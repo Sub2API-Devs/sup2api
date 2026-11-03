@@ -26,6 +26,16 @@ const (
 	TaskCluster TaskScope = "cluster"
 )
 
+// Scheduled task broadcast channels.
+const (
+	// ChannelTaskRun asks nodes to run a node task now:
+	// {"name": ..., "node_id": ...} (no node_id: every node).
+	ChannelTaskRun = "task:run"
+	// ChannelTaskChanged announces a change of the cluster task registry
+	// (plugin runtime tasks); nodes rebuild their periodic configuration.
+	ChannelTaskChanged = "task:changed"
+)
+
 // TaskSpec registers one scheduled task.
 type TaskSpec struct {
 	// Name is unique: core.<package>.<task> (plugin.<key>.<id> for plugin
