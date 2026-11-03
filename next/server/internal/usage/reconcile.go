@@ -25,14 +25,13 @@ import (
 // Plugins supply upstream facts through Monitor (or the compatible Poll /
 // Build+Parse paths). The host owns account admission, network policy,
 // observation fencing, pricing and all financial transactions.
-// A renewable cluster lock coordinates sweeps, PG claims fence per-task
-// outcomes, and the shared background executor bounds work and shutdown.
+// core.usage.reconcile runs the sweep on one node at a time, PG claims fence
+// per-task outcomes, and the shared background executor bounds work and
+// shutdown.
 // Giving up keeps the estimate and must never requeue a reserved debit as
 // ordinary failed billing; see abandon().
 const (
-	// reconcileLockKey is the cluster lock the sweep holds.
-	reconcileLockKey = "usage:reconcile"
-	// reconcileInterval is how often a node looks for due entries.
+	// reconcileInterval is the period of core.usage.reconcile.
 	reconcileInterval = 10 * time.Second
 	// reconcileBatch is how many entries one sweep claims.
 	reconcileBatch = 100
@@ -43,10 +42,6 @@ const (
 	// always finishes before the lease lapses, and short enough that a dead
 	// one is forgiven quickly.
 	reconcileLease = 3 * time.Minute
-	// reconcileLockTTL is the lock's validity. It is extended while a sweep
-	// runs, and never past reconcileSweepBudget, so a node that dies (or is
-	// stuck in a sweep) blocks the loop for at most this long after that.
-	reconcileLockTTL = 30 * time.Second
 	// reconcileSweepBudget bounds one sweep. Whatever is not reached stays
 	// due (its lease lapses) and is picked up next time, in order.
 	reconcileSweepBudget = 2 * time.Minute
@@ -59,13 +54,11 @@ const (
 	maxReconcileBody = 256 << 10
 )
 
-// ReconcileDeps are what the loop needs beyond the settler itself. The loop
-// does not run until StartReconcile is called with all of them.
+// ReconcileDeps are what the sweep needs beyond the settler itself. It does
+// nothing until StartReconcile is called with all of them.
 type ReconcileDeps struct {
 	// Executor is shared with plugin jobs; the reconcile group keeps its own cap.
 	Executor *background.Executor
-	// Locker keeps the sweep to one node (cluster.Locker).
-	Locker core.Locker
 	// Registry resolves the plugin named on an entry to its PlatformService.
 	Registry core.PluginRegistry
 	// Accounts loads the account that served the original request, with its
@@ -81,8 +74,6 @@ type ReconcileDeps struct {
 	AllowPrivateUpstream bool
 	NodeID               string
 	Logger               *slog.Logger
-	// Interval overrides reconcileInterval (tests).
-	Interval time.Duration
 }
 
 type reconciler struct {
@@ -91,18 +82,16 @@ type reconciler struct {
 	group *background.Group
 }
 
-// StartReconcile starts the reconcile loop, which runs until Stop. It is a
-// no-op when a dependency is missing: a deployment without a locker or a
-// plugin registry has no pre-charged rows to close either.
+// StartReconcile prepares the reconcile sweep (core.usage.reconcile,
+// ReconcileTaskSpec) until Stop. It is a no-op when a dependency is missing:
+// a deployment without a plugin registry has no pre-charged rows to close
+// either.
 func (s *Service) StartReconcile(ctx context.Context, d ReconcileDeps) {
-	if d.Locker == nil || d.Registry == nil || d.Accounts == nil || d.Proxies == nil {
+	if d.Registry == nil || d.Accounts == nil || d.Proxies == nil {
 		return
 	}
 	if d.Logger == nil {
 		d.Logger = slog.Default()
-	}
-	if d.Interval <= 0 {
-		d.Interval = reconcileInterval
 	}
 	if d.Executor == nil {
 		d.Executor = background.New(8)
@@ -115,21 +104,29 @@ func (s *Service) StartReconcile(ctx context.Context, d ReconcileDeps) {
 	s.rec = &reconciler{ReconcileDeps: d, log: d.Logger.With("component", "reconcile", "node", d.NodeID)}
 	ctx, s.recStop = context.WithCancel(context.WithoutCancel(ctx))
 	s.rec.group = d.Executor.Group(ctx, reconcileWorkers, reconcileBatch*2)
-	s.wg.Add(1)
 	s.mu.Unlock()
-	go func() { defer s.wg.Done(); s.reconcileLoop(ctx) }()
 }
 
-func (s *Service) reconcileLoop(ctx context.Context) {
-	t := time.NewTicker(s.rec.Interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.ReconcileDue(ctx)
-		}
+// ReconcileTask is the cluster task that runs the reconcile sweep.
+const ReconcileTask = "core.usage.reconcile"
+
+// ReconcileTaskSpec is core.usage.reconcile: one sweep every
+// reconcileInterval on one node. A run returns once every entry it claimed
+// was checked, so its count and duration are the sweep's.
+func (s *Service) ReconcileTaskSpec() core.TaskSpec {
+	return core.TaskSpec{
+		Name:  ReconcileTask,
+		Title: core.LocalizedText{"en": "Reconcile pre-charged usage", "zh": "对账预扣用量"},
+		Description: core.LocalizedText{
+			"en": "Asks the plugins for the final usage of pre-charged requests that are due and settles them; an entry nobody can confirm by its deadline keeps its estimate.",
+			"zh": "向插件查询到期的预扣请求的最终用量并结算；到截止时间仍无法确认的保留预估金额。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   reconcileInterval,
+		Timeout: reconcileSweepBudget + reconcileEntryBudget,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			return core.TaskResult{Count: s.ReconcileDue(ctx)}, ctx.Err()
+		},
 	}
 }
 
@@ -154,29 +151,18 @@ type settleEntry struct {
 	reported     bool
 }
 
-// ReconcileDue runs one sweep: claim the due entries and work through them.
-// It returns how many entries it claimed (0 when another node holds the
-// lock), which is what the tests assert on.
+// ReconcileDue runs one sweep: claim the due entries and work through them,
+// returning once every claimed entry was checked. It returns how many
+// entries it claimed. The task framework runs it on one node at a time; a
+// sweep that runs anyway beside another (a node of the previous release
+// during an upgrade) only takes entries the other did not lease.
 func (s *Service) ReconcileDue(ctx context.Context) int {
 	r := s.rec
 	if r == nil || !r.Executor.Allowed() {
 		return 0
 	}
-	// One node at a time. This is not the only guard - every claimed entry is
-	// leased below - but it keeps N nodes from each taking a slice of the
-	// same due set and calling N plugins at once every ten seconds.
-	lk, ok, err := r.Locker.TryLock(ctx, reconcileLockKey, reconcileLockTTL)
-	if err != nil {
-		if ctx.Err() == nil {
-			r.log.Warn("reconcile lock failed", "err", err)
-		}
-		return 0
-	}
-	if !ok {
-		return 0
-	}
 	var claimed int
-	_ = background.Scope(ctx, background.Work{Timeout: reconcileSweepBudget, Lease: lk}, func(ctx context.Context) error {
+	_ = background.Scope(ctx, background.Work{Timeout: reconcileSweepBudget}, func(ctx context.Context) error {
 		claimed = s.reconcileSweep(ctx)
 		return nil
 	})

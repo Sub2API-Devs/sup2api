@@ -2,48 +2,36 @@ package app
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usage"
 )
 
-// HelperPayloadExpiryTask clears expired helper history content.
-const HelperPayloadExpiryTask = "core.helper.payload_expiry"
+// Scheduled tasks of helper history.
+const (
+	HelperPayloadExpiryTask = "core.helper.payload_expiry"
+	HelperUsageReplayTask   = "core.helper.usage_replay"
+)
 
-// A replay may run on any ready node. The receipt/usage transaction and outbox
-// digest make concurrent delivery idempotent. (It moves to the task
-// framework with the billing tasks.)
-func startHelperHistoryMaintenance(parent context.Context, settler *usage.Service, store core.HelperHistory, admitted func() bool) func(context.Context) {
-	ctx, cancel := context.WithCancel(context.WithoutCancel(parent))
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		tick := time.NewTicker(5 * time.Second)
-		defer tick.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				if admitted != nil && !admitted() {
-					continue
-				}
-				work, stop := context.WithTimeout(ctx, 45*time.Second)
-				if err := settler.DrainHelperHistoryUsage(work, store); err != nil && ctx.Err() == nil {
-					slog.ErrorContext(work, "helper history usage replay failed", "error", err)
-				}
-				stop()
-			}
-		}
-	}()
-	return func(wait context.Context) {
-		cancel()
-		select {
-		case <-done:
-		case <-wait.Done():
-		}
+// helperUsageReplaySpec replays the helper usage outbox into usage every 5 s
+// on one node. The receipt/usage transaction and the outbox digest make a
+// replay idempotent, so a run of an old node meanwhile (rolling upgrade)
+// does not count anything twice.
+func helperUsageReplaySpec(settler *usage.Service, store core.HelperHistory) core.TaskSpec {
+	return core.TaskSpec{
+		Name:  HelperUsageReplayTask,
+		Title: core.LocalizedText{"en": "Replay helper usage", "zh": "回放 helper 用量"},
+		Description: core.LocalizedText{
+			"en": "Records the usage that helper history entries carry (their outbox) as usage rows; each entry is recorded once.",
+			"zh": "把 helper 历史记录带的用量（outbox）记成用量记录，每条只记一次。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   5 * time.Second,
+		Timeout: 45 * time.Second,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			return core.TaskResult{}, settler.DrainHelperHistoryUsage(ctx, store)
+		},
 	}
 }
 

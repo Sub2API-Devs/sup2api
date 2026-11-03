@@ -47,11 +47,6 @@ var tickerAllowed = map[string]struct {
 	// The framework itself.
 	"task/cluster.go": {1, "River admission watch"},
 	"task/node.go":    {1, "node task state refresh"},
-	// Move to the framework with the billing batch (0.1.236); drop them here
-	// then.
-	"app/helper_history.go": {1, "core.helper.usage_replay (#12a), 0.1.236"},
-	"usage/reconcile.go":    {1, "core.usage.reconcile (#38), 0.1.236"},
-	"usage/settler.go":      {1, "core.usage.settlement_retry (#40), 0.1.236"},
 }
 
 // tickersIn counts the time.NewTicker and time.Tick calls of the non-test Go

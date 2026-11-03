@@ -12,16 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/cluster"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
 // Pre-charged usage and the reconcile loop (CONTRACTS §25.4).
@@ -222,13 +218,11 @@ func reconcileFixtureWith(t *testing.T, acc *core.Account) *recFixture {
 	t.Cleanup(rf.up.Close)
 	rf.plugin = &recPlugin{url: rf.up.URL}
 	f.svc.StartReconcile(context.Background(), ReconcileDeps{
-		Locker:               testutil.NewMemLocker(), // single node: always granted
 		Registry:             recRegistry{gen: reconcileGen(rf.plugin)},
 		Accounts:             recAccounts{acc: acc},
 		Proxies:              recProxies{},
 		AllowPrivateUpstream: true, // the upstream double listens on 127.0.0.1
 		NodeID:               "node-a",
-		Interval:             time.Hour, // sweeps are driven by the test
 	})
 	return rf
 }
@@ -843,28 +837,23 @@ func TestManualRefundAndRetryOfAnAbandonedEntry(t *testing.T) {
 
 // ---------------------------------------------------------------- multi node
 
-// Two nodes, one sweep. The cluster lock is the first guard; the lease on
-// each claimed entry is the second.
+// Two nodes sweeping at once (the task framework runs one sweep at a time;
+// during an upgrade a node of the previous release still sweeps on its own):
+// the lease on each claimed entry checks it once.
 func TestReconcileRunsOnOneNodeOnly(t *testing.T) {
 	rf := reconcileFixture(t)
 	ctx := context.Background()
 	rf.svc.process(ctx, []*core.UsageRecord{rf.reserved("req-multi", "task-multi", core.UsageTokens{Input: 10, Output: 1})})
 
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = rdb.Close() })
-
-	// Two services over the same database, each with its own locker over the
-	// same Redis - which is what two nodes are.
+	// Two services over the same database, which is what two nodes are.
 	var svcs []*Service
 	for _, node := range []string{"node-a", "node-b"} {
 		s := New(rf.db, rf.ledger, rf.ledger, nil, Options{RetryInterval: time.Hour, RetryAfter: time.Hour})
 		s.StartReconcile(ctx, ReconcileDeps{
-			Locker:               cluster.NewLocker(rdb, nil),
 			Registry:             recRegistry{gen: reconcileGen(rf.plugin)},
 			Accounts:             recAccounts{},
 			Proxies:              recProxies{},
-			AllowPrivateUpstream: true, NodeID: node, Interval: time.Hour,
+			AllowPrivateUpstream: true, NodeID: node,
 		})
 		svcs = append(svcs, s)
 	}
@@ -888,7 +877,7 @@ func TestReconcileRunsOnOneNodeOnly(t *testing.T) {
 	wg.Wait()
 
 	if claimed[0]+claimed[1] != 1 {
-		t.Fatalf("entries claimed: node-a %d, node-b %d; exactly one node must sweep", claimed[0], claimed[1])
+		t.Fatalf("entries claimed: node-a %d, node-b %d; exactly one node must check it", claimed[0], claimed[1])
 	}
 	if got := rf.plugin.builds.Load(); got != 1 {
 		t.Fatalf("the plugin was asked %d times for one entry", got)

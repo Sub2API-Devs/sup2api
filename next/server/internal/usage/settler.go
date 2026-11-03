@@ -137,7 +137,8 @@ func New(db *store.DB, ledger TxLedger, quoter core.Quoter, events core.EventPub
 	return &Service{db: db, ledger: ledger, quoter: quoter, events: events, opts: opts, queue: make(chan *core.UsageRecord, opts.QueueSize)}
 }
 
-// Start runs the settlement workers and the retry loop until Stop.
+// Start runs the settlement workers until Stop; retries are
+// core.usage.settlement_retry (RetryTaskSpec).
 func (s *Service) Start(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -148,7 +149,6 @@ func (s *Service) Start(ctx context.Context) {
 	for range s.opts.Workers {
 		s.wg.Go(func() { s.worker(ctx) })
 	}
-	s.wg.Go(func() { s.retryLoop(ctx) })
 }
 
 // Stop drains the queue and waits for the workers (bounded by ctx).
@@ -842,20 +842,31 @@ func recordedEvent(p *pending, total decimal.Decimal, status string) core.Event 
 
 // ---------------------------------------------------------------- retry
 
-func (s *Service) retryLoop(ctx context.Context) {
-	ticker := time.NewTicker(s.opts.RetryInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if n, err := s.RetryPending(ctx); err != nil {
-				slog.Error("usage: retry pending", "err", err)
-			} else if n > 0 {
-				slog.Info("usage: retried pending settlements", "rows", n)
+// SettlementRetryTask is the node task that retries pending settlements.
+const SettlementRetryTask = "core.usage.settlement_retry"
+
+// RetryTaskSpec is core.usage.settlement_retry: every Options.RetryInterval
+// on each node that may work, RetryPending (rows are shared through SKIP
+// LOCKED and settled under their idempotency keys).
+func (s *Service) RetryTaskSpec() core.TaskSpec {
+	return core.TaskSpec{
+		Name:  SettlementRetryTask,
+		Title: core.LocalizedText{"en": "Retry pending settlements", "zh": "重试待结算用量"},
+		Description: core.LocalizedText{
+			"en": "Releases expired pre-charges and settles again the usage rows that are still pending or failed; every node that may work takes its share.",
+			"zh": "释放过期的预扣，并重新结算仍处于待结算或失败的用量记录；每个可工作节点都跑，各自分摊。",
+		},
+		Scope:       core.TaskNode,
+		Every:       s.opts.RetryInterval,
+		Timeout:     5 * time.Minute,
+		RequireWork: true,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			n, err := s.RetryPending(ctx)
+			if n > 0 {
+				slog.InfoContext(ctx, "usage: retried pending settlements", "rows", n)
 			}
-		}
+			return core.TaskResult{Count: n}, err
+		},
 	}
 }
 

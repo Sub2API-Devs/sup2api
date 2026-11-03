@@ -167,6 +167,9 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	b.settler = usage.New(b.db, bill, bill, b.events, usage.Options{CanRetry: b.canWork, Environment: b.env})
 	b.settler.Start(b.ctx)
 	b.stopper.add("settler", b.settler.Stop)
+	if err := b.tasks.Register(b.settler.RetryTaskSpec()); err != nil {
+		return nil, fmt.Errorf("settlement retry task: %w", err)
+	}
 	b.ntf = notify.New(b.db, b.reg, notify.Options{CanRun: b.canWork})
 	if err := b.tasks.Register(b.ntf.PurgeTaskSpec()); err != nil {
 		return nil, fmt.Errorf("notify purge task: %w", err)
@@ -253,13 +256,16 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	// account and proxy directories: the core sends the reconcile request
 	// itself, through the account's proxy, so that a plugin with
 	// asynchronous work needs neither network access nor account access of
-	// its own. Only one node sweeps at a time (cl.Locker).
+	// its own. The sweep is core.usage.reconcile (one node at a time).
 	b.settler.StartReconcile(b.ctx, usage.ReconcileDeps{
 		Executor: b.work,
-		Locker:   b.cl.Locker, Registry: b.reg, Accounts: b.acc, Proxies: b.prx,
+		Registry: b.reg, Accounts: b.acc, Proxies: b.prx,
 		Slots: b.cl.Slots, Limiter: b.limiter,
 		AllowPrivateUpstream: cfg.AllowPrivateUpstream, NodeID: cfg.NodeID, Logger: b.log,
 	})
+	if err := b.tasks.Register(b.settler.ReconcileTaskSpec()); err != nil {
+		return nil, fmt.Errorf("usage reconcile task: %w", err)
+	}
 	return trust, nil
 }
 
@@ -310,10 +316,10 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	}
 	resources := providerresources.New(b.db, providerresources.Options{})
 	helpers := helperhistory.New(b.db, b.cipher, helperhistory.Options{})
-	stopHelperHistory := startHelperHistoryMaintenance(b.ctx, b.settler, helpers, b.canWork)
-	b.stopper.add("helper-history", stopHelperHistory)
-	if err := b.tasks.Register(helperPayloadExpirySpec(helpers)); err != nil {
-		return fmt.Errorf("helper payload expiry task: %w", err)
+	for _, spec := range []core.TaskSpec{helperUsageReplaySpec(b.settler, helpers), helperPayloadExpirySpec(helpers)} {
+		if err := b.tasks.Register(spec); err != nil {
+			return fmt.Errorf("helper history task: %w", err)
+		}
 	}
 	observations := observer.New(b.reg, b.stats, observer.Consumer{Namespace: observation.CoreNamespace, AllAccounts: true,
 		Phases: []string{observation.UsageFinalized, observation.AttemptFinished}, Metrics: observation.CoreMetrics, Client: account.StatsConsumer{}})
@@ -356,7 +362,6 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	// of the 90s teardown budget) before rollout stops the plugin instances.
 	b.ntf.Start(b.ctx)
 	b.stopper.add("notifications", b.ntf.Stop)
-	b.stopper.add("helper-history", stopHelperHistory)
 
 	b.inst = install.New(install.Deps{Mutations: mutations,
 		DB: b.db, Trust: trust, Authz: b.az, Permissions: b.az, Defaults: defaults,
