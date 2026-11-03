@@ -121,6 +121,12 @@
 
 **上线顺序**：同 0.1.128。16:16 更新 ovh 的 sup2api-1（10 秒就绪），日志 `release cleanup removed=74`，releases + blobs 由 65 GB 降到 2 GB（ovh `/` 剩 1.1 TB）。从 Caddy 摘下 3140（`Caddyfile.bak-gw130`），16:17:45 重建 sup2api-ccp（9 秒就绪），`removed=1`（发核心 0.1.230 后变旧的 0.1.228），恢复 Caddy。两节点都只剩 0.1.230（current）与 0.1.229（previous）；clicodeplus `/` 剩 20 GB。全程 api.prophey.ai `/readyz` 200，两节点无 ERROR，核心仍是 0.1.230。
 
+## 网关 0.1.131：Host API 9（2026-11-04）
+
+源码 `2701738f6`，镜像 `sup2api-gateway:0.1.131`（ID `ac2826b3…`），在 ovh 干净 worktree `~/sup2api/release-gateway-0.1.131` 构建，经本机复制到 clicodeplus（gzip 44 MB）。与 0.1.130 的唯一区别是 `runtime-contract` 的 `HostAPIVersion` 8 → 9（插件运行时任务，CONTRACTS §77.8），镜像里的 `sub2api-release` 默认签 Host API 9。两边 `.env` 的 `GATEWAY_IMAGE` 都已改成这个版本，备份为 `.env.bak-gw131`。
+
+**上线顺序**：同 0.1.128。19:51 更新 ovh 的 sup2api-1（9 秒就绪）；从 Caddy 摘下 3140（`Caddyfile.bak-gw131`），19:52:51 重建 sup2api-ccp（24 秒就绪），恢复 Caddy。全程 api.prophey.ai `/readyz` 200。随后发布核心 0.1.237。clicodeplus `/` 剩 18 GB。
+
 ## 已知问题
 
 - **资源余量小**：clicodeplus 6 核、7.7 GB 内存，节点约用 1.8 GB，可用约 3.6 GB；磁盘 158 GB 剩约 20 GB（2026-11-02 曾被占满，大头是同机其他服务；外壳 0.1.130 起旧核心发布包会自动清理）。

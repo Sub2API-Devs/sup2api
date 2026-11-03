@@ -4,6 +4,14 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-04 网关（外壳）**0.1.131** + 核心 **0.1.237**（`2701738f6`，北京时间 03:51–04:01；外壳镜像 `ac2826b3…`；核心 manifest `c3213c51…4a32`，计划 `20c82ddcf69fe39fc0d6956ed8a4f9f0` completed/13，55 秒，没有暂停；**无迁移**，schema 仍 `6100539c…`；**Host API 8 → 9**；内置插件与 0.1.236 相同）：
+- 内容（CONTRACTS §77.8，定时任务第二批）：插件任务全部走框架，`internal/job` 原来的调度（每节点算时段 + Redis 锁）删除；manifest `jobs[]` 加 `scope`（`cluster` 默认 / `node`）和 `title`；`RunJob` 请求/应答加字段；Host API 9 运行时任务 `SyncTasks`/`UpsertTask`/`DeleteTask`/`ListTasks`/`EnqueueTask`；SDK `JobMux.HandleJob`、`host.Tasks()`；River 新队列 `plugin`；新权限 `task:manage` 与 `PATCH /system/tasks/:name`（启用/停用插件全集群任务），控制台定时任务页有开关、插件“任务”页签显示范围和名称。现有插件没重发。
+- 顺序：先升外壳（Host API 9，否则签出的核心与外壳不符，见 2026-10-31 事故）。外壳 0.1.131 与 0.1.130 只差 `runtime-contract` 的 Host API；ovh 19:51 换（9 秒就绪），clicodeplus 从 Caddy 摘 3140 后 19:52 重建（24 秒就绪）、恢复 Caddy，全程 api.prophey.ai 200。两边 `.env` 备份 `.env.bak-gw131`，Caddy 备份 `Caddyfile.bak-gw131`。
+- 发布前：Linux（`golang:1.27-bookworm` + 一次性 postgres:16）核心 53 个包、SDK 13 个、外壳 9 个全过（config 用例因测试库密码含 `pw@` 误判、manifest/check 图标用例因挂载目录少了 `next/` 前缀，各自按正确环境重跑通过）；插件 dynweight/guard/growth/moderation/mailer 本机通过；前端 116/117 个文件通过，`stores/plugins.spec.ts` 4 个用例在 Windows 上因路径失败，与本次无关。
+- 核验：两节点 current 都是 `c3213c51…`，`/readyz` 与 api.prophey.ai 200；`scheduled_tasks` 17 个核心任务 + 5 个 `plugin_manifest` 行（dynweight evaluate/cleanup、moderation alerts/analysis/cleanup，标题“动态权重 · evaluate”等）；插件任务的 `river_job` 都在 `plugin` 队列且 completed；切换窗口里 `plugin_job_runs` 没有同一时段两次运行（旧核心与新核心各认领时段）；Valkey 不再有 `job:*` 时段锁。`PATCH` 实测：停用 `plugin.dynweight.cleanup` 后 3 秒内不再登记，再启用恢复；对核心任务返回 400 `task_not_editable`。两节点 ERROR/WARN 只有滚动时 ccp 的 3 条（停旧核心时 context canceled；moderation 启动时 `GRANT … tuple concurrently updated`，两节点同时建 schema 的已有竞态，之后 moderation 两节点都 ready）。
+- 回滚：同 schema，核心可以自动回滚到 0.1.236（旧核心在新外壳上照常运行）；外壳回滚把 `.env` 改回 `sup2api-gateway:0.1.130` 后 `up -d`（只有核心也回到 Host API 8 时才需要）。
+- 脚本 `stage/gateway-0.1.131/`、`stage/0.1.237/`（基准 `baseline-db.txt`）；备份 `backups/core-0.1.237`（`ca8bb752…`）。
+
 2026-11-04 核心 **0.1.236**（`7d6b6e51b`，北京时间 02:30–02:32；核心 manifest `a3cd3499…d72e`，计划 `19ea72996b81a47516ffb840040b8533` completed/13，没有暂停；迁移 0076–0085，schema `c4cddb7f…` → `6100539c…`，Host API 8，内置插件为 0.1.234 的一套把 ccgateway 换成 0.1.126（线上已是该版本））：
 - **0.1.235 与 0.1.236 合并成一次发布**（用户 2026-11-04 选择）：清单 [TASK-FRAMEWORK-RELEASE-0.1.235](../../../docs/TASK-FRAMEWORK-RELEASE-0.1.235.md) + [0.1.236](../../../docs/TASK-FRAMEWORK-RELEASE-0.1.236.md)，没有单独发 0.1.235。另外带上同分支的界面改动：调度策略页说明与布局（触发规则、Go 正则单独一列、错误来源、去掉占位）、账号列表「重置状态」只留图标。
 - 内容（CONTRACTS §77）：gocron（每节点）+ River（全集群一次）定时任务框架；控制台「系统 → 定时任务」；20 个原有循环迁入（含计费对账、结算重试、凭证续期、用量限制、运行环境全量同步）；红色 CCGateway 账号满 `park_after_hours`=3 小时原地停容器（测试、重新授权、「启动」唤醒）；停用/停着的运行环境 `enabled:false` 去重记在 `ccgateway_runtimes`。
