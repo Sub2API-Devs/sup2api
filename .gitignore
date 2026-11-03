@@ -8,5 +8,6 @@ analysis/vendor/index/
 *.log
 .rn-tmp/
 runnable/
-build/
+/build/
 nul
+reconstructed/dist/

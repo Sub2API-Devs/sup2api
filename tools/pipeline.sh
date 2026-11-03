@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full reconstruction pipeline, from original/ to build/readable and runnable/.
+# Full reconstruction pipeline, from original/ to reconstructed/ (readable, buildable) and runnable/.
 #   bash tools/pipeline.sh            all stages after the scans
 #   SCAN=1 bash tools/pipeline.sh     also rerun the AST scans (≈3 min)
 #   VERIFY=1 bash tools/pipeline.sh   also run the runtime comparison original vs runnable
@@ -27,8 +27,11 @@ step propagate;         $N tools/naming/propagate.mjs | tail -5
 step resolve;           $N tools/naming/resolve.mjs | head -10
 step runnable;          $N tools/rename/apply.mjs original naming/final runnable --force --report artifacts/tmp/rename-report.json --check | tail -6
 step readable;          rm -rf reconstructed && $N tools/emit/readable.mjs --out reconstructed | tail -6
+step build-readable;    node reconstructed/build.mjs | tail -1
 if [ "${VERIFY:-0}" = 1 ]; then
   step verify;          npm run -s verify:runnable | tail -5
+  # the reading tree itself, built with Bun 1.4.4 (docs/process/buildable.md)
+  step verify-readable-build; node tools/verify/compare.mjs original reconstructed/dist --name original-vs-reconstructed-dist | tail -5
   # the readable tree's deminify rewrite, proven on the runnable layout
   step verify-deminify; $N tools/emit/deminify-dir.mjs runnable artifacts/tmp/deminify/runnable-dm --force --check-printer --check-canonical | tail -3
   node tools/verify/compare.mjs original artifacts/tmp/deminify/runnable-dm --name deminify-runnable-dm | tail -5

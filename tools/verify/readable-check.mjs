@@ -24,8 +24,9 @@ const files = [];
 (function walk(d) {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name);
-    // assets/ holds resources copied byte-for-byte (incl. three minified BOM scripts)
-    if (e.isDirectory()) { if (!(d === ROOT && e.name === 'assets')) walk(p); }
+    // assets/ holds resources copied byte-for-byte (incl. three minified BOM scripts); dist/ is the
+    // build output (tools/build/build.mjs), node_modules/ is not part of the tree
+    if (e.isDirectory()) { if (!(d === ROOT && ['assets', 'dist', 'node_modules'].includes(e.name))) walk(p); }
     else if (/\.[cm]?js$/.test(e.name)) files.push(p);
   }
 })(ROOT);
