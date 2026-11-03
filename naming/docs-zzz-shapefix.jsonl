@@ -25,3 +25,17 @@
 {"id":"chunk-x58vpmpd.js#b","doc":"设备密钥存储的常量组：b 是钥匙串服务名 \"Claude Code-device-keys\"；T 是 security 命令超时 2000 ms；U 是改用 -i 传参数的命令行长度上限 4032；ee 是“项不存在”的退出码 44；re 是无钥匙串的退出码集合 {37,50}。"}
 {"id":"chunk-yb0ajcmt.js#Ct","doc":"mermaid 时序图解析：Ct 是消息箭头写法表（写法 → 线型 + 箭头形状）；Dt 是 participant/actor 行正则；He 是 \" as \" 关键字；Rt/Ot/We/_t/Lt 是注记、激活/停用、分组、else/and/option、方向标记的正则；Nt/It 是参与方与步骤数上限（50/400）。"}
 {"id":"chunk-yf82ynbr.js#ne","doc":"敏感目录与文件名的表：ne 常见敏感目录名；te 敏感目录路径段；re 敏感文件名；w 敏感密钥文件后缀正则；d DOT_ENV 前缀；oe Claude 自用文件名；G 非机密后缀；M/se/ie 三种匹配正则；f 名称变体条数上限 64；U$e 255 与 le 是路径读长上限与切分正则；ce 远程前缀正则；w3o/E3o/ae 编辑器备份与同步冲突后缀；ue/x 是 .git 与 config。"}
+{"id":"chunk-85kmkm1x.js#Xn","doc":"MCP 服务器文件的校验常量组：Xn 是已知服务器类型集合（stdio/http/streamable-http/sse/ws/sdk/sse-ide/ws-ide/claudeai-proxy）；Qn 是 ${user_config.X} 占位符正则（全局）；xt 是任意 ${…} 模板占位正则，URL 里出现即判模板；Me 是最多检查的 MCP server 文件数 16；es 是 URL 长度上限 8192；ts/ns/ss 是机密值、键名与占位值的识别正则。"}
+{"id":"chunk-aepeg2w5.js#ac","doc":"行为遥测键缓存（同一声明 4 个绑定）：ac 键前缀 \"bi1-\"；eoo 不可用标记 `${ac}key-unavailable`；na 按 entrypoint/model/版本/组织 的 sha256 缓存键的 Map；wI 缓存条数上限 32，超过即整体清空。"}
+{"id":"chunk-dcmhvw5a.js#_E","doc":"插件专属定制限制：_E 是 strictPluginOnlyCustomization 的 schema（逐项过滤，非数组原样放行）；oJt 是允许的定制组件名单 [\"skills\",\"agents\",\"hooks\",\"mcp\"]，名单外会在校验时给出 unknown-surface 的说明。"}
+{"id":"chunk-f3qhjfah.js#MFe","doc":"插件链接标记：MFe 是标记文件名 \".claude-plugin-link\"；CJr 是链接文件 schema（绝对路径的 target）；vkn 是写进文件首行的头 `\\n[mode: link]`。"}
+{"id":"chunk-f3qhjfah.js#un","doc":"插件归属 sidecar：un 是侧车文件的 schema（四个可选字段，键来自常量，解析失败按缺省忽略）；dZo 是读取该文件时 4096 字节的上限。"}
+{"id":"chunk-mvhmq2z8.js#et","doc":"云会话模型选择器的提示文案组：et 本地选项不可用、Po 列表加载失败、Lo 等待超时的说明（\"Stopped waiting for the cloud session’s model list …\"）；No 是超时毫秒 15000；Kt/xo 是别名判断与最长值挑选。"}
+{"id":"chunk-16jhn3ak.js#bMr","doc":"设置层级名单 [\"project\",\"local\",\"user\"]：v$s = (kind) => !bMr.includes(kind)，用来判断某个 kind 是否属于这三层设置；导出为 bMr。"}
+{"id":"chunk-3g8vhh6f.js#aDn","doc":"团队记忆的目录名 \"team\"：记忆文件路径 …/memory/team/<file> 里以 n[2]===aDn 判定属于团队记忆（另一支是个人记忆）；导出为 aDn。"}
+{"id":"chunk-4m46mxx9.js#B","doc":"telemetry 插件的目录名 \"telemetry\"，导出为 MOD_FOLDER；registerPlugin 里 Zfr(B) 在该目录下解析 hooks 模块文件。"}
+{"id":"chunk-85kmkm1x.js#ht","doc":"市场/插件名校验常量组：ht 是名称格式正则 /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/；Un 是保留市场名集合（org / org-provisioned / unknown）；$e 是 \"UNRECORDABLE_NAME\" finding code；UOr 是 plugin@marketplace 各分段允许字符的规则文案，拼进 message。"}
+{"id":"chunk-aepeg2w5.js#cj","doc":"按 host 缓存的 Linux 沙箱探测槽：new W(() => new yx({platform:\"linux\", isDockerenvPresent, isBubblewrapEnvSet, probeInternalNetworkAccess, …}))；gs() 返回 cj.of(B().host)，所以同一进程里每个 host 只有一个探测实例，不是可直接调用的函数。"}
+{"id":"chunk-bfnfj4kx.js#yos","doc":"agents 目录名 \"agents\"，导出为 yos；加载 agents 文件时用它拼目录。"}
+{"id":"chunk-bss4k1z9.js#Ao","doc":"首段解释的写作指引文案 \"At most 100 words; fewer when the thing needs no introduction.\"，导出为 FIRST_EXPLANATION_LENGTH；EXPLANATION_LENGTHS.first 直接引用它（是提示语，不是数字上限）。"}
+{"id":"chunk-e6aww6q8.js#Hdo","doc":"agent 元数据清洗：Hdo 是截断长度上限 1024（YR(e, n = Hdo) 的默认值）；P2e 是元数据名正则 /^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$/；Bdo 匹配控制字符与换行的成串正则（替换为空格）。"}
