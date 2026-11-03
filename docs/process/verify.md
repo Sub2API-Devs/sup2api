@@ -12,6 +12,7 @@
   - Ink 界面跑不起来的唯一原因是 `Bun.ant.CellSegmenter`（Anthropic 内部 Bun 的原生扩展）。`tools/verify/bun-ant-shim.js` 用 `Intl.Segmenter` + `Bun.stringWidth` 在 JS 里实现了它（**验证环境补丁，不是 316 源码**），`mcp list/get/remove`、`plugin list`、`auth status`、`auto-mode defaults/config` 和**伪终端里的交互会话**都能渲染并对拍。
   - Bash 工具 "Bad file descriptor" 的原因：linux 构建把平台固化成 `linux`，在 Windows 上走 POSIX 分支，用 `O_APPEND` 打开输出文件再交给 bash 当 stdout；Windows 上 `O_APPEND` 句柄没有 `FILE_WRITE_DATA`，Git Bash 写不进去。**是 CLI（linux 构建）在 Windows 上走了 linux 路径，不是公版 Bun 的问题**（Node 24 一样复现）。`win-append-shim.js` 绕开，`print-bash-stdout` 覆盖。
   - `update-offline` 偶发 0 个外网请求：请求其实是 CLI 调起的**本机真实 npm** 发的，CLI 给 `npm view` 只留 5 秒，机器忙时 npm 还没联网就被中止。改为沙箱里放立即失败的假 npm，场景不再依赖网络时机；`compare.mjs` 也加了"不一致时重跑一次、重跑后一致记为 flaky"。
+- **第三轮（scenarios 成员，2026-11-04，第 15 节）**：场景扩到 98 个（新增工具错误路径、权限模式与规则、钩子、MCP 资源/提示词/失败、插件、会话恢复、伪终端交互共 44 个），original 对 original 两轮 98/98、original 对 runnable 98/98，均无重跑。详见 `docs/process/scenarios.md`。
 - 顺带对拍了 rename 成员的测试输出 `.rn-tmp/out-full`、`.rn-tmp/out-final`（第一轮 42 个场景）：都一致。
 
 ## 2. 环境
@@ -252,7 +253,7 @@ JSON 里每个场景有：预期检查结果、`equal`、差异列表（JSON 路
 - ~~`runnable/` 生成后跑 `npm run verify:runnable`~~：第二轮已跑，54/54 一致。
 - 与官方 ELF 对拍（cch、TLS、原生模块、Ink）需要在 linux 上做：`run.mjs` 的隔离和假上游可直接复用，只要把 spawn 的程序换成官方二进制。
 - ~~Ink 相关命令在公版 Bun 上无法验证~~：第二轮写了垫片（第 12 节）。垫片与官方原生实现是否逐格一致无法在本机证明，要在 linux 上用官方 ELF 跑同样的伪终端场景、比较屏幕。
-- 交互模式只覆盖了"输入 → 回答 → /exit"；权限确认框、工具调用的展示、斜杠命令菜单等还没有场景。
+- ~~交互模式只覆盖了"输入 → 回答 → /exit"~~：第三轮加了权限确认框接受/拒绝、Esc 中断、多轮、/help、斜杠菜单、输入框编辑、Shift+Tab、--continue/--resume、bash 模式（第 15 节）。
 
 ## 12. `Bun.ant.*` 与其它私有 API；Ink 垫片
 
@@ -340,3 +341,21 @@ lead 在全量对拍 original 对 runnable 时看到基线一侧 0 个外网请�
 
 1. 沙箱 PATH 最前面放假 npm（第 4 节 8a），`npm view` 立即失败；`update-offline` 的预期改为"退出 1、stderr 有两句失败说明、0 个请求"，6 路并发 6 次输出逐字节相同。`doctor` 也会调 npm（`npm config get prefix`、`npm -g config get prefix`），同样不再碰真实 npm。
 2. `compare.mjs` 加 `--retry`（默认 1）：不一致或预期不满足的场景两棵树各重跑一次，重跑后一致的标为 flaky（终端打印 `OK*`、摘要里写"是（重跑后）"、JSON 里保留第一次的差异），用来区分环境抖动和真实差异。修复后三次全量（3 路、4 路、对 runnable）都没有触发重跑。
+
+## 15. 第三轮：场景扩到 98 个（scenarios 成员）
+
+完整清单、判定方法、发现和过程在 `docs/process/scenarios.md`，这里只记对本工具的改动和结论。
+
+- 新增 44 个场景（`scenarios.mjs` 里"第三轮"注释之后）：工具往返与错误路径 7（Read/Edit/Write/Bash/NotebookEdit/ToolSearch/Skill/Agent，含不存在的工具）、权限 10（plan/acceptEdits/bypassPermissions/dontAsk/auto 五种模式、`--allowedTools` 模式、settings.json 规则、未信任目录、`--settings` 默认模式）、钩子 1、MCP 4（资源、提示词、连接失败、项目 .mcp.json）、插件 5（`--plugin-dir`、本地市场 add/install/disable/enable/uninstall、禁用后命令不可用、validate）、会话 5（`--session-id`/`--resume`/`--continue`/`--fork-session`/错误路径/带工具的恢复）、伪终端 12（多轮、权限框接受/拒绝、Esc 中断、/help、斜杠菜单、输入编辑、Shift+Tab、未知命令、交互 --continue/--resume、bash 模式）。
+- 结果：original 对 original 两轮（3 路、4 路，`--retry 0`）98/98 一致、预期全满足；original 对 runnable 98/98（`--retry 1` 未触发）；负对照改三处文字，三个相关场景都报差异。报告 `analysis/verify/scenarios-*`。
+- 夹具：`tools/verify/fixtures/verify-marketplace/`（本地市场 + verify-plugin：命令、技能、代理、hooks.json + log-hook.cjs），场景运行时复制到沙箱 tmp/。
+- 工具改动（都向后兼容，不用新字段时行为不变）：
+  - `fake-upstream.mjs`：`side` 可为函数；`routes`（按系统提示词把子代理请求路由到另一组脚本）；`delayMs`/`finalDelayMs`。
+  - `fake-mcp-server.mjs`：`--full`（resources、prompts、fail 工具）、`--exit-on-start`。
+  - `run.mjs`：只加 `shimWinHookSpawn` / `--shim-win-hook-spawn`（预加载 `win-hook-spawn-shim.js`），8 行增量。
+  - `pty-driver.js`：`waitFor` 可为数组；步骤可带 `delayMs`。
+  - `compare.mjs`：sequence 里的伪终端步骤也只比较还原屏幕；新规则 `agent-id`、`plan-slug`，`duration` 扩展到纯文本 `duration_ms: <n>`（理由见 scenarios.md 3.4）。
+  - `vt-screen.mjs`：宽字符改用 `\p{Emoji_Presentation}`（原来把 ⏸ ⚠ 这类字符算 2 列，Ink 增量重绘后整行错位）。
+- 新垫片 `win-hook-spawn-shim.js`（**验证环境补丁**）：linux 构建的命令钩子在 Windows 上是 `spawn(cmd, [], {shell: true, detached: true})`，公版 Bun 在 Windows 上 shell + detached 的子进程收不到 stdin（钩子卡到超时），cmd.exe 也不展开 `${CLAUDE_PLUGIN_ROOT}`；垫片把这类调用改成 Windows 构建的参数（Git Bash、不 detached）。
+- 新发现的 Windows 偏差（linux 构建平台固化导致，两棵树相同）：路径类权限规则（`Read(./x)` 等）不生效、acceptEdits 下 Write 仍被拒、Bash 重定向被判"工作目录外"——规则匹配用 `posix.relative` 算 `D:\` 路径。场景按现状断言并写明，要在 linux 上用官方 ELF 确认真实行为。
+- 第 9 节的归一化表另加：`agent-id`、`plan-slug`（第三轮）；会话文件只比较 user/assistant 行序列和行类型集合；伪终端场景先等 11 秒让两个 10 秒提示过期再操作（不是归一化，见 scenarios.md 3.4）。

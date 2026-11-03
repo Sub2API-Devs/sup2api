@@ -25,6 +25,12 @@
 //     error: { status, type, message }  // 设置后对 /v1/messages 一律回这个错误（测试错误处理）
 //   }
 //   step = { text?: '前置文本', tools?: [{ name, input }] }   input 可以是函数 (ctx) => object
+//   以下为 scenarios 成员加的可选字段（不写时行为与之前完全相同）：
+//     side: 也可以是函数 (body) => 文本，按旁路请求内容回答（例如让自动模式分类器按动作回 <severity>N</severity>）
+//     routes: [{ match: '子串', steps, final }]  请求的 system 或第一条 user 消息里含 match 时改用这一组 steps/final
+//             （例如子代理：它的系统提示词含自定义代理的 prompt；第一个命中的生效）；记录里 response.route = 下标
+//     step.delayMs / finalDelayMs  回答前等待的毫秒数（SSE 与 JSON 都适用；用来测 Esc 中断）。连接先关闭（CLI 中断、
+//             close()）时取消，不再写回答
 //   无状态：同样的请求永远得到同样的回答，id 由请求序号之外的内容决定（msg_/toolu_ 按 step 下标编号），
 //   这样同一场景两次运行时 CLI 回传的 tool_use id 相同，便于对拍。
 import http from 'node:http';
@@ -99,8 +105,17 @@ export async function startFakeUpstream({ script = {}, ctx = {}, port = 0, onReq
       rec.response = { status: 200, stream: !!rec.body.stream, step: plan.step, content: plan.content, stop_reason: plan.stop_reason };
       const msg = { id: plan.id, type: 'message', role: 'assistant', model: rec.body.model || 'claude-fake',
         content: plan.content, stop_reason: plan.stop_reason, stop_sequence: null, usage: usage(plan) };
-      if (!rec.body.stream) return json(res, 200, msg, { 'request-id': `req_fake_${plan.id}` });
-      return sse(res, msg);
+      if (plan.route !== undefined) rec.response.route = plan.route;
+      const go = () => {
+        if (!rec.body.stream) return json(res, 200, msg, { 'request-id': `req_fake_${plan.id}` });
+        return sse(res, msg);
+      };
+      if (plan.delayMs) {
+        const timer = setTimeout(go, plan.delayMs);
+        res.on('close', () => clearTimeout(timer));
+        return;
+      }
+      return go();
     }
     rec.response = { status: 404 };
     return json(res, 404, { type: 'error', error: { type: 'not_found_error', message: `fake upstream: no route for ${req.method} ${path}` } });
@@ -123,27 +138,37 @@ export async function startFakeUpstream({ script = {}, ctx = {}, port = 0, onReq
 }
 
 // 决定回答。主循环请求：step 下标 = 请求里 assistant 消息的个数。
+// script.routes 里第一个 match 命中（system 或第一条 user 消息含该子串）的 route 代替顶层 steps/final；
+// route 的 id 带 r<下标> 前缀（msg_fake_r0_1、toolu_fake_r0_1_0），与主循环区分。
 export function planReply(script, ctx, body) {
   const hasTools = Array.isArray(body.tools) && body.tools.length > 0;
   const assistantTurns = (body.messages || []).filter((m) => m.role === 'assistant').length;
-  const steps = script.steps || [];
   if (!hasTools) {
-    const text = script.side ?? 'OK';
+    const text = typeof script.side === 'function' ? script.side(body) : (script.side ?? 'OK');
     return { id: `msg_fake_side_${assistantTurns}`, step: 'side', content: [{ type: 'text', text }], stop_reason: 'end_turn' };
   }
+  let plan = script, pre = '', route;
+  if (Array.isArray(script.routes) && script.routes.length) {
+    const firstUser = (body.messages || []).find((m) => m.role === 'user');
+    const hay = JSON.stringify(body.system ?? '') + JSON.stringify(firstUser?.content ?? '');
+    const k = script.routes.findIndex((r) => hay.includes(r.match));
+    if (k >= 0) { plan = script.routes[k]; pre = `r${k}_`; route = k; }
+  }
+  const steps = plan.steps || [];
   if (assistantTurns < steps.length) {
     const s = steps[assistantTurns];
     const content = [];
     if (s.text) content.push({ type: 'text', text: s.text });
     (s.tools || []).forEach((t, i) => {
       const input = typeof t.input === 'function' ? t.input(ctx) : t.input;
-      content.push({ type: 'tool_use', id: `toolu_fake_${assistantTurns}_${i}`, name: t.name, input });
+      content.push({ type: 'tool_use', id: `toolu_fake_${pre}${assistantTurns}_${i}`, name: t.name, input });
     });
-    return { id: `msg_fake_${assistantTurns}`, step: assistantTurns, content,
+    return { id: `msg_fake_${pre}${assistantTurns}`, step: assistantTurns, route, content, delayMs: s.delayMs,
       stop_reason: s.tools?.length ? 'tool_use' : 'end_turn' };
   }
-  const text = script.final ?? 'Hello from the fake upstream.';
-  return { id: `msg_fake_${assistantTurns}`, step: 'final', content: [{ type: 'text', text }], stop_reason: 'end_turn' };
+  const text = plan.final ?? 'Hello from the fake upstream.';
+  return { id: `msg_fake_${pre}${assistantTurns}`, step: 'final', route, content: [{ type: 'text', text }], stop_reason: 'end_turn',
+    delayMs: plan.finalDelayMs };
 }
 
 function usage(plan) {

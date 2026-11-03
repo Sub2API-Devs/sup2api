@@ -1,0 +1,6 @@
+{
+  "name": "verify-plugin",
+  "version": "1.0.0",
+  "description": "Verify plugin: a slash command, a skill, an agent and hooks",
+  "author": { "name": "verify" }
+}

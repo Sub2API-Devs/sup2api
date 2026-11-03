@@ -7,6 +7,8 @@
 //   steps  [{ waitFor?: "屏幕上要出现的文字", timeoutMs?: 等 waitFor 的上限（默认 20000）,
 //             idleMs?: 无输出多久算稳定, snapshot?: true 时在发送按键前记下当前屏幕, send?: "按键（\r 回车、\x03 Ctrl+C…）" }, ...]
 //          每步先等 waitFor 出现（在 vt-screen.mjs 模拟出的屏幕文字里找，空白折叠），再等输出静止 idleMs，然后发送 send。
+//          （scenarios 成员加，向后兼容）waitFor 也可以是字符串数组：全部出现才算匹配，用来等"回答已上屏且状态行已恢复"；
+//          delayMs：先等这么久再开始 waitFor（按键后旧画面还在屏幕上时，避免 waitFor 立刻匹配到旧画面）。
 //   全部步骤结束后再等一次静止（若子进程已退出则不等），然后关闭终端、结束子进程。
 // 输出：stdout 是终端原始字节流（UTF-8）；stderr 最后一行是 JSON 摘要
 //   {"ptyExit":退出码|null,"killed":是否被我们结束,"ms":总耗时,"steps":[{"step":i,"matched":bool,"ms":..}]}
@@ -41,16 +43,19 @@ async function waitIdle(ms) {
 }
 async function waitFor(text, timeoutMs) {
   const until = Date.now() + Math.min(timeoutMs, Math.max(0, left()));
+  const all = Array.isArray(text) ? text : [text];
+  const seen = () => { const t = screenText(); return all.every((x) => t.includes(x)); };
   while (Date.now() < until && exited === null) {
-    if (screenText().includes(text)) return true;
+    if (seen()) return true;
     await sleep(100);
   }
-  return screenText().includes(text);
+  return seen();
 }
 
 const report = [];
 for (const [i, st] of (cfg.steps || []).entries()) {
   const s0 = Date.now();
+  if (st.delayMs) await sleep(Math.min(st.delayMs, Math.max(0, left())));
   const matched = st.waitFor ? await waitFor(st.waitFor, st.timeoutMs ?? 20000) : true;
   await waitIdle(st.idleMs ?? cfg.idleMs ?? 1500);
   const snap = st.snapshot ? renderScreen(raw, { cols, rows }).screen : undefined;

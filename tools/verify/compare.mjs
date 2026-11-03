@@ -49,13 +49,15 @@ export const RULES_DOC = [
   ['cwd-file', 'Bash 工具的 cwd 记录文件 claude-<4hex>-cwd → claude-<HEX4>-cwd'],
   ['tmp-file', '原子写临时文件 .tmp.<pid>.<12hex> → .tmp.<PID>.<HEX>'],
   ['date', '"Today\'s date is YYYY-MM-DD" 与 currentDate 之类的日期 → <DATE>'],
-  ['duration', 'JSON 里名字含 duration / _ms / Ms / ttft 的数值字段 → "<N>"'],
+  ['duration', 'JSON 里名字含 duration / _ms / Ms / ttft 的数值字段 → "<N>"；纯文本 "duration_ms: <n>"（子代理 hand-back 的 <usage>）→ <N>'],
   ['cost', 'total_cost_usd / costUSD 数值不归一（假上游 usage 固定，成本应稳定）'],
   ['header:content-length', '请求头 Content-Length → <LEN>（body 本身逐字段比较）'],
   ['request:t', '请求到达时间 t、seq 不参与比较'],
   ['path:?', '路径分隔符显示成 ? 的形式（交互界面里的跨会话消息警告）也按沙箱路径归一'],
   ['tty-turn-line', '交互界面回合结束行 "✻ <随机动词> for <耗时> · done <钟点>" → "✻ <VERB> for <DUR> · done <CLOCK>"'],
-  ['tty-stream', '伪终端场景不比较原始字节流（Ink 增量重绘的帧切分随时间变），改为比较 vt-screen.mjs 还原的最终屏幕和各步快照'],
+  ['tty-stream', '伪终端场景不比较原始字节流（Ink 增量重绘的帧切分随时间变），改为比较 vt-screen.mjs 还原的最终屏幕和各步快照；sequence 里的伪终端步骤同样处理（scenarios 成员加）'],
+  ['agent-id', '子代理 id a<16hex>（Agent 工具 hand-back 里的 agentId、子代理请求头）→ <AGENT-ID-n>，按首次出现编号（scenarios 成员加）'],
+  ['plan-slug', '计划文件名 ~/.claude/plans/<前缀>-<随机词>-<随机词>.md 的两个随机词 → <WORD>-<WORD>（scenarios 成员加）'],
   ['parallel-tool-results', '同一条 user 消息里连续的 tool_result 块（以及 stream-json 里连续的 tool_result user 事件行）按 tool_use_id 排序：并行工具按完成先后回传，顺序不确定'],
 ];
 
@@ -74,7 +76,7 @@ export function makeNormalizer(raw) {
   addPath('path:project', sb.projectRoot, '<PROJECT>');
   literal.sort((a, b) => b[1].source.length - a[1].source.length);
   const runId = path.basename(sb.root);
-  const ord = { uuid: new Map(), hex64: new Map() };
+  const ord = { uuid: new Map(), hex64: new Map(), agent: new Map() };
   const ordinal = (kind, label) => (m) => {
     const key = m.toLowerCase();
     if (!ord[kind].has(key)) ord[kind].set(key, ord[kind].size + 1);
@@ -90,6 +92,12 @@ export function makeNormalizer(raw) {
     ['epoch-ms', /\b1[6-9]\d{11}\b/g, '<EPOCH-MS>'],
     ['cch', /\bcch=[0-9a-f]{5}\b/g, 'cch=<CCH>'],
     ['cwd-file', /\bclaude-[0-9a-f]{4}-cwd\b/g, 'claude-<HEX4>-cwd'],
+    // 子代理 hand-back 的 <usage> 块是纯文本 "duration_ms: 2670"（scenarios 成员加）
+    ['duration', /(\bduration_ms: )\d+/g, '$1<N>'],
+    // 子代理 id：'a' + 16 位十六进制（createAgentId），每次随机；只认这一种形状，编号保留"同一个子代理"的关系
+    ['agent-id', /\ba[0-9a-f]{16}\b/g, ordinal('agent', 'AGENT-ID')],
+    // plan 模式的计划文件名：<前缀>-<形容词>-<名词>.md，后两个词随机
+    ['plan-slug', /(plans(?:\\\\|\\|\/)+[a-z0-9]+)-[a-z]+-[a-z]+\.md\b/g, '$1-<WORD>-<WORD>.md'],
     ['tmp-file', /\.tmp\.\d+\.[0-9a-f]{12}\b/g, '.tmp.<PID>.<HEX>'],
     ['date', /(Today's date is |"currentDate"\s*:\s*"|currentDate: )\d{4}-\d{2}-\d{2}/g, '$1<DATE>'],
     ['duration', /("[A-Za-z_]*(?:duration|Duration|_ms|Ms|ttft)[A-Za-z_]*"\s*:\s*)-?\d+(?:\.\d+)?/g, '$1"<N>"'],
@@ -178,7 +186,13 @@ export function normalizeResult(raw0) {
     stdout: tty ? "<tty stream, not compared>" : n.str(raw.stdout), stderr: n.str(raw.stderr),
     ...(tty && { screen: raw.screen.map(n.str), snapshots: (raw.snapshots || []).map((x) => x.map(n.str)),
       pty: { exit: raw.pty?.ptyExit, killed: raw.pty?.killed, matched: (raw.pty?.steps || []).map((x) => x.matched) } }),
-    steps: raw.steps?.map((s) => ({ args: n.deep(s.args), exitCode: s.exitCode, timedOut: s.timedOut, stdout: n.str(s.stdout), stderr: n.str(s.stderr) })),
+    // sequence 里的伪终端步骤（runCli 的 st.tty）同样只比较还原出的屏幕，不比较原始字节流
+    steps: raw.steps?.map((s) => ({ args: n.deep(s.args), exitCode: s.exitCode, timedOut: s.timedOut,
+      ...(s.screen !== undefined
+        ? { stdout: '<tty stream, not compared>', screen: s.screen.map(n.str), snapshots: (s.snapshots || []).map((x) => x.map(n.str)),
+            pty: { exit: s.pty?.ptyExit, killed: s.pty?.killed, matched: (s.pty?.steps || []).map((x) => x.matched) } }
+        : { stdout: n.str(s.stdout) }),
+      stderr: n.str(s.stderr) })),
     requests: raw.requests.map(req),
     files: n.deep(raw.files),
     collected: n.deep(raw.collected),

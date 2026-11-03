@@ -7,7 +7,11 @@
 //   擦除（J K X）、插入/删除（@ P L M）、滚动（S T、ESC D/M、LF 到底）、保存/恢复光标（ESC 7/8、CSI s/u）；
 //   SGR、模式切换（h/l）、OSC、DCS 等忽略。不模拟滚动区域（DECSTBM 记录但按全屏处理）和备用屏幕切换（全部画在同一屏）。
 // 只用于比较两棵树的输出是否一致，不追求与真实终端逐像素相同。
-const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|\p{Extended_Pictographic}/u;
+// 宽度：东亚宽字符与 \p{Emoji_Presentation}（默认按 emoji 显示的字符）算 2 列，与 Bun.stringWidth / CLI 的排版一致。
+// （scenarios 成员 2026-11-04 修正：原来用 \p{Extended_Pictographic}，把 ⏸ ⚠ ✳ ⏺ ✔ ▶ ♥ 这类默认按文本显示、CLI 按 1 列
+//  排版的字符也算 2 列；Ink 增量重绘用 CSI n C 跳过没变的格子，于是整行错位，例如 "⏸ manual mode on" 被还原成
+//  "⏸ munual mode on"，waitFor 也找不到文字。见 docs/process/scenarios.md 第 3 节。）
+const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|\p{Emoji_Presentation}/u;
 const ZERO = /^[\p{M}​-‏⁠-⁤︀-️]$/u;
 
 export function renderScreen(raw, { cols = 100, rows = 30 } = {}) {

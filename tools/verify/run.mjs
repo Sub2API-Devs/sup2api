@@ -10,6 +10,7 @@
 //     --spawn-trace      预加载 spawn-trace-preload.js，记录 CLI 启动的子进程与 stdio（结果在 spawns）
 //     --shim-ant         预加载 bun-ant-shim.js（验证环境补丁：用公开 API 实现 Bun.ant.CellSegmenter，让 Ink 命令能在公版 Bun 上渲染）
 //     --shim-win-append  预加载 win-append-shim.js（验证环境补丁：Windows 上新建独占文件去掉 O_APPEND，让 Bash 工具能写 stdout）
+//     --shim-win-hook-spawn 预加载 win-hook-spawn-shim.js（验证环境补丁：Windows 上命令钩子的 spawn 改成 Windows 构建的做法——Git Bash 当 shell、不 detached；scenarios 成员加）
 //     --env-trace        预加载 env-trace-preload.js，记录 CLI 读取过的环境变量名（结果在 envReads，非 --json 时打印）
 //     --json             输出完整结果 JSON（含假上游收到的请求）
 //     --timeout <ms>     超时，默认 60000
@@ -19,7 +20,7 @@
 //
 // 用法（库）：import { runCli, runScenario, pool } from './run.mjs'
 //   const r = await runCli({ tree, args | sequence: [{args, stdin}], script, firstParty, upstream, setup, collect,
-//                            timeoutMs, stdin, env, keep, trace, envTrace, spawnTrace, shimAnt, shimWinAppend, tty })
+//                            timeoutMs, stdin, env, keep, trace, envTrace, spawnTrace, shimAnt, shimWinAppend, shimWinHookSpawn, tty })
 //   r = { exitCode, signal, timedOut, stdout, stderr, durationMs, steps?, requests, files, collected, envReads?, spawns?,
 //         screen?, snapshots?, pty?, sandbox: {root, home, work, tmp, …}, leaks, hostWarnings }
 //   tty: { cols, rows, idleMs, expectExit, steps: [{ waitFor, idleMs, snapshot, send }] } 时经 pty-driver.js 在伪终端
@@ -186,7 +187,7 @@ function killTree(child) {
 export async function runScenario(tree, s) {
   return runCli({ tree, args: s.args, sequence: s.sequence, script: s.script, upstream: s.upstream !== false,
     firstParty: !!s.firstParty, setup: s.setup, collect: s.collect, stdin: s.stdin, env: s.env, timeoutMs: s.timeoutMs || 60000,
-    shimAnt: !!s.shimAnt, shimWinAppend: !!s.shimWinAppend, tty: s.tty });
+    shimAnt: !!s.shimAnt, shimWinAppend: !!s.shimWinAppend, shimWinHookSpawn: !!s.shimWinHookSpawn, tty: s.tty });
 }
 
 export async function pool(items, n, fn) {
@@ -197,7 +198,7 @@ export async function pool(items, n, fn) {
 }
 
 // 一次 CLI 调用：spawn bun，收集输出，超时按 PID 杀进程树
-async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTrace, spawnTrace, shimAnt, shimWinAppend, tty }) {
+async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTrace, spawnTrace, shimAnt, shimWinAppend, shimWinHookSpawn, tty }) {
   const t0 = Date.now();
   const pre = [];
   if (trace) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'trace-preload.js'));
@@ -205,6 +206,7 @@ async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTra
   if (spawnTrace) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'spawn-trace-preload.js'));
   if (shimAnt) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'bun-ant-shim.js'));
   if (shimWinAppend) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'win-append-shim.js'));
+  if (shimWinHookSpawn) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'win-hook-spawn-shim.js'));
   const cliArgv = ['--no-install', ...pre, entry, ...args];
   // tty：经 pty-driver.js 在伪终端（Windows 上是 ConPTY）里运行，stdout 收到的是终端字节流
   let cmdArgv = cliArgv, cmdEnv = env;
@@ -247,7 +249,7 @@ async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTra
 // 结果的 exitCode/stdout/stderr 取自最后一步，每一步的完整结果在 steps 里。
 // collect(ctx) 在删除沙箱前调用，返回值放进 result.collected（例如读取 MCP 服务器日志）。
 export async function runCli({ tree, args = [], sequence, script, upstream = true, firstParty = false, setup, collect,
-  timeoutMs = 60000, stdin, env: extraEnv = {}, keep = false, trace = false, envTrace = false, spawnTrace = false, shimAnt = false, shimWinAppend = false, tty } = {}) {
+  timeoutMs = 60000, stdin, env: extraEnv = {}, keep = false, trace = false, envTrace = false, spawnTrace = false, shimAnt = false, shimWinAppend = false, shimWinHookSpawn = false, tty } = {}) {
   const treeDir = path.resolve(projectRoot, tree);
   const entry = path.join(treeDir, 'cli.js');
   if (!fs.existsSync(entry)) throw new Error(`找不到 ${entry}`);
@@ -264,7 +266,7 @@ export async function runCli({ tree, args = [], sequence, script, upstream = tru
     const steps = [];
     for (const st of plan) {
       const a = typeof st.args === 'function' ? st.args(ctx) : st.args;
-      steps.push(await spawnOnce({ entry, args: a, sb, env, stdin: st.stdin, timeoutMs, trace, envTrace, spawnTrace, shimAnt, shimWinAppend, tty: st.tty ?? tty }));
+      steps.push(await spawnOnce({ entry, args: a, sb, env, stdin: st.stdin, timeoutMs, trace, envTrace, spawnTrace, shimAnt, shimWinAppend, shimWinHookSpawn, tty: st.tty ?? tty }));
     }
     const last = steps.at(-1);
     const result = {
@@ -352,7 +354,7 @@ if (isMain) {
   const env = {};
   own.forEach((a, i) => { if (a === '--env') { const [k, ...v] = own[i + 1].split('='); env[k] = v.length ? v.join('=') : undefined; } });
   const r = await runCli({ tree, args: cliArgs, firstParty: flag('--first-party'), upstream: !flag('--no-upstream'),
-    keep: flag('--keep'), trace: flag('--trace'), envTrace: flag('--env-trace'), spawnTrace: flag('--spawn-trace'), shimAnt: flag('--shim-ant'), shimWinAppend: flag('--shim-win-append'), env, timeoutMs: timeoutIdx >= 0 ? Number(own[timeoutIdx + 1]) : 60000 });
+    keep: flag('--keep'), trace: flag('--trace'), envTrace: flag('--env-trace'), spawnTrace: flag('--spawn-trace'), shimAnt: flag('--shim-ant'), shimWinAppend: flag('--shim-win-append'), shimWinHookSpawn: flag('--shim-win-hook-spawn'), env, timeoutMs: timeoutIdx >= 0 ? Number(own[timeoutIdx + 1]) : 60000 });
   if (flag('--json')) {
     console.log(JSON.stringify(r, null, 2));
   } else {
