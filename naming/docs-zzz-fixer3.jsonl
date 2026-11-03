@@ -1,0 +1,11 @@
+{"id":"chunk-s61vbvea.js#Xh","doc":"按“钩子是否来自托管/可更新插件”过滤一组钩子：整组都满足时返回该组或空数组，混合时返回只含满足条目的新组。被 filterHooksByManagedHold 使用。"}
+{"id":"chunk-hnwnzznd.js#nAo","doc":"判断 URL 串与该主机是否指同一地址：相等，或只差 http:// 、https:// 前缀。只用于决定是否把链接文本换成 URL。"}
+{"id":"chunk-v9tcvh08.js#se","doc":"按模型代号的模型配置表（haiku35 … sonnet46/5、opus40 … 5.5、fable5/5.1 等，外加 mythos 的多提供者 id）。"}
+{"id":"chunk-mxpjbr4y.js#z","doc":"把一条 home seed 提示拼成 `${触发前缀}: ${正文}${后缀}` 一行（create 与其他触发用不同前缀）。"}
+{"id":"chunk-cgr0tezp.js#Bs","doc":"检测 URL 的反斜杠与 @ 混淆：反斜杠之后、@ 之前出现：或 %3a 视为可疑（浏览器与 URL 解析器会把它当成不同主机）。"}
+{"id":"chunk-ddkccdnb.js#cpr","doc":"市场名防冒充：引用本身不是官方市场、但名字与提供者相近时返回 true。"}
+{"id":"chunk-e6aww6q8.js#ZGn","doc":"写已安装插件清单前确保插件数据目录存在（mkdirSync，已存在则无操作）。"}
+{"id":"chunk-e6aww6q8.js#WTr","doc":"可注入子 shell 的环境变量白名单：Windows 档案变量、语言/locale、PATH 一类，再并上代理 CA/token 变量（NO_PROXY 除外）。"}
+{"id":"chunk-3dq9c61y.js#z","doc":"主机档案探测的常量组：探测截止时间、读文件上限、工具/发行版/架构名的正则、候选工具名，以及 plist 与 CUDA 的路径。"}
+{"id":"chunk-9hy503gy.js#pe","doc":"渲染“工作流被拒绝”的工具结果；当前实现只输出 “Dynamic workflow cancelled” 一行（函数被复用来渲染拒绝状态）。"}
+{"id":"chunk-j0y6ypnr.js#Lai","doc":"判断 \\\\wsl$ 或 \\\\wsl.localhost 的 UNC 路径是否属于给定 WSL 发行版；不是 WSL 路径时视为匹配。"}
