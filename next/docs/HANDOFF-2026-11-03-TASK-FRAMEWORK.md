@@ -5,7 +5,7 @@
 ## 1. 现在的状态
 
 - **只有设计，没有任何实现代码。** 两份设计文档已提交：
-  - `next/docs/TASK-FRAMEWORK-DESIGN.md`：定时任务框架（gocron 每个节点 + River 全集群一次），含核心约 40 个后台循环的盘点和分批。
+  - `next/docs/TASK-FRAMEWORK-DESIGN.md`：定时任务框架（gocron 每个节点 + River 全集群一次），含核心约 40 个后台循环的盘点和分批。2026-11-03 用户要求先完整设计框架，已补成完整设计（接口、两个后端、表、迁移文件、控制台接口、插件协议、依赖版本），§17 列了待用户确认的决定。
   - `next/plugins/ccgateway/docs/ACCOUNT-RUNTIME-PARKING-DESIGN.md`：红色账号停机满 3 小时后停止（不删除）容器。
 - 线上现状：核心 0.1.234（两节点），ccgateway 插件 0.1.125（CLI v46）。最近一次发布记录在 `next/deploy/gateway/ovh/README.md` 顶部。
 - **第一批的范围用户还没有明确说“开始做”。** 最后一轮是我问“第一批可以开始做吗？”，用户回复“提交所有代码，然后给我一份说明，我交接给其他 AI 继续做”。开工前先向用户确认第一批范围（见 §4）。
@@ -21,7 +21,7 @@
    - 插件的“每个节点”任务**只能在 manifest 显式声明**，核心调度；插件的“全集群一次”任务**运行时通过 SDK 注册**。
    - 核心的“每个节点”任务启动时用 gocron 注册，“全集群一次”用 River。
    - 要抽象、解耦，**一套 API** 完成任务框架。
-5. 数据库连接：用户担心节点多了连接过多。已查：每个核心节点有 pgx 连接池（默认最多 20，`SUB2API_PG_MAX_CONNS` 或 DSN `pool_max_conns` 可调），线上远没到上限，不需要外部连接池（数字见框架设计 §6.2）。
+5. 数据库连接：用户担心节点多了连接过多。已查：每个核心节点有 pgx 连接池（默认最多 20，`SUB2API_PG_MAX_CONNS` 或 DSN `pool_max_conns` 可调），线上远没到上限，不需要外部连接池（数字见框架设计 §13）。
 
 ## 3. 关键事实（已核对代码与线上）
 
@@ -32,7 +32,7 @@
 - 同步：`ccgateway/accounts.go` `Run`（每 60 秒全量）+ 账号变更 `kickCCGateway` 立即同步；`blockedRecently/markBlocked` 只对已删除账号去重，要扩到所有 `!Enabled`（否则停着的账号每分钟各 PUT 一次，2026-10-11 出过这个问题）。
 - 重新授权要求容器 ready（`ccgateway/reauth.go` `ReauthDraft`）；测试在 `internal/account/testreq.go` `runTest`；手动查额度在 `internal/account/quota.go` `runQuotaQuery`。这三处要处理停着的容器（设计 §5）。
 - 账号表没有“状态变化时间”，要加 `accounts.status_changed_at` + 触发器（设计 §3）。
-- `CanWork`（`app/managed.go`、`app/phases.go` 约 157 行）是节点级的“可以跑后台任务”许可，不是选主；River 的执行客户端只在它为真的节点启动（框架设计 §4.2）。
+- `CanWork`（`app/managed.go`、`app/phases.go` 约 157 行）是节点级的“可以跑后台任务”许可，不是选主；River 的执行客户端只在它为真的节点启动（框架设计 §7.1）。
 - 自动禁用到点恢复的写法（`internal/account/automatic_state.go` `SweepAutomaticState`）是“按行到期 + SKIP LOCKED”的参考。
 - 插件定时任务现状：`internal/job/job.go`（Redis 锁 + `plugin_job_runs` 唯一索引，调插件 `RunJob`）；manifest `Job` 在 `next/sdk/manifest/manifest.go` 约 736 行；`RunJob` 在 `next/sdk/proto/sub2api/plugin/v1/app.proto`。
 - 迁移：`internal/store/migrate.go`，每个文件一个事务、跨节点 advisory 锁；最新是 `0075_failure_policy_stored_login_keywords.sql`，新迁移从 0076 起。
@@ -41,10 +41,10 @@
 
 ## 4. 下一步（第一批，核心 0.1.235）
 
-范围见框架设计 §8 第一批：框架本身 + 停容器 + 10 个全集群任务 + 3 个每节点任务。插件不发、插件定时任务这一批不动。建议顺序：
+范围见框架设计 §14：框架本身 + 停容器 + 12 个全集群任务（含停容器和框架自带的 `core.task.housekeeping`）+ 3 个每节点任务。插件不发、插件定时任务这一批不动。建议顺序：
 
-1. **依赖与迁移**：加 River、gocron 依赖（锁定版本）；用 `river migrate-get` 按版本导出 SQL 成核心迁移；`tasks` 表；停容器的列与触发器（回填用迁移时间，不用 `updated_at`）。在测试库上用非超级用户账号执行。
-2. **`internal/core` 接口 + `internal/task` 实现**（框架设计 §3、§4）：通用 River kind `sup2api.task`、周期配置从 `tasks` 表构建并经 `task:changed` 同步、`CanWork` 控制 River 执行客户端启停、gocron singleton 模式。
+1. **依赖与迁移**：加 River、gocron 依赖（锁定版本）；用 `river migrate-get` 按版本导出 SQL 成核心迁移；`scheduled_tasks` 表（框架设计 §9）；停容器的列与触发器（回填用迁移时间，不用 `updated_at`）。在测试库上用非超级用户账号执行。
+2. **`internal/core` 接口 + `internal/task` 实现**（框架设计 §4–§8）：通用 River kind `sup2api.task`、周期配置从 registry 构建、`scheduled_tasks` 行租约防叠跑、`CanWork` 控制 River 客户端启停、gocron singleton 模式。
 3. **停容器**（停容器设计 §4–§6）：`core.ccgateway.park_runtimes`、`desiredIn` 的 `parked`、去重扩展、唤醒（重新授权、测试、运行环境列表“启动”）、额度查询回 `runtime_parked`、控制台文案与设置项（默认 3 小时，0 为不停）。
 4. **迁移第一批现有循环**，删除原循环。
 5. **控制台**“系统 → 定时任务”只读页 + 手动运行。

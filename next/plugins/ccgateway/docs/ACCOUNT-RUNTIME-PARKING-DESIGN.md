@@ -26,7 +26,7 @@
 
 ## 3. 数据：迁移（幂等，只加可空列）
 
-River 自身的表见 `next/docs/TASK-FRAMEWORK-DESIGN.md` §6.1，排在前面；本功能另一个迁移：
+River 自身的表见 `next/docs/TASK-FRAMEWORK-DESIGN.md` §9，排在前面（本功能的迁移是 `0085_account_runtime_parking.sql`）；本功能另一个迁移：
 
 ```sql
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS status_changed_at timestamptz;
@@ -130,7 +130,7 @@ r.parked_at IS NOT NULL AND r.parked_at >= a.status_changed_at AND <红色>
 
 ## 9. 验证
 
-- 单元（核心 `internal/ccgateway`、`internal/account`，嵌入式 PG，不能跳过；框架本身的测试见 TASK-FRAMEWORK-DESIGN.md §10）：
+- 单元（核心 `internal/ccgateway`、`internal/account`，嵌入式 PG，不能跳过；框架本身的测试见 TASK-FRAMEWORK-DESIGN.md §16）：
   - 触发器：改 `status`/`auto_disabled_until`/`schedulable` 写时间，改其他列不写。
   - 定时任务：各种状态 × 满/未满 3 小时 × `woken_at` × 时长 0；两个任务并发跑同一批账号只认领一次；3 小时内恢复又禁用的从新时间算。
   - 停机标记失效：账号恢复后 `Enabled=true`；再次禁用后旧标记不生效。
