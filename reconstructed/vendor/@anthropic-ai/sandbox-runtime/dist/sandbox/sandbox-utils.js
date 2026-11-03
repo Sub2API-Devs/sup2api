@@ -5,32 +5,26 @@
  * pieces: chunk-fq0cr76a.js (8), chunk-r0ads4ty.js (52), chunk-vp5gef34.js (1)
  * attribution: affinity 6, esm-fingerprint 37, esm-layout 18
  */
-import * as pathModule from "path";
+import "path";
 import * as pathModule_2 from "path";
-import { sep, sep as sep_2, sep as sep_3, join, join as join_2 } from "path";
+import { sep, join } from "path";
 import { homedir } from "os";
-import * as fsModule from "fs";
+import "fs";
 import * as fsModule_2 from "fs";
-import * as fsModule_3 from "fs";
-import {
-  open,
-  open as open_2,
-  realpath,
-  realpath as realpath_2,
-  stat,
-  lstat,
-  lstat as lstat_2,
-  lstat as lstat_3,
-  readdir,
-} from "fs/promises";
-import { xTt, X, O, W } from "./glob-pattern.js";
-import { JSe } from "../utils/real-path.js";
-import { zv } from "../utils/platform.js";
-import { At } from "../utils/debug.js";
+import "fs";
+import { open, realpath, stat, lstat, readdir } from "fs/promises";
+import { xTt, globTokenToRegex, GlobTokenKind, parseGlob } from "./glob-pattern.js";
+import { realPathOf } from "../utils/real-path.js";
+import { getPlatform } from "../utils/platform.js";
+import { logForDebugging } from "../utils/debug.js";
 import { escapeInvalidCharClasses } from "../../../../../src/utils/sandbox/windowsSandbox.js";
 import { urlPatternToRegex, countCharInString } from "../../../../../src/utils/stringUtils.js";
-import { $c } from "../../../../../src/utils/platformTargets.js";
-import { N, Pe, we } from "../../../../../src/memdir/memoryIndex.js";
+import { readOnlyNoFollowFlags } from "../../../../../src/utils/platformTargets.js";
+import {
+  hasDocumentPath,
+  upsertDocument,
+  extractMemoryFieldsFromFile,
+} from "../../../../../src/memdir/memoryIndex.js";
 import { isENOENT } from "../../../../../src/utils/errors.js";
 
 //@ chunk-r0ads4ty.js:3804-3856 esm-fingerprint
@@ -38,53 +32,53 @@ function Cwn(e) {
   return xTt(e).slice(0, -1) + "(/.*)?$";
 }
 //@ chunk-r0ads4ty.js:3856-4006 esm-fingerprint
-var dsr = [
-    ".gitconfig",
-    ".gitmodules",
-    ".bashrc",
-    ".bash_profile",
-    ".zshrc",
-    ".zprofile",
-    ".profile",
-    ".ripgreprc",
-    ".mcp.json",
-  ],
-  oe = [".git", ".vscode", ".idea"];
+var DANGEROUS_FILES = [
+  ".gitconfig",
+  ".gitmodules",
+  ".bashrc",
+  ".bash_profile",
+  ".zshrc",
+  ".zprofile",
+  ".profile",
+  ".ripgreprc",
+  ".mcp.json",
+];
+var DANGEROUS_DIRECTORIES = [".git", ".vscode", ".idea"];
 //@ chunk-r0ads4ty.js:4006-4095 esm-fingerprint
-function csr() {
-  return [...oe.filter((e) => e !== ".git"), ".claude/commands", ".claude/agents"];
+function getDangerousDirectories() {
+  return [...DANGEROUS_DIRECTORIES.filter((d) => d !== ".git"), ".claude/commands", ".claude/agents"];
 }
 //@ chunk-r0ads4ty.js:4095-4134 esm-layout
-function Mqt(e) {
-  return e.toLowerCase();
+function normalizeCaseForComparison(pathStr) {
+  return pathStr.toLowerCase();
 }
 //@ chunk-r0ads4ty.js:4134-4197 esm-layout
-function oS(e, t) {
-  return e === t || e.startsWith(t === "/" ? "/" : t + "/");
+function isAtOrUnder(p, dir) {
+  return p === dir || p.startsWith(dir === "/" ? "/" : dir + "/");
 }
 //@ chunk-r0ads4ty.js:4197-4237 esm-layout
-function zot(e, t) {
-  return e !== t && oS(e, t);
+function zot(p, dir) {
+  return p !== dir && isAtOrUnder(p, dir);
 }
 //@ chunk-r0ads4ty.js:4237-4350 esm-fingerprint
-function* Rwn(e) {
-  for (let index = e.lastIndexOf("/"); index > 0; index = e.lastIndexOf("/", index - 1))
-    yield e.slice(0, index);
-  if (e !== "/") yield "/";
+function* properAncestors(absolutePath) {
+  for (let slash = absolutePath.lastIndexOf("/"); slash > 0; slash = absolutePath.lastIndexOf("/", slash - 1))
+    yield absolutePath.slice(0, slash);
+  if (absolutePath !== "/") yield "/";
 }
 //@ chunk-r0ads4ty.js:4350-4421 esm-layout
-function Dqt(e) {
+function Dqt(candidatePath) {
   try {
-    let t = JSe(e);
-    if (t !== e) return [e, t];
+    let resolved = realPathOf(candidatePath);
+    if (resolved !== candidatePath) return [candidatePath, resolved];
   } catch {}
-  return [e];
+  return [candidatePath];
 }
 //@ chunk-r0ads4ty.js:4421-4522 esm-fingerprint
-function F3r(e, t) {
-  if (e === "/") return e;
-  let r = t(pathModule.dirname(e));
-  return `${r === "/" ? "" : r}/${pathModule.basename(e)}`;
+function nameLocation(p, canonicalOf) {
+  if (p === "/") return p;
+  let parent = canonicalOf(pathModule_2.dirname(p));
+  return `${parent === "/" ? "" : parent}/${pathModule_2.basename(p)}`;
 }
 //@ chunk-r0ads4ty.js:4522-4576 esm-fingerprint
 function xwn() {
@@ -95,221 +89,277 @@ function xwn() {
   }
 }
 //@ chunk-r0ads4ty.js:4576-4674 esm-fingerprint
-function R4e(e) {
-  let t = e?.code;
-  return t === "ENOENT" || t === "ENOTDIR" || t === "ELOOP" || t === "ENAMETOOLONG";
+function isAbsenceErrno(err) {
+  let code = err?.code;
+  return code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP" || code === "ENAMETOOLONG";
 }
 //@ chunk-r0ads4ty.js:4674-4763 esm-layout
-function Ad(e) {
-  return e.includes("*") || e.includes("?") || e.includes("[") || e.includes("]");
+function containsGlobChars(pathPattern) {
+  return (
+    pathPattern.includes("*") ||
+    pathPattern.includes("?") ||
+    pathPattern.includes("[") ||
+    pathPattern.includes("]")
+  );
 }
 //@ chunk-r0ads4ty.js:4763-4819 esm-layout
-function Jxe(e) {
-  return e.includes("*") || e.includes("?");
+function containsGlobCharsWin(p) {
+  return p.includes("*") || p.includes("?");
 }
 //@ chunk-r0ads4ty.js:4819-4872 esm-fingerprint
-function PTt(e) {
-  return zv() === "windows" ? Jxe(e) : Ad(e);
+function containsGlobCharsForPlatform(p) {
+  return getPlatform() === "windows" ? containsGlobCharsWin(p) : containsGlobChars(p);
 }
 //@ chunk-r0ads4ty.js:4872-5121 esm-layout
-function Lqt(e) {
-  let t = e;
-  if (t === null || typeof t !== "object" || typeof t.path !== "string" || t.path === "" || t.literal !== !0)
+function markedLiteralPath(entry) {
+  let candidate = entry;
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    typeof candidate.path !== "string" ||
+    candidate.path === "" ||
+    candidate.literal !== true
+  )
     throw TypeError(
-      `A filesystem path entry must be a path, or { path, literal: true }; got ${JSON.stringify(e) ?? String(e)}`,
+      `A filesystem path entry must be a path, or { path, literal: true }; got ${JSON.stringify(entry) ?? String(entry)}`,
     );
-  return t.path;
+  return candidate.path;
 }
 //@ chunk-r0ads4ty.js:5121-5243 esm-fingerprint
-function oD(e) {
-  if (/^\\\\\?\\unc\\/i.test(e)) return "\\\\" + e.slice(8);
-  if (e.startsWith("\\\\?\\")) return e.slice(4);
-  return e;
+function stripExtendedPathPrefix(p) {
+  if (/^\\\\\?\\unc\\/i.test(p)) return "\\\\" + p.slice(8);
+  if (p.startsWith("\\\\?\\")) return p.slice(4);
+  return p;
 }
 //@ chunk-r0ads4ty.js:5243-5337 esm-fingerprint
-function Hqt(e) {
-  let toNamespacedPath = pathModule.win32.toNamespacedPath(e);
-  return /^[\\/]{2}[?.][\\/]unc[\\/]/i.test(toNamespacedPath);
+function isUncPath(p) {
+  let ns = pathModule_2.win32.toNamespacedPath(p);
+  return /^[\\/]{2}[?.][\\/]unc[\\/]/i.test(ns);
 }
 //@ chunk-r0ads4ty.js:5337-5388 esm-fingerprint
-function uy(e) {
-  return e.replace(/\/\*\*$/, "") || "/";
+function removeTrailingGlobSuffix(pathPattern) {
+  return pathPattern.replace(/\/\*\*$/, "") || "/";
 }
 //@ chunk-r0ads4ty.js:5388-5901 esm-fingerprint
-function Pwn(e, t) {
-  let normalized = pathModule.normalize(e),
-    normalized_2 = pathModule.normalize(t);
-  if (normalized_2 === normalized) return !1;
-  if (normalized.startsWith("/tmp/") && normalized_2 === "/private" + normalized) return !1;
-  if (normalized.startsWith("/var/") && normalized_2 === "/private" + normalized) return !1;
-  if (normalized_2 === "/") return !0;
-  if (normalized_2.split("/").filter(Boolean).length <= 1) return !0;
-  if (normalized.startsWith(normalized_2 + "/")) return !0;
-  let f = normalized;
-  if (normalized.startsWith("/tmp/")) f = "/private" + normalized;
-  else if (normalized.startsWith("/var/")) f = "/private" + normalized;
-  if (f !== normalized && f.startsWith(normalized_2 + "/")) return !0;
-  let startsWith = normalized_2.startsWith(normalized + "/"),
-    o = f !== normalized && normalized_2.startsWith(f + "/");
-  if (!(f !== normalized && normalized_2 === f) && !startsWith && !o) return !0;
-  return !1;
+function isSymlinkOutsideBoundary(originalPath, resolvedPath) {
+  let normalizedOriginal = pathModule_2.normalize(originalPath);
+  let normalizedResolved = pathModule_2.normalize(resolvedPath);
+  if (normalizedResolved === normalizedOriginal) return false;
+  if (normalizedOriginal.startsWith("/tmp/") && normalizedResolved === "/private" + normalizedOriginal)
+    return false;
+  if (normalizedOriginal.startsWith("/var/") && normalizedResolved === "/private" + normalizedOriginal)
+    return false;
+  if (normalizedResolved === "/") return true;
+  if (normalizedResolved.split("/").filter(Boolean).length <= 1) return true;
+  if (normalizedOriginal.startsWith(normalizedResolved + "/")) return true;
+  let canonicalOriginal = normalizedOriginal;
+  if (normalizedOriginal.startsWith("/tmp/")) canonicalOriginal = "/private" + normalizedOriginal;
+  else if (normalizedOriginal.startsWith("/var/")) canonicalOriginal = "/private" + normalizedOriginal;
+  if (canonicalOriginal !== normalizedOriginal && canonicalOriginal.startsWith(normalizedResolved + "/"))
+    return true;
+  let a = normalizedResolved.startsWith(normalizedOriginal + "/");
+  let o = canonicalOriginal !== normalizedOriginal && normalizedResolved.startsWith(canonicalOriginal + "/");
+  if (!(canonicalOriginal !== normalizedOriginal && normalizedResolved === canonicalOriginal) && !a && !o)
+    return true;
+  return false;
 }
 //@ chunk-r0ads4ty.js:5901-5992 esm-fingerprint
-function Nqt(e) {
-  if (e === "~") return homedir();
-  if (e.startsWith("~/")) return homedir() + e.slice(1);
-  return e;
+function Nqt(p) {
+  if (p === "~") return homedir();
+  if (p.startsWith("~/")) return homedir() + p.slice(1);
+  return p;
 }
 //@ chunk-r0ads4ty.js:5992-6165 esm-fingerprint
-function Kot(e) {
-  let t = homedir(),
-    r = /^[A-Za-z]:/.test(t) ? t.slice(0, 2) : "",
-    n = r ? t.slice(2) : t;
+function expandWindowsEnvRefs(e) {
+  let home = homedir();
+  let drive = /^[A-Za-z]:/.test(home) ? home.slice(0, 2) : "";
+  let homePath = drive ? home.slice(2) : home;
   return e
-    .replace(/%USERPROFILE%/gi, t)
-    .replace(/%HOMEDRIVE%/gi, r)
-    .replace(/%HOMEPATH%/gi, n);
+    .replace(/%USERPROFILE%/gi, home)
+    .replace(/%HOMEDRIVE%/gi, drive)
+    .replace(/%HOMEPATH%/gi, homePath);
 }
 //@ chunk-r0ads4ty.js:6165-6239 esm-fingerprint
-function S8o(e) {
-  return e.replace(/\/{2,}/g, "/").replace(/\/\.(?=\/)/g, "");
+function collapseInteriorSpellings(pathPattern) {
+  return pathPattern.replace(/\/{2,}/g, "/").replace(/\/\.(?=\/)/g, "");
 }
 //@ chunk-r0ads4ty.js:6239-6453 esm-fingerprint
-function z(e) {
-  if (zv() !== "windows" && /(?:^|\/)\.\.(?:\/|$)/.test(e))
-    At(
-      `[Sandbox] "${e}" could not be resolved and still contains a ".." component, so a rule spelled this way may not match.`,
-      { level: "warn" },
+function warnIfParentRefUnfolded(normalizedPath) {
+  if (getPlatform() !== "windows" && /(?:^|\/)\.\.(?:\/|$)/.test(normalizedPath))
+    logForDebugging(
+      `[Sandbox] "${normalizedPath}" could not be resolved and still contains a ".." component, so a rule spelled this way may not match.`,
+      {
+        level: "warn",
+      },
     );
-  return e;
+  return normalizedPath;
 }
 //@ chunk-r0ads4ty.js:6453-7151 esm-fingerprint
-function sS(e, t) {
-  let r = (c) => !t?.literal && PTt(c);
-  if (zv() === "windows") {
-    if (((e = oD(Kot(e))), /^[a-z]:/.test(e))) e = e[0].toUpperCase() + e.slice(1);
-    if (Hqt(e) && !r(e)) return pathModule.win32.normalize(e);
+function normalizePathForSandbox(pathPattern, opts) {
+  let isGlobSpelling = (p) => !opts?.literal && containsGlobCharsForPlatform(p);
+  if (getPlatform() === "windows") {
+    pathPattern = stripExtendedPathPrefix(expandWindowsEnvRefs(pathPattern));
+    if (/^[a-z]:/.test(pathPattern)) pathPattern = pathPattern[0].toUpperCase() + pathPattern.slice(1);
+    if (isUncPath(pathPattern) && !isGlobSpelling(pathPattern))
+      return pathModule_2.win32.normalize(pathPattern);
   }
-  if (zv() !== "windows" && e.endsWith("/") && !r(e)) e = e.replace(/\/+$/, "") || "/";
-  let n = Nqt(e);
-  if (n === e && !pathModule.isAbsolute(e)) n = pathModule.resolve(process.cwd(), e);
-  if (zv() !== "windows") n = S8o(n);
-  if (r(n)) {
-    let c = zv() === "windows" ? /[*?]/ : /[*?[\]]/,
-      f = n.split(c)[0];
-    if (f && f !== "/") {
-      let a = f.endsWith("/") ? f.slice(0, -1) : pathModule.dirname(f);
+  if (getPlatform() !== "windows" && pathPattern.endsWith("/") && !isGlobSpelling(pathPattern))
+    pathPattern = pathPattern.replace(/\/+$/, "") || "/";
+  let normalizedPath = Nqt(pathPattern);
+  if (normalizedPath === pathPattern && !pathModule_2.isAbsolute(pathPattern))
+    normalizedPath = pathModule_2.resolve(process.cwd(), pathPattern);
+  if (getPlatform() !== "windows") normalizedPath = collapseInteriorSpellings(normalizedPath);
+  if (isGlobSpelling(normalizedPath)) {
+    let splitRe = getPlatform() === "windows" ? /[*?]/ : /[*?[\]]/;
+    let staticPrefix = normalizedPath.split(splitRe)[0];
+    if (staticPrefix && staticPrefix !== "/") {
+      let baseDir = staticPrefix.endsWith("/")
+        ? staticPrefix.slice(0, -1)
+        : pathModule_2.dirname(staticPrefix);
       try {
-        let o = JSe(a);
-        if (!Pwn(a, o)) {
-          let sliced = n.slice(a.length);
-          return z(o + sliced);
+        let resolvedBaseDir = realPathOf(baseDir);
+        if (!isSymlinkOutsideBoundary(baseDir, resolvedBaseDir)) {
+          let patternSuffix = normalizedPath.slice(baseDir.length);
+          return warnIfParentRefUnfolded(resolvedBaseDir + patternSuffix);
         }
       } catch {}
     }
-    return z(n);
+    return warnIfParentRefUnfolded(normalizedPath);
   }
-  if (zv() !== "windows" && n !== "") n = n.replace(/\/\.$/, "").replace(/\/+$/, "") || "/";
+  if (getPlatform() !== "windows" && normalizedPath !== "")
+    normalizedPath = normalizedPath.replace(/\/\.$/, "").replace(/\/+$/, "") || "/";
   try {
-    let c = JSe(n);
-    if (!Pwn(n, c)) n = c;
+    let resolvedPath = realPathOf(normalizedPath);
+    if (!isSymlinkOutsideBoundary(normalizedPath, resolvedPath)) normalizedPath = resolvedPath;
   } catch {}
-  return z(n);
+  return warnIfParentRefUnfolded(normalizedPath);
 }
 //@ chunk-r0ads4ty.js:7151-7322 esm-fingerprint
-var ie = [
-    "/dev/stdout",
-    "/dev/stderr",
-    "/dev/null",
-    "/dev/tty",
-    "/dev/dtracehelper",
-    "/dev/autofs_nowait",
-    "/tmp/claude",
-    "/private/tmp/claude",
-  ],
-  te = [".npm/_logs", ".claude/debug"];
+var SANDBOX_OWN_WRITE_PATHS = [
+  "/dev/stdout",
+  "/dev/stderr",
+  "/dev/null",
+  "/dev/tty",
+  "/dev/dtracehelper",
+  "/dev/autofs_nowait",
+  "/tmp/claude",
+  "/private/tmp/claude",
+];
+var HOME_CONVENIENCE_WRITE_DIRS = [".npm/_logs", ".claude/debug"];
 //@ chunk-r0ads4ty.js:7322-7448 esm-fingerprint
-function BP(e) {
-  let t = homedir(),
-    r = !e || e.denyRead.length === 0 ? te : ce(t, e.denyRead, e.allowRead);
-  return [...ie, ...r.map((n) => pathModule.join(t, n))];
+function getDefaultWritePaths(readRules) {
+  let home = homedir();
+  let keptDirs =
+    !readRules || readRules.denyRead.length === 0
+      ? HOME_CONVENIENCE_WRITE_DIRS
+      : homeDirsNotReadDenied(home, readRules.denyRead, readRules.allowRead);
+  return [...SANDBOX_OWN_WRITE_PATHS, ...keptDirs.map((rel) => pathModule_2.join(home, rel))];
 }
 //@ chunk-r0ads4ty.js:7448-7780 esm-fingerprint
-function ce(e, t, r = []) {
-  let n = [...new Set([e, sS(e, { literal: !0 })])],
-    mapped = t.map((a) => ae(a)),
-    mapped_2 = r
-      .flatMap((a) => {
-        if (typeof a !== "string") return [Lqt(a)];
-        let o = uy(a);
-        return PTt(o) ? [] : [o];
-      })
-      .map((a) => sS(a, { literal: !0 }));
-  return te.filter((a) => {
-    let mapped_3 = n.map((i) => pathModule.join(i, a));
-    return !mapped.some(
-      (i) => mapped_3.some(i) && !mapped_2.some((s) => i(s) && mapped_3.some((C) => oS(C, s))),
+function homeDirsNotReadDenied(home, denyRead, allowRead = []) {
+  let homes = [
+    ...new Set([
+      home,
+      normalizePathForSandbox(home, {
+        literal: true,
+      }),
+    ]),
+  ];
+  let denies = denyRead.map((entry) => readRuleCovers(entry));
+  let reopened = allowRead
+    .flatMap((entry) => {
+      if (typeof entry !== "string") return [markedLiteralPath(entry)];
+      let stripped = removeTrailingGlobSuffix(entry);
+      return containsGlobCharsForPlatform(stripped) ? [] : [stripped];
+    })
+    .map((entry) =>
+      normalizePathForSandbox(entry, {
+        literal: true,
+      }),
+    );
+  return HOME_CONVENIENCE_WRITE_DIRS.filter((rel) => {
+    let spellings = homes.map((h) => pathModule_2.join(h, rel));
+    return !denies.some(
+      (denyCovers) =>
+        spellings.some(denyCovers) &&
+        !reopened.some((allow) => denyCovers(allow) && spellings.some((s) => isAtOrUnder(s, allow))),
     );
   });
 }
 //@ chunk-r0ads4ty.js:7780-7989 esm-fingerprint
-function ae(e) {
-  if (typeof e !== "string") {
-    let n = sS(Lqt(e), { literal: !0 });
-    return (c) => oS(c, n);
+function readRuleCovers(entry) {
+  if (typeof entry !== "string") {
+    let rule = normalizePathForSandbox(markedLiteralPath(entry), {
+      literal: true,
+    });
+    return (p) => isAtOrUnder(p, rule);
   }
-  let t = uy(e);
-  if (PTt(t)) {
-    let n = le(sS(t));
-    return n === null ? () => !0 : (c) => n.test(c);
+  let stripped = removeTrailingGlobSuffix(entry);
+  if (containsGlobCharsForPlatform(stripped)) {
+    let regex = compiledDenyGlob(normalizePathForSandbox(stripped));
+    return regex === null ? () => true : (p) => regex.test(p);
   }
-  let r = sS(t, { literal: !0 });
-  return (n) => oS(n, r);
+  let rule = normalizePathForSandbox(stripped, {
+    literal: true,
+  });
+  return (p) => isAtOrUnder(p, rule);
 }
 //@ chunk-r0ads4ty.js:7989-8144 esm-fingerprint
-function le(e) {
-  let t = K.get(e);
-  if (t === void 0) {
+function compiledDenyGlob(normalizedGlob) {
+  let regex = compiledDenyGlobs.get(normalizedGlob);
+  if (regex === undefined) {
     try {
-      ((t = new RegExp(Cwn(e))), t.test(""));
+      regex = new RegExp(Cwn(normalizedGlob));
+      regex.test("");
     } catch {
-      t = null;
+      regex = null;
     }
-    if (((Z += e.length), Z > fe)) (K.clear(), (Z = e.length));
-    K.set(e, t);
+    compiledDenyGlobChars += normalizedGlob.length;
+    if (compiledDenyGlobChars > MAX_COMPILED_DENY_GLOB_CHARS) {
+      compiledDenyGlobs.clear();
+      compiledDenyGlobChars = normalizedGlob.length;
+    }
+    compiledDenyGlobs.set(normalizedGlob, regex);
   }
-  return t;
+  return regex;
 }
 //@ chunk-r0ads4ty.js:8144-8387 esm-layout
-var K = new Map(),
-  Z = 0,
-  fe = 1048576,
-  ue = [
-    "NODE_EXTRA_CA_CERTS",
-    "SSL_CERT_FILE",
-    "CURL_CA_BUNDLE",
-    "REQUESTS_CA_BUNDLE",
-    "PIP_CERT",
-    "GIT_SSL_CAINFO",
-    "AWS_CA_BUNDLE",
-    "CARGO_HTTP_CAINFO",
-    "DENO_CERT",
-    "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE",
-    "NIX_SSL_CERT_FILE",
-  ];
+var compiledDenyGlobs = new Map();
+var compiledDenyGlobChars = 0;
+var MAX_COMPILED_DENY_GLOB_CHARS = 1048576;
+var CA_TRUST_VARS = [
+  "NODE_EXTRA_CA_CERTS",
+  "SSL_CERT_FILE",
+  "CURL_CA_BUNDLE",
+  "REQUESTS_CA_BUNDLE",
+  "PIP_CERT",
+  "GIT_SSL_CAINFO",
+  "AWS_CA_BUNDLE",
+  "CARGO_HTTP_CAINFO",
+  "DENO_CERT",
+  "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE",
+  "NIX_SSL_CERT_FILE",
+];
 //@ chunk-r0ads4ty.js:8387-10384 esm-fingerprint
-function Vot(e, t, r, n, c, f) {
-  let a = he(f),
-    o = a === SRT ? a : encodeURIComponent(a),
-    i = n ? `${o}:${n}@` : "",
-    s = ["SANDBOX_RUNTIME=1"];
-  if (!c) {
-    let I = process.env.CLAUDE_CODE_TMPDIR || process.env.CLAUDE_TMPDIR || "/tmp/claude";
-    s.push(`TMPDIR=${I}`);
+function generateProxyEnvVars(
+  httpProxyPort,
+  socksProxyPort,
+  caCertPath,
+  proxyAuthToken,
+  skipTmpdir,
+  encodedCommand,
+) {
+  let userRaw = proxyUsernameFor(encodedCommand);
+  let userPct = userRaw === PROXY_AUTH_USER ? userRaw : encodeURIComponent(userRaw);
+  let auth = proxyAuthToken ? `${userPct}:${proxyAuthToken}@` : "";
+  let envVars = ["SANDBOX_RUNTIME=1"];
+  if (!skipTmpdir) {
+    let tmpdir = process.env.CLAUDE_CODE_TMPDIR || process.env.CLAUDE_TMPDIR || "/tmp/claude";
+    envVars.push(`TMPDIR=${tmpdir}`);
   }
-  if (r) for (let I of ue) s.push(`${I}=${r}`);
-  if (!e && !t) return s;
-  let joined = [
+  if (caCertPath) for (let v of CA_TRUST_VARS) envVars.push(`${v}=${caCertPath}`);
+  if (!httpProxyPort && !socksProxyPort) return envVars;
+  let noProxyAddresses = [
     "localhost",
     "127.0.0.1",
     "::1",
@@ -318,506 +368,607 @@ function Vot(e, t, r, n, c, f) {
     "172.16.0.0/12",
     "192.168.0.0/16",
   ].join(",");
-  (s.push(`NO_PROXY=${joined}`), s.push(`no_proxy=${joined}`));
-  let w = n ? "127.0.0.1" : "localhost",
-    S = n && e === t ? "127.0.0.1" : "localhost";
-  if (e) {
-    if (
-      (s.push(`HTTP_PROXY=http://${i}${w}:${e}`),
-      s.push(`HTTPS_PROXY=http://${i}${w}:${e}`),
-      s.push(`http_proxy=http://${i}${w}:${e}`),
-      s.push(`https_proxy=http://${i}${w}:${e}`),
-      n)
-    )
-      s.push("GIT_CONFIG_PARAMETERS='http.proxyAuthMethod=basic'");
+  envVars.push(`NO_PROXY=${noProxyAddresses}`);
+  envVars.push(`no_proxy=${noProxyAddresses}`);
+  let w = proxyAuthToken ? "127.0.0.1" : "localhost";
+  let S = proxyAuthToken && httpProxyPort === socksProxyPort ? "127.0.0.1" : "localhost";
+  if (httpProxyPort) {
+    envVars.push(`HTTP_PROXY=http://${auth}${w}:${httpProxyPort}`);
+    envVars.push(`HTTPS_PROXY=http://${auth}${w}:${httpProxyPort}`);
+    envVars.push(`http_proxy=http://${auth}${w}:${httpProxyPort}`);
+    envVars.push(`https_proxy=http://${auth}${w}:${httpProxyPort}`);
+    if (proxyAuthToken) envVars.push("GIT_CONFIG_PARAMETERS='http.proxyAuthMethod=basic'");
   }
-  let A = e ? `http://${i}${w}:${e}` : `socks5h://${i}${S}:${t}`;
-  if (
-    (s.push(`ALL_PROXY=${A}`),
-    s.push(`all_proxy=${A}`),
-    s.push(`GRPC_PROXY=${A}`),
-    s.push(`grpc_proxy=${A}`),
-    t)
-  ) {
-    let p = zv();
-    if (p === "macos" && n && e === t) {
-      let buffer = Buffer.from(`${a}:${n}`);
-      s.push(
-        `SRT_SSH_PROXY_COMMAND=${de(t, buffer.toString("base64"))}`,
+  let connectProxyUrl = httpProxyPort
+    ? `http://${auth}${w}:${httpProxyPort}`
+    : `socks5h://${auth}${S}:${socksProxyPort}`;
+  envVars.push(`ALL_PROXY=${connectProxyUrl}`);
+  envVars.push(`all_proxy=${connectProxyUrl}`);
+  envVars.push(`GRPC_PROXY=${connectProxyUrl}`);
+  envVars.push(`grpc_proxy=${connectProxyUrl}`);
+  if (socksProxyPort) {
+    let platform = getPlatform();
+    if (platform === "macos" && proxyAuthToken && httpProxyPort === socksProxyPort) {
+      let basic = Buffer.from(`${userRaw}:${proxyAuthToken}`);
+      envVars.push(
+        `SRT_SSH_PROXY_COMMAND=${sshConnectScript(socksProxyPort, basic.toString("base64"))}`,
         `GIT_SSH_COMMAND=ssh -o ControlMaster=no -o ControlPath=none -o ProxyCommand="/bin/sh -c 'eval \\"\\\${SRT_SSH_PROXY_COMMAND:?unset, but GIT_SSH_COMMAND needs it}\\"' sh '%h' %p"`,
       );
-    } else if (p === "macos")
-      s.push(
-        `GIT_SSH_COMMAND=ssh -o ControlMaster=no -o ControlPath=none -o ProxyCommand='nc -X 5 -x localhost:${t} %h %p'`,
+    } else if (platform === "macos")
+      envVars.push(
+        `GIT_SSH_COMMAND=ssh -o ControlMaster=no -o ControlPath=none -o ProxyCommand='nc -X 5 -x localhost:${socksProxyPort} %h %p'`,
       );
-    else if (p === "linux" && e) {
-      let E = n ? `,proxyauth=${a}:${n}` : "";
-      s.push(
-        `GIT_SSH_COMMAND=ssh -o ControlMaster=no -o ControlPath=none -o ProxyCommand='socat - PROXY:${w}:%h:%p,proxyport=${e}${E}'`,
+    else if (platform === "linux" && httpProxyPort) {
+      let socatAuth = proxyAuthToken ? `,proxyauth=${userRaw}:${proxyAuthToken}` : "";
+      envVars.push(
+        `GIT_SSH_COMMAND=ssh -o ControlMaster=no -o ControlPath=none -o ProxyCommand='socat - PROXY:${w}:%h:%p,proxyport=${httpProxyPort}${socatAuth}'`,
       );
     }
-    if (
-      (s.push(`FTP_PROXY=socks5h://${i}${S}:${t}`),
-      s.push(`ftp_proxy=socks5h://${i}${S}:${t}`),
-      s.push(`RSYNC_PROXY=${S}:${t}`),
-      s.push(`DOCKER_HTTP_PROXY=http://${i}${e ? w : S}:${e || t}`),
-      s.push(`DOCKER_HTTPS_PROXY=http://${i}${e ? w : S}:${e || t}`),
-      e)
-    ) {
-      if (
-        (s.push("CLOUDSDK_PROXY_TYPE=http"),
-        s.push(`CLOUDSDK_PROXY_ADDRESS=${w}`),
-        s.push(`CLOUDSDK_PROXY_PORT=${e}`),
-        n)
-      )
-        (s.push(`CLOUDSDK_PROXY_USERNAME=${a}`), s.push(`CLOUDSDK_PROXY_PASSWORD=${n}`));
+    envVars.push(`FTP_PROXY=socks5h://${auth}${S}:${socksProxyPort}`);
+    envVars.push(`ftp_proxy=socks5h://${auth}${S}:${socksProxyPort}`);
+    envVars.push(`RSYNC_PROXY=${S}:${socksProxyPort}`);
+    envVars.push(
+      `DOCKER_HTTP_PROXY=http://${auth}${httpProxyPort ? w : S}:${httpProxyPort || socksProxyPort}`,
+    );
+    envVars.push(
+      `DOCKER_HTTPS_PROXY=http://${auth}${httpProxyPort ? w : S}:${httpProxyPort || socksProxyPort}`,
+    );
+    if (httpProxyPort) {
+      envVars.push("CLOUDSDK_PROXY_TYPE=http");
+      envVars.push(`CLOUDSDK_PROXY_ADDRESS=${w}`);
+      envVars.push(`CLOUDSDK_PROXY_PORT=${httpProxyPort}`);
+      if (proxyAuthToken) {
+        envVars.push(`CLOUDSDK_PROXY_USERNAME=${userRaw}`);
+        envVars.push(`CLOUDSDK_PROXY_PASSWORD=${proxyAuthToken}`);
+      }
     }
   }
-  return s;
+  return envVars;
 }
 //@ chunk-r0ads4ty.js:10384-10971 esm-layout
-function de(e, t, r = "/usr/bin/nc") {
-  return `LC_ALL=C; no() { printf "sandbox proxy: %s\\n" "$*" >&2; exit 1; }; case $1 in ""|*[!A-Za-z0-9._:-]*) no bad host;; *:*) set -- "[$1]" "$2";; esac; case $2 in ""|*[!0-9]*) no bad port;; esac; exec 3<&0; { printf "CONNECT %s HTTP/1.1\\r\\nHost: %s\\r\\nProxy-Authorization: Basic ${t}\\r\\n\\r\\n" "$1:$2" "$1:$2"; exec /bin/cat <&3; } | ${r} 127.0.0.1 ${e} | { read -r v why; while read -r v; do case $v in ""|?) break;; esac; done; case $why in "200 "*) exec /bin/cat;; esac; why=\${why%?}; no "$1:$2: \${why:-no answer}"; } & exec >&-; wait $!`;
+function sshConnectScript(proxyPort, basic, nc = "/usr/bin/nc") {
+  return `LC_ALL=C; no() { printf "sandbox proxy: %s\\n" "$*" >&2; exit 1; }; case $1 in ""|*[!A-Za-z0-9._:-]*) no bad host;; *:*) set -- "[$1]" "$2";; esac; case $2 in ""|*[!0-9]*) no bad port;; esac; exec 3<&0; { printf "CONNECT %s HTTP/1.1\\r\\nHost: %s\\r\\nProxy-Authorization: Basic ${basic}\\r\\n\\r\\n" "$1:$2" "$1:$2"; exec /bin/cat <&3; } | ${nc} 127.0.0.1 ${proxyPort} | { read -r v why; while read -r v; do case $v in ""|?) break;; esac; done; case $why in "200 "*) exec /bin/cat;; esac; why=\${why%?}; no "$1:$2: \${why:-no answer}"; } & exec >&-; wait $!`;
 }
 //@ chunk-r0ads4ty.js:10971-10980 esm-layout
-var pe = 8;
+var SAFE_DIRECTORY_WILDCARD_THRESHOLD = 8;
 //@ chunk-r0ads4ty.js:10980-11702 esm-fingerprint
-function U3r(e) {
-  if (e.baseEnv?.GIT_CONFIG_COUNT === "0") return {};
-  let int = Number.parseInt(e.baseEnv?.GIT_CONFIG_COUNT ?? "", 10),
-    r = Number.isFinite(int) && int >= 0 ? int : 0,
-    n = r,
-    c = {},
-    f = (o, i) => {
-      ((c[`GIT_CONFIG_KEY_${n}`] = o), (c[`GIT_CONFIG_VALUE_${n}`] = i), n++);
-    },
-    a = [
-      ...new Set(
-        e.safeDirs
-          .filter((safeDir) => !!safeDir)
-          .map((o) => {
-            let replaced = o.replace(/\\/g, "/").replace(/\/+$/, "");
-            if (replaced === "" || /^[A-Za-z]:$/.test(replaced)) return `${replaced}/`;
-            return replaced;
-          }),
-      ),
-    ];
-  if (a.length > pe) f("safe.directory", "*");
-  else for (let o of a) (f("safe.directory", o), f("safe.directory", o.endsWith("/") ? `${o}*` : `${o}/*`));
-  if (e.schannelCa) (f("http.schannelUseSSLCAInfo", "true"), f("http.schannelCheckRevoke", "false"));
-  if (e.opensslBackend) f("http.sslBackend", "openssl");
-  if (n === r) return {};
-  return ((c.GIT_CONFIG_COUNT = String(n)), c);
+function buildGitConfigEnv(opts) {
+  if (opts.baseEnv?.GIT_CONFIG_COUNT === "0") return {};
+  let parsed = Number.parseInt(opts.baseEnv?.GIT_CONFIG_COUNT ?? "", 10);
+  let start = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  let n = start;
+  let out = {};
+  let emit = (key, value) => {
+    out[`GIT_CONFIG_KEY_${n}`] = key;
+    out[`GIT_CONFIG_VALUE_${n}`] = value;
+    n++;
+  };
+  let dirs = [
+    ...new Set(
+      opts.safeDirs
+        .filter((d) => !!d)
+        .map((d) => {
+          let stripped = d.replace(/\\/g, "/").replace(/\/+$/, "");
+          if (stripped === "" || /^[A-Za-z]:$/.test(stripped)) return `${stripped}/`;
+          return stripped;
+        }),
+    ),
+  ];
+  if (dirs.length > SAFE_DIRECTORY_WILDCARD_THRESHOLD) emit("safe.directory", "*");
+  else
+    for (let d of dirs) {
+      emit("safe.directory", d);
+      emit("safe.directory", d.endsWith("/") ? `${d}*` : `${d}/*`);
+    }
+  if (opts.schannelCa) {
+    emit("http.schannelUseSSLCAInfo", "true");
+    emit("http.schannelCheckRevoke", "false");
+  }
+  if (opts.opensslBackend) emit("http.sslBackend", "openssl");
+  if (n === start) return {};
+  out.GIT_CONFIG_COUNT = String(n);
+  return out;
 }
 //@ chunk-r0ads4ty.js:11702-11894 esm-fingerprint
-function B3r(e) {
-  let t = { GIT_CONFIG_COUNT: process.env.GIT_CONFIG_COUNT };
-  for (let r of e.unsetEnvVars ?? []) delete t[r];
-  return (Object.assign(t, e.setEnvVars ?? {}), U3r({ safeDirs: e.safeDirs, baseEnv: t }));
+function buildPosixGitSafeDirEnv(opts) {
+  let baseEnv = {
+    GIT_CONFIG_COUNT: process.env.GIT_CONFIG_COUNT,
+  };
+  for (let k of opts.unsetEnvVars ?? []) delete baseEnv[k];
+  Object.assign(baseEnv, opts.setEnvVars ?? {});
+  return buildGitConfigEnv({
+    safeDirs: opts.safeDirs,
+    baseEnv,
+  });
 }
 //@ chunk-r0ads4ty.js:11894-11906 esm-layout
-var w8o = 100;
+var SANDBOXED_COMMAND_KEY_LENGTH = 100;
 //@ chunk-r0ads4ty.js:11906-11937 esm-layout
-function ITt(e, t) {
-  return !t ? e : t;
+function ITt(command, commandId) {
+  return !commandId ? command : commandId;
 }
 //@ chunk-r0ads4ty.js:11937-12015 esm-fingerprint
-function QSe(e) {
-  let sliced = e.slice(0, w8o);
-  return Buffer.from(sliced).toString("base64");
+function encodeSandboxedCommand(command) {
+  let truncatedCommand = command.slice(0, SANDBOXED_COMMAND_KEY_LENGTH);
+  return Buffer.from(truncatedCommand).toString("base64");
 }
 //@ chunk-r0ads4ty.js:12015-12079 esm-fingerprint
-function x4e(e) {
-  return Buffer.from(e, "base64").toString("utf8");
+function decodeSandboxedCommand(encodedCommand) {
+  return Buffer.from(encodedCommand, "base64").toString("utf8");
 }
 //@ chunk-r0ads4ty.js:12079-12136 esm-fingerprint
-var SRT = "srt",
-  ne = 255,
-  E8o = ne - Buffer.byteLength(`${SRT}.`);
+var PROXY_AUTH_USER = "srt";
+var MAX_PROXY_USERNAME_BYTES = 255;
+var MAX_ENCODED_COMMAND_BYTES = MAX_PROXY_USERNAME_BYTES - Buffer.byteLength(`${PROXY_AUTH_USER}.`);
 //@ chunk-r0ads4ty.js:12136-12226 esm-layout
-function he(e) {
-  if (!e) return SRT;
-  let t = `${SRT}.${e}`;
-  return Buffer.byteLength(t) <= ne ? t : SRT;
+function proxyUsernameFor(encodedCommand) {
+  if (!encodedCommand) return PROXY_AUTH_USER;
+  let user = `${PROXY_AUTH_USER}.${encodedCommand}`;
+  return Buffer.byteLength(user) <= MAX_PROXY_USERNAME_BYTES ? user : PROXY_AUTH_USER;
 }
 //@ chunk-r0ads4ty.js:12226-12357 esm-fingerprint
-function Iwn(e) {
-  if (!e || !e.startsWith(`${SRT}.`)) return;
-  let sliced = e.slice(SRT.length + 1);
-  if (!sliced || Buffer.byteLength(sliced) > E8o) return;
-  return sliced;
+function encodedCommandFromProxyUser(username) {
+  if (!username || !username.startsWith(`${PROXY_AUTH_USER}.`)) return;
+  let suffix = username.slice(PROXY_AUTH_USER.length + 1);
+  if (!suffix || Buffer.byteLength(suffix) > MAX_ENCODED_COMMAND_BYTES) return;
+  return suffix;
 }
 //@ chunk-r0ads4ty.js:12357-12422 esm-fingerprint
-function Own(e) {
+function finish(steps) {
   for (;;) {
-    let t = e.next();
-    if (t.done) return t.value;
+    let step = steps.next();
+    if (step.done) return step.value;
   }
 }
 //@ chunk-r0ads4ty.js:12422-12432 esm-layout
-var me = 10;
+var TURN_MS = 10;
 //@ chunk-r0ads4ty.js:12432-12684 esm-fingerprint
-async function ili(e, t) {
-  t?.throwIfAborted();
-  let startTime = performance.now();
+async function finishInTurns(steps, signal) {
+  signal?.throwIfAborted();
+  let since = performance.now();
   for (;;) {
-    let n = e.next();
-    if (!n.done && performance.now() - startTime < me) continue;
-    if (!n.done) await new Promise((c) => setImmediate(c));
-    if ((t?.throwIfAborted(), n.done)) return n.value;
-    startTime = performance.now();
+    let step = steps.next();
+    if (!step.done && performance.now() - since < TURN_MS) continue;
+    if (!step.done) await new Promise((resolve) => setImmediate(resolve));
+    signal?.throwIfAborted();
+    if (step.done) return step.value;
+    since = performance.now();
   }
 }
 //@ chunk-r0ads4ty.js:12684-12728 esm-layout
-function usr(e, t = {}) {
-  return $e(e, t).matches;
+function expandGlobPattern(globPath, opts = {}) {
+  return walkGlobPattern(globPath, opts).matches;
 }
 //@ chunk-r0ads4ty.js:12728-14314 esm-fingerprint
-function Se(e, t) {
-  let regExp = new RegExp(xTt(e), t),
-    n = uy(e),
-    c = n !== e ? new RegExp(xTt(n), t) : void 0,
-    f = {
-      splits: !1,
-      start: [0],
-      next: () => [0],
-      matches: (p, E, _) => regExp.test(_),
-      matchesDirectoryForm: (p, E, _) => c?.test(_) === !0,
-    },
-    a = [],
-    o = X({ kind: O.Star }),
-    i = (p) => {
-      let mapped = p.map(X),
-        _ = new Map(),
-        T = (d) => a.push({ then: d }) - 1,
-        R = (d, y) => {
-          let m = `${d}${y ? "*" : ""}`,
-            b = _.get(m);
-          if (b !== void 0) return b;
-          if (!y && p[d]?.kind === O.GlobstarSlash) {
-            let u = T(void 0);
-            return (_.set(m, u), (a[u].then = R(d + 1, !1)), u);
-          }
-          if (!y && p[d]?.kind === O.Globstar && d === p.length - 1) {
-            let u = T(void 0);
-            return (_.set(m, u), u);
-          }
-          let x = { edges: [] },
-            D = a.push(x) - 1;
-          _.set(m, D);
-          let g = (u, v) => {
-              x.edges.push({ regex: new RegExp(`^${u}$`, t), to: v });
-            },
-            l = y ? o : "";
-          for (let u = d; ; u++) {
-            let v = p[u];
-            if (v === void 0) {
-              g(l, void 0);
-              break;
-            }
-            if (v.kind === O.Separator) {
-              g(l, R(u + 1, !1));
-              break;
-            }
-            if (v.kind === O.Globstar) (g(l + o, T(R(u + 1, !0))), (l += o));
-            else if (v.kind === O.GlobstarSlash) g(l + o, T(R(u + 1, !1)));
-            else if (v.kind === O.Set && v.matchesSeparator) (g(l, R(u + 1, !1)), (l += `(?!/)${mapped[u]}`));
-            else l += mapped[u];
-          }
-          return D;
-        };
-      return R(0, !1);
-    },
-    s,
-    C;
+function globPositions(normalizedPattern, flags) {
+  let regex = new RegExp(xTt(normalizedPattern), flags);
+  let directoryForm = removeTrailingGlobSuffix(normalizedPattern);
+  let directoryRegex =
+    directoryForm !== normalizedPattern ? new RegExp(xTt(directoryForm), flags) : undefined;
+  let unsplit = {
+    splits: false,
+    start: [0],
+    next: () => [0],
+    matches: (_positions, _name, spelled) => regex.test(spelled),
+    matchesDirectoryForm: (_positions, _name, spelled) => directoryRegex?.test(spelled) === true,
+  };
+  let states = [];
+  let star = globTokenToRegex({
+    kind: GlobTokenKind.Star,
+  });
+  let build = (pieces) => {
+    let sources = pieces.map(globTokenToRegex);
+    let memo = new Map();
+    let globstar = (then) =>
+      states.push({
+        then,
+      }) - 1;
+    let componentAt = (i, lead) => {
+      let key = `${i}${lead ? "*" : ""}`;
+      let known = memo.get(key);
+      if (known !== undefined) return known;
+      if (!lead && pieces[i]?.kind === GlobTokenKind.GlobstarSlash) {
+        let id = globstar(undefined);
+        memo.set(key, id);
+        states[id].then = componentAt(i + 1, false);
+        return id;
+      }
+      if (!lead && pieces[i]?.kind === GlobTokenKind.Globstar && i === pieces.length - 1) {
+        let id = globstar(undefined);
+        memo.set(key, id);
+        return id;
+      }
+      let component = {
+        edges: [],
+      };
+      let id = states.push(component) - 1;
+      memo.set(key, id);
+      let endsWith = (source, to) => {
+        component.edges.push({
+          regex: new RegExp(`^${source}$`, flags),
+          to,
+        });
+      };
+      let source = lead ? star : "";
+      for (let j = i; ; j++) {
+        let piece = pieces[j];
+        if (piece === undefined) {
+          endsWith(source, undefined);
+          break;
+        }
+        if (piece.kind === GlobTokenKind.Separator) {
+          endsWith(source, componentAt(j + 1, false));
+          break;
+        }
+        if (piece.kind === GlobTokenKind.Globstar) {
+          endsWith(source + star, globstar(componentAt(j + 1, true)));
+          source += star;
+        } else if (piece.kind === GlobTokenKind.GlobstarSlash)
+          endsWith(source + star, globstar(componentAt(j + 1, false)));
+        else if (piece.kind === GlobTokenKind.Set && piece.matchesSeparator) {
+          endsWith(source, componentAt(j + 1, false));
+          source += `(?!/)${sources[j]}`;
+        } else source += sources[j];
+      }
+      return id;
+    };
+    return componentAt(0, false);
+  };
+  let starts;
+  let firstOfDirectoryForm;
   try {
-    if (((s = [i(W(e))]), (C = a.length), c)) s.push(i(W(n)));
+    starts = [build(parseGlob(normalizedPattern))];
+    firstOfDirectoryForm = states.length;
+    if (directoryRegex) starts.push(build(parseGlob(directoryForm)));
   } catch {
-    return f;
+    return unsplit;
   }
-  let w = (p, E) => {
-      for (let _ = E; _ !== void 0 && !p.has(_);) {
-        p.add(_);
-        let T = a[_];
-        _ = "then" in T ? T.then : void 0;
-      }
-    },
-    S = (p) => [...p].sort((E, _) => E - _),
-    A = (p, E, _) =>
-      p.some((T) => {
-        if (T >= C !== _) return !1;
-        let R = a[T];
-        return "then" in R
-          ? R.then === void 0
-          : R.edges.some((edge) => edge.to === void 0 && edge.regex.test(E));
-      }),
-    I = new Set();
-  for (let p of s) w(I, p);
+  let open = (into, position) => {
+    for (let p = position; p !== undefined && !into.has(p);) {
+      into.add(p);
+      let state = states[p];
+      p = "then" in state ? state.then : undefined;
+    }
+  };
+  let sorted = (positions) => [...positions].sort((x, y) => x - y);
+  let endsAt = (positions, name, ofDirectoryForm) =>
+    positions.some((p) => {
+      if (p >= firstOfDirectoryForm !== ofDirectoryForm) return false;
+      let state = states[p];
+      return "then" in state
+        ? state.then === undefined
+        : state.edges.some((e) => e.to === undefined && e.regex.test(name));
+    });
+  let start = new Set();
+  for (let start_2 of starts) open(start, start_2);
   return {
-    splits: !0,
-    start: S(I),
-    next: (p, E) => {
-      let _ = new Set();
-      for (let T of p) {
-        let R = a[T];
-        if ("then" in R) w(_, T);
-        else for (let edge of R.edges) if (edge.to !== void 0 && edge.regex.test(E)) w(_, edge.to);
+    splits: true,
+    start: sorted(start),
+    next: (positions, name) => {
+      let next = new Set();
+      for (let p of positions) {
+        let state = states[p];
+        if ("then" in state) open(next, p);
+        else
+          for (let edge of state.edges)
+            if (edge.to !== undefined && edge.regex.test(name)) open(next, edge.to);
       }
-      return S(_);
+      return sorted(next);
     },
-    matches: (p, E) => A(p, E, !1),
-    matchesDirectoryForm: (p, E) => A(p, E, !0),
+    matches: (positions, name) => endsAt(positions, name, false),
+    matchesDirectoryForm: (positions, name) => endsAt(positions, name, true),
   };
 }
 //@ chunk-r0ads4ty.js:14314-14429 esm-fingerprint
-function v8o(e) {
-  let t = e.split(/[*?[\]]/)[0];
-  if (!t) return "";
-  return t.endsWith("/") ? t.slice(0, -1) : pathModule.posix.dirname(t);
+function globPatternBaseDir(normalizedPattern) {
+  let staticPrefix = normalizedPattern.split(/[*?[\]]/)[0];
+  if (!staticPrefix) return "";
+  return staticPrefix.endsWith("/") ? staticPrefix.slice(0, -1) : pathModule_2.posix.dirname(staticPrefix);
 }
 //@ chunk-r0ads4ty.js:14429-14468 esm-layout
-function k8o(e) {
-  return e === "" || e === "/";
+function globBaseDirIsRoot(baseDir) {
+  return baseDir === "" || baseDir === "/";
 }
 //@ chunk-r0ads4ty.js:14468-14493 esm-layout
-function $qt(e) {
-  return e;
+function toForwardSlashes(s) {
+  return s;
 }
 //@ chunk-r0ads4ty.js:14493-14534 esm-layout
-function $e(e, t = {}) {
-  return Own(fsr(e, t));
+function walkGlobPattern(globPath, opts = {}) {
+  return finish(walkGlobPatternSteps(globPath, opts));
 }
 //@ chunk-r0ads4ty.js:14534-18917 esm-fingerprint
-function* fsr(e, t = {}) {
-  let r = {
-      baseLocation: "",
-      matches: [],
-      directoryMatches: [],
-      symlinks: new Set(),
-      uninspectableLinks: new Set(),
-      unlisted: [],
-      realOf: new Map(),
-    },
-    n = t.anchor === void 0 ? void 0 : $qt(t.anchor),
-    c = n === void 0 ? $qt(sS(e)) : $qt(e).slice(n.length);
-  if (n !== void 0 && (!/[^/]/.test(n) || !$qt(e).startsWith(n) || !(n.endsWith("/") || /^(\/|$)/.test(c))))
-    throw TypeError(`Glob pattern ${e} does not lie beneath the anchor ${t.anchor}`);
-  let f = v8o(c),
-    a = f === "/" ? "" : f,
-    o = n === void 0 ? f : n + a;
-  if (k8o(o))
-    return (
-      At(`[Sandbox] Glob pattern has no literal directory below the root to start from, skipping: ${e}`, {
+function* walkGlobPatternSteps(globPath, opts = {}) {
+  let walk = {
+    baseLocation: "",
+    matches: [],
+    directoryMatches: [],
+    symlinks: new Set(),
+    uninspectableLinks: new Set(),
+    unlisted: [],
+    realOf: new Map(),
+  };
+  let anchor = opts.anchor === undefined ? undefined : toForwardSlashes(opts.anchor);
+  let normalizedPattern =
+    anchor === undefined
+      ? toForwardSlashes(normalizePathForSandbox(globPath))
+      : toForwardSlashes(globPath).slice(anchor.length);
+  if (
+    anchor !== undefined &&
+    (!/[^/]/.test(anchor) ||
+      !toForwardSlashes(globPath).startsWith(anchor) ||
+      !(anchor.endsWith("/") || /^(\/|$)/.test(normalizedPattern)))
+  )
+    throw TypeError(`Glob pattern ${globPath} does not lie beneath the anchor ${opts.anchor}`);
+  let patternBaseDir = globPatternBaseDir(normalizedPattern);
+  let baseDirBelowAnchor = patternBaseDir === "/" ? "" : patternBaseDir;
+  let baseDir = anchor === undefined ? patternBaseDir : anchor + baseDirBelowAnchor;
+  if (globBaseDirIsRoot(baseDir)) {
+    logForDebugging(
+      `[Sandbox] Glob pattern has no literal directory below the root to start from, skipping: ${globPath}`,
+      {
         level: "warn",
-      }),
-      r
-    );
-  let i = t.caseInsensitive ? "is" : "s",
-    s = Se(c, i);
-  if (t.followSymlinkedDirectories && !s.splits)
-    At(
-      `[Sandbox] Glob pattern ${e} cannot be followed one path component at a time, so it is matched against real paths only and not through symlinked directories`,
-      { level: "warn" },
-    );
-  let C = new Map(),
-    w = t.listings ?? new Map(),
-    S = [],
-    A = (d) => d?.code,
-    I = (d, y, m, b, x) => {
-      try {
-        return m(d);
-      } catch (error) {
-        if (y === d) throw error;
-        let g;
-        try {
-          g = m(y);
-        } catch (error_2) {
-          throw b(error) && !b(error_2) ? error_2 : error;
-        }
-        if (!b(error) && A(error) !== "ENAMETOOLONG")
-          (At(
-            `[Sandbox] ${d} could not be read for glob pattern ${e}, so it is covered whole, whatever ${y} leads to: ${error}`,
-            { level: "warn" },
-          ),
-            x());
-        return g;
-      }
-    },
-    p = new Map(),
-    E = (d, y) => {
-      let m = p.get(y);
-      if (m !== void 0) return m;
-      let b;
-      try {
-        let x = !1;
-        b = {
-          ...I(
-            y,
-            d,
-            (g) => ({ isDirectory: fsModule_2.statSync(g).isDirectory(), real: JSe(g) }),
-            R4e,
-            () => (x = !0),
-          ),
-          unread: x,
-        };
-      } catch (error) {
-        b = R4e(error) ? "absent" : "uninspectable";
-      }
-      return (p.set(y, b), b);
-    },
-    _ = (d, y, m) => {
-      if (
-        d.isFile() ||
-        d.isDirectory() ||
-        d.isSymbolicLink() ||
-        d.isFIFO() ||
-        d.isSocket() ||
-        d.isCharacterDevice() ||
-        d.isBlockDevice()
-      )
-        return d;
-      let { name: b } = d,
-        joined = pathModule.join(y, b),
-        D = "other";
-      try {
-        let lstatSync = fsModule_2.lstatSync(joined);
-        if (lstatSync.isDirectory()) D = "directory";
-        else if (lstatSync.isSymbolicLink()) D = "link";
-      } catch {
-        try {
-          let isDirectory = fsModule_2.statSync(joined).isDirectory();
-          if (JSe(joined) !== pathModule.join(m, b)) D = "link";
-          else if (isDirectory) D = "directory";
-        } catch (error) {
-          let l = error?.code;
-          if (l === "ELOOP") D = "link";
-          else if (l !== "ENOENT")
-            ((D = "directory"),
-              w.set(pathModule.join(m, b), error instanceof Error ? error : Error(String(error))));
-        }
-      }
-      return { name: b, isDirectory: () => D === "directory", isSymbolicLink: () => D === "link" };
-    },
-    T = /^[A-Za-z]:$/.test(o) ? `${o}/` : o,
-    R = T;
-  try {
-    R = JSe(T);
-  } catch {}
-  ((r.baseLocation = R),
-    S.push({
-      dir: T,
-      real: R,
-      short: T.length < R.length ? T : R,
-      positions: (n === void 0 ? o : a).split("/").reduce(s.next, s.start),
-    }));
-  for (let d = S.pop(); d !== void 0; d = S.pop()) {
-    let { dir: dir, real: real } = d,
-      b = C.get(real) ?? { listedFor: new Set() };
-    C.set(real, b);
-    let filtered = d.positions.filter((position) => !b.listedFor.has(position));
-    if (filtered.length === 0) continue;
-    yield;
-    let D = () => {
-        if (b.unlisted) return;
-        if (((b.unlisted = !0), r.unlisted.push(dir), real !== dir)) r.realOf.set(dir, real);
       },
-      g;
+    );
+    return walk;
+  }
+  let flags = opts.caseInsensitive ? "is" : "s";
+  let positions = globPositions(normalizedPattern, flags);
+  if (opts.followSymlinkedDirectories && !positions.splits)
+    logForDebugging(
+      `[Sandbox] Glob pattern ${globPath} cannot be followed one path component at a time, so it is matched against real paths only and not through symlinked directories`,
+      {
+        level: "warn",
+      },
+    );
+  let records = new Map();
+  let listings = opts.listings ?? new Map();
+  let pending = [];
+  let codeOf = (err) => err?.code;
+  let onRealPath = (real, short, call, absent, unread) => {
     try {
-      let l = w.get(real);
-      if (l instanceof Error) throw l;
-      ((g =
-        l ??
-        I(
+      return call(real);
+    } catch (first) {
+      if (short === real) throw first;
+      let answer;
+      try {
+        answer = call(short);
+      } catch (second) {
+        throw absent(first) && !absent(second) ? second : first;
+      }
+      if (!absent(first) && codeOf(first) !== "ENAMETOOLONG") {
+        logForDebugging(
+          `[Sandbox] ${real} could not be read for glob pattern ${globPath}, so it is covered whole, whatever ${short} leads to: ${first}`,
+          {
+            level: "warn",
+          },
+        );
+        unread();
+      }
+      return answer;
+    }
+  };
+  let linkTargets = new Map();
+  let linkTargetOf = (linkPath, realLinkPath) => {
+    let cached = linkTargets.get(realLinkPath);
+    if (cached !== undefined) return cached;
+    let target;
+    try {
+      let unread = false;
+      target = {
+        ...onRealPath(
+          realLinkPath,
+          linkPath,
+          (p) => ({
+            isDirectory: fsModule_2.statSync(p).isDirectory(),
+            real: realPathOf(p),
+          }),
+          isAbsenceErrno,
+          () => (unread = true),
+        ),
+        unread,
+      };
+    } catch (err) {
+      target = isAbsenceErrno(err) ? "absent" : "uninspectable";
+    }
+    linkTargets.set(realLinkPath, target);
+    return target;
+  };
+  let withType = (entry, listedAs, real) => {
+    if (
+      entry.isFile() ||
+      entry.isDirectory() ||
+      entry.isSymbolicLink() ||
+      entry.isFIFO() ||
+      entry.isSocket() ||
+      entry.isCharacterDevice() ||
+      entry.isBlockDevice()
+    )
+      return entry;
+    let { name } = entry;
+    let spelled = pathModule_2.join(listedAs, name);
+    let type = "other";
+    try {
+      let stats = fsModule_2.lstatSync(spelled);
+      if (stats.isDirectory()) type = "directory";
+      else if (stats.isSymbolicLink()) type = "link";
+    } catch {
+      try {
+        let isDirectory = fsModule_2.statSync(spelled).isDirectory();
+        if (realPathOf(spelled) !== pathModule_2.join(real, name)) type = "link";
+        else if (isDirectory) type = "directory";
+      } catch (err) {
+        let code = err?.code;
+        if (code === "ELOOP") type = "link";
+        else if (code !== "ENOENT") {
+          type = "directory";
+          listings.set(pathModule_2.join(real, name), err instanceof Error ? err : Error(String(err)));
+        }
+      }
+    }
+    return {
+      name,
+      isDirectory: () => type === "directory",
+      isSymbolicLink: () => type === "link",
+    };
+  };
+  let baseSpelling = /^[A-Za-z]:$/.test(baseDir) ? `${baseDir}/` : baseDir;
+  let baseReal = baseSpelling;
+  try {
+    baseReal = realPathOf(baseSpelling);
+  } catch {}
+  walk.baseLocation = baseReal;
+  pending.push({
+    dir: baseSpelling,
+    real: baseReal,
+    short: baseSpelling.length < baseReal.length ? baseSpelling : baseReal,
+    positions: (anchor === undefined ? baseDir : baseDirBelowAnchor)
+      .split("/")
+      .reduce(positions.next, positions.start),
+  });
+  for (let frame = pending.pop(); frame !== undefined; frame = pending.pop()) {
+    let { dir, real } = frame;
+    let record = records.get(real) ?? {
+      listedFor: new Set(),
+    };
+    records.set(real, record);
+    let fresh = frame.positions.filter((p) => !record.listedFor.has(p));
+    if (fresh.length === 0) continue;
+    yield;
+    let denyWhole = () => {
+      if (record.unlisted) return;
+      record.unlisted = true;
+      walk.unlisted.push(dir);
+      if (real !== dir) walk.realOf.set(dir, real);
+    };
+    let entries;
+    try {
+      let known = listings.get(real);
+      if (known instanceof Error) throw known;
+      entries =
+        known ??
+        onRealPath(
           real,
-          d.short,
-          (u) => fsModule_2.readdirSync(u, { withFileTypes: !0 }).map((v) => _(v, u, real)),
-          (u) => A(u) === "ENOENT",
-          D,
-        )),
-        w.set(real, g));
-    } catch (error) {
-      let u = A(error);
-      if (
-        (At(`[Sandbox] Error listing ${dir} for glob pattern ${e}: ${error}`, {
-          level: u === "ENOENT" ? "info" : "warn",
-        }),
-        u !== "ENOENT")
-      ) {
-        if (t.listings !== void 0) w.set(real, error instanceof Error ? error : Error(String(error)));
-        D();
+          frame.short,
+          (p) =>
+            fsModule_2
+              .readdirSync(p, {
+                withFileTypes: true,
+              })
+              .map((entry) => withType(entry, p, real)),
+          (err) => codeOf(err) === "ENOENT",
+          denyWhole,
+        );
+      listings.set(real, entries);
+    } catch (err) {
+      let errorCode = codeOf(err);
+      logForDebugging(`[Sandbox] Error listing ${dir} for glob pattern ${globPath}: ${err}`, {
+        level: errorCode === "ENOENT" ? "info" : "warn",
+      });
+      if (errorCode !== "ENOENT") {
+        if (opts.listings !== undefined) listings.set(real, err instanceof Error ? err : Error(String(err)));
+        denyWhole();
       }
       continue;
     }
-    for (let l of filtered) b.listedFor.add(l);
-    for (let l of g) {
-      if (s.splits && !l.isDirectory() && !l.isSymbolicLink() && !s.matches(filtered, l.name, "")) continue;
-      let joined = pathModule.join(dir, l.name),
-        joined_2 = pathModule.join(real, l.name),
-        Y = $qt(joined),
-        H = n !== void 0 && Y.startsWith(n) ? Y.slice(n.length) : Y,
-        matches = s.matches(filtered, l.name, H);
-      if (matches) r.matches.push(joined);
-      if (l.isDirectory()) {
-        let Q = s.next(filtered, l.name),
-          q = t.withDirectoryForm === !0 && s.matchesDirectoryForm(filtered, l.name, H);
-        if (q) r.directoryMatches.push(joined);
-        if ((matches || q) && joined_2 !== joined) r.realOf.set(joined, joined_2);
-        if (Q.length > 0)
-          S.push({ dir: joined, real: joined_2, short: pathModule.join(d.short, l.name), positions: Q });
+    for (let p of fresh) record.listedFor.add(p);
+    for (let entry of entries) {
+      if (
+        positions.splits &&
+        !entry.isDirectory() &&
+        !entry.isSymbolicLink() &&
+        !positions.matches(fresh, entry.name, "")
+      )
+        continue;
+      let fullPath = pathModule_2.join(dir, entry.name);
+      let realPath = pathModule_2.join(real, entry.name);
+      let spelled = toForwardSlashes(fullPath);
+      let candidate =
+        anchor !== undefined && spelled.startsWith(anchor) ? spelled.slice(anchor.length) : spelled;
+      let isMatch = positions.matches(fresh, entry.name, candidate);
+      if (isMatch) walk.matches.push(fullPath);
+      if (entry.isDirectory()) {
+        let beneath = positions.next(fresh, entry.name);
+        let isDirectoryMatch =
+          opts.withDirectoryForm === true && positions.matchesDirectoryForm(fresh, entry.name, candidate);
+        if (isDirectoryMatch) walk.directoryMatches.push(fullPath);
+        if ((isMatch || isDirectoryMatch) && realPath !== fullPath) walk.realOf.set(fullPath, realPath);
+        if (beneath.length > 0)
+          pending.push({
+            dir: fullPath,
+            real: realPath,
+            short: pathModule_2.join(frame.short, entry.name),
+            positions: beneath,
+          });
         continue;
       }
-      if (!l.isSymbolicLink()) {
-        if (matches && joined_2 !== joined) r.realOf.set(joined, joined_2);
+      if (!entry.isSymbolicLink()) {
+        if (isMatch && realPath !== fullPath) walk.realOf.set(fullPath, realPath);
         continue;
       }
-      if ((r.symlinks.add(joined), !t.followSymlinkedDirectories)) continue;
-      let F = t.withDirectoryForm === !0 && s.matchesDirectoryForm(filtered, l.name, H),
-        j = s.splits ? s.next(filtered, l.name) : [];
-      if (!matches && !F && j.length === 0) continue;
-      let joined_3 = pathModule.join(d.short, l.name),
-        N = E(joined_3, joined_2);
-      if (N === "absent") continue;
-      let k = N === "uninspectable" || N.unread;
-      if (k) {
-        if ((r.uninspectableLinks.add(joined), F)) r.directoryMatches.push(joined);
+      walk.symlinks.add(fullPath);
+      if (!opts.followSymlinkedDirectories) continue;
+      let isDirectoryFormCandidate =
+        opts.withDirectoryForm === true && positions.matchesDirectoryForm(fresh, entry.name, candidate);
+      let beneath = positions.splits ? positions.next(fresh, entry.name) : [];
+      if (!isMatch && !isDirectoryFormCandidate && beneath.length === 0) continue;
+      let shortPath = pathModule_2.join(frame.short, entry.name);
+      let target = linkTargetOf(shortPath, realPath);
+      if (target === "absent") continue;
+      let unread = target === "uninspectable" || target.unread;
+      if (unread) {
+        walk.uninspectableLinks.add(fullPath);
+        if (isDirectoryFormCandidate) walk.directoryMatches.push(fullPath);
       }
-      if (N === "uninspectable") continue;
-      if (k && (matches || (F && N.isDirectory))) r.matches.push(N.real === "/" ? real : N.real);
-      if (matches && !k) r.realOf.set(joined, N.real);
-      if (!N.isDirectory) continue;
-      if (F && !k) (r.directoryMatches.push(joined), r.realOf.set(joined, N.real));
-      if (j.length === 0) continue;
-      if (oS(real, N.real) || oS(R, N.real)) {
-        At(
-          `[Sandbox] Not following symlink ${joined} -> ${N.real} for glob pattern ${e}: it leads back up the tree`,
+      if (target === "uninspectable") continue;
+      if (unread && (isMatch || (isDirectoryFormCandidate && target.isDirectory)))
+        walk.matches.push(target.real === "/" ? real : target.real);
+      if (isMatch && !unread) walk.realOf.set(fullPath, target.real);
+      if (!target.isDirectory) continue;
+      if (isDirectoryFormCandidate && !unread) {
+        walk.directoryMatches.push(fullPath);
+        walk.realOf.set(fullPath, target.real);
+      }
+      if (beneath.length === 0) continue;
+      if (isAtOrUnder(real, target.real) || isAtOrUnder(baseReal, target.real)) {
+        logForDebugging(
+          `[Sandbox] Not following symlink ${fullPath} -> ${target.real} for glob pattern ${globPath}: it leads back up the tree`,
         );
         continue;
       }
-      (At(`[Sandbox] Following symlink ${joined} -> ${N.real} for glob pattern ${e}`),
-        S.push({
-          dir: N.real,
-          real: N.real,
-          short: joined_3.length < N.real.length ? joined_3 : N.real,
-          positions: j,
-        }));
+      logForDebugging(
+        `[Sandbox] Following symlink ${fullPath} -> ${target.real} for glob pattern ${globPath}`,
+      );
+      pending.push({
+        dir: target.real,
+        real: target.real,
+        short: shortPath.length < target.real.length ? shortPath : target.real,
+        positions: beneath,
+      });
     }
   }
-  return r;
+  return walk;
 }
 //@ chunk-fq0cr76a.js:857514-857561 affinity
-var v0 = "(.*/)?",
-  zae = 3,
-  gM = 4096,
-  Xae = /\[[^\]]*\*/;
+var v0 = "(.*/)?";
+var zae = 3;
+var gM = 4096;
+var Xae = /\[[^\]]*\*/;
 //@ chunk-fq0cr76a.js:857561-857651 affinity
-function yM(e) {
-  if (e.length > gM) return { kind: "tooCostly" };
-  return EM(e, T0(Cwn(e)), T0(xTt(e)));
+function yM(globPattern) {
+  if (globPattern.length > gM)
+    return {
+      kind: "tooCostly",
+    };
+  return EM(globPattern, T0(Cwn(globPattern)), T0(xTt(globPattern)));
 }
 //@ chunk-fq0cr76a.js:857651-858025 esm-fingerprint
-function bM(e) {
-  if (e.length > gM) return { kind: "tooCostly" };
-  let n = `^${e
+function bM(globPattern) {
+  if (globPattern.length > gM)
+    return {
+      kind: "tooCostly",
+    };
+  let n = `^${globPattern
     .replace(/[.^$+{}()|\\]/g, "\\$&")
     .replace(/\[([^\]]*?)$/g, "\\[$1")
     .replace(/\*\*\//g, "__GLOBSTAR_SLASH__")
@@ -826,26 +977,43 @@ function bM(e) {
     .replace(/\?/g, "[^/]")
     .replace(/__GLOBSTAR_SLASH__/g, v0)
     .replace(/__GLOBSTAR__/g, ".*")}$`;
-  return EM(e, escapeInvalidCharClasses(T0(`${n.slice(0, -1)}(/.*)?$`)), escapeInvalidCharClasses(T0(n)));
+  return EM(
+    globPattern,
+    escapeInvalidCharClasses(T0(`${n.slice(0, -1)}(/.*)?$`)),
+    escapeInvalidCharClasses(T0(n)),
+  );
 }
 //@ chunk-fq0cr76a.js:858025-858091 esm-fingerprint
-function SM(e) {
-  let n = `^${e === "/" ? "" : urlPatternToRegex(e)}(/.*)?$`;
+function SM(globBaseDirectory) {
+  let n = `^${globBaseDirectory === "/" ? "" : urlPatternToRegex(globBaseDirectory)}(/.*)?$`;
   return xM(n, n);
 }
 //@ chunk-fq0cr76a.js:858091-858254 affinity
 function EM(e, n, r) {
   try {
-    let s = xM(n, r);
-    if (Xae.test(e) || Jae(r)) return { kind: "tooCostly" };
-    return { kind: "read", translation: s };
+    let translation = xM(n, r);
+    if (Xae.test(e) || Jae(r))
+      return {
+        kind: "tooCostly",
+      };
+    return {
+      kind: "read",
+      translation,
+    };
   } catch (error) {
-    return { kind: "unreadable", error: error };
+    return {
+      kind: "unreadable",
+      error,
+    };
   }
 }
 //@ chunk-fq0cr76a.js:858254-858359 affinity
 function xM(e, n) {
-  return { anyCase: new RegExp(e, "is"), ownCase: new RegExp(e, "s"), exactly: new RegExp(n, "is") };
+  return {
+    anyCase: new RegExp(e, "is"),
+    ownCase: new RegExp(e, "s"),
+    exactly: new RegExp(n, "is"),
+  };
 }
 //@ chunk-fq0cr76a.js:858359-858419 affinity
 function T0(e) {
@@ -853,204 +1021,245 @@ function T0(e) {
 }
 //@ chunk-fq0cr76a.js:858419-858597 affinity
 function Jae(e) {
-  let replaced = e.replace(/\.\*\$$/, "$"),
-    replaced_2 = replaced.replaceAll(`/${v0}`, "/"),
-    s = (replaced.length - replaced_2.length) / v0.length,
-    h = replaced_2.split(".*").length - 1;
+  let replaced = e.replace(/\.\*\$$/, "$");
+  let replaced_2 = replaced.replaceAll(`/${v0}`, "/");
+  let s = (replaced.length - replaced_2.length) / v0.length;
+  let h = replaced_2.split(".*").length - 1;
   return countCharInString(replaced_2, "*") - h + 2 * Math.max(0, s + 2 * h - 1) > zae;
 }
 //@ chunk-vp5gef34.js:15549-19463 esm-fingerprint
-var j = Symbol("transient-read-failure"),
-  En = (e) => {
-    let t = e?.code;
-    return t === "ENOENT" || t === "ENOTDIR" || t === "ELOOP" || t === "ENAMETOOLONG";
-  },
-  Pn = (e) => {
-    let t = e?.code;
-    return t === "EACCES" || t === "EPERM";
-  },
-  A = (e) => (En(e) ? "structural" : Pn(e) ? "permission" : "other"),
-  ut = async (e, t) => {
-    let n = await open(e, $c());
-    try {
-      let stats = await n.stat();
-      if (!stats.isFile()) throw Object.assign(Error("not a regular file"), { code: "ENOTREG" });
-      if (t?.maxBytes !== void 0 && stats.size > t.maxBytes)
-        throw Object.assign(Error("exceeds the read cap"), { code: "EFBIG" });
-      if (t?.withinReal !== void 0) {
-        let s = await realpath_2(e).catch((i) => {
-          if (A(i) === "structural") return;
-          throw i;
-        });
-        if (s === void 0 || !s.startsWith(t.withinReal + sep_2))
-          throw Object.assign(Error("resolves outside the store root"), { code: "ENOTREG" });
-        let r = await stat(s).catch((i) => {
-          if (A(i) === "structural") return;
-          throw i;
-        });
-        if (r === void 0) throw Object.assign(Error("resolves outside the store root"), { code: "ENOTREG" });
-        if (r.dev !== stats.dev || r.ino !== stats.ino)
-          throw Object.assign(Error("inode changed during read; retry"), { code: "EAGAIN" });
-      }
-      return await n.readFile();
-    } finally {
-      await n.close();
-    }
-  },
-  ft = (e) => {
-    let t = e?.code;
-    return t === "ENOTREG" || t === "ELOOP" || t === "EFBIG";
-  },
-  fe_vp5g = Symbol("not-a-regular-file"),
-  pt = async (e, t, n) =>
-    lstat_2(join(e, t)).then(
-      (o) => !o.isFile() || (n !== void 0 && o.size > n),
-      (o) => A(o) === "structural",
-    ),
-  mt = async (e, t) => {
-    if (!(await pt(e, t))) return !1;
-    return realpath_2(e).then(
-      () => !0,
-      () => !1,
-    );
-  },
-  ht = async (e, t, n, o = C) => {
-    if (e.pathToId.get(n) === void 0) return !1;
-    let r = await realpath_2(t).catch(() => j);
-    if (typeof r !== "string") return !1;
-    let i = await ut(join(t, n), { withinReal: r, maxBytes: o.maxFileBytes }).catch((l) =>
-      ft(l) ? fe_vp5g : A(l) === "structural" ? void 0 : j,
-    );
-    if (i === j) return !1;
-    if (i === fe_vp5g) return N(e, n);
-    if (i === void 0) {
-      if (!(await mt(t, n))) return !1;
-      return N(e, n);
-    }
-    if (i.byteLength > o.maxFileBytes) return N(e, n);
-    let decode = new TextDecoder().decode(i),
-      c = await lstat_2(join(t, n)).catch(() => {
-        return;
+var j = Symbol("transient-read-failure");
+var En = (e) => {
+  let code = e?.code;
+  return code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP" || code === "ENAMETOOLONG";
+};
+var Pn = (e) => {
+  let code = e?.code;
+  return code === "EACCES" || code === "EPERM";
+};
+var A = (error) => (En(error) ? "structural" : Pn(error) ? "permission" : "other");
+var ut = async (e, t) => {
+  let n = await open(e, readOnlyNoFollowFlags());
+  try {
+    let stats = await n.stat();
+    if (!stats.isFile())
+      throw Object.assign(Error("not a regular file"), {
+        code: "ENOTREG",
       });
-    return (
-      Pe(e, we(n, decode), { hash: gt(decode), size: c?.size ?? i.byteLength, mtimeMs: c?.mtimeMs ?? 0 }),
-      !0
-    );
-  },
-  C = { excludeBasenames: ["MEMORY.md"], maxFiles: 2000, maxFileBytes: 1048576 },
-  textEncoder = new TextEncoder(),
-  gt = (e) => {
-    let encode = textEncoder.encode(e),
-      n = -2078137563,
-      o = -873292572;
-    for (let r = 0; r < encode.length; r++) {
-      n ^= encode[r];
-      let i = n & 65535,
-        a = n >>> 16,
-        c = o & 65535,
-        l = o >>> 16,
-        d = i * 179,
-        h = d & 65535;
-      d = a * 179 + (d >>> 16);
-      let u = d & 65535;
-      d = c * 179 + (d >>> 16);
-      let p = d & 65535;
-      d = l * 179 + (d >>> 16);
-      let f = d & 65535,
-        m = n << 8,
-        g = (o << 8) | (n >>> 24),
-        S = h + (m & 65535),
-        I = u + (m >>> 16) + (S >>> 16);
-      ((n = (I << 16) | (S & 65535)), (o = (((f << 16) | p) + g + m + (I >>> 16)) | 0));
-    }
-    let s = (r) => (r >>> 0).toString(16).padStart(8, "0");
-    return s(o) + s(n);
-  },
-  De = (e, t) => {
-    if (t.excludeLog?.(e)) return !0;
-    if (t.isRecallVisible !== void 0 && !t.isRecallVisible(e)) return !0;
-    if (t.excludePrefixes?.some((o) => e.startsWith(o))) return !0;
-    if (t.excludePaths !== void 0) return t.excludePaths.has(e);
-    let sliced = e.slice(e.lastIndexOf("/") + 1);
-    return t.excludeBasenames.includes(sliced);
-  },
-  Rn = async (e, t = C) => {
-    let n = [],
-      o = new Set(),
-      s = !1,
-      r = [""];
-    while (r.length > 0) {
-      let f = r.pop(),
-        m = await readdir(join(e, f), { withFileTypes: !0 }).catch((g) => {
-          if (f === "") {
-            if (isENOENT(g)) return ((s = !0), []);
-            throw g;
-          }
-          switch (A(g)) {
-            case "permission":
-              return (o.add(f), []);
-            case "structural":
-              return [];
-            default:
-              throw g;
-          }
+    if (t?.maxBytes !== undefined && stats.size > t.maxBytes)
+      throw Object.assign(Error("exceeds the read cap"), {
+        code: "EFBIG",
+      });
+    if (t?.withinReal !== undefined) {
+      let s = await realpath(e).catch((error) => {
+        if (A(error) === "structural") return;
+        throw error;
+      });
+      if (s === undefined || !s.startsWith(t.withinReal + sep))
+        throw Object.assign(Error("resolves outside the store root"), {
+          code: "ENOTREG",
         });
-      for (let g of m) {
-        let S = f === "" ? g.name : `${f}/${g.name}`;
-        if (g.isSymbolicLink()) continue;
-        if (g.isDirectory()) {
-          if (t.excludePrefixes?.some((I) => `${S}/`.startsWith(I)) ?? !1) continue;
-          r.push(S);
-        } else n.push(S);
-      }
+      let r = await stat(s).catch((error) => {
+        if (A(error) === "structural") return;
+        throw error;
+      });
+      if (r === undefined)
+        throw Object.assign(Error("resolves outside the store root"), {
+          code: "ENOTREG",
+        });
+      if (r.dev !== stats.dev || r.ino !== stats.ino)
+        throw Object.assign(Error("inode changed during read; retry"), {
+          code: "EAGAIN",
+        });
     }
-    let sorted = n
-        .filter((f) => f.endsWith(".md"))
-        .filter((f) => !De(f, t))
-        .sort(),
-      a = new Set(),
-      settled = await Promise.allSettled(
-        sorted.map(async (f) => {
-          let m = await lstat_2(join(e, f)).catch((g) => {
-            switch (A(g)) {
-              case "structural":
-                return;
-              case "permission":
-                a.add(f);
-                return;
-              default:
-                throw g;
-            }
-          });
-          return m !== void 0 && m.isFile() && m.size <= t.maxFileBytes
-            ? { path: f, size: m.size, mtimeMs: m.mtimeMs }
-            : void 0;
-        }),
-      ),
-      found = settled.find((f) => f.status === "rejected");
-    if (found !== void 0 && found.status === "rejected") throw found.reason;
-    let filtered = settled
-        .map((f) => (f.status === "fulfilled" ? f.value : void 0))
-        .filter((f) => f !== void 0),
-      h =
-        filtered.length <= t.maxFiles
-          ? filtered
-          : filtered
-              .toSorted((f, m) => m.mtimeMs - f.mtimeMs)
-              .slice(0, t.maxFiles)
-              .toSorted((f, m) => (f.path < m.path ? -1 : 1)),
-      u = new Set(h.map((f) => f.path)),
-      p = new Set(filtered.filter((f) => !u.has(f.path)).map((f) => f.path));
-    return { files: h, skipped: a, skippedSubtrees: o, rootMissing: s, capDropped: p };
+    return await n.readFile();
+  } finally {
+    await n.close();
+  }
+};
+var ft = (error) => {
+  let code = error?.code;
+  return code === "ENOTREG" || code === "ELOOP" || code === "EFBIG";
+};
+var fe = Symbol("not-a-regular-file");
+var pt = async (e, t, maxFileBytes) =>
+  lstat(join(e, t)).then(
+    (o) => !o.isFile() || (maxFileBytes !== undefined && o.size > maxFileBytes),
+    (error) => A(error) === "structural",
+  );
+var mt = async (e, t) => {
+  if (!(await pt(e, t))) return false;
+  return realpath(e).then(
+    () => true,
+    () => false,
+  );
+};
+var ht = async (index, dir, path, options = C) => {
+  if (index.pathToId.get(path) === undefined) return false;
+  let r = await realpath(dir).catch(() => j);
+  if (typeof r !== "string") return false;
+  let i = await ut(join(dir, path), {
+    withinReal: r,
+    maxBytes: options.maxFileBytes,
+  }).catch((error) => (ft(error) ? fe : A(error) === "structural" ? undefined : j));
+  if (i === j) return false;
+  if (i === fe) return hasDocumentPath(index, path);
+  if (i === undefined) {
+    if (!(await mt(dir, path))) return false;
+    return hasDocumentPath(index, path);
+  }
+  if (i.byteLength > options.maxFileBytes) return hasDocumentPath(index, path);
+  let a = new TextDecoder().decode(i);
+  let c = await lstat(join(dir, path)).catch(() => {
+    return;
+  });
+  upsertDocument(index, extractMemoryFieldsFromFile(path, a), {
+    hash: gt(a),
+    size: c?.size ?? i.byteLength,
+    mtimeMs: c?.mtimeMs ?? 0,
+  });
+  return true;
+};
+var C = {
+  excludeBasenames: ["MEMORY.md"],
+  maxFiles: 2000,
+  maxFileBytes: 1048576,
+};
+var textEncoder = new TextEncoder();
+var gt = (e) => {
+  let t = textEncoder.encode(e);
+  let n = -2078137563;
+  let o = -873292572;
+  for (let idx = 0; idx < t.length; idx++) {
+    n ^= t[idx];
+    let i = n & 65535;
+    let a = n >>> 16;
+    let c = o & 65535;
+    let l = o >>> 16;
+    let d = i * 179;
+    let h = d & 65535;
+    d = a * 179 + (d >>> 16);
+    let u = d & 65535;
+    d = c * 179 + (d >>> 16);
+    let p = d & 65535;
+    d = l * 179 + (d >>> 16);
+    let f = d & 65535;
+    let m = n << 8;
+    let g = (o << 8) | (n >>> 24);
+    let S = h + (m & 65535);
+    let I = u + (m >>> 16) + (S >>> 16);
+    n = (I << 16) | (S & 65535);
+    o = (((f << 16) | p) + g + m + (I >>> 16)) | 0;
+  }
+  let s = (r) => (r >>> 0).toString(16).padStart(8, "0");
+  return s(o) + s(n);
+};
+var De = (e, t) => {
+  if (t.excludeLog?.(e)) return true;
+  if (t.isRecallVisible !== undefined && !t.isRecallVisible(e)) return true;
+  if (t.excludePrefixes?.some((excludePrefix) => e.startsWith(excludePrefix))) return true;
+  if (t.excludePaths !== undefined) return t.excludePaths.has(e);
+  let sliced = e.slice(e.lastIndexOf("/") + 1);
+  return t.excludeBasenames.includes(sliced);
+};
+var Rn = async (e, t = C) => {
+  let n = [];
+  let o = new Set();
+  let rootMissing = false;
+  let r = [""];
+  while (r.length > 0) {
+    let f = r.pop();
+    let m = await readdir(join(e, f), {
+      withFileTypes: true,
+    }).catch((error) => {
+      if (f === "") {
+        if (isENOENT(error)) {
+          rootMissing = true;
+          return [];
+        }
+        throw error;
+      }
+      switch (A(error)) {
+        case "permission":
+          o.add(f);
+          return [];
+        case "structural":
+          return [];
+        default:
+          throw error;
+      }
+    });
+    for (let g of m) {
+      let S = f === "" ? g.name : `${f}/${g.name}`;
+      if (g.isSymbolicLink()) continue;
+      if (g.isDirectory()) {
+        if (t.excludePrefixes?.some((excludePrefix) => `${S}/`.startsWith(excludePrefix)) ?? false) continue;
+        r.push(S);
+      } else n.push(S);
+    }
+  }
+  let sorted = n
+    .filter((f) => f.endsWith(".md"))
+    .filter((f) => !De(f, t))
+    .sort();
+  let a = new Set();
+  let settled = await Promise.allSettled(
+    sorted.map(async (f) => {
+      let m = await lstat(join(e, f)).catch((error) => {
+        switch (A(error)) {
+          case "structural":
+            return;
+          case "permission":
+            a.add(f);
+            return;
+          default:
+            throw error;
+        }
+      });
+      return m !== undefined && m.isFile() && m.size <= t.maxFileBytes
+        ? {
+            path: f,
+            size: m.size,
+            mtimeMs: m.mtimeMs,
+          }
+        : undefined;
+    }),
+  );
+  let found = settled.find((f) => f.status === "rejected");
+  if (found !== undefined && found.status === "rejected") throw found.reason;
+  let filtered = settled
+    .map((f) => (f.status === "fulfilled" ? f.value : undefined))
+    .filter((f) => f !== undefined);
+  let h =
+    filtered.length <= t.maxFiles
+      ? filtered
+      : filtered
+          .toSorted((f, m) => m.mtimeMs - f.mtimeMs)
+          .slice(0, t.maxFiles)
+          .toSorted((f, m) => (f.path < m.path ? -1 : 1));
+  let u = new Set(h.map((f) => f.path));
+  let capDropped = new Set(filtered.filter((f) => !u.has(f.path)).map((f) => f.path));
+  return {
+    files: h,
+    skipped: a,
+    skippedSubtrees: o,
+    rootMissing,
+    capDropped,
   };
-
+};
 export {
-  BP,
+  getDefaultWritePaths,
   Nqt,
-  oD,
-  Kot,
-  Ad,
-  uy,
+  stripExtendedPathPrefix,
+  expandWindowsEnvRefs,
+  containsGlobChars,
+  removeTrailingGlobSuffix,
+  yM,
+  bM,
+  SM,
+  containsGlobCharsWin,
+  isSymlinkOutsideBoundary,
+  expandGlobPattern,
   C,
   Rn,
   A,
@@ -1059,46 +1268,40 @@ export {
   pt,
   ut,
   ft,
-  fe_vp5g,
+  fe,
   mt,
   gt,
   ht,
-  yM,
-  bM,
-  SM,
-  Jxe,
-  Pwn,
-  usr,
-  Vot,
-  Lqt,
-  Hqt,
-  $qt,
-  S8o,
-  R4e,
-  PTt,
-  sS,
-  QSe,
-  w8o,
-  Iwn,
-  SRT,
-  x4e,
+  generateProxyEnvVars,
+  markedLiteralPath,
+  isUncPath,
+  toForwardSlashes,
+  collapseInteriorSpellings,
+  isAbsenceErrno,
+  containsGlobCharsForPlatform,
+  normalizePathForSandbox,
+  encodeSandboxedCommand,
+  SANDBOXED_COMMAND_KEY_LENGTH,
+  encodedCommandFromProxyUser,
+  PROXY_AUTH_USER,
+  decodeSandboxedCommand,
   ITt,
-  fsr,
-  Own,
+  walkGlobPatternSteps,
+  finish,
   xwn,
-  ili,
-  v8o,
-  k8o,
-  oS,
-  dsr,
-  csr,
-  Mqt,
-  F3r,
+  finishInTurns,
+  globPatternBaseDir,
+  globBaseDirIsRoot,
+  isAtOrUnder,
+  DANGEROUS_FILES,
+  getDangerousDirectories,
+  normalizeCaseForComparison,
+  nameLocation,
   zot,
-  Rwn,
-  B3r,
+  properAncestors,
+  buildPosixGitSafeDirEnv,
   Dqt,
   Cwn,
-  E8o,
-  U3r,
+  MAX_ENCODED_COMMAND_BYTES,
+  buildGitConfigEnv,
 };

@@ -9,9 +9,12 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../../assets/remote-diff.mjs-a2ecedbc.txt.zst" with { type: "file" };
-import { Et } from "../../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-e6m8bf9y.js:314-336 placement
-var e = __cc_resource_0;
+var remoteDiffPath = __cc_resource_0;
 //@ chunk-e6m8bf9y.js:336-368 placement
-var u = Et(e, import.meta.dirname);
+/**
+ * remote-diff 技能附带的脚本资源文本。
+ */
+var remoteDiff = readEmbeddedTextSync(remoteDiffPath, import.meta.dirname);

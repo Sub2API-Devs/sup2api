@@ -10,17 +10,17 @@
  */
 import { getGlobalConfig } from "../config.js";
 
+//@ chunk-aepeg2w5.js:418331-418830 fingerprint = isExtraUsageEnabled (0.96)
 /**
  * 缓存的 extra usage 禁用原因：未知为 false；null（已开启）或 out_of_credits 为 true；其他禁用原因为 false。供 Opus/Sonnet 1M 可用性（EK/vK）在订阅模式下判断。
  */
-//@ chunk-aepeg2w5.js:418331-418830 fingerprint = isExtraUsageEnabled (0.96)
 function isExtraUsageEnabled() {
   let reason = getGlobalConfig().cachedExtraUsageDisabledReason;
-  if (reason === void 0) return !1;
-  if (reason === null) return !0;
+  if (reason === undefined) return false;
+  if (reason === null) return true;
   switch (reason) {
     case "out_of_credits":
-      return !0;
+      return true;
     case "overage_not_provisioned":
     case "org_level_disabled":
     case "org_level_disabled_until":
@@ -33,10 +33,9 @@ function isExtraUsageEnabled() {
     case "no_limits_configured":
     case "fetch_error":
     case "unknown":
-      return !1;
+      return false;
     default:
-      return !1;
+      return false;
   }
 }
-
 export { isExtraUsageEnabled };

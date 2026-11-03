@@ -8,9 +8,16 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:277786-280042 cjs-fingerprint
-var Vr = x(function (JE, Kr) {
-  function Ep(e) {
-    let n = { relevance: 0, contains: [{ begin: "('|\\.')+" }] };
+var require_matlab = x(function (cjsExports, cjsModule) {
+  function matlab(hljs) {
+    let TRANSPOSE = {
+      relevance: 0,
+      contains: [
+        {
+          begin: "('|\\.')+",
+        },
+      ],
+    };
     return {
       name: "Matlab",
       keywords: {
@@ -26,28 +33,69 @@ var Vr = x(function (JE, Kr) {
           beginKeywords: "function",
           end: "$",
           contains: [
-            e.UNDERSCORE_TITLE_MODE,
+            hljs.UNDERSCORE_TITLE_MODE,
             {
               className: "params",
               variants: [
-                { begin: "\\(", end: "\\)" },
-                { begin: "\\[", end: "\\]" },
+                {
+                  begin: "\\(",
+                  end: "\\)",
+                },
+                {
+                  begin: "\\[",
+                  end: "\\]",
+                },
               ],
             },
           ],
         },
-        { className: "built_in", begin: /true|false/, relevance: 0, starts: n },
-        { begin: "[a-zA-Z][a-zA-Z_0-9]*('|\\.')+", relevance: 0 },
-        { className: "number", begin: e.C_NUMBER_RE, relevance: 0, starts: n },
-        { className: "string", begin: "'", end: "'", contains: [{ begin: "''" }] },
-        { begin: /\]|\}|\)/, relevance: 0, starts: n },
-        { className: "string", begin: '"', end: '"', contains: [{ begin: '""' }], starts: n },
-        e.COMMENT("^\\s*%\\{\\s*$", "^\\s*%\\}\\s*$"),
-        e.COMMENT("%", "$"),
+        {
+          className: "built_in",
+          begin: /true|false/,
+          relevance: 0,
+          starts: TRANSPOSE,
+        },
+        {
+          begin: "[a-zA-Z][a-zA-Z_0-9]*('|\\.')+",
+          relevance: 0,
+        },
+        {
+          className: "number",
+          begin: hljs.C_NUMBER_RE,
+          relevance: 0,
+          starts: TRANSPOSE,
+        },
+        {
+          className: "string",
+          begin: "'",
+          end: "'",
+          contains: [
+            {
+              begin: "''",
+            },
+          ],
+        },
+        {
+          begin: /\]|\}|\)/,
+          relevance: 0,
+          starts: TRANSPOSE,
+        },
+        {
+          className: "string",
+          begin: '"',
+          end: '"',
+          contains: [
+            {
+              begin: '""',
+            },
+          ],
+          starts: TRANSPOSE,
+        },
+        hljs.COMMENT("^\\s*%\\{\\s*$", "^\\s*%\\}\\s*$"),
+        hljs.COMMENT("%", "$"),
       ],
     };
   }
-  Kr.exports = Ep;
+  cjsModule.exports = matlab;
 });
-
-export { Vr };
+export { require_matlab };

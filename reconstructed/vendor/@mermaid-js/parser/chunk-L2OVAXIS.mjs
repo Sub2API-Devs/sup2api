@@ -11,10 +11,13 @@ import { Xve, Y8e } from "./dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mj
 //@ chunk-z0q4jgnc.js:388-397 placement
 var M_2 = {};
 //@ chunk-z0q4jgnc.js:397-421 placement
-Ar(M_2, { default: () => Xve });
+Ar(M_2, {
+  default: () => Xve,
+});
 //@ chunk-z0q4jgnc.js:421-430 placement
 var R_2 = {};
 //@ chunk-z0q4jgnc.js:430-454 placement
-Ar(R_2, { default: () => Y8e });
-
+Ar(R_2, {
+  default: () => Y8e,
+});
 export { M_2, R_2 };

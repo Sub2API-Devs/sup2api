@@ -6,47 +6,48 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { yHr } from "./writer.js";
-import { QGe } from "./util/minimal.js";
+import { require_writer } from "./writer.js";
+import { require_minimal } from "./util/minimal.js";
 
 //@ chunk-798ashq9.js:34145-34984 cjs-fingerprint
-var Rr = x(function (xc, Lr) {
-  Lr.exports = W;
-  var Ar = yHr();
-  (W.prototype = Object.create(Ar.prototype)).constructor = W;
-  var ot = QGe();
-  function W() {
-    Ar.call(this);
+var require_writer_buffer = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = BufferWriter;
+  var Writer = require_writer();
+  (BufferWriter.prototype = Object.create(Writer.prototype)).constructor = BufferWriter;
+  var util = require_minimal();
+  function BufferWriter() {
+    Writer.call(this);
   }
-  W._configure = function () {
-    ((W.alloc = ot._Buffer_allocUnsafe),
-      (W.writeBytesBuffer =
-        ot.Buffer && ot.Buffer.prototype instanceof Uint8Array && ot.Buffer.prototype.set.name === "set"
-          ? function (u, f, d) {
-              f.set(u, d);
-            }
-          : function (u, f, d) {
-              if (u.copy) u.copy(f, d, 0, u.length);
-              else for (var i = 0; i < u.length;) f[d++] = u[i++];
-            }));
+  BufferWriter._configure = function () {
+    BufferWriter.alloc = util._Buffer_allocUnsafe;
+    BufferWriter.writeBytesBuffer =
+      util.Buffer && util.Buffer.prototype instanceof Uint8Array && util.Buffer.prototype.set.name === "set"
+        ? function (val, buf, pos) {
+            buf.set(val, pos);
+          }
+        : function (val, buf, pos) {
+            if (val.copy) val.copy(buf, pos, 0, val.length);
+            else for (var i = 0; i < val.length;) buf[pos++] = val[i++];
+          };
   };
-  W.prototype.bytes = function (u) {
-    if (ot.isString(u)) u = ot._Buffer_from(u, "base64");
-    var f = u.length >>> 0;
-    if ((this.uint32(f), f)) this._push(W.writeBytesBuffer, f, u);
+  BufferWriter.prototype.bytes = function (value) {
+    if (util.isString(value)) value = util._Buffer_from(value, "base64");
+    var len = value.length >>> 0;
+    this.uint32(len);
+    if (len) this._push(BufferWriter.writeBytesBuffer, len, value);
     return this;
   };
-  function zi(l, u, f) {
-    if (l.length < 40) ot.utf8.write(l, u, f);
-    else if (u.utf8Write) u.utf8Write(l, f);
-    else u.write(l, f);
+  function writeStringBuffer(val, buf, pos) {
+    if (val.length < 40) util.utf8.write(val, buf, pos);
+    else if (buf.utf8Write) buf.utf8Write(val, pos);
+    else buf.write(val, pos);
   }
-  W.prototype.string = function (u) {
-    var byteLength = ot.Buffer.byteLength(u);
-    if ((this.uint32(byteLength), byteLength)) this._push(zi, byteLength, u);
+  BufferWriter.prototype.string = function (value) {
+    var len = util.Buffer.byteLength(value);
+    this.uint32(len);
+    if (len) this._push(writeStringBuffer, len, value);
     return this;
   };
-  W._configure();
+  BufferWriter._configure();
 });
-
-export { Rr };
+export { require_writer_buffer };

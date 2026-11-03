@@ -19,22 +19,23 @@ import { loadSessionIngressToken } from "./sessionIngressAuth.js";
 import { logForDebugging } from "./debug.js";
 import { errorMessage } from "./errors.js";
 
+//@ chunk-2dh0g62b.js:414-652 placement
 /**
  * 从文件描述符预读凭据（CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR 等），失败不致命。
  */
-//@ chunk-2dh0g62b.js:414-652 placement
-async function primeFileDescriptorCredentials(e, r = {}) {
+async function primeFileDescriptorCredentials(credentials, r = {}) {
   try {
     if (!isBareMode()) {
-      if (!env.CLAUDE_CODE_OAUTH_TOKEN && r.bgAuthSnapshot !== "leave") await openCredentialPathPolicy(e);
-      (await getOAuthTokenFromFileDescriptor_2(e), await getApiKeyFromFileDescriptor_2(e));
+      if (!env.CLAUDE_CODE_OAUTH_TOKEN && r.bgAuthSnapshot !== "leave")
+        await openCredentialPathPolicy(credentials);
+      await getOAuthTokenFromFileDescriptor_2(credentials);
+      await getApiKeyFromFileDescriptor_2(credentials);
     }
-    await loadSessionIngressToken(e);
+    await loadSessionIngressToken(credentials);
   } catch (error) {
     logForDebugging(`Descriptor credential prime failed (non-fatal): ${errorMessage(error)}`, {
       level: "error",
     });
   }
 }
-
 export { primeFileDescriptorCredentials };

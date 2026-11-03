@@ -10,26 +10,28 @@
  */
 import { getPromptCachingEnabled, isOneHourCacheTtl } from "../services/api/claude.js";
 import { getMainLoopModel } from "./model/model.js";
-import { tpn, use } from "../services/compact/autoCompact.js";
-import { oR, CACHE_TTL_5M_MS } from "../services/api/promptCacheBreakDetection.js";
+import { isCacheCold, findLastRealAssistantMessage } from "../services/compact/autoCompact.js";
+import { CACHE_TTL_1H_MS, CACHE_TTL_5M_MS } from "../services/api/promptCacheBreakDetection.js";
 import { getLastMainThreadRequestAt } from "../bootstrap/state.js";
 
 //@ chunk-e6aww6q8.js:2076386-2076482 placement = isMainThreadSource (1)
-function isMainThreadSource(e, n = Date.now()) {
-  if (!getPromptCachingEnabled(getMainLoopModel())) return !1;
-  return !tpn(e, isOneHourCacheTtl("repl_main_thread") ? oR : CACHE_TTL_5M_MS, n);
+function isMainThreadSource(messages, n = Date.now()) {
+  if (!getPromptCachingEnabled(getMainLoopModel())) return false;
+  return !isCacheCold(messages, isOneHourCacheTtl("repl_main_thread") ? CACHE_TTL_1H_MS : CACHE_TTL_5M_MS, n);
 }
+//@ chunk-e6aww6q8.js:2076482-2076624 placement
 /**
  * 主线程来源下，返回最近一次响应（仅当它不早于最后一次主线程请求）。
  */
-//@ chunk-e6aww6q8.js:2076482-2076624 placement
-function lastMainThreadResponse(e, n = Date.now()) {
-  if (!isMainThreadSource(e, n)) return;
-  let r = use(e);
+function lastMainThreadResponse(messages, n = Date.now()) {
+  if (!isMainThreadSource(messages, n)) return;
+  let lastRealAssistantMessage = findLastRealAssistantMessage(messages);
   return {
     response:
-      (r !== void 0 ? Date.parse(r.timestamp) : NaN) >= (getLastMainThreadRequestAt() ?? -1 / 0) ? r : void 0,
+      (lastRealAssistantMessage !== undefined ? Date.parse(lastRealAssistantMessage.timestamp) : NaN) >=
+      (getLastMainThreadRequestAt() ?? -1 / 0)
+        ? lastRealAssistantMessage
+        : undefined,
   };
 }
-
 export { isMainThreadSource, lastMainThreadResponse };

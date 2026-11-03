@@ -6,61 +6,78 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ze } from "./version-check.js";
-import { Ge } from "./regex.js";
+import { require_version_check } from "./version-check.js";
+import { require_regex } from "./regex.js";
 
 //@ chunk-spjgqa4y.js:8825-9968 cjs-fingerprint
-var q = x(function (Wi) {
-  var $t = ze(),
-    W = Ge();
-  Wi.NUMERIC = { id: "Numeric", bit: 1, ccBits: [10, 12, 14] };
-  Wi.ALPHANUMERIC = { id: "Alphanumeric", bit: 2, ccBits: [9, 11, 13] };
-  Wi.BYTE = { id: "Byte", bit: 4, ccBits: [8, 16, 16] };
-  Wi.KANJI = { id: "Kanji", bit: 8, ccBits: [8, 10, 12] };
-  Wi.MIXED = { bit: -1 };
-  Wi.getCharCountIndicator = function (e, r) {
-    if (!e.ccBits) throw Error("Invalid mode: " + e);
-    if (!$t.isValid(r)) throw Error("Invalid version: " + r);
-    if (r >= 1 && r < 10) return e.ccBits[0];
-    else if (r < 27) return e.ccBits[1];
-    return e.ccBits[2];
+var require_mode = x(function (cjsExports) {
+  var VersionCheck = require_version_check();
+  var Regex = require_regex();
+  cjsExports.NUMERIC = {
+    id: "Numeric",
+    bit: 1,
+    ccBits: [10, 12, 14],
   };
-  Wi.getBestModeForData = function (e) {
-    if (W.testNumeric(e)) return Wi.NUMERIC;
-    else if (W.testAlphanumeric(e)) return Wi.ALPHANUMERIC;
-    else if (W.testKanji(e)) return Wi.KANJI;
-    else return Wi.BYTE;
+  cjsExports.ALPHANUMERIC = {
+    id: "Alphanumeric",
+    bit: 2,
+    ccBits: [9, 11, 13],
   };
-  Wi.toString = function (e) {
-    if (e && e.id) return e.id;
+  cjsExports.BYTE = {
+    id: "Byte",
+    bit: 4,
+    ccBits: [8, 16, 16],
+  };
+  cjsExports.KANJI = {
+    id: "Kanji",
+    bit: 8,
+    ccBits: [8, 10, 12],
+  };
+  cjsExports.MIXED = {
+    bit: -1,
+  };
+  cjsExports.getCharCountIndicator = function (mode, version) {
+    if (!mode.ccBits) throw Error("Invalid mode: " + mode);
+    if (!VersionCheck.isValid(version)) throw Error("Invalid version: " + version);
+    if (version >= 1 && version < 10) return mode.ccBits[0];
+    else if (version < 27) return mode.ccBits[1];
+    return mode.ccBits[2];
+  };
+  cjsExports.getBestModeForData = function (dataStr) {
+    if (Regex.testNumeric(dataStr)) return cjsExports.NUMERIC;
+    else if (Regex.testAlphanumeric(dataStr)) return cjsExports.ALPHANUMERIC;
+    else if (Regex.testKanji(dataStr)) return cjsExports.KANJI;
+    else return cjsExports.BYTE;
+  };
+  cjsExports.toString = function (mode) {
+    if (mode && mode.id) return mode.id;
     throw Error("Invalid mode");
   };
-  Wi.isValid = function (e) {
-    return e && e.bit && e.ccBits;
+  cjsExports.isValid = function (mode) {
+    return mode && mode.bit && mode.ccBits;
   };
-  function Ki(t) {
-    if (typeof t !== "string") throw Error("Param is not a string");
-    switch (t.toLowerCase()) {
+  function fromString(string) {
+    if (typeof string !== "string") throw Error("Param is not a string");
+    switch (string.toLowerCase()) {
       case "numeric":
-        return Wi.NUMERIC;
+        return cjsExports.NUMERIC;
       case "alphanumeric":
-        return Wi.ALPHANUMERIC;
+        return cjsExports.ALPHANUMERIC;
       case "kanji":
-        return Wi.KANJI;
+        return cjsExports.KANJI;
       case "byte":
-        return Wi.BYTE;
+        return cjsExports.BYTE;
       default:
-        throw Error("Unknown mode: " + t);
+        throw Error("Unknown mode: " + string);
     }
   }
-  Wi.from = function (e, r) {
-    if (Wi.isValid(e)) return e;
+  cjsExports.from = function (value, defaultValue) {
+    if (cjsExports.isValid(value)) return value;
     try {
-      return Ki(e);
-    } catch (error) {
-      return r;
+      return fromString(value);
+    } catch (e) {
+      return defaultValue;
     }
   };
 });
-
-export { q };
+export { require_mode };

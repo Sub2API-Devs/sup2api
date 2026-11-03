@@ -15,11 +15,11 @@ import { isWellFormedString } from "../../utils/stringUtils.js";
 import { containsPathTraversal } from "../../utils/path.js";
 import { repoRootError, repoRootErrorClass } from "../repoRoots/repoRootErrors.js";
 import { getPlatform } from "../../utils/platform.js";
-import { hm } from "../../utils/pathPrefix.js";
-import { cH } from "../../utils/permissions/pathVetting.js";
+import { isSubpathOf } from "../../utils/pathPrefix.js";
+import { pathVettingReason } from "../../utils/permissions/pathVetting.js";
 import { getErrnoCode, sanitizedErrCodeForTelemetry } from "../../utils/errors.js";
-import { Yg } from "../../remote/remoteMode.js";
-import { tz, READ_LIMITS } from "../../utils/fsBoundRead.js";
+import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
+import { O_NOFOLLOW_ANY, READ_LIMITS } from "../../utils/fsBoundRead.js";
 import { count } from "../../utils/collections.js";
 import { getFileKind } from "../../utils/fileKind.js";
 import {
@@ -30,136 +30,170 @@ import {
 import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-htc3qf7e.js:854-883 placement
-var REMOTE_LIST_DIRECTORY_MAX_ENTRIES = 5000,
-  h = 10 * REMOTE_LIST_DIRECTORY_MAX_ENTRIES,
-  P = 1024;
+/**
+ * 远端目录列表的条目上限与路径长度上限。
+ */
+var REMOTE_LIST_DIRECTORY_MAX_ENTRIES = 5000;
+var MAX_LISTED_ENTRIES_RAW = 10 * REMOTE_LIST_DIRECTORY_MAX_ENTRIES;
+var MAX_REMOTE_PATH_CHARS = 1024;
+//@ chunk-htc3qf7e.js:883-2033 placement
 /**
  * 为远端列目录：逐段打开、不跟随符号链接、按读权限规则过滤。
  */
-//@ chunk-htc3qf7e.js:883-2033 placement
-async function listDirectoryForRemote(n, e, r, s) {
+async function listDirectoryForRemote(path, projectRoot, r, s) {
   try {
     if (
-      typeof n !== "string" ||
-      n.length > P ||
-      n.includes("\x00") ||
-      n.includes("\\") ||
-      !isWellFormedString(n) ||
-      win32.parse(n).root !== "" ||
-      containsPathTraversal(n)
+      typeof path !== "string" ||
+      path.length > MAX_REMOTE_PATH_CHARS ||
+      path.includes("\x00") ||
+      path.includes("\\") ||
+      !isWellFormedString(path) ||
+      win32.parse(path).root !== "" ||
+      containsPathTraversal(path)
     )
       throw repoRootError("invalid_path");
-    if (!isAbsolute(e) || getPlatform() !== "linux") throw repoRootError("unexpected_error");
-    let o = resolve(e, n);
-    if (!hm(e, o, !0)) throw repoRootError("invalid_path");
+    if (!isAbsolute(projectRoot) || getPlatform() !== "linux") throw repoRootError("unexpected_error");
+    let o = resolve(projectRoot, path);
+    if (!isSubpathOf(projectRoot, o, true)) throw repoRootError("invalid_path");
     let a = r();
-    if (cH(o, a.trustedNetworkDirectories) !== void 0) throw repoRootError("unsupported_name");
-    if (isListingDenied(e, o, a)) throw repoRootError("read_rule");
-    await using m = await openDirectoryNoFollow(e, o);
+    if (pathVettingReason(o, a.trustedNetworkDirectories) !== undefined)
+      throw repoRootError("unsupported_name");
+    if (isListingDenied(projectRoot, o, a)) throw repoRootError("read_rule");
+    await using directoryNoFollow = await openDirectoryNoFollow(projectRoot, o);
     if (
       !(
-        await readlink(`/proc/self/fd/${m.fd}`, { encoding: "buffer" }).catch((i) => {
-          throw getErrnoCode(i) === "ENOENT" ? repoRootError("unexpected_error") : i;
+        await readlink(`/proc/self/fd/${directoryNoFollow.fd}`, {
+          encoding: "buffer",
+        }).catch((error) => {
+          throw getErrnoCode(error) === "ENOENT" ? repoRootError("unexpected_error") : error;
         })
       ).equals(Buffer.from(o))
     )
       throw repoRootError("path_not_canonical");
-    let l = await readDirEntriesBounded(m);
+    let dirEntriesBounded = await readDirEntriesBounded(directoryNoFollow);
     if (s()) throw repoRootError("workspace_moved");
     let c = r();
-    if (c !== a && isListingDenied(e, o, c)) throw repoRootError("read_rule");
-    let d = l.length > h;
-    ((l.length = Math.min(l.length, h)), l.sort((i, f) => (i.name < f.name ? -1 : i.name > f.name ? 1 : 0)));
-    let u = [],
-      T = Yg(e, () => {
-        for (let i of l) {
-          let f = join(o, i.name);
-          if (isFileReadDenied(f, c, !i.isFile())) continue;
-          if (i.name.trimEnd() !== i.name && isFileReadDenied(`${f}${sep}`, c, !i.isFile())) continue;
-          if (u.length === REMOTE_LIST_DIRECTORY_MAX_ENTRIES) return !0;
-          u.push(i);
-        }
-        return !1;
-      }),
-      results = await Promise.all(u.map((i) => describeDirEntry(m, i)));
-    return { absPath: o, entries: results.filter((i) => i !== null), truncated: T || (d && u.length > 0) };
+    if (c !== a && isListingDenied(projectRoot, o, c)) throw repoRootError("read_rule");
+    let d = dirEntriesBounded.length > MAX_LISTED_ENTRIES_RAW;
+    dirEntriesBounded.length = Math.min(dirEntriesBounded.length, MAX_LISTED_ENTRIES_RAW);
+    dirEntriesBounded.sort((i, f) => (i.name < f.name ? -1 : i.name > f.name ? 1 : 0));
+    let u = [];
+    let T = runInRemoteCallFrameMain(projectRoot, () => {
+      for (let i of dirEntriesBounded) {
+        let f = join(o, i.name);
+        if (isFileReadDenied(f, c, !i.isFile())) continue;
+        if (i.name.trimEnd() !== i.name && isFileReadDenied(`${f}${sep}`, c, !i.isFile())) continue;
+        if (u.length === REMOTE_LIST_DIRECTORY_MAX_ENTRIES) return true;
+        u.push(i);
+      }
+      return false;
+    });
+    let results = await Promise.all(u.map((i) => describeDirEntry(directoryNoFollow, i)));
+    return {
+      absPath: o,
+      entries: results.filter((i) => i !== null),
+      truncated: T || (d && u.length > 0),
+    };
   } catch (error) {
-    throw repoRootErrorClass(error) !== void 0 ? error : listErrorFromErrno(error);
+    throw repoRootErrorClass(error) !== undefined ? error : listErrorFromErrno(error);
   }
 }
 //@ chunk-htc3qf7e.js:2033-2072 placement
-var D = tz | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS;
+var DIRECTORY_OPEN_FLAGS = O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS;
+//@ chunk-htc3qf7e.js:2072-2512 placement
 /**
  * 逐段打开目录，不跟随符号链接
  */
-//@ chunk-htc3qf7e.js:2072-2512 placement
 async function openDirectoryNoFollow(n, e) {
-  let filtered = e.split(sep).filter((a) => a !== ""),
-    s = count(resolve(n).split(sep), (a) => a !== "") - 1,
-    o = await open(sep, D);
+  let filtered = e.split(sep).filter((a) => a !== "");
+  let s = count(resolve(n).split(sep), (a) => a !== "") - 1;
+  let o = await open(sep, DIRECTORY_OPEN_FLAGS);
   for (let [a, m] of filtered.entries()) {
     await using y = o;
     let l = `/proc/self/fd/${y.fd}/${m}`;
-    o = await open(l, D).catch(async (c) => {
-      let d = getErrnoCode(c);
-      if (d === "ENOENT")
+    o = await open(l, DIRECTORY_OPEN_FLAGS).catch(async (error) => {
+      let errnoCode = getErrnoCode(error);
+      if (errnoCode === "ENOENT")
         await lstat(`/proc/self/fd/${y.fd}`).catch(() => {
           throw repoRootError("unexpected_error");
         });
-      if (d === "ENOTDIR" && (await lstat(l)).isSymbolicLink())
+      if (errnoCode === "ENOTDIR" && (await lstat(l)).isSymbolicLink())
         throw repoRootError(a < s ? "path_not_canonical" : "symlink_in_path");
-      throw c;
+      throw error;
     });
   }
   return o;
 }
+//@ chunk-htc3qf7e.js:2512-2697 placement
 /**
  * 有界读取目录条目
  */
-//@ chunk-htc3qf7e.js:2512-2697 placement
-async function readDirEntriesBounded(n) {
-  let e = await opendir(`/proc/self/fd/${n.fd}`).catch((s) => {
-      throw getErrnoCode(s) === "ENOENT" ? repoRootError("unexpected_error") : s;
-    }),
-    r = [];
-  for await (let s of e) if ((r.push(s), r.length > h)) break;
+async function readDirEntriesBounded(directoryNoFollow) {
+  let e = await opendir(`/proc/self/fd/${directoryNoFollow.fd}`).catch((error) => {
+    throw getErrnoCode(error) === "ENOENT" ? repoRootError("unexpected_error") : error;
+  });
+  let r = [];
+  for await (let s of e) {
+    r.push(s);
+    if (r.length > MAX_LISTED_ENTRIES_RAW) break;
+  }
   return r;
 }
+//@ chunk-htc3qf7e.js:2697-2980 placement
 /**
  * 描述目录条目
  */
-//@ chunk-htc3qf7e.js:2697-2980 placement
-async function describeDirEntry(n, e) {
-  let r = await getFileKind(e, `/proc/self/fd/${n.fd}/${e.name}`, "unknown");
-  if (r === "unknown") return null;
-  if (r === "symlink") return { name: e.name, isDirectory: !1, isSymlink: !0 };
-  if (r === "other") return { name: e.name, isDirectory: !1, isSpecial: !0 };
-  return { name: e.name, isDirectory: r === "dir" };
+async function describeDirEntry(directoryNoFollow, e) {
+  let fileKind = await getFileKind(e, `/proc/self/fd/${directoryNoFollow.fd}/${e.name}`, "unknown");
+  if (fileKind === "unknown") return null;
+  if (fileKind === "symlink")
+    return {
+      name: e.name,
+      isDirectory: false,
+      isSymlink: true,
+    };
+  if (fileKind === "other")
+    return {
+      name: e.name,
+      isDirectory: false,
+      isSpecial: true,
+    };
+  return {
+    name: e.name,
+    isDirectory: fileKind === "dir",
+  };
 }
 //@ chunk-htc3qf7e.js:2980-3104 placement
 function isListingDenied(n, e, r) {
   return (
     layeredReadVerdictForPaths([], r).layer !== "allow" ||
-    Yg(
+    runInRemoteCallFrameMain(
       n,
       () =>
-        isFileReadDenied(e, r, !0) ||
+        isFileReadDenied(e, r, true) ||
         ["deny", "ask"].some((s) => matchingDenyRuleForDirectoryContents(e, r, "read", s) !== null),
     )
   );
 }
 //@ chunk-htc3qf7e.js:3104-3222 placement = isFileReadDenied (1)
 function isFileReadDenied(n, e, r) {
-  return (r ? [{}, { isDirectory: !0 }] : [{}]).some((o) =>
-    ["deny", "ask"].some((a) => matchingRuleForInput(n, e, "read", a, o) !== null),
-  );
+  return (
+    r
+      ? [
+          {},
+          {
+            isDirectory: true,
+          },
+        ]
+      : [{}]
+  ).some((o) => ["deny", "ask"].some((a) => matchingRuleForInput(n, e, "read", a, o) !== null));
 }
+//@ chunk-htc3qf7e.js:3222-3601 placement
 /**
  * errno 转目录列举错误
  */
-//@ chunk-htc3qf7e.js:3222-3601 placement
-function listErrorFromErrno(n) {
-  switch (getErrnoCode(n)) {
+function listErrorFromErrno(error) {
+  switch (getErrnoCode(error)) {
     case "ENOENT":
       return repoRootError("not_found");
     case "ENOTDIR":
@@ -172,9 +206,11 @@ function listErrorFromErrno(n) {
     case "EPERM":
       return repoRootError("os_permission_denied");
     default:
-      let e = `list_directory failed: ${sanitizedErrCodeForTelemetry(n) ?? "not a filesystem error"}`;
-      return (logForDebugging(e, { level: "error" }), repoRootError("unexpected_error", e));
+      let e = `list_directory failed: ${sanitizedErrCodeForTelemetry(error) ?? "not a filesystem error"}`;
+      logForDebugging(e, {
+        level: "error",
+      });
+      return repoRootError("unexpected_error", e);
   }
 }
-
 export { REMOTE_LIST_DIRECTORY_MAX_ENTRIES, listDirectoryForRemote };

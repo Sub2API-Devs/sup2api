@@ -8,53 +8,48 @@
  * pieces: chunk-81qqq1aq.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { j } from "../../vendor/react/cjs/react.production.js";
-import { nGs } from "../utils/imagePaste.js";
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
+import { isClipboardImageUnsupported } from "../utils/imagePaste.js";
 import { getShortcutDisplay } from "../keybindings/shortcutFormat.js";
 
 //@ chunk-81qqq1aq.js:899-903 placement
-j();
+init_react_production();
 //@ chunk-81qqq1aq.js:903-1467 fingerprint = useClipboardImageHint (0.747)
-var CLIPBOARD_IMAGE_HINT = "clipboard-image-hint",
-  st = 1000,
-  lt = 30000,
-  Ee = {
-    id: "clipboard-image-hint",
-    deps: (t) => [t.isTerminalFocused, t.canPasteImages, t.addNotification, t.clock],
-    setup() {
-      let t = null,
-        h = 0,
-        i = null;
-      return ({
-        isTerminalFocused: isTerminalFocused,
-        canPasteImages: canPasteImages,
-        addNotification: addNotification,
-        clock: clock,
-      }) => {
-        let o = t ?? isTerminalFocused;
-        if (((t = isTerminalFocused), !canPasteImages || !isTerminalFocused || o)) return;
-        return (
-          i?.(),
-          (i = clock.setTimeout(async () => {
-            i = null;
-            let now = Date.now();
-            if (now - h < lt) return;
-            if (await nGs())
-              ((h = now),
-                addNotification({
-                  key: CLIPBOARD_IMAGE_HINT,
-                  kind: "contextual",
-                  text: `Image in clipboard \xB7 ${getShortcutDisplay("chat:imagePaste", "Chat", "ctrl+v")} to paste`,
-                  priority: "immediate",
-                  timeoutMs: 8000,
-                }));
-          }, st)),
-          () => {
-            (i?.(), (i = null));
-          }
-        );
+var CLIPBOARD_IMAGE_HINT = "clipboard-image-hint";
+var CLIPBOARD_HINT_DELAY_MS = 1000;
+var CLIPBOARD_HINT_COOLDOWN_MS = 30000;
+var clipboardImageHintNoticeSpec = {
+  id: "clipboard-image-hint",
+  deps: (t) => [t.isTerminalFocused, t.canPasteImages, t.addNotification, t.clock],
+  setup() {
+    let lastFocusedRef = null;
+    let h = 0;
+    let checkTimeoutRef = null;
+    return ({ isTerminalFocused, canPasteImages, addNotification, clock }) => {
+      let wasFocused = lastFocusedRef ?? isTerminalFocused;
+      lastFocusedRef = isTerminalFocused;
+      if (!canPasteImages || !isTerminalFocused || wasFocused) return;
+      checkTimeoutRef?.();
+      checkTimeoutRef = clock.setTimeout(async () => {
+        checkTimeoutRef = null;
+        let now = Date.now();
+        if (now - h < CLIPBOARD_HINT_COOLDOWN_MS) return;
+        if (await isClipboardImageUnsupported()) {
+          h = now;
+          addNotification({
+            key: CLIPBOARD_IMAGE_HINT,
+            kind: "contextual",
+            text: `Image in clipboard \xB7 ${getShortcutDisplay("chat:imagePaste", "Chat", "ctrl+v")} to paste`,
+            priority: "immediate",
+            timeoutMs: 8000,
+          });
+        }
+      }, CLIPBOARD_HINT_DELAY_MS);
+      return () => {
+        checkTimeoutRef?.();
+        checkTimeoutRef = null;
       };
-    },
-  };
-
-export { Ee };
+    };
+  },
+};
+export { clipboardImageHintNoticeSpec };

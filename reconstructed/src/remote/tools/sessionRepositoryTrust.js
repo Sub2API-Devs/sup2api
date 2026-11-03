@@ -8,28 +8,26 @@
  * pieces: chunk-vgetxrm1.js (1)
  * attribution: placement 1
  */
-import { dce } from "../../utils/teleport/repositoryTrustGate.js";
-import { Xti } from "./repositoryTrust.js";
+import { isRepositoryTrustGateEnabled } from "../../utils/teleport/repositoryTrustGate.js";
+import { repositoryTrustFromMessageTags } from "./repositoryTrust.js";
 import { createRefreshableValue } from "./toolHostsNotice.js";
 
+//@ chunk-vgetxrm1.js:269-476 placement
 /**
  * 会话仓库信任读取器。
  */
-//@ chunk-vgetxrm1.js:269-476 placement
-function sessionRepositoryTrustReader({
-  sessionId: sessionId,
-  getAccessToken: getAccessToken,
-  fetchSession: fetchSession,
-  initial: initial,
-  createOrigin: createOrigin,
-}) {
-  if (!dce()) return;
-  let n = !1,
-    r = (o) => Xti(o, n);
+function sessionRepositoryTrustReader({ sessionId, getAccessToken, fetchSession, initial, createOrigin }) {
+  if (!isRepositoryTrustGateEnabled()) return;
+  let n = false;
+  let r = (o) => repositoryTrustFromMessageTags(o, n);
   return createRefreshableValue({
-    ...(initial && { initial: initial.then(r) }),
-    read: () => fetchSession(sessionId, { accessToken: getAccessToken() }).then(r),
+    ...(initial && {
+      initial: initial.then(r),
+    }),
+    read: () =>
+      fetchSession(sessionId, {
+        accessToken: getAccessToken(),
+      }).then(r),
   });
 }
-
 export { sessionRepositoryTrustReader };

@@ -5,15 +5,14 @@
  * pieces: chunk-8nhse09v.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import { Q } from "./_asciiWords.js";
+import { asciiWords } from "./_asciiWords.js";
 
 //@ chunk-8nhse09v.js:3197-3205 esm-layout
-var b = Q;
+var asciiWords_default = asciiWords;
 //@ chunk-8nhse09v.js:3205-3280 esm-fingerprint
 var X = /[a-z][A-Z]|[A-Z]{2}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/;
 //@ chunk-8nhse09v.js:3280-3312 esm-layout
-function ee(e) {
-  return X.test(e);
+function ee(string) {
+  return X.test(string);
 }
-
-export { ee, b };
+export { ee, asciiWords_default };

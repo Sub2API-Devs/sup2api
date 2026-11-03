@@ -6,19 +6,18 @@
  * attribution: esm-fingerprint 1
  */
 import { debuglog } from "util";
-import pe, { default as re, default as Mr, default as No } from "process";
+import { default as Mr } from "process";
 
 //@ chunk-m4p5zn6n.js:27567-27831 esm-fingerprint
-var enabled = debuglog("execa").enabled,
-  fe = (e, n) => String(e).padStart(n, "0"),
-  Lo = () => {
-    let date = new Date();
-    return `${fe(date.getHours(), 2)}:${fe(date.getMinutes(), 2)}:${fe(date.getSeconds(), 2)}.${fe(date.getMilliseconds(), 3)}`;
-  },
-  We = (e, { verbose: verbose }) => {
-    if (!verbose) return;
-    No.stderr.write(`[${Lo()}] ${e}
+var verboseDefault = debuglog("execa").enabled;
+var padField = (field, padding) => String(field).padStart(padding, "0");
+var getTimestamp = () => {
+  let date = new Date();
+  return `${padField(date.getHours(), 2)}:${padField(date.getMinutes(), 2)}:${padField(date.getSeconds(), 2)}.${padField(date.getMilliseconds(), 3)}`;
+};
+var logCommand = (escapedCommand, { verbose }) => {
+  if (!verbose) return;
+  Mr.stderr.write(`[${getTimestamp()}] ${escapedCommand}
 `);
-  };
-
-export { enabled, We };
+};
+export { verboseDefault, logCommand };

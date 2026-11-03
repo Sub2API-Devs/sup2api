@@ -5,517 +5,627 @@
  * pieces: chunk-9z4e25ww.js (31)
  * attribution: esm-fingerprint 29, esm-layout 2
  */
-import { R$r, F, KYn, A$r, strip, merge } from "../shared/auth.js";
-import { K, Jze, g, w, J_t, z, TM } from "../server/auth/errors.js";
-import { J, Y } from "../shared/auth-utils.js";
+import {
+  OAuthErrorResponseSchema,
+  OAuthProtectedResourceMetadataSchema,
+  OAuthMetadataSchema,
+  OpenIdProviderDiscoveryMetadataSchema,
+  OAuthTokensSchema,
+  OAuthClientInformationFullSchema,
+} from "../shared/auth.js";
+import {
+  OAUTH_ERRORS,
+  ServerError,
+  InvalidClientError,
+  UnauthorizedClientError,
+  InvalidGrantError,
+  InvalidClientMetadataError,
+  OAuthError,
+} from "../server/auth/errors.js";
+import { resourceUrlFromServerUrl, checkResourceAllowed } from "../shared/auth-utils.js";
 import { LATEST_PROTOCOL_VERSION } from "../types.js";
-import { hcn } from "../../../../../pkce-challenge/dist/index.node.js";
+import { pkceChallenge } from "../../../../../pkce-challenge/dist/index.node.js";
 
 //@ chunk-9z4e25ww.js:6666-6730 esm-fingerprint
-class AM extends Error {
-  constructor(e) {
-    super(e ?? "Unauthorized");
+class UnauthorizedError extends Error {
+  constructor(message) {
+    super(message ?? "Unauthorized");
   }
 }
 //@ chunk-9z4e25ww.js:6730-6815 esm-fingerprint
-function ie(e) {
-  return ["client_secret_basic", "client_secret_post", "none"].includes(e);
+function isClientAuthMethod(method) {
+  return ["client_secret_basic", "client_secret_post", "none"].includes(method);
 }
 //@ chunk-9z4e25ww.js:6815-6837 esm-fingerprint
-var CODE = "code",
-  S256 = "S256";
+var AUTHORIZATION_CODE_RESPONSE_TYPE = "code";
+var AUTHORIZATION_CODE_CHALLENGE_METHOD = "S256";
 //@ chunk-9z4e25ww.js:6837-7339 esm-fingerprint
-function ce(e, t) {
-  let r = e.client_secret !== void 0;
+function selectClientAuthMethod(clientInformation, supportedMethods) {
+  let hasClientSecret = clientInformation.client_secret !== undefined;
   if (
-    "token_endpoint_auth_method" in e &&
-    e.token_endpoint_auth_method &&
-    ie(e.token_endpoint_auth_method) &&
-    (t.length === 0 || t.includes(e.token_endpoint_auth_method))
+    "token_endpoint_auth_method" in clientInformation &&
+    clientInformation.token_endpoint_auth_method &&
+    isClientAuthMethod(clientInformation.token_endpoint_auth_method) &&
+    (supportedMethods.length === 0 || supportedMethods.includes(clientInformation.token_endpoint_auth_method))
   )
-    return e.token_endpoint_auth_method;
-  if (t.length === 0) return r ? "client_secret_basic" : "none";
-  if (r && t.includes("client_secret_basic")) return "client_secret_basic";
-  if (r && t.includes("client_secret_post")) return "client_secret_post";
-  if (t.includes("none")) return "none";
-  return r ? "client_secret_post" : "none";
+    return clientInformation.token_endpoint_auth_method;
+  if (supportedMethods.length === 0) return hasClientSecret ? "client_secret_basic" : "none";
+  if (hasClientSecret && supportedMethods.includes("client_secret_basic")) return "client_secret_basic";
+  if (hasClientSecret && supportedMethods.includes("client_secret_post")) return "client_secret_post";
+  if (supportedMethods.includes("none")) return "none";
+  return hasClientSecret ? "client_secret_post" : "none";
 }
 //@ chunk-9z4e25ww.js:7339-7587 esm-fingerprint
-function ue(e, t, r, n) {
-  let { client_id: client_id, client_secret: client_secret } = t;
-  switch (e) {
+function applyClientAuthentication(method, clientInformation, headers, params) {
+  let { client_id, client_secret } = clientInformation;
+  switch (method) {
     case "client_secret_basic":
-      le(client_id, client_secret, r);
+      applyBasicAuth(client_id, client_secret, headers);
       return;
     case "client_secret_post":
-      pe(client_id, client_secret, n);
+      applyPostAuth(client_id, client_secret, params);
       return;
     case "none":
-      de(client_id, n);
+      applyPublicAuth(client_id, params);
       return;
     default:
-      throw Error(`Unsupported client authentication method: ${e}`);
+      throw Error(`Unsupported client authentication method: ${method}`);
   }
 }
 //@ chunk-9z4e25ww.js:7587-7747 esm-fingerprint
-function le(e, t, r) {
-  if (!t) throw Error("client_secret_basic authentication requires a client_secret");
-  let n = btoa(`${e}:${t}`);
-  r.set("Authorization", `Basic ${n}`);
+function applyBasicAuth(clientId, clientSecret, headers) {
+  if (!clientSecret) throw Error("client_secret_basic authentication requires a client_secret");
+  let credentials = btoa(`${clientId}:${clientSecret}`);
+  headers.set("Authorization", `Basic ${credentials}`);
 }
 //@ chunk-9z4e25ww.js:7747-7817 esm-fingerprint
-function pe(e, t, r) {
-  if ((r.set("client_id", e), t)) r.set("client_secret", t);
+function applyPostAuth(clientId, clientSecret, params) {
+  params.set("client_id", clientId);
+  if (clientSecret) params.set("client_secret", clientSecret);
 }
 //@ chunk-9z4e25ww.js:7817-7855 esm-fingerprint
-function de(e, t) {
-  t.set("client_id", e);
+function applyPublicAuth(clientId, params) {
+  params.set("client_id", clientId);
 }
 //@ chunk-9z4e25ww.js:7855-8178 esm-fingerprint
-async function X(e) {
-  let t = e instanceof Response ? e.status : void 0,
-    r = e instanceof Response ? await e.text() : e;
+async function parseErrorResponse(input) {
+  let statusCode = input instanceof Response ? input.status : undefined;
+  let body = input instanceof Response ? await input.text() : input;
   try {
-    let parse = R$r.parse(JSON.parse(r)),
-      { error: error, error_description: error_description, error_uri: error_uri } = parse;
-    return new (K[error] || Jze)(error_description || "", error_uri);
+    let result = OAuthErrorResponseSchema.parse(JSON.parse(body));
+    let { error, error_description, error_uri } = result;
+    return new (OAUTH_ERRORS[error] || ServerError)(error_description || "", error_uri);
   } catch (error) {
-    let a = `${t ? `HTTP ${t}: ` : ""}Invalid OAuth error response: ${error}. Raw body: ${r}`;
-    return new Jze(a);
+    let errorMessage = `${statusCode ? `HTTP ${statusCode}: ` : ""}Invalid OAuth error response: ${error}. Raw body: ${body}`;
+    return new ServerError(errorMessage);
   }
 }
 //@ chunk-9z4e25ww.js:8178-8424 esm-fingerprint
-async function Aue(e, t) {
+async function auth(provider, options) {
   try {
-    return await W(e, t);
+    return await authInternal(provider, options);
   } catch (error) {
-    if (error instanceof g || error instanceof w)
-      return (await e.invalidateCredentials?.("all"), await W(e, t));
-    else if (error instanceof J_t) return (await e.invalidateCredentials?.("tokens"), await W(e, t));
+    if (error instanceof InvalidClientError || error instanceof UnauthorizedClientError) {
+      await provider.invalidateCredentials?.("all");
+      return await authInternal(provider, options);
+    } else if (error instanceof InvalidGrantError) {
+      await provider.invalidateCredentials?.("tokens");
+      return await authInternal(provider, options);
+    }
     throw error;
   }
 }
 //@ chunk-9z4e25ww.js:8424-10757 esm-fingerprint
-async function W(
-  e,
-  {
-    serverUrl: serverUrl,
-    authorizationCode: authorizationCode,
-    scope: scope,
-    resourceMetadataUrl: resourceMetadataUrl,
-    fetchFn: fetchFn,
-  },
-) {
-  let c = await e.discoveryState?.(),
-    s,
-    l,
-    p,
-    h = resourceMetadataUrl;
-  if (!h && c?.resourceMetadataUrl) h = new URL(c.resourceMetadataUrl);
-  if (c?.authorizationServerUrl) {
-    if (
-      ((l = c.authorizationServerUrl),
-      (s = c.resourceMetadata),
-      (p = c.authorizationServerMetadata ?? (await s1t(l, { fetchFn: fetchFn }))),
-      !s)
-    )
+async function authInternal(provider, { serverUrl, authorizationCode, scope, resourceMetadataUrl, fetchFn }) {
+  let cachedState = await provider.discoveryState?.();
+  let resourceMetadata;
+  let authorizationServerUrl;
+  let metadata;
+  let effectiveResourceMetadataUrl = resourceMetadataUrl;
+  if (!effectiveResourceMetadataUrl && cachedState?.resourceMetadataUrl)
+    effectiveResourceMetadataUrl = new URL(cachedState.resourceMetadataUrl);
+  if (cachedState?.authorizationServerUrl) {
+    authorizationServerUrl = cachedState.authorizationServerUrl;
+    resourceMetadata = cachedState.resourceMetadata;
+    metadata =
+      cachedState.authorizationServerMetadata ??
+      (await discoverAuthorizationServerMetadata(authorizationServerUrl, {
+        fetchFn,
+      }));
+    if (!resourceMetadata)
       try {
-        s = await x$r(serverUrl, { resourceMetadataUrl: h }, fetchFn);
+        resourceMetadata = await discoverOAuthProtectedResourceMetadata(
+          serverUrl,
+          {
+            resourceMetadataUrl: effectiveResourceMetadataUrl,
+          },
+          fetchFn,
+        );
       } catch {}
-    if (p !== c.authorizationServerMetadata || s !== c.resourceMetadata)
-      await e.saveDiscoveryState?.({
-        authorizationServerUrl: String(l),
-        resourceMetadataUrl: h?.toString(),
-        resourceMetadata: s,
-        authorizationServerMetadata: p,
+    if (
+      metadata !== cachedState.authorizationServerMetadata ||
+      resourceMetadata !== cachedState.resourceMetadata
+    )
+      await provider.saveDiscoveryState?.({
+        authorizationServerUrl: String(authorizationServerUrl),
+        resourceMetadataUrl: effectiveResourceMetadataUrl?.toString(),
+        resourceMetadata,
+        authorizationServerMetadata: metadata,
       });
   } else {
-    let _ = await QLo(serverUrl, { resourceMetadataUrl: h, fetchFn: fetchFn });
-    ((l = _.authorizationServerUrl),
-      (p = _.authorizationServerMetadata),
-      (s = _.resourceMetadata),
-      await e.saveDiscoveryState?.({
-        authorizationServerUrl: String(l),
-        resourceMetadataUrl: h?.toString(),
-        resourceMetadata: s,
-        authorizationServerMetadata: p,
-      }));
+    let serverInfo = await discoverOAuthServerInfo(serverUrl, {
+      resourceMetadataUrl: effectiveResourceMetadataUrl,
+      fetchFn,
+    });
+    authorizationServerUrl = serverInfo.authorizationServerUrl;
+    metadata = serverInfo.authorizationServerMetadata;
+    resourceMetadata = serverInfo.resourceMetadata;
+    await provider.saveDiscoveryState?.({
+      authorizationServerUrl: String(authorizationServerUrl),
+      resourceMetadataUrl: effectiveResourceMetadataUrl?.toString(),
+      resourceMetadata,
+      authorizationServerMetadata: metadata,
+    });
   }
-  let m = await he(serverUrl, e, s),
-    D = scope || s?.scopes_supported?.join(" ") || e.clientMetadata.scope,
-    resolved = await Promise.resolve(e.clientInformation());
-  if (!resolved) {
-    if (authorizationCode !== void 0)
+  let resource = await selectResourceURL(serverUrl, provider, resourceMetadata);
+  let resolvedScope = scope || resourceMetadata?.scopes_supported?.join(" ") || provider.clientMetadata.scope;
+  let clientInformation = await Promise.resolve(provider.clientInformation());
+  if (!clientInformation) {
+    if (authorizationCode !== undefined)
       throw Error("Existing OAuth client information is required when exchanging an authorization code");
-    let _ = p?.client_id_metadata_document_supported === !0,
-      clientMetadataUrl = e.clientMetadataUrl;
-    if (clientMetadataUrl && !_e(clientMetadataUrl))
-      throw new z(
+    let supportsUrlBasedClientId = metadata?.client_id_metadata_document_supported === true;
+    let clientMetadataUrl = provider.clientMetadataUrl;
+    if (clientMetadataUrl && !isHttpsUrl(clientMetadataUrl))
+      throw new InvalidClientMetadataError(
         `clientMetadataUrl must be a valid HTTPS URL with a non-root pathname, got: ${clientMetadataUrl}`,
       );
-    if (_ && clientMetadataUrl)
-      ((resolved = { client_id: clientMetadataUrl }), await e.saveClientInformation?.(resolved));
-    else {
-      if (!e.saveClientInformation)
+    if (supportsUrlBasedClientId && clientMetadataUrl) {
+      clientInformation = {
+        client_id: clientMetadataUrl,
+      };
+      await provider.saveClientInformation?.(clientInformation);
+    } else {
+      if (!provider.saveClientInformation)
         throw Error("OAuth client information must be saveable for dynamic registration");
-      let N = await ye(l, { metadata: p, clientMetadata: e.clientMetadata, scope: D, fetchFn: fetchFn });
-      (await e.saveClientInformation(N), (resolved = N));
+      let fullInformation = await registerClient(authorizationServerUrl, {
+        metadata,
+        clientMetadata: provider.clientMetadata,
+        scope: resolvedScope,
+        fetchFn,
+      });
+      await provider.saveClientInformation(fullInformation);
+      clientInformation = fullInformation;
     }
   }
-  let ee = !e.redirectUrl;
-  if (authorizationCode !== void 0 || ee) {
-    let _ = await me(e, l, {
-      metadata: p,
-      resource: m,
-      authorizationCode: authorizationCode,
-      fetchFn: fetchFn,
+  let nonInteractiveFlow = !provider.redirectUrl;
+  if (authorizationCode !== undefined || nonInteractiveFlow) {
+    let tokens = await fetchToken(provider, authorizationServerUrl, {
+      metadata,
+      resource,
+      authorizationCode,
+      fetchFn,
     });
-    return (await e.saveTokens(_), "AUTHORIZED");
+    await provider.saveTokens(tokens);
+    return "AUTHORIZED";
   }
-  let tokens = await e.tokens();
+  let tokens = await provider.tokens();
   if (tokens?.refresh_token)
     try {
-      let _ = await eHo(l, {
-        metadata: p,
-        clientInformation: resolved,
+      let newTokens = await refreshAuthorization(authorizationServerUrl, {
+        metadata,
+        clientInformation,
         refreshToken: tokens.refresh_token,
-        resource: m,
-        addClientAuthentication: e.addClientAuthentication,
-        fetchFn: fetchFn,
+        resource,
+        addClientAuthentication: provider.addClientAuthentication,
+        fetchFn,
       });
-      return (await e.saveTokens(_), "AUTHORIZED");
+      await provider.saveTokens(newTokens);
+      return "AUTHORIZED";
     } catch (error) {
-      if (!(error instanceof TM) || error instanceof Jze);
+      if (!(error instanceof OAuthError) || error instanceof ServerError);
       else throw error;
     }
-  let te = e.state ? await e.state() : void 0,
-    { authorizationUrl: authorizationUrl, codeVerifier: codeVerifier } = await ZLo(l, {
-      metadata: p,
-      clientInformation: resolved,
-      state: te,
-      redirectUrl: e.redirectUrl,
-      scope: D,
-      resource: m,
-    });
-  return (
-    await e.saveCodeVerifier(codeVerifier),
-    await e.redirectToAuthorization(authorizationUrl),
-    "REDIRECT"
-  );
+  let state = provider.state ? await provider.state() : undefined;
+  let { authorizationUrl, codeVerifier } = await startAuthorization(authorizationServerUrl, {
+    metadata,
+    clientInformation,
+    state,
+    redirectUrl: provider.redirectUrl,
+    scope: resolvedScope,
+    resource,
+  });
+  await provider.saveCodeVerifier(codeVerifier);
+  await provider.redirectToAuthorization(authorizationUrl);
+  return "REDIRECT";
 }
 //@ chunk-9z4e25ww.js:10757-10871 esm-fingerprint
-function _e(e) {
-  if (!e) return !1;
+function isHttpsUrl(value) {
+  if (!value) return false;
   try {
-    let t = new URL(e);
-    return t.protocol === "https:" && t.pathname !== "/";
+    let url = new URL(value);
+    return url.protocol === "https:" && url.pathname !== "/";
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-9z4e25ww.js:10871-11170 esm-fingerprint
-async function he(e, t, r) {
-  let n = J(e);
-  if (t.validateResourceURL) return await t.validateResourceURL(n, r?.resource);
-  if (!r) return;
-  if (!Y({ requestedResource: n, configuredResource: r.resource }))
-    throw Error(`Protected resource ${r.resource} does not match expected ${n} (or origin)`);
-  return new URL(r.resource);
+async function selectResourceURL(serverUrl, provider, resourceMetadata) {
+  let defaultResource = resourceUrlFromServerUrl(serverUrl);
+  if (provider.validateResourceURL)
+    return await provider.validateResourceURL(defaultResource, resourceMetadata?.resource);
+  if (!resourceMetadata) return;
+  if (
+    !checkResourceAllowed({
+      requestedResource: defaultResource,
+      configuredResource: resourceMetadata.resource,
+    })
+  )
+    throw Error(
+      `Protected resource ${resourceMetadata.resource} does not match expected ${defaultResource} (or origin)`,
+    );
+  return new URL(resourceMetadata.resource);
 }
 //@ chunk-9z4e25ww.js:11170-11472 esm-fingerprint
-function NHe(e) {
-  let t = e.headers.get("WWW-Authenticate");
-  if (!t) return {};
-  let [r, n] = t.split(" ");
-  if (r.toLowerCase() !== "bearer" || !n) return {};
-  let a = H(e, "resource_metadata") || void 0,
-    i;
-  if (a)
+function extractWWWAuthenticateParams(res) {
+  let authenticateHeader = res.headers.get("WWW-Authenticate");
+  if (!authenticateHeader) return {};
+  let [type, scheme] = authenticateHeader.split(" ");
+  if (type.toLowerCase() !== "bearer" || !scheme) return {};
+  let resourceMetadataMatch = extractFieldFromWwwAuth(res, "resource_metadata") || undefined;
+  let resourceMetadataUrl;
+  if (resourceMetadataMatch)
     try {
-      i = new URL(a);
+      resourceMetadataUrl = new URL(resourceMetadataMatch);
     } catch {}
-  let c = H(e, "scope") || void 0,
-    s = H(e, "error") || void 0;
-  return { resourceMetadataUrl: i, scope: c, error: s };
+  let scope = extractFieldFromWwwAuth(res, "scope") || undefined;
+  let error = extractFieldFromWwwAuth(res, "error") || undefined;
+  return {
+    resourceMetadataUrl,
+    scope,
+    error,
+  };
 }
 //@ chunk-9z4e25ww.js:11472-11644 esm-fingerprint
-function H(e, t) {
-  let r = e.headers.get("WWW-Authenticate");
-  if (!r) return null;
-  let regExp = new RegExp(`${t}=(?:"([^"]+)"|([^\\s,]+))`),
-    match = r.match(regExp);
+function extractFieldFromWwwAuth(response, fieldName) {
+  let wwwAuthHeader = response.headers.get("WWW-Authenticate");
+  if (!wwwAuthHeader) return null;
+  let pattern = new RegExp(`${fieldName}=(?:"([^"]+)"|([^\\s,]+))`);
+  let match = wwwAuthHeader.match(pattern);
   if (match) return match[1] || match[2];
   return null;
 }
 //@ chunk-9z4e25ww.js:11644-12086 esm-fingerprint
-async function x$r(e, t, r = fetch) {
-  let n = await we(e, "oauth-protected-resource", r, {
-    protocolVersion: t?.protocolVersion,
-    metadataUrl: t?.resourceMetadataUrl,
+async function discoverOAuthProtectedResourceMetadata(serverUrl, opts, fetchFn = fetch) {
+  let response = await discoverMetadataWithFallback(serverUrl, "oauth-protected-resource", fetchFn, {
+    protocolVersion: opts?.protocolVersion,
+    metadataUrl: opts?.resourceMetadataUrl,
   });
-  if (!n || n.status === 404)
-    throw (
-      await n?.body?.cancel(),
-      Error("Resource server does not implement OAuth 2.0 Protected Resource Metadata.")
-    );
-  if (!n.ok)
-    throw (
-      await n.body?.cancel(),
-      Error(`HTTP ${n.status} trying to load well-known OAuth protected resource metadata.`)
-    );
-  return F.parse(await n.json());
+  if (!response || response.status === 404) {
+    await response?.body?.cancel();
+    throw Error("Resource server does not implement OAuth 2.0 Protected Resource Metadata.");
+  }
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw Error(`HTTP ${response.status} trying to load well-known OAuth protected resource metadata.`);
+  }
+  return OAuthProtectedResourceMetadataSchema.parse(await response.json());
 }
 //@ chunk-9z4e25ww.js:12086-12232 esm-layout
-async function q(e, t, r = fetch) {
+async function fetchWithCorsRetry(url, headers, fetchFn = fetch) {
   try {
-    return await r(e, { headers: t });
+    return await fetchFn(url, {
+      headers,
+    });
   } catch (error) {
     if (error instanceof TypeError)
-      if (t) return q(e, void 0, r);
+      if (headers) return fetchWithCorsRetry(url, undefined, fetchFn);
       else return;
     throw error;
   }
 }
 //@ chunk-9z4e25ww.js:12232-12365 esm-fingerprint
-function fe(e, t = "", r = {}) {
-  if (t.endsWith("/")) t = t.slice(0, -1);
-  return r.prependPathname ? `${t}/.well-known/${e}` : `/.well-known/${e}${t}`;
+function buildWellKnownPath(wellKnownPrefix, pathname = "", options = {}) {
+  if (pathname.endsWith("/")) pathname = pathname.slice(0, -1);
+  return options.prependPathname
+    ? `${pathname}/.well-known/${wellKnownPrefix}`
+    : `/.well-known/${wellKnownPrefix}${pathname}`;
 }
 //@ chunk-9z4e25ww.js:12365-12442 esm-fingerprint
-async function Q(e, t, r = fetch) {
-  return await q(e, { "MCP-Protocol-Version": t }, r);
-}
-//@ chunk-9z4e25ww.js:12442-12506 esm-layout
-function ge(e, t) {
-  return !e || (e.status >= 400 && e.status < 500 && t !== "/");
-}
-//@ chunk-9z4e25ww.js:12506-12826 esm-fingerprint
-async function we(e, t, r, n) {
-  let a = new URL(e),
-    i = n?.protocolVersion ?? LATEST_PROTOCOL_VERSION,
-    c;
-  if (n?.metadataUrl) c = new URL(n.metadataUrl);
-  else {
-    let l = fe(t, a.pathname);
-    ((c = new URL(l, n?.metadataServerUrl ?? a)), (c.search = a.search));
-  }
-  let s = await Q(c, i, r);
-  if (!n?.metadataUrl && ge(s, a.pathname)) {
-    let l = new URL(`/.well-known/${t}`, a);
-    s = await Q(l, i, r);
-  }
-  return s;
-}
-//@ chunk-9z4e25ww.js:12826-13406 esm-fingerprint
-function ze(e) {
-  let t = typeof e === "string" ? new URL(e) : e,
-    r = t.pathname !== "/",
-    n = [];
-  if (!r)
-    return (
-      n.push({ url: new URL("/.well-known/oauth-authorization-server", t.origin), type: "oauth" }),
-      n.push({ url: new URL("/.well-known/openid-configuration", t.origin), type: "oidc" }),
-      n
-    );
-  let pathname = t.pathname;
-  if (pathname.endsWith("/")) pathname = pathname.slice(0, -1);
-  return (
-    n.push({ url: new URL(`/.well-known/oauth-authorization-server${pathname}`, t.origin), type: "oauth" }),
-    n.push({ url: new URL(`/.well-known/openid-configuration${pathname}`, t.origin), type: "oidc" }),
-    n.push({ url: new URL(`${pathname}/.well-known/openid-configuration`, t.origin), type: "oidc" }),
-    n
+async function tryMetadataDiscovery(url, protocolVersion, fetchFn = fetch) {
+  return await fetchWithCorsRetry(
+    url,
+    {
+      "MCP-Protocol-Version": protocolVersion,
+    },
+    fetchFn,
   );
 }
+//@ chunk-9z4e25ww.js:12442-12506 esm-layout
+function shouldAttemptFallback(response, pathname) {
+  return !response || (response.status >= 400 && response.status < 500 && pathname !== "/");
+}
+//@ chunk-9z4e25ww.js:12506-12826 esm-fingerprint
+async function discoverMetadataWithFallback(serverUrl, wellKnownType, fetchFn, opts) {
+  let issuer = new URL(serverUrl);
+  let protocolVersion = opts?.protocolVersion ?? LATEST_PROTOCOL_VERSION;
+  let url;
+  if (opts?.metadataUrl) url = new URL(opts.metadataUrl);
+  else {
+    let wellKnownPath = buildWellKnownPath(wellKnownType, issuer.pathname);
+    url = new URL(wellKnownPath, opts?.metadataServerUrl ?? issuer);
+    url.search = issuer.search;
+  }
+  let response = await tryMetadataDiscovery(url, protocolVersion, fetchFn);
+  if (!opts?.metadataUrl && shouldAttemptFallback(response, issuer.pathname)) {
+    let rootUrl = new URL(`/.well-known/${wellKnownType}`, issuer);
+    response = await tryMetadataDiscovery(rootUrl, protocolVersion, fetchFn);
+  }
+  return response;
+}
+//@ chunk-9z4e25ww.js:12826-13406 esm-fingerprint
+function buildDiscoveryUrls(authorizationServerUrl) {
+  let url =
+    typeof authorizationServerUrl === "string" ? new URL(authorizationServerUrl) : authorizationServerUrl;
+  let hasPath = url.pathname !== "/";
+  let urlsToTry = [];
+  if (!hasPath) {
+    urlsToTry.push({
+      url: new URL("/.well-known/oauth-authorization-server", url.origin),
+      type: "oauth",
+    });
+    urlsToTry.push({
+      url: new URL("/.well-known/openid-configuration", url.origin),
+      type: "oidc",
+    });
+    return urlsToTry;
+  }
+  let pathname = url.pathname;
+  if (pathname.endsWith("/")) pathname = pathname.slice(0, -1);
+  urlsToTry.push({
+    url: new URL(`/.well-known/oauth-authorization-server${pathname}`, url.origin),
+    type: "oauth",
+  });
+  urlsToTry.push({
+    url: new URL(`/.well-known/openid-configuration${pathname}`, url.origin),
+    type: "oidc",
+  });
+  urlsToTry.push({
+    url: new URL(`${pathname}/.well-known/openid-configuration`, url.origin),
+    type: "oidc",
+  });
+  return urlsToTry;
+}
 //@ chunk-9z4e25ww.js:13406-13874 esm-fingerprint
-async function s1t(e, { fetchFn: t = fetch, protocolVersion: r = LATEST_PROTOCOL_VERSION } = {}) {
-  let n = { "MCP-Protocol-Version": r, Accept: "application/json" },
-    a = ze(e);
-  for (let { url: url, type: c } of a) {
-    let s = await q(url, n, t);
-    if (!s) continue;
-    if (!s.ok) {
-      if ((await s.body?.cancel(), s.status >= 400 && s.status < 500)) continue;
+async function discoverAuthorizationServerMetadata(
+  authorizationServerUrl,
+  { fetchFn = fetch, protocolVersion = LATEST_PROTOCOL_VERSION } = {},
+) {
+  let headers = {
+    "MCP-Protocol-Version": protocolVersion,
+    Accept: "application/json",
+  };
+  let urlsToTry = buildDiscoveryUrls(authorizationServerUrl);
+  for (let { url: endpointUrl, type } of urlsToTry) {
+    let response = await fetchWithCorsRetry(endpointUrl, headers, fetchFn);
+    if (!response) continue;
+    if (!response.ok) {
+      await response.body?.cancel();
+      if (response.status >= 400 && response.status < 500) continue;
       throw Error(
-        `HTTP ${s.status} trying to load ${c === "oauth" ? "OAuth" : "OpenID provider"} metadata from ${url}`,
+        `HTTP ${response.status} trying to load ${type === "oauth" ? "OAuth" : "OpenID provider"} metadata from ${endpointUrl}`,
       );
     }
-    if (c === "oauth") return KYn.parse(await s.json());
-    else return A$r.parse(await s.json());
+    if (type === "oauth") return OAuthMetadataSchema.parse(await response.json());
+    else return OpenIdProviderDiscoveryMetadataSchema.parse(await response.json());
   }
   return;
 }
 //@ chunk-9z4e25ww.js:13874-14231 esm-fingerprint
-async function QLo(e, t) {
-  let r, n;
+async function discoverOAuthServerInfo(serverUrl, opts) {
+  let resourceMetadata;
+  let authorizationServerUrl;
   try {
-    if (
-      ((r = await x$r(e, { resourceMetadataUrl: t?.resourceMetadataUrl }, t?.fetchFn)),
-      r.authorization_servers && r.authorization_servers.length > 0)
-    )
-      n = r.authorization_servers[0];
+    resourceMetadata = await discoverOAuthProtectedResourceMetadata(
+      serverUrl,
+      {
+        resourceMetadataUrl: opts?.resourceMetadataUrl,
+      },
+      opts?.fetchFn,
+    );
+    if (resourceMetadata.authorization_servers && resourceMetadata.authorization_servers.length > 0)
+      authorizationServerUrl = resourceMetadata.authorization_servers[0];
   } catch {}
-  if (!n) n = String(new URL("/", e));
-  let a = await s1t(n, { fetchFn: t?.fetchFn });
-  return { authorizationServerUrl: n, authorizationServerMetadata: a, resourceMetadata: r };
+  if (!authorizationServerUrl) authorizationServerUrl = String(new URL("/", serverUrl));
+  let authorizationServerMetadata = await discoverAuthorizationServerMetadata(authorizationServerUrl, {
+    fetchFn: opts?.fetchFn,
+  });
+  return {
+    authorizationServerUrl,
+    authorizationServerMetadata,
+    resourceMetadata,
+  };
 }
 //@ chunk-9z4e25ww.js:14231-15195 esm-fingerprint
-async function ZLo(
-  e,
-  {
-    metadata: metadata,
-    clientInformation: clientInformation,
-    redirectUrl: redirectUrl,
-    scope: scope,
-    state: state,
-    resource: resource,
-  },
+async function startAuthorization(
+  authorizationServerUrl,
+  { metadata, clientInformation, redirectUrl, scope, state, resource },
 ) {
-  let s;
+  let authorizationUrl;
   if (metadata) {
-    if (((s = new URL(metadata.authorization_endpoint)), !metadata.response_types_supported.includes(CODE)))
-      throw Error(`Incompatible auth server: does not support response type ${CODE}`);
+    authorizationUrl = new URL(metadata.authorization_endpoint);
+    if (!metadata.response_types_supported.includes(AUTHORIZATION_CODE_RESPONSE_TYPE))
+      throw Error(
+        `Incompatible auth server: does not support response type ${AUTHORIZATION_CODE_RESPONSE_TYPE}`,
+      );
     if (
       metadata.code_challenge_methods_supported &&
-      !metadata.code_challenge_methods_supported.includes(S256)
+      !metadata.code_challenge_methods_supported.includes(AUTHORIZATION_CODE_CHALLENGE_METHOD)
     )
-      throw Error(`Incompatible auth server: does not support code challenge method ${S256}`);
-  } else s = new URL("/authorize", e);
-  let l = await hcn(),
-    { code_verifier: code_verifier, code_challenge: code_challenge } = l;
-  if (
-    (s.searchParams.set("response_type", CODE),
-    s.searchParams.set("client_id", clientInformation.client_id),
-    s.searchParams.set("code_challenge", code_challenge),
-    s.searchParams.set("code_challenge_method", S256),
-    s.searchParams.set("redirect_uri", String(redirectUrl)),
-    state)
-  )
-    s.searchParams.set("state", state);
-  if (scope) s.searchParams.set("scope", scope);
-  if (scope?.includes("offline_access")) s.searchParams.append("prompt", "consent");
-  if (resource) s.searchParams.set("resource", resource.href);
-  return { authorizationUrl: s, codeVerifier: code_verifier };
+      throw Error(
+        `Incompatible auth server: does not support code challenge method ${AUTHORIZATION_CODE_CHALLENGE_METHOD}`,
+      );
+  } else authorizationUrl = new URL("/authorize", authorizationServerUrl);
+  let l = await pkceChallenge();
+  let { code_verifier: codeVerifier, code_challenge: codeChallenge } = l;
+  authorizationUrl.searchParams.set("response_type", AUTHORIZATION_CODE_RESPONSE_TYPE);
+  authorizationUrl.searchParams.set("client_id", clientInformation.client_id);
+  authorizationUrl.searchParams.set("code_challenge", codeChallenge);
+  authorizationUrl.searchParams.set("code_challenge_method", AUTHORIZATION_CODE_CHALLENGE_METHOD);
+  authorizationUrl.searchParams.set("redirect_uri", String(redirectUrl));
+  if (state) authorizationUrl.searchParams.set("state", state);
+  if (scope) authorizationUrl.searchParams.set("scope", scope);
+  if (scope?.includes("offline_access")) authorizationUrl.searchParams.append("prompt", "consent");
+  if (resource) authorizationUrl.searchParams.set("resource", resource.href);
+  return {
+    authorizationUrl,
+    codeVerifier,
+  };
 }
 //@ chunk-9z4e25ww.js:15195-15321 esm-fingerprint
-function G(e, t, r) {
+function prepareAuthorizationCodeRequest(authorizationCode, codeVerifier, redirectUri) {
   return new URLSearchParams({
     grant_type: "authorization_code",
-    code: e,
-    code_verifier: t,
-    redirect_uri: String(r),
+    code: authorizationCode,
+    code_verifier: codeVerifier,
+    redirect_uri: String(redirectUri),
   });
 }
 //@ chunk-9z4e25ww.js:15321-15859 esm-fingerprint
-async function I(
-  e,
-  {
-    metadata: metadata,
-    tokenRequestParams: tokenRequestParams,
-    clientInformation: clientInformation,
-    addClientAuthentication: addClientAuthentication,
-    resource: resource,
-    fetchFn: fetchFn,
-  },
+async function executeTokenRequest(
+  authorizationServerUrl,
+  { metadata, tokenRequestParams, clientInformation, addClientAuthentication, resource, fetchFn },
 ) {
-  let s = metadata?.token_endpoint ? new URL(metadata.token_endpoint) : new URL("/token", e),
-    headers = new Headers({
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    });
+  let tokenUrl = metadata?.token_endpoint
+    ? new URL(metadata.token_endpoint)
+    : new URL("/token", authorizationServerUrl);
+  let headers = new Headers({
+    "Content-Type": "application/x-www-form-urlencoded",
+    Accept: "application/json",
+  });
   if (resource) tokenRequestParams.set("resource", resource.href);
-  if (addClientAuthentication) await addClientAuthentication(headers, tokenRequestParams, s, metadata);
+  if (addClientAuthentication) await addClientAuthentication(headers, tokenRequestParams, tokenUrl, metadata);
   else if (clientInformation) {
-    let h = metadata?.token_endpoint_auth_methods_supported ?? [],
-      m = ce(clientInformation, h);
-    ue(m, clientInformation, headers, tokenRequestParams);
+    let supportedMethods = metadata?.token_endpoint_auth_methods_supported ?? [];
+    let authMethod = selectClientAuthMethod(clientInformation, supportedMethods);
+    applyClientAuthentication(authMethod, clientInformation, headers, tokenRequestParams);
   }
-  let p = await (fetchFn ?? fetch)(s, { method: "POST", headers: headers, body: tokenRequestParams });
-  if (!p.ok) throw await X(p);
-  return strip.parse(await p.json());
+  let response = await (fetchFn ?? fetch)(tokenUrl, {
+    method: "POST",
+    headers,
+    body: tokenRequestParams,
+  });
+  if (!response.ok) throw await parseErrorResponse(response);
+  return OAuthTokensSchema.parse(await response.json());
 }
 //@ chunk-9z4e25ww.js:15859-16138 esm-fingerprint
-async function r2s(
-  e,
+async function exchangeAuthorization(
+  authorizationServerUrl,
   {
-    metadata: metadata,
-    clientInformation: clientInformation,
-    authorizationCode: authorizationCode,
-    codeVerifier: codeVerifier,
-    redirectUri: redirectUri,
-    resource: resource,
-    addClientAuthentication: addClientAuthentication,
-    fetchFn: fetchFn,
+    metadata,
+    clientInformation,
+    authorizationCode,
+    codeVerifier,
+    redirectUri,
+    resource,
+    addClientAuthentication,
+    fetchFn,
   },
 ) {
-  let p = G(authorizationCode, codeVerifier, redirectUri);
-  return I(e, {
-    metadata: metadata,
-    tokenRequestParams: p,
-    clientInformation: clientInformation,
-    addClientAuthentication: addClientAuthentication,
-    resource: resource,
-    fetchFn: fetchFn,
+  let tokenRequestParams = prepareAuthorizationCodeRequest(authorizationCode, codeVerifier, redirectUri);
+  return executeTokenRequest(authorizationServerUrl, {
+    metadata,
+    tokenRequestParams,
+    clientInformation,
+    addClientAuthentication,
+    resource,
+    fetchFn,
   });
 }
 //@ chunk-9z4e25ww.js:16138-16470 esm-fingerprint
-async function eHo(
-  e,
-  {
-    metadata: metadata,
-    clientInformation: clientInformation,
-    refreshToken: refreshToken,
-    resource: resource,
-    addClientAuthentication: addClientAuthentication,
-    fetchFn: fetchFn,
-  },
+async function refreshAuthorization(
+  authorizationServerUrl,
+  { metadata, clientInformation, refreshToken, resource, addClientAuthentication, fetchFn },
 ) {
-  let uRLSearchParams = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
-    l = await I(e, {
-      metadata: metadata,
-      tokenRequestParams: uRLSearchParams,
-      clientInformation: clientInformation,
-      addClientAuthentication: addClientAuthentication,
-      resource: resource,
-      fetchFn: fetchFn,
-    });
-  return { refresh_token: refreshToken, ...l };
+  let tokenRequestParams = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+  let tokens = await executeTokenRequest(authorizationServerUrl, {
+    metadata,
+    tokenRequestParams,
+    clientInformation,
+    addClientAuthentication,
+    resource,
+    fetchFn,
+  });
+  return {
+    refresh_token: refreshToken,
+    ...tokens,
+  };
 }
 //@ chunk-9z4e25ww.js:16470-17054 esm-fingerprint
-async function me(e, t, { metadata: r, resource: n, authorizationCode: a, fetchFn: i } = {}) {
-  let scope = e.clientMetadata.scope,
-    s;
-  if (e.prepareTokenRequest) s = await e.prepareTokenRequest(scope);
-  if (!s) {
-    if (!a) throw Error("Either provider.prepareTokenRequest() or authorizationCode is required");
-    if (!e.redirectUrl) throw Error("redirectUrl is required for authorization_code flow");
-    let codeVerifier = await e.codeVerifier();
-    s = G(a, codeVerifier, e.redirectUrl);
+async function fetchToken(
+  provider,
+  authorizationServerUrl,
+  { metadata, resource, authorizationCode, fetchFn } = {},
+) {
+  let scope = provider.clientMetadata.scope;
+  let tokenRequestParams;
+  if (provider.prepareTokenRequest) tokenRequestParams = await provider.prepareTokenRequest(scope);
+  if (!tokenRequestParams) {
+    if (!authorizationCode)
+      throw Error("Either provider.prepareTokenRequest() or authorizationCode is required");
+    if (!provider.redirectUrl) throw Error("redirectUrl is required for authorization_code flow");
+    let codeVerifier = await provider.codeVerifier();
+    tokenRequestParams = prepareAuthorizationCodeRequest(
+      authorizationCode,
+      codeVerifier,
+      provider.redirectUrl,
+    );
   }
-  let clientInformation = await e.clientInformation();
-  return I(t, {
-    metadata: r,
-    tokenRequestParams: s,
-    clientInformation: clientInformation ?? void 0,
-    addClientAuthentication: e.addClientAuthentication,
-    resource: n,
-    fetchFn: i,
+  let clientInformation = await provider.clientInformation();
+  return executeTokenRequest(authorizationServerUrl, {
+    metadata,
+    tokenRequestParams,
+    clientInformation: clientInformation ?? undefined,
+    addClientAuthentication: provider.addClientAuthentication,
+    resource,
+    fetchFn,
   });
 }
 //@ chunk-9z4e25ww.js:17054-17511 esm-fingerprint
-async function ye(e, { metadata: metadata, clientMetadata: clientMetadata, scope: scope, fetchFn: fetchFn }) {
-  let i;
+async function registerClient(authorizationServerUrl, { metadata, clientMetadata, scope, fetchFn }) {
+  let registrationUrl;
   if (metadata) {
     if (!metadata.registration_endpoint)
       throw Error("Incompatible auth server: does not support dynamic client registration");
-    i = new URL(metadata.registration_endpoint);
-  } else i = new URL("/register", e);
-  let c = await (fetchFn ?? fetch)(i, {
+    registrationUrl = new URL(metadata.registration_endpoint);
+  } else registrationUrl = new URL("/register", authorizationServerUrl);
+  let response = await (fetchFn ?? fetch)(registrationUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...clientMetadata, ...(scope !== void 0 ? { scope: scope } : {}) }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ...clientMetadata,
+      ...(scope !== undefined
+        ? {
+            scope,
+          }
+        : {}),
+    }),
   });
-  if (!c.ok) throw await X(c);
-  return merge.parse(await c.json());
+  if (!response.ok) throw await parseErrorResponse(response);
+  return OAuthClientInformationFullSchema.parse(await response.json());
 }
-
-export { AM, x$r, s1t, QLo, Aue, NHe, eHo, ZLo, r2s };
+export {
+  UnauthorizedError,
+  discoverOAuthProtectedResourceMetadata,
+  discoverAuthorizationServerMetadata,
+  discoverOAuthServerInfo,
+  auth,
+  extractWWWAuthenticateParams,
+  refreshAuthorization,
+  startAuthorization,
+  exchangeAuthorization,
+};

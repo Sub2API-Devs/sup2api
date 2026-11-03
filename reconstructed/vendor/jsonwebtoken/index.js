@@ -6,23 +6,22 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { ic } from "./decode.js";
-import { Xh } from "./verify.js";
-import { Mf } from "./sign.js";
-import { vo } from "./lib/JsonWebTokenError.js";
-import { sc } from "./lib/NotBeforeError.js";
-import { ac } from "./lib/TokenExpiredError.js";
+import { require_decode } from "./decode.js";
+import { require_verify } from "./verify.js";
+import { require_sign } from "./sign.js";
+import { require_JsonWebTokenError } from "./lib/JsonWebTokenError.js";
+import { require_NotBeforeError } from "./lib/NotBeforeError.js";
+import { require_TokenExpiredError } from "./lib/TokenExpiredError.js";
 
 //@ chunk-mrx6y2r5.js:22157-22297 cjs-fingerprint
-var Uf = x(function (gL, Df) {
-  Df.exports = {
-    decode: ic(),
-    verify: Xh(),
-    sign: Mf(),
-    JsonWebTokenError: vo(),
-    NotBeforeError: sc(),
-    TokenExpiredError: ac(),
+var require_jsonwebtoken = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
+    decode: require_decode(),
+    verify: require_verify(),
+    sign: require_sign(),
+    JsonWebTokenError: require_JsonWebTokenError(),
+    NotBeforeError: require_NotBeforeError(),
+    TokenExpiredError: require_TokenExpiredError(),
   };
 });
-
-export { Uf };
+export { require_jsonwebtoken };

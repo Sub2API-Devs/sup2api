@@ -13,10 +13,10 @@ import { getProjectConfigRoot, getOriginalCwdOrNull } from "../../bootstrap/stat
 import {
   STDIO_VERDICT_PREFIX,
   CCR_VERDICT_PREFIX,
-  Qr,
+  shouldRememberVerdict,
   readDiscoverVerdict,
   getDiscoverVerdicts,
-  es,
+  isModernVerdictValid,
   updateDiscoverVerdicts,
   retainValidDiscoverVerdicts,
 } from "./discoverVerdicts.js";
@@ -24,23 +24,26 @@ import { computeContentHash } from "../../utils/commitAttribution.js";
 import { isSameOriginAsCcr, CCR_SESSION_MCP_PATH } from "./ccrMcpUrls.js";
 import { hasUniqueQueryParams } from "../analytics/metadata.js";
 import { isKnownProxyEndpointUrl } from "../../tools/WebFetchTool/utils.js";
-import { iJ, X_MCP_SERVER_ORIGIN } from "./fileReference/fileReferencePolicy.js";
-import { cyr } from "./remoteBrowserServer.js";
+import { headerValues, X_MCP_SERVER_ORIGIN } from "./fileReference/fileReferencePolicy.js";
+import { RESERVED_SERVER_IDS_WITH_DOCS } from "./remoteBrowserServer.js";
 import { MCP_PROTOCOL_NEXT } from "./mcpCallConstants.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, T, E } from "../../../vendor/zod/v4/classic/schemas.js";
-import { JGs } from "./connectionLifecycle.js";
+import { u, literal, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { wasListenGetSkipped } from "./connectionLifecycle.js";
 import { fromEnumOpt } from "../analytics/safeMetadata.js";
-import { ht } from "./cliOwnedClients.js";
+import { getCliOwnedState } from "./cliOwnedClients.js";
 import { logError } from "../../utils/log.js";
 
 //@ chunk-8t8n4kdh.js:30726-30795 placement
-var va = ["toolbox_mcp_server_id", "mcp_url"],
-  Ra = ["directory", "custom"];
+/**
+ * 允许的发现来源（directory、custom）。
+ */
+var CCR_UNIQUE_QUERY_KEYS = ["toolbox_mcp_server_id", "mcp_url"];
+var DIRECTORY_SOURCES = ["directory", "custom"];
+//@ chunk-8t8n4kdh.js:30795-31351 placement
 /**
  * getDiscoverVerdictKey：判定键：claudeai-proxy 用连接器 id；stdio 用 hash(command,args,排序 env,项目根) 前缀 stdio:；CCR toolbox http URL 用 hash(server_id, mcp_url) 前缀 ccr:；其他返回 undefined（不记）。
  */
-//@ chunk-8t8n4kdh.js:30795-31351 placement
 function getDiscoverVerdictKey(config) {
   if (config.type === "claudeai-proxy") return config.id;
   if ("command" in config) {
@@ -55,77 +58,102 @@ function getDiscoverVerdictKey(config) {
   if (
     config.type !== "http" ||
     !isSameOriginAsCcr(config.url) ||
-    !hasUniqueQueryParams(config.url, va) ||
+    !hasUniqueQueryParams(config.url, CCR_UNIQUE_QUERY_KEYS) ||
     isKnownProxyEndpointUrl(config.url)
   )
     return;
-  let n = iJ(config.headers, X_MCP_SERVER_ORIGIN),
-    r = new URL(config.url),
-    s = r.searchParams.get("toolbox_mcp_server_id")?.toLowerCase();
+  let n = headerValues(config.headers, X_MCP_SERVER_ORIGIN);
+  let r = new URL(config.url);
+  let lower = r.searchParams.get("toolbox_mcp_server_id")?.toLowerCase();
   if (
     !CCR_SESSION_MCP_PATH.test(r.pathname) ||
     n.length !== 1 ||
-    !n.every((y) => Ra.includes(y)) ||
-    !s ||
-    cyr.includes(s)
+    !n.every((y) => DIRECTORY_SOURCES.includes(y)) ||
+    !lower ||
+    RESERVED_SERVER_IDS_WITH_DOCS.includes(lower)
   )
     return;
-  let h = jsonStringify([s, r.searchParams.get("mcp_url")]);
+  let h = jsonStringify([lower, r.searchParams.get("mcp_url")]);
   return `${CCR_VERDICT_PREFIX}${computeContentHash(h).slice(0, 32)}`;
 }
+//@ chunk-8t8n4kdh.js:31351-31483 placement
 /**
  * isRememberedLegacyPeer：判定表中有未过期且记录时 modern 版本等于当前（2026-07-28）的条目。
  */
-//@ chunk-8t8n4kdh.js:31351-31483 placement
 async function isRememberedLegacyPeer(config, storageV5, r = Date.now()) {
-  let s = getDiscoverVerdictKey(config);
-  if (s === void 0 || !Qr(s)) return !1;
-  let h = readDiscoverVerdict(await getDiscoverVerdicts(storageV5), s);
-  return h !== void 0 && es(s, h, r);
+  let discoverVerdictKey = getDiscoverVerdictKey(config);
+  if (discoverVerdictKey === undefined || !shouldRememberVerdict(discoverVerdictKey)) return false;
+  let discoverVerdict = readDiscoverVerdict(await getDiscoverVerdicts(storageV5), discoverVerdictKey);
+  return discoverVerdict !== undefined && isModernVerdictValid(discoverVerdictKey, discoverVerdict, r);
 }
+//@ chunk-8t8n4kdh.js:31483-31707 placement
 /**
  * rememberLegacyPeer：记录 {observedAt, modernProtocolVersion}，表示该服务器对 server/discover 回 -32601 或没回应，下次直接走 legacy initialize。
  */
-//@ chunk-8t8n4kdh.js:31483-31707 placement
 function rememberLegacyPeer(config, storageV5, r = Date.now()) {
-  let s = getDiscoverVerdictKey(config);
-  if (s === void 0 || !Qr(s)) return Promise.resolve();
+  let discoverVerdictKey = getDiscoverVerdictKey(config);
+  if (discoverVerdictKey === undefined || !shouldRememberVerdict(discoverVerdictKey))
+    return Promise.resolve();
   return updateDiscoverVerdicts(storageV5, (h) => {
-    let y = readDiscoverVerdict(h, s);
-    if (y !== void 0 && es(s, y, r)) return;
+    let discoverVerdict = readDiscoverVerdict(h, discoverVerdictKey);
+    if (discoverVerdict !== undefined && isModernVerdictValid(discoverVerdictKey, discoverVerdict, r)) return;
     let S = retainValidDiscoverVerdicts(h, r);
-    return ((S[s] = { observedAt: r, modernProtocolVersion: MCP_PROTOCOL_NEXT }), S);
+    S[discoverVerdictKey] = {
+      observedAt: r,
+      modernProtocolVersion: MCP_PROTOCOL_NEXT,
+    };
+    return S;
   });
 }
+//@ chunk-8t8n4kdh.js:31707-31873 placement
 /**
  * forgetDiscoverVerdict：删除判定（服务器后来以 modern 协议应答、或基于判定的连接被拒）。
  */
-//@ chunk-8t8n4kdh.js:31707-31873 placement
 function forgetDiscoverVerdict(config, storageV5, r = Date.now()) {
-  let s = getDiscoverVerdictKey(config);
-  if (s === void 0) return Promise.resolve();
+  let discoverVerdictKey = getDiscoverVerdictKey(config);
+  if (discoverVerdictKey === undefined) return Promise.resolve();
   return updateDiscoverVerdicts(storageV5, (h) => {
-    if (!Object.hasOwn(h, s)) return;
+    if (!Object.hasOwn(h, discoverVerdictKey)) return;
     let y = retainValidDiscoverVerdicts(h, r);
-    return (delete y[s], y);
+    delete y[discoverVerdictKey];
+    return y;
   });
 }
 //@ chunk-8t8n4kdh.js:31873-32005 placement
-var DISCOVER_SNIFF_MAX_BYTES = 16384,
-  ka = DoctorLazy(() => u({ method: T("server/discover") })),
-  Oa = DoctorLazy(() => u({ error: u({ code: T(-32601) }) })),
-  La = DoctorLazy(() => u({ error: u({ code: E() }) }));
+/**
+ * JSON-RPC 错误响应的 schema。
+ */
+var DISCOVER_SNIFF_MAX_BYTES = 16384;
+var discoverRequestSchema = DoctorLazy(() =>
+  u({
+    method: literal("server/discover"),
+  }),
+);
+var methodNotFoundSchema = DoctorLazy(() =>
+  u({
+    error: u({
+      code: literal(-32601),
+    }),
+  }),
+);
+var jsonRpcErrorSchema = DoctorLazy(() =>
+  u({
+    error: u({
+      code: E(),
+    }),
+  }),
+);
+//@ chunk-8t8n4kdh.js:32005-32202 placement
 /**
  * wrapFetchDetectDiscoverMethodNotFound：包装 fetch，POST 体是 server/discover 时异步读响应前 16 KiB，若是 JSON-RPC -32601 错误就回调（标记 discoverMethodNotFound）。
  */
-//@ chunk-8t8n4kdh.js:32005-32202 placement
 function wrapFetchDetectDiscoverMethodNotFound(fetchFn, onMethodNotFound) {
   return async (r, s) => {
     let h =
-        (s?.method ?? "GET").toUpperCase() === "POST" &&
-        typeof s?.body === "string" &&
-        isDiscoverRequestBody(s.body),
-      y = await fetchFn(r, s);
+      (s?.method ?? "GET").toUpperCase() === "POST" &&
+      typeof s?.body === "string" &&
+      isDiscoverRequestBody(s.body);
+    let y = await fetchFn(r, s);
     if (h)
       isMethodNotFoundResponse(y.clone()).then(
         (S) => {
@@ -137,7 +165,10 @@ function wrapFetchDetectDiscoverMethodNotFound(fetchFn, onMethodNotFound) {
   };
 }
 //@ chunk-8t8n4kdh.js:32202-32248 placement
-function as(e) {
+/**
+ * 尝试解析 JSON，失败返回 undefined。
+ */
+function tryJsonParse(e) {
   try {
     return jsonParse(e);
   } catch {
@@ -145,8 +176,8 @@ function as(e) {
   }
 }
 //@ chunk-8t8n4kdh.js:32248-32331 placement
-function isDiscoverRequestBody(e) {
-  return e.includes("server/discover") && ka().safeParse(as(e)).success;
+function isDiscoverRequestBody(body) {
+  return body.includes("server/discover") && discoverRequestSchema().safeParse(tryJsonParse(body)).success;
 }
 //@ chunk-8t8n4kdh.js:32331-32513 placement
 function parseJsonRpcFromBody(e) {
@@ -157,233 +188,274 @@ function parseJsonRpcFromBody(e) {
           `
 `,
         )
-        .filter((r) => r.startsWith("data:"))
-        .map((r) => r.slice(5));
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5));
   for (let r of n) {
-    let s = as(r);
-    if (s !== void 0) return s;
+    let s = tryJsonParse(r);
+    if (s !== undefined) return s;
   }
   return;
 }
 //@ chunk-8t8n4kdh.js:32513-32610 placement
-function ds(e) {
-  let safeParse = La().safeParse(parseJsonRpcFromBody(e.slice(0, DISCOVER_SNIFF_MAX_BYTES)));
-  return safeParse.success ? safeParse.data.error.code : void 0;
+/**
+ * 从响应体里取 JSON-RPC 错误码。
+ */
+function discoverErrorCode(text) {
+  let n = jsonRpcErrorSchema().safeParse(parseJsonRpcFromBody(text.slice(0, DISCOVER_SNIFF_MAX_BYTES)));
+  return n.success ? n.data.error.code : undefined;
 }
 //@ chunk-8t8n4kdh.js:32610-32891 placement
 async function isMethodNotFoundResponse(e) {
-  let n = e.body?.getReader();
-  if (!n) return !1;
-  let textDecoder = new TextDecoder(),
-    s = "",
-    h = 0,
-    y = void 0;
-  while (y === void 0 && h < DISCOVER_SNIFF_MAX_BYTES) {
-    let { done: S, value: w } = await n.read();
+  let reader = e.body?.getReader();
+  if (!reader) return false;
+  let textDecoder = new TextDecoder();
+  let s = "";
+  let h = 0;
+  let y = undefined;
+  while (y === undefined && h < DISCOVER_SNIFF_MAX_BYTES) {
+    let { done: S, value: w } = await reader.read();
     if (S) break;
-    ((h += w.byteLength), (s += textDecoder.decode(w, { stream: !0 })), (y = parseJsonRpcFromBody(s)));
+    h += w.byteLength;
+    s += textDecoder.decode(w, {
+      stream: true,
+    });
+    y = parseJsonRpcFromBody(s);
   }
-  return (n.cancel().catch(() => {}), Oa().safeParse(y).success);
+  reader.cancel().catch(() => {});
+  return methodNotFoundSchema().safeParse(y).success;
 }
 //@ chunk-8t8n4kdh.js:32891-33112 placement
-var HANDSHAKE_METHODS = ["server/discover", "initialize", "notifications/initialized"],
-  xa = {
-    "server/discover": "discover",
-    initialize: "initialize",
-    "notifications/initialized": "initialized_notification",
-  },
-  Ua = 8,
-  $a = 600000,
-  Ba = 30000,
-  us = '"method":"';
+/**
+ * 在请求体里定位方法的标记字符串。
+ */
+var HANDSHAKE_METHODS = ["server/discover", "initialize", "notifications/initialized"];
+var HANDSHAKE_METHOD_LABELS = {
+  "server/discover": "discover",
+  initialize: "initialize",
+  "notifications/initialized": "initialized_notification",
+};
+var MAX_HANDSHAKE_SENDS = 8;
+var MAX_TRACE_MS = 600000;
+var SLOW_ANSWER_MS = 30000;
+var METHOD_MARKER = '"method":"';
+//@ chunk-8t8n4kdh.js:33112-33395 placement
 /**
  * createHandshakeTrace：握手跟踪状态（mcpHref、keepAliveDisabled、getAnsweredLocally、statelessGated、各阶段耗时与响应类型）。
  */
-//@ chunk-8t8n4kdh.js:33112-33395 placement
-function createHandshakeTrace({
-  mcpUrl: mcpUrl,
-  keepAliveDisabled: keepAliveDisabled,
-  getAnsweredLocally: getAnsweredLocally,
-  statelessGated: statelessGated,
-}) {
+function createHandshakeTrace({ mcpUrl, keepAliveDisabled, getAnsweredLocally, statelessGated }) {
   return {
-    mcpHref: _s(mcpUrl),
-    keepAliveDisabled: keepAliveDisabled,
-    getAnsweredLocally: getAnsweredLocally,
-    statelessGated: statelessGated,
+    mcpHref: normalizedHref(mcpUrl),
+    keepAliveDisabled,
+    getAnsweredLocally,
+    statelessGated,
     transportBuilds: 0,
     handshakeSends: 0,
-    connectEnded: !1,
-    initializedNotificationAnswered: !1,
+    connectEnded: false,
+    initializedNotificationAnswered: false,
     messageStreamGetOutcome: "not_sent",
   };
 }
+//@ chunk-8t8n4kdh.js:33395-33772 placement
 /**
  * 重建传输时重置握手追踪的计时与状态字段。
  */
-//@ chunk-8t8n4kdh.js:33395-33772 placement
-function resetHandshakeTrace(e) {
-  (e.transportBuilds++,
-    (e.handshakeSends = 0),
-    (e.initializedNotificationAnswered = !1),
-    (e.pendingMethod = void 0),
-    (e.initializeRequestMs = void 0),
-    (e.initializeStartMs = void 0),
-    (e.initializeResultMs = void 0),
-    (e.initializedNotificationMs = void 0),
-    (e.initializedNotificationAnsweredAtMs = void 0),
-    (e.discoverResponseKind = void 0),
-    (e.initializeResponseKind = void 0),
-    (e.messageStreamGetOutcome = "not_sent"));
+function resetHandshakeTrace(handshakeTrace) {
+  handshakeTrace.transportBuilds++;
+  handshakeTrace.handshakeSends = 0;
+  handshakeTrace.initializedNotificationAnswered = false;
+  handshakeTrace.pendingMethod = undefined;
+  handshakeTrace.initializeRequestMs = undefined;
+  handshakeTrace.initializeStartMs = undefined;
+  handshakeTrace.initializeResultMs = undefined;
+  handshakeTrace.initializedNotificationMs = undefined;
+  handshakeTrace.initializedNotificationAnsweredAtMs = undefined;
+  handshakeTrace.discoverResponseKind = undefined;
+  handshakeTrace.initializeResponseKind = undefined;
+  handshakeTrace.messageStreamGetOutcome = "not_sent";
 }
 //@ chunk-8t8n4kdh.js:33772-33819 placement
-function zn(e) {
-  if (e !== void 0) e.connectEnded = !0;
+/**
+ * 标记连接已结束。
+ */
+function markConnectEnded(handshakeTrace) {
+  if (handshakeTrace !== undefined) handshakeTrace.connectEnded = true;
 }
+//@ chunk-8t8n4kdh.js:33819-34961 placement
 /**
  * wrapFetchWithHandshakeTrace：记录 server/discover、initialize、notifications/initialized 的请求耗时与响应类型，以及 GET 通知流的结果（opened/405/401…）。
  */
-//@ chunk-8t8n4kdh.js:33819-34961 placement
-function wrapFetchWithHandshakeTrace(e, n) {
+function wrapFetchWithHandshakeTrace(e, handshakeTrace) {
   return (r, s) => {
     let upper = (s?.method ?? "GET").toUpperCase();
     if (upper === "GET") {
-      let messageStreamGetOutcome = n.messageStreamGetOutcome;
+      let messageStreamGetOutcome = handshakeTrace.messageStreamGetOutcome;
       if (
         (messageStreamGetOutcome !== "not_sent" &&
           messageStreamGetOutcome !== "unauthorized" &&
           messageStreamGetOutcome !== "forbidden") ||
-        !fs(r, n) ||
-        Ha(s)
+        !sameMcpHref(r, handshakeTrace) ||
+        hasLastEventId(s)
       )
         return e(r, s);
-      let transportBuilds = n.transportBuilds;
-      n.messageStreamGetOutcome = "awaiting_response";
+      let transportBuilds = handshakeTrace.transportBuilds;
+      handshakeTrace.messageStreamGetOutcome = "awaiting_response";
       let R = e(r, s);
-      return (
-        R.then(
-          (ce) =>
-            Cn(() => {
-              if (n.transportBuilds === transportBuilds)
-                n.messageStreamGetOutcome =
-                  n.getAnsweredLocally || JGs(ce) ? "answered_locally" : listenStreamOutcome(ce);
-            }),
-          () =>
-            Cn(() => {
-              if (n.transportBuilds === transportBuilds) n.messageStreamGetOutcome = "no_response";
-            }),
-        ),
-        R
+      R.then(
+        (ce) =>
+          safeRun(() => {
+            if (handshakeTrace.transportBuilds === transportBuilds)
+              handshakeTrace.messageStreamGetOutcome =
+                handshakeTrace.getAnsweredLocally || wasListenGetSkipped(ce)
+                  ? "answered_locally"
+                  : listenStreamOutcome(ce);
+          }),
+        () =>
+          safeRun(() => {
+            if (handshakeTrace.transportBuilds === transportBuilds)
+              handshakeTrace.messageStreamGetOutcome = "no_response";
+          }),
       );
+      return R;
     }
     if (
       upper !== "POST" ||
-      n.connectEnded ||
-      n.initializedNotificationAnswered ||
-      n.handshakeSends >= Ua ||
+      handshakeTrace.connectEnded ||
+      handshakeTrace.initializedNotificationAnswered ||
+      handshakeTrace.handshakeSends >= MAX_HANDSHAKE_SENDS ||
       typeof s?.body !== "string" ||
-      !fs(r, n)
+      !sameMcpHref(r, handshakeTrace)
     )
       return e(r, s);
     let y = handshakeMethodOf(s.body);
-    if (y === void 0) return e(r, s);
-    n.handshakeSends++;
-    let transportBuilds = n.transportBuilds,
-      startTime = performance.now();
-    if (((n.pendingMethod = y), y === "initialize"))
-      ((n.initializeStartMs = startTime), (n.initializeRequestMs = void 0), (n.initializeResultMs = void 0));
-    else if (y === "notifications/initialized") {
-      if (
-        ((n.initializedNotificationMs = void 0),
-        n.initializeStartMs !== void 0 && n.initializeResultMs === void 0)
-      )
-        n.initializeResultMs = jn(startTime - n.initializeStartMs);
+    if (y === undefined) return e(r, s);
+    handshakeTrace.handshakeSends++;
+    let transportBuilds = handshakeTrace.transportBuilds;
+    let startTime = performance.now();
+    handshakeTrace.pendingMethod = y;
+    if (y === "initialize") {
+      handshakeTrace.initializeStartMs = startTime;
+      handshakeTrace.initializeRequestMs = undefined;
+      handshakeTrace.initializeResultMs = undefined;
+    } else if (y === "notifications/initialized") {
+      handshakeTrace.initializedNotificationMs = undefined;
+      if (handshakeTrace.initializeStartMs !== undefined && handshakeTrace.initializeResultMs === undefined)
+        handshakeTrace.initializeResultMs = clampTraceMs(startTime - handshakeTrace.initializeStartMs);
     }
     let P = e(r, s);
-    return (
-      P.then(
-        (M) => Cn(() => recordHandshakeResponse(n, y, transportBuilds, startTime, M)),
-        () => Cn(() => recordHandshakeResponse(n, y, transportBuilds, startTime, void 0)),
-      ),
-      P
+    P.then(
+      (M) => safeRun(() => recordHandshakeResponse(handshakeTrace, y, transportBuilds, startTime, M)),
+      () => safeRun(() => recordHandshakeResponse(handshakeTrace, y, transportBuilds, startTime, undefined)),
     );
+    return P;
   };
 }
+//@ chunk-8t8n4kdh.js:34961-35440 placement
 /**
  * handshakeTraceTelemetry：把握手跟踪整理成遥测字段（discoverRequestMs、initializeRequestMs、statelessGated、keepAliveDisabled 等）。
  */
-//@ chunk-8t8n4kdh.js:34961-35440 placement
-function handshakeTraceTelemetry(e) {
-  if (e === void 0) return {};
+function handshakeTraceTelemetry(handshakeTrace) {
+  if (handshakeTrace === undefined) return {};
   return {
-    discoverRequestMs: e.discoverRequestMs,
-    initializeRequestMs: e.initializeRequestMs,
-    initializeResultMs: e.initializeResultMs,
-    initializedNotificationMs: e.initializedNotificationMs,
-    handshakeResponseKind: fromEnumOpt(e.initializeResponseKind ?? e.discoverResponseKind),
-    handshakeRequestPending: fromEnumOpt(e.pendingMethod === void 0 ? void 0 : xa[e.pendingMethod]),
-    transportBuilds: e.transportBuilds,
-    statelessGated: e.statelessGated,
-    keepAliveDisabled: e.keepAliveDisabled,
+    discoverRequestMs: handshakeTrace.discoverRequestMs,
+    initializeRequestMs: handshakeTrace.initializeRequestMs,
+    initializeResultMs: handshakeTrace.initializeResultMs,
+    initializedNotificationMs: handshakeTrace.initializedNotificationMs,
+    handshakeResponseKind: fromEnumOpt(
+      handshakeTrace.initializeResponseKind ?? handshakeTrace.discoverResponseKind,
+    ),
+    handshakeRequestPending: fromEnumOpt(
+      handshakeTrace.pendingMethod === undefined
+        ? undefined
+        : HANDSHAKE_METHOD_LABELS[handshakeTrace.pendingMethod],
+    ),
+    transportBuilds: handshakeTrace.transportBuilds,
+    statelessGated: handshakeTrace.statelessGated,
+    keepAliveDisabled: handshakeTrace.keepAliveDisabled,
   };
 }
 //@ chunk-8t8n4kdh.js:35440-35530 placement
-function hs(e, n) {
-  ht().firstToolsListReports.set(e, { report: n, armedAtMs: performance.now() });
+/**
+ * 登记首次工具列表请求的上报信息。
+ */
+function armFirstToolsListReport(client, report) {
+  getCliOwnedState().firstToolsListReports.set(client, {
+    report,
+    armedAtMs: performance.now(),
+  });
 }
+//@ chunk-8t8n4kdh.js:35530-35854 placement
 /**
  * 首次工具列表请求结束后上报耗时与工具数（仅在登记后的有效期内）。
  */
-//@ chunk-8t8n4kdh.js:35530-35854 placement
 function reportFirstToolsList(e, n, r) {
-  let s = () => (typeof r === "function" ? r() : r),
-    firstToolsListReports = ht().firstToolsListReports,
-    y = firstToolsListReports.get(e);
-  if (y === void 0) return n;
+  let s = () => (typeof r === "function" ? r() : r);
+  let firstToolsListReports = getCliOwnedState().firstToolsListReports;
+  let y = firstToolsListReports.get(e);
+  if (y === undefined) return n;
   firstToolsListReports.delete(e);
-  let startTime = performance.now(),
-    w = startTime - y.armedAtMs;
-  if (w > Ba) return n;
-  let P = jn(w);
-  return (
-    n.then(
-      (M) =>
-        Cn(() => emitToolsListReport(y.report, startTime, !0, P, s(), Array.isArray(M) ? M.length : void 0)),
-      () => Cn(() => emitToolsListReport(y.report, startTime, !1, P, s())),
-    ),
-    n
+  let startTime = performance.now();
+  let w = startTime - y.armedAtMs;
+  if (w > SLOW_ANSWER_MS) return n;
+  let toolsListStartAfterConnectMs = clampTraceMs(w);
+  n.then(
+    (M) =>
+      safeRun(() =>
+        emitToolsListReport(
+          y.report,
+          startTime,
+          true,
+          toolsListStartAfterConnectMs,
+          s(),
+          Array.isArray(M) ? M.length : undefined,
+        ),
+      ),
+    () => safeRun(() => emitToolsListReport(y.report, startTime, false, toolsListStartAfterConnectMs, s())),
   );
+  return n;
 }
 //@ chunk-8t8n4kdh.js:35854-36089 placement
-function emitToolsListReport(e, n, r, s, h, y) {
-  let startTime = performance.now(),
-    w = {
-      toolsListMs: jn(startTime - n),
-      toolsListOk: r,
-      toolsListStartAfterConnectMs: s,
-      ...(h !== void 0 && { toolsListFromSendMs: jn(startTime - h) }),
-      ...(y !== void 0 && { toolsListCount: y }),
-    };
-  setImmediate((P, M) => Cn(() => P(M)), e, w);
+function emitToolsListReport(report, n, toolsListOk, toolsListStartAfterConnectMs, h, y) {
+  let startTime = performance.now();
+  let w = {
+    toolsListMs: clampTraceMs(startTime - n),
+    toolsListOk,
+    toolsListStartAfterConnectMs,
+    ...(h !== undefined && {
+      toolsListFromSendMs: clampTraceMs(startTime - h),
+    }),
+    ...(y !== undefined && {
+      toolsListCount: y,
+    }),
+  };
+  setImmediate((P, M) => safeRun(() => P(M)), report, w);
 }
 //@ chunk-8t8n4kdh.js:36089-36176 placement
-function Ha(e) {
+/**
+ * 判断请求头里是否带 last-event-id。
+ */
+function hasLastEventId(e) {
   try {
     return new Headers(e?.headers).has("last-event-id");
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-8t8n4kdh.js:36176-36226 placement
-function fs(e, n) {
-  return _s(String(e)) === n.mcpHref;
+/**
+ * 判断请求地址是否与跟踪的地址一致。
+ */
+function sameMcpHref(e, n) {
+  return normalizedHref(String(e)) === n.mcpHref;
 }
 //@ chunk-8t8n4kdh.js:36226-36284 placement
-function _s(e) {
+/**
+ * 规范化 URL 的 href（无效时原样）。
+ */
+function normalizedHref(mcpUrl) {
   try {
-    return new URL(e).href;
+    return new URL(mcpUrl).href;
   } catch {
-    return e;
+    return mcpUrl;
   }
 }
 //@ chunk-8t8n4kdh.js:36284-36460 placement
@@ -401,24 +473,24 @@ function listenStreamOutcome(e) {
   }
 }
 //@ chunk-8t8n4kdh.js:36460-37037 placement
-function recordHandshakeResponse(e, n, r, s, h) {
-  let y = jn(performance.now() - s);
+function recordHandshakeResponse(e, n, transportBuilds, s, h) {
+  let y = clampTraceMs(performance.now() - s);
   if (n === "server/discover") e.discoverRequestMs = y;
-  if (e.transportBuilds !== r) return;
-  if (e.pendingMethod === n) e.pendingMethod = void 0;
-  let S = h?.ok ? responseContentKind(h) : void 0;
+  if (e.transportBuilds !== transportBuilds) return;
+  if (e.pendingMethod === n) e.pendingMethod = undefined;
+  let S = h?.ok ? responseContentKind(h) : undefined;
   switch (n) {
     case "server/discover":
       e.discoverResponseKind = S ?? e.discoverResponseKind;
       return;
     case "initialize":
-      ((e.initializeRequestMs = y), (e.initializeResponseKind = S ?? e.initializeResponseKind));
+      e.initializeRequestMs = y;
+      e.initializeResponseKind = S ?? e.initializeResponseKind;
       return;
     case "notifications/initialized":
-      if (
-        ((e.initializedNotificationMs = y), (e.initializedNotificationAnswered = h?.ok === !0), h?.ok === !0)
-      )
-        e.initializedNotificationAnsweredAtMs = performance.now();
+      e.initializedNotificationMs = y;
+      e.initializedNotificationAnswered = h?.ok === true;
+      if (h?.ok === true) e.initializedNotificationAnsweredAtMs = performance.now();
       return;
   }
 }
@@ -435,43 +507,48 @@ function responseContentKind(e) {
   }
 }
 //@ chunk-8t8n4kdh.js:37244-37427 placement
-function handshakeMethodOf(e) {
-  let index = e.indexOf(us);
+function handshakeMethodOf(body) {
+  let index = body.indexOf(METHOD_MARKER);
   if (index === -1) return;
-  let r = index + us.length,
-    found = HANDSHAKE_METHODS.find((h) => e.startsWith(`${h}"`, r));
-  if (found === void 0) return;
+  let r = index + METHOD_MARKER.length;
+  let found = HANDSHAKE_METHODS.find((h) => body.startsWith(`${h}"`, r));
+  if (found === undefined) return;
   try {
-    return jsonParse(e)?.method === found ? found : void 0;
+    return jsonParse(body)?.method === found ? found : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-8t8n4kdh.js:37427-37488 placement
-function jn(e) {
-  return Math.min(Math.max(Math.round(e), 0), $a);
+/**
+ * 把耗时夹到 [0, $a] 并取整。
+ */
+function clampTraceMs(e) {
+  return Math.min(Math.max(Math.round(e), 0), MAX_TRACE_MS);
 }
 //@ chunk-8t8n4kdh.js:37488-37526 placement
-function Cn(e) {
+/**
+ * 安全执行回调（出错只记日志）。
+ */
+function safeRun(e) {
   try {
     e();
   } catch (error) {
     logError(error);
   }
 }
-
 export {
   getDiscoverVerdictKey,
   forgetDiscoverVerdict,
   isRememberedLegacyPeer,
-  ds,
+  discoverErrorCode,
   wrapFetchDetectDiscoverMethodNotFound,
   createHandshakeTrace,
   wrapFetchWithHandshakeTrace,
   resetHandshakeTrace,
-  zn,
+  markConnectEnded,
   handshakeTraceTelemetry,
   rememberLegacyPeer,
-  hs,
+  armFirstToolsListReport,
   reportFirstToolsList,
 };

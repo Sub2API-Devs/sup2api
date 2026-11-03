@@ -8,55 +8,58 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:9877-10856 cjs-fingerprint
-var Lo = x(function (up, Fo) {
-  var Za = "Function.prototype.bind called on incompatible ",
-    toString = Object.prototype.toString,
-    max = Math.max,
-    ru = "[object Function]",
-    Po = function (t, r) {
-      var n = [];
-      for (var o = 0; o < t.length; o += 1) n[o] = t[o];
-      for (var s = 0; s < r.length; s += 1) n[s + t.length] = r[s];
-      return n;
-    },
-    nu = function (t, r) {
-      var n = [];
-      for (var o = r || 0, s = 0; o < t.length; o += 1, s += 1) n[s] = t[o];
-      return n;
-    },
-    ou = function (e, t) {
-      var r = "";
-      for (var n = 0; n < e.length; n += 1) if (((r += e[n]), n + 1 < e.length)) r += t;
-      return r;
-    };
-  Fo.exports = function (t) {
-    var r = this;
-    if (typeof r !== "function" || toString.apply(r) !== ru) throw TypeError(Za + r);
-    var n = nu(arguments, 1),
-      o,
-      s = function () {
-        if (this instanceof o) {
-          var c = r.apply(this, Po(n, arguments));
-          if (Object(c) === c) return c;
-          return this;
-        }
-        return r.apply(t, Po(n, arguments));
-      },
-      i = max(0, r.length - n.length),
-      a = [];
-    for (var l = 0; l < i; l++) a[l] = "$" + l;
-    if (
-      ((o = Function(
-        "binder",
-        "return function (" + ou(a, ",") + "){ return binder.apply(this,arguments); }",
-      )(s)),
-      r.prototype)
-    ) {
-      var f = function () {};
-      ((f.prototype = r.prototype), (o.prototype = new f()), (f.prototype = null));
+var require_implementation = x(function (cjsExports, cjsModule) {
+  var ERROR_MESSAGE = "Function.prototype.bind called on incompatible ";
+  var toStr = Object.prototype.toString;
+  var max = Math.max;
+  var funcType = "[object Function]";
+  var concatty = function (a, b) {
+    var arr = [];
+    for (var i = 0; i < a.length; i += 1) arr[i] = a[i];
+    for (var j = 0; j < b.length; j += 1) arr[j + a.length] = b[j];
+    return arr;
+  };
+  var slicy = function (arrLike, offset) {
+    var arr = [];
+    for (var i = offset || 0, j = 0; i < arrLike.length; i += 1, j += 1) arr[j] = arrLike[i];
+    return arr;
+  };
+  var joiny = function (arr, joiner) {
+    var str = "";
+    for (var i = 0; i < arr.length; i += 1) {
+      str += arr[i];
+      if (i + 1 < arr.length) str += joiner;
     }
-    return o;
+    return str;
+  };
+  cjsModule.exports = function (that) {
+    var target = this;
+    if (typeof target !== "function" || toStr.apply(target) !== funcType)
+      throw TypeError(ERROR_MESSAGE + target);
+    var args = slicy(arguments, 1);
+    var bound;
+    var binder = function () {
+      if (this instanceof bound) {
+        var result = target.apply(this, concatty(args, arguments));
+        if (Object(result) === result) return result;
+        return this;
+      }
+      return target.apply(that, concatty(args, arguments));
+    };
+    var boundLength = max(0, target.length - args.length);
+    var boundArgs = [];
+    for (var i = 0; i < boundLength; i++) boundArgs[i] = "$" + i;
+    bound = Function(
+      "binder",
+      "return function (" + joiny(boundArgs, ",") + "){ return binder.apply(this,arguments); }",
+    )(binder);
+    if (target.prototype) {
+      var Empty = function () {};
+      Empty.prototype = target.prototype;
+      bound.prototype = new Empty();
+      Empty.prototype = null;
+    }
+    return bound;
   };
 });
-
-export { Lo };
+export { require_implementation };

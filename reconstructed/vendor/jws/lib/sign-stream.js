@@ -6,80 +6,88 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { d } from "../../safe-buffer/index.js";
-import { N } from "./data-stream.js";
-import { j } from "../../jwa/index.js";
-import { C } from "./tostring.js";
+import { require_safe_buffer } from "../../safe-buffer/index.js";
+import { require_data_stream } from "./data-stream.js";
+import { require_jwa } from "../../jwa/index.js";
+import { require_tostring } from "./tostring.js";
 
 //@ chunk-82d8c88w.js:7773-9091 cjs-fingerprint
-var be = x(function (Rr, ge) {
-  var ar = d().Buffer,
-    Se = N(),
-    fr = j(),
-    or = importMetaRequire("stream"),
-    ye = C(),
-    F = importMetaRequire("util");
-  function de(e, r) {
-    return ar.from(e, r).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+var require_sign_stream = x(function (cjsExports, cjsModule) {
+  var ar = require_safe_buffer().Buffer;
+  var DataStream = require_data_stream();
+  var jwa = require_jwa();
+  var Stream = importMetaRequire("stream");
+  var toString = require_tostring();
+  var util = importMetaRequire("util");
+  function base64url(string, encoding) {
+    return ar
+      .from(string, encoding)
+      .toString("base64")
+      .replace(/=/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
   }
-  function ur(e, r, t) {
-    t = t || "utf8";
-    var n = de(ye(e), "binary"),
-      a = de(ye(r), t);
-    return F.format("%s.%s", n, a);
+  function jwsSecuredInput(header, payload, encoding) {
+    encoding = encoding || "utf8";
+    var encodedHeader = base64url(toString(header), "binary");
+    var encodedPayload = base64url(toString(payload), encoding);
+    return util.format("%s.%s", encodedHeader, encodedPayload);
   }
-  function me(e) {
-    var { header: header, payload: payload } = e,
-      n = e.secret || e.privateKey,
-      encoding = e.encoding,
-      i = fr(header.alg),
-      u = ur(header, payload, encoding),
-      sign = i.sign(u, n);
-    return F.format("%s.%s", u, sign);
+  function jwsSign(opts) {
+    var { header, payload } = opts;
+    var n = opts.secret || opts.privateKey;
+    var encoding = opts.encoding;
+    var algo = jwa(header.alg);
+    var securedInput = jwsSecuredInput(header, payload, encoding);
+    var signature = algo.sign(securedInput, n);
+    return util.format("%s.%s", securedInput, signature);
   }
-  function R(e) {
-    var secret = e.secret;
-    if (
-      ((secret = secret == null ? e.privateKey : secret),
-      (secret = secret == null ? e.key : secret),
-      /^hs/i.test(e.header.alg) === !0 && secret == null)
-    )
+  function SignStream(opts) {
+    var secret = opts.secret;
+    secret = secret == null ? opts.privateKey : secret;
+    secret = secret == null ? opts.key : secret;
+    if (/^hs/i.test(opts.header.alg) === true && secret == null)
       throw TypeError("secret must be a string or buffer or a KeyObject");
-    var t = new Se(secret);
-    ((this.readable = !0),
-      (this.header = e.header),
-      (this.encoding = e.encoding),
-      (this.secret = this.privateKey = this.key = t),
-      (this.payload = new Se(e.payload)),
-      this.secret.once(
-        "close",
-        function () {
-          if (!this.payload.writable && this.readable) this.sign();
-        }.bind(this),
-      ),
-      this.payload.once(
-        "close",
-        function () {
-          if (!this.secret.writable && this.readable) this.sign();
-        }.bind(this),
-      ));
+    var secretStream = new DataStream(secret);
+    this.readable = true;
+    this.header = opts.header;
+    this.encoding = opts.encoding;
+    this.secret = this.privateKey = this.key = secretStream;
+    this.payload = new DataStream(opts.payload);
+    this.secret.once(
+      "close",
+      function () {
+        if (!this.payload.writable && this.readable) this.sign();
+      }.bind(this),
+    );
+    this.payload.once(
+      "close",
+      function () {
+        if (!this.secret.writable && this.readable) this.sign();
+      }.bind(this),
+    );
   }
-  F.inherits(R, or);
-  R.prototype.sign = function () {
+  util.inherits(SignStream, Stream);
+  SignStream.prototype.sign = function () {
     try {
-      var r = me({
+      var signature = jwsSign({
         header: this.header,
         payload: this.payload.buffer,
         secret: this.secret.buffer,
         encoding: this.encoding,
       });
-      return (this.emit("done", r), this.emit("data", r), this.emit("end"), (this.readable = !1), r);
-    } catch (error) {
-      ((this.readable = !1), this.emit("error", error), this.emit("close"));
+      this.emit("done", signature);
+      this.emit("data", signature);
+      this.emit("end");
+      this.readable = false;
+      return signature;
+    } catch (e) {
+      this.readable = false;
+      this.emit("error", e);
+      this.emit("close");
     }
   };
-  R.sign = me;
-  ge.exports = R;
+  SignStream.sign = jwsSign;
+  cjsModule.exports = SignStream;
 });
-
-export { be };
+export { require_sign_stream };

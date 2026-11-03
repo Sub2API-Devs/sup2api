@@ -13,39 +13,34 @@ import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 import { useRemoteTransportCore } from "../remote/useRemoteTransportCore.js";
 
 //@ chunk-18hwfzwa.js:309217-309809 fingerprint = useSSHSession (0.434)
-function useSSHSession({
-  session: session,
-  sink: sink,
-  requestDialog: requestDialog,
-  toolPermissionContext: toolPermissionContext,
-  tools: tools,
-}) {
+function useSSHSession({ session, sink, requestDialog, toolPermissionContext, tools }) {
   let converted = Q(() => {
     if (!session) return;
     return {
       label: "ssh",
       createManager: (prev) => session.createManager(prev),
       onDisconnected: (Re) => {
-        let stderr = session.getStderrTail().trim(),
-          exitCode = session.proc.exitCode,
-          msg = Re ? "Remote session ended." : "SSH session failed before connecting.";
+        let stderr = session.getStderrTail().trim();
+        let exitCode = session.proc.exitCode;
+        let msg = Re ? "Remote session ended." : "SSH session failed before connecting.";
         if (stderr && (!Re || exitCode !== 0))
           msg += `
 Remote stderr (exit ${exitCode ?? "signal " + session.proc.signalCode}):
 ${stderr}`;
-        gracefulShutdown(1, "other", { finalMessage: msg });
+        gracefulShutdown(1, "other", {
+          finalMessage: msg,
+        });
       },
       cleanup: () => session.proxy?.stop(),
-      hostUsesLocalCredentials: session.proxy !== void 0,
+      hostUsesLocalCredentials: session.proxy !== undefined,
     };
   }, [session]);
   return useRemoteTransportCore({
     adapter: converted,
-    sink: sink,
-    requestDialog: requestDialog,
-    toolPermissionContext: toolPermissionContext,
-    tools: tools,
+    sink,
+    requestDialog,
+    toolPermissionContext,
+    tools,
   });
 }
-
 export { useSSHSession };

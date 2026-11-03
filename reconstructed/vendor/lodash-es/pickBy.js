@@ -6,21 +6,18 @@
  * attribution: placement 1
  */
 import { s9e } from "./toString.js";
-import { mDn, ldo } from "../../src/utils/git/gitSafeEnv.js";
+import { allKeysIn, pickByBase } from "../../src/utils/git/gitSafeEnv.js";
 import { nz } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 
 //@ chunk-3a1caa6f.js:1667-1800 placement
-function pickBy(e, r) {
-  if (e == null) return {};
-  var n = s9e(mDn(e), function (o) {
-    return [o];
+function pickBy(object, predicate) {
+  if (object == null) return {};
+  var props = s9e(allKeysIn(object), function (prop) {
+    return [prop];
   });
-  return (
-    (r = nz(r)),
-    ldo(e, n, function (o, i) {
-      return r(o, i[0]);
-    })
-  );
+  predicate = nz(predicate);
+  return pickByBase(object, props, function (value, path) {
+    return predicate(value, path[0]);
+  });
 }
-
 export { pickBy };

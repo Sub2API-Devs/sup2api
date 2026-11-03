@@ -5,85 +5,125 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../core/resource.mjs";
-import { ee } from "../../core/pagination.mjs";
-import { T } from "../../internal/headers.mjs";
+import { APIResource } from "../../core/resource.mjs";
+import { TokenPage } from "../../core/pagination.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
 import { I } from "../../internal/utils/path.mjs";
 import { ut } from "../../internal/uploads.mjs";
 import { is } from "../../internal/stainless-helper-header.mjs";
 
 //@ chunk-hwmsct5x.js:50044-51409 esm-fingerprint
-class Sr extends Y {
-  list(e = {}, n) {
-    let { betas: betas, workspace_id: workspace_id, ...h } = e ?? {};
-    return this._client.getAPIList("/v1/files?beta=true", ee, {
-      query: h,
-      ...n,
-      headers: T([
+class Files extends APIResource {
+  list(params = {}, options) {
+    let { betas, workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/files?beta=true", TokenPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
         {
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        n?.headers,
+        options?.headers,
       ]),
     });
   }
-  delete(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id } = n ?? {};
-    return this._client.delete(I`/v1/files/${e}?beta=true`, {
-      ...r,
-      headers: T([
+  delete(fileID, params = {}, options) {
+    let { betas, workspace_id } = params ?? {};
+    return this._client.delete(I`/v1/files/${fileID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  download(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id } = n ?? {};
-    return this._client.get(I`/v1/files/${e}/content?beta=true`, {
-      ...r,
-      headers: T([
+  download(fileID, params = {}, options) {
+    let { betas, workspace_id } = params ?? {};
+    return this._client.get(I`/v1/files/${fileID}/content?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           Accept: "application/binary",
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
-      __binaryResponse: !0,
+      __binaryResponse: true,
     });
   }
-  retrieveMetadata(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id } = n ?? {};
-    return this._client.get(I`/v1/files/${e}?beta=true`, {
-      ...r,
-      headers: T([
+  retrieveMetadata(fileID, params = {}, options) {
+    let { betas, workspace_id } = params ?? {};
+    return this._client.get(I`/v1/files/${fileID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  upload(e, n) {
-    let { betas: betas, workspace_id: workspace_id, ...h } = e;
+  upload(params, options) {
+    let { betas, workspace_id, ...body } = params;
     return this._client.post(
       "/v1/files?beta=true",
       ut(
         {
-          body: h,
-          ...n,
-          headers: T([
+          body,
+          ...options,
+          headers: buildHeaders([
             {
-              ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-              ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+              ...(betas?.toString() != null
+                ? {
+                    "anthropic-beta": betas?.toString(),
+                  }
+                : undefined),
+              ...(workspace_id != null
+                ? {
+                    "anthropic-workspace-id": workspace_id,
+                  }
+                : undefined),
             },
-            is(h.file),
-            n?.headers,
+            is(body.file),
+            options?.headers,
           ]),
         },
         this._client,
@@ -91,5 +131,4 @@ class Sr extends Y {
     );
   }
 }
-
-export { Sr };
+export { Files };

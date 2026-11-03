@@ -13,192 +13,251 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../analytics/index.js";
 import { lit } from "../analytics/safeMetadata.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
-import { LXr } from "../../remote/tools/inputSchemaFlatten.js";
+import { SAFE_SCHEMA_KEY_RE } from "../../remote/tools/inputSchemaFlatten.js";
 import { jsonStringify, jsonStringifyRaw } from "../../utils/slowOperations.js";
 import { env } from "../../utils/env.js";
-import { mn } from "../../utils/remoteEnvironment.js";
-import { ht } from "./cliOwnedClients.js";
+import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
+import { getCliOwnedState } from "./cliOwnedClients.js";
 import { filterRemoteRepoTools } from "../analytics/metadata.js";
 import { createListingSanitizer } from "../../tools/WebFetchTool/sanitizeListing.js";
-import { ir } from "./client.js";
+import { serverCacheKey } from "./client.js";
 import { mcpServerSource } from "./fileReference/fileReferencePolicy.js";
 import { dynamicServerConnectorId } from "./mcpToolDecoration.js";
-import { qq } from "./claudeai.js";
-import { TB } from "./mcpTimeouts.js";
+import { requiresConnectorGrant } from "./claudeai.js";
+import { toolTimeoutForServer } from "./mcpTimeouts.js";
 import { officialPluginPromptOverrides } from "./officialPluginPromptOverrides.js";
-import { sT } from "../../utils/pastedContent.js";
+import { bunHashOf } from "../../utils/pastedContent.js";
 import { isServerIdentityActive } from "./serverIdentity.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
 
 //@ chunk-1dth5azr.js:4795-5114 placement
 function loadDraft202012MetaValidator() {
-  if (S === void 0) {
+  if (S === undefined) {
     try {
       let e = require("./chunk-n332mrkv.js");
       S = typeof e.default === "function" ? e.default : null;
     } catch {
       S = null;
     }
-    if (S === null)
-      (logForDebugging("MCP: draft 2020-12 meta-validator unavailable \u2014 tool schema checks fail open", {
+    if (S === null) {
+      logForDebugging("MCP: draft 2020-12 meta-validator unavailable \u2014 tool schema checks fail open", {
         level: "warn",
-      }),
-        logEvent("tengu_mcp_degraded", { reason: lit("schema_validator_unavailable") }));
+      });
+      logEvent("tengu_mcp_degraded", {
+        reason: lit("schema_validator_unavailable"),
+      });
+    }
   }
   return S;
 }
 //@ chunk-1dth5azr.js:5114-5136 placement
-function A() {
-  return !1;
+/**
+ * 恒返回 false 的占位判断。
+ */
+function alwaysFalse() {
+  return false;
 }
 //@ chunk-1dth5azr.js:5136-5265 placement
 function invalidPropertyName(e) {
   if (!isPlainObject(e) || !isPlainObject(e.properties)) return null;
-  for (let n of Object.keys(e.properties)) if (!LXr.test(n)) return n;
+  for (let key of Object.keys(e.properties)) if (!SAFE_SCHEMA_KEY_RE.test(key)) return key;
   return null;
 }
 //@ chunk-1dth5azr.js:5265-5299 placement
-function ezs(e) {
-  return validateToolInputSchema(loadDraft202012MetaValidator, e, A());
+/**
+ * 校验工具输入 schema 是否合法。
+ */
+function validateToolSchema(e) {
+  return validateToolInputSchema(loadDraft202012MetaValidator, e, alwaysFalse());
 }
 //@ chunk-1dth5azr.js:5299-6032 placement
 function validateToolInputSchema(e, n, f) {
   let r = invalidPropertyName(n);
   if (r !== null)
     return {
-      valid: !1,
+      valid: false,
       check: "propertyKey",
-      detail: `property key ${jsonStringify(r.slice(0, 80))} does not match ${LXr}`,
+      detail: `property key ${jsonStringify(r.slice(0, 80))} does not match ${SAFE_SCHEMA_KEY_RE}`,
     };
   let s = n;
   if (isPlainObject(n)) {
     let entries = Object.entries(n);
-    if (entries.some(([, l]) => l === null))
-      ((entries = entries.filter(([, l]) => l !== null)), (s = Object.fromEntries(entries)));
+    if (entries.some(([, l]) => l === null)) {
+      entries = entries.filter(([, l]) => l !== null);
+      s = Object.fromEntries(entries);
+    }
     let $schema = s.$schema;
-    if ($schema !== void 0)
+    if ($schema !== undefined)
       if (f) {
-        let { $schema: $schema, ...y } = s;
+        let { $schema, ...y } = s;
         s = y;
       } else if (typeof $schema === "string" && ($schema === z || $schema === `${z}#`));
-      else return { valid: !0 };
+      else
+        return {
+          valid: true,
+        };
   }
   try {
-    if (h(s)) return { valid: !0 };
+    if (h(s))
+      return {
+        valid: true,
+      };
     let c = e();
-    if (c === null) return { valid: !0 };
-    if (c(s)) return { valid: !0 };
+    if (c === null)
+      return {
+        valid: true,
+      };
+    if (c(s))
+      return {
+        valid: true,
+      };
     let d = c.errors?.[0];
     return {
-      valid: !1,
+      valid: false,
       check: "meta",
       detail: d ? `schema${d.instancePath} ${d.message ?? "is invalid"}` : "schema is invalid",
     };
   } catch (error) {
     return {
-      valid: !1,
+      valid: false,
       check: "meta",
       detail: `validation threw: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }
 //@ chunk-1dth5azr.js:6032-6056 placement
-var K = 3600000,
-  W = 1048576;
+/**
+ * 工具列表序列化的最大字节数（1 MiB）。
+ */
+var VALIDATOR_TTL_MS = 3600000;
+var MAX_LISTING_BYTES = 1048576;
 //@ chunk-1dth5azr.js:6056-6129 placement
-function S4n() {
-  return env.CLAUDE_CODE_MCP_SKIP_UNCHANGED_RELIST === !0 && mn();
+/**
+ * 是否跳过未变化的工具重新列举。
+ */
+function isUnchangedRelistSkipOn() {
+  return env.CLAUDE_CODE_MCP_SKIP_UNCHANGED_RELIST === true && isRemoteManagedEnvironment();
 }
 //@ chunk-1dth5azr.js:6129-7220 placement
 function listToolsWithMemo(e, n, f, r, s) {
-  if (!mn()) return;
-  let c = ht(),
-    d = c.toolListingMemos.get(e) ?? { buildsUnderWay: 0, built: void 0 };
-  c.toolListingMemos.set(e, d);
+  if (!isRemoteManagedEnvironment()) return;
+  let cliOwnedState = getCliOwnedState();
+  let d = cliOwnedState.toolListingMemos.get(e) ?? {
+    buildsUnderWay: 0,
+    built: undefined,
+  };
+  cliOwnedState.toolListingMemos.set(e, d);
   let built = d.built;
-  ((d.built = void 0), (d.buildsUnderWay += 1));
-  let y = filterRemoteRepoTools(e.config, n),
-    j = createListingSanitizer(W);
-  if (!y.every((k) => j(k))) return;
+  d.built = undefined;
+  d.buildsUnderWay += 1;
+  let y = filterRemoteRepoTools(e.config, n);
+  let listingSanitizer = createListingSanitizer(MAX_LISTING_BYTES);
+  if (!y.every((k) => listingSanitizer(k))) return;
   let C = () =>
-      jsonStringifyRaw([
-        ir(e.name, e.config),
-        e.config.scope,
-        e.config.pluginSource,
-        f,
-        mcpServerSource(e.name, e.config),
-        dynamicServerConnectorId(e.name, e.config),
-        qq(e.name, e.config),
-        s(),
-        A(),
-        TB(e.config),
-        TB(e.config, !0),
-        e.config.type === "sdk" && env.CLAUDE_AGENT_SDK_MCP_NO_PREFIX,
-        officialPluginPromptOverrides(e.config),
-      ]),
-    T = C(),
-    mapped = y.map((k) => sT(jsonStringifyRaw(k))),
-    joined = mapped.join(),
-    E = sT(mapped.toSorted().join()),
-    P = built?.inputs === T && built.toolsHash === joined,
-    x = {
-      inputs: T,
-      readInputs: C,
-      toolsHash: joined,
-      anyOrderToolsHash: E,
-      unchanged: P,
-      reordered: !P && built?.inputs === T && built.anyOrderToolsHash === E,
-    };
+    jsonStringifyRaw([
+      serverCacheKey(e.name, e.config),
+      e.config.scope,
+      e.config.pluginSource,
+      f,
+      mcpServerSource(e.name, e.config),
+      dynamicServerConnectorId(e.name, e.config),
+      requiresConnectorGrant(e.name, e.config),
+      s(),
+      alwaysFalse(),
+      toolTimeoutForServer(e.config),
+      toolTimeoutForServer(e.config, true),
+      e.config.type === "sdk" && env.CLAUDE_AGENT_SDK_MCP_NO_PREFIX,
+      officialPluginPromptOverrides(e.config),
+    ]);
+  let T = C();
+  let mapped = y.map((k) => bunHashOf(jsonStringifyRaw(k)));
+  let joined = mapped.join();
+  let E = bunHashOf(mapped.toSorted().join());
+  let P = built?.inputs === T && built.toolsHash === joined;
+  let x = {
+    inputs: T,
+    readInputs: C,
+    toolsHash: joined,
+    anyOrderToolsHash: E,
+    unchanged: P,
+    reordered: !P && built?.inputs === T && built.anyOrderToolsHash === E,
+  };
   if (
     !P ||
-    built.tools === void 0 ||
+    built.tools === undefined ||
     y.length === 0 ||
-    !S4n() ||
+    !isUnchangedRelistSkipOn() ||
     isServerIdentityActive() ||
-    Date.now() - built.builtAtMs >= K
+    Date.now() - built.builtAtMs >= VALIDATOR_TTL_MS
   )
-    return { ...x, reuse: void 0 };
-  if (((d.built = built), (d.buildsUnderWay -= 1), r.seq > r.state.applied))
-    ((r.state.applied = r.seq), (e.droppedTools = built.droppedTools));
-  return (
-    c.persistedDiscoveryRounds.delete(built.tools),
-    logFeatureOk("mcp_list_tools"),
-    c.toolListingVerdicts.set(built.tools, { unchanged: !0, reordered: !1, reused: !0 }),
-    { ...x, reuse: built.tools }
-  );
+    return {
+      ...x,
+      reuse: undefined,
+    };
+  d.built = built;
+  d.buildsUnderWay -= 1;
+  if (r.seq > r.state.applied) {
+    r.state.applied = r.seq;
+    e.droppedTools = built.droppedTools;
+  }
+  cliOwnedState.persistedDiscoveryRounds.delete(built.tools);
+  logFeatureOk("mcp_list_tools");
+  cliOwnedState.toolListingVerdicts.set(built.tools, {
+    unchanged: true,
+    reordered: false,
+    reused: true,
+  });
+  return {
+    ...x,
+    reuse: built.tools,
+  };
 }
+//@ chunk-1dth5azr.js:7220-7674 placement
 /**
  * 工具列表构建结束后记录结论，并在没有并发构建、输入未变时保存构建结果供复用。
  */
-//@ chunk-1dth5azr.js:7220-7674 placement
 function settleToolListingMemo(e, n, f, r) {
-  let s = ht();
-  if (n !== void 0)
-    s.toolListingVerdicts.set(f, { unchanged: n.unchanged, reordered: n.reordered, reused: !1 });
-  let c = s.toolListingMemos.get(e);
-  if (c === void 0) return;
-  if (
-    ((c.buildsUnderWay -= 1),
-    n === void 0 || c.buildsUnderWay > 0 || r.seq !== r.state.started || n.readInputs() !== n.inputs)
-  )
+  let cliOwnedState = getCliOwnedState();
+  if (n !== undefined)
+    cliOwnedState.toolListingVerdicts.set(f, {
+      unchanged: n.unchanged,
+      reordered: n.reordered,
+      reused: false,
+    });
+  let c = cliOwnedState.toolListingMemos.get(e);
+  if (c === undefined) return;
+  c.buildsUnderWay -= 1;
+  if (n === undefined || c.buildsUnderWay > 0 || r.seq !== r.state.started || n.readInputs() !== n.inputs)
     return;
   c.built = {
     inputs: n.inputs,
     toolsHash: n.toolsHash,
     anyOrderToolsHash: n.anyOrderToolsHash,
     builtAtMs: Date.now(),
-    tools: S4n() ? f : void 0,
+    tools: isUnchangedRelistSkipOn() ? f : undefined,
     droppedTools: e.droppedTools,
   };
 }
 //@ chunk-1dth5azr.js:7674-7773 placement
-function tzs(e) {
-  if (!mn()) return {};
-  return { unchangedSkipOn: S4n(), ...ht().toolListingVerdicts.get(e) };
+/**
+ * 取该服务器的工具列举判定信息。
+ */
+function toolListingVerdict(newTools) {
+  if (!isRemoteManagedEnvironment()) return {};
+  return {
+    unchangedSkipOn: isUnchangedRelistSkipOn(),
+    ...getCliOwnedState().toolListingVerdicts.get(newTools),
+  };
 }
 //@ chunk-1dth5azr.js:7773-7871 placement = findChromeClient (0.783)
 function isSameConnectedClient(e, n) {
   return e === n || (e?.type === "connected" && n?.type === "connected" && e.client === n.client);
 }
-
-export { isSameConnectedClient, listToolsWithMemo, settleToolListingMemo, S4n, tzs, ezs };
+export {
+  isSameConnectedClient,
+  listToolsWithMemo,
+  settleToolListingMemo,
+  isUnchangedRelistSkipOn,
+  toolListingVerdict,
+  validateToolSchema,
+};

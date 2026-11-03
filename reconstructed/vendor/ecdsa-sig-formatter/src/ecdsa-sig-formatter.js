@@ -6,95 +6,123 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { d } from "../../safe-buffer/index.js";
-import { Q } from "./param-bytes-for-alg.js";
+import { require_safe_buffer } from "../../safe-buffer/index.js";
+import { require_param_bytes_for_alg } from "./param-bytes-for-alg.js";
 
 //@ chunk-82d8c88w.js:1328-3287 cjs-fingerprint
-var Nns = x(function (Tr, re) {
-  var B = d().Buffer,
-    Y = Q(),
-    _ = 128,
-    z = 0,
-    Ke = 32,
-    Ne = 16,
-    He = 2,
-    k = Ne | Ke | (z << 6),
-    T = He | (z << 6);
-  function Ge(e) {
-    return e.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+var require_ecdsa_sig_formatter = x(function (cjsExports, cjsModule) {
+  var B = require_safe_buffer().Buffer;
+  var getParamBytesForAlg = require_param_bytes_for_alg();
+  var MAX_OCTET = 128;
+  var CLASS_UNIVERSAL = 0;
+  var PRIMITIVE_BIT = 32;
+  var TAG_SEQ = 16;
+  var TAG_INT = 2;
+  var ENCODED_TAG_SEQ = TAG_SEQ | PRIMITIVE_BIT | (CLASS_UNIVERSAL << 6);
+  var ENCODED_TAG_INT = TAG_INT | (CLASS_UNIVERSAL << 6);
+  function base64Url(base64) {
+    return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
   }
-  function ee(e) {
-    if (B.isBuffer(e)) return e;
-    else if (typeof e === "string") return B.from(e, "base64");
+  function signatureAsBuffer(signature) {
+    if (B.isBuffer(signature)) return signature;
+    else if (typeof signature === "string") return B.from(signature, "base64");
     throw TypeError("ECDSA signature must be a Base64 string or a Buffer");
   }
-  function Je(e, r) {
-    e = ee(e);
-    var t = Y(r),
-      n = t + 1,
-      a = e.length,
-      i = 0;
-    if (e[i++] !== k) throw Error('Could not find expected "seq"');
-    var u = e[i++];
-    if (u === (_ | 1)) u = e[i++];
-    if (a - i < u) throw Error('"seq" specified length of "' + u + '", only "' + (a - i) + '" remaining');
-    if (e[i++] !== T) throw Error('Could not find expected "int" for "r"');
-    var s = e[i++];
-    if (a - i - 2 < s)
-      throw Error('"r" specified length of "' + s + '", only "' + (a - i - 2) + '" available');
-    if (n < s) throw Error('"r" specified length of "' + s + '", max of "' + n + '" is acceptable');
-    var S = i;
-    if (((i += s), e[i++] !== T)) throw Error('Could not find expected "int" for "s"');
-    var l = e[i++];
-    if (a - i !== l) throw Error('"s" specified length of "' + l + '", expected "' + (a - i) + '"');
-    if (n < l) throw Error('"s" specified length of "' + l + '", max of "' + n + '" is acceptable');
-    var o = i;
-    if (((i += l), i !== a))
-      throw Error('Expected to consume entire buffer, but "' + (a - i) + '" bytes remain');
-    var f = t - s,
-      D = t - l,
-      allocUnsafe = B.allocUnsafe(f + s + D + l);
-    for (i = 0; i < f; ++i) allocUnsafe[i] = 0;
-    (e.copy(allocUnsafe, i, S + Math.max(-f, 0), S + s), (i = t));
-    for (var Oe = i; i < Oe + D; ++i) allocUnsafe[i] = 0;
-    return (
-      e.copy(allocUnsafe, i, o + Math.max(-D, 0), o + l),
-      (allocUnsafe = allocUnsafe.toString("base64")),
-      (allocUnsafe = Ge(allocUnsafe)),
-      allocUnsafe
-    );
+  function derToJose(signature, alg) {
+    signature = signatureAsBuffer(signature);
+    var paramBytes = getParamBytesForAlg(alg);
+    var maxEncodedParamLength = paramBytes + 1;
+    var inputLength = signature.length;
+    var offset = 0;
+    if (signature[offset++] !== ENCODED_TAG_SEQ) throw Error('Could not find expected "seq"');
+    var seqLength = signature[offset++];
+    if (seqLength === (MAX_OCTET | 1)) seqLength = signature[offset++];
+    if (inputLength - offset < seqLength)
+      throw Error(
+        '"seq" specified length of "' + seqLength + '", only "' + (inputLength - offset) + '" remaining',
+      );
+    if (signature[offset++] !== ENCODED_TAG_INT) throw Error('Could not find expected "int" for "r"');
+    var rLength = signature[offset++];
+    if (inputLength - offset - 2 < rLength)
+      throw Error(
+        '"r" specified length of "' + rLength + '", only "' + (inputLength - offset - 2) + '" available',
+      );
+    if (maxEncodedParamLength < rLength)
+      throw Error(
+        '"r" specified length of "' + rLength + '", max of "' + maxEncodedParamLength + '" is acceptable',
+      );
+    var rOffset = offset;
+    offset += rLength;
+    if (signature[offset++] !== ENCODED_TAG_INT) throw Error('Could not find expected "int" for "s"');
+    var sLength = signature[offset++];
+    if (inputLength - offset !== sLength)
+      throw Error('"s" specified length of "' + sLength + '", expected "' + (inputLength - offset) + '"');
+    if (maxEncodedParamLength < sLength)
+      throw Error(
+        '"s" specified length of "' + sLength + '", max of "' + maxEncodedParamLength + '" is acceptable',
+      );
+    var sOffset = offset;
+    offset += sLength;
+    if (offset !== inputLength)
+      throw Error('Expected to consume entire buffer, but "' + (inputLength - offset) + '" bytes remain');
+    var rPadding = paramBytes - rLength;
+    var sPadding = paramBytes - sLength;
+    var dst = B.allocUnsafe(rPadding + rLength + sPadding + sLength);
+    for (offset = 0; offset < rPadding; ++offset) dst[offset] = 0;
+    signature.copy(dst, offset, rOffset + Math.max(-rPadding, 0), rOffset + rLength);
+    offset = paramBytes;
+    for (var o = offset; offset < o + sPadding; ++offset) dst[offset] = 0;
+    signature.copy(dst, offset, sOffset + Math.max(-sPadding, 0), sOffset + sLength);
+    dst = dst.toString("base64");
+    dst = base64Url(dst);
+    return dst;
   }
-  function X(e, r, t) {
-    var n = 0;
-    while (r + n < t && e[r + n] === 0) ++n;
-    var a = e[r + n] >= _;
-    if (a) --n;
-    return n;
+  function countPadding(buf, start, stop) {
+    var padding = 0;
+    while (start + padding < stop && buf[start + padding] === 0) ++padding;
+    var needsSign = buf[start + padding] >= MAX_OCTET;
+    if (needsSign) --padding;
+    return padding;
   }
-  function Me(e, r) {
-    e = ee(e);
-    var t = Y(r),
-      n = e.length;
-    if (n !== t * 2) throw TypeError('"' + r + '" signatures must be "' + t * 2 + '" bytes, saw "' + n + '"');
-    var a = X(e, 0, t),
-      i = X(e, t, e.length),
-      u = t - a,
-      s = t - i,
-      S = 2 + u + 1 + 1 + s,
-      l = S < _,
-      allocUnsafe = B.allocUnsafe((l ? 2 : 3) + S),
-      f = 0;
-    if (((allocUnsafe[f++] = k), l)) allocUnsafe[f++] = S;
-    else ((allocUnsafe[f++] = _ | 1), (allocUnsafe[f++] = S & 255));
-    if (((allocUnsafe[f++] = T), (allocUnsafe[f++] = u), a < 0))
-      ((allocUnsafe[f++] = 0), (f += e.copy(allocUnsafe, f, 0, t)));
-    else f += e.copy(allocUnsafe, f, a, t);
-    if (((allocUnsafe[f++] = T), (allocUnsafe[f++] = s), i < 0))
-      ((allocUnsafe[f++] = 0), e.copy(allocUnsafe, f, t));
-    else e.copy(allocUnsafe, f, t + i);
-    return allocUnsafe;
+  function joseToDer(signature, alg) {
+    signature = signatureAsBuffer(signature);
+    var paramBytes = getParamBytesForAlg(alg);
+    var signatureBytes = signature.length;
+    if (signatureBytes !== paramBytes * 2)
+      throw TypeError(
+        '"' + alg + '" signatures must be "' + paramBytes * 2 + '" bytes, saw "' + signatureBytes + '"',
+      );
+    var rPadding = countPadding(signature, 0, paramBytes);
+    var sPadding = countPadding(signature, paramBytes, signature.length);
+    var rLength = paramBytes - rPadding;
+    var sLength = paramBytes - sPadding;
+    var rsBytes = 2 + rLength + 1 + 1 + sLength;
+    var shortLength = rsBytes < MAX_OCTET;
+    var dst = B.allocUnsafe((shortLength ? 2 : 3) + rsBytes);
+    var offset = 0;
+    dst[offset++] = ENCODED_TAG_SEQ;
+    if (shortLength) dst[offset++] = rsBytes;
+    else {
+      dst[offset++] = MAX_OCTET | 1;
+      dst[offset++] = rsBytes & 255;
+    }
+    dst[offset++] = ENCODED_TAG_INT;
+    dst[offset++] = rLength;
+    if (rPadding < 0) {
+      dst[offset++] = 0;
+      offset += signature.copy(dst, offset, 0, paramBytes);
+    } else offset += signature.copy(dst, offset, rPadding, paramBytes);
+    dst[offset++] = ENCODED_TAG_INT;
+    dst[offset++] = sLength;
+    if (sPadding < 0) {
+      dst[offset++] = 0;
+      signature.copy(dst, offset, paramBytes);
+    } else signature.copy(dst, offset, paramBytes + sPadding);
+    return dst;
   }
-  re.exports = { derToJose: Je, joseToDer: Me };
+  cjsModule.exports = {
+    derToJose,
+    joseToDer,
+  };
 });
-
-export { Nns };
+export { require_ecdsa_sig_formatter };

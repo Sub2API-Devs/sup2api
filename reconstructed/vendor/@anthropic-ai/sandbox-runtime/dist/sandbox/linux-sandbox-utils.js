@@ -5,272 +5,283 @@
  * pieces: chunk-fq0cr76a.js (61), chunk-yf82ynbr.js (1)
  * attribution: esm-layout 16, esm-fingerprint 46
  */
-import path, {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-} from "path";
-import * as fsModule from "fs";
+import path, { join } from "path";
+import "fs";
 import * as fsModule_2 from "fs";
-import * as fsModule_3 from "fs";
-import * as fsModule_4 from "fs";
-import * as fsModule_5 from "fs";
-import * as fsModule_6 from "fs";
-import * as fsModule_7 from "fs";
+import "fs";
+import "fs";
+import "fs";
+import "fs";
+import "fs";
+import { tmpdir, endianness } from "os";
+import { spawnSync, spawn } from "child_process";
+import { randomBytes } from "crypto";
 import {
-  tmpdir,
-  tmpdir as tmpdir_2,
-  tmpdir as tmpdir_3,
-  tmpdir as tmpdir_4,
-  tmpdir as tmpdir_5,
-  endianness,
-} from "os";
-import {
-  spawnSync,
-  spawnSync as spawnSync_2,
-  spawnSync as spawnSync_3,
-  spawn,
-  spawn as spawn_2,
-  spawn as spawn_3,
-  spawn as spawn_4,
-  spawn as spawn_5,
-} from "child_process";
-import {
-  randomBytes,
-  randomBytes as randomBytes_2,
-  randomBytes as randomBytes_3,
-  randomBytes as randomBytes_4,
-  randomBytes as randomBytes_5,
-} from "crypto";
-import { oS, dsr, csr, Mqt, R4e, xwn, F3r, zot, sS, Pwn, Rwn, QSe, ITt, B3r, Vot } from "./sandbox-utils.js";
-import { JSe, b8o } from "../utils/real-path.js";
-import { At } from "../utils/debug.js";
-import { LR, RipgrepError } from "../utils/ripgrep.js";
-import { zee } from "../utils/shell-quote.js";
-import { ha } from "../utils/which.js";
+  isAtOrUnder,
+  DANGEROUS_FILES,
+  getDangerousDirectories,
+  normalizeCaseForComparison,
+  isAbsenceErrno,
+  xwn,
+  nameLocation,
+  zot,
+  normalizePathForSandbox,
+  isSymlinkOutsideBoundary,
+  properAncestors,
+  encodeSandboxedCommand,
+  ITt,
+  buildPosixGitSafeDirEnv,
+  generateProxyEnvVars,
+} from "./sandbox-utils.js";
+import { realPathOf, wayTo } from "../utils/real-path.js";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
+import { ripGrep, RipgrepError } from "../utils/ripgrep.js";
+import { quote } from "../utils/shell-quote.js";
+import { whichSync } from "../utils/which.js";
 import { vor } from "./generate-seccomp-filter.js";
-import { Xw, Jw } from "./path-entries.js";
-import { Ym } from "./java-proxy-agent.js";
+import { readNamesOf, writeNamesOf } from "./path-entries.js";
+import { buildJavaToolOptions } from "./java-proxy-agent.js";
 
 //@ chunk-fq0cr76a.js:723589-723598 esm-layout
-var qE = 3;
+var DEFAULT_MANDATORY_DENY_SEARCH_DEPTH = 3;
 //@ chunk-fq0cr76a.js:723598-723793 esm-fingerprint
-function BE(e, n) {
-  let parts = e.split(path.sep),
-    s = "";
-  for (let h of parts) {
-    if (!h) continue;
-    let y = s + path.sep + h;
+function findSymlinkInPath(targetPath, allowedWritePaths) {
+  let parts = targetPath.split(path.sep);
+  let currentPath = "";
+  for (let part of parts) {
+    if (!part) continue;
+    let nextPath = currentPath + path.sep + part;
     try {
-      if (fsModule_4.lstatSync(y).isSymbolicLink()) {
-        if (n.some((w) => oS(y, w))) return y;
+      if (fsModule_2.lstatSync(nextPath).isSymbolicLink()) {
+        if (allowedWritePaths.some((allowedWritePath) => isAtOrUnder(nextPath, allowedWritePath)))
+          return nextPath;
       }
     } catch {
       break;
     }
-    s = y;
+    currentPath = nextPath;
   }
   return null;
 }
 //@ chunk-fq0cr76a.js:723793-723803 esm-layout
-var d8 = 40;
+var MAX_MISSING_NAMES_PASSED = 40;
 //@ chunk-fq0cr76a.js:723803-724575 esm-fingerprint
-function jR(e, n) {
+function resolveSymlinkedDenyPath(targetPath, alsoDenied) {
   try {
-    return JSe(e);
+    return realPathOf(targetPath);
   } catch {}
-  let r = e,
-    s = [],
-    h = null;
-  while (h === null) {
-    let dir = path.dirname(r);
-    if (dir === r) return null;
-    (s.unshift(path.basename(r)), (r = dir));
+  let ancestor = targetPath;
+  let remainder = [];
+  let resolvedAncestor = null;
+  while (resolvedAncestor === null) {
+    let parent = path.dirname(ancestor);
+    if (parent === ancestor) return null;
+    remainder.unshift(path.basename(ancestor));
+    ancestor = parent;
     try {
-      h = JSe(r);
+      resolvedAncestor = realPathOf(ancestor);
     } catch {}
   }
-  let joined = path.join(h, ...s);
+  let rejoined = path.join(resolvedAncestor, ...remainder);
   try {
-    fsModule_4.readlinkSync(path.join(h, s[0]));
+    fsModule_2.readlinkSync(path.join(resolvedAncestor, remainder[0]));
   } catch {
-    return joined;
+    return rejoined;
   }
-  let b = "it goes up from too many names that are not there";
+  let why = "it goes up from too many names that are not there";
   try {
-    let S = joined;
-    for (let w = 0; w < d8; w++) {
-      let { real: real, rest: rest, notThere: notThere } = b8o(S);
+    let onward = rejoined;
+    for (let i = 0; i < MAX_MISSING_NAMES_PASSED; i++) {
+      let { real, rest, notThere } = wayTo(onward);
       if (notThere?.code === "EACCES") return real || "/";
-      let filtered = rest.filter((V) => V !== "" && V !== ".");
-      if (filtered[1] !== "..") return [real, ...filtered.slice(0, 2)].join("/") || "/";
-      (n?.push(`${real}/${filtered[0]}`), (S = [real, ...filtered.slice(2)].join("/")));
+      let names = rest.filter((name) => name !== "" && name !== ".");
+      if (names[1] !== "..") return [real, ...names.slice(0, 2)].join("/") || "/";
+      alsoDenied?.push(`${real}/${names[0]}`);
+      onward = [real, ...names.slice(2)].join("/");
     }
-  } catch (error) {
-    b = error;
+  } catch (err) {
+    why = err;
   }
-  if (n === void 0)
-    At(
-      `[Sandbox Linux] Where a write to ${e} would land cannot be settled: ${b}. The link on the way is masked instead, which can keep the sandbox from starting.`,
-      { level: "warn" },
+  if (alsoDenied === undefined)
+    logForDebugging_2(
+      `[Sandbox Linux] Where a write to ${targetPath} would land cannot be settled: ${why}. The link on the way is masked instead, which can keep the sandbox from starting.`,
+      {
+        level: "warn",
+      },
     );
   return null;
 }
 //@ chunk-fq0cr76a.js:724575-724734 esm-fingerprint
-function f8(e) {
-  let parts = e.split(path.sep),
-    r = "";
-  for (let s of parts) {
-    if (!s) continue;
-    let h = r + path.sep + s;
+function fileOnTheWay(targetPath) {
+  let parts = targetPath.split(path.sep);
+  let currentPath = "";
+  for (let part of parts) {
+    if (!part) continue;
+    let nextPath = currentPath + path.sep + part;
     try {
-      if (!fsModule_4.statSync(h).isDirectory()) return h;
+      if (!fsModule_2.statSync(nextPath).isDirectory()) return nextPath;
     } catch {
       break;
     }
-    r = h;
+    currentPath = nextPath;
   }
   return;
 }
 //@ chunk-fq0cr76a.js:724734-724867 esm-fingerprint
-function p8(e) {
-  let parts = e.split(path.sep),
-    r = "";
-  for (let s of parts) {
-    if (!s) continue;
-    let h = r + path.sep + s;
-    if (!fsModule_4.existsSync(h)) return h;
-    r = h;
+function findFirstNonExistentComponent(targetPath) {
+  let parts = targetPath.split(path.sep);
+  let currentPath = "";
+  for (let part of parts) {
+    if (!part) continue;
+    let nextPath = currentPath + path.sep + part;
+    if (!fsModule_2.existsSync(nextPath)) return nextPath;
+    currentPath = nextPath;
   }
-  return e;
+  return targetPath;
 }
 //@ chunk-fq0cr76a.js:724867-724874 esm-layout
-var Is;
+var MountPointKind;
 //@ chunk-fq0cr76a.js:724874-724980 esm-fingerprint
-(function (e) {
-  ((e.File = "file"), (e.Directory = "directory"), (e.Held = "held"), (e.Unmakeable = "unmakeable"));
-})(Is || (Is = {}));
+(function (MountPointKind) {
+  MountPointKind.File = "file";
+  MountPointKind.Directory = "directory";
+  MountPointKind.Held = "held";
+  MountPointKind.Unmakeable = "unmakeable";
+})(MountPointKind || (MountPointKind = {}));
 //@ chunk-fq0cr76a.js:724980-725007 esm-fingerprint
-var h8 = 2097152,
-  m8 = 16914839;
+var O_PATH = 2097152;
+var V9FS_MAGIC = 16914839;
 //@ chunk-fq0cr76a.js:725007-725796 esm-fingerprint
-function g8(e, n) {
-  let r = (h) => {
-      try {
-        h();
-        return;
-      } catch (error) {
-        let code = error.code;
-        if (code === "EACCES" || code === "EPERM" || code === "EROFS") return code;
-        throw error;
-      }
-    },
-    s;
-  try {
-    s = fsModule_4.openSync(
-      path.dirname(e),
-      h8 | fsModule_4.constants.O_NOFOLLOW | fsModule_4.constants.O_DIRECTORY,
-    );
-    let h = `/proc/self/fd/${s}`;
-    if (fsModule_4.readlinkSync(h) !== path.dirname(e)) return n;
-    let { uid: uid, mode: mode } = fsModule_4.fstatSync(s),
-      S = r(() => fsModule_4.accessSync(h, fsModule_4.constants.W_OK | fsModule_4.constants.X_OK));
-    if (fsModule_4.statfsSync(h).type !== m8)
-      return S === void 0 || (S === "EACCES" && uid === process.geteuid?.()) ? n : Is.Unmakeable;
-    if (S === void 0) {
-      let w = `${h}/${path.basename(e)}`;
-      if (n === Is.File && r(() => fsModule_4.closeSync(fsModule_4.openSync(w, "wx", 292))) === void 0)
-        return Is.File;
-      if (r(() => fsModule_4.mkdirSync(w)) === void 0) return Is.Directory;
+function makeableMountPoint(dest, wanted) {
+  let refusalOf = (attempt) => {
+    try {
+      attempt();
+      return;
+    } catch (err) {
+      let code = err.code;
+      if (code === "EACCES" || code === "EPERM" || code === "EROFS") return code;
+      throw err;
     }
-    return r(() => fsModule_4.chmodSync(h, mode & 4095)) === void 0 ? n : Is.Unmakeable;
+  };
+  let fd;
+  try {
+    fd = fsModule_2.openSync(
+      path.dirname(dest),
+      O_PATH | fsModule_2.constants.O_NOFOLLOW | fsModule_2.constants.O_DIRECTORY,
+    );
+    let parent = `/proc/self/fd/${fd}`;
+    if (fsModule_2.readlinkSync(parent) !== path.dirname(dest)) return wanted;
+    let { uid, mode } = fsModule_2.fstatSync(fd);
+    let refusal = refusalOf(() =>
+      fsModule_2.accessSync(parent, fsModule_2.constants.W_OK | fsModule_2.constants.X_OK),
+    );
+    if (fsModule_2.statfsSync(parent).type !== V9FS_MAGIC)
+      return refusal === undefined || (refusal === "EACCES" && uid === process.geteuid?.())
+        ? wanted
+        : MountPointKind.Unmakeable;
+    if (refusal === undefined) {
+      let entry = `${parent}/${path.basename(dest)}`;
+      if (
+        wanted === MountPointKind.File &&
+        refusalOf(() => fsModule_2.closeSync(fsModule_2.openSync(entry, "wx", 292))) === undefined
+      )
+        return MountPointKind.File;
+      if (refusalOf(() => fsModule_2.mkdirSync(entry)) === undefined) return MountPointKind.Directory;
+    }
+    return refusalOf(() => fsModule_2.chmodSync(parent, mode & 4095)) === undefined
+      ? wanted
+      : MountPointKind.Unmakeable;
   } catch {
-    return n;
+    return wanted;
   } finally {
-    if (s !== void 0) fsModule_4.closeSync(s);
+    if (fd !== undefined) fsModule_2.closeSync(fd);
   }
 }
 //@ chunk-fq0cr76a.js:725796-725803 esm-layout
-var hc;
+var DotGitKind;
 //@ chunk-fq0cr76a.js:725803-725887 esm-fingerprint
-(function (e) {
-  ((e.Directory = "directory"), (e.File = "file"), (e.Absent = "absent"));
-})(hc || (hc = {}));
+(function (DotGitKind) {
+  DotGitKind.Directory = "directory";
+  DotGitKind.File = "file";
+  DotGitKind.Absent = "absent";
+})(DotGitKind || (DotGitKind = {}));
 //@ chunk-fq0cr76a.js:725887-725987 esm-fingerprint
-function y8(e) {
+function dotGitKindAt(dotGitPath) {
   try {
-    return fsModule_4.statSync(e).isDirectory() ? hc.Directory : hc.File;
+    return fsModule_2.statSync(dotGitPath).isDirectory() ? DotGitKind.Directory : DotGitKind.File;
   } catch {
-    return hc.Absent;
+    return DotGitKind.Absent;
   }
 }
 //@ chunk-fq0cr76a.js:725987-726260 esm-fingerprint
-function jE(e = !1) {
-  let cwd = process.cwd(),
-    r = [...dsr.map((y) => path.resolve(cwd, y)), ...csr().map((y) => path.resolve(cwd, y))],
-    resolved = path.resolve(cwd, ".git"),
-    h = y8(resolved);
-  if (h === hc.File) r.push(resolved);
-  if (h === hc.Directory) {
-    if ((r.push(path.resolve(cwd, ".git/hooks")), !e)) r.push(path.resolve(cwd, ".git/config"));
+function linuxGetCwdMandatoryDenyPaths(allowGitConfig = false) {
+  let cwd = process.cwd();
+  let denyPaths = [
+    ...DANGEROUS_FILES.map((f) => path.resolve(cwd, f)),
+    ...getDangerousDirectories().map((d) => path.resolve(cwd, d)),
+  ];
+  let dotGitPath = path.resolve(cwd, ".git");
+  let dotGit = dotGitKindAt(dotGitPath);
+  if (dotGit === DotGitKind.File) denyPaths.push(dotGitPath);
+  if (dotGit === DotGitKind.Directory) {
+    denyPaths.push(path.resolve(cwd, ".git/hooks"));
+    if (!allowGitConfig) denyPaths.push(path.resolve(cwd, ".git/config"));
   }
-  return r;
+  return denyPaths;
 }
 //@ chunk-fq0cr76a.js:726260-726787 esm-fingerprint
-function b8(e, n, r) {
-  let s = [],
-    h = new Set();
-  for (let y of e.split(`
+function unreadableDirectories(stderr, cwd, maxDepth) {
+  let found = [];
+  let tried = new Set();
+  for (let line of stderr.split(`
 `)) {
-    let b = y.startsWith("rg: ") ? y.slice(4) : y;
-    for (let index = b.indexOf(": "); index !== -1; index = b.indexOf(": ", index + 1))
+    let said = line.startsWith("rg: ") ? line.slice(4) : line;
+    for (let cut = said.indexOf(": "); cut !== -1; cut = said.indexOf(": ", cut + 1))
       for (
-        let resolved = path.resolve(n, b.slice(0, index));
-        resolved.startsWith(n + path.sep) && !h.has(resolved);
-        resolved = path.dirname(resolved)
+        let dir = path.resolve(cwd, said.slice(0, cut));
+        dir.startsWith(cwd + path.sep) && !tried.has(dir);
+        dir = path.dirname(dir)
       ) {
-        h.add(resolved);
+        tried.add(dir);
         try {
-          let lstatSync = fsModule_4.lstatSync(resolved);
-          if (!lstatSync.isDirectory() || lstatSync.uid !== process.getuid?.() || JSe(resolved) !== resolved)
-            break;
+          let stat = fsModule_2.lstatSync(dir);
+          if (!stat.isDirectory() || stat.uid !== process.getuid?.() || realPathOf(dir) !== dir) break;
         } catch (error) {
           if (error.code === "EACCES") continue;
           break;
         }
         try {
-          fsModule_4.accessSync(resolved, fsModule_4.constants.R_OK | fsModule_4.constants.X_OK);
+          fsModule_2.accessSync(dir, fsModule_2.constants.R_OK | fsModule_2.constants.X_OK);
         } catch {
-          if (path.relative(n, resolved).split(path.sep).length <= r) s.push(resolved);
+          if (path.relative(cwd, dir).split(path.sep).length <= maxDepth) found.push(dir);
         }
         break;
       }
   }
-  return s;
+  return found;
 }
 //@ chunk-fq0cr76a.js:726787-727833 esm-fingerprint
-async function S8(e = { command: "rg" }, n = qE, r = !1, s) {
-  let cwd = process.cwd(),
-    abortController = new AbortController(),
-    b = s ?? abortController.signal,
-    S = csr(),
-    w = jE(r),
-    R = [];
-  for (let L of dsr) R.push("--iglob", L);
-  for (let L of S) R.push("--iglob", `**/${L}/**`);
-  if ((R.push("--iglob", "**/.git/hooks/**", "--iglob", "**/.git/HEAD"), !r))
-    R.push("--iglob", "**/.git/config");
-  let D = [];
+async function linuxGetMandatoryDenyPaths(
+  ripgrepConfig = {
+    command: "rg",
+  },
+  maxDepth = DEFAULT_MANDATORY_DENY_SEARCH_DEPTH,
+  allowGitConfig = false,
+  abortSignal,
+) {
+  let cwd = process.cwd();
+  let fallbackController = new AbortController();
+  let signal = abortSignal ?? fallbackController.signal;
+  let dangerousDirectories = getDangerousDirectories();
+  let denyPaths = linuxGetCwdMandatoryDenyPaths(allowGitConfig);
+  let iglobArgs = [];
+  for (let fileName of DANGEROUS_FILES) iglobArgs.push("--iglob", fileName);
+  for (let dirName of dangerousDirectories) iglobArgs.push("--iglob", `**/${dirName}/**`);
+  iglobArgs.push("--iglob", "**/.git/hooks/**", "--iglob", "**/.git/HEAD");
+  if (!allowGitConfig) iglobArgs.push("--iglob", "**/.git/config");
+  let matches = [];
   try {
-    D = await LR(
+    matches = await ripGrep(
       [
         "--files",
         "--hidden",
@@ -278,180 +289,201 @@ async function S8(e = { command: "rg" }, n = qE, r = !1, s) {
         "--no-config",
         "--line-buffered",
         "--max-depth",
-        String(n + 1),
-        ...R,
+        String(maxDepth + 1),
+        ...iglobArgs,
         "-g",
         "!**/node_modules/**",
       ],
       cwd,
-      b,
-      e,
+      signal,
+      ripgrepConfig,
     );
   } catch (error) {
-    if ((b.throwIfAborted(), error instanceof RipgrepError))
-      ((D = error.listed), w.push(...b8(error.stderr, cwd, n)));
-    At(`[Sandbox] ripgrep scan failed: ${error}`, { level: "warn" });
+    signal.throwIfAborted();
+    if (error instanceof RipgrepError) {
+      matches = error.listed;
+      denyPaths.push(...unreadableDirectories(error.stderr, cwd, maxDepth));
+    }
+    logForDebugging_2(`[Sandbox] ripgrep scan failed: ${error}`, {
+      level: "warn",
+    });
   }
-  let mapped = [...S, ".git/hooks", ".git/config", ".git/HEAD"].map((L) => Mqt(L).split("/"));
-  for (let L of D) {
-    let parts = path.relative(cwd, path.resolve(cwd, L)).split(path.sep),
-      mapped_2 = parts.map(Mqt),
-      q = parts.length - 1,
-      Z = 1,
-      J = n - 1;
-    e: for (let ae = 0; ae < mapped_2.length; ae++)
-      for (let Se of mapped)
-        if (Se.every((ue, me) => mapped_2[ae + me] === ue)) {
-          ((q = ae), (Z = Se.length), (J = n - 2));
+  let directoryNames = [...dangerousDirectories, ".git/hooks", ".git/config", ".git/HEAD"].map((name) =>
+    normalizeCaseForComparison(name).split("/"),
+  );
+  for (let match of matches) {
+    let segments = path.relative(cwd, path.resolve(cwd, match)).split(path.sep);
+    let lower = segments.map(normalizeCaseForComparison);
+    let at = segments.length - 1;
+    let length = 1;
+    let deepest = maxDepth - 1;
+    e: for (let i = 0; i < lower.length; i++)
+      for (let name of directoryNames)
+        if (name.every((component, k) => lower[i + k] === component)) {
+          at = i;
+          length = name.length;
+          deepest = maxDepth - 2;
           break e;
         }
-    if (q > J) continue;
-    let sliced = parts.slice(0, q + Z);
-    if (mapped_2[q] === ".git" && mapped_2[q + 1] === "head") sliced[q + 1] = "hooks";
-    w.push(path.join(cwd, ...sliced));
+    if (at > deepest) continue;
+    let found = segments.slice(0, at + length);
+    if (lower[at] === ".git" && lower[at + 1] === "head") found[at + 1] = "hooks";
+    denyPaths.push(path.join(cwd, ...found));
   }
-  return [...new Set(w)];
+  return [...new Set(denyPaths)];
 }
 //@ chunk-fq0cr76a.js:727833-727851 esm-layout
-var $E = new Set(),
-  ni;
+var bwrapMountPoints = new Set();
+var emptyMountSourceDir;
 //@ chunk-fq0cr76a.js:727851-728223 esm-fingerprint
-function E8() {
-  if (ni !== void 0) {
+function ensureEmptyMountSourceDir() {
+  if (emptyMountSourceDir !== undefined) {
     try {
-      let lstatSync = fsModule_4.lstatSync(ni);
+      let stat = fsModule_2.lstatSync(emptyMountSourceDir);
       if (
-        lstatSync.isDirectory() &&
-        lstatSync.uid === process.getuid?.() &&
-        (lstatSync.mode & 63) === 0 &&
-        fsModule_4.readdirSync(ni).length === 0
+        stat.isDirectory() &&
+        stat.uid === process.getuid?.() &&
+        (stat.mode & 63) === 0 &&
+        fsModule_2.readdirSync(emptyMountSourceDir).length === 0
       )
-        return ni;
+        return emptyMountSourceDir;
     } catch {}
-    At(
-      `[Sandbox Linux] Not reusing the empty-directory mount source, it is gone or no longer our own empty directory: ${ni}`,
+    logForDebugging_2(
+      `[Sandbox Linux] Not reusing the empty-directory mount source, it is gone or no longer our own empty directory: ${emptyMountSourceDir}`,
     );
   }
-  return (
-    (ni = fsModule_4.mkdtempSync(path.join(tmpdir_4(), "claude-empty-"))),
-    fsModule_4.chmodSync(ni, 448),
-    ni
-  );
+  emptyMountSourceDir = fsModule_2.mkdtempSync(path.join(tmpdir(), "claude-empty-"));
+  fsModule_2.chmodSync(emptyMountSourceDir, 448);
+  return emptyMountSourceDir;
 }
 //@ chunk-fq0cr76a.js:728223-728243 esm-layout
-var j6r = 31,
-  YR,
-  ZR = !1;
+var CAP_SETFCAP = 31;
+var boundingCapabilities;
+var capabilityReadFailureLogged = false;
 //@ chunk-fq0cr76a.js:728243-728598 esm-fingerprint
-function W6r(e) {
-  let n = YR;
-  if (n === void 0) {
-    let r = "has no CapBnd or CapInh line";
+function processHasBoundingCapability(cap) {
+  let bits = boundingCapabilities;
+  if (bits === undefined) {
+    let failure = "has no CapBnd or CapInh line";
     try {
-      ((n = x8(fsModule_4.readFileSync("/proc/self/status", "utf8"))), (YR = n));
-    } catch (error) {
-      r = `could not be read (${String(error)})`;
+      bits = boundingCapabilitiesFromStatus(fsModule_2.readFileSync("/proc/self/status", "utf8"));
+      boundingCapabilities = bits;
+    } catch (e) {
+      failure = `could not be read (${String(e)})`;
     }
-    if (n === void 0) {
-      if (!ZR)
-        ((ZR = !0),
-          At(`[Sandbox Linux] /proc/self/status ${r} - assuming this process holds no capabilities`, {
+    if (bits === undefined) {
+      if (!capabilityReadFailureLogged) {
+        capabilityReadFailureLogged = true;
+        logForDebugging_2(
+          `[Sandbox Linux] /proc/self/status ${failure} - assuming this process holds no capabilities`,
+          {
             level: "warn",
-          }));
-      return !1;
+          },
+        );
+      }
+      return false;
     }
   }
-  return ((n >> BigInt(e)) & 1n) === 1n;
+  return ((bits >> BigInt(cap)) & 1n) === 1n;
 }
 //@ chunk-fq0cr76a.js:728598-728760 esm-fingerprint
-function x8(e) {
-  let match = e.match(/^CapBnd:\s*([0-9a-fA-F]+)\s*$/m),
-    match_2 = e.match(/^CapInh:\s*([0-9a-fA-F]+)\s*$/m);
-  return match && match_2 ? BigInt("0x" + match[1]) | BigInt("0x" + match_2[1]) : void 0;
+function boundingCapabilitiesFromStatus(status) {
+  let bounding = status.match(/^CapBnd:\s*([0-9a-fA-F]+)\s*$/m);
+  let inheritable = status.match(/^CapInh:\s*([0-9a-fA-F]+)\s*$/m);
+  return bounding && inheritable ? BigInt("0x" + bounding[1]) | BigInt("0x" + inheritable[1]) : undefined;
 }
 //@ chunk-fq0cr76a.js:728760-728924 esm-fingerprint
-function T3o({ euid: euid, hasSetfcap: hasSetfcap, usesSeccompHelper: usesSeccompHelper }) {
-  let s = ["--cap-drop", "ALL"];
-  if (euid !== 0) return s;
-  if (!hasSetfcap) return s;
-  if (usesSeccompHelper) s.push("--cap-add", "CAP_SETFCAP");
-  return s;
+function capabilityArgs({ euid, hasSetfcap, usesSeccompHelper }) {
+  let args = ["--cap-drop", "ALL"];
+  if (euid !== 0) return args;
+  if (!hasSetfcap) return args;
+  if (usesSeccompHelper) args.push("--cap-add", "CAP_SETFCAP");
+  return args;
 }
 //@ chunk-fq0cr76a.js:728924-729299 esm-layout
-var zR = !1,
-  VE = `running as uid 0 without CAP_SETFCAP in this process's capability bounding set - on kernels that enforce the CAP_SETFCAP requirement for mapping uid 0 into a user namespace (Linux 5.12 and distribution backports) every sandboxed command fails while writing a uid map ("Operation not permitted"). Grant CAP_SETFCAP to this process, or run as a non-root user`,
-  UE;
+var setfcapMissingLogged = false;
+var CAP_SETFCAP_MISSING_MESSAGE = `running as uid 0 without CAP_SETFCAP in this process's capability bounding set - on kernels that enforce the CAP_SETFCAP requirement for mapping uid 0 into a user namespace (Linux 5.12 and distribution backports) every sandboxed command fails while writing a uid map ("Operation not permitted"). Grant CAP_SETFCAP to this process, or run as a non-root user`;
+var linuxMaxArgStrlen;
 //@ chunk-fq0cr76a.js:729299-729578 esm-fingerprint
-function _8() {
-  if (UE === void 0) {
-    let n = 4096;
+function maxArgStrlen() {
+  if (linuxMaxArgStrlen === undefined) {
+    let pageSize = 4096;
     try {
-      let content = fsModule_4.readFileSync("/proc/self/auxv"),
-        s = /64|s390x/.test("x64") ? 8 : 4,
-        min = Math.min(s, 6),
-        y = (b) =>
-          endianness() === "BE" ? content.readUIntBE(b + s - min, min) : content.readUIntLE(b, min);
-      for (let b = 0; b + 2 * s <= content.length; b += 2 * s)
-        if (y(b) === 6) {
-          n = y(b + s);
+      let auxv = fsModule_2.readFileSync("/proc/self/auxv");
+      let wordBytes = /64|s390x/.test("x64") ? 8 : 4;
+      let low = Math.min(wordBytes, 6);
+      let word = (at) =>
+        endianness() === "BE" ? auxv.readUIntBE(at + wordBytes - low, low) : auxv.readUIntLE(at, low);
+      for (let at = 0; at + 2 * wordBytes <= auxv.length; at += 2 * wordBytes)
+        if (word(at) === 6) {
+          pageSize = word(at + wordBytes);
           break;
         }
     } catch {}
-    UE = 32 * n;
+    linuxMaxArgStrlen = 32 * pageSize;
   }
-  return UE;
+  return linuxMaxArgStrlen;
 }
 //@ chunk-fq0cr76a.js:729578-729650 esm-fingerprint
-var XR = 4096,
-  Vf = 9000,
-  FE = 9,
-  v8 = 4194304 | fsModule_4.constants.O_DIRECTORY,
-  YE = new Set();
+var ARG_HEADROOM_BYTES = 4096;
+var BWRAP_MAX_ARGS = 9000;
+var BWRAP_ARGS_FD = 9;
+var O_TMPFILE = 4194304 | fsModule_2.constants.O_DIRECTORY;
+var bwrapArgsFds = new Set();
 //@ chunk-fq0cr76a.js:729650-729702 esm-fingerprint
-function WE(e) {
-  return `/proc/${process.pid}/fd/${e}`;
+function bwrapArgsProfilePath(fd) {
+  return `/proc/${process.pid}/fd/${fd}`;
 }
 //@ chunk-fq0cr76a.js:729702-730148 esm-fingerprint
-function w8(e) {
-  let joined = e.map((s) => s + "\x00").join(""),
-    r = [];
-  for (let s of new Set([tmpdir_4(), "/dev/shm"])) {
-    let h;
+function openBwrapArgsProfile(mountWords) {
+  let contents = mountWords.map((word) => word + "\x00").join("");
+  let failures = [];
+  for (let dir of new Set([tmpdir(), "/dev/shm"])) {
+    let fd;
     try {
-      h = fsModule_4.openSync(s, v8 | fsModule_4.constants.O_RDWR, 384);
+      fd = fsModule_2.openSync(dir, O_TMPFILE | fsModule_2.constants.O_RDWR, 384);
     } catch (error) {
-      r.push(`${s}: ${GE(error)}`);
+      failures.push(`${dir}: ${errorText(error)}`);
       continue;
     }
     try {
-      (fsModule_4.writeFileSync(h, joined),
-        fsModule_4.fchmodSync(h, 256),
-        fsModule_4.closeSync(fsModule_4.openSync(WE(h), fsModule_4.constants.O_RDONLY)));
+      fsModule_2.writeFileSync(fd, contents);
+      fsModule_2.fchmodSync(fd, 256);
+      fsModule_2.closeSync(fsModule_2.openSync(bwrapArgsProfilePath(fd), fsModule_2.constants.O_RDONLY));
     } catch (error) {
-      (r.push(`${s}: ${GE(error)}`), fsModule_4.closeSync(h));
+      failures.push(`${dir}: ${errorText(error)}`);
+      fsModule_2.closeSync(fd);
       continue;
     }
-    return (YE.add(h), h);
+    bwrapArgsFds.add(fd);
+    return fd;
   }
-  throw Error(`no unnamed file could be opened for it (${r.join("; ")})`);
+  throw Error(`no unnamed file could be opened for it (${failures.join("; ")})`);
 }
 //@ chunk-fq0cr76a.js:730148-730204 esm-fingerprint
-function i1(e) {
-  YE.delete(e);
+function closeBwrapArgsProfile(fd) {
+  bwrapArgsFds.delete(fd);
   try {
-    fsModule_4.closeSync(e);
+    fsModule_2.closeSync(fd);
   } catch {}
 }
 //@ chunk-fq0cr76a.js:730204-730265 esm-layout
-function GE(e) {
-  return e instanceof Error ? e.message : String(e);
+function errorText(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 //@ chunk-fq0cr76a.js:730265-730468 esm-fingerprint
 class LinuxSandboxProfileError extends Error {
-  constructor(e, n, r) {
-    super(n);
-    if (((this.name = "LinuxSandboxProfileError"), (this.code = e), r !== void 0))
-      Object.defineProperty(this, "cause", { value: r, writable: !0, configurable: !0, enumerable: !1 });
+  constructor(code, message, cause) {
+    super(message);
+    this.name = "LinuxSandboxProfileError";
+    this.code = code;
+    if (cause !== undefined)
+      Object.defineProperty(this, "cause", {
+        value: cause,
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
   }
 }
 //@ chunk-fq0cr76a.js:730468-730617 esm-fingerprint
@@ -462,346 +494,397 @@ class WorkingDirectoryChanged extends Error {
   }
 }
 //@ chunk-fq0cr76a.js:730617-732554 esm-fingerprint
-function T8(e, n, r) {
-  let s = () =>
-    `${r.mandatoryDenyArgs} of its arguments are built-in write protection, in no list of the configuration: shell and tool settings and each git repository's hooks and config, in and below the working directory, and the directories holding them. For fewer, run from a directory with fewer repositories in it, or allow writing to fewer of them; a lower mandatoryDenySearchDepth leaves the deeper ones unprotected. The other ${n.length - r.mandatoryDenyArgs} are what the configuration expands to: each path takes about three arguments, each environment variable two`;
-  if (n.length > Vf)
+function renderBwrapInvocation(bwrapBinary, bwrapArgs, mounts) {
+  let shares = () =>
+    `${mounts.mandatoryDenyArgs} of its arguments are built-in write protection, in no list of the configuration: shell and tool settings and each git repository's hooks and config, in and below the working directory, and the directories holding them. For fewer, run from a directory with fewer repositories in it, or allow writing to fewer of them; a lower mandatoryDenySearchDepth leaves the deeper ones unprotected. The other ${bwrapArgs.length - mounts.mandatoryDenyArgs} are what the configuration expands to: each path takes about three arguments, each environment variable two`;
+  if (bwrapArgs.length > BWRAP_MAX_ARGS)
     throw new LinuxSandboxProfileError(
       "too_many_arguments",
-      `Sandbox profile has ${n.length} bwrap arguments and bwrap accepts at most ${Vf} (about ${Vf / 3} mounts). ${s()}`,
+      `Sandbox profile has ${bwrapArgs.length} bwrap arguments and bwrap accepts at most ${BWRAP_MAX_ARGS} (about ${BWRAP_MAX_ARGS / 3} mounts). ${shares()}`,
     );
-  let sliced = n.slice(r.start, r.end);
-  if (sliced.some((L) => L.includes("\x00")))
+  let mountWords = bwrapArgs.slice(mounts.start, mounts.end);
+  if (mountWords.some((word) => word.includes("\x00")))
     throw new LinuxSandboxProfileError(
       "nul_in_path",
       "Sandbox profile contains a path with a NUL byte, which neither a command line nor a file of bwrap arguments can carry",
     );
-  let y = zee([e, ...n]),
-    byteLength = Buffer.byteLength(y, "utf8"),
-    S = _8() - 1;
-  if (byteLength <= S - XR) return y;
-  let w = `Sandbox profile is too long for the command line (${byteLength} bytes; past ${S - XR} it goes through a file)`;
-  if (n.length + 2 > Vf)
+  let inline = quote([bwrapBinary, ...bwrapArgs]);
+  let inlineBytes = Buffer.byteLength(inline, "utf8");
+  let limit = maxArgStrlen() - 1;
+  if (inlineBytes <= limit - ARG_HEADROOM_BYTES) return inline;
+  let tooLong = `Sandbox profile is too long for the command line (${inlineBytes} bytes; past ${limit - ARG_HEADROOM_BYTES} it goes through a file)`;
+  if (bwrapArgs.length + 2 > BWRAP_MAX_ARGS)
     throw new LinuxSandboxProfileError(
       "too_many_arguments",
-      `${w} and, passed through a file, would exceed the ${Vf} arguments bwrap accepts. ${s()}`,
+      `${tooLong} and, passed through a file, would exceed the ${BWRAP_MAX_ARGS} arguments bwrap accepts. ${shares()}`,
     );
-  let R;
+  let argsFd;
   try {
-    R = w8(sliced);
+    argsFd = openBwrapArgsProfile(mountWords);
   } catch (error) {
     throw new LinuxSandboxProfileError(
       "args_file_unavailable",
-      `${w} and cannot be passed through a file: ${GE(error)}`,
+      `${tooLong} and cannot be passed through a file: ${errorText(error)}`,
       error,
     );
   }
-  let D = zee([
-      "/bin/sh",
-      "-c",
-      `exec ${FE}<"$1" && shift && exec "$@"`,
-      "srt-args",
-      WE(R),
-      e,
-      ...n.slice(0, r.start),
-      "--args",
-      String(FE),
-      ...n.slice(r.end),
-    ]),
-    byteLength_2 = Buffer.byteLength(D, "utf8");
-  if (byteLength_2 > S)
-    throw (
-      i1(R),
-      new LinuxSandboxProfileError(
-        "command_too_long",
-        `Sandboxed command is too long for one shell argument even with the mounts passed through a file (${byteLength_2} bytes; the limit here is ${S})`,
-      )
+  let viaArgsFile = quote([
+    "/bin/sh",
+    "-c",
+    `exec ${BWRAP_ARGS_FD}<"$1" && shift && exec "$@"`,
+    "srt-args",
+    bwrapArgsProfilePath(argsFd),
+    bwrapBinary,
+    ...bwrapArgs.slice(0, mounts.start),
+    "--args",
+    String(BWRAP_ARGS_FD),
+    ...bwrapArgs.slice(mounts.end),
+  ]);
+  let viaArgsFileBytes = Buffer.byteLength(viaArgsFile, "utf8");
+  if (viaArgsFileBytes > limit) {
+    closeBwrapArgsProfile(argsFd);
+    throw new LinuxSandboxProfileError(
+      "command_too_long",
+      `Sandboxed command is too long for one shell argument even with the mounts passed through a file (${viaArgsFileBytes} bytes; the limit here is ${limit})`,
     );
-  return (
-    At(
-      `[Sandbox Linux] bwrap mounts moved to an unnamed file, read through ${WE(R)} on bwrap's fd ${FE}: the command line would be ${byteLength} bytes as one argument`,
-    ),
-    D
+  }
+  logForDebugging_2(
+    `[Sandbox Linux] bwrap mounts moved to an unnamed file, read through ${bwrapArgsProfilePath(argsFd)} on bwrap's fd ${BWRAP_ARGS_FD}: the command line would be ${inlineBytes} bytes as one argument`,
   );
+  return viaArgsFile;
 }
 //@ chunk-fq0cr76a.js:732554-732580 esm-layout
-var ga = 0,
-  Zm = 0,
-  o1 = !1,
-  JR = !1;
+var activeSandboxCount = 0;
+var forcedCleanups = 0;
+var exitHandlerRegistered = false;
+var JR = false;
 //@ chunk-fq0cr76a.js:732580-732600 esm-layout
 function ZE() {
-  o1 = !0;
+  exitHandlerRegistered = true;
 }
 //@ chunk-fq0cr76a.js:732600-732678 esm-fingerprint
 function A8() {
   if (JR) return;
-  (process.on("exit", () => {
-    (ZE(), Wf({ force: !0 }));
-  }),
-    (JR = !0));
+  process.on("exit", () => {
+    ZE();
+    cleanupBwrapMountPoints({
+      force: true,
+    });
+  });
+  JR = true;
 }
 //@ chunk-fq0cr76a.js:732678-733667 esm-fingerprint
-function Wf(e) {
-  if (!e?.force) {
-    if (ga > 0) ga--;
-    if (ga > 0) {
-      At(`[Sandbox Linux] Deferring mount point cleanup \u2014 ${ga} sandbox(es) still active`);
+function cleanupBwrapMountPoints(opts) {
+  if (!opts?.force) {
+    if (activeSandboxCount > 0) activeSandboxCount--;
+    if (activeSandboxCount > 0) {
+      logForDebugging_2(
+        `[Sandbox Linux] Deferring mount point cleanup \u2014 ${activeSandboxCount} sandbox(es) still active`,
+      );
       return;
     }
-  } else if (o1 && ga > 0) {
-    At(
-      `[Sandbox Linux] Leaving mount points in place while this process ends \u2014 ${ga} sandbox(es) still active`,
+  } else if (exitHandlerRegistered && activeSandboxCount > 0) {
+    logForDebugging_2(
+      `[Sandbox Linux] Leaving mount points in place while this process ends \u2014 ${activeSandboxCount} sandbox(es) still active`,
     );
     return;
   }
-  if (e?.force) ((ga = 0), Zm++);
-  let sorted = [...$E].sort((r, s) => s.length - r.length);
-  for (let r of sorted)
+  if (opts?.force) {
+    activeSandboxCount = 0;
+    forcedCleanups++;
+  }
+  let deepestFirst = [...bwrapMountPoints].sort((a, b) => b.length - a.length);
+  for (let mountPoint of deepestFirst)
     try {
-      let stats = fsModule_4.statSync(r);
-      if (stats.isFile() && stats.size === 0)
-        (fsModule_4.unlinkSync(r), At(`[Sandbox Linux] Cleaned up bwrap mount point (file): ${r}`));
-      else if (stats.isDirectory()) {
-        if (fsModule_4.readdirSync(r).length === 0)
-          (fsModule_4.rmdirSync(r), At(`[Sandbox Linux] Cleaned up bwrap mount point (dir): ${r}`));
+      let stat = fsModule_2.statSync(mountPoint);
+      if (stat.isFile() && stat.size === 0) {
+        fsModule_2.unlinkSync(mountPoint);
+        logForDebugging_2(`[Sandbox Linux] Cleaned up bwrap mount point (file): ${mountPoint}`);
+      } else if (stat.isDirectory()) {
+        if (fsModule_2.readdirSync(mountPoint).length === 0) {
+          fsModule_2.rmdirSync(mountPoint);
+          logForDebugging_2(`[Sandbox Linux] Cleaned up bwrap mount point (dir): ${mountPoint}`);
+        }
       }
     } catch {}
-  if (($E.clear(), ni !== void 0))
+  bwrapMountPoints.clear();
+  if (emptyMountSourceDir !== undefined)
     try {
-      (fsModule_4.rmdirSync(ni),
-        At(`[Sandbox Linux] Cleaned up the empty-directory mount source: ${ni}`),
-        (ni = void 0));
-    } catch (error) {
-      let code = error.code;
+      fsModule_2.rmdirSync(emptyMountSourceDir);
+      logForDebugging_2(
+        `[Sandbox Linux] Cleaned up the empty-directory mount source: ${emptyMountSourceDir}`,
+      );
+      emptyMountSourceDir = undefined;
+    } catch (err) {
+      let code = err.code;
       if (code === "ENOTEMPTY")
-        At(
-          `[Sandbox Linux] Left the empty-directory mount source behind, something has written into it: ${ni}`,
+        logForDebugging_2(
+          `[Sandbox Linux] Left the empty-directory mount source behind, something has written into it: ${emptyMountSourceDir}`,
         );
-      if (code === "ENOENT" || code === "ENOTDIR") ni = void 0;
+      if (code === "ENOENT" || code === "ENOTDIR") emptyMountSourceDir = undefined;
     }
-  for (let r of [...YE]) i1(r);
+  for (let argsFd of [...bwrapArgsFds]) closeBwrapArgsProfile(argsFd);
 }
 //@ chunk-fq0cr76a.js:733667-733747 esm-fingerprint
-function QR(e) {
+function isExecutable(p) {
   try {
-    return (fsModule_4.accessSync(e, fsModule_4.constants.X_OK), !0);
+    fsModule_2.accessSync(p, fsModule_2.constants.X_OK);
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-fq0cr76a.js:733747-734347 esm-fingerprint
-function a1(e) {
-  let { seccompConfig: seccompConfig, bwrapPath: bwrapPath, socatPath: socatPath } = e ?? {},
-    h = [],
-    y = [],
-    b = null;
-  if (bwrapPath)
-    if (QR(bwrapPath)) b = bwrapPath;
-    else h.push(`bubblewrap (bwrap) not executable at ${bwrapPath}`);
-  else if (((b = ha("bwrap")), b === null)) h.push("bubblewrap (bwrap) not installed");
+function checkLinuxDependencies(opts) {
+  let { seccompConfig, bwrapPath, socatPath } = opts ?? {};
+  let errors = [];
+  let warnings = [];
+  let usableBwrap = null;
+  if (bwrapPath) {
+    if (isExecutable(bwrapPath)) usableBwrap = bwrapPath;
+    else errors.push(`bubblewrap (bwrap) not executable at ${bwrapPath}`);
+  } else {
+    usableBwrap = whichSync("bwrap");
+    if (usableBwrap === null) errors.push("bubblewrap (bwrap) not installed");
+  }
   if (socatPath) {
-    if (!QR(socatPath)) h.push(`socat not executable at ${socatPath}`);
-  } else if (ha("socat") === null) h.push("socat not installed");
+    if (!isExecutable(socatPath)) errors.push(`socat not executable at ${socatPath}`);
+  } else if (whichSync("socat") === null) errors.push("socat not installed");
   if (!seccompConfig?.argv0 && vor(seccompConfig?.applyPath) === null)
-    y.push("seccomp not available - unix socket access not restricted");
-  let S = N8({ euid: process.geteuid?.(), hasSetfcap: W6r(j6r), bwrap: b });
-  if (S !== null) h.push(S);
-  let w = I8(b);
-  if (w !== null) y.push(w);
-  return { warnings: y, errors: h };
+    warnings.push("seccomp not available - unix socket access not restricted");
+  let uid0Error = uid0SandboxError({
+    euid: process.geteuid?.(),
+    hasSetfcap: processHasBoundingCapability(CAP_SETFCAP),
+    bwrap: usableBwrap,
+  });
+  if (uid0Error !== null) errors.push(uid0Error);
+  let outdated = outdatedBwrapWarning(usableBwrap);
+  if (outdated !== null) warnings.push(outdated);
+  return {
+    warnings,
+    errors,
+  };
 }
 //@ chunk-fq0cr76a.js:734347-734373 esm-fingerprint
-var MIN_COMMAND_VERSION = "0.5.0",
-  commandVersionCache = new Map();
+var MIN_COMMAND_VERSION = "0.5.0";
+var commandVersionCache = new Map();
+//@ chunk-fq0cr76a.js:734373-734622 esm-fingerprint
 /**
  * 同步执行 cmd --version 取版本号（缓存）。
  */
-//@ chunk-fq0cr76a.js:734373-734622 esm-fingerprint
-function getCommandVersion(e) {
-  let n = commandVersionCache.get(e);
-  if (n !== void 0) return n;
-  let r = spawnSync_2(e, ["--version"], {
-      timeout: 5000,
-      stdio: ["ignore", "pipe", "ignore"],
-      encoding: "utf8",
-    }),
-    s = r.error === void 0 && r.status === 0 ? (/\d+(?:\.\d+)*/.exec(r.stdout ?? "")?.[0] ?? null) : null;
-  return (commandVersionCache.set(e, s), s);
+function getCommandVersion(bwrap) {
+  let cached = commandVersionCache.get(bwrap);
+  if (cached !== undefined) return cached;
+  let probe = spawnSync(bwrap, ["--version"], {
+    timeout: 5000,
+    stdio: ["ignore", "pipe", "ignore"],
+    encoding: "utf8",
+  });
+  let version =
+    probe.error === undefined && probe.status === 0
+      ? (/\d+(?:\.\d+)*/.exec(probe.stdout ?? "")?.[0] ?? null)
+      : null;
+  commandVersionCache.set(bwrap, version);
+  return version;
 }
 //@ chunk-fq0cr76a.js:734622-734844 esm-fingerprint
-function R8(e, n) {
-  let r = (y) =>
-      y.split(".").map((b) => {
-        let int = Number.parseInt(b, 10);
-        return Number.isNaN(int) ? 0 : int;
-      }),
-    s = r(e),
-    h = r(n);
-  for (let y = 0; y < Math.max(s.length, h.length); y++) {
-    let b = (s[y] ?? 0) - (h[y] ?? 0);
-    if (b !== 0) return b;
+function compareVersions(a, b) {
+  let partsOf = (version) =>
+    version.split(".").map((part) => {
+      let parsed = Number.parseInt(part, 10);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    });
+  let left = partsOf(a);
+  let right = partsOf(b);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    let difference = (left[i] ?? 0) - (right[i] ?? 0);
+    if (difference !== 0) return difference;
   }
   return 0;
 }
 //@ chunk-fq0cr76a.js:734844-735149 esm-layout
-function I8(e) {
-  if (e === null) return null;
-  let n = getCommandVersion(e);
-  if (n === null || R8(n, MIN_COMMAND_VERSION) >= 0) return null;
-  return `bubblewrap ${n} at ${e} is older than ${MIN_COMMAND_VERSION}: a denyRead entry or credential mask naming a path that is not a regular file (a fifo, socket or device node) cannot be applied on it. Everything else is unaffected`;
+function outdatedBwrapWarning(bwrap) {
+  if (bwrap === null) return null;
+  let version = getCommandVersion(bwrap);
+  if (version === null || compareVersions(version, MIN_COMMAND_VERSION) >= 0) return null;
+  return `bubblewrap ${version} at ${bwrap} is older than ${MIN_COMMAND_VERSION}: a denyRead entry or credential mask naming a path that is not a regular file (a fifo, socket or device node) cannot be applied on it. Everything else is unaffected`;
 }
 //@ chunk-fq0cr76a.js:735149-735306 esm-fingerprint
-function N8({ euid: euid, hasSetfcap: hasSetfcap, bwrap: bwrap }) {
+function uid0SandboxError({ euid, hasSetfcap, bwrap }) {
   if (euid !== 0 || hasSetfcap || bwrap === null) return null;
-  let s = k8(bwrap);
-  if (s === null) return null;
-  return s === "" ? VE : `${VE} (bubblewrap: ${s})`;
+  let refusal = probeUid0UserNamespace(bwrap);
+  if (refusal === null) return null;
+  return refusal === ""
+    ? CAP_SETFCAP_MISSING_MESSAGE
+    : `${CAP_SETFCAP_MISSING_MESSAGE} (bubblewrap: ${refusal})`;
 }
 //@ chunk-fq0cr76a.js:735306-735321 esm-layout
-var n1 = new Map();
+var uid0UserNamespaceProbes = new Map();
 //@ chunk-fq0cr76a.js:735321-735642 esm-fingerprint
-function k8(e) {
-  let n = n1.get(e);
-  if (n !== void 0) return n;
-  let r = spawnSync_2(e, ["--unshare-user", "--dev-bind", "/", "/", "true"], {
-      timeout: 5000,
-      stdio: ["ignore", "ignore", "pipe"],
-      encoding: "utf8",
-    }),
-    s =
-      r.error === void 0 && r.status === 0
-        ? null
-        : ((r.stderr ?? "")
-            .split(
-              `
+function probeUid0UserNamespace(bwrap) {
+  let cached = uid0UserNamespaceProbes.get(bwrap);
+  if (cached !== undefined) return cached;
+  let probe = spawnSync(bwrap, ["--unshare-user", "--dev-bind", "/", "/", "true"], {
+    timeout: 5000,
+    stdio: ["ignore", "ignore", "pipe"],
+    encoding: "utf8",
+  });
+  let refusal =
+    probe.error === undefined && probe.status === 0
+      ? null
+      : ((probe.stderr ?? "")
+          .split(
+            `
 `,
-            )
-            .map((h) => h.trim())
-            .find((h) => h.length > 0)
-            ?.slice(0, 200) ?? "");
-  return (n1.set(e, s), s);
+          )
+          .map((line) => line.trim())
+          .find((line) => line.length > 0)
+          ?.slice(0, 200) ?? "");
+  uid0UserNamespaceProbes.set(bwrap, refusal);
+  return refusal;
 }
 //@ chunk-fq0cr76a.js:735642-737365 esm-fingerprint
-async function l1(e, n, r) {
-  let s = r ?? "socat",
-    str = randomBytes_3(8).toString("hex"),
-    y = join_5(tmpdir_4(), `claude-http-${str}.sock`),
-    b = join_5(tmpdir_4(), `claude-socks-${str}.sock`),
-    S = [`UNIX-LISTEN:${y},fork,reuseaddr`, `TCP:localhost:${e},keepalive,keepidle=10,keepintvl=5,keepcnt=3`];
-  At(`Starting HTTP bridge: ${s} ${S.join(" ")}`);
-  let w = spawn(s, S, { stdio: "ignore" });
-  if (
-    (w.on("error", (L) => {
-      At(`HTTP bridge process error: ${L}`, { level: "error" });
-    }),
-    w.on("exit", (L, V) => {
-      At(`HTTP bridge process exited with code ${L}, signal ${V}`, { level: L === 0 ? "info" : "error" });
-    }),
-    !w.pid)
-  )
-    throw Error("Failed to start HTTP bridge process");
-  let R, D;
-  if (n === e) ((R = w), (D = y));
-  else {
-    D = b;
-    let L = [
-      `UNIX-LISTEN:${b},fork,reuseaddr`,
-      `TCP:localhost:${n},keepalive,keepidle=10,keepintvl=5,keepcnt=3`,
+async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort, socatPath) {
+  let socat = socatPath ?? "socat";
+  let socketId = randomBytes(8).toString("hex");
+  let httpSocketPath = join(tmpdir(), `claude-http-${socketId}.sock`);
+  let socksSocketPath = join(tmpdir(), `claude-socks-${socketId}.sock`);
+  let httpSocatArgs = [
+    `UNIX-LISTEN:${httpSocketPath},fork,reuseaddr`,
+    `TCP:localhost:${httpProxyPort},keepalive,keepidle=10,keepintvl=5,keepcnt=3`,
+  ];
+  logForDebugging_2(`Starting HTTP bridge: ${socat} ${httpSocatArgs.join(" ")}`);
+  let httpBridgeProcess = spawn(socat, httpSocatArgs, {
+    stdio: "ignore",
+  });
+  httpBridgeProcess.on("error", (err) => {
+    logForDebugging_2(`HTTP bridge process error: ${err}`, {
+      level: "error",
+    });
+  });
+  httpBridgeProcess.on("exit", (code, signal) => {
+    logForDebugging_2(`HTTP bridge process exited with code ${code}, signal ${signal}`, {
+      level: code === 0 ? "info" : "error",
+    });
+  });
+  if (!httpBridgeProcess.pid) throw Error("Failed to start HTTP bridge process");
+  let socksBridgeProcess;
+  let socksSockPath;
+  if (socksProxyPort === httpProxyPort) {
+    socksBridgeProcess = httpBridgeProcess;
+    socksSockPath = httpSocketPath;
+  } else {
+    socksSockPath = socksSocketPath;
+    let socksSocatArgs = [
+      `UNIX-LISTEN:${socksSocketPath},fork,reuseaddr`,
+      `TCP:localhost:${socksProxyPort},keepalive,keepidle=10,keepintvl=5,keepcnt=3`,
     ];
-    if (
-      (At(`Starting SOCKS bridge: ${s} ${L.join(" ")}`),
-      (R = spawn(s, L, { stdio: "ignore" })),
-      R.on("error", (V) => {
-        At(`SOCKS bridge process error: ${V}`, { level: "error" });
-      }),
-      R.on("exit", (V, K) => {
-        At(`SOCKS bridge process exited with code ${V}, signal ${K}`, { level: V === 0 ? "info" : "error" });
-      }),
-      !R.pid)
-    ) {
-      if (w.pid)
+    logForDebugging_2(`Starting SOCKS bridge: ${socat} ${socksSocatArgs.join(" ")}`);
+    socksBridgeProcess = spawn(socat, socksSocatArgs, {
+      stdio: "ignore",
+    });
+    socksBridgeProcess.on("error", (err) => {
+      logForDebugging_2(`SOCKS bridge process error: ${err}`, {
+        level: "error",
+      });
+    });
+    socksBridgeProcess.on("exit", (code, signal) => {
+      logForDebugging_2(`SOCKS bridge process exited with code ${code}, signal ${signal}`, {
+        level: code === 0 ? "info" : "error",
+      });
+    });
+    if (!socksBridgeProcess.pid) {
+      if (httpBridgeProcess.pid)
         try {
-          process.kill(w.pid, "SIGTERM");
+          process.kill(httpBridgeProcess.pid, "SIGTERM");
         } catch {}
       throw Error("Failed to start SOCKS bridge process");
     }
   }
-  let O = 5;
-  for (let L = 0; L < O; L++) {
-    if (!w.pid || w.killed || !R.pid || R.killed) throw Error("Linux bridge process died unexpectedly");
+  let maxAttempts = 5;
+  for (let i = 0; i < maxAttempts; i++) {
+    if (
+      !httpBridgeProcess.pid ||
+      httpBridgeProcess.killed ||
+      !socksBridgeProcess.pid ||
+      socksBridgeProcess.killed
+    )
+      throw Error("Linux bridge process died unexpectedly");
     try {
-      if (fsModule_4.existsSync(y) && fsModule_4.existsSync(D)) {
-        At(`Linux bridges ready after ${L + 1} attempts`);
+      if (fsModule_2.existsSync(httpSocketPath) && fsModule_2.existsSync(socksSockPath)) {
+        logForDebugging_2(`Linux bridges ready after ${i + 1} attempts`);
         break;
       }
-    } catch (error) {
-      At(`Error checking sockets (attempt ${L + 1}): ${error}`, { level: "error" });
+    } catch (err) {
+      logForDebugging_2(`Error checking sockets (attempt ${i + 1}): ${err}`, {
+        level: "error",
+      });
     }
-    if (L === O - 1) {
-      if (w.pid)
+    if (i === maxAttempts - 1) {
+      if (httpBridgeProcess.pid)
         try {
-          process.kill(w.pid, "SIGTERM");
+          process.kill(httpBridgeProcess.pid, "SIGTERM");
         } catch {}
-      if (R.pid)
+      if (socksBridgeProcess.pid)
         try {
-          process.kill(R.pid, "SIGTERM");
+          process.kill(socksBridgeProcess.pid, "SIGTERM");
         } catch {}
-      throw Error(`Failed to create bridge sockets after ${O} attempts`);
+      throw Error(`Failed to create bridge sockets after ${maxAttempts} attempts`);
     }
-    await new Promise((V) => setTimeout(V, L * 100));
+    await new Promise((resolve) => setTimeout(resolve, i * 100));
   }
   return {
-    httpSocketPath: y,
-    socksSocketPath: D,
-    httpBridgeProcess: w,
-    socksBridgeProcess: R,
-    httpProxyPort: e,
-    socksProxyPort: n,
+    httpSocketPath,
+    socksSocketPath: socksSockPath,
+    httpBridgeProcess,
+    socksBridgeProcess,
+    httpProxyPort,
+    socksProxyPort,
   };
 }
 //@ chunk-fq0cr76a.js:737365-737398 esm-fingerprint
-var SRT_ALLOW_NESTED_USERNS = "SRT_ALLOW_NESTED_USERNS";
+var NESTED_USERNS_ENV = "SRT_ALLOW_NESTED_USERNS";
 //@ chunk-fq0cr76a.js:737398-737441 esm-layout
-function D8(e) {
-  return `${SRT_ALLOW_NESTED_USERNS}=${e ? "1" : "0"} `;
+function helperEnvironmentPrefix(allowNestedUserNamespaces) {
+  return `${NESTED_USERNS_ENV}=${allowNestedUserNamespaces ? "1" : "0"} `;
 }
 //@ chunk-fq0cr76a.js:737441-737456 esm-layout
-var r1 = new Map();
+var disableUsernsProbes = new Map();
 //@ chunk-fq0cr76a.js:737456-737792 esm-fingerprint
-function O8(e) {
-  let n = r1.get(e);
-  if (n !== void 0) return n;
-  let r = !1;
+function bwrapCanDisableUserns(bwrap) {
+  let cached = disableUsernsProbes.get(bwrap);
+  if (cached !== undefined) return cached;
+  let can = false;
   try {
-    if ((fsModule_4.statSync(e).mode & 2048) === 0) {
-      let s = spawnSync_2(e, ["--help"], {
-          timeout: 5000,
-          stdio: ["ignore", "pipe", "pipe"],
-          encoding: "utf8",
-        }),
-        h = `${s.stdout ?? ""}${s.stderr ?? ""}`;
-      if (s.error !== void 0 || h.trim() === "") return !1;
-      r = h.includes("--disable-userns");
+    if ((fsModule_2.statSync(bwrap).mode & 2048) === 0) {
+      let help = spawnSync(bwrap, ["--help"], {
+        timeout: 5000,
+        stdio: ["ignore", "pipe", "pipe"],
+        encoding: "utf8",
+      });
+      let text = `${help.stdout ?? ""}${help.stderr ?? ""}`;
+      if (help.error !== undefined || text.trim() === "") return false;
+      can = text.includes("--disable-userns");
     }
   } catch {
-    return !1;
+    return false;
   }
-  return (r1.set(e, r), r);
+  disableUsernsProbes.set(bwrap, can);
+  return can;
 }
 //@ chunk-fq0cr76a.js:737792-737802 esm-layout
-var s1 = !1;
+var noUsernsLimitLogged = false;
 //@ chunk-fq0cr76a.js:737802-737982 esm-fingerprint
-function P8(e, n) {
-  if (n) {
-    if (!e) throw Error("seccompConfig.argv0 requires seccompConfig.applyPath");
-    return `ARGV0=${zee([n])} ${zee([e])} `;
+function resolveApplySeccompPrefix(applyPath, argv0) {
+  if (argv0) {
+    if (!applyPath) throw Error("seccompConfig.argv0 requires seccompConfig.applyPath");
+    return `ARGV0=${quote([argv0])} ${quote([applyPath])} `;
   }
-  let r = vor(e);
-  return r ? `${zee([r])} ` : void 0;
+  let binary = vor(applyPath);
+  return binary ? `${quote([binary])} ` : undefined;
 }
 //@ chunk-fq0cr76a.js:737982-738725 esm-fingerprint
-var L8 = [
+var RELAYS_LISTEN = [
   "_srt_since=",
   'while [ -r /proc/net/sockstat ] && kill -0 "$_srt_http" "$_srt_socks" 2>/dev/null; do',
   "  _srt_up=0",
@@ -819,777 +902,1052 @@ var L8 = [
   "unset _srt_since _srt_now _srt_up _srt_counts _srt_kind _srt_skip _srt_inuse _srt_http _srt_socks",
 ];
 //@ chunk-fq0cr76a.js:738725-739277 esm-fingerprint
-function B8(e, n, r, s, h, y) {
-  let b = h || "bash",
-    S = zee([y ?? "socat"]),
-    w = "fork,reuseaddr,backlog=4096",
-    R = (O, L) =>
-      `{ ${S} TCP6-LISTEN:${O},ipv6only=0,fork,reuseaddr,backlog=4096 UNIX-CONNECT:${L} || exec ${S} TCP4-LISTEN:${O},fork,reuseaddr,backlog=4096 UNIX-CONNECT:${L}; } >/dev/null 2>&1 &`,
-    D = [
-      R(3128, e),
-      "_srt_http=$!",
-      R(1080, n),
-      "_srt_socks=$!",
-      "trap 'rc=$?; kill %1 %2 2>/dev/null; exit $rc' EXIT",
-      ...L8,
-    ];
-  if (s) {
-    let O = s + zee([b, "-c", r]),
-      joined = [...D, O].join(`
+function buildSandboxCommand(
+  httpSocketPath,
+  socksSocketPath,
+  userCommand,
+  applySeccompPrefix,
+  shell,
+  socatPath,
+) {
+  let shellPath = shell || "bash";
+  let socat = quote([socatPath ?? "socat"]);
+  let w = "fork,reuseaddr,backlog=4096";
+  let relay = (port, socketPath) =>
+    `{ ${socat} TCP6-LISTEN:${port},ipv6only=0,fork,reuseaddr,backlog=4096 UNIX-CONNECT:${socketPath} || exec ${socat} TCP4-LISTEN:${port},fork,reuseaddr,backlog=4096 UNIX-CONNECT:${socketPath}; } >/dev/null 2>&1 &`;
+  let socatCommands = [
+    relay(3128, httpSocketPath),
+    "_srt_http=$!",
+    relay(1080, socksSocketPath),
+    "_srt_socks=$!",
+    "trap 'rc=$?; kill %1 %2 2>/dev/null; exit $rc' EXIT",
+    ...RELAYS_LISTEN,
+  ];
+  if (applySeccompPrefix) {
+    let applySeccompCmd = applySeccompPrefix + quote([shellPath, "-c", userCommand]);
+    let innerScript = [...socatCommands, applySeccompCmd].join(`
 `);
-    return `${b} -c ${zee([joined])}`;
+    return `${shellPath} -c ${quote([innerScript])}`;
   } else {
-    let joined = [...D, `eval ${zee([r])}`].join(`
+    let innerScript = [...socatCommands, `eval ${quote([userCommand])}`].join(`
 `);
-    return `${b} -c ${zee([joined])}`;
+    return `${shellPath} -c ${quote([innerScript])}`;
   }
 }
 //@ chunk-fq0cr76a.js:739277-739379 esm-fingerprint
-function U8(e) {
-  let n = e?.code;
-  return n === "EIO" || n === "ESTALE" || n === "EMFILE" || n === "ENFILE" || n === "EAGAIN";
+function isTransientErrno(err) {
+  let code = err?.code;
+  return code === "EIO" || code === "ESTALE" || code === "EMFILE" || code === "ENFILE" || code === "EAGAIN";
 }
 //@ chunk-fq0cr76a.js:739379-739447 esm-layout
-function ME(e) {
+function retryingTransient(attempt) {
   try {
-    return e();
-  } catch (error) {
-    if (!U8(error)) throw error;
+    return attempt();
+  } catch (err) {
+    if (!isTransientErrno(err)) throw err;
   }
-  return e();
+  return attempt();
 }
 //@ chunk-fq0cr76a.js:739447-739478 esm-fingerprint
-var u1 = ["/proc", "/dev", "/sys"];
+var KERNEL_TOP_LEVEL_DIRS = ["/proc", "/dev", "/sys"];
 //@ chunk-fq0cr76a.js:739478-740085 esm-fingerprint
-function F8(e, n) {
-  let { rootIsWriteRoot: rootIsWriteRoot } = n,
-    s = new Set(),
-    h = new Set(),
-    y = new Set();
-  for (let S of e) {
-    if (rootIsWriteRoot && u1.some((w) => oS(S, w))) continue;
+function ancestorPinArgs(seeds, writeRoots) {
+  let { rootIsWriteRoot } = writeRoots;
+  let pinDirs = new Set();
+  let coverDirs = new Set();
+  let visited = new Set();
+  for (let seed of seeds) {
+    if (rootIsWriteRoot && KERNEL_TOP_LEVEL_DIRS.some((dir) => isAtOrUnder(seed, dir))) continue;
     for (
-      let dir = path.dirname(S);
-      dir !== "/" && !y.has(dir) && n.isWithinAllowedWrite(dir);
+      let dir = path.dirname(seed);
+      dir !== "/" && !visited.has(dir) && writeRoots.isWithinAllowedWrite(dir);
       dir = path.dirname(dir)
     ) {
-      if ((y.add(dir), rootIsWriteRoot)) {
+      visited.add(dir);
+      if (rootIsWriteRoot) {
         if (path.dirname(dir) === "/") {
-          h.add(dir);
+          coverDirs.add(dir);
           continue;
         }
-      } else if (n.isAllowedWriteRoot(dir)) continue;
+      } else if (writeRoots.isAllowedWriteRoot(dir)) continue;
       try {
-        fsModule_4.statSync(dir);
-      } catch (error) {
-        if (R4e(error)) continue;
+        fsModule_2.statSync(dir);
+      } catch (err) {
+        if (isAbsenceErrno(err)) continue;
       }
-      s.add(dir);
+      pinDirs.add(dir);
     }
   }
-  let b = [...h];
-  if (b.length > 0) At(`[Sandbox Linux] Covering the pinned ancestors under: ${b.join(", ")}`);
+  let covers = [...coverDirs];
+  if (covers.length > 0)
+    logForDebugging_2(`[Sandbox Linux] Covering the pinned ancestors under: ${covers.join(", ")}`);
   return [
-    ...[...s].sort((S, w) => S.split("/").length - w.split("/").length).flatMap((S) => ["--ro-bind", S, S]),
-    ...b.flatMap((S) => ["--bind", S, S]),
+    ...[...pinDirs]
+      .sort((a, b) => a.split("/").length - b.split("/").length)
+      .flatMap((dir) => ["--ro-bind", dir, dir]),
+    ...covers.flatMap((dir) => ["--bind", dir, dir]),
   ];
 }
 //@ chunk-fq0cr76a.js:740085-741269 esm-fingerprint
-function M8(e, n) {
-  let { landing: landing, allowedWritePaths: allowedWritePaths, readAllowPaths: readAllowPaths } = n;
-  e.push("--tmpfs", landing);
-  let y = (w) => {
-      let nameLocation = n.nameLocation(w);
-      if (!oS(nameLocation, landing)) return;
-      let { canonical: canonical, resolved: resolved } = n.resolve(w);
-      if (!resolved) {
-        At(
-          `[Sandbox Linux] Not restoring ${w} over denyRead tmpfs ${landing}: nothing there resolves (absent, dangling or unreadable), so the only source available is the name itself`,
-          { level: "warn" },
+function pushReadDenyDirMounts(args, unit) {
+  let { landing, allowedWritePaths, readAllowPaths } = unit;
+  args.push("--tmpfs", landing);
+  let restorePlacementOf = (p) => {
+    let dest = unit.nameLocation(p);
+    if (!isAtOrUnder(dest, landing)) return;
+    let { canonical: source, resolved } = unit.resolve(p);
+    if (!resolved) {
+      logForDebugging_2(
+        `[Sandbox Linux] Not restoring ${p} over denyRead tmpfs ${landing}: nothing there resolves (absent, dangling or unreadable), so the only source available is the name itself`,
+        {
+          level: "warn",
+        },
+      );
+      return;
+    }
+    if (!isAtOrUnder(source, landing)) {
+      logForDebugging_2(
+        `[Sandbox Linux] Not restoring ${p} over denyRead tmpfs ${landing}: it resolves outside it, to ${source}`,
+        {
+          level: "warn",
+        },
+      );
+      return;
+    }
+    if (source !== dest) {
+      let denied = unit.readDenialAround(source);
+      if (denied !== undefined) {
+        logForDebugging_2(
+          `[Sandbox Linux] Not restoring ${p} over denyRead tmpfs ${landing}: it resolves to ${source}, and the read section denies or masks ${denied}`,
+          {
+            level: "warn",
+          },
         );
         return;
       }
-      if (!oS(canonical, landing)) {
-        At(
-          `[Sandbox Linux] Not restoring ${w} over denyRead tmpfs ${landing}: it resolves outside it, to ${canonical}`,
-          { level: "warn" },
-        );
-        return;
-      }
-      if (canonical !== nameLocation) {
-        let denialAround = n.readDenialAround(canonical);
-        if (denialAround !== void 0) {
-          At(
-            `[Sandbox Linux] Not restoring ${w} over denyRead tmpfs ${landing}: it resolves to ${canonical}, and the read section denies or masks ${denialAround}`,
-            { level: "warn" },
-          );
-          return;
-        }
-      }
-      return { source: canonical, dest: nameLocation };
-    },
-    b = [];
-  for (let w of allowedWritePaths) {
-    let R = y(w);
-    if (R === void 0) continue;
-    (e.push("--bind", R.source, R.dest),
-      b.push(R),
-      At(`[Sandbox Linux] Re-bound write path wiped by denyRead tmpfs: ${w}`));
+    }
+    return {
+      source,
+      dest,
+    };
+  };
+  let restoredWrites = [];
+  for (let writePath of allowedWritePaths) {
+    let placement = restorePlacementOf(writePath);
+    if (placement === undefined) continue;
+    args.push("--bind", placement.source, placement.dest);
+    restoredWrites.push(placement);
+    logForDebugging_2(`[Sandbox Linux] Re-bound write path wiped by denyRead tmpfs: ${writePath}`);
   }
-  let S = [];
-  for (let w of readAllowPaths) {
-    let R = y(w);
-    if (R === void 0) continue;
-    if (b.some((D) => oS(R.dest, D.dest))) continue;
-    (e.push("--ro-bind", R.source, R.dest),
-      S.push(R),
-      At(`[Sandbox Linux] Re-allowed read access within denied region: ${w}`));
+  let restoredReads = [];
+  for (let allowPath of readAllowPaths) {
+    let placement = restorePlacementOf(allowPath);
+    if (placement === undefined) continue;
+    if (restoredWrites.some((w) => isAtOrUnder(placement.dest, w.dest))) continue;
+    args.push("--ro-bind", placement.source, placement.dest);
+    restoredReads.push(placement);
+    logForDebugging_2(`[Sandbox Linux] Re-allowed read access within denied region: ${allowPath}`);
   }
-  return { restoredWrites: b, restoredReads: S };
+  return {
+    restoredWrites,
+    restoredReads,
+  };
 }
 //@ chunk-fq0cr76a.js:741269-752374 esm-fingerprint
-async function $8(e, n, r, s, h = { command: "rg" }, y = qE, b = !1, S) {
-  let w = [],
-    R = xwn(),
-    D = [],
-    O = [],
-    L = 1 / 0,
-    V = new Map(),
-    K = new Set(),
-    q = new Map(),
-    Z = new Set(),
-    J,
-    ie = new Map(),
-    ae = new Set(),
-    Se = new Set(),
-    ue = (ze) => {
-      let ot = ie.get(ze);
-      if (ot === void 0) {
-        try {
-          ot = ME(() => JSe(ze));
-        } catch (error) {
-          if (((ot = ze), Se.add(ze), !R4e(error)))
-            (ae.add(ze),
-              At(
-                `[Sandbox Linux] Where ${ze} really is cannot be told, so what is mounted for it is mounted on this spelling, which bubblewrap may refuse: ${error}`,
-                { level: "warn" },
-              ));
-        }
-        ie.set(ze, ot);
-      }
-      return ot;
-    },
-    me = (ze) => ({ canonical: ue(ze), resolved: !Se.has(ze) }),
-    Ne = (ze) => {
-      let ot = ue(ze);
-      return ot === ze ? [ze] : [ze, ot];
-    },
-    Ce = (ze) => F3r(ze, ue),
-    Ie = (ze) => D.some((ot) => oS(ze, ot)),
-    he = (ze) => Ie(ze) || D.some((ot) => zot(ot, ze)),
-    ft = (ze) => D.includes(ze),
-    rt,
-    ut = () => rt ?? (rt = (e?.allowWithinDeny || []).map((ze) => sS(ze, { literal: !0 }))),
-    we,
-    Ae = () => we ?? (we = (e?.ownAllowWithinDeny ?? []).map((ze) => sS(ze, { literal: !0 }))),
-    dt = new Set(e?.credentialDenyOnly),
-    Me = (ze) => (ze ? Ae() : ut()),
-    Ft = (ze) => {
-      for (let ot = ze; ; ot = path.dirname(ot)) {
-        if (ot === "/" && ot !== ze) return;
-        try {
-          let gn = ME(() => fsModule_4.statSync(ot));
-          return { path: ot, isDirectory: gn.isDirectory(), isStandIn: ot !== ze };
-        } catch (error) {
-          if (R4e(error) || ot === "/") return;
-        }
-      }
-    },
-    xn = (ze) => {
-      let ot = Ft(ze);
-      if (ot === void 0) return;
-      let gn = ue(ot.path);
-      if (gn !== "/")
-        return { landing: gn, named: ot.path, isDirectory: ot.isDirectory, isStandIn: ot.isStandIn };
-      let vn = ue(path.dirname(ot.path));
-      if (vn === "/") return;
-      return { landing: vn, named: ot.path, isDirectory: !0, isStandIn: !0 };
-    },
-    mt,
-    Mt = () => {
-      if (mt !== void 0) return mt;
-      if (!e) return [];
-      let ze = [];
-      for (let ot of e.denyOnly || []) {
-        if (sS(ot, { literal: !0 }) !== "/") {
-          ze.push(ot);
-          continue;
-        }
-        let gn = ME(() => fsModule_4.readdirSync("/")),
-          vn = dt.has(ot);
-        for (let pr of gn) {
-          if (u1.includes(`/${pr}`)) continue;
-          let dr = ue("/" + pr);
-          if (Me(vn).some(($s) => oS(dr, Ce($s)))) {
-            At(`[Sandbox Linux] Root deny expansion skips /${pr}: covered by allowRead`);
-            continue;
-          }
-          if ((ze.push("/" + pr), vn)) dt.add("/" + pr);
-        }
-      }
-      if (fsModule_4.existsSync("/etc/ssh/ssh_config.d")) ze.push("/etc/ssh/ssh_config.d");
-      return ((mt = ze), ze);
-    },
-    mn = (ze) => ue(ze).split("/").length,
-    Nt,
-    Wt = () =>
-      Nt ??
-      (Nt = Mt()
-        .map((ze) => ({ normalizedPath: sS(ze, { literal: !0 }), isCredential: dt.has(ze) }))
-        .sort((ze, ot) => mn(ze.normalizedPath) - mn(ot.normalizedPath))
-        .map(({ normalizedPath: normalizedPath, isCredential: isCredential }) => {
-          let gn = xn(normalizedPath);
-          return {
-            normalizedPath: normalizedPath,
-            mount: gn,
-            isCredential: isCredential,
-            liftedFile:
-              gn !== void 0 && !gn.isDirectory && Me(isCredential).some((vn) => Ce(vn) === gn.landing),
-          };
-        })),
-    gt;
-  if (n) {
-    w.push("--ro-bind", "/", "/");
-    let ze = w.length;
-    for (let wn of n.allowOnly || []) {
-      let In = sS(wn, { literal: !0 }),
-        rn = In === "" ? "" : In.replace(/\/+$/, "") || "/";
-      if ((At(`[Sandbox Linux] Processing write path: ${wn} -> ${rn}`), rn.startsWith("/dev/"))) {
-        At(`[Sandbox Linux] Skipping /dev path: ${rn}`);
-        continue;
-      }
-      if (!fsModule_4.existsSync(rn)) {
-        At(`[Sandbox Linux] Skipping non-existent write path: ${rn}`);
-        continue;
-      }
+async function generateFilesystemArgs(
+  readConfig,
+  writeConfig,
+  maskedFileBinds,
+  maskedFileStoreDir,
+  ripgrepConfig = {
+    command: "rg",
+  },
+  mandatoryDenySearchDepth = DEFAULT_MANDATORY_DENY_SEARCH_DEPTH,
+  allowGitConfig = false,
+  abortSignal,
+) {
+  let args = [];
+  let startedIn = xwn();
+  let allowedWritePaths = [];
+  let denyWriteArgs = [];
+  let mandatoryDenyArgsStart = 1 / 0;
+  let readOnlyDenyDirSpellings = new Map();
+  let symlinkedDenySpellingDests = new Set();
+  let denyWriteRawDests = new Map();
+  let unmakeableDenyDests = new Set();
+  let emptySource;
+  let canonicalFormCache = new Map();
+  let canonicalFormGuesses = new Set();
+  let canonicalFormUnresolved = new Set();
+  let canonicalForm = (p) => {
+    let canonical = canonicalFormCache.get(p);
+    if (canonical === undefined) {
       try {
-        let sn = JSe(rn),
-          replaced = rn.replace(/\/+$/, "");
-        if (sn !== replaced && Pwn(rn, sn)) {
-          At(
-            `[Sandbox Linux] Skipping symlink write path pointing outside expected location: ${wn} -> ${sn}`,
-          );
-          continue;
-        }
-      } catch {
-        At(`[Sandbox Linux] Skipping write path that could not be resolved: ${rn}`);
-        continue;
-      }
-      (w.push("--bind", rn, rn), D.push(rn));
-    }
-    gt = ft("/") ? w.length : ze;
-    let ot,
-      gn = () => {
-        if (ot !== void 0) return ot;
-        let wn = (In) => (
-          At(
-            `[Sandbox Linux] Read-deny prediction unusable (${In}); keeping every deny placeholder, which refuses to start wherever a covering deny directory is read-only: bubblewrap cannot create a placeholder's mount point there`,
-            { level: "warn" },
-          ),
-          { usable: !1 }
-        );
-        try {
-          let flattened = D.flatMap(Ne),
-            flattened_2 = Wt().flatMap(({ mount: mount }) => {
-              if (!mount?.isDirectory) return [];
-              return [...new Set([...Ne(mount.named), mount.landing])].filter((Kn) => Kn !== "/");
-            });
-          ot =
-            ae.size > 0
-              ? wn(`no canonical location for ${[...ae].join(", ")}`)
-              : {
-                  usable: !0,
-                  allowedWritePathsBothForms: flattened,
-                  prospectiveReadDenyTmpfsDirsBothForms: flattened_2,
-                };
-        } catch (error) {
-          ot = wn(`deriving it threw: ${error}`);
-        }
-        return ot;
-      },
-      vn = n.denyWithinAllow || [],
-      pr = [...vn, ...(await S8(h, y, b, S))];
-    if (xwn() !== R) throw new WorkingDirectoryChanged();
-    let dr = new Set(),
-      Ti = new Set();
-    for (let wn of pr) {
-      let In = sS(wn, { literal: !0 });
-      if (In.startsWith("/dev/")) continue;
-      let rn = jR(In, pr);
-      if (rn === null || rn.startsWith("/dev/")) continue;
-      for (let Kn of Rwn(rn)) Ti.add(Kn);
-      if (BE(rn, D)) continue;
-      if (rn !== In) K.add(rn);
-      let sn = !1;
-      try {
-        sn = fsModule_4.statSync(rn).isDirectory();
-      } catch {
-        continue;
-      }
-      if (!sn) continue;
-      if (he(rn)) {
-        let Kn = V.get(rn);
-        if (Kn === void 0) ((Kn = new Set()), V.set(rn, Kn));
-        Kn.add(In);
-      }
-    }
-    let $s = new Map(),
-      Ba = (wn) => {
-        let In = $s.get(wn);
-        if (In !== void 0) return In;
-        let rn = gn(),
-          sn =
-            !rn.usable ||
-            rn.allowedWritePathsBothForms.some(
-              (allowedWritePathsBothForm) =>
-                zot(allowedWritePathsBothForm, wn) &&
-                rn.prospectiveReadDenyTmpfsDirsBothForms.some((prospectiveReadDenyTmpfsDirsBothForm) =>
-                  oS(allowedWritePathsBothForm, prospectiveReadDenyTmpfsDirsBothForm),
-                ),
-            ) ||
-            rn.prospectiveReadDenyTmpfsDirsBothForms.some((prospectiveReadDenyTmpfsDirsBothForm) =>
-              [wn, ...(V.get(wn) ?? [])].some((Cr) => oS(Cr, prospectiveReadDenyTmpfsDirsBothForm)),
-            );
-        return ($s.set(wn, sn), sn);
-      },
-      po = [...V.keys()],
-      filtered = D.filter((wn) => !po.some((In) => zot(wn, In))),
-      Mc = (wn) => {
-        let In = !1;
-        for (let rn of po) {
-          if (!zot(wn, rn)) continue;
-          if (Ba(rn)) {
-            if (rn === "/") {
-              let sn = gn();
-              if (
-                sn.usable &&
-                !sn.prospectiveReadDenyTmpfsDirsBothForms.some((prospectiveReadDenyTmpfsDirsBothForm) =>
-                  oS(wn, prospectiveReadDenyTmpfsDirsBothForm),
-                )
-              )
-                In = !0;
-              continue;
-            }
-            return !1;
-          }
-          In = !0;
-        }
-        return In;
-      },
-      Ua = new Set(),
-      Fa = (wn) => [wn, ...Rwn(wn)].find((In) => Ua.has(In)),
-      $c = (wn) => {
-        let In = (Rs) => {
-            At(`[Sandbox Linux] No placeholder for non-existent deny path ${wn}: ${Rs}`);
-            return;
-          },
-          rn = Fa(wn);
-        if (rn !== void 0) return In(`decided with ${rn}`);
-        if (!filtered.some((Rs) => oS(wn, Rs)) || Mc(wn)) return In("it is read-only there");
-        let sn = f8(path.dirname(wn));
-        if (sn !== void 0) {
-          if (dr.has(sn)) return In(`${sn} is denied itself`);
-          if (!filtered.some((Rs) => oS(path.dirname(sn), Rs)))
-            return In(`${sn} is a file, in a directory that is read-only`);
-          return (dr.add(sn), Ua.add(sn), { dest: sn, kind: Is.Held });
-        }
-        let Kn = p8(wn);
-        Ua.add(Kn);
-        let Cr = g8(Kn, Ti.has(Kn) ? Is.Directory : Is.File);
-        if (Cr === Is.Unmakeable) Z.add(Kn);
-        else ($E.add(Kn), A8());
-        return { dest: Kn, kind: Cr };
-      },
-      ho = ({ dest: dest, kind: kind }) => {
-        switch (kind) {
-          case Is.Held:
-            return dest;
-          case Is.Directory:
-            return J ?? (J = E8());
-          case Is.File:
-            return "/dev/null";
-          case Is.Unmakeable:
-            return "/dev/null";
-        }
-      };
-    for (let [wn, In] of pr.entries()) {
-      if (wn === vn.length) L = O.length;
-      let rn = sS(In, { literal: !0 });
-      if (rn.startsWith("/dev/")) continue;
-      let sn = jR(rn);
-      if (sn === null) {
-        let Cr = BE(rn, D);
-        if (Cr && !dr.has(Cr)) (dr.add(Cr), O.push("--ro-bind", "/dev/null", Cr), q.set(Cr, rn));
-        At(`[Sandbox Linux] Deny path could not be resolved through symlinks, failing closed: ${rn}`);
-        continue;
-      }
-      if (sn !== rn) At(`[Sandbox Linux] Resolved symlinked deny path: ${rn} -> ${sn}`);
-      if (sn.startsWith("/dev/")) continue;
-      if (dr.has(sn)) continue;
-      dr.add(sn);
-      let Kn = BE(sn, D);
-      if (Kn) {
-        if (!dr.has(Kn)) (dr.add(Kn), O.push("--ro-bind", "/dev/null", Kn), q.set(Kn, rn));
-        At(`[Sandbox Linux] Mounted /dev/null at symlink ${Kn} to prevent symlink replacement attack`);
-        continue;
-      }
-      if (Fa(sn) !== void 0 || !fsModule_4.existsSync(sn)) {
-        let Cr = $c(sn);
-        if (Cr !== void 0) {
-          let { dest: dest, kind: kind } = Cr,
-            $a = ho(Cr);
-          (O.push("--ro-bind", $a, dest),
-            q.set(dest, rn),
-            At(
-              kind === Is.Unmakeable
-                ? `[Sandbox Linux] No mount point at ${dest}, which neither bubblewrap nor the command can create, for ${sn}`
-                : `[Sandbox Linux] Mounted ${$a} at ${dest} to block creation of ${sn}`,
-            ));
-        }
-        continue;
-      }
-      if (he(sn)) {
-        if (!K.has(sn) && Mc(sn)) {
-          At(`[Sandbox Linux] Skipping deny path already under read-only denied directory: ${sn}`);
-          continue;
-        }
-        for (let Cr of D)
-          if (zot(Cr, sn))
-            At(`[Sandbox Linux] Write deny ${sn} covers allowed write path ${Cr}; ${Cr} will be read-only`, {
+        canonical = retryingTransient(() => realPathOf(p));
+      } catch (err) {
+        canonical = p;
+        canonicalFormUnresolved.add(p);
+        if (!isAbsenceErrno(err)) {
+          canonicalFormGuesses.add(p);
+          logForDebugging_2(
+            `[Sandbox Linux] Where ${p} really is cannot be told, so what is mounted for it is mounted on this spelling, which bubblewrap may refuse: ${err}`,
+            {
               level: "warn",
-            });
-        (O.push("--ro-bind", sn, sn), q.set(sn, rn));
-      } else At(`[Sandbox Linux] Skipping deny path not within allowed paths: ${sn}`);
-    }
-  } else (w.push("--bind", "/", "/"), D.push("/"), (gt = w.length));
-  let jt = [],
-    Rn = [],
-    Xe = (ze, ot) => {
-      let gn = (pr) => pr.some((dr) => oS(ze, dr.dest)),
-        vn = !1;
-      for (let pr of jt) {
-        if (oS(ze, pr.landing)) vn = !0;
-        if (gn(pr.restoredWrites) || (ot === "writes and reads" && gn(pr.restoredReads))) vn = !1;
-      }
-      return vn;
-    },
-    nn = new Set(e?.unlistableDenyDirs ?? []),
-    Je = new Map();
-  for (let { realPath: realPath, fakePath: fakePath } of r ?? []) Je.set(ue(realPath), fakePath);
-  let vt = new Set(Je.keys()),
-    Lt = [
-      ...Wt().flatMap(({ mount: mount, liftedFile: liftedFile }) =>
-        mount === void 0 || liftedFile ? [] : [mount.landing],
-      ),
-      ...Je.keys(),
-    ],
-    ln = (ze, ot) => Lt.find((gn) => !oS(ot, gn) && (oS(gn, ze) || oS(ze, gn))),
-    flattened = Wt().flatMap(({ mount: mount, isCredential: isCredential }) =>
-      mount !== void 0 && isCredential ? [mount.landing] : [],
-    ),
-    kn = new Set(),
-    zr = (ze) => {
-      let found = flattened.find((gn) => oS(Ce(ze), gn));
-      if (found !== void 0 && !kn.has(ze))
-        (kn.add(ze),
-          At(`[Sandbox Linux] ${ze} is at or beneath the credential deny ${found}: not bound back`, {
-            level: "warn",
-          }));
-      return found === void 0;
-    },
-    filtered = ut().filter((ze) => Ae().includes(ze) || zr(ze)),
-    filtered_2 = D.filter(zr);
-  for (let { normalizedPath: normalizedPath, mount: mount, liftedFile: liftedFile } of Wt()) {
-    if (mount === void 0) {
-      At(
-        `[Sandbox Linux] Read deny path mounts nothing this wrap can place (absent, or uninspectable, or a link to '/' with nothing but '/' holding it): ${normalizedPath}`,
-      );
-      continue;
-    }
-    let { landing: landing, isDirectory: isDirectory, isStandIn: isStandIn } = mount;
-    if (Xe(landing, "writes and reads")) {
-      At(`[Sandbox Linux] Skipping read deny already hidden by a denyRead tmpfs: ${landing}`);
-      continue;
-    }
-    if (isDirectory) {
-      if (isStandIn)
-        At(
-          `[Sandbox Linux] Read deny path ${normalizedPath} cannot be mounted where it names; hiding ${landing} instead`,
-          { level: "warn" },
-        );
-      let Ti = nn.has(normalizedPath) || nn.has(landing);
-      if (Ti)
-        At(
-          `[Sandbox Linux] Read-denied directory could not be listed when the glob was expanded; restoring nothing beneath it: ${landing}`,
-          { level: "warn" },
-        );
-      let $s = isStandIn || Ti,
-        Ba = M8(w, {
-          landing: landing,
-          allowedWritePaths: $s ? [] : filtered_2,
-          readAllowPaths: $s ? [] : filtered,
-          resolve: me,
-          readDenialAround: (po) => ln(po, landing),
-          nameLocation: Ce,
-        });
-      jt.push({ landing: landing, ...Ba });
-    } else {
-      if (liftedFile) {
-        At(`[Sandbox Linux] Skipping read deny for re-allowed path: ${normalizedPath}`);
-        continue;
-      }
-      if (vt.has(landing)) {
-        At(
-          `[Sandbox Linux] Skipping read deny at a destination a file mask already covers: ${normalizedPath} -> ${landing}`,
-        );
-        continue;
-      }
-      (vt.add(landing),
-        w.push("--ro-bind", "/dev/null", landing),
-        Rn.push({ source: "/dev/null", landing: landing }));
-    }
-  }
-  for (let [ze, ot] of Je) (w.push("--ro-bind", ot, ze), Rn.push({ source: ot, landing: ze }));
-  let ta = F8([...q.keys(), ...Rn.map((ze) => ze.landing), ...jt.map((ze) => ze.landing)], {
-    rootIsWriteRoot: ft("/"),
-    isWithinAllowedWrite: Ie,
-    isAllowedWriteRoot: ft,
-  });
-  w.splice(gt, 0, ...ta);
-  let La = new Set(ta),
-    na = new Set();
-  for (let ze = L; ze < O.length; ze += 3)
-    for (let dir = path.dirname(O[ze + 2]); dir !== "/" && !na.has(dir); dir = path.dirname(dir))
-      if (La.has(dir)) na.add(dir);
-  let Fc = 3 * na.size,
-    qi = [],
-    wi = new Set();
-  for (let ze = 0; ze < O.length; ze += 3) {
-    let ot = O[ze + 2];
-    if (Z.has(ot)) continue;
-    let gn = q.get(ot) ?? ot;
-    if (Rn.some((vn) => vn.landing === ot)) continue;
-    if (Xe(ot, "writes")) {
-      At(`[Sandbox Linux] Skipping denyWrite bind already hidden by denyRead tmpfs: ${ot}`);
-      for (let vn of jt)
-        for (let restoredWrite of vn.restoredWrites) {
-          let dest = restoredWrite.dest;
-          if (!oS(dest, ot) && !oS(dest, gn)) continue;
-          if (Rn.some((Ti) => Ti.landing === dest)) {
-            At(
-              `[Sandbox Linux] Leaving a masked file to its mask inside dropped denyWrite bind ${ot}: ${dest}`,
-            );
-            continue;
-          }
-          if (wi.has(dest)) continue;
-          (wi.add(dest),
-            w.push("--ro-bind", restoredWrite.source, dest),
-            qi.push(dest),
-            At(
-              `[Sandbox Linux] Restoring write path read-only inside dropped denyWrite bind ${ot}: ${dest}`,
-            ));
+            },
+          );
         }
-      continue;
+      }
+      canonicalFormCache.set(p, canonical);
     }
-    if ((w.push(O[ze], O[ze + 1], ot), ze >= L)) Fc += 3;
-    if ((qi.push(ot), gn !== ot)) qi.push(gn);
-  }
-  for (let ze of jt) {
-    let found = qi.find((gn) => zot(ze.landing, gn));
-    if (found !== void 0) {
-      if (
-        (At(`[Sandbox Linux] Re-applying denyRead tmpfs re-exposed by denyWrite bind: ${ze.landing}`),
-        ze.restoredWrites.length > 0)
-      )
-        At(
-          `[Sandbox Linux] Restoring write paths read-only inside denyWrite bind ${found}: ${ze.restoredWrites.map((restoredWrite) => restoredWrite.dest).join(", ")}`,
-        );
-      w.push("--tmpfs", ze.landing);
-      for (let gn of [...ze.restoredWrites, ...ze.restoredReads]) w.push("--ro-bind", gn.source, gn.dest);
-    }
-  }
-  for (let ze of Rn)
-    if (qi.some((ot) => oS(ze.landing, ot)))
-      (At(`[Sandbox Linux] Re-applying file mask re-exposed by denyWrite bind: ${ze.landing}`),
-        w.push("--ro-bind", ze.source, ze.landing));
-  if (s !== void 0) w.push("--ro-bind", s, s);
-  if (J !== void 0) w.push("--ro-bind", J, J);
-  return { args: w, mandatoryDenyArgs: Fc };
-}
-//@ chunk-fq0cr76a.js:752374-756340 esm-fingerprint
-async function d1(e) {
-  let {
-      command: command,
-      commandId: commandId,
-      needsNetworkRestriction: needsNetworkRestriction,
-      httpSocketPath: httpSocketPath,
-      socksSocketPath: socksSocketPath,
-      httpProxyPort: httpProxyPort,
-      socksProxyPort: socksProxyPort,
-      proxyAuthToken: proxyAuthToken,
-      caCertPath: caCertPath,
-      javaAgentJarPath: javaAgentJarPath,
-      unsetEnvVars: unsetEnvVars,
-      setEnvVars: setEnvVars,
-      maskedFileBinds: maskedFileBinds,
-      maskedFileStoreDir: maskedFileStoreDir,
-      enableWeakerNestedSandbox: enableWeakerNestedSandbox,
-      allowNestedUserNamespaces: allowNestedUserNamespaces,
-      allowAllUnixSockets: allowAllUnixSockets,
-      binShell: binShell,
-      ripgrepConfig: ripgrepConfig = { command: "rg" },
-      mandatoryDenySearchDepth: mandatoryDenySearchDepth = qE,
-      allowGitConfig: allowGitConfig = !1,
-      gitSafeDirectories: gitSafeDirectories,
-      seccompConfig: seccompConfig,
-      bwrapPath: bwrapPath,
-      socatPath: socatPath,
-      observeSocketPath: observeSocketPath,
-      abortSignal: abortSignal,
-    } = e,
-    rt = Xw(e.readConfig),
-    ut = Jw(e.writeConfig),
-    we = (rt && rt.denyOnly.length > 0) || (maskedFileBinds !== void 0 && maskedFileBinds.length > 0),
-    Ae = ut !== void 0,
-    dt =
-      (unsetEnvVars !== void 0 && unsetEnvVars.length > 0) ||
-      (setEnvVars !== void 0 && Object.keys(setEnvVars).length > 0),
-    Me = (gitSafeDirectories?.length ?? 0) > 0;
-  if (!needsNetworkRestriction && !we && !Ae && !dt && !Me) return command;
-  ga++;
-  let Ft = Zm,
-    xn = QSe(ITt(command, commandId)),
-    mt = ["--new-session", "--die-with-parent"],
-    Mt;
-  try {
-    if (!allowAllUnixSockets)
-      if (((Mt = P8(seccompConfig?.applyPath, seccompConfig?.argv0)), !Mt))
-        At(
-          "[Sandbox Linux] apply-seccomp binary not available - unix socket blocking disabled. Install @anthropic-ai/sandbox-runtime globally for full protection.",
-          { level: "warn" },
-        );
-      else
-        ((Mt = D8(allowNestedUserNamespaces === !0) + Mt),
-          At("[Sandbox Linux] Applying seccomp filter for Unix socket blocking"));
-    else At("[Sandbox Linux] Skipping seccomp filter - allowAllUnixSockets is enabled");
-    if (observeSocketPath && Mt)
-      if (fsModule_4.existsSync(observeSocketPath))
-        (mt.push("--bind", observeSocketPath, observeSocketPath),
-          mt.push("--setenv", "SRT_OBSERVE_SOCK", observeSocketPath),
-          mt.push("--setenv", "SRT_ENCODED_CMD", xn));
-      else
-        At(
-          "[Sandbox Linux] observe socket missing \u2014 supervisor not running; " +
-            "continuing without violation monitoring",
-        );
-    if (dt) {
-      for (let Lt of unsetEnvVars ?? []) mt.push("--unsetenv", Lt);
-      for (let [Lt, ln] of Object.entries(setEnvVars ?? {})) mt.push("--setenv", Lt, ln);
-    }
-    if (gitSafeDirectories && gitSafeDirectories.length > 0) {
-      let Lt = B3r({ safeDirs: gitSafeDirectories, unsetEnvVars: unsetEnvVars, setEnvVars: setEnvVars });
-      for (let [ln, Zt] of Object.entries(Lt)) mt.push("--setenv", ln, Zt);
-    }
-    if (needsNetworkRestriction) {
-      if ((mt.push("--unshare-net"), httpSocketPath && socksSocketPath)) {
-        if (!fsModule_4.existsSync(httpSocketPath))
-          throw Error(
-            `Linux HTTP bridge socket does not exist: ${httpSocketPath}. The bridge process may have died. Try reinitializing the sandbox.`,
-          );
-        if (!fsModule_4.existsSync(socksSocketPath))
-          throw Error(
-            `Linux SOCKS bridge socket does not exist: ${socksSocketPath}. The bridge process may have died. Try reinitializing the sandbox.`,
-          );
-        if ((mt.push("--bind", httpSocketPath, httpSocketPath), socksSocketPath !== httpSocketPath))
-          mt.push("--bind", socksSocketPath, socksSocketPath);
-        let Lt = Vot(3128, 1080, caCertPath, proxyAuthToken, ut === void 0, xn);
-        mt.push(
-          ...Lt.flatMap((Zt) => {
-            let index = Zt.indexOf("="),
-              sliced = Zt.slice(0, index),
-              sliced_2 = Zt.slice(index + 1);
-            return ["--setenv", sliced, sliced_2];
-          }),
-        );
-        let ln = Ym({
-          agentJarPath: javaAgentJarPath,
-          unsetEnvVars: unsetEnvVars,
-          inherited: process.env.JAVA_TOOL_OPTIONS,
-        });
-        if (ln !== void 0) mt.push("--setenv", "JAVA_TOOL_OPTIONS", ln);
-        if (httpProxyPort !== void 0)
-          mt.push("--setenv", "CLAUDE_CODE_HOST_HTTP_PROXY_PORT", String(httpProxyPort));
-        if (socksProxyPort !== void 0)
-          mt.push("--setenv", "CLAUDE_CODE_HOST_SOCKS_PROXY_PORT", String(socksProxyPort));
+    return canonical;
+  };
+  let canonicalLocationOf = (p) => ({
+    canonical: canonicalForm(p),
+    resolved: !canonicalFormUnresolved.has(p),
+  });
+  let mountForms = (p) => {
+    let canonical = canonicalForm(p);
+    return canonical === p ? [p] : [p, canonical];
+  };
+  let nameLocationOf = (p) => nameLocation(p, canonicalForm);
+  let isWithinAnyAllowedWritePath = (candidatePath) =>
+    allowedWritePaths.some((allowedPath) => isAtOrUnder(candidatePath, allowedPath));
+  let meetsAnyAllowedWritePath = (candidatePath) =>
+    isWithinAnyAllowedWritePath(candidatePath) ||
+    allowedWritePaths.some((allowedPath) => zot(allowedPath, candidatePath));
+  let isAllowedWriteRoot = (candidatePath) => allowedWritePaths.includes(candidatePath);
+  let readAllowPathsMemo;
+  let readAllowPaths = () =>
+    readAllowPathsMemo ??
+    (readAllowPathsMemo = (readConfig?.allowWithinDeny || []).map((p) =>
+      normalizePathForSandbox(p, {
+        literal: true,
+      }),
+    ));
+  let ownReadAllowPathsMemo;
+  let ownReadAllowPaths = () =>
+    ownReadAllowPathsMemo ??
+    (ownReadAllowPathsMemo = (readConfig?.ownAllowWithinDeny ?? []).map((p) =>
+      normalizePathForSandbox(p, {
+        literal: true,
+      }),
+    ));
+  let credentialDenies = new Set(readConfig?.credentialDenyOnly);
+  let readExceptionsTo = (isCredential) => (isCredential ? ownReadAllowPaths() : readAllowPaths());
+  let readDenyTargetOf = (entry) => {
+    for (let candidate = entry; ; candidate = path.dirname(candidate)) {
+      if (candidate === "/" && candidate !== entry) return;
+      try {
+        let stats = retryingTransient(() => fsModule_2.statSync(candidate));
+        return {
+          path: candidate,
+          isDirectory: stats.isDirectory(),
+          isStandIn: candidate !== entry,
+        };
+      } catch (err) {
+        if (isAbsenceErrno(err) || candidate === "/") return;
       }
     }
-    let { args: args, mandatoryDenyArgs: mandatoryDenyArgs } = await $8(
-        rt,
-        ut,
-        maskedFileBinds,
-        maskedFileStoreDir,
+  };
+  let readDenyMountOf = (entry) => {
+    let target = readDenyTargetOf(entry);
+    if (target === undefined) return;
+    let landing = canonicalForm(target.path);
+    if (landing !== "/")
+      return {
+        landing,
+        named: target.path,
+        isDirectory: target.isDirectory,
+        isStandIn: target.isStandIn,
+      };
+    let holder = canonicalForm(path.dirname(target.path));
+    if (holder === "/") return;
+    return {
+      landing: holder,
+      named: target.path,
+      isDirectory: true,
+      isStandIn: true,
+    };
+  };
+  let readDenyEntriesMemo;
+  let readDenyEntries = () => {
+    if (readDenyEntriesMemo !== undefined) return readDenyEntriesMemo;
+    if (!readConfig) return [];
+    let entries = [];
+    for (let p of readConfig.denyOnly || []) {
+      if (
+        normalizePathForSandbox(p, {
+          literal: true,
+        }) !== "/"
+      ) {
+        entries.push(p);
+        continue;
+      }
+      let children = retryingTransient(() => fsModule_2.readdirSync("/"));
+      let isCredential = credentialDenies.has(p);
+      for (let child of children) {
+        if (KERNEL_TOP_LEVEL_DIRS.includes(`/${child}`)) continue;
+        let childLocation = canonicalForm("/" + child);
+        if (readExceptionsTo(isCredential).some(($s) => isAtOrUnder(childLocation, nameLocationOf($s)))) {
+          logForDebugging_2(`[Sandbox Linux] Root deny expansion skips /${child}: covered by allowRead`);
+          continue;
+        }
+        entries.push("/" + child);
+        if (isCredential) credentialDenies.add("/" + child);
+      }
+    }
+    if (fsModule_2.existsSync("/etc/ssh/ssh_config.d")) entries.push("/etc/ssh/ssh_config.d");
+    readDenyEntriesMemo = entries;
+    return entries;
+  };
+  let canonicalDepth = (p) => canonicalForm(p).split("/").length;
+  let readDenyPlanMemo;
+  let readDenyPlan = () =>
+    readDenyPlanMemo ??
+    (readDenyPlanMemo = readDenyEntries()
+      .map((p) => ({
+        normalizedPath: normalizePathForSandbox(p, {
+          literal: true,
+        }),
+        isCredential: credentialDenies.has(p),
+      }))
+      .sort((a, b) => canonicalDepth(a.normalizedPath) - canonicalDepth(b.normalizedPath))
+      .map(({ normalizedPath, isCredential }) => {
+        let mount = readDenyMountOf(normalizedPath);
+        return {
+          normalizedPath,
+          mount,
+          isCredential,
+          liftedFile:
+            mount !== undefined &&
+            !mount.isDirectory &&
+            readExceptionsTo(isCredential).some((allowPath) => nameLocationOf(allowPath) === mount.landing),
+        };
+      }));
+  let ancestorPinInsertAt;
+  if (writeConfig) {
+    args.push("--ro-bind", "/", "/");
+    let beneathAllowBinds = args.length;
+    for (let pathPattern of writeConfig.allowOnly || []) {
+      let normalized = normalizePathForSandbox(pathPattern, {
+        literal: true,
+      });
+      let normalizedPath = normalized === "" ? "" : normalized.replace(/\/+$/, "") || "/";
+      logForDebugging_2(`[Sandbox Linux] Processing write path: ${pathPattern} -> ${normalizedPath}`);
+      if (normalizedPath.startsWith("/dev/")) {
+        logForDebugging_2(`[Sandbox Linux] Skipping /dev path: ${normalizedPath}`);
+        continue;
+      }
+      if (!fsModule_2.existsSync(normalizedPath)) {
+        logForDebugging_2(`[Sandbox Linux] Skipping non-existent write path: ${normalizedPath}`);
+        continue;
+      }
+      try {
+        let resolvedPath = realPathOf(normalizedPath);
+        let normalizedForComparison = normalizedPath.replace(/\/+$/, "");
+        if (
+          resolvedPath !== normalizedForComparison &&
+          isSymlinkOutsideBoundary(normalizedPath, resolvedPath)
+        ) {
+          logForDebugging_2(
+            `[Sandbox Linux] Skipping symlink write path pointing outside expected location: ${pathPattern} -> ${resolvedPath}`,
+          );
+          continue;
+        }
+      } catch {
+        logForDebugging_2(
+          `[Sandbox Linux] Skipping write path that could not be resolved: ${normalizedPath}`,
+        );
+        continue;
+      }
+      args.push("--bind", normalizedPath, normalizedPath);
+      allowedWritePaths.push(normalizedPath);
+    }
+    ancestorPinInsertAt = isAllowedWriteRoot("/") ? args.length : beneathAllowBinds;
+    let stubSkipVetoInputs;
+    let getStubSkipVetoInputs = () => {
+      if (stubSkipVetoInputs !== undefined) return stubSkipVetoInputs;
+      let unusable = (cause) => {
+        logForDebugging_2(
+          `[Sandbox Linux] Read-deny prediction unusable (${cause}); keeping every deny placeholder, which refuses to start wherever a covering deny directory is read-only: bubblewrap cannot create a placeholder's mount point there`,
+          {
+            level: "warn",
+          },
+        );
+        return {
+          usable: false,
+        };
+      };
+      try {
+        let allowedWritePathsBothForms = allowedWritePaths.flatMap(mountForms);
+        let prospectiveReadDenyTmpfsDirsBothForms = readDenyPlan().flatMap(({ mount }) => {
+          if (!mount?.isDirectory) return [];
+          return [...new Set([...mountForms(mount.named), mount.landing])].filter((form) => form !== "/");
+        });
+        stubSkipVetoInputs =
+          canonicalFormGuesses.size > 0
+            ? unusable(`no canonical location for ${[...canonicalFormGuesses].join(", ")}`)
+            : {
+                usable: true,
+                allowedWritePathsBothForms,
+                prospectiveReadDenyTmpfsDirsBothForms,
+              };
+      } catch (err) {
+        stubSkipVetoInputs = unusable(`deriving it threw: ${err}`);
+      }
+      return stubSkipVetoInputs;
+    };
+    let configuredDenyPaths = writeConfig.denyWithinAllow || [];
+    let denyPaths = [
+      ...configuredDenyPaths,
+      ...(await linuxGetMandatoryDenyPaths(
         ripgrepConfig,
         mandatoryDenySearchDepth,
         allowGitConfig,
         abortSignal,
-      ),
-      Wt = mt.length;
-    mt.push(...args);
-    let gt = { start: Wt, end: mt.length, mandatoryDenyArgs: mandatoryDenyArgs };
-    (mt.push("--dev", "/dev"), mt.push("--unshare-pid"));
-    let jt = process.geteuid?.(),
-      Rn = W6r(j6r);
-    if (jt === 0 && !Rn && !zR) ((zR = !0), At(`[Sandbox Linux] ${VE}`, { level: "warn" }));
-    if (
-      (mt.push("--unshare-user", ...T3o({ euid: jt, hasSetfcap: Rn, usesSeccompHelper: Mt !== void 0 })),
-      !enableWeakerNestedSandbox)
-    )
-      mt.push("--proc", "/proc");
-    else mt.push("--bind", "/proc", "/proc");
-    if ((mt.push("--unsetenv", SRT_ALLOW_NESTED_USERNS), Mt === void 0 && allowNestedUserNamespaces !== !0)) {
-      let Lt = enableWeakerNestedSandbox ? null : (bwrapPath ?? ha("bwrap"));
-      if (Lt !== null && O8(Lt)) mt.push("--disable-userns");
-      else if (!s1)
-        ((s1 = !0),
-          At(
-            "[Sandbox Linux] no seccomp helper in use, and bubblewrap cannot disable user namespaces (needs 0.8.0 or later, not setuid, and no enableWeakerNestedSandbox) - a sandboxed command that creates one can undo the write denies",
-            { level: "warn" },
-          ));
+      )),
+    ];
+    if (xwn() !== startedIn) throw new WorkingDirectoryChanged();
+    let seenDenyWrite = new Set();
+    let denyPathAncestors = new Set();
+    for (let pathPattern of denyPaths) {
+      let rawPath = normalizePathForSandbox(pathPattern, {
+        literal: true,
+      });
+      if (rawPath.startsWith("/dev/")) continue;
+      let resolvedPath = resolveSymlinkedDenyPath(rawPath, denyPaths);
+      if (resolvedPath === null || resolvedPath.startsWith("/dev/")) continue;
+      for (let above of properAncestors(resolvedPath)) denyPathAncestors.add(above);
+      if (findSymlinkInPath(resolvedPath, allowedWritePaths)) continue;
+      if (resolvedPath !== rawPath) symlinkedDenySpellingDests.add(resolvedPath);
+      let isDirectory = false;
+      try {
+        isDirectory = fsModule_2.statSync(resolvedPath).isDirectory();
+      } catch {
+        continue;
+      }
+      if (!isDirectory) continue;
+      if (meetsAnyAllowedWritePath(resolvedPath)) {
+        let spellings = readOnlyDenyDirSpellings.get(resolvedPath);
+        if (spellings === undefined) {
+          spellings = new Set();
+          readOnlyDenyDirSpellings.set(resolvedPath, spellings);
+        }
+        spellings.add(rawPath);
+      }
     }
-    let Xe = binShell || "bash",
-      nn = ha(Xe);
-    if (!nn) throw Error(`Shell '${Xe}' not found in PATH`);
-    if ((mt.push("--", nn, "-c"), needsNetworkRestriction && httpSocketPath && socksSocketPath)) {
-      let Lt = B8(httpSocketPath, socksSocketPath, command, Mt, nn, socatPath);
-      mt.push(Lt);
-    } else if (Mt) {
-      let Lt = Mt + zee([nn, "-c", command]);
-      mt.push(Lt);
-    } else mt.push(command);
-    let Je = T8(bwrapPath ?? "bwrap", mt, gt),
-      vt = [];
-    if (needsNetworkRestriction) vt.push("network");
-    if (we || Ae) vt.push("filesystem");
-    if (dt) vt.push("env");
-    if (Mt) vt.push("seccomp(unix-block)");
-    if ((At(`[Sandbox Linux] Wrapped command with bwrap (${vt.join(", ")} restrictions)`), Zm !== Ft)) ga++;
-    return Je;
+    let coveringDirUnsafeVerdicts = new Map();
+    let coveringDirIsUnsafe = (denyDir) => {
+      let cached = coveringDirUnsafeVerdicts.get(denyDir);
+      if (cached !== undefined) return cached;
+      let vetoInputs = getStubSkipVetoInputs();
+      let unsafe =
+        !vetoInputs.usable ||
+        vetoInputs.allowedWritePathsBothForms.some(
+          (writePath) =>
+            zot(writePath, denyDir) &&
+            vetoInputs.prospectiveReadDenyTmpfsDirsBothForms.some((tmpfsDir) =>
+              isAtOrUnder(writePath, tmpfsDir),
+            ),
+        ) ||
+        vetoInputs.prospectiveReadDenyTmpfsDirsBothForms.some((tmpfsDir) =>
+          [denyDir, ...(readOnlyDenyDirSpellings.get(denyDir) ?? [])].some((spelling) =>
+            isAtOrUnder(spelling, tmpfsDir),
+          ),
+        );
+      coveringDirUnsafeVerdicts.set(denyDir, unsafe);
+      return unsafe;
+    };
+    let readOnlyDenyDirs = [...readOnlyDenyDirSpellings.keys()];
+    let uncoveredWritePaths = allowedWritePaths.filter(
+      (allowedPath) => !readOnlyDenyDirs.some((denyDir) => zot(allowedPath, denyDir)),
+    );
+    let coveredBySafeReadOnlyDenyDir = (candidate) => {
+      let covered = false;
+      for (let denyDir of readOnlyDenyDirs) {
+        if (!zot(candidate, denyDir)) continue;
+        if (coveringDirIsUnsafe(denyDir)) {
+          if (denyDir === "/") {
+            let vetoInputs = getStubSkipVetoInputs();
+            if (
+              vetoInputs.usable &&
+              !vetoInputs.prospectiveReadDenyTmpfsDirsBothForms.some((tmpfsDir) =>
+                isAtOrUnder(candidate, tmpfsDir),
+              )
+            )
+              covered = true;
+            continue;
+          }
+          return false;
+        }
+        covered = true;
+      }
+      return covered;
+    };
+    let decidedMountPoints = new Set();
+    let decidedMountPointOver = (p) => [p, ...properAncestors(p)].find((at) => decidedMountPoints.has(at));
+    let mountPointFor = (absentPath) => {
+      let none = (why) => {
+        logForDebugging_2(`[Sandbox Linux] No placeholder for non-existent deny path ${absentPath}: ${why}`);
+        return;
+      };
+      let decided = decidedMountPointOver(absentPath);
+      if (decided !== undefined) return none(`decided with ${decided}`);
+      if (
+        !uncoveredWritePaths.some((allowedPath) => isAtOrUnder(absentPath, allowedPath)) ||
+        coveredBySafeReadOnlyDenyDir(absentPath)
+      )
+        return none("it is read-only there");
+      let file = fileOnTheWay(path.dirname(absentPath));
+      if (file !== undefined) {
+        if (seenDenyWrite.has(file)) return none(`${file} is denied itself`);
+        if (!uncoveredWritePaths.some((allowedPath) => isAtOrUnder(path.dirname(file), allowedPath)))
+          return none(`${file} is a file, in a directory that is read-only`);
+        seenDenyWrite.add(file);
+        decidedMountPoints.add(file);
+        return {
+          dest: file,
+          kind: MountPointKind.Held,
+        };
+      }
+      let dest = findFirstNonExistentComponent(absentPath);
+      decidedMountPoints.add(dest);
+      let kind = makeableMountPoint(
+        dest,
+        denyPathAncestors.has(dest) ? MountPointKind.Directory : MountPointKind.File,
+      );
+      if (kind === MountPointKind.Unmakeable) unmakeableDenyDests.add(dest);
+      else {
+        bwrapMountPoints.add(dest);
+        A8();
+      }
+      return {
+        dest,
+        kind,
+      };
+    };
+    let mountSourceFor = ({ dest, kind }) => {
+      switch (kind) {
+        case MountPointKind.Held:
+          return dest;
+        case MountPointKind.Directory:
+          return emptySource ?? (emptySource = ensureEmptyMountSourceDir());
+        case MountPointKind.File:
+          return "/dev/null";
+        case MountPointKind.Unmakeable:
+          return "/dev/null";
+      }
+    };
+    for (let [index, pathPattern] of denyPaths.entries()) {
+      if (index === configuredDenyPaths.length) mandatoryDenyArgsStart = denyWriteArgs.length;
+      let rawPath = normalizePathForSandbox(pathPattern, {
+        literal: true,
+      });
+      if (rawPath.startsWith("/dev/")) continue;
+      let normalizedPath = resolveSymlinkedDenyPath(rawPath);
+      if (normalizedPath === null) {
+        let unresolvableSymlink = findSymlinkInPath(rawPath, allowedWritePaths);
+        if (unresolvableSymlink && !seenDenyWrite.has(unresolvableSymlink)) {
+          seenDenyWrite.add(unresolvableSymlink);
+          denyWriteArgs.push("--ro-bind", "/dev/null", unresolvableSymlink);
+          denyWriteRawDests.set(unresolvableSymlink, rawPath);
+        }
+        logForDebugging_2(
+          `[Sandbox Linux] Deny path could not be resolved through symlinks, failing closed: ${rawPath}`,
+        );
+        continue;
+      }
+      if (normalizedPath !== rawPath)
+        logForDebugging_2(`[Sandbox Linux] Resolved symlinked deny path: ${rawPath} -> ${normalizedPath}`);
+      if (normalizedPath.startsWith("/dev/")) continue;
+      if (seenDenyWrite.has(normalizedPath)) continue;
+      seenDenyWrite.add(normalizedPath);
+      let symlinkInPath = findSymlinkInPath(normalizedPath, allowedWritePaths);
+      if (symlinkInPath) {
+        if (!seenDenyWrite.has(symlinkInPath)) {
+          seenDenyWrite.add(symlinkInPath);
+          denyWriteArgs.push("--ro-bind", "/dev/null", symlinkInPath);
+          denyWriteRawDests.set(symlinkInPath, rawPath);
+        }
+        logForDebugging_2(
+          `[Sandbox Linux] Mounted /dev/null at symlink ${symlinkInPath} to prevent symlink replacement attack`,
+        );
+        continue;
+      }
+      if (decidedMountPointOver(normalizedPath) !== undefined || !fsModule_2.existsSync(normalizedPath)) {
+        let placeholder = mountPointFor(normalizedPath);
+        if (placeholder !== undefined) {
+          let { dest, kind } = placeholder;
+          let source = mountSourceFor(placeholder);
+          denyWriteArgs.push("--ro-bind", source, dest);
+          denyWriteRawDests.set(dest, rawPath);
+          logForDebugging_2(
+            kind === MountPointKind.Unmakeable
+              ? `[Sandbox Linux] No mount point at ${dest}, which neither bubblewrap nor the command can create, for ${normalizedPath}`
+              : `[Sandbox Linux] Mounted ${source} at ${dest} to block creation of ${normalizedPath}`,
+          );
+        }
+        continue;
+      }
+      if (meetsAnyAllowedWritePath(normalizedPath)) {
+        if (!symlinkedDenySpellingDests.has(normalizedPath) && coveredBySafeReadOnlyDenyDir(normalizedPath)) {
+          logForDebugging_2(
+            `[Sandbox Linux] Skipping deny path already under read-only denied directory: ${normalizedPath}`,
+          );
+          continue;
+        }
+        for (let buried of allowedWritePaths)
+          if (zot(buried, normalizedPath))
+            logForDebugging_2(
+              `[Sandbox Linux] Write deny ${normalizedPath} covers allowed write path ${buried}; ${buried} will be read-only`,
+              {
+                level: "warn",
+              },
+            );
+        denyWriteArgs.push("--ro-bind", normalizedPath, normalizedPath);
+        denyWriteRawDests.set(normalizedPath, rawPath);
+      } else
+        logForDebugging_2(`[Sandbox Linux] Skipping deny path not within allowed paths: ${normalizedPath}`);
+    }
+  } else {
+    args.push("--bind", "/", "/");
+    allowedWritePaths.push("/");
+    ancestorPinInsertAt = args.length;
+  }
+  let readDenyTmpfsUnits = [];
+  let fileMasks = [];
+  let isHiddenByTmpfs = (location, broughtBackBy) => {
+    let broughtBack = (restored) => restored.some((r) => isAtOrUnder(location, r.dest));
+    let hidden = false;
+    for (let unit of readDenyTmpfsUnits) {
+      if (isAtOrUnder(location, unit.landing)) hidden = true;
+      if (
+        broughtBack(unit.restoredWrites) ||
+        (broughtBackBy === "writes and reads" && broughtBack(unit.restoredReads))
+      )
+        hidden = false;
+    }
+    return hidden;
+  };
+  let unlistableDenyDirs = new Set(readConfig?.unlistableDenyDirs ?? []);
+  let credentialMaskFakes = new Map();
+  for (let { realPath, fakePath } of maskedFileBinds ?? [])
+    credentialMaskFakes.set(canonicalForm(realPath), fakePath);
+  let fileMaskLandings = new Set(credentialMaskFakes.keys());
+  let readDeniedLocations = [
+    ...readDenyPlan().flatMap(({ mount, liftedFile }) =>
+      mount === undefined || liftedFile ? [] : [mount.landing],
+    ),
+    ...credentialMaskFakes.keys(),
+  ];
+  let readDenialAround = (target, landing) =>
+    readDeniedLocations.find(
+      (denied) =>
+        !isAtOrUnder(landing, denied) && (isAtOrUnder(denied, target) || isAtOrUnder(target, denied)),
+    );
+  let credentialLandings = readDenyPlan().flatMap(({ mount, isCredential }) =>
+    mount !== undefined && isCredential ? [mount.landing] : [],
+  );
+  let leftOut = new Set();
+  let outsideCredentials = (p) => {
+    let landing = credentialLandings.find((at) => isAtOrUnder(nameLocationOf(p), at));
+    if (landing !== undefined && !leftOut.has(p)) {
+      leftOut.add(p);
+      logForDebugging_2(
+        `[Sandbox Linux] ${p} is at or beneath the credential deny ${landing}: not bound back`,
+        {
+          level: "warn",
+        },
+      );
+    }
+    return landing === undefined;
+  };
+  let restorableReadPaths = readAllowPaths().filter(
+    (p) => ownReadAllowPaths().includes(p) || outsideCredentials(p),
+  );
+  let restorableWritePaths = allowedWritePaths.filter(outsideCredentials);
+  for (let { normalizedPath, mount, liftedFile } of readDenyPlan()) {
+    if (mount === undefined) {
+      logForDebugging_2(
+        `[Sandbox Linux] Read deny path mounts nothing this wrap can place (absent, or uninspectable, or a link to '/' with nothing but '/' holding it): ${normalizedPath}`,
+      );
+      continue;
+    }
+    let { landing, isDirectory, isStandIn } = mount;
+    if (isHiddenByTmpfs(landing, "writes and reads")) {
+      logForDebugging_2(`[Sandbox Linux] Skipping read deny already hidden by a denyRead tmpfs: ${landing}`);
+      continue;
+    }
+    if (isDirectory) {
+      if (isStandIn)
+        logForDebugging_2(
+          `[Sandbox Linux] Read deny path ${normalizedPath} cannot be mounted where it names; hiding ${landing} instead`,
+          {
+            level: "warn",
+          },
+        );
+      let unlistable = unlistableDenyDirs.has(normalizedPath) || unlistableDenyDirs.has(landing);
+      if (unlistable)
+        logForDebugging_2(
+          `[Sandbox Linux] Read-denied directory could not be listed when the glob was expanded; restoring nothing beneath it: ${landing}`,
+          {
+            level: "warn",
+          },
+        );
+      let restoresNothing = isStandIn || unlistable;
+      let restored = pushReadDenyDirMounts(args, {
+        landing,
+        allowedWritePaths: restoresNothing ? [] : restorableWritePaths,
+        readAllowPaths: restoresNothing ? [] : restorableReadPaths,
+        resolve: canonicalLocationOf,
+        readDenialAround: (restoreTarget) => readDenialAround(restoreTarget, landing),
+        nameLocation: nameLocationOf,
+      });
+      readDenyTmpfsUnits.push({
+        landing,
+        ...restored,
+      });
+    } else {
+      if (liftedFile) {
+        logForDebugging_2(`[Sandbox Linux] Skipping read deny for re-allowed path: ${normalizedPath}`);
+        continue;
+      }
+      if (fileMaskLandings.has(landing)) {
+        logForDebugging_2(
+          `[Sandbox Linux] Skipping read deny at a destination a file mask already covers: ${normalizedPath} -> ${landing}`,
+        );
+        continue;
+      }
+      fileMaskLandings.add(landing);
+      args.push("--ro-bind", "/dev/null", landing);
+      fileMasks.push({
+        source: "/dev/null",
+        landing,
+      });
+    }
+  }
+  for (let [landing, fakePath] of credentialMaskFakes) {
+    args.push("--ro-bind", fakePath, landing);
+    fileMasks.push({
+      source: fakePath,
+      landing,
+    });
+  }
+  let pinArgs = ancestorPinArgs(
+    [
+      ...denyWriteRawDests.keys(),
+      ...fileMasks.map((mask) => mask.landing),
+      ...readDenyTmpfsUnits.map((unit) => unit.landing),
+    ],
+    {
+      rootIsWriteRoot: isAllowedWriteRoot("/"),
+      isWithinAllowedWrite: isWithinAnyAllowedWritePath,
+      isAllowedWriteRoot,
+    },
+  );
+  args.splice(ancestorPinInsertAt, 0, ...pinArgs);
+  let pinned = new Set(pinArgs);
+  let mandatoryDenyPins = new Set();
+  for (let i = mandatoryDenyArgsStart; i < denyWriteArgs.length; i += 3)
+    for (
+      let dir = path.dirname(denyWriteArgs[i + 2]);
+      dir !== "/" && !mandatoryDenyPins.has(dir);
+      dir = path.dirname(dir)
+    )
+      if (pinned.has(dir)) mandatoryDenyPins.add(dir);
+  let mandatoryDenyArgs = 3 * mandatoryDenyPins.size;
+  let emittedDenyWriteDests = [];
+  let restoredReadOnlyWritePaths = new Set();
+  for (let i = 0; i < denyWriteArgs.length; i += 3) {
+    let dest = denyWriteArgs[i + 2];
+    if (unmakeableDenyDests.has(dest)) continue;
+    let rawDest = denyWriteRawDests.get(dest) ?? dest;
+    if (fileMasks.some((mask) => mask.landing === dest)) continue;
+    if (isHiddenByTmpfs(dest, "writes")) {
+      logForDebugging_2(`[Sandbox Linux] Skipping denyWrite bind already hidden by denyRead tmpfs: ${dest}`);
+      for (let unit of readDenyTmpfsUnits)
+        for (let writeMount of unit.restoredWrites) {
+          let writePath = writeMount.dest;
+          if (!isAtOrUnder(writePath, dest) && !isAtOrUnder(writePath, rawDest)) continue;
+          if (fileMasks.some((mask) => mask.landing === writePath)) {
+            logForDebugging_2(
+              `[Sandbox Linux] Leaving a masked file to its mask inside dropped denyWrite bind ${dest}: ${writePath}`,
+            );
+            continue;
+          }
+          if (restoredReadOnlyWritePaths.has(writePath)) continue;
+          restoredReadOnlyWritePaths.add(writePath);
+          args.push("--ro-bind", writeMount.source, writePath);
+          emittedDenyWriteDests.push(writePath);
+          logForDebugging_2(
+            `[Sandbox Linux] Restoring write path read-only inside dropped denyWrite bind ${dest}: ${writePath}`,
+          );
+        }
+      continue;
+    }
+    args.push(denyWriteArgs[i], denyWriteArgs[i + 1], dest);
+    if (i >= mandatoryDenyArgsStart) mandatoryDenyArgs += 3;
+    emittedDenyWriteDests.push(dest);
+    if (rawDest !== dest) emittedDenyWriteDests.push(rawDest);
+  }
+  for (let unit of readDenyTmpfsUnits) {
+    let reExposingDest = emittedDenyWriteDests.find((dest) => zot(unit.landing, dest));
+    if (reExposingDest !== undefined) {
+      logForDebugging_2(
+        `[Sandbox Linux] Re-applying denyRead tmpfs re-exposed by denyWrite bind: ${unit.landing}`,
+      );
+      if (unit.restoredWrites.length > 0)
+        logForDebugging_2(
+          `[Sandbox Linux] Restoring write paths read-only inside denyWrite bind ${reExposingDest}: ${unit.restoredWrites.map((w) => w.dest).join(", ")}`,
+        );
+      args.push("--tmpfs", unit.landing);
+      for (let restored of [...unit.restoredWrites, ...unit.restoredReads])
+        args.push("--ro-bind", restored.source, restored.dest);
+    }
+  }
+  for (let mask of fileMasks)
+    if (emittedDenyWriteDests.some((dest) => isAtOrUnder(mask.landing, dest))) {
+      logForDebugging_2(
+        `[Sandbox Linux] Re-applying file mask re-exposed by denyWrite bind: ${mask.landing}`,
+      );
+      args.push("--ro-bind", mask.source, mask.landing);
+    }
+  if (maskedFileStoreDir !== undefined) args.push("--ro-bind", maskedFileStoreDir, maskedFileStoreDir);
+  if (emptySource !== undefined) args.push("--ro-bind", emptySource, emptySource);
+  return {
+    args,
+    mandatoryDenyArgs,
+  };
+}
+//@ chunk-fq0cr76a.js:752374-756340 esm-fingerprint
+async function wrapCommandWithSandboxLinux(params) {
+  let {
+    command,
+    commandId,
+    needsNetworkRestriction,
+    httpSocketPath,
+    socksSocketPath,
+    httpProxyPort,
+    socksProxyPort,
+    proxyAuthToken,
+    caCertPath,
+    javaAgentJarPath,
+    unsetEnvVars,
+    setEnvVars,
+    maskedFileBinds,
+    maskedFileStoreDir,
+    enableWeakerNestedSandbox,
+    allowNestedUserNamespaces,
+    allowAllUnixSockets,
+    binShell,
+    ripgrepConfig = {
+      command: "rg",
+    },
+    mandatoryDenySearchDepth = DEFAULT_MANDATORY_DENY_SEARCH_DEPTH,
+    allowGitConfig = false,
+    gitSafeDirectories,
+    seccompConfig,
+    bwrapPath,
+    socatPath,
+    observeSocketPath,
+    abortSignal,
+  } = params;
+  let readConfig = readNamesOf(params.readConfig);
+  let writeConfig = writeNamesOf(params.writeConfig);
+  let hasReadRestrictions =
+    (readConfig && readConfig.denyOnly.length > 0) ||
+    (maskedFileBinds !== undefined && maskedFileBinds.length > 0);
+  let hasWriteRestrictions = writeConfig !== undefined;
+  let hasEnvRestrictions =
+    (unsetEnvVars !== undefined && unsetEnvVars.length > 0) ||
+    (setEnvVars !== undefined && Object.keys(setEnvVars).length > 0);
+  let hasGitConfig = (gitSafeDirectories?.length ?? 0) > 0;
+  if (
+    !needsNetworkRestriction &&
+    !hasReadRestrictions &&
+    !hasWriteRestrictions &&
+    !hasEnvRestrictions &&
+    !hasGitConfig
+  )
+    return command;
+  activeSandboxCount++;
+  let countedAfter = forcedCleanups;
+  let attributionKey = encodeSandboxedCommand(ITt(command, commandId));
+  let bwrapArgs = ["--new-session", "--die-with-parent"];
+  let applySeccompPrefix;
+  try {
+    if (!allowAllUnixSockets) {
+      applySeccompPrefix = resolveApplySeccompPrefix(seccompConfig?.applyPath, seccompConfig?.argv0);
+      if (!applySeccompPrefix)
+        logForDebugging_2(
+          "[Sandbox Linux] apply-seccomp binary not available - unix socket blocking disabled. Install @anthropic-ai/sandbox-runtime globally for full protection.",
+          {
+            level: "warn",
+          },
+        );
+      else {
+        applySeccompPrefix = helperEnvironmentPrefix(allowNestedUserNamespaces === true) + applySeccompPrefix;
+        logForDebugging_2("[Sandbox Linux] Applying seccomp filter for Unix socket blocking");
+      }
+    } else logForDebugging_2("[Sandbox Linux] Skipping seccomp filter - allowAllUnixSockets is enabled");
+    if (observeSocketPath && applySeccompPrefix)
+      if (fsModule_2.existsSync(observeSocketPath)) {
+        bwrapArgs.push("--bind", observeSocketPath, observeSocketPath);
+        bwrapArgs.push("--setenv", "SRT_OBSERVE_SOCK", observeSocketPath);
+        bwrapArgs.push("--setenv", "SRT_ENCODED_CMD", attributionKey);
+      } else
+        logForDebugging_2(
+          "[Sandbox Linux] observe socket missing \u2014 supervisor not running; " +
+            "continuing without violation monitoring",
+        );
+    if (hasEnvRestrictions) {
+      for (let name of unsetEnvVars ?? []) bwrapArgs.push("--unsetenv", name);
+      for (let [name, value] of Object.entries(setEnvVars ?? {})) bwrapArgs.push("--setenv", name, value);
+    }
+    if (gitSafeDirectories && gitSafeDirectories.length > 0) {
+      let gitCfg = buildPosixGitSafeDirEnv({
+        safeDirs: gitSafeDirectories,
+        unsetEnvVars,
+        setEnvVars,
+      });
+      for (let [name, value] of Object.entries(gitCfg)) bwrapArgs.push("--setenv", name, value);
+    }
+    if (needsNetworkRestriction) {
+      bwrapArgs.push("--unshare-net");
+      if (httpSocketPath && socksSocketPath) {
+        if (!fsModule_2.existsSync(httpSocketPath))
+          throw Error(
+            `Linux HTTP bridge socket does not exist: ${httpSocketPath}. The bridge process may have died. Try reinitializing the sandbox.`,
+          );
+        if (!fsModule_2.existsSync(socksSocketPath))
+          throw Error(
+            `Linux SOCKS bridge socket does not exist: ${socksSocketPath}. The bridge process may have died. Try reinitializing the sandbox.`,
+          );
+        bwrapArgs.push("--bind", httpSocketPath, httpSocketPath);
+        if (socksSocketPath !== httpSocketPath) bwrapArgs.push("--bind", socksSocketPath, socksSocketPath);
+        let proxyEnv = generateProxyEnvVars(
+          3128,
+          1080,
+          caCertPath,
+          proxyAuthToken,
+          writeConfig === undefined,
+          attributionKey,
+        );
+        bwrapArgs.push(
+          ...proxyEnv.flatMap((env) => {
+            let firstEq = env.indexOf("=");
+            let key = env.slice(0, firstEq);
+            let value = env.slice(firstEq + 1);
+            return ["--setenv", key, value];
+          }),
+        );
+        let javaToolOptions = buildJavaToolOptions({
+          agentJarPath: javaAgentJarPath,
+          unsetEnvVars,
+          inherited: process.env.JAVA_TOOL_OPTIONS,
+        });
+        if (javaToolOptions !== undefined) bwrapArgs.push("--setenv", "JAVA_TOOL_OPTIONS", javaToolOptions);
+        if (httpProxyPort !== undefined)
+          bwrapArgs.push("--setenv", "CLAUDE_CODE_HOST_HTTP_PROXY_PORT", String(httpProxyPort));
+        if (socksProxyPort !== undefined)
+          bwrapArgs.push("--setenv", "CLAUDE_CODE_HOST_SOCKS_PROXY_PORT", String(socksProxyPort));
+      }
+    }
+    let { args: fsArgs, mandatoryDenyArgs } = await generateFilesystemArgs(
+      readConfig,
+      writeConfig,
+      maskedFileBinds,
+      maskedFileStoreDir,
+      ripgrepConfig,
+      mandatoryDenySearchDepth,
+      allowGitConfig,
+      abortSignal,
+    );
+    let mountsStart = bwrapArgs.length;
+    bwrapArgs.push(...fsArgs);
+    let mounts = {
+      start: mountsStart,
+      end: bwrapArgs.length,
+      mandatoryDenyArgs,
+    };
+    bwrapArgs.push("--dev", "/dev");
+    bwrapArgs.push("--unshare-pid");
+    let euid = process.geteuid?.();
+    let hasSetfcap = processHasBoundingCapability(CAP_SETFCAP);
+    if (euid === 0 && !hasSetfcap && !setfcapMissingLogged) {
+      setfcapMissingLogged = true;
+      logForDebugging_2(`[Sandbox Linux] ${CAP_SETFCAP_MISSING_MESSAGE}`, {
+        level: "warn",
+      });
+    }
+    bwrapArgs.push(
+      "--unshare-user",
+      ...capabilityArgs({
+        euid,
+        hasSetfcap,
+        usesSeccompHelper: applySeccompPrefix !== undefined,
+      }),
+    );
+    if (!enableWeakerNestedSandbox) bwrapArgs.push("--proc", "/proc");
+    else bwrapArgs.push("--bind", "/proc", "/proc");
+    bwrapArgs.push("--unsetenv", NESTED_USERNS_ENV);
+    if (applySeccompPrefix === undefined && allowNestedUserNamespaces !== true) {
+      let bwrap = enableWeakerNestedSandbox ? null : (bwrapPath ?? whichSync("bwrap"));
+      if (bwrap !== null && bwrapCanDisableUserns(bwrap)) bwrapArgs.push("--disable-userns");
+      else if (!noUsernsLimitLogged) {
+        noUsernsLimitLogged = true;
+        logForDebugging_2(
+          "[Sandbox Linux] no seccomp helper in use, and bubblewrap cannot disable user namespaces (needs 0.8.0 or later, not setuid, and no enableWeakerNestedSandbox) - a sandboxed command that creates one can undo the write denies",
+          {
+            level: "warn",
+          },
+        );
+      }
+    }
+    let shellName = binShell || "bash";
+    let shell = whichSync(shellName);
+    if (!shell) throw Error(`Shell '${shellName}' not found in PATH`);
+    bwrapArgs.push("--", shell, "-c");
+    if (needsNetworkRestriction && httpSocketPath && socksSocketPath) {
+      let sandboxCommand = buildSandboxCommand(
+        httpSocketPath,
+        socksSocketPath,
+        command,
+        applySeccompPrefix,
+        shell,
+        socatPath,
+      );
+      bwrapArgs.push(sandboxCommand);
+    } else if (applySeccompPrefix) {
+      let applySeccompCmd = applySeccompPrefix + quote([shell, "-c", command]);
+      bwrapArgs.push(applySeccompCmd);
+    } else bwrapArgs.push(command);
+    let wrappedCommand = renderBwrapInvocation(bwrapPath ?? "bwrap", bwrapArgs, mounts);
+    let restrictions = [];
+    if (needsNetworkRestriction) restrictions.push("network");
+    if (hasReadRestrictions || hasWriteRestrictions) restrictions.push("filesystem");
+    if (hasEnvRestrictions) restrictions.push("env");
+    if (applySeccompPrefix) restrictions.push("seccomp(unix-block)");
+    logForDebugging_2(`[Sandbox Linux] Wrapped command with bwrap (${restrictions.join(", ")} restrictions)`);
+    if (forcedCleanups !== countedAfter) activeSandboxCount++;
+    return wrappedCommand;
   } catch (error) {
-    if (Zm === Ft) Wf();
+    if (forcedCleanups === countedAfter) cleanupBwrapMountPoints();
     throw error;
   }
 }
 //@ chunk-yf82ynbr.js:10481-10512 esm-fingerprint
 var Be = ["/proc", "/sys", "/dev"];
-
-export { T3o, W6r, j6r, ZE, jE, l1, a1, d1, WorkingDirectoryChanged, Wf, Be };
+export {
+  capabilityArgs,
+  processHasBoundingCapability,
+  CAP_SETFCAP,
+  ZE,
+  linuxGetCwdMandatoryDenyPaths,
+  initializeLinuxNetworkBridge,
+  checkLinuxDependencies,
+  wrapCommandWithSandboxLinux,
+  WorkingDirectoryChanged,
+  cleanupBwrapMountPoints,
+  Be,
+};

@@ -17,28 +17,35 @@ import { logForDebugging } from "./debug.js";
 //@ chunk-e6aww6q8.js:1502484-1502516 placement
 var REMOVE_PROMPT_STRINGS = "remove_prompt_strings";
 //@ chunk-e6aww6q8.js:1502516-1502630 placement
-function logPromptStringsRemoval({ strings: strings, matched: matched }) {
-  logEvent("tengu_remove_prompt_strings_applied", { configured: strings.length, matched: matched.size });
+function logPromptStringsRemoval({ strings, matched }) {
+  logEvent("tengu_remove_prompt_strings_applied", {
+    configured: strings.length,
+    matched: matched.size,
+  });
 }
+//@ chunk-e6aww6q8.js:1502630-1503098 placement
 /**
  * 读取要从提示词中删除的字符串列表（环境变量 CLAUDE_CODE_REMOVE_PROMPT_STRINGS 优先，否则取客户端数据），格式不对时告警；有内容则记遥测。
  */
-//@ chunk-e6aww6q8.js:1502630-1503098 placement
 function loadPromptRemovalConfig() {
-  let e = env.CLAUDE_CODE_REMOVE_PROMPT_STRINGS !== void 0,
-    n = e
-      ? safeParseJSON(env.CLAUDE_CODE_REMOVE_PROMPT_STRINGS, !1)
-      : getCachedClientData()?.[REMOVE_PROMPT_STRINGS],
-    r = Array.isArray(n) ? n.filter((y) => typeof y === "string" && y.trim() !== "") : [],
-    s = Array.isArray(n) ? n.length > 0 : n !== void 0;
+  let e = env.CLAUDE_CODE_REMOVE_PROMPT_STRINGS !== undefined;
+  let n = e
+    ? safeParseJSON(env.CLAUDE_CODE_REMOVE_PROMPT_STRINGS, false)
+    : getCachedClientData()?.[REMOVE_PROMPT_STRINGS];
+  let r = Array.isArray(n) ? n.filter((y) => typeof y === "string" && y.trim() !== "") : [];
+  let s = Array.isArray(n) ? n.length > 0 : n !== undefined;
   if (r.length === 0 && s)
     logForDebugging(
       `prompt ablation: ignoring ${e ? "CLAUDE_CODE_REMOVE_PROMPT_STRINGS" : `client_data ${REMOVE_PROMPT_STRINGS}`}: not a JSON array of non-empty strings`,
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
-  let h = { strings: r, matched: new Set() };
+  let h = {
+    strings: r,
+    matched: new Set(),
+  };
   if (r.length > 0) logPromptStringsRemoval(h);
   return h;
 }
-
 export { loadPromptRemovalConfig, logPromptStringsRemoval };

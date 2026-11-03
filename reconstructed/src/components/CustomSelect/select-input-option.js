@@ -20,7 +20,11 @@ import { TextInput } from "../TextInput.js";
 import { useScrollViewportSize } from "../ScrollViewportContext.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
-import { e, r, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { SelectOption } from "./select-option.js";
 import { ClickableImageRef } from "../ClickableImageRef.js";
@@ -29,106 +33,116 @@ import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 
 //@ chunk-ey2qag4x.js:26333-26392 placement
-function Do(t) {
-  return t?.name === "escape" && !t.ctrl && !t.meta;
+function isEscapeKey(event) {
+  return event?.name === "escape" && !event.ctrl && !event.meta;
 }
 //@ chunk-ey2qag4x.js:26392-26433 layout = _temp (1)
-function mc(c) {
+function isImagePaste_6(c) {
   return c.type === "image";
 }
 //@ chunk-ey2qag4x.js:26433-26493 layout
-function jr(t, o, i, a) {
-  let l = 2 + o + 2;
-  return Math.max(1, t - l - i - a);
+function inputOptionWidth(columns, maxIndexWidth, i, a) {
+  let l = 2 + maxIndexWidth + 2;
+  return Math.max(1, columns - l - i - a);
 }
 //@ chunk-ey2qag4x.js:26493-33398 fingerprint = SelectInputOption (0.907)
-function SelectInputOption(t0) {
-  let $ = w(107),
-    {
-      option: option,
-      isFocused: isFocused,
-      isSelected: isSelected,
-      shouldShowDownArrow: shouldShowDownArrow,
-      shouldShowUpArrow: shouldShowUpArrow,
-      maxIndexWidth: maxIndexWidth,
-      index: index,
-      hideIndex: hideIndex,
-      inputValue: inputValue,
-      onInputChange: onInputChange,
-      onSubmit: onSubmit,
-      onExit: onExit,
-      layout: layout,
-      children: children,
-      showLabel: t1,
-      onOpenEditor: onOpenEditor,
-      resetCursorOnUpdate: t2,
-      canPasteImage: canPasteImage,
-      onImagePaste: onImagePaste,
-      pastedContents: pastedContents,
-      onRemoveImage: onRemoveImage,
-      imagesSelected: imagesSelected,
-      selectedImageIndex: t3,
-      onImagesSelectedChange: onImagesSelectedChange,
-      onSelectedImageIndexChange: onSelectedImageIndexChange,
-      extraChromeWidth: extraChromeWidth,
-      onClick: onClick,
-      hoverStyle: hoverStyle,
-    } = t0,
-    Y = hideIndex === void 0 ? !1 : hideIndex,
-    J = t1 === void 0 ? !1 : t1,
-    ye = t2 === void 0 ? !1 : t2,
-    fe = t3 === void 0 ? 0 : t3,
-    ee = extraChromeWidth === void 0 ? 0 : extraChromeWidth,
-    xe;
-  if ($[0] !== pastedContents)
-    ((xe = pastedContents ? Object.values(pastedContents).filter(mc) : []),
-      ($[0] = pastedContents),
-      ($[1] = xe));
-  else xe = $[1];
-  let U = xe,
-    me = J || option.showLabelWithValue === !0,
-    [X, le] = y(inputValue.length),
-    isUserEditing = R(!1),
-    Ve;
-  if ($[2] !== inputValue.length || $[3] !== isFocused || $[4] !== ye)
-    ((Ve = () => {
-      if (ye && isFocused) {
-        if (isUserEditing.current) isUserEditing.current = !1;
-        else le(inputValue.length);
+function SelectInputOption(props) {
+  let $ = w(107);
+  let {
+    option,
+    isFocused,
+    isSelected,
+    shouldShowDownArrow,
+    shouldShowUpArrow,
+    maxIndexWidth,
+    index,
+    hideIndex,
+    inputValue,
+    onInputChange,
+    onSubmit,
+    onExit,
+    layout,
+    children,
+    showLabel,
+    onOpenEditor,
+    resetCursorOnUpdate,
+    canPasteImage,
+    onImagePaste,
+    pastedContents,
+    onRemoveImage,
+    imagesSelected,
+    selectedImageIndex,
+    onImagesSelectedChange,
+    onSelectedImageIndexChange,
+    extraChromeWidth,
+    onClick,
+    hoverStyle,
+  } = props;
+  let Y = hideIndex === undefined ? false : hideIndex;
+  let showLabelProp = showLabel === undefined ? false : showLabel;
+  let resetCursorOnUpdate_2 = resetCursorOnUpdate === undefined ? false : resetCursorOnUpdate;
+  let selectedImageIndex_2 = selectedImageIndex === undefined ? 0 : selectedImageIndex;
+  let ee = extraChromeWidth === undefined ? 0 : extraChromeWidth;
+  let t4;
+  if ($[0] !== pastedContents) {
+    t4 = pastedContents ? Object.values(pastedContents).filter(isImagePaste_6) : [];
+    $[0] = pastedContents;
+    $[1] = t4;
+  } else t4 = $[1];
+  let imageAttachments = t4;
+  let me = showLabelProp || option.showLabelWithValue === true;
+  let [cursorOffset, setCursorOffset] = y(inputValue.length);
+  let isUserEditing = R(false);
+  let t5;
+  if ($[2] !== inputValue.length || $[3] !== isFocused || $[4] !== resetCursorOnUpdate_2) {
+    t5 = () => {
+      if (resetCursorOnUpdate_2 && isFocused) {
+        if (isUserEditing.current) isUserEditing.current = false;
+        else setCursorOffset(inputValue.length);
       }
-    }),
-      ($[2] = inputValue.length),
-      ($[3] = isFocused),
-      ($[4] = ye),
-      ($[5] = Ve));
-  else Ve = $[5];
-  let ne;
-  if ($[6] !== inputValue || $[7] !== isFocused || $[8] !== ye)
-    ((ne = [ye, isFocused, inputValue]), ($[6] = inputValue), ($[7] = isFocused), ($[8] = ye), ($[9] = ne));
-  else ne = $[9];
-  P(Ve, ne);
-  let A;
-  if ($[10] !== inputValue || $[11] !== onInputChange || $[12] !== onOpenEditor)
-    ((A = () => {
+    };
+    $[2] = inputValue.length;
+    $[3] = isFocused;
+    $[4] = resetCursorOnUpdate_2;
+    $[5] = t5;
+  } else t5 = $[5];
+  let t6;
+  if ($[6] !== inputValue || $[7] !== isFocused || $[8] !== resetCursorOnUpdate_2) {
+    t6 = [resetCursorOnUpdate_2, isFocused, inputValue];
+    $[6] = inputValue;
+    $[7] = isFocused;
+    $[8] = resetCursorOnUpdate_2;
+    $[9] = t6;
+  } else t6 = $[9];
+  P(t5, t6);
+  let t7;
+  if ($[10] !== inputValue || $[11] !== onInputChange || $[12] !== onOpenEditor) {
+    t7 = () => {
       onOpenEditor?.(inputValue, onInputChange);
-    }),
-      ($[10] = inputValue),
-      ($[11] = onInputChange),
-      ($[12] = onOpenEditor),
-      ($[13] = A));
-  else A = $[13];
-  const we = isFocused && !!onOpenEditor;
-  let te;
-  if ($[14] !== we) ((te = { context: "Chat", isActive: we }), ($[14] = we), ($[15] = te));
-  else te = $[15];
-  useKeybinding("chat:externalEditor", A, te);
-  let ze;
-  if ($[16] !== canPasteImage || $[17] !== onImagePaste)
-    ((ze = () => {
+    };
+    $[10] = inputValue;
+    $[11] = onInputChange;
+    $[12] = onOpenEditor;
+    $[13] = t7;
+  } else t7 = $[13];
+  const isActive = isFocused && !!onOpenEditor;
+  let t9;
+  if ($[14] !== isActive) {
+    t9 = {
+      context: "Chat",
+      isActive,
+    };
+    $[14] = isActive;
+    $[15] = t9;
+  } else t9 = $[15];
+  useKeybinding("chat:externalEditor", t7, t9);
+  let t10;
+  if ($[16] !== canPasteImage || $[17] !== onImagePaste) {
+    t10 = () => {
       if (!onImagePaste) {
         return;
       }
-      if (canPasteImage?.() === !1) {
+      if (canPasteImage?.() === false) {
         return;
       }
       getImageFromClipboard(imageLimitsForModel(getMainLoopModel())).then((imageData) => {
@@ -138,148 +152,185 @@ function SelectInputOption(t0) {
             dimensions: imageData.dimensions,
           });
       });
-    }),
-      ($[16] = canPasteImage),
-      ($[17] = onImagePaste),
-      ($[18] = ze));
-  else ze = $[18];
-  const mt = isFocused && !!onImagePaste;
-  let Be;
-  if ($[19] !== mt) ((Be = { context: "Chat", isActive: mt }), ($[19] = mt), ($[20] = Be));
-  else Be = $[20];
-  useKeybinding("chat:imagePaste", ze, Be);
-  let Bt;
-  if ($[21] !== U || $[22] !== onRemoveImage)
-    ((Bt = () => {
-      if (U.length > 0 && onRemoveImage) onRemoveImage(U.at(-1).id);
-    }),
-      ($[21] = U),
-      ($[22] = onRemoveImage),
-      ($[23] = Bt));
-  else Bt = $[23];
-  const Vt = isFocused && !imagesSelected && inputValue === "" && U.length > 0 && !!onRemoveImage;
-  let Nt;
-  if ($[24] !== Vt) ((Nt = { context: "Attachments", isActive: Vt }), ($[24] = Vt), ($[25] = Nt));
-  else Nt = $[25];
-  useKeybinding("attachments:remove", Bt, Nt);
-  let Fe, yt;
-  if ($[26] !== U.length || $[27] !== onSelectedImageIndexChange || $[28] !== fe)
-    ((Fe = () => {
-      if (U.length > 1) onSelectedImageIndexChange?.((fe + 1) % U.length);
-    }),
-      (yt = () => {
-        if (U.length > 1) onSelectedImageIndexChange?.((fe - 1 + U.length) % U.length);
-      }),
-      ($[26] = U.length),
-      ($[27] = onSelectedImageIndexChange),
-      ($[28] = fe),
-      ($[29] = Fe),
-      ($[30] = yt));
-  else ((Fe = $[29]), (yt = $[30]));
-  let _e;
+    };
+    $[16] = canPasteImage;
+    $[17] = onImagePaste;
+    $[18] = t10;
+  } else t10 = $[18];
+  const isActive_2 = isFocused && !!onImagePaste;
+  let t12;
+  if ($[19] !== isActive_2) {
+    t12 = {
+      context: "Chat",
+      isActive: isActive_2,
+    };
+    $[19] = isActive_2;
+    $[20] = t12;
+  } else t12 = $[20];
+  useKeybinding("chat:imagePaste", t10, t12);
+  let t13;
+  if ($[21] !== imageAttachments || $[22] !== onRemoveImage) {
+    t13 = () => {
+      if (imageAttachments.length > 0 && onRemoveImage) onRemoveImage(imageAttachments.at(-1).id);
+    };
+    $[21] = imageAttachments;
+    $[22] = onRemoveImage;
+    $[23] = t13;
+  } else t13 = $[23];
+  const isActive_3 =
+    isFocused && !imagesSelected && inputValue === "" && imageAttachments.length > 0 && !!onRemoveImage;
+  let t15;
+  if ($[24] !== isActive_3) {
+    t15 = {
+      context: "Attachments",
+      isActive: isActive_3,
+    };
+    $[24] = isActive_3;
+    $[25] = t15;
+  } else t15 = $[25];
+  useKeybinding("attachments:remove", t13, t15);
+  let t16;
+  let yt;
   if (
-    $[31] !== U ||
+    $[26] !== imageAttachments.length ||
+    $[27] !== onSelectedImageIndexChange ||
+    $[28] !== selectedImageIndex_2
+  ) {
+    t16 = () => {
+      if (imageAttachments.length > 1)
+        onSelectedImageIndexChange?.((selectedImageIndex_2 + 1) % imageAttachments.length);
+    };
+    yt = () => {
+      if (imageAttachments.length > 1)
+        onSelectedImageIndexChange?.(
+          (selectedImageIndex_2 - 1 + imageAttachments.length) % imageAttachments.length,
+        );
+    };
+    $[26] = imageAttachments.length;
+    $[27] = onSelectedImageIndexChange;
+    $[28] = selectedImageIndex_2;
+    $[29] = t16;
+    $[30] = yt;
+  } else {
+    t16 = $[29];
+    yt = $[30];
+  }
+  let t18;
+  if (
+    $[31] !== imageAttachments ||
     $[32] !== onImagesSelectedChange ||
     $[33] !== onRemoveImage ||
     $[34] !== onSelectedImageIndexChange ||
-    $[35] !== fe
-  )
-    ((_e = () => {
-      let img = U[fe];
+    $[35] !== selectedImageIndex_2
+  ) {
+    t18 = () => {
+      let img = imageAttachments[selectedImageIndex_2];
       if (img && onRemoveImage) {
-        if (onRemoveImage(img.id) === !1) {
+        if (onRemoveImage(img.id) === false) {
           return;
         }
-        if (U.length <= 1) onImagesSelectedChange?.(!1);
-        else onSelectedImageIndexChange?.(Math.min(fe, U.length - 2));
+        if (imageAttachments.length <= 1) onImagesSelectedChange?.(false);
+        else onSelectedImageIndexChange?.(Math.min(selectedImageIndex_2, imageAttachments.length - 2));
       }
-    }),
-      ($[31] = U),
-      ($[32] = onImagesSelectedChange),
-      ($[33] = onRemoveImage),
-      ($[34] = onSelectedImageIndexChange),
-      ($[35] = fe),
-      ($[36] = _e));
-  else _e = $[36];
+    };
+    $[31] = imageAttachments;
+    $[32] = onImagesSelectedChange;
+    $[33] = onRemoveImage;
+    $[34] = onSelectedImageIndexChange;
+    $[35] = selectedImageIndex_2;
+    $[36] = t18;
+  } else t18 = $[36];
   let dt;
-  if ($[37] !== onImagesSelectedChange)
-    ((dt = () => {
-      onImagesSelectedChange?.(!1);
-    }),
-      ($[37] = onImagesSelectedChange),
-      ($[38] = dt));
-  else dt = $[38];
-  let Qe;
-  if ($[39] !== Fe || $[40] !== yt || $[41] !== _e || $[42] !== dt)
-    ((Qe = {
-      "attachments:next": Fe,
+  if ($[37] !== onImagesSelectedChange) {
+    dt = () => {
+      onImagesSelectedChange?.(false);
+    };
+    $[37] = onImagesSelectedChange;
+    $[38] = dt;
+  } else dt = $[38];
+  let t20;
+  if ($[39] !== t16 || $[40] !== yt || $[41] !== t18 || $[42] !== dt) {
+    t20 = {
+      "attachments:next": t16,
       "attachments:previous": yt,
-      "attachments:remove": _e,
+      "attachments:remove": t18,
       "attachments:exit": dt,
-    }),
-      ($[39] = Fe),
-      ($[40] = yt),
-      ($[41] = _e),
-      ($[42] = dt),
-      ($[43] = Qe));
-  else Qe = $[43];
-  const ct = isFocused && !!imagesSelected;
-  let ht;
-  if ($[44] !== ct) ((ht = { context: "Attachments", isActive: ct }), ($[44] = ct), ($[45] = ht));
-  else ht = $[45];
-  MessageActionsKeybindings(Qe, ht);
-  let { vimEditing: vimEditing } = option,
-    Ne = vimEditing ? VimTextInput : TextInput,
-    p = R(null),
-    Ft,
-    St;
-  if ($[46] !== imagesSelected || $[47] !== isFocused || $[48] !== onImagesSelectedChange)
-    ((Ft = () => {
-      if (!isFocused && imagesSelected) onImagesSelectedChange?.(!1);
-    }),
-      (St = [isFocused, imagesSelected, onImagesSelectedChange]),
-      ($[46] = imagesSelected),
-      ($[47] = isFocused),
-      ($[48] = onImagesSelectedChange),
-      ($[49] = Ft),
-      ($[50] = St));
-  else ((Ft = $[49]), (St = $[50]));
+    };
+    $[39] = t16;
+    $[40] = yt;
+    $[41] = t18;
+    $[42] = dt;
+    $[43] = t20;
+  } else t20 = $[43];
+  const isActive_4 = isFocused && !!imagesSelected;
+  let t22;
+  if ($[44] !== isActive_4) {
+    t22 = {
+      context: "Attachments",
+      isActive: isActive_4,
+    };
+    $[44] = isActive_4;
+    $[45] = t22;
+  } else t22 = $[45];
+  MessageActionsKeybindings(t20, t22);
+  let { vimEditing } = option;
+  let Ne = vimEditing ? VimTextInput : TextInput;
+  let p = R(null);
+  let Ft;
+  let St;
+  if ($[46] !== imagesSelected || $[47] !== isFocused || $[48] !== onImagesSelectedChange) {
+    Ft = () => {
+      if (!isFocused && imagesSelected) onImagesSelectedChange?.(false);
+    };
+    St = [isFocused, imagesSelected, onImagesSelectedChange];
+    $[46] = imagesSelected;
+    $[47] = isFocused;
+    $[48] = onImagesSelectedChange;
+    $[49] = Ft;
+    $[50] = St;
+  } else {
+    Ft = $[49];
+    St = $[50];
+  }
   P(Ft, St);
-  let Le = layout === "expanded" ? maxIndexWidth + 3 : maxIndexWidth + 4,
-    { columns: columns } = useScrollViewportSize(useTerminalSize()),
-    kt =
-      me && typeof option.label === "string"
-        ? bunStringWidth(option.label) + bunStringWidth(option.labelValueSeparator ?? ", ")
-        : 0,
-    bt;
-  if ($[51] !== columns || $[52] !== ee || $[53] !== kt || $[54] !== maxIndexWidth)
-    ((bt = jr(columns, maxIndexWidth, kt, ee)),
-      ($[51] = columns),
-      ($[52] = ee),
-      ($[53] = kt),
-      ($[54] = maxIndexWidth),
-      ($[55] = bt));
-  else bt = $[55];
-  let on = bt;
-  const Ge = vimEditing?.takesEscape ? ul : void 0,
-    Lt = layout === "compact" ? 0 : void 0;
+  let descriptionPaddingLeft = layout === "expanded" ? maxIndexWidth + 3 : maxIndexWidth + 4;
+  let { columns } = useScrollViewportSize(useTerminalSize());
+  let kt =
+    me && typeof option.label === "string"
+      ? bunStringWidth(option.label) + bunStringWidth(option.labelValueSeparator ?? ", ")
+      : 0;
+  let bt;
+  if ($[51] !== columns || $[52] !== ee || $[53] !== kt || $[54] !== maxIndexWidth) {
+    bt = inputOptionWidth(columns, maxIndexWidth, kt, ee);
+    $[51] = columns;
+    $[52] = ee;
+    $[53] = kt;
+    $[54] = maxIndexWidth;
+    $[55] = bt;
+  } else bt = $[55];
+  let columns_2 = bt;
+  const onKeyDown = vimEditing?.takesEscape ? stopEscapePropagation : undefined;
+  const flexShrink = layout === "compact" ? 0 : undefined;
   let Ze;
-  if ($[56] !== Y || $[57] !== index || $[58] !== maxIndexWidth)
-    ((Ze =
+  if ($[56] !== Y || $[57] !== index || $[58] !== maxIndexWidth) {
+    Ze =
       !Y &&
-      e(Box, {
+      jsxProd_default(Box, {
         flexShrink: 0,
-        children: e(Text, { dimColor: !0, children: `${index}.`.padEnd(maxIndexWidth + 2) }),
-      })),
-      ($[56] = Y),
-      ($[57] = index),
-      ($[58] = maxIndexWidth),
-      ($[59] = Ze));
-  else Ze = $[59];
-  let sn;
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: `${index}.`.padEnd(maxIndexWidth + 2),
+        }),
+      });
+    $[56] = Y;
+    $[57] = index;
+    $[58] = maxIndexWidth;
+    $[59] = Ze;
+  } else Ze = $[59];
+  let t32;
   if (
     $[60] !== Ne ||
-    $[61] !== X ||
+    $[61] !== cursorOffset ||
     $[62] !== imagesSelected ||
     $[63] !== inputValue ||
     $[64] !== isFocused ||
@@ -289,51 +340,57 @@ function SelectInputOption(t0) {
     $[68] !== onSubmit ||
     $[69] !== option ||
     $[70] !== me ||
-    $[71] !== on ||
+    $[71] !== columns_2 ||
     $[72] !== vimEditing?.onStateChange
-  )
-    ((sn = me
+  ) {
+    t32 = me
       ? isFocused
-        ? r(Fragment, {
+        ? jsxProd_default_2(Fragment, {
             children: [
-              r(Text, { color: "suggestion", children: [option.label, option.labelValueSeparator ?? ", "] }),
-              e(Ne, {
+              jsxProd_default_2(Text, {
+                color: "suggestion",
+                children: [option.label, option.labelValueSeparator ?? ", "],
+              }),
+              jsxProd_default(Ne, {
                 value: inputValue,
                 onChange: (value) => {
-                  if (option.onChange(value) === !1) {
+                  if (option.onChange(value) === false) {
                     return;
                   }
-                  ((isUserEditing.current = !0), onInputChange(value));
+                  isUserEditing.current = true;
+                  onInputChange(value);
                 },
-                onSubmit: onSubmit,
-                onExit: onExit,
+                onSubmit,
+                onExit,
                 placeholder: option.placeholder,
                 focus: !imagesSelected,
-                showCursor: !0,
-                multiline: !0,
-                cursorOffset: X,
-                onChangeCursorOffset: le,
-                columns: on,
+                showCursor: true,
+                multiline: true,
+                cursorOffset,
+                onChangeCursorOffset: setCursorOffset,
+                columns: columns_2,
                 onEditingStateChange: vimEditing?.onStateChange,
                 cancelRemapRef: p,
-                onImagePaste: onImagePaste,
+                onImagePaste,
                 onPaste: (pastedText) => {
                   if (!pastedText) {
                     return;
                   }
                   p.current?.();
-                  let before = inputValue.slice(0, X);
-                  let after = inputValue.slice(X);
-                  let Xo = before + pastedText + after;
-                  if (option.onChange(Xo) === !1) {
+                  let before = inputValue.slice(0, cursorOffset);
+                  let after = inputValue.slice(cursorOffset);
+                  let newValue = before + pastedText + after;
+                  if (option.onChange(newValue) === false) {
                     return;
                   }
-                  ((isUserEditing.current = !0), onInputChange(Xo), le(before.length + pastedText.length));
+                  isUserEditing.current = true;
+                  onInputChange(newValue);
+                  setCursorOffset(before.length + pastedText.length);
                 },
               }),
             ],
           })
-        : r(Text, {
+        : jsxProd_default_2(Text, {
             children: [
               option.label,
               inputValue ? (option.labelValueSeparator ?? ", ") : null,
@@ -341,69 +398,76 @@ function SelectInputOption(t0) {
             ],
           })
       : isFocused
-        ? e(Ne, {
+        ? jsxProd_default(Ne, {
             value: inputValue,
-            onChange: (value_0) => {
-              if (option.onChange(value_0) === !1) {
+            onChange: (value) => {
+              if (option.onChange(value) === false) {
                 return;
               }
-              ((isUserEditing.current = !0), onInputChange(value_0));
+              isUserEditing.current = true;
+              onInputChange(value);
             },
-            onSubmit: onSubmit,
-            onExit: onExit,
-            placeholder: option.placeholder || (typeof option.label === "string" ? option.label : void 0),
+            onSubmit,
+            onExit,
+            placeholder: option.placeholder || (typeof option.label === "string" ? option.label : undefined),
             focus: !imagesSelected,
-            showCursor: !0,
-            multiline: !0,
-            cursorOffset: X,
-            onChangeCursorOffset: le,
-            columns: on,
+            showCursor: true,
+            multiline: true,
+            cursorOffset,
+            onChangeCursorOffset: setCursorOffset,
+            columns: columns_2,
             onEditingStateChange: vimEditing?.onStateChange,
             cancelRemapRef: p,
-            onImagePaste: onImagePaste,
-            onPaste: (pastedText_0) => {
-              if (!pastedText_0) {
+            onImagePaste,
+            onPaste: (pastedText) => {
+              if (!pastedText) {
                 return;
               }
               p.current?.();
-              let before_0 = inputValue.slice(0, X);
-              let after_0 = inputValue.slice(X);
-              let ln = before_0 + pastedText_0 + after_0;
-              if (option.onChange(ln) === !1) {
+              let before = inputValue.slice(0, cursorOffset);
+              let after = inputValue.slice(cursorOffset);
+              let newValue = before + pastedText + after;
+              if (option.onChange(newValue) === false) {
                 return;
               }
-              ((isUserEditing.current = !0), onInputChange(ln), le(before_0.length + pastedText_0.length));
+              isUserEditing.current = true;
+              onInputChange(newValue);
+              setCursorOffset(before.length + pastedText.length);
             },
           })
-        : e(Text, {
-            color: inputValue ? void 0 : "inactive",
+        : jsxProd_default(Text, {
+            color: inputValue ? undefined : "inactive",
             children: inputValue || option.placeholder || option.label,
-          })),
-      ($[60] = Ne),
-      ($[61] = X),
-      ($[62] = imagesSelected),
-      ($[63] = inputValue),
-      ($[64] = isFocused),
-      ($[65] = onExit),
-      ($[66] = onImagePaste),
-      ($[67] = onInputChange),
-      ($[68] = onSubmit),
-      ($[69] = option),
-      ($[70] = me),
-      ($[71] = on),
-      ($[72] = vimEditing?.onStateChange),
-      ($[73] = sn));
-  else sn = $[73];
-  let ft;
-  if ($[74] !== children || $[75] !== Lt || $[76] !== Ze || $[77] !== sn)
-    ((ft = r(Box, { flexDirection: "row", flexShrink: Lt, children: [Ze, children, sn] })),
-      ($[74] = children),
-      ($[75] = Lt),
-      ($[76] = Ze),
-      ($[77] = sn),
-      ($[78] = ft));
-  else ft = $[78];
-  let Ue;
+          });
+    $[60] = Ne;
+    $[61] = cursorOffset;
+    $[62] = imagesSelected;
+    $[63] = inputValue;
+    $[64] = isFocused;
+    $[65] = onExit;
+    $[66] = onImagePaste;
+    $[67] = onInputChange;
+    $[68] = onSubmit;
+    $[69] = option;
+    $[70] = me;
+    $[71] = columns_2;
+    $[72] = vimEditing?.onStateChange;
+    $[73] = t32;
+  } else t32 = $[73];
+  let children_2;
+  if ($[74] !== children || $[75] !== flexShrink || $[76] !== Ze || $[77] !== t32) {
+    children_2 = jsxProd_default_2(Box, {
+      flexDirection: "row",
+      flexShrink,
+      children: [Ze, children, t32],
+    });
+    $[74] = children;
+    $[75] = flexShrink;
+    $[76] = Ze;
+    $[77] = t32;
+    $[78] = children_2;
+  } else children_2 = $[78];
+  let t34;
   if (
     $[79] !== hoverStyle ||
     $[80] !== isFocused ||
@@ -411,83 +475,96 @@ function SelectInputOption(t0) {
     $[82] !== onClick ||
     $[83] !== shouldShowDownArrow ||
     $[84] !== shouldShowUpArrow ||
-    $[85] !== ft
-  )
-    ((Ue = e(SelectOption, {
-      isFocused: isFocused,
-      isSelected: isSelected,
-      shouldShowDownArrow: shouldShowDownArrow,
-      shouldShowUpArrow: shouldShowUpArrow,
-      declareCursor: !1,
-      onClick: onClick,
-      hoverStyle: hoverStyle,
-      children: ft,
-    })),
-      ($[79] = hoverStyle),
-      ($[80] = isFocused),
-      ($[81] = isSelected),
-      ($[82] = onClick),
-      ($[83] = shouldShowDownArrow),
-      ($[84] = shouldShowUpArrow),
-      ($[85] = ft),
-      ($[86] = Ue));
-  else Ue = $[86];
-  let an;
+    $[85] !== children_2
+  ) {
+    t34 = jsxProd_default(SelectOption, {
+      isFocused,
+      isSelected,
+      shouldShowDownArrow,
+      shouldShowUpArrow,
+      declareCursor: false,
+      onClick,
+      hoverStyle,
+      children: children_2,
+    });
+    $[79] = hoverStyle;
+    $[80] = isFocused;
+    $[81] = isSelected;
+    $[82] = onClick;
+    $[83] = shouldShowDownArrow;
+    $[84] = shouldShowUpArrow;
+    $[85] = children_2;
+    $[86] = t34;
+  } else t34 = $[86];
+  let t35;
   if (
-    $[87] !== Le ||
+    $[87] !== descriptionPaddingLeft ||
     $[88] !== isFocused ||
     $[89] !== isSelected ||
     $[90] !== option.description ||
     $[91] !== option.dimDescription
-  )
-    ((an =
+  ) {
+    t35 =
       option.description &&
-      e(Box, {
-        paddingLeft: Le,
-        children: e(Text, {
-          dimColor: option.dimDescription !== !1,
-          color: isSelected ? "success" : isFocused ? "suggestion" : void 0,
+      jsxProd_default(Box, {
+        paddingLeft: descriptionPaddingLeft,
+        children: jsxProd_default(Text, {
+          dimColor: option.dimDescription !== false,
+          color: isSelected ? "success" : isFocused ? "suggestion" : undefined,
           children: option.description,
         }),
-      })),
-      ($[87] = Le),
-      ($[88] = isFocused),
-      ($[89] = isSelected),
-      ($[90] = option.description),
-      ($[91] = option.dimDescription),
-      ($[92] = an));
-  else an = $[92];
-  let z;
-  if ($[93] !== Le || $[94] !== U || $[95] !== imagesSelected || $[96] !== isFocused || $[97] !== fe)
-    ((z =
-      U.length > 0 &&
-      r(Box, {
+      });
+    $[87] = descriptionPaddingLeft;
+    $[88] = isFocused;
+    $[89] = isSelected;
+    $[90] = option.description;
+    $[91] = option.dimDescription;
+    $[92] = t35;
+  } else t35 = $[92];
+  let t36;
+  if (
+    $[93] !== descriptionPaddingLeft ||
+    $[94] !== imageAttachments ||
+    $[95] !== imagesSelected ||
+    $[96] !== isFocused ||
+    $[97] !== selectedImageIndex_2
+  ) {
+    t36 =
+      imageAttachments.length > 0 &&
+      jsxProd_default_2(Box, {
         flexDirection: "row",
         gap: 1,
-        paddingLeft: Le,
+        paddingLeft: descriptionPaddingLeft,
         children: [
-          U.map((img_0, idx) =>
-            e(ClickableImageRef, { imageId: img_0.id, isSelected: !!imagesSelected && idx === fe }, img_0.id),
+          imageAttachments.map((img, idx) =>
+            jsxProd_default(
+              ClickableImageRef,
+              {
+                imageId: img.id,
+                isSelected: !!imagesSelected && idx === selectedImageIndex_2,
+              },
+              img.id,
+            ),
           ),
-          e(Box, {
+          jsxProd_default(Box, {
             flexGrow: 1,
             justifyContent: "flex-start",
             flexDirection: "row",
-            children: e(Text, {
-              dimColor: !0,
+            children: jsxProd_default(Text, {
+              dimColor: true,
               children: imagesSelected
-                ? r(Byline, {
+                ? jsxProd_default_2(Byline, {
                     children: [
-                      U.length > 1 &&
-                        r(Fragment, {
+                      imageAttachments.length > 1 &&
+                        jsxProd_default_2(Fragment, {
                           children: [
-                            e(ConfigurableShortcutHint, {
+                            jsxProd_default(ConfigurableShortcutHint, {
                               action: "attachments:next",
                               context: "Attachments",
                               fallback: "\u2192",
                               description: "next",
                             }),
-                            e(ConfigurableShortcutHint, {
+                            jsxProd_default(ConfigurableShortcutHint, {
                               action: "attachments:previous",
                               context: "Attachments",
                               fallback: "\u2190",
@@ -495,13 +572,13 @@ function SelectInputOption(t0) {
                             }),
                           ],
                         }),
-                      e(ConfigurableShortcutHint, {
+                      jsxProd_default(ConfigurableShortcutHint, {
                         action: "attachments:remove",
                         context: "Attachments",
                         fallback: "backspace",
                         description: "remove",
                       }),
-                      e(ConfigurableShortcutHint, {
+                      jsxProd_default(ConfigurableShortcutHint, {
                         action: "attachments:exit",
                         context: "Attachments",
                         fallback: "esc",
@@ -510,38 +587,52 @@ function SelectInputOption(t0) {
                     ],
                   })
                 : isFocused
-                  ? e(KeyboardShortcutHint, { chord: "down", action: "select", parens: !0 })
+                  ? jsxProd_default(KeyboardShortcutHint, {
+                      chord: "down",
+                      action: "select",
+                      parens: true,
+                    })
                   : null,
             }),
           }),
         ],
-      })),
-      ($[93] = Le),
-      ($[94] = U),
-      ($[95] = imagesSelected),
-      ($[96] = isFocused),
-      ($[97] = fe),
-      ($[98] = z));
-  else z = $[98];
-  let tt;
-  if ($[99] !== layout)
-    ((tt = layout === "expanded" && e(Text, { children: " " })), ($[99] = layout), ($[100] = tt));
-  else tt = $[100];
-  let pn;
-  if ($[101] !== Ge || $[102] !== Ue || $[103] !== an || $[104] !== z || $[105] !== tt)
-    ((pn = r(Box, { flexDirection: "column", flexShrink: 0, onKeyDown: Ge, children: [Ue, an, z, tt] })),
-      ($[101] = Ge),
-      ($[102] = Ue),
-      ($[103] = an),
-      ($[104] = z),
-      ($[105] = tt),
-      ($[106] = pn));
-  else pn = $[106];
-  return pn;
+      });
+    $[93] = descriptionPaddingLeft;
+    $[94] = imageAttachments;
+    $[95] = imagesSelected;
+    $[96] = isFocused;
+    $[97] = selectedImageIndex_2;
+    $[98] = t36;
+  } else t36 = $[98];
+  let t37;
+  if ($[99] !== layout) {
+    t37 =
+      layout === "expanded" &&
+      jsxProd_default(Text, {
+        children: " ",
+      });
+    $[99] = layout;
+    $[100] = t37;
+  } else t37 = $[100];
+  let t38;
+  if ($[101] !== onKeyDown || $[102] !== t34 || $[103] !== t35 || $[104] !== t36 || $[105] !== t37) {
+    t38 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      flexShrink: 0,
+      onKeyDown,
+      children: [t34, t35, t36, t37],
+    });
+    $[101] = onKeyDown;
+    $[102] = t34;
+    $[103] = t35;
+    $[104] = t36;
+    $[105] = t37;
+    $[106] = t38;
+  } else t38 = $[106];
+  return t38;
 }
 //@ chunk-ey2qag4x.js:33398-33451 affinity
-function ul(t) {
-  if (Do(t)) t.stopImmediatePropagation();
+function stopEscapePropagation(event) {
+  if (isEscapeKey(event)) event.stopImmediatePropagation();
 }
-
-export { SelectInputOption, Do };
+export { SelectInputOption, isEscapeKey };

@@ -8,24 +8,22 @@
  * pieces: chunk-ndmse9kj.js (1)
  * attribution: callgraph-witnessed 1
  */
-
+//@ chunk-ndmse9kj.js:35988-36671 callgraph-witnessed = NO_CONTENT_MESSAGE (0.2)
 /**
  * 消息相关固定文本常量："(no content)"、已删除图片说明、"No response requested."、合成模型名 "<synthetic>"、Auto Mode 标题、回滚不安全原因与说明、跨组织 thinking 不可用提示。
  */
-//@ chunk-ndmse9kj.js:35988-36671 callgraph-witnessed = NO_CONTENT_MESSAGE (0.2)
-var NO_CONTENT_MESSAGE = "(no content)",
-  DELETED_IMAGE_NOTICE =
-    "An image that was attached near this point was deleted. Do not open or recover any saved copy of it, even by its path. If the person asks about it or asks you to open it, tell them that it was deleted.",
-  NO_RESPONSE_REQUESTED = "No response requested.",
-  SYNTHETIC_MODEL = "<synthetic>",
-  AUTO_MODE_ACTIVE_TITLE = "Auto Mode Active",
-  REWIND_UNSAFE_PATH_REASON =
-    "the tracked path is (or became) a link or other non-regular file, its directory changed since the checkpoint, or its backup could not be safely read",
-  RESTORE_FILES_CAVEAT =
-    "Restored files go back whole, losing later changes by anyone. Bash changes to other files are not undone.",
-  FOREIGN_ORG_THINKING_NOTICE = "Claude can't use thinking from another organization",
-  FOREIGN_ORG_THINKING_HINT = "resume signed in to that organization to use it again";
-
+var NO_CONTENT_MESSAGE = "(no content)";
+var DELETED_IMAGE_NOTICE =
+  "An image that was attached near this point was deleted. Do not open or recover any saved copy of it, even by its path. If the person asks about it or asks you to open it, tell them that it was deleted.";
+var NO_RESPONSE_REQUESTED = "No response requested.";
+var SYNTHETIC_MODEL = "<synthetic>";
+var AUTO_MODE_ACTIVE_TITLE = "Auto Mode Active";
+var REWIND_UNSAFE_PATH_REASON =
+  "the tracked path is (or became) a link or other non-regular file, its directory changed since the checkpoint, or its backup could not be safely read";
+var RESTORE_FILES_CAVEAT =
+  "Restored files go back whole, losing later changes by anyone. Bash changes to other files are not undone.";
+var FOREIGN_ORG_THINKING_NOTICE = "Claude can't use thinking from another organization";
+var FOREIGN_ORG_THINKING_HINT = "resume signed in to that organization to use it again";
 export {
   SYNTHETIC_MODEL,
   NO_RESPONSE_REQUESTED,

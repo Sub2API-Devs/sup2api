@@ -8,18 +8,44 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:128976-130149 cjs-fingerprint
-var Yn = x(function (aE, Wn) {
-  function ed(e) {
-    let t = { variants: [e.COMMENT("--", "$"), e.COMMENT(/\{-/, /-\}/, { contains: ["self"] })] },
-      n = { className: "type", begin: "\\b[A-Z][\\w']*", relevance: 0 },
-      a = {
-        begin: "\\(",
-        end: "\\)",
-        illegal: '"',
-        contains: [{ className: "type", begin: "\\b[A-Z][\\w]*(\\((\\.\\.|,|\\w+)\\))?" }, t],
-      },
-      s = { begin: /\{/, end: /\}/, contains: a.contains },
-      o = { className: "string", begin: "'\\\\?.", end: "'", illegal: "." };
+var require_elm = x(function (cjsExports, cjsModule) {
+  function elm(hljs) {
+    let COMMENT = {
+      variants: [
+        hljs.COMMENT("--", "$"),
+        hljs.COMMENT(/\{-/, /-\}/, {
+          contains: ["self"],
+        }),
+      ],
+    };
+    let CONSTRUCTOR = {
+      className: "type",
+      begin: "\\b[A-Z][\\w']*",
+      relevance: 0,
+    };
+    let LIST = {
+      begin: "\\(",
+      end: "\\)",
+      illegal: '"',
+      contains: [
+        {
+          className: "type",
+          begin: "\\b[A-Z][\\w]*(\\((\\.\\.|,|\\w+)\\))?",
+        },
+        COMMENT,
+      ],
+    };
+    let RECORD = {
+      begin: /\{/,
+      end: /\}/,
+      contains: LIST.contains,
+    };
+    let CHARACTER = {
+      className: "string",
+      begin: "'\\\\?.",
+      end: "'",
+      illegal: ".",
+    };
     return {
       name: "Elm",
       keywords: [
@@ -50,25 +76,48 @@ var Yn = x(function (aE, Wn) {
           beginKeywords: "port effect module",
           end: "exposing",
           keywords: "port effect module where command subscription exposing",
-          contains: [a, t],
+          contains: [LIST, COMMENT],
           illegal: "\\W\\.|;",
         },
-        { begin: "import", end: "$", keywords: "import as exposing", contains: [a, t], illegal: "\\W\\.|;" },
-        { begin: "type", end: "$", keywords: "type alias", contains: [n, a, s, t] },
-        { beginKeywords: "infix infixl infixr", end: "$", contains: [e.C_NUMBER_MODE, t] },
-        { begin: "port", end: "$", keywords: "port", contains: [t] },
-        o,
-        e.QUOTE_STRING_MODE,
-        e.C_NUMBER_MODE,
-        n,
-        e.inherit(e.TITLE_MODE, { begin: "^[_a-z][\\w']*" }),
-        t,
-        { begin: "->|<-" },
+        {
+          begin: "import",
+          end: "$",
+          keywords: "import as exposing",
+          contains: [LIST, COMMENT],
+          illegal: "\\W\\.|;",
+        },
+        {
+          begin: "type",
+          end: "$",
+          keywords: "type alias",
+          contains: [CONSTRUCTOR, LIST, RECORD, COMMENT],
+        },
+        {
+          beginKeywords: "infix infixl infixr",
+          end: "$",
+          contains: [hljs.C_NUMBER_MODE, COMMENT],
+        },
+        {
+          begin: "port",
+          end: "$",
+          keywords: "port",
+          contains: [COMMENT],
+        },
+        CHARACTER,
+        hljs.QUOTE_STRING_MODE,
+        hljs.C_NUMBER_MODE,
+        CONSTRUCTOR,
+        hljs.inherit(hljs.TITLE_MODE, {
+          begin: "^[_a-z][\\w']*",
+        }),
+        COMMENT,
+        {
+          begin: "->|<-",
+        },
       ],
       illegal: /;/,
     };
   }
-  Wn.exports = ed;
+  cjsModule.exports = elm;
 });
-
-export { Yn };
+export { require_elm };

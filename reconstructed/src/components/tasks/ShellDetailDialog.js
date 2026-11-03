@@ -8,8 +8,12 @@
  * pieces: chunk-18hwfzwa.js (5)
  * attribution: placement 1, fingerprint 4
  */
-import { j, y, eJ, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
-import { e, Fragment, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { init_react_production, y, eJ, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default,
+  Fragment,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { tailOutputOfTask } from "../../utils/task/diskOutput.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
@@ -25,244 +29,374 @@ import { FocusColumn } from "../design-system/FocusColumn.js";
 import { HintText } from "../design-system/HintText.js";
 
 //@ chunk-18hwfzwa.js:721881-721885 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:721885-721954 fingerprint = _temp2 (1)
-function OXt(line_0, i_1) {
-  return e(Text, { wrap: "truncate-end", children: line_0 }, i_1);
+function renderOutputLine(line_0, i_1) {
+  return jsxProd_default(
+    Text,
+    {
+      wrap: "truncate-end",
+      children: line_0,
+    },
+    i_1,
+  );
 }
 //@ chunk-18hwfzwa.js:721954-722090 fingerprint = getTaskOutput (1)
 async function getTaskOutput(shell) {
   try {
-    let x = await tailOutputOfTask(shell.id);
-    return { content: x.content, bytesTotal: x.bytesTotal };
+    let result = await tailOutputOfTask(shell.id);
+    return {
+      content: result.content,
+      bytesTotal: result.bytesTotal,
+    };
   } catch {
-    return { content: "", bytesTotal: 0 };
+    return {
+      content: "",
+      bytesTotal: 0,
+    };
   }
 }
+//@ chunk-18hwfzwa.js:722090-725128 fingerprint = ShellDetailDialog (0.637)
 /**
  * 后台 shell / monitor 详情：命令、运行时长、输出尾部（截断行数），可停止。
  */
-//@ chunk-18hwfzwa.js:722090-725128 fingerprint = ShellDetailDialog (0.637)
-function ShellDetailDialog(t0) {
-  let $ = w(51),
-    { shell: shell, onDone: onDone, onKillShell: onKillShell, onBack: onBack } = t0,
-    { columns: columns } = useTerminalSize(),
-    Be;
-  if ($[0] !== shell) ((Be = () => getTaskOutput(shell)), ($[0] = shell), ($[1] = Be));
-  else Be = $[1];
-  let [He, We] = y(Be),
-    deferredOutputPromise = eJ(He),
-    Xe;
-  if ($[2] !== shell) ((Xe = () => We(getTaskOutput(shell))), ($[2] = shell), ($[3] = Xe));
-  else Xe = $[3];
+function ShellDetailDialog(props) {
+  let $ = w(51);
+  let { shell, onDone, onKillShell, onBack } = props;
+  let { columns } = useTerminalSize();
+  let t1;
+  if ($[0] !== shell) {
+    t1 = () => getTaskOutput(shell);
+    $[0] = shell;
+    $[1] = t1;
+  } else t1 = $[1];
+  let [outputPromise, setOutputPromise] = y(t1);
+  let deferredOutputPromise = eJ(outputPromise);
+  let Xe;
+  if ($[2] !== shell) {
+    Xe = () => setOutputPromise(getTaskOutput(shell));
+    $[2] = shell;
+    $[3] = Xe;
+  } else Xe = $[3];
   useInterval(Xe, shell.status === "running" ? 1000 : null);
-  let rt;
-  if ($[4] !== onDone)
-    ((rt = () => onDone("Shell details dismissed", { display: "system" })), ($[4] = onDone), ($[5] = rt));
-  else rt = $[5];
-  let kt = rt;
-  const At = shell.status === "running" ? onKillShell : void 0;
+  let t4;
+  if ($[4] !== onDone) {
+    t4 = () =>
+      onDone("Shell details dismissed", {
+        display: "system",
+      });
+    $[4] = onDone;
+    $[5] = t4;
+  } else t4 = $[5];
+  let kt = t4;
+  const onKill = shell.status === "running" ? onKillShell : undefined;
   let It;
-  if ($[6] !== kt || $[7] !== onBack || $[8] !== At)
-    ((It = { onClose: kt, onBack: onBack, onKill: At }),
-      ($[6] = kt),
-      ($[7] = onBack),
-      ($[8] = At),
-      ($[9] = It));
-  else It = $[9];
-  let Ot = useConfirmationKeys(It),
-    Et = shell.kind === "monitor",
-    Dt;
-  if ($[10] !== shell.command)
-    ((Dt = truncateToWidth(shell.command, 280)), ($[10] = shell.command), ($[11] = Dt));
-  else Dt = $[11];
-  let Lt = Dt;
-  const oo = Et ? "Monitor details" : "Shell details",
-    Xt = !!onBack,
-    io = shell.status === "running" && !!onKillShell;
-  let so;
-  if ($[12] !== Xt || $[13] !== io)
-    ((so = e(TaskDetailFooterHints, { showBack: Xt, showStop: io })),
-      ($[12] = Xt),
-      ($[13] = io),
-      ($[14] = so));
-  else so = $[14];
-  let po;
-  if ($[15] === MEMO_CACHE_SENTINEL) ((po = [{ bold: !0 }, { width: { ratio: 1 } }]), ($[15] = po));
-  else po = $[15];
-  const ao = columns - 6;
-  let co;
-  if ($[16] === MEMO_CACHE_SENTINEL) ((co = e(Fragment, { children: "Status:" })), ($[16] = co));
-  else co = $[16];
-  let bo;
-  if ($[17] !== shell.result || $[18] !== shell.status)
-    ((bo = r(FlexDirectionRow.Row, {
+  if ($[6] !== kt || $[7] !== onBack || $[8] !== onKill) {
+    It = {
+      onClose: kt,
+      onBack,
+      onKill,
+    };
+    $[6] = kt;
+    $[7] = onBack;
+    $[8] = onKill;
+    $[9] = It;
+  } else It = $[9];
+  let handleKeyDown = useConfirmationKeys(It);
+  let isMonitor = shell.kind === "monitor";
+  let t8;
+  if ($[10] !== shell.command) {
+    t8 = truncateToWidth(shell.command, 280);
+    $[10] = shell.command;
+    $[11] = t8;
+  } else t8 = $[11];
+  let displayCommand = t8;
+  const title = isMonitor ? "Monitor details" : "Shell details";
+  const showBack = !!onBack;
+  const showStop = shell.status === "running" && !!onKillShell;
+  let inputGuide;
+  if ($[12] !== showBack || $[13] !== showStop) {
+    inputGuide = jsxProd_default(TaskDetailFooterHints, {
+      showBack,
+      showStop,
+    });
+    $[12] = showBack;
+    $[13] = showStop;
+    $[14] = inputGuide;
+  } else inputGuide = $[14];
+  let columns_2;
+  if ($[15] === MEMO_CACHE_SENTINEL) {
+    columns_2 = [
+      {
+        bold: true,
+      },
+      {
+        width: {
+          ratio: 1,
+        },
+      },
+    ];
+    $[15] = columns_2;
+  } else columns_2 = $[15];
+  const forceWidth = columns - 6;
+  let t11;
+  if ($[16] === MEMO_CACHE_SENTINEL) {
+    t11 = jsxProd_default(Fragment, {
+      children: "Status:",
+    });
+    $[16] = t11;
+  } else t11 = $[16];
+  let t12;
+  if ($[17] !== shell.result || $[18] !== shell.status) {
+    t12 = jsxProd_default_2(FlexDirectionRow.Row, {
       children: [
-        co,
+        t11,
         shell.status === "running"
-          ? r(Text, {
+          ? jsxProd_default_2(Text, {
               color: "background",
-              children: [shell.status, shell.result?.code !== void 0 && ` (exit code: ${shell.result.code})`],
+              children: [
+                shell.status,
+                shell.result?.code !== undefined && ` (exit code: ${shell.result.code})`,
+              ],
             })
           : shell.status === "completed"
-            ? r(Text, {
+            ? jsxProd_default_2(Text, {
                 color: "success",
                 children: [
                   shell.status,
-                  shell.result?.code !== void 0 && ` (exit code: ${shell.result.code})`,
+                  shell.result?.code !== undefined && ` (exit code: ${shell.result.code})`,
                 ],
               })
-            : r(Text, {
+            : jsxProd_default_2(Text, {
                 color: "error",
                 children: [
                   shell.status,
-                  shell.result?.code !== void 0 && ` (exit code: ${shell.result.code})`,
+                  shell.result?.code !== undefined && ` (exit code: ${shell.result.code})`,
                 ],
               }),
       ],
-    })),
-      ($[17] = shell.result),
-      ($[18] = shell.status),
-      ($[19] = bo));
-  else bo = $[19];
-  let Ao;
-  if ($[20] === MEMO_CACHE_SENTINEL) ((Ao = e(Fragment, { children: "Runtime:" })), ($[20] = Ao));
-  else Ao = $[20];
-  let Bo;
-  if ($[21] !== shell.endTime) ((Bo = shell.endTime ?? Date.now()), ($[21] = shell.endTime), ($[22] = Bo));
-  else Bo = $[22];
-  const Ro = Bo - shell.startTime;
-  let Ho;
-  if ($[23] !== Ro) ((Ho = formatDuration(Ro)), ($[23] = Ro), ($[24] = Ho));
-  else Ho = $[24];
-  let Io;
-  if ($[25] !== Ho) ((Io = r(FlexDirectionRow.Row, { children: [Ao, Ho] })), ($[25] = Ho), ($[26] = Io));
-  else Io = $[26];
-  const Wo = Et ? "Script:" : "Command:";
-  let mn;
-  if ($[27] !== Wo) ((mn = e(Fragment, { children: Wo })), ($[27] = Wo), ($[28] = mn));
-  else mn = $[28];
-  let Cn;
-  if ($[29] !== Lt || $[30] !== mn)
-    ((Cn = r(FlexDirectionRow.Row, { children: [mn, Lt] })), ($[29] = Lt), ($[30] = mn), ($[31] = Cn));
-  else Cn = $[31];
-  let No;
-  if ($[32] !== ao || $[33] !== bo || $[34] !== Io || $[35] !== Cn)
-    ((No = r(FlexDirectionRow, { columns: po, forceWidth: ao, children: [bo, Io, Cn] })),
-      ($[32] = ao),
-      ($[33] = bo),
-      ($[34] = Io),
-      ($[35] = Cn),
-      ($[36] = No));
-  else No = $[36];
-  let vo;
-  if ($[37] === MEMO_CACHE_SENTINEL) ((vo = e(Text, { bold: !0, children: "Output:" })), ($[37] = vo));
-  else vo = $[37];
-  let Yo;
-  if ($[38] === MEMO_CACHE_SENTINEL)
-    ((Yo = e(Text, { dimColor: !0, children: "Loading output\u2026" })), ($[38] = Yo));
-  else Yo = $[38];
-  let kn;
-  if ($[39] !== columns || $[40] !== deferredOutputPromise)
-    ((kn = r(Box, {
+    });
+    $[17] = shell.result;
+    $[18] = shell.status;
+    $[19] = t12;
+  } else t12 = $[19];
+  let t13;
+  if ($[20] === MEMO_CACHE_SENTINEL) {
+    t13 = jsxProd_default(Fragment, {
+      children: "Runtime:",
+    });
+    $[20] = t13;
+  } else t13 = $[20];
+  let t14;
+  if ($[21] !== shell.endTime) {
+    t14 = shell.endTime ?? Date.now();
+    $[21] = shell.endTime;
+    $[22] = t14;
+  } else t14 = $[22];
+  const t15 = t14 - shell.startTime;
+  let t16;
+  if ($[23] !== t15) {
+    t16 = formatDuration(t15);
+    $[23] = t15;
+    $[24] = t16;
+  } else t16 = $[24];
+  let t17;
+  if ($[25] !== t16) {
+    t17 = jsxProd_default_2(FlexDirectionRow.Row, {
+      children: [t13, t16],
+    });
+    $[25] = t16;
+    $[26] = t17;
+  } else t17 = $[26];
+  const children = isMonitor ? "Script:" : "Command:";
+  let t19;
+  if ($[27] !== children) {
+    t19 = jsxProd_default(Fragment, {
+      children,
+    });
+    $[27] = children;
+    $[28] = t19;
+  } else t19 = $[28];
+  let t20;
+  if ($[29] !== displayCommand || $[30] !== t19) {
+    t20 = jsxProd_default_2(FlexDirectionRow.Row, {
+      children: [t19, displayCommand],
+    });
+    $[29] = displayCommand;
+    $[30] = t19;
+    $[31] = t20;
+  } else t20 = $[31];
+  let t21;
+  if ($[32] !== forceWidth || $[33] !== t12 || $[34] !== t17 || $[35] !== t20) {
+    t21 = jsxProd_default_2(FlexDirectionRow, {
+      columns: columns_2,
+      forceWidth,
+      children: [t12, t17, t20],
+    });
+    $[32] = forceWidth;
+    $[33] = t12;
+    $[34] = t17;
+    $[35] = t20;
+    $[36] = t21;
+  } else t21 = $[36];
+  let t22;
+  if ($[37] === MEMO_CACHE_SENTINEL) {
+    t22 = jsxProd_default(Text, {
+      bold: true,
+      children: "Output:",
+    });
+    $[37] = t22;
+  } else t22 = $[37];
+  let fallback;
+  if ($[38] === MEMO_CACHE_SENTINEL) {
+    fallback = jsxProd_default(Text, {
+      dimColor: true,
+      children: "Loading output\u2026",
+    });
+    $[38] = fallback;
+  } else fallback = $[38];
+  let t24;
+  if ($[39] !== columns || $[40] !== deferredOutputPromise) {
+    t24 = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        vo,
-        e(fo, {
-          fallback: Yo,
-          children: e(ShellOutputContent, { outputPromise: deferredOutputPromise, columns: columns }),
+        t22,
+        jsxProd_default(fo, {
+          fallback,
+          children: jsxProd_default(ShellOutputContent, {
+            outputPromise: deferredOutputPromise,
+            columns,
+          }),
         }),
       ],
-    })),
-      ($[39] = columns),
-      ($[40] = deferredOutputPromise),
-      ($[41] = kn));
-  else kn = $[41];
-  let Fn;
-  if ($[42] !== kt || $[43] !== so || $[44] !== No || $[45] !== kn || $[46] !== oo)
-    ((Fn = r(Dialog, { title: oo, onCancel: kt, color: "background", inputGuide: so, children: [No, kn] })),
-      ($[42] = kt),
-      ($[43] = so),
-      ($[44] = No),
-      ($[45] = kn),
-      ($[46] = oo),
-      ($[47] = Fn));
-  else Fn = $[47];
-  let bn;
-  if ($[48] !== Ot || $[49] !== Fn)
-    ((bn = e(FocusColumn, { onKeyDown: Ot, children: Fn })), ($[48] = Ot), ($[49] = Fn), ($[50] = bn));
-  else bn = $[50];
-  return bn;
+    });
+    $[39] = columns;
+    $[40] = deferredOutputPromise;
+    $[41] = t24;
+  } else t24 = $[41];
+  let children_2;
+  if ($[42] !== kt || $[43] !== inputGuide || $[44] !== t21 || $[45] !== t24 || $[46] !== title) {
+    children_2 = jsxProd_default_2(Dialog, {
+      title,
+      onCancel: kt,
+      color: "background",
+      inputGuide,
+      children: [t21, t24],
+    });
+    $[42] = kt;
+    $[43] = inputGuide;
+    $[44] = t21;
+    $[45] = t24;
+    $[46] = title;
+    $[47] = children_2;
+  } else children_2 = $[47];
+  let t26;
+  if ($[48] !== handleKeyDown || $[49] !== children_2) {
+    t26 = jsxProd_default(FocusColumn, {
+      onKeyDown: handleKeyDown,
+      children: children_2,
+    });
+    $[48] = handleKeyDown;
+    $[49] = children_2;
+    $[50] = t26;
+  } else t26 = $[50];
+  return t26;
 }
 //@ chunk-18hwfzwa.js:725128-726327 fingerprint = ShellOutputContent (0.835)
-function ShellOutputContent(t0) {
-  let $ = w(19),
-    { outputPromise: outputPromise, columns: columns } = t0,
-    { content: content, bytesTotal: bytesTotal } = Qr(outputPromise);
+function ShellOutputContent(props) {
+  let $ = w(19);
+  let { outputPromise, columns } = props;
+  let { content, bytesTotal } = Qr(outputPromise);
   if (!content) {
-    let Re;
-    if ($[0] === MEMO_CACHE_SENTINEL) ((Re = e(HintText, { children: "No output available" })), ($[0] = Re));
-    else Re = $[0];
-    return Re;
+    let t1;
+    if ($[0] === MEMO_CACHE_SENTINEL) {
+      t1 = jsxProd_default(HintText, {
+        children: "No output available",
+      });
+      $[0] = t1;
+    } else t1 = $[0];
+    return t1;
   }
-  let Be, He;
+  let isIncomplete;
+  let rendered;
   if ($[1] !== bytesTotal || $[2] !== content) {
     let starts = [];
     let pos = content.length;
-    for (let Xe = 0; Xe < 10 && pos > 0; Xe++) {
-      let index = content.lastIndexOf(
+    for (let i = 0; i < 10 && pos > 0; i++) {
+      let prev = content.lastIndexOf(
         `
 `,
         pos - 1,
       );
-      (starts.push(index + 1), (pos = index));
+      starts.push(prev + 1);
+      pos = prev;
     }
     starts.reverse();
-    Be = bytesTotal > content.length;
-    He = [];
-    for (let kt = 0; kt < starts.length; kt++) {
-      let start = starts[kt];
-      let end = kt < starts.length - 1 ? starts[kt + 1] - 1 : content.length;
+    isIncomplete = bytesTotal > content.length;
+    rendered = [];
+    for (let i_0 = 0; i_0 < starts.length; i_0++) {
+      let start = starts[i_0];
+      let end = i_0 < starts.length - 1 ? starts[i_0 + 1] - 1 : content.length;
       let line = content.slice(start, end);
-      if (line) He.push(line);
+      if (line) rendered.push(line);
     }
-    (($[1] = bytesTotal), ($[2] = content), ($[3] = Be), ($[4] = He));
-  } else ((Be = $[3]), (He = $[4]));
-  const t1 = columns - 6;
-  let Et;
-  if ($[5] !== He) ((Et = He.map(OXt)), ($[5] = He), ($[6] = Et));
-  else Et = $[6];
-  let Dt;
-  if ($[7] !== t1 || $[8] !== Et)
-    ((Dt = e(Box, {
+    $[1] = bytesTotal;
+    $[2] = content;
+    $[3] = isIncomplete;
+    $[4] = rendered;
+  } else {
+    isIncomplete = $[3];
+    rendered = $[4];
+  }
+  const maxWidth = columns - 6;
+  let children;
+  if ($[5] !== rendered) {
+    children = rendered.map(renderOutputLine);
+    $[5] = rendered;
+    $[6] = children;
+  } else children = $[6];
+  let t3;
+  if ($[7] !== maxWidth || $[8] !== children) {
+    t3 = jsxProd_default(Box, {
       borderStyle: "round",
       paddingX: 1,
       flexDirection: "column",
       height: 12,
-      maxWidth: t1,
-      children: Et,
-    })),
-      ($[7] = t1),
-      ($[8] = Et),
-      ($[9] = Dt));
-  else Dt = $[9];
-  const t4 = `Showing ${He.length} lines`;
-  let oo;
-  if ($[10] !== bytesTotal || $[11] !== Be)
-    ((oo = Be ? ` of ${formatFileSize(bytesTotal)}` : ""), ($[10] = bytesTotal), ($[11] = Be), ($[12] = oo));
-  else oo = $[12];
-  let Xt;
-  if ($[13] !== t4 || $[14] !== oo)
-    ((Xt = r(Text, { dimColor: !0, italic: !0, children: [t4, oo] })),
-      ($[13] = t4),
-      ($[14] = oo),
-      ($[15] = Xt));
-  else Xt = $[15];
-  let io;
-  if ($[16] !== Dt || $[17] !== Xt)
-    ((io = r(Fragment, { children: [Dt, Xt] })), ($[16] = Dt), ($[17] = Xt), ($[18] = io));
-  else io = $[18];
-  return io;
+      maxWidth,
+      children,
+    });
+    $[7] = maxWidth;
+    $[8] = children;
+    $[9] = t3;
+  } else t3 = $[9];
+  const t4 = `Showing ${rendered.length} lines`;
+  let t5;
+  if ($[10] !== bytesTotal || $[11] !== isIncomplete) {
+    t5 = isIncomplete ? ` of ${formatFileSize(bytesTotal)}` : "";
+    $[10] = bytesTotal;
+    $[11] = isIncomplete;
+    $[12] = t5;
+  } else t5 = $[12];
+  let t6;
+  if ($[13] !== t4 || $[14] !== t5) {
+    t6 = jsxProd_default_2(Text, {
+      dimColor: true,
+      italic: true,
+      children: [t4, t5],
+    });
+    $[13] = t4;
+    $[14] = t5;
+    $[15] = t6;
+  } else t6 = $[15];
+  let t7;
+  if ($[16] !== t3 || $[17] !== t6) {
+    t7 = jsxProd_default_2(Fragment, {
+      children: [t3, t6],
+    });
+    $[16] = t3;
+    $[17] = t6;
+    $[18] = t7;
+  } else t7 = $[18];
+  return t7;
 }
-
 export { ShellDetailDialog };

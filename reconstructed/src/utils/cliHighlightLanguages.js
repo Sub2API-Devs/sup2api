@@ -8,406 +8,418 @@
  * pieces: chunk-egr0twnb.js (5)
  * attribution: placement 5
  */
-import { je } from "../../vendor/highlight.js/lib/languages/abnf.js";
-import { tt } from "../../vendor/highlight.js/lib/languages/accesslog.js";
-import { at } from "../../vendor/highlight.js/lib/languages/actionscript.js";
-import { it } from "../../vendor/highlight.js/lib/languages/ada.js";
-import { ot } from "../../vendor/highlight.js/lib/languages/angelscript.js";
-import { lt } from "../../vendor/highlight.js/lib/languages/apache.js";
-import { pt } from "../../vendor/highlight.js/lib/languages/applescript.js";
-import { _t } from "../../vendor/highlight.js/lib/languages/arcade.js";
-import { Et } from "../../vendor/highlight.js/lib/languages/arduino.js";
-import { bt } from "../../vendor/highlight.js/lib/languages/armasm.js";
-import { Tt } from "../../vendor/highlight.js/lib/languages/asciidoc.js";
-import { St } from "../../vendor/highlight.js/lib/languages/aspectj.js";
-import { Rt } from "../../vendor/highlight.js/lib/languages/autohotkey.js";
-import { vt } from "../../vendor/highlight.js/lib/languages/autoit.js";
-import { Ct } from "../../vendor/highlight.js/lib/languages/avrasm.js";
-import { ht } from "../../vendor/highlight.js/lib/languages/awk.js";
-import { Dt } from "../../vendor/highlight.js/lib/languages/axapta.js";
-import { wt } from "../../vendor/highlight.js/lib/languages/bash.js";
-import { kt } from "../../vendor/highlight.js/lib/languages/basic.js";
-import { Ut } from "../../vendor/highlight.js/lib/languages/bnf.js";
-import { Gt } from "../../vendor/highlight.js/lib/languages/brainfuck.js";
-import { qt } from "../../vendor/highlight.js/lib/languages/c.js";
-import { $t } from "../../vendor/highlight.js/lib/languages/cal.js";
-import { Kt } from "../../vendor/highlight.js/lib/languages/capnproto.js";
-import { Wt } from "../../vendor/highlight.js/lib/languages/ceylon.js";
-import { Xt } from "../../vendor/highlight.js/lib/languages/clean.js";
-import { Qt } from "../../vendor/highlight.js/lib/languages/clojure.js";
-import { jt } from "../../vendor/highlight.js/lib/languages/clojure-repl.js";
-import { tn } from "../../vendor/highlight.js/lib/languages/cmake.js";
-import { an } from "../../vendor/highlight.js/lib/languages/coffeescript.js";
-import { sn } from "../../vendor/highlight.js/lib/languages/coq.js";
-import { cn } from "../../vendor/highlight.js/lib/languages/cos.js";
-import { dn } from "../../vendor/highlight.js/lib/languages/cpp.js";
-import { mn } from "../../vendor/highlight.js/lib/languages/crmsh.js";
-import { un } from "../../vendor/highlight.js/lib/languages/crystal.js";
-import { gn } from "../../vendor/highlight.js/lib/languages/csharp.js";
-import { fn } from "../../vendor/highlight.js/lib/languages/csp.js";
-import { Nn } from "../../vendor/highlight.js/lib/languages/css.js";
-import { An } from "../../vendor/highlight.js/lib/languages/d.js";
-import { On } from "../../vendor/highlight.js/lib/languages/dart.js";
-import { In } from "../../vendor/highlight.js/lib/languages/delphi.js";
-import { yn } from "../../vendor/highlight.js/lib/languages/diff.js";
-import { Mn } from "../../vendor/highlight.js/lib/languages/django.js";
-import { Ln } from "../../vendor/highlight.js/lib/languages/dns.js";
-import { xn } from "../../vendor/highlight.js/lib/languages/dockerfile.js";
-import { Pn } from "../../vendor/highlight.js/lib/languages/dos.js";
-import { Bn } from "../../vendor/highlight.js/lib/languages/dsconfig.js";
-import { Fn } from "../../vendor/highlight.js/lib/languages/dts.js";
-import { Hn } from "../../vendor/highlight.js/lib/languages/dust.js";
-import { zn } from "../../vendor/highlight.js/lib/languages/ebnf.js";
-import { Vn } from "../../vendor/highlight.js/lib/languages/elixir.js";
-import { Yn } from "../../vendor/highlight.js/lib/languages/elm.js";
-import { Zn } from "../../vendor/highlight.js/lib/languages/erb.js";
-import { Jn } from "../../vendor/highlight.js/lib/languages/erlang.js";
-import { ea } from "../../vendor/highlight.js/lib/languages/erlang-repl.js";
-import { na } from "../../vendor/highlight.js/lib/languages/excel.js";
-import { ra } from "../../vendor/highlight.js/lib/languages/fix.js";
-import { sa, Sa } from "../../vendor/highlight.js/lib/languages/flix.js";
-import { ca } from "../../vendor/highlight.js/lib/languages/fortran.js";
-import { pa } from "../../vendor/highlight.js/lib/languages/fsharp.js";
-import { _a } from "../../vendor/highlight.js/lib/languages/gams.js";
-import { Ea } from "../../vendor/highlight.js/lib/languages/gauss.js";
-import { ba } from "../../vendor/highlight.js/lib/languages/gcode.js";
-import { Ta } from "../../vendor/highlight.js/lib/languages/gherkin.js";
-import { Ra } from "../../vendor/highlight.js/lib/languages/go.js";
-import { va } from "../../vendor/highlight.js/lib/languages/golo.js";
-import { Ca } from "../../vendor/highlight.js/lib/languages/gradle.js";
-import { ha } from "../../vendor/highlight.js/lib/languages/graphql.js";
-import { Da } from "../../vendor/highlight.js/lib/languages/groovy.js";
-import { wa } from "../../vendor/highlight.js/lib/languages/haml.js";
-import { ka } from "../../vendor/highlight.js/lib/languages/handlebars.js";
-import { Ua } from "../../vendor/highlight.js/lib/languages/haskell.js";
-import { Ga } from "../../vendor/highlight.js/lib/languages/haxe.js";
-import { qa } from "../../vendor/highlight.js/lib/languages/hsp.js";
-import { $a } from "../../vendor/highlight.js/lib/languages/http.js";
-import { Ka } from "../../vendor/highlight.js/lib/languages/hy.js";
-import { Wa } from "../../vendor/highlight.js/lib/languages/inform7.js";
-import { Xa } from "../../vendor/highlight.js/lib/languages/ini.js";
-import { Qa } from "../../vendor/highlight.js/lib/languages/irpf90.js";
-import { tr } from "../../vendor/highlight.js/lib/languages/java.js";
-import { sr } from "../../vendor/highlight.js/lib/languages/javascript.js";
-import { cr } from "../../vendor/highlight.js/lib/languages/jboss-cli.js";
-import { dr, Yr, Ms } from "../../vendor/highlight.js/lib/languages/json.js";
-import { mr } from "../../vendor/highlight.js/lib/languages/julia.js";
-import { ur } from "../../vendor/highlight.js/lib/languages/julia-repl.js";
-import { gr } from "../../vendor/highlight.js/lib/languages/kotlin.js";
-import { fr } from "../../vendor/highlight.js/lib/languages/lasso.js";
-import { Nr } from "../../vendor/highlight.js/lib/languages/latex.js";
-import { Ar } from "../../vendor/highlight.js/lib/languages/ldif.js";
-import { Or } from "../../vendor/highlight.js/lib/languages/leaf.js";
-import { yr } from "../../vendor/highlight.js/lib/languages/less.js";
-import { Mr } from "../../vendor/highlight.js/lib/languages/lisp.js";
-import { Lr } from "../../vendor/highlight.js/lib/languages/livecodeserver.js";
-import { xr } from "../../vendor/highlight.js/lib/languages/livescript.js";
-import { Pr } from "../../vendor/highlight.js/lib/languages/llvm.js";
-import { Br } from "../../vendor/highlight.js/lib/languages/lsl.js";
-import { Fr } from "../../vendor/highlight.js/lib/languages/lua.js";
-import { Hr } from "../../vendor/highlight.js/lib/languages/makefile.js";
-import { zr } from "../../vendor/highlight.js/lib/languages/markdown.js";
-import { Vr } from "../../vendor/highlight.js/lib/languages/matlab.js";
-import { Zr } from "../../vendor/highlight.js/lib/languages/mercury.js";
-import { Jr } from "../../vendor/highlight.js/lib/languages/mipsasm.js";
-import { ei } from "../../vendor/highlight.js/lib/languages/mizar.js";
-import { ni } from "../../vendor/highlight.js/lib/languages/mojolicious.js";
-import { ri } from "../../vendor/highlight.js/lib/languages/monkey.js";
-import { si } from "../../vendor/highlight.js/lib/languages/moonscript.js";
-import { ci } from "../../vendor/highlight.js/lib/languages/n1ql.js";
-import { di } from "../../vendor/highlight.js/lib/languages/nestedtext.js";
-import { mi } from "../../vendor/highlight.js/lib/languages/nginx.js";
-import { ui } from "../../vendor/highlight.js/lib/languages/nim.js";
-import { gi } from "../../vendor/highlight.js/lib/languages/nix.js";
-import { fi } from "../../vendor/highlight.js/lib/languages/node-repl.js";
-import { Ni } from "../../vendor/highlight.js/lib/languages/nsis.js";
-import { Ai } from "../../vendor/highlight.js/lib/languages/objectivec.js";
-import { Oi } from "../../vendor/highlight.js/lib/languages/ocaml.js";
-import { Ii } from "../../vendor/highlight.js/lib/languages/openscad.js";
-import { yi } from "../../vendor/highlight.js/lib/languages/oxygene.js";
-import { Mi } from "../../vendor/highlight.js/lib/languages/parser3.js";
-import { Li } from "../../vendor/highlight.js/lib/languages/perl.js";
-import { xi } from "../../vendor/highlight.js/lib/languages/pf.js";
-import { Pi } from "../../vendor/highlight.js/lib/languages/pgsql.js";
-import { Bi } from "../../vendor/highlight.js/lib/languages/php.js";
-import { Fi } from "../../vendor/highlight.js/lib/languages/php-template.js";
-import { Hi } from "../../vendor/highlight.js/lib/languages/plaintext.js";
-import { zi } from "../../vendor/highlight.js/lib/languages/pony.js";
-import { Vi } from "../../vendor/highlight.js/lib/languages/powershell.js";
-import { Yi } from "../../vendor/highlight.js/lib/languages/processing.js";
-import { Zi } from "../../vendor/highlight.js/lib/languages/profile.js";
-import { Ji } from "../../vendor/highlight.js/lib/languages/prolog.js";
-import { es } from "../../vendor/highlight.js/lib/languages/properties.js";
-import { ns } from "../../vendor/highlight.js/lib/languages/protobuf.js";
-import { rs } from "../../vendor/highlight.js/lib/languages/puppet.js";
-import { ss } from "../../vendor/highlight.js/lib/languages/purebasic.js";
-import { cs } from "../../vendor/highlight.js/lib/languages/python.js";
-import { ds } from "../../vendor/highlight.js/lib/languages/python-repl.js";
-import { ms } from "../../vendor/highlight.js/lib/languages/q.js";
-import { us } from "../../vendor/highlight.js/lib/languages/qml.js";
-import { gs } from "../../vendor/highlight.js/lib/languages/r.js";
-import { fs } from "../../vendor/highlight.js/lib/languages/reasonml.js";
-import { Ns } from "../../vendor/highlight.js/lib/languages/rib.js";
-import { As } from "../../vendor/highlight.js/lib/languages/roboconf.js";
-import { Os } from "../../vendor/highlight.js/lib/languages/routeros.js";
-import { Is } from "../../vendor/highlight.js/lib/languages/rsl.js";
-import { ys } from "../../vendor/highlight.js/lib/languages/ruby.js";
-import { Ls } from "../../vendor/highlight.js/lib/languages/rust.js";
-import { xs } from "../../vendor/highlight.js/lib/languages/sas.js";
-import { Ps } from "../../vendor/highlight.js/lib/languages/scala.js";
-import { Bs } from "../../vendor/highlight.js/lib/languages/scheme.js";
-import { Fs } from "../../vendor/highlight.js/lib/languages/scilab.js";
-import { Hs } from "../../vendor/highlight.js/lib/languages/scss.js";
-import { zs } from "../../vendor/highlight.js/lib/languages/shell.js";
-import { Vs } from "../../vendor/highlight.js/lib/languages/smali.js";
-import { Ys } from "../../vendor/highlight.js/lib/languages/smalltalk.js";
-import { Zs } from "../../vendor/highlight.js/lib/languages/sml.js";
-import { Js } from "../../vendor/highlight.js/lib/languages/sql.js";
-import { eo } from "../../vendor/highlight.js/lib/languages/stan.js";
-import { no } from "../../vendor/highlight.js/lib/languages/stata.js";
-import { ro } from "../../vendor/highlight.js/lib/languages/step21.js";
-import { so } from "../../vendor/highlight.js/lib/languages/stylus.js";
-import { co } from "../../vendor/highlight.js/lib/languages/subunit.js";
-import { fo } from "../../vendor/highlight.js/lib/languages/swift.js";
-import { No } from "../../vendor/highlight.js/lib/languages/taggerscript.js";
-import { Ao } from "../../vendor/highlight.js/lib/languages/tap.js";
-import { Oo } from "../../vendor/highlight.js/lib/languages/tcl.js";
-import { Io } from "../../vendor/highlight.js/lib/languages/thrift.js";
-import { yo } from "../../vendor/highlight.js/lib/languages/tp.js";
-import { Mo } from "../../vendor/highlight.js/lib/languages/twig.js";
-import { Go } from "../../vendor/highlight.js/lib/languages/typescript.js";
-import { qo } from "../../vendor/highlight.js/lib/languages/vala.js";
-import { $o } from "../../vendor/highlight.js/lib/languages/vbnet.js";
-import { Ko } from "../../vendor/highlight.js/lib/languages/vbscript.js";
-import { Wo } from "../../vendor/highlight.js/lib/languages/vbscript-html.js";
-import { Xo } from "../../vendor/highlight.js/lib/languages/verilog.js";
-import { Qo } from "../../vendor/highlight.js/lib/languages/vhdl.js";
-import { jo } from "../../vendor/highlight.js/lib/languages/vim.js";
-import { tc } from "../../vendor/highlight.js/lib/languages/wasm.js";
-import { ac } from "../../vendor/highlight.js/lib/languages/wren.js";
-import { ic } from "../../vendor/highlight.js/lib/languages/x86asm.js";
-import { oc } from "../../vendor/highlight.js/lib/languages/xl.js";
-import { lc } from "../../vendor/highlight.js/lib/languages/xml.js";
-import { pc } from "../../vendor/highlight.js/lib/languages/xquery.js";
-import { _c } from "../../vendor/highlight.js/lib/languages/yaml.js";
-import { Ec } from "../../vendor/highlight.js/lib/languages/zephir.js";
-import { Gc } from "../../vendor/highlight.js/lib/core.js";
-import { canonicalLanguageName, BRe } from "./highlight/pluginLanguages.js";
-import { kki } from "./cliHighlight.js";
+import { require_abnf } from "../../vendor/highlight.js/lib/languages/abnf.js";
+import { require_accesslog } from "../../vendor/highlight.js/lib/languages/accesslog.js";
+import { require_actionscript } from "../../vendor/highlight.js/lib/languages/actionscript.js";
+import { require_ada } from "../../vendor/highlight.js/lib/languages/ada.js";
+import { require_angelscript } from "../../vendor/highlight.js/lib/languages/angelscript.js";
+import { require_apache } from "../../vendor/highlight.js/lib/languages/apache.js";
+import { require_applescript } from "../../vendor/highlight.js/lib/languages/applescript.js";
+import { require_arcade } from "../../vendor/highlight.js/lib/languages/arcade.js";
+import { require_arduino } from "../../vendor/highlight.js/lib/languages/arduino.js";
+import { require_armasm } from "../../vendor/highlight.js/lib/languages/armasm.js";
+import { require_asciidoc } from "../../vendor/highlight.js/lib/languages/asciidoc.js";
+import { require_aspectj } from "../../vendor/highlight.js/lib/languages/aspectj.js";
+import { require_autohotkey } from "../../vendor/highlight.js/lib/languages/autohotkey.js";
+import { require_autoit } from "../../vendor/highlight.js/lib/languages/autoit.js";
+import { require_avrasm } from "../../vendor/highlight.js/lib/languages/avrasm.js";
+import { require_awk } from "../../vendor/highlight.js/lib/languages/awk.js";
+import { require_axapta } from "../../vendor/highlight.js/lib/languages/axapta.js";
+import { require_bash } from "../../vendor/highlight.js/lib/languages/bash.js";
+import { require_basic } from "../../vendor/highlight.js/lib/languages/basic.js";
+import { require_bnf } from "../../vendor/highlight.js/lib/languages/bnf.js";
+import { require_brainfuck } from "../../vendor/highlight.js/lib/languages/brainfuck.js";
+import { require_c } from "../../vendor/highlight.js/lib/languages/c.js";
+import { require_cal } from "../../vendor/highlight.js/lib/languages/cal.js";
+import { require_capnproto } from "../../vendor/highlight.js/lib/languages/capnproto.js";
+import { require_ceylon } from "../../vendor/highlight.js/lib/languages/ceylon.js";
+import { require_clean } from "../../vendor/highlight.js/lib/languages/clean.js";
+import { require_clojure } from "../../vendor/highlight.js/lib/languages/clojure.js";
+import { require_clojure_repl } from "../../vendor/highlight.js/lib/languages/clojure-repl.js";
+import { require_cmake } from "../../vendor/highlight.js/lib/languages/cmake.js";
+import { require_coffeescript } from "../../vendor/highlight.js/lib/languages/coffeescript.js";
+import { require_coq } from "../../vendor/highlight.js/lib/languages/coq.js";
+import { require_cos } from "../../vendor/highlight.js/lib/languages/cos.js";
+import { require_cpp } from "../../vendor/highlight.js/lib/languages/cpp.js";
+import { require_crmsh } from "../../vendor/highlight.js/lib/languages/crmsh.js";
+import { require_crystal } from "../../vendor/highlight.js/lib/languages/crystal.js";
+import { require_csharp } from "../../vendor/highlight.js/lib/languages/csharp.js";
+import { require_csp } from "../../vendor/highlight.js/lib/languages/csp.js";
+import { require_css } from "../../vendor/highlight.js/lib/languages/css.js";
+import { require_d } from "../../vendor/highlight.js/lib/languages/d.js";
+import { require_dart } from "../../vendor/highlight.js/lib/languages/dart.js";
+import { require_delphi } from "../../vendor/highlight.js/lib/languages/delphi.js";
+import { require_diff } from "../../vendor/highlight.js/lib/languages/diff.js";
+import { require_django } from "../../vendor/highlight.js/lib/languages/django.js";
+import { require_dns } from "../../vendor/highlight.js/lib/languages/dns.js";
+import { require_dockerfile } from "../../vendor/highlight.js/lib/languages/dockerfile.js";
+import { require_dos } from "../../vendor/highlight.js/lib/languages/dos.js";
+import { require_dsconfig } from "../../vendor/highlight.js/lib/languages/dsconfig.js";
+import { require_dts } from "../../vendor/highlight.js/lib/languages/dts.js";
+import { require_dust } from "../../vendor/highlight.js/lib/languages/dust.js";
+import { require_ebnf } from "../../vendor/highlight.js/lib/languages/ebnf.js";
+import { require_elixir } from "../../vendor/highlight.js/lib/languages/elixir.js";
+import { require_elm } from "../../vendor/highlight.js/lib/languages/elm.js";
+import { require_erb } from "../../vendor/highlight.js/lib/languages/erb.js";
+import { require_erlang } from "../../vendor/highlight.js/lib/languages/erlang.js";
+import { require_erlang_repl } from "../../vendor/highlight.js/lib/languages/erlang-repl.js";
+import { require_excel } from "../../vendor/highlight.js/lib/languages/excel.js";
+import { require_fix } from "../../vendor/highlight.js/lib/languages/fix.js";
+import { require_flix, require_flix_2 } from "../../vendor/highlight.js/lib/languages/flix.js";
+import { require_fortran } from "../../vendor/highlight.js/lib/languages/fortran.js";
+import { require_fsharp } from "../../vendor/highlight.js/lib/languages/fsharp.js";
+import { require_gams } from "../../vendor/highlight.js/lib/languages/gams.js";
+import { require_gauss } from "../../vendor/highlight.js/lib/languages/gauss.js";
+import { require_gcode } from "../../vendor/highlight.js/lib/languages/gcode.js";
+import { require_gherkin } from "../../vendor/highlight.js/lib/languages/gherkin.js";
+import { require_go } from "../../vendor/highlight.js/lib/languages/go.js";
+import { require_golo } from "../../vendor/highlight.js/lib/languages/golo.js";
+import { require_gradle } from "../../vendor/highlight.js/lib/languages/gradle.js";
+import { require_graphql } from "../../vendor/highlight.js/lib/languages/graphql.js";
+import { require_groovy } from "../../vendor/highlight.js/lib/languages/groovy.js";
+import { require_haml } from "../../vendor/highlight.js/lib/languages/haml.js";
+import { require_handlebars } from "../../vendor/highlight.js/lib/languages/handlebars.js";
+import { require_haskell } from "../../vendor/highlight.js/lib/languages/haskell.js";
+import { require_haxe } from "../../vendor/highlight.js/lib/languages/haxe.js";
+import { require_hsp } from "../../vendor/highlight.js/lib/languages/hsp.js";
+import { require_http } from "../../vendor/highlight.js/lib/languages/http.js";
+import { require_hy } from "../../vendor/highlight.js/lib/languages/hy.js";
+import { require_inform7 } from "../../vendor/highlight.js/lib/languages/inform7.js";
+import { require_ini } from "../../vendor/highlight.js/lib/languages/ini.js";
+import { require_irpf90 } from "../../vendor/highlight.js/lib/languages/irpf90.js";
+import { require_java } from "../../vendor/highlight.js/lib/languages/java.js";
+import { require_javascript } from "../../vendor/highlight.js/lib/languages/javascript.js";
+import { require_jboss_cli } from "../../vendor/highlight.js/lib/languages/jboss-cli.js";
+import {
+  require_json,
+  require_json_2,
+  require_json_3,
+} from "../../vendor/highlight.js/lib/languages/json.js";
+import { require_julia } from "../../vendor/highlight.js/lib/languages/julia.js";
+import { require_julia_repl } from "../../vendor/highlight.js/lib/languages/julia-repl.js";
+import { require_kotlin } from "../../vendor/highlight.js/lib/languages/kotlin.js";
+import { require_lasso } from "../../vendor/highlight.js/lib/languages/lasso.js";
+import { require_latex } from "../../vendor/highlight.js/lib/languages/latex.js";
+import { require_ldif } from "../../vendor/highlight.js/lib/languages/ldif.js";
+import { require_leaf } from "../../vendor/highlight.js/lib/languages/leaf.js";
+import { require_less } from "../../vendor/highlight.js/lib/languages/less.js";
+import { require_lisp } from "../../vendor/highlight.js/lib/languages/lisp.js";
+import { require_livecodeserver } from "../../vendor/highlight.js/lib/languages/livecodeserver.js";
+import { require_livescript } from "../../vendor/highlight.js/lib/languages/livescript.js";
+import { require_llvm } from "../../vendor/highlight.js/lib/languages/llvm.js";
+import { require_lsl } from "../../vendor/highlight.js/lib/languages/lsl.js";
+import { require_lua } from "../../vendor/highlight.js/lib/languages/lua.js";
+import { require_makefile } from "../../vendor/highlight.js/lib/languages/makefile.js";
+import { require_markdown } from "../../vendor/highlight.js/lib/languages/markdown.js";
+import { require_matlab } from "../../vendor/highlight.js/lib/languages/matlab.js";
+import { require_mercury } from "../../vendor/highlight.js/lib/languages/mercury.js";
+import { require_mipsasm } from "../../vendor/highlight.js/lib/languages/mipsasm.js";
+import { require_mizar } from "../../vendor/highlight.js/lib/languages/mizar.js";
+import { require_mojolicious } from "../../vendor/highlight.js/lib/languages/mojolicious.js";
+import { require_monkey } from "../../vendor/highlight.js/lib/languages/monkey.js";
+import { require_moonscript } from "../../vendor/highlight.js/lib/languages/moonscript.js";
+import { require_n1ql } from "../../vendor/highlight.js/lib/languages/n1ql.js";
+import { require_nestedtext } from "../../vendor/highlight.js/lib/languages/nestedtext.js";
+import { require_nginx } from "../../vendor/highlight.js/lib/languages/nginx.js";
+import { require_nim } from "../../vendor/highlight.js/lib/languages/nim.js";
+import { require_nix } from "../../vendor/highlight.js/lib/languages/nix.js";
+import { require_node_repl } from "../../vendor/highlight.js/lib/languages/node-repl.js";
+import { require_nsis } from "../../vendor/highlight.js/lib/languages/nsis.js";
+import { require_objectivec } from "../../vendor/highlight.js/lib/languages/objectivec.js";
+import { require_ocaml } from "../../vendor/highlight.js/lib/languages/ocaml.js";
+import { require_openscad } from "../../vendor/highlight.js/lib/languages/openscad.js";
+import { require_oxygene } from "../../vendor/highlight.js/lib/languages/oxygene.js";
+import { require_parser3 } from "../../vendor/highlight.js/lib/languages/parser3.js";
+import { require_perl } from "../../vendor/highlight.js/lib/languages/perl.js";
+import { require_pf } from "../../vendor/highlight.js/lib/languages/pf.js";
+import { require_pgsql } from "../../vendor/highlight.js/lib/languages/pgsql.js";
+import { require_php } from "../../vendor/highlight.js/lib/languages/php.js";
+import { require_php_template } from "../../vendor/highlight.js/lib/languages/php-template.js";
+import { require_plaintext } from "../../vendor/highlight.js/lib/languages/plaintext.js";
+import { require_pony } from "../../vendor/highlight.js/lib/languages/pony.js";
+import { require_powershell } from "../../vendor/highlight.js/lib/languages/powershell.js";
+import { require_processing } from "../../vendor/highlight.js/lib/languages/processing.js";
+import { require_profile } from "../../vendor/highlight.js/lib/languages/profile.js";
+import { require_prolog } from "../../vendor/highlight.js/lib/languages/prolog.js";
+import { require_properties } from "../../vendor/highlight.js/lib/languages/properties.js";
+import { require_protobuf } from "../../vendor/highlight.js/lib/languages/protobuf.js";
+import { require_puppet } from "../../vendor/highlight.js/lib/languages/puppet.js";
+import { require_purebasic } from "../../vendor/highlight.js/lib/languages/purebasic.js";
+import { require_python } from "../../vendor/highlight.js/lib/languages/python.js";
+import { require_python_repl } from "../../vendor/highlight.js/lib/languages/python-repl.js";
+import { require_q } from "../../vendor/highlight.js/lib/languages/q.js";
+import { require_qml } from "../../vendor/highlight.js/lib/languages/qml.js";
+import { require_r } from "../../vendor/highlight.js/lib/languages/r.js";
+import { require_reasonml } from "../../vendor/highlight.js/lib/languages/reasonml.js";
+import { require_rib } from "../../vendor/highlight.js/lib/languages/rib.js";
+import { require_roboconf } from "../../vendor/highlight.js/lib/languages/roboconf.js";
+import { require_routeros } from "../../vendor/highlight.js/lib/languages/routeros.js";
+import { require_rsl } from "../../vendor/highlight.js/lib/languages/rsl.js";
+import { require_ruby } from "../../vendor/highlight.js/lib/languages/ruby.js";
+import { require_rust } from "../../vendor/highlight.js/lib/languages/rust.js";
+import { require_sas } from "../../vendor/highlight.js/lib/languages/sas.js";
+import { require_scala } from "../../vendor/highlight.js/lib/languages/scala.js";
+import { require_scheme } from "../../vendor/highlight.js/lib/languages/scheme.js";
+import { require_scilab } from "../../vendor/highlight.js/lib/languages/scilab.js";
+import { require_scss } from "../../vendor/highlight.js/lib/languages/scss.js";
+import { require_shell } from "../../vendor/highlight.js/lib/languages/shell.js";
+import { require_smali } from "../../vendor/highlight.js/lib/languages/smali.js";
+import { require_smalltalk } from "../../vendor/highlight.js/lib/languages/smalltalk.js";
+import { require_sml } from "../../vendor/highlight.js/lib/languages/sml.js";
+import { require_sql } from "../../vendor/highlight.js/lib/languages/sql.js";
+import { require_stan } from "../../vendor/highlight.js/lib/languages/stan.js";
+import { require_stata } from "../../vendor/highlight.js/lib/languages/stata.js";
+import { require_step21 } from "../../vendor/highlight.js/lib/languages/step21.js";
+import { require_stylus } from "../../vendor/highlight.js/lib/languages/stylus.js";
+import { require_subunit } from "../../vendor/highlight.js/lib/languages/subunit.js";
+import { require_swift } from "../../vendor/highlight.js/lib/languages/swift.js";
+import { require_taggerscript } from "../../vendor/highlight.js/lib/languages/taggerscript.js";
+import { require_tap } from "../../vendor/highlight.js/lib/languages/tap.js";
+import { require_tcl } from "../../vendor/highlight.js/lib/languages/tcl.js";
+import { require_thrift } from "../../vendor/highlight.js/lib/languages/thrift.js";
+import { require_tp } from "../../vendor/highlight.js/lib/languages/tp.js";
+import { require_twig } from "../../vendor/highlight.js/lib/languages/twig.js";
+import { require_typescript } from "../../vendor/highlight.js/lib/languages/typescript.js";
+import { require_vala } from "../../vendor/highlight.js/lib/languages/vala.js";
+import { require_vbnet } from "../../vendor/highlight.js/lib/languages/vbnet.js";
+import { require_vbscript } from "../../vendor/highlight.js/lib/languages/vbscript.js";
+import { require_vbscript_html } from "../../vendor/highlight.js/lib/languages/vbscript-html.js";
+import { require_verilog } from "../../vendor/highlight.js/lib/languages/verilog.js";
+import { require_vhdl } from "../../vendor/highlight.js/lib/languages/vhdl.js";
+import { require_vim } from "../../vendor/highlight.js/lib/languages/vim.js";
+import { require_wasm } from "../../vendor/highlight.js/lib/languages/wasm.js";
+import { require_wren } from "../../vendor/highlight.js/lib/languages/wren.js";
+import { require_x86asm } from "../../vendor/highlight.js/lib/languages/x86asm.js";
+import { require_xl } from "../../vendor/highlight.js/lib/languages/xl.js";
+import { require_xml } from "../../vendor/highlight.js/lib/languages/xml.js";
+import { require_xquery } from "../../vendor/highlight.js/lib/languages/xquery.js";
+import { require_yaml } from "../../vendor/highlight.js/lib/languages/yaml.js";
+import { require_zephir } from "../../vendor/highlight.js/lib/languages/zephir.js";
+import { require_core } from "../../vendor/highlight.js/lib/core.js";
+import { canonicalLanguageName, pluginHighlightLanguages } from "./highlight/pluginLanguages.js";
+import { HIGHLIGHT_LANGUAGE_ALIASES } from "./cliHighlight.js";
 
 //@ chunk-egr0twnb.js:586332-589295 placement
 var HIGHLIGHT_LANGUAGE_LOADERS = {
-  abnf: () => je(),
-  accesslog: () => tt(),
-  actionscript: () => at(),
-  ada: () => it(),
-  angelscript: () => ot(),
-  apache: () => lt(),
-  applescript: () => pt(),
-  arcade: () => _t(),
-  arduino: () => Et(),
-  armasm: () => bt(),
-  asciidoc: () => Tt(),
-  aspectj: () => St(),
-  autohotkey: () => Rt(),
-  autoit: () => vt(),
-  avrasm: () => Ct(),
-  awk: () => ht(),
-  axapta: () => Dt(),
-  bash: () => wt(),
-  basic: () => kt(),
-  bnf: () => Ut(),
-  brainfuck: () => Gt(),
-  c: () => qt(),
-  cal: () => $t(),
-  capnproto: () => Kt(),
-  ceylon: () => Wt(),
-  clean: () => Xt(),
-  clojure: () => Qt(),
-  "clojure-repl": () => jt(),
-  cmake: () => tn(),
-  coffeescript: () => an(),
-  coq: () => sn(),
-  cos: () => cn(),
-  cpp: () => dn(),
-  crmsh: () => mn(),
-  crystal: () => un(),
-  csharp: () => gn(),
-  csp: () => fn(),
-  css: () => Nn(),
-  d: () => An(),
-  dart: () => On(),
-  delphi: () => In(),
-  diff: () => yn(),
-  django: () => Mn(),
-  dns: () => Ln(),
-  dockerfile: () => xn(),
-  dos: () => Pn(),
-  dsconfig: () => Bn(),
-  dts: () => Fn(),
-  dust: () => Hn(),
-  ebnf: () => zn(),
-  elixir: () => Vn(),
-  elm: () => Yn(),
-  erb: () => Zn(),
-  erlang: () => Jn(),
-  "erlang-repl": () => ea(),
-  excel: () => na(),
-  fix: () => ra(),
-  flix: () => sa(),
-  fortran: () => ca(),
-  fsharp: () => pa(),
-  gams: () => _a(),
-  gauss: () => Ea(),
-  gcode: () => ba(),
-  gherkin: () => Ta(),
-  glsl: () => Sa(),
-  go: () => Ra(),
-  golo: () => va(),
-  gradle: () => Ca(),
-  graphql: () => ha(),
-  groovy: () => Da(),
-  haml: () => wa(),
-  handlebars: () => ka(),
-  haskell: () => Ua(),
-  haxe: () => Ga(),
-  hsp: () => qa(),
-  http: () => $a(),
-  hy: () => Ka(),
-  inform7: () => Wa(),
-  ini: () => Xa(),
-  irpf90: () => Qa(),
-  java: () => tr(),
-  javascript: () => sr(),
-  "jboss-cli": () => cr(),
-  json: () => dr(),
-  julia: () => mr(),
-  "julia-repl": () => ur(),
-  kotlin: () => gr(),
-  lasso: () => fr(),
-  latex: () => Nr(),
-  ldif: () => Ar(),
-  leaf: () => Or(),
-  less: () => yr(),
-  lisp: () => Mr(),
-  livecodeserver: () => Lr(),
-  livescript: () => xr(),
-  llvm: () => Pr(),
-  lsl: () => Br(),
-  lua: () => Fr(),
-  makefile: () => Hr(),
-  markdown: () => zr(),
-  matlab: () => Vr(),
-  mel: () => Yr(),
-  mercury: () => Zr(),
-  mipsasm: () => Jr(),
-  mizar: () => ei(),
-  mojolicious: () => ni(),
-  monkey: () => ri(),
-  moonscript: () => si(),
-  n1ql: () => ci(),
-  nestedtext: () => di(),
-  nginx: () => mi(),
-  nim: () => ui(),
-  nix: () => gi(),
-  "node-repl": () => fi(),
-  nsis: () => Ni(),
-  objectivec: () => Ai(),
-  ocaml: () => Oi(),
-  openscad: () => Ii(),
-  oxygene: () => yi(),
-  parser3: () => Mi(),
-  perl: () => Li(),
-  pf: () => xi(),
-  pgsql: () => Pi(),
-  php: () => Bi(),
-  "php-template": () => Fi(),
-  plaintext: () => Hi(),
-  pony: () => zi(),
-  powershell: () => Vi(),
-  processing: () => Yi(),
-  profile: () => Zi(),
-  prolog: () => Ji(),
-  properties: () => es(),
-  protobuf: () => ns(),
-  puppet: () => rs(),
-  purebasic: () => ss(),
-  python: () => cs(),
-  "python-repl": () => ds(),
-  q: () => ms(),
-  qml: () => us(),
-  r: () => gs(),
-  reasonml: () => fs(),
-  rib: () => Ns(),
-  roboconf: () => As(),
-  routeros: () => Os(),
-  rsl: () => Is(),
-  ruby: () => ys(),
-  ruleslanguage: () => Ms(),
-  rust: () => Ls(),
-  sas: () => xs(),
-  scala: () => Ps(),
-  scheme: () => Bs(),
-  scilab: () => Fs(),
-  scss: () => Hs(),
-  shell: () => zs(),
-  smali: () => Vs(),
-  smalltalk: () => Ys(),
-  sml: () => Zs(),
-  sql: () => Js(),
-  stan: () => eo(),
-  stata: () => no(),
-  step21: () => ro(),
-  stylus: () => so(),
-  subunit: () => co(),
-  swift: () => fo(),
-  taggerscript: () => No(),
-  tap: () => Ao(),
-  tcl: () => Oo(),
-  thrift: () => Io(),
-  tp: () => yo(),
-  twig: () => Mo(),
-  typescript: () => Go(),
-  vala: () => qo(),
-  vbnet: () => $o(),
-  vbscript: () => Ko(),
-  "vbscript-html": () => Wo(),
-  verilog: () => Xo(),
-  vhdl: () => Qo(),
-  vim: () => jo(),
-  wasm: () => tc(),
-  wren: () => ac(),
-  x86asm: () => ic(),
-  xl: () => oc(),
-  xml: () => lc(),
-  xquery: () => pc(),
-  yaml: () => _c(),
-  zephir: () => Ec(),
+  abnf: () => require_abnf(),
+  accesslog: () => require_accesslog(),
+  actionscript: () => require_actionscript(),
+  ada: () => require_ada(),
+  angelscript: () => require_angelscript(),
+  apache: () => require_apache(),
+  applescript: () => require_applescript(),
+  arcade: () => require_arcade(),
+  arduino: () => require_arduino(),
+  armasm: () => require_armasm(),
+  asciidoc: () => require_asciidoc(),
+  aspectj: () => require_aspectj(),
+  autohotkey: () => require_autohotkey(),
+  autoit: () => require_autoit(),
+  avrasm: () => require_avrasm(),
+  awk: () => require_awk(),
+  axapta: () => require_axapta(),
+  bash: () => require_bash(),
+  basic: () => require_basic(),
+  bnf: () => require_bnf(),
+  brainfuck: () => require_brainfuck(),
+  c: () => require_c(),
+  cal: () => require_cal(),
+  capnproto: () => require_capnproto(),
+  ceylon: () => require_ceylon(),
+  clean: () => require_clean(),
+  clojure: () => require_clojure(),
+  "clojure-repl": () => require_clojure_repl(),
+  cmake: () => require_cmake(),
+  coffeescript: () => require_coffeescript(),
+  coq: () => require_coq(),
+  cos: () => require_cos(),
+  cpp: () => require_cpp(),
+  crmsh: () => require_crmsh(),
+  crystal: () => require_crystal(),
+  csharp: () => require_csharp(),
+  csp: () => require_csp(),
+  css: () => require_css(),
+  d: () => require_d(),
+  dart: () => require_dart(),
+  delphi: () => require_delphi(),
+  diff: () => require_diff(),
+  django: () => require_django(),
+  dns: () => require_dns(),
+  dockerfile: () => require_dockerfile(),
+  dos: () => require_dos(),
+  dsconfig: () => require_dsconfig(),
+  dts: () => require_dts(),
+  dust: () => require_dust(),
+  ebnf: () => require_ebnf(),
+  elixir: () => require_elixir(),
+  elm: () => require_elm(),
+  erb: () => require_erb(),
+  erlang: () => require_erlang(),
+  "erlang-repl": () => require_erlang_repl(),
+  excel: () => require_excel(),
+  fix: () => require_fix(),
+  flix: () => require_flix(),
+  fortran: () => require_fortran(),
+  fsharp: () => require_fsharp(),
+  gams: () => require_gams(),
+  gauss: () => require_gauss(),
+  gcode: () => require_gcode(),
+  gherkin: () => require_gherkin(),
+  glsl: () => require_flix_2(),
+  go: () => require_go(),
+  golo: () => require_golo(),
+  gradle: () => require_gradle(),
+  graphql: () => require_graphql(),
+  groovy: () => require_groovy(),
+  haml: () => require_haml(),
+  handlebars: () => require_handlebars(),
+  haskell: () => require_haskell(),
+  haxe: () => require_haxe(),
+  hsp: () => require_hsp(),
+  http: () => require_http(),
+  hy: () => require_hy(),
+  inform7: () => require_inform7(),
+  ini: () => require_ini(),
+  irpf90: () => require_irpf90(),
+  java: () => require_java(),
+  javascript: () => require_javascript(),
+  "jboss-cli": () => require_jboss_cli(),
+  json: () => require_json(),
+  julia: () => require_julia(),
+  "julia-repl": () => require_julia_repl(),
+  kotlin: () => require_kotlin(),
+  lasso: () => require_lasso(),
+  latex: () => require_latex(),
+  ldif: () => require_ldif(),
+  leaf: () => require_leaf(),
+  less: () => require_less(),
+  lisp: () => require_lisp(),
+  livecodeserver: () => require_livecodeserver(),
+  livescript: () => require_livescript(),
+  llvm: () => require_llvm(),
+  lsl: () => require_lsl(),
+  lua: () => require_lua(),
+  makefile: () => require_makefile(),
+  markdown: () => require_markdown(),
+  matlab: () => require_matlab(),
+  mel: () => require_json_2(),
+  mercury: () => require_mercury(),
+  mipsasm: () => require_mipsasm(),
+  mizar: () => require_mizar(),
+  mojolicious: () => require_mojolicious(),
+  monkey: () => require_monkey(),
+  moonscript: () => require_moonscript(),
+  n1ql: () => require_n1ql(),
+  nestedtext: () => require_nestedtext(),
+  nginx: () => require_nginx(),
+  nim: () => require_nim(),
+  nix: () => require_nix(),
+  "node-repl": () => require_node_repl(),
+  nsis: () => require_nsis(),
+  objectivec: () => require_objectivec(),
+  ocaml: () => require_ocaml(),
+  openscad: () => require_openscad(),
+  oxygene: () => require_oxygene(),
+  parser3: () => require_parser3(),
+  perl: () => require_perl(),
+  pf: () => require_pf(),
+  pgsql: () => require_pgsql(),
+  php: () => require_php(),
+  "php-template": () => require_php_template(),
+  plaintext: () => require_plaintext(),
+  pony: () => require_pony(),
+  powershell: () => require_powershell(),
+  processing: () => require_processing(),
+  profile: () => require_profile(),
+  prolog: () => require_prolog(),
+  properties: () => require_properties(),
+  protobuf: () => require_protobuf(),
+  puppet: () => require_puppet(),
+  purebasic: () => require_purebasic(),
+  python: () => require_python(),
+  "python-repl": () => require_python_repl(),
+  q: () => require_q(),
+  qml: () => require_qml(),
+  r: () => require_r(),
+  reasonml: () => require_reasonml(),
+  rib: () => require_rib(),
+  roboconf: () => require_roboconf(),
+  routeros: () => require_routeros(),
+  rsl: () => require_rsl(),
+  ruby: () => require_ruby(),
+  ruleslanguage: () => require_json_3(),
+  rust: () => require_rust(),
+  sas: () => require_sas(),
+  scala: () => require_scala(),
+  scheme: () => require_scheme(),
+  scilab: () => require_scilab(),
+  scss: () => require_scss(),
+  shell: () => require_shell(),
+  smali: () => require_smali(),
+  smalltalk: () => require_smalltalk(),
+  sml: () => require_sml(),
+  sql: () => require_sql(),
+  stan: () => require_stan(),
+  stata: () => require_stata(),
+  step21: () => require_step21(),
+  stylus: () => require_stylus(),
+  subunit: () => require_subunit(),
+  swift: () => require_swift(),
+  taggerscript: () => require_taggerscript(),
+  tap: () => require_tap(),
+  tcl: () => require_tcl(),
+  thrift: () => require_thrift(),
+  tp: () => require_tp(),
+  twig: () => require_twig(),
+  typescript: () => require_typescript(),
+  vala: () => require_vala(),
+  vbnet: () => require_vbnet(),
+  vbscript: () => require_vbscript(),
+  "vbscript-html": () => require_vbscript_html(),
+  verilog: () => require_verilog(),
+  vhdl: () => require_vhdl(),
+  vim: () => require_vim(),
+  wasm: () => require_wasm(),
+  wren: () => require_wren(),
+  x86asm: () => require_x86asm(),
+  xl: () => require_xl(),
+  xml: () => require_xml(),
+  xquery: () => require_xquery(),
+  yaml: () => require_yaml(),
+  zephir: () => require_zephir(),
 };
+//@ chunk-egr0twnb.js:589295-589415 placement
 /**
  * 高亮库加载器（核心、语言 id 解析、语言加载器、子语言依赖）。
  */
-//@ chunk-egr0twnb.js:589295-589415 placement
 var HIGHLIGHT_LOADER = {
   loadCore() {
-    let e = Gc();
+    let e = require_core();
     return "default" in e && e.default ? e.default : e;
   },
   resolveId: canonicalLanguageName,
   loaders: HIGHLIGHT_LANGUAGE_LOADERS,
-  subLanguageDeps: kki,
+  subLanguageDeps: HIGHLIGHT_LANGUAGE_ALIASES,
 };
 //@ chunk-egr0twnb.js:589415-589450 placement
-function tUn() {
-  return BRe.core(HIGHLIGHT_LOADER);
+/**
+ * 用共享加载器做基础高亮。
+ */
+function highlightCore() {
+  return pluginHighlightLanguages.core(HIGHLIGHT_LOADER);
 }
 //@ chunk-egr0twnb.js:589450-589509 placement
-function WPs(e, t) {
-  return BRe.highlightUnderMessage(HIGHLIGHT_LOADER, e, t);
+/**
+ * 以消息样式作为背景做高亮。
+ */
+function highlightUnderMessage(work, t) {
+  return pluginHighlightLanguages.highlightUnderMessage(HIGHLIGHT_LOADER, work, t);
 }
 //@ chunk-egr0twnb.js:589509-589557 placement
-function Sce(e) {
-  return BRe.ensureLanguage(e, HIGHLIGHT_LOADER);
+/**
+ * 按需加载（并确认）高亮语言。
+ */
+function ensureHighlightLanguage(e) {
+  return pluginHighlightLanguages.ensureLanguage(e, HIGHLIGHT_LOADER);
 }
-
-export { Sce, WPs, tUn };
+export { ensureHighlightLanguage, highlightUnderMessage, highlightCore };

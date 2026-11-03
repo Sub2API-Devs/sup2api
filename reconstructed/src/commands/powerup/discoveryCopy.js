@@ -11,10 +11,10 @@
 import { env } from "../../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 
+//@ chunk-a1p5y6g9.js:261-568 placement
 /**
  * /powerup 发现提示文案与实验分支（tengu_birch_lantern）。
  */
-//@ chunk-a1p5y6g9.js:261-568 placement
 var POWERUP_DISCOVERY_COPY = {
   heading: "Learn the moves",
   body:
@@ -31,5 +31,4 @@ function resolvePowerupDiscoveryArm() {
     return CLAUDE_CODE_POWERUP_ONBOARDING;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_birch_lantern", "off");
 }
-
 export { resolvePowerupDiscoveryArm, POWERUP_DISCOVERY_COPY };

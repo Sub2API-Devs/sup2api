@@ -6,360 +6,478 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
-import { Gs } from "./debug.js";
+import { require_debug } from "./debug.js";
 
 //@ chunk-h6b7mazd.js:37518-45969 cjs-fingerprint
-var Qs = x(function (Dd, $r) {
-  var ct = importMetaRequire("url"),
-    ut = ct.URL,
-    Ef = importMetaRequire("http"),
-    Rf = importMetaRequire("https"),
-    Writable = importMetaRequire("stream").Writable,
-    Ir = importMetaRequire("assert"),
-    Js = Gs();
+var require_follow_redirects = x(function (cjsExports, cjsModule) {
+  var url = importMetaRequire("url");
+  var ut = url.URL;
+  var http = importMetaRequire("http");
+  var https = importMetaRequire("https");
+  var Writable = importMetaRequire("stream").Writable;
+  var assert = importMetaRequire("assert");
+  var debug = require_debug();
   (function () {
-    var t = typeof process < "u",
-      r = typeof window < "u" && typeof document < "u",
-      n = Ce(Error.captureStackTrace);
-    if (!t && (r || !n)) console.warn("The follow-redirects package should be excluded from browser builds.");
+    var looksLikeNode = typeof process !== "undefined";
+    var looksLikeBrowser = typeof window !== "undefined" && typeof document !== "undefined";
+    var looksLikeV8 = isFunction(Error.captureStackTrace);
+    if (!looksLikeNode && (looksLikeBrowser || !looksLikeV8))
+      console.warn("The follow-redirects package should be excluded from browser builds.");
   })();
-  var kr = !1;
+  var useNativeURL = false;
   try {
-    Ir(new ut(""));
+    assert(new ut(""));
   } catch (error) {
-    kr = error.code === "ERR_INVALID_URL";
+    useNativeURL = error.code === "ERR_INVALID_URL";
   }
-  var wf = ["Authorization", "Proxy-Authorization", "Cookie"],
-    xf = [
-      "auth",
-      "host",
-      "hostname",
-      "href",
-      "path",
-      "pathname",
-      "port",
-      "protocol",
-      "query",
-      "search",
-      "hash",
-    ],
-    jr = ["abort", "aborted", "connect", "error", "socket", "timeout"],
-    create = Object.create(null);
-  jr.forEach(function (e) {
-    create[e] = function (t, r, n) {
-      this._redirectable.emit(e, t, r, n);
+  var sensitiveHeaders = ["Authorization", "Proxy-Authorization", "Cookie"];
+  var preservedUrlFields = [
+    "auth",
+    "host",
+    "hostname",
+    "href",
+    "path",
+    "pathname",
+    "port",
+    "protocol",
+    "query",
+    "search",
+    "hash",
+  ];
+  var events = ["abort", "aborted", "connect", "error", "socket", "timeout"];
+  var eventHandlers = Object.create(null);
+  events.forEach(function (event) {
+    eventHandlers[event] = function (arg1, arg2, arg3) {
+      this._redirectable.emit(event, arg1, arg2, arg3);
     };
   });
-  var Nr = ft("ERR_INVALID_URL", "Invalid URL", TypeError),
-    Dr = ft("ERR_FR_REDIRECTION_FAILURE", "Redirected request failed"),
-    _f = ft("ERR_FR_TOO_MANY_REDIRECTS", "Maximum number of redirects exceeded", Dr),
-    Sf = ft("ERR_FR_MAX_BODY_LENGTH_EXCEEDED", "Request body larger than maxBodyLength limit"),
-    Af = ft("ERR_STREAM_WRITE_AFTER_END", "write after end"),
-    Of = Writable.prototype.destroy || Xs;
-  function Y(e, t) {
-    if (
-      (Writable.call(this),
-      this._sanitizeOptions(e),
-      (this._options = e),
-      (this._ended = !1),
-      (this._ending = !1),
-      (this._redirectCount = 0),
-      (this._redirects = []),
-      (this._requestBodyLength = 0),
-      (this._requestBodyBuffers = []),
-      t)
-    )
-      this.on("response", t);
+  var InvalidUrlError = createErrorType("ERR_INVALID_URL", "Invalid URL", TypeError);
+  var RedirectionError = createErrorType("ERR_FR_REDIRECTION_FAILURE", "Redirected request failed");
+  var TooManyRedirectsError = createErrorType(
+    "ERR_FR_TOO_MANY_REDIRECTS",
+    "Maximum number of redirects exceeded",
+    RedirectionError,
+  );
+  var MaxBodyLengthExceededError = createErrorType(
+    "ERR_FR_MAX_BODY_LENGTH_EXCEEDED",
+    "Request body larger than maxBodyLength limit",
+  );
+  var WriteAfterEndError = createErrorType("ERR_STREAM_WRITE_AFTER_END", "write after end");
+  var destroy = Writable.prototype.destroy || noop;
+  function RedirectableRequest(options, responseCallback) {
+    Writable.call(this);
+    this._sanitizeOptions(options);
+    this._options = options;
+    this._ended = false;
+    this._ending = false;
+    this._redirectCount = 0;
+    this._redirects = [];
+    this._requestBodyLength = 0;
+    this._requestBodyBuffers = [];
+    if (responseCallback) this.on("response", responseCallback);
     var r = this;
-    ((this._onNativeResponse = function (n) {
+    this._onNativeResponse = function (response) {
       try {
-        r._processResponse(n);
-      } catch (error) {
-        r.emit("error", error instanceof Dr ? error : new Dr({ cause: error }));
+        r._processResponse(response);
+      } catch (cause) {
+        r.emit(
+          "error",
+          cause instanceof RedirectionError
+            ? cause
+            : new RedirectionError({
+                cause,
+              }),
+        );
       }
-    }),
-      (this._headerFilter = new RegExp("^(?:" + wf.concat(e.sensitiveHeaders).map(Lf).join("|") + ")$", "i")),
-      this._performRequest());
+    };
+    this._headerFilter = new RegExp(
+      "^(?:" + sensitiveHeaders.concat(options.sensitiveHeaders).map(escapeRegex).join("|") + ")$",
+      "i",
+    );
+    this._performRequest();
   }
-  Y.prototype = Object.create(Writable.prototype);
-  Y.prototype.abort = function () {
-    (zr(this._currentRequest), this._currentRequest.abort(), this.emit("abort"));
+  RedirectableRequest.prototype = Object.create(Writable.prototype);
+  RedirectableRequest.prototype.abort = function () {
+    destroyRequest(this._currentRequest);
+    this._currentRequest.abort();
+    this.emit("abort");
   };
-  Y.prototype.destroy = function (e) {
-    return (zr(this._currentRequest, e), Of.call(this, e), this);
+  RedirectableRequest.prototype.destroy = function (error) {
+    destroyRequest(this._currentRequest, error);
+    destroy.call(this, error);
+    return this;
   };
-  Y.prototype.write = function (e, t, r) {
-    if (this._ending) throw new Af();
-    if (!Oe(e) && !Pf(e)) throw TypeError("data should be a string, Buffer or Uint8Array");
-    if (Ce(t)) ((r = t), (t = null));
-    if (e.length === 0) {
-      if (r) r();
+  RedirectableRequest.prototype.write = function (data, encoding, callback) {
+    if (this._ending) throw new WriteAfterEndError();
+    if (!isString(data) && !isBuffer(data)) throw TypeError("data should be a string, Buffer or Uint8Array");
+    if (isFunction(encoding)) {
+      callback = encoding;
+      encoding = null;
+    }
+    if (data.length === 0) {
+      if (callback) callback();
       return;
     }
-    if (this._requestBodyLength + e.length <= this._options.maxBodyLength)
-      ((this._requestBodyLength += e.length),
-        this._requestBodyBuffers.push({ data: e, encoding: t }),
-        this._currentRequest.write(e, t, r));
-    else (this.emit("error", new Sf()), this.abort());
-  };
-  Y.prototype.end = function (e, t, r) {
-    if (Ce(e)) ((r = e), (e = t = null));
-    else if (Ce(t)) ((r = t), (t = null));
-    if (!e) ((this._ended = this._ending = !0), this._currentRequest.end(null, null, r));
-    else {
-      var n = this,
-        _currentRequest = this._currentRequest;
-      (this.write(e, t, function () {
-        ((n._ended = !0), _currentRequest.end(null, null, r));
-      }),
-        (this._ending = !0));
+    if (this._requestBodyLength + data.length <= this._options.maxBodyLength) {
+      this._requestBodyLength += data.length;
+      this._requestBodyBuffers.push({
+        data,
+        encoding,
+      });
+      this._currentRequest.write(data, encoding, callback);
+    } else {
+      this.emit("error", new MaxBodyLengthExceededError());
+      this.abort();
     }
   };
-  Y.prototype.setHeader = function (e, t) {
-    ((this._options.headers[e] = t), this._currentRequest.setHeader(e, t));
+  RedirectableRequest.prototype.end = function (data, encoding, callback) {
+    if (isFunction(data)) {
+      callback = data;
+      data = encoding = null;
+    } else if (isFunction(encoding)) {
+      callback = encoding;
+      encoding = null;
+    }
+    if (!data) {
+      this._ended = this._ending = true;
+      this._currentRequest.end(null, null, callback);
+    } else {
+      var n = this;
+      var currentRequest = this._currentRequest;
+      this.write(data, encoding, function () {
+        n._ended = true;
+        currentRequest.end(null, null, callback);
+      });
+      this._ending = true;
+    }
   };
-  Y.prototype.removeHeader = function (e) {
-    (delete this._options.headers[e], this._currentRequest.removeHeader(e));
+  RedirectableRequest.prototype.setHeader = function (name, value) {
+    this._options.headers[name] = value;
+    this._currentRequest.setHeader(name, value);
   };
-  Y.prototype.setTimeout = function (e, t) {
+  RedirectableRequest.prototype.removeHeader = function (name) {
+    delete this._options.headers[name];
+    this._currentRequest.removeHeader(name);
+  };
+  RedirectableRequest.prototype.setTimeout = function (msecs, callback) {
     var r = this;
-    function n(i) {
-      (i.setTimeout(e), i.removeListener("timeout", i.destroy), i.addListener("timeout", i.destroy));
+    function destroyOnTimeout(socket) {
+      socket.setTimeout(msecs);
+      socket.removeListener("timeout", socket.destroy);
+      socket.addListener("timeout", socket.destroy);
     }
-    function o(i) {
+    function startTimer(socket) {
       if (r._timeout) clearTimeout(r._timeout);
-      ((r._timeout = setTimeout(function () {
-        (r.emit("timeout"), s());
-      }, e)),
-        n(i));
+      r._timeout = setTimeout(function () {
+        r.emit("timeout");
+        clearTimer();
+      }, msecs);
+      destroyOnTimeout(socket);
     }
-    function s() {
-      if (r._timeout) (clearTimeout(r._timeout), (r._timeout = null));
-      if (
-        (r.removeListener("abort", s),
-        r.removeListener("error", s),
-        r.removeListener("response", s),
-        r.removeListener("close", s),
-        t)
-      )
-        r.removeListener("timeout", t);
-      if (!r.socket) r._currentRequest.removeListener("socket", o);
+    function clearTimer() {
+      if (r._timeout) {
+        clearTimeout(r._timeout);
+        r._timeout = null;
+      }
+      r.removeListener("abort", clearTimer);
+      r.removeListener("error", clearTimer);
+      r.removeListener("response", clearTimer);
+      r.removeListener("close", clearTimer);
+      if (callback) r.removeListener("timeout", callback);
+      if (!r.socket) r._currentRequest.removeListener("socket", startTimer);
     }
-    if (t) this.on("timeout", t);
-    if (this.socket) o(this.socket);
-    else this._currentRequest.once("socket", o);
-    return (
-      this.on("socket", n),
-      this.on("abort", s),
-      this.on("error", s),
-      this.on("response", s),
-      this.on("close", s),
-      this
-    );
+    if (callback) this.on("timeout", callback);
+    if (this.socket) startTimer(this.socket);
+    else this._currentRequest.once("socket", startTimer);
+    this.on("socket", destroyOnTimeout);
+    this.on("abort", clearTimer);
+    this.on("error", clearTimer);
+    this.on("response", clearTimer);
+    this.on("close", clearTimer);
+    return this;
   };
-  ["flushHeaders", "getHeader", "setNoDelay", "setSocketKeepAlive"].forEach(function (e) {
-    Y.prototype[e] = function (t, r) {
-      return this._currentRequest[e](t, r);
+  ["flushHeaders", "getHeader", "setNoDelay", "setSocketKeepAlive"].forEach(function (method) {
+    RedirectableRequest.prototype[method] = function (a, b) {
+      return this._currentRequest[method](a, b);
     };
   });
-  ["aborted", "connection", "socket"].forEach(function (e) {
-    Object.defineProperty(Y.prototype, e, {
+  ["aborted", "connection", "socket"].forEach(function (property) {
+    Object.defineProperty(RedirectableRequest.prototype, property, {
       get: function () {
-        return this._currentRequest[e];
+        return this._currentRequest[property];
       },
     });
   });
-  Y.prototype._sanitizeOptions = function (e) {
-    if (!e.headers) e.headers = {};
-    if (!Tf(e.sensitiveHeaders)) e.sensitiveHeaders = [];
-    if (e.host) {
-      if (!e.hostname) e.hostname = e.host;
-      delete e.host;
+  RedirectableRequest.prototype._sanitizeOptions = function (options) {
+    if (!options.headers) options.headers = {};
+    if (!isArray(options.sensitiveHeaders)) options.sensitiveHeaders = [];
+    if (options.host) {
+      if (!options.hostname) options.hostname = options.host;
+      delete options.host;
     }
-    if (!e.pathname && e.path) {
-      var index = e.path.indexOf("?");
-      if (index < 0) e.pathname = e.path;
-      else ((e.pathname = e.path.substring(0, index)), (e.search = e.path.substring(index)));
+    if (!options.pathname && options.path) {
+      var searchPos = options.path.indexOf("?");
+      if (searchPos < 0) options.pathname = options.path;
+      else {
+        options.pathname = options.path.substring(0, searchPos);
+        options.search = options.path.substring(searchPos);
+      }
     }
   };
-  Y.prototype._performRequest = function () {
-    var protocol = this._options.protocol,
-      t = this._options.nativeProtocols[protocol];
-    if (!t) throw TypeError("Unsupported protocol " + protocol);
+  RedirectableRequest.prototype._performRequest = function () {
+    var protocol = this._options.protocol;
+    var nativeProtocol = this._options.nativeProtocols[protocol];
+    if (!nativeProtocol) throw TypeError("Unsupported protocol " + protocol);
     if (this._options.agents) {
-      var sliced = protocol.slice(0, -1);
-      this._options.agent = this._options.agents[sliced];
+      var scheme = protocol.slice(0, -1);
+      this._options.agent = this._options.agents[scheme];
     }
-    var n = (this._currentRequest = t.request(this._options, this._onNativeResponse));
-    n._redirectable = this;
-    for (var o of jr) n.on(o, create[o]);
-    if (
-      ((this._currentUrl = /^\//.test(this._options.path) ? ct.format(this._options) : this._options.path),
-      this._isRedirect)
-    ) {
-      var s = 0,
-        i = this,
-        _requestBodyBuffers = this._requestBodyBuffers;
-      (function l(f) {
-        if (n === i._currentRequest) {
-          if (f) i.emit("error", f);
-          else if (s < _requestBodyBuffers.length) {
-            var c = _requestBodyBuffers[s++];
-            if (!n.finished) n.write(c.data, c.encoding, l);
-          } else if (i._ended) n.end();
+    var request = (this._currentRequest = nativeProtocol.request(this._options, this._onNativeResponse));
+    request._redirectable = this;
+    for (var event of events) request.on(event, eventHandlers[event]);
+    this._currentUrl = /^\//.test(this._options.path) ? url.format(this._options) : this._options.path;
+    if (this._isRedirect) {
+      var i_2 = 0;
+      var i = this;
+      var buffers = this._requestBodyBuffers;
+      (function writeNext(error) {
+        if (request === i._currentRequest) {
+          if (error) i.emit("error", error);
+          else if (i_2 < buffers.length) {
+            var buffer = buffers[i_2++];
+            if (!request.finished) request.write(buffer.data, buffer.encoding, writeNext);
+          } else if (i._ended) request.end();
         }
       })();
     }
   };
-  Y.prototype._processResponse = function (e) {
-    var statusCode = e.statusCode;
+  RedirectableRequest.prototype._processResponse = function (response) {
+    var statusCode = response.statusCode;
     if (this._options.trackRedirects)
-      this._redirects.push({ url: this._currentUrl, headers: e.headers, statusCode: statusCode });
-    var location = e.headers.location;
-    if (!location || this._options.followRedirects === !1 || statusCode < 300 || statusCode >= 400) {
-      ((e.responseUrl = this._currentUrl),
-        (e.redirects = this._redirects),
-        this.emit("response", e),
-        (this._requestBodyBuffers = []));
+      this._redirects.push({
+        url: this._currentUrl,
+        headers: response.headers,
+        statusCode,
+      });
+    var location = response.headers.location;
+    if (!location || this._options.followRedirects === false || statusCode < 300 || statusCode >= 400) {
+      response.responseUrl = this._currentUrl;
+      response.redirects = this._redirects;
+      this.emit("response", response);
+      this._requestBodyBuffers = [];
       return;
     }
-    if ((zr(this._currentRequest), e.destroy(), ++this._redirectCount > this._options.maxRedirects))
-      throw new _f();
-    var n,
-      beforeRedirect = this._options.beforeRedirect;
-    if (beforeRedirect) n = Object.assign({ Host: e.req.getHeader("host") }, this._options.headers);
+    destroyRequest(this._currentRequest);
+    response.destroy();
+    if (++this._redirectCount > this._options.maxRedirects) throw new TooManyRedirectsError();
+    var requestHeaders;
+    var beforeRedirect = this._options.beforeRedirect;
+    if (beforeRedirect)
+      requestHeaders = Object.assign(
+        {
+          Host: response.req.getHeader("host"),
+        },
+        this._options.headers,
+      );
     var method = this._options.method;
     if (
       ((statusCode === 301 || statusCode === 302) && this._options.method === "POST") ||
       (statusCode === 303 && !/^(?:GET|HEAD)$/.test(this._options.method))
-    )
-      ((this._options.method = "GET"),
-        (this._requestBodyBuffers = []),
-        Br(/^content-/i, this._options.headers));
-    var i = Br(/^host$/i, this._options.headers),
-      a = Hr(this._currentUrl),
-      l = i || a.host,
-      f = /^\w+:/.test(location) ? this._currentUrl : ct.format(Object.assign(a, { host: l })),
-      c = Cf(location, f);
+    ) {
+      this._options.method = "GET";
+      this._requestBodyBuffers = [];
+      removeMatchingHeaders(/^content-/i, this._options.headers);
+    }
+    var currentHostHeader = removeMatchingHeaders(/^host$/i, this._options.headers);
+    var currentUrlParts = parseUrl(this._currentUrl);
+    var currentHost = currentHostHeader || currentUrlParts.host;
+    var currentUrl = /^\w+:/.test(location)
+      ? this._currentUrl
+      : url.format(
+          Object.assign(currentUrlParts, {
+            host: currentHost,
+          }),
+        );
+    var redirectUrl = resolveUrl(location, currentUrl);
+    debug("redirecting to", redirectUrl.href);
+    this._isRedirect = true;
+    spreadUrlObject(redirectUrl, this._options);
     if (
-      (Js("redirecting to", c.href),
-      (this._isRedirect = !0),
-      Ur(c, this._options),
-      (c.protocol !== a.protocol && c.protocol !== "https:") || (c.host !== l && !vf(c.host, l)))
+      (redirectUrl.protocol !== currentUrlParts.protocol && redirectUrl.protocol !== "https:") ||
+      (redirectUrl.host !== currentHost && !isSubdomain(redirectUrl.host, currentHost))
     )
-      Br(this._headerFilter, this._options.headers);
-    if (Ce(beforeRedirect)) {
-      var p = { headers: e.headers, statusCode: statusCode },
-        d = { url: f, method: method, headers: n };
-      (beforeRedirect(this._options, p, d), this._sanitizeOptions(this._options));
+      removeMatchingHeaders(this._headerFilter, this._options.headers);
+    if (isFunction(beforeRedirect)) {
+      var responseDetails = {
+        headers: response.headers,
+        statusCode,
+      };
+      var requestDetails = {
+        url: currentUrl,
+        method,
+        headers: requestHeaders,
+      };
+      beforeRedirect(this._options, responseDetails, requestDetails);
+      this._sanitizeOptions(this._options);
     }
     this._performRequest();
   };
-  function Ks(e) {
-    var t = { maxRedirects: 21, maxBodyLength: 10485760 },
-      r = {};
-    return (
-      Object.keys(e).forEach(function (n) {
-        var o = n + ":",
-          s = (r[o] = e[n]),
-          i = (t[n] = Object.create(s));
-        function a(f, c, p) {
-          if (Ff(f)) f = Ur(f);
-          else if (Oe(f)) f = Ur(Hr(f));
-          else ((p = c), (c = Ys(f)), (f = { protocol: o }));
-          if (Ce(c)) ((p = c), (c = null));
-          if (
-            ((c = Object.assign({ maxRedirects: t.maxRedirects, maxBodyLength: t.maxBodyLength }, f, c)),
-            (c.nativeProtocols = r),
-            !Oe(c.host) && !Oe(c.hostname))
-          )
-            c.hostname = "::1";
-          return (Ir.equal(c.protocol, o, "protocol mismatch"), Js("options", c), new Y(c, p));
+  function wrap(protocols) {
+    var t = {
+      maxRedirects: 21,
+      maxBodyLength: 10485760,
+    };
+    var nativeProtocols = {};
+    Object.keys(protocols).forEach(function (scheme) {
+      var protocol = scheme + ":";
+      var nativeProtocol = (nativeProtocols[protocol] = protocols[scheme]);
+      var wrappedProtocol = (t[scheme] = Object.create(nativeProtocol));
+      function request(input, options, callback) {
+        if (isURL(input)) input = spreadUrlObject(input);
+        else if (isString(input)) input = spreadUrlObject(parseUrl(input));
+        else {
+          callback = options;
+          options = validateUrl(input);
+          input = {
+            protocol,
+          };
         }
-        function l(f, c, p) {
-          var request = i.request(f, c, p);
-          return (request.end(), request);
+        if (isFunction(options)) {
+          callback = options;
+          options = null;
         }
-        Object.defineProperties(i, {
-          request: { value: a, configurable: !0, enumerable: !0, writable: !0 },
-          get: { value: l, configurable: !0, enumerable: !0, writable: !0 },
-        });
-      }),
-      t
-    );
-  }
-  function Xs() {}
-  function Hr(e) {
-    var t;
-    if (kr) t = new ut(e);
-    else if (((t = Ys(ct.parse(e))), !Oe(t.protocol))) throw new Nr({ input: e });
+        options = Object.assign(
+          {
+            maxRedirects: t.maxRedirects,
+            maxBodyLength: t.maxBodyLength,
+          },
+          input,
+          options,
+        );
+        options.nativeProtocols = nativeProtocols;
+        if (!isString(options.host) && !isString(options.hostname)) options.hostname = "::1";
+        assert.equal(options.protocol, protocol, "protocol mismatch");
+        debug("options", options);
+        return new RedirectableRequest(options, callback);
+      }
+      function get(input, options, callback) {
+        var wrappedRequest = wrappedProtocol.request(input, options, callback);
+        wrappedRequest.end();
+        return wrappedRequest;
+      }
+      Object.defineProperties(wrappedProtocol, {
+        request: {
+          value: request,
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        },
+        get: {
+          value: get,
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        },
+      });
+    });
     return t;
   }
-  function Cf(e, t) {
-    return kr ? new ut(e, t) : Hr(ct.resolve(t, e));
-  }
-  function Ys(e) {
-    if (/^\[/.test(e.hostname) && !/^\[[:0-9a-f]+\]$/i.test(e.hostname)) throw new Nr({ input: e.href || e });
-    if (/^\[/.test(e.host) && !/^\[[:0-9a-f]+\](:\d+)?$/i.test(e.host)) throw new Nr({ input: e.href || e });
-    return e;
-  }
-  function Ur(e, t) {
-    var r = t || {};
-    for (var n of xf) r[n] = e[n];
-    if (r.hostname.startsWith("[")) r.hostname = r.hostname.slice(1, -1);
-    if (r.port !== "") r.port = Number(r.port);
-    return ((r.path = r.search ? r.pathname + r.search : r.pathname), r);
-  }
-  function Br(e, t) {
-    var r;
-    for (var key in t) if (e.test(key)) ((r = t[key]), delete t[key]);
-    return r === null || typeof r > "u" ? void 0 : String(r).trim();
-  }
-  function ft(e, t, r) {
-    function n(o) {
-      if (Ce(Error.captureStackTrace)) Error.captureStackTrace(this, this.constructor);
-      (Object.assign(this, o || {}),
-        (this.code = e),
-        (this.message = this.cause ? t + ": " + this.cause.message : t));
+  function noop() {}
+  function parseUrl(input) {
+    var parsed;
+    if (useNativeURL) parsed = new ut(input);
+    else {
+      parsed = validateUrl(url.parse(input));
+      if (!isString(parsed.protocol))
+        throw new InvalidUrlError({
+          input,
+        });
     }
-    return (
-      (n.prototype = Object.create((r || Error).prototype)),
-      Object.defineProperties(n.prototype, {
-        constructor: { value: n, enumerable: !1 },
-        name: { value: "Error [" + e + "]", enumerable: !1 },
-      }),
-      n
-    );
+    return parsed;
   }
-  function zr(e, t) {
-    for (var r of jr) e.removeListener(r, create[r]);
-    (e.on("error", Xs), e.destroy(t));
+  function resolveUrl(relative, base) {
+    return useNativeURL ? new ut(relative, base) : parseUrl(url.resolve(base, relative));
   }
-  function vf(e, t) {
-    Ir(Oe(e) && Oe(t));
-    var r = e.length - t.length - 1;
-    return r > 0 && e[r] === "." && e.endsWith(t);
+  function validateUrl(input) {
+    if (/^\[/.test(input.hostname) && !/^\[[:0-9a-f]+\]$/i.test(input.hostname))
+      throw new InvalidUrlError({
+        input: input.href || input,
+      });
+    if (/^\[/.test(input.host) && !/^\[[:0-9a-f]+\](:\d+)?$/i.test(input.host))
+      throw new InvalidUrlError({
+        input: input.href || input,
+      });
+    return input;
   }
-  function Tf(e) {
-    return e instanceof Array;
+  function spreadUrlObject(urlObject, target) {
+    var spread = target || {};
+    for (var key of preservedUrlFields) spread[key] = urlObject[key];
+    if (spread.hostname.startsWith("[")) spread.hostname = spread.hostname.slice(1, -1);
+    if (spread.port !== "") spread.port = Number(spread.port);
+    spread.path = spread.search ? spread.pathname + spread.search : spread.pathname;
+    return spread;
   }
-  function Oe(e) {
-    return typeof e === "string" || e instanceof String;
+  function removeMatchingHeaders(regex, headers) {
+    var lastValue;
+    for (var header in headers)
+      if (regex.test(header)) {
+        lastValue = headers[header];
+        delete headers[header];
+      }
+    return lastValue === null || typeof lastValue === "undefined" ? undefined : String(lastValue).trim();
   }
-  function Ce(e) {
-    return typeof e === "function";
+  function createErrorType(code, message, baseClass) {
+    function CustomError(properties) {
+      if (isFunction(Error.captureStackTrace)) Error.captureStackTrace(this, this.constructor);
+      Object.assign(this, properties || {});
+      this.code = code;
+      this.message = this.cause ? message + ": " + this.cause.message : message;
+    }
+    CustomError.prototype = Object.create((baseClass || Error).prototype);
+    Object.defineProperties(CustomError.prototype, {
+      constructor: {
+        value: CustomError,
+        enumerable: false,
+      },
+      name: {
+        value: "Error [" + code + "]",
+        enumerable: false,
+      },
+    });
+    return CustomError;
   }
-  function Pf(e) {
-    return typeof e === "object" && "length" in e;
+  function destroyRequest(request, error) {
+    for (var event of events) request.removeListener(event, eventHandlers[event]);
+    request.on("error", noop);
+    request.destroy(error);
   }
-  function Ff(e) {
-    return ut && e instanceof ut;
+  function isSubdomain(subdomain, domain) {
+    assert(isString(subdomain) && isString(domain));
+    var dot = subdomain.length - domain.length - 1;
+    return dot > 0 && subdomain[dot] === "." && subdomain.endsWith(domain);
   }
-  function Lf(e) {
-    return e.replace(/[\]\\/()*+?.$]/g, "\\$&");
+  function isArray(value) {
+    return value instanceof Array;
   }
-  $r.exports = Ks({ http: Ef, https: Rf });
-  $r.exports.wrap = Ks;
+  function isString(value) {
+    return typeof value === "string" || value instanceof String;
+  }
+  function isFunction(value) {
+    return typeof value === "function";
+  }
+  function isBuffer(value) {
+    return typeof value === "object" && "length" in value;
+  }
+  function isURL(value) {
+    return ut && value instanceof ut;
+  }
+  function escapeRegex(regex) {
+    return regex.replace(/[\]\\/()*+?.$]/g, "\\$&");
+  }
+  cjsModule.exports = wrap({
+    http,
+    https,
+  });
+  cjsModule.exports.wrap = wrap;
 });
-
-export { Qs };
+export { require_follow_redirects };

@@ -9,7 +9,7 @@
  * attribution: facade-exports 10, layout 1, fingerprint 2
  */
 import { TICK } from "../constants/xml.js";
-import { uft, jwr } from "./systemReminder.js";
+import { unwrapReminderText, textOrReminderWrapped } from "./systemReminder.js";
 import { toError, errorStackOrMessage } from "./errors.js";
 import { isEnvTruthy } from "./envUtils.js";
 import { isEssentialTrafficOnly } from "./privacyLevel.js";
@@ -17,42 +17,42 @@ import { setLastAPIRequest, setLastAPIRequestMessages } from "../bootstrap/state
 
 //@ chunk-bbtre4r8.js:14747-15020 facade-exports = getLogDisplayTitle (0.847)
 function getLogDisplayTitle(log, defaultTitle) {
-  let r = log.firstPromptShown ?? log.firstPrompt,
-    isAutonomousPrompt = r?.startsWith(`<${TICK}>`),
-    strippedFirstPrompt = r ? uft(r) : "",
-    a = strippedFirstPrompt && !isAutonomousPrompt,
-    i =
-      log.agentName ||
-      log.customTitle ||
-      log.aiTitle ||
-      log.summary ||
-      (a ? strippedFirstPrompt : void 0) ||
-      defaultTitle ||
-      (isAutonomousPrompt ? "Autonomous session" : void 0) ||
-      (log.sessionId ? log.sessionId.slice(0, 8) : "") ||
-      "";
-  return jwr(i).trim();
+  let r = log.firstPromptShown ?? log.firstPrompt;
+  let isAutonomousPrompt = r?.startsWith(`<${TICK}>`);
+  let strippedFirstPrompt = r ? unwrapReminderText(r) : "";
+  let useFirstPrompt = strippedFirstPrompt && !isAutonomousPrompt;
+  let title =
+    log.agentName ||
+    log.customTitle ||
+    log.aiTitle ||
+    log.summary ||
+    (useFirstPrompt ? strippedFirstPrompt : undefined) ||
+    defaultTitle ||
+    (isAutonomousPrompt ? "Autonomous session" : undefined) ||
+    (log.sessionId ? log.sessionId.slice(0, 8) : "") ||
+    "";
+  return textOrReminderWrapped(title).trim();
 }
 //@ chunk-bbtre4r8.js:15020-15080 facade-exports
-function dateToFilename(t) {
-  return t.toISOString().replace(/[:.]/g, "-");
+function dateToFilename(date) {
+  return date.toISOString().replace(/[:.]/g, "-");
 }
 //@ chunk-bbtre4r8.js:15080-15097 layout
-var Q = 100,
-  Z = 1000;
+var MAX_REMEMBERED_ERRORS = 100;
+var MAX_REMEMBERED_ERROR_CHARS = 1000;
 //@ chunk-bbtre4r8.js:15097-16155 fingerprint = attachErrorLogSink (0.433)
 class attachErrorLogSink_2 {
   recentErrors = [];
   queue = [];
   droppedBeforeSink = 0;
   sink = null;
-  hardFailMode = void 0;
-  maxRememberedChars = void 0;
+  hardFailMode = undefined;
+  maxRememberedChars = undefined;
   remember(t) {
-    if (this.recentErrors.length >= Q) this.recentErrors.shift();
+    if (this.recentErrors.length >= MAX_REMEMBERED_ERRORS) this.recentErrors.shift();
     let maxRememberedChars = this.maxRememberedChars;
     this.recentErrors.push(
-      maxRememberedChars === void 0 || t.error.length <= maxRememberedChars
+      maxRememberedChars === undefined || t.error.length <= maxRememberedChars
         ? t
         : {
             ...t,
@@ -62,7 +62,7 @@ class attachErrorLogSink_2 {
   }
   dispatch(t) {
     if (this.sink === null) {
-      if (this.queue.length >= Z) {
+      if (this.queue.length >= MAX_REMEMBERED_ERROR_CHARS) {
         this.droppedBeforeSink++;
         return;
       }
@@ -81,35 +81,36 @@ class attachErrorLogSink_2 {
         break;
     }
   }
-  attachSink(t) {
+  attachSink(sink) {
     if (this.sink !== null) return;
-    this.sink = t;
+    this.sink = sink;
     let queue = this.queue;
     this.queue = [];
     for (let r of queue) this.dispatch(r);
   }
   isHardFailMode() {
-    return ((this.hardFailMode ??= process.argv.includes("--hard-fail")), this.hardFailMode);
+    this.hardFailMode ??= process.argv.includes("--hard-fail");
+    return this.hardFailMode;
   }
   reset() {
-    ((this.recentErrors = []),
-      (this.queue = []),
-      (this.droppedBeforeSink = 0),
-      (this.sink = null),
-      (this.hardFailMode = void 0),
-      (this.maxRememberedChars = void 0));
+    this.recentErrors = [];
+    this.queue = [];
+    this.droppedBeforeSink = 0;
+    this.sink = null;
+    this.hardFailMode = undefined;
+    this.maxRememberedChars = undefined;
   }
 }
 //@ chunk-bbtre4r8.js:16155-16169 facade-exports
 var errorLogBuffer = new attachErrorLogSink_2();
 //@ chunk-bbtre4r8.js:16169-16203 facade-exports
-function attachErrorLogSink(t) {
-  errorLogBuffer.attachSink(t);
+function attachErrorLogSink(errorLogSink) {
+  errorLogBuffer.attachSink(errorLogSink);
 }
+//@ chunk-bbtre4r8.js:16203-16666 facade-exports = logError (0.598)
 /**
  * 记录错误：写入错误日志与内存环形缓冲（有长度上限），非生产时输出调试；被约 1790 处调用。
  */
-//@ chunk-bbtre4r8.js:16203-16666 facade-exports = logError (0.598)
 function logError(error) {
   let err = toError(error);
   try {
@@ -124,8 +125,15 @@ function logError(error) {
       isEssentialTrafficOnly()
     )
       return;
-    let errorInfo = { error: errorStackOrMessage(err), timestamp: new Date().toISOString() };
-    (errorLogBuffer.remember(errorInfo), errorLogBuffer.dispatch({ type: "error", error: err }));
+    let errorInfo = {
+      error: errorStackOrMessage(err),
+      timestamp: new Date().toISOString(),
+    };
+    errorLogBuffer.remember(errorInfo);
+    errorLogBuffer.dispatch({
+      type: "error",
+      error: err,
+    });
   } catch {}
 }
 //@ chunk-bbtre4r8.js:16666-16709 facade-exports
@@ -135,36 +143,44 @@ function getInMemoryErrors() {
 //@ chunk-bbtre4r8.js:16709-16791 facade-exports = logMCPError (0.734)
 function logMCPError(serverName, error) {
   try {
-    errorLogBuffer.dispatch({ type: "mcpError", serverName: serverName, error: error });
+    errorLogBuffer.dispatch({
+      type: "mcpError",
+      serverName,
+      error,
+    });
   } catch {}
 }
 //@ chunk-bbtre4r8.js:16791-16875 facade-exports = logMCPDebug (0.734)
 function logMCPDebug(serverName, message) {
   try {
-    errorLogBuffer.dispatch({ type: "mcpDebug", serverName: serverName, message: message });
+    errorLogBuffer.dispatch({
+      type: "mcpDebug",
+      serverName,
+      message,
+    });
   } catch {}
 }
 //@ chunk-bbtre4r8.js:16875-16949 facade-exports
 function keepsMCPDebug() {
   try {
-    return errorLogBuffer.sink?.keepsMCPDebug?.() ?? !0;
+    return errorLogBuffer.sink?.keepsMCPDebug?.() ?? true;
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-bbtre4r8.js:16949-17070 facade-exports = isMainThreadSource (1)
-function captureAPIRequest(t, e, r) {
-  if (!e || !e.startsWith("repl_main_thread")) return;
+function captureAPIRequest(t, querySource, r) {
+  if (!querySource || !querySource.startsWith("repl_main_thread")) return;
   if (!r) return;
-  let { messages: messages, ...o } = t;
-  (setLastAPIRequest(o), setLastAPIRequestMessages(null));
+  let { messages, ...o } = t;
+  setLastAPIRequest(o);
+  setLastAPIRequestMessages(null);
 }
 //@ chunk-s67w32sp.js:5050-5139 fingerprint = dateToFilename (0.673)
 function dateToFilename_2(date) {
-  let parse = Date.parse(date);
-  return new Date(Number.isFinite(parse) ? parse : 0).toISOString();
+  let timestamp = Date.parse(date);
+  return new Date(Number.isFinite(timestamp) ? timestamp : 0).toISOString();
 }
-
 export {
   logError,
   logMCPDebug,

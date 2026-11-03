@@ -8,18 +8,18 @@
  * pieces: chunk-xw402a7j.js (1)
  * attribution: placement 1
  */
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 import { plural } from "../../utils/stringUtils.js";
 
+//@ chunk-xw402a7j.js:4532-4677 placement
 /**
  * 连接器建议结果。
  */
-//@ chunk-xw402a7j.js:4532-4677 placement
 function renderSuggestConnectorsResult(o) {
-  return e(MessageResponse, {
-    children: e(Text, {
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default(Text, {
       children: o.opt_in_required
         ? o.message
         : `${o.connectors.length} ${plural(o.connectors.length, "connector")}`,

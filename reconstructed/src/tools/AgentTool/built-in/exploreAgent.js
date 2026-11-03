@@ -24,15 +24,15 @@ import { NOTEBOOK_EDIT_TOOL_NAME } from "../../NotebookEditTool/constants.js";
 
 //@ chunk-e6aww6q8.js:179523-181888 fingerprint = getExploreSystemPrompt (0.647)
 function getExploreSystemPrompt() {
-  let embedded = isBashAvailable(),
-    n = embedded ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME,
-    r = hasEmbeddedSearchTools() && embedded,
-    s = r
-      ? `- Use \`find\` via ${BASH_TOOL_NAME} for broad file pattern matching`
-      : `- Use ${GLOB_TOOL_NAME} for broad file pattern matching`,
-    h = r
-      ? `- Use \`grep\` via ${BASH_TOOL_NAME} for searching file contents with regex`
-      : `- Use ${GREP_TOOL_NAME} for searching file contents with regex`;
+  let embedded = isBashAvailable();
+  let n = embedded ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
+  let r = hasEmbeddedSearchTools() && embedded;
+  let globGuidance = r
+    ? `- Use \`find\` via ${BASH_TOOL_NAME} for broad file pattern matching`
+    : `- Use ${GLOB_TOOL_NAME} for broad file pattern matching`;
+  let grepGuidance = r
+    ? `- Use \`grep\` via ${BASH_TOOL_NAME} for searching file contents with regex`
+    : `- Use ${GREP_TOOL_NAME} for searching file contents with regex`;
   return `You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
@@ -53,8 +53,8 @@ Your strengths:
 - Reading and analyzing file contents
 
 Guidelines:
-${s}
-${h}
+${globGuidance}
+${grepGuidance}
 - Use ${FILE_READ_TOOL_NAME} when you know the specific file path you need to read
 - Use ${n} ONLY for read-only operations (${embedded ? `ls, git status, git log, git diff, find${r ? ", grep" : ""}, cat, head, tail` : "Get-ChildItem, git status, git log, git diff, Get-Content, Select-Object -First/-Last"})
 - NEVER use ${n} for: ${embedded ? "mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install" : "New-Item, Remove-Item, Copy-Item, Move-Item, git add, git commit, npm install, pip install"}, or any file creation/modification
@@ -67,31 +67,30 @@ NOTE: You are meant to be a fast agent that returns output as quickly as possibl
 
 Complete the user's search request efficiently and report your findings clearly.`;
 }
+//@ chunk-e6aww6q8.js:181888-183116 fingerprint = EXPLORE_AGENT (0.716)
 /**
  * Explore 内建代理及其 whenToUse 文本；EXPLORE_AGENT_MIN_QUERIES=3 用于主提示词"超过 3 次查询改用 Explore"。
  */
-//@ chunk-e6aww6q8.js:181888-183116 fingerprint = EXPLORE_AGENT (0.716)
-var EXPLORE_AGENT_MIN_QUERIES = 3,
-  EXPLORE_WHEN_TO_USE =
-    'Fast read-only search agent for locating code. Use it to find files by pattern (eg. "src/components/**/*.tsx"), grep for symbols or keywords (eg. "API endpoints"), or answer "where is X defined / which files reference Y." Do NOT use it for code review, design-doc auditing, cross-file consistency checks, or open-ended analysis \u2014 it reads excerpts rather than whole files and will miss content past its read window. When calling, specify search breadth: "quick" for a single targeted lookup, "medium" for moderate exploration, or "very thorough" to search across multiple locations and naming conventions.',
-  EXPLORE_WHEN_TO_USE_LEAN = `Read-only search agent for broad fan-out searches \u2014 when answering means sweeping many files, directories, or naming conventions and you only need the conclusion, not the file dumps. It reads excerpts rather than whole files, so it locates code; it doesn't review or audit it. Specify search breadth: "medium" for moderate exploration, "very thorough" for multiple locations and naming conventions.`,
-  EXPLORE_AGENT = {
-    agentType: "Explore",
-    whenToUse: EXPLORE_WHEN_TO_USE,
-    whenToUseLean: EXPLORE_WHEN_TO_USE_LEAN,
-    disallowedTools: [
-      AGENT,
-      ...ARTIFACT_FAMILY_TOOL_NAMES,
-      EXITPLANMODE,
-      FILE_EDIT_TOOL_NAME,
-      FILE_WRITE_TOOL_NAME,
-      NOTEBOOK_EDIT_TOOL_NAME,
-    ],
-    source: "built-in",
-    baseDir: "built-in",
-    model: "inherit",
-    omitClaudeMd: !0,
-    getSystemPrompt: () => getExploreSystemPrompt(),
-  };
-
+var EXPLORE_AGENT_MIN_QUERIES = 3;
+var EXPLORE_WHEN_TO_USE =
+  'Fast read-only search agent for locating code. Use it to find files by pattern (eg. "src/components/**/*.tsx"), grep for symbols or keywords (eg. "API endpoints"), or answer "where is X defined / which files reference Y." Do NOT use it for code review, design-doc auditing, cross-file consistency checks, or open-ended analysis \u2014 it reads excerpts rather than whole files and will miss content past its read window. When calling, specify search breadth: "quick" for a single targeted lookup, "medium" for moderate exploration, or "very thorough" to search across multiple locations and naming conventions.';
+var EXPLORE_WHEN_TO_USE_LEAN = `Read-only search agent for broad fan-out searches \u2014 when answering means sweeping many files, directories, or naming conventions and you only need the conclusion, not the file dumps. It reads excerpts rather than whole files, so it locates code; it doesn't review or audit it. Specify search breadth: "medium" for moderate exploration, "very thorough" for multiple locations and naming conventions.`;
+var EXPLORE_AGENT = {
+  agentType: "Explore",
+  whenToUse: EXPLORE_WHEN_TO_USE,
+  whenToUseLean: EXPLORE_WHEN_TO_USE_LEAN,
+  disallowedTools: [
+    AGENT,
+    ...ARTIFACT_FAMILY_TOOL_NAMES,
+    EXITPLANMODE,
+    FILE_EDIT_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    NOTEBOOK_EDIT_TOOL_NAME,
+  ],
+  source: "built-in",
+  baseDir: "built-in",
+  model: "inherit",
+  omitClaudeMd: true,
+  getSystemPrompt: () => getExploreSystemPrompt(),
+};
 export { EXPLORE_AGENT_MIN_QUERIES, EXPLORE_AGENT };

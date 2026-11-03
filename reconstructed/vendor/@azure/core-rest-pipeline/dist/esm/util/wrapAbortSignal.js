@@ -7,18 +7,31 @@
  */
 
 //@ chunk-mrx6y2r5.js:61450-61768 esm-fingerprint
-function Xo(e) {
-  if (e instanceof AbortSignal) return { abortSignal: e };
-  if (e.aborted) return { abortSignal: AbortSignal.abort(e.reason) };
-  let abortController = new AbortController(),
-    r = !0;
-  function n() {
-    if (r) (e.removeEventListener("abort", o), (r = !1));
+function wrapAbortSignalLike(abortSignalLike) {
+  if (abortSignalLike instanceof AbortSignal)
+    return {
+      abortSignal: abortSignalLike,
+    };
+  if (abortSignalLike.aborted)
+    return {
+      abortSignal: AbortSignal.abort(abortSignalLike.reason),
+    };
+  let controller = new AbortController();
+  let needsCleanup = true;
+  function cleanup() {
+    if (needsCleanup) {
+      abortSignalLike.removeEventListener("abort", listener);
+      needsCleanup = false;
+    }
   }
-  function o() {
-    (abortController.abort(e.reason), n());
+  function listener() {
+    controller.abort(abortSignalLike.reason);
+    cleanup();
   }
-  return (e.addEventListener("abort", o), { abortSignal: abortController.signal, cleanup: n });
+  abortSignalLike.addEventListener("abort", listener);
+  return {
+    abortSignal: controller.signal,
+    cleanup,
+  };
 }
-
-export { Xo };
+export { wrapAbortSignalLike };

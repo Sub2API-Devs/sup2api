@@ -8,7 +8,7 @@
  * pieces: chunk-0jk9tmkx.js (1), chunk-71c4j971.js (17), chunk-tpjqzh89.js (11)
  * attribution: fingerprint 1, placement 23, facade-majority 4, layout 1
  */
-import { Ao } from "../bootstrap/sessionFeatureValues.js";
+import { getSessionFeatureValues } from "../bootstrap/sessionFeatureValues.js";
 import { env } from "../utils/env.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
@@ -35,10 +35,15 @@ import {
 } from "../utils/model/providers.js";
 import { getAuthenticatedAccountEpoch } from "../bootstrap/state.js";
 import { getPolicyLimitsTunnelSocket, isPolicyLimitsEligible } from "../services/policyLimits/policyState.js";
-import { f, k, hasProfileScopeSafe } from "./bridgeEntitlement.js";
-import { E, getBearerSubscriptionType, getBridgeAccessToken_2, hasFreshBearerPlan } from "./bridgeConfig.js";
+import { isSubscriberSafe, SUBSCRIPTION_PLAN_NAMES, hasProfileScopeSafe } from "./bridgeEntitlement.js";
 import {
-  le,
+  isGrowthBookUnavailableOnNoTelemetry,
+  getBearerSubscriptionType,
+  getBridgeAccessToken_2,
+  hasFreshBearerPlan,
+} from "./bridgeConfig.js";
+import {
+  isTrustedDevicesRequiredOrAbsent,
   isBridgeChildAutoModeDefaultEnabled,
   isBridgeRcChildArtifactEnabled,
   isBridgeRcChildCliEntrypointEnabled,
@@ -49,13 +54,13 @@ import {
 } from "./bridgeGates.js";
 import { getOauthAccountInfo_2, getClaudeAIOAuthTokens } from "../utils/auth.js";
 import { withDeadline, sleep } from "../utils/sleep.js";
-import { ao } from "./bridgeHostState.js";
+import { bridgeHostState } from "./bridgeHostState.js";
 import { REMOTE_CONTROL_APP, REMOTE_CONTROL_CLI, RC_CHILD, WORKFLOW_REMOTE_AGENT } from "./sessionOrigins.js";
 import { canSeedAutoMode } from "../utils/permissions/permissionSetup.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string } from "../../vendor/zod/v4/classic/schemas.js";
 import { isSemverString, splitOnDash } from "../utils/model/modelCatalog/catalogCapabilities.js";
-import { gt, lt_2 } from "../utils/semver.js";
+import { semverGte, lt_2 as lt } from "../utils/semver.js";
 import { getPrivacyLevel, isEssentialTrafficOnly } from "../utils/privacyLevel.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage, isAbortError, ConfigParseError } from "../utils/errors.js";
@@ -64,164 +69,204 @@ import { errorMessage, isAbortError, ConfigParseError } from "../utils/errors.js
 var TENGU_REFLECTIVE_WOLF = "tengu_reflective_wolf";
 //@ chunk-71c4j971.js:1215-1364 placement
 function isAttributionAnnouncementEnabled() {
-  let e = Ao();
-  return (
-    (e.attributionAnnouncementEnabled ??=
-      env.CLAUDE_CODE_ATTRIBUTION_ANNOUNCEMENT ??
-      getFeatureValue_CACHED_MAY_BE_STALE(TENGU_REFLECTIVE_WOLF, !0)),
-    e.attributionAnnouncementEnabled
-  );
+  let sessionFeatureValues = getSessionFeatureValues();
+  sessionFeatureValues.attributionAnnouncementEnabled ??=
+    env.CLAUDE_CODE_ATTRIBUTION_ANNOUNCEMENT ??
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_REFLECTIVE_WOLF, true);
+  return sessionFeatureValues.attributionAnnouncementEnabled;
 }
 //@ chunk-71c4j971.js:1364-1485 placement
 function withClientDataReseedOnModelChange(e) {
-  let o = isAttributionAnnouncementEnabled() ? getFetchedClientData() : void 0,
-    n = getMainLoopModel();
-  if ((e(), o === void 0 || getMainLoopModel() === n)) return;
-  return (seedClientDataForCurrentKey(o, { forContextWindow: !0 }), o);
+  let o = isAttributionAnnouncementEnabled() ? getFetchedClientData() : undefined;
+  let mainLoopModel = getMainLoopModel();
+  e();
+  if (o === undefined || getMainLoopModel() === mainLoopModel) return;
+  seedClientDataForCurrentKey(o, {
+    forContextWindow: true,
+  });
+  return o;
 }
 //@ chunk-71c4j971.js:1485-1642 placement
-function refreshBootstrapDataTracked(e, o, n) {
+function refreshBootstrapDataTracked(e, o, renderedClientData) {
   let r = import("./chunk-1qx2v2vg.js")
-    .then(({ refreshBootstrapData: refreshBootstrapData }) =>
-      refreshBootstrapData(e, o, { renderedClientData: n }),
+    .then(({ refreshBootstrapData }) =>
+      refreshBootstrapData(e, o, {
+        renderedClientData,
+      }),
     )
     .then(
       () => {},
-      (a) => logError(a),
+      (error) => logError(error),
     );
-  return (trackClientDataFetch(r), r);
+  trackClientDataFetch(r);
+  return r;
 }
 //@ chunk-71c4j971.js:1642-1678 placement
-function Qsr(e, o, n) {
-  return refreshBootstrapDataTracked(e, o, n);
+/**
+ * refreshBootstrapDataTracked 的薄包装（同名导出已被占用，加后缀）；在清模型/应用状态变化时刷新启动数据。
+ */
+function refreshBootstrapDataTracked_2(e, o, renderedClientData) {
+  return refreshBootstrapDataTracked(e, o, renderedClientData);
 }
 //@ chunk-71c4j971.js:1678-1719 placement
-function Tdi(e) {
-  getProviderState().fetchesClientData = e;
+/**
+ * 设置 providerState.fetchesClientData 开关（是否拉取 clientData）。
+ */
+function setFetchesClientData(fetchesClientData) {
+  getProviderState().fetchesClientData = fetchesClientData;
 }
 //@ chunk-71c4j971.js:1719-1785 placement
-function C9o() {
+/**
+ * 判断是否应拉取 clientData：已开启该开关且当前 API 提供商为 firstParty。
+ */
+function isFirstPartyClientDataFetchEnabled() {
   return getProviderState().fetchesClientData && getAPIProvider() === "firstParty";
 }
 //@ chunk-71c4j971.js:1785-2001 placement
-function trackClientDataFetch(e) {
-  let o = clientDataSlotKey(),
-    clientDataFetches = getProviderState().providerCache.clientDataFetches;
-  if (o !== void 0 && !(clientDataFetches.get(o) instanceof Promise)) {
-    let r = getAuthenticatedAccountEpoch();
-    (clientDataFetches.set(o, e),
-      e.finally(() => {
-        if (clientDataFetches.get(o) === e)
-          if (getAuthenticatedAccountEpoch() === r) clientDataFetches.set(o, "over");
-          else clientDataFetches.delete(o);
-      }));
+function trackClientDataFetch(bootstrapData) {
+  let o = clientDataSlotKey();
+  let clientDataFetches = getProviderState().providerCache.clientDataFetches;
+  if (o !== undefined && !(clientDataFetches.get(o) instanceof Promise)) {
+    let authenticatedAccountEpoch = getAuthenticatedAccountEpoch();
+    clientDataFetches.set(o, bootstrapData);
+    bootstrapData.finally(() => {
+      if (clientDataFetches.get(o) === bootstrapData)
+        if (getAuthenticatedAccountEpoch() === authenticatedAccountEpoch) clientDataFetches.set(o, "over");
+        else clientDataFetches.delete(o);
+    });
   }
 }
 //@ chunk-71c4j971.js:2001-2095 placement
-function w() {
-  return [...getProviderState().providerCache.clientDataFetches.values()].filter((e) => e !== "over");
+function pendingClientDataFetches() {
+  return [...getProviderState().providerCache.clientDataFetches.values()].filter(
+    (clientDataFetch) => clientDataFetch !== "over",
+  );
 }
 //@ chunk-71c4j971.js:2095-2196 placement
-function markClientDataFetchOver(e) {
+function markClientDataFetchOver(clientDataFetch) {
   let clientDataFetches = getProviderState().providerCache.clientDataFetches;
-  for (let [n, r] of clientDataFetches) if (r === e) clientDataFetches.set(n, "over");
+  for (let [n, r] of clientDataFetches) if (r === clientDataFetch) clientDataFetches.set(n, "over");
 }
 //@ chunk-71c4j971.js:2196-2373 placement
-function ensureClientDataFetch(e, o) {
+function ensureClientDataFetch(storageV5, credentials) {
   let n = clientDataSlotKey();
-  if (n === void 0 || !C9o() || hasClientDataCacheSlot()) return;
+  if (n === undefined || !isFirstPartyClientDataFetchEnabled() || hasClientDataCacheSlot()) return;
   let r = getProviderState().providerCache.clientDataFetches.get(n);
-  if (r !== void 0) return r === "over" ? void 0 : r;
-  return refreshBootstrapDataTracked(e, o, getFetchedClientData());
+  if (r !== undefined) return r === "over" ? undefined : r;
+  return refreshBootstrapDataTracked(storageV5, credentials, getFetchedClientData());
 }
 //@ chunk-71c4j971.js:2373-2479 placement
 function isBridgeFirstParty() {
-  if (!isFirstPartyProvider()) return !1;
-  if (getPolicyLimitsTunnelSocket() !== void 0) return !0;
-  if (env.ANTHROPIC_UNIX_SOCKET) return !1;
+  if (!isFirstPartyProvider()) return false;
+  if (getPolicyLimitsTunnelSocket() !== undefined) return true;
+  if (env.ANTHROPIC_UNIX_SOCKET) return false;
   return isActualFirstPartyAnthropicBaseUrl();
 }
+//@ chunk-71c4j971.js:2479-2544 placement = isBridgeEnabled (1)
 /**
  * Remote Control 是否可用：订阅用户、一方提供商，且 tengu_ccr_bridge 或另一条件成立。
  */
-//@ chunk-71c4j971.js:2479-2544 placement = isBridgeEnabled (1)
 function hasBridgeEntitlement() {
   return (
     isBridgeFirstParty() &&
-    f() &&
-    (getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_bridge", !1) || isBridgeSubscriptionEligible())
+    isSubscriberSafe() &&
+    (getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_bridge", false) || isBridgeSubscriptionEligible())
   );
 }
+//@ chunk-71c4j971.js:2544-2819 placement
 /**
  * 判断当前账户订阅是否允许 Remote Control：优先用已知订阅类型（team/enterprise 还需策略限制资格），否则从 OAuth 令牌的 subscriptionType 判断。
  */
-//@ chunk-71c4j971.js:2544-2819 placement
 function isBridgeSubscriptionEligible() {
-  if (!E() || !isBridgeFirstParty() || le()) return !1;
-  let e = getBearerSubscriptionType();
-  if (e !== null) return k.includes(e) && ((e !== "team" && e !== "enterprise") || isPolicyLimitsEligible());
-  if (!hasProfileScopeSafe() || !getOauthAccountInfo_2()?.organizationUuid) return !1;
+  if (!isGrowthBookUnavailableOnNoTelemetry() || !isBridgeFirstParty() || isTrustedDevicesRequiredOrAbsent())
+    return false;
+  let bearerSubscriptionType = getBearerSubscriptionType();
+  if (bearerSubscriptionType !== null)
+    return (
+      SUBSCRIPTION_PLAN_NAMES.includes(bearerSubscriptionType) &&
+      ((bearerSubscriptionType !== "team" && bearerSubscriptionType !== "enterprise") ||
+        isPolicyLimitsEligible())
+    );
+  if (!hasProfileScopeSafe() || !getOauthAccountInfo_2()?.organizationUuid) return false;
   try {
-    let o = getClaudeAIOAuthTokens(),
-      n = o?.refreshToken ? (o.subscriptionType ?? null) : null;
-    return n !== null && k.includes(n);
+    let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
+    let n = claudeAIOAuthTokens?.refreshToken ? (claudeAIOAuthTokens.subscriptionType ?? null) : null;
+    return n !== null && SUBSCRIPTION_PLAN_NAMES.includes(n);
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-71c4j971.js:3364-3383 placement
-var j = 6000,
-  F = 60000;
+var PREFETCH_BRIDGE_PLAN_TIMEOUT_MS = 6000;
+var BEARER_PLAN_REFRESH_MS = 60000;
 //@ chunk-71c4j971.js:3383-3524 placement
 async function prefetchBridgePlanInfo(e) {
-  if (getBridgeAccessToken_2() === null || !E() || hasFreshBearerPlan()) return;
+  if (getBridgeAccessToken_2() === null || !isGrowthBookUnavailableOnNoTelemetry() || hasFreshBearerPlan())
+    return;
   await withDeadline(
-    Promise.allSettled(w()).then(async () => {
-      if (e !== void 0) (await kickBearerPlanFetch(e), await kickBearerPlanFetch(e));
+    Promise.allSettled(pendingClientDataFetches()).then(async () => {
+      if (e !== undefined) {
+        await kickBearerPlanFetch(e);
+        await kickBearerPlanFetch(e);
+      }
     }),
-    j,
+    PREFETCH_BRIDGE_PLAN_TIMEOUT_MS,
   );
 }
+//@ chunk-71c4j971.js:3524-3910 placement
 /**
  * 按当前 bearer 的 sha256 去重地发起订阅计划查询（超过时限重新拉取），结果缓存在全局状态里供 Remote Control 资格判断用。
  */
-//@ chunk-71c4j971.js:3524-3910 placement
-function kickBearerPlanFetch({ storageV5: storageV5, credentials: credentials }) {
-  let n = getBridgeAccessToken_2();
-  if (n === null || hasFreshBearerPlan()) return;
-  let r = ao();
-  if (r.bearerPlanFetch?.bearerSha256 !== n || Date.now() - r.bearerPlanFetch.startedAtMs >= F)
+function kickBearerPlanFetch({ storageV5, credentials }) {
+  let bridgeAccessToken = getBridgeAccessToken_2();
+  if (bridgeAccessToken === null || hasFreshBearerPlan()) return;
+  let r = bridgeHostState();
+  if (
+    r.bearerPlanFetch?.bearerSha256 !== bridgeAccessToken ||
+    Date.now() - r.bearerPlanFetch.startedAtMs >= BEARER_PLAN_REFRESH_MS
+  )
     r.bearerPlanFetch = {
-      bearerSha256: n,
+      bearerSha256: bridgeAccessToken,
       startedAtMs: Date.now(),
       answered: import("./chunk-1qx2v2vg.js")
-        .then(({ refreshBootstrapData: refreshBootstrapData }) =>
-          refreshBootstrapData(storageV5, credentials, { keepRenderCaches: !0 }),
+        .then(({ refreshBootstrapData }) =>
+          refreshBootstrapData(storageV5, credentials, {
+            keepRenderCaches: true,
+          }),
         )
         .then(
           () => {},
-          (a) => logError(a),
+          (error) => logError(error),
         ),
     };
   return r.bearerPlanFetch.answered;
 }
 //@ chunk-tpjqzh89.js:626-642 placement
-var R = [REMOTE_CONTROL_APP, REMOTE_CONTROL_CLI];
+var REMOTE_CONTROL_SESSION_ORIGINS = [REMOTE_CONTROL_APP, REMOTE_CONTROL_CLI];
+//@ chunk-tpjqzh89.js:642-963 placement
 /**
  * 按会话标签（hearth-rc-child、RC_CHILD、WORKFLOW_REMOTE_AGENT 等）判断 Remote Control 子会话的角色：rcChild、projectThreadChild、attended、mayBeAttended；标签未读到时视为可能有人值守。
  */
-//@ chunk-tpjqzh89.js:642-963 placement
 function classifyBridgeSessionRoles(e) {
   if (e === null)
-    return { tagsRead: !1, rcChild: !1, projectThreadChild: !1, attended: !1, mayBeAttended: !0 };
-  let r = !1;
+    return {
+      tagsRead: false,
+      rcChild: false,
+      projectThreadChild: false,
+      attended: false,
+      mayBeAttended: true,
+    };
+  let r = false;
   r = e.includes("hearth-rc-child");
   let included = e.includes(RC_CHILD);
   return {
-    tagsRead: !0,
+    tagsRead: true,
     rcChild: included,
     projectThreadChild: r,
-    attended: e.some((a) => R.includes(a)) && !included && !e.includes(WORKFLOW_REMOTE_AGENT),
+    attended:
+      e.some((a) => REMOTE_CONTROL_SESSION_ORIGINS.includes(a)) &&
+      !included &&
+      !e.includes(WORKFLOW_REMOTE_AGENT),
     mayBeAttended: !included && !r && !e.includes(WORKFLOW_REMOTE_AGENT),
   };
 }
@@ -232,68 +277,81 @@ function hasBridgeChildFeatureEnabled(e) {
     isBridgeRcChildArtifactEnabled() ||
     (e === "spawn" && isBridgeRcChildCliEntrypointEnabled())
   )
-    return !0;
+    return true;
   return (
     isBridgeRcChildAutoCompactEnabled() ||
     isBridgeRcChildProjectsEntrypointEnabled() ||
     (e === "spawn" && isBridgeChildMachineSettingsEnabled())
   );
 }
+//@ chunk-tpjqzh89.js:1064-1491 placement
 /**
  * 根据会话角色与各 bridge 子会话特性开关，算出该子会话启用的功能：auto 模式默认、auto 覆盖设置、artifact、机器设置、自动压缩、Projects 入口、CLI 入口。
  */
-//@ chunk-tpjqzh89.js:1064-1491 placement
 function resolveBridgeChildFeatures(e) {
-  let r = e.roles.rcChild && !e.modePinned && isBridgeChildAutoModeDefaultEnabled(),
-    n = r && isBridgeChildAutoOverSettingsEnabled() && canSeedAutoMode(e.settings()),
-    attended = e.roles.attended,
-    i = !1,
-    s = !1,
-    h = !1;
-  ((attended = attended || e.roles.projectThreadChild),
-    (i = e.roles.projectThreadChild && isBridgeChildMachineSettingsEnabled()),
-    (s = e.roles.projectThreadChild && isBridgeRcChildAutoCompactEnabled()),
-    (h = e.roles.projectThreadChild && isBridgeRcChildProjectsEntrypointEnabled()));
-  let E = attended && isBridgeRcChildArtifactEnabled();
+  let r = e.roles.rcChild && !e.modePinned && isBridgeChildAutoModeDefaultEnabled();
+  let autoOverSettings = r && isBridgeChildAutoOverSettingsEnabled() && canSeedAutoMode(e.settings());
+  let attended = e.roles.attended;
+  let machineSettings = false;
+  let autoCompact = false;
+  let projectsEntrypoint = false;
+  attended = attended || e.roles.projectThreadChild;
+  machineSettings = e.roles.projectThreadChild && isBridgeChildMachineSettingsEnabled();
+  autoCompact = e.roles.projectThreadChild && isBridgeRcChildAutoCompactEnabled();
+  projectsEntrypoint = e.roles.projectThreadChild && isBridgeRcChildProjectsEntrypointEnabled();
+  let artifact = attended && isBridgeRcChildArtifactEnabled();
   return {
     autoDefault: r,
-    autoOverSettings: n,
-    artifact: E,
-    machineSettings: i,
-    autoCompact: s,
-    projectsEntrypoint: h,
+    autoOverSettings,
+    artifact,
+    machineSettings,
+    autoCompact,
+    projectsEntrypoint,
     cliEntrypoint: e.roles.mayBeAttended && isBridgeRcChildCliEntrypointEnabled(),
   };
 }
 //@ chunk-tpjqzh89.js:1491-1574 placement
-var c = "2.1.270",
-  g = DoctorLazy(() =>
-    u({
-      minVersion: o()
-        .refine((e) => e === "" || isSemverString(e))
-        .optional(),
-    }),
-  );
+var BUILTIN_BRIDGE_MIN_VERSION = "2.1.270";
+var bridgeMinVersionSchema = DoctorLazy(() =>
+  u({
+    minVersion: string()
+      .refine((e) => e === "" || isSemverString(e))
+      .optional(),
+  }),
+);
+//@ chunk-tpjqzh89.js:1574-1901 placement
 /**
  * 读取 GrowthBook tengu_bridge_min_version 并校验；开关关闭返回 null，未取到或格式错时返回内置最低版本并标注 unknown 原因，否则取配置与内置值中较高者。
  */
-//@ chunk-tpjqzh89.js:1574-1901 placement
 function getBridgeMinVersionConfig() {
-  let { value: e, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
-    "tengu_bridge_min_version",
-    { minVersion: c },
-  );
+  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_bridge_min_version", {
+    minVersion: BUILTIN_BRIDGE_MIN_VERSION,
+  });
   if (source === "disabled") return null;
-  if (source === "fallback" && !hasFreshGrowthBookFeatures()) return { minVersion: c, unknown: "unanswered" };
-  let safeParse = g().safeParse(e);
-  if (!safeParse.success) return { minVersion: c, unknown: "malformed" };
-  let minVersion = safeParse.data.minVersion;
-  return { minVersion: minVersion && gt(minVersion, c) ? minVersion : c, unknown: null };
+  if (source === "fallback" && !hasFreshGrowthBookFeatures())
+    return {
+      minVersion: BUILTIN_BRIDGE_MIN_VERSION,
+      unknown: "unanswered",
+    };
+  let n = bridgeMinVersionSchema().safeParse(e);
+  if (!n.success)
+    return {
+      minVersion: BUILTIN_BRIDGE_MIN_VERSION,
+      unknown: "malformed",
+    };
+  let minVersion = n.data.minVersion;
+  return {
+    minVersion:
+      minVersion && semverGte(minVersion, BUILTIN_BRIDGE_MIN_VERSION)
+        ? minVersion
+        : BUILTIN_BRIDGE_MIN_VERSION,
+    unknown: null,
+  };
 }
+//@ chunk-tpjqzh89.js:1901-2631 facade-majority = checkBridgeMinVersion (0.452)
 /**
  * 版本低于 tengu_bridge_min_version 配置时返回"请 claude update"提示。
  */
-//@ chunk-tpjqzh89.js:1901-2631 facade-majority = checkBridgeMinVersion (0.452)
 function checkBridgeMinVersion(
   e = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -307,11 +365,11 @@ function checkBridgeMinVersion(
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
 ) {
-  let r = getBridgeMinVersionConfig();
-  if (r === null) return null;
-  if (lt_2(splitOnDash(e), r.minVersion))
+  let bridgeMinVersionConfig = getBridgeMinVersionConfig();
+  if (bridgeMinVersionConfig === null) return null;
+  if (lt(splitOnDash(e), bridgeMinVersionConfig.minVersion))
     return `Your version of Claude Code (${e}) is too old for Remote Control.
-Version ${r.minVersion} or higher is required. Run \`claude update\` to update.`;
+Version ${bridgeMinVersionConfig.minVersion} or higher is required. Run \`claude update\` to update.`;
   return null;
 }
 //@ chunk-tpjqzh89.js:2631-4110 facade-majority
@@ -328,15 +386,15 @@ function machineLaneVersionRefusal(
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
 ) {
-  let r = getBridgeMinVersionConfig();
-  if (r === null)
+  let bridgeMinVersionConfig = getBridgeMinVersionConfig();
+  if (bridgeMinVersionConfig === null)
     return getPrivacyLevel() === "no-telemetry"
       ? {
           reason: "floor_unreachable",
           message: `This computer's Claude Code (${e}) cannot take a session started remotely on it: the version such sessions require cannot be received while feature-flag evaluation is off (DISABLE_TELEMETRY or DO_NOT_TRACK is set).`,
         }
       : null;
-  switch (r.unknown) {
+  switch (bridgeMinVersionConfig.unknown) {
     case "unanswered":
       return {
         reason: "floor_unanswered",
@@ -348,21 +406,21 @@ function machineLaneVersionRefusal(
         message: `This computer's Claude Code (${e}) cannot take a session started remotely on it: the version such sessions require could not be read.`,
       };
     case null:
-      if (lt_2(splitOnDash(e), r.minVersion))
+      if (lt(splitOnDash(e), bridgeMinVersionConfig.minVersion))
         return {
           reason: "below_floor",
-          message: `This computer's Claude Code (${e}) is below the version a session started remotely on it requires (${r.minVersion}). Run \`claude update\` to update.`,
+          message: `This computer's Claude Code (${e}) is below the version a session started remotely on it requires (${bridgeMinVersionConfig.minVersion}). Run \`claude update\` to update.`,
         };
       return null;
   }
 }
 //@ chunk-tpjqzh89.js:4110-4126 layout
-var _ = 1e4,
-  C = 500;
+var _ = 1e4;
+var MACHINE_LANE_VERSION_POLL_STEP_MS = 500;
 //@ chunk-tpjqzh89.js:4126-5093 facade-majority
 async function machineLaneVersionRefusalAfterHold(
   e,
-  r,
+  loopSignal,
   n,
   a = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -379,18 +437,20 @@ async function machineLaneVersionRefusalAfterHold(
   try {
     if (!isGrowthBookEnabled() || !hasGrowthBookInitializeStarted()) return e;
     n.inFlight ??= refreshGrowthBookFeatures()
-      .catch((i) =>
-        logForDebugging(`[bridge:floor] Flag refresh failed: ${errorMessage(i)}`, { level: "error" }),
+      .catch((error) =>
+        logForDebugging(`[bridge:floor] Flag refresh failed: ${errorMessage(error)}`, {
+          level: "error",
+        }),
       )
       .finally(() => {
-        n.inFlight = void 0;
+        n.inFlight = undefined;
       });
-    for (let i = 0; i < _ && !r.aborted; i += C) {
-      await sleep(C, r);
-      let s = getBridgeMinVersionConfig();
-      if (r.aborted || s === null) break;
-      if (s.unknown !== "unanswered") return machineLaneVersionRefusal(a);
-      if (n.inFlight === void 0 && !isGrowthBookInitializeInFlight()) break;
+    for (let i = 0; i < _ && !loopSignal.aborted; i += MACHINE_LANE_VERSION_POLL_STEP_MS) {
+      await sleep(MACHINE_LANE_VERSION_POLL_STEP_MS, loopSignal);
+      let bridgeMinVersionConfig = getBridgeMinVersionConfig();
+      if (loopSignal.aborted || bridgeMinVersionConfig === null) break;
+      if (bridgeMinVersionConfig.unknown !== "unanswered") return machineLaneVersionRefusal(a);
+      if (n.inFlight === undefined && !isGrowthBookInitializeInFlight()) break;
     }
   } catch (error) {
     if (isAbortError(error) || error instanceof ConfigParseError)
@@ -406,14 +466,14 @@ function isMachineLaneWork(e, r) {
   if (e === null) return r.reason !== "floor_unreachable";
   return classifyBridgeSessionRoles(e).projectThreadChild;
 }
+//@ chunk-0jk9tmkx.js:8226-8418 fingerprint = isClaudeAISubscriber (0.321)
 /**
  * 是否应主动注册可信设备：非云容器、非 DISABLE_LOGIN_COMMAND、一方提供商、claude.ai 订阅、未设 CLAUDE_TRUSTED_DEVICE_TOKEN、非仅必要流量。
  */
-//@ chunk-0jk9tmkx.js:8226-8418 fingerprint = isClaudeAISubscriber (0.321)
 function shouldProactivelyEnrollDevice() {
-  let { isClaudeAISubscriber: isClaudeAISubscriber } = require("./chunk-7v0gj88m.js");
+  let { isClaudeAISubscriber } = require("./chunk-7v0gj88m.js");
   return !(
-    env.CLAUDE_CODE_REMOTE === !0 ||
+    env.CLAUDE_CODE_REMOTE === true ||
     env.DISABLE_LOGIN_COMMAND ||
     !isFirstPartyProvider() ||
     !isClaudeAISubscriber() ||
@@ -421,7 +481,6 @@ function shouldProactivelyEnrollDevice() {
     isEssentialTrafficOnly()
   );
 }
-
 export {
   trackClientDataFetch,
   shouldProactivelyEnrollDevice,
@@ -431,11 +490,11 @@ export {
   isMachineLaneWork,
   machineLaneVersionRefusalAfterHold,
   hasBridgeChildFeatureEnabled,
-  C9o,
+  isFirstPartyClientDataFetchEnabled,
   withClientDataReseedOnModelChange,
-  Qsr,
-  Tdi,
-  F,
+  refreshBootstrapDataTracked_2,
+  setFetchesClientData,
+  BEARER_PLAN_REFRESH_MS,
   hasBridgeEntitlement,
   prefetchBridgePlanInfo,
   isBridgeSubscriptionEligible,

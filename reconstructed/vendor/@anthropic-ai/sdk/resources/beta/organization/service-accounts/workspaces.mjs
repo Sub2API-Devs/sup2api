@@ -5,48 +5,69 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../../core/resource.mjs";
+import { APIResource } from "../../../../core/resource.mjs";
 import { I } from "../../../../internal/utils/path.mjs";
-import { ee } from "../../../../core/pagination.mjs";
-import { T } from "../../../../internal/headers.mjs";
+import { TokenPage } from "../../../../core/pagination.mjs";
+import { buildHeaders } from "../../../../internal/headers.mjs";
 
 //@ chunk-hwmsct5x.js:124391-125120 esm-fingerprint
-class uo extends Y {
-  list(e, n = {}, r) {
-    let { betas: betas, ...h } = n ?? {};
-    return this._client.getAPIList(I`/v1/organizations/service_accounts/${e}/workspaces?beta=true`, ee, {
-      query: h,
-      ...r,
-      headers: T([
-        { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-        r?.headers,
-      ]),
-    });
-  }
-  add(e, n, r) {
-    let { betas: betas, ...h } = n;
-    return this._client.post(I`/v1/organizations/service_accounts/${e}/workspaces?beta=true`, {
-      body: h,
-      ...r,
-      headers: T([
-        { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-        r?.headers,
-      ]),
-    });
-  }
-  remove(e, n, r) {
-    let { service_account_id: service_account_id, betas: betas } = n;
-    return this._client.delete(
-      I`/v1/organizations/service_accounts/${service_account_id}/workspaces/${e}?beta=true`,
+class Workspaces_2 extends APIResource {
+  list(serviceAccountID, params = {}, options) {
+    let { betas, ...query } = params ?? {};
+    return this._client.getAPIList(
+      I`/v1/organizations/service_accounts/${serviceAccountID}/workspaces?beta=true`,
+      TokenPage,
       {
-        ...r,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          r?.headers,
+        query,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
+        ]),
+      },
+    );
+  }
+  add(serviceAccountID, params, options) {
+    let { betas, ...body } = params;
+    return this._client.post(I`/v1/organizations/service_accounts/${serviceAccountID}/workspaces?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+        },
+        options?.headers,
+      ]),
+    });
+  }
+  remove(workspaceID, params, options) {
+    let { service_account_id, betas } = params;
+    return this._client.delete(
+      I`/v1/organizations/service_accounts/${service_account_id}/workspaces/${workspaceID}?beta=true`,
+      {
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       },
     );
   }
 }
-
-export { uo };
+export { Workspaces_2 };

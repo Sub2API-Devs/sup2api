@@ -6,31 +6,40 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Vr } from "../../../@aws/lambda-invoke-store/dist-cjs/invoke-store.js";
-import { Kg } from "../../../@smithy/protocol-http/dist-cjs/index.js";
+import { require_invoke_store } from "../../../@aws/lambda-invoke-store/dist-cjs/invoke-store.js";
+import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:4337-4991 cjs-fingerprint
-var Gr = x(function (qr) {
-  Object.defineProperty(qr, "__esModule", { value: !0 });
-  qr.recursionDetectionMiddleware = void 0;
-  var Fr = Vr(),
-    jr = Kg(),
-    Tt = "X-Amzn-Trace-Id",
-    So = "AWS_LAMBDA_FUNCTION_NAME",
-    wo = "_X_AMZN_TRACE_ID",
-    xo = () => (e) => async (t) => {
-      let { request: request } = t;
-      if (!jr.HttpRequest.isInstance(request)) return e(t);
-      let s = Object.keys(request.headers ?? {}).find((y) => y.toLowerCase() === Tt.toLowerCase()) ?? Tt;
-      if (request.headers.hasOwnProperty(s)) return e(t);
-      let o = process.env[So],
-        a = process.env[wo],
-        f = (await Fr.InvokeStore.getInstanceAsync())?.getXRayTraceId() ?? a,
-        m = (y) => typeof y === "string" && y.length > 0;
-      if (m(o) && m(f)) request.headers[Tt] = f;
-      return e({ ...t, request: request });
-    };
-  qr.recursionDetectionMiddleware = xo;
+var require_recursionDetectionMiddleware = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.recursionDetectionMiddleware = undefined;
+  var lambda_invoke_store_1 = require_invoke_store();
+  var protocol_http_1 = require_protocol_http();
+  var TRACE_ID_HEADER_NAME = "X-Amzn-Trace-Id";
+  var ENV_LAMBDA_FUNCTION_NAME = "AWS_LAMBDA_FUNCTION_NAME";
+  var ENV_TRACE_ID = "_X_AMZN_TRACE_ID";
+  var recursionDetectionMiddleware = () => (next) => async (args) => {
+    let { request } = args;
+    if (!protocol_http_1.HttpRequest.isInstance(request)) return next(args);
+    let traceIdHeader =
+      Object.keys(request.headers ?? {}).find(
+        (h) => h.toLowerCase() === TRACE_ID_HEADER_NAME.toLowerCase(),
+      ) ?? TRACE_ID_HEADER_NAME;
+    if (request.headers.hasOwnProperty(traceIdHeader)) return next(args);
+    let functionName = process.env[ENV_LAMBDA_FUNCTION_NAME];
+    let traceIdFromEnv = process.env[ENV_TRACE_ID];
+    let traceId =
+      (await lambda_invoke_store_1.InvokeStore.getInstanceAsync())?.getXRayTraceId() ?? traceIdFromEnv;
+    let nonEmptyString = (str) => typeof str === "string" && str.length > 0;
+    if (nonEmptyString(functionName) && nonEmptyString(traceId))
+      request.headers[TRACE_ID_HEADER_NAME] = traceId;
+    return next({
+      ...args,
+      request,
+    });
+  };
+  cjsExports.recursionDetectionMiddleware = recursionDetectionMiddleware;
 });
-
-export { Gr };
+export { require_recursionDetectionMiddleware };

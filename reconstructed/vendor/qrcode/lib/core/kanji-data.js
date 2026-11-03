@@ -6,42 +6,43 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { q } from "./mode.js";
-import { N } from "./utils.js";
+import { require_mode } from "./mode.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:13100-13686 cjs-fingerprint
-var wr = x(function (Nl, yr) {
-  var _r = q(),
-    mr = N();
-  function ee(t) {
-    ((this.mode = _r.KANJI), (this.data = t));
+var require_kanji_data = x(function (cjsExports, cjsModule) {
+  var Mode = require_mode();
+  var Utils = require_utils();
+  function KanjiData(data) {
+    this.mode = Mode.KANJI;
+    this.data = data;
   }
-  ee.getBitsLength = function (e) {
-    return e * 13;
+  KanjiData.getBitsLength = function (length) {
+    return length * 13;
   };
-  ee.prototype.getLength = function () {
+  KanjiData.prototype.getLength = function () {
     return this.data.length;
   };
-  ee.prototype.getBitsLength = function () {
-    return ee.getBitsLength(this.data.length);
+  KanjiData.prototype.getBitsLength = function () {
+    return KanjiData.getBitsLength(this.data.length);
   };
-  ee.prototype.write = function (t) {
-    let e;
-    for (e = 0; e < this.data.length; e++) {
-      let toSJIS = mr.toSJIS(this.data[e]);
-      if (toSJIS >= 33088 && toSJIS <= 40956) toSJIS -= 33088;
-      else if (toSJIS >= 57408 && toSJIS <= 60351) toSJIS -= 49472;
+  KanjiData.prototype.write = function (bitBuffer) {
+    let i;
+    for (i = 0; i < this.data.length; i++) {
+      let value = Utils.toSJIS(this.data[i]);
+      if (value >= 33088 && value <= 40956) value -= 33088;
+      else if (value >= 57408 && value <= 60351) value -= 49472;
       else
         throw Error(
           "Invalid SJIS character: " +
-            this.data[e] +
+            this.data[i] +
             `
 Make sure your charset is UTF-8`,
         );
-      ((toSJIS = ((toSJIS >>> 8) & 255) * 192 + (toSJIS & 255)), t.put(toSJIS, 13));
+      value = ((value >>> 8) & 255) * 192 + (value & 255);
+      bitBuffer.put(value, 13);
     }
   };
-  yr.exports = ee;
+  cjsModule.exports = KanjiData;
 });
-
-export { wr };
+export { require_kanji_data };

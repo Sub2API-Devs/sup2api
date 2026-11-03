@@ -8,50 +8,50 @@
 import { AbortError_2 } from "../restError.js";
 
 //@ chunk-mrx6y2r5.js:43325-43361 esm-fingerprint
-var Dm = "The operation was aborted.";
+var StandardAbortMessage = "The operation was aborted.";
 //@ chunk-mrx6y2r5.js:43361-43887 esm-fingerprint
-function yl(e, t, r) {
-  return new Promise((n, o) => {
-    let i = void 0,
-      s = void 0,
-      a = () =>
-        o(
-          new AbortError_2(
-            (r === null || r === void 0 ? void 0 : r.abortErrorMsg)
-              ? r === null || r === void 0
-                ? void 0
-                : r.abortErrorMsg
-              : Dm,
-          ),
+function delay(delayInMs, value, options) {
+  return new Promise((resolve, reject) => {
+    let timer = undefined;
+    let onAborted = undefined;
+    let rejectOnAbort = () =>
+      reject(
+        new AbortError_2(
+          (options === null || options === undefined ? undefined : options.abortErrorMsg)
+            ? options === null || options === undefined
+              ? undefined
+              : options.abortErrorMsg
+            : StandardAbortMessage,
         ),
-      c = () => {
-        if ((r === null || r === void 0 ? void 0 : r.abortSignal) && s)
-          r.abortSignal.removeEventListener("abort", s);
-      };
+      );
+    let removeListeners = () => {
+      if ((options === null || options === undefined ? undefined : options.abortSignal) && onAborted)
+        options.abortSignal.removeEventListener("abort", onAborted);
+    };
+    onAborted = () => {
+      if (timer) clearTimeout(timer);
+      removeListeners();
+      return rejectOnAbort();
+    };
     if (
-      ((s = () => {
-        if (i) clearTimeout(i);
-        return (c(), a());
-      }),
-      (r === null || r === void 0 ? void 0 : r.abortSignal) && r.abortSignal.aborted)
+      (options === null || options === undefined ? undefined : options.abortSignal) &&
+      options.abortSignal.aborted
     )
-      return a();
-    if (
-      ((i = setTimeout(() => {
-        (c(), n(t));
-      }, e)),
-      r === null || r === void 0 ? void 0 : r.abortSignal)
-    )
-      r.abortSignal.addEventListener("abort", s);
+      return rejectOnAbort();
+    timer = setTimeout(() => {
+      removeListeners();
+      resolve(value);
+    }, delayInMs);
+    if (options === null || options === undefined ? undefined : options.abortSignal)
+      options.abortSignal.addEventListener("abort", onAborted);
   });
 }
 //@ chunk-mrx6y2r5.js:43887-43991 esm-fingerprint
-function Tl(e, t) {
-  let r = e.headers.get(t);
-  if (!r) return;
-  let n = Number(r);
-  if (Number.isNaN(n)) return;
-  return n;
+function parseHeaderValueAsNumber(response, headerName) {
+  let value = response.headers.get(headerName);
+  if (!value) return;
+  let valueAsNum = Number(value);
+  if (Number.isNaN(valueAsNum)) return;
+  return valueAsNum;
 }
-
-export { Tl, yl };
+export { parseHeaderValueAsNumber, delay };

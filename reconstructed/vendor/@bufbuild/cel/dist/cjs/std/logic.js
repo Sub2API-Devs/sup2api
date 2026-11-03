@@ -6,170 +6,205 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Ny } from "../gen/dev/cel/expr/operator_const.js";
-import { q_ } from "../gen/dev/cel/expr/overload_const.js";
-import { Ei } from "../type.js";
-import { F_ } from "../equals.js";
-import { Tc } from "../func.js";
+import { require_operator_const } from "../gen/dev/cel/expr/operator_const.js";
+import { require_overload_const } from "../gen/dev/cel/expr/overload_const.js";
+import { require_type } from "../type.js";
+import { require_equals_2 } from "../equals.js";
+import { require_func } from "../func.js";
 
 //@ chunk-fq0cr76a.js:502006-507433 cjs-fingerprint
-var MB = x(function (FB) {
-  Object.defineProperty(FB, "__esModule", { value: !0 });
-  FB.matches = UB;
-  var Ge = Ny(),
-    Ur = q_(),
-    yn = Ei(),
-    gd = F_(),
-    De = Tc(),
-    $se = [
-      /\\[1-9]/,
-      /\\k<.>/,
-      /\(\?\=/,
-      /\(\?\!/,
-      /\(\?\<\=/,
-      /\(\?\<\!/,
-      /\\c[A-Z]/,
-      /\\u[0-9a-fA-F]{4}/,
-      /\\0(?!\d)/,
-      /\[\\b.*\]/,
-    ],
-    regExp = new RegExp(/^\(\?(?<flags>[ims\-]+)\)/);
-  function UB(e) {
-    for (let h of $se) if (h.test(e)) throw Error(`Error evaluating pattern ${e}, invalid RE2 syntax`);
-    let n = "",
-      match = e.match(regExp);
-    if (match) {
-      for (let h of match?.groups?.flags ?? "") {
-        if (h == "-") break;
-        n += h;
+var require_logic = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.matches = matches;
+  var opc = require_operator_const();
+  var olc = require_overload_const();
+  var type_js_1 = require_type();
+  var equals_js_1 = require_equals_2();
+  var func_js_1 = require_func();
+  var invalidPatterns = [
+    /\\[1-9]/,
+    /\\k<.>/,
+    /\(\?\=/,
+    /\(\?\!/,
+    /\(\?\<\=/,
+    /\(\?\<\!/,
+    /\\c[A-Z]/,
+    /\\u[0-9a-fA-F]{4}/,
+    /\\0(?!\d)/,
+    /\[\\b.*\]/,
+  ];
+  var flagPattern = new RegExp(/^\(\?(?<flags>[ims\-]+)\)/);
+  function matches(pattern) {
+    for (let invalidPattern of invalidPatterns)
+      if (invalidPattern.test(pattern))
+        throw Error(`Error evaluating pattern ${pattern}, invalid RE2 syntax`);
+    let flags = "";
+    let flagMatches = pattern.match(flagPattern);
+    if (flagMatches) {
+      for (let flag of flagMatches?.groups?.flags ?? "") {
+        if (flag == "-") break;
+        flags += flag;
       }
-      e = e.substring(match[0].length);
+      pattern = pattern.substring(flagMatches[0].length);
     }
-    return new RegExp(e, n).test(this);
+    return new RegExp(pattern, flags).test(this);
   }
-  function Wy(e, n) {
-    let r = e.message.seconds - n.message.seconds;
-    if (r == 0n) return e.message.nanos - n.message.nanos;
-    return r < 0n ? -1 : 1;
+  function compareDuration(lhs, rhs) {
+    let cmp = lhs.message.seconds - rhs.message.seconds;
+    if (cmp == 0n) return lhs.message.nanos - rhs.message.nanos;
+    return cmp < 0n ? -1 : 1;
   }
-  function Gy(e, n) {
-    let r = e.message.seconds - n.message.seconds;
-    if (r == 0n) return e.message.nanos - n.message.nanos;
-    return r < 0n ? -1 : 1;
+  function compareTimestamp(lhs, rhs) {
+    let cmp = lhs.message.seconds - rhs.message.seconds;
+    if (cmp == 0n) return lhs.message.nanos - rhs.message.nanos;
+    return cmp < 0n ? -1 : 1;
   }
-  function Hy(e, n) {
-    let min = Math.min(e.length, n.length);
-    for (let s = 0; s < min; s++) {
-      if (e[s] < n[s]) return -1;
-      if (e[s] > n[s]) return 1;
+  function compareBytes(lhs, rhs) {
+    let minLen = Math.min(lhs.length, rhs.length);
+    for (let i = 0; i < minLen; i++) {
+      if (lhs[i] < rhs[i]) return -1;
+      if (lhs[i] > rhs[i]) return 1;
     }
-    return e.length - n.length;
+    return lhs.length - rhs.length;
   }
-  function Wse(e, n) {
-    for (let r of n) if (gd.equals(r, e)) return !0;
-    return !1;
+  function inList(value, list) {
+    for (let v of list) if (equals_js_1.equals(v, value)) return true;
+    return false;
   }
-  function wp(e, n) {
-    return n.has(e);
+  function inMap(value, map) {
+    return map.has(value);
   }
-  var {
-      BOOL: BOOL,
-      BYTES: BYTES,
-      DOUBLE: DOUBLE,
-      DYN: DYN,
-      INT: INT,
-      STRING: STRING,
-      UINT: UINT,
-    } = yn.CelScalar,
-    listType = yn.listType(yn.CelScalar.DYN),
-    mapType = yn.mapType(yn.CelScalar.DYN, yn.CelScalar.DYN);
-  FB.default = [
-    De.celFunc(Ge.LOGICAL_NOT, [BOOL], BOOL, (e) => !e),
-    De.celFunc(Ge.EQUALS, [DYN, DYN], BOOL, gd.equals),
-    De.celFunc(Ge.NOT_EQUALS, [DYN, DYN], BOOL, (e, n) => !gd.equals(e, n)),
-    De.celFunc(Ge.LESS, [BOOL, BOOL], BOOL, (e, n) => e < n),
-    De.celFunc(Ge.LESS, [BYTES, BYTES], BOOL, (e, n) => Hy(e, n) < 0),
-    De.celFunc(Ge.LESS, [DOUBLE, DOUBLE], BOOL, (e, n) => e < n),
-    De.celFunc(Ge.LESS, [STRING, STRING], BOOL, (e, n) => e < n),
-    De.celFunc(Ge.LESS, [INT, INT], BOOL, (e, n) => e < n),
-    De.celFunc(Ge.LESS, [INT, UINT], BOOL, (e, n) => e < n.value),
-    De.celFunc(Ge.LESS, [UINT, INT], BOOL, (e, n) => e.value < n),
-    De.celFunc(Ge.LESS, [UINT, UINT], BOOL, (e, n) => e.value < n.value),
-    De.celFunc(Ge.LESS, [INT, DOUBLE], BOOL, (e, n) => Number(e) < n),
-    De.celFunc(Ge.LESS, [DOUBLE, INT], BOOL, (e, n) => e < Number(n)),
-    De.celFunc(Ge.LESS, [DOUBLE, UINT], BOOL, (e, n) => e < Number(n.value)),
-    De.celFunc(Ge.LESS, [UINT, DOUBLE], BOOL, (e, n) => Number(e.value) < n),
-    De.celFunc(Ge.LESS, [yn.DURATION, yn.DURATION], BOOL, (e, n) => Wy(e, n) < 0),
-    De.celFunc(Ge.LESS, [yn.TIMESTAMP, yn.TIMESTAMP], BOOL, (e, n) => Gy(e, n) < 0),
-    De.celFunc(Ge.LESS_EQUALS, [BOOL, BOOL], BOOL, (e, n) => e <= n),
-    De.celFunc(Ge.LESS_EQUALS, [BYTES, BYTES], BOOL, (e, n) => Hy(e, n) <= 0),
-    De.celFunc(Ge.LESS_EQUALS, [DOUBLE, DOUBLE], BOOL, (e, n) => e <= n),
-    De.celFunc(Ge.LESS_EQUALS, [STRING, STRING], BOOL, (e, n) => e <= n),
-    De.celFunc(Ge.LESS_EQUALS, [INT, INT], BOOL, (e, n) => e <= n),
-    De.celFunc(Ge.LESS_EQUALS, [INT, UINT], BOOL, (e, n) => e <= n.value),
-    De.celFunc(Ge.LESS_EQUALS, [UINT, INT], BOOL, (e, n) => e.value <= n),
-    De.celFunc(Ge.LESS_EQUALS, [UINT, UINT], BOOL, (e, n) => e.value <= n.value),
-    De.celFunc(Ge.LESS_EQUALS, [INT, DOUBLE], BOOL, (e, n) => Number(e) <= n),
-    De.celFunc(Ge.LESS_EQUALS, [DOUBLE, INT], BOOL, (e, n) => e <= Number(n)),
-    De.celFunc(Ge.LESS_EQUALS, [DOUBLE, UINT], BOOL, (e, n) => e <= Number(n.value)),
-    De.celFunc(Ge.LESS_EQUALS, [UINT, DOUBLE], BOOL, (e, n) => Number(e.value) <= n),
-    De.celFunc(Ge.LESS_EQUALS, [yn.DURATION, yn.DURATION], BOOL, (e, n) => Wy(e, n) <= 0),
-    De.celFunc(Ge.LESS_EQUALS, [yn.TIMESTAMP, yn.TIMESTAMP], BOOL, (e, n) => Gy(e, n) <= 0),
-    De.celFunc(Ge.GREATER, [BOOL, BOOL], BOOL, (e, n) => e > n),
-    De.celFunc(Ge.GREATER, [BYTES, BYTES], BOOL, (e, n) => Hy(e, n) > 0),
-    De.celFunc(Ge.GREATER, [DOUBLE, DOUBLE], BOOL, (e, n) => e > n),
-    De.celFunc(Ge.GREATER, [STRING, STRING], BOOL, (e, n) => e > n),
-    De.celFunc(Ge.GREATER, [INT, INT], BOOL, (e, n) => e > n),
-    De.celFunc(Ge.GREATER, [INT, UINT], BOOL, (e, n) => e > n.value),
-    De.celFunc(Ge.GREATER, [UINT, INT], BOOL, (e, n) => e.value > n),
-    De.celFunc(Ge.GREATER, [UINT, UINT], BOOL, (e, n) => e.value > n.value),
-    De.celFunc(Ge.GREATER, [INT, DOUBLE], BOOL, (e, n) => Number(e) > n),
-    De.celFunc(Ge.GREATER, [DOUBLE, INT], BOOL, (e, n) => e > Number(n)),
-    De.celFunc(Ge.GREATER, [DOUBLE, UINT], BOOL, (e, n) => e > Number(n.value)),
-    De.celFunc(Ge.GREATER, [UINT, DOUBLE], BOOL, (e, n) => Number(e.value) > n),
-    De.celFunc(Ge.GREATER, [yn.DURATION, yn.DURATION], BOOL, (e, n) => Wy(e, n) > 0),
-    De.celFunc(Ge.GREATER, [yn.TIMESTAMP, yn.TIMESTAMP], BOOL, (e, n) => Gy(e, n) > 0),
-    De.celFunc(Ge.GREATER_EQUALS, [BOOL, BOOL], BOOL, (e, n) => e >= n),
-    De.celFunc(Ge.GREATER_EQUALS, [BYTES, BYTES], BOOL, (e, n) => Hy(e, n) >= 0),
-    De.celFunc(Ge.GREATER_EQUALS, [DOUBLE, DOUBLE], BOOL, (e, n) => e >= n),
-    De.celFunc(Ge.GREATER_EQUALS, [STRING, STRING], BOOL, (e, n) => e >= n),
-    De.celFunc(Ge.GREATER_EQUALS, [INT, INT], BOOL, (e, n) => e >= n),
-    De.celFunc(Ge.GREATER_EQUALS, [INT, UINT], BOOL, (e, n) => e >= n.value),
-    De.celFunc(Ge.GREATER_EQUALS, [UINT, INT], BOOL, (e, n) => e.value >= n),
-    De.celFunc(Ge.GREATER_EQUALS, [UINT, UINT], BOOL, (e, n) => e.value >= n.value),
-    De.celFunc(Ge.GREATER_EQUALS, [INT, DOUBLE], BOOL, (e, n) => Number(e) >= n),
-    De.celFunc(Ge.GREATER_EQUALS, [DOUBLE, INT], BOOL, (e, n) => e >= Number(n)),
-    De.celFunc(Ge.GREATER_EQUALS, [DOUBLE, UINT], BOOL, (e, n) => e >= Number(n.value)),
-    De.celFunc(Ge.GREATER_EQUALS, [UINT, DOUBLE], BOOL, (e, n) => Number(e.value) >= n),
-    De.celFunc(Ge.GREATER_EQUALS, [yn.DURATION, yn.DURATION], BOOL, (e, n) => Wy(e, n) >= 0),
-    De.celFunc(Ge.GREATER_EQUALS, [yn.TIMESTAMP, yn.TIMESTAMP], BOOL, (e, n) => Gy(e, n) >= 0),
-    De.celFunc(Ur.SIZE, [BYTES], INT, (e) => BigInt(e.length)),
-    De.celFunc(Ur.SIZE, [listType], INT, (e) => BigInt(e.size)),
-    De.celFunc(Ur.SIZE, [STRING], INT, (e) => BigInt([...e].length)),
-    De.celFunc(Ur.SIZE, [mapType], INT, (e) => BigInt(e.size)),
-    De.celMethod(Ur.SIZE, BYTES, [], INT, function () {
+  var { BOOL, BYTES, DOUBLE, DYN, INT, STRING, UINT } = type_js_1.CelScalar;
+  var LIST = type_js_1.listType(type_js_1.CelScalar.DYN);
+  var MAP = type_js_1.mapType(type_js_1.CelScalar.DYN, type_js_1.CelScalar.DYN);
+  cjsExports.default = [
+    func_js_1.celFunc(opc.LOGICAL_NOT, [BOOL], BOOL, (x) => !x),
+    func_js_1.celFunc(opc.EQUALS, [DYN, DYN], BOOL, equals_js_1.equals),
+    func_js_1.celFunc(opc.NOT_EQUALS, [DYN, DYN], BOOL, (l, r) => !equals_js_1.equals(l, r)),
+    func_js_1.celFunc(opc.LESS, [BOOL, BOOL], BOOL, (l, r) => l < r),
+    func_js_1.celFunc(opc.LESS, [BYTES, BYTES], BOOL, (l, r) => compareBytes(l, r) < 0),
+    func_js_1.celFunc(opc.LESS, [DOUBLE, DOUBLE], BOOL, (l, r) => l < r),
+    func_js_1.celFunc(opc.LESS, [STRING, STRING], BOOL, (l, r) => l < r),
+    func_js_1.celFunc(opc.LESS, [INT, INT], BOOL, (l, r) => l < r),
+    func_js_1.celFunc(opc.LESS, [INT, UINT], BOOL, (l, r) => l < r.value),
+    func_js_1.celFunc(opc.LESS, [UINT, INT], BOOL, (l, r) => l.value < r),
+    func_js_1.celFunc(opc.LESS, [UINT, UINT], BOOL, (l, r) => l.value < r.value),
+    func_js_1.celFunc(opc.LESS, [INT, DOUBLE], BOOL, (l, r) => Number(l) < r),
+    func_js_1.celFunc(opc.LESS, [DOUBLE, INT], BOOL, (l, r) => l < Number(r)),
+    func_js_1.celFunc(opc.LESS, [DOUBLE, UINT], BOOL, (l, r) => l < Number(r.value)),
+    func_js_1.celFunc(opc.LESS, [UINT, DOUBLE], BOOL, (l, r) => Number(l.value) < r),
+    func_js_1.celFunc(
+      opc.LESS,
+      [type_js_1.DURATION, type_js_1.DURATION],
+      BOOL,
+      (l, r) => compareDuration(l, r) < 0,
+    ),
+    func_js_1.celFunc(
+      opc.LESS,
+      [type_js_1.TIMESTAMP, type_js_1.TIMESTAMP],
+      BOOL,
+      (l, r) => compareTimestamp(l, r) < 0,
+    ),
+    func_js_1.celFunc(opc.LESS_EQUALS, [BOOL, BOOL], BOOL, (l, r) => l <= r),
+    func_js_1.celFunc(opc.LESS_EQUALS, [BYTES, BYTES], BOOL, (l, r) => compareBytes(l, r) <= 0),
+    func_js_1.celFunc(opc.LESS_EQUALS, [DOUBLE, DOUBLE], BOOL, (l, r) => l <= r),
+    func_js_1.celFunc(opc.LESS_EQUALS, [STRING, STRING], BOOL, (l, r) => l <= r),
+    func_js_1.celFunc(opc.LESS_EQUALS, [INT, INT], BOOL, (l, r) => l <= r),
+    func_js_1.celFunc(opc.LESS_EQUALS, [INT, UINT], BOOL, (l, r) => l <= r.value),
+    func_js_1.celFunc(opc.LESS_EQUALS, [UINT, INT], BOOL, (l, r) => l.value <= r),
+    func_js_1.celFunc(opc.LESS_EQUALS, [UINT, UINT], BOOL, (l, r) => l.value <= r.value),
+    func_js_1.celFunc(opc.LESS_EQUALS, [INT, DOUBLE], BOOL, (l, r) => Number(l) <= r),
+    func_js_1.celFunc(opc.LESS_EQUALS, [DOUBLE, INT], BOOL, (l, r) => l <= Number(r)),
+    func_js_1.celFunc(opc.LESS_EQUALS, [DOUBLE, UINT], BOOL, (l, r) => l <= Number(r.value)),
+    func_js_1.celFunc(opc.LESS_EQUALS, [UINT, DOUBLE], BOOL, (l, r) => Number(l.value) <= r),
+    func_js_1.celFunc(
+      opc.LESS_EQUALS,
+      [type_js_1.DURATION, type_js_1.DURATION],
+      BOOL,
+      (l, r) => compareDuration(l, r) <= 0,
+    ),
+    func_js_1.celFunc(
+      opc.LESS_EQUALS,
+      [type_js_1.TIMESTAMP, type_js_1.TIMESTAMP],
+      BOOL,
+      (l, r) => compareTimestamp(l, r) <= 0,
+    ),
+    func_js_1.celFunc(opc.GREATER, [BOOL, BOOL], BOOL, (l, r) => l > r),
+    func_js_1.celFunc(opc.GREATER, [BYTES, BYTES], BOOL, (l, r) => compareBytes(l, r) > 0),
+    func_js_1.celFunc(opc.GREATER, [DOUBLE, DOUBLE], BOOL, (l, r) => l > r),
+    func_js_1.celFunc(opc.GREATER, [STRING, STRING], BOOL, (l, r) => l > r),
+    func_js_1.celFunc(opc.GREATER, [INT, INT], BOOL, (l, r) => l > r),
+    func_js_1.celFunc(opc.GREATER, [INT, UINT], BOOL, (l, r) => l > r.value),
+    func_js_1.celFunc(opc.GREATER, [UINT, INT], BOOL, (l, r) => l.value > r),
+    func_js_1.celFunc(opc.GREATER, [UINT, UINT], BOOL, (l, r) => l.value > r.value),
+    func_js_1.celFunc(opc.GREATER, [INT, DOUBLE], BOOL, (l, r) => Number(l) > r),
+    func_js_1.celFunc(opc.GREATER, [DOUBLE, INT], BOOL, (l, r) => l > Number(r)),
+    func_js_1.celFunc(opc.GREATER, [DOUBLE, UINT], BOOL, (l, r) => l > Number(r.value)),
+    func_js_1.celFunc(opc.GREATER, [UINT, DOUBLE], BOOL, (l, r) => Number(l.value) > r),
+    func_js_1.celFunc(
+      opc.GREATER,
+      [type_js_1.DURATION, type_js_1.DURATION],
+      BOOL,
+      (l, r) => compareDuration(l, r) > 0,
+    ),
+    func_js_1.celFunc(
+      opc.GREATER,
+      [type_js_1.TIMESTAMP, type_js_1.TIMESTAMP],
+      BOOL,
+      (l, r) => compareTimestamp(l, r) > 0,
+    ),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [BOOL, BOOL], BOOL, (l, r) => l >= r),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [BYTES, BYTES], BOOL, (l, r) => compareBytes(l, r) >= 0),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [DOUBLE, DOUBLE], BOOL, (l, r) => l >= r),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [STRING, STRING], BOOL, (l, r) => l >= r),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [INT, INT], BOOL, (l, r) => l >= r),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [INT, UINT], BOOL, (l, r) => l >= r.value),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [UINT, INT], BOOL, (l, r) => l.value >= r),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [UINT, UINT], BOOL, (l, r) => l.value >= r.value),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [INT, DOUBLE], BOOL, (l, r) => Number(l) >= r),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [DOUBLE, INT], BOOL, (l, r) => l >= Number(r)),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [DOUBLE, UINT], BOOL, (l, r) => l >= Number(r.value)),
+    func_js_1.celFunc(opc.GREATER_EQUALS, [UINT, DOUBLE], BOOL, (l, r) => Number(l.value) >= r),
+    func_js_1.celFunc(
+      opc.GREATER_EQUALS,
+      [type_js_1.DURATION, type_js_1.DURATION],
+      BOOL,
+      (l, r) => compareDuration(l, r) >= 0,
+    ),
+    func_js_1.celFunc(
+      opc.GREATER_EQUALS,
+      [type_js_1.TIMESTAMP, type_js_1.TIMESTAMP],
+      BOOL,
+      (l, r) => compareTimestamp(l, r) >= 0,
+    ),
+    func_js_1.celFunc(olc.SIZE, [BYTES], INT, (x) => BigInt(x.length)),
+    func_js_1.celFunc(olc.SIZE, [LIST], INT, (x) => BigInt(x.size)),
+    func_js_1.celFunc(olc.SIZE, [STRING], INT, (x) => BigInt([...x].length)),
+    func_js_1.celFunc(olc.SIZE, [MAP], INT, (x) => BigInt(x.size)),
+    func_js_1.celMethod(olc.SIZE, BYTES, [], INT, function () {
       return BigInt(this.length);
     }),
-    De.celMethod(Ur.SIZE, listType, [], INT, function () {
+    func_js_1.celMethod(olc.SIZE, LIST, [], INT, function () {
       return BigInt(this.size);
     }),
-    De.celMethod(Ur.SIZE, STRING, [], INT, function () {
+    func_js_1.celMethod(olc.SIZE, STRING, [], INT, function () {
       return BigInt([...this].length);
     }),
-    De.celMethod(Ur.SIZE, mapType, [], INT, function () {
+    func_js_1.celMethod(olc.SIZE, MAP, [], INT, function () {
       return BigInt(this.size);
     }),
-    De.celFunc(Ge.IN, [DYN, listType], BOOL, Wse),
-    De.celFunc(Ge.IN, [STRING, mapType], BOOL, wp),
-    De.celFunc(Ge.IN, [DOUBLE, mapType], BOOL, wp),
-    De.celFunc(Ge.IN, [INT, mapType], BOOL, wp),
-    De.celFunc(Ge.IN, [BOOL, mapType], BOOL, wp),
-    De.celFunc(Ge.IN, [UINT, mapType], BOOL, wp),
-    De.celMethod(Ur.CONTAINS, STRING, [STRING], BOOL, String.prototype.includes),
-    De.celMethod(Ur.ENDS_WITH, STRING, [STRING], BOOL, String.prototype.endsWith),
-    De.celMethod(Ur.STARTS_WITH, STRING, [STRING], BOOL, String.prototype.startsWith),
-    De.celMethod(Ur.MATCHES, STRING, [STRING], BOOL, UB),
+    func_js_1.celFunc(opc.IN, [DYN, LIST], BOOL, inList),
+    func_js_1.celFunc(opc.IN, [STRING, MAP], BOOL, inMap),
+    func_js_1.celFunc(opc.IN, [DOUBLE, MAP], BOOL, inMap),
+    func_js_1.celFunc(opc.IN, [INT, MAP], BOOL, inMap),
+    func_js_1.celFunc(opc.IN, [BOOL, MAP], BOOL, inMap),
+    func_js_1.celFunc(opc.IN, [UINT, MAP], BOOL, inMap),
+    func_js_1.celMethod(olc.CONTAINS, STRING, [STRING], BOOL, String.prototype.includes),
+    func_js_1.celMethod(olc.ENDS_WITH, STRING, [STRING], BOOL, String.prototype.endsWith),
+    func_js_1.celMethod(olc.STARTS_WITH, STRING, [STRING], BOOL, String.prototype.startsWith),
+    func_js_1.celMethod(olc.MATCHES, STRING, [STRING], BOOL, matches),
   ];
 });
-
-export { MB };
+export { require_logic };

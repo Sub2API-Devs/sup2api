@@ -10,98 +10,104 @@
  */
 import * as pathModule from "path";
 import { lstat, realpath, readlink } from "fs/promises";
-import { rc } from "../../pathClassification.js";
+import { hasBackslash } from "../../pathClassification.js";
 import {
   extractToolInputForTelemetry,
   quoteForDisplay,
   checkDerivedName,
   readPluginFileSafe,
 } from "./helpers.js";
-import { j, $e } from "./validatePluginDirectory.js";
+import { MAX_FIELD_CHARS, SYSTEM_FILE_GIT_NOTE } from "./validatePluginDirectory.js";
 import { ONE_MIB } from "../schemas.js";
 import { countReadmeWords } from "./readmeAndListing.js";
 
 //@ chunk-5aas12zq.js:20183-20326 placement = getTopLevelPaths (0.8)
 async function getTopLevelPaths(e, n, t) {
   let r = e;
-  for (let s of pathModule.relative(e, t).split(pathModule.sep))
-    if (((r = pathModule.join(r, s)), !isPathInside(await H(r), n))) return r;
+  for (let s of pathModule.relative(e, t).split(pathModule.sep)) {
+    r = pathModule.join(r, s);
+    if (!isPathInside(await realpathOrManual(r), n)) return r;
+  }
   return (await findAncestorMatching(t, e)) ?? t;
 }
 //@ chunk-5aas12zq.js:20326-20437 layout
 async function findAncestorMatching(e, n) {
   for (let t = e; ; t = pathModule.dirname(t)) {
-    if (await Un(t)) return t;
+    if (await isSymlinkPath(t)) return t;
     if (t === n || pathModule.dirname(t) === t) return;
   }
 }
 //@ chunk-5aas12zq.js:20437-20520 layout
-async function Un(e) {
+async function isSymlinkPath(e) {
   return (
     (
       await lstat(e).catch(() => {
         return;
       })
-    )?.isSymbolicLink() === !0
+    )?.isSymbolicLink() === true
   );
 }
 //@ chunk-5aas12zq.js:20520-20530 placement
-var jn = 40;
+var MAX_DIRECTORY_NAME_LENGTH = 40;
 //@ chunk-5aas12zq.js:20530-20606 placement
-async function H(e) {
-  return rc(e)
+/**
+ * realpathOrManual：Windows 交叉点手算，否则 realpath。
+ */
+async function realpathOrManual(e) {
+  return hasBackslash(e)
     ? resolvePosixPathManually(pathModule.resolve(e))
     : realpath(e).catch(() => {
         return;
       });
 }
+//@ chunk-5aas12zq.js:20606-21200 placement
 /**
  * 手动逐段解析 POSIX 路径中的符号链接（限跳数）。
  */
-//@ chunk-5aas12zq.js:20606-21200 placement
 async function resolvePosixPathManually(e) {
-  let parts = e.split("/"),
-    max = Math.max(
-      0,
-      parts.findIndex((l) => l.includes("\\")),
-    ),
-    reverse = parts.slice(max).reverse(),
-    s = await realpath(parts.slice(0, max).join("/") || "/").catch(() => {
-      return;
-    });
-  if (s === void 0) return;
-  let o = !0,
-    a = 0;
-  while (reverse.length > 0) {
-    let l = reverse.pop();
-    if (l === void 0 || l === "" || l === ".") continue;
+  let parts = e.split("/");
+  let max = Math.max(
+    0,
+    parts.findIndex((l) => l.includes("\\")),
+  );
+  let r = parts.slice(max).reverse();
+  let s = await realpath(parts.slice(0, max).join("/") || "/").catch(() => {
+    return;
+  });
+  if (s === undefined) return;
+  let o = true;
+  let a = 0;
+  while (r.length > 0) {
+    let l = r.pop();
+    if (l === undefined || l === "" || l === ".") continue;
     if (!o) return;
     if (l === "..") {
       s = pathModule.dirname(s);
       continue;
     }
-    let joined = pathModule.join(s, l),
-      f = await lstat(joined).catch(() => {
-        return;
-      });
-    if (f === void 0) return;
+    let joined = pathModule.join(s, l);
+    let f = await lstat(joined).catch(() => {
+      return;
+    });
+    if (f === undefined) return;
     if (!f.isSymbolicLink()) {
-      ((s = joined), (o = f.isDirectory()));
+      s = joined;
+      o = f.isDirectory();
       continue;
     }
     a++;
     let p = await readlink(joined).catch(() => {
       return;
     });
-    if (a > jn || p === void 0) return;
+    if (a > MAX_DIRECTORY_NAME_LENGTH || p === undefined) return;
     if (p.startsWith("/")) s = "/";
-    reverse.push(...p.split("/").reverse());
+    r.push(...p.split("/").reverse());
   }
   return s;
 }
 //@ chunk-5aas12zq.js:21200-21345 placement
 function isPathInside(e, n) {
-  if (e === void 0 || n === void 0) return !1;
+  if (e === undefined || n === undefined) return false;
   let relativePath = pathModule.relative(n, e);
   return (
     relativePath === "" ||
@@ -111,28 +117,28 @@ function isPathInside(e, n) {
   );
 }
 //@ chunk-5aas12zq.js:21345-21393 placement
-function Bn(e) {
+function ensureTrailingDot(e) {
   return e.endsWith(".") ? e : `${e}.`;
 }
 //@ chunk-5aas12zq.js:21393-21473 placement
-var Ie = "MANIFEST_NAME_FORMAT, MANIFEST_NAME_NOT_KEBAB and IDENTIFIER_NON_ASCII";
+var NAME_FORMAT_ISSUE_TEXT = "MANIFEST_NAME_FORMAT, MANIFEST_NAME_NOT_KEBAB and IDENTIFIER_NON_ASCII";
 //@ chunk-5aas12zq.js:21473-24163 placement
 function describeLinkedReadme(e, n, t, r) {
-  if (e === void 0) return [];
+  if (e === undefined) return [];
   if (e.kind === "link" || e.kind === "unresolved") {
-    let a = `so no README or license at a repository root was used${t === void 0 ? "" : ` and the name the directory would list this folder under is not known. The directory's rules for that name (${Ie}) were not checked`}`;
+    let a = `so no README or license at a repository root was used${t === undefined ? "" : ` and the name the directory would list this folder under is not known. The directory's rules for that name (${NAME_FORMAT_ISSUE_TEXT}) were not checked`}`;
     if (e.kind === "unresolved")
       return [
-        `Stopped looking for a repository root at ${extractToolInputForTelemetry(e.dir, j)}, because this command could not find where that folder really is on disk (a folder on the path may not be readable, or its links may loop), ${a}. Check that every folder on that path exists and can be opened, then run this command again.`,
+        `Stopped looking for a repository root at ${extractToolInputForTelemetry(e.dir, MAX_FIELD_CHARS)}, because this command could not find where that folder really is on disk (a folder on the path may not be readable, or its links may loop), ${a}. Check that every folder on that path exists and can be opened, then run this command again.`,
       ];
-    let l = `the plugin folder's real path, ${extractToolInputForTelemetry(e.realPlugin, j)}`;
+    let l = `the plugin folder's real path, ${extractToolInputForTelemetry(e.realPlugin, MAX_FIELD_CHARS)}`;
     return [
-      `Stopped looking for a repository root at ${extractToolInputForTelemetry(e.dir, j)}, a symbolic link inside the repository at ${extractToolInputForTelemetry(e.repository, j)} that leads out of it, ${a}. If this plugin is in a git repository, run this command on ${l}.`,
+      `Stopped looking for a repository root at ${extractToolInputForTelemetry(e.dir, MAX_FIELD_CHARS)}, a symbolic link inside the repository at ${extractToolInputForTelemetry(e.repository, MAX_FIELD_CHARS)} that leads out of it, ${a}. If this plugin is in a git repository, run this command on ${l}.`,
     ];
   }
   if (e.kind === "parent") {
     let a = [
-      ...(t === void 0
+      ...(t === undefined
         ? []
         : [
             `Because this folder is below a repository root, the directory lists it under the last part of its path, ${quoteForDisplay(n)}. To change the name, rename the folder or add .claude-plugin/plugin.json with a "name".`,
@@ -151,36 +157,37 @@ function describeLinkedReadme(e, n, t, r) {
     return a.length === 0
       ? []
       : [
-          `The repository root was taken to be ${extractToolInputForTelemetry(e.dir, j)}, the nearest parent folder with a .git folder or file. ${a.join(" ")} For a plugin submitted from a git repository, the repository root is the top folder of that repository, with only what is committed there, so check that the folder named above is that top folder.`,
+          `The repository root was taken to be ${extractToolInputForTelemetry(e.dir, MAX_FIELD_CHARS)}, the nearest parent folder with a .git folder or file. ${a.join(" ")} For a plugin submitted from a git repository, the repository root is the top folder of that repository, with only what is committed there, so check that the folder named above is that top folder.`,
         ];
   }
-  if (t === void 0) return [];
-  let s = ` The directory's rules for that name (${Ie}) were not checked.`;
+  if (t === undefined) return [];
+  let s = ` The directory's rules for that name (${NAME_FORMAT_ISSUE_TEXT}) were not checked.`;
   if (e.kind === "own")
     return [
       `This folder holds a .git entry, so it is its own repository root, and the directory lists it under the repository's name, which this command cannot know.${s} Check that the repository's name is lowercase letters, digits and single hyphens.`,
     ];
   let o = checkDerivedName(n);
   return [
-    `No repository root was found for this folder (the search looks for a .git folder or file in it and in up to ${$e} parents, and stops at a .git of any other kind), so the name the directory would list it under is not known.${s} Submitted as a sub-folder under its present name, ${quoteForDisplay(n)}, ${o.length === 0 ? "none of them would apply." : `it would draw: ${Bn(o.map((a) => `${a.code}: ${a.message}`).join("; "))} Rename the folder, or add .claude-plugin/plugin.json with a valid "name".`}`,
+    `No repository root was found for this folder (the search looks for a .git folder or file in it and in up to ${SYSTEM_FILE_GIT_NOTE} parents, and stops at a .git of any other kind), so the name the directory would list it under is not known.${s} Submitted as a sub-folder under its present name, ${quoteForDisplay(n)}, ${o.length === 0 ? "none of them would apply." : `it would draw: ${ensureTrailingDot(o.map((a) => `${a.code}: ${a.message}`).join("; "))} Rename the folder, or add .claude-plugin/plugin.json with a valid "name".`}`,
   ];
 }
 //@ chunk-5aas12zq.js:24163-24411 placement
-async function readFirstDoc(e, n, t) {
+async function readFirstDoc(e, n, fromRepositoryRoot) {
   for (let r of n) {
-    let s = await readPluginFileSafe(e, r, ONE_MIB);
-    if (s.found) {
-      let o = s.bytes?.toString("utf-8") ?? "";
+    let pluginFile = await readPluginFileSafe(e, r, ONE_MIB);
+    if (pluginFile.found) {
+      let o = pluginFile.bytes?.toString("utf-8") ?? "";
       return {
         displayPath: r,
         text: o,
         words: countReadmeWords(o),
-        ...(s.bytes === void 0 && { unread: s.tooLarge ? "too-large" : "unreadable" }),
-        fromRepositoryRoot: t,
+        ...(pluginFile.bytes === undefined && {
+          unread: pluginFile.tooLarge ? "too-large" : "unreadable",
+        }),
+        fromRepositoryRoot,
       };
     }
   }
   return;
 }
-
-export { readFirstDoc, describeLinkedReadme, H, isPathInside, getTopLevelPaths };
+export { readFirstDoc, describeLinkedReadme, realpathOrManual, isPathInside, getTopLevelPaths };

@@ -13,19 +13,19 @@ import { withoutSensitiveHeaders } from "../../utils/anthropicHosts.js";
 import { requestMethodAndUrl, testGuardedFetch } from "../../utils/testNetworkGuard.js";
 import { getTLSFetchOptions } from "../../utils/mtls.js";
 import { createTlsSessionFetch } from "../../upstreamproxy/proxyFetch.js";
-import { ge } from "../../utils/identity.js";
+import { identity } from "../../utils/identity.js";
 import { env } from "../../utils/env.js";
 import { isRemoteCowork } from "../../utils/entrypointKinds.js";
-import { mn } from "../../utils/remoteEnvironment.js";
+import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { spawnTimestampMs } from "../../utils/startupMarks.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
   errorMessage,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../../utils/errors.js";
-import { hi } from "../requestUserDialog.js";
-import { Bn } from "../../utils/model/modelIds.js";
-import { Xb } from "./foundryCapabilities.js";
+import { normalizeRequestId } from "../requestUserDialog.js";
+import { stripAnyVersatileSuffix } from "../../utils/model/modelIds.js";
+import { SAFE_FOUNDRY_KEY_RE } from "./foundryCapabilities.js";
 import { UNREADABLE_TOOLS_USED_BEFORE_SUMMARY } from "../../bootstrap/stateSlices.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { isSillyShoreGateOn } from "../../utils/messages/untrustedArtifactContent.js";
@@ -45,50 +45,66 @@ import { logFeatureSad } from "../analytics/featureTelemetry.js";
 import { jsonStringifyRaw } from "../../utils/slowOperations.js";
 
 //@ chunk-hwmsct5x.js:246577-246643 placement
-function Wb(e) {
-  return e?.aborted === !0 && !(e.reason instanceof StreamNoResponseError);
+function isAbortedWithoutStreamError(signal) {
+  return signal?.aborted === true && !(signal.reason instanceof StreamNoResponseError);
 }
 //@ chunk-hwmsct5x.js:246643-246799 placement
 function modelApiFetch(input, init) {
   let r = withoutSensitiveHeaders(
-      requestMethodAndUrl(input, init).url,
-      init?.headers ?? (input instanceof Request ? input.headers : void 0),
-    ),
-    s = init?.tls ? { ...init, ...getTLSFetchOptions(r) } : init;
+    requestMethodAndUrl(input, init).url,
+    init?.headers ?? (input instanceof Request ? input.headers : undefined),
+  );
+  let s = init?.tls
+    ? {
+        ...init,
+        ...getTLSFetchOptions(r),
+      }
+    : init;
   return testGuardedFetch(input, s, createTlsSessionFetch("modelApi", s, r));
 }
 //@ chunk-hwmsct5x.js:246799-246935 placement
-var FULL_CHECK_INTERVAL_MS = 120000,
-  WORKER_START = "worker_start",
-  authCacheClockState = ge({ lastFullCheck: WORKER_START, lifetimeSource: "process" }, (e) => {
-    ((e.lastFullCheck = WORKER_START), (e.lifetimeSource = "process"));
-  });
+var FULL_CHECK_INTERVAL_MS = 120000;
+var WORKER_START = "worker_start";
+var authCacheClockState = identity(
+  {
+    lastFullCheck: WORKER_START,
+    lifetimeSource: "process",
+  },
+  (e) => {
+    e.lastFullCheck = WORKER_START;
+    e.lifetimeSource = "process";
+  },
+);
 //@ chunk-hwmsct5x.js:246935-247061 placement
 function getTenantLifetimeMs() {
   let lifetimeSource = authCacheClockState.lifetimeSource;
   if (lifetimeSource !== "process") return lifetimeSource.tenantLifetimeMs;
-  return env.CLAUDE_CODE_REMOTE && isRemoteCowork() ? FULL_CHECK_INTERVAL_MS : void 0;
+  return env.CLAUDE_CODE_REMOTE && isRemoteCowork() ? FULL_CHECK_INTERVAL_MS : undefined;
 }
 //@ chunk-hwmsct5x.js:247061-247119 placement
 function msSinceLastFullCheck(e) {
-  let n = getElapsedSinceFullCheck(e);
-  return n === void 0 ? void 0 : e - n;
+  let elapsedSinceFullCheck = getElapsedSinceFullCheck(e);
+  return elapsedSinceFullCheck === undefined ? undefined : e - elapsedSinceFullCheck;
 }
 //@ chunk-hwmsct5x.js:247119-247131 placement
-var Gb = 5000;
+var AUTH_CACHE_FRESH_MS = 5000;
 //@ chunk-hwmsct5x.js:247131-247306 placement
 function getElapsedSinceFullCheck(e) {
   let lastFullCheck = authCacheClockState.lastFullCheck;
-  if (lastFullCheck === "worker_start") lastFullCheck = mn() ? spawnTimestampMs() : void 0;
-  if (lastFullCheck === void 0) return;
+  if (lastFullCheck === "worker_start")
+    lastFullCheck = isRemoteManagedEnvironment() ? spawnTimestampMs() : undefined;
+  if (lastFullCheck === undefined) return;
   if (lastFullCheck > e)
-    return authCacheClockState.lifetimeSource !== "process" && lastFullCheck - e <= Gb ? 0 : void 0;
+    return authCacheClockState.lifetimeSource !== "process" && lastFullCheck - e <= AUTH_CACHE_FRESH_MS
+      ? 0
+      : undefined;
   return e - lastFullCheck;
 }
 //@ chunk-hwmsct5x.js:247306-247376 placement
-function noteFullCheckAt(e, n) {
-  let r = getElapsedSinceFullCheck(e);
-  if (r === void 0 || r >= n) authCacheClockState.lastFullCheck = e;
+function noteFullCheckAt(e, tenantLifetimeMs) {
+  let elapsedSinceFullCheck = getElapsedSinceFullCheck(e);
+  if (elapsedSinceFullCheck === undefined || elapsedSinceFullCheck >= tenantLifetimeMs)
+    authCacheClockState.lastFullCheck = e;
 }
 //@ chunk-hwmsct5x.js:247376-247442 placement
 function advanceFullCheckMark(e, n) {
@@ -96,13 +112,13 @@ function advanceFullCheckMark(e, n) {
 }
 //@ chunk-hwmsct5x.js:247442-247506 placement
 function clearFullCheckMarkIf(e) {
-  if (authCacheClockState.lastFullCheck === e) authCacheClockState.lastFullCheck = void 0;
+  if (authCacheClockState.lastFullCheck === e) authCacheClockState.lastFullCheck = undefined;
 }
 //@ chunk-hwmsct5x.js:247506-247680 placement
 function noteModelRequestSent(e) {
   try {
-    let n = getTenantLifetimeMs();
-    if (n !== void 0) noteFullCheckAt(e, n);
+    let tenantLifetimeMs = getTenantLifetimeMs();
+    if (tenantLifetimeMs !== undefined) noteFullCheckAt(e, tenantLifetimeMs);
   } catch (error) {
     logForDebugging(
       `[authCacheClock] could not note when a model request was sent; the request itself is unaffected: ${errorMessage(error)}`,
@@ -111,29 +127,29 @@ function noteModelRequestSent(e) {
 }
 //@ chunk-hwmsct5x.js:247680-247719 placement
 function resetFullCheckMark() {
-  authCacheClockState.lastFullCheck = void 0;
+  authCacheClockState.lastFullCheck = undefined;
 }
 //@ chunk-hwmsct5x.js:247719-247929 placement
-var WORKSPACE_UNSUPPORTED_PATTERN = /([a-z0-9_, ]+?)\s+not supported in your workspace/i,
-  FOUNDRY_UNSUPPORTED_PATTERN =
-    /features are not available for Azure AI Foundry workspaces?:\s*([a-z0-9_, ]+)/i,
-  WEB_SEARCH_UNAVAILABLE_PATTERN = /server-side web search is not available in this environment/i;
+var WORKSPACE_UNSUPPORTED_PATTERN = /([a-z0-9_, ]+?)\s+not supported in your workspace/i;
+var FOUNDRY_UNSUPPORTED_PATTERN =
+  /features are not available for Azure AI Foundry workspaces?:\s*([a-z0-9_, ]+)/i;
+var WEB_SEARCH_UNAVAILABLE_PATTERN = /server-side web search is not available in this environment/i;
 //@ chunk-hwmsct5x.js:247929-248067 placement
 function getFoundryBaseUrl() {
-  let e = hi(env.ANTHROPIC_FOUNDRY_RESOURCE);
-  return env.ANTHROPIC_FOUNDRY_BASE_URL || (e ? `https://${e}.services.ai.azure.com` : void 0);
+  let e = normalizeRequestId(env.ANTHROPIC_FOUNDRY_RESOURCE);
+  return env.ANTHROPIC_FOUNDRY_BASE_URL || (e ? `https://${e}.services.ai.azure.com` : undefined);
 }
 //@ chunk-hwmsct5x.js:248067-248144 placement
-function El(e) {
-  let n = Bn(e);
+function foundryModelKey(e) {
+  let n = stripAnyVersatileSuffix(e);
   return `${getFoundryBaseUrl() ?? "unknown-foundry-resource"}::${n}`;
 }
 //@ chunk-hwmsct5x.js:248144-248171 placement
 var TOOL_NAME_TOKEN_REGEX = /^[a-z][a-z0-9_]*$/;
+//@ chunk-hwmsct5x.js:248171-248450 placement = makeToolSchema (0.356)
 /**
  * 从自然语言文本里解析出工具名列表（两种正则格式，否则命中关键词时返回 ["web_search"]）。与 WebSearch 工具本身无直接关系。
  */
-//@ chunk-hwmsct5x.js:248171-248450 placement = makeToolSchema (0.356)
 function makeToolSchema(input) {
   let n = input.match(WORKSPACE_UNSUPPORTED_PATTERN)?.[1];
   if (n) {
@@ -148,13 +164,13 @@ function makeToolSchema(input) {
   if (WEB_SEARCH_UNAVAILABLE_PATTERN.test(input)) return ["web_search"];
   return null;
 }
+//@ chunk-hwmsct5x.js:249957-250329 placement
 /**
  * 校验插入 claude.googleapis.com 请求路径的 GCP 项目/位置等环境变量只含字母数字连字符下划线。
  */
-//@ chunk-hwmsct5x.js:249957-250329 placement
 function assertGcpPathSegment(e, n) {
   if (!n) return;
-  if (!Xb.test(n))
+  if (!SAFE_FOUNDRY_KEY_RE.test(n))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `${e} may only contain letters, digits, hyphens, and underscores \u2014 ` +
         "it is interpolated into the claude.googleapis.com request path, so URL metacharacters in its value would rewrite the project/workspace the request targets. Unset it or correct its value.",
@@ -162,17 +178,23 @@ function assertGcpPathSegment(e, n) {
     );
 }
 //@ chunk-hwmsct5x.js:250329-250395 placement
-var SANDY_PLOVER_HEADER = "x-claude-code-sandy-plover",
-  Jb = 64,
-  Qb = 7168,
-  Zb = 256,
-  zXo = UNREADABLE_TOOLS_USED_BEFORE_SUMMARY;
+/**
+ * x-claude-code-sandy-plover 请求头（本轮用过的工具名列表）的编码限额：最多 64 项、总长 7168 字节、单项 256 字节。
+ */
+var SANDY_PLOVER_HEADER = "x-claude-code-sandy-plover";
+var MAX_TOOL_NAME_LIST_COUNT = 64;
+var MAX_TOOL_NAME_HEADER_BYTES = 7168;
+var MAX_TOOL_NAME_BYTES = 256;
+var UNREADABLE_TOOLS_BEFORE_SUMMARY = UNREADABLE_TOOLS_USED_BEFORE_SUMMARY;
 //@ chunk-hwmsct5x.js:250395-250448 placement
-function pf() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_snug_mitten", !1) && isSillyShoreGateOn();
+function isSnugMittenAndSillyShoreOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_snug_mitten", false) && isSillyShoreGateOn();
 }
 //@ chunk-hwmsct5x.js:250448-250505 placement
-var df = new Set([
+/**
+ * 内置工具名集合：编码请求头时把内置工具排在自定义工具之后。
+ */
+var BUILTIN_TOOL_NAMES = new Set([
   BASH_TOOL_NAME,
   FILE_READ_TOOL_NAME,
   FILE_EDIT_TOOL_NAME,
@@ -187,59 +209,71 @@ var df = new Set([
   ENTER_PLAN_MODE_TOOL_NAME,
   EXITPLANMODE,
 ]);
+//@ chunk-hwmsct5x.js:250505-250825 placement
 /**
  * 把本轮用到的工具名编码成受长度上限约束的请求头值（超限时截断并加省略标记）。
  */
-//@ chunk-hwmsct5x.js:250505-250825 placement
 function encodeToolsUsedHeader(e) {
-  let filtered = e.filter((h) => h !== "" && Buffer.byteLength(h, "utf8") <= Zb),
-    r = [...filtered.filter((h) => !df.has(h)), ...filtered.filter((h) => df.has(h))],
-    s = encodeToolNameList(r);
-  if (s.length < e.length)
-    return (
-      (s = encodeToolNameList([zXo, ...r])),
-      { value: `[${s.join(",")}]`, sent: s.length - 1, dropped: e.length - (s.length - 1) }
-    );
-  return { value: `[${s.join(",")}]`, sent: s.length, dropped: 0 };
+  let filtered = e.filter((h) => h !== "" && Buffer.byteLength(h, "utf8") <= MAX_TOOL_NAME_BYTES);
+  let names = [
+    ...filtered.filter((h) => !BUILTIN_TOOL_NAMES.has(h)),
+    ...filtered.filter((h) => BUILTIN_TOOL_NAMES.has(h)),
+  ];
+  let s = encodeToolNameList(names);
+  if (s.length < e.length) {
+    s = encodeToolNameList([UNREADABLE_TOOLS_BEFORE_SUMMARY, ...names]);
+    return {
+      value: `[${s.join(",")}]`,
+      sent: s.length - 1,
+      dropped: e.length - (s.length - 1),
+    };
+  }
+  return {
+    value: `[${s.join(",")}]`,
+    sent: s.length,
+    dropped: 0,
+  };
 }
 //@ chunk-hwmsct5x.js:250825-251008 placement
-function toolsUsedHeaderBuilder(e) {
-  return e.built((n) => {
+function toolsUsedHeaderBuilder(conversationToolsUsed) {
+  return conversationToolsUsed.built((n) => {
     let r = encodeToolsUsedHeader(n);
-    if (r.dropped > 0 && e.reportTruncationOnce())
-      logFeatureSad("api_tools_used_header", "incomplete_list", { sent: r.sent, dropped: r.dropped });
+    if (r.dropped > 0 && conversationToolsUsed.reportTruncationOnce())
+      logFeatureSad("api_tools_used_header", "incomplete_list", {
+        sent: r.sent,
+        dropped: r.dropped,
+      });
     return r.value;
   });
 }
 //@ chunk-hwmsct5x.js:251008-251250 placement
 function encodeToolNameList(names) {
-  let n = [],
-    r = 2;
-  for (let s of names) {
-    if (n.length === Jb) break;
-    let replaced = jsonStringifyRaw({ name: s }).replace(
-        /[\u007f-\uffff]/g,
-        (w) => `\\u${w.charCodeAt(0).toString(16).padStart(4, "0")}`,
-      ),
-      y = replaced.length + (n.length === 0 ? 0 : 1);
-    if (r + y > Qb) break;
-    (n.push(replaced), (r += y));
+  let n = [];
+  let r = 2;
+  for (let name of names) {
+    if (n.length === MAX_TOOL_NAME_LIST_COUNT) break;
+    let replaced = jsonStringifyRaw({
+      name,
+    }).replace(/[\u007f-\uffff]/g, (w) => `\\u${w.charCodeAt(0).toString(16).padStart(4, "0")}`);
+    let y = replaced.length + (n.length === 0 ? 0 : 1);
+    if (r + y > MAX_TOOL_NAME_HEADER_BYTES) break;
+    n.push(replaced);
+    r += y;
   }
   return n;
 }
-
 export {
   assertGcpPathSegment,
   getFoundryBaseUrl,
-  pf,
+  isSnugMittenAndSillyShoreOn,
   SANDY_PLOVER_HEADER,
   toolsUsedHeaderBuilder,
   noteModelRequestSent,
   modelApiFetch,
-  Wb,
-  El,
+  isAbortedWithoutStreamError,
+  foundryModelKey,
   makeToolSchema,
-  zXo,
+  UNREADABLE_TOOLS_BEFORE_SUMMARY,
   getTenantLifetimeMs,
   msSinceLastFullCheck,
   getElapsedSinceFullCheck,

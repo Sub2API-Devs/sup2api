@@ -10,7 +10,7 @@
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { logFeatureSad } from "../analytics/featureTelemetry.js";
-import { LANGUAGE_NAMES, wPt } from "../../utils/cliHighlight.js";
+import { LANGUAGE_NAMES, HIGHLIGHT_LANGUAGE_NAME_MAP } from "../../utils/cliHighlight.js";
 import { logError } from "../../utils/log.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
@@ -21,31 +21,34 @@ import {
   SINGLE_QUOTE_RUNS,
 } from "../../tools/ArtifactTool/artifactUrls.js";
 
+//@ chunk-06y4szbn.js:4627-4838 placement
 /**
  * 页面里注入的运行时区块标记（mermaid、highlight.js、图表运行时的开始/结束注释）。
  */
-//@ chunk-06y4szbn.js:4627-4838 placement
-var MERMAID_RUNTIME_BEGIN = "<!--claude-mermaid-runtime-begin:",
-  MERMAID_RUNTIME_END = "<!--claude-mermaid-runtime-end-->",
-  HLJS_RUNTIME_BEGIN = "<!--claude-hljs-runtime-begin:",
-  HLJS_RUNTIME_END = "<!--claude-hljs-runtime-end-->",
-  CHART_RUNTIME_BEGIN = "<!-- chart-runtime -->",
-  CHART_RUNTIME_END = "<!-- /chart-runtime -->";
+var MERMAID_RUNTIME_BEGIN = "<!--claude-mermaid-runtime-begin:";
+var MERMAID_RUNTIME_END = "<!--claude-mermaid-runtime-end-->";
+var HLJS_RUNTIME_BEGIN = "<!--claude-hljs-runtime-begin:";
+var HLJS_RUNTIME_END = "<!--claude-hljs-runtime-end-->";
+var CHART_RUNTIME_BEGIN = "<!-- chart-runtime -->";
+var CHART_RUNTIME_END = "<!-- /chart-runtime -->";
 //@ chunk-06y4szbn.js:4838-4934 placement
-var MERMAID_RUNTIME_PATH = "/_runtime/mermaid-11.16.1.min.js",
-  _i = '<script src="/_runtime/mermaid-11.16.1.min.js">';
+/**
+ * 导出常量或表 `MERMAID_RUNTIME_PATH`：值为 "/_runtime/mermaid-11.16.1.min.js", _i = '<script src="/_runtime/mermaid-11.16.1.min.js">'。
+ */
+var MERMAID_RUNTIME_PATH = "/_runtime/mermaid-11.16.1.min.js";
+var MERMAID_RUNTIME_SCRIPT_TAG = '<script src="/_runtime/mermaid-11.16.1.min.js">';
 //@ chunk-06y4szbn.js:4934-4995 placement
-var FRAME_RUNTIME_SENTINELS = "<!-- frame-runtime -->",
-  Dt = "<!-- /frame-runtime -->";
+var FRAME_RUNTIME_SENTINELS = "<!-- frame-runtime -->";
+var FRAME_RUNTIME_END_MARKER = "<!-- /frame-runtime -->";
 //@ chunk-06y4szbn.js:4995-5283 placement
-function hasRuntimeSentinels(e) {
+function hasRuntimeSentinels(body) {
   return (
-    e.includes("<!--claude-mermaid-runtime-begin:") ||
-    e.includes("<!--claude-mermaid-runtime-end-->") ||
-    e.includes("<!--claude-hljs-runtime-begin:") ||
-    e.includes("<!--claude-hljs-runtime-end-->") ||
-    e.includes("<!-- chart-runtime -->") ||
-    e.includes("<!-- /chart-runtime -->")
+    body.includes("<!--claude-mermaid-runtime-begin:") ||
+    body.includes("<!--claude-mermaid-runtime-end-->") ||
+    body.includes("<!--claude-hljs-runtime-begin:") ||
+    body.includes("<!--claude-hljs-runtime-end-->") ||
+    body.includes("<!-- chart-runtime -->") ||
+    body.includes("<!-- /chart-runtime -->")
   );
 }
 //@ chunk-06y4szbn.js:5283-6203 placement
@@ -65,7 +68,7 @@ function unsafeBundleReason(e) {
   return null;
 }
 //@ chunk-06y4szbn.js:6203-6252 placement
-var An = new Set([
+var TAG_BOUNDARY_CHARS = new Set([
   " ",
   "\t",
   `
@@ -77,22 +80,25 @@ var An = new Set([
 ]);
 //@ chunk-06y4szbn.js:6252-6400 placement
 function trimHtmlWhitespace(e) {
-  let n = 0,
-    r = e.length;
-  while (n < r && wn(e.charCodeAt(n))) n++;
-  while (r > n && wn(e.charCodeAt(r - 1))) r--;
+  let n = 0;
+  let r = e.length;
+  while (n < r && isAsciiWhitespaceCode(e.charCodeAt(n))) n++;
+  while (r > n && isAsciiWhitespaceCode(e.charCodeAt(r - 1))) r--;
   return n === 0 && r === e.length ? e : e.slice(n, r);
 }
 //@ chunk-06y4szbn.js:6400-6460 placement
-function wn(e) {
+function isAsciiWhitespaceCode(e) {
   return e === 32 || e === 9 || e === 10 || e === 12 || e === 13;
 }
 //@ chunk-06y4szbn.js:6460-6569 placement
 function removeRanges(e, n) {
   if (!n.length) return e;
-  let r = "",
-    s = 0;
-  for (let [h, b] of n) ((r += e.slice(s, h)), (s = b));
+  let r = "";
+  let s = 0;
+  for (let [h, b] of n) {
+    r += e.slice(s, h);
+    s = b;
+  }
   return r + e.slice(s);
 }
 //@ chunk-06y4szbn.js:6569-6630 placement
@@ -100,41 +106,47 @@ function hasCommentAndScript(e) {
   return e.includes("<!--") && /<script/i.test(e);
 }
 //@ chunk-06y4szbn.js:6630-6699 placement
-var no = /<\/script(?=[\t\n\f\r />])/i,
-  ro = /<\/style(?=[\t\n\f\r />])/i;
+var SCRIPT_CLOSE_TAG_RE = /<\/script(?=[\t\n\f\r />])/i;
+var STYLE_CLOSE_TAG_RE = /<\/style(?=[\t\n\f\r />])/i;
 //@ chunk-06y4szbn.js:6699-6877 placement
 function findMarkerTag(e, n) {
   let match = e.match(n);
   if (!match) return null;
-  let s = match.index ?? 0,
-    h = s + match[0].length,
-    index = e.indexOf(">", h);
-  if (index === -1 || /['"]/.test(e.slice(h, index))) return null;
-  return { data: s, after: index + 1 };
+  let index = match.index ?? 0;
+  let h = index + match[0].length;
+  let index_2 = e.indexOf(">", h);
+  if (index_2 === -1 || /['"]/.test(e.slice(h, index_2))) return null;
+  return {
+    data: index,
+    after: index_2 + 1,
+  };
 }
 //@ chunk-06y4szbn.js:6877-6960 placement
 function scriptBlockEnd(e) {
-  let n = findMarkerTag(e, no);
-  if (!n || hasCommentAndScript(e.slice(0, n.data))) return -1;
-  return n.after;
+  let markerTag = findMarkerTag(e, SCRIPT_CLOSE_TAG_RE);
+  if (!markerTag || hasCommentAndScript(e.slice(0, markerTag.data))) return -1;
+  return markerTag.after;
 }
 //@ chunk-06y4szbn.js:6960-6991 placement
-function wi(e) {
-  return findMarkerTag(e, ro);
+function styleMarkerTag(e) {
+  return findMarkerTag(e, STYLE_CLOSE_TAG_RE);
 }
 //@ chunk-06y4szbn.js:6991-7115 placement
-var DATA_ID_PATTERN = 16,
-  En = ' data-id="',
-  rr = En.length + DATA_ID_PATTERN + 1,
-  xi = "(?!-)(?:(?!--)[A-Za-z0-9_-]){16}",
-  regExp = new RegExp(`^${xi}$`),
-  ir = `${En}${xi}"`;
+/**
+ * 页面 data-id 属性的长度 16 与对应正则（chart/mermaid 运行时标记识别用）。
+ */
+var DATA_ID_PATTERN = 16;
+var DATA_ID_ATTR_PREFIX = ' data-id="';
+var DATA_ID_ATTR_LENGTH = DATA_ID_ATTR_PREFIX.length + DATA_ID_PATTERN + 1;
+var DATA_ID_VALUE_PATTERN = "(?!-)(?:(?!--)[A-Za-z0-9_-]){16}";
+var regExp = new RegExp(`^${DATA_ID_VALUE_PATTERN}$`);
+var DATA_ID_ATTR_PATTERN = `${DATA_ID_ATTR_PREFIX}${DATA_ID_VALUE_PATTERN}"`;
 //@ chunk-06y4szbn.js:7115-7246 placement
 function dataIdAttributeLength(e, n) {
-  if (!e.startsWith(En, n)) return 0;
-  let r = n + En.length,
-    s = r + DATA_ID_PATTERN;
-  return e.charCodeAt(s) === 34 && regExp.test(e.slice(r, s)) ? rr : 0;
+  if (!e.startsWith(DATA_ID_ATTR_PREFIX, n)) return 0;
+  let r = n + DATA_ID_ATTR_PREFIX.length;
+  let s = r + DATA_ID_PATTERN;
+  return e.charCodeAt(s) === 34 && regExp.test(e.slice(r, s)) ? DATA_ID_ATTR_LENGTH : 0;
 }
 //@ chunk-06y4szbn.js:7246-7421 placement
 function matchClosingTag(e, n, r) {
@@ -149,7 +161,7 @@ function findScriptOpen(e, n) {
   return matchClosingTag(e, n, "<script>");
 }
 //@ chunk-06y4szbn.js:7464-7506 placement
-function Ri(e, n) {
+function styleClosingTag(e, n) {
   return matchClosingTag(e, n, "<style>");
 }
 //@ chunk-06y4szbn.js:7506-7611 placement
@@ -163,9 +175,18 @@ function matchScriptOpenTag(e, n) {
   let match = regExp_2.exec(e);
   if (match === null) return null;
   let s = n + match[0].length;
-  if (e.charCodeAt(s) === 62) return { len: s + 1 - n, annotated: !1 };
+  if (e.charCodeAt(s) === 62)
+    return {
+      len: s + 1 - n,
+      annotated: false,
+    };
   let h = dataIdAttributeLength(e, s);
-  return h && e.charCodeAt(s + h) === 62 ? { len: s + h + 1 - n, annotated: !0 } : null;
+  return h && e.charCodeAt(s + h) === 62
+    ? {
+        len: s + h + 1 - n,
+        annotated: true,
+      }
+    : null;
 }
 //@ chunk-06y4szbn.js:7839-8017 placement
 function countExternalScripts(e) {
@@ -173,38 +194,40 @@ function countExternalScripts(e) {
   if (!n.length) return -1;
   let r = 0;
   while (n.length) {
-    let s = findScriptOpen(n, 0);
-    if (!s) return -1;
-    if (s > 8) r++;
-    let h = scriptBlockEnd(n.slice(s));
+    let scriptOpen = findScriptOpen(n, 0);
+    if (!scriptOpen) return -1;
+    if (scriptOpen > 8) r++;
+    let h = scriptBlockEnd(n.slice(scriptOpen));
     if (h < 0) return -1;
-    n = trimHtmlWhitespace(n.slice(s + h));
+    n = trimHtmlWhitespace(n.slice(scriptOpen + h));
   }
   return r;
 }
 //@ chunk-06y4szbn.js:8017-8387 placement
 function skipQuotedAttribute(e, n) {
-  let r = 0,
-    s = n;
+  let r = 0;
+  let s = n;
   while (s < e.length) {
     let code = e.charCodeAt(s);
     if (r === 3) {
       if (code === 34 || code === 39) {
         let index = e.indexOf(code === 34 ? '"' : "'", s + 1);
         if (index < 0) return -1;
-        ((s = index + 1), (r = 5));
+        s = index + 1;
+        r = 5;
         continue;
       }
-      if (wn(code)) {
+      if (isAsciiWhitespaceCode(code)) {
         s++;
         continue;
       }
       if (code === 62) return s + 1;
-      ((r = 4), s++);
+      r = 4;
+      s++;
       continue;
     }
     if (code === 62) return s + 1;
-    if (wn(code)) r = r === 1 || r === 2 ? 2 : 0;
+    if (isAsciiWhitespaceCode(code)) r = r === 1 || r === 2 ? 2 : 0;
     else if (code === 47 && r !== 4) r = 0;
     else if (code === 61 && (r === 1 || r === 2)) r = 3;
     else r = r === 4 ? 4 : 1;
@@ -214,37 +237,39 @@ function skipQuotedAttribute(e, n) {
 }
 //@ chunk-06y4szbn.js:8387-8437 placement
 function isChartRuntimeEnabled() {
-  return !getFeatureValue_CACHED_MAY_BE_STALE("tengu_pewter_canteen", !1);
+  return !getFeatureValue_CACHED_MAY_BE_STALE("tengu_pewter_canteen", false);
 }
 //@ chunk-06y4szbn.js:8437-8465 placement
 var DATA_CHART_RUNTIME = "data-chart-runtime";
 //@ chunk-06y4szbn.js:8465-8502 placement
-function Ci(e) {
+function hasChartRuntime(e) {
   return e.includes(DATA_CHART_RUNTIME);
 }
 //@ chunk-06y4szbn.js:8502-8530 placement
-function ao(e) {
+function unsafeBundleReasonOf(e) {
   return unsafeBundleReason(e);
 }
 //@ chunk-06y4szbn.js:8530-8561 placement
-function $i(e) {
+function hasExternalScripts(e) {
   return countExternalScripts(e) >= 0;
 }
 //@ chunk-06y4szbn.js:8561-8772 placement
-function stripMermaidRuntime(e) {
-  let n = [],
-    index = e.indexOf(CHART_RUNTIME_BEGIN),
-    s = -1;
+function stripMermaidRuntime(runtimeBlocks) {
+  let n = [];
+  let index = runtimeBlocks.indexOf(CHART_RUNTIME_BEGIN);
+  let s = -1;
   while (index >= 0) {
     let h = index + CHART_RUNTIME_BEGIN.length;
     if (s < h) {
-      if (((s = e.indexOf(CHART_RUNTIME_END, h)), s < 0)) break;
+      s = runtimeBlocks.indexOf(CHART_RUNTIME_END, h);
+      if (s < 0) break;
     }
-    let index_2 = e.indexOf(CHART_RUNTIME_BEGIN, h);
-    if ((index_2 < 0 || index_2 > s) && $i(e.slice(h, s))) n.push([index, s + CHART_RUNTIME_END.length]);
+    let index_2 = runtimeBlocks.indexOf(CHART_RUNTIME_BEGIN, h);
+    if ((index_2 < 0 || index_2 > s) && hasExternalScripts(runtimeBlocks.slice(h, s)))
+      n.push([index, s + CHART_RUNTIME_END.length]);
     index = index_2;
   }
-  return removeRanges(e, n);
+  return removeRanges(runtimeBlocks, n);
 }
 //@ chunk-06y4szbn.js:8772-14299 placement
 var CHART_INIT_SCRIPT = `(function () {
@@ -370,21 +395,27 @@ var CHART_INIT_SCRIPT = `(function () {
     new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
 })();`;
+//@ chunk-06y4szbn.js:14299-14754 placement
 /**
  * 加载 Chart.js 运行时（内置资源）用于 artifact 页面注入，校验 bundle 安全性。
  */
-//@ chunk-06y4szbn.js:14299-14754 placement
 async function loadChartRuntime() {
   let e;
   try {
-    let { loadChartBundleJs: loadChartBundleJs } = await import("./chunk-te2wpq39.js");
+    let { loadChartBundleJs } = await import("./chunk-te2wpq39.js");
     e = await loadChartBundleJs();
   } catch {
-    return (logFeatureSad("artifact_publish", "chart_bundle_unreadable"), null);
+    logFeatureSad("artifact_publish", "chart_bundle_unreadable");
+    return null;
   }
-  if (ao(e) !== null) return (logFeatureSad("artifact_publish", "chart_bundle_unsafe"), null);
-  if (unsafeBundleReason(CHART_INIT_SCRIPT) !== null)
-    return (logFeatureSad("artifact_publish", "chart_init_unsafe"), null);
+  if (unsafeBundleReasonOf(e) !== null) {
+    logFeatureSad("artifact_publish", "chart_bundle_unsafe");
+    return null;
+  }
+  if (unsafeBundleReason(CHART_INIT_SCRIPT) !== null) {
+    logFeatureSad("artifact_publish", "chart_init_unsafe");
+    return null;
+  }
   let n =
     `
 <script>` +
@@ -394,21 +425,24 @@ async function loadChartRuntime() {
     CHART_INIT_SCRIPT +
     `</script>
 `;
-  if (!$i(n)) return (logFeatureSad("artifact_publish", "chart_block_unstrippable"), null);
+  if (!hasExternalScripts(n)) {
+    logFeatureSad("artifact_publish", "chart_block_unstrippable");
+    return null;
+  }
   return CHART_RUNTIME_BEGIN + n + CHART_RUNTIME_END;
 }
 //@ chunk-06y4szbn.js:14754-14782 placement
-function oo(e) {
+function unsafeScriptBundleReason(e) {
   return unsafeBundleReason(e);
 }
 //@ chunk-06y4szbn.js:14782-14791 placement
-var lo = 8;
+var MAX_LENGTH_DIGITS = 8;
 //@ chunk-06y4szbn.js:14791-14827 placement
-function co(e) {
+function chartRuntimeFooter(e) {
   return `${HLJS_RUNTIME_BEGIN}${e}-->`;
 }
 //@ chunk-06y4szbn.js:14827-14842 placement
-var Ni = 4194304;
+var MAX_CHART_RUNTIME_SPAN = 4194304;
 //@ chunk-06y4szbn.js:14842-14944 placement
 function isPureScriptBlock(e, n = 0) {
   return (
@@ -423,35 +457,39 @@ function isPureScriptBlock(e, n = 0) {
   );
 }
 //@ chunk-06y4szbn.js:14944-15058 placement
-var CHART_SENTINEL_SPEC = 2,
-  Fi = {
-    beginPrefix: HLJS_RUNTIME_BEGIN,
-    end: HLJS_RUNTIME_END,
-    lenDigitsMax: lo,
-    maxSpan: Ni,
-    openTags: CHART_SENTINEL_SPEC,
-    validate: isPureScriptBlock,
-  },
-  fo = 50000,
-  po = 250000,
-  ho = 4096;
+/**
+ * 图表（高亮）运行时标记识别的规格：起始前缀、结束标记、最多 8 位长度数字、最大跨度 4 MB 与校验函数。
+ */
+var CHART_SENTINEL_SPEC = 2;
+var CHART_SENTINEL_LIMITS = {
+  beginPrefix: HLJS_RUNTIME_BEGIN,
+  end: HLJS_RUNTIME_END,
+  lenDigitsMax: MAX_LENGTH_DIGITS,
+  maxSpan: MAX_CHART_RUNTIME_SPAN,
+  openTags: CHART_SENTINEL_SPEC,
+  validate: isPureScriptBlock,
+};
+var MAX_INLINE_SCRIPT_CHARS = 50000;
+var MAX_SCRIPT_BUDGET = 250000;
+var MAX_SCRIPT_ATTR_CHARS = 4096;
 //@ chunk-06y4szbn.js:15058-15480 placement
 function hasHighlightableCode(e) {
-  let lower = e.toLowerCase(),
-    r = 0;
+  let lower = e.toLowerCase();
+  let r = 0;
   for (;;) {
-    if (((r = lower.indexOf("<code", r)), r < 0)) return !1;
+    r = lower.indexOf("<code", r);
+    if (r < 0) return false;
     let s = lower[r + 5];
-    if (s === void 0) return !1;
-    if (!An.has(s)) {
+    if (s === undefined) return false;
+    if (!TAG_BOUNDARY_CHARS.has(s)) {
       r += 5;
       continue;
     }
-    let min = Math.min(r + ho, lower.length),
-      b = min;
-    for (let x = r + 5; x < min; x++)
-      if (lower[x] === ">") {
-        b = x;
+    let min = Math.min(r + MAX_SCRIPT_ATTR_CHARS, lower.length);
+    let b = min;
+    for (let j = r + 5; j < min; j++)
+      if (lower[j] === ">") {
+        b = j;
         break;
       }
     let sliced = lower.slice(r + 5, b);
@@ -459,9 +497,9 @@ function hasHighlightableCode(e) {
       let w = x[1];
       if (
         Object.prototype.hasOwnProperty.call(LANGUAGE_NAMES, w) ||
-        Object.prototype.hasOwnProperty.call(wPt, w)
+        Object.prototype.hasOwnProperty.call(HIGHLIGHT_LANGUAGE_NAME_MAP, w)
       )
-        return !0;
+        return true;
     }
     r = b;
   }
@@ -470,7 +508,7 @@ function hasHighlightableCode(e) {
 function highlightInitScript() {
   return `(function(){
 if(typeof hljs==='undefined')return;
-var budget=${po};
+var budget=${MAX_SCRIPT_BUDGET};
 var codes=Array.prototype.slice.call(document.querySelectorAll('pre>code'));
 for(var i=0;i<codes.length;i++){
 var el=codes[i];
@@ -479,7 +517,7 @@ var m=/(?:^|\\s)language-(\\S+)/.exec(el.className||'');
 if(!m||!hljs.getLanguage(m[1]))continue;
 if(el.children.length)continue;
 var src=(el.textContent||'').replace(/\\n$/,'');
-if(src.length>${fo}||src.length>budget)continue;
+if(src.length>${MAX_INLINE_SCRIPT_CHARS}||src.length>budget)continue;
 budget-=src.length;
 el.setAttribute('data-claude-hljs-claimed','1');
 try{
@@ -494,17 +532,24 @@ el.classList.add('hljs');
 async function loadHighlightRuntime() {
   let e;
   try {
-    let { loadHljsBundleJs: loadHljsBundleJs } = await import("./chunk-q86arebq.js");
+    let { loadHljsBundleJs } = await import("./chunk-q86arebq.js");
     e = await loadHljsBundleJs();
   } catch (error) {
-    return (logError(error), logFeatureSad("artifact_publish", "hljs_bundle_unreadable"), null);
+    logError(error);
+    logFeatureSad("artifact_publish", "hljs_bundle_unreadable");
+    return null;
   }
   let bundleEmbedVerdicts = getLiveState().bundleEmbedVerdicts;
-  if (bundleEmbedVerdicts.hljs === void 0) bundleEmbedVerdicts.hljs = oo(e);
-  if (bundleEmbedVerdicts.hljs !== null)
-    return (logFeatureSad("artifact_publish", "hljs_bundle_unsafe"), null);
+  if (bundleEmbedVerdicts.hljs === undefined) bundleEmbedVerdicts.hljs = unsafeScriptBundleReason(e);
+  if (bundleEmbedVerdicts.hljs !== null) {
+    logFeatureSad("artifact_publish", "hljs_bundle_unsafe");
+    return null;
+  }
   let r = highlightInitScript();
-  if (unsafeBundleReason(r) !== null) return (logFeatureSad("artifact_publish", "hljs_init_unsafe"), null);
+  if (unsafeBundleReason(r) !== null) {
+    logFeatureSad("artifact_publish", "hljs_init_unsafe");
+    return null;
+  }
   let s =
     `
 <script>` +
@@ -514,14 +559,20 @@ async function loadHighlightRuntime() {
     r +
     `</script>
 `;
-  if (s.length >= Ni) return (logFeatureSad("artifact_publish", "hljs_bundle_overspan"), null);
+  if (s.length >= MAX_CHART_RUNTIME_SPAN) {
+    logFeatureSad("artifact_publish", "hljs_bundle_overspan");
+    return null;
+  }
   let blockStripVerdicts = getLiveState().blockStripVerdicts;
-  if (blockStripVerdicts.hljs === void 0) blockStripVerdicts.hljs = isPureScriptBlock(s);
-  if (!blockStripVerdicts.hljs) return (logFeatureSad("artifact_publish", "hljs_block_unstrippable"), null);
+  if (blockStripVerdicts.hljs === undefined) blockStripVerdicts.hljs = isPureScriptBlock(s);
+  if (!blockStripVerdicts.hljs) {
+    logFeatureSad("artifact_publish", "hljs_block_unstrippable");
+    return null;
+  }
   return (
     `
 ` +
-    co(s.length) +
+    chartRuntimeFooter(s.length) +
     s +
     HLJS_RUNTIME_END +
     `
@@ -529,18 +580,35 @@ async function loadHighlightRuntime() {
   );
 }
 //@ chunk-06y4szbn.js:16875-17186 placement
+/**
+ * Mermaid 图的浅色/深色配色与图表样式。
+ */
 var MERMAID_PALETTES = {
-    light: { surface: "#f4efe4", text: "#42392e", line: "#8a7f6d", border: "#7a6c52", bg: "#fffdf8" },
-    dark: { surface: "#262b34", text: "#f2f3f5", line: "#a8adb8", border: "#9aa4b8", bg: "#1f232b" },
+  light: {
+    surface: "#f4efe4",
+    text: "#42392e",
+    line: "#8a7f6d",
+    border: "#7a6c52",
+    bg: "#fffdf8",
   },
-  bo =
-    "<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>";
+  dark: {
+    surface: "#262b34",
+    text: "#f2f3f5",
+    line: "#a8adb8",
+    border: "#9aa4b8",
+    bg: "#1f232b",
+  },
+};
+var MERMAID_DIAGRAM_STYLE =
+  "<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>";
 //@ chunk-06y4szbn.js:17186-20295 placement
 function mermaidInitScript() {
   return (
     `(function(){
 var CFG=` +
-    jsonStringify({ palettes: MERMAID_PALETTES }) +
+    jsonStringify({
+      palettes: MERMAID_PALETTES,
+    }) +
     `;
 if(typeof mermaid==='undefined')return;
 var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')).filter(function(p){if(p.hasAttribute('data-claude-mermaid-claimed'))return false;p.setAttribute('data-claude-mermaid-claimed','1');return true;});
@@ -615,20 +683,20 @@ if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(ro
   );
 }
 //@ chunk-06y4szbn.js:20295-20304 placement
-var yo = 8;
+var MAX_MERMAID_LENGTH_DIGITS = 8;
 //@ chunk-06y4szbn.js:20304-20340 placement
-function vo(e) {
+function mermaidRuntimeFooter(e) {
   return `${MERMAID_RUNTIME_BEGIN}${e}-->`;
 }
 //@ chunk-06y4szbn.js:20340-20355 placement
-var wo = 8388608;
+var MAX_MERMAID_RUNTIME_SPAN = 8388608;
 //@ chunk-06y4szbn.js:20355-20714 placement
 function isMermaidRuntimeBlock(e, n = 0) {
   let r =
     e[0] ===
     `
 `
-      ? Ri(e, 1)
+      ? styleClosingTag(e, 1)
       : 0;
   if (
     !r ||
@@ -636,62 +704,68 @@ function isMermaidRuntimeBlock(e, n = 0) {
 `) ||
     e.includes(MERMAID_RUNTIME_BEGIN)
   )
-    return !1;
-  let s = 1 + r,
-    h = wi(e.slice(s));
-  if (h === null || e.indexOf("<", s) !== s + h.data) return !1;
-  let b = r > 7 ? 1 : 0,
-    y = trimHtmlWhitespace(e.slice(s + h.after)),
-    x = matchScriptOpenTag(y, 0);
+    return false;
+  let s = 1 + r;
+  let h = styleMarkerTag(e.slice(s));
+  if (h === null || e.indexOf("<", s) !== s + h.data) return false;
+  let b = r > 7 ? 1 : 0;
+  let y = trimHtmlWhitespace(e.slice(s + h.after));
+  let x = matchScriptOpenTag(y, 0);
   if (x !== null) {
-    if (!y.startsWith("</script>", x.len)) return !1;
-    ((b += x.annotated ? 1 : 0), (y = y.slice(x.len + 9)));
+    if (!y.startsWith("</script>", x.len)) return false;
+    b += x.annotated ? 1 : 0;
+    y = y.slice(x.len + 9);
   }
   let w = countExternalScripts(y);
   return w >= 0 && w + b === n;
 }
 //@ chunk-06y4szbn.js:20714-20809 placement
-var MERMAID_SENTINEL_SPEC = 3,
-  Bi = {
-    beginPrefix: MERMAID_RUNTIME_BEGIN,
-    end: MERMAID_RUNTIME_END,
-    lenDigitsMax: yo,
-    maxSpan: wo,
-    openTags: MERMAID_SENTINEL_SPEC,
-    validate: isMermaidRuntimeBlock,
-  },
-  xo = 4096;
+/**
+ * Mermaid 运行时标记识别的规格：起始/结束标记、最多 8 位长度、最大跨度 8 MB 与校验函数。
+ */
+var MERMAID_SENTINEL_SPEC = 3;
+var MERMAID_SENTINEL_LIMITS = {
+  beginPrefix: MERMAID_RUNTIME_BEGIN,
+  end: MERMAID_RUNTIME_END,
+  lenDigitsMax: MAX_MERMAID_LENGTH_DIGITS,
+  maxSpan: MAX_MERMAID_RUNTIME_SPAN,
+  openTags: MERMAID_SENTINEL_SPEC,
+  validate: isMermaidRuntimeBlock,
+};
+var MAX_MERMAID_ATTR_CHARS = 4096;
 //@ chunk-06y4szbn.js:20809-21094 placement
 function hasMermaidBlocks(e) {
-  let lower = e.toLowerCase(),
-    r = 0;
+  let lower = e.toLowerCase();
+  let r = 0;
   for (;;) {
-    if (((r = lower.indexOf("<pre", r)), r < 0)) return !1;
+    r = lower.indexOf("<pre", r);
+    if (r < 0) return false;
     let s = lower[r + 4];
-    if (s === void 0) return !1;
-    if (!An.has(s)) {
+    if (s === undefined) return false;
+    if (!TAG_BOUNDARY_CHARS.has(s)) {
       r += 4;
       continue;
     }
-    let min = Math.min(r + xo, lower.length),
-      b = min,
-      y = !1;
-    for (let x = r + 4; x < min; x++)
-      if (lower[x] === ">") {
-        ((b = x), (y = !0));
+    let min = Math.min(r + MAX_MERMAID_ATTR_CHARS, lower.length);
+    let b = min;
+    let y = false;
+    for (let j = r + 4; j < min; j++)
+      if (lower[j] === ">") {
+        b = j;
+        y = true;
         break;
       }
-    if (hasChartClass(lower.slice(r + 4, b))) return !0;
+    if (hasChartClass(lower.slice(r + 4, b))) return true;
     r = y ? b + 1 : b;
   }
 }
 //@ chunk-06y4szbn.js:21094-21592 placement
 function hasChartClass(e) {
-  let n = e.length,
-    r = 0;
+  let n = e.length;
+  let r = 0;
   while (r < n) {
     let index = e.indexOf("class", r);
-    if (index < 0) return !1;
+    if (index < 0) return false;
     let h = e[index - 1];
     if (!(
       h === " " ||
@@ -713,46 +787,51 @@ function hasChartClass(e) {
     }
     b++;
     while (b < n && /\s/.test(e[b])) b++;
-    let y = e[b],
-      x;
+    let y = e[b];
+    let x;
     if (y === '"' || y === "'") {
       let index = e.indexOf(y, b + 1);
-      if (index < 0) return !1;
+      if (index < 0) return false;
       x = e.slice(b + 1, index);
     } else {
       let w = b;
       while (w < n && !/[\s>]/.test(e[w])) w++;
       x = e.slice(b, w);
     }
-    for (let w of x.split(/\s+/)) if (w === "mermaid") return !0;
+    for (let w of x.split(/\s+/)) if (w === "mermaid") return true;
     r = index + 5;
   }
-  return !1;
+  return false;
 }
 //@ chunk-06y4szbn.js:21592-21918 placement
 function mermaidRuntimeBlock() {
   let e = mermaidInitScript();
-  if (unsafeBundleReason(e) !== null) return (logFeatureSad("artifact_publish", "mermaid_init_unsafe"), null);
+  if (unsafeBundleReason(e) !== null) {
+    logFeatureSad("artifact_publish", "mermaid_init_unsafe");
+    return null;
+  }
   let n =
-      `
+    `
 ` +
-      bo +
-      `
+    MERMAID_DIAGRAM_STYLE +
+    `
 ` +
-      _i +
-      `</script>
+    MERMAID_RUNTIME_SCRIPT_TAG +
+    `</script>
 <script>` +
-      e +
-      `</script>
-`,
-    blockStripVerdicts = getLiveState().blockStripVerdicts;
-  if (blockStripVerdicts.mermaid === void 0) blockStripVerdicts.mermaid = isMermaidRuntimeBlock(n);
-  if (!blockStripVerdicts.mermaid)
-    return (logFeatureSad("artifact_publish", "mermaid_block_unstrippable"), null);
+    e +
+    `</script>
+`;
+  let blockStripVerdicts = getLiveState().blockStripVerdicts;
+  if (blockStripVerdicts.mermaid === undefined) blockStripVerdicts.mermaid = isMermaidRuntimeBlock(n);
+  if (!blockStripVerdicts.mermaid) {
+    logFeatureSad("artifact_publish", "mermaid_block_unstrippable");
+    return null;
+  }
   return (
     `
 ` +
-    vo(n.length) +
+    mermaidRuntimeFooter(n.length) +
     n +
     MERMAID_RUNTIME_END +
     `
@@ -760,8 +839,12 @@ function mermaidRuntimeBlock() {
   );
 }
 //@ chunk-06y4szbn.js:21918-21983 placement
-function detectPageRuntimes(e) {
-  return { chart: Ci(e), mermaid: hasMermaidBlocks(e), highlight: hasHighlightableCode(e) };
+function detectPageRuntimes(body) {
+  return {
+    chart: hasChartRuntime(body),
+    mermaid: hasMermaidBlocks(body),
+    highlight: hasHighlightableCode(body),
+  };
 }
 //@ chunk-06y4szbn.js:21983-22216 placement
 function escapeForJsString(e, n) {
@@ -787,23 +870,22 @@ function escapeForJsString(e, n) {
 }
 //@ chunk-06y4szbn.js:22216-22335 placement
 function quotedExcerpt(e, n) {
-  let { escaped: escaped, elided: elided } = escapeForJsString(e, n),
-    h = `"${normalizeQuotes(sweepResultLineText(escaped, escaped.length))}"`;
+  let { escaped, elided } = escapeForJsString(e, n);
+  let h = `"${normalizeQuotes(sweepResultLineText(escaped, escaped.length))}"`;
   return elided > 0 ? `${h} \u2026(+${elided} chars)` : h;
 }
 //@ chunk-06y4szbn.js:22335-22392 placement
 function normalizeQuotes(e) {
   return e.replace(QUOTE_HOMOGLYPHS, "'").replace(SINGLE_QUOTE_RUNS, "'");
 }
-
 export {
   trimHtmlWhitespace,
-  ir,
+  DATA_ID_ATTR_PATTERN,
   skipQuotedAttribute,
   findScriptOpen,
   scriptBlockEnd,
   FRAME_RUNTIME_SENTINELS,
-  Dt,
+  FRAME_RUNTIME_END_MARKER,
   hasCommentAndScript,
   removeRanges,
   stripMermaidRuntime,
@@ -813,9 +895,9 @@ export {
   loadChartRuntime,
   mermaidRuntimeBlock,
   loadHighlightRuntime,
-  Bi,
-  Fi,
-  rr,
+  MERMAID_SENTINEL_LIMITS,
+  CHART_SENTINEL_LIMITS,
+  DATA_ID_ATTR_LENGTH,
   MERMAID_RUNTIME_PATH,
   dataIdAttributeLength,
   quotedExcerpt,

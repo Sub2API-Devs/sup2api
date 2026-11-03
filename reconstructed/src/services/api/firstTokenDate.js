@@ -15,46 +15,54 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { isExpectedApiError, errorMessage } from "../../utils/errors.js";
 
+//@ chunk-zbtr7f5k.js:1393-2222 fingerprint = fetchAndStoreClaudeCodeFirstTokenDate (0.475)
 /**
  * 已有缓存则跳过；否则 GET /api/organization/claude_code_first_token_date，校验日期后写入全局配置 claudeCodeFirstTokenDate。
  */
-//@ chunk-zbtr7f5k.js:1393-2222 fingerprint = fetchAndStoreClaudeCodeFirstTokenDate (0.475)
-async function fetchAndStoreClaudeCodeFirstTokenDate(e, r) {
+async function fetchAndStoreClaudeCodeFirstTokenDate(e, credentials) {
   try {
-    if (getGlobalConfig().claudeCodeFirstTokenDate !== void 0) {
+    if (getGlobalConfig().claudeCodeFirstTokenDate !== undefined) {
       logFeatureOk("api_first_token_date_fetch");
       return;
     }
     let f = await apiClient.get("/api/organization/claude_code_first_token_date", {
       auth: "async",
       timeout: 1e4,
-      credentials: r,
+      credentials,
     });
     if (!f.ok) {
-      if (f.reason === "no-auth")
-        (logForDebugging(`Failed to get auth headers for first-token-date fetch: ${f.detail}`, {
+      if (f.reason === "no-auth") {
+        logForDebugging(`Failed to get auth headers for first-token-date fetch: ${f.detail}`, {
           level: "error",
-        }),
-          logFeatureBad("api_first_token_date_fetch", "request_failed"));
+        });
+        logFeatureBad("api_first_token_date_fetch", "request_failed");
+      }
       return;
     }
     let firstTokenDate = f.data?.first_token_date ?? null;
     if (firstTokenDate !== null) {
       let dateTime = new Date(firstTokenDate).getTime();
       if (isNaN(dateTime)) {
-        (logError(Error(`Received invalid first_token_date from API: ${firstTokenDate}`)),
-          logFeatureBad("api_first_token_date_fetch", "invalid_date"));
+        logError(Error(`Received invalid first_token_date from API: ${firstTokenDate}`));
+        logFeatureBad("api_first_token_date_fetch", "invalid_date");
         return;
       }
     }
-    (await saveGlobalConfig((current) => ({ ...current, claudeCodeFirstTokenDate: firstTokenDate }), e),
-      logFeatureOk("api_first_token_date_fetch"));
+    await saveGlobalConfig(
+      (current) => ({
+        ...current,
+        claudeCodeFirstTokenDate: firstTokenDate,
+      }),
+      e,
+    );
+    logFeatureOk("api_first_token_date_fetch");
   } catch (error) {
     if (isExpectedApiError(error))
-      logForDebugging(`Failed to fetch first token date: ${errorMessage(error)}`, { level: "error" });
+      logForDebugging(`Failed to fetch first token date: ${errorMessage(error)}`, {
+        level: "error",
+      });
     else logError(error);
     logFeatureBad("api_first_token_date_fetch", "request_failed");
   }
 }
-
 export { fetchAndStoreClaudeCodeFirstTokenDate };

@@ -6,46 +6,49 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { bl } from "./error.js";
-import { wa } from "./value.js";
+import { require_error } from "./error.js";
+import { require_value } from "./value.js";
 
 //@ chunk-fq0cr76a.js:611055-611599 cjs-fingerprint
-var lv = x(function (sF) {
-  Object.defineProperty(sF, "__esModule", { value: !0 });
-  sF.EMPTY_ACTIVATION = sF.VarActivation = sF.ObjectActivation = void 0;
-  var eF = bl(),
-    tF = wa();
-  class nF {
+var require_activation = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.EMPTY_ACTIVATION = cjsExports.VarActivation = cjsExports.ObjectActivation = undefined;
+  var error_js_1 = require_error();
+  var value_js_1 = require_value();
+  class ObjectActivation {
     data;
-    constructor(e) {
-      this.data = e;
+    constructor(data) {
+      this.data = data;
     }
-    resolve(e) {
-      let n = this.data[e];
-      if (n === void 0) return;
-      if (eF.isCelError(n)) return n;
-      return tF.toCel(n);
+    resolve(name) {
+      let value = this.data[name];
+      if (value === undefined) return;
+      if (error_js_1.isCelError(value)) return value;
+      return value_js_1.toCel(value);
     }
   }
-  sF.ObjectActivation = nF;
-  class rF {
+  cjsExports.ObjectActivation = ObjectActivation;
+  class VarActivation {
     name;
     value;
     parent;
-    constructor(e, n, r) {
-      ((this.name = e), (this.value = n), (this.parent = r));
+    constructor(name, value, parent) {
+      this.name = name;
+      this.value = value;
+      this.parent = parent;
     }
-    resolve(e) {
-      if (e === this.name) return this.value;
-      return this.parent.resolve(e);
+    resolve(name) {
+      if (name === this.name) return this.value;
+      return this.parent.resolve(name);
     }
   }
-  sF.VarActivation = rF;
-  sF.EMPTY_ACTIVATION = {
+  cjsExports.VarActivation = VarActivation;
+  cjsExports.EMPTY_ACTIVATION = {
     resolve() {
       return;
     },
   };
 });
-
-export { lv };
+export { require_activation };

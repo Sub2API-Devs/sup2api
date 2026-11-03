@@ -10,10 +10,10 @@
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 
+//@ chunk-kxyd0g16.js:117315-120631 placement
 /**
  * EnterWorktree 工具提示词。
  */
-//@ chunk-kxyd0g16.js:117315-120631 placement
 function enterWorktreePrompt() {
   return `Use this tool ONLY when explicitly instructed to work in a worktree \u2014 either by the user directly, or by project instructions (CLAUDE.md / memory). This tool creates an isolated git worktree and switches the current session into it.
 
@@ -53,6 +53,8 @@ ${""}
 `;
 }
 //@ chunk-kxyd0g16.js:120631-120658 placement
-var Hf = new SessionRootSlot(() => new Set());
-
+/**
+ * 按会话根记录已展示过的 worktree 提示集合（当前无引用）。
+ */
+var worktreePromptsShownByRoot = new SessionRootSlot(() => new Set());
 export { enterWorktreePrompt };

@@ -8,51 +8,58 @@
  * pieces: chunk-18hwfzwa.js (4)
  * attribution: affinity 1, fingerprint 3
  */
-import { yX } from "./suggestionCache.js";
-import { g4r, parsePastedRefs } from "../../history.js";
+import { suggestionCacheBySessionRoot } from "./suggestionCache.js";
+import { readProjectHistory, parsePastedRefs } from "../../history.js";
 import { logForDebugging } from "../debug.js";
 
 //@ chunk-18hwfzwa.js:607982-607996 affinity
 var SHELL_HISTORY_CACHE_TTL_MS = 60000;
 //@ chunk-18hwfzwa.js:607996-608512 fingerprint = getShellHistoryCommands (0.582)
 async function getShellHistoryCommands(h, x) {
-  let of = yX.of(h),
-    now = Date.now();
-  if (of.shellHistoryCommands && now - of.shellHistoryLoadedAt < SHELL_HISTORY_CACHE_TTL_MS)
-    return of.shellHistoryCommands;
-  let commands = [],
-    seen = new Set();
+  let D = suggestionCacheBySessionRoot.of(h);
+  let now = Date.now();
+  if (D.shellHistoryCommands && now - D.shellHistoryLoadedAt < SHELL_HISTORY_CACHE_TTL_MS)
+    return D.shellHistoryCommands;
+  let commands = [];
+  let seen = new Set();
   try {
-    for await (let entry of g4r(x)) {
+    for await (let entry of readProjectHistory(x)) {
       if (entry.display && entry.display.startsWith("!")) {
         if (parsePastedRefs(entry.display).some((He) => !He.match.startsWith("[Image"))) continue;
         let command = entry.display.slice(1).trim();
-        if (command && !seen.has(command)) (seen.add(command), commands.push(command));
+        if (command && !seen.has(command)) {
+          seen.add(command);
+          commands.push(command);
+        }
       }
       if (commands.length >= 50) break;
     }
   } catch (error) {
     logForDebugging(`Failed to read shell history: ${error}`);
   }
-  return ((of.shellHistoryCommands = commands), (of.shellHistoryLoadedAt = now), commands);
+  D.shellHistoryCommands = commands;
+  D.shellHistoryLoadedAt = now;
+  return commands;
 }
 //@ chunk-18hwfzwa.js:608512-608635 fingerprint = prependToShellHistoryCache (0.708)
-function prependToShellHistoryCache(h, x) {
-  let shellHistoryCommands = yX.of(h).shellHistoryCommands;
+function prependToShellHistoryCache(session, x) {
+  let shellHistoryCommands = suggestionCacheBySessionRoot.of(session).shellHistoryCommands;
   if (!shellHistoryCommands) return;
   let idx = shellHistoryCommands.indexOf(x);
   if (idx !== -1) shellHistoryCommands.splice(idx, 1);
   shellHistoryCommands.unshift(x);
 }
 //@ chunk-18hwfzwa.js:608635-608844 fingerprint = getShellHistoryCompletion (1)
-async function getShellHistoryCompletion(h, x, D) {
-  if (!x || x.length < 2) return null;
-  if (!x.trim()) return null;
-  let ee = await getShellHistoryCommands(h, D);
-  for (let command of ee)
-    if (command.startsWith(x) && command !== x)
-      return { fullCommand: command, suffix: command.slice(x.length) };
+async function getShellHistoryCompletion(session, input, storageV5) {
+  if (!input || input.length < 2) return null;
+  if (!input.trim()) return null;
+  let commands = await getShellHistoryCommands(session, storageV5);
+  for (let command of commands)
+    if (command.startsWith(input) && command !== input)
+      return {
+        fullCommand: command,
+        suffix: command.slice(input.length),
+      };
   return null;
 }
-
 export { getShellHistoryCompletion, prependToShellHistoryCache };

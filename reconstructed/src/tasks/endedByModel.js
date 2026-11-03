@@ -9,35 +9,43 @@
  * attribution: placement 5
  */
 
+//@ chunk-mzc7v3jq.js:191-237 placement
 /**
  * 标记任务由模型结束。
  */
-//@ chunk-mzc7v3jq.js:191-237 placement
-function withEndedByModel(e, n) {
-  return { ...e, endedByModel: n };
+function withEndedByModel(e, endedByModel) {
+  return {
+    ...e,
+    endedByModel,
+  };
 }
+//@ chunk-mzc7v3jq.js:237-276 placement
 /**
  * 读取任务是否由模型结束。
  */
-//@ chunk-mzc7v3jq.js:237-276 placement
 function getEndedByModel(e) {
   return e?.endedByModel;
 }
 //@ chunk-mzc7v3jq.js:276-300 placement
-function $nr() {
-  return !1;
+/**
+ * 外部构建中恒返回 false 的能力占位。
+ */
+function isModelEndCheckSupported() {
+  return false;
 }
 //@ chunk-mzc7v3jq.js:300-324 placement
-function c5o() {
+/**
+ * 任务描述后缀（外部构建为空串）。
+ */
+function taskDescriptionSuffix() {
   return "";
 }
+//@ chunk-mzc7v3jq.js:324-379 placement
 /**
  * 给任务描述附加后缀（外部构建为空）。
  */
-//@ chunk-mzc7v3jq.js:324-379 placement
 function withTaskSuffix(e) {
-  let n = c5o();
+  let n = taskDescriptionSuffix();
   return n === "" ? e : `${e} ${n}`;
 }
-
-export { withEndedByModel, getEndedByModel, $nr, withTaskSuffix, c5o };
+export { withEndedByModel, getEndedByModel, isModelEndCheckSupported, withTaskSuffix, taskDescriptionSuffix };

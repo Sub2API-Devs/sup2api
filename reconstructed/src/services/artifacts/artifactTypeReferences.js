@@ -10,79 +10,99 @@
  */
 
 //@ chunk-75vetdac.js:191-323 placement
-function typeReference(r, e, a, i = !1, s = !1) {
+function typeReference(r, inlinedByCreate, printed, readByKit = false, needsDesignSystem = false) {
   return {
     path: `artifact-type/reference/${r}`,
-    inlinedByCreate: e,
-    printed: a,
-    readByKit: i,
-    needsDesignSystem: s,
+    inlinedByCreate,
+    printed,
+    readByKit,
+    needsDesignSystem,
   };
 }
+//@ chunk-75vetdac.js:323-720 placement
 /**
  * 各 artifact 类型（design、migrated-design、slides）的参考文档清单：路径、创建时是否内联、是否打印、是否由套件读取、是否需要设计系统；DEFAULT_TYPE_REFERENCES 为其他类型的默认清单。
  */
-//@ chunk-75vetdac.js:323-720 placement
 var ARTIFACT_TYPE_REFERENCES = new Map([
+  [
+    "design",
     [
-      "design",
-      [
-        typeReference("format.md", !0, !0, !0),
-        typeReference("design-system-components.md", !0, !1, !0, !0),
-        typeReference("fonts.md", !1, !0),
-        typeReference("craft.md", !1, !0),
-      ],
+      typeReference("format.md", true, true, true),
+      typeReference("design-system-components.md", true, false, true, true),
+      typeReference("fonts.md", false, true),
+      typeReference("craft.md", false, true),
     ],
+  ],
+  [
+    "migrated-design",
     [
-      "migrated-design",
-      [
-        typeReference("format.md", !0, !0),
-        typeReference("fonts.md", !1, !0),
-        typeReference("craft.md", !1, !0),
-      ],
+      typeReference("format.md", true, true),
+      typeReference("fonts.md", false, true),
+      typeReference("craft.md", false, true),
     ],
+  ],
+  [
+    "slides",
     [
-      "slides",
-      [
-        typeReference("format.md", !0, !0, !0),
-        typeReference("fonts.md", !0, !0, !0),
-        typeReference("craft.md", !1, !0),
-        typeReference("deck-files.md", !1, !1, !0),
-      ],
+      typeReference("format.md", true, true, true),
+      typeReference("fonts.md", true, true, true),
+      typeReference("craft.md", false, true),
+      typeReference("deck-files.md", false, false, true),
     ],
-  ]),
-  DEFAULT_TYPE_REFERENCES = [
-    typeReference("format.md", !1, !0),
-    typeReference("fonts.md", !1, !0),
-    typeReference("craft.md", !1, !0),
-  ];
+  ],
+]);
+var DEFAULT_TYPE_REFERENCES = [
+  typeReference("format.md", false, true),
+  typeReference("fonts.md", false, true),
+  typeReference("craft.md", false, true),
+];
 //@ chunk-75vetdac.js:720-774 placement
-function n(r) {
-  return (r === void 0 ? void 0 : ARTIFACT_TYPE_REFERENCES.get(r)) ?? DEFAULT_TYPE_REFERENCES;
+/**
+ * 按 artifact 类型取参考文件清单，并按“创建时内联/需要设计系统/打印/kit 读取”筛选的四个辅助函数。
+ */
+function typeReferencesFor(r) {
+  return (r === undefined ? undefined : ARTIFACT_TYPE_REFERENCES.get(r)) ?? DEFAULT_TYPE_REFERENCES;
 }
 //@ chunk-75vetdac.js:774-850 placement
-function N$s(r) {
-  return n(r)
+/**
+ * 导出函数 `inlinedByCreatePaths`：参数 r，返回 n(r) .filter((e) => e.inlinedByCreate) .map((e) => e.path)。
+ */
+function inlinedByCreatePaths(r) {
+  return typeReferencesFor(r)
     .filter((e) => e.inlinedByCreate)
     .map((e) => e.path);
 }
 //@ chunk-75vetdac.js:850-947 placement
-function $$s(r) {
-  return n(r)
+/**
+ * 导出函数 `inlinedByCreateDesignPaths`：参数 r，返回 n(r) .filter((e) => e.inlinedByCreate && e.needsDesignSystem) .map((e) => e.path)。
+ */
+function inlinedByCreateDesignPaths(r) {
+  return typeReferencesFor(r)
     .filter((e) => e.inlinedByCreate && e.needsDesignSystem)
     .map((e) => e.path);
 }
 //@ chunk-75vetdac.js:947-1015 placement
-function NMr(r) {
-  return n(r)
+/**
+ * 导出函数 `printedTypePaths`：参数 r，返回 n(r) .filter((e) => e.printed) .map((e) => e.path)。
+ */
+function printedTypePaths(r) {
+  return typeReferencesFor(r)
     .filter((e) => e.printed)
     .map((e) => e.path);
 }
 //@ chunk-75vetdac.js:1015-1085 placement
-function F$s(r) {
-  return n(r)
+/**
+ * 导出函数 `kitReadTypePaths`：参数 r，返回 n(r) .filter((e) => e.readByKit) .map((e) => e.path); } export { NMr, F$s, ARTIFACT_TYPE_REFERENCES, N$s, $$s …。
+ */
+function kitReadTypePaths(typeKey) {
+  return typeReferencesFor(typeKey)
     .filter((e) => e.readByKit)
     .map((e) => e.path);
 }
-
-export { NMr, F$s, ARTIFACT_TYPE_REFERENCES, N$s, $$s };
+export {
+  printedTypePaths,
+  kitReadTypePaths,
+  ARTIFACT_TYPE_REFERENCES,
+  inlinedByCreatePaths,
+  inlinedByCreateDesignPaths,
+};

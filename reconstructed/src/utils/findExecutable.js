@@ -9,22 +9,33 @@
  * attribution: placement 3, fingerprint 1
  */
 import { Re } from "../../runtime/bun-runtime.js";
-import { Vpe } from "../../vendor/ignore/index.js";
-import { w0 } from "./which.js";
+import { require_ignore } from "../../vendor/ignore/index.js";
+import { bunWhichSync } from "./which.js";
 
 //@ chunk-fq0cr76a.js:877365-877414 placement
-function QM(e, n) {
+/**
+ * 按下标逐项比较两个数组是否全等。
+ */
+function arraysEqualByIndex(e, n) {
   return e.every((r, s) => r === n[s]);
 }
 //@ chunk-fq0cr76a.js:877414-877468 placement
-function _le(e, n) {
-  return e.length === n.length && QM(e, n);
+/**
+ * 判断两个数组长度与内容是否完全相同。
+ */
+function isSameArray(e, configHome) {
+  return e.length === configHome.length && arraysEqualByIndex(e, configHome);
 }
 //@ chunk-fq0cr76a.js:877468-877487 placement
-var o4 = Re(Vpe(), 1);
+/**
+ * path 模块（Node 内置 path）的引用。
+ */
+var pathModule = Re(require_ignore(), 1);
 //@ chunk-fq0cr76a.js:877818-877863 fingerprint = findExecutable (1)
 function findExecutable(exe, args) {
-  return { cmd: w0(exe) ?? exe, args: args };
+  return {
+    cmd: bunWhichSync(exe) ?? exe,
+    args,
+  };
 }
-
-export { findExecutable, o4, QM, _le };
+export { findExecutable, pathModule, arraysEqualByIndex, isSameArray };

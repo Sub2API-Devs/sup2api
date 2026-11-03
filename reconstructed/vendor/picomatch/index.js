@@ -6,19 +6,22 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { uN } from "./lib/picomatch.js";
-import { np } from "./lib/utils.js";
+import { require_picomatch } from "./lib/picomatch.js";
+import { require_utils } from "./lib/utils.js";
 
 //@ chunk-fq0cr76a.js:320219-320419 cjs-fingerprint
-var hqt = x(function (qge, hN) {
-  var dN = uN(),
-    fN = np();
-  function pN(e, n, r = !1) {
-    if (n && (n.windows === null || n.windows === void 0)) n = { ...n, windows: fN.isWindows() };
-    return dN(e, n, r);
+var require_picomatch_2 = x(function (cjsExports, cjsModule) {
+  var pico = require_picomatch();
+  var utils = require_utils();
+  function picomatch(glob, options, returnState = false) {
+    if (options && (options.windows === null || options.windows === undefined))
+      options = {
+        ...options,
+        windows: utils.isWindows(),
+      };
+    return pico(glob, options, returnState);
   }
-  Object.assign(pN, dN);
-  hN.exports = pN;
+  Object.assign(picomatch, pico);
+  cjsModule.exports = picomatch;
 });
-
-export { hqt };
+export { require_picomatch_2 };

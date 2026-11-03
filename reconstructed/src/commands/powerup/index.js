@@ -9,15 +9,16 @@
  * attribution: placement 1
  */
 
+//@ chunk-e6aww6q8.js:1733401-1733539 placement
 /**
  * /powerup 命令对象（local-jsx）；描述：Discover Claude Code features through quick interactive lessons；实现 chunk-fxpvgzqn.js 的 l。
  */
-//@ chunk-e6aww6q8.js:1733401-1733539 placement
 var powerupCommand = {
   type: "local-jsx",
   name: "powerup",
   description: "Discover Claude Code features through quick interactive lessons",
-  requires: { ink: !0 },
+  requires: {
+    ink: true,
+  },
 };
-
 export { powerupCommand };

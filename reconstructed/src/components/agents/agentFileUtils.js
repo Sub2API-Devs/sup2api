@@ -10,37 +10,41 @@
  */
 import { mkdir, open } from "fs/promises";
 import { dirname } from "path";
-import { constants, constants as constants_2 } from "fs";
+import { constants } from "fs";
 import { parkAgentBaseline } from "../../services/api/promptCacheBreakDetection.js";
-import { Nd } from "../../tools/AgentTool/runAgent.js";
+import { prefixTranscriptPath } from "../../tools/AgentTool/runAgent.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { pathToSessionSideKey } from "../../utils/storage/storageKeys.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 import { getPlatform } from "../../utils/platform.js";
 
 //@ chunk-0h4e7gnq.js:81060-81304 fingerprint = ensureAgentDirectoryExists (0.584)
-async function ensureAgentDirectoryExists(e, n, s) {
-  let dirPath = parkAgentBaseline(e);
-  if (dirPath === void 0 || !n) return;
+async function ensureAgentDirectoryExists(agentId, n, storageV5) {
+  let dirPath = parkAgentBaseline(agentId);
+  if (dirPath === undefined || !n) return;
   try {
-    let r = Nd(e),
-      S = isStorageV5Enabled() && s !== void 0 ? pathToSessionSideKey(r) : void 0;
-    if (s !== void 0 && S !== void 0) {
-      await s.write(S, dirPath, { mode: 438 & ~process.umask() });
+    let r = prefixTranscriptPath(agentId);
+    let S = isStorageV5Enabled() && storageV5 !== undefined ? pathToSessionSideKey(r) : undefined;
+    if (storageV5 !== undefined && S !== undefined) {
+      await storageV5.write(S, dirPath, {
+        mode: 438 & ~process.umask(),
+      });
       return;
     }
-    (await mkdir(dirname(r), { recursive: !0 }), await writeFileAtomic(r, dirPath));
+    await mkdir(dirname(r), {
+      recursive: true,
+    });
+    await writeFileAtomic(r, dirPath);
   } catch {}
 }
 //@ chunk-jhrww53q.js:48857-49040 fingerprint = writeFileAndFlush (0.4)
-async function writeFileAndFlush(o, t) {
-  let _ = getPlatform() === "windows" ? 0 : constants_2.O_NOFOLLOW | constants_2.O_NONBLOCK,
-    E = await open(o, constants_2.O_WRONLY | constants_2.O_CREAT | constants_2.O_TRUNC | _, 438);
+async function writeFileAndFlush(filePath, content) {
+  let flag = getPlatform() === "windows" ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK;
+  let handle = await open(filePath, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | flag, 438);
   try {
-    await E.writeFile(t, "utf-8");
+    await handle.writeFile(content, "utf-8");
   } finally {
-    await E.close();
+    await handle.close();
   }
 }
-
 export { ensureAgentDirectoryExists, writeFileAndFlush };

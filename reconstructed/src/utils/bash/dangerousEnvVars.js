@@ -9,51 +9,57 @@
  * attribution: placement 9
  */
 import { SHELL_ASSIGNMENT_SUFFIX } from "../attributionFileClasses.js";
-import { freeze as freeze_2 } from "../git/gitSafeEnv.js";
+import { GIT_SAFE_GLOBAL_ARGS } from "../git/gitSafeEnv.js";
 
 //@ chunk-0sfjpx19.js:131202-131264 placement
-var SECURITY_GUIDANCE = "security-guidance",
-  tA = `${SECURITY_GUIDANCE}@claude-code-marketplace`;
 /**
- * 会改变命令解析的环境变量（CDPATH、OLDPWD、FPATH 等）及扩展列表。
+ * 安全指引插件在全名（security-guidance@claude-code-marketplace）。
  */
+var SECURITY_GUIDANCE = "security-guidance";
+var SECURITY_GUIDANCE_PLUGIN = `${SECURITY_GUIDANCE}@claude-code-marketplace`;
 //@ chunk-0sfjpx19.js:131264-131610 placement
-var PATH_LIKE_ENV_VARS = ["CDPATH", "OLDPWD", "FPATH", "MODULE_PATH"],
-  yn = [
-    ...PATH_LIKE_ENV_VARS,
-    "HOME",
-    "PWD",
-    "PATH",
-    "EXECIGNORE",
-    "BASH_CMDS",
-    "BASH_ALIASES",
-    "XDG_CONFIG_HOME",
-  ],
-  Pl = ["path", "cdpath", "fpath", "module_path"],
-  regExp_2 = new RegExp(`(?:^|[^A-Za-z0-9_])(?:${yn.join("|")})(?![A-Za-z0-9_.-])`),
-  regExp_3 = new RegExp(`^(?:${[...yn, ...Pl].join("|")})${SHELL_ASSIGNMENT_SUFFIX}`, "i"),
-  regExp_4 = new RegExp(yn.join("|"), "i");
+/**
+ * 会改变命令解析的环境变量列表（CDPATH、OLDPWD、PATH、BASH_CMDS 等）。
+ */
+var PATH_LIKE_ENV_VARS = ["CDPATH", "OLDPWD", "FPATH", "MODULE_PATH"];
+var DANGEROUS_ENV_VARS = [
+  ...PATH_LIKE_ENV_VARS,
+  "HOME",
+  "PWD",
+  "PATH",
+  "EXECIGNORE",
+  "BASH_CMDS",
+  "BASH_ALIASES",
+  "XDG_CONFIG_HOME",
+];
+var DANGEROUS_ENV_VARS_LOWER = ["path", "cdpath", "fpath", "module_path"];
+var regExp_2 = new RegExp(`(?:^|[^A-Za-z0-9_])(?:${DANGEROUS_ENV_VARS.join("|")})(?![A-Za-z0-9_.-])`);
+var regExp_3 = new RegExp(
+  `^(?:${[...DANGEROUS_ENV_VARS, ...DANGEROUS_ENV_VARS_LOWER].join("|")})${SHELL_ASSIGNMENT_SUFFIX}`,
+  "i",
+);
+var regExp_4 = new RegExp(DANGEROUS_ENV_VARS.join("|"), "i");
 //@ chunk-0sfjpx19.js:131610-131782 placement
 var GIT_REDIRECT_ENV_PATTERN =
-    "GIT_(?:DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|NAMESPACE|REFERENCE_BACKEND|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|CONFIG\\w*)",
-  regExp_5 = new RegExp(`^${GIT_REDIRECT_ENV_PATTERN}${SHELL_ASSIGNMENT_SUFFIX}`, "i");
+  "GIT_(?:DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|NAMESPACE|REFERENCE_BACKEND|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|CONFIG\\w*)";
+var regExp_5 = new RegExp(`^${GIT_REDIRECT_ENV_PATTERN}${SHELL_ASSIGNMENT_SUFFIX}`, "i");
 //@ chunk-0sfjpx19.js:131782-131919 placement
 function buildOptionAbbrevPattern(e, n) {
   let r = "";
-  for (let s = e.length - 1; s >= n; s--) r = `(?:${e[s] === "-" ? "-" : e[s]}${r})?`;
+  for (let j = e.length - 1; j >= n; j--) r = `(?:${e[j] === "-" ? "-" : e[j]}${r})?`;
   return `${e.slice(0, n)}${r}(?![A-Za-z0-9_-])`;
 }
-/**
- * 匹配改变 git 仓库/工作树位置的选项（--git-dir、--work-tree、--config-env 等）。
- */
 //@ chunk-0sfjpx19.js:131919-132246 placement
+/**
+ * 会改变仓库位置的 git 配置键（core.worktree、core.bare、include.path、includeIf）。
+ */
 var GIT_REDIRECT_OPTION_PATTERN = new RegExp(
-    `(?:--git-dir|--work-tree|--namespace|--super-prefix|--config-env)(?![A-Za-z0-9_-])|${buildOptionAbbrevPattern("--separate-git-dir", 4)}`,
-    "i",
-  ),
-  Dl = /(?:core\.worktree|core\.bare|include\.path)(?![A-Za-z0-9_.-])|includeif\./i,
-  regExp_6 = new RegExp(`${GIT_REDIRECT_OPTION_PATTERN.source}|${Dl.source}`, "i"),
-  regExp_7 = new RegExp(`(?<![A-Za-z0-9_])${GIT_REDIRECT_ENV_PATTERN}(?![A-Za-z0-9_.-])`, "i");
+  `(?:--git-dir|--work-tree|--namespace|--super-prefix|--config-env)(?![A-Za-z0-9_-])|${buildOptionAbbrevPattern("--separate-git-dir", 4)}`,
+  "i",
+);
+var GIT_REDIRECT_CONFIG_KEYS = /(?:core\.worktree|core\.bare|include\.path)(?![A-Za-z0-9_.-])|includeif\./i;
+var regExp_6 = new RegExp(`${GIT_REDIRECT_OPTION_PATTERN.source}|${GIT_REDIRECT_CONFIG_KEYS.source}`, "i");
+var regExp_7 = new RegExp(`(?<![A-Za-z0-9_])${GIT_REDIRECT_ENV_PATTERN}(?![A-Za-z0-9_.-])`, "i");
 //@ chunk-0sfjpx19.js:132246-132324 placement
 var regExp_8 = new RegExp(`(?<![A-Za-z0-9_])(?:${PATH_LIKE_ENV_VARS.join("|")})(?![A-Za-z0-9_])`, "i");
 //@ chunk-0sfjpx19.js:132324-132496 placement
@@ -67,4 +73,7 @@ var regExp_10 = new RegExp(
   "i",
 );
 //@ chunk-0sfjpx19.js:132588-132639 placement
-var XT = [...freeze_2, "-c", "safe.bareRepository=explicit"];
+/**
+ * 安全的 git 前缀参数（冻结参数加 safe.bareRepository=explicit）。
+ */
+var SAFE_GIT_BASE_ARGS = [...GIT_SAFE_GLOBAL_ARGS, "-c", "safe.bareRepository=explicit"];

@@ -8,40 +8,60 @@
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:4634-5438 cjs-fingerprint
-var Ki = x(function (Eve, fO) {
-  var { format: format } = importMetaRequire("util");
-  class uO extends Error {
-    constructor({ error_description: e, error: t, error_uri: n, session_state: o, state: r, scope: s }, a) {
-      super(!e ? t : `${t} (${e})`);
-      if (
-        (Object.assign(
-          this,
-          { error: t },
-          e && { error_description: e },
-          n && { error_uri: n },
-          r && { state: r },
-          s && { scope: s },
-          o && { session_state: o },
-        ),
-        a)
-      )
-        Object.defineProperty(this, "response", { value: a });
-      ((this.name = this.constructor.name), Error.captureStackTrace(this, this.constructor));
+var require_errors = x(function (cjsExports, cjsModule) {
+  var { format } = importMetaRequire("util");
+  class OPError extends Error {
+    constructor({ error_description, error, error_uri, session_state, state, scope }, response) {
+      super(!error_description ? error : `${error} (${error_description})`);
+      Object.assign(
+        this,
+        {
+          error,
+        },
+        error_description && {
+          error_description,
+        },
+        error_uri && {
+          error_uri,
+        },
+        state && {
+          state,
+        },
+        scope && {
+          scope,
+        },
+        session_state && {
+          session_state,
+        },
+      );
+      if (response)
+        Object.defineProperty(this, "response", {
+          value: response,
+        });
+      this.name = this.constructor.name;
+      Error.captureStackTrace(this, this.constructor);
     }
   }
-  class dO extends Error {
-    constructor(...e) {
-      if (typeof e[0] === "string") super(format(...e));
+  class RPError extends Error {
+    constructor(...args) {
+      if (typeof args[0] === "string") super(format(...args));
       else {
-        let { message: message, printf: printf, response: response, ...r } = e[0];
+        let { message, printf, response, ...rest } = args[0];
         if (printf) super(format(...printf));
         else super(message);
-        if ((Object.assign(this, r), response)) Object.defineProperty(this, "response", { value: response });
+        Object.assign(this, rest);
+        if (response)
+          Object.defineProperty(this, "response", {
+            value: response,
+          });
       }
-      ((this.name = this.constructor.name), Error.captureStackTrace(this, this.constructor));
+      this.name = this.constructor.name;
+      Error.captureStackTrace(this, this.constructor);
     }
   }
-  fO.exports = { OPError: uO, RPError: dO };
+  cjsModule.exports = {
+    OPError,
+    RPError,
+  };
 });
-
-export { Ki };
+export { require_errors };

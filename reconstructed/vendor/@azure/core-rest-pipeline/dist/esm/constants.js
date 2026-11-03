@@ -5,9 +5,7 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: esm-fingerprint 1
  */
-
 //@ chunk-mrx6y2r5.js:55465-55486 esm-fingerprint
-var jo = "1.21.0",
-  jl = 3;
-
-export { jo, jl };
+var SDK_VERSION_2 = "1.21.0";
+var jl = 3;
+export { SDK_VERSION_2, jl };

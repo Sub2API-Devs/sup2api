@@ -8,66 +8,15 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-  randomUUID as randomUUID_18,
-  randomUUID as randomUUID_19,
-  randomUUID as randomUUID_20,
-  randomUUID as randomUUID_21,
-  randomUUID as randomUUID_22,
-  randomUUID as randomUUID_23,
-  randomUUID as randomUUID_24,
-  randomUUID as randomUUID_25,
-  randomUUID as randomUUID_26,
-  randomUUID as randomUUID_27,
-  randomUUID as randomUUID_28,
-  randomUUID as randomUUID_29,
-  randomUUID as randomUUID_30,
-  randomUUID as randomUUID_31,
-  randomUUID as randomUUID_32,
-  randomUUID as randomUUID_33,
-  randomUUID as randomUUID_34,
-  randomUUID as randomUUID_35,
-  randomUUID as randomUUID_36,
-  randomUUID as randomUUID_37,
-  randomUUID as randomUUID_38,
-  randomUUID as randomUUID_39,
-  randomUUID as randomUUID_40,
-  randomUUID as randomUUID_41,
-  randomUUID as randomUUID_42,
-  randomUUID as randomUUID_43,
-  randomUUID as randomUUID_44,
-  randomUUID as randomUUID_45,
-  randomUUID as randomUUID_46,
-  randomUUID as randomUUID_47,
-  randomUUID as randomUUID_48,
-  randomUUID as randomUUID_49,
-  randomUUID as randomUUID_50,
-} from "crypto";
+import { randomUUID } from "crypto";
 import { isDiskless } from "../../bootstrap/state.js";
 import { getAgentTranscriptPath, getTranscriptPath } from "../sessionStorage.js";
 import { safeResolvePath, getFsImplementation } from "../fsOperations.js";
-import { gn } from "../shortHash.js";
+import { shortHash } from "../shortHash.js";
 import { substituteArguments } from "../argumentSubstitution.js";
 import { logForDebugging, createAttachmentMessage_2 } from "../debug.js";
 import { createUserMessage, isNonRenderableSystemMessage, isResendableClientApiError } from "../messages.js";
-import { aO } from "./hookConcurrency.js";
+import { hookTimeoutMs } from "./hookConcurrency.js";
 import { createAbortController } from "../abortController.js";
 import { createCombinedAbortSignal } from "../combinedAbortSignal.js";
 import {
@@ -76,10 +25,10 @@ import {
   hookResponseSchema,
   nonBlockingHookErrorResult,
 } from "./hookHelpers.js";
-import { bN } from "../../services/accountMemory/memoryContext.js";
-import { kMr, denyDestructiveForHookAgent } from "./servedHooks/destructiveCommands.js";
-import { Bnr } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
-import { Y2t } from "../../services/accountMemory/accountMemoryServer.js";
+import { memoryModeForSession } from "../../services/accountMemory/memoryContext.js";
+import { filterNonGuardTools, denyDestructiveForHookAgent } from "./servedHooks/destructiveCommands.js";
+import { isCoordinatorBashToolUse } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
+import { isServedAccountMemoryTool } from "../../services/accountMemory/accountMemoryServer.js";
 import { asSystemPrompt } from "../systemPromptType.js";
 import { STRUCTUREDOUTPUT } from "../../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import { unlessManagedDeniedModel, getSmallFastModel } from "../model/smallFastModel.js";
@@ -87,11 +36,11 @@ import { resolveModelAliasSpelling } from "../model/model.js";
 import { getMainLoopModel as getMainLoopModel_2 } from "../permissions/toolPermissionContext.js";
 import { getAPIProvider } from "../model/providers.js";
 import { env } from "../env.js";
-import { pcr, QZo } from "../effort.js";
-import { Mr, HOOK_AGENT_ID_PREFIX } from "../agentId.js";
+import { isSameModelSettings, withoutSessionLevel } from "../effort.js";
+import { identityAgentId2, HOOK_AGENT_ID_PREFIX } from "../agentId.js";
 import { createStickyBetaLatches } from "../../bootstrap/stateSlices.js";
 import { stripHostToolMeta } from "../../plugins/functionHooks/sites/toolSites.js";
-import { Jro } from "../../memdir/memoryTool.js";
+import { stripMemoryCallMeta } from "../../memdir/memoryTool.js";
 import { cloneFileStateCache } from "../fileStateCache.js";
 import { withClassifiedWebCalls, hasPermissionsToUseTool } from "../permissions/permissions.js";
 import { jsonStringify } from "../slowOperations.js";
@@ -101,51 +50,58 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { promptEndingFields } from "../../entrypoints/sdk/coreSchemas.js";
 import { errorMessage } from "../errors.js";
 
+//@ chunk-e6aww6q8.js:3396429-3401496 fingerprint = execAgentHook (0.656)
 /**
  * 执行 agent 钩子：用 $ARGUMENTS 替换后的提示词启动一个最多 50 轮的验证子代理（工具集去掉危险工具并加 StructuredOutput，dontAsk 权限，可读 transcript），超时默认 60s；返回 ok 成功、not ok 阻断、未给结构化输出视为取消；模型被拒时回退主模型。
  */
-//@ chunk-e6aww6q8.js:3396429-3401496 fingerprint = execAgentHook (0.656)
-async function execAgentHook(e, n, r, s, h, y, S, w) {
-  let L = S || `hook-${randomUUID_34()}`,
-    G = y.remoteCall !== void 0,
-    q = isDiskless() ? void 0 : y.agentId ? getAgentTranscriptPath(y.agentId) : getTranscriptPath(),
-    Z = G || q === void 0 ? void 0 : safeResolvePath(getFsImplementation(), q).resolvedPath,
-    hookStartTime = Date.now(),
-    ke = w ? gn(w) : void 0;
+async function execAgentHook(hook, hookName, r, jsonInput, h, y, toolUseID, w) {
+  let effectiveToolUseID = toolUseID || `hook-${randomUUID()}`;
+  let G = y.remoteCall !== undefined;
+  let q = isDiskless() ? undefined : y.agentId ? getAgentTranscriptPath(y.agentId) : getTranscriptPath();
+  let resolvedPath =
+    G || q === undefined ? undefined : safeResolvePath(getFsImplementation(), q).resolvedPath;
+  let hookStartTime = Date.now();
+  let agentName = w ? shortHash(w) : undefined;
   try {
-    let processedPrompt = substituteArguments(e.prompt, s);
+    let processedPrompt = substituteArguments(hook.prompt, jsonInput);
     logForDebugging(`Hooks: Processing agent hook with prompt: ${processedPrompt}`);
-    let agentMessages = [createUserMessage({ content: processedPrompt })];
-    logForDebugging(`Hooks: Starting agent query with ${agentMessages.length} messages`);
-    let Ie = aO(e, 60000),
-      hookAbortController = createAbortController(),
-      { signal: parentTimeoutSignal, cleanup: cleanupCombinedSignal } = createCombinedAbortSignal(h, {
-        timeoutMs: Ie,
+    let agentMessages = [
+      createUserMessage({
+        content: processedPrompt,
       }),
-      onParentTimeout = () => hookAbortController.abort();
+    ];
+    logForDebugging(`Hooks: Starting agent query with ${agentMessages.length} messages`);
+    let hookTimeoutMs_2 = hookTimeoutMs(hook, 60000);
+    let hookAbortController = createAbortController();
+    let { signal: parentTimeoutSignal, cleanup: cleanupCombinedSignal } = createCombinedAbortSignal(h, {
+      timeoutMs: hookTimeoutMs_2,
+    });
+    let onParentTimeout = () => hookAbortController.abort();
     parentTimeoutSignal.addEventListener("abort", onParentTimeout);
     let combinedSignal = hookAbortController.signal;
     try {
-      let structuredOutputTool = createStructuredOutputTool(),
-        pt = y.memoryCaller ?? "worker",
-        mode = bN(y).mode,
-        tools = [
-          ...kMr(y.options.tools).filter((tool) => !Bnr(tool, y) && !Y2t(tool, mode)),
-          structuredOutputTool,
-        ],
-        At =
-          r === "Stop" || r === "SubagentStop"
-            ? "You are verifying a stop condition in Claude Code. Your task is to verify that the agent completed the given plan."
-            : `You are evaluating a ${r} hook in Claude Code. Your task is to evaluate the condition described in the user message.`,
-        systemPrompt = asSystemPrompt([
-          `${At} ${
-            Z !== void 0
-              ? `The conversation transcript is available at: ${Z}
+      let structuredOutputTool = createStructuredOutputTool();
+      let memoryCaller = y.memoryCaller ?? "worker";
+      let mode = memoryModeForSession(y).mode;
+      let tools = [
+        ...filterNonGuardTools(y.options.tools).filter(
+          (tool) => !isCoordinatorBashToolUse(tool, y) && !isServedAccountMemoryTool(tool, mode),
+        ),
+        structuredOutputTool,
+      ];
+      let At =
+        r === "Stop" || r === "SubagentStop"
+          ? "You are verifying a stop condition in Claude Code. Your task is to verify that the agent completed the given plan."
+          : `You are evaluating a ${r} hook in Claude Code. Your task is to evaluate the condition described in the user message.`;
+      let systemPrompt = asSystemPrompt([
+        `${At} ${
+          resolvedPath !== undefined
+            ? `The conversation transcript is available at: ${resolvedPath}
 You can read this file to analyze the conversation history if needed.`
-              : G
-                ? "This call is being served for another machine's session; there is no local conversation transcript to read."
-                : "There is no conversation transcript file to read here."
-          }
+            : G
+              ? "This call is being served for another machine's session; there is no local conversation transcript to read."
+              : "There is no conversation transcript file to read here."
+        }
 
 Use the available tools to inspect the codebase and verify the condition.
 Use as few steps as possible - be efficient and direct.
@@ -153,211 +109,238 @@ Use as few steps as possible - be efficient and direct.
 When done, return your result using the ${STRUCTUREDOUTPUT} tool, always with a reason.
 
 ${HOOK_OK_SEMANTICS}`,
-        ]),
-        Yt = unlessManagedDeniedModel(e.model ?? getSmallFastModel()),
-        qt = e.model === void 0 ? Yt : resolveModelAliasSpelling(Yt),
-        Zt = getMainLoopModel_2(y),
-        rn =
-          e.model === void 0 &&
-          getAPIProvider() === "gateway" &&
-          env.ANTHROPIC_DEFAULT_HAIKU_MODEL === void 0 &&
-          env.ANTHROPIC_SMALL_FAST_MODEL === void 0
-            ? Zt
-            : qt,
-        pn = pcr(rn, Zt),
-        MAX_AGENT_TURNS = 50,
-        hookAgentId = Mr(`${HOOK_AGENT_ID_PREFIX}${randomUUID_34()}`),
-        ho = createStickyBetaLatches(),
-        yn = {
-          ...y,
-          agentId: hookAgentId,
-          memoryCaller: pt,
-          mcpRequestMeta: stripHostToolMeta(Jro(y.mcpRequestMeta)),
-          stickyBetas: ho,
-          abortController: hookAbortController,
-          forPromptShellCommand: void 0,
-          permissionModeAtRequest: void 0,
-          synthesizedBy: void 0,
-          promptShellHandOff: void 0,
-          gateIgnoresSwitch: void 0,
-          clientRequestedToolUseId: void 0,
-          namesShownToApi: void 0,
-          permissionLayers: (y.permissionLayers ?? [])
-            .filter((vn) => pn || vn.kind !== "effort")
-            .concat({ kind: "model", mainLoopModel: rn }),
-          readFileState: cloneFileStateCache(y.readFileState, { stripSeededFromContext: !0 }),
-          options: {
-            ...y.options,
-            tools: tools,
+      ]);
+      let Yt = unlessManagedDeniedModel(hook.model ?? getSmallFastModel());
+      let qt = hook.model === undefined ? Yt : resolveModelAliasSpelling(Yt);
+      let mainLoopModel = getMainLoopModel_2(y);
+      let rn =
+        hook.model === undefined &&
+        getAPIProvider() === "gateway" &&
+        env.ANTHROPIC_DEFAULT_HAIKU_MODEL === undefined &&
+        env.ANTHROPIC_SMALL_FAST_MODEL === undefined
+          ? mainLoopModel
+          : qt;
+      let pn = isSameModelSettings(rn, mainLoopModel);
+      let MAX_AGENT_TURNS = 50;
+      let hookAgentId = identityAgentId2(`${HOOK_AGENT_ID_PREFIX}${randomUUID()}`);
+      let stickyBetas = createStickyBetaLatches();
+      let agentToolUseContext = {
+        ...y,
+        agentId: hookAgentId,
+        memoryCaller,
+        mcpRequestMeta: stripHostToolMeta(stripMemoryCallMeta(y.mcpRequestMeta)),
+        stickyBetas,
+        abortController: hookAbortController,
+        forPromptShellCommand: undefined,
+        permissionModeAtRequest: undefined,
+        synthesizedBy: undefined,
+        promptShellHandOff: undefined,
+        gateIgnoresSwitch: undefined,
+        clientRequestedToolUseId: undefined,
+        namesShownToApi: undefined,
+        permissionLayers: (y.permissionLayers ?? [])
+          .filter((vn) => pn || vn.kind !== "effort")
+          .concat({
+            kind: "model",
             mainLoopModel: rn,
-            isNonInteractiveSession: !0,
-            requiresStructuredOutput: !0,
-            structuredOutputIsHandback: void 0,
-            thinkingConfig: { type: "disabled", mechanical: !0 },
-            activeMcpServer: void 0,
-            activeMcpTool: void 0,
-            refreshTools: void 0,
-            refreshMcpClients: void 0,
+          }),
+        readFileState: cloneFileStateCache(y.readFileState, {
+          stripSeededFromContext: true,
+        }),
+        options: {
+          ...y.options,
+          tools,
+          mainLoopModel: rn,
+          isNonInteractiveSession: true,
+          requiresStructuredOutput: true,
+          structuredOutputIsHandback: undefined,
+          thinkingConfig: {
+            type: "disabled",
+            mechanical: true,
           },
-          getAppState() {
-            let vn = pn ? y.getAppState() : QZo(y.getAppState()),
-              co = vn.toolPermissionContext.alwaysAllowRules.session ?? [];
-            return {
-              ...vn,
-              toolPermissionContext: {
-                ...withClassifiedWebCalls(vn.toolPermissionContext, "dontAsk"),
-                alwaysAllowRules: {
-                  ...vn.toolPermissionContext.alwaysAllowRules,
-                  session: Z !== void 0 ? [...co, `Read(/${Z})`] : co,
-                },
-              },
-            };
-          },
+          activeMcpServer: undefined,
+          activeMcpTool: undefined,
+          refreshTools: undefined,
+          refreshMcpClients: undefined,
         },
-        structuredOutputResult = null,
-        turnCount = 0,
-        fo = !1,
-        To = !1,
-        bo = G ? denyDestructiveForHookAgent(hasPermissionsToUseTool) : hasPermissionsToUseTool;
-      for await (let message of yn.options.runQuery({
+        getAppState() {
+          let appState = pn ? y.getAppState() : withoutSessionLevel(y.getAppState());
+          let existingSessionRules = appState.toolPermissionContext.alwaysAllowRules.session ?? [];
+          return {
+            ...appState,
+            toolPermissionContext: {
+              ...withClassifiedWebCalls(appState.toolPermissionContext, "dontAsk"),
+              alwaysAllowRules: {
+                ...appState.toolPermissionContext.alwaysAllowRules,
+                session:
+                  resolvedPath !== undefined
+                    ? [...existingSessionRules, `Read(/${resolvedPath})`]
+                    : existingSessionRules,
+              },
+            },
+          };
+        },
+      };
+      let structuredOutputResult = null;
+      let turnCount = 0;
+      let fo = false;
+      let To = false;
+      let canUseTool = G ? denyDestructiveForHookAgent(hasPermissionsToUseTool) : hasPermissionsToUseTool;
+      for await (let message of agentToolUseContext.options.runQuery({
         messages: agentMessages,
-        systemPrompt: systemPrompt,
+        systemPrompt,
         userContext: {},
         systemContext: {},
-        canUseTool: bo,
-        toolUseContext: yn,
+        canUseTool,
+        toolUseContext: agentToolUseContext,
         querySource: "hook_agent",
-        stickyBetas: ho,
+        stickyBetas,
       })) {
-        if (
-          (isNonRenderableSystemMessage(message, {
-            onMessage: () => {},
-            onUpdateLength: () => {},
-            onSetStreamMode: () => {},
-            onStreamingToolUses: () => {},
-          }),
-          message.type === "stream_event" || message.type === "stream_request_start")
-        )
-          continue;
+        isNonRenderableSystemMessage(message, {
+          onMessage: () => {},
+          onUpdateLength: () => {},
+          onSetStreamMode: () => {},
+          onStreamingToolUses: () => {},
+        });
+        if (message.type === "stream_event" || message.type === "stream_request_start") continue;
         if (message.type === "assistant") {
           if (turnCount === 0) To = isResendableClientApiError(message);
-          if ((turnCount++, turnCount >= 50)) {
-            ((fo = !0),
-              logForDebugging(`Hooks: Agent turn ${turnCount} hit max turns, aborting`),
-              hookAbortController.abort());
+          turnCount++;
+          if (turnCount >= 50) {
+            fo = true;
+            logForDebugging(`Hooks: Agent turn ${turnCount} hit max turns, aborting`);
+            hookAbortController.abort();
             break;
           }
         }
         if (message.type === "attachment" && message.attachment.type === "structured_output") {
           let parsed = hookResponseSchema().safeParse(message.attachment.data);
           if (parsed.success) {
-            ((structuredOutputResult = parsed.data),
-              logForDebugging(`Hooks: Got structured output: ${jsonStringify(structuredOutputResult)}`),
-              hookAbortController.abort());
+            structuredOutputResult = parsed.data;
+            logForDebugging(`Hooks: Got structured output: ${jsonStringify(structuredOutputResult)}`);
+            hookAbortController.abort();
             break;
           }
         }
       }
-      if (
-        (parentTimeoutSignal.removeEventListener("abort", onParentTimeout),
-        cleanupCombinedSignal(),
-        !structuredOutputResult)
-      ) {
-        if (To && rn !== Zt && e.model !== Zt && !h.aborted && !isNoModelFallbackEnabled())
-          return (
-            logForDebugging(`Hooks: ${rn} was refused, running the agent hook on ${Zt}`),
-            { ...(await execAgentHook({ ...e, model: Zt }, n, r, s, h, y, S, w)), hook: e }
-          );
-        if (fo)
-          return (
-            logForDebugging("Hooks: Agent hook did not complete within 50 turns"),
-            logEvent("tengu_agent_stop_hook_max_turns", {
-              durationMs: Date.now() - hookStartTime,
-              turnCount: turnCount,
-              hookEvent: fromEnum(r),
-              agentName: ke,
-            }),
-            { hook: e, outcome: "cancelled" }
-          );
-        return (
-          logForDebugging("Hooks: Agent hook did not return structured output"),
-          logEvent("tengu_agent_stop_hook_error", {
-            durationMs: Date.now() - hookStartTime,
-            turnCount: turnCount,
-            errorType: 1,
-            hookEvent: fromEnum(r),
-            agentName: ke,
-          }),
-          { hook: e, outcome: "cancelled" }
-        );
-      }
-      if (!structuredOutputResult.ok)
-        return (
-          logForDebugging(`Hooks: Agent hook condition was not met: ${structuredOutputResult.reason}`),
-          logEvent("tengu_agent_stop_hook_blocking", {
-            durationMs: Date.now() - hookStartTime,
-            turnCount: turnCount,
-            hookEvent: fromEnum(r),
-            agentName: ke,
-          }),
-          {
-            hook: e,
-            outcome: "blocking",
-            blockingError: {
-              blockingError: `Agent hook condition was not met: ${structuredOutputResult.reason}`,
-              command: e.prompt,
-              ...promptEndingFields(r, { reason: structuredOutputResult.reason }),
-            },
-          }
-        );
-      return (
-        logForDebugging("Hooks: Agent hook condition was met"),
-        logEvent("tengu_agent_stop_hook_success", {
-          durationMs: Date.now() - hookStartTime,
-          turnCount: turnCount,
-          hookEvent: fromEnum(r),
-          agentName: ke,
-        }),
-        {
-          hook: e,
-          outcome: "success",
-          message: createAttachmentMessage_2({
-            type: "hook_success",
-            hookName: n,
-            toolUseID: L,
-            hookEvent: r,
-            content: "",
-          }),
+      parentTimeoutSignal.removeEventListener("abort", onParentTimeout);
+      cleanupCombinedSignal();
+      if (!structuredOutputResult) {
+        if (
+          To &&
+          rn !== mainLoopModel &&
+          hook.model !== mainLoopModel &&
+          !h.aborted &&
+          !isNoModelFallbackEnabled()
+        ) {
+          logForDebugging(`Hooks: ${rn} was refused, running the agent hook on ${mainLoopModel}`);
+          return {
+            ...(await execAgentHook(
+              {
+                ...hook,
+                model: mainLoopModel,
+              },
+              hookName,
+              r,
+              jsonInput,
+              h,
+              y,
+              toolUseID,
+              w,
+            )),
+            hook,
+          };
         }
-      );
+        if (fo) {
+          logForDebugging("Hooks: Agent hook did not complete within 50 turns");
+          logEvent("tengu_agent_stop_hook_max_turns", {
+            durationMs: Date.now() - hookStartTime,
+            turnCount,
+            hookEvent: fromEnum(r),
+            agentName,
+          });
+          return {
+            hook,
+            outcome: "cancelled",
+          };
+        }
+        logForDebugging("Hooks: Agent hook did not return structured output");
+        logEvent("tengu_agent_stop_hook_error", {
+          durationMs: Date.now() - hookStartTime,
+          turnCount,
+          errorType: 1,
+          hookEvent: fromEnum(r),
+          agentName,
+        });
+        return {
+          hook,
+          outcome: "cancelled",
+        };
+      }
+      if (!structuredOutputResult.ok) {
+        logForDebugging(`Hooks: Agent hook condition was not met: ${structuredOutputResult.reason}`);
+        logEvent("tengu_agent_stop_hook_blocking", {
+          durationMs: Date.now() - hookStartTime,
+          turnCount,
+          hookEvent: fromEnum(r),
+          agentName,
+        });
+        return {
+          hook,
+          outcome: "blocking",
+          blockingError: {
+            blockingError: `Agent hook condition was not met: ${structuredOutputResult.reason}`,
+            command: hook.prompt,
+            ...promptEndingFields(r, {
+              reason: structuredOutputResult.reason,
+            }),
+          },
+        };
+      }
+      logForDebugging("Hooks: Agent hook condition was met");
+      logEvent("tengu_agent_stop_hook_success", {
+        durationMs: Date.now() - hookStartTime,
+        turnCount,
+        hookEvent: fromEnum(r),
+        agentName,
+      });
+      return {
+        hook,
+        outcome: "success",
+        message: createAttachmentMessage_2({
+          type: "hook_success",
+          hookName,
+          toolUseID: effectiveToolUseID,
+          hookEvent: r,
+          content: "",
+        }),
+      };
     } catch (error) {
-      if (
-        (parentTimeoutSignal.removeEventListener("abort", onParentTimeout),
-        cleanupCombinedSignal(),
-        combinedSignal.aborted)
-      )
-        return { hook: e, outcome: "cancelled" };
+      parentTimeoutSignal.removeEventListener("abort", onParentTimeout);
+      cleanupCombinedSignal();
+      if (combinedSignal.aborted)
+        return {
+          hook,
+          outcome: "cancelled",
+        };
       throw error;
     }
   } catch (error) {
     let errorMsg = errorMessage(error);
-    return (
-      logForDebugging(`Hooks: Agent hook error: ${errorMsg}`),
-      logEvent("tengu_agent_stop_hook_error", {
-        durationMs: Date.now() - hookStartTime,
-        errorType: 2,
-        hookEvent: fromEnum(r),
-        agentName: ke,
-      }),
-      nonBlockingHookErrorResult(e, {
-        hookName: n,
-        toolUseID: L,
-        hookEvent: r,
-        stderr: `Error executing agent hook: ${errorMsg}`,
-        stdout: "",
-      })
-    );
+    logForDebugging(`Hooks: Agent hook error: ${errorMsg}`);
+    logEvent("tengu_agent_stop_hook_error", {
+      durationMs: Date.now() - hookStartTime,
+      errorType: 2,
+      hookEvent: fromEnum(r),
+      agentName,
+    });
+    return nonBlockingHookErrorResult(hook, {
+      hookName,
+      toolUseID: effectiveToolUseID,
+      hookEvent: r,
+      stderr: `Error executing agent hook: ${errorMsg}`,
+      stdout: "",
+    });
   }
 }
-
 export { execAgentHook };

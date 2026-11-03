@@ -9,7 +9,7 @@
  * attribution: placement 31
  */
 import {
-  constants,
+  constants as FS,
   lstatSync,
   realpathSync,
   openSync,
@@ -29,14 +29,14 @@ import { createHash } from "node:crypto";
 //@ runner-scaffold-q2rf9gg9.mjs:2620-2661 placement
 const WIN = process.platform === "win32";
 //@ runner-scaffold-q2rf9gg9.mjs:2662-2703 placement
-const NOFOLLOW = WIN ? 0 : constants.O_NOFOLLOW;
+const NOFOLLOW = WIN ? 0 : FS.O_NOFOLLOW;
 //@ runner-scaffold-q2rf9gg9.mjs:2863-2983 placement
 const lstatOrNull = (p) => {
   try {
     return lstatSync(p);
-  } catch (error) {
-    if (error?.code === "ENOENT") return null;
-    throw error;
+  } catch (e) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
   }
 };
 //@ runner-scaffold-q2rf9gg9.mjs:2984-3049 placement
@@ -51,20 +51,20 @@ const termSafe = (s) => String(s).replace(ESC_SEQ, "").replace(CONTROL, "");
 const eprint = (...a) => console.error(...a.map(termSafe));
 //@ runner-scaffold-q2rf9gg9.mjs:4228-4252 placement
 let flowRealRoot = null;
+//@ runner-scaffold-q2rf9gg9.mjs:4253-4600 placement
 /**
  * 确认目录真实路径位于 flow 根目录之内，否则抛错。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:4253-4600 placement
 function assertInFlow(dir, what) {
   if (flowRealRoot == null) throw new Error(`refusing to ${what}: flow root not resolved yet`);
   const dirReal = realpathSync(dir);
   if (dirReal !== flowRealRoot && !dirReal.startsWith(flowRealRoot + (WIN ? "\\" : "/")))
     throw new Error(`refusing to ${what}: ${dir} resolves outside the flow directory`);
 }
+//@ runner-scaffold-q2rf9gg9.mjs:4601-5483 placement
 /**
  * 不跟随符号链接地打开 flow 内的文件，拒绝经过符号链接目录或硬链接的路径。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:4601-5483 placement
 function openNoFollow(p, flags) {
   if (isSymlink(dirname(p))) throw new Error(`refusing to open through symlinked directory: ${dirname(p)}`);
   assertInFlow(dirname(p), "open");
@@ -80,15 +80,15 @@ function openNoFollow(p, flags) {
       throw new Error(
         `refusing to use ${p}: it has a second hard link (another name for the same file); replace it with a plain copy if it is yours`,
       );
-  } catch (error) {
+  } catch (e) {
     closeSync(fd);
-    throw error;
+    throw e;
   }
   return fd;
 }
 //@ runner-scaffold-q2rf9gg9.mjs:5771-5950 placement
 function writeFileNoFollow(p, data) {
-  const fd = openNoFollow(p, constants.O_WRONLY | constants.O_CREAT);
+  const fd = openNoFollow(p, FS.O_WRONLY | FS.O_CREAT);
   try {
     ftruncateSync(fd, 0);
     writeFileSync(fd, data);
@@ -96,21 +96,21 @@ function writeFileNoFollow(p, data) {
     closeSync(fd);
   }
 }
+//@ runner-scaffold-q2rf9gg9.mjs:6174-6654 placement
 /**
  * 以不跟随符号链接的方式追加写文件（Windows 下分块写）。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:6174-6654 placement
 function appendFileNoFollow(p, data) {
-  const fd = openNoFollow(p, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND);
+  const fd = openNoFollow(p, FS.O_WRONLY | FS.O_CREAT | FS.O_APPEND);
   try {
     if (!WIN) {
       writeFileSync(fd, data);
       return;
     }
-    const buffer = Buffer.from(data);
-    const size = fstatSync(fd).size;
-    for (let off = 0; off < buffer.length;) {
-      const n = writeSync(fd, buffer, off, buffer.length - off, size + off);
+    const buf = Buffer.from(data);
+    const start = fstatSync(fd).size;
+    for (let off = 0; off < buf.length;) {
+      const n = writeSync(fd, buf, off, buf.length - off, start + off);
       if (n <= 0) throw new Error(`append to ${p} made no progress`);
       off += n;
     }
@@ -122,7 +122,7 @@ function appendFileNoFollow(p, data) {
 const lexists = (p) => lstatOrNull(p) != null;
 //@ runner-scaffold-q2rf9gg9.mjs:7080-7225 placement
 function readFileNoFollow(p) {
-  const fd = openNoFollow(p, constants.O_RDONLY);
+  const fd = openNoFollow(p, FS.O_RDONLY);
   try {
     return readFileSync(fd, "utf8");
   } finally {
@@ -133,18 +133,20 @@ function readFileNoFollow(p) {
 function readIfPresent(p) {
   try {
     return readFileNoFollow(p);
-  } catch (error) {
-    if (error?.code === "ENOENT") return null;
-    throw error;
+  } catch (e) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
   }
 }
+//@ runner-scaffold-q2rf9gg9.mjs:7441-7833 placement
 /**
  * 创建目录并在创建后确认没有经过符号链接祖先目录。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:7441-7833 placement
 function mkdirNoFollow(dir) {
   if (isSymlink(dir)) throw new Error(`refusing to use symlinked directory: ${dir}`);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dir, {
+    recursive: true,
+  });
   // Check after creating: mkdirSync(recursive) follows symlinked ancestors,
   // so a dir minted through one resolves outside the flow root and is refused
   // here before any file lands in it.
@@ -157,10 +159,10 @@ async function loadCases() {
   // e.g. return JSON.parse(readFileSync('eval/cases.json', 'utf8'));
   throw new Error("TODO: loadCases");
 }
+//@ runner-scaffold-q2rf9gg9.mjs:8542-9084 placement
 /**
  * 执行单个用例的模板函数，需由用户实现调用模型并返回输出、对话记录和用量。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:8542-9084 placement
 async function runCase(input, ctx) {
   // const res = await client.messages.create({ model: ctx.model, ... });
   // return {
@@ -181,10 +183,10 @@ async function gradeCase(input, run, ref, ctx) {
 function perfFrom(run) {
   return {};
 }
+//@ runner-scaffold-q2rf9gg9.mjs:9949-11746 placement
 /**
  * 解析 runner 脚手架的命令行参数（--flow、--variant、--approve-harness 等），缺少必填项时打印用法并退出。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:9949-11746 placement
 function parseArgs(argv) {
   const a = {
     flow: ".claude/hillclimb/flow",
@@ -251,134 +253,134 @@ function usage() {
     "usage: node run-eval.mjs --flow DIR --variant ID [--model ID] [--reps N] [--concurrency N] [--timeout-s N (0 = no ceiling)] [--approve-harness]",
   );
 }
+//@ runner-scaffold-q2rf9gg9.mjs:13459-15440 placement
 /**
  * 对运行脚本自身、旁边的锁文件与 _state.json 列出的 harness 文件计算 sha256；与已批准值一致则继续，--approve-harness 时记录新值，否则打印差异说明并以退出码 2 结束。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:13459-15440 placement
 function checkHarness(statePath, st, approve) {
   const self = fileURLToPath(import.meta.url);
   const listed = Array.isArray(st.harness_paths) ? st.harness_paths.map(String) : [];
-  const filtered = [
+  const lockfiles = [
     ...new Set(
       [dirname(self), process.cwd()].flatMap((d) =>
         ["package-lock.json", "bun.lock", "bun.lockb", "yarn.lock", "pnpm-lock.yaml"].map((f) => join(d, f)),
       ),
     ),
   ].filter((f) => existsSync(f));
-  const sorted = [...new Set([self, ...filtered, ...listed.map((p) => resolve(p))])].sort();
+  const paths = [...new Set([self, ...lockfiles, ...listed.map((p) => resolve(p))])].sort();
   const h = createHash("sha256");
   const hashed = [];
-  for (const p of sorted) {
+  for (const p of paths) {
     let buf;
     try {
       buf = readFileSync(p);
-    } catch (error) {
-      if (p === self) throw error;
+    } catch (e) {
+      if (p === self) throw e;
       eprint(
-        `warning: harness path '${relative(process.cwd(), p)}' not readable (${error?.code || "error"}) - skipped`,
+        `warning: harness path '${relative(process.cwd(), p)}' not readable (${e?.code || "error"}) - skipped`,
       );
       continue;
     }
     h.update(relative(process.cwd(), p)).update("\0").update(buf).update("\0");
     hashed.push(relative(process.cwd(), p));
   }
-  const digest = h.digest("hex");
-  if (st.harness_sha === digest) return;
+  const sha = h.digest("hex");
+  if (st.harness_sha === sha) return;
   // Said only here, where a person is about to approve or is being refused.
-  if (!filtered.length)
+  if (!lockfiles.length)
     eprint(
       "note: no lockfile beside the runner or in the current directory - dependency changes are outside the harness sha",
     );
   if (approve) {
-    st.harness_sha = digest;
+    st.harness_sha = sha;
     writeFileNoFollow(statePath, JSON.stringify(st, null, 2) + "\n");
     eprint(
-      `harness approved: sha256 ${digest.slice(0, 12)} over ${hashed.length} file(s) recorded in ${statePath}`,
+      `harness approved: sha256 ${sha.slice(0, 12)} over ${hashed.length} file(s) recorded in ${statePath}`,
     );
     return;
   }
   if (st.harness_sha == null) {
     eprint(
-      `no approved harness sha in ${statePath} (computed ${digest.slice(0, 12)} over: ${hashed.join(", ")}).`,
+      `no approved harness sha in ${statePath} (computed ${sha.slice(0, 12)} over: ${hashed.join(", ")}).`,
     );
     eprint("Review the harness, then run once with --approve-harness to record it.");
   } else {
     eprint(
       `harness changed since last approved run (files: ${hashed.join(", ")}); ` +
-        `approved ${String(st.harness_sha).slice(0, 12)}, now ${digest.slice(0, 12)}.`,
+        `approved ${String(st.harness_sha).slice(0, 12)}, now ${sha.slice(0, 12)}.`,
     );
     eprint("Re-run with --approve-harness after reviewing the diff.");
   }
   process.exit(2);
 }
+//@ runner-scaffold-q2rf9gg9.mjs:15797-16994 placement
 /**
  * 带退避重试执行函数：每次尝试前检查截止时间（超时抛 timeout 类错误），429/529/5xx 或 overloaded/rate limit 视为暂时错误按指数退避重试，最多 tries 次。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:15797-16994 placement
 async function withBackoff(fn, retry, deadline = Infinity, tries = 5) {
   for (let attempt = 0; ; attempt++) {
     // Checked before every attempt, not just before sleeps: once the case's
     // ceiling has passed, an abandoned chain must not issue another call
     // (e.g. a judge call after the app call consumed the whole ceiling).
     if (Date.now() >= deadline) {
-      const error = new Error("wall-clock ceiling exceeded before attempt");
-      error.failure_class = "timeout";
-      throw error;
+      const e = new Error("wall-clock ceiling exceeded before attempt");
+      e.failure_class = "timeout";
+      throw e;
     }
     try {
       return await fn();
-    } catch (error) {
-      const status = error?.status ?? error?.response?.status;
+    } catch (e) {
+      const status = e?.status ?? e?.response?.status;
       const transient =
         status === 429 ||
         status === 529 ||
         (status >= 500 && status < 600) ||
-        /overloaded|rate.?limit/i.test(String(error?.message ?? ""));
-      if (!transient || attempt >= tries - 1) throw error;
+        /overloaded|rate.?limit/i.test(String(e?.message ?? ""));
+      if (!transient || attempt >= tries - 1) throw e;
       const delay = Math.min(60_000, 1000 * 2 ** attempt) * (0.5 + Math.random());
       // Never start a retry that would outlive the case's wall-clock ceiling -
       // otherwise an abandoned chain keeps issuing API calls after the case failed.
-      if (Date.now() + delay >= deadline) throw error;
+      if (Date.now() + delay >= deadline) throw e;
       retry.count++;
       await new Promise((r) => setTimeout(r, delay));
     }
   }
 }
+//@ runner-scaffold-q2rf9gg9.mjs:17230-17648 placement
 /**
  * 给 Promise 加墙钟超时，超时以带失败类别的错误拒绝。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:17230-17648 placement
 function withTimeout(promise, seconds, label) {
   if (!(seconds > 0)) return promise;
   let timer;
-  const promise_2 = new Promise((_, reject) => {
+  const ceiling = new Promise((_, reject) => {
     timer = setTimeout(() => {
-      const error = new Error(`${label}: exceeded ${seconds}s wall-clock ceiling`);
-      error.failure_class = "timeout";
-      reject(error);
+      const e = new Error(`${label}: exceeded ${seconds}s wall-clock ceiling`);
+      e.failure_class = "timeout";
+      reject(e);
     }, seconds * 1000);
   });
-  return Promise.race([promise, promise_2]).finally(() => clearTimeout(timer));
+  return Promise.race([promise, ceiling]).finally(() => clearTimeout(timer));
 }
+//@ runner-scaffold-q2rf9gg9.mjs:17960-18600 placement
 /**
  * 把用例 id 转成可作文件名的安全形式，过长时截断并加哈希后缀，结果幂等。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:17960-18600 placement
 function pathSafeId(id) {
   const raw = String(id);
-  const replaced = raw.replace(/[^\w.-]/g, "_");
+  const cleaned = raw.replace(/[^\w.-]/g, "_");
   // Idempotent by construction: anything already path-safe and within the
   // length bound - including this function's own truncated+suffixed output -
   // passes through unchanged. Long ids (URLs, prompt text as id) truncate to
   // 120 chars plus an 8-hex hash of the full original, so they fail here, not
   // at the trace write after the spend, and distinct ids stay distinct.
-  if (replaced === raw && raw.length <= 129) return raw;
-  return `${replaced.slice(0, 120)}-${createHash("sha256").update(raw).digest("hex").slice(0, 8)}`;
+  if (cleaned === raw && raw.length <= 129) return raw;
+  return `${cleaned.slice(0, 120)}-${createHash("sha256").update(raw).digest("hex").slice(0, 8)}`;
 }
+//@ runner-scaffold-q2rf9gg9.mjs:18602-32458 placement
 /**
  * hillclimb 运行脚手架入口：解析参数、拒绝含 . / .. 的 --flow、在首次调用模型前预检所有输出路径不是符号链接、校验 harness 摘要，然后逐个用例运行、评分并写 results.jsonl、errors.jsonl 与 progress.txt。
  */
-//@ runner-scaffold-q2rf9gg9.mjs:18602-32458 placement
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   // lstat("link/") follows the final symlink, so a trailing separator on
@@ -386,13 +388,13 @@ async function main() {
   // Only Windows treats `\` as a separator; on POSIX it is a filename byte, so
   // splitting on it would walk prefixes that are not real path components.
   args.flow = args.flow.replace(WIN ? /(.)[\\/]+$/ : /(.)\/+$/, "$1");
-  const parts = args.flow.split(WIN ? /[\\/]/ : "/");
+  const flowSegments = args.flow.split(WIN ? /[\\/]/ : "/");
   // A `.`/`..` segment (e.g. a trailing `/.`) makes isSymlink(args.flow) below
   // resolve a different final component than the named dir - following a
   // planted link at the flow root - while join() collapses it and the absolute
   // branch skips the ancestor walk. Refuse dot segments outright
   // (absolute --flow stays supported).
-  if (parts.some((seg) => seg === "." || seg === "..")) {
+  if (flowSegments.some((seg) => seg === "." || seg === "..")) {
     eprint(`refusing to run: --flow must not contain '.' or '..' segments, got '${args.flow}'`);
     process.exit(2);
   }
@@ -423,7 +425,7 @@ async function main() {
   // macOS).
   if (!isAbsolute(args.flow)) {
     let walk = "";
-    for (const part of parts.filter(Boolean).slice(0, -1)) {
+    for (const part of flowSegments.filter(Boolean).slice(0, -1)) {
       walk = walk ? join(walk, part) : part;
       if (isSymlink(walk)) {
         eprint(`refusing to run: ${walk} is a symlink (ancestor of --flow)`);
@@ -435,7 +437,9 @@ async function main() {
   // create the flow dir when fresh (the preflight above refused a link at it
   // and, for a relative path, at every ancestor), then capture where it
   // really resolves.
-  mkdirSync(args.flow, { recursive: true });
+  mkdirSync(args.flow, {
+    recursive: true,
+  });
   flowRealRoot = realpathSync(args.flow);
   mkdirNoFollow(join(vdir, "traces"));
   // _state.json is READ-ONLY here. The orchestrator owns it. Absent is fine
@@ -455,7 +459,10 @@ async function main() {
     }
   }
   checkHarness(statePath, st, args.approveHarness);
-  const ctx = { ...args, state: st };
+  const ctx = {
+    ...args,
+    state: st,
+  };
 
   // Resume: which (id, rep) pairs already have a row?
   const resultsPath = join(vdir, "results.jsonl");
@@ -463,8 +470,8 @@ async function main() {
   for (const ln of (readIfPresent(resultsPath) ?? "").split("\n")) {
     if (!ln.trim()) continue;
     try {
-      const parsed = JSON.parse(ln);
-      done.add(`${parsed.prompt_id}\0${parsed.rep}`);
+      const r = JSON.parse(ln);
+      done.add(`${r.prompt_id}\0${r.rep}`);
     } catch {}
   }
   // Rows key on the path-safe id (see pathSafeId), so resume must too.
@@ -476,12 +483,12 @@ async function main() {
   // that matches no case would silently shrink the scored denominator.
   const seen = new Map();
   for (const c of cases) {
-    const lower = pathSafeId(c.id).toLowerCase();
-    if (seen.has(lower)) {
-      eprint(`duplicate case id after sanitization: '${c.id}' collides with '${seen.get(lower)}'`);
+    const k = pathSafeId(c.id).toLowerCase();
+    if (seen.has(k)) {
+      eprint(`duplicate case id after sanitization: '${c.id}' collides with '${seen.get(k)}'`);
       process.exit(2);
     }
-    seen.set(lower, c.id);
+    seen.set(k, c.id);
   }
   const safeIds = new Set(cases.map((c) => pathSafeId(c.id)));
   for (const k of ["train_ids", "val_ids", "test_ids"])
@@ -508,13 +515,15 @@ async function main() {
   for (const c of cases)
     for (let rep = 0; rep < args.reps; rep++) {
       if (done.has(`${pathSafeId(c.id)}\0${rep}`)) continue;
-      tasks.push({ c, rep });
+      tasks.push({
+        c,
+        rep,
+      });
     }
   eprint(`[${args.variant}] ${tasks.length} of ${cases.length * args.reps} (id,rep) to run`);
-
-  let i = 0,
-    ok = 0,
-    fail = 0;
+  let i = 0;
+  let ok = 0;
+  let fail = 0;
   const errorsPath = join(vdir, "errors.jsonl");
   // A hard crash (power loss, ENOSPC) can leave a torn final line with no
   // trailing newline; the next append would merge two rows into one permanently
@@ -527,18 +536,22 @@ async function main() {
     while (i < tasks.length) {
       const { c, rep } = tasks[i++];
       const safeId = pathSafeId(c.id);
-      const now = Date.now();
+      const t0 = Date.now();
       let lastRun = null; // survives into the catch - billed spend on a failed attempt
       let rowWritten = false; // set once the results row lands - the attempt is scored
-      const deadline = args.timeoutS > 0 ? now + args.timeoutS * 1000 : Infinity;
-      const appRetry = { count: 0 },
-        judgeRetry = { count: 0 };
+      const deadline = args.timeoutS > 0 ? t0 + args.timeoutS * 1000 : Infinity;
+      const appRetry = {
+        count: 0,
+      };
+      const judgeRetry = {
+        count: 0,
+      };
       try {
         // One ceiling over the whole case - app call, identity check, and grading -
         // so a hung judge stream can't hold the slot either.
         const { run, g, latency_s } = await withTimeout(
           (async () => {
-            let tAttempt = now;
+            let tAttempt = t0;
             const run = await withBackoff(
               () => {
                 tAttempt = Date.now();
@@ -561,14 +574,12 @@ async function main() {
             // id schemes (e.g. Bedrock's 'anthropic.claude-...-v1:0') need their own
             // rule here.
             if (ctx.model && run.model && run.model !== ctx.model) {
-              const replaced = ctx.model.replace(/-latest$|-0$/, "");
-              const rest = String(run.model).startsWith(replaced)
-                ? String(run.model).slice(replaced.length)
-                : null;
+              const base = ctx.model.replace(/-latest$|-0$/, "");
+              const rest = String(run.model).startsWith(base) ? String(run.model).slice(base.length) : null;
               if (!(rest != null && /^[-@](\d{8}|\d{4}-\d{2}-\d{2})$/.test(rest))) {
-                const error = new Error(`served model ${run.model} != requested ${ctx.model}`);
-                error.failure_class = "serving_substitution";
-                throw error;
+                const e = new Error(`served model ${run.model} != requested ${ctx.model}`);
+                e.failure_class = "serving_substitution";
+                throw e;
               }
             }
             // Frozen pairwise reference (never regenerated): baseline/ref/<id>.*
@@ -581,13 +592,17 @@ async function main() {
                 try {
                   ref = readFileNoFollow(p + ext);
                   break;
-                } catch (error) {
-                  if (error?.code !== "ENOENT") throw error;
+                } catch (e) {
+                  if (e?.code !== "ENOENT") throw e;
                 }
               }
             }
             const g = await withBackoff(() => gradeCase(c, run, ref, ctx), judgeRetry, deadline);
-            return { run, g, latency_s };
+            return {
+              run,
+              g,
+              latency_s,
+            };
           })(),
           args.timeoutS,
           `${c.id} rep${rep}`,
@@ -602,9 +617,21 @@ async function main() {
             safeId !== String(c.id) || appRetry.count || judgeRetry.count
               ? {
                   ...(c.meta ?? {}),
-                  ...(safeId !== String(c.id) ? { original_id: String(c.id) } : {}),
-                  ...(appRetry.count ? { retries: appRetry.count } : {}),
-                  ...(judgeRetry.count ? { judge_retries: judgeRetry.count } : {}),
+                  ...(safeId !== String(c.id)
+                    ? {
+                        original_id: String(c.id),
+                      }
+                    : {}),
+                  ...(appRetry.count
+                    ? {
+                        retries: appRetry.count,
+                      }
+                    : {}),
+                  ...(judgeRetry.count
+                    ? {
+                        judge_retries: judgeRetry.count,
+                      }
+                    : {}),
                 }
               : c.meta,
           model: run.model,
@@ -641,13 +668,13 @@ async function main() {
           );
         }
         ok++;
-      } catch (error) {
+      } catch (e) {
         fail++;
         if (rowWritten) {
           // The attempt scored; only a post-row write (trace, ref) failed. An error
           // row here would double-count the billed usage under the budget rule.
           eprint(
-            `  [${args.variant}] ${c.id} rep${rep} scored, but a post-row write failed: ${error?.message || error}`,
+            `  [${args.variant}] ${c.id} rep${rep} scored, but a post-row write failed: ${e?.message || e}`,
           );
           continue;
         }
@@ -658,9 +685,13 @@ async function main() {
           JSON.stringify({
             prompt_id: safeId,
             rep,
-            ...(safeId !== String(c.id) ? { original_id: String(c.id) } : {}),
-            failure_class: error?.failure_class ?? "error",
-            error: String(error?.message || error),
+            ...(safeId !== String(c.id)
+              ? {
+                  original_id: String(c.id),
+                }
+              : {}),
+            failure_class: e?.failure_class ?? "error",
+            error: String(e?.message || e),
             retries: appRetry.count,
             judge_retries: judgeRetry.count,
             // Billed-but-failed spend stays countable: when the app call completed
@@ -668,12 +699,12 @@ async function main() {
             // ceiling), carry its identity and usage on the error row.
             model: lastRun?.model,
             usage: lastRun?.usage,
-            judge_model: error?.judge_model ?? lastRun?.judge_model,
-            judge_usage: error?.judge_usage ?? lastRun?.judge_usage,
-            latency_s: (Date.now() - now) / 1000,
+            judge_model: e?.judge_model ?? lastRun?.judge_model,
+            judge_usage: e?.judge_usage ?? lastRun?.judge_usage,
+            latency_s: (Date.now() - t0) / 1000,
           }) + "\n",
         );
-        eprint(`  [${args.variant}] ${c.id} rep${rep} FAILED: ${error?.message || error}`);
+        eprint(`  [${args.variant}] ${c.id} rep${rep} FAILED: ${e?.message || e}`);
       }
     }
   }
@@ -681,11 +712,11 @@ async function main() {
   // is it?" is answerable from the background shell's output or one file read,
   // without the orchestrator parsing results.jsonl mid-write. ETA is a plain
   // rate extrapolation from this pass.
-  const now = Date.now();
+  const t0 = Date.now();
   const progress = () => {
-    const done = ok + fail,
-      total = tasks.length;
-    const el = (Date.now() - now) / 1000;
+    const done = ok + fail;
+    const total = tasks.length;
+    const el = (Date.now() - t0) / 1000;
     const eta = done ? Math.round((el / done) * (total - done)) : null;
     const line =
       `[${args.variant}] ${done}/${total} done (${ok} ok, ${fail} failed), ` +
@@ -698,7 +729,14 @@ async function main() {
   };
   const tick = setInterval(progress, 30_000);
   workersStarted = true;
-  await Promise.all(Array.from({ length: Math.max(1, args.concurrency) }, worker));
+  await Promise.all(
+    Array.from(
+      {
+        length: Math.max(1, args.concurrency),
+      },
+      worker,
+    ),
+  );
   clearInterval(tick);
   progress();
   eprint(`[${args.variant}] done - ${ok} ok, ${fail} failed -> ${resultsPath}`);

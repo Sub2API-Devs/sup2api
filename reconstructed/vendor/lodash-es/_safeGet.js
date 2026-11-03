@@ -7,10 +7,9 @@
  */
 
 //@ chunk-dcmhvw5a.js:142711-142819 placement
-function safeGet(e, n) {
-  if (n === "constructor" && typeof e[n] === "function") return;
-  if (n == "__proto__") return;
-  return e[n];
+function safeGet(object, key) {
+  if (key === "constructor" && typeof object[key] === "function") return;
+  if (key == "__proto__") return;
+  return object[key];
 }
-
 export { safeGet };

@@ -9,56 +9,81 @@ import { Qn } from "./instrumenter.js";
 import { AZURE_TRACING_SYMBOLS } from "./tracingContext.js";
 
 //@ chunk-mrx6y2r5.js:58616-59724 esm-fingerprint
-function Jn(e) {
-  let { namespace: namespace, packageName: packageName, packageVersion: packageVersion } = e;
-  function o(l, d, u) {
+function createTracingClient(options) {
+  let { namespace, packageName, packageVersion } = options;
+  function startSpan(name, operationOptions, spanOptions) {
     var m;
-    let startSpan = Qn().startSpan(
-        l,
-        Object.assign(Object.assign({}, u), {
-          packageName: packageName,
-          packageVersion: packageVersion,
-          tracingContext:
-            (m = d === null || d === void 0 ? void 0 : d.tracingOptions) === null || m === void 0
-              ? void 0
-              : m.tracingContext,
-        }),
-      ),
-      { tracingContext: tracingContext, span: span } = startSpan;
+    let p = Qn().startSpan(
+      name,
+      Object.assign(Object.assign({}, spanOptions), {
+        packageName,
+        packageVersion,
+        tracingContext:
+          (m =
+            operationOptions === null || operationOptions === undefined
+              ? undefined
+              : operationOptions.tracingOptions) === null || m === undefined
+            ? undefined
+            : m.tracingContext,
+      }),
+    );
+    let { tracingContext, span } = p;
     if (!tracingContext.getValue(AZURE_TRACING_SYMBOLS.namespace))
       tracingContext = tracingContext.setValue(AZURE_TRACING_SYMBOLS.namespace, namespace);
     span.setAttribute("az.namespace", tracingContext.getValue(AZURE_TRACING_SYMBOLS.namespace));
-    let merged = Object.assign({}, d, {
+    let updatedOptions = Object.assign({}, operationOptions, {
       tracingOptions: Object.assign(
-        Object.assign({}, d === null || d === void 0 ? void 0 : d.tracingOptions),
-        { tracingContext: tracingContext },
+        Object.assign(
+          {},
+          operationOptions === null || operationOptions === undefined
+            ? undefined
+            : operationOptions.tracingOptions,
+        ),
+        {
+          tracingContext,
+        },
       ),
     });
-    return { span: span, updatedOptions: merged };
+    return {
+      span,
+      updatedOptions,
+    };
   }
-  async function i(l, d, u, m) {
-    let { span: span, updatedOptions: updatedOptions } = o(l, d, m);
+  async function withSpan(name, operationOptions, callback, spanOptions) {
+    let { span, updatedOptions } = startSpan(name, operationOptions, spanOptions);
     try {
-      let T = await s(updatedOptions.tracingOptions.tracingContext, () =>
-        Promise.resolve(u(updatedOptions, span)),
+      let result = await withContext(updatedOptions.tracingOptions.tracingContext, () =>
+        Promise.resolve(callback(updatedOptions, span)),
       );
-      return (span.setStatus({ status: "success" }), T);
-    } catch (error) {
-      throw (span.setStatus({ status: "error", error: error }), error);
+      span.setStatus({
+        status: "success",
+      });
+      return result;
+    } catch (err) {
+      span.setStatus({
+        status: "error",
+        error: err,
+      });
+      throw err;
     } finally {
       span.end();
     }
   }
-  function s(l, d, ...u) {
-    return Qn().withContext(l, d, ...u);
+  function withContext(context, callback, ...callbackArgs) {
+    return Qn().withContext(context, callback, ...callbackArgs);
   }
-  function a(l) {
-    return Qn().parseTraceparentHeader(l);
+  function parseTraceparentHeader(traceparentHeader) {
+    return Qn().parseTraceparentHeader(traceparentHeader);
   }
-  function c(l) {
-    return Qn().createRequestHeaders(l);
+  function createRequestHeaders(tracingContext) {
+    return Qn().createRequestHeaders(tracingContext);
   }
-  return { startSpan: o, withSpan: i, withContext: s, parseTraceparentHeader: a, createRequestHeaders: c };
+  return {
+    startSpan,
+    withSpan,
+    withContext,
+    parseTraceparentHeader,
+    createRequestHeaders,
+  };
 }
-
-export { Jn };
+export { createTracingClient };

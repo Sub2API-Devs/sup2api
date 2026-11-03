@@ -11,23 +11,25 @@
 import { EventEmitter as EventEmitter_2 } from "events";
 import { InkEvent } from "./event.js";
 
+//@ chunk-24t3dkzb.js:5133-5424 placement = EventEmitter (1)
 /**
  * Ink 内部事件发射器：不限监听数；某个监听者对事件调用 stopImmediatePropagation 后后续监听者不再执行。
  */
-//@ chunk-24t3dkzb.js:5133-5424 placement = EventEmitter (1)
 class EventEmitter extends EventEmitter_2 {
   constructor() {
     super();
     this.setMaxListeners(0);
   }
-  emit(r, ...n) {
-    if (r === "error") return super.emit(r, ...n);
-    let rawListeners = this.rawListeners(r);
-    if (rawListeners.length === 0) return !1;
-    let u = n[0] instanceof InkEvent ? n[0] : null;
-    for (let s of rawListeners) if ((s.apply(this, n), u?.didStopImmediatePropagation())) break;
-    return !0;
+  emit(type, ...args) {
+    if (type === "error") return super.emit(type, ...args);
+    let listeners = this.rawListeners(type);
+    if (listeners.length === 0) return false;
+    let ccEvent = args[0] instanceof InkEvent ? args[0] : null;
+    for (let listener of listeners) {
+      listener.apply(this, args);
+      if (ccEvent?.didStopImmediatePropagation()) break;
+    }
+    return true;
   }
 }
-
 export { EventEmitter };

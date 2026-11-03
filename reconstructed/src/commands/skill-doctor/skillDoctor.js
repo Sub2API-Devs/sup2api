@@ -13,14 +13,17 @@ import { formatTokenEstimate, formatTokens } from "../../utils/format.js";
 import { plural } from "../../utils/stringUtils.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { computeDisusedPlugins } from "../../services/tips/pluginDisuseTip.js";
-import { han, k1s } from "../../services/usageInsights/transcriptScan.js";
+import {
+  isSkillDoctorScanAllowed,
+  aggregateRecentUsage,
+} from "../../services/usageInsights/transcriptScan.js";
 import { mergedSkillListing, skillListingTokenCounts } from "../../tools/SkillTool/prompt.js";
 import { getRuntimeMainLoopModel } from "../../utils/model/planModeModel.js";
 import { dropShadowedFallbackSkills, getBareCommandName } from "../../commands.js";
 import { isFallbackSkill, bareSkillName } from "../../utils/commandPredicates.js";
 import { recordSkillUsage } from "../../utils/suggestions/skillUsageTracking.js";
 import { printablePluginName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
-import { i3 } from "../../utils/permissions/permissionRulePayload.js";
+import { isSyncedMarketplacePlugin } from "../../utils/permissions/permissionRulePayload.js";
 import { CLAUDE_AI_SYNC_LABEL } from "../../utils/settings/commandSyncNames.js";
 import { uniq } from "../../utils/collections.js";
 import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
@@ -59,50 +62,57 @@ function formatSkillUsageTable(n) {
 //@ chunk-7s2ajdvd.js:1322-1450 placement
 class SkillDoctorStageError extends Error {
   featureErrorCode;
-  constructor(n, s) {
-    super("skill-doctor stage failed", { cause: s });
-    this.featureErrorCode = n;
+  constructor(featureErrorCode, cause) {
+    super("skill-doctor stage failed", {
+      cause,
+    });
+    this.featureErrorCode = featureErrorCode;
   }
 }
 //@ chunk-7s2ajdvd.js:1450-1668 placement
-function buildSkillDoctorContext(n) {
+function buildSkillDoctorContext(context) {
   return {
-    commands: n.options.commands,
-    mcpCommands: n.getMcp().commands,
-    mcpClients: n.getMcp().clients,
-    agentId: n.agentId,
-    mainLoopModel: n.options.mainLoopModel,
-    permissionMode: getToolPermissionContext(n).mode,
-    storageV5: n.storageV5,
+    commands: context.options.commands,
+    mcpCommands: context.getMcp().commands,
+    mcpClients: context.getMcp().clients,
+    agentId: context.agentId,
+    mainLoopModel: context.options.mainLoopModel,
+    permissionMode: getToolPermissionContext(context).mode,
+    storageV5: context.storageV5,
   };
 }
+//@ chunk-7s2ajdvd.js:1668-4052 placement
 /**
  * /skill-doctor：扫描已装技能的上下文占用、近一周使用量与最后使用时间，生成整理建议。
  */
-//@ chunk-7s2ajdvd.js:1668-4052 placement
 async function runSkillDoctor(n) {
-  let s = computeDisusedPlugins();
-  s.catch(() => {});
-  let o = han(),
-    c = o.allowed
-      ? k1s(n.storageV5).catch((e) => {
-          throw new SkillDoctorStageError("scan_failed", e);
-        })
-      : Promise.resolve(new Map());
+  let disusedPlugins = computeDisusedPlugins();
+  disusedPlugins.catch(() => {});
+  let o = isSkillDoctorScanAllowed();
+  let c = o.allowed
+    ? aggregateRecentUsage(n.storageV5).catch((error) => {
+        throw new SkillDoctorStageError("scan_failed", error);
+      })
+    : Promise.resolve(new Map());
   c.catch(() => {});
-  let { included: included } = await mergedSkillListing(n.mcpCommands, n.agentId, n.storageV5).catch((e) => {
-      throw new SkillDoctorStageError("skill_set_failed", e);
-    }),
-    S = getRuntimeMainLoopModel({ permissionMode: n.permissionMode, mainLoopModel: n.mainLoopModel }),
-    y = skillListingTokenCounts(included, S, n.mainLoopModel),
-    p = await c,
-    r = [],
-    l = dropShadowedFallbackSkills([...n.commands]),
-    w = new Set(l.map((e) => e.name)),
-    M = new Set(
-      n.commands.filter((command) => isFallbackSkill(command) && !w.has(command.name)).map((e) => e.name),
-    ),
-    m = new Map();
+  let { included } = await mergedSkillListing(n.mcpCommands, n.agentId, n.storageV5).catch((error) => {
+    throw new SkillDoctorStageError("skill_set_failed", error);
+  });
+  let runtimeMainLoopModel = getRuntimeMainLoopModel({
+    permissionMode: n.permissionMode,
+    mainLoopModel: n.mainLoopModel,
+  });
+  let y = skillListingTokenCounts(included, runtimeMainLoopModel, n.mainLoopModel);
+  let p = await c;
+  let r = [];
+  let l = dropShadowedFallbackSkills([...n.commands]);
+  let w = new Set(l.map((e) => e.name));
+  let M = new Set(
+    n.commands
+      .filter((command) => isFallbackSkill(command) && !w.has(command.name))
+      .map((command) => command.name),
+  );
+  let m = new Map();
   for (let e of l) {
     let t = e.type === "prompt" && e.loadedFrom !== "syncedSkills" ? e.name.lastIndexOf(":") : -1;
     if (t > 0) {
@@ -114,14 +124,14 @@ async function runSkillDoctor(n) {
     if (e.type !== "prompt") continue;
     if (e.source === "bundled" || e.source === "builtin" || e.source === "policySettings") continue;
     if (e.source === "mcp" && e.loadedFrom !== "mcp") continue;
-    let index = e.name.lastIndexOf(":"),
-      i = index > 0 ? e.name.slice(index + 1) : void 0,
-      u = i !== void 0 && e.loadedFrom !== "syncedSkills" && M.has(i) && m.get(i) === 1 ? i : void 0,
-      f = recordSkillUsage(e.name, u ?? bareSkillName(e));
+    let index = e.name.lastIndexOf(":");
+    let i = index > 0 ? e.name.slice(index + 1) : undefined;
+    let u = i !== undefined && e.loadedFrom !== "syncedSkills" && M.has(i) && m.get(i) === 1 ? i : undefined;
+    let f = recordSkillUsage(e.name, u ?? bareSkillName(e));
     r.push({
       name: e.pluginInfo ? printablePluginName(e.name) : e.name,
       source: e.pluginInfo
-        ? i3(e.pluginInfo.repository)
+        ? isSyncedMarketplacePlugin(e.pluginInfo.repository)
           ? CLAUDE_AI_SYNC_LABEL
           : printablePluginName(e.pluginInfo.pluginManifest.name)
         : e.loadedFrom === "syncedSkills"
@@ -139,49 +149,48 @@ async function runSkillDoctor(n) {
       usageCount: f?.usageCount ?? 0,
       daysSinceUse: f?.daysSinceUse ?? null,
       listingTokens: y.get(e.name) ?? null,
-      weekTokens: p.get(getBareCommandName(e)) ?? (u ? p.get(u) : void 0) ?? null,
+      weekTokens: p.get(getBareCommandName(e)) ?? (u ? p.get(u) : undefined) ?? null,
     });
   }
   r.sort((e, t) => (t.daysSinceUse ?? 1 / 0) - (e.daysSinceUse ?? 1 / 0));
-  let filtered = r.filter((e) => e.usageCount === 0 && e.listingTokens !== null),
-    filtered_2 = filtered.filter((e) => e.owner === "settings"),
-    filtered_3 = filtered.filter((e) => e.owner === "synced"),
-    x = new Set(r.filter((e) => e.usageCount > 0 && e.pluginKey !== void 0).map((e) => e.pluginKey)),
-    filtered_4 = filtered.filter(
-      (e) => e.owner === "plugin" && (e.pluginKey === void 0 || !x.has(e.pluginKey)),
+  let filtered = r.filter((e) => e.usageCount === 0 && e.listingTokens !== null);
+  let unusedOwned = filtered.filter((e) => e.owner === "settings");
+  let unusedSynced = filtered.filter((e) => e.owner === "synced");
+  let x = new Set(r.filter((e) => e.usageCount > 0 && e.pluginKey !== undefined).map((e) => e.pluginKey));
+  let unusedFromPlugins = filtered.filter(
+    (e) => e.owner === "plugin" && (e.pluginKey === undefined || !x.has(e.pluginKey)),
+  );
+  let d = (e) => {
+    let index = e.name.indexOf(":");
+    return index > 0 ? e.name.slice(0, index) : undefined;
+  };
+  let I = new Set(
+    r
+      .filter((e) => e.owner === "mcp" && e.usageCount > 0)
+      .map(d)
+      .filter((e) => e !== undefined),
+  );
+  let filtered_2 = filtered.filter((e) => {
+    if (e.owner !== "mcp") return false;
+    let t = d(e);
+    return t === undefined || !I.has(t);
+  });
+  let unusedMcpServers = uniq(filtered_2.map(d).filter((e) => e !== undefined)).map((e) =>
+    printablePluginName(
+      n.mcpClients.find((mcpClient) => normalizeNameForMCP(mcpClient.name) === e)?.name ?? e,
     ),
-    d = (e) => {
-      let index = e.name.indexOf(":");
-      return index > 0 ? e.name.slice(0, index) : void 0;
-    },
-    I = new Set(
-      r
-        .filter((e) => e.owner === "mcp" && e.usageCount > 0)
-        .map(d)
-        .filter((e) => e !== void 0),
-    ),
-    filtered_5 = filtered.filter((e) => {
-      if (e.owner !== "mcp") return !1;
-      let t = d(e);
-      return t === void 0 || !I.has(t);
-    }),
-    mapped = uniq(filtered_5.map(d).filter((e) => e !== void 0)).map((e) =>
-      printablePluginName(
-        n.mcpClients.find((mcpClient) => normalizeNameForMCP(mcpClient.name) === e)?.name ?? e,
-      ),
-    );
+  );
   return {
     rows: r,
-    unusedOwned: filtered_2,
-    unusedFromPlugins: filtered_4,
-    unusedFromMcp: filtered_5,
-    unusedSynced: filtered_3,
-    unusedMcpServers: mapped,
-    disusedPlugins: await s,
+    unusedOwned,
+    unusedFromPlugins,
+    unusedFromMcp: filtered_2,
+    unusedSynced,
+    unusedMcpServers,
+    disusedPlugins: await disusedPlugins,
     weekTokensNote: o.allowed ? null : o.reason,
   };
 }
-
 export {
   buildSkillDoctorContext,
   formatSkillUsageTable,

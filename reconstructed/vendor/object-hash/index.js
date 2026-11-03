@@ -8,293 +8,340 @@
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:30880-37631 cjs-fingerprint
-var AS = x(function (Ka, PS) {
+var require_object_hash = x(function (cjsExports, cjsModule) {
   var vy = importMetaRequire("crypto");
-  Ka = PS.exports = Au;
-  function Au(e, t) {
-    return ((t = kS(e, t)), ZF(e, t));
+  cjsExports = cjsModule.exports = objectHash;
+  function objectHash(object, options) {
+    options = applyDefaults(object, options);
+    return hash(object, options);
   }
-  Ka.sha1 = function (e) {
-    return Au(e);
+  cjsExports.sha1 = function (object) {
+    return objectHash(object);
   };
-  Ka.keys = function (e) {
-    return Au(e, { excludeValues: !0, algorithm: "sha1", encoding: "hex" });
+  cjsExports.keys = function (object) {
+    return objectHash(object, {
+      excludeValues: true,
+      algorithm: "sha1",
+      encoding: "hex",
+    });
   };
-  Ka.MD5 = function (e) {
-    return Au(e, { algorithm: "md5", encoding: "hex" });
+  cjsExports.MD5 = function (object) {
+    return objectHash(object, {
+      algorithm: "md5",
+      encoding: "hex",
+    });
   };
-  Ka.keysMD5 = function (e) {
-    return Au(e, { algorithm: "md5", encoding: "hex", excludeValues: !0 });
+  cjsExports.keysMD5 = function (object) {
+    return objectHash(object, {
+      algorithm: "md5",
+      encoding: "hex",
+      excludeValues: true,
+    });
   };
-  var kl = vy.getHashes ? vy.getHashes().slice() : ["sha1", "md5"];
-  kl.push("passthrough");
-  var vS = ["buffer", "hex", "binary", "base64"];
-  function kS(e, t) {
-    t = t || {};
-    var n = {};
-    if (
-      ((n.algorithm = t.algorithm || "sha1"),
-      (n.encoding = t.encoding || "hex"),
-      (n.excludeValues = t.excludeValues ? !0 : !1),
-      (n.algorithm = n.algorithm.toLowerCase()),
-      (n.encoding = n.encoding.toLowerCase()),
-      (n.ignoreUnknown = t.ignoreUnknown !== !0 ? !1 : !0),
-      (n.respectType = t.respectType === !1 ? !1 : !0),
-      (n.respectFunctionNames = t.respectFunctionNames === !1 ? !1 : !0),
-      (n.respectFunctionProperties = t.respectFunctionProperties === !1 ? !1 : !0),
-      (n.unorderedArrays = t.unorderedArrays !== !0 ? !1 : !0),
-      (n.unorderedSets = t.unorderedSets === !1 ? !1 : !0),
-      (n.unorderedObjects = t.unorderedObjects === !1 ? !1 : !0),
-      (n.replacer = t.replacer || void 0),
-      (n.excludeKeys = t.excludeKeys || void 0),
-      typeof e > "u")
-    )
-      throw Error("Object argument required.");
-    for (var o = 0; o < kl.length; ++o)
-      if (kl[o].toLowerCase() === n.algorithm.toLowerCase()) n.algorithm = kl[o];
-    if (kl.indexOf(n.algorithm) === -1)
-      throw Error('Algorithm "' + n.algorithm + '"  not supported. supported values: ' + kl.join(", "));
-    if (vS.indexOf(n.encoding) === -1 && n.algorithm !== "passthrough")
-      throw Error('Encoding "' + n.encoding + '"  not supported. supported values: ' + vS.join(", "));
-    return n;
+  var hashes = vy.getHashes ? vy.getHashes().slice() : ["sha1", "md5"];
+  hashes.push("passthrough");
+  var encodings = ["buffer", "hex", "binary", "base64"];
+  function applyDefaults(object, sourceOptions) {
+    sourceOptions = sourceOptions || {};
+    var options = {};
+    options.algorithm = sourceOptions.algorithm || "sha1";
+    options.encoding = sourceOptions.encoding || "hex";
+    options.excludeValues = sourceOptions.excludeValues ? true : false;
+    options.algorithm = options.algorithm.toLowerCase();
+    options.encoding = options.encoding.toLowerCase();
+    options.ignoreUnknown = sourceOptions.ignoreUnknown !== true ? false : true;
+    options.respectType = sourceOptions.respectType === false ? false : true;
+    options.respectFunctionNames = sourceOptions.respectFunctionNames === false ? false : true;
+    options.respectFunctionProperties = sourceOptions.respectFunctionProperties === false ? false : true;
+    options.unorderedArrays = sourceOptions.unorderedArrays !== true ? false : true;
+    options.unorderedSets = sourceOptions.unorderedSets === false ? false : true;
+    options.unorderedObjects = sourceOptions.unorderedObjects === false ? false : true;
+    options.replacer = sourceOptions.replacer || undefined;
+    options.excludeKeys = sourceOptions.excludeKeys || undefined;
+    if (typeof object === "undefined") throw Error("Object argument required.");
+    for (var i = 0; i < hashes.length; ++i)
+      if (hashes[i].toLowerCase() === options.algorithm.toLowerCase()) options.algorithm = hashes[i];
+    if (hashes.indexOf(options.algorithm) === -1)
+      throw Error(
+        'Algorithm "' + options.algorithm + '"  not supported. supported values: ' + hashes.join(", "),
+      );
+    if (encodings.indexOf(options.encoding) === -1 && options.algorithm !== "passthrough")
+      throw Error(
+        'Encoding "' + options.encoding + '"  not supported. supported values: ' + encodings.join(", "),
+      );
+    return options;
   }
-  function OS(e) {
-    if (typeof e !== "function") return !1;
-    var t = /^function\s+\w*\s*\(\s*\)\s*{\s+\[native code\]\s+}$/i;
-    return t.exec(Function.prototype.toString.call(e)) != null;
+  function isNativeFunction(f) {
+    if (typeof f !== "function") return false;
+    var exp = /^function\s+\w*\s*\(\s*\)\s*{\s+\[native code\]\s+}$/i;
+    return exp.exec(Function.prototype.toString.call(f)) != null;
   }
-  function ZF(e, t) {
-    var n;
-    if (t.algorithm !== "passthrough") n = vy.createHash(t.algorithm);
-    else n = new ES();
-    if (typeof n.write > "u") ((n.write = n.update), (n.end = n.update));
-    var o = wy(t, n);
-    if ((o.dispatch(e), !n.update)) n.end("");
-    if (n.digest) return n.digest(t.encoding === "buffer" ? void 0 : t.encoding);
-    var read = n.read();
-    if (t.encoding === "buffer") return read;
-    return read.toString(t.encoding);
+  function hash(object, options) {
+    var hashingStream;
+    if (options.algorithm !== "passthrough") hashingStream = vy.createHash(options.algorithm);
+    else hashingStream = new PassThrough();
+    if (typeof hashingStream.write === "undefined") {
+      hashingStream.write = hashingStream.update;
+      hashingStream.end = hashingStream.update;
+    }
+    var hasher = typeHasher(options, hashingStream);
+    hasher.dispatch(object);
+    if (!hashingStream.update) hashingStream.end("");
+    if (hashingStream.digest)
+      return hashingStream.digest(options.encoding === "buffer" ? undefined : options.encoding);
+    var buf = hashingStream.read();
+    if (options.encoding === "buffer") return buf;
+    return buf.toString(options.encoding);
   }
-  Ka.writeToStream = function (e, t, n) {
-    if (typeof n > "u") ((n = t), (t = {}));
-    return ((t = kS(e, t)), wy(t, n).dispatch(e));
+  cjsExports.writeToStream = function (object, options, stream) {
+    if (typeof stream === "undefined") {
+      stream = options;
+      options = {};
+    }
+    options = applyDefaults(object, options);
+    return typeHasher(options, stream).dispatch(object);
   };
-  function wy(e, t, n) {
-    n = n || [];
-    var o = function (r) {
-      if (t.update) return t.update(r, "utf8");
-      else return t.write(r, "utf8");
+  function typeHasher(options, writeTo, context) {
+    context = context || [];
+    var write = function (str) {
+      if (writeTo.update) return writeTo.update(str, "utf8");
+      else return writeTo.write(str, "utf8");
     };
     return {
-      dispatch: function (r) {
-        if (e.replacer) r = e.replacer(r);
-        var s = typeof r;
-        if (r === null) s = "null";
-        return this["_" + s](r);
+      dispatch: function (value) {
+        if (options.replacer) value = options.replacer(value);
+        var type = typeof value;
+        if (value === null) type = "null";
+        return this["_" + type](value);
       },
-      _object: function (r) {
-        var s = /\[object (.*)\]/i,
-          a = Object.prototype.toString.call(r),
-          match = s.exec(a);
-        if (!match) match = "unknown:[" + a + "]";
-        else match = match[1];
-        match = match.toLowerCase();
-        var c = null;
-        if ((c = n.indexOf(r)) >= 0) return this.dispatch("[CIRCULAR:" + c + "]");
-        else n.push(r);
-        if (typeof Buffer < "u" && Buffer.isBuffer && Buffer.isBuffer(r)) return (o("buffer:"), o(r));
-        if (match !== "object" && match !== "function" && match !== "asyncfunction")
-          if (this["_" + match]) this["_" + match](r);
-          else if (e.ignoreUnknown) return o("[" + match + "]");
-          else throw Error('Unknown object type "' + match + '"');
-        else {
-          var keys = Object.keys(r);
-          if (e.unorderedObjects) keys = keys.sort();
-          if (e.respectType !== !1 && !OS(r)) keys.splice(0, 0, "prototype", "__proto__", "constructor");
-          if (e.excludeKeys)
-            keys = keys.filter(function (h) {
-              return !e.excludeKeys(h);
+      _object: function (object) {
+        var pattern = /\[object (.*)\]/i;
+        var objString = Object.prototype.toString.call(object);
+        var objType = pattern.exec(objString);
+        if (!objType) objType = "unknown:[" + objString + "]";
+        else objType = objType[1];
+        objType = objType.toLowerCase();
+        var objectNumber = null;
+        if ((objectNumber = context.indexOf(object)) >= 0)
+          return this.dispatch("[CIRCULAR:" + objectNumber + "]");
+        else context.push(object);
+        if (typeof Buffer !== "undefined" && Buffer.isBuffer && Buffer.isBuffer(object)) {
+          write("buffer:");
+          return write(object);
+        }
+        if (objType !== "object" && objType !== "function" && objType !== "asyncfunction") {
+          if (this["_" + objType]) this["_" + objType](object);
+          else if (options.ignoreUnknown) return write("[" + objType + "]");
+          else throw Error('Unknown object type "' + objType + '"');
+        } else {
+          var keys = Object.keys(object);
+          if (options.unorderedObjects) keys = keys.sort();
+          if (options.respectType !== false && !isNativeFunction(object))
+            keys.splice(0, 0, "prototype", "__proto__", "constructor");
+          if (options.excludeKeys)
+            keys = keys.filter(function (key) {
+              return !options.excludeKeys(key);
             });
-          o("object:" + keys.length + ":");
+          write("object:" + keys.length + ":");
           var f = this;
-          return keys.forEach(function (h) {
-            if ((f.dispatch(h), o(":"), !e.excludeValues)) f.dispatch(r[h]);
-            o(",");
+          return keys.forEach(function (key) {
+            f.dispatch(key);
+            write(":");
+            if (!options.excludeValues) f.dispatch(object[key]);
+            write(",");
           });
         }
       },
-      _array: function (r, s) {
-        s = typeof s < "u" ? s : e.unorderedArrays !== !1;
+      _array: function (arr, unordered) {
+        unordered = typeof unordered !== "undefined" ? unordered : options.unorderedArrays !== false;
         var a = this;
-        if ((o("array:" + r.length + ":"), !s || r.length <= 1))
-          return r.forEach(function (u) {
-            return a.dispatch(u);
+        write("array:" + arr.length + ":");
+        if (!unordered || arr.length <= 1)
+          return arr.forEach(function (entry) {
+            return a.dispatch(entry);
           });
-        var l = [],
-          mapped = r.map(function (u) {
-            var f = new ES(),
-              sliced = n.slice(),
-              m = wy(e, f, sliced);
-            return (m.dispatch(u), (l = l.concat(sliced.slice(n.length))), f.read().toString());
-          });
-        return ((n = n.concat(l)), mapped.sort(), this._array(mapped, !1));
+        var contextAdditions = [];
+        var entries = arr.map(function (entry) {
+          var strm = new PassThrough();
+          var localContext = context.slice();
+          var hasher = typeHasher(options, strm, localContext);
+          hasher.dispatch(entry);
+          contextAdditions = contextAdditions.concat(localContext.slice(context.length));
+          return strm.read().toString();
+        });
+        context = context.concat(contextAdditions);
+        entries.sort();
+        return this._array(entries, false);
       },
-      _date: function (r) {
-        return o("date:" + r.toJSON());
+      _date: function (date) {
+        return write("date:" + date.toJSON());
       },
-      _symbol: function (r) {
-        return o("symbol:" + r.toString());
+      _symbol: function (sym) {
+        return write("symbol:" + sym.toString());
       },
-      _error: function (r) {
-        return o("error:" + r.toString());
+      _error: function (err) {
+        return write("error:" + err.toString());
       },
-      _boolean: function (r) {
-        return o("bool:" + r.toString());
+      _boolean: function (bool) {
+        return write("bool:" + bool.toString());
       },
-      _string: function (r) {
-        (o("string:" + r.length + ":"), o(r.toString()));
+      _string: function (string) {
+        write("string:" + string.length + ":");
+        write(string.toString());
       },
-      _function: function (r) {
-        if ((o("fn:"), OS(r))) this.dispatch("[native]");
-        else this.dispatch(r.toString());
-        if (e.respectFunctionNames !== !1) this.dispatch("function-name:" + String(r.name));
-        if (e.respectFunctionProperties) this._object(r);
+      _function: function (fn) {
+        write("fn:");
+        if (isNativeFunction(fn)) this.dispatch("[native]");
+        else this.dispatch(fn.toString());
+        if (options.respectFunctionNames !== false) this.dispatch("function-name:" + String(fn.name));
+        if (options.respectFunctionProperties) this._object(fn);
       },
-      _number: function (r) {
-        return o("number:" + r.toString());
+      _number: function (number) {
+        return write("number:" + number.toString());
       },
-      _xml: function (r) {
-        return o("xml:" + r.toString());
+      _xml: function (xml) {
+        return write("xml:" + xml.toString());
       },
       _null: function () {
-        return o("Null");
+        return write("Null");
       },
       _undefined: function () {
-        return o("Undefined");
+        return write("Undefined");
       },
-      _regexp: function (r) {
-        return o("regex:" + r.toString());
+      _regexp: function (regex) {
+        return write("regex:" + regex.toString());
       },
-      _uint8array: function (r) {
-        return (o("uint8array:"), this.dispatch(Array.prototype.slice.call(r)));
+      _uint8array: function (arr) {
+        write("uint8array:");
+        return this.dispatch(Array.prototype.slice.call(arr));
       },
-      _uint8clampedarray: function (r) {
-        return (o("uint8clampedarray:"), this.dispatch(Array.prototype.slice.call(r)));
+      _uint8clampedarray: function (arr) {
+        write("uint8clampedarray:");
+        return this.dispatch(Array.prototype.slice.call(arr));
       },
-      _int8array: function (r) {
-        return (o("uint8array:"), this.dispatch(Array.prototype.slice.call(r)));
+      _int8array: function (arr) {
+        write("uint8array:");
+        return this.dispatch(Array.prototype.slice.call(arr));
       },
-      _uint16array: function (r) {
-        return (o("uint16array:"), this.dispatch(Array.prototype.slice.call(r)));
+      _uint16array: function (arr) {
+        write("uint16array:");
+        return this.dispatch(Array.prototype.slice.call(arr));
       },
-      _int16array: function (r) {
-        return (o("uint16array:"), this.dispatch(Array.prototype.slice.call(r)));
+      _int16array: function (arr) {
+        write("uint16array:");
+        return this.dispatch(Array.prototype.slice.call(arr));
       },
-      _uint32array: function (r) {
-        return (o("uint32array:"), this.dispatch(Array.prototype.slice.call(r)));
+      _uint32array: function (arr) {
+        write("uint32array:");
+        return this.dispatch(Array.prototype.slice.call(arr));
       },
-      _int32array: function (r) {
-        return (o("uint32array:"), this.dispatch(Array.prototype.slice.call(r)));
+      _int32array: function (arr) {
+        write("uint32array:");
+        return this.dispatch(Array.prototype.slice.call(arr));
       },
-      _float32array: function (r) {
-        return (o("float32array:"), this.dispatch(Array.prototype.slice.call(r)));
+      _float32array: function (arr) {
+        write("float32array:");
+        return this.dispatch(Array.prototype.slice.call(arr));
       },
-      _float64array: function (r) {
-        return (o("float64array:"), this.dispatch(Array.prototype.slice.call(r)));
+      _float64array: function (arr) {
+        write("float64array:");
+        return this.dispatch(Array.prototype.slice.call(arr));
       },
-      _arraybuffer: function (r) {
-        return (o("arraybuffer:"), this.dispatch(new Uint8Array(r)));
+      _arraybuffer: function (arr) {
+        write("arraybuffer:");
+        return this.dispatch(new Uint8Array(arr));
       },
-      _url: function (r) {
-        return o("url:" + r.toString(), "utf8");
+      _url: function (url) {
+        return write("url:" + url.toString(), "utf8");
       },
-      _map: function (r) {
-        o("map:");
-        var list = Array.from(r);
-        return this._array(list, e.unorderedSets !== !1);
+      _map: function (map) {
+        write("map:");
+        var arr = Array.from(map);
+        return this._array(arr, options.unorderedSets !== false);
       },
-      _set: function (r) {
-        o("set:");
-        var list = Array.from(r);
-        return this._array(list, e.unorderedSets !== !1);
+      _set: function (set) {
+        write("set:");
+        var arr = Array.from(set);
+        return this._array(arr, options.unorderedSets !== false);
       },
-      _file: function (r) {
-        return (o("file:"), this.dispatch([r.name, r.size, r.type, r.lastModfied]));
+      _file: function (file) {
+        write("file:");
+        return this.dispatch([file.name, file.size, file.type, file.lastModfied]);
       },
       _blob: function () {
-        if (e.ignoreUnknown) return o("[blob]");
+        if (options.ignoreUnknown) return write("[blob]");
         throw Error(`Hashing Blob objects is currently not supported
 (see https://github.com/puleos/object-hash/issues/26)
 Use "options.replacer" or "options.ignoreUnknown"
 `);
       },
       _domwindow: function () {
-        return o("domwindow");
+        return write("domwindow");
       },
-      _bigint: function (r) {
-        return o("bigint:" + r.toString());
+      _bigint: function (number) {
+        return write("bigint:" + number.toString());
       },
       _process: function () {
-        return o("process");
+        return write("process");
       },
       _timer: function () {
-        return o("timer");
+        return write("timer");
       },
       _pipe: function () {
-        return o("pipe");
+        return write("pipe");
       },
       _tcp: function () {
-        return o("tcp");
+        return write("tcp");
       },
       _udp: function () {
-        return o("udp");
+        return write("udp");
       },
       _tty: function () {
-        return o("tty");
+        return write("tty");
       },
       _statwatcher: function () {
-        return o("statwatcher");
+        return write("statwatcher");
       },
       _securecontext: function () {
-        return o("securecontext");
+        return write("securecontext");
       },
       _connection: function () {
-        return o("connection");
+        return write("connection");
       },
       _zlib: function () {
-        return o("zlib");
+        return write("zlib");
       },
       _context: function () {
-        return o("context");
+        return write("context");
       },
       _nodescript: function () {
-        return o("nodescript");
+        return write("nodescript");
       },
       _httpparser: function () {
-        return o("httpparser");
+        return write("httpparser");
       },
       _dataview: function () {
-        return o("dataview");
+        return write("dataview");
       },
       _signal: function () {
-        return o("signal");
+        return write("signal");
       },
       _fsevent: function () {
-        return o("fsevent");
+        return write("fsevent");
       },
       _tlswrap: function () {
-        return o("tlswrap");
+        return write("tlswrap");
       },
     };
   }
-  function ES() {
+  function PassThrough() {
     return {
       buf: "",
-      write: function (e) {
-        this.buf += e;
+      write: function (b) {
+        this.buf += b;
       },
-      end: function (e) {
-        this.buf += e;
+      end: function (b) {
+        this.buf += b;
       },
       read: function () {
         return this.buf;
@@ -302,5 +349,4 @@ Use "options.replacer" or "options.ignoreUnknown"
     };
   }
 });
-
-export { AS };
+export { require_object_hash };

@@ -6,60 +6,77 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { we } from "./utils.js";
+import { require_utils_2 } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:55012-55959 cjs-fingerprint
-var Bt = x(function ($s) {
-  var zn = we();
-  function Hn(t, e) {
-    let r = t.a / 255,
-      n = e + '="' + t.hex + '"';
-    return r < 1 ? n + " " + e + '-opacity="' + r.toFixed(2).slice(1) + '"' : n;
+var require_svg_tag = x(function (cjsExports) {
+  var Utils = require_utils_2();
+  function getColorAttrib(color, attrib) {
+    let alpha = color.a / 255;
+    let str = attrib + '="' + color.hex + '"';
+    return alpha < 1 ? str + " " + attrib + '-opacity="' + alpha.toFixed(2).slice(1) + '"' : str;
   }
-  function xt(t, e, r) {
-    let n = t + e;
-    if (typeof r < "u") n += " " + r;
-    return n;
+  function svgCmd(cmd, x, y) {
+    let str = cmd + x;
+    if (typeof y !== "undefined") str += " " + y;
+    return str;
   }
-  function Zs(t, e, r) {
-    let n = "",
-      i = 0,
-      o = !1,
-      s = 0;
-    for (let l = 0; l < t.length; l++) {
-      let floored = Math.floor(l % e),
-        floored_2 = Math.floor(l / e);
-      if (!floored && !o) o = !0;
-      if (t[l]) {
-        if ((s++, !(l > 0 && floored > 0 && t[l - 1])))
-          ((n += o ? xt("M", floored + r, 0.5 + floored_2 + r) : xt("m", i, 0)), (i = 0), (o = !1));
-        if (!(floored + 1 < e && t[l + 1])) ((n += xt("h", s)), (s = 0));
-      } else i++;
+  function qrToPath(data, size, margin) {
+    let path = "";
+    let moveBy = 0;
+    let newRow = false;
+    let lineLength = 0;
+    for (let i = 0; i < data.length; i++) {
+      let col = Math.floor(i % size);
+      let row = Math.floor(i / size);
+      if (!col && !newRow) newRow = true;
+      if (data[i]) {
+        lineLength++;
+        if (!(i > 0 && col > 0 && data[i - 1])) {
+          path += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+          moveBy = 0;
+          newRow = false;
+        }
+        if (!(col + 1 < size && data[i + 1])) {
+          path += svgCmd("h", lineLength);
+          lineLength = 0;
+        }
+      } else moveBy++;
     }
-    return n;
+    return path;
   }
-  $s.render = function (e, r, n) {
-    let options = zn.getOptions(r),
-      size = e.modules.size,
-      s = e.modules.data,
-      l = size + options.margin * 2,
-      u = !options.color.light.a
-        ? ""
-        : "<path " + Hn(options.color.light, "fill") + ' d="M0 0h' + l + "v" + l + 'H0z"/>',
-      f = "<path " + Hn(options.color.dark, "stroke") + ' d="' + Zs(s, size, options.margin) + '"/>',
-      a = 'viewBox="0 0 ' + l + " " + l + '"',
-      c =
-        '<svg xmlns="http://www.w3.org/2000/svg" ' +
-        (!options.width ? "" : 'width="' + options.width + '" height="' + options.width + '" ') +
-        a +
-        ' shape-rendering="crispEdges">' +
-        u +
-        f +
-        `</svg>
+  cjsExports.render = function (qrData, options, cb) {
+    let opts = Utils.getOptions(options);
+    let size = qrData.modules.size;
+    let data = qrData.modules.data;
+    let qrcodesize = size + opts.margin * 2;
+    let bg = !opts.color.light.a
+      ? ""
+      : "<path " +
+        getColorAttrib(opts.color.light, "fill") +
+        ' d="M0 0h' +
+        qrcodesize +
+        "v" +
+        qrcodesize +
+        'H0z"/>';
+    let path =
+      "<path " +
+      getColorAttrib(opts.color.dark, "stroke") +
+      ' d="' +
+      qrToPath(data, size, opts.margin) +
+      '"/>';
+    let viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
+    let svgTag =
+      '<svg xmlns="http://www.w3.org/2000/svg" ' +
+      (!opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ') +
+      viewBox +
+      ' shape-rendering="crispEdges">' +
+      bg +
+      path +
+      `</svg>
 `;
-    if (typeof n === "function") n(null, c);
-    return c;
+    if (typeof cb === "function") cb(null, svgTag);
+    return svgTag;
   };
 });
-
-export { Bt };
+export { require_svg_tag };

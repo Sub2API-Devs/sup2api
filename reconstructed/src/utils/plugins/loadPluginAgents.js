@@ -8,207 +8,12 @@
  * pieces: chunk-bfnfj4kx.js (1), chunk-e6aww6q8.js (11)
  * attribution: fingerprint 3, placement 7, layout 2
  */
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-  join as join_13,
-  join as join_14,
-  join as join_15,
-  join as join_16,
-  join as join_17,
-  join as join_18,
-  join as join_19,
-  join as join_20,
-  join as join_21,
-  join as join_22,
-  join as join_23,
-  join as join_24,
-  join as join_25,
-  join as join_26,
-  join as join_27,
-  join as join_28,
-  join as join_29,
-  join as join_30,
-  join as join_31,
-  join as join_32,
-  join as join_33,
-  join as join_34,
-  join as join_35,
-  join as join_36,
-  join as join_37,
-  join as join_38,
-  join as join_40,
-  join as join_41,
-  join as join_42,
-  join as join_43,
-  join as join_44,
-  join as join_45,
-  join as join_46,
-  join as join_47,
-  join as join_48,
-  join as join_49,
-  join as join_50,
-  join as join_51,
-  join as join_52,
-  join as join_53,
-  join as join_54,
-  join as join_55,
-  join as join_56,
-  join as join_57,
-  join as join_58,
-  join as join_59,
-  join as join_60,
-  join as join_61,
-  join as join_62,
-  join as join_63,
-  join as join_64,
-  join as join_65,
-  join as join_66,
-  join as join_67,
-  join as join_68,
-  join as join_69,
-  join as join_70,
-  join as join_71,
-  join as join_72,
-  join as join_73,
-  join as join_74,
-  join as join_75,
-  join as join_76,
-  join as join_77,
-  join as join_78,
-  join as join_79,
-  join as join_80,
-  join as join_81,
-  join as join_82,
-  join as join_84,
-  join as join_85,
-  join as join_86,
-  join as join_87,
-  join as join_88,
-  join as join_89,
-  join as join_90,
-  join as join_91,
-  join as join_92,
-  join as join_93,
-  join as join_94,
-  join as join_95,
-  join as join_96,
-  join as join_97,
-  join as join_98,
-  join as join_99,
-  join as join_100,
-  join as join_101,
-  join as join_102,
-  join as join_103,
-  join as join_104,
-  join as join_105,
-  join as join_106,
-  join as join_107,
-  join as join_108,
-  join as join_109,
-  join as join_110,
-  join as join_111,
-  join as join_112,
-  join as join_113,
-  join as join_114,
-  join as join_115,
-  join as join_116,
-  join as join_117,
-  join as join_118,
-  join as join_119,
-  join as join_120,
-  join as join_121,
-  join as join_122,
-  join as join_123,
-  join as join_124,
-  join as join_125,
-  join as join_126,
-  join as join_127,
-  join as join_128,
-  join as join_129,
-  basename,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  basename as basename_7,
-  basename as basename_8,
-  basename as basename_9,
-  basename as basename_10,
-  basename as basename_11,
-  basename as basename_12,
-  basename as basename_13,
-  basename as basename_14,
-  basename as basename_15,
-  basename as basename_16,
-  basename as basename_17,
-  basename as basename_18,
-  basename as basename_19,
-  basename as basename_20,
-  basename as basename_21,
-  basename as basename_22,
-  basename as basename_23,
-  basename as basename_24,
-  basename as basename_25,
-  basename as basename_26,
-  basename as basename_27,
-  basename as basename_28,
-  basename as basename_29,
-  basename as basename_30,
-  basename as basename_31,
-  basename as basename_32,
-  basename as basename_33,
-  basename as basename_34,
-  basename as basename_35,
-  basename as basename_36,
-  basename as basename_37,
-  basename as basename_38,
-  basename as basename_39,
-  basename as basename_40,
-  basename as basename_41,
-  basename as basename_42,
-  basename as basename_43,
-  basename as basename_45,
-  basename as basename_46,
-  basename as basename_47,
-  basename as basename_48,
-  basename as basename_49,
-  basename as basename_50,
-  basename as basename_51,
-  basename as basename_52,
-  basename as basename_53,
-  basename as basename_54,
-  basename as basename_55,
-  basename as basename_56,
-  basename as basename_57,
-  basename as basename_58,
-  basename as basename_59,
-  basename as basename_60,
-  basename as basename_61,
-  basename as basename_62,
-  basename as basename_63,
-  basename as basename_64,
-  basename as basename_65,
-  basename as basename_66,
-  basename as basename_67,
-  basename as basename_68,
-} from "path";
-import { AWe } from "../frontmatterSchema.js";
-import { BQ } from "../objectUtils.js";
+import { join, basename } from "path";
+import { AgentFrontmatterSchema } from "../frontmatterSchema.js";
+import { normalizeKey } from "../objectUtils.js";
 import { similarNames } from "../settings/managedEnvKeys.js";
-import { zG, formatFailureDetails_2, loadAllPluginsCacheOnly } from "./pluginLoader.js";
-import { Mu } from "../stringUtils.js";
+import { quotedListItem, formatFailureDetails_2, loadAllPluginsCacheOnly } from "./pluginLoader.js";
+import { escapeControlCharsForDisplay } from "../stringUtils.js";
 import { claimOnce } from "../../services/api/verificationRequired.js";
 import { logForDebugging } from "../debug.js";
 import { logError } from "../log.js";
@@ -234,7 +39,7 @@ import {
   loadPluginOptions,
 } from "./pluginOptionsStorage.js";
 import { parseEffortValue, EFFORT_LEVELS } from "../effort.js";
-import { Kx, d0 } from "../config.js";
+import { TRANSPORT_LABELS, GLOBAL_CONFIG_FIELD_KINDS } from "../config.js";
 import { isAutoMemoryEnabled } from "../../memdir/paths.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
@@ -248,270 +53,343 @@ import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTel
 
 //@ chunk-e6aww6q8.js:2316979-2317099 placement
 var RENAMED_AGENT_FRONTMATTER_KEYS = new Map([
-    ["allowedtools", "tools"],
-    ["whentouse", "description"],
-    ["mode", null],
-  ]),
-  WHEN_TO_USE_KEY_SPELLINGS = ["when_to_use", "when-to-use"];
+  ["allowedtools", "tools"],
+  ["whentouse", "description"],
+  ["mode", null],
+]);
+var WHEN_TO_USE_KEY_SPELLINGS = ["when_to_use", "when-to-use"];
 //@ chunk-e6aww6q8.js:2317099-2317779 placement
-function validatePluginAgentFrontmatter({
-  subject: subject,
-  filePath: filePath,
-  frontmatter: frontmatter,
-  unhintedKeys: unhintedKeys = [],
-}) {
+function validatePluginAgentFrontmatter({ subject, filePath, frontmatter, unhintedKeys = [] }) {
   try {
-    let keys = Object.keys(AWe().shape),
-      y = subject === "Plugin agent file" ? [...keys, ...WHEN_TO_USE_KEY_SPELLINGS] : keys,
-      S = new Set(y),
-      filtered = y.filter((Se) => !unhintedKeys.includes(Se)),
-      filtered_2 = Object.keys(frontmatter).filter((Se) => !S.has(Se)),
-      mapped = filtered_2.map((Se) => {
-        let ke = RENAMED_AGENT_FRONTMATTER_KEYS.get(BQ(Se)),
-          we =
-            ke !== void 0
-              ? (ke ?? void 0)
-              : (filtered.find((Ee) => BQ(Ee) === BQ(Se)) ?? similarNames(Se, filtered, 1)[0]);
-        return we !== void 0 && filtered.includes(we) ? `${zG(Se)} (did you mean "${we}"?)` : zG(Se);
-      }),
-      q =
-        filtered_2.length === 0
-          ? ""
-          : `${subject} ${Mu(filePath)} has ${filtered_2.length === 1 ? "a frontmatter key" : "frontmatter keys"} Claude Code does not recognize or apply: ${formatFailureDetails_2(mapped)}`;
+    let keys = Object.keys(AgentFrontmatterSchema().shape);
+    let y = subject === "Plugin agent file" ? [...keys, ...WHEN_TO_USE_KEY_SPELLINGS] : keys;
+    let S = new Set(y);
+    let filtered = y.filter((Se) => !unhintedKeys.includes(Se));
+    let filtered_2 = Object.keys(frontmatter).filter((key) => !S.has(key));
+    let mapped = filtered_2.map((Se) => {
+      let ke = RENAMED_AGENT_FRONTMATTER_KEYS.get(normalizeKey(Se));
+      let we =
+        ke !== undefined
+          ? (ke ?? undefined)
+          : (filtered.find((Ee) => normalizeKey(Ee) === normalizeKey(Se)) ??
+            similarNames(Se, filtered, 1)[0]);
+      return we !== undefined && filtered.includes(we)
+        ? `${quotedListItem(Se)} (did you mean "${we}"?)`
+        : quotedListItem(Se);
+    });
+    let q =
+      filtered_2.length === 0
+        ? ""
+        : `${subject} ${escapeControlCharsForDisplay(filePath)} has ${filtered_2.length === 1 ? "a frontmatter key" : "frontmatter keys"} Claude Code does not recognize or apply: ${formatFailureDetails_2(mapped)}`;
     if (claimOnce().claimIfChanged(`agent-frontmatter-unknown-keys:${subject}:${filePath}`, q) && q !== "")
-      logForDebugging(q, { level: "warn" });
+      logForDebugging(q, {
+        level: "warn",
+      });
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-e6aww6q8.js:2317809-2317970 placement
-var builtinAgentFilesFromBundle = (e, n) =>
-  Object.entries(n)
-    .filter(([r]) => r.startsWith(`${loadAgentsFromDirectory}/`))
-    .map(([r, s]) => ({ filePath: `builtin:${e}/${r}`, namespace: r.split("/").slice(1, -1), text: s }));
+var builtinAgentFilesFromBundle = (e, files) =>
+  Object.entries(files)
+    .filter(([key]) => key.startsWith(`${loadAgentsFromDirectory}/`))
+    .map(([key, value]) => ({
+      filePath: `builtin:${e}/${key}`,
+      namespace: key.split("/").slice(1, -1),
+      text: value,
+    }));
 //@ chunk-e6aww6q8.js:2317970-2318132 placement
-function getBuiltinPluginAgentsSource(e) {
-  let n = getBuiltinPlugin(e)?.hooksModule,
-    r = n !== void 0 && "folder" in n,
-    h = n !== void 0 && "files" in n ? { files: builtinAgentFilesFromBundle(e, n.files) } : void 0;
-  return r ? { folder: join_77(n.folder, loadAgentsFromDirectory) } : h;
+function getBuiltinPluginAgentsSource(name) {
+  let hooksModule = getBuiltinPlugin(name)?.hooksModule;
+  let r = hooksModule !== undefined && "folder" in hooksModule;
+  let h =
+    hooksModule !== undefined && "files" in hooksModule
+      ? {
+          files: builtinAgentFilesFromBundle(name, hooksModule.files),
+        }
+      : undefined;
+  return r
+    ? {
+        folder: join(hooksModule.folder, loadAgentsFromDirectory),
+      }
+    : h;
 }
 //@ chunk-e6aww6q8.js:2318132-2318179 placement = isMcpServerFromProjectOrLocalSettings (1)
-var jan = 1048576,
-  Wan = ["user", "project", "local"];
+var MAX_PLUGIN_AGENT_FILE_BYTES = 1048576;
+var PLUGIN_AGENT_SCOPES = ["user", "project", "local"];
 //@ chunk-e6aww6q8.js:2318179-2318359 placement
-async function loadAgentsFromDir(e, n, r, s, h, y, S, w = !1) {
+async function loadAgentsFromDir(
+  rootDir,
+  pluginName,
+  source,
+  path,
+  manifest,
+  loadedPaths,
+  credentials,
+  isRootOptional = false,
+) {
   let L = [];
-  return (
-    await walkPluginMarkdown(
-      e,
-      async (G, q) => {
-        let Z = await loadAgentFile(G, n, q, r, s, h, S);
-        if (Z) L.push(Z);
-      },
-      { logLabel: "agents", isRootOptional: w, loadedPaths: y },
-    ),
-    L
+  await walkPluginMarkdown(
+    rootDir,
+    async (G, namespace) => {
+      let agentFile = await loadAgentFile(G, pluginName, namespace, source, path, manifest, credentials);
+      if (agentFile) L.push(agentFile);
+    },
+    {
+      logLabel: "agents",
+      isRootOptional,
+      loadedPaths,
+    },
   );
+  return L;
 }
+//@ chunk-e6aww6q8.js:2318359-2318755 placement
 /**
  * 读取单个插件代理 markdown（非普通文件或超过 jan 字节跳过并记 warn），交给 loadAgentFromFile 解析；出错返回 null。
  */
-//@ chunk-e6aww6q8.js:2318359-2318755 placement
-async function loadAgentFile(e, n, r, s, h, y, S) {
-  let w = getFsImplementation();
+async function loadAgentFile(e, pluginName, namespace, sourceName, pluginPath, pluginManifest, credentials) {
+  let fsImplementation = getFsImplementation();
   try {
-    let L = await readSmallFileChecked(w, e, jan);
-    if (L === null)
-      return (
-        logForDebugging(`Skipping plugin agent ${e}: not a regular file or exceeds ${jan} byte limit`, {
+    let smallFileChecked = await readSmallFileChecked(fsImplementation, e, MAX_PLUGIN_AGENT_FILE_BYTES);
+    if (smallFileChecked === null) {
+      logForDebugging(
+        `Skipping plugin agent ${e}: not a regular file or exceeds ${MAX_PLUGIN_AGENT_FILE_BYTES} byte limit`,
+        {
           level: "warn",
-        }),
-        null
+        },
       );
+      return null;
+    }
     return await loadAgentFromFile({
       filePath: e,
-      content: L,
-      pluginName: n,
-      namespace: r,
-      sourceName: s,
-      pluginPath: h,
-      pluginManifest: y,
-      credentials: S,
+      content: smallFileChecked,
+      pluginName,
+      namespace,
+      sourceName,
+      pluginPath,
+      pluginManifest,
+      credentials,
     });
   } catch (error) {
-    return (logForDebugging(`Failed to load agent from ${e}: ${error}`, { level: "error" }), null);
+    logForDebugging(`Failed to load agent from ${e}: ${error}`, {
+      level: "error",
+    });
+    return null;
   }
 }
 //@ chunk-e6aww6q8.js:2318755-2318873 layout
-var PLUGIN_AGENT_FORBIDDEN_FIELDS = ["permissionMode", "hooks", "mcpServers"],
-  PLUGIN_AGENT_IGNORED_FIELDS = ["initialPrompt", "observer", "observerMessage", "observeSubagents"];
+var PLUGIN_AGENT_FORBIDDEN_FIELDS = ["permissionMode", "hooks", "mcpServers"];
+var PLUGIN_AGENT_IGNORED_FIELDS = ["initialPrompt", "observer", "observerMessage", "observeSubagents"];
+//@ chunk-e6aww6q8.js:2318873-2321705 fingerprint = loadAgentFromFile (0.676)
 /**
  * 从插件的 agents/*.md 解析一个代理定义：frontmatter（name、description、tools、model、color…，插件代理禁止 permissionMode/hooks/mcpServers 等字段），名字加 <插件>: 命名空间，正文作为系统提示（替换插件变量与 user_config）。
  */
-//@ chunk-e6aww6q8.js:2318873-2321705 fingerprint = loadAgentFromFile (0.676)
 async function loadAgentFromFile({
-  filePath: filePath,
-  content: content,
-  pluginName: pluginName,
-  namespace: namespace,
-  sourceName: sourceName,
-  pluginPath: pluginPath,
-  pluginManifest: pluginManifest,
-  credentials: credentials,
-  untrusted: untrusted,
-  pluginDataDir: pluginDataDir,
+  filePath,
+  content,
+  pluginName,
+  namespace,
+  sourceName,
+  pluginPath,
+  pluginManifest,
+  credentials,
+  untrusted,
+  pluginDataDir,
 }) {
   let {
-    frontmatter: frontmatter,
-    content: content_2,
-    parseError: parseError,
-  } = parseFrontmatter(content, filePath, { normalizeKeys: !0, untrusted: untrusted });
-  if (untrusted && parseError !== void 0) throw Error("the frontmatter is refused or does not parse");
-  let ke =
-      parseFrontmatterName(frontmatter.name, `plugin agent ${filePath}`) ||
-      basename_43(filePath).replace(/\.md$/, ""),
-    agentType = [pluginName, ...namespace, ke].join(":"),
-    Ae =
-      coerceDescriptionToString(frontmatter.description, agentType) ??
-      coerceDescriptionToString(frontmatter.when_to_use, agentType) ??
-      coerceDescriptionToString(frontmatter["when-to-use"], agentType) ??
-      `Agent from ${pluginName} plugin`,
-    tools = parseAgentToolsFromFrontmatter(frontmatter.tools),
-    skills = parseSlashCommandToolsFromFrontmatter(frontmatter.skills),
-    { color: color, model: model } = frontmatter,
-    lt;
-  if (typeof model === "string" && model.trim().length > 0) {
-    let trimmed = model.trim();
-    lt = trimmed.toLowerCase() === "inherit" ? "inherit" : trimmed;
+    frontmatter,
+    content: markdownContent,
+    parseError,
+  } = parseFrontmatter(content, filePath, {
+    normalizeKeys: true,
+    untrusted,
+  });
+  if (untrusted && parseError !== undefined) throw Error("the frontmatter is refused or does not parse");
+  let baseAgentName =
+    parseFrontmatterName(frontmatter.name, `plugin agent ${filePath}`) ||
+    basename(filePath).replace(/\.md$/, "");
+  let agentType = [pluginName, ...namespace, baseAgentName].join(":");
+  let whenToUse =
+    coerceDescriptionToString(frontmatter.description, agentType) ??
+    coerceDescriptionToString(frontmatter.when_to_use, agentType) ??
+    coerceDescriptionToString(frontmatter["when-to-use"], agentType) ??
+    `Agent from ${pluginName} plugin`;
+  let tools = parseAgentToolsFromFrontmatter(frontmatter.tools);
+  let skills = parseSlashCommandToolsFromFrontmatter(frontmatter.skills);
+  let { color, model: modelRaw } = frontmatter;
+  let model;
+  if (typeof modelRaw === "string" && modelRaw.trim().length > 0) {
+    let trimmed = modelRaw.trim();
+    model = trimmed.toLowerCase() === "inherit" ? "inherit" : trimmed;
   }
-  let backgroundRaw = frontmatter.background,
-    nt = backgroundRaw === "true" || backgroundRaw === !0 ? !0 : void 0,
-    omitClaudeMd = frontmatter.omitClaudeMd,
-    Et = omitClaudeMd === "true" || omitClaudeMd === !0 ? !0 : void 0,
-    systemPrompt = substitutePluginVariables(content_2.trim(), {
-      path: pluginPath,
-      source: sourceName,
-      dataDir: pluginDataDir,
-    });
+  let backgroundRaw = frontmatter.background;
+  let nt = backgroundRaw === "true" || backgroundRaw === true ? true : undefined;
+  let omitClaudeMd = frontmatter.omitClaudeMd;
+  let Et = omitClaudeMd === "true" || omitClaudeMd === true ? true : undefined;
+  let systemPrompt = substitutePluginVariables(markdownContent.trim(), {
+    path: pluginPath,
+    source: sourceName,
+    dataDir: pluginDataDir,
+  });
   if (pluginManifest.userConfig)
     systemPrompt = substituteUserConfigInContent(
       systemPrompt,
       await loadPluginOptions(sourceName, credentials),
       pluginManifest.userConfig,
     );
-  let memoryRaw = frontmatter.memory,
-    At;
-  if (memoryRaw !== void 0)
-    if (Wan.includes(memoryRaw)) At = memoryRaw;
+  let memoryRaw = frontmatter.memory;
+  let memory;
+  if (memoryRaw !== undefined)
+    if (PLUGIN_AGENT_SCOPES.includes(memoryRaw)) memory = memoryRaw;
     else
       logForDebugging(
-        `Plugin agent file ${filePath} has invalid memory value '${memoryRaw}'. Valid options: ${Wan.join(", ")}`,
+        `Plugin agent file ${filePath} has invalid memory value '${memoryRaw}'. Valid options: ${PLUGIN_AGENT_SCOPES.join(", ")}`,
       );
-  let Yt = frontmatter.isolation === "worktree" ? "worktree" : void 0,
-    effortRaw = frontmatter.effort,
-    Zt = effortRaw !== void 0 ? parseEffortValue(effortRaw) : void 0;
-  if (effortRaw !== void 0 && Zt === void 0)
+  let Yt = frontmatter.isolation === "worktree" ? "worktree" : undefined;
+  let effortRaw = frontmatter.effort;
+  let effort = effortRaw !== undefined ? parseEffortValue(effortRaw) : undefined;
+  if (effortRaw !== undefined && effort === undefined)
     logForDebugging(
       `Plugin agent file ${filePath} has invalid effort '${effortRaw}'. Valid options: ${EFFORT_LEVELS.join(", ")} or an integer`,
     );
-  let rn = Mu(filePath);
-  for (let Xn of PLUGIN_AGENT_FORBIDDEN_FIELDS)
-    if (frontmatter[Xn] !== void 0)
+  let rn = escapeControlCharsForDisplay(filePath);
+  for (let field of PLUGIN_AGENT_FORBIDDEN_FIELDS)
+    if (frontmatter[field] !== undefined)
       logForDebugging(
-        `Plugin agent file ${rn} sets ${Xn}, which is ignored for plugin agents. Use .claude/agents/ for this level of control.`,
-        { level: "warn" },
+        `Plugin agent file ${rn} sets ${field}, which is ignored for plugin agents. Use .claude/agents/ for this level of control.`,
+        {
+          level: "warn",
+        },
       );
   for (let Xn of PLUGIN_AGENT_IGNORED_FIELDS)
-    if (frontmatter[Xn] !== void 0)
+    if (frontmatter[Xn] !== undefined)
       logForDebugging(
         `Plugin agent file ${rn} sets ${Xn}, which is ignored for plugin agents. Define the agent in .claude/agents/ to use ${Xn}.`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
   validatePluginAgentFrontmatter({
     subject: "Plugin agent file",
-    filePath: filePath,
-    frontmatter: frontmatter,
+    filePath,
+    frontmatter,
     unhintedKeys: [...PLUGIN_AGENT_FORBIDDEN_FIELDS, ...PLUGIN_AGENT_IGNORED_FIELDS],
   });
-  let maxTurnsRaw = frontmatter.maxTurns,
-    maxTurns = parsePositiveIntFromFrontmatter(maxTurnsRaw);
-  if (maxTurnsRaw !== void 0 && maxTurns === void 0)
+  let maxTurnsRaw = frontmatter.maxTurns;
+  let maxTurns = parsePositiveIntFromFrontmatter(maxTurnsRaw);
+  if (maxTurnsRaw !== undefined && maxTurns === undefined)
     logForDebugging(
       `Plugin agent file ${filePath} has invalid maxTurns '${maxTurnsRaw}'. Must be a positive integer.`,
     );
-  let autoCompactWindow = frontmatter.autoCompactWindow,
-    ho = parseBoundedIntFromFrontmatter(autoCompactWindow);
-  if (autoCompactWindow !== void 0 && ho === void 0)
+  let autoCompactWindow = frontmatter.autoCompactWindow;
+  let boundedIntFromFrontmatter = parseBoundedIntFromFrontmatter(autoCompactWindow);
+  if (autoCompactWindow !== undefined && boundedIntFromFrontmatter === undefined)
     logForDebugging(
-      `Plugin agent file ${filePath} has invalid autoCompactWindow '${autoCompactWindow}'. Must be an integer from ${Kx} to ${d0}.`,
-      { level: "warn" },
+      `Plugin agent file ${filePath} has invalid autoCompactWindow '${autoCompactWindow}'. Must be an integer from ${TRANSPORT_LABELS} to ${GLOBAL_CONFIG_FIELD_KINDS}.`,
+      {
+        level: "warn",
+      },
     );
-  let yn = parseExperimentalCacheTtl(frontmatter),
-    Kn =
-      frontmatter.disallowedTools !== void 0
-        ? parseAgentToolsFromFrontmatter(frontmatter.disallowedTools)
-        : void 0;
-  if (isAutoMemoryEnabled() && At && tools !== void 0) {
+  let experimentalCacheTtl = parseExperimentalCacheTtl(frontmatter);
+  let Kn =
+    frontmatter.disallowedTools !== undefined
+      ? parseAgentToolsFromFrontmatter(frontmatter.disallowedTools)
+      : undefined;
+  if (isAutoMemoryEnabled() && memory && tools !== undefined) {
     let toolSet = new Set(tools);
     for (let tool of [FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME, FILE_READ_TOOL_NAME])
       if (!toolSet.has(tool)) tools = [...tools, tool];
   }
   return {
-    agentType: agentType,
-    whenToUse: Ae,
-    tools: tools,
-    ...(Kn !== void 0 && { disallowedTools: Kn }),
-    ...(skills !== void 0 && { skills: skills }),
+    agentType,
+    whenToUse,
+    tools,
+    ...(Kn !== undefined && {
+      disallowedTools: Kn,
+    }),
+    ...(skills !== undefined && {
+      skills,
+    }),
     getSystemPrompt: (Xn) => {
-      if (isAutoMemoryEnabled() && At) {
-        let fo = loadAgentMemoryPrompt(agentType, At, Xn?.toolUseContext?.storageV5, Xn?.primedAgentMemory);
+      if (isAutoMemoryEnabled() && memory) {
+        let memoryPrompt = loadAgentMemoryPrompt(
+          agentType,
+          memory,
+          Xn?.toolUseContext?.storageV5,
+          Xn?.primedAgentMemory,
+        );
         return (
           systemPrompt +
           `
 
 ` +
-          fo
+          memoryPrompt
         );
       }
       return systemPrompt;
     },
     source: "plugin",
-    color: color,
-    model: lt,
-    filename: ke,
-    filePath: filePath,
+    color,
+    model,
+    filename: baseAgentName,
+    filePath,
     plugin: sourceName,
     pluginSource: {
-      filePath: filePath,
-      pluginName: pluginName,
-      namespace: namespace,
-      sourceName: sourceName,
-      pluginPath: pluginPath,
-      pluginManifest: pluginManifest,
+      filePath,
+      pluginName,
+      namespace,
+      sourceName,
+      pluginPath,
+      pluginManifest,
     },
-    ...(nt && { background: nt }),
-    ...(Et && { omitClaudeMd: Et }),
-    ...(At && { memory: At }),
-    ...(Yt && { isolation: Yt }),
-    ...(Zt !== void 0 && { effort: Zt }),
-    ...(maxTurns !== void 0 && { maxTurns: maxTurns }),
-    ...(ho !== void 0 && { autoCompactWindow: ho }),
-    ...(yn !== void 0 && { cacheTtl: yn }),
+    ...(nt && {
+      background: nt,
+    }),
+    ...(Et && {
+      omitClaudeMd: Et,
+    }),
+    ...(memory && {
+      memory,
+    }),
+    ...(Yt && {
+      isolation: Yt,
+    }),
+    ...(effort !== undefined && {
+      effort,
+    }),
+    ...(maxTurns !== undefined && {
+      maxTurns,
+    }),
+    ...(boundedIntFromFrontmatter !== undefined && {
+      autoCompactWindow: boundedIntFromFrontmatter,
+    }),
+    ...(experimentalCacheTtl !== undefined && {
+      cacheTtl: experimentalCacheTtl,
+    }),
   };
 }
+//@ chunk-e6aww6q8.js:2321705-2322206 layout
 /**
  * 内置插件：hooksModule 给的是目录就按目录遍历加载，给的是打包文件就逐个解析内容；失败的条目记错误并丢弃。
  */
-//@ chunk-e6aww6q8.js:2321705-2322206 layout
-async function loadBuiltinPluginAgents(e, n, r) {
-  let s = getBuiltinPluginAgentsSource(e.name);
-  if (s === void 0) return [];
+async function loadBuiltinPluginAgents(e, loadedPaths, r) {
+  let builtinPluginAgentsSource = getBuiltinPluginAgentsSource(e.name);
+  if (builtinPluginAgentsSource === undefined) return [];
   let h = pluginDisplayKey(e.name, e.source);
-  if ("folder" in s) return loadAgentsFromDir(s.folder, h, e.source, e.path, e.manifest, n, r, !0);
+  if ("folder" in builtinPluginAgentsSource)
+    return loadAgentsFromDir(
+      builtinPluginAgentsSource.folder,
+      h,
+      e.source,
+      e.path,
+      e.manifest,
+      loadedPaths,
+      r,
+      true,
+    );
   return (
     await Promise.all(
-      s.files.map(async (file) => {
+      builtinPluginAgentsSource.files.map(async (file) => {
         try {
           return await loadAgentFromFile({
             filePath: file.filePath,
@@ -524,131 +402,135 @@ async function loadBuiltinPluginAgents(e, n, r) {
             credentials: r,
           });
         } catch (error) {
-          return (
-            logForDebugging(`Failed to load agent from ${file.filePath}: ${error}`, { level: "error" }),
-            null
-          );
+          logForDebugging(`Failed to load agent from ${file.filePath}: ${error}`, {
+            level: "error",
+          });
+          return null;
         }
       }),
     )
   ).filter((S) => S !== null);
 }
+//@ chunk-e6aww6q8.js:2322206-2323863 fingerprint = loadPluginAgents (0.827)
 /**
  * 加载所有启用插件的代理（缓存在全局 agents），扫描 agentsPath/agentsPaths 下的 markdown。
  */
-//@ chunk-e6aww6q8.js:2322206-2323863 fingerprint = loadPluginAgents (0.827)
-function loadPluginAgents(e, n) {
-  let r = getPluginRegistry();
-  return (
-    (r.agents ??= (async () => {
-      let { enabled: enabled, errors: errors } = await loadAllPluginsCacheOnly(e);
-      if (r.handedIn !== void 0) {
-        let results = await Promise.all(
-          enabled.filter((G) => G.isBuiltin).map((G) => loadBuiltinPluginAgents(G, new Set(), n)),
-        );
-        return [...(await r.handedIn).agents, ...results.flat()];
-      }
-      if (errors.length > 0)
-        logForDebugging(`Plugin loading errors: ${errors.map((L) => pluginErrorText(L)).join(", ")}`);
-      let y = null,
-        flat = (
-          await Promise.all(
-            enabled.map(async (plugin) => {
-              let loadedPaths = new Set(),
-                pluginAgents = [];
-              if (plugin.agentsPath)
-                try {
-                  let Se = await loadAgentsFromDir(
-                    plugin.agentsPath,
-                    plugin.name,
-                    plugin.source,
-                    plugin.path,
-                    plugin.manifest,
-                    loadedPaths,
-                    n,
-                  );
-                  if ((pluginAgents.push(...Se), Se.length > 0))
-                    logForDebugging(
-                      `Loaded ${Se.length} agents from plugin ${plugin.name} default directory`,
-                    );
-                } catch (error) {
-                  ((y = "plugin_load_agents_dir_failed"),
-                    logForDebugging(
-                      `Failed to load agents from plugin ${plugin.name} default directory: ${error}`,
-                      { level: "error" },
-                    ));
-                }
-              if (plugin.agentsPaths) {
-                let pathResults = await Promise.all(
-                  plugin.agentsPaths.map(async (agentPath) => {
-                    try {
-                      let fs = getFsImplementation(),
-                        stats = await fs.stat(agentPath);
-                      if (stats.isDirectory()) {
-                        let Ae = await loadAgentsFromDir(
-                          agentPath,
-                          plugin.name,
-                          plugin.source,
-                          plugin.path,
-                          plugin.manifest,
-                          loadedPaths,
-                          n,
-                        );
-                        if (Ae.length > 0)
-                          logForDebugging(
-                            `Loaded ${Ae.length} agents from plugin ${plugin.name} custom path: ${agentPath}`,
-                          );
-                        return Ae;
-                      } else if (stats.isFile() && agentPath.endsWith(".md")) {
-                        if (isDuplicatePath(fs, agentPath, loadedPaths)) return [];
-                        let agent = await loadAgentFile(
-                          agentPath,
-                          plugin.name,
-                          [],
-                          plugin.source,
-                          plugin.path,
-                          plugin.manifest,
-                          n,
-                        );
-                        if (agent)
-                          return (
-                            logForDebugging(
-                              `Loaded agent from plugin ${plugin.name} custom file: ${agentPath}`,
-                            ),
-                            [agent]
-                          );
-                      }
-                      return [];
-                    } catch (error) {
-                      return (
-                        (y = "plugin_load_agents_path_failed"),
-                        logForDebugging(
-                          `Failed to load agents from plugin ${plugin.name} custom path ${agentPath}: ${error}`,
-                          { level: "error" },
-                        ),
-                        []
-                      );
-                    }
-                  }),
+function loadPluginAgents(e, credentials) {
+  let pluginRegistry = getPluginRegistry();
+  pluginRegistry.agents ??= (async () => {
+    let { enabled, errors } = await loadAllPluginsCacheOnly(e);
+    if (pluginRegistry.handedIn !== undefined) {
+      let results = await Promise.all(
+        enabled.filter((G) => G.isBuiltin).map((G) => loadBuiltinPluginAgents(G, new Set(), credentials)),
+      );
+      return [...(await pluginRegistry.handedIn).agents, ...results.flat()];
+    }
+    if (errors.length > 0)
+      logForDebugging(`Plugin loading errors: ${errors.map((e) => pluginErrorText(e)).join(", ")}`);
+    let y = null;
+    let w = (
+      await Promise.all(
+        enabled.map(async (plugin) => {
+          let loadedPaths = new Set();
+          let pluginAgents = [];
+          if (plugin.agentsPath)
+            try {
+              let agents = await loadAgentsFromDir(
+                plugin.agentsPath,
+                plugin.name,
+                plugin.source,
+                plugin.path,
+                plugin.manifest,
+                loadedPaths,
+                credentials,
+              );
+              pluginAgents.push(...agents);
+              if (agents.length > 0)
+                logForDebugging(
+                  `Loaded ${agents.length} agents from plugin ${plugin.name} default directory`,
                 );
-                for (let agents of pathResults) pluginAgents.push(...agents);
-              }
-              if (plugin.isBuiltin)
-                pluginAgents.push(...(await loadBuiltinPluginAgents(plugin, loadedPaths, n)));
-              let Z = pluginGrantProvenanceOf(plugin);
-              return pluginAgents.map((Se) => (Se.source === "plugin" ? { ...Se, pluginProvenance: Z } : Se));
-            }),
-          )
-        ).flat();
-      if ((logForDebugging(`Total plugin agents loaded: ${flat.length}`), y))
-        logFeatureBad("plugin_load_agents", y);
-      else logFeatureOk("plugin_load_agents");
-      return flat;
-    })()),
-    r.agents
-  );
+            } catch (error) {
+              y = "plugin_load_agents_dir_failed";
+              logForDebugging(
+                `Failed to load agents from plugin ${plugin.name} default directory: ${error}`,
+                {
+                  level: "error",
+                },
+              );
+            }
+          if (plugin.agentsPaths) {
+            let pathResults = await Promise.all(
+              plugin.agentsPaths.map(async (agentPath) => {
+                try {
+                  let fs = getFsImplementation();
+                  let stats = await fs.stat(agentPath);
+                  if (stats.isDirectory()) {
+                    let agents = await loadAgentsFromDir(
+                      agentPath,
+                      plugin.name,
+                      plugin.source,
+                      plugin.path,
+                      plugin.manifest,
+                      loadedPaths,
+                      credentials,
+                    );
+                    if (agents.length > 0)
+                      logForDebugging(
+                        `Loaded ${agents.length} agents from plugin ${plugin.name} custom path: ${agentPath}`,
+                      );
+                    return agents;
+                  } else if (stats.isFile() && agentPath.endsWith(".md")) {
+                    if (isDuplicatePath(fs, agentPath, loadedPaths)) return [];
+                    let agent = await loadAgentFile(
+                      agentPath,
+                      plugin.name,
+                      [],
+                      plugin.source,
+                      plugin.path,
+                      plugin.manifest,
+                      credentials,
+                    );
+                    if (agent) {
+                      logForDebugging(`Loaded agent from plugin ${plugin.name} custom file: ${agentPath}`);
+                      return [agent];
+                    }
+                  }
+                  return [];
+                } catch (error) {
+                  y = "plugin_load_agents_path_failed";
+                  logForDebugging(
+                    `Failed to load agents from plugin ${plugin.name} custom path ${agentPath}: ${error}`,
+                    {
+                      level: "error",
+                    },
+                  );
+                  return [];
+                }
+              }),
+            );
+            for (let agents of pathResults) pluginAgents.push(...agents);
+          }
+          if (plugin.isBuiltin)
+            pluginAgents.push(...(await loadBuiltinPluginAgents(plugin, loadedPaths, credentials)));
+          let pluginProvenance = pluginGrantProvenanceOf(plugin);
+          return pluginAgents.map((pluginAgent) =>
+            pluginAgent.source === "plugin"
+              ? {
+                  ...pluginAgent,
+                  pluginProvenance,
+                }
+              : pluginAgent,
+          );
+        }),
+      )
+    ).flat();
+    logForDebugging(`Total plugin agents loaded: ${w.length}`);
+    if (y) logFeatureBad("plugin_load_agents", y);
+    else logFeatureOk("plugin_load_agents");
+    return w;
+  })();
+  return pluginRegistry.agents;
 }
 //@ chunk-bfnfj4kx.js:75173-75190 fingerprint = loadAgentsFromDirectory (0.741)
 var loadAgentsFromDirectory = "agents";
-
 export { loadPluginAgents, validatePluginAgentFrontmatter };

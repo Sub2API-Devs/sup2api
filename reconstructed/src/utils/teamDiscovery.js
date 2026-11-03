@@ -12,18 +12,17 @@ import { uniq } from "./collections.js";
 import { readTeamFileAsync } from "./swarm/teamHelpers.js";
 
 //@ chunk-e6aww6q8.js:3751183-3751546 callgraph-fingerprint = getTeammateStatuses (0.321)
-async function getHiddenTeammateIds(e, n) {
+async function getHiddenTeammateIds(e, storageV5) {
   let flattened = e.flatMap((h) =>
-      h.type === "in_process_teammate" && h.status === "running" && h.identity.resumableAgentId === void 0
-        ? [h.identity]
-        : [],
-    ),
-    hiddenPaneIds = new Set(
-      (await Promise.all(uniq(flattened.map((h) => h.teamName)).map((h) => readTeamFileAsync(h, n)))).flatMap(
-        (h) => (h?.members ?? []).flatMap((y) => (y.isActive === !1 ? [y.agentId] : [])),
-      ),
-    );
-  return new Set(flattened.flatMap(({ agentId: agentId }) => (hiddenPaneIds.has(agentId) ? [agentId] : [])));
+    h.type === "in_process_teammate" && h.status === "running" && h.identity.resumableAgentId === undefined
+      ? [h.identity]
+      : [],
+  );
+  let hiddenPaneIds = new Set(
+    (
+      await Promise.all(uniq(flattened.map((h) => h.teamName)).map((h) => readTeamFileAsync(h, storageV5)))
+    ).flatMap((h) => (h?.members ?? []).flatMap((y) => (y.isActive === false ? [y.agentId] : []))),
+  );
+  return new Set(flattened.flatMap(({ agentId }) => (hiddenPaneIds.has(agentId) ? [agentId] : [])));
 }
-
 export { getHiddenTeammateIds };

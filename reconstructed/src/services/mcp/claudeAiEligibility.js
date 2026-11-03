@@ -11,16 +11,18 @@
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 
 //@ chunk-65zhns9p.js:226-290 placement
-function i() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_claudeai_eligibility_gate", !1);
+/**
+ * 读 tengu_mcp_claudeai_eligibility_gate（默认关）。
+ */
+function isEligibilityGateEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_claudeai_eligibility_gate", false);
 }
 //@ chunk-65zhns9p.js:290-350 placement
 function isClaudeAiEligibilityCheckEnabled() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_delightful_hamster", !1) === !0;
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_delightful_hamster", false) === true;
 }
 //@ chunk-65zhns9p.js:350-421 placement = _temp2 (0.774)
-function isIneligibleClaudeAiProxy(client_0) {
-  return client_0.type === "claudeai-proxy" && client_0.eligible === !1 && i();
+function isIneligibleClaudeAiProxy(client) {
+  return client.type === "claudeai-proxy" && client.eligible === false && isEligibilityGateEnabled();
 }
-
 export { isIneligibleClaudeAiProxy, isClaudeAiEligibilityCheckEnabled };

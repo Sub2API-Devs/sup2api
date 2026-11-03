@@ -28,21 +28,20 @@ function stripModePrefix(input) {
   if (getModeFromInput(input) === "prompt") return input;
   return input.slice(1);
 }
+//@ chunk-74a0twcp.js:388-419 placement
 /**
  * 字符是否是进入 bash 模式的 "!"。
  */
-//@ chunk-74a0twcp.js:388-419 placement
-function isBashModeChar(t) {
-  return t === "!";
+function isBashModeChar(key) {
+  return key === "!";
 }
+//@ chunk-74a0twcp.js:419-571 placement
 /**
  * 判断用户是否在空输入或行首键入了模式前缀字符（如 ! 或 #）以切换输入模式。
  */
-//@ chunk-74a0twcp.js:419-571 placement
-function isModeCharTyped({ nextValue: nextValue, value: r, cursorOffset: cursorOffset, mode: mode }) {
-  let e = getModeFromInput(nextValue);
-  if (cursorOffset !== 0 || e === "prompt" || e === mode) return !1;
+function isModeCharTyped({ nextValue, value: r, cursorOffset, mode }) {
+  let modeFromInput = getModeFromInput(nextValue);
+  if (cursorOffset !== 0 || modeFromInput === "prompt" || modeFromInput === mode) return false;
   return nextValue.length === r.length + 1 || r.length === 0;
 }
-
 export { stripModePrefix, getModeFromInput, prependModeCharacterToInput, isModeCharTyped, isBashModeChar };

@@ -13,115 +13,170 @@ import { AsyncLocalStorage } from "async_hooks";
 //@ chunk-krkjw7dv.js:239-266 placement
 var TENGU_TINGLY_PEARL = "tengu_tingly_pearl";
 //@ chunk-krkjw7dv.js:266-340 placement
-class o {
+/**
+ * 保存 bash 解析器特性开关读取器的容器（register 返回旧读取器）。
+ */
+class bashParserFlagReader {
   reader = null;
-  register(e) {
-    let reader = this.reader;
-    return ((this.reader = e), reader);
+  register(reader) {
+    let reader_2 = this.reader;
+    this.reader = reader;
+    return reader_2;
   }
 }
 //@ chunk-krkjw7dv.js:340-352 placement
-var n = new o();
+/**
+ * 全局唯一的 bash 解析器开关读取器容器。
+ */
+var installBashParserFlagReader = new bashParserFlagReader();
 //@ chunk-krkjw7dv.js:352-389 placement
-function JCi(e) {
-  return n.register(e);
+/**
+ * 注册开关读取器并返回旧的（供测试替换）。
+ */
+function readTinglyPearlFlag(e) {
+  return installBashParserFlagReader.register(e);
 }
+//@ chunk-krkjw7dv.js:389-531 placement
 /**
  * 读取 tengu_tingly_pearl 开关（默认开启，只有服务端明确关闭才关闭）。
  */
-//@ chunk-krkjw7dv.js:389-531 placement
 function isTinglyPearlEnabled() {
-  let reader = n.reader;
-  if (!reader) return !0;
+  let reader = installBashParserFlagReader.reader;
+  if (!reader) return true;
   try {
-    let { value: r, source: source, defaultHost: defaultHost } = reader(TENGU_TINGLY_PEARL, !0);
-    return r !== !1 || source !== "payload" || !defaultHost;
+    let { value: r, source, defaultHost } = reader(TENGU_TINGLY_PEARL, true);
+    return r !== false || source !== "payload" || !defaultHost;
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-krkjw7dv.js:531-543 placement
-var u = new AsyncLocalStorage();
+/**
+ * 记录“守卫是否关闭、是否已触发”的 AsyncLocalStorage。
+ */
+var guardStorage = new AsyncLocalStorage();
 //@ chunk-krkjw7dv.js:543-636 placement
-async function BIt(e, r) {
-  let t = { off: e, fired: !1 };
-  return { result: await u.run(t, r), fired: t.fired };
+/**
+ * 在守卫上下文中运行回调，返回结果与是否触发守卫。
+ */
+async function runGuarded(off, r) {
+  let t = {
+    off,
+    fired: false,
+  };
+  return {
+    result: await guardStorage.run(t, r),
+    fired: t.fired,
+  };
 }
 //@ chunk-krkjw7dv.js:636-686 placement
-function Ndt(e) {
-  return u.run({ off: !0, fired: !1 }, e);
+/**
+ * 在“守卫关闭”的上下文中运行回调。
+ */
+function runWithGuardOff(e) {
+  return guardStorage.run(
+    {
+      off: true,
+      fired: false,
+    },
+    e,
+  );
 }
 //@ chunk-krkjw7dv.js:686-731 placement
-function $dt() {
-  return u.getStore()?.off === !0;
+/**
+ * 当前是否处于守卫关闭的上下文。
+ */
+function isGuardOff() {
+  return guardStorage.getStore()?.off === true;
 }
 //@ chunk-krkjw7dv.js:731-781 placement
-function KPn() {
-  let store = u.getStore();
-  if (store) store.fired = !0;
+/**
+ * 把当前上下文标记为“守卫已触发”。
+ */
+function markGuardFired() {
+  let e = guardStorage.getStore();
+  if (e) e.fired = true;
 }
 //@ chunk-krkjw7dv.js:781-801 placement
-class d {
+/**
+ * 保存 tengu_foamy_heron 开关读取器的状态对象。
+ */
+class foamyHeronState {
   reader = null;
 }
 //@ chunk-krkjw7dv.js:801-813 placement
-var l = new d();
+/**
+ * 全局唯一的 tengu_foamy_heron 开关读取器状态。
+ */
+var setFoamyHeronReader = new foamyHeronState();
 //@ chunk-krkjw7dv.js:813-840 placement
-function QCi(e) {
-  l.reader = e;
+/**
+ * 设置 tengu_foamy_heron 开关的读取器。
+ */
+function readFoamyHeronFlag(reader) {
+  setFoamyHeronReader.reader = reader;
 }
+//@ chunk-krkjw7dv.js:840-1000 placement
 /**
  * 读取 tengu_foamy_heron 开关（默认开启，只有服务端明确关闭才关闭）。
  */
-//@ chunk-krkjw7dv.js:840-1000 placement
 function isFoamyHeronEnabled() {
-  let reader = l.reader;
-  if (!reader) return !0;
+  let reader = setFoamyHeronReader.reader;
+  if (!reader) return true;
   try {
-    let { value: r, source: source, defaultHost: defaultHost } = reader("tengu_foamy_heron", !0);
-    return r !== !1 || source !== "payload" || !defaultHost;
+    let { value: r, source, defaultHost } = reader("tengu_foamy_heron", true);
+    return r !== false || source !== "payload" || !defaultHost;
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-krkjw7dv.js:1000-1074 placement
-class f {
+/**
+ * 保存 tengu_calm_nautilus 开关读取器的状态对象。
+ */
+class calmNautilusReaderState {
   reader = null;
-  register(e) {
-    let reader = this.reader;
-    return ((this.reader = e), reader);
+  register(reader) {
+    let reader_2 = this.reader;
+    this.reader = reader;
+    return reader_2;
   }
 }
 //@ chunk-krkjw7dv.js:1074-1086 placement
-var s = new f();
+/**
+ * 全局唯一的 tengu_calm_nautilus 开关读取器状态。
+ */
+var installCalmNautilusReader = new calmNautilusReaderState();
 //@ chunk-krkjw7dv.js:1086-1123 placement
-function ZCi(e) {
-  return s.register(e);
+/**
+ * 注册 tengu_calm_nautilus 开关的读取器。
+ */
+function readCalmNautilusFlag(e) {
+  return installCalmNautilusReader.register(e);
 }
+//@ chunk-krkjw7dv.js:1123-1285 placement
 /**
  * 读取 tengu_calm_nautilus 开关（默认开启，只有服务端明确关闭才关闭）。
  */
-//@ chunk-krkjw7dv.js:1123-1285 placement
 function isCalmNautilusEnabled() {
-  let reader = s.reader;
-  if (!reader) return !0;
+  let reader = installCalmNautilusReader.reader;
+  if (!reader) return true;
   try {
-    let { value: r, source: source, defaultHost: defaultHost } = reader("tengu_calm_nautilus", !0);
-    return r !== !1 || source !== "payload" || !defaultHost;
+    let { value: r, source, defaultHost } = reader("tengu_calm_nautilus", true);
+    return r !== false || source !== "payload" || !defaultHost;
   } catch {
-    return !0;
+    return true;
   }
 }
-
 export {
   isTinglyPearlEnabled,
-  BIt,
-  Ndt,
-  ZCi,
-  JCi,
-  QCi,
-  $dt,
-  KPn,
+  runGuarded,
+  runWithGuardOff,
+  readCalmNautilusFlag,
+  readTinglyPearlFlag,
+  readFoamyHeronFlag,
+  isGuardOff,
+  markGuardFired,
   isCalmNautilusEnabled,
   isFoamyHeronEnabled,
 };

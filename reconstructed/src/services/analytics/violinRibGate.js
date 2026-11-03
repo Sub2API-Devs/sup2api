@@ -10,16 +10,15 @@
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "./growthbook.js";
 
+//@ chunk-cpq5ppb2.js:226-298 placement
 /**
  * 开关 tengu_violin_rib。
  */
-//@ chunk-cpq5ppb2.js:226-298 placement
 function isViolinRibEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_rib", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_rib", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export { isViolinRibEnabled };

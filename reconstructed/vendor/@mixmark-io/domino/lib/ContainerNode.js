@@ -6,18 +6,19 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xe } from "./Node.js";
-import { yt } from "./NodeList.js";
+import { require_Node } from "./Node.js";
+import { require_NodeList } from "./NodeList.js";
 
 //@ chunk-vwj6ccer.js:23770-24885 cjs-fingerprint
-var Qr = x(function (dd, os) {
-  os.exports = cs;
-  var ss = xe(),
-    pl = yt();
-  function cs() {
-    (ss.call(this), (this._firstChild = this._childNodes = null));
+var require_ContainerNode = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = ContainerNode;
+  var Node = require_Node();
+  var NodeList = require_NodeList();
+  function ContainerNode() {
+    Node.call(this);
+    this._firstChild = this._childNodes = null;
   }
-  cs.prototype = Object.create(ss.prototype, {
+  ContainerNode.prototype = Object.create(Node.prototype, {
     hasChildNodes: {
       value: function () {
         if (this._childNodes) return this._childNodes.length > 0;
@@ -26,7 +27,8 @@ var Qr = x(function (dd, os) {
     },
     childNodes: {
       get: function () {
-        return (this._ensureChildNodes(), this._childNodes);
+        this._ensureChildNodes();
+        return this._childNodes;
       },
     },
     firstChild: {
@@ -37,33 +39,38 @@ var Qr = x(function (dd, os) {
     },
     lastChild: {
       get: function () {
-        var _childNodes = this._childNodes,
-          t;
-        if (_childNodes) return _childNodes.length === 0 ? null : _childNodes[_childNodes.length - 1];
-        if (((t = this._firstChild), t === null)) return null;
-        return t._previousSibling;
+        var kids = this._childNodes;
+        var first;
+        if (kids) return kids.length === 0 ? null : kids[kids.length - 1];
+        first = this._firstChild;
+        if (first === null) return null;
+        return first._previousSibling;
       },
     },
     _ensureChildNodes: {
       value: function () {
         if (this._childNodes) return;
-        var _firstChild = this._firstChild,
-          t = _firstChild,
-          r = (this._childNodes = new pl());
-        if (_firstChild)
-          do (r.push(t), (t = t._nextSibling));
-          while (t !== _firstChild);
+        var first = this._firstChild;
+        var kid = first;
+        var childNodes = (this._childNodes = new NodeList());
+        if (first)
+          do {
+            childNodes.push(kid);
+            kid = kid._nextSibling;
+          } while (kid !== first);
         this._firstChild = null;
       },
     },
     removeChildren: {
       value: function () {
-        var t = this.rooted ? this.ownerDocument : null,
-          firstChild = this.firstChild,
-          a;
-        while (firstChild !== null) {
-          if (((a = firstChild), (firstChild = a.nextSibling), t)) t.mutateRemove(a);
-          a.parentNode = null;
+        var root = this.rooted ? this.ownerDocument : null;
+        var next = this.firstChild;
+        var kid;
+        while (next !== null) {
+          kid = next;
+          next = kid.nextSibling;
+          if (root) root.mutateRemove(kid);
+          kid.parentNode = null;
         }
         if (this._childNodes) this._childNodes.length = 0;
         else this._firstChild = null;
@@ -72,5 +79,4 @@ var Qr = x(function (dd, os) {
     },
   });
 });
-
-export { Qr };
+export { require_ContainerNode };

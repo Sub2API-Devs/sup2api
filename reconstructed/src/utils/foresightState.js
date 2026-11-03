@@ -8,9 +8,18 @@
  * pieces: chunk-szmxcexk.js (1)
  * attribution: placement 1
  */
-import { ge } from "./identity.js";
+import { identity } from "./identity.js";
 
 //@ chunk-szmxcexk.js:227-328 placement
-var foresightState = ge({ settled: void 0, open: !1, foresee: void 0 }, (e) => {
-  ((e.settled = void 0), (e.open = !1), (e.foresee = void 0));
-});
+var foresightState = identity(
+  {
+    settled: undefined,
+    open: false,
+    foresee: undefined,
+  },
+  (e) => {
+    e.settled = undefined;
+    e.open = false;
+    e.foresee = undefined;
+  },
+);

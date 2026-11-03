@@ -8,11 +8,12 @@
  * pieces: chunk-wnbbggnd.js (2)
  * attribution: placement 2
  */
-
 //@ chunk-wnbbggnd.js:191-211 placement
-var DIFF_SIDEBAR_MIN_COLUMNS = 110,
-  okt = 144;
+/**
+ * diff 侧栏的宽度阈值：达到 110 列才会自动显示；用户在设置里明确开启时也用这个阈值，144 列是未设置时的默认开启线。
+ */
+var DIFF_SIDEBAR_MIN_COLUMNS = 110;
+var DIFF_SIDEBAR_OPEN_COLUMNS = 144;
 //@ chunk-wnbbggnd.js:211-236 placement
 var CC_PLUGIN_DIFF = "cc-plugin-diff";
-
-export { DIFF_SIDEBAR_MIN_COLUMNS, okt, CC_PLUGIN_DIFF };
+export { DIFF_SIDEBAR_MIN_COLUMNS, DIFF_SIDEBAR_OPEN_COLUMNS, CC_PLUGIN_DIFF };

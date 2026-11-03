@@ -5,312 +5,431 @@
  * pieces: chunk-kndsyy4v.js (7)
  * attribution: esm-layout 1, esm-fingerprint 6
  */
-import { U } from "./scanner.js";
+import { createScanner } from "./scanner.js";
 
 //@ chunk-kndsyy4v.js:7855-7861 esm-layout
-var V;
+var ParseOptions;
 //@ chunk-kndsyy4v.js:7861-7921 esm-fingerprint
-(function (e) {
-  e.DEFAULT = { allowTrailingComma: !1 };
-})(V || (V = {}));
+(function (ParseOptions) {
+  ParseOptions.DEFAULT = {
+    allowTrailingComma: false,
+  };
+})(ParseOptions || (ParseOptions = {}));
 //@ chunk-kndsyy4v.js:7921-8326 esm-fingerprint
-function C(e, s = [], r = V.DEFAULT) {
-  let n = null,
-    i = [],
-    o = [];
-  function c(u) {
-    if (Array.isArray(i)) i.push(u);
-    else if (n !== null) i[n] = u;
-  }
-  return (
-    Z(
-      e,
-      {
-        onObjectBegin: () => {
-          let u = {};
-          (c(u), o.push(i), (i = u), (n = null));
-        },
-        onObjectProperty: (u) => {
-          n = u;
-        },
-        onObjectEnd: () => {
-          i = o.pop();
-        },
-        onArrayBegin: () => {
-          let u = [];
-          (c(u), o.push(i), (i = u), (n = null));
-        },
-        onArrayEnd: () => {
-          i = o.pop();
-        },
-        onLiteralValue: c,
-        onError: (u, h, p) => {
-          s.push({ error: u, offset: h, length: p });
-        },
-      },
-      r,
-    ),
-    i[0]
-  );
-}
-//@ chunk-kndsyy4v.js:8326-9279 esm-fingerprint
-function X(e, s = [], r = V.DEFAULT) {
-  let n = { type: "array", offset: -1, length: -1, children: [], parent: void 0 };
-  function i(u) {
-    if (n.type === "property") ((n.length = u - n.offset), (n = n.parent));
-  }
-  function o(u) {
-    return (n.children.push(u), u);
+function C(text, s = [], options = ParseOptions.DEFAULT) {
+  let currentProperty = null;
+  let currentParent = [];
+  let previousParents = [];
+  function onValue(value) {
+    if (Array.isArray(currentParent)) currentParent.push(value);
+    else if (currentProperty !== null) currentParent[currentProperty] = value;
   }
   Z(
-    e,
+    text,
     {
-      onObjectBegin: (u) => {
-        n = o({ type: "object", offset: u, length: -1, parent: n, children: [] });
+      onObjectBegin: () => {
+        let object = {};
+        onValue(object);
+        previousParents.push(currentParent);
+        currentParent = object;
+        currentProperty = null;
       },
-      onObjectProperty: (u, h, p) => {
-        ((n = o({ type: "property", offset: h, length: -1, parent: n, children: [] })),
-          n.children.push({ type: "string", value: u, offset: h, length: p, parent: n }));
+      onObjectProperty: (name) => {
+        currentProperty = name;
       },
-      onObjectEnd: (u, h) => {
-        (i(u + h), (n.length = u + h - n.offset), (n = n.parent), i(u + h));
+      onObjectEnd: () => {
+        currentParent = previousParents.pop();
       },
-      onArrayBegin: (u, h) => {
-        n = o({ type: "array", offset: u, length: -1, parent: n, children: [] });
+      onArrayBegin: () => {
+        let array = [];
+        onValue(array);
+        previousParents.push(currentParent);
+        currentParent = array;
+        currentProperty = null;
       },
-      onArrayEnd: (u, h) => {
-        ((n.length = u + h - n.offset), (n = n.parent), i(u + h));
+      onArrayEnd: () => {
+        currentParent = previousParents.pop();
       },
-      onLiteralValue: (u, h, p) => {
-        (o({ type: pe(u), offset: h, length: p, parent: n, value: u }), i(h + p));
-      },
-      onSeparator: (u, h, p) => {
-        if (n.type === "property") {
-          if (u === ":") n.colonOffset = h;
-          else if (u === ",") i(h);
-        }
-      },
-      onError: (u, h, p) => {
-        s.push({ error: u, offset: h, length: p });
+      onLiteralValue: onValue,
+      onError: (error, offset, length) => {
+        s.push({
+          error,
+          offset,
+          length,
+        });
       },
     },
-    r,
+    options,
   );
-  let f = n.children[0];
-  if (f) delete f.parent;
-  return f;
+  return currentParent[0];
+}
+//@ chunk-kndsyy4v.js:8326-9279 esm-fingerprint
+function parseTree(text, errors = [], options = ParseOptions.DEFAULT) {
+  let currentParent = {
+    type: "array",
+    offset: -1,
+    length: -1,
+    children: [],
+    parent: undefined,
+  };
+  function ensurePropertyComplete(endOffset) {
+    if (currentParent.type === "property") {
+      currentParent.length = endOffset - currentParent.offset;
+      currentParent = currentParent.parent;
+    }
+  }
+  function onValue(valueNode) {
+    currentParent.children.push(valueNode);
+    return valueNode;
+  }
+  Z(
+    text,
+    {
+      onObjectBegin: (offset) => {
+        currentParent = onValue({
+          type: "object",
+          offset,
+          length: -1,
+          parent: currentParent,
+          children: [],
+        });
+      },
+      onObjectProperty: (name, offset, length) => {
+        currentParent = onValue({
+          type: "property",
+          offset,
+          length: -1,
+          parent: currentParent,
+          children: [],
+        });
+        currentParent.children.push({
+          type: "string",
+          value: name,
+          offset,
+          length,
+          parent: currentParent,
+        });
+      },
+      onObjectEnd: (offset, length) => {
+        ensurePropertyComplete(offset + length);
+        currentParent.length = offset + length - currentParent.offset;
+        currentParent = currentParent.parent;
+        ensurePropertyComplete(offset + length);
+      },
+      onArrayBegin: (offset, length) => {
+        currentParent = onValue({
+          type: "array",
+          offset,
+          length: -1,
+          parent: currentParent,
+          children: [],
+        });
+      },
+      onArrayEnd: (offset, length) => {
+        currentParent.length = offset + length - currentParent.offset;
+        currentParent = currentParent.parent;
+        ensurePropertyComplete(offset + length);
+      },
+      onLiteralValue: (value, offset, length) => {
+        onValue({
+          type: getNodeType(value),
+          offset,
+          length,
+          parent: currentParent,
+          value,
+        });
+        ensurePropertyComplete(offset + length);
+      },
+      onSeparator: (sep, offset, length) => {
+        if (currentParent.type === "property") {
+          if (sep === ":") currentParent.colonOffset = offset;
+          else if (sep === ",") ensurePropertyComplete(offset);
+        }
+      },
+      onError: (error, offset, length) => {
+        errors.push({
+          error,
+          offset,
+          length,
+        });
+      },
+    },
+    options,
+  );
+  let result = currentParent.children[0];
+  if (result) delete result.parent;
+  return result;
 }
 //@ chunk-kndsyy4v.js:9279-9682 esm-fingerprint
-function M(e, s) {
-  if (!e) return;
-  let r = e;
-  for (let n of s)
-    if (typeof n === "string") {
-      if (r.type !== "object" || !Array.isArray(r.children)) return;
-      let i = !1;
-      for (let o of r.children)
-        if (Array.isArray(o.children) && o.children[0].value === n && o.children.length === 2) {
-          ((r = o.children[1]), (i = !0));
+function findNodeAtLocation(root, path) {
+  if (!root) return;
+  let node = root;
+  for (let segment of path)
+    if (typeof segment === "string") {
+      if (node.type !== "object" || !Array.isArray(node.children)) return;
+      let found = false;
+      for (let propertyNode of node.children)
+        if (
+          Array.isArray(propertyNode.children) &&
+          propertyNode.children[0].value === segment &&
+          propertyNode.children.length === 2
+        ) {
+          node = propertyNode.children[1];
+          found = true;
           break;
         }
-      if (!i) return;
+      if (!found) return;
     } else {
-      let i = n;
-      if (r.type !== "array" || i < 0 || !Array.isArray(r.children) || i >= r.children.length) return;
-      r = r.children[i];
+      let index = segment;
+      if (
+        node.type !== "array" ||
+        index < 0 ||
+        !Array.isArray(node.children) ||
+        index >= node.children.length
+      )
+        return;
+      node = node.children[index];
     }
-  return r;
+  return node;
 }
 //@ chunk-kndsyy4v.js:9682-12205 esm-fingerprint
-function Z(e, s, r = V.DEFAULT) {
-  let n = U(e, !1),
-    i = [];
-  function o(O) {
-    return O
-      ? () => O(n.getTokenOffset(), n.getTokenLength(), n.getTokenStartLine(), n.getTokenStartCharacter())
-      : () => !0;
-  }
-  function c(O) {
-    return O
+function Z(text, visitor, options = ParseOptions.DEFAULT) {
+  let _scanner = createScanner(text, false);
+  let _jsonPath = [];
+  function o(visitFunction) {
+    return visitFunction
       ? () =>
-          O(n.getTokenOffset(), n.getTokenLength(), n.getTokenStartLine(), n.getTokenStartCharacter(), () =>
-            i.slice(),
+          visitFunction(
+            _scanner.getTokenOffset(),
+            _scanner.getTokenLength(),
+            _scanner.getTokenStartLine(),
+            _scanner.getTokenStartCharacter(),
           )
-      : () => !0;
+      : () => true;
   }
-  function f(O) {
-    return O
-      ? (A) => O(A, n.getTokenOffset(), n.getTokenLength(), n.getTokenStartLine(), n.getTokenStartCharacter())
-      : () => !0;
+  function c(visitFunction) {
+    return visitFunction
+      ? () =>
+          visitFunction(
+            _scanner.getTokenOffset(),
+            _scanner.getTokenLength(),
+            _scanner.getTokenStartLine(),
+            _scanner.getTokenStartCharacter(),
+            () => _jsonPath.slice(),
+          )
+      : () => true;
   }
-  function u(O) {
-    return O
+  function toOneArgVisit(visitFunction) {
+    return visitFunction
+      ? (arg) =>
+          visitFunction(
+            arg,
+            _scanner.getTokenOffset(),
+            _scanner.getTokenLength(),
+            _scanner.getTokenStartLine(),
+            _scanner.getTokenStartCharacter(),
+          )
+      : () => true;
+  }
+  function toOneArgVisitWithPath(visitFunction) {
+    return visitFunction
       ? (A) =>
-          O(
+          visitFunction(
             A,
-            n.getTokenOffset(),
-            n.getTokenLength(),
-            n.getTokenStartLine(),
-            n.getTokenStartCharacter(),
-            () => i.slice(),
+            _scanner.getTokenOffset(),
+            _scanner.getTokenLength(),
+            _scanner.getTokenStartLine(),
+            _scanner.getTokenStartCharacter(),
+            () => _jsonPath.slice(),
           )
-      : () => !0;
+      : () => true;
   }
-  let h = c(s.onObjectBegin),
-    p = u(s.onObjectProperty),
-    k = o(s.onObjectEnd),
-    y = c(s.onArrayBegin),
-    T = o(s.onArrayEnd),
-    w = u(s.onLiteralValue),
-    v = f(s.onSeparator),
-    N = o(s.onComment),
-    S = f(s.onError),
-    B = r && r.disallowComments,
-    g = r && r.allowTrailingComma;
-  function b() {
-    while (!0) {
-      let scan = n.scan();
-      switch (n.getTokenError()) {
+  let h = c(visitor.onObjectBegin);
+  let onObjectProperty = toOneArgVisitWithPath(visitor.onObjectProperty);
+  let onObjectEnd = o(visitor.onObjectEnd);
+  let onArrayBegin = c(visitor.onArrayBegin);
+  let onArrayEnd = o(visitor.onArrayEnd);
+  let onLiteralValue = toOneArgVisitWithPath(visitor.onLiteralValue);
+  let onSeparator = toOneArgVisit(visitor.onSeparator);
+  let onComment = o(visitor.onComment);
+  let onError = toOneArgVisit(visitor.onError);
+  let disallowComments = options && options.disallowComments;
+  let allowTrailingComma = options && options.allowTrailingComma;
+  function scanNext() {
+    while (true) {
+      let token = _scanner.scan();
+      switch (_scanner.getTokenError()) {
         case 4:
-          a(14);
+          handleError(14);
           break;
         case 5:
-          a(15);
+          handleError(15);
           break;
         case 3:
-          a(13);
+          handleError(13);
           break;
         case 1:
-          if (!B) a(11);
+          if (!disallowComments) handleError(11);
           break;
         case 2:
-          a(12);
+          handleError(12);
           break;
         case 6:
-          a(16);
+          handleError(16);
           break;
       }
-      switch (scan) {
+      switch (token) {
         case 12:
         case 13:
-          if (B) a(10);
-          else N();
+          if (disallowComments) handleError(10);
+          else onComment();
           break;
         case 16:
-          a(1);
+          handleError(1);
           break;
         case 15:
         case 14:
           break;
         default:
-          return scan;
+          return token;
       }
     }
   }
-  function a(O, A = [], q = []) {
-    if ((S(O), A.length + q.length > 0)) {
-      let token = n.getToken();
+  function handleError(error, skipUntilAfter = [], skipUntil = []) {
+    onError(error);
+    if (skipUntilAfter.length + skipUntil.length > 0) {
+      let token = _scanner.getToken();
       while (token !== 17) {
-        if (A.indexOf(token) !== -1) {
-          b();
+        if (skipUntilAfter.indexOf(token) !== -1) {
+          scanNext();
           break;
-        } else if (q.indexOf(token) !== -1) break;
-        token = b();
+        } else if (skipUntil.indexOf(token) !== -1) break;
+        token = scanNext();
       }
     }
   }
-  function d(O) {
-    let tokenValue = n.getTokenValue();
-    if (O) w(tokenValue);
-    else (p(tokenValue), i.push(tokenValue));
-    return (b(), !0);
+  function parseString(isValue) {
+    let value = _scanner.getTokenValue();
+    if (isValue) onLiteralValue(value);
+    else {
+      onObjectProperty(value);
+      _jsonPath.push(value);
+    }
+    scanNext();
+    return true;
   }
-  function m() {
-    switch (n.getToken()) {
+  function parseLiteral() {
+    switch (_scanner.getToken()) {
       case 11:
-        let tokenValue = n.getTokenValue(),
-          A = Number(tokenValue);
-        if (isNaN(A)) (a(2), (A = 0));
-        w(A);
+        let tokenValue = _scanner.getTokenValue();
+        let value = Number(tokenValue);
+        if (isNaN(value)) {
+          handleError(2);
+          value = 0;
+        }
+        onLiteralValue(value);
         break;
       case 7:
-        w(null);
+        onLiteralValue(null);
         break;
       case 8:
-        w(!0);
+        onLiteralValue(true);
         break;
       case 9:
-        w(!1);
+        onLiteralValue(false);
         break;
       default:
-        return !1;
+        return false;
     }
-    return (b(), !0);
+    scanNext();
+    return true;
   }
-  function E() {
-    if (n.getToken() !== 10) return (a(3, [], [2, 5]), !1);
-    if ((d(!1), n.getToken() === 6)) {
-      if ((v(":"), b(), !W())) a(4, [], [2, 5]);
-    } else a(5, [], [2, 5]);
-    return (i.pop(), !0);
-  }
-  function D() {
-    (h(), b());
-    let O = !1;
-    while (n.getToken() !== 2 && n.getToken() !== 17) {
-      if (n.getToken() === 5) {
-        if (!O) a(4, [], []);
-        if ((v(","), b(), n.getToken() === 2 && g)) break;
-      } else if (O) a(6, [], []);
-      if (!E()) a(4, [], [2, 5]);
-      O = !0;
+  function parseProperty() {
+    if (_scanner.getToken() !== 10) {
+      handleError(3, [], [2, 5]);
+      return false;
     }
-    if ((k(), n.getToken() !== 2)) a(7, [2], []);
-    else b();
-    return !0;
+    parseString(false);
+    if (_scanner.getToken() === 6) {
+      onSeparator(":");
+      scanNext();
+      if (!parseValue()) handleError(4, [], [2, 5]);
+    } else handleError(5, [], [2, 5]);
+    _jsonPath.pop();
+    return true;
   }
-  function z() {
-    (y(), b());
-    let O = !0,
-      A = !1;
-    while (n.getToken() !== 4 && n.getToken() !== 17) {
-      if (n.getToken() === 5) {
-        if (!A) a(4, [], []);
-        if ((v(","), b(), n.getToken() === 4 && g)) break;
-      } else if (A) a(6, [], []);
-      if (O) (i.push(0), (O = !1));
-      else i[i.length - 1]++;
-      if (!W()) a(4, [], [4, 5]);
-      A = !0;
+  function parseObject() {
+    h();
+    scanNext();
+    let needsComma = false;
+    while (_scanner.getToken() !== 2 && _scanner.getToken() !== 17) {
+      if (_scanner.getToken() === 5) {
+        if (!needsComma) handleError(4, [], []);
+        onSeparator(",");
+        scanNext();
+        if (_scanner.getToken() === 2 && allowTrailingComma) break;
+      } else if (needsComma) handleError(6, [], []);
+      if (!parseProperty()) handleError(4, [], [2, 5]);
+      needsComma = true;
     }
-    if ((T(), !O)) i.pop();
-    if (n.getToken() !== 4) a(8, [4], []);
-    else b();
-    return !0;
+    onObjectEnd();
+    if (_scanner.getToken() !== 2) handleError(7, [2], []);
+    else scanNext();
+    return true;
   }
-  function W() {
-    switch (n.getToken()) {
+  function parseArray() {
+    onArrayBegin();
+    scanNext();
+    let isFirstElement = true;
+    let needsComma = false;
+    while (_scanner.getToken() !== 4 && _scanner.getToken() !== 17) {
+      if (_scanner.getToken() === 5) {
+        if (!needsComma) handleError(4, [], []);
+        onSeparator(",");
+        scanNext();
+        if (_scanner.getToken() === 4 && allowTrailingComma) break;
+      } else if (needsComma) handleError(6, [], []);
+      if (isFirstElement) {
+        _jsonPath.push(0);
+        isFirstElement = false;
+      } else _jsonPath[_jsonPath.length - 1]++;
+      if (!parseValue()) handleError(4, [], [4, 5]);
+      needsComma = true;
+    }
+    onArrayEnd();
+    if (!isFirstElement) _jsonPath.pop();
+    if (_scanner.getToken() !== 4) handleError(8, [4], []);
+    else scanNext();
+    return true;
+  }
+  function parseValue() {
+    switch (_scanner.getToken()) {
       case 3:
-        return z();
+        return parseArray();
       case 1:
-        return D();
+        return parseObject();
       case 10:
-        return d(!0);
+        return parseString(true);
       default:
-        return m();
+        return parseLiteral();
     }
   }
-  if ((b(), n.getToken() === 17)) {
-    if (r.allowEmptyContent) return !0;
-    return (a(4, [], []), !1);
+  scanNext();
+  if (_scanner.getToken() === 17) {
+    if (options.allowEmptyContent) return true;
+    handleError(4, [], []);
+    return false;
   }
-  if (!W()) return (a(4, [], []), !1);
-  if (n.getToken() !== 17) a(9, [], []);
-  return !0;
+  if (!parseValue()) {
+    handleError(4, [], []);
+    return false;
+  }
+  if (_scanner.getToken() !== 17) handleError(9, [], []);
+  return true;
 }
 //@ chunk-kndsyy4v.js:12205-12432 esm-fingerprint
-function pe(e) {
-  switch (typeof e) {
+function getNodeType(value) {
+  switch (typeof value) {
     case "boolean":
       return "boolean";
     case "number":
@@ -318,13 +437,12 @@ function pe(e) {
     case "string":
       return "string";
     case "object": {
-      if (!e) return "null";
-      else if (Array.isArray(e)) return "array";
+      if (!value) return "null";
+      else if (Array.isArray(value)) return "array";
       return "object";
     }
     default:
       return "null";
   }
 }
-
-export { X, M, C };
+export { parseTree, findNodeAtLocation, C };

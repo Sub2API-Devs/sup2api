@@ -8,49 +8,54 @@
  * pieces: chunk-w2thzqyb.js (3)
  * attribution: placement 3
  */
-import { vc } from "../../utils/taskDescription.js";
+import { cleanTaskDescription } from "../../utils/taskDescription.js";
 import { generateTaskId, createTaskStateBase } from "../../Task.js";
 
 //@ chunk-w2thzqyb.js:266-318 placement
-function joe(e, t) {
-  return `${vc(e) ?? ""}/${vc(t) ?? ""}`;
+/**
+ * 用服务器名与工具名拼出 MCP 任务键。
+ */
+function mcpTaskKey(serverName, toolName) {
+  return `${cleanTaskDescription(serverName) ?? ""}/${cleanTaskDescription(toolName) ?? ""}`;
 }
 //@ chunk-w2thzqyb.js:318-351 placement
-function o2s(e) {
-  return vc(e) ?? "";
+/**
+ * 取工具名，无则空串。
+ */
+function toolNameOrEmpty(serverName) {
+  return cleanTaskDescription(serverName) ?? "";
 }
+//@ chunk-w2thzqyb.js:351-797 placement
 /**
  * 创建 MCP 后台任务的初始状态：服务器名、工具名、任务 id、轮询间隔与中止控制器等。
  */
-//@ chunk-w2thzqyb.js:351-797 placement
 function createMcpTaskState({
-  serverName: serverName,
-  toolName: toolName,
-  mcpTaskId: mcpTaskId,
-  toolUseId: toolUseId,
-  pollIntervalMs: pollIntervalMs,
-  abortController: abortController,
-  backgroundedToDeliverMessage: backgroundedToDeliverMessage,
-  protocol: protocol,
-  driveAbortController: driveAbortController,
-  ttlExpiresAt: ttlExpiresAt,
+  serverName,
+  toolName,
+  mcpTaskId,
+  toolUseId,
+  pollIntervalMs,
+  abortController,
+  backgroundedToDeliverMessage,
+  protocol,
+  driveAbortController,
+  ttlExpiresAt,
 }) {
-  let r = generateTaskId("mcp_task");
+  let taskId = generateTaskId("mcp_task");
   return {
-    ...createTaskStateBase(r, "mcp_task", joe(serverName, toolName), toolUseId),
+    ...createTaskStateBase(taskId, "mcp_task", mcpTaskKey(serverName, toolName), toolUseId),
     type: "mcp_task",
     status: "running",
-    serverName: serverName,
-    toolName: toolName,
-    mcpTaskId: mcpTaskId ?? r,
+    serverName,
+    toolName,
+    mcpTaskId: mcpTaskId ?? taskId,
     mcpStatus: "working",
-    pollIntervalMs: pollIntervalMs,
-    abortController: abortController,
-    backgroundedToDeliverMessage: backgroundedToDeliverMessage,
-    protocol: protocol,
-    driveAbortController: driveAbortController,
-    ttlExpiresAt: ttlExpiresAt,
+    pollIntervalMs,
+    abortController,
+    backgroundedToDeliverMessage,
+    protocol,
+    driveAbortController,
+    ttlExpiresAt,
   };
 }
-
-export { createMcpTaskState, joe, o2s };
+export { createMcpTaskState, mcpTaskKey, toolNameOrEmpty };

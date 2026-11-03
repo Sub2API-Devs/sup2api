@@ -8,12 +8,11 @@
  * pieces: chunk-yr5hx1r4.js (1)
  * attribution: placement 1
  */
-import { stripInvisibleChars } from "../../utils/invisibleChars.js";
-import { Yn } from "../../utils/stripAnsi.js";
+import { stripInvisibleChars_2 } from "../../utils/invisibleChars.js";
+import { stripAnsi } from "../../utils/stripAnsi.js";
 
 //@ chunk-yr5hx1r4.js:264-326 placement
 function diffLineToPlainText(t) {
-  return stripInvisibleChars(Yn(t)).text.replace(/[\t\n]+/g, " ");
+  return stripInvisibleChars_2(stripAnsi(t)).text.replace(/[\t\n]+/g, " ");
 }
-
 export { diffLineToPlainText };

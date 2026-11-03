@@ -5,25 +5,31 @@
  * pieces: chunk-5h78gfwc.js (3)
  * attribution: esm-fingerprint 3
  */
-import { H } from "./crypto_key.js";
-import { E_2, A } from "./buffer_utils.js";
-import { c } from "../../node/esm/util/errors.js";
+import { checkEncCryptoKey } from "./crypto_key.js";
+import { concat, encode } from "./buffer_utils.js";
+import { JWEInvalid } from "../../node/esm/util/errors.js";
 
 //@ chunk-5h78gfwc.js:13647-13787 esm-fingerprint
-function Yt(e, t) {
-  if (e instanceof Uint8Array) return crypto.subtle.importKey("raw", e, "PBKDF2", !1, ["deriveBits"]);
-  return (H(e, t, "deriveBits"), e);
+function getCryptoKey(key, alg) {
+  if (key instanceof Uint8Array) return crypto.subtle.importKey("raw", key, "PBKDF2", false, ["deriveBits"]);
+  checkEncCryptoKey(key, alg, "deriveBits");
+  return key;
 }
 //@ chunk-5h78gfwc.js:13787-13828 esm-fingerprint
-var qt = (e, t) => E_2(A(e), Uint8Array.of(0), t);
+var concatSalt = (alg, p2sInput) => concat(encode(alg), Uint8Array.of(0), p2sInput);
 //@ chunk-5h78gfwc.js:13828-14141 esm-fingerprint
-async function at(e, t, r, n) {
-  if (!(e instanceof Uint8Array) || e.length < 8) throw new c("PBES2 Salt Input must be 8 or more octets");
-  let i = qt(t, e),
-    o = parseInt(t.slice(13, 16), 10),
-    a = { hash: `SHA-${t.slice(8, 11)}`, iterations: r, name: "PBKDF2", salt: i },
-    s = await Yt(n, t);
-  return new Uint8Array(await crypto.subtle.deriveBits(a, s, o));
+async function deriveKey_2(p2s, alg, p2c, key) {
+  if (!(p2s instanceof Uint8Array) || p2s.length < 8)
+    throw new JWEInvalid("PBES2 Salt Input must be 8 or more octets");
+  let salt = concatSalt(alg, p2s);
+  let o = parseInt(alg.slice(13, 16), 10);
+  let subtleAlg = {
+    hash: `SHA-${alg.slice(8, 11)}`,
+    iterations: p2c,
+    name: "PBKDF2",
+    salt,
+  };
+  let cryptoKey = await getCryptoKey(key, alg);
+  return new Uint8Array(await crypto.subtle.deriveBits(subtleAlg, cryptoKey, o));
 }
-
-export { at };
+export { deriveKey_2 };

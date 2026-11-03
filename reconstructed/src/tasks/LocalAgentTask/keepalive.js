@@ -12,27 +12,27 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { isCompletedBackgroundAgent } from "../taskKinds.js";
 
 //@ chunk-e6aww6q8.js:1620253-1620305 placement
-function jK() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_concurrent_shore", !0);
+function isConcurrentShoreOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_concurrent_shore", true);
 }
 //@ chunk-e6aww6q8.js:1620305-1620331 placement
 var FLAG_IDLE_WINDOW = "flag:idle-window";
+//@ chunk-e6aww6q8.js:1620331-1620471 placement
 /**
  * 判断后台代理已完成且只因空闲窗口保活。
  */
-//@ chunk-e6aww6q8.js:1620331-1620471 placement
 function isIdleCompletedAgent(e) {
   return (
     isCompletedBackgroundAgent(e) &&
     (!("keepaliveReasons" in e) ||
       !(e.keepaliveReasons instanceof Set) ||
-      [...e.keepaliveReasons].every((n) => n === FLAG_IDLE_WINDOW))
+      [...e.keepaliveReasons].every((keepaliveReason) => keepaliveReason === FLAG_IDLE_WINDOW))
   );
 }
+//@ chunk-e6aww6q8.js:1620471-1620626 placement
 /**
  * 判断本地代理已完成但仍有保活原因（在等待子任务）。
  */
-//@ chunk-e6aww6q8.js:1620471-1620626 placement
 function isWaitingOnChildren(e) {
   return (
     e.type === "local_agent" &&
@@ -42,5 +42,4 @@ function isWaitingOnChildren(e) {
     e.keepaliveReasons.size > 0
   );
 }
-
-export { FLAG_IDLE_WINDOW, isIdleCompletedAgent, jK, isWaitingOnChildren };
+export { FLAG_IDLE_WINDOW, isIdleCompletedAgent, isConcurrentShoreOn, isWaitingOnChildren };

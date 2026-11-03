@@ -9,9 +9,9 @@
  * attribution: placement 37, fingerprint 1
  */
 import { isDeepStrictEqual } from "util";
-import { randomUUID, randomUUID as randomUUID_2 } from "crypto";
+import { randomUUID } from "crypto";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o, kt, T, pe, oe } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string, looseObject, literal, record, unknown } from "../../vendor/zod/v4/classic/schemas.js";
 import { isDifferentString } from "../bridge/bridgePermissionResponse.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage, AbortError } from "../utils/errors.js";
@@ -20,15 +20,15 @@ import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytic
 import { logEvent } from "../services/analytics/index.js";
 import { SessionsV2Client } from "./SessionsV2Client.js";
 import {
-  H,
-  qkr,
+  noopGuard,
+  supportsSendNow,
   FORWARDED_CONTROL_REQUESTS,
   HOST_HANDLED_CONTROL_REQUESTS,
   holdFirstSendForSettings,
-  Me,
-  Vkr,
+  defaultHoldBudgetMs,
+  HOLD_MAX_MS,
 } from "../services/homeSeed/firstSend.js";
-import { Kkr } from "./backgroundTaskEvents.js";
+import { supportsBackgroundTasksMovesBash } from "./backgroundTaskEvents.js";
 import {
   controlResponseError,
   withOutcomeTelemetry,
@@ -36,10 +36,14 @@ import {
   ControlRequestTimeoutError,
 } from "./controlRequestErrors.js";
 import { MODEL_SET_STDOUT_PREFIX } from "../utils/messages.js";
-import { isSubagentToolRequest, R7 } from "./wireFrameShape.js";
+import { isSubagentToolRequest, UNSUPPORTED_CONTROL_SUBTYPE_TEXT } from "./wireFrameShape.js";
 import { count } from "../utils/collections.js";
 import { parseControlRequest } from "../entrypoints/sdk/controlSchemas.js";
-import { unexpectedValueFingerprint, KNe, m2 } from "./tools/protocolConstants.js";
+import {
+  unexpectedValueFingerprint,
+  isConfirmRepositoryTrustTool,
+  isRequestComputerFolderTool,
+} from "./tools/protocolConstants.js";
 import {
   sendEventToRemoteSession,
   sendBashCommandToRemoteSession,
@@ -53,118 +57,163 @@ import { sleep, withDeadline } from "../utils/sleep.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { logError } from "../utils/log.js";
 import { jsonStringify } from "../utils/slowOperations.js";
-import { aNt, servedAnswerTooLargeText } from "../services/remoteTools/servedAnswerSize.js";
+import {
+  servedAnswerLimitBytes,
+  servedAnswerTooLargeText,
+} from "../services/remoteTools/servedAnswerSize.js";
 import { parseDeviceHookId } from "../utils/hooks/deviceHookId.js";
-import { _Ce } from "../services/remoteTools/remoteToolsDebug.js";
+import { REMOTE_TOOLS_LOG_EVENTS } from "../services/remoteTools/remoteToolsDebug.js";
 import { getOauthConfig } from "../constants/oauth.js";
-import { Dt } from "../../vendor/axios/dist/esm/axios.js";
+import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 import { isTrustedDeviceGateEnabled } from "../bridge/trustedDevice.js";
 import { classifyElevatedAuthError } from "../bridge/codeSessionApi.js";
 import { isPlainObject } from "../utils/isPlainObject.js";
 import { SETTINGS_CONTROL_SUBTYPES } from "../cli/transports/ccrClient.js";
 
 //@ chunk-08945j39.js:35221-35287 placement
-function Wt(e) {
-  return e instanceof Error && e.name === "TimeoutError";
+function isTimeoutError(error) {
+  return error instanceof Error && error.name === "TimeoutError";
 }
 //@ chunk-08945j39.js:35287-35312 placement
-var et = 1000,
-  Vt = 8,
-  Xkr = 200;
+/**
+ * 远程会话跟踪容量常量：Set 型跟踪表（已应答请求 id、可恢复对话框 id 等）上限 1000、每请求记录的成功工具名上限 8、权限请求缓存上限 200。
+ */
+var MAX_TRACKED_REQUEST_IDS = 1000;
+var MAX_TOOL_NAMES_PER_REQUEST = 8;
+var MAX_CACHED_PERMISSION_REQUESTS = 200;
+//@ chunk-08945j39.js:35312-35581 placement
 /**
  * 远程会话中控制请求的 schema 表（can_use_tool、request_user_dialog）。
  */
-//@ chunk-08945j39.js:35312-35581 placement
 var CONTROL_REQUEST_SCHEMAS = {
   can_use_tool: DoctorLazy(() =>
     u({
-      request_id: o(),
-      request: kt({ subtype: T("can_use_tool"), tool_name: o(), input: pe(o(), oe()), tool_use_id: o() }),
+      request_id: string(),
+      request: looseObject({
+        subtype: literal("can_use_tool"),
+        tool_name: string(),
+        input: record(string(), unknown()),
+        tool_use_id: string(),
+      }),
     }),
   ),
   request_user_dialog: DoctorLazy(() =>
     u({
-      request_id: o(),
-      request: kt({ subtype: T("request_user_dialog"), dialog_kind: o(), payload: pe(o(), oe()) }),
+      request_id: string(),
+      request: looseObject({
+        subtype: literal("request_user_dialog"),
+        dialog_kind: string(),
+        payload: record(string(), unknown()),
+      }),
     }),
   ),
 };
 //@ chunk-08945j39.js:35735-35802 placement
-var jt = DoctorLazy(() => u({ subtype: T("success"), response: u({ toolName: o() }) }));
+var controlResponseSuccessSchema = DoctorLazy(() =>
+  u({
+    subtype: literal("success"),
+    response: u({
+      toolName: string(),
+    }),
+  }),
+);
 //@ chunk-08945j39.js:35802-35866 placement
-function tt(e) {
-  return jt().safeParse(e).data?.response.toolName;
+function getControlResponseToolName(e) {
+  return controlResponseSuccessSchema().safeParse(e).data?.response.toolName;
 }
 //@ chunk-08945j39.js:35866-35925 placement
-function xmo(e, n) {
-  return typeof n === "string" && isDifferentString(tt(e), n);
+/**
+ * 导出函数 `isToolNameDifferent`：参数 e, n，返回 typeof n === "string" && isDifferentString(tt(e), n)。
+ */
+function isToolNameDifferent(response, toolName) {
+  return typeof toolName === "string" && isDifferentString(getControlResponseToolName(response), toolName);
 }
 //@ chunk-08945j39.js:35925-35977 placement
-function Ge(e, n) {
+function isDeepEqualSafe(e, request) {
   try {
-    return isDeepStrictEqual(e, n);
+    return isDeepStrictEqual(e, request);
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-08945j39.js:35977-36073 placement
-function W(e, n) {
-  if ((e.add(n), e.size > et)) {
+function addCappedToSet(e, requestId) {
+  e.add(requestId);
+  if (e.size > MAX_TRACKED_REQUEST_IDS) {
     let s = e.values().next().value;
-    if (s !== void 0) e.delete(s);
+    if (s !== undefined) e.delete(s);
   }
 }
 //@ chunk-08945j39.js:36073-36177 placement
-function setCapped(e, n, s, i = Xkr) {
-  if ((e.set(n, s), e.size > i)) {
+function setCapped(e, requestId, s, i = MAX_CACHED_PERMISSION_REQUESTS) {
+  e.set(requestId, s);
+  if (e.size > i) {
     let r = e.keys().next().value;
-    if (r !== void 0) e.delete(r);
+    if (r !== undefined) e.delete(r);
   }
 }
 //@ chunk-08945j39.js:36177-36239 placement
-var eCs = ["can_use_tool", "request_user_dialog"],
-  Yt = 30000,
-  zt = 16;
+/**
+ * 需要转给本机处理的对话框类控制请求子类型：can_use_tool 与 request_user_dialog。
+ */
+var DIALOG_REQUEST_SUBTYPES = ["can_use_tool", "request_user_dialog"];
+var REPLAYED_REFUSAL_MAX_AGE_MS = 30000;
+var MAX_REPLAYED_REFUSALS = 16;
+//@ chunk-08945j39.js:36239-36375 placement
 /**
  * 把字符串转为可打印 ASCII 摘要（超过 80 字符截断并标出剩余长度）。
  */
-//@ chunk-08945j39.js:36239-36375 placement
-function printableExcerpt(e) {
-  return e.length > 80
-    ? `${e.slice(0, 80).replace(/[^\x20-\x7e]/g, "?")}\u2026(+${e.length - 80})`
-    : e.replace(/[^\x20-\x7e]/g, "?");
+function printableExcerpt(requestId) {
+  return requestId.length > 80
+    ? `${requestId.slice(0, 80).replace(/[^\x20-\x7e]/g, "?")}\u2026(+${requestId.length - 80})`
+    : requestId.replace(/[^\x20-\x7e]/g, "?");
 }
 //@ chunk-08945j39.js:36375-36407 placement
-var ie = 256,
-  Xt = 3,
-  Qt = 750,
-  Jt = 35000;
+/**
+ * 远程控制请求的长度与重试常量：id 上限 256 字符、withheld 首条消息重发最多 3 次、退避 750 ms、重试窗口 35 秒。
+ */
+var MAX_CONTROL_ID_LENGTH = 256;
+var MAX_WITHHELD_PROMPT_ATTEMPTS = 3;
+var WITHHELD_PROMPT_BACKOFF_MS = 750;
+var WITHHELD_PROMPT_RETRY_WINDOW_MS = 35000;
 //@ chunk-08945j39.js:36407-36552 placement
 function sendFailureKind(e) {
   if (e.withheld) return "withheld";
   if (e.status === 429) return "http_429";
-  if (e.status !== void 0) return "http_4xx";
+  if (e.status !== undefined) return "http_4xx";
   return e.cause ?? "unknown";
 }
 //@ chunk-08945j39.js:36552-36633 placement
-function Zt(e) {
+function isRetriableSendFailure(e) {
   return e === "http_429" || e === "server" || e === "timeout" || e === "network";
 }
 //@ chunk-08945j39.js:36633-36720 placement
-var nt = { timeout: "the service took too long to answer", network: "the connection failed" };
+var SEND_FAILURE_MESSAGES = {
+  timeout: "the service took too long to answer",
+  network: "the connection failed",
+};
 //@ chunk-08945j39.js:36720-36797 placement
-function tCs(e) {
+/**
+ * 导出函数 `sendFailureMessage`：参数 e，返回 n === "timeout" || n === "network" ? nt[n] : void 0。
+ */
+function sendFailureMessage(e) {
   let n = sendFailureKind(e);
-  return n === "timeout" || n === "network" ? nt[n] : void 0;
+  return n === "timeout" || n === "network" ? SEND_FAILURE_MESSAGES[n] : undefined;
 }
 //@ chunk-08945j39.js:36797-36928 placement
-var CANCELLED = "cancelled",
-  WITHDRAWN = "withdrawn",
-  je = { outcome: "failed", cause: "closed" },
-  en = 1500,
-  st = [1000, 5000, 15000, 45000],
-  ze = st.length,
-  tn = 120000;
+/**
+ * 未决应答的投递常量：取消/撤回文案、已关闭的投递结果、释放等待 1500 ms、重发退避 [1s,5s,15s,45s] 及次数上限、工具类控制请求超时 120 s。
+ */
+var CANCELLED = "cancelled";
+var WITHDRAWN = "withdrawn";
+var CLOSED_SEND_RESULT = {
+  outcome: "failed",
+  cause: "closed",
+};
+var HELD_SENDS_RELEASE_TIMEOUT_MS = 1500;
+var RESPONSE_RESEND_DELAYS_MS = [1000, 5000, 15000, 45000];
+var RESPONSE_RESEND_MAX_ATTEMPTS = RESPONSE_RESEND_DELAYS_MS.length;
+var TOOL_CONTROL_REQUEST_TIMEOUT_MS = 120000;
 //@ chunk-08945j39.js:36928-38165 placement
 function formatUndeliveredAnswerNotice(e, n) {
   switch (e) {
@@ -182,10 +231,10 @@ function formatUndeliveredAnswerNotice(e, n) {
         : "The result of work this machine did for the cloud session (such as a command it ran) could not be delivered; the session waits for it until its deadline and then carries on without it.";
   }
 }
+//@ chunk-08945j39.js:38165-75642 placement
 /**
  * 远程会话管理：连接云会话、转发权限请求与对话框回答、处理未送达
  */
-//@ chunk-08945j39.js:38165-75642 placement
 class RemoteSessionManager {
   config;
   callbacks;
@@ -197,10 +246,10 @@ class RemoteSessionManager {
   pendingDialogRequests = new Set();
   pendingForwardedHooks = new Set();
   settledForwardedHookIds = new Set();
-  workerSeenThisConnection = !1;
+  workerSeenThisConnection = false;
   replayedRefusalsAnswered = 0;
-  seedRequestsArmed = !1;
-  securityTierRaiseSeen = !1;
+  seedRequestsArmed = false;
+  securityTierRaiseSeen = false;
   pendingServedRequests = new Map();
   settledServedRequestIds = new Set();
   errorShapedControlResponseIds = new Set();
@@ -210,51 +259,52 @@ class RemoteSessionManager {
   reinstatablePermissionRequests = new Map();
   reinstatableDialogIds = new Set();
   pendingControlRequests = new Map();
-  workerStarting = !1;
+  workerStarting = false;
   pendingModelSwitchIds = new Set();
   sendGates = new Set();
   heldSends = new Set();
-  withholdableHeldTold = !1;
+  withholdableHeldTold = false;
   chainedSends = 0;
   lifetime = new AbortController();
-  serving = !1;
-  firstSendReleased = !1;
-  exitFlushRequested = !1;
+  serving = false;
+  firstSendReleased = false;
+  exitFlushRequested = false;
   withheldPromptInFlight = null;
-  sentAMessage = !1;
+  sentAMessage = false;
   sendsNow;
   movesBash;
   connections = 0;
   newestOwnMessageSequence = null;
-  lastHeld = { issued: Promise.resolve(), posted: Promise.resolve() };
+  lastHeld = {
+    issued: Promise.resolve(),
+    posted: Promise.resolve(),
+  };
   pendingInterrupt = null;
-  constructor(e, n) {
+  constructor(e, callbacks) {
     this.config = e;
-    this.callbacks = n;
-    if (
-      ((this.sendsNow = e.seedWorkerSendsNow),
-      (this.movesBash = e.seedWorkerMovesBash),
-      e.homeSeed !== void 0 && e.homeSeedHoldsFirstSend !== !1)
-    )
-      this.gateSendsOnSettings(e.homeSeed);
-    if (e.withheldInitialPrompt !== void 0) {
+    this.callbacks = callbacks;
+    this.sendsNow = e.seedWorkerSendsNow;
+    this.movesBash = e.seedWorkerMovesBash;
+    if (e.homeSeed !== undefined && e.homeSeedHoldsFirstSend !== false) this.gateSendsOnSettings(e.homeSeed);
+    if (e.withheldInitialPrompt !== undefined) {
       let withheldInitialPrompt = e.withheldInitialPrompt;
       queueMicrotask(() => void this.sendWithheldInitialPrompt(withheldInitialPrompt));
     }
   }
   connect() {
     logForDebugging(`[RemoteSessionManager] Connecting to session ${this.config.sessionId}`);
-    let e = {
+    let callbacks = {
       onMessage: (n, s) => this.handleMessage(n, s),
       onConnected: (n) => {
-        (logForDebugging("[RemoteSessionManager] Connected"), (this.replayedRefusalsAnswered = 0));
-        for (let s of this.undeliveredResponses.values())
-          if (((s.failures = 0), s.giveUpOnSettle === "undelivered")) s.giveUpOnSettle = null;
-        if (
-          (this.resendUndeliveredResponses(),
-          (this.workerSeenThisConnection = !1),
-          this.securityTierRaiseSeen)
-        )
+        logForDebugging("[RemoteSessionManager] Connected");
+        this.replayedRefusalsAnswered = 0;
+        for (let undeliveredResponse of this.undeliveredResponses.values()) {
+          undeliveredResponse.failures = 0;
+          if (undeliveredResponse.giveUpOnSettle === "undelivered") undeliveredResponse.giveUpOnSettle = null;
+        }
+        this.resendUndeliveredResponses();
+        this.workerSeenThisConnection = false;
+        if (this.securityTierRaiseSeen)
           try {
             this.config.rebindEventSigner?.();
           } catch (error) {
@@ -262,15 +312,16 @@ class RemoteSessionManager {
               level: "error",
             });
           }
-        if ((this.callbacks.onConnected?.(n), !this.seedRequestsArmed && !this.lifetime.signal.aborted)) {
-          this.seedRequestsArmed = !0;
-          let size = this.pendingPermissionRequests.size,
-            mapped = (this.config.seedSubagentRequests ?? []).map((S) =>
-              safeEmit((h) => this.handleControlRequest(h, {}), S, "RemoteSessionManager, attach seed"),
-            );
-          if (mapped.length > 0 && !mapped.includes(!0))
+        this.callbacks.onConnected?.(n);
+        if (!this.seedRequestsArmed && !this.lifetime.signal.aborted) {
+          this.seedRequestsArmed = true;
+          let size = this.pendingPermissionRequests.size;
+          let mapped = (this.config.seedSubagentRequests ?? []).map((S) =>
+            safeEmit((h) => this.handleControlRequest(h, {}), S, "RemoteSessionManager, attach seed"),
+          );
+          if (mapped.length > 0 && !mapped.includes(true))
             logFeatureBad("remote_permission_seed_adoption", "handler_threw");
-          else if (mapped.includes(!1)) logFeatureSad("remote_permission_seed_adoption", "handler_threw");
+          else if (mapped.includes(false)) logFeatureSad("remote_permission_seed_adoption", "handler_threw");
           else if (mapped.length > 0) logFeatureOk("remote_permission_seed_adoption");
           let r = this.pendingPermissionRequests.size - size;
           if (r > 0)
@@ -281,120 +332,134 @@ class RemoteSessionManager {
         }
       },
       onClose: (n) => {
-        if ((logForDebugging("[RemoteSessionManager] Disconnected"), this.client?.isRevivable()))
-          this.giveUpUndeliveredResponses();
+        logForDebugging("[RemoteSessionManager] Disconnected");
+        if (this.client?.isRevivable()) this.giveUpUndeliveredResponses();
         else this.dropUndeliveredResponses();
-        (this.endWorkerStart(), this.callbacks.onDisconnected?.(n));
+        this.endWorkerStart();
+        this.callbacks.onDisconnected?.(n);
       },
       onReconnecting: () => {
-        ((this.workerSeenThisConnection = !1),
-          logForDebugging("[RemoteSessionManager] Reconnecting"),
-          this.callbacks.onReconnecting?.());
+        this.workerSeenThisConnection = false;
+        logForDebugging("[RemoteSessionManager] Reconnecting");
+        this.callbacks.onReconnecting?.();
       },
       onStreamSilent: (n) => this.callbacks.onStreamSilent?.(n),
-      onDeliveryUpdate: ({ eventId: eventId, status: status }) => {
+      onDeliveryUpdate: ({ eventId, status }) => {
         if (/PROCESS(ING|ED)$/i.test(status)) this.callbacks.onLineTaken?.(eventId);
       },
       onOwnRequestEchoed: (n, s) => {
         let i = this.pendingControlRequests.get(n);
-        if (i?.onEchoed) (this.pendingControlRequests.set(n, { ...i, onEchoed: void 0 }), i.onEchoed(s));
+        if (i?.onEchoed) {
+          this.pendingControlRequests.set(n, {
+            ...i,
+            onEchoed: undefined,
+          });
+          i.onEchoed(s);
+        }
       },
       onWorkerConnectionStatus: (n) => {
-        if (
-          (logForDebugging(
-            `[RemoteSessionManager] The service reports the worker ${n === "connected" || n === "disconnected" ? n : "in an unknown state"}`,
-          ),
-          n === "connected")
-        )
-          (this.noteWorkerLive(), this.callbacks.onWorkerConnectionStatus?.(n));
-        else if (n === "disconnected") {
+        logForDebugging(
+          `[RemoteSessionManager] The service reports the worker ${n === "connected" || n === "disconnected" ? n : "in an unknown state"}`,
+        );
+        if (n === "connected") {
+          this.noteWorkerLive();
+          this.callbacks.onWorkerConnectionStatus?.(n);
+        } else if (n === "disconnected") {
           if (this.workerSeenThisConnection) this.endWorkerStart();
-          ((this.workerSeenThisConnection = !1),
-            this.callbacks.onWorkerGone?.(),
-            this.callbacks.onWorkerConnectionStatus?.(n));
+          this.workerSeenThisConnection = false;
+          this.callbacks.onWorkerGone?.();
+          this.callbacks.onWorkerConnectionStatus?.(n);
         }
       },
       onSecurityTierRaised: () => {
-        this.securityTierRaiseSeen = !0;
+        this.securityTierRaiseSeen = true;
       },
       onToolHostEnded: (n) => {
-        (logForDebugging(
+        logForDebugging(
           "[RemoteSessionManager] The service ended this session's connection to a computer serving its tools",
-        ),
-          this.callbacks.onToolHostEnded?.(n));
+        );
+        this.callbacks.onToolHostEnded?.(n);
       },
       ...{},
       onCatchUpTruncated: () => {
-        (logForDebugging("[RemoteSessionManager] Catch-up truncated"), this.callbacks.onCatchUpTruncated?.());
+        logForDebugging("[RemoteSessionManager] Catch-up truncated");
+        this.callbacks.onCatchUpTruncated?.();
       },
       onError: (n) => {
-        (logForDebugging(`[RemoteSessionManager] Stream error: ${n.message}`, { level: "error" }),
-          this.callbacks.onError?.(n));
+        logForDebugging(`[RemoteSessionManager] Stream error: ${n.message}`, {
+          level: "error",
+        });
+        this.callbacks.onError?.(n);
       },
     };
-    ((this.client = new SessionsV2Client(
+    this.client = new SessionsV2Client(
       this.config.sessionId,
       this.config.orgUuid,
       this.config.getAccessToken,
-      e,
+      callbacks,
       this.config.onAuth401,
       this.config.initialSequenceNum,
       {
-        trackSends: this.config.trackSendsInFlight === !0,
-        controlOnly: this.config.controlOnly === !0,
-        admitProjectPersonMessages: this.config.admitProjectPersonMessages === !0,
-        keepRedialling: () => this.config.keepStreamRedialling === !0 || this.serving,
-        withholdTrustedDeviceToken: this.config.consoleProfileBearer === !0,
+        trackSends: this.config.trackSendsInFlight === true,
+        controlOnly: this.config.controlOnly === true,
+        admitProjectPersonMessages: this.config.admitProjectPersonMessages === true,
+        keepRedialling: () => this.config.keepStreamRedialling === true || this.serving,
+        withholdTrustedDeviceToken: this.config.consoleProfileBearer === true,
         ...this.signedOpts({}),
       },
-    )),
-      this.client.connect());
+    );
+    this.client.connect();
   }
   handleMessage(e, n = {}) {
-    if ((H("in", e, n), n.source === "worker" && n.replayed !== !0)) this.noteWorkerLive();
-    if (n.source === "worker" && e.type === "system" && e.subtype === "init")
-      ((this.sendsNow = qkr(e)), (this.movesBash = Kkr(e)));
+    noopGuard("in", e, n);
+    if (n.source === "worker" && n.replayed !== true) this.noteWorkerLive();
+    if (n.source === "worker" && e.type === "system" && e.subtype === "init") {
+      this.sendsNow = supportsSendNow(e);
+      this.movesBash = supportsBackgroundTasksMovesBash(e);
+    }
     if (e.type === "control_request") {
       this.handleControlRequest(e, n);
       return;
     }
     if (e.type === "control_cancel_request") {
-      let { request_id: request_id } = e;
-      (this.reinstatablePermissionRequests.delete(request_id), this.reinstatableDialogIds.delete(request_id));
-      let i = this.undeliveredResponses.get(request_id);
+      let { request_id: requestId } = e;
+      this.reinstatablePermissionRequests.delete(requestId);
+      this.reinstatableDialogIds.delete(requestId);
+      let i = this.undeliveredResponses.get(requestId);
       if (i?.kind === "hook" || i?.kind === "tool") this.giveUp(i, "overtaken");
       else if (i) this.dropKept(i);
       else if (
-        this.config.keepUndeliveredResponses === !0 &&
-        this.settledForwardedHookIds.has(request_id) &&
-        !this.hookGiveUpsTold.has(request_id)
-      )
-        (W(this.hookGiveUpsTold, request_id),
-          logFeatureBad("remote_control_response", "overtaken"),
-          this.callbacks.onResponseUndelivered?.(request_id, "hook", "overtaken"));
-      if (this.pendingForwardedHooks.delete(request_id)) {
-        (logForDebugging(
-          `[RemoteSessionManager] Forwarded hook request cancelled by the worker: ${printableExcerpt(request_id)}`,
-        ),
-          this.callbacks.onForwardedHookCancelled?.(request_id, "worker"));
+        this.config.keepUndeliveredResponses === true &&
+        this.settledForwardedHookIds.has(requestId) &&
+        !this.hookGiveUpsTold.has(requestId)
+      ) {
+        addCappedToSet(this.hookGiveUpsTold, requestId);
+        logFeatureBad("remote_control_response", "overtaken");
+        this.callbacks.onResponseUndelivered?.(requestId, "hook", "overtaken");
+      }
+      if (this.pendingForwardedHooks.delete(requestId)) {
+        logForDebugging(
+          `[RemoteSessionManager] Forwarded hook request cancelled by the worker: ${printableExcerpt(requestId)}`,
+        );
+        this.callbacks.onForwardedHookCancelled?.(requestId, "worker");
         return;
       }
-      if (this.retireServedRequest(request_id, "worker")) return;
-      if (this.pendingDialogRequests.delete(request_id)) {
-        (logForDebugging(`[RemoteSessionManager] User dialog request cancelled: ${request_id}`),
-          this.callbacks.onUserDialogCancelled?.(request_id));
+      if (this.retireServedRequest(requestId, "worker")) return;
+      if (this.pendingDialogRequests.delete(requestId)) {
+        logForDebugging(`[RemoteSessionManager] User dialog request cancelled: ${requestId}`);
+        this.callbacks.onUserDialogCancelled?.(requestId);
         return;
       }
-      let r = this.pendingPermissionRequests.get(request_id);
+      let r = this.pendingPermissionRequests.get(requestId);
       if (!r) {
         logForDebugging(
-          `[RemoteSessionManager] control_cancel_request for unknown request ${request_id} \u2014 nothing pending, ignoring`,
+          `[RemoteSessionManager] control_cancel_request for unknown request ${requestId} \u2014 nothing pending, ignoring`,
         );
         return;
       }
-      (logForDebugging(`[RemoteSessionManager] Permission request cancelled: ${request_id}`),
-        this.retirePermissionRequest(request_id),
-        this.callbacks.onPermissionCancelled?.(request_id, r.tool_use_id));
+      logForDebugging(`[RemoteSessionManager] Permission request cancelled: ${requestId}`);
+      this.retirePermissionRequest(requestId);
+      this.callbacks.onPermissionCancelled?.(requestId, r.tool_use_id);
       return;
     }
     if (e.type === "system" && e.subtype === "control_request_progress") {
@@ -407,72 +472,81 @@ class RemoteSessionManager {
         return;
       }
       clearTimeout(s.timer);
-      let i = setTimeout(this.onControlRequestTimeout, s.timeoutMs, e.request_id, s.subtype, s.timeoutMs);
-      (this.pendingControlRequests.set(e.request_id, { ...s, timer: i }), s.onProgress?.(e));
+      let timer = setTimeout(this.onControlRequestTimeout, s.timeoutMs, e.request_id, s.subtype, s.timeoutMs);
+      this.pendingControlRequests.set(e.request_id, {
+        ...s,
+        timer,
+      });
+      s.onProgress?.(e);
       return;
     }
     if (e.type === "control_response") {
-      let { request_id: request_id } = e.response,
-        i = this.config.ignoreErrorShapedDialogReplies === !0 && e.response.subtype === "error",
-        r = tt(e.response),
-        S = this.seenSuccessToolNames.get(request_id) ?? [],
-        h = this.pendingPermissionRequests.get(request_id),
-        v = h !== void 0 && isDifferentString(r, h.tool_name);
-      if (i) W(this.errorShapedControlResponseIds, request_id);
-      else if (r !== void 0 && S.length < Vt && !v)
-        setCapped(this.seenSuccessToolNames, request_id, [...S, r], et);
-      else if (!v) this.recordSeenControlResponseId(request_id);
-      let w = this.undeliveredResponses.get(request_id);
-      if (w !== void 0 && "uuid" in e && e.uuid === w.uuid && w.giveUpOnSettle !== "overtaken")
-        if ((this.dropKept(w), w.failures > 0)) logFeatureSad("remote_control_response", "recovered");
+      let { request_id: requestId } = e.response;
+      let i = this.config.ignoreErrorShapedDialogReplies === true && e.response.subtype === "error";
+      let controlResponseToolName = getControlResponseToolName(e.response);
+      let S = this.seenSuccessToolNames.get(requestId) ?? [];
+      let h = this.pendingPermissionRequests.get(requestId);
+      let v = h !== undefined && isDifferentString(controlResponseToolName, h.tool_name);
+      if (i) addCappedToSet(this.errorShapedControlResponseIds, requestId);
+      else if (controlResponseToolName !== undefined && S.length < MAX_TOOL_NAMES_PER_REQUEST && !v)
+        setCapped(
+          this.seenSuccessToolNames,
+          requestId,
+          [...S, controlResponseToolName],
+          MAX_TRACKED_REQUEST_IDS,
+        );
+      else if (!v) this.recordSeenControlResponseId(requestId);
+      let w = this.undeliveredResponses.get(requestId);
+      if (w !== undefined && "uuid" in e && e.uuid === w.uuid && w.giveUpOnSettle !== "overtaken") {
+        this.dropKept(w);
+        if (w.failures > 0) logFeatureSad("remote_control_response", "recovered");
         else logFeatureOk("remote_control_response");
-      this.pendingModelSwitchIds.delete(request_id);
-      let R = this.pendingControlRequests.get(request_id);
-      if (R)
-        if (
-          (this.pendingControlRequests.delete(request_id),
-          clearTimeout(R.timer),
-          R.removeAbortListener?.(),
-          this.endWorkerStart(),
-          e.response.subtype === "success")
-        )
-          R.resolve(e.response.response);
+      }
+      this.pendingModelSwitchIds.delete(requestId);
+      let R = this.pendingControlRequests.get(requestId);
+      if (R) {
+        this.pendingControlRequests.delete(requestId);
+        clearTimeout(R.timer);
+        R.removeAbortListener?.();
+        this.endWorkerStart();
+        if (e.response.subtype === "success") R.resolve(e.response.response);
         else R.reject(controlResponseError(e.response));
-      else {
-        let y = this.pendingPermissionRequests.get(request_id);
+      } else {
+        let y = this.pendingPermissionRequests.get(requestId);
         if (y) {
           if (v) {
             logForDebugging(
-              `[RemoteSessionManager] Permission response ${request_id} has mismatched toolName \u2014 worker will drop it, keeping prompt`,
+              `[RemoteSessionManager] Permission response ${requestId} has mismatched toolName \u2014 worker will drop it, keeping prompt`,
             );
             return;
           }
-          (this.retirePermissionRequest(request_id),
-            logForDebugging(
-              `[RemoteSessionManager] Permission request ${request_id} answered elsewhere \u2014 dismissing`,
-            ),
-            this.callbacks.onPermissionCancelled?.(request_id, y.tool_use_id));
-        } else if (this.pendingDialogRequests.has(request_id))
+          this.retirePermissionRequest(requestId);
+          logForDebugging(
+            `[RemoteSessionManager] Permission request ${requestId} answered elsewhere \u2014 dismissing`,
+          );
+          this.callbacks.onPermissionCancelled?.(requestId, y.tool_use_id);
+        } else if (this.pendingDialogRequests.has(requestId)) {
           if (i)
             logForDebugging(
-              `[RemoteSessionManager] User dialog request ${request_id} got an error-shaped reply elsewhere \u2014 worker still waiting, keeping it`,
+              `[RemoteSessionManager] User dialog request ${requestId} got an error-shaped reply elsewhere \u2014 worker still waiting, keeping it`,
             );
-          else
-            (this.pendingDialogRequests.delete(request_id),
-              logForDebugging(
-                `[RemoteSessionManager] User dialog request ${request_id} answered elsewhere \u2014 dismissing`,
-              ),
-              this.callbacks.onUserDialogCancelled?.(request_id));
-        else if (this.pendingForwardedHooks.has(request_id))
+          else {
+            this.pendingDialogRequests.delete(requestId);
+            logForDebugging(
+              `[RemoteSessionManager] User dialog request ${requestId} answered elsewhere \u2014 dismissing`,
+            );
+            this.callbacks.onUserDialogCancelled?.(requestId);
+          }
+        } else if (this.pendingForwardedHooks.has(requestId))
           logForDebugging(
-            `[RemoteSessionManager] Ignoring a peer control_response (${e.response.subtype}) for forwarded hook request ${printableExcerpt(request_id)} \u2014 still answering it here`,
+            `[RemoteSessionManager] Ignoring a peer control_response (${e.response.subtype}) for forwarded hook request ${printableExcerpt(requestId)} \u2014 still answering it here`,
           );
-        else if (!this.settledServedRequestIds.has(request_id))
+        else if (!this.settledServedRequestIds.has(requestId))
           logForDebugging(
-            `[RemoteSessionManager] Unmatched control_response ${request_id} (${e.response.subtype})${e.response.subtype === "error" ? `: ${e.response.error}` : ""}`,
+            `[RemoteSessionManager] Unmatched control_response ${requestId} (${e.response.subtype})${e.response.subtype === "error" ? `: ${e.response.error}` : ""}`,
           );
       }
-      if (this.config.rearmRedeliveredPermissionRequests === !0)
+      if (this.config.rearmRedeliveredPermissionRequests === true)
         this.rearmRedelivered(
           e.response.pending_permission_requests,
           "can_use_tool",
@@ -486,39 +560,40 @@ class RemoteSessionManager {
       return;
     }
     if (
-      this.config.keepOwnModelSwitchBreadcrumb !== !0 &&
+      this.config.keepOwnModelSwitchBreadcrumb !== true &&
       this.pendingModelSwitchIds.size > 0 &&
       e.type === "user" &&
       "isReplay" in e &&
-      e.isReplay === !0 &&
+      e.isReplay === true &&
       typeof e.message?.content === "string" &&
       e.message.content.startsWith(MODEL_SET_STDOUT_PREFIX)
     ) {
       let [s] = this.pendingModelSwitchIds;
-      (this.pendingModelSwitchIds.delete(s),
-        logForDebugging("[RemoteSessionManager] Dropped own set_model breadcrumb echo"));
+      this.pendingModelSwitchIds.delete(s);
+      logForDebugging("[RemoteSessionManager] Dropped own set_model breadcrumb echo");
       return;
     }
     if (e.type === "result") {
       if (
         this.sentAMessage ||
-        this.config.homeSeedHoldsFirstSend !== !1 ||
-        this.config.initialPromptUuid !== void 0
+        this.config.homeSeedHoldsFirstSend !== false ||
+        this.config.initialPromptUuid !== undefined
       )
         this.config.homeSeed?.afterFirstReply(this.lifetime.signal);
-      let s = [...this.pendingPermissionRequests],
-        r =
-          this.config.subagentRequestsOutliveTheTurn === !0
-            ? s.filter(([, S]) => !isSubagentToolRequest(S))
-            : s;
-      for (let [S, h] of r)
-        (logForDebugging(
+      let s = [...this.pendingPermissionRequests];
+      let r =
+        this.config.subagentRequestsOutliveTheTurn === true
+          ? s.filter(([, S]) => !isSubagentToolRequest(S))
+          : s;
+      for (let [S, h] of r) {
+        logForDebugging(
           `[RemoteSessionManager] Turn ended with permission request ${S} unresolved \u2014 dismissing`,
-        ),
-          this.callbacks.onPermissionCancelled?.(S, h.tool_use_id),
-          this.retirePermissionRequest(S),
-          setCapped(this.reinstatablePermissionRequests, S, h));
-      if (s.length > 0 && n.replayed !== !0) {
+        );
+        this.callbacks.onPermissionCancelled?.(S, h.tool_use_id);
+        this.retirePermissionRequest(S);
+        setCapped(this.reinstatablePermissionRequests, S, h);
+      }
+      if (s.length > 0 && n.replayed !== true) {
         let S = count(s, ([, h]) => isSubagentToolRequest(h));
         logEvent("tengu_remote_turn_ended_with_open_permission_requests", {
           from_main_thread: s.length - S,
@@ -526,117 +601,143 @@ class RemoteSessionManager {
           kept_open: s.length - r.length,
         });
       }
-      for (let pendingDialogRequest of this.pendingDialogRequests)
-        (logForDebugging(
+      for (let pendingDialogRequest of this.pendingDialogRequests) {
+        logForDebugging(
           `[RemoteSessionManager] Turn ended with user dialog request ${pendingDialogRequest} unresolved \u2014 dismissing`,
-        ),
-          this.callbacks.onUserDialogCancelled?.(pendingDialogRequest),
-          W(this.reinstatableDialogIds, pendingDialogRequest));
+        );
+        this.callbacks.onUserDialogCancelled?.(pendingDialogRequest);
+        addCappedToSet(this.reinstatableDialogIds, pendingDialogRequest);
+      }
       this.pendingDialogRequests.clear();
     }
     this.callbacks.onMessage(e, n);
   }
   retirePermissionRequest(e) {
-    (this.pendingPermissionRequests.delete(e), this.retiredPermissionRequestIds.add(e));
+    this.pendingPermissionRequests.delete(e);
+    this.retiredPermissionRequestIds.add(e);
   }
-  rearmRedelivered(e, n, s) {
+  rearmRedelivered(e, schemaKey, s) {
     if (!Array.isArray(e)) return;
-    e.slice(0, Xkr).forEach((i) => {
-      let r = parseControlRequest(i, n);
-      if (r === null) return;
-      let S = this.seenSuccessToolNames.get(r.request_id),
-        { request: request } = r;
+    e.slice(0, MAX_CACHED_PERMISSION_REQUESTS).forEach((i) => {
+      let controlRequest = parseControlRequest(i, schemaKey);
+      if (controlRequest === null) return;
+      let S = this.seenSuccessToolNames.get(controlRequest.request_id);
+      let { request } = controlRequest;
       if (
-        this.seenControlResponseIds.has(r.request_id) ||
-        (n === "can_use_tool" && this.errorShapedControlResponseIds.has(r.request_id)) ||
-        (S !== void 0 &&
+        this.seenControlResponseIds.has(controlRequest.request_id) ||
+        (schemaKey === "can_use_tool" && this.errorShapedControlResponseIds.has(controlRequest.request_id)) ||
+        (S !== undefined &&
           !(request.subtype === "can_use_tool" && S.every((R) => isDifferentString(R, request.tool_name))))
       ) {
         logForDebugging(
-          `[RemoteSessionManager] Redelivered ${n} ${printableExcerpt(r.request_id)} already answered \u2014 skipping`,
+          `[RemoteSessionManager] Redelivered ${schemaKey} ${printableExcerpt(controlRequest.request_id)} already answered \u2014 skipping`,
         );
         return;
       }
-      let v = !1;
-      if (n === "can_use_tool" && this.retiredPermissionRequestIds.has(r.request_id)) {
-        let R = this.reinstatablePermissionRequests.get(r.request_id);
-        if (R === void 0) {
+      let v = false;
+      if (schemaKey === "can_use_tool" && this.retiredPermissionRequestIds.has(controlRequest.request_id)) {
+        let R = this.reinstatablePermissionRequests.get(controlRequest.request_id);
+        if (R === undefined) {
           logForDebugging(
-            `[RemoteSessionManager] Redelivered can_use_tool ${printableExcerpt(r.request_id)} already retired here \u2014 skipping`,
+            `[RemoteSessionManager] Redelivered can_use_tool ${printableExcerpt(controlRequest.request_id)} already retired here \u2014 skipping`,
           );
           return;
         }
-        if ((this.reinstatablePermissionRequests.delete(r.request_id), !Ge(R, r.request))) {
-          (logFeatureBad("remote_permission_request", "redelivered_mismatch"),
-            logForDebugging(
-              `[RemoteSessionManager] Redelivered can_use_tool ${printableExcerpt(r.request_id)} differs from the request first shown under that id \u2014 not arming it`,
-              { level: "warn" },
-            ));
+        this.reinstatablePermissionRequests.delete(controlRequest.request_id);
+        if (!isDeepEqualSafe(R, controlRequest.request)) {
+          logFeatureBad("remote_permission_request", "redelivered_mismatch");
+          logForDebugging(
+            `[RemoteSessionManager] Redelivered can_use_tool ${printableExcerpt(controlRequest.request_id)} differs from the request first shown under that id \u2014 not arming it`,
+            {
+              level: "warn",
+            },
+          );
           return;
         }
-        (this.retiredPermissionRequestIds.delete(r.request_id), (v = !0));
-      } else if (n === "request_user_dialog") v = this.reinstatableDialogIds.has(r.request_id);
-      let w = s.has(r.request_id);
-      if ((this.handleControlRequest(r, {}, { reinstated: v }), !w && s.has(r.request_id)))
-        (this.reinstatableDialogIds.delete(r.request_id),
-          logFeatureOk(n === "can_use_tool" ? "remote_permission_redelivery" : "remote_dialog_redelivery"));
+        this.retiredPermissionRequestIds.delete(controlRequest.request_id);
+        v = true;
+      } else if (schemaKey === "request_user_dialog")
+        v = this.reinstatableDialogIds.has(controlRequest.request_id);
+      let w = s.has(controlRequest.request_id);
+      this.handleControlRequest(
+        controlRequest,
+        {},
+        {
+          reinstated: v,
+        },
+      );
+      if (!w && s.has(controlRequest.request_id)) {
+        this.reinstatableDialogIds.delete(controlRequest.request_id);
+        logFeatureOk(
+          schemaKey === "can_use_tool" ? "remote_permission_redelivery" : "remote_dialog_redelivery",
+        );
+      }
     });
   }
   recordSeenControlResponseId(e) {
-    W(this.seenControlResponseIds, e);
+    addCappedToSet(this.seenControlResponseIds, e);
   }
   recordSettledForwardedHookId(e) {
-    W(this.settledForwardedHookIds, e);
+    addCappedToSet(this.settledForwardedHookIds, e);
   }
-  handleControlRequest(e, { ageMs: n, attestationStatus: s, modeStamp: i, replayed: r }, S) {
-    let { request_id: request_id, request: request } = e,
-      w = { replayed: r, ageMs: n },
-      R =
-        typeof request === "object" && request !== null && Object.hasOwn(request, "subtype")
-          ? request.subtype
-          : void 0,
-      y = unexpectedValueFingerprint(R, FORWARDED_CONTROL_REQUESTS);
-    if (y !== void 0) {
-      let found = HOST_HANDLED_CONTROL_REQUESTS.find((k) => k === R);
-      if (
-        (this.refuseControlRequest(
-          request_id,
-          found !== void 0
-            ? `${found}, which another client answers,`
-            : `a control request of a kind no client of this build handles (${y.length} characters, sha12 ${y.hash}${y.variantOfListed ? ", a variant of a listed kind" : ""})`,
-          w,
-        ),
-        found === void 0)
-      )
-        this.callbacks.onControlRequestRefused?.(y);
+  handleControlRequest(e, { ageMs, attestationStatus, modeStamp, replayed }, S) {
+    let { request_id: requestId, request } = e;
+    let w = {
+      replayed,
+      ageMs,
+    };
+    let subtype =
+      typeof request === "object" && request !== null && Object.hasOwn(request, "subtype")
+        ? request.subtype
+        : undefined;
+    let y = unexpectedValueFingerprint(subtype, FORWARDED_CONTROL_REQUESTS);
+    if (y !== undefined) {
+      let found = HOST_HANDLED_CONTROL_REQUESTS.find((k) => k === subtype);
+      this.refuseControlRequest(
+        requestId,
+        found !== undefined
+          ? `${found}, which another client answers,`
+          : `a control request of a kind no client of this build handles (${y.length} characters, sha12 ${y.hash}${y.variantOfListed ? ", a variant of a listed kind" : ""})`,
+        w,
+      );
+      if (found === undefined) this.callbacks.onControlRequestRefused?.(y);
       return;
     }
-    if (typeof request_id !== "string") {
-      this.refuseControlRequest(request_id, `${request.subtype} with an id that is not a string`, w);
+    if (typeof requestId !== "string") {
+      this.refuseControlRequest(requestId, `${request.subtype} with an id that is not a string`, w);
       return;
     }
     if (request.subtype === "can_use_tool") {
       logForDebugging(`[RemoteSessionManager] Permission request for tool: ${request.tool_name}`);
-      let b = this.pendingPermissionRequests.get(request_id);
-      if (b !== void 0) {
-        if (Ge(b, request))
+      let b = this.pendingPermissionRequests.get(requestId);
+      if (b !== undefined) {
+        if (isDeepEqualSafe(b, request))
           logForDebugging(
-            `[RemoteSessionManager] Duplicate permission request ${printableExcerpt(String(request_id))} \u2014 already pending, skipping`,
+            `[RemoteSessionManager] Duplicate permission request ${printableExcerpt(String(requestId))} \u2014 already pending, skipping`,
           );
-        else
-          (logFeatureBad("remote_permission_request", "redelivered_mismatch"),
-            logForDebugging(
-              `[RemoteSessionManager] Permission request ${printableExcerpt(String(request_id))} redelivered with a different body (${printableExcerpt(String(request.tool_name))}) \u2014 keeping the one first shown (${printableExcerpt(b.tool_name)})`,
-              { level: "warn" },
-            ));
+        else {
+          logFeatureBad("remote_permission_request", "redelivered_mismatch");
+          logForDebugging(
+            `[RemoteSessionManager] Permission request ${printableExcerpt(String(requestId))} redelivered with a different body (${printableExcerpt(String(request.tool_name))}) \u2014 keeping the one first shown (${printableExcerpt(b.tool_name)})`,
+            {
+              level: "warn",
+            },
+          );
+        }
         return;
       }
-      if (this.retiredPermissionRequestIds.has(request_id)) {
-        if (this.config.seedSubagentRequests?.some((q) => q.request_id === request_id) !== !0)
+      if (this.retiredPermissionRequestIds.has(requestId)) {
+        if (
+          this.config.seedSubagentRequests?.some(
+            (seedSubagentRequest) => seedSubagentRequest.request_id === requestId,
+          ) !== true
+        )
           logFeatureBad("remote_permission_request", "retired_id_rearmed");
         logForDebugging(
-          `[RemoteSessionManager] Permission request ${printableExcerpt(String(request_id))} arrived again after it was retired here \u2014 not arming it`,
-          { level: "warn" },
+          `[RemoteSessionManager] Permission request ${printableExcerpt(String(requestId))} arrived again after it was retired here \u2014 not arming it`,
+          {
+            level: "warn",
+          },
         );
         return;
       }
@@ -646,221 +747,277 @@ class RemoteSessionManager {
       } catch {
         k = request;
       }
-      (this.pendingPermissionRequests.set(request_id, k),
-        this.callbacks.onPermissionRequest(request, request_id, S, r === !0));
+      this.pendingPermissionRequests.set(requestId, k);
+      this.callbacks.onPermissionRequest(request, requestId, S, replayed === true);
       return;
     }
     if (request.subtype === "request_user_dialog") {
-      if (this.pendingDialogRequests.has(request_id)) {
+      if (this.pendingDialogRequests.has(requestId)) {
         logForDebugging(
-          `[RemoteSessionManager] Duplicate user dialog request ${request_id} \u2014 already pending, skipping`,
+          `[RemoteSessionManager] Duplicate user dialog request ${requestId} \u2014 already pending, skipping`,
         );
         return;
       }
-      (logForDebugging(`[RemoteSessionManager] User dialog request: ${request.dialog_kind}`),
-        this.pendingDialogRequests.add(request_id),
-        this.callbacks.onUserDialogRequest(request, request_id, S));
+      logForDebugging(`[RemoteSessionManager] User dialog request: ${request.dialog_kind}`);
+      this.pendingDialogRequests.add(requestId);
+      this.callbacks.onUserDialogRequest(request, requestId, S);
       return;
     }
     if (request.subtype === "hook_callback" && isDeviceHookRequest(request)) {
       let onForwardedHookCallback = this.callbacks.onForwardedHookCallback;
       if (!onForwardedHookCallback) {
         logForDebugging(
-          `[RemoteSessionManager] Forwarded hook_callback ${printableExcerpt(request_id)} \u2014 not serving device hooks here, leaving it unanswered`,
+          `[RemoteSessionManager] Forwarded hook_callback ${printableExcerpt(requestId)} \u2014 not serving device hooks here, leaving it unanswered`,
         );
         return;
       }
-      if (request_id.length > ie || request.callback_id.length > ie) {
+      if (requestId.length > MAX_CONTROL_ID_LENGTH || request.callback_id.length > MAX_CONTROL_ID_LENGTH) {
         logForDebugging(
-          `[RemoteSessionManager] Forwarded hook_callback ${printableExcerpt(request_id)} \u2014 an id longer than ${ie} characters, leaving it unanswered`,
+          `[RemoteSessionManager] Forwarded hook_callback ${printableExcerpt(requestId)} \u2014 an id longer than ${MAX_CONTROL_ID_LENGTH} characters, leaving it unanswered`,
         );
         return;
       }
       let k = {
-          requestId: request_id,
-          callbackId: request.callback_id,
-          input: request.input,
-          ...(typeof request.issued_at === "number" && { issuedAt: request.issued_at }),
-          ...(typeof request.deadline_ms === "number" && { deadlineMs: request.deadline_ms }),
-          ageMs: n,
-          ...(s !== void 0 && { attestationStatus: s }),
-        },
-        onUndeliveredHookReplayed = this.callbacks.onUndeliveredHookReplayed;
-      if (onUndeliveredHookReplayed && this.undeliveredHookIds.delete(request_id)) {
-        (this.hookGiveUpsTold.delete(request_id),
-          this.pendingForwardedHooks.add(request_id),
-          onUndeliveredHookReplayed(k));
+        requestId,
+        callbackId: request.callback_id,
+        input: request.input,
+        ...(typeof request.issued_at === "number" && {
+          issuedAt: request.issued_at,
+        }),
+        ...(typeof request.deadline_ms === "number" && {
+          deadlineMs: request.deadline_ms,
+        }),
+        ageMs,
+        ...(attestationStatus !== undefined && {
+          attestationStatus,
+        }),
+      };
+      let onUndeliveredHookReplayed = this.callbacks.onUndeliveredHookReplayed;
+      if (onUndeliveredHookReplayed && this.undeliveredHookIds.delete(requestId)) {
+        this.hookGiveUpsTold.delete(requestId);
+        this.pendingForwardedHooks.add(requestId);
+        onUndeliveredHookReplayed(k);
         return;
       }
-      if (this.settledForwardedHookIds.has(request_id) || this.pendingForwardedHooks.has(request_id)) {
+      if (this.settledForwardedHookIds.has(requestId) || this.pendingForwardedHooks.has(requestId)) {
         logForDebugging(
-          `[RemoteSessionManager] Forwarded hook_callback ${printableExcerpt(request_id)} already answered or in hand \u2014 skipping`,
+          `[RemoteSessionManager] Forwarded hook_callback ${printableExcerpt(requestId)} already answered or in hand \u2014 skipping`,
         );
         return;
       }
-      (this.pendingForwardedHooks.add(request_id), onForwardedHookCallback(k));
+      this.pendingForwardedHooks.add(requestId);
+      onForwardedHookCallback(k);
       return;
     }
-    if (on(request)) {
+    if (isServedChannelRequest(request)) {
       let onServedChannelRequest = this.callbacks.onServedChannelRequest;
       if (!onServedChannelRequest) {
         logForDebugging(
-          `[RemoteSessionManager] ${request.subtype} ${printableExcerpt(request_id)} \u2014 not serving tools here, leaving it unanswered`,
+          `[RemoteSessionManager] ${request.subtype} ${printableExcerpt(requestId)} \u2014 not serving tools here, leaving it unanswered`,
         );
         return;
       }
-      if (request_id.length > ie) {
+      if (requestId.length > MAX_CONTROL_ID_LENGTH) {
         logForDebugging(
-          `[RemoteSessionManager] ${request.subtype} ${printableExcerpt(request_id)} \u2014 an id longer than ${ie} characters, leaving it unanswered`,
+          `[RemoteSessionManager] ${request.subtype} ${printableExcerpt(requestId)} \u2014 an id longer than ${MAX_CONTROL_ID_LENGTH} characters, leaving it unanswered`,
         );
         return;
       }
-      if (this.settledServedRequestIds.has(request_id) || this.pendingServedRequests.has(request_id)) {
+      if (this.settledServedRequestIds.has(requestId) || this.pendingServedRequests.has(requestId)) {
         logForDebugging(
-          `[RemoteSessionManager] ${request.subtype} ${printableExcerpt(request_id)} already answered or in hand \u2014 skipping`,
+          `[RemoteSessionManager] ${request.subtype} ${printableExcerpt(requestId)} already answered or in hand \u2014 skipping`,
         );
         return;
       }
       let abortController = new AbortController();
-      (this.pendingServedRequests.set(request_id, { abort: abortController, subtype: request.subtype }),
-        onServedChannelRequest({
-          requestId: request_id,
-          subtype: request.subtype,
-          request: request,
-          signal: abortController.signal,
-          ageMs: n,
-          ...(s !== void 0 && { attestationStatus: s }),
-          ...(i !== void 0 && { modeStamp: i }),
-        }));
+      this.pendingServedRequests.set(requestId, {
+        abort: abortController,
+        subtype: request.subtype,
+      });
+      onServedChannelRequest({
+        requestId,
+        subtype: request.subtype,
+        request,
+        signal: abortController.signal,
+        ageMs,
+        ...(attestationStatus !== undefined && {
+          attestationStatus,
+        }),
+        ...(modeStamp !== undefined && {
+          modeStamp,
+        }),
+      });
       return;
     }
-    this.refuseControlRequest(request_id, `${request.subtype} in a shape this client has no handler for`, w);
+    this.refuseControlRequest(requestId, `${request.subtype} in a shape this client has no handler for`, w);
   }
-  refuseControlRequest(e, n, { replayed: s, ageMs: i }) {
-    let r = s === !0 && (i === void 0 || i > Yt || this.replayedRefusalsAnswered >= zt);
-    if (this.config.controlOnly === !0 || typeof e !== "string" || r) {
+  refuseControlRequest(e, n, { replayed, ageMs }) {
+    let r =
+      replayed === true &&
+      (ageMs === undefined ||
+        ageMs > REPLAYED_REFUSAL_MAX_AGE_MS ||
+        this.replayedRefusalsAnswered >= MAX_REPLAYED_REFUSALS);
+    if (this.config.controlOnly === true || typeof e !== "string" || r) {
       logForDebugging(
         `[RemoteSessionManager] ${n}${typeof e === "string" ? ` ${printableExcerpt(e)}` : ""} \u2014 leaving it unanswered`,
       );
       return;
     }
-    if (s === !0) this.replayedRefusalsAnswered++;
-    (logForDebugging(
+    if (replayed === true) this.replayedRefusalsAnswered++;
+    logForDebugging(
       `[RemoteSessionManager] ${n} ${printableExcerpt(e)} \u2014 answering that it is not supported`,
-    ),
-      this.sendResponse(
-        { type: "control_response", response: { subtype: "error", request_id: e, error: R7 } },
-        null,
-      ));
+    );
+    this.sendResponse(
+      {
+        type: "control_response",
+        response: {
+          subtype: "error",
+          request_id: e,
+          error: UNSUPPORTED_CONTROL_SUBTYPE_TEXT,
+        },
+      },
+      null,
+    );
   }
   signedOpts(e) {
-    return { ...(e ?? {}), ...(this.config.eventSigner && { eventSigner: this.config.eventSigner }) };
+    return {
+      ...(e ?? {}),
+      ...(this.config.eventSigner && {
+        eventSigner: this.config.eventSigner,
+      }),
+    };
   }
   async sendMessage(e, n, s) {
     return this.send(
       e,
       n,
       (i, r) => sendEventToRemoteSession(this.config.sessionId, i, this.signedOpts(r)),
-      !1,
+      false,
       s,
     );
   }
   async sendMessageVia(e, n, s) {
-    return this.send(e, n, s, !0);
+    return this.send(e, n, s, true);
   }
   async send(e, n, s, i, r) {
-    (logForDebugging(`[RemoteSessionManager] Sending message to session ${this.config.sessionId}`),
-      this.reviveStreamForUserSend(),
-      H("out", { kind: "sendMessage", content: e, opts: n }));
-    let currentSendGates = this.currentSendGates(),
-      h = !i && currentSendGates.length === 0 && this.chainedSends === 0,
-      v = null,
-      w = s,
-      R;
+    logForDebugging(`[RemoteSessionManager] Sending message to session ${this.config.sessionId}`);
+    this.reviveStreamForUserSend();
+    noopGuard("out", {
+      kind: "sendMessage",
+      content: e,
+      opts: n,
+    });
+    let S = this.currentSendGates();
+    let h = !i && S.length === 0 && this.chainedSends === 0;
+    let v = null;
+    let w = s;
+    let R;
     try {
-      R = await (h ? w(e, n) : this.sendBehindGates(currentSendGates, e, n, w, r));
+      R = await (h ? w(e, n) : this.sendBehindGates(S, e, n, w, r));
     } catch (error) {
-      throw (
-        logForDebugging(
-          `[RemoteSessionManager] Send to session ${this.config.sessionId} threw: ${errorMessage(error)}`,
-          { level: "error" },
-        ),
-        logFeatureBad("remote_send_message", "remote_send_message_threw"),
-        error
+      logForDebugging(
+        `[RemoteSessionManager] Send to session ${this.config.sessionId} threw: ${errorMessage(error)}`,
+        {
+          level: "error",
+        },
       );
+      logFeatureBad("remote_send_message", "remote_send_message_threw");
+      throw error;
     }
-    if (!R.ok && R.withheld)
-      (logForDebugging(`[RemoteSessionManager] Message withheld by a send gate: ${R.reason}`),
-        logFeatureSad(
-          "remote_send_message",
-          R.reason === CANCELLED
-            ? "remote_send_message_cancelled"
-            : R.reason === WITHDRAWN
-              ? "remote_send_message_withdrawn"
-              : "remote_send_message_withheld",
-        ));
-    else if (!R.ok)
-      (logForDebugging(
+    if (!R.ok && R.withheld) {
+      logForDebugging(`[RemoteSessionManager] Message withheld by a send gate: ${R.reason}`);
+      logFeatureSad(
+        "remote_send_message",
+        R.reason === CANCELLED
+          ? "remote_send_message_cancelled"
+          : R.reason === WITHDRAWN
+            ? "remote_send_message_withdrawn"
+            : "remote_send_message_withheld",
+      );
+    } else if (!R.ok) {
+      logForDebugging(
         `[RemoteSessionManager] Failed to send message to session ${this.config.sessionId}: ${R.reason}`,
-        { level: "error" },
-      ),
-        logFeatureBad("remote_send_message", "remote_send_message_failed"));
-    else (logFeatureOk("remote_send_message"), (this.sentAMessage = !0));
+        {
+          level: "error",
+        },
+      );
+      logFeatureBad("remote_send_message", "remote_send_message_failed");
+    } else {
+      logFeatureOk("remote_send_message");
+      this.sentAMessage = true;
+    }
     return R;
   }
-  addSendGate(e, n = {}) {
-    let s = { gate: e, onRelease: n.onRelease ?? "send", onExit: n.onExit ?? "as_release" };
-    return (
-      this.sendGates.add(s),
-      () => {
-        this.sendGates.delete(s);
-      }
-    );
+  addSendGate(gate, n = {}) {
+    let s = {
+      gate,
+      onRelease: n.onRelease ?? "send",
+      onExit: n.onExit ?? "as_release",
+    };
+    this.sendGates.add(s);
+    return () => {
+      this.sendGates.delete(s);
+    };
   }
   gateSendsOnSettings(e) {
-    let n = () => {},
-      s = holdFirstSendForSettings(e, {
-        retire: () => n(),
-        noticeAfterMs: this.config.homeSeedWaitNoticeMs,
-        typedAheadGraceMs: this.config.homeSeedTypedAheadGraceMs,
-      });
+    let n = () => {};
+    let s = holdFirstSendForSettings(e, {
+      retire: () => n(),
+      noticeAfterMs: this.config.homeSeedWaitNoticeMs,
+      typedAheadGraceMs: this.config.homeSeedTypedAheadGraceMs,
+    });
     if (s === null) return;
     n = this.addSendGate(
-      (i) => (
+      (i) => {
         i.released.then(() => {
-          if (!i.exiting()) this.firstSendReleased = !0;
-        }),
-        s(i)
-      ),
-      { onRelease: "withhold", onExit: "await" },
+          if (!i.exiting()) this.firstSendReleased = true;
+        });
+        return s(i);
+      },
+      {
+        onRelease: "withhold",
+        onExit: "await",
+      },
     );
   }
   async sendWithheldInitialPrompt(e) {
     if (e.sent) return;
-    e.sent = !0;
-    let now = Date.now(),
-      s = this.config.withheldPromptBackoffMs ?? Qt,
-      i = 0,
-      r,
-      S = async (k, P) => {
-        ((i += 1), (r ??= Date.now()));
-        let q = await sendEventToRemoteSession(this.config.sessionId, k, this.signedOpts(P));
-        if (
-          q.ok ||
-          i >= Xt ||
-          !Zt(sendFailureKind(q)) ||
-          this.firstSendReleased ||
-          Date.now() - r > (this.config.withheldPromptRetryWindowMs ?? Jt)
-        )
-          return q;
-        if ((await sleep(s * i, this.lifetime.signal), this.exitFlushRequested && !this.firstSendReleased))
-          return ((i += 1), sendEventToRemoteSession(this.config.sessionId, k, this.signedOpts(P)));
-        return this.lifetime.signal.aborted || this.firstSendReleased ? q : S(k, P);
+    e.sent = true;
+    let now = Date.now();
+    let withheldPromptBackoffMs = this.config.withheldPromptBackoffMs ?? WITHHELD_PROMPT_BACKOFF_MS;
+    let i = 0;
+    let r;
+    let S = async (k, P) => {
+      i += 1;
+      r ??= Date.now();
+      let q = await sendEventToRemoteSession(this.config.sessionId, k, this.signedOpts(P));
+      if (
+        q.ok ||
+        i >= MAX_WITHHELD_PROMPT_ATTEMPTS ||
+        !isRetriableSendFailure(sendFailureKind(q)) ||
+        this.firstSendReleased ||
+        Date.now() - r > (this.config.withheldPromptRetryWindowMs ?? WITHHELD_PROMPT_RETRY_WINDOW_MS)
+      )
+        return q;
+      await sleep(withheldPromptBackoffMs * i, this.lifetime.signal);
+      if (this.exitFlushRequested && !this.firstSendReleased) {
+        i += 1;
+        return sendEventToRemoteSession(this.config.sessionId, k, this.signedOpts(P));
+      }
+      return this.lifetime.signal.aborted || this.firstSendReleased ? q : S(k, P);
+    };
+    let h = this.send(
+      e.content,
+      {
+        uuid: e.uuid,
       },
-      h = this.send(e.content, { uuid: e.uuid }, S, !0, 0).catch((k) => ({
-        ok: !1,
-        reason: errorMessage(k),
-      }));
+      S,
+      true,
+      0,
+    ).catch((error) => ({
+      ok: false,
+      reason: errorMessage(error),
+    }));
     this.withheldPromptInFlight = h.then(
       () => {
         return;
@@ -872,29 +1029,29 @@ class RemoteSessionManager {
     let v = await h;
     this.withheldPromptInFlight = null;
     let w = this.lifetime.signal.aborted && !v.ok;
-    if (
-      (logEvent("tengu_home_seed_prompt_resequenced", {
-        success: v.ok,
-        withheld_for: fromEnum(
-          e.followsPermissionMode
-            ? "signed_send"
-            : e.heldOnlyForToolsCheck
-              ? "tools_check"
-              : this.config.homeSeed !== void 0
-                ? "home_seed"
-                : "other",
-        ),
-        attempts: i,
-        reason: fromEnum(v.ok ? "ok" : w ? "aborted" : sendFailureKind(v)),
-        duration_ms: Date.now() - now,
-      }),
-      v.ok)
-    )
-      ((e.sent = !0), this.callbacks.onWithheldPromptSent?.());
+    logEvent("tengu_home_seed_prompt_resequenced", {
+      success: v.ok,
+      withheld_for: fromEnum(
+        e.followsPermissionMode
+          ? "signed_send"
+          : e.heldOnlyForToolsCheck
+            ? "tools_check"
+            : this.config.homeSeed !== undefined
+              ? "home_seed"
+              : "other",
+      ),
+      attempts: i,
+      reason: fromEnum(v.ok ? "ok" : w ? "aborted" : sendFailureKind(v)),
+      duration_ms: Date.now() - now,
+    });
+    if (v.ok) {
+      e.sent = true;
+      this.callbacks.onWithheldPromptSent?.();
+    }
     if (w || v.ok) return;
-    let R = sendFailureKind(v),
-      y = R === "timeout" || R === "network" || R === "unknown",
-      b;
+    let R = sendFailureKind(v);
+    let y = R === "timeout" || R === "network" || R === "unknown";
+    let b;
     switch (R) {
       case "withheld":
       case "not_first_party":
@@ -911,7 +1068,7 @@ class RemoteSessionManager {
         break;
       case "timeout":
       case "network":
-        b = nt[R];
+        b = SEND_FAILURE_MESSAGES[R];
         break;
       case "unknown":
         b = v.advice ?? "";
@@ -933,123 +1090,148 @@ class RemoteSessionManager {
   }
   async sendBehindGates(e, n, s, i, r) {
     this.chainedSends++;
-    let S = !1,
-      h = !1,
-      v = !1,
-      w = () => {},
-      promise = new Promise((M) => {
-        w = M;
+    let S = false;
+    let h = false;
+    let v = false;
+    let w = () => {};
+    let promise = new Promise((resolve) => {
+      w = resolve;
+    });
+    let release = (M, O) => {
+      S = M;
+      h = O;
+      v = true;
+      w();
+      this.tellWithholdableHeld();
+    };
+    let b = () => {};
+    let promise_2 = new Promise((resolve) => {
+      b = resolve;
+    });
+    let P = () => {};
+    let decided = new Promise((resolve) => {
+      P = resolve;
+    });
+    let fe = {
+      messageUuid: s?.uuid,
+      ...(r !== undefined && {
+        submittedAtMs: r,
       }),
-      y = (M, O) => {
-        ((S = M), (h = O), (v = !0), w(), this.tellWithholdableHeld());
-      },
-      b = () => {},
-      promise_2 = new Promise((M) => {
-        b = M;
+      released: promise,
+      withdrawn: promise_2,
+      exiting: () => S,
+      final: () => h,
+      decided,
+    };
+    let E = () => {};
+    let issued = new Promise((resolve) => {
+      E = resolve;
+    });
+    let lastHeld = this.lastHeld;
+    let j = () => {};
+    let ne = false;
+    let G = false;
+    let mapped = e.map(() => {
+      return;
+    });
+    let X = new Set(e);
+    let mapped_2 = e.map((M, O) =>
+      runSendGate(M.gate, fe).then((K) => {
+        mapped[O] = K;
+        X.delete(M);
+        this.tellWithholdableHeld();
+        return K;
       }),
-      P = () => {},
-      promise_3 = new Promise((M) => {
-        P = M;
-      }),
-      fe = {
-        messageUuid: s?.uuid,
-        ...(r !== void 0 && { submittedAtMs: r }),
-        released: promise,
-        withdrawn: promise_2,
-        exiting: () => S,
-        final: () => h,
-        decided: promise_3,
-      },
-      E = () => {},
-      promise_4 = new Promise((M) => {
-        E = M;
-      }),
-      lastHeld = this.lastHeld,
-      j = () => {},
-      ne = !1,
-      G = !1,
-      mapped = e.map(() => {
-        return;
-      }),
-      X = new Set(e),
-      mapped_2 = e.map((M, O) =>
-        runSendGate(M.gate, fe).then((K) => ((mapped[O] = K), X.delete(M), this.tellWithholdableHeld(), K)),
+    );
+    let promise_3 = new Promise((resolve) => {
+      for (let O of mapped_2)
+        O.then((K) => {
+          if (K !== undefined) resolve(K);
+        });
+    });
+    let winner = Promise.race([
+      Promise.all(mapped_2).then(findFirstDefined),
+      promise_3,
+      promise.then(
+        () =>
+          findFirstDefined(mapped) ??
+          withholdOnRelease(X, S) ??
+          Promise.all(mapped_2.filter((M, O) => S && e[O]?.onExit === "await")).then(findFirstDefined),
       ),
-      promise_5 = new Promise((M) => {
-        for (let O of mapped_2)
-          O.then((K) => {
-            if (K !== void 0) M(K);
-          });
-      }),
-      winner = Promise.race([
-        Promise.all(mapped_2).then(he),
-        promise_5,
-        promise.then(
-          () =>
-            he(mapped) ??
-            withholdOnRelease(X, S) ??
-            Promise.all(mapped_2.filter((M, O) => S && e[O]?.onExit === "await")).then(he),
-        ),
-        promise_2.then(() => Je(!0)),
-      ]),
-      se = () => {
-        ((v = !0), P(), this.tellWithholdableHeld());
-      };
+      promise_2.then(() => withdrawnSendResult(true)),
+    ]);
+    let se = () => {
+      v = true;
+      P();
+      this.tellWithholdableHeld();
+    };
     winner.then(se, se);
     let Q = winner
-        .then((M) => Promise.race([lastHeld.posted, promise.then(() => lastHeld.issued)]).then(() => M))
-        .then((M) => {
-          let O = M ?? Je(ne);
-          if ((j(), (G = !0), E(), O !== void 0)) return Qe(O);
-          return (this.reviveStreamForUserSend(), i(n, s));
-        }),
-      I = {
-        messageUuid: s?.uuid,
-        release: y,
-        issuedYet: () => G,
-        settledYet: () => v,
-        withheldOnRelease: () => he(mapped) !== void 0 || withholdOnRelease(X, !1) !== void 0,
-        withdraw: () => {
-          ((ne = !0), j(), b());
+      .then((M) => Promise.race([lastHeld.posted, promise.then(() => lastHeld.issued)]).then(() => M))
+      .then((M) => {
+        let O = M ?? withdrawnSendResult(ne);
+        j();
+        G = true;
+        E();
+        if (O !== undefined) return withheldSendResult(O);
+        this.reviveStreamForUserSend();
+        return i(n, s);
+      });
+    let I = {
+      messageUuid: s?.uuid,
+      release,
+      issuedYet: () => G,
+      settledYet: () => v,
+      withheldOnRelease: () =>
+        findFirstDefined(mapped) !== undefined || withholdOnRelease(X, false) !== undefined,
+      withdraw: () => {
+        ne = true;
+        j();
+        b();
+      },
+      issued,
+      posted: Q,
+    };
+    this.lastHeld = {
+      issued,
+      posted: Q.then(
+        () => {
+          return;
         },
-        issued: promise_4,
-        posted: Q,
-      };
-    return (
-      (this.lastHeld = {
-        issued: promise_4,
-        posted: Q.then(
-          () => {
-            return;
-          },
-          () => {
-            return;
-          },
-        ),
-      }),
-      this.heldSends.add(I),
-      (j = () => {
-        (this.heldSends.delete(I), this.tellWithholdableHeld());
-      }),
-      sleep(0, this.lifetime.signal).then(() => this.tellWithholdableHeld()),
-      Q.then(
-        () => this.leaveChain(I, E),
-        () => this.leaveChain(I, E),
+        () => {
+          return;
+        },
       ),
-      winner.then((M) => (M === void 0 ? Q : Qe(M)))
+    };
+    this.heldSends.add(I);
+    j = () => {
+      this.heldSends.delete(I);
+      this.tellWithholdableHeld();
+    };
+    sleep(0, this.lifetime.signal).then(() => this.tellWithholdableHeld());
+    Q.then(
+      () => this.leaveChain(I, E),
+      () => this.leaveChain(I, E),
     );
+    return winner.then((M) => (M === undefined ? Q : withheldSendResult(M)));
   }
   withdrawHeldSend(e) {
-    let filtered = [...this.heldSends].filter((s) => s.messageUuid === e && !s.issuedYet());
-    return (filtered.forEach((s) => s.withdraw()), filtered.length > 0);
+    let filtered = [...this.heldSends].filter(
+      (heldSend) => heldSend.messageUuid === e && !heldSend.issuedYet(),
+    );
+    filtered.forEach((s) => s.withdraw());
+    return filtered.length > 0;
   }
   heldSendUuids() {
-    return [...this.heldSends].flatMap((e) =>
-      e.messageUuid !== void 0 && !e.issuedYet() ? [e.messageUuid] : [],
+    return [...this.heldSends].flatMap((heldSend) =>
+      heldSend.messageUuid !== undefined && !heldSend.issuedYet() ? [heldSend.messageUuid] : [],
     );
   }
   leaveChain(e, n) {
-    (this.chainedSends--, this.heldSends.delete(e), this.tellWithholdableHeld(), n());
+    this.chainedSends--;
+    this.heldSends.delete(e);
+    this.tellWithholdableHeld();
+    n();
   }
   hasWithholdableHeldSend() {
     return this.withholdableHeldSends().length > 0;
@@ -1058,136 +1240,165 @@ class RemoteSessionManager {
     return this.withholdableHeldSends().length;
   }
   cancelHeldSends() {
-    let withholdableHeldSends = this.withholdableHeldSends();
-    return (withholdableHeldSends.forEach((n) => n.release(!1, !1)), withholdableHeldSends.length);
+    let e = this.withholdableHeldSends();
+    e.forEach((n) => n.release(false, false));
+    return e.length;
   }
   withholdableHeldSends() {
-    return [...this.heldSends].filter((e) => !e.issuedYet() && !e.settledYet() && e.withheldOnRelease());
+    return [...this.heldSends].filter(
+      (heldSend) => !heldSend.issuedYet() && !heldSend.settledYet() && heldSend.withheldOnRelease(),
+    );
   }
   tellWithholdableHeld() {
-    let hasWithholdableHeldSend = this.hasWithholdableHeldSend();
-    if (hasWithholdableHeldSend === this.withholdableHeldTold) return;
-    this.withholdableHeldTold = hasWithholdableHeldSend;
+    let e = this.hasWithholdableHeldSend();
+    if (e === this.withholdableHeldTold) return;
+    this.withholdableHeldTold = e;
     try {
-      this.callbacks.onWithholdableHeldChanged?.(hasWithholdableHeldSend);
+      this.callbacks.onWithholdableHeldChanged?.(e);
     } catch (error) {
       logError(
         Error(`[RemoteSessionManager] onWithholdableHeldChanged listener failed: ${errorMessage(error)}`),
       );
     }
   }
-  async releaseHeldSends(e = en, { exiting: n = !1, final: s = !1, keepWithheld: i = !1 } = {}) {
-    if (n) this.exitFlushRequested = !0;
-    let filtered = [...this.heldSends].filter((h) => !(i && h.withheldOnRelease()));
+  async releaseHeldSends(
+    e = HELD_SENDS_RELEASE_TIMEOUT_MS,
+    { exiting: n = false, final: s = false, keepWithheld: i = false } = {},
+  ) {
+    if (n) this.exitFlushRequested = true;
+    let filtered = [...this.heldSends].filter((heldSend) => !(i && heldSend.withheldOnRelease()));
     filtered.forEach((h) => h.release(n, s));
-    let mapped = filtered.map(() => ({ kind: "waiting" }));
-    return (
-      await withDeadline(
-        Promise.allSettled([
-          ...filtered.map((h, v) =>
-            h.posted.then(
-              (w) => {
-                mapped[v] = deliveryOutcome(w);
-              },
-              () => {
-                mapped[v] = { kind: "unconfirmed" };
-              },
-            ),
+    let mapped = filtered.map(() => ({
+      kind: "waiting",
+    }));
+    await withDeadline(
+      Promise.allSettled([
+        ...filtered.map((h, v) =>
+          h.posted.then(
+            (w) => {
+              mapped[v] = deliveryOutcome(w);
+            },
+            () => {
+              mapped[v] = {
+                kind: "unconfirmed",
+              };
+            },
           ),
-          ...(this.withheldPromptInFlight ? [this.withheldPromptInFlight] : []),
-        ]),
-        e,
-      ),
-      filtered.forEach((h, v) => {
-        if (mapped[v]?.kind !== "waiting") return;
-        if (h.issuedYet()) mapped[v] = { kind: "unconfirmed" };
-        else if (s) (h.withdraw(), (mapped[v] = { kind: "unsent" }));
-      }),
-      {
-        unsent: count(mapped, (h) => h.kind === "unsent"),
-        refused: mapped.flatMap((h) => (h.kind === "refused" ? [h.reason] : [])),
-        unconfirmed: count(mapped, (h) => h.kind === "unconfirmed"),
-        stillHeld: count(mapped, (h) => h.kind === "waiting"),
-      }
+        ),
+        ...(this.withheldPromptInFlight ? [this.withheldPromptInFlight] : []),
+      ]),
+      e,
     );
+    filtered.forEach((h, v) => {
+      if (mapped[v]?.kind !== "waiting") return;
+      if (h.issuedYet())
+        mapped[v] = {
+          kind: "unconfirmed",
+        };
+      else if (s) {
+        h.withdraw();
+        mapped[v] = {
+          kind: "unsent",
+        };
+      }
+    });
+    return {
+      unsent: count(mapped, (h) => h.kind === "unsent"),
+      refused: mapped.flatMap((h) => (h.kind === "refused" ? [h.reason] : [])),
+      unconfirmed: count(mapped, (h) => h.kind === "unconfirmed"),
+      stillHeld: count(mapped, (h) => h.kind === "waiting"),
+    };
   }
   async sendBashCommand(e, n) {
-    (logForDebugging(`[RemoteSessionManager] Sending bash_command to session ${this.config.sessionId}`),
-      this.reviveStreamForUserSend());
+    logForDebugging(`[RemoteSessionManager] Sending bash_command to session ${this.config.sessionId}`);
+    this.reviveStreamForUserSend();
     let s = await sendBashCommandToRemoteSession(this.config.sessionId, e, this.signedOpts(n));
-    if (!s.ok)
-      (logForDebugging(
+    if (!s.ok) {
+      logForDebugging(
         `[RemoteSessionManager] Failed to send bash_command to session ${this.config.sessionId}: ${s.reason}`,
-        { level: "error" },
-      ),
-        logFeatureBad("remote_send_bash", "remote_send_bash_failed"));
-    else logFeatureOk("remote_send_bash");
+        {
+          level: "error",
+        },
+      );
+      logFeatureBad("remote_send_bash", "remote_send_bash_failed");
+    } else logFeatureOk("remote_send_bash");
     return s;
   }
   reviveStreamForUserSend() {
-    if (this.client?.reviveAfterExhaustion()) return (this.callbacks.onReconnecting?.(), !0);
-    return !1;
+    if (this.client?.reviveAfterExhaustion()) {
+      this.callbacks.onReconnecting?.();
+      return true;
+    }
+    return false;
   }
   sendResponse(e, n, s, i) {
     let client = this.client;
     if (!client) return;
-    let startTime = performance.now(),
-      h =
-        i === void 0
-          ? void 0
-          : (y) => {
-              try {
-                i(y, Math.round(performance.now() - startTime));
-              } catch (error) {
-                logForDebugging(
-                  `[RemoteSessionManager] An answer's post listener threw; the answer's fate is unchanged: ${errorMessage(error)}`,
-                  { level: "warn" },
-                );
-              }
-              return y;
-            };
-    if (n === null || this.config.keepUndeliveredResponses !== !0) {
-      let sendControlResponse = client.sendControlResponse(e, void 0, Xe(n));
-      h === void 0 || sendControlResponse.then(h);
+    let startTime = performance.now();
+    let h =
+      i === undefined
+        ? undefined
+        : (y) => {
+            try {
+              i(y, Math.round(performance.now() - startTime));
+            } catch (error) {
+              logForDebugging(
+                `[RemoteSessionManager] An answer's post listener threw; the answer's fate is unchanged: ${errorMessage(error)}`,
+                {
+                  level: "warn",
+                },
+              );
+            }
+            return y;
+          };
+    if (n === null || this.config.keepUndeliveredResponses !== true) {
+      let y = client.sendControlResponse(e, undefined, timeoutOptionsForKind(n));
+      if (!(h === undefined)) y.then(h);
       return;
     }
-    let request_id = e.response.request_id,
-      R = this.undeliveredResponses.get(request_id) ?? {
-        response: e,
-        kind: n,
-        uuid: randomUUID(),
-        failures: 0,
-        inFlight: !1,
-        giveUpOnSettle: null,
-        timer: null,
-        told: !1,
-      };
-    if (((R.response = e), s !== void 0)) R.request = s;
-    (this.undeliveredResponses.set(request_id, R), this.postKeptResponse(client, R, h));
+    let requestId = e.response.request_id;
+    let R = this.undeliveredResponses.get(requestId) ?? {
+      response: e,
+      kind: n,
+      uuid: randomUUID(),
+      failures: 0,
+      inFlight: false,
+      giveUpOnSettle: null,
+      timer: null,
+      told: false,
+    };
+    R.response = e;
+    if (s !== undefined) R.request = s;
+    this.undeliveredResponses.set(requestId, R);
+    this.postKeptResponse(client, R, h);
   }
   postKeptResponse(e, n, s) {
-    n.inFlight = !0;
-    let sendControlResponse = e.sendControlResponse(n.response, n.uuid, Xe(n.kind));
-    (s === void 0 ? sendControlResponse : sendControlResponse.then(s)).then(
+    n.inFlight = true;
+    let i = e.sendControlResponse(n.response, n.uuid, timeoutOptionsForKind(n.kind));
+    (s === undefined ? i : i.then(s)).then(
       (r) => this.settleResponsePost(n, r),
-      (r) => {
-        (logForDebugging(`[RemoteSessionManager] Posting an answer threw: ${errorMessage(r)}`, {
+      (error) => {
+        logForDebugging(`[RemoteSessionManager] Posting an answer threw: ${errorMessage(error)}`, {
           level: "warn",
-        }),
-          this.settleResponsePost(n, { outcome: "failed", cause: "network" }));
+        });
+        this.settleResponsePost(n, {
+          outcome: "failed",
+          cause: "network",
+        });
       },
     );
   }
   settleResponsePost(e, n) {
-    e.inFlight = !1;
-    let request_id = e.response.response.request_id;
-    if (this.undeliveredResponses.get(request_id) !== e) return;
+    e.inFlight = false;
+    let requestId = e.response.response.request_id;
+    if (this.undeliveredResponses.get(requestId) !== e) return;
     if (n.outcome === "accepted") {
       if (e.giveUpOnSettle === "overtaken") {
         this.giveUp(e, "overtaken");
         return;
       }
-      if ((this.dropKept(e), e.standIn)) return;
+      this.dropKept(e);
+      if (e.standIn) return;
       if (e.failures > 0 || e.giveUpOnSettle !== null) logFeatureSad("remote_control_response", "recovered");
       else logFeatureOk("remote_control_response");
       return;
@@ -1200,11 +1411,11 @@ class RemoteSessionManager {
       n.outcome === "session_inactive" ||
       (n.outcome === "failed" && n.cause === "http" && n.status === 404)
     ) {
-      (this.dropKept(e),
-        logForDebugging(
-          `[RemoteSessionManager] Answer for ${printableExcerpt(request_id)} has no session to go to (${n.outcome === "failed" && n.cause === "http" ? `http ${n.status}` : "session not active"}); dropped`,
-        ),
-        logFeatureSad("remote_control_response", "session_gone"));
+      this.dropKept(e);
+      logForDebugging(
+        `[RemoteSessionManager] Answer for ${printableExcerpt(requestId)} has no session to go to (${n.outcome === "failed" && n.cause === "http" ? `http ${n.status}` : "session not active"}); dropped`,
+      );
+      logFeatureSad("remote_control_response", "session_gone");
       return;
     }
     if (n.outcome === "failed" && n.cause === "closed") {
@@ -1219,33 +1430,38 @@ class RemoteSessionManager {
       n.status !== 429
     ) {
       if (this.postRefusalStandIn(e, n)) return;
-      (logForDebugging(
-        `[RemoteSessionManager] Answer for ${printableExcerpt(request_id)} was refused by the service (http ${n.status}); not re-sending`,
-        { level: "warn" },
-      ),
-        this.giveUp(e, "undelivered", "refused"));
+      logForDebugging(
+        `[RemoteSessionManager] Answer for ${printableExcerpt(requestId)} was refused by the service (http ${n.status}); not re-sending`,
+        {
+          level: "warn",
+        },
+      );
+      this.giveUp(e, "undelivered", "refused");
       return;
     }
     if (!this.client?.isConnected()) {
       logForDebugging(
-        `[RemoteSessionManager] Answer for ${printableExcerpt(request_id)} did not reach the session while the stream is down; it goes again at reconnect`,
+        `[RemoteSessionManager] Answer for ${printableExcerpt(requestId)} did not reach the session while the stream is down; it goes again at reconnect`,
       );
       return;
     }
-    if (((e.failures += 1), e.failures > ze)) {
-      (logForDebugging(
-        `[RemoteSessionManager] Answer for ${printableExcerpt(request_id)} could not be delivered after ${e.failures} attempts; giving up`,
-        { level: "warn" },
-      ),
-        this.giveUp(e));
+    e.failures += 1;
+    if (e.failures > RESPONSE_RESEND_MAX_ATTEMPTS) {
+      logForDebugging(
+        `[RemoteSessionManager] Answer for ${printableExcerpt(requestId)} could not be delivered after ${e.failures} attempts; giving up`,
+        {
+          level: "warn",
+        },
+      );
+      this.giveUp(e);
       return;
     }
     if (e.failures === 1) logFeatureSad("remote_control_response", "resend");
     this.scheduleResponseResend(e);
   }
   postRefusalStandIn(e, n) {
-    let client = this.client,
-      response = e.response.response;
+    let client = this.client;
+    let response = e.response.response;
     if (
       e.kind !== "tool" ||
       e.standIn ||
@@ -1254,292 +1470,362 @@ class RemoteSessionManager {
       n.status === 401 ||
       n.status === 403
     )
-      return !1;
-    let byteLength = Buffer.byteLength(jsonStringify(response.response), "utf8");
-    return (
-      logForDebugging(
-        `[RemoteSessionManager] Answer for ${printableExcerpt(response.request_id)} was refused by the service (http ${n.status}${n.tooLarge ? `, too large: this machine's configured limit is ${aNt()} bytes, so the service's is lower` : ""}, ${byteLength} bytes); sending an error in its place`,
-        { level: "warn" },
-      ),
-      logFeatureSad("remote_control_response", n.tooLarge ? "refused_too_large" : "refused_stand_in"),
-      (e.response = {
-        type: "control_response",
-        response: {
-          subtype: "success",
-          request_id: response.request_id,
-          response: {
-            result: servedAnswerTooLargeText({
-              answer: response.response,
-              bytes: byteLength,
-              status: n.status,
-              tooLarge: n.tooLarge === !0,
-            }),
-          },
-        },
-      }),
-      (e.uuid = randomUUID()),
-      (e.standIn = !0),
-      (e.failures = 0),
-      H("out", e.response),
-      this.postKeptResponse(client, e),
-      !0
+      return false;
+    let r = Buffer.byteLength(jsonStringify(response.response), "utf8");
+    logForDebugging(
+      `[RemoteSessionManager] Answer for ${printableExcerpt(response.request_id)} was refused by the service (http ${n.status}${n.tooLarge ? `, too large: this machine's configured limit is ${servedAnswerLimitBytes()} bytes, so the service's is lower` : ""}, ${r} bytes); sending an error in its place`,
+      {
+        level: "warn",
+      },
     );
+    logFeatureSad("remote_control_response", n.tooLarge ? "refused_too_large" : "refused_stand_in");
+    e.response = {
+      type: "control_response",
+      response: {
+        subtype: "success",
+        request_id: response.request_id,
+        response: {
+          result: servedAnswerTooLargeText({
+            answer: response.response,
+            bytes: r,
+            status: n.status,
+            tooLarge: n.tooLarge === true,
+          }),
+        },
+      },
+    };
+    e.uuid = randomUUID();
+    e.standIn = true;
+    e.failures = 0;
+    noopGuard("out", e.response);
+    this.postKeptResponse(client, e);
+    return true;
   }
   dropKept(e) {
-    (this.clearResendTimer(e), this.undeliveredResponses.delete(e.response.response.request_id));
+    this.clearResendTimer(e);
+    this.undeliveredResponses.delete(e.response.response.request_id);
   }
   giveUp(e, n = "undelivered", s = n) {
-    let request_id = e.response.response.request_id;
+    let requestId = e.response.response.request_id;
     if (e.inFlight) {
       if (e.giveUpOnSettle !== "overtaken") e.giveUpOnSettle = n;
       return;
     }
-    if ((this.dropKept(e), e.kind === "hook")) W(this.hookGiveUpsTold, request_id);
-    if (n === "undelivered" && (e.kind === "dialog" || e.kind === "permission"))
-      if ((this.seenControlResponseIds.delete(request_id), e.kind === "permission")) {
-        if (e.request !== void 0) setCapped(this.reinstatablePermissionRequests, request_id, e.request);
-      } else W(this.reinstatableDialogIds, request_id);
-    if (n === "undelivered" && e.kind === "hook" && s !== "refused") W(this.undeliveredHookIds, request_id);
-    if ((logFeatureBad("remote_control_response", s), e.told)) return;
-    ((e.told = !0), this.callbacks.onResponseUndelivered?.(request_id, e.kind, n));
+    this.dropKept(e);
+    if (e.kind === "hook") addCappedToSet(this.hookGiveUpsTold, requestId);
+    if (n === "undelivered" && (e.kind === "dialog" || e.kind === "permission")) {
+      this.seenControlResponseIds.delete(requestId);
+      if (e.kind === "permission") {
+        if (e.request !== undefined) setCapped(this.reinstatablePermissionRequests, requestId, e.request);
+      } else addCappedToSet(this.reinstatableDialogIds, requestId);
+    }
+    if (n === "undelivered" && e.kind === "hook" && s !== "refused")
+      addCappedToSet(this.undeliveredHookIds, requestId);
+    logFeatureBad("remote_control_response", s);
+    if (e.told) return;
+    e.told = true;
+    this.callbacks.onResponseUndelivered?.(requestId, e.kind, n);
   }
   scheduleResponseResend(e) {
     this.clearResendTimer(e);
-    let n = st[Math.min(e.failures, ze) - 1] ?? 45000;
+    let n = RESPONSE_RESEND_DELAYS_MS[Math.min(e.failures, RESPONSE_RESEND_MAX_ATTEMPTS) - 1] ?? 45000;
     e.timer = setTimeout(this.resendOnTimer, n, e.response.response.request_id);
   }
   resendOnTimer = (e) => {
-    let n = this.undeliveredResponses.get(e),
-      client = this.client;
+    let n = this.undeliveredResponses.get(e);
+    let client = this.client;
     if (!n || !client) return;
-    if (((n.timer = null), !n.inFlight)) (H("out", n.response), this.postKeptResponse(client, n));
+    n.timer = null;
+    if (!n.inFlight) {
+      noopGuard("out", n.response);
+      this.postKeptResponse(client, n);
+    }
   };
   clearResendTimer(e) {
-    if (e.timer !== null) (clearTimeout(e.timer), (e.timer = null));
+    if (e.timer !== null) {
+      clearTimeout(e.timer);
+      e.timer = null;
+    }
   }
   resendUndeliveredResponses() {
     let client = this.client;
     if (!client) return;
-    for (let n of this.undeliveredResponses.values())
-      if ((this.clearResendTimer(n), !n.inFlight)) (H("out", n.response), this.postKeptResponse(client, n));
+    for (let undeliveredResponse of this.undeliveredResponses.values()) {
+      this.clearResendTimer(undeliveredResponse);
+      if (!undeliveredResponse.inFlight) {
+        noopGuard("out", undeliveredResponse.response);
+        this.postKeptResponse(client, undeliveredResponse);
+      }
+    }
   }
   giveUpUndeliveredResponses() {
-    for (let e of [...this.undeliveredResponses.values()]) this.giveUp(e);
+    for (let undeliveredResponse of [...this.undeliveredResponses.values()]) this.giveUp(undeliveredResponse);
   }
   giveUpKeptServedResults() {
-    for (let e of [...this.undeliveredResponses.values()])
-      if (e.kind === "tool") ((e.inFlight = !1), this.giveUp(e, e.giveUpOnSettle ?? "undelivered"));
+    for (let undeliveredResponse of [...this.undeliveredResponses.values()])
+      if (undeliveredResponse.kind === "tool") {
+        undeliveredResponse.inFlight = false;
+        this.giveUp(undeliveredResponse, undeliveredResponse.giveUpOnSettle ?? "undelivered");
+      }
   }
   dropUndeliveredResponses() {
-    for (let e of [...this.undeliveredResponses.values()]) {
-      if (e.giveUpOnSettle === "overtaken") {
-        ((e.inFlight = !1), this.giveUp(e, "overtaken"));
+    for (let undeliveredResponse of [...this.undeliveredResponses.values()]) {
+      if (undeliveredResponse.giveUpOnSettle === "overtaken") {
+        undeliveredResponse.inFlight = false;
+        this.giveUp(undeliveredResponse, "overtaken");
         continue;
       }
-      (this.dropKept(e), logFeatureSad("remote_control_response", "session_gone"));
+      this.dropKept(undeliveredResponse);
+      logFeatureSad("remote_control_response", "session_gone");
     }
   }
-  respondToPermissionRequest(e, n) {
-    let s = this.pendingPermissionRequests.get(e);
+  respondToPermissionRequest(requestId, n) {
+    let s = this.pendingPermissionRequests.get(requestId);
     if (!s) {
-      (logError(Error(`[RemoteSessionManager] No pending permission request with ID: ${e}`)),
-        logFeatureBad("remote_permission_respond", "remote_permission_respond_no_pending"));
+      logError(Error(`[RemoteSessionManager] No pending permission request with ID: ${requestId}`));
+      logFeatureBad("remote_permission_respond", "remote_permission_respond_no_pending");
       return;
     }
-    (this.retirePermissionRequest(e), this.recordSeenControlResponseId(e), this.reviveStreamForUserSend());
-    let i = this.config.nameRepositoryTrustAnswers === !0 && KNe(s.tool_name),
-      r = !1,
-      S = this.config.pinComputerFolderAllow?.() === !0 && m2(s.tool_name),
-      h =
-        (i || S) && n.behavior === "allow"
-          ? {
-              behavior: "allow",
-              updatedInput: s.input,
-              ...(n.toolUseID !== void 0 && { toolUseID: n.toolUseID }),
-            }
-          : n,
-      v = buildControlResponse(
-        e,
-        h,
-        this.config.nameToolOnPermissionAllow === !0 || i || r ? s.tool_name : void 0,
-        i && n.behavior === "deny" && n.decisionClassification === "user_reject",
-      );
-    (logForDebugging(`[RemoteSessionManager] Sending permission response: ${n.behavior}`),
-      H("out", v),
-      this.sendResponse(v, "permission", s),
-      logFeatureOk("remote_permission_respond"));
+    this.retirePermissionRequest(requestId);
+    this.recordSeenControlResponseId(requestId);
+    this.reviveStreamForUserSend();
+    let i = this.config.nameRepositoryTrustAnswers === true && isConfirmRepositoryTrustTool(s.tool_name);
+    let r = false;
+    let S = this.config.pinComputerFolderAllow?.() === true && isRequestComputerFolderTool(s.tool_name);
+    let h =
+      (i || S) && n.behavior === "allow"
+        ? {
+            behavior: "allow",
+            updatedInput: s.input,
+            ...(n.toolUseID !== undefined && {
+              toolUseID: n.toolUseID,
+            }),
+          }
+        : n;
+    let controlResponse = buildControlResponse(
+      requestId,
+      h,
+      this.config.nameToolOnPermissionAllow === true || i || r ? s.tool_name : undefined,
+      i && n.behavior === "deny" && n.decisionClassification === "user_reject",
+    );
+    logForDebugging(`[RemoteSessionManager] Sending permission response: ${n.behavior}`);
+    noopGuard("out", controlResponse);
+    this.sendResponse(controlResponse, "permission", s);
+    logFeatureOk("remote_permission_respond");
   }
   respondToUserDialogRequest(e, n) {
     if (!this.pendingDialogRequests.delete(e)) {
-      (logError(Error(`[RemoteSessionManager] No pending user dialog request with ID: ${e}`)),
-        logFeatureBad("remote_dialog_respond", "remote_dialog_respond_no_pending"));
+      logError(Error(`[RemoteSessionManager] No pending user dialog request with ID: ${e}`));
+      logFeatureBad("remote_dialog_respond", "remote_dialog_respond_no_pending");
       return;
     }
-    (this.recordSeenControlResponseId(e), this.reviveStreamForUserSend());
-    let s = { type: "control_response", response: { subtype: "success", request_id: e, response: n } };
-    (logForDebugging(`[RemoteSessionManager] Sending user dialog response: ${n.behavior}`),
-      H("out", s),
-      this.sendResponse(s, "dialog"),
-      logFeatureOk("remote_dialog_respond"));
+    this.recordSeenControlResponseId(e);
+    this.reviveStreamForUserSend();
+    let s = {
+      type: "control_response",
+      response: {
+        subtype: "success",
+        request_id: e,
+        response: n,
+      },
+    };
+    logForDebugging(`[RemoteSessionManager] Sending user dialog response: ${n.behavior}`);
+    noopGuard("out", s);
+    this.sendResponse(s, "dialog");
+    logFeatureOk("remote_dialog_respond");
   }
   releaseForwardedHook(e) {
-    if ((this.pendingForwardedHooks.delete(e), this.settledForwardedHookIds.has(e)))
-      W(this.hookGiveUpsTold, e);
+    this.pendingForwardedHooks.delete(e);
+    if (this.settledForwardedHookIds.has(e)) addCappedToSet(this.hookGiveUpsTold, e);
   }
-  respondToForwardedHook(e, n) {
-    if (!this.pendingForwardedHooks.delete(e))
-      return (
-        logForDebugging(
-          `[RemoteSessionManager] Forwarded hook request ${printableExcerpt(e)} is no longer pending \u2014 answer not sent`,
-        ),
-        !1
+  respondToForwardedHook(e, response) {
+    if (!this.pendingForwardedHooks.delete(e)) {
+      logForDebugging(
+        `[RemoteSessionManager] Forwarded hook request ${printableExcerpt(e)} is no longer pending \u2014 answer not sent`,
       );
-    if (!this.client) return !1;
-    (this.recordSeenControlResponseId(e),
-      this.recordSettledForwardedHookId(e),
-      this.reviveStreamForUserSend());
-    let i = { type: "control_response", response: { subtype: "success", request_id: e, response: n } };
-    return (H("out", i), this.sendResponse(i, "hook"), !0);
+      return false;
+    }
+    if (!this.client) return false;
+    this.recordSeenControlResponseId(e);
+    this.recordSettledForwardedHookId(e);
+    this.reviveStreamForUserSend();
+    let i = {
+      type: "control_response",
+      response: {
+        subtype: "success",
+        request_id: e,
+        response,
+      },
+    };
+    noopGuard("out", i);
+    this.sendResponse(i, "hook");
+    return true;
   }
   respondToServedChannelRequest(e, n, s) {
     let i = this.pendingServedRequests.get(e);
-    if (!i)
-      return (
-        logForDebugging(
-          `[RemoteSessionManager] served request ${printableExcerpt(e)} is no longer pending \u2014 result not sent`,
-        ),
-        !1
+    if (!i) {
+      logForDebugging(
+        `[RemoteSessionManager] served request ${printableExcerpt(e)} is no longer pending \u2014 result not sent`,
       );
-    if ((this.pendingServedRequests.delete(e), !this.client)) return !1;
-    (this.recordSeenControlResponseId(e), W(this.settledServedRequestIds, e), this.reviveStreamForUserSend());
+      return false;
+    }
+    this.pendingServedRequests.delete(e);
+    if (!this.client) return false;
+    this.recordSeenControlResponseId(e);
+    addCappedToSet(this.settledServedRequestIds, e);
+    this.reviveStreamForUserSend();
     let S = {
       type: "control_response",
-      response: { subtype: "success", request_id: e, response: capToolResultSize(n) },
+      response: {
+        subtype: "success",
+        request_id: e,
+        response: capToolResultSize(n),
+      },
     };
-    return (
-      H("out", S),
-      this.sendResponse(S, i.subtype === "remote_tools_probe" ? null : "tool", void 0, s),
-      !0
-    );
+    noopGuard("out", S);
+    this.sendResponse(S, i.subtype === "remote_tools_probe" ? null : "tool", undefined, s);
+    return true;
   }
   releaseServedChannelRequest(e) {
     this.pendingServedRequests.delete(e);
   }
   countServedToolCallsInHand() {
-    return count(
-      [...this.pendingServedRequests.values()],
-      ({ subtype: subtype }) => subtype === "remote_tool_call",
-    );
+    return count([...this.pendingServedRequests.values()], ({ subtype }) => subtype === "remote_tool_call");
   }
   retireServedRequest(e, n) {
     let s = this.pendingServedRequests.get(e);
-    if (!s) return !1;
-    return (
-      this.pendingServedRequests.delete(e),
-      logForDebugging(
-        `[RemoteSessionManager] served request ${printableExcerpt(e)} ${n === "worker" ? "cancelled by the worker" : "dropped with the stream"}`,
-      ),
-      s.abort.abort(),
-      this.callbacks.onServedChannelRequestCancelled?.(e, n),
-      !0
+    if (!s) return false;
+    this.pendingServedRequests.delete(e);
+    logForDebugging(
+      `[RemoteSessionManager] served request ${printableExcerpt(e)} ${n === "worker" ? "cancelled by the worker" : "dropped with the stream"}`,
     );
+    s.abort.abort();
+    this.callbacks.onServedChannelRequestCancelled?.(e, n);
+    return true;
   }
   isConnected() {
-    return this.client?.isConnected() ?? !1;
+    return this.client?.isConnected() ?? false;
   }
   noteWorkerLive() {
     if (this.workerSeenThisConnection) return;
-    ((this.workerSeenThisConnection = !0), this.callbacks.onWorkerLive?.());
+    this.workerSeenThisConnection = true;
+    this.callbacks.onWorkerLive?.();
   }
-  markServing(e) {
-    this.serving = e;
+  markServing(serving) {
+    this.serving = serving;
   }
   workerLive() {
     return this.isConnected() && this.workerSeenThisConnection;
   }
   sendsInFlight() {
-    return this.client?.sendsInFlight() ?? { count: 0, settled: Promise.resolve() };
+    return (
+      this.client?.sendsInFlight() ?? {
+        count: 0,
+        settled: Promise.resolve(),
+      }
+    );
   }
   flushSends(e) {
     return this.client?.flushSends(e) ?? Promise.resolve();
   }
   cancelSession() {
-    (logForDebugging("[RemoteSessionManager] Sending interrupt signal"),
-      (this.firstSendReleased = !0),
-      this.reviveStreamForUserSend());
+    logForDebugging("[RemoteSessionManager] Sending interrupt signal");
+    this.firstSendReleased = true;
+    this.reviveStreamForUserSend();
     let e = () => {
-      (H("out", { kind: "control_request", subtype: "interrupt" }),
-        this.client?.sendControlRequest({ subtype: "interrupt" }));
+      noopGuard("out", {
+        kind: "control_request",
+        subtype: "interrupt",
+      });
+      this.client?.sendControlRequest({
+        subtype: "interrupt",
+      });
     };
     if (this.heldSends.size === 0) {
       e();
       return;
     }
     let n = () => {
-      if (this.pendingInterrupt === n) ((this.pendingInterrupt = null), e());
+      if (this.pendingInterrupt === n) {
+        this.pendingInterrupt = null;
+        e();
+      }
     };
-    ((this.pendingInterrupt = n), this.releaseHeldSends().then(n, n));
+    this.pendingInterrupt = n;
+    this.releaseHeldSends().then(n, n);
   }
   sendControlRequest(e, n) {
     return this.postControlRequest(e, n).response;
   }
   postControlRequest(e, n) {
-    let { promise: promise, resolve: resolve } = Promise.withResolvers(),
-      r = async () => {
-        let h = null;
-        try {
-          if (n?.signal?.aborted) throw new AbortError();
-          if (!n?.background) this.reviveStreamForUserSend();
-          if (
-            (H("out", { kind: "control_request", ...e }),
-            (h = this.client?.postControlRequest(e, this.onControlRequestPostFailed) ?? null),
-            h === null)
-          )
-            throw Error("[RemoteSessionManager] Cannot send: not connected");
-        } finally {
-          if (h === null) resolve(je);
-        }
-        return (h.posted.then(resolve, () => resolve(je)), this.awaitControlResponse(h.requestId, e, n));
-      },
-      S = n?.answerExpected === !1 ? r() : withOutcomeTelemetry("remote_control_rpc", r);
-    return { posted: promise, response: S };
+    let { promise, resolve } = Promise.withResolvers();
+    let r = async () => {
+      let h = null;
+      try {
+        if (n?.signal?.aborted) throw new AbortError();
+        if (!n?.background) this.reviveStreamForUserSend();
+        noopGuard("out", {
+          kind: "control_request",
+          ...e,
+        });
+        h = this.client?.postControlRequest(e, this.onControlRequestPostFailed) ?? null;
+        if (h === null) throw Error("[RemoteSessionManager] Cannot send: not connected");
+      } finally {
+        if (h === null) resolve(CLOSED_SEND_RESULT);
+      }
+      h.posted.then(resolve, () => resolve(CLOSED_SEND_RESULT));
+      return this.awaitControlResponse(h.requestId, e, n);
+    };
+    let response = n?.answerExpected === false ? r() : withOutcomeTelemetry("remote_control_rpc", r);
+    return {
+      posted: promise,
+      response,
+    };
   }
   awaitControlResponse(e, n, s) {
     if (n.subtype === "set_model") this.pendingModelSwitchIds.add(e);
-    let i = Me(n.subtype, s?.timeoutMs),
-      r = this.workerStarting ? s?.awaitWorkerStart : void 0,
-      S = r ? Math.max(Vkr, i) : i;
-    return new Promise((h, v) => {
-      let w = setTimeout(this.onControlRequestTimeout, S, e, n.subtype, S),
-        R = s?.signal,
-        y = R ? () => this.cancelControlRequest(e) : void 0;
-      if (R && y) R.addEventListener("abort", y, { once: !0 });
-      if (
-        (this.pendingControlRequests.set(e, {
-          resolve: (b) => h(b),
-          reject: v,
-          timer: w,
-          timeoutMs: i,
-          subtype: n.subtype,
-          onProgress: s?.onProgress,
-          removeAbortListener: R && y ? () => R.removeEventListener("abort", y) : void 0,
-          ...(s?.background && { background: !0 }),
-          ...(s?.onEchoed && { onEchoed: s.onEchoed }),
-          ...(r && { awaitingWorker: r }),
+    let i = defaultHoldBudgetMs(n.subtype, s?.timeoutMs);
+    let awaitWorkerStart = this.workerStarting ? s?.awaitWorkerStart : undefined;
+    let S = awaitWorkerStart ? Math.max(HOLD_MAX_MS, i) : i;
+    return new Promise((resolve, reject) => {
+      let timer = setTimeout(this.onControlRequestTimeout, S, e, n.subtype, S);
+      let signal = s?.signal;
+      let y = signal ? () => this.cancelControlRequest(e) : undefined;
+      if (signal && y)
+        signal.addEventListener("abort", y, {
+          once: true,
+        });
+      this.pendingControlRequests.set(e, {
+        resolve: (b) => resolve(b),
+        reject,
+        timer,
+        timeoutMs: i,
+        subtype: n.subtype,
+        onProgress: s?.onProgress,
+        removeAbortListener: signal && y ? () => signal.removeEventListener("abort", y) : undefined,
+        ...(s?.background && {
+          background: true,
         }),
-        r)
-      )
-        (logForDebugging(
+        ...(s?.onEchoed && {
+          onEchoed: s.onEchoed,
+        }),
+        ...(awaitWorkerStart && {
+          awaitingWorker: awaitWorkerStart,
+        }),
+      });
+      if (awaitWorkerStart) {
+        logForDebugging(
           `[RemoteSessionManager] control_request ${e} (${n.subtype}) waits for the worker; its ${i / 1000}s limit starts when that wait ends`,
-        ),
-          this.tellAwaitingWorker(r, !0));
+        );
+        this.tellAwaitingWorker(awaitWorkerStart, true);
+      }
     });
   }
   workerSendsNow() {
     return this.sendsNow;
   }
   workerMovesBash() {
-    return this.movesBash === !0;
+    return this.movesBash === true;
   }
   serviceTimeMs() {
     return this.client?.serviceTimeMs();
@@ -1551,23 +1837,27 @@ class RemoteSessionManager {
     return this.connections === 1;
   }
   beginWorkerStart() {
-    this.workerStarting = !0;
+    this.workerStarting = true;
   }
   endWorkerStart() {
     if (!this.workerStarting) return;
-    this.workerStarting = !1;
+    this.workerStarting = false;
     let e = [];
     for (let [n, s] of this.pendingControlRequests) {
-      if (s.awaitingWorker === void 0) continue;
+      if (s.awaitingWorker === undefined) continue;
       clearTimeout(s.timer);
-      let i = setTimeout(this.onControlRequestTimeout, s.timeoutMs, n, s.subtype, s.timeoutMs);
-      (this.pendingControlRequests.set(n, { ...s, timer: i, awaitingWorker: void 0 }),
-        e.push(s.awaitingWorker));
+      let timer = setTimeout(this.onControlRequestTimeout, s.timeoutMs, n, s.subtype, s.timeoutMs);
+      this.pendingControlRequests.set(n, {
+        ...s,
+        timer,
+        awaitingWorker: undefined,
+      });
+      e.push(s.awaitingWorker);
     }
     logForDebugging(
       `[RemoteSessionManager] The wait for the worker ended; ${e.length} waiting control request(s) start their own limit`,
     );
-    for (let n of e) this.tellAwaitingWorker(n, !1);
+    for (let n of e) this.tellAwaitingWorker(n, false);
   }
   tellAwaitingWorker(e, n) {
     try {
@@ -1580,34 +1870,40 @@ class RemoteSessionManager {
     this.pendingModelSwitchIds.delete(e);
     let n = this.pendingControlRequests.get(e);
     if (!n) return;
-    (this.pendingControlRequests.delete(e),
-      clearTimeout(n.timer),
-      n.removeAbortListener?.(),
-      logForDebugging(
-        `[RemoteSessionManager] control_request ${e} (${n.subtype}) was not delivered \u2014 failing it`,
-        { level: "warn" },
-      ),
-      n.reject(new ControlRequestNotDeliveredError(n.subtype)));
+    this.pendingControlRequests.delete(e);
+    clearTimeout(n.timer);
+    n.removeAbortListener?.();
+    logForDebugging(
+      `[RemoteSessionManager] control_request ${e} (${n.subtype}) was not delivered \u2014 failing it`,
+      {
+        level: "warn",
+      },
+    );
+    n.reject(new ControlRequestNotDeliveredError(n.subtype));
   };
   onControlRequestTimeout = (e, n, s) => {
     this.pendingModelSwitchIds.delete(e);
     let i = this.pendingControlRequests.get(e);
     if (!i) return;
-    if ((this.pendingControlRequests.delete(e), i.removeAbortListener?.(), i.awaitingWorker !== void 0))
-      this.endWorkerStart();
+    this.pendingControlRequests.delete(e);
+    i.removeAbortListener?.();
+    if (i.awaitingWorker !== undefined) this.endWorkerStart();
     i.reject(new ControlRequestTimeoutError(n, s));
   };
   cancelControlRequest(e) {
     let n = this.pendingControlRequests.get(e);
     if (!n) return;
     if (!n.background) this.reviveStreamForUserSend();
-    (this.pendingControlRequests.delete(e),
-      this.pendingModelSwitchIds.delete(e),
-      clearTimeout(n.timer),
-      logForDebugging(`[RemoteSessionManager] Cancelling control request ${e} (${n.subtype})`),
-      H("out", { kind: "control_cancel_request", requestId: e }),
-      this.client?.sendControlCancelRequest(e),
-      n.reject(new AbortError()));
+    this.pendingControlRequests.delete(e);
+    this.pendingModelSwitchIds.delete(e);
+    clearTimeout(n.timer);
+    logForDebugging(`[RemoteSessionManager] Cancelling control request ${e} (${n.subtype})`);
+    noopGuard("out", {
+      kind: "control_cancel_request",
+      requestId: e,
+    });
+    this.client?.sendControlCancelRequest(e);
+    n.reject(new AbortError());
   }
   getSessionId() {
     return this.config.sessionId;
@@ -1615,154 +1911,202 @@ class RemoteSessionManager {
   disconnect() {
     logForDebugging("[RemoteSessionManager] Disconnecting");
     let withheldInitialPrompt = this.config.withheldInitialPrompt;
-    if (withheldInitialPrompt !== void 0 && this.withheldPromptInFlight !== null && !this.firstSendReleased)
-      withheldInitialPrompt.sent = !1;
-    (this.lifetime.abort(), this.pendingInterrupt?.(), this.client?.close(), (this.client = null));
-    for (let n of [...this.undeliveredResponses.values()])
-      if ((this.clearResendTimer(n), n.giveUpOnSettle !== null))
-        ((n.inFlight = !1), this.giveUp(n, n.giveUpOnSettle));
-    (this.undeliveredResponses.clear(),
-      this.undeliveredHookIds.clear(),
-      this.hookGiveUpsTold.clear(),
-      this.pendingPermissionRequests.clear(),
-      this.pendingDialogRequests.clear());
+    if (
+      withheldInitialPrompt !== undefined &&
+      this.withheldPromptInFlight !== null &&
+      !this.firstSendReleased
+    )
+      withheldInitialPrompt.sent = false;
+    this.lifetime.abort();
+    this.pendingInterrupt?.();
+    this.client?.close();
+    this.client = null;
+    for (let undeliveredResponse of [...this.undeliveredResponses.values()]) {
+      this.clearResendTimer(undeliveredResponse);
+      if (undeliveredResponse.giveUpOnSettle !== null) {
+        undeliveredResponse.inFlight = false;
+        this.giveUp(undeliveredResponse, undeliveredResponse.giveUpOnSettle);
+      }
+    }
+    this.undeliveredResponses.clear();
+    this.undeliveredHookIds.clear();
+    this.hookGiveUpsTold.clear();
+    this.pendingPermissionRequests.clear();
+    this.pendingDialogRequests.clear();
     for (let pendingForwardedHook of this.pendingForwardedHooks)
       this.callbacks.onForwardedHookCancelled?.(pendingForwardedHook, "disconnected");
     this.pendingForwardedHooks.clear();
-    for (let n of [...this.pendingServedRequests.keys()]) this.retireServedRequest(n, "disconnected");
-    ((this.workerSeenThisConnection = !1), (this.workerStarting = !1));
-    for (let n of this.pendingControlRequests.values())
-      (clearTimeout(n.timer),
-        n.removeAbortListener?.(),
-        n.reject(Error("[RemoteSessionManager] Disconnected")));
-    (this.pendingControlRequests.clear(), this.pendingModelSwitchIds.clear());
+    for (let key of [...this.pendingServedRequests.keys()]) this.retireServedRequest(key, "disconnected");
+    this.workerSeenThisConnection = false;
+    this.workerStarting = false;
+    for (let pendingControlRequest of this.pendingControlRequests.values()) {
+      clearTimeout(pendingControlRequest.timer);
+      pendingControlRequest.removeAbortListener?.();
+      pendingControlRequest.reject(Error("[RemoteSessionManager] Disconnected"));
+    }
+    this.pendingControlRequests.clear();
+    this.pendingModelSwitchIds.clear();
   }
   reconnect() {
-    (logForDebugging("[RemoteSessionManager] Reconnecting SSE stream"), this.client?.reconnect());
+    logForDebugging("[RemoteSessionManager] Reconnecting SSE stream");
+    this.client?.reconnect();
   }
   reconnectAfterSuspend() {
     this.client?.reconnectAfterSuspend();
   }
 }
 //@ chunk-08945j39.js:75642-75789 placement
-function isDeviceHookRequest(e) {
+function isDeviceHookRequest(request) {
   return (
-    typeof e.callback_id === "string" &&
-    (typeof e.issued_at === "number" ||
-      typeof e.deadline_ms === "number" ||
-      parseDeviceHookId(e.callback_id) !== null)
+    typeof request.callback_id === "string" &&
+    (typeof request.issued_at === "number" ||
+      typeof request.deadline_ms === "number" ||
+      parseDeviceHookId(request.callback_id) !== null)
   );
 }
 //@ chunk-08945j39.js:75789-75835 placement
-function on(e) {
-  return _Ce.includes(e.subtype);
+function isServedChannelRequest(request) {
+  return REMOTE_TOOLS_LOG_EVENTS.includes(request.subtype);
 }
 //@ chunk-08945j39.js:75835-75886 placement
-function Xe(e) {
-  return e === "tool" ? { timeoutMs: tn } : {};
+function timeoutOptionsForKind(e) {
+  return e === "tool"
+    ? {
+        timeoutMs: TOOL_CONTROL_REQUEST_TIMEOUT_MS,
+      }
+    : {};
 }
 //@ chunk-08945j39.js:75886-76097 placement
 function capToolResultSize(e) {
-  let byteLength = Buffer.byteLength(jsonStringify(e), "utf8"),
-    s = aNt();
-  if (byteLength <= s) return e;
+  let n = Buffer.byteLength(jsonStringify(e), "utf8");
+  let s = servedAnswerLimitBytes();
+  if (n <= s) return e;
   return {
     result: {
       content: [
         {
           type: "text",
-          text: `(the result was too large to return: ${byteLength} bytes, over the ${s}-byte limit)`,
+          text: `(the result was too large to return: ${n} bytes, over the ${s}-byte limit)`,
         },
       ],
-      isError: !0,
+      isError: true,
     },
   };
 }
 //@ chunk-08945j39.js:76097-76307 placement
-function runSendGate(e, n) {
-  let s = (i) => {
-    logForDebugging(`[RemoteSessionManager] send gate failed, message goes anyway: ${errorMessage(i)}`, {
+function runSendGate(gate, n) {
+  let s = (error) => {
+    logForDebugging(`[RemoteSessionManager] send gate failed, message goes anyway: ${errorMessage(error)}`, {
       level: "warn",
     });
     return;
   };
   try {
-    return e(n).then((i) => (dn(i) ? i : void 0), s);
+    return gate(n).then((i) => (isStoppedSendResult(i) ? i : undefined), s);
   } catch (error) {
     return Promise.resolve(s(error));
   }
 }
 //@ chunk-08945j39.js:76307-76398 placement
-function dn(e) {
-  return typeof e === "object" && e !== null && e.go === !1 && typeof e.reason === "string";
+function isStoppedSendResult(e) {
+  return typeof e === "object" && e !== null && e.go === false && typeof e.reason === "string";
 }
 //@ chunk-08945j39.js:76398-76444 placement
-function he(e) {
-  return e.find((n) => n !== void 0);
+function findFirstDefined(e) {
+  return e.find((n) => n !== undefined);
 }
 //@ chunk-08945j39.js:76444-76501 placement
-function Qe(e) {
-  return { ok: !1, reason: e.reason, withheld: !0 };
+function withheldSendResult(e) {
+  return {
+    ok: false,
+    reason: e.reason,
+    withheld: true,
+  };
 }
+//@ chunk-08945j39.js:76501-76834 placement
 /**
  * 把发送结果映射为投递结果：sent、unsent、refused 或 unconfirmed。
  */
-//@ chunk-08945j39.js:76501-76834 placement
 function deliveryOutcome(e) {
-  if (e.ok) return { kind: "sent" };
+  if (e.ok)
+    return {
+      kind: "sent",
+    };
   switch (sendFailureKind(e)) {
     case "withheld":
       return e.reason === CANCELLED || e.reason === WITHDRAWN
-        ? { kind: "unsent" }
-        : { kind: "refused", reason: e.reason };
+        ? {
+            kind: "unsent",
+          }
+        : {
+            kind: "refused",
+            reason: e.reason,
+          };
     case "http_4xx":
     case "http_429":
     case "not_first_party":
-      return { kind: "refused", reason: e.reason };
+      return {
+        kind: "refused",
+        reason: e.reason,
+      };
     case "server":
     case "timeout":
     case "network":
     case "unknown":
-      return { kind: "unconfirmed" };
+      return {
+        kind: "unconfirmed",
+      };
   }
 }
 //@ chunk-08945j39.js:76834-76884 placement
-function Je(e) {
-  return e ? { go: !1, reason: WITHDRAWN } : void 0;
+function withdrawnSendResult(e) {
+  return e
+    ? {
+        go: false,
+        reason: WITHDRAWN,
+      }
+    : undefined;
 }
 //@ chunk-08945j39.js:76884-77006 placement
 function withholdOnRelease(e, n) {
-  return [...e].some(
-    ({ onRelease: onRelease, onExit: onExit }) => onRelease === "withhold" && !(n && onExit === "await"),
-  )
-    ? { go: !1, reason: CANCELLED }
-    : void 0;
+  return [...e].some(({ onRelease, onExit }) => onRelease === "withhold" && !(n && onExit === "await"))
+    ? {
+        go: false,
+        reason: CANCELLED,
+      }
+    : undefined;
 }
 //@ chunk-08945j39.js:77006-77026 placement
-var _en = 100,
-  nCs = 500;
+/**
+ * 远程历史事件分页条数：fetchLatestEvents/fetchOlderEvents 默认 100 条，historyPrefetch 首页用 500 条，服务端 400 时回落到 100。
+ */
+var DEFAULT_EVENT_PAGE_SIZE = 100;
+var PREFETCH_EVENT_PAGE_SIZE = 500;
+//@ chunk-08945j39.js:77026-77154 placement
 /**
  * 解析事件的 sequence_num 为整数（缺失或无效时为 undefined）。
  */
-//@ chunk-08945j39.js:77026-77154 placement
 function parseSequenceNum(e) {
-  let n = e?.sequence_num === void 0 ? void 0 : parseInt(String(e.sequence_num), 10);
-  return n !== void 0 && !isNaN(n) ? n : void 0;
+  let n = e?.sequence_num === undefined ? undefined : parseInt(String(e.sequence_num), 10);
+  return n !== undefined && !isNaN(n) ? n : undefined;
 }
 //@ chunk-08945j39.js:77154-77179 placement
-class $Nn extends Error {}
+/**
+ * 导出类 `UntrustedDeviceTokenError`：继承 `Error`。
+ */
+class UntrustedDeviceTokenError extends Error {}
 //@ chunk-08945j39.js:77179-77211 placement
 var X_TRUSTED_DEVICE_TOKEN = "X-Trusted-Device-Token";
+//@ chunk-08945j39.js:77211-77499 placement
 /**
  * 构造远程会话 API 请求配置：会话 URL 与请求头；需要时附带以续期设备令牌重建请求头的函数。
  */
-//@ chunk-08945j39.js:77211-77499 placement
-async function getSessionRequestConfig(e, n, { recoverDeviceProof: s = !1 } = {}) {
-  let { accessToken: accessToken, profile: profile } = await prepareApiRequest(n),
-    S = {
-      sessionUrl: `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${e}`,
-      headers: await getSessionRequestHeaders(accessToken, profile),
-    };
+async function getSessionRequestConfig(e, n, { recoverDeviceProof: s = false } = {}) {
+  let { accessToken, profile } = await prepareApiRequest(n);
+  let S = {
+    sessionUrl: `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${e}`,
+    headers: await getSessionRequestHeaders(accessToken, profile),
+  };
   if (!s) return S;
   return {
     ...S,
@@ -1773,53 +2117,67 @@ async function getSessionRequestConfig(e, n, { recoverDeviceProof: s = !1 } = {}
   };
 }
 //@ chunk-08945j39.js:77499-77645 placement
-function fetchSessionEvents(e, n, s, i) {
-  return Dt.get(`${e}/events`, {
-    headers: n,
-    params: s,
-    timeout: 15000,
-    validateStatus: () => !0,
-    maxContentLength: i ?? -1,
-  }).catch(() => null);
+function fetchSessionEvents(sessionUrl, headers, params, i) {
+  return axios_default
+    .get(`${sessionUrl}/events`, {
+      headers,
+      params,
+      timeout: 15000,
+      validateStatus: () => true,
+      maxContentLength: i ?? -1,
+    })
+    .catch(() => null);
 }
 //@ chunk-08945j39.js:77645-78703 placement
-async function renewDeviceTokenAndRetry(e, n, s, i) {
-  let r = await fetchSessionEvents(e.sessionUrl, e.headers, n, i),
-    headersForRenewedDeviceToken = e.headersForRenewedDeviceToken;
-  if (r?.status === 403 && headersForRenewedDeviceToken !== void 0) {
-    let R = !1,
-      y = await resendAfterUntrustedDevice(
-        r,
-        e.headers[X_TRUSTED_DEVICE_TOKEN],
-        async (b) => {
-          let k = await headersForRenewedDeviceToken(b).then(
-            (P) => fetchSessionEvents(e.sessionUrl, P, n, i),
-            () => null,
-          );
-          if (k === null) throw ((R = !0), Error("no answer"));
-          return k;
-        },
-        "cloud_session",
-      );
-    if (R) return (logForDebugging(`[${s}] no answer after renewing the device token`), null);
+async function renewDeviceTokenAndRetry(ctx, params, s, i) {
+  let sessionEvents = await fetchSessionEvents(ctx.sessionUrl, ctx.headers, params, i);
+  let headersForRenewedDeviceToken = ctx.headersForRenewedDeviceToken;
+  if (sessionEvents?.status === 403 && headersForRenewedDeviceToken !== undefined) {
+    let R = false;
+    let y = await resendAfterUntrustedDevice(
+      sessionEvents,
+      ctx.headers[X_TRUSTED_DEVICE_TOKEN],
+      async (b) => {
+        let k = await headersForRenewedDeviceToken(b).then(
+          (headers) => fetchSessionEvents(ctx.sessionUrl, headers, params, i),
+          () => null,
+        );
+        if (k === null) {
+          R = true;
+          throw Error("no answer");
+        }
+        return k;
+      },
+      "cloud_session",
+    );
+    if (R) {
+      logForDebugging(`[${s}] no answer after renewing the device token`);
+      return null;
+    }
     if (
       y.status === 403 &&
       isTrustedDeviceGateEnabled() &&
       classifyElevatedAuthError(y.data) === "untrusted_device"
-    )
-      throw (
-        logForDebugging(`[${s}] HTTP 403 untrusted_device`),
-        new $Nn("the service does not accept a trusted-device token from this computer")
+    ) {
+      logForDebugging(`[${s}] HTTP 403 untrusted_device`);
+      throw new UntrustedDeviceTokenError(
+        "the service does not accept a trusted-device token from this computer",
       );
-    r = y;
+    }
+    sessionEvents = y;
   }
-  if (!r || r.status !== 200) return (logForDebugging(`[${s}] HTTP ${r?.status ?? "error"}`), null);
-  if (r.data === null || typeof r.data !== "object")
-    return (logForDebugging(`[${s}] non-object 200 body`), null);
-  let h = Array.isArray(r.data.data) ? r.data.data : [],
-    v = [];
-  for (let R = h.length - 1; R >= 0; R--) {
-    let y = h[R];
+  if (!sessionEvents || sessionEvents.status !== 200) {
+    logForDebugging(`[${s}] HTTP ${sessionEvents?.status ?? "error"}`);
+    return null;
+  }
+  if (sessionEvents.data === null || typeof sessionEvents.data !== "object") {
+    logForDebugging(`[${s}] non-object 200 body`);
+    return null;
+  }
+  let h = Array.isArray(sessionEvents.data.data) ? sessionEvents.data.data : [];
+  let v = [];
+  for (let j = h.length - 1; j >= 0; j--) {
+    let y = h[j];
     if (y?.payload)
       v.push({
         payload: y.payload,
@@ -1828,43 +2186,42 @@ async function renewDeviceTokenAndRetry(e, n, s, i) {
         sequenceNum: parseSequenceNum(y),
       });
   }
-  let w = r.data.next_cursor ?? null;
+  let nextCursor = sessionEvents.data.next_cursor ?? null;
   return {
     events: v,
-    firstId: w,
-    hasMore: w !== null,
+    firstId: nextCursor,
+    hasMore: nextCursor !== null,
     droppedRows: h.length - v.length,
     newestSequenceNum: parseSequenceNum(h[0]),
   };
 }
+//@ chunk-fp6aqx1j.js:16781-16916 fingerprint = isSDKMessage (0.72)
 /**
  * 是否是可中继的控制帧：control_request（subtype 在允许集合内）或 control_response。
  */
-//@ chunk-fp6aqx1j.js:16781-16916 fingerprint = isSDKMessage (0.72)
 function isRelayableControlFrame(frame) {
-  if (!isPlainObject(frame)) return !1;
+  if (!isPlainObject(frame)) return false;
   return frame.type === "control_request"
     ? isPlainObject(frame.request) && SETTINGS_CONTROL_SUBTYPES.has(frame.request.subtype)
     : frame.type === "control_response";
 }
-
 export {
-  Wt,
+  isTimeoutError,
   CONTROL_REQUEST_SCHEMAS,
-  _en,
+  DEFAULT_EVENT_PAGE_SIZE,
   renewDeviceTokenAndRetry,
   getSessionRequestConfig,
   RemoteSessionManager,
   CANCELLED,
   formatUndeliveredAnswerNotice,
-  tCs,
+  sendFailureMessage,
   isRelayableControlFrame,
   WITHDRAWN,
-  $Nn,
+  UntrustedDeviceTokenError,
   printableExcerpt,
-  nCs,
+  PREFETCH_EVENT_PAGE_SIZE,
   parseSequenceNum,
-  xmo,
-  eCs,
-  Xkr,
+  isToolNameDifferent,
+  DIALOG_REQUEST_SUBTYPES,
+  MAX_CACHED_PERMISSION_REQUESTS,
 };

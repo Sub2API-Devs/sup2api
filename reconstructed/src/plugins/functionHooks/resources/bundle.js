@@ -9,9 +9,15 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../../assets/bundle.mjs-c7466167.txt.zst" with { type: "file" };
-import { Et } from "../../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-kpkakvzd.js:309-331 placement
-var e = __cc_resource_0;
+/**
+ * 内嵌资源
+ */
+var BUNDLE_RESOURCE = __cc_resource_0;
 //@ chunk-kpkakvzd.js:331-363 placement
-var f = Et(e, import.meta.dirname);
+/**
+ * 读取资源文本
+ */
+var bundleResourceText = readEmbeddedTextSync(BUNDLE_RESOURCE, import.meta.dirname);

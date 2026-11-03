@@ -6,23 +6,23 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Pu } from "./deep_clone.js";
-import { wu } from "./is_plain_object.js";
+import { require_deep_clone } from "./deep_clone.js";
+import { require_is_plain_object } from "./is_plain_object.js";
 
 //@ chunk-1ny7cxrt.js:23839-27191 cjs-fingerprint
-var gy = x(function (qve, fS) {
-  var Sl = require("./chunk-2tyrgda4.js"),
-    DF = Pu(),
-    cS = wu(),
-    uS = Symbol(),
-    dS = (e, { alg: alg, use: use }) => {
-      let o = 0;
-      if (alg && e.alg) o++;
-      if (use && e.use) o++;
-      return o;
-    };
-  function MF(e) {
-    switch (typeof e === "string" && e.slice(0, 2)) {
+var require_keystore = x(function (cjsExports, cjsModule) {
+  var jose = require("./chunk-2tyrgda4.js");
+  var clone = require_deep_clone();
+  var isPlainObject = require_is_plain_object();
+  var internal = Symbol();
+  var keyscore = (key, { alg, use }) => {
+    let score = 0;
+    if (alg && key.alg) score++;
+    if (use && key.use) score++;
+    return score;
+  };
+  function getKtyFromAlg(alg) {
+    switch (typeof alg === "string" && alg.slice(0, 2)) {
       case "RS":
       case "PS":
         return "RSA";
@@ -34,84 +34,92 @@ var gy = x(function (qve, fS) {
         return;
     }
   }
-  function jF(e, t, n, o) {
-    if (t) return new Set([t]);
-    switch (n) {
+  function getAlgorithms(use, alg, kty, crv) {
+    if (alg) return new Set([alg]);
+    switch (kty) {
       case "EC": {
-        let r = [];
-        if (e === "enc" || e === void 0)
-          r = r.concat(["ECDH-ES", "ECDH-ES+A128KW", "ECDH-ES+A192KW", "ECDH-ES+A256KW"]);
-        if (e === "sig" || e === void 0)
-          switch (o) {
+        let algs = [];
+        if (use === "enc" || use === undefined)
+          algs = algs.concat(["ECDH-ES", "ECDH-ES+A128KW", "ECDH-ES+A192KW", "ECDH-ES+A256KW"]);
+        if (use === "sig" || use === undefined)
+          switch (crv) {
             case "P-256":
             case "P-384":
-              r = r.concat([`ES${o.slice(-3)}`]);
+              algs = algs.concat([`ES${crv.slice(-3)}`]);
               break;
             case "P-521":
-              r = r.concat(["ES512"]);
+              algs = algs.concat(["ES512"]);
               break;
             case "secp256k1":
-              if (Sl.cryptoRuntime === "node:crypto") r = r.concat(["ES256K"]);
+              if (jose.cryptoRuntime === "node:crypto") algs = algs.concat(["ES256K"]);
               break;
           }
-        return new Set(r);
+        return new Set(algs);
       }
       case "OKP":
         return new Set(["ECDH-ES", "ECDH-ES+A128KW", "ECDH-ES+A192KW", "ECDH-ES+A256KW"]);
       case "RSA": {
-        let r = [];
-        if (e === "enc" || e === void 0) {
-          if (
-            ((r = r.concat(["RSA-OAEP", "RSA-OAEP-256", "RSA-OAEP-384", "RSA-OAEP-512"])),
-            Sl.cryptoRuntime === "node:crypto")
-          )
-            r = r.concat(["RSA1_5"]);
+        let algs = [];
+        if (use === "enc" || use === undefined) {
+          algs = algs.concat(["RSA-OAEP", "RSA-OAEP-256", "RSA-OAEP-384", "RSA-OAEP-512"]);
+          if (jose.cryptoRuntime === "node:crypto") algs = algs.concat(["RSA1_5"]);
         }
-        if (e === "sig" || e === void 0) r = r.concat(["PS256", "PS384", "PS512", "RS256", "RS384", "RS512"]);
-        return new Set(r);
+        if (use === "sig" || use === undefined)
+          algs = algs.concat(["PS256", "PS384", "PS512", "RS256", "RS384", "RS512"]);
+        return new Set(algs);
       }
       default:
         throw Error("unreachable");
     }
   }
-  fS.exports = class {
+  cjsModule.exports = class {
     #e;
-    constructor(t, n) {
-      if (t !== uS) throw Error("invalid constructor call");
-      this.#e = n;
+    constructor(i, keys) {
+      if (i !== internal) throw Error("invalid constructor call");
+      this.#e = keys;
     }
     toJWKS() {
-      return { keys: this.map(({ jwk: { d: t, p: n, q: o, dp: r, dq: s, qi: a, ...l } }) => l) };
+      return {
+        keys: this.map(({ jwk: { d, p, q, dp, dq, qi, ...jwk } }) => jwk),
+      };
     }
-    all({ alg: t, kid: n, use: o } = {}) {
-      if (!o || !t) throw Error();
-      let r = MF(t),
-        s = { alg: t, use: o };
-      return this.filter((a) => {
-        let l = !0;
-        if (l && r !== void 0 && a.jwk.kty !== r) l = !1;
-        if (l && n !== void 0 && a.jwk.kid !== n) l = !1;
-        if (l && o !== void 0 && a.jwk.use !== void 0 && a.jwk.use !== o) l = !1;
-        if (l && a.jwk.alg && a.jwk.alg !== t) l = !1;
-        else if (!a.algorithms.has(t)) l = !1;
-        return l;
-      }).sort((a, l) => dS(l, s) - dS(a, s));
+    all({ alg, kid, use } = {}) {
+      if (!use || !alg) throw Error();
+      let kty = getKtyFromAlg(alg);
+      let search = {
+        alg,
+        use,
+      };
+      return this.filter((key) => {
+        let candidate = true;
+        if (candidate && kty !== undefined && key.jwk.kty !== kty) candidate = false;
+        if (candidate && kid !== undefined && key.jwk.kid !== kid) candidate = false;
+        if (candidate && use !== undefined && key.jwk.use !== undefined && key.jwk.use !== use)
+          candidate = false;
+        if (candidate && key.jwk.alg && key.jwk.alg !== alg) candidate = false;
+        else if (!key.algorithms.has(alg)) candidate = false;
+        return candidate;
+      }).sort((first, second) => keyscore(second, search) - keyscore(first, search));
     }
-    get(...t) {
-      return this.all(...t)[0];
+    get(...args) {
+      return this.all(...args)[0];
     }
-    static async fromJWKS(t, { onlyPublic: n = !1, onlyPrivate: o = !1 } = {}) {
-      if (!cS(t) || !Array.isArray(t.keys) || t.keys.some((key) => !cS(key) || !("kty" in key)))
+    static async fromJWKS(jwks, { onlyPublic = false, onlyPrivate = false } = {}) {
+      if (
+        !isPlainObject(jwks) ||
+        !Array.isArray(jwks.keys) ||
+        jwks.keys.some((k) => !isPlainObject(k) || !("kty" in k))
+      )
         throw TypeError("jwks must be a JSON Web Key Set formatted object");
-      let r = [];
-      for (let key of t.keys) {
-        key = DF(key);
-        let { kty: kty, kid: kid, crv: crv } = key,
-          { alg: alg, use: use } = key;
+      let keys = [];
+      for (let jwk of jwks.keys) {
+        jwk = clone(jwk);
+        let { kty, kid, crv } = jwk;
+        let { alg, use } = jwk;
         if (typeof kty !== "string" || !kty) continue;
-        if (use !== void 0 && use !== "sig" && use !== "enc") continue;
-        if (typeof alg !== "string" && alg !== void 0) continue;
-        if (typeof kid !== "string" && kid !== void 0) continue;
+        if (use !== undefined && use !== "sig" && use !== "enc") continue;
+        if (typeof alg !== "string" && alg !== undefined) continue;
+        if (typeof kid !== "string" && kid !== undefined) continue;
         if (kty === "EC" && use === "sig")
           switch (crv) {
             case "P-256":
@@ -126,12 +134,16 @@ var gy = x(function (qve, fS) {
             default:
               break;
           }
-        if (crv === "secp256k1") ((use = "sig"), (alg = "ES256K"));
+        if (crv === "secp256k1") {
+          use = "sig";
+          alg = "ES256K";
+        }
         if (kty === "OKP")
           switch (crv) {
             case "Ed25519":
             case "Ed448":
-              ((use = "sig"), (alg = "EdDSA"));
+              use = "sig";
+              alg = "EdDSA";
               break;
             case "X25519":
             case "X448":
@@ -141,7 +153,7 @@ var gy = x(function (qve, fS) {
               break;
           }
         if (alg && !use)
-          switch (!0) {
+          switch (true) {
             case alg.startsWith("ECDH"):
               use = "enc";
               break;
@@ -151,57 +163,59 @@ var gy = x(function (qve, fS) {
             default:
               break;
           }
-        if (o && (key.kty === "oct" || !key.d)) throw Error("jwks must only contain private keys");
-        if (n && (key.d || key.k)) continue;
-        r.push({
-          jwk: { ...key, alg: alg, use: use },
-          async keyObject(h) {
-            if (this[h]) return this[h];
-            let importJWK = await Sl.importJWK(this.jwk, h);
-            return ((this[h] = importJWK), importJWK);
+        if (onlyPrivate && (jwk.kty === "oct" || !jwk.d)) throw Error("jwks must only contain private keys");
+        if (onlyPublic && (jwk.d || jwk.k)) continue;
+        keys.push({
+          jwk: {
+            ...jwk,
+            alg,
+            use,
+          },
+          async keyObject(alg) {
+            if (this[alg]) return this[alg];
+            let keyObject = await jose.importJWK(this.jwk, alg);
+            this[alg] = keyObject;
+            return keyObject;
           },
           get algorithms() {
-            return (
-              Object.defineProperty(this, "algorithms", {
-                value: jF(this.jwk.use, this.jwk.alg, this.jwk.kty, this.jwk.crv),
-                enumerable: !0,
-                configurable: !1,
-              }),
-              this.algorithms
-            );
+            Object.defineProperty(this, "algorithms", {
+              value: getAlgorithms(this.jwk.use, this.jwk.alg, this.jwk.kty, this.jwk.crv),
+              enumerable: true,
+              configurable: false,
+            });
+            return this.algorithms;
           },
         });
       }
-      return new this(uS, r);
+      return new this(internal, keys);
     }
-    filter(...t) {
-      return this.#e.filter(...t);
+    filter(...args) {
+      return this.#e.filter(...args);
     }
-    find(...t) {
-      return this.#e.find(...t);
+    find(...args) {
+      return this.#e.find(...args);
     }
-    every(...t) {
-      return this.#e.every(...t);
+    every(...args) {
+      return this.#e.every(...args);
     }
-    some(...t) {
-      return this.#e.some(...t);
+    some(...args) {
+      return this.#e.some(...args);
     }
-    map(...t) {
-      return this.#e.map(...t);
+    map(...args) {
+      return this.#e.map(...args);
     }
-    forEach(...t) {
-      return this.#e.forEach(...t);
+    forEach(...args) {
+      return this.#e.forEach(...args);
     }
-    reduce(...t) {
-      return this.#e.reduce(...t);
+    reduce(...args) {
+      return this.#e.reduce(...args);
     }
-    sort(...t) {
-      return this.#e.sort(...t);
+    sort(...args) {
+      return this.#e.sort(...args);
     }
     *[Symbol.iterator]() {
-      for (let t of this.#e) yield t;
+      for (let key of this.#e) yield key;
     }
   };
 });
-
-export { gy };
+export { require_keystore };

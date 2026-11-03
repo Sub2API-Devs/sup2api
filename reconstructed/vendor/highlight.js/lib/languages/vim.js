@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:520619-529224 cjs-fingerprint+context
-var jo = x(function (Sb, Jo) {
-  function c_(e) {
+var require_vim = x(function (cjsExports, cjsModule) {
+  function vim(hljs) {
     return {
       name: "Vim Script",
       keywords: {
@@ -21,23 +21,45 @@ var jo = x(function (Sb, Jo) {
       },
       illegal: /;/,
       contains: [
-        e.NUMBER_MODE,
-        { className: "string", begin: "'", end: "'", illegal: "\\n" },
-        { className: "string", begin: /"(\\"|\n\\|[^"\n])*"/ },
-        e.COMMENT('"', "$"),
-        { className: "variable", begin: /[bwtglsav]:[\w\d_]+/ },
+        hljs.NUMBER_MODE,
         {
-          begin: [/\b(?:function|function!)/, /\s+/, e.IDENT_RE],
-          className: { 1: "keyword", 3: "title" },
+          className: "string",
+          begin: "'",
+          end: "'",
+          illegal: "\\n",
+        },
+        {
+          className: "string",
+          begin: /"(\\"|\n\\|[^"\n])*"/,
+        },
+        hljs.COMMENT('"', "$"),
+        {
+          className: "variable",
+          begin: /[bwtglsav]:[\w\d_]+/,
+        },
+        {
+          begin: [/\b(?:function|function!)/, /\s+/, hljs.IDENT_RE],
+          className: {
+            1: "keyword",
+            3: "title",
+          },
           end: "$",
           relevance: 0,
-          contains: [{ className: "params", begin: "\\(", end: "\\)" }],
+          contains: [
+            {
+              className: "params",
+              begin: "\\(",
+              end: "\\)",
+            },
+          ],
         },
-        { className: "symbol", begin: /<[\w-]+>/ },
+        {
+          className: "symbol",
+          begin: /<[\w-]+>/,
+        },
       ],
     };
   }
-  Jo.exports = c_;
+  cjsModule.exports = vim;
 });
-
-export { jo };
+export { require_vim };

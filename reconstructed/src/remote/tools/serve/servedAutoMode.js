@@ -31,10 +31,10 @@ function autoModeRefusedForServedCalls() {
     isServedSettingRefused("unattended_serving_off")
   );
 }
+//@ chunk-vpphf2a1.js:443-838 placement
 /**
  * 远端服务调用拒绝 auto 模式的原因。
  */
-//@ chunk-vpphf2a1.js:443-838 placement
 function autoModeRefusedForServedCallsWhy(n) {
   try {
     if (autoModeRefusedHere()) return getAutoModeUnavailableReason() === "settings" ? "settings" : "breaker";
@@ -51,13 +51,15 @@ function autoModeRefusedForServedCallsWhy(n) {
   }
 }
 //@ chunk-vpphf2a1.js:838-1030 placement
-function autoOffNotice(n) {
+function autoOffNotice(targetName) {
   let e = autoModeRefusedForServedCallsWhy();
   if (e === "none") return;
   return {
     key: `served-auto-off-${e === "consent_unset" || e === "consent_declined" ? "consent" : e}`,
-    text: REMOTE_TOOLS_CONSENT_TEXT.auto_off_notice(n, REMOTE_TOOLS_CONSENT_TEXT[`auto_off.reason.${e}`]),
+    text: REMOTE_TOOLS_CONSENT_TEXT.auto_off_notice(
+      targetName,
+      REMOTE_TOOLS_CONSENT_TEXT[`auto_off.reason.${e}`],
+    ),
   };
 }
-
 export { autoModeRefusedForServedCalls, autoOffNotice, autoModeRefusedForServedCallsWhy };

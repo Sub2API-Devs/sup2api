@@ -8,32 +8,36 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:6325-6693 cjs-require-graph
-var QPo = x(function (ac, nr) {
-  nr.exports = Vi;
-  function Vi(l, u) {
-    var f = Array(arguments.length - 1),
-      d = 0,
-      i = 2,
-      o = !0;
-    while (i < arguments.length) f[d++] = arguments[i++];
-    return new Promise(function (t, r) {
-      f[d] = function (c) {
-        if (o)
-          if (((o = !1), c)) r(c);
+var require_aspromise = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = asPromise;
+  function asPromise(fn, ctx) {
+    var params = Array(arguments.length - 1);
+    var offset = 0;
+    var index = 2;
+    var pending = true;
+    while (index < arguments.length) params[offset++] = arguments[index++];
+    return new Promise(function (resolve, reject) {
+      params[offset] = function (err) {
+        if (pending) {
+          pending = false;
+          if (err) reject(err);
           else {
-            var s = Array(arguments.length - 1),
-              m = 0;
-            while (m < s.length) s[m++] = arguments[m];
-            t.apply(null, s);
+            var params = Array(arguments.length - 1);
+            var offset = 0;
+            while (offset < params.length) params[offset++] = arguments[offset];
+            resolve.apply(null, params);
           }
+        }
       };
       try {
-        l.apply(u || null, f);
-      } catch (error) {
-        if (o) ((o = !1), r(error));
+        fn.apply(ctx || null, params);
+      } catch (err) {
+        if (pending) {
+          pending = false;
+          reject(err);
+        }
       }
     });
   }
 });
-
-export { QPo };
+export { require_aspromise };

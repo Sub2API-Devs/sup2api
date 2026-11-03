@@ -10,61 +10,76 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
-import { So } from "../../hooks/useRecentInputGuard.js";
+import { RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3 } from "../../hooks/useRecentInputGuard.js";
 import { sanitizeOneLineLabel, LabelValueRow } from "../EffortMediumNudgeDialog.js";
 import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { PermissionDialog_2 } from "../permissions/PermissionDialog.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { getDynamicConfig_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 
 //@ chunk-18hwfzwa.js:1106798-1106812 affinity
-var oit = 30000;
+var DESKTOP_UPSELL_TIMEOUT_MS = 30000;
 //@ chunk-18hwfzwa.js:1106812-1108717 callgraph-fingerprint = DesktopUpsellStartup (0.167)
-function DesktopUpsellStartup(t0) {
-  let $ = w(33),
+function DesktopUpsellStartup(props) {
+  let $ = w(33);
+  let {
+    title,
+    intro,
+    pluginName,
+    pluginDescription,
+    marketplaceName,
+    extraIdentityRow,
+    question,
+    options,
+    unansweredResponse,
+    onResponse,
+  } = props;
+  let timeout = useTimeout(RECENT_INPUT_GUARD_MS_3);
+  let rt = [
     {
-      title: title,
-      intro: intro,
-      pluginName: pluginName,
-      pluginDescription: pluginDescription,
-      marketplaceName: marketplaceName,
-      extraIdentityRow: extraIdentityRow,
-      question: question,
-      options: options,
-      unansweredResponse: unansweredResponse,
-      onResponse: onResponse,
-    } = t0,
-    Xe = useTimeout(So),
-    rt = [
-      { label: "Plugin:", value: pluginName, fallback: "(unnamed plugin)", suffix: "" },
-      { label: "Marketplace:", value: marketplaceName, fallback: "(unnamed marketplace)", suffix: "" },
-      ...(extraIdentityRow ? [extraIdentityRow] : []),
-    ],
-    At;
-  if ($[0] !== pluginDescription)
-    ((At = pluginDescription === void 0 ? void 0 : sanitizeOneLineLabel(pluginDescription)),
-      ($[0] = pluginDescription),
-      ($[1] = At));
-  else At = $[1];
-  let It = At,
-    Ot;
-  if ($[2] !== onResponse || $[3] !== unansweredResponse)
-    ((Ot = () => onResponse(isUnattendedInteractiveSession() ? "cancelled" : unansweredResponse)),
-      ($[2] = onResponse),
-      ($[3] = unansweredResponse),
-      ($[4] = Ot));
-  else Ot = $[4];
+      label: "Plugin:",
+      value: pluginName,
+      fallback: "(unnamed plugin)",
+      suffix: "",
+    },
+    {
+      label: "Marketplace:",
+      value: marketplaceName,
+      fallback: "(unnamed marketplace)",
+      suffix: "",
+    },
+    ...(extraIdentityRow ? [extraIdentityRow] : []),
+  ];
+  let At;
+  if ($[0] !== pluginDescription) {
+    At = pluginDescription === undefined ? undefined : sanitizeOneLineLabel(pluginDescription);
+    $[0] = pluginDescription;
+    $[1] = At;
+  } else At = $[1];
+  let It = At;
+  let Ot;
+  if ($[2] !== onResponse || $[3] !== unansweredResponse) {
+    Ot = () => onResponse(isUnattendedInteractiveSession() ? "cancelled" : unansweredResponse);
+    $[2] = onResponse;
+    $[3] = unansweredResponse;
+    $[4] = Ot;
+  } else Ot = $[4];
   let Et;
-  if ($[5] === MEMO_CACHE_SENTINEL) ((Et = []), ($[5] = Et));
-  else Et = $[5];
-  useTimeout(Ot, oit, Et);
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    Et = [];
+    $[5] = Et;
+  } else Et = $[5];
+  useTimeout(Ot, DESKTOP_UPSELL_TIMEOUT_MS, Et);
   let Dt;
-  if ($[6] !== Xe || $[7] !== onResponse)
-    ((Dt = function oo(value) {
-      if (!Xe) {
+  if ($[6] !== timeout || $[7] !== onResponse) {
+    Dt = function oo(value) {
+      if (!timeout) {
         return;
       }
       if (isUnattendedInteractiveSession()) {
@@ -72,77 +87,120 @@ function DesktopUpsellStartup(t0) {
         return;
       }
       onResponse(value);
-    }),
-      ($[6] = Xe),
-      ($[7] = onResponse),
-      ($[8] = Dt));
-  else Dt = $[8];
+    };
+    $[6] = timeout;
+    $[7] = onResponse;
+    $[8] = Dt;
+  } else Dt = $[8];
   let oo = Dt;
-  const Xt = PermissionDialog_2,
-    io = Box,
-    so = "column",
-    po = 2,
-    ao = 1;
+  const Xt = PermissionDialog_2;
+  const io = Box;
+  const flexDirection = "column";
+  const paddingX = 2;
+  const paddingY = 1;
   let co;
-  if ($[9] !== intro) ((co = e(Box, { marginBottom: 1, children: intro })), ($[9] = intro), ($[10] = co));
-  else co = $[10];
+  if ($[9] !== intro) {
+    co = jsxProd_default(Box, {
+      marginBottom: 1,
+      children: intro,
+    });
+    $[9] = intro;
+    $[10] = co;
+  } else co = $[10];
   const mapped = rt.map(LabelValueRow);
   let Ao;
-  if ($[11] !== It)
-    ((Ao =
+  if ($[11] !== It) {
+    Ao =
       It &&
-      r(Box, {
+      jsxProd_default_2(Box, {
         children: [
-          e(Box, { flexShrink: 0, children: e(Text, { dimColor: !0, children: "Description:" }) }),
-          r(Text, { dimColor: !0, wrap: "truncate-end", children: [" ", It] }),
+          jsxProd_default(Box, {
+            flexShrink: 0,
+            children: jsxProd_default(Text, {
+              dimColor: true,
+              children: "Description:",
+            }),
+          }),
+          jsxProd_default_2(Text, {
+            dimColor: true,
+            wrap: "truncate-end",
+            children: [" ", It],
+          }),
         ],
-      })),
-      ($[11] = It),
-      ($[12] = Ao));
-  else Ao = $[12];
+      });
+    $[11] = It;
+    $[12] = Ao;
+  } else Ao = $[12];
   let Bo;
-  if ($[13] !== question)
-    ((Bo = e(Box, { marginTop: 1, children: e(Text, { children: question }) })),
-      ($[13] = question),
-      ($[14] = Bo));
-  else Bo = $[14];
-  const Ro = !Xe;
-  let Ho;
-  if ($[15] !== oo) ((Ho = () => oo("no")), ($[15] = oo), ($[16] = Ho));
-  else Ho = $[16];
+  if ($[13] !== question) {
+    Bo = jsxProd_default(Box, {
+      marginTop: 1,
+      children: jsxProd_default(Text, {
+        children: question,
+      }),
+    });
+    $[13] = question;
+    $[14] = Bo;
+  } else Bo = $[14];
+  const isDisabled = !timeout;
+  let onCancel;
+  if ($[15] !== oo) {
+    onCancel = () => oo("no");
+    $[15] = oo;
+    $[16] = onCancel;
+  } else onCancel = $[16];
   let Io;
-  if ($[17] !== options || $[18] !== oo || $[19] !== Ro || $[20] !== Ho)
-    ((Io = e(Box, {
-      children: e(ModelSelector, { options: options, isDisabled: Ro, onChange: oo, onCancel: Ho }),
-    })),
-      ($[17] = options),
-      ($[18] = oo),
-      ($[19] = Ro),
-      ($[20] = Ho),
-      ($[21] = Io));
-  else Io = $[21];
-  let Wo;
-  if ($[22] !== io || $[23] !== Ao || $[24] !== Bo || $[25] !== Io || $[26] !== co || $[27] !== mapped)
-    ((Wo = r(io, { flexDirection: so, paddingX: po, paddingY: ao, children: [co, mapped, Ao, Bo, Io] })),
-      ($[22] = io),
-      ($[23] = Ao),
-      ($[24] = Bo),
-      ($[25] = Io),
-      ($[26] = co),
-      ($[27] = mapped),
-      ($[28] = Wo));
-  else Wo = $[28];
+  if ($[17] !== options || $[18] !== oo || $[19] !== isDisabled || $[20] !== onCancel) {
+    Io = jsxProd_default(Box, {
+      children: jsxProd_default(ModelSelector, {
+        options,
+        isDisabled,
+        onChange: oo,
+        onCancel,
+      }),
+    });
+    $[17] = options;
+    $[18] = oo;
+    $[19] = isDisabled;
+    $[20] = onCancel;
+    $[21] = Io;
+  } else Io = $[21];
+  let children;
+  if ($[22] !== io || $[23] !== Ao || $[24] !== Bo || $[25] !== Io || $[26] !== co || $[27] !== mapped) {
+    children = jsxProd_default_2(io, {
+      flexDirection,
+      paddingX,
+      paddingY,
+      children: [co, mapped, Ao, Bo, Io],
+    });
+    $[22] = io;
+    $[23] = Ao;
+    $[24] = Bo;
+    $[25] = Io;
+    $[26] = co;
+    $[27] = mapped;
+    $[28] = children;
+  } else children = $[28];
   let mn;
-  if ($[29] !== Xt || $[30] !== Wo || $[31] !== title)
-    ((mn = e(Xt, { title: title, children: Wo })), ($[29] = Xt), ($[30] = Wo), ($[31] = title), ($[32] = mn));
-  else mn = $[32];
+  if ($[29] !== Xt || $[30] !== children || $[31] !== title) {
+    mn = jsxProd_default(Xt, {
+      title,
+      children,
+    });
+    $[29] = Xt;
+    $[30] = children;
+    $[31] = title;
+    $[32] = mn;
+  } else mn = $[32];
   return mn;
 }
 //@ chunk-4t8fx0s8.js:13747-13804 fingerprint = DESKTOP_UPSELL_DEFAULT (0.667)
-var DESKTOP_UPSELL_DEFAULT = { enable_shortcut_tip: !1, enable_contextual_tip: !1 };
+var DESKTOP_UPSELL_DEFAULT = {
+  enable_shortcut_tip: false,
+  enable_contextual_tip: false,
+};
 //@ chunk-4t8fx0s8.js:13804-13854 fingerprint = getDesktopUpsellConfig (1)
 function getDesktopUpsellConfig() {
   return getDynamicConfig_CACHED_MAY_BE_STALE("tengu_desktop_upsell", DESKTOP_UPSELL_DEFAULT);
 }
-
 export { DesktopUpsellStartup, getDesktopUpsellConfig };

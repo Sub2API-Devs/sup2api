@@ -11,19 +11,30 @@
 import { env } from "../env.js";
 import { isFirstPartyProvider } from "../model/providers.js";
 
+//@ chunk-2nwtj5hg.js:262-624 placement
 /**
  * 校验 teleport 中继的 SESSION_INGRESS_URL 来源（必须 https、无额外部分）。
  */
-//@ chunk-2nwtj5hg.js:262-624 placement
 function validateIngressOrigin(s) {
-  if (!s.startsWith("https://")) return { ok: !1, cause: "non_https" };
+  if (!s.startsWith("https://"))
+    return {
+      ok: false,
+      cause: "non_https",
+    };
   let e;
   try {
     e = new URL(s);
   } catch {
-    return { ok: !1, cause: "unparseable" };
+    return {
+      ok: false,
+      cause: "unparseable",
+    };
   }
-  if (e.protocol !== "https:") return { ok: !1, cause: "non_https" };
+  if (e.protocol !== "https:")
+    return {
+      ok: false,
+      cause: "non_https",
+    };
   if (
     e.username !== "" ||
     e.password !== "" ||
@@ -31,43 +42,82 @@ function validateIngressOrigin(s) {
     e.hash !== "" ||
     (e.pathname !== "" && e.pathname !== "/")
   )
-    return { ok: !1, cause: "origin_extras" };
-  return { ok: !0, origin: e.origin };
+    return {
+      ok: false,
+      cause: "origin_extras",
+    };
+  return {
+    ok: true,
+    origin: e.origin,
+  };
 }
 //@ chunk-2nwtj5hg.js:624-652 placement
-var t = /^cse_[A-Za-z0-9_]+$/;
+var SESSION_ID_RE = /^cse_[A-Za-z0-9_]+$/;
+//@ chunk-2nwtj5hg.js:652-1189 placement
 /**
  * 读取 teleport 中继环境变量
  */
-//@ chunk-2nwtj5hg.js:652-1189 placement
 function readTeleportRelayEnv() {
-  if (!env.CCR_SESSION_PROFILE) return { ok: !1, cause: null };
+  if (!env.CCR_SESSION_PROFILE)
+    return {
+      ok: false,
+      cause: null,
+    };
   let SESSION_INGRESS_URL = env.SESSION_INGRESS_URL;
-  if (!SESSION_INGRESS_URL) return { ok: !1, cause: "missing_ingress_url" };
+  if (!SESSION_INGRESS_URL)
+    return {
+      ok: false,
+      cause: "missing_ingress_url",
+    };
   let e = validateIngressOrigin(SESSION_INGRESS_URL);
-  if (!e.ok) return { ok: !1, cause: `invalid_ingress_origin:${e.cause}` };
+  if (!e.ok)
+    return {
+      ok: false,
+      cause: `invalid_ingress_origin:${e.cause}`,
+    };
   let CLAUDE_CODE_REMOTE_SESSION_ID = env.CLAUDE_CODE_REMOTE_SESSION_ID;
-  if (!CLAUDE_CODE_REMOTE_SESSION_ID) return { ok: !1, cause: "missing_session_id" };
-  if (!CLAUDE_CODE_REMOTE_SESSION_ID.startsWith("cse_")) return { ok: !1, cause: "non_cse_session_id" };
-  if (!t.test(CLAUDE_CODE_REMOTE_SESSION_ID)) return { ok: !1, cause: "malformed_session_id" };
-  if (!isFirstPartyProvider()) return { ok: !1, cause: "non_first_party" };
-  return { ok: !0, config: { ingressOrigin: e.origin, remoteSessionId: CLAUDE_CODE_REMOTE_SESSION_ID } };
+  if (!CLAUDE_CODE_REMOTE_SESSION_ID)
+    return {
+      ok: false,
+      cause: "missing_session_id",
+    };
+  if (!CLAUDE_CODE_REMOTE_SESSION_ID.startsWith("cse_"))
+    return {
+      ok: false,
+      cause: "non_cse_session_id",
+    };
+  if (!SESSION_ID_RE.test(CLAUDE_CODE_REMOTE_SESSION_ID))
+    return {
+      ok: false,
+      cause: "malformed_session_id",
+    };
+  if (!isFirstPartyProvider())
+    return {
+      ok: false,
+      cause: "non_first_party",
+    };
+  return {
+    ok: true,
+    config: {
+      ingressOrigin: e.origin,
+      remoteSessionId: CLAUDE_CODE_REMOTE_SESSION_ID,
+    },
+  };
 }
 //@ chunk-2nwtj5hg.js:1189-1240 placement
 function getTeleportRelayEnvConfig() {
-  let s = readTeleportRelayEnv();
-  return s.ok ? s.config : null;
+  let teleportRelayEnv = readTeleportRelayEnv();
+  return teleportRelayEnv.ok ? teleportRelayEnv.config : null;
 }
 //@ chunk-2nwtj5hg.js:1240-1290 placement
 function explainTeleportEnvRefusal() {
-  let s = readTeleportRelayEnv();
-  return s.ok ? null : s.cause;
+  let teleportRelayEnv = readTeleportRelayEnv();
+  return teleportRelayEnv.ok ? null : teleportRelayEnv.cause;
 }
 //@ chunk-2nwtj5hg.js:1290-1334 placement
 function teleportRelayCarrierPresent() {
   return env.CCR_SESSION_PROFILE;
 }
-
 export {
   validateIngressOrigin,
   getTeleportRelayEnvConfig,

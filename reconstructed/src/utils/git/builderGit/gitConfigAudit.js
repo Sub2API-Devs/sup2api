@@ -8,133 +8,51 @@
  * pieces: chunk-s61vbvea.js (37)
  * attribution: placement 37
  */
+import { isAbsolute, join, basename, dirname, resolve, sep } from "path";
+import { realpath, stat } from "fs/promises";
+import { homedir, userInfo } from "os";
 import {
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  isAbsolute as isAbsolute_4,
-  isAbsolute as isAbsolute_5,
-  isAbsolute as isAbsolute_6,
-  isAbsolute as isAbsolute_7,
-  isAbsolute as isAbsolute_8,
-  isAbsolute as isAbsolute_9,
-  isAbsolute as isAbsolute_10,
-  isAbsolute as isAbsolute_11,
-  isAbsolute as isAbsolute_12,
-  isAbsolute as isAbsolute_13,
-  isAbsolute as isAbsolute_14,
-  isAbsolute as isAbsolute_15,
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-  join as join_13,
-  join as join_14,
-  join as join_15,
-  join as join_16,
-  join as join_17,
-  join as join_18,
-  join as join_19,
-  join as join_20,
-  basename,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  resolve,
-  resolve as resolve_2,
-  resolve as resolve_3,
-  resolve as resolve_4,
-  resolve as resolve_5,
-  resolve as resolve_6,
-  resolve as resolve_7,
-  resolve as resolve_8,
-  resolve as resolve_9,
-  resolve as resolve_10,
-  resolve as resolve_11,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  sep as sep_5,
-  sep as sep_6,
-  sep as sep_7,
-  sep as sep_8,
-  sep as sep_9,
-} from "path";
+  GIT_SAFE_GLOBAL_ARGS,
+  GIT_ENV_VARS_TO_CLEAR,
+  regExp as regExp_17,
+  GIT_TRANSPORT_ENV_RE,
+} from "../gitSafeEnv.js";
 import {
-  realpath,
-  realpath as realpath_3,
-  realpath as realpath_4,
-  realpath as realpath_5,
-  stat,
-  stat as stat_2,
-  stat as stat_3,
-  stat as stat_4,
-  stat as stat_5,
-} from "fs/promises";
-import {
-  homedir,
-  homedir as homedir_2,
-  homedir as homedir_3,
-  homedir as homedir_4,
-  homedir as homedir_5,
-  homedir as homedir_6,
-  homedir as homedir_7,
-  userInfo,
-} from "os";
-import { freeze as freeze_6, dre, regExp as regExp_17, BSr } from "../gitSafeEnv.js";
-import {
-  ui,
-  rS,
+  reachRootsOrUnreadable,
+  boundSessionReachRoots,
   IN_TREE_SETTINGS_UNREADABLE,
   IN_TREE_SETTINGS_UNREADABLE_MESSAGE,
-  oKt,
+  buildGitEnvForReach,
   buildGitEnv,
   EMPTY_VALUE,
-  VI,
-  Oy,
+  GIT_READ_ARGS,
+  MAX_GIT_BUFFER_BYTES,
   gitConfigLocationEnv,
   scrubGitTrace2Env,
-  WI,
-  zI,
-  eer,
-  cSe,
-  DNe,
+  GIT_READ_ENV,
+  GIT_REF_PARANOIA_ENV,
+  runGitWithEnv,
+  isDangerousEnvName,
+  isBuildToolEnvVar,
   opensslConfIncludeEnv,
-  tS,
+  applyOpenSslConfInclude,
   getPreSettingsEnv,
   reachForBoundSession,
-  ES,
-  xO,
+  INCLUDE_PATH_CONFIG_KEY_RE,
+  isCannotChangeToError,
   regExp_7,
   GIT_ISOLATION_CONFIG_ARGS,
 } from "./gitEnv.js";
-import { HNe, iKt, windowsGitNote, GitBinaryError } from "./gitBinary.js";
+import { currentGitBinaryState, gitExeOnPathInEnv, windowsGitNote, GitBinaryError } from "./gitBinary.js";
 import {
   GIT_NOT_FOUND_MESSAGE,
   SANDBOX_REACH_TEXTS,
   homeInCheckoutNote,
-  LVo,
-  HO,
+  UNEXAMINABLE_REACH_NOTE,
+  reachRootsForRepo,
   findEnclosingRepos,
-  Cvt,
-  Lqr,
+  checkoutDirOfGitDir,
+  createReachCollector,
 } from "./sandboxReach.js";
 import { getRemoteHostSessionCount } from "../../../commands/insights.js";
 import {
@@ -142,37 +60,37 @@ import {
   checkSessionTempRoot,
   resolveGitFile,
   isSameGitDir,
-  UI,
-  pd,
-  fd,
+  gitDirComparisonKey,
+  stripLineEnding,
+  gitDirIdentityHeld,
   gitDirChangedFailure,
   getFileIdentity_2,
   resolveLinkedWorktreeGitDir,
   sameIdentity,
-  Dnt,
+  toPosixSpelling,
   classifyWorktreeConfig,
 } from "./gitDirIdentity.js";
-import { uy, withholdGitStderr, RVo, txe } from "./gitRun.js";
+import { annotateStderr, withholdGitStderr, firstGitFailureClass, seenStderr } from "./gitRun.js";
 import { GIT_FILES_REF_BACKEND_ENV } from "../gitLanes.js";
 import {
   PROTECTED_ENV_VARS,
   isPathInside as isPathInside_2,
   collectGitProtectedPaths,
   getGitConfigPaths,
-  Yii,
+  systemGitConfigPaths,
   findReachableProtectedPath,
   isWindowsNonDrivePath,
   getHomeDirCandidates,
   resolveRelative,
 } from "../../permissions/protectedEnvAndGitPaths.js";
-import { GIT_SAFETY_ENV } from "../gitSafeInvocation.js";
+import { GIT_SAFETY_ENV as GIT_SAFETY_ENV_2 } from "../gitSafeInvocation.js";
 import { DEFAULT_INVOCATION_ENCODING } from "../../detectRepository.js";
 import { execFileNoThrowWithCwd } from "../../execFileNoThrow.js";
 import { getLatchedPreSettingsEnvSnapshot } from "../../managedEnvApply.js";
 import { getPlatform as getPlatform_2 } from "../../platform.js";
 import { uniq, count } from "../../collections.js";
 import { findCanonicalGitRootUncached } from "../../git.js";
-import { rc } from "../../pathClassification.js";
+import { hasBackslash } from "../../pathClassification.js";
 import { getEnvCaseInsensitive } from "../../plugins/securityDefaultPlugin.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import {
@@ -180,7 +98,7 @@ import {
   detectUnsupportedLayout,
   objectsDirFingerprint,
   statFingerprint,
-  XP,
+  hasReftableOrigin,
 } from "./gitDirShape.js";
 import { getFirstLine } from "../../stringUtils.js";
 import { mapped } from "../../gitSafeExec.js";
@@ -189,207 +107,272 @@ import { readGitConfigFromEnv } from "./inTreeConfig.js";
 
 //@ chunk-s61vbvea.js:217511-218846 placement
 function listGitRefs(e, n, r) {
-  let s = r.input === void 0 ? {} : { input: r.input };
+  let s =
+    r.input === undefined
+      ? {}
+      : {
+          input: r.input,
+        };
   if (!r.hardened)
-    return runGitForAudit([...freeze_6, ...n], {
+    return runGitForAudit([...GIT_SAFE_GLOBAL_ARGS, ...n], {
       cwd: e,
       abortSignal: r.signal,
       ...s,
       ...buildAuditEnv(r.env),
-      ...(r.maxBuffer !== void 0 && { maxBuffer: r.maxBuffer }),
+      ...(r.maxBuffer !== undefined && {
+        maxBuffer: r.maxBuffer,
+      }),
     });
   let h =
-    r.reach ?? (r.reachRoots !== void 0 ? ui(r.reachRoots) : r.layout === void 0 ? void 0 : rS(r.layout));
+    r.reach ??
+    (r.reachRoots !== undefined
+      ? reachRootsOrUnreadable(r.reachRoots)
+      : r.layout === undefined
+        ? undefined
+        : boundSessionReachRoots(r.layout));
   if (h === IN_TREE_SETTINGS_UNREADABLE)
-    return Promise.resolve({ stdout: "", stderr: IN_TREE_SETTINGS_UNREADABLE_MESSAGE, code: 126 });
-  let y = r.probes ?? HNe(),
-    S = r.screenMemo ?? y.screenMemo,
-    w = oKt(h, S),
-    R = iKt(w, y);
+    return Promise.resolve({
+      stdout: "",
+      stderr: IN_TREE_SETTINGS_UNREADABLE_MESSAGE,
+      code: 126,
+    });
+  let y = r.probes ?? currentGitBinaryState();
+  let screenMemo = r.screenMemo ?? y.screenMemo;
+  let gitEnvForReach = buildGitEnvForReach(h, screenMemo);
+  let R = gitExeOnPathInEnv(gitEnvForReach, y);
   if (R === null)
     return Promise.resolve({
       stdout: "",
       stderr:
-        h === void 0 || iKt(buildGitEnv(void 0), y) === null
+        h === undefined || gitExeOnPathInEnv(buildGitEnv(undefined), y) === null
           ? GIT_NOT_FOUND_MESSAGE
-          : `${SANDBOX_REACH_TEXTS}${homeInCheckoutNote(r.layout?.workTree ?? e)}. ${LVo}`,
+          : `${SANDBOX_REACH_TEXTS}${homeInCheckoutNote(r.layout?.workTree ?? e)}. ${UNEXAMINABLE_REACH_NOTE}`,
       code: 127,
     });
   let x = [];
-  if (x === void 0) return Promise.resolve({ stdout: "", stderr: EMPTY_VALUE, code: 126 });
+  if (x === undefined)
+    return Promise.resolve({
+      stdout: "",
+      stderr: EMPTY_VALUE,
+      code: 126,
+    });
   let P = [
     {
       file: R,
       startsOutside:
-        h !== void 0 && !(r.startsInProject || r.reachRoots?.startsInProject || r.layout?.startsInProject),
+        h !== undefined && !(r.startsInProject || r.reachRoots?.startsInProject || r.layout?.startsInProject),
     },
-    [...freeze_6, ...VI, ...x, ...n],
+    [...GIT_SAFE_GLOBAL_ARGS, ...GIT_READ_ARGS, ...x, ...n],
     {
       dir: r.layout?.workTree ?? e,
       abortSignal: r.signal,
-      maxBuffer: Math.min(r.hardenedMaxBuffer ?? Oy, Oy),
+      maxBuffer: Math.min(r.hardenedMaxBuffer ?? MAX_GIT_BUFFER_BYTES, MAX_GIT_BUFFER_BYTES),
       ...s,
-      ...(r.stripFinalNewline === !1 && { stripFinalNewline: !1 }),
-      ...(r.encoding !== void 0 && { encoding: r.encoding }),
-      ...(r.stdoutFd !== void 0 && { stdout: r.stdoutFd }),
+      ...(r.stripFinalNewline === false && {
+        stripFinalNewline: false,
+      }),
+      ...(r.encoding !== undefined && {
+        encoding: r.encoding,
+      }),
+      ...(r.stdoutFd !== undefined && {
+        stdout: r.stdoutFd,
+      }),
       env: {
         ...neutralizeGitConfigEnv(
           getRemoteHostSessionCount(
             {
-              ...gitConfigLocationEnv(w),
-              ...scrubGitTrace2Env(w),
-              ...WI,
-              ...(n[0] === "for-each-ref" && zI),
+              ...gitConfigLocationEnv(gitEnvForReach),
+              ...scrubGitTrace2Env(gitEnvForReach),
+              ...GIT_READ_ENV,
+              ...(n[0] === "for-each-ref" && GIT_REF_PARANOIA_ENV),
               ...(r.layout && gitDirEnv(r.layout)),
-              ...(r.layout?.borrowedObjects !== void 0 && {
-                GIT_ALTERNATE_OBJECT_DIRECTORIES: uy(r.layout.borrowedObjects),
+              ...(r.layout?.borrowedObjects !== undefined && {
+                GIT_ALTERNATE_OBJECT_DIRECTORIES: annotateStderr(r.layout.borrowedObjects),
               }),
               ...r.layout?.configPins,
               ...r.env,
             },
-            { base: w },
+            {
+              base: gitEnvForReach,
+            },
           ),
         ),
         ...(r.layout && GIT_FILES_REF_BACKEND_ENV),
       },
     },
   ];
-  return eer(...P).then(withholdGitStderr);
+  return runGitWithEnv(...P).then(withholdGitStderr);
 }
+//@ chunk-s61vbvea.js:218846-219554 placement
 /**
  * 审查 git 时关注的环境变量集合与判断函数。
  */
-//@ chunk-s61vbvea.js:218846-219554 placement
 var AUDITED_ENV_VARS = new Set([
-    ...dre,
-    "GIT_CONFIG_NOSYSTEM",
-    "GIT_REFERENCE_BACKEND",
-    "GIT_EXEC_PATH",
-    "GIT_ATTR_SOURCE",
-    "GIT_SSH",
-    "GIT_SSH_COMMAND",
-    "GIT_ASKPASS",
-    "SSH_ASKPASS",
-    "HOME",
-    "XDG_CONFIG_HOME",
-    "USERPROFILE",
-    "HOMEDRIVE",
-    "HOMEPATH",
-    "PROGRAMDATA",
-    "PATH",
-    "GIT_EXTERNAL_DIFF",
-    "GIT_DIFF_OPTS",
-    "GIT_PAGER",
-    "GIT_TEMPLATE_DIR",
-    "GIT_SSH_VARIANT",
-    "SSH_ASKPASS_REQUIRE",
-    "GIT_HTTP_PROXY_AUTHMETHOD",
-    "HTTP_PROXY",
-    "HTTPS_PROXY",
-    "ALL_PROXY",
-    "NO_PROXY",
-    "CURL_CA_BUNDLE",
-    "SSL_CERT_FILE",
-    "SSL_CERT_DIR",
-    "NIX_SSL_CERT_FILE",
-    "SSLKEYLOGFILE",
-    "GIT_ALLOW_PROTOCOL",
-    ...PROTECTED_ENV_VARS,
-    ...Object.keys(GIT_SAFETY_ENV),
-  ]),
-  GIT_TRACE_ENV_RE = /^GIT_(?:CURL_|LFS_|TRACE|TRANSFER_TRACE$|REDIRECT_STD)/i,
-  isAuditedEnvVar = (e) =>
-    AUDITED_ENV_VARS.has(e.toUpperCase()) ||
-    regExp_17.test(e) ||
-    GIT_TRACE_ENV_RE.test(e) ||
-    BSr.test(e) ||
-    cSe(e) ||
-    DNe(e);
+  ...GIT_ENV_VARS_TO_CLEAR,
+  "GIT_CONFIG_NOSYSTEM",
+  "GIT_REFERENCE_BACKEND",
+  "GIT_EXEC_PATH",
+  "GIT_ATTR_SOURCE",
+  "GIT_SSH",
+  "GIT_SSH_COMMAND",
+  "GIT_ASKPASS",
+  "SSH_ASKPASS",
+  "HOME",
+  "XDG_CONFIG_HOME",
+  "USERPROFILE",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "PROGRAMDATA",
+  "PATH",
+  "GIT_EXTERNAL_DIFF",
+  "GIT_DIFF_OPTS",
+  "GIT_PAGER",
+  "GIT_TEMPLATE_DIR",
+  "GIT_SSH_VARIANT",
+  "SSH_ASKPASS_REQUIRE",
+  "GIT_HTTP_PROXY_AUTHMETHOD",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "CURL_CA_BUNDLE",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NIX_SSL_CERT_FILE",
+  "SSLKEYLOGFILE",
+  "GIT_ALLOW_PROTOCOL",
+  ...PROTECTED_ENV_VARS,
+  ...Object.keys(GIT_SAFETY_ENV_2),
+]);
+var GIT_TRACE_ENV_RE = /^GIT_(?:CURL_|LFS_|TRACE|TRANSFER_TRACE$|REDIRECT_STD)/i;
+var isAuditedEnvVar = (e) =>
+  AUDITED_ENV_VARS.has(e.toUpperCase()) ||
+  regExp_17.test(e) ||
+  GIT_TRACE_ENV_RE.test(e) ||
+  GIT_TRANSPORT_ENV_RE.test(e) ||
+  isDangerousEnvName(e) ||
+  isBuildToolEnvVar(e);
+//@ chunk-s61vbvea.js:219554-219675 placement
 /**
  * 审查用 git 环境（恢复设置前的值与 OpenSSL include）。
  */
-//@ chunk-s61vbvea.js:219554-219675 placement
 function buildAuditEnv(e) {
-  let n = { ...diffPreSettingsEnv(), ...e },
-    r = opensslConfIncludeEnv({ ...process.env, ...n }),
-    s = { ...n, ...r };
-  return Object.keys(s).length > 0 ? { env: s } : {};
+  let n = {
+    ...diffPreSettingsEnv(),
+    ...e,
+  };
+  let r = opensslConfIncludeEnv({
+    ...process.env,
+    ...n,
+  });
+  let s = {
+    ...n,
+    ...r,
+  };
+  return Object.keys(s).length > 0
+    ? {
+        env: s,
+      }
+    : {};
 }
 //@ chunk-s61vbvea.js:219675-219707 placement
-function RP() {
-  return iKt(Oqr());
+function gitExeForAudit() {
+  return gitExeOnPathInEnv(auditEnvironment());
 }
+//@ chunk-s61vbvea.js:219707-219865 placement
 /**
  * 运行 git（找不到时返回 127 并隐藏 stderr）。
  */
-//@ chunk-s61vbvea.js:219707-219865 placement
 function runGitForAudit(e, n) {
-  let r = RP(),
-    s = { ...n, encoding: n.encoding ?? DEFAULT_INVOCATION_ENCODING };
+  let r = gitExeForAudit();
+  let s = {
+    ...n,
+    encoding: n.encoding ?? DEFAULT_INVOCATION_ENCODING,
+  };
   return r === null
-    ? Promise.resolve({ stdout: "", stderr: `${GIT_NOT_FOUND_MESSAGE}${windowsGitNote()}`, code: 127 })
+    ? Promise.resolve({
+        stdout: "",
+        stderr: `${GIT_NOT_FOUND_MESSAGE}${windowsGitNote()}`,
+        code: 127,
+      })
     : execFileNoThrowWithCwd(r, e, s).then(withholdGitStderr);
 }
 //@ chunk-s61vbvea.js:219865-219916 placement
-function Oqr() {
-  return tS({ ...process.env, ...diffPreSettingsEnv() });
+/**
+ * 构造 git 审查用的环境（进程环境叠加设置生效后的差异）。
+ */
+function auditEnvironment() {
+  return applyOpenSslConfInclude({
+    ...process.env,
+    ...diffPreSettingsEnv(),
+  });
 }
+//@ chunk-s61vbvea.js:219916-220321 placement
 /**
  * 设置生效前后不同的被审查变量。
  */
-//@ chunk-s61vbvea.js:219916-220321 placement
 function diffPreSettingsEnv() {
-  if (getLatchedPreSettingsEnvSnapshot() === void 0) return {};
-  let e = getPreSettingsEnv(),
-    env = process.env,
-    r = getPlatform_2() === "windows" ? (y) => y.toUpperCase() : (y) => y,
-    s = new Map(Object.keys(env).map((y) => [r(y), y])),
-    h = new Map(Object.keys(e).map((y) => [r(y), y]));
+  if (getLatchedPreSettingsEnvSnapshot() === undefined) return {};
+  let preSettingsEnv = getPreSettingsEnv();
+  let env = process.env;
+  let r = getPlatform_2() === "windows" ? (y) => y.toUpperCase() : (y) => y;
+  let s = new Map(Object.keys(env).map((key) => [r(key), key]));
+  let h = new Map(Object.keys(preSettingsEnv).map((key) => [r(key), key]));
   return Object.fromEntries(
     uniq([...s.keys(), ...h.keys()]).flatMap((y) => {
-      let S = s.get(y),
-        w = h.get(y),
-        R = S ?? w ?? y,
-        x = w === void 0 ? void 0 : e[w];
-      if (!isAuditedEnvVar(R) || (S === void 0 ? void 0 : env[S]) === x) return [];
-      return [[R, x ?? TP(R)]];
+      let S = s.get(y);
+      let w = h.get(y);
+      let R = S ?? w ?? y;
+      let x = w === undefined ? undefined : preSettingsEnv[w];
+      if (!isAuditedEnvVar(R) || (S === undefined ? undefined : env[S]) === x) return [];
+      return [[R, x ?? gitSafetyEnvValue(R)]];
     }),
   );
 }
 //@ chunk-s61vbvea.js:220321-220395 placement
-var xP = GIT_SAFETY_ENV,
-  TP = (e) => xP[e.toUpperCase()],
-  nKt = { GIT_REFERENCE_BACKEND: void 0 };
+/**
+ * git 安全相关环境变量的基准表及其取值函数，以及需要额外清空的变量。
+ */
+var GIT_SAFETY_ENV = GIT_SAFETY_ENV_2;
+var gitSafetyEnvValue = (e) => GIT_SAFETY_ENV[e.toUpperCase()];
+var UNSET_REFERENCE_BACKEND_ENV = {
+  GIT_REFERENCE_BACKEND: undefined,
+};
 //@ chunk-s61vbvea.js:220395-220638 placement
-function neutralizeGitConfigEnv(e) {
-  let n = new Set(["GIT_CONFIG", "GIT_ATTR_SOURCE", ...Object.keys(nKt)]),
-    filtered = Object.keys(e).filter((s) => n.has(s.toUpperCase()));
+function neutralizeGitConfigEnv(remoteHostSessionCount) {
+  let n = new Set(["GIT_CONFIG", "GIT_ATTR_SOURCE", ...Object.keys(UNSET_REFERENCE_BACKEND_ENV)]);
+  let filtered = Object.keys(remoteHostSessionCount).filter((key) => n.has(key.toUpperCase()));
   return {
-    ...e,
-    ...Object.fromEntries(filtered.map((s) => [s, void 0])),
-    GIT_CONFIG: void 0,
-    GIT_ATTR_SOURCE: void 0,
-    ...nKt,
+    ...remoteHostSessionCount,
+    ...Object.fromEntries(filtered.map((s) => [s, undefined])),
+    GIT_CONFIG: undefined,
+    GIT_ATTR_SOURCE: undefined,
+    ...UNSET_REFERENCE_BACKEND_ENV,
   };
 }
 //@ chunk-s61vbvea.js:220638-220700 placement
-function Hy(e) {
-  return e !== void 0 && e !== "files" && e !== "reftable";
+function isUnsafeReferenceBackend(e) {
+  return e !== undefined && e !== "files" && e !== "reftable";
 }
 //@ chunk-s61vbvea.js:220700-220918 placement
-function classifyConfigFile(e, n, r) {
+function classifyConfigFile(e, gitConfigPaths, gitProtectedPaths) {
   return {
     path: e,
-    kind: n.includes(e) ? "user_level" : r.fixed.includes(e) ? "repository" : "included",
+    kind: gitConfigPaths.includes(e)
+      ? "user_level"
+      : gitProtectedPaths.fixed.includes(e)
+        ? "repository"
+        : "included",
     ground: e.includes("\uFFFD")
       ? "not_text"
-      : !r.fixed.includes(e) && r.roots.some((root) => isPathInside_2(root, e))
+      : !gitProtectedPaths.fixed.includes(e) &&
+          gitProtectedPaths.roots.some((root) => isPathInside_2(root, e))
         ? "inside"
         : "indirect",
   };
 }
 //@ chunk-s61vbvea.js:220918-220984 placement
-var AP = ["user_level", "system", "condition", "unknown", "repository"];
+var CONFIG_SCOPE_ORDER = ["user_level", "system", "condition", "unknown", "repository"];
 //@ chunk-s61vbvea.js:220984-221996 placement
 function auditRefStorageSetting(e) {
   if (e === "ignored_setting")
@@ -398,30 +381,33 @@ function auditRefStorageSetting(e) {
     ? "the variable GIT_REFERENCE_BACKEND tells git to keep branches and tags in another place, which this upload does not read; start claude without that variable (a Claude Code settings file may also set it, in its env block)"
     : "this repository\u2019s own git configuration (extensions.refStorage) keeps its branches and tags in another place, which this upload does not read; work from an ordinary clone of the repository";
 }
+//@ chunk-s61vbvea.js:221996-226988 placement
 /**
  * 检查仓库 git 布局（common dir、worktree、admin dir）是否可信
  */
-//@ chunk-s61vbvea.js:221996-226988 placement
 async function inspectGitLayout(
   e,
   n,
   {
-    linkedTrees: r = !1,
+    linkedTrees: r = false,
     bound: s = r,
-    startsInProject: h = !1,
+    startsInProject: h = false,
     perWorktreeConfig: y = "refuse",
-    notesBareRepository: S = !1,
-    probes: w = HNe(),
+    notesBareRepository: S = false,
+    probes: w = currentGitBinaryState(),
     holder: R,
     namedCommonDirs: x = [],
     findKeyedFolder: P = findCanonicalGitRootUncached,
-    keepsListedSettings: j = !1,
+    keepsListedSettings: j = false,
   } = {},
 ) {
-  if (x.some((ke) => !isAbsolute_6(ke)))
-    return { kind: "failed", detail: "a common directory named for this tree is not an absolute path" };
-  let G = w.screenMemo === void 0 ? new GitBinaryError("operation") : w,
-    L = rc(e) ? null : await realpath_3(e).catch(() => null);
+  if (x.some((ke) => !isAbsolute(ke)))
+    return {
+      kind: "failed",
+      detail: "a common directory named for this tree is not an absolute path",
+    };
+  let G = w.screenMemo === undefined ? new GitBinaryError("operation") : w;
+  let L = hasBackslash(e) ? null : await realpath(e).catch(() => null);
   if (L === null)
     return {
       kind: "failed",
@@ -430,136 +416,241 @@ async function inspectGitLayout(
     };
   if (s) {
     if ((await checkSessionTempRoot(L)).some((Me) => isPathInside_2(Me, L) || isPathInside_2(Me, e)))
-      return { kind: "tampered", misplaced: "temp_root", gitDir: "", commonDir: "" };
+      return {
+        kind: "tampered",
+        misplaced: "temp_root",
+        gitDir: "",
+        commonDir: "",
+      };
   }
-  if ([buildGitEnv(void 0), process.env].some((ke) => Hy(getEnvCaseInsensitive(ke, "GIT_REFERENCE_BACKEND"))))
-    return { kind: "tampered", misplaced: "ref_storage", keptBy: "variable", gitDir: "", commonDir: "" };
-  let q = await resolveGitFile(L);
-  if (q.kind === "refuse" || (q.kind === "chain" && !r))
+  if (
+    [buildGitEnv(undefined), process.env].some((ke) =>
+      isUnsafeReferenceBackend(getEnvCaseInsensitive(ke, "GIT_REFERENCE_BACKEND")),
+    )
+  )
     return {
       kind: "tampered",
-      misplaced: q.kind === "refuse" && q.why !== "git_file" ? "linked_worktree" : "git_file",
-      gitDir: q.adminDir ?? "",
-      commonDir: q.kind === "chain" ? q.commonDir : "",
-      ...(q.kind === "refuse" && { detail: q.why }),
+      misplaced: "ref_storage",
+      keptBy: "variable",
+      gitDir: "",
+      commonDir: "",
     };
-  if (q.kind === "chain" && x.some((ke) => ke !== q.commonDir))
-    return { kind: "tampered", misplaced: "common_dir", gitDir: q.adminDir, commonDir: q.commonDir };
+  let gitFile = await resolveGitFile(L);
+  if (gitFile.kind === "refuse" || (gitFile.kind === "chain" && !r))
+    return {
+      kind: "tampered",
+      misplaced: gitFile.kind === "refuse" && gitFile.why !== "git_file" ? "linked_worktree" : "git_file",
+      gitDir: gitFile.adminDir ?? "",
+      commonDir: gitFile.kind === "chain" ? gitFile.commonDir : "",
+      ...(gitFile.kind === "refuse" && {
+        detail: gitFile.why,
+      }),
+    };
+  if (gitFile.kind === "chain" && x.some((ke) => ke !== gitFile.commonDir))
+    return {
+      kind: "tampered",
+      misplaced: "common_dir",
+      gitDir: gitFile.adminDir,
+      commonDir: gitFile.commonDir,
+    };
   let Q = async (ke) => {
     let results = await Promise.all(uniq([e, L]).map((We) => isSameGitDir(ke, L, P(We))));
-    return results.includes(!1) ? !1 : results.includes("unresolved") ? "unresolved" : !0;
+    return results.includes(false) ? false : results.includes("unresolved") ? "unresolved" : true;
   };
-  if (q.kind === "chain") {
-    let ke = await Q({ resolved: q.commonDir });
-    if (ke !== !0)
-      logEvent("tengu_git_layout_keyed_elsewhere", { bound: s, unresolved: ke === "unresolved" });
+  if (gitFile.kind === "chain") {
+    let ke = await Q({
+      resolved: gitFile.commonDir,
+    });
+    if (ke !== true)
+      logEvent("tengu_git_layout_keyed_elsewhere", {
+        bound: s,
+        unresolved: ke === "unresolved",
+      });
     if (ke === "unresolved" && s)
       return {
         kind: "failed",
         detail: "the folder that keeps this tree\u2019s trust could not be resolved",
         cause: "keyed_folder_unresolved",
       };
-    if (ke === !1 && s)
+    if (ke === false && s)
       return {
         kind: "tampered",
         misplaced: "linked_worktree",
-        gitDir: q.adminDir,
-        commonDir: q.commonDir,
+        gitDir: gitFile.adminDir,
+        commonDir: gitFile.commonDir,
         detail: "keyed_elsewhere",
       };
   }
-  if (q.kind === "not_file" && x.length > 0) {
-    let ke = join_7(L, ".git"),
-      Me = await statDotGit(L);
-    if (Me.kind === "unreadable") return { kind: "failed", detail: Me.detail };
+  if (gitFile.kind === "not_file" && x.length > 0) {
+    let ke = join(L, ".git");
+    let Me = await statDotGit(L);
+    if (Me.kind === "unreadable")
+      return {
+        kind: "failed",
+        detail: Me.detail,
+      };
     return Me.kind === "directory"
-      ? { kind: "tampered", misplaced: "git_dir", gitDir: ke, commonDir: ke }
-      : { kind: "failed", detail: "this linked working tree's .git file is missing" };
+      ? {
+          kind: "tampered",
+          misplaced: "git_dir",
+          gitDir: ke,
+          commonDir: ke,
+        }
+      : {
+          kind: "failed",
+          detail: "this linked working tree's .git file is missing",
+        };
   }
   let [Z = "not_held", ee = "not_held"] =
-      R === void 0
-        ? []
-        : await Promise.all(
-            (q.kind === "chain" ? [q.adminDir, q.commonDir] : [join_7(L, ".git")]).map((ke) => R.hold(ke)),
+    R === undefined
+      ? []
+      : await Promise.all(
+          (gitFile.kind === "chain" ? [gitFile.adminDir, gitFile.commonDir] : [join(L, ".git")]).map((ke) =>
+            R.hold(ke),
           ),
-    ae = s ? HO(L, [...findEnclosingRepos(L), ...(q.kind === "chain" ? [Cvt(q.commonDir)] : [])]) : void 0,
-    se = (ke) =>
-      listGitRefs(e, ["rev-parse", ...ke], {
-        hardened: !0,
-        signal: n,
-        probes: G,
-        stripFinalNewline: !1,
-        env: { GIT_CEILING_DIRECTORIES: UI(L, e) },
-        ...(ae !== void 0 && { reach: ae, startsInProject: h }),
+        );
+  let ae = s
+    ? reachRootsForRepo(L, [
+        ...findEnclosingRepos(L),
+        ...(gitFile.kind === "chain" ? [checkoutDirOfGitDir(gitFile.commonDir)] : []),
+      ])
+    : undefined;
+  let se = (ke) =>
+    listGitRefs(e, ["rev-parse", ...ke], {
+      hardened: true,
+      signal: n,
+      probes: G,
+      stripFinalNewline: false,
+      env: {
+        GIT_CEILING_DIRECTORIES: gitDirComparisonKey(L, e),
+      },
+      ...(ae !== undefined && {
+        reach: ae,
+        startsInProject: h,
       }),
-    [re, he, Se] = await Promise.all([
-      se(["--absolute-git-dir"]),
-      se(["--path-format=absolute", "--git-common-dir"]),
-      se(["--show-toplevel"]),
-    ]),
-    ce = pd(re.stdout),
-    we = pd(he.stdout),
-    ie = pd(Se.stdout);
+    });
+  let [re, he, Se] = await Promise.all([
+    se(["--absolute-git-dir"]),
+    se(["--path-format=absolute", "--git-common-dir"]),
+    se(["--show-toplevel"]),
+  ]);
+  let ce = stripLineEnding(re.stdout);
+  let we = stripLineEnding(he.stdout);
+  let ie = stripLineEnding(Se.stdout);
   if (
-    [re, he, Se].some(({ code: code }) => code !== 0) ||
+    [re, he, Se].some(({ code }) => code !== 0) ||
     ce === null ||
     we === null ||
     ie === null ||
-    !isAbsolute_6(ce) ||
-    !isAbsolute_6(ie)
+    !isAbsolute(ce) ||
+    !isAbsolute(ie)
   ) {
-    let found = [re, he, Se].find(({ stderr: stderr }) => stderr !== ""),
-      Me =
-        re.exitCode === 126 || re.exitCode === 127
-          ? ae !== void 0 && !h
-            ? "git_did_not_run_from_outside"
-            : "git_did_not_run"
-          : found && RVo(txe(found));
+    let found = [re, he, Se].find(({ stderr }) => stderr !== "");
+    let Me =
+      re.exitCode === 126 || re.exitCode === 127
+        ? ae !== undefined && !h
+          ? "git_did_not_run_from_outside"
+          : "git_did_not_run"
+        : found && firstGitFailureClass(seenStderr(found));
     return {
       kind: "failed",
       detail: getFirstLine((found?.stderr ?? re.stdout).trim()),
-      ...(Me !== void 0 && { cause: Me }),
+      ...(Me !== undefined && {
+        cause: Me,
+      }),
       ...(re.code === 127 &&
         re.stderr.startsWith(GIT_NOT_FOUND_MESSAGE) && {
           why: "git_not_found",
-          ...(re.stderr !== GIT_NOT_FOUND_MESSAGE && { withinReach: !0 }),
+          ...(re.stderr !== GIT_NOT_FOUND_MESSAGE && {
+            withinReach: true,
+          }),
         }),
-      ...(re.stderr === IN_TREE_SETTINGS_UNREADABLE_MESSAGE && { why: "settings_unreadable" }),
+      ...(re.stderr === IN_TREE_SETTINGS_UNREADABLE_MESSAGE && {
+        why: "settings_unreadable",
+      }),
     };
   }
   if (getFirstLine(we) === "--path-format=absolute")
-    return { kind: "tampered", misplaced: "old_git", gitDir: ce, commonDir: we };
-  if (!isAbsolute_6(we)) return { kind: "tampered", misplaced: "common_dir", gitDir: ce, commonDir: we };
+    return {
+      kind: "tampered",
+      misplaced: "old_git",
+      gitDir: ce,
+      commonDir: we,
+    };
+  if (!isAbsolute(we))
+    return {
+      kind: "tampered",
+      misplaced: "common_dir",
+      gitDir: ce,
+      commonDir: we,
+    };
   let Ee = await statDotGit(e);
-  if (Ee.kind === "unreadable") return { kind: "failed", detail: Ee.detail };
+  if (Ee.kind === "unreadable")
+    return {
+      kind: "failed",
+      detail: Ee.detail,
+    };
   if (Ee.kind === "directory") {
-    if (!fd(Z, Ee.id)) return gitDirChangedFailure(Z);
+    if (!gitDirIdentityHeld(Z, Ee.id)) return gitDirChangedFailure(Z);
     if (Ee.id !== (await getFileIdentity_2(ce)))
-      return { kind: "tampered", misplaced: "git_dir", gitDir: ce, commonDir: we };
-    if (we !== ce) return { kind: "tampered", misplaced: "common_dir", gitDir: ce, commonDir: we };
+      return {
+        kind: "tampered",
+        misplaced: "git_dir",
+        gitDir: ce,
+        commonDir: we,
+      };
+    if (we !== ce)
+      return {
+        kind: "tampered",
+        misplaced: "common_dir",
+        gitDir: ce,
+        commonDir: we,
+      };
   }
-  let Ie = await detectUnsupportedLayout(we);
-  if (Ie !== null) return { kind: "tampered", misplaced: Ie, gitDir: ce, commonDir: we };
+  let unsupportedLayout = await detectUnsupportedLayout(we);
+  if (unsupportedLayout !== null)
+    return {
+      kind: "tampered",
+      misplaced: unsupportedLayout,
+      gitDir: ce,
+      commonDir: we,
+    };
   if (Ee.kind === "not_a_directory") {
-    if (!r || q.kind !== "chain")
-      return { kind: "tampered", misplaced: "git_file", gitDir: ce, commonDir: we, detail: "git_file" };
-    let ke = await resolveLinkedWorktreeGitDir(L, ce, we, q);
-    if (ke.kind !== "vouched")
-      return ke.kind === "unread"
-        ? { kind: "failed", detail: ke.detail, why: "changed_under_read" }
+    if (!r || gitFile.kind !== "chain")
+      return {
+        kind: "tampered",
+        misplaced: "git_file",
+        gitDir: ce,
+        commonDir: we,
+        detail: "git_file",
+      };
+    let linkedWorktreeGitDir = await resolveLinkedWorktreeGitDir(L, ce, we, gitFile);
+    if (linkedWorktreeGitDir.kind !== "vouched")
+      return linkedWorktreeGitDir.kind === "unread"
+        ? {
+            kind: "failed",
+            detail: linkedWorktreeGitDir.detail,
+            why: "changed_under_read",
+          }
         : {
             kind: "tampered",
-            misplaced: ke.kind,
+            misplaced: linkedWorktreeGitDir.kind,
             gitDir: ce,
             commonDir: we,
-            detail: ke.kind === "linked_worktree" ? ke.detail : "git_file",
+            detail:
+              linkedWorktreeGitDir.kind === "linked_worktree" ? linkedWorktreeGitDir.detail : "git_file",
           };
-    let Me = { resolved: ke.commonDir, id: ke.commonDirId };
+    let Me = {
+      resolved: linkedWorktreeGitDir.commonDir,
+      id: linkedWorktreeGitDir.commonDirId,
+    };
     if (
       s &&
       !(
-        sameIdentity(Me, { id: await getFileIdentity_2(q.commonDir), resolved: q.commonDir }) &&
-        (await Q(Me)) === !0
+        sameIdentity(Me, {
+          id: await getFileIdentity_2(gitFile.commonDir),
+          resolved: gitFile.commonDir,
+        }) && (await Q(Me)) === true
       )
     )
       return {
@@ -567,25 +658,38 @@ async function inspectGitLayout(
         detail: "the git directory changed while it was read",
         why: "changed_under_read",
       };
-    if (!fd(Z, ke.gitDirId) || !fd(ee, ke.commonDirId)) return gitDirChangedFailure(Z, ee);
+    if (
+      !gitDirIdentityHeld(Z, linkedWorktreeGitDir.gitDirId) ||
+      !gitDirIdentityHeld(ee, linkedWorktreeGitDir.commonDirId)
+    )
+      return gitDirChangedFailure(Z, ee);
     return auditGitDirConfig(
       e,
       {
-        gitDir: ke.gitDir,
-        gitDirId: ke.gitDirId,
-        ...(ke.gitDirBorn !== void 0 && { gitDirBorn: ke.gitDirBorn }),
-        commonDir: ke.commonDir,
-        commonDirId: ke.commonDirId,
-        ...(ke.commonDirBorn !== void 0 && { commonDirBorn: ke.commonDirBorn }),
+        gitDir: linkedWorktreeGitDir.gitDir,
+        gitDirId: linkedWorktreeGitDir.gitDirId,
+        ...(linkedWorktreeGitDir.gitDirBorn !== undefined && {
+          gitDirBorn: linkedWorktreeGitDir.gitDirBorn,
+        }),
+        commonDir: linkedWorktreeGitDir.commonDir,
+        commonDirId: linkedWorktreeGitDir.commonDirId,
+        ...(linkedWorktreeGitDir.commonDirBorn !== undefined && {
+          commonDirBorn: linkedWorktreeGitDir.commonDirBorn,
+        }),
         workTree: ie,
         checkout: "linked",
         bound: s,
-        ...(h && { startsInProject: h }),
+        ...(h && {
+          startsInProject: h,
+        }),
       },
       L,
       n,
       G,
-      { perWorktreeConfig: y, notesBareRepository: S },
+      {
+        perWorktreeConfig: y,
+        notesBareRepository: S,
+      },
     );
   }
   return auditGitDirConfig(
@@ -593,17 +697,23 @@ async function inspectGitLayout(
     {
       gitDir: ce,
       gitDirId: Ee.id,
-      ...(Ee.born !== void 0 && { gitDirBorn: Ee.born }),
+      ...(Ee.born !== undefined && {
+        gitDirBorn: Ee.born,
+      }),
       commonDir: we,
       workTree: ie,
       checkout: "main",
       bound: s,
-      ...(h && { startsInProject: h }),
+      ...(h && {
+        startsInProject: h,
+      }),
     },
     L,
     n,
     G,
-    { keepsListedSettings: j },
+    {
+      keepsListedSettings: j,
+    },
   );
 }
 //@ chunk-s61vbvea.js:226988-228840 placement
@@ -611,28 +721,33 @@ async function auditGitDirConfig(
   e,
   n,
   r,
-  s,
-  h,
-  {
-    perWorktreeConfig: perWorktreeConfig = "refuse",
-    notesBareRepository: notesBareRepository = !1,
-    keepsListedSettings: keepsListedSettings = !1,
-  },
+  signal,
+  probes,
+  { perWorktreeConfig = "refuse", notesBareRepository = false, keepsListedSettings = false },
 ) {
-  let { gitDir: gitDir, commonDir: commonDir, workTree: workTree } = n,
-    [j, G] = await (workTree === Dnt(r)
-      ? getFileIdentity_2(r).then((re) => [re, re])
-      : Promise.all([getFileIdentity_2(workTree), getFileIdentity_2(r)]));
+  let { gitDir, commonDir, workTree } = n;
+  let [j, G] = await (workTree === toPosixSpelling(r)
+    ? getFileIdentity_2(r).then((fileIdentity) => [fileIdentity, fileIdentity])
+    : Promise.all([getFileIdentity_2(workTree), getFileIdentity_2(r)]));
   if (G === null || j !== G)
     return {
       kind: "tampered",
       misplaced: "work_tree",
-      gitDir: gitDir,
-      commonDir: commonDir,
-      ...(G === null && { unexamined: !0 }),
+      gitDir,
+      commonDir,
+      ...(G === null && {
+        unexamined: true,
+      }),
     };
-  let L = { ...n, workTree: Dnt(r), workTreeId: G, ...(workTree !== Dnt(r) && { workTreeRespelled: !0 }) },
-    q = await objectsDirFingerprint(commonDir);
+  let L = {
+    ...n,
+    workTree: toPosixSpelling(r),
+    workTreeId: G,
+    ...(workTree !== toPosixSpelling(r) && {
+      workTreeRespelled: true,
+    }),
+  };
+  let q = await objectsDirFingerprint(commonDir);
   if (q.info === "absent" || q.pack === "absent")
     return {
       kind: "failed",
@@ -640,177 +755,243 @@ async function auditGitDirConfig(
         "objects/info or objects/pack is missing from the git directory (running git init again in the checkout puts them back)",
       cause: "git_dir_objects_folder_missing",
     };
-  let Q = L.checkout === "linked" ? await classifyWorktreeConfig(e, L, s, h) : "absent";
-  if (Q === "unread") return { kind: "failed", detail: "could not read extensions.worktreeConfig" };
+  let Q = L.checkout === "linked" ? await classifyWorktreeConfig(e, L, signal, probes) : "absent";
+  if (Q === "unread")
+    return {
+      kind: "failed",
+      detail: "could not read extensions.worktreeConfig",
+    };
   if (Q === "file" || (Q !== "absent" && perWorktreeConfig === "refuse"))
     return {
       kind: "tampered",
       misplaced: "linked_worktree",
-      gitDir: gitDir,
-      commonDir: commonDir,
+      gitDir,
+      commonDir,
       detail: "worktree_config",
     };
-  let Z = Q === "absent" ? L : { ...L, worktreeConfig: Q },
-    ee = [join_7(commonDir, "config"), join_7(gitDir, "config.worktree")],
-    ae = keepsListedSettings ? await statFingerprint(ee) : null,
-    se = await listGitConfigInForce(e, Z, s, h);
+  let Z =
+    Q === "absent"
+      ? L
+      : {
+          ...L,
+          worktreeConfig: Q,
+        };
+  let ee = [join(commonDir, "config"), join(gitDir, "config.worktree")];
+  let ae = keepsListedSettings ? await statFingerprint(ee) : null;
+  let se = await listGitConfigInForce(e, Z, signal, probes);
   switch (se.kind) {
     case "unlistable":
-      return { kind: "failed", detail: se.detail };
+      return {
+        kind: "failed",
+        detail: se.detail,
+      };
     case "many_includes":
-      return { kind: "tampered", misplaced: "many_includes", gitDir: gitDir, commonDir: commonDir };
+      return {
+        kind: "tampered",
+        misplaced: "many_includes",
+        gitDir,
+        commonDir,
+      };
     case "ref_storage":
       return {
         kind: "tampered",
         misplaced: "ref_storage",
         keptBy: se.keptBy,
-        gitDir: gitDir,
-        commonDir: commonDir,
+        gitDir,
+        commonDir,
       };
     case "reftable":
-      return { kind: "tampered", misplaced: "reftable", gitDir: gitDir, commonDir: commonDir };
+      return {
+        kind: "tampered",
+        misplaced: "reftable",
+        gitDir,
+        commonDir,
+      };
     case "included":
       return {
         kind: "tampered",
         misplaced: "included_config",
         writable: `${se.configFile.kind}_${se.configFile.ground}`,
         configFile: se.configFile,
-        ...(se.includedBy !== void 0 && { includedBy: se.includedBy }),
-        gitDir: gitDir,
-        commonDir: commonDir,
+        ...(se.includedBy !== undefined && {
+          includedBy: se.includedBy,
+        }),
+        gitDir,
+        commonDir,
       };
     case "pins": {
       let he =
-        ae === null || se.listed.some(({ key: key }) => key.startsWith("includeif.onbranch:"))
+        ae === null || se.listed.some(({ key }) => key.startsWith("includeif.onbranch:"))
           ? null
           : await statFingerprint(se.settingsFiles);
-      return { kind: "read", layout: { ...Z, storeStamps: q, ...se.pins, ...{}, ...{} } };
+      return {
+        kind: "read",
+        layout: {
+          ...Z,
+          storeStamps: q,
+          ...se.pins,
+          ...{},
+          ...{},
+        },
+      };
     }
   }
 }
 //@ chunk-s61vbvea.js:228840-228950 placement
-function isCommonDirConfigFile(e, { commonDir: commonDir, workTree: workTree }) {
-  let s = resolveFileUrl(e, workTree);
+function isCommonDirConfigFile(e, { commonDir, workTree }) {
+  let fileUrl = resolveFileUrl(e, workTree);
   return (
-    s !== null &&
-    basename_2(s) === "config" &&
-    isPathInside_2(commonDir, s) &&
-    isPathInside_2(dirname_2(s), commonDir)
+    fileUrl !== null &&
+    basename(fileUrl) === "config" &&
+    isPathInside_2(commonDir, fileUrl) &&
+    isPathInside_2(dirname(fileUrl), commonDir)
   );
 }
 //@ chunk-s61vbvea.js:228950-229035 placement
-var IP = /^hook\.(?:(.*)\.)?(?:command|event|enabled)$/s,
-  MP = new Set(mapped.map(([e]) => e));
+var HOOK_CONFIG_KEY_RE = /^hook\.(?:(.*)\.)?(?:command|event|enabled)$/s;
+var declaredHookNames = new Set(mapped.map(([e]) => e));
 //@ chunk-s61vbvea.js:229035-229067 placement
-function DP(e) {
-  return MP.has(e);
+function isDeclaredHookName(e) {
+  return declaredHookNames.has(e);
 }
 //@ chunk-s61vbvea.js:229067-229142 placement
-function NP(e) {
-  let n = DP(e) ? null : IP.exec(e);
-  return n === null ? void 0 : (n[1] ?? "");
+function hookOwnerOfKey(key) {
+  let n = isDeclaredHookName(key) ? null : HOOK_CONFIG_KEY_RE.exec(key);
+  return n === null ? undefined : (n[1] ?? "");
 }
 //@ chunk-s61vbvea.js:229142-232019 placement
-async function listGitConfigInForce(e, n, r, s) {
-  let h = { kind: "unlistable", detail: "could not list the configuration in force" },
-    y = reachForBoundSession(n),
-    S = s.screenMemo ?? Lqr(),
-    w = (Be) =>
-      listGitRefs(e, Be, {
-        hardened: !0,
-        layout: n,
-        signal: r,
-        probes: s,
-        ...(y !== void 0 && { reachRoots: y, screenMemo: S }),
+async function listGitConfigInForce(e, n, signal, s) {
+  let h = {
+    kind: "unlistable",
+    detail: "could not list the configuration in force",
+  };
+  let y = reachForBoundSession(n);
+  let screenMemo = s.screenMemo ?? createReachCollector();
+  let w = (Be) =>
+    listGitRefs(e, Be, {
+      hardened: true,
+      layout: n,
+      signal,
+      probes: s,
+      ...(y !== undefined && {
+        reachRoots: y,
+        screenMemo,
       }),
-    R = async (Be) => {
-      let [Re, Ne] = await Promise.all([
-          w(["config", "-z", "--show-origin", ...Be, "--list"]),
-          w(["config", "-z", "--show-origin", "--type=path", ...Be, "--get-regexp", ES]),
-        ]),
-        Je = Be.length > 0 && Re.exitCode === 128 && !xO(Re);
-      if ((Re.code !== 0 && !Je) || (Ne.code !== 0 && Ne.exitCode === void 0)) return null;
-      let lt = Je ? [] : parseGitConfigNullList(Re.stdout),
-        flattened = [
-          ...lt.filter(({ key: key }) => regExp_7.test(key)),
-          ...(Ne.code === 0 ? parseGitConfigNullList(Ne.stdout) : []),
-        ].flatMap(({ origin: origin, key: key, value: Nt }) =>
-          resolveIncludePaths(Nt, origin, n.workTree).map((An) => ({ holder: origin, key: key, target: An })),
-        );
-      return { keys: lt, targets: flattened.map(({ target: target }) => target), directives: flattened };
-    },
-    [x, P, j] = await Promise.all([R([]), w(["var", "GIT_CONFIG_GLOBAL"]), w(["var", "GIT_CONFIG_SYSTEM"])]);
+    });
+  let R = async (Be) => {
+    let [Re, Ne] = await Promise.all([
+      w(["config", "-z", "--show-origin", ...Be, "--list"]),
+      w(["config", "-z", "--show-origin", "--type=path", ...Be, "--get-regexp", INCLUDE_PATH_CONFIG_KEY_RE]),
+    ]);
+    let Je = Be.length > 0 && Re.exitCode === 128 && !isCannotChangeToError(Re);
+    if ((Re.code !== 0 && !Je) || (Ne.code !== 0 && Ne.exitCode === undefined)) return null;
+    let lt = Je ? [] : parseGitConfigNullList(Re.stdout);
+    let flattened = [
+      ...lt.filter(({ key }) => regExp_7.test(key)),
+      ...(Ne.code === 0 ? parseGitConfigNullList(Ne.stdout) : []),
+    ].flatMap(({ origin, key, value: Nt }) =>
+      resolveIncludePaths(Nt, origin, n.workTree).map((target) => ({
+        holder: origin,
+        key,
+        target,
+      })),
+    );
+    return {
+      keys: lt,
+      targets: flattened.map(({ target }) => target),
+      directives: flattened,
+    };
+  };
+  let [x, P, j] = await Promise.all([
+    R([]),
+    w(["var", "GIT_CONFIG_GLOBAL"]),
+    w(["var", "GIT_CONFIG_SYSTEM"]),
+  ]);
   if (x === null) return h;
-  let filtered = x.keys.filter(({ key: key }) => key === "extensions.refstorage"),
-    L = (Be) => resolveFileUrl(Be, n.workTree) === null || isCommonDirConfigFile(Be, n),
-    filtered_2 = filtered.filter(({ value: Be }) => Hy(Be));
+  let filtered = x.keys.filter(({ key }) => key === "extensions.refstorage");
+  let L = (origin) => resolveFileUrl(origin, n.workTree) === null || isCommonDirConfigFile(origin, n);
+  let filtered_2 = filtered.filter(({ value: Be }) => isUnsafeReferenceBackend(Be));
   if (filtered_2.length > 0)
     return {
       kind: "ref_storage",
-      keptBy: filtered_2.some(({ origin: origin }) => L(origin)) ? "setting" : "ignored_setting",
+      keptBy: filtered_2.some(({ origin }) => L(origin)) ? "setting" : "ignored_setting",
     };
-  if (XP(filtered, L)) return { kind: "reftable" };
-  let Q = await collectGitProtectedPaths(
+  if (hasReftableOrigin(filtered, L))
+    return {
+      kind: "reftable",
+    };
+  let gitProtectedPaths = await collectGitProtectedPaths(
     n.workTree,
-    { GIT_DIR: n.gitDir, GIT_COMMON_DIR: n.commonDir },
+    {
+      GIT_DIR: n.gitDir,
+      GIT_COMMON_DIR: n.commonDir,
+    },
     n.workTree,
   );
-  if (Q === null) return h;
+  if (gitProtectedPaths === null) return h;
   let Z =
-      j.code === 0
-        ? j.stdout.split(`
+    j.code === 0
+      ? j.stdout.split(`
 `)
-        : [],
-    ee = null,
-    ae = buildGitEnv(void 0),
-    se = [n.workTree, ee, ae],
-    re = getGitConfigPaths(
-      [
-        ...(P.code === 0
-          ? P.stdout.split(`
+      : [];
+  let ee = null;
+  let gitEnv = buildGitEnv(undefined);
+  let se = [n.workTree, ee, gitEnv];
+  let gitConfigPaths = getGitConfigPaths(
+    [
+      ...(P.code === 0
+        ? P.stdout.split(`
 `)
-          : []),
-        ...Z,
-      ],
-      ...se,
-    ),
-    he = Yii(Z, ...se),
-    Se = [...x.keys.map(({ origin: origin }) => resolveFileUrl(origin, n.workTree)), ...re],
-    ce = (Be) => ({
-      kind: "included",
-      configFile: classifyConfigFile(Be, re, Q),
-      ...(!re.includes(Be) &&
-        !Q.fixed.includes(Be) && {
-          includedBy: attributeIncludeSource(Be, x.directives, {
-            workTree: n.workTree,
-            userFiles: re,
-            systemFiles: he,
-            fromOwnConfig: L,
-          }),
+        : []),
+      ...Z,
+    ],
+    ...se,
+  );
+  let systemFiles = systemGitConfigPaths(Z, ...se);
+  let Se = [...x.keys.map(({ origin }) => resolveFileUrl(origin, n.workTree)), ...gitConfigPaths];
+  let ce = (Be) => ({
+    kind: "included",
+    configFile: classifyConfigFile(Be, gitConfigPaths, gitProtectedPaths),
+    ...(!gitConfigPaths.includes(Be) &&
+      !gitProtectedPaths.fixed.includes(Be) && {
+        includedBy: attributeIncludeSource(Be, x.directives, {
+          workTree: n.workTree,
+          userFiles: gitConfigPaths,
+          systemFiles,
+          fromOwnConfig: L,
         }),
-    }),
-    found = Se.find((Be) => Be?.includes("\uFFFD"));
-  if (found !== void 0 && found !== null) return ce(found);
-  let ie = await findReachableProtectedPath(Q, Se);
-  if (ie !== void 0) return ie === null ? h : ce(ie);
-  let Ee = await collectIncludedConfigs(
+      }),
+  });
+  let found = Se.find((Be) => Be?.includes("\uFFFD"));
+  if (found !== undefined && found !== null) return ce(found);
+  let reachableProtectedPath = await findReachableProtectedPath(gitProtectedPaths, Se);
+  if (reachableProtectedPath !== undefined)
+    return reachableProtectedPath === null ? h : ce(reachableProtectedPath);
+  let includedConfigs = await collectIncludedConfigs(
     x.targets,
     (Be) => R(["--file", Be]),
-    (Be) => findReachableProtectedPath(Q, Be),
+    (Be) => findReachableProtectedPath(gitProtectedPaths, Be),
   );
-  if (Ee === null) return h;
-  if ("tooMany" in Ee) return { kind: "many_includes" };
-  if ("contributes" in Ee) return ce(Ee.contributes);
-  let Ie = [...x.keys, ...Ee.keys],
-    Me = ((Be) =>
-      uniq(
-        Ie.flatMap(({ key: key }) => {
-          let Ne = Be.exec(key)?.[1];
-          return Ne === void 0 ? [] : [Ne];
-        }),
-      ))(/^filter\.(.*)\.(?:clean|smudge|process|required)$/s),
-    We = uniq(Ie.flatMap(({ key: key }) => NP(key) ?? []));
-  if ([...Me, ...We].some((Be) => Be.includes("\uFFFD"))) return { kind: "unlistable", detail: WP };
+  if (includedConfigs === null) return h;
+  if ("tooMany" in includedConfigs)
+    return {
+      kind: "many_includes",
+    };
+  if ("contributes" in includedConfigs) return ce(includedConfigs.contributes);
+  let Ie = [...x.keys, ...includedConfigs.keys];
+  let Me = ((Be) =>
+    uniq(
+      Ie.flatMap(({ key }) => {
+        let Ne = Be.exec(key)?.[1];
+        return Ne === undefined ? [] : [Ne];
+      }),
+    ))(/^filter\.(.*)\.(?:clean|smudge|process|required)$/s);
+  let We = uniq(Ie.flatMap(({ key }) => hookOwnerOfKey(key) ?? []));
+  if ([...Me, ...We].some((Be) => Be.includes("\uFFFD")))
+    return {
+      kind: "unlistable",
+      detail: INVALID_UTF8_NAME_DETAIL,
+    };
   let nt = [
     ...Me.flatMap((Be) => [
       [`filter.${Be}.clean`, ""],
@@ -829,7 +1010,7 @@ async function listGitConfigInForce(e, n, r, s) {
     settingsFiles: uniq([...Se, ...x.targets].filter((Be) => Be !== null)),
     pins: {
       filterDrivers: Me,
-      attributeSetting: readAttributesConfig(x.keys, Ee.keys, re, n),
+      attributeSetting: readAttributesConfig(x.keys, includedConfigs.keys, gitConfigPaths, n),
       configPins: Object.fromEntries([
         ["GIT_CONFIG_COUNT", String(nt.length)],
         ...nt.flatMap(([Be, Re], Ne) => [
@@ -841,121 +1022,145 @@ async function listGitConfigInForce(e, n, r, s) {
   };
 }
 //@ chunk-s61vbvea.js:232019-232043 placement
-var FP = 8,
-  QZn = 32,
-  HP = 4096;
+/**
+ * include 展开的轮数上限、文件数上限与集合大小上限。
+ */
+var MAX_INCLUDE_ROUNDS = 8;
+var MAX_INCLUDE_FILES = 32;
+var MAX_INCLUDE_SET_SIZE = 4096;
+//@ chunk-s61vbvea.js:232043-232461 placement
 /**
  * 判断 include 目标由哪类配置引入。
  */
-//@ chunk-s61vbvea.js:232043-232461 placement
-function attributeIncludeSource(
-  e,
-  n,
-  { workTree: workTree, userFiles: userFiles, systemFiles: systemFiles, fromOwnConfig: fromOwnConfig },
-) {
-  let S = resolve_2(e),
-    w = n.some(({ target: target }) => fromOwnConfig(`file:${target}`)) ? "unknown" : "repository",
-    R = new Set(
-      n
-        .filter(({ target: target }) => resolve_2(target) === S)
-        .map(({ holder: holder, key: key }) => {
-          let j = resolveFileUrl(holder, workTree);
-          if (j === null) return "unknown";
-          if (!userFiles.includes(j)) return fromOwnConfig(holder) ? w : "unknown";
-          if (GIT_ISOLATION_CONFIG_ARGS.test(key)) return "condition";
-          return systemFiles.includes(j) ? "system" : "user_level";
-        }),
-    );
-  return AP.find((x) => R.has(x)) ?? "unknown";
+function attributeIncludeSource(e, directives, { workTree, userFiles, systemFiles, fromOwnConfig }) {
+  let S = resolve(e);
+  let w = directives.some(({ target }) => fromOwnConfig(`file:${target}`)) ? "unknown" : "repository";
+  let R = new Set(
+    directives
+      .filter(({ target }) => resolve(target) === S)
+      .map(({ holder, key }) => {
+        let fileUrl = resolveFileUrl(holder, workTree);
+        if (fileUrl === null) return "unknown";
+        if (!userFiles.includes(fileUrl)) return fromOwnConfig(holder) ? w : "unknown";
+        if (GIT_ISOLATION_CONFIG_ARGS.test(key)) return "condition";
+        return systemFiles.includes(fileUrl) ? "system" : "user_level";
+      }),
+  );
+  return CONFIG_SCOPE_ORDER.find((x) => R.has(x)) ?? "unknown";
 }
+//@ chunk-s61vbvea.js:232461-233138 placement
 /**
  * 逐层追踪 include 的配置文件（限层数与数量）。
  */
-//@ chunk-s61vbvea.js:232461-233138 placement
-async function collectIncludedConfigs(e, n, r) {
-  let s = (R) => R !== null,
-    h = new Set(e.filter(s)),
-    y = [],
-    S = [...h],
-    w = 0;
+async function collectIncludedConfigs(targets, n, r) {
+  let s = (R) => R !== null;
+  let h = new Set(targets.filter(s));
+  let y = [];
+  let S = [...h];
+  let w = 0;
   for (let R = 0; S.length > 0; R += 1) {
-    if (R === FP || h.size > HP) return { tooMany: !0 };
+    if (R === MAX_INCLUDE_ROUNDS || h.size > MAX_INCLUDE_SET_SIZE)
+      return {
+        tooMany: true,
+      };
     let found = S.find((L) => L.includes("\uFFFD"));
-    if (found !== void 0) return { contributes: found };
+    if (found !== undefined)
+      return {
+        contributes: found,
+      };
     let P = await r(S);
-    if (P !== void 0) return P === null ? null : { contributes: P };
+    if (P !== undefined)
+      return P === null
+        ? null
+        : {
+            contributes: P,
+          };
     let results = await Promise.all(
       S.map(async (L) =>
-        !isWindowsNonDrivePath(L) && (await stat_5(L).catch(() => null))?.isFile() ? L : null,
+        !isWindowsNonDrivePath(L) && (await stat(L).catch(() => null))?.isFile() ? L : null,
       ),
     );
-    if (((w += count(results, s)), w > QZn)) return { tooMany: !0 };
+    w += count(results, s);
+    if (w > MAX_INCLUDE_FILES)
+      return {
+        tooMany: true,
+      };
     let results_2 = await Promise.all(results.filter(s).map(n));
     if (results_2.some((L) => L === null)) return null;
-    (y.push(...results_2.flatMap((L) => L?.keys ?? [])),
-      (S = uniq(results_2.flatMap((L) => L?.targets ?? []).filter(s)).filter((L) => !h.has(L))),
-      S.forEach((L) => h.add(L)));
+    y.push(...results_2.flatMap((L) => L?.keys ?? []));
+    S = uniq(results_2.flatMap((L) => L?.targets ?? []).filter(s)).filter((L) => !h.has(L));
+    S.forEach((L) => h.add(L));
   }
-  return { files: [...h], keys: y };
+  return {
+    files: [...h],
+    keys: y,
+  };
 }
 //@ chunk-s61vbvea.js:233138-233352 placement
-function parseGitConfigNullList(e) {
-  let parts = e.split("\x00");
-  return Array.from({ length: Math.floor(parts.length / 2) }, (r, s) => {
-    let h = parts[2 * s + 1],
-      index = h.indexOf(`
+function parseGitConfigNullList(stdout) {
+  let parts = stdout.split("\x00");
+  return Array.from(
+    {
+      length: Math.floor(parts.length / 2),
+    },
+    (r, s) => {
+      let h = parts[2 * s + 1];
+      let index = h.indexOf(`
 `);
-    return {
-      origin: parts[2 * s],
-      key: index < 0 ? h : h.slice(0, index),
-      value: index < 0 ? "" : h.slice(index + 1),
-      valueless: index < 0,
-    };
-  });
+      return {
+        origin: parts[2 * s],
+        key: index < 0 ? h : h.slice(0, index),
+        value: index < 0 ? "" : h.slice(index + 1),
+        valueless: index < 0,
+      };
+    },
+  );
 }
 //@ chunk-s61vbvea.js:233352-233520 placement
 function resolveIncludePaths(e, n, r) {
   let match = /^~[^/]*\//.exec(e);
   if (match !== null)
-    return getHomeDirCandidates(buildGitEnv(void 0)).map((y) =>
-      resolveRelative(r, `${y}${sep_5}${e.slice(match[0].length)}`),
+    return getHomeDirCandidates(buildGitEnv(undefined)).map((y) =>
+      resolveRelative(r, `${y}${sep}${e.slice(match[0].length)}`),
     );
-  let h = resolveIncludePath(e, n, r);
-  return isAbsolute_6(h) ? [h] : [];
+  let includePath = resolveIncludePath(e, n, r);
+  return isAbsolute(includePath) ? [includePath] : [];
 }
 //@ chunk-s61vbvea.js:233520-233589 placement = _temp2 (1)
-function resolveFileUrl(e, n) {
-  return e.startsWith("file:") ? resolveRelative(n, e.slice(5)) : null;
+function resolveFileUrl(origin, workTree) {
+  return origin.startsWith("file:") ? resolveRelative(workTree, origin.slice(5)) : null;
 }
 //@ chunk-s61vbvea.js:233589-233830 placement
 function resolveIncludePath(e, n, r) {
   let match = /^~([^/]*)\//.exec(e);
   if (match !== null)
-    return match[1] === "" || match[1] === KP() ? `${homedir()}${sep_5}${e.slice(match[0].length)}` : e;
-  if (isAbsolute_6(e) || e.startsWith("%(prefix)/")) return e;
-  return `${n.startsWith("file:") ? dirname_2(resolveRelative(r, n.slice(5))) : r}${sep_5}${e}`;
+    return match[1] === "" || match[1] === currentUserName()
+      ? `${homedir()}${sep}${e.slice(match[0].length)}`
+      : e;
+  if (isAbsolute(e) || e.startsWith("%(prefix)/")) return e;
+  return `${n.startsWith("file:") ? dirname(resolveRelative(r, n.slice(5))) : r}${sep}${e}`;
 }
 //@ chunk-s61vbvea.js:233830-233909 placement
-var WP = "a configured filter driver or hook has a name that is not valid UTF-8";
+var INVALID_UTF8_NAME_DETAIL = "a configured filter driver or hook has a name that is not valid UTF-8";
 //@ chunk-s61vbvea.js:233909-233949 placement
-var zP = new Set(["unset", "unspecified"]);
+var KNOWN_SAFE_FILTER_DRIVERS = new Set(["unset", "unspecified"]);
+//@ chunk-s61vbvea.js:233949-234151 placement
 /**
  * 涉及的 filter 驱动都是已知安全的。
  */
-//@ chunk-s61vbvea.js:233949-234151 placement
-function hasOnlyKnownFilterDrivers(e, n = buildGitEnv(void 0)) {
-  let r = readGitConfigFromEnv(n);
+function hasOnlyKnownFilterDrivers(layout, n = buildGitEnv(undefined)) {
+  let gitConfigFromEnv = readGitConfigFromEnv(n);
   return (
-    e.filterDrivers !== void 0 &&
-    r !== null &&
+    layout.filterDrivers !== undefined &&
+    gitConfigFromEnv !== null &&
     ![
-      ...e.filterDrivers,
-      ...r.flatMap(({ key: key }) => /^filter\.(.+)\.[^.]*$/is.exec(key.trim())?.[1] ?? []),
-    ].some((s) => zP.has(s))
+      ...layout.filterDrivers,
+      ...gitConfigFromEnv.flatMap(({ key }) => /^filter\.(.+)\.[^.]*$/is.exec(key.trim())?.[1] ?? []),
+    ].some((s) => KNOWN_SAFE_FILTER_DRIVERS.has(s))
   );
 }
 //@ chunk-s61vbvea.js:234151-234209 placement
-function KP() {
+function currentUserName() {
   try {
     return userInfo().username;
   } catch {
@@ -963,11 +1168,14 @@ function KP() {
   }
 }
 //@ chunk-s61vbvea.js:234209-234296 placement
-async function VP(e) {
-  return e.workTreeId !== void 0 && e.workTreeId !== (await getFileIdentity_2(e.workTree));
+/**
+ * 判断记录中的工作树 id 与当前实际身份不一致（工作树已被替换）。
+ */
+async function workTreeReplacedSinceRecorded(e) {
+  return e.workTreeId !== undefined && e.workTreeId !== (await getFileIdentity_2(e.workTree));
 }
 //@ chunk-s61vbvea.js:239490-239661 placement
-var CHECKOUT_SHAPE_CONFIG_KEYS = new Set([
+var CHECKOUT_SHAPE_CONFIG_KEYS_2 = new Set([
   "core.autocrlf",
   "core.eol",
   "core.safecrlf",
@@ -987,42 +1195,54 @@ function quoteGitConfigValue(e) {
     .replace(/\x08/g, "\\b")}"`;
 }
 //@ chunk-s61vbvea.js:239788-239839 placement
-var hy = ["core.excludesfile", "core.attributesfile"];
+/**
+ * 影响检出形态的 git 配置键（core.excludesfile、core.attributesfile）。
+ */
+var CHECKOUT_SHAPE_CONFIG_KEYS = ["core.excludesfile", "core.attributesfile"];
 //@ chunk-s61vbvea.js:239839-240069 placement
-function lastGlobalOrSystemValue(e) {
-  let parts = e.split("\x00"),
-    list = Array.from({ length: Math.floor((parts.length - 1) / 3) }, (y, S) =>
-      parts.slice(3 * S, 3 * S + 3),
-    ),
-    s = ([y]) => y === "global" || y === "system",
-    last = list.findLast(s);
-  return { origin: last?.[1], value: last?.[2], passedOver: list.some((y) => !s(y)) };
+function lastGlobalOrSystemValue(stdout) {
+  let parts = stdout.split("\x00");
+  let list = Array.from(
+    {
+      length: Math.floor((parts.length - 1) / 3),
+    },
+    (y, S) => parts.slice(3 * S, 3 * S + 3),
+  );
+  let s = ([y]) => y === "global" || y === "system";
+  let last = list.findLast(s);
+  return {
+    origin: last?.[1],
+    value: last?.[2],
+    passedOver: list.some((y) => !s(y)),
+  };
 }
 //@ chunk-s61vbvea.js:240069-240144 placement
-var nO = /^[^\u0000-\u001f\u007f]{1,4096}$/,
-  Cd = 268435456,
-  Ad = 64,
-  yy = 1073741824;
-
+/**
+ * 合法的可打印 git 配置值正则，以及配置文件大小、层级与总拷贝上限。
+ */
+var PRINTABLE_CONFIG_VALUE_RE = /^[^\u0000-\u001f\u007f]{1,4096}$/;
+var MAX_CONFIG_FILE_BYTES = 268435456;
+var MAX_PLACEMENT_DEPTH = 64;
+var MAX_CONFIG_COPY_BYTES = 1073741824;
 export {
   listGitRefs,
-  Ad,
-  nKt,
+  MAX_PLACEMENT_DEPTH,
+  UNSET_REFERENCE_BACKEND_ENV,
   inspectGitLayout,
   runGitForAudit,
   buildAuditEnv,
-  QZn,
+  MAX_INCLUDE_FILES,
   auditRefStorageSetting,
   hasOnlyKnownFilterDrivers,
-  Oqr,
-  VP,
-  hy,
-  parseGitConfigNullList,
+  auditEnvironment,
+  workTreeReplacedSinceRecorded,
   CHECKOUT_SHAPE_CONFIG_KEYS,
+  parseGitConfigNullList,
+  CHECKOUT_SHAPE_CONFIG_KEYS_2,
   lastGlobalOrSystemValue,
-  nO,
-  yy,
-  Cd,
+  PRINTABLE_CONFIG_VALUE_RE,
+  MAX_CONFIG_COPY_BYTES,
+  MAX_CONFIG_FILE_BYTES,
   quoteGitConfigValue,
   resolveFileUrl,
   resolveIncludePaths,

@@ -8,59 +8,75 @@
 import { state_2 } from "../commonjs/state-cjs.js";
 
 //@ chunk-mrx6y2r5.js:68828-69300 esm-fingerprint
-function Nt(e, t, r) {
-  let { parameterPath: parameterPath, mapper: mapper } = t,
-    i;
+function getOperationArgumentValueFromParameter(operationArguments, t, fallbackObject) {
+  let { parameterPath, mapper: parameterMapper } = t;
+  let value;
   if (typeof parameterPath === "string") parameterPath = [parameterPath];
   if (Array.isArray(parameterPath)) {
     if (parameterPath.length > 0)
-      if (mapper.isConstant) i = mapper.defaultValue;
+      if (parameterMapper.isConstant) value = parameterMapper.defaultValue;
       else {
-        let s = Rd(e, parameterPath);
-        if (!s.propertyFound && r) s = Rd(r, parameterPath);
-        let a = !1;
-        if (!s.propertyFound)
-          a = mapper.required || (parameterPath[0] === "options" && parameterPath.length === 2);
-        i = a ? mapper.defaultValue : s.propertyValue;
+        let propertySearchResult = getPropertyFromParameterPath(operationArguments, parameterPath);
+        if (!propertySearchResult.propertyFound && fallbackObject)
+          propertySearchResult = getPropertyFromParameterPath(fallbackObject, parameterPath);
+        let useDefaultValue = false;
+        if (!propertySearchResult.propertyFound)
+          useDefaultValue =
+            parameterMapper.required || (parameterPath[0] === "options" && parameterPath.length === 2);
+        value = useDefaultValue ? parameterMapper.defaultValue : propertySearchResult.propertyValue;
       }
   } else {
-    if (mapper.required) i = {};
-    for (let key in parameterPath) {
-      let a = mapper.type.modelProperties[key],
-        c = parameterPath[key],
-        l = Nt(e, { parameterPath: c, mapper: a }, r);
-      if (l !== void 0) {
-        if (!i) i = {};
-        i[key] = l;
+    if (parameterMapper.required) value = {};
+    for (let propertyName in parameterPath) {
+      let propertyMapper = parameterMapper.type.modelProperties[propertyName];
+      let propertyPath = parameterPath[propertyName];
+      let propertyValue = getOperationArgumentValueFromParameter(
+        operationArguments,
+        {
+          parameterPath: propertyPath,
+          mapper: propertyMapper,
+        },
+        fallbackObject,
+      );
+      if (propertyValue !== undefined) {
+        if (!value) value = {};
+        value[propertyName] = propertyValue;
       }
     }
   }
-  return i;
+  return value;
 }
 //@ chunk-mrx6y2r5.js:69300-69471 esm-fingerprint
-function Rd(e, t) {
-  let r = { propertyFound: !1 },
-    n = 0;
-  for (; n < t.length; ++n) {
-    let o = t[n];
-    if (e && o in e) e = e[o];
+function getPropertyFromParameterPath(parent, parameterPath) {
+  let result = {
+    propertyFound: false,
+  };
+  let i = 0;
+  for (; i < parameterPath.length; ++i) {
+    let parameterPathPart = parameterPath[i];
+    if (parent && parameterPathPart in parent) parent = parent[parameterPathPart];
     else break;
   }
-  if (n === t.length) ((r.propertyValue = e), (r.propertyFound = !0));
-  return r;
+  if (i === parameterPath.length) {
+    result.propertyValue = parent;
+    result.propertyFound = true;
+  }
+  return result;
 }
 //@ chunk-mrx6y2r5.js:69471-69528 esm-fingerprint
-var wd = Symbol.for("@azure/core-client original request");
+var originalRequestSymbol = Symbol.for("@azure/core-client original request");
 //@ chunk-mrx6y2r5.js:69528-69558 esm-layout
-function Gp(e) {
-  return wd in e;
+function hasOriginalRequest(request) {
+  return originalRequestSymbol in request;
 }
 //@ chunk-mrx6y2r5.js:69558-69687 esm-fingerprint
-function ft(e) {
-  if (Gp(e)) return ft(e[wd]);
-  let t = state_2.operationRequestMap.get(e);
-  if (!t) ((t = {}), state_2.operationRequestMap.set(e, t));
-  return t;
+function getOperationRequestInfo(request) {
+  if (hasOriginalRequest(request)) return getOperationRequestInfo(request[originalRequestSymbol]);
+  let info = state_2.operationRequestMap.get(request);
+  if (!info) {
+    info = {};
+    state_2.operationRequestMap.set(request, info);
+  }
+  return info;
 }
-
-export { ft, Nt };
+export { getOperationRequestInfo, getOperationArgumentValueFromParameter };

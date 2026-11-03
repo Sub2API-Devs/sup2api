@@ -8,16 +8,13 @@
 import { mao } from "./_inlinedHelpers.js";
 
 //@ chunk-9q5xd4yn.js:308-388 placement
-function m(r, e) {
-  var t = [];
-  return (
-    mao(r, function (o, f, i) {
-      if (e(o, f, i)) t.push(o);
-    }),
-    t
-  );
+function baseFilter(collection, predicate) {
+  var result = [];
+  mao(collection, function (value, index, collection) {
+    if (predicate(value, index, collection)) result.push(value);
+  });
+  return result;
 }
 //@ chunk-9q5xd4yn.js:388-396 placement
-var a = m;
-
-export { a };
+var baseFilter_default = baseFilter;
+export { baseFilter_default };

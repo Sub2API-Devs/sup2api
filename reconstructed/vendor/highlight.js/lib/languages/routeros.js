@@ -8,24 +8,43 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:394771-397360 cjs-fingerprint
-var Os = x(function (qg, Rs) {
-  function rm(e) {
-    let r = { className: "variable", variants: [{ begin: /\$[\w\d#@][\w\d_]*/ }, { begin: /\$\{(.*?)\}/ }] },
-      i = {
-        className: "string",
-        begin: /"/,
-        end: /"/,
-        contains: [
-          e.BACKSLASH_ESCAPE,
-          r,
-          { className: "variable", begin: /\$\(/, end: /\)/, contains: [e.BACKSLASH_ESCAPE] },
-        ],
-      },
-      c = { className: "string", begin: /'/, end: /'/ };
+var require_routeros = x(function (cjsExports, cjsModule) {
+  function routeros(hljs) {
+    let VAR = {
+      className: "variable",
+      variants: [
+        {
+          begin: /\$[\w\d#@][\w\d_]*/,
+        },
+        {
+          begin: /\$\{(.*?)\}/,
+        },
+      ],
+    };
+    let QUOTE_STRING = {
+      className: "string",
+      begin: /"/,
+      end: /"/,
+      contains: [
+        hljs.BACKSLASH_ESCAPE,
+        VAR,
+        {
+          className: "variable",
+          begin: /\$\(/,
+          end: /\)/,
+          contains: [hljs.BACKSLASH_ESCAPE],
+        },
+      ],
+    };
+    let APOS_STRING = {
+      className: "string",
+      begin: /'/,
+      end: /'/,
+    };
     return {
       name: "MikroTik RouterOS script",
       aliases: ["mikrotik"],
-      case_insensitive: !0,
+      case_insensitive: true,
       keywords: {
         $pattern: /:?[\w-]+/,
         literal: "true false yes no nothing nil null",
@@ -40,40 +59,57 @@ var Os = x(function (qg, Rs) {
       contains: [
         {
           variants: [
-            { begin: /\/\*/, end: /\*\// },
-            { begin: /\/\//, end: /$/ },
-            { begin: /<\//, end: />/ },
+            {
+              begin: /\/\*/,
+              end: /\*\//,
+            },
+            {
+              begin: /\/\//,
+              end: /$/,
+            },
+            {
+              begin: /<\//,
+              end: />/,
+            },
           ],
           illegal: /./,
         },
-        e.COMMENT("^#", "$"),
-        i,
-        c,
-        r,
+        hljs.COMMENT("^#", "$"),
+        QUOTE_STRING,
+        APOS_STRING,
+        VAR,
         {
           begin: /[\w-]+=([^\s{}[\]()>]+)/,
           relevance: 0,
-          returnBegin: !0,
+          returnBegin: true,
           contains: [
-            { className: "attribute", begin: /[^=]+/ },
+            {
+              className: "attribute",
+              begin: /[^=]+/,
+            },
             {
               begin: /=/,
-              endsWithParent: !0,
+              endsWithParent: true,
               relevance: 0,
               contains: [
-                i,
-                c,
-                r,
+                QUOTE_STRING,
+                APOS_STRING,
+                VAR,
                 {
                   className: "literal",
                   begin: "\\b(" + "true false yes no nothing nil null".split(" ").join("|") + ")\\b",
                 },
-                { begin: /("[^"]*"|[^\s{}[\]]+)/ },
+                {
+                  begin: /("[^"]*"|[^\s{}[\]]+)/,
+                },
               ],
             },
           ],
         },
-        { className: "number", begin: /\*[0-9a-fA-F]+/ },
+        {
+          className: "number",
+          begin: /\*[0-9a-fA-F]+/,
+        },
         {
           begin:
             "\\b(" +
@@ -81,8 +117,13 @@ var Os = x(function (qg, Rs) {
               .split(" ")
               .join("|") +
             ")([\\s[(\\]|])",
-          returnBegin: !0,
-          contains: [{ className: "built_in", begin: /\w+/ }],
+          returnBegin: true,
+          contains: [
+            {
+              className: "built_in",
+              begin: /\w+/,
+            },
+          ],
         },
         {
           className: "built_in",
@@ -95,13 +136,15 @@ var Os = x(function (qg, Rs) {
                   .join("|") +
                 ");?\\s)+",
             },
-            { begin: /\.\./, relevance: 0 },
+            {
+              begin: /\.\./,
+              relevance: 0,
+            },
           ],
         },
       ],
     };
   }
-  Rs.exports = rm;
+  cjsModule.exports = routeros;
 });
-
-export { Os };
+export { require_routeros };

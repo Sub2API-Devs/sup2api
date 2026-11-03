@@ -6,140 +6,181 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { uh } from "../compile/codegen/index.js";
-import { ew } from "../compile/util.js";
-import { DPe } from "../compile/names.js";
+import { require_codegen_2 } from "../compile/codegen/index.js";
+import { require_util_2 } from "../compile/util.js";
+import { require_names } from "../compile/names.js";
 
 //@ chunk-s82q9s4x.js:30715-33752 cjs-fingerprint
-var Q = x(function (Bs) {
-  Object.defineProperty(Bs, "__esModule", { value: !0 });
-  Bs.validateUnion =
-    Bs.validateArray =
-    Bs.usePattern =
-    Bs.callValidateCode =
-    Bs.schemaProperties =
-    Bs.allSchemaProperties =
-    Bs.noPropertyInData =
-    Bs.propertyInData =
-    Bs.isOwnProperty =
-    Bs.hasPropFunc =
-    Bs.reportMissingProp =
-    Bs.checkMissingProp =
-    Bs.checkReportMissingProp =
-      void 0;
-  var S = uh(),
-    Ke = ew(),
-    $e = DPe(),
-    Gs = ew();
-  function ou(e, t) {
-    let { gen: gen, data: s, it: it } = e;
-    gen.if($r(gen, s, t, it.opts.ownProperties), () => {
-      (e.setParams({ missingProperty: S._`${t}` }, !0), e.error());
+var require_code_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.validateUnion =
+    cjsExports.validateArray =
+    cjsExports.usePattern =
+    cjsExports.callValidateCode =
+    cjsExports.schemaProperties =
+    cjsExports.allSchemaProperties =
+    cjsExports.noPropertyInData =
+    cjsExports.propertyInData =
+    cjsExports.isOwnProperty =
+    cjsExports.hasPropFunc =
+    cjsExports.reportMissingProp =
+    cjsExports.checkMissingProp =
+    cjsExports.checkReportMissingProp =
+      undefined;
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var names_1 = require_names();
+  var util_2 = require_util_2();
+  function checkReportMissingProp(cxt, prop) {
+    let { gen, data, it } = cxt;
+    gen.if(noPropertyInData(gen, data, prop, it.opts.ownProperties), () => {
+      cxt.setParams(
+        {
+          missingProperty: codegen_1._`${prop}`,
+        },
+        true,
+      );
+      cxt.error();
     });
   }
-  Bs.checkReportMissingProp = ou;
-  function iu({ gen: gen, data: t, it: { opts: r } }, s, n) {
-    return S.or(...s.map((o) => S.and($r(gen, t, o, r.ownProperties), S._`${n} = ${o}`)));
+  cjsExports.checkReportMissingProp = checkReportMissingProp;
+  function checkMissingProp({ gen, data, it: { opts } }, properties, missing) {
+    return codegen_1.or(
+      ...properties.map((prop) =>
+        codegen_1.and(
+          noPropertyInData(gen, data, prop, opts.ownProperties),
+          codegen_1._`${missing} = ${prop}`,
+        ),
+      ),
+    );
   }
-  Bs.checkMissingProp = iu;
-  function au(e, t) {
-    (e.setParams({ missingProperty: t }, !0), e.error());
+  cjsExports.checkMissingProp = checkMissingProp;
+  function reportMissingProp(cxt, missing) {
+    cxt.setParams(
+      {
+        missingProperty: missing,
+      },
+      true,
+    );
+    cxt.error();
   }
-  Bs.reportMissingProp = au;
-  function Js(e) {
-    return e.scopeValue("func", {
+  cjsExports.reportMissingProp = reportMissingProp;
+  function hasPropFunc(gen) {
+    return gen.scopeValue("func", {
       ref: Object.prototype.hasOwnProperty,
-      code: S._`Object.prototype.hasOwnProperty`,
+      code: codegen_1._`Object.prototype.hasOwnProperty`,
     });
   }
-  Bs.hasPropFunc = Js;
-  function gr(e, t, r) {
-    return S._`${Js(e)}.call(${t}, ${r})`;
+  cjsExports.hasPropFunc = hasPropFunc;
+  function isOwnProperty(gen, data, property) {
+    return codegen_1._`${hasPropFunc(gen)}.call(${data}, ${property})`;
   }
-  Bs.isOwnProperty = gr;
-  function cu(e, t, r, s) {
-    let n = S._`${t}${S.getProperty(r)} !== undefined`;
-    return s ? S._`${n} && ${gr(e, t, r)}` : n;
+  cjsExports.isOwnProperty = isOwnProperty;
+  function propertyInData(gen, data, property, ownProperties) {
+    let cond = codegen_1._`${data}${codegen_1.getProperty(property)} !== undefined`;
+    return ownProperties ? codegen_1._`${cond} && ${isOwnProperty(gen, data, property)}` : cond;
   }
-  Bs.propertyInData = cu;
-  function $r(e, t, r, s) {
-    let n = S._`${t}${S.getProperty(r)} === undefined`;
-    return s ? S.or(n, S.not(gr(e, t, r))) : n;
+  cjsExports.propertyInData = propertyInData;
+  function noPropertyInData(gen, data, property, ownProperties) {
+    let cond = codegen_1._`${data}${codegen_1.getProperty(property)} === undefined`;
+    return ownProperties ? codegen_1.or(cond, codegen_1.not(isOwnProperty(gen, data, property))) : cond;
   }
-  Bs.noPropertyInData = $r;
-  function Ws(e) {
-    return e ? Object.keys(e).filter((t) => t !== "__proto__") : [];
+  cjsExports.noPropertyInData = noPropertyInData;
+  function allSchemaProperties(schemaMap) {
+    return schemaMap ? Object.keys(schemaMap).filter((p) => p !== "__proto__") : [];
   }
-  Bs.allSchemaProperties = Ws;
-  function uu(e, t) {
-    return Ws(t).filter((r) => !Ke.alwaysValidSchema(e, t[r]));
+  cjsExports.allSchemaProperties = allSchemaProperties;
+  function schemaProperties(it, schemaMap) {
+    return allSchemaProperties(schemaMap).filter((p) => !util_1.alwaysValidSchema(it, schemaMap[p]));
   }
-  Bs.schemaProperties = uu;
-  function lu(
-    { schemaCode: schemaCode, data: t, it: { gen: r, topSchemaRef: s, schemaPath: n, errorPath: o }, it: it },
-    a,
-    c,
-    u,
+  cjsExports.schemaProperties = schemaProperties;
+  function callValidateCode(
+    { schemaCode, data, it: { gen, topSchemaRef, schemaPath, errorPath }, it },
+    func,
+    context,
+    passSchema,
   ) {
-    let l = u ? S._`${schemaCode}, ${t}, ${s}${n}` : t,
-      f = [
-        [$e.default.instancePath, S.strConcat($e.default.instancePath, o)],
-        [$e.default.parentData, it.parentData],
-        [$e.default.parentDataProperty, it.parentDataProperty],
-        [$e.default.rootData, $e.default.rootData],
-      ];
-    if (it.opts.dynamicRef) f.push([$e.default.dynamicAnchors, $e.default.dynamicAnchors]);
-    let b = S._`${l}, ${r.object(...f)}`;
-    return c !== S.nil ? S._`${a}.call(${c}, ${b})` : S._`${a}(${b})`;
+    let dataAndSchema = passSchema ? codegen_1._`${schemaCode}, ${data}, ${topSchemaRef}${schemaPath}` : data;
+    let valCxt = [
+      [names_1.default.instancePath, codegen_1.strConcat(names_1.default.instancePath, errorPath)],
+      [names_1.default.parentData, it.parentData],
+      [names_1.default.parentDataProperty, it.parentDataProperty],
+      [names_1.default.rootData, names_1.default.rootData],
+    ];
+    if (it.opts.dynamicRef) valCxt.push([names_1.default.dynamicAnchors, names_1.default.dynamicAnchors]);
+    let args = codegen_1._`${dataAndSchema}, ${gen.object(...valCxt)}`;
+    return context !== codegen_1.nil
+      ? codegen_1._`${func}.call(${context}, ${args})`
+      : codegen_1._`${func}(${args})`;
   }
-  Bs.callValidateCode = lu;
-  var du = S._`new RegExp`;
-  function fu({ gen: gen, it: { opts: t } }, r) {
-    let s = t.unicodeRegExp ? "u" : "",
-      { regExp: regExp } = t.code,
-      o = regExp(r, s);
+  cjsExports.callValidateCode = callValidateCode;
+  var newRegExp = codegen_1._`new RegExp`;
+  function usePattern({ gen, it: { opts } }, pattern) {
+    let u = opts.unicodeRegExp ? "u" : "";
+    let { regExp } = opts.code;
+    let rx = regExp(pattern, u);
     return gen.scopeValue("pattern", {
-      key: o.toString(),
-      ref: o,
-      code: S._`${regExp.code === "new RegExp" ? du : Gs.useFunc(gen, regExp)}(${r}, ${s})`,
+      key: rx.toString(),
+      ref: rx,
+      code: codegen_1._`${regExp.code === "new RegExp" ? newRegExp : util_2.useFunc(gen, regExp)}(${pattern}, ${u})`,
     });
   }
-  Bs.usePattern = fu;
-  function pu(e) {
-    let { gen: gen, data: r, keyword: keyword, it: it } = e,
-      o = gen.name("valid");
+  cjsExports.usePattern = usePattern;
+  function validateArray(cxt) {
+    let { gen, data, keyword, it } = cxt;
+    let valid = gen.name("valid");
     if (it.allErrors) {
-      let a = gen.let("valid", !0);
-      return (i(() => gen.assign(a, !1)), a);
+      let validArr = gen.let("valid", true);
+      validateItems(() => gen.assign(validArr, false));
+      return validArr;
     }
-    return (gen.var(o, !0), i(() => gen.break()), o);
-    function i(a) {
-      let c = gen.const("len", S._`${r}.length`);
-      gen.forRange("i", 0, c, (u) => {
-        (e.subschema({ keyword: keyword, dataProp: u, dataPropType: Ke.Type.Num }, o), gen.if(S.not(o), a));
+    gen.var(valid, true);
+    validateItems(() => gen.break());
+    return valid;
+    function validateItems(notValid) {
+      let len = gen.const("len", codegen_1._`${data}.length`);
+      gen.forRange("i", 0, len, (i) => {
+        cxt.subschema(
+          {
+            keyword,
+            dataProp: i,
+            dataPropType: util_1.Type.Num,
+          },
+          valid,
+        );
+        gen.if(codegen_1.not(valid), notValid);
       });
     }
   }
-  Bs.validateArray = pu;
-  function hu(e) {
-    let { gen: gen, schema: schema, keyword: keyword, it: it } = e;
+  cjsExports.validateArray = validateArray;
+  function validateUnion(cxt) {
+    let { gen, schema, keyword, it } = cxt;
     if (!Array.isArray(schema)) throw Error("ajv implementation error");
-    if (schema.some((c) => Ke.alwaysValidSchema(it, c)) && !it.opts.unevaluated) return;
-    let i = gen.let("valid", !1),
-      a = gen.name("_valid");
-    (gen.block(() =>
-      schema.forEach((c, u) => {
-        let subschema = e.subschema({ keyword: keyword, schemaProp: u, compositeRule: !0 }, a);
-        if ((gen.assign(i, S._`${i} || ${a}`), !e.mergeValidEvaluated(subschema, a))) gen.if(S.not(i));
+    if (schema.some((c) => util_1.alwaysValidSchema(it, c)) && !it.opts.unevaluated) return;
+    let valid = gen.let("valid", false);
+    let schValid = gen.name("_valid");
+    gen.block(() =>
+      schema.forEach((_sch, i) => {
+        let schCxt = cxt.subschema(
+          {
+            keyword,
+            schemaProp: i,
+            compositeRule: true,
+          },
+          schValid,
+        );
+        gen.assign(valid, codegen_1._`${valid} || ${schValid}`);
+        if (!cxt.mergeValidEvaluated(schCxt, schValid)) gen.if(codegen_1.not(valid));
       }),
-    ),
-      e.result(
-        i,
-        () => e.reset(),
-        () => e.error(!0),
-      ));
+    );
+    cxt.result(
+      valid,
+      () => cxt.reset(),
+      () => cxt.error(true),
+    );
   }
-  Bs.validateUnion = hu;
+  cjsExports.validateUnion = validateUnion;
 });
-
-export { Q };
+export { require_code_2 };

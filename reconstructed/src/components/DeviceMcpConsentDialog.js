@@ -8,7 +8,7 @@
  * pieces: chunk-tmg3f18n.js (4)
  * attribution: placement 4
  */
-import { j, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
 import { useSelfOpenedDialog } from "../hooks/useSelfOpenedDialog.js";
 import { logEvent } from "../services/analytics/index.js";
 import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
@@ -20,12 +20,15 @@ import {
   writeDeviceMcpNotNow,
   writeDeviceMcpConsent,
   clearDeviceMcpNotNow,
-  t9,
-  tAs,
-  _0n,
+  shortServerLabel,
+  deleteConsentHint,
+  deleteNotNowHint,
 } from "../services/deviceBridge/deviceMcpConsent.js";
 import { logError } from "../utils/log.js";
-import { r, e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { Dialog } from "./design-system/Dialog.js";
 import { Byline } from "./design-system/Byline.js";
@@ -34,12 +37,12 @@ import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 
 //@ chunk-tmg3f18n.js:14337-14341 placement
-j();
+init_react_production();
 //@ chunk-tmg3f18n.js:14341-14349 placement
-var m = 8;
+var MAX_LISTED_CONSENT_SERVERS = 8;
 //@ chunk-tmg3f18n.js:14349-14546 placement
-function describeMcpScopeOwner(d) {
-  switch (d) {
+function describeMcpScopeOwner(scope) {
+  switch (scope) {
     case "user":
     case "local":
       return "yours";
@@ -53,66 +56,88 @@ function describeMcpScopeOwner(d) {
       return "other";
   }
 }
+//@ chunk-tmg3f18n.js:14546-17127 placement
 /**
  * 询问是否让云端会话使用本机 MCP 服务器的同意对话框。
  */
-//@ chunk-tmg3f18n.js:14546-17127 placement
-function DeviceMcpConsentDialog({ servers: servers, storageV5: storageV5, onDone: onDone }) {
-  let o = useSelfOpenedDialog(onDone, {
-    selfOpened: !0,
+function DeviceMcpConsentDialog({ servers, storageV5, onDone }) {
+  let selfOpenedDialog = useSelfOpenedDialog(onDone, {
+    selfOpened: true,
     onCancelled: (t) =>
-      logEvent("tengu_device_mcp_consent_prompt", { choice: t ? lit("cancelled_saving") : lit("cancelled") }),
+      logEvent("tengu_device_mcp_consent_prompt", {
+        choice: t ? lit("cancelled_saving") : lit("cancelled"),
+      }),
   });
-  (useKeybinding("confirm:no", () => p("not_now"), { context: "Confirmation", isActive: !o.decided }),
-    P(() => {
-      logEvent("tengu_device_mcp_consent_prompt_shown", { server_count: servers.length });
-    }, [servers.length]));
-  function p(t) {
-    if (!o.take()) return;
-    logEvent("tengu_device_mcp_consent_prompt", { choice: fromEnum(t) });
-    let f = deviceMcpConsentStore(storageV5),
-      h = deviceMcpNotNowStore(storageV5);
-    if (t === "not_now") {
-      (deviceMcpConsentAnswer(f)
+  useKeybinding("confirm:no", () => p("not_now"), {
+    context: "Confirmation",
+    isActive: !selfOpenedDialog.decided,
+  });
+  P(() => {
+    logEvent("tengu_device_mcp_consent_prompt_shown", {
+      server_count: servers.length,
+    });
+  }, [servers.length]);
+  function p(choice) {
+    if (!selfOpenedDialog.take()) return;
+    logEvent("tengu_device_mcp_consent_prompt", {
+      choice: fromEnum(choice),
+    });
+    let f = deviceMcpConsentStore(storageV5);
+    let h = deviceMcpNotNowStore(storageV5);
+    if (choice === "not_now") {
+      deviceMcpConsentAnswer(f)
         .then((i) =>
           i === "unset"
             ? writeDeviceMcpNotNow(
-                servers.map((g) => g.name),
+                servers.map((server) => server.name),
                 h,
               )
-            : void 0,
+            : undefined,
         )
-        .then(void 0, (i) => logError(i)),
-        o.handBack(t));
+        .then(undefined, (error) => logError(error));
+      selfOpenedDialog.handBack(choice);
       return;
     }
-    writeDeviceMcpConsent(t, f).then(
+    writeDeviceMcpConsent(choice, f).then(
       (i) => {
         if (i) clearDeviceMcpNotNow(h);
-        if (o.settled()) return;
-        if (!i) logEvent("tengu_device_mcp_consent_prompt", { choice: lit("write_failed") });
-        o.handBack(i ? t : "not_now");
+        if (selfOpenedDialog.settled()) return;
+        if (!i)
+          logEvent("tengu_device_mcp_consent_prompt", {
+            choice: lit("write_failed"),
+          });
+        selfOpenedDialog.handBack(i ? choice : "not_now");
       },
-      (i) => {
-        (logError(i), o.handBack("not_now"));
+      (error) => {
+        logError(error);
+        selfOpenedDialog.handBack("not_now");
       },
     );
   }
-  if (o.decided)
-    return o.exitHintShowing
-      ? r(Text, { dimColor: !0, italic: !0, children: ["Press ", o.exit.keyName, " again to exit"] })
+  if (selfOpenedDialog.decided)
+    return selfOpenedDialog.exitHintShowing
+      ? jsxProd_default_2(Text, {
+          dimColor: true,
+          italic: true,
+          children: ["Press ", selfOpenedDialog.exit.keyName, " again to exit"],
+        })
       : null;
-  let sliced = servers.slice(0, m);
-  return r(Dialog, {
+  let sliced = servers.slice(0, MAX_LISTED_CONSENT_SERVERS);
+  return jsxProd_default_2(Dialog, {
     title: "Let cloud sessions use this machine's MCP servers?",
     onCancel: () => p("not_now"),
-    isCancelActive: !1,
-    inputGuide: o.exit.pending
-      ? r(Text, { children: ["Press ", o.exit.keyName, " again to exit"] })
-      : r(Byline, {
+    isCancelActive: false,
+    inputGuide: selfOpenedDialog.exit.pending
+      ? jsxProd_default_2(Text, {
+          children: ["Press ", selfOpenedDialog.exit.keyName, " again to exit"],
+        })
+      : jsxProd_default_2(Byline, {
           children: [
-            e(KeyboardShortcutHint, { chord: "enter", action: "confirm" }),
-            e(ConfigurableShortcutHint, {
+            jsxProd_default(KeyboardShortcutHint, {
+              chord: "enter",
+              action: "confirm",
+            }),
+            jsxProd_default(ConfigurableShortcutHint, {
               action: "confirm:no",
               context: "Confirmation",
               fallback: "Esc",
@@ -121,60 +146,75 @@ function DeviceMcpConsentDialog({ servers: servers, storageV5: storageV5, onDone
           ],
         }),
     children: [
-      r(Box, {
+      jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
         children: [
-          e(Text, {
+          jsxProd_default(Text, {
             children:
               "Cloud sessions you start with claude --cloud from this machine can call the MCP servers configured here, and any you add later. They keep running on this machine with the logins saved here. This machine's own allow, deny and ask rules for these tools decide, exactly as in a local session; without an allow rule you're asked in the session first. Servers deployed by an administrator are never offered.",
           }),
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
               sliced.map((t) =>
-                r(
+                jsxProd_default_2(
                   Text,
                   {
                     children: [
                       "\xB7 ",
-                      t9(t.name),
+                      shortServerLabel(t.name),
                       " ",
-                      r(Text, { dimColor: !0, children: ["(", describeMcpScopeOwner(t.scope), ")"] }),
+                      jsxProd_default_2(Text, {
+                        dimColor: true,
+                        children: ["(", describeMcpScopeOwner(t.scope), ")"],
+                      }),
                     ],
                   },
                   t.name,
                 ),
               ),
-              servers.length > m
-                ? r(Text, { dimColor: !0, children: ["\u2026 and ", servers.length - m, " more"] })
+              servers.length > MAX_LISTED_CONSENT_SERVERS
+                ? jsxProd_default_2(Text, {
+                    dimColor: true,
+                    children: ["\u2026 and ", servers.length - MAX_LISTED_CONSENT_SERVERS, " more"],
+                  })
                 : null,
             ],
           }),
-          r(Text, {
-            dimColor: !0,
+          jsxProd_default_2(Text, {
+            dimColor: true,
             children: [
               "Without this, cloud sessions see none of this machine's MCP servers. Servers a project defines are not offered yet. Yes and No are saved for this machine; to change the answer later,",
               " ",
-              tAs(),
+              deleteConsentHint(),
               ". Not now waits until you add an MCP server; to be asked sooner, ",
-              _0n(),
+              deleteNotNowHint(),
               ".",
             ],
           }),
         ],
       }),
-      e(ModelSelector, {
+      jsxProd_default(ModelSelector, {
         options: [
-          { label: "Yes, offer this machine's MCP servers", value: "accepted" },
-          { label: "No, keep them to this machine", value: "declined" },
-          { label: "Not now", value: "not_now" },
+          {
+            label: "Yes, offer this machine's MCP servers",
+            value: "accepted",
+          },
+          {
+            label: "No, keep them to this machine",
+            value: "declined",
+          },
+          {
+            label: "Not now",
+            value: "not_now",
+          },
         ],
         defaultFocusValue: "not_now",
-        hideIndexes: !0,
-        disablePrintableKeybindings: !0,
-        isDisabled: o.choicesDisabled,
-        refuseInput: o.refuseInput,
+        hideIndexes: true,
+        disablePrintableKeybindings: true,
+        isDisabled: selfOpenedDialog.choicesDisabled,
+        refuseInput: selfOpenedDialog.refuseInput,
         onChange: p,
       }),
     ],

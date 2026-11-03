@@ -12,65 +12,71 @@ import { GITHUB_HOST } from "../git/githubUrl.js";
 import { foldName, INVISIBLE_FORMAT_CHAR_RE } from "../permissions/protectedDirNames.js";
 import { OFFICIAL_MARKETPLACE_NAME } from "./officialMarketplaceNames.js";
 
+//@ chunk-dcmhvw5a.js:20639-21039 placement
 /**
  * 插件来源 URL 的主机/路径正则片段。
  */
-//@ chunk-dcmhvw5a.js:20639-21039 placement
-var HOST_PATTERNS = String.raw`[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.?`,
-  Wn = "[A-Za-z0-9._-]+",
-  Zo = "[A-Za-z0-9._~-]",
-  Oh = `${Zo}+(?::${Zo}*)?@`,
-  Rh = ":[1-9][0-9]{0,4}",
-  Th = `(?:/(?:${Zo}|%[0-9A-Fa-f]{2})*)*`,
-  regExp_2 = new RegExp(`^${Wn}/${Wn}$`),
-  regExp_3 = new RegExp(`^git@(${HOST_PATTERNS}):(${Wn}(?:/${Wn})*)/?$`),
-  fa = `(?:${Oh})?(${HOST_PATTERNS})(?:${Rh})?(${Th})$`,
-  regExp_4 = new RegExp(`^https://${fa}`),
-  regExp_5 = new RegExp(`^https?://${fa}`),
-  ga = `ssh.${GITHUB_HOST}`,
-  WIDE = "wide:";
+var HOST_PATTERNS = String.raw`[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.?`;
+var PLUGIN_NAME_CHARS = "[A-Za-z0-9._-]+";
+var PATH_SAFE_CHARS = "[A-Za-z0-9._~-]";
+var USER_SEGMENT_CHARS = `${PATH_SAFE_CHARS}+(?::${PATH_SAFE_CHARS}*)?@`;
+var HOST_SEGMENT_CHARS = ":[1-9][0-9]{0,4}";
+var PORT_SEGMENT_PATTERN = `(?:/(?:${PATH_SAFE_CHARS}|%[0-9A-Fa-f]{2})*)*`;
+var regExp_2 = new RegExp(`^${PLUGIN_NAME_CHARS}/${PLUGIN_NAME_CHARS}$`);
+var regExp_3 = new RegExp(`^git@(${HOST_PATTERNS}):(${PLUGIN_NAME_CHARS}(?:/${PLUGIN_NAME_CHARS})*)/?$`);
+var HOST_CHARS = `(?:${USER_SEGMENT_CHARS})?(${HOST_PATTERNS})(?:${HOST_SEGMENT_CHARS})?(${PORT_SEGMENT_PATTERN})$`;
+var regExp_4 = new RegExp(`^https://${HOST_CHARS}`);
+var regExp_5 = new RegExp(`^https?://${HOST_CHARS}`);
+var REPO_PATH_CHARS = `ssh.${GITHUB_HOST}`;
+var WIDE = "wide:";
+//@ chunk-dcmhvw5a.js:21039-21429 placement
 /**
  * 解析 git 托管 URL。
  */
-//@ chunk-dcmhvw5a.js:21039-21429 placement
 function parseGitHostUrl(e, n) {
-  let matches = regExp_2.test(e),
-    match = regExp_3.exec(e),
-    match_2 = (n ? regExp_5 : regExp_4).exec(e),
-    c = matches ? GITHUB_HOST : (match?.[1] ?? match_2?.[1]);
-  if (c === void 0) return;
+  let matches = regExp_2.test(e);
+  let match = regExp_3.exec(e);
+  let match_2 = (n ? regExp_5 : regExp_4).exec(e);
+  let c = matches ? GITHUB_HOST : (match?.[1] ?? match_2?.[1]);
+  if (c === undefined) return;
   let replaced = c.toLowerCase().replace(/\.$/, "");
   if (c.endsWith(".") && replaced !== GITHUB_HOST && replaced !== `www.${GITHUB_HOST}`) return;
   let m = matches ? `/${e}` : match ? `/${match[2]}` : match_2?.[2] || "/";
   if (m.split("/").some((h) => /^(?:\.|%2e){1,2}$/i.test(h) || (matches && /^\.git$/i.test(h)))) return;
-  return { url: match_2 ? e : `https://${c}${m}`, host: c, path: m, scp: match !== null };
+  return {
+    url: match_2 ? e : `https://${c}${m}`,
+    host: c,
+    path: m,
+    scp: match !== null,
+  };
 }
+//@ chunk-dcmhvw5a.js:21429-22470 placement
 /**
  * 规范化插件仓库 URL。
  */
-//@ chunk-dcmhvw5a.js:21429-22470 placement
-function normalizePluginRepoUrl(e, n, r) {
-  let s = r?.blocklistDirection === !0,
-    a,
-    c,
-    g,
-    m = parseGitHostUrl(e, s);
-  if (m === void 0) return;
+function normalizePluginRepoUrl(url, path, r) {
+  let s = r?.blocklistDirection === true;
+  let a;
+  let c;
+  let g;
+  let gitHostUrl = parseGitHostUrl(url, s);
+  if (gitHostUrl === undefined) return;
   try {
-    let S = new URL(m.url);
-    if (S.hostname !== m.host.toLowerCase() || S.pathname !== m.path) return;
+    let S = new URL(gitHostUrl.url);
+    if (S.hostname !== gitHostUrl.host.toLowerCase() || S.pathname !== gitHostUrl.path) return;
     let replaced = S.hostname.replace(/\.$/, "");
-    if (replaced === ga && !m.scp && !s) return;
-    let w = replaced === `www.${GITHUB_HOST}` || replaced === ga ? GITHUB_HOST : replaced;
+    if (replaced === REPO_PATH_CHARS && !gitHostUrl.scp && !s) return;
+    let w = replaced === `www.${GITHUB_HOST}` || replaced === REPO_PATH_CHARS ? GITHUB_HOST : replaced;
     g = s || (w === GITHUB_HOST && S.port === "");
-    let L = s && (S.port === "80" || S.port === "443") ? "" : S.port;
-    ((a = `${w}${L === "" ? "" : `:${L}`}`), (c = S.pathname));
+    let port = s && (S.port === "80" || S.port === "443") ? "" : S.port;
+    a = `${w}${port === "" ? "" : `:${port}`}`;
+    c = S.pathname;
   } catch {
     return;
   }
   let replaced = c.replace(/%([0-9a-f]{2})/gi, (S, C) => {
-    let fromCharCode = String.fromCharCode(parseInt(C, 16));
-    return /^[A-Za-z0-9._~-]$/.test(fromCharCode) ? fromCharCode : S;
+    let w = String.fromCharCode(parseInt(C, 16));
+    return /^[A-Za-z0-9._~-]$/.test(w) ? w : S;
   });
   if (replaced.includes("%")) return;
   let replaced_2 = (g ? replaced.toLowerCase() : replaced)
@@ -82,9 +88,9 @@ function normalizePluginRepoUrl(e, n, r) {
     while (replaced_2.endsWith(".git", S)) S -= replaced_2[S - 5] === "/" ? 5 : 4;
     replaced_2 = replaced_2.slice(0, S);
   }
-  if (n?.includes("\\")) return;
+  if (path?.includes("\\")) return;
   let y = [];
-  for (let S of (n ?? "").split("/")) {
+  for (let S of (path ?? "").split("/")) {
     if (S === "" || S === ".") continue;
     if (S !== "..") {
       y.push(S);
@@ -96,9 +102,9 @@ function normalizePluginRepoUrl(e, n, r) {
   if (!s) return `${a}${replaced_2}#${y.join("/")}`;
   let b = [];
   for (let S of y) {
-    let C = toWindowsShortNameKey(S);
-    if (C === void 0) return;
-    b.push(C);
+    let windowsShortNameKey = toWindowsShortNameKey(S);
+    if (windowsShortNameKey === undefined) return;
+    b.push(windowsShortNameKey);
   }
   return `${WIDE}${a}${replaced_2}#${b.join("/")}`;
 }
@@ -112,90 +118,102 @@ function toWindowsShortNameKey(cwd) {
   if (/~\d/.test(s) || s.includes(":") || INVISIBLE_FORMAT_CHAR_RE.test(s)) return;
   return s.toUpperCase().toLowerCase().normalize("NFC");
 }
+//@ chunk-dcmhvw5a.js:22731-22841 placement = getCurrentRepoHttpsUrl (0.803)
 /**
  * 解析 repo#ref 写法。
  */
-//@ chunk-dcmhvw5a.js:22731-22841 placement = getCurrentRepoHttpsUrl (0.803)
 function parseRepoWithRef(e) {
   let index = e.indexOf("#");
   if (index === -1) return e;
   return normalizePluginRepoUrl(`https://${e.slice(0, index)}`, e.slice(index + 1)) ?? e;
 }
+//@ chunk-dcmhvw5a.js:22841-23385 placement
 /**
  * 两个插件来源是否相同。
  */
-//@ chunk-dcmhvw5a.js:22841-23385 placement
-function samePluginSource(e, n, r) {
-  let s = r?.blocklistDirection !== !0;
-  if (typeof e === "string") {
-    let m = typeof n === "string" ? { url: n, ref: void 0 } : n;
-    if (!m?.url || (s && m.ref !== void 0)) return;
-    return normalizePluginRepoUrl(m.url, e, r);
+function samePluginSource(source, n, r) {
+  let s = r?.blocklistDirection !== true;
+  if (typeof source === "string") {
+    let m =
+      typeof n === "string"
+        ? {
+            url: n,
+            ref: undefined,
+          }
+        : n;
+    if (!m?.url || (s && m.ref !== undefined)) return;
+    return normalizePluginRepoUrl(m.url, source, r);
   }
-  if (typeof e !== "object" || e === null) return;
-  let a = e,
-    c = typeof a.sha === "string" && /^[a-f0-9]{40}$/.test(a.sha);
-  if (s && a.ref !== void 0 && !c) return;
-  let g = typeof a.path === "string" ? a.path : void 0;
+  if (typeof source !== "object" || source === null) return;
+  let a = source;
+  let c = typeof a.sha === "string" && /^[a-f0-9]{40}$/.test(a.sha);
+  if (s && a.ref !== undefined && !c) return;
+  let path = typeof a.path === "string" ? a.path : undefined;
   switch (a.source) {
     case "github":
-      return typeof a.repo === "string" ? normalizePluginRepoUrl(a.repo, g, r) : void 0;
+      return typeof a.repo === "string" ? normalizePluginRepoUrl(a.repo, path, r) : undefined;
     case "url":
     case "git-subdir":
-      return typeof a.url === "string" ? normalizePluginRepoUrl(a.url, g, r) : void 0;
+      return typeof a.url === "string" ? normalizePluginRepoUrl(a.url, path, r) : undefined;
     default:
       return;
   }
 }
+//@ chunk-dcmhvw5a.js:23385-23515 placement
 /**
  * 取来源的 URL 与 ref。
  */
-//@ chunk-dcmhvw5a.js:23385-23515 placement
-function sourceUrlAndRef(e) {
-  switch (e?.source) {
+function sourceUrlAndRef(source) {
+  switch (source?.source) {
     case "github":
-      return { url: e.repo, ref: e.ref };
+      return {
+        url: source.repo,
+        ref: source.ref,
+      };
     case "git":
-      return { url: e.url, ref: e.ref };
+      return {
+        url: source.url,
+        ref: source.ref,
+      };
     default:
       return;
   }
 }
+//@ chunk-dcmhvw5a.js:23515-23669 placement
 /**
  * 官方插件固定的 sha。
  */
-//@ chunk-dcmhvw5a.js:23515-23669 placement
-function pinnedSha(e, n) {
+function pinnedSha(e, source) {
   {
     if (!e.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) return;
-    if (typeof n !== "object" || n === null) return;
-    let sha = n.sha;
-    return typeof sha === "string" && sha !== "" ? sha : void 0;
+    if (typeof source !== "object" || source === null) return;
+    let sha = source.sha;
+    return typeof sha === "string" && sha !== "" ? sha : undefined;
   }
   return;
 }
+//@ chunk-dcmhvw5a.js:23669-23751 placement
 /**
  * 名字附加 sha 前缀。
  */
-//@ chunk-dcmhvw5a.js:23669-23751 placement
 function withShaSuffix(e, n) {
   let r = `-${n.substring(0, 12)}`;
   return e.endsWith(r) ? e : `${e}${r}`;
 }
+//@ chunk-dcmhvw5a.js:23751-23844 placement
 /**
  * 插件目录不可用的错误。
  */
-//@ chunk-dcmhvw5a.js:23751-23844 placement
 class PluginDirectoryUnavailableError extends Error {
-  constructor(e) {
-    super(e);
+  constructor(message) {
+    super(message);
     this.name = "PluginDirectoryUnavailableError";
   }
 }
+//@ chunk-dcmhvw5a.js:23886-23992 placement
 /**
  * 脚本扩展名到加载器（ts/tsx/jsx/js）的映射。
  */
-//@ chunk-dcmhvw5a.js:23886-23992 placement
 var SCRIPT_EXTENSION_LOADERS = {
   ".ts": "ts",
   ".tsx": "tsx",
@@ -206,14 +224,17 @@ var SCRIPT_EXTENSION_LOADERS = {
   ".mts": "ts",
   ".cts": "ts",
 };
+//@ chunk-dcmhvw5a.js:23992-24017 placement
 /**
  * 脚本扩展名列表。
  */
-//@ chunk-dcmhvw5a.js:23992-24017 placement
 var SCRIPT_EXTENSIONS = Object.keys(SCRIPT_EXTENSION_LOADERS);
 //@ chunk-dcmhvw5a.js:24017-24080 placement
-var gps = `${SCRIPT_EXTENSIONS.slice(0, -1).join(", ")} or ` + String(SCRIPT_EXTENSIONS.at(-1));
-
+/**
+ * SCRIPT_EXTENSIONS_TEXT：脚本后缀的列举文字。
+ */
+var SCRIPT_EXTENSIONS_TEXT =
+  `${SCRIPT_EXTENSIONS.slice(0, -1).join(", ")} or ` + String(SCRIPT_EXTENSIONS.at(-1));
 export {
   PluginDirectoryUnavailableError,
   samePluginSource,
@@ -221,7 +242,7 @@ export {
   withShaSuffix,
   sourceUrlAndRef,
   parseRepoWithRef,
-  gps,
+  SCRIPT_EXTENSIONS_TEXT,
   SCRIPT_EXTENSION_LOADERS,
   SCRIPT_EXTENSIONS,
   normalizePluginRepoUrl,

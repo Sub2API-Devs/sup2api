@@ -8,17 +8,15 @@
  * pieces: chunk-axp7p75e.js (1)
  * attribution: placement 1
  */
-
+//@ chunk-axp7p75e.js:191-362 placement
 /**
  * 需要从远程桥转录中扣留的工具结果字段与分类器上下文字段。
  */
-//@ chunk-axp7p75e.js:191-362 placement
-var REMOTE_RESULT_FIELDS = ["toolUseResult", "tool_use_result", "mcpMeta", "remoteToolResult"],
-  CLASSIFIER_CONTEXT_FIELDS = [
-    "hostClassifierContext",
-    "classifierMetaLines",
-    "serverClassifierContext",
-    "summarizeMetadata",
-  ];
-
+var REMOTE_RESULT_FIELDS = ["toolUseResult", "tool_use_result", "mcpMeta", "remoteToolResult"];
+var CLASSIFIER_CONTEXT_FIELDS = [
+  "hostClassifierContext",
+  "classifierMetaLines",
+  "serverClassifierContext",
+  "summarizeMetadata",
+];
 export { REMOTE_RESULT_FIELDS, CLASSIFIER_CONTEXT_FIELDS };

@@ -6,83 +6,94 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ee } from "./utils.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:29363-31379 cjs-fingerprint
-var xn = x(function (gd, bs) {
-  var ln = ee();
-  bs.exports = gs;
-  function gs(e, t) {
-    ((this._getString = e),
-      (this._setString = t),
-      (this._length = 0),
-      (this._lastStringValue = ""),
-      this._update());
+var require_DOMTokenList = x(function (cjsExports, cjsModule) {
+  var utils = require_utils();
+  cjsModule.exports = DOMTokenList;
+  function DOMTokenList(getter, setter) {
+    this._getString = getter;
+    this._setString = setter;
+    this._length = 0;
+    this._lastStringValue = "";
+    this._update();
   }
-  Object.defineProperties(gs.prototype, {
+  Object.defineProperties(DOMTokenList.prototype, {
     length: {
       get: function () {
         return this._length;
       },
     },
     item: {
-      value: function (e) {
-        var t = Mt(this);
-        if (e < 0 || e >= t.length) return null;
-        return t[e];
+      value: function (index) {
+        var list = getList(this);
+        if (index < 0 || index >= list.length) return null;
+        return list[index];
       },
     },
     contains: {
-      value: function (e) {
-        e = String(e);
-        var t = Mt(this);
-        return t.indexOf(e) > -1;
+      value: function (token) {
+        token = String(token);
+        var list = getList(this);
+        return list.indexOf(token) > -1;
       },
     },
     add: {
       value: function () {
-        var e = Mt(this);
-        for (var t = 0, r = arguments.length; t < r; t++) {
-          var a = sr(arguments[t]);
-          if (e.indexOf(a) < 0) e.push(a);
+        var list = getList(this);
+        for (var i = 0, len = arguments.length; i < len; i++) {
+          var token = handleErrors(arguments[i]);
+          if (list.indexOf(token) < 0) list.push(token);
         }
-        this._update(e);
+        this._update(list);
       },
     },
     remove: {
       value: function () {
-        var e = Mt(this);
-        for (var t = 0, r = arguments.length; t < r; t++) {
-          var a = sr(arguments[t]),
-            index = e.indexOf(a);
-          if (index > -1) e.splice(index, 1);
+        var list = getList(this);
+        for (var i = 0, len = arguments.length; i < len; i++) {
+          var token = handleErrors(arguments[i]);
+          var index = list.indexOf(token);
+          if (index > -1) list.splice(index, 1);
         }
-        this._update(e);
+        this._update(list);
       },
     },
     toggle: {
-      value: function (t, r) {
-        if (((t = sr(t)), this.contains(t))) {
-          if (r === void 0 || r === !1) return (this.remove(t), !1);
-          return !0;
+      value: function (token, force) {
+        token = handleErrors(token);
+        if (this.contains(token)) {
+          if (force === undefined || force === false) {
+            this.remove(token);
+            return false;
+          }
+          return true;
         } else {
-          if (r === void 0 || r === !0) return (this.add(t), !0);
-          return !1;
+          if (force === undefined || force === true) {
+            this.add(token);
+            return true;
+          }
+          return false;
         }
       },
     },
     replace: {
-      value: function (t, r) {
-        if (String(r) === "") ln.SyntaxError();
-        ((t = sr(t)), (r = sr(r)));
-        var a = Mt(this),
-          index = a.indexOf(t);
-        if (index < 0) return !1;
-        var index_2 = a.indexOf(r);
-        if (index_2 < 0) a[index] = r;
-        else if (index < index_2) ((a[index] = r), a.splice(index_2, 1));
-        else a.splice(index, 1);
-        return (this._update(a), !0);
+      value: function (token, newToken) {
+        if (String(newToken) === "") utils.SyntaxError();
+        token = handleErrors(token);
+        newToken = handleErrors(newToken);
+        var list = getList(this);
+        var idx = list.indexOf(token);
+        if (idx < 0) return false;
+        var idx2 = list.indexOf(newToken);
+        if (idx2 < 0) list[idx] = newToken;
+        else if (idx < idx2) {
+          list[idx] = newToken;
+          list.splice(idx2, 1);
+        } else list.splice(idx, 1);
+        this._update(list);
+        return true;
       },
     },
     toString: {
@@ -94,50 +105,54 @@ var xn = x(function (gd, bs) {
       get: function () {
         return this._getString();
       },
-      set: function (e) {
-        (this._setString(e), this._update());
+      set: function (v) {
+        this._setString(v);
+        this._update();
       },
     },
     _update: {
-      value: function (e) {
-        if (e) (ms(this, e), this._setString(e.join(" ").trim()));
-        else ms(this, Mt(this));
+      value: function (list) {
+        if (list) {
+          fixIndex(this, list);
+          this._setString(list.join(" ").trim());
+        } else fixIndex(this, getList(this));
         this._lastStringValue = this._getString();
       },
     },
   });
-  function ms(e, t) {
-    var _length = e._length,
-      a;
-    e._length = t.length;
-    for (a = 0; a < t.length; a++) e[a] = t[a];
-    for (; a < _length; a++) e[a] = void 0;
+  function fixIndex(clist, list) {
+    var oldLength = clist._length;
+    var i;
+    clist._length = list.length;
+    for (i = 0; i < list.length; i++) clist[i] = list[i];
+    for (; i < oldLength; i++) clist[i] = undefined;
   }
-  function sr(e) {
-    if (((e = String(e)), e === "")) ln.SyntaxError();
-    if (/[ \t\r\n\f]/.test(e)) ln.InvalidCharacterError();
-    return e;
+  function handleErrors(token) {
+    token = String(token);
+    if (token === "") utils.SyntaxError();
+    if (/[ \t\r\n\f]/.test(token)) utils.InvalidCharacterError();
+    return token;
   }
-  function Ml(e) {
-    var _length = e._length,
-      r = Array(_length);
-    for (var a = 0; a < _length; a++) r[a] = e[a];
-    return r;
+  function toArray(clist) {
+    var length = clist._length;
+    var arr = Array(length);
+    for (var i = 0; i < length; i++) arr[i] = clist[i];
+    return arr;
   }
-  function Mt(e) {
-    var _getString = e._getString();
-    if (_getString === e._lastStringValue) return Ml(e);
-    var replaced = _getString.replace(/(^[ \t\r\n\f]+)|([ \t\r\n\f]+$)/g, "");
-    if (replaced === "") return [];
+  function getList(clist) {
+    var strProp = clist._getString();
+    if (strProp === clist._lastStringValue) return toArray(clist);
+    var str = strProp.replace(/(^[ \t\r\n\f]+)|([ \t\r\n\f]+$)/g, "");
+    if (str === "") return [];
     else {
-      var create = Object.create(null);
-      return replaced.split(/[ \t\r\n\f]+/g).filter(function (s) {
-        var c = "$" + s;
-        if (create[c]) return !1;
-        return ((create[c] = !0), !0);
+      var seen = Object.create(null);
+      return str.split(/[ \t\r\n\f]+/g).filter(function (n) {
+        var key = "$" + n;
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
       });
     }
   }
 });
-
-export { xn };
+export { require_DOMTokenList };

@@ -6,20 +6,21 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { m } from "./getHomeDir.js";
+import { require_getHomeDir } from "./getHomeDir.js";
 
 //@ chunk-a1ttyqdw.js:666-951 cjs-fingerprint
-var _ = x(function (R) {
-  Object.defineProperty(R, "__esModule", { value: !0 });
-  R.getSSOTokenFilepath = void 0;
-  var y = importMetaRequire("crypto"),
-    C = importMetaRequire("path"),
-    H = m(),
-    Z = (e) => {
-      let digest = y.createHash("sha1").update(e).digest("hex");
-      return C.join(H.getHomeDir(), ".aws", "sso", "cache", `${digest}.json`);
-    };
-  R.getSSOTokenFilepath = Z;
+var require_getSSOTokenFilepath = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.getSSOTokenFilepath = undefined;
+  var crypto_1 = importMetaRequire("crypto");
+  var path_1 = importMetaRequire("path");
+  var getHomeDir_1 = require_getHomeDir();
+  var getSSOTokenFilepath = (id) => {
+    let r = crypto_1.createHash("sha1").update(id).digest("hex");
+    return path_1.join(getHomeDir_1.getHomeDir(), ".aws", "sso", "cache", `${r}.json`);
+  };
+  cjsExports.getSSOTokenFilepath = getSSOTokenFilepath;
 });
-
-export { _ };
+export { require_getSSOTokenFilepath };

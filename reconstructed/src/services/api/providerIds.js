@@ -23,18 +23,23 @@ var PROVIDER_ID_PREFIXES = [
   "req_vrtx_",
 ];
 //@ chunk-e6aww6q8.js:227171-227223 placement
-function Uue(e) {
+/**
+ * 导出函数 `containsProviderId`：参数 e，返回 PROVIDER_ID_PREFIXES.some((n) => e.includes(n))。
+ */
+function containsProviderId(e) {
   return PROVIDER_ID_PREFIXES.some((n) => e.includes(n));
 }
 //@ chunk-e6aww6q8.js:227223-227298 placement
-function jbt(e) {
+/**
+ * 导出函数 `anyMessageHasProviderId`：参数 e，返回 e.some((n) => { try { return Uue(jsonStringify(n)); } catch { return !0; } }); } export { jbt, Uue }。
+ */
+function anyMessageHasProviderId(e) {
   return e.some((n) => {
     try {
-      return Uue(jsonStringify(n));
+      return containsProviderId(jsonStringify(n));
     } catch {
-      return !0;
+      return true;
     }
   });
 }
-
-export { jbt, Uue };
+export { anyMessageHasProviderId, containsProviderId };

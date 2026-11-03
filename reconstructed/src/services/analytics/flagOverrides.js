@@ -14,53 +14,64 @@ import {
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
   hasGrowthBookUsedNonDefaultHost,
 } from "./growthbook.js";
-import { e_i } from "../../utils/envValidation.js";
-import { Oys } from "../../utils/gitSafeExec.js";
+import { envEntryProblem } from "../../utils/envValidation.js";
+import { resolveEnvRead } from "../../utils/gitSafeExec.js";
 
 //@ chunk-dwdfj3nt.js:339-397 placement
-var TENGU_AMBER_QUILLWORT = "tengu_amber_quillwort",
-  TENGU_VELVET_HARROW = "tengu_velvet_harrow";
+var TENGU_AMBER_QUILLWORT = "tengu_amber_quillwort";
+var TENGU_VELVET_HARROW = "tengu_velvet_harrow";
+//@ chunk-dwdfj3nt.js:397-565 placement
 /**
  * 开关开启，或内部覆盖变量允许时读 GrowthBook 值。
  */
-//@ chunk-dwdfj3nt.js:397-565 placement
 function isFlagOnWithInternalOverride(e) {
-  if (readFlagWithOverride(e, { safe: !1 })) return !0;
+  if (
+    readFlagWithOverride(e, {
+      safe: false,
+    })
+  )
+    return true;
   let CLAUDE_INTERNAL_FC_OVERRIDES = env.CLAUDE_INTERNAL_FC_OVERRIDES;
   return (
-    CLAUDE_INTERNAL_FC_OVERRIDES !== void 0 &&
+    CLAUDE_INTERNAL_FC_OVERRIDES !== undefined &&
     hasGrowthBookEnvOverride(e) &&
-    !e_i("CLAUDE_INTERNAL_FC_OVERRIDES", CLAUDE_INTERNAL_FC_OVERRIDES) &&
-    getFeatureValueWithSource_CACHED_MAY_BE_STALE(e, !1).value === !0
+    !envEntryProblem("CLAUDE_INTERNAL_FC_OVERRIDES", CLAUDE_INTERNAL_FC_OVERRIDES) &&
+    getFeatureValueWithSource_CACHED_MAY_BE_STALE(e, false).value === true
   );
 }
+//@ chunk-z7nt3zpj.js:267-396 placement
 /**
  * 读取特性开关（支持安全默认值与覆盖来源）。
  */
-//@ chunk-z7nt3zpj.js:267-396 placement
-function readFlagWithOverride(e, { safe: safe }) {
+function readFlagWithOverride(e, { safe }) {
   try {
-    let { value: o, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(e, safe),
-      n = !hasGrowthBookUsedNonDefaultHost();
-    return Oys({ value: o, source: source, defaultHost: n }, safe);
+    let { value: o, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(e, safe);
+    let defaultHost = !hasGrowthBookUsedNonDefaultHost();
+    return resolveEnvRead(
+      {
+        value: o,
+        source,
+        defaultHost,
+      },
+      safe,
+    );
   } catch {
     return safe;
   }
 }
+//@ chunk-z7nt3zpj.js:396-545 placement
 /**
  * 读取枚举型开关：值在候选内且来自正常下发时才采用，否则用安全默认值。
  */
-//@ chunk-z7nt3zpj.js:396-545 placement
-function readEnumFlag(e, { safe: safe, others: others }) {
+function readEnumFlag(e, { safe, others }) {
   try {
-    let { value: r, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(e, safe),
-      found = others.find((c) => c === r);
-    return found !== void 0 && source === "payload" && !hasGrowthBookUsedNonDefaultHost() ? found : safe;
+    let { value: r, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(e, safe);
+    let found = others.find((other) => other === r);
+    return found !== undefined && source === "payload" && !hasGrowthBookUsedNonDefaultHost() ? found : safe;
   } catch {
     return safe;
   }
 }
-
 export {
   readFlagWithOverride,
   isFlagOnWithInternalOverride,

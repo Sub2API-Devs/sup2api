@@ -19,14 +19,15 @@ var SETUP_ISSUE_HINTS = {
   settings: "run `claude doctor` for details",
   install: "run `claude doctor` for details",
 };
+//@ chunk-e6aww6q8.js:3574513-3574628 placement
 /**
  * 记录某类设置问题的数量及查看详情的提示。
  */
-//@ chunk-e6aww6q8.js:3574513-3574628 placement
 function logSetupIssues(e, n) {
   if (n <= 0) return;
   let r = SETUP_ISSUE_HINTS[e];
-  logForDebugging(`${n} setup ${plural(n, "issue")}: ${e}${r ? ` (${r})` : ""}`, { level: "info" });
+  logForDebugging(`${n} setup ${plural(n, "issue")}: ${e}${r ? ` (${r})` : ""}`, {
+    level: "info",
+  });
 }
-
 export { logSetupIssues };

@@ -21,7 +21,7 @@ import { getSettings_DEPRECATED } from "../settings/settings.js";
 import { resolveStartupModel } from "../permissions/permissionSetup.js";
 import { reprobeEntitlementDeny } from "./validateModel.js";
 import { logError } from "../log.js";
-import { GEi } from "./sessionModelRestriction.js";
+import { setSessionModelReprobe } from "./sessionModelRestriction.js";
 import { getOrgModelDefault } from "./modelAllowlist.js";
 import {
   isRecognizedOrgDefaultName,
@@ -45,64 +45,70 @@ import {
 } from "../../services/mcp/config.js";
 import { agentMcpSpecsToScopedConfigs } from "../../tools/AgentTool/loadAgentsDir.js";
 
+//@ chunk-3wek6r2k.js:64581-66146 placement
 /**
  * 汇总模型来源（命令行、环境变量、设置、代理定义），生成覆盖提示。
  */
-//@ chunk-3wek6r2k.js:64581-66146 placement
 async function collectModelOverrides(e) {
   let o = {
-      cli: { model: e.userSpecifiedModel, isNonInteractiveSession: getIsNonInteractiveSession() },
-      env: process.env,
-      settings: getSettings_DEPRECATED() || {},
-      agentFrontmatter:
-        e.agentModel !== void 0 ? { model: e.agentModel, modelSource: e.agentModelSource } : void 0,
+    cli: {
+      model: e.userSpecifiedModel,
+      isNonInteractiveSession: getIsNonInteractiveSession(),
     },
-    n = resolveStartupModel(o, e.storageV5),
-    r;
-  if (n.restrictedModel !== void 0)
+    env: process.env,
+    settings: getSettings_DEPRECATED() || {},
+    agentFrontmatter:
+      e.agentModel !== undefined
+        ? {
+            model: e.agentModel,
+            modelSource: e.agentModelSource,
+          }
+        : undefined,
+  };
+  let startupModel = resolveStartupModel(o, e.storageV5);
+  let r;
+  if (startupModel.restrictedModel !== undefined)
     try {
-      if (
-        ((r = await reprobeEntitlementDeny(n.restrictedModel, e.storageV5, e.credentials)),
-        r === "overturned")
-      )
-        n = resolveStartupModel(o, e.storageV5);
+      r = await reprobeEntitlementDeny(startupModel.restrictedModel, e.storageV5, e.credentials);
+      if (r === "overturned") startupModel = resolveStartupModel(o, e.storageV5);
     } catch (error) {
       logError(error);
     }
   let {
-    effectiveModel: effectiveModel,
-    initialMainLoopModel: initialMainLoopModel,
-    resolvedInitialModel: resolvedInitialModel,
-    rawModelRequest: rawModelRequest,
-    restrictedModel: restrictedModel,
-    unservedModelSpelling: unservedModelSpelling,
-    settingLayer: settingLayer,
-  } = n;
-  (setMainLoopModelOverride(effectiveModel),
-    setInitialMainLoopModel(initialMainLoopModel),
-    setInitialModelSettingLayer(settingLayer),
-    GEi((A) => reprobeEntitlementDeny(A, e.storageV5, e.credentials)));
-  let w = getOrgModelDefault(),
-    P = w !== null && !isRecognizedOrgDefaultName(w.name);
+    effectiveModel,
+    initialMainLoopModel,
+    resolvedInitialModel,
+    rawModelRequest,
+    restrictedModel,
+    unservedModelSpelling,
+    settingLayer,
+  } = startupModel;
+  setMainLoopModelOverride(effectiveModel);
+  setInitialMainLoopModel(initialMainLoopModel);
+  setInitialModelSettingLayer(settingLayer);
+  setSessionModelReprobe((A) => reprobeEntitlementDeny(A, e.storageV5, e.credentials));
+  let orgModelDefault = getOrgModelDefault();
+  let P = orgModelDefault !== null && !isRecognizedOrgDefaultName(orgModelDefault.name);
   if (P) logFeatureSad("model_org_default", "unrecognized");
   else setResolvedOrgDefault(getResolvedOrgDefaultModel());
-  if (
-    (setInitialEnvDefaultModel(env.ANTHROPIC_DEFAULT_MODEL ?? null), env.ANTHROPIC_DEFAULT_MODEL !== void 0)
-  )
+  setInitialEnvDefaultModel(env.ANTHROPIC_DEFAULT_MODEL ?? null);
+  if (env.ANTHROPIC_DEFAULT_MODEL !== undefined)
     if (getEnvDefaultModel() === null) logFeatureSad("model_env_default", "inert");
     else if (P) logFeatureSad("model_env_default", "org_default_unrecognized");
     else if (resolveDefaultMainLoopModelSetting().attribution === "org")
       logFeatureSad("model_env_default", "outranked_by_org_default");
     else logFeatureOk("model_env_default");
   if (!e.routineModelTransientlySkipped)
-    syncRespawnFlag("--model", ["-m"], initialMainLoopModel, void 0, e.storageV5);
-  if (restrictedModel !== void 0)
+    syncRespawnFlag("--model", ["-m"], initialMainLoopModel, undefined, e.storageV5);
+  if (restrictedModel !== undefined)
     logFeatureSad(
       "startup_resolve_model",
       r === "probe_failed" ? "entitlement_probe_failed" : "requested_model_restricted",
-      { model: telemetrySafeModelName(restrictedModel) ?? lit("nonconforming") },
+      {
+        model: telemetrySafeModelName(restrictedModel) ?? lit("nonconforming"),
+      },
     );
-  else if (unservedModelSpelling !== void 0)
+  else if (unservedModelSpelling !== undefined)
     logFeatureSad(
       "startup_resolve_model",
       isUnservedFamilySpelling(unservedModelSpelling)
@@ -111,36 +117,55 @@ async function collectModelOverrides(e) {
     );
   else logFeatureOk("startup_resolve_model");
   return {
-    effectiveModel: effectiveModel,
-    initialMainLoopModel: initialMainLoopModel,
-    resolvedInitialModel: resolvedInitialModel,
-    rawModelRequest: rawModelRequest,
-    restrictedModel: restrictedModel,
-    unservedModelSpelling: unservedModelSpelling,
-    settingLayer: settingLayer,
-    modelWithoutStartupOverride: n.modelWithoutStartupOverride,
+    effectiveModel,
+    initialMainLoopModel,
+    resolvedInitialModel,
+    rawModelRequest,
+    restrictedModel,
+    unservedModelSpelling,
+    settingLayer,
+    modelWithoutStartupOverride: startupModel.modelWithoutStartupOverride,
   };
 }
 //@ chunk-3wek6r2k.js:66146-66539 placement
-function applyAgentModelOverride(e, o, n) {
-  if (!o) return e;
-  if (isSafeMode()) return e;
+function applyAgentModelOverride(dynamicMcpConfig, mainThreadAgentDefinition, n) {
+  if (!mainThreadAgentDefinition) return dynamicMcpConfig;
+  if (isSafeMode()) return dynamicMcpConfig;
   if (isDiskless()) {
-    if (o.mcpServers?.length) reportOnce("main_agent_mcp_servers");
-    return e;
+    if (mainThreadAgentDefinition.mcpServers?.length) reportOnce("main_agent_mcp_servers");
+    return dynamicMcpConfig;
   }
-  if ((n?.strictMcpConfig && o.source !== "flagSettings") || doesEnterpriseMcpConfigExist()) return e;
-  let u = agentMcpSpecsToScopedConfigs(o);
-  if (Object.keys(u).length === 0) return e;
-  let { allowed: allowed, blocked: blocked } = filterMcpServersByPolicy(u);
+  if (
+    (n?.strictMcpConfig && mainThreadAgentDefinition.source !== "flagSettings") ||
+    doesEnterpriseMcpConfigExist()
+  )
+    return dynamicMcpConfig;
+  let u = agentMcpSpecsToScopedConfigs(mainThreadAgentDefinition);
+  if (Object.keys(u).length === 0) return dynamicMcpConfig;
+  let { allowed, blocked } = filterMcpServersByPolicy(u);
   if (blocked.length > 0) n?.onBlocked?.(blocked);
-  let { servers: servers, refused: refused } = refuseReservedNamesForCarrier(allowed, e);
-  for (let M of refused) addAgentModelOverrideNotice({ ...M, scope: "agent" });
-  return { ...servers, ...e };
+  let { servers, refused } = refuseReservedNamesForCarrier(allowed, dynamicMcpConfig);
+  for (let M of refused)
+    addAgentModelOverrideNotice({
+      ...M,
+      scope: "agent",
+    });
+  return {
+    ...servers,
+    ...dynamicMcpConfig,
+  };
 }
 //@ chunk-3wek6r2k.js:66576-66663 placement
-var MODEL_PIN_PATTERNS = /^v1:([1-9][0-9]{0,8}):([0-9a-f]{64})$/,
-  Eu = /^[\s\u001c-\u001f\u0085]+$/,
-  va = 1024;
-
-export { applyAgentModelOverride, collectModelOverrides, MODEL_PIN_PATTERNS, Eu, va };
+/**
+ * 模型 pin 格式正则、空白提示正则与提示文本长度上限。
+ */
+var MODEL_PIN_PATTERNS = /^v1:([1-9][0-9]{0,8}):([0-9a-f]{64})$/;
+var BLANK_NOTICE_RE = /^[\s\u001c-\u001f\u0085]+$/;
+var MAX_OVERRIDE_NOTICE_CHARS = 1024;
+export {
+  applyAgentModelOverride,
+  collectModelOverrides,
+  MODEL_PIN_PATTERNS,
+  BLANK_NOTICE_RE,
+  MAX_OVERRIDE_NOTICE_CHARS,
+};

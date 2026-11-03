@@ -13,29 +13,45 @@ import { zodStrictObject, M } from "../../../vendor/zod/v4/classic/schemas.js";
 import { saveGlobalConfigDurably } from "../config.js";
 
 //@ chunk-q3c4ejfd.js:3352-3392 placement
-var n = DoctorLazy(() => zodStrictObject({ enabledByDefault: M() }));
+/**
+ * Chrome 设置的输入 schema（enabledByDefault）。
+ */
+var chromeSettingsInputSchema = DoctorLazy(() =>
+  zodStrictObject({
+    enabledByDefault: M(),
+  }),
+);
 //@ chunk-q3c4ejfd.js:3392-3877 placement
 async function applyChromeSettingsEdit(o, a) {
-  let safeParse = n().safeParse(o);
-  if (!safeParse.success) {
-    let e = safeParse.error.issues[0];
+  let t = chromeSettingsInputSchema().safeParse(o);
+  if (!t.success) {
+    let e = t.error.issues[0];
     return {
-      ok: !1,
+      ok: false,
       error: e
         ? `Not a Claude in Chrome settings edit (${e.path.map(String).join(".") || "edit"}: ${e.message}).`
         : "Not a Claude in Chrome settings edit.",
     };
   }
-  let r = safeParse.data;
+  let r = t.data;
   if (
     !(await saveGlobalConfigDurably(
       (e) =>
         e.claudeInChromeDefaultEnabled === r.enabledByDefault
           ? e
-          : { ...e, claudeInChromeDefaultEnabled: r.enabledByDefault },
+          : {
+              ...e,
+              claudeInChromeDefaultEnabled: r.enabledByDefault,
+            },
       a,
     ))
   )
-    return { ok: !1, error: "The Claude in Chrome setting may not have been saved." };
-  return { ok: !0, written: r };
+    return {
+      ok: false,
+      error: "The Claude in Chrome setting may not have been saved.",
+    };
+  return {
+    ok: true,
+    written: r,
+  };
 }

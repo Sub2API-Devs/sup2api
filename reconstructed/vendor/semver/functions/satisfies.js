@@ -6,20 +6,19 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { ee } from "../classes/range.js";
+import { require_range } from "../classes/range.js";
 
 //@ chunk-bwbq4xvm.js:21678-21798 cjs-require-graph
-var Rt = x(function (y2, bl) {
-  var Ik = ee(),
-    Nk = (e, s, n) => {
-      try {
-        s = new Ik(s, n);
-      } catch (error) {
-        return !1;
-      }
-      return s.test(e);
-    };
-  bl.exports = Nk;
+var require_satisfies = x(function (cjsExports, cjsModule) {
+  var Range = require_range();
+  var satisfies = (version, range, options) => {
+    try {
+      range = new Range(range, options);
+    } catch (er) {
+      return false;
+    }
+    return range.test(version);
+  };
+  cjsModule.exports = satisfies;
 });
-
-export { Rt };
+export { require_satisfies };

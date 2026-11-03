@@ -8,373 +8,417 @@
 import * as hat from "fs";
 import * as zp from "path";
 import * as BRt from "crypto";
-import { h4t } from "./utils/bytes.mjs";
+import { encodeUTF8 } from "./utils/bytes.mjs";
 
 //@ chunk-2cw52qnf.js:6954-7426 esm-fingerprint
-var promises_3 = hat.promises,
-  constants = hat.constants,
-  xe = 448,
-  bt = 384,
-  Ot = 448,
-  ge = constants.O_NOFOLLOW ?? 0,
-  Mt = constants.O_NONBLOCK ?? 0,
-  m = (() => {
-    class FileStoreError extends Error {
-      constructor(e, t) {
-        super(`path ${JSON.stringify(t)} ${e}`);
-        ((this.name = "FileStoreError"), (this.reason = e), (this.relPath = t));
-      }
+var fsp = hat.promises;
+var C_2 = hat.constants;
+var OWNER_ONLY_DIR_MODE = 448;
+var OWNER_ONLY_FILE_MODE = 384;
+var OWNER_ONLY_EXEC_MODE = 448;
+var O_NOFOLLOW = C_2.O_NOFOLLOW ?? 0;
+var O_NONBLOCK = C_2.O_NONBLOCK ?? 0;
+var FileStoreError = (() => {
+  class FileStoreError extends Error {
+    constructor(reason, relPath) {
+      super(`path ${JSON.stringify(relPath)} ${reason}`);
+      this.name = "FileStoreError";
+      this.reason = reason;
+      this.relPath = relPath;
     }
-    return (
-      (FileStoreError.ESCAPES_ROOT = "escapes the store root"),
-      (FileStoreError.IS_A_SYMLINK = "is a symlink"),
-      (FileStoreError.NOT_A_FILE = "is not a regular file"),
-      (FileStoreError.NOT_A_DIRECTORY = "is not a directory"),
-      (FileStoreError.NOT_UTF8 = "is not valid utf-8"),
-      (FileStoreError.MOVE_DESTINATION_EXISTS = "already exists"),
-      FileStoreError
-    );
-  })();
+  }
+  FileStoreError.ESCAPES_ROOT = "escapes the store root";
+  FileStoreError.IS_A_SYMLINK = "is a symlink";
+  FileStoreError.NOT_A_FILE = "is not a regular file";
+  FileStoreError.NOT_A_DIRECTORY = "is not a directory";
+  FileStoreError.NOT_UTF8 = "is not valid utf-8";
+  FileStoreError.MOVE_DESTINATION_EXISTS = "already exists";
+  return FileStoreError;
+})();
 //@ chunk-2cw52qnf.js:7426-7496 esm-fingerprint
-function Se(r) {
-  return r.startsWith("/") && !r.split("/").includes("..");
+function isPathLegal(p) {
+  return p.startsWith("/") && !p.split("/").includes("..");
 }
 //@ chunk-2cw52qnf.js:7496-10714 esm-fingerprint
-var _e = (() => {
-  class r {
-    constructor(e, t, n = !1) {
-      ((this.hashes = new Map()),
-        (this.rootPath = e),
-        (this.removedOnDispose = t),
-        (this.decoder = n ? new TextDecoder("utf-8", { fatal: !0 }) : void 0));
+var FileStore = (() => {
+  class FileStore {
+    constructor(root, removedOnDispose, utf8Only = false) {
+      this.hashes = new Map();
+      this.rootPath = root;
+      this.removedOnDispose = removedOnDispose;
+      this.decoder = utf8Only
+        ? new TextDecoder("utf-8", {
+            fatal: true,
+          })
+        : undefined;
     }
-    static async open(e, t) {
-      if (!vt()) throw Error("FileStore requires O_NOFOLLOW support on this platform");
-      let n = !1;
+    static async open(root, opts) {
+      if (!platformSupported()) throw Error("FileStore requires O_NOFOLLOW support on this platform");
+      let removedOnDispose = false;
       try {
-        await promises_3.lstat(e);
-      } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-        n = !0;
+        await fsp.lstat(root);
+      } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+        removedOnDispose = true;
       }
-      return new r(zp.resolve(e), n, t?.utf8 ?? !1);
+      return new FileStore(zp.resolve(root), removedOnDispose, opts?.utf8 ?? false);
     }
     async createRoot() {
-      await kt(this.rootPath);
+      await makeDirAndAncestors(this.rootPath);
     }
     root() {
-      return { path: this.rootPath, removedOnDispose: this.removedOnDispose };
+      return {
+        path: this.rootPath,
+        removedOnDispose: this.removedOnDispose,
+      };
     }
     async dispose() {
       if (!this.removedOnDispose) return;
-      await promises_3.rm(this.rootPath, { recursive: !0, force: !0 });
+      await fsp.rm(this.rootPath, {
+        recursive: true,
+        force: true,
+      });
     }
-    async put(e, t, n) {
-      let replaced = e.replace(/\\/g, "/");
-      if (replaced.endsWith("/") || replaced.endsWith("/.") || replaced === "" || replaced === ".")
-        throw new m(m.NOT_A_FILE, e);
-      let underRoot = this.resolveUnderRoot(e),
-        s = typeof t === "string" ? h4t(t) : t;
-      (this.requireUtf8(e, s),
-        await Le(this.rootPath, zp.dirname(underRoot)),
-        await It(underRoot, s, n?.executable ?? !1));
+    async put(relPath, data, opts) {
+      let tail = relPath.replace(/\\/g, "/");
+      if (tail.endsWith("/") || tail.endsWith("/.") || tail === "" || tail === ".")
+        throw new FileStoreError(FileStoreError.NOT_A_FILE, relPath);
+      let dest = this.resolveUnderRoot(relPath);
+      let payload = typeof data === "string" ? encodeUTF8(data) : data;
+      this.requireUtf8(relPath, payload);
+      await makeDirsBelowRoot(this.rootPath, zp.dirname(dest));
+      await replaceViaTemp(dest, payload, opts?.executable ?? false);
     }
-    async get(e) {
-      let underRoot = this.resolveUnderRoot(e),
-        n;
+    async get(relPath) {
+      let dest = this.resolveUnderRoot(relPath);
+      let handle;
       try {
-        n = await De(e, underRoot);
-      } catch (error) {
-        if (error.code === "ENOENT") return null;
-        throw error;
+        handle = await openRegularFile(relPath, dest);
+      } catch (e) {
+        if (e.code === "ENOENT") return null;
+        throw e;
       }
-      let i;
+      let data;
       try {
-        let content = await n.readFile();
-        i = new Uint8Array(content.buffer, content.byteOffset, content.byteLength);
+        let buf = await handle.readFile();
+        data = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
       } finally {
-        await n.close();
+        await handle.close();
       }
-      return (this.requireUtf8(e, i), i);
+      this.requireUtf8(relPath, data);
+      return data;
     }
-    async ls(e = "/") {
-      let underRoot = this.resolveUnderRoot(e);
-      return new Set((await $e(this.rootPath, e, underRoot)).map(([n]) => n));
+    async ls(under = "/") {
+      let base = this.resolveUnderRoot(under);
+      return new Set((await filenamesInDir(this.rootPath, under, base)).map(([rel]) => rel));
     }
-    async findSymlinks(e = "/") {
-      let underRoot = this.resolveUnderRoot(e);
-      return Rt(this.rootPath, e, underRoot);
+    async findSymlinks(under = "/") {
+      let base = this.resolveUnderRoot(under);
+      return symlinksInDir(this.rootPath, under, base);
     }
-    async hashtree(e = "/") {
-      let underRoot = this.resolveUnderRoot(e),
-        nowNs = re.nowNs(),
-        create = Object.create(null);
-      for (let [o, s] of await $e(this.rootPath, e, underRoot)) {
-        let hashViaCache = await this.hashViaCache(o, s, nowNs);
-        if (hashViaCache !== null) create[o] = hashViaCache;
+    async hashtree(under = "/") {
+      let base = this.resolveUnderRoot(under);
+      let walkStartNs = _internals.nowNs();
+      let out = Object.create(null);
+      for (let [rel, full] of await filenamesInDir(this.rootPath, under, base)) {
+        let sha = await this.hashViaCache(rel, full, walkStartNs);
+        if (sha !== null) out[rel] = sha;
       }
-      return create;
+      return out;
     }
-    async hashFile(e) {
-      let underRoot = this.resolveUnderRoot(e),
-        n;
+    async hashFile(relPath) {
+      let dest = this.resolveUnderRoot(relPath);
+      let st;
       try {
-        n = await promises_3.lstat(underRoot, { bigint: !0 });
-      } catch (error) {
-        if (error.code === "ENOENT") return null;
-        throw error;
+        st = await fsp.lstat(dest, {
+          bigint: true,
+        });
+      } catch (e) {
+        if (e.code === "ENOENT") return null;
+        throw e;
       }
-      if (n.isSymbolicLink()) throw new m(m.IS_A_SYMLINK, e);
-      if (!n.isFile()) throw new m(m.NOT_A_FILE, e);
-      let joined = zp.relative(this.rootPath, underRoot).split(zp.sep).join("/");
-      return this.hashViaCache(joined, underRoot, re.nowNs());
+      if (st.isSymbolicLink()) throw new FileStoreError(FileStoreError.IS_A_SYMLINK, relPath);
+      if (!st.isFile()) throw new FileStoreError(FileStoreError.NOT_A_FILE, relPath);
+      let rel = zp.relative(this.rootPath, dest).split(zp.sep).join("/");
+      return this.hashViaCache(rel, dest, _internals.nowNs());
     }
-    async move(e, t) {
-      let underRoot = this.resolveUnderRoot(e),
-        underRoot_2 = this.resolveUnderRoot(t);
-      if (underRoot === this.rootPath || underRoot_2 === this.rootPath) return;
+    async move(src, dst) {
+      let s = this.resolveUnderRoot(src);
+      let d = this.resolveUnderRoot(dst);
+      if (s === this.rootPath || d === this.rootPath) return;
       if (
-        await promises_3.stat(underRoot_2).then(
-          () => !0,
-          () => !1,
+        await fsp.stat(d).then(
+          () => true,
+          () => false,
         )
       )
-        throw new m(m.MOVE_DESTINATION_EXISTS, t);
-      (await Le(this.rootPath, zp.dirname(underRoot_2)), await promises_3.rename(underRoot, underRoot_2));
+        throw new FileStoreError(FileStoreError.MOVE_DESTINATION_EXISTS, dst);
+      await makeDirsBelowRoot(this.rootPath, zp.dirname(d));
+      await fsp.rename(s, d);
     }
-    async remove(e) {
-      let underRoot = this.resolveUnderRoot(e);
-      if (underRoot === this.rootPath) return;
-      let n;
+    async remove(relPath) {
+      let dest = this.resolveUnderRoot(relPath);
+      if (dest === this.rootPath) return;
+      let st;
       try {
-        n = await promises_3.lstat(underRoot, { bigint: !0 });
-      } catch (error) {
-        if (error.code === "ENOENT") return;
-        throw error;
+        st = await fsp.lstat(dest, {
+          bigint: true,
+        });
+      } catch (e) {
+        if (e.code === "ENOENT") return;
+        throw e;
       }
-      if (n.isDirectory()) await promises_3.rm(underRoot, { recursive: !0, force: !0 });
+      if (st.isDirectory())
+        await fsp.rm(dest, {
+          recursive: true,
+          force: true,
+        });
       else
         try {
-          await promises_3.unlink(underRoot);
-        } catch (error) {
-          if (error.code !== "ENOENT") throw error;
+          await fsp.unlink(dest);
+        } catch (e) {
+          if (e.code !== "ENOENT") throw e;
         }
     }
-    resolveUnderRoot(e) {
-      let replaced = e.replace(/\\/g, "/").replace(/^\/+/, ""),
-        filtered = replaced.split("/").filter((i) => i !== "" && i !== ".");
-      if (zp.posix.isAbsolute(replaced) || filtered.includes("..")) throw new m(m.ESCAPES_ROOT, e);
-      return filtered.length === 0 ? this.rootPath : zp.join(this.rootPath, ...filtered);
+    resolveUnderRoot(relPath) {
+      let norm = relPath.replace(/\\/g, "/").replace(/^\/+/, "");
+      let parts = norm.split("/").filter((p) => p !== "" && p !== ".");
+      if (zp.posix.isAbsolute(norm) || parts.includes(".."))
+        throw new FileStoreError(FileStoreError.ESCAPES_ROOT, relPath);
+      return parts.length === 0 ? this.rootPath : zp.join(this.rootPath, ...parts);
     }
-    requireUtf8(e, t) {
+    requireUtf8(relPath, data) {
       if (!this.decoder) return;
       try {
-        this.decoder.decode(t);
+        this.decoder.decode(data);
       } catch {
-        throw new m(m.NOT_UTF8, e);
+        throw new FileStoreError(FileStoreError.NOT_UTF8, relPath);
       }
     }
-    async hashViaCache(e, t, n) {
-      let i;
+    async hashViaCache(rel, full, walkStartNs) {
+      let st;
       try {
-        i = await promises_3.lstat(t, { bigint: !0 });
-      } catch (error) {
-        if (error.code === "ENOENT") return null;
-        throw error;
+        st = await fsp.lstat(full, {
+          bigint: true,
+        });
+      } catch (e) {
+        if (e.code === "ENOENT") return null;
+        throw e;
       }
-      if (!i.isFile()) return null;
-      let o = this.hashes.get(e),
-        s;
-      if (o !== void 0 && Lt(o, i)) s = o.sha;
+      if (!st.isFile()) return null;
+      let cached = this.hashes.get(rel);
+      let sha;
+      if (cached !== undefined && unchangedSinceHashed(cached, st)) sha = cached.sha;
       else
         try {
-          s = await re.hashFile(t);
-        } catch (error) {
-          let code = error.code;
-          if (code === "ENOENT" || error instanceof m) return null;
+          sha = await _internals.hashFile(full);
+        } catch (e) {
+          let code = e.code;
+          if (code === "ENOENT" || e instanceof FileStoreError) return null;
           if (code === "ELOOP" || code === "EMLINK") return null;
-          throw error;
+          throw e;
         }
-      if ($t(i, n)) this.hashes.set(e, { mtimeNs: i.mtimeNs, ctimeNs: i.ctimeNs, size: i.size, sha: s });
-      return s;
+      if (oldEnoughToCache(st, walkStartNs))
+        this.hashes.set(rel, {
+          mtimeNs: st.mtimeNs,
+          ctimeNs: st.ctimeNs,
+          size: st.size,
+          sha,
+        });
+      return sha;
     }
   }
-  return ((r.isPathLegal = Se), r);
+  FileStore.isPathLegal = isPathLegal;
+  return FileStore;
 })();
 //@ chunk-2cw52qnf.js:10714-10742 esm-layout
-function vt() {
-  return ge !== 0;
+function platformSupported() {
+  return O_NOFOLLOW !== 0;
 }
 //@ chunk-2cw52qnf.js:10742-11028 esm-fingerprint
-async function kt(r) {
-  let e = [],
-    t = r;
+async function makeDirAndAncestors(dir) {
+  let missing = [];
+  let current = dir;
   for (;;) {
     try {
-      await promises_3.stat(t);
+      await fsp.stat(current);
       break;
-    } catch (error) {
-      let code = error.code;
-      if (code !== "ENOENT" && code !== "ENOTDIR" && code !== "ELOOP") throw error;
+    } catch (e) {
+      let code = e.code;
+      if (code !== "ENOENT" && code !== "ENOTDIR" && code !== "ELOOP") throw e;
     }
-    e.push(t);
-    let dir = zp.dirname(t);
-    if (dir === t) break;
-    t = dir;
+    missing.push(current);
+    let parent = zp.dirname(current);
+    if (parent === current) break;
+    current = parent;
   }
-  for (let n of e.reverse())
+  for (let directory of missing.reverse())
     try {
-      await promises_3.mkdir(n, { mode: xe });
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
+      await fsp.mkdir(directory, {
+        mode: OWNER_ONLY_DIR_MODE,
+      });
+    } catch (e) {
+      if (e.code !== "EEXIST") throw e;
     }
 }
 //@ chunk-2cw52qnf.js:11028-11215 esm-fingerprint
-async function Le(r, e) {
-  let relativePath = zp.relative(r, e);
-  if (relativePath === "") return;
-  let n = r;
-  for (let i of relativePath.split(zp.sep)) {
-    n = zp.join(n, i);
+async function makeDirsBelowRoot(root, dir) {
+  let below = zp.relative(root, dir);
+  if (below === "") return;
+  let current = root;
+  for (let part of below.split(zp.sep)) {
+    current = zp.join(current, part);
     try {
-      await promises_3.mkdir(n, { mode: xe });
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
+      await fsp.mkdir(current, {
+        mode: OWNER_ONLY_DIR_MODE,
+      });
+    } catch (e) {
+      if (e.code !== "EEXIST") throw e;
     }
   }
 }
 //@ chunk-2cw52qnf.js:11215-11537 esm-fingerprint
-async function It(r, e, t) {
-  let n = t ? Ot : bt,
-    joined = zp.join(zp.dirname(r), `.fs-${BRt.randomBytes(8).toString("hex")}.tmp`),
-    o;
+async function replaceViaTemp(dest, data, isExecutable) {
+  let mode = isExecutable ? OWNER_ONLY_EXEC_MODE : OWNER_ONLY_FILE_MODE;
+  let tmp = zp.join(zp.dirname(dest), `.fs-${BRt.randomBytes(8).toString("hex")}.tmp`);
+  let handle;
   try {
-    ((o = await promises_3.open(joined, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | ge, n)),
-      await o.writeFile(e),
-      await o.close(),
-      (o = void 0),
-      await promises_3.rename(joined, r));
-  } catch (error) {
-    if (o) await o.close().catch(() => {});
-    throw (await promises_3.unlink(joined).catch(() => {}), error);
+    handle = await fsp.open(tmp, C_2.O_WRONLY | C_2.O_CREAT | C_2.O_EXCL | O_NOFOLLOW, mode);
+    await handle.writeFile(data);
+    await handle.close();
+    handle = undefined;
+    await fsp.rename(tmp, dest);
+  } catch (err) {
+    if (handle) await handle.close().catch(() => {});
+    await fsp.unlink(tmp).catch(() => {});
+    throw err;
   }
 }
 //@ chunk-2cw52qnf.js:11537-11812 esm-fingerprint
-async function De(r, e) {
-  let t;
+async function openRegularFile(relPath, dest) {
+  let handle;
   try {
-    t = await promises_3.open(e, constants.O_RDONLY | ge | Mt);
-  } catch (error) {
-    let code = error.code;
-    if (code === "ELOOP" || code === "EMLINK") throw new m(m.IS_A_SYMLINK, r);
-    throw error;
+    handle = await fsp.open(dest, C_2.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  } catch (e) {
+    let code = e.code;
+    if (code === "ELOOP" || code === "EMLINK") throw new FileStoreError(FileStoreError.IS_A_SYMLINK, relPath);
+    throw e;
   }
   try {
-    if (!(await t.stat()).isFile()) throw new m(m.NOT_A_FILE, r);
-  } catch (error) {
-    throw (await t.close().catch(() => {}), error);
+    if (!(await handle.stat()).isFile()) throw new FileStoreError(FileStoreError.NOT_A_FILE, relPath);
+  } catch (e) {
+    await handle.close().catch(() => {});
+    throw e;
   }
-  return t;
+  return handle;
 }
 //@ chunk-2cw52qnf.js:11812-12064 esm-fingerprint
-async function Nt(r) {
-  let hash = BRt.createHash("sha256"),
-    t = await De(zp.basename(r), r),
-    uint8Array = new Uint8Array(1048576);
+async function hashFile(full) {
+  let digest = BRt.createHash("sha256");
+  let handle = await openRegularFile(zp.basename(full), full);
+  let buf = new Uint8Array(1048576);
   try {
     for (;;) {
-      let { bytesRead: bytesRead } = await t.read(uint8Array, 0, uint8Array.length);
+      let { bytesRead } = await handle.read(buf, 0, buf.length);
       if (bytesRead === 0) break;
-      hash.update(uint8Array.subarray(0, bytesRead));
+      digest.update(buf.subarray(0, bytesRead));
     }
   } finally {
-    await t.close();
+    await handle.close();
   }
-  return hash.digest("hex");
+  return digest.digest("hex");
 }
 //@ chunk-2cw52qnf.js:12064-12231 esm-fingerprint
-async function $e(r, e, t) {
-  if (!(await Tt(e, t))) return [];
-  let n = [];
-  return (
-    await Ce(t, (i, o) => {
-      if (o.isFile()) n.push([zp.relative(r, i).split(zp.sep).join("/"), i]);
-    }),
-    n.sort(),
-    n
-  );
+async function filenamesInDir(root, under, base) {
+  if (!(await requireDir(under, base))) return [];
+  let out = [];
+  await walk(base, (full, entry) => {
+    if (entry.isFile()) out.push([zp.relative(root, full).split(zp.sep).join("/"), full]);
+  });
+  out.sort();
+  return out;
 }
 //@ chunk-2cw52qnf.js:12231-12597 esm-fingerprint
-async function Rt(r, e, t) {
-  let n = (s) => zp.relative(r, s).split(zp.sep).join("/"),
-    i;
+async function symlinksInDir(root, under, base) {
+  let relOf = (full) => zp.relative(root, full).split(zp.sep).join("/");
+  let st;
   try {
-    i = await promises_3.lstat(t, { bigint: !0 });
-  } catch (error) {
-    let code = error.code;
+    st = await fsp.lstat(base, {
+      bigint: true,
+    });
+  } catch (e) {
+    let code = e.code;
     if (code === "ENOENT" || code === "ENOTDIR") return new Set();
-    throw error;
+    throw e;
   }
-  if (i.isSymbolicLink()) return new Set([n(t)]);
-  if (!i.isDirectory()) throw new m(m.NOT_A_DIRECTORY, e);
-  let o = new Set();
-  return (
-    await Ce(t, (s, a) => {
-      if (a.isSymbolicLink()) o.add(n(s));
-    }),
-    o
-  );
+  if (st.isSymbolicLink()) return new Set([relOf(base)]);
+  if (!st.isDirectory()) throw new FileStoreError(FileStoreError.NOT_A_DIRECTORY, under);
+  let out = new Set();
+  await walk(base, (full, entry) => {
+    if (entry.isSymbolicLink()) out.add(relOf(full));
+  });
+  return out;
 }
 //@ chunk-2cw52qnf.js:12597-12793 esm-fingerprint
-async function Tt(r, e) {
-  let t;
+async function requireDir(under, base) {
+  let st;
   try {
-    t = await promises_3.lstat(e, { bigint: !0 });
-  } catch (error) {
-    let code = error.code;
-    if (code === "ENOENT" || code === "ENOTDIR") return !1;
-    throw error;
+    st = await fsp.lstat(base, {
+      bigint: true,
+    });
+  } catch (e) {
+    let code = e.code;
+    if (code === "ENOENT" || code === "ENOTDIR") return false;
+    throw e;
   }
-  if (!t.isDirectory()) throw new m(m.NOT_A_DIRECTORY, r);
-  return !0;
+  if (!st.isDirectory()) throw new FileStoreError(FileStoreError.NOT_A_DIRECTORY, under);
+  return true;
 }
 //@ chunk-2cw52qnf.js:12793-13048 esm-fingerprint
-async function Ce(r, e) {
-  let t = [r];
-  while (t.length) {
-    let n = t.pop(),
-      i;
+async function walk(base, visit) {
+  let stack = [base];
+  while (stack.length) {
+    let dir = stack.pop();
+    let entries;
     try {
-      i = await promises_3.readdir(n, { withFileTypes: !0 });
-    } catch (error) {
-      if (error.code === "ENOENT") continue;
-      throw error;
+      entries = await fsp.readdir(dir, {
+        withFileTypes: true,
+      });
+    } catch (e) {
+      if (e.code === "ENOENT") continue;
+      throw e;
     }
-    for (let o of i) {
-      let joined = zp.join(n, o.name);
-      if ((e(joined, o), o.isDirectory() && !o.isSymbolicLink())) t.push(joined);
+    for (let entry of entries) {
+      let full = zp.join(dir, entry.name);
+      visit(full, entry);
+      if (entry.isDirectory() && !entry.isSymbolicLink()) stack.push(full);
     }
   }
 }
 //@ chunk-2cw52qnf.js:13048-13134 esm-fingerprint
-function Lt(r, e) {
-  return e.mtimeNs === r.mtimeNs && e.ctimeNs === r.ctimeNs && e.size === r.size;
+function unchangedSinceHashed(cached, st) {
+  return st.mtimeNs === cached.mtimeNs && st.ctimeNs === cached.ctimeNs && st.size === cached.size;
 }
 //@ chunk-2cw52qnf.js:13134-13227 esm-fingerprint
-function $t(r, e) {
-  return (r.mtimeNs > r.ctimeNs ? r.mtimeNs : r.ctimeNs) < e - re.timestampTrustMarginNs;
+function oldEnoughToCache(st, walkStartNs) {
+  return (
+    (st.mtimeNs > st.ctimeNs ? st.mtimeNs : st.ctimeNs) < walkStartNs - _internals.timestampTrustMarginNs
+  );
 }
 //@ chunk-2cw52qnf.js:13227-13356 esm-layout
-var At = 2000000000n,
-  re = { hashFile: Nt, timestampTrustMarginNs: At, nowNs: () => BigInt(Date.now()) * 1000000n },
-  Fe = _e,
-  asyncDispose = Symbol.asyncDispose;
+var TIMESTAMP_TRUST_MARGIN_NS = 2000000000n;
+var _internals = {
+  hashFile,
+  timestampTrustMarginNs: TIMESTAMP_TRUST_MARGIN_NS,
+  nowNs: () => BigInt(Date.now()) * 1000000n,
+};
+var FileStore_default = FileStore;
+var asyncDispose = Symbol.asyncDispose;
 //@ chunk-2cw52qnf.js:13356-13458 esm-fingerprint
 if (asyncDispose)
-  Object.defineProperty(_e.prototype, asyncDispose, {
-    value: _e.prototype.dispose,
-    configurable: !0,
-    writable: !0,
+  Object.defineProperty(FileStore.prototype, asyncDispose, {
+    value: FileStore.prototype.dispose,
+    configurable: true,
+    writable: true,
   });
-
-export { Fe, m, Se };
+export { FileStore_default, FileStoreError, isPathLegal };

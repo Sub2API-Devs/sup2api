@@ -16,24 +16,20 @@ var useDeprecationWarningNotification = {
   deps: (h) => [h.mainLoopModel, h.userSpecifiedModel, h.addNotification],
   setup() {
     let h = null;
-    return ({
-      addNotification: addNotification,
-      mainLoopModel: mainLoopModel,
-      userSpecifiedModel: userSpecifiedModel,
-    }) => {
-      let ee = getDeprecationStatusLine(userSpecifiedModel ?? mainLoopModel);
-      if (ee && ee !== h)
-        ((h = ee),
-          addNotification({
-            key: "model-deprecation-warning",
-            kind: "warning",
-            text: ee,
-            color: "warning",
-            priority: "high",
-          }));
-      if (!ee) h = null;
+    return ({ addNotification, mainLoopModel, userSpecifiedModel }) => {
+      let deprecationWarning = getDeprecationStatusLine(userSpecifiedModel ?? mainLoopModel);
+      if (deprecationWarning && deprecationWarning !== h) {
+        h = deprecationWarning;
+        addNotification({
+          key: "model-deprecation-warning",
+          kind: "warning",
+          text: deprecationWarning,
+          color: "warning",
+          priority: "high",
+        });
+      }
+      if (!deprecationWarning) h = null;
     };
   },
 };
-
 export { useDeprecationWarningNotification };

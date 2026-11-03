@@ -8,29 +8,43 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-1r4fv9mg.js:5780-7539 cjs-fingerprint
-var Ae = x(function (Pr, xt) {
-  xt.exports = {
+var require_schema = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/schema",
     $vocabulary: {
-      "https://json-schema.org/draft/2020-12/vocab/core": !0,
-      "https://json-schema.org/draft/2020-12/vocab/applicator": !0,
-      "https://json-schema.org/draft/2020-12/vocab/unevaluated": !0,
-      "https://json-schema.org/draft/2020-12/vocab/validation": !0,
-      "https://json-schema.org/draft/2020-12/vocab/meta-data": !0,
-      "https://json-schema.org/draft/2020-12/vocab/format-annotation": !0,
-      "https://json-schema.org/draft/2020-12/vocab/content": !0,
+      "https://json-schema.org/draft/2020-12/vocab/core": true,
+      "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+      "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+      "https://json-schema.org/draft/2020-12/vocab/validation": true,
+      "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+      "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+      "https://json-schema.org/draft/2020-12/vocab/content": true,
     },
     $dynamicAnchor: "meta",
     title: "Core and Validation specifications meta-schema",
     allOf: [
-      { $ref: "meta/core" },
-      { $ref: "meta/applicator" },
-      { $ref: "meta/unevaluated" },
-      { $ref: "meta/validation" },
-      { $ref: "meta/meta-data" },
-      { $ref: "meta/format-annotation" },
-      { $ref: "meta/content" },
+      {
+        $ref: "meta/core",
+      },
+      {
+        $ref: "meta/applicator",
+      },
+      {
+        $ref: "meta/unevaluated",
+      },
+      {
+        $ref: "meta/validation",
+      },
+      {
+        $ref: "meta/meta-data",
+      },
+      {
+        $ref: "meta/format-annotation",
+      },
+      {
+        $ref: "meta/content",
+      },
     ],
     type: ["object", "boolean"],
     $comment:
@@ -39,8 +53,10 @@ var Ae = x(function (Pr, xt) {
       definitions: {
         $comment: '"definitions" has been replaced by "$defs".',
         type: "object",
-        additionalProperties: { $dynamicRef: "#meta" },
-        deprecated: !0,
+        additionalProperties: {
+          $dynamicRef: "#meta",
+        },
+        deprecated: true,
         default: {},
       },
       dependencies: {
@@ -48,23 +64,29 @@ var Ae = x(function (Pr, xt) {
           '"dependencies" has been split and replaced by "dependentSchemas" and "dependentRequired" in order to serve their differing semantics.',
         type: "object",
         additionalProperties: {
-          anyOf: [{ $dynamicRef: "#meta" }, { $ref: "meta/validation#/$defs/stringArray" }],
+          anyOf: [
+            {
+              $dynamicRef: "#meta",
+            },
+            {
+              $ref: "meta/validation#/$defs/stringArray",
+            },
+          ],
         },
-        deprecated: !0,
+        deprecated: true,
         default: {},
       },
       $recursiveAnchor: {
         $comment: '"$recursiveAnchor" has been replaced by "$dynamicAnchor".',
         $ref: "meta/core#/$defs/anchorString",
-        deprecated: !0,
+        deprecated: true,
       },
       $recursiveRef: {
         $comment: '"$recursiveRef" has been replaced by "$dynamicRef".',
         $ref: "meta/core#/$defs/uriReferenceString",
-        deprecated: !0,
+        deprecated: true,
       },
     },
   };
 });
-
-export { Ae };
+export { require_schema };

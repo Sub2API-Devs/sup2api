@@ -8,11 +8,11 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:54626-56486 cjs-fingerprint
-var kt = x(function (Ou, xt) {
-  function ol(e) {
+var require_basic = x(function (cjsExports, cjsModule) {
+  function basic(hljs) {
     return {
       name: "BASIC",
-      case_insensitive: !0,
+      case_insensitive: true,
       illegal: "^.",
       keywords: {
         $pattern: "[a-zA-Z][a-zA-Z0-9_$%!#]*",
@@ -197,17 +197,39 @@ var kt = x(function (Ou, xt) {
         ],
       },
       contains: [
-        { scope: "string", begin: /"/, end: /"|$/, contains: [e.BACKSLASH_ESCAPE] },
-        e.COMMENT("REM", "$", { relevance: 10 }),
-        e.COMMENT("'", "$", { relevance: 0 }),
-        { className: "symbol", begin: "^[0-9]+ ", relevance: 10 },
-        { className: "number", begin: "\\b\\d+(\\.\\d+)?([edED]\\d+)?[#!]?", relevance: 0 },
-        { className: "number", begin: "(&[hH][0-9a-fA-F]{1,4})" },
-        { className: "number", begin: "(&[oO][0-7]{1,6})" },
+        {
+          scope: "string",
+          begin: /"/,
+          end: /"|$/,
+          contains: [hljs.BACKSLASH_ESCAPE],
+        },
+        hljs.COMMENT("REM", "$", {
+          relevance: 10,
+        }),
+        hljs.COMMENT("'", "$", {
+          relevance: 0,
+        }),
+        {
+          className: "symbol",
+          begin: "^[0-9]+ ",
+          relevance: 10,
+        },
+        {
+          className: "number",
+          begin: "\\b\\d+(\\.\\d+)?([edED]\\d+)?[#!]?",
+          relevance: 0,
+        },
+        {
+          className: "number",
+          begin: "(&[hH][0-9a-fA-F]{1,4})",
+        },
+        {
+          className: "number",
+          begin: "(&[oO][0-7]{1,6})",
+        },
       ],
     };
   }
-  xt.exports = ol;
+  cjsModule.exports = basic;
 });
-
-export { kt };
+export { require_basic };

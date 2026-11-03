@@ -8,45 +8,15 @@
  * pieces: chunk-6nqjztgx.js (1), chunk-dcd8bnv7.js (4), chunk-f25sswmp.js (2), chunk-jcnpfn31.js (46), chunk-t0gq9gyw.js (16)
  * attribution: placement 23, fingerprint 17, file-local 9, callgraph-fingerprint 1, layout 19
  */
+import { join, dirname, basename, relative, sep, isAbsolute } from "path";
 import {
-  join,
-  dirname,
-  basename,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  basename as basename_7,
-  relative,
-  relative as relative_2,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  isAbsolute as isAbsolute_4,
-  isAbsolute as isAbsolute_5,
-  isAbsolute as isAbsolute_6,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  dirname as dirname_7,
-  dirname as dirname_8,
-  dirname as dirname_9,
-} from "path";
-import { OUTPUT_SIZE_LIMITS, iCi, sCi, RESULT_LIMITS, qhr, SIt } from "../constants/outputLimits.js";
+  OUTPUT_SIZE_LIMITS,
+  MAX_RESULT_BUFFER_BYTES,
+  MAX_RESULT_CHARS,
+  RESULT_LIMITS,
+  MAX_RESULT_BYTES,
+  RESULT_LIMIT_COUNT,
+} from "../constants/outputLimits.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { isReservedDeviceName } from "./windowsProfileFolders.js";
 import { jsonStringify } from "./slowOperations.js";
@@ -62,10 +32,10 @@ import { formatFileSize } from "./format.js";
 import { getFileReader } from "./fileStore.js";
 import { logEvent } from "../services/analytics/index.js";
 import { sanitizeToolNameForAnalytics } from "../services/analytics/metadata.js";
-import { ift } from "../constants/xml.js";
+import { ARTIFACT_CONTENT_AUTHORED_TAG_LEAD } from "../constants/xml.js";
 import { storageErrorCode } from "./storage/storageErrors.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
-import { xo, SessionRootSlot } from "../bootstrap/sessionSlices.js";
+import { getSessionProject, SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import {
   getSessionId,
   getOriginalCwd as getOriginalCwd_2,
@@ -78,184 +48,231 @@ import { pathToSessionSideKey } from "./storage/storageKeys.js";
 import { isBase64ImageBlock } from "./imageValidation.js";
 import { isPlainObject } from "./isPlainObject.js";
 
+//@ chunk-jcnpfn31.js:866-1034 file-local
 /**
  * "<persisted-output>" 等：落盘结果标签、截断结果标签、旧结果清除占位 "[Old tool result content cleared]"、阈值开关名 tengu_velvet_ibis。
  */
-//@ chunk-jcnpfn31.js:866-1034 file-local
-var PERSISTED_OUTPUT_TAG = "<persisted-output>",
-  PERSISTED_OUTPUT_CLOSING_TAG = "</persisted-output>",
-  TRUNCATED_OUTPUT_TAG = "<truncated-output>",
-  TRUNCATED_OUTPUT_CLOSING_TAG = "</truncated-output>",
-  TOOL_RESULT_CLEARED_MESSAGE = "[Old tool result content cleared]",
-  TENGU_VELVET_IBIS = "tengu_velvet_ibis";
+var PERSISTED_OUTPUT_TAG = "<persisted-output>";
+var PERSISTED_OUTPUT_CLOSING_TAG = "</persisted-output>";
+var TRUNCATED_OUTPUT_TAG = "<truncated-output>";
+var TRUNCATED_OUTPUT_CLOSING_TAG = "</truncated-output>";
+var TOOL_RESULT_CLEARED_MESSAGE = "[Old tool result content cleared]";
+var TENGU_VELVET_IBIS = "tengu_velvet_ibis";
+//@ chunk-jcnpfn31.js:1034-1217 callgraph-fingerprint = getPersistenceThreshold (1)
 /**
  * 单工具落盘阈值：工具声明 maxResultSizeChars 与默认 50000 取小；tengu_velvet_ibis 可按工具名覆盖；跳过聚合预算的工具只受上限。
  */
-//@ chunk-jcnpfn31.js:1034-1217 callgraph-fingerprint = getPersistenceThreshold (1)
-function getPersistenceThreshold(e, n, r = OUTPUT_SIZE_LIMITS, o = !1) {
-  if (!Number.isFinite(n)) return n;
-  if (o) return Math.min(n, r);
-  let override = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VELVET_IBIS, {})?.[e];
+function getPersistenceThreshold(
+  toolName,
+  declaredMaxResultSizeChars,
+  persistenceThresholdCeiling = OUTPUT_SIZE_LIMITS,
+  o = false,
+) {
+  if (!Number.isFinite(declaredMaxResultSizeChars)) return declaredMaxResultSizeChars;
+  if (o) return Math.min(declaredMaxResultSizeChars, persistenceThresholdCeiling);
+  let override = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VELVET_IBIS, {})?.[toolName];
   if (typeof override === "number" && Number.isFinite(override) && override > 0) return override;
-  return Math.min(n, r);
+  return Math.min(declaredMaxResultSizeChars, persistenceThresholdCeiling);
 }
+//@ chunk-jcnpfn31.js:1217-1259 layout
 /**
  * 2000：落盘结果预览长度；"tool result was not saved" 为落盘失败文本。
  */
-//@ chunk-jcnpfn31.js:1217-1259 layout
-var PREVIEW_SIZE_CHARS = 2000,
-  PERSIST_FAILED_MESSAGE = "tool result was not saved";
+var PREVIEW_SIZE_CHARS = 2000;
+var PERSIST_FAILED_MESSAGE = "tool result was not saved";
+//@ chunk-jcnpfn31.js:1259-1472 layout
 /**
  * 单字符按 UTF-8 字节百分号编码（孤立代理项用 %uXXXX）。
  */
-//@ chunk-jcnpfn31.js:1259-1472 layout
 function percentEncodeChar(e) {
   let code = e.charCodeAt(0);
   if (e.length === 1 && code >= 55296 && code <= 57343) return `%u${code.toString(16).toUpperCase()}`;
   return Array.from(Buffer.from(e), (r) => `%${r.toString(16).toUpperCase().padStart(2, "0")}`).join("");
 }
+//@ chunk-jcnpfn31.js:1472-1641 layout
 /**
  * 把 tool_use_id 转成安全文件名（非 [A-Za-z0-9_-.] 百分号编码，避开 Windows 保留名）。
  */
-//@ chunk-jcnpfn31.js:1472-1641 layout
-function sanitizeToolResultFileStem(e) {
+function sanitizeToolResultFileStem(id) {
   let n = "";
-  for (let r of String(e)) {
+  for (let r of String(id)) {
     let o = /^[A-Za-z0-9_-]$/.test(r) || (r === "." && n !== "");
     n += o ? r : percentEncodeChar(r);
   }
   if (n === "") return "%";
   return isReservedDeviceName(n) ? percentEncodeChar(n.charAt(0)) + n.slice(1) : n;
 }
+//@ chunk-jcnpfn31.js:1641-1691 fingerprint = getToolResultPath (1)
 /**
  * 落盘文件名 <id>.json（数组内容）或 <id>.txt。
  */
-//@ chunk-jcnpfn31.js:1641-1691 fingerprint = getToolResultPath (1)
 function getToolResultPath(id, isJson) {
   return `${sanitizeToolResultFileStem(id)}.${isJson ? "json" : "txt"}`;
 }
+//@ chunk-jcnpfn31.js:1691-1730 layout
 /**
  * 会话 tool-results 目录下的完整路径。
  */
-//@ chunk-jcnpfn31.js:1691-1730 layout
-function getToolResultFilePath(e, n, r) {
-  return join(e, getToolResultPath(n, r));
+function getToolResultFilePath(originalCwd, id, isJson) {
+  return join(originalCwd, getToolResultPath(id, isJson));
 }
+//@ chunk-jcnpfn31.js:1730-3561 fingerprint = persistToolResult (0.454)
 /**
  * 写出工具结果：宿主存储可用时存入宿主（截断到上限），否则写会话目录 tool-results/<id>.txt|json（排他创建，超 1GB 截断）；返回 {filepath, originalSize, isJson, preview, hasMore, truncatedAtBytes}。
  */
-//@ chunk-jcnpfn31.js:1730-3561 fingerprint = persistToolResult (0.454)
-async function persistToolResult(e, n, r, o, i = iCi) {
+async function persistToolResult(e, id, r, o, i = MAX_RESULT_BUFFER_BYTES) {
   let isJson = Array.isArray(e);
   if (isJson) {
-    if (e.some((block) => !bl(block) || block.type !== "text"))
-      return { error: "Cannot persist tool results containing non-text content" };
+    if (e.some((block) => !isObjectBlock(block) || block.type !== "text"))
+      return {
+        error: "Cannot persist tool results containing non-text content",
+      };
   }
-  let l = dy();
-  if (l !== void 0) {
-    let min = Math.min(i, l.maxBytes),
-      g,
-      d,
-      R;
+  let l = toolResultStoreOrNull();
+  if (l !== undefined) {
+    let min = Math.min(i, l.maxBytes);
+    let g;
+    let d;
+    let data;
     try {
-      ((g = isJson ? jsonStringify(e, null, 2) : e), (d = truncateUtf8Bytes(g, min)), (R = Buffer.from(d)));
+      g = isJson ? jsonStringify(e, null, 2) : e;
+      d = truncateUtf8Bytes(g, min);
+      data = Buffer.from(d);
     } catch {
-      return { error: PERSIST_FAILED_MESSAGE };
+      return {
+        error: PERSIST_FAILED_MESSAGE,
+      };
     }
-    let E = await saveResultSafely(l, { leafName: getToolResultPath(n, isJson), data: R });
-    if (E === null) return { error: PERSIST_FAILED_MESSAGE };
-    let { preview: preview, hasMore: hasMore } = generatePreview(d, PREVIEW_SIZE_CHARS);
+    let E = await saveResultSafely(l, {
+      leafName: getToolResultPath(id, isJson),
+      data,
+    });
+    if (E === null)
+      return {
+        error: PERSIST_FAILED_MESSAGE,
+      };
+    let { preview, hasMore } = generatePreview(d, PREVIEW_SIZE_CHARS);
     return {
       filepath: E.path,
       originalSize: g.length,
-      isJson: isJson,
-      preview: preview,
-      hasMore: hasMore,
-      truncatedAtBytes: d === g ? void 0 : min,
+      isJson,
+      preview,
+      hasMore,
+      truncatedAtBytes: d === g ? undefined : min,
     };
   }
-  if (r === null) return { error: PERSIST_FAILED_MESSAGE };
+  if (r === null)
+    return {
+      error: PERSIST_FAILED_MESSAGE,
+    };
   await ensureToolResultsDir(r, o);
-  let u = getToolResultFilePath(r, n, isJson),
-    h,
-    m;
+  let path = getToolResultFilePath(r, id, isJson);
+  let h;
+  let m;
   try {
-    ((h = isJson ? jsonStringify(e, null, 2) : e), (m = truncateUtf8Bytes(h, i)));
+    h = isJson ? jsonStringify(e, null, 2) : e;
+    m = truncateUtf8Bytes(h, i);
   } catch (error) {
-    let g = getFileSystemErrorMessage(toError(error));
-    return (logForDebugging(`Failed to persist tool result to ${u}: ${g}`, { level: "error" }), { error: g });
+    let fileSystemErrorMessage = getFileSystemErrorMessage(toError(error));
+    logForDebugging(`Failed to persist tool result to ${path}: ${fileSystemErrorMessage}`, {
+      level: "error",
+    });
+    return {
+      error: fileSystemErrorMessage,
+    };
   }
-  let T = m === h ? void 0 : i,
-    S = isStorageV5Enabled() && o !== void 0 ? toolResultsKey(dirname(u), basename(u)) : void 0;
-  if (isStorageV5Enabled() && o !== void 0 && S !== void 0) {
-    let write = await o.write(S, m, { precondition: { type: "ifAbsent" }, mode: 438 & ~process.umask() });
-    if (!write.ok && write.error.code !== "AlreadyExists") {
-      let filepath = formatStorageWriteError(write.error, u);
-      return (
-        logForDebugging(`Failed to persist tool result to ${u}: ${filepath}`, { level: "error" }),
-        { error: filepath }
-      );
+  let truncatedAtBytes = m === h ? undefined : i;
+  let S = isStorageV5Enabled() && o !== undefined ? toolResultsKey(dirname(path), basename(path)) : undefined;
+  if (isStorageV5Enabled() && o !== undefined && S !== undefined) {
+    let p = await o.write(S, m, {
+      precondition: {
+        type: "ifAbsent",
+      },
+      mode: 438 & ~process.umask(),
+    });
+    if (!p.ok && p.error.code !== "AlreadyExists") {
+      let filepath = formatStorageWriteError(p.error, path);
+      logForDebugging(`Failed to persist tool result to ${path}: ${filepath}`, {
+        level: "error",
+      });
+      return {
+        error: filepath,
+      };
     }
-    if (write.ok) logForDebugging(`Persisted tool result to ${u} (${formatFileSize(m.length)})`);
+    if (p.ok) logForDebugging(`Persisted tool result to ${path} (${formatFileSize(m.length)})`);
   } else {
-    let p = getFileReader();
+    let fileReader = getFileReader();
     try {
-      (await checkToolResultsWritable(dirname(u), p),
-        await qhs(u, p),
-        await p.writeExclusive(u, m),
-        logForDebugging(`Persisted tool result to ${u} (${formatFileSize(m.length)})`));
+      await checkToolResultsWritable(dirname(path), fileReader);
+      await unlinkIfSymlink(path, fileReader);
+      await fileReader.writeExclusive(path, m);
+      logForDebugging(`Persisted tool result to ${path} (${formatFileSize(m.length)})`);
     } catch (error) {
-      if (getErrnoCode(error) !== "EEXIST")
-        return (
-          logForDebugging(
-            `Failed to persist tool result to ${u}: ${getFileSystemErrorMessage(toError(error))}`,
-            { level: "error" },
-          ),
-          { error: getFileSystemErrorMessage(toError(error)) }
+      if (getErrnoCode(error) !== "EEXIST") {
+        logForDebugging(
+          `Failed to persist tool result to ${path}: ${getFileSystemErrorMessage(toError(error))}`,
+          {
+            level: "error",
+          },
         );
+        return {
+          error: getFileSystemErrorMessage(toError(error)),
+        };
+      }
       let d;
       try {
-        d = await p.lstat(u);
+        d = await fileReader.lstat(path);
       } catch {
-        return { error: "tool result path could not be checked; not persisted" };
+        return {
+          error: "tool result path could not be checked; not persisted",
+        };
       }
-      if (d?.isSymbolicLink) return { error: "tool result path is a link; not persisted" };
-      if (d?.isFile !== !0) return { error: "tool result path is not a regular file; not persisted" };
-      if (d.nlink > 1) return { error: "tool result path has another name; not persisted" };
+      if (d?.isSymbolicLink)
+        return {
+          error: "tool result path is a link; not persisted",
+        };
+      if (d?.isFile !== true)
+        return {
+          error: "tool result path is not a regular file; not persisted",
+        };
+      if (d.nlink > 1)
+        return {
+          error: "tool result path has another name; not persisted",
+        };
     }
   }
-  let { preview: preview, hasMore: hasMore } = generatePreview(m, PREVIEW_SIZE_CHARS);
+  let { preview, hasMore } = generatePreview(m, PREVIEW_SIZE_CHARS);
   return {
-    filepath: u,
+    filepath: path,
     originalSize: h.length,
-    isJson: isJson,
-    preview: preview,
-    hasMore: hasMore,
-    truncatedAtBytes: T,
+    isJson,
+    preview,
+    hasMore,
+    truncatedAtBytes,
   };
 }
+//@ chunk-jcnpfn31.js:3561-3608 layout
 /**
  * 用 <persisted-output> 包装 buildLargeToolResultMessage 的文本。
  */
-//@ chunk-jcnpfn31.js:3561-3608 layout
-function buildPersistedOutputMessage(e) {
+function buildPersistedOutputMessage(result) {
   return `${PERSISTED_OUTPUT_TAG}
-${buildLargeToolResultMessage(e)}${PERSISTED_OUTPUT_CLOSING_TAG}`;
+${buildLargeToolResultMessage(result)}${PERSISTED_OUTPUT_CLOSING_TAG}`;
 }
+//@ chunk-jcnpfn31.js:3608-4175 fingerprint = buildLargeToolResultMessage (0.576)
 /**
  * 落盘后替换文本："Output too large (X). Full output saved to: <路径>" + 预览（开头或首尾）。
  */
-//@ chunk-jcnpfn31.js:3608-4175 fingerprint = buildLargeToolResultMessage (0.576)
 function buildLargeToolResultMessage(result) {
   let n =
-    result.truncatedAtBytes === void 0
+    result.truncatedAtBytes === undefined
       ? `Output too large (${formatFileSize(result.originalSize)}). Full output saved to: ${result.filepath}
 
 `
       : `Output exceeded the ${formatFileSize(result.truncatedAtBytes)} persist limit; only the first ${formatFileSize(result.truncatedAtBytes)} were saved to: ${result.filepath}
 
 `;
-  if (result.previewEnd !== void 0) {
+  if (result.previewEnd !== undefined) {
     let max = Math.max(
       0,
       result.originalSize - Buffer.byteLength(result.preview) - Buffer.byteLength(result.previewEnd),
@@ -266,46 +283,48 @@ ${result.preview}
 ${result.previewEnd}
 `;
   }
-  return (
-    (n += `Preview (first ${formatFileSize(PREVIEW_SIZE_CHARS)}):
-`),
-    (n += result.preview),
-    (n += result.hasMore
-      ? `
+  n += `Preview (first ${formatFileSize(PREVIEW_SIZE_CHARS)}):
+`;
+  n += result.preview;
+  n += result.hasMore
+    ? `
 ...
 `
-      : `
-`),
-    n
-  );
+    : `
+`;
+  return n;
 }
+//@ chunk-jcnpfn31.js:4175-4194 layout
 /**
  * "1023 bytes"：估算截断说明长度用的占位。
  */
-//@ chunk-jcnpfn31.js:4175-4194 layout
 var TRUNCATION_NOTE_RESERVE = "1023 bytes";
+//@ chunk-jcnpfn31.js:4194-4577 layout
 /**
  * 无法落盘时就地截断：<truncated-output> 说明 + 开头部分。
  */
-//@ chunk-jcnpfn31.js:4194-4577 layout
 function buildTruncatedInlineResult(e, n) {
-  if (Array.isArray(e) && e.some((l) => !bl(l) || l.type !== "text")) return null;
+  if (Array.isArray(e) && e.some((l) => !isObjectBlock(l) || l.type !== "text")) return null;
   let r =
-      typeof e === "string"
-        ? e
-        : e.flatMap((l) => (l.type === "text" && "text" in l && typeof l.text === "string" ? [l.text] : []))
-            .join(`
-`),
-    o = formatFileSize(r.length),
-    max = Math.max(0, n - formatTruncatedOutputMessage(o, TRUNCATION_NOTE_RESERVE, "").length),
-    s = truncateToLength(r, generatePreview(r, max).preview.length);
+    typeof e === "string"
+      ? e
+      : e.flatMap((block) =>
+          block.type === "text" && "text" in block && typeof block.text === "string" ? [block.text] : [],
+        ).join(`
+`);
+  let o = formatFileSize(r.length);
+  let max = Math.max(0, n - formatTruncatedOutputMessage(o, TRUNCATION_NOTE_RESERVE, "").length);
+  let s = truncateToLength(r, generatePreview(r, max).preview.length);
   if (s.length === r.length) return null;
-  return { message: formatTruncatedOutputMessage(o, formatFileSize(s.length), s), originalSize: r.length };
+  return {
+    message: formatTruncatedOutputMessage(o, formatFileSize(s.length), s),
+    originalSize: r.length,
+  };
 }
+//@ chunk-jcnpfn31.js:4577-4808 layout
 /**
  * <truncated-output> 文案："Output too large… only the first N are shown…"。
  */
-//@ chunk-jcnpfn31.js:4577-4808 layout
 function formatTruncatedOutputMessage(e, n, r) {
   return `${TRUNCATED_OUTPUT_TAG}
 Output too large (${e}). It could not be saved, so only the first ${n} are shown; the rest was dropped. If the tool can page or filter its results, call it again for the part you need.
@@ -313,153 +332,180 @@ Output too large (${e}). It could not be saved, so only the first ${n} are shown
 ${r}
 ${TRUNCATED_OUTPUT_CLOSING_TAG}`;
 }
+//@ chunk-jcnpfn31.js:4808-4899 layout
 /**
  * 工具输出映射成 tool_result 块后走 processToolResultBlock。
  */
-//@ chunk-jcnpfn31.js:4808-4899 layout
-async function mapAndMaybePersistToolResult(e, n, r, o, i) {
-  return processToolResultBlock(e.mapToolResultToToolResultBlockParam(n, r), e, o, i);
+async function mapAndMaybePersistToolResult(tool, toolUseResult, toolUseID, o, storageV5) {
+  return processToolResultBlock(
+    tool.mapToolResultToToolResultBlockParam(toolUseResult, toolUseID),
+    tool,
+    o,
+    storageV5,
+  );
 }
+//@ chunk-jcnpfn31.js:4899-5050 fingerprint = processToolResultBlock (0.358)
 /**
  * 按工具阈值调用 maybePersistLargeToolResult。
  */
-//@ chunk-jcnpfn31.js:4899-5050 fingerprint = processToolResultBlock (0.358)
-async function processToolResultBlock(e, n, r, o) {
+async function processToolResultBlock(toolResultBlock, tool, r, storageV5) {
   return maybePersistLargeToolResult(
-    e,
-    n.name,
+    toolResultBlock,
+    tool.name,
     r,
     getPersistenceThreshold(
-      n.name,
-      n.maxResultSizeChars,
-      n.persistenceThresholdCeiling,
-      n.skipAggregateToolResultBudget === !0,
+      tool.name,
+      tool.maxResultSizeChars,
+      tool.persistenceThresholdCeiling,
+      tool.skipAggregateToolResultBudget === true,
     ),
-    o,
+    storageV5,
   );
 }
+//@ chunk-jcnpfn31.js:5050-5286 file-local
 /**
  * 内容是否为空（空串、空数组或只有空白文本）。旧版名 contentSize 不准确。
  */
-//@ chunk-jcnpfn31.js:5050-5286 file-local
 function isToolResultContentEmpty(content) {
-  if (!content) return !0;
+  if (!content) return true;
   if (typeof content === "string") return content.trim() === "";
-  if (!Array.isArray(content)) return !1;
-  if (content.length === 0) return !0;
+  if (!Array.isArray(content)) return false;
+  if (content.length === 0) return true;
   return content.every(
     (block) =>
-      bl(block) &&
+      isObjectBlock(block) &&
       block.type === "text" &&
       "text" in block &&
       (typeof block.text !== "string" || block.text.trim() === ""),
   );
 }
+//@ chunk-jcnpfn31.js:5286-6260 fingerprint = maybePersistLargeToolResult (0.872)
 /**
  * 单个工具结果处理：空结果替换为 "(<工具> completed with no output)"；超阈值时落盘并换成 <persisted-output> 预览，宿主存储落盘失败则就地截断；记 tengu_tool_result_persisted。
  */
-//@ chunk-jcnpfn31.js:5286-6260 fingerprint = maybePersistLargeToolResult (0.872)
-async function maybePersistLargeToolResult(e, n, r, o, i) {
-  let content = e.content;
-  if (isToolResultContentEmpty(content))
-    return (
-      logEvent("tengu_tool_empty_result", { toolName: sanitizeToolNameForAnalytics(n) }),
-      { ...e, content: `(${n} completed with no output)` }
-    );
-  if (!content) return e;
-  let threshold = o ?? sCi;
-  if (!exceedsPersistThreshold(content, threshold)) return e;
-  let u = dy();
-  if (!hasLongUnbrokenRun(content) && u?.takesTextInline?.(getToolResultTextLength(content)) === !0) return e;
-  let h = await persistToolResult(content, e.tool_use_id, r, i);
-  if (isPersistError(h)) {
-    if (u !== void 0) {
-      let T = buildTruncatedInlineResult(content, threshold);
-      if (T === null) return e;
-      return (
-        logEvent("tengu_tool_result_persisted", {
-          toolName: sanitizeToolNameForAnalytics(n),
-          originalSizeBytes: T.originalSize,
-          persistedSizeBytes: T.message.length,
-          estimatedOriginalTokens: Math.ceil(T.originalSize / RESULT_LIMITS),
-          estimatedPersistedTokens: Math.ceil(T.message.length / RESULT_LIMITS),
-          thresholdUsed: threshold,
-          stored: !1,
-        }),
-        { ...e, content: T.message }
-      );
-    }
-    return e;
+async function maybePersistLargeToolResult(toolResultBlock, toolName, r, persistenceThreshold, i) {
+  let content = toolResultBlock.content;
+  if (isToolResultContentEmpty(content)) {
+    logEvent("tengu_tool_empty_result", {
+      toolName: sanitizeToolNameForAnalytics(toolName),
+    });
+    return {
+      ...toolResultBlock,
+      content: `(${toolName} completed with no output)`,
+    };
   }
-  let message = buildPersistedOutputMessage(h);
-  return (
-    logEvent("tengu_tool_result_persisted", {
-      toolName: sanitizeToolNameForAnalytics(n),
-      originalSizeBytes: h.originalSize,
-      persistedSizeBytes: message.length,
-      estimatedOriginalTokens: Math.ceil(h.originalSize / RESULT_LIMITS),
-      estimatedPersistedTokens: Math.ceil(message.length / RESULT_LIMITS),
-      thresholdUsed: threshold,
-      truncatedAtCap: h.truncatedAtBytes !== void 0,
-    }),
-    { ...e, content: message }
-  );
+  if (!content) return toolResultBlock;
+  let threshold = persistenceThreshold ?? MAX_RESULT_CHARS;
+  if (!exceedsPersistThreshold(content, threshold)) return toolResultBlock;
+  let u = toolResultStoreOrNull();
+  if (!hasLongUnbrokenRun(content) && u?.takesTextInline?.(getToolResultTextLength(content)) === true)
+    return toolResultBlock;
+  let result = await persistToolResult(content, toolResultBlock.tool_use_id, r, i);
+  if (isPersistError(result)) {
+    if (u !== undefined) {
+      let truncatedInlineResult = buildTruncatedInlineResult(content, threshold);
+      if (truncatedInlineResult === null) return toolResultBlock;
+      logEvent("tengu_tool_result_persisted", {
+        toolName: sanitizeToolNameForAnalytics(toolName),
+        originalSizeBytes: truncatedInlineResult.originalSize,
+        persistedSizeBytes: truncatedInlineResult.message.length,
+        estimatedOriginalTokens: Math.ceil(truncatedInlineResult.originalSize / RESULT_LIMITS),
+        estimatedPersistedTokens: Math.ceil(truncatedInlineResult.message.length / RESULT_LIMITS),
+        thresholdUsed: threshold,
+        stored: false,
+      });
+      return {
+        ...toolResultBlock,
+        content: truncatedInlineResult.message,
+      };
+    }
+    return toolResultBlock;
+  }
+  let message = buildPersistedOutputMessage(result);
+  logEvent("tengu_tool_result_persisted", {
+    toolName: sanitizeToolNameForAnalytics(toolName),
+    originalSizeBytes: result.originalSize,
+    persistedSizeBytes: message.length,
+    estimatedOriginalTokens: Math.ceil(result.originalSize / RESULT_LIMITS),
+    estimatedPersistedTokens: Math.ceil(message.length / RESULT_LIMITS),
+    thresholdUsed: threshold,
+    truncatedAtCap: result.truncatedAtBytes !== undefined,
+  });
+  return {
+    ...toolResultBlock,
+    content: message,
+  };
 }
+//@ chunk-jcnpfn31.js:6260-6407 fingerprint = generatePreview (1)
 /**
  * 预览：超长时在最后一个换行处截断（换行位置要超过一半），返回 {preview, hasMore}。
  */
-//@ chunk-jcnpfn31.js:6260-6407 fingerprint = generatePreview (1)
 function generatePreview(content, maxBytes) {
-  if (content.length <= maxBytes) return { preview: content, hasMore: !1 };
+  if (content.length <= maxBytes)
+    return {
+      preview: content,
+      hasMore: false,
+    };
   let index = content.slice(0, maxBytes).lastIndexOf(`
-`),
-    cutPoint = index > maxBytes * 0.5 ? index : maxBytes;
-  return { preview: truncateToLength(content, cutPoint), hasMore: !0 };
+`);
+  let cutPoint = index > maxBytes * 0.5 ? index : maxBytes;
+  return {
+    preview: truncateToLength(content, cutPoint),
+    hasMore: true,
+  };
 }
+//@ chunk-jcnpfn31.js:6407-6440 file-local
 /**
  * persistToolResult 返回值是否为错误。
  */
-//@ chunk-jcnpfn31.js:6407-6440 file-local
 function isPersistError(result) {
   return "error" in result;
 }
+//@ chunk-jcnpfn31.js:6440-6500 fingerprint = createContentReplacementState (1)
 /**
  * 新建 contentReplacementState {seenIds:Set, replacements:Map}。
  */
-//@ chunk-jcnpfn31.js:6440-6500 fingerprint = createContentReplacementState (1)
 function createContentReplacementState() {
-  return { seenIds: new Set(), replacements: new Map() };
+  return {
+    seenIds: new Set(),
+    replacements: new Map(),
+  };
 }
+//@ chunk-jcnpfn31.js:6500-6588 layout = createContentReplacementState (1)
 /**
  * 复制替换状态（分叉/子代理用）。
  */
-//@ chunk-jcnpfn31.js:6500-6588 layout = createContentReplacementState (1)
-function cloneContentReplacementState(e) {
-  return { seenIds: new Set(e.seenIds), replacements: new Map(e.replacements) };
+function cloneContentReplacementState(source) {
+  return {
+    seenIds: new Set(source.seenIds),
+    replacements: new Map(source.replacements),
+  };
 }
+//@ chunk-jcnpfn31.js:6588-6686 fingerprint = provisionContentReplacementState (1)
 /**
  * tengu_hawthorn_steeple 开启时为会话准备替换状态：有历史则重建，否则新建。
  */
-//@ chunk-jcnpfn31.js:6588-6686 fingerprint = provisionContentReplacementState (1)
 function provisionContentReplacementState(initialMessages, initialContentReplacements) {
-  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_hawthorn_steeple", !1)) return;
+  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_hawthorn_steeple", false)) return;
   if (initialMessages)
     return reconstructContentReplacementState(initialMessages, initialContentReplacements ?? []);
   return createContentReplacementState();
 }
+//@ chunk-jcnpfn31.js:6686-6812 layout
 /**
  * 内容已是落盘替换或 "[Old tool result content cleared]"。
  */
-//@ chunk-jcnpfn31.js:6686-6812 layout
-function isReplacedToolResultContent(e) {
-  if (typeof e !== "string") return !1;
-  let n = e.startsWith(ift) ? e.slice(ift.length) : e;
+function isReplacedToolResultContent(content) {
+  if (typeof content !== "string") return false;
+  let n = content.startsWith(ARTIFACT_CONTENT_AUTHORED_TAG_LEAD)
+    ? content.slice(ARTIFACT_CONTENT_AUTHORED_TAG_LEAD.length)
+    : content;
   return n.startsWith(PERSISTED_OUTPUT_TAG) || n === TOOL_RESULT_CLEARED_MESSAGE;
 }
+//@ chunk-jcnpfn31.js:6812-6888 file-local
 /**
  * 内容非空且未被替换/截断。
  */
-//@ chunk-jcnpfn31.js:6812-6888 file-local
 function isContentAlreadyCompacted(content) {
   return (
     !!content &&
@@ -467,320 +513,369 @@ function isContentAlreadyCompacted(content) {
     !(typeof content === "string" && content.startsWith(TRUNCATED_OUTPUT_TAG))
   );
 }
+//@ chunk-jcnpfn31.js:6888-7143 layout
 /**
  * 历史里该 tool_use 的结果非错误且仍是原文。
  */
-//@ chunk-jcnpfn31.js:6888-7143 layout
-function wasToolResultKeptInFull(e, n) {
-  for (let r = e.length - 1; r >= 0; r--) {
-    let o = e[r];
+function wasToolResultKeptInFull(e, toolUseId) {
+  for (let j = e.length - 1; j >= 0; j--) {
+    let o = e[j];
     if (o.type !== "user" || o.isVirtual || !Array.isArray(o.message.content)) continue;
     for (let i of o.message.content)
-      if (i.type === "tool_result" && i.tool_use_id === n)
+      if (i.type === "tool_result" && i.tool_use_id === toolUseId)
         return !i.is_error && isContentAlreadyCompacted(i.content);
   }
-  return !1;
+  return false;
 }
+//@ chunk-jcnpfn31.js:7143-7183 layout
 /**
  * 内容不含媒体且字符数超过阈值。
  */
-//@ chunk-jcnpfn31.js:7143-7183 layout
-function exceedsPersistThreshold(e, n) {
-  return !hasMediaContent(e) && getToolResultTextLength(e) > n;
+function exceedsPersistThreshold(block, n) {
+  return !hasMediaContent(block) && getToolResultTextLength(block) > n;
 }
+//@ chunk-jcnpfn31.js:7183-7282 layout = isMedia (1)
 /**
  * 内容数组含 image/document 块。
  */
-//@ chunk-jcnpfn31.js:7183-7282 layout = isMedia (1)
 function hasMediaContent(block) {
-  return Array.isArray(block) && block.some((n) => bl(n) && (n.type === "image" || n.type === "document"));
+  return (
+    Array.isArray(block) &&
+    block.some((n) => isObjectBlock(n) && (n.type === "image" || n.type === "document"))
+  );
 }
+//@ chunk-jcnpfn31.js:7282-7293 layout
 /**
  * 5000：连续无空白字符的长度阈值。
  */
-//@ chunk-jcnpfn31.js:7282-7293 layout
 var LONG_UNBROKEN_RUN_CHARS = 5000;
+//@ chunk-jcnpfn31.js:7293-7569 layout
 /**
  * 文本中有超过 5000 个连续非空白字符（这类结果不交给宿主内联）。
  */
-//@ chunk-jcnpfn31.js:7293-7569 layout
-function hasLongUnbrokenRun(e) {
+function hasLongUnbrokenRun(content) {
   return (
-    typeof e === "string"
-      ? [e]
-      : Array.isArray(e)
-        ? e.map((r) =>
-            bl(r) && r.type === "text" && "text" in r && typeof r.text === "string" ? r.text : "",
+    typeof content === "string"
+      ? [content]
+      : Array.isArray(content)
+        ? content.map((r) =>
+            isObjectBlock(r) && r.type === "text" && "text" in r && typeof r.text === "string" ? r.text : "",
           )
         : []
   ).some((r) => {
     let o = 0;
     for (let i = 0; i < r.length; i++) {
       let code = r.charCodeAt(i);
-      if (((o = code === 32 || (code >= 9 && code <= 13) ? 0 : o + 1), o >= LONG_UNBROKEN_RUN_CHARS))
-        return !0;
+      o = code === 32 || (code >= 9 && code <= 13) ? 0 : o + 1;
+      if (o >= LONG_UNBROKEN_RUN_CHARS) return true;
     }
-    return !1;
+    return false;
   });
 }
+//@ chunk-jcnpfn31.js:7569-7761 file-local
 /**
  * 字符串或文本块总字符数。
  */
-//@ chunk-jcnpfn31.js:7569-7761 file-local
 function getToolResultTextLength(content) {
   if (typeof content === "string") return content.length;
   if (!Array.isArray(content)) return 0;
   return content.reduce(
     (sum, r) =>
-      sum + (bl(r) && r.type === "text" && "text" in r && typeof r.text === "string" ? r.text.length : 0),
+      sum +
+      (isObjectBlock(r) && r.type === "text" && "text" in r && typeof r.text === "string"
+        ? r.text.length
+        : 0),
     0,
   );
 }
+//@ chunk-jcnpfn31.js:7761-7966 layout = countToolCallsSince (1)
 /**
  * 所有 assistant tool_use 的 id → 工具名。
  */
-//@ chunk-jcnpfn31.js:7761-7966 layout = countToolCallsSince (1)
-function mapToolUseIdToName(e) {
+function mapToolUseIdToName(messages) {
   let n = new Map();
-  for (let message of e) {
+  for (let message of messages) {
     if (message.type !== "assistant") continue;
     let content = message.message.content;
     if (!Array.isArray(content)) continue;
-    for (let i of content) if (bl(i) && i.type === "tool_use") n.set(i.id, i.name);
+    for (let i of content) if (isObjectBlock(i) && i.type === "tool_use") n.set(i.id, i.name);
   }
   return n;
 }
+//@ chunk-jcnpfn31.js:7966-8262 layout
 /**
  * 一条 user 消息里可替换的 tool_result（非空、未替换、不含媒体）及其大小。
  */
-//@ chunk-jcnpfn31.js:7966-8262 layout
-function collectToolResultCandidates(e) {
-  if (e.type !== "user" || !Array.isArray(e.message.content)) return [];
-  return e.message.content.flatMap((n) => {
-    if (!bl(n) || n.type !== "tool_result" || !n.content) return [];
+function collectToolResultCandidates(message) {
+  if (message.type !== "user" || !Array.isArray(message.message.content)) return [];
+  return message.message.content.flatMap((n) => {
+    if (!isObjectBlock(n) || n.type !== "tool_result" || !n.content) return [];
     if (isReplacedToolResultContent(n.content)) return [];
     if (hasMediaContent(n.content)) return [];
-    return [{ toolUseId: n.tool_use_id, content: n.content, size: getToolResultTextLength(n.content) }];
+    return [
+      {
+        toolUseId: n.tool_use_id,
+        content: n.content,
+        size: getToolResultTextLength(n.content),
+      },
+    ];
   });
 }
+//@ chunk-jcnpfn31.js:8262-8479 file-local
 /**
  * 按"同一次助手回答后的工具结果"分组收集候选（并行工具结果算一组）。
  */
-//@ chunk-jcnpfn31.js:8262-8479 file-local
 function collectCandidatesByMessage(messages) {
-  let n = [],
-    r = [],
-    flush = () => {
-      if (r.length > 0) n.push(r);
-      r = [];
-    },
-    seenAsstIds = new Set();
+  let groups = [];
+  let current = [];
+  let flush = () => {
+    if (current.length > 0) groups.push(current);
+    current = [];
+  };
+  let seenAsstIds = new Set();
   for (let message of messages)
-    if (message.type === "user") r.push(...collectToolResultCandidates(message));
+    if (message.type === "user") current.push(...collectToolResultCandidates(message));
     else if (message.type === "assistant") {
-      if (!seenAsstIds.has(message.message.id)) (flush(), seenAsstIds.add(message.message.id));
+      if (!seenAsstIds.has(message.message.id)) {
+        flush();
+        seenAsstIds.add(message.message.id);
+      }
     }
-  return (flush(), n);
+  flush();
+  return groups;
 }
+//@ chunk-jcnpfn31.js:8479-8733 fingerprint = partitionByPriorDecision (1)
 /**
  * 按替换状态把候选分为 mustReapply（已替换，需重放）、frozen（已见过、不再动）、fresh（新的）。
  */
-//@ chunk-jcnpfn31.js:8479-8733 fingerprint = partitionByPriorDecision (1)
 function partitionByPriorDecision(candidates, state) {
   return candidates.reduce(
-    (acc, o) => {
-      let replacement = state.replacements.get(o.toolUseId);
-      if (replacement !== void 0) acc.mustReapply.push({ ...o, replacement: replacement });
-      else if (state.seenIds.has(o.toolUseId)) acc.frozen.push(o);
-      else acc.fresh.push(o);
+    (acc, candidate) => {
+      let replacement = state.replacements.get(candidate.toolUseId);
+      if (replacement !== undefined)
+        acc.mustReapply.push({
+          ...candidate,
+          replacement,
+        });
+      else if (state.seenIds.has(candidate.toolUseId)) acc.frozen.push(candidate);
+      else acc.fresh.push(candidate);
       return acc;
     },
-    { mustReapply: [], frozen: [], fresh: [] },
+    {
+      mustReapply: [],
+      frozen: [],
+      fresh: [],
+    },
   );
 }
+//@ chunk-jcnpfn31.js:8733-8888 file-local
 /**
  * 从 fresh 里按大小降序挑选，直到 frozen+剩余 ≤ 预算。
  */
-//@ chunk-jcnpfn31.js:8733-8888 file-local
 function selectFreshToReplace(fresh, frozenSize, limit) {
-  let sorted = [...fresh].sort((l, u) => u.size - l.size),
-    selected = [],
-    remaining = frozenSize + fresh.reduce((sum, u) => sum + u.size, 0);
+  let sorted = [...fresh].sort((l, u) => u.size - l.size);
+  let selected = [];
+  let remaining = frozenSize + fresh.reduce((sum, u) => sum + u.size, 0);
   for (let l of sorted) {
     if (remaining <= limit) break;
-    (selected.push(l), (remaining -= l.size));
+    selected.push(l);
+    remaining -= l.size;
   }
   return selected;
 }
+//@ chunk-jcnpfn31.js:8888-9256 file-local
 /**
  * 把消息中指定 tool_use_id 的 tool_result 内容替换为新文本。
  */
-//@ chunk-jcnpfn31.js:8888-9256 file-local
 function replaceToolResultContents(messages, replacementMap) {
   return messages.map((message) => {
     if (message.type !== "user" || !Array.isArray(message.message.content)) return message;
     let content = message.message.content;
-    if (!content.some((s) => bl(s) && s.type === "tool_result" && replacementMap.has(s.tool_use_id)))
+    if (
+      !content.some((s) => isObjectBlock(s) && s.type === "tool_result" && replacementMap.has(s.tool_use_id))
+    )
       return message;
     return {
       ...message,
       message: {
         ...message.message,
         content: content.map((block) => {
-          if (!bl(block) || block.type !== "tool_result") return block;
+          if (!isObjectBlock(block) || block.type !== "tool_result") return block;
           let replacement = replacementMap.get(block.tool_use_id);
-          return replacement === void 0 ? block : { ...block, content: replacement };
+          return replacement === undefined
+            ? block
+            : {
+                ...block,
+                content: replacement,
+              };
         }),
       },
     };
   });
 }
+//@ chunk-jcnpfn31.js:9256-9438 fingerprint = buildReplacement (0.591)
 /**
  * 落盘一个候选并生成替换文本。
  */
-//@ chunk-jcnpfn31.js:9256-9438 fingerprint = buildReplacement (0.591)
-async function buildReplacement(e, n, r) {
-  let o = await persistToolResult(e.content, e.toolUseId, n, r);
-  if (isPersistError(o)) return null;
+async function buildReplacement(candidate, n, r) {
+  let result = await persistToolResult(candidate.content, candidate.toolUseId, n, r);
+  if (isPersistError(result)) return null;
   return {
-    content: buildPersistedOutputMessage(o),
-    originalSize: o.originalSize,
-    truncatedAtCap: o.truncatedAtBytes !== void 0,
+    content: buildPersistedOutputMessage(result),
+    originalSize: result.originalSize,
+    truncatedAtCap: result.truncatedAtBytes !== undefined,
   };
 }
+//@ chunk-jcnpfn31.js:9438-9623 file-local
 /**
  * 不参与聚合预算的工具名集合（maxResultSizeChars 无限或 skipAggregateToolResultBudget）。旧版名 getPerMessageBudgetLimit 不准确。
  */
-//@ chunk-jcnpfn31.js:9438-9623 file-local
-function getBudgetExemptToolNames(e) {
+function getBudgetExemptToolNames(tools) {
   let n = new Set();
-  for (let r of e)
-    if (!Number.isFinite(r.maxResultSizeChars) || r.skipAggregateToolResultBudget === !0) {
+  for (let r of tools)
+    if (!Number.isFinite(r.maxResultSizeChars) || r.skipAggregateToolResultBudget === true) {
       n.add(r.name);
       for (let o of r.aliases ?? []) n.add(o);
     }
   return n;
 }
+//@ chunk-jcnpfn31.js:9623-11298 fingerprint = enforceToolResultBudget (0.888)
 /**
  * 每组工具结果的聚合预算（200,000 字符）：重放已有替换；新结果超预算时落盘最大的若干个；所有见过的 id 记入 seenIds，保证同一结果的决定不再改变（缓存前缀稳定）；记 tengu_message_level_tool_result_budget_enforced。
  */
-//@ chunk-jcnpfn31.js:9623-11298 fingerprint = enforceToolResultBudget (0.888)
-async function enforceToolResultBudget(e, n, r, o, i = new Set()) {
-  let candidatesByMessage = collectCandidatesByMessage(e),
-    l = i.size > 0 ? mapToolUseIdToName(e) : void 0,
-    shouldSkip = (id) => l !== void 0 && i.has(l.get(id) ?? ""),
-    h = qhr,
-    replacementMap = new Map(),
-    T = [],
-    S = 0,
-    y = 0;
+async function enforceToolResultBudget(messages, state, r, o, i = new Set()) {
+  let candidatesByMessage = collectCandidatesByMessage(messages);
+  let nameByToolUseId = i.size > 0 ? mapToolUseIdToName(messages) : undefined;
+  let shouldSkip = (id) => nameByToolUseId !== undefined && i.has(nameByToolUseId.get(id) ?? "");
+  let limit = MAX_RESULT_BYTES;
+  let replacementMap = new Map();
+  let toPersist = [];
+  let reappliedCount = 0;
+  let messagesOverBudget = 0;
   for (let candidates of candidatesByMessage) {
-    let { mustReapply: mustReapply, frozen: frozen, fresh: fresh } = partitionByPriorDecision(candidates, n);
-    if (
-      (mustReapply.forEach((f) => replacementMap.set(f.toolUseId, f.replacement)),
-      (S += mustReapply.length),
-      fresh.length === 0)
-    ) {
-      candidates.forEach((f) => n.seenIds.add(f.toolUseId));
+    let { mustReapply, frozen, fresh } = partitionByPriorDecision(candidates, state);
+    mustReapply.forEach((f) => replacementMap.set(f.toolUseId, f.replacement));
+    reappliedCount += mustReapply.length;
+    if (fresh.length === 0) {
+      candidates.forEach((candidate) => state.seenIds.add(candidate.toolUseId));
       continue;
     }
-    fresh.filter((f) => shouldSkip(f.toolUseId)).forEach((f) => n.seenIds.add(f.toolUseId));
-    let eligible = fresh.filter((f) => !shouldSkip(f.toolUseId)),
-      frozenSize = frozen.reduce((sum, C) => sum + (shouldSkip(C.toolUseId) ? 0 : C.size), 0),
-      freshSize = eligible.reduce((sum, C) => sum + C.size, 0),
-      I = frozenSize + freshSize > h ? selectFreshToReplace(eligible, frozenSize, h) : [],
-      selectedIds = new Set(I.map((f) => f.toolUseId));
-    if (
-      (candidates.filter((f) => !selectedIds.has(f.toolUseId)).forEach((f) => n.seenIds.add(f.toolUseId)),
-      I.length === 0)
-    )
-      continue;
-    (y++, T.push(...I));
+    fresh.filter((f) => shouldSkip(f.toolUseId)).forEach((f) => state.seenIds.add(f.toolUseId));
+    let eligible = fresh.filter((f) => !shouldSkip(f.toolUseId));
+    let frozenSize = frozen.reduce((sum, C) => sum + (shouldSkip(C.toolUseId) ? 0 : C.size), 0);
+    let freshSize = eligible.reduce((sum, C) => sum + C.size, 0);
+    let selected = frozenSize + freshSize > limit ? selectFreshToReplace(eligible, frozenSize, limit) : [];
+    let selectedIds = new Set(selected.map((f) => f.toolUseId));
+    candidates
+      .filter((candidate) => !selectedIds.has(candidate.toolUseId))
+      .forEach((candidate) => state.seenIds.add(candidate.toolUseId));
+    if (selected.length === 0) continue;
+    messagesOverBudget++;
+    toPersist.push(...selected);
   }
-  if (replacementMap.size === 0 && T.length === 0) return { messages: e, newlyReplaced: [] };
-  let freshReplacements = await Promise.all(T.map(async (d) => [d, await buildReplacement(d, r, o)])),
-    p = [],
-    g = 0;
-  for (let [d, R] of freshReplacements) {
-    if ((n.seenIds.add(d.toolUseId), R === null)) continue;
-    ((g += d.size),
-      replacementMap.set(d.toolUseId, R.content),
-      n.replacements.set(d.toolUseId, R.content),
-      p.push({ kind: "tool-result", toolUseId: d.toolUseId, replacement: R.content }),
-      logEvent("tengu_tool_result_persisted_message_budget", {
-        originalSizeBytes: R.originalSize,
-        persistedSizeBytes: R.content.length,
-        estimatedOriginalTokens: Math.ceil(R.originalSize / RESULT_LIMITS),
-        estimatedPersistedTokens: Math.ceil(R.content.length / RESULT_LIMITS),
-        truncatedAtCap: R.truncatedAtCap,
-      }));
+  if (replacementMap.size === 0 && toPersist.length === 0)
+    return {
+      messages,
+      newlyReplaced: [],
+    };
+  let freshReplacements = await Promise.all(toPersist.map(async (d) => [d, await buildReplacement(d, r, o)]));
+  let newlyReplaced = [];
+  let replacedSize = 0;
+  for (let [candidate, replacement] of freshReplacements) {
+    state.seenIds.add(candidate.toolUseId);
+    if (replacement === null) continue;
+    replacedSize += candidate.size;
+    replacementMap.set(candidate.toolUseId, replacement.content);
+    state.replacements.set(candidate.toolUseId, replacement.content);
+    newlyReplaced.push({
+      kind: "tool-result",
+      toolUseId: candidate.toolUseId,
+      replacement: replacement.content,
+    });
+    logEvent("tengu_tool_result_persisted_message_budget", {
+      originalSizeBytes: replacement.originalSize,
+      persistedSizeBytes: replacement.content.length,
+      estimatedOriginalTokens: Math.ceil(replacement.originalSize / RESULT_LIMITS),
+      estimatedPersistedTokens: Math.ceil(replacement.content.length / RESULT_LIMITS),
+      truncatedAtCap: replacement.truncatedAtCap,
+    });
   }
-  if (replacementMap.size === 0) return { messages: e, newlyReplaced: [] };
-  if (p.length > 0)
-    (logForDebugging(
-      `Per-message budget: persisted ${p.length} tool results across ${y} over-budget message(s), shed ~${formatFileSize(g)}, ${S} re-applied`,
-    ),
-      logEvent("tengu_message_level_tool_result_budget_enforced", {
-        resultsPersisted: p.length,
-        messagesOverBudget: y,
-        replacedSizeBytes: g,
-        reapplied: S,
-      }));
-  return { messages: replaceToolResultContents(e, replacementMap), newlyReplaced: p };
+  if (replacementMap.size === 0)
+    return {
+      messages,
+      newlyReplaced: [],
+    };
+  if (newlyReplaced.length > 0) {
+    logForDebugging(
+      `Per-message budget: persisted ${newlyReplaced.length} tool results across ${messagesOverBudget} over-budget message(s), shed ~${formatFileSize(replacedSize)}, ${reappliedCount} re-applied`,
+    );
+    logEvent("tengu_message_level_tool_result_budget_enforced", {
+      resultsPersisted: newlyReplaced.length,
+      messagesOverBudget,
+      replacedSizeBytes: replacedSize,
+      reapplied: reappliedCount,
+    });
+  }
+  return {
+    messages: replaceToolResultContents(messages, replacementMap),
+    newlyReplaced,
+  };
 }
+//@ chunk-jcnpfn31.js:11298-11438 fingerprint = applyToolResultBudget (1)
 /**
  * applyToolResultBudget：queryLoop 每轮调用；有替换状态时执行 enforceToolResultBudget，新替换通过回调记录到会话存储。
  */
-//@ chunk-jcnpfn31.js:11298-11438 fingerprint = applyToolResultBudget (1)
-async function applyToolResultBudget(e, n, r, o, i, s) {
-  if (!n) return e;
-  let l = await enforceToolResultBudget(e, n, r, s, i);
-  if (l.newlyReplaced.length > 0) o?.(l.newlyReplaced);
-  return l.messages;
+async function applyToolResultBudget(messages, state, r, o, budgetExemptToolNames, storageV5) {
+  if (!state) return messages;
+  let result = await enforceToolResultBudget(messages, state, r, storageV5, budgetExemptToolNames);
+  if (result.newlyReplaced.length > 0) o?.(result.newlyReplaced);
+  return result.messages;
 }
+//@ chunk-jcnpfn31.js:11438-11746 fingerprint = reconstructContentReplacementState (1)
 /**
  * 从对话与存储的替换记录重建替换状态（恢复会话用）。
  */
-//@ chunk-jcnpfn31.js:11438-11746 fingerprint = reconstructContentReplacementState (1)
 function reconstructContentReplacementState(messages, records, inheritedReplacements) {
-  let state = createContentReplacementState(),
-    candidateIds = new Set(
-      collectCandidatesByMessage(messages)
-        .flat()
-        .map((s) => s.toolUseId),
-    );
+  let state = createContentReplacementState();
+  let candidateIds = new Set(
+    collectCandidatesByMessage(messages)
+      .flat()
+      .map((s) => s.toolUseId),
+  );
   for (let id of candidateIds) state.seenIds.add(id);
-  for (let s of records)
-    if (s.kind === "tool-result" && candidateIds.has(s.toolUseId))
-      state.replacements.set(s.toolUseId, s.replacement);
+  for (let record of records)
+    if (record.kind === "tool-result" && candidateIds.has(record.toolUseId))
+      state.replacements.set(record.toolUseId, record.replacement);
   if (inheritedReplacements) {
-    for (let [s, l] of inheritedReplacements)
-      if (candidateIds.has(s) && !state.replacements.has(s)) state.replacements.set(s, l);
+    for (let [id, replacement] of inheritedReplacements)
+      if (candidateIds.has(id) && !state.replacements.has(id)) state.replacements.set(id, replacement);
   }
   return state;
 }
+//@ chunk-jcnpfn31.js:11746-11810 fingerprint = reconstructForSubagentResume (1)
 /**
  * 子代理恢复时以父替换为补充重建状态。
  */
-//@ chunk-jcnpfn31.js:11746-11810 fingerprint = reconstructForSubagentResume (1)
 function reconstructForSubagentResume(parentState, resumedMessages, sidechainRecords) {
   if (!parentState) return;
   return reconstructContentReplacementState(resumedMessages, sidechainRecords, parentState.replacements);
 }
+//@ chunk-jcnpfn31.js:11810-11959 layout
 /**
  * 宿主存储写失败的错误文本。
  */
-//@ chunk-jcnpfn31.js:11810-11959 layout
-function formatStorageWriteError(e, n) {
-  let r = storageErrorCode(e);
-  if (r === void 0) return `storage write failed: ${e.code}`;
+function formatStorageWriteError(error, path) {
+  let r = storageErrorCode(error);
+  if (r === undefined) return `storage write failed: ${error.code}`;
   let o = Error("storage write failed");
-  return ((o.code = r), (o.path = n), getFileSystemErrorMessage(o));
+  o.code = r;
+  o.path = path;
+  return getFileSystemErrorMessage(o);
 }
+//@ chunk-jcnpfn31.js:11959-12393 fingerprint = getFileSystemErrorMessage (1)
 /**
  * 文件系统错误码 → 可读文本（ENOENT/EACCES/ENOSPC/EROFS/EMFILE/EEXIST）。
  */
-//@ chunk-jcnpfn31.js:11959-12393 fingerprint = getFileSystemErrorMessage (1)
 function getFileSystemErrorMessage(error) {
   let nodeError = error;
   if (nodeError.code)
@@ -802,86 +897,85 @@ function getFileSystemErrorMessage(error) {
     }
   return error.message;
 }
+//@ chunk-jcnpfn31.js:12393-12983 placement
 /**
  * 钩子输出超 10000 字符时落盘为 hook-<id>-<source> 并换成预览；失败时截断并说明。
  */
-//@ chunk-jcnpfn31.js:12393-12983 placement
-async function persistLargeHookOutput(e, n, r, { threshold: o = SIt, storageV5: i } = {}) {
+async function persistLargeHookOutput(e, n, r, { threshold: o = RESULT_LIMIT_COUNT, storageV5: i } = {}) {
   if (e.length <= o) return e;
-  let s = await persistToolResult(e, `hook-${n}-${r}`, kSr(), i);
+  let s = await persistToolResult(e, `hook-${n}-${r}`, toolResultsDirOrNull(), i);
   if (isPersistError(s)) {
-    if (dy() !== void 0) return buildTruncatedInlineResult(e, o)?.message ?? e;
-    return (
-      logEvent("tengu_hook_output_persisted", {
-        source: fromEnum(r),
-        originalSizeBytes: e.length,
-        persistedSizeBytes: 0,
-        truncatedFallback: !0,
-      }),
-      `${truncateToLength(e, o)}
-
-[Hook ${r} truncated at ${o} chars \u2014 persist-to-disk failed: ${s.error}]`
-    );
-  }
-  let l = buildPersistedOutputMessage(s);
-  return (
+    if (toolResultStoreOrNull() !== undefined) return buildTruncatedInlineResult(e, o)?.message ?? e;
     logEvent("tengu_hook_output_persisted", {
       source: fromEnum(r),
-      originalSizeBytes: s.originalSize,
-      persistedSizeBytes: l.length,
-      truncatedFallback: !1,
-      truncatedAtCap: s.truncatedAtBytes !== void 0,
-    }),
-    l
-  );
+      originalSizeBytes: e.length,
+      persistedSizeBytes: 0,
+      truncatedFallback: true,
+    });
+    return `${truncateToLength(e, o)}
+
+[Hook ${r} truncated at ${o} chars \u2014 persist-to-disk failed: ${s.error}]`;
+  }
+  let persistedOutputMessage = buildPersistedOutputMessage(s);
+  logEvent("tengu_hook_output_persisted", {
+    source: fromEnum(r),
+    originalSizeBytes: s.originalSize,
+    persistedSizeBytes: persistedOutputMessage.length,
+    truncatedFallback: false,
+    truncatedAtCap: s.truncatedAtBytes !== undefined,
+  });
+  return persistedOutputMessage;
 }
 //@ chunk-jcnpfn31.js:12983-13050 placement
 function isPersistedHookOutputPath(e, n) {
   return n.startsWith(PERSISTED_OUTPUT_TAG) && n.endsWith(PERSISTED_OUTPUT_CLOSING_TAG) && n !== e;
 }
+//@ chunk-t0gq9gyw.js:44789-44812 fingerprint = TOOL_RESULTS_SUBDIR (1)
 /**
  * 落盘子目录名 "tool-results"。
  */
-//@ chunk-t0gq9gyw.js:44789-44812 fingerprint = TOOL_RESULTS_SUBDIR (1)
 var TOOL_RESULTS_SUBDIR = "tool-results";
 //@ chunk-t0gq9gyw.js:44812-44875 placement = getOriginalCwd (0.722)
-function getOriginalCwd(e) {
-  return Tn(e.root.id, () => xo(e.root).originalCwd);
+function getOriginalCwd(session) {
+  return toolResultsDirFor(session.root.id, () => getSessionProject(session.root).originalCwd);
 }
+//@ chunk-t0gq9gyw.js:44875-44907 placement
 /**
  * 工具结果目录。
  */
-//@ chunk-t0gq9gyw.js:44875-44907 placement
 function toolResultsDir() {
-  return Tn(getSessionId(), getOriginalCwd_2);
+  return toolResultsDirFor(getSessionId(), getOriginalCwd_2);
 }
+//@ chunk-t0gq9gyw.js:44907-44944 placement
 /**
  * 指定会话的工具结果目录。
  */
-//@ chunk-t0gq9gyw.js:44907-44944 placement
-function toolResultsDirFor(e) {
-  return isDiskless() ? null : getOriginalCwd(e);
+function toolResultsDirFor_2(session) {
+  return isDiskless() ? null : getOriginalCwd(session);
 }
 //@ chunk-t0gq9gyw.js:44944-44980 placement
-function kSr() {
+/**
+ * 非 diskless 时返回 tool-results 目录。
+ */
+function toolResultsDirOrNull() {
   return isDiskless() ? null : toolResultsDir();
 }
 //@ chunk-t0gq9gyw.js:44980-45029 placement
-function Tn(e, n) {
-  return join_3(getPinnedProjectDir() ?? getProjectDir(n()), e, TOOL_RESULTS_SUBDIR);
+function toolResultsDirFor(e, n) {
+  return join(getPinnedProjectDir() ?? getProjectDir(n()), e, TOOL_RESULTS_SUBDIR);
 }
+//@ chunk-t0gq9gyw.js:45029-45095 placement
 /**
  * 工具结果文件对应的存储键。
  */
-//@ chunk-t0gq9gyw.js:45029-45095 placement
 function toolResultsKey(e, n) {
-  if (basename_3(e) !== TOOL_RESULTS_SUBDIR || !isValidKeySegment(n)) return;
-  return pathToSessionSideKey(join_3(e, n));
+  if (basename(e) !== TOOL_RESULTS_SUBDIR || !isValidKeySegment(n)) return;
+  return pathToSessionSideKey(join(e, n));
 }
 //@ chunk-t0gq9gyw.js:45095-45280 placement
 function getSidecarParentKey(e) {
   let n = toolResultsKey(e, "probe");
-  if (n === void 0 || n.namespace !== "sidecar") return;
+  if (n === undefined || n.namespace !== "sidecar") return;
   return {
     namespace: "sidecar",
     projectKey: n.projectKey,
@@ -889,94 +983,97 @@ function getSidecarParentKey(e) {
     relPath: n.relPath.slice(0, -1),
   };
 }
+//@ chunk-t0gq9gyw.js:45280-45562 placement
 /**
  * 确保工具结果目录存在。
  */
-//@ chunk-t0gq9gyw.js:45280-45562 placement
 async function ensureToolResultsDir(e, n) {
-  if (isStorageV5Enabled() && n !== void 0) {
-    let s = getSidecarParentKey(e);
-    if (s !== void 0)
+  if (isStorageV5Enabled() && n !== undefined) {
+    let sidecarParentKey = getSidecarParentKey(e);
+    if (sidecarParentKey !== undefined)
       try {
-        if ((await n.ensureScope(s)).ok) return;
+        if ((await n.ensureScope(sidecarParentKey)).ok) return;
       } catch {}
   }
   if (isDiskless()) {
     logForDebugging("tool-results folder not made: diskless session");
     return;
   }
-  let r = getFileReader(),
-    o = !1;
+  let fileReader = getFileReader();
+  let o = false;
   try {
-    o = await To(r, e);
+    o = await hasOnlyDirectoryAncestors(fileReader, e);
   } catch {}
   if (!o) return;
   try {
-    await r.mkdir(e);
+    await fileReader.mkdir(e);
   } catch (error) {
     return error;
   }
 }
 //@ chunk-t0gq9gyw.js:45562-45571 placement
-var Fo = 3;
+var MAX_WRITE_RETRIES = 3;
 //@ chunk-t0gq9gyw.js:45571-45624 placement
-async function To(e, n) {
-  return (await findNonDirectoryAncestor(e, n)) === void 0;
+async function hasOnlyDirectoryAncestors(fileReader, n) {
+  return (await findNonDirectoryAncestor(fileReader, n)) === undefined;
 }
 //@ chunk-t0gq9gyw.js:45624-45865 placement
 async function findNonDirectoryAncestor(e, n) {
-  let r = getProjectsDir(),
-    o = relative(r, n);
-  if (o === "" || o === ".." || o.startsWith(".." + sep_2) || isAbsolute_3(o)) return;
-  let s = r;
-  for (let a of o.split(sep_2)) {
-    s = join_3(s, a);
+  let projectsDir = getProjectsDir();
+  let o = relative(projectsDir, n);
+  if (o === "" || o === ".." || o.startsWith(".." + sep) || isAbsolute(o)) return;
+  let s = projectsDir;
+  for (let a of o.split(sep)) {
+    s = join(s, a);
     let stats = await e.lstat(s);
-    if (stats === void 0) return;
+    if (stats === undefined) return;
     if (stats.isSymbolicLink || !stats.isDirectory) return s;
   }
   return;
 }
+//@ chunk-t0gq9gyw.js:45865-46173 placement
 /**
  * 检查工具结果目录可写（无本地文件会话拒绝）。
  */
-//@ chunk-t0gq9gyw.js:45865-46173 placement
-async function checkToolResultsWritable(e, n) {
+async function checkToolResultsWritable(e, fileReader) {
   if (isDiskless())
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "tool-results file refused: this session keeps no files on this machine",
     );
-  let r = await findNonDirectoryAncestor(n, e);
-  if (r !== void 0)
+  let nonDirectoryAncestor = await findNonDirectoryAncestor(fileReader, e);
+  if (nonDirectoryAncestor !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `tool-results path refused: ${r} is a link or not a directory`,
+      `tool-results path refused: ${nonDirectoryAncestor} is a link or not a directory`,
       "tool-results path refused: a directory on the way is a link or not a directory",
     );
 }
+//@ chunk-t0gq9gyw.js:46173-46379 placement
 /**
  * 写入工具结果文件（重试）。
  */
-//@ chunk-t0gq9gyw.js:46173-46379 placement
 async function writeToolResultFile(e, n, r) {
-  let o = getFileReader();
-  await checkToolResultsWritable(dirname_4(e), o);
-  for (let s = 1; ; s++) {
-    if (s > 1) await Dn(o, e);
-    else await qhs(e, o);
+  let fileReader = getFileReader();
+  await checkToolResultsWritable(dirname(e), fileReader);
+  for (let j = 1; ; j++) {
+    if (j > 1) await unlinkQuietly(fileReader, e);
+    else await unlinkIfSymlink(e, fileReader);
     try {
-      await o.writeBytesExclusive(e, n, r);
+      await fileReader.writeBytesExclusive(e, n, r);
       return;
     } catch (error) {
-      if (getErrnoCode(error) !== "EEXIST" || s >= Fo) throw error;
+      if (getErrnoCode(error) !== "EEXIST" || j >= MAX_WRITE_RETRIES) throw error;
     }
   }
 }
 //@ chunk-t0gq9gyw.js:46379-46455 placement
-async function qhs(e, n) {
-  if ((await n.lstat(e))?.isSymbolicLink) await Dn(n, e);
+/**
+ * 目标是符号链接时先删除。
+ */
+async function unlinkIfSymlink(e, fileReader) {
+  if ((await fileReader.lstat(e))?.isSymbolicLink) await unlinkQuietly(fileReader, e);
 }
 //@ chunk-t0gq9gyw.js:46455-46537 placement
-async function Dn(e, n) {
+async function unlinkQuietly(e, n) {
   try {
     await e.delete(n);
   } catch (error) {
@@ -984,65 +1081,80 @@ async function Dn(e, n) {
   }
 }
 //@ chunk-dcd8bnv7.js:264-333 placement
-var r = new SessionRootSlot(() => ({ store: void 0 })),
-  s = { maxBytes: 0, save: async () => null };
+var toolResultStoreSlot = new SessionRootSlot(() => ({
+  store: undefined,
+}));
+var NOOP_RESULT_SAVE = {
+  maxBytes: 0,
+  save: async () => null,
+};
 //@ chunk-dcd8bnv7.js:333-417 placement
-function W5o(e) {
-  return r.peek(e)?.store ?? (e.host.launchOptions.diskless() ? s : void 0);
+/**
+ * 取会话的工具结果存储（diskless 用空实现）。
+ */
+function toolResultStore(e) {
+  return (
+    toolResultStoreSlot.peek(e)?.store ?? (e.host.launchOptions.diskless() ? NOOP_RESULT_SAVE : undefined)
+  );
 }
 //@ chunk-dcd8bnv7.js:417-447 placement
-function dy() {
-  return W5o(getRootSession());
+/**
+ * 取当前会话的工具结果存储。
+ */
+function toolResultStoreOrNull() {
+  return toolResultStore(getRootSession());
 }
+//@ chunk-dcd8bnv7.js:447-594 placement
 /**
  * 保存结果到模型可读的位置，失败时记错误日志并返回 null。
  */
-//@ chunk-dcd8bnv7.js:447-594 placement
 async function saveResultSafely(e, o) {
   try {
     return await e.save(o);
   } catch {
-    return (
-      logForDebugging("A result could not be saved where the model reads files", { level: "error" }),
-      null
-    );
+    logForDebugging("A result could not be saved where the model reads files", {
+      level: "error",
+    });
+    return null;
   }
 }
+//@ chunk-f25sswmp.js:2019-2135 fingerprint = hasImageBlock (1)
 /**
  * 是否为合法 base64 image 块。
  */
-//@ chunk-f25sswmp.js:2019-2135 fingerprint = hasImageBlock (1)
 function hasImageBlock(content) {
-  if (typeof content !== "object" || content === null) return !1;
-  if (!("type" in content) || content.type !== "image") return !1;
+  if (typeof content !== "object" || content === null) return false;
+  if (!("type" in content) || content.type !== "image") return false;
   return isBase64ImageBlock(content);
 }
 //@ chunk-f25sswmp.js:2135-2288 placement = isToolResultBlockWithContent (1)
 function isToolResultWithArrayContent(obj) {
-  if (typeof obj !== "object" || obj === null) return !1;
-  if (!("type" in obj) || obj.type !== "tool_result") return !1;
+  if (typeof obj !== "object" || obj === null) return false;
+  if (!("type" in obj) || obj.type !== "tool_result") return false;
   return "content" in obj && Array.isArray(obj.content);
 }
 //@ chunk-6nqjztgx.js:226-253 placement
-function bl(n) {
+/**
+ * 是否是普通对象。
+ */
+function isObjectBlock(n) {
   return isPlainObject(n);
 }
-
 export {
   toolResultsDir,
   toolResultsKey,
-  bl,
+  isObjectBlock,
   getPersistenceThreshold,
   persistToolResult,
-  toolResultsDirFor,
+  toolResultsDirFor_2,
   isPersistError,
-  W5o,
+  toolResultStore,
   buildTruncatedInlineResult,
   buildPersistedOutputMessage,
   reconstructForSubagentResume,
   provisionContentReplacementState,
   reconstructContentReplacementState,
-  dy,
+  toolResultStoreOrNull,
   TOOL_RESULTS_SUBDIR,
   applyToolResultBudget,
   getBudgetExemptToolNames,
@@ -1071,7 +1183,7 @@ export {
   wasToolResultKeptInFull,
   cloneContentReplacementState,
   isToolResultWithArrayContent,
-  kSr,
+  toolResultsDirOrNull,
   TOOL_RESULT_CLEARED_MESSAGE,
   isContentAlreadyCompacted,
 };

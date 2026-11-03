@@ -9,16 +9,15 @@
  * attribution: placement 1
  */
 
+//@ chunk-dnt9czc7.js:191-259 placement
 /**
  * 服务调用错误类型。
  */
-//@ chunk-dnt9czc7.js:191-259 placement
 class ServedCallError extends Error {
   meta;
-  constructor(r, e) {
-    super(r);
-    this.meta = e;
+  constructor(message, meta) {
+    super(message);
+    this.meta = meta;
   }
 }
-
 export { ServedCallError };

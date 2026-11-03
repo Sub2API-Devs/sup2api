@@ -11,19 +11,18 @@
 import { getSessionId } from "../bootstrap/state.js";
 import { env } from "../utils/env.js";
 
+//@ chunk-ha3km179.js:142768-142929 fingerprint = buildQueryConfig (0.827)
 /**
  * buildQueryConfig：{sessionId, gates:{emitToolUseSummaries: CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES, isAnt:false, fastModeEnabled: !CLAUDE_CODE_DISABLE_FAST_MODE}}。
  */
-//@ chunk-ha3km179.js:142768-142929 fingerprint = buildQueryConfig (0.827)
 function buildQueryConfig() {
   return {
     sessionId: getSessionId(),
     gates: {
       emitToolUseSummaries: env.CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES,
-      isAnt: !1,
+      isAnt: false,
       fastModeEnabled: !env.CLAUDE_CODE_DISABLE_FAST_MODE,
     },
   };
 }
-
 export { buildQueryConfig };

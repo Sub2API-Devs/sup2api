@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-3e7edr38.js:211-231 fingerprint = TASK_UPDATE_TOOL_NAME (1)
 /**
  * "TaskUpdate"。
  */
-//@ chunk-3e7edr38.js:211-231 fingerprint = TASK_UPDATE_TOOL_NAME (1)
 var TASK_UPDATE_TOOL_NAME = "TaskUpdate";
-
 export { TASK_UPDATE_TOOL_NAME };

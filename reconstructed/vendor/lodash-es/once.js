@@ -5,7 +5,7 @@
  * pieces: chunk-bwbq4xvm.js (5)
  * attribution: placement 5
  */
-import { toIntegerExport } from "./toInteger.js";
+import { toInteger_default } from "./toInteger.js";
 
 //@ chunk-bwbq4xvm.js:151035-151064 placement
 var FUNC_ERROR_TEXT = "Expected a function";
@@ -13,14 +13,12 @@ var FUNC_ERROR_TEXT = "Expected a function";
 function before(e, s) {
   var n;
   if (typeof s != "function") throw TypeError(FUNC_ERROR_TEXT);
-  return (
-    (e = toIntegerExport(e)),
-    function () {
-      if (--e > 0) n = s.apply(this, arguments);
-      if (e <= 1) s = void 0;
-      return n;
-    }
-  );
+  e = toInteger_default(e);
+  return function () {
+    if (--e > 0) n = s.apply(this, arguments);
+    if (e <= 1) s = undefined;
+    return n;
+  };
 }
 //@ chunk-bwbq4xvm.js:151220-151230 placement
 var beforeExport = before;
@@ -28,10 +26,9 @@ var beforeExport = before;
 function once(e) {
   return beforeExport(2, e);
 }
+//@ chunk-bwbq4xvm.js:151260-151270 placement
 /**
  * lodash-es once：包装函数只执行一次并缓存结果（316 中被 FileEdit/WebFetch 等使用）。
  */
-//@ chunk-bwbq4xvm.js:151260-151270 placement
 var onceExport = once;
-
 export { onceExport };

@@ -8,12 +8,12 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:133716-139327 cjs-fingerprint
-var na = x(function (oE, ta) {
-  function rd(e) {
+var require_excel = x(function (cjsExports, cjsModule) {
+  function excel(hljs) {
     return {
       name: "Excel formulae",
       aliases: ["xlsx", "xls"],
-      case_insensitive: !0,
+      case_insensitive: true,
       keywords: {
         $pattern: /[a-zA-Z][\w\.]*/,
         built_in: [
@@ -533,17 +533,40 @@ var na = x(function (oE, ta) {
         ],
       },
       contains: [
-        { begin: /^=/, end: /[^=]/, returnEnd: !0, illegal: /=/, relevance: 10 },
-        { className: "symbol", begin: /\b[A-Z]{1,2}\d+\b/, end: /[^\d]/, excludeEnd: !0, relevance: 0 },
-        { className: "symbol", begin: /[A-Z]{0,2}\d*:[A-Z]{0,2}\d*/, relevance: 0 },
-        e.BACKSLASH_ESCAPE,
-        e.QUOTE_STRING_MODE,
-        { className: "number", begin: e.NUMBER_RE + "(%)?", relevance: 0 },
-        e.COMMENT(/\bN\(/, /\)/, { excludeBegin: !0, excludeEnd: !0, illegal: /\n/ }),
+        {
+          begin: /^=/,
+          end: /[^=]/,
+          returnEnd: true,
+          illegal: /=/,
+          relevance: 10,
+        },
+        {
+          className: "symbol",
+          begin: /\b[A-Z]{1,2}\d+\b/,
+          end: /[^\d]/,
+          excludeEnd: true,
+          relevance: 0,
+        },
+        {
+          className: "symbol",
+          begin: /[A-Z]{0,2}\d*:[A-Z]{0,2}\d*/,
+          relevance: 0,
+        },
+        hljs.BACKSLASH_ESCAPE,
+        hljs.QUOTE_STRING_MODE,
+        {
+          className: "number",
+          begin: hljs.NUMBER_RE + "(%)?",
+          relevance: 0,
+        },
+        hljs.COMMENT(/\bN\(/, /\)/, {
+          excludeBegin: true,
+          excludeEnd: true,
+          illegal: /\n/,
+        }),
       ],
     };
   }
-  ta.exports = rd;
+  cjsModule.exports = excel;
 });
-
-export { na };
+export { require_excel };

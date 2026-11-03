@@ -5,24 +5,48 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Jt } from "../jwe/compact/decrypt.js";
-import { Ae } from "../../../webapi/lib/jwt_claims_set.js";
-import { z5 } from "../util/errors.js";
+import { compactDecrypt_2 } from "../jwe/compact/decrypt.js";
+import { validateClaimsSet } from "../../../webapi/lib/jwt_claims_set.js";
+import { JWTClaimValidationFailed } from "../util/errors.js";
 
 //@ chunk-5h78gfwc.js:44434-45018 esm-fingerprint
-async function jwtDecrypt(e, t, r) {
-  let n = await Jt(e, t, r),
-    i = Ae(n.protectedHeader, n.plaintext, r),
-    { protectedHeader: protectedHeader } = n;
-  if (protectedHeader.iss !== void 0 && protectedHeader.iss !== i.iss)
-    throw new z5('replicated "iss" claim header parameter mismatch', i, "iss", "mismatch");
-  if (protectedHeader.sub !== void 0 && protectedHeader.sub !== i.sub)
-    throw new z5('replicated "sub" claim header parameter mismatch', i, "sub", "mismatch");
-  if (protectedHeader.aud !== void 0 && JSON.stringify(protectedHeader.aud) !== JSON.stringify(i.aud))
-    throw new z5('replicated "aud" claim header parameter mismatch', i, "aud", "mismatch");
-  let a = { payload: i, protectedHeader: protectedHeader };
-  if (typeof t === "function") return { ...a, key: n.key };
-  return a;
+async function jwtDecrypt(jwt, key, options) {
+  let decrypted = await compactDecrypt_2(jwt, key, options);
+  let payload = validateClaimsSet(decrypted.protectedHeader, decrypted.plaintext, options);
+  let { protectedHeader } = decrypted;
+  if (protectedHeader.iss !== undefined && protectedHeader.iss !== payload.iss)
+    throw new JWTClaimValidationFailed(
+      'replicated "iss" claim header parameter mismatch',
+      payload,
+      "iss",
+      "mismatch",
+    );
+  if (protectedHeader.sub !== undefined && protectedHeader.sub !== payload.sub)
+    throw new JWTClaimValidationFailed(
+      'replicated "sub" claim header parameter mismatch',
+      payload,
+      "sub",
+      "mismatch",
+    );
+  if (
+    protectedHeader.aud !== undefined &&
+    JSON.stringify(protectedHeader.aud) !== JSON.stringify(payload.aud)
+  )
+    throw new JWTClaimValidationFailed(
+      'replicated "aud" claim header parameter mismatch',
+      payload,
+      "aud",
+      "mismatch",
+    );
+  let result = {
+    payload,
+    protectedHeader,
+  };
+  if (typeof key === "function")
+    return {
+      ...result,
+      key: decrypted.key,
+    };
+  return result;
 }
-
 export { jwtDecrypt };

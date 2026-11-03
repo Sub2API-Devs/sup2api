@@ -7,53 +7,56 @@
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
 import { base64Module } from "../../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
-import { B } from "../stream-type-check.js";
-import { We } from "./ChecksumStream.browser.js";
+import { require_stream_type_check } from "../stream-type-check.js";
+import { require_ChecksumStream_browser } from "./ChecksumStream.browser.js";
 
 //@ chunk-wjd9n4jx.js:2027-2964 cjs-fingerprint
-var Ke = x(function (Ye) {
-  Object.defineProperty(Ye, "__esModule", { value: !0 });
-  Ye.createChecksumStream = void 0;
-  var Ve = base64Module(),
-    Qe = B(),
-    Ge = We(),
-    Dr = ({
-      expectedChecksum: expectedChecksum,
-      checksum: checksum,
-      source: source,
-      checksumSourceLocation: checksumSourceLocation,
-      base64Encoder: base64Encoder,
-    }) => {
-      if (!Qe.isReadableStream(source))
-        throw Error(
-          `@smithy/util-stream: unsupported source type ${source?.constructor?.name ?? source} in ChecksumStream.`,
-        );
-      let i = base64Encoder ?? Ve.toBase64;
-      if (typeof TransformStream !== "function")
-        throw Error(
-          "@smithy/util-stream: unable to instantiate ChecksumStream because API unavailable: ReadableStream/TransformStream.",
-        );
-      let transformStream = new TransformStream({
-        start() {},
-        async transform(c, u) {
-          (checksum.update(c), u.enqueue(c));
-        },
-        async flush(c) {
-          let digest = await checksum.digest(),
-            h = i(digest);
-          if (expectedChecksum !== h) {
-            let f = Error(
-              `Checksum mismatch: expected "${expectedChecksum}" but received "${h}" in response header "${checksumSourceLocation}".`,
-            );
-            c.error(f);
-          } else c.terminate();
-        },
-      });
-      source.pipeThrough(transformStream);
-      let readable = transformStream.readable;
-      return (Object.setPrototypeOf(readable, Ge.ChecksumStream.prototype), readable);
-    };
-  Ye.createChecksumStream = Dr;
+var require_createChecksumStream_browser = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.createChecksumStream = undefined;
+  var util_base64_1 = base64Module();
+  var stream_type_check_1 = require_stream_type_check();
+  var ChecksumStream_browser_1 = require_ChecksumStream_browser();
+  var createChecksumStream = ({
+    expectedChecksum,
+    checksum,
+    source,
+    checksumSourceLocation,
+    base64Encoder,
+  }) => {
+    if (!stream_type_check_1.isReadableStream(source))
+      throw Error(
+        `@smithy/util-stream: unsupported source type ${source?.constructor?.name ?? source} in ChecksumStream.`,
+      );
+    let encoder = base64Encoder ?? util_base64_1.toBase64;
+    if (typeof TransformStream !== "function")
+      throw Error(
+        "@smithy/util-stream: unable to instantiate ChecksumStream because API unavailable: ReadableStream/TransformStream.",
+      );
+    let transform = new TransformStream({
+      start() {},
+      async transform(chunk, controller) {
+        checksum.update(chunk);
+        controller.enqueue(chunk);
+      },
+      async flush(controller) {
+        let digest = await checksum.digest();
+        let received = encoder(digest);
+        if (expectedChecksum !== received) {
+          let error = Error(
+            `Checksum mismatch: expected "${expectedChecksum}" but received "${received}" in response header "${checksumSourceLocation}".`,
+          );
+          controller.error(error);
+        } else controller.terminate();
+      },
+    });
+    source.pipeThrough(transform);
+    let readable = transform.readable;
+    Object.setPrototypeOf(readable, ChecksumStream_browser_1.ChecksumStream.prototype);
+    return readable;
+  };
+  cjsExports.createChecksumStream = createChecksumStream;
 });
-
-export { Ke };
+export { require_createChecksumStream_browser };

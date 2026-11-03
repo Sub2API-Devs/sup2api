@@ -5,122 +5,143 @@
  * pieces: chunk-7vb8p3zb.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
  */
-import { L } from "../../libcjs/diff/base.js";
-import { j, k, H, T, W, b, I, y, E, O, A } from "../../libcjs/util/string.js";
+import { Diff } from "../../libcjs/diff/base.js";
+import {
+  segment,
+  leadingAndTrailingWs,
+  longestCommonPrefix,
+  replaceSuffix,
+  W,
+  longestCommonSuffix,
+  replacePrefix,
+  y,
+  leadingWs,
+  trailingWs,
+  maximumOverlap,
+} from "../../libcjs/util/string.js";
 
 //@ chunk-7vb8p3zb.js:4740-4907 esm-fingerprint
-var F =
-    "a-zA-Z0-9_\\u{AD}\\u{C0}-\\u{D6}\\u{D8}-\\u{F6}\\u{F8}-\\u{2C6}\\u{2C8}-\\u{2D7}\\u{2DE}-\\u{2FF}\\u{1E00}-\\u{1EFF}",
-  regExp = new RegExp(`[${F}]+|\\s+|[^${F}]`, "ug");
+var extendedWordChars =
+  "a-zA-Z0-9_\\u{AD}\\u{C0}-\\u{D6}\\u{D8}-\\u{F6}\\u{F8}-\\u{2C6}\\u{2C8}-\\u{2D7}\\u{2DE}-\\u{2FF}\\u{1E00}-\\u{1EFF}";
+var tokenizeIncludingWhitespace = new RegExp(`[${extendedWordChars}]+|\\s+|[^${extendedWordChars}]`, "ug");
 //@ chunk-7vb8p3zb.js:4907-5764 esm-fingerprint
-class R extends L {
-  equals(n, e, t) {
-    if (t.ignoreCase) ((n = n.toLowerCase()), (e = e.toLowerCase()));
-    return n.trim() === e.trim();
+class WordDiff extends Diff {
+  equals(left, right, options) {
+    if (options.ignoreCase) {
+      left = left.toLowerCase();
+      right = right.toLowerCase();
+    }
+    return left.trim() === right.trim();
   }
-  tokenize(n, e = {}) {
-    let t;
-    if (e.intlSegmenter) {
-      let intlSegmenter = e.intlSegmenter;
-      if (intlSegmenter.resolvedOptions().granularity != "word")
+  tokenize(value, options = {}) {
+    let parts;
+    if (options.intlSegmenter) {
+      let segmenter = options.intlSegmenter;
+      if (segmenter.resolvedOptions().granularity != "word")
         throw Error('The segmenter passed must have a granularity of "word"');
-      t = j(n, intlSegmenter);
-    } else t = n.match(regExp) || [];
-    let i = [],
-      l = null;
-    return (
-      t.forEach((r) => {
-        if (/\s/.test(r))
-          if (l == null) i.push(r);
-          else i.push(i.pop() + r);
-        else if (l != null && /\s/.test(l))
-          if (i[i.length - 1] == l) i.push(i.pop() + r);
-          else i.push(l + r);
-        else i.push(r);
-        l = r;
-      }),
-      i
-    );
+      parts = segment(value, segmenter);
+    } else parts = value.match(tokenizeIncludingWhitespace) || [];
+    let tokens = [];
+    let prevPart = null;
+    parts.forEach((part) => {
+      if (/\s/.test(part)) {
+        if (prevPart == null) tokens.push(part);
+        else tokens.push(tokens.pop() + part);
+      } else if (prevPart != null && /\s/.test(prevPart)) {
+        if (tokens[tokens.length - 1] == prevPart) tokens.push(tokens.pop() + part);
+        else tokens.push(prevPart + part);
+      } else tokens.push(part);
+      prevPart = part;
+    });
+    return tokens;
   }
-  join(n) {
-    return n
-      .map((e, t) => {
-        if (t == 0) return e;
-        else return e.replace(/^\s+/, "");
+  join(tokens) {
+    return tokens
+      .map((token, i) => {
+        if (i == 0) return token;
+        else return token.replace(/^\s+/, "");
       })
       .join("");
   }
-  postProcess(n, e) {
-    if (!n || e.oneChangePerToken) return n;
-    let t = null,
-      i = null,
-      l = null;
-    if (
-      (n.forEach((r) => {
-        if (r.added) i = r;
-        else if (r.removed) l = r;
-        else {
-          if (i || l) N(t, l, i, r, e.intlSegmenter);
-          ((t = r), (i = null), (l = null));
-        }
-      }),
-      i || l)
-    )
-      N(t, l, i, null, e.intlSegmenter);
-    return n;
+  postProcess(changes, options) {
+    if (!changes || options.oneChangePerToken) return changes;
+    let lastKeep = null;
+    let insertion = null;
+    let deletion = null;
+    changes.forEach((change) => {
+      if (change.added) insertion = change;
+      else if (change.removed) deletion = change;
+      else {
+        if (insertion || deletion)
+          dedupeWhitespaceInChangeObjects(lastKeep, deletion, insertion, change, options.intlSegmenter);
+        lastKeep = change;
+        insertion = null;
+        deletion = null;
+      }
+    });
+    if (insertion || deletion)
+      dedupeWhitespaceInChangeObjects(lastKeep, deletion, insertion, null, options.intlSegmenter);
+    return changes;
   }
 }
 //@ chunk-7vb8p3zb.js:5764-5776 esm-layout
-var B = new R();
+var B = new WordDiff();
 //@ chunk-7vb8p3zb.js:5776-6496 esm-fingerprint
-function N(n, e, t, i, l) {
-  if (e && t) {
-    let [r, s] = k(e.value, l),
-      [o, f] = k(t.value, l);
-    if (n) {
-      let u = H(r, o);
-      ((n.value = T(n.value, o, u)), (e.value = W(e.value, u)), (t.value = W(t.value, u)));
+function dedupeWhitespaceInChangeObjects(startKeep, deletion, insertion, endKeep, segmenter) {
+  if (deletion && insertion) {
+    let [oldWsPrefix, oldWsSuffix] = leadingAndTrailingWs(deletion.value, segmenter);
+    let [newWsPrefix, newWsSuffix] = leadingAndTrailingWs(insertion.value, segmenter);
+    if (startKeep) {
+      let commonWsPrefix = longestCommonPrefix(oldWsPrefix, newWsPrefix);
+      startKeep.value = replaceSuffix(startKeep.value, newWsPrefix, commonWsPrefix);
+      deletion.value = W(deletion.value, commonWsPrefix);
+      insertion.value = W(insertion.value, commonWsPrefix);
     }
-    if (i) {
-      let u = b(s, f);
-      ((i.value = I(i.value, f, u)), (e.value = y(e.value, u)), (t.value = y(t.value, u)));
+    if (endKeep) {
+      let commonWsSuffix = longestCommonSuffix(oldWsSuffix, newWsSuffix);
+      endKeep.value = replacePrefix(endKeep.value, newWsSuffix, commonWsSuffix);
+      deletion.value = y(deletion.value, commonWsSuffix);
+      insertion.value = y(insertion.value, commonWsSuffix);
     }
-  } else if (t) {
-    if (n) {
-      let r = E(t.value, l);
-      t.value = t.value.substring(r.length);
+  } else if (insertion) {
+    if (startKeep) {
+      let ws = leadingWs(insertion.value, segmenter);
+      insertion.value = insertion.value.substring(ws.length);
     }
-    if (i) {
-      let r = E(i.value, l);
-      i.value = i.value.substring(r.length);
+    if (endKeep) {
+      let ws = leadingWs(endKeep.value, segmenter);
+      endKeep.value = endKeep.value.substring(ws.length);
     }
-  } else if (n && i) {
-    let r = E(i.value, l),
-      [s, o] = k(e.value, l),
-      f = H(r, s);
-    e.value = W(e.value, f);
-    let u = b(W(r, f), o);
-    ((e.value = y(e.value, u)),
-      (i.value = I(i.value, r, u)),
-      (n.value = T(n.value, r, r.slice(0, r.length - u.length))));
-  } else if (i) {
-    let r = E(i.value, l),
-      s = O(e.value, l),
-      o = A(s, r);
-    e.value = y(e.value, o);
-  } else if (n) {
-    let r = O(n.value, l),
-      s = E(e.value, l),
-      o = A(r, s);
-    e.value = W(e.value, o);
+  } else if (startKeep && endKeep) {
+    let newWsFull = leadingWs(endKeep.value, segmenter);
+    let [delWsStart, delWsEnd] = leadingAndTrailingWs(deletion.value, segmenter);
+    let newWsStart = longestCommonPrefix(newWsFull, delWsStart);
+    deletion.value = W(deletion.value, newWsStart);
+    let newWsEnd = longestCommonSuffix(W(newWsFull, newWsStart), delWsEnd);
+    deletion.value = y(deletion.value, newWsEnd);
+    endKeep.value = replacePrefix(endKeep.value, newWsFull, newWsEnd);
+    startKeep.value = replaceSuffix(
+      startKeep.value,
+      newWsFull,
+      newWsFull.slice(0, newWsFull.length - newWsEnd.length),
+    );
+  } else if (endKeep) {
+    let endKeepWsPrefix = leadingWs(endKeep.value, segmenter);
+    let deletionWsSuffix = trailingWs(deletion.value, segmenter);
+    let overlap = maximumOverlap(deletionWsSuffix, endKeepWsPrefix);
+    deletion.value = y(deletion.value, overlap);
+  } else if (startKeep) {
+    let startKeepWsSuffix = trailingWs(startKeep.value, segmenter);
+    let deletionWsPrefix = leadingWs(deletion.value, segmenter);
+    let overlap = maximumOverlap(startKeepWsSuffix, deletionWsPrefix);
+    deletion.value = W(deletion.value, overlap);
   }
 }
 //@ chunk-7vb8p3zb.js:6496-6614 esm-fingerprint
-class z extends L {
-  tokenize(n) {
-    let regExp = new RegExp(`(\\r?\\n)|[${F}]+|[^\\S\\n\\r]+|[^${F}]`, "ug");
-    return n.match(regExp) || [];
+class WordsWithSpaceDiff extends Diff {
+  tokenize(value) {
+    let regex = new RegExp(`(\\r?\\n)|[${extendedWordChars}]+|[^\\S\\n\\r]+|[^${extendedWordChars}]`, "ug");
+    return value.match(regex) || [];
   }
 }
-
-export { z };
+export { WordsWithSpaceDiff };

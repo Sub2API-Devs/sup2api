@@ -10,48 +10,64 @@
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { useMemoryUsage } from "../hooks/useMemoryUsage.js";
-import { wt } from "../remote/remoteMode.js";
+import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { zt } from "../../vendor/react/cjs/react.production.js";
 import { formatFileSize } from "../utils/format.js";
 import { isFullscreenEnvEnabled } from "../utils/fullscreen.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 
 //@ chunk-18hwfzwa.js:783611-784345 fingerprint = MemoryUsageIndicator (0.397)
-function MemoryUsageIndicator(h) {
-  let $ = w(11),
-    { tier: tier, onShowingChange: onShowingChange } = h,
-    ee = useMemoryUsage("critical", tier === "critical"),
-    Re;
-  if ($[0] !== ee || $[1] !== tier)
-    ((Re = wt() || !ee || ee.status !== tier), ($[0] = ee), ($[1] = tier), ($[2] = Re));
-  else Re = $[2];
-  let Be = Re,
-    He,
-    We;
-  if ($[3] !== Be || $[4] !== onShowingChange)
-    ((He = () => (onShowingChange?.(!Be), () => onShowingChange?.(!1))),
-      (We = [Be, onShowingChange]),
-      ($[3] = Be),
-      ($[4] = onShowingChange),
-      ($[5] = He),
-      ($[6] = We));
-  else ((He = $[5]), (We = $[6]));
-  if ((zt(He, We), Be)) {
+function MemoryUsageIndicator(props) {
+  let $ = w(11);
+  let { tier, onShowingChange } = props;
+  let memoryUsage = useMemoryUsage("critical", tier === "critical");
+  let Re;
+  if ($[0] !== memoryUsage || $[1] !== tier) {
+    Re = isRemoteSessionAvailable() || !memoryUsage || memoryUsage.status !== tier;
+    $[0] = memoryUsage;
+    $[1] = tier;
+    $[2] = Re;
+  } else Re = $[2];
+  let Be = Re;
+  let He;
+  let We;
+  if ($[3] !== Be || $[4] !== onShowingChange) {
+    He = () => {
+      onShowingChange?.(!Be);
+      return () => onShowingChange?.(false);
+    };
+    We = [Be, onShowingChange];
+    $[3] = Be;
+    $[4] = onShowingChange;
+    $[5] = He;
+    $[6] = We;
+  } else {
+    He = $[5];
+    We = $[6];
+  }
+  zt(He, We);
+  if (Be) {
     return null;
   }
   let ze;
-  if ($[7] !== ee.heapUsed) ((ze = formatFileSize(ee.heapUsed)), ($[7] = ee.heapUsed), ($[8] = ze));
-  else ze = $[8];
+  if ($[7] !== memoryUsage.heapUsed) {
+    ze = formatFileSize(memoryUsage.heapUsed);
+    $[7] = memoryUsage.heapUsed;
+    $[8] = ze;
+  } else ze = $[8];
   let Xe = ze;
   if (tier === "high") {
     return null;
   }
-  let rt = !isFullscreenEnvEnabled(),
-    kt;
-  if ($[9] !== Xe)
-    ((kt = e(Box, {
-      children: r(Text, {
+  let rt = !isFullscreenEnvEnabled();
+  let kt;
+  if ($[9] !== Xe) {
+    kt = jsxProd_default(Box, {
+      children: jsxProd_default_2(Text, {
         color: "error",
         wrap: "truncate",
         children: [
@@ -62,11 +78,10 @@ function MemoryUsageIndicator(h) {
           "",
         ],
       }),
-    })),
-      ($[9] = Xe),
-      ($[10] = kt));
-  else kt = $[10];
+    });
+    $[9] = Xe;
+    $[10] = kt;
+  } else kt = $[10];
   return kt;
 }
-
 export { MemoryUsageIndicator };

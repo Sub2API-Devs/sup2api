@@ -8,11 +8,11 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:178386-180238 cjs-fingerprint
-var Ca = x(function (TE, Ia) {
-  function fd(e) {
+var require_gradle = x(function (cjsExports, cjsModule) {
+  function gradle(hljs) {
     return {
       name: "Gradle",
-      case_insensitive: !0,
+      case_insensitive: true,
       keywords: [
         "task",
         "project",
@@ -178,16 +178,15 @@ var Ca = x(function (TE, Ia) {
         "writeLine",
       ],
       contains: [
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
-        e.APOS_STRING_MODE,
-        e.QUOTE_STRING_MODE,
-        e.NUMBER_MODE,
-        e.REGEXP_MODE,
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        hljs.APOS_STRING_MODE,
+        hljs.QUOTE_STRING_MODE,
+        hljs.NUMBER_MODE,
+        hljs.REGEXP_MODE,
       ],
     };
   }
-  Ia.exports = fd;
+  cjsModule.exports = gradle;
 });
-
-export { Ca };
+export { require_gradle };

@@ -6,19 +6,18 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { N } from "./utils.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:2981-3101 cjs-fingerprint
-var Yt = x(function (gi) {
-  var getSymbolSize = N().getSymbolSize;
-  gi.getPositions = function (e) {
-    let r = getSymbolSize(e);
+var require_finder_pattern = x(function (cjsExports) {
+  var getSymbolSize = require_utils().getSymbolSize;
+  cjsExports.getPositions = function (version) {
+    let size = getSymbolSize(version);
     return [
       [0, 0],
-      [r - 7, 0],
-      [0, r - 7],
+      [size - 7, 0],
+      [0, size - 7],
     ];
   };
 });
-
-export { Yt };
+export { require_finder_pattern };

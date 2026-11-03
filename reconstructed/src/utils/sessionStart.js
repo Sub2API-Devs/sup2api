@@ -9,7 +9,7 @@
  * attribution: placement 13, fingerprint 2
  */
 import { createAbortController } from "./abortController.js";
-import { hq } from "./hooks/hookMessages.js";
+import { logHookExecutionFailure } from "./hooks/hookMessages.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import {
   getRootSession,
@@ -36,16 +36,16 @@ import { getPolicyAllowedSet } from "./plugins/pluginPolicy.js";
 import { logForDebugging, createAttachmentMessage_2 } from "./debug.js";
 import { withDiagnosticsTiming } from "./diagLogs.js";
 import { loadPluginHooks } from "./plugins/loadPluginHooks.js";
-import { Qhi } from "./startupTiming.js";
-import { tWe } from "./hooks/hookPolicyHold.js";
+import { markHooksInitSource } from "./startupTiming.js";
+import { waitForStartHooksPolicyIfNeeded } from "./hooks/hookPolicyHold.js";
 import { StreamClosedAbortError } from "./errors.js";
 import { clearCommandsCache } from "../commands.js";
-import { Jz } from "./plugins/pluginsChangedSignal.js";
+import { skillsChangedSignal } from "./plugins/pluginsChangedSignal.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { invalidateSessionEnvCache } from "./sessionEnvironment.js";
 import { addWatchPaths, updateWatchPaths } from "./hooks/fileChangedWatcher.js";
 import { createSessionStartContextAttachments } from "./messages.js";
-import { use } from "../services/compact/autoCompact.js";
+import { findLastRealAssistantMessage } from "../services/compact/autoCompact.js";
 import { stageResumeKeepalive } from "../services/api/cacheKeepalive.js";
 import {
   estimateCacheWriteCost,
@@ -58,166 +58,197 @@ import { getCacheCreationTtl } from "../services/api/promptCacheBreakDetection.j
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../services/projects/threadRows.js";
 import { getTokenUsage } from "./tokens.js";
 import { totalTokensOf } from "./messages/usageAndStopReason.js";
-import { Lg } from "../services/tokenEstimation.js";
+import { roughTokenCountEstimationForMessages } from "../services/tokenEstimation.js";
 
+//@ chunk-e6aww6q8.js:2077254-2077366 placement
 /**
  * 启动一次可中止的钩子执行：返回 Promise（失败时记录并给空列表）、放置位置与中止函数。
  */
-//@ chunk-e6aww6q8.js:2077254-2077366 placement
-function startHookRun(e, n) {
-  let r = createAbortController();
-  return { promise: n(r.signal).catch((s) => (hq(s), [])), placement: e, abort: () => r.abort() };
+function startHookRun(placement, n) {
+  let abortController = createAbortController();
+  return {
+    promise: n(abortController.signal).catch((error) => {
+      logHookExecutionFailure(error);
+      return [];
+    }),
+    placement,
+    abort: () => abortController.abort(),
+  };
 }
 //@ chunk-e6aww6q8.js:2077366-2077542 placement
 class SessionStartState {
-  pendingInitialUserMessage = void 0;
-  pendingHookSessionTitle = void 0;
-  startSource = void 0;
+  pendingInitialUserMessage = undefined;
+  pendingHookSessionTitle = undefined;
+  startSource = undefined;
   pluginsCovered = new Map();
   pluginsSucceeded = new Set();
   hooksDispatched = 0;
-  hasDispatched = !1;
+  hasDispatched = false;
 }
 //@ chunk-e6aww6q8.js:2077542-2077570 placement
-var psr = new SessionRootSlot(() => new SessionStartState());
+var sessionStartStateSlot = new SessionRootSlot(() => new SessionStartState());
 //@ chunk-e6aww6q8.js:2077570-2077604 placement
-function MTe() {
-  return psr.of(getRootSession());
+function sessionStartState() {
+  return sessionStartStateSlot.of(getRootSession());
 }
+//@ chunk-e6aww6q8.js:2077604-2077859 placement
 /**
  * 列出尚未运行 SessionStart 钩子的新插件，返回补跑所需的来源与筛选函数；没有则为 undefined。
  */
-//@ chunk-e6aww6q8.js:2077604-2077859 placement
 function owedSessionStartHooks() {
-  let e = MTe();
-  if (e.startSource === void 0) return;
+  let e = sessionStartState();
+  if (e.startSource === undefined) return;
   let filtered = getHooksForEvent("SessionStart").filter((r) => "pluginRoot" in r);
   return owedPluginHooks(e, filtered).owed.length === 0
-    ? void 0
+    ? undefined
     : {
         source: e.startSource,
-        newPluginsOnly: { owed: (r) => owedPluginHooks(e, r).owed, envFileIndexBase: e.hooksDispatched },
+        newPluginsOnly: {
+          owed: (r) => owedPluginHooks(e, r).owed,
+          envFileIndexBase: e.hooksDispatched,
+        },
       };
 }
+//@ chunk-e6aww6q8.js:2077859-2078459 placement
 /**
  * 找出未被覆盖的插件钩子（同名插件经市场别名已覆盖的视为已运行）。
  */
-//@ chunk-e6aww6q8.js:2077859-2078459 placement
-function owedPluginHooks({ pluginsCovered: pluginsCovered, pluginsSucceeded: pluginsSucceeded }, r) {
+function owedPluginHooks({ pluginsCovered, pluginsSucceeded }, r) {
   let s = new Set(
-      Object.values(getRegisteredHooks() ?? {}).flatMap((q) =>
-        q.flatMap((Z) => ("pluginRoot" in Z ? nfcLower(Z.pluginId) : [])),
-      ),
+    Object.values(getRegisteredHooks() ?? {}).flatMap((q) =>
+      q.flatMap((Z) => ("pluginRoot" in Z ? nfcLower(Z.pluginId) : [])),
     ),
-    list = Array.from(pluginsCovered, ([q, Z]) => ({ id: q, name: Z, folded: nfcLower(q) })),
-    y = new Set(list.map((q) => q.folded)),
-    S = new Set(Array.from(pluginsSucceeded, nfcLower)),
-    w = [],
-    L = new Map(),
-    G = new Set();
+  );
+  let list = Array.from(pluginsCovered, ([q, Z]) => ({
+    id: q,
+    name: Z,
+    folded: nfcLower(q),
+  }));
+  let y = new Set(list.map((q) => q.folded));
+  let S = new Set(Array.from(pluginsSucceeded, nfcLower));
+  let w = [];
+  let L = new Map();
+  let G = new Set();
   for (let q of r) {
-    let { pluginId: pluginId } = q,
-      Se = nfcLower(pluginId);
+    let { pluginId } = q;
+    let Se = nfcLower(pluginId);
     if (y.has(Se) || L.has(Se)) continue;
-    let ke = nfcLower(q.pluginName),
-      found = list.find(
-        (Ee) =>
-          Ee.name === ke &&
-          !s.has(Ee.folded) &&
-          !S.has(Ee.folded) &&
-          !G.has(Ee.folded) &&
-          (hasMarketplaceAlias(Ee.id) || hasMarketplaceAlias(pluginId)),
-      );
-    if (found === void 0) {
+    let ke = nfcLower(q.pluginName);
+    let found = list.find(
+      (Ee) =>
+        Ee.name === ke &&
+        !s.has(Ee.folded) &&
+        !S.has(Ee.folded) &&
+        !G.has(Ee.folded) &&
+        (hasMarketplaceAlias(Ee.id) || hasMarketplaceAlias(pluginId)),
+    );
+    if (found === undefined) {
       w.push(q);
       continue;
     }
-    (L.set(Se, found.id), G.add(found.folded));
+    L.set(Se, found.id);
+    G.add(found.folded);
   }
-  return { owed: w, stoodFor: L };
+  return {
+    owed: w,
+    stoodFor: L,
+  };
 }
+//@ chunk-e6aww6q8.js:2078459-2078560 placement
 /**
  * 取出并清除 SessionStart 钩子提供的初始用户消息。
  */
-//@ chunk-e6aww6q8.js:2078459-2078560 placement
 function takePendingInitialUserMessage() {
-  let e = MTe(),
-    pendingInitialUserMessage = e.pendingInitialUserMessage;
-  return ((e.pendingInitialUserMessage = void 0), pendingInitialUserMessage);
+  let e = sessionStartState();
+  let pendingInitialUserMessage = e.pendingInitialUserMessage;
+  e.pendingInitialUserMessage = undefined;
+  return pendingInitialUserMessage;
 }
 //@ chunk-e6aww6q8.js:2078560-2078657 placement
-function PGt() {
-  let e = MTe(),
-    pendingHookSessionTitle = e.pendingHookSessionTitle;
-  return ((e.pendingHookSessionTitle = void 0), pendingHookSessionTitle);
+/**
+ * takePendingHookSessionTitle：取待定的钩子会话标题。
+ */
+function takePendingHookSessionTitle() {
+  let e = sessionStartState();
+  let pendingHookSessionTitle = e.pendingHookSessionTitle;
+  e.pendingHookSessionTitle = undefined;
+  return pendingHookSessionTitle;
 }
+//@ chunk-e6aww6q8.js:2078657-2081951 fingerprint = processSessionStartHooks (0.552)
 /**
  * 运行 SessionStart hooks（startup/resume/clear/compact），收集附加上下文与初始消息。
  */
-//@ chunk-e6aww6q8.js:2078657-2081951 fingerprint = processSessionStartHooks (0.552)
 async function processSessionStartHooks(
-  e,
+  session,
   n,
   {
-    sessionId: r,
+    sessionId,
     sessionTitle: s,
     agentType: h,
-    model: y,
-    forceSyncExecution: S,
+    model,
+    forceSyncExecution,
     resumedMessages: w,
-    storageV5: L,
-    credentials: G,
-    signal: q,
+    storageV5,
+    credentials,
+    signal,
     orphaned: Z,
-    agentContext: Se,
+    agentContext,
     newPluginsOnly: ke,
     envFileSessionId: we,
     progress: Ee,
     holdHooksUntil: Ae,
   } = {},
 ) {
-  let Ie = w !== void 0 ? resumeCacheStats(w, y, r, { credentials: G, storageV5: L }) : void 0;
+  let Ie =
+    w !== undefined
+      ? resumeCacheStats(w, model, sessionId, {
+          credentials,
+          storageV5,
+        })
+      : undefined;
   if (isCustomizationDisabled("hooks")) return [];
-  if (Ae !== void 0) {
-    if ((await Ae(), Z?.aborted)) return [];
+  if (Ae !== undefined) {
+    await Ae();
+    if (Z?.aborted) return [];
   }
-  let Me = MTe(),
-    We = Ee?.rows ?? [],
-    ze = Ee?.additionalContexts ?? [],
-    lt = [],
-    Je,
-    nt = !1,
-    pt =
-      !Me.hasDispatched &&
-      (n === "startup" || (n === "resume" && w?.length === 0)) &&
-      Se === void 0 &&
-      ke === void 0;
-  Me.hasDispatched = !0;
+  let Me = sessionStartState();
+  let rows = Ee?.rows ?? [];
+  let additionalContexts = Ee?.additionalContexts ?? [];
+  let lt = [];
+  let Je;
+  let nt = false;
+  let pt =
+    !Me.hasDispatched &&
+    (n === "startup" || (n === "resume" && w?.length === 0)) &&
+    agentContext === undefined &&
+    ke === undefined;
+  Me.hasDispatched = true;
   let Et = executeSessionStartHooks(
-    e,
+    session,
     n,
-    r,
+    sessionId,
     s,
     h ?? getMainThreadAgentType(),
-    y,
-    q,
-    void 0,
-    S,
+    model,
+    signal,
+    undefined,
+    forceSyncExecution,
     Ie,
-    Se,
+    agentContext,
     {
       newPluginsOnly: ke,
       envFileSessionId: we,
       launcherHookEnv: sessionAccessTokenEnvForHooks(pt),
       onMatched: (yt, gt) => {
-        if (((Me.hooksDispatched += gt), n === "compact")) return;
+        Me.hooksDispatched += gt;
+        if (n === "compact") return;
         let At = ke ? [] : owedPluginHooks(Me, yt).stoodFor.values();
         for (let It of At) Me.pluginsSucceeded.add(It);
         for (let It of yt) Me.pluginsCovered.set(It.pluginId, nfcLower(It.pluginName));
       },
     },
-    L,
-    G,
+    storageV5,
+    credentials,
   );
   if (shouldAllowManagedHooksOnly() && (isSafeMode() || getPolicyAllowedSet() === null))
     logForDebugging(
@@ -227,91 +258,114 @@ async function processSessionStartHooks(
     );
   else
     try {
-      await withDiagnosticsTiming("load_plugin_hooks", () => loadPluginHooks(L));
+      await withDiagnosticsTiming("load_plugin_hooks", () => loadPluginHooks(storageV5));
     } catch (error) {
-      let gt = error instanceof Error ? error.message : String(error),
-        userGuidance = "";
+      let errorMessage = error instanceof Error ? error.message : String(error);
+      let userGuidance = "";
       if (
-        gt.includes("Failed to clone") ||
-        gt.includes("network") ||
-        gt.includes("ETIMEDOUT") ||
-        gt.includes("ENOTFOUND")
+        errorMessage.includes("Failed to clone") ||
+        errorMessage.includes("network") ||
+        errorMessage.includes("ETIMEDOUT") ||
+        errorMessage.includes("ENOTFOUND")
       )
         userGuidance = "This appears to be a network issue. Check your internet connection and try again.";
-      else if (gt.includes("Permission denied") || gt.includes("EACCES") || gt.includes("EPERM"))
+      else if (
+        errorMessage.includes("Permission denied") ||
+        errorMessage.includes("EACCES") ||
+        errorMessage.includes("EPERM")
+      )
         userGuidance = "This appears to be a permissions issue. Check file permissions on ~/.claude/plugins/";
-      else if (gt.includes("Invalid") || gt.includes("parse") || gt.includes("JSON") || gt.includes("schema"))
+      else if (
+        errorMessage.includes("Invalid") ||
+        errorMessage.includes("parse") ||
+        errorMessage.includes("JSON") ||
+        errorMessage.includes("schema")
+      )
         userGuidance =
           "This appears to be a configuration issue. Check your plugin settings in .claude/settings.json";
       else
         userGuidance =
           "Please fix the plugin configuration or remove problematic plugins from your settings.";
       logForDebugging(
-        `Warning: Failed to load plugin hooks. SessionStart hooks from plugins will not execute. Error: ${gt}. ${userGuidance}`,
-        { level: "error" },
+        `Warning: Failed to load plugin hooks. SessionStart hooks from plugins will not execute. Error: ${errorMessage}. ${userGuidance}`,
+        {
+          level: "error",
+        },
       );
     }
-  if (n === "startup" || n === "resume" || n === "fork") ((Me.startSource = n), Qhi(n));
-  await tWe("SessionStart");
+  if (n === "startup" || n === "resume" || n === "fork") {
+    Me.startSource = n;
+    markHooksInitSource(n);
+  }
+  await waitForStartHooksPolicyIfNeeded("SessionStart");
   try {
     for await (let yt of Et) {
       if (
         yt.message &&
         !(yt.message.type === "attachment" && yt.message.attachment.type === "hook_blocking_error")
       )
-        We.push(yt.message);
+        rows.push(yt.message);
       if (yt.blockingError)
-        We.push(getNonBlockableHookErrorMessage("SessionStart", yt.blockingError, `SessionStart:${n}`));
-      if (yt.additionalContexts && yt.additionalContexts.length > 0) ze.push(...yt.additionalContexts);
+        rows.push(getNonBlockableHookErrorMessage("SessionStart", yt.blockingError, `SessionStart:${n}`));
+      if (yt.additionalContexts && yt.additionalContexts.length > 0)
+        additionalContexts.push(...yt.additionalContexts);
       if (yt.initialUserMessage)
         if (ke)
           logForDebugging(
             "Ignoring initialUserMessage from a SessionStart hook: its plugin loaded after the session started",
-            { level: "warn" },
+            {
+              level: "warn",
+            },
           );
         else if (Ee?.isOvertaken) Ee.lateInitialUserMessage = yt.initialUserMessage;
         else Me.pendingInitialUserMessage = yt.initialUserMessage;
       if (yt.sessionTitle) Je = yt.sessionTitle;
       if (yt.watchPaths && yt.watchPaths.length > 0) lt.push(...yt.watchPaths);
-      if (yt.reloadSkills) nt = !0;
+      if (yt.reloadSkills) nt = true;
     }
   } catch (error) {
     if (!(error instanceof StreamClosedAbortError)) throw error;
     logForDebugging("SessionStart hooks cancelled (control stream closed)");
   }
-  if (q?.aborted || Z?.aborted) return We;
-  if (nt) (clearCommandsCache(), Jz.emit(), logFeatureOk("hook_session_start_reload_skills"));
-  if (
-    ((Me.pendingHookSessionTitle = !ke && (n === "startup" || n === "resume" || n === "fork") ? Je : void 0),
-    ke || we !== void 0)
-  )
-    invalidateSessionEnvCache();
+  if (signal?.aborted || Z?.aborted) return rows;
+  if (nt) {
+    clearCommandsCache();
+    skillsChangedSignal.emit();
+    logFeatureOk("hook_session_start_reload_skills");
+  }
+  Me.pendingHookSessionTitle = !ke && (n === "startup" || n === "resume" || n === "fork") ? Je : undefined;
+  if (ke || we !== undefined) invalidateSessionEnvCache();
   if (lt.length > 0)
     if (ke || Ee?.isOvertaken) addWatchPaths(lt);
     else updateWatchPaths(lt);
-  return (We.push(...createSessionStartContextAttachments(ze)), We);
+  rows.push(...createSessionStartContextAttachments(additionalContexts));
+  return rows;
 }
 //@ chunk-e6aww6q8.js:2081951-2082032 placement
-function t8s(e) {
-  return ((e.isOvertaken = !0), [...e.rows, ...createSessionStartContextAttachments(e.additionalContexts)]);
+/**
+ * overtakeSessionStart：接管会话启动上下文。
+ */
+function overtakeSessionStart(progress) {
+  progress.isOvertaken = true;
+  return [...progress.rows, ...createSessionStartContextAttachments(progress.additionalContexts)];
 }
+//@ chunk-e6aww6q8.js:2082032-2082189 placement
 /**
  * 是否需等待 SessionStart 钩子的原因：托管层钩子或托管插件策略。
  */
-//@ chunk-e6aww6q8.js:2082032-2082189 placement
 function sessionStartWaitReason() {
   let e = managedTierHooks("SessionStart");
   if (e !== "none") return e === "some" ? "managed_hooks" : "managed_hooks_unknown";
-  return getPolicyAllowedSet() === null ? void 0 : "managed_plugins";
+  return getPolicyAllowedSet() === null ? undefined : "managed_plugins";
 }
+//@ chunk-e6aww6q8.js:2082354-2083443 fingerprint = processSetupHooks (0.573)
 /**
  * 运行 Setup hooks（safe mode 下跳过插件 hooks）。
  */
-//@ chunk-e6aww6q8.js:2082354-2083443 fingerprint = processSetupHooks (0.573)
-async function processSetupHooks(e, n, { forceSyncExecution: r, storageV5: s, credentials: h } = {}) {
+async function processSetupHooks(trigger, trigger_2, { forceSyncExecution, storageV5, credentials } = {}) {
   if (isCustomizationDisabled("hooks")) return [];
-  let y = [],
-    S = [];
+  let hookMessages = [];
+  let additionalContexts = [];
   if (shouldAllowManagedHooksOnly() && (isSafeMode() || getPolicyAllowedSet() === null))
     logForDebugging(
       isSafeMode()
@@ -320,17 +374,27 @@ async function processSetupHooks(e, n, { forceSyncExecution: r, storageV5: s, cr
     );
   else
     try {
-      await loadPluginHooks(s);
+      await loadPluginHooks(storageV5);
     } catch (error) {
       let errorMessage = error instanceof Error ? error.message : String(error);
       logForDebugging(
         `Warning: Failed to load plugin hooks. Setup hooks from plugins will not execute. Error: ${errorMessage}`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
     }
-  await tWe("Setup");
+  await waitForStartHooksPolicyIfNeeded("Setup");
   try {
-    for await (let hookResult of executeSetupHooks(e, n, void 0, void 0, r, s, h)) {
+    for await (let hookResult of executeSetupHooks(
+      trigger,
+      trigger_2,
+      undefined,
+      undefined,
+      forceSyncExecution,
+      storageV5,
+      credentials,
+    )) {
       if (
         hookResult.message &&
         !(
@@ -338,130 +402,140 @@ async function processSetupHooks(e, n, { forceSyncExecution: r, storageV5: s, cr
           hookResult.message.attachment.type === "hook_blocking_error"
         )
       )
-        y.push(hookResult.message);
+        hookMessages.push(hookResult.message);
       if (hookResult.blockingError)
-        y.push(getNonBlockableHookErrorMessage("Setup", hookResult.blockingError, `Setup:${n}`));
+        hookMessages.push(
+          getNonBlockableHookErrorMessage("Setup", hookResult.blockingError, `Setup:${trigger_2}`),
+        );
       if (hookResult.additionalContexts && hookResult.additionalContexts.length > 0)
-        S.push(...hookResult.additionalContexts);
+        additionalContexts.push(...hookResult.additionalContexts);
     }
   } catch (error) {
     if (!(error instanceof StreamClosedAbortError)) throw error;
     logForDebugging("Setup hooks cancelled (control stream closed)");
   }
-  if (S.length > 0) {
+  if (additionalContexts.length > 0) {
     let contextMessage = createAttachmentMessage_2({
       type: "hook_additional_context",
-      content: S,
+      content: additionalContexts,
       hookName: "Setup",
       toolUseID: "Setup",
       hookEvent: "Setup",
     });
-    y.push(contextMessage);
+    hookMessages.push(contextMessage);
   }
-  return y;
+  return hookMessages;
 }
+//@ chunk-e6aww6q8.js:2083443-2084306 placement
 /**
  * 恢复会话时统计：距上次响应秒数、上下文 token、提示缓存是否可能过期与重写费用，并记录恢复日志种子。
  */
-//@ chunk-e6aww6q8.js:2083443-2084306 placement
-function resumeCacheStats(e, n, r, s) {
-  let h = contextTokensOf(e),
-    y = (Ee, Ae) => {
-      stageResumeJournalSeed({ sessionId: r, contextTokens: h, requestAt: Ee, ttlMs: Ae });
-    },
-    S = use(e),
-    w = S ? Date.parse(S.timestamp) : NaN;
-  if (!S || Number.isNaN(w))
-    return (
-      y(null, null),
-      stageResumeKeepalive(() => {
-        return;
-      }),
-      {}
-    );
-  let max = Math.max(0, Math.round((Date.now() - w) / 1000)),
-    G = hasPostCompactUsage(e),
-    q = getLastLiveMainThreadRequestAt(),
-    Z = estimateCacheWriteCost(
-      n ?? S.message.model ?? getMainLoopModel(),
-      h,
-      G
-        ? (getCacheCreationTtl(S.message.usage) ??
-            (q !== null && q === getLastMainThreadRequestAt()
-              ? resolveMainThreadCacheTtl()
-              : getMainThreadCacheTtl()))
-        : getMainThreadCacheTtl(),
-    ),
-    Se = Z.cache_ttl === "1h" ? 3600 : 300,
-    ke = G ? w : NaN,
-    we = Number.isNaN(ke) ? 1 / 0 : Math.max(0, Math.round((Date.now() - ke) / 1000));
-  return (
-    y(Number.isNaN(ke) ? null : ke, Number.isNaN(ke) ? null : Se * 1000),
-    stageResumeKeepalive(() =>
-      G && getCacheCreationTtl(S.message.usage) === "5m" && S.remoteSourced !== !0
-        ? {
-            sessionId: r,
-            repliedAt: w,
-            requestId: S.requestId,
-            cacheTtlOf: getMainThreadCacheTtlConfig,
-            clientOptions: { model: S.message.model, ...s },
-          }
-        : void 0,
-    ),
-    {
-      seconds_since_last_response: max,
-      context_tokens: h,
-      prompt_cache_likely_expired: we >= Se,
-      estimated_cache_write_usd: Z.estimated_cache_write_usd,
-    }
+function resumeCacheStats(e, n, sessionId, s) {
+  let h = contextTokensOf(e);
+  let y = (requestAt, ttlMs) => {
+    stageResumeJournalSeed({
+      sessionId,
+      contextTokens: h,
+      requestAt,
+      ttlMs,
+    });
+  };
+  let lastRealAssistantMessage = findLastRealAssistantMessage(e);
+  let w = lastRealAssistantMessage ? Date.parse(lastRealAssistantMessage.timestamp) : NaN;
+  if (!lastRealAssistantMessage || Number.isNaN(w)) {
+    y(null, null);
+    stageResumeKeepalive(() => {
+      return;
+    });
+    return {};
+  }
+  let secondsSinceLastResponse = Math.max(0, Math.round((Date.now() - w) / 1000));
+  let G = hasPostCompactUsage(e);
+  let lastLiveMainThreadRequestAt = getLastLiveMainThreadRequestAt();
+  let Z = estimateCacheWriteCost(
+    n ?? lastRealAssistantMessage.message.model ?? getMainLoopModel(),
+    h,
+    G
+      ? (getCacheCreationTtl(lastRealAssistantMessage.message.usage) ??
+          (lastLiveMainThreadRequestAt !== null &&
+          lastLiveMainThreadRequestAt === getLastMainThreadRequestAt()
+            ? resolveMainThreadCacheTtl()
+            : getMainThreadCacheTtl()))
+      : getMainThreadCacheTtl(),
   );
+  let Se = Z.cache_ttl === "1h" ? 3600 : 300;
+  let ke = G ? w : NaN;
+  let we = Number.isNaN(ke) ? 1 / 0 : Math.max(0, Math.round((Date.now() - ke) / 1000));
+  y(Number.isNaN(ke) ? null : ke, Number.isNaN(ke) ? null : Se * 1000);
+  stageResumeKeepalive(() =>
+    G &&
+    getCacheCreationTtl(lastRealAssistantMessage.message.usage) === "5m" &&
+    lastRealAssistantMessage.remoteSourced !== true
+      ? {
+          sessionId,
+          repliedAt: w,
+          requestId: lastRealAssistantMessage.requestId,
+          cacheTtlOf: getMainThreadCacheTtlConfig,
+          clientOptions: {
+            model: lastRealAssistantMessage.message.model,
+            ...s,
+          },
+        }
+      : undefined,
+  );
+  return {
+    seconds_since_last_response: secondsSinceLastResponse,
+    context_tokens: h,
+    prompt_cache_likely_expired: we >= Se,
+    estimated_cache_write_usd: Z.estimated_cache_write_usd,
+  };
 }
+//@ chunk-e6aww6q8.js:2084306-2084641 placement
 /**
  * 判断压缩边界之后是否有助手用量（或保留段锚点即边界）。
  */
-//@ chunk-e6aww6q8.js:2084306-2084641 placement
 function hasPostCompactUsage(e) {
   let lastIndex = e.findLastIndex(isCompactBoundaryMessage_3);
-  if (lastIndex === -1) return !0;
-  for (let y = e.length - 1; y > lastIndex; y--) {
-    let S = e[y];
+  if (lastIndex === -1) return true;
+  for (let idx = e.length - 1; idx > lastIndex; idx--) {
+    let S = e[idx];
     if (S?.type !== "assistant") continue;
-    let w = getTokenUsage(S);
-    if (w && totalTokensOf(w) > 0) return !0;
+    let tokenUsage = getTokenUsage(S);
+    if (tokenUsage && totalTokensOf(tokenUsage) > 0) return true;
   }
   let r = e[lastIndex];
-  if (r === void 0 || !isCompactBoundaryMessage_3(r)) return !1;
-  let compactMetadata = r.compactMetadata,
-    h = compactMetadata?.preservedMessages?.anchorUuid ?? compactMetadata?.preservedSegment?.anchorUuid;
-  return h !== void 0 && h === r.uuid;
+  if (r === undefined || !isCompactBoundaryMessage_3(r)) return false;
+  let compactMetadata = r.compactMetadata;
+  let anchorUuid =
+    compactMetadata?.preservedMessages?.anchorUuid ?? compactMetadata?.preservedSegment?.anchorUuid;
+  return anchorUuid !== undefined && anchorUuid === r.uuid;
 }
+//@ chunk-e6aww6q8.js:2084641-2084912 placement
 /**
  * 估算当前上下文 token：取最近一次助手用量，否则取压缩边界的 postTokens 或估算。
  */
-//@ chunk-e6aww6q8.js:2084641-2084912 placement
 function contextTokensOf(e) {
   let lastIndex = e.findLastIndex(isCompactBoundaryMessage_3);
-  for (let s = e.length - 1; s > lastIndex; s--) {
-    let h = e[s];
+  for (let idx = e.length - 1; idx > lastIndex; idx--) {
+    let h = e[idx];
     if (h?.type !== "assistant") continue;
-    let y = getTokenUsage(h),
-      S = y ? totalTokensOf(y) : 0;
+    let tokenUsage = getTokenUsage(h);
+    let S = tokenUsage ? totalTokensOf(tokenUsage) : 0;
     if (S > 0) return S;
   }
-  let r = lastIndex === -1 ? void 0 : e[lastIndex];
-  if (r !== void 0 && isCompactBoundaryMessage_3(r))
-    return r.compactMetadata?.postTokens ?? Lg(e.slice(lastIndex + 1));
-  return Lg(e);
+  let r = lastIndex === -1 ? undefined : e[lastIndex];
+  if (r !== undefined && isCompactBoundaryMessage_3(r))
+    return r.compactMetadata?.postTokens ?? roughTokenCountEstimationForMessages(e.slice(lastIndex + 1));
+  return roughTokenCountEstimationForMessages(e);
 }
-
 export {
   startHookRun,
   processSessionStartHooks,
-  PGt,
+  takePendingHookSessionTitle,
   contextTokensOf,
   takePendingInitialUserMessage,
   processSetupHooks,
   owedSessionStartHooks,
   sessionStartWaitReason,
-  t8s,
+  overtakeSessionStart,
 };

@@ -8,9 +8,12 @@
  * pieces: chunk-93kwxas0.js (1), chunk-ah34pb7m.js (3), chunk-vde9a20m.js (4)
  * attribution: fingerprint 3, placement 5
  */
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { parseScheduleInput } from "../../utils/cron.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { hasValidDates } from "../../commands/insights.js";
@@ -18,7 +21,7 @@ import { HintText } from "../../components/design-system/HintText.js";
 import { truncate } from "../../utils/format.js";
 
 //@ chunk-vde9a20m.js:818-822 placement
-j();
+init_react_production();
 //@ chunk-vde9a20m.js:869-941 placement
 function cronPromptFieldHint() {
   return "Sent to Claude on each fire. Slash commands work.";
@@ -27,30 +30,33 @@ function cronPromptFieldHint() {
 function validateScheduleInput(mo) {
   return mo.trim() === "" ? null : (parseScheduleInput(mo).error ?? null);
 }
+//@ chunk-vde9a20m.js:1004-1114 fingerprint = renderCreateToolUseMessage (0.616)
 /**
  * 把输入文本解析成 cron 并返回 "人类可读 · cron"，解析失败返回 undefined。
  */
-//@ chunk-vde9a20m.js:1004-1114 fingerprint = renderCreateToolUseMessage (0.616)
 function renderCreateToolUseMessage(input) {
   if (input.trim() === "") {
     return;
   }
-  let Ee = parseScheduleInput(input);
-  return Ee.error ? void 0 : `${Ee.human} \xB7 ${Ee.cron}`;
+  let scheduleInput = parseScheduleInput(input);
+  return scheduleInput.error ? undefined : `${scheduleInput.human} \xB7 ${scheduleInput.cron}`;
 }
+//@ chunk-ah34pb7m.js:35256-35430 fingerprint = renderCreateResultMessage (0.503)
 /**
  * CronCreate 结果渲染："Scheduled <id> (人类可读时间表 下次时间)"。
  */
-//@ chunk-ah34pb7m.js:35256-35430 fingerprint = renderCreateResultMessage (0.503)
 function renderCreateResultMessage(output) {
-  return e(MessageResponse, {
-    children: r(Text, {
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default_2(Text, {
       children: [
         "Scheduled ",
-        e(Text, { bold: !0, children: output.id }),
+        jsxProd_default(Text, {
+          bold: true,
+          children: output.id,
+        }),
         " ",
-        r(Text, {
-          dimColor: !0,
+        jsxProd_default_2(Text, {
+          dimColor: true,
           children: ["(", output.humanSchedule, hasValidDates(output.nextFireAt), ")"],
         }),
       ],
@@ -59,35 +65,50 @@ function renderCreateResultMessage(output) {
 }
 //@ chunk-ah34pb7m.js:35430-35529 placement
 function renderDeleteResultMessage(output) {
-  return e(MessageResponse, {
-    children: r(Text, { children: ["Cancelled ", e(Text, { bold: !0, children: output.id })] }),
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default_2(Text, {
+      children: [
+        "Cancelled ",
+        jsxProd_default(Text, {
+          bold: true,
+          children: output.id,
+        }),
+      ],
+    }),
   });
 }
+//@ chunk-ah34pb7m.js:35529-35940 placement
 /**
  * 显示定时任务列表。
  */
-//@ chunk-ah34pb7m.js:35529-35940 placement
 function renderCronList(m) {
   if (m.jobs.length === 0)
-    return e(MessageResponse, { children: e(HintText, { children: "No scheduled jobs" }) });
-  return e(MessageResponse, {
-    children: e(Box, {
+    return jsxProd_default(MessageResponse, {
+      children: jsxProd_default(HintText, {
+        children: "No scheduled jobs",
+      }),
+    });
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default(Box, {
       flexDirection: "column",
       children: m.jobs.map((job) =>
-        r(
+        jsxProd_default_2(
           Text,
           {
             children: [
-              e(Text, { bold: !0, children: job.id }),
+              jsxProd_default(Text, {
+                bold: true,
+                children: job.id,
+              }),
               " ",
-              r(Text, {
-                dimColor: !0,
+              jsxProd_default_2(Text, {
+                dimColor: true,
                 children: [
                   job.humanSchedule,
                   job.recurring ? " (recurring)" : " (one-shot)",
-                  job.durable === !1 ? " [session-only]" : "",
+                  job.durable === false ? " [session-only]" : "",
                   hasValidDates(job.nextFireAt),
-                  job.prompt ? `: ${truncate(job.prompt, 60, !0)}` : "",
+                  job.prompt ? `: ${truncate(job.prompt, 60, true)}` : "",
                 ],
               }),
             ],
@@ -98,14 +119,13 @@ function renderCronList(m) {
     }),
   });
 }
+//@ chunk-93kwxas0.js:163163-163196 fingerprint = renderListResultMessage (0.512)
 /**
  * 取 CronList 输出中的任务数组（缺省为空数组）。
  */
-//@ chunk-93kwxas0.js:163163-163196 fingerprint = renderListResultMessage (0.512)
 function renderListResultMessage(output) {
   return output.jobs ?? [];
 }
-
 export {
   renderListResultMessage,
   renderCreateResultMessage,

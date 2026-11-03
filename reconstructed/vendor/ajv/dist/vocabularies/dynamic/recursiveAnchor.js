@@ -6,23 +6,24 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { T } from "./dynamicAnchor.js";
-import { ew } from "../../compile/util.js";
+import { require_dynamicAnchor } from "./dynamicAnchor.js";
+import { require_util_2 as require_util } from "../../compile/util.js";
 
 //@ chunk-1r4fv9mg.js:1958-2225 cjs-fingerprint
-var te = x(function (ee) {
-  Object.defineProperty(ee, "__esModule", { value: !0 });
-  var J = T(),
-    Q = ew(),
-    Ke = {
-      keyword: "$recursiveAnchor",
-      schemaType: "boolean",
-      code(e) {
-        if (e.schema) J.dynamicAnchor(e, "");
-        else Q.checkStrictMode(e.it, "$recursiveAnchor: false is ignored");
-      },
-    };
-  ee.default = Ke;
+var require_recursiveAnchor = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var dynamicAnchor_1 = require_dynamicAnchor();
+  var util_1 = require_util();
+  var def = {
+    keyword: "$recursiveAnchor",
+    schemaType: "boolean",
+    code(cxt) {
+      if (cxt.schema) dynamicAnchor_1.dynamicAnchor(cxt, "");
+      else util_1.checkStrictMode(cxt.it, "$recursiveAnchor: false is ignored");
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { te };
+export { require_recursiveAnchor };

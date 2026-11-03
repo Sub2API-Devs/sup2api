@@ -10,12 +10,12 @@
  */
 import { clearSessionContextCaches } from "../../context.js";
 import { clearIsGitMemoFor } from "../../utils/git.js";
-import { Gvn } from "../../utils/sessionTimeZone.js";
+import { sessionDateCellSlot } from "../../utils/sessionTimeZone.js";
 import { resetFileIndexCache, globalFileIndexCache } from "../../hooks/fileSuggestions.js";
 import { clearCommandsCache } from "../../commands.js";
 import { recordSummaryFork, promptCacheTrackers } from "../../services/api/promptCacheBreakDetection.js";
-import { Sbn } from "../../services/api/deferredToolsState.js";
-import { Ywt, cleanupAfterCompaction } from "../../services/compact/postCompactCleanup.js";
+import { deferredToolCacheSlot } from "../../services/api/deferredToolsState.js";
+import { loadCleanupHelpers, cleanupAfterCompaction } from "../../services/compact/postCompactCleanup.js";
 import {
   noteSystemPromptSectionInvalidation,
   getStickyBetas,
@@ -23,100 +23,100 @@ import {
 } from "../../bootstrap/state.js";
 import {
   resetStickyBetaNameOnlyEntries,
-  xDt,
+  clearAdvisorHeld,
   clearInlineToolsRefusal,
   dropWireShapeSeed,
-  fEr,
-  ODt,
-  pEr,
+  clearWebSearchHistoryRejected,
+  clearMediaItemCap,
+  clearRefusedToolSchemas,
 } from "../../bootstrap/stateSlices.js";
 import { invalidateToolDescriptions } from "../../services/api/toolDescriptionCache.js";
-import { wXn } from "../../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
+import { clearDeclared } from "../../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
 import { resetGetMemoryFilesCache } from "../../utils/claudemd.js";
-import { ICe } from "../../utils/instructionFileAccess.js";
-import { R7e } from "../../tasks/taskState.js";
-import { BVs } from "../../utils/sessionStorage.js";
-import { Xjs } from "../../hooks/useSwarmPermissionPoller.js";
+import { claudeMdAccessTrackerSlot } from "../../utils/instructionFileAccess.js";
+import { spawnStatsSlots } from "../../tasks/taskState.js";
+import { clearLastIngressUuid } from "../../utils/sessionStorage.js";
+import { clearSwarmPermissions } from "../../hooks/useSwarmPermissionPoller.js";
 import { clearRepositoryCaches } from "../../utils/detectRepository.js";
-import { dWs } from "../../services/api/dumpPrompts.js";
+import { clearDumpPromptState } from "../../services/api/dumpPrompts.js";
 import { clearResolveGitDirCache } from "../../utils/git/gitFilesystem.js";
 import { clearDynamicSkills, resetProjectSkillDirectories } from "../../skills/loadSkillsDir.js";
 import { resetAllLSPDiagnosticState } from "../../services/lsp/LSPDiagnosticRegistry.js";
-import { wUt } from "../../utils/idHolder.js";
+import { IdHolder } from "../../utils/idHolder.js";
 import { RecentItemsCache } from "../../utils/recentItemsCache.js";
 import { AwayEpisodeTracker } from "../../services/awayEpisodes.js";
 
 //@ chunk-7egnrh1d.js:863-2075 facade-exports
-function clearSessionCaches(t, r = new Set(), s, o, n, m = !1) {
-  let hasPreserved = r.size > 0;
-  if (
-    (clearSessionContextCaches(t),
-    clearIsGitMemoFor(t),
-    Gvn.of(t).clear(),
-    resetFileIndexCache(globalFileIndexCache),
-    clearCommandsCache(),
-    recordSummaryFork(r),
-    !hasPreserved)
-  )
-    Sbn.peek(t)?.clear();
-  let l = Ywt();
-  if (l?.getTeleportCacheState().status === "active") l.revertTeleportCache("transcript_cleared", "main");
-  if (
-    (cleanupAfterCompaction(t, void 0, s, void 0, void 0, n),
-    noteSystemPromptSectionInvalidation("clear"),
-    resetStickyBetaNameOnlyEntries(getStickyBetas()),
-    xDt(getStickyBetas()),
-    clearInlineToolsRefusal(getStickyBetas()),
-    dropWireShapeSeed(getStickyBetas()),
-    fEr(getStickyBetas()),
-    ODt(getStickyBetas()),
-    pEr(getStickyBetas()),
-    !m)
-  )
-    (invalidateToolDescriptions(), wXn(t.host));
-  if (
-    (resetGetMemoryFilesCache(t, "session_start"),
-    ICe.of(t).reset(),
-    promptCacheTrackers.of(t).clear(),
-    R7e.of(t).reset(),
-    s?.((e) => {
-      if (
-        e.storedImagePaths.size === 0 &&
-        e.imageDescriptions.size === 0 &&
-        Object.keys(e.displayedMessageContent).length === 0
-      )
-        return e;
-      return { ...e, storedImagePaths: new Map(), imageDescriptions: new Map(), displayedMessageContent: {} };
-    }),
-    BVs(),
-    !hasPreserved)
-  )
-    Xjs();
-  if ((clearRepositoryCaches(), !hasPreserved)) dWs();
-  if (
-    (clearInvokedSkills(r),
-    clearResolveGitDirCache(),
-    clearDynamicSkills(),
-    resetProjectSkillDirectories().catch(() => {}),
-    resetAllLSPDiagnosticState(t),
-    o)
-  )
-    (o.get(wUt).clear(),
-      o.get(RecentItemsCache).clear(),
-      o.get(AwayEpisodeTracker).clear(),
-      import("./chunk-8esf3qf8.js").then(({ WebFetchCache: WebFetchCache }) => o.get(WebFetchCache).clear()),
-      import("./chunk-mp05jpbx.js").then(({ WebFetchHistory: WebFetchHistory }) =>
-        o.get(WebFetchHistory).clear(),
-      ),
-      import("./chunk-veja3kzs.js").then(({ BashRepeatMeter: BashRepeatMeter }) =>
-        o.get(BashRepeatMeter).clear(),
-      ),
-      import("./chunk-k9ccmfj2.js").then(({ ToolSearchDescriptionCache: ToolSearchDescriptionCache }) =>
-        o.get(ToolSearchDescriptionCache).clear(),
-      ));
-  import("./chunk-t271r49x.js").then(({ clearAgentDefinitionsCache: clearAgentDefinitionsCache }) =>
-    clearAgentDefinitionsCache(),
-  );
+function clearSessionCaches(
+  session,
+  preservedAgentIds = new Set(),
+  setAppState,
+  toolState,
+  storageV5,
+  m = false,
+) {
+  let hasPreserved = preservedAgentIds.size > 0;
+  clearSessionContextCaches(session);
+  clearIsGitMemoFor(session);
+  sessionDateCellSlot.of(session).clear();
+  resetFileIndexCache(globalFileIndexCache);
+  clearCommandsCache();
+  recordSummaryFork(preservedAgentIds);
+  if (!hasPreserved) deferredToolCacheSlot.peek(session)?.clear();
+  let cleanupHelpers = loadCleanupHelpers();
+  if (cleanupHelpers?.getTeleportCacheState().status === "active")
+    cleanupHelpers.revertTeleportCache("transcript_cleared", "main");
+  cleanupAfterCompaction(session, undefined, setAppState, undefined, undefined, storageV5);
+  noteSystemPromptSectionInvalidation("clear");
+  resetStickyBetaNameOnlyEntries(getStickyBetas());
+  clearAdvisorHeld(getStickyBetas());
+  clearInlineToolsRefusal(getStickyBetas());
+  dropWireShapeSeed(getStickyBetas());
+  clearWebSearchHistoryRejected(getStickyBetas());
+  clearMediaItemCap(getStickyBetas());
+  clearRefusedToolSchemas(getStickyBetas());
+  if (!m) {
+    invalidateToolDescriptions();
+    clearDeclared(session.host);
+  }
+  resetGetMemoryFilesCache(session, "session_start");
+  claudeMdAccessTrackerSlot.of(session).reset();
+  promptCacheTrackers.of(session).clear();
+  spawnStatsSlots.of(session).reset();
+  setAppState?.((e) => {
+    if (
+      e.storedImagePaths.size === 0 &&
+      e.imageDescriptions.size === 0 &&
+      Object.keys(e.displayedMessageContent).length === 0
+    )
+      return e;
+    return {
+      ...e,
+      storedImagePaths: new Map(),
+      imageDescriptions: new Map(),
+      displayedMessageContent: {},
+    };
+  });
+  clearLastIngressUuid();
+  if (!hasPreserved) clearSwarmPermissions();
+  clearRepositoryCaches();
+  if (!hasPreserved) clearDumpPromptState();
+  clearInvokedSkills(preservedAgentIds);
+  clearResolveGitDirCache();
+  clearDynamicSkills();
+  resetProjectSkillDirectories().catch(() => {});
+  resetAllLSPDiagnosticState(session);
+  if (toolState) {
+    toolState.get(IdHolder).clear();
+    toolState.get(RecentItemsCache).clear();
+    toolState.get(AwayEpisodeTracker).clear();
+    import("./chunk-8esf3qf8.js").then(({ WebFetchCache }) => toolState.get(WebFetchCache).clear());
+    import("./chunk-mp05jpbx.js").then(({ WebFetchHistory }) => toolState.get(WebFetchHistory).clear());
+    import("./chunk-veja3kzs.js").then(({ BashRepeatMeter }) => toolState.get(BashRepeatMeter).clear());
+    import("./chunk-k9ccmfj2.js").then(({ ToolSearchDescriptionCache }) =>
+      toolState.get(ToolSearchDescriptionCache).clear(),
+    );
+  }
+  import("./chunk-t271r49x.js").then(({ clearAgentDefinitionsCache }) => clearAgentDefinitionsCache());
 }
-
 export { clearSessionCaches };

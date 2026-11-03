@@ -8,38 +8,58 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:140381-146112 cjs-fingerprint
-var ca = x(function (dE, oa) {
-  function od(e) {
-    let regex = e.regex,
-      n = { className: "params", begin: "\\(", end: "\\)" },
-      a = {
-        variants: [
-          e.COMMENT("!", "$", { relevance: 0 }),
-          e.COMMENT("^C[ ]", "$", { relevance: 0 }),
-          e.COMMENT("^C$", "$", { relevance: 0 }),
-        ],
-      },
-      s = /(_[a-z_\d]+)?/,
-      o = /([de][+-]?\d+)?/,
-      r = {
-        className: "number",
-        variants: [
-          { begin: regex.concat(/\b\d+/, /\.(\d*)/, o, s) },
-          { begin: regex.concat(/\b\d+/, o, s) },
-          { begin: regex.concat(/\.\d+/, o, s) },
-        ],
-        relevance: 0,
-      },
-      i = {
-        className: "function",
-        beginKeywords: "subroutine function program",
-        illegal: "[${=\\n]",
-        contains: [e.UNDERSCORE_TITLE_MODE, n],
-      },
-      c = { className: "string", relevance: 0, variants: [e.APOS_STRING_MODE, e.QUOTE_STRING_MODE] };
+var require_fortran = x(function (cjsExports, cjsModule) {
+  function fortran(hljs) {
+    let regex = hljs.regex;
+    let PARAMS = {
+      className: "params",
+      begin: "\\(",
+      end: "\\)",
+    };
+    let COMMENT = {
+      variants: [
+        hljs.COMMENT("!", "$", {
+          relevance: 0,
+        }),
+        hljs.COMMENT("^C[ ]", "$", {
+          relevance: 0,
+        }),
+        hljs.COMMENT("^C$", "$", {
+          relevance: 0,
+        }),
+      ],
+    };
+    let OPTIONAL_NUMBER_SUFFIX = /(_[a-z_\d]+)?/;
+    let OPTIONAL_NUMBER_EXP = /([de][+-]?\d+)?/;
+    let NUMBER = {
+      className: "number",
+      variants: [
+        {
+          begin: regex.concat(/\b\d+/, /\.(\d*)/, OPTIONAL_NUMBER_EXP, OPTIONAL_NUMBER_SUFFIX),
+        },
+        {
+          begin: regex.concat(/\b\d+/, OPTIONAL_NUMBER_EXP, OPTIONAL_NUMBER_SUFFIX),
+        },
+        {
+          begin: regex.concat(/\.\d+/, OPTIONAL_NUMBER_EXP, OPTIONAL_NUMBER_SUFFIX),
+        },
+      ],
+      relevance: 0,
+    };
+    let FUNCTION_DEF = {
+      className: "function",
+      beginKeywords: "subroutine function program",
+      illegal: "[${=\\n]",
+      contains: [hljs.UNDERSCORE_TITLE_MODE, PARAMS],
+    };
+    let STRING = {
+      className: "string",
+      relevance: 0,
+      variants: [hljs.APOS_STRING_MODE, hljs.QUOTE_STRING_MODE],
+    };
     return {
       name: "Fortran",
-      case_insensitive: !0,
+      case_insensitive: true,
       aliases: ["f90", "f95"],
       keywords: {
         $pattern: /\b[a-z][a-z0-9_]+\b|\.[a-z][a-z0-9_]+\./,
@@ -531,10 +551,18 @@ var ca = x(function (dE, oa) {
         ],
       },
       illegal: /\/\*/,
-      contains: [c, i, { begin: /^C\s*=(?!=)/, relevance: 0 }, a, r],
+      contains: [
+        STRING,
+        FUNCTION_DEF,
+        {
+          begin: /^C\s*=(?!=)/,
+          relevance: 0,
+        },
+        COMMENT,
+        NUMBER,
+      ],
     };
   }
-  oa.exports = od;
+  cjsModule.exports = fortran;
 });
-
-export { ca };
+export { require_fortran };

@@ -6,491 +6,550 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { K6t } from "../../util-hex-encoding/dist-cjs/index.js";
-import { IR } from "../../util-utf8/dist-cjs/index.js";
-import { s_s } from "../../is-array-buffer/dist-cjs/index.js";
-import { Kg } from "../../protocol-http/dist-cjs/index.js";
-import { bD } from "../../util-middleware/dist-cjs/index.js";
-import { ahs } from "../../util-uri-escape/dist-cjs/index.js";
+import { require_util_hex_encoding } from "../../util-hex-encoding/dist-cjs/index.js";
+import { require_util_utf8 } from "../../util-utf8/dist-cjs/index.js";
+import { require_is_array_buffer } from "../../is-array-buffer/dist-cjs/index.js";
+import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
+import { require_util_middleware } from "../../util-middleware/dist-cjs/index.js";
+import { require_util_uri_escape } from "../../util-uri-escape/dist-cjs/index.js";
 
 //@ chunk-kyj1a8d5.js:379-10813 cjs-fingerprint
-var yat = x(function (Re) {
-  var f = K6t(),
-    d = IR(),
-    ue = s_s(),
-    Y = Kg(),
-    M = bD(),
-    R = ahs(),
-    K = "X-Amz-Algorithm",
-    j = "X-Amz-Credential",
-    m = "X-Amz-Date",
-    Q = "X-Amz-SignedHeaders",
-    V = "X-Amz-Expires",
-    U = "X-Amz-Signature",
-    v = "X-Amz-Security-Token",
-    Ae = "X-Amz-Region-Set",
-    P = "authorization",
-    lower = m.toLowerCase(),
-    q = "date",
-    z = [P, lower, q],
-    lower_2 = U.toLowerCase(),
-    S = "x-amz-content-sha256",
-    lower_3 = v.toLowerCase(),
-    Ee = "host",
-    F = {
-      authorization: !0,
-      "cache-control": !0,
-      connection: !0,
-      expect: !0,
-      from: !0,
-      "keep-alive": !0,
-      "max-forwards": !0,
-      pragma: !0,
-      referer: !0,
-      te: !0,
-      trailer: !0,
-      "transfer-encoding": !0,
-      upgrade: !0,
-      "user-agent": !0,
-      "x-amzn-trace-id": !0,
-    },
-    W = /^proxy-/,
-    Z = /^sec-/,
-    he = [/^proxy-/i, /^sec-/i],
-    _ = "AWS4-HMAC-SHA256",
-    fe = "AWS4-ECDSA-P256-SHA256",
-    J = "AWS4-HMAC-SHA256-PAYLOAD",
-    ee = "UNSIGNED-PAYLOAD",
-    te = 50,
-    b = "aws4_request",
-    se = 604800,
-    y = {},
-    w = [],
-    D = (e, t, r) => `${e}/${t}/${r}/${b}`,
-    re = async (e, t, r, s, n) => {
-      let a = await G(e, t.secretAccessKey, t.accessKeyId),
-        o = `${r}:${s}:${n}:${f.toHex(a)}:${t.sessionToken}`;
-      if (o in y) return y[o];
-      w.push(o);
-      while (w.length > te) delete y[w.shift()];
-      let i = `AWS4${t.secretAccessKey}`;
-      for (let c of [r, s, n, b]) i = await G(e, i, c);
-      return (y[o] = i);
-    },
-    le = () => {
-      ((w.length = 0),
-        Object.keys(y).forEach((e) => {
-          delete y[e];
-        }));
-    },
-    G = (e, t, r) => {
-      let s = new e(t);
-      return (s.update(d.toUint8Array(r)), s.digest());
-    },
-    T = ({ headers: headers }, t, r) => {
-      let s = {};
-      for (let n of Object.keys(headers).sort()) {
-        if (headers[n] == null) continue;
-        let lower = n.toLowerCase();
-        if (lower in F || t?.has(lower) || W.test(lower) || Z.test(lower)) {
-          if (!r || (r && !r.has(lower))) continue;
-        }
-        s[lower] = headers[n].trim().replace(/\s+/g, " ");
+var require_signature_v4 = x(function (cjsExports) {
+  var toHex = require_util_hex_encoding();
+  var d = require_util_utf8();
+  var isArrayBuffer = require_is_array_buffer();
+  var Y = require_protocol_http();
+  var normalizeProvider = require_util_middleware();
+  var escapeUri = require_util_uri_escape();
+  var ALGORITHM_QUERY_PARAM = "X-Amz-Algorithm";
+  var CREDENTIAL_QUERY_PARAM = "X-Amz-Credential";
+  var AMZ_DATE_QUERY_PARAM = "X-Amz-Date";
+  var SIGNED_HEADERS_QUERY_PARAM = "X-Amz-SignedHeaders";
+  var EXPIRES_QUERY_PARAM = "X-Amz-Expires";
+  var SIGNATURE_QUERY_PARAM = "X-Amz-Signature";
+  var TOKEN_QUERY_PARAM = "X-Amz-Security-Token";
+  var REGION_SET_PARAM = "X-Amz-Region-Set";
+  var AUTH_HEADER = "authorization";
+  var AMZ_DATE_HEADER = AMZ_DATE_QUERY_PARAM.toLowerCase();
+  var DATE_HEADER = "date";
+  var z = [AUTH_HEADER, AMZ_DATE_HEADER, DATE_HEADER];
+  var SIGNATURE_HEADER = SIGNATURE_QUERY_PARAM.toLowerCase();
+  var SHA256_HEADER = "x-amz-content-sha256";
+  var TOKEN_HEADER = TOKEN_QUERY_PARAM.toLowerCase();
+  var HOST_HEADER = "host";
+  var ALWAYS_UNSIGNABLE_HEADERS = {
+    authorization: true,
+    "cache-control": true,
+    connection: true,
+    expect: true,
+    from: true,
+    "keep-alive": true,
+    "max-forwards": true,
+    pragma: true,
+    referer: true,
+    te: true,
+    trailer: true,
+    "transfer-encoding": true,
+    upgrade: true,
+    "user-agent": true,
+    "x-amzn-trace-id": true,
+  };
+  var PROXY_HEADER_PATTERN = /^proxy-/;
+  var SEC_HEADER_PATTERN = /^sec-/;
+  var UNSIGNABLE_PATTERNS = [/^proxy-/i, /^sec-/i];
+  var ALGORITHM_IDENTIFIER = "AWS4-HMAC-SHA256";
+  var ALGORITHM_IDENTIFIER_V4A = "AWS4-ECDSA-P256-SHA256";
+  var EVENT_ALGORITHM_IDENTIFIER = "AWS4-HMAC-SHA256-PAYLOAD";
+  var ee = "UNSIGNED-PAYLOAD";
+  var MAX_CACHE_SIZE = 50;
+  var KEY_TYPE_IDENTIFIER = "aws4_request";
+  var MAX_PRESIGNED_TTL = 604800;
+  var signingKeyCache = {};
+  var cacheQueue = [];
+  var createScope = (shortDate, region, r) => `${shortDate}/${region}/${r}/${KEY_TYPE_IDENTIFIER}`;
+  var getSigningKey = async (sha256Constructor, credentials, shortDate, region, service) => {
+    let credsHash = await hmac(sha256Constructor, credentials.secretAccessKey, credentials.accessKeyId);
+    let cacheKey = `${shortDate}:${region}:${service}:${toHex.toHex(credsHash)}:${credentials.sessionToken}`;
+    if (cacheKey in signingKeyCache) return signingKeyCache[cacheKey];
+    cacheQueue.push(cacheKey);
+    while (cacheQueue.length > MAX_CACHE_SIZE) delete signingKeyCache[cacheQueue.shift()];
+    let key = `AWS4${credentials.secretAccessKey}`;
+    for (let signable of [shortDate, region, service, KEY_TYPE_IDENTIFIER])
+      key = await hmac(sha256Constructor, key, signable);
+    return (signingKeyCache[cacheKey] = key);
+  };
+  var clearCredentialCache = () => {
+    cacheQueue.length = 0;
+    Object.keys(signingKeyCache).forEach((cacheKey) => {
+      delete signingKeyCache[cacheKey];
+    });
+  };
+  var hmac = (ctor, secret, data) => {
+    let hash = new ctor(secret);
+    hash.update(d.toUint8Array(data));
+    return hash.digest();
+  };
+  var getCanonicalHeaders = ({ headers }, unsignableHeaders, signableHeaders) => {
+    let canonical = {};
+    for (let headerName of Object.keys(headers).sort()) {
+      if (headers[headerName] == null) continue;
+      let canonicalHeaderName = headerName.toLowerCase();
+      if (
+        canonicalHeaderName in ALWAYS_UNSIGNABLE_HEADERS ||
+        unsignableHeaders?.has(canonicalHeaderName) ||
+        PROXY_HEADER_PATTERN.test(canonicalHeaderName) ||
+        SEC_HEADER_PATTERN.test(canonicalHeaderName)
+      ) {
+        if (!signableHeaders || (signableHeaders && !signableHeaders.has(canonicalHeaderName))) continue;
       }
-      return s;
-    },
-    H = async ({ headers: headers, body: body }, r) => {
-      for (let s of Object.keys(headers)) if (s.toLowerCase() === S) return headers[s];
-      if (body == null) return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-      else if (typeof body === "string" || ArrayBuffer.isView(body) || ue.isArrayBuffer(body)) {
-        let s = new r();
-        return (s.update(d.toUint8Array(body)), f.toHex(await s.digest()));
-      }
-      return ee;
-    };
-  class ne {
-    format(e) {
-      let t = [];
-      for (let n of Object.keys(e)) {
-        let fromUtf8 = d.fromUtf8(n);
-        t.push(Uint8Array.from([fromUtf8.byteLength]), fromUtf8, this.formatHeaderValue(e[n]));
-      }
-      let uint8Array = new Uint8Array(t.reduce((n, a) => n + a.byteLength, 0)),
-        s = 0;
-      for (let n of t) (uint8Array.set(n, s), (s += n.byteLength));
-      return uint8Array;
+      canonical[canonicalHeaderName] = headers[headerName].trim().replace(/\s+/g, " ");
     }
-    formatHeaderValue(e) {
-      switch (e.type) {
+    return canonical;
+  };
+  var getPayloadHash = async ({ headers, body }, r) => {
+    for (let headerName of Object.keys(headers))
+      if (headerName.toLowerCase() === SHA256_HEADER) return headers[headerName];
+    if (body == null) return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    else if (typeof body === "string" || ArrayBuffer.isView(body) || isArrayBuffer.isArrayBuffer(body)) {
+      let s = new r();
+      s.update(d.toUint8Array(body));
+      return toHex.toHex(await s.digest());
+    }
+    return ee;
+  };
+  class HeaderFormatter {
+    format(headers) {
+      let chunks = [];
+      for (let headerName of Object.keys(headers)) {
+        let bytes = d.fromUtf8(headerName);
+        chunks.push(Uint8Array.from([bytes.byteLength]), bytes, this.formatHeaderValue(headers[headerName]));
+      }
+      let out = new Uint8Array(chunks.reduce((carry, bytes) => carry + bytes.byteLength, 0));
+      let position = 0;
+      for (let chunk of chunks) {
+        out.set(chunk, position);
+        position += chunk.byteLength;
+      }
+      return out;
+    }
+    formatHeaderValue(header) {
+      switch (header.type) {
         case "boolean":
-          return Uint8Array.from([e.value ? 0 : 1]);
+          return Uint8Array.from([header.value ? 0 : 1]);
         case "byte":
-          return Uint8Array.from([2, e.value]);
+          return Uint8Array.from([2, header.value]);
         case "short":
           let dataView = new DataView(new ArrayBuffer(3));
-          return (
-            dataView.setUint8(0, 3),
-            dataView.setInt16(1, e.value, !1),
-            new Uint8Array(dataView.buffer)
-          );
+          dataView.setUint8(0, 3);
+          dataView.setInt16(1, header.value, false);
+          return new Uint8Array(dataView.buffer);
         case "integer":
-          let dataView_2 = new DataView(new ArrayBuffer(5));
-          return (
-            dataView_2.setUint8(0, 4),
-            dataView_2.setInt32(1, e.value, !1),
-            new Uint8Array(dataView_2.buffer)
-          );
+          let intView = new DataView(new ArrayBuffer(5));
+          intView.setUint8(0, 4);
+          intView.setInt32(1, header.value, false);
+          return new Uint8Array(intView.buffer);
         case "long":
-          let uint8Array = new Uint8Array(9);
-          return ((uint8Array[0] = 5), uint8Array.set(e.value.bytes, 1), uint8Array);
+          let longBytes = new Uint8Array(9);
+          longBytes[0] = 5;
+          longBytes.set(header.value.bytes, 1);
+          return longBytes;
         case "binary":
-          let dataView_3 = new DataView(new ArrayBuffer(3 + e.value.byteLength));
-          (dataView_3.setUint8(0, 6), dataView_3.setUint16(1, e.value.byteLength, !1));
-          let uint8Array_2 = new Uint8Array(dataView_3.buffer);
-          return (uint8Array_2.set(e.value, 3), uint8Array_2);
+          let binView = new DataView(new ArrayBuffer(3 + header.value.byteLength));
+          binView.setUint8(0, 6);
+          binView.setUint16(1, header.value.byteLength, false);
+          let binBytes = new Uint8Array(binView.buffer);
+          binBytes.set(header.value, 3);
+          return binBytes;
         case "string":
-          let fromUtf8 = d.fromUtf8(e.value),
-            dataView_4 = new DataView(new ArrayBuffer(3 + fromUtf8.byteLength));
-          (dataView_4.setUint8(0, 7), dataView_4.setUint16(1, fromUtf8.byteLength, !1));
-          let uint8Array_3 = new Uint8Array(dataView_4.buffer);
-          return (uint8Array_3.set(fromUtf8, 3), uint8Array_3);
+          let utf8Bytes = d.fromUtf8(header.value);
+          let strView = new DataView(new ArrayBuffer(3 + utf8Bytes.byteLength));
+          strView.setUint8(0, 7);
+          strView.setUint16(1, utf8Bytes.byteLength, false);
+          let strBytes = new Uint8Array(strView.buffer);
+          strBytes.set(utf8Bytes, 3);
+          return strBytes;
         case "timestamp":
-          let uint8Array_4 = new Uint8Array(9);
-          return (
-            (uint8Array_4[0] = 8),
-            uint8Array_4.set(C.fromNumber(e.value.valueOf()).bytes, 1),
-            uint8Array_4
-          );
+          let tsBytes = new Uint8Array(9);
+          tsBytes[0] = 8;
+          tsBytes.set(Int64.fromNumber(header.value.valueOf()).bytes, 1);
+          return tsBytes;
         case "uuid":
-          if (!ge.test(e.value)) throw Error(`Invalid UUID received: ${e.value}`);
-          let uint8Array_5 = new Uint8Array(17);
-          return (
-            (uint8Array_5[0] = 9),
-            uint8Array_5.set(f.fromHex(e.value.replace(/\-/g, "")), 1),
-            uint8Array_5
-          );
+          if (!UUID_PATTERN.test(header.value)) throw Error(`Invalid UUID received: ${header.value}`);
+          let uuidBytes = new Uint8Array(17);
+          uuidBytes[0] = 9;
+          uuidBytes.set(toHex.fromHex(header.value.replace(/\-/g, "")), 1);
+          return uuidBytes;
       }
     }
   }
-  var ge = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-  class C {
+  var UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+  class Int64 {
     bytes;
-    constructor(e) {
-      if (((this.bytes = e), e.byteLength !== 8)) throw Error("Int64 buffers must be exactly 8 bytes");
+    constructor(bytes) {
+      this.bytes = bytes;
+      if (bytes.byteLength !== 8) throw Error("Int64 buffers must be exactly 8 bytes");
     }
-    static fromNumber(e) {
-      if (e > 9223372036854776000 || e < -9223372036854776000)
-        throw Error(`${e} is too large (or, if negative, too small) to represent as an Int64`);
-      let uint8Array = new Uint8Array(8);
-      for (let r = 7, abs = Math.abs(Math.round(e)); r > -1 && abs > 0; r--, abs /= 256) uint8Array[r] = abs;
-      if (e < 0) k(uint8Array);
-      return new C(uint8Array);
+    static fromNumber(number) {
+      if (number > 9223372036854776000 || number < -9223372036854776000)
+        throw Error(`${number} is too large (or, if negative, too small) to represent as an Int64`);
+      let bytes = new Uint8Array(8);
+      for (
+        let i = 7, remaining = Math.abs(Math.round(number));
+        i > -1 && remaining > 0;
+        i--, remaining /= 256
+      )
+        bytes[i] = remaining;
+      if (number < 0) negate(bytes);
+      return new Int64(bytes);
     }
     valueOf() {
-      let sliced = this.bytes.slice(0),
-        t = sliced[0] & 128;
-      if (t) k(sliced);
-      return parseInt(f.toHex(sliced), 16) * (t ? -1 : 1);
+      let bytes = this.bytes.slice(0);
+      let negative = bytes[0] & 128;
+      if (negative) negate(bytes);
+      return parseInt(toHex.toHex(bytes), 16) * (negative ? -1 : 1);
     }
     toString() {
       return String(this.valueOf());
     }
   }
-  function k(e) {
-    for (let t = 0; t < 8; t++) e[t] ^= 255;
-    for (let t = 7; t > -1; t--) if ((e[t]++, e[t] !== 0)) break;
+  function negate(bytes) {
+    for (let i = 0; i < 8; i++) bytes[i] ^= 255;
+    for (let i = 7; i > -1; i--) {
+      bytes[i]++;
+      if (bytes[i] !== 0) break;
+    }
   }
-  var ae = (e, t) => {
-      e = e.toLowerCase();
-      for (let r of Object.keys(t)) if (e === r.toLowerCase()) return !0;
-      return !1;
-    },
-    oe = (e, t = {}) => {
-      let { headers: headers, query: query = {} } = Y.HttpRequest.clone(e);
-      for (let n of Object.keys(headers)) {
-        let lower = n.toLowerCase();
-        if (
-          (lower.slice(0, 6) === "x-amz-" && !t.unhoistableHeaders?.has(lower)) ||
-          t.hoistableHeaders?.has(lower)
-        )
-          ((query[n] = headers[n]), delete headers[n]);
+  var hasHeader = (e, headers) => {
+    e = e.toLowerCase();
+    for (let key of Object.keys(headers)) if (e === key.toLowerCase()) return true;
+    return false;
+  };
+  var moveHeadersToQuery = (request, t = {}) => {
+    let { headers, query = {} } = Y.HttpRequest.clone(request);
+    for (let key of Object.keys(headers)) {
+      let lower = key.toLowerCase();
+      if (
+        (lower.slice(0, 6) === "x-amz-" && !t.unhoistableHeaders?.has(lower)) ||
+        t.hoistableHeaders?.has(lower)
+      ) {
+        query[key] = headers[key];
+        delete headers[key];
       }
-      return { ...e, headers: headers, query: query };
-    },
-    I = (e) => {
-      e = Y.HttpRequest.clone(e);
-      for (let t of Object.keys(e.headers)) if (z.indexOf(t.toLowerCase()) > -1) delete e.headers[t];
-      return e;
-    },
-    ie = ({ query: query = {} }) => {
-      let t = [],
-        r = {};
-      for (let s of Object.keys(query)) {
-        if (s.toLowerCase() === lower_2) continue;
-        let escapeUri = R.escapeUri(s);
-        t.push(escapeUri);
-        let a = query[s];
-        if (typeof a === "string") r[escapeUri] = `${escapeUri}=${R.escapeUri(a)}`;
-        else if (Array.isArray(a))
-          r[escapeUri] = a
-            .slice(0)
-            .reduce((o, i) => o.concat([`${escapeUri}=${R.escapeUri(i)}`]), [])
-            .sort()
-            .join("&");
-      }
-      return t
-        .sort()
-        .map((s) => r[s])
-        .filter((s) => s)
-        .join("&");
-    },
-    de = (e) =>
-      ye(e)
-        .toISOString()
-        .replace(/\.\d{3}Z$/, "Z"),
-    ye = (e) => {
-      if (typeof e === "number") return new Date(e * 1000);
-      if (typeof e === "string") {
-        if (Number(e)) return new Date(Number(e) * 1000);
-        return new Date(e);
-      }
-      return e;
+    }
+    return {
+      ...request,
+      headers,
+      query,
     };
-  class L {
+  };
+  var prepareRequest = (e) => {
+    e = Y.HttpRequest.clone(e);
+    for (let key of Object.keys(e.headers)) if (z.indexOf(key.toLowerCase()) > -1) delete e.headers[key];
+    return e;
+  };
+  var getCanonicalQuery = ({ query = {} }) => {
+    let keys = [];
+    let serialized = {};
+    for (let key of Object.keys(query)) {
+      if (key.toLowerCase() === SIGNATURE_HEADER) continue;
+      let encodedKey = escapeUri.escapeUri(key);
+      keys.push(encodedKey);
+      let value = query[key];
+      if (typeof value === "string") serialized[encodedKey] = `${encodedKey}=${escapeUri.escapeUri(value)}`;
+      else if (Array.isArray(value))
+        serialized[encodedKey] = value
+          .slice(0)
+          .reduce((encoded, value) => encoded.concat([`${encodedKey}=${escapeUri.escapeUri(value)}`]), [])
+          .sort()
+          .join("&");
+    }
+    return keys
+      .sort()
+      .map((key) => serialized[key])
+      .filter((serialized) => serialized)
+      .join("&");
+  };
+  var iso8601 = (time) =>
+    toDate(time)
+      .toISOString()
+      .replace(/\.\d{3}Z$/, "Z");
+  var toDate = (time) => {
+    if (typeof time === "number") return new Date(time * 1000);
+    if (typeof time === "string") {
+      if (Number(time)) return new Date(Number(time) * 1000);
+      return new Date(time);
+    }
+    return time;
+  };
+  class SignatureV4Base {
     service;
     regionProvider;
     credentialProvider;
     sha256;
     uriEscapePath;
     applyChecksum;
-    constructor({
-      applyChecksum: e,
-      credentials: t,
-      region: r,
-      service: s,
-      sha256: n,
-      uriEscapePath: a = !0,
-    }) {
-      ((this.service = s),
-        (this.sha256 = n),
-        (this.uriEscapePath = a),
-        (this.applyChecksum = typeof e === "boolean" ? e : !0),
-        (this.regionProvider = M.normalizeProvider(r)),
-        (this.credentialProvider = M.normalizeProvider(t)));
+    constructor({ applyChecksum, credentials, region, service, sha256, uriEscapePath = true }) {
+      this.service = service;
+      this.sha256 = sha256;
+      this.uriEscapePath = uriEscapePath;
+      this.applyChecksum = typeof applyChecksum === "boolean" ? applyChecksum : true;
+      this.regionProvider = normalizeProvider.normalizeProvider(region);
+      this.credentialProvider = normalizeProvider.normalizeProvider(credentials);
     }
-    createCanonicalRequest(e, t, r) {
-      let sorted = Object.keys(t).sort();
-      return `${e.method}
-${this.getCanonicalPath(e)}
-${ie(e)}
-${sorted.map((n) => `${n}:${t[n]}`).join(`
+    createCanonicalRequest(request, canonicalHeaders, payloadHash) {
+      let sortedHeaders = Object.keys(canonicalHeaders).sort();
+      return `${request.method}
+${this.getCanonicalPath(request)}
+${getCanonicalQuery(request)}
+${sortedHeaders.map((name) => `${name}:${canonicalHeaders[name]}`).join(`
 `)}
 
-${sorted.join(";")}
-${r}`;
+${sortedHeaders.join(";")}
+${payloadHash}`;
     }
-    async createStringToSign(e, t, r, s) {
-      let n = new this.sha256();
-      n.update(d.toUint8Array(r));
-      let digest = await n.digest();
-      return `${s}
-${e}
-${t}
-${f.toHex(digest)}`;
+    async createStringToSign(longDate, credentialScope, canonicalRequest, algorithmIdentifier) {
+      let hash = new this.sha256();
+      hash.update(d.toUint8Array(canonicalRequest));
+      let hashedRequest = await hash.digest();
+      return `${algorithmIdentifier}
+${longDate}
+${credentialScope}
+${toHex.toHex(hashedRequest)}`;
     }
-    getCanonicalPath({ path: e }) {
+    getCanonicalPath({ path }) {
       if (this.uriEscapePath) {
-        let t = [];
-        for (let n of e.split("/")) {
-          if (n?.length === 0) continue;
-          if (n === ".") continue;
-          if (n === "..") t.pop();
-          else t.push(n);
+        let normalizedPathSegments = [];
+        for (let pathSegment of path.split("/")) {
+          if (pathSegment?.length === 0) continue;
+          if (pathSegment === ".") continue;
+          if (pathSegment === "..") normalizedPathSegments.pop();
+          else normalizedPathSegments.push(pathSegment);
         }
-        let r = `${e?.startsWith("/") ? "/" : ""}${t.join("/")}${t.length > 0 && e?.endsWith("/") ? "/" : ""}`;
-        return R.escapeUri(r).replace(/%2F/g, "/");
+        let normalizedPath = `${path?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path?.endsWith("/") ? "/" : ""}`;
+        return escapeUri.escapeUri(normalizedPath).replace(/%2F/g, "/");
       }
-      return e;
+      return path;
     }
-    validateResolvedCredentials(e) {
-      if (typeof e !== "object" || typeof e.accessKeyId !== "string" || typeof e.secretAccessKey !== "string")
+    validateResolvedCredentials(credentials) {
+      if (
+        typeof credentials !== "object" ||
+        typeof credentials.accessKeyId !== "string" ||
+        typeof credentials.secretAccessKey !== "string"
+      )
         throw Error("Resolved credential object is not valid");
     }
-    formatDate(e) {
-      let replaced = de(e).replace(/[\-:]/g, "");
-      return { longDate: replaced, shortDate: replaced.slice(0, 8) };
+    formatDate(now) {
+      let longDate = iso8601(now).replace(/[\-:]/g, "");
+      return {
+        longDate,
+        shortDate: longDate.slice(0, 8),
+      };
     }
-    getCanonicalHeaderList(e) {
-      return Object.keys(e).sort().join(";");
+    getCanonicalHeaderList(headers) {
+      return Object.keys(headers).sort().join(";");
     }
   }
-  class ce extends L {
-    headerFormatter = new ne();
-    constructor({
-      applyChecksum: e,
-      credentials: t,
-      region: r,
-      service: s,
-      sha256: n,
-      uriEscapePath: a = !0,
-    }) {
-      super({ applyChecksum: e, credentials: t, region: r, service: s, sha256: n, uriEscapePath: a });
+  class SignatureV4 extends SignatureV4Base {
+    headerFormatter = new HeaderFormatter();
+    constructor({ applyChecksum, credentials, region, service, sha256, uriEscapePath = true }) {
+      super({
+        applyChecksum,
+        credentials,
+        region,
+        service,
+        sha256,
+        uriEscapePath,
+      });
     }
-    async presign(e, t = {}) {
+    async presign(originalRequest, options = {}) {
       let {
-          signingDate: signingDate = new Date(),
-          expiresIn: expiresIn = 3600,
-          unsignableHeaders: unsignableHeaders,
-          unhoistableHeaders: unhoistableHeaders,
-          signableHeaders: signableHeaders,
-          hoistableHeaders: hoistableHeaders,
-          signingRegion: signingRegion,
-          signingService: signingService,
-        } = t,
-        credentialProvider = await this.credentialProvider();
-      this.validateResolvedCredentials(credentialProvider);
-      let h = signingRegion ?? (await this.regionProvider()),
-        { longDate: longDate, shortDate: shortDate } = this.formatDate(signingDate);
-      if (expiresIn > se)
+        signingDate = new Date(),
+        expiresIn = 3600,
+        unsignableHeaders,
+        unhoistableHeaders,
+        signableHeaders,
+        hoistableHeaders,
+        signingRegion,
+        signingService,
+      } = options;
+      let credentials = await this.credentialProvider();
+      this.validateResolvedCredentials(credentials);
+      let region = signingRegion ?? (await this.regionProvider());
+      let { longDate, shortDate } = this.formatDate(signingDate);
+      if (expiresIn > MAX_PRESIGNED_TTL)
         return Promise.reject(
           "Signature version 4 presigned URLs must have an expiration date less than one week in the future",
         );
-      let p = D(shortDate, h, signingService ?? this.service),
-        E = oe(I(e), { unhoistableHeaders: unhoistableHeaders, hoistableHeaders: hoistableHeaders });
-      if (credentialProvider.sessionToken) E.query[v] = credentialProvider.sessionToken;
-      ((E.query[K] = _),
-        (E.query[j] = `${credentialProvider.accessKeyId}/${p}`),
-        (E.query[m] = longDate),
-        (E.query[V] = expiresIn.toString(10)));
-      let O = T(E, unsignableHeaders, signableHeaders);
-      return (
-        (E.query[Q] = this.getCanonicalHeaderList(O)),
-        (E.query[U] = await this.getSignature(
-          longDate,
-          p,
-          this.getSigningKey(credentialProvider, h, shortDate, signingService),
-          this.createCanonicalRequest(E, O, await H(e, this.sha256)),
-        )),
-        E
+      let scope = createScope(shortDate, region, signingService ?? this.service);
+      let request = moveHeadersToQuery(prepareRequest(originalRequest), {
+        unhoistableHeaders,
+        hoistableHeaders,
+      });
+      if (credentials.sessionToken) request.query[TOKEN_QUERY_PARAM] = credentials.sessionToken;
+      request.query[ALGORITHM_QUERY_PARAM] = ALGORITHM_IDENTIFIER;
+      request.query[CREDENTIAL_QUERY_PARAM] = `${credentials.accessKeyId}/${scope}`;
+      request.query[AMZ_DATE_QUERY_PARAM] = longDate;
+      request.query[EXPIRES_QUERY_PARAM] = expiresIn.toString(10);
+      let canonicalHeaders = getCanonicalHeaders(request, unsignableHeaders, signableHeaders);
+      request.query[SIGNED_HEADERS_QUERY_PARAM] = this.getCanonicalHeaderList(canonicalHeaders);
+      request.query[SIGNATURE_QUERY_PARAM] = await this.getSignature(
+        longDate,
+        scope,
+        this.getSigningKey(credentials, region, shortDate, signingService),
+        this.createCanonicalRequest(
+          request,
+          canonicalHeaders,
+          await getPayloadHash(originalRequest, this.sha256),
+        ),
       );
+      return request;
     }
-    async sign(e, t) {
-      if (typeof e === "string") return this.signString(e, t);
-      else if (e.headers && e.payload) return this.signEvent(e, t);
-      else if (e.message) return this.signMessage(e, t);
-      else return this.signRequest(e, t);
+    async sign(toSign, options) {
+      if (typeof toSign === "string") return this.signString(toSign, options);
+      else if (toSign.headers && toSign.payload) return this.signEvent(toSign, options);
+      else if (toSign.message) return this.signMessage(toSign, options);
+      else return this.signRequest(toSign, options);
     }
     async signEvent(
-      { headers: e, payload: t },
-      { signingDate: r = new Date(), priorSignature: s, signingRegion: n, signingService: a },
+      { headers, payload },
+      { signingDate = new Date(), priorSignature, signingRegion, signingService },
     ) {
-      let o = n ?? (await this.regionProvider()),
-        { shortDate: shortDate, longDate: longDate } = this.formatDate(r),
-        A = D(shortDate, o, a ?? this.service),
-        u = await H({ headers: {}, body: t }, this.sha256),
-        h = new this.sha256();
-      h.update(e);
-      let toHex = f.toHex(await h.digest()),
-        joined = [J, longDate, A, s, toHex, u].join(`
+      let region = signingRegion ?? (await this.regionProvider());
+      let { shortDate, longDate } = this.formatDate(signingDate);
+      let scope = createScope(shortDate, region, signingService ?? this.service);
+      let hashedPayload = await getPayloadHash(
+        {
+          headers: {},
+          body: payload,
+        },
+        this.sha256,
+      );
+      let hash = new this.sha256();
+      hash.update(headers);
+      let hashedHeaders = toHex.toHex(await hash.digest());
+      let stringToSign = [
+        EVENT_ALGORITHM_IDENTIFIER,
+        longDate,
+        scope,
+        priorSignature,
+        hashedHeaders,
+        hashedPayload,
+      ].join(`
 `);
-      return this.signString(joined, { signingDate: r, signingRegion: o, signingService: a });
+      return this.signString(stringToSign, {
+        signingDate,
+        signingRegion: region,
+        signingService,
+      });
     }
-    async signMessage(e, { signingDate: t = new Date(), signingRegion: r, signingService: s }) {
+    async signMessage(signableMessage, { signingDate = new Date(), signingRegion, signingService }) {
       return this.signEvent(
-        { headers: this.headerFormatter.format(e.message.headers), payload: e.message.body },
-        { signingDate: t, signingRegion: r, signingService: s, priorSignature: e.priorSignature },
-      ).then((a) => ({ message: e.message, signature: a }));
+        {
+          headers: this.headerFormatter.format(signableMessage.message.headers),
+          payload: signableMessage.message.body,
+        },
+        {
+          signingDate,
+          signingRegion,
+          signingService,
+          priorSignature: signableMessage.priorSignature,
+        },
+      ).then((signature) => ({
+        message: signableMessage.message,
+        signature,
+      }));
     }
-    async signString(e, { signingDate: t = new Date(), signingRegion: r, signingService: s } = {}) {
-      let credentialProvider = await this.credentialProvider();
-      this.validateResolvedCredentials(credentialProvider);
-      let a = r ?? (await this.regionProvider()),
-        { shortDate: shortDate } = this.formatDate(t),
-        i = new this.sha256(await this.getSigningKey(credentialProvider, a, shortDate, s));
-      return (i.update(d.toUint8Array(e)), f.toHex(await i.digest()));
+    async signString(stringToSign, { signingDate = new Date(), signingRegion, signingService } = {}) {
+      let credentials = await this.credentialProvider();
+      this.validateResolvedCredentials(credentials);
+      let region = signingRegion ?? (await this.regionProvider());
+      let { shortDate } = this.formatDate(signingDate);
+      let hash = new this.sha256(await this.getSigningKey(credentials, region, shortDate, signingService));
+      hash.update(d.toUint8Array(stringToSign));
+      return toHex.toHex(await hash.digest());
     }
     async signRequest(
-      e,
-      {
-        signingDate: t = new Date(),
-        signableHeaders: r,
-        unsignableHeaders: s,
-        signingRegion: n,
-        signingService: a,
-      } = {},
+      requestToSign,
+      { signingDate = new Date(), signableHeaders, unsignableHeaders, signingRegion, signingService } = {},
     ) {
-      let credentialProvider = await this.credentialProvider();
-      this.validateResolvedCredentials(credentialProvider);
-      let i = n ?? (await this.regionProvider()),
-        c = I(e),
-        { longDate: longDate, shortDate: shortDate } = this.formatDate(t),
-        h = D(shortDate, i, a ?? this.service);
-      if (((c.headers[lower] = longDate), credentialProvider.sessionToken))
-        c.headers[lower_3] = credentialProvider.sessionToken;
-      let l = await H(c, this.sha256);
-      if (!ae(S, c.headers) && this.applyChecksum) c.headers[S] = l;
-      let g = T(c, s, r),
-        signature = await this.getSignature(
-          longDate,
-          h,
-          this.getSigningKey(credentialProvider, i, shortDate, a),
-          this.createCanonicalRequest(c, g, l),
-        );
-      return (
-        (c.headers[P] =
-          `${_} Credential=${credentialProvider.accessKeyId}/${h}, SignedHeaders=${this.getCanonicalHeaderList(g)}, Signature=${signature}`),
-        c
+      let credentials = await this.credentialProvider();
+      this.validateResolvedCredentials(credentials);
+      let region = signingRegion ?? (await this.regionProvider());
+      let request = prepareRequest(requestToSign);
+      let { longDate, shortDate } = this.formatDate(signingDate);
+      let scope = createScope(shortDate, region, signingService ?? this.service);
+      request.headers[AMZ_DATE_HEADER] = longDate;
+      if (credentials.sessionToken) request.headers[TOKEN_HEADER] = credentials.sessionToken;
+      let payloadHash = await getPayloadHash(request, this.sha256);
+      if (!hasHeader(SHA256_HEADER, request.headers) && this.applyChecksum)
+        request.headers[SHA256_HEADER] = payloadHash;
+      let canonicalHeaders = getCanonicalHeaders(request, unsignableHeaders, signableHeaders);
+      let signature = await this.getSignature(
+        longDate,
+        scope,
+        this.getSigningKey(credentials, region, shortDate, signingService),
+        this.createCanonicalRequest(request, canonicalHeaders, payloadHash),
       );
+      request.headers[AUTH_HEADER] =
+        `${ALGORITHM_IDENTIFIER} Credential=${credentials.accessKeyId}/${scope}, SignedHeaders=${this.getCanonicalHeaderList(canonicalHeaders)}, Signature=${signature}`;
+      return request;
     }
-    async getSignature(e, t, r, s) {
-      let stringToSign = await this.createStringToSign(e, t, s, _),
-        a = new this.sha256(await r);
-      return (a.update(d.toUint8Array(stringToSign)), f.toHex(await a.digest()));
+    async getSignature(longDate, credentialScope, keyPromise, canonicalRequest) {
+      let stringToSign = await this.createStringToSign(
+        longDate,
+        credentialScope,
+        canonicalRequest,
+        ALGORITHM_IDENTIFIER,
+      );
+      let hash = new this.sha256(await keyPromise);
+      hash.update(d.toUint8Array(stringToSign));
+      return toHex.toHex(await hash.digest());
     }
-    getSigningKey(e, t, r, s) {
-      return re(this.sha256, e, r, t, s || this.service);
+    getSigningKey(credentials, region, shortDate, service) {
+      return getSigningKey(this.sha256, credentials, shortDate, region, service || this.service);
     }
   }
-  var pe = { SignatureV4a: null };
-  Re.ALGORITHM_IDENTIFIER = _;
-  Re.ALGORITHM_IDENTIFIER_V4A = fe;
-  Re.ALGORITHM_QUERY_PARAM = K;
-  Re.ALWAYS_UNSIGNABLE_HEADERS = F;
-  Re.AMZ_DATE_HEADER = lower;
-  Re.AMZ_DATE_QUERY_PARAM = m;
-  Re.AUTH_HEADER = P;
-  Re.CREDENTIAL_QUERY_PARAM = j;
-  Re.DATE_HEADER = q;
-  Re.EVENT_ALGORITHM_IDENTIFIER = J;
-  Re.EXPIRES_QUERY_PARAM = V;
-  Re.GENERATED_HEADERS = z;
-  Re.HOST_HEADER = Ee;
-  Re.KEY_TYPE_IDENTIFIER = b;
-  Re.MAX_CACHE_SIZE = te;
-  Re.MAX_PRESIGNED_TTL = se;
-  Re.PROXY_HEADER_PATTERN = W;
-  Re.REGION_SET_PARAM = Ae;
-  Re.SEC_HEADER_PATTERN = Z;
-  Re.SHA256_HEADER = S;
-  Re.SIGNATURE_HEADER = lower_2;
-  Re.SIGNATURE_QUERY_PARAM = U;
-  Re.SIGNED_HEADERS_QUERY_PARAM = Q;
-  Re.SignatureV4 = ce;
-  Re.SignatureV4Base = L;
-  Re.TOKEN_HEADER = lower_3;
-  Re.TOKEN_QUERY_PARAM = v;
-  Re.UNSIGNABLE_PATTERNS = he;
-  Re.UNSIGNED_PAYLOAD = ee;
-  Re.clearCredentialCache = le;
-  Re.createScope = D;
-  Re.getCanonicalHeaders = T;
-  Re.getCanonicalQuery = ie;
-  Re.getPayloadHash = H;
-  Re.getSigningKey = re;
-  Re.hasHeader = ae;
-  Re.moveHeadersToQuery = oe;
-  Re.prepareRequest = I;
-  Re.signatureV4aContainer = pe;
+  var signatureV4aContainer = {
+    SignatureV4a: null,
+  };
+  cjsExports.ALGORITHM_IDENTIFIER = ALGORITHM_IDENTIFIER;
+  cjsExports.ALGORITHM_IDENTIFIER_V4A = ALGORITHM_IDENTIFIER_V4A;
+  cjsExports.ALGORITHM_QUERY_PARAM = ALGORITHM_QUERY_PARAM;
+  cjsExports.ALWAYS_UNSIGNABLE_HEADERS = ALWAYS_UNSIGNABLE_HEADERS;
+  cjsExports.AMZ_DATE_HEADER = AMZ_DATE_HEADER;
+  cjsExports.AMZ_DATE_QUERY_PARAM = AMZ_DATE_QUERY_PARAM;
+  cjsExports.AUTH_HEADER = AUTH_HEADER;
+  cjsExports.CREDENTIAL_QUERY_PARAM = CREDENTIAL_QUERY_PARAM;
+  cjsExports.DATE_HEADER = DATE_HEADER;
+  cjsExports.EVENT_ALGORITHM_IDENTIFIER = EVENT_ALGORITHM_IDENTIFIER;
+  cjsExports.EXPIRES_QUERY_PARAM = EXPIRES_QUERY_PARAM;
+  cjsExports.GENERATED_HEADERS = z;
+  cjsExports.HOST_HEADER = HOST_HEADER;
+  cjsExports.KEY_TYPE_IDENTIFIER = KEY_TYPE_IDENTIFIER;
+  cjsExports.MAX_CACHE_SIZE = MAX_CACHE_SIZE;
+  cjsExports.MAX_PRESIGNED_TTL = MAX_PRESIGNED_TTL;
+  cjsExports.PROXY_HEADER_PATTERN = PROXY_HEADER_PATTERN;
+  cjsExports.REGION_SET_PARAM = REGION_SET_PARAM;
+  cjsExports.SEC_HEADER_PATTERN = SEC_HEADER_PATTERN;
+  cjsExports.SHA256_HEADER = SHA256_HEADER;
+  cjsExports.SIGNATURE_HEADER = SIGNATURE_HEADER;
+  cjsExports.SIGNATURE_QUERY_PARAM = SIGNATURE_QUERY_PARAM;
+  cjsExports.SIGNED_HEADERS_QUERY_PARAM = SIGNED_HEADERS_QUERY_PARAM;
+  cjsExports.SignatureV4 = SignatureV4;
+  cjsExports.SignatureV4Base = SignatureV4Base;
+  cjsExports.TOKEN_HEADER = TOKEN_HEADER;
+  cjsExports.TOKEN_QUERY_PARAM = TOKEN_QUERY_PARAM;
+  cjsExports.UNSIGNABLE_PATTERNS = UNSIGNABLE_PATTERNS;
+  cjsExports.UNSIGNED_PAYLOAD = ee;
+  cjsExports.clearCredentialCache = clearCredentialCache;
+  cjsExports.createScope = createScope;
+  cjsExports.getCanonicalHeaders = getCanonicalHeaders;
+  cjsExports.getCanonicalQuery = getCanonicalQuery;
+  cjsExports.getPayloadHash = getPayloadHash;
+  cjsExports.getSigningKey = getSigningKey;
+  cjsExports.hasHeader = hasHeader;
+  cjsExports.moveHeadersToQuery = moveHeadersToQuery;
+  cjsExports.prepareRequest = prepareRequest;
+  cjsExports.signatureV4aContainer = signatureV4aContainer;
 });
-
-export { yat };
+export { require_signature_v4 };

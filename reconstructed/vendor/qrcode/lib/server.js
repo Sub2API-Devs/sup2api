@@ -5,113 +5,121 @@
  * pieces: chunk-spjgqa4y.js (7)
  * attribution: esm-layout 2, esm-fingerprint 5
  */
-import { Ue } from "./can-promise.js";
-import { it } from "./core/qrcode.js";
-import { Pn } from "./renderer/png.js";
-import { Sbo } from "./renderer/utf8.js";
+import { require_can_promise } from "./can-promise.js";
+import { require_qrcode } from "./core/qrcode.js";
+import { require_png_2 } from "./renderer/png.js";
+import { require_utf8 } from "./renderer/utf8.js";
 import { qrTerminalModule } from "./renderer/terminal.js";
-import { Kn } from "./renderer/svg.js";
-import { Qn } from "./browser.js";
+import { require_svg } from "./renderer/svg.js";
+import { require_browser } from "./browser.js";
 
 //@ chunk-spjgqa4y.js:57866-57919 esm-layout
-var Zn = Ue(),
-  he = it(),
-  hl = Pn(),
-  $n = Sbo(),
-  cl = qrTerminalModule(),
-  Xn = Kn();
+var canPromise = require_can_promise();
+var QRCode = require_qrcode();
+var PngRenderer = require_png_2();
+var Utf8Renderer = require_utf8();
+var TerminalRenderer = qrTerminalModule();
+var SvgRenderer = require_svg();
 //@ chunk-spjgqa4y.js:57919-58152 esm-fingerprint
-function Te(t, e, r) {
-  if (typeof t > "u") throw Error("String required as first argument");
-  if (typeof r > "u") ((r = e), (e = {}));
-  if (typeof r !== "function")
-    if (!Zn()) throw Error("Callback required as last argument");
-    else ((e = r || {}), (r = null));
-  return { opts: e, cb: r };
+function checkParams(text, opts, cb) {
+  if (typeof text === "undefined") throw Error("String required as first argument");
+  if (typeof cb === "undefined") {
+    cb = opts;
+    opts = {};
+  }
+  if (typeof cb !== "function")
+    if (!canPromise()) throw Error("Callback required as last argument");
+    else {
+      opts = cb || {};
+      cb = null;
+    }
+  return {
+    opts,
+    cb,
+  };
 }
 //@ chunk-spjgqa4y.js:58152-58226 esm-fingerprint
-function dl(t) {
-  return t.slice(((t.lastIndexOf(".") - 1) >>> 0) + 2).toLowerCase();
+function getTypeFromFilename(path) {
+  return path.slice(((path.lastIndexOf(".") - 1) >>> 0) + 2).toLowerCase();
 }
 //@ chunk-spjgqa4y.js:58226-58347 esm-fingerprint
-function Oe(t) {
-  switch (t) {
+function getRendererFromType(type) {
+  switch (type) {
     case "svg":
-      return Xn;
+      return SvgRenderer;
     case "txt":
     case "utf8":
-      return $n;
+      return Utf8Renderer;
     case "png":
     case "image/png":
     default:
-      return hl;
+      return PngRenderer;
   }
 }
 //@ chunk-spjgqa4y.js:58347-58447 esm-fingerprint
-function pl(t) {
-  switch (t) {
+function getStringRendererFromType(type) {
+  switch (type) {
     case "svg":
-      return Xn;
+      return SvgRenderer;
     case "terminal":
-      return cl;
+      return TerminalRenderer;
     case "utf8":
     default:
-      return $n;
+      return Utf8Renderer;
   }
 }
 //@ chunk-spjgqa4y.js:58447-58680 esm-fingerprint
-function Ce(t, e, r) {
-  if (!r.cb)
-    return new Promise(function (n, i) {
+function render(renderFunc, text, params) {
+  if (!params.cb)
+    return new Promise(function (resolve, reject) {
       try {
-        let create = he.create(e, r.opts);
-        return t(create, r.opts, function (s, l) {
-          return s ? i(s) : n(l);
+        let data = QRCode.create(text, params.opts);
+        return renderFunc(data, params.opts, function (err, data) {
+          return err ? reject(err) : resolve(data);
         });
-      } catch (error) {
-        i(error);
+      } catch (e) {
+        reject(e);
       }
     });
   try {
-    let create = he.create(e, r.opts);
-    return t(create, r.opts, r.cb);
-  } catch (error) {
-    r.cb(error);
+    let data = QRCode.create(text, params.opts);
+    return renderFunc(data, params.opts, params.cb);
+  } catch (e) {
+    params.cb(e);
   }
 }
 //@ chunk-spjgqa4y.js:58680-59446 esm-layout
-var create = he.create,
-  toCanvas = Qn().toCanvas,
-  toString = function (e, r, n) {
-    let i = Te(e, r, n),
-      o = i.opts ? i.opts.type : void 0,
-      s = pl(o);
-    return Ce(s.render, e, i);
-  },
-  toDataURL = function (e, r, n) {
-    let i = Te(e, r, n),
-      o = Oe(i.opts.type);
-    return Ce(o.renderToDataURL, e, i);
-  },
-  toBuffer = function (e, r, n) {
-    let i = Te(e, r, n),
-      o = Oe(i.opts.type);
-    return Ce(o.renderToBuffer, e, i);
-  },
-  toFile = function (e, r, n, i) {
-    if (typeof e !== "string" || !(typeof r === "string" || typeof r === "object"))
-      throw Error("Invalid argument");
-    if (arguments.length < 3 && !Zn()) throw Error("Too few arguments provided");
-    let o = Te(r, n, i),
-      s = o.opts.type || dl(e),
-      u = Oe(s).renderToFile.bind(null, e);
-    return Ce(u, r, o);
-  },
-  toFileStream = function (e, r, n) {
-    if (arguments.length < 2) throw Error("Too few arguments provided");
-    let i = Te(r, n, e.emit.bind(e, "error")),
-      s = Oe("png").renderToFileStream.bind(null, e);
-    Ce(s, r, i);
-  };
-
+var create = QRCode.create;
+var toCanvas = require_browser().toCanvas;
+var toString = function (text, opts, cb) {
+  let params = checkParams(text, opts, cb);
+  let type = params.opts ? params.opts.type : undefined;
+  let renderer = getStringRendererFromType(type);
+  return render(renderer.render, text, params);
+};
+var toDataURL = function (text, opts, cb) {
+  let params = checkParams(text, opts, cb);
+  let renderer = getRendererFromType(params.opts.type);
+  return render(renderer.renderToDataURL, text, params);
+};
+var toBuffer = function (text, opts, cb) {
+  let params = checkParams(text, opts, cb);
+  let renderer = getRendererFromType(params.opts.type);
+  return render(renderer.renderToBuffer, text, params);
+};
+var toFile = function (path, text, opts, cb) {
+  if (typeof path !== "string" || !(typeof text === "string" || typeof text === "object"))
+    throw Error("Invalid argument");
+  if (arguments.length < 3 && !canPromise()) throw Error("Too few arguments provided");
+  let params = checkParams(text, opts, cb);
+  let type = params.opts.type || getTypeFromFilename(path);
+  let u = getRendererFromType(type).renderToFile.bind(null, path);
+  return render(u, text, params);
+};
+var toFileStream = function (stream, text, opts) {
+  if (arguments.length < 2) throw Error("Too few arguments provided");
+  let params = checkParams(text, opts, stream.emit.bind(stream, "error"));
+  let s = getRendererFromType("png").renderToFileStream.bind(null, stream);
+  render(s, text, params);
+};
 export { toString, create };

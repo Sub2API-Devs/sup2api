@@ -37,7 +37,7 @@ import { claudeCommand } from "../../utils/worktreeResumeHint.js";
 function formatErrorMessage(error) {
   switch (error.type) {
     case "path-not-found":
-      if (error.plugin === void 0)
+      if (error.plugin === undefined)
         return error.errno
           ? `Plugin path could not be checked: ${printableOrEmpty(error.path)} (${quotedPrintable(error.errno)})`
           : `Plugin path not found: ${printableOrEmpty(error.path)}`;
@@ -63,21 +63,22 @@ function formatErrorMessage(error) {
         return marketplaceListingChangedMessage(
           error.pluginId,
           error.directoryRenamedTo,
-          error.directoryIdentityChanged === !0,
+          error.directoryIdentityChanged === true,
           error.directoryNotInstallableReason,
-          error.registryReadFailed === !0,
+          error.registryReadFailed === true,
         );
       return `Plugin "${quotedPrintable(error.pluginId)}" not found in marketplace "${quotedPrintable(error.marketplace)}"`;
     case "marketplace-not-found":
       return error.registryReadFailed
         ? `Marketplace "${quotedPrintable(error.marketplace)}": the marketplace registry could not be read`
         : error.registrationHidden
-          ? error.registrationHiddenReason === void 0
+          ? error.registrationHiddenReason === undefined
             ? `Marketplace "${quotedPrintable(error.marketplace)}" is added but ignored (see the debug log)`
             : `Marketplace "${quotedPrintable(error.marketplace)}" is added but ignored. ${capitalize(printableText(error.registrationHiddenReason))}`
           : `Marketplace "${quotedPrintable(error.marketplace)}" not found`;
     case "marketplace-load-failed":
-      if (error.directoryBlockedBy !== void 0 || isMarketplaceLoadError(error)) return pluginErrorText(error);
+      if (error.directoryBlockedBy !== undefined || isMarketplaceLoadError(error))
+        return pluginErrorText(error);
       if (error.nameRefused) return reservedMarketplaceNameError(error.marketplace);
       return `Failed to load marketplace "${quotedPrintable(error.marketplace)}": ${quotedPrintable(error.reason)}`;
     case "mcp-config-invalid":
@@ -94,7 +95,7 @@ function formatErrorMessage(error) {
       return `MCPB manifest invalid at ${printableOrEmpty(error.mcpbPath)}: ${quotedPrintable(error.validationError)}`;
     case "marketplace-blocked-by-policy": {
       let k = pluginBlockSource(error);
-      if (k !== null) return directoryBlockedMessage(void 0, k);
+      if (k !== null) return directoryBlockedMessage(undefined, k);
       return error.blockedByBlocklist
         ? `Marketplace "${quotedPrintable(error.marketplace)}" is blocked by enterprise policy`
         : `Marketplace "${quotedPrintable(error.marketplace)}" is not in the allowed marketplace list`;
@@ -102,7 +103,7 @@ function formatErrorMessage(error) {
     case "dependency-unsatisfied":
       return error.reason === "not-enabled"
         ? `Dependency "${quotedPrintable(error.dependency)}" is disabled`
-        : `Dependency "${quotedPrintable(error.dependency)}" is not installed${error.sameNameSyncedPlugin === void 0 ? "" : `; ${cloudOnlyDependencyMessage(error.sameNameSyncedPlugin)}`}`;
+        : `Dependency "${quotedPrintable(error.dependency)}" is not installed${error.sameNameSyncedPlugin === undefined ? "" : `; ${cloudOnlyDependencyMessage(error.sameNameSyncedPlugin)}`}`;
     case "dependency-version-unsatisfied":
       return `Requires "${quotedPrintable(error.dependency)}" ${quotedPrintable(error.required)}, installed ${quotedPrintable(error.installed ?? "version unknown")}`;
     case "lsp-config-invalid":
@@ -118,22 +119,22 @@ function formatErrorMessage(error) {
     case "lsp-request-failed":
       return `LSP server "${quotedPrintable(error.serverName)}" ${quotedPrintable(error.method)} failed: ${quotedPrintable(error.error)}`;
     case "plugin-cache-miss":
-      if (error.registryReadFailed === !0)
+      if (error.registryReadFailed === true)
         return `Plugin "${quotedPrintable(error.plugin)}" is not loaded: installed_plugins.json could not be read, so its install could not be checked`;
       return `Plugin "${quotedPrintable(error.plugin)}" not cached at ${printableOrEmpty(error.installPath)}`;
     case "plugin-not-installed":
-      if (error.installedListHeldNote !== void 0)
+      if (error.installedListHeldNote !== undefined)
         return `Plugin "${quotedPrintable(error.plugin)}" is enabled in project settings, but whether it is installed could not be checked`;
       return `Plugin "${quotedPrintable(error.plugin)}" is enabled in project settings but isn't installed here`;
     case "autoupdate-deferred-entry-helper":
     case "autoupdate-disabled-by-policy":
       return error.message;
     case "autoupdate-blocked-by-pinner": {
-      let k = error.heldAt ? ` at ${printableOrEmpty(error.heldAt)}` : "",
-        C =
-          error.disabledPinners.length > 0
-            ? ` (${quotedPrintable(error.disabledPinners.join(", "))} ${error.disabledPinners.length === 1 ? "is" : "are"} disabled)`
-            : "";
+      let k = error.heldAt ? ` at ${printableOrEmpty(error.heldAt)}` : "";
+      let C =
+        error.disabledPinners.length > 0
+          ? ` (${quotedPrintable(error.disabledPinners.join(", "))} ${error.disabledPinners.length === 1 ? "is" : "are"} disabled)`
+          : "";
       return `Autoupdate held${k} \u2014 version constraint from ${quotedPrintable(error.blockedBy.join(", "))}${C}`;
     }
     case "generic-error":
@@ -142,9 +143,9 @@ function formatErrorMessage(error) {
   return pluginErrorText(error);
 }
 //@ chunk-vrb44rx7.js:131623-131677 layout
-function getErrorGuidanceText(i) {
-  let h = getErrorGuidance(i);
-  return h === null ? null : stripInvisibleKeepEmoji(h);
+function getErrorGuidanceText(error) {
+  let errorGuidance = getErrorGuidance(error);
+  return errorGuidance === null ? null : stripInvisibleKeepEmoji(errorGuidance);
 }
 //@ chunk-vrb44rx7.js:131677-138059 fingerprint = getErrorGuidance (0.632)
 function getErrorGuidance(error) {
@@ -152,7 +153,7 @@ function getErrorGuidance(error) {
     case "path-not-found":
       return error.errno
         ? `Claude Code could not check this path (${quotedPrintable(error.errno)}): look for a symlink pointing at itself, a broken network mount, or a permissions problem, then run /reload-plugins`
-        : error.plugin !== void 0
+        : error.plugin !== undefined
           ? "Check that the path in your manifest or marketplace config is correct"
           : marketplaceOf(error.source) === SYNCED
             ? "claude.ai syncs this plugin and its directory is no longer on disk; restart Claude Code to refresh your synced plugins"
@@ -176,11 +177,11 @@ function getErrorGuidance(error) {
         : "Check manifest file follows the required schema";
     case "plugin-not-found":
       if (error.removedFromDirectory) {
-        if (error.registryReadFailed === !0)
-          return `Run /reload-plugins. If it is still not loaded, fix or restore installed_plugins.json in the plugins directory, then run it again${error.installedListHeldNote === void 0 ? "" : `. ${error.installedListHeldNote}`}`;
+        if (error.registryReadFailed === true)
+          return `Run /reload-plugins. If it is still not loaded, fix or restore installed_plugins.json in the plugins directory, then run it again${error.installedListHeldNote === undefined ? "" : `. ${error.installedListHeldNote}`}`;
         if (error.directoryRenamedTo?.length)
           return "Uninstall it, then install it under its new name from /plugin \u2192 Discover";
-        if (error.directoryNotInstallableReason !== void 0)
+        if (error.directoryNotInstallableReason !== undefined)
           return "It loads again once the listing can be installed. Uninstall it if you no longer need it";
         return error.directoryIdentityChanged
           ? "Uninstall it, then install the new listing if you want it"
@@ -189,11 +190,11 @@ function getErrorGuidance(error) {
       return `Plugin may not exist in marketplace "${quotedPrintable(error.marketplace)}"`;
     case "marketplace-not-found": {
       let k = marketplaceNotFoundMessage(error);
-      if (k !== void 0) return k;
+      if (k !== undefined) return k;
       return error.registryReadFailed
         ? "Check known_marketplaces.json in the plugins directory, then run /reload-plugins"
         : error.registrationHidden
-          ? error.registrationHiddenReason === void 0
+          ? error.registrationHiddenReason === undefined
             ? "Remove and re-add the marketplace"
             : capitalize(MARKETPLACE_SOURCE_FIX_HINTS[error.registrationHidden])
           : error.availableMarketplaces.length > 0
@@ -223,7 +224,7 @@ function getErrorGuidance(error) {
     case "dependency-unsatisfied":
       if (error.reason === "not-enabled")
         return `Enable "${quotedPrintable(error.dependency)}" or ${formatDisableOrUninstall(error)}`;
-      return error.sameNameSyncedPlugin !== void 0
+      return error.sameNameSyncedPlugin !== undefined
         ? `Install "${quotedPrintable(error.dependency)}", which then loads instead of "${quotedPrintable(error.sameNameSyncedPlugin)}", or ${formatDisableOrUninstall(error)}`
         : `Install "${quotedPrintable(error.dependency)}" or ${formatDisableOrUninstall(error)}`;
     case "dependency-version-unsatisfied":
@@ -236,13 +237,13 @@ function getErrorGuidance(error) {
     case "lsp-request-failed":
       return "Check LSP server logs with --debug for details";
     case "plugin-cache-miss": {
-      let k = error.installedListHeldNote === void 0 ? "" : `. ${error.installedListHeldNote}`;
-      if (error.registryReadFailed === !0)
+      let k = error.installedListHeldNote === undefined ? "" : `. ${error.installedListHeldNote}`;
+      if (error.registryReadFailed === true)
         return `Fix or restore installed_plugins.json in the plugins directory, then run /reload-plugins${k}`;
       return `Run /plugin to refresh the plugin cache${k}`;
     }
     case "plugin-not-installed": {
-      if (error.installedListHeldNote !== void 0) return error.installedListHeldNote;
+      if (error.installedListHeldNote !== undefined) return error.installedListHeldNote;
       let k = claudeCommand("plugin install", error.source, "--scope project");
       return k ? `Run \`${k}\` to install it for this project` : "Install it at project scope to fix this";
     }
@@ -256,12 +257,12 @@ function getErrorGuidance(error) {
         : null;
     }
     case "marketplace-load-failed":
-      if (error.directoryBlockedBy !== void 0)
+      if (error.directoryBlockedBy !== undefined)
         return "Uninstall it (/plugin \u2192 Installed, or `claude plugin uninstall <plugin>`), or install it from a marketplace your organization allows";
       if (isMarketplaceLoadError(error)) return RELOAD_PLUGINS_HINT;
       if (error.nameRefused)
         return marketplaceRemovalAdvice(error.marketplace, {
-          declaredInSettings: error.nameRefusedDeclaredInSettings === !0,
+          declaredInSettings: error.nameRefusedDeclaredInSettings === true,
         });
       return error.reason === "cache-miss"
         ? error.catalogReadFailed
@@ -271,8 +272,7 @@ function getErrorGuidance(error) {
     case "generic-error":
       return null;
   }
-  let h = error;
+  let _exhaustive = error;
   return null;
 }
-
 export { getErrorGuidanceText, formatErrorMessage };

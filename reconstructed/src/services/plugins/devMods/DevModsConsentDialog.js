@@ -13,43 +13,76 @@ import { DEV_MODS_DIR_PLACEHOLDER } from "./devModsWatcher.js";
 import { getIsNonInteractiveSession } from "../../../bootstrap/state.js";
 
 //@ chunk-zhrgwca4.js:1093-1102 placement
-var N = {};
+/**
+ * 模块命名空间对象占位（导出集合）。
+ */
+var devModsDialogNamespace = {};
 //@ chunk-zhrgwca4.js:1102-1152 placement
-Ar(N, { DEV_MODS_PLACEHOLDER: () => DEV_MODS_DIR_PLACEHOLDER, default: () => N });
+Ar(devModsDialogNamespace, {
+  DEV_MODS_PLACEHOLDER: () => DEV_MODS_DIR_PLACEHOLDER,
+  default: () => devModsDialogNamespace,
+});
 //@ chunk-zhrgwca4.js:1152-1212 placement
-var fo = { explain: "explain", allow: "enable", not_now: "decline" };
+/**
+ * 对话框选项值到结果名的映射。
+ */
+var CHOICE_BY_VALUE = {
+  explain: "explain",
+  allow: "enable",
+  not_now: "decline",
+};
 //@ chunk-zhrgwca4.js:1212-1310 placement
-var lo = { no_one_to_ask: "no_one_to_ask", host_closed: "closed", no_selection: "unpicked", error: "retry" };
+/**
+ * 失败原因到结果名的映射。
+ */
+var OUTCOME_BY_REASON = {
+  no_one_to_ask: "no_one_to_ask",
+  host_closed: "closed",
+  no_selection: "unpicked",
+  error: "retry",
+};
 //@ chunk-zhrgwca4.js:1310-1472 placement
 function consentOutcomeToChoice(o) {
   switch (o.kind) {
     case "chose":
-      return fo[o.value];
+      return CHOICE_BY_VALUE[o.value];
     case "declined":
       return "decline";
     case "aborted":
       return "withdrawn";
     case "unanswered":
-      return lo[o.reason];
+      return OUTCOME_BY_REASON[o.reason];
   }
 }
 //@ chunk-zhrgwca4.js:1472-1484 placement
 var CONSENT_DIALOG_DELAY_MS = 2000;
 //@ chunk-zhrgwca4.js:1484-1534 placement
-var co = (o) => (o === "now" ? "now" : "when this turn ends");
+/**
+ * 描述 mod 加载时机（立即或本轮结束后）。
+ */
+var loadTimingLabel = (o) => (o === "now" ? "now" : "when this turn ends");
 //@ chunk-zhrgwca4.js:1534-1675 placement
 var devModsConsentBody = (o) =>
-  `They'll load ${co(o)}, and they'll reload whenever they change. A mod is code, and it runs with the same access you have here.`;
+  `They'll load ${loadTimingLabel(o)}, and they'll reload whenever they change. A mod is code, and it runs with the same access you have here.`;
 //@ chunk-zhrgwca4.js:1675-1801 placement
 var DEV_MODS_CONSENT_OPTIONS = [
-  { value: "explain", label: "How does this work?" },
-  { value: "allow", label: "Turn them on" },
-  { value: "not_now", label: "Not now" },
+  {
+    value: "explain",
+    label: "How does this work?",
+  },
+  {
+    value: "allow",
+    label: "Turn them on",
+  },
+  {
+    value: "not_now",
+    label: "Not now",
+  },
 ];
 //@ chunk-zhrgwca4.js:1801-2369 placement
 function devModsExplainerLines(o) {
-  let e = o === "now",
-    r = !getIsNonInteractiveSession();
+  let e = o === "now";
+  let r = !getIsNonInteractiveSession();
   return [
     "A mod is a small program that changes how Claude looks or behaves here.",
     "Claude wrote these mods, and they run with the same access you have.",
@@ -70,7 +103,6 @@ var DEV_MODS_CONSENT_QUESTION = "Turn on the mods Claude writes in this session?
 var devModsConsentQuestionFor = (o) => `${DEV_MODS_CONSENT_QUESTION}
 
 ${devModsConsentBody(o)}`;
-
 export {
   DEV_MODS_CONSENT_QUESTION,
   devModsExplainerLines,
@@ -79,5 +111,5 @@ export {
   MODS_DIALOG_TITLE,
   DEV_MODS_CONSENT_OPTIONS,
   CONSENT_DIALOG_DELAY_MS,
-  N,
+  devModsDialogNamespace,
 };

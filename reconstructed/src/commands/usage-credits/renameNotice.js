@@ -8,20 +8,18 @@
  * pieces: chunk-pjtx3j3k.js (1)
  * attribution: placement 1
  */
-
+//@ chunk-pjtx3j3k.js:191-390 placement
 /**
  * /extra-usage 改名为 /usage-credits 的提示。
  */
-//@ chunk-pjtx3j3k.js:191-390 placement
-var RENAME_NOTICE = "/extra-usage is now /usage-credits",
-  call = async (a, t) => {
-    let { call: e } = await import("./chunk-g49d7j62.js");
-    return {
-      type: "text",
-      value: `/extra-usage is now /usage-credits
+var RENAME_NOTICE = "/extra-usage is now /usage-credits";
+var call = async (a, t) => {
+  let { call: e } = await import("./chunk-g49d7j62.js");
+  return {
+    type: "text",
+    value: `/extra-usage is now /usage-credits
 
 ${(await e(a, t)).value}`,
-    };
   };
-
+};
 export { RENAME_NOTICE };

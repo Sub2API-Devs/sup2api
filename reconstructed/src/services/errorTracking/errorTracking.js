@@ -13,33 +13,33 @@ import { release } from "os";
 import { errorTrackingClient, isErrorTrackingCapReached, enqueueErrorLog } from "./datadogErrorSink.js";
 import { getOrCreateUserID, getOrCreateMachineID } from "../../utils/config.js";
 import {
-  jOi,
-  UOi,
+  isAnonymousBundledFrame,
+  unifyCliBundlePath,
   getSanitizedStackFrames,
   isStackOnlyExternal,
-  DSr,
+  isSourceFrame,
 } from "../../utils/errorStackSanitize.js";
-import { LEGACY_MODEL_IDS, Lt } from "../../utils/model/modelIds.js";
+import { LEGACY_MODEL_IDS_2, strip1mSuffix } from "../../utils/model/modelIds.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { getAllGrowthBookFeatures, getNonDefaultFeatureKeys } from "../analytics/growthbook.js";
 import {
-  Lf,
-  fT,
-  ef,
-  q7t,
-  K9e,
-  Y7t,
-  V9e,
-  X7t,
-  J7t,
-  Q7t,
-  Z7t,
-  Ot,
-  AHn,
-  pr,
+  APIUserAbortError,
+  APIConnectionTimeoutError,
+  APIConnectionError,
+  BadRequestError,
+  AuthenticationError,
+  PermissionDeniedError,
+  NotFoundError,
+  ConflictError,
+  UnprocessableEntityError,
+  RateLimitError,
+  InternalServerError,
+  APIError,
+  RetryableError,
+  AnthropicError,
 } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
-import { rp } from "../../../vendor/@anthropic-ai/sdk/lib/credentials/types.mjs";
+import { WorkloadIdentityError } from "../../../vendor/@anthropic-ai/sdk/lib/credentials/types.mjs";
 import {
   ClaudeError,
   sanitizeClassName,
@@ -56,7 +56,7 @@ import { env } from "../../utils/env.js";
 import { getEntrypointKind } from "../../utils/entrypointKinds.js";
 import { envSessionKind } from "../../utils/concurrentSessions.js";
 import { getRendererModeForAnalytics, getAttacherCaps } from "../../bootstrap/state.js";
-import { aro, getCurrentAuthSurface } from "../analytics/authOutcomeTelemetry.js";
+import { currentAuthSurface, getCurrentAuthSurface } from "../analytics/authOutcomeTelemetry.js";
 import { getPlatform } from "../../utils/platform.js";
 import { hasEmbeddedSearchTools_2 } from "../../utils/embeddedTools.js";
 import { isErrorReportingEnabled } from "../errorReportingGate.js";
@@ -67,7 +67,19 @@ var CLAUDE_CODE_ERROR_TRACKING = "claude-code-error-tracking";
 function buildErrorTrackingRelease(e) {
   return e
     ? {
-        version: `${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}_${e}`,
+        version: `${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.VERSION
+        }_${e}`,
         sourcemapGroup: e,
       }
     : {
@@ -86,23 +98,27 @@ function buildErrorTrackingRelease(e) {
       };
 }
 //@ chunk-crrjgh95.js:1903-1912 placement
-var O = 30;
+/**
+ * 把用户 id 哈希映射到 30 个桶之一。
+ */
+var USER_BUCKET_MODULUS = 30;
 //@ chunk-crrjgh95.js:1912-2116 placement
 function getUserBucket() {
   let e = errorTrackingClient();
-  if (e.cachedUserBucket !== void 0) return e.cachedUserBucket;
-  let r = getOrCreateUserID(),
-    digest = createHash("sha256").update(r).digest("hex");
-  return ((e.cachedUserBucket = parseInt(digest.slice(0, 8), 16) % O), e.cachedUserBucket);
+  if (e.cachedUserBucket !== undefined) return e.cachedUserBucket;
+  let r = getOrCreateUserID();
+  let o = createHash("sha256").update(r).digest("hex");
+  e.cachedUserBucket = parseInt(o.slice(0, 8), 16) % USER_BUCKET_MODULUS;
+  return e.cachedUserBucket;
 }
 //@ chunk-crrjgh95.js:2116-2342 placement
 function computeErrorFingerprint(e, r) {
   let joined = r
     .slice(0, 3)
     .map((n) =>
-      jOi(n)
+      isAnonymousBundledFrame(n)
         ? `${n.function ?? "?"}@${n.file}:${n.line ?? "?"}:${n.column ?? "?"}`
-        : `${n.function ?? "?"}@${UOi(n.file)}`,
+        : `${n.function ?? "?"}@${unifyCliBundlePath(n.file)}`,
     )
     .join("|");
   return createHash("sha256")
@@ -114,30 +130,39 @@ ${joined}`,
     .slice(0, 16);
 }
 //@ chunk-crrjgh95.js:2342-2361 placement
-var M = new Set(LEGACY_MODEL_IDS);
+/**
+ * 旧模型 id 集合（不在其中的归 other）。
+ */
+var LEGACY_MODEL_SET = new Set(LEGACY_MODEL_IDS_2);
 //@ chunk-crrjgh95.js:2361-2472 placement
 function getCanonicalModelForTracking() {
   try {
-    let e = getMainLoopModel();
-    if (!e) return;
-    let r = getCanonicalName(Lt(e), { identity: !0 });
-    return M.has(r) ? r : "other";
+    let mainLoopModel = getMainLoopModel();
+    if (!mainLoopModel) return;
+    let canonicalName = getCanonicalName(strip1mSuffix(mainLoopModel), {
+      identity: true,
+    });
+    return LEGACY_MODEL_SET.has(canonicalName) ? canonicalName : "other";
   } catch {
     return;
   }
 }
 //@ chunk-crrjgh95.js:2472-2481 placement
-var U = 50;
+/**
+ * 事件里最多附加的文件数（50）。
+ */
+var MAX_ADDITIONAL_FILES = 50;
 //@ chunk-crrjgh95.js:2481-2642 placement
 function getNonDefaultBooleanFlags() {
   try {
-    let e = getAllGrowthBookFeatures(),
-      r = getNonDefaultFeatureKeys(),
-      o = {},
-      n = 0;
-    for (let [t, s] of Object.entries(e))
-      if (typeof s === "boolean" && r.has(t)) {
-        if (((o[t] = s), ++n >= U)) break;
+    let allGrowthBookFeatures = getAllGrowthBookFeatures();
+    let nonDefaultFeatureKeys = getNonDefaultFeatureKeys();
+    let o = {};
+    let n = 0;
+    for (let [key, value] of Object.entries(allGrowthBookFeatures))
+      if (typeof value === "boolean" && nonDefaultFeatureKeys.has(key)) {
+        o[key] = value;
+        if (++n >= MAX_ADDITIONAL_FILES) break;
       }
     return o;
   } catch {
@@ -148,91 +173,110 @@ function getNonDefaultBooleanFlags() {
 function summarizeZodIssues(e) {
   let issues = e.issues;
   if (!Array.isArray(issues) || issues.length === 0) return;
-  let filtered = issues.map((n) => n?.code).filter((n) => typeof n === "string" && /^[a-z_]{1,40}$/.test(n));
+  let filtered = issues
+    .map((issue) => issue?.code)
+    .filter((n) => typeof n === "string" && /^[a-z_]{1,40}$/.test(n));
   return `${issues.length} issue(s): ${filtered.join(",")}`;
 }
 //@ chunk-crrjgh95.js:2843-2857 placement
-function B() {}
+/**
+ * 探测函数，用其名字是否被压缩判断构建是否保留类名。
+ */
+function errorTrackingIdentifierProbe() {}
+//@ chunk-crrjgh95.js:2857-3369 placement
 /**
  * 错误追踪：构建是否保留类名（探测函数名未被压缩）、SDK/客户端错误类名表（用 instanceof 识别）、"已验证无代码路径" 后缀正则。
  */
-//@ chunk-crrjgh95.js:2857-3369 placement
-var CLASS_NAMES_PRESERVED = !B.name.startsWith("errorTrackingIdentifierProbe"),
-  KNOWN_ERROR_CLASSES = [
-    ["APIUserAbortError", Lf],
-    ["APIConnectionTimeoutError", fT],
-    ["APIConnectionError", ef],
-    ["BadRequestError", q7t],
-    ["AuthenticationError", K9e],
-    ["PermissionDeniedError", Y7t],
-    ["NotFoundError", V9e],
-    ["ConflictError", X7t],
-    ["UnprocessableEntityError", J7t],
-    ["RateLimitError", Q7t],
-    ["InternalServerError", Z7t],
-    ["APIError", Ot],
-    ["RetryableError", AHn],
-    ["WorkloadIdentityError", rp],
-    ["AnthropicError", pr],
-    ["ClaudeError", ClaudeError],
-  ],
-  VERIFIED_SAFE_SUFFIX_RE = /_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS$/;
+var CLASS_NAMES_PRESERVED = !errorTrackingIdentifierProbe.name.startsWith("errorTrackingIdentifierProbe");
+var KNOWN_ERROR_CLASSES = [
+  ["APIUserAbortError", APIUserAbortError],
+  ["APIConnectionTimeoutError", APIConnectionTimeoutError],
+  ["APIConnectionError", APIConnectionError],
+  ["BadRequestError", BadRequestError],
+  ["AuthenticationError", AuthenticationError],
+  ["PermissionDeniedError", PermissionDeniedError],
+  ["NotFoundError", NotFoundError],
+  ["ConflictError", ConflictError],
+  ["UnprocessableEntityError", UnprocessableEntityError],
+  ["RateLimitError", RateLimitError],
+  ["InternalServerError", InternalServerError],
+  ["APIError", APIError],
+  ["RetryableError", RetryableError],
+  ["WorkloadIdentityError", WorkloadIdentityError],
+  ["AnthropicError", AnthropicError],
+  ["ClaudeError", ClaudeError],
+];
+var VERIFIED_SAFE_SUFFIX_RE = /_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS$/;
 //@ chunk-crrjgh95.js:3369-3679 placement
 function errorClassName(e, r = CLASS_NAMES_PRESERVED) {
   let o =
-      typeof e.constructor?.name === "string"
-        ? e.constructor.name.replace(VERIFIED_SAFE_SUFFIX_RE, "")
-        : void 0,
-    n = r && e instanceof ClaudeError && e.name === o,
-    replaced = (
-      (typeof e.name === "string" && e.name !== "Error" && !n ? e.name : void 0) ||
-      (!r && sanitizeClassName(o) !== void 0
-        ? o
-        : KNOWN_ERROR_CLASSES.find(([, a]) => e instanceof a)?.[0]) ||
-      "Error"
-    ).replace(VERIFIED_SAFE_SUFFIX_RE, "");
+    typeof e.constructor?.name === "string"
+      ? e.constructor.name.replace(VERIFIED_SAFE_SUFFIX_RE, "")
+      : undefined;
+  let n = r && e instanceof ClaudeError && e.name === o;
+  let replaced = (
+    (typeof e.name === "string" && e.name !== "Error" && !n ? e.name : undefined) ||
+    (!r && sanitizeClassName(o) !== undefined
+      ? o
+      : KNOWN_ERROR_CLASSES.find(([, a]) => e instanceof a)?.[0]) ||
+    "Error"
+  ).replace(VERIFIED_SAFE_SUFFIX_RE, "");
   return sanitizeClassName(replaced) ?? "Error";
 }
 //@ chunk-crrjgh95.js:3679-3688 placement
-var G = 20;
+/**
+ * 错误事件里最多保留的栈帧数（20）。
+ */
+var MAX_STACK_FRAMES = 20;
+//@ chunk-crrjgh95.js:3688-5589 placement
 /**
  * 构造错误追踪事件（截取栈、标记捆绑外抛出、版本信息）。
  */
-//@ chunk-crrjgh95.js:3688-5589 placement
-function buildErrorTrackingEvent(e, r, o) {
-  let n = getSanitizedStackFrames(e),
-    t = isStackOnlyExternal(n),
-    sliced = n.slice(0, G),
-    c = getTelemetryMessage(e),
-    a =
-      t && c === void 0
-        ? `thrown outside the Claude Code bundle (${o})`
-        : redactErrorMessage(redactErrorPaths(e, c ?? summarizeZodIssues(e) ?? e.message ?? String(e))),
-    C = formatGitErrorFrames({ name: o, message: a }, sliced),
-    { version: version, sourcemapGroup: sourcemapGroup } = buildErrorTrackingRelease(
-      {
-        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-        PACKAGE_URL: "@anthropic-ai/claude-code",
-        README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
-        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-        DD_SOURCEMAP_GROUP: "default",
-      }.DD_SOURCEMAP_GROUP,
-    ),
-    y = computeErrorFingerprint(o, sliced),
-    E = getUserBucket(),
-    u = getCanonicalModelForTracking(),
-    F = typeof Bun < "u" && !0,
-    m = sanitizeErrnoForTelemetry(e),
-    p = getTelemetryChildExitStatus(e),
-    f = env.CLAUDE_CODE_ENTRYPOINT === void 0 ? "cli" : (getEntrypointKind() ?? "other"),
-    d = envSessionKind(),
-    g = getRendererModeForAnalytics(),
-    _ = aro(),
-    h = X(release());
+function buildErrorTrackingEvent(error, r, o) {
+  let sanitizedStackFrames = getSanitizedStackFrames(error);
+  let t = isStackOnlyExternal(sanitizedStackFrames);
+  let sliced = sanitizedStackFrames.slice(0, MAX_STACK_FRAMES);
+  let telemetryMessage = getTelemetryMessage(error);
+  let a =
+    t && telemetryMessage === undefined
+      ? `thrown outside the Claude Code bundle (${o})`
+      : redactErrorMessage(
+          redactErrorPaths(
+            error,
+            telemetryMessage ?? summarizeZodIssues(error) ?? error.message ?? String(error),
+          ),
+        );
+  let C = formatGitErrorFrames(
+    {
+      name: o,
+      message: a,
+    },
+    sliced,
+  );
+  let { version, sourcemapGroup } = buildErrorTrackingRelease(
+    {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.DD_SOURCEMAP_GROUP,
+  );
+  let fingerprint = computeErrorFingerprint(o, sliced);
+  let userBucket = getUserBucket();
+  let canonicalModelForTracking = getCanonicalModelForTracking();
+  let F = typeof Bun !== "undefined" && true;
+  let m = sanitizeErrnoForTelemetry(error);
+  let telemetryChildExitStatus = getTelemetryChildExitStatus(error);
+  let f = env.CLAUDE_CODE_ENTRYPOINT === undefined ? "cli" : (getEntrypointKind() ?? "other");
+  let d = envSessionKind();
+  let rendererModeForAnalytics = getRendererModeForAnalytics();
+  let _ = currentAuthSurface();
+  let majorMinorVersion = getMajorMinorVersion(release());
   return {
     ddtags: [
       `service:${CLAUDE_CODE_ERROR_TRACKING}`,
@@ -241,18 +285,18 @@ function buildErrorTrackingEvent(e, r, o) {
       "env:external",
       `origin:${r}`,
       `platform:${getPlatform()}`,
-      `os_release:${h}`,
-      `user_bucket:${E}`,
+      `os_release:${majorMinorVersion}`,
+      `user_bucket:${userBucket}`,
       `entrypoint:${f}`,
       `node_version:${process.versions.node}`,
       "bun_version:1.4.4",
       `is_native_runtime:${F}`,
-      ...(u ? [`model:${u}`] : []),
+      ...(canonicalModelForTracking ? [`model:${canonicalModelForTracking}`] : []),
       ...(m ? [`error_code:${m}`] : []),
-      ...(p !== void 0 ? [`child_exit_status:${p}`] : []),
+      ...(telemetryChildExitStatus !== undefined ? [`child_exit_status:${telemetryChildExitStatus}`] : []),
       ...(d ? [`session_kind:${d}`] : []),
       ...(d ? [`has_attacher:${getAttacherCaps() ? "1" : "0"}`] : []),
-      ...(g ? [`renderer_mode:${g}`] : []),
+      ...(rendererModeForAnalytics ? [`renderer_mode:${rendererModeForAnalytics}`] : []),
       ...(_ ? [`remote_control_lane:${_}`] : []),
       ...(getCurrentAuthSurface() ? ["projects_session:1"] : []),
     ].join(","),
@@ -265,94 +309,112 @@ function buildErrorTrackingEvent(e, r, o) {
       kind: o,
       message: a.slice(0, 4000),
       stack: C.slice(0, 16000),
-      fingerprint: y,
+      fingerprint,
       handling: r === "logError" ? "handled" : "unhandled",
     },
-    version: version,
+    version,
     sourcemap_group: sourcemapGroup,
     env: "external",
-    user_bucket: E,
+    user_bucket: userBucket,
     origin: r,
     host_platform: getPlatform(),
-    host_os_release: h,
+    host_os_release: majorMinorVersion,
     host_name_redacted: getOrCreateMachineID().slice(0, 12),
     entrypoint: f,
     node_version: process.versions.node,
     bun_version: "1.4.4",
-    ...(u && { model: u }),
+    ...(canonicalModelForTracking && {
+      model: canonicalModelForTracking,
+    }),
     error_frames: sliced,
     feature_flags: getNonDefaultBooleanFlags(),
   };
 }
 //@ chunk-crrjgh95.js:5589-5873 placement
-var EXPECTED_ERROR_CLASSES = new Set(["APIUserAbortError", "AuthenticationError", "McpSessionExpiredError"]),
-  W = [{ messagePrefix: "File does not exist", topFrameIncludes: "FileReadTool.ts" }],
-  z = [
-    { topFile: "node:net", topFunction: "internalConnectMultipleTimeout" },
-    { topFile: "node:_http_server", topFunction: "#onClose" },
-  ];
+/**
+ * 已知可忽略的系统栈帧（node 内部帧）。
+ */
+var EXPECTED_ERROR_CLASSES = new Set(["APIUserAbortError", "AuthenticationError", "McpSessionExpiredError"]);
+var KNOWN_IGNORED_ERRORS = [
+  {
+    messagePrefix: "File does not exist",
+    topFrameIncludes: "FileReadTool.ts",
+  },
+];
+var KNOWN_IGNORED_SYSTEM_FRAMES = [
+  {
+    topFile: "node:net",
+    topFunction: "internalConnectMultipleTimeout",
+  },
+  {
+    topFile: "node:_http_server",
+    topFunction: "#onClose",
+  },
+];
 //@ chunk-crrjgh95.js:5873-6005 placement
-function isIgnoredTopFrame(e) {
-  let r = getSanitizedStackFrames(e, 20),
-    o = r[0];
-  if (!o || r.some(DSr)) return !1;
-  return z.some((n) => o.file === n.topFile && o.function === n.topFunction);
+function isIgnoredTopFrame(error) {
+  let sanitizedStackFrames = getSanitizedStackFrames(error, 20);
+  let o = sanitizedStackFrames[0];
+  if (!o || sanitizedStackFrames.some(isSourceFrame)) return false;
+  return KNOWN_IGNORED_SYSTEM_FRAMES.some((n) => o.file === n.topFile && o.function === n.topFunction);
 }
 //@ chunk-crrjgh95.js:6005-6141 placement
 function isRemoteEnvironment() {
   return (
-    env.CLAUDE_CODE_REMOTE === !0 ||
+    env.CLAUDE_CODE_REMOTE === true ||
     Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID) ||
     Boolean(env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE)
   );
 }
 //@ chunk-crrjgh95.js:6141-6466 placement
-function classifyFsSyscall(e, r) {
-  if (EXPECTED_ERROR_CLASSES.has(r)) return !0;
+function classifyFsSyscall(error, r) {
+  if (EXPECTED_ERROR_CLASSES.has(r)) return true;
   if (
     hasEmbeddedSearchTools_2() &&
     !isRemoteEnvironment() &&
-    isSyscallError(e) &&
-    e.code !== void 0 &&
-    PERMISSION_DENIED_CODES.has(e.code) &&
-    (e.syscall === "mkdir" || e.syscall === "open") &&
+    isSyscallError(error) &&
+    error.code !== undefined &&
+    PERMISSION_DENIED_CODES.has(error.code) &&
+    (error.syscall === "mkdir" || error.syscall === "open") &&
     getPlatform() !== "windows"
   )
-    return !0;
-  let o = e.message ?? "";
-  return W.some(
+    return true;
+  let message = error.message ?? "";
+  return KNOWN_IGNORED_ERRORS.some(
     (n) =>
-      o.startsWith(n.messagePrefix) &&
+      message.startsWith(n.messagePrefix) &&
       (
-        e.stack
+        error.stack
           ?.split(
             `
 `,
           )
-          .find((t) => t.trim().startsWith("at ")) ?? ""
+          .find((line) => line.trim().startsWith("at ")) ?? ""
       ).includes(n.topFrameIncludes),
   );
 }
 //@ chunk-crrjgh95.js:6466-6547 placement
-function X(e) {
+/**
+ * 取版本的 major.minor，取不到返回 unknown。
+ */
+function getMajorMinorVersion(e) {
   let match = /^(\d+)\.(\d+)/.exec(e);
   return match ? `${match[1]}.${match[2]}` : "unknown";
 }
+//@ chunk-crrjgh95.js:6547-6766 placement
 /**
  * 把错误上报到客户端错误追踪：判定开启后过滤文件系统系统调用错误、已知可忽略的未处理异常、达到上限，然后构建事件入队。
  */
-//@ chunk-crrjgh95.js:6547-6766 placement
 function trackError(e, r = "logError") {
   try {
     if (!isErrorReportingEnabled()) return;
-    let o = toError(e),
-      n = errorClassName(o);
-    if (r === "logError" && classifyFsSyscall(o, n)) return;
-    if ((r === "unhandled_rejection" || r === "uncaught_exception") && isIgnoredTopFrame(o)) return;
+    let error = toError(e);
+    let n = errorClassName(error);
+    if (r === "logError" && classifyFsSyscall(error, n)) return;
+    if ((r === "unhandled_rejection" || r === "uncaught_exception") && isIgnoredTopFrame(error)) return;
     if (isErrorTrackingCapReached()) return;
-    let t = buildErrorTrackingEvent(o, r, n);
-    enqueueErrorLog(t);
+    let errorTrackingEvent = buildErrorTrackingEvent(error, r, n);
+    enqueueErrorLog(errorTrackingEvent);
   } catch {}
 }
-
 export { trackError, errorClassName };

@@ -8,18 +8,19 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-
 //@ chunk-e6aww6q8.js:3037238-3037421 fingerprint = alias (1)
+/**
+ * alias 命令的补全 spec。
+ */
 var aliasSpec = {
-    name: "alias",
-    description: "Create or list command aliases",
-    args: {
-      name: "definition",
-      description: "Alias definition in the form name=value",
-      isOptional: !0,
-      isVariadic: !0,
-    },
+  name: "alias",
+  description: "Create or list command aliases",
+  args: {
+    name: "definition",
+    description: "Alias definition in the form name=value",
+    isOptional: true,
+    isVariadic: true,
   },
-  Fbn = aliasSpec;
-
-export { Fbn };
+};
+var aliasSpec_2 = aliasSpec;
+export { aliasSpec_2 };

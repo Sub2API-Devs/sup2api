@@ -8,13 +8,13 @@
  * pieces: chunk-s3fw2t2g.js (11)
  * attribution: placement 9, fingerprint 1, file-local 1
  */
-import { j, qt, Se } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, qt, Se } from "../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useTheme } from "../design-system/ThemeProvider.js";
-import { d5 } from "../messages/expandContext.js";
+import { expandContextSignal } from "../messages/expandContext.js";
 import { ValidationErrorsList_2 } from "../ValidationErrorsList.js";
 import { wrapText_2 } from "../../utils/terminal.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
@@ -22,48 +22,53 @@ import { MessageResponse } from "../MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 
 //@ chunk-s3fw2t2g.js:634-638 placement
-j();
+init_react_production();
 //@ chunk-s3fw2t2g.js:638-642 placement
-j();
+init_react_production();
 //@ chunk-s3fw2t2g.js:642-646 placement
-j();
+init_react_production();
 //@ chunk-s3fw2t2g.js:646-659 placement
-var c = qt(!1);
+var outputLineSignal = qt(false);
+//@ chunk-s3fw2t2g.js:659-788 placement
 /**
  * 为子树标记处于工具结果中。
  */
-//@ chunk-s3fw2t2g.js:659-788 placement
-function InsideToolResultProvider(r) {
-  let s = w(2),
-    { children: children } = r,
-    o;
-  if (s[0] !== children)
-    ((o = e(c.Provider, { value: !0, children: children })), (s[0] = children), (s[1] = o));
-  else o = s[1];
+function InsideToolResultProvider(props) {
+  let s = w(2);
+  let { children } = props;
+  let o;
+  if (s[0] !== children) {
+    o = jsxProd_default(outputLineSignal.Provider, {
+      value: true,
+      children,
+    });
+    s[0] = children;
+    s[1] = o;
+  } else o = s[1];
   return o;
 }
 //@ chunk-s3fw2t2g.js:788-814 placement
-function u() {
-  return Se(c);
+function useOutputLineSignal() {
+  return Se(outputLineSignal);
 }
 //@ chunk-s3fw2t2g.js:814-972 placement
-function linkifyUrlsInText(content) {
+function linkifyUrlsInText(line) {
   try {
-    let t = jsonParse(content),
-      s = jsonStringify(t),
-      replaced = content.replaceAll("\\/", "/").replace(/\s+/g, ""),
-      replaced_2 = s.replace(/\s+/g, "");
-    if (replaced !== replaced_2) return content;
-    return jsonStringify(t, null, 2);
+    let parsed = jsonParse(line);
+    let stringified = jsonStringify(parsed);
+    let normalizedOriginal = line.replaceAll("\\/", "/").replace(/\s+/g, "");
+    let normalizedStringified = stringified.replace(/\s+/g, "");
+    if (normalizedOriginal !== normalizedStringified) return line;
+    return jsonStringify(parsed, null, 2);
   } catch {
-    return content;
+    return line;
   }
 }
 //@ chunk-s3fw2t2g.js:972-982 placement
-var P = 1e4;
+var MAX_OUTPUT_LINE = 1e4;
 //@ chunk-s3fw2t2g.js:982-1056 placement
 function tryJsonFormatContent(content) {
-  if (content.length > P) return content;
+  if (content.length > MAX_OUTPUT_LINE) return content;
   return content
     .split(
       `
@@ -73,54 +78,70 @@ function tryJsonFormatContent(content) {
 `);
 }
 //@ chunk-s3fw2t2g.js:1296-1893 fingerprint = OutputLine (0.829)
-function OutputLine(t0) {
-  let $ = w(14),
-    { content: content, verbose: verbose, isError: isError, isWarning: isWarning } = t0,
-    { columns: columns } = useTerminalSize(),
-    [g] = useTheme(),
-    expandShellOutput = u(),
-    h = Se(d5),
-    shouldShowFull = verbose || expandShellOutput,
-    O;
-  if ($[0] !== content || $[1] !== g)
-    ((O = ValidationErrorsList_2(tryJsonFormatContent(content), g)),
-      ($[0] = content),
-      ($[1] = g),
-      ($[2] = O));
-  else O = $[2];
-  let a = O,
-    N;
+function OutputLine(props) {
+  let $ = w(14);
+  let { content, verbose, isError, isWarning } = props;
+  let { columns } = useTerminalSize();
+  let [themeName] = useTheme();
+  let expandShellOutput = useOutputLineSignal();
+  let suppressExpandHint = Se(expandContextSignal);
+  let shouldShowFull = verbose || expandShellOutput;
+  let O;
+  if ($[0] !== content || $[1] !== themeName) {
+    O = ValidationErrorsList_2(tryJsonFormatContent(content), themeName);
+    $[0] = content;
+    $[1] = themeName;
+    $[2] = O;
+  } else O = $[2];
+  let content_2 = O;
+  let N;
   ur: {
     if (shouldShowFull) {
       let i;
-      if ($[3] !== a) ((i = tryFormatJson(a)), ($[3] = a), ($[4] = i));
-      else i = $[4];
+      if ($[3] !== content_2) {
+        i = tryFormatJson(content_2);
+        $[3] = content_2;
+        $[4] = i;
+      } else i = $[4];
       N = i;
       break ur;
     }
     let i;
-    if ($[5] !== columns || $[6] !== a || $[7] !== h)
-      ((i = tryFormatJson(wrapText_2(a, columns, h))), ($[5] = columns), ($[6] = a), ($[7] = h), ($[8] = i));
-    else i = $[8];
+    if ($[5] !== columns || $[6] !== content_2 || $[7] !== suppressExpandHint) {
+      i = tryFormatJson(wrapText_2(content_2, columns, suppressExpandHint));
+      $[5] = columns;
+      $[6] = content_2;
+      $[7] = suppressExpandHint;
+      $[8] = i;
+    } else i = $[8];
     N = i;
   }
-  let R = N,
-    color = isError ? "error" : isWarning ? "warning" : void 0,
-    i;
-  if ($[9] !== R) ((i = e(Ansi, { children: R })), ($[9] = R), ($[10] = i));
-  else i = $[10];
-  let v;
-  if ($[11] !== color || $[12] !== i)
-    ((v = e(MessageResponse, { children: e(Text, { color: color, children: i }) })),
-      ($[11] = color),
-      ($[12] = i),
-      ($[13] = v));
-  else v = $[13];
-  return v;
+  let formattedContent = N;
+  let color = isError ? "error" : isWarning ? "warning" : undefined;
+  let children;
+  if ($[9] !== formattedContent) {
+    children = jsxProd_default(Ansi, {
+      children: formattedContent,
+    });
+    $[9] = formattedContent;
+    $[10] = children;
+  } else children = $[10];
+  let t3;
+  if ($[11] !== color || $[12] !== children) {
+    t3 = jsxProd_default(MessageResponse, {
+      children: jsxProd_default(Text, {
+        color,
+        children,
+      }),
+    });
+    $[11] = color;
+    $[12] = children;
+    $[13] = t3;
+  } else t3 = $[13];
+  return t3;
 }
 //@ chunk-s3fw2t2g.js:1893-2004 file-local
-function tryFormatJson(line) {
-  return line.replace(/\u001b\[([0-9]+;)*4(;[0-9]+)*m|\u001b\[4(;[0-9]+)*m|\u001b\[([0-9]+;)*4m/g, "");
+function tryFormatJson(content) {
+  return content.replace(/\u001b\[([0-9]+;)*4(;[0-9]+)*m|\u001b\[4(;[0-9]+)*m|\u001b\[([0-9]+;)*4m/g, "");
 }
-
 export { OutputLine, InsideToolResultProvider };

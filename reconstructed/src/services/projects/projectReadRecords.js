@@ -11,16 +11,38 @@
 import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-6tqjcxkp.js:226-322 placement
-function tbn(t, e, r, n) {
-  return { method: "project_read", path: t, ...(e !== void 0 && { version: e }), ...r, ...n };
+/**
+ * 构造项目读取的输入记录。
+ */
+function projectReadInput(path, e, r, n) {
+  return {
+    method: "project_read",
+    path,
+    ...(e !== undefined && {
+      version: e,
+    }),
+    ...r,
+    ...n,
+  };
 }
 //@ chunk-6tqjcxkp.js:322-375 placement
-function dYo(t) {
-  return { method: "project_read", path: t };
+/**
+ * 按项目与路径构造读取输入。
+ */
+function projectReadInputFor(path) {
+  return {
+    method: "project_read",
+    path,
+  };
 }
 //@ chunk-6tqjcxkp.js:375-442 placement
-function enr({ docId: docId, read: read }) {
-  return { input: jsonStringify(dYo(docId)), result: jsonStringify(read) };
+/**
+ * 构造项目读取结果记录。
+ */
+function projectReadRecord({ docId, read }) {
+  return {
+    input: jsonStringify(projectReadInputFor(docId)),
+    result: jsonStringify(read),
+  };
 }
-
-export { dYo, enr, tbn };
+export { projectReadInputFor, projectReadRecord, projectReadInput };

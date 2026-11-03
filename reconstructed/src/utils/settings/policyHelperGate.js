@@ -9,14 +9,14 @@
  * attribution: placement 6
  */
 import { getRemoteSettingsPathOverride } from "../../services/remoteManagedSettings/remoteSettingsState.js";
-import { KRi } from "./policyHelper/helperRemote.js";
+import { helperInitAttempted } from "./policyHelper/helperRemote.js";
 import {
   getBasePolicySettings,
   getBasePolicySettingsOrigin,
   isAdminPolicyOrigin,
   getPolicyHelperSourceLoadErrors,
 } from "./settings.js";
-import { jRi } from "./policyHelper/helperPayload.js";
+import { hasStaticPayload } from "./policyHelper/helperPayload.js";
 import { isRemoteManagedSettingsColdStartPending } from "../../services/remoteManagedSettings/loader.js";
 import { getSessionEndHookTimeoutMs } from "../hooks.js";
 import { cliError } from "../../cli/exit.js";
@@ -28,57 +28,64 @@ import { recordManagedSettingsRefusal } from "../../cli/managedConfigRefusal.js"
 
 //@ chunk-cjydagjy.js:36599-36765 placement
 function shouldWaitForRemotePolicy() {
-  if (getRemoteSettingsPathOverride()) return !1;
-  if (KRi()) return !1;
-  let e = getBasePolicySettings(),
-    r = getBasePolicySettingsOrigin();
-  if (r === "remote") return jRi(e);
+  if (getRemoteSettingsPathOverride()) return false;
+  if (helperInitAttempted()) return false;
+  let basePolicySettings = getBasePolicySettings();
+  let basePolicySettingsOrigin = getBasePolicySettingsOrigin();
+  if (basePolicySettingsOrigin === "remote") return hasStaticPayload(basePolicySettings);
   return (
-    isAdminPolicyOrigin(r) &&
-    (e?.policyHelpers != null || e?.policyHelper != null) &&
+    isAdminPolicyOrigin(basePolicySettingsOrigin) &&
+    (basePolicySettings?.policyHelpers != null || basePolicySettings?.policyHelper != null) &&
     isRemoteManagedSettingsColdStartPending()
   );
 }
 //@ chunk-cjydagjy.js:36765-36788 placement
-var dr = 120000,
-  pr = 60000;
+var HELPER_GATE_TIMEOUT_MS = 120000;
+var HELPER_GATE_HOOK_GRACE_MS = 60000;
 //@ chunk-cjydagjy.js:36788-36854 placement
-function mr() {
+function helperGateDeadline() {
   let e = 0;
   try {
     e = getSessionEndHookTimeoutMs();
   } catch {}
-  return Math.max(dr, e + pr);
+  return Math.max(HELPER_GATE_TIMEOUT_MS, e + HELPER_GATE_HOOK_GRACE_MS);
 }
 //@ chunk-cjydagjy.js:36854-36873 placement
-function st() {
+function exitCliWithError() {
   cliError();
 }
 //@ chunk-cjydagjy.js:36873-36916 placement
-function Zuo() {
-  setTimeout(st, mr()).unref();
+/**
+ * armHelperGateExit：武装 helper 闸门退出定时器。
+ */
+function armHelperGateExit() {
+  setTimeout(exitCliWithError, helperGateDeadline()).unref();
 }
+//@ chunk-cjydagjy.js:36916-37242 placement
 /**
  * 策略 helper 宿主回调（读取、拒绝）。
  */
-//@ chunk-cjydagjy.js:36916-37242 placement
-var POLICY_HELPER_HOST = {
-    readBase: () => ({
-      settings: getBasePolicySettings(),
-      origin: getBasePolicySettingsOrigin(),
-      loadErrors: getPolicyHelperSourceLoadErrors(),
-    }),
-    baseSettled: () => !isRemoteManagedSettingsColdStartPending(),
-    isUnwatchedRepl: () => isUnattendedBgSession() || getTeammateAgentId() !== void 0,
-    refuse: (e) => {
-      let r = isTerminalShutdown();
-      if ((latchTerminalShutdown(), emitExitMessage(e), recordManagedSettingsRefusal("helper_failed"), r)) {
-        Zuo();
-        return;
-      }
-      gracefulShutdown(1, "other", { suppressResumeHint: !0 }).then(st, st);
-    },
+var POLICY_HELPER_HOST_2 = {
+  readBase: () => ({
+    settings: getBasePolicySettings(),
+    origin: getBasePolicySettingsOrigin(),
+    loadErrors: getPolicyHelperSourceLoadErrors(),
+  }),
+  baseSettled: () => !isRemoteManagedSettingsColdStartPending(),
+  isUnwatchedRepl: () => isUnattendedBgSession() || getTeammateAgentId() !== undefined,
+  refuse: (e) => {
+    let r = isTerminalShutdown();
+    latchTerminalShutdown();
+    emitExitMessage(e);
+    recordManagedSettingsRefusal("helper_failed");
+    if (r) {
+      armHelperGateExit();
+      return;
+    }
+    gracefulShutdown(1, "other", {
+      suppressResumeHint: true,
+    }).then(exitCliWithError, exitCliWithError);
   },
-  gr = new Set(["install", "update", "rollback", "forward-home-settings"]);
-
-export { gr, shouldWaitForRemotePolicy, POLICY_HELPER_HOST, Zuo };
+};
+var POLICY_HELPER_HOST = new Set(["install", "update", "rollback", "forward-home-settings"]);
+export { POLICY_HELPER_HOST, shouldWaitForRemotePolicy, POLICY_HELPER_HOST_2, armHelperGateExit };

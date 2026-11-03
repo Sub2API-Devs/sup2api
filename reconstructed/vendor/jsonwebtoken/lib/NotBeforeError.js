@@ -6,17 +6,18 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { vo } from "./JsonWebTokenError.js";
+import { require_JsonWebTokenError } from "./JsonWebTokenError.js";
 
 //@ chunk-mrx6y2r5.js:4130-4325 cjs-fingerprint
-var sc = x(function (eL, Lh) {
-  var Uh = vo(),
-    ls = function (e, t) {
-      (Uh.call(this, e), (this.name = "NotBeforeError"), (this.date = t));
-    };
-  ls.prototype = Object.create(Uh.prototype);
-  ls.prototype.constructor = ls;
-  Lh.exports = ls;
+var require_NotBeforeError = x(function (cjsExports, cjsModule) {
+  var JsonWebTokenError = require_JsonWebTokenError();
+  var NotBeforeError = function (message, date) {
+    JsonWebTokenError.call(this, message);
+    this.name = "NotBeforeError";
+    this.date = date;
+  };
+  NotBeforeError.prototype = Object.create(JsonWebTokenError.prototype);
+  NotBeforeError.prototype.constructor = NotBeforeError;
+  cjsModule.exports = NotBeforeError;
 });
-
-export { sc };
+export { require_NotBeforeError };

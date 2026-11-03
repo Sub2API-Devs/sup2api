@@ -8,21 +8,21 @@
  * pieces: chunk-mtx4csef.js (8)
  * attribution: placement 2, fingerprint 5, file-local 1
  */
-import { j, R, Q } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, R, Q } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-mtx4csef.js:14813-14817 placement
-j();
+init_react_production();
 //@ chunk-mtx4csef.js:14817-14821 placement
-j();
+init_react_production();
 //@ chunk-mtx4csef.js:14821-15070 fingerprint = isFileEditResult (0.874)
 function isFileEditResult(result) {
-  if (!result || typeof result !== "object") return !1;
+  if (!result || typeof result !== "object") return false;
   let o = result;
-  if (o.staged === !0) return !1;
-  let hasFilePath = typeof o.filePath === "string",
-    t = Array.isArray(o.structuredPatch) && o.structuredPatch.length > 0,
-    u = o.type === "create" && typeof o.content === "string";
-  return hasFilePath && (t || u);
+  if (o.staged === true) return false;
+  let hasFilePath = typeof o.filePath === "string";
+  let hasStructuredPatch = Array.isArray(o.structuredPatch) && o.structuredPatch.length > 0;
+  let isNewFile = o.type === "create" && typeof o.content === "string";
+  return hasFilePath && (hasStructuredPatch || isNewFile);
 }
 //@ chunk-mtx4csef.js:15070-15142 fingerprint = isFileWriteOutput (1)
 function isFileWriteOutput(result) {
@@ -30,42 +30,57 @@ function isFileWriteOutput(result) {
 }
 //@ chunk-mtx4csef.js:15142-15286 fingerprint = countHunkLines (1)
 function countHunkLines(hunks) {
-  let o = 0,
-    i = 0;
+  let added = 0;
+  let removed = 0;
   for (let hunk of hunks)
     for (let line of hunk.lines)
-      if (line.startsWith("+")) o++;
-      else if (line.startsWith("-")) i++;
-  return { added: o, removed: i };
+      if (line.startsWith("+")) added++;
+      else if (line.startsWith("-")) removed++;
+  return {
+    added,
+    removed,
+  };
 }
 //@ chunk-mtx4csef.js:15286-15435 file-local
 function getUserPromptPreview(message) {
   if (message.type !== "user") return "";
-  let content = message.message.content,
-    text = typeof content === "string" ? content : "";
+  let content = message.message.content;
+  let text = typeof content === "string" ? content : "";
   if (text.length <= 30) return text;
   return text.slice(0, 29) + "\u2026";
 }
 //@ chunk-mtx4csef.js:15435-15590 fingerprint = computeTurnStats (1)
 function computeTurnStats(turn) {
-  let o = 0,
-    i = 0;
-  for (let file of turn.files.values()) ((o += file.linesAdded), (i += file.linesRemoved));
-  turn.stats = { filesChanged: turn.files.size, linesAdded: o, linesRemoved: i };
+  let totalAdded = 0;
+  let totalRemoved = 0;
+  for (let file of turn.files.values()) {
+    totalAdded += file.linesAdded;
+    totalRemoved += file.linesRemoved;
+  }
+  turn.stats = {
+    filesChanged: turn.files.size,
+    linesAdded: totalAdded,
+    linesRemoved: totalRemoved,
+  };
 }
 //@ chunk-mtx4csef.js:15590-17021 fingerprint = useTurnDiffs (1)
 function useTurnDiffs(messages) {
-  let cache = R({ completedTurns: [], currentTurn: null, lastProcessedIndex: 0, lastTurnIndex: 0 });
+  let cache = R({
+    completedTurns: [],
+    currentTurn: null,
+    lastProcessedIndex: 0,
+    lastTurnIndex: 0,
+  });
   return Q(() => {
     let i = cache.current;
-    if (messages.length < i.lastProcessedIndex)
-      ((i.completedTurns = []), (i.currentTurn = null), (i.lastProcessedIndex = 0), (i.lastTurnIndex = 0));
-    for (
-      let lastProcessedIndex = i.lastProcessedIndex;
-      lastProcessedIndex < messages.length;
-      lastProcessedIndex++
-    ) {
-      let message = messages[lastProcessedIndex];
+    if (messages.length < i.lastProcessedIndex) {
+      i.completedTurns = [];
+      i.currentTurn = null;
+      i.lastProcessedIndex = 0;
+      i.lastTurnIndex = 0;
+    }
+    for (let i_2 = i.lastProcessedIndex; i_2 < messages.length; i_2++) {
+      let message = messages[i_2];
       if (!message || message.type !== "user") continue;
       if (
         !(
@@ -74,51 +89,67 @@ function useTurnDiffs(messages) {
         ) &&
         !message.isMeta
       ) {
-        if (i.currentTurn && i.currentTurn.files.size > 0)
-          (computeTurnStats(i.currentTurn), i.completedTurns.push(i.currentTurn));
-        (i.lastTurnIndex++,
-          (i.currentTurn = {
-            turnIndex: i.lastTurnIndex,
-            userPromptPreview: getUserPromptPreview(message),
-            timestamp: message.timestamp,
-            files: new Map(),
-            stats: { filesChanged: 0, linesAdded: 0, linesRemoved: 0 },
-          }));
+        if (i.currentTurn && i.currentTurn.files.size > 0) {
+          computeTurnStats(i.currentTurn);
+          i.completedTurns.push(i.currentTurn);
+        }
+        i.lastTurnIndex++;
+        i.currentTurn = {
+          turnIndex: i.lastTurnIndex,
+          userPromptPreview: getUserPromptPreview(message),
+          timestamp: message.timestamp,
+          files: new Map(),
+          stats: {
+            filesChanged: 0,
+            linesAdded: 0,
+            linesRemoved: 0,
+          },
+        };
       } else if (i.currentTurn && message.toolUseResult) {
         let result = message.toolUseResult;
         if (isFileEditResult(result)) {
-          let { filePath: filePath, structuredPatch: structuredPatch } = result,
-            g = "type" in result && result.type === "create",
-            fileEntry = i.currentTurn.files.get(filePath);
-          if (!fileEntry)
-            ((fileEntry = { filePath: filePath, hunks: [], isNewFile: g, linesAdded: 0, linesRemoved: 0 }),
-              i.currentTurn.files.set(filePath, fileEntry));
-          if (g && structuredPatch.length === 0 && isFileWriteOutput(result)) {
-            let parts = result.content.split(`
-`),
-              syntheticHunk = {
-                oldStart: 0,
-                oldLines: 0,
-                newStart: 1,
-                newLines: parts.length,
-                lines: parts.map((V) => "+" + V),
-              };
-            (fileEntry.hunks.push(syntheticHunk), (fileEntry.linesAdded += parts.length));
+          let { filePath, structuredPatch } = result;
+          let isNewFile = "type" in result && result.type === "create";
+          let fileEntry = i.currentTurn.files.get(filePath);
+          if (!fileEntry) {
+            fileEntry = {
+              filePath,
+              hunks: [],
+              isNewFile,
+              linesAdded: 0,
+              linesRemoved: 0,
+            };
+            i.currentTurn.files.set(filePath, fileEntry);
+          }
+          if (isNewFile && structuredPatch.length === 0 && isFileWriteOutput(result)) {
+            let lines = result.content.split(`
+`);
+            let syntheticHunk = {
+              oldStart: 0,
+              oldLines: 0,
+              newStart: 1,
+              newLines: lines.length,
+              lines: lines.map((line) => "+" + line),
+            };
+            fileEntry.hunks.push(syntheticHunk);
+            fileEntry.linesAdded += lines.length;
           } else {
             fileEntry.hunks.push(...structuredPatch);
-            let { added: added, removed: removed } = countHunkLines(structuredPatch);
-            ((fileEntry.linesAdded += added), (fileEntry.linesRemoved += removed));
+            let { added, removed } = countHunkLines(structuredPatch);
+            fileEntry.linesAdded += added;
+            fileEntry.linesRemoved += removed;
           }
-          if (g) fileEntry.isNewFile = !0;
+          if (isNewFile) fileEntry.isNewFile = true;
         }
       }
     }
     i.lastProcessedIndex = messages.length;
     let result = [...i.completedTurns];
-    if (i.currentTurn && i.currentTurn.files.size > 0)
-      (computeTurnStats(i.currentTurn), result.push(i.currentTurn));
+    if (i.currentTurn && i.currentTurn.files.size > 0) {
+      computeTurnStats(i.currentTurn);
+      result.push(i.currentTurn);
+    }
     return result.reverse();
   }, [messages]);
 }
-
 export { useTurnDiffs };

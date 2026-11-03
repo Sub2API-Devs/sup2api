@@ -6,218 +6,243 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { N } from "./utils.js";
-import { be } from "./error-correction-level.js";
-import { Nt } from "./bit-buffer.js";
-import { Ut } from "./bit-matrix.js";
-import { Dt } from "./alignment-pattern.js";
-import { Yt } from "./finder-pattern.js";
-import { Kt } from "./mask-pattern.js";
-import { Ye } from "./error-correction-code.js";
-import { Zt } from "./reed-solomon-encoder.js";
-import { ir } from "./version.js";
-import { sr } from "./format-info.js";
-import { q } from "./mode.js";
-import { Br } from "./segments.js";
+import { require_utils } from "./utils.js";
+import { require_error_correction_level } from "./error-correction-level.js";
+import { require_bit_buffer } from "./bit-buffer.js";
+import { require_bit_matrix } from "./bit-matrix.js";
+import { require_alignment_pattern } from "./alignment-pattern.js";
+import { require_finder_pattern } from "./finder-pattern.js";
+import { require_mask_pattern } from "./mask-pattern.js";
+import { require_error_correction_code } from "./error-correction-code.js";
+import { require_reed_solomon_encoder } from "./reed-solomon-encoder.js";
+import { require_version } from "./version.js";
+import { require_format_info } from "./format-info.js";
+import { require_mode } from "./mode.js";
+import { require_segments } from "./segments.js";
 
 //@ chunk-spjgqa4y.js:17575-20975 cjs-fingerprint
-var it = x(function (Bo) {
-  var Y = N(),
-    te = be(),
-    po = Nt(),
-    go = Ut(),
-    Ir = Dt(),
-    Ar = Yt(),
-    ne = Kt(),
-    ie = Ye(),
-    _o = Zt(),
-    D = ir(),
-    Lr = sr(),
-    Rr = q(),
-    re = Br();
-  function mo(t, e) {
-    let size = t.size,
-      positions = Ar.getPositions(e);
-    for (let i = 0; i < positions.length; i++) {
-      let o = positions[i][0],
-        s = positions[i][1];
-      for (let l = -1; l <= 7; l++) {
-        if (o + l <= -1 || size <= o + l) continue;
-        for (let u = -1; u <= 7; u++) {
-          if (s + u <= -1 || size <= s + u) continue;
+var require_qrcode = x(function (cjsExports) {
+  var Utils = require_utils();
+  var ECLevel = require_error_correction_level();
+  var BitBuffer = require_bit_buffer();
+  var BitMatrix = require_bit_matrix();
+  var AlignmentPattern = require_alignment_pattern();
+  var FinderPattern = require_finder_pattern();
+  var MaskPattern = require_mask_pattern();
+  var ECCode = require_error_correction_code();
+  var ReedSolomonEncoder = require_reed_solomon_encoder();
+  var Version = require_version();
+  var FormatInfo = require_format_info();
+  var Mode = require_mode();
+  var Segments = require_segments();
+  function setupFinderPattern(matrix, version) {
+    let size = matrix.size;
+    let pos = FinderPattern.getPositions(version);
+    for (let i = 0; i < pos.length; i++) {
+      let row = pos[i][0];
+      let col = pos[i][1];
+      for (let r = -1; r <= 7; r++) {
+        if (row + r <= -1 || size <= row + r) continue;
+        for (let c = -1; c <= 7; c++) {
+          if (col + c <= -1 || size <= col + c) continue;
           if (
-            (l >= 0 && l <= 6 && (u === 0 || u === 6)) ||
-            (u >= 0 && u <= 6 && (l === 0 || l === 6)) ||
-            (l >= 2 && l <= 4 && u >= 2 && u <= 4)
+            (r >= 0 && r <= 6 && (c === 0 || c === 6)) ||
+            (c >= 0 && c <= 6 && (r === 0 || r === 6)) ||
+            (r >= 2 && r <= 4 && c >= 2 && c <= 4)
           )
-            t.set(o + l, s + u, !0, !0);
-          else t.set(o + l, s + u, !1, !0);
+            matrix.set(row + r, col + c, true, true);
+          else matrix.set(row + r, col + c, false, true);
         }
       }
     }
   }
-  function yo(t) {
-    let size = t.size;
-    for (let r = 8; r < size - 8; r++) {
-      let n = r % 2 === 0;
-      (t.set(r, 6, n, !0), t.set(6, r, n, !0));
+  function setupTimingPattern(matrix) {
+    let size = matrix.size;
+    for (let i = 8; i < size - 8; i++) {
+      let value = i % 2 === 0;
+      matrix.set(i, 6, value, true);
+      matrix.set(6, i, value, true);
     }
   }
-  function wo(t, e) {
-    let positions = Ir.getPositions(e);
-    for (let n = 0; n < positions.length; n++) {
-      let i = positions[n][0],
-        o = positions[n][1];
-      for (let s = -2; s <= 2; s++)
-        for (let l = -2; l <= 2; l++)
-          if (s === -2 || s === 2 || l === -2 || l === 2 || (s === 0 && l === 0)) t.set(i + s, o + l, !0, !0);
-          else t.set(i + s, o + l, !1, !0);
+  function setupAlignmentPattern(matrix, version) {
+    let pos = AlignmentPattern.getPositions(version);
+    for (let i_2 = 0; i_2 < pos.length; i_2++) {
+      let row = pos[i_2][0];
+      let col = pos[i_2][1];
+      for (let r = -2; r <= 2; r++)
+        for (let c = -2; c <= 2; c++)
+          if (r === -2 || r === 2 || c === -2 || c === 2 || (r === 0 && c === 0))
+            matrix.set(row + r, col + c, true, true);
+          else matrix.set(row + r, col + c, false, true);
     }
   }
-  function Eo(t, e) {
-    let size = t.size,
-      encodedBits = D.getEncodedBits(e),
-      i,
-      o,
-      s;
-    for (let l = 0; l < 18; l++)
-      ((i = Math.floor(l / 3)),
-        (o = (l % 3) + size - 8 - 3),
-        (s = ((encodedBits >> l) & 1) === 1),
-        t.set(i, o, s, !0),
-        t.set(o, i, s, !0));
-  }
-  function nt(t, e, r) {
-    let size = t.size,
-      encodedBits = Lr.getEncodedBits(e, r),
-      o,
-      s;
-    for (o = 0; o < 15; o++) {
-      if (((s = ((encodedBits >> o) & 1) === 1), o < 6)) t.set(o, 8, s, !0);
-      else if (o < 8) t.set(o + 1, 8, s, !0);
-      else t.set(size - 15 + o, 8, s, !0);
-      if (o < 8) t.set(8, size - o - 1, s, !0);
-      else if (o < 9) t.set(8, 15 - o - 1 + 1, s, !0);
-      else t.set(8, 15 - o - 1, s, !0);
+  function setupVersionInfo(matrix, version) {
+    let size = matrix.size;
+    let bits = Version.getEncodedBits(version);
+    let row;
+    let col;
+    let mod;
+    for (let i = 0; i < 18; i++) {
+      row = Math.floor(i / 3);
+      col = (i % 3) + size - 8 - 3;
+      mod = ((bits >> i) & 1) === 1;
+      matrix.set(row, col, mod, true);
+      matrix.set(col, row, mod, true);
     }
-    t.set(size - 8, 8, 1, !0);
   }
-  function To(t, e) {
-    let size = t.size,
-      n = -1,
-      i = size - 1,
-      o = 7,
-      s = 0;
-    for (let l = size - 1; l > 0; l -= 2) {
-      if (l === 6) l--;
-      while (!0) {
-        for (let u = 0; u < 2; u++)
-          if (!t.isReserved(i, l - u)) {
-            let f = !1;
-            if (s < e.length) f = ((e[s] >>> o) & 1) === 1;
-            if ((t.set(i, l - u, f), o--, o === -1)) (s++, (o = 7));
+  function setupFormatInfo(matrix, errorCorrectionLevel, maskPattern) {
+    let size = matrix.size;
+    let bits = FormatInfo.getEncodedBits(errorCorrectionLevel, maskPattern);
+    let i;
+    let mod;
+    for (i = 0; i < 15; i++) {
+      mod = ((bits >> i) & 1) === 1;
+      if (i < 6) matrix.set(i, 8, mod, true);
+      else if (i < 8) matrix.set(i + 1, 8, mod, true);
+      else matrix.set(size - 15 + i, 8, mod, true);
+      if (i < 8) matrix.set(8, size - i - 1, mod, true);
+      else if (i < 9) matrix.set(8, 15 - i - 1 + 1, mod, true);
+      else matrix.set(8, 15 - i - 1, mod, true);
+    }
+    matrix.set(size - 8, 8, 1, true);
+  }
+  function setupData(matrix, data) {
+    let size = matrix.size;
+    let inc = -1;
+    let row = size - 1;
+    let bitIndex = 7;
+    let byteIndex = 0;
+    for (let col = size - 1; col > 0; col -= 2) {
+      if (col === 6) col--;
+      while (true) {
+        for (let c = 0; c < 2; c++)
+          if (!matrix.isReserved(row, col - c)) {
+            let dark = false;
+            if (byteIndex < data.length) dark = ((data[byteIndex] >>> bitIndex) & 1) === 1;
+            matrix.set(row, col - c, dark);
+            bitIndex--;
+            if (bitIndex === -1) {
+              byteIndex++;
+              bitIndex = 7;
+            }
           }
-        if (((i += n), i < 0 || size <= i)) {
-          ((i -= n), (n = -n));
+        row += inc;
+        if (row < 0 || size <= row) {
+          row -= inc;
+          inc = -inc;
           break;
         }
       }
     }
   }
-  function Co(t, e, r) {
-    let n = new po();
-    r.forEach(function (u) {
-      (n.put(u.mode.bit, 4), n.put(u.getLength(), Rr.getCharCountIndicator(u.mode, t)), u.write(n));
+  function createData(version, errorCorrectionLevel, segments) {
+    let buffer = new BitBuffer();
+    segments.forEach(function (data) {
+      buffer.put(data.mode.bit, 4);
+      buffer.put(data.getLength(), Mode.getCharCountIndicator(data.mode, version));
+      data.write(buffer);
     });
-    let symbolTotalCodewords = Y.getSymbolTotalCodewords(t),
-      totalCodewordsCount = ie.getTotalCodewordsCount(t, e),
-      s = (symbolTotalCodewords - totalCodewordsCount) * 8;
-    if (n.getLengthInBits() + 4 <= s) n.put(0, 4);
-    while (n.getLengthInBits() % 8 !== 0) n.putBit(0);
-    let l = (s - n.getLengthInBits()) / 8;
-    for (let u = 0; u < l; u++) n.put(u % 2 ? 17 : 236, 8);
-    return bo(n, t, e);
+    let totalCodewords = Utils.getSymbolTotalCodewords(version);
+    let ecTotalCodewords = ECCode.getTotalCodewordsCount(version, errorCorrectionLevel);
+    let dataTotalCodewordsBits = (totalCodewords - ecTotalCodewords) * 8;
+    if (buffer.getLengthInBits() + 4 <= dataTotalCodewordsBits) buffer.put(0, 4);
+    while (buffer.getLengthInBits() % 8 !== 0) buffer.putBit(0);
+    let remainingByte = (dataTotalCodewordsBits - buffer.getLengthInBits()) / 8;
+    for (let i = 0; i < remainingByte; i++) buffer.put(i % 2 ? 17 : 236, 8);
+    return createCodewords(buffer, version, errorCorrectionLevel);
   }
-  function bo(t, e, r) {
-    let symbolTotalCodewords = Y.getSymbolTotalCodewords(e),
-      totalCodewordsCount = ie.getTotalCodewordsCount(e, r),
-      o = symbolTotalCodewords - totalCodewordsCount,
-      blocksCount = ie.getBlocksCount(e, r),
-      l = symbolTotalCodewords % blocksCount,
-      u = blocksCount - l,
-      floored = Math.floor(symbolTotalCodewords / blocksCount),
-      floored_2 = Math.floor(o / blocksCount),
-      h = floored_2 + 1,
-      c = floored - floored_2,
-      p = new _o(c),
-      _ = 0,
-      w = Array(blocksCount),
-      m = Array(blocksCount),
-      E = 0,
-      uint8Array = new Uint8Array(t.buffer);
-    for (let V = 0; V < blocksCount; V++) {
-      let qe = V < u ? floored_2 : h;
-      ((w[V] = uint8Array.slice(_, _ + qe)), (m[V] = p.encode(w[V])), (_ += qe), (E = Math.max(E, qe)));
+  function createCodewords(bitBuffer, version, errorCorrectionLevel) {
+    let totalCodewords = Utils.getSymbolTotalCodewords(version);
+    let ecTotalCodewords = ECCode.getTotalCodewordsCount(version, errorCorrectionLevel);
+    let dataTotalCodewords = totalCodewords - ecTotalCodewords;
+    let ecTotalBlocks = ECCode.getBlocksCount(version, errorCorrectionLevel);
+    let blocksInGroup2 = totalCodewords % ecTotalBlocks;
+    let blocksInGroup1 = ecTotalBlocks - blocksInGroup2;
+    let totalCodewordsInGroup1 = Math.floor(totalCodewords / ecTotalBlocks);
+    let dataCodewordsInGroup1 = Math.floor(dataTotalCodewords / ecTotalBlocks);
+    let dataCodewordsInGroup2 = dataCodewordsInGroup1 + 1;
+    let ecCount = totalCodewordsInGroup1 - dataCodewordsInGroup1;
+    let rs = new ReedSolomonEncoder(ecCount);
+    let offset = 0;
+    let dcData = Array(ecTotalBlocks);
+    let ecData = Array(ecTotalBlocks);
+    let maxDataSize = 0;
+    let buffer = new Uint8Array(bitBuffer.buffer);
+    for (let b = 0; b < ecTotalBlocks; b++) {
+      let dataSize = b < blocksInGroup1 ? dataCodewordsInGroup1 : dataCodewordsInGroup2;
+      dcData[b] = buffer.slice(offset, offset + dataSize);
+      ecData[b] = rs.encode(dcData[b]);
+      offset += dataSize;
+      maxDataSize = Math.max(maxDataSize, dataSize);
     }
-    let uint8Array_2 = new Uint8Array(symbolTotalCodewords),
-      I = 0,
-      L,
-      O;
-    for (L = 0; L < E; L++)
-      for (O = 0; O < blocksCount; O++) if (L < w[O].length) uint8Array_2[I++] = w[O][L];
-    for (L = 0; L < c; L++) for (O = 0; O < blocksCount; O++) uint8Array_2[I++] = m[O][L];
-    return uint8Array_2;
-  }
-  function xo(t, e, r, n) {
+    let data = new Uint8Array(totalCodewords);
+    let index = 0;
     let i;
-    if (Array.isArray(t)) i = re.fromArray(t);
-    else if (typeof t === "string") {
-      let f = e;
-      if (!f) {
-        let rawSplit = re.rawSplit(t);
-        f = D.getBestVersionForData(rawSplit, r);
+    let r;
+    for (i = 0; i < maxDataSize; i++)
+      for (r = 0; r < ecTotalBlocks; r++) if (i < dcData[r].length) data[index++] = dcData[r][i];
+    for (i = 0; i < ecCount; i++) for (r = 0; r < ecTotalBlocks; r++) data[index++] = ecData[r][i];
+    return data;
+  }
+  function createSymbol(data, version, errorCorrectionLevel, maskPattern) {
+    let segments;
+    if (Array.isArray(data)) segments = Segments.fromArray(data);
+    else if (typeof data === "string") {
+      let estimatedVersion = version;
+      if (!estimatedVersion) {
+        let rawSegments = Segments.rawSplit(data);
+        estimatedVersion = Version.getBestVersionForData(rawSegments, errorCorrectionLevel);
       }
-      i = re.fromString(t, f || 40);
+      segments = Segments.fromString(data, estimatedVersion || 40);
     } else throw Error("Invalid data");
-    let bestVersionForData = D.getBestVersionForData(i, r);
-    if (!bestVersionForData) throw Error("The amount of data is too big to be stored in a QR Code");
-    if (!e) e = bestVersionForData;
-    else if (e < bestVersionForData)
+    let bestVersion = Version.getBestVersionForData(segments, errorCorrectionLevel);
+    if (!bestVersion) throw Error("The amount of data is too big to be stored in a QR Code");
+    if (!version) version = bestVersion;
+    else if (version < bestVersion)
       throw Error(
         `
 The chosen QR Code version cannot contain this amount of data.
 Minimum version required to store current data is: ` +
-          bestVersionForData +
+          bestVersion +
           `.
 `,
       );
-    let s = Co(e, r, i),
-      symbolSize = Y.getSymbolSize(e),
-      u = new go(symbolSize);
-    if ((mo(u, e), yo(u), wo(u, e), nt(u, r, 0), e >= 7)) Eo(u, e);
-    if ((To(u, s), isNaN(n))) n = ne.getBestMask(u, nt.bind(null, u, r));
-    return (
-      ne.applyMask(n, u),
-      nt(u, r, n),
-      { modules: u, version: e, errorCorrectionLevel: r, maskPattern: n, segments: i }
-    );
+    let dataBits = createData(version, errorCorrectionLevel, segments);
+    let moduleCount = Utils.getSymbolSize(version);
+    let modules = new BitMatrix(moduleCount);
+    setupFinderPattern(modules, version);
+    setupTimingPattern(modules);
+    setupAlignmentPattern(modules, version);
+    setupFormatInfo(modules, errorCorrectionLevel, 0);
+    if (version >= 7) setupVersionInfo(modules, version);
+    setupData(modules, dataBits);
+    if (isNaN(maskPattern))
+      maskPattern = MaskPattern.getBestMask(
+        modules,
+        setupFormatInfo.bind(null, modules, errorCorrectionLevel),
+      );
+    MaskPattern.applyMask(maskPattern, modules);
+    setupFormatInfo(modules, errorCorrectionLevel, maskPattern);
+    return {
+      modules,
+      version,
+      errorCorrectionLevel,
+      maskPattern,
+      segments,
+    };
   }
-  Bo.create = function (e, r) {
-    if (typeof e > "u" || e === "") throw Error("No input text");
-    let n = te.M,
-      i,
-      o;
-    if (typeof r < "u") {
-      if (
-        ((n = te.from(r.errorCorrectionLevel, te.M)),
-        (i = D.from(r.version)),
-        (o = ne.from(r.maskPattern)),
-        r.toSJISFunc)
-      )
-        Y.setToSJISFunction(r.toSJISFunc);
+  cjsExports.create = function (data, options) {
+    if (typeof data === "undefined" || data === "") throw Error("No input text");
+    let errorCorrectionLevel = ECLevel.M;
+    let version;
+    let mask;
+    if (typeof options !== "undefined") {
+      errorCorrectionLevel = ECLevel.from(options.errorCorrectionLevel, ECLevel.M);
+      version = Version.from(options.version);
+      mask = MaskPattern.from(options.maskPattern);
+      if (options.toSJISFunc) Utils.setToSJISFunction(options.toSJISFunc);
     }
-    return xo(e, i, n, o);
+    return createSymbol(data, version, errorCorrectionLevel, mask);
   };
 });
-
-export { it };
+export { require_qrcode };

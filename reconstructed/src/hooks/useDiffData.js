@@ -8,35 +8,35 @@
  * pieces: chunk-qwh6zcf0.js (1)
  * attribution: fingerprint 1
  */
-import { K } from "./useWorkspaceDiff.js";
+import { DIFF_DEBOUNCE_MS } from "./useWorkspaceDiff.js";
 
 //@ chunk-qwh6zcf0.js:3841-4330 fingerprint = useDiffData (0.786)
-function useDiffData(t) {
-  let r = new Set(t.skippedLarge),
-    o = new Set(t.restricted),
-    sorted = t.perFileStats
-      .map((perFileStat) => {
-        let a = r.has(perFileStat.path);
-        return {
-          path: perFileStat.path,
-          linesAdded: perFileStat.added,
-          linesRemoved: perFileStat.removed,
-          isBinary: perFileStat.isBinary,
-          isLargeFile: a,
-          isTruncated: !a && !perFileStat.isBinary && perFileStat.added + perFileStat.removed > K,
-          isUntracked: perFileStat.isUntracked,
-          isRestricted: o.has(perFileStat.path),
-        };
-      })
-      .sort((i, a) => i.path.localeCompare(a.path));
+function useDiffData(diff) {
+  let r = new Set(diff.skippedLarge);
+  let o = new Set(diff.restricted);
+  let files = diff.perFileStats
+    .map((perFileStat) => {
+      let a = r.has(perFileStat.path);
+      return {
+        path: perFileStat.path,
+        linesAdded: perFileStat.added,
+        linesRemoved: perFileStat.removed,
+        isBinary: perFileStat.isBinary,
+        isLargeFile: a,
+        isTruncated:
+          !a && !perFileStat.isBinary && perFileStat.added + perFileStat.removed > DIFF_DEBOUNCE_MS,
+        isUntracked: perFileStat.isUntracked,
+        isRestricted: o.has(perFileStat.path),
+      };
+    })
+    .sort((i, a) => i.path.localeCompare(a.path));
   return {
-    stats: t.stats,
-    files: sorted,
-    hunks: new Map(t.hunks.map((hunk) => [hunk.path, hunk.hunks])),
-    loading: !1,
-    source: t.source,
+    stats: diff.stats,
+    files,
+    hunks: new Map(diff.hunks.map((hunk) => [hunk.path, hunk.hunks])),
+    loading: false,
+    source: diff.source,
     baseMode: "branch-point",
   };
 }
-
 export { useDiffData };

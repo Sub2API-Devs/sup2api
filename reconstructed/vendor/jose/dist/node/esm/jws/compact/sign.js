@@ -6,36 +6,40 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { Xa } from "../../../../../../../runtime/bun-runtime.js";
-import { P, E } from "../../../../webapi/lib/content_encryption.js";
-import { kt, it } from "../flattened/sign.js";
-import { oe } from "../../../../webapi/lib/validate.js";
-import { v } from "../../../../browser/runtime/base64url.js";
-import { se } from "../../../../browser/runtime/encrypt.js";
-import { pe } from "../../../../webapi/lib/options.js";
+import {
+  init_content_encryption,
+  init_content_encryption_2,
+} from "../../../../webapi/lib/content_encryption.js";
+import { init_sign, FlattenedSign } from "../flattened/sign.js";
+import { init_validate_2 } from "../../../../webapi/lib/validate.js";
+import { init_base64url } from "../../../../browser/runtime/base64url.js";
+import { init_encrypt } from "../../../../browser/runtime/encrypt.js";
+import { init_options_2 } from "../../../../webapi/lib/options.js";
 
 //@ chunk-2tyrgda4.js:38428-38477 esm-layout
-var jt = Xa(() => {
-  P();
-  kt();
-  oe();
-  E();
-  v();
-  se();
-  pe();
+var init_sign_2 = Xa(() => {
+  init_content_encryption();
+  init_sign();
+  init_validate_2();
+  init_content_encryption_2();
+  init_base64url();
+  init_encrypt();
+  init_options_2();
 });
 //@ chunk-2tyrgda4.js:38477-38804 esm-fingerprint
-class ve {
-  constructor(e) {
-    this._flattened = new it(e);
+class CompactSign {
+  constructor(payload) {
+    this._flattened = new FlattenedSign(payload);
   }
-  setProtectedHeader(e) {
-    return (this._flattened.setProtectedHeader(e), this);
+  setProtectedHeader(protectedHeader) {
+    this._flattened.setProtectedHeader(protectedHeader);
+    return this;
   }
-  async sign(e, t) {
-    let sign = await this._flattened.sign(e, t);
-    if (sign.payload === void 0) throw TypeError("use the flattened module for creating JWS with b64: false");
-    return `${sign.protected}.${sign.payload}.${sign.signature}`;
+  async sign(key, options) {
+    let jws = await this._flattened.sign(key, options);
+    if (jws.payload === undefined)
+      throw TypeError("use the flattened module for creating JWS with b64: false");
+    return `${jws.protected}.${jws.payload}.${jws.signature}`;
   }
 }
-
-export { jt, ve };
+export { init_sign_2, CompactSign };

@@ -10,6 +10,8 @@
  */
 
 //@ chunk-n1y14wmc.js:191-265 placement
-var ide = ["NODE_TLS_REJECT_UNAUTHORIZED", "BUN_TLS_REFUSE_DISTRUSTED_KEYS"];
-
-export { ide };
+/**
+ * 会影响 TLS 校验的环境变量名。
+ */
+var TLS_ENV_VARS = ["NODE_TLS_REJECT_UNAUTHORIZED", "BUN_TLS_REFUSE_DISTRUSTED_KEYS"];
+export { TLS_ENV_VARS };

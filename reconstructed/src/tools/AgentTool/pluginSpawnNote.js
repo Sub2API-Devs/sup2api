@@ -15,8 +15,8 @@ import { isHookRegistrationPending } from "../../utils/plugins/loadPluginHooks.j
 //@ chunk-8zzqbk6w.js:299-412 placement
 function isUnknownPluginSpawnedAgent(o) {
   return (
-    o.hookCaller === void 0 &&
-    o.pluginUnnamed === !0 &&
+    o.hookCaller === undefined &&
+    o.pluginUnnamed === true &&
     (getPluginRegistry().loadedModules.some((loadedModule) => !hasLink(loadedModule)) ||
       isHookRegistrationPending())
   );
@@ -24,5 +24,4 @@ function isUnknownPluginSpawnedAgent(o) {
 //@ chunk-8zzqbk6w.js:412-607 placement
 var UNKNOWN_PLUGIN_AGENT_NOTE =
   "A plugin started or resumed this subagent, or the one that spawned it, and that plugin is not known in this session. It cannot schedule work: nothing would hold that work after a Stop.";
-
 export { isUnknownPluginSpawnedAgent, UNKNOWN_PLUGIN_AGENT_NOTE };

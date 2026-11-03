@@ -36,7 +36,7 @@ import {
 } from "./artifactToolActions.js";
 import { buildTool } from "../tools/permissionCheckGuard.js";
 import { ARTIFACT_TOOL_HEAD } from "../../tools/ArtifactTool/ArtifactTool.js";
-import { vZe, isArtifactVerifyEnabled } from "./artifactPromptText.js";
+import { hasArtifactAddon, isArtifactVerifyEnabled } from "./artifactPromptText.js";
 import { isBuiltInArtifactHiddenForMcp } from "./artifactsMcpTools.js";
 import { askCardFor, withAskDecisionRecording } from "../../tools/ArtifactTool/artifactAskMessages.js";
 import {
@@ -46,58 +46,65 @@ import {
 } from "../../tools/ArtifactTool/permissions/legacyPermissions.js";
 import { applyAskRuleOverride } from "../../utils/permissions/permissions.js";
 import { artifactSchemaGates } from "./artifactToolSchema.js";
-import { e0s, t0s, n0s } from "../../tools/ArtifactTool/inputSchema.js";
+import {
+  commentsInputSchemaLazy,
+  dataInputSchemaLazy,
+  verifyPreviewInputSchemaLazy,
+} from "../../tools/ArtifactTool/inputSchema.js";
 
 //@ chunk-cqgek8qx.js:13430-13481 placement
-function h() {
+function legacyHostModule() {
   return require("./chunk-2rzz5p5d.js");
 }
 //@ chunk-cqgek8qx.js:13481-13524 placement
-function a() {
-  return h().artifactLegacyHost;
+/**
+ * 各 addon（comments/data/check）工具对旧 Artifact 动作的改写规则与“动作在本工具里怎么写”的映射，均委托 artifactLegacyHost。
+ */
+function artifactLegacyHost() {
+  return legacyHostModule().artifactLegacyHost;
 }
+//@ chunk-cqgek8qx.js:13524-14395 placement
 /**
  * 各 addon 工具（comments/data/check）里旧 Artifact 动作名的改写规则（把提示词里的旧动作改成新工具的写法），以及校验失败时告诉模型"该动作在本工具里怎么写"的映射。
  */
-//@ chunk-cqgek8qx.js:13524-14395 placement
 var LEGACY_VERB_REWRITES = {
-    comments: [
-      [/action:? "comments"/g, 'action "read"'],
-      [/action:? "unwatch"/g, 'action "watch" with `on: false`'],
-      [/action:? "status"/g, 'action "watch" with no `url`'],
-      [/action:? "resume_replies"|\bresume_replies\b/g, 'action "watch" with `replies: true`'],
-    ],
-    data: [
-      [/action:? "(?:read_db|write_db)" with db_op /g, "action "],
-      [/\bdb_op\b/g, "action"],
-      [/action:? "read_db"|\bread_db\b/g, "a read (get, list, query or profiles)"],
-      [/action:? "write_db"|\bwrite_db\b/g, "a write (set, update, delete or batch)"],
-    ],
-    check: [],
+  comments: [
+    [/action:? "comments"/g, 'action "read"'],
+    [/action:? "unwatch"/g, 'action "watch" with `on: false`'],
+    [/action:? "status"/g, 'action "watch" with no `url`'],
+    [/action:? "resume_replies"|\bresume_replies\b/g, 'action "watch" with `replies: true`'],
+  ],
+  data: [
+    [/action:? "(?:read_db|write_db)" with db_op /g, "action "],
+    [/\bdb_op\b/g, "action"],
+    [/action:? "read_db"|\bread_db\b/g, "a read (get, list, query or profiles)"],
+    [/action:? "write_db"|\bwrite_db\b/g, "a write (set, update, delete or batch)"],
+  ],
+  check: [],
+};
+var LEGACY_VERB_STEERS = {
+  comments: {
+    comments: '`action: "read"`',
+    status: '`action: "watch"` with no `url`',
+    unwatch: '`action: "watch"` with `on: false`',
+    resume_replies: '`action: "watch"` with `replies: true`',
   },
-  LEGACY_VERB_STEERS = {
-    comments: {
-      comments: '`action: "read"`',
-      status: '`action: "watch"` with no `url`',
-      unwatch: '`action: "watch"` with `on: false`',
-      resume_replies: '`action: "watch"` with `replies: true`',
-    },
-    data: {
-      read_db: 'as the read itself \u2014 `action`: "get", "list" or "query"',
-      write_db: 'as the write itself \u2014 `action`: "set", "update", "delete" or "batch"',
-    },
-    check: {},
-  };
+  data: {
+    read_db: 'as the read itself \u2014 `action`: "get", "list" or "query"',
+    write_db: 'as the write itself \u2014 `action`: "set", "update", "delete" or "batch"',
+  },
+  check: {},
+};
 //@ chunk-cqgek8qx.js:14395-14465 placement
-function p(e, o) {
-  let i = o;
-  for (let [l, t] of LEGACY_VERB_REWRITES[e]) i = i.replace(l, t);
+function rewriteLegacyVerb(addon, message) {
+  let i = message;
+  for (let [l, t] of LEGACY_VERB_REWRITES[addon]) i = i.replace(l, t);
   return i;
 }
+//@ chunk-cqgek8qx.js:14465-14895 placement
 /**
  * 把评论工具提示词改写为合并后 artifact 工具写法的替换表（comments→read、status→watch 列表、unwatch→watch on:false 等）。
  */
-//@ chunk-cqgek8qx.js:14465-14895 placement
 var COMMENTS_PROMPT_REWRITES = [
   ['`action: "comments"`', '`action: "read"`'],
   ['`action: "status"` lists', '`action: "watch"` with no `url` lists'],
@@ -108,15 +115,15 @@ var COMMENTS_PROMPT_REWRITES = [
   ["a watch result, `status`, or", "a watch result, that listing, or"],
 ];
 //@ chunk-cqgek8qx.js:14895-14971 placement
-function R(e) {
-  let o = republishWatchParagraph(!0, e);
+function buildArtifactCommentsPrompt(watchRail) {
+  let o = republishWatchParagraph(true, watchRail);
   for (let [i, l] of COMMENTS_PROMPT_REWRITES) o = o.replaceAll(i, l);
   return o;
 }
+//@ chunk-cqgek8qx.js:14971-16198 placement
 /**
  * 生成 ArtifactComments 工具的提示词：读/答评论线程与管理监听的说明、按 watchRail 改写的评论段落、监听段落；live 时附"恢复自动回复"说明。
  */
-//@ chunk-cqgek8qx.js:14971-16198 placement
 function buildCommentsToolPrompt(gates) {
   let o = [
     `Read and answer the comment threads people leave on a published artifact, and manage this session's artifact watches. Publishing and reading the artifact itself is the \`${ARTIFACT_TOOL_NAME}\` tool's job; every call here names the artifact by its \`url\`. When the Artifact tool says an artifact is a Claude Doc, leave new comments through the document's own connector tools: search the available tools for them. This tool reads, replies to and resolves existing threads.`,
@@ -124,7 +131,7 @@ function buildCommentsToolPrompt(gates) {
       commentsPromptParagraphs(gates.watchRail === "none" ? commentsWatchUnavailableNote() : ""),
       [['`action: "comments"`', '`action: "read"`']],
     ),
-    R(gates.watchRail),
+    buildArtifactCommentsPrompt(gates.watchRail),
   ];
   if (gates.watchRail === "live")
     o.push(
@@ -134,10 +141,10 @@ function buildCommentsToolPrompt(gates) {
 
 `);
 }
+//@ chunk-cqgek8qx.js:16198-16499 placement
 /**
  * 把数据库读写提示词改写为合并后 artifact 工具写法的替换表（read_db/write_db 改为按 action 区分）。
  */
-//@ chunk-cqgek8qx.js:16198-16499 placement
 var DATA_PROMPT_REWRITES = [
   [
     'these actions read and write it as the user. Pass `action: "read_db"` with the artifact\'s `url` and `db_op`:',
@@ -145,10 +152,10 @@ var DATA_PROMPT_REWRITES = [
   ],
   ['Pass `action: "write_db"` with `db_op`:', "To write, pass `action`:"],
 ];
+//@ chunk-cqgek8qx.js:16499-16674 placement
 /**
  * 生成 ArtifactData 工具的提示词：说明它是页面共享数据库，附改写后的数据库操作段落与 profiles 段落。
  */
-//@ chunk-cqgek8qx.js:16499-16674 placement
 function buildDataToolPrompt(e) {
   return [
     `The artifact itself is published and read with the \`${ARTIFACT_TOOL_NAME}\` tool; this tool is its page's shared database.`,
@@ -158,10 +165,10 @@ function buildDataToolPrompt(e) {
 
 `);
 }
+//@ chunk-cqgek8qx.js:16674-16904 placement
 /**
  * 生成 ArtifactCheck 工具的提示词：按 preview/verify 开关说明发布前预览（本地或模拟器）与发布后校验。
  */
-//@ chunk-cqgek8qx.js:16674-16904 placement
 function buildCheckToolPrompt(e) {
   return [
     `Check a page ${e.previewOn && e.verifyOn ? "before or after" : e.previewOn ? "before" : "after"} publishing it with the \`${ARTIFACT_TOOL_NAME}\` tool.`,
@@ -174,11 +181,11 @@ function buildCheckToolPrompt(e) {
 `);
 }
 //@ chunk-cqgek8qx.js:16904-17153 placement
-function getAddonSearchHint(e) {
+function getAddonSearchHint(spec) {
   let mapped = Object.entries(ADDON_OF_LEGACY_ACTION)
-      .filter(([l, t]) => t === e.addon && (e.offersLegacyVerb?.(l) ?? !0))
-      .map(([l]) => l),
-    i = typeof e.searchHint === "function" ? e.searchHint() : e.searchHint;
+    .filter(([key, value]) => value === spec.addon && (spec.offersLegacyVerb?.(key) ?? true))
+    .map(([key]) => key);
+  let i = typeof spec.searchHint === "function" ? spec.searchHint() : spec.searchHint;
   return mapped.length === 0 ? i : `${i} (formerly the ${ARTIFACT_TOOL_NAME} tool's ${mapped.join(", ")})`;
 }
 //@ chunk-cqgek8qx.js:17153-17283 placement
@@ -186,150 +193,161 @@ function runWithEngine(e, o) {
   if (!e.runEngine) throw Error("Artifact: this member needs the executor (call.runEngine)");
   return e.runEngine(o, {});
 }
+//@ chunk-cqgek8qx.js:17283-19830 placement
 /**
  * 用 Artifact 主工具的实现包装出一个 addon 工具（comments/data/check）：输入先转成主工具输入，权限检查、校验、调用、摘要、分类器输入等全部委托主工具，错误消息改写成本工具的动作名；不可用旧动作时给出拼写提示。
  */
-//@ chunk-cqgek8qx.js:17283-19830 placement
 function buildArtifactAddonTool(spec) {
-  let toParentInput = (t) => toParentArtifactInput(spec.addon, t),
-    fromParentInput = (t) => fromParentArtifactInput(spec.addon, t),
-    tool = buildTool({
-      name: spec.name,
-      get searchHint() {
-        return getAddonSearchHint(spec);
-      },
-      shouldDefer: !0,
-      briefStandalone: ARTIFACT_TOOL_HEAD.briefStandalone,
-      familyParentToolName: ARTIFACT_TOOL_NAME,
-      mintsArtifactKeys: () => !0,
-      toFamilyParentInput: (t) => toParentInput(t),
-      ruleContentField: ARTIFACT_TOOL_HEAD.ruleContentField,
-      getPath: (t) => a().getPath(toParentInput(t)),
-      backgrounding: "never",
-      maxResultSizeChars: ARTIFACT_TOOL_HEAD.maxResultSizeChars,
-      persistenceThresholdCeiling: ARTIFACT_TOOL_HEAD.persistenceThresholdCeiling,
-      skipAggregateToolResultBudget: ARTIFACT_TOOL_HEAD.skipAggregateToolResultBudget,
-      preserveToolUseResultInSubagents: ARTIFACT_TOOL_HEAD.preserveToolUseResultInSubagents,
-      stripToolUseResultAtCreation: ARTIFACT_TOOL_HEAD.stripToolUseResultAtCreation,
-      stripForStorage: (...t) => a().stripForStorage(...t),
-      userFacingName: () => ARTIFACT_TOOL_NAME,
-      get inputSchema() {
-        return spec.inputSchema();
-      },
-      get outputSchema() {
-        return a().outputSchema;
-      },
-      isEnabled: () => vZe(spec.addon) && !isBuiltInArtifactHiddenForMcp(),
-      isConcurrencySafe: (t) => a().isConcurrencySafe(toParentInput(t)),
-      isReadOnly: (t) => a().isReadOnly(toParentInput(t)),
-      isDestructive: (t) => a().isDestructive(toParentInput(t)),
-      ignoresWholeToolAllowRule: (t) => a().ignoresWholeToolAllowRule(toParentInput(t)),
-      suppressesAlwaysAllowRule: (t) => a().suppressesAlwaysAllowRule(toParentInput(t)),
-      permissionCard: askCardFor,
-      create() {
-        return {
-          permissionCheckFailureDecision: (t, n) =>
-            runWithEngine(n, ({ toolUseContext: toolUseContext }) => {
-              let r = toParentInput(t);
-              return mapUpdatedInput(
-                legacyCheckPermissions(
-                  spec.name,
-                  () => a().permissionCheckFailureDecision(r, toolUseContext),
-                  r,
-                  r,
-                  toolUseContext,
-                  h().artifactRuleTargetInput,
-                ),
-                fromParentInput,
-              );
-            }),
-          checkPermissions: (t, n) =>
-            runWithEngine(n, async ({ toolUseContext: toolUseContext }) => {
-              let r = toParentInput(t);
-              return mapUpdatedInput(
-                await applyAskRuleOverride(
-                  await a().checkPermissions(r, toolUseContext),
-                  legacyAskRule(toolUseContext, r, h().artifactRuleTargetInput),
-                  () => a().description(r),
-                ),
-                fromParentInput,
-              );
-            }),
-          validateInput: (t, n) =>
-            runWithEngine(n, async ({ toolUseContext: toolUseContext }) => {
-              let r = spec.contradiction?.(t);
-              if (r !== void 0) return { result: !1, message: r, errorCode: 8 };
-              let validateInput = await a().validateInput(toParentInput(t), toolUseContext);
-              return validateInput.result
-                ? validateInput
-                : { ...validateInput, message: p(spec.addon, validateInput.message) };
-            }),
-          call: (t, n) =>
-            runWithEngine(n, async ({ toolUseContext: toolUseContext, canUseTool: canUseTool }) => {
-              let c = [toolUseContext, canUseTool, n.parentMessage, n.onProgress];
-              try {
-                return await a().call(toParentInput(t), ...c);
-              } catch (error) {
-                if (error instanceof ArtifactInputError) error.message = p(spec.addon, error.message);
-                throw error;
-              }
-            }),
-        };
-      },
-      toAutoClassifierInput: (t) => a().toAutoClassifierInput(toParentInput(t)),
-      staleServerClassifierContext: (t, n, s) => a().staleServerClassifierContext(toParentInput(t), n, s),
-      description: (t, ...n) => a().description(toParentInput(t), ...n),
-      getToolUseSummary: (t) => a().getToolUseSummary(toParentInput(t)),
-      prompt: async () => spec.prompt(artifactSchemaGates()),
-      validationErrorSteer(t) {
-        let n = t?.action,
-          s = LEGACY_VERB_STEERS[spec.addon],
-          r = typeof n === "string" && Object.hasOwn(s, n) ? s[n] : void 0;
-        return r === void 0 ? null : `action "${n}" is spelled ${r} in this tool.`;
-      },
-      mapToolResultToToolResultBlockParam: (...t) => a().mapToolResultToToolResultBlockParam(...t),
-      restoreTransientForRemap: (...t) => a().restoreTransientForRemap(...t),
-    });
+  let toParentInput = (t) => toParentArtifactInput(spec.addon, t);
+  let fromParentInput = (t) => fromParentArtifactInput(spec.addon, t);
+  let tool = buildTool({
+    name: spec.name,
+    get searchHint() {
+      return getAddonSearchHint(spec);
+    },
+    shouldDefer: true,
+    briefStandalone: ARTIFACT_TOOL_HEAD.briefStandalone,
+    familyParentToolName: ARTIFACT_TOOL_NAME,
+    mintsArtifactKeys: () => true,
+    toFamilyParentInput: (t) => toParentInput(t),
+    ruleContentField: ARTIFACT_TOOL_HEAD.ruleContentField,
+    getPath: (t) => artifactLegacyHost().getPath(toParentInput(t)),
+    backgrounding: "never",
+    maxResultSizeChars: ARTIFACT_TOOL_HEAD.maxResultSizeChars,
+    persistenceThresholdCeiling: ARTIFACT_TOOL_HEAD.persistenceThresholdCeiling,
+    skipAggregateToolResultBudget: ARTIFACT_TOOL_HEAD.skipAggregateToolResultBudget,
+    preserveToolUseResultInSubagents: ARTIFACT_TOOL_HEAD.preserveToolUseResultInSubagents,
+    stripToolUseResultAtCreation: ARTIFACT_TOOL_HEAD.stripToolUseResultAtCreation,
+    stripForStorage: (...t) => artifactLegacyHost().stripForStorage(...t),
+    userFacingName: () => ARTIFACT_TOOL_NAME,
+    get inputSchema() {
+      return spec.inputSchema();
+    },
+    get outputSchema() {
+      return artifactLegacyHost().outputSchema;
+    },
+    isEnabled: () => hasArtifactAddon(spec.addon) && !isBuiltInArtifactHiddenForMcp(),
+    isConcurrencySafe: (t) => artifactLegacyHost().isConcurrencySafe(toParentInput(t)),
+    isReadOnly: (t) => artifactLegacyHost().isReadOnly(toParentInput(t)),
+    isDestructive: (t) => artifactLegacyHost().isDestructive(toParentInput(t)),
+    ignoresWholeToolAllowRule: (t) => artifactLegacyHost().ignoresWholeToolAllowRule(toParentInput(t)),
+    suppressesAlwaysAllowRule: (t) => artifactLegacyHost().suppressesAlwaysAllowRule(toParentInput(t)),
+    permissionCard: askCardFor,
+    create() {
+      return {
+        permissionCheckFailureDecision: (t, n) =>
+          runWithEngine(n, ({ toolUseContext }) => {
+            let rawInput = toParentInput(t);
+            return mapUpdatedInput(
+              legacyCheckPermissions(
+                spec.name,
+                () => artifactLegacyHost().permissionCheckFailureDecision(rawInput, toolUseContext),
+                rawInput,
+                rawInput,
+                toolUseContext,
+                legacyHostModule().artifactRuleTargetInput,
+              ),
+              fromParentInput,
+            );
+          }),
+        checkPermissions: (t, n) =>
+          runWithEngine(n, async ({ toolUseContext }) => {
+            let parentInput = toParentInput(t);
+            return mapUpdatedInput(
+              await applyAskRuleOverride(
+                await artifactLegacyHost().checkPermissions(parentInput, toolUseContext),
+                legacyAskRule(toolUseContext, parentInput, legacyHostModule().artifactRuleTargetInput),
+                () => artifactLegacyHost().description(parentInput),
+              ),
+              fromParentInput,
+            );
+          }),
+        validateInput: (t, n) =>
+          runWithEngine(n, async ({ toolUseContext }) => {
+            let r = spec.contradiction?.(t);
+            if (r !== undefined)
+              return {
+                result: false,
+                message: r,
+                errorCode: 8,
+              };
+            let c = await artifactLegacyHost().validateInput(toParentInput(t), toolUseContext);
+            return c.result
+              ? c
+              : {
+                  ...c,
+                  message: rewriteLegacyVerb(spec.addon, c.message),
+                };
+          }),
+        call: (t, n) =>
+          runWithEngine(n, async ({ toolUseContext, canUseTool }) => {
+            let c = [toolUseContext, canUseTool, n.parentMessage, n.onProgress];
+            try {
+              return await artifactLegacyHost().call(toParentInput(t), ...c);
+            } catch (error) {
+              if (error instanceof ArtifactInputError)
+                error.message = rewriteLegacyVerb(spec.addon, error.message);
+              throw error;
+            }
+          }),
+      };
+    },
+    toAutoClassifierInput: (t) => artifactLegacyHost().toAutoClassifierInput(toParentInput(t)),
+    staleServerClassifierContext: (t, n, s) =>
+      artifactLegacyHost().staleServerClassifierContext(toParentInput(t), n, s),
+    description: (t, ...n) => artifactLegacyHost().description(toParentInput(t), ...n),
+    getToolUseSummary: (t) => artifactLegacyHost().getToolUseSummary(toParentInput(t)),
+    prompt: async () => spec.prompt(artifactSchemaGates()),
+    validationErrorSteer(t) {
+      let action = t?.action;
+      let s = LEGACY_VERB_STEERS[spec.addon];
+      let r = typeof action === "string" && Object.hasOwn(s, action) ? s[action] : undefined;
+      return r === undefined ? null : `action "${action}" is spelled ${r} in this tool.`;
+    },
+    mapToolResultToToolResultBlockParam: (...t) =>
+      artifactLegacyHost().mapToolResultToToolResultBlockParam(...t),
+    restoreTransientForRemap: (...t) => artifactLegacyHost().restoreTransientForRemap(...t),
+  });
   return withAskDecisionRecording(tool);
 }
+//@ chunk-cqgek8qx.js:19830-20590 placement
 /**
  * 三个 Artifact addon 工具实例：ArtifactComments（读/答评论、监听重发布，watch 时 on:false 与 replies:true 互斥）、ArtifactData（共享数据库读写）、ArtifactCheck（预览/运行时诊断）；ARTIFACT_ADDON_TOOLS 为三者列表。
  */
-//@ chunk-cqgek8qx.js:19830-20590 placement
 var ARTIFACT_COMMENTS_TOOL = buildArtifactAddonTool({
-    addon: "comments",
-    name: ARTIFACT_COMMENTS_TOOL_NAME,
-    searchHint: "read and reply to comment threads on a published artifact; watch it for republishes",
-    inputSchema: e0s,
-    prompt: buildCommentsToolPrompt,
-    contradiction: (e) =>
-      e.action === "watch" && e.on === !1 && e.replies === !0
-        ? "watch: `on: false` stops the watch and `replies: true` resumes automatic replies on it \u2014 pass one, not both"
-        : void 0,
-  }),
-  ARTIFACT_DATA_TOOL = buildArtifactAddonTool({
-    addon: "data",
-    name: ARTIFACT_DATA_TOOL_NAME,
-    searchHint: "read and write a published artifact's shared database",
-    inputSchema: t0s,
-    prompt: buildDataToolPrompt,
-  }),
-  ARTIFACT_CHECK_TOOL = buildArtifactAddonTool({
-    addon: "check",
-    name: ARTIFACT_CHECK_TOOL_NAME,
-    searchHint: () =>
-      [
-        isArtifactPreviewEnabled()
-          ? previewEngineKind() === "emulator"
-            ? "look at a page in the artifact viewer"
-            : "preview a page locally"
-          : "",
-        isArtifactVerifyEnabled() ? "read viewers' runtime diagnostics" : "",
-      ]
-        .filter(Boolean)
-        .join(" and "),
-    inputSchema: n0s,
-    prompt: buildCheckToolPrompt,
-    offersLegacyVerb: (e) => (e === "verify" ? isArtifactVerifyEnabled() : isArtifactPreviewEnabled()),
-  }),
-  ARTIFACT_ADDON_TOOLS = [ARTIFACT_COMMENTS_TOOL, ARTIFACT_DATA_TOOL, ARTIFACT_CHECK_TOOL];
+  addon: "comments",
+  name: ARTIFACT_COMMENTS_TOOL_NAME,
+  searchHint: "read and reply to comment threads on a published artifact; watch it for republishes",
+  inputSchema: commentsInputSchemaLazy,
+  prompt: buildCommentsToolPrompt,
+  contradiction: (e) =>
+    e.action === "watch" && e.on === false && e.replies === true
+      ? "watch: `on: false` stops the watch and `replies: true` resumes automatic replies on it \u2014 pass one, not both"
+      : undefined,
+});
+var ARTIFACT_DATA_TOOL = buildArtifactAddonTool({
+  addon: "data",
+  name: ARTIFACT_DATA_TOOL_NAME,
+  searchHint: "read and write a published artifact's shared database",
+  inputSchema: dataInputSchemaLazy,
+  prompt: buildDataToolPrompt,
+});
+var ARTIFACT_CHECK_TOOL = buildArtifactAddonTool({
+  addon: "check",
+  name: ARTIFACT_CHECK_TOOL_NAME,
+  searchHint: () =>
+    [
+      isArtifactPreviewEnabled()
+        ? previewEngineKind() === "emulator"
+          ? "look at a page in the artifact viewer"
+          : "preview a page locally"
+        : "",
+      isArtifactVerifyEnabled() ? "read viewers' runtime diagnostics" : "",
+    ]
+      .filter(Boolean)
+      .join(" and "),
+  inputSchema: verifyPreviewInputSchemaLazy,
+  prompt: buildCheckToolPrompt,
+  offersLegacyVerb: (e) => (e === "verify" ? isArtifactVerifyEnabled() : isArtifactPreviewEnabled()),
+});
+var ARTIFACT_ADDON_TOOLS = [ARTIFACT_COMMENTS_TOOL, ARTIFACT_DATA_TOOL, ARTIFACT_CHECK_TOOL];

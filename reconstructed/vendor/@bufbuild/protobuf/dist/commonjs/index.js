@@ -6,134 +6,130 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Uk } from "./types.js";
-import { vg } from "../cjs/is-message.js";
-import { wl } from "../cjs/create.js";
-import { n_ } from "./clone.js";
-import { Ns } from "../cjs/descriptors.js";
-import { xP } from "./equals.js";
-import { E_ } from "./fields.js";
-import { qg } from "../cjs/registry.js";
-import { qu } from "../cjs/to-binary.js";
-import { Ku } from "./from-binary.js";
-import { UP } from "./to-json.js";
-import { JP } from "./from-json.js";
-import { tL } from "./merge.js";
-import { gp } from "./extensions.js";
-import { ko } from "./proto-int64.js";
+import { require_types } from "./types.js";
+import { require_is_message } from "../cjs/is-message.js";
+import { require_create } from "../cjs/create.js";
+import { require_clone } from "./clone.js";
+import { require_descriptors } from "../cjs/descriptors.js";
+import { require_equals } from "./equals.js";
+import { require_fields } from "./fields.js";
+import { require_registry } from "../cjs/registry.js";
+import { require_to_binary } from "../cjs/to-binary.js";
+import { require_from_binary } from "./from-binary.js";
+import { require_to_json } from "./to-json.js";
+import { require_from_json } from "./from-json.js";
+import { require_merge } from "./merge.js";
+import { require_extensions } from "./extensions.js";
+import { require_proto_int64 } from "./proto-int64.js";
 
 //@ chunk-fq0cr76a.js:466118-467800 cjs-fingerprint
-var li = x(function (Vn) {
-  var iQ =
-      (Vn && Vn.__createBinding) ||
-      (Object.create
-        ? function (e, n, r, s) {
-            if (s === void 0) s = r;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(n, r);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !n.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return n[r];
-                },
-              };
-            Object.defineProperty(e, s, ownPropertyDescriptor);
-          }
-        : function (e, n, r, s) {
-            if (s === void 0) s = r;
-            e[s] = n[r];
-          }),
-    Ui =
-      (Vn && Vn.__exportStar) ||
-      function (e, n) {
-        for (var key in e)
-          if (key !== "default" && !Object.prototype.hasOwnProperty.call(n, key)) iQ(n, e, key);
-      };
-  Object.defineProperty(Vn, "__esModule", { value: !0 });
-  Vn.getOption =
-    Vn.hasOption =
-    Vn.clearExtension =
-    Vn.setExtension =
-    Vn.getExtension =
-    Vn.hasExtension =
-    Vn.mergeFromBinary =
-    Vn.fromBinary =
-    Vn.toBinary =
-      void 0;
-  Ui(Uk(), Vn);
-  Ui(vg(), Vn);
-  Ui(wl(), Vn);
-  Ui(n_(), Vn);
-  Ui(Ns(), Vn);
-  Ui(xP(), Vn);
-  Ui(E_(), Vn);
-  Ui(qg(), Vn);
-  var oQ = qu();
-  Object.defineProperty(Vn, "toBinary", {
-    enumerable: !0,
+var require_protobuf = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o, k2, desc);
+        }
+      : function (o, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o[k2] = m[k];
+        });
+  var __exportStar =
+    (cjsExports && cjsExports.__exportStar) ||
+    function (m, n) {
+      for (var p in m)
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(n, p)) __createBinding(n, m, p);
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.getOption =
+    cjsExports.hasOption =
+    cjsExports.clearExtension =
+    cjsExports.setExtension =
+    cjsExports.getExtension =
+    cjsExports.hasExtension =
+    cjsExports.mergeFromBinary =
+    cjsExports.fromBinary =
+    cjsExports.toBinary =
+      undefined;
+  __exportStar(require_types(), cjsExports);
+  __exportStar(require_is_message(), cjsExports);
+  __exportStar(require_create(), cjsExports);
+  __exportStar(require_clone(), cjsExports);
+  __exportStar(require_descriptors(), cjsExports);
+  __exportStar(require_equals(), cjsExports);
+  __exportStar(require_fields(), cjsExports);
+  __exportStar(require_registry(), cjsExports);
+  var to_binary_js_1 = require_to_binary();
+  Object.defineProperty(cjsExports, "toBinary", {
+    enumerable: true,
     get: function () {
-      return oQ.toBinary;
+      return to_binary_js_1.toBinary;
     },
   });
-  var nL = Ku();
-  Object.defineProperty(Vn, "fromBinary", {
-    enumerable: !0,
+  var from_binary_js_1 = require_from_binary();
+  Object.defineProperty(cjsExports, "fromBinary", {
+    enumerable: true,
     get: function () {
-      return nL.fromBinary;
+      return from_binary_js_1.fromBinary;
     },
   });
-  Object.defineProperty(Vn, "mergeFromBinary", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "mergeFromBinary", {
+    enumerable: true,
     get: function () {
-      return nL.mergeFromBinary;
+      return from_binary_js_1.mergeFromBinary;
     },
   });
-  Ui(UP(), Vn);
-  Ui(JP(), Vn);
-  Ui(tL(), Vn);
-  var id = gp();
-  Object.defineProperty(Vn, "hasExtension", {
-    enumerable: !0,
+  __exportStar(require_to_json(), cjsExports);
+  __exportStar(require_from_json(), cjsExports);
+  __exportStar(require_merge(), cjsExports);
+  var extensions_js_1 = require_extensions();
+  Object.defineProperty(cjsExports, "hasExtension", {
+    enumerable: true,
     get: function () {
-      return id.hasExtension;
+      return extensions_js_1.hasExtension;
     },
   });
-  Object.defineProperty(Vn, "getExtension", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "getExtension", {
+    enumerable: true,
     get: function () {
-      return id.getExtension;
+      return extensions_js_1.getExtension;
     },
   });
-  Object.defineProperty(Vn, "setExtension", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "setExtension", {
+    enumerable: true,
     get: function () {
-      return id.setExtension;
+      return extensions_js_1.setExtension;
     },
   });
-  Object.defineProperty(Vn, "clearExtension", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "clearExtension", {
+    enumerable: true,
     get: function () {
-      return id.clearExtension;
+      return extensions_js_1.clearExtension;
     },
   });
-  Object.defineProperty(Vn, "hasOption", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "hasOption", {
+    enumerable: true,
     get: function () {
-      return id.hasOption;
+      return extensions_js_1.hasOption;
     },
   });
-  Object.defineProperty(Vn, "getOption", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "getOption", {
+    enumerable: true,
     get: function () {
-      return id.getOption;
+      return extensions_js_1.getOption;
     },
   });
-  Ui(ko(), Vn);
+  __exportStar(require_proto_int64(), cjsExports);
 });
-
-export { li };
+export { require_protobuf };

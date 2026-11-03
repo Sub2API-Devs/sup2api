@@ -20,150 +20,229 @@ import { isCcrHostedConfig } from "./config.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { MCP_PROTOCOL_LATEST, MCP_PROTOCOL_NEXT } from "./mcpCallConstants.js";
-import { PU } from "../api/errorUtils.js";
+import { UNREACHABLE_ERROR_CODES } from "../api/errorUtils.js";
 
 //@ chunk-0qx6sn4e.js:1391-1479 placement
-function M$e(e) {
-  let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === e);
-  return found === void 0 || isModuleAdmitted(found);
+/**
+ * 判断插件模块是否存在且被接纳。
+ */
+function isModuleAdmittedByName(plugin) {
+  let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === plugin);
+  return found === undefined || isModuleAdmitted(found);
 }
 //@ chunk-0qx6sn4e.js:1479-1815 placement
 function createModuleStore() {
-  let e = new Map(),
-    n = new Map(),
-    o = new Set();
+  let e = new Map();
+  let n = new Map();
+  let o = new Set();
   return {
-    list: (r) => (M$e(r) ? [...(e.get(r)?.values() ?? [])] : []),
+    list: (r) => (isModuleAdmittedByName(r) ? [...(e.get(r)?.values() ?? [])] : []),
     own: (r) => {
       let c = e.get(r) ?? new Map();
-      return (e.set(r, c), c);
+      e.set(r, c);
+      return c;
     },
     serverKey: (r) => n.get(r),
     ownerOfKey: (r) => [...n.entries()].find(([, c]) => c === r)?.[0],
     keyed: (r, c) => {
-      (n.set(r, c), o.add(c));
+      n.set(r, c);
+      o.add(c);
     },
     minted: (r) => o.has(r),
     forget: (r) => {
-      (e.delete(r), n.delete(r));
+      e.delete(r);
+      n.delete(r);
     },
   };
 }
 //@ chunk-0qx6sn4e.js:1815-1828 placement
-var EN = createModuleStore();
+/**
+ * 模块存储（插件模块索引）。
+ */
+var moduleStore = createModuleStore();
 //@ chunk-0qx6sn4e.js:1828-1882 placement
-function w() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_url_elicitation", !0);
+/**
+ * 是否启用 URL 模式 elicitation。
+ */
+function isUrlElicitationEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_url_elicitation", true);
 }
 //@ chunk-0qx6sn4e.js:1882-1948 placement
-function P() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_legacy_url_elicitation", !0) === !0;
+/**
+ * 是否启用旧版 URL elicitation。
+ */
+function isLegacyUrlElicitationEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_legacy_url_elicitation", true) === true;
 }
 //@ chunk-0qx6sn4e.js:1948-2013 placement
-var IO_MODELCONTEXTPROTOCOL_UI = "io.modelcontextprotocol/ui",
-  X = "text/html;profile=mcp-app";
+/**
+ * MCP 应用（UI）的 MIME 类型。
+ */
+var IO_MODELCONTEXTPROTOCOL_UI = "io.modelcontextprotocol/ui";
+var MCP_APP_MIME_TYPE = "text/html;profile=mcp-app";
 //@ chunk-0qx6sn4e.js:2013-2068 placement
-function DSn() {
-  return env.CLAUDE_CODE_MCP_APPS_HOST === !0;
+/**
+ * 当前是否作为 MCP 应用宿主。
+ */
+function isMcpAppsHost() {
+  return env.CLAUDE_CODE_MCP_APPS_HOST === true;
 }
 //@ chunk-0qx6sn4e.js:2068-2172 placement
 function baseClientCapabilities() {
   return {
-    roots: { listChanged: !0 },
+    roots: {
+      listChanged: true,
+    },
     elicitation: {},
-    ...(DSn() && { extensions: { [IO_MODELCONTEXTPROTOCOL_UI]: { mimeTypes: [X] } } }),
+    ...(isMcpAppsHost() && {
+      extensions: {
+        [IO_MODELCONTEXTPROTOCOL_UI]: {
+          mimeTypes: [MCP_APP_MIME_TYPE],
+        },
+      },
+    }),
   };
 }
+//@ chunk-0qx6sn4e.js:2172-2361 placement
 /**
  * 从客户端能力中去掉 tasks 能力及其扩展声明。
  */
-//@ chunk-0qx6sn4e.js:2172-2361 placement
 function stripTasksCapability(e) {
-  let { tasks: tasks, extensions: extensions, ...r } = e;
-  if (extensions === void 0 || !(IO_MODELCONTEXTPROTOCOL_TASKS in extensions))
-    return extensions === void 0 ? r : { ...r, extensions: extensions };
+  let { tasks, extensions, ...r } = e;
+  if (extensions === undefined || !(IO_MODELCONTEXTPROTOCOL_TASKS in extensions))
+    return extensions === undefined
+      ? r
+      : {
+          ...r,
+          extensions,
+        };
   let { [IO_MODELCONTEXTPROTOCOL_TASKS]: c, ...C } = extensions;
-  return Object.keys(C).length > 0 ? { ...r, extensions: C } : r;
+  return Object.keys(C).length > 0
+    ? {
+        ...r,
+        extensions: C,
+      }
+    : r;
 }
 //@ chunk-0qx6sn4e.js:2361-2412 placement
-function LSn() {
+/**
+ * 基础客户端能力（v2 SDK 时附加任务扩展）。
+ */
+function clientCapabilitiesForSdk() {
   let e = baseClientCapabilities();
-  return mcpSdkGeneration() === "v2" ? Q(e) : e;
+  return mcpSdkGeneration() === "v2" ? withTasksExtension(e) : e;
 }
 //@ chunk-0qx6sn4e.js:2412-2501 placement
-function Q(e) {
+/**
+ * 需要时给客户端能力加上 tasks 扩展。
+ */
+function withTasksExtension(e) {
   if (!isMcpTasksEnabled() || isHttpMcpServeInvocation()) return e;
-  return { ...e, extensions: { ...e.extensions, [IO_MODELCONTEXTPROTOCOL_TASKS]: {} } };
+  return {
+    ...e,
+    extensions: {
+      ...e.extensions,
+      [IO_MODELCONTEXTPROTOCOL_TASKS]: {},
+    },
+  };
 }
 //@ chunk-0qx6sn4e.js:2501-2587 placement
-function HSn() {
-  let e = LSn();
-  if (!w()) return e;
-  return { ...e, elicitation: { form: {}, url: {} } };
+/**
+ * 在基础能力上附加 elicitation（form/url）能力。
+ */
+function clientCapabilitiesWithElicitation() {
+  let e = clientCapabilitiesForSdk();
+  if (!isUrlElicitationEnabled()) return e;
+  return {
+    ...e,
+    elicitation: {
+      form: {},
+      url: {},
+    },
+  };
 }
+//@ chunk-0qx6sn4e.js:2587-2811 placement
 /**
  * 选择发给 MCP 服务器的客户端能力：符合条件的服务器声明完整 elicitation 能力，否则用精简能力。
  */
-//@ chunk-0qx6sn4e.js:2587-2811 placement
-function clientCapabilitiesFor(e, { denylisted: denylisted }) {
-  return P() &&
+function clientCapabilitiesFor(serverRef, { denylisted }) {
+  return isLegacyUrlElicitationEnabled() &&
     !denylisted &&
-    (e.type === void 0 || e.type === "stdio" || e.type === "sse" || e.type === "http" || e.type === "ws") &&
-    !isCcrHostedConfig(e) &&
-    !("bareElicitationCapability" in e && e.bareElicitationCapability === !0)
-    ? HSn()
-    : LSn();
+    (serverRef.type === undefined ||
+      serverRef.type === "stdio" ||
+      serverRef.type === "sse" ||
+      serverRef.type === "http" ||
+      serverRef.type === "ws") &&
+    !isCcrHostedConfig(serverRef) &&
+    !("bareElicitationCapability" in serverRef && serverRef.bareElicitationCapability === true)
+    ? clientCapabilitiesWithElicitation()
+    : clientCapabilitiesForSdk();
 }
 //@ chunk-0qx6sn4e.js:2811-2871 placement
-function NSn() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_stateless_skip_init", !0);
+/**
+ * 是否跳过无状态服务器的 initialize。
+ */
+function isStatelessSkipInitEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_stateless_skip_init", true);
 }
+//@ chunk-0qx6sn4e.js:2871-2983 placement
 /**
  * 读取 server/discover 投影先验的开关值（off / legacy_only / all）。
  */
-//@ chunk-0qx6sn4e.js:2871-2983 placement
 function discoverProjectionPrior() {
-  let e = getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_discover_projection_prior", "off");
-  return e === "legacy_only" || e === "all" ? e : "off";
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
+    "tengu_mcp_discover_projection_prior",
+    "off",
+  );
+  return featureValue_CACHED_MAY_BE_STALE === "legacy_only" || featureValue_CACHED_MAY_BE_STALE === "all"
+    ? featureValue_CACHED_MAY_BE_STALE
+    : "off";
 }
 //@ chunk-0qx6sn4e.js:2983-2995 placement
-var ee = 6144;
+/**
+ * discover 投影信息的字节上限（6144）。
+ */
+var MAX_DISCOVER_PROJECTION_BYTES = 6144;
 //@ chunk-0qx6sn4e.js:2995-3387 placement
 function buildClientCapabilitiesHeader() {
-  let e = discoverProjectionPrior();
-  if (!NSn() && e === "off") return {};
-  let n = LSn(),
-    str = Buffer.from(jsonStringify(n)).toString("base64");
-  if (Buffer.byteLength(str, "ascii") > ee)
-    return (
-      logForDebugging(
-        "[claudeai-mcp] client capabilities header exceeds size limit \u2014 omitting init-projection headers",
-      ),
-      {}
+  let projectionPrior = discoverProjectionPrior();
+  if (!isStatelessSkipInitEnabled() && projectionPrior === "off") return {};
+  let n = clientCapabilitiesForSdk();
+  let str = Buffer.from(jsonStringify(n)).toString("base64");
+  if (Buffer.byteLength(str, "ascii") > MAX_DISCOVER_PROJECTION_BYTES) {
+    logForDebugging(
+      "[claudeai-mcp] client capabilities header exceeds size limit \u2014 omitting init-projection headers",
     );
+    return {};
+  }
   return {
     "anthropic-mcp-client-capabilities": str,
     "MCP-Protocol-Version": MCP_PROTOCOL_LATEST,
-    ...(e !== "off" && { "anthropic-mcp-discover-protocol-version": MCP_PROTOCOL_NEXT }),
+    ...(projectionPrior !== "off" && {
+      "anthropic-mcp-discover-protocol-version": MCP_PROTOCOL_NEXT,
+    }),
   };
 }
 //@ chunk-0qx6sn4e.js:3387-3581 placement
-var CLAUDEAI_FETCH_TIMEOUT_MS = 5000,
-  CLAUDEAI_FETCH_MAX_ATTEMPTS = 3,
-  CLAUDEAI_RETRY_BASE_MS = 500,
-  CLAUDEAI_RETRY_FACTOR = 3,
-  CLAUDEAI_RETRY_BUDGET_MS = 12000,
-  TRANSIENT_NETWORK_ERRNOS = new Set([
-    "ECONNABORTED",
-    "ECONNRESET",
-    "ECONNREFUSED",
-    "ETIMEDOUT",
-    "EAI_AGAIN",
-    "ERR_SOCKET_CLOSED",
-    "ERR_PROXY_TUNNEL",
-  ]),
-  RETRYABLE_NETWORK_CODES = new Set([...TRANSIENT_NETWORK_ERRNOS, ...PU, "ERR_NETWORK"]);
-
+var CLAUDEAI_FETCH_TIMEOUT_MS = 5000;
+var CLAUDEAI_FETCH_MAX_ATTEMPTS = 3;
+var CLAUDEAI_RETRY_BASE_MS = 500;
+var CLAUDEAI_RETRY_FACTOR = 3;
+var CLAUDEAI_RETRY_BUDGET_MS = 12000;
+var TRANSIENT_NETWORK_ERRNOS = new Set([
+  "ECONNABORTED",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "ERR_SOCKET_CLOSED",
+  "ERR_PROXY_TUNNEL",
+]);
+var RETRYABLE_NETWORK_CODES = new Set([
+  ...TRANSIENT_NETWORK_ERRNOS,
+  ...UNREACHABLE_ERROR_CODES,
+  "ERR_NETWORK",
+]);
 export {
   TRANSIENT_NETWORK_ERRNOS,
   buildClientCapabilitiesHeader,
@@ -173,14 +252,14 @@ export {
   CLAUDEAI_RETRY_FACTOR,
   CLAUDEAI_RETRY_BUDGET_MS,
   RETRYABLE_NETWORK_CODES,
-  EN,
-  DSn,
+  moduleStore,
+  isMcpAppsHost,
   clientCapabilitiesFor,
   stripTasksCapability,
   discoverProjectionPrior,
-  LSn,
-  HSn,
-  NSn,
+  clientCapabilitiesForSdk,
+  clientCapabilitiesWithElicitation,
+  isStatelessSkipInitEnabled,
   createModuleStore,
-  M$e,
+  isModuleAdmittedByName,
 };

@@ -13,44 +13,51 @@ import { getBundledSkills, registerBundledSkill } from "../bundledSkills.js";
 import { DATAVIZ, ARTIFACT_DESIGN } from "./bundledSkillNames.js";
 import { isArtifactToolRegistered } from "../../services/artifacts/artifactToolGates.js";
 import { isBuiltInArtifactHiddenForMcp } from "../../services/artifacts/artifactsMcpTools.js";
-import { uNs, loadDatavizSkillContent } from "./datavizCallout.js";
+import { setPageContractHeaderProvider, loadDatavizSkillContent } from "./datavizCallout.js";
 
 //@ chunk-hantmvxa.js:25849-26040 placement
-var ARTIFACT_DESIGN_DESCRIPTION = "Design guidance and fundamentals for Artifacts.",
-  ARTIFACT_DESIGN_WHEN_TO_USE =
-    "Load before writing any artifact, including a skill-instructed Markdown one - Markdown is never a shortcut past the design pass.";
+var ARTIFACT_DESIGN_DESCRIPTION = "Design guidance and fundamentals for Artifacts.";
+var ARTIFACT_DESIGN_WHEN_TO_USE =
+  "Load before writing any artifact, including a skill-instructed Markdown one - Markdown is never a shortcut past the design pass.";
+//@ chunk-hantmvxa.js:26040-26445 placement
 /**
  * 开关打开且内置 dataviz 技能存在时，返回图表与示意图设计的补充提示词。
  */
-//@ chunk-hantmvxa.js:26040-26445 placement
 function getDatavizDesignAddendum() {
   if (
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_dataviz", !1) &&
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_dataviz", false) &&
     getBundledSkills().some((e) => e.name === DATAVIZ)
   )
     return `**When adding charts or diagrams** The craft shifts from identity to honesty \u2014 pick the form the data's shape calls for, keep encodings from exaggerating, title the finding rather than the axes. Load the \`${DATAVIZ}\` skill for the specifics; this skill continues to govern the page the chart sits in.`;
   return "";
 }
 //@ chunk-hantmvxa.js:26445-26478 placement
-function jn() {
+/**
+ * 判断 artifact-design 内置技能是否启用（依赖 Artifact 工具可用）。
+ */
+function isArtifactDesignSkillEnabled() {
   return isArtifactToolRegistered() && !isBuiltInArtifactHiddenForMcp();
 }
+//@ chunk-hantmvxa.js:26478-26641 placement = registerLoopSkill (0.574)
 /**
  * 注册 artifact-design 内置 skill（模型可调用、用户不可见），isEnabled 由 artifact 功能门控。旧版此处匹配为 registerLoopSkill，实为不同 skill。
  */
-//@ chunk-hantmvxa.js:26478-26641 placement = registerLoopSkill (0.574)
 function registerArtifactDesignSkill() {
-  (uNs(getDatavizDesignAddendum),
-    registerBundledSkill({
-      name: ARTIFACT_DESIGN,
-      description: ARTIFACT_DESIGN_DESCRIPTION,
-      whenToUse: ARTIFACT_DESIGN_WHEN_TO_USE,
-      isEnabled: jn,
-      userInvocable: !1,
-      async getPromptForCommand() {
-        return [{ type: "text", text: await loadDatavizSkillContent() }];
-      },
-    }));
+  setPageContractHeaderProvider(getDatavizDesignAddendum);
+  registerBundledSkill({
+    name: ARTIFACT_DESIGN,
+    description: ARTIFACT_DESIGN_DESCRIPTION,
+    whenToUse: ARTIFACT_DESIGN_WHEN_TO_USE,
+    isEnabled: isArtifactDesignSkillEnabled,
+    userInvocable: false,
+    async getPromptForCommand() {
+      return [
+        {
+          type: "text",
+          text: await loadDatavizSkillContent(),
+        },
+      ];
+    },
+  });
 }
-
 export { registerArtifactDesignSkill };

@@ -6,246 +6,278 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xe } from "./Node.js";
-import { Ft } from "./Element.js";
-import { oa } from "./CSSStyleDeclaration.js";
-import { ee } from "./utils.js";
-import { Vn } from "./URLUtils.js";
-import { jn } from "./defineElement.js";
+import { require_Node } from "./Node.js";
+import { require_Element } from "./Element.js";
+import { require_CSSStyleDeclaration } from "./CSSStyleDeclaration.js";
+import { require_utils } from "./utils.js";
+import { require_URLUtils } from "./URLUtils.js";
+import { require_defineElement } from "./defineElement.js";
 
 //@ chunk-vwj6ccer.js:84376-106314 cjs-fingerprint
-var la = x(function (Nx) {
-  var Gn = xe(),
-    I0 = Ft(),
-    _x = oa(),
-    Te = ee(),
-    O0 = Vn(),
-    vx = jn(),
-    Xe = (Nx.elements = {}),
-    create = Object.create(null);
-  Nx.createElement = function (e, t, r) {
-    var a = create[t] || yx;
-    return new a(e, t, r);
+var require_htmlelts = x(function (cjsExports) {
+  var Node = require_Node();
+  var Element = require_Element();
+  var CSSStyleDeclaration = require_CSSStyleDeclaration();
+  var utils = require_utils();
+  var URLUtils = require_URLUtils();
+  var defineElement = require_defineElement();
+  var htmlElements = (cjsExports.elements = {});
+  var htmlNameToImpl = Object.create(null);
+  cjsExports.createElement = function (doc, localName, prefix) {
+    var impl = htmlNameToImpl[localName] || HTMLUnknownElement;
+    return new impl(doc, localName, prefix);
   };
-  function _(e) {
-    return vx(e, y, Xe, create);
+  function define(spec) {
+    return defineElement(spec, HTMLElement, htmlElements, htmlNameToImpl);
   }
-  function te(e) {
+  function te(attr) {
     return {
       get: function () {
-        var _getattr = this._getattr(e);
-        if (_getattr === null) return "";
-        var _resolve = this.doc._resolve(_getattr);
-        return _resolve === null ? _getattr : _resolve;
+        var v = this._getattr(attr);
+        if (v === null) return "";
+        var url = this.doc._resolve(v);
+        return url === null ? v : url;
       },
-      set: function (t) {
-        this._setattr(e, t);
+      set: function (value) {
+        this._setattr(attr, value);
       },
     };
   }
-  function ua(e) {
+  function CORS(attr) {
     return {
       get: function () {
-        var _getattr = this._getattr(e);
-        if (_getattr === null) return null;
-        if (_getattr.toLowerCase() === "use-credentials") return "use-credentials";
+        var v = this._getattr(attr);
+        if (v === null) return null;
+        if (v.toLowerCase() === "use-credentials") return "use-credentials";
         return "anonymous";
       },
-      set: function (t) {
-        if (t === null || t === void 0) this.removeAttribute(e);
-        else this._setattr(e, t);
+      set: function (value) {
+        if (value === null || value === undefined) this.removeAttribute(attr);
+        else this._setattr(attr, value);
       },
     };
   }
-  var Pt = {
-      type: [
-        "",
-        "no-referrer",
-        "no-referrer-when-downgrade",
-        "same-origin",
-        "origin",
-        "strict-origin",
-        "origin-when-cross-origin",
-        "strict-origin-when-cross-origin",
-        "unsafe-url",
-      ],
-      missing: "",
+  var REFERRER = {
+    type: [
+      "",
+      "no-referrer",
+      "no-referrer-when-downgrade",
+      "same-origin",
+      "origin",
+      "strict-origin",
+      "origin-when-cross-origin",
+      "strict-origin-when-cross-origin",
+      "unsafe-url",
+    ],
+    missing: "",
+  };
+  var focusableElements = {
+    A: true,
+    LINK: true,
+    BUTTON: true,
+    INPUT: true,
+    SELECT: true,
+    TEXTAREA: true,
+    COMMAND: true,
+  };
+  var HTMLFormElement = function (doc, localName, prefix) {
+    HTMLElement.call(this, doc, localName, prefix);
+    this._form = null;
+  };
+  var HTMLElement = (cjsExports.HTMLElement = define({
+    superclass: Element,
+    name: "HTMLElement",
+    ctor: function (doc, localName, prefix) {
+      Element.call(this, doc, localName, utils.NAMESPACE.HTML, prefix);
     },
-    Tx = { A: !0, LINK: !0, BUTTON: !0, INPUT: !0, SELECT: !0, TEXTAREA: !0, COMMAND: !0 },
-    Le = function (e, t, r) {
-      (y.call(this, e, t, r), (this._form = null));
-    },
-    y = (Nx.HTMLElement = _({
-      superclass: I0,
-      name: "HTMLElement",
-      ctor: function (t, r, a) {
-        I0.call(this, t, r, Te.NAMESPACE.HTML, a);
-      },
-      props: {
-        dangerouslySetInnerHTML: {
-          set: function (e) {
-            this._innerHTML = e;
-          },
-        },
-        innerHTML: {
-          get: function () {
-            return this.serialize();
-          },
-          set: function (e) {
-            var mozHTMLParser = this.ownerDocument.implementation.mozHTMLParser(
-              this.ownerDocument._address,
-              this,
-            );
-            mozHTMLParser.parse(e === null ? "" : String(e), !0);
-            var r = this instanceof create.template ? this.content : this;
-            while (r.hasChildNodes()) r.removeChild(r.firstChild);
-            r.appendChild(mozHTMLParser._asDocumentFragment());
-          },
-        },
-        style: {
-          get: function () {
-            if (!this._style) this._style = new _x(this);
-            return this._style;
-          },
-          set: function (e) {
-            if (e === null || e === void 0) e = "";
-            this._setattr("style", String(e));
-          },
-        },
-        blur: { value: function () {} },
-        focus: { value: function () {} },
-        forceSpellCheck: { value: function () {} },
-        click: {
-          value: function () {
-            if (this._click_in_progress) return;
-            this._click_in_progress = !0;
-            try {
-              if (this._pre_click_activation_steps) this._pre_click_activation_steps();
-              var event = this.ownerDocument.createEvent("MouseEvent");
-              event.initMouseEvent(
-                "click",
-                !0,
-                !0,
-                this.ownerDocument.defaultView,
-                1,
-                0,
-                0,
-                0,
-                0,
-                !1,
-                !1,
-                !1,
-                !1,
-                0,
-                null,
-              );
-              var dispatchEvent = this.dispatchEvent(event);
-              if (dispatchEvent) {
-                if (this._post_click_activation_steps) this._post_click_activation_steps(event);
-              } else if (this._cancelled_activation_steps) this._cancelled_activation_steps();
-            } finally {
-              this._click_in_progress = !1;
-            }
-          },
-        },
-        submit: { value: Te.nyi },
-      },
-      attributes: {
-        title: String,
-        lang: String,
-        dir: { type: ["ltr", "rtl", "auto"], missing: "" },
-        draggable: { type: ["true", "false"], treatNullAsEmptyString: !0 },
-        spellcheck: { type: ["true", "false"], missing: "" },
-        enterKeyHint: { type: ["enter", "done", "go", "next", "previous", "search", "send"], missing: "" },
-        autoCapitalize: { type: ["off", "on", "none", "sentences", "words", "characters"], missing: "" },
-        autoFocus: Boolean,
-        accessKey: String,
-        nonce: String,
-        hidden: Boolean,
-        translate: { type: ["no", "yes"], missing: "" },
-        tabIndex: {
-          type: "long",
-          default: function () {
-            if (this.tagName in Tx || this.contentEditable) return 0;
-            else return -1;
-          },
+    props: {
+      dangerouslySetInnerHTML: {
+        set: function (v) {
+          this._innerHTML = v;
         },
       },
-      events: [
-        "abort",
-        "canplay",
-        "canplaythrough",
-        "change",
-        "click",
-        "contextmenu",
-        "cuechange",
-        "dblclick",
-        "drag",
-        "dragend",
-        "dragenter",
-        "dragleave",
-        "dragover",
-        "dragstart",
-        "drop",
-        "durationchange",
-        "emptied",
-        "ended",
-        "input",
-        "invalid",
-        "keydown",
-        "keypress",
-        "keyup",
-        "loadeddata",
-        "loadedmetadata",
-        "loadstart",
-        "mousedown",
-        "mousemove",
-        "mouseout",
-        "mouseover",
-        "mouseup",
-        "mousewheel",
-        "pause",
-        "play",
-        "playing",
-        "progress",
-        "ratechange",
-        "readystatechange",
-        "reset",
-        "seeked",
-        "seeking",
-        "select",
-        "show",
-        "stalled",
-        "submit",
-        "suspend",
-        "timeupdate",
-        "volumechange",
-        "waiting",
-        "blur",
-        "error",
-        "focus",
-        "load",
-        "scroll",
-      ],
-    })),
-    yx = _({
-      name: "HTMLUnknownElement",
-      ctor: function (t, r, a) {
-        y.call(this, t, r, a);
-      },
-    }),
-    Me = {
-      form: {
+      innerHTML: {
         get: function () {
-          return this._form;
+          return this.serialize();
+        },
+        set: function (v) {
+          var parser = this.ownerDocument.implementation.mozHTMLParser(this.ownerDocument._address, this);
+          parser.parse(v === null ? "" : String(v), true);
+          var target = this instanceof htmlNameToImpl.template ? this.content : this;
+          while (target.hasChildNodes()) target.removeChild(target.firstChild);
+          target.appendChild(parser._asDocumentFragment());
         },
       },
-    };
-  _({
+      style: {
+        get: function () {
+          if (!this._style) this._style = new CSSStyleDeclaration(this);
+          return this._style;
+        },
+        set: function (v) {
+          if (v === null || v === undefined) v = "";
+          this._setattr("style", String(v));
+        },
+      },
+      blur: {
+        value: function () {},
+      },
+      focus: {
+        value: function () {},
+      },
+      forceSpellCheck: {
+        value: function () {},
+      },
+      click: {
+        value: function () {
+          if (this._click_in_progress) return;
+          this._click_in_progress = true;
+          try {
+            if (this._pre_click_activation_steps) this._pre_click_activation_steps();
+            var event = this.ownerDocument.createEvent("MouseEvent");
+            event.initMouseEvent(
+              "click",
+              true,
+              true,
+              this.ownerDocument.defaultView,
+              1,
+              0,
+              0,
+              0,
+              0,
+              false,
+              false,
+              false,
+              false,
+              0,
+              null,
+            );
+            var success = this.dispatchEvent(event);
+            if (success) {
+              if (this._post_click_activation_steps) this._post_click_activation_steps(event);
+            } else if (this._cancelled_activation_steps) this._cancelled_activation_steps();
+          } finally {
+            this._click_in_progress = false;
+          }
+        },
+      },
+      submit: {
+        value: utils.nyi,
+      },
+    },
+    attributes: {
+      title: String,
+      lang: String,
+      dir: {
+        type: ["ltr", "rtl", "auto"],
+        missing: "",
+      },
+      draggable: {
+        type: ["true", "false"],
+        treatNullAsEmptyString: true,
+      },
+      spellcheck: {
+        type: ["true", "false"],
+        missing: "",
+      },
+      enterKeyHint: {
+        type: ["enter", "done", "go", "next", "previous", "search", "send"],
+        missing: "",
+      },
+      autoCapitalize: {
+        type: ["off", "on", "none", "sentences", "words", "characters"],
+        missing: "",
+      },
+      autoFocus: Boolean,
+      accessKey: String,
+      nonce: String,
+      hidden: Boolean,
+      translate: {
+        type: ["no", "yes"],
+        missing: "",
+      },
+      tabIndex: {
+        type: "long",
+        default: function () {
+          if (this.tagName in focusableElements || this.contentEditable) return 0;
+          else return -1;
+        },
+      },
+    },
+    events: [
+      "abort",
+      "canplay",
+      "canplaythrough",
+      "change",
+      "click",
+      "contextmenu",
+      "cuechange",
+      "dblclick",
+      "drag",
+      "dragend",
+      "dragenter",
+      "dragleave",
+      "dragover",
+      "dragstart",
+      "drop",
+      "durationchange",
+      "emptied",
+      "ended",
+      "input",
+      "invalid",
+      "keydown",
+      "keypress",
+      "keyup",
+      "loadeddata",
+      "loadedmetadata",
+      "loadstart",
+      "mousedown",
+      "mousemove",
+      "mouseout",
+      "mouseover",
+      "mouseup",
+      "mousewheel",
+      "pause",
+      "play",
+      "playing",
+      "progress",
+      "ratechange",
+      "readystatechange",
+      "reset",
+      "seeked",
+      "seeking",
+      "select",
+      "show",
+      "stalled",
+      "submit",
+      "suspend",
+      "timeupdate",
+      "volumechange",
+      "waiting",
+      "blur",
+      "error",
+      "focus",
+      "load",
+      "scroll",
+    ],
+  }));
+  var HTMLUnknownElement = define({
+    name: "HTMLUnknownElement",
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
+    },
+  });
+  var formAssociatedProps = {
+    form: {
+      get: function () {
+        return this._form;
+      },
+    },
+  };
+  define({
     tag: "a",
     name: "HTMLAnchorElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
       _post_click_activation_steps: {
@@ -263,7 +295,7 @@ var la = x(function (Nx) {
       media: String,
       hreflang: String,
       type: String,
-      referrerPolicy: Pt,
+      referrerPolicy: REFERRER,
       coords: String,
       charset: String,
       name: String,
@@ -271,12 +303,12 @@ var la = x(function (Nx) {
       shape: String,
     },
   });
-  O0._inherit(create.a.prototype);
-  _({
+  URLUtils._inherit(htmlNameToImpl.a.prototype);
+  define({
     tag: "area",
     name: "HTMLAreaElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
       alt: String,
@@ -290,32 +322,36 @@ var la = x(function (Nx) {
       shape: String,
       coords: String,
       ping: String,
-      referrerPolicy: Pt,
+      referrerPolicy: REFERRER,
       noHref: Boolean,
     },
   });
-  O0._inherit(create.area.prototype);
-  _({
+  URLUtils._inherit(htmlNameToImpl.area.prototype);
+  define({
     tag: "br",
     name: "HTMLBRElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { clear: String },
+    attributes: {
+      clear: String,
+    },
   });
-  _({
+  define({
     tag: "base",
     name: "HTMLBaseElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { target: String },
+    attributes: {
+      target: String,
+    },
   });
-  _({
+  define({
     tag: "body",
     name: "HTMLBodyElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     events: [
       "afterprint",
@@ -338,31 +374,53 @@ var la = x(function (Nx) {
       "unload",
     ],
     attributes: {
-      text: { type: String, treatNullAsEmptyString: !0 },
-      link: { type: String, treatNullAsEmptyString: !0 },
-      vLink: { type: String, treatNullAsEmptyString: !0 },
-      aLink: { type: String, treatNullAsEmptyString: !0 },
-      bgColor: { type: String, treatNullAsEmptyString: !0 },
+      text: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
+      link: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
+      vLink: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
+      aLink: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
+      bgColor: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
       background: String,
     },
   });
-  _({
+  define({
     tag: "button",
     name: "HTMLButtonElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
-    props: Me,
+    props: formAssociatedProps,
     attributes: {
       name: String,
       value: String,
       disabled: Boolean,
       autofocus: Boolean,
-      type: { type: ["submit", "reset", "button", "menu"], missing: "submit" },
+      type: {
+        type: ["submit", "reset", "button", "menu"],
+        missing: "submit",
+      },
       formTarget: String,
       formAction: te,
       formNoValidate: Boolean,
-      formMethod: { type: ["get", "post", "dialog"], invalid: "get", missing: "" },
+      formMethod: {
+        type: ["get", "post", "dialog"],
+        invalid: "get",
+        missing: "",
+      },
       formEnctype: {
         type: ["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"],
         invalid: "application/x-www-form-urlencoded",
@@ -370,76 +428,103 @@ var la = x(function (Nx) {
       },
     },
   });
-  _({
+  define({
     tag: "dl",
     name: "HTMLDListElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { compact: Boolean },
+    attributes: {
+      compact: Boolean,
+    },
   });
-  _({
+  define({
     tag: "data",
     name: "HTMLDataElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { value: String },
+    attributes: {
+      value: String,
+    },
   });
-  _({
+  define({
     tag: "datalist",
     name: "HTMLDataListElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
   });
-  _({
+  define({
     tag: "details",
     name: "HTMLDetailsElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { open: Boolean },
+    attributes: {
+      open: Boolean,
+    },
   });
-  _({
+  define({
     tag: "div",
     name: "HTMLDivElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { align: String },
+    attributes: {
+      align: String,
+    },
   });
-  _({
+  define({
     tag: "embed",
     name: "HTMLEmbedElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { src: te, type: String, width: String, height: String, align: String, name: String },
+    attributes: {
+      src: te,
+      type: String,
+      width: String,
+      height: String,
+      align: String,
+      name: String,
+    },
   });
-  _({
+  define({
     tag: "fieldset",
     name: "HTMLFieldSetElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
-    props: Me,
-    attributes: { disabled: Boolean, name: String },
+    props: formAssociatedProps,
+    attributes: {
+      disabled: Boolean,
+      name: String,
+    },
   });
-  _({
+  define({
     tag: "form",
     name: "HTMLFormElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
       action: String,
-      autocomplete: { type: ["on", "off"], missing: "on" },
+      autocomplete: {
+        type: ["on", "off"],
+        missing: "on",
+      },
       name: String,
-      acceptCharset: { name: "accept-charset" },
+      acceptCharset: {
+        name: "accept-charset",
+      },
       target: String,
       noValidate: Boolean,
-      method: { type: ["get", "post", "dialog"], invalid: "get", missing: "get" },
+      method: {
+        type: ["get", "post", "dialog"],
+        invalid: "get",
+        missing: "get",
+      },
       enctype: {
         type: ["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"],
         invalid: "application/x-www-form-urlencoded",
@@ -453,42 +538,53 @@ var la = x(function (Nx) {
       },
     },
   });
-  _({
+  define({
     tag: "hr",
     name: "HTMLHRElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { align: String, color: String, noShade: Boolean, size: String, width: String },
+    attributes: {
+      align: String,
+      color: String,
+      noShade: Boolean,
+      size: String,
+      width: String,
+    },
   });
-  _({
+  define({
     tag: "head",
     name: "HTMLHeadElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
   });
-  _({
+  define({
     tags: ["h1", "h2", "h3", "h4", "h5", "h6"],
     name: "HTMLHeadingElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { align: String },
+    attributes: {
+      align: String,
+    },
   });
-  _({
+  define({
     tag: "html",
     name: "HTMLHtmlElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { xmlns: te, version: String },
+    attributes: {
+      xmlns: te,
+      version: String,
+    },
   });
-  _({
+  define({
     tag: "iframe",
     name: "HTMLIFrameElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
       src: te,
@@ -501,59 +597,86 @@ var la = x(function (Nx) {
       allowFullscreen: Boolean,
       allowUserMedia: Boolean,
       allowPaymentRequest: Boolean,
-      referrerPolicy: Pt,
-      loading: { type: ["eager", "lazy"], treatNullAsEmptyString: !0 },
+      referrerPolicy: REFERRER,
+      loading: {
+        type: ["eager", "lazy"],
+        treatNullAsEmptyString: true,
+      },
       align: String,
       scrolling: String,
       frameBorder: String,
       longDesc: te,
-      marginHeight: { type: String, treatNullAsEmptyString: !0 },
-      marginWidth: { type: String, treatNullAsEmptyString: !0 },
+      marginHeight: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
+      marginWidth: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
     },
   });
-  _({
+  define({
     tag: "img",
     name: "HTMLImageElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
       alt: String,
       src: te,
       srcset: String,
-      crossOrigin: ua,
+      crossOrigin: CORS,
       useMap: String,
       isMap: Boolean,
       sizes: String,
-      height: { type: "unsigned long", default: 0 },
-      width: { type: "unsigned long", default: 0 },
-      referrerPolicy: Pt,
-      loading: { type: ["eager", "lazy"], missing: "" },
+      height: {
+        type: "unsigned long",
+        default: 0,
+      },
+      width: {
+        type: "unsigned long",
+        default: 0,
+      },
+      referrerPolicy: REFERRER,
+      loading: {
+        type: ["eager", "lazy"],
+        missing: "",
+      },
       name: String,
       lowsrc: te,
       align: String,
-      hspace: { type: "unsigned long", default: 0 },
-      vspace: { type: "unsigned long", default: 0 },
+      hspace: {
+        type: "unsigned long",
+        default: 0,
+      },
+      vspace: {
+        type: "unsigned long",
+        default: 0,
+      },
       longDesc: te,
-      border: { type: String, treatNullAsEmptyString: !0 },
+      border: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
     },
   });
-  _({
+  define({
     tag: "input",
     name: "HTMLInputElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
     props: {
-      form: Me.form,
+      form: formAssociatedProps.form,
       _post_click_activation_steps: {
         value: function (e) {
           if (this.type === "checkbox") this.checked = !this.checked;
           else if (this.type === "radio") {
-            var elementsByName = this.form.getElementsByName(this.name);
-            for (var r = elementsByName.length - 1; r >= 0; r--) {
-              var a = elementsByName[r];
-              a.checked = a === this;
+            var group = this.form.getElementsByName(this.name);
+            for (var i = group.length - 1; i >= 0; i--) {
+              var el = group[i];
+              el.checked = el === this;
             }
           }
         },
@@ -571,19 +694,49 @@ var la = x(function (Nx) {
       placeholder: String,
       step: String,
       dirName: String,
-      defaultValue: { name: "value" },
+      defaultValue: {
+        name: "value",
+      },
       multiple: Boolean,
       required: Boolean,
       readOnly: Boolean,
       checked: Boolean,
       value: String,
       src: te,
-      defaultChecked: { name: "checked", type: Boolean },
-      size: { type: "unsigned long", default: 20, min: 1, setmin: 1 },
-      width: { type: "unsigned long", min: 0, setmin: 0, default: 0 },
-      height: { type: "unsigned long", min: 0, setmin: 0, default: 0 },
-      minLength: { type: "unsigned long", min: 0, setmin: 0, default: -1 },
-      maxLength: { type: "unsigned long", min: 0, setmin: 0, default: -1 },
+      defaultChecked: {
+        name: "checked",
+        type: Boolean,
+      },
+      size: {
+        type: "unsigned long",
+        default: 20,
+        min: 1,
+        setmin: 1,
+      },
+      width: {
+        type: "unsigned long",
+        min: 0,
+        setmin: 0,
+        default: 0,
+      },
+      height: {
+        type: "unsigned long",
+        min: 0,
+        setmin: 0,
+        default: 0,
+      },
+      minLength: {
+        type: "unsigned long",
+        min: 0,
+        setmin: 0,
+        default: -1,
+      },
+      maxLength: {
+        type: "unsigned long",
+        min: 0,
+        setmin: 0,
+        default: -1,
+      },
       autocomplete: String,
       type: {
         type: [
@@ -615,7 +768,11 @@ var la = x(function (Nx) {
       },
       formTarget: String,
       formNoValidate: Boolean,
-      formMethod: { type: ["get", "post"], invalid: "get", missing: "" },
+      formMethod: {
+        type: ["get", "post"],
+        invalid: "get",
+        missing: "",
+      },
       formEnctype: {
         type: ["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"],
         invalid: "application/x-www-form-urlencoded",
@@ -642,51 +799,67 @@ var la = x(function (Nx) {
       useMap: String,
     },
   });
-  _({
+  define({
     tag: "keygen",
     name: "HTMLKeygenElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
-    props: Me,
+    props: formAssociatedProps,
     attributes: {
       name: String,
       disabled: Boolean,
       autofocus: Boolean,
       challenge: String,
-      keytype: { type: ["rsa"], missing: "" },
+      keytype: {
+        type: ["rsa"],
+        missing: "",
+      },
     },
   });
-  _({
+  define({
     tag: "li",
     name: "HTMLLIElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { value: { type: "long", default: 0 }, type: String },
+    attributes: {
+      value: {
+        type: "long",
+        default: 0,
+      },
+      type: String,
+    },
   });
-  _({
+  define({
     tag: "label",
     name: "HTMLLabelElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
-    props: Me,
-    attributes: { htmlFor: { name: "for", type: String } },
+    props: formAssociatedProps,
+    attributes: {
+      htmlFor: {
+        name: "for",
+        type: String,
+      },
+    },
   });
-  _({
+  define({
     tag: "legend",
     name: "HTMLLegendElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { align: String },
+    attributes: {
+      align: String,
+    },
   });
-  _({
+  define({
     tag: "link",
     name: "HTMLLinkElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
       href: te,
@@ -694,10 +867,10 @@ var la = x(function (Nx) {
       media: String,
       hreflang: String,
       type: String,
-      crossOrigin: ua,
+      crossOrigin: CORS,
       nonce: String,
       integrity: String,
-      referrerPolicy: Pt,
+      referrerPolicy: REFERRER,
       imageSizes: String,
       imageSrcset: String,
       charset: String,
@@ -705,71 +878,80 @@ var la = x(function (Nx) {
       target: String,
     },
   });
-  _({
+  define({
     tag: "map",
     name: "HTMLMapElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
-    },
-    attributes: { name: String },
-  });
-  _({
-    tag: "menu",
-    name: "HTMLMenuElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      type: { type: ["context", "popup", "toolbar"], missing: "toolbar" },
+      name: String,
+    },
+  });
+  define({
+    tag: "menu",
+    name: "HTMLMenuElement",
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
+    },
+    attributes: {
+      type: {
+        type: ["context", "popup", "toolbar"],
+        missing: "toolbar",
+      },
       label: String,
       compact: Boolean,
     },
   });
-  _({
+  define({
     tag: "meta",
     name: "HTMLMetaElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
       name: String,
       content: String,
-      httpEquiv: { name: "http-equiv", type: String },
+      httpEquiv: {
+        name: "http-equiv",
+        type: String,
+      },
       scheme: String,
     },
   });
-  _({
+  define({
     tag: "meter",
     name: "HTMLMeterElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
-    props: Me,
+    props: formAssociatedProps,
   });
-  _({
+  define({
     tags: ["ins", "del"],
     name: "HTMLModElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { cite: te, dateTime: String },
+    attributes: {
+      cite: te,
+      dateTime: String,
+    },
   });
-  _({
+  define({
     tag: "ol",
     name: "HTMLOListElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
       _numitems: {
         get: function () {
-          var e = 0;
-          return (
-            this.childNodes.forEach(function (childNode) {
-              if (childNode.nodeType === Gn.ELEMENT_NODE && childNode.tagName === "LI") e++;
-            }),
-            e
-          );
+          var items = 0;
+          this.childNodes.forEach(function (n) {
+            if (n.nodeType === Node.ELEMENT_NODE && n.tagName === "LI") items++;
+          });
+          return items;
         },
       },
     },
@@ -786,13 +968,13 @@ var la = x(function (Nx) {
       compact: Boolean,
     },
   });
-  _({
+  define({
     tag: "object",
     name: "HTMLObjectElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
-    props: Me,
+    props: formAssociatedProps,
     attributes: {
       data: te,
       type: String,
@@ -805,35 +987,47 @@ var la = x(function (Nx) {
       archive: String,
       code: String,
       declare: Boolean,
-      hspace: { type: "unsigned long", default: 0 },
+      hspace: {
+        type: "unsigned long",
+        default: 0,
+      },
       standby: String,
-      vspace: { type: "unsigned long", default: 0 },
+      vspace: {
+        type: "unsigned long",
+        default: 0,
+      },
       codeBase: te,
       codeType: String,
-      border: { type: String, treatNullAsEmptyString: !0 },
+      border: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
     },
   });
-  _({
+  define({
     tag: "optgroup",
     name: "HTMLOptGroupElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { disabled: Boolean, label: String },
+    attributes: {
+      disabled: Boolean,
+      label: String,
+    },
   });
-  _({
+  define({
     tag: "option",
     name: "HTMLOptionElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
       form: {
         get: function () {
-          var parentNode = this.parentNode;
-          while (parentNode && parentNode.nodeType === Gn.ELEMENT_NODE) {
-            if (parentNode.localName === "select") return parentNode.form;
-            parentNode = parentNode.parentNode;
+          var p = this.parentNode;
+          while (p && p.nodeType === Node.ELEMENT_NODE) {
+            if (p.localName === "select") return p.form;
+            p = p.parentNode;
           }
         },
       },
@@ -841,90 +1035,120 @@ var la = x(function (Nx) {
         get: function () {
           return this._getattr("value") || this.text;
         },
-        set: function (e) {
-          this._setattr("value", e);
+        set: function (v) {
+          this._setattr("value", v);
         },
       },
       text: {
         get: function () {
           return this.textContent.replace(/[ \t\n\f\r]+/g, " ").trim();
         },
-        set: function (e) {
-          this.textContent = e;
+        set: function (v) {
+          this.textContent = v;
         },
       },
     },
-    attributes: { disabled: Boolean, defaultSelected: { name: "selected", type: Boolean }, label: String },
+    attributes: {
+      disabled: Boolean,
+      defaultSelected: {
+        name: "selected",
+        type: Boolean,
+      },
+      label: String,
+    },
   });
-  _({
+  define({
     tag: "output",
     name: "HTMLOutputElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
-    props: Me,
-    attributes: { name: String },
+    props: formAssociatedProps,
+    attributes: {
+      name: String,
+    },
   });
-  _({
+  define({
     tag: "p",
     name: "HTMLParagraphElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { align: String },
+    attributes: {
+      align: String,
+    },
   });
-  _({
+  define({
     tag: "param",
     name: "HTMLParamElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { name: String, value: String, type: String, valueType: String },
+    attributes: {
+      name: String,
+      value: String,
+      type: String,
+      valueType: String,
+    },
   });
-  _({
+  define({
     tags: ["pre", "listing", "xmp"],
     name: "HTMLPreElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { width: { type: "long", default: 0 } },
+    attributes: {
+      width: {
+        type: "long",
+        default: 0,
+      },
+    },
   });
-  _({
+  define({
     tag: "progress",
     name: "HTMLProgressElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
-    props: Me,
-    attributes: { max: { type: Number, float: !0, default: 1, min: 0 } },
+    props: formAssociatedProps,
+    attributes: {
+      max: {
+        type: Number,
+        float: true,
+        default: 1,
+        min: 0,
+      },
+    },
   });
-  _({
+  define({
     tags: ["q", "blockquote"],
     name: "HTMLQuoteElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { cite: te },
+    attributes: {
+      cite: te,
+    },
   });
-  _({
+  define({
     tag: "script",
     name: "HTMLScriptElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
       text: {
         get: function () {
-          var e = "";
-          for (var t = 0, r = this.childNodes.length; t < r; t++) {
-            var a = this.childNodes[t];
-            if (a.nodeType === Gn.TEXT_NODE) e += a._data;
+          var s = "";
+          for (var i = 0, n = this.childNodes.length; i < n; i++) {
+            var child = this.childNodes[i];
+            if (child.nodeType === Node.TEXT_NODE) s += child._data;
           }
-          return e;
+          return s;
         },
-        set: function (e) {
-          if ((this.removeChildren(), e !== null && e !== ""))
-            this.appendChild(this.ownerDocument.createTextNode(e));
+        set: function (value) {
+          this.removeChildren();
+          if (value !== null && value !== "") this.appendChild(this.ownerDocument.createTextNode(value));
         },
       },
     },
@@ -932,23 +1156,23 @@ var la = x(function (Nx) {
       src: te,
       type: String,
       charset: String,
-      referrerPolicy: Pt,
+      referrerPolicy: REFERRER,
       defer: Boolean,
       async: Boolean,
       nomodule: Boolean,
-      crossOrigin: ua,
+      crossOrigin: CORS,
       nonce: String,
       integrity: String,
     },
   });
-  _({
+  define({
     tag: "select",
     name: "HTMLSelectElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
     props: {
-      form: Me.form,
+      form: formAssociatedProps.form,
       options: {
         get: function () {
           return this.getElementsByTagName("option");
@@ -962,73 +1186,110 @@ var la = x(function (Nx) {
       autofocus: Boolean,
       multiple: Boolean,
       required: Boolean,
-      size: { type: "unsigned long", default: 0 },
+      size: {
+        type: "unsigned long",
+        default: 0,
+      },
     },
   });
-  _({
+  define({
     tag: "span",
     name: "HTMLSpanElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
   });
-  _({
+  define({
     tag: "style",
     name: "HTMLStyleElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
-    },
-    attributes: { media: String, type: String, scoped: Boolean },
-  });
-  _({
-    tag: "caption",
-    name: "HTMLTableCaptionElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
-    },
-    attributes: { align: String },
-  });
-  _({
-    name: "HTMLTableCellElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      colSpan: { type: "unsigned long", default: 1 },
-      rowSpan: { type: "unsigned long", default: 1 },
-      scope: { type: ["row", "col", "rowgroup", "colgroup"], missing: "" },
+      media: String,
+      type: String,
+      scoped: Boolean,
+    },
+  });
+  define({
+    tag: "caption",
+    name: "HTMLTableCaptionElement",
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
+    },
+    attributes: {
+      align: String,
+    },
+  });
+  define({
+    name: "HTMLTableCellElement",
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
+    },
+    attributes: {
+      colSpan: {
+        type: "unsigned long",
+        default: 1,
+      },
+      rowSpan: {
+        type: "unsigned long",
+        default: 1,
+      },
+      scope: {
+        type: ["row", "col", "rowgroup", "colgroup"],
+        missing: "",
+      },
       abbr: String,
       align: String,
       axis: String,
       height: String,
       width: String,
-      ch: { name: "char", type: String },
-      chOff: { name: "charoff", type: String },
+      ch: {
+        name: "char",
+        type: String,
+      },
+      chOff: {
+        name: "charoff",
+        type: String,
+      },
       noWrap: Boolean,
       vAlign: String,
-      bgColor: { type: String, treatNullAsEmptyString: !0 },
+      bgColor: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
     },
   });
-  _({
+  define({
     tags: ["col", "colgroup"],
     name: "HTMLTableColElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      span: { type: "limited unsigned long with fallback", default: 1, min: 1 },
+      span: {
+        type: "limited unsigned long with fallback",
+        default: 1,
+        min: 1,
+      },
       align: String,
-      ch: { name: "char", type: String },
-      chOff: { name: "charoff", type: String },
+      ch: {
+        name: "char",
+        type: String,
+      },
+      chOff: {
+        name: "charoff",
+        type: String,
+      },
       vAlign: String,
       width: String,
     },
   });
-  _({
+  define({
     tag: "table",
     name: "HTMLTableElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
       rows: {
@@ -1044,16 +1305,26 @@ var la = x(function (Nx) {
       rules: String,
       summary: String,
       width: String,
-      bgColor: { type: String, treatNullAsEmptyString: !0 },
-      cellPadding: { type: String, treatNullAsEmptyString: !0 },
-      cellSpacing: { type: String, treatNullAsEmptyString: !0 },
+      bgColor: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
+      cellPadding: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
+      cellSpacing: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
     },
   });
-  _({
+  define({
     tag: "template",
     name: "HTMLTemplateElement",
-    ctor: function (t, r, a) {
-      (y.call(this, t, r, a), (this._contentFragment = t._templateDoc.createDocumentFragment()));
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
+      this._contentFragment = doc._templateDoc.createDocumentFragment();
     },
     props: {
       content: {
@@ -1068,11 +1339,11 @@ var la = x(function (Nx) {
       },
     },
   });
-  _({
+  define({
     tag: "tr",
     name: "HTMLTableRowElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
       cells: {
@@ -1083,17 +1354,26 @@ var la = x(function (Nx) {
     },
     attributes: {
       align: String,
-      ch: { name: "char", type: String },
-      chOff: { name: "charoff", type: String },
+      ch: {
+        name: "char",
+        type: String,
+      },
+      chOff: {
+        name: "charoff",
+        type: String,
+      },
       vAlign: String,
-      bgColor: { type: String, treatNullAsEmptyString: !0 },
+      bgColor: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
     },
   });
-  _({
+  define({
     tags: ["thead", "tfoot", "tbody"],
     name: "HTMLTableSectionElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
       rows: {
@@ -1104,19 +1384,25 @@ var la = x(function (Nx) {
     },
     attributes: {
       align: String,
-      ch: { name: "char", type: String },
-      chOff: { name: "charoff", type: String },
+      ch: {
+        name: "char",
+        type: String,
+      },
+      chOff: {
+        name: "charoff",
+        type: String,
+      },
       vAlign: String,
     },
   });
-  _({
+  define({
     tag: "textarea",
     name: "HTMLTextAreaElement",
-    ctor: function (t, r, a) {
-      Le.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLFormElement.call(this, doc, localName, prefix);
     },
     props: {
-      form: Me.form,
+      form: formAssociatedProps.form,
       type: {
         get: function () {
           return "textarea";
@@ -1126,16 +1412,16 @@ var la = x(function (Nx) {
         get: function () {
           return this.textContent;
         },
-        set: function (e) {
-          this.textContent = e;
+        set: function (v) {
+          this.textContent = v;
         },
       },
       value: {
         get: function () {
           return this.defaultValue;
         },
-        set: function (e) {
-          this.defaultValue = e;
+        set: function (v) {
+          this.defaultValue = v;
         },
       },
       textLength: {
@@ -1154,10 +1440,26 @@ var la = x(function (Nx) {
       dirName: String,
       required: Boolean,
       readOnly: Boolean,
-      rows: { type: "limited unsigned long with fallback", default: 2 },
-      cols: { type: "limited unsigned long with fallback", default: 20 },
-      maxLength: { type: "unsigned long", min: 0, setmin: 0, default: -1 },
-      minLength: { type: "unsigned long", min: 0, setmin: 0, default: -1 },
+      rows: {
+        type: "limited unsigned long with fallback",
+        default: 2,
+      },
+      cols: {
+        type: "limited unsigned long with fallback",
+        default: 20,
+      },
+      maxLength: {
+        type: "unsigned long",
+        min: 0,
+        setmin: 0,
+        default: -1,
+      },
+      minLength: {
+        type: "unsigned long",
+        min: 0,
+        setmin: 0,
+        default: -1,
+      },
       inputMode: {
         type: [
           "verbatim",
@@ -1177,19 +1479,22 @@ var la = x(function (Nx) {
       },
     },
   });
-  _({
+  define({
     tag: "time",
     name: "HTMLTimeElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { dateTime: String, pubDate: Boolean },
+    attributes: {
+      dateTime: String,
+      pubDate: Boolean,
+    },
   });
-  _({
+  define({
     tag: "title",
     name: "HTMLTitleElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
       text: {
@@ -1199,136 +1504,196 @@ var la = x(function (Nx) {
       },
     },
   });
-  _({
+  define({
     tag: "ul",
     name: "HTMLUListElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { type: String, compact: Boolean },
+    attributes: {
+      type: String,
+      compact: Boolean,
+    },
   });
-  _({
+  define({
     name: "HTMLMediaElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
       src: te,
-      crossOrigin: ua,
-      preload: { type: ["metadata", "none", "auto", { value: "", alias: "auto" }], missing: "auto" },
+      crossOrigin: CORS,
+      preload: {
+        type: [
+          "metadata",
+          "none",
+          "auto",
+          {
+            value: "",
+            alias: "auto",
+          },
+        ],
+        missing: "auto",
+      },
       loop: Boolean,
       autoplay: Boolean,
       mediaGroup: String,
       controls: Boolean,
-      defaultMuted: { name: "muted", type: Boolean },
+      defaultMuted: {
+        name: "muted",
+        type: Boolean,
+      },
     },
   });
-  _({
+  define({
     name: "HTMLAudioElement",
     tag: "audio",
-    superclass: Xe.HTMLMediaElement,
-    ctor: function (t, r, a) {
-      Xe.HTMLMediaElement.call(this, t, r, a);
+    superclass: htmlElements.HTMLMediaElement,
+    ctor: function (doc, localName, prefix) {
+      htmlElements.HTMLMediaElement.call(this, doc, localName, prefix);
     },
   });
-  _({
+  define({
     name: "HTMLVideoElement",
     tag: "video",
-    superclass: Xe.HTMLMediaElement,
-    ctor: function (t, r, a) {
-      Xe.HTMLMediaElement.call(this, t, r, a);
+    superclass: htmlElements.HTMLMediaElement,
+    ctor: function (doc, localName, prefix) {
+      htmlElements.HTMLMediaElement.call(this, doc, localName, prefix);
     },
     attributes: {
       poster: te,
-      width: { type: "unsigned long", min: 0, default: 0 },
-      height: { type: "unsigned long", min: 0, default: 0 },
+      width: {
+        type: "unsigned long",
+        min: 0,
+        default: 0,
+      },
+      height: {
+        type: "unsigned long",
+        min: 0,
+        default: 0,
+      },
     },
   });
-  _({
+  define({
     tag: "td",
     name: "HTMLTableDataCellElement",
-    superclass: Xe.HTMLTableCellElement,
-    ctor: function (t, r, a) {
-      Xe.HTMLTableCellElement.call(this, t, r, a);
+    superclass: htmlElements.HTMLTableCellElement,
+    ctor: function (doc, localName, prefix) {
+      htmlElements.HTMLTableCellElement.call(this, doc, localName, prefix);
     },
   });
-  _({
+  define({
     tag: "th",
     name: "HTMLTableHeaderCellElement",
-    superclass: Xe.HTMLTableCellElement,
-    ctor: function (t, r, a) {
-      Xe.HTMLTableCellElement.call(this, t, r, a);
+    superclass: htmlElements.HTMLTableCellElement,
+    ctor: function (doc, localName, prefix) {
+      htmlElements.HTMLTableCellElement.call(this, doc, localName, prefix);
     },
   });
-  _({
+  define({
     tag: "frameset",
     name: "HTMLFrameSetElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
   });
-  _({
+  define({
     tag: "frame",
     name: "HTMLFrameElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
   });
-  _({
+  define({
     tag: "canvas",
     name: "HTMLCanvasElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
-      getContext: { value: Te.nyi },
-      probablySupportsContext: { value: Te.nyi },
-      setContext: { value: Te.nyi },
-      transferControlToProxy: { value: Te.nyi },
-      toDataURL: { value: Te.nyi },
-      toBlob: { value: Te.nyi },
+      getContext: {
+        value: utils.nyi,
+      },
+      probablySupportsContext: {
+        value: utils.nyi,
+      },
+      setContext: {
+        value: utils.nyi,
+      },
+      transferControlToProxy: {
+        value: utils.nyi,
+      },
+      toDataURL: {
+        value: utils.nyi,
+      },
+      toBlob: {
+        value: utils.nyi,
+      },
     },
     attributes: {
-      width: { type: "unsigned long", default: 300 },
-      height: { type: "unsigned long", default: 150 },
+      width: {
+        type: "unsigned long",
+        default: 300,
+      },
+      height: {
+        type: "unsigned long",
+        default: 150,
+      },
     },
   });
-  _({
+  define({
     tag: "dialog",
     name: "HTMLDialogElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    props: { show: { value: Te.nyi }, showModal: { value: Te.nyi }, close: { value: Te.nyi } },
-    attributes: { open: Boolean, returnValue: String },
+    props: {
+      show: {
+        value: utils.nyi,
+      },
+      showModal: {
+        value: utils.nyi,
+      },
+      close: {
+        value: utils.nyi,
+      },
+    },
+    attributes: {
+      open: Boolean,
+      returnValue: String,
+    },
   });
-  _({
+  define({
     tag: "menuitem",
     name: "HTMLMenuItemElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     props: {
       _label: {
         get: function () {
-          var _getattr = this._getattr("label");
-          if (_getattr !== null && _getattr !== "") return _getattr;
-          return ((_getattr = this.textContent), _getattr.replace(/[ \t\n\f\r]+/g, " ").trim());
+          var val = this._getattr("label");
+          if (val !== null && val !== "") return val;
+          val = this.textContent;
+          return val.replace(/[ \t\n\f\r]+/g, " ").trim();
         },
       },
       label: {
         get: function () {
-          var _getattr = this._getattr("label");
-          if (_getattr !== null) return _getattr;
+          var val = this._getattr("label");
+          if (val !== null) return val;
           return this._label;
         },
-        set: function (e) {
-          this._setattr("label", e);
+        set: function (v) {
+          this._setattr("label", v);
         },
       },
     },
     attributes: {
-      type: { type: ["command", "checkbox", "radio"], missing: "command" },
+      type: {
+        type: ["command", "checkbox", "radio"],
+        missing: "command",
+      },
       icon: te,
       disabled: Boolean,
       checked: Boolean,
@@ -1336,11 +1701,11 @@ var la = x(function (Nx) {
       default: Boolean,
     },
   });
-  _({
+  define({
     tag: "source",
     name: "HTMLSourceElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
       srcset: String,
@@ -1352,11 +1717,11 @@ var la = x(function (Nx) {
       height: String,
     },
   });
-  _({
+  define({
     tag: "track",
     name: "HTMLTrackElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
       src: te,
@@ -1390,31 +1755,44 @@ var la = x(function (Nx) {
           return 3;
         },
       },
-      readyState: { get: Te.nyi },
-      track: { get: Te.nyi },
+      readyState: {
+        get: utils.nyi,
+      },
+      track: {
+        get: utils.nyi,
+      },
     },
   });
-  _({
+  define({
     tag: "font",
     name: "HTMLFontElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      color: { type: String, treatNullAsEmptyString: !0 },
-      face: { type: String },
-      size: { type: String },
+      color: {
+        type: String,
+        treatNullAsEmptyString: true,
+      },
+      face: {
+        type: String,
+      },
+      size: {
+        type: String,
+      },
     },
   });
-  _({
+  define({
     tag: "dir",
     name: "HTMLDirectoryElement",
-    ctor: function (t, r, a) {
-      y.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      HTMLElement.call(this, doc, localName, prefix);
     },
-    attributes: { compact: Boolean },
+    attributes: {
+      compact: Boolean,
+    },
   });
-  _({
+  define({
     tags: [
       "abbr",
       "address",
@@ -1470,5 +1848,4 @@ var la = x(function (Nx) {
     ],
   });
 });
-
-export { la };
+export { require_htmlelts };

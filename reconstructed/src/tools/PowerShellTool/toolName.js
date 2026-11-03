@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-bwbq4xvm.js:775269-775289 fingerprint = POWERSHELL_TOOL_NAME (1)
 /**
  * PowerShell 工具名常量 "PowerShell"。
  */
-//@ chunk-bwbq4xvm.js:775269-775289 fingerprint = POWERSHELL_TOOL_NAME (1)
 var POWERSHELL_TOOL_NAME = "PowerShell";
-
 export { POWERSHELL_TOOL_NAME };

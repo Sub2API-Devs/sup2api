@@ -6,64 +6,75 @@
  * attribution: esm-fingerprint 4
  */
 import { Transform } from "stream";
-import { gE } from "./request-filter.js";
-import { At } from "../utils/debug.js";
+import { BODYLESS_METHODS } from "./request-filter.js";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
 //@ chunk-fq0cr76a.js:664164-664239 esm-fingerprint
-function N5(e) {
-  return e.every((n) => n.sentinel.length === n.realValue.length);
+function allLengthMatched(pairs) {
+  return pairs.every((p) => p.sentinel.length === p.realValue.length);
 }
 //@ chunk-fq0cr76a.js:664239-664775 esm-fingerprint
-function Lm(e, n, r, s) {
-  if (e === void 0) return;
-  let h = n.headers["content-length"] !== void 0 || n.headers["transfer-encoding"] !== void 0;
-  if (gE.has(n.method ?? "GET") && !h) return;
-  let y = e(s);
-  if (!y?.length) return;
-  if (n.headers["content-encoding"] !== void 0) {
-    At(
-      `[body-substitution] ${s}: request body has Content-Encoding "${String(n.headers["content-encoding"])}"; masked-credential ` +
+function prepareBodySubstitution(getBodySubstitutions, req, fwdHeaders, destHost) {
+  if (getBodySubstitutions === undefined) return;
+  let declaresBody =
+    req.headers["content-length"] !== undefined || req.headers["transfer-encoding"] !== undefined;
+  if (BODYLESS_METHODS.has(req.method ?? "GET") && !declaresBody) return;
+  let pairs = getBodySubstitutions(destHost);
+  if (!pairs?.length) return;
+  if (req.headers["content-encoding"] !== undefined) {
+    logForDebugging_2(
+      `[body-substitution] ${destHost}: request body has Content-Encoding "${String(req.headers["content-encoding"])}"; masked-credential ` +
         "substitution skipped \u2014 a sentinel in this body reaches the " +
         "upstream as the fake value",
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
     return;
   }
-  if (!N5(y)) delete r["content-length"];
-  return k5(y);
+  if (!allLengthMatched(pairs)) delete fwdHeaders["content-length"];
+  return createBodySubstitutionTransform(pairs);
 }
 //@ chunk-fq0cr76a.js:664775-665031 esm-fingerprint
-function k5(e) {
-  let max = Math.max(...e.map((s) => s.sentinel.length)),
-    r;
+function createBodySubstitutionTransform(pairs) {
+  let maxLen = Math.max(...pairs.map((p) => p.sentinel.length));
+  let carry;
   return new Transform({
-    transform(s, h, y) {
-      let b = Buffer.isBuffer(s) ? s : Buffer.from(s, h),
-        S = r?.length ? Buffer.concat([r, b]) : b,
-        { out: out, tail: tail } = D5(S, e, max);
-      ((r = tail), y(null, out));
+    transform(chunk, encoding, callback) {
+      let buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
+      let work = carry?.length ? Buffer.concat([carry, buf]) : buf;
+      let { out, tail } = substitute(work, pairs, maxLen);
+      carry = tail;
+      callback(null, out);
     },
-    flush(s) {
-      s(null, r?.length ? r : void 0);
+    flush(callback) {
+      callback(null, carry?.length ? carry : undefined);
     },
   });
 }
 //@ chunk-fq0cr76a.js:665031-665358 esm-fingerprint
-function D5(e, n, r) {
-  let s = [],
-    h = 0;
+function substitute(work, pairs, maxLen) {
+  let parts = [];
+  let pos = 0;
   for (;;) {
-    let b = -1,
-      S;
-    for (let w of n) {
-      let index = e.indexOf(w.sentinel, h);
-      if (index !== -1 && (b === -1 || index < b)) ((b = index), (S = w));
+    let matchIdx = -1;
+    let matchPair;
+    for (let p of pairs) {
+      let i = work.indexOf(p.sentinel, pos);
+      if (i !== -1 && (matchIdx === -1 || i < matchIdx)) {
+        matchIdx = i;
+        matchPair = p;
+      }
     }
-    if (S === void 0) break;
-    (s.push(e.subarray(h, b), S.realValue), (h = b + S.sentinel.length));
+    if (matchPair === undefined) break;
+    parts.push(work.subarray(pos, matchIdx), matchPair.realValue);
+    pos = matchIdx + matchPair.sentinel.length;
   }
-  let max = Math.max(h, e.length - (r - 1));
-  return (s.push(e.subarray(h, max)), { out: Buffer.concat(s), tail: Buffer.from(e.subarray(max)) });
+  let tailStart = Math.max(pos, work.length - (maxLen - 1));
+  parts.push(work.subarray(pos, tailStart));
+  return {
+    out: Buffer.concat(parts),
+    tail: Buffer.from(work.subarray(tailStart)),
+  };
 }
-
-export { Lm };
+export { prepareBodySubstitution };

@@ -8,13 +8,16 @@
  * pieces: chunk-p2qwpk2k.js (3)
  * attribution: fingerprint 3
  */
-import { r, e } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../../ink/components/Text.js";
 import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
 import { PermissionRuleDescription } from "./PermissionRuleDescription.js";
 import { getRelativeSettingsFilePathForSource } from "../../../utils/settings/settings.js";
 import { w } from "../../../../vendor/react/compiler-runtime.js";
-import { Me } from "../../design-system/ThemeProvider.js";
+import { useTheme_2 } from "../../design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { SOURCES } from "../../../utils/settings/constants.js";
 import {
@@ -29,17 +32,22 @@ import { ModelSelector } from "../../agents/ModelSelector.js";
 import { Dialog } from "../../design-system/Dialog.js";
 
 //@ chunk-p2qwpk2k.js:22240-22363 fingerprint = _temp (1)
-function renderRuleListItem(ruleValue_0) {
-  return r(
+function renderRuleListItem(ruleValue) {
+  return jsxProd_default_2(
     Box,
     {
       flexDirection: "column",
       children: [
-        e(Text, { bold: !0, children: formatPermissionRule(ruleValue_0) }),
-        e(PermissionRuleDescription, { ruleValue: ruleValue_0 }),
+        jsxProd_default(Text, {
+          bold: true,
+          children: formatPermissionRule(ruleValue),
+        }),
+        jsxProd_default(PermissionRuleDescription, {
+          ruleValue,
+        }),
       ],
     },
-    formatPermissionRule(ruleValue_0),
+    formatPermissionRule(ruleValue),
   );
 }
 //@ chunk-p2qwpk2k.js:22363-22727 fingerprint = optionForPermissionSaveDestination (1)
@@ -66,22 +74,17 @@ function optionForPermissionSaveDestination(saveDestination) {
   }
 }
 //@ chunk-p2qwpk2k.js:22727-24428 fingerprint = AddPermissionRules (0.948)
-function AddPermissionRules(t0) {
-  let $ = w(27),
-    {
-      onAddRules: onAddRules,
-      onCancel: onCancel,
-      ruleValues: ruleValues,
-      ruleBehavior: ruleBehavior,
-      initialContext: initialContext,
-      setToolPermissionContext: setToolPermissionContext,
-    } = t0,
-    { storageV5: storageV5 } = Me(),
-    c;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((c = SOURCES.map(optionForPermissionSaveDestination)), ($[0] = c));
-  else c = $[0];
-  let M = c,
-    b;
+function AddPermissionRules(props) {
+  let $ = w(27);
+  let { onAddRules, onCancel, ruleValues, ruleBehavior, initialContext, setToolPermissionContext } = props;
+  let { storageV5 } = useTheme_2();
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = SOURCES.map(optionForPermissionSaveDestination);
+    $[0] = t1;
+  } else t1 = $[0];
+  let allOptions = t1;
+  let t2;
   if (
     $[1] !== initialContext ||
     $[2] !== onAddRules ||
@@ -90,33 +93,38 @@ function AddPermissionRules(t0) {
     $[5] !== ruleValues ||
     $[6] !== setToolPermissionContext ||
     $[7] !== storageV5
-  )
-    ((b = (selectedValue) => {
+  ) {
+    t2 = (selectedValue) => {
       if (selectedValue === "cancel") {
         onCancel();
         return;
       } else if (SOURCES.includes(selectedValue)) {
-        let E = selectedValue;
+        let destination = selectedValue;
         let updatedContext = applyValidatedPermissionUpdate(initialContext, {
           type: "addRules",
           rules: ruleValues,
           behavior: ruleBehavior,
-          destination: E,
+          destination,
         });
-        (persistValidatedPermissionUpdate(
-          { type: "addRules", rules: ruleValues, behavior: ruleBehavior, destination: E },
+        persistValidatedPermissionUpdate(
+          {
+            type: "addRules",
+            rules: ruleValues,
+            behavior: ruleBehavior,
+            destination,
+          },
           storageV5,
-        ).catch(logError),
-          setToolPermissionContext(updatedContext));
+        ).catch(logError);
+        setToolPermissionContext(updatedContext);
         let rules = ruleValues.map((ruleValue) => ({
-          ruleValue: ruleValue,
-          ruleBehavior: ruleBehavior,
-          source: E,
+          ruleValue,
+          ruleBehavior,
+          source: destination,
         }));
         let sandboxAutoAllowEnabled =
           SandboxManager.isSandboxingEnabled() && SandboxManager.isAutoAllowBashIfSandboxedEnabled();
         let newUnreachable = detectUnreachableRules(updatedContext, {
-          sandboxAutoAllowEnabled: sandboxAutoAllowEnabled,
+          sandboxAutoAllowEnabled,
         }).filter((B) =>
           ruleValues.some(
             (rv) =>
@@ -125,54 +133,84 @@ function AddPermissionRules(t0) {
         );
         onAddRules(rules, newUnreachable);
       }
-    }),
-      ($[1] = initialContext),
-      ($[2] = onAddRules),
-      ($[3] = onCancel),
-      ($[4] = ruleBehavior),
-      ($[5] = ruleValues),
-      ($[6] = setToolPermissionContext),
-      ($[7] = storageV5),
-      ($[8] = b));
-  else b = $[8];
-  let Re = b,
-    le;
-  if ($[9] !== ruleValues.length)
-    ((le = plural(ruleValues.length, "rule")), ($[9] = ruleValues.length), ($[10] = le));
-  else le = $[10];
-  let title = `Add ${ruleBehavior} permission ${le}`,
-    K;
-  if ($[11] !== ruleValues) ((K = ruleValues.map(renderRuleListItem)), ($[11] = ruleValues), ($[12] = K));
-  else K = $[12];
+    };
+    $[1] = initialContext;
+    $[2] = onAddRules;
+    $[3] = onCancel;
+    $[4] = ruleBehavior;
+    $[5] = ruleValues;
+    $[6] = setToolPermissionContext;
+    $[7] = storageV5;
+    $[8] = t2;
+  } else t2 = $[8];
+  let onSelect = t2;
+  let t3;
+  if ($[9] !== ruleValues.length) {
+    t3 = plural(ruleValues.length, "rule");
+    $[9] = ruleValues.length;
+    $[10] = t3;
+  } else t3 = $[10];
+  let title = `Add ${ruleBehavior} permission ${t3}`;
+  let children;
+  if ($[11] !== ruleValues) {
+    children = ruleValues.map(renderRuleListItem);
+    $[11] = ruleValues;
+    $[12] = children;
+  } else children = $[12];
   let ye;
-  if ($[13] !== K)
-    ((ye = e(Box, { flexDirection: "column", paddingX: 2, children: K })), ($[13] = K), ($[14] = ye));
-  else ye = $[14];
-  const t6 =
+  if ($[13] !== children) {
+    ye = jsxProd_default(Box, {
+      flexDirection: "column",
+      paddingX: 2,
+      children,
+    });
+    $[13] = children;
+    $[14] = ye;
+  } else ye = $[14];
+  const children_2 =
     ruleValues.length === 1 ? "Where should this rule be saved?" : "Where should these rules be saved?";
-  let ee;
-  if ($[15] !== t6) ((ee = e(Text, { children: t6 })), ($[15] = t6), ($[16] = ee));
-  else ee = $[16];
-  let ce;
-  if ($[17] !== Re) ((ce = e(ModelSelector, { options: M, onChange: Re })), ($[17] = Re), ($[18] = ce));
-  else ce = $[18];
-  let te;
-  if ($[19] !== ee || $[20] !== ce)
-    ((te = r(Box, { flexDirection: "column", marginY: 1, children: [ee, ce] })),
-      ($[19] = ee),
-      ($[20] = ce),
-      ($[21] = te));
-  else te = $[21];
-  let Se;
-  if ($[22] !== onCancel || $[23] !== ye || $[24] !== te || $[25] !== title)
-    ((Se = r(Dialog, { title: title, onCancel: onCancel, color: "permission", children: [ye, te] })),
-      ($[22] = onCancel),
-      ($[23] = ye),
-      ($[24] = te),
-      ($[25] = title),
-      ($[26] = Se));
-  else Se = $[26];
-  return Se;
+  let t7;
+  if ($[15] !== children_2) {
+    t7 = jsxProd_default(Text, {
+      children: children_2,
+    });
+    $[15] = children_2;
+    $[16] = t7;
+  } else t7 = $[16];
+  let t8;
+  if ($[17] !== onSelect) {
+    t8 = jsxProd_default(ModelSelector, {
+      options: allOptions,
+      onChange: onSelect,
+    });
+    $[17] = onSelect;
+    $[18] = t8;
+  } else t8 = $[18];
+  let t9;
+  if ($[19] !== t7 || $[20] !== t8) {
+    t9 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      marginY: 1,
+      children: [t7, t8],
+    });
+    $[19] = t7;
+    $[20] = t8;
+    $[21] = t9;
+  } else t9 = $[21];
+  let t10;
+  if ($[22] !== onCancel || $[23] !== ye || $[24] !== t9 || $[25] !== title) {
+    t10 = jsxProd_default_2(Dialog, {
+      title,
+      onCancel,
+      color: "permission",
+      children: [ye, t9],
+    });
+    $[22] = onCancel;
+    $[23] = ye;
+    $[24] = t9;
+    $[25] = title;
+    $[26] = t10;
+  } else t10 = $[26];
+  return t10;
 }
-
 export { AddPermissionRules };

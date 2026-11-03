@@ -18,114 +18,143 @@ import {
 import { logError } from "../log.js";
 import { MEMORY } from "../../services/mcp/firstPartyServerIds.js";
 import { hasMcpInboundDoor } from "../../services/mcp/mcpInboundDoor.js";
-import { isPlainObject as isPlainObject_4 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
 
 //@ chunk-e6aww6q8.js:933012-933039 sole-consumer
 var historyWriterRegistry = new HostScoped(() => new HistoryWriterStack());
 //@ chunk-e6aww6q8.js:933039-933078 placement
-function the() {
+function currentHistoryWriter() {
   return historyWriterRegistry.of(getRootSession().host);
 }
 //@ chunk-e6aww6q8.js:933078-933146 placement
-function gFo(e) {
-  if (e === null) {
-    the().reset();
+/**
+ * 设置历史写入器（null 表示重置）。
+ */
+function setHistoryWriter(prevProgressState) {
+  if (prevProgressState === null) {
+    currentHistoryWriter().reset();
     return;
   }
-  the().register(e);
+  currentHistoryWriter().register(prevProgressState);
 }
 //@ chunk-e6aww6q8.js:933146-933182 placement
-function hFo(e) {
-  the().unregister(e);
+/**
+ * 注销某个历史写入器。
+ */
+function clearHistoryWriter(prevProgressState) {
+  currentHistoryWriter().unregister(prevProgressState);
 }
 //@ chunk-e6aww6q8.js:933182-933213 placement
-function F1e(e) {
-  the().write(e);
+/**
+ * 写入一条历史记录。
+ */
+function writeHistoryEntry(e) {
+  currentHistoryWriter().write(e);
 }
 //@ chunk-e6aww6q8.js:934527-934583 placement = isToolReferenceWithName (1)
 function getToolNameField(obj) {
-  return "tool_name" in obj ? obj.tool_name : void 0;
+  return "tool_name" in obj ? obj.tool_name : undefined;
 }
 //@ chunk-e6aww6q8.js:934583-934653 placement
-function j1e(e, n) {
-  let r = createMemoryServerVerifier(() => n);
-  return e.some((s) => isTrustedMemoryTool(s, r, "live"));
+function anyTrustedMemoryTool(e, n) {
+  let memoryServerVerifier = createMemoryServerVerifier(() => n);
+  return e.some((s) => isTrustedMemoryTool(s, memoryServerVerifier, "live"));
 }
 //@ chunk-e6aww6q8.js:934653-934716 placement
-function KBr(e, n) {
+/**
+ * anyTrustedMemoryTool 的安全包装：异常时返回 true。
+ */
+function anyTrustedMemoryToolSafe(e, tools) {
   try {
-    return j1e(e, n);
+    return anyTrustedMemoryTool(e, tools);
   } catch (error) {
-    return (logError(error), !0);
+    logError(error);
+    return true;
   }
 }
 //@ chunk-e6aww6q8.js:934716-934963 placement
 function touchesAccountMemory(e, n) {
-  let r = getToolNameField(e);
-  if (r !== void 0) return j1e([r], n);
+  let toolNameField = getToolNameField(e);
+  if (toolNameField !== undefined) return anyTrustedMemoryTool([toolNameField], n);
   switch (e.hook_event_name) {
     case "PostToolBatch":
-      return j1e(
-        e.tool_calls.map((tool_call) => tool_call.tool_name),
+      return anyTrustedMemoryTool(
+        e.tool_calls.map((toolCall) => toolCall.tool_name),
         n,
       );
     case "Elicitation":
     case "ElicitationResult":
       return e.mcp_server_name === MEMORY;
     default:
-      return !1;
+      return false;
   }
 }
 //@ chunk-e6aww6q8.js:934963-935027 placement
-function W1e(e, n) {
-  return { toolName: getToolNameField(e), accountMemory: touchesAccountMemory(e, n) };
+/**
+ * 生成钩子输入摘要（工具名与是否触碰账户记忆）。
+ */
+function hookInputSummary(hookInput, n) {
+  return {
+    toolName: getToolNameField(hookInput),
+    accountMemory: touchesAccountMemory(hookInput, n),
+  };
 }
 //@ chunk-e6aww6q8.js:935027-935038 placement
-var z1e = 20;
+/**
+ * 钩子输出 metrics 保留的最大键数。
+ */
+var MAX_HOOK_METRIC_KEYS = 20;
+//@ chunk-e6aww6q8.js:935038-935418 placement
 /**
  * 存在 MCP 入站通道时限制 hook 输出，只保留允许的字段。
  */
-//@ chunk-e6aww6q8.js:935038-935418 placement
-function restrictHookOutputForMcpInbound(e) {
-  if (!hasMcpInboundDoor()) return e;
-  let { systemMessage: systemMessage, metrics: metrics, hookSpecificOutput: hookSpecificOutput } = e,
-    { hookEventName: hookEventName, additionalContext: additionalContext } = isPlainObject_4(
-      hookSpecificOutput,
-    )
-      ? hookSpecificOutput
-      : {};
+function restrictHookOutputForMcpInbound(asyncHookOutput) {
+  if (!hasMcpInboundDoor()) return asyncHookOutput;
+  let { systemMessage, metrics, hookSpecificOutput } = asyncHookOutput;
+  let { hookEventName, additionalContext } = isPlainObject_5(hookSpecificOutput) ? hookSpecificOutput : {};
   return {
-    ...(systemMessage !== void 0 && { systemMessage: systemMessage }),
-    ...(metrics !== void 0 && { metrics: Object.fromEntries(Object.entries(metrics).slice(0, z1e)) }),
-    ...(hookSpecificOutput !== void 0 && {
+    ...(systemMessage !== undefined && {
+      systemMessage,
+    }),
+    ...(metrics !== undefined && {
+      metrics: Object.fromEntries(Object.entries(metrics).slice(0, MAX_HOOK_METRIC_KEYS)),
+    }),
+    ...(hookSpecificOutput !== undefined && {
       hookSpecificOutput: {
-        ...(typeof hookEventName === "string" && { hookEventName: hookEventName }),
-        ...(typeof additionalContext === "string" && { additionalContext: additionalContext }),
+        ...(typeof hookEventName === "string" && {
+          hookEventName,
+        }),
+        ...(typeof additionalContext === "string" && {
+          additionalContext,
+        }),
       },
     }),
   };
 }
 //@ chunk-e6aww6q8.js:935418-935570 placement
-function getHookMessageTexts(e) {
-  let { systemMessage: systemMessage, hookSpecificOutput: hookSpecificOutput } = isPlainObject_4(e) ? e : {},
-    { additionalContext: additionalContext } = isPlainObject_4(hookSpecificOutput) ? hookSpecificOutput : {};
+function getHookMessageTexts(response) {
+  let { systemMessage, hookSpecificOutput } = isPlainObject_5(response) ? response : {};
+  let { additionalContext } = isPlainObject_5(hookSpecificOutput) ? hookSpecificOutput : {};
   return [systemMessage, additionalContext].filter((h) => typeof h === "string" && h !== "");
 }
 //@ chunk-e6aww6q8.js:935570-935636 placement
-function hUt(e) {
-  if (!hasMcpInboundDoor()) return e;
-  let { metrics: metrics, ...r } = e;
+/**
+ * 存在 MCP 入站通道时去掉 metrics 字段。
+ */
+function stripMetricsForMcpInbound(response) {
+  if (!hasMcpInboundDoor()) return response;
+  let { metrics, ...r } = response;
   return r;
 }
+//@ chunk-e6aww6q8.js:935636-935764 placement
 /**
  * SDK 钩子事件开关：是否发送全部钩子事件、是否发送 UserPromptSubmit 的开始/结束事件。
  */
-//@ chunk-e6aww6q8.js:935636-935764 placement
 class HookEventEmitState {
-  allHookEventsEnabled = !1;
-  userPromptSubmitStartAndEndEnabled = !1;
-  setAllHookEventsEnabled(e) {
-    this.allHookEventsEnabled = e;
+  allHookEventsEnabled = false;
+  userPromptSubmitStartAndEndEnabled = false;
+  setAllHookEventsEnabled(allHookEventsEnabled) {
+    this.allHookEventsEnabled = allHookEventsEnabled;
   }
 }
 //@ chunk-e6aww6q8.js:935764-935791 placement
@@ -134,17 +163,16 @@ var hookEventEmitStates = new HostScoped(() => new HookEventEmitState());
 function getHookEventEmitState() {
   return hookEventEmitStates.of(getRootSession().host);
 }
-
 export {
   getHookEventEmitState,
-  gFo,
-  hFo,
-  KBr,
+  setHistoryWriter,
+  clearHistoryWriter,
+  anyTrustedMemoryToolSafe,
   restrictHookOutputForMcpInbound,
-  z1e,
+  MAX_HOOK_METRIC_KEYS,
   getToolNameField,
-  W1e,
-  F1e,
-  hUt,
+  hookInputSummary,
+  writeHistoryEntry,
+  stripMetricsForMcpInbound,
   getHookMessageTexts,
 };

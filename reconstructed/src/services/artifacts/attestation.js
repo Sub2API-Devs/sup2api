@@ -16,7 +16,7 @@ function getAttestationKind(e) {
 }
 //@ chunk-jv307fw4.js:20555-20593 placement
 function isAttestedArtifact(e) {
-  return getAttestationKind(e) !== void 0;
+  return getAttestationKind(e) !== undefined;
 }
 //@ chunk-jv307fw4.js:20593-21024 placement
 function describeAttestationKind(e) {
@@ -32,11 +32,16 @@ function describeAttestationKind(e) {
   }
 }
 //@ chunk-jv307fw4.js:21024-21098 placement
-function formatAttestationTag(e) {
-  let n = getAttestationKind(e);
-  return n === void 0 ? "" : ` [attested: ${describeAttestationKind(n)}]`;
+function formatAttestationTag(slug) {
+  let attestationKind = getAttestationKind(slug);
+  return attestationKind === undefined ? "" : ` [attested: ${describeAttestationKind(attestationKind)}]`;
 }
 //@ chunk-jv307fw4.js:21098-21112 placement
-var Ct = 600000;
-
-export { getAttestationKind, formatAttestationTag, describeAttestationKind, Ct, isAttestedArtifact };
+var ATTESTATION_KIND_TTL_MS = 600000;
+export {
+  getAttestationKind,
+  formatAttestationTag,
+  describeAttestationKind,
+  ATTESTATION_KIND_TTL_MS,
+  isAttestedArtifact,
+};

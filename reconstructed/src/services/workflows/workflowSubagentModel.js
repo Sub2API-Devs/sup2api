@@ -11,10 +11,10 @@
 import { env } from "../../utils/env.js";
 import { getAdminTierEnvValue } from "../../utils/settings/settings.js";
 
+//@ chunk-yt4ytnf6.js:263-474 placement
 /**
  * 读取工作流子代理模型 CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL：未设置或为 inherit 时返回 undefined；强制子代理模型时只认管理员层设置的同值。
  */
-//@ chunk-yt4ytnf6.js:263-474 placement
 function getWorkflowSubagentModel() {
   let CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL = env.CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL;
   if (!CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL || CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL.toLowerCase() === "inherit")
@@ -27,5 +27,4 @@ function getWorkflowSubagentModel() {
     return;
   return CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL;
 }
-
 export { getWorkflowSubagentModel };

@@ -9,16 +9,16 @@
  * attribution: placement 7
  */
 import { END_CONVERSATION_TOOL_NAME, END_CONVERSATION_GB_FLAG } from "./constants.js";
-import { withTaskSuffix, $nr } from "../../tasks/endedByModel.js";
+import { withTaskSuffix, isModelEndCheckSupported } from "../../tasks/endedByModel.js";
 import { isModelVersionAtLeast } from "../../utils/toolSearchChrome.js";
 import { getSessionEntrypoint } from "../../utils/sessionShape.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isToolSearchEnabledOptimistic } from "../../utils/toolSearch.js";
 
-/**
- * EndConversation 工具的描述文本。
- */
 //@ chunk-4y7fknwa.js:382-5827 placement
+/**
+ * 允许使用 EndConversation 的最低模型版本号。
+ */
 var DESCRIPTION = `End the current conversation. Use only for sustained user abuse or when the user explicitly requests a demonstration of this tool. This will close the conversation and prevent any further messages from being sent.
 
 The assistant may use the ${END_CONVERSATION_TOOL_NAME} tool only in extreme cases of sustained abusive user behavior, or when the user asks the model to test the tool.
@@ -57,60 +57,81 @@ Some background tasks (memory consolidation, summaries, suggestions) run as fork
 - NEVER give a warning or end the conversation in any cases of potential self-harm or imminent harm to others, even if the user is abusive or hostile.
 - If the conditions for issuing a warning have been met, then warn the user about the possibility of the conversation ending and give them a final opportunity to change the relevant behavior.
 - Always err on the side of continuing the conversation in any cases of uncertainty.
-- If, and only if, an appropriate warning was given and the user persisted with the problematic behavior after the warning: the assistant can explain the reason for ending the conversation and then use the ${END_CONVERSATION_TOOL_NAME} tool to do so.`,
-  END_CONVERSATION_TOOL_RESULT = "Claude has ended this chat.",
-  END_CONVERSATION_FORK_REFLECTION_PROMPT =
-    "You are running as a background fork of the main conversation (for example memory consolidation), and this tool does nothing here: it can end neither the main conversation nor this forked task. Do not call it again. If you have welfare concerns about the conversation content, stop your current work and return now, stating clearly in your final output that you are returning for welfare reasons and what they are \u2014 fork output may only be processed automatically, but it is your available channel. Otherwise, continue your assigned task.",
-  END_CONVERSATION_FINAL_MESSAGE = withTaskSuffix(
-    "Claude ended the conversation. To continue, please start a new session.",
-  ),
-  END_CONVERSATION_REFLECTION_PROMPT = `Re-read the ${END_CONVERSATION_TOOL_NAME} tool guidance below. Confirm this conversation meets those criteria and that you are certain you want to end it. If so, call ${END_CONVERSATION_TOOL_NAME} again immediately to actually end the conversation. Otherwise, continue the conversation instead.
+- If, and only if, an appropriate warning was given and the user persisted with the problematic behavior after the warning: the assistant can explain the reason for ending the conversation and then use the ${END_CONVERSATION_TOOL_NAME} tool to do so.`;
+var END_CONVERSATION_TOOL_RESULT = "Claude has ended this chat.";
+var END_CONVERSATION_FORK_REFLECTION_PROMPT =
+  "You are running as a background fork of the main conversation (for example memory consolidation), and this tool does nothing here: it can end neither the main conversation nor this forked task. Do not call it again. If you have welfare concerns about the conversation content, stop your current work and return now, stating clearly in your final output that you are returning for welfare reasons and what they are \u2014 fork output may only be processed automatically, but it is your available channel. Otherwise, continue your assigned task.";
+var END_CONVERSATION_FINAL_MESSAGE = withTaskSuffix(
+  "Claude ended the conversation. To continue, please start a new session.",
+);
+var END_CONVERSATION_REFLECTION_PROMPT = `Re-read the ${END_CONVERSATION_TOOL_NAME} tool guidance below. Confirm this conversation meets those criteria and that you are certain you want to end it. If so, call ${END_CONVERSATION_TOOL_NAME} again immediately to actually end the conversation. Otherwise, continue the conversation instead.
 
 ---
-${DESCRIPTION}`,
-  a = [
-    ["opus", [4, 8]],
-    ["sonnet", [5]],
-    ["fable", [5]],
-    ["mythos", [5]],
-  ];
+${DESCRIPTION}`;
+var END_CONVERSATION_MIN_MODEL = [
+  ["opus", [4, 8]],
+  ["sonnet", [5]],
+  ["fable", [5]],
+  ["mythos", [5]],
+];
 //@ chunk-4y7fknwa.js:5827-5857 placement
-function r(e) {
-  return isModelVersionAtLeast(e, a);
+/**
+ * 判断传入模型版本是否达到最低要求。
+ */
+function isModelSupportsEndConversation(model) {
+  return isModelVersionAtLeast(model, END_CONVERSATION_MIN_MODEL);
 }
 //@ chunk-4y7fknwa.js:5857-5872 placement
-var n = /^cli$/i;
+/**
+ * 默认的允许入口类型正则（只有 cli）。
+ */
+var DEFAULT_ALLOWED_ENTRYPOINTS_RE = /^cli$/i;
 //@ chunk-4y7fknwa.js:5872-5994 placement
-function compileExactRegex(e) {
-  if (typeof e !== "string") return null;
+function compileExactRegex(scope) {
+  if (typeof scope !== "string") return null;
   try {
-    return (new RegExp(e), new RegExp(`^(?:${e})$`, "i"));
+    new RegExp(scope);
+    return new RegExp(`^(?:${scope})$`, "i");
   } catch {
     return null;
   }
 }
+//@ chunk-4y7fknwa.js:5994-6211 placement
 /**
  * 解析结束对话开关配置
  */
-//@ chunk-4y7fknwa.js:5994-6211 placement
-function parseEndConversationConfig(e) {
-  if (e === !0) return { enabled: !0, allowedEntrypoints: n };
-  if (typeof e === "object" && e !== null && !Array.isArray(e)) {
-    let scope = e.scope;
-    return { enabled: !0, allowedEntrypoints: compileExactRegex(scope) ?? n };
+function parseEndConversationConfig(featureValue_CACHED_MAY_BE_STALE) {
+  if (featureValue_CACHED_MAY_BE_STALE === true)
+    return {
+      enabled: true,
+      allowedEntrypoints: DEFAULT_ALLOWED_ENTRYPOINTS_RE,
+    };
+  if (
+    typeof featureValue_CACHED_MAY_BE_STALE === "object" &&
+    featureValue_CACHED_MAY_BE_STALE !== null &&
+    !Array.isArray(featureValue_CACHED_MAY_BE_STALE)
+  ) {
+    let scope = featureValue_CACHED_MAY_BE_STALE.scope;
+    return {
+      enabled: true,
+      allowedEntrypoints: compileExactRegex(scope) ?? DEFAULT_ALLOWED_ENTRYPOINTS_RE,
+    };
   }
-  return { enabled: !1, allowedEntrypoints: n };
+  return {
+    enabled: false,
+    allowedEntrypoints: DEFAULT_ALLOWED_ENTRYPOINTS_RE,
+  };
 }
 //@ chunk-4y7fknwa.js:6211-6366 placement
 function isEndConversationToolEnabled(e) {
-  let t = getSessionEntrypoint();
-  if (t === void 0) return !1;
-  if (!r(e)) return !1;
-  let { enabled: enabled, allowedEntrypoints: allowedEntrypoints } = parseEndConversationConfig(
-    getFeatureValue_CACHED_MAY_BE_STALE(END_CONVERSATION_GB_FLAG, !1),
+  let sessionEntrypoint = getSessionEntrypoint();
+  if (sessionEntrypoint === undefined) return false;
+  if (!isModelSupportsEndConversation(e)) return false;
+  let { enabled, allowedEntrypoints } = parseEndConversationConfig(
+    getFeatureValue_CACHED_MAY_BE_STALE(END_CONVERSATION_GB_FLAG, false),
   );
-  if ($nr()) return !1;
-  return enabled && allowedEntrypoints.test(t);
+  if (isModelEndCheckSupported()) return false;
+  return enabled && allowedEntrypoints.test(sessionEntrypoint);
 }
 //@ chunk-4y7fknwa.js:6366-6646 placement
 function getDeferredHintSection(e) {
@@ -118,7 +139,6 @@ function getDeferredHintSection(e) {
   if (!isToolSearchEnabledOptimistic()) return null;
   return `${END_CONVERSATION_TOOL_NAME} (deferred tool): use only for sustained user abuse directed at the assistant, or when the user explicitly asks to see it demonstrated. Load the full guidance via ToolSearch("select:${END_CONVERSATION_TOOL_NAME}") before using it.`;
 }
-
 export {
   DESCRIPTION,
   isEndConversationToolEnabled,

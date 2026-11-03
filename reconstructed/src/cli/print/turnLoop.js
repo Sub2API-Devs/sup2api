@@ -8,43 +8,21 @@
  * pieces: chunk-tyg7f3ek.js (47)
  * attribution: placement 47
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-  randomUUID as randomUUID_18,
-  randomUUID as randomUUID_19,
-  randomUUID as randomUUID_20,
-  randomUUID as randomUUID_21,
-} from "crypto";
+import { randomUUID } from "crypto";
 import { getActiveMessageQueue } from "../../query/presenceCheck.js";
 import {
   isOrphanedPermissionCommand,
   shouldYieldRescueTurn,
   maybeYieldToPersonPrompt,
 } from "./commandQueueDrain.js";
-import { jse, im } from "../../utils/messageQueueManager.js";
+import { isRefillableCommand, isActiveMainAgentCommand } from "../../utils/messageQueueManager.js";
 import { isGoalIdleCheckinPaused } from "../../query/goalCheckIn.js";
 import {
-  NAs,
+  isAnalyticsEventName,
   createDependencyWatcher,
   createTranscriptSaver as createTranscriptSaver_2,
 } from "./rewindStandIn.js";
-import { aO } from "../../utils/historyFile.js";
+import { lastTextBlockText } from "../../utils/historyFile.js";
 import { createSignal } from "../../utils/signal.js";
 import { FetchingUserFilesCounter } from "./backgroundWait.js";
 import { createAbortController, userAbortReason } from "../../utils/abortController.js";
@@ -58,8 +36,8 @@ import {
   TurnRefusedError,
 } from "./turnGate.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { j4r } from "../../services/remoteTools/backgroundCommands.js";
-import { sN } from "../../utils/model/modelSwitchHooks.js";
+import { toolStateSlot } from "../../services/remoteTools/backgroundCommands.js";
+import { switchSerializerSlot } from "../../utils/model/modelSwitchHooks.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { discardPollEvent, buildPollEventDelivery, getPollEventEnvelope } from "../../utils/pollEvents.js";
 import { emitLoadError } from "../print.js";
@@ -72,24 +50,27 @@ import {
   logHeadlessProfilerTurn,
   headlessProfilerStartTurn,
 } from "../../utils/headlessProfiler.js";
-import { startQueryProfile, bJn } from "../../utils/queryProfiler.js";
-import { isOrganizationModsLoadPending, hFi } from "../../utils/plugins/hooksModulesRollout.js";
+import { startQueryProfile, finishQueryProfile } from "../../utils/queryProfiler.js";
+import {
+  isOrganizationModsLoadPending,
+  followRolloutWithDeadline,
+} from "../../utils/plugins/hooksModulesRollout.js";
 import { isPolicyUnreadPastItsBounds } from "../../utils/plugins/loadPluginHooks.js";
 import {
-  D4o,
+  hooksModulesGateFromPayload,
   runOrganizationStatusLoadOnce,
-  sYr,
-  L4o,
+  ORGANIZATION_POLICY_UNREADABLE_MESSAGE,
+  ORGANIZATION_MODS_UNLOADED_MESSAGE,
   waitForOrganizationModsOnClaim,
 } from "../../utils/plugins/hooksModulesLoadGate.js";
-import { I_n } from "../../services/analytics/growthbookCredentials.js";
+import { resolveHooksModulesValue } from "../../services/analytics/growthbookCredentials.js";
 import { waitForCloudModsHold } from "../../utils/hooks/hookPolicyHold.js";
 import { rejudgeLoadedMods } from "../../utils/hooks.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { freeze as freeze_2 } from "../../utils/errorRedaction.js";
+import { $Ei } from "../../utils/errorRedaction.js";
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
-import { n0e } from "../../utils/shutdown/pendingWrites.js";
+import { isUntrustedObject } from "../../utils/shutdown/pendingWrites.js";
 import { protoDataString } from "../../utils/gracefulShutdown.js";
 import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
@@ -110,19 +91,24 @@ import { fromEnum, lit, fromEnumOpt } from "../../services/analytics/safeMetadat
 import { isTranscriptPersistenceDisabled } from "../../utils/sessionStorage.js";
 import { sleep } from "../../utils/sleep.js";
 import { bridgeSlashLineBuildsRequest } from "../../bridge/bridgeSlashCommands.js";
-import { Br } from "../../utils/startupTiming.js";
+import { recordPhase } from "../../utils/startupTiming.js";
 import { env } from "../../utils/env.js";
 import { LISTMCPRESOURCESTOOL } from "../../tools/ListMcpResourcesTool/prompt.js";
 import { READMCPRESOURCETOOL } from "../../tools/ReadMcpResourceTool/prompt.js";
 import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../../tools/ReadMcpResourceDirTool/prompt.js";
-import { vS } from "../../utils/remoteEnvironment.js";
-import { ec } from "../../utils/timerDelayClamp.js";
-import { Qai, getConnectionTimeoutMs, Npe, Zai } from "../../services/mcp/client.js";
+import { isBridgeEnvironment } from "../../utils/remoteEnvironment.js";
+import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
+import {
+  REMOTE_CONNECT_TIMEOUT_MS,
+  getConnectionTimeoutMs,
+  TRANSPORT_FALLBACK_TIMEOUT_MS,
+  SHORT_RETRY_MS,
+} from "../../services/mcp/client.js";
 import {
   isToolSearchEnabledOptimistic,
   modelSupportsToolReference,
   isVertexModelWithoutToolSearch,
-  rGt,
+  isToolSearchLockedOffByDefault,
   extractDiscoveredToolNames,
   getToolSearchMode,
 } from "../../utils/toolSearch.js";
@@ -130,7 +116,7 @@ import { getMainLoopModel } from "../../utils/model/model.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
 import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
-import { Udo } from "../../utils/entrypointKinds.js";
+import { REMOTE_ENTRYPOINT_NAMES } from "../../utils/entrypointKinds.js";
 import { isFromBuiltinMarketplace } from "../../utils/plugins/pluginIdentifier.js";
 import { isSortedOtterOn } from "../../services/mcp/mcpGates.js";
 import { coordinatorExtraToolNames, coordinatorMainThreadUsesMcpServer } from "../../utils/toolPool.js";
@@ -140,74 +126,78 @@ import { waitForStoreState } from "../../context/voice.js";
 class QueueHeadWaiter {
   messageQueue;
   stopping;
-  isHeadAhead = !1;
+  isHeadAhead = false;
   queuedAtWait;
   followersFrom;
-  constructor(e, n) {
-    ((this.messageQueue = e), (this.stopping = n));
+  constructor(messageQueue, stopping) {
+    this.messageQueue = messageQueue;
+    this.stopping = stopping;
   }
   waitForHead(e) {
-    let n = getActiveMessageQueue();
-    return this.isHeld(n, e()) ? this.waitOut(e, n) : void 0;
+    let activeMessageQueue = getActiveMessageQueue();
+    return this.isHeld(activeMessageQueue, e()) ? this.waitOut(e, activeMessageQueue) : undefined;
   }
   takeHead(e, n) {
+    this.isHeadAhead = false;
+    this.followersFrom = undefined;
     if (
-      ((this.isHeadAhead = !1),
-      (this.followersFrom = void 0),
-      getActiveMessageQueue() !== void 0 &&
-        this.messageQueue.peek(T_) !== void 0 &&
-        this.messageQueue.peek(e) !== void 0)
-    )
+      getActiveMessageQueue() !== undefined &&
+      this.messageQueue.peek(isPausedGoalCheckin) !== undefined &&
+      this.messageQueue.peek(e) !== undefined
+    ) {
+      this.isHeadAhead = true;
       return (
-        (this.isHeadAhead = !0),
         this.messageQueue.dequeue((h) => isOrphanedPermissionCommand(h) && e(h)) ??
-          this.messageQueue.dequeue(T_)
+        this.messageQueue.dequeue(isPausedGoalCheckin)
       );
+    }
     if (this.isHeld(getActiveMessageQueue(), e)) return;
+    this.followersFrom = this.queuedAtWait;
+    this.queuedAtWait = undefined;
     return (
-      (this.followersFrom = this.queuedAtWait),
-      (this.queuedAtWait = void 0),
-      (this.messageQueue.peek((h) => isOrphanedPermissionCommand(h) || (e(h) && jse(h))) === void 0
-        ? this.messageQueue.dequeue((h) => e(h) && EH(h))
-        : void 0) ?? n()
+      (this.messageQueue.peek((h) => isOrphanedPermissionCommand(h) || (e(h) && isRefillableCommand(h))) ===
+      undefined
+        ? this.messageQueue.dequeue((h) => e(h) && isPausedAnalyticsHold(h))
+        : undefined) ?? n()
     );
   }
   get isAheadOfStart() {
     return this.isHeadAhead;
   }
   admits(e) {
-    return !this.isHeadAhead && (this.followersFrom?.has(e) ?? !0);
+    return !this.isHeadAhead && (this.followersFrom?.has(e) ?? true);
   }
   async waitOut(e, n) {
     let r = n;
-    while (this.isHeld(r, e()))
-      ((this.queuedAtWait ??= new Set(this.messageQueue.getCommandQueue())),
-        await waitForSignalOr(this.messageQueue, r),
-        (r = getActiveMessageQueue()));
+    while (this.isHeld(r, e())) {
+      this.queuedAtWait ??= new Set(this.messageQueue.getCommandQueue());
+      await waitForSignalOr(this.messageQueue, r);
+      r = getActiveMessageQueue();
+    }
   }
   isHeld(e, n) {
     return (
       !this.stopping() &&
-      e !== void 0 &&
-      this.messageQueue.peek(n) !== void 0 &&
-      this.messageQueue.peek(T_) === void 0
+      e !== undefined &&
+      this.messageQueue.peek(n) !== undefined &&
+      this.messageQueue.peek(isPausedGoalCheckin) === undefined
     );
   }
 }
 //@ chunk-tyg7f3ek.js:146953-146994 placement
-function T_(e) {
-  return im(e) && isGoalIdleCheckinPaused(e.uuid);
+function isPausedGoalCheckin(e) {
+  return isActiveMainAgentCommand(e) && isGoalIdleCheckinPaused(e.uuid);
 }
 //@ chunk-tyg7f3ek.js:146994-147035 placement
-function EH(e) {
-  return im(e) && NAs(e.uuid);
+function isPausedAnalyticsHold(e) {
+  return isActiveMainAgentCommand(e) && isAnalyticsEventName(e.uuid);
 }
 //@ chunk-tyg7f3ek.js:147035-147159 placement
-async function waitForSignalOr(e, n) {
-  let r = () => {},
-    promise = new Promise((h) => {
-      r = e.subscribe(() => h());
-    });
+async function waitForSignalOr(messageQueue, n) {
+  let r = () => {};
+  let promise = new Promise((resolve) => {
+    r = messageQueue.subscribe(() => resolve());
+  });
   try {
     await Promise.race([n, promise]);
   } finally {
@@ -215,16 +205,18 @@ async function waitForSignalOr(e, n) {
   }
 }
 //@ chunk-tyg7f3ek.js:147159-147293 placement
-function isSlashCommandInput(e) {
+function isSlashCommandInput(command) {
   return (
-    aO(e.value)?.startsWith("/") === !0 &&
-    (e.skipSlashCommands !== !0 || e.bridgeOrigin === !0 || e.modelScheduledOrigin === !0)
+    lastTextBlockText(command.value)?.startsWith("/") === true &&
+    (command.skipSlashCommands !== true ||
+      command.bridgeOrigin === true ||
+      command.modelScheduledOrigin === true)
   );
 }
+//@ chunk-tyg7f3ek.js:147293-156636 placement
 /**
  * print/headless 主轮次循环：从队列取消息、协调闸门、运行轮次、处理崩溃（Headless turn loop crashed）与收尾。
  */
-//@ chunk-tyg7f3ek.js:147293-156636 placement
 class HeadlessTurnLoop {
   drain;
   messageQueue;
@@ -248,58 +240,58 @@ class HeadlessTurnLoop {
   session;
   sessionMirror;
   host;
-  tornDown = !1;
-  memoryRecheckOwed = !1;
+  tornDown = false;
+  memoryRecheckOwed = false;
   atTeardown = [];
   tornDownLatch = Promise.withResolvers();
   tornDownSignal = createSignal();
   promptsFetchingFiles = new FetchingUserFilesCounter();
   constructor({
-    drain: e,
-    messageQueue: n,
-    prewaitLatch: r,
-    deliveryLedger: s,
-    turnRunner: h,
-    drainSettle: y,
-    turnOutcome: S,
-    io: R,
-    emit: w,
-    drainSdkEvents: P,
-    stopping: L,
-    terminalShutdown: q,
-    endSessionHead: x,
-    commandLacksUserIntent: G,
-    repeatsUsageLimitAlert: Z,
-    revokeCodeliveredFollowups: re,
-    deferredToolUsePending: Ae,
-    idleRelease: Ue,
-    turnGate: ce,
-    session: nt,
-    sessionMirror: ie,
-    host: Se,
+    drain,
+    messageQueue,
+    prewaitLatch,
+    deliveryLedger,
+    turnRunner,
+    drainSettle,
+    turnOutcome,
+    io,
+    emit,
+    drainSdkEvents,
+    stopping,
+    terminalShutdown,
+    endSessionHead,
+    commandLacksUserIntent,
+    repeatsUsageLimitAlert,
+    revokeCodeliveredFollowups,
+    deferredToolUsePending,
+    idleRelease,
+    turnGate,
+    session,
+    sessionMirror,
+    host,
   }) {
-    ((this.drain = e),
-      (this.messageQueue = n),
-      (this.prewaitLatch = r),
-      (this.deliveryLedger = s),
-      (this.turnRunner = h),
-      (this.drainSettle = y),
-      (this.turnOutcome = S),
-      (this.io = R),
-      (this.emit = w),
-      (this.drainSdkEvents = P),
-      (this.stopping = L),
-      (this.terminalShutdown = q),
-      (this.endSessionHead = x),
-      (this.commandLacksUserIntent = G),
-      (this.repeatsUsageLimitAlert = Z),
-      (this.revokeCodeliveredFollowups = re),
-      (this.deferredToolUsePending = Ae),
-      (this.idleRelease = Ue),
-      (this.turnGate = ce),
-      (this.session = nt),
-      (this.sessionMirror = ie),
-      (this.host = Se));
+    this.drain = drain;
+    this.messageQueue = messageQueue;
+    this.prewaitLatch = prewaitLatch;
+    this.deliveryLedger = deliveryLedger;
+    this.turnRunner = turnRunner;
+    this.drainSettle = drainSettle;
+    this.turnOutcome = turnOutcome;
+    this.io = io;
+    this.emit = emit;
+    this.drainSdkEvents = drainSdkEvents;
+    this.stopping = stopping;
+    this.terminalShutdown = terminalShutdown;
+    this.endSessionHead = endSessionHead;
+    this.commandLacksUserIntent = commandLacksUserIntent;
+    this.repeatsUsageLimitAlert = repeatsUsageLimitAlert;
+    this.revokeCodeliveredFollowups = revokeCodeliveredFollowups;
+    this.deferredToolUsePending = deferredToolUsePending;
+    this.idleRelease = idleRelease;
+    this.turnGate = turnGate;
+    this.session = session;
+    this.sessionMirror = sessionMirror;
+    this.host = host;
   }
   turnAbortSignal() {
     return (
@@ -309,20 +301,20 @@ class HeadlessTurnLoop {
     ).signal;
   }
   teardown() {
-    if (this.tornDown) return !1;
-    ((this.tornDown = !0), (this.drain.endSessionRequested = !0), this.deliveryLedger.freezeTerminals());
+    if (this.tornDown) return false;
+    this.tornDown = true;
+    this.drain.endSessionRequested = true;
+    this.deliveryLedger.freezeTerminals();
     for (let e of this.atTeardown.splice(0))
       try {
         e();
       } catch (error) {
         logError(error);
       }
-    return (
-      this.drain.abortController?.abort(userAbortReason("shutdown")),
-      this.tornDownLatch.resolve(),
-      this.tornDownSignal.emit(),
-      !0
-    );
+    this.drain.abortController?.abort(userAbortReason("shutdown"));
+    this.tornDownLatch.resolve();
+    this.tornDownSignal.emit();
+    return true;
   }
   isTornDown() {
     return this.tornDown;
@@ -331,11 +323,11 @@ class HeadlessTurnLoop {
     return this.tornDownLatch.promise;
   }
   raceTeardown(e) {
-    let withResolvers = Promise.withResolvers(),
-      r = () => void this.tornDownLatch.promise.then(() => withResolvers.resolve(void 0)),
-      subscribe = this.tornDownSignal.subscribe(r);
+    let deferred = Promise.withResolvers();
+    let r = () => void this.tornDownLatch.promise.then(() => deferred.resolve(undefined));
+    let s = this.tornDownSignal.subscribe(r);
     if (this.tornDown) r();
-    return Promise.race([e, withResolvers.promise]).finally(subscribe);
+    return Promise.race([e, deferred.promise]).finally(s);
   }
   releaseAtTeardown(e) {
     if (this.tornDown) {
@@ -353,7 +345,7 @@ class HeadlessTurnLoop {
       this.terminalShutdown()
     )
       return;
-    this.memoryRecheckOwed = !1;
+    this.memoryRecheckOwed = false;
     try {
       fetchTurnEndMemoryContext(this.session);
     } catch (error) {
@@ -361,297 +353,331 @@ class HeadlessTurnLoop {
     }
   }
   async run() {
-    let { drain: drain, messageQueue: messageQueue, host: host } = this;
+    let { drain, messageQueue, host } = this;
     if (
       drain.running ||
       this.stopping() ||
       this.terminalShutdown() ||
       configProbeEnv() ||
-      (drain.endSessionRequested && messageQueue.peek(this.endSessionHead) === void 0)
+      (drain.endSessionRequested && messageQueue.peek(this.endSessionHead) === undefined)
     )
       return;
-    ((drain.running = !0), (drain.runPhase = void 0), (drain.runningReported = !1));
+    drain.running = true;
+    drain.runPhase = undefined;
+    drain.runningReported = false;
     let turnStartClock = drain.turnStartClock;
-    (turnStartClock.enter("entry_joins"),
-      host.onEntry(),
-      this.io.resetStallWatchdog(),
-      this.idleRelease.stop());
-    let beforeDrain = host.beforeDrain();
-    for (let q = beforeDrain.next(); !q.done;) {
+    turnStartClock.enter("entry_joins");
+    host.onEntry();
+    this.io.resetStallWatchdog();
+    this.idleRelease.stop();
+    let h = host.beforeDrain();
+    for (let q = h.next(); !q.done;) {
       let x;
       try {
         x = await q.value;
       } catch (error) {
-        q = beforeDrain.throw(error);
+        q = h.throw(error);
         continue;
       }
-      q = beforeDrain.next(x);
+      q = h.next(x);
     }
-    let openRun = host.openRun(),
-      S = !1,
-      R,
-      w;
+    let y = host.openRun();
+    let crashed = false;
+    let R;
+    let w;
     try {
-      let q = !1,
-        x = !0,
-        G = new QueueHeadWaiter(messageQueue, this.stopping),
-        Z = "none",
-        re = new TurnStartCoordinator({
-          messageQueue: messageQueue,
-          drain: drain,
-          prewaitLatch: this.prewaitLatch,
-          deliveryLedger: this.deliveryLedger,
-          io: this.io,
-          commandLacksUserIntent: this.commandLacksUserIntent,
-          revokeCodeliveredFollowups: this.revokeCodeliveredFollowups,
-          stopping: this.stopping,
-          endSessionHead: this.endSessionHead,
-          startGate: {
-            takeHead: (ce, nt) => (host.setAsideHeldInput?.(), G.takeHead(ce, nt)),
-            admits: (ce) => G.admits(ce),
+      let q = false;
+      let x = true;
+      let G = new QueueHeadWaiter(messageQueue, this.stopping);
+      let Z = "none";
+      let re = new TurnStartCoordinator({
+        messageQueue,
+        drain,
+        prewaitLatch: this.prewaitLatch,
+        deliveryLedger: this.deliveryLedger,
+        io: this.io,
+        commandLacksUserIntent: this.commandLacksUserIntent,
+        revokeCodeliveredFollowups: this.revokeCodeliveredFollowups,
+        stopping: this.stopping,
+        endSessionHead: this.endSessionHead,
+        startGate: {
+          takeHead: (ce, nt) => {
+            host.setAsideHeldInput?.();
+            return G.takeHead(ce, nt);
           },
-          onHead: (ce) => host.onHead(ce),
-          replayMerged: (ce, nt) => host.replayMerged(ce, nt),
-          deferredToolUsePending: this.deferredToolUsePending,
-          holdsEvalSettles: () => host.holdsEvalSettles?.() ?? !1,
-          coalesceTaskNotifications: () => getFeatureValue_CACHED_MAY_BE_STALE("tengu_swirling_meteor", !0),
-          repeatsUsageLimitAlert: this.repeatsUsageLimitAlert,
-          headYields: (ce, nt) => {
-            if (
-              shouldYieldRescueTurn({
-                head: ce,
-                queued: messageQueue.getCommandQueueSnapshot(),
-                stopLatched: this.prewaitLatch.stopLatched,
-                decidedAt: nt,
-                promptWait: Z,
-              })
-            )
-              return (host.onRescueGaveWay(), !0);
-            return (
-              nt === "before_start" &&
-              (j4r.peek(this.session)?.toolState.get(HostReturnWakeTracker).lapsedAtTurnStart(ce) ??
-                isHostReturnWake(ce))
-            );
-          },
-        }),
-        Ae = async () => {
-          G = new QueueHeadWaiter(messageQueue, this.stopping);
-          let ce = () => (drain.endSessionRequested ? this.endSessionHead : im);
-          for (;;) {
-            turnStartClock.enter("session_start_wait");
-            let waitForHead = G.waitForHead(ce);
-            if (waitForHead) await waitForHead;
-            let ie =
-              !this.stopping() &&
-              this.io.sessionState.turnEndSummaryOutstanding() &&
-              this.messageQueue.peek(ce()) !== void 0
-                ? this.io.sessionState.waitForTurnEndSummary()
-                : void 0;
-            if (ie !== void 0) {
-              (turnStartClock.enter("earlier_turn"), await this.raceTeardown(ie));
-              continue;
-            }
-            let of = sN.of(this.session);
-            if (
-              of.pending > 0 &&
-              !this.stopping() &&
-              this.messageQueue.peek((Pn) => Pn.handedOffTurn?.kind === "run" && ce()(Pn)) !== void 0
-            ) {
-              (logForDiagnosticsNoPII("info", "cli_turn_handoff_waits_for_model", {
-                barrier_pending: of.pending,
-              }),
-                await of.tail);
-              continue;
-            }
-            let me =
-              !this.stopping() && !drain.endSessionRequested ? host.inheritedPromptAnswerJoin?.() : void 0;
-            if (me !== void 0) {
-              (turnStartClock.enter("earlier_turn"), await me);
-              continue;
-            }
-            Z = "none";
-            let take = re.take();
-            if (take === void 0) {
-              turnStartClock.enter("after_turn");
-              break;
-            }
-            if ((turnStartClock.enter("turn_joins"), x)) {
-              ((x = !1), turnStartClock.enter("first_command"));
-              let firstCommand = host.firstCommand();
-              for (let oo = firstCommand.next(); !oo.done;) {
-                let No;
-                try {
-                  No = await oo.value;
-                } catch (error) {
-                  oo = firstCommand.throw(error);
-                  continue;
-                }
-                oo = firstCommand.next(No);
-              }
-              turnStartClock.enter("turn_joins");
-            }
-            let Ee;
-            try {
-              Ee =
-                !this.stopping() && !drain.endSessionRequested
-                  ? (host.hooksModulesSwitchJoin?.() ?? null)
-                  : null;
-            } catch (error) {
-              Ee = Promise.reject(error);
-            }
-            if (Ee !== null) await this.raceTeardown(Ee.catch(logError));
-            let He =
-              !this.stopping() && !drain.endSessionRequested
-                ? (host.accountPluginsJoin?.(take) ?? null)
-                : null;
-            if (He !== null) await He;
-            let Xe = host.turnMountJoin?.(take) ?? null;
-            if (Xe !== null) await Xe;
-            let We = host.sdkMcpServersJoin?.(take) ?? null;
-            if (We !== null) await We;
-            let St = host.deferredMcpServersJoin?.(take) ?? null;
-            if (St !== null) await St;
-            let wt;
-            try {
-              wt =
-                !this.stopping() && !drain.endSessionRequested
-                  ? maybeYieldToPersonPrompt({
-                      head: take.command,
-                      messageQueue: messageQueue,
-                      prewaitLatch: this.prewaitLatch,
-                      fetchingFiles: this.promptsFetchingFiles,
-                    })
-                  : null;
-            } catch (error) {
-              (logError(error), (wt = null));
-            }
-            Z = wt === null ? "none" : ((await this.raceTeardown(wt)) ?? "timed_out");
-            let Lt = this.stopping() || drain.endSessionRequested,
-              pn = drain.inputClosed && drain.organizationsLoadFailed,
-              _n = host.organizationsLoadGate?.(Lt ? "ending" : pn ? "failed" : "open") ?? null,
-              Mn = _n === null ? { kind: "start" } : ((await this.raceTeardown(_n)) ?? { kind: "ended" });
-            if (Mn.kind === "failed") {
-              ((drain.organizationsLoadFailed = !0),
-                (drain.batchLeftUnstarted = !0),
-                this.prewaitLatch.dropParkedBatch(),
-                discardPollEvent(take.members, Mn.message),
-                this.deliveryLedger.startBatch(take.members),
-                this.turnOutcome.reportUnrunTurnFailed(this.io.sessionState, Mn.message),
-                this.emit({
-                  ...emitLoadError(this.session.id, [Mn.message], take.uuids[0]),
-                  terminal_reason: "turn_setup_failed",
-                }),
-                this.deliveryLedger.settleBatch({
-                  batchUuids: take.uuids,
-                  deliveredPollBatchUuids: [],
-                  terminalReason: "turn_setup_failed",
-                  aborted: !1,
-                }),
-                turnStartClock.enter("after_turn"));
-              continue;
-            }
-            if (
-              this.tornDown ||
-              Mn.kind === "ended" ||
-              (wt !== null && (this.stopping() || drain.endSessionRequested))
-            ) {
-              ((drain.batchLeftUnstarted ||= Mn.kind === "ended"), turnStartClock.enter("after_turn"));
-              break;
-            }
-            turnStartClock.enter("tool_pool");
-            let wireTurn = host.wireTurn(take);
-            ((drain.batchLeftUnstarted = !1),
-              (drain.organizationsLoadFailed = !1),
-              turnStartClock.enter("commit"));
-            let commit = re.commit(take);
-            if (commit === void 0) continue;
-            let { command: command } = commit;
-            if (
-              ((drain.intentBatchInFlight = !this.commandLacksUserIntent(command)), drain.intentBatchInFlight)
-            )
-              devIntentTracker.of(this.session.host).turnStarting();
-            host.onCommitted(commit);
-            let start = re.start(commit);
-            w = commit;
-            let $r =
-              command.mode === "poll-event"
-                ? wrapInSystemReminder(
-                    buildPollEventDelivery(
-                      [getPollEventEnvelope(command)],
-                      0,
-                      listUnreadableToolsUsed(getConversationToolsUsed().names(), []),
-                    ),
-                  )
-                : command.value;
-            host.beforeArm({ batch: commit, input: $r });
-            let arm = this.turnRunner.arm(commit);
-            turnStartClock.enter("after_arm");
-            let afterArm = host.afterArm({
-              batch: commit,
-              signal: arm.signal,
-              aheadOfStart: G.isAheadOfStart,
-            });
-            if (afterArm) await afterArm;
-            turnStartClock.enter("turn_gate");
-            let Yt = this.turnGate?.beforeTurn(arm.signal) ?? null;
-            if (Yt !== null) {
-              let Pn = await Yt;
-              if (Pn.kind === "fail") throw new TurnRefusedError(Pn.message);
-            }
-            let nn =
-                command.shouldQuery === !1 && !isSlashCommandInput(command)
-                  ? void 0
-                  : host.refuseStart?.(commit, arm.signal),
-              kn = nn === void 0 ? void 0 : await nn;
-            (turnStartClock.enter("turn_open"),
-              headlessProfilerCheckpoint("before_ask"),
-              startQueryProfile());
-            let run = await this.turnRunner.run({
-              batch: commit,
-              input: $r,
-              tools: wireTurn,
-              intake: re,
-              turnStartClock: turnStartClock,
-              inPlaceOfFirstRequest: kn,
-            });
-            (turnStartClock.enter("after_turn"), (this.memoryRecheckOwed ||= command.shouldQuery !== !1));
-            let settleBatch = this.drainSettle.settleBatch({
-              batch:
-                run.putBack.size === 0
-                  ? commit
-                  : { uuids: commit.uuids.filter((uuid) => !run.putBack.has(uuid)), members: commit.members },
-              deliveredPollBatchUuids: start,
-              turnEnd: run,
-              turnSignal: arm.signal,
-            });
-            if (((w = void 0), settleBatch)) await settleBatch;
-            (logForDiagnosticsNoPII("info", "cli_ask_turn_complete", {
-              should_query: command.shouldQuery,
-              batch_size: commit.members.length,
-              mode: command.mode,
-            }),
-              host.afterTurn({ batch: commit, signal: arm.signal, turnEnd: run }),
-              logHeadlessProfilerTurn(),
-              bJn(),
-              headlessProfilerStartTurn());
+          admits: (ce) => G.admits(ce),
+        },
+        onHead: (ce) => host.onHead(ce),
+        replayMerged: (ce, nt) => host.replayMerged(ce, nt),
+        deferredToolUsePending: this.deferredToolUsePending,
+        holdsEvalSettles: () => host.holdsEvalSettles?.() ?? false,
+        coalesceTaskNotifications: () => getFeatureValue_CACHED_MAY_BE_STALE("tengu_swirling_meteor", true),
+        repeatsUsageLimitAlert: this.repeatsUsageLimitAlert,
+        headYields: (ce, nt) => {
+          if (
+            shouldYieldRescueTurn({
+              head: ce,
+              queued: messageQueue.getCommandQueueSnapshot(),
+              stopLatched: this.prewaitLatch.stopLatched,
+              decidedAt: nt,
+              promptWait: Z,
+            })
+          ) {
+            host.onRescueGaveWay();
+            return true;
           }
-        };
+          return (
+            nt === "before_start" &&
+            (toolStateSlot.peek(this.session)?.toolState.get(HostReturnWakeTracker).lapsedAtTurnStart(ce) ??
+              isHostReturnWake(ce))
+          );
+        },
+      });
+      let Ae = async () => {
+        G = new QueueHeadWaiter(messageQueue, this.stopping);
+        let ce = () => (drain.endSessionRequested ? this.endSessionHead : isActiveMainAgentCommand);
+        for (;;) {
+          turnStartClock.enter("session_start_wait");
+          let nt = G.waitForHead(ce);
+          if (nt) await nt;
+          let ie =
+            !this.stopping() &&
+            this.io.sessionState.turnEndSummaryOutstanding() &&
+            this.messageQueue.peek(ce()) !== undefined
+              ? this.io.sessionState.waitForTurnEndSummary()
+              : undefined;
+          if (ie !== undefined) {
+            turnStartClock.enter("earlier_turn");
+            await this.raceTeardown(ie);
+            continue;
+          }
+          let Se = switchSerializerSlot.of(this.session);
+          if (
+            Se.pending > 0 &&
+            !this.stopping() &&
+            this.messageQueue.peek((Pn) => Pn.handedOffTurn?.kind === "run" && ce()(Pn)) !== undefined
+          ) {
+            logForDiagnosticsNoPII("info", "cli_turn_handoff_waits_for_model", {
+              barrier_pending: Se.pending,
+            });
+            await Se.tail;
+            continue;
+          }
+          let me =
+            !this.stopping() && !drain.endSessionRequested ? host.inheritedPromptAnswerJoin?.() : undefined;
+          if (me !== undefined) {
+            turnStartClock.enter("earlier_turn");
+            await me;
+            continue;
+          }
+          Z = "none";
+          let Me = re.take();
+          if (Me === undefined) {
+            turnStartClock.enter("after_turn");
+            break;
+          }
+          turnStartClock.enter("turn_joins");
+          if (x) {
+            x = false;
+            turnStartClock.enter("first_command");
+            let Pn = host.firstCommand();
+            for (let oo = Pn.next(); !oo.done;) {
+              let No;
+              try {
+                No = await oo.value;
+              } catch (error) {
+                oo = Pn.throw(error);
+                continue;
+              }
+              oo = Pn.next(No);
+            }
+            turnStartClock.enter("turn_joins");
+          }
+          let Ee;
+          try {
+            Ee =
+              !this.stopping() && !drain.endSessionRequested
+                ? (host.hooksModulesSwitchJoin?.() ?? null)
+                : null;
+          } catch (error) {
+            Ee = Promise.reject(error);
+          }
+          if (Ee !== null) await this.raceTeardown(Ee.catch(logError));
+          let He =
+            !this.stopping() && !drain.endSessionRequested ? (host.accountPluginsJoin?.(Me) ?? null) : null;
+          if (He !== null) await He;
+          let Xe = host.turnMountJoin?.(Me) ?? null;
+          if (Xe !== null) await Xe;
+          let We = host.sdkMcpServersJoin?.(Me) ?? null;
+          if (We !== null) await We;
+          let St = host.deferredMcpServersJoin?.(Me) ?? null;
+          if (St !== null) await St;
+          let wt;
+          try {
+            wt =
+              !this.stopping() && !drain.endSessionRequested
+                ? maybeYieldToPersonPrompt({
+                    head: Me.command,
+                    messageQueue,
+                    prewaitLatch: this.prewaitLatch,
+                    fetchingFiles: this.promptsFetchingFiles,
+                  })
+                : null;
+          } catch (error) {
+            logError(error);
+            wt = null;
+          }
+          Z = wt === null ? "none" : ((await this.raceTeardown(wt)) ?? "timed_out");
+          let Lt = this.stopping() || drain.endSessionRequested;
+          let organizationsLoadFailed = drain.inputClosed && drain.organizationsLoadFailed;
+          let _n =
+            host.organizationsLoadGate?.(Lt ? "ending" : organizationsLoadFailed ? "failed" : "open") ?? null;
+          let Mn =
+            _n === null
+              ? {
+                  kind: "start",
+                }
+              : ((await this.raceTeardown(_n)) ?? {
+                  kind: "ended",
+                });
+          if (Mn.kind === "failed") {
+            drain.organizationsLoadFailed = true;
+            drain.batchLeftUnstarted = true;
+            this.prewaitLatch.dropParkedBatch();
+            discardPollEvent(Me.members, Mn.message);
+            this.deliveryLedger.startBatch(Me.members);
+            this.turnOutcome.reportUnrunTurnFailed(this.io.sessionState, Mn.message);
+            this.emit({
+              ...emitLoadError(this.session.id, [Mn.message], Me.uuids[0]),
+              terminal_reason: "turn_setup_failed",
+            });
+            this.deliveryLedger.settleBatch({
+              batchUuids: Me.uuids,
+              deliveredPollBatchUuids: [],
+              terminalReason: "turn_setup_failed",
+              aborted: false,
+            });
+            turnStartClock.enter("after_turn");
+            continue;
+          }
+          if (
+            this.tornDown ||
+            Mn.kind === "ended" ||
+            (wt !== null && (this.stopping() || drain.endSessionRequested))
+          ) {
+            drain.batchLeftUnstarted ||= Mn.kind === "ended";
+            turnStartClock.enter("after_turn");
+            break;
+          }
+          turnStartClock.enter("tool_pool");
+          let tools = host.wireTurn(Me);
+          drain.batchLeftUnstarted = false;
+          drain.organizationsLoadFailed = false;
+          turnStartClock.enter("commit");
+          let Jn = re.commit(Me);
+          if (Jn === undefined) continue;
+          let { command } = Jn;
+          drain.intentBatchInFlight = !this.commandLacksUserIntent(command);
+          if (drain.intentBatchInFlight) devIntentTracker.of(this.session.host).turnStarting();
+          host.onCommitted(Jn);
+          let deliveredPollBatchUuids = re.start(Jn);
+          w = Jn;
+          let input =
+            command.mode === "poll-event"
+              ? wrapInSystemReminder(
+                  buildPollEventDelivery(
+                    [getPollEventEnvelope(command)],
+                    0,
+                    listUnreadableToolsUsed(getConversationToolsUsed().names(), []),
+                  ),
+                )
+              : command.value;
+          host.beforeArm({
+            batch: Jn,
+            input,
+          });
+          let $n = this.turnRunner.arm(Jn);
+          turnStartClock.enter("after_arm");
+          let ut = host.afterArm({
+            batch: Jn,
+            signal: $n.signal,
+            aheadOfStart: G.isAheadOfStart,
+          });
+          if (ut) await ut;
+          turnStartClock.enter("turn_gate");
+          let Yt = this.turnGate?.beforeTurn($n.signal) ?? null;
+          if (Yt !== null) {
+            let Pn = await Yt;
+            if (Pn.kind === "fail") throw new TurnRefusedError(Pn.message);
+          }
+          let nn =
+            command.shouldQuery === false && !isSlashCommandInput(command)
+              ? undefined
+              : host.refuseStart?.(Jn, $n.signal);
+          let inPlaceOfFirstRequest = nn === undefined ? undefined : await nn;
+          turnStartClock.enter("turn_open");
+          headlessProfilerCheckpoint("before_ask");
+          startQueryProfile();
+          let En = await this.turnRunner.run({
+            batch: Jn,
+            input,
+            tools,
+            intake: re,
+            turnStartClock,
+            inPlaceOfFirstRequest,
+          });
+          turnStartClock.enter("after_turn");
+          this.memoryRecheckOwed ||= command.shouldQuery !== false;
+          let Mr = this.drainSettle.settleBatch({
+            batch:
+              En.putBack.size === 0
+                ? Jn
+                : {
+                    uuids: Jn.uuids.filter((uuid) => !En.putBack.has(uuid)),
+                    members: Jn.members,
+                  },
+            deliveredPollBatchUuids,
+            turnEnd: En,
+            turnSignal: $n.signal,
+          });
+          w = undefined;
+          if (Mr) await Mr;
+          logForDiagnosticsNoPII("info", "cli_ask_turn_complete", {
+            should_query: command.shouldQuery,
+            batch_size: Jn.members.length,
+            mode: command.mode,
+          });
+          host.afterTurn({
+            batch: Jn,
+            signal: $n.signal,
+            turnEnd: En,
+          });
+          logHeadlessProfilerTurn();
+          finishQueryProfile();
+          headlessProfilerStartTurn();
+        }
+      };
       do {
         for (let me of this.drainSdkEvents()) this.emit(me);
         turnStartClock.enter("loop_top");
-        let loopTop = host.loopTop();
-        if (loopTop) await loopTop;
+        let ce = host.loopTop();
+        if (ce) await ce;
         let nt =
           !this.stopping() &&
           this.io.sessionState.turnEndSummaryOutstanding() &&
-          messageQueue.peek(im) !== void 0
+          messageQueue.peek(isActiveMainAgentCommand) !== undefined
             ? this.io.sessionState.waitForTurnEndSummary()
-            : void 0;
-        if (nt !== void 0)
-          (turnStartClock.enter("earlier_turn"),
-            await this.raceTeardown(nt),
-            turnStartClock.enter("loop_top"));
-        if (messageQueue.peek(im) !== void 0 && !(host.holdsEvalSettles?.() ?? !1)) host.onLoopTopWork();
+            : undefined;
+        if (nt !== undefined) {
+          turnStartClock.enter("earlier_turn");
+          await this.raceTeardown(nt);
+          turnStartClock.enter("loop_top");
+        }
+        if (
+          messageQueue.peek(isActiveMainAgentCommand) !== undefined &&
+          !(host.holdsEvalSettles?.() ?? false)
+        )
+          host.onLoopTopWork();
         drain.runPhase = "draining_commands";
         let commandsProcessed = re.commandsProcessed;
         try {
@@ -659,216 +685,237 @@ class HeadlessTurnLoop {
         } finally {
           re.exit();
         }
-        let afterPass = openRun.afterPass({ drained: re.commandsProcessed > commandsProcessed });
-        if (((q = afterPass !== "done"), typeof afterPass !== "string"))
-          (turnStartClock.enter("background_wait"), this.recheckMemoryContextAfterTurn(), await afterPass);
+        let Se = y.afterPass({
+          drained: re.commandsProcessed > commandsProcessed,
+        });
+        q = Se !== "done";
+        if (typeof Se !== "string") {
+          turnStartClock.enter("background_wait");
+          this.recheckMemoryContextAfterTurn();
+          await Se;
+        }
       } while (q);
       logForDiagnosticsNoPII("info", "cli_drain_queue_complete", {
         commands_processed: re.commandsProcessed,
         queue_depth_at_exit: messageQueue.getCommandQueueLength(),
       });
-      let releaseHeld = host.releaseHeld();
-      if (releaseHeld !== void 0) await releaseHeld;
+      let Ue = host.releaseHeld();
+      if (Ue !== undefined) await Ue;
     } catch (error) {
-      (turnStartClock.enter("after_turn"),
-        (S = !0),
-        await this.turnOutcome.emitSessionCrash(error, {
-          io: this.io,
-          session: this.session,
-          sessionMirror: this.sessionMirror,
-        }),
-        host.onCrash(error, w));
+      turnStartClock.enter("after_turn");
+      crashed = true;
+      await this.turnOutcome.emitSessionCrash(error, {
+        io: this.io,
+        session: this.session,
+        sessionMirror: this.sessionMirror,
+      });
+      host.onCrash(error, w);
       return;
     } finally {
-      if (
-        ((R = await this.drainSettle.release({ crashed: S, raceTeardown: (q) => this.raceTeardown(q) })),
-        !drain.running)
-      )
-        turnStartClock.enter("idle");
+      R = await this.drainSettle.release({
+        crashed,
+        raceTeardown: (q) => this.raceTeardown(q),
+      });
+      if (!drain.running) turnStartClock.enter("idle");
     }
     if (R === "rekicked") return;
     if (!drain.running) this.recheckMemoryContextAfterTurn();
-    let afterRelease = openRun.afterRelease(),
-      L = afterRelease.next();
+    let P = y.afterRelease();
+    let L = P.next();
     while (!L.done) {
       let q;
       try {
         q = await L.value;
       } catch (error) {
-        L = afterRelease.throw(error);
+        L = P.throw(error);
         continue;
       }
-      L = afterRelease.next(q);
+      L = P.next(q);
     }
     if (L.value === "rekicked") return;
     if (drain.inputClosed) await host.onInputClosed();
   }
 }
 //@ chunk-tyg7f3ek.js:156673-156746 placement
-function E_(e) {
+function safeAsyncCall(e) {
   try {
     return e()?.catch(logError) ?? null;
   } catch (error) {
-    return (logError(error), null);
+    logError(error);
+    return null;
   }
 }
 //@ chunk-tyg7f3ek.js:156746-156813 placement
-var xH = {
+var MODS_LOAD_STATE_READERS = {
   isFirstReadOwed: () => isOrganizationModsLoadPending(),
   isUnreadPastItsBounds: () => isPolicyUnreadPastItsBounds(),
 };
 //@ chunk-tyg7f3ek.js:156813-156944 placement
-function isFirstReadOverdue(e = xH, n = !1) {
+function isFirstReadOverdue(e = MODS_LOAD_STATE_READERS, n = false) {
   try {
-    let r = n || (D4o() && I_n());
+    let r = n || (hooksModulesGateFromPayload() && resolveHooksModulesValue());
     return e.isFirstReadOwed() && r && e.isUnreadPastItsBounds();
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
 //@ chunk-tyg7f3ek.js:156944-157323 placement
 function pluginHookReloader(e) {
   return {
     reload: async () => {
-      let { clearPluginHookCache: clearPluginHookCache, loadPluginHooks: loadPluginHooks } =
-        await import("./chunk-c7p56eem.js");
-      (clearPluginHookCache(), await loadPluginHooks(e.storageV5, e.credentials));
+      let { clearPluginHookCache, loadPluginHooks } = await import("./chunk-c7p56eem.js");
+      clearPluginHookCache();
+      await loadPluginHooks(e.storageV5, e.credentials);
     },
-    tell: (n) =>
+    tell: (content) =>
       e.enqueue({
         type: "system",
         subtype: "informational",
-        content: n,
+        content,
         level: "warning",
-        uuid: randomUUID_5(),
+        uuid: randomUUID(),
         session_id: getSessionId(),
       }),
     standDown: async () => {
-      let { standDownInstalledHooksModules: standDownInstalledHooksModules } =
-        await import("./chunk-c7p56eem.js");
+      let { standDownInstalledHooksModules } = await import("./chunk-c7p56eem.js");
       await standDownInstalledHooksModules();
     },
   };
 }
 //@ chunk-tyg7f3ek.js:157323-157632 placement
 function createPluginHookRefresh(e) {
-  let { reload: reload, tell: tell, standDown: standDown } = pluginHookReloader(e),
-    h = () => E_(() => waitForCloudModsHold(reload, tell)),
-    y = h();
+  let { reload, tell, standDown } = pluginHookReloader(e);
+  let h = () => safeAsyncCall(() => waitForCloudModsHold(reload, tell));
+  let y = h();
   function S() {
-    let w = hFi(reload, tell, standDown);
-    return y !== null || w === null ? w : w.then(() => h() ?? void 0);
+    let w = followRolloutWithDeadline(reload, tell, standDown);
+    return y !== null || w === null ? w : w.then(() => h() ?? undefined);
   }
   function R() {
-    let w = E_(() => rejudgeLoadedMods(reload, tell));
+    let w = safeAsyncCall(() => rejudgeLoadedMods(reload, tell));
     if (w === null) return S();
-    return w.then(() => S() ?? void 0);
+    return w.then(() => S() ?? undefined);
   }
   if (y === null) return R();
-  return y.then(() => R() ?? void 0);
+  return y.then(() => R() ?? undefined);
 }
 //@ chunk-tyg7f3ek.js:157632-157708 placement
 function reloadPluginHooksNow(e) {
   return isOrganizationModsLoadPending()
-    ? runOrganizationStatusLoadOnce(pluginHookReloader(e).reload, !0).catch(logError)
+    ? runOrganizationStatusLoadOnce(pluginHookReloader(e).reload, true).catch(logError)
     : Promise.resolve();
 }
 //@ chunk-tyg7f3ek.js:157708-158051 placement
 function refreshPluginHooksOnClaim(e, n) {
   if (n !== "open") {
     let w =
-      n === "ending" ? { kind: "ended" } : { kind: "failed", message: isFirstReadOverdue() ? sYr : L4o };
+      n === "ending"
+        ? {
+            kind: "ended",
+          }
+        : {
+            kind: "failed",
+            message: isFirstReadOverdue()
+              ? ORGANIZATION_POLICY_UNREADABLE_MESSAGE
+              : ORGANIZATION_MODS_UNLOADED_MESSAGE,
+          };
     return isOrganizationModsLoadPending() ? Promise.resolve(noteTurnGatePolicyUnread(w)) : null;
   }
-  let { reload: reload, tell: tell, standDown: standDown } = pluginHookReloader(e),
-    withResolvers = Promise.withResolvers(),
-    S = waitForOrganizationModsOnClaim(
-      reload,
-      tell,
-      standDown,
-      Promise.race([e.ended, withResolvers.promise]),
-      isFirstReadOverdue,
-    );
+  let { reload, tell, standDown } = pluginHookReloader(e);
+  let deferred = Promise.withResolvers();
+  let S = waitForOrganizationModsOnClaim(
+    reload,
+    tell,
+    standDown,
+    Promise.race([e.ended, deferred.promise]),
+    isFirstReadOverdue,
+  );
   if (S === null) return null;
-  let R = registerCleanup(async () => withResolvers.resolve());
+  let R = registerCleanup(async () => deferred.resolve());
   return S.finally(R).then(noteTurnGatePolicyUnread);
 }
 //@ chunk-tyg7f3ek.js:158051-158166 placement
 function noteTurnGatePolicyUnread(e) {
-  if (e.kind === "failed" && e.message === sYr)
+  if (e.kind === "failed" && e.message === ORGANIZATION_POLICY_UNREADABLE_MESSAGE)
     logFeatureBad("plugin_function_hooks_turn_gate", "policy_unread");
   return e;
 }
 //@ chunk-tyg7f3ek.js:158166-158242 placement
 function reloadPluginHooksQuiet(e) {
   return isOrganizationModsLoadPending()
-    ? runOrganizationStatusLoadOnce(pluginHookReloader(e).reload, !1).catch(logError)
+    ? runOrganizationStatusLoadOnce(pluginHookReloader(e).reload, false).catch(logError)
     : Promise.resolve();
 }
 //@ chunk-tyg7f3ek.js:158242-158351 placement
-var TURN_LOOP_CRASHED = "Headless turn loop crashed",
-  ALLOWED_ERROR_NAMES = new Set(freeze_2),
-  ERROR_STACK_GETTER = Object.getOwnPropertyDescriptor(Error(), "stack")?.get;
+var TURN_LOOP_CRASHED = "Headless turn loop crashed";
+var ALLOWED_ERROR_NAMES = new Set($Ei);
+var ERROR_STACK_GETTER = Object.getOwnPropertyDescriptor(Error(), "stack")?.get;
+//@ chunk-tyg7f3ek.js:158351-159588 placement
 /**
  * 轮次循环崩溃时上报错误名/消息/堆栈摘要（避免读取不安全的 stack）。
  */
-//@ chunk-tyg7f3ek.js:158351-159588 placement
 function reportTurnLoopCrash(e) {
   try {
     if (isTerminalShutdown()) return;
-    let n = !n0e(e) && e instanceof Error;
+    let n = !isUntrustedObject(e) && e instanceof Error;
     if (n && e instanceof TurnRefusedError) return;
-    let r = n ? protoDataString(e, "name") : void 0,
-      s = n ? protoDataString(e, "message") : void 0,
-      h = (() => {
-        try {
-          let G = n && r !== void 0 && s !== void 0 ? Object.getOwnPropertyDescriptor(e, "stack") : void 0;
-          return G === void 0 || "value" in G
-            ? G?.value
-            : ERROR_STACK_GETTER !== void 0 && G.get === ERROR_STACK_GETTER
-              ? Reflect.apply(ERROR_STACK_GETTER, e, [])
-              : void 0;
-        } catch {
-          return;
-        }
-      })(),
-      y = n
-        ? Object.create(
-            Object.getPrototypeOf(e),
-            xr(
-              {
-                name: r,
-                message: s,
-                stack: h,
-                code: ownDataValue(e, "code"),
-                errno: ownDataValue(e, "errno"),
-                syscall: ownDataValue(e, "syscall"),
-                constructor: { name: constructorNameOf(e) },
+    let r = n ? protoDataString(e, "name") : undefined;
+    let s = n ? protoDataString(e, "message") : undefined;
+    let h = (() => {
+      try {
+        let G =
+          n && r !== undefined && s !== undefined ? Object.getOwnPropertyDescriptor(e, "stack") : undefined;
+        return G === undefined || "value" in G
+          ? G?.value
+          : ERROR_STACK_GETTER !== undefined && G.get === ERROR_STACK_GETTER
+            ? Reflect.apply(ERROR_STACK_GETTER, e, [])
+            : undefined;
+      } catch {
+        return;
+      }
+    })();
+    let y = n
+      ? Object.create(
+          Object.getPrototypeOf(e),
+          xr(
+            {
+              name: r,
+              message: s,
+              stack: h,
+              code: ownDataValue(e, "code"),
+              errno: ownDataValue(e, "errno"),
+              syscall: ownDataValue(e, "syscall"),
+              constructor: {
+                name: constructorNameOf(e),
               },
-              (G) => ({ value: G }),
-            ),
-          )
-        : void 0,
-      S = y && oC(ALLOWED_ERROR_NAMES, ownDataValue(y, "code")),
-      R =
-        y === void 0
-          ? "UnknownError"
-          : S !== void 0
-            ? `Error:${S}`
-            : (oC(LANGUAGE_ERROR_NAMES, r) ?? "Error"),
-      w = `${TURN_LOOP_CRASHED} (${R})`,
-      P = y !== void 0 && typeof h === "string" ? stripStackHeader(y) : void 0,
-      L =
-        P !== void 0 &&
-        P !== h &&
-        P.split(
-          `
+            },
+            (value) => ({
+              value,
+            }),
+          ),
+        )
+      : undefined;
+    let S = y && pickAllowedName(ALLOWED_ERROR_NAMES, ownDataValue(y, "code"));
+    let R =
+      y === undefined
+        ? "UnknownError"
+        : S !== undefined
+          ? `Error:${S}`
+          : (pickAllowedName(LANGUAGE_ERROR_NAMES, r) ?? "Error");
+    let w = `${TURN_LOOP_CRASHED} (${R})`;
+    let P = y !== undefined && typeof h === "string" ? stripStackHeader(y) : undefined;
+    let L =
+      P !== undefined &&
+      P !== h &&
+      P.split(
+        `
 `,
-        ).every((G) => G.trim() === "" || G.trim().startsWith("at ")),
-      q = withTelemetryMessage(Error("Headless turn loop crashed"), w),
-      x = y !== void 0 && L ? errorClassName(y) : void 0;
-    (logError(
-      y === void 0 || x === void 0
+      ).every((line) => line.trim() === "" || line.trim().startsWith("at "));
+    let q = withTelemetryMessage(Error("Headless turn loop crashed"), w);
+    let x = y !== undefined && L ? errorClassName(y) : undefined;
+    logError(
+      y === undefined || x === undefined
         ? q
         : Object.assign(q, {
             name: x,
@@ -878,41 +925,43 @@ ${P}`,
             errno: ownDataValue(y, "errno"),
             syscall: ownDataValue(y, "syscall"),
           }),
-    ),
-      logForDebugging(
-        typeof h === "string"
-          ? `${w}: error message left out of this line, as it may hold private data; a local session's result has it in errors[0]`
-          : `${w}: what was thrown has no stack that can be read safely`,
-        { level: "error" },
-      ));
+    );
+    logForDebugging(
+      typeof h === "string"
+        ? `${w}: error message left out of this line, as it may hold private data; a local session's result has it in errors[0]`
+        : `${w}: what was thrown has no stack that can be read safely`,
+      {
+        level: "error",
+      },
+    );
   } catch {}
 }
 //@ chunk-tyg7f3ek.js:159588-159651 placement
-function oC(e, n) {
-  return typeof n === "string" && e.has(n) ? n : void 0;
+function pickAllowedName(e, n) {
+  return typeof n === "string" && e.has(n) ? n : undefined;
 }
 //@ chunk-tyg7f3ek.js:159651-159914 placement
 function constructorNameOf(e) {
   if (e === null) return;
   let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(e, "constructor");
-  if (ownPropertyDescriptor === void 0) return constructorNameOf(Object.getPrototypeOf(e));
+  if (ownPropertyDescriptor === undefined) return constructorNameOf(Object.getPrototypeOf(e));
   let r =
     "value" in ownPropertyDescriptor &&
     typeof ownPropertyDescriptor.value === "function" &&
-    !n0e(ownPropertyDescriptor.value)
+    !isUntrustedObject(ownPropertyDescriptor.value)
       ? ownDataValue(ownPropertyDescriptor.value, "name")
-      : void 0;
-  return typeof r === "string" ? r : void 0;
+      : undefined;
+  return typeof r === "string" ? r : undefined;
 }
 //@ chunk-tyg7f3ek.js:159914-160020 placement
 function ownDataValue(e, n) {
   let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(e, n);
-  return ownPropertyDescriptor !== void 0 && "value" in ownPropertyDescriptor
+  return ownPropertyDescriptor !== undefined && "value" in ownPropertyDescriptor
     ? ownPropertyDescriptor.value
-    : void 0;
+    : undefined;
 }
 //@ chunk-tyg7f3ek.js:160020-160098 placement
-function watchTaskChanges({ store: store, ...n }) {
+function watchTaskChanges({ store, ...n }) {
   return createDependencyWatcher(
     [store],
     () => [store.getState().tasks],
@@ -920,13 +969,7 @@ function watchTaskChanges({ store: store, ...n }) {
   );
 }
 //@ chunk-tyg7f3ek.js:160098-160331 placement
-function maybeReportIdleWithBackgroundTasks({
-  drain: drain,
-  io: io,
-  ccrRecap: ccrRecap,
-  stopping: stopping,
-  idleAllowedAtTurnEnd: idleAllowedAtTurnEnd,
-}) {
+function maybeReportIdleWithBackgroundTasks({ drain, io, ccrRecap, stopping, idleAllowedAtTurnEnd }) {
   try {
     if (
       drain.running ||
@@ -936,32 +979,36 @@ function maybeReportIdleWithBackgroundTasks({
       !idleAllowedAtTurnEnd()
     )
       return;
-    (io.sessionState.notifyStateChanged("idle"), maybeStartCcrRecap(ccrRecap, io.sessionState));
+    io.sessionState.notifyStateChanged("idle");
+    maybeStartCcrRecap(ccrRecap, io.sessionState);
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-tyg7f3ek.js:160331-160361 placement
-var HH = 8000,
-  NH = 1e4,
-  WH = 8,
-  qH = 64;
+var MCP_PREWAIT_BUDGET_MS = 8000;
+var MCP_PREWAIT_MAX_BUDGET_MS = 1e4;
+var MAX_PREWAIT_MCP_SERVERS = 8;
+var MAX_MCP_SERVER_NAME_CHARS = 64;
 //@ chunk-tyg7f3ek.js:160361-160564 placement
 function parseMcpPrewaitServers(e, n) {
-  if (e === void 0 || n === 0) return;
+  if (e === undefined || n === 0) return;
   let sliced = uniq(
     e
       .split(",")
       .map((s) => s.trim())
-      .filter((s) => s.length > 0 && s.length <= qH),
-  ).slice(0, WH);
+      .filter((s) => s.length > 0 && s.length <= MAX_MCP_SERVER_NAME_CHARS),
+  ).slice(0, MAX_PREWAIT_MCP_SERVERS);
   if (sliced.length === 0) return;
-  return { names: sliced, budgetMs: Math.min(n ?? HH, NH) };
+  return {
+    names: sliced,
+    budgetMs: Math.min(n ?? MCP_PREWAIT_BUDGET_MS, MCP_PREWAIT_MAX_BUDGET_MS),
+  };
 }
+//@ chunk-tyg7f3ek.js:160564-163023 placement
 /**
  * 轮次开始前等待指定 MCP 服务器连接（CLAUDE_CODE_MCP_PREWAIT_SERVERS）或连接器预等待，带截止时间。
  */
-//@ chunk-tyg7f3ek.js:160564-163023 placement
 class McpPrewait {
   names;
   deadlineAt;
@@ -974,23 +1021,21 @@ class McpPrewait {
   mainThreadRequested;
   mcpClients;
   waitForPendingMcp;
-  reported = !1;
+  reported = false;
   logged;
   constructor(e) {
-    ((this.coordinatorMainThreadOnly = e.coordinatorMainThreadOnly),
-      (this.relayMarked = e.relayMarked),
-      (this.relayHoldLog = e.relayHoldLog),
-      (this.startedFromTranscript = e.startedFromTranscript),
-      (this.mainThreadRequested = e.mainThreadRequested),
-      (this.mcpClients = e.mcpClients),
-      (this.waitForPendingMcp = e.waitForPendingMcp));
-    let n = e.setting?.names ?? [];
-    if (
-      ((this.namedCount = n.length),
-      (this.budgetMs = e.setting?.budgetMs ?? 0),
-      (this.deadlineAt = e.kickedAtMs + this.budgetMs),
-      n.length === 0)
-    ) {
+    this.coordinatorMainThreadOnly = e.coordinatorMainThreadOnly;
+    this.relayMarked = e.relayMarked;
+    this.relayHoldLog = e.relayHoldLog;
+    this.startedFromTranscript = e.startedFromTranscript;
+    this.mainThreadRequested = e.mainThreadRequested;
+    this.mcpClients = e.mcpClients;
+    this.waitForPendingMcp = e.waitForPendingMcp;
+    let names = e.setting?.names ?? [];
+    this.namedCount = names.length;
+    this.budgetMs = e.setting?.budgetMs ?? 0;
+    this.deadlineAt = e.kickedAtMs + this.budgetMs;
+    if (names.length === 0) {
       this.names = new Set();
       return;
     }
@@ -1000,29 +1045,40 @@ class McpPrewait {
         .filter((s) => s.config.scope === "dynamic" && !isPluginServerConfig(s.config))
         .map((s) => s.name),
     );
-    if (((this.names = new Set(n.filter((s) => r.has(s)))), n.length > this.names.size))
+    this.names = new Set(names.filter((name) => r.has(name)));
+    if (names.length > this.names.size)
       logForDebugging(
-        `[MCP] CLAUDE_CODE_MCP_PREWAIT_SERVERS names servers with no --mcp-config row at start-up; not waiting for: ${n.filter((s) => !r.has(s)).join(", ")}`,
+        `[MCP] CLAUDE_CODE_MCP_PREWAIT_SERVERS names servers with no --mcp-config row at start-up; not waiting for: ${names.filter((name) => !r.has(name)).join(", ")}`,
       );
   }
   join(e) {
     if (!e || this.names.size === 0) return null;
-    if (this.mainThreadRequested()) return (this.report("request_started", 0), null);
-    if (!this.stillPending()) return (this.report("not_pending", 0), null);
-    let startTime = performance.now(),
-      rounded = Math.round(this.deadlineAt - startTime);
-    if (rounded <= 0) return (this.report("deadline_passed", 0), null);
-    let s = !1;
+    if (this.mainThreadRequested()) {
+      this.report("request_started", 0);
+      return null;
+    }
+    if (!this.stillPending()) {
+      this.report("not_pending", 0);
+      return null;
+    }
+    let startTime = performance.now();
+    let rounded = Math.round(this.deadlineAt - startTime);
+    if (rounded <= 0) {
+      this.report("deadline_passed", 0);
+      return null;
+    }
+    let s = false;
     return this.waitForPendingMcp(rounded, {
-      waitForDeferrable: !0,
-      localOnly: !1,
+      waitForDeferrable: true,
+      localOnly: false,
       coordinatorMainThreadOnly: this.coordinatorMainThreadOnly,
       relayMarked: this.relayMarked,
       ...this.relayHoldLog,
       onlyServerNames: this.names,
     })
-      .catch((h) => {
-        ((s = !0), logError(h));
+      .catch((error) => {
+        s = true;
+        logError(error);
       })
       .then(() =>
         this.report(
@@ -1040,7 +1096,7 @@ class McpPrewait {
   }
   report(e, n) {
     if (this.reported) return;
-    this.reported = !0;
+    this.reported = true;
     let r = {
       namedCount: this.namedCount,
       inLaunchSetCount: this.names.size,
@@ -1052,73 +1108,78 @@ class McpPrewait {
       coordinatorMainThreadOnly: this.coordinatorMainThreadOnly,
       startedFromTranscript: this.startedFromTranscript,
     };
-    if (
-      ((this.logged = { outcome: e, ...r }),
-      logEvent("tengu_headless_mcp_launch_named_wait", { outcome: fromEnum(e), ...r }),
-      e === "held_timed_out" || e === "held_wait_failed" || e === "deadline_passed")
-    )
+    this.logged = {
+      outcome: e,
+      ...r,
+    };
+    logEvent("tengu_headless_mcp_launch_named_wait", {
+      outcome: fromEnum(e),
+      ...r,
+    });
+    if (e === "held_timed_out" || e === "held_wait_failed" || e === "deadline_passed")
       logFeatureSad("mcp_launch_named_wait", e, r);
     else if (e !== "request_started") logFeatureOk("mcp_launch_named_wait", r);
   }
 }
 //@ chunk-tyg7f3ek.js:163023-163044 placement
-var jH = 150000,
-  QH = 250;
+var TRANSCRIPT_UPLOAD_WAIT_MS = 150000;
+var TRANSCRIPT_SAVE_POLL_MS = 250;
 //@ chunk-tyg7f3ek.js:163044-163393 placement
-function createTranscriptSaver({ io: io, isShuttingDown: isShuttingDown, uploadWaitMs: uploadWaitMs = jH }) {
-  let s = createTranscriptSaver_2();
+function createTranscriptSaver({ io, isShuttingDown, uploadWaitMs = TRANSCRIPT_UPLOAD_WAIT_MS }) {
+  let transcriptSaver = createTranscriptSaver_2();
   return {
     isOn: () => !isTranscriptPersistenceDisabled(),
     save: async (h) => {
-      if (!(await s.save())) return !1;
+      if (!(await transcriptSaver.save())) return false;
       let y = Date.now() + uploadWaitMs;
       while (io.unsentInternalEvents > 0) {
-        if (isShuttingDown() || Date.now() > y) return !1;
-        await sleep(QH, void 0, { unref: !0 });
+        if (isShuttingDown() || Date.now() > y) return false;
+        await sleep(TRANSCRIPT_SAVE_POLL_MS, undefined, {
+          unref: true,
+        });
       }
       return !isShuttingDown() && io.refusedInternalEvents(h).length === 0;
     },
-    lostSoFar: () => s.lostSoFar() + io.droppedInternalBatches,
+    lostSoFar: () => transcriptSaver.lostSoFar() + io.droppedInternalBatches,
   };
 }
 //@ chunk-tyg7f3ek.js:163393-163567 placement
-function isSlashCommandPrompt(e, n, r) {
-  let s = aO(n),
-    y =
-      s !== null &&
-      s.startsWith("/") &&
-      (e.skipSlashCommands !== !0 ||
-        (e.bridgeOrigin === !0 && e.textNotTyped !== !0 && !bridgeSlashLineBuildsRequest(s, r())));
-  return e.shouldQuery !== !1 && !y;
+function isSlashCommandPrompt(command, n, r) {
+  let s = lastTextBlockText(n);
+  let y =
+    s !== null &&
+    s.startsWith("/") &&
+    (command.skipSlashCommands !== true ||
+      (command.bridgeOrigin === true &&
+        command.textNotTyped !== true &&
+        !bridgeSlashLineBuildsRequest(s, r())));
+  return command.shouldQuery !== false && !y;
 }
 //@ chunk-tyg7f3ek.js:163567-163619 placement
 function createInlineMcpTiming() {
-  return { totalMs: 0, firstStartMs: void 0 };
+  return {
+    totalMs: 0,
+    firstStartMs: undefined,
+  };
 }
 //@ chunk-tyg7f3ek.js:163619-164071 placement
 function recordInlineMcpSetServers(
-  e,
-  {
-    startMs: startMs,
-    answeredMs: answeredMs,
-    mainThreadRequested: mainThreadRequested,
-    relayMarked: relayMarked,
-    response: response,
-  },
+  inlineMcpTiming,
+  { startMs, answeredMs, mainThreadRequested, relayMarked, response },
 ) {
   let S = answeredMs - startMs;
-  ((e.totalMs += S),
-    (e.firstStartMs ??= startMs),
-    Br("mcp_set_servers_inline_ms", e.totalMs, e.firstStartMs));
-  let R = Object.keys(response.errors).length,
-    w = {
-      after_first_main_thread_query: mainThreadRequested,
-      relay_marked: relayMarked,
-      hold_ms: Math.round(S),
-      added_count: response.added.length,
-      removed_count: response.removed.length,
-      error_count: R,
-    };
+  inlineMcpTiming.totalMs += S;
+  inlineMcpTiming.firstStartMs ??= startMs;
+  recordPhase("mcp_set_servers_inline_ms", inlineMcpTiming.totalMs, inlineMcpTiming.firstStartMs);
+  let R = Object.keys(response.errors).length;
+  let w = {
+    after_first_main_thread_query: mainThreadRequested,
+    relay_marked: relayMarked,
+    hold_ms: Math.round(S),
+    added_count: response.added.length,
+    removed_count: response.removed.length,
+    error_count: R,
+  };
   if (R > 0) logFeatureSad("mcp_set_servers_apply", "server_errors", w);
   else logFeatureOk("mcp_set_servers_apply", w);
 }
@@ -1126,148 +1187,179 @@ function recordInlineMcpSetServers(
 function isIdlePluginRefreshEnabled() {
   return (
     !env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL &&
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_plugin_refresh_in_idle_enabled", !1)
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_plugin_refresh_in_idle_enabled", false)
   );
 }
 //@ chunk-tyg7f3ek.js:164176-164807 placement
 async function waitForPluginSyncBudget(e) {
-  let n = !1;
+  let n = false;
   try {
     let r = e.pluginsSync.then(
-        () => "settled",
-        () => "settled",
-      ),
-      s = sleep(Math.max(0, e.remainingSyncBudgetMs())).then(() => "timeout");
-    if ((await Promise.race([r, s])) === "timeout") ((n = !0), e.onSyncOutlivedBudget());
+      () => "settled",
+      () => "settled",
+    );
+    let s = sleep(Math.max(0, e.remainingSyncBudgetMs())).then(() => "timeout");
+    if ((await Promise.race([r, s])) === "timeout") {
+      n = true;
+      e.onSyncOutlivedBudget();
+    }
   } catch (error) {
     logError(error);
   }
   try {
-    let startTime = performance.now(),
-      serverNamesOwnedBeforePluginsSync = await e.serverNamesOwnedBeforePluginsSync();
-    if (
-      (await e.refreshPluginState(),
-      Br("plugin_state_refresh_idle_ms", performance.now() - startTime, startTime),
-      n)
-    )
-      logFeatureSad("plugins_sync_idle_refresh", "sync_timeout");
+    let startTime = performance.now();
+    let s = await e.serverNamesOwnedBeforePluginsSync();
+    await e.refreshPluginState();
+    recordPhase("plugin_state_refresh_idle_ms", performance.now() - startTime, startTime);
+    if (n) logFeatureSad("plugins_sync_idle_refresh", "sync_timeout");
     else logFeatureOk("plugins_sync_idle_refresh");
-    return serverNamesOwnedBeforePluginsSync;
+    return s;
   } catch (error) {
-    (logError(error),
-      logFeatureBad("plugins_sync_idle_refresh", "reload_failed", {
-        error_name:
-          error instanceof Error ? (sanitizeClassName(error.name) ?? lit("Error")) : lit("non-error"),
-      }));
+    logError(error);
+    logFeatureBad("plugins_sync_idle_refresh", "reload_failed", {
+      error_name: error instanceof Error ? (sanitizeClassName(error.name) ?? lit("Error")) : lit("non-error"),
+    });
     return;
   }
 }
 //@ chunk-tyg7f3ek.js:164807-164943 placement
 function needsPluginRefreshAfterIdle(e) {
-  if (!e.idleRefreshRan) return !1;
+  if (!e.idleRefreshRan) return false;
   return (e.idleRefreshSyncTimedOut && e.syncLanded) || e.syncRoundReplaced || e.installNeedsRefresh;
 }
 //@ chunk-tyg7f3ek.js:164943-164970 placement
-var hC = new Set([LISTMCPRESOURCESTOOL, READMCPRESOURCETOOL, READ_MCP_RESOURCE_DIR_TOOL_NAME]);
+var MCP_RESOURCE_TOOL_NAMES = new Set([
+  LISTMCPRESOURCESTOOL,
+  READMCPRESOURCETOOL,
+  READ_MCP_RESOURCE_DIR_TOOL_NAME,
+]);
 //@ chunk-tyg7f3ek.js:164970-165076 placement
-var coordinatorModeModule = require("./chunk-yxywkh50.js"),
-  teleportRelayCarrierModule = require("./chunk-1d5behve.js"),
-  relayUsabilityModule = require("./chunk-1cnesc1e.js");
+var coordinatorModeModule = require("./chunk-yxywkh50.js");
+var teleportRelayCarrierModule = require("./chunk-1d5behve.js");
+var relayUsabilityModule = require("./chunk-1cnesc1e.js");
 //@ chunk-tyg7f3ek.js:165076-165146 placement
-function $H() {
+function mcpClientModule_6() {
   return require("./chunk-asne9cp8.js").mcpClientModule();
 }
 //@ chunk-tyg7f3ek.js:165146-166129 placement
 function planMcpConnectorPrewait(e) {
-  let n = Boolean(e.sdkUrl) && !vS(),
-    isCoordinatorMode = coordinatorModeModule.isCoordinatorMode(),
-    s = n ? env.CLAUDE_CODE_MCP_CONNECTOR_PREWAIT_MS : void 0,
-    h = s === void 0 ? void 0 : Math.min(s, ec),
-    y = n && wC(),
-    S = y && !(e.relayHoldFollowsBootVerdict === !0 && !KH()),
-    R = n && !isCoordinatorMode && h === void 0,
-    CLAUDE_CODE_MCP_STARTUP_WAIT_MS = env.CLAUDE_CODE_MCP_STARTUP_WAIT_MS,
-    P = CLAUDE_CODE_MCP_STARTUP_WAIT_MS === void 0 ? void 0 : Math.min(CLAUDE_CODE_MCP_STARTUP_WAIT_MS, ec),
-    L = S
-      ? "relay"
-      : P !== void 0
-        ? P > 0
-          ? "host_wait"
-          : "host_no_wait"
-        : !e.hasStreamingInput
-          ? "single_shot"
-          : n
-            ? "ccr_worker"
-            : isCoordinatorMode
-              ? "coordinator"
-              : !e.toolSearchAvailable
-                ? "no_tool_search"
-                : e.explicitMcpConfigFlag
-                  ? "explicit_mcp_config"
-                  : "lifted",
-    q = n
-      ? parseMcpPrewaitServers(env.CLAUDE_CODE_MCP_PREWAIT_SERVERS, env.CLAUDE_CODE_MCP_PREWAIT_SERVERS_MS)
-      : void 0;
+  let n = Boolean(e.sdkUrl) && !isBridgeEnvironment();
+  let r = coordinatorModeModule.isCoordinatorMode();
+  let CLAUDE_CODE_MCP_CONNECTOR_PREWAIT_MS = n ? env.CLAUDE_CODE_MCP_CONNECTOR_PREWAIT_MS : undefined;
+  let h =
+    CLAUDE_CODE_MCP_CONNECTOR_PREWAIT_MS === undefined
+      ? undefined
+      : Math.min(CLAUDE_CODE_MCP_CONNECTOR_PREWAIT_MS, MAX_TIMER_DELAY_MS);
+  let y = n && isTeleportRelayCarrierPresent();
+  let S = y && !(e.relayHoldFollowsBootVerdict === true && !isRelayStillUsable());
+  let R = n && !r && h === undefined;
+  let CLAUDE_CODE_MCP_STARTUP_WAIT_MS = env.CLAUDE_CODE_MCP_STARTUP_WAIT_MS;
+  let P =
+    CLAUDE_CODE_MCP_STARTUP_WAIT_MS === undefined
+      ? undefined
+      : Math.min(CLAUDE_CODE_MCP_STARTUP_WAIT_MS, MAX_TIMER_DELAY_MS);
+  let L = S
+    ? "relay"
+    : P !== undefined
+      ? P > 0
+        ? "host_wait"
+        : "host_no_wait"
+      : !e.hasStreamingInput
+        ? "single_shot"
+        : n
+          ? "ccr_worker"
+          : r
+            ? "coordinator"
+            : !e.toolSearchAvailable
+              ? "no_tool_search"
+              : e.explicitMcpConfigFlag
+                ? "explicit_mcp_config"
+                : "lifted";
+  let q = n
+    ? parseMcpPrewaitServers(env.CLAUDE_CODE_MCP_PREWAIT_SERVERS, env.CLAUDE_CODE_MCP_PREWAIT_SERVERS_MS)
+    : undefined;
   return {
     deadlineMs: S
-      ? Math.max(Qai, P ?? h ?? 0)
+      ? Math.max(REMOTE_CONNECT_TIMEOUT_MS, P ?? h ?? 0)
       : (P ?? (e.explicitMcpConfigFlag && !n ? getConnectionTimeoutMs() : h)),
     waitForDeferrable: L !== "lifted" && L !== "host_no_wait",
     firstTurnHold: L,
     localOnly: R && !S,
-    coordinatorMainThreadOnly: isCoordinatorMode,
+    coordinatorMainThreadOnly: r,
     relayMarked: y,
     relayHold: S,
-    ...(q !== void 0 && { launchNamed: q }),
-    skipFullyDeferredServers: n && !isCoordinatorMode && e.hasStreamingInput && e.toolSearchAvailable,
-    ...(S && { laterWakes: { deadlineMs: P ?? h, localOnly: R } }),
+    ...(q !== undefined && {
+      launchNamed: q,
+    }),
+    skipFullyDeferredServers: n && !r && e.hasStreamingInput && e.toolSearchAvailable,
+    ...(S && {
+      laterWakes: {
+        deadlineMs: P ?? h,
+        localOnly: R,
+      },
+    }),
   };
 }
 //@ chunk-tyg7f3ek.js:166129-166194 placement
-function wC() {
+function isTeleportRelayCarrierPresent() {
   return teleportRelayCarrierModule !== null && teleportRelayCarrierModule.teleportRelayCarrierPresent();
 }
 //@ chunk-tyg7f3ek.js:166194-166257 placement
-function KH() {
+function isRelayStillUsable() {
   return relayUsabilityModule === null || relayUsabilityModule.relayStillUsableInProcess();
 }
 //@ chunk-tyg7f3ek.js:166257-166318 placement
-function vC() {
+function canUseToolSearch() {
   return (
     isToolSearchEnabledOptimistic() &&
     modelSupportsToolReference(getMainLoopModel()) &&
     !isVertexModelWithoutToolSearch(getCanonicalName(getMainLoopModel())) &&
-    !rGt()
+    !isToolSearchLockedOffByDefault()
   );
 }
 //@ chunk-tyg7f3ek.js:166318-166333 placement
-var _C = new Set();
+var EMPTY_TOOL_SET = new Set();
 //@ chunk-tyg7f3ek.js:166333-167115 placement
-function discoveredToolsInConversation(e, n) {
-  let r = (s) => n !== void 0 && count(n, (h) => h === s) === 1;
+function discoveredToolsInConversation(messages, n) {
+  let r = (s) => n !== undefined && count(n, (h) => h === s) === 1;
   try {
-    let s = new Set(),
-      h = extractDiscoveredToolNames(e, n && { surfaced: { exceptAnnouncements: new Set() } }),
-      y = new Set(h);
-    for (let S of e)
+    let s = new Set();
+    let discoveredToolNames = extractDiscoveredToolNames(
+      messages,
+      n && {
+        surfaced: {
+          exceptAnnouncements: new Set(),
+        },
+      },
+    );
+    let y = new Set(discoveredToolNames);
+    for (let S of messages)
       if (S.type === "assistant") {
-        for (let R of S.message.content) if (R.type === "tool_use") (h.add(R.name), y.add(R.name));
+        for (let R of S.message.content)
+          if (R.type === "tool_use") {
+            discoveredToolNames.add(R.name);
+            y.add(R.name);
+          }
       } else if (S.type === "attachment") {
-        let { attachment: attachment } = S;
+        let { attachment } = S;
         if (attachment.type === "deferred_tools_delta") {
-          for (let w of stringArray(attachment.addedNames)) h.add(w);
-          for (let w of stringArray(attachment.wireHiddenNames)) (h.add(w), y.add(w));
+          for (let w of stringArray(attachment.addedNames)) discoveredToolNames.add(w);
+          for (let w of stringArray(attachment.wireHiddenNames)) {
+            discoveredToolNames.add(w);
+            y.add(w);
+          }
         } else if (attachment.type === "mcp_instructions_delta")
           for (let w of stringArray(attachment.addedNames)) {
-            let P = getPrefixServerKey(w);
-            if (!r(P)) s.add(P);
+            let prefixServerKey = getPrefixServerKey(w);
+            if (!r(prefixServerKey)) s.add(prefixServerKey);
           }
       }
-    for (let S of h) {
-      let R = mcpInfoFromString(S);
+    for (let discoveredToolName of discoveredToolNames) {
+      let R = mcpInfoFromString(discoveredToolName);
       if (R) {
-        if (y.has(S) || !r(R.serverName)) s.add(R.serverName);
-      } else if (hC.has(S) || S.startsWith("mcp__")) return;
+        if (y.has(discoveredToolName) || !r(R.serverName)) s.add(R.serverName);
+      } else if (MCP_RESOURCE_TOOL_NAMES.has(discoveredToolName) || discoveredToolName.startsWith("mcp__"))
+        return;
     }
     return s;
   } catch (error) {
@@ -1278,85 +1370,94 @@ function discoveredToolsInConversation(e, n) {
   }
 }
 //@ chunk-tyg7f3ek.js:167115-167718 placement
-function pluginMcpServersRequired({
-  policyAllows: policyAllows,
-  clients: clients,
-  requiredServerNames: requiredServerNames,
-  messages: messages,
-}) {
-  let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT,
-    y = Udo.some((P) => P === CLAUDE_CODE_ENTRYPOINT) && !env.CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS && !wC(),
-    filtered = clients.filter(
-      (P) =>
-        P.type === "pending" &&
-        (P.config.type === void 0 || P.config.type === "stdio") &&
-        (P.config.alwaysLoad === !1 ||
-          (P.config.alwaysLoad === void 0 && y && isFromBuiltinMarketplace(P.config))),
-    );
-  if (filtered.length === 0 || !policyAllows() || getToolSearchMode() !== "tst" || !vC()) return _C;
+function pluginMcpServersRequired({ policyAllows, clients, requiredServerNames, messages }) {
+  let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
+  let y =
+    REMOTE_ENTRYPOINT_NAMES.some((P) => P === CLAUDE_CODE_ENTRYPOINT) &&
+    !env.CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS &&
+    !isTeleportRelayCarrierPresent();
+  let filtered = clients.filter(
+    (client) =>
+      client.type === "pending" &&
+      (client.config.type === undefined || client.config.type === "stdio") &&
+      (client.config.alwaysLoad === false ||
+        (client.config.alwaysLoad === undefined && y && isFromBuiltinMarketplace(client.config))),
+  );
+  if (filtered.length === 0 || !policyAllows() || getToolSearchMode() !== "tst" || !canUseToolSearch())
+    return EMPTY_TOOL_SET;
   let R = discoveredToolsInConversation(
     messages,
-    isSortedOtterOn() ? clients.map((P) => getPrefixServerKey(P.name)) : void 0,
+    isSortedOtterOn() ? clients.map((client) => getPrefixServerKey(client.name)) : undefined,
   );
-  if (R === void 0) return _C;
+  if (R === undefined) return EMPTY_TOOL_SET;
   let w = requiredServerNames();
   return new Set(
     filtered
-      .map((P) => ({ name: P.name, segment: getPrefixServerKey(P.name) }))
+      .map((P) => ({
+        name: P.name,
+        segment: getPrefixServerKey(P.name),
+      }))
       .filter((P) => !w.has(P.segment) && !R.has(P.segment))
       .map((P) => P.name),
   );
 }
+//@ chunk-tyg7f3ek.js:167718-170176 placement
 /**
  * 每轮开始前刷新 MCP：等待可延迟服务器、合并本地/插件/动态配置、更新工具与命令。
  */
-//@ chunk-tyg7f3ek.js:167718-170176 placement
-async function refreshMcpForTurn(e, n, r = Npe, s = {}) {
+async function refreshMcpForTurn(e, subscribe, r = TRANSPORT_FALLBACK_TIMEOUT_MS, s = {}) {
   let {
-      skipTelemetry: skipTelemetry = !1,
-      waitForDeferrable: waitForDeferrable = !1,
-      localOnly: localOnly = !1,
-      coordinatorMainThreadOnly: coordinatorMainThreadOnly = !1,
-      relayMarked: relayMarked = !1,
-      relayHold: relayHold,
-      relayHoldFollowsBootVerdict: relayHoldFollowsBootVerdict,
-      firstTurnHold: firstTurnHold,
-      requiredServerNames: requiredServerNames,
-      onlyServerNames: onlyServerNames,
-      permissionPromptToolServerName: permissionPromptToolServerName,
-      alsoWaitFor: alsoWaitFor,
-      skipServerNames: skipServerNames,
-    } = s,
-    Ue = !waitForDeferrable && vC(),
-    ce = (ut) => requiredServerNames?.has(getPrefixServerKey(ut.name)) ?? !1,
-    nt = coordinatorMainThreadOnly ? coordinatorExtraToolNames() : [],
-    ie = (ut) =>
-      (onlyServerNames === void 0 || onlyServerNames.has(ut.name)) &&
-      !skipServerNames?.has(ut.name) &&
-      (!localOnly || $H().isLocalMcpServer(ut.config)) &&
-      (!coordinatorMainThreadOnly || coordinatorMainThreadUsesMcpServer(ut, nt)),
-    Se = (ut) => ie(ut) && (!Ue || ut.config.alwaysLoad === !0 || ce(ut)),
-    me = (ut) => ut.type === "pending" && ce(ut) && ie(ut),
-    Me = (ut) =>
-      permissionPromptToolServerName !== void 0 &&
-      getPrefixServerKey(ut.name) === permissionPromptToolServerName,
-    Ee = (ut) => ut.type === "pending" && Me(ut),
-    He = (ut) => ut.type === "pending" && alsoWaitFor?.has(ut.name) === !0 && ie(ut) && !Se(ut) && !Me(ut),
-    Xe = (ut) => ut.type === "pending" && (Me(ut) || Se(ut) || He(ut)),
-    mcp = e().mcp,
-    St = count(mcp.clients, (ut) => ut.type === "pending"),
-    wt = count(mcp.clients, Xe),
-    Lt = count(mcp.clients, He),
-    any = mcp.clients.some(Ee),
-    _n = mcp.tools.length,
-    Mn = { getState: e, subscribe: n },
-    jn = 0,
-    Jn = 0,
-    now = Date.now();
+    skipTelemetry = false,
+    waitForDeferrable = false,
+    localOnly = false,
+    coordinatorMainThreadOnly = false,
+    relayMarked = false,
+    relayHold,
+    relayHoldFollowsBootVerdict,
+    firstTurnHold,
+    requiredServerNames,
+    onlyServerNames,
+    permissionPromptToolServerName,
+    alsoWaitFor,
+    skipServerNames,
+  } = s;
+  let Ue = !waitForDeferrable && canUseToolSearch();
+  let ce = (ut) => requiredServerNames?.has(getPrefixServerKey(ut.name)) ?? false;
+  let nt = coordinatorMainThreadOnly ? coordinatorExtraToolNames() : [];
+  let ie = (ut) =>
+    (onlyServerNames === undefined || onlyServerNames.has(ut.name)) &&
+    !skipServerNames?.has(ut.name) &&
+    (!localOnly || mcpClientModule_6().isLocalMcpServer(ut.config)) &&
+    (!coordinatorMainThreadOnly || coordinatorMainThreadUsesMcpServer(ut, nt));
+  let Se = (ut) => ie(ut) && (!Ue || ut.config.alwaysLoad === true || ce(ut));
+  let me = (ut) => ut.type === "pending" && ce(ut) && ie(ut);
+  let Me = (ut) =>
+    permissionPromptToolServerName !== undefined &&
+    getPrefixServerKey(ut.name) === permissionPromptToolServerName;
+  let Ee = (ut) => ut.type === "pending" && Me(ut);
+  let He = (ut) =>
+    ut.type === "pending" && alsoWaitFor?.has(ut.name) === true && ie(ut) && !Se(ut) && !Me(ut);
+  let Xe = (ut) => ut.type === "pending" && (Me(ut) || Se(ut) || He(ut));
+  let mcp = e().mcp;
+  let pendingBefore = count(mcp.clients, (ut) => ut.type === "pending");
+  let wt = count(mcp.clients, Xe);
+  let Lt = count(mcp.clients, He);
+  let any = mcp.clients.some(Ee);
+  let toolsBefore = mcp.tools.length;
+  let Mn = {
+    getState: e,
+    subscribe,
+  };
+  let jn = 0;
+  let namedOnlyWaitedMs = 0;
+  let now = Date.now();
   if (wt > 0 && r > 0) {
-    if (Lt > 0)
-      (await waitForStoreState(Mn, (Yt) => !Yt.mcp.clients.some(He), { timeoutMs: Math.min(r, Zai) }),
-        (Jn = Date.now() - now));
+    if (Lt > 0) {
+      await waitForStoreState(Mn, (Yt) => !Yt.mcp.clients.some(He), {
+        timeoutMs: Math.min(r, SHORT_RETRY_MS),
+      });
+      namedOnlyWaitedMs = Date.now() - now;
+    }
     let ut = (Yt) => Yt.type === "pending" && (Me(Yt) || Se(Yt));
     if (e().mcp.clients.some(ut))
       await waitForStoreState(Mn, (Yt) => !Yt.mcp.clients.some(ut), {
@@ -1365,41 +1466,43 @@ async function refreshMcpForTurn(e, n, r = Npe, s = {}) {
     jn = Date.now() - now;
   }
   let Dr = 0;
-  if (r < Npe && e().mcp.clients.some(me))
-    (await waitForStoreState(Mn, (ut) => !ut.mcp.clients.some(me), {
-      timeoutMs: Math.max(0, now + Npe - Date.now()),
-    }),
-      (Dr = Date.now() - now - jn));
-  let $r = 0;
-  if (any)
-    (await waitForStoreState(Mn, (ut) => !ut.mcp.clients.some(Ee), {
+  if (r < TRANSPORT_FALLBACK_TIMEOUT_MS && e().mcp.clients.some(me)) {
+    await waitForStoreState(Mn, (ut) => !ut.mcp.clients.some(me), {
+      timeoutMs: Math.max(0, now + TRANSPORT_FALLBACK_TIMEOUT_MS - Date.now()),
+    });
+    Dr = Date.now() - now - jn;
+  }
+  let permissionPromptWaitedMs = 0;
+  if (any) {
+    await waitForStoreState(Mn, (ut) => !ut.mcp.clients.some(Ee), {
       timeoutMs: Math.max(0, now + getConnectionTimeoutMs() - Date.now()),
-    }),
-      ($r = Date.now() - now - jn - Dr));
+    });
+    permissionPromptWaitedMs = Date.now() - now - jn - Dr;
+  }
   if (skipTelemetry) return;
   let mcp_2 = e().mcp;
   logEvent("tengu_headless_mcp_prewait", {
-    localOnly: localOnly,
-    coordinatorMainThreadOnly: coordinatorMainThreadOnly,
+    localOnly,
+    coordinatorMainThreadOnly,
     willDeferMcp: Ue,
-    waitForDeferrable: waitForDeferrable,
+    waitForDeferrable,
     deadlineMs: r,
-    pendingBefore: St,
+    pendingBefore,
     pendingWaitedBefore: wt,
-    toolsBefore: _n,
+    toolsBefore,
     waitedMs: jn,
     permissionPromptServerPendingBefore: any,
-    permissionPromptWaitedMs: $r,
+    permissionPromptWaitedMs,
     pendingAfter: count(mcp_2.clients, (ut) => ut.type === "pending"),
     pendingWaitedAfter: count(mcp_2.clients, Xe),
     permissionPromptServerPendingAfter: mcp_2.clients.some(Ee),
-    relayMarked: relayMarked,
-    relayHold: relayHold,
-    relayHoldFollowsBootVerdict: relayHoldFollowsBootVerdict,
-    namedServersOnly: onlyServerNames !== void 0,
+    relayMarked,
+    relayHold,
+    relayHoldFollowsBootVerdict,
+    namedServersOnly: onlyServerNames !== undefined,
     alsoWaitForCount: alsoWaitFor?.size ?? 0,
     pendingNamedOnlyBefore: Lt,
-    namedOnlyWaitedMs: Jn,
+    namedOnlyWaitedMs,
     toolsAfter: mcp_2.tools.length,
     mcpNonBlocking: getMcpConnectNonBlocking(),
     firstTurnHold: fromEnumOpt(firstTurnHold),
@@ -1408,17 +1511,18 @@ async function refreshMcpForTurn(e, n, r = Npe, s = {}) {
     requiredWaitedMs: Dr,
     pendingFullyDeferredSkippedBefore: count(
       mcp.clients,
-      (ut) => ut.type === "pending" && skipServerNames?.has(ut.name) === !0 && !Xe(ut),
+      (ut) => ut.type === "pending" && skipServerNames?.has(ut.name) === true && !Xe(ut),
     ),
   });
 }
 //@ chunk-tyg7f3ek.js:170176-170268 placement
-function emitOrHoldResult({ message: message, held: held, holdBackActive: holdBackActive, emit: emit }) {
+function emitOrHoldResult({ message, held, holdBackActive, emit }) {
   if (holdBackActive) {
     held.push(message);
     return;
   }
-  (flushHeldResults(held, emit), emit(message));
+  flushHeldResults(held, emit);
+  emit(message);
 }
 //@ chunk-tyg7f3ek.js:170268-170316 placement
 function flushHeldResults(e, n) {
@@ -1427,10 +1531,12 @@ function flushHeldResults(e, n) {
 }
 //@ chunk-tyg7f3ek.js:170316-170455 placement
 function clearQueuedTurnCount(e, n) {
-  if (!n || e.type !== "result" || e.queued_turn_count === void 0 || e.queued_turn_count === 0) return e;
-  return { ...e, queued_turn_count: 0 };
+  if (!n || e.type !== "result" || e.queued_turn_count === undefined || e.queued_turn_count === 0) return e;
+  return {
+    ...e,
+    queued_turn_count: 0,
+  };
 }
-
 export {
   createTranscriptSaver,
   createInlineMcpTiming,

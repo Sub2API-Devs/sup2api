@@ -5,52 +5,60 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-layout 1
  */
-import { Xo, ar } from "../internal/parse.mjs";
-import { Kn, ke } from "../internal/tslib.mjs";
+import { Xo, addResponseIDs } from "../internal/parse.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
 
 //@ chunk-hwmsct5x.js:36448-37300 esm-layout
-var lr,
-  Jo = (() => {
-    class e extends Promise {
-      constructor(n, r, s = Xo) {
-        super((h) => {
-          h(null);
-        });
-        ((this.responsePromise = r), (this.parseResponse = s), lr.set(this, void 0), Kn(this, lr, n, "f"));
-      }
-      _thenUnwrap(n) {
-        return new e(ke(this, lr, "f"), this.responsePromise, async (r, s) =>
-          ar(n(await this.parseResponse(r, s), s), s.response),
-        );
-      }
-      asResponse() {
-        return this.responsePromise.then((n) => n.response);
-      }
-      async withResponse() {
-        let [n, r] = await Promise.all([this.parse(), this.asResponse()]);
-        return {
-          data: n,
-          response: r,
-          request_id: r.headers.get("request-id"),
-          workspace_id: r.headers.get("anthropic-workspace-id"),
-        };
-      }
-      parse() {
-        if (!this.parsedPromise)
-          this.parsedPromise = this.responsePromise.then((n) => this.parseResponse(ke(this, lr, "f"), n));
-        return this.parsedPromise;
-      }
-      then(n, r) {
-        return this.parse().then(n, r);
-      }
-      catch(n) {
-        return this.parse().catch(n);
-      }
-      finally(n) {
-        return this.parse().finally(n);
-      }
+var _APIPromise_client;
+var APIPromise = (() => {
+  class APIPromise extends Promise {
+    constructor(client, responsePromise, parseResponse = Xo) {
+      super((resolve) => {
+        resolve(null);
+      });
+      this.responsePromise = responsePromise;
+      this.parseResponse = parseResponse;
+      _APIPromise_client.set(this, undefined);
+      __classPrivateFieldSet(this, _APIPromise_client, client, "f");
     }
-    return ((lr = new WeakMap()), e);
-  })();
-
-export { Jo };
+    _thenUnwrap(transform) {
+      return new APIPromise(
+        __classPrivateFieldGet(this, _APIPromise_client, "f"),
+        this.responsePromise,
+        async (client, props) =>
+          addResponseIDs(transform(await this.parseResponse(client, props), props), props.response),
+      );
+    }
+    asResponse() {
+      return this.responsePromise.then((p) => p.response);
+    }
+    async withResponse() {
+      let [data, response] = await Promise.all([this.parse(), this.asResponse()]);
+      return {
+        data,
+        response,
+        request_id: response.headers.get("request-id"),
+        workspace_id: response.headers.get("anthropic-workspace-id"),
+      };
+    }
+    parse() {
+      if (!this.parsedPromise)
+        this.parsedPromise = this.responsePromise.then((data) =>
+          this.parseResponse(__classPrivateFieldGet(this, _APIPromise_client, "f"), data),
+        );
+      return this.parsedPromise;
+    }
+    then(onfulfilled, onrejected) {
+      return this.parse().then(onfulfilled, onrejected);
+    }
+    catch(onrejected) {
+      return this.parse().catch(onrejected);
+    }
+    finally(onfinally) {
+      return this.parse().finally(onfinally);
+    }
+  }
+  _APIPromise_client = new WeakMap();
+  return APIPromise;
+})();
+export { APIPromise };

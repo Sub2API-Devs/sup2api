@@ -12,32 +12,33 @@ import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { renderModelName } from "../../utils/model/modelDisplay.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 
+//@ chunk-e6aww6q8.js:2040656-2041085 fingerprint = default (0.569)
 /**
  * /model 命令对象（local）；描述：Set the AI model for Claude Code；isEnabled: ()=>_e()；isHidden: {return!_e()}；实现 chunk-0pmcg6nh.js 的 b。
  */
-//@ chunk-e6aww6q8.js:2040656-2041085 fingerprint = default (0.569)
 var modelNonInteractiveCommand = {
-    type: "local",
-    name: "model",
-    supportsNonInteractive: !0,
-    description: "Set the AI model for Claude Code",
-    argumentHint: "<model>",
-    isEnabled: () => getIsNonInteractiveSession(),
-    get isHidden() {
-      return !getIsNonInteractiveSession();
-    },
-    load: () => import("./chunk-0pmcg6nh.js"),
+  type: "local",
+  name: "model",
+  supportsNonInteractive: true,
+  description: "Set the AI model for Claude Code",
+  argumentHint: "<model>",
+  isEnabled: () => getIsNonInteractiveSession(),
+  get isHidden() {
+    return !getIsNonInteractiveSession();
   },
-  modelCommand = {
-    type: "local-jsx",
-    name: "model",
-    get description() {
-      return `Set the AI model for Claude Code (currently ${renderModelName(getMainLoopModel())})`;
-    },
-    argumentHint: "[model]",
-    immediate: !0,
-    requires: { ink: !0 },
-    thinClientDispatch: "control-request",
-  };
-
+  load: () => import("./chunk-0pmcg6nh.js"),
+};
+var modelCommand = {
+  type: "local-jsx",
+  name: "model",
+  get description() {
+    return `Set the AI model for Claude Code (currently ${renderModelName(getMainLoopModel())})`;
+  },
+  argumentHint: "[model]",
+  immediate: true,
+  requires: {
+    ink: true,
+  },
+  thinClientDispatch: "control-request",
+};
 export { modelCommand, modelNonInteractiveCommand };

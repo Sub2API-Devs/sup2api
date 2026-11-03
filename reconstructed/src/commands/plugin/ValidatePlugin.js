@@ -10,7 +10,7 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { resolveValidateTarget, sanitizeForDisplay } from "../../utils/plugins/validatePlugin.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { plural } from "../../utils/stringUtils.js";
 import { logError } from "../../utils/log.js";
 import { formatAdviceLines, readmeAdviceFor } from "../../services/plugins/pluginReadmeAdvice.js";
@@ -18,31 +18,31 @@ import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { P } from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
 //@ chunk-vrb44rx7.js:214694-214725 sole-consumer
-function Ek(ae) {
+function withTrailingNewline(ae) {
   return `${ae}
 `;
 }
 //@ chunk-vrb44rx7.js:214725-214759 sole-consumer
-function Dk(Se) {
+function succeededResult(Se) {
   return Se.success;
 }
 //@ chunk-vrb44rx7.js:214759-214803 affinity
-function Mk(kt) {
+function hasWarnings(kt) {
   return kt.warnings.length > 0;
 }
 //@ chunk-vrb44rx7.js:214803-217501 fingerprint = ValidatePlugin (0.654)
-function ValidatePlugin(t0) {
-  let C = w(5),
-    { onComplete: onComplete, path: path } = t0,
-    x,
-    T;
-  if (C[0] !== onComplete || C[1] !== path)
-    ((x = () => {
-      let runValidation = async function je() {
+function ValidatePlugin(props) {
+  let $ = w(5);
+  let { onComplete, path } = props;
+  let t1;
+  let t2;
+  if ($[0] !== onComplete || $[1] !== path) {
+    t1 = () => {
+      let runValidation = async function runValidation() {
         if (!path) {
           onComplete(`Usage: /plugin validate <path>
 
@@ -70,150 +70,151 @@ Or from the command line:
           return;
         }
         try {
-          let {
-            manifest: manifest,
-            contents: contents,
-            resolvedPath: resolvedPath,
-            pluginRoot: pluginRoot,
-          } = await resolveValidateTarget(path);
+          let { manifest, contents, resolvedPath, pluginRoot } = await resolveValidateTarget(path);
           let V = manifest ? [manifest, ...contents] : contents;
-          let B = manifest
+          let output = manifest
             ? `Validating ${manifest.fileType} manifest: ${manifest.filePath}
 
 `
             : `Validating components in: ${resolvedPath}
 
 `;
-          for (const _ of V) {
-            if (_ !== manifest)
-              B =
-                B +
-                `Validating ${_.fileType}: ${_.filePath}
+          for (const result of V) {
+            if (result !== manifest)
+              output =
+                output +
+                `Validating ${result.fileType}: ${result.filePath}
 
 `;
-            if (_.errors.length > 0)
-              ((B =
-                B +
-                `${re.cross} Found ${_.errors.length} ${plural(_.errors.length, "error")}:
+            if (result.errors.length > 0) {
+              output =
+                output +
+                `${figures_default.cross} Found ${result.errors.length} ${plural(result.errors.length, "error")}:
 
-`),
-                _.errors.forEach((error) => {
-                  B =
-                    B +
-                    `  ${re.pointer} ${error.path}: ${error.message}
 `;
-                }),
-                (B =
-                  B +
-                  `
-`));
-            if (_.warnings.length > 0)
-              ((B =
-                B +
-                `${re.warning} Found ${_.warnings.length} ${plural(_.warnings.length, "warning")}:
+              result.errors.forEach((error) => {
+                output =
+                  output +
+                  `  ${figures_default.pointer} ${error.path}: ${error.message}
+`;
+              });
+              output =
+                output +
+                `
+`;
+            }
+            if (result.warnings.length > 0) {
+              output =
+                output +
+                `${figures_default.warning} Found ${result.warnings.length} ${plural(result.warnings.length, "warning")}:
 
-`),
-                _.warnings.forEach((error_0) => {
-                  B =
-                    B +
-                    `  ${re.pointer} ${error_0.path}: ${error_0.message}
 `;
-                }),
-                (B =
-                  B +
-                  `
-`));
-            if (_.notes !== void 0)
-              (_.notes.forEach((warning) => {
-                B =
-                  B +
-                  `  ${re.pointer} ${warning}
+              result.warnings.forEach((warning) => {
+                output =
+                  output +
+                  `  ${figures_default.pointer} ${warning.path}: ${warning.message}
 `;
-              }),
-                (B =
-                  B +
-                  `
-`));
+              });
+              output =
+                output +
+                `
+`;
+            }
+            if (result.notes !== undefined) {
+              result.notes.forEach((warning) => {
+                output =
+                  output +
+                  `  ${figures_default.pointer} ${warning}
+`;
+              });
+              output =
+                output +
+                `
+`;
+            }
           }
           let me = await import("./chunk-5aas12zq.js");
-          let directoryChecksRoot = me.directoryChecksRoot({
-            pluginRoot: pluginRoot,
-            manifest: manifest,
-            resolvedPath: resolvedPath,
+          let ne = me.directoryChecksRoot({
+            pluginRoot,
+            manifest,
+            resolvedPath,
           });
-          if (directoryChecksRoot !== null) {
+          if (ne !== null) {
             let he;
             try {
-              let lintPluginForDirectory = await me.lintPluginForDirectory(directoryChecksRoot);
+              let Oe = await me.lintPluginForDirectory(ne);
               he =
-                lintPluginForDirectory === null
+                Oe === null
                   ? []
-                  : me.formatDirectoryReport(
-                      directoryChecksRoot,
-                      lintPluginForDirectory,
-                      "claude plugin validate <path> --profile directory",
-                    );
-            } catch (t3) {
-              let rt = t3;
-              (logError(rt), (he = me.formatDirectoryChecksFailure(directoryChecksRoot)));
+                  : me.formatDirectoryReport(ne, Oe, "claude plugin validate <path> --profile directory");
+            } catch (error) {
+              let rt = error;
+              logError(rt);
+              he = me.formatDirectoryChecksFailure(ne);
             }
             if (he.length > 0)
-              B =
-                B +
+              output =
+                output +
                 (he.join(`
 `) +
                   `
 `);
           }
-          if (
-            ((B =
-              B +
-              formatAdviceLines(await readmeAdviceFor(path, manifest, contents))
-                .map(Ek)
-                .join("")),
-            V.every(Dk))
-          )
-            ((B =
-              B +
-              (V.some(Mk)
-                ? `${re.tick} Validation passed with warnings
+          output =
+            output +
+            formatAdviceLines(await readmeAdviceFor(path, manifest, contents))
+              .map(withTrailingNewline)
+              .join("");
+          if (V.every(succeededResult)) {
+            output =
+              output +
+              (V.some(hasWarnings)
+                ? `${figures_default.tick} Validation passed with warnings
 `
-                : `${re.tick} Validation passed
-`)),
-              (process.exitCode = 0));
-          else
-            ((B =
-              B +
-              `${re.cross} Validation failed
-`),
-              (process.exitCode = 1));
-          onComplete(B);
+                : `${figures_default.tick} Validation passed
+`);
+            process.exitCode = 0;
+          } else {
+            output =
+              output +
+              `${figures_default.cross} Validation failed
+`;
+            process.exitCode = 1;
+          }
+          onComplete(output);
         } catch (error) {
-          let et = error;
-          ((process.exitCode = 2),
-            logForDebugging(`Plugin validation failed unexpectedly for ${path}: ${errorMessage(et)}`, {
-              level: "error",
-            }),
-            onComplete(
-              `${re.cross} Unexpected error during validation: ${sanitizeForDisplay(errorMessage(et), 200)}`,
-            ));
+          let error_2 = error;
+          process.exitCode = 2;
+          logForDebugging(`Plugin validation failed unexpectedly for ${path}: ${errorMessage(error_2)}`, {
+            level: "error",
+          });
+          onComplete(
+            `${figures_default.cross} Unexpected error during validation: ${sanitizeForDisplay(errorMessage(error_2), 200)}`,
+          );
         }
       };
       runValidation();
-    }),
-      (T = [onComplete, path]),
-      (C[0] = onComplete),
-      (C[1] = path),
-      (C[2] = x),
-      (C[3] = T));
-  else ((x = C[2]), (T = C[3]));
-  P(x, T);
-  let D;
-  if (C[4] === MEMO_CACHE_SENTINEL)
-    ((D = e(Box, { flexDirection: "column", children: e(Text, { children: "Running validation..." }) })),
-      (C[4] = D));
-  else D = C[4];
-  return D;
+    };
+    t2 = [onComplete, path];
+    $[0] = onComplete;
+    $[1] = path;
+    $[2] = t1;
+    $[3] = t2;
+  } else {
+    t1 = $[2];
+    t2 = $[3];
+  }
+  P(t1, t2);
+  let t3;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    t3 = jsxProd_default(Box, {
+      flexDirection: "column",
+      children: jsxProd_default(Text, {
+        children: "Running validation...",
+      }),
+    });
+    $[4] = t3;
+  } else t3 = $[4];
+  return t3;
 }
-
 export { ValidatePlugin };

@@ -11,13 +11,13 @@
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { getCachedRemainingPasses } from "../../services/api/referral.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { GuestPassesDialog } from "./_new/GuestPassesContent.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { GuestPassesDialog } from "./GuestPassesContent.js";
 
+//@ chunk-aa3cndeh.js:11146-11400 fingerprint = call (1)
 /**
  * /passes 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-aa3cndeh.js:11146-11400 fingerprint = call (1)
 async function call(onDone, context) {
   let isFirstVisit = !getGlobalConfig().hasVisitedPasses;
   if (isFirstVisit) {
@@ -25,14 +25,16 @@ async function call(onDone, context) {
     await saveGlobalConfig(
       (current) => ({
         ...current,
-        hasVisitedPasses: !0,
+        hasVisitedPasses: true,
         passesLastSeenRemaining: remaining ?? current.passesLastSeenRemaining,
       }),
       context.storageV5,
     );
   }
-  return (
-    logEvent("tengu_guest_passes_visited", { is_first_visit: isFirstVisit }),
-    e(GuestPassesDialog, { onDone: onDone })
-  );
+  logEvent("tengu_guest_passes_visited", {
+    is_first_visit: isFirstVisit,
+  });
+  return jsxProd_default(GuestPassesDialog, {
+    onDone,
+  });
 }

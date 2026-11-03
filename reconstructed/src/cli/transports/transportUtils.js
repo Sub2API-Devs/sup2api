@@ -9,14 +9,13 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-1wpnxx5r.js:2162-2276 fingerprint = getTransportForUrl (0.738)
 /**
  * 把 ws:/wss: 协议改成 http:/https:。
  */
-//@ chunk-1wpnxx5r.js:2162-2276 fingerprint = getTransportForUrl (0.738)
 function getTransportForUrl(e) {
   if (e.protocol === "wss:") e.protocol = "https:";
   else if (e.protocol === "ws:") e.protocol = "http:";
   return e;
 }
-
 export { getTransportForUrl };

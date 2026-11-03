@@ -5,47 +5,68 @@
  * pieces: chunk-zykv69v4.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
-import { L } from "../../esm/shared/protocol.js";
+import { isPlainObject } from "../../esm/shared/protocol.js";
 import { Re } from "../../../../../../runtime/bun-runtime.js";
-import { nlr } from "../../../../../ajv/dist/ajv.js";
-import { oe } from "../../../../../ajv-formats/dist/index.js";
+import { require_ajv } from "../../../../../ajv/dist/ajv.js";
+import { require_ajv_formats } from "../../../../../ajv-formats/dist/index.js";
 
 //@ chunk-zykv69v4.js:27574-27722 esm-layout
-function vGn(e, t) {
-  let r = { ...e };
-  for (let key in t) {
-    let n = key,
-      s = t[n];
-    if (s === void 0) continue;
+function vGn(mod, capabilities) {
+  let r = {
+    ...mod,
+  };
+  for (let key in capabilities) {
+    let n = key;
+    let s = capabilities[n];
+    if (s === undefined) continue;
     let o = r[n];
-    if (L(o) && L(s)) r[n] = { ...o, ...s };
+    if (isPlainObject(o) && isPlainObject(s))
+      r[n] = {
+        ...o,
+        ...s,
+      };
     else r[n] = s;
   }
   return r;
 }
 //@ chunk-zykv69v4.js:27722-27755 esm-layout
-var ie = Re(nlr(), 1),
-  ue = Re(oe(), 1);
+var import_ajv = Re(require_ajv(), 1);
+var import_ajv_formats = Re(require_ajv_formats(), 1);
 //@ chunk-zykv69v4.js:27755-27876 esm-fingerprint
-function qe() {
-  let e = new ie.default({ strict: !1, validateFormats: !0, validateSchema: !1, allErrors: !0 });
-  return (ue.default(e), e);
+function createDefaultAjvInstance() {
+  let ajv = new import_ajv.default({
+    strict: false,
+    validateFormats: true,
+    validateSchema: false,
+    allErrors: true,
+  });
+  import_ajv_formats.default(ajv);
+  return ajv;
 }
 //@ chunk-zykv69v4.js:27876-28190 esm-fingerprint
 class Gsn {
-  constructor(e) {
-    this._ajv = e ?? qe();
+  constructor(ajv) {
+    this._ajv = ajv ?? createDefaultAjvInstance();
   }
-  getValidator(e) {
-    let t =
-      "$id" in e && typeof e.$id === "string"
-        ? (this._ajv.getSchema(e.$id) ?? this._ajv.compile(e))
-        : this._ajv.compile(e);
+  getValidator(schema) {
+    let ajvValidator =
+      "$id" in schema && typeof schema.$id === "string"
+        ? (this._ajv.getSchema(schema.$id) ?? this._ajv.compile(schema))
+        : this._ajv.compile(schema);
     return (r) => {
-      if (t(r)) return { valid: !0, data: r, errorMessage: void 0 };
-      else return { valid: !1, data: void 0, errorMessage: this._ajv.errorsText(t.errors) };
+      if (ajvValidator(r))
+        return {
+          valid: true,
+          data: r,
+          errorMessage: undefined,
+        };
+      else
+        return {
+          valid: false,
+          data: undefined,
+          errorMessage: this._ajv.errorsText(ajvValidator.errors),
+        };
     };
   }
 }
-
 export { Gsn, vGn };

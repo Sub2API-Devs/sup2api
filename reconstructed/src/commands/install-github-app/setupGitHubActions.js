@@ -18,7 +18,7 @@ import {
   PR_BODY,
 } from "../../constants/github-app.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
-import { fi } from "../../utils/browser.js";
+import { openValidatedUrlSucceeded } from "../../utils/browser.js";
 import { saveGlobalConfig } from "../../utils/config.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
@@ -26,30 +26,30 @@ import { logError } from "../../utils/log.js";
 //@ chunk-4v9zy7gn.js:42521-42667 placement
 class SetupCancelledError extends Error {
   alreadyDone;
-  constructor(I) {
+  constructor(alreadyDone) {
     super("GitHub Actions setup was cancelled");
-    this.alreadyDone = I;
+    this.alreadyDone = alreadyDone;
     this.name = "SetupCancelledError";
   }
 }
 //@ chunk-4v9zy7gn.js:42667-44266 fingerprint = createWorkflowFile (0.884)
 async function createWorkflowFile({
-  repoName: repoName,
-  branchName: branchName,
-  workflowPath: workflowPath,
-  workflowContent: workflowContent,
-  secretName: secretName,
-  message: message,
-  context: context,
-  signal: signal,
+  repoName,
+  branchName,
+  workflowPath,
+  workflowContent,
+  secretName,
+  message,
+  context,
+  signal,
 }) {
   let checkFileResult = await execFileNoThrow("gh", [
-      "api",
-      `repos/${repoName}/contents/${workflowPath}`,
-      "--jq",
-      ".sha",
-    ]),
-    fileSha = null;
+    "api",
+    `repos/${repoName}/contents/${workflowPath}`,
+    "--jq",
+    ".sha",
+  ]);
+  let fileSha = null;
   if (checkFileResult.code === 0) fileSha = checkFileResult.stdout.trim();
   let content = workflowContent;
   if (secretName === "CLAUDE_CODE_OAUTH_TOKEN")
@@ -62,34 +62,33 @@ async function createWorkflowFile({
       /anthropic_api_key: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/g,
       `anthropic_api_key: \${{ secrets.${secretName} }}`,
     );
-  let base64Content = Buffer.from(content).toString("base64"),
-    apiParams = [
-      "api",
-      "--method",
-      "PUT",
-      `repos/${repoName}/contents/${workflowPath}`,
-      "-f",
-      `message=${fileSha ? `"Update ${message}"` : `"${message}"`}`,
-      "-f",
-      `content=${base64Content}`,
-      "-f",
-      `branch=${branchName}`,
-    ];
+  let base64Content = Buffer.from(content).toString("base64");
+  let apiParams = [
+    "api",
+    "--method",
+    "PUT",
+    `repos/${repoName}/contents/${workflowPath}`,
+    "-f",
+    `message=${fileSha ? `"Update ${message}"` : `"${message}"`}`,
+    "-f",
+    `content=${base64Content}`,
+    "-f",
+    `branch=${branchName}`,
+  ];
   if (fileSha) apiParams.push("-f", `sha=${fileSha}`);
   signal.throwIfAborted();
   let createFileResult = await execFileNoThrow("gh", apiParams);
   if (createFileResult.code !== 0) {
-    if (createFileResult.stderr.includes("422") && createFileResult.stderr.includes("sha"))
-      throw (
-        logEvent("tengu_setup_github_actions_failed", {
-          reason: lit("failed_to_create_workflow_file"),
-          exit_code: createFileResult.code,
-          ...context,
-        }),
-        Error(
-          `Failed to create workflow file ${workflowPath}: A Claude workflow file already exists in this repository. Please remove it first or update it manually.`,
-        )
+    if (createFileResult.stderr.includes("422") && createFileResult.stderr.includes("sha")) {
+      logEvent("tengu_setup_github_actions_failed", {
+        reason: lit("failed_to_create_workflow_file"),
+        exit_code: createFileResult.code,
+        ...context,
+      });
+      throw Error(
+        `Failed to create workflow file ${workflowPath}: A Claude workflow file already exists in this repository. Please remove it first or update it manually.`,
       );
+    }
     logEvent("tengu_setup_github_actions_failed", {
       reason: lit("failed_to_create_workflow_file"),
       exit_code: createFileResult.code,
@@ -109,111 +108,136 @@ Need help? Common issues:
   }
 }
 //@ chunk-4v9zy7gn.js:44266-47620 fingerprint = setupGitHubActions (0.889)
-async function setupGitHubActions(I, i, p, f, C = !1, u, o, v, A, g) {
-  let _ = [];
+async function setupGitHubActions(
+  repoName,
+  apiKeyOrOAuthToken,
+  secretName,
+  updateProgress,
+  skipWorkflow = false,
+  selectedWorkflows,
+  authType,
+  signal,
+  context,
+  storageV5,
+) {
+  let alreadyDone = [];
   try {
     logEvent("tengu_setup_github_actions_started", {
-      skip_workflow: C,
-      has_api_key: !!i,
-      using_default_secret_name: p === "ANTHROPIC_API_KEY",
-      selected_claude_workflow: u.includes("claude"),
-      selected_claude_review_workflow: u.includes("claude-review"),
-      ...A,
+      skip_workflow: skipWorkflow,
+      has_api_key: !!apiKeyOrOAuthToken,
+      using_default_secret_name: secretName === "ANTHROPIC_API_KEY",
+      selected_claude_workflow: selectedWorkflows.includes("claude"),
+      selected_claude_review_workflow: selectedWorkflows.includes("claude-review"),
+      ...context,
     });
-    let repoCheckResult = await execFileNoThrow("gh", ["api", `repos/${I}`, "--jq", ".id"]);
-    if (repoCheckResult.code !== 0)
-      throw (
-        logEvent("tengu_setup_github_actions_failed", {
-          reason: lit("repo_not_found"),
-          exit_code: repoCheckResult.code,
-          ...A,
-        }),
-        Error(`Failed to access repository ${I}: ${repoCheckResult.stderr}`)
-      );
-    let defaultBranchResult = await execFileNoThrow("gh", ["api", `repos/${I}`, "--jq", ".default_branch"]);
-    if (defaultBranchResult.code !== 0)
-      throw (
-        logEvent("tengu_setup_github_actions_failed", {
-          reason: lit("failed_to_get_default_branch"),
-          exit_code: defaultBranchResult.code,
-          ...A,
-        }),
-        Error(`Failed to get default branch: ${defaultBranchResult.stderr}`)
-      );
-    let defaultBranch = defaultBranchResult.stdout.trim(),
-      shaResult = await execFileNoThrow("gh", [
-        "api",
-        `repos/${I}/git/ref/heads/${defaultBranch}`,
-        "--jq",
-        ".object.sha",
-      ]);
-    if (shaResult.code !== 0)
-      throw (
-        logEvent("tengu_setup_github_actions_failed", {
-          reason: lit("failed_to_get_branch_sha"),
-          exit_code: shaResult.code,
-          ...A,
-        }),
-        Error(`Failed to get branch SHA: ${shaResult.stderr}`)
-      );
-    let sha = shaResult.stdout.trim(),
-      branchName = null;
-    if (!C) {
-      (f(), (branchName = `add-claude-github-actions-${Date.now()}`), v.throwIfAborted());
+    let repoCheckResult = await execFileNoThrow("gh", ["api", `repos/${repoName}`, "--jq", ".id"]);
+    if (repoCheckResult.code !== 0) {
+      logEvent("tengu_setup_github_actions_failed", {
+        reason: lit("repo_not_found"),
+        exit_code: repoCheckResult.code,
+        ...context,
+      });
+      throw Error(`Failed to access repository ${repoName}: ${repoCheckResult.stderr}`);
+    }
+    let defaultBranchResult = await execFileNoThrow("gh", [
+      "api",
+      `repos/${repoName}`,
+      "--jq",
+      ".default_branch",
+    ]);
+    if (defaultBranchResult.code !== 0) {
+      logEvent("tengu_setup_github_actions_failed", {
+        reason: lit("failed_to_get_default_branch"),
+        exit_code: defaultBranchResult.code,
+        ...context,
+      });
+      throw Error(`Failed to get default branch: ${defaultBranchResult.stderr}`);
+    }
+    let defaultBranch = defaultBranchResult.stdout.trim();
+    let shaResult = await execFileNoThrow("gh", [
+      "api",
+      `repos/${repoName}/git/ref/heads/${defaultBranch}`,
+      "--jq",
+      ".object.sha",
+    ]);
+    if (shaResult.code !== 0) {
+      logEvent("tengu_setup_github_actions_failed", {
+        reason: lit("failed_to_get_branch_sha"),
+        exit_code: shaResult.code,
+        ...context,
+      });
+      throw Error(`Failed to get branch SHA: ${shaResult.stderr}`);
+    }
+    let sha = shaResult.stdout.trim();
+    let branchName = null;
+    if (!skipWorkflow) {
+      updateProgress();
+      branchName = `add-claude-github-actions-${Date.now()}`;
+      signal.throwIfAborted();
       let createBranchResult = await execFileNoThrow("gh", [
         "api",
         "--method",
         "POST",
-        `repos/${I}/git/refs`,
+        `repos/${repoName}/git/refs`,
         "-f",
         `ref=refs/heads/${branchName}`,
         "-f",
         `sha=${sha}`,
       ]);
-      if (createBranchResult.code !== 0)
-        throw (
-          logEvent("tengu_setup_github_actions_failed", {
-            reason: lit("failed_to_create_branch"),
-            exit_code: createBranchResult.code,
-            ...A,
-          }),
-          Error(`Failed to create branch: ${createBranchResult.stderr}`)
-        );
-      (_.push(`created branch ${branchName}`), f());
-      let B = [];
-      if (u.includes("claude"))
-        B.push({
+      if (createBranchResult.code !== 0) {
+        logEvent("tengu_setup_github_actions_failed", {
+          reason: lit("failed_to_create_branch"),
+          exit_code: createBranchResult.code,
+          ...context,
+        });
+        throw Error(`Failed to create branch: ${createBranchResult.stderr}`);
+      }
+      alreadyDone.push(`created branch ${branchName}`);
+      updateProgress();
+      let workflows = [];
+      if (selectedWorkflows.includes("claude"))
+        workflows.push({
           path: ".github/workflows/claude.yml",
           content: WORKFLOW_CONTENT,
           message: "Claude PR Assistant workflow",
         });
-      if (u.includes("claude-review"))
-        B.push({
+      if (selectedWorkflows.includes("claude-review"))
+        workflows.push({
           path: ".github/workflows/claude-code-review.yml",
           content: CODE_REVIEW_PLUGIN_WORKFLOW_CONTENT,
           message: "Claude Code Review workflow",
         });
-      for (let workflow of B)
-        (await createWorkflowFile({
-          repoName: I,
-          branchName: branchName,
+      for (let workflow of workflows) {
+        await createWorkflowFile({
+          repoName,
+          branchName,
           workflowPath: workflow.path,
           workflowContent: workflow.content,
-          secretName: p,
+          secretName,
           message: workflow.message,
-          context: A,
-          signal: v,
-        }),
-          _.push(`wrote ${workflow.path} to it`));
+          context,
+          signal,
+        });
+        alreadyDone.push(`wrote ${workflow.path} to it`);
+      }
     }
-    if ((f(), i)) {
-      v.throwIfAborted();
-      let setSecretResult = await execFileNoThrow("gh", ["secret", "set", p, "--body", i, "--repo", I]);
+    updateProgress();
+    if (apiKeyOrOAuthToken) {
+      signal.throwIfAborted();
+      let setSecretResult = await execFileNoThrow("gh", [
+        "secret",
+        "set",
+        secretName,
+        "--body",
+        apiKeyOrOAuthToken,
+        "--repo",
+        repoName,
+      ]);
       if (setSecretResult.code !== 0) {
         logEvent("tengu_setup_github_actions_failed", {
           reason: lit("failed_to_set_api_key_secret"),
           exit_code: setSecretResult.code,
-          ...A,
+          ...context,
         });
         let helpText =
           `
@@ -227,43 +251,49 @@ Need help? Common issues:
           "\xB7 For manual setup \u2192 Visit: https://github.com/anthropics/claude-code-action";
         throw Error(`Failed to set API key secret: ${setSecretResult.stderr || "Unknown error"}${helpText}`);
       }
-      _.push(`saved the ${p} secret`);
+      alreadyDone.push(`saved the ${secretName} secret`);
     }
-    if (!C && branchName) {
-      f();
-      let compareUrl = `https://github.com/${I}/compare/${defaultBranch}...${branchName}?quick_pull=1&title=${encodeURIComponent(PR_TITLE)}&body=${encodeURIComponent(PR_BODY)}`;
-      (v.throwIfAborted(),
-        await raceWithAbortSignal(
-          fi(compareUrl),
-          v,
-          () => new SetupCancelledError([..._, "started opening the pull request page"]),
-        ));
+    if (!skipWorkflow && branchName) {
+      updateProgress();
+      let compareUrl = `https://github.com/${repoName}/compare/${defaultBranch}...${branchName}?quick_pull=1&title=${encodeURIComponent(PR_TITLE)}&body=${encodeURIComponent(PR_BODY)}`;
+      signal.throwIfAborted();
+      await raceWithAbortSignal(
+        openValidatedUrlSucceeded(compareUrl),
+        signal,
+        () => new SetupCancelledError([...alreadyDone, "started opening the pull request page"]),
+      );
     }
-    (logEvent("tengu_setup_github_actions_completed", {
-      skip_workflow: C,
-      has_api_key: !!i,
-      auth_type: fromEnum(o),
-      using_default_secret_name: p === "ANTHROPIC_API_KEY",
-      selected_claude_workflow: u.includes("claude"),
-      selected_claude_review_workflow: u.includes("claude-review"),
-      ...A,
-    }),
-      saveGlobalConfig(
-        (current) => ({ ...current, githubActionSetupCount: (current.githubActionSetupCount ?? 0) + 1 }),
-        g,
-      ));
+    logEvent("tengu_setup_github_actions_completed", {
+      skip_workflow: skipWorkflow,
+      has_api_key: !!apiKeyOrOAuthToken,
+      auth_type: fromEnum(authType),
+      using_default_secret_name: secretName === "ANTHROPIC_API_KEY",
+      selected_claude_workflow: selectedWorkflows.includes("claude"),
+      selected_claude_review_workflow: selectedWorkflows.includes("claude-review"),
+      ...context,
+    });
+    saveGlobalConfig(
+      (current) => ({
+        ...current,
+        githubActionSetupCount: (current.githubActionSetupCount ?? 0) + 1,
+      }),
+      storageV5,
+    );
   } catch (error) {
     if (error instanceof SetupCancelledError) throw error;
-    if (v.aborted && error === v.reason) throw new SetupCancelledError(_);
+    if (signal.aborted && error === signal.reason) throw new SetupCancelledError(alreadyDone);
     if (error instanceof Error && error.message.includes("Failed to"))
-      logForDebugging(`GitHub Actions setup failed: ${error.message}`, { level: "error" });
-    else if (
-      (logEvent("tengu_setup_github_actions_failed", { reason: lit("unexpected_error"), ...A }),
-      error instanceof Error)
-    )
-      logError(error);
+      logForDebugging(`GitHub Actions setup failed: ${error.message}`, {
+        level: "error",
+      });
+    else {
+      logEvent("tengu_setup_github_actions_failed", {
+        reason: lit("unexpected_error"),
+        ...context,
+      });
+      if (error instanceof Error) logError(error);
+    }
     throw error;
   }
 }
-
 export { setupGitHubActions, SetupCancelledError };

@@ -8,7 +8,10 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { e, r } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { FileEditToolDiff, DiffFrame } from "../../FileEditToolDiff.js";
 import { Box, Text } from "../../../ink/components/Text.js";
 import { FileWriteToolDiff } from "../FileWritePermissionRequest/FileWriteToolDiff.js";
@@ -19,29 +22,34 @@ import {
   needsGutter,
 } from "../../../utils/permissions/approvalPayloadSerialization.js";
 import { xr } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
-import { hr } from "../../../utils/invisibleChars.js";
-import { UHt } from "../../messages/toolUseRenderers.js";
+import { stripInvisibleChars as stripInvisibleChars_3 } from "../../../utils/invisibleChars.js";
+import { renderToolUseByName } from "../../messages/toolUseRenderers.js";
 import { logError } from "../../../utils/log.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../../utils/errors.js";
 import { Blockquote } from "../../Blockquote.js";
 
 //@ chunk-18hwfzwa.js:1379060-1380440 callgraph-fingerprint = NotebookEditPermissionRequest (0.16)
-function NotebookEditPermissionRequest(h, x, D, L) {
-  let content = h.content;
+function NotebookEditPermissionRequest(payload, theme, languageName, paddingX) {
+  let content = payload.content;
   switch (content.kind) {
     case "file-edit-diff":
-      return e(FileEditToolDiff, {
+      return jsxProd_default(FileEditToolDiff, {
         file_path: content.filePath,
         edits: [...content.edits],
         remoteOldContent: content.remoteOldContent,
         skipLocalRead: content.skipLocalRead,
       });
     case "file-write-diff":
-      return r(Box, {
+      return jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          content.notice === void 0 ? null : e(Text, { dimColor: !0, children: content.notice }),
-          e(FileWriteToolDiff, {
+          content.notice === undefined
+            ? null
+            : jsxProd_default(Text, {
+                dimColor: true,
+                children: content.notice,
+              }),
+          jsxProd_default(FileWriteToolDiff, {
             file_path: content.filePath,
             content: content.content,
             fileExists: content.fileExists,
@@ -50,51 +58,66 @@ function NotebookEditPermissionRequest(h, x, D, L) {
         ],
       });
     case "notebook-edit-diff":
-      return e(NotebookEditToolDiff, {
+      return jsxProd_default(NotebookEditToolDiff, {
         notebook_path: content.notebookPath,
         cell_id: content.cellId,
         new_source: content.newSource,
         cell_type: content.cellType,
         edit_mode: content.editMode,
-        verbose: !0,
+        verbose: true,
         width: 120,
         remoteOldContent: content.remoteOldContent,
         skipLocalRead: content.skipLocalRead,
         oldCellSource: content.oldCellSource,
       });
     case "tool-use-line": {
-      let renderedToolUseMessage = h.renderedToolUseMessage;
+      let renderedToolUseMessage = payload.renderedToolUseMessage;
       if (typeof renderedToolUseMessage === "string") {
-        if (D !== null)
-          return e(DiffFrame, { paddingX: L, children: e(Text, { dimColor: !0, children: D }) });
+        if (languageName !== null)
+          return jsxProd_default(DiffFrame, {
+            paddingX,
+            children: jsxProd_default(Text, {
+              dimColor: true,
+              children: languageName,
+            }),
+          });
         renderedToolUseMessage = replaceLineBreaks(renderedToolUseMessage);
       }
       if (renderedToolUseMessage == null)
         try {
-          let Re = xr(h.input, (Be) => (typeof Be === "string" ? markBrokenSequences(hr(Be)) : Be));
-          renderedToolUseMessage = UHt(h.toolName, Re, { theme: x, verbose: !0 });
+          let Re = xr(payload.input, (Be) =>
+            typeof Be === "string" ? markBrokenSequences(stripInvisibleChars_3(Be)) : Be,
+          );
+          renderedToolUseMessage = renderToolUseByName(payload.toolName, Re, {
+            theme,
+            verbose: true,
+          });
         } catch (error) {
-          (logError(
+          logError(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `Error rendering tool use line for ${h.toolName}: ${error}`,
+              `Error rendering tool use line for ${payload.toolName}: ${error}`,
               "Error rendering tool use line (file consent dialog fallback)",
             ),
-          ),
-            (renderedToolUseMessage = hr(h.filePath)));
+          );
+          renderedToolUseMessage = stripInvisibleChars_3(payload.filePath);
         }
-      return e(DiffFrame, {
-        paddingX: L,
-        children: e(Blockquote, {
+      return jsxProd_default(DiffFrame, {
+        paddingX,
+        children: jsxProd_default(Blockquote, {
           multiline:
             typeof renderedToolUseMessage === "string" &&
-            needsGutter(`${h.userFacingName}(${renderedToolUseMessage})`),
-          children: r(Text, { children: [h.userFacingName, "(", renderedToolUseMessage, ")"] }),
+            needsGutter(`${payload.userFacingName}(${renderedToolUseMessage})`),
+          children: jsxProd_default_2(Text, {
+            children: [payload.userFacingName, "(", renderedToolUseMessage, ")"],
+          }),
         }),
       });
     }
     case "no-changes":
-      return e(Text, { dimColor: !0, children: content.message });
+      return jsxProd_default(Text, {
+        dimColor: true,
+        children: content.message,
+      });
   }
 }
-
 export { NotebookEditPermissionRequest };

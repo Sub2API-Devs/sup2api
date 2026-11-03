@@ -9,10 +9,10 @@
  * attribution: fingerprint 1, callgraph-fingerprint 1
  */
 
+//@ chunk-ahy3gsxp.js:659-1577 fingerprint = BINARY_EXTENSIONS (0.867)
 /**
  * 二进制扩展名集合（图片、音视频、压缩包、可执行、Office/PDF 等），读文件时跳过。
  */
-//@ chunk-ahy3gsxp.js:659-1577 fingerprint = BINARY_EXTENSIONS (0.867)
 var BINARY_EXTENSIONS = new Set([
   ".png",
   ".jpg",
@@ -136,13 +136,12 @@ var BINARY_EXTENSIONS = new Set([
   ".dat",
   ".data",
 ]);
+//@ chunk-ahy3gsxp.js:1577-1657 callgraph-fingerprint = hasBinaryExtension (1)
 /**
  * 按扩展名判断是否为二进制文件。
  */
-//@ chunk-ahy3gsxp.js:1577-1657 callgraph-fingerprint = hasBinaryExtension (1)
 function hasBinaryExtension(filePath) {
   let ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
   return BINARY_EXTENSIONS.has(ext);
 }
-
 export { hasBinaryExtension };

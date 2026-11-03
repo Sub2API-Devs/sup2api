@@ -10,8 +10,11 @@
  */
 
 //@ chunk-e6aww6q8.js:1859253-1859341 placement
-function Djr(e) {
-  return e.isApiErrorMessage === !0 && Array.isArray(e.retractedMessageUuids);
+/**
+ * 是否因工具调用畸形而被耗尽（API 错误且带撤回的 uuid）。
+ */
+function isMalformedToolUseExhausted(e) {
+  return e.isApiErrorMessage === true && Array.isArray(e.retractedMessageUuids);
 }
 //@ chunk-e6aww6q8.js:1859341-1859519 placement
 function isRefusalTurn(e) {
@@ -20,20 +23,26 @@ function isRefusalTurn(e) {
     e.apiError === "dlp_request_denied" ||
     e.apiError === "safety_monitor_blocked" ||
     e.apiError === "unattended_start_limit" ||
-    Djr(e)
+    isMalformedToolUseExhausted(e)
   );
 }
 //@ chunk-e6aww6q8.js:1859519-1859576 placement
-function Ljr(e) {
-  return e.isApiErrorMessage === !0 && !isRefusalTurn(e);
+/**
+ * 是 API 错误但不是拒绝型。
+ */
+function isApiErrorWithoutRefusal(e) {
+  return e.isApiErrorMessage === true && !isRefusalTurn(e);
 }
 //@ chunk-e6aww6q8.js:1859576-1859669 placement
-function _Wt(e) {
-  return e.isApiErrorMessage === !0 && e.apiError === "unattended_start_unconfirmed";
+/**
+ * 是否「无人值守启动未确认」的 API 错误。
+ */
+function isUnattendedStartUnconfirmed(e) {
+  return e.isApiErrorMessage === true && e.apiError === "unattended_start_unconfirmed";
 }
 //@ chunk-e6aww6q8.js:1859669-1859894 placement
 function refusalKind(e) {
-  if (Djr(e)) return "malformed_tool_use_exhausted";
+  if (isMalformedToolUseExhausted(e)) return "malformed_tool_use_exhausted";
   if (e.apiError === "safety_monitor_blocked" || e.apiError === "unattended_start_limit") return e.apiError;
   return e.apiError === "dlp_request_denied" ? "dlp_denied" : "refusal";
 }
@@ -48,5 +57,10 @@ function apiErrorKind(e) {
       return "other";
   }
 }
-
-export { _Wt, apiErrorKind, Ljr, refusalKind, Djr };
+export {
+  isUnattendedStartUnconfirmed,
+  apiErrorKind,
+  isApiErrorWithoutRefusal,
+  refusalKind,
+  isMalformedToolUseExhausted,
+};

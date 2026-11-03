@@ -6,179 +6,217 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Ns } from "../cjs/descriptors.js";
-import { El } from "./reflect/scalar.js";
-import { Po } from "../cjs/reflect/reflect.js";
-import { xc } from "./wire/binary-encoding.js";
-import { Tg } from "../cjs/wire/varint.js";
+import { require_descriptors } from "../cjs/descriptors.js";
+import { require_scalar } from "./reflect/scalar.js";
+import { require_reflect } from "../cjs/reflect/reflect.js";
+import { require_binary_encoding } from "./wire/binary-encoding.js";
+import { require_varint } from "../cjs/wire/varint.js";
 
 //@ chunk-fq0cr76a.js:410280-413424 cjs-require-graph
-var Ku = x(function (jD) {
-  Object.defineProperty(jD, "__esModule", { value: !0 });
-  jD.fromBinary = yz;
-  jD.mergeFromBinary = bz;
-  jD.readField = qD;
-  var Pn = Ns(),
-    jg = El(),
-    Il = Po(),
-    Lo = xc(),
-    HD = Tg(),
-    GD = { readUnknownFields: !0 };
-  function KD(e) {
-    return e ? Object.assign(Object.assign({}, GD), e) : GD;
+var require_from_binary = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.fromBinary = fromBinary;
+  cjsExports.mergeFromBinary = mergeFromBinary;
+  cjsExports.readField = readField;
+  var descriptors_js_1 = require_descriptors();
+  var scalar_js_1 = require_scalar();
+  var reflect_js_1 = require_reflect();
+  var binary_encoding_js_1 = require_binary_encoding();
+  var varint_js_1 = require_varint();
+  var GD = {
+    readUnknownFields: true,
+  };
+  function makeReadContext(options) {
+    return options ? Object.assign(Object.assign({}, GD), options) : GD;
   }
-  function yz(e, n, r) {
-    let reflect = Il.reflect(e, void 0, !1);
-    return (f_(reflect, new Lo.BinaryReader(n), KD(r), !1, n.byteLength), reflect.message);
+  function fromBinary(schema, bytes, options) {
+    let msg = reflect_js_1.reflect(schema, undefined, false);
+    readMessage(
+      msg,
+      new binary_encoding_js_1.BinaryReader(bytes),
+      makeReadContext(options),
+      false,
+      bytes.byteLength,
+    );
+    return msg.message;
   }
-  function bz(e, n, r, s) {
-    return (f_(Il.reflect(e, n, !1), new Lo.BinaryReader(r), KD(s), !1, r.byteLength), n);
+  function mergeFromBinary(schema, target, bytes, options) {
+    readMessage(
+      reflect_js_1.reflect(schema, target, false),
+      new binary_encoding_js_1.BinaryReader(bytes),
+      makeReadContext(options),
+      false,
+      bytes.byteLength,
+    );
+    return target;
   }
-  function f_(e, n, r, s, h) {
-    var y;
-    let b = s ? n.len : n.pos + h,
-      S,
-      w,
-      R = (y = e.getUnknown()) !== null && y !== void 0 ? y : [];
-    while (n.pos < b) {
-      if ((([S, w] = n.tag()), s && w == Lo.WireType.EndGroup)) break;
-      let number = e.findNumber(S);
-      if (!number) {
-        let skip = n.skip(w, S);
-        if (r.readUnknownFields) R.push({ no: S, wireType: w, data: skip });
+  function readMessage(message, reader, ctx, delimited, lengthOrDelimitedFieldNo) {
+    var _a;
+    let b = delimited ? reader.len : reader.pos + lengthOrDelimitedFieldNo;
+    let fieldNo;
+    let wireType;
+    let unknownFields = (_a = message.getUnknown()) !== null && _a !== undefined ? _a : [];
+    while (reader.pos < b) {
+      [fieldNo, wireType] = reader.tag();
+      if (delimited && wireType == binary_encoding_js_1.WireType.EndGroup) break;
+      let field = message.findNumber(fieldNo);
+      if (!field) {
+        let data = reader.skip(wireType, fieldNo);
+        if (ctx.readUnknownFields)
+          unknownFields.push({
+            no: fieldNo,
+            wireType,
+            data,
+          });
         continue;
       }
-      qD(e, n, number, w, r);
+      readField(message, reader, field, wireType, ctx);
     }
-    if (s) {
-      if (w != Lo.WireType.EndGroup || S !== h) throw Error("invalid end group tag");
+    if (delimited) {
+      if (wireType != binary_encoding_js_1.WireType.EndGroup || fieldNo !== lengthOrDelimitedFieldNo)
+        throw Error("invalid end group tag");
     }
-    if (R.length > 0) e.setUnknown(R);
+    if (unknownFields.length > 0) message.setUnknown(unknownFields);
   }
-  function qD(e, n, r, s, h) {
-    var y;
-    switch (r.fieldKind) {
+  function readField(message, reader, field, wireType, ctx) {
+    var _a;
+    switch (field.fieldKind) {
       case "scalar":
-        e.set(r, Hu(n, r.scalar, r.utf8Validation));
+        message.set(field, readScalar(reader, field.scalar, field.utf8Validation));
         break;
       case "enum":
-        let b = Hu(n, Pn.ScalarType.INT32);
-        if (r.enum.open) e.set(r, b);
-        else if (r.enum.values.some((w) => w.number === b)) e.set(r, b);
-        else if (h.readUnknownFields) {
-          let w = [];
-          HD.varint32write(b, w);
-          let R = (y = e.getUnknown()) !== null && y !== void 0 ? y : [];
-          (R.push({ no: r.number, wireType: s, data: new Uint8Array(w) }), e.setUnknown(R));
+        let val = readScalar(reader, descriptors_js_1.ScalarType.INT32);
+        if (field.enum.open) message.set(field, val);
+        else if (field.enum.values.some((v) => v.number === val)) message.set(field, val);
+        else if (ctx.readUnknownFields) {
+          let bytes = [];
+          varint_js_1.varint32write(val, bytes);
+          let unknownFields = (_a = message.getUnknown()) !== null && _a !== undefined ? _a : [];
+          unknownFields.push({
+            no: field.number,
+            wireType,
+            data: new Uint8Array(bytes),
+          });
+          message.setUnknown(unknownFields);
         }
         break;
       case "message":
-        e.set(r, p_(n, h, r, e.get(r)));
+        message.set(field, readMessageField(reader, ctx, field, message.get(field)));
         break;
       case "list":
-        Ez(n, s, e.get(r), h);
+        readListField(reader, wireType, message.get(field), ctx);
         break;
       case "map":
-        Sz(n, e.get(r), h);
+        readMapEntry(reader, message.get(field), ctx);
         break;
     }
   }
-  function Sz(e, n, r) {
-    let field = n.field(),
-      h,
-      y,
-      uint32 = e.uint32(),
-      S = e.pos + uint32;
-    while (e.pos < S) {
-      let [w] = e.tag();
-      switch (w) {
+  function readMapEntry(reader, map, ctx) {
+    let field = map.field();
+    let key;
+    let val;
+    let len = reader.uint32();
+    let end = reader.pos + len;
+    while (reader.pos < end) {
+      let [fieldNo] = reader.tag();
+      switch (fieldNo) {
         case 1:
-          h = Hu(e, field.mapKey, field.utf8Validation);
+          key = readScalar(reader, field.mapKey, field.utf8Validation);
           break;
         case 2:
           switch (field.mapKind) {
             case "scalar":
-              y = Hu(e, field.scalar, field.utf8Validation);
+              val = readScalar(reader, field.scalar, field.utf8Validation);
               break;
             case "enum":
-              y = e.int32();
+              val = reader.int32();
               break;
             case "message":
-              y = p_(e, r, field);
+              val = readMessageField(reader, ctx, field);
               break;
           }
           break;
       }
     }
-    if (h === void 0) h = jg.scalarZeroValue(field.mapKey, !1);
-    if (y === void 0)
+    if (key === undefined) key = scalar_js_1.scalarZeroValue(field.mapKey, false);
+    if (val === undefined)
       switch (field.mapKind) {
         case "scalar":
-          y = jg.scalarZeroValue(field.scalar, !1);
+          val = scalar_js_1.scalarZeroValue(field.scalar, false);
           break;
         case "enum":
-          y = field.enum.values[0].number;
+          val = field.enum.values[0].number;
           break;
         case "message":
-          y = Il.reflect(field.message, void 0, !1);
+          val = reflect_js_1.reflect(field.message, undefined, false);
           break;
       }
-    n.set(h, y);
+    map.set(key, val);
   }
-  function Ez(e, n, r, s) {
-    var h;
-    let field = r.field();
+  function readListField(reader, wireType, list, ctx) {
+    var _a;
+    let field = list.field();
     if (field.listKind === "message") {
-      r.add(p_(e, s, field));
+      list.add(readMessageField(reader, ctx, field));
       return;
     }
-    let b = (h = field.scalar) !== null && h !== void 0 ? h : Pn.ScalarType.INT32;
-    if (!(n == Lo.WireType.LengthDelimited && b != Pn.ScalarType.STRING && b != Pn.ScalarType.BYTES)) {
-      r.add(Hu(e, b, field.utf8Validation));
+    let scalarType =
+      (_a = field.scalar) !== null && _a !== undefined ? _a : descriptors_js_1.ScalarType.INT32;
+    if (!(
+      wireType == binary_encoding_js_1.WireType.LengthDelimited &&
+      scalarType != descriptors_js_1.ScalarType.STRING &&
+      scalarType != descriptors_js_1.ScalarType.BYTES
+    )) {
+      list.add(readScalar(reader, scalarType, field.utf8Validation));
       return;
     }
-    let w = e.uint32() + e.pos;
-    while (e.pos < w) r.add(Hu(e, b, field.utf8Validation));
+    let e = reader.uint32() + reader.pos;
+    while (reader.pos < e) list.add(readScalar(reader, scalarType, field.utf8Validation));
   }
-  function p_(e, n, r, s) {
-    let delimitedEncoding = r.delimitedEncoding,
-      y = s !== null && s !== void 0 ? s : Il.reflect(r.message, void 0, !1);
-    return (f_(y, e, n, delimitedEncoding, delimitedEncoding ? r.number : e.uint32()), y);
+  function readMessageField(reader, ctx, field, mergeMessage) {
+    let delimited = field.delimitedEncoding;
+    let message =
+      mergeMessage !== null && mergeMessage !== undefined
+        ? mergeMessage
+        : reflect_js_1.reflect(field.message, undefined, false);
+    readMessage(message, reader, ctx, delimited, delimited ? field.number : reader.uint32());
+    return message;
   }
-  function Hu(e, n, r = !1) {
-    switch (n) {
-      case Pn.ScalarType.STRING:
-        return e.string(r);
-      case Pn.ScalarType.BOOL:
-        return e.bool();
-      case Pn.ScalarType.DOUBLE:
-        return e.double();
-      case Pn.ScalarType.FLOAT:
-        return e.float();
-      case Pn.ScalarType.INT32:
-        return e.int32();
-      case Pn.ScalarType.INT64:
-        return e.int64();
-      case Pn.ScalarType.UINT64:
-        return e.uint64();
-      case Pn.ScalarType.FIXED64:
-        return e.fixed64();
-      case Pn.ScalarType.BYTES:
-        return e.bytes();
-      case Pn.ScalarType.FIXED32:
-        return e.fixed32();
-      case Pn.ScalarType.SFIXED32:
-        return e.sfixed32();
-      case Pn.ScalarType.SFIXED64:
-        return e.sfixed64();
-      case Pn.ScalarType.SINT64:
-        return e.sint64();
-      case Pn.ScalarType.UINT32:
-        return e.uint32();
-      case Pn.ScalarType.SINT32:
-        return e.sint32();
+  function readScalar(reader, type, validateUtf8 = false) {
+    switch (type) {
+      case descriptors_js_1.ScalarType.STRING:
+        return reader.string(validateUtf8);
+      case descriptors_js_1.ScalarType.BOOL:
+        return reader.bool();
+      case descriptors_js_1.ScalarType.DOUBLE:
+        return reader.double();
+      case descriptors_js_1.ScalarType.FLOAT:
+        return reader.float();
+      case descriptors_js_1.ScalarType.INT32:
+        return reader.int32();
+      case descriptors_js_1.ScalarType.INT64:
+        return reader.int64();
+      case descriptors_js_1.ScalarType.UINT64:
+        return reader.uint64();
+      case descriptors_js_1.ScalarType.FIXED64:
+        return reader.fixed64();
+      case descriptors_js_1.ScalarType.BYTES:
+        return reader.bytes();
+      case descriptors_js_1.ScalarType.FIXED32:
+        return reader.fixed32();
+      case descriptors_js_1.ScalarType.SFIXED32:
+        return reader.sfixed32();
+      case descriptors_js_1.ScalarType.SFIXED64:
+        return reader.sfixed64();
+      case descriptors_js_1.ScalarType.SINT64:
+        return reader.sint64();
+      case descriptors_js_1.ScalarType.UINT32:
+        return reader.uint32();
+      case descriptors_js_1.ScalarType.SINT32:
+        return reader.sint32();
     }
   }
 });
-
-export { Ku };
+export { require_from_binary };

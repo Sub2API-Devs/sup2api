@@ -8,13 +8,16 @@
  * pieces: chunk-j1c0t4gs.js (7)
  * attribution: placement 1, layout 2, fingerprint 4
  */
-import { j, y, P } from "../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, P } from "../../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
-import { e, r } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../../ink/components/Text.js";
 import { TextInput } from "../../TextInput.js";
-import { re } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { PromptInputFooterSuggestions } from "../../PromptInput/PromptInputFooterSuggestions.js";
 import { ErrorText } from "../../ErrorText.js";
 import { useSession } from "../../../context/session.js";
@@ -30,188 +33,225 @@ import { Dialog } from "../../design-system/Dialog.js";
 import { FocusColumn } from "../../design-system/FocusColumn.js";
 
 //@ chunk-j1c0t4gs.js:889-893 placement
-j();
+init_react_production();
 //@ chunk-j1c0t4gs.js:893-939 layout
-function He(l) {
+function stripLineBreaks(l) {
   return l.replace(/[\r\n]/g, "");
 }
 //@ chunk-j1c0t4gs.js:939-1087 fingerprint = REMEMBER_DIRECTORY_OPTIONS (1)
 var REMEMBER_DIRECTORY_OPTIONS = [
-  { value: "yes-session", label: "Yes, for this session" },
-  { value: "yes-remember", label: "Yes, and remember this directory" },
-  { value: "no", label: "No" },
+  {
+    value: "yes-session",
+    label: "Yes, for this session",
+  },
+  {
+    value: "yes-remember",
+    label: "Yes, and remember this directory",
+  },
+  {
+    value: "no",
+    label: "No",
+  },
 ];
 //@ chunk-j1c0t4gs.js:1087-1287 layout
 function WorkspaceDirectoryHint() {
-  let $ = w(1),
-    i;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((i = e(Text, {
-      dimColor: !0,
+  let $ = w(1);
+  let t0;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t0 = jsxProd_default(Text, {
+      dimColor: true,
       children:
         "Claude Code will be able to read files in this directory and make edits when auto-accept edits is on.",
-    })),
-      ($[0] = i));
-  else i = $[0];
-  return i;
+    });
+    $[0] = t0;
+  } else t0 = $[0];
+  return t0;
 }
 //@ chunk-j1c0t4gs.js:1287-1555 fingerprint = DirectoryDisplay (0.521)
-function DirectoryDisplay(t0) {
-  let $ = w(5),
-    { path: path } = t0,
-    a;
-  if ($[0] !== path) ((a = e(Text, { color: "permission", children: path })), ($[0] = path), ($[1] = a));
-  else a = $[1];
-  let p;
-  if ($[2] === MEMO_CACHE_SENTINEL) ((p = e(WorkspaceDirectoryHint, {})), ($[2] = p));
-  else p = $[2];
-  let t;
-  if ($[3] !== a)
-    ((t = r(Box, { flexDirection: "column", gap: 1, children: [a, p] })), ($[3] = a), ($[4] = t));
-  else t = $[4];
-  return t;
+function DirectoryDisplay(props) {
+  let $ = w(5);
+  let { path } = props;
+  let t1;
+  if ($[0] !== path) {
+    t1 = jsxProd_default(Text, {
+      color: "permission",
+      children: path,
+    });
+    $[0] = path;
+    $[1] = t1;
+  } else t1 = $[1];
+  let t2;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    t2 = jsxProd_default(WorkspaceDirectoryHint, {});
+    $[2] = t2;
+  } else t2 = $[2];
+  let t3;
+  if ($[3] !== t1) {
+    t3 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      gap: 1,
+      children: [t1, t2],
+    });
+    $[3] = t1;
+    $[4] = t3;
+  } else t3 = $[4];
+  return t3;
 }
 //@ chunk-j1c0t4gs.js:1555-2553 fingerprint = DirectoryInput (0.739)
-function DirectoryInput(t0) {
-  let $ = w(16),
-    {
-      value: value,
-      onChange: onChange,
-      cursorOffset: cursorOffset,
-      onChangeCursorOffset: onChangeCursorOffset,
-      onSubmit: onSubmit,
-      error: error,
-      suggestions: suggestions,
-      selectedSuggestion: selectedSuggestion,
-    } = t0,
-    E;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((E = e(Text, { children: "Enter the path to the directory:" })), ($[0] = E));
-  else E = $[0];
-  let f;
+function DirectoryInput(props) {
+  let $ = w(16);
+  let {
+    value,
+    onChange,
+    cursorOffset,
+    onChangeCursorOffset,
+    onSubmit,
+    error,
+    suggestions,
+    selectedSuggestion,
+  } = props;
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = jsxProd_default(Text, {
+      children: "Enter the path to the directory:",
+    });
+    $[0] = t1;
+  } else t1 = $[0];
+  let t2;
   if (
     $[1] !== cursorOffset ||
     $[2] !== onChange ||
     $[3] !== onChangeCursorOffset ||
     $[4] !== onSubmit ||
     $[5] !== value
-  )
-    ((f = e(Box, {
-      borderDimColor: !0,
+  ) {
+    t2 = jsxProd_default(Box, {
+      borderDimColor: true,
       borderStyle: "round",
       marginTop: 1,
       paddingLeft: 1,
-      children: e(TextInput, {
-        showCursor: !0,
-        focus: !0,
-        placeholder: `Directory path${re.ellipsis}`,
-        value: value,
-        onChange: onChange,
-        onSubmit: onSubmit,
+      children: jsxProd_default(TextInput, {
+        showCursor: true,
+        focus: true,
+        placeholder: `Directory path${figures_default.ellipsis}`,
+        value,
+        onChange,
+        onSubmit,
         columns: 80,
-        cursorOffset: cursorOffset,
-        onChangeCursorOffset: onChangeCursorOffset,
-        inputFilter: He,
-        disableCursorMovementForUpDownKeys: !0,
+        cursorOffset,
+        onChangeCursorOffset,
+        inputFilter: stripLineBreaks,
+        disableCursorMovementForUpDownKeys: true,
       }),
-    })),
-      ($[1] = cursorOffset),
-      ($[2] = onChange),
-      ($[3] = onChangeCursorOffset),
-      ($[4] = onSubmit),
-      ($[5] = value),
-      ($[6] = f));
-  else f = $[6];
-  let v;
-  if ($[7] !== selectedSuggestion || $[8] !== suggestions)
-    ((v =
+    });
+    $[1] = cursorOffset;
+    $[2] = onChange;
+    $[3] = onChangeCursorOffset;
+    $[4] = onSubmit;
+    $[5] = value;
+    $[6] = t2;
+  } else t2 = $[6];
+  let t3;
+  if ($[7] !== selectedSuggestion || $[8] !== suggestions) {
+    t3 =
       suggestions.length > 0 &&
-      e(Box, {
+      jsxProd_default(Box, {
         marginBottom: 1,
-        children: e(PromptInputFooterSuggestions, {
-          suggestions: suggestions,
-          selectedSuggestion: selectedSuggestion,
-          noPad: !0,
+        children: jsxProd_default(PromptInputFooterSuggestions, {
+          suggestions,
+          selectedSuggestion,
+          noPad: true,
         }),
-      })),
-      ($[7] = selectedSuggestion),
-      ($[8] = suggestions),
-      ($[9] = v));
-  else v = $[9];
-  let o;
-  if ($[10] !== error) ((o = e(ErrorText, { error: error })), ($[10] = error), ($[11] = o));
-  else o = $[11];
-  let F;
-  if ($[12] !== f || $[13] !== v || $[14] !== o)
-    ((F = r(Box, { flexDirection: "column", children: [E, f, v, o] })),
-      ($[12] = f),
-      ($[13] = v),
-      ($[14] = o),
-      ($[15] = F));
-  else F = $[15];
-  return F;
+      });
+    $[7] = selectedSuggestion;
+    $[8] = suggestions;
+    $[9] = t3;
+  } else t3 = $[9];
+  let t4;
+  if ($[10] !== error) {
+    t4 = jsxProd_default(ErrorText, {
+      error,
+    });
+    $[10] = error;
+    $[11] = t4;
+  } else t4 = $[11];
+  let t5;
+  if ($[12] !== t2 || $[13] !== t3 || $[14] !== t4) {
+    t5 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [t1, t2, t3, t4],
+    });
+    $[12] = t2;
+    $[13] = t3;
+    $[14] = t4;
+    $[15] = t5;
+  } else t5 = $[15];
+  return t5;
 }
 //@ chunk-j1c0t4gs.js:2553-5100 fingerprint = AddWorkspaceDirectory (0.726)
-function AddWorkspaceDirectory(t0) {
-  let $ = w(38),
-    {
-      onAddDirectory: onAddDirectory,
-      onAlreadyAccessible: onAlreadyAccessible,
-      onCancel: onCancel,
-      permissionContext: permissionContext,
-      directoryPath: directoryPath,
-    } = t0,
-    C = useSession(),
-    [c, k] = y(""),
-    [m, E] = y(0),
-    [f, v] = y(null),
-    F;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((F = []), ($[0] = F));
-  else F = $[0];
-  let [l, ge] = y(F),
-    [D, K] = y(0),
-    de;
-  if ($[1] !== C)
-    ((de = async (path) => {
+function AddWorkspaceDirectory(props) {
+  let $ = w(38);
+  let { onAddDirectory, onAlreadyAccessible, onCancel, permissionContext, directoryPath } = props;
+  let session = useSession();
+  let [directoryInput, setDirectoryInput] = y("");
+  let [m, E] = y(0);
+  let [error, setError] = y(null);
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = [];
+    $[0] = t1;
+  } else t1 = $[0];
+  let [suggestions, setSuggestions] = y(t1);
+  let [selectedSuggestion, setSelectedSuggestion] = y(0);
+  let de;
+  if ($[1] !== session) {
+    de = async (path) => {
       if (!path) {
-        (ge([]), K(0));
+        setSuggestions([]);
+        setSelectedSuggestion(0);
         return;
       }
-      let _e = await getDirectoryCompletions(C, path);
-      (ge(_e), K(0));
-    }),
-      ($[1] = C),
-      ($[2] = de));
-  else de = $[2];
-  let debouncedFetchSuggestions = useDebouncedCallback(de, 100),
-    me,
-    fe;
-  if ($[3] !== debouncedFetchSuggestions || $[4] !== c)
-    ((me = () => {
-      debouncedFetchSuggestions(c);
-    }),
-      (fe = [c, debouncedFetchSuggestions]),
-      ($[3] = debouncedFetchSuggestions),
-      ($[4] = c),
-      ($[5] = me),
-      ($[6] = fe));
-  else ((me = $[5]), (fe = $[6]));
-  P(me, fe);
-  let he;
-  if ($[7] === MEMO_CACHE_SENTINEL)
-    ((he = (suggestion) => {
+      let completions = await getDirectoryCompletions(session, path);
+      setSuggestions(completions);
+      setSelectedSuggestion(0);
+    };
+    $[1] = session;
+    $[2] = de;
+  } else de = $[2];
+  let debouncedFetchSuggestions = useDebouncedCallback(de, 100);
+  let me;
+  let t4;
+  if ($[3] !== debouncedFetchSuggestions || $[4] !== directoryInput) {
+    me = () => {
+      debouncedFetchSuggestions(directoryInput);
+    };
+    t4 = [directoryInput, debouncedFetchSuggestions];
+    $[3] = debouncedFetchSuggestions;
+    $[4] = directoryInput;
+    $[5] = me;
+    $[6] = t4;
+  } else {
+    me = $[5];
+    t4 = $[6];
+  }
+  P(me, t4);
+  let t5;
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    t5 = (suggestion) => {
       let newPath = suggestion.id + "/";
-      (k(newPath), E(newPath.length), v(null));
-    }),
-      ($[7] = he));
-  else he = $[7];
-  let tt = he,
-    be;
-  if ($[8] !== onAddDirectory || $[9] !== onAlreadyAccessible || $[10] !== permissionContext)
-    ((be = async (newPath_0) => {
-      let result = await validateDirectoryForWorkspace(newPath_0, permissionContext);
+      setDirectoryInput(newPath);
+      E(newPath.length);
+      setError(null);
+    };
+    $[7] = t5;
+  } else t5 = $[7];
+  let applySuggestion = t5;
+  let t6;
+  if ($[8] !== onAddDirectory || $[9] !== onAlreadyAccessible || $[10] !== permissionContext) {
+    t6 = async (newPath) => {
+      let result = await validateDirectoryForWorkspace(newPath, permissionContext);
       if (result.resultType === "success") {
-        onAddDirectory(result.absolutePath, !1);
+        onAddDirectory(result.absolutePath, false);
         return;
       }
       if (
@@ -221,155 +261,178 @@ function AddWorkspaceDirectory(t0) {
       ) {
         return;
       }
-      v(addDirHelpMessage(result));
-    }),
-      ($[8] = onAddDirectory),
-      ($[9] = onAlreadyAccessible),
-      ($[10] = permissionContext),
-      ($[11] = be));
-  else be = $[11];
-  let z = be,
-    Se;
-  if ($[12] === MEMO_CACHE_SENTINEL) ((Se = { context: "Settings" }), ($[12] = Se));
-  else Se = $[12];
-  useKeybinding("confirm:no", onCancel, Se);
+      setError(addDirHelpMessage(result));
+    };
+    $[8] = onAddDirectory;
+    $[9] = onAlreadyAccessible;
+    $[10] = permissionContext;
+    $[11] = t6;
+  } else t6 = $[11];
+  let handleSubmit = t6;
+  let t7;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    t7 = {
+      context: "Settings",
+    };
+    $[12] = t7;
+  } else t7 = $[12];
+  useKeybinding("confirm:no", onCancel, t7);
   let Ce;
-  if ($[13] !== D || $[14] !== l)
-    ((Ce = (g) => {
-      if (l.length > 0) {
-        if (g.name === "tab") {
-          g.preventDefault();
-          let ve = l[D];
-          if (ve) tt(ve);
+  if ($[13] !== selectedSuggestion || $[14] !== suggestions) {
+    Ce = (e) => {
+      if (suggestions.length > 0) {
+        if (e.name === "tab") {
+          e.preventDefault();
+          let suggestion = suggestions[selectedSuggestion];
+          if (suggestion) applySuggestion(suggestion);
           return;
         }
-        if (g.name === "up" || (g.ctrl && g.name === "p")) {
-          (g.preventDefault(), K((prev) => (prev <= 0 ? l.length - 1 : prev - 1)));
+        if (e.name === "up" || (e.ctrl && e.name === "p")) {
+          e.preventDefault();
+          setSelectedSuggestion((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
           return;
         }
-        if (g.name === "down" || (g.ctrl && g.name === "n")) {
-          (g.preventDefault(), K((prev_0) => (prev_0 >= l.length - 1 ? 0 : prev_0 + 1)));
+        if (e.name === "down" || (e.ctrl && e.name === "n")) {
+          e.preventDefault();
+          setSelectedSuggestion((prev) => (prev >= suggestions.length - 1 ? 0 : prev + 1));
           return;
         }
       }
-    }),
-      ($[13] = D),
-      ($[14] = l),
-      ($[15] = Ce));
-  else Ce = $[15];
-  let X = Ce,
-    Ae;
-  if ($[16] !== directoryPath || $[17] !== onAddDirectory || $[18] !== onCancel)
-    ((Ae = (value) => {
+    };
+    $[13] = selectedSuggestion;
+    $[14] = suggestions;
+    $[15] = Ce;
+  } else Ce = $[15];
+  let handleKeyDown = Ce;
+  let t9;
+  if ($[16] !== directoryPath || $[17] !== onAddDirectory || $[18] !== onCancel) {
+    t9 = (value) => {
       if (!directoryPath) {
         return;
       }
       kt: switch (value) {
         case "yes-session": {
-          onAddDirectory(directoryPath, !1);
+          onAddDirectory(directoryPath, false);
           break kt;
         }
         case "yes-remember": {
-          onAddDirectory(directoryPath, !0);
+          onAddDirectory(directoryPath, true);
           break kt;
         }
         case "no": {
           onCancel();
         }
       }
-    }),
-      ($[16] = directoryPath),
-      ($[17] = onAddDirectory),
-      ($[18] = onCancel),
-      ($[19] = Ae));
-  else Ae = $[19];
-  let N = Ae,
-    B;
-  if ($[20] !== directoryPath)
-    ((B = directoryPath
-      ? void 0
-      : r(Byline, {
+    };
+    $[16] = directoryPath;
+    $[17] = onAddDirectory;
+    $[18] = onCancel;
+    $[19] = t9;
+  } else t9 = $[19];
+  let handleSelect = t9;
+  let inputGuide;
+  if ($[20] !== directoryPath) {
+    inputGuide = directoryPath
+      ? undefined
+      : jsxProd_default_2(Byline, {
           children: [
-            e(KeyboardShortcutHint, { chord: "tab", action: "complete" }),
-            e(KeyboardShortcutHint, { chord: "enter", action: "add" }),
-            e(ConfigurableShortcutHint, {
+            jsxProd_default(KeyboardShortcutHint, {
+              chord: "tab",
+              action: "complete",
+            }),
+            jsxProd_default(KeyboardShortcutHint, {
+              chord: "enter",
+              action: "add",
+            }),
+            jsxProd_default(ConfigurableShortcutHint, {
               action: "confirm:no",
               context: "Settings",
               fallback: "Esc",
               description: "cancel",
             }),
           ],
-        })),
-      ($[20] = directoryPath),
-      ($[21] = B));
-  else B = $[21];
-  let L;
+        });
+    $[20] = directoryPath;
+    $[21] = inputGuide;
+  } else inputGuide = $[21];
+  let children;
   if (
     $[22] !== m ||
-    $[23] !== c ||
+    $[23] !== directoryInput ||
     $[24] !== directoryPath ||
-    $[25] !== f ||
-    $[26] !== N ||
-    $[27] !== z ||
-    $[28] !== D ||
-    $[29] !== l
-  )
-    ((L = directoryPath
-      ? r(Box, {
+    $[25] !== error ||
+    $[26] !== handleSelect ||
+    $[27] !== handleSubmit ||
+    $[28] !== selectedSuggestion ||
+    $[29] !== suggestions
+  ) {
+    children = directoryPath
+      ? jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
           children: [
-            e(DirectoryDisplay, { path: directoryPath }),
-            e(ModelSelector, { options: REMEMBER_DIRECTORY_OPTIONS, onChange: N, onCancel: () => N("no") }),
-          ],
-        })
-      : r(Box, {
-          flexDirection: "column",
-          gap: 1,
-          children: [
-            e(WorkspaceDirectoryHint, {}),
-            e(DirectoryInput, {
-              value: c,
-              onChange: k,
-              cursorOffset: m,
-              onChangeCursorOffset: E,
-              onSubmit: z,
-              error: f,
-              suggestions: l,
-              selectedSuggestion: D,
+            jsxProd_default(DirectoryDisplay, {
+              path: directoryPath,
+            }),
+            jsxProd_default(ModelSelector, {
+              options: REMEMBER_DIRECTORY_OPTIONS,
+              onChange: handleSelect,
+              onCancel: () => handleSelect("no"),
             }),
           ],
-        })),
-      ($[22] = m),
-      ($[23] = c),
-      ($[24] = directoryPath),
-      ($[25] = f),
-      ($[26] = N),
-      ($[27] = z),
-      ($[28] = D),
-      ($[29] = l),
-      ($[30] = L));
-  else L = $[30];
-  let U;
-  if ($[31] !== onCancel || $[32] !== B || $[33] !== L)
-    ((U = e(Dialog, {
+        })
+      : jsxProd_default_2(Box, {
+          flexDirection: "column",
+          gap: 1,
+          children: [
+            jsxProd_default(WorkspaceDirectoryHint, {}),
+            jsxProd_default(DirectoryInput, {
+              value: directoryInput,
+              onChange: setDirectoryInput,
+              cursorOffset: m,
+              onChangeCursorOffset: E,
+              onSubmit: handleSubmit,
+              error,
+              suggestions,
+              selectedSuggestion,
+            }),
+          ],
+        });
+    $[22] = m;
+    $[23] = directoryInput;
+    $[24] = directoryPath;
+    $[25] = error;
+    $[26] = handleSelect;
+    $[27] = handleSubmit;
+    $[28] = selectedSuggestion;
+    $[29] = suggestions;
+    $[30] = children;
+  } else children = $[30];
+  let children_2;
+  if ($[31] !== onCancel || $[32] !== inputGuide || $[33] !== children) {
+    children_2 = jsxProd_default(Dialog, {
       title: "Add directory to workspace",
-      onCancel: onCancel,
+      onCancel,
       color: "permission",
-      isCancelActive: !1,
-      inputGuide: B,
-      children: L,
-    })),
-      ($[31] = onCancel),
-      ($[32] = B),
-      ($[33] = L),
-      ($[34] = U));
-  else U = $[34];
-  let Oe;
-  if ($[35] !== X || $[36] !== U)
-    ((Oe = e(FocusColumn, { onKeyDown: X, children: U })), ($[35] = X), ($[36] = U), ($[37] = Oe));
-  else Oe = $[37];
-  return Oe;
+      isCancelActive: false,
+      inputGuide,
+      children,
+    });
+    $[31] = onCancel;
+    $[32] = inputGuide;
+    $[33] = children;
+    $[34] = children_2;
+  } else children_2 = $[34];
+  let t13;
+  if ($[35] !== handleKeyDown || $[36] !== children_2) {
+    t13 = jsxProd_default(FocusColumn, {
+      onKeyDown: handleKeyDown,
+      children: children_2,
+    });
+    $[35] = handleKeyDown;
+    $[36] = children_2;
+    $[37] = t13;
+  } else t13 = $[37];
+  return t13;
 }
-
 export { AddWorkspaceDirectory };

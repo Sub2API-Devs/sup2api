@@ -9,31 +9,38 @@
  * attribution: fingerprint 1
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ShutdownRequestDisplay } from "./ShutdownMessage.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 import { Box } from "../../ink/components/Text.js";
 
 //@ chunk-ah34pb7m.js:112874-113172 fingerprint = UserPlanMessage (0.444)
-function UserPlanMessage(t0) {
-  let $ = w(5),
-    { addMargin: addMargin, planContent: planContent } = t0;
-  const t1 = addMargin ? 1 : 0;
-  let h;
-  if ($[0] !== planContent)
-    ((h = e(ShutdownRequestDisplay, {
+function UserPlanMessage(props) {
+  let $ = w(5);
+  let { addMargin, planContent } = props;
+  const marginTop = addMargin ? 1 : 0;
+  let children;
+  if ($[0] !== planContent) {
+    children = jsxProd_default(ShutdownRequestDisplay, {
       color: "planMode",
       title: "Plan to implement",
-      children: e(MarkdownText_2, { children: planContent }),
-    })),
-      ($[0] = planContent),
-      ($[1] = h));
-  else h = $[1];
+      children: jsxProd_default(MarkdownText_2, {
+        children: planContent,
+      }),
+    });
+    $[0] = planContent;
+    $[1] = children;
+  } else children = $[1];
   let M;
-  if ($[2] !== t1 || $[3] !== h)
-    ((M = e(Box, { marginTop: t1, children: h })), ($[2] = t1), ($[3] = h), ($[4] = M));
-  else M = $[4];
+  if ($[2] !== marginTop || $[3] !== children) {
+    M = jsxProd_default(Box, {
+      marginTop,
+      children,
+    });
+    $[2] = marginTop;
+    $[3] = children;
+    $[4] = M;
+  } else M = $[4];
   return M;
 }
-
 export { UserPlanMessage };

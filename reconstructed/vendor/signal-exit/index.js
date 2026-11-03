@@ -6,118 +6,141 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
-import { Ve } from "./signals.js";
+import { require_signals } from "./signals.js";
 
 //@ chunk-bmbhxpfm.js:15044-17126 cjs-fingerprint
-var Xe = x(function (ir, J) {
-  var g = global.process,
-    B = function (e) {
-      return (
-        e &&
-        typeof e === "object" &&
-        typeof e.removeListener === "function" &&
-        typeof e.emit === "function" &&
-        typeof e.reallyExit === "function" &&
-        typeof e.listeners === "function" &&
-        typeof e.kill === "function" &&
-        typeof e.pid === "number" &&
-        typeof e.on === "function"
-      );
-    };
-  if (!B(g))
-    J.exports = function () {
+var require_signal_exit = x(function (cjsExports, cjsModule) {
+  var g = global.process;
+  var processOk = function (e) {
+    return (
+      e &&
+      typeof e === "object" &&
+      typeof e.removeListener === "function" &&
+      typeof e.emit === "function" &&
+      typeof e.reallyExit === "function" &&
+      typeof e.listeners === "function" &&
+      typeof e.kill === "function" &&
+      typeof e.pid === "number" &&
+      typeof e.on === "function"
+    );
+  };
+  if (!processOk(g))
+    cjsModule.exports = function () {
       return function () {};
     };
   else {
-    if (
-      ((Te = importMetaRequire("assert")),
-      (z = Ve()),
-      (xe = /^win/i.test(g.platform)),
-      (X = importMetaRequire("events")),
-      typeof X !== "function")
-    )
-      X = X.EventEmitter;
-    if (g.__signal_exit_emitter__) D = g.__signal_exit_emitter__;
-    else ((D = g.__signal_exit_emitter__ = new X()), (D.count = 0), (D.emitted = {}));
-    if (!D.infinite) (D.setMaxListeners(1 / 0), (D.infinite = !0));
-    ((J.exports = function (e, r) {
-      if (!B(global.process)) return function () {};
-      if ((Te.equal(typeof e, "function", "a callback must be provided for exit handler"), H === !1)) se();
-      var n = "exit";
-      if (r && r.alwaysLast) n = "afterexit";
-      var i = function () {
-        if (
-          (D.removeListener(n, e), D.listeners("exit").length === 0 && D.listeners("afterexit").length === 0)
-        )
-          ee();
+    assert = importMetaRequire("assert");
+    signals = require_signals();
+    isWin = /^win/i.test(g.platform);
+    EE = importMetaRequire("events");
+    if (typeof EE !== "function") EE = EE.EventEmitter;
+    if (g.__signal_exit_emitter__) emitter = g.__signal_exit_emitter__;
+    else {
+      emitter = g.__signal_exit_emitter__ = new EE();
+      emitter.count = 0;
+      emitter.emitted = {};
+    }
+    if (!emitter.infinite) {
+      emitter.setMaxListeners(1 / 0);
+      emitter.infinite = true;
+    }
+    cjsModule.exports = function (cb, opts) {
+      if (!processOk(global.process)) return function () {};
+      assert.equal(typeof cb, "function", "a callback must be provided for exit handler");
+      if (loaded === false) load();
+      var ev = "exit";
+      if (opts && opts.alwaysLast) ev = "afterexit";
+      var remove = function () {
+        emitter.removeListener(ev, cb);
+        if (emitter.listeners("exit").length === 0 && emitter.listeners("afterexit").length === 0) unload();
       };
-      return (D.on(n, e), i);
-    }),
-      (ee = function () {
-        if (!H || !B(global.process)) return;
-        ((H = !1),
-          z.forEach(function (r) {
-            try {
-              g.removeListener(r, te[r]);
-            } catch (error) {}
-          }),
-          (g.emit = re),
-          (g.reallyExit = he),
-          (D.count -= 1));
-      }),
-      (J.exports.unload = ee),
-      (Y = function (r, n, i) {
-        if (D.emitted[r]) return;
-        ((D.emitted[r] = !0), D.emit(r, n, i));
-      }),
-      (te = {}),
-      z.forEach(function (e) {
-        te[e] = function () {
-          if (!B(global.process)) return;
-          var listeners = g.listeners(e);
-          if (listeners.length === D.count) {
-            if ((ee(), Y("exit", null, e), Y("afterexit", null, e), xe && e === "SIGHUP")) e = "SIGINT";
-            g.kill(g.pid, e);
-          }
-        };
-      }),
-      (J.exports.signals = function () {
-        return z;
-      }),
-      (H = !1),
-      (se = function () {
-        if (H || !B(global.process)) return;
-        ((H = !0),
-          (D.count += 1),
-          (z = z.filter(function (r) {
-            try {
-              return (g.on(r, te[r]), !0);
-            } catch (error) {
-              return !1;
-            }
-          })),
-          (g.emit = Ie),
-          (g.reallyExit = ke));
-      }),
-      (J.exports.load = se),
-      (he = g.reallyExit),
-      (ke = function (r) {
-        if (!B(global.process)) return;
-        ((g.exitCode = r || 0),
-          Y("exit", g.exitCode, null),
-          Y("afterexit", g.exitCode, null),
-          he.call(g, g.exitCode));
-      }),
-      (re = g.emit),
-      (Ie = function (r, n) {
-        if (r === "exit" && B(global.process)) {
-          if (n !== void 0) g.exitCode = n;
-          var i = re.apply(this, arguments);
-          return (Y("exit", g.exitCode, null), Y("afterexit", g.exitCode, null), i);
-        } else return re.apply(this, arguments);
-      }));
+      emitter.on(ev, cb);
+      return remove;
+    };
+    unload = function () {
+      if (!loaded || !processOk(global.process)) return;
+      loaded = false;
+      signals.forEach(function (sig) {
+        try {
+          g.removeListener(sig, sigListeners[sig]);
+        } catch (er) {}
+      });
+      g.emit = originalProcessEmit;
+      g.reallyExit = originalProcessReallyExit;
+      emitter.count -= 1;
+    };
+    cjsModule.exports.unload = unload;
+    emit = function (event, code, signal) {
+      if (emitter.emitted[event]) return;
+      emitter.emitted[event] = true;
+      emitter.emit(event, code, signal);
+    };
+    sigListeners = {};
+    signals.forEach(function (sig) {
+      sigListeners[sig] = function () {
+        if (!processOk(global.process)) return;
+        var listeners = g.listeners(sig);
+        if (listeners.length === emitter.count) {
+          unload();
+          emit("exit", null, sig);
+          emit("afterexit", null, sig);
+          if (isWin && sig === "SIGHUP") sig = "SIGINT";
+          g.kill(g.pid, sig);
+        }
+      };
+    });
+    cjsModule.exports.signals = function () {
+      return signals;
+    };
+    loaded = false;
+    load = function () {
+      if (loaded || !processOk(global.process)) return;
+      loaded = true;
+      emitter.count += 1;
+      signals = signals.filter(function (sig) {
+        try {
+          g.on(sig, sigListeners[sig]);
+          return true;
+        } catch (er) {
+          return false;
+        }
+      });
+      g.emit = processEmit;
+      g.reallyExit = processReallyExit;
+    };
+    cjsModule.exports.load = load;
+    originalProcessReallyExit = g.reallyExit;
+    processReallyExit = function (code) {
+      if (!processOk(global.process)) return;
+      g.exitCode = code || 0;
+      emit("exit", g.exitCode, null);
+      emit("afterexit", g.exitCode, null);
+      originalProcessReallyExit.call(g, g.exitCode);
+    };
+    originalProcessEmit = g.emit;
+    processEmit = function (ev, arg) {
+      if (ev === "exit" && processOk(global.process)) {
+        if (arg !== undefined) g.exitCode = arg;
+        var ret = originalProcessEmit.apply(this, arguments);
+        emit("exit", g.exitCode, null);
+        emit("afterexit", g.exitCode, null);
+        return ret;
+      } else return originalProcessEmit.apply(this, arguments);
+    };
   }
-  var Te, z, xe, X, D, ee, Y, te, H, se, he, ke, re, Ie;
+  var assert;
+  var signals;
+  var isWin;
+  var EE;
+  var emitter;
+  var unload;
+  var emit;
+  var sigListeners;
+  var loaded;
+  var load;
+  var originalProcessReallyExit;
+  var processReallyExit;
+  var originalProcessEmit;
+  var processEmit;
 });
-
-export { Xe };
+export { require_signal_exit };

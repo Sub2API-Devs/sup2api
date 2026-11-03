@@ -5,22 +5,22 @@
  * pieces: chunk-20ppca50.js (2)
  * attribution: esm-layout 2
  */
-import fs, { default as fs_2, default as fs_3 } from "fs";
-import { h, G, X } from "../is-docker/index.js";
+import fs from "fs";
+import { h, hasDockerEnv, hasDockerCGroup } from "../is-docker/index.js";
 
 //@ chunk-20ppca50.js:749-796 esm-layout
 function x() {
-  if (h === void 0) h = G() || X();
+  if (h === undefined) h = hasDockerEnv() || hasDockerCGroup();
   return h;
 }
 //@ chunk-20ppca50.js:796-873 esm-layout
-var y,
-  q = () => {
-    try {
-      return (fs_2.statSync("/run/.containerenv"), !0);
-    } catch {
-      return !1;
-    }
-  };
-
-export { y, q, x };
+var y;
+var hasContainerEnv = () => {
+  try {
+    fs.statSync("/run/.containerenv");
+    return true;
+  } catch {
+    return false;
+  }
+};
+export { y, hasContainerEnv, x };

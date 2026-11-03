@@ -8,25 +8,26 @@
  * pieces: chunk-byj4f9x7.js (3)
  * attribution: placement 3
  */
-import { j, Uy, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, Uy, P } from "../../vendor/react/cjs/react.production.js";
 import { onGrowthBookRefresh } from "../services/analytics/growthbook.js";
 
 //@ chunk-byj4f9x7.js:267-271 placement
-j();
+init_react_production();
+//@ chunk-byj4f9x7.js:271-334 placement
 /**
  * 返回一个强制重渲染计数器的 hook。
  */
-//@ chunk-byj4f9x7.js:271-334 placement
 function useForceRender() {
   let [o, r] = Uy((e) => e + 1, 0);
-  return (P(() => onGrowthBookRefresh(r), []), o);
+  P(() => onGrowthBookRefresh(r), []);
+  return o;
 }
+//@ chunk-byj4f9x7.js:334-365 placement
 /**
  * 订阅强制更新后执行渲染函数。
  */
-//@ chunk-byj4f9x7.js:334-365 placement
 function renderWithForceUpdate(o) {
-  return (useForceRender(), o());
+  useForceRender();
+  return o();
 }
-
 export { renderWithForceUpdate, useForceRender };

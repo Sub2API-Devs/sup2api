@@ -6,29 +6,32 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:158192-158596 cjs-fingerprint
-var AS = x(function (Nfe, bA) {
-  var lc = Tn();
-  Zn();
-  lc.mgf = lc.mgf || {};
-  var OG = (bA.exports = lc.mgf.mgf1 = lc.mgf1 = lc.mgf1 || {});
-  OG.create = function (e) {
-    var n = {
-      generate: function (r, s) {
-        var h = new lc.util.ByteBuffer(),
-          ceil = Math.ceil(s / e.digestLength);
-        for (var b = 0; b < ceil; b++) {
-          var S = new lc.util.ByteBuffer();
-          (S.putInt32(b), e.start(), e.update(r + S.getBytes()), h.putBuffer(e.digest()));
+var require_mgf1 = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_util();
+  forge.mgf = forge.mgf || {};
+  var mgf1 = (cjsModule.exports = forge.mgf.mgf1 = forge.mgf1 = forge.mgf1 || {});
+  mgf1.create = function (md) {
+    var mgf = {
+      generate: function (seed, maskLen) {
+        var t = new forge.util.ByteBuffer();
+        var len = Math.ceil(maskLen / md.digestLength);
+        for (var i = 0; i < len; i++) {
+          var c = new forge.util.ByteBuffer();
+          c.putInt32(i);
+          md.start();
+          md.update(seed + c.getBytes());
+          t.putBuffer(md.digest());
         }
-        return (h.truncate(h.length() - s), h.getBytes());
+        t.truncate(t.length() - maskLen);
+        return t.getBytes();
       },
     };
-    return n;
+    return mgf;
   };
 });
-
-export { AS };
+export { require_mgf1 };

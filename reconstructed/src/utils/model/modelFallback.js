@@ -9,7 +9,7 @@
  * attribution: placement 14
  */
 import {
-  envDefaultModel,
+  envDefaultModel_2,
   resolveAvailableModels,
   familyDefaultFor,
   isModelAllowedUnderActiveEnforcement,
@@ -17,8 +17,21 @@ import {
 import { parseUserSpecifiedModel, isUsageCreditsOnlyModel } from "./modelDisplay.js";
 import { getDefaultMainLoopModelSetting, getDefaultHaikuModel } from "./planModeModel.js";
 import { env } from "../env.js";
-import { pve, Lt, f_r, parseModelId, wR } from "./modelIds.js";
-import { nw, ow, isModelFallbackDisabled, ew, tno, isFormerHeadRefused } from "./modelUnavailability.js";
+import {
+  isModelKeyAliasOrResolved,
+  strip1mSuffix,
+  normalizeDottedVersion,
+  parseModelId,
+  isStandardVersion,
+} from "./modelIds.js";
+import {
+  markModelsConfigured,
+  sessionFallbacks,
+  isModelFallbackDisabled,
+  isFormerHeadOrInLadder,
+  primaryRungProvider,
+  isFormerHeadRefused,
+} from "./modelUnavailability.js";
 import { ladderRungsToSend, getUserSpecifiedModelSetting } from "./smallFastModel.js";
 import { getMainLoopModel, getDefaultOpusModel, getDefaultSonnetModel } from "./model.js";
 import { getProviderForModel } from "./providers.js";
@@ -29,8 +42,8 @@ import { isPDFExtension } from "../pdfUtils.js";
 
 //@ chunk-aepeg2w5.js:454751-454869 placement
 function isDefaultModelEnforced() {
-  let e = envDefaultModel();
-  if (resolveAvailableModels(e.setting, e.envFamily, e.concreteBaseline) !== null) return !0;
+  let e = envDefaultModel_2();
+  if (resolveAvailableModels(e.setting, e.envFamily, e.concreteBaseline) !== null) return true;
   return familyDefaultFor(e.setting) !== null;
 }
 //@ chunk-aepeg2w5.js:454869-454899 placement
@@ -39,7 +52,7 @@ function getDefaultMainLoopModel() {
 }
 //@ chunk-aepeg2w5.js:454899-454957 placement
 function isNoModelFallbackEnabled() {
-  return env.CLAUDE_CODE_NO_MODEL_FALLBACK === !0;
+  return env.CLAUDE_CODE_NO_MODEL_FALLBACK === true;
 }
 //@ chunk-aepeg2w5.js:454957-455318 placement
 function noModelFallbackTripwire() {
@@ -51,18 +64,19 @@ function noModelFallbackTripwire() {
 }
 //@ chunk-aepeg2w5.js:455318-455567 placement
 function isSubagentModelPinned(e) {
-  let n = env.CLAUDE_CODE_SUBAGENT_MODEL?.trim().toLowerCase();
-  if (!n || n === "inherit" || n === "default" || pve(n)) return !1;
-  let r = Lt(parseUserSpecifiedModel(env.CLAUDE_CODE_SUBAGENT_MODEL)),
-    s = Lt(e),
-    h = /^[a-z-]+\.(?=anthropic\.)/;
+  let lower = env.CLAUDE_CODE_SUBAGENT_MODEL?.trim().toLowerCase();
+  if (!lower || lower === "inherit" || lower === "default" || isModelKeyAliasOrResolved(lower)) return false;
+  let r = strip1mSuffix(parseUserSpecifiedModel(env.CLAUDE_CODE_SUBAGENT_MODEL));
+  let s = strip1mSuffix(e);
+  let h = /^[a-z-]+\.(?=anthropic\.)/;
   return h.test(r) ? r === s : r === s.replace(h, "");
 }
 //@ chunk-aepeg2w5.js:455567-455706 placement
 function buildAvailabilityFallbackChain(e, n) {
   if (isNoModelFallbackEnabled()) return [e];
   let r = configuredAvailabilityFallbacks(e, n);
-  if ((nw(r), r.length === 0 && mayStepDownOnRefusal(e))) {
+  markModelsConfigured(r);
+  if (r.length === 0 && mayStepDownOnRefusal(e)) {
     let s = ladderRungsToSend(e);
     if (s.length > 0) return [e, ...s];
   }
@@ -70,32 +84,42 @@ function buildAvailabilityFallbackChain(e, n) {
 }
 //@ chunk-aepeg2w5.js:455706-455772 placement
 function sessionHasOwnFallback() {
-  let e = ow();
+  let e = sessionFallbacks();
   return e.length > 0 && configuredAvailabilityFallbacks(getMainLoopModel(), e).length > 0;
 }
 //@ chunk-aepeg2w5.js:455772-455833 placement
 function mayStepDownOnRefusal(e) {
-  return !isModelFallbackDisabled() && ew(e) && tno(e) === getProviderForModel(e) && !isExactModelPick(e);
+  return (
+    !isModelFallbackDisabled() &&
+    isFormerHeadOrInLadder(e) &&
+    primaryRungProvider(e) === getProviderForModel(e) &&
+    !isExactModelPick(e)
+  );
 }
 //@ chunk-aepeg2w5.js:455833-455988 placement
 function isExactModelPick(e) {
-  if (isSubagentModelPinned(e)) return !0;
-  let n = getUserSpecifiedModelSetting();
-  if (n == null || n.trim().toLowerCase() === "default" || pve(n.trim().toLowerCase())) return !1;
-  return Lt(parseUserSpecifiedModel(n)) === Lt(e);
+  if (isSubagentModelPinned(e)) return true;
+  let userSpecifiedModelSetting = getUserSpecifiedModelSetting();
+  if (
+    userSpecifiedModelSetting == null ||
+    userSpecifiedModelSetting.trim().toLowerCase() === "default" ||
+    isModelKeyAliasOrResolved(userSpecifiedModelSetting.trim().toLowerCase())
+  )
+    return false;
+  return strip1mSuffix(parseUserSpecifiedModel(userSpecifiedModelSetting)) === strip1mSuffix(e);
 }
 //@ chunk-aepeg2w5.js:455988-456084 placement
 function configuredAvailabilityFallbacks(e, n) {
   return [n]
     .flat()
-    .filter((r) => r !== void 0)
+    .filter((r) => r !== undefined)
     .filter((r) => r !== "" && r !== e && !isFormerHeadRefused(r, e));
 }
 //@ chunk-aepeg2w5.js:456084-456236 placement
 function getUsageCreditsOnlyModelConsentDeclineFallback() {
   if (isNoModelFallbackEnabled()) return null;
-  let e = getDefaultMainLoopModel();
-  if (!isUsageCreditsOnlyModel(e)) return e;
+  let defaultMainLoopModel = getDefaultMainLoopModel();
+  if (!isUsageCreditsOnlyModel(defaultMainLoopModel)) return defaultMainLoopModel;
   for (let n of [getDefaultOpusModel(), getDefaultSonnetModel(), getDefaultHaikuModel()]) {
     if (isUsageCreditsOnlyModel(n)) continue;
     if (isModelAllowedUnderActiveEnforcement(n) ?? isModelAllowed(n)) return n;
@@ -104,10 +128,10 @@ function getUsageCreditsOnlyModelConsentDeclineFallback() {
 }
 //@ chunk-aepeg2w5.js:456236-456412 placement
 function firstPartyNameToCanonical(e) {
-  e = f_r(e.toLowerCase());
-  let canonicalNameMemo = getCatalogState().canonicalNameMemo,
-    r = canonicalNameMemo.get(e);
-  if (r !== void 0) return r;
+  e = normalizeDottedVersion(e.toLowerCase());
+  let canonicalNameMemo = getCatalogState().canonicalNameMemo;
+  let r = canonicalNameMemo.get(e);
+  if (r !== undefined) return r;
   let s = bedrockModelInfo(e);
   if (e.length <= 256) {
     if (canonicalNameMemo.size >= 256) canonicalNameMemo.clear();
@@ -115,21 +139,21 @@ function firstPartyNameToCanonical(e) {
   }
   return s;
 }
+//@ chunk-aepeg2w5.js:456412-458110 placement
 /**
  * 按 Bedrock 模型 id（含区域前缀）查找模型信息。
  */
-//@ chunk-aepeg2w5.js:456412-458110 placement
 function bedrockModelInfo(e) {
   let n = catalogIdForProviderModelId(e);
-  if (n !== void 0) return n;
+  if (n !== undefined) return n;
   for (let s of BEDROCK_REGION_PREFIXES)
     if (s !== "us" && e.startsWith(`${s}.anthropic.`)) {
       let h = catalogIdForProviderModelId(`us${e.slice(s.length)}`);
-      if (h !== void 0) return h;
+      if (h !== undefined) return h;
       break;
     }
-  let r = parseModelId(e);
-  if (wR(r)) return isPDFExtension(r) ?? ww(r.base);
+  let ext = parseModelId(e);
+  if (isStandardVersion(ext)) return isPDFExtension(ext) ?? stripDateSuffix(ext.base);
   if (e.includes("claude-fable-5-1")) return "claude-fable-5-1";
   if (e.includes("claude-fable-5")) return "claude-fable-5";
   if (e.includes("claude-mythos-5-1")) return "claude-mythos-5-1";
@@ -155,13 +179,12 @@ function bedrockModelInfo(e) {
   if (e.includes("claude-3-opus")) return "claude-3-opus";
   if (e.includes("claude-3-sonnet")) return "claude-3-sonnet";
   if (e.includes("claude-3-haiku")) return "claude-3-haiku";
-  return ww(e);
+  return stripDateSuffix(e);
 }
 //@ chunk-aepeg2w5.js:458110-458156 placement
-function ww(e) {
+function stripDateSuffix(e) {
   return e.replace(/-\d{8}$/, "");
 }
-
 export {
   getDefaultMainLoopModel,
   buildAvailabilityFallbackChain,

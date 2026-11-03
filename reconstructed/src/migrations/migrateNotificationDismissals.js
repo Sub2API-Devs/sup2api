@@ -12,22 +12,32 @@ import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
 //@ chunk-cjydagjy.js:10044-10101 placement
-var NOTIFICATION_DISMISSAL_KEYS = { "subscription-switch": "subscriptionNoticeCount" };
+var NOTIFICATION_DISMISSAL_KEYS = {
+  "subscription-switch": "subscriptionNoticeCount",
+};
+//@ chunk-cjydagjy.js:10101-10386 placement
 /**
  * 316 新增迁移：subscriptionNoticeCount 等通知计数 → seenNotifications。
  */
-//@ chunk-cjydagjy.js:10101-10386 placement
 function migrateNotificationDismissals(e) {
-  let r = getGlobalConfig();
-  if (r.seenNotifications !== void 0) return;
+  let globalConfig = getGlobalConfig();
+  if (globalConfig.seenNotifications !== undefined) return;
   let n = {};
-  for (let [s, S] of Object.entries(NOTIFICATION_DISMISSAL_KEYS)) {
-    let y = r[S];
-    if (typeof y === "number" && y > 0) n[s] = y;
-    else if (y === !0) n[s] = 1;
+  for (let [key, value] of Object.entries(NOTIFICATION_DISMISSAL_KEYS)) {
+    let y = globalConfig[value];
+    if (typeof y === "number" && y > 0) n[key] = y;
+    else if (y === true) n[key] = 1;
   }
-  (saveGlobalConfig((s) => (s.seenNotifications !== void 0 ? s : { ...s, seenNotifications: n }), e),
-    logFeatureOk("migration_notification_dismissals"));
+  saveGlobalConfig(
+    (s) =>
+      s.seenNotifications !== undefined
+        ? s
+        : {
+            ...s,
+            seenNotifications: n,
+          },
+    e,
+  );
+  logFeatureOk("migration_notification_dismissals");
 }
-
 export { migrateNotificationDismissals };

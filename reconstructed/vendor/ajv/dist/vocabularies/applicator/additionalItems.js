@@ -6,53 +6,66 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:92118-93166 cjs-fingerprint
-var Rr = x(function (ti) {
-  Object.defineProperty(ti, "__esModule", { value: !0 });
-  ti.validateAdditionalItems = void 0;
-  var J = uh(),
-    Ze = ew(),
-    Zf = {
-      message: ({ params: { len: e } }) => J.str`must NOT have more than ${e} items`,
-      params: ({ params: { len: e } }) => J._`{limit: ${e}}`,
+var require_additionalItems = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.validateAdditionalItems = undefined;
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var error = {
+    message: ({ params: { len } }) => codegen_1.str`must NOT have more than ${len} items`,
+    params: ({ params: { len } }) => codegen_1._`{limit: ${len}}`,
+  };
+  var def = {
+    keyword: "additionalItems",
+    type: "array",
+    schemaType: ["boolean", "object"],
+    before: "uniqueItems",
+    error,
+    code(cxt) {
+      let { parentSchema, it } = cxt;
+      let { items } = parentSchema;
+      if (!Array.isArray(items)) {
+        util_1.checkStrictMode(it, '"additionalItems" is ignored when "items" is not an array of schemas');
+        return;
+      }
+      validateAdditionalItems(cxt, items);
     },
-    ep = {
-      keyword: "additionalItems",
-      type: "array",
-      schemaType: ["boolean", "object"],
-      before: "uniqueItems",
-      error: Zf,
-      code(e) {
-        let { parentSchema: parentSchema, it: it } = e,
-          { items: items } = parentSchema;
-        if (!Array.isArray(items)) {
-          Ze.checkStrictMode(it, '"additionalItems" is ignored when "items" is not an array of schemas');
-          return;
-        }
-        ei(e, items);
-      },
-    };
-  function ei(e, t) {
-    let { gen: gen, schema: schema, data: n, keyword: keyword, it: it } = e;
-    it.items = !0;
-    let a = gen.const("len", J._`${n}.length`);
-    if (schema === !1) (e.setParams({ len: t.length }), e.pass(J._`${a} <= ${t.length}`));
-    else if (typeof schema == "object" && !Ze.alwaysValidSchema(it, schema)) {
-      let u = gen.var("valid", J._`${a} <= ${t.length}`);
-      (gen.if(J.not(u), () => c(u)), e.ok(u));
+  };
+  function validateAdditionalItems(cxt, items) {
+    let { gen, schema, data, keyword, it } = cxt;
+    it.items = true;
+    let len = gen.const("len", codegen_1._`${data}.length`);
+    if (schema === false) {
+      cxt.setParams({
+        len: items.length,
+      });
+      cxt.pass(codegen_1._`${len} <= ${items.length}`);
+    } else if (typeof schema == "object" && !util_1.alwaysValidSchema(it, schema)) {
+      let valid = gen.var("valid", codegen_1._`${len} <= ${items.length}`);
+      gen.if(codegen_1.not(valid), () => validateItems(valid));
+      cxt.ok(valid);
     }
-    function c(u) {
-      gen.forRange("i", t.length, a, (l) => {
-        if ((e.subschema({ keyword: keyword, dataProp: l, dataPropType: Ze.Type.Num }, u), !it.allErrors))
-          gen.if(J.not(u), () => gen.break());
+    function validateItems(valid) {
+      gen.forRange("i", items.length, len, (i) => {
+        cxt.subschema(
+          {
+            keyword,
+            dataProp: i,
+            dataPropType: util_1.Type.Num,
+          },
+          valid,
+        );
+        if (!it.allErrors) gen.if(codegen_1.not(valid), () => gen.break());
       });
     }
   }
-  ti.validateAdditionalItems = ei;
-  ti.default = ep;
+  cjsExports.validateAdditionalItems = validateAdditionalItems;
+  cjsExports.default = def;
 });
-
-export { Rr };
+export { require_additionalItems };

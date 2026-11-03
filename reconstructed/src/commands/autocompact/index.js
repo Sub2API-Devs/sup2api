@@ -10,39 +10,38 @@
  */
 import { getIsNonInteractiveSession, getIsRemoteMode } from "../../bootstrap/state.js";
 
+//@ chunk-e6aww6q8.js:1693236-1693786 placement
 /**
  * /autocompact 命令对象（local-jsx）；描述：Set how full the context gets before auto-summarizing；isEnabled: ()=>!_e()；isHidden: false；实现 chunk-qqj12s77.js 的 vo。
  */
-//@ chunk-e6aww6q8.js:1693236-1693786 placement
 var autocompactCommand = {
-    type: "local-jsx",
-    name: "autocompact",
-    description: "Set how full the context gets before auto-summarizing",
-    immediate: !0,
-    isEnabled: () => !getIsNonInteractiveSession(),
-    isHidden: !1,
-    argumentHint: "[auto|<tokens>]",
-    userFacingName() {
-      return "autocompact";
-    },
+  type: "local-jsx",
+  name: "autocompact",
+  description: "Set how full the context gets before auto-summarizing",
+  immediate: true,
+  isEnabled: () => !getIsNonInteractiveSession(),
+  isHidden: false,
+  argumentHint: "[auto|<tokens>]",
+  userFacingName() {
+    return "autocompact";
   },
-  autocompactNonInteractiveCommand = {
-    type: "local",
-    name: "autocompact",
-    supportsNonInteractive: !0,
-    thinClientDispatch: "post-text",
-    description: "Configure the auto-compact window size",
-    get isHidden() {
-      return !getIsNonInteractiveSession() && !getIsRemoteMode();
-    },
-    isEnabled() {
-      return getIsNonInteractiveSession() || getIsRemoteMode();
-    },
-    argumentHint: "[auto|<tokens>]",
-    load: () => import("./chunk-70h2e8y3.js"),
-    userFacingName() {
-      return "autocompact";
-    },
-  };
-
+};
+var autocompactNonInteractiveCommand = {
+  type: "local",
+  name: "autocompact",
+  supportsNonInteractive: true,
+  thinClientDispatch: "post-text",
+  description: "Configure the auto-compact window size",
+  get isHidden() {
+    return !getIsNonInteractiveSession() && !getIsRemoteMode();
+  },
+  isEnabled() {
+    return getIsNonInteractiveSession() || getIsRemoteMode();
+  },
+  argumentHint: "[auto|<tokens>]",
+  load: () => import("./chunk-70h2e8y3.js"),
+  userFacingName() {
+    return "autocompact";
+  },
+};
 export { autocompactCommand, autocompactNonInteractiveCommand };

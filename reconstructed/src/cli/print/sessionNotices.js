@@ -11,7 +11,7 @@
 import { logForDebugging } from "../../utils/debug.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { DoctorLazy } from "../handlers/util.js";
-import { u, T, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, literal, string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import {
@@ -19,24 +19,24 @@ import {
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
 } from "../../services/analytics/growthbook.js";
 import {
-  G2,
-  Hvn,
-  rfi,
-  ime,
+  isPollEventIngressActive,
+  isHostIngressPollEvents,
+  normalizedEventLabel,
+  MAX_POLL_EVENT_ENVELOPE_BYTES,
   escapeXmlText,
   validatePollEvent,
   SESSION_NOTICE,
-  Kv,
-  vFe,
+  isPollEventMode,
+  POLL_KIND_DEFAULT_TIMEOUT_MS,
 } from "../../utils/pollEvents.js";
 import { transportStateByHost } from "../transportState.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { Vt } from "../../utils/agentId.js";
-import { CVs } from "../../utils/pollEvents/declarations.js";
+import { normalizeUuidOrNull } from "../../utils/agentId.js";
+import { escapedEventJsonBody } from "../../utils/pollEvents/declarations.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { errorMessage, isAbortError } from "../../utils/errors.js";
 import { count } from "../../utils/collections.js";
-import { t7n, enqueuePollEvent } from "../../utils/messageQueueManager.js";
+import { getCommandQueueSnapshot, enqueuePollEvent } from "../../utils/messageQueueManager.js";
 import { executeUserPromptSubmitHooksForSession } from "../../utils/hooks.js";
 import { flushSessionStorage } from "../../utils/sessionStorage.js";
 
@@ -46,29 +46,29 @@ function isNoticeKindServed(e) {
 }
 //@ chunk-tyg7f3ek.js:33361-33654 placement
 var NOTICE_KIND_SERVED = {
-  directories: !1,
-  file_state: !1,
-  unfit_text: !1,
-  no_file: !1,
-  tie: !1,
-  held_file_unreadable: !1,
-  needs_file_search: !1,
-  too_many: !1,
-  outside: !1,
-  hipaa: !1,
-  no_policy_answer: !1,
-  switched_off: !1,
-  lane: !0,
-  unfit_within: !0,
-  not_served: !0,
-  fault: !0,
-  time_limit: !0,
-  stranded: !0,
-  waited_too_long: !0,
-  session_ending: !0,
+  directories: false,
+  file_state: false,
+  unfit_text: false,
+  no_file: false,
+  tie: false,
+  held_file_unreadable: false,
+  needs_file_search: false,
+  too_many: false,
+  outside: false,
+  hipaa: false,
+  no_policy_answer: false,
+  switched_off: false,
+  lane: true,
+  unfit_within: true,
+  not_served: true,
+  fault: true,
+  time_limit: true,
+  stranded: true,
+  waited_too_long: true,
+  session_ending: true,
 };
 //@ chunk-tyg7f3ek.js:33654-33738 placement
-class Sb {
+class LaneAssignmentMap {
   #t = new WeakMap();
   mark(e, n) {
     this.#t.set(e, n);
@@ -78,9 +78,9 @@ class Sb {
   }
 }
 //@ chunk-tyg7f3ek.js:33738-33764 placement
-var HOST_INGRESS_LANES = new SessionRootSlot(() => new Sb());
+var HOST_INGRESS_LANES = new SessionRootSlot(() => new LaneAssignmentMap());
 //@ chunk-tyg7f3ek.js:33764-33775 placement
-var wb = 1e4;
+var MAX_TRACKED_NOTICE_UUIDS = 1e4;
 //@ chunk-tyg7f3ek.js:33775-34034 placement
 class RecentUuidSet {
   uuids = new Set();
@@ -89,98 +89,103 @@ class RecentUuidSet {
     return this.uuids.has(e);
   }
   track(e) {
-    if (this.uuids.has(e)) return !1;
-    if ((this.uuids.add(e), this.order.push(e), this.order.length > wb)) {
-      let splice = this.order.splice(0, this.order.length - wb);
-      for (let r of splice) this.uuids.delete(r);
+    if (this.uuids.has(e)) return false;
+    this.uuids.add(e);
+    this.order.push(e);
+    if (this.order.length > MAX_TRACKED_NOTICE_UUIDS) {
+      let n = this.order.splice(0, this.order.length - MAX_TRACKED_NOTICE_UUIDS);
+      for (let r of n) this.uuids.delete(r);
     }
-    return !0;
+    return true;
   }
 }
 //@ chunk-tyg7f3ek.js:34034-34060 placement
 var RECEIVED_MESSAGE_UUIDS = new SessionRootSlot(() => new RecentUuidSet());
 //@ chunk-tyg7f3ek.js:34060-34371 placement
-var SESSION_NOTICES_FLAG = "tengu_polished_lagoon",
-  Rb = !1,
-  SESSION_NOTICES = "session_notices",
-  jL = DoctorLazy(() =>
-    u({
-      type: T("session_notice"),
-      uuid: o().regex(/^[A-Za-z0-9_-]{1,128}$/),
-      notice_class: o().regex(/^[a-z][a-z0-9_]{0,63}$/),
-      from_session_id: o().regex(/^[A-Za-z0-9_.:-]{1,256}$/),
-      content: o(),
-      isSynthetic: T(!0),
-      inbound_origin: T("mcp_session_notice"),
-    }),
-  );
+/**
+ * session_notices 特性：默认关闭（false）、消息类型常量 session_notices，以及通知载荷的 zod schema。
+ */
+var SESSION_NOTICES_FLAG = "tengu_polished_lagoon";
+var SESSION_NOTICES_DEFAULT_OFF = false;
+var SESSION_NOTICES = "session_notices";
+var sessionNoticeSchema = DoctorLazy(() =>
+  u({
+    type: literal("session_notice"),
+    uuid: string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+    notice_class: string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+    from_session_id: string().regex(/^[A-Za-z0-9_.:-]{1,256}$/),
+    content: string(),
+    isSynthetic: literal(true),
+    inbound_origin: literal("mcp_session_notice"),
+  }),
+);
 //@ chunk-tyg7f3ek.js:34371-34448 placement
-function Pb() {
+function isSessionNoticesEnabled() {
   return (
-    env.CLAUDE_CODE_REMOTE === !0 &&
+    env.CLAUDE_CODE_REMOTE === true &&
     getIsNonInteractiveSession() &&
-    getFeatureValue_CACHED_MAY_BE_STALE(SESSION_NOTICES_FLAG, Rb) &&
-    G2() &&
-    !Hvn()
+    getFeatureValue_CACHED_MAY_BE_STALE(SESSION_NOTICES_FLAG, SESSION_NOTICES_DEFAULT_OFF) &&
+    isPollEventIngressActive() &&
+    !isHostIngressPollEvents()
   );
 }
 //@ chunk-tyg7f3ek.js:34448-34754 placement
-function sessionNoticesCapability(e, n) {
-  let r = transportStateByHost.of(e).active?.isRemoteTransport() === !0,
-    s = n === "auto" && Pb() && r,
-    { value: h, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(SESSION_NOTICES_FLAG, Rb);
-  return (
-    logForDebugging(
-      `[session-notices] advertise=${s} mode=${n} flag=${h}(${source}) pollChannel=${G2()} ownEventsOnly=${Hvn()} remote=${r} remoteEnv=${env.CLAUDE_CODE_REMOTE === !0} nonInteractive=${getIsNonInteractiveSession()}`,
-    ),
-    s
+function sessionNoticesCapability(session, permissionMode) {
+  let r = transportStateByHost.of(session).active?.isRemoteTransport() === true;
+  let s = permissionMode === "auto" && isSessionNoticesEnabled() && r;
+  let { value: h, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+    SESSION_NOTICES_FLAG,
+    SESSION_NOTICES_DEFAULT_OFF,
   );
+  logForDebugging(
+    `[session-notices] advertise=${s} mode=${permissionMode} flag=${h}(${source}) pollChannel=${isPollEventIngressActive()} ownEventsOnly=${isHostIngressPollEvents()} remote=${r} remoteEnv=${env.CLAUDE_CODE_REMOTE === true} nonInteractive=${getIsNonInteractiveSession()}`,
+  );
+  return s;
 }
 //@ chunk-tyg7f3ek.js:34754-34845 placement
-function _h(e, n) {
-  if (e === void 0) return;
-  transportStateByHost.of(n).active?.onCommandLifecycle?.(e, "completed");
+function completeCommandLifecycleForHost(uuid, session) {
+  if (uuid === undefined) return;
+  transportStateByHost.of(session).active?.onCommandLifecycle?.(uuid, "completed");
 }
+//@ chunk-tyg7f3ek.js:34845-38288 placement
 /**
  * 处理 CCR 下发的 session_notice（仅 RemoteIO 传输）：校验载荷、去重、截断后作为系统提醒注入。
  */
-//@ chunk-tyg7f3ek.js:34845-38288 placement
 function handleSessionNotice(
   e,
-  {
-    getAppState: getAppState,
-    setAppState: setAppState,
-    session: session,
-    sessionHooks: sessionHooks,
-    isRemoteTransport: isRemoteTransport,
-    ingressTail: ingressTail,
-    storageV5: storageV5,
-    credentials: credentials,
-  },
+  { getAppState, setAppState, session, sessionHooks, isRemoteTransport, ingressTail, storageV5, credentials },
 ) {
   if (!isRemoteTransport()) {
-    (logForDebugging(
+    logForDebugging(
       "[session-notices] session_notice on a non-RemoteIO transport \u2014 dropping without ack",
-      { level: "warn" },
-    ),
-      logFeatureBad("ccr_session_notices", "not_remote_transport"));
+      {
+        level: "warn",
+      },
+    );
+    logFeatureBad("ccr_session_notices", "not_remote_transport");
     return;
   }
-  let P = Vt(e.uuid) ?? void 0,
-    safeParse = jL().safeParse(e);
-  if (!safeParse.success) {
-    (logForDebugging("[session-notices] dropping malformed session_notice payload", { level: "error" }),
-      logFeatureBad("ccr_session_notices", "malformed_payload"),
-      _h(P, session));
+  let P = normalizeUuidOrNull(e.uuid) ?? undefined;
+  let L = sessionNoticeSchema().safeParse(e);
+  if (!L.success) {
+    logForDebugging("[session-notices] dropping malformed session_notice payload", {
+      level: "error",
+    });
+    logFeatureBad("ccr_session_notices", "malformed_payload");
+    completeCommandLifecycleForHost(P, session);
     return;
   }
-  let q = safeParse.data;
-  if (!Pb()) {
-    if (env.CLAUDE_CODE_REMOTE !== !0 || !getIsNonInteractiveSession()) {
-      (logFeatureBad("ccr_session_notices", "structurally_not_a_consumer"), _h(q.uuid, session));
+  let q = L.data;
+  if (!isSessionNoticesEnabled()) {
+    if (env.CLAUDE_CODE_REMOTE !== true || !getIsNonInteractiveSession()) {
+      logFeatureBad("ccr_session_notices", "structurally_not_a_consumer");
+      completeCommandLifecycleForHost(q.uuid, session);
       return;
     }
-    logFeatureSad("ccr_session_notices", G2() && Hvn() ? "own_events_only" : "flag_disabled");
+    logFeatureSad(
+      "ccr_session_notices",
+      isPollEventIngressActive() && isHostIngressPollEvents() ? "own_events_only" : "flag_disabled",
+    );
     return;
   }
   if (getAppState().toolPermissionContext.mode !== "auto") {
@@ -191,49 +196,58 @@ function handleSessionNotice(
     logForDebugging("[session-notices] duplicate redelivery while delivery in flight \u2014 suppressed");
     return;
   }
-  let Z = rfi(q.content),
-    re = !1,
-    Ae = ime - 1024,
-    Ue = !1,
-    ce = Ue ? CVs : escapeXmlText,
-    nt = ce(Z);
+  let prompt = normalizedEventLabel(q.content);
+  let re = false;
+  let Ae = MAX_POLL_EVENT_ENVELOPE_BYTES - 1024;
+  let Ue = false;
+  let ce = Ue ? escapedEventJsonBody : escapeXmlText;
+  let nt = ce(prompt);
   if (Buffer.byteLength(nt, "utf8") > Ae) {
-    let Ee = 0,
-      He = Z.length;
+    let Ee = 0;
+    let He = prompt.length;
     while (Ee < He) {
-      let St = Ee + Math.ceil((He - Ee) / 2),
-        wt = truncateToLength(Z, St);
+      let St = Ee + Math.ceil((He - Ee) / 2);
+      let wt = truncateToLength(prompt, St);
       if (Buffer.byteLength(ce(wt), "utf8") <= Ae - 128) Ee = St;
       else He = St - 1;
     }
-    let Xe = Z.length,
-      We = truncateToLength(Z, Ee);
-    ((Z =
+    let Xe = prompt.length;
+    let We = truncateToLength(prompt, Ee);
+    prompt =
       We +
       `
-\u2026[session_notice content truncated by the CLI: ${Xe - We.length} characters dropped]`),
-      (re = !0));
+\u2026[session_notice content truncated by the CLI: ${Xe - We.length} characters dropped]`;
+    re = true;
   }
-  let iso = new Date().toISOString(),
-    Se = Ue
-      ? {
-          typed: {
-            at: iso,
-            fields: { "notice-class": q.notice_class, "from-session": q.from_session_id, text: Z },
+  let at = new Date().toISOString();
+  let Se = Ue
+    ? {
+        typed: {
+          at,
+          fields: {
+            "notice-class": q.notice_class,
+            "from-session": q.from_session_id,
+            text: prompt,
           },
-        }
-      : {
-          element: validatePollEvent({
-            kind: SESSION_NOTICE,
-            at: iso,
-            content: Z,
-            attributes: { "notice-class": q.notice_class, "from-session": q.from_session_id },
-          }),
-        };
+        },
+      }
+    : {
+        element: validatePollEvent({
+          kind: SESSION_NOTICE,
+          at,
+          content: prompt,
+          attributes: {
+            "notice-class": q.notice_class,
+            "from-session": q.from_session_id,
+          },
+        }),
+      };
   try {
     setAppState((Me) => ({
       ...Me,
-      sessionNoticesPoll: { pendingDeliveryUuids: [...Me.sessionNoticesPoll.pendingDeliveryUuids, q.uuid] },
+      sessionNoticesPoll: {
+        pendingDeliveryUuids: [...Me.sessionNoticesPoll.pendingDeliveryUuids, q.uuid],
+      },
     }));
   } catch (error) {
     logForDebugging(`[session-notices] pending-add subscriber threw (contained): ${errorMessage(error)}`, {
@@ -252,23 +266,24 @@ function handleSessionNotice(
   };
   ingressTail.current = ingressTail.current
     .then(async () => {
-      if (count(t7n(), Kv) >= vFe) {
-        (me(), logFeatureSad("ccr_session_notices", "queue_cap_will_retry"));
+      if (count(getCommandQueueSnapshot(), isPollEventMode) >= POLL_KIND_DEFAULT_TIMEOUT_MS) {
+        me();
+        logFeatureSad("ccr_session_notices", "queue_cap_will_retry");
         return;
       }
-      let Me = !1;
+      let Me = false;
       try {
         for await (let Ee of executeUserPromptSubmitHooksForSession(
           session,
           sessionHooks,
-          Z,
+          prompt,
           getAppState().toolPermissionContext.mode,
-          void 0,
+          undefined,
           storageV5,
           credentials,
         ))
           if (Ee.blockingError) {
-            Me = !0;
+            Me = true;
             break;
           }
       } catch (error) {
@@ -276,66 +291,79 @@ function handleSessionNotice(
         else
           logForDebugging(
             `[session-notices] enqueue hook pass failed (failing open): ${errorMessage(error)}`,
-            { level: "error" },
+            {
+              level: "error",
+            },
           );
       }
       if (Me) {
-        (me(), logFeatureSad("ccr_session_notices", "hook_blocked_will_retry"));
+        me();
+        logFeatureSad("ccr_session_notices", "hook_blocked_will_retry");
         return;
       }
       enqueuePollEvent({
         kind: SESSION_NOTICE,
         ...Se,
-        wake: !0,
-        allowReservedKind: !0,
-        provenance: { authority: "peer-agent", senderId: q.from_session_id, senderText: Z },
+        wake: true,
+        allowReservedKind: true,
+        provenance: {
+          authority: "peer-agent",
+          senderId: q.from_session_id,
+          senderText: prompt,
+        },
       })
         .then(
           async () => {
             try {
-              if (
-                (await flushSessionStorage(),
-                !((await transportStateByHost.of(session).active?.flushInternalEventsConfirmed()) ?? !0))
-              ) {
-                (me(), logFeatureSad("ccr_session_notices", "delivery_record_dropped_will_retry"));
+              await flushSessionStorage();
+              if (!(
+                (await transportStateByHost.of(session).active?.flushInternalEventsConfirmed()) ?? true
+              )) {
+                me();
+                logFeatureSad("ccr_session_notices", "delivery_record_dropped_will_retry");
                 return;
               }
             } catch (error) {
-              (logForDebugging(
+              logForDebugging(
                 `[session-notices] persistence flush failed (ack skipped, will redeliver): ${errorMessage(error)}`,
-                { level: "error" },
-              ),
-                me(),
-                logFeatureSad("ccr_session_notices", "flush_failed_will_retry"));
+                {
+                  level: "error",
+                },
+              );
+              me();
+              logFeatureSad("ccr_session_notices", "flush_failed_will_retry");
               return;
             }
-            if ((me(), _h(q.uuid, session), re)) logFeatureSad("ccr_session_notices", "content_truncated");
+            me();
+            completeCommandLifecycleForHost(q.uuid, session);
+            if (re) logFeatureSad("ccr_session_notices", "content_truncated");
             else logFeatureOk("ccr_session_notices");
           },
-          (Ee) => {
-            (logForDebugging(`[session-notices] delivery rejected (will redeliver): ${errorMessage(Ee)}`, {
+          (error) => {
+            logForDebugging(`[session-notices] delivery rejected (will redeliver): ${errorMessage(error)}`, {
               level: "error",
-            }),
-              me(),
-              logFeatureSad("ccr_session_notices", "delivery_rejected_will_retry"));
+            });
+            me();
+            logFeatureSad("ccr_session_notices", "delivery_rejected_will_retry");
           },
         )
-        .catch((Ee) => {
-          (logForDebugging(`[session-notices] settle handler failed: ${errorMessage(Ee)}`, {
+        .catch((error) => {
+          logForDebugging(`[session-notices] settle handler failed: ${errorMessage(error)}`, {
             level: "error",
-          }),
-            logFeatureBad("ccr_session_notices", "settle_handler_failed"));
+          });
+          logFeatureBad("ccr_session_notices", "settle_handler_failed");
         });
     })
-    .catch((Me) => {
-      (logForDebugging(`[session-notices] ingress-tail link failed: ${errorMessage(Me)}`, { level: "error" }),
-        logFeatureBad("ccr_session_notices", "ingress_tail_link_failed"));
+    .catch((error) => {
+      logForDebugging(`[session-notices] ingress-tail link failed: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      logFeatureBad("ccr_session_notices", "ingress_tail_link_failed");
     });
 }
 //@ chunk-tyg7f3ek.js:38288-38353 placement
-var HELD_MESSAGE_FLAGS = "tengu_mellow_heron",
-  TENGU_SNAPPY_SUNRISE_KILLSWITCH = "tengu_snappy_sunrise_killswitch";
-
+var HELD_MESSAGE_FLAGS = "tengu_mellow_heron";
+var TENGU_SNAPPY_SUNRISE_KILLSWITCH = "tengu_snappy_sunrise_killswitch";
 export {
   RECEIVED_MESSAGE_UUIDS,
   HOST_INGRESS_LANES,

@@ -12,9 +12,19 @@ import { isPlainObject as isPlainObject_2 } from "../../utils/isPlainObject.js";
 import { uniq } from "../../utils/collections.js";
 
 //@ chunk-g54kbxqw.js:11123-11267 placement
-var SCHEMA_COMBINATOR_KEYS = ["anyOf", "oneOf", "allOf"],
-  LXr = /^[a-zA-Z0-9_.-]{1,64}$/,
-  Br = ["$defs", "definitions", "$schema", "additionalProperties", "description", "title"];
+/**
+ * 导出常量或表 `SCHEMA_COMBINATOR_KEYS`：值为 ["anyOf", "oneOf", "allOf"], LXr = /^[a-zA-Z0-9_.-]{1,64}$/, Br = ["$defs", "definitions", "$schema", "additionalPropert…。
+ */
+var SCHEMA_COMBINATOR_KEYS = ["anyOf", "oneOf", "allOf"];
+var SAFE_SCHEMA_KEY_RE = /^[a-zA-Z0-9_.-]{1,64}$/;
+var SCHEMA_PASSTHROUGH_KEYS = [
+  "$defs",
+  "definitions",
+  "$schema",
+  "additionalProperties",
+  "description",
+  "title",
+];
 //@ chunk-g54kbxqw.js:11267-11463 placement
 function resolveSchemaRef(e, n) {
   let $ref = e.$ref;
@@ -27,7 +37,7 @@ function resolveSchemaRef(e, n) {
   return isPlainObject_2(y) ? y : e;
 }
 //@ chunk-g54kbxqw.js:11463-11517 placement
-function jt(e, n) {
+function dedupeResolvedSchemaRefs(e, n) {
   return uniq(e.map((s) => (isPlainObject_2(s) ? resolveSchemaRef(s, n) : s)));
 }
 //@ chunk-g54kbxqw.js:11517-11752 placement
@@ -43,44 +53,62 @@ function describeSchemaVariantFields(e) {
   }
   return null;
 }
+//@ chunk-g54kbxqw.js:11752-12773 placement
 /**
  * 把含 anyOf/oneOf/allOf 的工具输入 JSON Schema 拍平为单个对象（用于远程工具声明），附加约束说明。
  */
-//@ chunk-g54kbxqw.js:11752-12773 placement
 function flattenInputSchema(e) {
-  if (!isPlainObject_2(e)) return { outcome: "unchanged" };
+  if (!isPlainObject_2(e))
+    return {
+      outcome: "unchanged",
+    };
   let filtered = SCHEMA_COMBINATOR_KEYS.filter((s) => s in e);
-  if (filtered.length === 0) return { outcome: "unchanged" };
+  if (filtered.length === 0)
+    return {
+      outcome: "unchanged",
+    };
   try {
-    let create = Object.create(null),
-      r = (w) => {
-        if (!isPlainObject_2(w)) return;
-        for (let [P, L] of Object.entries(w))
-          if (LXr.test(P) && !(P in create) && isPlainObject_2(L)) create[P] = L;
-      };
+    let s = Object.create(null);
+    let r = (properties) => {
+      if (!isPlainObject_2(properties)) return;
+      for (let [key, value] of Object.entries(properties))
+        if (SAFE_SCHEMA_KEY_RE.test(key) && !(key in s) && isPlainObject_2(value)) s[key] = value;
+    };
     r(e.properties);
     for (let w of filtered) {
       let P = e[w];
       if (!Array.isArray(P))
-        return { outcome: "drop", reason: `input schema has top-level ${w} that is not an array` };
-      for (let L of jt(P, e)) if (isPlainObject_2(L)) r(L.properties);
+        return {
+          outcome: "drop",
+          reason: `input schema has top-level ${w} that is not an array`,
+        };
+      for (let L of dedupeResolvedSchemaRefs(P, e)) if (isPlainObject_2(L)) r(L.properties);
     }
-    let h = new Set(),
-      y = (w) => {
-        if (!Array.isArray(w)) return;
-        for (let P of w) if (typeof P === "string" && P in create) h.add(P);
-      };
+    let h = new Set();
+    let y = (required) => {
+      if (!Array.isArray(required)) return;
+      for (let P of required) if (typeof P === "string" && P in s) h.add(P);
+    };
     y(e.required);
     let allOf = e.allOf;
     if (Array.isArray(allOf)) {
-      for (let w of jt(allOf, e)) if (isPlainObject_2(w)) y(w.required);
+      for (let w of dedupeResolvedSchemaRefs(allOf, e)) if (isPlainObject_2(w)) y(w.required);
     }
-    let C = filtered.includes("anyOf") || filtered.includes("oneOf"),
-      R = { type: "object", properties: create, required: [...h] };
-    for (let w of Br) if (w in e) R[w] = e[w];
-    let S = combinatorConstraintNote(filtered, e, C);
-    if (!("additionalProperties" in e)) R.additionalProperties = !0;
-    return { outcome: "normalized", schema: R, note: S, combinators: filtered };
+    let C = filtered.includes("anyOf") || filtered.includes("oneOf");
+    let R = {
+      type: "object",
+      properties: s,
+      required: [...h],
+    };
+    for (let w of SCHEMA_PASSTHROUGH_KEYS) if (w in e) R[w] = e[w];
+    let note = combinatorConstraintNote(filtered, e, C);
+    if (!("additionalProperties" in e)) R.additionalProperties = true;
+    return {
+      outcome: "normalized",
+      schema: R,
+      note,
+      combinators: filtered,
+    };
   } catch {
     return {
       outcome: "drop",
@@ -92,28 +120,27 @@ function flattenInputSchema(e) {
 function combinatorConstraintNote(e, n, s) {
   if (!s)
     return "Input constraint: all listed parameters apply together (flattened from a JSON Schema allOf).";
-  let r = e.includes("oneOf") ? "oneOf" : "anyOf",
-    h = n[r],
-    y = Array.isArray(h)
-      ? uniq(
-          jt(h, n)
-            .map(describeSchemaVariantFields)
-            .filter((R) => R !== null),
-        )
-      : [],
-    k = r === "oneOf" ? "Provide parameters for exactly one of" : "Provide parameters for at least one of";
+  let r = e.includes("oneOf") ? "oneOf" : "anyOf";
+  let h = n[r];
+  let y = Array.isArray(h)
+    ? uniq(
+        dedupeResolvedSchemaRefs(h, n)
+          .map(describeSchemaVariantFields)
+          .filter((R) => R !== null),
+      )
+    : [];
+  let k = r === "oneOf" ? "Provide parameters for exactly one of" : "Provide parameters for at least one of";
   if (y.length === 0)
     return `Input constraint: ${k} the documented parameter groups (flattened from a JSON Schema ${r}).`;
   let joined = y.map((R) => `(${R})`).join(" or ");
   return `Input constraint: ${k}: ${joined}.`;
 }
 //@ chunk-g54kbxqw.js:13300-13342 placement
-function joinDescription(e, n) {
-  return n
-    ? `${e}
+function joinDescription(note, description) {
+  return description
+    ? `${note}
 
-${n}`
-    : e;
+${description}`
+    : note;
 }
-
-export { joinDescription, LXr, resolveSchemaRef, SCHEMA_COMBINATOR_KEYS, flattenInputSchema };
+export { joinDescription, SAFE_SCHEMA_KEY_RE, resolveSchemaRef, SCHEMA_COMBINATOR_KEYS, flattenInputSchema };

@@ -5,104 +5,137 @@
  * pieces: chunk-kndsyy4v.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
  */
-import { K, mapped, H } from "./string-intern.js";
-import { U } from "./scanner.js";
+import { K, cachedSpaces, cachedBreakLinesWithSpaces } from "./string-intern.js";
+import { createScanner } from "./scanner.js";
 
 //@ chunk-kndsyy4v.js:5455-7403 esm-fingerprint
-function Q(e, s, r) {
-  let n, i, o, c, f;
-  if (s) {
-    ((c = s.offset), (f = c + s.length), (o = c));
-    while (o > 0 && !P(e, o - 1)) o--;
-    let a = f;
-    while (a < e.length && !P(e, a)) a++;
-    ((i = e.substring(o, a)), (n = ue(i, r)));
-  } else ((i = e), (n = 0), (o = 0), (c = 0), (f = e.length));
-  let u = ce(r, e),
-    included = K.includes(u),
-    p = 0,
-    k = 0,
-    y;
-  if (r.insertSpaces) y = mapped[r.tabSize || 4] ?? j(mapped[1], r.tabSize || 4);
-  else y = "\t";
-  let T = y === "\t" ? "\t" : " ",
-    w = U(i, !1),
-    v = !1;
-  function N() {
-    if (p > 1) return j(u, p) + j(y, n + k);
-    let a = y.length * (n + k);
-    if (!included || a > H[T][u].length) return u + j(y, n + k);
-    if (a <= 0) return u;
-    return H[T][u][a];
+function format(documentText, range, options) {
+  let initialIndentLevel;
+  let formatText;
+  let formatTextStart;
+  let rangeStart;
+  let rangeEnd;
+  if (range) {
+    rangeStart = range.offset;
+    rangeEnd = rangeStart + range.length;
+    formatTextStart = rangeStart;
+    while (formatTextStart > 0 && !isEOL(documentText, formatTextStart - 1)) formatTextStart--;
+    let endOffset = rangeEnd;
+    while (endOffset < documentText.length && !isEOL(documentText, endOffset)) endOffset++;
+    formatText = documentText.substring(formatTextStart, endOffset);
+    initialIndentLevel = computeIndentLevel(formatText, options);
+  } else {
+    formatText = documentText;
+    initialIndentLevel = 0;
+    formatTextStart = 0;
+    rangeStart = 0;
+    rangeEnd = documentText.length;
   }
-  function S() {
-    let scan = w.scan();
-    p = 0;
-    while (scan === 15 || scan === 14) {
-      if (scan === 14 && r.keepLines) p += 1;
-      else if (scan === 14) p = 1;
-      scan = w.scan();
+  let eol = getEOL(options, documentText);
+  let eolFastPathSupported = K.includes(eol);
+  let numberLineBreaks = 0;
+  let indentLevel = 0;
+  let indentValue;
+  if (options.insertSpaces)
+    indentValue = cachedSpaces[options.tabSize || 4] ?? repeat(cachedSpaces[1], options.tabSize || 4);
+  else indentValue = "\t";
+  let indentType = indentValue === "\t" ? "\t" : " ";
+  let scanner = createScanner(formatText, false);
+  let hasError = false;
+  function newLinesAndIndent() {
+    if (numberLineBreaks > 1)
+      return repeat(eol, numberLineBreaks) + repeat(indentValue, initialIndentLevel + indentLevel);
+    let amountOfSpaces = indentValue.length * (initialIndentLevel + indentLevel);
+    if (!eolFastPathSupported || amountOfSpaces > cachedBreakLinesWithSpaces[indentType][eol].length)
+      return eol + repeat(indentValue, initialIndentLevel + indentLevel);
+    if (amountOfSpaces <= 0) return eol;
+    return cachedBreakLinesWithSpaces[indentType][eol][amountOfSpaces];
+  }
+  function scanNext() {
+    let token = scanner.scan();
+    numberLineBreaks = 0;
+    while (token === 15 || token === 14) {
+      if (token === 14 && options.keepLines) numberLineBreaks += 1;
+      else if (token === 14) numberLineBreaks = 1;
+      token = scanner.scan();
     }
-    return ((v = scan === 16 || w.getTokenError() !== 0), scan);
+    hasError = token === 16 || scanner.getTokenError() !== 0;
+    return token;
   }
-  let B = [];
-  function g(a, d, m) {
-    if (!v && (!s || (d < f && m > c)) && e.substring(d, m) !== a)
-      B.push({ offset: d, length: m - d, content: a });
+  let editOperations = [];
+  function addEdit(text, startOffset, endOffset) {
+    if (
+      !hasError &&
+      (!range || (startOffset < rangeEnd && endOffset > rangeStart)) &&
+      documentText.substring(startOffset, endOffset) !== text
+    )
+      editOperations.push({
+        offset: startOffset,
+        length: endOffset - startOffset,
+        content: text,
+      });
   }
-  let b = S();
-  if (r.keepLines && p > 0) g(j(u, p), 0, 0);
-  if (b !== 17) {
-    let a = w.getTokenOffset() + o,
-      d = y.length * n < 20 && r.insertSpaces ? mapped[y.length * n] : j(y, n);
-    g(d, o, a);
+  let firstToken = scanNext();
+  if (options.keepLines && numberLineBreaks > 0) addEdit(repeat(eol, numberLineBreaks), 0, 0);
+  if (firstToken !== 17) {
+    let firstTokenStart = scanner.getTokenOffset() + formatTextStart;
+    let initialIndent =
+      indentValue.length * initialIndentLevel < 20 && options.insertSpaces
+        ? cachedSpaces[indentValue.length * initialIndentLevel]
+        : repeat(indentValue, initialIndentLevel);
+    addEdit(initialIndent, formatTextStart, firstTokenStart);
   }
-  while (b !== 17) {
-    let a = w.getTokenOffset() + w.getTokenLength() + o,
-      d = S(),
-      m = "",
-      E = !1;
-    while (p === 0 && (d === 12 || d === 13)) {
-      let z = w.getTokenOffset() + o;
-      (g(mapped[1], a, z),
-        (a = w.getTokenOffset() + w.getTokenLength() + o),
-        (E = d === 12),
-        (m = E ? N() : ""),
-        (d = S()));
+  while (firstToken !== 17) {
+    let firstTokenEnd = scanner.getTokenOffset() + scanner.getTokenLength() + formatTextStart;
+    let secondToken = scanNext();
+    let replaceContent = "";
+    let needsLineBreak = false;
+    while (numberLineBreaks === 0 && (secondToken === 12 || secondToken === 13)) {
+      let commentTokenStart = scanner.getTokenOffset() + formatTextStart;
+      addEdit(cachedSpaces[1], firstTokenEnd, commentTokenStart);
+      firstTokenEnd = scanner.getTokenOffset() + scanner.getTokenLength() + formatTextStart;
+      needsLineBreak = secondToken === 12;
+      replaceContent = needsLineBreak ? newLinesAndIndent() : "";
+      secondToken = scanNext();
     }
-    if (d === 2) {
-      if (b !== 1) k--;
-      if ((r.keepLines && p > 0) || (!r.keepLines && b !== 1)) m = N();
-      else if (r.keepLines) m = mapped[1];
-    } else if (d === 4) {
-      if (b !== 3) k--;
-      if ((r.keepLines && p > 0) || (!r.keepLines && b !== 3)) m = N();
-      else if (r.keepLines) m = mapped[1];
+    if (secondToken === 2) {
+      if (firstToken !== 1) indentLevel--;
+      if ((options.keepLines && numberLineBreaks > 0) || (!options.keepLines && firstToken !== 1))
+        replaceContent = newLinesAndIndent();
+      else if (options.keepLines) replaceContent = cachedSpaces[1];
+    } else if (secondToken === 4) {
+      if (firstToken !== 3) indentLevel--;
+      if ((options.keepLines && numberLineBreaks > 0) || (!options.keepLines && firstToken !== 3))
+        replaceContent = newLinesAndIndent();
+      else if (options.keepLines) replaceContent = cachedSpaces[1];
     } else {
-      switch (b) {
+      switch (firstToken) {
         case 3:
         case 1:
-          if ((k++, (r.keepLines && p > 0) || !r.keepLines)) m = N();
-          else m = mapped[1];
+          indentLevel++;
+          if ((options.keepLines && numberLineBreaks > 0) || !options.keepLines)
+            replaceContent = newLinesAndIndent();
+          else replaceContent = cachedSpaces[1];
           break;
         case 5:
-          if ((r.keepLines && p > 0) || !r.keepLines) m = N();
-          else m = mapped[1];
+          if ((options.keepLines && numberLineBreaks > 0) || !options.keepLines)
+            replaceContent = newLinesAndIndent();
+          else replaceContent = cachedSpaces[1];
           break;
         case 12:
-          m = N();
+          replaceContent = newLinesAndIndent();
           break;
         case 13:
-          if (p > 0) m = N();
-          else if (!E) m = mapped[1];
+          if (numberLineBreaks > 0) replaceContent = newLinesAndIndent();
+          else if (!needsLineBreak) replaceContent = cachedSpaces[1];
           break;
         case 6:
-          if (r.keepLines && p > 0) m = N();
-          else if (!E) m = mapped[1];
+          if (options.keepLines && numberLineBreaks > 0) replaceContent = newLinesAndIndent();
+          else if (!needsLineBreak) replaceContent = cachedSpaces[1];
           break;
         case 10:
-          if (r.keepLines && p > 0) m = N();
-          else if (d === 6 && !E) m = "";
+          if (options.keepLines && numberLineBreaks > 0) replaceContent = newLinesAndIndent();
+          else if (secondToken === 6 && !needsLineBreak) replaceContent = "";
           break;
         case 7:
         case 8:
@@ -110,52 +143,55 @@ function Q(e, s, r) {
         case 11:
         case 2:
         case 4:
-          if (r.keepLines && p > 0) m = N();
-          else if ((d === 12 || d === 13) && !E) m = mapped[1];
-          else if (d !== 5 && d !== 17) v = !0;
+          if (options.keepLines && numberLineBreaks > 0) replaceContent = newLinesAndIndent();
+          else if ((secondToken === 12 || secondToken === 13) && !needsLineBreak)
+            replaceContent = cachedSpaces[1];
+          else if (secondToken !== 5 && secondToken !== 17) hasError = true;
           break;
         case 16:
-          v = !0;
+          hasError = true;
           break;
       }
-      if (p > 0 && (d === 12 || d === 13)) m = N();
+      if (numberLineBreaks > 0 && (secondToken === 12 || secondToken === 13))
+        replaceContent = newLinesAndIndent();
     }
-    if (d === 17)
-      if (r.keepLines && p > 0) m = N();
-      else m = r.insertFinalNewline ? u : "";
-    let D = w.getTokenOffset() + o;
-    (g(m, a, D), (b = d));
+    if (secondToken === 17)
+      if (options.keepLines && numberLineBreaks > 0) replaceContent = newLinesAndIndent();
+      else replaceContent = options.insertFinalNewline ? eol : "";
+    let secondTokenStart = scanner.getTokenOffset() + formatTextStart;
+    addEdit(replaceContent, firstTokenEnd, secondTokenStart);
+    firstToken = secondToken;
   }
-  return B;
+  return editOperations;
 }
 //@ chunk-kndsyy4v.js:7403-7462 esm-layout
-function j(e, s) {
-  let r = "";
-  for (let n = 0; n < s; n++) r += e;
-  return r;
+function repeat(s_2, count) {
+  let result = "";
+  for (let i = 0; i < count; i++) result += s_2;
+  return result;
 }
 //@ chunk-kndsyy4v.js:7462-7618 esm-fingerprint
-function ue(e, s) {
-  let r = 0,
-    n = 0,
-    i = s.tabSize || 4;
-  while (r < e.length) {
-    let charAt = e.charAt(r);
-    if (charAt === mapped[1]) n++;
-    else if (charAt === "\t") n += i;
+function computeIndentLevel(content, options) {
+  let i_2 = 0;
+  let nChars = 0;
+  let tabSize = options.tabSize || 4;
+  while (i_2 < content.length) {
+    let ch = content.charAt(i_2);
+    if (ch === cachedSpaces[1]) nChars++;
+    else if (ch === "\t") nChars += tabSize;
     else break;
-    r++;
+    i_2++;
   }
-  return Math.floor(n / i);
+  return Math.floor(nChars / tabSize);
 }
 //@ chunk-kndsyy4v.js:7618-7801 esm-fingerprint
-function ce(e, s) {
-  for (let r = 0; r < s.length; r++) {
-    let charAt = s.charAt(r);
-    if (charAt === "\r") {
+function getEOL(options, text) {
+  for (let i = 0; i < text.length; i++) {
+    let ch = text.charAt(i);
+    if (ch === "\r") {
       if (
-        r + 1 < s.length &&
-        s.charAt(r + 1) ===
+        i + 1 < text.length &&
+        text.charAt(i + 1) ===
           `
 `
       )
@@ -163,7 +199,7 @@ function ce(e, s) {
 `;
       return "\r";
     } else if (
-      charAt ===
+      ch ===
       `
 `
     )
@@ -171,17 +207,16 @@ function ce(e, s) {
 `;
   }
   return (
-    (e && e.eol) ||
+    (options && options.eol) ||
     `
 `
   );
 }
 //@ chunk-kndsyy4v.js:7801-7855 esm-fingerprint
-function P(e, s) {
+function isEOL(text, offset) {
   return (
     `\r
-`.indexOf(e.charAt(s)) !== -1
+`.indexOf(text.charAt(offset)) !== -1
   );
 }
-
-export { P, Q };
+export { isEOL, format };

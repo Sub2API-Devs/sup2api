@@ -6,947 +6,1159 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { de } from "./ral.js";
-import { we } from "./is.js";
-import { ht } from "./messages.js";
-import { mt } from "./linkedMap.js";
-import { _e } from "./events.js";
-import { Ve } from "./cancellation.js";
+import { require_ral } from "./ral.js";
+import { require_is } from "./is.js";
+import { require_messages } from "./messages.js";
+import { require_linkedMap } from "./linkedMap.js";
+import { require_events } from "./events.js";
+import { require_cancellation } from "./cancellation.js";
 
 //@ chunk-t4ksmxzx.js:26637-44519 cjs-fingerprint
-var Rn = x(function (bn) {
-  Object.defineProperty(bn, "__esModule", { value: !0 });
-  bn.createMessageConnection =
-    bn.ConnectionOptions =
-    bn.MessageStrategy =
-    bn.CancellationStrategy =
-    bn.CancellationSenderStrategy =
-    bn.CancellationReceiverStrategy =
-    bn.RequestCancellationReceiverStrategy =
-    bn.IdCancellationReceiverStrategy =
-    bn.ConnectionStrategy =
-    bn.ConnectionError =
-    bn.ConnectionErrors =
-    bn.LogTraceNotification =
-    bn.SetTraceNotification =
-    bn.TraceFormat =
-    bn.TraceValues =
-    bn.Trace =
-    bn.NullLogger =
-    bn.ProgressType =
-    bn.ProgressToken =
-      void 0;
-  var pn = de(),
-    m = we(),
-    a = ht(),
-    Ke = mt(),
-    se = _e(),
-    Ee = Ve(),
-    ze;
-  (function (e) {
-    e.type = new a.NotificationType("$/cancelRequest");
-  })(ze || (ze = {}));
-  var Tt;
-  (function (e) {
-    function r(n) {
-      return typeof n === "string" || typeof n === "number";
+var require_connection = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.createMessageConnection =
+    cjsExports.ConnectionOptions =
+    cjsExports.MessageStrategy =
+    cjsExports.CancellationStrategy =
+    cjsExports.CancellationSenderStrategy =
+    cjsExports.CancellationReceiverStrategy =
+    cjsExports.RequestCancellationReceiverStrategy =
+    cjsExports.IdCancellationReceiverStrategy =
+    cjsExports.ConnectionStrategy =
+    cjsExports.ConnectionError =
+    cjsExports.ConnectionErrors =
+    cjsExports.LogTraceNotification =
+    cjsExports.SetTraceNotification =
+    cjsExports.TraceFormat =
+    cjsExports.TraceValues =
+    cjsExports.Trace =
+    cjsExports.NullLogger =
+    cjsExports.ProgressType =
+    cjsExports.ProgressToken =
+      undefined;
+  var ral_1 = require_ral();
+  var Is = require_is();
+  var messages_1 = require_messages();
+  var linkedMap_1 = require_linkedMap();
+  var events_1 = require_events();
+  var cancellation_1 = require_cancellation();
+  var CancelNotification;
+  (function (CancelNotification) {
+    CancelNotification.type = new messages_1.NotificationType("$/cancelRequest");
+  })(CancelNotification || (CancelNotification = {}));
+  var ProgressToken;
+  (function (ProgressToken) {
+    function is(value) {
+      return typeof value === "string" || typeof value === "number";
     }
-    e.is = r;
-  })(Tt || (bn.ProgressToken = Tt = {}));
-  var De;
-  (function (e) {
-    e.type = new a.NotificationType("$/progress");
-  })(De || (De = {}));
-  class yn {
+    ProgressToken.is = is;
+  })(ProgressToken || (cjsExports.ProgressToken = ProgressToken = {}));
+  var ProgressNotification;
+  (function (ProgressNotification) {
+    ProgressNotification.type = new messages_1.NotificationType("$/progress");
+  })(ProgressNotification || (ProgressNotification = {}));
+  class ProgressType {
     constructor() {}
   }
-  bn.ProgressType = yn;
-  var Et;
-  (function (e) {
-    function r(n) {
-      return m.func(n);
+  cjsExports.ProgressType = ProgressType;
+  var StarRequestHandler;
+  (function (StarRequestHandler) {
+    function is(value) {
+      return Is.func(value);
     }
-    e.is = r;
-  })(Et || (Et = {}));
-  bn.NullLogger = Object.freeze({ error: () => {}, warn: () => {}, info: () => {}, log: () => {} });
-  var E;
-  (function (e) {
-    ((e[(e.Off = 0)] = "Off"),
-      (e[(e.Messages = 1)] = "Messages"),
-      (e[(e.Compact = 2)] = "Compact"),
-      (e[(e.Verbose = 3)] = "Verbose"));
-  })(E || (bn.Trace = E = {}));
-  var mn;
-  (function (e) {
-    ((e.Off = "off"), (e.Messages = "messages"), (e.Compact = "compact"), (e.Verbose = "verbose"));
-  })(mn || (bn.TraceValues = mn = {}));
-  (function (e) {
-    function r(s) {
-      if (!m.string(s)) return e.Off;
-      switch (((s = s.toLowerCase()), s)) {
+    StarRequestHandler.is = is;
+  })(StarRequestHandler || (StarRequestHandler = {}));
+  cjsExports.NullLogger = Object.freeze({
+    error: () => {},
+    warn: () => {},
+    info: () => {},
+    log: () => {},
+  });
+  var Trace;
+  (function (Trace) {
+    Trace[(Trace.Off = 0)] = "Off";
+    Trace[(Trace.Messages = 1)] = "Messages";
+    Trace[(Trace.Compact = 2)] = "Compact";
+    Trace[(Trace.Verbose = 3)] = "Verbose";
+  })(Trace || (cjsExports.Trace = Trace = {}));
+  var TraceValues;
+  (function (TraceValues) {
+    TraceValues.Off = "off";
+    TraceValues.Messages = "messages";
+    TraceValues.Compact = "compact";
+    TraceValues.Verbose = "verbose";
+  })(TraceValues || (cjsExports.TraceValues = TraceValues = {}));
+  (function (Trace) {
+    function fromString(value) {
+      if (!Is.string(value)) return Trace.Off;
+      switch (((value = value.toLowerCase()), value)) {
         case "off":
-          return e.Off;
+          return Trace.Off;
         case "messages":
-          return e.Messages;
+          return Trace.Messages;
         case "compact":
-          return e.Compact;
+          return Trace.Compact;
         case "verbose":
-          return e.Verbose;
+          return Trace.Verbose;
         default:
-          return e.Off;
+          return Trace.Off;
       }
     }
-    e.fromString = r;
-    function n(s) {
-      switch (s) {
-        case e.Off:
+    Trace.fromString = fromString;
+    function toString(value) {
+      switch (value) {
+        case Trace.Off:
           return "off";
-        case e.Messages:
+        case Trace.Messages:
           return "messages";
-        case e.Compact:
+        case Trace.Compact:
           return "compact";
-        case e.Verbose:
+        case Trace.Verbose:
           return "verbose";
         default:
           return "off";
       }
     }
-    e.toString = n;
-  })(E || (bn.Trace = E = {}));
-  var Y;
-  (function (e) {
-    ((e.Text = "text"), (e.JSON = "json"));
-  })(Y || (bn.TraceFormat = Y = {}));
-  (function (e) {
-    function r(n) {
-      if (!m.string(n)) return e.Text;
-      if (((n = n.toLowerCase()), n === "json")) return e.JSON;
-      else return e.Text;
+    Trace.toString = toString;
+  })(Trace || (cjsExports.Trace = Trace = {}));
+  var TraceFormat;
+  (function (TraceFormat) {
+    TraceFormat.Text = "text";
+    TraceFormat.JSON = "json";
+  })(TraceFormat || (cjsExports.TraceFormat = TraceFormat = {}));
+  (function (TraceFormat) {
+    function fromString(value) {
+      if (!Is.string(value)) return TraceFormat.Text;
+      value = value.toLowerCase();
+      if (value === "json") return TraceFormat.JSON;
+      else return TraceFormat.Text;
     }
-    e.fromString = r;
-  })(Y || (bn.TraceFormat = Y = {}));
-  var Ct;
-  (function (e) {
-    e.type = new a.NotificationType("$/setTrace");
-  })(Ct || (bn.SetTraceNotification = Ct = {}));
-  var Qe;
-  (function (e) {
-    e.type = new a.NotificationType("$/logTrace");
-  })(Qe || (bn.LogTraceNotification = Qe = {}));
-  var Ae;
-  (function (e) {
-    ((e[(e.Closed = 1)] = "Closed"),
-      (e[(e.Disposed = 2)] = "Disposed"),
-      (e[(e.AlreadyListening = 3)] = "AlreadyListening"));
-  })(Ae || (bn.ConnectionErrors = Ae = {}));
-  class Te extends Error {
-    constructor(e, r) {
-      super(r);
-      ((this.code = e), Object.setPrototypeOf(this, Te.prototype));
+    TraceFormat.fromString = fromString;
+  })(TraceFormat || (cjsExports.TraceFormat = TraceFormat = {}));
+  var SetTraceNotification;
+  (function (SetTraceNotification) {
+    SetTraceNotification.type = new messages_1.NotificationType("$/setTrace");
+  })(SetTraceNotification || (cjsExports.SetTraceNotification = SetTraceNotification = {}));
+  var LogTraceNotification;
+  (function (LogTraceNotification) {
+    LogTraceNotification.type = new messages_1.NotificationType("$/logTrace");
+  })(LogTraceNotification || (cjsExports.LogTraceNotification = LogTraceNotification = {}));
+  var ConnectionErrors;
+  (function (ConnectionErrors) {
+    ConnectionErrors[(ConnectionErrors.Closed = 1)] = "Closed";
+    ConnectionErrors[(ConnectionErrors.Disposed = 2)] = "Disposed";
+    ConnectionErrors[(ConnectionErrors.AlreadyListening = 3)] = "AlreadyListening";
+  })(ConnectionErrors || (cjsExports.ConnectionErrors = ConnectionErrors = {}));
+  class ConnectionError extends Error {
+    constructor(code, message) {
+      super(message);
+      this.code = code;
+      Object.setPrototypeOf(this, ConnectionError.prototype);
     }
   }
-  bn.ConnectionError = Te;
-  var xt;
-  (function (e) {
-    function r(n) {
-      let s = n;
-      return s && m.func(s.cancelUndispatched);
+  cjsExports.ConnectionError = ConnectionError;
+  var ConnectionStrategy;
+  (function (ConnectionStrategy) {
+    function is(value) {
+      let candidate = value;
+      return candidate && Is.func(candidate.cancelUndispatched);
     }
-    e.is = r;
-  })(xt || (bn.ConnectionStrategy = xt = {}));
-  var Ge;
-  (function (e) {
-    function r(n) {
-      let s = n;
+    ConnectionStrategy.is = is;
+  })(ConnectionStrategy || (cjsExports.ConnectionStrategy = ConnectionStrategy = {}));
+  var IdCancellationReceiverStrategy;
+  (function (IdCancellationReceiverStrategy) {
+    function is(value) {
+      let candidate = value;
       return (
-        s &&
-        (s.kind === void 0 || s.kind === "id") &&
-        m.func(s.createCancellationTokenSource) &&
-        (s.dispose === void 0 || m.func(s.dispose))
+        candidate &&
+        (candidate.kind === undefined || candidate.kind === "id") &&
+        Is.func(candidate.createCancellationTokenSource) &&
+        (candidate.dispose === undefined || Is.func(candidate.dispose))
       );
     }
-    e.is = r;
-  })(Ge || (bn.IdCancellationReceiverStrategy = Ge = {}));
-  var kt;
-  (function (e) {
-    function r(n) {
-      let s = n;
+    IdCancellationReceiverStrategy.is = is;
+  })(
+    IdCancellationReceiverStrategy ||
+      (cjsExports.IdCancellationReceiverStrategy = IdCancellationReceiverStrategy = {}),
+  );
+  var RequestCancellationReceiverStrategy;
+  (function (RequestCancellationReceiverStrategy) {
+    function is(value) {
+      let candidate = value;
       return (
-        s &&
-        s.kind === "request" &&
-        m.func(s.createCancellationTokenSource) &&
-        (s.dispose === void 0 || m.func(s.dispose))
+        candidate &&
+        candidate.kind === "request" &&
+        Is.func(candidate.createCancellationTokenSource) &&
+        (candidate.dispose === undefined || Is.func(candidate.dispose))
       );
     }
-    e.is = r;
-  })(kt || (bn.RequestCancellationReceiverStrategy = kt = {}));
-  var Ye;
-  (function (e) {
-    e.Message = Object.freeze({
-      createCancellationTokenSource(n) {
-        return new Ee.CancellationTokenSource();
+    RequestCancellationReceiverStrategy.is = is;
+  })(
+    RequestCancellationReceiverStrategy ||
+      (cjsExports.RequestCancellationReceiverStrategy = RequestCancellationReceiverStrategy = {}),
+  );
+  var CancellationReceiverStrategy;
+  (function (CancellationReceiverStrategy) {
+    CancellationReceiverStrategy.Message = Object.freeze({
+      createCancellationTokenSource(_) {
+        return new cancellation_1.CancellationTokenSource();
       },
     });
-    function r(n) {
-      return Ge.is(n) || kt.is(n);
+    function is(value) {
+      return IdCancellationReceiverStrategy.is(value) || RequestCancellationReceiverStrategy.is(value);
     }
-    e.is = r;
-  })(Ye || (bn.CancellationReceiverStrategy = Ye = {}));
-  var Xe;
-  (function (e) {
-    e.Message = Object.freeze({
-      sendCancellation(n, s) {
-        return n.sendNotification(ze.type, { id: s });
+    CancellationReceiverStrategy.is = is;
+  })(
+    CancellationReceiverStrategy ||
+      (cjsExports.CancellationReceiverStrategy = CancellationReceiverStrategy = {}),
+  );
+  var CancellationSenderStrategy;
+  (function (CancellationSenderStrategy) {
+    CancellationSenderStrategy.Message = Object.freeze({
+      sendCancellation(conn, id) {
+        return conn.sendNotification(CancelNotification.type, {
+          id,
+        });
       },
-      cleanup(n) {},
+      cleanup(_) {},
     });
-    function r(n) {
-      let s = n;
-      return s && m.func(s.sendCancellation) && m.func(s.cleanup);
+    function is(value) {
+      let candidate = value;
+      return candidate && Is.func(candidate.sendCancellation) && Is.func(candidate.cleanup);
     }
-    e.is = r;
-  })(Xe || (bn.CancellationSenderStrategy = Xe = {}));
-  var Ze;
-  (function (e) {
-    e.Message = Object.freeze({ receiver: Ye.Message, sender: Xe.Message });
-    function r(n) {
-      let s = n;
-      return s && Ye.is(s.receiver) && Xe.is(s.sender);
+    CancellationSenderStrategy.is = is;
+  })(CancellationSenderStrategy || (cjsExports.CancellationSenderStrategy = CancellationSenderStrategy = {}));
+  var CancellationStrategy;
+  (function (CancellationStrategy) {
+    CancellationStrategy.Message = Object.freeze({
+      receiver: CancellationReceiverStrategy.Message,
+      sender: CancellationSenderStrategy.Message,
+    });
+    function is(value) {
+      let candidate = value;
+      return (
+        candidate &&
+        CancellationReceiverStrategy.is(candidate.receiver) &&
+        CancellationSenderStrategy.is(candidate.sender)
+      );
     }
-    e.is = r;
-  })(Ze || (bn.CancellationStrategy = Ze = {}));
-  var et;
-  (function (e) {
-    function r(n) {
-      let s = n;
-      return s && m.func(s.handleMessage);
+    CancellationStrategy.is = is;
+  })(CancellationStrategy || (cjsExports.CancellationStrategy = CancellationStrategy = {}));
+  var MessageStrategy;
+  (function (MessageStrategy) {
+    function is(value) {
+      let candidate = value;
+      return candidate && Is.func(candidate.handleMessage);
     }
-    e.is = r;
-  })(et || (bn.MessageStrategy = et = {}));
-  var gn;
-  (function (e) {
-    function r(n) {
-      let s = n;
-      return s && (Ze.is(s.cancellationStrategy) || xt.is(s.connectionStrategy) || et.is(s.messageStrategy));
+    MessageStrategy.is = is;
+  })(MessageStrategy || (cjsExports.MessageStrategy = MessageStrategy = {}));
+  var ConnectionOptions;
+  (function (ConnectionOptions) {
+    function is(value) {
+      let candidate = value;
+      return (
+        candidate &&
+        (CancellationStrategy.is(candidate.cancellationStrategy) ||
+          ConnectionStrategy.is(candidate.connectionStrategy) ||
+          MessageStrategy.is(candidate.messageStrategy))
+      );
     }
-    e.is = r;
-  })(gn || (bn.ConnectionOptions = gn = {}));
-  var te;
-  (function (e) {
-    ((e[(e.New = 1)] = "New"),
-      (e[(e.Listening = 2)] = "Listening"),
-      (e[(e.Closed = 3)] = "Closed"),
-      (e[(e.Disposed = 4)] = "Disposed"));
-  })(te || (te = {}));
-  function rs(e, r, n, s) {
-    let c = n !== void 0 ? n : bn.NullLogger,
-      h = 0,
-      P = 0,
-      _ = 0,
-      j = "2.0",
-      I = void 0,
-      X = new Map(),
-      J = void 0,
-      oe = new Map(),
-      fe = new Map(),
-      re,
-      Q = new Ke.LinkedMap(),
-      Z = new Map(),
-      y = new Set(),
-      b = new Map(),
-      Off = E.Off,
-      Text = Y.Text,
-      k,
-      New = te.New,
-      ne = new se.Emitter(),
-      ce = new se.Emitter(),
-      he = new se.Emitter(),
-      v = new se.Emitter(),
-      z = new se.Emitter(),
-      G = s && s.cancellationStrategy ? s.cancellationStrategy : Ze.Message;
-    function pe(i) {
-      if (i === null) throw Error("Can't send requests with id null since the response can't be correlated.");
-      return "req-" + i.toString();
+    ConnectionOptions.is = is;
+  })(ConnectionOptions || (cjsExports.ConnectionOptions = ConnectionOptions = {}));
+  var ConnectionState;
+  (function (ConnectionState) {
+    ConnectionState[(ConnectionState.New = 1)] = "New";
+    ConnectionState[(ConnectionState.Listening = 2)] = "Listening";
+    ConnectionState[(ConnectionState.Closed = 3)] = "Closed";
+    ConnectionState[(ConnectionState.Disposed = 4)] = "Disposed";
+  })(ConnectionState || (ConnectionState = {}));
+  function createMessageConnection(messageReader, messageWriter, _logger, options) {
+    let logger = _logger !== undefined ? _logger : cjsExports.NullLogger;
+    let sequenceNumber = 0;
+    let notificationSequenceNumber = 0;
+    let unknownResponseSequenceNumber = 0;
+    let version = "2.0";
+    let starRequestHandler = undefined;
+    let requestHandlers = new Map();
+    let starNotificationHandler = undefined;
+    let notificationHandlers = new Map();
+    let progressHandlers = new Map();
+    let timer;
+    let messageQueue = new linkedMap_1.LinkedMap();
+    let responsePromises = new Map();
+    let knownCanceledRequests = new Set();
+    let requestTokens = new Map();
+    let trace = Trace.Off;
+    let traceFormat = TraceFormat.Text;
+    let tracer;
+    let state = ConnectionState.New;
+    let errorEmitter = new events_1.Emitter();
+    let closeEmitter = new events_1.Emitter();
+    let unhandledNotificationEmitter = new events_1.Emitter();
+    let unhandledProgressEmitter = new events_1.Emitter();
+    let disposeEmitter = new events_1.Emitter();
+    let cancellationStrategy =
+      options && options.cancellationStrategy ? options.cancellationStrategy : CancellationStrategy.Message;
+    function createRequestQueueKey(id) {
+      if (id === null)
+        throw Error("Can't send requests with id null since the response can't be correlated.");
+      return "req-" + id.toString();
     }
-    function me(i) {
-      if (i === null) return "res-unknown-" + (++_).toString();
-      else return "res-" + i.toString();
+    function createResponseQueueKey(id) {
+      if (id === null) return "res-unknown-" + (++unknownResponseSequenceNumber).toString();
+      else return "res-" + id.toString();
     }
-    function ge() {
-      return "not-" + (++P).toString();
+    function createNotificationQueueKey() {
+      return "not-" + (++notificationSequenceNumber).toString();
     }
-    function We(i, o) {
-      if (a.Message.isRequest(o)) i.set(pe(o.id), o);
-      else if (a.Message.isResponse(o)) i.set(me(o.id), o);
-      else i.set(ge(), o);
+    function addMessageToQueue(queue, message) {
+      if (messages_1.Message.isRequest(message)) queue.set(createRequestQueueKey(message.id), message);
+      else if (messages_1.Message.isResponse(message)) queue.set(createResponseQueueKey(message.id), message);
+      else queue.set(createNotificationQueueKey(), message);
     }
-    function je(i) {
+    function cancelUndispatched(_message) {
       return;
     }
-    function qt() {
-      return New === te.Listening;
+    function isListening() {
+      return state === ConnectionState.Listening;
     }
-    function It() {
-      return New === te.Closed;
+    function isClosed() {
+      return state === ConnectionState.Closed;
     }
-    function ye() {
-      return New === te.Disposed;
+    function isDisposed() {
+      return state === ConnectionState.Disposed;
     }
-    function Dt() {
-      if (New === te.New || New === te.Listening) ((New = te.Closed), ce.fire(void 0));
-    }
-    function An(i) {
-      ne.fire([i, void 0, void 0]);
-    }
-    function zn(i) {
-      ne.fire(i);
-    }
-    (e.onClose(Dt), e.onError(An), r.onClose(Dt), r.onError(zn));
-    function At() {
-      if (re || Q.size === 0) return;
-      re = (0, pn.default)().timer.setImmediate(() => {
-        ((re = void 0), Wn());
-      });
-    }
-    function zt(i) {
-      if (a.Message.isRequest(i)) Hn(i);
-      else if (a.Message.isNotification(i)) Vn(i);
-      else if (a.Message.isResponse(i)) Un(i);
-      else Jn(i);
-    }
-    function Wn() {
-      if (Q.size === 0) return;
-      let i = Q.shift();
-      try {
-        let o = s?.messageStrategy;
-        if (et.is(o)) o.handleMessage(i, zt);
-        else zt(i);
-      } finally {
-        At();
+    function closeHandler() {
+      if (state === ConnectionState.New || state === ConnectionState.Listening) {
+        state = ConnectionState.Closed;
+        closeEmitter.fire(undefined);
       }
     }
-    let Fn = (i) => {
+    function readErrorHandler(error) {
+      errorEmitter.fire([error, undefined, undefined]);
+    }
+    function writeErrorHandler(data) {
+      errorEmitter.fire(data);
+    }
+    messageReader.onClose(closeHandler);
+    messageReader.onError(readErrorHandler);
+    messageWriter.onClose(closeHandler);
+    messageWriter.onError(writeErrorHandler);
+    function triggerMessageQueue() {
+      if (timer || messageQueue.size === 0) return;
+      timer = (0, ral_1.default)().timer.setImmediate(() => {
+        timer = undefined;
+        processMessageQueue();
+      });
+    }
+    function handleMessage(message) {
+      if (messages_1.Message.isRequest(message)) handleRequest(message);
+      else if (messages_1.Message.isNotification(message)) handleNotification(message);
+      else if (messages_1.Message.isResponse(message)) handleResponse(message);
+      else handleInvalidMessage(message);
+    }
+    function processMessageQueue() {
+      if (messageQueue.size === 0) return;
+      let message = messageQueue.shift();
       try {
-        if (a.Message.isNotification(i) && i.method === ze.type.method) {
-          let id = i.params.id,
-            u = pe(id),
-            f = Q.get(u);
-          if (a.Message.isRequest(f)) {
-            let L = s?.connectionStrategy,
-              B = L && L.cancelUndispatched ? L.cancelUndispatched(f, je) : je(f);
-            if (B && (B.error !== void 0 || B.result !== void 0)) {
-              (Q.delete(u),
-                b.delete(id),
-                (B.id = f.id),
-                Fe(B, i.method, Date.now()),
-                r.write(B).catch(() => c.error("Sending response for canceled message failed.")));
+        let messageStrategy = options?.messageStrategy;
+        if (MessageStrategy.is(messageStrategy)) messageStrategy.handleMessage(message, handleMessage);
+        else handleMessage(message);
+      } finally {
+        triggerMessageQueue();
+      }
+    }
+    let callback = (message) => {
+      try {
+        if (messages_1.Message.isNotification(message) && message.method === CancelNotification.type.method) {
+          let cancelId = message.params.id;
+          let key = createRequestQueueKey(cancelId);
+          let toCancel = messageQueue.get(key);
+          if (messages_1.Message.isRequest(toCancel)) {
+            let strategy = options?.connectionStrategy;
+            let response =
+              strategy && strategy.cancelUndispatched
+                ? strategy.cancelUndispatched(toCancel, cancelUndispatched)
+                : cancelUndispatched(toCancel);
+            if (response && (response.error !== undefined || response.result !== undefined)) {
+              messageQueue.delete(key);
+              requestTokens.delete(cancelId);
+              response.id = toCancel.id;
+              traceSendingResponse(response, message.method, Date.now());
+              messageWriter
+                .write(response)
+                .catch(() => logger.error("Sending response for canceled message failed."));
               return;
             }
           }
-          let M = b.get(id);
-          if (M !== void 0) {
-            (M.cancel(), ut(i));
+          let cancellationToken = requestTokens.get(cancelId);
+          if (cancellationToken !== undefined) {
+            cancellationToken.cancel();
+            traceReceivedNotification(message);
             return;
-          } else y.add(id);
+          } else knownCanceledRequests.add(cancelId);
         }
-        We(Q, i);
+        addMessageToQueue(messageQueue, message);
       } finally {
-        At();
+        triggerMessageQueue();
       }
     };
-    function Hn(i) {
-      if (ye()) return;
-      function o(T, D, C) {
-        let W = { jsonrpc: j, id: i.id };
-        if (T instanceof a.ResponseError) W.error = T.toJson();
-        else W.result = T === void 0 ? null : T;
-        (Fe(W, D, C), r.write(W).catch(() => c.error("Sending response failed.")));
+    function handleRequest(requestMessage) {
+      if (isDisposed()) return;
+      function reply(resultOrError, method, startTime) {
+        let message = {
+          jsonrpc: version,
+          id: requestMessage.id,
+        };
+        if (resultOrError instanceof messages_1.ResponseError) message.error = resultOrError.toJson();
+        else message.result = resultOrError === undefined ? null : resultOrError;
+        traceSendingResponse(message, method, startTime);
+        messageWriter.write(message).catch(() => logger.error("Sending response failed."));
       }
-      function u(T, D, C) {
-        let W = { jsonrpc: j, id: i.id, error: T.toJson() };
-        (Fe(W, D, C), r.write(W).catch(() => c.error("Sending response failed.")));
+      function replyError(error, method, startTime) {
+        let message = {
+          jsonrpc: version,
+          id: requestMessage.id,
+          error: error.toJson(),
+        };
+        traceSendingResponse(message, method, startTime);
+        messageWriter.write(message).catch(() => logger.error("Sending response failed."));
       }
-      function f(T, D, C) {
-        if (T === void 0) T = null;
-        let W = { jsonrpc: j, id: i.id, result: T };
-        (Fe(W, D, C), r.write(W).catch(() => c.error("Sending response failed.")));
+      function replySuccess(result, method, startTime) {
+        if (result === undefined) result = null;
+        let message = {
+          jsonrpc: version,
+          id: requestMessage.id,
+          result,
+        };
+        traceSendingResponse(message, method, startTime);
+        messageWriter.write(message).catch(() => logger.error("Sending response failed."));
       }
-      Gn(i);
-      let M = X.get(i.method),
-        L,
-        B;
-      if (M) ((L = M.type), (B = M.handler));
-      let now = Date.now();
-      if (B || I) {
-        let T = i.id ?? String(Date.now()),
-          D = Ge.is(G.receiver)
-            ? G.receiver.createCancellationTokenSource(T)
-            : G.receiver.createCancellationTokenSource(i);
-        if (i.id !== null && y.has(i.id)) D.cancel();
-        if (i.id !== null) b.set(T, D);
+      traceReceivedRequest(requestMessage);
+      let element = requestHandlers.get(requestMessage.method);
+      let type;
+      let requestHandler;
+      if (element) {
+        type = element.type;
+        requestHandler = element.handler;
+      }
+      let startTime = Date.now();
+      if (requestHandler || starRequestHandler) {
+        let tokenKey = requestMessage.id ?? String(Date.now());
+        let cancellationSource = IdCancellationReceiverStrategy.is(cancellationStrategy.receiver)
+          ? cancellationStrategy.receiver.createCancellationTokenSource(tokenKey)
+          : cancellationStrategy.receiver.createCancellationTokenSource(requestMessage);
+        if (requestMessage.id !== null && knownCanceledRequests.has(requestMessage.id))
+          cancellationSource.cancel();
+        if (requestMessage.id !== null) requestTokens.set(tokenKey, cancellationSource);
         try {
-          let C;
-          if (B)
-            if (i.params === void 0) {
-              if (L !== void 0 && L.numberOfParams !== 0) {
-                u(
-                  new a.ResponseError(
-                    a.ErrorCodes.InvalidParams,
-                    `Request ${i.method} defines ${L.numberOfParams} params but received none.`,
+          let handlerResult;
+          if (requestHandler) {
+            if (requestMessage.params === undefined) {
+              if (type !== undefined && type.numberOfParams !== 0) {
+                replyError(
+                  new messages_1.ResponseError(
+                    messages_1.ErrorCodes.InvalidParams,
+                    `Request ${requestMessage.method} defines ${type.numberOfParams} params but received none.`,
                   ),
-                  i.method,
-                  now,
+                  requestMessage.method,
+                  startTime,
                 );
                 return;
               }
-              C = B(D.token);
-            } else if (Array.isArray(i.params)) {
-              if (L !== void 0 && L.parameterStructures === a.ParameterStructures.byName) {
-                u(
-                  new a.ResponseError(
-                    a.ErrorCodes.InvalidParams,
-                    `Request ${i.method} defines parameters by name but received parameters by position`,
+              handlerResult = requestHandler(cancellationSource.token);
+            } else if (Array.isArray(requestMessage.params)) {
+              if (type !== undefined && type.parameterStructures === messages_1.ParameterStructures.byName) {
+                replyError(
+                  new messages_1.ResponseError(
+                    messages_1.ErrorCodes.InvalidParams,
+                    `Request ${requestMessage.method} defines parameters by name but received parameters by position`,
                   ),
-                  i.method,
-                  now,
+                  requestMessage.method,
+                  startTime,
                 );
                 return;
               }
-              C = B(...i.params, D.token);
+              handlerResult = requestHandler(...requestMessage.params, cancellationSource.token);
             } else {
-              if (L !== void 0 && L.parameterStructures === a.ParameterStructures.byPosition) {
-                u(
-                  new a.ResponseError(
-                    a.ErrorCodes.InvalidParams,
-                    `Request ${i.method} defines parameters by position but received parameters by name`,
+              if (
+                type !== undefined &&
+                type.parameterStructures === messages_1.ParameterStructures.byPosition
+              ) {
+                replyError(
+                  new messages_1.ResponseError(
+                    messages_1.ErrorCodes.InvalidParams,
+                    `Request ${requestMessage.method} defines parameters by position but received parameters by name`,
                   ),
-                  i.method,
-                  now,
+                  requestMessage.method,
+                  startTime,
                 );
                 return;
               }
-              C = B(i.params, D.token);
+              handlerResult = requestHandler(requestMessage.params, cancellationSource.token);
             }
-          else if (I) C = I(i.method, i.params, D.token);
-          let W = C;
-          if (!C) (b.delete(T), f(C, i.method, now));
-          else if (W.then)
-            W.then(
-              (V) => {
-                (b.delete(T), o(V, i.method, now));
+          } else if (starRequestHandler)
+            handlerResult = starRequestHandler(
+              requestMessage.method,
+              requestMessage.params,
+              cancellationSource.token,
+            );
+          let promise = handlerResult;
+          if (!handlerResult) {
+            requestTokens.delete(tokenKey);
+            replySuccess(handlerResult, requestMessage.method, startTime);
+          } else if (promise.then)
+            promise.then(
+              (resultOrError) => {
+                requestTokens.delete(tokenKey);
+                reply(resultOrError, requestMessage.method, startTime);
               },
-              (V) => {
-                if ((b.delete(T), V instanceof a.ResponseError)) u(V, i.method, now);
-                else if (V && m.string(V.message))
-                  u(
-                    new a.ResponseError(
-                      a.ErrorCodes.InternalError,
-                      `Request ${i.method} failed with message: ${V.message}`,
+              (error) => {
+                requestTokens.delete(tokenKey);
+                if (error instanceof messages_1.ResponseError)
+                  replyError(error, requestMessage.method, startTime);
+                else if (error && Is.string(error.message))
+                  replyError(
+                    new messages_1.ResponseError(
+                      messages_1.ErrorCodes.InternalError,
+                      `Request ${requestMessage.method} failed with message: ${error.message}`,
                     ),
-                    i.method,
-                    now,
+                    requestMessage.method,
+                    startTime,
                   );
                 else
-                  u(
-                    new a.ResponseError(
-                      a.ErrorCodes.InternalError,
-                      `Request ${i.method} failed unexpectedly without providing any details.`,
+                  replyError(
+                    new messages_1.ResponseError(
+                      messages_1.ErrorCodes.InternalError,
+                      `Request ${requestMessage.method} failed unexpectedly without providing any details.`,
                     ),
-                    i.method,
-                    now,
+                    requestMessage.method,
+                    startTime,
                   );
               },
             );
-          else (b.delete(T), o(C, i.method, now));
+          else {
+            requestTokens.delete(tokenKey);
+            reply(handlerResult, requestMessage.method, startTime);
+          }
         } catch (error) {
-          if ((b.delete(T), error instanceof a.ResponseError)) o(error, i.method, now);
-          else if (error && m.string(error.message))
-            u(
-              new a.ResponseError(
-                a.ErrorCodes.InternalError,
-                `Request ${i.method} failed with message: ${error.message}`,
+          requestTokens.delete(tokenKey);
+          if (error instanceof messages_1.ResponseError) reply(error, requestMessage.method, startTime);
+          else if (error && Is.string(error.message))
+            replyError(
+              new messages_1.ResponseError(
+                messages_1.ErrorCodes.InternalError,
+                `Request ${requestMessage.method} failed with message: ${error.message}`,
               ),
-              i.method,
-              now,
+              requestMessage.method,
+              startTime,
             );
           else
-            u(
-              new a.ResponseError(
-                a.ErrorCodes.InternalError,
-                `Request ${i.method} failed unexpectedly without providing any details.`,
+            replyError(
+              new messages_1.ResponseError(
+                messages_1.ErrorCodes.InternalError,
+                `Request ${requestMessage.method} failed unexpectedly without providing any details.`,
               ),
-              i.method,
-              now,
+              requestMessage.method,
+              startTime,
             );
         }
       } else
-        u(new a.ResponseError(a.ErrorCodes.MethodNotFound, `Unhandled method ${i.method}`), i.method, now);
+        replyError(
+          new messages_1.ResponseError(
+            messages_1.ErrorCodes.MethodNotFound,
+            `Unhandled method ${requestMessage.method}`,
+          ),
+          requestMessage.method,
+          startTime,
+        );
     }
-    function Un(i) {
-      if (ye()) return;
-      if (i.id === null)
-        if (i.error)
-          c.error(`Received response message without id: Error is: 
-${JSON.stringify(i.error, void 0, 4)}`);
-        else c.error("Received response message without id. No further error information provided.");
-      else {
-        let id = i.id,
-          u = Z.get(id);
-        if ((Yn(i, u), u !== void 0)) {
-          Z.delete(id);
+    function handleResponse(responseMessage) {
+      if (isDisposed()) return;
+      if (responseMessage.id === null) {
+        if (responseMessage.error)
+          logger.error(`Received response message without id: Error is: 
+${JSON.stringify(responseMessage.error, undefined, 4)}`);
+        else logger.error("Received response message without id. No further error information provided.");
+      } else {
+        let key = responseMessage.id;
+        let responsePromise = responsePromises.get(key);
+        traceReceivedResponse(responseMessage, responsePromise);
+        if (responsePromise !== undefined) {
+          responsePromises.delete(key);
           try {
-            if (i.error) {
-              let error = i.error;
-              u.reject(new a.ResponseError(error.code, error.message, error.data));
-            } else if (i.result !== void 0) u.resolve(i.result);
+            if (responseMessage.error) {
+              let error = responseMessage.error;
+              responsePromise.reject(new messages_1.ResponseError(error.code, error.message, error.data));
+            } else if (responseMessage.result !== undefined) responsePromise.resolve(responseMessage.result);
             else throw Error("Should never happen.");
           } catch (error) {
             if (error.message)
-              c.error(`Response handler '${u.method}' failed with message: ${error.message}`);
-            else c.error(`Response handler '${u.method}' failed unexpectedly.`);
+              logger.error(
+                `Response handler '${responsePromise.method}' failed with message: ${error.message}`,
+              );
+            else logger.error(`Response handler '${responsePromise.method}' failed unexpectedly.`);
           }
         }
       }
     }
-    function Vn(i) {
-      if (ye()) return;
-      let o = void 0,
-        u;
-      if (i.method === ze.type.method) {
-        let id = i.params.id;
-        (y.delete(id), ut(i));
+    function handleNotification(message) {
+      if (isDisposed()) return;
+      let type = undefined;
+      let notificationHandler;
+      if (message.method === CancelNotification.type.method) {
+        let cancelId = message.params.id;
+        knownCanceledRequests.delete(cancelId);
+        traceReceivedNotification(message);
         return;
       } else {
-        let f = oe.get(i.method);
-        if (f) ((u = f.handler), (o = f.type));
+        let element = notificationHandlers.get(message.method);
+        if (element) {
+          notificationHandler = element.handler;
+          type = element.type;
+        }
       }
-      if (u || J)
+      if (notificationHandler || starNotificationHandler)
         try {
-          if ((ut(i), u))
-            if (i.params === void 0) {
-              if (o !== void 0) {
-                if (o.numberOfParams !== 0 && o.parameterStructures !== a.ParameterStructures.byName)
-                  c.error(`Notification ${i.method} defines ${o.numberOfParams} params but received none.`);
+          traceReceivedNotification(message);
+          if (notificationHandler) {
+            if (message.params === undefined) {
+              if (type !== undefined) {
+                if (
+                  type.numberOfParams !== 0 &&
+                  type.parameterStructures !== messages_1.ParameterStructures.byName
+                )
+                  logger.error(
+                    `Notification ${message.method} defines ${type.numberOfParams} params but received none.`,
+                  );
               }
-              u();
-            } else if (Array.isArray(i.params)) {
-              let params = i.params;
-              if (i.method === De.type.method && params.length === 2 && Tt.is(params[0]))
-                u({ token: params[0], value: params[1] });
+              notificationHandler();
+            } else if (Array.isArray(message.params)) {
+              let params = message.params;
+              if (
+                message.method === ProgressNotification.type.method &&
+                params.length === 2 &&
+                ProgressToken.is(params[0])
+              )
+                notificationHandler({
+                  token: params[0],
+                  value: params[1],
+                });
               else {
-                if (o !== void 0) {
-                  if (o.parameterStructures === a.ParameterStructures.byName)
-                    c.error(
-                      `Notification ${i.method} defines parameters by name but received parameters by position`,
+                if (type !== undefined) {
+                  if (type.parameterStructures === messages_1.ParameterStructures.byName)
+                    logger.error(
+                      `Notification ${message.method} defines parameters by name but received parameters by position`,
                     );
-                  if (o.numberOfParams !== i.params.length)
-                    c.error(
-                      `Notification ${i.method} defines ${o.numberOfParams} params but received ${params.length} arguments`,
+                  if (type.numberOfParams !== message.params.length)
+                    logger.error(
+                      `Notification ${message.method} defines ${type.numberOfParams} params but received ${params.length} arguments`,
                     );
                 }
-                u(...params);
+                notificationHandler(...params);
               }
             } else {
-              if (o !== void 0 && o.parameterStructures === a.ParameterStructures.byPosition)
-                c.error(
-                  `Notification ${i.method} defines parameters by position but received parameters by name`,
+              if (
+                type !== undefined &&
+                type.parameterStructures === messages_1.ParameterStructures.byPosition
+              )
+                logger.error(
+                  `Notification ${message.method} defines parameters by position but received parameters by name`,
                 );
-              u(i.params);
+              notificationHandler(message.params);
             }
-          else if (J) J(i.method, i.params);
+          } else if (starNotificationHandler) starNotificationHandler(message.method, message.params);
         } catch (error) {
           if (error.message)
-            c.error(`Notification handler '${i.method}' failed with message: ${error.message}`);
-          else c.error(`Notification handler '${i.method}' failed unexpectedly.`);
+            logger.error(`Notification handler '${message.method}' failed with message: ${error.message}`);
+          else logger.error(`Notification handler '${message.method}' failed unexpectedly.`);
         }
-      else he.fire(i);
+      else unhandledNotificationEmitter.fire(message);
     }
-    function Jn(i) {
-      if (!i) {
-        c.error("Received empty message.");
+    function handleInvalidMessage(message) {
+      if (!message) {
+        logger.error("Received empty message.");
         return;
       }
-      c.error(`Received message which is neither a response nor a notification message:
-${JSON.stringify(i, null, 4)}`);
-      let o = i;
-      if (m.string(o.id) || m.number(o.id)) {
-        let id = o.id,
-          f = Z.get(id);
-        if (f) f.reject(Error("The received response has neither a result nor an error property."));
+      logger.error(`Received message which is neither a response nor a notification message:
+${JSON.stringify(message, null, 4)}`);
+      let responseMessage = message;
+      if (Is.string(responseMessage.id) || Is.number(responseMessage.id)) {
+        let key = responseMessage.id;
+        let responseHandler = responsePromises.get(key);
+        if (responseHandler)
+          responseHandler.reject(Error("The received response has neither a result nor an error property."));
       }
     }
-    function ue(i) {
-      if (i === void 0 || i === null) return;
-      switch (Off) {
-        case E.Verbose:
-          return JSON.stringify(i, null, 4);
-        case E.Compact:
-          return JSON.stringify(i);
+    function stringifyTrace(params) {
+      if (params === undefined || params === null) return;
+      switch (trace) {
+        case Trace.Verbose:
+          return JSON.stringify(params, null, 4);
+        case Trace.Compact:
+          return JSON.stringify(params);
         default:
           return;
       }
     }
-    function Kn(i) {
-      if (Off === E.Off || !k) return;
-      if (Text === Y.Text) {
-        let o = void 0;
-        if ((Off === E.Verbose || Off === E.Compact) && i.params)
-          o = `Params: ${ue(i.params)}
+    function traceSendingRequest(message) {
+      if (trace === Trace.Off || !tracer) return;
+      if (traceFormat === TraceFormat.Text) {
+        let data = undefined;
+        if ((trace === Trace.Verbose || trace === Trace.Compact) && message.params)
+          data = `Params: ${stringifyTrace(message.params)}
 
 `;
-        k.log(`Sending request '${i.method} - (${i.id})'.`, o);
-      } else be("send-request", i);
+        tracer.log(`Sending request '${message.method} - (${message.id})'.`, data);
+      } else logLSPMessage("send-request", message);
     }
-    function Qn(i) {
-      if (Off === E.Off || !k) return;
-      if (Text === Y.Text) {
-        let o = void 0;
-        if (Off === E.Verbose || Off === E.Compact)
-          if (i.params)
-            o = `Params: ${ue(i.params)}
-
-`;
-          else
-            o = `No parameters provided.
-
-`;
-        k.log(`Sending notification '${i.method}'.`, o);
-      } else be("send-notification", i);
-    }
-    function Fe(i, o, u) {
-      if (Off === E.Off || !k) return;
-      if (Text === Y.Text) {
-        let f = void 0;
-        if (Off === E.Verbose || Off === E.Compact) {
-          if (i.error && i.error.data)
-            f = `Error data: ${ue(i.error.data)}
-
-`;
-          else if (i.result)
-            f = `Result: ${ue(i.result)}
-
-`;
-          else if (i.error === void 0)
-            f = `No result returned.
-
-`;
-        }
-        k.log(`Sending response '${o} - (${i.id})'. Processing request took ${Date.now() - u}ms`, f);
-      } else be("send-response", i);
-    }
-    function Gn(i) {
-      if (Off === E.Off || !k) return;
-      if (Text === Y.Text) {
-        let o = void 0;
-        if ((Off === E.Verbose || Off === E.Compact) && i.params)
-          o = `Params: ${ue(i.params)}
-
-`;
-        k.log(`Received request '${i.method} - (${i.id})'.`, o);
-      } else be("receive-request", i);
-    }
-    function ut(i) {
-      if (Off === E.Off || !k || i.method === Qe.type.method) return;
-      if (Text === Y.Text) {
-        let o = void 0;
-        if (Off === E.Verbose || Off === E.Compact)
-          if (i.params)
-            o = `Params: ${ue(i.params)}
+    function traceSendingNotification(message) {
+      if (trace === Trace.Off || !tracer) return;
+      if (traceFormat === TraceFormat.Text) {
+        let data = undefined;
+        if (trace === Trace.Verbose || trace === Trace.Compact)
+          if (message.params)
+            data = `Params: ${stringifyTrace(message.params)}
 
 `;
           else
-            o = `No parameters provided.
+            data = `No parameters provided.
 
 `;
-        k.log(`Received notification '${i.method}'.`, o);
-      } else be("receive-notification", i);
+        tracer.log(`Sending notification '${message.method}'.`, data);
+      } else logLSPMessage("send-notification", message);
     }
-    function Yn(i, o) {
-      if (Off === E.Off || !k) return;
-      if (Text === Y.Text) {
-        let u = void 0;
-        if (Off === E.Verbose || Off === E.Compact) {
-          if (i.error && i.error.data)
-            u = `Error data: ${ue(i.error.data)}
+    function traceSendingResponse(message, method, startTime) {
+      if (trace === Trace.Off || !tracer) return;
+      if (traceFormat === TraceFormat.Text) {
+        let data = undefined;
+        if (trace === Trace.Verbose || trace === Trace.Compact) {
+          if (message.error && message.error.data)
+            data = `Error data: ${stringifyTrace(message.error.data)}
 
 `;
-          else if (i.result)
-            u = `Result: ${ue(i.result)}
+          else if (message.result)
+            data = `Result: ${stringifyTrace(message.result)}
 
 `;
-          else if (i.error === void 0)
-            u = `No result returned.
+          else if (message.error === undefined)
+            data = `No result returned.
 
 `;
         }
-        if (o) {
-          let f = i.error ? ` Request failed: ${i.error.message} (${i.error.code}).` : "";
-          k.log(`Received response '${o.method} - (${i.id})' in ${Date.now() - o.timerStart}ms.${f}`, u);
-        } else k.log(`Received response ${i.id} without active response promise.`, u);
-      } else be("receive-response", i);
+        tracer.log(
+          `Sending response '${method} - (${message.id})'. Processing request took ${Date.now() - startTime}ms`,
+          data,
+        );
+      } else logLSPMessage("send-response", message);
     }
-    function be(i, o) {
-      if (!k || Off === E.Off) return;
-      let u = { isLSPMessage: !0, type: i, message: o, timestamp: Date.now() };
-      k.log(u);
+    function traceReceivedRequest(message) {
+      if (trace === Trace.Off || !tracer) return;
+      if (traceFormat === TraceFormat.Text) {
+        let data = undefined;
+        if ((trace === Trace.Verbose || trace === Trace.Compact) && message.params)
+          data = `Params: ${stringifyTrace(message.params)}
+
+`;
+        tracer.log(`Received request '${message.method} - (${message.id})'.`, data);
+      } else logLSPMessage("receive-request", message);
     }
-    function $e() {
-      if (It()) throw new Te(Ae.Closed, "Connection is closed.");
-      if (ye()) throw new Te(Ae.Disposed, "Connection is disposed.");
+    function traceReceivedNotification(message) {
+      if (trace === Trace.Off || !tracer || message.method === LogTraceNotification.type.method) return;
+      if (traceFormat === TraceFormat.Text) {
+        let data = undefined;
+        if (trace === Trace.Verbose || trace === Trace.Compact)
+          if (message.params)
+            data = `Params: ${stringifyTrace(message.params)}
+
+`;
+          else
+            data = `No parameters provided.
+
+`;
+        tracer.log(`Received notification '${message.method}'.`, data);
+      } else logLSPMessage("receive-notification", message);
     }
-    function Xn() {
-      if (qt()) throw new Te(Ae.AlreadyListening, "Connection is already listening");
+    function traceReceivedResponse(message, responsePromise) {
+      if (trace === Trace.Off || !tracer) return;
+      if (traceFormat === TraceFormat.Text) {
+        let data = undefined;
+        if (trace === Trace.Verbose || trace === Trace.Compact) {
+          if (message.error && message.error.data)
+            data = `Error data: ${stringifyTrace(message.error.data)}
+
+`;
+          else if (message.result)
+            data = `Result: ${stringifyTrace(message.result)}
+
+`;
+          else if (message.error === undefined)
+            data = `No result returned.
+
+`;
+        }
+        if (responsePromise) {
+          let error = message.error
+            ? ` Request failed: ${message.error.message} (${message.error.code}).`
+            : "";
+          tracer.log(
+            `Received response '${responsePromise.method} - (${message.id})' in ${Date.now() - responsePromise.timerStart}ms.${error}`,
+            data,
+          );
+        } else tracer.log(`Received response ${message.id} without active response promise.`, data);
+      } else logLSPMessage("receive-response", message);
     }
-    function Zn() {
-      if (!qt()) throw Error("Call listen() first.");
+    function logLSPMessage(type, message) {
+      if (!tracer || trace === Trace.Off) return;
+      let lspMessage = {
+        isLSPMessage: true,
+        type,
+        message,
+        timestamp: Date.now(),
+      };
+      tracer.log(lspMessage);
     }
-    function qe(i) {
-      if (i === void 0) return null;
-      else return i;
+    function throwIfClosedOrDisposed() {
+      if (isClosed()) throw new ConnectionError(ConnectionErrors.Closed, "Connection is closed.");
+      if (isDisposed()) throw new ConnectionError(ConnectionErrors.Disposed, "Connection is disposed.");
     }
-    function Wt(i) {
-      if (i === null) return;
-      else return i;
+    function throwIfListening() {
+      if (isListening())
+        throw new ConnectionError(ConnectionErrors.AlreadyListening, "Connection is already listening");
     }
-    function Ft(i) {
-      return i !== void 0 && i !== null && !Array.isArray(i) && typeof i === "object";
+    function throwIfNotListening() {
+      if (!isListening()) throw Error("Call listen() first.");
     }
-    function dt(i, o) {
-      switch (i) {
-        case a.ParameterStructures.auto:
-          if (Ft(o)) return Wt(o);
-          else return [qe(o)];
-        case a.ParameterStructures.byName:
-          if (!Ft(o)) throw Error("Received parameters by name but param is not an object literal.");
-          return Wt(o);
-        case a.ParameterStructures.byPosition:
-          return [qe(o)];
+    function undefinedToNull(param) {
+      if (param === undefined) return null;
+      else return param;
+    }
+    function nullToUndefined(param) {
+      if (param === null) return;
+      else return param;
+    }
+    function isNamedParam(param) {
+      return param !== undefined && param !== null && !Array.isArray(param) && typeof param === "object";
+    }
+    function computeSingleParam(parameterStructures, param) {
+      switch (parameterStructures) {
+        case messages_1.ParameterStructures.auto:
+          if (isNamedParam(param)) return nullToUndefined(param);
+          else return [undefinedToNull(param)];
+        case messages_1.ParameterStructures.byName:
+          if (!isNamedParam(param))
+            throw Error("Received parameters by name but param is not an object literal.");
+          return nullToUndefined(param);
+        case messages_1.ParameterStructures.byPosition:
+          return [undefinedToNull(param)];
         default:
-          throw Error(`Unknown parameter structure ${i.toString()}`);
+          throw Error(`Unknown parameter structure ${parameterStructures.toString()}`);
       }
     }
-    function Ht(i, o) {
-      let u,
-        numberOfParams = i.numberOfParams;
+    function computeMessageParams(type, params) {
+      let result;
+      let numberOfParams = type.numberOfParams;
       switch (numberOfParams) {
         case 0:
-          u = void 0;
+          result = undefined;
           break;
         case 1:
-          u = dt(i.parameterStructures, o[0]);
+          result = computeSingleParam(type.parameterStructures, params[0]);
           break;
         default:
-          u = [];
-          for (let M = 0; M < o.length && M < numberOfParams; M++) u.push(qe(o[M]));
-          if (o.length < numberOfParams) for (let M = o.length; M < numberOfParams; M++) u.push(null);
+          result = [];
+          for (let i = 0; i < params.length && i < numberOfParams; i++)
+            result.push(undefinedToNull(params[i]));
+          if (params.length < numberOfParams)
+            for (let i = params.length; i < numberOfParams; i++) result.push(null);
           break;
       }
-      return u;
+      return result;
     }
-    let ve = {
-      sendNotification: (i, ...o) => {
-        $e();
-        let u, f;
-        if (m.string(i)) {
-          u = i;
-          let L = o[0],
-            B = 0,
-            auto = a.ParameterStructures.auto;
-          if (a.ParameterStructures.is(L)) ((B = 1), (auto = L));
-          let T = o.length,
-            D = T - B;
-          switch (D) {
+    let connection = {
+      sendNotification: (type, ...args) => {
+        throwIfClosedOrDisposed();
+        let method;
+        let messageParams;
+        if (Is.string(type)) {
+          method = type;
+          let first = args[0];
+          let paramStart = 0;
+          let parameterStructures = messages_1.ParameterStructures.auto;
+          if (messages_1.ParameterStructures.is(first)) {
+            paramStart = 1;
+            parameterStructures = first;
+          }
+          let paramEnd = args.length;
+          let numberOfParams = paramEnd - paramStart;
+          switch (numberOfParams) {
             case 0:
-              f = void 0;
+              messageParams = undefined;
               break;
             case 1:
-              f = dt(auto, o[B]);
+              messageParams = computeSingleParam(parameterStructures, args[paramStart]);
               break;
             default:
-              if (auto === a.ParameterStructures.byName)
-                throw Error(`Received ${D} parameters for 'by Name' notification parameter structure.`);
-              f = o.slice(B, T).map((C) => qe(C));
+              if (parameterStructures === messages_1.ParameterStructures.byName)
+                throw Error(
+                  `Received ${numberOfParams} parameters for 'by Name' notification parameter structure.`,
+                );
+              messageParams = args.slice(paramStart, paramEnd).map((value) => undefinedToNull(value));
               break;
           }
         } else {
-          let L = o;
-          ((u = i.method), (f = Ht(i, L)));
+          let params = args;
+          method = type.method;
+          messageParams = computeMessageParams(type, params);
         }
-        let M = { jsonrpc: j, method: u, params: f };
-        return (
-          Qn(M),
-          r.write(M).catch((L) => {
-            throw (c.error("Sending notification failed."), L);
-          })
-        );
+        let notificationMessage = {
+          jsonrpc: version,
+          method,
+          params: messageParams,
+        };
+        traceSendingNotification(notificationMessage);
+        return messageWriter.write(notificationMessage).catch((error) => {
+          logger.error("Sending notification failed.");
+          throw error;
+        });
       },
-      onNotification: (i, o) => {
-        $e();
-        let u;
-        if (m.func(i)) J = i;
-        else if (o)
-          if (m.string(i)) ((u = i), oe.set(i, { type: void 0, handler: o }));
-          else ((u = i.method), oe.set(i.method, { type: i, handler: o }));
+      onNotification: (type, handler) => {
+        throwIfClosedOrDisposed();
+        let method;
+        if (Is.func(type)) starNotificationHandler = type;
+        else if (handler)
+          if (Is.string(type)) {
+            method = type;
+            notificationHandlers.set(type, {
+              type: undefined,
+              handler,
+            });
+          } else {
+            method = type.method;
+            notificationHandlers.set(type.method, {
+              type,
+              handler,
+            });
+          }
         return {
           dispose: () => {
-            if (u !== void 0) oe.delete(u);
-            else J = void 0;
+            if (method !== undefined) notificationHandlers.delete(method);
+            else starNotificationHandler = undefined;
           },
         };
       },
-      onProgress: (i, o, u) => {
-        if (fe.has(o)) throw Error(`Progress handler for token ${o} already registered`);
-        return (
-          fe.set(o, u),
-          {
-            dispose: () => {
-              fe.delete(o);
-            },
-          }
-        );
+      onProgress: (_type, token, handler) => {
+        if (progressHandlers.has(token))
+          throw Error(`Progress handler for token ${token} already registered`);
+        progressHandlers.set(token, handler);
+        return {
+          dispose: () => {
+            progressHandlers.delete(token);
+          },
+        };
       },
-      sendProgress: (i, o, u) => ve.sendNotification(De.type, { token: o, value: u }),
-      onUnhandledProgress: v.event,
-      sendRequest: (i, ...o) => {
-        ($e(), Zn());
-        let u,
-          f,
-          M = void 0;
-        if (m.string(i)) {
-          u = i;
-          let T = o[0],
-            D = o[o.length - 1],
-            C = 0,
-            auto = a.ParameterStructures.auto;
-          if (a.ParameterStructures.is(T)) ((C = 1), (auto = T));
-          let V = o.length;
-          if (Ee.CancellationToken.is(D)) ((V = V - 1), (M = D));
-          let ae = V - C;
-          switch (ae) {
+      sendProgress: (_type, token, value) =>
+        connection.sendNotification(ProgressNotification.type, {
+          token,
+          value,
+        }),
+      onUnhandledProgress: unhandledProgressEmitter.event,
+      sendRequest: (type, ...args) => {
+        throwIfClosedOrDisposed();
+        throwIfNotListening();
+        let method;
+        let messageParams;
+        let token = undefined;
+        if (Is.string(type)) {
+          method = type;
+          let first = args[0];
+          let last = args[args.length - 1];
+          let paramStart = 0;
+          let parameterStructures = messages_1.ParameterStructures.auto;
+          if (messages_1.ParameterStructures.is(first)) {
+            paramStart = 1;
+            parameterStructures = first;
+          }
+          let paramEnd = args.length;
+          if (cancellation_1.CancellationToken.is(last)) {
+            paramEnd = paramEnd - 1;
+            token = last;
+          }
+          let numberOfParams = paramEnd - paramStart;
+          switch (numberOfParams) {
             case 0:
-              f = void 0;
+              messageParams = undefined;
               break;
             case 1:
-              f = dt(auto, o[C]);
+              messageParams = computeSingleParam(parameterStructures, args[paramStart]);
               break;
             default:
-              if (auto === a.ParameterStructures.byName)
-                throw Error(`Received ${ae} parameters for 'by Name' request parameter structure.`);
-              f = o.slice(C, V).map((ei) => qe(ei));
+              if (parameterStructures === messages_1.ParameterStructures.byName)
+                throw Error(
+                  `Received ${numberOfParams} parameters for 'by Name' request parameter structure.`,
+                );
+              messageParams = args.slice(paramStart, paramEnd).map((value) => undefinedToNull(value));
               break;
           }
         } else {
-          let T = o;
-          ((u = i.method), (f = Ht(i, T)));
-          let numberOfParams = i.numberOfParams;
-          M = Ee.CancellationToken.is(T[numberOfParams]) ? T[numberOfParams] : void 0;
+          let params = args;
+          method = type.method;
+          messageParams = computeMessageParams(type, params);
+          let numberOfParams = type.numberOfParams;
+          token = cancellation_1.CancellationToken.is(params[numberOfParams])
+            ? params[numberOfParams]
+            : undefined;
         }
-        let L = h++,
-          B;
-        if (M)
-          B = M.onCancellationRequested(() => {
-            let sendCancellation = G.sender.sendCancellation(ve, L);
-            if (sendCancellation === void 0)
-              return (
-                c.log(`Received no promise from cancellation strategy when cancelling id ${L}`),
-                Promise.resolve()
-              );
-            else
-              return sendCancellation.catch(() => {
-                c.log(`Sending cancellation messages for id ${L} failed`);
+        let id = sequenceNumber++;
+        let disposable;
+        if (token)
+          disposable = token.onCancellationRequested(() => {
+            let p = cancellationStrategy.sender.sendCancellation(connection, id);
+            if (p === undefined) {
+              logger.log(`Received no promise from cancellation strategy when cancelling id ${id}`);
+              return Promise.resolve();
+            } else
+              return p.catch(() => {
+                logger.log(`Sending cancellation messages for id ${id} failed`);
               });
           });
-        let A = { jsonrpc: j, id: L, method: u, params: f };
-        if ((Kn(A), typeof G.sender.enableCancellation === "function")) G.sender.enableCancellation(A);
-        return new Promise(async (T, D) => {
-          let C = (ae) => {
-              (T(ae), G.sender.cleanup(L), B?.dispose());
-            },
-            W = (ae) => {
-              (D(ae), G.sender.cleanup(L), B?.dispose());
-            },
-            V = { method: u, timerStart: Date.now(), resolve: C, reject: W };
+        let requestMessage = {
+          jsonrpc: version,
+          id,
+          method,
+          params: messageParams,
+        };
+        traceSendingRequest(requestMessage);
+        if (typeof cancellationStrategy.sender.enableCancellation === "function")
+          cancellationStrategy.sender.enableCancellation(requestMessage);
+        return new Promise(async (resolve, reject) => {
+          let resolveWithCleanup = (r) => {
+            resolve(r);
+            cancellationStrategy.sender.cleanup(id);
+            disposable?.dispose();
+          };
+          let rejectWithCleanup = (r) => {
+            reject(r);
+            cancellationStrategy.sender.cleanup(id);
+            disposable?.dispose();
+          };
+          let responsePromise = {
+            method,
+            timerStart: Date.now(),
+            resolve: resolveWithCleanup,
+            reject: rejectWithCleanup,
+          };
           try {
-            (Z.set(L, V), await r.write(A));
+            responsePromises.set(id, responsePromise);
+            await messageWriter.write(requestMessage);
           } catch (error) {
-            (Z.delete(L),
-              V.reject(
-                new a.ResponseError(
-                  a.ErrorCodes.MessageWriteError,
-                  error.message ? error.message : "Unknown reason",
-                ),
+            responsePromises.delete(id);
+            responsePromise.reject(
+              new messages_1.ResponseError(
+                messages_1.ErrorCodes.MessageWriteError,
+                error.message ? error.message : "Unknown reason",
               ),
-              c.error("Sending request failed."));
+            );
+            logger.error("Sending request failed.");
           }
         });
       },
-      onRequest: (i, o) => {
-        $e();
-        let u = null;
-        if (Et.is(i)) ((u = void 0), (I = i));
-        else if (m.string(i)) {
-          if (((u = null), o !== void 0)) ((u = i), X.set(i, { handler: o, type: void 0 }));
-        } else if (o !== void 0) ((u = i.method), X.set(i.method, { type: i, handler: o }));
+      onRequest: (type, handler) => {
+        throwIfClosedOrDisposed();
+        let method = null;
+        if (StarRequestHandler.is(type)) {
+          method = undefined;
+          starRequestHandler = type;
+        } else if (Is.string(type)) {
+          method = null;
+          if (handler !== undefined) {
+            method = type;
+            requestHandlers.set(type, {
+              handler,
+              type: undefined,
+            });
+          }
+        } else if (handler !== undefined) {
+          method = type.method;
+          requestHandlers.set(type.method, {
+            type,
+            handler,
+          });
+        }
         return {
           dispose: () => {
-            if (u === null) return;
-            if (u !== void 0) X.delete(u);
-            else I = void 0;
+            if (method === null) return;
+            if (method !== undefined) requestHandlers.delete(method);
+            else starRequestHandler = undefined;
           },
         };
       },
-      hasPendingResponse: () => Z.size > 0,
-      trace: async (i, o, u) => {
-        let f = !1,
-          Text_2 = Y.Text;
-        if (u !== void 0)
-          if (m.boolean(u)) f = u;
-          else ((f = u.sendNotification || !1), (Text_2 = u.traceFormat || Y.Text));
-        if (((Off = i), (Text = Text_2), Off === E.Off)) k = void 0;
-        else k = o;
-        if (f && !It() && !ye()) await ve.sendNotification(Ct.type, { value: E.toString(i) });
+      hasPendingResponse: () => responsePromises.size > 0,
+      trace: async (_value, _tracer, sendNotificationOrTraceOptions) => {
+        let _sendNotification = false;
+        let _traceFormat = TraceFormat.Text;
+        if (sendNotificationOrTraceOptions !== undefined)
+          if (Is.boolean(sendNotificationOrTraceOptions)) _sendNotification = sendNotificationOrTraceOptions;
+          else {
+            _sendNotification = sendNotificationOrTraceOptions.sendNotification || false;
+            _traceFormat = sendNotificationOrTraceOptions.traceFormat || TraceFormat.Text;
+          }
+        trace = _value;
+        traceFormat = _traceFormat;
+        if (trace === Trace.Off) tracer = undefined;
+        else tracer = _tracer;
+        if (_sendNotification && !isClosed() && !isDisposed())
+          await connection.sendNotification(SetTraceNotification.type, {
+            value: Trace.toString(_value),
+          });
       },
-      onError: ne.event,
-      onClose: ce.event,
-      onUnhandledNotification: he.event,
-      onDispose: z.event,
+      onError: errorEmitter.event,
+      onClose: closeEmitter.event,
+      onUnhandledNotification: unhandledNotificationEmitter.event,
+      onDispose: disposeEmitter.event,
       end: () => {
-        r.end();
+        messageWriter.end();
       },
       dispose: () => {
-        if (ye()) return;
-        ((New = te.Disposed), z.fire(void 0));
-        let i = new a.ResponseError(
-          a.ErrorCodes.PendingResponseRejected,
+        if (isDisposed()) return;
+        state = ConnectionState.Disposed;
+        disposeEmitter.fire(undefined);
+        let error = new messages_1.ResponseError(
+          messages_1.ErrorCodes.PendingResponseRejected,
           "Pending response rejected since connection got disposed",
         );
-        for (let o of Z.values()) o.reject(i);
-        if (((Z = new Map()), (b = new Map()), (y = new Set()), (Q = new Ke.LinkedMap()), m.func(r.dispose)))
-          r.dispose();
-        if (m.func(e.dispose)) e.dispose();
+        for (let promise of responsePromises.values()) promise.reject(error);
+        responsePromises = new Map();
+        requestTokens = new Map();
+        knownCanceledRequests = new Set();
+        messageQueue = new linkedMap_1.LinkedMap();
+        if (Is.func(messageWriter.dispose)) messageWriter.dispose();
+        if (Is.func(messageReader.dispose)) messageReader.dispose();
       },
       listen: () => {
-        ($e(), Xn(), (New = te.Listening), e.listen(Fn));
+        throwIfClosedOrDisposed();
+        throwIfListening();
+        state = ConnectionState.Listening;
+        messageReader.listen(callback);
       },
       inspect: () => {
-        (0, pn.default)().console.log("inspect");
+        (0, ral_1.default)().console.log("inspect");
       },
     };
-    return (
-      ve.onNotification(Qe.type, (i) => {
-        if (Off === E.Off || !k) return;
-        let o = Off === E.Verbose || Off === E.Compact;
-        k.log(i.message, o ? i.verbose : void 0);
-      }),
-      ve.onNotification(De.type, (i) => {
-        let o = fe.get(i.token);
-        if (o) o(i.value);
-        else v.fire(i);
-      }),
-      ve
-    );
+    connection.onNotification(LogTraceNotification.type, (params) => {
+      if (trace === Trace.Off || !tracer) return;
+      let verbose = trace === Trace.Verbose || trace === Trace.Compact;
+      tracer.log(params.message, verbose ? params.verbose : undefined);
+    });
+    connection.onNotification(ProgressNotification.type, (params) => {
+      let handler = progressHandlers.get(params.token);
+      if (handler) handler(params.value);
+      else unhandledProgressEmitter.fire(params);
+    });
+    return connection;
   }
-  bn.createMessageConnection = rs;
+  cjsExports.createMessageConnection = createMessageConnection;
 });
-
-export { Rn };
+export { require_connection };

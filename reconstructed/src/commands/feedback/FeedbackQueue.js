@@ -8,13 +8,17 @@
  * pieces: chunk-v517dzda.js (17)
  * attribution: placement 17
  */
-import { j, y, R, ce, P, Q } from "../../../vendor/react/cjs/react.production.js";
-import { e, r, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { OrderedListWithItem } from "../../components/CustomSelect/selectTable.js";
-import { hr, pIt } from "../../utils/invisibleChars.js";
+import { init_react_production, y, R, ce, P, Q } from "../../../vendor/react/cjs/react.production.js";
 import {
-  bon,
-  Son,
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { OrderedListWithItem } from "../../components/CustomSelect/selectTable.js";
+import { stripInvisibleChars, stripInvisibleCharsMultiLine } from "../../utils/invisibleChars.js";
+import {
+  FEEDBACK_FAILURE_MODES,
+  FEEDBACK_TASK_CATEGORIES,
   listFeedbackDrafts,
   setSessionDraftCount,
   recentEntries,
@@ -25,7 +29,7 @@ import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js"
 import { useLatestState } from "../../components/CustomSelect/option-map.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useClock } from "../../ink/components/ClockContext.js";
-import { Me } from "../../components/design-system/ThemeProvider.js";
+import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useHost, useSession } from "../../context/session.js";
 import { count } from "../../utils/collections.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -44,36 +48,54 @@ import { StatusIcon } from "../../components/design-system/StatusIcon.js";
 import { stripCombiningRepeated } from "../../utils/sanitization.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { TextInput } from "../../components/TextInput.js";
 import { WrappedTextBox } from "../../components/FeedbackSurvey/FeedbackDraftNotice.js";
-import { useScrollViewportSize, Tl } from "../../components/ScrollViewportContext.js";
+import { useScrollViewportSize, useHasScrollViewport } from "../../components/ScrollViewportContext.js";
 import { merged } from "../../components/CustomSelect/select.js";
 
 //@ chunk-v517dzda.js:1297-1301 placement
-j();
+init_react_production();
 //@ chunk-v517dzda.js:1301-1376 placement
-function Xt(U) {
-  return e(OrderedListWithItem.Item, { label: hr(U.title), meta: feedbackItemMeta(U) }, U.draft_id);
+function renderThisSessionFeedbackItem(U) {
+  return jsxProd_default(
+    OrderedListWithItem.Item,
+    {
+      label: stripInvisibleChars(U.title),
+      meta: feedbackItemMeta(U),
+    },
+    U.draft_id,
+  );
 }
 //@ chunk-v517dzda.js:1376-1455 placement
-function Jt(te) {
-  return e(OrderedListWithItem.Item, { label: hr(te.title), meta: feedbackItemMeta(te) }, te.draft_id);
+function renderOtherFeedbackItem(te) {
+  return jsxProd_default(
+    OrderedListWithItem.Item,
+    {
+      label: stripInvisibleChars(te.title),
+      meta: feedbackItemMeta(te),
+    },
+    te.draft_id,
+  );
 }
 //@ chunk-v517dzda.js:1455-1603 placement
-var FEEDBACK_TYPES = ["bug", "idea", "missing_capability"],
-  FEEDBACK_TYPE_LABELS = { bug: "bug", idea: "idea", missing_capability: "missing capability" },
-  AREA_CHOICES = [void 0, ...bon],
-  FAILURE_MODE_CHOICES = [void 0, ...Son];
+var FEEDBACK_TYPES = ["bug", "idea", "missing_capability"];
+var FEEDBACK_TYPE_LABELS = {
+  bug: "bug",
+  idea: "idea",
+  missing_capability: "missing capability",
+};
+var AREA_CHOICES = [undefined, ...FEEDBACK_FAILURE_MODES];
+var FAILURE_MODE_CHOICES = [undefined, ...FEEDBACK_TASK_CATEGORIES];
 //@ chunk-v517dzda.js:1603-1665 placement
-function st(h) {
-  return h === void 0 ? "(none)" : h.replace(/_/g, " ");
+function snakeToWords(h) {
+  return h === undefined ? "(none)" : h.replace(/_/g, " ");
 }
+//@ chunk-v517dzda.js:1665-1801 placement
 /**
  * 反馈编辑表单的字段顺序，transcript 可用时含 transcript。
  */
-//@ chunk-v517dzda.js:1665-1801 placement
 function getFeedbackFormFields(h) {
   return [
     "type",
@@ -87,52 +109,49 @@ function getFeedbackFormFields(h) {
   ];
 }
 //@ chunk-v517dzda.js:1801-1827 placement
-var Pe = 500,
-  at = 6,
-  lt = 3,
-  dt = 5;
+var DRAFT_DEBOUNCE_MS = 500;
+var FEEDBACK_LIST_CHROME_ROWS = 6;
+var FEEDBACK_LIST_FIXED_ROWS = 3;
+var FEEDBACK_LIST_MIN_ROWS = 5;
+//@ chunk-v517dzda.js:1827-12269 placement
 /**
  * /feedback 的反馈队列界面（2.1.316 新增）：列出本会话与其他会话的待发反馈，可打开、编辑字段、丢弃或新写一条。
  */
-//@ chunk-v517dzda.js:1827-12269 placement
-function FeedbackQueue({
-  messages: messages,
-  onDone: onDone,
-  abortSignal: abortSignal,
-  onWriteNew: onWriteNew,
-}) {
-  let [f, C] = y(null),
-    [b, B] = y(0),
-    J = useIsScreenReaderEnabled(),
-    [m, L] = y("list"),
-    [i, A] = y(null),
-    [D, K] = y(!1),
-    [H, _, M] = useLatestState(0),
-    [T, k, G] = useLatestState(null),
-    [Y, z] = y(null),
-    de = R(-1 / 0),
-    [se, E] = y(null),
-    [oe, ue] = y(null),
-    ee = useTerminalSize().columns - 6,
-    x = useClock(),
-    ae = R(0),
-    U = R(!1),
-    te = R(0),
-    fe = R(!1),
-    ye = R(!1),
-    { storageV5: storageV5, credentials: credentials } = Me(),
-    Ve = useHost(),
-    ne = useSession((t) => t.id),
-    me = onWriteNew !== void 0,
-    le = ce(async () => {
-      let { queued: queued } = await listFeedbackDrafts(void 0, storageV5).catch(() => ({
-        queued: [],
-        expired: [],
-      }));
-      (setSessionDraftCount(count(queued, (l) => l.source_session_id === ne)), C(queued));
-      let o = queued.length - (me ? 0 : 1);
-      return (B((l) => Math.min(l, Math.max(0, o))), queued);
-    }, [ne, me, storageV5, B]);
+function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
+  let [f, C] = y(null);
+  let [b, B] = y(0);
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let [m, L] = y("list");
+  let [i, A] = y(null);
+  let [D, K] = y(false);
+  let [H, _, M] = useLatestState(0);
+  let [T, k, G] = useLatestState(null);
+  let [Y, z] = y(null);
+  let de = R(-1 / 0);
+  let [se, E] = y(null);
+  let [oe, ue] = y(null);
+  let columns = useTerminalSize().columns - 6;
+  let clock = useClock();
+  let ae = R(0);
+  let U = R(false);
+  let te = R(0);
+  let fe = R(false);
+  let ye = R(false);
+  let { storageV5, credentials } = useTheme_2();
+  let host = useHost();
+  let ne = useSession((t) => t.id);
+  let me = onWriteNew !== undefined;
+  let le = ce(async () => {
+    let { queued } = await listFeedbackDrafts(undefined, storageV5).catch(() => ({
+      queued: [],
+      expired: [],
+    }));
+    setSessionDraftCount(count(queued, (l) => l.source_session_id === ne));
+    C(queued);
+    let o = queued.length - (me ? 0 : 1);
+    B((l) => Math.min(l, Math.max(0, o)));
+    return queued;
+  }, [ne, me, storageV5, B]);
   P(() => {
     le().then((t) => {
       logEvent("tengu_feedback_queue_opened", {
@@ -141,348 +160,457 @@ function FeedbackQueue({
       });
     });
   }, [le, ne]);
-  let filtered = (f ?? []).filter((t) => t.source_session_id === ne),
-    filtered_2 = (f ?? []).filter((t) => t.source_session_id !== ne),
-    ie = [...filtered, ...filtered_2],
-    ze = me && b === ie.length,
-    Qe = ie.length + (me ? 1 : 0),
-    Dt = ie[b],
-    Oe = i ? recentEntries(i.request_ids).length : 0,
-    pe = ce(
-      (t) => {
-        if (t === void 0) onDone();
-        else onDone(t, { display: "system" });
-      },
-      [onDone],
-    ),
-    I = Q(() => (i ? getFeedbackFormFields(i) : []), [i]),
-    ke = ce(
-      (t) => {
-        ((ae.current = x.now()), _(t.length - 1));
-      },
-      [x, _],
-    ),
-    p = I[H],
-    he = p === "title" || p === "area" || p === "details",
-    _t = ce(
-      (t) => {
-        (A(t),
-          K(t.transcriptAvailable),
-          E(null),
-          k({
-            type: t.type,
-            title: hr(t.title),
-            area: hr(t.area ?? ""),
-            failureMode: t.failure_mode,
-            taskCategory: t.task_category,
-            details: pIt(t.details),
-          }),
-          z(null),
-          (de.current = -1 / 0),
-          ke(getFeedbackFormFields(t)),
-          (te.current = x.now()),
-          (U.current = !1),
-          (ye.current = !1),
-          L("review"));
-      },
-      [x, ke, k],
-    ),
-    Ze = ce(
-      async (t) => {
-        let now = x.now(),
-          l = te.current;
-        if (((te.current = Math.max(now, l)), now - l < Pe || fe.current || U.current)) return;
-        fe.current = !0;
-        try {
-          (await discardFeedbackDraft(t, "panel", storageV5).catch(() => {}), await le(), L("list"), A(null));
-        } finally {
-          fe.current = !1;
-        }
-      },
-      [le, x, storageV5],
-    ),
-    xe = ce(
-      (t) => {
-        (A(t), C((g) => (g ? g.map((v) => (v.draft_id === t.draft_id ? t : v)) : g)));
-        let { transcriptAvailable: transcriptAvailable, ...l } = t;
-        return saveFeedbackDraft(l, new Date(), storageV5).then((g) => {
-          if (!g.success)
-            E(
-              g.reason === "too_large"
-                ? "That draft is too large to save. Trim the details."
-                : "Could not save the draft to disk.",
-            );
+  let filtered = (f ?? []).filter((t) => t.source_session_id === ne);
+  let filtered_2 = (f ?? []).filter((t) => t.source_session_id !== ne);
+  let ie = [...filtered, ...filtered_2];
+  let ze = me && b === ie.length;
+  let Qe = ie.length + (me ? 1 : 0);
+  let Dt = ie[b];
+  let Oe = i ? recentEntries(i.request_ids).length : 0;
+  let pe = ce(
+    (t) => {
+      if (t === undefined) onDone();
+      else
+        onDone(t, {
+          display: "system",
         });
-      },
-      [storageV5],
-    ),
-    ve = ce(() => {
-      let t = G();
-      if (!i || !t) return i;
-      let o = hr(i.title),
-        l = hr(i.area ?? ""),
-        g = pIt(i.details),
-        v = t.title === o || t.title.trim() === "" ? i.title : t.title.trim(),
-        Ce = t.area === l ? (i.area ?? "") : t.area.trim(),
-        rt = t.details === g ? i.details : t.details.trim() === "" ? "" : t.details;
-      if (
-        t.type === i.type &&
-        v === i.title &&
-        (Ce === "" ? void 0 : Ce) === i.area &&
-        t.failureMode === i.failure_mode &&
-        t.taskCategory === i.task_category &&
-        rt === i.details
-      )
-        return i;
-      return {
-        ...i,
+    },
+    [onDone],
+  );
+  let I = Q(() => (i ? getFeedbackFormFields(i) : []), [i]);
+  let ke = ce(
+    (t) => {
+      ae.current = clock.now();
+      _(t.length - 1);
+    },
+    [clock, _],
+  );
+  let p = I[H];
+  let he = p === "title" || p === "area" || p === "details";
+  let onOpen = ce(
+    (t) => {
+      A(t);
+      K(t.transcriptAvailable);
+      E(null);
+      k({
         type: t.type,
-        title: v,
-        area: Ce === "" ? void 0 : Ce,
-        failure_mode: t.failureMode,
-        task_category: t.taskCategory,
-        details: rt,
-      };
-    }, [i, G]),
-    et = ce(() => {
-      let t = ve();
-      if (t && t !== i) {
-        if (i && t.details === "" && i.details !== "" && x.now() - de.current < Pe)
-          t = { ...t, details: i.details };
-        xe(t);
-      }
-    }, [ve, i, xe, x]),
-    W = ce(
-      (t) => {
-        (z(null),
-          E((o) => (o === DETAILS_TOO_LARGE_MESSAGE ? null : o)),
-          _((o) => {
-            let max = Math.max(0, Math.min(I.length - 1, o + t));
-            if (max !== o && I[max] === "send") ae.current = x.now();
-            return max;
-          }));
-      },
-      [I, x, _],
-    ),
-    Tt = ce(
-      (t, o) => {
-        if (t === "type")
-          k((l) => {
-            if (!l) return l;
-            let index = FEEDBACK_TYPES.indexOf(l.type),
-              v = FEEDBACK_TYPES[(index + o + FEEDBACK_TYPES.length) % FEEDBACK_TYPES.length];
-            return v ? { ...l, type: v } : l;
-          });
-        else if (t === "failure_mode")
-          k((l) => {
-            if (!l) return l;
-            let index = AREA_CHOICES.indexOf(l.failureMode),
-              v = AREA_CHOICES.length;
-            return { ...l, failureMode: AREA_CHOICES[(index + o + v) % v] };
-          });
-        else if (t === "task_category")
-          k((l) => {
-            if (!l) return l;
-            let index = FAILURE_MODE_CHOICES.indexOf(l.taskCategory),
-              v = FAILURE_MODE_CHOICES.length;
-            return { ...l, taskCategory: FAILURE_MODE_CHOICES[(index + o + v) % v] };
-          });
-        else if (t === "transcript") K((l) => !l);
-      },
-      [k],
-    ),
-    Rt = ce(async () => {
-      if (!i || U.current || fe.current) return;
-      let now = x.now(),
-        o = ae.current;
-      if (((ae.current = Math.max(now, o)), now - o < Pe)) return;
-      if (G()?.title.trim() === "") {
-        E("Title is blank. Type a title, or press esc on the field to restore it.");
-        return;
-      }
-      let l = ve() ?? i;
-      if (((U.current = !0), L("submitting"), E(null), l !== i)) await xe(l);
-      let g;
+        title: stripInvisibleChars(t.title),
+        area: stripInvisibleChars(t.area ?? ""),
+        failureMode: t.failure_mode,
+        taskCategory: t.task_category,
+        details: stripInvisibleCharsMultiLine(t.details),
+      });
+      z(null);
+      de.current = -1 / 0;
+      ke(getFeedbackFormFields(t));
+      te.current = clock.now();
+      U.current = false;
+      ye.current = false;
+      L("review");
+    },
+    [clock, ke, k],
+  );
+  let Ze = ce(
+    async (t) => {
+      let o = clock.now();
+      let l = te.current;
+      te.current = Math.max(o, l);
+      if (o - l < DRAFT_DEBOUNCE_MS || fe.current || U.current) return;
+      fe.current = true;
       try {
-        g = await submitFeedbackDraft({
-          draft: l,
-          includeTranscript: D && l.transcriptAvailable,
-          currentSessionMessages: messages,
-          signal: abortSignal,
-          storageV5: storageV5,
-          host: Ve,
-          credentials: credentials,
+        await discardFeedbackDraft(t, "panel", storageV5).catch(() => {});
+        await le();
+        L("list");
+        A(null);
+      } finally {
+        fe.current = false;
+      }
+    },
+    [le, clock, storageV5],
+  );
+  let xe = ce(
+    (t) => {
+      A(t);
+      C((g) => (g ? g.map((v) => (v.draft_id === t.draft_id ? t : v)) : g));
+      let { transcriptAvailable, ...l } = t;
+      return saveFeedbackDraft(l, new Date(), storageV5).then((g) => {
+        if (!g.success)
+          E(
+            g.reason === "too_large"
+              ? "That draft is too large to save. Trim the details."
+              : "Could not save the draft to disk.",
+          );
+      });
+    },
+    [storageV5],
+  );
+  let ve = ce(() => {
+    let t = G();
+    if (!i || !t) return i;
+    let o = stripInvisibleChars(i.title);
+    let l = stripInvisibleChars(i.area ?? "");
+    let g = stripInvisibleCharsMultiLine(i.details);
+    let v = t.title === o || t.title.trim() === "" ? i.title : t.title.trim();
+    let Ce = t.area === l ? (i.area ?? "") : t.area.trim();
+    let rt = t.details === g ? i.details : t.details.trim() === "" ? "" : t.details;
+    if (
+      t.type === i.type &&
+      v === i.title &&
+      (Ce === "" ? undefined : Ce) === i.area &&
+      t.failureMode === i.failure_mode &&
+      t.taskCategory === i.task_category &&
+      rt === i.details
+    )
+      return i;
+    return {
+      ...i,
+      type: t.type,
+      title: v,
+      area: Ce === "" ? undefined : Ce,
+      failure_mode: t.failureMode,
+      task_category: t.taskCategory,
+      details: rt,
+    };
+  }, [i, G]);
+  let et = ce(() => {
+    let t = ve();
+    if (t && t !== i) {
+      if (i && t.details === "" && i.details !== "" && clock.now() - de.current < DRAFT_DEBOUNCE_MS)
+        t = {
+          ...t,
+          details: i.details,
+        };
+      xe(t);
+    }
+  }, [ve, i, xe, clock]);
+  let W = ce(
+    (t) => {
+      z(null);
+      E((o) => (o === DETAILS_TOO_LARGE_MESSAGE ? null : o));
+      _((o) => {
+        let max = Math.max(0, Math.min(I.length - 1, o + t));
+        if (max !== o && I[max] === "send") ae.current = clock.now();
+        return max;
+      });
+    },
+    [I, clock, _],
+  );
+  let Tt = ce(
+    (t, o) => {
+      if (t === "type")
+        k((l) => {
+          if (!l) return l;
+          let index = FEEDBACK_TYPES.indexOf(l.type);
+          let v = FEEDBACK_TYPES[(index + o + FEEDBACK_TYPES.length) % FEEDBACK_TYPES.length];
+          return v
+            ? {
+                ...l,
+                type: v,
+              }
+            : l;
         });
-      } catch {
-        g = { success: !1, error: "Couldn't send feedback. The draft is still queued. Try again later." };
-      }
-      if (((U.current = !1), g.success)) (await le(), ue(g.feedbackId), L("receipt"));
-      else {
-        if ((E(g.error), g.payloadTooLarge)) {
-          let index = I.indexOf("transcript");
-          if (index >= 0) _(index);
-        }
-        L("review");
-      }
-    }, [i, G, D, messages, abortSignal, le, x, ve, xe, storageV5, credentials, Ve, I, _]);
-  function St(t) {
-    if (t.ctrl || t.meta) return;
-    if (m === "submitting") {
-      t.preventDefault();
+      else if (t === "failure_mode")
+        k((l) => {
+          if (!l) return l;
+          let index = AREA_CHOICES.indexOf(l.failureMode);
+          let v = AREA_CHOICES.length;
+          return {
+            ...l,
+            failureMode: AREA_CHOICES[(index + o + v) % v],
+          };
+        });
+      else if (t === "task_category")
+        k((l) => {
+          if (!l) return l;
+          let index = FAILURE_MODE_CHOICES.indexOf(l.taskCategory);
+          let v = FAILURE_MODE_CHOICES.length;
+          return {
+            ...l,
+            taskCategory: FAILURE_MODE_CHOICES[(index + o + v) % v],
+          };
+        });
+      else if (t === "transcript") K((l) => !l);
+    },
+    [k],
+  );
+  let Rt = ce(async () => {
+    if (!i || U.current || fe.current) return;
+    let t = clock.now();
+    let o = ae.current;
+    ae.current = Math.max(t, o);
+    if (t - o < DRAFT_DEBOUNCE_MS) return;
+    if (G()?.title.trim() === "") {
+      E("Title is blank. Type a title, or press esc on the field to restore it.");
       return;
     }
-    if (t.key === "escape" && !(m === "review" && he)) return;
+    let l = ve() ?? i;
+    U.current = true;
+    L("submitting");
+    E(null);
+    if (l !== i) await xe(l);
+    let g;
+    try {
+      g = await submitFeedbackDraft({
+        draft: l,
+        includeTranscript: D && l.transcriptAvailable,
+        currentSessionMessages: messages,
+        signal: abortSignal,
+        storageV5,
+        host,
+        credentials,
+      });
+    } catch {
+      g = {
+        success: false,
+        error: "Couldn't send feedback. The draft is still queued. Try again later.",
+      };
+    }
+    U.current = false;
+    if (g.success) {
+      await le();
+      ue(g.feedbackId);
+      L("receipt");
+    } else {
+      E(g.error);
+      if (g.payloadTooLarge) {
+        let index = I.indexOf("transcript");
+        if (index >= 0) _(index);
+      }
+      L("review");
+    }
+  }, [i, G, D, messages, abortSignal, le, clock, ve, xe, storageV5, credentials, host, I, _]);
+  function St(event) {
+    if (event.ctrl || event.meta) return;
+    if (m === "submitting") {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "escape" && !(m === "review" && he)) return;
     if (m === "receipt") {
-      if ((t.preventDefault(), (f?.length ?? 0) > 0)) (L("list"), A(null));
-      else pe(`Feedback sent (receipt ${oe})`);
+      event.preventDefault();
+      if ((f?.length ?? 0) > 0) {
+        L("list");
+        A(null);
+      } else pe(`Feedback sent (receipt ${oe})`);
       return;
     }
     if (m === "list") {
       if (!f) {
-        t.preventDefault();
+        event.preventDefault();
         return;
       }
-      if (t.key.toLowerCase() === "w" && onWriteNew) {
-        (t.preventDefault(), onWriteNew());
+      if (event.key.toLowerCase() === "w" && onWriteNew) {
+        event.preventDefault();
+        onWriteNew();
         return;
       }
       if (Qe === 0) {
-        (t.preventDefault(), pe());
+        event.preventDefault();
+        pe();
         return;
       }
       if (ie.length > 0) return;
-      if (t.key === "up" || t.key === "down") t.preventDefault();
-      else if (t.key === "return" && onWriteNew) (t.preventDefault(), onWriteNew());
-      else if (t.key !== "escape") (t.preventDefault(), pe());
+      if (event.key === "up" || event.key === "down") event.preventDefault();
+      else if (event.key === "return" && onWriteNew) {
+        event.preventDefault();
+        onWriteNew();
+      } else if (event.key !== "escape") {
+        event.preventDefault();
+        pe();
+      }
       return;
     }
     if (m === "review" && i) {
       if (ye.current) {
-        t.preventDefault();
+        event.preventDefault();
         return;
       }
       if (he) {
-        if (t.key === "escape") (t.preventDefault(), tt());
+        if (event.key === "escape") {
+          event.preventDefault();
+          tt();
+        }
         return;
       }
       let o = I[M()];
-      if (t.key === "up") (t.preventDefault(), W(-1));
-      else if (t.key === "down") (t.preventDefault(), W(1));
-      else if (t.key === "left" || t.key === "right") (t.preventDefault(), Tt(o, t.key === "left" ? -1 : 1));
-      else if (t.key === " " && o === "transcript") (t.preventDefault(), K((l) => !l));
-      else if (t.key === "return")
-        if ((t.preventDefault(), o === "send")) Rt();
+      if (event.key === "up") {
+        event.preventDefault();
+        W(-1);
+      } else if (event.key === "down") {
+        event.preventDefault();
+        W(1);
+      } else if (event.key === "left" || event.key === "right") {
+        event.preventDefault();
+        Tt(o, event.key === "left" ? -1 : 1);
+      } else if (event.key === " " && o === "transcript") {
+        event.preventDefault();
+        K((l) => !l);
+      } else if (event.key === "return") {
+        event.preventDefault();
+        if (o === "send") Rt();
         else W(1);
-      else if (t.key.toLowerCase() === "d" && o !== "title" && o !== "area" && o !== "details")
-        (t.preventDefault(), Ze(i));
+      } else if (event.key.toLowerCase() === "d" && o !== "title" && o !== "area" && o !== "details") {
+        event.preventDefault();
+        Ze(i);
+      }
     }
   }
   let ge = ce(() => {
-      if (ye.current || U.current || fe.current) return;
-      ((ye.current = !0), et(), (te.current = -1 / 0), L("list"), A(null));
-    }, [et]),
-    tt = ce(() => {
-      if (m !== "review") {
-        pe();
-        return;
-      }
-      let t = I[M()];
-      if (t !== "title" && t !== "area" && t !== "details") {
-        ge();
-        return;
-      }
-      (k((o) => (o && i ? { ...o, [t]: t === "details" ? pIt(i.details) : hr(i[t] ?? "") } : o)),
-        z(null),
-        ke(I),
-        E((o) => (o === DETAILS_TOO_LARGE_MESSAGE ? null : o)));
-    }, [m, i, I, M, ge, k, ke, pe]),
-    it = !(J && ie.length > 0),
-    Et =
-      m === "list"
-        ? r(Byline, {
+    if (ye.current || U.current || fe.current) return;
+    ye.current = true;
+    et();
+    te.current = -1 / 0;
+    L("list");
+    A(null);
+  }, [et]);
+  let tt = ce(() => {
+    if (m !== "review") {
+      pe();
+      return;
+    }
+    let t = I[M()];
+    if (t !== "title" && t !== "area" && t !== "details") {
+      ge();
+      return;
+    }
+    k((o) =>
+      o && i
+        ? {
+            ...o,
+            [t]: t === "details" ? stripInvisibleCharsMultiLine(i.details) : stripInvisibleChars(i[t] ?? ""),
+          }
+        : o,
+    );
+    z(null);
+    ke(I);
+    E((o) => (o === DETAILS_TOO_LARGE_MESSAGE ? null : o));
+  }, [m, i, I, M, ge, k, ke, pe]);
+  let it = !(isScreenReaderEnabled && ie.length > 0);
+  let inputGuide =
+    m === "list"
+      ? jsxProd_default_2(Byline, {
+          children: [
+            Qe > 0 &&
+              it &&
+              jsxProd_default(KeyboardShortcutHint, {
+                chord: "enter",
+                action: ze ? "write new feedback" : "review",
+              }),
+            Dt !== undefined &&
+              it &&
+              jsxProd_default(KeyboardShortcutHint, {
+                chord: "d",
+                action: "discard",
+              }),
+            jsxProd_default(KeyboardShortcutHint, {
+              chord: "esc",
+              action: "close",
+            }),
+          ],
+        })
+      : m === "review"
+        ? jsxProd_default_2(Byline, {
             children: [
-              Qe > 0 &&
-                it &&
-                e(KeyboardShortcutHint, { chord: "enter", action: ze ? "write new feedback" : "review" }),
-              Dt !== void 0 && it && e(KeyboardShortcutHint, { chord: "d", action: "discard" }),
-              e(KeyboardShortcutHint, { chord: "esc", action: "close" }),
+              jsxProd_default(KeyboardShortcutHint, {
+                chord: ["up", "down"],
+                action: "move",
+              }),
+              (p === "type" || p === "failure_mode" || p === "task_category" || p === "transcript") &&
+                jsxProd_default(KeyboardShortcutHint, {
+                  chord: ["left", "right"],
+                  action: "change",
+                }),
+              jsxProd_default(KeyboardShortcutHint, {
+                chord: "enter",
+                action: p === "send" ? "send" : "next",
+              }),
+              p === "details" &&
+                jsxProd_default(KeyboardShortcutHint, {
+                  chord: supportsShiftEnter() ? "shift+enter" : "ctrl+j",
+                  action: "new line",
+                }),
+              !he &&
+                jsxProd_default(KeyboardShortcutHint, {
+                  chord: "d",
+                  action: "discard",
+                }),
+              jsxProd_default(KeyboardShortcutHint, {
+                chord: "esc",
+                action: he ? "cancel edit" : "later",
+              }),
             ],
           })
-        : m === "review"
-          ? r(Byline, {
-              children: [
-                e(KeyboardShortcutHint, { chord: ["up", "down"], action: "move" }),
-                (p === "type" || p === "failure_mode" || p === "task_category" || p === "transcript") &&
-                  e(KeyboardShortcutHint, { chord: ["left", "right"], action: "change" }),
-                e(KeyboardShortcutHint, { chord: "enter", action: p === "send" ? "send" : "next" }),
-                p === "details" &&
-                  e(KeyboardShortcutHint, {
-                    chord: supportsShiftEnter() ? "shift+enter" : "ctrl+j",
-                    action: "new line",
-                  }),
-                !he && e(KeyboardShortcutHint, { chord: "d", action: "discard" }),
-                e(KeyboardShortcutHint, { chord: "esc", action: he ? "cancel edit" : "later" }),
-              ],
-            })
-          : null;
-  return e(FocusColumn, {
+        : null;
+  return jsxProd_default(FocusColumn, {
     onKeyDown: St,
-    children: r(Dialog, {
+    children: jsxProd_default_2(Dialog, {
       title: "Feedback drafts",
       onCancel: tt,
       isCancelActive: m !== "submitting" && !he,
       hideInputGuide: m === "receipt" || m === "submitting",
-      inputGuide: Et,
+      inputGuide,
       children: [
-        m === "list" && f === null && e(Text, { dimColor: !0, children: "Loading\u2026" }),
+        m === "list" &&
+          f === null &&
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: "Loading\u2026",
+          }),
         m === "list" &&
           f !== null &&
           ie.length === 0 &&
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
             children: [
-              e(Text, { children: "No feedback drafts queued." }),
-              e(Text, {
-                dimColor: !0,
+              jsxProd_default(Text, {
+                children: "No feedback drafts queued.",
+              }),
+              jsxProd_default(Text, {
+                dimColor: true,
                 children:
                   "Claude drafts feedback at high-signal moments; drafts appear here for your review.",
               }),
               onWriteNew
-                ? r(Box, {
+                ? jsxProd_default_2(Box, {
                     flexDirection: "column",
                     gap: 1,
                     children: [
-                      e(HideRow, { isSelected: ze }),
-                      e(Text, {
-                        dimColor: !0,
+                      jsxProd_default(HideRow, {
+                        isSelected: ze,
+                      }),
+                      jsxProd_default(Text, {
+                        dimColor: true,
                         children: "/bug works anytime. Any other key closes this panel.",
                       }),
                     ],
                   })
-                : e(Text, { dimColor: !0, children: "Any key closes this panel." }),
+                : jsxProd_default(Text, {
+                    dimColor: true,
+                    children: "Any key closes this panel.",
+                  }),
             ],
           }),
         m === "list" &&
           f !== null &&
           ie.length > 0 &&
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              e(FeedbackQueueList, {
+              jsxProd_default(FeedbackQueueList, {
                 thisSession: filtered,
                 others: filtered_2,
                 hasWriteNew: me,
                 defaultFocusIndex: b,
                 onFocus: B,
-                onOpen: _t,
+                onOpen,
                 onWriteNew: () => onWriteNew?.(),
                 onDiscard: (t) => void Ze(t),
               }),
-              e(Box, {
+              jsxProd_default(Box, {
                 marginTop: 1,
-                children: e(Text, {
-                  dimColor: !0,
+                children: jsxProd_default(Text, {
+                  dimColor: true,
                   wrap: "wrap",
                   children:
                     "Drafts live only on this machine and are never sent without you. Unsent drafts expire after 30 days.",
@@ -493,75 +621,117 @@ function FeedbackQueue({
         m === "review" &&
           i &&
           T &&
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              r(Box, {
+              jsxProd_default_2(Box, {
                 children: [
-                  e(FocusPointer, { isFocused: p === "type" }),
-                  e(Text, { children: "Type: " }),
-                  e(CycleValue, { value: FEEDBACK_TYPE_LABELS[T.type], isFocused: p === "type" }),
+                  jsxProd_default(FocusPointer, {
+                    isFocused: p === "type",
+                  }),
+                  jsxProd_default(Text, {
+                    children: "Type: ",
+                  }),
+                  jsxProd_default(CycleValue, {
+                    value: FEEDBACK_TYPE_LABELS[T.type],
+                    isFocused: p === "type",
+                  }),
                 ],
               }),
-              e(FeedbackField, {
+              jsxProd_default(FeedbackField, {
                 label: "Title:",
                 value: T.title,
                 isFocused: p === "title",
-                bold: !0,
-                columns: ee,
+                bold: true,
+                columns,
                 cursorOffset: Y,
-                onChange: (t) => k((o) => (o ? { ...o, title: t } : o)),
+                onChange: (title) =>
+                  k((o) =>
+                    o
+                      ? {
+                          ...o,
+                          title,
+                        }
+                      : o,
+                  ),
                 onCursorChange: z,
                 onNext: () => W(1),
                 onPrev: () => W(-1),
                 onExit: ge,
               }),
-              e(FeedbackField, {
+              jsxProd_default(FeedbackField, {
                 label: "Area:",
                 value: T.area,
                 isFocused: p === "area",
-                dim: !0,
-                columns: ee,
+                dim: true,
+                columns,
                 cursorOffset: Y,
-                onChange: (t) => k((o) => (o ? { ...o, area: t } : o)),
+                onChange: (area) =>
+                  k((o) =>
+                    o
+                      ? {
+                          ...o,
+                          area,
+                        }
+                      : o,
+                  ),
                 onCursorChange: z,
                 onNext: () => W(1),
                 onPrev: () => W(-1),
                 onExit: ge,
               }),
-              r(Box, {
+              jsxProd_default_2(Box, {
                 children: [
-                  e(FocusPointer, { isFocused: p === "failure_mode" }),
-                  e(Text, { children: "Failure mode: " }),
-                  e(CycleValue, { value: st(T.failureMode), isFocused: p === "failure_mode" }),
+                  jsxProd_default(FocusPointer, {
+                    isFocused: p === "failure_mode",
+                  }),
+                  jsxProd_default(Text, {
+                    children: "Failure mode: ",
+                  }),
+                  jsxProd_default(CycleValue, {
+                    value: snakeToWords(T.failureMode),
+                    isFocused: p === "failure_mode",
+                  }),
                 ],
               }),
-              r(Box, {
+              jsxProd_default_2(Box, {
                 children: [
-                  e(FocusPointer, { isFocused: p === "task_category" }),
-                  e(Text, { children: "Task: " }),
-                  e(CycleValue, { value: st(T.taskCategory), isFocused: p === "task_category" }),
+                  jsxProd_default(FocusPointer, {
+                    isFocused: p === "task_category",
+                  }),
+                  jsxProd_default(Text, {
+                    children: "Task: ",
+                  }),
+                  jsxProd_default(CycleValue, {
+                    value: snakeToWords(T.taskCategory),
+                    isFocused: p === "task_category",
+                  }),
                 ],
               }),
-              e(FeedbackField, {
+              jsxProd_default(FeedbackField, {
                 label: "Details:",
                 value: T.details,
                 isFocused: p === "details",
-                dim: !0,
-                multiline: !0,
-                columns: ee,
+                dim: true,
+                multiline: true,
+                columns,
                 cursorOffset: Y,
                 onChange: (t) => {
-                  let byteLength = Buffer.byteLength(t, "utf8");
-                  if (byteLength > MAX_DETAILS_LENGTH && byteLength >= Buffer.byteLength(T.details, "utf8")) {
+                  let o = Buffer.byteLength(t, "utf8");
+                  if (o > MAX_DETAILS_LENGTH && o >= Buffer.byteLength(T.details, "utf8")) {
                     E(DETAILS_TOO_LARGE_MESSAGE);
                     return;
                   }
-                  (k((l) => {
-                    if (l && l.details.trim() !== "" && t.trim() === "") de.current = x.now();
-                    return l ? { ...l, details: t } : l;
-                  }),
-                    E((l) => (l === DETAILS_TOO_LARGE_MESSAGE ? null : l)));
+                  k((l) => {
+                    if (l && l.details.trim() !== "" && t.trim() === "") de.current = clock.now();
+                    return l
+                      ? {
+                          ...l,
+                          details: t,
+                        }
+                      : l;
+                  });
+                  E((l) => (l === DETAILS_TOO_LARGE_MESSAGE ? null : l));
                 },
                 onCursorChange: z,
                 onNext: () => W(1),
@@ -569,76 +739,104 @@ function FeedbackQueue({
                 onExit: ge,
               }),
               i.transcriptAvailable
-                ? r(Box, {
+                ? jsxProd_default_2(Box, {
                     flexDirection: "column",
                     children: [
-                      r(Box, {
+                      jsxProd_default_2(Box, {
                         children: [
-                          e(FocusPointer, { isFocused: p === "transcript" }),
-                          e(Text, { children: "Send transcript: " }),
-                          e(CycleValue, { value: D ? "yes" : "no", isFocused: p === "transcript" }),
-                          r(Text, {
-                            dimColor: !0,
+                          jsxProd_default(FocusPointer, {
+                            isFocused: p === "transcript",
+                          }),
+                          jsxProd_default(Text, {
+                            children: "Send transcript: ",
+                          }),
+                          jsxProd_default(CycleValue, {
+                            value: D ? "yes" : "no",
+                            isFocused: p === "transcript",
+                          }),
+                          jsxProd_default_2(Text, {
+                            dimColor: true,
                             children: [" \xB7 ", D ? "sends this conversation to Anthropic" : "report only"],
                           }),
                         ],
                       }),
                       i.source_session_id !== ne &&
-                        e(Box, {
+                        jsxProd_default(Box, {
                           marginLeft: 4,
-                          children: r(Text, {
-                            dimColor: !0,
+                          children: jsxProd_default_2(Text, {
+                            dimColor: true,
                             wrap: "wrap",
-                            children: ["from ", hr(i.cwd), " \xB7 session", " ", hr(i.source_session_id)],
+                            children: [
+                              "from ",
+                              stripInvisibleChars(i.cwd),
+                              " \xB7 session",
+                              " ",
+                              stripInvisibleChars(i.source_session_id),
+                            ],
                           }),
                         }),
                     ],
                   })
-                : r(Box, {
+                : jsxProd_default_2(Box, {
                     children: [
-                      e(FocusPointer, { isFocused: !1 }),
-                      r(Text, {
+                      jsxProd_default(FocusPointer, {
+                        isFocused: false,
+                      }),
+                      jsxProd_default_2(Text, {
                         children: [
                           "Send transcript: ",
-                          e(Text, { dimColor: !0, children: "expired (report only)" }),
+                          jsxProd_default(Text, {
+                            dimColor: true,
+                            children: "expired (report only)",
+                          }),
                         ],
                       }),
                     ],
                   }),
-              r(Box, {
+              jsxProd_default_2(Box, {
                 marginTop: 1,
                 children: [
-                  e(FocusPointer, { isFocused: !1 }),
-                  r(Text, {
-                    dimColor: !0,
+                  jsxProd_default(FocusPointer, {
+                    isFocused: false,
+                  }),
+                  jsxProd_default_2(Text, {
+                    dimColor: true,
                     wrap: "wrap",
                     children: [
                       "Environment info (",
-                      hr(i.os),
+                      stripInvisibleChars(i.os),
                       ", v",
-                      hr(i.cli_version),
+                      stripInvisibleChars(i.cli_version),
                       ",",
                       " ",
-                      hr(i.model),
-                      i.effort !== void 0 && r(Fragment, { children: [", effort", " ", hr(i.effort)] }),
-                      i.thinking_type !== void 0 &&
-                        r(Fragment, {
+                      stripInvisibleChars(i.model),
+                      i.effort !== undefined &&
+                        jsxProd_default_2(Fragment, {
+                          children: [", effort", " ", stripInvisibleChars(i.effort)],
+                        }),
+                      i.thinking_type !== undefined &&
+                        jsxProd_default_2(Fragment, {
                           children: [
                             ", thinking ",
                             i.thinking_type,
-                            i.thinking_budget !== void 0 &&
-                              r(Fragment, { children: [" (budget ", i.thinking_budget, ")"] }),
+                            i.thinking_budget !== undefined &&
+                              jsxProd_default_2(Fragment, {
+                                children: [" (budget ", i.thinking_budget, ")"],
+                              }),
                           ],
                         }),
-                      i.assistant_turn_count !== void 0 &&
-                        r(Fragment, {
+                      i.assistant_turn_count !== undefined &&
+                        jsxProd_default_2(Fragment, {
                           children: [
                             ", turn ",
                             i.assistant_turn_count,
-                            i.message_count !== void 0 && r(Fragment, { children: ["/", i.message_count] }),
-                            i.subagent_count !== void 0 &&
+                            i.message_count !== undefined &&
+                              jsxProd_default_2(Fragment, {
+                                children: ["/", i.message_count],
+                              }),
+                            i.subagent_count !== undefined &&
                               i.subagent_count > 0 &&
-                              r(Fragment, {
+                              jsxProd_default_2(Fragment, {
                                 children: [
                                   " ",
                                   "with ",
@@ -659,18 +857,29 @@ function FeedbackQueue({
                   }),
                 ],
               }),
-              se && e(Box, { marginTop: 1, children: e(ErrorText, { error: se }) }),
-              r(Box, {
+              se &&
+                jsxProd_default(Box, {
+                  marginTop: 1,
+                  children: jsxProd_default(ErrorText, {
+                    error: se,
+                  }),
+                }),
+              jsxProd_default_2(Box, {
                 marginTop: 1,
                 children: [
-                  e(FocusPointer, { isFocused: p === "send" }),
-                  e(Text, { bold: p === "send", children: "Send feedback" }),
+                  jsxProd_default(FocusPointer, {
+                    isFocused: p === "send",
+                  }),
+                  jsxProd_default(Text, {
+                    bold: p === "send",
+                    children: "Send feedback",
+                  }),
                 ],
               }),
-              e(Box, {
+              jsxProd_default(Box, {
                 marginTop: 1,
-                children: e(Text, {
-                  dimColor: !0,
+                children: jsxProd_default(Text, {
+                  dimColor: true,
                   wrap: "wrap",
                   children:
                     "We may use these reports to debug related issues and improve Claude Code. Turn off Claude-drafted feedback anytime in /config.",
@@ -678,23 +887,33 @@ function FeedbackQueue({
               }),
             ],
           }),
-        m === "submitting" && e(Text, { children: "Sending feedback\u2026" }),
+        m === "submitting" &&
+          jsxProd_default(Text, {
+            children: "Sending feedback\u2026",
+          }),
         m === "receipt" &&
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              r(Text, {
+              jsxProd_default_2(Text, {
                 color: "success",
                 children: [
-                  e(StatusIcon, { status: "success", withSpace: !0 }),
+                  jsxProd_default(StatusIcon, {
+                    status: "success",
+                    withSpace: true,
+                  }),
                   "Feedback sent (receipt ",
                   oe,
                   "). Thanks!",
                 ],
               }),
-              e(Box, {
+              jsxProd_default(Box, {
                 marginTop: 1,
-                children: e(Text, { dimColor: !0, italic: !0, children: "Any key to continue" }),
+                children: jsxProd_default(Text, {
+                  dimColor: true,
+                  italic: true,
+                  children: "Any key to continue",
+                }),
               }),
             ],
           }),
@@ -705,7 +924,7 @@ function FeedbackQueue({
 //@ chunk-v517dzda.js:12269-12373 placement
 var DETAILS_TOO_LARGE_MESSAGE = `That edit would push Details past the ${Math.floor(MAX_DETAILS_LENGTH / 1024)}KB limit. Trim the details first.`;
 //@ chunk-v517dzda.js:12373-12470 placement
-function ct(h, u) {
+function normalizeFeedbackInput(h, multiline) {
   return stripCombiningRepeated(
     h.replace(
       /\r\n|\r/g,
@@ -717,83 +936,124 @@ function ct(h, u) {
       `
 `,
     )
-    .map((c) => replaceControlChars(c))
+    .map((line) => replaceControlChars(line))
     .join(
-      u
+      multiline
         ? `
 `
         : " ",
     );
 }
+//@ chunk-v517dzda.js:12470-12665 placement
 /**
  * 聚焦时显示指针，否则两个空格。
  */
-//@ chunk-v517dzda.js:12470-12665 placement
-function FocusPointer(h) {
-  let f = w(3),
-    { isFocused: isFocused } = h;
-  const c = isFocused ? "suggestion" : void 0,
-    d = isFocused ? `${re.pointer} ` : "  ";
+function FocusPointer(props) {
+  let f = w(3);
+  let { isFocused } = props;
+  const color = isFocused ? "suggestion" : undefined;
+  const children = isFocused ? `${figures_default.pointer} ` : "  ";
   let C;
-  if (f[0] !== c || f[1] !== d)
-    ((C = e(Text, { color: c, children: d })), (f[0] = c), (f[1] = d), (f[2] = C));
-  else C = f[2];
+  if (f[0] !== color || f[1] !== children) {
+    C = jsxProd_default(Text, {
+      color,
+      children,
+    });
+    f[0] = color;
+    f[1] = children;
+    f[2] = C;
+  } else C = f[2];
   return C;
 }
+//@ chunk-v517dzda.js:12665-13065 placement
 /**
  * 可左右切换的值：聚焦时两侧显示 ◀ ▶。
  */
-//@ chunk-v517dzda.js:12665-13065 placement
-function CycleValue(h) {
-  let d = w(6),
-    { value: u, isFocused: isFocused } = h;
+function CycleValue(props) {
+  let d = w(6);
+  let { value: u, isFocused } = props;
   if (!isFocused) {
     let f;
-    if (d[0] !== u) ((f = e(Text, { dimColor: !0, children: u })), (d[0] = u), (d[1] = f));
-    else f = d[1];
+    if (d[0] !== u) {
+      f = jsxProd_default(Text, {
+        dimColor: true,
+        children: u,
+      });
+      d[0] = u;
+      d[1] = f;
+    } else f = d[1];
     return f;
   }
   let f;
-  if (d[2] === MEMO_CACHE_SENTINEL)
-    ((f = r(Text, { dimColor: !0, children: [re.triangleLeft, " "] })), (d[2] = f));
-  else f = d[2];
+  if (d[2] === MEMO_CACHE_SENTINEL) {
+    f = jsxProd_default_2(Text, {
+      dimColor: true,
+      children: [figures_default.triangleLeft, " "],
+    });
+    d[2] = f;
+  } else f = d[2];
   let C;
-  if (d[3] === MEMO_CACHE_SENTINEL)
-    ((C = r(Text, { dimColor: !0, children: [" ", re.triangleRight] })), (d[3] = C));
-  else C = d[3];
+  if (d[3] === MEMO_CACHE_SENTINEL) {
+    C = jsxProd_default_2(Text, {
+      dimColor: true,
+      children: [" ", figures_default.triangleRight],
+    });
+    d[3] = C;
+  } else C = d[3];
   let b;
-  if (d[4] !== u) ((b = r(Text, { children: [f, u, C] })), (d[4] = u), (d[5] = b));
-  else b = d[5];
+  if (d[4] !== u) {
+    b = jsxProd_default_2(Text, {
+      children: [f, u, C],
+    });
+    d[4] = u;
+    d[5] = b;
+  } else b = d[5];
   return b;
 }
 //@ chunk-v517dzda.js:13065-14448 placement
-function FeedbackField(h) {
-  let H = w(24),
-    {
-      label: label,
-      value: c,
-      isFocused: isFocused,
-      bold: bold,
-      dim: dim,
-      multiline: multiline,
-      columns: columns,
-      cursorOffset: cursorOffset,
-      onChange: onChange,
-      onCursorChange: onCursorChange,
-      onNext: onNext,
-      onPrev: onPrev,
-      onExit: onExit,
-    } = h,
-    K = useIsScreenReaderEnabled(),
-    _;
-  if (H[0] !== isFocused) ((_ = e(FocusPointer, { isFocused: isFocused })), (H[0] = isFocused), (H[1] = _));
-  else _ = H[1];
+function FeedbackField(props) {
+  let H = w(24);
+  let {
+    label,
+    value: c,
+    isFocused,
+    bold,
+    dim,
+    multiline,
+    columns,
+    cursorOffset,
+    onChange,
+    onCursorChange,
+    onNext,
+    onPrev,
+    onExit,
+  } = props;
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let _;
+  if (H[0] !== isFocused) {
+    _ = jsxProd_default(FocusPointer, {
+      isFocused,
+    });
+    H[0] = isFocused;
+    H[1] = _;
+  } else _ = H[1];
   let M;
-  if (H[2] !== label) ((M = e(Text, { children: label })), (H[2] = label), (H[3] = M));
-  else M = H[3];
+  if (H[2] !== label) {
+    M = jsxProd_default(Text, {
+      children: label,
+    });
+    H[2] = label;
+    H[3] = M;
+  } else M = H[3];
   let T;
-  if (H[4] !== _ || H[5] !== M) ((T = r(Box, { children: [_, M] })), (H[4] = _), (H[5] = M), (H[6] = T));
-  else T = H[6];
+  if (H[4] !== _ || H[5] !== M) {
+    T = jsxProd_default_2(Box, {
+      children: [_, M],
+    });
+    H[4] = _;
+    H[5] = M;
+    H[6] = T;
+  } else T = H[6];
   let k;
   if (
     H[7] !== bold ||
@@ -801,7 +1061,7 @@ function FeedbackField(h) {
     H[9] !== cursorOffset ||
     H[10] !== dim ||
     H[11] !== isFocused ||
-    H[12] !== K ||
+    H[12] !== isScreenReaderEnabled ||
     H[13] !== multiline ||
     H[14] !== onChange ||
     H[15] !== onCursorChange ||
@@ -809,196 +1069,246 @@ function FeedbackField(h) {
     H[17] !== onNext ||
     H[18] !== onPrev ||
     H[19] !== c
-  )
-    ((k = e(Box, {
+  ) {
+    k = jsxProd_default(Box, {
       marginLeft: 4,
       children: isFocused
-        ? e(Box, {
-            borderStyle: multiline && !K ? "single" : void 0,
-            borderLeft: !0,
-            borderTop: !1,
-            borderBottom: !1,
-            borderRight: !1,
-            borderDimColor: !0,
-            paddingLeft: multiline && !K ? 1 : 0,
-            children: e(TextInput, {
+        ? jsxProd_default(Box, {
+            borderStyle: multiline && !isScreenReaderEnabled ? "single" : undefined,
+            borderLeft: true,
+            borderTop: false,
+            borderBottom: false,
+            borderRight: false,
+            borderDimColor: true,
+            paddingLeft: multiline && !isScreenReaderEnabled ? 1 : 0,
+            children: jsxProd_default(TextInput, {
               value: c,
-              onChange: onChange,
-              columns: multiline && !K ? columns - 2 : columns,
+              onChange,
+              columns: multiline && !isScreenReaderEnabled ? columns - 2 : columns,
               onSubmit: onNext,
-              onExit: onExit,
+              onExit,
               onHistoryUp: onPrev,
               onHistoryDown: onNext,
               cursorOffset: cursorOffset ?? c.length,
               onChangeCursorOffset: onCursorChange,
-              multiline: multiline,
-              inputFilter: (G) => ct(G, multiline),
-              clearOnSubmit: !1,
-              disableCtrlCClear: !0,
+              multiline,
+              inputFilter: (G) => normalizeFeedbackInput(G, multiline),
+              clearOnSubmit: false,
+              disableCtrlCClear: true,
               disableBackslashReturn: multiline,
               disableCursorMovementForUpDownKeys: !multiline,
-              disableEscapeDoublePress: !0,
-              showCursor: !0,
-              focus: !0,
+              disableEscapeDoublePress: true,
+              showCursor: true,
+              focus: true,
             }),
           })
         : multiline
-          ? e(WrappedTextBox, { value: c, bold: bold, dim: dim, columns: columns })
-          : e(Text, { bold: bold, dimColor: dim, wrap: "wrap", children: hr(c) }),
-    })),
-      (H[7] = bold),
-      (H[8] = columns),
-      (H[9] = cursorOffset),
-      (H[10] = dim),
-      (H[11] = isFocused),
-      (H[12] = K),
-      (H[13] = multiline),
-      (H[14] = onChange),
-      (H[15] = onCursorChange),
-      (H[16] = onExit),
-      (H[17] = onNext),
-      (H[18] = onPrev),
-      (H[19] = c),
-      (H[20] = k));
-  else k = H[20];
+          ? jsxProd_default(WrappedTextBox, {
+              value: c,
+              bold,
+              dim,
+              columns,
+            })
+          : jsxProd_default(Text, {
+              bold,
+              dimColor: dim,
+              wrap: "wrap",
+              children: stripInvisibleChars(c),
+            }),
+    });
+    H[7] = bold;
+    H[8] = columns;
+    H[9] = cursorOffset;
+    H[10] = dim;
+    H[11] = isFocused;
+    H[12] = isScreenReaderEnabled;
+    H[13] = multiline;
+    H[14] = onChange;
+    H[15] = onCursorChange;
+    H[16] = onExit;
+    H[17] = onNext;
+    H[18] = onPrev;
+    H[19] = c;
+    H[20] = k;
+  } else k = H[20];
   let Y;
-  if (H[21] !== T || H[22] !== k)
-    ((Y = r(Box, { flexDirection: "column", children: [T, k] })), (H[21] = T), (H[22] = k), (H[23] = Y));
-  else Y = H[23];
+  if (H[21] !== T || H[22] !== k) {
+    Y = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [T, k],
+    });
+    H[21] = T;
+    H[22] = k;
+    H[23] = Y;
+  } else Y = H[23];
   return Y;
 }
 //@ chunk-v517dzda.js:14448-14478 placement
 var WRITE_NEW_FEEDBACK_LABEL = "+ Write new feedback";
 //@ chunk-v517dzda.js:14680-16295 placement
-function FeedbackQueueList(h) {
-  let i = w(34),
-    {
-      thisSession: thisSession,
-      others: others,
-      hasWriteNew: hasWriteNew,
-      defaultFocusIndex: defaultFocusIndex,
-      onFocus: onFocus,
-      onOpen: onOpen,
-      onWriteNew: onWriteNew,
-      onDiscard: onDiscard,
-    } = h,
-    { rows: rows } = useScrollViewportSize(useTerminalSize()),
-    L = Tl(),
-    A;
-  if (i[0] !== others || i[1] !== thisSession)
-    ((A = [...thisSession, ...others]), (i[0] = others), (i[1] = thisSession), (i[2] = A));
-  else A = i[2];
-  let D = A,
-    K = (thisSession.length > 0 ? 1 : 0) + (others.length > 0 ? 1 : 0) + D.length + (hasWriteNew ? 2 : 0),
-    max = Math.max(dt, rows - lt - (L ? 0 : at));
-  const _ = K > max ? max - 2 : max;
-  let M;
-  if (i[3] !== onOpen || i[4] !== onWriteNew || i[5] !== D)
-    ((M = (T) => {
+function FeedbackQueueList(props) {
+  let i = w(34);
+  let { thisSession, others, hasWriteNew, defaultFocusIndex, onFocus, onOpen, onWriteNew, onDiscard } = props;
+  let { rows } = useScrollViewportSize(useTerminalSize());
+  let hasScrollViewport = useHasScrollViewport();
+  let A;
+  if (i[0] !== others || i[1] !== thisSession) {
+    A = [...thisSession, ...others];
+    i[0] = others;
+    i[1] = thisSession;
+    i[2] = A;
+  } else A = i[2];
+  let D = A;
+  let K = (thisSession.length > 0 ? 1 : 0) + (others.length > 0 ? 1 : 0) + D.length + (hasWriteNew ? 2 : 0);
+  let max = Math.max(
+    FEEDBACK_LIST_MIN_ROWS,
+    rows - FEEDBACK_LIST_FIXED_ROWS - (hasScrollViewport ? 0 : FEEDBACK_LIST_CHROME_ROWS),
+  );
+  const visibleCount = K > max ? max - 2 : max;
+  let onSelect;
+  if (i[3] !== onOpen || i[4] !== onWriteNew || i[5] !== D) {
+    onSelect = (T) => {
       let k = D[T];
       if (k) onOpen(k);
       else onWriteNew();
-    }),
-      (i[3] = onOpen),
-      (i[4] = onWriteNew),
-      (i[5] = D),
-      (i[6] = M));
-  else M = i[6];
-  let G;
-  if (i[7] !== onDiscard || i[8] !== D)
-    ((G = (Y, z) => {
+    };
+    i[3] = onOpen;
+    i[4] = onWriteNew;
+    i[5] = D;
+    i[6] = onSelect;
+  } else onSelect = i[6];
+  let onRowKeyDown;
+  if (i[7] !== onDiscard || i[8] !== D) {
+    onRowKeyDown = (event, z) => {
       let de = D[z];
-      if (Y.key.toLowerCase() === "d" && de && !Y.ctrl && !Y.meta) (Y.preventDefault(), onDiscard(de));
-    }),
-      (i[7] = onDiscard),
-      (i[8] = D),
-      (i[9] = G));
-  else G = i[9];
+      if (event.key.toLowerCase() === "d" && de && !event.ctrl && !event.meta) {
+        event.preventDefault();
+        onDiscard(de);
+      }
+    };
+    i[7] = onDiscard;
+    i[8] = D;
+    i[9] = onRowKeyDown;
+  } else onRowKeyDown = i[9];
   let se;
-  if (i[10] !== thisSession.length)
-    ((se =
+  if (i[10] !== thisSession.length) {
+    se =
       thisSession.length > 0 &&
-      e(merged.Heading, { children: e(Text, { bold: !0, children: "This session" }) }, "this-session")),
-      (i[10] = thisSession.length),
-      (i[11] = se));
-  else se = i[11];
+      jsxProd_default(
+        merged.Heading,
+        {
+          children: jsxProd_default(Text, {
+            bold: true,
+            children: "This session",
+          }),
+        },
+        "this-session",
+      );
+    i[10] = thisSession.length;
+    i[11] = se;
+  } else se = i[11];
   let E;
-  if (i[12] !== thisSession) ((E = thisSession.map(Xt)), (i[12] = thisSession), (i[13] = E));
-  else E = i[13];
+  if (i[12] !== thisSession) {
+    E = thisSession.map(renderThisSessionFeedbackItem);
+    i[12] = thisSession;
+    i[13] = E;
+  } else E = i[13];
   let oe;
-  if (i[14] !== others.length)
-    ((oe =
+  if (i[14] !== others.length) {
+    oe =
       others.length > 0 &&
-      e(merged.Heading, { children: e(Text, { bold: !0, children: "Other sessions" }) }, "other-sessions")),
-      (i[14] = others.length),
-      (i[15] = oe));
-  else oe = i[15];
+      jsxProd_default(
+        merged.Heading,
+        {
+          children: jsxProd_default(Text, {
+            bold: true,
+            children: "Other sessions",
+          }),
+        },
+        "other-sessions",
+      );
+    i[14] = others.length;
+    i[15] = oe;
+  } else oe = i[15];
   let ue;
-  if (i[16] !== others) ((ue = others.map(Jt)), (i[16] = others), (i[17] = ue));
-  else ue = i[17];
+  if (i[16] !== others) {
+    ue = others.map(renderOtherFeedbackItem);
+    i[16] = others;
+    i[17] = ue;
+  } else ue = i[17];
   let ee;
-  if (i[18] !== hasWriteNew)
-    ((ee = hasWriteNew && e(merged.Heading, {}, "gap")), (i[18] = hasWriteNew), (i[19] = ee));
-  else ee = i[19];
+  if (i[18] !== hasWriteNew) {
+    ee = hasWriteNew && jsxProd_default(merged.Heading, {}, "gap");
+    i[18] = hasWriteNew;
+    i[19] = ee;
+  } else ee = i[19];
   let x;
-  if (i[20] !== hasWriteNew)
-    ((x = hasWriteNew && e(OrderedListWithItem.Item, { label: WRITE_NEW_FEEDBACK_LABEL }, "write-new")),
-      (i[20] = hasWriteNew),
-      (i[21] = x));
-  else x = i[21];
+  if (i[20] !== hasWriteNew) {
+    x =
+      hasWriteNew &&
+      jsxProd_default(
+        OrderedListWithItem.Item,
+        {
+          label: WRITE_NEW_FEEDBACK_LABEL,
+        },
+        "write-new",
+      );
+    i[20] = hasWriteNew;
+    i[21] = x;
+  } else x = i[21];
   let ae;
   if (
     i[22] !== defaultFocusIndex ||
     i[23] !== onFocus ||
     i[24] !== x ||
-    i[25] !== _ ||
-    i[26] !== M ||
-    i[27] !== G ||
+    i[25] !== visibleCount ||
+    i[26] !== onSelect ||
+    i[27] !== onRowKeyDown ||
     i[28] !== se ||
     i[29] !== E ||
     i[30] !== oe ||
     i[31] !== ue ||
     i[32] !== ee
-  )
-    ((ae = r(OrderedListWithItem, {
-      visibleCount: _,
-      defaultFocusIndex: defaultFocusIndex,
+  ) {
+    ae = jsxProd_default_2(OrderedListWithItem, {
+      visibleCount,
+      defaultFocusIndex,
       overflowHint: "count",
-      onFocus: onFocus,
-      onSelect: M,
-      onRowKeyDown: G,
+      onFocus,
+      onSelect,
+      onRowKeyDown,
       children: [se, E, oe, ue, ee, x],
-    })),
-      (i[22] = defaultFocusIndex),
-      (i[23] = onFocus),
-      (i[24] = x),
-      (i[25] = _),
-      (i[26] = M),
-      (i[27] = G),
-      (i[28] = se),
-      (i[29] = E),
-      (i[30] = oe),
-      (i[31] = ue),
-      (i[32] = ee),
-      (i[33] = ae));
-  else ae = i[33];
+    });
+    i[22] = defaultFocusIndex;
+    i[23] = onFocus;
+    i[24] = x;
+    i[25] = visibleCount;
+    i[26] = onSelect;
+    i[27] = onRowKeyDown;
+    i[28] = se;
+    i[29] = E;
+    i[30] = oe;
+    i[31] = ue;
+    i[32] = ee;
+    i[33] = ae;
+  } else ae = i[33];
   return ae;
 }
+//@ chunk-v517dzda.js:16295-16436 placement
 /**
  * 反馈条目的元信息：类型、多久前、目录、transcript 是否可用。
  */
-//@ chunk-v517dzda.js:16295-16436 placement
 function feedbackItemMeta(h) {
   return [
     FEEDBACK_TYPE_LABELS[h.type],
     formatAgeShort(h.created_at),
-    hr(h.cwd),
+    stripInvisibleChars(h.cwd),
     h.transcriptAvailable ? "transcript available" : "transcript expired (report only)",
   ];
 }
 //@ chunk-v517dzda.js:16436-16660 placement
-function formatAgeShort(h, u = Date.now()) {
-  let c = u - Date.parse(h);
+function formatAgeShort(createdAt, u = Date.now()) {
+  let c = u - Date.parse(createdAt);
   if (!Number.isFinite(c) || c < 0) return "now";
   let floored = Math.floor(c / 60000);
   if (floored < 60) return `${Math.max(1, floored)}m`;
@@ -1006,5 +1316,4 @@ function formatAgeShort(h, u = Date.now()) {
   if (floored_2 < 24) return `${floored_2}h`;
   return `${Math.floor(floored_2 / 24)}d`;
 }
-
 export { WRITE_NEW_FEEDBACK_LABEL, FeedbackQueue };

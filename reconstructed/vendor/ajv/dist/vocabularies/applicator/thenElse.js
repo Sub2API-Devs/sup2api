@@ -6,20 +6,21 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { ew } from "../../compile/util.js";
+import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:105688-105960 cjs-fingerprint
-var Qi = x(function (Bi) {
-  Object.defineProperty(Bi, "__esModule", { value: !0 });
-  var Wi = ew(),
-    Vp = {
-      keyword: ["then", "else"],
-      schemaType: ["object", "boolean"],
-      code({ keyword: e, parentSchema: t, it: r }) {
-        if (t.if === void 0) Wi.checkStrictMode(r, `"${e}" without "if" is ignored`);
-      },
-    };
-  Bi.default = Vp;
+var require_thenElse = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var util_1 = require_util_2();
+  var def = {
+    keyword: ["then", "else"],
+    schemaType: ["object", "boolean"],
+    code({ keyword, parentSchema, it }) {
+      if (parentSchema.if === undefined) util_1.checkStrictMode(it, `"${keyword}" without "if" is ignored`);
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { Qi };
+export { require_thenElse };

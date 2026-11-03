@@ -6,243 +6,298 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { np } from "./utils.js";
-import { tp } from "./constants.js";
+import { require_utils } from "./utils.js";
+import { require_constants } from "./constants.js";
 
 //@ chunk-fq0cr76a.js:299275-302511 cjs-fingerprint
-var rN = x(function (Gge, nN) {
-  var bg = np(),
-    {
-      CHAR_ASTERISK: CHAR_ASTERISK,
-      CHAR_AT: CHAR_AT,
-      CHAR_BACKWARD_SLASH: CHAR_BACKWARD_SLASH,
-      CHAR_COMMA: CHAR_COMMA,
-      CHAR_DOT: CHAR_DOT,
-      CHAR_EXCLAMATION_MARK: CHAR_EXCLAMATION_MARK,
-      CHAR_FORWARD_SLASH: CHAR_FORWARD_SLASH,
-      CHAR_LEFT_CURLY_BRACE: CHAR_LEFT_CURLY_BRACE,
-      CHAR_LEFT_PARENTHESES: CHAR_LEFT_PARENTHESES,
-      CHAR_LEFT_SQUARE_BRACKET: CHAR_LEFT_SQUARE_BRACKET,
-      CHAR_PLUS: CHAR_PLUS,
-      CHAR_QUESTION_MARK: CHAR_QUESTION_MARK,
-      CHAR_RIGHT_CURLY_BRACE: CHAR_RIGHT_CURLY_BRACE,
-      CHAR_RIGHT_PARENTHESES: CHAR_RIGHT_PARENTHESES,
-      CHAR_RIGHT_SQUARE_BRACKET: CHAR_RIGHT_SQUARE_BRACKET,
-    } = tp(),
-    QI = (e) => e === CHAR_FORWARD_SLASH || e === CHAR_BACKWARD_SLASH,
-    eN = (e) => {
-      if (e.isPrefix !== !0) e.depth = e.isGlobstar ? 1 / 0 : 1;
-    },
-    yq = (e, n) => {
-      let r = n || {},
-        s = e.length - 1,
-        h = r.parts === !0 || r.scanToEnd === !0,
-        y = [],
-        b = [],
-        S = [],
-        w = e,
-        R = -1,
-        D = 0,
-        O = 0,
-        L = !1,
-        V = !1,
-        K = !1,
-        q = !1,
-        Z = !1,
-        J = !1,
-        ie = !1,
-        ae = !1,
-        Se = !1,
-        ue = !1,
-        me = 0,
-        Ne,
-        Ce,
-        Ie = { value: "", depth: 0, isGlob: !1 },
-        he = () => R >= s,
-        ft = () => w.charCodeAt(R + 1),
-        rt = () => ((Ne = Ce), w.charCodeAt(++R));
-      while (R < s) {
-        Ce = rt();
-        let Me;
-        if (Ce === CHAR_BACKWARD_SLASH) {
-          if (((ie = Ie.backslashes = !0), (Ce = rt()), Ce === CHAR_LEFT_CURLY_BRACE)) J = !0;
+var require_scan = x(function (cjsExports, cjsModule) {
+  var utils = require_utils();
+  var {
+    CHAR_ASTERISK,
+    CHAR_AT,
+    CHAR_BACKWARD_SLASH,
+    CHAR_COMMA,
+    CHAR_DOT,
+    CHAR_EXCLAMATION_MARK,
+    CHAR_FORWARD_SLASH,
+    CHAR_LEFT_CURLY_BRACE,
+    CHAR_LEFT_PARENTHESES,
+    CHAR_LEFT_SQUARE_BRACKET,
+    CHAR_PLUS,
+    CHAR_QUESTION_MARK,
+    CHAR_RIGHT_CURLY_BRACE,
+    CHAR_RIGHT_PARENTHESES,
+    CHAR_RIGHT_SQUARE_BRACKET,
+  } = require_constants();
+  var isPathSeparator = (code) => code === CHAR_FORWARD_SLASH || code === CHAR_BACKWARD_SLASH;
+  var depth = (token) => {
+    if (token.isPrefix !== true) token.depth = token.isGlobstar ? 1 / 0 : 1;
+  };
+  var scan = (input, options) => {
+    let opts = options || {};
+    let length = input.length - 1;
+    let scanToEnd = opts.parts === true || opts.scanToEnd === true;
+    let slashes = [];
+    let tokens = [];
+    let parts = [];
+    let str = input;
+    let index = -1;
+    let start = 0;
+    let lastIndex = 0;
+    let isBrace = false;
+    let isBracket = false;
+    let isGlob = false;
+    let isExtglob = false;
+    let isGlobstar = false;
+    let braceEscaped = false;
+    let backslashes = false;
+    let negated = false;
+    let negatedExtglob = false;
+    let finished = false;
+    let braces = 0;
+    let prev;
+    let code;
+    let token = {
+      value: "",
+      depth: 0,
+      isGlob: false,
+    };
+    let eos = () => index >= length;
+    let peek = () => str.charCodeAt(index + 1);
+    let advance = () => {
+      prev = code;
+      return str.charCodeAt(++index);
+    };
+    while (index < length) {
+      code = advance();
+      let next;
+      if (code === CHAR_BACKWARD_SLASH) {
+        backslashes = token.backslashes = true;
+        code = advance();
+        if (code === CHAR_LEFT_CURLY_BRACE) braceEscaped = true;
+        continue;
+      }
+      if (braceEscaped === true || code === CHAR_LEFT_CURLY_BRACE) {
+        braces++;
+        while (eos() !== true && (code = advance())) {
+          if (code === CHAR_BACKWARD_SLASH) {
+            backslashes = token.backslashes = true;
+            advance();
+            continue;
+          }
+          if (code === CHAR_LEFT_CURLY_BRACE) {
+            braces++;
+            continue;
+          }
+          if (braceEscaped !== true && code === CHAR_DOT && (code = advance()) === CHAR_DOT) {
+            isBrace = token.isBrace = true;
+            isGlob = token.isGlob = true;
+            finished = true;
+            if (scanToEnd === true) continue;
+            break;
+          }
+          if (braceEscaped !== true && code === CHAR_COMMA) {
+            isBrace = token.isBrace = true;
+            isGlob = token.isGlob = true;
+            finished = true;
+            if (scanToEnd === true) continue;
+            break;
+          }
+          if (code === CHAR_RIGHT_CURLY_BRACE) {
+            braces--;
+            if (braces === 0) {
+              braceEscaped = false;
+              isBrace = token.isBrace = true;
+              finished = true;
+              break;
+            }
+          }
+        }
+        if (scanToEnd === true) continue;
+        break;
+      }
+      if (code === CHAR_FORWARD_SLASH) {
+        slashes.push(index);
+        tokens.push(token);
+        token = {
+          value: "",
+          depth: 0,
+          isGlob: false,
+        };
+        if (finished === true) continue;
+        if (prev === CHAR_DOT && index === start + 1) {
+          start += 2;
           continue;
         }
-        if (J === !0 || Ce === CHAR_LEFT_CURLY_BRACE) {
-          me++;
-          while (he() !== !0 && (Ce = rt())) {
-            if (Ce === CHAR_BACKWARD_SLASH) {
-              ((ie = Ie.backslashes = !0), rt());
-              continue;
-            }
-            if (Ce === CHAR_LEFT_CURLY_BRACE) {
-              me++;
-              continue;
-            }
-            if (J !== !0 && Ce === CHAR_DOT && (Ce = rt()) === CHAR_DOT) {
-              if (((L = Ie.isBrace = !0), (K = Ie.isGlob = !0), (ue = !0), h === !0)) continue;
-              break;
-            }
-            if (J !== !0 && Ce === CHAR_COMMA) {
-              if (((L = Ie.isBrace = !0), (K = Ie.isGlob = !0), (ue = !0), h === !0)) continue;
-              break;
-            }
-            if (Ce === CHAR_RIGHT_CURLY_BRACE) {
-              if ((me--, me === 0)) {
-                ((J = !1), (L = Ie.isBrace = !0), (ue = !0));
+        lastIndex = index + 1;
+        continue;
+      }
+      if (opts.noext !== true) {
+        if (
+          (code === CHAR_PLUS ||
+            code === CHAR_AT ||
+            code === CHAR_ASTERISK ||
+            code === CHAR_QUESTION_MARK ||
+            code === CHAR_EXCLAMATION_MARK) === true &&
+          peek() === CHAR_LEFT_PARENTHESES
+        ) {
+          isGlob = token.isGlob = true;
+          isExtglob = token.isExtglob = true;
+          finished = true;
+          if (code === CHAR_EXCLAMATION_MARK && index === start) negatedExtglob = true;
+          if (scanToEnd === true) {
+            while (eos() !== true && (code = advance())) {
+              if (code === CHAR_BACKWARD_SLASH) {
+                backslashes = token.backslashes = true;
+                code = advance();
+                continue;
+              }
+              if (code === CHAR_RIGHT_PARENTHESES) {
+                isGlob = token.isGlob = true;
+                finished = true;
                 break;
               }
             }
-          }
-          if (h === !0) continue;
-          break;
-        }
-        if (Ce === CHAR_FORWARD_SLASH) {
-          if ((y.push(R), b.push(Ie), (Ie = { value: "", depth: 0, isGlob: !1 }), ue === !0)) continue;
-          if (Ne === CHAR_DOT && R === D + 1) {
-            D += 2;
             continue;
           }
-          O = R + 1;
-          continue;
+          break;
         }
-        if (r.noext !== !0) {
-          if (
-            (Ce === CHAR_PLUS ||
-              Ce === CHAR_AT ||
-              Ce === CHAR_ASTERISK ||
-              Ce === CHAR_QUESTION_MARK ||
-              Ce === CHAR_EXCLAMATION_MARK) === !0 &&
-            ft() === CHAR_LEFT_PARENTHESES
-          ) {
-            if (
-              ((K = Ie.isGlob = !0),
-              (q = Ie.isExtglob = !0),
-              (ue = !0),
-              Ce === CHAR_EXCLAMATION_MARK && R === D)
-            )
-              Se = !0;
-            if (h === !0) {
-              while (he() !== !0 && (Ce = rt())) {
-                if (Ce === CHAR_BACKWARD_SLASH) {
-                  ((ie = Ie.backslashes = !0), (Ce = rt()));
-                  continue;
-                }
-                if (Ce === CHAR_RIGHT_PARENTHESES) {
-                  ((K = Ie.isGlob = !0), (ue = !0));
-                  break;
-                }
-              }
-              continue;
-            }
+      }
+      if (code === CHAR_ASTERISK) {
+        if (prev === CHAR_ASTERISK) isGlobstar = token.isGlobstar = true;
+        isGlob = token.isGlob = true;
+        finished = true;
+        if (scanToEnd === true) continue;
+        break;
+      }
+      if (code === CHAR_QUESTION_MARK) {
+        isGlob = token.isGlob = true;
+        finished = true;
+        if (scanToEnd === true) continue;
+        break;
+      }
+      if (code === CHAR_LEFT_SQUARE_BRACKET) {
+        while (eos() !== true && (next = advance())) {
+          if (next === CHAR_BACKWARD_SLASH) {
+            backslashes = token.backslashes = true;
+            advance();
+            continue;
+          }
+          if (next === CHAR_RIGHT_SQUARE_BRACKET) {
+            isBracket = token.isBracket = true;
+            isGlob = token.isGlob = true;
+            finished = true;
             break;
           }
         }
-        if (Ce === CHAR_ASTERISK) {
-          if (Ne === CHAR_ASTERISK) Z = Ie.isGlobstar = !0;
-          if (((K = Ie.isGlob = !0), (ue = !0), h === !0)) continue;
-          break;
-        }
-        if (Ce === CHAR_QUESTION_MARK) {
-          if (((K = Ie.isGlob = !0), (ue = !0), h === !0)) continue;
-          break;
-        }
-        if (Ce === CHAR_LEFT_SQUARE_BRACKET) {
-          while (he() !== !0 && (Me = rt())) {
-            if (Me === CHAR_BACKWARD_SLASH) {
-              ((ie = Ie.backslashes = !0), rt());
+        if (scanToEnd === true) continue;
+        break;
+      }
+      if (opts.nonegate !== true && code === CHAR_EXCLAMATION_MARK && index === start) {
+        negated = token.negated = true;
+        start++;
+        continue;
+      }
+      if (opts.noparen !== true && code === CHAR_LEFT_PARENTHESES) {
+        isGlob = token.isGlob = true;
+        if (scanToEnd === true) {
+          while (eos() !== true && (code = advance())) {
+            if (code === CHAR_LEFT_PARENTHESES) {
+              backslashes = token.backslashes = true;
+              code = advance();
               continue;
             }
-            if (Me === CHAR_RIGHT_SQUARE_BRACKET) {
-              ((V = Ie.isBracket = !0), (K = Ie.isGlob = !0), (ue = !0));
+            if (code === CHAR_RIGHT_PARENTHESES) {
+              finished = true;
               break;
             }
           }
-          if (h === !0) continue;
-          break;
-        }
-        if (r.nonegate !== !0 && Ce === CHAR_EXCLAMATION_MARK && R === D) {
-          ((ae = Ie.negated = !0), D++);
           continue;
         }
-        if (r.noparen !== !0 && Ce === CHAR_LEFT_PARENTHESES) {
-          if (((K = Ie.isGlob = !0), h === !0)) {
-            while (he() !== !0 && (Ce = rt())) {
-              if (Ce === CHAR_LEFT_PARENTHESES) {
-                ((ie = Ie.backslashes = !0), (Ce = rt()));
-                continue;
-              }
-              if (Ce === CHAR_RIGHT_PARENTHESES) {
-                ue = !0;
-                break;
-              }
-            }
-            continue;
-          }
-          break;
-        }
-        if (K === !0) {
-          if (((ue = !0), h === !0)) continue;
-          break;
-        }
+        break;
       }
-      if (r.noext === !0) ((q = !1), (K = !1));
-      let ut = w,
-        we = "",
-        Ae = "";
-      if (D > 0) ((we = w.slice(0, D)), (w = w.slice(D)), (O -= D));
-      if (ut && K === !0 && O > 0) ((ut = w.slice(0, O)), (Ae = w.slice(O)));
-      else if (K === !0) ((ut = ""), (Ae = w));
-      else ut = w;
-      if (ut && ut !== "" && ut !== "/" && ut !== w) {
-        if (QI(ut.charCodeAt(ut.length - 1))) ut = ut.slice(0, -1);
+      if (isGlob === true) {
+        finished = true;
+        if (scanToEnd === true) continue;
+        break;
       }
-      if (r.unescape === !0) {
-        if (Ae) Ae = bg.removeBackslashes(Ae);
-        if (ut && ie === !0) ut = bg.removeBackslashes(ut);
-      }
-      let dt = {
-        prefix: we,
-        input: e,
-        start: D,
-        base: ut,
-        glob: Ae,
-        isBrace: L,
-        isBracket: V,
-        isGlob: K,
-        isExtglob: q,
-        isGlobstar: Z,
-        negated: ae,
-        negatedExtglob: Se,
-      };
-      if (r.tokens === !0) {
-        if (((dt.maxDepth = 0), !QI(Ce))) b.push(Ie);
-        dt.tokens = b;
-      }
-      if (r.parts === !0 || r.tokens === !0) {
-        let Me;
-        for (let Ft = 0; Ft < y.length; Ft++) {
-          let xn = Me ? Me + 1 : D,
-            mt = y[Ft],
-            sliced = e.slice(xn, mt);
-          if (r.tokens) {
-            if (Ft === 0 && D !== 0) ((b[Ft].isPrefix = !0), (b[Ft].value = we));
-            else b[Ft].value = sliced;
-            (eN(b[Ft]), (dt.maxDepth += b[Ft].depth));
-          }
-          if (Ft !== 0 || sliced !== "") S.push(sliced);
-          Me = mt;
-        }
-        if (Me && Me + 1 < e.length) {
-          let sliced = e.slice(Me + 1);
-          if ((S.push(sliced), r.tokens))
-            ((b[b.length - 1].value = sliced), eN(b[b.length - 1]), (dt.maxDepth += b[b.length - 1].depth));
-        }
-        ((dt.slashes = y), (dt.parts = S));
-      }
-      return dt;
+    }
+    if (opts.noext === true) {
+      isExtglob = false;
+      isGlob = false;
+    }
+    let base = str;
+    let prefix = "";
+    let glob = "";
+    if (start > 0) {
+      prefix = str.slice(0, start);
+      str = str.slice(start);
+      lastIndex -= start;
+    }
+    if (base && isGlob === true && lastIndex > 0) {
+      base = str.slice(0, lastIndex);
+      glob = str.slice(lastIndex);
+    } else if (isGlob === true) {
+      base = "";
+      glob = str;
+    } else base = str;
+    if (base && base !== "" && base !== "/" && base !== str) {
+      if (isPathSeparator(base.charCodeAt(base.length - 1))) base = base.slice(0, -1);
+    }
+    if (opts.unescape === true) {
+      if (glob) glob = utils.removeBackslashes(glob);
+      if (base && backslashes === true) base = utils.removeBackslashes(base);
+    }
+    let state = {
+      prefix,
+      input,
+      start,
+      base,
+      glob,
+      isBrace,
+      isBracket,
+      isGlob,
+      isExtglob,
+      isGlobstar,
+      negated,
+      negatedExtglob,
     };
-  nN.exports = yq;
+    if (opts.tokens === true) {
+      state.maxDepth = 0;
+      if (!isPathSeparator(code)) tokens.push(token);
+      state.tokens = tokens;
+    }
+    if (opts.parts === true || opts.tokens === true) {
+      let prevIndex;
+      for (let idx = 0; idx < slashes.length; idx++) {
+        let n = prevIndex ? prevIndex + 1 : start;
+        let i = slashes[idx];
+        let value = input.slice(n, i);
+        if (opts.tokens) {
+          if (idx === 0 && start !== 0) {
+            tokens[idx].isPrefix = true;
+            tokens[idx].value = prefix;
+          } else tokens[idx].value = value;
+          depth(tokens[idx]);
+          state.maxDepth += tokens[idx].depth;
+        }
+        if (idx !== 0 || value !== "") parts.push(value);
+        prevIndex = i;
+      }
+      if (prevIndex && prevIndex + 1 < input.length) {
+        let value = input.slice(prevIndex + 1);
+        parts.push(value);
+        if (opts.tokens) {
+          tokens[tokens.length - 1].value = value;
+          depth(tokens[tokens.length - 1]);
+          state.maxDepth += tokens[tokens.length - 1].depth;
+        }
+      }
+      state.slashes = slashes;
+      state.parts = parts;
+    }
+    return state;
+  };
+  cjsModule.exports = scan;
 });
-
-export { rN };
+export { require_scan };

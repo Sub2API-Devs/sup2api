@@ -8,8 +8,7 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:5284-5355 cjs-fingerprint
-var Xr = x(function (Tu) {
-  Tu.isApiWritable = !globalThis.__domino_frozen__;
+var require_config = x(function (cjsExports) {
+  cjsExports.isApiWritable = !globalThis.__domino_frozen__;
 });
-
-export { Xr };
+export { require_config };

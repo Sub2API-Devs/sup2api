@@ -9,122 +9,128 @@
  * attribution: placement 47, fingerprint 3, layout 3, affinity 1
  */
 import {
-  cleanOptionalText,
+  cleanOptionalText_2,
   stripInvisibleKeepNewlines,
   stripInvisibleKeepEmoji,
-  gu,
+  cleanOptionalText,
 } from "../../utils/settings/marketplaceSettingsAliases.js";
 import { redactUrlCredentials } from "../../utils/plugins/marketplaceManager.js";
 import { displaySafeUrl, REDACTED_URL } from "../../utils/redaction/urlRedaction.js";
 import { SUPPORTED_PLATFORMS } from "../../utils/settings/types.js";
 import {
   DANGEROUS_SHELL_SETTINGS_LIST,
-  Os,
-  cu,
-  uu,
+  SANDBOX_BINARY_SETTINGS,
+  SANDBOX_SETTINGS_KEYS,
+  SANDBOX_NETWORK_MODE_VALUES,
   isProtectedEnvVar,
 } from "../../utils/managedEnvConstants.js";
 import { extraMarketplacesOf, describeEnvRows } from "../../utils/settings/otelEndpointValidation.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { uniq } from "../../utils/collections.js";
-import { oC } from "../FileEditToolUpdatedMessage.js";
+import { editSizeOf } from "../FileEditToolUpdatedMessage.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { nfcLower } from "../../utils/stringUtils.js";
 import { sortKeysDeep } from "../../utils/settings/settingsSourceTrust.js";
 import { safeParseJSON } from "../../utils/json.js";
 
+//@ chunk-dcmhvw5a.js:376544-376884 placement
 /**
  * 清洗插件清单里要展示的字段（显示名、版本、描述、作者），去掉不可打印字符并截断。
  */
-//@ chunk-dcmhvw5a.js:376544-376884 placement
-function sanitizePluginManifestForDisplay(e) {
+function sanitizePluginManifestForDisplay(manifest) {
   return {
-    ...e,
-    displayName: cleanOptionalText(e.displayName),
-    version: cleanOptionalText(e.version),
-    description: cleanOptionalText(e.description, stripInvisibleKeepNewlines),
+    ...manifest,
+    displayName: cleanOptionalText_2(manifest.displayName),
+    version: cleanOptionalText_2(manifest.version),
+    description: cleanOptionalText_2(manifest.description, stripInvisibleKeepNewlines),
     author:
-      e.author === void 0
-        ? void 0
+      manifest.author === undefined
+        ? undefined
         : {
-            ...e.author,
-            name: stripInvisibleKeepEmoji(e.author.name),
-            email: cleanOptionalText(e.author.email),
-            url: redactUrlCredentials(e.author.url),
+            ...manifest.author,
+            name: stripInvisibleKeepEmoji(manifest.author.name),
+            email: cleanOptionalText_2(manifest.author.email),
+            url: redactUrlCredentials(manifest.author.url),
           },
-    homepage: redactUrlCredentials(e.homepage),
-    repository: redactUrlCredentials(e.repository),
-    license: cleanOptionalText(e.license),
-    keywords: e.keywords?.map(stripInvisibleKeepEmoji),
+    homepage: redactUrlCredentials(manifest.homepage),
+    repository: redactUrlCredentials(manifest.repository),
+    license: cleanOptionalText_2(manifest.license),
+    keywords: manifest.keywords?.map(stripInvisibleKeepEmoji),
   };
 }
+//@ chunk-dcmhvw5a.js:376884-376912 placement
 /**
  * 把插件名转成可打印形式。
  */
-//@ chunk-dcmhvw5a.js:376884-376912 placement
 function printablePluginName(e) {
-  return gu(e);
+  return cleanOptionalText(e);
 }
+//@ chunk-dcmhvw5a.js:376912-377097 placement
 /**
  * 取插件可显示名称：清单 displayName → 名称 → 来源，都不可打印时返回占位文字。
  */
-//@ chunk-dcmhvw5a.js:376912-377097 placement
 function getPluginDisplayName(e) {
-  let n = mu(e) ? e.manifest.displayName : e.displayName;
+  let displayName = hasManifest(e) ? e.manifest.displayName : e.displayName;
   return (
-    Tct(typeof n === "string" ? stripInvisibleKeepEmoji(n).trim() : n) ??
-    Tct(printablePluginName(e.name)) ??
-    Tct(printablePluginName(mu(e) ? e.source : "")) ??
+    trimmedOrUndefined(
+      typeof displayName === "string" ? stripInvisibleKeepEmoji(displayName).trim() : displayName,
+    ) ??
+    trimmedOrUndefined(printablePluginName(e.name)) ??
+    trimmedOrUndefined(printablePluginName(hasManifest(e) ? e.source : "")) ??
     "(unprintable plugin name)"
   );
 }
 //@ chunk-dcmhvw5a.js:377097-377168 placement
-function Tct(e) {
-  if (typeof e !== "string") return;
-  return e.trim() ? e : void 0;
+/**
+ * 函数 trimmedOrUndefined（trim 后为空返回 undefined）；位于「托管设置危险项提取与比较：hooks、apiKeyHelper、危险环境变量（含增强遥测）等，判断自上次批准后是否变化」模块。
+ */
+function trimmedOrUndefined(displayName) {
+  if (typeof displayName !== "string") return;
+  return displayName.trim() ? displayName : undefined;
 }
 //@ chunk-dcmhvw5a.js:377168-377253 placement
-function mu(e) {
+function hasManifest(e) {
   return "manifest" in e && typeof e.manifest === "object" && e.manifest !== null;
 }
 //@ chunk-dcmhvw5a.js:377253-377396 placement
 var HIDDEN_CHARS_WARNING =
   "The command contains non-ASCII, hidden or control characters (shown as \\u{\u2026} escapes). Do not proceed unless you expected them.";
+//@ chunk-dcmhvw5a.js:377396-377534 placement
 /**
  * 描述插件归档下载的 headersHelper 命令（目的地、隐藏字符警告、转义后的命令）。
  */
-//@ chunk-dcmhvw5a.js:377396-377534 placement
 function describeArchiveFetchCommand(e) {
-  let { text: text, escaped: escaped } = escapeNonPrintable(e.command);
+  let { text, escaped } = escapeNonPrintable(e.command);
   return {
     destination: displaySafeUrl(e.archiveUrl) ?? REDACTED_URL,
     hiddenCharactersWarning: escaped ? HIDDEN_CHARS_WARNING : null,
     command: text,
   };
 }
+//@ chunk-dcmhvw5a.js:377534-377702 placement
 /**
  * 把不可打印字符（及反斜杠）转义为 \u{…} 形式，返回转义后文本及是否发生转义。
  */
-//@ chunk-dcmhvw5a.js:377534-377702 placement
-function escapeNonPrintable(e) {
-  let n = !1;
+function escapeNonPrintable(command) {
+  let escaped = false;
   return {
-    text: e.replace(/[^\x20-\x5b\x5d-\x7e]/gu, (s) => {
+    text: command.replace(/[^\x20-\x5b\x5d-\x7e]/gu, (s) => {
       if (s === "\\") return "\\\\";
-      return ((n = !0), `\\u{${s.codePointAt(0).toString(16)}}`);
+      escaped = true;
+      return `\\u{${s.codePointAt(0).toString(16)}}`;
     }),
-    escaped: n,
+    escaped,
   };
 }
 //@ chunk-dcmhvw5a.js:377702-377810 placement
-var SANDBOX_TOGGLE_KEYS = ["enabled", "enabledPlatforms"],
-  NETWORK_ALLOWEDDOMAINS = "network.allowedDomains",
-  IGNORED_ENV_VARS = new Set(["OTEL_LOG_MANAGED_SETTINGS"]);
+var SANDBOX_TOGGLE_KEYS = ["enabled", "enabledPlatforms"];
+var NETWORK_ALLOWEDDOMAINS = "network.allowedDomains";
+var IGNORED_ENV_VARS = new Set(["OTEL_LOG_MANAGED_SETTINGS"]);
+//@ chunk-dcmhvw5a.js:377810-378429 placement
 /**
  * 汇总托管设置文档里需要用户确认的危险项（shell 设置、环境变量、沙箱、隔离、hooks、policyHelpers 槽位）。
  */
-//@ chunk-dcmhvw5a.js:377810-378429 placement
 function summarizeManagedSettingsRisk(e) {
   if (!e)
     return {
@@ -132,41 +138,56 @@ function summarizeManagedSettingsRisk(e) {
       envVars: {},
       sandboxSettings: {},
       isolationSettings: {},
-      hasHooks: !1,
+      hasHooks: false,
       payloadSlots: {},
     };
   let n = [
-      ["top", e],
-      ...policyHelperSlots(e),
-      ...policyHelperSlots(e).map(([m]) => [m, { slotPresent: !0 }]),
-      ...SUPPORTED_PLATFORMS.map((m) => [
-        `policyHelpers.${m}`,
-        { outputBehavior: getAtPath_2(e, `policyHelpers.${m}.outputBehavior`) },
-      ]),
-    ],
-    r = collectDangerousSettings(e, n),
-    s = JE(e, n);
-  markSandboxSettingConflicts([r, ...s.map(([, m]) => m)]);
+    ["top", e],
+    ...policyHelperSlots(e),
+    ...policyHelperSlots(e).map(([m]) => [
+      m,
+      {
+        slotPresent: true,
+      },
+    ]),
+    ...SUPPORTED_PLATFORMS.map((m) => [
+      `policyHelpers.${m}`,
+      {
+        outputBehavior: getAtPath_2(e, `policyHelpers.${m}.outputBehavior`),
+      },
+    ]),
+  ];
+  let dangerousSettings = collectDangerousSettings(e, n);
+  let s = mapSettingsValues(e, n);
+  markSandboxSettingConflicts([dangerousSettings, ...s.map(([, m]) => m)]);
   let a = {};
   for (let [m, f] of s) {
     let h = {
-      shellSettings: f.hasHooks ? { ...f.shellSettings, hooks: Ve(f.hooks) } : f.shellSettings,
+      shellSettings: f.hasHooks
+        ? {
+            ...f.shellSettings,
+            hooks: toCanonicalPath(f.hooks),
+          }
+        : f.shellSettings,
       envVars: f.envVars,
       sandboxSettings: f.sandboxSettings,
       isolationSettings: f.isolationSettings,
     };
     if (hasRiskySettings(h)) a[m] = h;
   }
-  let { sandboxSwitches: sandboxSwitches, ...g } = r;
-  return { ...g, payloadSlots: a };
+  let { sandboxSwitches, ...g } = dangerousSettings;
+  return {
+    ...g,
+    payloadSlots: a,
+  };
 }
+//@ chunk-dcmhvw5a.js:378429-380873 placement
 /**
  * 遍历托管设置的危险键（含 policyHelpers.* 子项），收集命令文本与脚本大小。
  */
-//@ chunk-dcmhvw5a.js:378429-380873 placement
 function collectDangerousSettings(e, n) {
-  let r = {},
-    s;
+  let r = {};
+  let s;
   for (let S of DANGEROUS_SHELL_SETTINGS_LIST) {
     let C = e[S];
     if (S === "policyHelpers") {
@@ -174,8 +195,11 @@ function collectDangerousSettings(e, n) {
         for (let L of SUPPORTED_PLATFORMS) {
           let v = policyHelperCommand(C[L]);
           if (v) {
-            if (((r[`policyHelpers.${L}`] = v.command), v.scriptSize))
-              ((s ??= {}), (s[`policyHelpers.${L}`] = v.scriptSize));
+            r[`policyHelpers.${L}`] = v.command;
+            if (v.scriptSize) {
+              s ??= {};
+              s[`policyHelpers.${L}`] = v.scriptSize;
+            }
           }
         }
       continue;
@@ -184,96 +208,115 @@ function collectDangerousSettings(e, n) {
     if (typeof C === "string") w = C;
     else if (C !== null && typeof C === "object" && "command" in C && typeof C.command === "string")
       w = C.command;
-    if (w !== void 0 && w.length > 0) r[S] = w;
+    if (w !== undefined && w.length > 0) r[S] = w;
   }
   let a = extraMarketplacesOf(e);
   if (a && typeof a === "object")
-    for (let [S, C] of Object.entries(a)) {
-      let w = C?.pluginDigests;
-      if (w !== void 0 && w !== null && Object.keys(w).length > 0)
-        r[`extraKnownMarketplaces[${jsonStringify(S)}].pluginDigests`] = Ve({
-          pluginDigests: w,
-          arming: pluginSlotDangerEntries(n, S, w),
+    for (let [key, value] of Object.entries(a)) {
+      let pluginDigests = value?.pluginDigests;
+      if (pluginDigests !== undefined && pluginDigests !== null && Object.keys(pluginDigests).length > 0)
+        r[`extraKnownMarketplaces[${jsonStringify(key)}].pluginDigests`] = toCanonicalPath({
+          pluginDigests,
+          arming: pluginSlotDangerEntries(n, key, pluginDigests),
         });
-      let L = C?.source;
-      if (!L || typeof L !== "object") continue;
-      if (L.source === "url" && typeof L.headersHelper === "string" && L.headersHelper.length > 0)
-        r[`extraKnownMarketplaces[${jsonStringify(S)}].source.headersHelper`] = _u(
-          L.headersHelper,
+      let source = value?.source;
+      if (!source || typeof source !== "object") continue;
+      if (
+        source.source === "url" &&
+        typeof source.headersHelper === "string" &&
+        source.headersHelper.length > 0
+      )
+        r[`extraKnownMarketplaces[${jsonStringify(key)}].source.headersHelper`] = joinPathParts(
+          source.headersHelper,
           "url",
-          L.url,
+          source.url,
         );
-      if (L.source === "settings" && Array.isArray(L.plugins)) {
+      if (source.source === "settings" && Array.isArray(source.plugins)) {
         let v = new Map();
-        for (let plugin of L.plugins) {
-          let x = jsonStringify(plugin?.name),
-            K = v.get(x) ?? 0;
+        for (let plugin of source.plugins) {
+          let x = jsonStringify(plugin?.name);
+          let K = v.get(x) ?? 0;
           v.set(x, K + 1);
-          let q = plugin?.source;
+          let source = plugin?.source;
           if (
-            q !== null &&
-            typeof q === "object" &&
-            "source" in q &&
-            q.source === "command" &&
-            "command" in q &&
-            typeof q.command === "string" &&
-            q.command.length > 0
+            source !== null &&
+            typeof source === "object" &&
+            "source" in source &&
+            source.source === "command" &&
+            "command" in source &&
+            typeof source.command === "string" &&
+            source.command.length > 0
           )
             r[
-              `extraKnownMarketplaces[${jsonStringify(S)}].plugins[${jsonStringify(plugin.name)}][${K}].source.command`
-            ] = q.command;
+              `extraKnownMarketplaces[${jsonStringify(key)}].plugins[${jsonStringify(plugin.name)}][${K}].source.command`
+            ] = source.command;
           if (typeof plugin?.headersHelper === "string" && plugin.headersHelper.length > 0) {
-            let source = plugin.source,
-              Z = source !== null && typeof source === "object";
+            let source = plugin.source;
+            let Z = source !== null && typeof source === "object";
             r[
-              `extraKnownMarketplaces[${jsonStringify(S)}].plugins[${jsonStringify(plugin.name)}][${K}].headersHelper`
-            ] = _u(
+              `extraKnownMarketplaces[${jsonStringify(key)}].plugins[${jsonStringify(plugin.name)}][${K}].headersHelper`
+            ] = joinPathParts(
               plugin.headersHelper,
-              Z && "source" in source ? source.source : void 0,
-              Z && "url" in source ? source.url : void 0,
+              Z && "source" in source ? source.source : undefined,
+              Z && "url" in source ? source.url : undefined,
             );
           }
         }
       }
     }
-  let sandbox = e.sandbox,
-    g = {},
-    m = {
-      enabled: getAtPath_2(sandbox, "enabled"),
-      enabledPlatforms: getAtPath_2(sandbox, "enabledPlatforms"),
-      [NETWORK_ALLOWEDDOMAINS]: getAtPath_2(sandbox, NETWORK_ALLOWEDDOMAINS),
-    };
+  let sandbox = e.sandbox;
+  let g = {};
+  let m = {
+    enabled: getAtPath_2(sandbox, "enabled"),
+    enabledPlatforms: getAtPath_2(sandbox, "enabledPlatforms"),
+    [NETWORK_ALLOWEDDOMAINS]: getAtPath_2(sandbox, NETWORK_ALLOWEDDOMAINS),
+  };
   if (sandbox !== null && typeof sandbox === "object") {
-    let S = { enabled: m.enabled, enabledPlatforms: m.enabledPlatforms };
-    for (let C of Os) {
+    let S = {
+      enabled: m.enabled,
+      enabledPlatforms: m.enabledPlatforms,
+    };
+    for (let C of SANDBOX_BINARY_SETTINGS) {
       let w = hookCommandText(sandbox[C]);
-      if (w) r[`sandbox.${C}`] = Ve({ value: w, ...S });
-    }
-    for (let C of cu) {
-      let w = getAtPath_2(sandbox, C);
-      if (isMeaningfulValue(C, w))
-        g[`sandbox.${C}`] = Ve({
+      if (w)
+        r[`sandbox.${C}`] = toCanonicalPath({
           value: w,
           ...S,
-          ...(Tu.has(C) && { allowedDomains: vu(m[NETWORK_ALLOWEDDOMAINS]) }),
+        });
+    }
+    for (let C of SANDBOX_SETTINGS_KEYS) {
+      let atPath = getAtPath_2(sandbox, C);
+      if (isMeaningfulValue(C, atPath))
+        g[`sandbox.${C}`] = toCanonicalPath({
+          value: atPath,
+          ...S,
+          ...(SENSITIVE_POLICY_KEYS.has(C) && {
+            allowedDomains: sortedStringList(m[NETWORK_ALLOWEDDOMAINS]),
+          }),
         });
     }
   }
-  let isolation = e.isolation,
-    h = {};
-  for (let S of uu) {
-    let C = getAtPath_2(isolation, S);
-    if (isRiskyIsolationValue(S, C)) h[`isolation.${S}`] = Ve({ value: C });
+  let isolation = e.isolation;
+  let h = {};
+  for (let S of SANDBOX_NETWORK_MODE_VALUES) {
+    let atPath = getAtPath_2(isolation, S);
+    if (isRiskyIsolationValue(S, atPath))
+      h[`isolation.${S}`] = toCanonicalPath({
+        value: atPath,
+      });
   }
   let y = {};
   if (e.env && typeof e.env === "object")
-    for (let [S, C] of Object.entries(e.env)) {
-      if (C === void 0) continue;
-      let w = String(C);
-      if (w.length > 0 && !IGNORED_ENV_VARS.has(S.toUpperCase()) && !isProtectedEnvVar(S, w)) y[S] = w;
+    for (let [key, value] of Object.entries(e.env)) {
+      if (value === undefined) continue;
+      let w = String(value);
+      if (w.length > 0 && !IGNORED_ENV_VARS.has(key.toUpperCase()) && !isProtectedEnvVar(key, w)) y[key] = w;
     }
   let b =
-    e.hooks !== void 0 && e.hooks !== null && typeof e.hooks === "object" && Object.keys(e.hooks).length > 0;
+    e.hooks !== undefined &&
+    e.hooks !== null &&
+    typeof e.hooks === "object" &&
+    Object.keys(e.hooks).length > 0;
   return {
     shellSettings: r,
     inlineHelperScriptSizes: s,
@@ -281,83 +324,94 @@ function collectDangerousSettings(e, n) {
     sandboxSettings: g,
     isolationSettings: h,
     hasHooks: b,
-    hooks: b ? e.hooks : void 0,
+    hooks: b ? e.hooks : undefined,
     sandboxSwitches: m,
   };
 }
 //@ chunk-dcmhvw5a.js:380873-380929 placement
-function JE(e, n) {
+function mapSettingsValues(e, n) {
   return policyHelperSlots(e).map(([r, s]) => [r, collectDangerousSettings(s, n)]);
 }
+//@ chunk-dcmhvw5a.js:380929-381092 placement
 /**
  * 列出托管设置中各 policyHelpers 槽位的配置（去掉嵌套的 policyHelper/policyHelpers 字段）。
  */
-//@ chunk-dcmhvw5a.js:380929-381092 placement
 function policyHelperSlots(e) {
   let n = [];
-  for (let r of Ru) {
-    let s = `policyHelpers.${r}`,
-      a = getAtPath_2(e, s);
-    if (!isPlainObject(a)) continue;
-    let { policyHelper: policyHelper, policyHelpers: policyHelpers, ...m } = a;
+  for (let r of POLICY_HELPER_SETTING_PATHS) {
+    let s = `policyHelpers.${r}`;
+    let atPath = getAtPath_2(e, s);
+    if (!isPlainObject(atPath)) continue;
+    let { policyHelper, policyHelpers, ...m } = atPath;
     n.push([s, m]);
   }
   return n;
 }
 //@ chunk-dcmhvw5a.js:381092-381169 placement
-function Ps(e) {
+function isPolicyHelperPath(e) {
   return SUPPORTED_PLATFORMS.find((n) => e === `policyHelpers.${n}.defaultSettings`);
 }
+//@ chunk-dcmhvw5a.js:381169-381269 placement
 /**
  * 判断某个设置对应的 policyHelper 是否为 merge 输出行为。
  */
-//@ chunk-dcmhvw5a.js:381169-381269 placement
 function isMergingPolicyHelper(e, n) {
-  let r = Ps(n);
-  return r !== void 0 && getAtPath_2(e, `policyHelpers.${r}.outputBehavior`) === "merge";
+  let r = isPolicyHelperPath(n);
+  return r !== undefined && getAtPath_2(e, `policyHelpers.${r}.outputBehavior`) === "merge";
 }
+//@ chunk-dcmhvw5a.js:381269-381754 placement
 /**
  * 在多份托管设置摘要间标出沙箱设置的重叠与冲突。
  */
-//@ chunk-dcmhvw5a.js:381269-381754 placement
 function markSandboxSettingConflicts(e) {
   let mapped = e.map(
-      (s) =>
-        Object.keys(s.sandboxSettings).length > 0 ||
-        Os.some((a) => s.shellSettings[`sandbox.${a}`] !== void 0),
-    ),
-    mapped_2 = e.map((s) => [...Tu].some((a) => s.sandboxSettings[`sandbox.${a}`] !== void 0));
+    (s) =>
+      Object.keys(s.sandboxSettings).length > 0 ||
+      SANDBOX_BINARY_SETTINGS.some((a) => s.shellSettings[`sandbox.${a}`] !== undefined),
+  );
+  let mapped_2 = e.map((s) =>
+    [...SENSITIVE_POLICY_KEYS].some((a) => s.sandboxSettings[`sandbox.${a}`] !== undefined),
+  );
   e.forEach((s, a) => {
     if (mapped.some((c, g) => c && g !== a))
       for (let c of SANDBOX_TOGGLE_KEYS) {
         let g = s.sandboxSwitches[c];
-        if (g !== void 0) s.sandboxSettings[`sandbox.${c}`] = Ve({ value: g });
+        if (g !== undefined)
+          s.sandboxSettings[`sandbox.${c}`] = toCanonicalPath({
+            value: g,
+          });
       }
     if (mapped_2.some((c, g) => c && g !== a)) {
       let c = s.sandboxSwitches[NETWORK_ALLOWEDDOMAINS];
-      if (c !== void 0) s.sandboxSettings[`sandbox.${NETWORK_ALLOWEDDOMAINS}`] = Ve({ value: vu(c) ?? c });
+      if (c !== undefined)
+        s.sandboxSettings[`sandbox.${NETWORK_ALLOWEDDOMAINS}`] = toCanonicalPath({
+          value: sortedStringList(c) ?? c,
+        });
     }
   });
 }
 //@ chunk-dcmhvw5a.js:381754-381812 placement
-var Ru = [...SUPPORTED_PLATFORMS.map((e) => `${e}.defaultSettings`), "default"];
+var POLICY_HELPER_SETTING_PATHS = [...SUPPORTED_PLATFORMS.map((e) => `${e}.defaultSettings`), "default"];
+//@ chunk-dcmhvw5a.js:381812-381944 placement
 /**
  * 列出载荷中含危险内容的 policyHelpers 槽位。
  */
-//@ chunk-dcmhvw5a.js:381812-381944 placement
 function riskyPayloadSlots(e) {
   let n = [];
-  for (let r of Ru) {
-    let s = `policyHelpers.${r}`,
-      a = e.payloadSlots[s];
-    if (a !== void 0 && hasRiskySettings(a)) n.push([s, a]);
+  for (let r of POLICY_HELPER_SETTING_PATHS) {
+    let s = `policyHelpers.${r}`;
+    let a = e.payloadSlots[s];
+    if (a !== undefined && hasRiskySettings(a)) n.push([s, a]);
   }
   return n;
 }
 //@ chunk-dcmhvw5a.js:381944-382011 placement
-function TPi(e, n) {
-  let r = e.payloadSlots[n];
-  return r !== void 0 && hasRiskySettings(r);
+/**
+ * 函数 hasPayloadSlot（payloadSlots 有条目）；位于「托管设置危险项提取与比较：hooks、apiKeyHelper、危险环境变量（含增强遥测）等，判断自上次批准后是否变化」模块。
+ */
+function hasPayloadSlot(e, sourceField) {
+  let r = e.payloadSlots[sourceField];
+  return r !== undefined && hasRiskySettings(r);
 }
 //@ chunk-dcmhvw5a.js:382011-382188 placement
 function hasRiskySettings(e) {
@@ -369,14 +423,14 @@ function hasRiskySettings(e) {
   );
 }
 //@ chunk-dcmhvw5a.js:382188-382243 placement
-var Tu = new Set(["credentials", "network.tlsTerminate"]);
+var SENSITIVE_POLICY_KEYS = new Set(["credentials", "network.tlsTerminate"]);
 //@ chunk-dcmhvw5a.js:382243-382334 placement
-function vu(e) {
-  return Array.isArray(e) ? uniq(e.filter((n) => typeof n === "string")).sort() : void 0;
+function sortedStringList(e) {
+  return Array.isArray(e) ? uniq(e.filter((n) => typeof n === "string")).sort() : undefined;
 }
 //@ chunk-dcmhvw5a.js:382334-382442 placement
-function getAtPath_2(e, n) {
-  let r = e;
+function getAtPath_2(sandbox, n) {
+  let r = sandbox;
   for (let s of n.split(".")) {
     if (r === null || typeof r !== "object") return;
     r = r[s];
@@ -384,162 +438,179 @@ function getAtPath_2(e, n) {
   return r;
 }
 //@ chunk-dcmhvw5a.js:382442-382577 placement
-function isMeaningfulValue(e, n) {
-  if (n === void 0 || n === null || n === !1) return !1;
-  if (Array.isArray(n) && n.length === 0) return !1;
-  return !(e === "credentials" && isCredentialsSettingShape(n));
+function isMeaningfulValue(e, atPath) {
+  if (atPath === undefined || atPath === null || atPath === false) return false;
+  if (Array.isArray(atPath) && atPath.length === 0) return false;
+  return !(e === "credentials" && isCredentialsSettingShape(atPath));
 }
 //@ chunk-dcmhvw5a.js:382577-382804 placement
-function isRiskyIsolationValue(e, n) {
-  if (n === void 0 || n === null) return !1;
+function isRiskyIsolationValue(e, atPath) {
+  if (atPath === undefined || atPath === null) return false;
   switch (e) {
     case "required":
-      return n !== !1;
+      return atPath !== false;
     case "egress":
       return (
-        !isPlainObject(n) ||
-        Object.entries(n).some(([r, s]) =>
-          QE.has(r) ? s !== void 0 && s !== null && !(Array.isArray(s) && s.length === 0) : s !== void 0,
+        !isPlainObject(atPath) ||
+        Object.entries(atPath).some(([key, value]) =>
+          NETWORK_HOST_KEYS.has(key)
+            ? value !== undefined && value !== null && !(Array.isArray(value) && value.length === 0)
+            : value !== undefined,
         )
       );
   }
 }
 //@ chunk-dcmhvw5a.js:382804-382851 placement
-var QE = new Set(["allowedHosts", "deniedHosts"]);
+var NETWORK_HOST_KEYS = new Set(["allowedHosts", "deniedHosts"]);
+//@ chunk-dcmhvw5a.js:382851-383237 placement
 /**
  * 判断 credentials 设置是否为合法形状（files/envVars 条目带 mode）。
  */
-//@ chunk-dcmhvw5a.js:382851-383237 placement
 function isCredentialsSettingShape(e) {
-  if (typeof e !== "object" || e === null) return !1;
-  return Object.entries(e).every(([n, r]) => {
-    if (r === void 0) return !0;
-    if (n === "files" || n === "envVars")
-      return Array.isArray(r) && r.every((s) => typeof s === "object" && s !== null && s.mode === "deny");
-    if (n === "sigv4")
+  if (typeof e !== "object" || e === null) return false;
+  return Object.entries(e).every(([key, value]) => {
+    if (value === undefined) return true;
+    if (key === "files" || key === "envVars")
       return (
-        typeof r === "object" && r !== null && Object.values(r).every((s) => s === void 0 || s === "deny")
+        Array.isArray(value) && value.every((s) => typeof s === "object" && s !== null && s.mode === "deny")
       );
-    return n === "allowPlaintextInject" && r === !1;
+    if (key === "sigv4")
+      return (
+        typeof value === "object" &&
+        value !== null &&
+        Object.values(value).every((s) => s === undefined || s === "deny")
+      );
+    return key === "allowPlaintextInject" && value === false;
   });
 }
 //@ chunk-dcmhvw5a.js:383237-383297 fingerprint = hasDangerousSettingsChanged (0.574)
 function hasDangerousSettingsChanged(e) {
-  return Object.keys(e.shellSettings).some(Pu);
+  return Object.keys(e.shellSettings).some(isPolicyHelperName);
 }
 //@ chunk-dcmhvw5a.js:383297-383358 placement
-function Pu(e) {
+function isPolicyHelperName(e) {
   return SUPPORTED_PLATFORMS.some((n) => e === `policyHelpers.${n}`);
 }
+//@ chunk-dcmhvw5a.js:383358-383483 placement
 /**
  * 判断托管设置是否需要用户确认：危险设置有变化、新增 extraKnownMarketplaces，或存在危险的 policyHelpers 槽位。
  */
-//@ chunk-dcmhvw5a.js:383358-383483 placement
 function needsManagedSettingsConsent(e) {
   return (
     hasDangerousSettingsChanged(e) ||
-    Object.keys(e.shellSettings).some((n) => n.startsWith("extraKnownMarketplaces[")) ||
+    Object.keys(e.shellSettings).some((key) => key.startsWith("extraKnownMarketplaces[")) ||
     riskyPayloadSlots(e).length > 0
   );
 }
 //@ chunk-dcmhvw5a.js:383483-383526 placement
-function xu(e) {
-  return e === "sh" || e === "pwsh";
+function isShellHelper(interpreter) {
+  return interpreter === "sh" || interpreter === "pwsh";
 }
+//@ chunk-dcmhvw5a.js:383526-383658 placement
 /**
  * 判断 policyHelper 配置是否为内联脚本形式（合法 interpreter + 字符串 script）。
  */
-//@ chunk-dcmhvw5a.js:383526-383658 placement
 function isInlineScriptHelper(e) {
   return (
     e !== null &&
     typeof e === "object" &&
     "interpreter" in e &&
-    xu(e.interpreter) &&
+    isShellHelper(e.interpreter) &&
     "script" in e &&
     typeof e.script === "string"
   );
 }
+//@ chunk-dcmhvw5a.js:383658-383696 placement
 /**
  * 取 policyHelper 配置对应的命令文本。
  */
-//@ chunk-dcmhvw5a.js:383658-383696 placement
 function getPolicyHelperCommand(e) {
   return policyHelperCommand(e)?.command;
 }
 //@ chunk-dcmhvw5a.js:383696-383995 placement
 function policyHelperCommand(e) {
   if (e === null || typeof e !== "object") return;
-  let {
-      path: path,
-      script: script,
-      interpreter: interpreter,
-      timeoutMs: timeoutMs,
-      refreshIntervalMs: refreshIntervalMs,
-    } = e,
-    g,
-    m;
+  let { path, script, interpreter, timeoutMs, refreshIntervalMs } = e;
+  let g;
+  let scriptSize;
   if (typeof path === "string" && path) g = path;
-  else if (typeof script === "string" && script && xu(interpreter))
-    ((g = { interpreter: interpreter, script: Nu(script) }), (m = oC(script)));
-  else return;
-  return { command: jsonStringify([g, timeoutMs ?? null, refreshIntervalMs ?? null]), scriptSize: m };
+  else if (typeof script === "string" && script && isShellHelper(interpreter)) {
+    g = {
+      interpreter,
+      script: normalizePathText(script),
+    };
+    scriptSize = editSizeOf(script);
+  } else return;
+  return {
+    command: jsonStringify([g, timeoutMs ?? null, refreshIntervalMs ?? null]),
+    scriptSize,
+  };
 }
 //@ chunk-dcmhvw5a.js:384090-384121 placement
-function Nu(e) {
+function normalizePathText(e) {
   return computeContentHash(jsonStringify(e));
 }
 //@ chunk-dcmhvw5a.js:384121-384364 placement
 function hookCommandText(e) {
-  if (typeof e === "string") return e || void 0;
+  if (typeof e === "string") return e || undefined;
   if (e === null || typeof e !== "object" || !("command" in e) || typeof e.command !== "string" || !e.command)
     return;
   let n = "args" in e && Array.isArray(e.args) ? e.args.map(String) : [];
   return jsonStringify([e.command, ...n]);
 }
+//@ chunk-dcmhvw5a.js:384364-384421 placement
 /**
  * 摘要中是否含任何需要确认的危险设置（含 hooks 与 payload 槽位）。
  */
-//@ chunk-dcmhvw5a.js:384364-384421 placement
 function hasDangerousManagedSettings(e) {
   return hasRiskySettings(e) || e.hasHooks || riskyPayloadSlots(e).length > 0;
 }
 //@ chunk-dcmhvw5a.js:384421-384453 placement
-function vs(e) {
-  return Ve(dangerousSettingsDigestInput(e));
+function canonicalPath(e) {
+  return toCanonicalPath(dangerousSettingsDigestInput(e));
 }
+//@ chunk-dcmhvw5a.js:384453-384763 placement
 /**
  * 生成用于计算同意摘要哈希的危险设置对象。
  */
-//@ chunk-dcmhvw5a.js:384453-384763 placement
 function dangerousSettingsDigestInput(e) {
   return {
     shellSettings: e.shellSettings,
     envVars: e.envVars,
-    sandboxSettings: Object.keys(e.sandboxSettings).length > 0 ? e.sandboxSettings : void 0,
+    sandboxSettings: Object.keys(e.sandboxSettings).length > 0 ? e.sandboxSettings : undefined,
     ...isolationSettingsField(e),
     hooks: e.hooks,
     payloadSlots:
       riskyPayloadSlots(e).length > 0
         ? Object.fromEntries(
             riskyPayloadSlots(e).map(([n, r]) => {
-              let { isolationSettings: isolationSettings, ...a } = r;
-              return [n, { ...a, ...isolationSettingsField(r) }];
+              let { isolationSettings, ...a } = r;
+              return [
+                n,
+                {
+                  ...a,
+                  ...isolationSettingsField(r),
+                },
+              ];
             }),
           )
-        : void 0,
+        : undefined,
   };
 }
 //@ chunk-dcmhvw5a.js:384763-384870 placement
 function isolationSettingsField(e) {
-  return Object.keys(e.isolationSettings).length > 0 ? { isolationSettings: e.isolationSettings } : {};
+  return Object.keys(e.isolationSettings).length > 0
+    ? {
+        isolationSettings: e.isolationSettings,
+      }
+    : {};
 }
+//@ chunk-dcmhvw5a.js:384870-385347 placement
 /**
  * 为托管设置里的插件槽位（enabledPlugins、prepend/appendPlugins 等）生成危险项条目。
  */
-//@ chunk-dcmhvw5a.js:384870-385347 placement
-function pluginSlotDangerEntries(e, n, r) {
-  let s = new Set(Object.keys(r).map((a) => nfcLower(`${a}@${n}`)));
+function pluginSlotDangerEntries(e, n, pluginDigests) {
+  let s = new Set(Object.keys(pluginDigests).map((key) => nfcLower(`${key}@${n}`)));
   return e.flatMap(([a, c]) =>
     [
       "enabledPlugins",
@@ -549,9 +620,9 @@ function pluginSlotDangerEntries(e, n, r) {
       "outputBehavior",
       "slotPresent",
     ].flatMap((g) => {
-      let m = c[g],
-        f = g === "enabledPlugins" ? isPlainObject(m) : Array.isArray(m);
-      if (m === void 0) return [];
+      let m = c[g];
+      let f = g === "enabledPlugins" ? isPlainObject(m) : Array.isArray(m);
+      if (m === undefined) return [];
       if (!f) return [[a, `${g}:whole`, m]];
       return (isPlainObject(m) ? Object.entries(m).toSorted() : [m].flat().map((y) => [y]))
         .filter(([y]) => typeof y !== "string" || s.has(nfcLower(y)))
@@ -560,93 +631,112 @@ function pluginSlotDangerEntries(e, n, r) {
   );
 }
 //@ chunk-dcmhvw5a.js:385347-385378 placement
-function Ve(e) {
-  return jsonStringify(sortKeysDeep(e));
+function toCanonicalPath(hooks) {
+  return jsonStringify(sortKeysDeep(hooks));
 }
 //@ chunk-dcmhvw5a.js:385378-385411 placement
-function hbr(e) {
-  return computeContentHash(vs(e));
+/**
+ * 函数 realCanonicalPath（真实路径）；位于「托管设置危险项提取与比较：hooks、apiKeyHelper、危险环境变量（含增强遥测）等，判断自上次批准后是否变化」模块。
+ */
+function realCanonicalPath(e) {
+  return computeContentHash(canonicalPath(e));
 }
+//@ chunk-dcmhvw5a.js:385411-385527 placement
 /**
  * 判断托管设置摘要是否与已同意的哈希一致（直接比较，或加入 CLAUDE.md 内容后重算比较）。
  */
-//@ chunk-dcmhvw5a.js:385411-385527 placement
-function matchesConsentedHash(e, n, r) {
-  if (hbr(n) === e) return !0;
+function matchesConsentedHash(e, n, claudeMd) {
+  if (realCanonicalPath(n) === e) return true;
   return (
-    typeof r === "string" &&
-    r.length > 0 &&
-    computeContentHash(Ve({ ...dangerousSettingsDigestInput(n), claudeMd: r })) === e
+    typeof claudeMd === "string" &&
+    claudeMd.length > 0 &&
+    computeContentHash(
+      toCanonicalPath({
+        ...dangerousSettingsDigestInput(n),
+        claudeMd,
+      }),
+    ) === e
   );
 }
+//@ chunk-dcmhvw5a.js:385527-385683 placement
 /**
  * 解析 headersHelper 的 JSON 三元组，取出命令与可选 URL。
  */
-//@ chunk-dcmhvw5a.js:385527-385683 placement
 function parseHeadersHelperCommand(e) {
-  let n = safeParseJSON(e, !1);
+  let n = safeParseJSON(e, false);
   if (!Array.isArray(n) || n.length !== 3 || typeof n[0] !== "string") return;
-  return { command: n[0], url: typeof n[2] === "string" ? n[2] : void 0 };
+  return {
+    command: n[0],
+    url: typeof n[2] === "string" ? n[2] : undefined,
+  };
 }
 //@ chunk-dcmhvw5a.js:385683-385770 placement
-function _u(e, n, r) {
-  return jsonStringify([e, typeof n === "string" ? n : null, typeof r === "string" ? r : null]);
+function joinPathParts(headersHelper, n, r) {
+  return jsonStringify([headersHelper, typeof n === "string" ? n : null, typeof r === "string" ? r : null]);
 }
 //@ chunk-dcmhvw5a.js:385770-385868 placement
-function yu(e, n) {
-  let r = summarizeManagedSettingsRisk(e),
-    s = summarizeManagedSettingsRisk(n);
-  if (!hasDangerousManagedSettings(s)) return !1;
-  if (!hasDangerousManagedSettings(r)) return !0;
-  return vs(r) !== vs(s);
+function isPathShadowed(e, n) {
+  let r = summarizeManagedSettingsRisk(e);
+  let s = summarizeManagedSettingsRisk(n);
+  if (!hasDangerousManagedSettings(s)) return false;
+  if (!hasDangerousManagedSettings(r)) return true;
+  return canonicalPath(r) !== canonicalPath(s);
 }
+//@ chunk-dcmhvw5a.js:385868-386089 placement
 /**
  * 判断已同意的托管设置是否需要重新征求同意：按同意来源（已同意的 payload 或组织记录）比较当前危险项与哈希/已同意内容。
  */
-//@ chunk-dcmhvw5a.js:385868-386089 placement
 function managedSettingsNeedReconsent(e, n) {
   switch (e.source) {
     case "consented_payload":
-      return yu(e.settings, n);
+      return isPathShadowed(e.settings, n);
     case "org_record": {
       let r = summarizeManagedSettingsRisk(n);
-      if (!hasDangerousManagedSettings(r)) return !1;
-      if (matchesConsentedHash(e.dangerousSettingsHash, r, n?.claudeMd)) return !1;
-      return yu(e.consentedPayload, n);
+      if (!hasDangerousManagedSettings(r)) return false;
+      if (matchesConsentedHash(e.dangerousSettingsHash, r, n?.claudeMd)) return false;
+      return isPathShadowed(e.consentedPayload, n);
     }
   }
 }
 //@ chunk-dcmhvw5a.js:386089-387329 fingerprint = extractDangerousSettings (0.426)
-function extractDangerousSettings(e, n) {
-  let r = summarizeManagedSettingsRisk(e),
-    s = {},
-    a = diffSettingsMap(r.shellSettings, n.shellSettings, s),
-    c = {},
-    g = diffSettingsMap(r.envVars, n.envVars, c),
-    m = {},
-    f = diffSettingsMap(r.sandboxSettings, n.sandboxSettings, m),
-    h = {},
-    y = diffSettingsMap(r.isolationSettings, n.isolationSettings, h),
-    b = a.unchanged + g.unchanged + f.unchanged + y.unchanged,
-    S = a.removed + g.removed + f.removed + y.removed;
-  if (r.hasHooks && !n.hasHooks) S++;
-  let hasHooks = n.hasHooks && !(r.hasHooks && Ve(r.hooks) === Ve(n.hooks));
-  if (n.hasHooks && !hasHooks) b++;
+function extractDangerousSettings(baseline, dangerous) {
+  let r = summarizeManagedSettingsRisk(baseline);
+  let s = {};
+  let a = diffSettingsMap(r.shellSettings, dangerous.shellSettings, s);
+  let c = {};
+  let g = diffSettingsMap(r.envVars, dangerous.envVars, c);
+  let m = {};
+  let f = diffSettingsMap(r.sandboxSettings, dangerous.sandboxSettings, m);
+  let h = {};
+  let y = diffSettingsMap(r.isolationSettings, dangerous.isolationSettings, h);
+  let b = a.unchanged + g.unchanged + f.unchanged + y.unchanged;
+  let S = a.removed + g.removed + f.removed + y.removed;
+  if (r.hasHooks && !dangerous.hasHooks) S++;
+  let hasHooks =
+    dangerous.hasHooks && !(r.hasHooks && toCanonicalPath(r.hooks) === toCanonicalPath(dangerous.hooks));
+  if (dangerous.hasHooks && !hasHooks) b++;
   let w = {};
-  for (let [L, v] of riskyPayloadSlots(n)) {
-    let j = r.payloadSlots[L],
-      x = { shellSettings: {}, envVars: {}, sandboxSettings: {}, isolationSettings: {} };
-    for (let { unchanged: unchanged, removed: removed } of [
+  for (let [L, v] of riskyPayloadSlots(dangerous)) {
+    let j = r.payloadSlots[L];
+    let x = {
+      shellSettings: {},
+      envVars: {},
+      sandboxSettings: {},
+      isolationSettings: {},
+    };
+    for (let { unchanged, removed } of [
       diffSettingsMap(j?.shellSettings ?? {}, v.shellSettings, x.shellSettings),
       diffSettingsMap(j?.envVars ?? {}, v.envVars, x.envVars),
       diffSettingsMap(j?.sandboxSettings ?? {}, v.sandboxSettings, x.sandboxSettings),
       diffSettingsMap(j?.isolationSettings ?? {}, v.isolationSettings, x.isolationSettings),
-    ])
-      ((b += unchanged), (S += removed));
+    ]) {
+      b += unchanged;
+      S += removed;
+    }
     if (hasRiskySettings(x)) w[L] = x;
   }
   for (let [L, v] of riskyPayloadSlots(r))
-    if (n.payloadSlots[L] === void 0)
+    if (dangerous.payloadSlots[L] === undefined)
       S +=
         Object.keys(v.shellSettings).length +
         Object.keys(v.envVars).length +
@@ -655,12 +745,12 @@ function extractDangerousSettings(e, n) {
   return {
     changed: {
       shellSettings: s,
-      inlineHelperScriptSizes: n.inlineHelperScriptSizes,
+      inlineHelperScriptSizes: dangerous.inlineHelperScriptSizes,
       envVars: c,
       sandboxSettings: m,
       isolationSettings: h,
-      hasHooks: hasHooks,
-      hooks: hasHooks ? n.hooks : void 0,
+      hasHooks,
+      hooks: hasHooks ? dangerous.hooks : undefined,
       payloadSlots: w,
     },
     unchangedCount: b,
@@ -670,97 +760,99 @@ function extractDangerousSettings(e, n) {
 //@ chunk-dcmhvw5a.js:387329-387554 layout
 function diffSettingsMap(e, n, r) {
   let s = 0;
-  for (let [c, g] of Object.entries(n)) {
-    if (g === void 0) continue;
-    if (Object.hasOwn(e, c) && e[c] === g) s++;
-    else r[c] = g;
+  for (let [key, value] of Object.entries(n)) {
+    if (value === undefined) continue;
+    if (Object.hasOwn(e, key) && e[key] === value) s++;
+    else r[key] = value;
   }
   let a = 0;
-  for (let c of Object.keys(e)) if (!Object.hasOwn(n, c)) a++;
-  return { unchanged: s, removed: a };
+  for (let key of Object.keys(e)) if (!Object.hasOwn(n, key)) a++;
+  return {
+    unchanged: s,
+    removed: a,
+  };
 }
+//@ chunk-dcmhvw5a.js:387554-387850 layout
 /**
  * OTLP 导出端点环境变量名的匹配正则（含 traces/logs/metrics 及 ANT_ 前缀版本），以及增强遥测开关变量名集合。
  */
-//@ chunk-dcmhvw5a.js:387554-387850 layout
-var OTLP_ENDPOINT_RE = /^OTEL_EXPORTER_OTLP_(?:LOGS_|METRICS_|TRACES_)?ENDPOINT$/,
-  OTLP_TRACES_ENDPOINT_RE = /^OTEL_EXPORTER_OTLP_(?:TRACES_)?ENDPOINT$/,
-  OTLP_ANY_ENDPOINT_RE =
-    /^(?:ANT_OTEL_EXPORTER_OTLP_ENDPOINT|OTEL_EXPORTER_OTLP_(?:LOGS_|METRICS_|TRACES_)?ENDPOINT)$/,
-  ENHANCED_TELEMETRY_VARS = new Set([
-    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA",
-    "ENABLE_ENHANCED_TELEMETRY_BETA",
-  ]);
+var OTLP_ENDPOINT_RE = /^OTEL_EXPORTER_OTLP_(?:LOGS_|METRICS_|TRACES_)?ENDPOINT$/;
+var OTLP_TRACES_ENDPOINT_RE = /^OTEL_EXPORTER_OTLP_(?:TRACES_)?ENDPOINT$/;
+var OTLP_ANY_ENDPOINT_RE =
+  /^(?:ANT_OTEL_EXPORTER_OTLP_ENDPOINT|OTEL_EXPORTER_OTLP_(?:LOGS_|METRICS_|TRACES_)?ENDPOINT)$/;
+var ENHANCED_TELEMETRY_VARS = new Set([
+  "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA",
+  "ENABLE_ENHANCED_TELEMETRY_BETA",
+]);
+//@ chunk-dcmhvw5a.js:387850-388090 layout
 /**
  * 托管设置的危险项是否只有 OTLP 遥测端点（及增强遥测开关）而无 hooks/shell/沙箱/隔离设置——此类改动可简化确认。
  */
-//@ chunk-dcmhvw5a.js:387850-388090 layout
-function isTelemetryOnlyChange(e, n) {
-  let r = n ? summarizeManagedSettingsRisk(n) : e,
-    s = [r, ...riskyPayloadSlots(r).map(([, a]) => a)];
+function isTelemetryOnlyChange(e, settings) {
+  let r = settings ? summarizeManagedSettingsRisk(settings) : e;
+  let s = [r, ...riskyPayloadSlots(r).map(([, a]) => a)];
   return (
     onlyTelemetryEnvVars(e) &&
     onlyTelemetryEnvVars(r) &&
     !r.hasHooks &&
     s.every(
-      (a) =>
-        Object.keys(a.shellSettings).length === 0 &&
-        Object.keys(a.sandboxSettings).length === 0 &&
-        Object.keys(a.isolationSettings).length === 0,
+      (dangerous) =>
+        Object.keys(dangerous.shellSettings).length === 0 &&
+        Object.keys(dangerous.sandboxSettings).length === 0 &&
+        Object.keys(dangerous.isolationSettings).length === 0,
     )
   );
 }
 //@ chunk-dcmhvw5a.js:388090-388361 fingerprint = hasDangerousSettings (0.736)
-function hasDangerousSettings(e, n) {
-  let r = n ? summarizeManagedSettingsRisk(n) : e,
-    s = [r, ...riskyPayloadSlots(r).map(([, a]) => a)];
+function hasDangerousSettings(e, settings) {
+  let r = settings ? summarizeManagedSettingsRisk(settings) : e;
+  let s = [r, ...riskyPayloadSlots(r).map(([, a]) => a)];
   return (
     !r.hasHooks &&
     s.some((a) => Object.keys(a.isolationSettings).length > 0) &&
     s.every(
-      (a) =>
-        Object.keys(a.shellSettings).length === 0 &&
-        Object.keys(a.envVars).length === 0 &&
-        Object.keys(a.sandboxSettings).length === 0,
+      (dangerous) =>
+        Object.keys(dangerous.shellSettings).length === 0 &&
+        Object.keys(dangerous.envVars).length === 0 &&
+        Object.keys(dangerous.sandboxSettings).length === 0,
     )
   );
 }
 //@ chunk-dcmhvw5a.js:388361-388586 affinity
 function onlyTelemetryEnvVars(e) {
-  let n = describeEnvRows(e),
-    r = (a) => a.url !== void 0 && OTLP_ENDPOINT_RE.test(a.key.toUpperCase()),
-    s =
-      !n.some((a) => a.tracesSwitch === !0) ||
-      n.some((a) => r(a) && OTLP_TRACES_ENDPOINT_RE.test(a.key.toUpperCase()));
-  return n.some(r) && s && n.every((a) => r(a) || a.tracesSwitch === !0);
+  let n = describeEnvRows(e);
+  let r = (a) => a.url !== undefined && OTLP_ENDPOINT_RE.test(a.key.toUpperCase());
+  let s =
+    !n.some((a) => a.tracesSwitch === true) ||
+    n.some((a) => r(a) && OTLP_TRACES_ENDPOINT_RE.test(a.key.toUpperCase()));
+  return n.some(r) && s && n.every((a) => r(a) || a.tracesSwitch === true);
 }
-
 export {
   getPluginDisplayName,
   describeArchiveFetchCommand,
   printablePluginName,
-  Tct,
+  trimmedOrUndefined,
   sanitizePluginManifestForDisplay,
   summarizeManagedSettingsRisk,
   extractDangerousSettings,
   hasDangerousManagedSettings,
   isTelemetryOnlyChange,
   hasDangerousSettings,
-  hbr,
+  realCanonicalPath,
   managedSettingsNeedReconsent,
   isInlineScriptHelper,
-  Nu,
+  normalizePathText,
   riskyPayloadSlots,
   ENHANCED_TELEMETRY_VARS,
   OTLP_ANY_ENDPOINT_RE,
-  Pu,
+  isPolicyHelperName,
   escapeNonPrintable,
   parseHeadersHelperCommand,
   needsManagedSettingsConsent,
   matchesConsentedHash,
   isMergingPolicyHelper,
   policyHelperSlots,
-  Ps,
-  TPi,
+  isPolicyHelperPath,
+  hasPayloadSlot,
   getPolicyHelperCommand,
 };

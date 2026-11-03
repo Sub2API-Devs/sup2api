@@ -8,8 +8,7 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:7960-8007 cjs-require-graph
-var co = x(function (Xl, uo) {
-  uo.exports = Math.min;
+var require_min = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Math.min;
 });
-
-export { co };
+export { require_min };

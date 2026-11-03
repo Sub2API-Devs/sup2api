@@ -9,11 +9,14 @@
  * attribution: callgraph-fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, pe, oe } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-4pc1m5n9.js:4092-4155 callgraph-fingerprint = RemoteManagedSettingsResponseSchema (0.502)
 var RemoteManagedSettingsResponseSchema = DoctorLazy(() =>
-  u({ uuid: o(), checksum: o(), settings: pe(o(), oe()) }),
+  u({
+    uuid: string(),
+    checksum: string(),
+    settings: record(string(), unknown()),
+  }),
 );
-
 export { RemoteManagedSettingsResponseSchema };

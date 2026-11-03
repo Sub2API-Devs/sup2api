@@ -38,284 +38,390 @@ import { getDenyAndAskUrlRules, matchesWildcardPattern } from "../permissions/ur
 import { artifactViewerUrl } from "../../../services/artifacts/publishInstanceFiles.js";
 import { findUrlContentRule } from "../permissions/ruleTarget.js";
 import { getRuleExactDomain, filterRulesMatchingUrls } from "../../../utils/permissions/permissions.js";
-import { wi } from "../typeCatalog.js";
+import { typeRowTitle } from "../typeCatalog.js";
 import { sweepScalarField } from "../../../services/artifacts/artifactPeople.js";
-import { Ro } from "../designSystems.js";
+import { clearQuickstartNoneFlags } from "../designSystems.js";
 
 //@ chunk-8wvtd8sr.js:106809-106924 placement
-function describeTypeTarget(e, n = canonicalArtifactTargetFor) {
+function describeTypeTarget(e, classifierArtifactTargetFor = canonicalArtifactTargetFor) {
   let s = typeOf(e);
-  return s !== void 0
+  return s !== undefined
     ? `the type named ${quoteForDecisionSurface(s, TITLE_MAX_CHARS)}`
-    : n(typeUrlOf(e), "(unrecognized address)");
+    : classifierArtifactTargetFor(typeUrlOf(e), "(unrecognized address)");
 }
 //@ chunk-8wvtd8sr.js:106924-106977 placement
-function Non(e) {
-  return e.scope === void 0 ? "all" : listScopeFrom(e);
+/**
+ * 取列表 scope，未设置时按 all 处理。
+ */
+function listScopeOrDefault(e) {
+  return e.scope === undefined ? "all" : listScopeFrom(e);
 }
 //@ chunk-8wvtd8sr.js:106977-107255 placement
-var LIST_BY_TYPE_UNAVAILABLE = "listing the Artifacts made from a type is not available in this session",
-  TYPE_AND_TYPE_URL_BOTH = "`type` and `type_url` both name the type to list \u2014 pass one of them",
-  EMPTY_TYPE_NAME =
-    '`type` is empty \u2014 pass an Artifact type\'s name (as action "list_types" shows it), or its link as `type_url`';
+var LIST_BY_TYPE_UNAVAILABLE = "listing the Artifacts made from a type is not available in this session";
+var TYPE_AND_TYPE_URL_BOTH = "`type` and `type_url` both name the type to list \u2014 pass one of them";
+var EMPTY_TYPE_NAME =
+  '`type` is empty \u2014 pass an Artifact type\'s name (as action "list_types" shows it), or its link as `type_url`';
 //@ chunk-8wvtd8sr.js:107255-107390 placement
 function noTypeNamedMessage(e) {
   return `no Artifact type named ${jsonStringify(e)} is published for this account \u2014 action "list_types" shows the ones that are`;
 }
 //@ chunk-8wvtd8sr.js:107390-107632 placement
-function typeNotFoundPartialMessage(e, n) {
-  return `none of the ${n} Artifact ${plural(n, "type")} read is named ${jsonStringify(e)} exactly, and the listing could not be read completely \u2014 action "list_types" shows what is published; pass the type's link from there as \`type_url\``;
+function typeNotFoundPartialMessage(e, listed) {
+  return `none of the ${listed} Artifact ${plural(listed, "type")} read is named ${jsonStringify(e)} exactly, and the listing could not be read completely \u2014 action "list_types" shows what is published; pass the type's link from there as \`type_url\``;
 }
 //@ chunk-8wvtd8sr.js:107632-107853 placement
-function ambiguousTypeNameMessage(e, n) {
-  return `${n.length} published Artifact types are named ${jsonStringify(e)}: ${n.map((s) => `${jsonStringify(s.title)} \u2014 ${s.typeUrl}`).join("; ")} \u2014 pass the one you mean by its link, as \`type_url\` instead of \`type\``;
+function ambiguousTypeNameMessage(e, named) {
+  return `${named.length} published Artifact types are named ${jsonStringify(e)}: ${named.map((s) => `${jsonStringify(s.title)} \u2014 ${s.typeUrl}`).join("; ")} \u2014 pass the one you mean by its link, as \`type_url\` instead of \`type\``;
 }
 //@ chunk-8wvtd8sr.js:107853-107914 placement
-var cy = new Set(["action", "type", "type_url", "scope", "limit"]);
+var LIST_BY_TYPE_ALLOWED_KEYS = new Set(["action", "type", "type_url", "scope", "limit"]);
+//@ chunk-8wvtd8sr.js:107914-108673 placement
 /**
  * 校验 list + type/type_url：类型目录需开启，只能带 scope/limit，type 与 type_url 只能二选一，type 名不能为空，type_url 必须是合法类型链接。
  */
-//@ chunk-8wvtd8sr.js:107914-108673 placement
 function validateListByTypeInput(e) {
-  if (getLiveState().frozenArtifactTypes?.typeCatalogOn !== !0)
-    return { result: !1, message: LIST_BY_TYPE_UNAVAILABLE, errorCode: 8 };
-  let filtered = Object.keys(e).filter((y) => !cy.has(y) && e[y] !== void 0);
-  if (filtered.length > 0)
+  if (getLiveState().frozenArtifactTypes?.typeCatalogOn !== true)
     return {
-      result: !1,
-      message: `action "list" with \`type\` or \`type_url\` takes only \`scope\` and \`limit\` \u2014 remove ${filtered.join(", ")}.${getLiveState().frozenArtifactTypes?.typeCreateOn === !0 ? " To start a new Artifact from the type, omit `action` and pass its `type_url`." : ""}`,
+      result: false,
+      message: LIST_BY_TYPE_UNAVAILABLE,
       errorCode: 8,
     };
-  let s = typeOf(e),
-    r = typeUrlOf(e);
-  if (s !== void 0 && r !== void 0) return { result: !1, message: TYPE_AND_TYPE_URL_BOTH, errorCode: 8 };
-  if (s !== void 0)
+  let filtered = Object.keys(e).filter((key) => !LIST_BY_TYPE_ALLOWED_KEYS.has(key) && e[key] !== undefined);
+  if (filtered.length > 0)
+    return {
+      result: false,
+      message: `action "list" with \`type\` or \`type_url\` takes only \`scope\` and \`limit\` \u2014 remove ${filtered.join(", ")}.${getLiveState().frozenArtifactTypes?.typeCreateOn === true ? " To start a new Artifact from the type, omit `action` and pass its `type_url`." : ""}`,
+      errorCode: 8,
+    };
+  let s = typeOf(e);
+  let r = typeUrlOf(e);
+  if (s !== undefined && r !== undefined)
+    return {
+      result: false,
+      message: TYPE_AND_TYPE_URL_BOTH,
+      errorCode: 8,
+    };
+  if (s !== undefined)
     return typeNameKey(typeNameWithoutQuotes(s)) === ""
-      ? { result: !1, message: EMPTY_TYPE_NAME, errorCode: 8 }
-      : { result: !0 };
-  let h = parseSessionArtifactUrl(r ?? "", { notUrlMessage: notTypeUrlError(r ?? "") });
-  if (!h.ok) return { result: !1, message: h.message, errorCode: h.errorCode };
-  return { result: !0 };
+      ? {
+          result: false,
+          message: EMPTY_TYPE_NAME,
+          errorCode: 8,
+        }
+      : {
+          result: true,
+        };
+  let sessionArtifactUrl = parseSessionArtifactUrl(r ?? "", {
+    notUrlMessage: notTypeUrlError(r ?? ""),
+  });
+  if (!sessionArtifactUrl.ok)
+    return {
+      result: false,
+      message: sessionArtifactUrl.message,
+      errorCode: sessionArtifactUrl.errorCode,
+    };
+  return {
+    result: true,
+  };
 }
+//@ chunk-8wvtd8sr.js:108673-108893 placement
 /**
  * 按类型列出 Artifact 为只读操作的说明，以及会把组织内他人发布的标题与链接读入对话的提示。
  */
-//@ chunk-8wvtd8sr.js:108673-108893 placement
 var LIST_BY_TYPE_READ_ONLY_REASON =
-    "Listing the Artifacts made from a type that the user can open is a read-only action",
-  OTHERS_TITLES_READ_CLAUSE =
-    "titles, descriptions and links of Artifacts other people in the organization published will be read into the conversation";
+  "Listing the Artifacts made from a type that the user can open is a read-only action";
+var OTHERS_TITLES_READ_CLAUSE =
+  "titles, descriptions and links of Artifacts other people in the organization published will be read into the conversation";
+//@ chunk-8wvtd8sr.js:108893-109113 placement
 /**
  * 按类型列出 Artifact 的分类器摘要（含范围与目标类型）。
  */
-//@ chunk-8wvtd8sr.js:108893-109113 placement
 function describeListByTypeSummary(e) {
-  let n = Non(e);
+  let n = listScopeOrDefault(e);
   return `list artifacts made from a type (read-only, scope: ${n}${n === "mine" ? "" : " \u2014 includes titles and descriptions of artifacts other users in the organization published"}): ${describeTypeTarget(e, classifierArtifactTargetFor)}`;
 }
+//@ chunk-8wvtd8sr.js:109113-109439 placement
 /**
  * 按类型列出 Artifact 的权限询问描述：区分只列自己的、组织内他人发布的、或用户能打开的（只读）。
  */
-//@ chunk-8wvtd8sr.js:109113-109439 placement
 function describeListByTypeAsk(e) {
-  let n = Non(e),
-    s = describeTypeTarget(e);
+  let n = listScopeOrDefault(e);
+  let s = describeTypeTarget(e);
   return n === "mine"
     ? `List the user's own Artifacts made from one Artifact type (${s}) \u2014 titles and links (read-only).`
     : `List the Artifacts made from one Artifact type (${s}) that ${n === "shared" ? "other people in the organization published" : "the user can open"} \u2014 ${OTHERS_TITLES_READ_CLAUSE} (read-only).`;
 }
+//@ chunk-8wvtd8sr.js:109439-109603 placement
 /**
  * 按类型列出 Artifact 的简短描述（范围非 mine 时附他人内容读入的提示）。
  */
-//@ chunk-8wvtd8sr.js:109439-109603 placement
 function describeListByTypeShort(e) {
-  let n = Non(e);
+  let n = listScopeOrDefault(e);
   return n === "mine"
     ? "list artifacts made from a type (read-only)"
     : `list artifacts made from a type (read-only, scope: ${n} \u2014 ${OTHERS_TITLES_READ_CLAUSE})`;
 }
 //@ chunk-8wvtd8sr.js:109603-113502 placement
-async function listArtifactsByType(e, n, s) {
-  if (getLiveState().frozenArtifactTypes?.typeCatalogOn !== !0)
+async function listArtifactsByType(e, n, tool) {
+  if (getLiveState().frozenArtifactTypes?.typeCatalogOn !== true)
     throw new ArtifactInputError(LIST_BY_TYPE_UNAVAILABLE, "list_type_unavailable");
-  let r = Non(e),
-    h = typeOf(e),
-    y = { signal: n.abortController.signal, credentials: n.credentials },
-    p = getToolPermissionContext(n),
-    w,
-    A;
-  if (h === void 0) {
+  let scope = listScopeOrDefault(e);
+  let h = typeOf(e);
+  let y = {
+    signal: n.abortController.signal,
+    credentials: n.credentials,
+  };
+  let toolPermissionContext = getToolPermissionContext(n);
+  let w;
+  let A;
+  if (h === undefined) {
     A = parseArtifactUrlOrThrow(typeUrlOf(e)).slug;
-    let L = { action: "list", type_url: typeUrlOf(e) },
-      V = getDenyAndAskUrlRules(p, s)[0];
-    if (V !== void 0) {
+    let L = {
+      action: "list",
+      type_url: typeUrlOf(e),
+    };
+    let V = getDenyAndAskUrlRules(toolPermissionContext, tool)[0];
+    if (V !== undefined) {
       let q = await describeArtifactType(A, y);
       if (q.err !== null) {
         if (q.reason === "ccr_credential_refused" || q.reason === "relay_unserved")
-          return Su({ type_url: artifactViewerUrl(A) }, r);
+          return typeListUnavailableResult(
+            {
+              type_url: artifactViewerUrl(A),
+            },
+            scope,
+          );
         throw new ArtifactInputError(q.err, `list_type_describe_${q.reason}`);
       }
-      let { title: title } = q.detail;
+      let { title } = q.detail;
       if (q.detail.untitled || typeNameMatchKey(title) === "")
         throw new ArtifactInputError(
           `This link's Artifact type has no readable name, so it cannot be checked against the permission rule ${formatRuleForDisplay(V)}. Nothing was listed; tell the user.`,
           "list_type_rule_unresolved",
         );
-      let Z = getToolPermissionContext(n);
-      (assertListTypeNotDenied(Z, s, title), assertTypeListNotDenied(Z, L, title));
-      let ue = findAskTypeRule(Z, p, s, title);
-      if (ue !== void 0 && findUrlContentRule(p, L, "ask") === null) {
-        let we = getRuleExactDomain(ue) ?? title,
-          Ie = await findArtifactTypeByName(we, y);
-        if (Ie.err !== null) throw new ArtifactInputError(Ie.err, `list_type_${Ie.reason}`);
-        let ie = Ie.found?.typeUrl === artifactViewerUrl(A),
-          _e = jsonStringify(wi(title));
-        if (!ie && Ie.found === void 0 && "partial" in Ie && Ie.partial)
+      let toolPermissionContext_2 = getToolPermissionContext(n);
+      assertListTypeNotDenied(toolPermissionContext_2, tool, title);
+      assertTypeListNotDenied(toolPermissionContext_2, L, title);
+      let askTypeRule = findAskTypeRule(toolPermissionContext_2, toolPermissionContext, tool, title);
+      if (askTypeRule !== undefined && findUrlContentRule(toolPermissionContext, L, "ask") === null) {
+        let we = getRuleExactDomain(askTypeRule) ?? title;
+        let artifactTypeByName = await findArtifactTypeByName(we, y);
+        if (artifactTypeByName.err !== null)
+          throw new ArtifactInputError(artifactTypeByName.err, `list_type_${artifactTypeByName.reason}`);
+        let ie = artifactTypeByName.found?.typeUrl === artifactViewerUrl(A);
+        let _e = jsonStringify(typeRowTitle(title));
+        if (
+          !ie &&
+          artifactTypeByName.found === undefined &&
+          "partial" in artifactTypeByName &&
+          artifactTypeByName.partial
+        )
           throw new ArtifactInputError(
-            `The permission rule ${formatRuleForDisplay(ue)} asks the user before the ${_e} type is listed, and the type listing could not be read completely to find the name to ask under, so nothing was listed \u2014 retry.`,
+            `The permission rule ${formatRuleForDisplay(askTypeRule)} asks the user before the ${_e} type is listed, and the type listing could not be read completely to find the name to ask under, so nothing was listed \u2014 retry.`,
             "list_type_name_unread",
           );
         throw ie
-          ? new ArtifactInputError(typeRuleAskNote(ue, _e, we), "list_type_rule_ask_retry")
+          ? new ArtifactInputError(typeRuleAskNote(askTypeRule, _e, we), "list_type_rule_ask_retry")
           : new ArtifactInputError(
-              `The permission rule ${formatRuleForDisplay(ue)} asks the user before the ${_e} type is listed, and this type can be listed only by its link, where nothing can ask the user, so nothing was listed. Tell the user; an ask rule naming the link (\`type_url:\`) would let them be asked.`,
+              `The permission rule ${formatRuleForDisplay(askTypeRule)} asks the user before the ${_e} type is listed, and this type can be listed only by its link, where nothing can ask the user, so nothing was listed. Tell the user; an ask rule naming the link (\`type_url:\`) would let them be asked.`,
               "list_type_rule_ask_unaskable",
             );
       }
     }
-    let M = getToolPermissionContext(n);
-    assertTypeListNotDenied(M, L);
-    let x = findUrlContentRule(p, L, "ask") === null ? findUrlContentRule(M, L, "ask") : null;
+    let toolPermissionContext_2 = getToolPermissionContext(n);
+    assertTypeListNotDenied(toolPermissionContext_2, L);
+    let x =
+      findUrlContentRule(toolPermissionContext, L, "ask") === null
+        ? findUrlContentRule(toolPermissionContext_2, L, "ask")
+        : null;
     if (x !== null)
       throw new ArtifactInputError(
         `The permission rule ${formatRuleForDisplay(x)} asks the user before this type is listed, and it was added after this call's permission check ran, so nothing was listed. List it again the same way to have the user asked.`,
         "list_type_rule_ask_retry",
       );
   } else {
-    if (
-      ((w = sweepScalarField(h.trim(), TITLE_MAX_CHARS)),
-      typeUrlOf(e) !== void 0 || typeNameKey(typeNameWithoutQuotes(h)) === "")
-    )
+    w = sweepScalarField(h.trim(), TITLE_MAX_CHARS);
+    if (typeUrlOf(e) !== undefined || typeNameKey(typeNameWithoutQuotes(h)) === "")
       throw new ArtifactInputError(
         "pass the type as `type` (its name) or `type_url` (its link) \u2014 exactly one",
         "list_type_name_bad",
       );
-    let L = await findArtifactTypeByName(h, y);
-    if (L.err !== null) throw new ArtifactInputError(L.err, `list_type_${L.reason}`);
-    if (L.found === void 0) {
-      if ("unavailable" in L) return Su({ type: w }, r);
+    let artifactTypeByName = await findArtifactTypeByName(h, y);
+    if (artifactTypeByName.err !== null)
+      throw new ArtifactInputError(artifactTypeByName.err, `list_type_${artifactTypeByName.reason}`);
+    if (artifactTypeByName.found === undefined) {
+      if ("unavailable" in artifactTypeByName)
+        return typeListUnavailableResult(
+          {
+            type: w,
+          },
+          scope,
+        );
       throw new ArtifactInputError(
-        L.named.length > 0
-          ? ambiguousTypeNameMessage(w, L.named)
-          : L.partial
-            ? typeNotFoundPartialMessage(w, L.listed)
+        artifactTypeByName.named.length > 0
+          ? ambiguousTypeNameMessage(w, artifactTypeByName.named)
+          : artifactTypeByName.partial
+            ? typeNotFoundPartialMessage(w, artifactTypeByName.listed)
             : noTypeNamedMessage(w),
-        L.named.length > 0
+        artifactTypeByName.named.length > 0
           ? "list_type_name_ambiguous"
-          : L.partial
+          : artifactTypeByName.partial
             ? "list_type_name_unread"
             : "list_type_name_unknown",
       );
     }
-    w = L.found.title;
-    let V = getToolPermissionContext(n),
-      M = typeNameMatchKey(h),
-      x = { action: "list", type_url: L.found.typeUrl },
-      q = jsonStringify(wi(L.found.title));
-    (assertListTypeNotDenied(V, s, L.found.title, M), assertTypeListNotDenied(V, x, L.found.title));
-    let re = findAskTypeRule(V, p, s, L.found.title, M);
-    if (re !== void 0)
+    w = artifactTypeByName.found.title;
+    let toolPermissionContext_2 = getToolPermissionContext(n);
+    let M = typeNameMatchKey(h);
+    let x = {
+      action: "list",
+      type_url: artifactTypeByName.found.typeUrl,
+    };
+    let q = jsonStringify(typeRowTitle(artifactTypeByName.found.title));
+    assertListTypeNotDenied(toolPermissionContext_2, tool, artifactTypeByName.found.title, M);
+    assertTypeListNotDenied(toolPermissionContext_2, x, artifactTypeByName.found.title);
+    let askTypeRule = findAskTypeRule(
+      toolPermissionContext_2,
+      toolPermissionContext,
+      tool,
+      artifactTypeByName.found.title,
+      M,
+    );
+    if (askTypeRule !== undefined)
       throw new ArtifactInputError(
-        typeRuleAskNote(re, q, getRuleExactDomain(re) ?? L.found.title),
+        typeRuleAskNote(askTypeRule, q, getRuleExactDomain(askTypeRule) ?? artifactTypeByName.found.title),
         "list_type_rule_ask_retry",
       );
-    let Z = hasAskRuleForUrl(p, s, L.found.title, M) ? null : findUrlContentRule(V, x, "ask");
+    let Z = hasAskRuleForUrl(toolPermissionContext, tool, artifactTypeByName.found.title, M)
+      ? null
+      : findUrlContentRule(toolPermissionContext_2, x, "ask");
     if (Z !== null)
       throw new ArtifactInputError(
-        `The permission rule ${formatRuleForDisplay(Z)} asks the user before the ${q} type is listed, and the user is asked only when the call names the type by that link, so nothing was listed. To have the user asked, list it again with \`type_url\` set to ${L.found.typeUrl} instead of \`type\`.`,
+        `The permission rule ${formatRuleForDisplay(Z)} asks the user before the ${q} type is listed, and the user is asked only when the call names the type by that link, so nothing was listed. To have the user asked, list it again with \`type_url\` set to ${artifactTypeByName.found.typeUrl} instead of \`type\`.`,
         "list_type_rule_ask_retry",
       );
-    A = parseArtifactUrlOrThrow(L.found.typeUrl).slug;
+    A = parseArtifactUrlOrThrow(artifactTypeByName.found.typeUrl).slug;
   }
-  let S = await listTypeInstances(A, { scope: r, ...y });
+  let S = await listTypeInstances(A, {
+    scope,
+    ...y,
+  });
   if (S.err !== null) throw new ArtifactInputError(S.err, `list_type_${S.reason}`);
   let designSystemTypeSlug = getLiveState().designSystemTypeSlug;
   if (
     S.rows.length > 0 &&
-    ((designSystemTypeSlug !== void 0 && A === designSystemTypeSlug) || w === DESIGN_SYSTEM_TYPE_TITLE)
+    ((designSystemTypeSlug !== undefined && A === designSystemTypeSlug) || w === DESIGN_SYSTEM_TYPE_TITLE)
   )
-    Ro();
-  let min = Math.min(Math.max(1, e.limit ?? DEFAULT_LIST_LIMIT), TYPE_LIST_LIMIT_MAX),
-    sliced = S.rows.slice(0, min);
+    clearQuickstartNoneFlags();
+  let min = Math.min(Math.max(1, e.limit ?? DEFAULT_LIST_LIMIT), TYPE_LIST_LIMIT_MAX);
+  let sliced = S.rows.slice(0, min);
   return {
     data: {
       type_instances: {
-        ...(w !== void 0 && { type: w }),
+        ...(w !== undefined && {
+          type: w,
+        }),
         type_url: artifactViewerUrl(A),
-        scope: r,
+        scope,
         instances: sliced.map((L) => ({
           title: L.title,
           url: L.url,
-          ...(L.description !== void 0 && { description: L.description }),
-          ...(L.createdAt !== void 0 && { created_at: L.createdAt }),
+          ...(L.description !== undefined && {
+            description: L.description,
+          }),
+          ...(L.createdAt !== undefined && {
+            created_at: L.createdAt,
+          }),
           rel: L.rel,
-          ...(L.audience !== void 0 && { audience: L.audience }),
-          ...(L.default !== void 0 && { default: L.default }),
-          ...(L.outsidersMayHaveWritten && { outsiders_may_have_written: !0 }),
+          ...(L.audience !== undefined && {
+            audience: L.audience,
+          }),
+          ...(L.default !== undefined && {
+            default: L.default,
+          }),
+          ...(L.outsidersMayHaveWritten && {
+            outsiders_may_have_written: true,
+          }),
         })),
-        ...(sliced.length < S.rows.length && { more: !0 }),
-        ...(S.overflow && { overflow: !0 }),
-        ...(S.dropped > 0 && { dropped: S.dropped }),
-        ...(S.unavailable && { unavailable: !0 }),
+        ...(sliced.length < S.rows.length && {
+          more: true,
+        }),
+        ...(S.overflow && {
+          overflow: true,
+        }),
+        ...(S.dropped > 0 && {
+          dropped: S.dropped,
+        }),
+        ...(S.unavailable && {
+          unavailable: true,
+        }),
       },
     },
   };
 }
 //@ chunk-8wvtd8sr.js:113502-113567 placement
-var Uu = (e, n) => ({ tool_use_id: n, type: "tool_result", content: formatArtifactListEntry(e) });
+/**
+ * 把类型实例列表格式化成工具结果。
+ */
+var typeInstanceListToolResult = (e, toolUseId) => ({
+  tool_use_id: toolUseId,
+  type: "tool_result",
+  content: formatArtifactListEntry(e),
+});
 //@ chunk-8wvtd8sr.js:113567-113657 placement
-function Su(e, n) {
-  return { data: { type_instances: { ...e, scope: n, instances: [], unavailable: !0 } } };
+/**
+ * 类型列表不可用时的空结果（instances 为空、unavailable）。
+ */
+function typeListUnavailableResult(e, scope) {
+  return {
+    data: {
+      type_instances: {
+        ...e,
+        scope,
+        instances: [],
+        unavailable: true,
+      },
+    },
+  };
 }
 //@ chunk-8wvtd8sr.js:113657-113915 placement
-function assertTypeListNotDenied(e, n, s) {
-  let r = findUrlContentRule(e, n, "deny");
-  if (r !== null)
+function assertTypeListNotDenied(toolPermissionContext, n, title) {
+  let urlContentRule = findUrlContentRule(toolPermissionContext, n, "deny");
+  if (urlContentRule !== null)
     throw new ArtifactInputError(
-      `Listing ${s === void 0 ? "this" : `the ${jsonStringify(wi(s))}`} type is blocked by the permission rule ${formatRuleForDisplay(r)}, which names that type by its link. Nothing was listed; tell the user.`,
+      `Listing ${title === undefined ? "this" : `the ${jsonStringify(typeRowTitle(title))}`} type is blocked by the permission rule ${formatRuleForDisplay(urlContentRule)}, which names that type by its link. Nothing was listed; tell the user.`,
       "list_type_rule_denied",
     );
 }
 //@ chunk-8wvtd8sr.js:113915-114253 placement
-function assertListTypeNotDenied(e, n, s, r) {
-  let h = typeTitleMatchKeys(s),
-    y = filterRulesMatchingUrls(e, n, r === void 0 ? h : [...h, r], "deny")[0];
-  if (y !== void 0)
+function assertListTypeNotDenied(toolPermissionContext, n, title, r) {
+  let h = typeTitleMatchKeys(title);
+  let y = filterRulesMatchingUrls(toolPermissionContext, n, r === undefined ? h : [...h, r], "deny")[0];
+  if (y !== undefined)
     throw new ArtifactInputError(
-      `Listing the ${jsonStringify(wi(s))} type is blocked by the permission rule ${formatRuleForDisplay(y)}, which covers that type however ${r === void 0 ? "the call names it" : "its name is spelled in the call"}. Nothing was listed; tell the user.`,
+      `Listing the ${jsonStringify(typeRowTitle(title))} type is blocked by the permission rule ${formatRuleForDisplay(y)}, which covers that type however ${r === undefined ? "the call names it" : "its name is spelled in the call"}. Nothing was listed; tell the user.`,
       "list_type_rule_denied",
     );
 }
 //@ chunk-8wvtd8sr.js:114253-114326 placement
-function findAskTypeRule(e, n, s, r, h) {
-  return hasAskRuleForUrl(n, s, r, h)
-    ? void 0
-    : filterRulesMatchingUrls(e, s, typeTitleMatchKeys(r), "ask")[0];
+function findAskTypeRule(toolPermissionContext, toolPermissionContext_2, s, title, h) {
+  return hasAskRuleForUrl(toolPermissionContext_2, s, title, h)
+    ? undefined
+    : filterRulesMatchingUrls(toolPermissionContext, s, typeTitleMatchKeys(title), "ask")[0];
 }
 //@ chunk-8wvtd8sr.js:114326-114434 placement = getDenyRuleForAgent (1)
 function hasAskRuleForUrl(e, n, s, r) {
   return (
-    r !== void 0 &&
+    r !== undefined &&
     filterRulesMatchingUrls(e, n, typeTitleMatchKeys(s), "ask").some((rule) =>
       matchesWildcardPattern(rule.ruleValue.ruleContent ?? "", [r]),
     )
   );
 }
 //@ chunk-8wvtd8sr.js:114434-114698 placement
-function typeRuleAskNote(e, n, s) {
-  return `The permission rule ${formatRuleForDisplay(e)} asks the user before the ${n} type is listed, and the user is asked only when \`type\` matches the rule, so nothing was listed. To have the user asked, list it again with \`type\` set to exactly ${jsonStringify(wi(s))}.`;
+function typeRuleAskNote(askTypeRule, n, s) {
+  return `The permission rule ${formatRuleForDisplay(askTypeRule)} asks the user before the ${n} type is listed, and the user is asked only when \`type\` matches the rule, so nothing was listed. To have the user asked, list it again with \`type\` set to exactly ${jsonStringify(typeRowTitle(s))}.`;
 }
-
 export {
   describeListByTypeAsk,
   LIST_BY_TYPE_READ_ONLY_REASON,
@@ -323,6 +429,6 @@ export {
   describeListByTypeSummary,
   describeListByTypeShort,
   listArtifactsByType,
-  Uu,
-  Non,
+  typeInstanceListToolResult,
+  listScopeOrDefault,
 };

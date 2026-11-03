@@ -8,166 +8,181 @@
 import { createHmac, createHash } from "crypto";
 
 //@ chunk-fq0cr76a.js:666915-666991 esm-fingerprint
-var AWS4_HMAC_SHA256 = "AWS4-HMAC-SHA256",
-  AWS4_ECDSA_P256_SHA256 = "AWS4-ECDSA-P256-SHA256",
-  UNSIGNED_PAYLOAD = "UNSIGNED-PAYLOAD";
+var SIGV4_ALGORITHM = "AWS4-HMAC-SHA256";
+var SIGV4A_ALGORITHM = "AWS4-ECDSA-P256-SHA256";
+var UNSIGNED_PAYLOAD = "UNSIGNED-PAYLOAD";
 //@ chunk-fq0cr76a.js:666991-667591 esm-fingerprint
-function zC(e, n) {
-  let r = _u(e.authorization);
-  if (r !== void 0 && r.startsWith(AWS4_ECDSA_P256_SHA256)) {
-    let S = qC(r);
-    if (S !== void 0) return { kind: "sigv4a", accessKeyId: S };
-  } else if (r !== void 0 && r.startsWith(AWS4_HMAC_SHA256)) {
-    let S = qC(r);
-    if (S !== void 0)
+function detectSigv4(headers, requestTarget) {
+  let auth = singleHeader(headers.authorization);
+  if (auth !== undefined && auth.startsWith(SIGV4A_ALGORITHM)) {
+    let akid = credentialAccessKeyId(auth);
+    if (akid !== undefined)
       return {
-        kind: _u(e["x-amz-content-sha256"])?.startsWith("STREAMING-") ? "streaming" : "header-sigv4",
-        accessKeyId: S,
+        kind: "sigv4a",
+        accessKeyId: akid,
+      };
+  } else if (auth !== undefined && auth.startsWith(SIGV4_ALGORITHM)) {
+    let akid = credentialAccessKeyId(auth);
+    if (akid !== undefined)
+      return {
+        kind: singleHeader(headers["x-amz-content-sha256"])?.startsWith("STREAMING-")
+          ? "streaming"
+          : "header-sigv4",
+        accessKeyId: akid,
       };
   }
-  let index = n.indexOf("?");
-  if (index === -1) return null;
-  let uRLSearchParams = new URLSearchParams(n.slice(index + 1));
-  if (uRLSearchParams.get("X-Amz-Algorithm") !== AWS4_HMAC_SHA256) return null;
-  if (!uRLSearchParams.has("X-Amz-Signature")) return null;
-  let y = uRLSearchParams.get("X-Amz-Credential");
-  if (!y) return null;
-  let b = y.split("/")[0];
-  return b ? { kind: "presigned", accessKeyId: b } : null;
+  let q = requestTarget.indexOf("?");
+  if (q === -1) return null;
+  let params = new URLSearchParams(requestTarget.slice(q + 1));
+  if (params.get("X-Amz-Algorithm") !== SIGV4_ALGORITHM) return null;
+  if (!params.has("X-Amz-Signature")) return null;
+  let credential = params.get("X-Amz-Credential");
+  if (!credential) return null;
+  let akid = credential.split("/")[0];
+  return akid
+    ? {
+        kind: "presigned",
+        accessKeyId: akid,
+      }
+    : null;
 }
 //@ chunk-fq0cr76a.js:667591-667651 esm-fingerprint
-function qC(e) {
-  return /Credential=([^/,\s]+)\//.exec(e)?.[1];
+function credentialAccessKeyId(auth) {
+  return /Credential=([^/,\s]+)\//.exec(auth)?.[1];
 }
 //@ chunk-fq0cr76a.js:667651-668078 esm-fingerprint
-function JC(e) {
-  if (!e.startsWith(AWS4_HMAC_SHA256)) return null;
-  let n = /Credential=([^,\s]+)/.exec(e)?.[1],
-    r = /SignedHeaders=([^,\s]+)/.exec(e)?.[1],
-    s = /Signature=([0-9a-fA-F]+)/.exec(e)?.[1];
-  if (!n || !r || !s) return null;
-  let parts = n.split("/");
+function parseSigv4Authorization(auth) {
+  if (!auth.startsWith(SIGV4_ALGORITHM)) return null;
+  let cred = /Credential=([^,\s]+)/.exec(auth)?.[1];
+  let signedHeaders = /SignedHeaders=([^,\s]+)/.exec(auth)?.[1];
+  let signature = /Signature=([0-9a-fA-F]+)/.exec(auth)?.[1];
+  if (!cred || !signedHeaders || !signature) return null;
+  let parts = cred.split("/");
   if (parts.length !== 5 || parts[4] !== "aws4_request") return null;
-  let [y, b, S, w] = parts;
-  if (!y || !b || !S || !w) return null;
+  let [accessKeyId, date, region, service] = parts;
+  if (!accessKeyId || !date || !region || !service) return null;
   return {
-    accessKeyId: y,
-    date: b,
-    region: S,
-    service: w,
-    signedHeaders: r.split(";").map((R) => R.toLowerCase()),
-    signature: s,
+    accessKeyId,
+    date,
+    region,
+    service,
+    signedHeaders: signedHeaders.split(";").map((h) => h.toLowerCase()),
+    signature,
   };
 }
 //@ chunk-fq0cr76a.js:668078-668194 esm-fingerprint
-function SE(e) {
-  return encodeURIComponent(e).replace(/[!'()*]/g, (n) => "%" + n.charCodeAt(0).toString(16).toUpperCase());
+function uriEncode(s) {
+  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 }
 //@ chunk-fq0cr76a.js:668194-668450 esm-fingerprint
-function $5(e, n) {
-  if (e === "") return "/";
-  if (n === "s3") return e;
-  let r = [];
-  for (let y of e.split("/")) {
-    if (y === "" || y === ".") continue;
-    if (y === "..") r.pop();
-    else r.push(y);
+function canonicalUri(rawPath, service) {
+  if (rawPath === "") return "/";
+  if (service === "s3") return rawPath;
+  let segments = [];
+  for (let seg of rawPath.split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") segments.pop();
+    else segments.push(seg);
   }
-  let s = r.length > 0 && e.endsWith("/") ? "/" : "",
-    h = `/${r.join("/")}${s}`;
-  return SE(h).replace(/%2F/gi, "/");
+  let trailing = segments.length > 0 && rawPath.endsWith("/") ? "/" : "";
+  let normalized = `/${segments.join("/")}${trailing}`;
+  return uriEncode(normalized).replace(/%2F/gi, "/");
 }
 //@ chunk-fq0cr76a.js:668450-668735 esm-fingerprint
-function V5(e) {
-  if (e === "") return "";
-  let n = [];
-  for (let r of e.split("&")) {
-    if (r === "") continue;
-    let index = r.indexOf("="),
-      h = index === -1 ? r : r.slice(0, index),
-      y = index === -1 ? "" : r.slice(index + 1);
-    n.push([SE(jC(h)), SE(jC(y))]);
+function canonicalQueryString(rawQuery) {
+  if (rawQuery === "") return "";
+  let pairs = [];
+  for (let part of rawQuery.split("&")) {
+    if (part === "") continue;
+    let eq = part.indexOf("=");
+    let rawKey = eq === -1 ? part : part.slice(0, eq);
+    let rawValue = eq === -1 ? "" : part.slice(eq + 1);
+    pairs.push([uriEncode(safeDecode(rawKey)), uriEncode(safeDecode(rawValue))]);
   }
-  return (
-    n.sort(([r, s], [h, y]) => (r < h ? -1 : r > h ? 1 : s < y ? -1 : s > y ? 1 : 0)),
-    n.map(([r, s]) => `${r}=${s}`).join("&")
-  );
+  pairs.sort(([ak, av], [bk, bv]) => (ak < bk ? -1 : ak > bk ? 1 : av < bv ? -1 : av > bv ? 1 : 0));
+  return pairs.map(([k, v]) => `${k}=${v}`).join("&");
 }
 //@ chunk-fq0cr76a.js:668735-668799 esm-layout
-function jC(e) {
+function safeDecode(s) {
   try {
-    return decodeURIComponent(e);
+    return decodeURIComponent(s);
   } catch {
-    return e;
+    return s;
   }
 }
 //@ chunk-fq0cr76a.js:668799-668853 esm-fingerprint
-function YC(e) {
-  return e.trim().replace(/[ \t]+/g, " ");
+function trimall(value) {
+  return value.trim().replace(/[ \t]+/g, " ");
 }
 //@ chunk-fq0cr76a.js:668853-669380 esm-fingerprint
-function W5(e) {
-  let index = e.requestTarget.indexOf("?"),
-    r = index === -1 ? e.requestTarget : e.requestTarget.slice(0, index),
-    s = index === -1 ? "" : e.requestTarget.slice(index + 1),
-    sorted = [...e.signedHeaders].map((b) => b.toLowerCase()).sort(),
-    y = [];
-  for (let b of sorted) {
-    let S = b === "host" ? e.hostHeader : e.headers[b];
-    if (S === void 0) throw Error(`signed header "${b}" is missing from the request`);
-    let w = Array.isArray(S) ? S.map(YC).join(",") : YC(String(S));
-    y.push(`${b}:${w}`);
+function buildCanonicalRequest(input) {
+  let q = input.requestTarget.indexOf("?");
+  let rawPath = q === -1 ? input.requestTarget : input.requestTarget.slice(0, q);
+  let rawQuery = q === -1 ? "" : input.requestTarget.slice(q + 1);
+  let names = [...input.signedHeaders].map((h) => h.toLowerCase()).sort();
+  let headerLines = [];
+  for (let name of names) {
+    let value = name === "host" ? input.hostHeader : input.headers[name];
+    if (value === undefined) throw Error(`signed header "${name}" is missing from the request`);
+    let canonical = Array.isArray(value) ? value.map(trimall).join(",") : trimall(String(value));
+    headerLines.push(`${name}:${canonical}`);
   }
   return [
-    e.method.toUpperCase(),
-    $5(r, e.scope.service),
-    V5(s),
-    y.join(`
+    input.method.toUpperCase(),
+    canonicalUri(rawPath, input.scope.service),
+    canonicalQueryString(rawQuery),
+    headerLines.join(`
 `) +
       `
 `,
-    sorted.join(";"),
-    e.payloadHash,
+    names.join(";"),
+    input.payloadHash,
   ].join(`
 `);
 }
 //@ chunk-fq0cr76a.js:669380-669478 esm-fingerprint
-function G5(e, n, r) {
-  return [AWS4_HMAC_SHA256, n, `${r.date}/${r.region}/${r.service}/aws4_request`, EE(e)].join(`
+function buildStringToSign(canonicalRequest, amzDate, scope) {
+  return [
+    SIGV4_ALGORITHM,
+    amzDate,
+    `${scope.date}/${scope.region}/${scope.service}/aws4_request`,
+    sha256Hex(canonicalRequest),
+  ].join(`
 `);
 }
 //@ chunk-fq0cr76a.js:669478-669586 esm-fingerprint
-function H5(e, n) {
-  let r = Bm(`AWS4${e}`, n.date),
-    s = Bm(r, n.region),
-    h = Bm(s, n.service);
-  return Bm(h, "aws4_request");
+function deriveSigningKey(secretAccessKey, scope) {
+  let kDate = hmac(`AWS4${secretAccessKey}`, scope.date);
+  let kRegion = hmac(kDate, scope.region);
+  let kService = hmac(kRegion, scope.service);
+  return hmac(kService, "aws4_request");
 }
 //@ chunk-fq0cr76a.js:669586-669996 esm-fingerprint
-function QC(e) {
-  let n = W5(e),
-    r = G5(n, e.amzDate, e.scope),
-    digest = createHmac("sha256", H5(e.secretAccessKey, e.scope)).update(r, "utf8").digest("hex"),
-    sorted = [...e.signedHeaders].map((b) => b.toLowerCase()).sort(),
-    y = `${e.scope.date}/${e.scope.region}/${e.scope.service}/aws4_request`;
+function signSigv4(input) {
+  let canonicalRequest = buildCanonicalRequest(input);
+  let stringToSign = buildStringToSign(canonicalRequest, input.amzDate, input.scope);
+  let signature = createHmac("sha256", deriveSigningKey(input.secretAccessKey, input.scope))
+    .update(stringToSign, "utf8")
+    .digest("hex");
+  let names = [...input.signedHeaders].map((h) => h.toLowerCase()).sort();
+  let scopeStr = `${input.scope.date}/${input.scope.region}/${input.scope.service}/aws4_request`;
   return {
-    authorization: `${AWS4_HMAC_SHA256} Credential=${e.accessKeyId}/${y}, SignedHeaders=${sorted.join(";")}, Signature=${digest}`,
-    signature: digest,
-    canonicalRequest: n,
-    stringToSign: r,
+    authorization: `${SIGV4_ALGORITHM} Credential=${input.accessKeyId}/${scopeStr}, SignedHeaders=${names.join(";")}, Signature=${signature}`,
+    signature,
+    canonicalRequest,
+    stringToSign,
   };
 }
 //@ chunk-fq0cr76a.js:669996-670055 esm-fingerprint
-function EE(e) {
-  return createHash("sha256").update(e).digest("hex");
+function sha256Hex(data) {
+  return createHash("sha256").update(data).digest("hex");
 }
 //@ chunk-fq0cr76a.js:670055-670120 esm-fingerprint
-function Bm(e, n) {
-  return createHmac("sha256", e).update(n, "utf8").digest();
+function hmac(key, data) {
+  return createHmac("sha256", key).update(data, "utf8").digest();
 }
 //@ chunk-fq0cr76a.js:670120-670166 esm-layout
-function _u(e) {
-  return Array.isArray(e) ? e[0] : e;
+function singleHeader(v) {
+  return Array.isArray(v) ? v[0] : v;
 }
-
-export { EE, zC, JC, _u, UNSIGNED_PAYLOAD, QC };
+export { sha256Hex, detectSigv4, parseSigv4Authorization, singleHeader, UNSIGNED_PAYLOAD, signSigv4 };

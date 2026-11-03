@@ -11,45 +11,56 @@
 import { qt, Se, y } from "../../../vendor/react/cjs/react.production.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
 //@ chunk-thjvqmbc.js:8008-8031 placement
-function vt() {
-  return !1;
+function returnFalse_3() {
+  return false;
 }
 //@ chunk-thjvqmbc.js:8031-8045 placement
-var ee = qt(!1);
+var NOTICE_UNDER_SCENE_CONTEXT = qt(false);
 //@ chunk-thjvqmbc.js:8045-8074 placement
 function useIsFullPageNotice() {
-  return Se(ee);
+  return Se(NOTICE_UNDER_SCENE_CONTEXT);
 }
 //@ chunk-thjvqmbc.js:8074-8128 placement
-function FullPageNotice(i) {
-  let { children: children } = i;
-  return (useTerminalSize(), y(vt), children);
+function FullPageNotice(props) {
+  let { children } = props;
+  useTerminalSize();
+  y(returnFalse_3);
+  return children;
 }
 //@ chunk-thjvqmbc.js:8128-8302 placement
-function NoticeUnderScene(i) {
-  let a = w(2),
-    { children: children } = i,
-    p;
-  if (a[0] !== children)
-    ((p = e(ee, {
-      value: !0,
-      children: e(Box, { flexDirection: "column", paddingLeft: 1, children: children }),
-    })),
-      (a[0] = children),
-      (a[1] = p));
-  else p = a[1];
+function NoticeUnderScene(props) {
+  let a = w(2);
+  let { children } = props;
+  let p;
+  if (a[0] !== children) {
+    p = jsxProd_default(NOTICE_UNDER_SCENE_CONTEXT, {
+      value: true,
+      children: jsxProd_default(Box, {
+        flexDirection: "column",
+        paddingLeft: 1,
+        children,
+      }),
+    });
+    a[0] = children;
+    a[1] = p;
+  } else p = a[1];
   return p;
 }
 //@ chunk-thjvqmbc.js:8302-8415 placement
 function NoticeAccent(i) {
-  let { children: children, bold: bold, color: color } = i;
+  let { children, bold, color } = i;
   return useIsFullPageNotice()
-    ? e(Text, { children: children })
-    : e(Text, { bold: bold, color: color, children: children });
+    ? jsxProd_default(Text, {
+        children,
+      })
+    : jsxProd_default(Text, {
+        bold,
+        color,
+        children,
+      });
 }
-
 export { NoticeUnderScene, useIsFullPageNotice, NoticeAccent };

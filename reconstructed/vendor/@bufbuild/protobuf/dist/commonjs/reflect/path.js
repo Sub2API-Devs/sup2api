@@ -6,85 +6,89 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Ns } from "../../cjs/descriptors.js";
+import { require_descriptors } from "../../cjs/descriptors.js";
 
 //@ chunk-fq0cr76a.js:353129-358179 cjs-fingerprint
-var Dk = x(function (Nk) {
-  Object.defineProperty(Nk, "__esModule", { value: !0 });
-  Nk.InvalidPathError = void 0;
-  Nk.buildPath = OY;
-  Nk.parsePath = PY;
-  Nk.pathToString = LY;
-  var Br = Ns();
-  function OY(e) {
-    return new $g(e, e, []);
+var require_path = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.InvalidPathError = undefined;
+  cjsExports.buildPath = buildPath;
+  cjsExports.parsePath = parsePath;
+  cjsExports.pathToString = pathToString;
+  var descriptors_js_1 = require_descriptors();
+  function buildPath(schema) {
+    return new PathBuilderImpl(schema, schema, []);
   }
-  function PY(e, n, r) {
-    var s, h;
-    let y = new $g(e, e, []),
-      b = (S, w) => new InvalidPathError(e, S + " at column " + (w + 1), n);
-    for (let S = 0; S < n.length;) {
-      let w = UY(S, n),
-        left = y.getLeft(),
-        D = void 0;
-      if ("field" in w) {
-        if (
-          ((D =
-            (left === null || left === void 0 ? void 0 : left.kind) != "message"
-              ? void 0
-              : (s = left.fields.find((field) => field.name === w.field)) !== null && s !== void 0
-                ? s
-                : left.oneofs.find((oneof) => oneof.name === w.field)),
-          !D)
-        )
-          throw b(`Unknown field "${w.field}"`, S);
-      } else if ("ext" in w) {
-        if (
-          ((D =
-            (h = r === null || r === void 0 ? void 0 : r.registry) === null || h === void 0
-              ? void 0
-              : h.getExtension(w.ext)),
-          !D)
-        )
-          throw b(`Unknown extension "${w.ext}"`, S);
-      } else if ("val" in w)
-        D =
-          (left === null || left === void 0 ? void 0 : left.kind) == "field" &&
+  function parsePath(schema, path, options) {
+    var _a;
+    var _b;
+    let builder = new PathBuilderImpl(schema, schema, []);
+    let err = (message, i) => new InvalidPathError(schema, message + " at column " + (i + 1), path);
+    for (let i = 0; i < path.length;) {
+      let token = nextToken(i, path);
+      let left = builder.getLeft();
+      let right = undefined;
+      if ("field" in token) {
+        right =
+          (left === null || left === undefined ? undefined : left.kind) != "message"
+            ? undefined
+            : (_a = left.fields.find((field) => field.name === token.field)) !== null && _a !== undefined
+              ? _a
+              : left.oneofs.find((oneof) => oneof.name === token.field);
+        if (!right) throw err(`Unknown field "${token.field}"`, i);
+      } else if ("ext" in token) {
+        right =
+          (_b = options === null || options === undefined ? undefined : options.registry) === null ||
+          _b === undefined
+            ? undefined
+            : _b.getExtension(token.ext);
+        if (!right) throw err(`Unknown extension "${token.ext}"`, i);
+      } else if ("val" in token)
+        right =
+          (left === null || left === undefined ? undefined : left.kind) == "field" &&
           left.fieldKind == "list" &&
-          typeof w.val == "bigint"
-            ? { kind: "list_sub", index: Number(w.val) }
-            : { kind: "map_sub", key: w.val };
-      else if ("err" in w) throw b(w.err, w.i);
-      if (D)
+          typeof token.val == "bigint"
+            ? {
+                kind: "list_sub",
+                index: Number(token.val),
+              }
+            : {
+                kind: "map_sub",
+                key: token.val,
+              };
+      else if ("err" in token) throw err(token.err, token.i);
+      if (right)
         try {
-          y.add([D]);
-        } catch (error) {
-          throw b(error instanceof InvalidPathError ? error.message : String(error), S);
+          builder.add([right]);
+        } catch (e) {
+          throw err(e instanceof InvalidPathError ? e.message : String(e), i);
         }
-      S = w.i;
+      i = token.i;
     }
-    return y.toPath();
+    return builder.toPath();
   }
-  function LY(e) {
-    let n = [];
-    for (let r of e)
-      switch (r.kind) {
+  function pathToString(path) {
+    let str = [];
+    for (let ele of path)
+      switch (ele.kind) {
         case "field":
         case "oneof":
-          if (n.length > 0) n.push(".");
-          n.push(r.name);
+          if (str.length > 0) str.push(".");
+          str.push(ele.name);
           break;
         case "extension":
-          n.push("[", r.typeName, "]");
+          str.push("[", ele.typeName, "]");
           break;
         case "list_sub":
-          n.push("[", r.index, "]");
+          str.push("[", ele.index, "]");
           break;
         case "map_sub":
-          if (typeof r.key == "string")
-            n.push(
+          if (typeof ele.key == "string")
+            str.push(
               '["',
-              r.key
+              ele.key
                 .split("\\")
                 .join("\\\\")
                 .split('"')
@@ -98,50 +102,59 @@ var Dk = x(function (Nk) {
                 .join("\\n"),
               '"]',
             );
-          else n.push("[", r.key, "]");
+          else str.push("[", ele.key, "]");
           break;
       }
-    return n.join("");
+    return str.join("");
   }
   class InvalidPathError extends Error {
-    constructor(e, n, r) {
-      super(n);
-      ((this.name = "InvalidPathError"),
-        (this.schema = e),
-        (this.path = r),
-        Object.setPrototypeOf(this, new.target.prototype));
+    constructor(schema, message, path) {
+      super(message);
+      this.name = "InvalidPathError";
+      this.schema = schema;
+      this.path = path;
+      Object.setPrototypeOf(this, new.target.prototype);
     }
   }
-  Nk.InvalidPathError = InvalidPathError;
-  class $g {
-    constructor(e, n, r) {
-      ((this.schema = e), (this.left = n), (this.path = r));
+  cjsExports.InvalidPathError = InvalidPathError;
+  class PathBuilderImpl {
+    constructor(schema, left, path) {
+      this.schema = schema;
+      this.left = left;
+      this.path = path;
     }
     getLeft() {
       return this.left;
     }
-    field(e) {
-      return this.push(e);
+    field(field) {
+      return this.push(field);
     }
-    oneof(e) {
-      return this.push(e);
+    oneof(oneof) {
+      return this.push(oneof);
     }
-    extension(e) {
-      return this.push(e);
+    extension(extension) {
+      return this.push(extension);
     }
-    list(e) {
-      return this.push({ kind: "list_sub", index: e });
+    list(index) {
+      return this.push({
+        kind: "list_sub",
+        index,
+      });
     }
-    map(e) {
-      return this.push({ kind: "map_sub", key: e });
+    map(key) {
+      return this.push({
+        kind: "map_sub",
+        key,
+      });
     }
-    add(e) {
-      let n = Array.isArray(e) ? e : e.toPath(),
-        r = this.path.length;
+    add(pathOrBuilder) {
+      let path = Array.isArray(pathOrBuilder) ? pathOrBuilder : pathOrBuilder.toPath();
+      let l = this.path.length;
       try {
-        for (let s of n) this.push(s);
-      } catch (error) {
-        throw (this.path.splice(r), error);
+        for (let ele of path) this.push(ele);
+      } catch (e) {
+        this.path.splice(l);
+        throw e;
       }
       return this;
     }
@@ -149,140 +162,188 @@ var Dk = x(function (Nk) {
       return this.path.concat();
     }
     clone() {
-      return new $g(this.schema, this.left, this.path.concat());
+      return new PathBuilderImpl(this.schema, this.left, this.path.concat());
     }
-    push(e) {
-      switch (e.kind) {
+    push(ele) {
+      switch (ele.kind) {
         case "field":
-          if (!this.left || this.left.kind != "message" || this.left.typeName != e.parent.typeName)
+          if (!this.left || this.left.kind != "message" || this.left.typeName != ele.parent.typeName)
             throw this.err("field access");
-          return (
-            this.path.push(e),
-            (this.left =
-              e.fieldKind == "message"
-                ? e.message
-                : e.fieldKind == "list" || e.fieldKind == "map"
-                  ? e
-                  : void 0),
-            this
-          );
+          this.path.push(ele);
+          this.left =
+            ele.fieldKind == "message"
+              ? ele.message
+              : ele.fieldKind == "list" || ele.fieldKind == "map"
+                ? ele
+                : undefined;
+          return this;
         case "oneof":
-          if (!this.left || this.left.kind != "message" || this.left.typeName != e.parent.typeName)
+          if (!this.left || this.left.kind != "message" || this.left.typeName != ele.parent.typeName)
             throw this.err("oneof access");
-          return (this.path.push(e), (this.left = void 0), this);
+          this.path.push(ele);
+          this.left = undefined;
+          return this;
         case "extension":
-          if (!this.left || this.left.kind != "message" || this.left.typeName != e.extendee.typeName)
+          if (!this.left || this.left.kind != "message" || this.left.typeName != ele.extendee.typeName)
             throw this.err("extension access");
-          return (this.path.push(e), (this.left = e.fieldKind == "message" ? e.message : void 0), this);
+          this.path.push(ele);
+          this.left = ele.fieldKind == "message" ? ele.message : undefined;
+          return this;
         case "list_sub":
           if (!this.left || this.left.kind != "field" || this.left.fieldKind != "list")
             throw this.err("list access");
-          if (e.index < 0 || !Number.isInteger(e.index)) throw this.err("list index");
-          return (
-            this.path.push(e),
-            (this.left = this.left.listKind == "message" ? this.left.message : void 0),
-            this
-          );
+          if (ele.index < 0 || !Number.isInteger(ele.index)) throw this.err("list index");
+          this.path.push(ele);
+          this.left = this.left.listKind == "message" ? this.left.message : undefined;
+          return this;
         case "map_sub":
           if (!this.left || this.left.kind != "field" || this.left.fieldKind != "map")
             throw this.err("map access");
-          if (!BY(e.key, this.left.mapKey)) throw this.err("map key");
-          return (
-            this.path.push(e),
-            (this.left = this.left.mapKind == "message" ? this.left.message : void 0),
-            this
-          );
+          if (!checkKeyType(ele.key, this.left.mapKey)) throw this.err("map key");
+          this.path.push(ele);
+          this.left = this.left.mapKind == "message" ? this.left.message : undefined;
+          return this;
       }
     }
-    err(e) {
-      return new InvalidPathError(this.schema, "Invalid " + e, this.path);
+    err(what) {
+      return new InvalidPathError(this.schema, "Invalid " + what, this.path);
     }
   }
-  function BY(e, n) {
-    switch (n) {
-      case Br.ScalarType.STRING:
-        return typeof e == "string";
-      case Br.ScalarType.INT32:
-      case Br.ScalarType.UINT32:
-      case Br.ScalarType.SINT32:
-      case Br.ScalarType.SFIXED32:
-      case Br.ScalarType.FIXED32:
-        return typeof e == "number";
-      case Br.ScalarType.UINT64:
-      case Br.ScalarType.INT64:
-      case Br.ScalarType.FIXED64:
-      case Br.ScalarType.SFIXED64:
-      case Br.ScalarType.SINT64:
-        return typeof e == "bigint";
-      case Br.ScalarType.BOOL:
-        return typeof e == "boolean";
+  function checkKeyType(key, type) {
+    switch (type) {
+      case descriptors_js_1.ScalarType.STRING:
+        return typeof key == "string";
+      case descriptors_js_1.ScalarType.INT32:
+      case descriptors_js_1.ScalarType.UINT32:
+      case descriptors_js_1.ScalarType.SINT32:
+      case descriptors_js_1.ScalarType.SFIXED32:
+      case descriptors_js_1.ScalarType.FIXED32:
+        return typeof key == "number";
+      case descriptors_js_1.ScalarType.UINT64:
+      case descriptors_js_1.ScalarType.INT64:
+      case descriptors_js_1.ScalarType.FIXED64:
+      case descriptors_js_1.ScalarType.SFIXED64:
+      case descriptors_js_1.ScalarType.SINT64:
+        return typeof key == "bigint";
+      case descriptors_js_1.ScalarType.BOOL:
+        return typeof key == "boolean";
     }
   }
-  function UY(e, n) {
-    let r = /^[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*$/,
-      s = /^[A-Za-z_][A-Za-z_0-9]*$/;
-    if (n[e] == "[") {
-      e++;
-      while (n[e] == " ") e++;
-      if (e >= n.length) return { err: "Premature end", i: n.length - 1 };
-      let b;
-      if (n[e] == '"') {
-        e++;
-        let S = "";
+  function nextToken(i, path) {
+    let re_extension = /^[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*$/;
+    let re_field = /^[A-Za-z_][A-Za-z_0-9]*$/;
+    if (path[i] == "[") {
+      i++;
+      while (path[i] == " ") i++;
+      if (i >= path.length)
+        return {
+          err: "Premature end",
+          i: path.length - 1,
+        };
+      let token;
+      if (path[i] == '"') {
+        i++;
+        let val = "";
         for (;;) {
-          if (n[e] == '"') {
-            e++;
+          if (path[i] == '"') {
+            i++;
             break;
           }
-          if (n[e] == "\\") {
-            switch (n[e + 1]) {
+          if (path[i] == "\\") {
+            switch (path[i + 1]) {
               case '"':
               case "\\":
-                S += n[e + 1];
+                val += path[i + 1];
                 break;
               case "r":
-                S += "\r";
+                val += "\r";
                 break;
               case "n":
-                S += `
+                val += `
 `;
                 break;
               default:
-                return { err: "Invalid escape sequence", i: e };
+                return {
+                  err: "Invalid escape sequence",
+                  i,
+                };
             }
-            e++;
-          } else S += n[e];
-          if (e >= n.length) return { err: "Premature end of string", i: n.length - 1 };
-          e++;
+            i++;
+          } else val += path[i];
+          if (i >= path.length)
+            return {
+              err: "Premature end of string",
+              i: path.length - 1,
+            };
+          i++;
         }
-        b = { val: S };
-      } else if (n[e].match(/\d/)) {
-        let S = e;
-        while (e < n.length && /\d/.test(n[e])) e++;
-        b = { val: BigInt(n.substring(S, e)) };
-      } else if (n[e] == "]") return { err: "Premature ]", i: e };
+        token = {
+          val,
+        };
+      } else if (path[i].match(/\d/)) {
+        let start = i;
+        while (i < path.length && /\d/.test(path[i])) i++;
+        token = {
+          val: BigInt(path.substring(start, i)),
+        };
+      } else if (path[i] == "]")
+        return {
+          err: "Premature ]",
+          i,
+        };
       else {
-        let S = e;
-        while (e < n.length && n[e] != " " && n[e] != "]") e++;
-        let substring = n.substring(S, e);
-        if (substring === "true") b = { val: !0 };
-        else if (substring === "false") b = { val: !1 };
-        else if (r.test(substring)) b = { ext: substring };
-        else return { err: "Invalid ident", i: S };
+        let start = i;
+        while (i < path.length && path[i] != " " && path[i] != "]") i++;
+        let name = path.substring(start, i);
+        if (name === "true")
+          token = {
+            val: true,
+          };
+        else if (name === "false")
+          token = {
+            val: false,
+          };
+        else if (re_extension.test(name))
+          token = {
+            ext: name,
+          };
+        else
+          return {
+            err: "Invalid ident",
+            i: start,
+          };
       }
-      while (n[e] == " ") e++;
-      if (n[e] != "]") return { err: "Missing ]", i: e };
-      return (e++, Object.assign(Object.assign({}, b), { i: e }));
+      while (path[i] == " ") i++;
+      if (path[i] != "]")
+        return {
+          err: "Missing ]",
+          i,
+        };
+      i++;
+      return Object.assign(Object.assign({}, token), {
+        i,
+      });
     }
-    if (e > 0) {
-      if (n[e] != ".") return { err: 'Expected "."', i: e };
-      e++;
+    if (i > 0) {
+      if (path[i] != ".")
+        return {
+          err: 'Expected "."',
+          i,
+        };
+      i++;
     }
-    let h = e;
-    while (e < n.length && n[e] != "." && n[e] != "[") e++;
-    let substring = n.substring(h, e);
-    return s.test(substring) ? { field: substring, i: e } : { err: "Invalid ident", i: h };
+    let start = i;
+    while (i < path.length && path[i] != "." && path[i] != "[") i++;
+    let field = path.substring(start, i);
+    return re_field.test(field)
+      ? {
+          field,
+          i,
+        }
+      : {
+          err: "Invalid ident",
+          i: start,
+        };
   }
 });
-
-export { Dk };
+export { require_path };

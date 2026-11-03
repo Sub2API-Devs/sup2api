@@ -6,40 +6,43 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Ns } from "../descriptors.js";
-import { ko } from "../../commonjs/proto-int64.js";
+import { require_descriptors } from "../descriptors.js";
+import { require_proto_int64 } from "../../commonjs/proto-int64.js";
 
 //@ chunk-fq0cr76a.js:361746-364098 cjs-require-graph
-var s_ = x(function (zk) {
-  Object.defineProperty(zk, "__esModule", { value: !0 });
-  zk.parseTextFormatEnumValue = e7;
-  zk.parseTextFormatScalarValue = t7;
-  var Jn = Ns(),
-    Wu = ko();
-  function e7(e, n) {
-    let found = e.values.find((s) => s.name === n);
-    if (!found) throw Error(`cannot parse ${e} default value: ${n}`);
-    return found.number;
+var require_text_format = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.parseTextFormatEnumValue = parseTextFormatEnumValue;
+  cjsExports.parseTextFormatScalarValue = parseTextFormatScalarValue;
+  var descriptors_js_1 = require_descriptors();
+  var proto_int64_js_1 = require_proto_int64();
+  function parseTextFormatEnumValue(descEnum, value) {
+    let enumValue = descEnum.values.find((v) => v.name === value);
+    if (!enumValue) throw Error(`cannot parse ${descEnum} default value: ${value}`);
+    return enumValue.number;
   }
-  function t7(e, n) {
-    switch (e) {
-      case Jn.ScalarType.STRING:
-        return n;
-      case Jn.ScalarType.BYTES: {
-        let r = n7(n);
-        if (r === !1) throw Error(`cannot parse ${Jn.ScalarType[e]} default value: ${n}`);
-        return r;
+  function parseTextFormatScalarValue(type, value) {
+    switch (type) {
+      case descriptors_js_1.ScalarType.STRING:
+        return value;
+      case descriptors_js_1.ScalarType.BYTES: {
+        let u = unescapeBytesDefaultValue(value);
+        if (u === false)
+          throw Error(`cannot parse ${descriptors_js_1.ScalarType[type]} default value: ${value}`);
+        return u;
       }
-      case Jn.ScalarType.INT64:
-      case Jn.ScalarType.SFIXED64:
-      case Jn.ScalarType.SINT64:
-        return Wu.protoInt64.parse(n);
-      case Jn.ScalarType.UINT64:
-      case Jn.ScalarType.FIXED64:
-        return Wu.protoInt64.uParse(n);
-      case Jn.ScalarType.DOUBLE:
-      case Jn.ScalarType.FLOAT:
-        switch (n) {
+      case descriptors_js_1.ScalarType.INT64:
+      case descriptors_js_1.ScalarType.SFIXED64:
+      case descriptors_js_1.ScalarType.SINT64:
+        return proto_int64_js_1.protoInt64.parse(value);
+      case descriptors_js_1.ScalarType.UINT64:
+      case descriptors_js_1.ScalarType.FIXED64:
+        return proto_int64_js_1.protoInt64.uParse(value);
+      case descriptors_js_1.ScalarType.DOUBLE:
+      case descriptors_js_1.ScalarType.FLOAT:
+        switch (value) {
           case "inf":
             return Number.POSITIVE_INFINITY;
           case "-inf":
@@ -47,60 +50,63 @@ var s_ = x(function (zk) {
           case "nan":
             return Number.NaN;
           default:
-            return parseFloat(n);
+            return parseFloat(value);
         }
-      case Jn.ScalarType.BOOL:
-        return n === "true";
-      case Jn.ScalarType.INT32:
-      case Jn.ScalarType.UINT32:
-      case Jn.ScalarType.SINT32:
-      case Jn.ScalarType.FIXED32:
-      case Jn.ScalarType.SFIXED32:
-        return parseInt(n, 10);
+      case descriptors_js_1.ScalarType.BOOL:
+        return value === "true";
+      case descriptors_js_1.ScalarType.INT32:
+      case descriptors_js_1.ScalarType.UINT32:
+      case descriptors_js_1.ScalarType.SINT32:
+      case descriptors_js_1.ScalarType.FIXED32:
+      case descriptors_js_1.ScalarType.SFIXED32:
+        return parseInt(value, 10);
     }
   }
-  function n7(e) {
-    let n = [],
-      r = {
-        tail: e,
-        c: "",
-        next() {
-          if (this.tail.length == 0) return !1;
-          return ((this.c = this.tail[0]), (this.tail = this.tail.substring(1)), !0);
-        },
-        take(s) {
-          if (this.tail.length >= s) {
-            let substring = this.tail.substring(0, s);
-            return ((this.tail = this.tail.substring(s)), substring);
-          }
-          return !1;
-        },
-      };
-    while (r.next())
-      switch (r.c) {
+  function unescapeBytesDefaultValue(str) {
+    let b_2 = [];
+    let input = {
+      tail: str,
+      c: "",
+      next() {
+        if (this.tail.length == 0) return false;
+        this.c = this.tail[0];
+        this.tail = this.tail.substring(1);
+        return true;
+      },
+      take(n) {
+        if (this.tail.length >= n) {
+          let r = this.tail.substring(0, n);
+          this.tail = this.tail.substring(n);
+          return r;
+        }
+        return false;
+      },
+    };
+    while (input.next())
+      switch (input.c) {
         case "\\":
-          if (r.next())
-            switch (r.c) {
+          if (input.next())
+            switch (input.c) {
               case "\\":
-                n.push(r.c.charCodeAt(0));
+                b_2.push(input.c.charCodeAt(0));
                 break;
               case "b":
-                n.push(8);
+                b_2.push(8);
                 break;
               case "f":
-                n.push(12);
+                b_2.push(12);
                 break;
               case "n":
-                n.push(10);
+                b_2.push(10);
                 break;
               case "r":
-                n.push(13);
+                b_2.push(13);
                 break;
               case "t":
-                n.push(9);
+                b_2.push(9);
                 break;
               case "v":
-                n.push(11);
+                b_2.push(11);
                 break;
               case "0":
               case "1":
@@ -110,62 +116,52 @@ var s_ = x(function (zk) {
               case "5":
               case "6":
               case "7": {
-                let s = r.c,
-                  take = r.take(2);
-                if (take === !1) return !1;
-                let y = parseInt(s + take, 8);
-                if (Number.isNaN(y)) return !1;
-                n.push(y);
+                let s = input.c;
+                let t = input.take(2);
+                if (t === false) return false;
+                let n = parseInt(s + t, 8);
+                if (Number.isNaN(n)) return false;
+                b_2.push(n);
                 break;
               }
               case "x": {
-                let s = r.c,
-                  take = r.take(2);
-                if (take === !1) return !1;
-                let y = parseInt(s + take, 16);
-                if (Number.isNaN(y)) return !1;
-                n.push(y);
+                let s = input.c;
+                let t = input.take(2);
+                if (t === false) return false;
+                let n = parseInt(s + t, 16);
+                if (Number.isNaN(n)) return false;
+                b_2.push(n);
                 break;
               }
               case "u": {
-                let s = r.c,
-                  take = r.take(4);
-                if (take === !1) return !1;
-                let y = parseInt(s + take, 16);
-                if (Number.isNaN(y)) return !1;
-                let uint8Array = new Uint8Array(4);
-                (new DataView(uint8Array.buffer).setInt32(0, y, !0),
-                  n.push(uint8Array[0], uint8Array[1], uint8Array[2], uint8Array[3]));
+                let s = input.c;
+                let t = input.take(4);
+                if (t === false) return false;
+                let n = parseInt(s + t, 16);
+                if (Number.isNaN(n)) return false;
+                let chunk = new Uint8Array(4);
+                new DataView(chunk.buffer).setInt32(0, n, true);
+                b_2.push(chunk[0], chunk[1], chunk[2], chunk[3]);
                 break;
               }
               case "U": {
-                let s = r.c,
-                  take = r.take(8);
-                if (take === !1) return !1;
-                let uEnc = Wu.protoInt64.uEnc(s + take),
-                  uint8Array = new Uint8Array(8),
-                  dataView = new DataView(uint8Array.buffer);
-                (dataView.setInt32(0, uEnc.lo, !0),
-                  dataView.setInt32(4, uEnc.hi, !0),
-                  n.push(
-                    uint8Array[0],
-                    uint8Array[1],
-                    uint8Array[2],
-                    uint8Array[3],
-                    uint8Array[4],
-                    uint8Array[5],
-                    uint8Array[6],
-                    uint8Array[7],
-                  ));
+                let s = input.c;
+                let t = input.take(8);
+                if (t === false) return false;
+                let tc = proto_int64_js_1.protoInt64.uEnc(s + t);
+                let chunk = new Uint8Array(8);
+                let view = new DataView(chunk.buffer);
+                view.setInt32(0, tc.lo, true);
+                view.setInt32(4, tc.hi, true);
+                b_2.push(chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7]);
                 break;
               }
             }
           break;
         default:
-          n.push(r.c.charCodeAt(0));
+          b_2.push(input.c.charCodeAt(0));
       }
-    return new Uint8Array(n);
+    return new Uint8Array(b_2);
   }
 });
-
-export { s_ };
+export { require_text_format };

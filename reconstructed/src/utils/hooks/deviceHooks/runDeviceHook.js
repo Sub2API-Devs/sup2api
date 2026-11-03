@@ -8,28 +8,32 @@
  * pieces: chunk-mthxbav8.js (27)
  * attribution: placement 26, layout 1
  */
-import { realpath, realpath as realpath_2 } from "fs/promises";
-import { dirname, dirname as dirname_2 } from "path";
+import { realpath } from "fs/promises";
+import { dirname } from "path";
 import { devNull } from "os";
 import { SETTING_SOURCES } from "../../settings/constants.js";
 import { expandPath } from "../../path.js";
 import { isAbsolutePlatformPath, findGitRootUncached } from "../../git.js";
 import { uniq } from "../../collections.js";
-import { collectStickyRoots, stickyRootsFor, m_ } from "../../settings/stickyRoots.js";
+import { collectStickyRoots, stickyRootsFor, anyPairMatches } from "../../settings/stickyRoots.js";
 import { logForDebugging } from "../../debug.js";
 import { scriptFileReaderDeps, replaceCommandProgram } from "../servedHooks/hookSandbox.js";
-import { collectBaseReachRoots, dSe, collectSettingsWriteRoots } from "../../git/builderGit/sandboxReach.js";
+import {
+  collectBaseReachRoots,
+  settingsReachRootsForSource,
+  collectSettingsWriteRoots,
+} from "../../git/builderGit/sandboxReach.js";
 import { getSettingsFilePathForSource, parseSettingsFileUncached } from "../../settings/settings.js";
 import {
   getFlagSettingsExpectedContent,
   getFlagSettingsFilePinnedContent,
   getAdditionalDirectoriesForClaudeMd,
 } from "../../../bootstrap/state.js";
-import { POSIX_SEP, isPosixPathUnder } from "../hookCommandAnalysis.js";
-import { wWe } from "../../../cli/headlessCloud/cloudPlugins.js";
+import { POSIX_SEP_2, isPosixPathUnder } from "../hookCommandAnalysis.js";
+import { cloudPluginsConsentFilePath } from "../../../cli/headlessCloud/cloudPlugins.js";
 import { getClaudeConfigDir } from "../../envUtils.js";
 import { commandReachRoots } from "./commandReach.js";
-import { mKt } from "./consent.js";
+import { probeWritability } from "./consent.js";
 import { HostScoped } from "../../hostScoped.js";
 import {
   execCommandHookForDevice,
@@ -44,8 +48,14 @@ import {
   withHookStderr,
 } from "../../hooks.js";
 import { execHttpHook } from "../execHttpHook.js";
-import { $2e, pjt } from "../hookCommandResolution.js";
-import { HMt, buildGitConfigEnv, Mys, Dys, Lys } from "../../gitSafeExec.js";
+import { EMPTY_PATH_DIR, mergeHookEnv } from "../hookCommandResolution.js";
+import {
+  ALTERNATE_REFS_COMMAND,
+  buildGitConfigEnv,
+  LOG_SAFETY_CONFIG,
+  MAINTENANCE_OFF_CONFIG,
+  DIFF_SAFETY_CONFIG,
+} from "../../gitSafeExec.js";
 import { jsonStringify } from "../../slowOperations.js";
 import { createCombinedAbortSignal } from "../../combinedAbortSignal.js";
 import { claudeEnvContextFrom } from "../../claudeSubprocessEnv.js";
@@ -56,7 +66,12 @@ import {
   isCloudClientToolServingAnsweredOn,
   getToolServingFlagAnsweredOff,
 } from "../../../services/analytics/violinWillowGate.js";
-import { stripTrailingSlashes, HOOK_INPUT_TOP_FIELDS, rtn, j$n } from "../hookInputPaths.js";
+import {
+  stripTrailingSlashes,
+  HOOK_INPUT_TOP_FIELDS,
+  unescapeJsonPointerPath,
+  toolPathFieldInput,
+} from "../hookInputPaths.js";
 import { isObjectLike } from "./hookInputPaths.js";
 
 //@ chunk-mthxbav8.js:6715-6852 placement
@@ -70,120 +85,142 @@ function createReachState() {
     commonRoots: null,
   };
 }
+//@ chunk-mthxbav8.js:6852-8309 placement
 /**
  * 创建设备钩子执行器：准备可达性基线、依赖，执行钩子并归纳结果。
  */
-//@ chunk-mthxbav8.js:6852-8309 placement
 function createDeviceHookRunner(e) {
-  let n = { ...defaultReachDeps(e.launchDir), ...e.deps },
-    { memory: memory } = e;
-  ((memory.reachBaseline ??= new Map(SETTING_SOURCES.map((y) => [y, n.scopeWriteEntries(y)]))),
-    (memory.commonRoots ??= n.commonWriteRoots()));
-  let {
-      reachBaseline: reachBaseline,
-      commonRoots: commonRoots,
-      syncRoots: syncRoots,
-      stickyRoots: stickyRoots,
-    } = memory,
-    h = (y) => {
-      (syncRoots.add(y),
-        n.realpath(y).then(
-          (C) => syncRoots.add(C),
-          () => {},
-        ));
-    },
-    v = async () => {
-      let flattened = n.addedDirectories().flatMap((C) => {
-        try {
-          return [expandPath(C, e.launchDir)];
-        } catch {
-          return [];
-        }
-      });
-      return [...flattened, ...(await Promise.all(flattened.map((C) => n.realpath(C).catch(() => C))))];
-    };
+  let n = {
+    ...defaultReachDeps(e.launchDir),
+    ...e.deps,
+  };
+  let { memory } = e;
+  memory.reachBaseline ??= new Map(SETTING_SOURCES.map((y) => [y, n.scopeWriteEntries(y)]));
+  memory.commonRoots ??= n.commonWriteRoots();
+  let { reachBaseline, commonRoots, syncRoots, stickyRoots } = memory;
+  let noteSyncRoot = (y) => {
+    syncRoots.add(y);
+    n.realpath(y).then(
+      (C) => syncRoots.add(C),
+      () => {},
+    );
+  };
+  let v = async () => {
+    let flattened = n.addedDirectories().flatMap((C) => {
+      try {
+        return [expandPath(C, e.launchDir)];
+      } catch {
+        return [];
+      }
+    });
+    return [...flattened, ...(await Promise.all(flattened.map((C) => n.realpath(C).catch(() => C))))];
+  };
   return {
-    noteSyncRoot: h,
+    noteSyncRoot,
     async current() {
-      let y = !1,
-        C = (T) =>
-          n.realpath(T).then(
-            (P) => (isAbsolutePlatformPath(P) ? P : T),
-            () => ((y = !0), T),
-          ),
-        O = await C(e.launchDir),
-        x = await C(e.projectDir),
-        R = null;
+      let y = false;
+      let C = (T) =>
+        n.realpath(T).then(
+          (P) => (isAbsolutePlatformPath(P) ? P : T),
+          () => {
+            y = true;
+            return T;
+          },
+        );
+      let launchDirReal = await C(e.launchDir);
+      let projectDirReal = await C(e.projectDir);
+      let R = null;
       try {
         R = e.syncRoot();
       } catch {
-        y = !0;
+        y = true;
       }
-      if (R !== null) (syncRoots.add(R), syncRoots.add(await C(R)));
-      let j = R === null ? void 0 : { rootReal: await C(R), root: R },
-        M = uniq([
-          ...(e.repoRoot !== null ? [e.repoRoot, await C(e.repoRoot)] : []),
-          ...syncRoots,
-          ...(await v()),
-        ]),
-        q = await C(e.configHome);
-      if (
-        (await collectStickyRoots({
-          stickyRoots: stickyRoots,
-          pinnedScopes: memory.pinnedScopes,
-          pinnedRoots: memory.pinnedRoots,
-          baseRoots: [...stickyRootsFor({ launchDir: e.launchDir, launchDirReal: O }), ...M],
-          reachBaseline: reachBaseline,
-          scopeSettingsFile: n.scopeSettingsFile,
-          realpath: n.realpath,
-          commonRoots: () => commonRoots,
-          scopeRoots: n.scopeWriteRoots,
-        }).catch(() => {
-          y = !0;
-        }),
-        y)
-      )
+      if (R !== null) {
+        syncRoots.add(R);
+        syncRoots.add(await C(R));
+      }
+      let j =
+        R === null
+          ? undefined
+          : {
+              rootReal: await C(R),
+              root: R,
+            };
+      let M = uniq([
+        ...(e.repoRoot !== null ? [e.repoRoot, await C(e.repoRoot)] : []),
+        ...syncRoots,
+        ...(await v()),
+      ]);
+      let configHomeReal = await C(e.configHome);
+      await collectStickyRoots({
+        stickyRoots,
+        pinnedScopes: memory.pinnedScopes,
+        pinnedRoots: memory.pinnedRoots,
+        baseRoots: [
+          ...stickyRootsFor({
+            launchDir: e.launchDir,
+            launchDirReal,
+          }),
+          ...M,
+        ],
+        reachBaseline,
+        scopeSettingsFile: n.scopeSettingsFile,
+        realpath: n.realpath,
+        commonRoots: () => commonRoots,
+        scopeRoots: n.scopeWriteRoots,
+      }).catch(() => {
+        y = true;
+      });
+      if (y)
         logForDebugging(
           "cloud session reach: a base root did not resolve (or sync state could not be read); every hook is treated as in reach for this answer",
-          { level: "warn" },
+          {
+            level: "warn",
+          },
         );
       return {
         launchDir: e.launchDir,
-        launchDirReal: O,
-        configHomeReal: q,
+        launchDirReal,
+        configHomeReal,
         projectDir: e.projectDir,
-        projectDirReal: x,
-        ...(j !== void 0 && { sync: j }),
+        projectDirReal,
+        ...(j !== undefined && {
+          sync: j,
+        }),
         extraReach: y ? ["/"] : uniq([...M, ...stickyRoots]),
       };
     },
   };
 }
 //@ chunk-mthxbav8.js:8309-8900 placement
-function defaultReachDeps(e) {
+function defaultReachDeps(launchDir) {
   return {
     realpath: scriptFileReaderDeps().realpath,
-    commonWriteRoots: () => collectBaseReachRoots(e),
-    scopeWriteRoots: (n, r) => dSe(e, n, r),
+    commonWriteRoots: () => collectBaseReachRoots(launchDir),
+    scopeWriteRoots: (n, r) => settingsReachRootsForSource(launchDir, n, r),
     scopeWriteEntries: (n) => {
-      let r = collectSettingsWriteRoots(n, e),
-        s = getSettingsFilePathForSource(n);
-      if (n === "policySettings" || !s) return r;
-      let u = parseSettingsFileUncached(
-        s,
+      let settingsWriteRoots = collectSettingsWriteRoots(n, launchDir);
+      let settingsFilePathForSource = getSettingsFilePathForSource(n);
+      if (n === "policySettings" || !settingsFilePathForSource) return settingsWriteRoots;
+      let settingsFileUncached = parseSettingsFileUncached(
+        settingsFilePathForSource,
         n === "flagSettings"
           ? (getFlagSettingsExpectedContent() ?? getFlagSettingsFilePinnedContent())
-          : void 0,
+          : undefined,
       );
-      if (u.errors.some((error) => (error.severity ?? "fatal") === "fatal"))
-        return (
-          logForDebugging(
-            `cloud session reach: the ${n} settings file could not be read or parsed at attach; its write grants are unknown, so every hook counts as in the session's reach`,
-            { level: "warn" },
-          ),
-          [POSIX_SEP]
+      if (settingsFileUncached.errors.some((error) => (error.severity ?? "fatal") === "fatal")) {
+        logForDebugging(
+          `cloud session reach: the ${n} settings file could not be read or parsed at attach; its write grants are unknown, so every hook counts as in the session's reach`,
+          {
+            level: "warn",
+          },
         );
-      return uniq([...collectSettingsWriteRoots(n, e, u.settings), ...r]);
+        return [POSIX_SEP_2];
+      }
+      return uniq([
+        ...collectSettingsWriteRoots(n, launchDir, settingsFileUncached.settings),
+        ...settingsWriteRoots,
+      ]);
     },
     scopeSettingsFile: (n) => getSettingsFilePathForSource(n) ?? null,
     addedDirectories: () => getAdditionalDirectoriesForClaudeMd(),
@@ -192,51 +229,53 @@ function defaultReachDeps(e) {
 //@ chunk-mthxbav8.js:8900-9927 placement
 function createDeviceHookDecider(e) {
   let n = {
-      realpath: realpath,
-      repoRootOf: findGitRootUncached,
-      consentPath: wWe,
-      configHome: getClaudeConfigDir,
-      ...e.deps,
-    },
-    { launchDir: launchDir, memory: memory } = e,
-    u = null,
-    S = () =>
-      (u ??= (async () => {
-        let w = (x) => n.realpath(x).catch(() => x),
-          h = await w(launchDir),
-          v = uniq([launchDir, h].map((x) => n.repoRootOf(x)).filter((x) => x !== null)),
-          y = uniq((await Promise.all(v.map(w))).concat(v)),
-          [C = null] = v;
-        return {
-          tracker: createDeviceHookRunner({
-            launchDir: launchDir,
-            projectDir: launchDir,
-            repoRoot: C,
-            configHome: n.configHome(),
-            syncRoot: e.syncRoot,
-            memory: memory,
-            ...(n.tracker !== void 0 && { deps: n.tracker }),
+    realpath,
+    repoRootOf: findGitRootUncached,
+    consentPath: cloudPluginsConsentFilePath,
+    configHome: getClaudeConfigDir,
+    ...e.deps,
+  };
+  let { launchDir, memory } = e;
+  let u = null;
+  let S = () =>
+    (u ??= (async () => {
+      let w = (launchDir) => n.realpath(launchDir).catch(() => launchDir);
+      let h = await w(launchDir);
+      let v = uniq([launchDir, h].map((x) => n.repoRootOf(x)).filter((x) => x !== null));
+      let y = uniq((await Promise.all(v.map(w))).concat(v));
+      let [C = null] = v;
+      return {
+        tracker: createDeviceHookRunner({
+          launchDir,
+          projectDir: launchDir,
+          repoRoot: C,
+          configHome: n.configHome(),
+          syncRoot: e.syncRoot,
+          memory,
+          ...(n.tracker !== undefined && {
+            deps: n.tracker,
           }),
-          launchRoots: uniq([launchDir, h, ...y]),
-          repoRoots: y,
-        };
-      })());
+        }),
+        launchRoots: uniq([launchDir, h, ...y]),
+        repoRoots: y,
+      };
+    })());
   return {
     async judge() {
       try {
-        let { tracker: tracker, launchRoots: launchRoots, repoRoots: repoRoots } = await S(),
-          y = await tracker.current();
-        if (e.syncElsewhere !== !1) return "unknown";
+        let { tracker, launchRoots, repoRoots } = await S();
+        let y = await tracker.current();
+        if (e.syncElsewhere !== false) return "unknown";
         let C = [...commandReachRoots(y), ...repoRoots];
-        if (C.some((j) => j === POSIX_SEP || !isAbsolutePlatformPath(j))) return "unknown";
-        let consentPath = n.consentPath();
-        if (!consentPath.startsWith("/")) return "unknown";
-        let x = await mKt(consentPath, C, n.realpath);
-        if (x === !1) return "outside";
+        if (C.some((j) => j === POSIX_SEP_2 || !isAbsolutePlatformPath(j))) return "unknown";
+        let O = n.consentPath();
+        if (!O.startsWith("/")) return "unknown";
+        let x = await probeWritability(O, C, n.realpath);
+        if (x === false) return "outside";
         if (x === "unresolvable") return "unknown";
-        let R = [consentPath, await n.realpath(consentPath).catch(() => consentPath)];
-        if (m_(R, launchRoots)) return "in_launch_dir";
-        return m_(R, [...memory.syncRoots]) ? "in_sync_root" : "in_other_root";
+        let R = [O, await n.realpath(O).catch(() => O)];
+        if (anyPairMatches(R, launchRoots)) return "in_launch_dir";
+        return anyPairMatches(R, [...memory.syncRoots]) ? "in_sync_root" : "in_other_root";
       } catch {
         return "unknown";
       }
@@ -249,78 +288,115 @@ function createReachStateRegistry() {
   return {
     reachFor(n) {
       let r = e.get(n);
-      if (r !== void 0) return r;
-      let s = createReachState();
-      return (e.set(n, s), s);
+      if (r !== undefined) return r;
+      let reachState = createReachState();
+      e.set(n, reachState);
+      return reachState;
     },
   };
 }
 //@ chunk-mthxbav8.js:10045-10063 placement
-var xNn = new HostScoped(createReachStateRegistry);
+/**
+ * 宿主隔离的可达范围状态注册表。
+ */
+var reachStateRegistry = new HostScoped(createReachStateRegistry);
 //@ chunk-mthxbav8.js:10170-10616 placement
-var DEVICE_HOOK_EXECUTORS = { execCommand: execCommandHookForDevice, execHttp: execHttpHook },
-  Cr = `${$2e}/project-folder-not-given-to-this-hook`,
-  $n = [
-    ["safe.bareRepository", "explicit"],
-    ["core.hooksPath", "/dev/null"],
-    ["core.fsmonitor", "false"],
-    ["protocol.ext.allow", "never"],
-    ["submodule.recurse", "false"],
-    ["diff.ignoreSubmodules", "all"],
-    ["status.submoduleSummary", "false"],
-    ["fetch.recurseSubmodules", "false"],
-    ["push.recurseSubmodules", "no"],
-  ],
-  TENGU_TRANQUIL_CROWN = "tengu_tranquil_crown",
-  Tr = ["core.alternateRefsCommand", HMt];
+/**
+ * 设备钩子执行器映射、缺失项目目录标记、传给钩子 git 的安全配置与替代 ref 命令参数。
+ */
+var DEVICE_HOOK_EXECUTORS = {
+  execCommand: execCommandHookForDevice,
+  execHttp: execHttpHook,
+};
+var MISSING_PROJECT_DIR_MARKER = `${EMPTY_PATH_DIR}/project-folder-not-given-to-this-hook`;
+var SAFE_GIT_CONFIG_FOR_HOOKS = [
+  ["safe.bareRepository", "explicit"],
+  ["core.hooksPath", "/dev/null"],
+  ["core.fsmonitor", "false"],
+  ["protocol.ext.allow", "never"],
+  ["submodule.recurse", "false"],
+  ["diff.ignoreSubmodules", "all"],
+  ["status.submoduleSummary", "false"],
+  ["fetch.recurseSubmodules", "false"],
+  ["push.recurseSubmodules", "no"],
+];
+var TENGU_TRANQUIL_CROWN = "tengu_tranquil_crown";
+var ALTERNATE_REFS_CONFIG_ARG = ["core.alternateRefsCommand", ALTERNATE_REFS_COMMAND];
 //@ chunk-mthxbav8.js:10616-10785 placement
 function withShellPrefix(e) {
   if (e.omit.includes("CLAUDE_CODE_SHELL_PREFIX")) return;
-  let n = e.base.CLAUDE_CODE_SHELL_PREFIX?.trim() || void 0;
-  return n !== void 0 && n.startsWith("/") ? n : void 0;
+  let n = e.base.CLAUDE_CODE_SHELL_PREFIX?.trim() || undefined;
+  return n !== undefined && n.startsWith("/") ? n : undefined;
 }
 //@ chunk-mthxbav8.js:10785-11892 placement
-async function runDeviceHook(
-  { hook: hook, event: event, input: input, timeoutMs: timeoutMs, env: env, startDirectory: startDirectory },
-  w,
-  h,
-  v,
-) {
+async function runDeviceHook({ hook, event, input, timeoutMs, env, startDirectory }, w, h, v) {
   if (v.aborted)
     return hook.type === "http"
-      ? { kind: "http", ok: !1, body: "", aborted: !0 }
-      : { kind: "command", stdout: "", stderr: "", status: 1, aborted: !0 };
+      ? {
+          kind: "http",
+          ok: false,
+          body: "",
+          aborted: true,
+        }
+      : {
+          kind: "command",
+          stdout: "",
+          stderr: "",
+          status: 1,
+          aborted: true,
+        };
   let y = jsonStringify(input);
   if (hook.type === "http")
     try {
       return {
         kind: "http",
-        ...(await h.execHttp({ ...hook, timeout: void 0 }, event, y, v, timeoutMs, pjt(env))),
+        ...(await h.execHttp(
+          {
+            ...hook,
+            timeout: undefined,
+          },
+          event,
+          y,
+          v,
+          timeoutMs,
+          mergeHookEnv(env),
+        )),
       };
     } catch (error) {
       return {
         kind: "http",
-        ok: !1,
+        ok: false,
         body: "",
         error: error instanceof Error ? error.message : String(error),
       };
     }
-  let { signal: signal, cleanup: cleanup } = createCombinedAbortSignal(v, { timeoutMs: timeoutMs });
+  let { signal, cleanup } = createCombinedAbortSignal(v, {
+    timeoutMs,
+  });
   try {
     return {
       kind: "command",
       ...(await h.execCommand({
-        hook: { ...hook, timeout: Math.ceil(timeoutMs / 1000) + 30 },
+        hook: {
+          ...hook,
+          timeout: Math.ceil(timeoutMs / 1000) + 30,
+        },
         hookEvent: event,
         jsonInput: y,
         envContext: claudeEnvContextFrom(input),
         project:
-          startDirectory === void 0
-            ? { originalCwd: w.launchDir, projectRoot: w.projectRoot }
-            : { originalCwd: startDirectory, projectRoot: Cr },
+          startDirectory === undefined
+            ? {
+                originalCwd: w.launchDir,
+                projectRoot: w.projectRoot,
+              }
+            : {
+                originalCwd: startDirectory,
+                projectRoot: MISSING_PROJECT_DIR_MARKER,
+              },
         cwd: startDirectory ?? input.cwd,
-        startsOutsideProject: startDirectory !== void 0,
-        signal: signal,
+        startsOutsideProject: startDirectory !== undefined,
+        signal,
         envBase: env.base,
         envOmit: env.omit,
         shellPrefix: withShellPrefix(env),
@@ -328,12 +404,22 @@ async function runDeviceHook(
           ...env.extra,
           CLAUDE_CODE_CLOUD_SESSION_ID: w.cloudSessionId,
           ...buildGitConfigEnv(
-            void 0,
-            readFlagWithOverride(TENGU_TRANQUIL_CROWN, { safe: !0 })
-              ? [...$n, ...Mys, ...Dys, ...Lys, Tr]
-              : $n,
+            undefined,
+            readFlagWithOverride(TENGU_TRANQUIL_CROWN, {
+              safe: true,
+            })
+              ? [
+                  ...SAFE_GIT_CONFIG_FOR_HOOKS,
+                  ...LOG_SAFETY_CONFIG,
+                  ...MAINTENANCE_OFF_CONFIG,
+                  ...DIFF_SAFETY_CONFIG,
+                  ALTERNATE_REFS_CONFIG_ARG,
+                ]
+              : SAFE_GIT_CONFIG_FOR_HOOKS,
           ),
-          ...(startDirectory !== void 0 && { GIT_CEILING_DIRECTORIES: dirname(startDirectory) }),
+          ...(startDirectory !== undefined && {
+            GIT_CEILING_DIRECTORIES: dirname(startDirectory),
+          }),
         },
       })),
     };
@@ -343,29 +429,41 @@ async function runDeviceHook(
       stdout: "",
       stderr: error instanceof Error ? error.message : String(error),
       status: 1,
-      spawnFailed: !0,
+      spawnFailed: true,
     };
   } finally {
     cleanup();
   }
 }
 //@ chunk-mthxbav8.js:11892-11944 placement
-function Oe(e, n) {
-  return sanitizeDisplayText(e, { maxCodeUnits: 400 }) || n;
+function sanitizeOrFallback(stderr, n) {
+  return (
+    sanitizeDisplayText(stderr, {
+      maxCodeUnits: 400,
+    }) || n
+  );
 }
 //@ chunk-mthxbav8.js:11944-12319 placement
-function blockDecision(e, n, r = {}) {
+function blockDecision(event, n, r = {}) {
   let s = "async" in r ? {} : r;
-  if (e !== "PreToolUse") return { ...s, decision: "block", reason: n };
-  let u = "hookSpecificOutput" in s ? s.hookSpecificOutput : void 0,
-    S = u?.hookEventName === "PreToolUse" ? u.additionalContext : void 0;
+  if (event !== "PreToolUse")
+    return {
+      ...s,
+      decision: "block",
+      reason: n,
+    };
+  let hookSpecificOutput = "hookSpecificOutput" in s ? s.hookSpecificOutput : undefined;
+  let additionalContext =
+    hookSpecificOutput?.hookEventName === "PreToolUse" ? hookSpecificOutput.additionalContext : undefined;
   return {
     ...s,
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
       permissionDecisionReason: n,
-      ...(S !== void 0 && { additionalContext: S }),
+      ...(additionalContext !== undefined && {
+        additionalContext,
+      }),
     },
   };
 }
@@ -373,31 +471,36 @@ function blockDecision(e, n, r = {}) {
 function interpretHookResult(e, n) {
   let r = classifyHookOutput(e, n);
   if (r.answer === null) return r;
-  let { answer: answer } = parseHookJsonOutput(r.answer, n.event);
+  let { answer } = parseHookJsonOutput(r.answer, n.event);
   if (r.exitClass === "2" && r.blocked && !isDenyingHookOutput(answer) && e.kind === "command") {
     let u = blockDecision(n.event, `[${n.label}]: ${e.stderr || "No stderr output"}`, answer);
-    return { ...r, answer: parseHookJsonOutput(u, n.event).answer, exitClass: "2", blocked: !0 };
+    return {
+      ...r,
+      answer: parseHookJsonOutput(u, n.event).answer,
+      exitClass: "2",
+      blocked: true,
+    };
   }
-  return { ...r, answer: answer, blocked: isBlockingHookOutput(answer) };
+  return {
+    ...r,
+    answer,
+    blocked: isBlockingHookOutput(answer),
+  };
 }
+//@ chunk-mthxbav8.js:12647-16511 placement
 /**
  * 把钩子执行结果（退出码、超时、输出 JSON）归类为答复，处理超时是否默认拒绝。
  */
-//@ chunk-mthxbav8.js:12647-16511 placement
-function classifyHookOutput(
-  e,
-  {
-    event: event,
-    label: label,
-    timedOut: timedOut,
-    timeoutMs: timeoutMs,
-    timeoutFailsClosed: timeoutFailsClosed = !1,
-  },
-) {
-  if (e.aborted && !timedOut) return { answer: null, exitClass: "cancelled", blocked: !1 };
+function classifyHookOutput(e, { event, label, timedOut, timeoutMs, timeoutFailsClosed = false }) {
+  if (e.aborted && !timedOut)
+    return {
+      answer: null,
+      exitClass: "cancelled",
+      blocked: false,
+    };
   if (e.aborted) {
-    let rounded = Math.round(timeoutMs / 1000),
-      j = `[${label}]: timed out after ${rounded}s on the attached machine`;
+    let rounded = Math.round(timeoutMs / 1000);
+    let j = `[${label}]: timed out after ${rounded}s on the attached machine`;
     if (
       timeoutFailsClosed &&
       (event === "PreToolUse" || event === "UserPromptSubmit" || event === "UserPromptExpansion")
@@ -405,23 +508,23 @@ function classifyHookOutput(
       return {
         answer: blockDecision(event, j, buildPromptBlockOutput(event, j) ?? {}),
         exitClass: "timeout",
-        blocked: !0,
+        blocked: true,
       };
     return {
       answer: {},
       exitClass: "timeout",
       localWarning: `[${label}]: timed out after ${rounded}s \u2014 output discarded; raise the hook's "timeout" to allow more time`,
-      blocked: !1,
+      blocked: false,
     };
   }
   if (e.kind === "http") {
-    if (e.error !== void 0 || !e.ok) {
-      let M = Oe(e.error ?? `HTTP ${e.statusCode ?? "request failed"}`, "request failed"),
-        q =
-          e.error !== void 0
-            ? "the request to it could not be made from this machine"
-            : `it answered HTTP ${e.statusCode ?? "with an error"}`,
-        T = denyPreToolUseOutput(event, `[${label}]: not run \u2014 ${q}; retry`);
+    if (e.error !== undefined || !e.ok) {
+      let M = sanitizeOrFallback(e.error ?? `HTTP ${e.statusCode ?? "request failed"}`, "request failed");
+      let q =
+        e.error !== undefined
+          ? "the request to it could not be made from this machine"
+          : `it answered HTTP ${e.statusCode ?? "with an error"}`;
+      let T = denyPreToolUseOutput(event, `[${label}]: not run \u2014 ${q}; retry`);
       return {
         answer: T,
         exitClass: "other",
@@ -429,15 +532,19 @@ function classifyHookOutput(
         blocked: isBlockingHookOutput(T),
       };
     }
-    let { json: json, validationError: validationError } = parseHttpHookOutput(e.body);
-    if (validationError !== void 0 || json === void 0)
+    let { json, validationError } = parseHttpHookOutput(e.body);
+    if (validationError !== undefined || json === undefined)
       return {
         answer: {},
         exitClass: "other",
-        localWarning: `[${label}]: ${Oe(validationError ?? "", "no JSON in the response")}`,
-        blocked: !1,
+        localWarning: `[${label}]: ${sanitizeOrFallback(validationError ?? "", "no JSON in the response")}`,
+        blocked: false,
       };
-    return { answer: json, exitClass: "0", blocked: isBlockingHookOutput(json) };
+    return {
+      answer: json,
+      exitClass: "0",
+      blocked: isBlockingHookOutput(json),
+    };
   }
   if (e.spawnFailed) {
     let R = denyPreToolUseOutput(
@@ -447,7 +554,7 @@ function classifyHookOutput(
     return {
       answer: R,
       exitClass: "spawn_failed",
-      localWarning: `[${label}]: ${Oe(e.stderr, "failed to start")}`,
+      localWarning: `[${label}]: ${sanitizeOrFallback(e.stderr, "failed to start")}`,
       blocked: isBlockingHookOutput(R),
     };
   }
@@ -460,9 +567,14 @@ function classifyHookOutput(
       stdioIncomplete: e.stdioIncomplete,
       stdioClosedWithoutEnd: e.stdioClosedWithoutEnd,
     });
-  if (e.status === 2 && (e.stdioIncomplete === !0 || e.stdioClosedWithoutEnd === !0)) {
-    let R = buildPromptBlockOutput(event, `[${label}]: ${e.stderr || "No stderr output"}`);
-    if (R !== void 0) return { answer: R, exitClass: "2", blocked: !0 };
+  if (e.status === 2 && (e.stdioIncomplete === true || e.stdioClosedWithoutEnd === true)) {
+    let promptBlockOutput = buildPromptBlockOutput(event, `[${label}]: ${e.stderr || "No stderr output"}`);
+    if (promptBlockOutput !== undefined)
+      return {
+        answer: promptBlockOutput,
+        exitClass: "2",
+        blocked: true,
+      };
   }
   let h = event !== "Stop" && event !== "SubagentStop" && event !== "StopFailure";
   if (announcedAsync(e.stdout)) {
@@ -470,61 +582,75 @@ function classifyHookOutput(
       return {
         answer: blockDecision(event, `[${label}]: ${e.stderr || "No stderr output"}`),
         exitClass: "2",
-        blocked: !0,
+        blocked: true,
       };
     return e.status === 0
-      ? { answer: {}, exitClass: "0", blocked: !1 }
+      ? {
+          answer: {},
+          exitClass: "0",
+          blocked: false,
+        }
       : {
           answer: {},
           exitClass: e.status === 2 ? "2" : "other",
-          localWarning: `[${label}]: announced async, then failed with status code ${e.status}: ${Oe(e.stderr, "No stderr output")}`,
-          blocked: !1,
+          localWarning: `[${label}]: announced async, then failed with status code ${e.status}: ${sanitizeOrFallback(e.stderr, "No stderr output")}`,
+          blocked: false,
         };
   }
-  let { json: json, plainText: plainText, validationError: validationError } = parseHookOutput(e.stdout),
-    O = dropSuspectCaptureJson(e, event, json),
-    x = getUntrustedCaptureReason(e, event, e.stdout, O, (R) => parseHookOutput(R).json);
-  if (x !== void 0) {
-    let R = `[${label}]: output incomplete \u2014 its stdio was cut before end-of-stream on this machine; retry`,
-      j = PROMPT_GUARD_EVENTS.has(event)
-        ? blockDecision(event, R, buildPromptBlockOutput(event, R) ?? {})
-        : {};
+  let { json, plainText, validationError } = parseHookOutput(e.stdout);
+  let O = dropSuspectCaptureJson(e, event, json);
+  let untrustedCaptureReason = getUntrustedCaptureReason(
+    e,
+    event,
+    e.stdout,
+    O,
+    (R) => parseHookOutput(R).json,
+  );
+  if (untrustedCaptureReason !== undefined) {
+    let R = `[${label}]: output incomplete \u2014 its stdio was cut before end-of-stream on this machine; retry`;
+    let j = PROMPT_GUARD_EVENTS.has(event)
+      ? blockDecision(event, R, buildPromptBlockOutput(event, R) ?? {})
+      : {};
     return {
       answer: j,
       exitClass: "0",
-      localWarning: `[${label}]: ${Oe(x, "stdio incomplete")}`,
+      localWarning: `[${label}]: ${sanitizeOrFallback(untrustedCaptureReason, "stdio incomplete")}`,
       blocked: isBlockingHookOutput(j),
     };
   }
-  if (validationError !== void 0 && e.status !== 2)
+  if (validationError !== undefined && e.status !== 2)
     return {
       answer: {},
       exitClass: e.status === 0 ? "0" : "other",
-      localWarning: `[${label}]: ${Oe(withHookStderr(validationError, e.status, e.stderr), "hook JSON output failed validation")}`,
-      blocked: !1,
+      localWarning: `[${label}]: ${sanitizeOrFallback(withHookStderr(validationError, e.status, e.stderr), "hook JSON output failed validation")}`,
+      blocked: false,
     };
-  if (O !== void 0) {
+  if (O !== undefined) {
     if ("async" in O)
       return e.status === 2 && !w && h
         ? {
             answer: blockDecision(event, `[${label}]: ${e.stderr || "No stderr output"}`),
             exitClass: "2",
-            blocked: !0,
+            blocked: true,
           }
         : e.status === 0
-          ? { answer: {}, exitClass: "0", blocked: !1 }
+          ? {
+              answer: {},
+              exitClass: "0",
+              blocked: false,
+            }
           : {
               answer: {},
               exitClass: e.status === 2 ? "2" : "other",
-              localWarning: `[${label}]: announced async, then failed with status code ${e.status}: ${Oe(e.stderr, "No stderr output")}`,
-              blocked: !1,
+              localWarning: `[${label}]: announced async, then failed with status code ${e.status}: ${sanitizeOrFallback(e.stderr, "No stderr output")}`,
+              blocked: false,
             };
     let R = O;
     if (e.status === 2 && !isDenyingHookOutput(R))
       return {
         answer: blockDecision(event, `[${label}]: ${e.stderr || "No stderr output"}`, R),
         exitClass: "2",
-        blocked: !0,
+        blocked: true,
       };
     return {
       answer: R,
@@ -536,92 +662,114 @@ function classifyHookOutput(
     let trimmed = (plainText ?? "").trim();
     return (event === "UserPromptSubmit" || event === "UserPromptExpansion") && trimmed !== ""
       ? {
-          answer: { hookSpecificOutput: { hookEventName: event, additionalContext: trimmed } },
+          answer: {
+            hookSpecificOutput: {
+              hookEventName: event,
+              additionalContext: trimmed,
+            },
+          },
           exitClass: "0",
-          blocked: !1,
+          blocked: false,
         }
-      : { answer: {}, exitClass: "0", blocked: !1 };
+      : {
+          answer: {},
+          exitClass: "0",
+          blocked: false,
+        };
   }
   if (e.status === 2) {
     if (w)
       return {
         answer: {},
         exitClass: "2",
-        localWarning: `[${label}]: the hook script appears to be missing (${Oe(e.stderr, "no such file")})`,
-        blocked: !1,
+        localWarning: `[${label}]: the hook script appears to be missing (${sanitizeOrFallback(e.stderr, "no such file")})`,
+        blocked: false,
       };
     return {
       answer: blockDecision(event, `[${label}]: ${e.stderr || "No stderr output"}`),
       exitClass: "2",
-      blocked: !0,
+      blocked: true,
     };
   }
   return {
     answer: {},
     exitClass: "other",
-    localWarning: `[${label}]: failed with non-blocking status code ${e.status}: ${Oe(e.stderr, "No stderr output")}`,
-    blocked: !1,
+    localWarning: `[${label}]: failed with non-blocking status code ${e.status}: ${sanitizeOrFallback(e.stderr, "No stderr output")}`,
+    blocked: false,
   };
 }
 //@ chunk-mthxbav8.js:16511-16658 placement
-function denyPreToolUseOutput(e, n) {
-  return e === "PreToolUse"
+function denyPreToolUseOutput(event, permissionDecisionReason) {
+  return event === "PreToolUse"
     ? {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
-          permissionDecisionReason: n,
+          permissionDecisionReason,
         },
       }
     : {};
 }
 //@ chunk-mthxbav8.js:16658-16739 placement
-var Hr = {
+var answeredOnDeps = {
   isAnsweredOn: () => isCloudClientToolServingAnsweredOn(),
-  isAnsweredOff: () => getToolServingFlagAnsweredOff({ cloudClient: !0 }) !== void 0,
+  isAnsweredOff: () =>
+    getToolServingFlagAnsweredOff({
+      cloudClient: true,
+    }) !== undefined,
 };
 //@ chunk-mthxbav8.js:16739-16877 placement
-function createAnsweredOnLatch(e = Hr) {
-  let n = !1;
+function createAnsweredOnLatch(e = answeredOnDeps) {
+  let n = false;
   return () => {
     if (e.isAnsweredOff()) return "answered_off";
-    return ((n ||= e.isAnsweredOn()), n ? "answered_on" : "unanswered");
+    n ||= e.isAnsweredOn();
+    return n ? "answered_on" : "unanswered";
   };
 }
 //@ chunk-mthxbav8.js:17001-17424 placement
-var DEVICE_HOOK_GRACE_MS = 30000,
-  $r = 8,
-  Kt = 64,
-  Nr = 1048576,
-  Gt = 2000,
-  qn = 1000,
-  Lr = 256,
-  pt = 256,
-  Mr = 64,
-  Fr = 8,
-  jn = 256,
-  Wr = devNull,
-  Ur = 'started in an empty folder \xB7 mark it "cloud": "device" if it needs the project',
-  Yn = /^[A-Za-z0-9_.:-]{1,128}$/,
-  qr = /^[a-z]{1,16}$/,
-  jr =
-    "Not running your hooks for the cloud session: the service could not vouch for the sender of its hook requests under your organization's trusted-device policy. The session goes on without them.";
+/**
+ * 设备钩子的宽限、重试、体积与标识长度等常量，以及空目录提示与无法担保发送者的文案。
+ */
+var DEVICE_HOOK_GRACE_MS = 30000;
+var MAX_TRANSPORT_RETRIES = 8;
+var MAX_HOOKS_PER_EVENT = 64;
+var MAX_HOOK_BODY_BYTES = 1048576;
+var REQUEST_TIMEOUT_MS = 2000;
+var MIN_WAIT_BEFORE_ACQUIRE_MS = 1000;
+var MAX_LABEL_CHARS = 256;
+var MAX_COLLECTED_PATHS = 256;
+var MAX_LINK_HOPS = 64;
+var MAX_PATH_DEPTH = 8;
+var MAX_REQUEST_ID_CHARS = 256;
+var NULL_DEVICE = devNull;
+var EMPTY_FOLDER_HINT = 'started in an empty folder \xB7 mark it "cloud": "device" if it needs the project';
+var SAFE_IDENTIFIER_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
+var EFFORT_LEVEL_RE = /^[a-z]{1,16}$/;
+var SENDER_UNVOUCHED_TEXT =
+  "Not running your hooks for the cloud session: the service could not vouch for the sender of its hook requests under your organization's trusted-device policy. The session goes on without them.";
 //@ chunk-mthxbav8.js:17424-17513 placement
 function isPastDeadline(e) {
-  return e.deadlineMs !== void 0 && (e.ageMs === void 0 || e.ageMs > e.deadlineMs + DEVICE_HOOK_GRACE_MS);
+  return (
+    e.deadlineMs !== undefined && (e.ageMs === undefined || e.ageMs > e.deadlineMs + DEVICE_HOOK_GRACE_MS)
+  );
 }
 //@ chunk-mthxbav8.js:17513-17572 placement
-function safeLabel(e) {
-  return Yn.test(e) ? e : sanitizeDisplayText(e, { maxCodeUnits: 64 });
+function safeLabel(requestId) {
+  return SAFE_IDENTIFIER_RE.test(requestId)
+    ? requestId
+    : sanitizeDisplayText(requestId, {
+        maxCodeUnits: 64,
+      });
 }
 //@ chunk-mthxbav8.js:17572-17734 placement
-function permissionDecisionOutput(e, n, r) {
-  return e === "PreToolUse"
+function permissionDecisionOutput(event, wire, r) {
+  return event === "PreToolUse"
     ? {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
-          permissionDecisionReason: `[${n}]: ${r}`,
+          permissionDecisionReason: `[${wire}]: ${r}`,
         },
       }
     : {};
@@ -631,92 +779,94 @@ function rewritePathInInput(e, n, r) {
   return n.rawPath === r ? e : replaceCommandProgram(e, n.site, r);
 }
 //@ chunk-mthxbav8.js:17792-18056 placement
-function isPlausibleAbsolutePath(e, n) {
-  if (typeof e !== "string" || n === null || !e.startsWith("/")) return !1;
-  if (e.trim() !== e || /^\/(?:proc|dev|net|network)(?:\/|$)/i.test(e)) return !1;
+function isPlausibleAbsolutePath(atPath, roots) {
+  if (typeof atPath !== "string" || roots === null || !atPath.startsWith("/")) return false;
+  if (atPath.trim() !== atPath || /^\/(?:proc|dev|net|network)(?:\/|$)/i.test(atPath)) return false;
   if (
-    e
+    atPath
       .split("/")
       .slice(1)
       .some((s) => s === "" || s === "." || s === "..")
   )
-    return !1;
-  return !isPosixPathUnder(e, stripTrailingSlashes(n.containerProjectDir));
+    return false;
+  return !isPosixPathUnder(atPath, stripTrailingSlashes(roots.containerProjectDir));
 }
 //@ chunk-mthxbav8.js:18056-18067 placement
 var isHookInputTopField = HOOK_INPUT_TOP_FIELDS;
 //@ chunk-mthxbav8.js:18067-18317 placement
 function isRewritablePath(e, n) {
-  if (isHookInputTopField(e)) return !0;
-  let r = rtn(e),
-    s = r[0] === "tool_calls" ? 2 : 0;
-  if (r[s] !== "tool_response") return !1;
-  let reduced = r.slice(0, s + 1).reduce((S, w) => (isObjectLike(S) ? S[w] : void 0), n);
+  if (isHookInputTopField(e)) return true;
+  let r = unescapeJsonPointerPath(e);
+  let s = r[0] === "tool_calls" ? 2 : 0;
+  if (r[s] !== "tool_response") return false;
+  let reduced = r.slice(0, s + 1).reduce((acc, w) => (isObjectLike(acc) ? acc[w] : undefined), n);
   for (let S of r.slice(s + 1)) {
-    if (Array.isArray(reduced)) return !1;
-    reduced = isObjectLike(reduced) ? reduced[S] : void 0;
+    if (Array.isArray(reduced)) return false;
+    reduced = isObjectLike(reduced) ? reduced[S] : undefined;
   }
-  return !0;
+  return true;
 }
 //@ chunk-mthxbav8.js:18317-18620 placement
 function isToolResponsePath(e, n, r) {
-  let s = rtn(e),
-    u = s[0] === "tool_calls",
-    S = u ? s.slice(2) : s;
-  if (S[0] === "tool_response") return !0;
-  if (S[0] !== "tool_input" || S.length !== 2 || !isObjectLike(n)) return !1;
-  let tool_calls = n.tool_calls,
-    h = u ? (isObjectLike(tool_calls) ? tool_calls[s[1] ?? ""] : void 0) : n,
-    v = isObjectLike(h) ? h.tool_name : void 0,
-    y = typeof v === "string" ? j$n(v, r) : void 0;
-  return y !== void 0 && S[1] === y;
+  let s = unescapeJsonPointerPath(e);
+  let u = s[0] === "tool_calls";
+  let S = u ? s.slice(2) : s;
+  if (S[0] === "tool_response") return true;
+  if (S[0] !== "tool_input" || S.length !== 2 || !isObjectLike(n)) return false;
+  let toolCalls = n.tool_calls;
+  let h = u ? (isObjectLike(toolCalls) ? toolCalls[s[1] ?? ""] : undefined) : n;
+  let toolName = isObjectLike(h) ? h.tool_name : undefined;
+  let y = typeof toolName === "string" ? toolPathFieldInput(toolName, r) : undefined;
+  return y !== undefined && S[1] === y;
 }
 //@ chunk-mthxbav8.js:18620-18729 layout
-var PERMISSION_MODE_ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,40}$/,
-  DEVICE_HOOKS_DISCONNECT = Symbol("deviceHooks.disconnect"),
-  DEVICE_HOOKS_DEADLINE = Symbol("deviceHooks.deadline");
+var PERMISSION_MODE_ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,40}$/;
+var DEVICE_HOOKS_DISCONNECT = Symbol("deviceHooks.disconnect");
+var DEVICE_HOOKS_DEADLINE = Symbol("deviceHooks.deadline");
+//@ chunk-mthxbav8.js:18729-19107 placement = createBaseHookInput (0.526)
 /**
  * 校验钩子输入里的 session_id/agent_id/prompt_id/tool_use_id 不含路径穿越、permission_mode/effort/agent_type 合法，用于设备钩子转发。旧版名 createBaseHookInput 配错。
  */
-//@ chunk-mthxbav8.js:18729-19107 placement = createBaseHookInput (0.526)
 function isSafeHookInputIds(e) {
   let n = [e.session_id, e.agent_id, e.prompt_id];
   if ("tool_use_id" in e && typeof e.tool_use_id === "string") n.push(e.tool_use_id);
   return (
-    n.every((r) => r === void 0 || (Yn.test(r) && !r.includes(".."))) &&
-    (e.permission_mode === void 0 || PERMISSION_MODE_ID_RE.test(e.permission_mode)) &&
-    (e.effort === void 0 || qr.test(e.effort.level)) &&
-    (e.agent_type === void 0 || sanitizeDisplayText(e.agent_type, { maxCodeUnits: 64 }) === e.agent_type)
+    n.every((r) => r === undefined || (SAFE_IDENTIFIER_RE.test(r) && !r.includes(".."))) &&
+    (e.permission_mode === undefined || PERMISSION_MODE_ID_RE.test(e.permission_mode)) &&
+    (e.effort === undefined || EFFORT_LEVEL_RE.test(e.effort.level)) &&
+    (e.agent_type === undefined ||
+      sanitizeDisplayText(e.agent_type, {
+        maxCodeUnits: 64,
+      }) === e.agent_type)
   );
 }
-
 export {
   createDeviceHookDecider,
-  xNn,
-  Kt,
-  pt,
-  Fr,
+  reachStateRegistry,
+  MAX_HOOKS_PER_EVENT,
+  MAX_COLLECTED_PATHS,
+  MAX_PATH_DEPTH,
   isHookInputTopField,
-  Mr,
-  $r,
-  Gt,
-  Lr,
+  MAX_LINK_HOPS,
+  MAX_TRANSPORT_RETRIES,
+  REQUEST_TIMEOUT_MS,
+  MAX_LABEL_CHARS,
   permissionDecisionOutput,
   rewritePathInInput,
   isPastDeadline,
-  Nr,
+  MAX_HOOK_BODY_BYTES,
   isSafeHookInputIds,
   safeLabel,
   isRewritablePath,
   isToolResponsePath,
   isPlausibleAbsolutePath,
-  Wr,
-  qn,
+  NULL_DEVICE,
+  MIN_WAIT_BEFORE_ACQUIRE_MS,
   withShellPrefix,
   interpretHookResult,
-  Ur,
-  jn,
-  jr,
+  EMPTY_FOLDER_HINT,
+  MAX_REQUEST_ID_CHARS,
+  SENDER_UNVOUCHED_TEXT,
   DEVICE_HOOKS_DISCONNECT,
   DEVICE_HOOKS_DEADLINE,
   runDeviceHook,

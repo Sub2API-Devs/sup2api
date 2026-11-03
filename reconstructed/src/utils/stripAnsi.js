@@ -11,16 +11,24 @@
 import { toWellFormedString } from "./stringUtils.js";
 
 //@ chunk-58wc6nbw.js:227-266 placement
-function Yn(r) {
+/**
+ * 去掉 ANSI 转义（Bun.stripANSI）。
+ */
+function stripAnsi(r) {
   return Bun.stripANSI(r);
 }
 //@ chunk-58wc6nbw.js:266-311 placement
-function Pje(r) {
-  return toWellFormedString(Yn(toWellFormedString(String(r))));
+/**
+ * 先转良构再除 ANSI，用于云端文本。
+ */
+function sanitizeAnsiText(r) {
+  return toWellFormedString(stripAnsi(toWellFormedString(String(r))));
 }
 //@ chunk-58wc6nbw.js:311-387 placement
-function qa(r) {
-  return r.replace(/[^\n\r\v\f\x85\u2028\u2029]+/g, (n) => Yn(n));
+/**
+ * 逐段除 ANSI，保留换行与分隔符。
+ */
+function stripAnsiPerLine(r) {
+  return r.replace(/[^\n\r\v\f\x85\u2028\u2029]+/g, (n) => stripAnsi(n));
 }
-
-export { Yn, qa, Pje };
+export { stripAnsi, stripAnsiPerLine, sanitizeAnsiText };

@@ -8,16 +8,21 @@
  * pieces: chunk-3z3sb58b.js (2)
  * attribution: placement 2
  */
-import { ht } from "../mcp/cliOwnedClients.js";
+import { getCliOwnedState } from "../mcp/cliOwnedClients.js";
 
 //@ chunk-3z3sb58b.js:227-272 placement
-function N1s(t) {
-  ht().policyColdStartWaiter = t;
+/**
+ * 记录策略冷启动的等待函数。
+ */
+function setPolicyColdStartWaiter(policyColdStartWaiter) {
+  getCliOwnedState().policyColdStartWaiter = policyColdStartWaiter;
 }
 //@ chunk-3z3sb58b.js:272-340 placement
-async function kA() {
-  let policyColdStartWaiter = ht().policyColdStartWaiter;
+/**
+ * 若有冷启动等待函数则等待其完成。
+ */
+async function awaitPolicyColdStartWaiter() {
+  let policyColdStartWaiter = getCliOwnedState().policyColdStartWaiter;
   if (policyColdStartWaiter) await policyColdStartWaiter();
 }
-
-export { kA, N1s };
+export { awaitPolicyColdStartWaiter, setPolicyColdStartWaiter };

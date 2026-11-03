@@ -8,15 +8,18 @@
  * pieces: chunk-18hwfzwa.js (8), chunk-dcmhvw5a.js (14)
  * attribution: placement 22
  */
-import { homedir, homedir as homedir_2, homedir as homedir_3 } from "os";
+import { homedir } from "os";
 import { getModeConfig } from "./permissions/PermissionMode.js";
-import { M, Ka, u, A, o, U, T } from "../../vendor/zod/v4/classic/schemas.js";
+import { M, preprocess, u, array, string, _enum, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { PERMISSION_MODES, EXTERNAL_PERMISSION_MODES } from "../types/permissions.js";
 import { logForDebugging } from "./debug.js";
 import { whichAsync } from "./which.js";
 import { HostScoped } from "./hostScoped.js";
 import { createSignal } from "./signal.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { lit as lit_2, fromEnum } from "../services/analytics/safeMetadata.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { env } from "./env.js";
@@ -39,45 +42,48 @@ import { registerCleanup } from "./cleanupRegistry.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { truncateToLength, stripSuffix } from "./stringUtils.js";
 
+//@ chunk-dcmhvw5a.js:209359-209393 placement
 /**
  * 取主题颜色。
  */
-//@ chunk-dcmhvw5a.js:209359-209393 placement
 function themeColorOf(e) {
   return getModeConfig(e).color;
 }
+//@ chunk-dcmhvw5a.js:209393-209428 placement
 /**
  * 接受 true/false 字符串的布尔 schema。
  */
-//@ chunk-dcmhvw5a.js:209393-209428 placement
 function booleanishSchema(e = M()) {
-  return Ka(coerceBooleanString, e);
+  return preprocess(coerceBooleanString, e);
 }
+//@ chunk-dcmhvw5a.js:209428-209481 placement
 /**
  * 把 true/false 字符串转为布尔。
  */
-//@ chunk-dcmhvw5a.js:209428-209481 placement
 function coerceBooleanString(e) {
-  return e === "true" ? !0 : e === "false" ? !1 : e;
+  return e === "true" ? true : e === "false" ? false : e;
 }
+//@ chunk-dcmhvw5a.js:209481-209566 placement
 /**
  * 拼写检查程序列表与词格式。
  */
-//@ chunk-dcmhvw5a.js:209481-209566 placement
-var SPELLCHECK_PROGRAMS = ["aspell", "hunspell", "ispell"],
-  oPi = `!
-`,
-  Wb = /^[A-Za-z][A-Za-z0-9_.,-]{0,63}$/;
+var SPELLCHECK_PROGRAMS = ["aspell", "hunspell", "ispell"];
+var ISPELL_SESSION_END_MARKER = `!
+`;
+var SPELLCHECK_LANG_RE = /^[A-Za-z][A-Za-z0-9_.,-]{0,63}$/;
 //@ chunk-dcmhvw5a.js:209566-209600 placement
-function B_r(e) {
-  return Wb.test(e);
+/**
+ * 语言标识是否合法（字母开头、允许 . , _ -）。
+ */
+function isValidLanguageTag(e) {
+  return SPELLCHECK_LANG_RE.test(e);
 }
+//@ chunk-dcmhvw5a.js:209600-209852 placement
 /**
  * 拼写检查程序的管道模式参数。
  */
-//@ chunk-dcmhvw5a.js:209600-209852 placement
 function spellCheckerArgs(e, n) {
-  let r = n !== void 0 && B_r(n) ? n : void 0;
+  let r = n !== undefined && isValidLanguageTag(n) ? n : undefined;
   switch (e) {
     case "aspell":
       return ["-a", "--encoding=utf-8", "--sug-mode=ultra", ...(r ? [`--lang=${r}`] : [])];
@@ -87,10 +93,10 @@ function spellCheckerArgs(e, n) {
       return ["-a", ...(r ? ["-d", r] : [])];
   }
 }
+//@ chunk-dcmhvw5a.js:209852-210039 placement
 /**
  * 从 ispell 版本行判断实际是 aspell/hunspell/ispell。
  */
-//@ chunk-dcmhvw5a.js:209852-210039 placement
 function detectSpellCheckerFlavor(e) {
   if (!e.startsWith("@(#) International Ispell")) return null;
   if (/but really Aspell/i.test(e)) return "aspell";
@@ -98,43 +104,67 @@ function detectSpellCheckerFlavor(e) {
   return "ispell";
 }
 //@ chunk-dcmhvw5a.js:210039-210080 placement
-function aPi(e) {
+/**
+ * 生成向 ispell 管道查询的 `^word …` 行。
+ */
+function buildWordQueryLine(e) {
   return `^${e.join(" ")}
 `;
 }
+//@ chunk-dcmhvw5a.js:210080-210436 placement
 /**
  * 解析 ispell 管道输出行。
  */
-//@ chunk-dcmhvw5a.js:210080-210436 placement
 function parseIspellLine(e) {
-  if (e === "") return { type: "end" };
+  if (e === "")
+    return {
+      type: "end",
+    };
   switch (e[0]) {
     case "*":
     case "+":
     case "-":
-      return { type: "correct" };
+      return {
+        type: "correct",
+      };
     case "&":
     case "?": {
       let match = /^[&?] (\S+) \d+ \d+:/.exec(e);
-      return match ? { type: "misspelled", word: match[1] } : { type: "unrecognized" };
+      return match
+        ? {
+            type: "misspelled",
+            word: match[1],
+          }
+        : {
+            type: "unrecognized",
+          };
     }
     case "#": {
       let match = /^# (\S+) \d+/.exec(e);
-      return match ? { type: "misspelled", word: match[1] } : { type: "unrecognized" };
+      return match
+        ? {
+            type: "misspelled",
+            word: match[1],
+          }
+        : {
+            type: "unrecognized",
+          };
     }
     default:
-      return { type: "unrecognized" };
+      return {
+        type: "unrecognized",
+      };
   }
 }
 //@ chunk-dcmhvw5a.js:210436-210502 placement
-var Vb = ["autoMode", "deepLink", "voice", "briefView", "screenReader"];
+var SETTINGS_FEATURE_ORDER = ["autoMode", "deepLink", "voice", "briefView", "screenReader"];
+//@ chunk-dcmhvw5a.js:210502-212817 placement
 /**
  * 按特性分组的设置 schema（构建开关、形状）。
  */
-//@ chunk-dcmhvw5a.js:210502-212817 placement
 var SETTINGS_FEATURE_GROUPS = {
   autoMode: {
-    buildGate: () => !0,
+    buildGate: () => true,
     shape: () => ({
       skipAutoPermissionPrompt: M()
         .optional()
@@ -143,24 +173,24 @@ var SETTINGS_FEATURE_GROUPS = {
         .optional()
         .describe("Whether plan mode uses auto mode semantics when auto mode is available (default: true)"),
       autoMode: u({
-        allow: A(o())
+        allow: array(string())
           .optional()
           .describe(
             'Rules for the auto mode classifier allow section. Include the literal string "$defaults" to inherit the built-in rules at that position.',
           ),
-        soft_deny: A(o())
+        soft_deny: array(string())
           .optional()
           .describe(
             'Rules for the auto mode classifier SOFT BLOCK section \u2014 destructive/irreversible actions that user intent can clear. Include the literal string "$defaults" to inherit the built-in rules at that position.',
           ),
-        hard_deny: A(o())
+        hard_deny: array(string())
           .optional()
           .describe(
             'Rules for the auto mode classifier HARD BLOCK section \u2014 security boundaries that user intent does NOT clear. Include the literal string "$defaults" to inherit the built-in rules at that position.',
           ),
-        ...!1,
+        ...false,
         ...{},
-        environment: A(o())
+        environment: array(string())
           .optional()
           .describe(
             'Entries for the auto mode classifier environment section. Include the literal string "$defaults" to inherit the built-in entries at that position.',
@@ -177,27 +207,29 @@ var SETTINGS_FEATURE_GROUPS = {
     permissionModes: () => PERMISSION_MODES.filter((e) => !EXTERNAL_PERMISSION_MODES.includes(e)),
   },
   deepLink: {
-    buildGate: () => !0,
+    buildGate: () => true,
     shape: () => ({
-      disableDeepLinkRegistration: U(["disable"])
+      disableDeepLinkRegistration: _enum(["disable"])
         .optional()
         .describe("Prevent claude-cli:// protocol handler registration with the OS"),
     }),
   },
   voice: {
-    buildGate: () => !0,
-    shape: () => ({ voiceEnabled: M().optional().describe("Enable voice mode (hold-to-talk dictation)") }),
+    buildGate: () => true,
+    shape: () => ({
+      voiceEnabled: M().optional().describe("Enable voice mode (hold-to-talk dictation)"),
+    }),
   },
   briefView: {
-    buildGate: () => !0,
+    buildGate: () => true,
     shape: () => ({
-      defaultView: U(["chat", "transcript"])
+      defaultView: _enum(["chat", "transcript"])
         .optional()
         .describe("Default transcript view: chat (SendUserMessage checkpoints only) or transcript (full)"),
     }),
   },
   screenReader: {
-    buildGate: () => !0,
+    buildGate: () => true,
     shape: () => ({
       axScreenReader: M()
         .optional()
@@ -208,17 +240,24 @@ var SETTINGS_FEATURE_GROUPS = {
   },
 };
 //@ chunk-dcmhvw5a.js:212817-212873 placement
-function LOt() {
-  return Vb.filter((e) => SETTINGS_FEATURE_GROUPS[e].buildGate());
+/**
+ * 返回构建开关打开的设置特性组名。
+ */
+function enabledSettingsFeatureGroups() {
+  return SETTINGS_FEATURE_ORDER.filter((e) => SETTINGS_FEATURE_GROUPS[e].buildGate());
 }
 //@ chunk-dcmhvw5a.js:212873-212947 placement
-function pc(e) {
+function buildSettingsShapeForGroups(e) {
   let n = {};
-  for (let r of e) n = { ...n, ...SETTINGS_FEATURE_GROUPS[r].shape() };
+  for (let r of e)
+    n = {
+      ...n,
+      ...SETTINGS_FEATURE_GROUPS[r].shape(),
+    };
   return n;
 }
 //@ chunk-dcmhvw5a.js:212947-213036 placement
-function ts(e) {
+function buildPermissionModesForGroups(e) {
   let n = [];
   for (let r of e) n.push(...(SETTINGS_FEATURE_GROUPS[r].permissionModes?.() ?? []));
   return n;
@@ -226,86 +265,98 @@ function ts(e) {
 //@ chunk-18hwfzwa.js:865347-865735 placement
 async function findSpellChecker(h, x) {
   let D = h !== "auto" && SPELLCHECK_PROGRAMS.includes(h) ? [h] : SPELLCHECK_PROGRAMS;
-  if (x !== void 0 && !B_r(x))
+  if (x !== undefined && !isValidLanguageTag(x))
     logForDebugging(
       `[spellcheck] ignoring language "${x}" (not a plain dictionary name); the checker's default dictionary applies`,
     );
   for (let L of D) {
     let ee = await whichAsync(L);
-    if (ee) return { command: ee, args: spellCheckerArgs(L, x) };
+    if (ee)
+      return {
+        command: ee,
+        args: spellCheckerArgs(L, x),
+      };
   }
-  return (
-    logForDebugging(
-      `[spellcheck] no checker found on PATH (looked for ${D.join(", ")}); spell checking stays off`,
-    ),
-    null
+  logForDebugging(
+    `[spellcheck] no checker found on PATH (looked for ${D.join(", ")}); spell checking stays off`,
   );
+  return null;
 }
 //@ chunk-18hwfzwa.js:865735-865784 placement
-var z3e = new HostScoped(() => ({ key: void 0, checker: void 0 }));
+var spellCheckerByHost = new HostScoped(() => ({
+  key: undefined,
+  checker: undefined,
+}));
+//@ chunk-18hwfzwa.js:865784-865960 placement
 /**
  * 按程序与语言复用或新建拼写检查器。
  */
-//@ chunk-18hwfzwa.js:865784-865960 placement
-function getSpellChecker(h, x, D) {
-  let of = z3e.of(h),
-    ee = `${x}:${D ?? ""}`;
-  if (of.checker && of.key === ee) return of.checker;
-  return (
-    of.checker?.dispose(),
-    (of.key = ee),
-    (of.checker = new SpellChecker(() => findSpellChecker(x, D))),
-    of.checker
-  );
+function getSpellChecker(host, checker, dictLanguage) {
+  let L = spellCheckerByHost.of(host);
+  let ee = `${checker}:${dictLanguage ?? ""}`;
+  if (L.checker && L.key === ee) return L.checker;
+  L.checker?.dispose();
+  L.key = ee;
+  L.checker = new SpellChecker(() => findSpellChecker(checker, dictLanguage));
+  return L.checker;
 }
 //@ chunk-18hwfzwa.js:865960-866043 placement
-function Y3e(h) {
-  let of = z3e.of(h);
-  (of.checker?.dispose(), (of.key = void 0), (of.checker = void 0));
+function disposeSpellChecker(host) {
+  let x = spellCheckerByHost.of(host);
+  x.checker?.dispose();
+  x.key = undefined;
+  x.checker = undefined;
 }
+//@ chunk-18hwfzwa.js:866043-866194 placement
 /**
  * 拼写检查器的时间与大小常量。
  */
-//@ chunk-18hwfzwa.js:866043-866194 placement
-var RESPONSE_TIMEOUT_MS = 3000,
-  wno = 15000,
-  kno = 1000,
-  vno = 1,
-  Q3e = 3,
-  Cno = { aspell: 256, hunspell: 16, ispell: 256 },
-  _no = 128,
-  Tno = /[\s\p{Cc}]/u,
-  Rno = 20,
-  xno = 4096,
-  Pno = 65536,
-  Ano = 1e4,
-  Nye = 80;
+var RESPONSE_TIMEOUT_MS = 3000;
+var RESOLVE_TIMEOUT_MS = 15000;
+var RETRY_DELAY_MS = 1000;
+var MAX_CHECKER_RESTARTS = 1;
+var MAX_TIMEOUTS_BEFORE_ABANDON = 3;
+var MAX_WORDS_PER_BACKEND = {
+  aspell: 256,
+  hunspell: 16,
+  ispell: 256,
+};
+var MAX_WORD_CHARS = 128;
+var WHITESPACE_OR_CONTROL_RE = /[\s\p{Cc}]/u;
+var RESET_COUNTERS_EVERY_RESPONSES = 20;
+var MAX_REQUEST_BYTES = 4096;
+var MAX_OUTPUT_LINE_CHARS = 65536;
+var MAX_CACHED_VERDICTS = 1e4;
+var MAX_LOGGED_LINE_CHARS = 80;
+//@ chunk-18hwfzwa.js:866194-871660 placement
 /**
  * 拼写检查器：在 PATH 中找 aspell/hunspell/ispell，以 -a 管道模式常驻子进程查询单词，带响应超时与状态机（resolving/starting/ready/unavailable）。
  */
-//@ chunk-18hwfzwa.js:866194-871660 placement
 class SpellChecker {
   changed = createSignal();
   #e = this.#b();
-  #t = { status: "idle" };
-  #o = !1;
+  #t = {
+    status: "idle",
+  };
+  #o = false;
   #n = 0;
   #s = 0;
   #r = 0;
-  #c = !1;
-  #i = !1;
+  #c = false;
+  #i = false;
   #a = "";
   #l = new Map();
   #d = new Set();
   #m = null;
   #p = new Set();
   #u = "";
-  #f = void 0;
-  #S = void 0;
+  #f = undefined;
+  #S = undefined;
   #h;
   #y;
   constructor(h, x = {}) {
-    ((this.#h = h), (this.#y = x.responseTimeoutMs ?? wno));
+    this.#h = h;
+    this.#y = x.responseTimeoutMs ?? RESOLVE_TIMEOUT_MS;
   }
   get verdicts() {
     return this.#e;
@@ -314,22 +365,34 @@ class SpellChecker {
     return this.#l.get(h);
   }
   #b() {
-    return { isMisspelled: (h) => this.#l.get(h) };
+    return {
+      isMisspelled: (h) => this.#l.get(h),
+    };
   }
   request(h) {
     if (this.#o || this.#t.status === "unavailable") return;
     for (let x of h)
-      if (!this.#l.has(x) && !this.#m?.has(x) && x.length > 0 && x.length <= _no && !Tno.test(x))
+      if (
+        !this.#l.has(x) &&
+        !this.#m?.has(x) &&
+        x.length > 0 &&
+        x.length <= MAX_WORD_CHARS &&
+        !WHITESPACE_OR_CONTROL_RE.test(x)
+      )
         this.#d.add(x);
     this.#g();
   }
   dispose() {
     if (this.#o) return;
-    ((this.#o = !0), this.#P(), this.#d.clear(), this.changed.clear());
+    this.#o = true;
+    this.#P();
+    this.#d.clear();
+    this.changed.clear();
   }
   #g() {
-    this.#v().catch((h) => {
-      (logError(h), this.#_(`internal error: ${errorMessage(h)}`, "internal_error"));
+    this.#v().catch((error) => {
+      logError(error);
+      this.#_(`internal error: ${errorMessage(error)}`, "internal_error");
     });
   }
   async #v() {
@@ -345,93 +408,107 @@ class SpellChecker {
       case "ready":
         break;
     }
-    let h = Cno[this.#t.backend],
-      x = [],
-      D = 2;
+    let h = MAX_WORDS_PER_BACKEND[this.#t.backend];
+    let x = [];
+    let D = 2;
     for (let L of this.#d) {
       let ee = Buffer.byteLength(L) + 1;
-      if (x.length >= h || D + ee > xno) break;
-      (x.push(L), (D += ee));
+      if (x.length >= h || D + ee > MAX_REQUEST_BYTES) break;
+      x.push(L);
+      D += ee;
     }
     for (let L of x) this.#d.delete(L);
-    ((this.#m = new Set(x)),
-      this.#p.clear(),
-      this.#M(this.#y, "response timeout"),
-      this.#t.process.stdin?.write(aPi(x)));
+    this.#m = new Set(x);
+    this.#p.clear();
+    this.#M(this.#y, "response timeout");
+    this.#t.process.stdin?.write(buildWordQueryLine(x));
   }
   async #C() {
-    this.#t = { status: "resolving" };
-    let h,
-      x = !1;
+    this.#t = {
+      status: "resolving",
+    };
+    let h;
+    let x = false;
     try {
       h = await this.#h();
     } catch (error) {
-      (logForDebugging(
+      logForDebugging(
         `[spellcheck] could not look for a checker: ${errorMessage(error)}; spell checking stays off`,
-        { level: "warn" },
-      ),
-        (h = null),
-        (x = !0));
+        {
+          level: "warn",
+        },
+      );
+      h = null;
+      x = true;
     }
     if (this.#o || this.#t.status !== "resolving") return;
     if (!h) {
-      (logFeatureSad("input_spellcheck", x ? "checker_lookup_failed" : "checker_not_found"),
-        (this.#t = { status: "unavailable" }),
-        this.#d.clear());
+      logFeatureSad("input_spellcheck", x ? "checker_lookup_failed" : "checker_not_found");
+      this.#t = {
+        status: "unavailable",
+      };
+      this.#d.clear();
       return;
     }
     let D;
     try {
-      (logForDebugging(`[spellcheck] starting ${h.command} ${h.args.join(" ")}`),
-        (D = safeSpawn(h.command, h.args, {
-          stdio: ["pipe", "pipe", "pipe"],
-          env: subprocessEnv(),
-          extendEnv: !1,
-          cwd: homedir(),
-          windowsHide: !0,
-          toolCgroupClass: "plugin",
-        })));
+      logForDebugging(`[spellcheck] starting ${h.command} ${h.args.join(" ")}`);
+      D = safeSpawn(h.command, h.args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: subprocessEnv(),
+        extendEnv: false,
+        cwd: homedir(),
+        windowsHide: true,
+        toolCgroupClass: "plugin",
+      });
     } catch (error) {
-      ((this.#t = { status: "idle" }),
-        this.#_(`spawn failed: ${errorMessage(error)}`, "checker_failed_to_start"));
+      this.#t = {
+        status: "idle",
+      };
+      this.#_(`spawn failed: ${errorMessage(error)}`, "checker_failed_to_start");
       return;
     }
-    ((this.#t = { status: "starting", process: D }),
-      (this.#S = registerCleanup(() => this.dispose())),
-      D.unref());
+    this.#t = {
+      status: "starting",
+      process: D,
+    };
+    this.#S = registerCleanup(() => this.dispose());
+    D.unref();
     for (let L of [D.stdin, D.stdout, D.stderr]) unrefHandle(L);
-    (D.stdout?.setEncoding("utf8"),
-      D.stdout?.on("data", (L) => {
-        if (this.#w(D)) this.#T(L);
-      }),
-      D.stderr?.setEncoding("utf8"),
-      D.stderr?.on("data", (L) => {
-        let trimmed = L.trim();
-        if (trimmed)
-          ((this.#a = truncateToLength(trimmed, 200)), logForDebugging(`[spellcheck] stderr: ${this.#a}`));
-      }));
+    D.stdout?.setEncoding("utf8");
+    D.stdout?.on("data", (L) => {
+      if (this.#w(D)) this.#T(L);
+    });
+    D.stderr?.setEncoding("utf8");
+    D.stderr?.on("data", (L) => {
+      let trimmed = L.trim();
+      if (trimmed) {
+        this.#a = truncateToLength(trimmed, 200);
+        logForDebugging(`[spellcheck] stderr: ${this.#a}`);
+      }
+    });
     for (let L of [D.stdout, D.stderr])
       L?.on("error", (ee) => {
         if (this.#w(D)) this.#_(`stdio error: ${ee.message}`, "checker_crashed");
       });
-    (D.on("error", (L) => {
+    D.on("error", (L) => {
       if (this.#w(D)) this.#_(`process error: ${L.message}`, "checker_crashed");
-    }),
-      D.stdin?.on("error", (L) => {
-        if (this.#w(D)) this.#_(`stdin error: ${L.message}`, "checker_crashed");
-      }),
-      D.on("exit", (L, ee) => {
-        if (this.#w(D)) {
-          let ke = this.#i
-            ? ""
-            : `; last stderr: ${this.#a || "none"} (a missing dictionary usually means spellcheck.language needs setting)`;
-          this.#_(
-            `checker exited (code ${L}, signal ${ee})${ke}`,
-            this.#i ? "checker_crashed" : "checker_failed_to_start",
-          );
-        }
-      }),
-      this.#M(RESPONSE_TIMEOUT_MS, "banner timeout"));
+    });
+    D.stdin?.on("error", (L) => {
+      if (this.#w(D)) this.#_(`stdin error: ${L.message}`, "checker_crashed");
+    });
+    D.on("exit", (L, ee) => {
+      if (this.#w(D)) {
+        let ke = this.#i
+          ? ""
+          : `; last stderr: ${this.#a || "none"} (a missing dictionary usually means spellcheck.language needs setting)`;
+        this.#_(
+          `checker exited (code ${L}, signal ${ee})${ke}`,
+          this.#i ? "checker_crashed" : "checker_failed_to_start",
+        );
+      }
+    });
+    this.#M(RESPONSE_TIMEOUT_MS, "banner timeout");
   }
   #w(h) {
     return (this.#t.status === "starting" || this.#t.status === "ready") && this.#t.process === h;
@@ -442,16 +519,13 @@ class SpellChecker {
 `);
     while (index !== -1) {
       let D = stripSuffix(this.#u.slice(0, index), "\r");
-      if (
-        ((this.#u = this.#u.slice(index + 1)),
-        this.#x(D),
-        this.#t.status !== "starting" && this.#t.status !== "ready")
-      )
-        return;
+      this.#u = this.#u.slice(index + 1);
+      this.#x(D);
+      if (this.#t.status !== "starting" && this.#t.status !== "ready") return;
       index = this.#u.indexOf(`
 `);
     }
-    if (this.#u.length > Pno) {
+    if (this.#u.length > MAX_OUTPUT_LINE_CHARS) {
       this.#_("output line too long", "checker_protocol_error");
       return;
     }
@@ -459,143 +533,182 @@ class SpellChecker {
   }
   #x(h) {
     if (this.#t.status === "starting") {
-      let D = detectSpellCheckerFlavor(h);
-      if (!D) {
-        this.#_(`unexpected banner: ${truncateToLength(h, Nye)}`, "checker_failed_to_start");
+      let spellCheckerFlavor = detectSpellCheckerFlavor(h);
+      if (!spellCheckerFlavor) {
+        this.#_(
+          `unexpected banner: ${truncateToLength(h, MAX_LOGGED_LINE_CHARS)}`,
+          "checker_failed_to_start",
+        );
         return;
       }
-      if (
-        (clearTimeout(this.#f),
-        (this.#t = { status: "ready", process: this.#t.process, backend: D }),
-        this.#t.process.stdin?.write(oPi),
-        !this.#i)
-      )
-        ((this.#i = !0), logFeatureOk("input_spellcheck", { backend: fromEnum(D) }));
-      logForDebugging(`[spellcheck] ${D} ready`);
+      clearTimeout(this.#f);
+      this.#t = {
+        status: "ready",
+        process: this.#t.process,
+        backend: spellCheckerFlavor,
+      };
+      this.#t.process.stdin?.write(ISPELL_SESSION_END_MARKER);
+      if (!this.#i) {
+        this.#i = true;
+        logFeatureOk("input_spellcheck", {
+          backend: fromEnum(spellCheckerFlavor),
+        });
+      }
+      logForDebugging(`[spellcheck] ${spellCheckerFlavor} ready`);
       return;
     }
     if (!this.#m) {
-      this.#_(`unexpected output: ${truncateToLength(h, Nye)}`, "checker_protocol_error");
+      this.#_(`unexpected output: ${truncateToLength(h, MAX_LOGGED_LINE_CHARS)}`, "checker_protocol_error");
       return;
     }
-    let x = parseIspellLine(h);
-    switch (x.type) {
+    let ispellLine = parseIspellLine(h);
+    switch (ispellLine.type) {
       case "correct":
         return;
       case "misspelled":
-        this.#p.add(x.word);
+        this.#p.add(ispellLine.word);
         return;
       case "unrecognized":
-        this.#_(`unrecognized output: ${truncateToLength(h, Nye)}`, "checker_protocol_error");
+        this.#_(
+          `unrecognized output: ${truncateToLength(h, MAX_LOGGED_LINE_CHARS)}`,
+          "checker_protocol_error",
+        );
         return;
       case "end": {
         if (this.#u !== "") {
           this.#_("output past the end of a response", "checker_protocol_error");
           return;
         }
-        if (
-          (clearTimeout(this.#f),
-          this.#k(this.#m, this.#p),
-          (this.#m = null),
-          this.#p.clear(),
-          this.#r++,
-          this.#r >= Rno)
-        )
-          ((this.#r = 0), (this.#n = 0), (this.#s = 0));
+        clearTimeout(this.#f);
+        this.#k(this.#m, this.#p);
+        this.#m = null;
+        this.#p.clear();
+        this.#r++;
+        if (this.#r >= RESET_COUNTERS_EVERY_RESPONSES) {
+          this.#r = 0;
+          this.#n = 0;
+          this.#s = 0;
+        }
         this.#g();
         return;
       }
     }
   }
   #k(h, x) {
-    if (this.#l.size + h.size > Ano) {
-      let ceil = Math.ceil(this.#l.size / 2);
-      for (let L of this.#l.keys()) {
-        if (ceil-- <= 0) break;
-        this.#l.delete(L);
+    if (this.#l.size + h.size > MAX_CACHED_VERDICTS) {
+      let D = Math.ceil(this.#l.size / 2);
+      for (let key of this.#l.keys()) {
+        if (D-- <= 0) break;
+        this.#l.delete(key);
       }
     }
     for (let D of h) this.#l.set(D, x.has(D));
-    ((this.#e = this.#b()), this.changed.emit());
+    this.#e = this.#b();
+    this.changed.emit();
   }
   #M(h, x) {
-    (clearTimeout(this.#f), (this.#f = setTimeout((D) => this.#R(D), h, x)), this.#f.unref?.());
+    clearTimeout(this.#f);
+    this.#f = setTimeout((D) => this.#R(D), h, x);
+    this.#f.unref?.();
   }
   #R(h) {
     if (this.#t.status !== "ready" || !this.#m) {
       this.#_(h, "checker_failed_to_start");
       return;
     }
-    (this.#s++,
-      (this.#r = 0),
-      logForDebugging(
-        `[spellcheck] no answer for ${this.#m.size} words within ${this.#y}ms; skipping them (${this.#s}/${Q3e})`,
-        { level: "warn" },
-      ));
-    let x = this.#m,
-      D = new Set(this.#p);
-    if (((this.#m = null), this.#p.clear(), this.#k(x, D), this.#s >= Q3e)) {
+    this.#s++;
+    this.#r = 0;
+    logForDebugging(
+      `[spellcheck] no answer for ${this.#m.size} words within ${this.#y}ms; skipping them (${this.#s}/${MAX_TIMEOUTS_BEFORE_ABANDON})`,
+      {
+        level: "warn",
+      },
+    );
+    let x = this.#m;
+    let D = new Set(this.#p);
+    this.#m = null;
+    this.#p.clear();
+    this.#k(x, D);
+    if (this.#s >= MAX_TIMEOUTS_BEFORE_ABANDON) {
       this.#A(h, "checker_too_slow");
       return;
     }
-    (this.#P(), this.#g());
+    this.#P();
+    this.#g();
   }
   #P() {
-    (clearTimeout(this.#f), (this.#c = !1), this.#S?.(), (this.#S = void 0));
+    clearTimeout(this.#f);
+    this.#c = false;
+    this.#S?.();
+    this.#S = undefined;
     let h = this.#t;
-    if (((this.#t = { status: "idle" }), (this.#u = ""), this.#m)) {
+    this.#t = {
+      status: "idle",
+    };
+    this.#u = "";
+    if (this.#m) {
       for (let x of this.#m) this.#d.add(x);
-      ((this.#m = null), this.#p.clear());
+      this.#m = null;
+      this.#p.clear();
     }
     if (h.status === "starting" || h.status === "ready") stopChildProcess(h.process);
   }
   #_(h, x) {
     if (this.#o || this.#t.status === "unavailable") return;
-    if ((this.#P(), (this.#r = 0), this.#n < vno)) {
-      (this.#n++,
-        logForDebugging(`[spellcheck] ${h}; restarting once`, { level: "warn" }),
-        (this.#c = !0),
-        (this.#f = setTimeout(() => {
-          ((this.#c = !1), this.#g());
-        }, kno)),
-        this.#f.unref?.());
+    this.#P();
+    this.#r = 0;
+    if (this.#n < MAX_CHECKER_RESTARTS) {
+      this.#n++;
+      logForDebugging(`[spellcheck] ${h}; restarting once`, {
+        level: "warn",
+      });
+      this.#c = true;
+      this.#f = setTimeout(() => {
+        this.#c = false;
+        this.#g();
+      }, RETRY_DELAY_MS);
+      this.#f.unref?.();
       return;
     }
     this.#A(h, x);
   }
   #A(h, x) {
-    (logForDebugging(`[spellcheck] ${h}; spell checking is off for this session`, { level: "warn" }),
-      logFeatureBad("input_spellcheck", x),
-      this.#P(),
-      (this.#t = { status: "unavailable" }),
-      this.#d.clear());
+    logForDebugging(`[spellcheck] ${h}; spell checking is off for this session`, {
+      level: "warn",
+    });
+    logFeatureBad("input_spellcheck", x);
+    this.#P();
+    this.#t = {
+      status: "unavailable",
+    };
+    this.#d.clear();
   }
 }
+//@ chunk-18hwfzwa.js:871660-871761 placement
 /**
  * 对可 unref 的对象调用 unref。
  */
-//@ chunk-18hwfzwa.js:871660-871761 placement
 function unrefHandle(h) {
   if (typeof h === "object" && h !== null && "unref" in h && typeof h.unref === "function") h.unref();
 }
+//@ chunk-18hwfzwa.js:871761-871872 placement
 /**
  * 关闭子进程 stdin，仍在运行时 kill。
  */
-//@ chunk-18hwfzwa.js:871761-871872 placement
 function stopChildProcess(h) {
-  if ((h.stdin?.end(), typeof h.exitCode === "number" || typeof h.signalCode === "string")) return;
+  h.stdin?.end();
+  if (typeof h.exitCode === "number" || typeof h.signalCode === "string") return;
   h.kill();
 }
-
 export {
   themeColorOf,
   SPELLCHECK_PROGRAMS,
-  B_r,
+  isValidLanguageTag,
   getSpellChecker,
-  Y3e,
+  disposeSpellChecker,
   booleanishSchema,
   coerceBooleanString,
-  LOt,
-  ts,
-  pc,
+  enabledSettingsFeatureGroups,
+  buildPermissionModesForGroups,
+  buildSettingsShapeForGroups,
 };

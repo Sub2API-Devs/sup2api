@@ -8,32 +8,35 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:320419-321068 cjs-fingerprint
-var bl = x(function (bN) {
-  Object.defineProperty(bN, "__esModule", { value: !0 });
-  bN.celError = Pq;
-  bN.celErrorMerge = Lq;
-  bN.isCelError = yN;
-  var gN = Symbol.for("@bufbuild/cel/error");
-  function Pq(e, n) {
-    if (yN(e)) return e;
-    if (typeof n === "number") n = BigInt(n);
-    if (e instanceof Error) return new ip(e.message, e, n);
-    if (typeof e === "string") return new ip(e, void 0, n);
-    return new ip(`${e}`, e, n);
+var require_error = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.celError = celError;
+  cjsExports.celErrorMerge = celErrorMerge;
+  cjsExports.isCelError = isCelError;
+  var privateSymbol = Symbol.for("@bufbuild/cel/error");
+  function celError(value, exprId) {
+    if (isCelError(value)) return value;
+    if (typeof exprId === "number") exprId = BigInt(exprId);
+    if (value instanceof Error) return new _CelError(value.message, value, exprId);
+    if (typeof value === "string") return new _CelError(value, undefined, exprId);
+    return new _CelError(`${value}`, value, exprId);
   }
-  function Lq(e, ...n) {
-    return new ip(e.message, n, e.exprId);
+  function celErrorMerge(first, ...rest) {
+    return new _CelError(first.message, rest, first.exprId);
   }
-  function yN(e) {
-    return typeof e === "object" && e !== null && gN in e;
+  function isCelError(v) {
+    return typeof v === "object" && v !== null && privateSymbol in v;
   }
-  class ip extends Error {
+  class _CelError extends Error {
     _cause;
     _exprId;
-    [gN] = {};
-    constructor(e, n, r) {
-      super(e);
-      ((this._cause = n), (this._exprId = r));
+    [privateSymbol] = {};
+    constructor(message, _cause, _exprId) {
+      super(message);
+      this._cause = _cause;
+      this._exprId = _exprId;
     }
     get exprId() {
       return this._exprId;
@@ -43,5 +46,4 @@ var bl = x(function (bN) {
     }
   }
 });
-
-export { bl };
+export { require_error };

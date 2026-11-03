@@ -10,53 +10,77 @@
  */
 
 //@ chunk-2tgyb8s4.js:191-276 placement
-function Vl(e, t) {
-  return { code: "InvalidArgument", argument: e, ...(t !== void 0 && { reason: t }) };
+/**
+ * 构造 InvalidArgument 形态的存储错误。
+ */
+function invalidStorageArgument(argument, t) {
+  return {
+    code: "InvalidArgument",
+    argument,
+    ...(t !== undefined && {
+      reason: t,
+    }),
+  };
 }
 //@ chunk-2tgyb8s4.js:276-499 placement
-function unavailableStorageError(e = "unknown", t) {
+function unavailableStorageError(failureClass = "unknown", t) {
   return {
     code: "Unavailable",
-    failureClass: e,
-    ...(t?.key !== void 0 && { key: t.key }),
-    ...(t?.retryAfterMs !== void 0 && { retryAfterMs: t.retryAfterMs }),
-    ...(t?.telemetryCode !== void 0 && { telemetryCode: t.telemetryCode }),
+    failureClass,
+    ...(t?.key !== undefined && {
+      key: t.key,
+    }),
+    ...(t?.retryAfterMs !== undefined && {
+      retryAfterMs: t.retryAfterMs,
+    }),
+    ...(t?.telemetryCode !== undefined && {
+      telemetryCode: t.telemetryCode,
+    }),
   };
 }
 //@ chunk-2tgyb8s4.js:499-520 placement
 var OTHERNAMES = "OtherNames";
 //@ chunk-2tgyb8s4.js:520-604 placement
-var LEAFMOVED = "LeafMoved",
-  HARDENINGUNAVAILABLE = "HardeningUnavailable",
-  REMOTELINK = "RemoteLink",
-  ASIDESTRANDED = "AsideStranded";
+var LEAFMOVED = "LeafMoved";
+var HARDENINGUNAVAILABLE = "HardeningUnavailable";
+var REMOTELINK = "RemoteLink";
+var ASIDESTRANDED = "AsideStranded";
 //@ chunk-2tgyb8s4.js:604-626 placement
 var UNSUPPORTED = "Unsupported";
 //@ chunk-2tgyb8s4.js:626-698 placement
-function kDt(e) {
-  return isStoreError(e) && e.code === "Failed" && e.telemetryCode === UNSUPPORTED;
+/**
+ * 是否为「不支持」的存储失败（telemetryCode Unsupported）。
+ */
+function isUnsupportedStorageError(error) {
+  return isStoreError(error) && error.code === "Failed" && error.telemetryCode === UNSUPPORTED;
 }
 //@ chunk-2tgyb8s4.js:698-726 placement
 var BYTEVIEWUNSUPPORTED = "ByteViewUnsupported";
 //@ chunk-2tgyb8s4.js:726-809 placement
-function d7t(e) {
-  return e.code === "Failed" && "telemetryCode" in e && e.telemetryCode === BYTEVIEWUNSUPPORTED;
+/**
+ * 是否为 ByteView 不支持的存储失败。
+ */
+function isByteViewUnsupportedError(error) {
+  return error.code === "Failed" && "telemetryCode" in error && error.telemetryCode === BYTEVIEWUNSUPPORTED;
 }
 //@ chunk-2tgyb8s4.js:809-829 placement
 var STOREFENCED = "StoreFenced";
 //@ chunk-2tgyb8s4.js:829-912 placement
-function wbs(e) {
+/**
+ * 是否为存储被 fence 的失败。
+ */
+function isStoreFencedError(e) {
   return e.code === "Failed" && "telemetryCode" in e && e.telemetryCode === STOREFENCED;
 }
 //@ chunk-2tgyb8s4.js:912-999 placement
-var SOURCENOTREGULAR = "SourceNotRegular",
-  SOURCETOOLARGE = "SourceTooLarge",
-  SOURCESHARED = "SourceShared",
-  SOURCEOUTSIDE = "SourceOutside";
+var SOURCENOTREGULAR = "SourceNotRegular";
+var SOURCETOOLARGE = "SourceTooLarge";
+var SOURCESHARED = "SourceShared";
+var SOURCEOUTSIDE = "SourceOutside";
+//@ chunk-2tgyb8s4.js:999-1133 placement
 /**
  * 存储 v5 错误码集合（InvalidArgument、NotFound、LeaseHeld、Unavailable…）。与 bridge 无关。
  */
-//@ chunk-2tgyb8s4.js:999-1133 placement
 var STORE_ERROR_CODES = new Set([
   "InvalidArgument",
   "NotFound",
@@ -67,10 +91,10 @@ var STORE_ERROR_CODES = new Set([
   "Failed",
   "ScopeNotFound",
 ]);
+//@ chunk-2tgyb8s4.js:1133-1239 placement = isConnectionError (1)
 /**
  * 错误是否带已知的存储错误码。
  */
-//@ chunk-2tgyb8s4.js:1133-1239 placement = isConnectionError (1)
 function isStoreError(err) {
   return (
     typeof err === "object" &&
@@ -83,37 +107,39 @@ function isStoreError(err) {
 //@ chunk-2tgyb8s4.js:1239-1262 placement
 var ABSENTPARENT = "AbsentParent";
 //@ chunk-2tgyb8s4.js:1262-1347 placement
-function wft(e) {
-  return e.code === "Failed" && "telemetryCode" in e && e.telemetryCode === ABSENTPARENT;
+/**
+ * 是否为父目录缺失的存储失败。
+ */
+function isAbsentParentError(error) {
+  return error.code === "Failed" && "telemetryCode" in error && error.telemetryCode === ABSENTPARENT;
 }
 //@ chunk-2tgyb8s4.js:1347-1436 placement
-function storageErrorCode(e) {
-  if (wft(e)) return "ENOENT";
-  return "telemetryCode" in e ? e.telemetryCode : void 0;
+function storageErrorCode(error) {
+  if (isAbsentParentError(error)) return "ENOENT";
+  return "telemetryCode" in error ? error.telemetryCode : undefined;
 }
 //@ chunk-2tgyb8s4.js:1436-1455 placement
 var TOOLARGE = "TooLarge";
 //@ chunk-2tgyb8s4.js:1455-1637 placement
-function formatStorageError(e) {
+function formatStorageError(error) {
   return (
-    e.code +
-    ("failureClass" in e ? ` ${e.failureClass}` : "") +
-    ("telemetryCode" in e && e.telemetryCode ? ` ${e.telemetryCode}` : "") +
-    ("cause" in e && e.cause ? `: ${i(e.cause)}` : "")
+    error.code +
+    ("failureClass" in error ? ` ${error.failureClass}` : "") +
+    ("telemetryCode" in error && error.telemetryCode ? ` ${error.telemetryCode}` : "") +
+    ("cause" in error && error.cause ? `: ${errorMessageOf(error.cause)}` : "")
   );
 }
 //@ chunk-2tgyb8s4.js:1637-1697 placement
-function i(e) {
-  return e instanceof Error ? e.message : String(e);
+function errorMessageOf(cause) {
+  return cause instanceof Error ? cause.message : String(cause);
 }
-
 export {
   formatStorageError,
   isStoreError,
-  wft,
-  kDt,
-  d7t,
-  wbs,
+  isAbsentParentError,
+  isUnsupportedStorageError,
+  isByteViewUnsupportedError,
+  isStoreFencedError,
   storageErrorCode,
   ABSENTPARENT,
   REMOTELINK,
@@ -128,5 +154,5 @@ export {
   OTHERNAMES,
   HARDENINGUNAVAILABLE,
   unavailableStorageError,
-  Vl,
+  invalidStorageArgument,
 };

@@ -10,19 +10,19 @@
  */
 import { isSyntheticMessage, isUserTextPrompt, getUserMessageText } from "../../utils/messages.js";
 import { isLocalCommandMarkup } from "../../utils/messages/localCommandTags.js";
-import { Us } from "../../services/projects/threadRows.js";
-import { O7s } from "../../utils/promptSubmissionOrigin.js";
+import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
+import { isHumanSubmittedTurn } from "../../utils/promptSubmissionOrigin.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { generateAwaySummary } from "../../services/awaySummary.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 
+//@ chunk-z9nn3hxt.js:11906-13208 placement
 /**
  * /recap：用当前对话生成一段回顾摘要（需要有实际助手输出）。
  */
-//@ chunk-z9nn3hxt.js:11906-13208 placement
-async function generateRecap(e) {
+async function generateRecap(context) {
   if (
-    !e.messages.some(
+    !context.messages.some(
       (message) =>
         (message.type === "assistant" && !message.isApiErrorMessage && !isSyntheticMessage(message)) ||
         (message.type === "user" && message.isCompactSummary) ||
@@ -31,98 +31,133 @@ async function generateRecap(e) {
   )
     return null;
   let [
-      { fetchSystemPromptParts: a },
-      { getToolPermissionContext: l },
-      { getMainLoopModel: s, getRuntimeMainLoopModel: o },
-      { asSystemPrompt: c },
-      { baseSystemPromptOf: u },
-      { withCliSections: d },
-    ] = await Promise.all([
-      import("./chunk-cqycffet.js"),
-      import("./chunk-bvy3yerb.js"),
-      import("./chunk-gqemcfsb.js"),
-      import("./chunk-xpgm632z.js"),
-      import("./chunk-dtmdbzw0.js"),
-      import("./chunk-n5p5ppmp.js"),
-    ]),
-    y = l(e),
-    i = o({ permissionMode: y.mode, mainLoopModel: s() }),
-    { customSystemPrompt: customSystemPrompt, appendSystemPrompt: appendSystemPrompt } = e.options,
-    {
-      defaultSystemPrompt: defaultSystemPrompt,
-      userContext: userContext,
-      systemContext: systemContext,
-    } = await a({
-      session: e.session,
-      tools: e.options.tools,
-      mainLoopModel: i,
-      customSystemPrompt: customSystemPrompt,
-      excludeDynamicSections: e.options.excludeDynamicSections,
-      cacheBreakerPhrase: e.options.cacheBreakerPhrase,
-      analysisOnly: !0,
-      storageV5: e.storageV5,
-      credentials: e.credentials,
+    { fetchSystemPromptParts: a },
+    { getToolPermissionContext: l },
+    { getMainLoopModel: s, getRuntimeMainLoopModel: o },
+    { asSystemPrompt: c },
+    { baseSystemPromptOf: u },
+    { withCliSections: d },
+  ] = await Promise.all([
+    import("./chunk-cqycffet.js"),
+    import("./chunk-bvy3yerb.js"),
+    import("./chunk-gqemcfsb.js"),
+    import("./chunk-xpgm632z.js"),
+    import("./chunk-dtmdbzw0.js"),
+    import("./chunk-n5p5ppmp.js"),
+  ]);
+  let y = l(context);
+  let mainLoopModel = o({
+    permissionMode: y.mode,
+    mainLoopModel: s(),
+  });
+  let { customSystemPrompt, appendSystemPrompt } = context.options;
+  let { defaultSystemPrompt, userContext, systemContext } = await a({
+    session: context.session,
+    tools: context.options.tools,
+    mainLoopModel,
+    customSystemPrompt,
+    excludeDynamicSections: context.options.excludeDynamicSections,
+    cacheBreakerPhrase: context.options.cacheBreakerPhrase,
+    analysisOnly: true,
+    storageV5: context.storageV5,
+    credentials: context.credentials,
+  });
+  let systemPrompt = c(
+    d(u(customSystemPrompt, defaultSystemPrompt), {
+      tools: context.options.tools,
+      appendSystemPrompt,
     }),
-    k = c(
-      d(u(customSystemPrompt, defaultSystemPrompt), {
-        tools: e.options.tools,
-        appendSystemPrompt: appendSystemPrompt,
-      }),
-    ),
-    at = e.messages.at(-1),
-    P = Us(
-      at?.type === "assistant" && at.message.stop_reason === null ? e.messages.slice(0, -1) : e.messages,
-    );
+  );
+  let last = context.messages.at(-1);
+  let forkContextMessages = messagesSinceCompactBoundary(
+    last?.type === "assistant" && last.message.stop_reason === null
+      ? context.messages.slice(0, -1)
+      : context.messages,
+  );
   return {
-    systemPrompt: k,
-    userContext: userContext,
-    systemContext: systemContext,
-    toolUseContext: { ...e, options: { ...e.options, mainLoopModel: i } },
-    forkContextMessages: P,
-    advisorModel: e.getAdvisorSetting(),
+    systemPrompt,
+    userContext,
+    systemContext,
+    toolUseContext: {
+      ...context,
+      options: {
+        ...context.options,
+        mainLoopModel,
+      },
+    },
+    forkContextMessages,
+    advisorModel: context.getAdvisorSetting(),
   };
 }
+//@ chunk-z9nn3hxt.js:13208-14319 placement
 /**
  * /recap 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-z9nn3hxt.js:13208-14319 placement
 var RECAP_USER_ONLY_MESSAGE =
-    "/recap only runs when you ask for it yourself in this session: from the terminal, the Claude app or claude.ai/code, or over Remote Control. A message relayed from Slack, Teams or a project thread, or sent by a routine or another program, can't request it.",
-  E = async (args, context) => {
-    if (!O7s(context) && getFeatureValue_CACHED_MAY_BE_STALE("tengu_playful_hare", !0))
-      return { type: "text", value: RECAP_USER_ONLY_MESSAGE };
-    let a = !1,
-      l = !1,
-      s = await generateAwaySummary(context.abortController.signal, async () => {
-        try {
-          let o = await generateRecap(context);
-          return ((a = o !== null), o);
-        } catch (error) {
-          throw ((l = !0), error);
-        }
-      });
-    switch (s.kind) {
-      case "ok":
-        if (s.capped) logFeatureSad("recap_command", "capped", { fallback_params: a });
-        else logFeatureOk("recap_command", { fallback_params: a });
-        return { type: "text", value: s.text };
-      case "api-error":
-        return (
-          logFeatureBad("recap_command", "api_error", { fallback_params: a }),
-          { type: "text", value: s.text, outcome: { kind: "failed" } }
-        );
-      case "no-turn":
-        return { type: "text", value: "Nothing to recap yet \u2014 send a message first." };
-      case "aborted":
-        return { type: "text", value: "Recap cancelled." };
-      case "failed":
-        return (
-          logFeatureBad("recap_command", l ? "fallback_rebuild_failed" : "failed", { fallback_params: a }),
-          {
-            type: "text",
-            value: "Couldn't generate a recap. Run with --debug for details.",
-            outcome: { kind: "failed" },
-          }
-        );
+  "/recap only runs when you ask for it yourself in this session: from the terminal, the Claude app or claude.ai/code, or over Remote Control. A message relayed from Slack, Teams or a project thread, or sent by a routine or another program, can't request it.";
+var recapCommandCall = async (args, context) => {
+  if (!isHumanSubmittedTurn(context) && getFeatureValue_CACHED_MAY_BE_STALE("tengu_playful_hare", true))
+    return {
+      type: "text",
+      value: RECAP_USER_ONLY_MESSAGE,
+    };
+  let fallbackParams = false;
+  let l = false;
+  let awaySummary = await generateAwaySummary(context.abortController.signal, async () => {
+    try {
+      let recap = await generateRecap(context);
+      fallbackParams = recap !== null;
+      return recap;
+    } catch (error) {
+      l = true;
+      throw error;
     }
-  };
+  });
+  switch (awaySummary.kind) {
+    case "ok":
+      if (awaySummary.capped)
+        logFeatureSad("recap_command", "capped", {
+          fallback_params: fallbackParams,
+        });
+      else
+        logFeatureOk("recap_command", {
+          fallback_params: fallbackParams,
+        });
+      return {
+        type: "text",
+        value: awaySummary.text,
+      };
+    case "api-error":
+      logFeatureBad("recap_command", "api_error", {
+        fallback_params: fallbackParams,
+      });
+      return {
+        type: "text",
+        value: awaySummary.text,
+        outcome: {
+          kind: "failed",
+        },
+      };
+    case "no-turn":
+      return {
+        type: "text",
+        value: "Nothing to recap yet \u2014 send a message first.",
+      };
+    case "aborted":
+      return {
+        type: "text",
+        value: "Recap cancelled.",
+      };
+    case "failed":
+      logFeatureBad("recap_command", l ? "fallback_rebuild_failed" : "failed", {
+        fallback_params: fallbackParams,
+      });
+      return {
+        type: "text",
+        value: "Couldn't generate a recap. Run with --debug for details.",
+        outcome: {
+          kind: "failed",
+        },
+      };
+  }
+};

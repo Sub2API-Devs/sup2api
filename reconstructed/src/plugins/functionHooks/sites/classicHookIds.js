@@ -8,26 +8,33 @@
  * pieces: chunk-5prdqx1m.js (5)
  * attribution: placement 5
  */
-
 //@ chunk-5prdqx1m.js:191-362 placement
-var regExp = new RegExp("^(?:settings|(?:plugin|skill)(?::[A-Za-z0-9][A-Za-z0-9._-]{0,63})?)$"),
-  regExp_2 = new RegExp("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}@[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
+var regExp = new RegExp("^(?:settings|(?:plugin|skill)(?::[A-Za-z0-9][A-Za-z0-9._-]{0,63})?)$");
+var regExp_2 = new RegExp("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}@[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
 //@ chunk-5prdqx1m.js:362-425 placement
-function sjn(n) {
-  return typeof n === "string" && regExp.test(n) ? n : void 0;
+/**
+ * 经典 PreToolUse id
+ */
+function classicPreToolUseHookId(hookSource) {
+  return typeof hookSource === "string" && regExp.test(hookSource) ? hookSource : undefined;
 }
 //@ chunk-5prdqx1m.js:425-488 placement
-function ijn(n) {
-  return typeof n === "string" && regExp_2.test(n) ? n : void 0;
+/**
+ * 经典钩子 id
+ */
+function classicHookId(hookPluginId) {
+  return typeof hookPluginId === "string" && regExp_2.test(hookPluginId) ? hookPluginId : undefined;
 }
 //@ chunk-5prdqx1m.js:488-594 placement
-function classicPreToolUseHookId(n, e) {
-  if (n === `PreToolUse:${e}`) return "PreToolUse";
-  return n === "tool.check" ? "tool.check" : void 0;
+function classicPreToolUseHookId_2(hookName, name) {
+  if (hookName === `PreToolUse:${name}`) return "PreToolUse";
+  return hookName === "tool.check" ? "tool.check" : undefined;
 }
 //@ chunk-5prdqx1m.js:594-661 placement
-function MLs(n) {
-  return n === "PreToolUse" || n === "tool.check" ? n : void 0;
+/**
+ * PreToolUse 或 tool.check
+ */
+function toolCheckHookId(n) {
+  return n === "PreToolUse" || n === "tool.check" ? n : undefined;
 }
-
-export { classicPreToolUseHookId, sjn, ijn, MLs };
+export { classicPreToolUseHookId_2, classicPreToolUseHookId, classicHookId, toolCheckHookId };

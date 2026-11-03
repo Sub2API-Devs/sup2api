@@ -5,7 +5,7 @@
  * pieces: chunk-aepeg2w5.js (131)
  * attribution: esm-layout 25, esm-fingerprint 106
  */
-import { xs, ei } from "./esm.min.js";
+import { promiseTimeout, getAutoExperimentChangeType } from "./esm.min.js";
 
 //@ chunk-aepeg2w5.js:6509-6567 esm-layout
 function pu() {
@@ -18,1187 +18,1422 @@ function pu() {
   };
 }
 //@ chunk-aepeg2w5.js:6604-6775 esm-fingerprint
-var d_ = {
-  fetch: globalThis.fetch ? globalThis.fetch.bind(globalThis) : void 0,
-  SubtleCrypto: globalThis.crypto ? globalThis.crypto.subtle : void 0,
+var polyfills$1 = {
+  fetch: globalThis.fetch ? globalThis.fetch.bind(globalThis) : undefined,
+  SubtleCrypto: globalThis.crypto ? globalThis.crypto.subtle : undefined,
   EventSource: globalThis.EventSource,
 };
 //@ chunk-aepeg2w5.js:6775-6799 esm-layout
-function xn() {
-  return d_;
+function getPolyfills() {
+  return polyfills$1;
 }
 //@ chunk-aepeg2w5.js:6799-6933 esm-fingerprint
-function Dd(e) {
-  let n = 2166136261,
-    r = e.length;
-  for (let s = 0; s < r; s++)
-    ((n ^= e.charCodeAt(s)), (n += (n << 1) + (n << 4) + (n << 7) + (n << 8) + (n << 24)));
-  return n >>> 0;
+function hashFnv32a(str) {
+  let hval = 2166136261;
+  let l = str.length;
+  for (let i = 0; i < l; i++) {
+    hval ^= str.charCodeAt(i);
+    hval += (hval << 1) + (hval << 4) + (hval << 7) + (hval << 8) + (hval << 24);
+  }
+  return hval >>> 0;
 }
 //@ chunk-aepeg2w5.js:6933-7037 esm-fingerprint
-function Jo(e, n, r) {
-  if (r === 2) return (Dd(Dd(e + n) + "") % 1e4) / 1e4;
-  if (r === 1) return (Dd(n + e) % 1000) / 1000;
+function hash(seed, value, version) {
+  if (version === 2) return (hashFnv32a(hashFnv32a(seed + value) + "") % 1e4) / 1e4;
+  if (version === 1) return (hashFnv32a(value + seed) % 1000) / 1000;
   return null;
 }
 //@ chunk-aepeg2w5.js:7037-7095 esm-layout
-function IP(e) {
-  if (e <= 0) return [];
-  return Array(e).fill(1 / e);
+function getEqualWeights(n) {
+  if (n <= 0) return [];
+  return Array(n).fill(1 / n);
 }
 //@ chunk-aepeg2w5.js:7095-7135 esm-layout
-function Rs(e, n) {
-  return e >= n[0] && e < n[1];
+function inRange(n_2, range) {
+  return n_2 >= range[0] && n_2 < range[1];
 }
 //@ chunk-aepeg2w5.js:7135-7220 esm-layout
-function c_(e, n) {
-  let r = Jo("__" + n[0], e, 1);
-  if (r === null) return !1;
-  return r >= n[1] && r < n[2];
+function inNamespace(hashValue, namespace) {
+  let n = hash("__" + namespace[0], hashValue, 1);
+  if (n === null) return false;
+  return n >= namespace[1] && n < namespace[2];
 }
 //@ chunk-aepeg2w5.js:7220-7296 esm-layout
-function f_(e, n) {
-  for (let r = 0; r < n.length; r++) if (Rs(e, n[r])) return r;
+function chooseVariation(n_2, ranges) {
+  for (let i = 0; i < ranges.length; i++) if (inRange(n_2, ranges[i])) return i;
   return -1;
 }
 //@ chunk-aepeg2w5.js:7296-7408 esm-fingerprint
-function Fd(e) {
+function getUrlRegExp(regexString) {
   try {
-    let replaced = e.replace(/([^\\])\//g, "$1\\/");
-    return new RegExp(replaced);
-  } catch (error) {
-    console.error(error);
+    let escaped = regexString.replace(/([^\\])\//g, "$1\\/");
+    return new RegExp(escaped);
+  } catch (e) {
+    console.error(e);
     return;
   }
 }
 //@ chunk-aepeg2w5.js:7408-7593 esm-fingerprint
-function Qo(e, n) {
-  if (!n.length) return !1;
-  let r = !1,
-    s = !1;
-  for (let h = 0; h < n.length; h++) {
-    let y = FP(e, n[h].type, n[h].pattern);
-    if (n[h].include === !1) {
-      if (y) return !1;
-    } else if (((r = !0), y)) s = !0;
+function isURLTargeted(url, targets) {
+  if (!targets.length) return false;
+  let hasIncludeRules = false;
+  let isIncluded = false;
+  for (let i = 0; i < targets.length; i++) {
+    let match = _evalURLTarget(url, targets[i].type, targets[i].pattern);
+    if (targets[i].include === false) {
+      if (match) return false;
+    } else {
+      hasIncludeRules = true;
+      if (match) isIncluded = true;
+    }
   }
-  return s || !r;
+  return isIncluded || !hasIncludeRules;
 }
 //@ chunk-aepeg2w5.js:7593-7793 esm-fingerprint
-function DP(e, n, r) {
+function _evalSimpleUrlPart(actual, pattern, isPath) {
   try {
-    let replaced = n.replace(/[*.+?^${}()|[\]\\]/g, "\\$&").replace(/_____/g, ".*");
-    if (r) replaced = "\\/?" + replaced.replace(/(^\/|\/$)/g, "") + "\\/?";
-    return new RegExp("^" + replaced + "$", "i").test(e);
-  } catch (error) {
-    return !1;
+    let escaped = pattern.replace(/[*.+?^${}()|[\]\\]/g, "\\$&").replace(/_____/g, ".*");
+    if (isPath) escaped = "\\/?" + escaped.replace(/(^\/|\/$)/g, "") + "\\/?";
+    return new RegExp("^" + escaped + "$", "i").test(actual);
+  } catch (e) {
+    return false;
   }
 }
 //@ chunk-aepeg2w5.js:7793-8130 esm-fingerprint
-function NP(e, n) {
+function _evalSimpleUrlTarget(actual, pattern) {
   try {
-    let r = new URL(n.replace(/^([^:/?]*)\./i, "https://$1.").replace(/\*/g, "_____"), "https://_____"),
-      s = [
-        [e.host, r.host, !1],
-        [e.pathname, r.pathname, !0],
-      ];
-    if (r.hash) s.push([e.hash, r.hash, !1]);
-    return (
-      r.searchParams.forEach((searchParam, y) => {
-        s.push([e.searchParams.get(y) || "", searchParam, !1]);
-      }),
-      !s.some((h) => !DP(h[0], h[1], h[2]))
+    let expected = new URL(
+      pattern.replace(/^([^:/?]*)\./i, "https://$1.").replace(/\*/g, "_____"),
+      "https://_____",
     );
-  } catch (error) {
-    return !1;
+    let comps = [
+      [actual.host, expected.host, false],
+      [actual.pathname, expected.pathname, true],
+    ];
+    if (expected.hash) comps.push([actual.hash, expected.hash, false]);
+    expected.searchParams.forEach((v, k) => {
+      comps.push([actual.searchParams.get(k) || "", v, false]);
+    });
+    return !comps.some((data) => !_evalSimpleUrlPart(data[0], data[1], data[2]));
+  } catch (e) {
+    return false;
   }
 }
 //@ chunk-aepeg2w5.js:8130-8354 esm-fingerprint
-function FP(e, n, r) {
+function _evalURLTarget(url, type, pattern) {
   try {
-    let s = new URL(e, "https://_");
-    if (n === "regex") {
-      let h = Fd(r);
-      if (!h) return !1;
-      return h.test(s.href) || h.test(s.href.substring(s.origin.length));
-    } else if (n === "simple") return NP(s, r);
-    return !1;
-  } catch (error) {
-    return !1;
+    let parsed = new URL(url, "https://_");
+    if (type === "regex") {
+      let regex = getUrlRegExp(pattern);
+      if (!regex) return false;
+      return regex.test(parsed.href) || regex.test(parsed.href.substring(parsed.origin.length));
+    } else if (type === "simple") return _evalSimpleUrlTarget(parsed, pattern);
+    return false;
+  } catch (e) {
+    return false;
   }
 }
 //@ chunk-aepeg2w5.js:8354-8566 esm-fingerprint
-function p_(e, n, r) {
-  if (((n = n === void 0 ? 1 : n), n < 0)) n = 0;
-  else if (n > 1) n = 1;
-  let s = IP(e);
-  if (((r = r || s), r.length !== e)) r = s;
-  let reduced = r.reduce((S, w) => w + S, 0);
-  if (reduced < 0.99 || reduced > 1.01) r = s;
-  let y = 0;
-  return r.map((S) => {
-    let w = y;
-    return ((y += S), [w, w + n * S]);
+function getBucketRanges(numVariations, coverage, weights) {
+  coverage = coverage === undefined ? 1 : coverage;
+  if (coverage < 0) coverage = 0;
+  else if (coverage > 1) coverage = 1;
+  let equal = getEqualWeights(numVariations);
+  weights = weights || equal;
+  if (weights.length !== numVariations) weights = equal;
+  let totalWeight = weights.reduce((w_2, sum) => sum + w_2, 0);
+  if (totalWeight < 0.99 || totalWeight > 1.01) weights = equal;
+  let cumulative = 0;
+  return weights.map((w_2) => {
+    let start = cumulative;
+    cumulative += w_2;
+    return [start, start + coverage * w_2];
   });
 }
 //@ chunk-aepeg2w5.js:8566-8838 esm-fingerprint
-function m_(e, n, r) {
-  if (!n) return null;
-  let s = n.split("?")[1];
-  if (!s) return null;
-  let mapped = s
+function getQueryStringOverride(id, url, numVariations) {
+  if (!url) return null;
+  let search = url.split("?")[1];
+  if (!search) return null;
+  let match = search
     .replace(/#.*/, "")
     .split("&")
-    .map((y) => y.split("=", 2))
-    .filter((y) => {
-      let [S] = y;
-      return S === e;
+    .map((kv) => kv.split("=", 2))
+    .filter((_ref) => {
+      let [k] = _ref;
+      return k === id;
     })
-    .map((y) => {
-      let [, S] = y;
-      return parseInt(S);
+    .map((_ref2) => {
+      let [, v] = _ref2;
+      return parseInt(v);
     });
-  if (mapped.length > 0 && mapped[0] >= 0 && mapped[0] < r) return mapped[0];
+  if (match.length > 0 && match[0] >= 0 && match[0] < numVariations) return match[0];
   return null;
 }
 //@ chunk-aepeg2w5.js:8838-8905 esm-layout
-function g_(e) {
+function isIncluded(include) {
   try {
-    return e();
-  } catch (error) {
-    return (console.error(error), !1);
+    return include();
+  } catch (e) {
+    console.error(e);
+    return false;
   }
 }
 //@ chunk-aepeg2w5.js:8905-8963 esm-fingerprint
-var Nd = (e) => Uint8Array.from(atob(e), (n) => n.charCodeAt(0));
+var base64ToBuf = (b) => Uint8Array.from(atob(b), (c) => c.charCodeAt(0));
 //@ chunk-aepeg2w5.js:8963-9364 esm-fingerprint
-async function br(e, n, r) {
-  if (((n = n || ""), (r = r || (globalThis.crypto && globalThis.crypto.subtle) || d_.SubtleCrypto), !r))
-    throw Error("No SubtleCrypto implementation found");
+async function decrypt(encryptedString, decryptionKey, subtle) {
+  decryptionKey = decryptionKey || "";
+  subtle = subtle || (globalThis.crypto && globalThis.crypto.subtle) || polyfills$1.SubtleCrypto;
+  if (!subtle) throw Error("No SubtleCrypto implementation found");
   try {
-    let importKey = await r.importKey("raw", Nd(n), { name: "AES-CBC", length: 128 }, !0, [
-        "encrypt",
-        "decrypt",
-      ]),
-      [h, y] = e.split("."),
-      decrypt = await r.decrypt({ name: "AES-CBC", iv: Nd(h) }, importKey, Nd(y));
-    return new TextDecoder().decode(decrypt);
-  } catch (error) {
+    let key = await subtle.importKey(
+      "raw",
+      base64ToBuf(decryptionKey),
+      {
+        name: "AES-CBC",
+        length: 128,
+      },
+      true,
+      ["encrypt", "decrypt"],
+    );
+    let [iv, cipherText] = encryptedString.split(".");
+    let plainTextBuffer = await subtle.decrypt(
+      {
+        name: "AES-CBC",
+        iv: base64ToBuf(iv),
+      },
+      key,
+      base64ToBuf(cipherText),
+    );
+    return new TextDecoder().decode(plainTextBuffer);
+  } catch (e) {
     throw Error("Failed to decrypt");
   }
 }
 //@ chunk-aepeg2w5.js:9364-9436 esm-fingerprint
-function Zo(e) {
-  if (typeof e === "string") return e;
-  return JSON.stringify(e);
+function toString(input) {
+  if (typeof input === "string") return input;
+  return JSON.stringify(input);
 }
 //@ chunk-aepeg2w5.js:9436-9659 esm-fingerprint
-function zt(e) {
-  if (typeof e === "number") e = e + "";
-  if (!e || typeof e !== "string") e = "0";
-  let parts = e.replace(/(^v|\+.*$)/g, "").split(/[-.]/);
+function paddedVersionString(input) {
+  if (typeof input === "number") input = input + "";
+  if (!input || typeof input !== "string") input = "0";
+  let parts = input.replace(/(^v|\+.*$)/g, "").split(/[-.]/);
   if (parts.length === 3) parts.push("~");
-  return parts.map((r) => (r.match(/^[0-9]+$/) ? r.padStart(5, " ") : r)).join("-");
+  return parts.map((v) => (v.match(/^[0-9]+$/) ? v.padStart(5, " ") : v)).join("-");
 }
 //@ chunk-aepeg2w5.js:9659-9716 esm-fingerprint
-function __() {
-  let e;
+function loadSDKVersion() {
+  let version;
   try {
-    e = "1.6.1";
-  } catch (error) {
-    e = "";
+    version = "1.6.1";
+  } catch (e) {
+    version = "";
   }
-  return e;
+  return version;
 }
 //@ chunk-aepeg2w5.js:9716-9951 esm-fingerprint
-function h_(e, n) {
-  let r, s;
+function mergeQueryStrings(oldUrl, newUrl) {
+  let currUrl;
+  let redirectUrl;
   try {
-    ((r = new URL(e)), (s = new URL(n)));
-  } catch (error) {
-    return (console.error(`Unable to merge query strings: ${error}`), n);
+    currUrl = new URL(oldUrl);
+    redirectUrl = new URL(newUrl);
+  } catch (e) {
+    console.error(`Unable to merge query strings: ${e}`);
+    return newUrl;
   }
-  return (
-    r.searchParams.forEach((searchParam, y) => {
-      if (s.searchParams.has(y)) return;
-      s.searchParams.set(y, searchParam);
-    }),
-    s.toString()
-  );
+  currUrl.searchParams.forEach((value, key) => {
+    if (redirectUrl.searchParams.has(key)) return;
+    redirectUrl.searchParams.set(key, value);
+  });
+  return redirectUrl.toString();
 }
 //@ chunk-aepeg2w5.js:10395-11436 esm-layout
-var yt = {
-    staleTTL: 60000,
-    maxAge: 14400000,
-    cacheKey: "gbFeaturesCache",
-    backgroundSync: !0,
-    maxEntries: 10,
-    disableIdleStreams: !1,
-    idleStreamInterval: 20000,
-    disableCache: !1,
+var cacheSettings = {
+  staleTTL: 60000,
+  maxAge: 14400000,
+  cacheKey: "gbFeaturesCache",
+  backgroundSync: true,
+  maxEntries: 10,
+  disableIdleStreams: false,
+  idleStreamInterval: 20000,
+  disableCache: false,
+};
+var polyfills = getPolyfills();
+var helpers = {
+  fetchFeaturesCall: (_ref) => {
+    let { host, clientKey, headers } = _ref;
+    return polyfills.fetch(`${host}/api/features/${clientKey}`, {
+      headers,
+    });
   },
-  on = xn(),
-  Nt = {
-    fetchFeaturesCall: (e) => {
-      let { host: host, clientKey: clientKey, headers: headers } = e;
-      return on.fetch(`${host}/api/features/${clientKey}`, { headers: headers });
-    },
-    fetchRemoteEvalCall: (e) => {
-      let { host: host, clientKey: clientKey, payload: payload, headers: headers } = e,
-        y = {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...headers },
-          body: JSON.stringify(payload),
-        };
-      return on.fetch(`${host}/api/eval/${clientKey}`, y);
-    },
-    eventSourceCall: (e) => {
-      let { host: host, clientKey: clientKey, headers: headers } = e;
-      if (headers) return new on.EventSource(`${host}/sub/${clientKey}`, { headers: headers });
-      return new on.EventSource(`${host}/sub/${clientKey}`);
-    },
-    startIdleListener: () => {
-      let e;
-      if (!(typeof window < "u" && typeof document < "u")) return;
-      let r = () => {
-        if (document.visibilityState === "visible") (window.clearTimeout(e), k_());
-        else if (document.visibilityState === "hidden") e = window.setTimeout(E_, yt.idleStreamInterval);
-      };
-      return (
-        document.addEventListener("visibilitychange", r),
-        () => document.removeEventListener("visibilitychange", r)
-      );
-    },
-    stopIdleListener: () => {},
-  };
+  fetchRemoteEvalCall: (_ref2) => {
+    let { host, clientKey, payload, headers } = _ref2;
+    let options = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify(payload),
+    };
+    return polyfills.fetch(`${host}/api/eval/${clientKey}`, options);
+  },
+  eventSourceCall: (_ref3) => {
+    let { host, clientKey, headers } = _ref3;
+    if (headers)
+      return new polyfills.EventSource(`${host}/sub/${clientKey}`, {
+        headers,
+      });
+    return new polyfills.EventSource(`${host}/sub/${clientKey}`);
+  },
+  startIdleListener: () => {
+    let idleTimeout;
+    if (!(typeof window !== "undefined" && typeof document !== "undefined")) return;
+    let onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        window.clearTimeout(idleTimeout);
+        onVisible();
+      } else if (document.visibilityState === "hidden")
+        idleTimeout = window.setTimeout(onHidden, cacheSettings.idleStreamInterval);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  },
+  stopIdleListener: () => {},
+};
 //@ chunk-aepeg2w5.js:11436-11517 esm-fingerprint
 try {
-  if (globalThis.localStorage) on.localStorage = globalThis.localStorage;
+  if (globalThis.localStorage) polyfills.localStorage = globalThis.localStorage;
 } catch (error) {}
 //@ chunk-aepeg2w5.js:11517-11582 esm-layout
-var Jr = new Map(),
-  y_ = !1,
-  On = new Map(),
-  Os = new Map(),
-  Qr = new Map(),
-  Zr = new Set();
+var subscribedInstances = new Map();
+var cacheInitialized = false;
+var cache = new Map();
+var activeFetches = new Map();
+var streams = new Map();
+var supportsSSE = new Set();
 //@ chunk-aepeg2w5.js:11582-11617 esm-layout
-function Ps(e) {
-  Object.assign(on, e);
+function setPolyfills(overrides) {
+  Object.assign(polyfills, overrides);
 }
 //@ chunk-aepeg2w5.js:11617-11679 esm-fingerprint
-function Ud(e) {
-  if ((Object.assign(yt, e), !yt.backgroundSync)) GP();
+function configureCache(overrides) {
+  Object.assign(cacheSettings, overrides);
+  if (!cacheSettings.backgroundSync) clearAutoRefresh();
 }
 //@ chunk-aepeg2w5.js:11679-11856 esm-fingerprint
-async function S_(e) {
-  let {
-    instance: instance,
-    timeout: timeout,
-    skipCache: skipCache,
-    allowStale: allowStale,
-    backgroundSync: backgroundSync,
-  } = e;
-  if (!backgroundSync) yt.backgroundSync = !1;
-  return UP({ instance: instance, allowStale: allowStale, timeout: timeout, skipCache: skipCache });
+async function refreshFeatures(_ref4) {
+  let { instance, timeout, skipCache, allowStale, backgroundSync } = _ref4;
+  if (!backgroundSync) cacheSettings.backgroundSync = false;
+  return fetchFeaturesWithCache({
+    instance,
+    allowStale,
+    timeout,
+    skipCache,
+  });
 }
 //@ chunk-aepeg2w5.js:11856-11925 esm-fingerprint
-function LP(e) {
-  let n = ti(e),
-    r = Jr.get(n) || new Set();
-  (r.add(e), Jr.set(n, r));
+function subscribe(instance) {
+  let key = getKey(instance);
+  let subs = subscribedInstances.get(key) || new Set();
+  subs.add(instance);
+  subscribedInstances.set(key, subs);
 }
 //@ chunk-aepeg2w5.js:11925-11969 esm-fingerprint
-function v_(e) {
-  Jr.forEach((n) => n.delete(e));
+function unsubscribe(instance) {
+  subscribedInstances.forEach((s) => s.delete(instance));
 }
 //@ chunk-aepeg2w5.js:11969-12036 esm-fingerprint
-function E_() {
-  Qr.forEach((e) => {
-    if (!e) return;
-    ((e.state = "idle"), $d(e));
+function onHidden() {
+  streams.forEach((channel) => {
+    if (!channel) return;
+    channel.state = "idle";
+    disableChannel(channel);
   });
 }
 //@ chunk-aepeg2w5.js:12036-12115 esm-fingerprint
-function k_() {
-  Qr.forEach((e) => {
-    if (!e) return;
-    if (e.state !== "idle") return;
-    Wd(e);
+function onVisible() {
+  streams.forEach((channel) => {
+    if (!channel) return;
+    if (channel.state !== "idle") return;
+    enableChannel(channel);
   });
 }
 //@ chunk-aepeg2w5.js:12115-12261 esm-fingerprint
-async function b_() {
+async function updatePersistentCache() {
   try {
-    if (!on.localStorage) return;
-    await on.localStorage.setItem(yt.cacheKey, JSON.stringify(Array.from(On.entries())));
+    if (!polyfills.localStorage) return;
+    await polyfills.localStorage.setItem(cacheSettings.cacheKey, JSON.stringify(Array.from(cache.entries())));
   } catch (error) {}
 }
 //@ chunk-aepeg2w5.js:12261-12691 esm-fingerprint
-async function UP(e) {
-  let { instance: instance, allowStale: allowStale, timeout: timeout, skipCache: skipCache } = e,
-    y = ti(instance),
-    S = Bd(instance),
-    date = new Date(),
-    date_2 = new Date(date.getTime() - yt.maxAge + yt.staleTTL);
-  await HP();
-  let x = !yt.disableCache && !skipCache ? On.get(S) : void 0;
-  if (x && (allowStale || x.staleAt > date) && x.staleAt > date_2) {
-    if (x.sse) Zr.add(y);
-    if (x.staleAt < date) Ld(instance);
-    else Kd(instance);
-    return { data: x.data, success: !0, source: "cache" };
+async function fetchFeaturesWithCache(_ref5) {
+  let { instance, allowStale, timeout, skipCache } = _ref5;
+  let key = getKey(instance);
+  let cacheKey = getCacheKey(instance);
+  let now = new Date();
+  let minStaleAt = new Date(now.getTime() - cacheSettings.maxAge + cacheSettings.staleTTL);
+  await initializeCache();
+  let existing = !cacheSettings.disableCache && !skipCache ? cache.get(cacheKey) : undefined;
+  if (existing && (allowStale || existing.staleAt > now) && existing.staleAt > minStaleAt) {
+    if (existing.sse) supportsSSE.add(key);
+    if (existing.staleAt < now) fetchFeatures(instance);
+    else startAutoRefresh(instance);
+    return {
+      data: existing.data,
+      success: true,
+      source: "cache",
+    };
   } else
     return (
-      (await xs(Ld(instance), timeout)) || {
+      (await promiseTimeout(fetchFeatures(instance), timeout)) || {
         data: null,
-        success: !1,
+        success: false,
         source: "timeout",
         error: Error("Timeout"),
       }
     );
 }
 //@ chunk-aepeg2w5.js:12691-12749 esm-fingerprint
-function ti(e) {
-  let [n, r] = e.getApiInfo();
-  return `${n}||${r}`;
+function getKey(instance) {
+  let [apiHost, clientKey] = instance.getApiInfo();
+  return `${apiHost}||${clientKey}`;
 }
 //@ chunk-aepeg2w5.js:12749-13040 esm-fingerprint
-function Bd(e) {
-  let n = ti(e);
-  if (!("isRemoteEval" in e) || !e.isRemoteEval()) return n;
-  let attributes = e.getAttributes(),
-    s = e.getCacheKeyAttributes() || Object.keys(e.getAttributes()),
-    h = {};
-  s.forEach((w) => {
-    h[w] = attributes[w];
+function getCacheKey(instance) {
+  let baseKey = getKey(instance);
+  if (!("isRemoteEval" in instance) || !instance.isRemoteEval()) return baseKey;
+  let attributes = instance.getAttributes();
+  let cacheKeyAttributes = instance.getCacheKeyAttributes() || Object.keys(instance.getAttributes());
+  let ca = {};
+  cacheKeyAttributes.forEach((key) => {
+    ca[key] = attributes[key];
   });
-  let forcedVariations = e.getForcedVariations(),
-    url = e.getUrl();
-  return `${n}||${JSON.stringify({ ca: h, fv: forcedVariations, url: url })}`;
+  let fv = instance.getForcedVariations();
+  let url = instance.getUrl();
+  return `${baseKey}||${JSON.stringify({
+    ca,
+    fv,
+    url,
+  })}`;
 }
 //@ chunk-aepeg2w5.js:13040-13394 esm-fingerprint
-async function HP() {
-  if (y_) return;
-  y_ = !0;
+async function initializeCache() {
+  if (cacheInitialized) return;
+  cacheInitialized = true;
   try {
-    if (on.localStorage) {
-      let item = await on.localStorage.getItem(yt.cacheKey);
-      if (!yt.disableCache && item) {
-        let parsed = JSON.parse(item);
+    if (polyfills.localStorage) {
+      let value = await polyfills.localStorage.getItem(cacheSettings.cacheKey);
+      if (!cacheSettings.disableCache && value) {
+        let parsed = JSON.parse(value);
         if (parsed && Array.isArray(parsed))
-          parsed.forEach((r) => {
-            let [s, h] = r;
-            On.set(s, { ...h, staleAt: new Date(h.staleAt) });
+          parsed.forEach((_ref6) => {
+            let [key, data] = _ref6;
+            cache.set(key, {
+              ...data,
+              staleAt: new Date(data.staleAt),
+            });
           });
-        w_();
+        cleanupCache();
       }
     }
   } catch (error) {}
-  if (!yt.disableIdleStreams) {
-    let startIdleListener = Nt.startIdleListener();
-    if (startIdleListener) Nt.stopIdleListener = startIdleListener;
+  if (!cacheSettings.disableIdleStreams) {
+    let cleanupFn = helpers.startIdleListener();
+    if (cleanupFn) helpers.stopIdleListener = cleanupFn;
   }
 }
 //@ chunk-aepeg2w5.js:13394-13631 esm-fingerprint
-function w_() {
-  let sorted = Array.from(On.entries())
-      .map((r) => {
-        let [s, h] = r;
-        return { key: s, staleAt: h.staleAt.getTime() };
-      })
-      .sort((r, s) => r.staleAt - s.staleAt),
-    min = Math.min(Math.max(0, On.size - yt.maxEntries), On.size);
-  for (let r = 0; r < min; r++) On.delete(sorted[r].key);
+function cleanupCache() {
+  let entriesWithTimestamps = Array.from(cache.entries())
+    .map((_ref7) => {
+      let [key, value] = _ref7;
+      return {
+        key,
+        staleAt: value.staleAt.getTime(),
+      };
+    })
+    .sort((a, b) => a.staleAt - b.staleAt);
+  let entriesToRemoveCount = Math.min(Math.max(0, cache.size - cacheSettings.maxEntries), cache.size);
+  for (let i = 0; i < entriesToRemoveCount; i++) cache.delete(entriesWithTimestamps[i].key);
 }
 //@ chunk-aepeg2w5.js:13631-13919 esm-fingerprint
-function A_(e, n, r) {
-  let s = r.dateUpdated || "",
-    date = new Date(Date.now() + yt.staleTTL),
-    y = !yt.disableCache ? On.get(n) : void 0;
-  if (y && s && y.version === s) {
-    ((y.staleAt = date), b_());
+function onNewFeatureData(key, cacheKey, data) {
+  let version = data.dateUpdated || "";
+  let staleAt = new Date(Date.now() + cacheSettings.staleTTL);
+  let existing = !cacheSettings.disableCache ? cache.get(cacheKey) : undefined;
+  if (existing && version && existing.version === version) {
+    existing.staleAt = staleAt;
+    updatePersistentCache();
     return;
   }
-  if (!yt.disableCache) (On.set(n, { data: r, version: s, staleAt: date, sse: Zr.has(e) }), w_());
-  b_();
-  let S = Jr.get(e);
-  S && S.forEach((w) => BP(w, r));
+  if (!cacheSettings.disableCache) {
+    cache.set(cacheKey, {
+      data,
+      version,
+      staleAt,
+      sse: supportsSSE.has(key),
+    });
+    cleanupCache();
+  }
+  updatePersistentCache();
+  let instances = subscribedInstances.get(key);
+  if (instances) instances.forEach((instance) => refreshInstance(instance, data));
 }
 //@ chunk-aepeg2w5.js:13919-13980 esm-fingerprint
-async function BP(e, n) {
-  await e.setPayload(n || e.getPayload());
+async function refreshInstance(instance, data) {
+  await instance.setPayload(data || instance.getPayload());
 }
 //@ chunk-aepeg2w5.js:13980-14718 esm-fingerprint
-async function Ld(e) {
-  let { apiHost: apiHost, apiRequestHeaders: apiRequestHeaders } = e.getApiHosts(),
-    clientKey = e.getClientKey(),
-    h = "isRemoteEval" in e && e.isRemoteEval(),
-    y = ti(e),
-    S = Bd(e),
-    w = Os.get(S);
-  if (!w)
-    ((w = (
-      h
-        ? Nt.fetchRemoteEvalCall({
+async function fetchFeatures(instance) {
+  let { apiHost, apiRequestHeaders } = instance.getApiHosts();
+  let clientKey = instance.getClientKey();
+  let remoteEval = "isRemoteEval" in instance && instance.isRemoteEval();
+  let key = getKey(instance);
+  let cacheKey = getCacheKey(instance);
+  let promise = activeFetches.get(cacheKey);
+  if (!promise) {
+    promise = (
+      remoteEval
+        ? helpers.fetchRemoteEvalCall({
             host: apiHost,
-            clientKey: clientKey,
+            clientKey,
             payload: {
-              attributes: e.getAttributes(),
-              forcedVariations: e.getForcedVariations(),
-              forcedFeatures: Array.from(e.getForcedFeatures().entries()),
-              url: e.getUrl(),
+              attributes: instance.getAttributes(),
+              forcedVariations: instance.getForcedVariations(),
+              forcedFeatures: Array.from(instance.getForcedFeatures().entries()),
+              url: instance.getUrl(),
             },
             headers: apiRequestHeaders,
           })
-        : Nt.fetchFeaturesCall({ host: apiHost, clientKey: clientKey, headers: apiRequestHeaders })
+        : helpers.fetchFeaturesCall({
+            host: apiHost,
+            clientKey,
+            headers: apiRequestHeaders,
+          })
     )
-      .then((x) => {
-        if (!x.ok) throw Error(`HTTP error: ${x.status}`);
-        if (x.headers.get("x-sse-support") === "enabled") Zr.add(y);
-        return x.json();
+      .then((res) => {
+        if (!res.ok) throw Error(`HTTP error: ${res.status}`);
+        if (res.headers.get("x-sse-support") === "enabled") supportsSSE.add(key);
+        return res.json();
       })
-      .then((x) => (A_(y, S, x), Kd(e), Os.delete(S), { data: x, success: !0, source: "network" }))
-      .catch((x) => (Os.delete(S), { data: null, source: "error", success: !1, error: x }))),
-      Os.set(S, w));
-  return w;
+      .then((data) => {
+        onNewFeatureData(key, cacheKey, data);
+        startAutoRefresh(instance);
+        activeFetches.delete(cacheKey);
+        return {
+          data,
+          success: true,
+          source: "network",
+        };
+      })
+      .catch((e) => {
+        activeFetches.delete(cacheKey);
+        return {
+          data: null,
+          source: "error",
+          success: false,
+          error: e,
+        };
+      });
+    activeFetches.set(cacheKey, promise);
+  }
+  return promise;
 }
 //@ chunk-aepeg2w5.js:14718-15249 esm-fingerprint
-function Kd(e) {
-  let n = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : !1,
-    r = ti(e),
-    s = Bd(e),
-    { streamingHost: streamingHost, streamingHostRequestHeaders: streamingHostRequestHeaders } =
-      e.getApiHosts(),
-    clientKey = e.getClientKey();
-  if (n) Zr.add(r);
-  if (yt.backgroundSync && Zr.has(r) && on.EventSource) {
-    if (Qr.has(r)) return;
-    let w = {
+function startAutoRefresh(instance) {
+  let forceSSE = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+  let key = getKey(instance);
+  let cacheKey = getCacheKey(instance);
+  let { streamingHost, streamingHostRequestHeaders } = instance.getApiHosts();
+  let clientKey = instance.getClientKey();
+  if (forceSSE) supportsSSE.add(key);
+  if (cacheSettings.backgroundSync && supportsSSE.has(key) && polyfills.EventSource) {
+    if (streams.has(key)) return;
+    let channel = {
       src: null,
       host: streamingHost,
-      clientKey: clientKey,
+      clientKey,
       headers: streamingHostRequestHeaders,
-      cb: (R) => {
+      cb: (event) => {
         try {
-          if (R.type === "features-updated") {
-            let x = Jr.get(r);
-            x &&
-              x.forEach((P) => {
-                Ld(P);
+          if (event.type === "features-updated") {
+            let instances = subscribedInstances.get(key);
+            if (instances)
+              instances.forEach((instance) => {
+                fetchFeatures(instance);
               });
-          } else if (R.type === "features") {
-            let parsed = JSON.parse(R.data);
-            A_(r, s, parsed);
+          } else if (event.type === "features") {
+            let json = JSON.parse(event.data);
+            onNewFeatureData(key, cacheKey, json);
           }
-          w.errors = 0;
-        } catch (error) {
-          T_(w);
+          channel.errors = 0;
+        } catch (e) {
+          onSSEError(channel);
         }
       },
       errors: 0,
       state: "active",
     };
-    (Qr.set(r, w), Wd(w));
+    streams.set(key, channel);
+    enableChannel(channel);
   }
 }
 //@ chunk-aepeg2w5.js:15249-15497 esm-fingerprint
-function T_(e) {
-  if (e.state === "idle") return;
-  if ((e.errors++, e.errors > 3 || (e.src && e.src.readyState === 2))) {
-    let n = Math.pow(3, e.errors - 3) * (1000 + Math.random() * 1000);
-    ($d(e),
-      setTimeout(
-        () => {
-          if (["idle", "active"].includes(e.state)) return;
-          Wd(e);
-        },
-        Math.min(n, 300000),
-      ));
+function onSSEError(channel) {
+  if (channel.state === "idle") return;
+  channel.errors++;
+  if (channel.errors > 3 || (channel.src && channel.src.readyState === 2)) {
+    let delay = Math.pow(3, channel.errors - 3) * (1000 + Math.random() * 1000);
+    disableChannel(channel);
+    setTimeout(
+      () => {
+        if (["idle", "active"].includes(channel.state)) return;
+        enableChannel(channel);
+      },
+      Math.min(delay, 300000),
+    );
   }
 }
 //@ chunk-aepeg2w5.js:15497-15632 esm-fingerprint
-function $d(e) {
-  if (!e.src) return;
-  if (((e.src.onopen = null), (e.src.onerror = null), e.src.close(), (e.src = null), e.state === "active"))
-    e.state = "disabled";
+function disableChannel(channel) {
+  if (!channel.src) return;
+  channel.src.onopen = null;
+  channel.src.onerror = null;
+  channel.src.close();
+  channel.src = null;
+  if (channel.state === "active") channel.state = "disabled";
 }
 //@ chunk-aepeg2w5.js:15632-15886 esm-fingerprint
-function Wd(e) {
-  ((e.src = Nt.eventSourceCall({ host: e.host, clientKey: e.clientKey, headers: e.headers })),
-    (e.state = "active"),
-    e.src.addEventListener("features", e.cb),
-    e.src.addEventListener("features-updated", e.cb),
-    (e.src.onerror = () => T_(e)),
-    (e.src.onopen = () => {
-      e.errors = 0;
-    }));
+function enableChannel(channel) {
+  channel.src = helpers.eventSourceCall({
+    host: channel.host,
+    clientKey: channel.clientKey,
+    headers: channel.headers,
+  });
+  channel.state = "active";
+  channel.src.addEventListener("features", channel.cb);
+  channel.src.addEventListener("features-updated", channel.cb);
+  channel.src.onerror = () => onSSEError(channel);
+  channel.src.onopen = () => {
+    channel.errors = 0;
+  };
 }
 //@ chunk-aepeg2w5.js:15886-15922 esm-layout
-function KP(e, n) {
-  ($d(e), Qr.delete(n));
+function destroyChannel(channel, key) {
+  disableChannel(channel);
+  streams.delete(key);
 }
 //@ chunk-aepeg2w5.js:15922-15995 esm-fingerprint
-function GP() {
-  (Zr.clear(), Qr.forEach(KP), Jr.clear(), Nt.stopIdleListener());
+function clearAutoRefresh() {
+  supportsSSE.clear();
+  streams.forEach(destroyChannel);
+  subscribedInstances.clear();
+  helpers.stopIdleListener();
 }
 //@ chunk-aepeg2w5.js:15995-16136 esm-fingerprint
-function Ms(e, n) {
-  if (n.streaming) {
-    if (!e.getClientKey()) throw Error("Must specify clientKey to enable streaming");
-    if (n.payload) Kd(e, !0);
-    LP(e);
+function startStreaming(instance, options) {
+  if (options.streaming) {
+    if (!instance.getClientKey()) throw Error("Must specify clientKey to enable streaming");
+    if (options.payload) startAutoRefresh(instance, true);
+    subscribe(instance);
   }
 }
 //@ chunk-aepeg2w5.js:16136-16221 esm-fingerprint
-var $P = /^[a-zA-Z:_][a-zA-Z0-9:_.-]*$/,
-  Yd = { revert: function () {} },
-  Fs = new Map(),
-  qd = new Set();
+var validAttributeName = /^[a-zA-Z:_][a-zA-Z0-9:_.-]*$/;
+var nullController = {
+  revert: function () {},
+};
+var elements = new Map();
+var mutations = new Set();
 //@ chunk-aepeg2w5.js:16221-16371 esm-fingerprint
-function WP(e) {
-  return e === "html"
-    ? { childList: !0, subtree: !0, attributes: !0, characterData: !0 }
-    : { childList: !1, subtree: !1, attributes: !0, attributeFilter: [e] };
+function getObserverInit(attr) {
+  return attr === "html"
+    ? {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        characterData: true,
+      }
+    : {
+        childList: false,
+        subtree: false,
+        attributes: true,
+        attributeFilter: [attr],
+      };
 }
 //@ chunk-aepeg2w5.js:16371-16457 esm-fingerprint
-function Us(e) {
-  var n = Fs.get(e);
-  if (!n) ((n = { element: e, attributes: {} }), Fs.set(e, n));
-  return n;
+function getElementRecord(element) {
+  var record = elements.get(element);
+  if (!record) {
+    record = {
+      element,
+      attributes: {},
+    };
+    elements.set(element, record);
+  }
+  return record;
 }
 //@ chunk-aepeg2w5.js:16457-17154 esm-fingerprint
-function Bs(e, n, r, s, h) {
-  var y = r(e),
-    S = {
-      isDirty: !1,
-      originalValue: y,
-      virtualValue: y,
-      mutations: [],
-      el: e,
-      _positionTimeout: null,
-      observer: new MutationObserver(function () {
-        if (n === "position" && S._positionTimeout) return;
-        else if (n === "position")
-          S._positionTimeout = setTimeout(function () {
-            S._positionTimeout = null;
-          }, 1000);
-        var w = r(e);
-        if (
-          n === "position" &&
-          w.parentNode === S.virtualValue.parentNode &&
-          w.insertBeforeNode === S.virtualValue.insertBeforeNode
-        )
-          return;
-        if (w === S.virtualValue) return;
-        ((S.originalValue = w), h(S));
-      }),
-      mutationRunner: h,
-      setValue: s,
-      getCurrentValue: r,
-    };
-  if (n === "position" && e.parentNode)
-    S.observer.observe(e.parentNode, { childList: !0, subtree: !0, attributes: !1, characterData: !1 });
-  else S.observer.observe(e, WP(n));
-  return S;
+function createElementPropertyRecord(el, attr, getCurrentValue, setValue, mutationRunner) {
+  var currentValue = getCurrentValue(el);
+  var record = {
+    isDirty: false,
+    originalValue: currentValue,
+    virtualValue: currentValue,
+    mutations: [],
+    el,
+    _positionTimeout: null,
+    observer: new MutationObserver(function () {
+      if (attr === "position" && record._positionTimeout) return;
+      else if (attr === "position")
+        record._positionTimeout = setTimeout(function () {
+          record._positionTimeout = null;
+        }, 1000);
+      var currentValue = getCurrentValue(el);
+      if (
+        attr === "position" &&
+        currentValue.parentNode === record.virtualValue.parentNode &&
+        currentValue.insertBeforeNode === record.virtualValue.insertBeforeNode
+      )
+        return;
+      if (currentValue === record.virtualValue) return;
+      record.originalValue = currentValue;
+      mutationRunner(record);
+    }),
+    mutationRunner,
+    setValue,
+    getCurrentValue,
+  };
+  if (attr === "position" && el.parentNode)
+    record.observer.observe(el.parentNode, {
+      childList: true,
+      subtree: true,
+      attributes: false,
+      characterData: false,
+    });
+  else record.observer.observe(el, getObserverInit(attr));
+  return record;
 }
 //@ chunk-aepeg2w5.js:17154-17371 esm-fingerprint
-function Ks(e, n) {
-  var currentValue = n.getCurrentValue(n.el);
-  if (((n.virtualValue = e), e && typeof e !== "string")) {
+function queueIfNeeded(val, record) {
+  var currentVal = record.getCurrentValue(record.el);
+  record.virtualValue = val;
+  if (val && typeof val !== "string") {
     if (
-      !currentValue ||
-      e.parentNode !== currentValue.parentNode ||
-      e.insertBeforeNode !== currentValue.insertBeforeNode
-    )
-      ((n.isDirty = !0), O_());
-  } else if (e !== currentValue) ((n.isDirty = !0), O_());
+      !currentVal ||
+      val.parentNode !== currentVal.parentNode ||
+      val.insertBeforeNode !== currentVal.insertBeforeNode
+    ) {
+      record.isDirty = true;
+      runDOMUpdates();
+    }
+  } else if (val !== currentVal) {
+    record.isDirty = true;
+    runDOMUpdates();
+  }
 }
 //@ chunk-aepeg2w5.js:17371-17475 esm-fingerprint
-function zP(e) {
-  var originalValue = e.originalValue;
-  (e.mutations.forEach(function (mutation) {
-    return (originalValue = mutation.mutate(originalValue));
-  }),
-    Ks(lM(originalValue), e));
+function htmlMutationRunner(record) {
+  var val = record.originalValue;
+  record.mutations.forEach(function (m) {
+    return (val = m.mutate(val));
+  });
+  queueIfNeeded(getTransformedHTML(val), record);
 }
 //@ chunk-aepeg2w5.js:17475-17649 esm-fingerprint
-function jP(e) {
-  var n = new Set(e.originalValue.split(/\s+/).filter(Boolean));
-  (e.mutations.forEach(function (mutation) {
-    return mutation.mutate(n);
-  }),
-    Ks(Array.from(n).filter(Boolean).join(" "), e));
+function classMutationRunner(record) {
+  var val = new Set(record.originalValue.split(/\s+/).filter(Boolean));
+  record.mutations.forEach(function (m) {
+    return m.mutate(val);
+  });
+  queueIfNeeded(Array.from(val).filter(Boolean).join(" "), record);
 }
 //@ chunk-aepeg2w5.js:17649-17749 esm-fingerprint
-function VP(e) {
-  var originalValue = e.originalValue;
-  (e.mutations.forEach(function (mutation) {
-    return (originalValue = mutation.mutate(originalValue));
-  }),
-    Ks(originalValue, e));
+function attrMutationRunner(record) {
+  var val = record.originalValue;
+  record.mutations.forEach(function (m) {
+    return (val = m.mutate(val));
+  });
+  queueIfNeeded(val, record);
 }
 //@ chunk-aepeg2w5.js:17749-17957 esm-fingerprint
-function YP(e) {
-  var { parentSelector: parentSelector, insertBeforeSelector: insertBeforeSelector } = e,
-    querySelector = document.querySelector(parentSelector);
-  if (!querySelector) return null;
-  var h = insertBeforeSelector ? document.querySelector(insertBeforeSelector) : null;
-  if (insertBeforeSelector && !h) return null;
-  return { parentNode: querySelector, insertBeforeNode: h };
+function _loadDOMNodes(selectors) {
+  var { parentSelector, insertBeforeSelector } = selectors;
+  var parentNode = document.querySelector(parentSelector);
+  if (!parentNode) return null;
+  var insertBeforeNode = insertBeforeSelector ? document.querySelector(insertBeforeSelector) : null;
+  if (insertBeforeSelector && !insertBeforeNode) return null;
+  return {
+    parentNode,
+    insertBeforeNode,
+  };
 }
 //@ chunk-aepeg2w5.js:17957-18068 esm-fingerprint
-function qP(e) {
-  var originalValue = e.originalValue;
-  (e.mutations.forEach(function (mutation) {
-    var mutate = mutation.mutate(),
-      h = YP(mutate);
-    originalValue = h || originalValue;
-  }),
-    Ks(originalValue, e));
+function positionMutationRunner(record) {
+  var val = record.originalValue;
+  record.mutations.forEach(function (m) {
+    var selectors = m.mutate();
+    var newNodes = _loadDOMNodes(selectors);
+    val = newNodes || val;
+  });
+  queueIfNeeded(val, record);
 }
 //@ chunk-aepeg2w5.js:18068-18146 esm-fingerprint
-var XP = function (n) {
-    return n.innerHTML;
-  },
-  JP = function (n, r) {
-    return (n.innerHTML = r);
-  };
+var getHTMLValue = function (el) {
+  return el.innerHTML;
+};
+var setHTMLValue = function (el, value) {
+  return (el.innerHTML = value);
+};
+//@ chunk-aepeg2w5.js:18146-18227 esm-fingerprint
 /**
  * DOM 节点 html 属性的懒缓存访问（innerHTML 读写），第三方 DOM 实现代码，被误归到 AskUserQuestion/prompt。
  */
-//@ chunk-aepeg2w5.js:18146-18227 esm-fingerprint
-function D_(e) {
-  var n = Us(e);
-  if (!n.html) n.html = Bs(e, "html", XP, JP, zP);
-  return n.html;
+function getElementHTMLRecord(element) {
+  var elementRecord = getElementRecord(element);
+  if (!elementRecord.html)
+    elementRecord.html = createElementPropertyRecord(
+      element,
+      "html",
+      getHTMLValue,
+      setHTMLValue,
+      htmlMutationRunner,
+    );
+  return elementRecord.html;
 }
 //@ chunk-aepeg2w5.js:18227-18459 esm-fingerprint
-var QP = function (n) {
-    return { parentNode: n.parentElement, insertBeforeNode: n.nextElementSibling };
-  },
-  ZP = function (n, r) {
-    if (r.insertBeforeNode && !r.parentNode.contains(r.insertBeforeNode)) return;
-    r.parentNode.insertBefore(n, r.insertBeforeNode);
+var getElementPosition = function (el) {
+  return {
+    parentNode: el.parentElement,
+    insertBeforeNode: el.nextElementSibling,
   };
+};
+var setElementPosition = function (el, value) {
+  if (value.insertBeforeNode && !value.parentNode.contains(value.insertBeforeNode)) return;
+  value.parentNode.insertBefore(el, value.insertBeforeNode);
+};
 //@ chunk-aepeg2w5.js:18459-18556 esm-fingerprint
-function F_(e) {
-  var n = Us(e);
-  if (!n.position) n.position = Bs(e, "position", QP, ZP, qP);
-  return n.position;
+function getElementPositionRecord(element) {
+  var elementRecord = getElementRecord(element);
+  if (!elementRecord.position)
+    elementRecord.position = createElementPropertyRecord(
+      element,
+      "position",
+      getElementPosition,
+      setElementPosition,
+      positionMutationRunner,
+    );
+  return elementRecord.position;
 }
 //@ chunk-aepeg2w5.js:18556-18663 esm-fingerprint
-var tM = function (n, r) {
-    return r ? (n.className = r) : n.removeAttribute("class");
-  },
-  nM = function (n) {
-    return n.className;
-  };
+var setClassValue = function (el, val) {
+  return val ? (el.className = val) : el.removeAttribute("class");
+};
+var getClassValue = function (el) {
+  return el.className;
+};
 //@ chunk-aepeg2w5.js:18663-18754 esm-fingerprint
-function L_(e) {
-  var n = Us(e);
-  if (!n.classes) n.classes = Bs(e, "class", nM, tM, jP);
-  return n.classes;
+function getElementClassRecord(el) {
+  var elementRecord = getElementRecord(el);
+  if (!elementRecord.classes)
+    elementRecord.classes = createElementPropertyRecord(
+      el,
+      "class",
+      getClassValue,
+      setClassValue,
+      classMutationRunner,
+    );
+  return elementRecord.classes;
 }
 //@ chunk-aepeg2w5.js:18754-18936 esm-fingerprint
-var rM = function (n) {
-    return function (r) {
-      var s;
-      return (s = r.getAttribute(n)) != null ? s : null;
-    };
-  },
-  iM = function (n) {
-    return function (r, s) {
-      return s !== null ? r.setAttribute(n, s) : r.removeAttribute(n);
-    };
+var getAttrValue = function (attrName) {
+  return function (el) {
+    var _el$getAttribute;
+    return (_el$getAttribute = el.getAttribute(attrName)) != null ? _el$getAttribute : null;
   };
+};
+var setAttrValue = function (attrName) {
+  return function (el, val) {
+    return val !== null ? el.setAttribute(attrName, val) : el.removeAttribute(attrName);
+  };
+};
 //@ chunk-aepeg2w5.js:18936-19047 esm-layout
-function U_(e, n) {
-  var r = Us(e);
-  if (!r.attributes[n]) r.attributes[n] = Bs(e, n, rM(n), iM(n), VP);
-  return r.attributes[n];
+function getElementAttributeRecord(el, attr) {
+  var elementRecord = getElementRecord(el);
+  if (!elementRecord.attributes[attr])
+    elementRecord.attributes[attr] = createElementPropertyRecord(
+      el,
+      attr,
+      getAttrValue(attr),
+      setAttrValue(attr),
+      attrMutationRunner,
+    );
+  return elementRecord.attributes[attr];
 }
 //@ chunk-aepeg2w5.js:19047-19514 esm-fingerprint
-function uM(e, n) {
-  var r = Fs.get(e);
-  if (!r) return;
-  if (n === "html") {
-    var s, h;
-    ((s = r.html) == null || (h = s.observer) == null || h.disconnect(), delete r.html);
-  } else if (n === "class") {
-    var y, S;
-    ((y = r.classes) == null || (S = y.observer) == null || S.disconnect(), delete r.classes);
-  } else if (n === "position") {
-    var w, R;
-    ((w = r.position) == null || (R = w.observer) == null || R.disconnect(), delete r.position);
+function deleteElementPropertyRecord(el, attr) {
+  var element = elements.get(el);
+  if (!element) return;
+  if (attr === "html") {
+    var _element$html;
+    var _element$html$observe;
+    if (!((_element$html = element.html) == null || (_element$html$observe = _element$html.observer) == null))
+      _element$html$observe.disconnect();
+    delete element.html;
+  } else if (attr === "class") {
+    var _element$classes;
+    var _element$classes$obse;
+    if (!(
+      (_element$classes = element.classes) == null ||
+      (_element$classes$obse = _element$classes.observer) == null
+    ))
+      _element$classes$obse.disconnect();
+    delete element.classes;
+  } else if (attr === "position") {
+    var _element$position;
+    var _element$position$obs;
+    if (!(
+      (_element$position = element.position) == null ||
+      (_element$position$obs = _element$position.observer) == null
+    ))
+      _element$position$obs.disconnect();
+    delete element.position;
   } else {
-    var x, P, F;
-    ((x = r.attributes) == null || (P = x[n]) == null || (F = P.observer) == null || F.disconnect(),
-      delete r.attributes[n]);
+    var _element$attributes;
+    var _element$attributes$a;
+    var _element$attributes$a2;
+    if (!(
+      (_element$attributes = element.attributes) == null ||
+      (_element$attributes$a = _element$attributes[attr]) == null ||
+      (_element$attributes$a2 = _element$attributes$a.observer) == null
+    ))
+      _element$attributes$a2.disconnect();
+    delete element.attributes[attr];
   }
 }
 //@ chunk-aepeg2w5.js:19514-19521 esm-layout
-var Is;
+var transformContainer;
 //@ chunk-aepeg2w5.js:19521-19611 esm-fingerprint
-function lM(e) {
-  if (!Is) Is = document.createElement("div");
-  return ((Is.innerHTML = e), Is.innerHTML);
+function getTransformedHTML(html) {
+  if (!transformContainer) transformContainer = document.createElement("div");
+  transformContainer.innerHTML = html;
+  return transformContainer.innerHTML;
 }
 //@ chunk-aepeg2w5.js:19611-19732 esm-fingerprint
-function Ds(e, n, r) {
-  if (!r.isDirty) return;
-  r.isDirty = !1;
-  var virtualValue = r.virtualValue;
-  if (!r.mutations.length) uM(e, n);
-  r.setValue(e, virtualValue);
+function setPropertyValue(el, attr, m) {
+  if (!m.isDirty) return;
+  m.isDirty = false;
+  var val = m.virtualValue;
+  if (!m.mutations.length) deleteElementPropertyRecord(el, attr);
+  m.setValue(el, val);
 }
 //@ chunk-aepeg2w5.js:19732-19924 esm-fingerprint
-function dM(e, n) {
-  (e.html && Ds(n, "html", e.html),
-    e.classes && Ds(n, "class", e.classes),
-    e.position && Ds(n, "position", e.position),
-    Object.keys(e.attributes).forEach(function (r) {
-      Ds(n, r, e.attributes[r]);
-    }));
+function setValue(m, el) {
+  if (m.html) setPropertyValue(el, "html", m.html);
+  if (m.classes) setPropertyValue(el, "class", m.classes);
+  if (m.position) setPropertyValue(el, "position", m.position);
+  Object.keys(m.attributes).forEach(function (attr) {
+    setPropertyValue(el, attr, m.attributes[attr]);
+  });
 }
 //@ chunk-aepeg2w5.js:19924-19953 esm-layout
-function O_() {
-  Fs.forEach(dM);
+function runDOMUpdates() {
+  elements.forEach(setValue);
 }
 //@ chunk-aepeg2w5.js:19953-20179 esm-fingerprint
-function cM(e, n) {
-  var r = null;
-  if (e.kind === "html") r = D_(n);
-  else if (e.kind === "class") r = L_(n);
-  else if (e.kind === "attribute") r = U_(n, e.attribute);
-  else if (e.kind === "position") r = F_(n);
-  if (!r) return;
-  (r.mutations.push(e), r.mutationRunner(r));
+function startMutating(mutation, element) {
+  var record = null;
+  if (mutation.kind === "html") record = getElementHTMLRecord(element);
+  else if (mutation.kind === "class") record = getElementClassRecord(element);
+  else if (mutation.kind === "attribute") record = getElementAttributeRecord(element, mutation.attribute);
+  else if (mutation.kind === "position") record = getElementPositionRecord(element);
+  if (!record) return;
+  record.mutations.push(mutation);
+  record.mutationRunner(record);
 }
 //@ chunk-aepeg2w5.js:20179-20448 esm-fingerprint
-function fM(e, n) {
-  var r = null;
-  if (e.kind === "html") r = D_(n);
-  else if (e.kind === "class") r = L_(n);
-  else if (e.kind === "attribute") r = U_(n, e.attribute);
-  else if (e.kind === "position") r = F_(n);
-  if (!r) return;
-  var index = r.mutations.indexOf(e);
-  if (index !== -1) r.mutations.splice(index, 1);
-  r.mutationRunner(r);
+function stopMutating(mutation, el) {
+  var record = null;
+  if (mutation.kind === "html") record = getElementHTMLRecord(el);
+  else if (mutation.kind === "class") record = getElementClassRecord(el);
+  else if (mutation.kind === "attribute") record = getElementAttributeRecord(el, mutation.attribute);
+  else if (mutation.kind === "position") record = getElementPositionRecord(el);
+  if (!record) return;
+  var index = record.mutations.indexOf(mutation);
+  if (index !== -1) record.mutations.splice(index, 1);
+  record.mutationRunner(record);
 }
 //@ chunk-aepeg2w5.js:20448-20643 esm-fingerprint
-function H_(e) {
-  if (e.kind === "position" && e.elements.size === 1) return;
-  var n = new Set(e.elements),
-    querySelectorAll = document.querySelectorAll(e.selector);
-  querySelectorAll.forEach(function (s) {
-    if (!n.has(s)) (e.elements.add(s), cM(e, s));
+function refreshElementsSet(mutation) {
+  if (mutation.kind === "position" && mutation.elements.size === 1) return;
+  var existingElements = new Set(mutation.elements);
+  var matchingElements = document.querySelectorAll(mutation.selector);
+  matchingElements.forEach(function (el) {
+    if (!existingElements.has(el)) {
+      mutation.elements.add(el);
+      startMutating(mutation, el);
+    }
   });
 }
 //@ chunk-aepeg2w5.js:20643-20738 esm-fingerprint
-function pM(e) {
-  (e.elements.forEach(function (element) {
-    return fM(e, element);
-  }),
-    e.elements.clear(),
-    qd.delete(e));
+function revertMutation(mutation) {
+  mutation.elements.forEach(function (el) {
+    return stopMutating(mutation, el);
+  });
+  mutation.elements.clear();
+  mutations.delete(mutation);
 }
 //@ chunk-aepeg2w5.js:20738-20767 esm-layout
-function M_() {
-  qd.forEach(H_);
+function refreshAllElementSets() {
+  mutations.forEach(refreshElementsSet);
 }
 //@ chunk-aepeg2w5.js:20767-20774 esm-layout
-var zd;
+var observer;
 //@ chunk-aepeg2w5.js:20774-20966 esm-fingerprint
-function mM() {
-  if (typeof document > "u") return;
-  if (!zd)
-    zd = new MutationObserver(function () {
-      M_();
+function connectGlobalObserver() {
+  if (typeof document === "undefined") return;
+  if (!observer)
+    observer = new MutationObserver(function () {
+      refreshAllElementSets();
     });
-  (M_(),
-    zd.observe(document.documentElement, { childList: !0, subtree: !0, attributes: !1, characterData: !1 }));
+  refreshAllElementSets();
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: false,
+    characterData: false,
+  });
 }
 //@ chunk-aepeg2w5.js:20966-20971 esm-layout
-mM();
+connectGlobalObserver();
 //@ chunk-aepeg2w5.js:20971-21069 esm-fingerprint
-function Ws(e) {
-  if (typeof document > "u") return Yd;
-  return (
-    qd.add(e),
-    H_(e),
-    {
-      revert: function () {
-        pM(e);
-      },
-    }
-  );
+function newMutation(m) {
+  if (typeof document === "undefined") return nullController;
+  mutations.add(m);
+  refreshElementsSet(m);
+  return {
+    revert: function () {
+      revertMutation(m);
+    },
+  };
 }
 //@ chunk-aepeg2w5.js:21069-21148 esm-fingerprint
-function jd(e, n) {
-  return Ws({ kind: "html", elements: new Set(), mutate: n, selector: e });
+function html(selector, mutate) {
+  return newMutation({
+    kind: "html",
+    elements: new Set(),
+    mutate,
+    selector,
+  });
 }
 //@ chunk-aepeg2w5.js:21148-21231 esm-fingerprint
-function B_(e, n) {
-  return Ws({ kind: "position", elements: new Set(), mutate: n, selector: e });
+function position(selector, mutate) {
+  return newMutation({
+    kind: "position",
+    elements: new Set(),
+    mutate,
+    selector,
+  });
 }
 //@ chunk-aepeg2w5.js:21231-21311 esm-fingerprint
-function oi(e, n) {
-  return Ws({ kind: "class", elements: new Set(), mutate: n, selector: e });
+function classes(selector, mutate) {
+  return newMutation({
+    kind: "class",
+    elements: new Set(),
+    mutate,
+    selector,
+  });
 }
 //@ chunk-aepeg2w5.js:21311-21618 esm-fingerprint
-function Ns(e, n, r) {
-  if (!$P.test(n)) return Yd;
-  if (n === "class" || n === "className")
-    return oi(e, function (s) {
-      var h = r(Array.from(s).join(" "));
-      if ((s.clear(), !h)) return;
-      h.split(/\s+/g)
+function attribute(selector, attribute, mutate) {
+  if (!validAttributeName.test(attribute)) return nullController;
+  if (attribute === "class" || attribute === "className")
+    return classes(selector, function (classnames) {
+      var mutatedClassnames = mutate(Array.from(classnames).join(" "));
+      classnames.clear();
+      if (!mutatedClassnames) return;
+      mutatedClassnames
+        .split(/\s+/g)
         .filter(Boolean)
-        .forEach(function (y) {
-          return s.add(y);
+        .forEach(function (c) {
+          return classnames.add(c);
         });
     });
-  return Ws({ kind: "attribute", attribute: n, elements: new Set(), mutate: r, selector: e });
+  return newMutation({
+    kind: "attribute",
+    attribute,
+    elements: new Set(),
+    mutate,
+    selector,
+  });
 }
 //@ chunk-aepeg2w5.js:21618-22416 esm-fingerprint
 function gM(e) {
-  var {
-    selector: selector,
-    action: action,
-    value: s,
-    attribute: attribute,
-    parentSelector: parentSelector,
-    insertBeforeSelector: insertBeforeSelector,
-  } = e;
-  if (attribute === "html") {
+  var { selector, action, value, attribute: attr, parentSelector, insertBeforeSelector } = e;
+  if (attr === "html") {
     if (action === "append")
-      return jd(selector, function (w) {
-        return w + (s != null ? s : "");
+      return html(selector, function (val) {
+        return val + (value != null ? value : "");
       });
     else if (action === "set")
-      return jd(selector, function () {
-        return s != null ? s : "";
+      return html(selector, function () {
+        return value != null ? value : "";
       });
-  } else if (attribute === "class") {
+  } else if (attr === "class") {
     if (action === "append")
-      return oi(selector, function (w) {
-        if (s) w.add(s);
+      return classes(selector, function (val) {
+        if (value) val.add(value);
       });
     else if (action === "remove")
-      return oi(selector, function (w) {
-        if (s) w.delete(s);
+      return classes(selector, function (val) {
+        if (value) val.delete(value);
       });
     else if (action === "set")
-      return oi(selector, function (w) {
-        if ((w.clear(), s)) w.add(s);
+      return classes(selector, function (val) {
+        val.clear();
+        if (value) val.add(value);
       });
-  } else if (attribute === "position") {
+  } else if (attr === "position") {
     if (action === "set" && parentSelector)
-      return B_(selector, function () {
-        return { insertBeforeSelector: insertBeforeSelector, parentSelector: parentSelector };
+      return position(selector, function () {
+        return {
+          insertBeforeSelector,
+          parentSelector,
+        };
       });
   } else if (action === "append")
-    return Ns(selector, attribute, function (w) {
-      return w !== null ? w + (s != null ? s : "") : s != null ? s : "";
+    return attribute(selector, attr, function (val) {
+      return val !== null ? val + (value != null ? value : "") : value != null ? value : "";
     });
   else if (action === "set")
-    return Ns(selector, attribute, function () {
-      return s != null ? s : "";
+    return attribute(selector, attr, function () {
+      return value != null ? value : "";
     });
   else if (action === "remove")
-    return Ns(selector, attribute, function () {
+    return attribute(selector, attr, function () {
       return null;
     });
-  return Yd;
+  return nullController;
 }
 //@ chunk-aepeg2w5.js:22416-22490 esm-fingerprint
-var _M = { html: jd, classes: oi, attribute: Ns, position: B_, declarative: gM },
-  K_ = _M;
+var _M = {
+  html,
+  classes,
+  attribute,
+  position,
+  declarative: gM,
+};
+var K_ = _M;
 //@ chunk-aepeg2w5.js:22490-22500 esm-layout
-var Xd = {};
+var _regexCache = {};
 //@ chunk-aepeg2w5.js:22500-22773 esm-fingerprint
-function Yn(e, n, r) {
-  r = r || {};
-  for (let [s, h] of Object.entries(n))
-    switch (s) {
+function evalCondition(obj, condition, savedGroups) {
+  savedGroups = savedGroups || {};
+  for (let [k, v] of Object.entries(condition))
+    switch (k) {
       case "$or":
-        if (!G_(e, h, r)) return !1;
+        if (!evalOr(obj, v, savedGroups)) return false;
         break;
       case "$nor":
-        if (G_(e, h, r)) return !1;
+        if (evalOr(obj, v, savedGroups)) return false;
         break;
       case "$and":
-        if (!EM(e, h, r)) return !1;
+        if (!evalAnd(obj, v, savedGroups)) return false;
         break;
       case "$not":
-        if (Yn(e, h, r)) return !1;
+        if (evalCondition(obj, v, savedGroups)) return false;
         break;
       default:
-        if (!ii(h, hM(e, s), r)) return !1;
+        if (!evalConditionValue(v, getPath(obj, k), savedGroups)) return false;
     }
-  return !0;
+  return true;
 }
 //@ chunk-aepeg2w5.js:22773-22912 esm-fingerprint
-function hM(e, n) {
-  let parts = n.split("."),
-    s = e;
-  for (let h = 0; h < parts.length; h++)
-    if (s && typeof s === "object" && parts[h] in s) s = s[parts[h]];
+function getPath(obj, path) {
+  let parts = path.split(".");
+  let current = obj;
+  for (let i = 0; i < parts.length; i++)
+    if (current && typeof current === "object" && parts[i] in current) current = current[parts[i]];
     else return null;
-  return s;
+  return current;
 }
 //@ chunk-aepeg2w5.js:22912-23000 esm-fingerprint
-function yM(e) {
-  if (!Xd[e]) Xd[e] = new RegExp(e.replace(/([^\\])\//g, "$1\\/"));
-  return Xd[e];
+function getRegex(regex) {
+  if (!_regexCache[regex]) _regexCache[regex] = new RegExp(regex.replace(/([^\\])\//g, "$1\\/"));
+  return _regexCache[regex];
 }
 //@ chunk-aepeg2w5.js:23000-23298 esm-fingerprint
-function ii(e, n, r) {
-  if (typeof e === "string") return n + "" === e;
-  if (typeof e === "number") return n * 1 === e;
-  if (typeof e === "boolean") return n !== null && !!n === e;
-  if (e === null) return n === null;
-  if (Array.isArray(e) || !$_(e)) return JSON.stringify(n) === JSON.stringify(e);
-  for (let key in e) if (!vM(key, n, e[key], r)) return !1;
-  return !0;
+function evalConditionValue(condition, value, savedGroups) {
+  if (typeof condition === "string") return value + "" === condition;
+  if (typeof condition === "number") return value * 1 === condition;
+  if (typeof condition === "boolean") return value !== null && !!value === condition;
+  if (condition === null) return value === null;
+  if (Array.isArray(condition) || !isOperatorObject(condition))
+    return JSON.stringify(value) === JSON.stringify(condition);
+  for (let op in condition) if (!evalOperatorCondition(op, value, condition[op], savedGroups)) return false;
+  return true;
 }
 //@ chunk-aepeg2w5.js:23298-23397 esm-fingerprint
-function $_(e) {
-  let keys = Object.keys(e);
-  return keys.length > 0 && keys.filter((r) => r[0] === "$").length === keys.length;
+function isOperatorObject(obj) {
+  let keys = Object.keys(obj);
+  return keys.length > 0 && keys.filter((k) => k[0] === "$").length === keys.length;
 }
 //@ chunk-aepeg2w5.js:23397-23577 esm-fingerprint
-function bM(e) {
-  if (e === null) return "null";
-  if (Array.isArray(e)) return "array";
-  let n = typeof e;
-  if (["string", "number", "boolean", "object", "undefined"].includes(n)) return n;
+function getType(v) {
+  if (v === null) return "null";
+  if (Array.isArray(v)) return "array";
+  let t = typeof v;
+  if (["string", "number", "boolean", "object", "undefined"].includes(t)) return t;
   return "unknown";
 }
 //@ chunk-aepeg2w5.js:23577-23730 esm-layout
-function SM(e, n, r) {
-  if (!Array.isArray(e)) return !1;
-  let s = $_(n) ? (h) => ii(n, h, r) : (h) => Yn(h, n, r);
-  for (let h = 0; h < e.length; h++) if (e[h] && s(e[h])) return !0;
-  return !1;
+function elemMatch(actual, expected, savedGroups) {
+  if (!Array.isArray(actual)) return false;
+  let check = isOperatorObject(expected)
+    ? (v) => evalConditionValue(expected, v, savedGroups)
+    : (v) => evalCondition(v, expected, savedGroups);
+  for (let i = 0; i < actual.length; i++) if (actual[i] && check(actual[i])) return true;
+  return false;
 }
 //@ chunk-aepeg2w5.js:23730-23822 esm-fingerprint
-function js(e, n) {
-  if (Array.isArray(e)) return e.some((r) => n.includes(r));
-  return n.includes(e);
+function isIn(actual, expected) {
+  if (Array.isArray(actual)) return actual.some((el) => expected.includes(el));
+  return expected.includes(actual);
 }
 //@ chunk-aepeg2w5.js:23822-24832 esm-fingerprint
-function vM(e, n, r, s) {
-  switch (e) {
+function evalOperatorCondition(operator, actual, expected, savedGroups) {
+  switch (operator) {
     case "$veq":
-      return zt(n) === zt(r);
+      return paddedVersionString(actual) === paddedVersionString(expected);
     case "$vne":
-      return zt(n) !== zt(r);
+      return paddedVersionString(actual) !== paddedVersionString(expected);
     case "$vgt":
-      return zt(n) > zt(r);
+      return paddedVersionString(actual) > paddedVersionString(expected);
     case "$vgte":
-      return zt(n) >= zt(r);
+      return paddedVersionString(actual) >= paddedVersionString(expected);
     case "$vlt":
-      return zt(n) < zt(r);
+      return paddedVersionString(actual) < paddedVersionString(expected);
     case "$vlte":
-      return zt(n) <= zt(r);
+      return paddedVersionString(actual) <= paddedVersionString(expected);
     case "$eq":
-      return n === r;
+      return actual === expected;
     case "$ne":
-      return n !== r;
+      return actual !== expected;
     case "$lt":
-      return n < r;
+      return actual < expected;
     case "$lte":
-      return n <= r;
+      return actual <= expected;
     case "$gt":
-      return n > r;
+      return actual > expected;
     case "$gte":
-      return n >= r;
+      return actual >= expected;
     case "$exists":
-      return r ? n != null : n == null;
+      return expected ? actual != null : actual == null;
     case "$in":
-      if (!Array.isArray(r)) return !1;
-      return js(n, r);
+      if (!Array.isArray(expected)) return false;
+      return isIn(actual, expected);
     case "$inGroup":
-      return js(n, s[r] || []);
+      return isIn(actual, savedGroups[expected] || []);
     case "$notInGroup":
-      return !js(n, s[r] || []);
+      return !isIn(actual, savedGroups[expected] || []);
     case "$nin":
-      if (!Array.isArray(r)) return !1;
-      return !js(n, r);
+      if (!Array.isArray(expected)) return false;
+      return !isIn(actual, expected);
     case "$not":
-      return !ii(r, n, s);
+      return !evalConditionValue(expected, actual, savedGroups);
     case "$size":
-      if (!Array.isArray(n)) return !1;
-      return ii(r, n.length, s);
+      if (!Array.isArray(actual)) return false;
+      return evalConditionValue(expected, actual.length, savedGroups);
     case "$elemMatch":
-      return SM(n, r, s);
+      return elemMatch(actual, expected, savedGroups);
     case "$all":
-      if (!Array.isArray(n)) return !1;
-      for (let h = 0; h < r.length; h++) {
-        let y = !1;
-        for (let S = 0; S < n.length; S++)
-          if (ii(r[h], n[S], s)) {
-            y = !0;
+      if (!Array.isArray(actual)) return false;
+      for (let i = 0; i < expected.length; i++) {
+        let passed = false;
+        for (let j = 0; j < actual.length; j++)
+          if (evalConditionValue(expected[i], actual[j], savedGroups)) {
+            passed = true;
             break;
           }
-        if (!y) return !1;
+        if (!passed) return false;
       }
-      return !0;
+      return true;
     case "$regex":
       try {
-        return yM(r).test(n);
-      } catch (error) {
-        return !1;
+        return getRegex(expected).test(actual);
+      } catch (e) {
+        return false;
       }
     case "$type":
-      return bM(n) === r;
+      return getType(actual) === expected;
     default:
-      return (console.error("Unknown operator: " + e), !1);
+      console.error("Unknown operator: " + operator);
+      return false;
   }
 }
 //@ chunk-aepeg2w5.js:24832-24934 esm-layout
-function G_(e, n, r) {
-  if (!n.length) return !0;
-  for (let s = 0; s < n.length; s++) if (Yn(e, n[s], r)) return !0;
-  return !1;
+function evalOr(obj, conditions, savedGroups) {
+  if (!conditions.length) return true;
+  for (let i = 0; i < conditions.length; i++) if (evalCondition(obj, conditions[i], savedGroups)) return true;
+  return false;
 }
 //@ chunk-aepeg2w5.js:24934-25015 esm-layout
-function EM(e, n, r) {
-  for (let s = 0; s < n.length; s++) if (!Yn(e, n[s], r)) return !1;
-  return !0;
+function evalAnd(obj, conditions, savedGroups) {
+  for (let i = 0; i < conditions.length; i++)
+    if (!evalCondition(obj, conditions[i], savedGroups)) return false;
+  return true;
 }
 //@ chunk-aepeg2w5.js:25015-25065 esm-fingerprint
-var FEATURE_EVALUATED_EVENT = "Feature Evaluated",
-  wM = "Experiment Viewed";
+var FEATURE_EVALUATED_EVENT = "Feature Evaluated";
+var EVENT_EXPERIMENT_VIEWED = "Experiment Viewed";
 //@ chunk-aepeg2w5.js:25065-25275 esm-fingerprint
-function getForcedFeatureValues(e) {
-  let n = new Map();
-  if (e.global.forcedFeatureValues)
-    e.global.forcedFeatureValues.forEach((forcedFeatureValue, s) => n.set(s, forcedFeatureValue));
-  if (e.user.forcedFeatureValues)
-    e.user.forcedFeatureValues.forEach((forcedFeatureValue, s) => n.set(s, forcedFeatureValue));
-  return n;
+function getForcedFeatureValues(ctx) {
+  let ret = new Map();
+  if (ctx.global.forcedFeatureValues) ctx.global.forcedFeatureValues.forEach((v, k) => ret.set(k, v));
+  if (ctx.user.forcedFeatureValues) ctx.user.forcedFeatureValues.forEach((v, k) => ret.set(k, v));
+  return ret;
 }
 //@ chunk-aepeg2w5.js:25275-25552 esm-fingerprint
-function getForcedVariations(e) {
-  if (e.global.forcedVariations && e.user.forcedVariations)
-    return { ...e.global.forcedVariations, ...e.user.forcedVariations };
-  else if (e.global.forcedVariations) return e.global.forcedVariations;
-  else if (e.user.forcedVariations) return e.user.forcedVariations;
+function getForcedVariations(ctx) {
+  if (ctx.global.forcedVariations && ctx.user.forcedVariations)
+    return {
+      ...ctx.global.forcedVariations,
+      ...ctx.user.forcedVariations,
+    };
+  else if (ctx.global.forcedVariations) return ctx.global.forcedVariations;
+  else if (ctx.user.forcedVariations) return ctx.user.forcedVariations;
   else return {};
 }
 //@ chunk-aepeg2w5.js:25552-25598 esm-layout
-async function eo(e) {
+async function safeCall(fn) {
   try {
-    await e();
+    await fn();
   } catch (error) {}
 }
 //@ chunk-aepeg2w5.js:25598-26240 esm-fingerprint
-function W_(e, n, r) {
-  if (e.user.trackedExperiments) {
-    let h = qs(n, r);
-    if (e.user.trackedExperiments.has(h)) return [];
-    e.user.trackedExperiments.add(h);
+function onExperimentViewed(ctx, experiment, result) {
+  if (ctx.user.trackedExperiments) {
+    let k = getExperimentDedupeKey(experiment, result);
+    if (ctx.user.trackedExperiments.has(k)) return [];
+    ctx.user.trackedExperiments.add(k);
   }
-  if (e.user.enableDevMode && e.user.devLogs)
-    e.user.devLogs.push({
-      experiment: n,
-      result: r,
+  if (ctx.user.enableDevMode && ctx.user.devLogs)
+    ctx.user.devLogs.push({
+      experiment,
+      result,
       timestamp: Date.now().toString(),
       logType: "experiment",
     });
-  let s = [];
-  if (e.global.trackingCallback) {
-    let trackingCallback = e.global.trackingCallback;
-    s.push(eo(() => trackingCallback(n, r, e.user)));
+  let calls = [];
+  if (ctx.global.trackingCallback) {
+    let cb = ctx.global.trackingCallback;
+    calls.push(safeCall(() => cb(experiment, result, ctx.user)));
   }
-  if (e.user.trackingCallback) {
-    let trackingCallback = e.user.trackingCallback;
-    s.push(eo(() => trackingCallback(n, r)));
+  if (ctx.user.trackingCallback) {
+    let cb = ctx.user.trackingCallback;
+    calls.push(safeCall(() => cb(experiment, result)));
   }
-  if (e.global.eventLogger) {
-    let eventLogger = e.global.eventLogger;
-    s.push(
-      eo(() =>
-        eventLogger(
-          wM,
-          { experimentId: n.key, variationId: r.key, hashAttribute: r.hashAttribute, hashValue: r.hashValue },
-          e.user,
+  if (ctx.global.eventLogger) {
+    let cb = ctx.global.eventLogger;
+    calls.push(
+      safeCall(() =>
+        cb(
+          EVENT_EXPERIMENT_VIEWED,
+          {
+            experimentId: experiment.key,
+            variationId: result.key,
+            hashAttribute: result.hashAttribute,
+            hashValue: result.hashValue,
+          },
+          ctx.user,
         ),
       ),
     );
   }
-  return s;
+  return calls;
 }
 //@ chunk-aepeg2w5.js:26240-26910 esm-fingerprint
-function CM(e, n, r) {
-  if (e.user.trackedFeatureUsage) {
-    let json = JSON.stringify(r.value);
-    if (e.user.trackedFeatureUsage[n] === json) return;
-    if (((e.user.trackedFeatureUsage[n] = json), e.user.enableDevMode && e.user.devLogs))
-      e.user.devLogs.push({ featureKey: n, result: r, timestamp: Date.now().toString(), logType: "feature" });
+function onFeatureUsage(ctx, key, ret) {
+  if (ctx.user.trackedFeatureUsage) {
+    let stringifiedValue = JSON.stringify(ret.value);
+    if (ctx.user.trackedFeatureUsage[key] === stringifiedValue) return;
+    ctx.user.trackedFeatureUsage[key] = stringifiedValue;
+    if (ctx.user.enableDevMode && ctx.user.devLogs)
+      ctx.user.devLogs.push({
+        featureKey: key,
+        result: ret,
+        timestamp: Date.now().toString(),
+        logType: "feature",
+      });
   }
-  if (e.global.onFeatureUsage) {
-    let onFeatureUsage = e.global.onFeatureUsage;
-    eo(() => onFeatureUsage(n, r, e.user));
+  if (ctx.global.onFeatureUsage) {
+    let cb = ctx.global.onFeatureUsage;
+    safeCall(() => cb(key, ret, ctx.user));
   }
-  if (e.user.onFeatureUsage) {
-    let onFeatureUsage = e.user.onFeatureUsage;
-    eo(() => onFeatureUsage(n, r));
+  if (ctx.user.onFeatureUsage) {
+    let cb = ctx.user.onFeatureUsage;
+    safeCall(() => cb(key, ret));
   }
-  if (e.global.eventLogger) {
-    let eventLogger = e.global.eventLogger;
-    eo(() =>
-      eventLogger(
+  if (ctx.global.eventLogger) {
+    let cb = ctx.global.eventLogger;
+    safeCall(() =>
+      cb(
         FEATURE_EVALUATED_EVENT,
         {
-          feature: n,
-          source: r.source,
-          value: r.value,
-          ruleId: r.source === "defaultValue" ? "$default" : r.ruleId || "",
-          variationId: r.experimentResult ? r.experimentResult.key : "",
+          feature: key,
+          source: ret.source,
+          value: ret.value,
+          ruleId: ret.source === "defaultValue" ? "$default" : ret.ruleId || "",
+          variationId: ret.experimentResult ? ret.experimentResult.key : "",
         },
-        e.user,
+        ctx.user,
       ),
     );
   }
 }
 //@ chunk-aepeg2w5.js:26910-29050 esm-fingerprint
-function evaluateFeature(e, n) {
-  if (n.stack.evaluatedFeatures.has(e)) return getFeatureResult(n, e, null, "cyclicPrerequisite");
-  (n.stack.evaluatedFeatures.add(e), (n.stack.id = e));
-  let r = getForcedFeatureValues(n);
-  if (r.has(e)) return getFeatureResult(n, e, r.get(e), "override");
-  if (!n.global.features || !n.global.features[e]) return getFeatureResult(n, e, null, "unknownFeature");
-  let s = n.global.features[e];
-  if (s.rules) {
-    let h = new Set(n.stack.evaluatedFeatures);
-    e: for (let rule of s.rules) {
+function evaluateFeature(id, ctx) {
+  if (ctx.stack.evaluatedFeatures.has(id)) return getFeatureResult(ctx, id, null, "cyclicPrerequisite");
+  ctx.stack.evaluatedFeatures.add(id);
+  ctx.stack.id = id;
+  let forcedValues = getForcedFeatureValues(ctx);
+  if (forcedValues.has(id)) return getFeatureResult(ctx, id, forcedValues.get(id), "override");
+  if (!ctx.global.features || !ctx.global.features[id])
+    return getFeatureResult(ctx, id, null, "unknownFeature");
+  let feature = ctx.global.features[id];
+  if (feature.rules) {
+    let evaluatedFeatures = new Set(ctx.stack.evaluatedFeatures);
+    e: for (let rule of feature.rules) {
       if (rule.parentConditions)
         for (let parentCondition of rule.parentConditions) {
-          n.stack.evaluatedFeatures = new Set(h);
-          let x = evaluateFeature(parentCondition.id, n);
-          if (x.source === "cyclicPrerequisite") return getFeatureResult(n, e, null, "cyclicPrerequisite");
-          let P = { value: x.value };
-          if (!Yn(P, parentCondition.condition || {})) {
-            if (parentCondition.gate) return getFeatureResult(n, e, null, "prerequisite");
+          ctx.stack.evaluatedFeatures = new Set(evaluatedFeatures);
+          let parentResult = evaluateFeature(parentCondition.id, ctx);
+          if (parentResult.source === "cyclicPrerequisite")
+            return getFeatureResult(ctx, id, null, "cyclicPrerequisite");
+          let evalObj = {
+            value: parentResult.value,
+          };
+          if (!evalCondition(evalObj, parentCondition.condition || {})) {
+            if (parentCondition.gate) return getFeatureResult(ctx, id, null, "prerequisite");
             continue e;
           }
         }
-      if (rule.filters && V_(rule.filters, n)) continue;
+      if (rule.filters && isFilteredOut(rule.filters, ctx)) continue;
       if ("force" in rule) {
-        if (rule.condition && !j_(rule.condition, n)) continue;
+        if (rule.condition && !conditionPasses(rule.condition, ctx)) continue;
         if (
-          !RM(
-            n,
-            rule.seed || e,
+          !isIncludedInRollout(
+            ctx,
+            rule.seed || id,
             rule.hashAttribute,
-            n.user.saveStickyBucketAssignmentDoc && !rule.disableStickyBucketing
+            ctx.user.saveStickyBucketAssignmentDoc && !rule.disableStickyBucketing
               ? rule.fallbackAttribute
-              : void 0,
+              : undefined,
             rule.range,
             rule.coverage,
             rule.hashVersion,
@@ -1206,429 +1441,591 @@ function evaluateFeature(e, n) {
         )
           continue;
         if (rule.tracks)
-          rule.tracks.forEach((track) => {
-            if (!W_(n, track.experiment, track.result).length && n.global.saveDeferredTrack)
-              n.global.saveDeferredTrack({ experiment: track.experiment, result: track.result });
+          rule.tracks.forEach((t) => {
+            if (!onExperimentViewed(ctx, t.experiment, t.result).length && ctx.global.saveDeferredTrack)
+              ctx.global.saveDeferredTrack({
+                experiment: t.experiment,
+                result: t.result,
+              });
           });
-        return getFeatureResult(n, e, rule.force, "force", rule.id);
+        return getFeatureResult(ctx, id, rule.force, "force", rule.id);
       }
       if (!rule.variations) continue;
-      let S = { variations: rule.variations, key: rule.key || e };
-      if ("coverage" in rule) S.coverage = rule.coverage;
-      if (rule.weights) S.weights = rule.weights;
-      if (rule.hashAttribute) S.hashAttribute = rule.hashAttribute;
-      if (rule.fallbackAttribute) S.fallbackAttribute = rule.fallbackAttribute;
-      if (rule.disableStickyBucketing) S.disableStickyBucketing = rule.disableStickyBucketing;
-      if (rule.bucketVersion !== void 0) S.bucketVersion = rule.bucketVersion;
-      if (rule.minBucketVersion !== void 0) S.minBucketVersion = rule.minBucketVersion;
-      if (rule.namespace) S.namespace = rule.namespace;
-      if (rule.meta) S.meta = rule.meta;
-      if (rule.ranges) S.ranges = rule.ranges;
-      if (rule.name) S.name = rule.name;
-      if (rule.phase) S.phase = rule.phase;
-      if (rule.seed) S.seed = rule.seed;
-      if (rule.hashVersion) S.hashVersion = rule.hashVersion;
-      if (rule.filters) S.filters = rule.filters;
-      if (rule.condition) S.condition = rule.condition;
-      let { result: w } = runExperiment(S, e, n);
-      if ((n.global.onExperimentEval && n.global.onExperimentEval(S, w), w.inExperiment && !w.passthrough))
-        return getFeatureResult(n, e, w.value, "experiment", rule.id, S, w);
+      let exp = {
+        variations: rule.variations,
+        key: rule.key || id,
+      };
+      if ("coverage" in rule) exp.coverage = rule.coverage;
+      if (rule.weights) exp.weights = rule.weights;
+      if (rule.hashAttribute) exp.hashAttribute = rule.hashAttribute;
+      if (rule.fallbackAttribute) exp.fallbackAttribute = rule.fallbackAttribute;
+      if (rule.disableStickyBucketing) exp.disableStickyBucketing = rule.disableStickyBucketing;
+      if (rule.bucketVersion !== undefined) exp.bucketVersion = rule.bucketVersion;
+      if (rule.minBucketVersion !== undefined) exp.minBucketVersion = rule.minBucketVersion;
+      if (rule.namespace) exp.namespace = rule.namespace;
+      if (rule.meta) exp.meta = rule.meta;
+      if (rule.ranges) exp.ranges = rule.ranges;
+      if (rule.name) exp.name = rule.name;
+      if (rule.phase) exp.phase = rule.phase;
+      if (rule.seed) exp.seed = rule.seed;
+      if (rule.hashVersion) exp.hashVersion = rule.hashVersion;
+      if (rule.filters) exp.filters = rule.filters;
+      if (rule.condition) exp.condition = rule.condition;
+      let { result } = runExperiment(exp, id, ctx);
+      if (ctx.global.onExperimentEval) ctx.global.onExperimentEval(exp, result);
+      if (result.inExperiment && !result.passthrough)
+        return getFeatureResult(ctx, id, result.value, "experiment", rule.id, exp, result);
     }
   }
-  return getFeatureResult(n, e, s.defaultValue === void 0 ? null : s.defaultValue, "defaultValue");
+  return getFeatureResult(
+    ctx,
+    id,
+    feature.defaultValue === undefined ? null : feature.defaultValue,
+    "defaultValue",
+  );
 }
 //@ chunk-aepeg2w5.js:29050-31779 esm-fingerprint
-function runExperiment(e, n, r) {
-  let key = e.key,
-    h = e.variations.length;
-  if (h < 2) return { result: ze(r, e, -1, !1, n) };
-  if (r.global.enabled === !1 || r.user.enabled === !1) return { result: ze(r, e, -1, !1, n) };
-  if (((e = xM(e, r)), e.urlPatterns && !Qo(r.user.url || "", e.urlPatterns)))
-    return { result: ze(r, e, -1, !1, n) };
-  let y = m_(key, r.user.url || "", h);
-  if (y !== null) return { result: ze(r, e, y, !1, n) };
-  let S = getForcedVariations(r);
-  if (key in S) {
-    let q = S[key];
-    return { result: ze(r, e, q, !1, n) };
+function runExperiment(experiment, featureId, ctx) {
+  let key = experiment.key;
+  let numVariations = experiment.variations.length;
+  if (numVariations < 2)
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  if (ctx.global.enabled === false || ctx.user.enabled === false)
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  experiment = mergeOverrides(experiment, ctx);
+  if (experiment.urlPatterns && !isURLTargeted(ctx.user.url || "", experiment.urlPatterns))
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  let qsOverride = getQueryStringOverride(key, ctx.user.url || "", numVariations);
+  if (qsOverride !== null)
+    return {
+      result: getExperimentResult(ctx, experiment, qsOverride, false, featureId),
+    };
+  let forcedVariations = getForcedVariations(ctx);
+  if (key in forcedVariations) {
+    let variation = forcedVariations[key];
+    return {
+      result: getExperimentResult(ctx, experiment, variation, false, featureId),
+    };
   }
-  if (e.status === "draft" || e.active === !1) return { result: ze(r, e, -1, !1, n) };
-  let { hashAttribute: hashAttribute, hashValue: hashValue } = wr(
-    r,
-    e.hashAttribute,
-    r.user.saveStickyBucketAssignmentDoc && !e.disableStickyBucketing ? e.fallbackAttribute : void 0,
+  if (experiment.status === "draft" || experiment.active === false)
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  let { hashAttribute, hashValue } = getHashAttribute(
+    ctx,
+    experiment.hashAttribute,
+    ctx.user.saveStickyBucketAssignmentDoc && !experiment.disableStickyBucketing
+      ? experiment.fallbackAttribute
+      : undefined,
   );
-  if (!hashValue) return { result: ze(r, e, -1, !1, n) };
-  let x = -1,
-    P = !1,
-    F = !1;
-  if (r.user.saveStickyBucketAssignmentDoc && !e.disableStickyBucketing) {
-    let { variation: variation, versionIsBlocked: versionIsBlocked } = MM({
-      ctx: r,
-      expKey: e.key,
-      expBucketVersion: e.bucketVersion,
-      expHashAttribute: e.hashAttribute,
-      expFallbackAttribute: e.fallbackAttribute,
-      expMinBucketVersion: e.minBucketVersion,
-      expMeta: e.meta,
+  if (!hashValue)
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  let assigned = -1;
+  let foundStickyBucket = false;
+  let stickyBucketVersionIsBlocked = false;
+  if (ctx.user.saveStickyBucketAssignmentDoc && !experiment.disableStickyBucketing) {
+    let { variation, versionIsBlocked } = getStickyBucketVariation({
+      ctx,
+      expKey: experiment.key,
+      expBucketVersion: experiment.bucketVersion,
+      expHashAttribute: experiment.hashAttribute,
+      expFallbackAttribute: experiment.fallbackAttribute,
+      expMinBucketVersion: experiment.minBucketVersion,
+      expMeta: experiment.meta,
     });
-    ((P = variation >= 0), (x = variation), (F = !!versionIsBlocked));
+    foundStickyBucket = variation >= 0;
+    assigned = variation;
+    stickyBucketVersionIsBlocked = !!versionIsBlocked;
   }
-  if (!P) {
-    if (e.filters) {
-      if (V_(e.filters, r)) return { result: ze(r, e, -1, !1, n) };
-    } else if (e.namespace && !c_(hashValue, e.namespace)) return { result: ze(r, e, -1, !1, n) };
-    if (e.include && !g_(e.include)) return { result: ze(r, e, -1, !1, n) };
-    if (e.condition && !j_(e.condition, r)) return { result: ze(r, e, -1, !1, n) };
-    if (e.parentConditions) {
-      let q = new Set(r.stack.evaluatedFeatures);
-      for (let parentCondition of e.parentConditions) {
-        r.stack.evaluatedFeatures = new Set(q);
-        let re = evaluateFeature(parentCondition.id, r);
-        if (re.source === "cyclicPrerequisite") return { result: ze(r, e, -1, !1, n) };
-        let se = { value: re.value };
-        if (!Yn(se, parentCondition.condition || {})) return { result: ze(r, e, -1, !1, n) };
+  if (!foundStickyBucket) {
+    if (experiment.filters) {
+      if (isFilteredOut(experiment.filters, ctx))
+        return {
+          result: getExperimentResult(ctx, experiment, -1, false, featureId),
+        };
+    } else if (experiment.namespace && !inNamespace(hashValue, experiment.namespace))
+      return {
+        result: getExperimentResult(ctx, experiment, -1, false, featureId),
+      };
+    if (experiment.include && !isIncluded(experiment.include))
+      return {
+        result: getExperimentResult(ctx, experiment, -1, false, featureId),
+      };
+    if (experiment.condition && !conditionPasses(experiment.condition, ctx))
+      return {
+        result: getExperimentResult(ctx, experiment, -1, false, featureId),
+      };
+    if (experiment.parentConditions) {
+      let evaluatedFeatures = new Set(ctx.stack.evaluatedFeatures);
+      for (let parentCondition of experiment.parentConditions) {
+        ctx.stack.evaluatedFeatures = new Set(evaluatedFeatures);
+        let parentResult = evaluateFeature(parentCondition.id, ctx);
+        if (parentResult.source === "cyclicPrerequisite")
+          return {
+            result: getExperimentResult(ctx, experiment, -1, false, featureId),
+          };
+        let evalObj = {
+          value: parentResult.value,
+        };
+        if (!evalCondition(evalObj, parentCondition.condition || {}))
+          return {
+            result: getExperimentResult(ctx, experiment, -1, false, featureId),
+          };
       }
     }
-    if (e.groups && !PM(e.groups, r)) return { result: ze(r, e, -1, !1, n) };
+    if (experiment.groups && !hasGroupOverlap(experiment.groups, ctx))
+      return {
+        result: getExperimentResult(ctx, experiment, -1, false, featureId),
+      };
   }
-  if (e.url && !OM(e.url, r)) return { result: ze(r, e, -1, !1, n) };
-  let L = Jo(e.seed || key, hashValue, e.hashVersion || 1);
-  if (L === null) return { result: ze(r, e, -1, !1, n) };
-  if (!P) {
-    let q = e.ranges || p_(h, e.coverage === void 0 ? 1 : e.coverage, e.weights);
-    x = f_(L, q);
+  if (experiment.url && !urlIsValid(experiment.url, ctx))
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  let n = hash(experiment.seed || key, hashValue, experiment.hashVersion || 1);
+  if (n === null)
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  if (!foundStickyBucket) {
+    let ranges =
+      experiment.ranges ||
+      getBucketRanges(
+        numVariations,
+        experiment.coverage === undefined ? 1 : experiment.coverage,
+        experiment.weights,
+      );
+    assigned = chooseVariation(n, ranges);
   }
-  if (F) return { result: ze(r, e, -1, !1, n, void 0, !0) };
-  if (x < 0) return { result: ze(r, e, -1, !1, n) };
-  if ("force" in e) return { result: ze(r, e, e.force === void 0 ? -1 : e.force, !1, n) };
-  if (r.global.qaMode || r.user.qaMode) return { result: ze(r, e, -1, !1, n) };
-  if (e.status === "stopped") return { result: ze(r, e, -1, !1, n) };
-  let G = ze(r, e, x, !0, n, L, P);
-  if (r.user.saveStickyBucketAssignmentDoc && !e.disableStickyBucketing) {
+  if (stickyBucketVersionIsBlocked)
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId, undefined, true),
+    };
+  if (assigned < 0)
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  if ("force" in experiment)
+    return {
+      result: getExperimentResult(
+        ctx,
+        experiment,
+        experiment.force === undefined ? -1 : experiment.force,
+        false,
+        featureId,
+      ),
+    };
+  if (ctx.global.qaMode || ctx.user.qaMode)
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  if (experiment.status === "stopped")
+    return {
+      result: getExperimentResult(ctx, experiment, -1, false, featureId),
+    };
+  let result = getExperimentResult(ctx, experiment, assigned, true, featureId, n, foundStickyBucket);
+  if (ctx.user.saveStickyBucketAssignmentDoc && !experiment.disableStickyBucketing) {
     let {
-      changed: changed,
-      key: key,
-      doc: doc,
-    } = DM(r, hashAttribute, Zo(hashValue), { [ec(e.key, e.bucketVersion)]: G.key });
-    if (changed)
-      ((r.user.stickyBucketAssignmentDocs = r.user.stickyBucketAssignmentDocs || {}),
-        (r.user.stickyBucketAssignmentDocs[key] = doc),
-        r.user.saveStickyBucketAssignmentDoc(doc));
+      changed,
+      key: attrKey,
+      doc,
+    } = generateStickyBucketAssignmentDoc(ctx, hashAttribute, toString(hashValue), {
+      [getStickyBucketExperimentKey(experiment.key, experiment.bucketVersion)]: result.key,
+    });
+    if (changed) {
+      ctx.user.stickyBucketAssignmentDocs = ctx.user.stickyBucketAssignmentDocs || {};
+      ctx.user.stickyBucketAssignmentDocs[attrKey] = doc;
+      ctx.user.saveStickyBucketAssignmentDoc(doc);
+    }
   }
-  let j = W_(r, e, G);
-  if (j.length === 0 && r.global.saveDeferredTrack) r.global.saveDeferredTrack({ experiment: e, result: G });
-  let ee = !j.length ? void 0 : j.length === 1 ? j[0] : Promise.all(j).then(() => {});
-  return (
-    "changeId" in e && e.changeId && r.global.recordChangeId && r.global.recordChangeId(e.changeId),
-    { result: G, trackingCall: ee }
-  );
+  let trackingCalls = onExperimentViewed(ctx, experiment, result);
+  if (trackingCalls.length === 0 && ctx.global.saveDeferredTrack)
+    ctx.global.saveDeferredTrack({
+      experiment,
+      result,
+    });
+  let trackingCall = !trackingCalls.length
+    ? undefined
+    : trackingCalls.length === 1
+      ? trackingCalls[0]
+      : Promise.all(trackingCalls).then(() => {});
+  if ("changeId" in experiment && experiment.changeId && ctx.global.recordChangeId)
+    ctx.global.recordChangeId(experiment.changeId);
+  return {
+    result,
+    trackingCall,
+  };
 }
 //@ chunk-aepeg2w5.js:31779-31941 esm-fingerprint
-function getFeatureResult(e, n, r, s, h, y, S) {
-  let w = { value: r, on: !!r, off: !r, source: s, ruleId: h || "" };
-  if (y) w.experiment = y;
-  if (S) w.experimentResult = S;
-  if (s !== "override") CM(e, n, w);
-  return w;
+function getFeatureResult(ctx, key, value, source, ruleId, experiment, result) {
+  let ret = {
+    value,
+    on: !!value,
+    off: !value,
+    source,
+    ruleId: ruleId || "",
+  };
+  if (experiment) ret.experiment = experiment;
+  if (result) ret.experimentResult = result;
+  if (source !== "override") onFeatureUsage(ctx, key, ret);
+  return ret;
 }
 //@ chunk-aepeg2w5.js:31941-32014 esm-fingerprint
-function z_(e) {
-  return { ...e.user.attributes, ...e.user.attributeOverrides };
+function getAttributes(ctx) {
+  return {
+    ...ctx.user.attributes,
+    ...ctx.user.attributeOverrides,
+  };
 }
 //@ chunk-aepeg2w5.js:32014-32075 esm-fingerprint
-function j_(e, n) {
-  return Yn(z_(n), e, n.global.savedGroups || {});
+function conditionPasses(condition, ctx) {
+  return evalCondition(getAttributes(ctx), condition, ctx.global.savedGroups || {});
 }
 //@ chunk-aepeg2w5.js:32075-32256 esm-fingerprint
-function V_(e, n) {
-  return e.some((r) => {
-    let { hashValue: hashValue } = wr(n, r.attribute);
-    if (!hashValue) return !0;
-    let h = Jo(r.seed, hashValue, r.hashVersion || 2);
-    if (h === null) return !0;
-    return !r.ranges.some((range) => Rs(h, range));
+function isFilteredOut(filters, ctx) {
+  return filters.some((filter) => {
+    let { hashValue } = getHashAttribute(ctx, filter.attribute);
+    if (!hashValue) return true;
+    let n = hash(filter.seed, hashValue, filter.hashVersion || 2);
+    if (n === null) return true;
+    return !filter.ranges.some((r) => inRange(n, r));
   });
 }
 //@ chunk-aepeg2w5.js:32256-32450 esm-fingerprint
-function RM(e, n, r, s, h, y, S) {
-  if (!h && y === void 0) return !0;
-  if (!h && y === 0) return !1;
-  let { hashValue: hashValue } = wr(e, r, s);
-  if (!hashValue) return !1;
-  let R = Jo(n, hashValue, S || 1);
-  if (R === null) return !1;
-  return h ? Rs(R, h) : y !== void 0 ? R <= y : !0;
+function isIncludedInRollout(ctx, seed, hashAttribute, fallbackAttribute, range, coverage, hashVersion) {
+  if (!range && coverage === undefined) return true;
+  if (!range && coverage === 0) return false;
+  let { hashValue } = getHashAttribute(ctx, hashAttribute, fallbackAttribute);
+  if (!hashValue) return false;
+  let n = hash(seed, hashValue, hashVersion || 1);
+  if (n === null) return false;
+  return range ? inRange(n, range) : coverage !== undefined ? n <= coverage : true;
 }
 //@ chunk-aepeg2w5.js:32450-32940 esm-fingerprint
-function ze(e, n, r, s, h, y, S) {
-  let w = !0;
-  if (r < 0 || r >= n.variations.length) ((r = 0), (w = !1));
-  let { hashAttribute: hashAttribute, hashValue: hashValue } = wr(
-      e,
-      n.hashAttribute,
-      e.user.saveStickyBucketAssignmentDoc && !n.disableStickyBucketing ? n.fallbackAttribute : void 0,
-    ),
-    P = n.meta ? n.meta[r] : {},
-    F = {
-      key: P.key || "" + r,
-      featureId: h,
-      inExperiment: w,
-      hashUsed: s,
-      variationId: r,
-      value: n.variations[r],
-      hashAttribute: hashAttribute,
-      hashValue: hashValue,
-      stickyBucketUsed: !!S,
-    };
-  if (P.name) F.name = P.name;
-  if (y !== void 0) F.bucket = y;
-  if (P.passthrough) F.passthrough = P.passthrough;
-  return F;
+function getExperimentResult(ctx, experiment, variationIndex, hashUsed, featureId, bucket, stickyBucketUsed) {
+  let inExperiment = true;
+  if (variationIndex < 0 || variationIndex >= experiment.variations.length) {
+    variationIndex = 0;
+    inExperiment = false;
+  }
+  let { hashAttribute, hashValue } = getHashAttribute(
+    ctx,
+    experiment.hashAttribute,
+    ctx.user.saveStickyBucketAssignmentDoc && !experiment.disableStickyBucketing
+      ? experiment.fallbackAttribute
+      : undefined,
+  );
+  let meta = experiment.meta ? experiment.meta[variationIndex] : {};
+  let res = {
+    key: meta.key || "" + variationIndex,
+    featureId,
+    inExperiment,
+    hashUsed,
+    variationId: variationIndex,
+    value: experiment.variations[variationIndex],
+    hashAttribute,
+    hashValue,
+    stickyBucketUsed: !!stickyBucketUsed,
+  };
+  if (meta.name) res.name = meta.name;
+  if (bucket !== undefined) res.bucket = bucket;
+  if (meta.passthrough) res.passthrough = meta.passthrough;
+  return res;
 }
 //@ chunk-aepeg2w5.js:32940-33081 esm-fingerprint
-function xM(e, n) {
-  let key = e.key,
-    overrides = n.global.overrides;
-  if (overrides && overrides[key]) {
-    if (((e = Object.assign({}, e, overrides[key])), typeof e.url === "string")) e.url = Fd(e.url);
+function mergeOverrides(experiment, ctx) {
+  let key = experiment.key;
+  let o = ctx.global.overrides;
+  if (o && o[key]) {
+    experiment = Object.assign({}, experiment, o[key]);
+    if (typeof experiment.url === "string") experiment.url = getUrlRegExp(experiment.url);
   }
-  return e;
+  return experiment;
 }
 //@ chunk-aepeg2w5.js:33081-33212 esm-fingerprint
-function wr(e, n, r) {
-  let s = n || "id",
-    h = "",
-    y = z_(e);
-  if (y[s]) h = y[s];
-  if (!h && r) {
-    if (y[r]) h = y[r];
-    if (h) s = r;
+function getHashAttribute(ctx, attr, fallback) {
+  let hashAttribute = attr || "id";
+  let hashValue = "";
+  let attributes = getAttributes(ctx);
+  if (attributes[hashAttribute]) hashValue = attributes[hashAttribute];
+  if (!hashValue && fallback) {
+    if (attributes[fallback]) hashValue = attributes[fallback];
+    if (hashValue) hashAttribute = fallback;
   }
-  return { hashAttribute: s, hashValue: h };
+  return {
+    hashAttribute,
+    hashValue,
+  };
 }
 //@ chunk-aepeg2w5.js:33212-33373 esm-fingerprint
-function OM(e, n) {
-  let url = n.user.url;
-  if (!url) return !1;
-  let replaced = url.replace(/^https?:\/\//, "").replace(/^[^/]*\//, "/");
-  if (e.test(url)) return !0;
-  if (e.test(replaced)) return !0;
-  return !1;
+function urlIsValid(urlRegex, ctx) {
+  let url = ctx.user.url;
+  if (!url) return false;
+  let pathOnly = url.replace(/^https?:\/\//, "").replace(/^[^/]*\//, "/");
+  if (urlRegex.test(url)) return true;
+  if (urlRegex.test(pathOnly)) return true;
+  return false;
 }
 //@ chunk-aepeg2w5.js:33373-33472 esm-fingerprint
-function PM(e, n) {
-  let r = n.global.groups || {};
-  for (let s = 0; s < e.length; s++) if (r[e[s]]) return !0;
-  return !1;
+function hasGroupOverlap(expGroups, ctx) {
+  let groups = ctx.global.groups || {};
+  for (let i = 0; i < expGroups.length; i++) if (groups[expGroups[i]]) return true;
+  return false;
 }
 //@ chunk-aepeg2w5.js:33472-33889 esm-fingerprint
-function MM(e) {
+function getStickyBucketVariation(_ref) {
   let {
-    ctx: ctx,
-    expKey: expKey,
-    expBucketVersion: expBucketVersion,
-    expHashAttribute: expHashAttribute,
-    expFallbackAttribute: expFallbackAttribute,
-    expMinBucketVersion: expMinBucketVersion,
-    expMeta: expMeta,
-  } = e;
-  ((expBucketVersion = expBucketVersion || 0),
-    (expMinBucketVersion = expMinBucketVersion || 0),
-    (expHashAttribute = expHashAttribute || "id"),
-    (expMeta = expMeta || []));
-  let R = ec(expKey, expBucketVersion),
-    x = IM(ctx, expHashAttribute, expFallbackAttribute);
+    ctx,
+    expKey,
+    expBucketVersion,
+    expHashAttribute,
+    expFallbackAttribute,
+    expMinBucketVersion,
+    expMeta,
+  } = _ref;
+  expBucketVersion = expBucketVersion || 0;
+  expMinBucketVersion = expMinBucketVersion || 0;
+  expHashAttribute = expHashAttribute || "id";
+  expMeta = expMeta || [];
+  let id = getStickyBucketExperimentKey(expKey, expBucketVersion);
+  let assignments = getStickyBucketAssignments(ctx, expHashAttribute, expFallbackAttribute);
   if (expMinBucketVersion > 0)
-    for (let L = 0; L <= expMinBucketVersion; L++) {
-      let G = ec(expKey, L);
-      if (x[G] !== void 0) return { variation: -1, versionIsBlocked: !0 };
+    for (let i = 0; i <= expMinBucketVersion; i++) {
+      let blockedKey = getStickyBucketExperimentKey(expKey, i);
+      if (assignments[blockedKey] !== undefined)
+        return {
+          variation: -1,
+          versionIsBlocked: true,
+        };
     }
-  let P = x[R];
-  if (P === void 0) return { variation: -1 };
-  let index = expMeta.findIndex((L) => L.key === P);
-  if (index < 0) return { variation: -1 };
-  return { variation: index };
+  let variationKey = assignments[id];
+  if (variationKey === undefined)
+    return {
+      variation: -1,
+    };
+  let variation = expMeta.findIndex((m) => m.key === variationKey);
+  if (variation < 0)
+    return {
+      variation: -1,
+    };
+  return {
+    variation,
+  };
 }
 //@ chunk-aepeg2w5.js:33889-33933 esm-layout
-function ec(e, n) {
-  return ((n = n || 0), `${e}__${n}`);
+function getStickyBucketExperimentKey(experimentKey, experimentBucketVersion) {
+  experimentBucketVersion = experimentBucketVersion || 0;
+  return `${experimentKey}__${experimentBucketVersion}`;
 }
 //@ chunk-aepeg2w5.js:33933-33969 esm-layout
-function rc(e, n) {
-  return `${e}||${n}`;
+function getStickyBucketAttributeKey(attributeName, attributeValue) {
+  return `${attributeName}||${attributeValue}`;
 }
 //@ chunk-aepeg2w5.js:33969-34386 esm-fingerprint
-function IM(e, n, r) {
-  if (!e.user.stickyBucketAssignmentDocs) return {};
-  let { hashAttribute: hashAttribute, hashValue: hashValue } = wr(e, n),
-    y = rc(hashAttribute, Zo(hashValue)),
-    { hashAttribute: hashAttribute_2, hashValue: hashValue_2 } = wr(e, r),
-    R = hashValue_2 ? rc(hashAttribute_2, Zo(hashValue_2)) : null,
-    x = {};
-  if (R && e.user.stickyBucketAssignmentDocs[R])
-    Object.assign(x, e.user.stickyBucketAssignmentDocs[R].assignments || {});
-  if (e.user.stickyBucketAssignmentDocs[y])
-    Object.assign(x, e.user.stickyBucketAssignmentDocs[y].assignments || {});
-  return x;
+function getStickyBucketAssignments(ctx, expHashAttribute, expFallbackAttribute) {
+  if (!ctx.user.stickyBucketAssignmentDocs) return {};
+  let { hashAttribute, hashValue } = getHashAttribute(ctx, expHashAttribute);
+  let hashKey = getStickyBucketAttributeKey(hashAttribute, toString(hashValue));
+  let { hashAttribute: fallbackAttribute, hashValue: fallbackValue } = getHashAttribute(
+    ctx,
+    expFallbackAttribute,
+  );
+  let fallbackKey = fallbackValue
+    ? getStickyBucketAttributeKey(fallbackAttribute, toString(fallbackValue))
+    : null;
+  let assignments = {};
+  if (fallbackKey && ctx.user.stickyBucketAssignmentDocs[fallbackKey])
+    Object.assign(assignments, ctx.user.stickyBucketAssignmentDocs[fallbackKey].assignments || {});
+  if (ctx.user.stickyBucketAssignmentDocs[hashKey])
+    Object.assign(assignments, ctx.user.stickyBucketAssignmentDocs[hashKey].assignments || {});
+  return assignments;
 }
 //@ chunk-aepeg2w5.js:34386-34682 esm-fingerprint
-function DM(e, n, r, s) {
-  let h = rc(n, r),
-    y =
-      e.user.stickyBucketAssignmentDocs && e.user.stickyBucketAssignmentDocs[h]
-        ? e.user.stickyBucketAssignmentDocs[h].assignments || {}
-        : {},
-    S = { ...y, ...s },
-    w = JSON.stringify(y) !== JSON.stringify(S);
-  return { key: h, doc: { attributeName: n, attributeValue: r, assignments: S }, changed: w };
+function generateStickyBucketAssignmentDoc(ctx, attributeName, attributeValue, assignments) {
+  let key = getStickyBucketAttributeKey(attributeName, attributeValue);
+  let existingAssignments =
+    ctx.user.stickyBucketAssignmentDocs && ctx.user.stickyBucketAssignmentDocs[key]
+      ? ctx.user.stickyBucketAssignmentDocs[key].assignments || {}
+      : {};
+  let newAssignments = {
+    ...existingAssignments,
+    ...assignments,
+  };
+  let changed = JSON.stringify(existingAssignments) !== JSON.stringify(newAssignments);
+  return {
+    key,
+    doc: {
+      attributeName,
+      attributeValue,
+      assignments: newAssignments,
+    },
+    changed,
+  };
 }
 //@ chunk-aepeg2w5.js:34682-35107 esm-fingerprint
-function NM(e, n) {
-  let r = new Set(),
-    s = n && n.features ? n.features : e.global.features || {},
-    h = n && n.experiments ? n.experiments : e.global.experiments || [];
-  return (
-    Object.keys(s).forEach((y) => {
-      let S = s[y];
-      if (S.rules) {
-        for (let rule of S.rules)
-          if (rule.variations) {
-            if ((r.add(rule.hashAttribute || "id"), rule.fallbackAttribute)) r.add(rule.fallbackAttribute);
-          }
-      }
-    }),
-    h.map((y) => {
-      if ((r.add(y.hashAttribute || "id"), y.fallbackAttribute)) r.add(y.fallbackAttribute);
-    }),
-    Array.from(r)
-  );
+function deriveStickyBucketIdentifierAttributes(ctx, data) {
+  let attributes = new Set();
+  let features = data && data.features ? data.features : ctx.global.features || {};
+  let experiments = data && data.experiments ? data.experiments : ctx.global.experiments || [];
+  Object.keys(features).forEach((id) => {
+    let feature = features[id];
+    if (feature.rules) {
+      for (let rule of feature.rules)
+        if (rule.variations) {
+          attributes.add(rule.hashAttribute || "id");
+          if (rule.fallbackAttribute) attributes.add(rule.fallbackAttribute);
+        }
+    }
+  });
+  experiments.map((experiment) => {
+    attributes.add(experiment.hashAttribute || "id");
+    if (experiment.fallbackAttribute) attributes.add(experiment.fallbackAttribute);
+  });
+  return Array.from(attributes);
 }
 //@ chunk-aepeg2w5.js:35107-35176 esm-fingerprint
-async function Y_(e, n, r) {
-  let s = oc(e, r);
-  return n.getAllAssignments(s);
+async function getAllStickyBucketAssignmentDocs(ctx, stickyBucketService, data) {
+  let attributes = getStickyBucketAttributes(ctx, data);
+  return stickyBucketService.getAllAssignments(attributes);
 }
 //@ chunk-aepeg2w5.js:35176-35271 esm-fingerprint
-function oc(e, n) {
-  let r = {};
-  return (
-    NM(e, n).forEach((h) => {
-      let { hashValue: hashValue } = wr(e, h);
-      r[h] = Zo(hashValue);
-    }),
-    r
-  );
+function getStickyBucketAttributes(ctx, n) {
+  let attributes = {};
+  deriveStickyBucketIdentifierAttributes(ctx, n).forEach((attr) => {
+    let { hashValue } = getHashAttribute(ctx, attr);
+    attributes[attr] = toString(hashValue);
+  });
+  return attributes;
 }
 //@ chunk-aepeg2w5.js:35271-35752 esm-fingerprint
-async function q_(e, n, r) {
-  if (((e = { ...e }), e.encryptedFeatures)) {
+async function decryptPayload(data, decryptionKey, subtle) {
+  data = {
+    ...data,
+  };
+  if (data.encryptedFeatures) {
     try {
-      e.features = JSON.parse(await br(e.encryptedFeatures, n, r));
-    } catch (error) {
-      console.error(error);
+      data.features = JSON.parse(await decrypt(data.encryptedFeatures, decryptionKey, subtle));
+    } catch (e) {
+      console.error(e);
     }
-    delete e.encryptedFeatures;
+    delete data.encryptedFeatures;
   }
-  if (e.encryptedExperiments) {
+  if (data.encryptedExperiments) {
     try {
-      e.experiments = JSON.parse(await br(e.encryptedExperiments, n, r));
-    } catch (error) {
-      console.error(error);
+      data.experiments = JSON.parse(await decrypt(data.encryptedExperiments, decryptionKey, subtle));
+    } catch (e) {
+      console.error(e);
     }
-    delete e.encryptedExperiments;
+    delete data.encryptedExperiments;
   }
-  if (e.encryptedSavedGroups) {
+  if (data.encryptedSavedGroups) {
     try {
-      e.savedGroups = JSON.parse(await br(e.encryptedSavedGroups, n, r));
-    } catch (error) {
-      console.error(error);
+      data.savedGroups = JSON.parse(await decrypt(data.encryptedSavedGroups, decryptionKey, subtle));
+    } catch (e) {
+      console.error(e);
     }
-    delete e.encryptedSavedGroups;
+    delete data.encryptedSavedGroups;
   }
-  return e;
+  return data;
 }
 //@ chunk-aepeg2w5.js:35752-36003 esm-fingerprint
-function X_(e) {
-  let n = e.apiHost || "https://cdn.growthbook.io";
+function getApiHosts(options) {
+  let defaultHost = options.apiHost || "https://cdn.growthbook.io";
   return {
-    apiHost: n.replace(/\/*$/, ""),
-    streamingHost: (e.streamingHost || n).replace(/\/*$/, ""),
-    apiRequestHeaders: e.apiHostRequestHeaders,
-    streamingHostRequestHeaders: e.streamingHostRequestHeaders,
+    apiHost: defaultHost.replace(/\/*$/, ""),
+    streamingHost: (options.streamingHost || defaultHost).replace(/\/*$/, ""),
+    apiRequestHeaders: options.apiHostRequestHeaders,
+    streamingHostRequestHeaders: options.streamingHostRequestHeaders,
   };
 }
 //@ chunk-aepeg2w5.js:36003-36075 esm-fingerprint
-function qs(e, n) {
-  return n.hashAttribute + n.hashValue + e.key + n.variationId;
+function getExperimentDedupeKey(experiment, result) {
+  return result.hashAttribute + result.hashValue + experiment.key + result.variationId;
 }
 //@ chunk-aepeg2w5.js:36075-36129 esm-layout
-var to = typeof window < "u" && typeof document < "u",
-  FM = __();
+var isBrowser = typeof window !== "undefined" && typeof document !== "undefined";
+var SDK_VERSION$1 = loadSDKVersion();
 //@ chunk-aepeg2w5.js:36129-50738 esm-fingerprint
-class Js {
-  constructor(e) {
-    if (
-      ((e = e || {}),
-      (this.version = FM),
-      (this._options = this.context = e),
-      (this._renderer = e.renderer || null),
-      (this._trackedExperiments = new Set()),
-      (this._completedChangeIds = new Set()),
-      (this._trackedFeatures = {}),
-      (this.debug = !!e.debug),
-      (this._subscriptions = new Set()),
-      (this.ready = !1),
-      (this._assigned = new Map()),
-      (this._activeAutoExperiments = new Map()),
-      (this._triggeredExpKeys = new Set()),
-      (this._initialized = !1),
-      (this._redirectedUrl = ""),
-      (this._deferredTrackingCalls = new Map()),
-      (this._autoExperimentsAllowed = !e.disableExperimentsOnLoad),
-      (this._destroyCallbacks = []),
-      (this.logs = []),
-      (this.log = this.log.bind(this)),
-      (this._saveDeferredTrack = this._saveDeferredTrack.bind(this)),
-      (this._fireSubscriptions = this._fireSubscriptions.bind(this)),
-      (this._recordChangedId = this._recordChangedId.bind(this)),
-      e.remoteEval)
-    ) {
-      if (e.decryptionKey) throw Error("Encryption is not available for remoteEval");
-      if (!e.clientKey) throw Error("Missing clientKey");
-      let n = !1;
+class GrowthBook {
+  constructor(options) {
+    options = options || {};
+    this.version = SDK_VERSION$1;
+    this._options = this.context = options;
+    this._renderer = options.renderer || null;
+    this._trackedExperiments = new Set();
+    this._completedChangeIds = new Set();
+    this._trackedFeatures = {};
+    this.debug = !!options.debug;
+    this._subscriptions = new Set();
+    this.ready = false;
+    this._assigned = new Map();
+    this._activeAutoExperiments = new Map();
+    this._triggeredExpKeys = new Set();
+    this._initialized = false;
+    this._redirectedUrl = "";
+    this._deferredTrackingCalls = new Map();
+    this._autoExperimentsAllowed = !options.disableExperimentsOnLoad;
+    this._destroyCallbacks = [];
+    this.logs = [];
+    this.log = this.log.bind(this);
+    this._saveDeferredTrack = this._saveDeferredTrack.bind(this);
+    this._fireSubscriptions = this._fireSubscriptions.bind(this);
+    this._recordChangedId = this._recordChangedId.bind(this);
+    if (options.remoteEval) {
+      if (options.decryptionKey) throw Error("Encryption is not available for remoteEval");
+      if (!options.clientKey) throw Error("Missing clientKey");
+      let isGbHost = false;
       try {
-        n = !!new URL(e.apiHost || "").hostname.match(/growthbook\.io$/i);
-      } catch (error) {}
-      if (n) throw Error("Cannot use remoteEval on GrowthBook Cloud");
-    } else if (e.cacheKeyAttributes) throw Error("cacheKeyAttributes are only used for remoteEval");
-    if (e.stickyBucketService) {
-      let stickyBucketService = e.stickyBucketService;
-      this._saveStickyBucketAssignmentDoc = (r) => stickyBucketService.saveAssignments(r);
+        isGbHost = !!new URL(options.apiHost || "").hostname.match(/growthbook\.io$/i);
+      } catch (e) {}
+      if (isGbHost) throw Error("Cannot use remoteEval on GrowthBook Cloud");
+    } else if (options.cacheKeyAttributes) throw Error("cacheKeyAttributes are only used for remoteEval");
+    if (options.stickyBucketService) {
+      let s = options.stickyBucketService;
+      this._saveStickyBucketAssignmentDoc = (doc) => s.saveAssignments(doc);
     }
-    if (e.plugins) for (let plugin of e.plugins) plugin(this);
-    if (e.features) this.ready = !0;
-    if (to && e.enableDevMode) ((window._growthbook = this), document.dispatchEvent(new Event("gbloaded")));
-    if (e.experiments) ((this.ready = !0), this._updateAllAutoExperiments());
+    if (options.plugins) for (let plugin of options.plugins) plugin(this);
+    if (options.features) this.ready = true;
+    if (isBrowser && options.enableDevMode) {
+      window._growthbook = this;
+      document.dispatchEvent(new Event("gbloaded"));
+    }
+    if (options.experiments) {
+      this.ready = true;
+      this._updateAllAutoExperiments();
+    }
     if (this._options.stickyBucketService && this._options.stickyBucketAssignmentDocs)
       for (let key in this._options.stickyBucketAssignmentDocs) {
-        let r = this._options.stickyBucketAssignmentDocs[key];
-        if (r) this._options.stickyBucketService.saveAssignments(r).catch(() => {});
+        let doc = this._options.stickyBucketAssignmentDocs[key];
+        if (doc) this._options.stickyBucketService.saveAssignments(doc).catch(() => {});
       }
     if (this.ready) this.refreshStickyBuckets(this.getPayload());
   }
-  async setPayload(e) {
-    this._payload = e;
-    let n = await q_(e, this._options.decryptionKey);
-    if (((this._decryptedPayload = n), await this.refreshStickyBuckets(n), n.features))
-      this._options.features = n.features;
-    if (n.savedGroups) this._options.savedGroups = n.savedGroups;
-    if (n.experiments) ((this._options.experiments = n.experiments), this._updateAllAutoExperiments());
-    ((this.ready = !0), this._render());
+  async setPayload(payload) {
+    this._payload = payload;
+    let data = await decryptPayload(payload, this._options.decryptionKey);
+    this._decryptedPayload = data;
+    await this.refreshStickyBuckets(data);
+    if (data.features) this._options.features = data.features;
+    if (data.savedGroups) this._options.savedGroups = data.savedGroups;
+    if (data.experiments) {
+      this._options.experiments = data.experiments;
+      this._updateAllAutoExperiments();
+    }
+    this.ready = true;
+    this._render();
   }
-  initSync(e) {
-    this._initialized = !0;
-    let payload = e.payload;
+  initSync(options) {
+    this._initialized = true;
+    let payload = options.payload;
     if (payload.encryptedExperiments || payload.encryptedFeatures)
       throw Error("initSync does not support encrypted payloads");
     if (this._options.stickyBucketService && !this._options.stickyBucketAssignmentDocs)
@@ -1636,63 +2033,89 @@ class Js {
         this._options.stickyBucketService,
         payload,
       );
-    if (((this._payload = payload), (this._decryptedPayload = payload), payload.features))
-      this._options.features = payload.features;
-    if (payload.experiments)
-      ((this._options.experiments = payload.experiments), this._updateAllAutoExperiments());
-    return ((this.ready = !0), Ms(this, e), this);
+    this._payload = payload;
+    this._decryptedPayload = payload;
+    if (payload.features) this._options.features = payload.features;
+    if (payload.experiments) {
+      this._options.experiments = payload.experiments;
+      this._updateAllAutoExperiments();
+    }
+    this.ready = true;
+    startStreaming(this, options);
+    return this;
   }
-  async init(e) {
-    if (((this._initialized = !0), (e = e || {}), e.cacheSettings)) Ud(e.cacheSettings);
-    if (e.payload) return (await this.setPayload(e.payload), Ms(this, e), { success: !0, source: "init" });
-    else {
-      let { data: n, ...r } = await this._refresh({ ...e, allowStale: !0 });
-      return (Ms(this, e), await this.setPayload(n || {}), r);
+  async init(options) {
+    this._initialized = true;
+    options = options || {};
+    if (options.cacheSettings) configureCache(options.cacheSettings);
+    if (options.payload) {
+      await this.setPayload(options.payload);
+      startStreaming(this, options);
+      return {
+        success: true,
+        source: "init",
+      };
+    } else {
+      let { data, ...res } = await this._refresh({
+        ...options,
+        allowStale: true,
+      });
+      startStreaming(this, options);
+      await this.setPayload(data || {});
+      return res;
     }
   }
-  async loadFeatures(e) {
-    ((e = e || {}),
-      await this.init({
-        skipCache: e.skipCache,
-        timeout: e.timeout,
-        streaming:
-          (this._options.backgroundSync ?? !0) && (e.autoRefresh || this._options.subscribeToChanges),
-      }));
+  async loadFeatures(options) {
+    options = options || {};
+    await this.init({
+      skipCache: options.skipCache,
+      timeout: options.timeout,
+      streaming:
+        (this._options.backgroundSync ?? true) && (options.autoRefresh || this._options.subscribeToChanges),
+    });
   }
-  async refreshFeatures(e) {
-    let _refresh = await this._refresh({ ...(e || {}), allowStale: !1 });
-    if (_refresh.data) await this.setPayload(_refresh.data);
+  async refreshFeatures(options) {
+    let res = await this._refresh({
+      ...(options || {}),
+      allowStale: false,
+    });
+    if (res.data) await this.setPayload(res.data);
   }
   getApiInfo() {
     return [this.getApiHosts().apiHost, this.getClientKey()];
   }
   getApiHosts() {
-    return X_(this._options);
+    return getApiHosts(this._options);
   }
   getClientKey() {
     return this._options.clientKey || "";
   }
   getPayload() {
-    return this._payload || { features: this.getFeatures(), experiments: this.getExperiments() };
+    return (
+      this._payload || {
+        features: this.getFeatures(),
+        experiments: this.getExperiments(),
+      }
+    );
   }
   getDecryptedPayload() {
     return this._decryptedPayload || this.getPayload();
   }
   isRemoteEval() {
-    return this._options.remoteEval || !1;
+    return this._options.remoteEval || false;
   }
   getCacheKeyAttributes() {
     return this._options.cacheKeyAttributes;
   }
-  async _refresh(e) {
-    let { timeout: timeout, skipCache: skipCache, allowStale: allowStale, streaming: streaming } = e;
+  async _refresh(_ref) {
+    let { timeout, skipCache, allowStale, streaming } = _ref;
     if (!this._options.clientKey) throw Error("Missing clientKey");
-    return S_({
+    return refreshFeatures({
       instance: this,
-      timeout: timeout,
+      timeout,
       skipCache: skipCache || this._options.disableCache,
-      allowStale: allowStale,
-      backgroundSync: streaming ?? this._options.backgroundSync ?? !0,
+      allowStale,
+      backgroundSync: streaming ?? this._options.backgroundSync ?? true,
     });
   }
   _render() {
@@ -1703,61 +2126,83 @@ class Js {
         console.error("Failed to render", error);
       }
   }
-  setFeatures(e) {
-    ((this._options.features = e), (this.ready = !0), this._render());
+  setFeatures(features) {
+    this._options.features = features;
+    this.ready = true;
+    this._render();
   }
-  async setEncryptedFeatures(e, n, r) {
-    let s = await br(e, n || this._options.decryptionKey, r);
-    this.setFeatures(JSON.parse(s));
+  async setEncryptedFeatures(encryptedString, decryptionKey, subtle) {
+    let featuresJSON = await decrypt(encryptedString, decryptionKey || this._options.decryptionKey, subtle);
+    this.setFeatures(JSON.parse(featuresJSON));
   }
-  setExperiments(e) {
-    ((this._options.experiments = e), (this.ready = !0), this._updateAllAutoExperiments());
+  setExperiments(experiments) {
+    this._options.experiments = experiments;
+    this.ready = true;
+    this._updateAllAutoExperiments();
   }
-  async setEncryptedExperiments(e, n, r) {
-    let s = await br(e, n || this._options.decryptionKey, r);
-    this.setExperiments(JSON.parse(s));
+  async setEncryptedExperiments(encryptedString, decryptionKey, subtle) {
+    let experimentsJSON = await decrypt(
+      encryptedString,
+      decryptionKey || this._options.decryptionKey,
+      subtle,
+    );
+    this.setExperiments(JSON.parse(experimentsJSON));
   }
-  async setAttributes(e) {
-    if (((this._options.attributes = e), this._options.stickyBucketService))
-      await this.refreshStickyBuckets();
+  async setAttributes(attributes) {
+    this._options.attributes = attributes;
+    if (this._options.stickyBucketService) await this.refreshStickyBuckets();
     if (this._options.remoteEval) {
       await this._refreshForRemoteEval();
       return;
     }
-    (this._render(), this._updateAllAutoExperiments());
+    this._render();
+    this._updateAllAutoExperiments();
   }
-  async updateAttributes(e) {
-    return this.setAttributes({ ...this._options.attributes, ...e });
+  async updateAttributes(attributes) {
+    return this.setAttributes({
+      ...this._options.attributes,
+      ...attributes,
+    });
   }
-  async setAttributeOverrides(e) {
-    if (((this._options.attributeOverrides = e), this._options.stickyBucketService))
-      await this.refreshStickyBuckets();
+  async setAttributeOverrides(overrides) {
+    this._options.attributeOverrides = overrides;
+    if (this._options.stickyBucketService) await this.refreshStickyBuckets();
     if (this._options.remoteEval) {
       await this._refreshForRemoteEval();
       return;
     }
-    (this._render(), this._updateAllAutoExperiments());
+    this._render();
+    this._updateAllAutoExperiments();
   }
-  async setForcedVariations(e) {
-    if (((this._options.forcedVariations = e || {}), this._options.remoteEval)) {
+  async setForcedVariations(vars) {
+    this._options.forcedVariations = vars || {};
+    if (this._options.remoteEval) {
       await this._refreshForRemoteEval();
       return;
     }
-    (this._render(), this._updateAllAutoExperiments());
+    this._render();
+    this._updateAllAutoExperiments();
   }
-  setForcedFeatures(e) {
-    ((this._options.forcedFeatureValues = e), this._render());
+  setForcedFeatures(map) {
+    this._options.forcedFeatureValues = map;
+    this._render();
   }
-  async setURL(e) {
-    if (e === this._options.url) return;
-    if (((this._options.url = e), (this._redirectedUrl = ""), this._options.remoteEval)) {
-      (await this._refreshForRemoteEval(), this._updateAllAutoExperiments(!0));
+  async setURL(url) {
+    if (url === this._options.url) return;
+    this._options.url = url;
+    this._redirectedUrl = "";
+    if (this._options.remoteEval) {
+      await this._refreshForRemoteEval();
+      this._updateAllAutoExperiments(true);
       return;
     }
-    this._updateAllAutoExperiments(!0);
+    this._updateAllAutoExperiments(true);
   }
   getAttributes() {
-    return { ...this._options.attributes, ...this._options.attributeOverrides };
+    return {
+      ...this._options.attributes,
+      ...this._options.attributeOverrides,
+    };
   }
   getForcedVariations() {
     return this._options.forcedVariations || {};
@@ -1780,98 +2225,102 @@ class Js {
   getCompletedChangeIds() {
     return Array.from(this._completedChangeIds);
   }
-  subscribe(e) {
-    return (
-      this._subscriptions.add(e),
-      () => {
-        this._subscriptions.delete(e);
-      }
-    );
+  subscribe(cb) {
+    this._subscriptions.add(cb);
+    return () => {
+      this._subscriptions.delete(cb);
+    };
   }
   async _refreshForRemoteEval() {
     if (!this._options.remoteEval) return;
     if (!this._initialized) return;
-    let _refresh = await this._refresh({ allowStale: !1 });
-    if (_refresh.data) await this.setPayload(_refresh.data);
+    let res = await this._refresh({
+      allowStale: false,
+    });
+    if (res.data) await this.setPayload(res.data);
   }
   getAllResults() {
     return new Map(this._assigned);
   }
-  onDestroy(e) {
-    this._destroyCallbacks.push(e);
+  onDestroy(cb) {
+    this._destroyCallbacks.push(cb);
   }
   isDestroyed() {
     return !!this._destroyed;
   }
   destroy() {
-    if (
-      ((this._destroyed = !0),
-      this._destroyCallbacks.forEach((_destroyCallback) => {
-        try {
-          _destroyCallback();
-        } catch (error) {
-          console.error(error);
-        }
-      }),
-      this._subscriptions.clear(),
-      this._assigned.clear(),
-      this._trackedExperiments.clear(),
-      this._completedChangeIds.clear(),
-      this._deferredTrackingCalls.clear(),
-      (this._trackedFeatures = {}),
-      (this._destroyCallbacks = []),
-      (this._payload = void 0),
-      (this._saveStickyBucketAssignmentDoc = void 0),
-      v_(this),
-      (this.logs = []),
-      to && window._growthbook === this)
-    )
-      delete window._growthbook;
-    (this._activeAutoExperiments.forEach((_activeAutoExperiment) => {
-      _activeAutoExperiment.undo();
-    }),
-      this._activeAutoExperiments.clear(),
-      this._triggeredExpKeys.clear());
+    this._destroyed = true;
+    this._destroyCallbacks.forEach((cb) => {
+      try {
+        cb();
+      } catch (e) {
+        console.error(e);
+      }
+    });
+    this._subscriptions.clear();
+    this._assigned.clear();
+    this._trackedExperiments.clear();
+    this._completedChangeIds.clear();
+    this._deferredTrackingCalls.clear();
+    this._trackedFeatures = {};
+    this._destroyCallbacks = [];
+    this._payload = undefined;
+    this._saveStickyBucketAssignmentDoc = undefined;
+    unsubscribe(this);
+    this.logs = [];
+    if (isBrowser && window._growthbook === this) delete window._growthbook;
+    this._activeAutoExperiments.forEach((exp) => {
+      exp.undo();
+    });
+    this._activeAutoExperiments.clear();
+    this._triggeredExpKeys.clear();
   }
-  setRenderer(e) {
-    this._renderer = e;
+  setRenderer(renderer) {
+    this._renderer = renderer;
   }
-  forceVariation(e, n) {
-    if (
-      ((this._options.forcedVariations = this._options.forcedVariations || {}),
-      (this._options.forcedVariations[e] = n),
-      this._options.remoteEval)
-    ) {
+  forceVariation(key, variation) {
+    this._options.forcedVariations = this._options.forcedVariations || {};
+    this._options.forcedVariations[key] = variation;
+    if (this._options.remoteEval) {
       this._refreshForRemoteEval();
       return;
     }
-    (this._updateAllAutoExperiments(), this._render());
+    this._updateAllAutoExperiments();
+    this._render();
   }
-  run(e) {
-    let { result: n } = runExperiment(e, null, this._getEvalContext());
-    return (this._fireSubscriptions(e, n), n);
+  run(experiment) {
+    let { result } = runExperiment(experiment, null, this._getEvalContext());
+    this._fireSubscriptions(experiment, result);
+    return result;
   }
-  triggerExperiment(e) {
-    if ((this._triggeredExpKeys.add(e), !this._options.experiments)) return null;
+  triggerExperiment(key) {
+    this._triggeredExpKeys.add(key);
+    if (!this._options.experiments) return null;
     return this._options.experiments
-      .filter((experiment) => experiment.key === e)
-      .map((r) => this._runAutoExperiment(r))
-      .filter((r) => r !== null);
+      .filter((exp) => exp.key === key)
+      .map((exp) => this._runAutoExperiment(exp))
+      .filter((res) => res !== null);
   }
   triggerAutoExperiments() {
-    ((this._autoExperimentsAllowed = !0), this._updateAllAutoExperiments(!0));
+    this._autoExperimentsAllowed = true;
+    this._updateAllAutoExperiments(true);
   }
   _getEvalContext() {
     return {
       user: this._getUserContext(),
       global: this._getGlobalContext(),
-      stack: { evaluatedFeatures: new Set() },
+      stack: {
+        evaluatedFeatures: new Set(),
+      },
     };
   }
   _getUserContext() {
     return {
       attributes: this._options.user
-        ? { ...this._options.user, ...this._options.attributes }
+        ? {
+            ...this._options.user,
+            ...this._options.attributes,
+          }
         : this._options.attributes,
       enableDevMode: this._options.enableDevMode,
       blockedChangeIds: this._options.blockedChangeIds,
@@ -1898,248 +2347,294 @@ class Js {
       savedGroups: this._options.savedGroups,
       groups: this._options.groups,
       overrides: this._options.overrides,
-      onExperimentEval: this._subscriptions.size > 0 ? this._fireSubscriptions : void 0,
+      onExperimentEval: this._subscriptions.size > 0 ? this._fireSubscriptions : undefined,
       recordChangeId: this._recordChangedId,
       saveDeferredTrack: this._saveDeferredTrack,
       eventLogger: this._options.eventLogger,
     };
   }
-  _runAutoExperiment(e, n) {
-    let r = this._activeAutoExperiments.get(e);
-    if (e.manual && !this._triggeredExpKeys.has(e.key) && !r) return null;
-    let _isAutoExperimentBlockedByContext = this._isAutoExperimentBlockedByContext(e),
-      h,
-      y;
-    if (_isAutoExperimentBlockedByContext) h = ze(this._getEvalContext(), e, -1, !1, "");
-    else
-      (({ result: h, trackingCall: y } = runExperiment(e, null, this._getEvalContext())),
-        this._fireSubscriptions(e, h));
-    let json = JSON.stringify(h.value);
-    if (!n && h.inExperiment && r && r.valueHash === json) return h;
-    if (r) this._undoActiveAutoExperiment(e);
-    if (h.inExperiment) {
-      let w = ei(e);
-      if (w === "redirect" && h.value.urlRedirect && e.urlPatterns) {
-        let R = e.persistQueryString ? h_(this._getContextUrl(), h.value.urlRedirect) : h.value.urlRedirect;
-        if (Qo(R, e.urlPatterns))
-          return (this.log("Skipping redirect because original URL matches redirect URL", { id: e.key }), h);
-        this._redirectedUrl = R;
-        let { navigate: navigate, delay: delay } = this._getNavigateFunction();
+  _runAutoExperiment(experiment, forceRerun) {
+    let existing = this._activeAutoExperiments.get(experiment);
+    if (experiment.manual && !this._triggeredExpKeys.has(experiment.key) && !existing) return null;
+    let isBlocked = this._isAutoExperimentBlockedByContext(experiment);
+    let result;
+    let trackingCall;
+    if (isBlocked) result = getExperimentResult(this._getEvalContext(), experiment, -1, false, "");
+    else {
+      ({ result, trackingCall } = runExperiment(experiment, null, this._getEvalContext()));
+      this._fireSubscriptions(experiment, result);
+    }
+    let valueHash = JSON.stringify(result.value);
+    if (!forceRerun && result.inExperiment && existing && existing.valueHash === valueHash) return result;
+    if (existing) this._undoActiveAutoExperiment(experiment);
+    if (result.inExperiment) {
+      let changeType = getAutoExperimentChangeType(experiment);
+      if (changeType === "redirect" && result.value.urlRedirect && experiment.urlPatterns) {
+        let url = experiment.persistQueryString
+          ? mergeQueryStrings(this._getContextUrl(), result.value.urlRedirect)
+          : result.value.urlRedirect;
+        if (isURLTargeted(url, experiment.urlPatterns)) {
+          this.log("Skipping redirect because original URL matches redirect URL", {
+            id: experiment.key,
+          });
+          return result;
+        }
+        this._redirectedUrl = url;
+        let { navigate, delay } = this._getNavigateFunction();
         if (navigate)
-          if (to)
+          if (isBrowser)
             Promise.all([
-              ...(y ? [xs(y, this._options.maxNavigateDelay ?? 1000)] : []),
-              new Promise((F) => window.setTimeout(F, this._options.navigateDelay ?? delay)),
+              ...(trackingCall ? [promiseTimeout(trackingCall, this._options.maxNavigateDelay ?? 1000)] : []),
+              new Promise((resolve) => window.setTimeout(resolve, this._options.navigateDelay ?? delay)),
             ]).then(() => {
               try {
-                navigate(R);
-              } catch (error) {
-                console.error(error);
+                navigate(url);
+              } catch (e) {
+                console.error(e);
               }
             });
           else
             try {
-              navigate(R);
-            } catch (error) {
-              console.error(error);
+              navigate(url);
+            } catch (e) {
+              console.error(e);
             }
-      } else if (w === "visual") {
-        let R = this._options.applyDomChangesCallback
-          ? this._options.applyDomChangesCallback(h.value)
-          : this._applyDOMChanges(h.value);
-        if (R) this._activeAutoExperiments.set(e, { undo: R, valueHash: json });
+      } else if (changeType === "visual") {
+        let undo = this._options.applyDomChangesCallback
+          ? this._options.applyDomChangesCallback(result.value)
+          : this._applyDOMChanges(result.value);
+        if (undo)
+          this._activeAutoExperiments.set(experiment, {
+            undo,
+            valueHash,
+          });
       }
     }
-    return h;
+    return result;
   }
-  _undoActiveAutoExperiment(e) {
-    let n = this._activeAutoExperiments.get(e);
-    if (n) (n.undo(), this._activeAutoExperiments.delete(e));
+  _undoActiveAutoExperiment(exp) {
+    let data = this._activeAutoExperiments.get(exp);
+    if (data) {
+      data.undo();
+      this._activeAutoExperiments.delete(exp);
+    }
   }
-  _updateAllAutoExperiments(e) {
+  _updateAllAutoExperiments(forceRerun) {
     if (!this._autoExperimentsAllowed) return;
-    let n = this._options.experiments || [],
-      r = new Set(n);
-    this._activeAutoExperiments.forEach((_activeAutoExperiment, h) => {
-      if (!r.has(h)) (_activeAutoExperiment.undo(), this._activeAutoExperiments.delete(h));
+    let experiments = this._options.experiments || [];
+    let keys = new Set(experiments);
+    this._activeAutoExperiments.forEach((v, k) => {
+      if (!keys.has(k)) {
+        v.undo();
+        this._activeAutoExperiments.delete(k);
+      }
     });
-    for (let s of n) {
-      let _runAutoExperiment = this._runAutoExperiment(s, e);
+    for (let exp of experiments) {
+      let result = this._runAutoExperiment(exp, forceRerun);
       if (
-        _runAutoExperiment !== null &&
-        _runAutoExperiment !== void 0 &&
-        _runAutoExperiment.inExperiment &&
-        ei(s) === "redirect"
+        result !== null &&
+        result !== undefined &&
+        result.inExperiment &&
+        getAutoExperimentChangeType(exp) === "redirect"
       )
         break;
     }
   }
-  _fireSubscriptions(e, n) {
-    let key = e.key,
-      s = this._assigned.get(key);
-    if (!s || s.result.inExperiment !== n.inExperiment || s.result.variationId !== n.variationId)
-      (this._assigned.set(key, { experiment: e, result: n }),
-        this._subscriptions.forEach((_subscription) => {
-          try {
-            _subscription(e, n);
-          } catch (error) {
-            console.error(error);
-          }
-        }));
+  _fireSubscriptions(experiment, result) {
+    let key = experiment.key;
+    let prev = this._assigned.get(key);
+    if (
+      !prev ||
+      prev.result.inExperiment !== result.inExperiment ||
+      prev.result.variationId !== result.variationId
+    ) {
+      this._assigned.set(key, {
+        experiment,
+        result,
+      });
+      this._subscriptions.forEach((cb) => {
+        try {
+          cb(experiment, result);
+        } catch (e) {
+          console.error(e);
+        }
+      });
+    }
   }
-  _recordChangedId(e) {
-    this._completedChangeIds.add(e);
+  _recordChangedId(id) {
+    this._completedChangeIds.add(id);
   }
-  isOn(e) {
-    return this.evalFeature(e).on;
+  isOn(key) {
+    return this.evalFeature(key).on;
   }
-  isOff(e) {
-    return this.evalFeature(e).off;
+  isOff(key) {
+    return this.evalFeature(key).off;
   }
-  getFeatureValue(e, n) {
-    let r = this.evalFeature(e).value;
-    return r === null ? n : r;
+  getFeatureValue(key, defaultValue) {
+    let value = this.evalFeature(key).value;
+    return value === null ? defaultValue : value;
   }
-  feature(e) {
-    return this.evalFeature(e);
+  feature(id) {
+    return this.evalFeature(id);
   }
-  evalFeature(e) {
-    return evaluateFeature(e, this._getEvalContext());
+  evalFeature(id) {
+    return evaluateFeature(id, this._getEvalContext());
   }
-  log(e, n) {
+  log(msg, ctx) {
     if (!this.debug) return;
-    if (this._options.log) this._options.log(e, n);
-    else console.log(e, n);
+    if (this._options.log) this._options.log(msg, ctx);
+    else console.log(msg, ctx);
   }
   getDeferredTrackingCalls() {
     return Array.from(this._deferredTrackingCalls.values());
   }
-  setDeferredTrackingCalls(e) {
+  setDeferredTrackingCalls(calls) {
     this._deferredTrackingCalls = new Map(
-      e.filter((n) => n && n.experiment && n.result).map((n) => [qs(n.experiment, n.result), n]),
+      calls
+        .filter((c) => c && c.experiment && c.result)
+        .map((c) => [getExperimentDedupeKey(c.experiment, c.result), c]),
     );
   }
   async fireDeferredTrackingCalls() {
     if (!this._options.trackingCallback) return;
-    let e = [];
-    (this._deferredTrackingCalls.forEach((_deferredTrackingCall) => {
-      if (!_deferredTrackingCall || !_deferredTrackingCall.experiment || !_deferredTrackingCall.result)
-        console.error("Invalid deferred tracking call", { call: _deferredTrackingCall });
-      else
-        e.push(
-          this._options.trackingCallback(_deferredTrackingCall.experiment, _deferredTrackingCall.result),
-        );
-    }),
-      this._deferredTrackingCalls.clear(),
-      await Promise.all(e));
+    let promises = [];
+    this._deferredTrackingCalls.forEach((call) => {
+      if (!call || !call.experiment || !call.result)
+        console.error("Invalid deferred tracking call", {
+          call,
+        });
+      else promises.push(this._options.trackingCallback(call.experiment, call.result));
+    });
+    this._deferredTrackingCalls.clear();
+    await Promise.all(promises);
   }
-  setTrackingCallback(e) {
-    ((this._options.trackingCallback = e), this.fireDeferredTrackingCalls());
+  setTrackingCallback(callback) {
+    this._options.trackingCallback = callback;
+    this.fireDeferredTrackingCalls();
   }
-  setEventLogger(e) {
-    this._options.eventLogger = e;
+  setEventLogger(logger) {
+    this._options.eventLogger = logger;
   }
-  async logEvent(e, n) {
+  async logEvent(eventName, properties) {
     if (this._destroyed) {
       console.error("Cannot log event to destroyed GrowthBook instance");
       return;
     }
     if (this._options.enableDevMode)
-      this.logs.push({ eventName: e, properties: n, timestamp: Date.now().toString(), logType: "event" });
+      this.logs.push({
+        eventName,
+        properties,
+        timestamp: Date.now().toString(),
+        logType: "event",
+      });
     if (this._options.eventLogger)
       try {
-        await this._options.eventLogger(e, n || {}, this._getUserContext());
-      } catch (error) {
-        console.error(error);
+        await this._options.eventLogger(eventName, properties || {}, this._getUserContext());
+      } catch (e) {
+        console.error(e);
       }
     else console.error("No event logger configured");
   }
-  _saveDeferredTrack(e) {
-    this._deferredTrackingCalls.set(qs(e.experiment, e.result), e);
+  _saveDeferredTrack(data) {
+    this._deferredTrackingCalls.set(getExperimentDedupeKey(data.experiment, data.result), data);
   }
   _getContextUrl() {
-    return this._options.url || (to ? window.location.href : "");
+    return this._options.url || (isBrowser ? window.location.href : "");
   }
-  _isAutoExperimentBlockedByContext(e) {
-    let n = ei(e);
-    if (n === "visual") {
-      if (this._options.disableVisualExperiments) return !0;
+  _isAutoExperimentBlockedByContext(experiment) {
+    let changeType = getAutoExperimentChangeType(experiment);
+    if (changeType === "visual") {
+      if (this._options.disableVisualExperiments) return true;
       if (this._options.disableJsInjection) {
-        if (e.variations.some((variation) => variation.js)) return !0;
+        if (experiment.variations.some((v) => v.js)) return true;
       }
-    } else if (n === "redirect") {
-      if (this._options.disableUrlRedirectExperiments) return !0;
+    } else if (changeType === "redirect") {
+      if (this._options.disableUrlRedirectExperiments) return true;
       try {
-        let r = new URL(this._getContextUrl());
-        for (let variation of e.variations) {
-          if (!variation || !variation.urlRedirect) continue;
-          let h = new URL(variation.urlRedirect);
+        let current = new URL(this._getContextUrl());
+        for (let v of experiment.variations) {
+          if (!v || !v.urlRedirect) continue;
+          let url = new URL(v.urlRedirect);
           if (this._options.disableCrossOriginUrlRedirectExperiments) {
-            if (h.protocol !== r.protocol) return !0;
-            if (h.host !== r.host) return !0;
+            if (url.protocol !== current.protocol) return true;
+            if (url.host !== current.host) return true;
           }
         }
-      } catch (error) {
-        return (this.log("Error parsing current or redirect URL", { id: e.key, error: error }), !0);
+      } catch (e) {
+        this.log("Error parsing current or redirect URL", {
+          id: experiment.key,
+          error: e,
+        });
+        return true;
       }
-    } else return !0;
-    if (e.changeId && (this._options.blockedChangeIds || []).includes(e.changeId)) return !0;
-    return !1;
+    } else return true;
+    if (experiment.changeId && (this._options.blockedChangeIds || []).includes(experiment.changeId))
+      return true;
+    return false;
   }
   getRedirectUrl() {
     return this._redirectedUrl;
   }
   _getNavigateFunction() {
-    if (this._options.navigate) return { navigate: this._options.navigate, delay: 0 };
-    else if (to)
+    if (this._options.navigate)
       return {
-        navigate: (e) => {
-          window.location.replace(e);
+        navigate: this._options.navigate,
+        delay: 0,
+      };
+    else if (isBrowser)
+      return {
+        navigate: (url) => {
+          window.location.replace(url);
         },
         delay: 100,
       };
-    return { navigate: null, delay: 0 };
-  }
-  _applyDOMChanges(e) {
-    if (!to) return;
-    let n = [];
-    if (e.css) {
-      let element = document.createElement("style");
-      ((element.innerHTML = e.css), document.head.appendChild(element), n.push(() => element.remove()));
-    }
-    if (e.js) {
-      let element = document.createElement("script");
-      if (((element.innerHTML = e.js), this._options.jsInjectionNonce))
-        element.nonce = this._options.jsInjectionNonce;
-      (document.head.appendChild(element), n.push(() => element.remove()));
-    }
-    if (e.domMutations)
-      e.domMutations.forEach((domMutation) => {
-        n.push(K_.declarative(domMutation).revert);
-      });
-    return () => {
-      n.forEach((r) => r());
+    return {
+      navigate: null,
+      delay: 0,
     };
   }
-  async refreshStickyBuckets(e) {
+  _applyDOMChanges(changes) {
+    if (!isBrowser) return;
+    let undo = [];
+    if (changes.css) {
+      let s = document.createElement("style");
+      s.innerHTML = changes.css;
+      document.head.appendChild(s);
+      undo.push(() => s.remove());
+    }
+    if (changes.js) {
+      let script = document.createElement("script");
+      script.innerHTML = changes.js;
+      if (this._options.jsInjectionNonce) script.nonce = this._options.jsInjectionNonce;
+      document.head.appendChild(script);
+      undo.push(() => script.remove());
+    }
+    if (changes.domMutations)
+      changes.domMutations.forEach((mutation) => {
+        undo.push(K_.declarative(mutation).revert);
+      });
+    return () => {
+      undo.forEach((fn) => fn());
+    };
+  }
+  async refreshStickyBuckets(data) {
     if (this._options.stickyBucketService) {
-      let _getEvalContext = this._getEvalContext(),
-        r = await Y_(_getEvalContext, this._options.stickyBucketService, e);
-      this._options.stickyBucketAssignmentDocs = r;
+      let ctx = this._getEvalContext();
+      let docs = await getAllStickyBucketAssignmentDocs(ctx, this._options.stickyBucketService, data);
+      this._options.stickyBucketAssignmentDocs = docs;
     }
   }
-  generateStickyBucketAssignmentDocsSync(e, n) {
-    if (!("getAllAssignmentsSync" in e)) {
+  generateStickyBucketAssignmentDocsSync(stickyBucketService, payload) {
+    if (!("getAllAssignmentsSync" in stickyBucketService)) {
       console.error("generating StickyBucketAssignmentDocs docs requires StickyBucketServiceSync");
       return;
     }
-    let _getEvalContext = this._getEvalContext(),
-      s = oc(_getEvalContext, n);
-    return e.getAllAssignmentsSync(s);
+    let ctx = this._getEvalContext();
+    let attributes = getStickyBucketAttributes(ctx, payload);
+    return stickyBucketService.getAllAssignmentsSync(attributes);
   }
   inDevMode() {
     return !!this._options.enableDevMode;
   }
 }
-
-export { pu, xn, Ps, Nt, Js };
+export { pu, getPolyfills, setPolyfills, helpers, GrowthBook };

@@ -9,10 +9,10 @@
  * attribution: placement 5
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, T, zodStrictObject, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, literal, zodStrictObject, M } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   safeSerializedPermissionContextSchema,
-  PV,
+  exceedsSerializedContextLimit,
 } from "../../utils/permissions/permissionContextSerialization.js";
 import { addSessionWorkingDirectories } from "../../utils/permissions/PermissionUpdate.js";
 import { buildNativeDoctorDiagnostics } from "../../screens/Doctor.js";
@@ -22,28 +22,44 @@ import { getOriginalCwd } from "../../bootstrap/state.js";
 var ANTHROPIC_RENDERUNDERSESSIONRULES = "anthropic/renderUnderSessionRules";
 //@ chunk-phzhvaxm.js:458-506 placement
 function rendersUnderSessionRulesCapability() {
-  return { experimental: { [ANTHROPIC_RENDERUNDERSESSIONRULES]: { v: 1 } } };
+  return {
+    experimental: {
+      [ANTHROPIC_RENDERUNDERSESSIONRULES]: {
+        v: 1,
+      },
+    },
+  };
 }
 //@ chunk-phzhvaxm.js:506-558 placement
-var z = DoctorLazy(() => u({ experimental: u({ [ANTHROPIC_RENDERUNDERSESSIONRULES]: u({ v: T(1) }) }) }));
+var sessionRulesContractSchema = DoctorLazy(() =>
+  u({
+    experimental: u({
+      [ANTHROPIC_RENDERUNDERSESSIONRULES]: u({
+        v: literal(1),
+      }),
+    }),
+  }),
+);
 //@ chunk-phzhvaxm.js:558-665 placement
 var SESSION_RULES_SCHEMA = DoctorLazy(() =>
   zodStrictObject({
-    v: T(1),
+    v: literal(1),
     permissionContext: safeSerializedPermissionContextSchema(),
     offersHandOff: M(),
     classifiesEveryCall: M(),
     grantsApply: M(),
   }),
 );
+//@ chunk-phzhvaxm.js:665-1254 placement
 /**
  * 远程命令渲染时适用的会话规则（anthropic/renderUnderSessionRules）。
  */
-//@ chunk-phzhvaxm.js:665-1254 placement
-function applicableSessionRules(r, n, t) {
-  let e = PV(r) ? void 0 : SESSION_RULES_SCHEMA().safeParse(r).data;
-  if (e === void 0 || n === void 0) return;
-  let { mode: mode, ...o } = e.permissionContext;
+function applicableSessionRules(sessionRules, launchPermissionContext, repoRules) {
+  let e = exceedsSerializedContextLimit(sessionRules)
+    ? undefined
+    : SESSION_RULES_SCHEMA().safeParse(sessionRules).data;
+  if (e === undefined || launchPermissionContext === undefined) return;
+  let { mode, ...o } = e.permissionContext;
   if (
     !(
       mode === "default" ||
@@ -51,10 +67,10 @@ function applicableSessionRules(r, n, t) {
       mode === "acceptEdits" ||
       (mode === "auto" && e.offersHandOff)
     ) ||
-    Object.values(o.alwaysAllowRules).some((l) => l.length > 0) ||
-    o.strippedDangerousRules !== void 0 ||
+    Object.values(o.alwaysAllowRules).some((alwaysAllowRule) => alwaysAllowRule.length > 0) ||
+    o.strippedDangerousRules !== undefined ||
     o.additionalWorkingDirectories.$map.length > 0 ||
-    o.trustedNetworkDirectories !== void 0
+    o.trustedNetworkDirectories !== undefined
   )
     return;
   return {
@@ -62,11 +78,17 @@ function applicableSessionRules(r, n, t) {
     classifiesEveryCall: e.classifiesEveryCall,
     toolPermissionContext: {
       ...addSessionWorkingDirectories(
-        buildNativeDoctorDiagnostics(e.permissionContext, n, getOriginalCwd(), t),
+        buildNativeDoctorDiagnostics(
+          e.permissionContext,
+          launchPermissionContext,
+          getOriginalCwd(),
+          repoRules,
+        ),
       ),
-      ...(!e.grantsApply && { pollEventDeliveryGuard: !0 }),
+      ...(!e.grantsApply && {
+        pollEventDeliveryGuard: true,
+      }),
     },
   };
 }
-
 export { applicableSessionRules };

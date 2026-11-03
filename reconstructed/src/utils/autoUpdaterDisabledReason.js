@@ -15,25 +15,26 @@ import { getEnabledSettingSources } from "./settings/constants.js";
 import { getSettingsWithErrors_2, getSettingsForSource } from "./settings/settings.js";
 import { isEnvTruthy } from "./envUtils.js";
 
+//@ chunk-t9wvryrs.js:2141-2537 placement
 /**
  * 自动更新被禁用的原因：嵌套会话、托管设置未加载、未读用户设置、设置不可读，或在环境变量设置中关闭；都不是则为 null。
  */
-//@ chunk-t9wvryrs.js:2141-2537 placement
 function autoUpdaterDisabledReason(n) {
   if (isChildSession()) return "nested session";
-  if (getEligibilityMemo() !== !1 && !getRemoteManagedSettingsSyncFromCache())
+  if (getEligibilityMemo() !== false && !getRemoteManagedSettingsSyncFromCache())
     return "server-managed settings not loaded";
-  let t = getEnabledSettingSources();
-  if (!t.includes("userSettings")) return "user settings not read";
+  let enabledSettingSources = getEnabledSettingSources();
+  if (!enabledSettingSources.includes("userSettings")) return "user settings not read";
   if (
     getSettingsWithErrors_2().errors.some(
       (error) => error.severity !== "warning" || error.path === "env" || error.path === "",
     )
   )
     return "settings not readable";
-  return [n, ...t.map((e) => getSettingsForSource(e)?.env)].some((e) =>
-    Object.entries(e ?? {}).some(isUpdateDisablingEnv),
-  )
+  return [
+    n,
+    ...enabledSettingSources.map((enabledSettingSource) => getSettingsForSource(enabledSettingSource)?.env),
+  ].some((e) => Object.entries(e ?? {}).some(isUpdateDisablingEnv))
     ? "turned off in settings"
     : null;
 }
@@ -46,6 +47,6 @@ function isUpdateDisablingEnv([n, t]) {
     case "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":
       return t !== "";
     default:
-      return !1;
+      return false;
   }
 }

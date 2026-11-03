@@ -10,30 +10,67 @@
  */
 import { createHash } from "crypto";
 import { getHookTemplate } from "./hookTemplates.js";
-import { Ols } from "../../entrypoints/sdk/controlSchemas.js";
+import { BASE64_BODY_RE } from "../../entrypoints/sdk/controlSchemas.js";
 
 //@ chunk-6vmp3d2t.js:385-1294 placement
-function createHookTemplateStore(d = { byId: getHookTemplate }) {
+function createHookTemplateStore(
+  d = {
+    byId: getHookTemplate,
+  },
+) {
   let t = new Map();
   return {
-    accept({ template: r, digest: e, contentBase64: s }) {
-      let byId = d.byId(r);
-      if (byId === void 0) return { ok: !1, kind: "refused", error: "template_refused: unknown_template" };
-      if (!byId.digests.some((digest) => digest.sha256 === e))
-        return { ok: !1, kind: "refused", error: "template_refused: version_mismatch" };
-      if (!Ols.test(s) || s.length % 4 === 1)
-        return { ok: !1, kind: "invalid", error: "invalid_upload: bad_base64" };
-      let buffer = Buffer.from(s, "base64");
-      if (buffer.length > byId.maxBytes)
-        return { ok: !1, kind: "refused", error: "template_refused: too_large" };
-      if (createHash("sha256").update(buffer).digest("hex") !== e)
-        return { ok: !1, kind: "refused", error: "template_refused: digest_mismatch" };
-      if (t.has(e)) return { ok: !0, status: "already_stored", template: byId, bytes: buffer.length };
-      return (t.set(e, buffer), { ok: !0, status: "stored", template: byId, bytes: buffer.length });
+    accept({ template, digest, contentBase64 }) {
+      let o = d.byId(template);
+      if (o === undefined)
+        return {
+          ok: false,
+          kind: "refused",
+          error: "template_refused: unknown_template",
+        };
+      if (!o.digests.some((digest_2) => digest_2.sha256 === digest))
+        return {
+          ok: false,
+          kind: "refused",
+          error: "template_refused: version_mismatch",
+        };
+      if (!BASE64_BODY_RE.test(contentBase64) || contentBase64.length % 4 === 1)
+        return {
+          ok: false,
+          kind: "invalid",
+          error: "invalid_upload: bad_base64",
+        };
+      let buffer = Buffer.from(contentBase64, "base64");
+      if (buffer.length > o.maxBytes)
+        return {
+          ok: false,
+          kind: "refused",
+          error: "template_refused: too_large",
+        };
+      if (createHash("sha256").update(buffer).digest("hex") !== digest)
+        return {
+          ok: false,
+          kind: "refused",
+          error: "template_refused: digest_mismatch",
+        };
+      if (t.has(digest))
+        return {
+          ok: true,
+          status: "already_stored",
+          template: o,
+          bytes: buffer.length,
+        };
+      t.set(digest, buffer);
+      return {
+        ok: true,
+        status: "stored",
+        template: o,
+        bytes: buffer.length,
+      };
     },
     bytesFor: (r) => {
       let e = t.get(r);
-      return e === void 0 ? void 0 : Buffer.from(e);
+      return e === undefined ? undefined : Buffer.from(e);
     },
     template: (r) => d.byId(r),
     size: () => t.size,

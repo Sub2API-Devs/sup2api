@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:67219-67604 cjs-fingerprint
-var hr = x(function (Cd, e0) {
-  var Rn = {
+var require_NodeFilter = x(function (cjsExports, cjsModule) {
+  var NodeFilter = {
     FILTER_ACCEPT: 1,
     FILTER_REJECT: 2,
     FILTER_SKIP: 3,
@@ -27,7 +27,6 @@ var hr = x(function (Cd, e0) {
     SHOW_DOCUMENT_FRAGMENT: 1024,
     SHOW_NOTATION: 2048,
   };
-  e0.exports = Rn.constructor = Rn.prototype = Rn;
+  cjsModule.exports = NodeFilter.constructor = NodeFilter.prototype = NodeFilter;
 });
-
-export { hr };
+export { require_NodeFilter };

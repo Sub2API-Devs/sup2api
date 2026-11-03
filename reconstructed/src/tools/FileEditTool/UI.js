@@ -8,14 +8,14 @@
  * pieces: chunk-e6aww6q8.js (2), chunk-smaqkhx4.js (8)
  * attribution: fingerprint 8, placement 1, layout 1
  */
-import { j, y, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
 import { getPlansDirectory } from "../../utils/plans.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { FilePathLink } from "../../components/FilePathLink.js";
 import { getDisplayPath, FILE_NOT_FOUND_CWD_NOTE } from "../../utils/file.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
-import { P7n, readRejectionContext } from "../../utils/settings/settingsReview.js";
+import { settingsWriteGateText, readRejectionContext } from "../../utils/settings/settingsReview.js";
 import { FileEditToolUpdatedMessage } from "../../components/FileEditToolUpdatedMessage.js";
 import { getFirstLine } from "../../utils/stringUtils.js";
 import { isScratchpadDisplayPath } from "../../utils/permissions/filesystem.js";
@@ -23,7 +23,7 @@ import { FileEditToolUseRejectedMessage } from "../../components/FileEditToolUse
 import { extractTag } from "../../utils/messages.js";
 import { FallbackToolUseErrorMessage } from "../../components/FallbackToolUseErrorMessage.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { zEt, adjustHunkLineNumbers } from "../../utils/diff.js";
+import { DIFF_CONTEXT_LINES, adjustHunkLineNumbers } from "../../utils/diff.js";
 import { getPatchForEdit, findActualString, preserveQuoteStyle } from "./utils.js";
 import { isFsInaccessible } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -32,74 +32,76 @@ import { lintBackgroundMemoryWrite, rememberLintedWrite } from "../../memdir/mem
 import { expandPath } from "../../utils/path.js";
 
 //@ chunk-smaqkhx4.js:7811-7815 placement
-j();
+init_react_production();
 //@ chunk-smaqkhx4.js:7815-7948 layout = renderToolUseMessage (1)
-function renderToolUseMessage({ file_path: file_path }, { verbose: verbose }) {
+function renderToolUseMessage({ file_path }, { verbose }) {
   if (!file_path) return null;
   if (file_path.startsWith(getPlansDirectory())) return "";
-  return e(FilePathLink, { filePath: file_path, children: verbose ? file_path : getDisplayPath(file_path) });
+  return jsxProd_default(FilePathLink, {
+    filePath: file_path,
+    children: verbose ? file_path : getDisplayPath(file_path),
+  });
 }
 //@ chunk-smaqkhx4.js:7948-8333 fingerprint = renderToolResultMessage (0.865)
 function renderToolResultMessage(
-  {
-    filePath: filePath = "",
-    structuredPatch: structuredPatch,
-    originalFile: originalFile,
-    staged: staged,
-    stagedWording: stagedWording,
-  },
+  { filePath = "", structuredPatch, originalFile, staged, stagedWording },
   _progressMessagesForMessage,
-  { style: style, verbose: verbose },
+  { style, verbose },
 ) {
   if (!filePath) return null;
   if (staged)
-    return e(MessageResponse, { children: e(Text, { dimColor: !0, children: P7n(stagedWording) }) });
+    return jsxProd_default(MessageResponse, {
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        children: settingsWriteGateText(stagedWording),
+      }),
+    });
   let isPlanFile = filePath.startsWith(getPlansDirectory());
-  return e(FileEditToolUpdatedMessage, {
-    filePath: filePath,
-    structuredPatch: structuredPatch,
+  return jsxProd_default(FileEditToolUpdatedMessage, {
+    filePath,
+    structuredPatch,
     firstLine: originalFile ? getFirstLine(originalFile) : null,
-    fileContent: originalFile || void 0,
-    style: style,
-    verbose: verbose,
-    previewHint: isPlanFile ? "/plan to preview" : void 0,
+    fileContent: originalFile || undefined,
+    style,
+    verbose,
+    previewHint: isPlanFile ? "/plan to preview" : undefined,
     collapsed: !isPlanFile && isScratchpadDisplayPath(filePath),
   });
 }
 //@ chunk-smaqkhx4.js:8333-8721 fingerprint = renderToolUseRejectedMessage (1)
 function renderToolUseRejectedMessage(input, options) {
-  let { style: style, verbose: verbose } = options,
-    filePath = input.file_path,
-    c = input.old_string ?? "",
-    a = input.new_string ?? "",
-    p = input.replace_all ?? !1;
+  let { style, verbose } = options;
+  let filePath = input.file_path;
+  let oldString = input.old_string ?? "";
+  let newString = input.new_string ?? "";
+  let replaceAll = input.replace_all ?? false;
   if ("edits" in input && input.edits != null)
-    return e(FileEditToolUseRejectedMessage, {
+    return jsxProd_default(FileEditToolUseRejectedMessage, {
       file_path: filePath,
       operation: "update",
       firstLine: null,
-      verbose: verbose,
+      verbose,
     });
-  if (c === "")
-    return e(FileEditToolUseRejectedMessage, {
+  if (oldString === "")
+    return jsxProd_default(FileEditToolUseRejectedMessage, {
       file_path: filePath,
       operation: "write",
-      content: a,
-      firstLine: getFirstLine(a),
-      verbose: verbose,
+      content: newString,
+      firstLine: getFirstLine(newString),
+      verbose,
     });
-  return e(EditRejectionDiff, {
-    filePath: filePath,
-    oldString: c,
-    newString: a,
-    replaceAll: p,
-    style: style,
-    verbose: verbose,
+  return jsxProd_default(EditRejectionDiff, {
+    filePath,
+    oldString,
+    newString,
+    replaceAll,
+    style,
+    verbose,
   });
 }
 //@ chunk-smaqkhx4.js:8721-9198 fingerprint = renderToolUseErrorMessage (0.511)
 function renderToolUseErrorMessage(result, options) {
-  let { verbose: verbose, toolDenialKind: toolDenialKind } = options;
+  let { verbose, toolDenialKind } = options;
   if (
     !verbose &&
     toolDenialKind !== "permission-rule" &&
@@ -108,141 +110,177 @@ function renderToolUseErrorMessage(result, options) {
   ) {
     let errorMessage = extractTag(result, "tool_use_error");
     if (errorMessage?.includes("File has not been read yet"))
-      return e(MessageResponse, { children: e(Text, { dimColor: !0, children: "File must be read first" }) });
+      return jsxProd_default(MessageResponse, {
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: "File must be read first",
+        }),
+      });
     if (errorMessage?.includes(FILE_NOT_FOUND_CWD_NOTE))
-      return e(MessageResponse, { children: e(Text, { color: "error", children: "File not found" }) });
-    return e(MessageResponse, { children: e(Text, { color: "error", children: "Error editing file" }) });
+      return jsxProd_default(MessageResponse, {
+        children: jsxProd_default(Text, {
+          color: "error",
+          children: "File not found",
+        }),
+      });
+    return jsxProd_default(MessageResponse, {
+      children: jsxProd_default(Text, {
+        color: "error",
+        children: "Error editing file",
+      }),
+    });
   }
-  return e(FallbackToolUseErrorMessage, { result: result, verbose: verbose });
+  return jsxProd_default(FallbackToolUseErrorMessage, {
+    result,
+    verbose,
+  });
 }
 //@ chunk-smaqkhx4.js:9198-9795 fingerprint = EditRejectionDiff (1)
-function EditRejectionDiff(t0) {
-  let p = w(16),
-    {
-      filePath: filePath,
-      oldString: oldString,
-      newString: newString,
-      replaceAll: replaceAll,
-      style: style,
-      verbose: verbose,
-    } = t0,
-    m;
-  if (p[0] !== filePath || p[1] !== newString || p[2] !== oldString || p[3] !== replaceAll)
-    ((m = () => loadRejectionDiff(filePath, oldString, newString, replaceAll)),
-      (p[0] = filePath),
-      (p[1] = newString),
-      (p[2] = oldString),
-      (p[3] = replaceAll),
-      (p[4] = m));
-  else m = p[4];
-  let [u] = y(m),
-    d;
-  if (p[5] !== filePath || p[6] !== verbose)
-    ((d = e(FileEditToolUseRejectedMessage, {
+function EditRejectionDiff(props) {
+  let $ = w(16);
+  let { filePath, oldString, newString, replaceAll, style, verbose } = props;
+  let t1;
+  if ($[0] !== filePath || $[1] !== newString || $[2] !== oldString || $[3] !== replaceAll) {
+    t1 = () => loadRejectionDiff(filePath, oldString, newString, replaceAll);
+    $[0] = filePath;
+    $[1] = newString;
+    $[2] = oldString;
+    $[3] = replaceAll;
+    $[4] = t1;
+  } else t1 = $[4];
+  let [dataPromise] = y(t1);
+  let fallback;
+  if ($[5] !== filePath || $[6] !== verbose) {
+    fallback = jsxProd_default(FileEditToolUseRejectedMessage, {
       file_path: filePath,
       operation: "update",
       firstLine: null,
-      verbose: verbose,
-    })),
-      (p[5] = filePath),
-      (p[6] = verbose),
-      (p[7] = d));
-  else d = p[7];
-  let g;
-  if (p[8] !== u || p[9] !== filePath || p[10] !== style || p[11] !== verbose)
-    ((g = e(EditRejectionBody, { promise: u, filePath: filePath, style: style, verbose: verbose })),
-      (p[8] = u),
-      (p[9] = filePath),
-      (p[10] = style),
-      (p[11] = verbose),
-      (p[12] = g));
-  else g = p[12];
-  let R;
-  if (p[13] !== d || p[14] !== g)
-    ((R = e(fo, { fallback: d, children: g })), (p[13] = d), (p[14] = g), (p[15] = R));
-  else R = p[15];
-  return R;
+      verbose,
+    });
+    $[5] = filePath;
+    $[6] = verbose;
+    $[7] = fallback;
+  } else fallback = $[7];
+  let children;
+  if ($[8] !== dataPromise || $[9] !== filePath || $[10] !== style || $[11] !== verbose) {
+    children = jsxProd_default(EditRejectionBody, {
+      promise: dataPromise,
+      filePath,
+      style,
+      verbose,
+    });
+    $[8] = dataPromise;
+    $[9] = filePath;
+    $[10] = style;
+    $[11] = verbose;
+    $[12] = children;
+  } else children = $[12];
+  let t4;
+  if ($[13] !== fallback || $[14] !== children) {
+    t4 = jsxProd_default(fo, {
+      fallback,
+      children,
+    });
+    $[13] = fallback;
+    $[14] = children;
+    $[15] = t4;
+  } else t4 = $[15];
+  return t4;
 }
 //@ chunk-smaqkhx4.js:9795-10133 fingerprint = EditRejectionBody (1)
-function EditRejectionBody(t0) {
-  let m = w(7),
-    { promise: promise, filePath: filePath, style: style, verbose: verbose } = t0,
-    { patch: patch, firstLine: firstLine, fileContent: fileContent } = Qr(promise),
-    t1;
+function EditRejectionBody(props) {
+  let $ = w(7);
+  let { promise, filePath, style, verbose } = props;
+  let { patch, firstLine, fileContent } = Qr(promise);
+  let t1;
   if (
-    m[0] !== fileContent ||
-    m[1] !== filePath ||
-    m[2] !== firstLine ||
-    m[3] !== patch ||
-    m[4] !== style ||
-    m[5] !== verbose
-  )
-    ((t1 = e(FileEditToolUseRejectedMessage, {
+    $[0] !== fileContent ||
+    $[1] !== filePath ||
+    $[2] !== firstLine ||
+    $[3] !== patch ||
+    $[4] !== style ||
+    $[5] !== verbose
+  ) {
+    t1 = jsxProd_default(FileEditToolUseRejectedMessage, {
       file_path: filePath,
       operation: "update",
-      patch: patch,
-      firstLine: firstLine,
-      fileContent: fileContent,
-      style: style,
-      verbose: verbose,
-    })),
-      (m[0] = fileContent),
-      (m[1] = filePath),
-      (m[2] = firstLine),
-      (m[3] = patch),
-      (m[4] = style),
-      (m[5] = verbose),
-      (m[6] = t1));
-  else t1 = m[6];
+      patch,
+      firstLine,
+      fileContent,
+      style,
+      verbose,
+    });
+    $[0] = fileContent;
+    $[1] = filePath;
+    $[2] = firstLine;
+    $[3] = patch;
+    $[4] = style;
+    $[5] = verbose;
+    $[6] = t1;
+  } else t1 = $[6];
   return t1;
 }
 //@ chunk-smaqkhx4.js:10133-10735 fingerprint = loadRejectionDiff (0.882)
 async function loadRejectionDiff(filePath, oldString, newString, replaceAll) {
   try {
-    let ctx = await readRejectionContext(filePath, oldString, zEt);
+    let ctx = await readRejectionContext(filePath, oldString, DIFF_CONTEXT_LINES);
     if (ctx === null || ctx.truncated || ctx.content === "") {
-      let { patch: patch } = getPatchForEdit({
-        filePath: filePath,
+      let { patch } = getPatchForEdit({
+        filePath,
         fileContents: oldString,
-        oldString: oldString,
-        newString: newString,
+        oldString,
+        newString,
       });
-      return { patch: patch, firstLine: null, fileContent: void 0 };
+      return {
+        patch,
+        firstLine: null,
+        fileContent: undefined,
+      };
     }
-    let actualOld = findActualString(ctx.content, oldString) || oldString,
-      actualNew = preserveQuoteStyle(oldString, actualOld, newString),
-      { patch: patch } = getPatchForEdit({
-        filePath: filePath,
-        fileContents: ctx.content,
-        oldString: actualOld,
-        newString: actualNew,
-        replaceAll: replaceAll,
-      });
+    let actualOld = findActualString(ctx.content, oldString) || oldString;
+    let actualNew = preserveQuoteStyle(oldString, actualOld, newString);
+    let { patch } = getPatchForEdit({
+      filePath,
+      fileContents: ctx.content,
+      oldString: actualOld,
+      newString: actualNew,
+      replaceAll,
+    });
     return {
       patch: adjustHunkLineNumbers(patch, ctx.lineOffset - 1),
       firstLine: ctx.lineOffset === 1 ? getFirstLine(ctx.content) : null,
       fileContent: ctx.content,
     };
-  } catch (error) {
-    if (isFsInaccessible(error))
-      logForDebugging(`Failed to load rejection diff for ${filePath}: ${error.message}`, { level: "error" });
-    else logError(error);
-    return { patch: [], firstLine: null, fileContent: void 0 };
+  } catch (e) {
+    if (isFsInaccessible(e))
+      logForDebugging(`Failed to load rejection diff for ${filePath}: ${e.message}`, {
+        level: "error",
+      });
+    else logError(e);
+    return {
+      patch: [],
+      firstLine: null,
+      fileContent: undefined,
+    };
   }
 }
+//@ chunk-e6aww6q8.js:1364294-1364414 fingerprint = getToolUseSummary (0.701)
 /**
  * 对 Edit/Write 输入的某个字段做记忆目录写入清洗（XQ），有变化时记录并返回替换后的输入（checkPermissions 用它产出 updatedInput）。
  */
-//@ chunk-e6aww6q8.js:1364294-1364414 fingerprint = getToolUseSummary (0.701)
 function getToolUseSummary_2(e, n, r, s) {
   let h = lintBackgroundMemoryWrite(expandPath(e.file_path), e[n], r);
   if (h === e[n]) return e;
-  return (rememberLintedWrite(s.host, s.toolUseId), { ...e, [n]: h });
+  rememberLintedWrite(s.host, s.toolUseId);
+  return {
+    ...e,
+    [n]: h,
+  };
 }
+//@ chunk-e6aww6q8.js:4648659-4648833 fingerprint = userFacingName (1)
 /**
  * Edit 的用户可见名：计划文件显示 "Updated plan"，old_string 为空显示 "Create"，其余 "Update"。
  */
-//@ chunk-e6aww6q8.js:4648659-4648833 fingerprint = userFacingName (1)
 function userFacingName_2(input) {
   if (!input) return "Update";
   if (input.file_path?.startsWith(getPlansDirectory())) return "Updated plan";
@@ -250,5 +288,4 @@ function userFacingName_2(input) {
   if (input.old_string === "") return "Create";
   return "Update";
 }
-
 export { getToolUseSummary_2, userFacingName_2 };

@@ -8,15 +8,14 @@
  * pieces: chunk-4v9zy7gn.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-4v9zy7gn.js:17501-22847 fingerprint = PR_TITLE (0.5)
 /**
  * "Add Claude Code GitHub Workflow" 等 GitHub App 安装常量。
  */
-//@ chunk-4v9zy7gn.js:17501-22847 fingerprint = PR_TITLE (0.5)
-var PR_TITLE = "Add Claude Code GitHub Workflow",
-  GITHUB_ACTION_SETUP_DOCS_URL = "https://github.com/anthropics/claude-code-action/blob/main/docs/setup.md",
-  GITLAB_CI_DOCS_URL = "https://code.claude.com/docs/en/gitlab-ci-cd",
-  WORKFLOW_CONTENT = `name: Claude Code
+var PR_TITLE = "Add Claude Code GitHub Workflow";
+var GITHUB_ACTION_SETUP_DOCS_URL = "https://github.com/anthropics/claude-code-action/blob/main/docs/setup.md";
+var GITLAB_CI_DOCS_URL = "https://code.claude.com/docs/en/gitlab-ci-cd";
+var WORKFLOW_CONTENT = `name: Claude Code
 
 on:
   issue_comment:
@@ -66,8 +65,8 @@ jobs:
           # or https://code.claude.com/docs/en/cli-reference for available options
           # claude_args: '--allowed-tools Bash(gh pr *)'
 
-`,
-  PR_BODY = `## \uD83E\uDD16 Installing Claude Code GitHub App
+`;
+var PR_BODY = `## \uD83E\uDD16 Installing Claude Code GitHub App
 
 This PR adds a GitHub Actions workflow that enables Claude Code integration in our repository.
 
@@ -107,8 +106,8 @@ allowed_tools: Bash(npm install),Bash(npm run build),Bash(npm run lint),Bash(npm
 
 There's more information in the [Claude Code action repo](https://github.com/anthropics/claude-code-action).
 
-After merging this PR, let's try mentioning @claude in a comment on any PR to get started!`,
-  CODE_REVIEW_PLUGIN_WORKFLOW_CONTENT = `name: Claude Code Review
+After merging this PR, let's try mentioning @claude in a comment on any PR to get started!`;
+var CODE_REVIEW_PLUGIN_WORKFLOW_CONTENT = `name: Claude Code Review
 
 on:
   pull_request:
@@ -154,7 +153,6 @@ jobs:
           # or https://code.claude.com/docs/en/cli-reference for available options
 
 `;
-
 export {
   GITHUB_ACTION_SETUP_DOCS_URL,
   WORKFLOW_CONTENT,

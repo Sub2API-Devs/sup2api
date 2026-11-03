@@ -8,17 +8,26 @@
  * pieces: chunk-sycgf9xs.js (24)
  * attribution: placement 23, layout 1
  */
-import { homedir, homedir as homedir_2 } from "os";
+import { homedir } from "os";
 import { UserResourceUpdateMessage } from "../components/messages/UserResourceUpdateMessage.js";
 
 //@ chunk-sycgf9xs.js:838-861 placement
-function kQt(e) {
+/**
+ * 空实现探针函数，占位用于拼接调用表。
+ */
+function noopProbe(e) {
   return;
 }
 //@ chunk-sycgf9xs.js:861-883 placement
-var tDn = "<user-code>";
+/**
+ * 堆栈清洗时替换用户代码路径的占位文本 "<user-code>"。
+ */
+var USER_CODE_PLACEHOLDER = "<user-code>";
 //@ chunk-sycgf9xs.js:883-929 placement
-function nt() {
+/**
+ * 取当前用户主目录；取不到时返回空串。
+ */
+function homeDirectory() {
   try {
     return homedir();
   } catch {
@@ -26,204 +35,225 @@ function nt() {
   }
 }
 //@ chunk-sycgf9xs.js:929-1036 placement
-var CLI = "cli",
-  _e = new Set(["cli.js", CLI, "sdk.mjs", "browser-sdk.js", "agentSdk.js"]),
-  Ee = /^chunk-[0-9a-z]+\.js$/;
+var CLI_BUNDLE_BASENAME = "cli";
+var ENTRY_BUNDLE_BASENAMES = new Set([
+  "cli.js",
+  CLI_BUNDLE_BASENAME,
+  "sdk.mjs",
+  "browser-sdk.js",
+  "agentSdk.js",
+]);
+var CHUNK_FILENAME_RE = /^chunk-[0-9a-z]+\.js$/;
 //@ chunk-sycgf9xs.js:1036-1090 placement
-function Se(e) {
-  return e[0] === "/" && Ee.test(e.slice(1));
+function isChunkFilenamePath(e) {
+  return e[0] === "/" && CHUNK_FILENAME_RE.test(e.slice(1));
 }
 //@ chunk-sycgf9xs.js:1090-1150 placement
-function Te(e) {
-  return Se(e) || (e[0] === "/" && _e.has(e.slice(1)));
+function isCliBundlePath(file) {
+  return isChunkFilenamePath(file) || (file[0] === "/" && ENTRY_BUNDLE_BASENAMES.has(file.slice(1)));
 }
 //@ chunk-sycgf9xs.js:1150-1188 placement
-function UOi(e) {
-  return Se(e) ? "/" + CLI : e;
+/**
+ * 把 CLI 打包文件路径统一成 "/"+bundle 基名的形式，便于堆栈折叠。
+ */
+function unifyCliBundlePath(file) {
+  return isChunkFilenamePath(file) ? "/" + CLI_BUNDLE_BASENAME : file;
 }
 //@ chunk-sycgf9xs.js:1188-1260 layout
-var rt = /^(?:\/(?:\$bunfs|~BUN)|\/?[A-Za-z]:[\\/](?:\$bunfs|~BUN))[\\/]/;
+var BUN_BUNDLE_PATH_RE = /^(?:\/(?:\$bunfs|~BUN)|\/?[A-Za-z]:[\\/](?:\$bunfs|~BUN))[\\/]/;
 //@ chunk-sycgf9xs.js:1260-1336 placement = formatUri (1)
 function formatUri_2(uri) {
   let n = uri.startsWith("file://") ? uri.slice(7) : uri;
-  return rt.test(n);
+  return BUN_BUNDLE_PATH_RE.test(n);
 }
 //@ chunk-sycgf9xs.js:1535-1563 placement
-var st = ["src/", "packages/"];
+var SOURCE_DIR_PREFIXES = ["src/", "packages/"];
+//@ chunk-sycgf9xs.js:1563-1663 placement
 /**
  * 取路径的文件名部分（支持 / 与 \）。
  */
-//@ chunk-sycgf9xs.js:1563-1663 placement
 function getBaseName(e) {
   let max = Math.max(e.lastIndexOf("/"), e.lastIndexOf("\\"));
   return max === -1 ? e : e.slice(max + 1);
 }
 //@ chunk-sycgf9xs.js:1663-1733 placement
-function DSr(e) {
-  return Te(e.file) || st.some((n) => e.file.startsWith(n));
+/**
+ * 判断堆栈帧是否来自 CLI 自身源码（打包文件名或源码前缀目录）。
+ */
+function isSourceFrame(e) {
+  return isCliBundlePath(e.file) || SOURCE_DIR_PREFIXES.some((n) => e.file.startsWith(n));
 }
 //@ chunk-sycgf9xs.js:1733-1880 placement
-var RUNTIME_FRAME_PREFIXES = ["node:", "bun:", "internal:"],
-  IGNORED_FRAME_PACKAGES = new Set([
-    "native",
-    "unknown",
-    "ws",
-    "undici",
-    "node-fetch",
-    "isomorphic-fetch",
-    "vercel_fetch",
-    "utf-8-validate",
-  ]);
+var RUNTIME_FRAME_PREFIXES = ["node:", "bun:", "internal:"];
+var IGNORED_FRAME_PACKAGES = new Set([
+  "native",
+  "unknown",
+  "ws",
+  "undici",
+  "node-fetch",
+  "isomorphic-fetch",
+  "vercel_fetch",
+  "utf-8-validate",
+]);
 //@ chunk-sycgf9xs.js:1880-1943 placement
-function xe(e) {
+function isExternalFramePath(e) {
   return IGNORED_FRAME_PACKAGES.has(e) || RUNTIME_FRAME_PREFIXES.some((n) => e.startsWith(n));
 }
 //@ chunk-sycgf9xs.js:1943-1977 placement
-function Iys(e) {
-  return xe(e.file);
+/**
+ * 判断堆栈帧路径是否为外部（非本包）路径。
+ */
+function isStackFrameExternal(e) {
+  return isExternalFramePath(e.file);
 }
+//@ chunk-sycgf9xs.js:1977-2110 placement
 /**
  * 判断错误栈是否只有外部帧（首个有效帧为未知或 node_modules）。
  */
-//@ chunk-sycgf9xs.js:1977-2110 placement
-function isStackOnlyExternal(e) {
-  let found = e.find((r) => !Iys(r));
-  if (found === void 0) return e.length >= ye;
-  return found.file === tDn || found.file.startsWith("node_modules/");
+function isStackOnlyExternal(sanitizedStackFrames) {
+  let found = sanitizedStackFrames.find((r) => !isStackFrameExternal(r));
+  if (found === undefined) return sanitizedStackFrames.length >= MAX_SANITIZED_FRAMES;
+  return found.file === USER_CODE_PLACEHOLDER || found.file.startsWith("node_modules/");
 }
 //@ chunk-sycgf9xs.js:2110-2192 placement
-function jOi(e) {
-  return Te(e.file) && (e.function == null || e.function === "<anonymous>");
+/**
+ * 判断堆栈帧是否为打包文件里的匿名帧（无函数名或 <anonymous>）。
+ */
+function isAnonymousBundledFrame(e) {
+  return isCliBundlePath(e.file) && (e.function == null || e.function === "<anonymous>");
 }
 //@ chunk-sycgf9xs.js:2192-2496 placement
 function shortenNodeModulesPath(e) {
-  let parts = e.split(/[/\\]/),
-    r = -1;
-  for (let c = parts.length - 1; c >= 0; c--)
-    if (parts[c] === "node_modules") {
-      r = c;
+  let parts = e.split(/[/\\]/);
+  let r = -1;
+  for (let idx = parts.length - 1; idx >= 0; idx--)
+    if (parts[idx] === "node_modules") {
+      r = idx;
       break;
     }
   if (r === -1 || r >= parts.length - 1) return null;
-  let o = parts[r + 1],
-    s;
+  let o = parts[r + 1];
+  let s;
   if (o.startsWith("@")) {
     if (r + 2 >= parts.length) return null;
     s = `${o}/${parts[r + 2]}`;
   } else s = o;
-  let at = parts.at(-1);
-  if (!at) return null;
-  return `node_modules/${s}/${at}`;
+  let last = parts.at(-1);
+  if (!last) return null;
+  return `node_modules/${s}/${last}`;
 }
 //@ chunk-sycgf9xs.js:2496-2695 placement
-function sanitizeFramePath(e) {
-  let n = UserResourceUpdateMessage(e),
-    r = getBaseName(n),
-    o = shortenNodeModulesPath(n);
+function sanitizeFramePath(uri) {
+  let n = UserResourceUpdateMessage(uri);
+  let baseName = getBaseName(n);
+  let o = shortenNodeModulesPath(n);
   if (
-    (_e.has(r) && (o === null || o.startsWith("node_modules/@anthropic-ai/"))) ||
-    (formatUri_2(e) && Ee.test(r))
+    (ENTRY_BUNDLE_BASENAMES.has(baseName) && (o === null || o.startsWith("node_modules/@anthropic-ai/"))) ||
+    (formatUri_2(uri) && CHUNK_FILENAME_RE.test(baseName))
   )
-    return "/" + r;
+    return "/" + baseName;
   let s = null;
   if (s) return s;
-  if (xe(n)) return n;
-  return tDn;
+  if (isExternalFramePath(n)) return n;
+  return USER_CODE_PLACEHOLDER;
 }
 //@ chunk-sycgf9xs.js:2695-3141 placement
-function sanitizeStackFrame(e) {
-  let trimmed = e.trim();
+function sanitizeStackFrame(line) {
+  let trimmed = line.trim();
   if (!trimmed.startsWith("at ")) return null;
-  let sliced = trimmed.slice(3),
-    index = sliced.indexOf(" ("),
-    s,
-    u;
-  if (index !== -1 && sliced.endsWith(")"))
-    ((s = sliced.slice(0, index).trim()), (u = sliced.slice(index + 2, -1)));
-  else u = sliced.trim();
+  let sliced = trimmed.slice(3);
+  let index = sliced.indexOf(" (");
+  let s;
+  let u;
+  if (index !== -1 && sliced.endsWith(")")) {
+    s = sliced.slice(0, index).trim();
+    u = sliced.slice(index + 2, -1);
+  } else u = sliced.trim();
   if (s) {
-    if (
-      ((s = s.replace(/^async\s+/, "").replace(/^new\s+/, "")),
-      (s = s.replace(/\s*\[as\s+[^\]]+\]$/, "")),
-      !s)
-    )
-      s = void 0;
+    s = s.replace(/^async\s+/, "").replace(/^new\s+/, "");
+    s = s.replace(/\s*\[as\s+[^\]]+\]$/, "");
+    if (!s) s = undefined;
   }
   let match = u.match(/^(.*):(\d+):(\d+)$/);
   if (!match) return null;
-  let [, d, g, f] = match,
-    m = sanitizeFramePath(d);
-  return { file: m, line: Number(g), column: Number(f), function: m === tDn && s ? tDn : s };
+  let [, d, g, f] = match;
+  let m = sanitizeFramePath(d);
+  return {
+    file: m,
+    line: Number(g),
+    column: Number(f),
+    function: m === USER_CODE_PLACEHOLDER && s ? USER_CODE_PLACEHOLDER : s,
+  };
 }
 //@ chunk-sycgf9xs.js:3141-3151 placement
-var ye = 50;
+var MAX_SANITIZED_FRAMES = 50;
+//@ chunk-sycgf9xs.js:3151-3272 placement
 /**
  * 把错误栈逐帧清理为遥测安全格式，最多保留指定帧数。
  */
-//@ chunk-sycgf9xs.js:3151-3272 placement
-function getSanitizedStackFrames(e, n = ye) {
+function getSanitizedStackFrames(e, n = MAX_SANITIZED_FRAMES) {
   let r = [];
-  for (let o of stripStackHeader(e).split(`
+  for (let line of stripStackHeader(e).split(`
 `)) {
-    let s = sanitizeStackFrame(o);
+    let s = sanitizeStackFrame(line);
     if (s) {
-      if ((r.push(s), r.length >= n)) break;
+      r.push(s);
+      if (r.length >= n) break;
     }
   }
   return r;
 }
+//@ chunk-sycgf9xs.js:3272-3420 placement
 /**
  * 去掉错误栈开头的消息部分，只保留帧。
  */
-//@ chunk-sycgf9xs.js:3272-3420 placement
 function stripStackHeader(e) {
-  let n = typeof e.stack === "string" ? e.stack : "",
-    r = typeof e.message === "string" ? e.message : "",
-    o = formatErrorForTelemetry(n, e.name, r);
-  return o === -1 ? n : n.slice(o + 1);
+  let stack = typeof e.stack === "string" ? e.stack : "";
+  let message = typeof e.message === "string" ? e.message : "";
+  let o = formatErrorForTelemetry(stack, e.name, message);
+  return o === -1 ? stack : stack.slice(o + 1);
 }
 //@ chunk-sycgf9xs.js:3420-3842 placement
-function formatErrorForTelemetry(e, n, r) {
+function formatErrorForTelemetry(stack, name, message) {
   let o = (u) =>
     u !== "" &&
-    e.startsWith(`${u}
+    stack.startsWith(`${u}
 `);
-  if (r !== "") {
-    let u = typeof n === "string" && n !== "" ? `${n}: ${r}` : "";
+  if (message !== "") {
+    let u = typeof name === "string" && name !== "" ? `${name}: ${message}` : "";
     if (u !== "" && o(u)) return u.length;
-    let c = `: ${r}`,
-      index = e.indexOf(`${c}
+    let c = `: ${message}`;
+    let index = stack.indexOf(`${c}
 `);
     return index > 0 &&
-      !e.slice(0, index).includes(`
+      !stack.slice(0, index).includes(`
 `)
       ? index + c.length
-      : n === "" && o(r)
-        ? r.length
+      : name === "" && o(message)
+        ? message.length
         : -1;
   }
   let s =
-    n === void 0
+    name === undefined
       ? "Error"
-      : typeof n === "string"
-        ? n
-        : typeof n === "number" || typeof n === "boolean" || typeof n === "bigint" || n === null
-          ? String(n)
+      : typeof name === "string"
+        ? name
+        : typeof name === "number" || typeof name === "boolean" || typeof name === "bigint" || name === null
+          ? String(name)
           : "";
   return o(s) ? s.length : -1;
 }
-
 export {
   stripStackHeader,
   formatUri_2,
   getBaseName,
-  nt,
-  jOi,
-  UOi,
+  homeDirectory,
+  isAnonymousBundledFrame,
+  unifyCliBundlePath,
   getSanitizedStackFrames,
   isStackOnlyExternal,
-  DSr,
-  kQt,
-  Iys,
-  tDn,
+  isSourceFrame,
+  noopProbe,
+  isStackFrameExternal,
+  USER_CODE_PLACEHOLDER,
 };

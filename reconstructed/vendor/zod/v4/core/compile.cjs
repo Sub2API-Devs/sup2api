@@ -6,446 +6,515 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Xs } from "./core.cjs";
-import { tp } from "./doc.cjs";
-import { F_ } from "./memoizer.cjs";
-import { Ul } from "./regexes.cjs";
-import { Bl } from "./schemas.cjs";
-import { Ee } from "./util.cjs";
+import { require_core } from "./core.cjs";
+import { require_doc } from "./doc.cjs";
+import { require_memoizer } from "./memoizer.cjs";
+import { require_regexes } from "./regexes.cjs";
+import { require_schemas } from "./schemas.cjs";
+import { require_util } from "./util.cjs";
 
 //@ chunk-1ny7cxrt.js:509437-541070 cjs-fingerprint
-var MC = x(function (Mt) {
-  var cY =
-      (Mt && Mt.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    uY =
-      (Mt && Mt.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    PC =
-      (Mt && Mt.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) cY(t, e, key);
+var require_compile = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (uY(t, e), t);
-      };
-  Object.defineProperty(Mt, "__esModule", { value: !0 });
-  Mt.ZodCompileUnsupportedError = Mt.ZodCompileAsyncError = Mt.INVALID = void 0;
-  Mt.compile = pY;
-  Mt.withParser = CC;
-  Mt.compileFn = bh;
-  var AC = Xs(),
-    IC = tp(),
-    Yl = F_(),
-    dY = PC(Ul()),
-    gn = Bl(),
-    hr = PC(Ee());
-  Mt.INVALID = Symbol.for("zod.compile.invalid");
-  var wC = Symbol.for("zod.compile.fallback");
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ZodCompileUnsupportedError = cjsExports.ZodCompileAsyncError = cjsExports.INVALID = undefined;
+  cjsExports.compile = compile;
+  cjsExports.withParser = withParser;
+  cjsExports.compileFn = compileFn;
+  var core_js_1 = require_core();
+  var doc_js_1 = require_doc();
+  var memoizer_js_1 = require_memoizer();
+  var regexes = __importStar(require_regexes());
+  var schemas_js_1 = require_schemas();
+  var util = __importStar(require_util());
+  cjsExports.INVALID = Symbol.for("zod.compile.invalid");
+  var FALLBACK_FLAG = Symbol.for("zod.compile.fallback");
   class ZodCompileAsyncError extends Error {
-    constructor(e = "z.compile does not support async refinements, transforms, or checks") {
-      super(e);
+    constructor(message = "z.compile does not support async refinements, transforms, or checks") {
+      super(message);
       this.name = "ZodCompileAsyncError";
     }
   }
-  Mt.ZodCompileAsyncError = ZodCompileAsyncError;
+  cjsExports.ZodCompileAsyncError = ZodCompileAsyncError;
   class ZodCompileUnsupportedError extends Error {
-    constructor(e, t = !0) {
-      super(`z.compile does not support ${e}; this schema must use the runtime parser`);
-      ((this.name = "ZodCompileUnsupportedError"), (this.islandable = t));
+    constructor(feature, islandable = true) {
+      super(`z.compile does not support ${feature}; this schema must use the runtime parser`);
+      this.name = "ZodCompileUnsupportedError";
+      this.islandable = islandable;
     }
   }
-  Mt.ZodCompileUnsupportedError = ZodCompileUnsupportedError;
-  function fY(e, t) {
+  cjsExports.ZodCompileUnsupportedError = ZodCompileUnsupportedError;
+  function compileValidator(schema, parser) {
     try {
-      return bh(e, { assertOnly: !0 });
+      return compileFn(schema, {
+        assertOnly: true,
+      });
     } catch {
-      return t;
+      return parser;
     }
   }
-  function pY(e, t) {
+  function compile(schema, options) {
     try {
-      let n = bh(e),
-        o = CC(e, n);
-      return ((o._zod.bag.validator = fY(e, n)), o);
-    } catch (error) {
-      if (t?.strict) throw error;
-      return e;
+      let parser = compileFn(schema);
+      let clone = withParser(schema, parser);
+      clone._zod.bag.validator = compileValidator(schema, parser);
+      return clone;
+    } catch (err) {
+      if (options?.strict) throw err;
+      return schema;
     }
   }
-  function CC(e, t) {
-    if (Yl.isRecursiveSchema(e))
+  function withParser(schema, parser) {
+    if (memoizer_js_1.isRecursiveSchema(schema))
       throw new ZodCompileUnsupportedError("a schema whose subtree contains a reference cycle");
-    let clone = hr.clone(e),
-      run = e._zod.run,
-      r = run.__originalRun ?? run,
-      s = (a, l) => {
-        if (l?.async || l?.direction === "backward" || l?.skipChecks || l?.[wC]) return r(a, l);
-        if (l && Yl.isBackEdge(l, a.value)) return r(a, l);
-        let c = t(a.value);
-        if (c !== Mt.INVALID) return ((a.value = c), a);
-        if (l) l[wC] = !0;
-        return r(a, l);
-      };
-    if (
-      ((s.__originalRun = r),
-      (clone._zod.bag.fallbackRun = r),
-      (clone._zod.bag.validator = t),
-      (clone._zod.run = s),
-      !run.__originalRun)
-    )
-      hY(clone, e, t);
+    let clone = util.clone(schema);
+    let liveRun = schema._zod.run;
+    let originalRun = liveRun.__originalRun ?? liveRun;
+    let wrapped = (payload, ctx) => {
+      if (ctx?.async || ctx?.direction === "backward" || ctx?.skipChecks || ctx?.[FALLBACK_FLAG])
+        return originalRun(payload, ctx);
+      if (ctx && memoizer_js_1.isBackEdge(ctx, payload.value)) return originalRun(payload, ctx);
+      let out = parser(payload.value);
+      if (out !== cjsExports.INVALID) {
+        payload.value = out;
+        return payload;
+      }
+      if (ctx) ctx[FALLBACK_FLAG] = true;
+      return originalRun(payload, ctx);
+    };
+    wrapped.__originalRun = originalRun;
+    clone._zod.bag.fallbackRun = originalRun;
+    clone._zod.bag.validator = parser;
+    clone._zod.run = wrapped;
+    if (!liveRun.__originalRun) installCompiledUserMethods(clone, schema, parser);
     return clone;
   }
-  function hY(e, t, n) {
-    let o = e,
-      r = t;
-    if (typeof r.safeParse === "function") {
-      let safeParse = r.safeParse;
-      o.safeParse = (a, l) => {
-        let c = n(a);
-        if (c !== Mt.INVALID) return { success: !0, data: c };
-        return safeParse(a, l);
+  function installCompiledUserMethods(target, source, parser) {
+    let targetAny = target;
+    let sourceAny = source;
+    if (typeof sourceAny.safeParse === "function") {
+      let originalSafeParse = sourceAny.safeParse;
+      targetAny.safeParse = (data, params) => {
+        let out = parser(data);
+        if (out !== cjsExports.INVALID)
+          return {
+            success: true,
+            data: out,
+          };
+        return originalSafeParse(data, params);
       };
     }
-    if (typeof r.parse === "function") {
-      let parse = r.parse;
-      o.parse = (a, l) => {
-        let c = n(a);
-        if (c !== Mt.INVALID) return c;
-        return parse(a, l);
+    if (typeof sourceAny.parse === "function") {
+      let originalParse = sourceAny.parse;
+      targetAny.parse = (data, params) => {
+        let out = parser(data);
+        if (out !== cjsExports.INVALID) return out;
+        return originalParse(data, params);
       };
     }
   }
-  function bh(e, t) {
-    let n = !0;
+  function compileFn(schema, options) {
+    let recursive = true;
     try {
-      n = Yl.isRecursiveSchema(e);
+      recursive = memoizer_js_1.isRecursiveSchema(schema);
     } catch {}
-    if (n) throw new ZodCompileUnsupportedError("a schema whose subtree contains a reference cycle");
-    let o = { constants: new Map(), constantCounter: 0, varCounter: 0, definite: !0 },
-      r = new IC.Doc(["input"]),
-      s = yn(r, o, e, "input", !t?.assertOnly);
-    r.write(s === null ? "return true;" : `return ${s};`);
-    let a = ["INVALID", ...o.constants.keys()],
-      l = [Mt.INVALID, ...o.constants.values()],
-      joined = r.content.join(`
-`),
-      u = t?.debug
-        ? a.length > 0
-          ? `// Constants: ${a.join(", ")}
-${joined}`
-          : joined
-        : "",
-      f = Function,
-      h = `return (input) => {
-${joined}
-}`,
-      m;
+    if (recursive) throw new ZodCompileUnsupportedError("a schema whose subtree contains a reference cycle");
+    let ctx = {
+      constants: new Map(),
+      constantCounter: 0,
+      varCounter: 0,
+      definite: true,
+    };
+    let doc = new doc_js_1.Doc(["input"]);
+    let outputAccessor = generateCheck(doc, ctx, schema, "input", !options?.assertOnly);
+    doc.write(outputAccessor === null ? "return true;" : `return ${outputAccessor};`);
+    let constantNames = ["INVALID", ...ctx.constants.keys()];
+    let constantValues = [cjsExports.INVALID, ...ctx.constants.values()];
+    let code = doc.content.join(`
+`);
+    let fullCode = options?.debug
+      ? constantNames.length > 0
+        ? `// Constants: ${constantNames.join(", ")}
+${code}`
+        : code
+      : "";
+    let F = Function;
+    let h = `return (input) => {
+${code}
+}`;
+    let fn;
     try {
-      m = new f(...a, h)(...l);
-    } catch (error) {
-      throw new ZodCompileUnsupportedError(
-        `this schema (generated code failed to evaluate: ${error.message})`,
-      );
+      fn = new F(...constantNames, h)(...constantValues);
+    } catch (err) {
+      throw new ZodCompileUnsupportedError(`this schema (generated code failed to evaluate: ${err.message})`);
     }
-    if (t?.debug) m.code = u;
-    return ((m.definite = o.definite), m);
+    if (options?.debug) fn.code = fullCode;
+    fn.definite = ctx.definite;
+    return fn;
   }
-  function st(e, t) {
-    for (let [o, r] of e.constants) if (r === t) return o;
-    let n = `c${e.constantCounter++}`;
-    return (e.constants.set(n, t), n);
+  function addConstant(ctx, value) {
+    for (let [name, v] of ctx.constants) if (v === value) return name;
+    let name = `c${ctx.constantCounter++}`;
+    ctx.constants.set(name, value);
+    return name;
   }
-  function tl(e, t) {
-    return ((e.definite = !1), st(e, t));
+  function addUserConstant(ctx, fn) {
+    ctx.definite = false;
+    return addConstant(ctx, fn);
   }
-  function We(e) {
-    return `v${e.varCounter++}`;
+  function newVar(ctx) {
+    return `v${ctx.varCounter++}`;
   }
-  function mY(e, t) {
-    let run = e._zod.run({ value: t, issues: [] }, {});
-    if (run && typeof run.then === "function") return Mt.INVALID;
-    let o = run;
-    return o.issues.length === 0 ? o.value : Mt.INVALID;
+  function runtimeRun(schema, value) {
+    let result = schema._zod.run(
+      {
+        value,
+        issues: [],
+      },
+      {},
+    );
+    if (result && typeof result.then === "function") return cjsExports.INVALID;
+    let r = result;
+    return r.issues.length === 0 ? r.value : cjsExports.INVALID;
   }
-  function kr(e, t, n, o, r = !0) {
-    let s = e.content.length,
-      size = t.constants.size,
-      { constantCounter: constantCounter, varCounter: varCounter } = t;
+  function compileChild(doc, ctx, schema, accessor, needsValue = true) {
+    let contentLen = doc.content.length;
+    let constantCount = ctx.constants.size;
+    let { constantCounter, varCounter } = ctx;
     try {
-      return yn(e, t, n, o, r);
-    } catch (error) {
-      if (!(error instanceof ZodCompileUnsupportedError) || !error.islandable) throw error;
-      if (((e.content.length = s), t.constants.size > size)) {
-        let sliced = Array.from(t.constants.keys()).slice(size);
-        for (let h of sliced) t.constants.delete(h);
+      return generateCheck(doc, ctx, schema, accessor, needsValue);
+    } catch (err) {
+      if (!(err instanceof ZodCompileUnsupportedError) || !err.islandable) throw err;
+      doc.content.length = contentLen;
+      if (ctx.constants.size > constantCount) {
+        let trailing = Array.from(ctx.constants.keys()).slice(constantCount);
+        for (let k of trailing) ctx.constants.delete(k);
       }
-      return ((t.constantCounter = constantCounter), (t.varCounter = varCounter), gY(e, t, n, o));
+      ctx.constantCounter = constantCounter;
+      ctx.varCounter = varCounter;
+      return emitRuntimeIsland(doc, ctx, schema, accessor);
     }
   }
-  function gY(e, t, n, o) {
-    t.definite = !1;
-    let r = st(t, n),
-      s = st(t, mY),
-      a = We(t);
-    return (e.write(`const ${a} = ${s}(${r}, ${o});`), e.write(`if (${a} === INVALID) return INVALID;`), a);
+  function emitRuntimeIsland(doc, ctx, schema, accessor) {
+    ctx.definite = false;
+    let schemaConst = addConstant(ctx, schema);
+    let runConst = addConstant(ctx, runtimeRun);
+    let outVar = newVar(ctx);
+    doc.write(`const ${outVar} = ${runConst}(${schemaConst}, ${accessor});`);
+    doc.write(`if (${outVar} === INVALID) return INVALID;`);
+    return outVar;
   }
-  var yY = new Set(["max_size", "min_size", "size_equals", "max_length", "min_length", "length_equals"]);
-  function _Y(e, t, n, o) {
-    let checks = n._zod.def.checks;
-    if (!checks || checks.length === 0) return o;
-    let s = o;
-    for (let a of checks) {
-      let def = a._zod.def;
-      if (def.when && !yY.has(def.check))
+  var WHEN_DEFAULTED_CHECKS = new Set([
+    "max_size",
+    "min_size",
+    "size_equals",
+    "max_length",
+    "min_length",
+    "length_equals",
+  ]);
+  function generateChecks(doc, ctx, schema, accessor) {
+    let schemaChecks = schema._zod.def.checks;
+    if (!schemaChecks || schemaChecks.length === 0) return accessor;
+    let currentAccessor = accessor;
+    for (let check of schemaChecks) {
+      let def = check._zod.def;
+      if (def.when && !WHEN_DEFAULTED_CHECKS.has(def.check))
         throw new ZodCompileUnsupportedError('check with a custom "when" condition');
       switch (def.check) {
         case "greater_than":
-          bY(e, t, def, s);
+          generateGreaterThanCheck(doc, ctx, def, currentAccessor);
           break;
         case "less_than":
-          vY(e, t, def, s);
+          generateLessThanCheck(doc, ctx, def, currentAccessor);
           break;
         case "multiple_of":
-          wY(e, t, def, s);
+          generateMultipleOfCheck(doc, ctx, def, currentAccessor);
           break;
         case "number_format":
-          $C(e, def, s);
+          generateNumberFormatCheck(doc, def, currentAccessor);
           break;
         case "min_length": {
-          let c = Qa(def.minimum, "min_length"),
-            u = q_(e, t, s, `${s}.length >= ${c} && ${s}.length < ${def.minimum * 2}`);
-          e.write(`if (${u} < ${c}) return INVALID;`);
+          let min = numericOperand(def.minimum, "min_length");
+          let len = codePointLengthVar(
+            doc,
+            ctx,
+            currentAccessor,
+            `${currentAccessor}.length >= ${min} && ${currentAccessor}.length < ${def.minimum * 2}`,
+          );
+          doc.write(`if (${len} < ${min}) return INVALID;`);
           break;
         }
         case "max_length": {
-          let c = Qa(def.maximum, "max_length"),
-            u = q_(e, t, s, `${s}.length > ${c}`);
-          e.write(`if (${u} > ${c}) return INVALID;`);
+          let max = numericOperand(def.maximum, "max_length");
+          let len = codePointLengthVar(doc, ctx, currentAccessor, `${currentAccessor}.length > ${max}`);
+          doc.write(`if (${len} > ${max}) return INVALID;`);
           break;
         }
         case "length_equals": {
-          let c = Qa(def.length, "length_equals"),
-            u = q_(e, t, s, `${s}.length >= ${c} && ${s}.length <= ${def.length * 2}`);
-          e.write(`if (${u} !== ${c}) return INVALID;`);
+          let exact = numericOperand(def.length, "length_equals");
+          let len = codePointLengthVar(
+            doc,
+            ctx,
+            currentAccessor,
+            `${currentAccessor}.length >= ${exact} && ${currentAccessor}.length <= ${def.length * 2}`,
+          );
+          doc.write(`if (${len} !== ${exact}) return INVALID;`);
           break;
         }
         case "min_size":
-          e.write(`if (${s}.size < ${Qa(def.minimum, "min_size")}) return INVALID;`);
+          doc.write(
+            `if (${currentAccessor}.size < ${numericOperand(def.minimum, "min_size")}) return INVALID;`,
+          );
           break;
         case "max_size":
-          e.write(`if (${s}.size > ${Qa(def.maximum, "max_size")}) return INVALID;`);
+          doc.write(
+            `if (${currentAccessor}.size > ${numericOperand(def.maximum, "max_size")}) return INVALID;`,
+          );
           break;
         case "size_equals":
-          e.write(`if (${s}.size !== ${Qa(def.size, "size_equals")}) return INVALID;`);
+          doc.write(
+            `if (${currentAccessor}.size !== ${numericOperand(def.size, "size_equals")}) return INVALID;`,
+          );
           break;
         case "string_format":
-          s = DC(e, t, def, s);
+          currentAccessor = generateStringFormatCheck(doc, ctx, def, currentAccessor);
           break;
         case "custom":
-          s = PY(e, t, a, s);
+          currentAccessor = generateCustomRefineCheck(doc, ctx, check, currentAccessor);
           break;
         case "bigint_format":
-          OY(e, def, s);
+          generateBigIntFormatCheck(doc, def, currentAccessor);
           break;
         case "mime_type":
-          SY(e, t, def, s);
+          generateMimeTypeCheck(doc, ctx, def, currentAccessor);
           break;
         case "property":
-          kY(e, t, def, s);
+          generatePropertyCheck(doc, ctx, def, currentAccessor);
           break;
         case "properties":
-          RC(e, t, def, s, !1);
+          generatePropertiesChecks(doc, ctx, def, currentAccessor, false);
           break;
         case "overwrite": {
-          let c = We(t);
-          (EY(e, t, a, s, c), (s = c));
+          let newAccessor = newVar(ctx);
+          generateOverwriteCheck(doc, ctx, check, currentAccessor, newAccessor);
+          currentAccessor = newAccessor;
           break;
         }
         default:
           throw new ZodCompileUnsupportedError(`check type ${def.check}`);
       }
     }
-    return s;
+    return currentAccessor;
   }
-  function q_(e, t, n, o) {
-    let r = st(t, hr.codePointLength),
-      s = We(t);
-    return (e.write(`const ${s} = typeof ${n} === "string" && ${o} ? ${r}(${n}) : ${n}.length;`), s);
+  function codePointLengthVar(doc, ctx, accessor, inDoubt) {
+    let cpLen = addConstant(ctx, util.codePointLength);
+    let v = newVar(ctx);
+    doc.write(
+      `const ${v} = typeof ${accessor} === "string" && ${inDoubt} ? ${cpLen}(${accessor}) : ${accessor}.length;`,
+    );
+    return v;
   }
-  function Qa(e, t) {
-    if (typeof e !== "number" || !Number.isFinite(e))
-      throw new ZodCompileUnsupportedError(`${t} bound of type ${typeof e}`);
-    return `${e}`;
+  function numericOperand(value, label) {
+    if (typeof value !== "number" || !Number.isFinite(value))
+      throw new ZodCompileUnsupportedError(`${label} bound of type ${typeof value}`);
+    return `${value}`;
   }
-  function TC(e, t) {
-    if (typeof t === "bigint") return `${t}n`;
-    if (typeof t === "number") {
-      if (Number.isNaN(t)) throw new ZodCompileUnsupportedError("comparison check with NaN bound");
-      return `${t}`;
+  function comparisonOperand(ctx, value) {
+    if (typeof value === "bigint") return `${value}n`;
+    if (typeof value === "number") {
+      if (Number.isNaN(value)) throw new ZodCompileUnsupportedError("comparison check with NaN bound");
+      return `${value}`;
     }
-    if (t instanceof Date) {
-      if (Number.isNaN(t.getTime()))
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime()))
         throw new ZodCompileUnsupportedError("comparison check with Invalid Date bound");
-      return st(e, t);
+      return addConstant(ctx, value);
     }
-    throw new ZodCompileUnsupportedError(`comparison check bound of type ${typeof t}`);
+    throw new ZodCompileUnsupportedError(`comparison check bound of type ${typeof value}`);
   }
-  function bY(e, t, n, o) {
-    let r = n.inclusive ? "<" : "<=";
-    e.write(`if (${o} ${r} ${TC(t, n.value)}) return INVALID;`);
+  function generateGreaterThanCheck(doc, ctx, def, accessor) {
+    let op = def.inclusive ? "<" : "<=";
+    doc.write(`if (${accessor} ${op} ${comparisonOperand(ctx, def.value)}) return INVALID;`);
   }
-  function vY(e, t, n, o) {
-    let r = n.inclusive ? ">" : ">=";
-    e.write(`if (${o} ${r} ${TC(t, n.value)}) return INVALID;`);
+  function generateLessThanCheck(doc, ctx, def, accessor) {
+    let op = def.inclusive ? ">" : ">=";
+    doc.write(`if (${accessor} ${op} ${comparisonOperand(ctx, def.value)}) return INVALID;`);
   }
-  function wY(e, t, n, o) {
-    if (typeof n.value === "bigint") {
-      if (n.value === BigInt(0))
+  function generateMultipleOfCheck(doc, ctx, def, accessor) {
+    if (typeof def.value === "bigint") {
+      if (def.value === BigInt(0))
         throw new ZodCompileUnsupportedError("multiple_of check with a zero divisor");
-      e.write(`if (${o} % ${n.value}n !== 0n) return INVALID;`);
+      doc.write(`if (${accessor} % ${def.value}n !== 0n) return INVALID;`);
     } else {
-      let r = st(t, hr.floatSafeRemainder);
-      e.write(`if (${r}(${o}, ${Qa(n.value, "multiple_of")}) !== 0) return INVALID;`);
+      let remainder = addConstant(ctx, util.floatSafeRemainder);
+      doc.write(
+        `if (${remainder}(${accessor}, ${numericOperand(def.value, "multiple_of")}) !== 0) return INVALID;`,
+      );
     }
   }
-  function $C(e, t, n) {
-    let format = t.format;
+  function generateNumberFormatCheck(doc, def, accessor) {
+    let format = def.format;
     switch (format) {
       case "safeint":
-        e.write(`if (!Number.isSafeInteger(${n})) return INVALID;`);
+        doc.write(`if (!Number.isSafeInteger(${accessor})) return INVALID;`);
         break;
       case "int32":
-        e.write(`if (!Number.isInteger(${n}) || ${n} < -2147483648 || ${n} > 2147483647) return INVALID;`);
+        doc.write(
+          `if (!Number.isInteger(${accessor}) || ${accessor} < -2147483648 || ${accessor} > 2147483647) return INVALID;`,
+        );
         break;
       case "uint32":
-        e.write(`if (!Number.isInteger(${n}) || ${n} < 0 || ${n} > 4294967295) return INVALID;`);
+        doc.write(
+          `if (!Number.isInteger(${accessor}) || ${accessor} < 0 || ${accessor} > 4294967295) return INVALID;`,
+        );
         break;
       case "float32":
-        e.write(
-          `if (!Number.isFinite(${n}) || ${n} < -3.4028234663852886e38 || ${n} > 3.4028234663852886e38) return INVALID;`,
+        doc.write(
+          `if (!Number.isFinite(${accessor}) || ${accessor} < -3.4028234663852886e38 || ${accessor} > 3.4028234663852886e38) return INVALID;`,
         );
         break;
       case "float64":
-        e.write(`if (!Number.isFinite(${n})) return INVALID;`);
+        doc.write(`if (!Number.isFinite(${accessor})) return INVALID;`);
         break;
       default:
         throw new ZodCompileUnsupportedError(`number format ${format}`);
     }
   }
-  function OY(e, t, n) {
-    let format = t.format;
+  function generateBigIntFormatCheck(doc, def, accessor) {
+    let format = def.format;
     if (!format) return;
     switch (format) {
       case "int64":
-        e.write(`if (${n} < -9223372036854775808n || ${n} > 9223372036854775807n) return INVALID;`);
+        doc.write(
+          `if (${accessor} < -9223372036854775808n || ${accessor} > 9223372036854775807n) return INVALID;`,
+        );
         break;
       case "uint64":
-        e.write(`if (${n} < 0n || ${n} > 18446744073709551615n) return INVALID;`);
+        doc.write(`if (${accessor} < 0n || ${accessor} > 18446744073709551615n) return INVALID;`);
         break;
       default:
         throw new ZodCompileUnsupportedError(`bigint format ${format}`);
     }
   }
-  function SY(e, t, n, o) {
-    let mime = n.mime;
-    if (mime && mime.length > 0) {
-      let s = st(t, new Set(mime));
-      e.write(`if (!${s}.has(${o}.type)) return INVALID;`);
+  function generateMimeTypeCheck(doc, ctx, def, accessor) {
+    let mimeTypes = def.mime;
+    if (mimeTypes && mimeTypes.length > 0) {
+      let mimeSet = addConstant(ctx, new Set(mimeTypes));
+      doc.write(`if (!${mimeSet}.has(${accessor}.type)) return INVALID;`);
     }
   }
-  function RC(e, t, n, o, r) {
-    if (n.when) throw new ZodCompileUnsupportedError('check with a custom "when" condition');
-    e.write(
-      r
-        ? `if (${o} === null || (typeof ${o} !== "object" && typeof ${o} !== "function")) return INVALID;`
-        : `if (${o} == null) return INVALID;`,
+  function generatePropertiesChecks(doc, ctx, def, accessor, schemaRole) {
+    if (def.when) throw new ZodCompileUnsupportedError('check with a custom "when" condition');
+    doc.write(
+      schemaRole
+        ? `if (${accessor} === null || (typeof ${accessor} !== "object" && typeof ${accessor} !== "function")) return INVALID;`
+        : `if (${accessor} == null) return INVALID;`,
     );
-    let shape = n.shape;
-    for (let a of Reflect.ownKeys(shape)) {
-      let l = typeof a === "symbol" ? st(t, a) : hr.esc(a),
-        c = We(t);
-      (e.write(`const ${c} = ${o}[${l}];`), kr(e, t, shape[a], c, !1));
+    let shape = def.shape;
+    for (let key of Reflect.ownKeys(shape)) {
+      let keyExpr = typeof key === "symbol" ? addConstant(ctx, key) : util.esc(key);
+      let inputVar = newVar(ctx);
+      doc.write(`const ${inputVar} = ${accessor}[${keyExpr}];`);
+      compileChild(doc, ctx, shape[key], inputVar, false);
     }
   }
-  function kY(e, t, n, o) {
-    let r = `${o}[${JSON.stringify(n.property)}]`;
-    yn(e, t, n.schema, r);
+  function generatePropertyCheck(doc, ctx, def, accessor) {
+    let propAccessor = `${accessor}[${JSON.stringify(def.property)}]`;
+    generateCheck(doc, ctx, def.schema, propAccessor);
   }
-  function EY(e, t, n, o, r) {
-    let tx = n._zod.def.tx;
+  function generateOverwriteCheck(doc, ctx, check, currentAccessor, newAccessor) {
+    let tx = check._zod.def.tx;
     if (!tx) throw new ZodCompileUnsupportedError("overwrite check without a transform function");
-    if (nl(tx)) throw new ZodCompileAsyncError("z.compile: async overwrite transforms are not supported");
-    let a = st(t, tx);
-    e.write(`const ${r} = ${a}(${o});`);
+    if (isAsyncFunction(tx))
+      throw new ZodCompileAsyncError("z.compile: async overwrite transforms are not supported");
+    let txConst = addConstant(ctx, tx);
+    doc.write(`const ${newAccessor} = ${txConst}(${currentAccessor});`);
   }
-  function G_() {
-    throw new AC.$ZodAsyncError();
+  function throwAsync() {
+    throw new core_js_1.$ZodAsyncError();
   }
-  function Y_(e) {
-    this.issues.push(e);
+  function pushIssue(issue) {
+    this.issues.push(issue);
   }
-  function PY(e, t, n, o) {
-    let def = n._zod.def;
+  function generateCustomRefineCheck(doc, ctx, check, accessor) {
+    let def = check._zod.def;
     if (def.fn) {
-      if (nl(def.fn))
+      if (isAsyncFunction(def.fn))
         throw new ZodCompileAsyncError("z.compile: async .refine() predicates are not supported");
-      let s = tl(t, def.fn),
-        a = st(t, G_),
-        l = We(t);
-      return (
-        e.write(`const ${l} = ${s}(${o});`),
-        e.write(`if (${l} instanceof Promise) ${a}();`),
-        e.write(`if (!${l}) return INVALID;`),
-        o
-      );
+      let fnConst = addUserConstant(ctx, def.fn);
+      let throwAsyncConst = addConstant(ctx, throwAsync);
+      let resVar = newVar(ctx);
+      doc.write(`const ${resVar} = ${fnConst}(${accessor});`);
+      doc.write(`if (${resVar} instanceof Promise) ${throwAsyncConst}();`);
+      doc.write(`if (!${resVar}) return INVALID;`);
+      return accessor;
     }
-    if (n._zod.check) {
-      if (nl(n._zod.check))
+    if (check._zod.check) {
+      if (isAsyncFunction(check._zod.check))
         throw new ZodCompileAsyncError("z.compile: async .superRefine() / check functions are not supported");
-      let check = n._zod.check,
-        l = tl(t, (u) => {
-          let f = { value: u, issues: [], addIssue: Y_ };
-          if (check(f) instanceof Promise) G_();
-          return f.issues.length === 0 ? f.value : Mt.INVALID;
-        }),
-        c = We(t);
-      return (e.write(`const ${c} = ${l}(${o});`), e.write(`if (${c} === INVALID) return INVALID;`), c);
+      let checkFn = check._zod.check;
+      let l = addUserConstant(ctx, (value) => {
+        let fakePayload = {
+          value,
+          issues: [],
+          addIssue: pushIssue,
+        };
+        if (checkFn(fakePayload) instanceof Promise) throwAsync();
+        return fakePayload.issues.length === 0 ? fakePayload.value : cjsExports.INVALID;
+      });
+      let outVar = newVar(ctx);
+      doc.write(`const ${outVar} = ${l}(${accessor});`);
+      doc.write(`if (${outVar} === INVALID) return INVALID;`);
+      return outVar;
     }
     throw new ZodCompileUnsupportedError("custom check without a predicate or check function");
   }
-  var AY = new Set([
+  var PATTERN_IS_COMPLETE = new Set([
     "cidrv4",
     "cuid",
     "cuid2",
@@ -471,424 +540,461 @@ ${joined}
     "uuid",
     "xid",
   ]);
-  function DC(e, t, n, o) {
-    let format = n.format;
-    if (format === "base64") {
-      let c = st(t, gn.isValidBase64);
-      return (e.write(`if (!${c}(${o})) return INVALID;`), o);
+  function generateStringFormatCheck(doc, ctx, def, accessor) {
+    let fmt = def.format;
+    if (fmt === "base64") {
+      let validator = addConstant(ctx, schemas_js_1.isValidBase64);
+      doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+      return accessor;
     }
-    if (format === "base64url") {
-      let c = st(t, gn.isValidBase64URL);
-      return (e.write(`if (!${c}(${o})) return INVALID;`), o);
+    if (fmt === "base64url") {
+      let validator = addConstant(ctx, schemas_js_1.isValidBase64URL);
+      doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+      return accessor;
     }
-    if (format === "jwt") {
-      let c = st(t, gn.isValidJWT),
-        u = st(t, n.alg ?? null);
-      return (e.write(`if (!${c}(${o}, ${u})) return INVALID;`), o);
+    if (fmt === "jwt") {
+      let validator = addConstant(ctx, schemas_js_1.isValidJWT);
+      let alg = addConstant(ctx, def.alg ?? null);
+      doc.write(`if (!${validator}(${accessor}, ${alg})) return INVALID;`);
+      return accessor;
     }
-    if (format === "ipv6") {
-      let c = st(t, gn.isValidIPv6);
-      return (e.write(`if (!${c}(${o})) return INVALID;`), o);
+    if (fmt === "ipv6") {
+      let validator = addConstant(ctx, schemas_js_1.isValidIPv6);
+      doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+      return accessor;
     }
-    if (format === "cidrv6") {
-      let c = st(t, gn.isValidCIDRv6);
-      return (e.write(`if (!${c}(${o})) return INVALID;`), o);
+    if (fmt === "cidrv6") {
+      let validator = addConstant(ctx, schemas_js_1.isValidCIDRv6);
+      doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+      return accessor;
     }
-    if (format === "credit_card") {
-      let c = st(t, gn.isValidCreditCard);
-      return (e.write(`if (!${c}(${o})) return INVALID;`), o);
+    if (fmt === "credit_card") {
+      let validator = addConstant(ctx, schemas_js_1.isValidCreditCard);
+      doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+      return accessor;
     }
-    if (format === "iban") {
-      let c = st(t, gn.isValidIBAN);
-      return (e.write(`if (!${c}(${o})) return INVALID;`), o);
+    if (fmt === "iban") {
+      let validator = addConstant(ctx, schemas_js_1.isValidIBAN);
+      doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+      return accessor;
     }
-    let s = n;
+    let formatDef = def;
     if (
-      format === "url" ||
-      format === "httpurl" ||
-      s.normalize ||
-      s.hostname !== void 0 ||
-      s.protocol !== void 0
+      fmt === "url" ||
+      fmt === "httpurl" ||
+      formatDef.normalize ||
+      formatDef.hostname !== undefined ||
+      formatDef.protocol !== undefined
     ) {
-      let c = st(t, gn.parseURLObject),
-        u = st(t, n),
-        f = We(t),
-        h = We(t);
-      if (
-        (e.write(`const ${f} = ${o}.trim();`),
-        e.write(`const ${h} = ${c}(${f}, ${u});`),
-        e.write(`if (typeof ${h} === "number") return INVALID;`),
-        s.hostname !== void 0)
-      ) {
-        let b = st(t, gn.urlHostnameOk);
-        e.write(`if (!${b}(${h}, ${u}.hostname)) return INVALID;`);
+      let parseConst = addConstant(ctx, schemas_js_1.parseURLObject);
+      let defConst = addConstant(ctx, def);
+      let trimVar = newVar(ctx);
+      let urlVar = newVar(ctx);
+      doc.write(`const ${trimVar} = ${accessor}.trim();`);
+      doc.write(`const ${urlVar} = ${parseConst}(${trimVar}, ${defConst});`);
+      doc.write(`if (typeof ${urlVar} === "number") return INVALID;`);
+      if (formatDef.hostname !== undefined) {
+        let hostnameConst = addConstant(ctx, schemas_js_1.urlHostnameOk);
+        doc.write(`if (!${hostnameConst}(${urlVar}, ${defConst}.hostname)) return INVALID;`);
       }
-      if (s.protocol !== void 0) {
-        let b = st(t, gn.urlProtocolOk);
-        e.write(`if (!${b}(${h}, ${u}.protocol)) return INVALID;`);
+      if (formatDef.protocol !== undefined) {
+        let protocolConst = addConstant(ctx, schemas_js_1.urlProtocolOk);
+        doc.write(`if (!${protocolConst}(${urlVar}, ${defConst}.protocol)) return INVALID;`);
       }
-      let m = We(t),
-        y = s.normalize ? `${h}.href` : `${st(t, gn.stripTabAndNewline)}(${f})`;
-      return (e.write(`const ${m} = ${y};`), m);
+      let outputVar = newVar(ctx);
+      let outputExpr = formatDef.normalize
+        ? `${urlVar}.href`
+        : `${addConstant(ctx, schemas_js_1.stripTabAndNewline)}(${trimVar})`;
+      doc.write(`const ${outputVar} = ${outputExpr};`);
+      return outputVar;
     }
-    let fn = n.fn;
-    if (fn) {
-      if (nl(fn)) throw new ZodCompileUnsupportedError(`async string format ${format}`);
-      let c = st(t, fn);
-      return (e.write(`if (!${c}(${o})) return INVALID;`), o);
+    let customFn = def.fn;
+    if (customFn) {
+      if (isAsyncFunction(customFn)) throw new ZodCompileUnsupportedError(`async string format ${fmt}`);
+      let fnConst = addConstant(ctx, customFn);
+      doc.write(`if (!${fnConst}(${accessor})) return INVALID;`);
+      return accessor;
     }
-    if (AY.has(format) && n.pattern) {
-      let c = st(t, n.pattern);
-      return (e.write(`${c}.lastIndex = 0;`), e.write(`if (!${c}.test(${o})) return INVALID;`), o);
+    if (PATTERN_IS_COMPLETE.has(fmt) && def.pattern) {
+      let patternConst = addConstant(ctx, def.pattern);
+      doc.write(`${patternConst}.lastIndex = 0;`);
+      doc.write(`if (!${patternConst}.test(${accessor})) return INVALID;`);
+      return accessor;
     }
-    let format_2 = n.format;
-    switch (format_2) {
+    let format = def.format;
+    switch (format) {
       case "regex":
         throw new ZodCompileUnsupportedError("regex format without a pattern");
       case "lowercase":
-        e.write(`if (${o} !== ${o}.toLowerCase()) return INVALID;`);
+        doc.write(`if (${accessor} !== ${accessor}.toLowerCase()) return INVALID;`);
         break;
       case "uppercase":
-        e.write(`if (${o} !== ${o}.toUpperCase()) return INVALID;`);
+        doc.write(`if (${accessor} !== ${accessor}.toUpperCase()) return INVALID;`);
         break;
       case "includes":
-        e.write(`if (!${o}.includes(${hr.esc(n.includes)})) return INVALID;`);
+        doc.write(`if (!${accessor}.includes(${util.esc(def.includes)})) return INVALID;`);
         break;
       case "starts_with": {
-        let prefix = n.prefix;
-        e.write(`if (${o}.slice(0, ${prefix.length}) !== ${hr.esc(prefix)}) return INVALID;`);
+        let prefix = def.prefix;
+        doc.write(`if (${accessor}.slice(0, ${prefix.length}) !== ${util.esc(prefix)}) return INVALID;`);
         break;
       }
       case "ends_with": {
-        let suffix = n.suffix;
-        e.write(`if (${o}.slice(-${suffix.length}) !== ${hr.esc(suffix)}) return INVALID;`);
+        let suffix = def.suffix;
+        doc.write(`if (${accessor}.slice(-${suffix.length}) !== ${util.esc(suffix)}) return INVALID;`);
         break;
       }
       default:
-        throw new ZodCompileUnsupportedError(`string format ${format_2}`);
+        throw new ZodCompileUnsupportedError(`string format ${format}`);
     }
-    return o;
+    return accessor;
   }
-  function yn(e, t, n, o, r = !0) {
-    let def = n._zod.def,
-      a = def.type;
-    if (def.coerce) throw new ZodCompileUnsupportedError(`coercion (z.coerce.${a}())`);
-    let l = r || !!def.checks?.length,
-      c;
-    switch (a) {
+  function generateCheck(doc, ctx, schema, accessor, needsValue = true) {
+    let def = schema._zod.def;
+    let type = def.type;
+    if (def.coerce) throw new ZodCompileUnsupportedError(`coercion (z.coerce.${type}())`);
+    let buildsValue = needsValue || !!def.checks?.length;
+    let typeAccessor;
+    switch (type) {
       case "string":
-        c = IY(e, t, n, o);
+        typeAccessor = generateStringCheck(doc, ctx, schema, accessor);
         break;
       case "number":
-        c = CY(e, n, o);
+        typeAccessor = generateNumberCheck(doc, schema, accessor);
         break;
       case "boolean":
-        c = TY(e, o);
+        typeAccessor = generateBooleanCheck(doc, accessor);
         break;
       case "bigint":
-        c = $Y(e, n, o);
+        typeAccessor = generateBigIntCheck(doc, schema, accessor);
         break;
       case "symbol":
-        c = RY(e, o);
+        typeAccessor = generateSymbolCheck(doc, accessor);
         break;
       case "undefined":
-        c = DY(e, o);
+        typeAccessor = generateUndefinedCheck(doc, accessor);
         break;
       case "null":
-        c = MY(e, o);
+        typeAccessor = generateNullCheck(doc, accessor);
         break;
       case "any":
       case "unknown":
-        c = o;
+        typeAccessor = accessor;
         break;
       case "never":
-        (e.write("return INVALID;"), (c = o));
+        doc.write("return INVALID;");
+        typeAccessor = accessor;
         break;
       case "void":
-        c = jY(e, o);
+        typeAccessor = generateVoidCheck(doc, accessor);
         break;
       case "nan":
-        c = xY(e, o);
+        typeAccessor = generateNaNCheck(doc, accessor);
         break;
       case "date":
-        c = LY(e, o);
+        typeAccessor = generateDateCheck(doc, accessor);
         break;
       case "object":
-        c = NY(e, t, n, o, l);
+        typeAccessor = generateObjectCheck(doc, ctx, schema, accessor, buildsValue);
         break;
       case "optional":
-        c = UY(e, t, n, o, l);
+        typeAccessor = generateOptionalCheck(doc, ctx, schema, accessor, buildsValue);
         break;
       case "nullable":
-        c = BY(e, t, n, o, l);
+        typeAccessor = generateNullableCheck(doc, ctx, schema, accessor, buildsValue);
         break;
       case "array":
-        c = HY(e, t, n, o, l);
+        typeAccessor = generateArrayCheck(doc, ctx, schema, accessor, buildsValue);
         break;
       case "literal":
-        c = KY(e, t, n, o);
+        typeAccessor = generateLiteralCheck(doc, ctx, schema, accessor);
         break;
       case "enum":
-        c = ZY(e, t, n, o);
+        typeAccessor = generateEnumCheck(doc, ctx, schema, accessor);
         break;
       case "readonly": {
-        let u = SC(e, t, n, o),
-          f = We(t);
-        (e.write(`const ${f} = Object.freeze(${u});`), (c = f));
+        let innerOut = generateWrapperCheck(doc, ctx, schema, accessor);
+        let frozenVar = newVar(ctx);
+        doc.write(`const ${frozenVar} = Object.freeze(${innerOut});`);
+        typeAccessor = frozenVar;
         break;
       }
       case "success":
-        (SC(e, t, n, o), (c = "true"));
+        generateWrapperCheck(doc, ctx, schema, accessor);
+        typeAccessor = "true";
         break;
       case "default":
       case "prefault":
-        c = VY(e, t, n, o);
+        typeAccessor = generateDefaultCheck(doc, ctx, schema, accessor);
         break;
       case "nonoptional":
-        c = qY(e, t, n, o);
+        typeAccessor = generateNonOptionalCheck(doc, ctx, schema, accessor);
         break;
       case "tuple":
-        c = GY(e, t, n, o);
+        typeAccessor = generateTupleCheck(doc, ctx, schema, accessor);
         break;
       case "union":
-        c = WY(e, t, n, o);
+        typeAccessor = generateUnionCheck(doc, ctx, schema, accessor);
         break;
       case "intersection":
-        c = XY(e, t, n, o);
+        typeAccessor = generateIntersectionCheck(doc, ctx, schema, accessor);
         break;
       case "record":
-        c = QY(e, t, n, o);
+        typeAccessor = generateRecordCheck(doc, ctx, schema, accessor);
         break;
       case "map":
-        c = tJ(e, t, n, o);
+        typeAccessor = generateMapCheck(doc, ctx, schema, accessor);
         break;
       case "set":
-        c = nJ(e, t, n, o);
+        typeAccessor = generateSetCheck(doc, ctx, schema, accessor);
         break;
       case "file":
-        c = rJ(e, o);
+        typeAccessor = generateFileCheck(doc, accessor);
         break;
       case "template_literal":
-        c = iJ(e, t, n, o);
+        typeAccessor = generateTemplateLiteralCheck(doc, ctx, schema, accessor);
         break;
       case "lazy":
-        c = oJ(e, t, n, o);
+        typeAccessor = generateLazyCheck(doc, ctx, schema, accessor);
         break;
       case "pipe":
-        c = sJ(e, t, n, o);
+        typeAccessor = generatePipeCheck(doc, ctx, schema, accessor);
         break;
       case "custom":
-        c = aJ(e, t, n, o);
+        typeAccessor = generateCustomCheck(doc, ctx, schema, accessor);
         break;
       case "properties":
-        (RC(e, t, n._zod.def, o, !0), (c = o));
+        generatePropertiesChecks(doc, ctx, schema._zod.def, accessor, true);
+        typeAccessor = accessor;
         break;
       case "transform":
-        c = uJ(e, t, n, o);
+        typeAccessor = generateTransformCheck(doc, ctx, schema, accessor);
         break;
       case "catch":
-        c = cJ(e, t, n, o);
+        typeAccessor = generateCatchCheck(doc, ctx, schema, accessor);
         break;
       default:
-        throw new ZodCompileUnsupportedError(`schema type ${a}`);
+        throw new ZodCompileUnsupportedError(`schema type ${type}`);
     }
-    if (c === null) return null;
-    return _Y(e, t, n, c);
+    if (typeAccessor === null) return null;
+    return generateChecks(doc, ctx, schema, typeAccessor);
   }
-  function IY(e, t, n, o) {
-    e.write(`if (typeof ${o} !== "string") return INVALID;`);
-    let def = n._zod.def;
-    if (def.format === void 0) return o;
-    return DC(e, t, def, o);
+  function generateStringCheck(doc, ctx, schema, accessor) {
+    doc.write(`if (typeof ${accessor} !== "string") return INVALID;`);
+    let def = schema._zod.def;
+    if (def.format === undefined) return accessor;
+    return generateStringFormatCheck(doc, ctx, def, accessor);
   }
-  function CY(e, t, n) {
-    e.write(`if (typeof ${n} !== "number" || !Number.isFinite(${n})) return INVALID;`);
-    let def = t._zod.def;
-    if (def.check === "number_format" && def.format) $C(e, { format: def.format }, n);
-    return n;
+  function generateNumberCheck(doc, schema, accessor) {
+    doc.write(`if (typeof ${accessor} !== "number" || !Number.isFinite(${accessor})) return INVALID;`);
+    let def = schema._zod.def;
+    if (def.check === "number_format" && def.format)
+      generateNumberFormatCheck(
+        doc,
+        {
+          format: def.format,
+        },
+        accessor,
+      );
+    return accessor;
   }
-  function TY(e, t) {
-    return (e.write(`if (typeof ${t} !== "boolean") return INVALID;`), t);
+  function generateBooleanCheck(doc, accessor) {
+    doc.write(`if (typeof ${accessor} !== "boolean") return INVALID;`);
+    return accessor;
   }
-  function $Y(e, t, n) {
-    e.write(`if (typeof ${n} !== "bigint") return INVALID;`);
-    let def = t._zod.def;
+  function generateBigIntCheck(doc, schema, accessor) {
+    doc.write(`if (typeof ${accessor} !== "bigint") return INVALID;`);
+    let def = schema._zod.def;
     if (def.format)
       switch (def.format) {
         case "int64":
-          e.write(`if (${n} < -9223372036854775808n || ${n} > 9223372036854775807n) return INVALID;`);
+          doc.write(
+            `if (${accessor} < -9223372036854775808n || ${accessor} > 9223372036854775807n) return INVALID;`,
+          );
           break;
         case "uint64":
-          e.write(`if (${n} < 0n || ${n} > 18446744073709551615n) return INVALID;`);
+          doc.write(`if (${accessor} < 0n || ${accessor} > 18446744073709551615n) return INVALID;`);
           break;
       }
-    return n;
+    return accessor;
   }
-  function RY(e, t) {
-    return (e.write(`if (typeof ${t} !== "symbol") return INVALID;`), t);
+  function generateSymbolCheck(doc, accessor) {
+    doc.write(`if (typeof ${accessor} !== "symbol") return INVALID;`);
+    return accessor;
   }
-  function DY(e, t) {
-    return (e.write(`if (${t} !== undefined) return INVALID;`), t);
+  function generateUndefinedCheck(doc, accessor) {
+    doc.write(`if (${accessor} !== undefined) return INVALID;`);
+    return accessor;
   }
-  function MY(e, t) {
-    return (e.write(`if (${t} !== null) return INVALID;`), t);
+  function generateNullCheck(doc, accessor) {
+    doc.write(`if (${accessor} !== null) return INVALID;`);
+    return accessor;
   }
-  function jY(e, t) {
-    return (e.write(`if (${t} !== undefined) return INVALID;`), t);
+  function generateVoidCheck(doc, accessor) {
+    doc.write(`if (${accessor} !== undefined) return INVALID;`);
+    return accessor;
   }
-  function xY(e, t) {
-    return (e.write(`if (typeof ${t} !== "number" || !Number.isNaN(${t})) return INVALID;`), t);
+  function generateNaNCheck(doc, accessor) {
+    doc.write(`if (typeof ${accessor} !== "number" || !Number.isNaN(${accessor})) return INVALID;`);
+    return accessor;
   }
-  function LY(e, t) {
-    return (e.write(`if (!(${t} instanceof Date) || Number.isNaN(${t}.getTime())) return INVALID;`), t);
+  function generateDateCheck(doc, accessor) {
+    doc.write(`if (!(${accessor} instanceof Date) || Number.isNaN(${accessor}.getTime())) return INVALID;`);
+    return accessor;
   }
-  function NY(e, t, n, o, r = !0) {
-    let def = n._zod.def;
-    e.write(`if (typeof ${o} !== "object" || ${o} === null || Array.isArray(${o})) return INVALID;`);
-    let shape = def.shape,
-      keys = Object.keys(shape),
-      ownPropertySymbols = Object.getOwnPropertySymbols(shape),
-      u = ownPropertySymbols.length ? [...keys, ...ownPropertySymbols] : keys,
-      f = (M) => (typeof M === "symbol" ? st(t, M) : hr.esc(M)),
-      h = (M) => (typeof M === "symbol" ? `[${f(M)}]` : hr.esc(M)),
-      m = shape;
+  function generateObjectCheck(doc, ctx, schema, accessor, buildsValue = true) {
+    let def = schema._zod.def;
+    doc.write(
+      `if (typeof ${accessor} !== "object" || ${accessor} === null || Array.isArray(${accessor})) return INVALID;`,
+    );
+    let shape = def.shape;
+    let keys = Object.keys(shape);
+    let symbolKeys = Object.getOwnPropertySymbols(shape);
+    let allKeys = symbolKeys.length ? [...keys, ...symbolKeys] : keys;
+    let keyExpr = (k) => (typeof k === "symbol" ? addConstant(ctx, k) : util.esc(k));
+    let propKey = (k) => (typeof k === "symbol" ? `[${keyExpr(k)}]` : util.esc(k));
+    let propShape = shape;
     if (keys.includes("__proto__")) throw new ZodCompileUnsupportedError('object shape key "__proto__"');
-    let y = new Map();
-    for (let M of u) {
-      let N = m[M],
-        Z = f(M),
-        F = We(t);
-      if ((e.write(`const ${F} = ${o}[${Z}];`), N._zod.optin !== void 0)) {
-        let X = We(t);
-        if (
-          (e.write(`let ${X} = (() => {`),
-          e.indented((he) => {
-            let Me = kr(he, t, N, F);
-            he.write(`return ${Me};`);
-          }),
-          e.write("})();"),
-          N._zod.optout === "optional")
-        )
-          (e.write(`if (${X} === INVALID) {`),
-            e.indented((he) => {
-              (he.write(`if (${Z} in ${o}) return INVALID;`), he.write(`${X} = undefined;`));
-            }),
-            e.write("}"));
-        else e.write(`if (${X} === INVALID) return INVALID;`);
-        y.set(M, X);
+    let propOutputs = new Map();
+    for (let key of allKeys) {
+      let propSchema = propShape[key];
+      let kx = keyExpr(key);
+      let inputVar = newVar(ctx);
+      doc.write(`const ${inputVar} = ${accessor}[${kx}];`);
+      if (propSchema._zod.optin !== undefined) {
+        let outputVar = newVar(ctx);
+        doc.write(`let ${outputVar} = (() => {`);
+        doc.indented((d) => {
+          let outputAccessor = compileChild(d, ctx, propSchema, inputVar);
+          d.write(`return ${outputAccessor};`);
+        });
+        doc.write("})();");
+        if (propSchema._zod.optout === "optional") {
+          doc.write(`if (${outputVar} === INVALID) {`);
+          doc.indented((d) => {
+            d.write(`if (${kx} in ${accessor}) return INVALID;`);
+            d.write(`${outputVar} = undefined;`);
+          });
+          doc.write("}");
+        } else doc.write(`if (${outputVar} === INVALID) return INVALID;`);
+        propOutputs.set(key, outputVar);
       } else {
-        if (FY(N)) e.write(`if (!(${Z} in ${o})) return INVALID;`);
-        let X = kr(e, t, N, F, r);
-        if (X !== null) y.set(M, X);
+        if (requiresPresenceCheck(propSchema)) doc.write(`if (!(${kx} in ${accessor})) return INVALID;`);
+        let outputAccessor = compileChild(doc, ctx, propSchema, inputVar, buildsValue);
+        if (outputAccessor !== null) propOutputs.set(key, outputAccessor);
       }
     }
-    let catchall = def.catchall,
-      w = "none";
+    let catchall = def.catchall;
+    let unknownKeysMode = "none";
     if (catchall) {
-      let M = catchall._zod.def.type;
-      if (M === "never") {
-        let N = keys.map((Z) => `k !== ${hr.esc(Z)}`).join(" && ") || "true";
-        (e.write(`for (const k in ${o}) {`),
-          e.indented((Z) => {
-            Z.write(`if (${N}) return INVALID;`);
-          }),
-          e.write("}"));
-      } else if ((M === "unknown" || M === "any") && !catchall._zod.def.checks?.length) w = "passthrough";
-      else w = "schema";
+      let catchallType = catchall._zod.def.type;
+      if (catchallType === "never") {
+        let condition = keys.map((k) => `k !== ${util.esc(k)}`).join(" && ") || "true";
+        doc.write(`for (const k in ${accessor}) {`);
+        doc.indented((d) => {
+          d.write(`if (${condition}) return INVALID;`);
+        });
+        doc.write("}");
+      } else if ((catchallType === "unknown" || catchallType === "any") && !catchall._zod.def.checks?.length)
+        unknownKeysMode = "passthrough";
+      else unknownKeysMode = "schema";
     }
-    let S = We(t),
-      any = u.some((M) => OC(m[M]) || W_(m[M]));
-    if (!r) {
-      if (w === "schema") {
-        let M = keys.length > 0 ? st(t, new Set(keys)) : null;
-        (e.write(`for (const k in ${o}) {`),
-          e.indented((N) => {
-            if ((N.write('if (k === "__proto__") continue;'), M)) N.write(`if (${M}.has(k)) continue;`);
-            let Z = We(t);
-            (N.write(`const ${Z} = ${o}[k];`), kr(N, t, catchall, Z, !1));
-          }),
-          e.write("}"));
+    let outputVar = newVar(ctx);
+    let hasConditionalKeys = allKeys.some(
+      (k) => mayOmitUndefined(propShape[k]) || dropsWhenAbsent(propShape[k]),
+    );
+    if (!buildsValue) {
+      if (unknownKeysMode === "schema") {
+        let knownSet = keys.length > 0 ? addConstant(ctx, new Set(keys)) : null;
+        doc.write(`for (const k in ${accessor}) {`);
+        doc.indented((d) => {
+          d.write('if (k === "__proto__") continue;');
+          if (knownSet) d.write(`if (${knownSet}.has(k)) continue;`);
+          let valVar = newVar(ctx);
+          d.write(`const ${valVar} = ${accessor}[k];`);
+          compileChild(d, ctx, catchall, valVar, false);
+        });
+        doc.write("}");
       }
       return null;
     }
-    if (!any) {
-      let joined = u.map((N) => `${h(N)}: ${y.get(N)}`).join(", ");
-      e.write(`const ${S} = { ${joined} };`);
+    if (!hasConditionalKeys) {
+      let propLiterals = allKeys.map((k) => `${propKey(k)}: ${propOutputs.get(k)}`).join(", ");
+      doc.write(`const ${outputVar} = { ${propLiterals} };`);
     } else {
-      e.write(`const ${S} = {};`);
-      for (let M of u) {
-        let N = f(M),
-          Z = y.get(M);
-        if (W_(m[M])) e.write(`if (${N} in ${o}) ${S}[${N}] = ${Z};`);
-        else if (OC(m[M])) e.write(`if (${Z} !== undefined || ${N} in ${o}) ${S}[${N}] = ${Z};`);
-        else e.write(`${S}[${N}] = ${Z};`);
+      doc.write(`const ${outputVar} = {};`);
+      for (let k of allKeys) {
+        let kx = keyExpr(k);
+        let out = propOutputs.get(k);
+        if (dropsWhenAbsent(propShape[k]))
+          doc.write(`if (${kx} in ${accessor}) ${outputVar}[${kx}] = ${out};`);
+        else if (mayOmitUndefined(propShape[k]))
+          doc.write(`if (${out} !== undefined || ${kx} in ${accessor}) ${outputVar}[${kx}] = ${out};`);
+        else doc.write(`${outputVar}[${kx}] = ${out};`);
       }
     }
-    if (w !== "none") {
-      let M = keys.length > 0 ? st(t, new Set(keys)) : null;
-      (e.write(`for (const k in ${o}) {`),
-        e.indented((N) => {
-          if ((N.write('if (k === "__proto__") continue;'), M)) N.write(`if (${M}.has(k)) continue;`);
-          if (w === "passthrough") N.write(`${S}[k] = ${o}[k];`);
-          else {
-            let Z = We(t);
-            N.write(`const ${Z} = ${o}[k];`);
-            let F = kr(N, t, catchall, Z);
-            N.write(`${S}[k] = ${F};`);
-          }
-        }),
-        e.write("}"));
+    if (unknownKeysMode !== "none") {
+      let knownSet = keys.length > 0 ? addConstant(ctx, new Set(keys)) : null;
+      doc.write(`for (const k in ${accessor}) {`);
+      doc.indented((d) => {
+        d.write('if (k === "__proto__") continue;');
+        if (knownSet) d.write(`if (${knownSet}.has(k)) continue;`);
+        if (unknownKeysMode === "passthrough") d.write(`${outputVar}[k] = ${accessor}[k];`);
+        else {
+          let valVar = newVar(ctx);
+          d.write(`const ${valVar} = ${accessor}[k];`);
+          let catchallOut = compileChild(d, ctx, catchall, valVar);
+          d.write(`${outputVar}[k] = ${catchallOut};`);
+        }
+      });
+      doc.write("}");
     }
-    return S;
+    return outputVar;
   }
-  function UY(e, t, n, o, r = !0) {
-    let def = n._zod.def;
-    if (zY(n)) return yn(e, t, def.innerType, o, r);
+  function generateOptionalCheck(doc, ctx, schema, accessor, buildsValue = true) {
+    let def = schema._zod.def;
+    if (isExactOptional(schema)) return generateCheck(doc, ctx, def.innerType, accessor, buildsValue);
     if (def.innerType._zod.optin === "defaulted") {
-      let l = We(t),
-        c = We(t);
-      return (
-        e.write(`let ${l};`),
-        e.write(`if (${o} === undefined) {`),
-        e.indented((u) => {
-          (u.write(`const ${c} = (() => {`),
-            u.indented((f) => {
-              let h = yn(f, t, def.innerType, o);
-              f.write(`return ${h};`);
-            }),
-            u.write("})();"),
-            u.write(`if (${c} !== INVALID) ${l} = ${c};`));
-        }),
-        e.write("} else {"),
-        e.indented((u) => {
-          let f = yn(u, t, def.innerType, o);
-          u.write(`${l} = ${f};`);
-        }),
-        e.write("}"),
-        l
-      );
+      let outputVar = newVar(ctx);
+      let branchVar = newVar(ctx);
+      doc.write(`let ${outputVar};`);
+      doc.write(`if (${accessor} === undefined) {`);
+      doc.indented((d) => {
+        d.write(`const ${branchVar} = (() => {`);
+        d.indented((d2) => {
+          let innerOutput = generateCheck(d2, ctx, def.innerType, accessor);
+          d2.write(`return ${innerOutput};`);
+        });
+        d.write("})();");
+        d.write(`if (${branchVar} !== INVALID) ${outputVar} = ${branchVar};`);
+      });
+      doc.write("} else {");
+      doc.indented((d) => {
+        let innerOutput = generateCheck(d, ctx, def.innerType, accessor);
+        d.write(`${outputVar} = ${innerOutput};`);
+      });
+      doc.write("}");
+      return outputVar;
     }
-    let a = r ? We(t) : null;
-    if (a) e.write(`let ${a};`);
-    return (
-      e.write(`if (${o} !== undefined) {`),
-      e.indented((l) => {
-        let c = yn(l, t, def.innerType, o, r);
-        if (a && c !== null) l.write(`${a} = ${c};`);
-      }),
-      e.write("}"),
-      a
-    );
+    let outputVar = buildsValue ? newVar(ctx) : null;
+    if (outputVar) doc.write(`let ${outputVar};`);
+    doc.write(`if (${accessor} !== undefined) {`);
+    doc.indented((d) => {
+      let innerOutput = generateCheck(d, ctx, def.innerType, accessor, buildsValue);
+      if (outputVar && innerOutput !== null) d.write(`${outputVar} = ${innerOutput};`);
+    });
+    doc.write("}");
+    return outputVar;
   }
-  function zY(e) {
-    return e._zod.traits?.has("$ZodExactOptional") === !0;
+  function isExactOptional(schema) {
+    return schema._zod.traits?.has("$ZodExactOptional") === true;
   }
-  function FY(e) {
-    return e._zod.optin === void 0 && el(e);
+  function requiresPresenceCheck(schema) {
+    return schema._zod.optin === undefined && fastPathAcceptsAbsence(schema);
   }
-  function el(e) {
-    if (e._zod.def.coerce) return !0;
-    let def = e._zod.def;
+  function fastPathAcceptsAbsence(schema) {
+    if (schema._zod.def.coerce) return true;
+    let def = schema._zod.def;
     switch (def.type) {
       case "any":
       case "unknown":
@@ -899,7 +1005,7 @@ ${joined}
       case "transform":
       case "custom":
       case "lazy":
-        return !0;
+        return true;
       case "string":
       case "number":
       case "boolean":
@@ -917,39 +1023,41 @@ ${joined}
       case "set":
       case "file":
       case "template_literal":
-        return !1;
+        return false;
       case "nonoptional":
-        return def.innerType ? el(def.innerType) : !1;
+        return def.innerType ? fastPathAcceptsAbsence(def.innerType) : false;
       case "literal":
-        return !!def.values?.includes(void 0);
+        return !!def.values?.includes(undefined);
       case "enum":
-        return !!e._zod.values?.has(void 0);
+        return !!schema._zod.values?.has(undefined);
       case "optional":
       case "nullable":
       case "readonly":
       case "success":
-        return def.innerType ? el(def.innerType) : !0;
+        return def.innerType ? fastPathAcceptsAbsence(def.innerType) : true;
       case "catch":
-        return !0;
+        return true;
       case "union":
-        return def.options ? def.options.some(el) : !0;
+        return def.options ? def.options.some(fastPathAcceptsAbsence) : true;
       case "intersection":
-        if (!def.left || !def.right) return !0;
-        return el(def.left) && el(def.right);
+        if (!def.left || !def.right) return true;
+        return fastPathAcceptsAbsence(def.left) && fastPathAcceptsAbsence(def.right);
       case "pipe":
-        return def.in ? el(def.in) : !0;
+        return def.in ? fastPathAcceptsAbsence(def.in) : true;
       default:
-        return !0;
+        return true;
     }
   }
-  function W_(e) {
-    return e._zod.optin === "optional" && e._zod.optout === "optional";
+  function dropsWhenAbsent(schema) {
+    return schema._zod.optin === "optional" && schema._zod.optout === "optional";
   }
-  function OC(e) {
-    return (e._zod.optin !== "defaulted" || e._zod.optout === "optional") && Gl(e);
+  function mayOmitUndefined(schema) {
+    return (
+      (schema._zod.optin !== "defaulted" || schema._zod.optout === "optional") && mayOutputUndefined(schema)
+    );
   }
-  function Gl(e) {
-    let def = e._zod.def;
+  function mayOutputUndefined(schema) {
+    let def = schema._zod.def;
     switch (def.type) {
       case "string":
       case "number":
@@ -969,574 +1077,603 @@ ${joined}
       case "template_literal":
       case "never":
       case "success":
-        return !1;
+        return false;
       case "literal":
-        return !!def.values?.includes(void 0);
+        return !!def.values?.includes(undefined);
       case "enum":
-        return !!e._zod.values?.has(void 0);
+        return !!schema._zod.values?.has(undefined);
       case "optional":
-        return !0;
+        return true;
       case "nullable":
       case "readonly":
       case "nonoptional":
-        return def.innerType ? Gl(def.innerType) : !0;
+        return def.innerType ? mayOutputUndefined(def.innerType) : true;
       case "union":
-        return def.options ? def.options.some(Gl) : !0;
+        return def.options ? def.options.some(mayOutputUndefined) : true;
       case "intersection":
-        return !def.left || !def.right || Gl(def.left) || Gl(def.right);
+        return !def.left || !def.right || mayOutputUndefined(def.left) || mayOutputUndefined(def.right);
       case "pipe":
-        return def.out ? Gl(def.out) : !0;
+        return def.out ? mayOutputUndefined(def.out) : true;
       default:
-        return !0;
+        return true;
     }
   }
-  function BY(e, t, n, o, r = !0) {
-    let def = n._zod.def,
-      a = r ? We(t) : null;
-    if (a) e.write(`let ${a} = null;`);
-    return (
-      e.write(`if (${o} !== null) {`),
-      e.indented((l) => {
-        let c = yn(l, t, def.innerType, o, r);
-        if (a && c !== null) l.write(`${a} = ${c};`);
-      }),
-      e.write("}"),
-      a
-    );
+  function generateNullableCheck(doc, ctx, schema, accessor, buildsValue = true) {
+    let def = schema._zod.def;
+    let outputVar = buildsValue ? newVar(ctx) : null;
+    if (outputVar) doc.write(`let ${outputVar} = null;`);
+    doc.write(`if (${accessor} !== null) {`);
+    doc.indented((d) => {
+      let innerOutput = generateCheck(d, ctx, def.innerType, accessor, buildsValue);
+      if (outputVar && innerOutput !== null) d.write(`${outputVar} = ${innerOutput};`);
+    });
+    doc.write("}");
+    return outputVar;
   }
-  function HY(e, t, n, o, r = !0) {
-    let def = n._zod.def;
-    e.write(`if (!Array.isArray(${o})) return INVALID;`);
-    let a = r ? We(t) : null,
-      l = We(t),
-      c = We(t);
-    if (a) e.write(`const ${a} = new Array(${o}.length);`);
-    return (
-      e.write(`for (let ${l} = 0; ${l} < ${o}.length; ${l}++) {`),
-      e.indented((u) => {
-        u.write(`const ${c} = ${o}[${l}];`);
-        let f = kr(u, t, def.element, c, r);
-        if (a && f !== null) u.write(`${a}[${l}] = ${f};`);
-      }),
-      e.write("}"),
-      a
-    );
+  function generateArrayCheck(doc, ctx, schema, accessor, buildsValue = true) {
+    let def = schema._zod.def;
+    doc.write(`if (!Array.isArray(${accessor})) return INVALID;`);
+    let outputVar = buildsValue ? newVar(ctx) : null;
+    let iVar = newVar(ctx);
+    let elemVar = newVar(ctx);
+    if (outputVar) doc.write(`const ${outputVar} = new Array(${accessor}.length);`);
+    doc.write(`for (let ${iVar} = 0; ${iVar} < ${accessor}.length; ${iVar}++) {`);
+    doc.indented((d) => {
+      d.write(`const ${elemVar} = ${accessor}[${iVar}];`);
+      let elemOutput = compileChild(d, ctx, def.element, elemVar, buildsValue);
+      if (outputVar && elemOutput !== null) d.write(`${outputVar}[${iVar}] = ${elemOutput};`);
+    });
+    doc.write("}");
+    return outputVar;
   }
-  function KY(e, t, n, o) {
-    let values = n._zod.def.values;
+  function generateLiteralCheck(doc, ctx, schema, accessor) {
+    let values = schema._zod.def.values;
     if (values.length !== 1) {
-      let l = st(t, new Set(values));
-      return (e.write(`if (!${l}.has(${o})) return INVALID;`), o);
+      let literalSet = addConstant(ctx, new Set(values));
+      doc.write(`if (!${literalSet}.has(${accessor})) return INVALID;`);
+      return accessor;
     }
-    let a = values[0];
-    if (typeof a === "number" && Number.isNaN(a)) {
-      let l = st(t, new Set(values));
-      return (e.write(`if (!${l}.has(${o})) return INVALID;`), o);
+    let value = values[0];
+    if (typeof value === "number" && Number.isNaN(value)) {
+      let literalSet = addConstant(ctx, new Set(values));
+      doc.write(`if (!${literalSet}.has(${accessor})) return INVALID;`);
+      return accessor;
     }
-    if (typeof a === "string") e.write(`if (${o} !== ${hr.esc(a)}) return INVALID;`);
-    else if (typeof a === "number" || typeof a === "boolean") e.write(`if (${o} !== ${a}) return INVALID;`);
-    else if (a === null) e.write(`if (${o} !== null) return INVALID;`);
-    else if (a === void 0) e.write(`if (${o} !== undefined) return INVALID;`);
-    else if (typeof a === "bigint") e.write(`if (${o} !== ${a}n) return INVALID;`);
-    else throw new ZodCompileUnsupportedError(`literal type ${typeof a}`);
-    return o;
+    if (typeof value === "string") doc.write(`if (${accessor} !== ${util.esc(value)}) return INVALID;`);
+    else if (typeof value === "number" || typeof value === "boolean")
+      doc.write(`if (${accessor} !== ${value}) return INVALID;`);
+    else if (value === null) doc.write(`if (${accessor} !== null) return INVALID;`);
+    else if (value === undefined) doc.write(`if (${accessor} !== undefined) return INVALID;`);
+    else if (typeof value === "bigint") doc.write(`if (${accessor} !== ${value}n) return INVALID;`);
+    else throw new ZodCompileUnsupportedError(`literal type ${typeof value}`);
+    return accessor;
   }
-  function ZY(e, t, n, o) {
-    let values = n._zod.values;
+  function generateEnumCheck(doc, ctx, schema, accessor) {
+    let values = schema._zod.values;
     if (!values) throw new ZodCompileUnsupportedError("enum schema without enumerated values");
-    let s = st(t, values);
-    return (e.write(`if (!${s}.has(${o})) return INVALID;`), o);
+    let enumSet = addConstant(ctx, values);
+    doc.write(`if (!${enumSet}.has(${accessor})) return INVALID;`);
+    return accessor;
   }
-  function SC(e, t, n, o) {
-    let def = n._zod.def;
-    return yn(e, t, def.innerType, o);
+  function generateWrapperCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    return generateCheck(doc, ctx, def.innerType, accessor);
   }
-  function VY(e, t, n, o) {
-    let def = n._zod.def,
-      a = Object.getOwnPropertyDescriptor(n._zod.def, "defaultValue")
-        ? () => n._zod.def.defaultValue
-        : void 0;
-    if (n._zod.def.type === "prefault") {
-      if (!a) return yn(e, t, def.innerType, o);
-      let c = st(t, a),
-        u = We(t);
-      return (
-        e.write(`let ${u} = ${o};`),
-        e.write(`if (${o} === undefined) ${u} = ${c}();`),
-        yn(e, t, def.innerType, u)
-      );
+  function generateDefaultCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    let defaultGetter = Object.getOwnPropertyDescriptor(schema._zod.def, "defaultValue")
+      ? () => schema._zod.def.defaultValue
+      : undefined;
+    if (schema._zod.def.type === "prefault") {
+      if (!defaultGetter) return generateCheck(doc, ctx, def.innerType, accessor);
+      let defaultFn = addConstant(ctx, defaultGetter);
+      let inputVar = newVar(ctx);
+      doc.write(`let ${inputVar} = ${accessor};`);
+      doc.write(`if (${accessor} === undefined) ${inputVar} = ${defaultFn}();`);
+      return generateCheck(doc, ctx, def.innerType, inputVar);
     }
-    let l = We(t);
-    if (a) {
-      let c = st(t, a),
-        u = st(t, hr.shallowClone);
-      (e.write(`let ${l};`),
-        e.write(`if (${o} === undefined) {`),
-        e.indented((f) => {
-          f.write(`${l} = ${u}(${c}());`);
-        }),
-        e.write("} else {"),
-        e.indented((f) => {
-          let h = yn(f, t, def.innerType, o);
-          f.write(`${l} = ${h} === undefined ? ${u}(${c}()) : ${h};`);
-        }),
-        e.write("}"));
-    } else
-      (e.write(`let ${l};`),
-        e.write(`if (${o} !== undefined) {`),
-        e.indented((c) => {
-          let u = yn(c, t, def.innerType, o);
-          c.write(`${l} = ${u};`);
-        }),
-        e.write("}"));
-    return l;
+    let outputVar = newVar(ctx);
+    if (defaultGetter) {
+      let defaultFn = addConstant(ctx, defaultGetter);
+      let cloneFn = addConstant(ctx, util.shallowClone);
+      doc.write(`let ${outputVar};`);
+      doc.write(`if (${accessor} === undefined) {`);
+      doc.indented((d) => {
+        d.write(`${outputVar} = ${cloneFn}(${defaultFn}());`);
+      });
+      doc.write("} else {");
+      doc.indented((d) => {
+        let innerOutput = generateCheck(d, ctx, def.innerType, accessor);
+        d.write(`${outputVar} = ${innerOutput} === undefined ? ${cloneFn}(${defaultFn}()) : ${innerOutput};`);
+      });
+      doc.write("}");
+    } else {
+      doc.write(`let ${outputVar};`);
+      doc.write(`if (${accessor} !== undefined) {`);
+      doc.indented((d) => {
+        let innerOutput = generateCheck(d, ctx, def.innerType, accessor);
+        d.write(`${outputVar} = ${innerOutput};`);
+      });
+      doc.write("}");
+    }
+    return outputVar;
   }
-  function qY(e, t, n, o) {
-    let def = n._zod.def,
-      s = yn(e, t, def.innerType, o),
-      a = We(t);
-    return (e.write(`const ${a} = ${s};`), e.write(`if (${a} === undefined) return INVALID;`), a);
+  function generateNonOptionalCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    let innerOutput = generateCheck(doc, ctx, def.innerType, accessor);
+    let outputVar = newVar(ctx);
+    doc.write(`const ${outputVar} = ${innerOutput};`);
+    doc.write(`if (${outputVar} === undefined) return INVALID;`);
+    return outputVar;
   }
-  function GY(e, t, n, o) {
-    let def = n._zod.def,
-      { items: items, rest: rest } = def;
-    e.write(`if (!Array.isArray(${o})) return INVALID;`);
-    let l = kC(items, "optin"),
-      c = kC(items, "optout");
-    if (rest) e.write(`if (${o}.length < ${l}) return INVALID;`);
-    else e.write(`if (${o}.length < ${l} || ${o}.length > ${items.length}) return INVALID;`);
-    let u = We(t);
-    e.write(`const ${u} = [];`);
-    for (let f = 0; f < items.length; f++) {
-      let h = items[f];
-      if (f >= c)
-        (e.write(`if (${u}.length === ${f}) {`),
-          e.indented((m) => {
-            (m.write(`if (${f} < ${o}.length) {`),
-              m.indented((y) => {
-                let b = We(t);
-                y.write(`const ${b} = ${o}[${f}];`);
-                let w = kr(y, t, h, b);
-                y.write(`${u}[${f}] = ${w};`);
-              }),
-              m.write("} else {"),
-              m.indented((y) => {
-                if (W_(h)) {
-                  y.write(`${u}.length = ${f};`);
-                  return;
-                }
-                let b = We(t),
-                  w = We(t);
-                (y.write(`const ${b} = undefined;`),
-                  y.write(`const ${w} = (() => {`),
-                  y.indented((S) => {
-                    let j = kr(S, t, h, b);
-                    S.write(`return ${j};`);
-                  }),
-                  y.write("})();"),
-                  y.write(`if (${w} === INVALID || ${w} === undefined) ${u}.length = ${f};`),
-                  y.write(`else ${u}[${f}] = ${w};`));
-              }),
-              m.write("}"));
-          }),
-          e.write("}"));
-      else {
-        let m = We(t);
-        e.write(`const ${m} = ${o}[${f}];`);
-        let y = kr(e, t, h, m);
-        e.write(`${u}[${f}] = ${y};`);
+  function generateTupleCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    let { items, rest } = def;
+    doc.write(`if (!Array.isArray(${accessor})) return INVALID;`);
+    let optinStart = getTupleOptStart(items, "optin");
+    let optoutStart = getTupleOptStart(items, "optout");
+    if (rest) doc.write(`if (${accessor}.length < ${optinStart}) return INVALID;`);
+    else
+      doc.write(
+        `if (${accessor}.length < ${optinStart} || ${accessor}.length > ${items.length}) return INVALID;`,
+      );
+    let outputVar = newVar(ctx);
+    doc.write(`const ${outputVar} = [];`);
+    for (let i = 0; i < items.length; i++) {
+      let itemSchema = items[i];
+      if (i >= optoutStart) {
+        doc.write(`if (${outputVar}.length === ${i}) {`);
+        doc.indented((d) => {
+          d.write(`if (${i} < ${accessor}.length) {`);
+          d.indented((d2) => {
+            let elemVar = newVar(ctx);
+            d2.write(`const ${elemVar} = ${accessor}[${i}];`);
+            let elemOutput = compileChild(d2, ctx, itemSchema, elemVar);
+            d2.write(`${outputVar}[${i}] = ${elemOutput};`);
+          });
+          d.write("} else {");
+          d.indented((d2) => {
+            if (dropsWhenAbsent(itemSchema)) {
+              d2.write(`${outputVar}.length = ${i};`);
+              return;
+            }
+            let elemVar = newVar(ctx);
+            let branchVar = newVar(ctx);
+            d2.write(`const ${elemVar} = undefined;`);
+            d2.write(`const ${branchVar} = (() => {`);
+            d2.indented((d3) => {
+              let elemOutput = compileChild(d3, ctx, itemSchema, elemVar);
+              d3.write(`return ${elemOutput};`);
+            });
+            d2.write("})();");
+            d2.write(
+              `if (${branchVar} === INVALID || ${branchVar} === undefined) ${outputVar}.length = ${i};`,
+            );
+            d2.write(`else ${outputVar}[${i}] = ${branchVar};`);
+          });
+          d.write("}");
+        });
+        doc.write("}");
+      } else {
+        let elemVar = newVar(ctx);
+        doc.write(`const ${elemVar} = ${accessor}[${i}];`);
+        let elemOutput = compileChild(doc, ctx, itemSchema, elemVar);
+        doc.write(`${outputVar}[${i}] = ${elemOutput};`);
       }
     }
     if (rest) {
-      let f = We(t),
-        h = We(t);
-      (e.write(`for (let ${f} = ${items.length}; ${f} < ${o}.length; ${f}++) {`),
-        e.indented((m) => {
-          m.write(`const ${h} = ${o}[${f}];`);
-          let y = kr(m, t, rest, h);
-          m.write(`${u}[${f}] = ${y};`);
-        }),
-        e.write("}"));
+      let iVar = newVar(ctx);
+      let elemVar = newVar(ctx);
+      doc.write(`for (let ${iVar} = ${items.length}; ${iVar} < ${accessor}.length; ${iVar}++) {`);
+      doc.indented((d) => {
+        d.write(`const ${elemVar} = ${accessor}[${iVar}];`);
+        let elemOutput = compileChild(d, ctx, rest, elemVar);
+        d.write(`${outputVar}[${iVar}] = ${elemOutput};`);
+      });
+      doc.write("}");
     }
-    return u;
+    return outputVar;
   }
-  function kC(e, t) {
-    for (let n = e.length - 1; n >= 0; n--)
-      if (!(t === "optin" ? e[n]._zod.optin !== void 0 : e[n]._zod.optout === "optional")) return n + 1;
+  function getTupleOptStart(items, key) {
+    for (let i = items.length - 1; i >= 0; i--)
+      if (!(key === "optin" ? items[i]._zod.optin !== undefined : items[i]._zod.optout === "optional"))
+        return i + 1;
     return 0;
   }
-  function WY(e, t, n, o) {
-    let def = n._zod.def,
-      options = def.options;
-    if (def.discriminator) return YY(e, t, def, o);
-    if (def.inclusive === !1) throw new ZodCompileUnsupportedError("exclusive unions (z.xor)");
-    if (options.length === 0) return (e.write("return INVALID;"), o);
-    if (options.length === 1) return yn(e, t, options[0], o);
-    if (options.every((c) => c._zod.def.type === "literal" && !c._zod.def.checks?.length)) {
-      let c = new Set(options.flatMap((f) => f._zod.def.values)),
-        u = st(t, c);
-      return (e.write(`if (!${u}.has(${o})) return INVALID;`), o);
+  function generateUnionCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    let options = def.options;
+    if (def.discriminator) return generateDiscriminatedUnionCheck(doc, ctx, def, accessor);
+    if (def.inclusive === false) throw new ZodCompileUnsupportedError("exclusive unions (z.xor)");
+    if (options.length === 0) {
+      doc.write("return INVALID;");
+      return accessor;
     }
-    let l = We(t);
-    e.write(`let ${l};`);
-    for (let c = 0; c < options.length; c++) {
-      let u = options[c];
-      if (c === 0) e.write(`${l} = (() => {`);
-      else e.write(`if (${l} === INVALID) ${l} = (() => {`);
-      (e.indented((f) => {
-        let h = yn(f, t, u, o);
-        f.write(`return ${h};`);
-      }),
-        e.write("})();"));
+    if (options.length === 1) return generateCheck(doc, ctx, options[0], accessor);
+    if (options.every((opt) => opt._zod.def.type === "literal" && !opt._zod.def.checks?.length)) {
+      let values = new Set(options.flatMap((opt) => opt._zod.def.values));
+      let valuesConst = addConstant(ctx, values);
+      doc.write(`if (!${valuesConst}.has(${accessor})) return INVALID;`);
+      return accessor;
     }
-    return (e.write(`if (${l} === INVALID) return INVALID;`), l);
+    let outputVar = newVar(ctx);
+    doc.write(`let ${outputVar};`);
+    for (let i = 0; i < options.length; i++) {
+      let opt = options[i];
+      if (i === 0) doc.write(`${outputVar} = (() => {`);
+      else doc.write(`if (${outputVar} === INVALID) ${outputVar} = (() => {`);
+      doc.indented((d) => {
+        let branchOutput = generateCheck(d, ctx, opt, accessor);
+        d.write(`return ${branchOutput};`);
+      });
+      doc.write("})();");
+    }
+    doc.write(`if (${outputVar} === INVALID) return INVALID;`);
+    return outputVar;
   }
-  function YY(e, t, n, o) {
-    if (n.unionFallback) throw new ZodCompileUnsupportedError("discriminated union with unionFallback");
-    if (n.options.length === 0) return (e.write("return INVALID;"), o);
-    let r = We(t),
-      s = We(t);
-    (e.write(`const ${r} = ${o}?.[${hr.esc(n.discriminator)}];`), e.write(`let ${s};`));
-    let a = !0,
-      l = new Set();
-    for (let option of n.options) {
-      let u = option._zod.propValues?.[n.discriminator];
-      if (!u || u.size === 0)
+  function generateDiscriminatedUnionCheck(doc, ctx, def, accessor) {
+    if (def.unionFallback) throw new ZodCompileUnsupportedError("discriminated union with unionFallback");
+    if (def.options.length === 0) {
+      doc.write("return INVALID;");
+      return accessor;
+    }
+    let discVar = newVar(ctx);
+    let outputVar = newVar(ctx);
+    doc.write(`const ${discVar} = ${accessor}?.[${util.esc(def.discriminator)}];`);
+    doc.write(`let ${outputVar};`);
+    let firstBranch = true;
+    let claimed = new Set();
+    for (let option of def.options) {
+      let values = option._zod.propValues?.[def.discriminator];
+      if (!values || values.size === 0)
         throw new ZodCompileUnsupportedError(
           "discriminated union option without static discriminator values",
         );
-      for (let m of u) {
-        if (l.has(m)) throw new ZodCompileUnsupportedError(`duplicate discriminator value ${String(m)}`);
-        l.add(m);
+      for (let value of values) {
+        if (claimed.has(value))
+          throw new ZodCompileUnsupportedError(`duplicate discriminator value ${String(value)}`);
+        claimed.add(value);
       }
-      let list = Array.from(u, (m) => JY(t, r, m)),
-        h = a ? "if" : "else if";
-      (e.write(`${h} (${list.join(" || ")}) {`),
-        e.indented((m) => {
-          let y = yn(m, t, option, o);
-          m.write(`${s} = ${y};`);
-        }),
-        e.write("}"),
-        (a = !1));
+      let conditions = Array.from(values, (value) => literalEquality(ctx, discVar, value));
+      let prefix = firstBranch ? "if" : "else if";
+      doc.write(`${prefix} (${conditions.join(" || ")}) {`);
+      doc.indented((d) => {
+        let branchOutput = generateCheck(d, ctx, option, accessor);
+        d.write(`${outputVar} = ${branchOutput};`);
+      });
+      doc.write("}");
+      firstBranch = false;
     }
-    return (e.write("else { return INVALID; }"), s);
+    doc.write("else { return INVALID; }");
+    return outputVar;
   }
-  function JY(e, t, n) {
-    if (typeof n === "string") return `${t} === ${hr.esc(n)}`;
-    if (typeof n === "number") {
-      if (Number.isNaN(n)) return `Number.isNaN(${t})`;
-      return `${t} === ${n}`;
+  function literalEquality(ctx, accessor, value) {
+    if (typeof value === "string") return `${accessor} === ${util.esc(value)}`;
+    if (typeof value === "number") {
+      if (Number.isNaN(value)) return `Number.isNaN(${accessor})`;
+      return `${accessor} === ${value}`;
     }
-    if (typeof n === "boolean") return `${t} === ${n}`;
-    if (n === null) return `${t} === null`;
-    if (n === void 0) return `${t} === undefined`;
-    if (typeof n === "bigint") return `${t} === ${n}n`;
-    if (typeof n === "symbol") {
-      let o = st(e, n);
-      return `${t} === ${o}`;
+    if (typeof value === "boolean") return `${accessor} === ${value}`;
+    if (value === null) return `${accessor} === null`;
+    if (value === undefined) return `${accessor} === undefined`;
+    if (typeof value === "bigint") return `${accessor} === ${value}n`;
+    if (typeof value === "symbol") {
+      let symbolConst = addConstant(ctx, value);
+      return `${accessor} === ${symbolConst}`;
     }
-    throw new ZodCompileUnsupportedError(`literal discriminator value ${String(n)}`);
+    throw new ZodCompileUnsupportedError(`literal discriminator value ${String(value)}`);
   }
-  function XY(e, t, n, o) {
-    let def = n._zod.def;
-    t.definite = !1;
-    let s = kr(e, t, def.left, o),
-      a = kr(e, t, def.right, o),
-      l = st(t, gn.mergeValues),
-      c = We(t);
-    return (
-      e.write(`const ${c} = ${l}(${s}, ${a});`),
-      e.write(`if (!${c}.valid) return INVALID;`),
-      `${c}.data`
-    );
+  function generateIntersectionCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    ctx.definite = false;
+    let leftOutput = compileChild(doc, ctx, def.left, accessor);
+    let rightOutput = compileChild(doc, ctx, def.right, accessor);
+    let mergeConst = addConstant(ctx, schemas_js_1.mergeValues);
+    let mergedVar = newVar(ctx);
+    doc.write(`const ${mergedVar} = ${mergeConst}(${leftOutput}, ${rightOutput});`);
+    doc.write(`if (!${mergedVar}.valid) return INVALID;`);
+    return `${mergedVar}.data`;
   }
-  function QY(e, t, n, o) {
-    let def = n._zod.def,
-      s = st(t, hr.isPlainObject);
-    e.write(`if (!${s}(${o})) return INVALID;`);
-    let a = We(t),
-      l = We(t),
-      c = We(t);
-    e.write(`const ${a} = {};`);
-    let u = def,
-      f = u.partial ? void 0 : def.keyType._zod.values;
-    if (f) {
-      let y = [];
-      for (let w of f) {
-        if (!(typeof w === "string" || typeof w === "number" || typeof w === "symbol"))
-          throw new ZodCompileUnsupportedError(`record key value ${String(w)}`);
-        let S = typeof w === "number" ? w.toString() : w;
-        if (S === "__proto__") throw new ZodCompileUnsupportedError('record key "__proto__"');
-        y.push(S);
-        let j = st(t, w),
-          M = yn(e, t, def.keyType, j),
-          N = We(t);
-        e.write(`const ${N} = ${o}[${eJ(t, S)}];`);
-        let Z = kr(e, t, def.valueType, N);
-        e.write(`${a}[${M}] = ${Z};`);
+  function generateRecordCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    let isPlainObjectConst = addConstant(ctx, util.isPlainObject);
+    doc.write(`if (!${isPlainObjectConst}(${accessor})) return INVALID;`);
+    let outputVar = newVar(ctx);
+    let kVar = newVar(ctx);
+    let valVar = newVar(ctx);
+    doc.write(`const ${outputVar} = {};`);
+    let recordDef = def;
+    let keyValues = recordDef.partial ? undefined : def.keyType._zod.values;
+    if (keyValues) {
+      let inputKeys = [];
+      for (let key of keyValues) {
+        if (!(typeof key === "string" || typeof key === "number" || typeof key === "symbol"))
+          throw new ZodCompileUnsupportedError(`record key value ${String(key)}`);
+        let inputKey = typeof key === "number" ? key.toString() : key;
+        if (inputKey === "__proto__") throw new ZodCompileUnsupportedError('record key "__proto__"');
+        inputKeys.push(inputKey);
+        let keyConst = addConstant(ctx, key);
+        let outKey = generateCheck(doc, ctx, def.keyType, keyConst);
+        let valueVar = newVar(ctx);
+        doc.write(`const ${valueVar} = ${accessor}[${literalPropertyKey(ctx, inputKey)}];`);
+        let valOutput = compileChild(doc, ctx, def.valueType, valueVar);
+        doc.write(`${outputVar}[${outKey}] = ${valOutput};`);
       }
-      let b = st(t, new Set(y));
-      return (
-        e.write(`for (const ${l} in ${o}) {`),
-        e.indented((w) => {
-          if ((w.write(`if (${b}.has(${l})) continue;`), u.mode === "loose"))
-            w.write(`if (${l} !== "__proto__") ${a}[${l}] = ${o}[${l}];`);
-          else w.write("return INVALID;");
-        }),
-        e.write("}"),
-        a
-      );
+      let knownKeysConst = addConstant(ctx, new Set(inputKeys));
+      doc.write(`for (const ${kVar} in ${accessor}) {`);
+      doc.indented((d) => {
+        d.write(`if (${knownKeysConst}.has(${kVar})) continue;`);
+        if (recordDef.mode === "loose")
+          d.write(`if (${kVar} !== "__proto__") ${outputVar}[${kVar}] = ${accessor}[${kVar}];`);
+        else d.write("return INVALID;");
+      });
+      doc.write("}");
+      return outputVar;
     }
-    let def_2 = def.keyType._zod.def;
+    let keyDef = def.keyType._zod.def;
     if (!(
-      def_2.type === "string" &&
-      def_2.format === void 0 &&
-      !def_2.coerce &&
-      (def_2.checks?.length ?? 0) === 0
+      keyDef.type === "string" &&
+      keyDef.format === undefined &&
+      !keyDef.coerce &&
+      (keyDef.checks?.length ?? 0) === 0
     )) {
-      let y = def.mode === "loose",
-        b = bh(def.keyType);
-      if (b.definite === !1) t.definite = !1;
-      let w = st(t, b),
-        S = st(t, dY.number),
-        j = We(t);
-      return (
-        EC(e, t, o, l, (M) => {
-          if (
-            (M.write(`let ${j} = ${w}(${l});`),
-            M.write(
-              `if (${j} === INVALID && typeof ${l} === "string" && ${S}.test(${l})) ${j} = ${w}(Number(${l}));`,
-            ),
-            y)
-          )
-            M.write(`if (${j} === INVALID) { ${a}[${l}] = ${o}[${l}]; continue; }`);
-          else M.write(`if (${j} === INVALID) return INVALID;`);
-          M.write(`if (${j} === "__proto__") continue;`);
-          let N = We(t);
-          M.write(`const ${N} = ${o}[${l}];`);
-          let Z = kr(M, t, def.valueType, N);
-          M.write(`${a}[${j}] = ${Z};`);
-        }),
-        a
-      );
+      let isLoose = def.mode === "loose";
+      let keyFn = compileFn(def.keyType);
+      if (keyFn.definite === false) ctx.definite = false;
+      let keyFast = addConstant(ctx, keyFn);
+      let numericConst = addConstant(ctx, regexes.number);
+      let outKeyVar = newVar(ctx);
+      emitOwnKeys(doc, ctx, accessor, kVar, (d) => {
+        d.write(`let ${outKeyVar} = ${keyFast}(${kVar});`);
+        d.write(
+          `if (${outKeyVar} === INVALID && typeof ${kVar} === "string" && ${numericConst}.test(${kVar})) ${outKeyVar} = ${keyFast}(Number(${kVar}));`,
+        );
+        if (isLoose)
+          d.write(
+            `if (${outKeyVar} === INVALID) { ${outputVar}[${kVar}] = ${accessor}[${kVar}]; continue; }`,
+          );
+        else d.write(`if (${outKeyVar} === INVALID) return INVALID;`);
+        d.write(`if (${outKeyVar} === "__proto__") continue;`);
+        let valueVar = newVar(ctx);
+        d.write(`const ${valueVar} = ${accessor}[${kVar}];`);
+        let valOutput = compileChild(d, ctx, def.valueType, valueVar);
+        d.write(`${outputVar}[${outKeyVar}] = ${valOutput};`);
+      });
+      return outputVar;
     }
-    return (
-      EC(
-        e,
-        t,
-        o,
-        l,
-        (y) => {
-          y.write(`const ${c} = ${o}[${l}];`);
-          let b = kr(y, t, def.valueType, c);
-          y.write(`${a}[${l}] = ${b};`);
-        },
-        "return INVALID;",
-      ),
-      a
+    emitOwnKeys(
+      doc,
+      ctx,
+      accessor,
+      kVar,
+      (d) => {
+        d.write(`const ${valVar} = ${accessor}[${kVar}];`);
+        let valOutput = compileChild(d, ctx, def.valueType, valVar);
+        d.write(`${outputVar}[${kVar}] = ${valOutput};`);
+      },
+      "return INVALID;",
     );
+    return outputVar;
   }
-  function EC(e, t, n, o, r, s) {
-    let a = st(t, Object.prototype.propertyIsEnumerable),
-      l = We(t),
-      c = We(t),
-      u = We(t);
-    (e.write(`const ${l} = Object.getOwnPropertySymbols(${n});`),
-      e.write(`const ${c} = Object.getOwnPropertyNames(${n});`),
-      e.write(`for (let ${u} = 0; ${u} < ${c}.length; ${u}++) {`),
-      e.indented((f) => {
-        (f.write(`const ${o} = ${c}[${u}];`),
-          f.write(`if (${o} === "__proto__" || !${a}.call(${n}, ${o})) continue;`),
-          r(f));
-      }),
-      e.write("}"),
-      e.write(`for (let ${u} = 0; ${u} < ${l}.length; ${u}++) {`),
-      e.indented((f) => {
-        if ((f.write(`const ${o} = ${l}[${u}];`), f.write(`if (!${a}.call(${n}, ${o})) continue;`), s))
-          f.write(s);
-        else r(f);
-      }),
-      e.write("}"));
+  function emitOwnKeys(doc, ctx, accessor, kVar, body, onSymbol) {
+    let propIsEnumerableConst = addConstant(ctx, Object.prototype.propertyIsEnumerable);
+    let symsVar = newVar(ctx);
+    let keysVar = newVar(ctx);
+    let iVar = newVar(ctx);
+    doc.write(`const ${symsVar} = Object.getOwnPropertySymbols(${accessor});`);
+    doc.write(`const ${keysVar} = Object.getOwnPropertyNames(${accessor});`);
+    doc.write(`for (let ${iVar} = 0; ${iVar} < ${keysVar}.length; ${iVar}++) {`);
+    doc.indented((d) => {
+      d.write(`const ${kVar} = ${keysVar}[${iVar}];`);
+      d.write(
+        `if (${kVar} === "__proto__" || !${propIsEnumerableConst}.call(${accessor}, ${kVar})) continue;`,
+      );
+      body(d);
+    });
+    doc.write("}");
+    doc.write(`for (let ${iVar} = 0; ${iVar} < ${symsVar}.length; ${iVar}++) {`);
+    doc.indented((d) => {
+      d.write(`const ${kVar} = ${symsVar}[${iVar}];`);
+      d.write(`if (!${propIsEnumerableConst}.call(${accessor}, ${kVar})) continue;`);
+      if (onSymbol) d.write(onSymbol);
+      else body(d);
+    });
+    doc.write("}");
   }
-  function eJ(e, t) {
-    if (typeof t === "string") return hr.esc(t);
-    return st(e, t);
+  function literalPropertyKey(ctx, key) {
+    if (typeof key === "string") return util.esc(key);
+    return addConstant(ctx, key);
   }
-  function tJ(e, t, n, o) {
-    let def = n._zod.def;
-    e.write(`if (!(${o} instanceof Map)) return INVALID;`);
-    let s = We(t),
-      a = We(t),
-      l = We(t);
-    return (
-      e.write(`const ${s} = new Map();`),
-      e.write(`for (const [${a}, ${l}] of ${o}) {`),
-      e.indented((c) => {
-        let u = yn(c, t, def.keyType, a),
-          f = yn(c, t, def.valueType, l);
-        c.write(`${s}.set(${u}, ${f});`);
-      }),
-      e.write("}"),
-      s
-    );
+  function generateMapCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    doc.write(`if (!(${accessor} instanceof Map)) return INVALID;`);
+    let outputVar = newVar(ctx);
+    let kVar = newVar(ctx);
+    let valVar = newVar(ctx);
+    doc.write(`const ${outputVar} = new Map();`);
+    doc.write(`for (const [${kVar}, ${valVar}] of ${accessor}) {`);
+    doc.indented((d) => {
+      let keyOutput = generateCheck(d, ctx, def.keyType, kVar);
+      let valOutput = generateCheck(d, ctx, def.valueType, valVar);
+      d.write(`${outputVar}.set(${keyOutput}, ${valOutput});`);
+    });
+    doc.write("}");
+    return outputVar;
   }
-  function nJ(e, t, n, o) {
-    let def = n._zod.def;
-    e.write(`if (!(${o} instanceof Set)) return INVALID;`);
-    let s = We(t),
-      a = We(t);
-    return (
-      e.write(`const ${s} = new Set();`),
-      e.write(`for (const ${a} of ${o}) {`),
-      e.indented((l) => {
-        let c = yn(l, t, def.valueType, a);
-        l.write(`${s}.add(${c});`);
-      }),
-      e.write("}"),
-      s
-    );
+  function generateSetCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    doc.write(`if (!(${accessor} instanceof Set)) return INVALID;`);
+    let outputVar = newVar(ctx);
+    let valVar = newVar(ctx);
+    doc.write(`const ${outputVar} = new Set();`);
+    doc.write(`for (const ${valVar} of ${accessor}) {`);
+    doc.indented((d) => {
+      let valOutput = generateCheck(d, ctx, def.valueType, valVar);
+      d.write(`${outputVar}.add(${valOutput});`);
+    });
+    doc.write("}");
+    return outputVar;
   }
-  function rJ(e, t) {
-    return (e.write(`if (!(${t} instanceof File)) return INVALID;`), t);
+  function generateFileCheck(doc, accessor) {
+    doc.write(`if (!(${accessor} instanceof File)) return INVALID;`);
+    return accessor;
   }
-  function iJ(e, t, n, o) {
-    e.write(`if (typeof ${o} !== "string") return INVALID;`);
-    let pattern = n._zod.pattern;
+  function generateTemplateLiteralCheck(doc, ctx, schema, accessor) {
+    doc.write(`if (typeof ${accessor} !== "string") return INVALID;`);
+    let pattern = schema._zod.pattern;
     if (pattern) {
-      let s = st(t, pattern);
-      (e.write(`${s}.lastIndex = 0;`), e.write(`if (!${s}.test(${o})) return INVALID;`));
+      let patternConst = addConstant(ctx, pattern);
+      doc.write(`${patternConst}.lastIndex = 0;`);
+      doc.write(`if (!${patternConst}.test(${accessor})) return INVALID;`);
     }
-    return o;
+    return accessor;
   }
-  function oJ(e, t, n, o) {
-    let def = n._zod.def,
-      s = tl(t, def.getter),
-      a = st(t, { parser: null });
-    (e.write(`if (!${a}.parser) {`),
-      e.indented((c) => {
-        (c.write(`const inner = ${s}();`),
-          c.write(`${a}.parser = function(input) {`),
-          c.indented((u) => {
-            (u.write("const result = inner._zod.run({ value: input, issues: [] }, {});"),
-              u.write("return result.issues.length === 0 ? result.value : INVALID;"));
-          }),
-          c.write("};"));
-      }),
-      e.write("}"));
-    let l = We(t);
-    return (e.write(`const ${l} = ${a}.parser(${o});`), e.write(`if (${l} === INVALID) return INVALID;`), l);
+  function generateLazyCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    let getterConst = addUserConstant(ctx, def.getter);
+    let cacheConst = addConstant(ctx, {
+      parser: null,
+    });
+    doc.write(`if (!${cacheConst}.parser) {`);
+    doc.indented((d) => {
+      d.write(`const inner = ${getterConst}();`);
+      d.write(`${cacheConst}.parser = function(input) {`);
+      d.indented((d2) => {
+        d2.write("const result = inner._zod.run({ value: input, issues: [] }, {});");
+        d2.write("return result.issues.length === 0 ? result.value : INVALID;");
+      });
+      d.write("};");
+    });
+    doc.write("}");
+    let outputVar = newVar(ctx);
+    doc.write(`const ${outputVar} = ${cacheConst}.parser(${accessor});`);
+    doc.write(`if (${outputVar} === INVALID) return INVALID;`);
+    return outputVar;
   }
-  function sJ(e, t, n, o) {
-    let def = n._zod.def,
-      s = yn(e, t, def.in, o);
+  function generatePipeCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    let inputOutput = generateCheck(doc, ctx, def.in, accessor);
     if (def.transform) {
-      if (nl(def.transform))
+      if (isAsyncFunction(def.transform))
         throw new ZodCompileAsyncError("z.compile: async transforms in pipes are not supported");
-      let transform = def.transform,
-        c = tl(t, (f) => {
-          let h = { value: f, issues: [], addIssue: Y_ },
-            m = transform(f, h);
-          if (m instanceof Promise) return Mt.INVALID;
-          return h.issues.length === 0 ? m : Mt.INVALID;
-        }),
-        u = We(t);
-      return (
-        e.write(`const ${u} = ${c}(${s});`),
-        e.write(`if (${u} === INVALID) return INVALID;`),
-        yn(e, t, def.out, u)
-      );
-    } else return yn(e, t, def.out, s);
+      let transformFn = def.transform;
+      let c = addUserConstant(ctx, (value) => {
+        let fakePayload = {
+          value,
+          issues: [],
+          addIssue: pushIssue,
+        };
+        let result = transformFn(value, fakePayload);
+        if (result instanceof Promise) return cjsExports.INVALID;
+        return fakePayload.issues.length === 0 ? result : cjsExports.INVALID;
+      });
+      let transformedVar = newVar(ctx);
+      doc.write(`const ${transformedVar} = ${c}(${inputOutput});`);
+      doc.write(`if (${transformedVar} === INVALID) return INVALID;`);
+      return generateCheck(doc, ctx, def.out, transformedVar);
+    } else return generateCheck(doc, ctx, def.out, inputOutput);
   }
-  function nl(e) {
+  function isAsyncFunction(fn) {
     return (
-      typeof e === "function" &&
-      (e.constructor.name === "AsyncFunction" || e[Symbol.toStringTag] === "AsyncFunction")
+      typeof fn === "function" &&
+      (fn.constructor.name === "AsyncFunction" || fn[Symbol.toStringTag] === "AsyncFunction")
     );
   }
-  function aJ(e, t, n, o) {
-    let def = n._zod.def;
+  function generateCustomCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
     if (def.fn) {
-      if (nl(def.fn)) throw new ZodCompileAsyncError("z.compile: async custom predicates are not supported");
-      let s = tl(t, def.fn),
-        a = st(t, G_),
-        l = We(t);
-      (e.write(`const ${l} = ${s}(${o});`),
-        e.write(`if (${l} instanceof Promise) ${a}();`),
-        e.write(`if (!${l}) return INVALID;`));
+      if (isAsyncFunction(def.fn))
+        throw new ZodCompileAsyncError("z.compile: async custom predicates are not supported");
+      let fnConst = addUserConstant(ctx, def.fn);
+      let throwAsyncConst = addConstant(ctx, throwAsync);
+      let resVar = newVar(ctx);
+      doc.write(`const ${resVar} = ${fnConst}(${accessor});`);
+      doc.write(`if (${resVar} instanceof Promise) ${throwAsyncConst}();`);
+      doc.write(`if (!${resVar}) return INVALID;`);
     } else throw new ZodCompileUnsupportedError("custom schema without a predicate function");
-    return o;
+    return accessor;
   }
-  function lJ(e, t, n) {
-    let run = e._zod.run({ value: n, issues: [] }, {});
-    if (run && typeof run.then === "function") return Mt.INVALID;
-    let r = run;
+  function runtimeCatch(innerSchema, catchValue, value) {
+    let result = innerSchema._zod.run(
+      {
+        value,
+        issues: [],
+      },
+      {},
+    );
+    if (result && typeof result.then === "function") return cjsExports.INVALID;
+    let r = result;
     if (r.issues.length === 0) return r.value;
-    return t();
+    return catchValue();
   }
-  function cJ(e, t, n, o) {
-    let def = n._zod.def;
-    if (!def.catchValue[hr.CONSTANT_CATCH])
+  function generateCatchCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
+    if (!def.catchValue[util.CONSTANT_CATCH])
       throw new ZodCompileUnsupportedError(
         "catch with a callback (only a constant catch value compiles)",
-        !1,
+        false,
       );
-    let s = We(t);
-    (e.write(`let ${s} = (() => {`),
-      e.indented((u) => {
-        let f = kr(u, t, def.innerType, o);
-        u.write(`return ${f};`);
-      }),
-      e.write("})();"));
-    let a = st(t, def.innerType),
-      l = tl(t, def.catchValue),
-      c = st(t, lJ);
-    return (
-      e.write(`if (${s} === INVALID) {`),
-      e.indented((u) => {
-        (u.write(`${s} = ${c}(${a}, ${l}, ${o});`), u.write(`if (${s} === INVALID) return INVALID;`));
-      }),
-      e.write("}"),
-      s
-    );
+    let outputVar = newVar(ctx);
+    doc.write(`let ${outputVar} = (() => {`);
+    doc.indented((d) => {
+      let innerOut = compileChild(d, ctx, def.innerType, accessor);
+      d.write(`return ${innerOut};`);
+    });
+    doc.write("})();");
+    let innerConst = addConstant(ctx, def.innerType);
+    let catchConst = addUserConstant(ctx, def.catchValue);
+    let catchHelperConst = addConstant(ctx, runtimeCatch);
+    doc.write(`if (${outputVar} === INVALID) {`);
+    doc.indented((d) => {
+      d.write(`${outputVar} = ${catchHelperConst}(${innerConst}, ${catchConst}, ${accessor});`);
+      d.write(`if (${outputVar} === INVALID) return INVALID;`);
+    });
+    doc.write("}");
+    return outputVar;
   }
-  function uJ(e, t, n, o) {
-    let def = n._zod.def;
+  function generateTransformCheck(doc, ctx, schema, accessor) {
+    let def = schema._zod.def;
     if (def.transform) {
-      if (nl(def.transform)) throw new ZodCompileAsyncError("z.compile: async transforms are not supported");
-      let transform = def.transform,
-        l = tl(t, (u) => {
-          let f = { value: u, issues: [], addIssue: Y_ },
-            h = transform(u, f);
-          if (h instanceof Promise) return Mt.INVALID;
-          return f.issues.length === 0 ? h : Mt.INVALID;
-        }),
-        c = We(t);
-      return (e.write(`const ${c} = ${l}(${o});`), e.write(`if (${c} === INVALID) return INVALID;`), c);
+      if (isAsyncFunction(def.transform))
+        throw new ZodCompileAsyncError("z.compile: async transforms are not supported");
+      let transformFn = def.transform;
+      let l = addUserConstant(ctx, (value) => {
+        let fakePayload = {
+          value,
+          issues: [],
+          addIssue: pushIssue,
+        };
+        let result = transformFn(value, fakePayload);
+        if (result instanceof Promise) return cjsExports.INVALID;
+        return fakePayload.issues.length === 0 ? result : cjsExports.INVALID;
+      });
+      let outputVar = newVar(ctx);
+      doc.write(`const ${outputVar} = ${l}(${accessor});`);
+      doc.write(`if (${outputVar} === INVALID) return INVALID;`);
+      return outputVar;
     }
-    return o;
+    return accessor;
   }
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(Mt);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(Mt, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(Mt, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(Mt);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { MC };
+export { require_compile };

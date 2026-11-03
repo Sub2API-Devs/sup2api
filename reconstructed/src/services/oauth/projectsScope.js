@@ -33,94 +33,187 @@ import {
 } from "../../constants/oauth.js";
 import { isAbortError, errorMessage } from "../../utils/errors.js";
 
+//@ chunk-nghef0fw.js:1062-3097 placement
 /**
  * 取得带 Projects 读写 scope 的访问令牌：策略/提供方/流量限制不允许时直接拒绝；会话入口令牌直接用；已有 scope 则返回；否则在 OAuth 刷新锁内用刷新令牌扩展 scope 并保存，返回 {ok, accessToken, expanded} 或失败原因。
  */
-//@ chunk-nghef0fw.js:1062-3097 placement
 async function ensureProjectsAccessToken(credentials) {
-  if (!isPolicyAllowed("allow_projects_tool")) return { ok: !1, reason: "policy_disabled" };
-  if (!isFirstPartyProvider()) return { ok: !1, reason: "wrong_provider" };
-  if (isEssentialTrafficOnly()) return { ok: !1, reason: "essential_traffic_only" };
-  let o = getSessionIngressAuthToken();
-  if (o) return { ok: !0, accessToken: o, expanded: !1 };
+  if (!isPolicyAllowed("allow_projects_tool"))
+    return {
+      ok: false,
+      reason: "policy_disabled",
+    };
+  if (!isFirstPartyProvider())
+    return {
+      ok: false,
+      reason: "wrong_provider",
+    };
+  if (isEssentialTrafficOnly())
+    return {
+      ok: false,
+      reason: "essential_traffic_only",
+    };
+  let sessionIngressAuthToken = getSessionIngressAuthToken();
+  if (sessionIngressAuthToken)
+    return {
+      ok: true,
+      accessToken: sessionIngressAuthToken,
+      expanded: false,
+    };
   try {
-    await checkAndRefreshOAuthTokenIfNeeded({ credentials: credentials });
-  } catch {}
-  let n = getClaudeAIOAuthTokens();
-  if (!n?.accessToken) return { ok: !1, reason: "no_token" };
-  if (K(n.scopes)) return { ok: !0, accessToken: n.accessToken, expanded: !1 };
-  if (n.clientId) return { ok: !1, reason: "custom_client" };
-  if (!n.refreshToken) return { ok: !1, reason: "no_refresh" };
-  if (isDiskless())
-    return (logFeatureBad("oauth_token_refresh", "oauth_refresh_diskless"), { ok: !1, reason: "no_refresh" });
-  if (await isOAuthRefreshKnownDeadAsync(credentials)) return { ok: !1, reason: "no_refresh" };
-  let u = !1;
-  try {
-    return await withOAuthRefreshLock(
-      async ({ lockedTokens: lockedTokens, isCompromised: isCompromised, signal: signal }) => {
-        if (!lockedTokens?.refreshToken) return { ok: !1, reason: "no_refresh" };
-        if (isCompromised()) return { ok: !1, reason: "lock_contended" };
-        if (K(lockedTokens.scopes) && lockedTokens.accessToken)
-          return { ok: !0, accessToken: lockedTokens.accessToken, expanded: !1 };
-        if (lockedTokens.clientId) return { ok: !1, reason: "custom_client" };
-        if (await isOAuthRefreshKnownDeadAsync(credentials)) return { ok: !1, reason: "no_refresh" };
-        let y;
-        try {
-          ((u = !0),
-            (y = await refreshOAuthToken(lockedTokens.refreshToken, {
-              clientId: lockedTokens.clientId,
-              scopes: uniq([
-                ...claudeAiLoginScopes(),
-                ...preservableScopesFrom(lockedTokens.scopes),
-                CLAUDE_AI_PROJECTS_READ_SCOPE,
-                CLAUDE_AI_PROJECTS_WRITE_SCOPE,
-              ]),
-              signal: signal,
-              telemetryContext: "projects_scope_expansion",
-            })));
-        } catch (error) {
-          if (isInvalidGrantError(error) && !isCompromised())
-            await markRefreshTokenDeadAfterInvalidGrant(lockedTokens.refreshToken, credentials);
-          if (isCompromised() || isAbortError(error)) return { ok: !1, reason: "lock_contended" };
-          throw error;
-        }
-        let w = await saveRefreshedOAuthTokensRespectingLock({
-          isCompromised: isCompromised,
-          postedRefreshToken: lockedTokens.refreshToken,
-          refreshedTokens: y,
-          credentials: credentials,
-        });
-        if (w === "adopted_sibling") return { ok: !1, reason: "lock_contended" };
-        if (w === "save_failed")
-          return (
-            logFeatureSad("projects_scope_expansion", "save_failed"),
-            { ok: !1, reason: "save_failed" }
-          );
-        if (!K(y.scopes))
-          return (
-            logFeatureSad("projects_scope_expansion", "expand_failed"),
-            { ok: !1, reason: "expand_failed", detail: "refresh succeeded but projects scopes not granted" }
-          );
-        return (
-          logFeatureOk("projects_scope_expansion"),
-          { ok: !0, accessToken: y.accessToken, expanded: !0 }
-        );
-      },
+    await checkAndRefreshOAuthTokenIfNeeded({
       credentials,
-    );
+    });
+  } catch {}
+  let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
+  if (!claudeAIOAuthTokens?.accessToken)
+    return {
+      ok: false,
+      reason: "no_token",
+    };
+  if (hasProjectsScopes(claudeAIOAuthTokens.scopes))
+    return {
+      ok: true,
+      accessToken: claudeAIOAuthTokens.accessToken,
+      expanded: false,
+    };
+  if (claudeAIOAuthTokens.clientId)
+    return {
+      ok: false,
+      reason: "custom_client",
+    };
+  if (!claudeAIOAuthTokens.refreshToken)
+    return {
+      ok: false,
+      reason: "no_refresh",
+    };
+  if (isDiskless()) {
+    logFeatureBad("oauth_token_refresh", "oauth_refresh_diskless");
+    return {
+      ok: false,
+      reason: "no_refresh",
+    };
+  }
+  if (await isOAuthRefreshKnownDeadAsync(credentials))
+    return {
+      ok: false,
+      reason: "no_refresh",
+    };
+  let u = false;
+  try {
+    return await withOAuthRefreshLock(async ({ lockedTokens, isCompromised, signal }) => {
+      if (!lockedTokens?.refreshToken)
+        return {
+          ok: false,
+          reason: "no_refresh",
+        };
+      if (isCompromised())
+        return {
+          ok: false,
+          reason: "lock_contended",
+        };
+      if (hasProjectsScopes(lockedTokens.scopes) && lockedTokens.accessToken)
+        return {
+          ok: true,
+          accessToken: lockedTokens.accessToken,
+          expanded: false,
+        };
+      if (lockedTokens.clientId)
+        return {
+          ok: false,
+          reason: "custom_client",
+        };
+      if (await isOAuthRefreshKnownDeadAsync(credentials))
+        return {
+          ok: false,
+          reason: "no_refresh",
+        };
+      let y;
+      try {
+        u = true;
+        y = await refreshOAuthToken(lockedTokens.refreshToken, {
+          clientId: lockedTokens.clientId,
+          scopes: uniq([
+            ...claudeAiLoginScopes(),
+            ...preservableScopesFrom(lockedTokens.scopes),
+            CLAUDE_AI_PROJECTS_READ_SCOPE,
+            CLAUDE_AI_PROJECTS_WRITE_SCOPE,
+          ]),
+          signal,
+          telemetryContext: "projects_scope_expansion",
+        });
+      } catch (error) {
+        if (isInvalidGrantError(error) && !isCompromised())
+          await markRefreshTokenDeadAfterInvalidGrant(lockedTokens.refreshToken, credentials);
+        if (isCompromised() || isAbortError(error))
+          return {
+            ok: false,
+            reason: "lock_contended",
+          };
+        throw error;
+      }
+      let w = await saveRefreshedOAuthTokensRespectingLock({
+        isCompromised,
+        postedRefreshToken: lockedTokens.refreshToken,
+        refreshedTokens: y,
+        credentials,
+      });
+      if (w === "adopted_sibling")
+        return {
+          ok: false,
+          reason: "lock_contended",
+        };
+      if (w === "save_failed") {
+        logFeatureSad("projects_scope_expansion", "save_failed");
+        return {
+          ok: false,
+          reason: "save_failed",
+        };
+      }
+      if (!hasProjectsScopes(y.scopes)) {
+        logFeatureSad("projects_scope_expansion", "expand_failed");
+        return {
+          ok: false,
+          reason: "expand_failed",
+          detail: "refresh succeeded but projects scopes not granted",
+        };
+      }
+      logFeatureOk("projects_scope_expansion");
+      return {
+        ok: true,
+        accessToken: y.accessToken,
+        expanded: true,
+      };
+    }, credentials);
   } catch (error) {
     if (error instanceof OAuthRefreshLockContendedError || isAbortError(error))
-      return { ok: !1, reason: "lock_contended" };
-    if (!u) return { ok: !1, reason: "lock_contended", detail: errorMessage(error) };
-    return (
-      logFeatureSad("projects_scope_expansion", "expand_failed"),
-      { ok: !1, reason: "expand_failed", detail: errorMessage(error) }
-    );
+      return {
+        ok: false,
+        reason: "lock_contended",
+      };
+    if (!u)
+      return {
+        ok: false,
+        reason: "lock_contended",
+        detail: errorMessage(error),
+      };
+    logFeatureSad("projects_scope_expansion", "expand_failed");
+    return {
+      ok: false,
+      reason: "expand_failed",
+      detail: errorMessage(error),
+    };
   }
 }
 //@ chunk-nghef0fw.js:3097-3155 placement
-function K(e) {
-  return !!e && e.includes(CLAUDE_AI_PROJECTS_READ_SCOPE) && e.includes(CLAUDE_AI_PROJECTS_WRITE_SCOPE);
+/**
+ * 判断 scope 列表是否同时含 projects 的读写权限。
+ */
+function hasProjectsScopes(scopes) {
+  return (
+    !!scopes &&
+    scopes.includes(CLAUDE_AI_PROJECTS_READ_SCOPE) &&
+    scopes.includes(CLAUDE_AI_PROJECTS_WRITE_SCOPE)
+  );
 }
-
 export { ensureProjectsAccessToken };

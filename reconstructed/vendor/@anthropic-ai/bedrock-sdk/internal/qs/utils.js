@@ -5,13 +5,14 @@
  * pieces: chunk-h87x8cg3.js (2)
  * attribution: esm-layout 2
  */
-
 //@ chunk-h87x8cg3.js:6701-6739 esm-layout
-var N = (e) => ((N = Array.isArray), N(e)),
-  P = N;
+var has = (e) => {
+  has = Array.isArray;
+  return has(e);
+};
+var has_default = has;
 //@ chunk-h87x8cg3.js:6739-6808 esm-layout
-function A(e) {
-  return e != null && typeof e === "object" && !Array.isArray(e);
+function A(parsed) {
+  return parsed != null && typeof parsed === "object" && !Array.isArray(parsed);
 }
-
-export { P, A };
+export { has_default, A };

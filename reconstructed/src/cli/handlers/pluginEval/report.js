@@ -9,31 +9,31 @@
  * attribution: placement 28
  */
 import { relative } from "path";
-import { zVe } from "../../../../vendor/marked/lib/marked.esm.js";
+import { Marked } from "../../../../vendor/marked/lib/marked.esm.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { printableName } from "../../../utils/printableName.js";
 import { plural, truncateMiddle } from "../../../utils/stringUtils.js";
 import { count } from "../../../utils/collections.js";
-import { lLt } from "../../../services/pluginEval/evalReport.js";
+import { mean } from "../../../services/pluginEval/evalReport.js";
 import { formatDuration } from "../../../utils/format.js";
 import { escapeXmlAttr } from "../../../utils/xml.js";
 import { INVISIBLE_CHAR_CLASSES } from "../../../utils/confusables.js";
 
 //@ chunk-5wjwnxna.js:910-1023 placement
-var UNESCAPED_AMPERSAND = /&(?!(?:#\d{1,7}|#[Xx][0-9a-fA-F]{1,6}|\w+);)/g,
-  J = /^<input (?:checked="" )?disabled="" type="checkbox"> ?/;
+var UNESCAPED_AMPERSAND = /&(?!(?:#\d{1,7}|#[Xx][0-9a-fA-F]{1,6}|\w+);)/g;
+var DISABLED_CHECKBOX_PREFIX_PATTERN = /^<input (?:checked="" )?disabled="" type="checkbox"> ?/;
 //@ chunk-5wjwnxna.js:1023-1111 placement = escapeXml (1)
 function escapeXml(s) {
   return s.replace(UNESCAPED_AMPERSAND, "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
+//@ chunk-5wjwnxna.js:1111-1538 placement
 /**
  * 创建安全的 Markdown→HTML 渲染器（marked，GFM），原始 HTML 一律转义，链接与图片渲染可定制。
  */
-//@ chunk-5wjwnxna.js:1111-1538 placement
 function createSafeMarkdownRenderer(e) {
   let s = e.renderImage ?? ((a, n) => escapeXml(a || n));
-  return new zVe({
-    gfm: !0,
+  return new Marked({
+    gfm: true,
     renderer: {
       html(a) {
         return escapeXml(a.text);
@@ -41,7 +41,7 @@ function createSafeMarkdownRenderer(e) {
       text(a) {
         if ("tokens" in a && a.tokens) return this.parser.parseInline(a.tokens);
         if (a.type === "text" && a.escaped) {
-          let match = a.text.match(J);
+          let match = a.text.match(DISABLED_CHECKBOX_PREFIX_PATTERN);
           if (match) return match[0] + escapeXml(a.text.slice(match[0].length));
         }
         return escapeXml(a.text);
@@ -61,8 +61,8 @@ var safeHtmlMarkdownRenderer = createSafeMarkdownRenderer({
   renderLink(e, s, a) {
     let trimmed = e.trim();
     if (!/^(?:https?:|mailto:|#)/i.test(trimmed)) return s;
-    let t = a ? ` title="${i(a)}"` : "";
-    return `<a href="${i(trimmed)}"${t} rel="noopener">${s}</a>`;
+    let t = a ? ` title="${escapeAttr(a)}"` : "";
+    return `<a href="${escapeAttr(trimmed)}"${t} rel="noopener">${s}</a>`;
   },
   renderImage(e, s) {
     return `<code>[image: ${escapeXml(e || s)}]</code>`;
@@ -73,239 +73,260 @@ function createMarkdownHtmlCache() {
   let e = new Map();
   return (s) => {
     let a = e.get(s);
-    if (a !== void 0) return a;
+    if (a !== undefined) return a;
     let n;
     try {
-      n = safeHtmlMarkdownRenderer.parse(A(s), { async: !1 });
+      n = safeHtmlMarkdownRenderer.parse(stripInvisibleChars(s), {
+        async: false,
+      });
     } catch {
-      n = `<pre>${i(s)}</pre>`;
+      n = `<pre>${escapeAttr(s)}</pre>`;
     }
     let t = `<div class="md">${n}</div>`;
-    return (e.set(s, t), t);
+    e.set(s, t);
+    return t;
   };
 }
+//@ chunk-5wjwnxna.js:1973-2091 placement = formatPrice (1)
 /**
  * 比例转百分比串（<1 时最多 99.9%）。疑似不属于 modelCost。
  */
-//@ chunk-5wjwnxna.js:1973-2091 placement = formatPrice (1)
 function formatPercent(price) {
   let s = Math.round(price * 1000) / 10;
   if (price < 1 && s >= 100) s = 99.9;
   return Number.isInteger(s) ? `${s}%` : `${s.toFixed(1)}%`;
 }
 //@ chunk-5wjwnxna.js:2091-2130 placement
-function D(e) {
-  return `$${e.toFixed(2)}`;
+function formatCostUsd(costUsd) {
+  return `$${costUsd.toFixed(2)}`;
 }
 //@ chunk-5wjwnxna.js:2130-2230 placement
-function formatUtcMinute(e) {
-  let match = e.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
-  return match ? `${match[1]} ${match[2]} UTC` : e;
+function formatUtcMinute(startedAt) {
+  let match = startedAt.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  return match ? `${match[1]} ${match[2]} UTC` : startedAt;
 }
+//@ chunk-5wjwnxna.js:2230-2538 placement
 /**
  * 生成百分比进度条 HTML（0–100% 截断），可带一个刻度标记。
  */
-//@ chunk-5wjwnxna.js:2230-2538 placement
 function renderMeter(fraction, cls, tickFraction) {
-  let n = Number.isFinite(fraction) ? fraction : 0,
-    max = Math.max(0, Math.min(100, n * 100)),
-    l =
-      tickFraction !== void 0 && Number.isFinite(tickFraction)
-        ? `<i class="tick" style="left:${Math.max(0, Math.min(100, tickFraction * 100)).toFixed(1)}%"></i>`
-        : "";
+  let n = Number.isFinite(fraction) ? fraction : 0;
+  let max = Math.max(0, Math.min(100, n * 100));
+  let l =
+    tickFraction !== undefined && Number.isFinite(tickFraction)
+      ? `<i class="tick" style="left:${Math.max(0, Math.min(100, tickFraction * 100)).toFixed(1)}%"></i>`
+      : "";
   return `<span class="meter ${cls}" aria-hidden="true"><span style="width:${max.toFixed(1)}%"></span>${l}</span>`;
 }
 //@ chunk-5wjwnxna.js:2538-2707 placement
-function deltaStyle(e) {
-  if (e > 0) return { cls: "delta-pos", arrow: "\u2191", sign: "+" };
-  if (e < 0) return { cls: "delta-neg", arrow: "\u2193", sign: "" };
-  return { cls: "delta-zero", arrow: "\xB7", sign: "" };
+function deltaStyle(meanDelta) {
+  if (meanDelta > 0)
+    return {
+      cls: "delta-pos",
+      arrow: "\u2191",
+      sign: "+",
+    };
+  if (meanDelta < 0)
+    return {
+      cls: "delta-neg",
+      arrow: "\u2193",
+      sign: "",
+    };
+  return {
+    cls: "delta-zero",
+    arrow: "\xB7",
+    sign: "",
+  };
 }
 //@ chunk-5wjwnxna.js:2707-2828 placement
-function renderDelta(e) {
-  let { cls: cls, arrow: arrow, sign: sign } = deltaStyle(e);
-  return `<span class="delta ${cls}">${arrow} ${sign}${(e * 100).toFixed(1)} pts</span>`;
+function renderDelta(delta) {
+  let { cls, arrow, sign } = deltaStyle(delta);
+  return `<span class="delta ${cls}">${arrow} ${sign}${(delta * 100).toFixed(1)} pts</span>`;
 }
+//@ chunk-5wjwnxna.js:2828-3358 placement
 /**
  * 插件评测报告常量：出错运行的星号标记、长度上限、插件状态是否影响结果及其说明。
  */
-//@ chunk-5wjwnxna.js:2828-3358 placement
 var ERRORED_RUNS_STAR =
-    '<span class="star" title="Includes runs that errored or hit the cost ceiling \u2014 see \u201CHow to read this report\u201D">*</span>',
-  TRANSCRIPT_MAX_CHARS = 20000,
-  TRANSCRIPT_TAIL_CHARS = 4000,
-  PLUGIN_WARNING_SKIPS_PLUGIN = {
-    manifest_invalid: !0,
-    disabled_by_default: !0,
-    will_not_load: !0,
-    identity_unverified: !1,
-    archive_not_probed: !1,
-  },
-  PLUGIN_WARNING_LABELS = {
-    manifest_invalid: "manifest is invalid \u2014 ran without it",
-    disabled_by_default: "defaultEnabled: false \u2014 ran without it",
-    identity_unverified: "identity not verified",
-    archive_not_probed: "archive \u2014 identity not probed",
-    will_not_load: "will not load",
-  };
+  '<span class="star" title="Includes runs that errored or hit the cost ceiling \u2014 see \u201CHow to read this report\u201D">*</span>';
+var TRANSCRIPT_MAX_CHARS = 20000;
+var TRANSCRIPT_TAIL_CHARS = 4000;
+var PLUGIN_WARNING_SKIPS_PLUGIN = {
+  manifest_invalid: true,
+  disabled_by_default: true,
+  will_not_load: true,
+  identity_unverified: false,
+  archive_not_probed: false,
+};
+var PLUGIN_WARNING_LABELS = {
+  manifest_invalid: "manifest is invalid \u2014 ran without it",
+  disabled_by_default: "defaultEnabled: false \u2014 ran without it",
+  identity_unverified: "identity not verified",
+  archive_not_probed: "archive \u2014 identity not probed",
+  will_not_load: "will not load",
+};
+//@ chunk-5wjwnxna.js:3358-3574 placement
 /**
  * 生成评测报告标题（插件名与版本，或 Eval suite）。
  */
-//@ chunk-5wjwnxna.js:3358-3574 placement
 function suiteTitle(e) {
   return e.suite.plugins.length > 0
     ? e.suite.plugins
         .map((plugin) => {
-          let a = ie.test(plugin.name) ? plugin.name : jsonStringify(printableName(A(plugin.name), 80));
-          return plugin.version !== void 0 && oe.test(plugin.version) ? `${a} v${plugin.version}` : a;
+          let a = SAFE_PLUGIN_NAME_PATTERN.test(plugin.name)
+            ? plugin.name
+            : jsonStringify(printableName(stripInvisibleChars(plugin.name), 80));
+          return plugin.version !== undefined && SAFE_VERSION_PATTERN.test(plugin.version)
+            ? `${a} v${plugin.version}`
+            : a;
         })
         .join(", ")
     : "Eval suite";
 }
 //@ chunk-5wjwnxna.js:3574-3637 placement
-var ie = /^[0-9A-Za-z._@/-]{1,80}$/,
-  oe = /^[0-9A-Za-z._+-]{1,40}$/;
+var SAFE_PLUGIN_NAME_PATTERN = /^[0-9A-Za-z._@/-]{1,80}$/;
+var SAFE_VERSION_PATTERN = /^[0-9A-Za-z._+-]{1,40}$/;
 //@ chunk-5wjwnxna.js:3637-4499 placement
 function renderCaseRow(e) {
   let s = e.passed
-      ? '<span class="chip chip-pass">\u2713 pass</span>'
-      : '<span class="chip chip-fail">\u2717 fail</span>',
-    a = e.weight !== 1 ? `<span class="muted">\xD7${i(String(e.weight))}</span>` : "",
-    n = e.withOnly ? '<span class="badge">plugin-fired indicator</span>' : "",
-    t =
-      e.judgeVotes && e.judgeVotes.length > 1
-        ? `<div class="kv"><span>Judge votes</span><span class="votes">${e.judgeVotes.map((judgeVote) => (judgeVote ? "\u2713" : "\u2717")).join(" ")}</span></div>`
-        : "",
-    l = e.evidence
-      ? `<div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">${i(truncateTranscript(e.evidence))}</pre>`
+    ? '<span class="chip chip-pass">\u2713 pass</span>'
+    : '<span class="chip chip-fail">\u2717 fail</span>';
+  let a = e.weight !== 1 ? `<span class="muted">\xD7${escapeAttr(String(e.weight))}</span>` : "";
+  let n = e.withOnly ? '<span class="badge">plugin-fired indicator</span>' : "";
+  let t =
+    e.judgeVotes && e.judgeVotes.length > 1
+      ? `<div class="kv"><span>Judge votes</span><span class="votes">${e.judgeVotes.map((judgeVote) => (judgeVote ? "\u2713" : "\u2717")).join(" ")}</span></div>`
       : "";
+  let l = e.evidence
+    ? `<div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">${escapeAttr(truncateTranscript(e.evidence))}</pre>`
+    : "";
   return `<details class="grader"${e.passed ? "" : " open"}>
-<summary>${s} <span class="grader-name">${i(e.name)}</span> ${a} ${n}</summary>
+<summary>${s} <span class="grader-name">${escapeAttr(e.name)}</span> ${a} ${n}</summary>
 <div class="grader-body">
-<p class="explanation">${i(e.explanation)}</p>
+<p class="explanation">${escapeAttr(e.explanation)}</p>
 ${t}${l}
 </div>
 </details>`;
 }
 //@ chunk-5wjwnxna.js:4499-6254 placement
-function renderRunDetails(e, s, a) {
-  let n = e.error
-      ? `<div class="run-error"><span class="chip chip-fail">\u2717 run error</span> <span class="explanation">${i(e.error)}</span></div>`
-      : "",
-    t = e.skippedPaidGraders
-      ? '<div class="note">\u26A0 Cost ceiling hit during this run \u2014 LLM/baseline graders were marked fail without judging; the run still counts toward the averages with the score shown.</div>'
-      : "",
-    l = e.aborted
-      ? `<div class="run-error"><span class="chip chip-fail">\u2717 aborted by mock</span> <span class="explanation">${i(e.aborted.server)}/${i(e.aborted.tool)}: ${i(e.aborted.reason)}</span></div>`
-      : "",
-    p = e.mocks
-      ? `<details class="mocks"><summary>Mocked: ${e.mocks.servers.map((server) => `${i(server.server)}${server.kind === "standalone" ? " (standalone)" : ""} \u2014 ${server.tools.map((tool) => `${i(tool.tool)}=${tool.responder}`).join(", ")}`).join("; ")} \xB7 ${e.mocks.calls.total} ${plural(e.mocks.calls.total, "call")}${e.mocks.calls.errors ? `, ${e.mocks.calls.errors} ${plural(e.mocks.calls.errors, "tool error")}` : ""}${e.mocks.calls.replay && e.mocks.calls.replay.hits + e.mocks.calls.replay.misses > 0 ? ` \xB7 replay ${e.mocks.calls.replay.hits} hit / ${e.mocks.calls.replay.misses} live` : ""}</summary>${e.mocks.calls.unmocked.length ? `<div class="note">Called but not mocked: ${e.mocks.calls.unmocked.map((d) => `${i(d.tool)} \xD7${d.count}`).join(", ")}</div>` : ""}${e.mocks.warnings.map((warning) => `<div class="note">${i(warning)}</div>`).join("")}</details>`
-      : "";
+function renderRunDetails(run, s, a) {
+  let n = run.error
+    ? `<div class="run-error"><span class="chip chip-fail">\u2717 run error</span> <span class="explanation">${escapeAttr(run.error)}</span></div>`
+    : "";
+  let t = run.skippedPaidGraders
+    ? '<div class="note">\u26A0 Cost ceiling hit during this run \u2014 LLM/baseline graders were marked fail without judging; the run still counts toward the averages with the score shown.</div>'
+    : "";
+  let l = run.aborted
+    ? `<div class="run-error"><span class="chip chip-fail">\u2717 aborted by mock</span> <span class="explanation">${escapeAttr(run.aborted.server)}/${escapeAttr(run.aborted.tool)}: ${escapeAttr(run.aborted.reason)}</span></div>`
+    : "";
+  let p = run.mocks
+    ? `<details class="mocks"><summary>Mocked: ${run.mocks.servers.map((server) => `${escapeAttr(server.server)}${server.kind === "standalone" ? " (standalone)" : ""} \u2014 ${server.tools.map((tool) => `${escapeAttr(tool.tool)}=${tool.responder}`).join(", ")}`).join("; ")} \xB7 ${run.mocks.calls.total} ${plural(run.mocks.calls.total, "call")}${run.mocks.calls.errors ? `, ${run.mocks.calls.errors} ${plural(run.mocks.calls.errors, "tool error")}` : ""}${run.mocks.calls.replay && run.mocks.calls.replay.hits + run.mocks.calls.replay.misses > 0 ? ` \xB7 replay ${run.mocks.calls.replay.hits} hit / ${run.mocks.calls.replay.misses} live` : ""}</summary>${run.mocks.calls.unmocked.length ? `<div class="note">Called but not mocked: ${run.mocks.calls.unmocked.map((d) => `${escapeAttr(d.tool)} \xD7${d.count}`).join(", ")}</div>` : ""}${run.mocks.warnings.map((warning) => `<div class="note">${escapeAttr(warning)}</div>`).join("")}</details>`
+    : "";
   return `<div class="run">
 <div class="run-head">
 <span class="run-title">Run ${s + 1}</span>
-${renderMeter(e.score, a)}
-<span class="num">${formatPercent(e.score)}</span>
-<span class="muted num">${e.turns} turns \xB7 ${D(e.costUsd)}${e.startedAt ? ` \xB7 ${i(e.startedAt.slice(11, 19))} UTC` : ""}</span>
+${renderMeter(run.score, a)}
+<span class="num">${formatPercent(run.score)}</span>
+<span class="muted num">${run.turns} turns \xB7 ${formatCostUsd(run.costUsd)}${run.startedAt ? ` \xB7 ${escapeAttr(run.startedAt.slice(11, 19))} UTC` : ""}</span>
 </div>
 ${n}${l}${t}${p}
-<div class="graders">${e.graders.map(renderCaseRow).join(`
+<div class="graders">${run.graders.map(renderCaseRow).join(`
 `)}</div>
 </div>`;
 }
+//@ chunk-5wjwnxna.js:6254-6655 placement
 /**
  * 渲染一个对照臂（arm）区块：平均分进度条与满分比例（不可比时给提示），以及每次运行的详情。
  */
-//@ chunk-5wjwnxna.js:6254-6655 placement
 function renderArmSection(label, cls, score, perfectFraction, runs) {
   let l =
-    score !== void 0
+    score !== undefined
       ? `${renderMeter(score, cls)}
 <span class="num">${formatPercent(score)}</span>
 <span class="muted num">${formatPercent(perfectFraction ?? 0)} of runs perfect</span>`
       : '<span class="muted">aggregate not comparable \u2014 a run in one of the arms was not fully graded</span>';
   return `<section class="arm">
 <div class="arm-head">
-<span class="arm-label">${i(label)}</span>
+<span class="arm-label">${escapeAttr(label)}</span>
 ${l}
 </div>
-${runs.map((p, d) => renderRunDetails(p, d, cls)).join(`
+${runs.map((run, d) => renderRunDetails(run, d, cls)).join(`
 `)}
 </section>`;
 }
 //@ chunk-5wjwnxna.js:6655-6853 placement
-function renderGraderConfig(e) {
-  let entries = Object.entries(e);
+function renderGraderConfig(config) {
+  let entries = Object.entries(config);
   if (entries.length === 0) return "";
-  return `<div class="config">${entries.map(([a, n]) => `<div class="kv"><span>${i(a)}</span><code>${i(jsonStringify(n) ?? "")}</code></div>`).join("")}</div>`;
+  return `<div class="config">${entries.map(([a, n]) => `<div class="kv"><span>${escapeAttr(a)}</span><code>${escapeAttr(jsonStringify(n) ?? "")}</code></div>`).join("")}</div>`;
 }
+//@ chunk-5wjwnxna.js:6853-7164 placement
 /**
  * 渲染评分器定义：名称、类型、权重（非 1 时），以及 Markdown 说明或配置键值表。
  */
-//@ chunk-5wjwnxna.js:6853-7164 placement
 function renderGraderDefinition(grader, renderMarkdown) {
   return `<div class="grader-def">
-<div class="grader-def-head"><span class="grader-name">${i(grader.name)}</span><span class="badge">${i(grader.type)}</span>${grader.weight !== 1 ? `<span class="muted">weight \xD7${i(String(grader.weight))}</span>` : ""}</div>
+<div class="grader-def-head"><span class="grader-name">${escapeAttr(grader.name)}</span><span class="badge">${escapeAttr(grader.type)}</span>${grader.weight !== 1 ? `<span class="muted">weight \xD7${escapeAttr(String(grader.weight))}</span>` : ""}</div>
 ${grader.graderMarkdown ? renderMarkdown(grader.graderMarkdown) : renderGraderConfig(grader.config)}
 </div>`;
 }
 //@ chunk-5wjwnxna.js:7164-8761 placement
-function renderCaseSections(e, s, a, n) {
-  let t = (e.arms.without?.length ?? 0) > 0,
-    l = `<details class="section" open>
+function renderCaseSections(e, s, renderMarkdown, tickFraction) {
+  let t = (e.arms.without?.length ?? 0) > 0;
+  let l = `<details class="section" open>
 <summary>Prompt</summary>
-${a(e.promptMarkdown)}
-</details>`,
-    p = `<details class="section" open>
+${renderMarkdown(e.promptMarkdown)}
+</details>`;
+  let p = `<details class="section" open>
 <summary>Graders \u2014 what "good" means for this case</summary>
-${e.graders.map((grader) => renderGraderDefinition(grader, a)).join(`
+${e.graders.map((grader) => renderGraderDefinition(grader, renderMarkdown)).join(`
 `)}
-</details>`,
-    d = `<details class="section" open>
+</details>`;
+  let d = `<details class="section" open>
 <summary>Results</summary>
 ${t ? renderArmSection("With plugin", "m-accent", e.aggregates.score, e.aggregates.passRate, e.arms.with) + renderArmSection("Baseline (no plugin)", "m-base", e.aggregates.scoreWithout, e.aggregates.passRateWithout, e.arms.without ?? []) : renderArmSection("Runs", "m-accent", e.aggregates.score, e.aggregates.passRate, e.arms.with)}
-</details>`,
-    f = count(e.arms.with, (o) => o.error !== null),
-    u = count(e.arms.with, (o) => o.skippedPaidGraders && o.error === null),
-    w = e.aggregates.delta !== void 0 ? (e.arms.without ?? []) : [],
-    x = f + count(w, (o) => o.error !== null),
-    m = u + count(w, (o) => o.skippedPaidGraders && o.error === null),
-    joined = [
-      x > 0 ? `<span class="flag">\u26A0 ${x} ${plural(x, "run")} errored</span>` : "",
-      m > 0 ? `<span class="flag">\u26A0 ${m} ${plural(m, "run")} unjudged (cost ceiling)</span>` : "",
-    ].join("");
+</details>`;
+  let f = count(e.arms.with, (o) => o.error !== null);
+  let u = count(e.arms.with, (o) => o.skippedPaidGraders && o.error === null);
+  let w = e.aggregates.delta !== undefined ? (e.arms.without ?? []) : [];
+  let x = f + count(w, (o) => o.error !== null);
+  let m = u + count(w, (o) => o.skippedPaidGraders && o.error === null);
+  let joined = [
+    x > 0 ? `<span class="flag">\u26A0 ${x} ${plural(x, "run")} errored</span>` : "",
+    m > 0 ? `<span class="flag">\u26A0 ${m} ${plural(m, "run")} unjudged (cost ceiling)</span>` : "",
+  ].join("");
   return `<article class="case${(e.aggregates.delta ?? 0) < 0 ? " case-regressed" : ""}" id="case-${s + 1}">
 <div class="case-head">
-<h2>${i(e.name)}</h2>
-<span class="muted mono">${i(e.dir)}</span>
+<h2>${escapeAttr(e.name)}</h2>
+<span class="muted mono">${escapeAttr(e.dir)}</span>
 <span class="spacer"></span>
 ${joined}
-${e.aggregates.delta !== void 0 ? renderDelta(e.aggregates.delta) : ""}
+${e.aggregates.delta !== undefined ? renderDelta(e.aggregates.delta) : ""}
 ${t ? '<span class="muted">with plugin</span>' : ""}
-${renderMeter(e.aggregates.score, "m-accent", n)}
+${renderMeter(e.aggregates.score, "m-accent", tickFraction)}
 <span class="num case-score">${formatPercent(e.aggregates.score)}${f + u > 0 ? ERRORED_RUNS_STAR : ""}</span>
 </div>
-${(e.advisories ?? []).map((o) => `<div class="note">\u26A0 ${i(o)}</div>`).join(`
+${(e.advisories ?? []).map((o) => `<div class="note">\u26A0 ${escapeAttr(o)}</div>`).join(`
 `)}
 ${d}
 ${l}
 ${p}
 </article>`;
 }
+//@ chunk-5wjwnxna.js:8761-18703 placement
 /**
  * 插件评测 HTML 报告的内嵌 CSS。
  */
-//@ chunk-5wjwnxna.js:8761-18703 placement
 var EVAL_REPORT_CSS =
-    "--plane:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--ink-3:#6b6a64;--hairline:rgba(11,11,11,.10);--grid:#e1e0d9;--inset:rgba(11,11,11,.04);--accent:#2a78d6;--base-fill:#6b6a64;--delta-good:#006300;--good:#067d06;--warning:#8a6100;--critical:#d03b3b;",
-  P =
-    "--plane:#0d0d0d;--surface:#1a1a19;--ink:#ffffff;--ink-2:#c3c2b7;--ink-3:#898781;--hairline:rgba(255,255,255,.10);--grid:#2c2c2a;--inset:rgba(255,255,255,.05);--accent:#3987e5;--base-fill:#898781;--delta-good:#0ca30c;--good:#0ca30c;--warning:#fab219;--critical:#e06c6c;",
-  ge = `<style>
+  "--plane:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--ink-3:#6b6a64;--hairline:rgba(11,11,11,.10);--grid:#e1e0d9;--inset:rgba(11,11,11,.04);--accent:#2a78d6;--base-fill:#6b6a64;--delta-good:#006300;--good:#067d06;--warning:#8a6100;--critical:#d03b3b;";
+var EVAL_REPORT_CSS_VARS_DARK =
+  "--plane:#0d0d0d;--surface:#1a1a19;--ink:#ffffff;--ink-2:#c3c2b7;--ink-3:#898781;--hairline:rgba(255,255,255,.10);--grid:#2c2c2a;--inset:rgba(255,255,255,.05);--accent:#3987e5;--base-fill:#898781;--delta-good:#0ca30c;--good:#0ca30c;--warning:#fab219;--critical:#e06c6c;";
+var EVAL_REPORT_STYLE_BLOCK = `<style>
 :root{${EVAL_REPORT_CSS}
   color-scheme:light dark;
 }
-@media (prefers-color-scheme:dark){:root{${P}color-scheme:dark}}
-:root[data-theme="dark"]{${P}color-scheme:dark}
+@media (prefers-color-scheme:dark){:root{${EVAL_REPORT_CSS_VARS_DARK}color-scheme:dark}}
+:root[data-theme="dark"]{${EVAL_REPORT_CSS_VARS_DARK}color-scheme:dark}
 :root[data-theme="light"]{${EVAL_REPORT_CSS}color-scheme:light}
 *{box-sizing:border-box}
 body{margin:0;background:var(--plane);color:var(--ink);
@@ -433,8 +454,8 @@ footer{color:var(--ink-3);font-size:12px;text-align:center;padding-top:8px}
   .case,.run,.grader-def{break-inside:avoid}
   pre.evidence{max-height:none}
 }
-</style>`,
-  me = `<script>
+</style>`;
+var EVAL_REPORT_SCRIPT_BLOCK = `<script>
 document.addEventListener('DOMContentLoaded',function(){
   var bar=document.querySelector('.toolbar');
   if(!bar)return;
@@ -457,88 +478,92 @@ window.addEventListener('afterprint',function(){
   });
 });
 </script>`;
+//@ chunk-5wjwnxna.js:18703-24469 placement
 /**
  * renderEvalReportFragment：把插件评测结果渲染成 HTML 片段（用例分节、每个用例的运行详情）。
  */
-//@ chunk-5wjwnxna.js:18703-24469 placement
-function renderEvalReportFragment(e) {
-  let s = createMarkdownHtmlCache(),
-    { cases: cases, aggregates: aggregates, suite: suite } = e,
-    filtered = cases.filter((r) => r.aggregates.scoreWithout !== void 0),
-    p = suiteTitle(e),
-    reduced = cases.reduce((r, g) => r + g.arms.with.length + (g.arms.without?.length ?? 0), 0),
-    f = e.partial
-      ? `<div class="banner"><span class="chip-warn">\u26A0 Partial results</span><span>${e.partialReason === "cost_ceiling" ? "The --max-cost-usd ceiling was hit before every case finished." : e.partialReason === "auth_failed" ? "A run could not authenticate (or the credential was rejected before any run), so the suite stopped before every case finished." : "The run was interrupted before every case finished."}</span></div>`
-      : "",
-    meanDelta = aggregates.meanDelta,
-    w = suite.ablation === "with-without",
-    flattened = cases.flatMap((r) => r.arms.with),
-    m = count(flattened, (r) => r.error !== null),
-    v = count(flattened, (r) => r.skippedPaidGraders && r.error === null),
-    y = m + v > 0,
-    flattened_2 = cases.filter((r) => r.aggregates.delta !== void 0).flatMap((r) => r.arms.without ?? []),
-    k = m + count(flattened_2, (r) => r.error !== null),
-    R = v + count(flattened_2, (r) => r.skippedPaidGraders && r.error === null),
-    G =
-      k + R > 0
-        ? `<div class="banner"><span class="chip-warn">\u26A0 Averages include non-judgments</span><span>${[k > 0 ? `${k} ${plural(k, "run")} errored` : "", R > 0 ? `${R} ${plural(R, "run")} force-failed at the cost ceiling` : ""].filter(Boolean).join("; ")} \u2014 their scores count toward the averages shown without a complete judgment.</span></div>`
-        : "",
-    filtered_2 = cases.filter((r) => r.aggregates.delta !== void 0),
-    H =
-      meanDelta !== void 0 && filtered_2.length > 0
-        ? (() => {
-            let { cls: cls, arrow: arrow, sign: sign } = deltaStyle(meanDelta),
-              I = count(filtered_2, (M) => (M.aggregates.delta ?? 0) > 0),
-              L = count(filtered_2, (M) => (M.aggregates.delta ?? 0) < 0),
-              X = filtered_2.length - I - L;
-            return `<p class="verdict">Plugin effect: <span class="delta ${cls}">${arrow} ${sign}${(meanDelta * 100).toFixed(1)} pts</span> vs baseline \u2014 improved ${I} \xB7 flat ${X} \xB7 regressed ${L} of ${filtered_2.length} ${plural(filtered_2.length, "case")}.</p>`;
-          })()
-        : "",
-    V =
-      meanDelta !== void 0
-        ? (() => {
-            let { cls: cls, arrow: arrow, sign: sign } = deltaStyle(meanDelta);
-            return `<div class="tile"><span class="label">Ablation \u0394</span><span class="value num ${cls}">${arrow === "\xB7" ? "" : `${arrow} `}${sign}${(meanDelta * 100).toFixed(1)}</span><span class="sub">score points vs baseline, ${filtered_2.length} of ${cases.length} ${plural(cases.length, "case")}</span></div>`;
-          })()
-        : "",
-    q =
-      filtered.length > 0
-        ? `${V}
-<div class="tile"><span class="label">Baseline score</span><span class="value num">${formatPercent(lLt(filtered.map((r) => r.aggregates.scoreWithout ?? 0)))}</span><span class="sub">without the plugin</span></div>`
-        : "",
-    W = `<details class="section legend">
+function renderEvalReportFragment(report) {
+  let markdownHtmlCache = createMarkdownHtmlCache();
+  let { cases, aggregates, suite } = report;
+  let filtered = cases.filter((r) => r.aggregates.scoreWithout !== undefined);
+  let p = suiteTitle(report);
+  let reduced = cases.reduce((acc, g) => acc + g.arms.with.length + (g.arms.without?.length ?? 0), 0);
+  let f = report.partial
+    ? `<div class="banner"><span class="chip-warn">\u26A0 Partial results</span><span>${report.partialReason === "cost_ceiling" ? "The --max-cost-usd ceiling was hit before every case finished." : report.partialReason === "auth_failed" ? "A run could not authenticate (or the credential was rejected before any run), so the suite stopped before every case finished." : "The run was interrupted before every case finished."}</span></div>`
+    : "";
+  let meanDelta = aggregates.meanDelta;
+  let w = suite.ablation === "with-without";
+  let flattened = cases.flatMap((r) => r.arms.with);
+  let m = count(flattened, (r) => r.error !== null);
+  let v = count(flattened, (r) => r.skippedPaidGraders && r.error === null);
+  let y = m + v > 0;
+  let flattened_2 = cases
+    .filter((r) => r.aggregates.delta !== undefined)
+    .flatMap((r) => r.arms.without ?? []);
+  let k = m + count(flattened_2, (r) => r.error !== null);
+  let R = v + count(flattened_2, (r) => r.skippedPaidGraders && r.error === null);
+  let G =
+    k + R > 0
+      ? `<div class="banner"><span class="chip-warn">\u26A0 Averages include non-judgments</span><span>${[k > 0 ? `${k} ${plural(k, "run")} errored` : "", R > 0 ? `${R} ${plural(R, "run")} force-failed at the cost ceiling` : ""].filter(Boolean).join("; ")} \u2014 their scores count toward the averages shown without a complete judgment.</span></div>`
+      : "";
+  let filtered_2 = cases.filter((r) => r.aggregates.delta !== undefined);
+  let H =
+    meanDelta !== undefined && filtered_2.length > 0
+      ? (() => {
+          let { cls, arrow, sign } = deltaStyle(meanDelta);
+          let I = count(filtered_2, (M) => (M.aggregates.delta ?? 0) > 0);
+          let L = count(filtered_2, (M) => (M.aggregates.delta ?? 0) < 0);
+          let X = filtered_2.length - I - L;
+          return `<p class="verdict">Plugin effect: <span class="delta ${cls}">${arrow} ${sign}${(meanDelta * 100).toFixed(1)} pts</span> vs baseline \u2014 improved ${I} \xB7 flat ${X} \xB7 regressed ${L} of ${filtered_2.length} ${plural(filtered_2.length, "case")}.</p>`;
+        })()
+      : "";
+  let V =
+    meanDelta !== undefined
+      ? (() => {
+          let { cls, arrow, sign } = deltaStyle(meanDelta);
+          return `<div class="tile"><span class="label">Ablation \u0394</span><span class="value num ${cls}">${arrow === "\xB7" ? "" : `${arrow} `}${sign}${(meanDelta * 100).toFixed(1)}</span><span class="sub">score points vs baseline, ${filtered_2.length} of ${cases.length} ${plural(cases.length, "case")}</span></div>`;
+        })()
+      : "";
+  let q =
+    filtered.length > 0
+      ? `${V}
+<div class="tile"><span class="label">Baseline score</span><span class="value num">${formatPercent(mean(filtered.map((r) => r.aggregates.scoreWithout ?? 0)))}</span><span class="sub">without the plugin</span></div>`
+      : "";
+  let W = `<details class="section legend">
 <summary>How to read this report</summary>
 <ul class="legend-list">
 <li>A run's score is the weighted fraction of its graders that passed; a "perfect" run passed every grader.</li>
 <li>A case's score is the mean of its runs; a case passes when its score is at or above the ${formatPercent(suite.threshold)} threshold (the tick on each case bar).</li>
 <li>The suite score is the mean of the per-case scores.</li>
 <li>Judge votes are independent samples of the LLM judge; the majority decides pass or fail.</li>
-${w ? `<li>"With plugin" and "Baseline" runs are identical except for the plugin being loaded; \u0394 is the with-plugin score minus the baseline score.${e.cases.some((r) => (r.arms.without?.length ?? 0) === 0) ? " Cases that show no baseline ran a single arm (nothing to strip, or a replay case) \u2014 their scores are absolute." : ""}</li>` : "<li><strong>No baseline arm was run</strong> (ablation off) \u2014 this report shows absolute scores only and cannot say whether the plugin caused them. Re-run with <code>--ablation with-without</code> to measure the plugin\u2019s effect.</li>"}
+${w ? `<li>"With plugin" and "Baseline" runs are identical except for the plugin being loaded; \u0394 is the with-plugin score minus the baseline score.${report.cases.some((r) => (r.arms.without?.length ?? 0) === 0) ? " Cases that show no baseline ran a single arm (nothing to strip, or a replay case) \u2014 their scores are absolute." : ""}</li>` : "<li><strong>No baseline arm was run</strong> (ablation off) \u2014 this report shows absolute scores only and cannot say whether the plugin caused them. Re-run with <code>--ablation with-without</code> to measure the plugin\u2019s effect.</li>"}
 ${y ? "<li>Scores marked with * include runs that errored or hit the cost ceiling (LLM graders force-failed); those runs count toward the means without a complete judgment.</li>" : ""}
 </ul>
-</details>`,
-    K = `<div class="wrap">
+</details>`;
+  let K = `<div class="wrap">
 <header>
 <div class="eyebrow">Plugin eval report</div>
-<h1>${i(p)}</h1>
+<h1>${escapeAttr(p)}</h1>
 ${H}
 <div class="meta">
 ${suite.plugins.map(
   (plugin) =>
-    `<span class="mono">${i(relative(suite.root, plugin.path) || ".")}${plugin.problem === void 0 ? "" : ` <span class="chip ${PLUGIN_WARNING_SKIPS_PLUGIN[plugin.problem] ? "chip-fail" : "chip-warn"}">${i(PLUGIN_WARNING_LABELS[plugin.problem])}</span>`}</span>`,
+    `<span class="mono">${escapeAttr(relative(suite.root, plugin.path) || ".")}${plugin.problem === undefined ? "" : ` <span class="chip ${PLUGIN_WARNING_SKIPS_PLUGIN[plugin.problem] ? "chip-fail" : "chip-warn"}">${escapeAttr(PLUGIN_WARNING_LABELS[plugin.problem])}</span>`}</span>`,
 ).join(`
 `)}
-<span>Claude Code v${i(e.claudeVersion)}</span>
-<span class="num">${i(formatUtcMinute(e.startedAt))}</span>
-<span class="num">${formatDuration(e.durationSeconds * 1000, { hideTrailingZeros: !0 })}</span>
-<span class="num">${D(e.costUsd)}</span>
+<span>Claude Code v${escapeAttr(report.claudeVersion)}</span>
+<span class="num">${escapeAttr(formatUtcMinute(report.startedAt))}</span>
+<span class="num">${formatDuration(report.durationSeconds * 1000, {
+    hideTrailingZeros: true,
+  })}</span>
+<span class="num">${formatCostUsd(report.costUsd)}</span>
 <span class="num">${reduced} runs</span>
 ${(suite.concurrency ?? 1) > 1 ? `<span class="num">${suite.concurrency} in flight</span>` : ""}
-${suite.pluginId ? `<span class="mono">${i(suite.pluginId)}</span>` : ""}
-${suite.modelOverride ? `<span>model ${i(suite.modelOverride)}</span>` : ""}
-<span>judge ${i(suite.judgeModel ?? "default")}</span>
+${suite.pluginId ? `<span class="mono">${escapeAttr(suite.pluginId)}</span>` : ""}
+${suite.modelOverride ? `<span>model ${escapeAttr(suite.modelOverride)}</span>` : ""}
+<span>judge ${escapeAttr(suite.judgeModel ?? "default")}</span>
 <span class="num">threshold ${formatPercent(suite.threshold)}</span>
-${suite.caseFilter || suite.tagFilters?.length ? `<span>filtered: ${[suite.caseFilter ? `--case ${i(suite.caseFilter)}` : "", ...(suite.tagFilters ?? []).map((r) => `--tag ${i(r)}`)].filter(Boolean).join(" ")}</span>` : ""}
+${suite.caseFilter || suite.tagFilters?.length ? `<span>filtered: ${[suite.caseFilter ? `--case ${escapeAttr(suite.caseFilter)}` : "", ...(suite.tagFilters ?? []).map((r) => `--tag ${escapeAttr(r)}`)].filter(Boolean).join(" ")}</span>` : ""}
 </div>
 </header>
 ${f}${G}
@@ -552,43 +577,43 @@ ${W}
 ${
   cases.length > 0
     ? `<div class="toolbar"><button type="button" data-act="expand">Expand all</button><button type="button" data-act="collapse">Collapse all</button></div>
-${cases.map((r, g) => renderCaseSections(r, g, s, suite.threshold)).join(`
+${cases.map((r, g) => renderCaseSections(r, g, markdownHtmlCache, suite.threshold)).join(`
 `)}`
     : '<p class="muted">No cases in this result file.</p>'
 }
-<footer>Generated by <code>claude plugin eval</code> \xB7 schema v${e.schemaVersion} \xB7 scores are not comparable across different suites${aggregatesMismatchFlag(e)}</footer>
+<footer>Generated by <code>claude plugin eval</code> \xB7 schema v${report.schemaVersion} \xB7 scores are not comparable across different suites${aggregatesMismatchFlag(report)}</footer>
 </div>`;
-  return `${ge}
+  return `${EVAL_REPORT_STYLE_BLOCK}
 ${K}
-${me}`;
+${EVAL_REPORT_SCRIPT_BLOCK}`;
 }
+//@ chunk-5wjwnxna.js:24469-24825 placement
 /**
  * 检查报告里的聚合分数与按运行重算的值是否一致（容差 0.005），不一致时返回警告标记 HTML。
  */
-//@ chunk-5wjwnxna.js:24469-24825 placement
 function aggregatesMismatchFlag(report) {
   let any = report.cases.some((n) => {
-      let t = lLt(n.arms.with.map((l) => l.score));
-      return Math.abs(t - n.aggregates.score) > 0.005;
-    }),
-    a =
-      report.cases.length > 0 &&
-      Math.abs(lLt(report.cases.map((n) => n.aggregates.score)) - report.aggregates.overallScore) > 0.005;
+    let t = mean(n.arms.with.map((l) => l.score));
+    return Math.abs(t - n.aggregates.score) > 0.005;
+  });
+  let a =
+    report.cases.length > 0 &&
+    Math.abs(mean(report.cases.map((n) => n.aggregates.score)) - report.aggregates.overallScore) > 0.005;
   return any || a
     ? ' \xB7 <span class="flag">\u26A0 aggregates in this file do not match values recomputed from its runs</span>'
     : "";
 }
+//@ chunk-5wjwnxna.js:24825-25063 placement
 /**
  * 把报告片段包成完整 HTML 文档。
  */
-//@ chunk-5wjwnxna.js:24825-25063 placement
 function wrapReportHtml(e, s) {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Eval report \u2014 ${i(suiteTitle(e))}</title>
+<title>Eval report \u2014 ${escapeAttr(suiteTitle(e))}</title>
 </head>
 <body>
 ${s}
@@ -597,9 +622,9 @@ ${s}
 `;
 }
 //@ chunk-5wjwnxna.js:25063-25180 placement
-function truncateTranscript(e) {
+function truncateTranscript(evidence) {
   return truncateMiddle(
-    e,
+    evidence,
     TRANSCRIPT_MAX_CHARS - TRANSCRIPT_TAIL_CHARS,
     TRANSCRIPT_TAIL_CHARS,
     (s) => `
@@ -608,12 +633,12 @@ function truncateTranscript(e) {
   );
 }
 //@ chunk-5wjwnxna.js:25180-25210 placement
-function i(e) {
-  return escapeXmlAttr(A(e));
+function escapeAttr(e) {
+  return escapeXmlAttr(stripInvisibleChars(e));
 }
 //@ chunk-5wjwnxna.js:25210-25274 placement
 var regExp = new RegExp(`[${INVISIBLE_CHAR_CLASSES}\u2028\u2029]|[^\\P{Cc}\\n\\t]`, "gu");
 //@ chunk-5wjwnxna.js:25274-25313 placement
-function A(e) {
+function stripInvisibleChars(e) {
   return e.replace(regExp, " ");
 }

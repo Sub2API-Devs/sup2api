@@ -8,42 +8,52 @@
  * pieces: chunk-cg8zacmh.js (2)
  * attribution: placement 2
  */
-import { oin, workflowPolicyRefusal, runRemoteWorkflow } from "../../services/workflows/remoteWorkflow.js";
+import {
+  remoteWorkflowErrorLine,
+  workflowPolicyRefusal,
+  runRemoteWorkflow,
+} from "../../services/workflows/remoteWorkflow.js";
 import { env } from "../../utils/env.js";
 import { REMOTE_WORKFLOW_ENV, CLAUDE_REMOTE_WORKFLOW_ARGS } from "../../services/workflow/loadWorkflows.js";
-import { gx } from "../../services/workflow/scriptFile.js";
+import { MAX_SCRIPT_FILE_BYTES } from "../../services/workflow/scriptFile.js";
 
 //@ chunk-cg8zacmh.js:12892-12943 placement
-function e(s, t) {
-  return { type: "text", value: oin(s, t) };
+function remoteWorkflowTextResult(s, t) {
+  return {
+    type: "text",
+    value: remoteWorkflowErrorLine(s, t),
+  };
 }
+//@ chunk-cg8zacmh.js:12943-13785 placement
 /**
  * /__remote-workflow 命令：仅在 CCR 远程会话中运行环境里下发的工作流脚本。
  */
-//@ chunk-cg8zacmh.js:12943-13785 placement
 var call = async (args, context) => {
   if (!env.CLAUDE_CODE_REMOTE)
-    return e(
+    return remoteWorkflowTextResult(
       "not-remote-session",
       "this command only runs inside a remote (CCR) session (CLAUDE_CODE_REMOTE is not set). Use the Workflow tool locally.",
     );
   let CLAUDE_REMOTE_WORKFLOW_SCRIPT = env.CLAUDE_REMOTE_WORKFLOW_SCRIPT;
-  if (CLAUDE_REMOTE_WORKFLOW_SCRIPT === void 0 || CLAUDE_REMOTE_WORKFLOW_SCRIPT === "")
-    return e(
+  if (CLAUDE_REMOTE_WORKFLOW_SCRIPT === undefined || CLAUDE_REMOTE_WORKFLOW_SCRIPT === "")
+    return remoteWorkflowTextResult(
       "env-missing",
       `${REMOTE_WORKFLOW_ENV} is not set. This command is the deterministic entry point for sessions launched with an environment-delivered workflow script; it has no interactive use.`,
     );
   let a = workflowPolicyRefusal();
-  if (a) return e("policy-gate", a);
-  let l,
-    CLAUDE_REMOTE_WORKFLOW_ARGS_2 = env.CLAUDE_REMOTE_WORKFLOW_ARGS;
-  if (CLAUDE_REMOTE_WORKFLOW_ARGS_2 !== void 0 && CLAUDE_REMOTE_WORKFLOW_ARGS_2 !== "") {
-    if (CLAUDE_REMOTE_WORKFLOW_ARGS_2.length > gx)
-      return e("args-too-large", `${CLAUDE_REMOTE_WORKFLOW_ARGS} exceeds ${gx} bytes.`);
+  if (a) return remoteWorkflowTextResult("policy-gate", a);
+  let args_2;
+  let CLAUDE_REMOTE_WORKFLOW_ARGS_2 = env.CLAUDE_REMOTE_WORKFLOW_ARGS;
+  if (CLAUDE_REMOTE_WORKFLOW_ARGS_2 !== undefined && CLAUDE_REMOTE_WORKFLOW_ARGS_2 !== "") {
+    if (CLAUDE_REMOTE_WORKFLOW_ARGS_2.length > MAX_SCRIPT_FILE_BYTES)
+      return remoteWorkflowTextResult(
+        "args-too-large",
+        `${CLAUDE_REMOTE_WORKFLOW_ARGS} exceeds ${MAX_SCRIPT_FILE_BYTES} bytes.`,
+      );
     try {
-      l = JSON.parse(CLAUDE_REMOTE_WORKFLOW_ARGS_2);
+      args_2 = JSON.parse(CLAUDE_REMOTE_WORKFLOW_ARGS_2);
     } catch (error) {
-      return e(
+      return remoteWorkflowTextResult(
         "args-parse",
         `${CLAUDE_REMOTE_WORKFLOW_ARGS} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -54,9 +64,9 @@ var call = async (args, context) => {
     value: (
       await runRemoteWorkflow({
         script: CLAUDE_REMOTE_WORKFLOW_SCRIPT,
-        args: l,
+        args: args_2,
         telemetrySource: "remote_env",
-        context: context,
+        context,
       })
     ).line,
   };

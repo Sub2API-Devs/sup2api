@@ -8,31 +8,29 @@
  * pieces: chunk-dcmhvw5a.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-dcmhvw5a.js:203409-203657 fingerprint = BRIDGE_SPINNER_FRAMES (0.889)
 /**
  * Remote Control 桥接状态转圈帧与符号：就绪 ·✔·、失败 ×、✕、▸、⎿、⠿、盲文转圈帧。
  */
-//@ chunk-dcmhvw5a.js:203409-203657 fingerprint = BRIDGE_SPINNER_FRAMES (0.889)
-var BRIDGE_SPINNER_FRAMES = ["\xB7|\xB7", "\xB7/\xB7", "\xB7\u2014\xB7", "\xB7\\\xB7"],
-  BRIDGE_READY_INDICATOR = "\xB7\u2714\uFE0E\xB7",
-  BRIDGE_FAILED_INDICATOR = "\xD7",
-  HEAVY_MULTIPLICATION_X = "\u2715",
-  SMALL_TRIANGLE_RIGHT = "\u25B8",
-  RESPONSE_CONNECTOR = "\u23BF",
-  BRAILLE_FULL_BLOCK = "\u283F",
-  BRAILLE_SPINNER_FRAMES = [
-    "\u280B",
-    "\u2819",
-    "\u2839",
-    "\u2838",
-    "\u283C",
-    "\u2834",
-    "\u2826",
-    "\u2827",
-    "\u2807",
-    "\u280F",
-  ];
-
+var BRIDGE_SPINNER_FRAMES = ["\xB7|\xB7", "\xB7/\xB7", "\xB7\u2014\xB7", "\xB7\\\xB7"];
+var BRIDGE_READY_INDICATOR = "\xB7\u2714\uFE0E\xB7";
+var BRIDGE_FAILED_INDICATOR = "\xD7";
+var HEAVY_MULTIPLICATION_X = "\u2715";
+var SMALL_TRIANGLE_RIGHT = "\u25B8";
+var RESPONSE_CONNECTOR = "\u23BF";
+var BRAILLE_FULL_BLOCK = "\u283F";
+var BRAILLE_SPINNER_FRAMES = [
+  "\u280B",
+  "\u2819",
+  "\u2839",
+  "\u2838",
+  "\u283C",
+  "\u2834",
+  "\u2826",
+  "\u2827",
+  "\u2807",
+  "\u280F",
+];
 export {
   HEAVY_MULTIPLICATION_X,
   BRIDGE_FAILED_INDICATOR,

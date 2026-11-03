@@ -8,407 +8,434 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-41w44bgm.js:4112-12186 cjs-fingerprint
-var Ro = x(function (Hn, Ir) {
-  (function (e, n) {
-    typeof Hn === "object" && typeof Ir < "u"
-      ? n(Hn)
-      : typeof define === "function" && define.amd
-        ? define(["exports"], n)
-        : ((e = typeof globalThis < "u" ? globalThis : e || self),
-          n(((e.acorn = e.acorn || {}), (e.acorn.walk = {}))));
-  })(Hn, function (e) {
-    function n(s, S, w, P, V) {
-      if (!w) w = E;
-      (function N(se, q, ue) {
-        var Ee = ue || se.type;
-        if ((ce(w, Ee, se, q, N), S[Ee])) S[Ee](se, q);
-      })(s, P, V);
+var require_walk = x(function (cjsExports, cjsModule) {
+  (function (e, factory) {
+    if (typeof cjsExports === "object" && typeof cjsModule !== "undefined") factory(cjsExports);
+    else if (typeof define === "function" && define.amd) define(["exports"], factory);
+    else {
+      e = typeof globalThis !== "undefined" ? globalThis : e || self;
+      factory(((e.acorn = e.acorn || {}), (e.acorn.walk = {})));
     }
-    function r(s, S, w, P, V) {
-      var N = [];
-      if (!w) w = E;
-      (function se(q, ue, Ee) {
-        var xe = Ee || q.type,
-          ut = q !== N[N.length - 1];
-        if (ut) N.push(q);
-        if ((ce(w, xe, q, ue, se), S[xe])) S[xe](q, ue || N, N);
-        if (ut) N.pop();
-      })(s, P, V);
+  })(cjsExports, function (e) {
+    function simple(node, visitors, baseVisitor, state, override) {
+      if (!baseVisitor) baseVisitor = base;
+      (function c(node, st, override) {
+        var type = override || node.type;
+        visitNode(baseVisitor, type, node, st, c);
+        if (visitors[type]) visitors[type](node, st);
+      })(node, state, override);
     }
-    function h(s, S, w, P, V) {
-      var N = w ? me(w, P || void 0) : P;
-      (function se(q, ue, Ee) {
-        N[Ee || q.type](q, ue, se);
-      })(s, S, V);
+    function ancestor(node, visitors, baseVisitor, state, override) {
+      var ancestors = [];
+      if (!baseVisitor) baseVisitor = base;
+      (function c(node, st, override) {
+        var type = override || node.type;
+        var isNew = node !== ancestors[ancestors.length - 1];
+        if (isNew) ancestors.push(node);
+        visitNode(baseVisitor, type, node, st, c);
+        if (visitors[type]) visitors[type](node, st || ancestors, ancestors);
+        if (isNew) ancestors.pop();
+      })(node, state, override);
     }
-    function T(s) {
-      if (typeof s === "string")
-        return function (S) {
-          return S === s;
+    function recursive(node, state, funcs, baseVisitor, override) {
+      var visitor = funcs ? make(funcs, baseVisitor || undefined) : baseVisitor;
+      (function c(node, st, override) {
+        visitor[override || node.type](node, st, c);
+      })(node, state, override);
+    }
+    function makeTest(test) {
+      if (typeof test === "string")
+        return function (type) {
+          return type === test;
         };
-      else if (!s)
+      else if (!test)
         return function () {
-          return !0;
+          return true;
         };
-      else return s;
+      else return test;
     }
-    var y = function (S, w) {
-      ((this.node = S), (this.state = w));
+    var Found = function (node, state) {
+      this.node = node;
+      this.state = state;
     };
-    function A(s, S, w, P, V) {
-      if (!w) w = E;
-      var N;
-      (function se(q, ue, Ee) {
-        var xe = Ee || q.type;
-        if ((ce(w, xe, q, ue, se), N !== q)) (S(q, ue, xe), (N = q));
-      })(s, P, V);
+    function full(node, callback, baseVisitor, state, override) {
+      if (!baseVisitor) baseVisitor = base;
+      var last;
+      (function c(node, st, override) {
+        var type = override || node.type;
+        visitNode(baseVisitor, type, node, st, c);
+        if (last !== node) {
+          callback(node, st, type);
+          last = node;
+        }
+      })(node, state, override);
     }
-    function L(s, S, w, P) {
-      if (!w) w = E;
-      var V = [],
-        N;
-      (function se(q, ue, Ee) {
-        var xe = Ee || q.type,
-          ut = q !== V[V.length - 1];
-        if (ut) V.push(q);
-        if ((ce(w, xe, q, ue, se), N !== q)) (S(q, ue || V, V, xe), (N = q));
-        if (ut) V.pop();
-      })(s, P);
+    function fullAncestor(node, callback, baseVisitor, state) {
+      if (!baseVisitor) baseVisitor = base;
+      var ancestors = [];
+      var last;
+      (function c(node, st, override) {
+        var type = override || node.type;
+        var isNew = node !== ancestors[ancestors.length - 1];
+        if (isNew) ancestors.push(node);
+        visitNode(baseVisitor, type, node, st, c);
+        if (last !== node) {
+          callback(node, st || ancestors, ancestors, type);
+          last = node;
+        }
+        if (isNew) ancestors.pop();
+      })(node, state);
     }
-    function j(s, S, w, P, V, N) {
-      if (!V) V = E;
-      P = T(P);
+    function findNodeAt(node, start, end, test, baseVisitor, state) {
+      if (!baseVisitor) baseVisitor = base;
+      test = makeTest(test);
       try {
-        (function se(q, ue, Ee) {
-          var xe = Ee || q.type;
-          if ((S == null || q.start <= S) && (w == null || q.end >= w)) ce(V, xe, q, ue, se);
-          if ((S == null || q.start === S) && (w == null || q.end === w) && P(xe, q)) throw new y(q, ue);
-        })(s, N);
-      } catch (error) {
-        if (error instanceof y) return error;
-        throw error;
+        (function c(node, st, override) {
+          var type = override || node.type;
+          if ((start == null || node.start <= start) && (end == null || node.end >= end))
+            visitNode(baseVisitor, type, node, st, c);
+          if (
+            (start == null || node.start === start) &&
+            (end == null || node.end === end) &&
+            test(type, node)
+          )
+            throw new Found(node, st);
+        })(node, state);
+      } catch (e) {
+        if (e instanceof Found) return e;
+        throw e;
       }
     }
-    function he(s, S, w, P, V) {
-      if (((w = T(w)), !P)) P = E;
+    function findNodeAround(node, pos, test, baseVisitor, state) {
+      test = makeTest(test);
+      if (!baseVisitor) baseVisitor = base;
       try {
-        (function N(se, q, ue) {
-          var Ee = ue || se.type;
-          if (se.start > S || se.end < S) return;
-          if ((ce(P, Ee, se, q, N), w(Ee, se))) throw new y(se, q);
-        })(s, V);
-      } catch (error) {
-        if (error instanceof y) return error;
-        throw error;
+        (function c(node, st, override) {
+          var type = override || node.type;
+          if (node.start > pos || node.end < pos) return;
+          visitNode(baseVisitor, type, node, st, c);
+          if (test(type, node)) throw new Found(node, st);
+        })(node, state);
+      } catch (e) {
+        if (e instanceof Found) return e;
+        throw e;
       }
     }
-    function ke(s, S, w, P, V) {
-      if (((w = T(w)), !P)) P = E;
+    function findNodeAfter(node, pos, test, baseVisitor, state) {
+      test = makeTest(test);
+      if (!baseVisitor) baseVisitor = base;
       try {
-        (function N(se, q, ue) {
-          if (se.end < S) return;
-          var Ee = ue || se.type;
-          if (se.start >= S && w(Ee, se)) throw new y(se, q);
-          ce(P, Ee, se, q, N);
-        })(s, V);
-      } catch (error) {
-        if (error instanceof y) return error;
-        throw error;
+        (function c(node, st, override) {
+          if (node.end < pos) return;
+          var type = override || node.type;
+          if (node.start >= pos && test(type, node)) throw new Found(node, st);
+          visitNode(baseVisitor, type, node, st, c);
+        })(node, state);
+      } catch (e) {
+        if (e instanceof Found) return e;
+        throw e;
       }
     }
-    function te(s, S, w, P, V) {
-      if (((w = T(w)), !P)) P = E;
-      var N;
-      return (
-        (function se(q, ue, Ee) {
-          if (q.start > S) return;
-          var xe = Ee || q.type;
-          if (q.end <= S && (!N || N.node.end < q.end) && w(xe, q)) N = new y(q, ue);
-          ce(P, xe, q, ue, se);
-        })(s, V),
-        N
-      );
+    function findNodeBefore(node, pos, test, baseVisitor, state) {
+      test = makeTest(test);
+      if (!baseVisitor) baseVisitor = base;
+      var max;
+      (function c(node, st, override) {
+        if (node.start > pos) return;
+        var type = override || node.type;
+        if (node.end <= pos && (!max || max.node.end < node.end) && test(type, node))
+          max = new Found(node, st);
+        visitNode(baseVisitor, type, node, st, c);
+      })(node, state);
+      return max;
     }
-    function me(s, S) {
-      var create = Object.create(S || E);
-      for (var key in s) create[key] = s[key];
-      return create;
+    function make(funcs, baseVisitor) {
+      var visitor = Object.create(baseVisitor || base);
+      for (var type in funcs) visitor[type] = funcs[type];
+      return visitor;
     }
-    function We(s, S, w) {
-      w(s, S);
+    function skipThrough(node, st, c) {
+      c(node, st);
     }
-    function G(s, S, w) {}
-    function ce(s, S, w, P, V) {
-      if (s[S] == null) throw Error("No walker function defined for node type " + S);
-      s[S](w, P, V);
+    function ignore(_node, _st, _c) {}
+    function visitNode(baseVisitor, type, node, st, c) {
+      if (baseVisitor[type] == null) throw Error("No walker function defined for node type " + type);
+      baseVisitor[type](node, st, c);
     }
-    var E = {};
-    ((E.Program =
-      E.BlockStatement =
-      E.StaticBlock =
-        function (s, S, w) {
-          for (var P = 0, body = s.body; P < body.length; P += 1) {
-            var N = body[P];
-            w(N, S, "Statement");
+    var base = {};
+    base.Program =
+      base.BlockStatement =
+      base.StaticBlock =
+        function (node, st, c) {
+          for (var i = 0, list = node.body; i < list.length; i += 1) {
+            var stmt = list[i];
+            c(stmt, st, "Statement");
           }
-        }),
-      (E.Statement = We),
-      (E.EmptyStatement = G),
-      (E.ExpressionStatement =
-        E.ParenthesizedExpression =
-        E.ChainExpression =
-          function (s, S, w) {
-            return w(s.expression, S, "Expression");
-          }),
-      (E.IfStatement = function (s, S, w) {
-        if ((w(s.test, S, "Expression"), w(s.consequent, S, "Statement"), s.alternate))
-          w(s.alternate, S, "Statement");
-      }),
-      (E.LabeledStatement = function (s, S, w) {
-        return w(s.body, S, "Statement");
-      }),
-      (E.BreakStatement = E.ContinueStatement = G),
-      (E.WithStatement = function (s, S, w) {
-        (w(s.object, S, "Expression"), w(s.body, S, "Statement"));
-      }),
-      (E.SwitchStatement = function (s, S, w) {
-        w(s.discriminant, S, "Expression");
-        for (var P = 0, cases = s.cases; P < cases.length; P += 1) {
-          var N = cases[P];
-          w(N, S);
+        };
+    base.Statement = skipThrough;
+    base.EmptyStatement = ignore;
+    base.ExpressionStatement =
+      base.ParenthesizedExpression =
+      base.ChainExpression =
+        function (node, st, c) {
+          return c(node.expression, st, "Expression");
+        };
+    base.IfStatement = function (node, st, c) {
+      c(node.test, st, "Expression");
+      c(node.consequent, st, "Statement");
+      if (node.alternate) c(node.alternate, st, "Statement");
+    };
+    base.LabeledStatement = function (node, st, c) {
+      return c(node.body, st, "Statement");
+    };
+    base.BreakStatement = base.ContinueStatement = ignore;
+    base.WithStatement = function (node, st, c) {
+      c(node.object, st, "Expression");
+      c(node.body, st, "Statement");
+    };
+    base.SwitchStatement = function (node, st, c) {
+      c(node.discriminant, st, "Expression");
+      for (var i = 0, list = node.cases; i < list.length; i += 1) {
+        var cs = list[i];
+        c(cs, st);
+      }
+    };
+    base.SwitchCase = function (node, st, c) {
+      if (node.test) c(node.test, st, "Expression");
+      for (var i = 0, list = node.consequent; i < list.length; i += 1) {
+        var cons = list[i];
+        c(cons, st, "Statement");
+      }
+    };
+    base.ReturnStatement =
+      base.YieldExpression =
+      base.AwaitExpression =
+        function (node, st, c) {
+          if (node.argument) c(node.argument, st, "Expression");
+        };
+    base.ThrowStatement = base.SpreadElement = function (node, st, c) {
+      return c(node.argument, st, "Expression");
+    };
+    base.TryStatement = function (node, st, c) {
+      c(node.block, st, "Statement");
+      if (node.handler) c(node.handler, st);
+      if (node.finalizer) c(node.finalizer, st, "Statement");
+    };
+    base.CatchClause = function (node, st, c) {
+      if (node.param) c(node.param, st, "Pattern");
+      c(node.body, st, "Statement");
+    };
+    base.WhileStatement = base.DoWhileStatement = function (node, st, c) {
+      c(node.test, st, "Expression");
+      c(node.body, st, "Statement");
+    };
+    base.ForStatement = function (node, st, c) {
+      if (node.init) c(node.init, st, "ForInit");
+      if (node.test) c(node.test, st, "Expression");
+      if (node.update) c(node.update, st, "Expression");
+      c(node.body, st, "Statement");
+    };
+    base.ForInStatement = base.ForOfStatement = function (node, st, c) {
+      c(node.left, st, "ForInit");
+      c(node.right, st, "Expression");
+      c(node.body, st, "Statement");
+    };
+    base.ForInit = function (node, st, c) {
+      if (node.type === "VariableDeclaration") c(node, st);
+      else c(node, st, "Expression");
+    };
+    base.DebuggerStatement = ignore;
+    base.FunctionDeclaration = function (node, st, c) {
+      return c(node, st, "Function");
+    };
+    base.VariableDeclaration = function (node, st, c) {
+      for (var i = 0, list = node.declarations; i < list.length; i += 1) {
+        var decl = list[i];
+        c(decl, st);
+      }
+    };
+    base.VariableDeclarator = function (node, st, c) {
+      c(node.id, st, "Pattern");
+      if (node.init) c(node.init, st, "Expression");
+    };
+    base.Function = function (node, st, c) {
+      if (node.id) c(node.id, st, "Pattern");
+      for (var i = 0, list = node.params; i < list.length; i += 1) {
+        var param = list[i];
+        c(param, st, "Pattern");
+      }
+      c(node.body, st, node.expression ? "Expression" : "Statement");
+    };
+    base.Pattern = function (node, st, c) {
+      if (node.type === "Identifier") c(node, st, "VariablePattern");
+      else if (node.type === "MemberExpression") c(node, st, "MemberPattern");
+      else c(node, st);
+    };
+    base.VariablePattern = ignore;
+    base.MemberPattern = skipThrough;
+    base.RestElement = function (node, st, c) {
+      return c(node.argument, st, "Pattern");
+    };
+    base.ArrayPattern = function (node, st, c) {
+      for (var i = 0, list = node.elements; i < list.length; i += 1) {
+        var elt = list[i];
+        if (elt) c(elt, st, "Pattern");
+      }
+    };
+    base.ObjectPattern = function (node, st, c) {
+      for (var i = 0, list = node.properties; i < list.length; i += 1) {
+        var prop = list[i];
+        if (prop.type === "Property") {
+          if (prop.computed) c(prop.key, st, "Expression");
+          c(prop.value, st, "Pattern");
+        } else if (prop.type === "RestElement") c(prop.argument, st, "Pattern");
+      }
+    };
+    base.Expression = skipThrough;
+    base.ThisExpression = base.Super = base.MetaProperty = ignore;
+    base.ArrayExpression = function (node, st, c) {
+      for (var i = 0, list = node.elements; i < list.length; i += 1) {
+        var elt = list[i];
+        if (elt) c(elt, st, "Expression");
+      }
+    };
+    base.ObjectExpression = function (node, st, c) {
+      for (var i = 0, list = node.properties; i < list.length; i += 1) {
+        var prop = list[i];
+        c(prop, st);
+      }
+    };
+    base.FunctionExpression = base.ArrowFunctionExpression = base.FunctionDeclaration;
+    base.SequenceExpression = function (node, st, c) {
+      for (var i = 0, list = node.expressions; i < list.length; i += 1) {
+        var expr = list[i];
+        c(expr, st, "Expression");
+      }
+    };
+    base.TemplateLiteral = function (node, st, c) {
+      for (var i = 0, list = node.quasis; i < list.length; i += 1) {
+        var quasi = list[i];
+        c(quasi, st);
+      }
+      for (var i$1 = 0, list$1 = node.expressions; i$1 < list$1.length; i$1 += 1) {
+        var expr = list$1[i$1];
+        c(expr, st, "Expression");
+      }
+    };
+    base.TemplateElement = ignore;
+    base.UnaryExpression = base.UpdateExpression = function (node, st, c) {
+      c(node.argument, st, "Expression");
+    };
+    base.BinaryExpression = base.LogicalExpression = function (node, st, c) {
+      c(node.left, st, "Expression");
+      c(node.right, st, "Expression");
+    };
+    base.AssignmentExpression = base.AssignmentPattern = function (node, st, c) {
+      c(node.left, st, "Pattern");
+      c(node.right, st, "Expression");
+    };
+    base.ConditionalExpression = function (node, st, c) {
+      c(node.test, st, "Expression");
+      c(node.consequent, st, "Expression");
+      c(node.alternate, st, "Expression");
+    };
+    base.NewExpression = base.CallExpression = function (node, st, c) {
+      c(node.callee, st, "Expression");
+      if (node.arguments)
+        for (var i = 0, list = node.arguments; i < list.length; i += 1) {
+          var arg = list[i];
+          c(arg, st, "Expression");
         }
-      }),
-      (E.SwitchCase = function (s, S, w) {
-        if (s.test) w(s.test, S, "Expression");
-        for (var P = 0, consequent = s.consequent; P < consequent.length; P += 1) {
-          var N = consequent[P];
-          w(N, S, "Statement");
+    };
+    base.MemberExpression = function (node, st, c) {
+      c(node.object, st, "Expression");
+      if (node.computed) c(node.property, st, "Expression");
+    };
+    base.ExportNamedDeclaration = base.ExportDefaultDeclaration = function (node, st, c) {
+      if (node.declaration)
+        c(
+          node.declaration,
+          st,
+          node.type === "ExportNamedDeclaration" || node.declaration.id ? "Statement" : "Expression",
+        );
+      if (node.source) c(node.source, st, "Expression");
+      if (node.attributes)
+        for (var i = 0, list = node.attributes; i < list.length; i += 1) {
+          var attr = list[i];
+          c(attr, st);
         }
-      }),
-      (E.ReturnStatement =
-        E.YieldExpression =
-        E.AwaitExpression =
-          function (s, S, w) {
-            if (s.argument) w(s.argument, S, "Expression");
-          }),
-      (E.ThrowStatement = E.SpreadElement =
-        function (s, S, w) {
-          return w(s.argument, S, "Expression");
-        }),
-      (E.TryStatement = function (s, S, w) {
-        if ((w(s.block, S, "Statement"), s.handler)) w(s.handler, S);
-        if (s.finalizer) w(s.finalizer, S, "Statement");
-      }),
-      (E.CatchClause = function (s, S, w) {
-        if (s.param) w(s.param, S, "Pattern");
-        w(s.body, S, "Statement");
-      }),
-      (E.WhileStatement = E.DoWhileStatement =
-        function (s, S, w) {
-          (w(s.test, S, "Expression"), w(s.body, S, "Statement"));
-        }),
-      (E.ForStatement = function (s, S, w) {
-        if (s.init) w(s.init, S, "ForInit");
-        if (s.test) w(s.test, S, "Expression");
-        if (s.update) w(s.update, S, "Expression");
-        w(s.body, S, "Statement");
-      }),
-      (E.ForInStatement = E.ForOfStatement =
-        function (s, S, w) {
-          (w(s.left, S, "ForInit"), w(s.right, S, "Expression"), w(s.body, S, "Statement"));
-        }),
-      (E.ForInit = function (s, S, w) {
-        if (s.type === "VariableDeclaration") w(s, S);
-        else w(s, S, "Expression");
-      }),
-      (E.DebuggerStatement = G),
-      (E.FunctionDeclaration = function (s, S, w) {
-        return w(s, S, "Function");
-      }),
-      (E.VariableDeclaration = function (s, S, w) {
-        for (var P = 0, declarations = s.declarations; P < declarations.length; P += 1) {
-          var N = declarations[P];
-          w(N, S);
+    };
+    base.ExportAllDeclaration = function (node, st, c) {
+      if (node.exported) c(node.exported, st);
+      c(node.source, st, "Expression");
+      if (node.attributes)
+        for (var i = 0, list = node.attributes; i < list.length; i += 1) {
+          var attr = list[i];
+          c(attr, st);
         }
-      }),
-      (E.VariableDeclarator = function (s, S, w) {
-        if ((w(s.id, S, "Pattern"), s.init)) w(s.init, S, "Expression");
-      }),
-      (E.Function = function (s, S, w) {
-        if (s.id) w(s.id, S, "Pattern");
-        for (var P = 0, params = s.params; P < params.length; P += 1) {
-          var N = params[P];
-          w(N, S, "Pattern");
+    };
+    base.ImportAttribute = function (node, st, c) {
+      c(node.value, st, "Expression");
+    };
+    base.ImportDeclaration = function (node, st, c) {
+      for (var i = 0, list = node.specifiers; i < list.length; i += 1) {
+        var spec = list[i];
+        c(spec, st);
+      }
+      c(node.source, st, "Expression");
+      if (node.attributes)
+        for (var i$1 = 0, list$1 = node.attributes; i$1 < list$1.length; i$1 += 1) {
+          var attr = list$1[i$1];
+          c(attr, st);
         }
-        w(s.body, S, s.expression ? "Expression" : "Statement");
-      }),
-      (E.Pattern = function (s, S, w) {
-        if (s.type === "Identifier") w(s, S, "VariablePattern");
-        else if (s.type === "MemberExpression") w(s, S, "MemberPattern");
-        else w(s, S);
-      }),
-      (E.VariablePattern = G),
-      (E.MemberPattern = We),
-      (E.RestElement = function (s, S, w) {
-        return w(s.argument, S, "Pattern");
-      }),
-      (E.ArrayPattern = function (s, S, w) {
-        for (var P = 0, elements = s.elements; P < elements.length; P += 1) {
-          var N = elements[P];
-          if (N) w(N, S, "Pattern");
-        }
-      }),
-      (E.ObjectPattern = function (s, S, w) {
-        for (var P = 0, properties = s.properties; P < properties.length; P += 1) {
-          var N = properties[P];
-          if (N.type === "Property") {
-            if (N.computed) w(N.key, S, "Expression");
-            w(N.value, S, "Pattern");
-          } else if (N.type === "RestElement") w(N.argument, S, "Pattern");
-        }
-      }),
-      (E.Expression = We),
-      (E.ThisExpression = E.Super = E.MetaProperty = G),
-      (E.ArrayExpression = function (s, S, w) {
-        for (var P = 0, elements = s.elements; P < elements.length; P += 1) {
-          var N = elements[P];
-          if (N) w(N, S, "Expression");
-        }
-      }),
-      (E.ObjectExpression = function (s, S, w) {
-        for (var P = 0, properties = s.properties; P < properties.length; P += 1) {
-          var N = properties[P];
-          w(N, S);
-        }
-      }),
-      (E.FunctionExpression = E.ArrowFunctionExpression = E.FunctionDeclaration),
-      (E.SequenceExpression = function (s, S, w) {
-        for (var P = 0, expressions = s.expressions; P < expressions.length; P += 1) {
-          var N = expressions[P];
-          w(N, S, "Expression");
-        }
-      }),
-      (E.TemplateLiteral = function (s, S, w) {
-        for (var P = 0, quasis = s.quasis; P < quasis.length; P += 1) {
-          var N = quasis[P];
-          w(N, S);
-        }
-        for (var se = 0, expressions = s.expressions; se < expressions.length; se += 1) {
-          var ue = expressions[se];
-          w(ue, S, "Expression");
-        }
-      }),
-      (E.TemplateElement = G),
-      (E.UnaryExpression = E.UpdateExpression =
-        function (s, S, w) {
-          w(s.argument, S, "Expression");
-        }),
-      (E.BinaryExpression = E.LogicalExpression =
-        function (s, S, w) {
-          (w(s.left, S, "Expression"), w(s.right, S, "Expression"));
-        }),
-      (E.AssignmentExpression = E.AssignmentPattern =
-        function (s, S, w) {
-          (w(s.left, S, "Pattern"), w(s.right, S, "Expression"));
-        }),
-      (E.ConditionalExpression = function (s, S, w) {
-        (w(s.test, S, "Expression"), w(s.consequent, S, "Expression"), w(s.alternate, S, "Expression"));
-      }),
-      (E.NewExpression = E.CallExpression =
-        function (s, S, w) {
-          if ((w(s.callee, S, "Expression"), s.arguments))
-            for (var P = 0, V = s.arguments; P < V.length; P += 1) {
-              var N = V[P];
-              w(N, S, "Expression");
-            }
-        }),
-      (E.MemberExpression = function (s, S, w) {
-        if ((w(s.object, S, "Expression"), s.computed)) w(s.property, S, "Expression");
-      }),
-      (E.ExportNamedDeclaration = E.ExportDefaultDeclaration =
-        function (s, S, w) {
-          if (s.declaration)
-            w(
-              s.declaration,
-              S,
-              s.type === "ExportNamedDeclaration" || s.declaration.id ? "Statement" : "Expression",
-            );
-          if (s.source) w(s.source, S, "Expression");
-          if (s.attributes)
-            for (var P = 0, attributes = s.attributes; P < attributes.length; P += 1) {
-              var N = attributes[P];
-              w(N, S);
-            }
-        }),
-      (E.ExportAllDeclaration = function (s, S, w) {
-        if (s.exported) w(s.exported, S);
-        if ((w(s.source, S, "Expression"), s.attributes))
-          for (var P = 0, attributes = s.attributes; P < attributes.length; P += 1) {
-            var N = attributes[P];
-            w(N, S);
-          }
-      }),
-      (E.ImportAttribute = function (s, S, w) {
-        w(s.value, S, "Expression");
-      }),
-      (E.ImportDeclaration = function (s, S, w) {
-        for (var P = 0, specifiers = s.specifiers; P < specifiers.length; P += 1) {
-          var N = specifiers[P];
-          w(N, S);
-        }
-        if ((w(s.source, S, "Expression"), s.attributes))
-          for (var se = 0, attributes = s.attributes; se < attributes.length; se += 1) {
-            var ue = attributes[se];
-            w(ue, S);
-          }
-      }),
-      (E.ImportExpression = function (s, S, w) {
-        if ((w(s.source, S, "Expression"), s.options)) w(s.options, S, "Expression");
-      }),
-      (E.ImportSpecifier =
-        E.ImportDefaultSpecifier =
-        E.ImportNamespaceSpecifier =
-        E.Identifier =
-        E.PrivateIdentifier =
-        E.Literal =
-          G),
-      (E.TaggedTemplateExpression = function (s, S, w) {
-        (w(s.tag, S, "Expression"), w(s.quasi, S, "Expression"));
-      }),
-      (E.ClassDeclaration = E.ClassExpression =
-        function (s, S, w) {
-          return w(s, S, "Class");
-        }),
-      (E.Class = function (s, S, w) {
-        if (s.id) w(s.id, S, "Pattern");
-        if (s.superClass) w(s.superClass, S, "Expression");
-        w(s.body, S);
-      }),
-      (E.ClassBody = function (s, S, w) {
-        for (var P = 0, body = s.body; P < body.length; P += 1) {
-          var N = body[P];
-          w(N, S);
-        }
-      }),
-      (E.MethodDefinition =
-        E.PropertyDefinition =
-        E.Property =
-          function (s, S, w) {
-            if (s.computed) w(s.key, S, "Expression");
-            if (s.value) w(s.value, S, "Expression");
-          }),
-      (e.ancestor = r),
-      (e.base = E),
-      (e.findNodeAfter = ke),
-      (e.findNodeAround = he),
-      (e.findNodeAt = j),
-      (e.findNodeBefore = te),
-      (e.full = A),
-      (e.fullAncestor = L),
-      (e.make = me),
-      (e.recursive = h),
-      (e.simple = n));
+    };
+    base.ImportExpression = function (node, st, c) {
+      c(node.source, st, "Expression");
+      if (node.options) c(node.options, st, "Expression");
+    };
+    base.ImportSpecifier =
+      base.ImportDefaultSpecifier =
+      base.ImportNamespaceSpecifier =
+      base.Identifier =
+      base.PrivateIdentifier =
+      base.Literal =
+        ignore;
+    base.TaggedTemplateExpression = function (node, st, c) {
+      c(node.tag, st, "Expression");
+      c(node.quasi, st, "Expression");
+    };
+    base.ClassDeclaration = base.ClassExpression = function (node, st, c) {
+      return c(node, st, "Class");
+    };
+    base.Class = function (node, st, c) {
+      if (node.id) c(node.id, st, "Pattern");
+      if (node.superClass) c(node.superClass, st, "Expression");
+      c(node.body, st);
+    };
+    base.ClassBody = function (node, st, c) {
+      for (var i = 0, list = node.body; i < list.length; i += 1) {
+        var elt = list[i];
+        c(elt, st);
+      }
+    };
+    base.MethodDefinition =
+      base.PropertyDefinition =
+      base.Property =
+        function (node, st, c) {
+          if (node.computed) c(node.key, st, "Expression");
+          if (node.value) c(node.value, st, "Expression");
+        };
+    e.ancestor = ancestor;
+    e.base = base;
+    e.findNodeAfter = findNodeAfter;
+    e.findNodeAround = findNodeAround;
+    e.findNodeAt = findNodeAt;
+    e.findNodeBefore = findNodeBefore;
+    e.full = full;
+    e.fullAncestor = fullAncestor;
+    e.make = make;
+    e.recursive = recursive;
+    e.simple = simple;
   });
 });
-
-export { Ro };
+export { require_walk };

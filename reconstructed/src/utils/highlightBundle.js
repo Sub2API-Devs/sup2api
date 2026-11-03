@@ -12,8 +12,8 @@ import __cc_resource_0 from "../../assets/hljsBundle.generated.min.js" with { ty
 import { readEmbeddedText } from "./embeddedAssets.js";
 
 //@ chunk-q86arebq.js:310-332 placement
-var H = __cc_resource_0;
+var HLJS_BUNDLE_RESOURCE_ID = __cc_resource_0;
 //@ chunk-q86arebq.js:332-379 placement
-function L() {
-  return readEmbeddedText(H, import.meta.dirname);
+function loadHljsBundleJs() {
+  return readEmbeddedText(HLJS_BUNDLE_RESOURCE_ID, import.meta.dirname);
 }

@@ -15,7 +15,11 @@ import {
   updateSettingsForSource,
 } from "./settings.js";
 import { getGlobalConfig, DEFAULT_GLOBAL_CONFIG } from "../config.js";
-import { gxn, n9t, validateConfigValue } from "../config/globalConfigValidation.js";
+import {
+  isAutoUploadFlagKey,
+  isValidGlobalConfigValue,
+  validateConfigValue,
+} from "../config/globalConfigValidation.js";
 
 //@ chunk-r5n7tcxe.js:320-657 placement
 var USER_INTENT_SETTING_KEYS = [
@@ -36,33 +40,53 @@ var USER_INTENT_SETTING_KEYS = [
   "inputNeededNotifEnabled",
   "agentPushNotifEnabled",
 ];
+//@ chunk-r5n7tcxe.js:657-1043 placement
 /**
  * 解析用户意图类设置（主题、编辑模式等），兼顾旧的全局配置。
  */
-//@ chunk-r5n7tcxe.js:657-1043 placement
-function resolveSetting(n, i) {
-  let o = getEnabledSettingSources();
-  for (let e = o.length - 1; e >= 0; e--) {
-    let t = o[e],
-      s = getSettingsForSource(t)?.[n];
-    if (s === void 0) continue;
-    if (t === "projectSettings" && o.includes("userSettings") && projectSettingsAliasesUserSettings())
+function resolveSetting(n, value) {
+  let enabledSettingSources = getEnabledSettingSources();
+  for (let j = enabledSettingSources.length - 1; j >= 0; j--) {
+    let t = enabledSettingSources[j];
+    let s = getSettingsForSource(t)?.[n];
+    if (s === undefined) continue;
+    if (
+      t === "projectSettings" &&
+      enabledSettingSources.includes("userSettings") &&
+      projectSettingsAliasesUserSettings()
+    )
       continue;
-    return { value: s, source: t };
+    return {
+      value: s,
+      source: t,
+    };
   }
   if (USER_INTENT_SETTING_KEYS.includes(n)) {
-    let e = n,
-      t = getGlobalConfig()[e];
-    if (t !== void 0 && t !== DEFAULT_GLOBAL_CONFIG[e]) {
-      let s = gxn(e) ? n9t(e, t) : validateConfigValue(e, t);
-      if (s !== void 0) return { value: s, source: "legacyGlobalConfig" };
+    let e = n;
+    let t = getGlobalConfig()[e];
+    if (t !== undefined && t !== DEFAULT_GLOBAL_CONFIG[e]) {
+      let s = isAutoUploadFlagKey(e) ? isValidGlobalConfigValue(e, t) : validateConfigValue(e, t);
+      if (s !== undefined)
+        return {
+          value: s,
+          source: "legacyGlobalConfig",
+        };
     }
   }
-  return { value: i, source: "default" };
+  return {
+    value,
+    source: "default",
+  };
 }
 //@ chunk-r5n7tcxe.js:1043-1098 placement = _temp5 (1)
-function saveUserIntentSetting(n, i, o) {
-  updateSettingsForSource("userSettings", { [n]: i }, void 0, o);
+function saveUserIntentSetting(n, i, storageV5) {
+  updateSettingsForSource(
+    "userSettings",
+    {
+      [n]: i,
+    },
+    undefined,
+    storageV5,
+  );
 }
-
 export { resolveSetting, USER_INTENT_SETTING_KEYS, saveUserIntentSetting };

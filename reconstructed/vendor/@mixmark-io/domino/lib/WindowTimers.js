@@ -8,9 +8,13 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:235789-235889 cjs-fingerprint
-var Mc = x(function (Zd, Lc) {
-  var vf = { setTimeout, clearTimeout, setInterval, clearInterval };
-  Lc.exports = vf;
+var require_WindowTimers = x(function (cjsExports, cjsModule) {
+  var WindowTimers = {
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+  };
+  cjsModule.exports = WindowTimers;
 });
-
-export { Mc };
+export { require_WindowTimers };

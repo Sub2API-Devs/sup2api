@@ -13,29 +13,32 @@ import { logForDebugging } from "../debug.js";
 
 //@ chunk-th02cny1.js:261-303 placement
 var OTEL_DIAG_ERROR_PREFIX = "[3P telemetry] OTEL diag error:";
+//@ chunk-th02cny1.js:303-565 fingerprint = ClaudeCodeDiagLogger (0.75)
 /**
  * OTel 诊断 logger：把 OTel 内部 error/warn 写到调试日志（[3P telemetry] 前缀）。
  */
-//@ chunk-th02cny1.js:303-565 fingerprint = ClaudeCodeDiagLogger (0.75)
 class ClaudeCodeDiagLogger {
-  error(r, ...e) {
+  error(message, ...e) {
     if (env.CLAUDE_CODE_OTEL_DIAG_STDERR)
-      process.stderr.write(`${OTEL_DIAG_ERROR_PREFIX} ${r}
+      process.stderr.write(`${OTEL_DIAG_ERROR_PREFIX} ${message}
 `);
-    logForDebugging(`${OTEL_DIAG_ERROR_PREFIX} ${r}`, { level: "error" });
+    logForDebugging(`${OTEL_DIAG_ERROR_PREFIX} ${message}`, {
+      level: "error",
+    });
   }
-  warn(r, ...e) {
-    logForDebugging(`[3P telemetry] OTEL diag warn: ${r}`, { level: "warn" });
+  warn(message, ...e) {
+    logForDebugging(`[3P telemetry] OTEL diag warn: ${message}`, {
+      level: "warn",
+    });
   }
-  info(r, ...e) {
+  info(_message, ..._args) {
     return;
   }
-  debug(r, ...e) {
+  debug(_message, ..._args) {
     return;
   }
-  verbose(r, ...e) {
+  verbose(_message, ..._args) {
     return;
   }
 }
-
 export { ClaudeCodeDiagLogger, OTEL_DIAG_ERROR_PREFIX };

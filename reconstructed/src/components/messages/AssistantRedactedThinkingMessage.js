@@ -10,27 +10,41 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
 //@ chunk-ah34pb7m.js:43247-43543 fingerprint = AssistantRedactedThinkingMessage (0.369)
-function AssistantRedactedThinkingMessage(t0) {
-  let $ = w(3),
-    { addMargin: t1 } = t0;
-  const g = (t1 === void 0 ? !1 : t1) ? 1 : 0;
-  let h;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((h = r(Text, {
-      dimColor: !0,
-      italic: !0,
-      children: [e(Text, { "aria-hidden": !0, children: "\u273B " }), "Thinking\u2026"],
-    })),
-      ($[0] = h));
-  else h = $[0];
-  let M;
-  if ($[1] !== g) ((M = e(Box, { marginTop: g, children: h })), ($[1] = g), ($[2] = M));
-  else M = $[2];
-  return M;
+function AssistantRedactedThinkingMessage(props) {
+  let $ = w(3);
+  let { addMargin } = props;
+  const marginTop = (addMargin === undefined ? false : addMargin) ? 1 : 0;
+  let children;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    children = jsxProd_default_2(Text, {
+      dimColor: true,
+      italic: true,
+      children: [
+        jsxProd_default(Text, {
+          "aria-hidden": true,
+          children: "\u273B ",
+        }),
+        "Thinking\u2026",
+      ],
+    });
+    $[0] = children;
+  } else children = $[0];
+  let t4;
+  if ($[1] !== marginTop) {
+    t4 = jsxProd_default(Box, {
+      marginTop,
+      children,
+    });
+    $[1] = marginTop;
+    $[2] = t4;
+  } else t4 = $[2];
+  return t4;
 }
-
 export { AssistantRedactedThinkingMessage };

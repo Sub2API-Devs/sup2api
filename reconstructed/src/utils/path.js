@@ -24,75 +24,82 @@ import {
 } from "path";
 import { homedir } from "os";
 import { memoizeWithLRU } from "./memoize.js";
-import { gl, getCwd } from "./cwd.js";
+import { getCwdOrNull, getCwd } from "./cwd.js";
 import { NoProjectDirectoryError } from "../bootstrap/sessionSlices.js";
-import { Mn } from "./pathClassification.js";
+import { identity } from "./pathClassification.js";
 import { getPlatform } from "./platform.js";
-import { hl } from "./networkPaths.js";
+import { isUntouchableSpelling } from "./networkPaths.js";
 import { getFsImplementation } from "./fsOperations.js";
 
 //@ chunk-648vry02.js:2015-2172 placement
 function prependDirToPathEnv(e, r) {
   if (!pathWin32Module.isAbsolute(r)) return;
-  let dir = pathWin32Module.dirname(r),
-    o = Object.keys(e).find((a) => a.toUpperCase() === "PATH") ?? "PATH",
-    s = e[o];
+  let dir = pathWin32Module.dirname(r);
+  let o = Object.keys(e).find((key) => key.toUpperCase() === "PATH") ?? "PATH";
+  let s = e[o];
   e[o] = s ? dir + pathWin32Module.delimiter + s : dir;
 }
 //@ chunk-648vry02.js:2172-2479 placement
 function stripShellQuotes(e) {
-  let trimmed = e.trim(),
-    n = "",
-    o = 0;
+  let trimmed = e.trim();
+  let n = "";
+  let o = 0;
   while (o < trimmed.length) {
     let s = trimmed[o];
     if (s === '"' || s === "'") {
       let index = trimmed.indexOf(s, o + 1);
       if (index === -1) {
-        ((n += trimmed.slice(o + 1)), (o = trimmed.length));
+        n += trimmed.slice(o + 1);
+        o = trimmed.length;
         break;
       }
-      ((n += trimmed.slice(o + 1, index)), (o = index + 1));
-    } else if (s === "\\" && o + 1 < trimmed.length) ((n += trimmed[o + 1]), (o += 2));
-    else if (/\s/.test(s)) break;
-    else ((n += s), o++);
+      n += trimmed.slice(o + 1, index);
+      o = index + 1;
+    } else if (s === "\\" && o + 1 < trimmed.length) {
+      n += trimmed[o + 1];
+      o += 2;
+    } else if (/\s/.test(s)) break;
+    else {
+      n += s;
+      o++;
+    }
   }
   return n.endsWith(".sh") ? `bash ${e}` : e;
 }
+//@ chunk-648vry02.js:2479-3085 placement = posixPathToWindowsPath (1)
 /**
  * Windows 路径转 POSIX 形式（C:\a\b → /c/a/b，UNC 转正斜杠），LRU 缓存；同语句含反方向转换。
  */
-//@ chunk-648vry02.js:2479-3085 placement = posixPathToWindowsPath (1)
 var windowsPathToPosixPath = memoizeWithLRU(
-    (e) => {
-      if (e.startsWith("\\\\")) return e.replaceAll("\\", "/");
-      let match = e.match(/^([A-Za-z]):[/\\]/);
-      if (match) return "/" + match[1].toLowerCase() + e.slice(2).replaceAll("\\", "/");
-      return e.replaceAll("\\", "/");
-    },
-    (e) => e,
-    500,
-  ),
-  B8 = memoizeWithLRU(
-    (e) => {
-      if (e.startsWith("//")) return e.replaceAll("/", "\\");
-      let match = e.match(/^\/cygdrive\/([A-Za-z])(\/|$)/);
-      if (match) {
-        let upper = match[1].toUpperCase(),
-          sliced = e.slice(("/cygdrive/" + match[1]).length);
-        return upper + ":" + (sliced || "\\").replaceAll("/", "\\");
-      }
-      let match_2 = e.match(/^\/([A-Za-z])(\/|$)/);
-      if (match_2) {
-        let upper = match_2[1].toUpperCase(),
-          sliced = e.slice(2);
-        return upper + ":" + (sliced || "\\").replaceAll("/", "\\");
-      }
-      return e.replaceAll("/", "\\");
-    },
-    (e) => e,
-    500,
-  );
+  (windowsPath) => {
+    if (windowsPath.startsWith("\\\\")) return windowsPath.replaceAll("\\", "/");
+    let match = windowsPath.match(/^([A-Za-z]):[/\\]/);
+    if (match) return "/" + match[1].toLowerCase() + windowsPath.slice(2).replaceAll("\\", "/");
+    return windowsPath.replaceAll("\\", "/");
+  },
+  (e) => e,
+  500,
+);
+var posixPathToWindowsPath = memoizeWithLRU(
+  (posixPath) => {
+    if (posixPath.startsWith("//")) return posixPath.replaceAll("/", "\\");
+    let cygdriveMatch = posixPath.match(/^\/cygdrive\/([A-Za-z])(\/|$)/);
+    if (cygdriveMatch) {
+      let driveLetter = cygdriveMatch[1].toUpperCase();
+      let rest = posixPath.slice(("/cygdrive/" + cygdriveMatch[1]).length);
+      return driveLetter + ":" + (rest || "\\").replaceAll("/", "\\");
+    }
+    let driveMatch = posixPath.match(/^\/([A-Za-z])(\/|$)/);
+    if (driveMatch) {
+      let driveLetter = driveMatch[1].toUpperCase();
+      let rest = posixPath.slice(2);
+      return driveLetter + ":" + (rest || "\\").replaceAll("/", "\\");
+    }
+    return posixPath.replaceAll("/", "\\");
+  },
+  (e) => e,
+  500,
+);
 //@ chunk-648vry02.js:3085-3187 placement
 class NullBytePathError extends Error {
   constructor() {
@@ -105,8 +112,8 @@ function assertPathHasNoNullBytes(e) {
   if (e.includes("\x00")) throw new NullBytePathError();
 }
 //@ chunk-648vry02.js:3238-3308 placement
-function expandPath(e, r) {
-  let n = expandPath_2(e, r ?? gl());
+function expandPath(path, r) {
+  let n = expandPath_2(path, r ?? getCwdOrNull());
   if (n === null) throw new NoProjectDirectoryError();
   return n;
 }
@@ -115,20 +122,21 @@ function expandPath_2(path, baseDir) {
   if (typeof path !== "string") throw TypeError(`Path must be a string, received ${typeof path}`);
   if (baseDir !== null && typeof baseDir !== "string")
     throw TypeError(`Base directory must be a string, received ${typeof baseDir}`);
-  if ((assertPathHasNoNullBytes(path), baseDir !== null)) assertPathHasNoNullBytes(baseDir);
+  assertPathHasNoNullBytes(path);
+  if (baseDir !== null) assertPathHasNoNullBytes(baseDir);
   let trimmedPath = path.trim();
-  if (!trimmedPath) return baseDir === null ? null : Mn(normalize(baseDir));
-  if (trimmedPath === "~") return Mn(homedir());
-  if (trimmedPath.startsWith("~/")) return Mn(join(homedir(), trimmedPath.slice(2)));
+  if (!trimmedPath) return baseDir === null ? null : identity(normalize(baseDir));
+  if (trimmedPath === "~") return identity(homedir());
+  if (trimmedPath.startsWith("~/")) return identity(join(homedir(), trimmedPath.slice(2)));
   let processedPath = trimmedPath;
   if (getPlatform() === "windows" && trimmedPath.match(/^\/[a-z]\//i))
     try {
-      processedPath = B8(trimmedPath);
+      processedPath = posixPathToWindowsPath(trimmedPath);
     } catch {
       processedPath = trimmedPath;
     }
-  if (isAbsolute(processedPath)) return Mn(normalize(processedPath));
-  return baseDir === null ? null : Mn(resolve(baseDir, processedPath));
+  if (isAbsolute(processedPath)) return identity(normalize(processedPath));
+  return baseDir === null ? null : identity(resolve(baseDir, processedPath));
 }
 //@ chunk-648vry02.js:3799-3937 placement
 class UnstablePathError extends Error {
@@ -148,9 +156,9 @@ function isFullyQualifiedPath(p_0) {
   return isAbsolute(p_0) && (sep === posix.sep || parse(p_0).root.length > 1);
 }
 //@ chunk-648vry02.js:4067-4127 placement
-function expandPathOrNull(e, r) {
+function expandPathOrNull(path, r) {
   try {
-    return expandPath_2(e, r ?? gl());
+    return expandPath_2(path, r ?? getCwdOrNull());
   } catch {
     return null;
   }
@@ -160,13 +168,13 @@ function toRelativePath(absolutePath) {
   let relativePath = relative(getCwd(), absolutePath);
   return relativePath.startsWith("..") ? absolutePath : relativePath;
 }
+//@ chunk-648vry02.js:4189-4303 placement = isFileWithinReadSizeLimit (1)
 /**
  * 路径若是目录返回自身，否则返回其所在目录（UNC 等特殊路径直接取 dirname）。误配名。
  */
-//@ chunk-648vry02.js:4189-4303 placement = isFileWithinReadSizeLimit (1)
 function getDirectoryForPath(e) {
   let r = expandPath(e);
-  if (hl(r)) return dirname(r);
+  if (isUntouchableSpelling(r)) return dirname(r);
   try {
     if (getFsImplementation().statSync(r).isDirectory()) return r;
   } catch {}
@@ -213,13 +221,13 @@ function toDarwinPrivatePath(e, t = "linux") {
   return /^\/(tmp|var|etc)(\/|$)/.test(e) ? `/private${e}` : e;
 }
 //@ chunk-0wdgqhcf.js:45290-45344 placement = chordToDisplayString (1)
-function isDifferentPath(e, t, n = "linux") {
-  return t !== e && t !== toDarwinPrivatePath(e, n);
+function isDifferentPath(e, real, n = "linux") {
+  return real !== e && real !== toDarwinPrivatePath(e, n);
 }
+//@ chunk-s61vbvea.js:476278-476488 placement = SPINNER_FRAMES (0.711)
 /**
  * 列出给定路径的各级父目录（由近到远逆序后输出、跨路径去重），wipStash 用它找各级 .gitattributes。
  */
-//@ chunk-s61vbvea.js:476278-476488 placement = SPINNER_FRAMES (0.711)
 function listAncestorDirs(e) {
   let n = new Set();
   return e.flatMap((r) => {
@@ -231,12 +239,12 @@ function listAncestorDirs(e) {
     ) {
       let sliced = r.slice(0, index);
       if (n.has(sliced)) break;
-      (n.add(sliced), s.push(sliced));
+      n.add(sliced);
+      s.push(sliced);
     }
     return s.reverse();
   });
 }
-
 export {
   expandPathOrNull,
   tildify,
@@ -245,7 +253,7 @@ export {
   normalizePathForConfigKey,
   isDifferentPath,
   windowsPathToPosixPath,
-  B8,
+  posixPathToWindowsPath,
   containsPathTraversal,
   anchorPathUnnormalized,
   getDirectoryForPath,
@@ -256,7 +264,7 @@ export {
   toDarwinPrivatePath,
   NullBytePathError,
   UnstablePathError,
-  toRelativePath,
   assertPathHasNoNullBytes,
+  toRelativePath,
   listAncestorDirs,
 };

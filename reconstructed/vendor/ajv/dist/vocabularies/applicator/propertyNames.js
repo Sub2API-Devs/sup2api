@@ -6,47 +6,51 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:98190-98810 cjs-fingerprint
-var Pi = x(function (Si) {
-  Object.defineProperty(Si, "__esModule", { value: !0 });
-  var Kt = uh(),
-    Ei = ew(),
-    yp = {
-      message: "property name must be valid",
-      params: ({ params: params }) => Kt._`{propertyName: ${params.propertyName}}`,
+var require_propertyNames = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var error = {
+    message: "property name must be valid",
+    params: ({ params }) => codegen_1._`{propertyName: ${params.propertyName}}`,
+  };
+  var def = {
+    keyword: "propertyNames",
+    type: "object",
+    schemaType: ["object", "boolean"],
+    error,
+    code(cxt) {
+      let { gen, schema, data, it } = cxt;
+      if (util_1.alwaysValidSchema(it, schema)) return;
+      let valid = gen.name("valid");
+      gen.forIn("key", data, (key) => {
+        cxt.setParams({
+          propertyName: key,
+        });
+        cxt.subschema(
+          {
+            keyword: "propertyNames",
+            data: key,
+            dataTypes: ["string"],
+            propertyName: key,
+            compositeRule: true,
+          },
+          valid,
+        );
+        gen.if(codegen_1.not(valid), () => {
+          cxt.error(true);
+          if (!it.allErrors) gen.break();
+        });
+      });
+      cxt.ok(valid);
     },
-    _p = {
-      keyword: "propertyNames",
-      type: "object",
-      schemaType: ["object", "boolean"],
-      error: yp,
-      code(e) {
-        let { gen: gen, schema: schema, data: s, it: it } = e;
-        if (Ei.alwaysValidSchema(it, schema)) return;
-        let o = gen.name("valid");
-        (gen.forIn("key", s, (i) => {
-          (e.setParams({ propertyName: i }),
-            e.subschema(
-              {
-                keyword: "propertyNames",
-                data: i,
-                dataTypes: ["string"],
-                propertyName: i,
-                compositeRule: !0,
-              },
-              o,
-            ),
-            gen.if(Kt.not(o), () => {
-              if ((e.error(!0), !it.allErrors)) gen.break();
-            }));
-        }),
-          e.ok(o));
-      },
-    };
-  Si.default = _p;
+  };
+  cjsExports.default = def;
 });
-
-export { Pi };
+export { require_propertyNames };

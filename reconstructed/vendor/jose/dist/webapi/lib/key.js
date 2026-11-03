@@ -7,19 +7,18 @@
  */
 
 //@ chunk-5h78gfwc.js:6960-7026 esm-fingerprint
-function X(e) {
-  if (!D(e)) throw Error("CryptoKey instance expected");
+function tag(key) {
+  if (!isCryptoKey(key)) throw Error("CryptoKey instance expected");
 }
 //@ chunk-5h78gfwc.js:7026-7205 esm-fingerprint
-var D = (e) => {
-    if (e?.[Symbol.toStringTag] === "CryptoKey") return !0;
-    try {
-      return e instanceof CryptoKey;
-    } catch {
-      return !1;
-    }
-  },
-  ee = (e) => e?.[Symbol.toStringTag] === "KeyObject",
-  We = (e) => D(e) || ee(e);
-
-export { D, X, ee, We };
+var isCryptoKey = (key) => {
+  if (key?.[Symbol.toStringTag] === "CryptoKey") return true;
+  try {
+    return key instanceof CryptoKey;
+  } catch {
+    return false;
+  }
+};
+var isKeyObject = (key) => key?.[Symbol.toStringTag] === "KeyObject";
+var We = (key) => isCryptoKey(key) || isKeyObject(key);
+export { isCryptoKey, tag, isKeyObject, We };

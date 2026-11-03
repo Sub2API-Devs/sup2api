@@ -10,30 +10,30 @@
  */
 import { shellQuoteArgs } from "./bashPipeCommand.js";
 
+//@ chunk-e6aww6q8.js:3065136-3065305 file-local
 /**
  * 粗判命令是否含 heredoc（排除位移运算与算术中的 <<）。
  */
-//@ chunk-e6aww6q8.js:3065136-3065305 file-local
 function containsHeredoc(command) {
   if (
     /\d\s*<<\s*\d/.test(command) ||
     /\[\[\s*\d+\s*<<\s*\d+\s*\]\]/.test(command) ||
     /\$\(\(.*<<.*\)\)/.test(command)
   )
-    return !1;
+    return false;
   return /<<-?\s*(?:(['"]?)(\w+)\1|\\(\w+))/.test(command);
 }
 //@ chunk-e6aww6q8.js:3065305-3065431 file-local
 function containsMultilineString(command) {
-  let singleQuoteMultiline = /'(?:[^'\\]|\\.)*\n(?:[^'\\]|\\.)*'/,
-    doubleQuoteMultiline = /"(?:[^"\\]|\\.)*\n(?:[^"\\]|\\.)*"/;
+  let singleQuoteMultiline = /'(?:[^'\\]|\\.)*\n(?:[^'\\]|\\.)*'/;
+  let doubleQuoteMultiline = /"(?:[^"\\]|\\.)*\n(?:[^"\\]|\\.)*"/;
   return singleQuoteMultiline.test(command) || doubleQuoteMultiline.test(command);
 }
+//@ chunk-e6aww6q8.js:3065431-3065603 fingerprint = quoteShellCommand (0.841)
 /**
  * 把命令包装成可交给 eval 的单引号字符串；含 heredoc 或多行字符串时整体单引号，非 heredoc 时追加 < /dev/null。
  */
-//@ chunk-e6aww6q8.js:3065431-3065603 fingerprint = quoteShellCommand (0.841)
-function quoteShellCommand(command, addStdinRedirect = !0) {
+function quoteShellCommand(command, addStdinRedirect = true) {
   if (containsHeredoc(command) || containsMultilineString(command)) {
     let quoted = `'${command.replaceAll("'", `'"'"'`)}'`;
     if (containsHeredoc(command)) return quoted;
@@ -46,24 +46,23 @@ function quoteShellCommand(command, addStdinRedirect = !0) {
 function hasStdinRedirect(command) {
   return /(?:^|[\s;&|])<(?![<(])\s*\S+/.test(command);
 }
+//@ chunk-e6aww6q8.js:3065664-3065727 file-last-pair
 /**
  * 是否应追加 < /dev/null：命令含 heredoc 或已有输入重定向时不追加。
  */
-//@ chunk-e6aww6q8.js:3065664-3065727 file-last-pair
 function shouldAddStdinRedirect(command) {
-  if (containsHeredoc(command)) return !1;
-  if (hasStdinRedirect(command)) return !1;
-  return !0;
+  if (containsHeredoc(command)) return false;
+  if (hasStdinRedirect(command)) return false;
+  return true;
 }
 //@ chunk-e6aww6q8.js:3065727-3065783 layout
 var WINDOWS_NUL_REDIRECT_RE = /(\d?&?>+[ \t]*)[Nn][Uu][Ll](?=\s|$|[|&;)\n])/g;
+//@ chunk-e6aww6q8.js:3065783-3065897 fingerprint = rewriteWindowsNullRedirect (1)
 /**
  * 把 Windows 风格的 >NUL / 2>nul 改写为 /dev/null（命令含 < $ 反引号时不改）。
  */
-//@ chunk-e6aww6q8.js:3065783-3065897 fingerprint = rewriteWindowsNullRedirect (1)
 function rewriteWindowsNullRedirect(command) {
   if (command.includes("<") || command.includes("$") || command.includes("`")) return command;
   return command.replace(WINDOWS_NUL_REDIRECT_RE, "$1/dev/null");
 }
-
 export { rewriteWindowsNullRedirect, shouldAddStdinRedirect, quoteShellCommand };

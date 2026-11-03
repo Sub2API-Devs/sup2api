@@ -10,16 +10,15 @@
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "./growthbook.js";
 
+//@ chunk-s7c33dbx.js:226-297 placement
 /**
  * tengu_lazy_dove 开关（缓存值）。
  */
-//@ chunk-s7c33dbx.js:226-297 placement
 function isStillHereOnCached() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_lazy_dove", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_lazy_dove", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export { isStillHereOnCached };

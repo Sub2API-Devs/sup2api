@@ -8,20 +8,21 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-import { Gpe } from "../../utils/planTiers.js";
+import { canShowUpgradeCommand } from "../../utils/planTiers.js";
 
+//@ chunk-e6aww6q8.js:2041887-2042062 fingerprint = upgrade (0.778)
 /**
  * /upgrade 命令对象（local-jsx）；描述：Upgrade to Max for higher rate limits and more Opus；availability ["claude-ai"]；isEnabled: Gpe；实现 chunk-txp87wj5.js 的 Jji。
  */
-//@ chunk-e6aww6q8.js:2041887-2042062 fingerprint = upgrade (0.778)
 var upgradeCommandDefinition = {
-    type: "local-jsx",
-    name: "upgrade",
-    description: "Upgrade to Max for higher rate limits and more Opus",
-    availability: ["claude-ai"],
-    isEnabled: Gpe,
-    requires: { ink: !0 },
+  type: "local-jsx",
+  name: "upgrade",
+  description: "Upgrade to Max for higher rate limits and more Opus",
+  availability: ["claude-ai"],
+  isEnabled: canShowUpgradeCommand,
+  requires: {
+    ink: true,
   },
-  upgradeCommand = upgradeCommandDefinition;
-
+};
+var upgradeCommand = upgradeCommandDefinition;
 export { upgradeCommand };

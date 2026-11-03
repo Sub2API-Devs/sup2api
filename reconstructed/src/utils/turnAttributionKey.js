@@ -1,37 +1,50 @@
 /**
  * utils/turnAttributionKey.ts
+ *
+ * 2.1.316 新增：回合归因键的读取与校验（消息自带、任务通知继承、跨会话禁用）。
+ *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
  * pieces: chunk-aepeg2w5.js (4)
  * attribution: placement 4
  */
-import { Vt } from "./agentId.js";
+import { normalizeUuidOrNull } from "./agentId.js";
 
 //@ chunk-aepeg2w5.js:853069-853143 placement
-function GRn(e, { isCrossSession: isCrossSession }) {
-  return !isCrossSession && typeof e === "string" ? e : void 0;
+/**
+ * 取跨会话继承的回合归属键（跨会话时不给）。
+ */
+function inheritedAttributionKey(uuid, { isCrossSession }) {
+  return !isCrossSession && typeof uuid === "string" ? uuid : undefined;
 }
+//@ chunk-aepeg2w5.js:853143-853323 placement
 /**
  * 取消息的回合归因键（任务通知继承）。
  */
-//@ chunk-aepeg2w5.js:853143-853323 placement
-function messageTurnAttributionKey(e) {
-  if (e.turnAttributionKey !== void 0) return e.turnAttributionKey;
-  return e.mode === "task-notification" || e.resumeReason !== void 0
-    ? Rlt(e.inheritedTurnAttributionKey)
-    : void 0;
+function messageTurnAttributionKey(command) {
+  if (command.turnAttributionKey !== undefined) return command.turnAttributionKey;
+  return command.mode === "task-notification" || command.resumeReason !== undefined
+    ? attributionKeyOrUndefined(command.inheritedTurnAttributionKey)
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:853418-853455 placement
-function Rlt(e) {
-  return Vt(e) ?? void 0;
+/**
+ * 规范化归属键（空值转 undefined）。
+ */
+function attributionKeyOrUndefined(e) {
+  return normalizeUuidOrNull(e) ?? undefined;
 }
+//@ chunk-aepeg2w5.js:853455-853590 placement
 /**
  * 若消息中恰好有一条带回合归属键的非 meta 消息，返回其归属键。
  */
-//@ chunk-aepeg2w5.js:853455-853590 placement
 function turnAttributionKeyOf(e) {
-  let filtered = e.filter((r) => r.turnAttributionKey !== void 0 && !r.isMeta);
-  return filtered.length === 1 ? Rlt(filtered[0]?.turnAttributionKey) : void 0;
+  let filtered = e.filter((r) => r.turnAttributionKey !== undefined && !r.isMeta);
+  return filtered.length === 1 ? attributionKeyOrUndefined(filtered[0]?.turnAttributionKey) : undefined;
 }
-
-export { messageTurnAttributionKey, turnAttributionKeyOf, GRn, Rlt };
+export {
+  messageTurnAttributionKey,
+  turnAttributionKeyOf,
+  inheritedAttributionKey,
+  attributionKeyOrUndefined,
+};

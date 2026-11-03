@@ -14,8 +14,11 @@ import { directoryPluginFallbackName } from "../../utils/plugins/pluginLoader.js
 import { uniq } from "../../utils/collections.js";
 
 //@ chunk-a5k9jscj.js:1907-1987 placement
-var Me = new Set(["userSettings", "policySettings"]),
-  Pn = new Set([...Me, "session"]);
+/**
+ * 视为插件加载错误的设置来源（userSettings、policySettings）。
+ */
+var PLUGIN_ERROR_SETTINGS_SCOPES = new Set(["userSettings", "policySettings"]);
+var PLUGIN_ERROR_ALL_SCOPES = new Set([...PLUGIN_ERROR_SETTINGS_SCOPES, "session"]);
 //@ chunk-a5k9jscj.js:1987-2031 placement
 function isMarketplacePluginError(e) {
   return isDependencyError(e) || hasMarketplaceAlias(e.source);
@@ -26,7 +29,7 @@ function pluginNameOfError(e) {
     case "generic-error":
     case "manifest-validation-error":
     case "path-not-found":
-      return e.plugin === void 0 ? e.path : void 0;
+      return e.plugin === undefined ? e.path : undefined;
     default:
       return;
   }
@@ -41,30 +44,41 @@ var PLUGIN_LOAD_ERROR_LABELS = {
 //@ chunk-a5k9jscj.js:2376-2638 placement
 function describePluginLoadErrors(e) {
   return e.flatMap((n) => {
-    let s = PLUGIN_LOAD_ERROR_LABELS[n.type] ?? "load error",
-      i = pluginNameOfError(n);
-    if (i !== void 0) {
-      let d = n.type === "generic-error" ? n.manifestName : void 0,
-        k = directoryPluginFallbackName(i, marketplaceOf(n.source) ?? "");
-      return [{ names: d ? [d, k] : [k], category: s }];
+    let category = PLUGIN_LOAD_ERROR_LABELS[n.type] ?? "load error";
+    let i = pluginNameOfError(n);
+    if (i !== undefined) {
+      let manifestName = n.type === "generic-error" ? n.manifestName : undefined;
+      let k = directoryPluginFallbackName(i, marketplaceOf(n.source) ?? "");
+      return [
+        {
+          names: manifestName ? [manifestName, k] : [k],
+          category,
+        },
+      ];
     }
-    return isDependencyError(n) ? [{ names: [n.plugin], category: s }] : [];
+    return isDependencyError(n)
+      ? [
+          {
+            names: [n.plugin],
+            category,
+          },
+        ]
+      : [];
   });
 }
+//@ chunk-a5k9jscj.js:2638-3304 placement
 /**
  * 技能找不到时，若对应插件加载失败，附上失败原因说明。
  */
-//@ chunk-a5k9jscj.js:2638-3304 placement
-function pluginLoadFailureNote(e, n, s) {
-  let i = describePluginLoadErrors(n);
+function pluginLoadFailureNote(skillName, errors, s) {
+  let i = describePluginLoadErrors(errors);
   if (i.length === 0) return;
-  let index = e.indexOf(":"),
-    k = index > 0 ? e.slice(0, index) : void 0,
-    v = k === void 0 || s.has(k) ? void 0 : i.find((I) => I.names.includes(k));
-  if (v !== void 0)
+  let index = skillName.indexOf(":");
+  let k = index > 0 ? skillName.slice(0, index) : undefined;
+  let v = k === undefined || s.has(k) ? undefined : i.find((I) => I.names.includes(k));
+  if (v !== undefined)
     return `The plugin "${k}" did not load in this session (${v.category}): tell the user the plugin could not be loaded here, not that the skill is not installed.`;
   let joined = uniq(i.map((I) => I.category)).join(", ");
   return `${i.length === 1 ? `1 plugin did not load in this session (${joined}); if this skill belongs to it` : `${i.length} plugins did not load in this session (${joined}); if this skill belongs to one of them`}, tell the user its plugin could not be loaded here, not that the skill is not installed.`;
 }
-
 export { isMarketplacePluginError, pluginNameOfError, pluginLoadFailureNote };

@@ -7,11 +7,14 @@
  */
 
 //@ chunk-hwmsct5x.js:55405-55572 esm-fingerprint
-function qt(e, n) {
-  if (!e) return () => {};
-  if (e.aborted) return (n.abort(), () => {});
-  let r = () => n.abort();
-  return (e.addEventListener("abort", r), () => e.removeEventListener("abort", r));
+function linkAbort(external, controller) {
+  if (!external) return () => {};
+  if (external.aborted) {
+    controller.abort();
+    return () => {};
+  }
+  let onAbort = () => controller.abort();
+  external.addEventListener("abort", onAbort);
+  return () => external.removeEventListener("abort", onAbort);
 }
-
-export { qt };
+export { linkAbort };

@@ -10,33 +10,37 @@
  */
 import { isAnthropicOwnedHost } from "../anthropicHosts.js";
 import { noteExternalHttpUse } from "../testNetworkGuard.js";
-import { Dt } from "../../../vendor/axios/dist/esm/axios.js";
+import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 
 //@ chunk-9kawk9wc.js:300-336 placement
-var i = /^([a-z][a-z\d+\-.]*:)?\/\//i;
+var ABSOLUTE_URL_RE = /^([a-z][a-z\d+\-.]*:)?\/\//i;
+//@ chunk-9kawk9wc.js:336-708 placement
 /**
  * 断言下载客户端的请求（url 或 baseURL）解析到公共 CDN downloads.claude.ai，否则抛错并提示改用 firstPartyApi 或 externalHttp。
  */
-//@ chunk-9kawk9wc.js:336-708 placement
 function assertPublicCdnRequest(o, e) {
-  let s = e?.baseURL,
-    matches = i.test(o),
-    t = null;
+  let baseURL = e?.baseURL;
+  let matches = ABSOLUTE_URL_RE.test(o);
+  let t = null;
   if (matches && !isAnthropicOwnedHost(o)) t = o;
-  else if (s != null && !isAnthropicOwnedHost(s)) t = s;
-  else if (!matches && s == null) t = o;
+  else if (baseURL != null && !isAnthropicOwnedHost(baseURL)) t = baseURL;
+  else if (!matches && baseURL == null) t = o;
   if (t !== null)
     throw Error(
       `downloads: request (url="${o}"` +
-        (s != null ? `, baseURL="${s}"` : "") +
+        (baseURL != null ? `, baseURL="${baseURL}"` : "") +
         ") does not resolve to the public CDN (downloads.claude.ai). Use firstPartyApi for api.anthropic.com (residency-gated) or externalHttp for non-Anthropic hosts.",
     );
 }
 //@ chunk-9kawk9wc.js:708-759 placement
-var t3 = {
+/**
+ * 断言请求指向公共 CDN 后再转发的下载客户端。
+ */
+var publicCdnGuardedClient = {
   get(o, e) {
-    return (assertPublicCdnRequest(o, e), noteExternalHttpUse(), Dt.get(o, e));
+    assertPublicCdnRequest(o, e);
+    noteExternalHttpUse();
+    return axios_default.get(o, e);
   },
 };
-
-export { t3 };
+export { publicCdnGuardedClient };

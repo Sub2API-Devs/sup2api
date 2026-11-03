@@ -8,16 +8,16 @@
  * pieces: chunk-cne5hsvz.js (10)
  * attribution: placement 10
  */
-import { Gle, wve } from "../settings/managedSettingsKeys.js";
-import { nbr, getHostManagedProviderConflicts } from "../managedEnvConstants.js";
-import { withHostOwnedEnv, withHostEnvRestored } from "../settings/managedSettingsFiles.js";
-import { ci } from "./hostState.js";
+import { caCertEnvVars, caCertEnvVarList } from "../settings/managedSettingsKeys.js";
+import { TLS_CERT_ENV_VARS, getHostManagedProviderConflicts } from "../managedEnvConstants.js";
+import { withHostOwnedEnv, withHostEnvRestored_2 } from "../settings/managedSettingsFiles.js";
+import { swarmHostState } from "./hostState.js";
 import { shellQuoteArgs } from "../bash/bashPipeCommand.js";
 import { isProviderManagedByHost } from "../entrypointKinds.js";
 import { withLaunchValuesOfHybridConnection } from "../managedEnvApply.js";
 import { env } from "../env.js";
 import { isEnvTruthy } from "../envUtils.js";
-import { Xse } from "../../services/daemon/processLiveness.js";
+import { isAcceptableModelArg } from "../../services/daemon/processLiveness.js";
 import { getMainLoopModel } from "../model/model.js";
 import { isModelAllowed } from "../model/modelAllowlist.js";
 import { modelMatchesFamilyAlias, getDefaultSubagentModel } from "../model/agent.js";
@@ -84,9 +84,9 @@ var FORWARDED_TEAMMATE_ENV = [
   "http_proxy",
   "NO_PROXY",
   "no_proxy",
-  ...Gle,
-  ...Object.keys(wve),
-  ...nbr,
+  ...caCertEnvVars,
+  ...Object.keys(caCertEnvVarList),
+  ...TLS_CERT_ENV_VARS,
   "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
   "CLAUDE_CODE_HOST_CREDS_FILE",
   "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
@@ -101,8 +101,8 @@ function teammateEnvArgs() {
 }
 //@ chunk-cne5hsvz.js:16629-17597 placement
 function buildTeammateEnv() {
-  let e = ["CLAUDECODE=1", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"],
-    { sessionListId: sessionListId } = ci().taskList;
+  let e = ["CLAUDECODE=1", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"];
+  let { sessionListId } = swarmHostState().taskList;
   if (sessionListId) e.push(`CLAUDE_CODE_TASK_LIST_ID=${shellQuoteArgs([sessionListId])}`);
   if (isProviderManagedByHost()) e.push("CLAUDE_CODE_HOST_GATEWAY_LINEAGE=1");
   let a = new Set(getHostManagedProviderConflicts(process.env));
@@ -112,112 +112,112 @@ function buildTeammateEnv() {
     if (a.has(o)) continue;
     let h =
       o === "CLAUDE_CODE_AUTO_MODE_SERVER" && env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST && isEnvTruthy(l[o])
-        ? withHostEnvRestored(() => env.CLAUDE_CODE_AUTO_MODE_SERVER)
+        ? withHostEnvRestored_2(() => env.CLAUDE_CODE_AUTO_MODE_SERVER)
         : l[o];
-    if (h !== void 0 && h !== "") e.push(`${o}=${shellQuoteArgs([h])}`);
+    if (h !== undefined && h !== "") e.push(`${o}=${shellQuoteArgs([h])}`);
     else if (process.env[o] !== h) e.push(`${o}=''`);
   }
   let envClaudeSecurestorageConfigDir = process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
-  if (envClaudeSecurestorageConfigDir !== void 0)
+  if (envClaudeSecurestorageConfigDir !== undefined)
     e.push(`CLAUDE_SECURESTORAGE_CONFIG_DIR=${shellQuoteArgs([envClaudeSecurestorageConfigDir])}`);
   let CLAUDE_CODE_AUTO_MODE_TIER = env.CLAUDE_CODE_AUTO_MODE_TIER;
-  if (CLAUDE_CODE_AUTO_MODE_TIER !== void 0)
+  if (CLAUDE_CODE_AUTO_MODE_TIER !== undefined)
     e.push(`CLAUDE_CODE_AUTO_MODE_TIER=${shellQuoteArgs([CLAUDE_CODE_AUTO_MODE_TIER])}`);
-  return (
-    e.push(`CLAUDE_CODE_ATTRIBUTION_PROJECT=${shellQuoteArgs([env.CLAUDE_CODE_ATTRIBUTION_PROJECT ?? ""])}`),
-    e.push("CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS="),
-    e.join(" ")
-  );
+  e.push(`CLAUDE_CODE_ATTRIBUTION_PROJECT=${shellQuoteArgs([env.CLAUDE_CODE_ATTRIBUTION_PROJECT ?? ""])}`);
+  e.push("CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS=");
+  return e.join(" ");
 }
 //@ chunk-cne5hsvz.js:17597-17663 placement
 function envAssignment(e, n) {
-  return Xse(n) ? `${e} ${shellQuoteArgs([n])}` : `${e}=${shellQuoteArgs([n])}`;
+  return isAcceptableModelArg(n) ? `${e} ${shellQuoteArgs([n])}` : `${e}=${shellQuoteArgs([n])}`;
 }
 //@ chunk-cne5hsvz.js:17663-17692 placement
-function B(e) {
-  return e ?? getMainLoopModel();
+function resolveInheritedModel(agent) {
+  return agent ?? getMainLoopModel();
 }
 //@ chunk-cne5hsvz.js:17692-17950 placement
 function resolveTeammateModel(e, n) {
-  if (env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE) e = void 0;
-  if (e === "inherit") return B(n);
-  if (e !== void 0) {
-    if (!isModelAllowed(e)) return z(e, n);
+  if (env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE) e = undefined;
+  if (e === "inherit") return resolveInheritedModel(n);
+  if (e !== undefined) {
+    if (!isModelAllowed(e)) return fallbackModelForTeammate(e, n);
     if (n !== null && modelMatchesFamilyAlias(e, n)) return n;
     return e;
   }
-  let a = getDefaultSubagentModel();
-  if (a !== "inherit") {
-    let l = parseUserSpecifiedModel(a);
-    if (isModelAllowed(l)) return l;
-    return z(a, n);
+  let defaultSubagentModel = getDefaultSubagentModel();
+  if (defaultSubagentModel !== "inherit") {
+    let userSpecifiedModel = parseUserSpecifiedModel(defaultSubagentModel);
+    if (isModelAllowed(userSpecifiedModel)) return userSpecifiedModel;
+    return fallbackModelForTeammate(defaultSubagentModel, n);
   }
-  return B(n);
+  return resolveInheritedModel(n);
 }
+//@ chunk-cne5hsvz.js:17950-18009 placement
 /**
  * 队友模型：显式模型可解析则用之，否则取默认子代理模型。
  */
-//@ chunk-cne5hsvz.js:17950-18009 placement
-function z(e, n) {
+function fallbackModelForTeammate(e, agent) {
   let a = stepDownRestrictedFamilyAliasPick(e);
-  return (logTeammateModelNotAllowed(e, a !== null), a ?? resolveAgentModelDisplay(n));
+  logTeammateModelNotAllowed(e, a !== null);
+  return a ?? resolveAgentModelDisplay(agent);
 }
+//@ chunk-cne5hsvz.js:18009-18115 placement = resolveAgentModelDisplay (1)
 /**
  * 默认队友模型：默认子代理模型不是 inherit 且有效时用之，否则回退。
  */
-//@ chunk-cne5hsvz.js:18009-18115 placement = resolveAgentModelDisplay (1)
 function resolveAgentModelDisplay(agent) {
-  let n = getDefaultSubagentModel();
-  if (n !== "inherit") {
-    let a = parseUserSpecifiedModel(n);
-    if (isModelAllowed(a)) return a;
-    return stepDownRestrictedFamilyAliasPick(n) ?? B(agent);
+  let defaultSubagentModel = getDefaultSubagentModel();
+  if (defaultSubagentModel !== "inherit") {
+    let userSpecifiedModel = parseUserSpecifiedModel(defaultSubagentModel);
+    if (isModelAllowed(userSpecifiedModel)) return userSpecifiedModel;
+    return stepDownRestrictedFamilyAliasPick(defaultSubagentModel) ?? resolveInheritedModel(agent);
   }
-  return B(agent);
+  return resolveInheritedModel(agent);
 }
 //@ chunk-cne5hsvz.js:18115-18877 placement
-function teammateModelFlags(e, n, a = "tool") {
-  if (env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE) e = void 0;
-  let l = resolveTeammateModel(e, n),
-    E = getDefaultSubagentModel(),
-    p = e === void 0 && E !== "inherit" ? E : void 0,
-    [o, h] =
-      e === "inherit"
-        ? [n ?? l, "inherit"]
-        : e !== void 0
-          ? [e, a]
-          : p !== void 0
-            ? [p, "env"]
-            : [l, "default"],
-    r =
-      p !== void 0
-        ? !isModelAllowed(parseUserSpecifiedModel(p))
-        : (h === "tool" || h === "frontmatter") && !isModelAllowed(o),
-    T = r && stepDownRestrictedFamilyAliasPick(o) !== null,
-    _ = r && !T,
-    u = modelFamilyOf(o, getCanonicalName(o)),
-    w = modelFamilyOf(l, getCanonicalName(l)),
-    A = {
-      source: lit("teammate_spawn"),
-      precedence: fromEnum(h),
-      requested_family: fromEnum(u),
-      resolved_family: fromEnum(w),
-      requested_model: telemetrySafeModelName(o) ?? lit("none"),
-      resolved_model: telemetrySafeModelName(l) ?? lit("none"),
-    };
+function teammateModelFlags(model, mainLoopModel, modelSource = "tool") {
+  if (env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE) model = undefined;
+  let teammateModel = resolveTeammateModel(model, mainLoopModel);
+  let defaultSubagentModel = getDefaultSubagentModel();
+  let p = model === undefined && defaultSubagentModel !== "inherit" ? defaultSubagentModel : undefined;
+  let [o, h] =
+    model === "inherit"
+      ? [mainLoopModel ?? teammateModel, "inherit"]
+      : model !== undefined
+        ? [model, modelSource]
+        : p !== undefined
+          ? [p, "env"]
+          : [teammateModel, "default"];
+  let r =
+    p !== undefined
+      ? !isModelAllowed(parseUserSpecifiedModel(p))
+      : (h === "tool" || h === "frontmatter") && !isModelAllowed(o);
+  let T = r && stepDownRestrictedFamilyAliasPick(o) !== null;
+  let _ = r && !T;
+  let u = modelFamilyOf(o, getCanonicalName(o));
+  let w = modelFamilyOf(teammateModel, getCanonicalName(teammateModel));
+  let A = {
+    source: lit("teammate_spawn"),
+    precedence: fromEnum(h),
+    requested_family: fromEnum(u),
+    resolved_family: fromEnum(w),
+    requested_model: telemetrySafeModelName(o) ?? lit("none"),
+    resolved_model: telemetrySafeModelName(teammateModel) ?? lit("none"),
+  };
   if (T) logFeatureSad("subagent_model_resolve", "family_alias_stepped_down", A);
   else if (_) logFeatureSad("subagent_model_resolve", "override_dropped", A);
   else if (h !== "default" && u !== "other" && w !== "other" && u !== w)
     logFeatureSad("subagent_model_resolve", "family_mismatch", A);
   else logFeatureOk("subagent_model_resolve", A);
-  return l;
+  return teammateModel;
 }
 //@ chunk-cne5hsvz.js:18877-19054 placement
 function logTeammateModelNotAllowed(e, n) {
   logForDebugging(
     `Teammate model "${e}" is not in the availableModels allowlist; using the ${n ? "newest allowed model in its family" : "leader's model"} instead`,
-    { level: "warn" },
+    {
+      level: "warn",
+    },
   );
 }
-
 export { envAssignment, teammateModelFlags, teammateEnvArgs };

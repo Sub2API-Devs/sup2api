@@ -7,14 +7,16 @@
  */
 
 //@ chunk-hwmsct5x.js:27525-27813 esm-fingerprint
-var Ko = function () {
+var uuid4 = function () {
   let { crypto: e } = globalThis;
-  if (e?.randomUUID) return ((Ko = e.randomUUID.bind(e)), e.randomUUID());
-  let uint8Array = new Uint8Array(1),
-    r = e ? () => e.getRandomValues(uint8Array)[0] : () => (Math.random() * 255) & 255;
-  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (s) =>
-    (+s ^ (r() & (15 >> (+s / 4)))).toString(16),
+  if (e?.randomUUID) {
+    uuid4 = e.randomUUID.bind(e);
+    return e.randomUUID();
+  }
+  let u8 = new Uint8Array(1);
+  let randomByte = e ? () => e.getRandomValues(u8)[0] : () => (Math.random() * 255) & 255;
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+    (+c ^ (randomByte() & (15 >> (+c / 4)))).toString(16),
   );
 };
-
-export { Ko };
+export { uuid4 };

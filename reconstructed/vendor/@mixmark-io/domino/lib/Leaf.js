@@ -6,54 +6,59 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xe } from "./Node.js";
-import { yt } from "./NodeList.js";
-import { ee } from "./utils.js";
+import { require_Node } from "./Node.js";
+import { require_NodeList } from "./NodeList.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:62055-62721 cjs-fingerprint
-var Nn = x(function (Td, Bs) {
-  Bs.exports = Fs;
-  var qs = xe(),
-    ex = yt(),
-    Hs = ee(),
-    { HierarchyRequestError: HierarchyRequestError, NotFoundError: NotFoundError } = Hs;
-  function Fs() {
-    qs.call(this);
+var require_Leaf = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Leaf;
+  var Node = require_Node();
+  var NodeList = require_NodeList();
+  var Hs = require_utils();
+  var { HierarchyRequestError, NotFoundError } = Hs;
+  function Leaf() {
+    Node.call(this);
   }
-  Fs.prototype = Object.create(qs.prototype, {
+  Leaf.prototype = Object.create(Node.prototype, {
     hasChildNodes: {
       value: function () {
-        return !1;
+        return false;
       },
     },
-    firstChild: { value: null },
-    lastChild: { value: null },
+    firstChild: {
+      value: null,
+    },
+    lastChild: {
+      value: null,
+    },
     insertBefore: {
-      value: function (e, t) {
-        if (!e.nodeType) throw TypeError("not a node");
+      value: function (node, child) {
+        if (!node.nodeType) throw TypeError("not a node");
         HierarchyRequestError();
       },
     },
     replaceChild: {
-      value: function (e, t) {
-        if (!e.nodeType) throw TypeError("not a node");
+      value: function (node, child) {
+        if (!node.nodeType) throw TypeError("not a node");
         HierarchyRequestError();
       },
     },
     removeChild: {
-      value: function (e) {
-        if (!e.nodeType) throw TypeError("not a node");
+      value: function (node) {
+        if (!node.nodeType) throw TypeError("not a node");
         NotFoundError();
       },
     },
-    removeChildren: { value: function () {} },
+    removeChildren: {
+      value: function () {},
+    },
     childNodes: {
       get: function () {
-        if (!this._childNodes) this._childNodes = new ex();
+        if (!this._childNodes) this._childNodes = new NodeList();
         return this._childNodes;
       },
     },
   });
 });
-
-export { Nn };
+export { require_Leaf };

@@ -16,36 +16,35 @@ import { isLocationLink, toLocation } from "./LSPTool.js";
 
 //@ chunk-kxyd0g16.js:93527-93998 fingerprint = formatUri (0.932)
 function formatUri(uri, cwd) {
-  if (!uri)
-    return (
-      logForDebugging("formatUri called with undefined URI - indicates malformed LSP server response", {
-        level: "warn",
-      }),
-      "<unknown location>"
-    );
-  let n = stripPrefix(uri, "file://");
-  if (/^\/[A-Za-z]:/.test(n)) n = n.slice(1);
+  if (!uri) {
+    logForDebugging("formatUri called with undefined URI - indicates malformed LSP server response", {
+      level: "warn",
+    });
+    return "<unknown location>";
+  }
+  let filePath = stripPrefix(uri, "file://");
+  if (/^\/[A-Za-z]:/.test(filePath)) filePath = filePath.slice(1);
   try {
-    n = decodeURIComponent(n);
+    filePath = decodeURIComponent(filePath);
   } catch (error) {
     let errorMsg = errorMessage(error);
-    logForDebugging(`Failed to decode LSP URI '${uri}': ${errorMsg}. Using un-decoded path: ${n}`, {
+    logForDebugging(`Failed to decode LSP URI '${uri}': ${errorMsg}. Using un-decoded path: ${filePath}`, {
       level: "warn",
     });
   }
   if (cwd) {
-    let relativePath = relative(cwd, n).replaceAll("\\", "/");
-    if (relativePath.length < n.length && !relativePath.startsWith("../../")) return relativePath;
+    let relativePath = relative(cwd, filePath).replaceAll("\\", "/");
+    if (relativePath.length < filePath.length && !relativePath.startsWith("../../")) return relativePath;
   }
-  return n.replaceAll("\\", "/");
+  return filePath.replaceAll("\\", "/");
 }
 //@ chunk-kxyd0g16.js:93998-94145 fingerprint = groupByFile (1)
 function groupByFile(items, cwd) {
   let byFile = new Map();
   for (let item of items) {
-    let uri = "uri" in item ? item.uri : item.location.uri,
-      filePath = formatUri(uri, cwd),
-      existingItems = byFile.get(filePath);
+    let uri = "uri" in item ? item.uri : item.location.uri;
+    let filePath = formatUri(uri, cwd);
+    let existingItems = byFile.get(filePath);
     if (existingItems) existingItems.push(item);
     else byFile.set(filePath, [item]);
   }
@@ -53,42 +52,44 @@ function groupByFile(items, cwd) {
 }
 //@ chunk-kxyd0g16.js:94145-94254 fingerprint = formatLocation (1)
 function formatLocation(location, cwd) {
-  let filePath = formatUri(location.uri, cwd),
-    s = location.range.start.line + 1,
-    f = location.range.start.character + 1;
-  return `${filePath}:${s}:${f}`;
+  let filePath = formatUri(location.uri, cwd);
+  let line = location.range.start.line + 1;
+  let character = location.range.start.character + 1;
+  return `${filePath}:${line}:${character}`;
 }
+//@ chunk-kxyd0g16.js:94374-95169 fingerprint = formatGoToDefinitionResult (1)
 /**
  * 格式化 goToDefinition / goToImplementation 结果。
  */
-//@ chunk-kxyd0g16.js:94374-95169 fingerprint = formatGoToDefinitionResult (1)
 function formatGoToDefinitionResult(result, cwd) {
   if (!result)
     return "No definition found. This may occur if the cursor is not on a symbol, or if the definition is in an external library not indexed by the LSP server.";
   if (Array.isArray(result)) {
-    let locations = result.map((item) => (isLocationLink(item) ? toLocation(item) : item)),
-      invalidLocations = locations.filter((loc) => !loc || !loc.uri);
+    let locations = result.map((item) => (isLocationLink(item) ? toLocation(item) : item));
+    let invalidLocations = locations.filter((loc) => !loc || !loc.uri);
     if (invalidLocations.length > 0)
       logForDebugging(
         `formatGoToDefinitionResult: Filtering out ${invalidLocations.length} invalid location(s) - this should have been caught earlier`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
     let validLocations = locations.filter((loc) => loc && loc.uri);
     if (validLocations.length === 0)
       return "No definition found. This may occur if the cursor is not on a symbol, or if the definition is in an external library not indexed by the LSP server.";
     if (validLocations.length === 1) return `Defined in ${formatLocation(validLocations[0], cwd)}`;
-    let joined = validLocations.map((loc) => `  ${formatLocation(loc, cwd)}`).join(`
+    let locationList = validLocations.map((loc) => `  ${formatLocation(loc, cwd)}`).join(`
 `);
     return `Found ${validLocations.length} definitions:
-${joined}`;
+${locationList}`;
   }
   let location = isLocationLink(result) ? toLocation(result) : result;
   return `Defined in ${formatLocation(location, cwd)}`;
 }
+//@ chunk-kxyd0g16.js:95169-95978 fingerprint = formatFindReferencesResult (1)
 /**
  * 格式化 findReferences 结果（按文件分组）。
  */
-//@ chunk-kxyd0g16.js:95169-95978 fingerprint = formatFindReferencesResult (1)
 function formatFindReferencesResult(result, cwd) {
   if (!result || result.length === 0)
     return "No references found. This may occur if the symbol has no usages, or if the LSP server has not fully indexed the workspace.";
@@ -96,7 +97,9 @@ function formatFindReferencesResult(result, cwd) {
   if (invalidLocations.length > 0)
     logForDebugging(
       `formatFindReferencesResult: Filtering out ${invalidLocations.length} invalid location(s) - this should have been caught earlier`,
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
   let validLocations = result.filter((loc) => loc && loc.uri);
   if (validLocations.length === 0)
@@ -104,15 +107,15 @@ function formatFindReferencesResult(result, cwd) {
   if (validLocations.length === 1)
     return `Found 1 reference:
   ${formatLocation(validLocations[0], cwd)}`;
-  let byFile = groupByFile(validLocations, cwd),
-    lines = [`Found ${validLocations.length} references across ${byFile.size} files:`];
-  for (let [y, k] of byFile) {
+  let byFile = groupByFile(validLocations, cwd);
+  let lines = [`Found ${validLocations.length} references across ${byFile.size} files:`];
+  for (let [filePath, locations] of byFile) {
     lines.push(`
-${y}:`);
-    for (let loc of k) {
-      let S = loc.range.start.line + 1,
-        R = loc.range.start.character + 1;
-      lines.push(`  Line ${S}:${R}`);
+${filePath}:`);
+    for (let loc of locations) {
+      let line = loc.range.start.line + 1;
+      let character = loc.range.start.character + 1;
+      lines.push(`  Line ${line}:${character}`);
     }
   }
   return lines.join(`
@@ -131,18 +134,18 @@ function extractMarkupText(contents) {
   if ("kind" in contents) return contents.value;
   return contents.value;
 }
+//@ chunk-kxyd0g16.js:96168-96469 fingerprint = formatHoverResult (1)
 /**
  * 格式化 hover 结果（MarkupContent/MarkedString）。
  */
-//@ chunk-kxyd0g16.js:96168-96469 fingerprint = formatHoverResult (1)
 function formatHoverResult(result, _cwd) {
   if (!result)
     return "No hover information available. This may occur if the cursor is not on a symbol, or if the LSP server has not fully indexed the file.";
   let content = extractMarkupText(result.contents);
   if (result.range) {
-    let s = result.range.start.line + 1,
-      f = result.range.start.character + 1;
-    return `Hover info at ${s}:${f}:
+    let line = result.range.start.line + 1;
+    let character = result.range.start.character + 1;
+    return `Hover info at ${line}:${character}:
 
 ${content}`;
   }
@@ -183,34 +186,36 @@ function symbolKindToString(kind) {
 }
 //@ chunk-kxyd0g16.js:96882-97139 fingerprint = formatDocumentSymbolNode (1)
 function formatDocumentSymbolNode(symbol, indent = 0) {
-  let lines = [],
-    prefix = "  ".repeat(indent),
-    kind = symbolKindToString(symbol.kind),
-    line = `${prefix}${symbol.name} (${kind})`;
+  let lines = [];
+  let prefix = "  ".repeat(indent);
+  let kind = symbolKindToString(symbol.kind);
+  let line = `${prefix}${symbol.name} (${kind})`;
   if (symbol.detail) line += ` ${symbol.detail}`;
   let symbolLine = symbol.range.start.line + 1;
-  if (((line += ` - Line ${symbolLine}`), lines.push(line), symbol.children && symbol.children.length > 0))
+  line += ` - Line ${symbolLine}`;
+  lines.push(line);
+  if (symbol.children && symbol.children.length > 0)
     for (let child of symbol.children) lines.push(...formatDocumentSymbolNode(child, indent + 1));
   return lines;
 }
+//@ chunk-kxyd0g16.js:97139-97459 fingerprint = formatDocumentSymbolResult (1)
 /**
  * 格式化 documentSymbol 结果（层级缩进）。
  */
-//@ chunk-kxyd0g16.js:97139-97459 fingerprint = formatDocumentSymbolResult (1)
 function formatDocumentSymbolResult(result, cwd) {
   if (!result || result.length === 0)
     return "No symbols found in document. This may occur if the file is empty, not supported by the LSP server, or if the server has not fully indexed the file.";
   let firstSymbol = result[0];
   if (firstSymbol && "location" in firstSymbol) return formatWorkspaceSymbolResult(result, cwd);
   let lines = ["Document symbols:"];
-  for (let h of result) lines.push(...formatDocumentSymbolNode(h));
+  for (let symbol of result) lines.push(...formatDocumentSymbolNode(symbol));
   return lines.join(`
 `);
 }
+//@ chunk-kxyd0g16.js:97459-98333 fingerprint = formatWorkspaceSymbolResult (1)
 /**
  * 格式化 workspaceSymbol 结果。
  */
-//@ chunk-kxyd0g16.js:97459-98333 fingerprint = formatWorkspaceSymbolResult (1)
 function formatWorkspaceSymbolResult(result, cwd) {
   if (!result || result.length === 0)
     return "No symbols found in workspace. This may occur if the workspace is empty, or if the LSP server has not finished indexing the project.";
@@ -218,20 +223,22 @@ function formatWorkspaceSymbolResult(result, cwd) {
   if (invalidSymbols.length > 0)
     logForDebugging(
       `formatWorkspaceSymbolResult: Filtering out ${invalidSymbols.length} invalid symbol(s) - this should have been caught earlier`,
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
   let validSymbols = result.filter((sym) => sym && sym.location && sym.location.uri);
   if (validSymbols.length === 0)
     return "No symbols found in workspace. This may occur if the workspace is empty, or if the LSP server has not finished indexing the project.";
-  let lines = [`Found ${validSymbols.length} ${plural(validSymbols.length, "symbol")} in workspace:`],
-    byFile = groupByFile(validSymbols, cwd);
-  for (let [y, k] of byFile) {
+  let lines = [`Found ${validSymbols.length} ${plural(validSymbols.length, "symbol")} in workspace:`];
+  let byFile = groupByFile(validSymbols, cwd);
+  for (let [filePath, symbols] of byFile) {
     lines.push(`
-${y}:`);
-    for (let symbol of k) {
-      let kind = symbolKindToString(symbol.kind),
-        line = symbol.location.range.start.line + 1,
-        symbolLine = `  ${symbol.name} (${kind}) - Line ${line}`;
+${filePath}:`);
+    for (let symbol of symbols) {
+      let kind = symbolKindToString(symbol.kind);
+      let line = symbol.location.range.start.line + 1;
+      let symbolLine = `  ${symbol.name} (${kind}) - Line ${line}`;
       if (symbol.containerName) symbolLine += ` in ${symbol.containerName}`;
       lines.push(symbolLine);
     }
@@ -241,22 +248,23 @@ ${y}:`);
 }
 //@ chunk-kxyd0g16.js:98333-98625 fingerprint = formatCallHierarchyItem (1)
 function formatCallHierarchyItem(item, cwd) {
-  if (!item.uri)
-    return (
-      logForDebugging("formatCallHierarchyItem: CallHierarchyItem has undefined URI", { level: "warn" }),
-      `${item.name} (${symbolKindToString(item.kind)}) - <unknown location>`
-    );
-  let filePath = formatUri(item.uri, cwd),
-    line = item.range.start.line + 1,
-    kind = symbolKindToString(item.kind),
-    result = `${item.name} (${kind}) - ${filePath}:${line}`;
+  if (!item.uri) {
+    logForDebugging("formatCallHierarchyItem: CallHierarchyItem has undefined URI", {
+      level: "warn",
+    });
+    return `${item.name} (${symbolKindToString(item.kind)}) - <unknown location>`;
+  }
+  let filePath = formatUri(item.uri, cwd);
+  let line = item.range.start.line + 1;
+  let kind = symbolKindToString(item.kind);
+  let result = `${item.name} (${kind}) - ${filePath}:${line}`;
   if (item.detail) result += ` [${item.detail}]`;
   return result;
 }
+//@ chunk-kxyd0g16.js:98625-98882 fingerprint = formatPrepareCallHierarchyResult (1)
 /**
  * 格式化 prepareCallHierarchy 结果。
  */
-//@ chunk-kxyd0g16.js:98625-98882 fingerprint = formatPrepareCallHierarchyResult (1)
 function formatPrepareCallHierarchyResult(result, cwd) {
   if (!result || result.length === 0) return "No call hierarchy item found at this position";
   if (result.length === 1) return `Call hierarchy item: ${formatCallHierarchyItem(result[0], cwd)}`;
@@ -265,14 +273,14 @@ function formatPrepareCallHierarchyResult(result, cwd) {
   return lines.join(`
 `);
 }
+//@ chunk-kxyd0g16.js:98882-99590 fingerprint = formatIncomingCallsResult (1)
 /**
  * 格式化 incomingCalls 结果。
  */
-//@ chunk-kxyd0g16.js:98882-99590 fingerprint = formatIncomingCallsResult (1)
 function formatIncomingCallsResult(result, cwd) {
   if (!result || result.length === 0) return "No incoming calls found (nothing calls this function)";
-  let lines = [`Found ${result.length} incoming ${plural(result.length, "call")}:`],
-    byFile = new Map();
+  let lines = [`Found ${result.length} incoming ${plural(result.length, "call")}:`];
+  let byFile = new Map();
   for (let call of result) {
     if (!call.from) {
       logForDebugging("formatIncomingCallsResult: CallHierarchyIncomingCall has undefined from field", {
@@ -280,19 +288,19 @@ function formatIncomingCallsResult(result, cwd) {
       });
       continue;
     }
-    let filePath = formatUri(call.from.uri, cwd),
-      existing = byFile.get(filePath);
+    let filePath = formatUri(call.from.uri, cwd);
+    let existing = byFile.get(filePath);
     if (existing) existing.push(call);
     else byFile.set(filePath, [call]);
   }
-  for (let [f, h] of byFile) {
+  for (let [filePath, calls] of byFile) {
     lines.push(`
-${f}:`);
-    for (let call of h) {
+${filePath}:`);
+    for (let call of calls) {
       if (!call.from) continue;
-      let kind = symbolKindToString(call.from.kind),
-        line = call.from.range.start.line + 1,
-        callLine = `  ${call.from.name} (${kind}) - Line ${line}`;
+      let kind = symbolKindToString(call.from.kind);
+      let line = call.from.range.start.line + 1;
+      let callLine = `  ${call.from.name} (${kind}) - Line ${line}`;
       if (call.fromRanges && call.fromRanges.length > 0) {
         let callSites = call.fromRanges
           .map((fromRange) => `${fromRange.start.line + 1}:${fromRange.start.character + 1}`)
@@ -305,14 +313,14 @@ ${f}:`);
   return lines.join(`
 `);
 }
+//@ chunk-kxyd0g16.js:99590-100287 fingerprint = formatOutgoingCallsResult (1)
 /**
  * 格式化 outgoingCalls 结果。
  */
-//@ chunk-kxyd0g16.js:99590-100287 fingerprint = formatOutgoingCallsResult (1)
 function formatOutgoingCallsResult(result, cwd) {
   if (!result || result.length === 0) return "No outgoing calls found (this function calls nothing)";
-  let lines = [`Found ${result.length} outgoing ${plural(result.length, "call")}:`],
-    byFile = new Map();
+  let lines = [`Found ${result.length} outgoing ${plural(result.length, "call")}:`];
+  let byFile = new Map();
   for (let call of result) {
     if (!call.to) {
       logForDebugging("formatOutgoingCallsResult: CallHierarchyOutgoingCall has undefined to field", {
@@ -320,19 +328,19 @@ function formatOutgoingCallsResult(result, cwd) {
       });
       continue;
     }
-    let filePath = formatUri(call.to.uri, cwd),
-      existing = byFile.get(filePath);
+    let filePath = formatUri(call.to.uri, cwd);
+    let existing = byFile.get(filePath);
     if (existing) existing.push(call);
     else byFile.set(filePath, [call]);
   }
-  for (let [f, h] of byFile) {
+  for (let [filePath, calls] of byFile) {
     lines.push(`
-${f}:`);
-    for (let call of h) {
+${filePath}:`);
+    for (let call of calls) {
       if (!call.to) continue;
-      let kind = symbolKindToString(call.to.kind),
-        line = call.to.range.start.line + 1,
-        callLine = `  ${call.to.name} (${kind}) - Line ${line}`;
+      let kind = symbolKindToString(call.to.kind);
+      let line = call.to.range.start.line + 1;
+      let callLine = `  ${call.to.name} (${kind}) - Line ${line}`;
       if (call.fromRanges && call.fromRanges.length > 0) {
         let callSites = call.fromRanges
           .map((fromRange) => `${fromRange.start.line + 1}:${fromRange.start.character + 1}`)
@@ -345,7 +353,6 @@ ${f}:`);
   return lines.join(`
 `);
 }
-
 export {
   formatGoToDefinitionResult,
   formatFindReferencesResult,

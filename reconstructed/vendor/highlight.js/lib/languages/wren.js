@@ -8,136 +8,206 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:530928-533165 cjs-fingerprint
-var ac = x(function (Rb, nc) {
-  function d_(e) {
-    let regex = e.regex,
-      n = /[a-zA-Z]\w*/,
-      a = [
-        "as",
-        "break",
-        "class",
-        "construct",
-        "continue",
-        "else",
-        "for",
-        "foreign",
-        "if",
-        "import",
-        "in",
-        "is",
-        "return",
-        "static",
-        "var",
-        "while",
-      ],
-      s = ["true", "false", "null"],
-      o = ["this", "super"],
-      r = [
-        "Bool",
-        "Class",
-        "Fiber",
-        "Fn",
-        "List",
-        "Map",
-        "Null",
-        "Num",
-        "Object",
-        "Range",
-        "Sequence",
-        "String",
-        "System",
-      ],
-      i = [
-        "-",
-        "~",
-        /\*/,
-        "%",
-        /\.\.\./,
-        /\.\./,
-        /\+/,
-        "<<",
-        ">>",
-        ">=",
-        "<=",
-        "<",
-        ">",
-        /\^/,
-        /!=/,
-        /!/,
-        /\bis\b/,
-        "==",
-        "&&",
-        "&",
-        /\|\|/,
-        /\|/,
-        /\?:/,
-        "=",
-      ],
-      c = {
-        relevance: 0,
-        match: regex.concat(/\b(?!(if|while|for|else|super)\b)/, n, /(?=\s*[({])/),
-        className: "title.function",
-      },
-      l = {
-        match: regex.concat(
-          regex.either(regex.concat(/\b(?!(if|while|for|else|super)\b)/, n), regex.either(...i)),
-          /(?=\s*\([^)]+\)\s*\{)/,
-        ),
-        className: "title.function",
-        starts: {
-          contains: [{ begin: /\(/, end: /\)/, contains: [{ relevance: 0, scope: "params", match: n }] }],
-        },
-      },
-      d = {
-        variants: [{ match: [/class\s+/, n, /\s+is\s+/, n] }, { match: [/class\s+/, n] }],
-        scope: { 2: "title.class", 4: "title.class.inherited" },
-        keywords: a,
-      },
-      m = { relevance: 0, match: regex.either(...i), className: "operator" },
-      p = { className: "string", begin: /"""/, end: /"""/ },
-      _ = {
-        className: "property",
-        begin: regex.concat(/\./, regex.lookahead(n)),
-        end: n,
-        excludeBegin: !0,
-        relevance: 0,
-      },
-      E = { relevance: 0, match: regex.concat(/\b_/, n), scope: "variable" },
-      u = { relevance: 0, match: /\b[A-Z]+[a-z]+([A-Z]+[a-z]+)*/, scope: "title.class", keywords: { _: r } },
-      C_NUMBER_MODE = e.C_NUMBER_MODE,
-      f = {
-        match: [n, /\s*/, /=/, /\s*/, /\(/, n, /\)\s*\{/],
-        scope: { 1: "title.function", 3: "operator", 6: "params" },
-      },
-      COMMENT = e.COMMENT(/\/\*\*/, /\*\//, { contains: [{ match: /@[a-z]+/, scope: "doctag" }, "self"] }),
-      S = { scope: "subst", begin: /%\(/, end: /\)/, contains: [C_NUMBER_MODE, u, c, E, m] },
-      N = {
-        scope: "string",
-        begin: /"/,
-        end: /"/,
+var require_wren = x(function (cjsExports, cjsModule) {
+  function wren(hljs) {
+    let regex = hljs.regex;
+    let IDENT_RE = /[a-zA-Z]\w*/;
+    let KEYWORDS = [
+      "as",
+      "break",
+      "class",
+      "construct",
+      "continue",
+      "else",
+      "for",
+      "foreign",
+      "if",
+      "import",
+      "in",
+      "is",
+      "return",
+      "static",
+      "var",
+      "while",
+    ];
+    let LITERALS = ["true", "false", "null"];
+    let LANGUAGE_VARS = ["this", "super"];
+    let CORE_CLASSES = [
+      "Bool",
+      "Class",
+      "Fiber",
+      "Fn",
+      "List",
+      "Map",
+      "Null",
+      "Num",
+      "Object",
+      "Range",
+      "Sequence",
+      "String",
+      "System",
+    ];
+    let OPERATORS = [
+      "-",
+      "~",
+      /\*/,
+      "%",
+      /\.\.\./,
+      /\.\./,
+      /\+/,
+      "<<",
+      ">>",
+      ">=",
+      "<=",
+      "<",
+      ">",
+      /\^/,
+      /!=/,
+      /!/,
+      /\bis\b/,
+      "==",
+      "&&",
+      "&",
+      /\|\|/,
+      /\|/,
+      /\?:/,
+      "=",
+    ];
+    let FUNCTION = {
+      relevance: 0,
+      match: regex.concat(/\b(?!(if|while|for|else|super)\b)/, IDENT_RE, /(?=\s*[({])/),
+      className: "title.function",
+    };
+    let FUNCTION_DEFINITION = {
+      match: regex.concat(
+        regex.either(regex.concat(/\b(?!(if|while|for|else|super)\b)/, IDENT_RE), regex.either(...OPERATORS)),
+        /(?=\s*\([^)]+\)\s*\{)/,
+      ),
+      className: "title.function",
+      starts: {
         contains: [
-          S,
           {
-            scope: "char.escape",
-            variants: [
-              { match: /\\\\|\\["0%abefnrtv]/ },
-              { match: /\\x[0-9A-F]{2}/ },
-              { match: /\\u[0-9A-F]{4}/ },
-              { match: /\\U[0-9A-F]{8}/ },
+            begin: /\(/,
+            end: /\)/,
+            contains: [
+              {
+                relevance: 0,
+                scope: "params",
+                match: IDENT_RE,
+              },
             ],
           },
         ],
-      };
-    S.contains.push(N);
-    let A = [...a, ...o, ...s],
-      C = {
-        relevance: 0,
-        match: regex.concat("\\b(?!", A.join("|"), "\\b)", /[a-zA-Z_]\w*(?:[?!]|\b)/),
-        className: "variable",
-      };
+      },
+    };
+    let CLASS_DEFINITION = {
+      variants: [
+        {
+          match: [/class\s+/, IDENT_RE, /\s+is\s+/, IDENT_RE],
+        },
+        {
+          match: [/class\s+/, IDENT_RE],
+        },
+      ],
+      scope: {
+        2: "title.class",
+        4: "title.class.inherited",
+      },
+      keywords: KEYWORDS,
+    };
+    let OPERATOR = {
+      relevance: 0,
+      match: regex.either(...OPERATORS),
+      className: "operator",
+    };
+    let TRIPLE_STRING = {
+      className: "string",
+      begin: /"""/,
+      end: /"""/,
+    };
+    let PROPERTY = {
+      className: "property",
+      begin: regex.concat(/\./, regex.lookahead(IDENT_RE)),
+      end: IDENT_RE,
+      excludeBegin: true,
+      relevance: 0,
+    };
+    let FIELD = {
+      relevance: 0,
+      match: regex.concat(/\b_/, IDENT_RE),
+      scope: "variable",
+    };
+    let CLASS_REFERENCE = {
+      relevance: 0,
+      match: /\b[A-Z]+[a-z]+([A-Z]+[a-z]+)*/,
+      scope: "title.class",
+      keywords: {
+        _: CORE_CLASSES,
+      },
+    };
+    let NUMBER = hljs.C_NUMBER_MODE;
+    let SETTER = {
+      match: [IDENT_RE, /\s*/, /=/, /\s*/, /\(/, IDENT_RE, /\)\s*\{/],
+      scope: {
+        1: "title.function",
+        3: "operator",
+        6: "params",
+      },
+    };
+    let COMMENT_DOCS = hljs.COMMENT(/\/\*\*/, /\*\//, {
+      contains: [
+        {
+          match: /@[a-z]+/,
+          scope: "doctag",
+        },
+        "self",
+      ],
+    });
+    let SUBST = {
+      scope: "subst",
+      begin: /%\(/,
+      end: /\)/,
+      contains: [NUMBER, CLASS_REFERENCE, FUNCTION, FIELD, OPERATOR],
+    };
+    let STRING = {
+      scope: "string",
+      begin: /"/,
+      end: /"/,
+      contains: [
+        SUBST,
+        {
+          scope: "char.escape",
+          variants: [
+            {
+              match: /\\\\|\\["0%abefnrtv]/,
+            },
+            {
+              match: /\\x[0-9A-F]{2}/,
+            },
+            {
+              match: /\\u[0-9A-F]{4}/,
+            },
+            {
+              match: /\\U[0-9A-F]{8}/,
+            },
+          ],
+        },
+      ],
+    };
+    SUBST.contains.push(STRING);
+    let ALL_KWS = [...KEYWORDS, ...LANGUAGE_VARS, ...LITERALS];
+    let VARIABLE = {
+      relevance: 0,
+      match: regex.concat("\\b(?!", ALL_KWS.join("|"), "\\b)", /[a-zA-Z_]\w*(?:[?!]|\b)/),
+      className: "variable",
+    };
     return {
       name: "Wren",
-      keywords: { keyword: a, "variable.language": o, literal: s },
+      keywords: {
+        keyword: KEYWORDS,
+        "variable.language": LANGUAGE_VARS,
+        literal: LITERALS,
+      },
       contains: [
         {
           scope: "comment",
@@ -145,32 +215,37 @@ var ac = x(function (Rb, nc) {
             {
               begin: [/#!?/, /[A-Za-z_]+(?=\()/],
               beginScope: {},
-              keywords: { literal: s },
+              keywords: {
+                literal: LITERALS,
+              },
               contains: [],
               end: /\)/,
             },
-            { begin: [/#!?/, /[A-Za-z_]+/], beginScope: {}, end: /$/ },
+            {
+              begin: [/#!?/, /[A-Za-z_]+/],
+              beginScope: {},
+              end: /$/,
+            },
           ],
         },
-        C_NUMBER_MODE,
-        N,
-        p,
-        COMMENT,
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
-        u,
-        d,
-        f,
-        l,
-        c,
-        m,
-        E,
-        _,
-        C,
+        NUMBER,
+        STRING,
+        TRIPLE_STRING,
+        COMMENT_DOCS,
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        CLASS_REFERENCE,
+        CLASS_DEFINITION,
+        SETTER,
+        FUNCTION_DEFINITION,
+        FUNCTION,
+        OPERATOR,
+        FIELD,
+        PROPERTY,
+        VARIABLE,
       ],
     };
   }
-  nc.exports = d_;
+  cjsModule.exports = wren;
 });
-
-export { ac };
+export { require_wren };

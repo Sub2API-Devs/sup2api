@@ -20,14 +20,20 @@ import {
 import { updateSettingsForSource } from "../utils/settings/settings.js";
 import { announce } from "../utils/accessibility/screenReader.js";
 import { permissionModeIndicator } from "../utils/permissions/PermissionMode.js";
-import { j } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-18hwfzwa.js:153747-154002 placement
 function resolveAutoDefaultNudge(h, x, D) {
   let L = h === "accept" ? switchToAutoByDefault(D) : "declined";
   if (L !== "gate_off")
     saveGlobalConfig(
-      (ee) => (ee.hasSeenAutoDefaultNudge ? ee : { ...ee, hasSeenAutoDefaultNudge: !0 }),
+      (ee) =>
+        ee.hasSeenAutoDefaultNudge
+          ? ee
+          : {
+              ...ee,
+              hasSeenAutoDefaultNudge: true,
+            },
       D.storageV5,
     ).catch(logError);
   logEvent("tengu_auto_default_nudge_resolved", {
@@ -38,39 +44,46 @@ function resolveAutoDefaultNudge(h, x, D) {
 }
 //@ chunk-18hwfzwa.js:154002-154424 placement
 function switchToAutoByDefault({
-  getToolPermissionContext: getToolPermissionContext,
-  setToolPermissionContext: setToolPermissionContext,
-  addNotification: addNotification,
-  storageV5: storageV5,
+  getToolPermissionContext,
+  setToolPermissionContext,
+  addNotification,
+  storageV5,
 }) {
-  let ee = getToolPermissionContext();
-  if (canCycleToAuto(ee)) {
-    if (setPermissionModeWithGuards("auto", ee, setToolPermissionContext, "auto_default_nudge").ok)
-      return (
-        updateSettingsForSource(
-          "userSettings",
-          { permissions: { defaultMode: "auto" } },
-          void 0,
-          storageV5,
-        ).catch(logError),
-        announce(`[${permissionModeIndicator("auto")} on]`),
-        "switched"
-      );
+  let toolPermissionContext = getToolPermissionContext();
+  if (canCycleToAuto(toolPermissionContext)) {
+    if (
+      setPermissionModeWithGuards(
+        "auto",
+        toolPermissionContext,
+        setToolPermissionContext,
+        "auto_default_nudge",
+      ).ok
+    ) {
+      updateSettingsForSource(
+        "userSettings",
+        {
+          permissions: {
+            defaultMode: "auto",
+          },
+        },
+        undefined,
+        storageV5,
+      ).catch(logError);
+      announce(`[${permissionModeIndicator("auto")} on]`);
+      return "switched";
+    }
   }
-  let ke = getAutoModeUnavailableText();
-  return (
-    addNotification({
-      key: "auto-default-nudge-unavailable",
-      kind: "warning",
-      text: ke,
-      color: "warning",
-      priority: "high",
-    }),
-    announce(`[${ke}]`),
-    "gate_off"
-  );
+  let autoModeUnavailableText = getAutoModeUnavailableText();
+  addNotification({
+    key: "auto-default-nudge-unavailable",
+    kind: "warning",
+    text: autoModeUnavailableText,
+    color: "warning",
+    priority: "high",
+  });
+  announce(`[${autoModeUnavailableText}]`);
+  return "gate_off";
 }
 //@ chunk-18hwfzwa.js:154424-154428 placement
-j();
-
+init_react_production();
 export { resolveAutoDefaultNudge };

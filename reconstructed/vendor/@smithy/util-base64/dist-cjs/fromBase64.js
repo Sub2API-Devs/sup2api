@@ -6,21 +6,22 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { UQt } from "../../util-buffer-from/dist-cjs/index.js";
+import { require_util_buffer_from } from "../../util-buffer-from/dist-cjs/index.js";
 
 //@ chunk-wr8v03d0.js:877-1251 cjs-fingerprint
-var U = x(function (R) {
-  Object.defineProperty(R, "__esModule", { value: !0 });
-  R.fromBase64 = void 0;
-  var P = UQt(),
-    K = /^[A-Za-z0-9+/]*={0,2}$/,
-    W = (e) => {
-      if ((e.length * 3) % 4 !== 0) throw TypeError("Incorrect padding on base64 string.");
-      if (!K.exec(e)) throw TypeError("Invalid base64 string.");
-      let fromString = P.fromString(e, "base64");
-      return new Uint8Array(fromString.buffer, fromString.byteOffset, fromString.byteLength);
-    };
-  R.fromBase64 = W;
+var require_fromBase64 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.fromBase64 = undefined;
+  var util_buffer_from_1 = require_util_buffer_from();
+  var BASE64_REGEX = /^[A-Za-z0-9+/]*={0,2}$/;
+  var fromBase64 = (input) => {
+    if ((input.length * 3) % 4 !== 0) throw TypeError("Incorrect padding on base64 string.");
+    if (!BASE64_REGEX.exec(input)) throw TypeError("Invalid base64 string.");
+    let buffer = util_buffer_from_1.fromString(input, "base64");
+    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  };
+  cjsExports.fromBase64 = fromBase64;
 });
-
-export { U };
+export { require_fromBase64 };

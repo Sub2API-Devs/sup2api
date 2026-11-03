@@ -8,13 +8,18 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:1742-3199 cjs-fingerprint
-var at = x(function (cu, nt) {
-  function zc(e) {
-    let regex = e.regex,
-      n = /[a-zA-Z_$][a-zA-Z0-9_$]*/,
-      combined = regex.concat(n, regex.concat("(\\.", n, ")*")),
-      s = /([*]|[a-zA-Z_$][a-zA-Z0-9_$]*)/,
-      o = { className: "rest_arg", begin: /[.]{3}/, end: n, relevance: 10 };
+var require_actionscript = x(function (cjsExports, cjsModule) {
+  function actionscript(hljs) {
+    let regex = hljs.regex;
+    let IDENT_RE = /[a-zA-Z_$][a-zA-Z0-9_$]*/;
+    let PKG_NAME_RE = regex.concat(IDENT_RE, regex.concat("(\\.", IDENT_RE, ")*"));
+    let IDENT_FUNC_RETURN_TYPE_RE = /([*]|[a-zA-Z_$][a-zA-Z0-9_$]*)/;
+    let AS3_REST_ARG_MODE = {
+      className: "rest_arg",
+      begin: /[.]{3}/,
+      end: IDENT_RE,
+      relevance: 10,
+    };
     return {
       name: "ActionScript",
       aliases: ["as"],
@@ -74,50 +79,64 @@ var at = x(function (cu, nt) {
         literal: ["true", "false", "null", "undefined"],
       },
       contains: [
-        e.APOS_STRING_MODE,
-        e.QUOTE_STRING_MODE,
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
-        e.C_NUMBER_MODE,
-        { match: [/\bpackage/, /\s+/, combined], className: { 1: "keyword", 3: "title.class" } },
+        hljs.APOS_STRING_MODE,
+        hljs.QUOTE_STRING_MODE,
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        hljs.C_NUMBER_MODE,
         {
-          match: [/\b(?:class|interface|extends|implements)/, /\s+/, n],
-          className: { 1: "keyword", 3: "title.class" },
+          match: [/\bpackage/, /\s+/, PKG_NAME_RE],
+          className: {
+            1: "keyword",
+            3: "title.class",
+          },
+        },
+        {
+          match: [/\b(?:class|interface|extends|implements)/, /\s+/, IDENT_RE],
+          className: {
+            1: "keyword",
+            3: "title.class",
+          },
         },
         {
           className: "meta",
           beginKeywords: "import include",
           end: /;/,
-          keywords: { keyword: "import include" },
+          keywords: {
+            keyword: "import include",
+          },
         },
         {
           beginKeywords: "function",
           end: /[{;]/,
-          excludeEnd: !0,
+          excludeEnd: true,
           illegal: /\S/,
           contains: [
-            e.inherit(e.TITLE_MODE, { className: "title.function" }),
+            hljs.inherit(hljs.TITLE_MODE, {
+              className: "title.function",
+            }),
             {
               className: "params",
               begin: /\(/,
               end: /\)/,
               contains: [
-                e.APOS_STRING_MODE,
-                e.QUOTE_STRING_MODE,
-                e.C_LINE_COMMENT_MODE,
-                e.C_BLOCK_COMMENT_MODE,
-                o,
+                hljs.APOS_STRING_MODE,
+                hljs.QUOTE_STRING_MODE,
+                hljs.C_LINE_COMMENT_MODE,
+                hljs.C_BLOCK_COMMENT_MODE,
+                AS3_REST_ARG_MODE,
               ],
             },
-            { begin: regex.concat(/:\s*/, s) },
+            {
+              begin: regex.concat(/:\s*/, IDENT_FUNC_RETURN_TYPE_RE),
+            },
           ],
         },
-        e.METHOD_GUARD,
+        hljs.METHOD_GUARD,
       ],
       illegal: /#/,
     };
   }
-  nt.exports = zc;
+  cjsModule.exports = actionscript;
 });
-
-export { at };
+export { require_actionscript };

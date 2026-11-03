@@ -6,255 +6,316 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { Kg } from "../../protocol-http/dist-cjs/index.js";
-import { uSr } from "../../querystring-builder/dist-cjs/index.js";
+import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
+import { require_querystring_builder } from "../../querystring-builder/dist-cjs/index.js";
 
 //@ chunk-hq88884p.js:5498-17045 cjs-fingerprint
-var E$ = x(function (pn) {
-  var at = Kg(),
-    ut = uSr(),
-    fe = importMetaRequire("http"),
-    de = importMetaRequire("https"),
-    ft = importMetaRequire("stream"),
-    ve = importMetaRequire("http2"),
-    tn = ["ECONNRESET", "EPIPE", "ETIMEDOUT"],
-    lt = (e) => {
-      let r = {};
-      for (let n of Object.keys(e)) {
-        let o = e[n];
-        r[n] = Array.isArray(o) ? o.join(",") : o;
-      }
-      return r;
-    },
-    N = { setTimeout: (e, r) => setTimeout(e, r), clearTimeout: (e) => clearTimeout(e) },
-    st = 1000,
-    rn = (e, r, n = 0) => {
-      if (!n) return -1;
-      let o = (s) => {
-        let c = N.setTimeout(() => {
-            (e.destroy(),
-              r(
-                Object.assign(
-                  Error(
-                    `@smithy/node-http-handler - the request socket did not establish a connection with the server within the configured timeout of ${n} ms.`,
-                  ),
-                  { name: "TimeoutError" },
-                ),
-              ));
-          }, n - s),
-          a = (u) => {
-            if (u?.connecting)
-              u.on("connect", () => {
-                N.clearTimeout(c);
-              });
-            else N.clearTimeout(c);
-          };
-        if (e.socket) a(e.socket);
-        else e.on("socket", a);
-      };
-      if (n < 2000) return (o(0), 0);
-      return N.setTimeout(o.bind(null, st), st);
-    },
-    nn = (e, r, n = 0, o, s) => {
-      if (n)
-        return N.setTimeout(() => {
-          let c = `@smithy/node-http-handler - [${o ? "ERROR" : "WARN"}] a request has exceeded the configured ${n} ms requestTimeout.`;
-          if (o) {
-            let merged = Object.assign(Error(c), { name: "TimeoutError", code: "ETIMEDOUT" });
-            (e.destroy(merged), r(merged));
-          } else
-            ((c += " Init client requestHandler with throwOnRequestTimeout=true to turn this into an error."),
-              s?.warn?.(c));
-        }, n);
-      return -1;
-    },
-    on = 3000,
-    sn = (e, { keepAlive: keepAlive, keepAliveMsecs: keepAliveMsecs }, o = on) => {
-      if (keepAlive !== !0) return -1;
-      let s = () => {
-        if (e.socket) e.socket.setKeepAlive(keepAlive, keepAliveMsecs || 0);
-        else
-          e.on("socket", (c) => {
-            c.setKeepAlive(keepAlive, keepAliveMsecs || 0);
+var require_node_http_handler = x(function (cjsExports) {
+  var at = require_protocol_http();
+  var querystringBuilder = require_querystring_builder();
+  var fe = importMetaRequire("http");
+  var de = importMetaRequire("https");
+  var node_stream = importMetaRequire("stream");
+  var http2 = importMetaRequire("http2");
+  var tn = ["ECONNRESET", "EPIPE", "ETIMEDOUT"];
+  var lt = (headers) => {
+    let transformedHeaders = {};
+    for (let name of Object.keys(headers)) {
+      let headerValues = headers[name];
+      transformedHeaders[name] = Array.isArray(headerValues) ? headerValues.join(",") : headerValues;
+    }
+    return transformedHeaders;
+  };
+  var timing = {
+    setTimeout: (cb, ms) => setTimeout(cb, ms),
+    clearTimeout: (timeoutId) => clearTimeout(timeoutId),
+  };
+  var DEFER_EVENT_LISTENER_TIME$2 = 1000;
+  var setConnectionTimeout = (request, reject, timeoutInMs = 0) => {
+    if (!timeoutInMs) return -1;
+    let registerTimeout = (offset) => {
+      let timeoutId = timing.setTimeout(() => {
+        request.destroy();
+        reject(
+          Object.assign(
+            Error(
+              `@smithy/node-http-handler - the request socket did not establish a connection with the server within the configured timeout of ${timeoutInMs} ms.`,
+            ),
+            {
+              name: "TimeoutError",
+            },
+          ),
+        );
+      }, timeoutInMs - offset);
+      let doWithSocket = (socket) => {
+        if (socket?.connecting)
+          socket.on("connect", () => {
+            timing.clearTimeout(timeoutId);
           });
+        else timing.clearTimeout(timeoutId);
       };
-      if (o === 0) return (s(), 0);
-      return N.setTimeout(s, o);
-    },
-    it = 3000,
-    cn = (e, r, n = 0) => {
-      let o = (s) => {
-        let c = n - s,
-          a = () => {
-            (e.destroy(),
-              r(
-                Object.assign(
-                  Error(
-                    `@smithy/node-http-handler - the request socket timed out after ${n} ms of inactivity (configured by client requestHandler).`,
-                  ),
-                  { name: "TimeoutError" },
-                ),
-              ));
-          };
-        if (e.socket)
-          (e.socket.setTimeout(c, a), e.on("close", () => e.socket?.removeListener("timeout", a)));
-        else e.setTimeout(c, a);
+      if (request.socket) doWithSocket(request.socket);
+      else request.on("socket", doWithSocket);
+    };
+    if (timeoutInMs < 2000) {
+      registerTimeout(0);
+      return 0;
+    }
+    return timing.setTimeout(
+      registerTimeout.bind(null, DEFER_EVENT_LISTENER_TIME$2),
+      DEFER_EVENT_LISTENER_TIME$2,
+    );
+  };
+  var nn = (req, reject, timeoutInMs = 0, throwOnRequestTimeout, logger) => {
+    if (timeoutInMs)
+      return timing.setTimeout(() => {
+        let msg = `@smithy/node-http-handler - [${throwOnRequestTimeout ? "ERROR" : "WARN"}] a request has exceeded the configured ${timeoutInMs} ms requestTimeout.`;
+        if (throwOnRequestTimeout) {
+          let error = Object.assign(Error(msg), {
+            name: "TimeoutError",
+            code: "ETIMEDOUT",
+          });
+          req.destroy(error);
+          reject(error);
+        } else {
+          msg += " Init client requestHandler with throwOnRequestTimeout=true to turn this into an error.";
+          logger?.warn?.(msg);
+        }
+      }, timeoutInMs);
+    return -1;
+  };
+  var on = 3000;
+  var sn = (request, { keepAlive, keepAliveMsecs }, deferTimeMs = on) => {
+    if (keepAlive !== true) return -1;
+    let registerListener = () => {
+      if (request.socket) request.socket.setKeepAlive(keepAlive, keepAliveMsecs || 0);
+      else
+        request.on("socket", (socket) => {
+          socket.setKeepAlive(keepAlive, keepAliveMsecs || 0);
+        });
+    };
+    if (deferTimeMs === 0) {
+      registerListener();
+      return 0;
+    }
+    return timing.setTimeout(registerListener, deferTimeMs);
+  };
+  var DEFER_EVENT_LISTENER_TIME = 3000;
+  var cn = (request, reject, timeoutInMs = 0) => {
+    let registerTimeout = (offset) => {
+      let timeout = timeoutInMs - offset;
+      let onTimeout = () => {
+        request.destroy();
+        reject(
+          Object.assign(
+            Error(
+              `@smithy/node-http-handler - the request socket timed out after ${timeoutInMs} ms of inactivity (configured by client requestHandler).`,
+            ),
+            {
+              name: "TimeoutError",
+            },
+          ),
+        );
       };
-      if (0 < n && n < 6000) return (o(0), 0);
-      return N.setTimeout(o.bind(null, n === 0 ? 0 : it), it);
-    },
-    ct = 6000;
-  async function dt(e, r, n = ct, o = !1) {
-    let s = r.headers ?? {},
-      c = s.Expect || s.expect,
-      a = -1,
-      u = !0;
-    if (!o && c === "100-continue")
-      u = await Promise.race([
-        new Promise((l) => {
-          a = Number(N.setTimeout(() => l(!0), Math.max(ct, n)));
+      if (request.socket) {
+        request.socket.setTimeout(timeout, onTimeout);
+        request.on("close", () => request.socket?.removeListener("timeout", onTimeout));
+      } else request.setTimeout(timeout, onTimeout);
+    };
+    if (0 < timeoutInMs && timeoutInMs < 6000) {
+      registerTimeout(0);
+      return 0;
+    }
+    return timing.setTimeout(
+      registerTimeout.bind(null, timeoutInMs === 0 ? 0 : DEFER_EVENT_LISTENER_TIME),
+      DEFER_EVENT_LISTENER_TIME,
+    );
+  };
+  var MIN_WAIT_TIME = 6000;
+  async function writeRequestBody(
+    httpRequest,
+    request,
+    maxContinueTimeoutMs = MIN_WAIT_TIME,
+    externalAgent = false,
+  ) {
+    let headers = request.headers ?? {};
+    let expect = headers.Expect || headers.expect;
+    let timeoutId = -1;
+    let sendBody = true;
+    if (!externalAgent && expect === "100-continue")
+      sendBody = await Promise.race([
+        new Promise((resolve) => {
+          timeoutId = Number(
+            timing.setTimeout(() => resolve(true), Math.max(MIN_WAIT_TIME, maxContinueTimeoutMs)),
+          );
         }),
-        new Promise((l) => {
-          (e.on("continue", () => {
-            (N.clearTimeout(a), l(!0));
-          }),
-            e.on("response", () => {
-              (N.clearTimeout(a), l(!1));
-            }),
-            e.on("error", () => {
-              (N.clearTimeout(a), l(!1));
-            }));
+        new Promise((resolve) => {
+          httpRequest.on("continue", () => {
+            timing.clearTimeout(timeoutId);
+            resolve(true);
+          });
+          httpRequest.on("response", () => {
+            timing.clearTimeout(timeoutId);
+            resolve(false);
+          });
+          httpRequest.on("error", () => {
+            timing.clearTimeout(timeoutId);
+            resolve(false);
+          });
         }),
       ]);
-    if (u) an(e, r.body);
+    if (sendBody) writeBody(httpRequest, request.body);
   }
-  function an(e, r) {
-    if (r instanceof ft.Readable) {
-      r.pipe(e);
+  function writeBody(httpRequest, body) {
+    if (body instanceof node_stream.Readable) {
+      body.pipe(httpRequest);
       return;
     }
-    if (r) {
-      if (Buffer.isBuffer(r) || typeof r === "string") {
-        e.end(r);
+    if (body) {
+      if (Buffer.isBuffer(body) || typeof body === "string") {
+        httpRequest.end(body);
         return;
       }
-      let n = r;
+      let uint8 = body;
       if (
-        typeof n === "object" &&
-        n.buffer &&
-        typeof n.byteOffset === "number" &&
-        typeof n.byteLength === "number"
+        typeof uint8 === "object" &&
+        uint8.buffer &&
+        typeof uint8.byteOffset === "number" &&
+        typeof uint8.byteLength === "number"
       ) {
-        e.end(Buffer.from(n.buffer, n.byteOffset, n.byteLength));
+        httpRequest.end(Buffer.from(uint8.buffer, uint8.byteOffset, uint8.byteLength));
         return;
       }
-      e.end(Buffer.from(r));
+      httpRequest.end(Buffer.from(body));
       return;
     }
-    e.end();
+    httpRequest.end();
   }
-  var un = 0;
-  class pe {
+  var DEFAULT_REQUEST_TIMEOUT = 0;
+  class NodeHttpHandler {
     config;
     configProvider;
     socketWarningTimestamp = 0;
-    externalAgent = !1;
-    metadata = { handlerProtocol: "http/1.1" };
-    static create(e) {
-      if (typeof e?.handle === "function") return e;
-      return new pe(e);
+    externalAgent = false;
+    metadata = {
+      handlerProtocol: "http/1.1",
+    };
+    static create(instanceOrOptions) {
+      if (typeof instanceOrOptions?.handle === "function") return instanceOrOptions;
+      return new NodeHttpHandler(instanceOrOptions);
     }
-    static checkSocketUsage(e, r, n = console) {
-      let { sockets: sockets, requests: requests, maxSockets: maxSockets } = e;
-      if (typeof maxSockets !== "number" || maxSockets === 1 / 0) return r;
-      let a = 15000;
-      if (Date.now() - a < r) return r;
+    static checkSocketUsage(agent, socketWarningTimestamp, logger = console) {
+      let { sockets, requests, maxSockets } = agent;
+      if (typeof maxSockets !== "number" || maxSockets === 1 / 0) return socketWarningTimestamp;
+      let interval = 15000;
+      if (Date.now() - interval < socketWarningTimestamp) return socketWarningTimestamp;
       if (sockets && requests)
-        for (let key in sockets) {
-          let l = sockets[key]?.length ?? 0,
-            b = requests[key]?.length ?? 0;
-          if (l >= maxSockets && b >= 2 * maxSockets)
-            return (
-              n?.warn?.(`@smithy/node-http-handler:WARN - socket usage at capacity=${l} and ${b} additional requests are enqueued.
+        for (let origin in sockets) {
+          let socketsInUse = sockets[origin]?.length ?? 0;
+          let requestsEnqueued = requests[origin]?.length ?? 0;
+          if (socketsInUse >= maxSockets && requestsEnqueued >= 2 * maxSockets) {
+            logger?.warn?.(`@smithy/node-http-handler:WARN - socket usage at capacity=${socketsInUse} and ${requestsEnqueued} additional requests are enqueued.
 See https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/node-configuring-maxsockets.html
-or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler config.`),
-              Date.now()
-            );
+or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler config.`);
+            return Date.now();
+          }
         }
-      return r;
+      return socketWarningTimestamp;
     }
-    constructor(e) {
-      this.configProvider = new Promise((r, n) => {
-        if (typeof e === "function")
-          e()
-            .then((o) => {
-              r(this.resolveDefaultConfig(o));
+    constructor(options) {
+      this.configProvider = new Promise((resolve, reject) => {
+        if (typeof options === "function")
+          options()
+            .then((_options) => {
+              resolve(this.resolveDefaultConfig(_options));
             })
-            .catch(n);
-        else r(this.resolveDefaultConfig(e));
+            .catch(reject);
+        else resolve(this.resolveDefaultConfig(options));
       });
     }
     resolveDefaultConfig(e) {
       let {
-          requestTimeout: requestTimeout,
-          connectionTimeout: connectionTimeout,
-          socketTimeout: socketTimeout,
-          socketAcquisitionWarningTimeout: socketAcquisitionWarningTimeout,
-          httpAgent: httpAgent,
-          httpsAgent: httpsAgent,
-          throwOnRequestTimeout: throwOnRequestTimeout,
-        } = e || {},
-        l = !0,
-        b = 50;
+        requestTimeout,
+        connectionTimeout,
+        socketTimeout,
+        socketAcquisitionWarningTimeout,
+        httpAgent,
+        httpsAgent,
+        throwOnRequestTimeout,
+      } = e || {};
+      let l = true;
+      let b = 50;
       return {
-        connectionTimeout: connectionTimeout,
-        requestTimeout: requestTimeout,
-        socketTimeout: socketTimeout,
-        socketAcquisitionWarningTimeout: socketAcquisitionWarningTimeout,
-        throwOnRequestTimeout: throwOnRequestTimeout,
+        connectionTimeout,
+        requestTimeout,
+        socketTimeout,
+        socketAcquisitionWarningTimeout,
+        throwOnRequestTimeout,
         httpAgent: (() => {
-          if (httpAgent instanceof fe.Agent || typeof httpAgent?.destroy === "function")
-            return ((this.externalAgent = !0), httpAgent);
-          return new fe.Agent({ keepAlive: !0, maxSockets: 50, ...httpAgent });
+          if (httpAgent instanceof fe.Agent || typeof httpAgent?.destroy === "function") {
+            this.externalAgent = true;
+            return httpAgent;
+          }
+          return new fe.Agent({
+            keepAlive: true,
+            maxSockets: 50,
+            ...httpAgent,
+          });
         })(),
         httpsAgent: (() => {
-          if (httpsAgent instanceof de.Agent || typeof httpsAgent?.destroy === "function")
-            return ((this.externalAgent = !0), httpsAgent);
-          return new de.Agent({ keepAlive: !0, maxSockets: 50, ...httpsAgent });
+          if (httpsAgent instanceof de.Agent || typeof httpsAgent?.destroy === "function") {
+            this.externalAgent = true;
+            return httpsAgent;
+          }
+          return new de.Agent({
+            keepAlive: true,
+            maxSockets: 50,
+            ...httpsAgent,
+          });
         })(),
         logger: console,
       };
     }
     destroy() {
-      (this.config?.httpAgent?.destroy(), this.config?.httpsAgent?.destroy());
+      this.config?.httpAgent?.destroy();
+      this.config?.httpsAgent?.destroy();
     }
-    async handle(e, { abortSignal: r, requestTimeout: n } = {}) {
+    async handle(request, { abortSignal, requestTimeout } = {}) {
       if (!this.config) this.config = await this.configProvider;
-      return new Promise((o, s) => {
-        let config = this.config,
-          a = void 0,
-          u = [],
-          l = async (S) => {
-            (await a, u.forEach(N.clearTimeout), o(S));
-          },
-          b = async (S) => {
-            (await a, u.forEach(N.clearTimeout), s(S));
-          };
-        if (r?.aborted) {
+      return new Promise((resolve, reject) => {
+        let config = this.config;
+        let a = undefined;
+        let timeouts = [];
+        let l = async (S) => {
+          await a;
+          timeouts.forEach(timing.clearTimeout);
+          resolve(S);
+        };
+        let reject_2 = async (S) => {
+          await a;
+          timeouts.forEach(timing.clearTimeout);
+          reject(S);
+        };
+        if (abortSignal?.aborted) {
           let S = Error("Request aborted");
-          ((S.name = "AbortError"), b(S));
+          S.name = "AbortError";
+          reject_2(S);
           return;
         }
-        let E = e.protocol === "https:",
-          h = e.headers ?? {},
-          P = (h.Expect ?? h.expect) === "100-continue",
-          p = E ? config.httpsAgent : config.httpAgent;
-        if (P && !this.externalAgent) p = new (E ? de.Agent : fe.Agent)({ keepAlive: !1, maxSockets: 1 / 0 });
-        u.push(
-          N.setTimeout(
+        let isSSL = request.protocol === "https:";
+        let headers = request.headers ?? {};
+        let expectContinue = (headers.Expect ?? headers.expect) === "100-continue";
+        let agent = isSSL ? config.httpsAgent : config.httpAgent;
+        if (expectContinue && !this.externalAgent)
+          agent = new (isSSL ? de.Agent : fe.Agent)({
+            keepAlive: false,
+            maxSockets: 1 / 0,
+          });
+        timeouts.push(
+          timing.setTimeout(
             () => {
-              this.socketWarningTimestamp = pe.checkSocketUsage(
-                p,
+              this.socketWarningTimestamp = NodeHttpHandler.checkSocketUsage(
+                agent,
                 this.socketWarningTimestamp,
                 config.logger,
               );
@@ -263,67 +324,89 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
               (config.requestTimeout ?? 2000) + (config.connectionTimeout ?? 1000),
           ),
         );
-        let queryString = ut.buildQueryString(e.query || {}),
-          R = void 0;
-        if (e.username != null || e.password != null) {
-          let S = e.username ?? "",
-            _ = e.password ?? "";
-          R = `${S}:${_}`;
+        let queryString = querystringBuilder.buildQueryString(request.query || {});
+        let auth = undefined;
+        if (request.username != null || request.password != null) {
+          let username = request.username ?? "";
+          let password = request.password ?? "";
+          auth = `${username}:${password}`;
         }
-        let path = e.path;
+        let path = request.path;
         if (queryString) path += `?${queryString}`;
-        if (e.fragment) path += `#${e.fragment}`;
-        let O = e.hostname ?? "";
-        if (O[0] === "[" && O.endsWith("]")) O = e.hostname.slice(1, -1);
-        else O = e.hostname;
-        let y = {
-            headers: e.headers,
-            host: O,
-            method: e.method,
-            path: path,
-            port: e.port,
-            agent: p,
-            auth: R,
-          },
-          w = (E ? de.request : fe.request)(y, (S) => {
-            let _ = new at.HttpResponse({
-              statusCode: S.statusCode || -1,
-              reason: S.statusMessage,
-              headers: lt(S.headers),
-              body: S,
-            });
-            l({ response: _ });
+        if (request.fragment) path += `#${request.fragment}`;
+        let hostname = request.hostname ?? "";
+        if (hostname[0] === "[" && hostname.endsWith("]")) hostname = request.hostname.slice(1, -1);
+        else hostname = request.hostname;
+        let nodeHttpsOptions = {
+          headers: request.headers,
+          host: hostname,
+          method: request.method,
+          path,
+          port: request.port,
+          agent,
+          auth,
+        };
+        let req = (isSSL ? de.request : fe.request)(nodeHttpsOptions, (res) => {
+          let httpResponse = new at.HttpResponse({
+            statusCode: res.statusCode || -1,
+            reason: res.statusMessage,
+            headers: lt(res.headers),
+            body: res,
           });
-        if (
-          (w.on("error", (S) => {
-            if (tn.includes(S.code)) b(Object.assign(S, { name: "TimeoutError" }));
-            else b(S);
-          }),
-          r)
-        ) {
-          let S = () => {
-            w.destroy();
-            let _ = Error("Request aborted");
-            ((_.name = "AbortError"), b(_));
+          l({
+            response: httpResponse,
+          });
+        });
+        req.on("error", (err) => {
+          if (tn.includes(err.code))
+            reject_2(
+              Object.assign(err, {
+                name: "TimeoutError",
+              }),
+            );
+          else reject_2(err);
+        });
+        if (abortSignal) {
+          let onAbort = () => {
+            req.destroy();
+            let abortError = Error("Request aborted");
+            abortError.name = "AbortError";
+            reject_2(abortError);
           };
-          if (typeof r.addEventListener === "function") {
-            let _ = r;
-            (_.addEventListener("abort", S, { once: !0 }),
-              w.once("close", () => _.removeEventListener("abort", S)));
-          } else r.onabort = S;
+          if (typeof abortSignal.addEventListener === "function") {
+            let signal = abortSignal;
+            signal.addEventListener("abort", onAbort, {
+              once: true,
+            });
+            req.once("close", () => signal.removeEventListener("abort", onAbort));
+          } else abortSignal.onabort = onAbort;
         }
-        let k = n ?? config.requestTimeout;
-        (u.push(rn(w, b, config.connectionTimeout)),
-          u.push(nn(w, b, k, config.throwOnRequestTimeout, config.logger ?? console)),
-          u.push(cn(w, b, config.socketTimeout)));
-        let agent = y.agent;
-        if (typeof agent === "object" && "keepAlive" in agent)
-          u.push(sn(w, { keepAlive: agent.keepAlive, keepAliveMsecs: agent.keepAliveMsecs }));
-        a = dt(w, e, k, this.externalAgent).catch((S) => (u.forEach(N.clearTimeout), s(S)));
+        let effectiveRequestTimeout = requestTimeout ?? config.requestTimeout;
+        timeouts.push(setConnectionTimeout(req, reject_2, config.connectionTimeout));
+        timeouts.push(
+          nn(req, reject_2, effectiveRequestTimeout, config.throwOnRequestTimeout, config.logger ?? console),
+        );
+        timeouts.push(cn(req, reject_2, config.socketTimeout));
+        let httpAgent = nodeHttpsOptions.agent;
+        if (typeof httpAgent === "object" && "keepAlive" in httpAgent)
+          timeouts.push(
+            sn(req, {
+              keepAlive: httpAgent.keepAlive,
+              keepAliveMsecs: httpAgent.keepAliveMsecs,
+            }),
+          );
+        a = writeRequestBody(req, request, effectiveRequestTimeout, this.externalAgent).catch((e) => {
+          timeouts.forEach(timing.clearTimeout);
+          return reject(e);
+        });
       });
     }
-    updateHttpClientConfig(e, r) {
-      ((this.config = void 0), (this.configProvider = this.configProvider.then((n) => ({ ...n, [e]: r }))));
+    updateHttpClientConfig(key, value) {
+      this.config = undefined;
+      this.configProvider = this.configProvider.then((config) => ({
+        ...config,
+        [key]: value,
+      }));
     }
     httpHandlerConfigs() {
       return this.config ?? {};
@@ -331,14 +414,14 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
   }
   class pt {
     sessions = [];
-    constructor(e) {
-      this.sessions = e ?? [];
+    constructor(sessions) {
+      this.sessions = sessions ?? [];
     }
     poll() {
       if (this.sessions.length > 0) return this.sessions.shift();
     }
-    offerLast(e) {
-      this.sessions.push(e);
+    offerLast(ref) {
+      this.sessions.push(ref);
     }
     contains(e) {
       return this.sessions.includes(e);
@@ -357,197 +440,230 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
     }
   }
   class ht {
-    constructor(e) {
-      if (((this.config = e), this.config.maxConcurrency && this.config.maxConcurrency <= 0))
+    constructor(config) {
+      this.config = config;
+      if (this.config.maxConcurrency && this.config.maxConcurrency <= 0)
         throw RangeError("maxConcurrency must be greater than zero.");
     }
     config;
     sessionCache = new Map();
-    lease(e, r) {
-      let urlString = this.getUrlString(e),
-        o = this.sessionCache.get(urlString);
+    lease(requestContext, connectionConfiguration) {
+      let n = this.getUrlString(requestContext);
+      let o = this.sessionCache.get(n);
       if (o) {
-        let poll = o.poll();
-        if (poll && !this.config.disableConcurrency) return poll;
+        let u = o.poll();
+        if (u && !this.config.disableConcurrency) return u;
       }
-      let connect = ve.connect(urlString);
+      let s = http2.connect(n);
       if (this.config.maxConcurrency)
-        connect.settings({ maxConcurrentStreams: this.config.maxConcurrency }, (u) => {
-          if (u)
-            throw Error(
-              "Fail to set maxConcurrentStreams to " +
-                this.config.maxConcurrency +
-                "when creating new session for " +
-                e.destination.toString(),
-            );
-        });
-      connect.unref();
-      let c = () => {
-        (connect.destroy(), this.deleteSession(urlString, connect));
+        s.settings(
+          {
+            maxConcurrentStreams: this.config.maxConcurrency,
+          },
+          (u) => {
+            if (u)
+              throw Error(
+                "Fail to set maxConcurrentStreams to " +
+                  this.config.maxConcurrency +
+                  "when creating new session for " +
+                  requestContext.destination.toString(),
+              );
+          },
+        );
+      s.unref();
+      let destroySessionCb = () => {
+        s.destroy();
+        this.deleteSession(n, s);
       };
-      if (
-        (connect.on("goaway", c),
-        connect.on("error", c),
-        connect.on("frameError", c),
-        connect.on("close", () => this.deleteSession(urlString, connect)),
-        r.requestTimeout)
-      )
-        connect.setTimeout(r.requestTimeout, c);
-      let a = this.sessionCache.get(urlString) || new pt();
-      return (a.offerLast(connect), this.sessionCache.set(urlString, a), connect);
+      s.on("goaway", destroySessionCb);
+      s.on("error", destroySessionCb);
+      s.on("frameError", destroySessionCb);
+      s.on("close", () => this.deleteSession(n, s));
+      if (connectionConfiguration.requestTimeout)
+        s.setTimeout(connectionConfiguration.requestTimeout, destroySessionCb);
+      let a = this.sessionCache.get(n) || new pt();
+      a.offerLast(s);
+      this.sessionCache.set(n, a);
+      return s;
     }
     deleteSession(e, r) {
       let n = this.sessionCache.get(e);
       if (!n) return;
       if (!n.contains(r)) return;
-      (n.remove(r), this.sessionCache.set(e, n));
+      n.remove(r);
+      this.sessionCache.set(e, n);
     }
     release(e, r) {
-      let urlString = this.getUrlString(e);
-      this.sessionCache.get(urlString)?.offerLast(r);
+      let session = this.getUrlString(e);
+      this.sessionCache.get(session)?.offerLast(r);
     }
     destroy() {
-      for (let [e, r] of this.sessionCache) {
+      for (let [url, r] of this.sessionCache) {
         for (let n of r) {
           if (!n.destroyed) n.destroy();
           r.remove(n);
         }
-        this.sessionCache.delete(e);
+        this.sessionCache.delete(url);
       }
     }
-    setMaxConcurrentStreams(e) {
-      if (e && e <= 0) throw RangeError("maxConcurrentStreams must be greater than zero.");
-      this.config.maxConcurrency = e;
+    setMaxConcurrentStreams(maxConcurrentStreams) {
+      if (maxConcurrentStreams && maxConcurrentStreams <= 0)
+        throw RangeError("maxConcurrentStreams must be greater than zero.");
+      this.config.maxConcurrency = maxConcurrentStreams;
     }
-    setDisableConcurrentStreams(e) {
-      this.config.disableConcurrency = e;
+    setDisableConcurrentStreams(disableConcurrentStreams) {
+      this.config.disableConcurrency = disableConcurrentStreams;
     }
-    getUrlString(e) {
-      return e.destination.toString();
+    getUrlString(request) {
+      return request.destination.toString();
     }
   }
-  class Pe {
+  class NodeHttp2Handler {
     config;
     configProvider;
-    metadata = { handlerProtocol: "h2" };
+    metadata = {
+      handlerProtocol: "h2",
+    };
     connectionManager = new ht({});
-    static create(e) {
-      if (typeof e?.handle === "function") return e;
-      return new Pe(e);
+    static create(instanceOrOptions) {
+      if (typeof instanceOrOptions?.handle === "function") return instanceOrOptions;
+      return new NodeHttp2Handler(instanceOrOptions);
     }
-    constructor(e) {
-      this.configProvider = new Promise((r, n) => {
-        if (typeof e === "function")
-          e()
-            .then((o) => {
-              r(o || {});
+    constructor(options) {
+      this.configProvider = new Promise((resolve, reject) => {
+        if (typeof options === "function")
+          options()
+            .then((opts) => {
+              resolve(opts || {});
             })
-            .catch(n);
-        else r(e || {});
+            .catch(reject);
+        else resolve(options || {});
       });
     }
     destroy() {
       this.connectionManager.destroy();
     }
-    async handle(e, { abortSignal: r, requestTimeout: n } = {}) {
+    async handle(request, { abortSignal, requestTimeout } = {}) {
       if (!this.config) {
-        if (
-          ((this.config = await this.configProvider),
-          this.connectionManager.setDisableConcurrentStreams(this.config.disableConcurrentStreams || !1),
-          this.config.maxConcurrentStreams)
-        )
+        this.config = await this.configProvider;
+        this.connectionManager.setDisableConcurrentStreams(this.config.disableConcurrentStreams || false);
+        if (this.config.maxConcurrentStreams)
           this.connectionManager.setMaxConcurrentStreams(this.config.maxConcurrentStreams);
       }
-      let { requestTimeout: requestTimeout, disableConcurrentStreams: disableConcurrentStreams } =
-          this.config,
-        c = n ?? requestTimeout;
-      return new Promise((a, u) => {
-        let l = !1,
-          b = void 0,
-          E = async (v) => {
-            (await b, a(v));
-          },
-          h = async (v) => {
-            (await b, u(v));
-          };
-        if (r?.aborted) {
-          l = !0;
-          let v = Error("Request aborted");
-          ((v.name = "AbortError"), h(v));
+      let { requestTimeout: configRequestTimeout, disableConcurrentStreams } = this.config;
+      let effectiveRequestTimeout = requestTimeout ?? configRequestTimeout;
+      return new Promise((_resolve, _reject) => {
+        let fulfilled = false;
+        let writeRequestBodyPromise = undefined;
+        let E = async (arg) => {
+          await writeRequestBodyPromise;
+          _resolve(arg);
+        };
+        let reject = async (arg) => {
+          await writeRequestBodyPromise;
+          _reject(arg);
+        };
+        if (abortSignal?.aborted) {
+          fulfilled = true;
+          let abortError = Error("Request aborted");
+          abortError.name = "AbortError";
+          reject(abortError);
           return;
         }
-        let { hostname: hostname, method: method, port: port, protocol: protocol, query: query } = e,
-          O = "";
-        if (e.username != null || e.password != null) {
-          let v = e.username ?? "",
-            D = e.password ?? "";
-          O = `${v}:${D}@`;
+        let { hostname, method, port, protocol, query } = request;
+        let auth = "";
+        if (request.username != null || request.password != null) {
+          let username = request.username ?? "";
+          let password = request.password ?? "";
+          auth = `${username}:${password}@`;
         }
-        let y = `${protocol}//${O}${hostname}${port ? `:${port}` : ""}`,
-          T = { destination: new URL(y) },
-          lease = this.connectionManager.lease(T, {
-            requestTimeout: this.config?.sessionTimeout,
-            disableConcurrentStreams: disableConcurrentStreams || !1,
-          }),
-          k = (v) => {
-            if (disableConcurrentStreams) this.destroySession(lease);
-            ((l = !0), h(v));
-          },
-          queryString = ut.buildQueryString(query || {}),
-          path = e.path;
-        if (queryString) path += `?${queryString}`;
-        if (e.fragment) path += `#${e.fragment}`;
-        let request = lease.request({
-          ...e.headers,
-          [ve.constants.HTTP2_HEADER_PATH]: path,
-          [ve.constants.HTTP2_HEADER_METHOD]: method,
+        let authority = `${protocol}//${auth}${hostname}${port ? `:${port}` : ""}`;
+        let T = {
+          destination: new URL(authority),
+        };
+        let w = this.connectionManager.lease(T, {
+          requestTimeout: this.config?.sessionTimeout,
+          disableConcurrentStreams: disableConcurrentStreams || false,
         });
-        if (
-          (lease.ref(),
-          request.on("response", (v) => {
-            let D = new at.HttpResponse({ statusCode: v[":status"] || -1, headers: lt(v), body: request });
-            if (((l = !0), E({ response: D }), disableConcurrentStreams))
-              (lease.close(), this.connectionManager.deleteSession(y, lease));
-          }),
-          c)
-        )
-          request.setTimeout(c, () => {
-            request.close();
-            let v = Error(`Stream timed out because of no activity for ${c} ms`);
-            ((v.name = "TimeoutError"), k(v));
+        let rejectWithDestroy = (err) => {
+          if (disableConcurrentStreams) this.destroySession(w);
+          fulfilled = true;
+          reject(err);
+        };
+        let queryString = querystringBuilder.buildQueryString(query || {});
+        let path = request.path;
+        if (queryString) path += `?${queryString}`;
+        if (request.fragment) path += `#${request.fragment}`;
+        let clientHttp2Stream = w.request({
+          ...request.headers,
+          [http2.constants.HTTP2_HEADER_PATH]: path,
+          [http2.constants.HTTP2_HEADER_METHOD]: method,
+        });
+        w.ref();
+        clientHttp2Stream.on("response", (headers) => {
+          let response = new at.HttpResponse({
+            statusCode: headers[":status"] || -1,
+            headers: lt(headers),
+            body: clientHttp2Stream,
           });
-        if (r) {
-          let v = () => {
-            request.close();
-            let D = Error("Request aborted");
-            ((D.name = "AbortError"), k(D));
-          };
-          if (typeof r.addEventListener === "function") {
-            let D = r;
-            (D.addEventListener("abort", v, { once: !0 }),
-              request.once("close", () => D.removeEventListener("abort", v)));
-          } else r.onabort = v;
-        }
-        (request.on("frameError", (v, D, V) => {
-          k(Error(`Frame type id ${v} in stream id ${V} has failed with code ${D}.`));
-        }),
-          request.on("error", k),
-          request.on("aborted", () => {
-            k(
-              Error(
-                `HTTP/2 stream is abnormally aborted in mid-communication with result code ${request.rstCode}.`,
-              ),
+          fulfilled = true;
+          E({
+            response,
+          });
+          if (disableConcurrentStreams) {
+            w.close();
+            this.connectionManager.deleteSession(authority, w);
+          }
+        });
+        if (effectiveRequestTimeout)
+          clientHttp2Stream.setTimeout(effectiveRequestTimeout, () => {
+            clientHttp2Stream.close();
+            let timeoutError = Error(
+              `Stream timed out because of no activity for ${effectiveRequestTimeout} ms`,
             );
-          }),
-          request.on("close", () => {
-            if ((lease.unref(), disableConcurrentStreams)) lease.destroy();
-            if (!l) k(Error("Unexpected error: http2 request did not get a response"));
-          }),
-          (b = dt(request, e, c)));
+            timeoutError.name = "TimeoutError";
+            rejectWithDestroy(timeoutError);
+          });
+        if (abortSignal) {
+          let onAbort = () => {
+            clientHttp2Stream.close();
+            let abortError = Error("Request aborted");
+            abortError.name = "AbortError";
+            rejectWithDestroy(abortError);
+          };
+          if (typeof abortSignal.addEventListener === "function") {
+            let signal = abortSignal;
+            signal.addEventListener("abort", onAbort, {
+              once: true,
+            });
+            clientHttp2Stream.once("close", () => signal.removeEventListener("abort", onAbort));
+          } else abortSignal.onabort = onAbort;
+        }
+        clientHttp2Stream.on("frameError", (type, code, id) => {
+          rejectWithDestroy(Error(`Frame type id ${type} in stream id ${id} has failed with code ${code}.`));
+        });
+        clientHttp2Stream.on("error", rejectWithDestroy);
+        clientHttp2Stream.on("aborted", () => {
+          rejectWithDestroy(
+            Error(
+              `HTTP/2 stream is abnormally aborted in mid-communication with result code ${clientHttp2Stream.rstCode}.`,
+            ),
+          );
+        });
+        clientHttp2Stream.on("close", () => {
+          w.unref();
+          if (disableConcurrentStreams) w.destroy();
+          if (!fulfilled) rejectWithDestroy(Error("Unexpected error: http2 request did not get a response"));
+        });
+        writeRequestBodyPromise = writeRequestBody(clientHttp2Stream, request, effectiveRequestTimeout);
       });
     }
-    updateHttpClientConfig(e, r) {
-      ((this.config = void 0), (this.configProvider = this.configProvider.then((n) => ({ ...n, [e]: r }))));
+    updateHttpClientConfig(key, value) {
+      this.config = undefined;
+      this.configProvider = this.configProvider.then((config) => ({
+        ...config,
+        [key]: value,
+      }));
     }
     httpHandlerConfigs() {
       return this.config ?? {};
@@ -556,47 +672,54 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
       if (!e.destroyed) e.destroy();
     }
   }
-  class gt extends ft.Writable {
+  class Collector extends node_stream.Writable {
     bufferedBytes = [];
-    _write(e, r, n) {
-      (this.bufferedBytes.push(e), n());
+    _write(chunk, r, callback) {
+      this.bufferedBytes.push(chunk);
+      callback();
     }
   }
-  var fn = (e) => {
-      if (ln(e)) return dn(e);
-      return new Promise((r, n) => {
-        let o = new gt();
-        (e.pipe(o),
-          e.on("error", (s) => {
-            (o.end(), n(s));
-          }),
-          o.on("error", n),
-          o.on("finish", function () {
-            let uint8Array = new Uint8Array(Buffer.concat(this.bufferedBytes));
-            r(uint8Array);
-          }));
+  var streamCollector = (stream) => {
+    if (ln(stream)) return collectReadableStream(stream);
+    return new Promise((resolve, reject) => {
+      let collector = new Collector();
+      stream.pipe(collector);
+      stream.on("error", (err) => {
+        collector.end();
+        reject(err);
       });
-    },
-    ln = (e) => typeof ReadableStream === "function" && e instanceof ReadableStream;
-  async function dn(e) {
-    let r = [],
-      reader = e.getReader(),
-      o = !1,
-      s = 0;
-    while (!o) {
-      let { done: u, value: l } = await reader.read();
-      if (l) (r.push(l), (s += l.length));
-      o = u;
+      collector.on("error", reject);
+      collector.on("finish", function () {
+        let bytes = new Uint8Array(Buffer.concat(this.bufferedBytes));
+        resolve(bytes);
+      });
+    });
+  };
+  var ln = (stream) => typeof ReadableStream === "function" && stream instanceof ReadableStream;
+  async function collectReadableStream(stream) {
+    let chunks = [];
+    let reader = stream.getReader();
+    let isDone = false;
+    let length = 0;
+    while (!isDone) {
+      let { done, value } = await reader.read();
+      if (value) {
+        chunks.push(value);
+        length += value.length;
+      }
+      isDone = done;
     }
-    let uint8Array = new Uint8Array(s),
-      a = 0;
-    for (let u of r) (uint8Array.set(u, a), (a += u.length));
-    return uint8Array;
+    let collected = new Uint8Array(length);
+    let offset = 0;
+    for (let chunk of chunks) {
+      collected.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return collected;
   }
-  pn.DEFAULT_REQUEST_TIMEOUT = un;
-  pn.NodeHttp2Handler = Pe;
-  pn.NodeHttpHandler = pe;
-  pn.streamCollector = fn;
+  cjsExports.DEFAULT_REQUEST_TIMEOUT = DEFAULT_REQUEST_TIMEOUT;
+  cjsExports.NodeHttp2Handler = NodeHttp2Handler;
+  cjsExports.NodeHttpHandler = NodeHttpHandler;
+  cjsExports.streamCollector = streamCollector;
 });
-
-export { E$ };
+export { require_node_http_handler };

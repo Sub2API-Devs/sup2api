@@ -5,46 +5,65 @@
  * pieces: chunk-m4p5zn6n.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { D } from "./contents.js";
-import { ue, ce, Fe } from "./utils.js";
+import { getStreamContents } from "./contents.js";
+import { throwObjectStream, getLengthProp, Fe } from "./utils.js";
 
 //@ chunk-m4p5zn6n.js:22966-23006 esm-layout
-async function Ge(e, n) {
-  return D(e, fo, n);
+async function Ge(stream, options) {
+  return getStreamContents(stream, arrayBufferMethods, options);
 }
 //@ chunk-m4p5zn6n.js:23006-23880 esm-fingerprint
-var ro = () => ({ contents: new ArrayBuffer(0) }),
-  oo = (e) => textEncoder.encode(e),
-  textEncoder = new TextEncoder(),
-  dn = (e) => new Uint8Array(e),
-  ln = (e) => new Uint8Array(e.buffer, e.byteOffset, e.byteLength),
-  so = (e, n) => e.slice(0, n),
-  ao = (e, { contents: contents, length: r }, o) => {
-    let s = mn() ? co(contents, o) : uo(contents, o);
-    return (new Uint8Array(s).set(e, r), s);
+var initArrayBuffer = () => ({
+  contents: new ArrayBuffer(0),
+});
+var useTextEncoder = (chunk) => textEncoder.encode(chunk);
+var textEncoder = new TextEncoder();
+var useUint8Array = (chunk) => new Uint8Array(chunk);
+var useUint8ArrayWithOffset = (chunk) => new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+var truncateArrayBufferChunk = (convertedChunk, chunkSize) => convertedChunk.slice(0, chunkSize);
+var addArrayBufferChunk = (convertedChunk, { contents, length: previousLength }, length) => {
+  let newContents = hasArrayBufferResize()
+    ? resizeArrayBuffer(contents, length)
+    : resizeArrayBufferSlow(contents, length);
+  new Uint8Array(newContents).set(convertedChunk, previousLength);
+  return newContents;
+};
+var resizeArrayBufferSlow = (contents, length) => {
+  if (length <= contents.byteLength) return contents;
+  let arrayBuffer = new ArrayBuffer(getNewContentsLength(length));
+  new Uint8Array(arrayBuffer).set(new Uint8Array(contents), 0);
+  return arrayBuffer;
+};
+var resizeArrayBuffer = (contents, length) => {
+  if (length <= contents.maxByteLength) {
+    contents.resize(length);
+    return contents;
+  }
+  let arrayBuffer = new ArrayBuffer(length, {
+    maxByteLength: getNewContentsLength(length),
+  });
+  new Uint8Array(arrayBuffer).set(new Uint8Array(contents), 0);
+  return arrayBuffer;
+};
+var getNewContentsLength = (length) => SCALE_FACTOR ** Math.ceil(Math.log(length) / Math.log(SCALE_FACTOR));
+var SCALE_FACTOR = 2;
+var finalizeArrayBuffer = ({ contents, length }) =>
+  hasArrayBufferResize() ? contents : contents.slice(0, length);
+var hasArrayBufferResize = () => "resize" in ArrayBuffer.prototype;
+var arrayBufferMethods = {
+  init: initArrayBuffer,
+  convertChunk: {
+    string: useTextEncoder,
+    buffer: useUint8Array,
+    arrayBuffer: useUint8Array,
+    dataView: useUint8ArrayWithOffset,
+    typedArray: useUint8ArrayWithOffset,
+    others: throwObjectStream,
   },
-  uo = (e, n) => {
-    if (n <= e.byteLength) return e;
-    let arrayBuffer = new ArrayBuffer(pn(n));
-    return (new Uint8Array(arrayBuffer).set(new Uint8Array(e), 0), arrayBuffer);
-  },
-  co = (e, n) => {
-    if (n <= e.maxByteLength) return (e.resize(n), e);
-    let arrayBuffer = new ArrayBuffer(n, { maxByteLength: pn(n) });
-    return (new Uint8Array(arrayBuffer).set(new Uint8Array(e), 0), arrayBuffer);
-  },
-  pn = (e) => fn ** Math.ceil(Math.log(e) / Math.log(fn)),
-  fn = 2,
-  lo = ({ contents: contents, length: n }) => (mn() ? contents : contents.slice(0, n)),
-  mn = () => "resize" in ArrayBuffer.prototype,
-  fo = {
-    init: ro,
-    convertChunk: { string: oo, buffer: dn, arrayBuffer: dn, dataView: ln, typedArray: ln, others: ue },
-    getSize: ce,
-    truncateChunk: so,
-    addChunk: ao,
-    getFinalChunk: Fe,
-    finalize: lo,
-  };
-
+  getSize: getLengthProp,
+  truncateChunk: truncateArrayBufferChunk,
+  addChunk: addArrayBufferChunk,
+  getFinalChunk: Fe,
+  finalize: finalizeArrayBuffer,
+};
 export { Ge };

@@ -8,14 +8,23 @@
  * pieces: chunk-b85cz7hw.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-b85cz7hw.js:191-380 placement
-var SEARCHPLUGINS = "SearchPlugins",
-  SEARCHSKILLS = "SearchSkills",
-  SUGGESTPLUGININSTALL = "SuggestPluginInstall",
-  SUGGESTSKILLS = "SuggestSkills",
-  LISTPLUGINS = "ListPlugins",
-  LISTSKILLS = "ListSkills",
-  zrr = ["SearchPlugins", "SearchSkills", "ListPlugins", "ListSkills"];
-
-export { zrr, SUGGESTPLUGININSTALL, SUGGESTSKILLS, SEARCHPLUGINS, LISTPLUGINS, LISTSKILLS, SEARCHSKILLS };
+/**
+ * 插件发现里属于“搜索”类的工具名列表（SearchPlugins/SearchSkills/ListPlugins/ListSkills）。
+ */
+var SEARCHPLUGINS = "SearchPlugins";
+var SEARCHSKILLS = "SearchSkills";
+var SUGGESTPLUGININSTALL = "SuggestPluginInstall";
+var SUGGESTSKILLS = "SuggestSkills";
+var LISTPLUGINS = "ListPlugins";
+var LISTSKILLS = "ListSkills";
+var PLUGIN_DISCOVERY_SEARCH_TOOL_NAMES = ["SearchPlugins", "SearchSkills", "ListPlugins", "ListSkills"];
+export {
+  PLUGIN_DISCOVERY_SEARCH_TOOL_NAMES,
+  SUGGESTPLUGININSTALL,
+  SUGGESTSKILLS,
+  SEARCHPLUGINS,
+  LISTPLUGINS,
+  LISTSKILLS,
+  SEARCHSKILLS,
+};

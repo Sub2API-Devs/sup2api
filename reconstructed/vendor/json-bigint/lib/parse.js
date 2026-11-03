@@ -6,204 +6,287 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Ir } from "../../bignumber.js/bignumber.js";
+import { require_bignumber } from "../../bignumber.js/bignumber.js";
 
 //@ chunk-na3pph4p.js:39504-43194 cjs-fingerprint
-var an = x(function (Fd, on) {
-  var qt = null,
-    Gc =
-      /(?:_|\\u005[Ff])(?:_|\\u005[Ff])(?:p|\\u0070)(?:r|\\u0072)(?:o|\\u006[Ff])(?:t|\\u0074)(?:o|\\u006[Ff])(?:_|\\u005[Ff])(?:_|\\u005[Ff])/,
-    Bc =
-      /(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)/,
-    Hc = function (e) {
-      var t = {
-        strict: !1,
-        storeAsString: !1,
-        alwaysParseAsBig: !1,
-        useNativeBigInt: !1,
-        protoAction: "error",
-        constructorAction: "error",
-      };
-      if (e !== void 0 && e !== null) {
-        if (e.strict === !0) t.strict = !0;
-        if (e.storeAsString === !0) t.storeAsString = !0;
-        if (
-          ((t.alwaysParseAsBig = e.alwaysParseAsBig === !0 ? e.alwaysParseAsBig : !1),
-          (t.useNativeBigInt = e.useNativeBigInt === !0 ? e.useNativeBigInt : !1),
-          typeof e.constructorAction < "u")
-        )
-          if (
-            e.constructorAction === "error" ||
-            e.constructorAction === "ignore" ||
-            e.constructorAction === "preserve"
-          )
-            t.constructorAction = e.constructorAction;
-          else
-            throw Error(
-              `Incorrect value for constructorAction option, must be "error", "ignore" or undefined but passed ${e.constructorAction}`,
-            );
-        if (typeof e.protoAction < "u")
-          if (e.protoAction === "error" || e.protoAction === "ignore" || e.protoAction === "preserve")
-            t.protoAction = e.protoAction;
-          else
-            throw Error(
-              `Incorrect value for protoAction option, must be "error", "ignore" or undefined but passed ${e.protoAction}`,
-            );
-      }
-      var r,
-        s,
-        n = {
-          '"': '"',
-          "\\": "\\",
-          "/": "/",
-          b: "\b",
-          f: "\f",
-          n: `
-`,
-          r: "\r",
-          t: "\t",
-        },
-        a,
-        h = function (S) {
-          throw { name: "SyntaxError", message: S, at: r, text: a };
-        },
-        g = function (S) {
-          if (S && S !== s) h("Expected '" + S + "' instead of '" + s + "'");
-          return ((s = a.charAt(r)), (r += 1), s);
-        },
-        E = function () {
-          var S,
-            P = "";
-          if (s === "-") ((P = "-"), g("-"));
-          while (s >= "0" && s <= "9") ((P += s), g());
-          if (s === ".") {
-            P += ".";
-            while (g() && s >= "0" && s <= "9") P += s;
-          }
-          if (s === "e" || s === "E") {
-            if (((P += s), g(), s === "-" || s === "+")) ((P += s), g());
-            while (s >= "0" && s <= "9") ((P += s), g());
-          }
-          if (((S = +P), !isFinite(S))) h("Bad number");
-          else {
-            if (qt == null) qt = Ir();
-            if (P.length > 15) return t.storeAsString ? P : t.useNativeBigInt ? BigInt(P) : new qt(P);
-            else return !t.alwaysParseAsBig ? S : t.useNativeBigInt ? BigInt(S) : new qt(S);
-          }
-        },
-        k = function () {
-          var S,
-            P,
-            O = "",
-            G;
-          if (s === '"') {
-            var Z = r;
-            while (g()) {
-              if (s === '"') {
-                if (r - 1 > Z) O += a.substring(Z, r - 1);
-                return (g(), O);
-              }
-              if (s === "\\") {
-                if (r - 1 > Z) O += a.substring(Z, r - 1);
-                if ((g(), s === "u")) {
-                  G = 0;
-                  for (P = 0; P < 4; P += 1) {
-                    if (((S = parseInt(g(), 16)), !isFinite(S))) break;
-                    G = G * 16 + S;
-                  }
-                  O += String.fromCharCode(G);
-                } else if (typeof n[s] === "string") O += n[s];
-                else break;
-                Z = r;
-              }
-            }
-          }
-          h("Bad string");
-        },
-        T = function () {
-          while (s && s <= " ") g();
-        },
-        j = function () {
-          switch (s) {
-            case "t":
-              return (g("t"), g("r"), g("u"), g("e"), !0);
-            case "f":
-              return (g("f"), g("a"), g("l"), g("s"), g("e"), !1);
-            case "n":
-              return (g("n"), g("u"), g("l"), g("l"), null);
-          }
-          h("Unexpected '" + s + "'");
-        },
-        I,
-        Y = function () {
-          var S = [];
-          if (s === "[") {
-            if ((g("["), T(), s === "]")) return (g("]"), S);
-            while (s) {
-              if ((S.push(I()), T(), s === "]")) return (g("]"), S);
-              (g(","), T());
-            }
-          }
-          h("Bad array");
-        },
-        K = function () {
-          var S,
-            create = Object.create(null);
-          if (s === "{") {
-            if ((g("{"), T(), s === "}")) return (g("}"), create);
-            while (s) {
-              if (((S = k()), T(), g(":"), t.strict === !0 && Object.hasOwnProperty.call(create, S)))
-                h('Duplicate key "' + S + '"');
-              if (Gc.test(S) === !0)
-                if (t.protoAction === "error") h("Object contains forbidden prototype property");
-                else if (t.protoAction === "ignore") I();
-                else create[S] = I();
-              else if (Bc.test(S) === !0)
-                if (t.constructorAction === "error") h("Object contains forbidden constructor property");
-                else if (t.constructorAction === "ignore") I();
-                else create[S] = I();
-              else create[S] = I();
-              if ((T(), s === "}")) return (g("}"), create);
-              (g(","), T());
-            }
-          }
-          h("Bad object");
-        };
-      return (
-        (I = function () {
-          switch ((T(), s)) {
-            case "{":
-              return K();
-            case "[":
-              return Y();
-            case '"':
-              return k();
-            case "-":
-              return E();
-            default:
-              return s >= "0" && s <= "9" ? E() : j();
-          }
-        }),
-        function (S, P) {
-          var O;
-          if (((a = S + ""), (r = 0), (s = " "), (O = I()), T(), s)) h("Syntax error");
-          return typeof P === "function"
-            ? (function G(Z, ie) {
-                var D,
-                  U,
-                  L = Z[ie];
-                if (L && typeof L === "object")
-                  Object.keys(L).forEach(function (W) {
-                    if (((U = G(L, W)), U !== void 0)) L[W] = U;
-                    else delete L[W];
-                  });
-                return P.call(Z, ie, L);
-              })({ "": O }, "")
-            : O;
-        }
-      );
+var require_parse = x(function (cjsExports, cjsModule) {
+  var BigNumber = null;
+  var suspectProtoRx =
+    /(?:_|\\u005[Ff])(?:_|\\u005[Ff])(?:p|\\u0070)(?:r|\\u0072)(?:o|\\u006[Ff])(?:t|\\u0074)(?:o|\\u006[Ff])(?:_|\\u005[Ff])(?:_|\\u005[Ff])/;
+  var suspectConstructorRx =
+    /(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)/;
+  var json_parse = function (options) {
+    var _options = {
+      strict: false,
+      storeAsString: false,
+      alwaysParseAsBig: false,
+      useNativeBigInt: false,
+      protoAction: "error",
+      constructorAction: "error",
     };
-  on.exports = Hc;
+    if (options !== undefined && options !== null) {
+      if (options.strict === true) _options.strict = true;
+      if (options.storeAsString === true) _options.storeAsString = true;
+      _options.alwaysParseAsBig = options.alwaysParseAsBig === true ? options.alwaysParseAsBig : false;
+      _options.useNativeBigInt = options.useNativeBigInt === true ? options.useNativeBigInt : false;
+      if (typeof options.constructorAction !== "undefined")
+        if (
+          options.constructorAction === "error" ||
+          options.constructorAction === "ignore" ||
+          options.constructorAction === "preserve"
+        )
+          _options.constructorAction = options.constructorAction;
+        else
+          throw Error(
+            `Incorrect value for constructorAction option, must be "error", "ignore" or undefined but passed ${options.constructorAction}`,
+          );
+      if (typeof options.protoAction !== "undefined")
+        if (
+          options.protoAction === "error" ||
+          options.protoAction === "ignore" ||
+          options.protoAction === "preserve"
+        )
+          _options.protoAction = options.protoAction;
+        else
+          throw Error(
+            `Incorrect value for protoAction option, must be "error", "ignore" or undefined but passed ${options.protoAction}`,
+          );
+    }
+    var at;
+    var ch;
+    var escapee = {
+      '"': '"',
+      "\\": "\\",
+      "/": "/",
+      b: "\b",
+      f: "\f",
+      n: `
+`,
+      r: "\r",
+      t: "\t",
+    };
+    var text;
+    var error = function (m) {
+      throw {
+        name: "SyntaxError",
+        message: m,
+        at,
+        text,
+      };
+    };
+    var next = function (c) {
+      if (c && c !== ch) error("Expected '" + c + "' instead of '" + ch + "'");
+      ch = text.charAt(at);
+      at += 1;
+      return ch;
+    };
+    var number = function () {
+      var number;
+      var string = "";
+      if (ch === "-") {
+        string = "-";
+        next("-");
+      }
+      while (ch >= "0" && ch <= "9") {
+        string += ch;
+        next();
+      }
+      if (ch === ".") {
+        string += ".";
+        while (next() && ch >= "0" && ch <= "9") string += ch;
+      }
+      if (ch === "e" || ch === "E") {
+        string += ch;
+        next();
+        if (ch === "-" || ch === "+") {
+          string += ch;
+          next();
+        }
+        while (ch >= "0" && ch <= "9") {
+          string += ch;
+          next();
+        }
+      }
+      number = +string;
+      if (!isFinite(number)) error("Bad number");
+      else {
+        if (BigNumber == null) BigNumber = require_bignumber();
+        if (string.length > 15)
+          return _options.storeAsString
+            ? string
+            : _options.useNativeBigInt
+              ? BigInt(string)
+              : new BigNumber(string);
+        else
+          return !_options.alwaysParseAsBig
+            ? number
+            : _options.useNativeBigInt
+              ? BigInt(number)
+              : new BigNumber(number);
+      }
+    };
+    var string = function () {
+      var hex;
+      var i;
+      var string = "";
+      var uffff;
+      if (ch === '"') {
+        var startAt = at;
+        while (next()) {
+          if (ch === '"') {
+            if (at - 1 > startAt) string += text.substring(startAt, at - 1);
+            next();
+            return string;
+          }
+          if (ch === "\\") {
+            if (at - 1 > startAt) string += text.substring(startAt, at - 1);
+            next();
+            if (ch === "u") {
+              uffff = 0;
+              for (i = 0; i < 4; i += 1) {
+                hex = parseInt(next(), 16);
+                if (!isFinite(hex)) break;
+                uffff = uffff * 16 + hex;
+              }
+              string += String.fromCharCode(uffff);
+            } else if (typeof escapee[ch] === "string") string += escapee[ch];
+            else break;
+            startAt = at;
+          }
+        }
+      }
+      error("Bad string");
+    };
+    var white = function () {
+      while (ch && ch <= " ") next();
+    };
+    var word = function () {
+      switch (ch) {
+        case "t":
+          next("t");
+          next("r");
+          next("u");
+          next("e");
+          return true;
+        case "f":
+          next("f");
+          next("a");
+          next("l");
+          next("s");
+          next("e");
+          return false;
+        case "n":
+          next("n");
+          next("u");
+          next("l");
+          next("l");
+          return null;
+      }
+      error("Unexpected '" + ch + "'");
+    };
+    var value;
+    var array = function () {
+      var array = [];
+      if (ch === "[") {
+        next("[");
+        white();
+        if (ch === "]") {
+          next("]");
+          return array;
+        }
+        while (ch) {
+          array.push(value());
+          white();
+          if (ch === "]") {
+            next("]");
+            return array;
+          }
+          next(",");
+          white();
+        }
+      }
+      error("Bad array");
+    };
+    var object = function () {
+      var key;
+      var object = Object.create(null);
+      if (ch === "{") {
+        next("{");
+        white();
+        if (ch === "}") {
+          next("}");
+          return object;
+        }
+        while (ch) {
+          key = string();
+          white();
+          next(":");
+          if (_options.strict === true && Object.hasOwnProperty.call(object, key))
+            error('Duplicate key "' + key + '"');
+          if (suspectProtoRx.test(key) === true) {
+            if (_options.protoAction === "error") error("Object contains forbidden prototype property");
+            else if (_options.protoAction === "ignore") value();
+            else object[key] = value();
+          } else if (suspectConstructorRx.test(key) === true) {
+            if (_options.constructorAction === "error")
+              error("Object contains forbidden constructor property");
+            else if (_options.constructorAction === "ignore") value();
+            else object[key] = value();
+          } else object[key] = value();
+          white();
+          if (ch === "}") {
+            next("}");
+            return object;
+          }
+          next(",");
+          white();
+        }
+      }
+      error("Bad object");
+    };
+    value = function () {
+      switch ((white(), ch)) {
+        case "{":
+          return object();
+        case "[":
+          return array();
+        case '"':
+          return string();
+        case "-":
+          return number();
+        default:
+          return ch >= "0" && ch <= "9" ? number() : word();
+      }
+    };
+    return function (source, reviver) {
+      var result;
+      text = source + "";
+      at = 0;
+      ch = " ";
+      result = value();
+      white();
+      if (ch) error("Syntax error");
+      return typeof reviver === "function"
+        ? (function walk(holder, key) {
+            var k;
+            var v;
+            var value = holder[key];
+            if (value && typeof value === "object")
+              Object.keys(value).forEach(function (k) {
+                v = walk(value, k);
+                if (v !== undefined) value[k] = v;
+                else delete value[k];
+              });
+            return reviver.call(holder, key, value);
+          })(
+            {
+              "": result,
+            },
+            "",
+          )
+        : result;
+    };
+  };
+  cjsModule.exports = json_parse;
 });
-
-export { an };
+export { require_parse };

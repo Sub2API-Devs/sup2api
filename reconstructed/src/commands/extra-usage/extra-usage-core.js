@@ -18,36 +18,37 @@ import { fetchUtilization } from "../../services/api/usage.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getAdminRequestEligibility, listMyAdminRequests } from "../../services/api/adminRequests.js";
 import { HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE, USAGE_SETTINGS_URL } from "../../services/claudeAiLimits.js";
-import { fi } from "../../utils/browser.js";
+import { openValidatedUrlSucceeded } from "../../utils/browser.js";
 
+//@ chunk-vbks4x4e.js:4758-4901 placement = hasRequiredSubscription (0.53)
 /**
  * （误归 computerUse/gates）是否可购买额外用量：GrowthBook tengu_ember_latch 或已有覆盖，并且允许额外用量且是 pro/max 订阅。
  */
-//@ chunk-vbks4x4e.js:4758-4901 placement = hasRequiredSubscription (0.53)
 function canPurchaseExtraUsage() {
-  if (isBgSession()) return !1;
-  let tier = getSubscriptionType(),
-    hasOverride = getLspManager() !== null,
-    n = getFeatureValue_CACHED_MAY_BE_STALE("tengu_ember_latch", !1) || hasOverride,
-    o =
-      isExtraUsageAllowed() &&
-      (hasOverride || ((tier === "pro" || tier === "max") && !isEssentialTrafficOnly()));
+  if (isBgSession()) return false;
+  let tier = getSubscriptionType();
+  let hasOverride = getLspManager() !== null;
+  let n = getFeatureValue_CACHED_MAY_BE_STALE("tengu_ember_latch", false) || hasOverride;
+  let o =
+    isExtraUsageAllowed() &&
+    (hasOverride || ((tier === "pro" || tier === "max") && !isEssentialTrafficOnly()));
   return n && o;
 }
 //@ chunk-vbks4x4e.js:4901-6713 fingerprint = runExtraUsage (0.345)
-async function runExtraUsage(r, i) {
-  let subscriptionType = getSubscriptionType(),
-    isTeamOrEnterprise = subscriptionType === "team" || subscriptionType === "enterprise";
+async function runExtraUsage(r, credentials) {
+  let subscriptionType = getSubscriptionType();
+  let isTeamOrEnterprise = subscriptionType === "team" || subscriptionType === "enterprise";
   if (!isConsumerPlan() && isTeamOrEnterprise) {
-    let extraUsage,
-      p = !0;
+    let extraUsage;
+    let p = true;
     try {
-      ((extraUsage = (await fetchUtilization(i))?.extra_usage), (p &&= extraUsage !== void 0));
+      extraUsage = (await fetchUtilization(credentials))?.extra_usage;
+      p &&= extraUsage !== undefined;
     } catch (error) {
-      ((p = !1),
-        logForDebugging(`extra-usage: fetchUtilization failed, falling through to ask user: ${error}`, {
-          level: "error",
-        }));
+      p = false;
+      logForDebugging(`extra-usage: fetchUtilization failed, falling through to ask user: ${error}`, {
+        level: "error",
+      });
     }
     switch (extraUsage?.disabled_reason) {
       case "out_of_credits":
@@ -60,7 +61,7 @@ async function runExtraUsage(r, i) {
       case "org_spend_cap_reached":
         if (
           extraUsage.disabled_reason === "org_level_disabled_until" &&
-          extraUsage.spend_limit_reached === !1
+          extraUsage.spend_limit_reached === false
         )
           break;
         return {
@@ -78,42 +79,63 @@ async function runExtraUsage(r, i) {
         reason: "unlimited",
       };
     try {
-      let pendingOrDismissedRequests = await getAdminRequestEligibility("limit_increase", i);
-      if (pendingOrDismissedRequests?.is_allowed === !1)
+      let eligibility = await getAdminRequestEligibility("limit_increase", credentials);
+      if (eligibility?.is_allowed === false)
         return {
           type: "message",
           value: "Usage credit requests are turned off for your organization.",
           reason: "requests_off",
         };
-      p &&= pendingOrDismissedRequests?.is_allowed === !0;
+      p &&= eligibility?.is_allowed === true;
     } catch (error) {
-      ((p = !1), logForDebugging(`Extra usage eligibility check failed: ${error}`, { level: "error" }));
+      p = false;
+      logForDebugging(`Extra usage eligibility check failed: ${error}`, {
+        level: "error",
+      });
     }
     try {
-      let m = await listMyAdminRequests("limit_increase", ["pending"], i);
-      if (m && m.length > 0)
+      let pendingOrDismissedRequests = await listMyAdminRequests("limit_increase", ["pending"], credentials);
+      if (pendingOrDismissedRequests && pendingOrDismissedRequests.length > 0)
         return {
           type: "message",
           value: "You've already sent a usage credit request to your admin.",
           reason: "pending",
         };
-      p &&= m !== null;
+      p &&= pendingOrDismissedRequests !== null;
     } catch (error) {
-      ((p = !1), logForDebugging(`Failed to fetch pending admin requests: ${error}`, { level: "error" }));
+      p = false;
+      logForDebugging(`Failed to fetch pending admin requests: ${error}`, {
+        level: "error",
+      });
     }
-    return { type: "confirm-admin-request", extraUsage: extraUsage, checked: p };
+    return {
+      type: "confirm-admin-request",
+      extraUsage,
+      checked: p,
+    };
   }
   let url = isTeamOrEnterprise ? HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE : USAGE_SETTINGS_URL;
-  if (!r.openInBrowser || isBgSession()) return { type: "browser-opened", url: url, opened: !1 };
+  if (!r.openInBrowser || isBgSession())
+    return {
+      type: "browser-opened",
+      url,
+      opened: false,
+    };
   try {
-    let opened = await fi(url);
-    return { type: "browser-opened", url: url, opened: opened };
+    let opened = await openValidatedUrlSucceeded(url);
+    return {
+      type: "browser-opened",
+      url,
+      opened,
+    };
   } catch (error) {
-    return (
-      logForDebugging(`Failed to open browser for ${url}: ${error}`, { level: "error" }),
-      { type: "message", value: `Couldn't open your browser. Visit ${url} to manage usage credits.` }
-    );
+    logForDebugging(`Failed to open browser for ${url}: ${error}`, {
+      level: "error",
+    });
+    return {
+      type: "message",
+      value: `Couldn't open your browser. Visit ${url} to manage usage credits.`,
+    };
   }
 }
-
 export { runExtraUsage, canPurchaseExtraUsage };

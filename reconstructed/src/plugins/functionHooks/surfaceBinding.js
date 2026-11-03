@@ -8,41 +8,63 @@
  * pieces: chunk-e6aww6q8.js (8)
  * attribution: placement 8
  */
-import { ge } from "../../utils/identity.js";
+import { identity as identity_2 } from "../../utils/identity.js";
 import { createBindingSlot } from "./promptComposition.js";
-import { vk, g2 } from "./panes.js";
-import { $_t } from "../../utils/messageOrigin.js";
+import { clientRegistry, paneHostSlot } from "./panes.js";
+import { MAX_ORIGIN_TEXT_CHARS } from "../../utils/messageOrigin.js";
 
 //@ chunk-e6aww6q8.js:46982-47019 placement
-var NC = ge(createBindingSlot(), (e) => e.bind(void 0));
+/**
+ * 界面绑定槽
+ */
+var surfaceBindingSlot = identity_2(createBindingSlot(), (e) => e.bind(undefined));
 //@ chunk-e6aww6q8.js:47019-47035 placement
-var K$o = NC.bind;
+/**
+ * 绑定界面
+ */
+var bindSurface = surfaceBindingSlot.bind;
 //@ chunk-e6aww6q8.js:47035-47069 placement
-var G3 = () => NC.current()?.composer;
+/**
+ * 界面 composer
+ */
+var surfaceComposer = () => surfaceBindingSlot.current()?.composer;
 //@ chunk-e6aww6q8.js:47069-47087 placement
-var lp = NC.current;
+/**
+ * 当前界面绑定
+ */
+var currentSurfaceBinding = surfaceBindingSlot.current;
 //@ chunk-e6aww6q8.js:47087-47106 placement
-var release = NC.release;
+var release = surfaceBindingSlot.release;
 //@ chunk-e6aww6q8.js:47106-47127 placement
-var whenBound = NC.whenBound;
+var whenBound = surfaceBindingSlot.whenBound;
+//@ chunk-e6aww6q8.js:47127-47247 placement
 /**
  * 当前附着的绘制界面列表（本进程是终端时排在第一）。
  */
-//@ chunk-e6aww6q8.js:47127-47247 placement
 function attachedSurfaces() {
-  let e = lp()?.surface === "terminal",
-    filtered = vk.surfaces().filter((r) => r !== "terminal");
+  let e = currentSurfaceBinding()?.surface === "terminal";
+  let filtered = clientRegistry.surfaces().filter((r) => r !== "terminal");
   return e ? ["terminal", ...filtered] : filtered;
 }
+//@ chunk-e6aww6q8.js:84862-84992 placement
 /**
  * 构造视口信息：是否全屏与列数（优先绑定的视口，其次 stdout 列数）。
  */
-//@ chunk-e6aww6q8.js:84862-84992 placement
-function viewportInfo(e) {
-  let n = g2.get()?.columns,
-    columns = process.stdout.columns,
-    s = columns > 0;
-  return { isFullscreen: e === "fullscreen", columns: n ?? (s ? columns : $_t) };
+function viewportInfo(presentation) {
+  let columns = paneHostSlot.get()?.columns;
+  let columns_2 = process.stdout.columns;
+  let s = columns_2 > 0;
+  return {
+    isFullscreen: presentation === "fullscreen",
+    columns: columns ?? (s ? columns_2 : MAX_ORIGIN_TEXT_CHARS),
+  };
 }
-
-export { lp, K$o, release, viewportInfo, attachedSurfaces, whenBound, G3 };
+export {
+  currentSurfaceBinding,
+  bindSurface,
+  release,
+  viewportInfo,
+  attachedSurfaces,
+  whenBound,
+  surfaceComposer,
+};

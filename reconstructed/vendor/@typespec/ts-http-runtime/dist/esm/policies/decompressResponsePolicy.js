@@ -7,14 +7,13 @@
  */
 
 //@ chunk-mrx6y2r5.js:42950-43109 esm-fingerprint
-function Ys() {
+function decompressResponsePolicy() {
   return {
     name: "decompressResponsePolicy",
-    async sendRequest(e, t) {
-      if (e.method !== "HEAD") e.headers.set("Accept-Encoding", "gzip,deflate");
-      return t(e);
+    async sendRequest(request, next) {
+      if (request.method !== "HEAD") request.headers.set("Accept-Encoding", "gzip,deflate");
+      return next(request);
     },
   };
 }
-
-export { Ys };
+export { decompressResponsePolicy };

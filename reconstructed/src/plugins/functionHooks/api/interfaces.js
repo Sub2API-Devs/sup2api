@@ -8,85 +8,87 @@
  * pieces: chunk-4121qate.js (17)
  * attribution: placement 17
  */
-import { probeHookCallback, gos, KUi, CORE_ORIGIN } from "../eventPatterns.js";
+import { probeHookCallback, removedByPluginText, topWithholder, CORE_ORIGIN } from "../eventPatterns.js";
 import { HooksError } from "../hooksErrors.js";
-import { freezeApiObject, CAn, freezeHookCall } from "../dispatch/chain.js";
-import { pd } from "../../../utils/hooks/functionHookMatchers.js";
+import { freezeApiObject, callNextWith, freezeHookCall } from "../dispatch/chain.js";
+import { matcherLog } from "../../../utils/hooks/functionHookMatchers.js";
 import { errorMessage } from "../../../utils/errors.js";
 
 //@ chunk-4121qate.js:270537-270801 placement
 function createInterfaceState({
-  engine: engine,
-  core: core,
-  pluginName: pluginName,
-  callInterface: callInterface,
-  invoke: invoke,
-  wrapMethod: wrapMethod,
-  blamedWalk: blamedWalk = probeHookCallback,
+  engine,
+  core,
+  pluginName,
+  callInterface,
+  invoke,
+  wrapMethod,
+  blamedWalk = probeHookCallback,
 }) {
   let f = engine;
   return {
-    engine: engine,
+    engine,
     slots: f,
     identity: new Set(Object.keys(f)),
     local: core,
     own: new Map(),
-    isFinalized: !1,
-    pluginName: pluginName,
-    callInterface: callInterface,
-    invoke: invoke,
-    wrapMethod: wrapMethod,
-    blamedWalk: blamedWalk,
+    isFinalized: false,
+    pluginName,
+    callInterface,
+    invoke,
+    wrapMethod,
+    blamedWalk,
   };
 }
+//@ chunk-4121qate.js:270801-271133 placement
 /**
  * 列出插件接口对象中的方法；值不是方法对象时抛 HooksError。
  */
-//@ chunk-4121qate.js:270801-271133 placement
-function listInterfaceMethods(e, o, r) {
+function listInterfaceMethods(pluginName, o, r) {
   if (typeof r !== "object" || !r)
-    throw new HooksError(`${e}: $.${o} must be an object of methods, not ${typeof r}`);
+    throw new HooksError(`${pluginName}: $.${o} must be an object of methods, not ${typeof r}`);
   let n = [];
-  for (let [s, i] of Object.entries(r)) {
-    if (typeof i !== "function")
+  for (let [key, value] of Object.entries(r)) {
+    if (typeof value !== "function")
       throw new HooksError(
-        `${e}: $.${o}.${s} is not a function; an interface is an object of methods (a value another plugin can call)`,
+        `${pluginName}: $.${o}.${key} is not a function; an interface is an object of methods (a value another plugin can call)`,
       );
-    n.push(s);
+    n.push(key);
   }
   return n;
 }
+//@ chunk-4121qate.js:271133-271763 placement
 /**
  * 校验 engine.create 返回的 $ 是否保留了上游的名词
  */
-//@ chunk-4121qate.js:271133-271763 placement
-function checkEngineCreateResult(e, o, r) {
+function checkEngineCreateResult(e, o, weakMap) {
   if (typeof o !== "object" || !o)
     throw new HooksError(
       `${e.pluginName}: engine.create must return $ ({ ...await next(e), <noun>: { <event>() {} } }), not ${typeof o}`,
     );
-  let create = Object.create(null);
-  return (
-    e.blamedWalk((s, i, p) => {
-      for (let [f, a] of Object.entries(o)) {
-        if (e.identity.has(f)) {
-          if (a === e.slots[f]) continue;
-          throw new HooksError(
-            `${e.pluginName}: engine.create returned $.${f} changed; it is this plugin's identity, not a noun`,
-          );
-        }
-        let c = typeof a === "object" && a !== null ? r.get(a) : void 0;
-        if (c && c.name === f) {
-          (s(c.descriptor), (create[f] = c.descriptor));
-          continue;
-        }
-        ((create[f] = p(() => ({ owner: e.pluginName, methods: listInterfaceMethods(e.pluginName, f, a) }))),
-          e.own.set(f, a));
+  let n = Object.create(null);
+  e.blamedWalk((s, i, p) => {
+    for (let [key, value] of Object.entries(o)) {
+      if (e.identity.has(key)) {
+        if (value === e.slots[key]) continue;
+        throw new HooksError(
+          `${e.pluginName}: engine.create returned $.${key} changed; it is this plugin's identity, not a noun`,
+        );
       }
-      p(() => create);
-    }),
-    create
-  );
+      let c = typeof value === "object" && value !== null ? weakMap.get(value) : undefined;
+      if (c && c.name === key) {
+        s(c.descriptor);
+        n[key] = c.descriptor;
+        continue;
+      }
+      n[key] = p(() => ({
+        owner: e.pluginName,
+        methods: listInterfaceMethods(e.pluginName, key, value),
+      }));
+      e.own.set(key, value);
+    }
+    p(() => n);
+  });
+  return n;
 }
 //@ chunk-4121qate.js:271763-272012 placement
 function createObservingInterfaceStub(e, o, r) {
@@ -112,145 +114,183 @@ var NON_METHOD_PROPERTY_NAMES = new Set([
   "asymmetricMatch",
 ]);
 //@ chunk-4121qate.js:272131-272175 placement
-var vn = (e) => typeof e === "string" && !NON_METHOD_PROPERTY_NAMES.has(e);
+/**
+ * 合法方法名
+ */
+var isMethodName = (e) => typeof e === "string" && !NON_METHOD_PROPERTY_NAMES.has(e);
 //@ chunk-4121qate.js:272175-272322 placement
-function createRemoteInterface(e, o, r) {
+function createRemoteInterface(e, name, r) {
   let n = {};
   for (let method of r.methods)
-    n[method] = e.wrapMethod((...i) => e.callInterface({ owner: r.owner, name: o, method: method, args: i }));
+    n[method] = e.wrapMethod((...i) =>
+      e.callInterface({
+        owner: r.owner,
+        name,
+        method,
+        args: i,
+      }),
+    );
   return freezeApiObject(n);
 }
 //@ chunk-4121qate.js:272322-272364 placement
-var freeze_9 = Object.freeze(Object.create(null));
+var co = Object.freeze(Object.create(null));
 //@ chunk-4121qate.js:272364-272496 placement
-function createMissingInterfaceProxy(e, o, r) {
-  let n = (s) => r(() => Promise.reject(new HooksError(gos(`${e}.${s}`, o))));
-  return new Proxy(freeze_9, { get: (s, i) => (vn(i) ? n(i) : void 0) });
+function createMissingInterfaceProxy(e, o, wrapMethod) {
+  let n = (s) => wrapMethod(() => Promise.reject(new HooksError(removedByPluginText(`${e}.${s}`, o))));
+  return new Proxy(co, {
+    get: (s, i) => (isMethodName(i) ? n(i) : undefined),
+  });
 }
 //@ chunk-4121qate.js:272496-272753 placement
-function resolveInterface(e, o, r) {
-  let n = KUi(r);
-  if (n !== void 0) return createMissingInterfaceProxy(o, n, e.wrapMethod);
+function resolveInterface(e, name, r) {
+  let n = topWithholder(r);
+  if (n !== undefined) return createMissingInterfaceProxy(name, n, e.wrapMethod);
   if (r.owner === CORE_ORIGIN) {
-    let s = e.local[o];
+    let s = e.local[name];
     if (!s)
       throw new HooksError(
-        `${e.pluginName}: the interface table names core as the owner of $.${o}, which core does not provide`,
+        `${e.pluginName}: the interface table names core as the owner of $.${name}, which core does not provide`,
       );
     return s;
   }
-  return createRemoteInterface(e, o, r);
+  return createRemoteInterface(e, name, r);
 }
 //@ chunk-4121qate.js:272753-273010 placement
-function buildEngineSlots(e, { table: table, beneath: beneath, isObserving: isObserving }) {
+function buildEngineSlots(e, { table, beneath, isObserving }) {
   let merged = Object.assign(Object.create(null), e.slots);
-  return (
-    e.blamedWalk((i) => {
-      for (let [p, f] of Object.entries(table)) {
-        i(f);
-        let m =
-          isObserving && f.withheldBy === void 0
-            ? createObservingInterfaceStub(e, p, f)
-            : resolveInterface(e, p, f);
-        ((merged[p] = m), beneath.set(m, { name: p, descriptor: f }));
-      }
-    }),
-    merged
-  );
+  e.blamedWalk((i) => {
+    for (let [key, value] of Object.entries(table)) {
+      i(value);
+      let m =
+        isObserving && value.withheldBy === undefined
+          ? createObservingInterfaceStub(e, key, value)
+          : resolveInterface(e, key, value);
+      merged[key] = m;
+      beneath.set(m, {
+        name: key,
+        descriptor: value,
+      });
+    }
+  });
+  return merged;
 }
 //@ chunk-4121qate.js:273010-273074 placement
-var aC = (e, o) =>
-  new Proxy(freeze_9, { get: (r, n) => (vn(n) ? createMissingInterfaceProxy(n, e, o) : void 0) });
+/**
+ * 缺失接口的代理
+ */
+var missingInterfaceProxy = (e, wrapMethod) =>
+  new Proxy(co, {
+    get: (r, n) => (isMethodName(n) ? createMissingInterfaceProxy(n, e, wrapMethod) : undefined),
+  });
+//@ chunk-4121qate.js:273074-273500 placement
 /**
  * 生成 finalize(table, declared)：按接口表填好各名词槽位，为声明但未提供的名词建缺失代理，"*" 设为原型兜底，然后冻结 $。
  */
-//@ chunk-4121qate.js:273074-273500 placement
-var createInterfaceFinalizer = (e) => (o, r) => {
-  if (e.isFinalized) throw new HooksError(`${e.pluginName}: $ is already built`);
-  e.blamedWalk((s, i) => {
-    for (let [p, f] of Object.entries(o))
-      i(f.owner, () => {
-        e.slots[p] = resolveInterface(e, p, f);
+var createInterfaceFinalizer = (interfaceState) => (o, r) => {
+  if (interfaceState.isFinalized) throw new HooksError(`${interfaceState.pluginName}: $ is already built`);
+  interfaceState.blamedWalk((s, i) => {
+    for (let [key, value] of Object.entries(o))
+      i(value.owner, () => {
+        interfaceState.slots[key] = resolveInterface(interfaceState, key, value);
       });
   });
-  for (let [s, i] of Object.entries(r ?? {}))
-    if (s !== "*" && !Object.hasOwn(o, s) && !e.identity.has(s))
-      e.slots[s] = createMissingInterfaceProxy(s, i, e.wrapMethod);
+  for (let [key, value] of Object.entries(r ?? {}))
+    if (key !== "*" && !Object.hasOwn(o, key) && !interfaceState.identity.has(key))
+      interfaceState.slots[key] = createMissingInterfaceProxy(key, value, interfaceState.wrapMethod);
   let n = r?.["*"];
-  if (n !== void 0) Object.setPrototypeOf(e.engine, aC(n, e.wrapMethod));
-  (Object.freeze(e.engine), (e.isFinalized = !0));
+  if (n !== undefined)
+    Object.setPrototypeOf(interfaceState.engine, missingInterfaceProxy(n, interfaceState.wrapMethod));
+  Object.freeze(interfaceState.engine);
+  interfaceState.isFinalized = true;
 };
+//@ chunk-4121qate.js:273500-274124 placement
 /**
  * 生成 engine.create 钩子包装：调用插件步骤时传入可继续的 call/to，结果按接口表构建 $；on("*") 观察者失败时回退到下游结果。
  */
-//@ chunk-4121qate.js:273500-274124 placement
-var createEngineCreateWrapper = (e) => (o, r) => async (n, s) => {
-  let i = r !== void 0,
-    weakMap = new WeakMap(),
-    f;
+var createEngineCreateWrapper = (interfaceState) => (o, r) => async (n, s) => {
+  let i = r !== undefined;
+  let weakMap = new WeakMap();
+  let f;
   function a(g) {
-    return ((f = g), buildEngineSlots(e, { table: f, beneath: weakMap, isObserving: i }));
+    f = g;
+    return buildEngineSlots(interfaceState, {
+      table: f,
+      beneath: weakMap,
+      isObserving: i,
+    });
   }
-  let m = async (g) => a(await s(g)),
-    c = async (g, ...x) => a(await CAn(g, s, x));
-  async function u(g) {
-    if (
-      (pd().log(
-        `hooks module ${e.pluginName}: the on("${r}") hook failed at engine.create (${errorMessage(g)}); passed on`,
-        "warn",
-      ),
-      f)
-    )
-      return f;
-    if (s.signal.aborted) throw g;
+  let m = async (g) => a(await s(g));
+  let c = async (g, ...x) => a(await callNextWith(g, s, x));
+  async function u(error) {
+    matcherLog().log(
+      `hooks module ${interfaceState.pluginName}: the on("${r}") hook failed at engine.create (${errorMessage(error)}); passed on`,
+      "warn",
+    );
+    if (f) return f;
+    if (s.signal.aborted) throw error;
     return await s(n);
   }
   let l = freezeHookCall({
-      call: e.wrapMethod(m),
-      to: e.wrapMethod(c),
-      signal: s.signal,
-      is: s.is,
-      event: s.event,
-      origin: s.origin,
-      trace: () => s.trace,
-      budget: () => s.budget,
-    }),
-    y;
+    call: interfaceState.wrapMethod(m),
+    to: interfaceState.wrapMethod(c),
+    signal: s.signal,
+    is: s.is,
+    event: s.event,
+    origin: s.origin,
+    trace: () => s.trace,
+    budget: () => s.budget,
+  });
+  let y;
   try {
-    y = await e.invoke(o, [freeze_9, n, l]);
+    y = await interfaceState.invoke(o, [co, n, l]);
   } catch (error) {
     if (!i) throw error;
     return u(error);
   }
-  return checkEngineCreateResult(e, y, weakMap);
+  return checkEngineCreateResult(interfaceState, y, weakMap);
 };
+//@ chunk-4121qate.js:274124-274474 placement
 /**
  * 插件接口宿主：wrap 包装 engine.create 步骤、finalize 定稿 $，call 调用本插件提供的接口方法。
  */
-//@ chunk-4121qate.js:274124-274474 placement
 function createInterfaceHost(e) {
-  let o = createInterfaceState(e);
+  let interfaceState = createInterfaceState(e);
   return {
     get isFinalized() {
-      return o.isFinalized;
+      return interfaceState.isFinalized;
     },
-    wrap: createEngineCreateWrapper(o),
-    finalize: createInterfaceFinalizer(o),
+    wrap: createEngineCreateWrapper(interfaceState),
+    finalize: createInterfaceFinalizer(interfaceState),
     call: (r, n, s) => {
-      let i = o.own.get(r);
-      if (!i) return Promise.reject(new HooksError(`${o.pluginName} provides no interface named ${r}`));
+      let i = interfaceState.own.get(r);
+      if (!i)
+        return Promise.reject(
+          new HooksError(`${interfaceState.pluginName} provides no interface named ${r}`),
+        );
       let p = i[n];
       return typeof p === "function"
-        ? o.invoke(p, s, i)
-        : Promise.reject(new HooksError(`$.${r} (${o.pluginName}) has no method ${n}`));
+        ? interfaceState.invoke(p, s, i)
+        : Promise.reject(new HooksError(`$.${r} (${interfaceState.pluginName}) has no method ${n}`));
     },
   };
 }
 //@ chunk-4121qate.js:274474-274533 placement
-function Mt() {
+/**
+ * 抛“不是操作”
+ */
+function coreNotAnOperation() {
   throw new HooksError("core table: not an operation");
 }
 //@ chunk-4121qate.js:274533-274600 placement
-var xC = (e) => freezeApiObject({ value: (o, r) => e("flag.value", { name: o, fallback: r }) });
-
-export { xC, Mt, createInterfaceHost };
+/**
+ * flag.value 接口
+ */
+var flagValueApi = (host) =>
+  freezeApiObject({
+    value: (name, fallback) =>
+      host("flag.value", {
+        name,
+        fallback,
+      }),
+  });
+export { flagValueApi, coreNotAnOperation, createInterfaceHost };

@@ -8,17 +8,22 @@
  * pieces: chunk-s61vbvea.js (2)
  * attribution: placement 2
  */
-import { Dc } from "../../../vendor/lru-cache/dist/esm/index.min.js";
+import { LRUCache } from "../../../vendor/lru-cache/dist/esm/index.min.js";
 
 //@ chunk-s61vbvea.js:514928-514950 placement
-var e$ = 3600000,
-  MAX_PROMPT_HASHES_PER_URL = 32;
+/**
+ * WebFetch 抓取历史缓存条目的有效期（1 小时）。
+ */
+var WEBFETCH_HISTORY_TTL_MS = 3600000;
+var MAX_PROMPT_HASHES_PER_URL = 32;
 //@ chunk-s61vbvea.js:514950-515018 placement
 class WebFetchHistory {
-  urls = new Dc({ max: 1024, ttl: e$ });
+  urls = new LRUCache({
+    max: 1024,
+    ttl: WEBFETCH_HISTORY_TTL_MS,
+  });
   clear() {
     this.urls.clear();
   }
 }
-
 export { WebFetchHistory, MAX_PROMPT_HASHES_PER_URL };

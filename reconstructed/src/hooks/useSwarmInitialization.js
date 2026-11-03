@@ -10,7 +10,7 @@
  */
 import { useSession } from "../context/session.js";
 import { useSetAppState, useSessionHooksRegistry } from "../state/AppState.js";
-import { Me } from "../components/design-system/ThemeProvider.js";
+import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { P } from "../../vendor/react/cjs/react.production.js";
 import { isAgentSwarmsEnabled } from "../utils/agentSwarmsEnabled.js";
 import { initializeTeammateContextFromSession } from "../utils/swarm/reconnection.js";
@@ -19,42 +19,51 @@ import { initializeTeammateHooks } from "../utils/swarm/teammateInit.js";
 import { getDynamicTeamContext } from "../utils/teammate.js";
 
 //@ chunk-18hwfzwa.js:220439-221010 fingerprint = useSwarmInitialization (1)
-function useSwarmInitialization(h, { enabled: x = !0 } = {}) {
-  let D = useSession(),
-    L = useSetAppState(),
-    ee = useSessionHooksRegistry(),
-    { storageV5: storageV5 } = Me();
+function useSwarmInitialization(initialMessages, { enabled = true } = {}) {
+  let session = useSession();
+  let setAppState = useSetAppState();
+  let hookRegistry = useSessionHooksRegistry();
+  let { storageV5 } = useTheme_2();
   P(() => {
-    if (!x) return;
+    if (!enabled) return;
     (async () => {
       if (!isAgentSwarmsEnabled()) return;
-      let firstMessage = h?.[0],
-        Be = firstMessage && "teamName" in firstMessage ? firstMessage.teamName : void 0,
-        He = firstMessage && "agentName" in firstMessage ? firstMessage.agentName : void 0;
-      if (Be && He) {
-        await initializeTeammateContextFromSession(L, Be, He, storageV5);
-        let member = (await readTeamFileAsync(Be, storageV5))?.members.find((Xe) => Xe.name === He);
+      let firstMessage = initialMessages?.[0];
+      let teamName = firstMessage && "teamName" in firstMessage ? firstMessage.teamName : undefined;
+      let agentName = firstMessage && "agentName" in firstMessage ? firstMessage.agentName : undefined;
+      if (teamName && agentName) {
+        await initializeTeammateContextFromSession(setAppState, teamName, agentName, storageV5);
+        let member = (await readTeamFileAsync(teamName, storageV5))?.members.find(
+          (m) => m.name === agentName,
+        );
         if (member)
           await initializeTeammateHooks(
-            L,
-            ee,
-            D.id,
-            { teamName: Be, agentId: member.agentId, agentName: He },
+            setAppState,
+            hookRegistry,
+            session.id,
+            {
+              teamName,
+              agentId: member.agentId,
+              agentName,
+            },
             storageV5,
           );
       } else {
         let context = getDynamicTeamContext?.();
         if (context?.teamName && context?.agentId && context?.agentName)
           await initializeTeammateHooks(
-            L,
-            ee,
-            D.id,
-            { teamName: context.teamName, agentId: context.agentId, agentName: context.agentName },
+            setAppState,
+            hookRegistry,
+            session.id,
+            {
+              teamName: context.teamName,
+              agentId: context.agentId,
+              agentName: context.agentName,
+            },
             storageV5,
           );
       }
     })();
-  }, [L, ee, h, x, D, storageV5]);
+  }, [setAppState, hookRegistry, initialMessages, enabled, session, storageV5]);
 }
-
 export { useSwarmInitialization };

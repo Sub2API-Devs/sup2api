@@ -13,95 +13,106 @@ import { artifactContentOriginUrlFor } from "../../tools/ArtifactTool/artifactUr
 import { isDiskless } from "../../bootstrap/state.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { externalHttp } from "../http/externalHttp.js";
-import { rat, iG, Aae } from "../../utils/sandbox/proxyDenial.js";
+import {
+  isBlockedByProxyAllowlist,
+  isAllowlistBlockedResponse,
+  proxyDenialResult,
+} from "../../utils/sandbox/proxyDenial.js";
 import { isMaxContentLengthError } from "../../utils/errors.js";
 import { isForbiddenProxy, isNotFoundProxy } from "./shareEntries.js";
 
 //@ chunk-4xpk3fhh.js:1088-1130 placement
-var q = "/_warmup",
-  x = 3000,
-  J = 600000,
-  z = 262144;
+var WARMUP_PATH = "/_warmup";
+var PROBE_TIMEOUT_MS = 3000;
+var PROBE_CACHE_MS = 600000;
+var MAX_PROBE_RESPONSE_BYTES = 262144;
 //@ chunk-4xpk3fhh.js:1130-1244 placement
 function artifactHostUnreachable(e) {
-  let n = getLiveState();
+  let liveState = getLiveState();
   return (
-    n.contentHostEgressDenied.has(e.env) || n.contentHostEgressUnanswered.has(artifactContentOriginUrlFor(e))
+    liveState.contentHostEgressDenied.has(e.env) ||
+    liveState.contentHostEgressUnanswered.has(artifactContentOriginUrlFor(e))
   );
 }
 //@ chunk-4xpk3fhh.js:1244-1334 placement
-function P(e) {
+function wasProbedRecently(e) {
   let n = getLiveState().contentHostEgressProbed.get(e);
-  return n !== void 0 && Date.now() - n < J;
+  return n !== undefined && Date.now() - n < PROBE_CACHE_MS;
 }
 //@ chunk-4xpk3fhh.js:1334-1413 placement
 function artifactHostAnswerAtHand(e) {
   return (
-    isDiskless() || getLiveState().contentHostEgressDenied.has(e.env) || P(artifactContentOriginUrlFor(e))
+    isDiskless() ||
+    getLiveState().contentHostEgressDenied.has(e.env) ||
+    wasProbedRecently(artifactContentOriginUrlFor(e))
   );
 }
 //@ chunk-4xpk3fhh.js:1413-1910 placement
-async function probeArtifactHostEgress(e, n) {
-  let r = getLiveState(),
-    o = artifactContentOriginUrlFor(e);
+async function probeArtifactHostEgress(target, signal) {
+  let liveState = getLiveState();
+  let hostUrl = artifactContentOriginUrlFor(target);
   if (isDiskless()) {
-    (r.contentHostEgressProbed.delete(o), r.contentHostEgressUnanswered.add(o));
+    liveState.contentHostEgressProbed.delete(hostUrl);
+    liveState.contentHostEgressUnanswered.add(hostUrl);
     return;
   }
-  if (r.contentHostEgressDenied.has(e.env)) {
-    (r.contentHostEgressProbed.delete(o), r.contentHostEgressUnanswered.add(o));
+  if (liveState.contentHostEgressDenied.has(target.env)) {
+    liveState.contentHostEgressProbed.delete(hostUrl);
+    liveState.contentHostEgressUnanswered.add(hostUrl);
     return;
   }
-  if (P(o)) return;
-  let s = r.contentHostEgressInFlight.get(o);
-  if (s !== void 0)
-    return s.catch((l) => {
-      if (n.aborted) throw l;
-      return probeArtifactHostEgress(e, n);
+  if (wasProbedRecently(hostUrl)) return;
+  let s = liveState.contentHostEgressInFlight.get(hostUrl);
+  if (s !== undefined)
+    return s.catch((error) => {
+      if (signal.aborted) throw error;
+      return probeArtifactHostEgress(target, signal);
     });
-  let f = probeContentHostEgress(e, o, n).finally(() => {
-    r.contentHostEgressInFlight.delete(o);
+  let f = probeContentHostEgress(target, hostUrl, signal).finally(() => {
+    liveState.contentHostEgressInFlight.delete(hostUrl);
   });
-  return (r.contentHostEgressInFlight.set(o, f), f);
+  liveState.contentHostEgressInFlight.set(hostUrl, f);
+  return f;
 }
+//@ chunk-4xpk3fhh.js:1910-2846 placement
 /**
  * 探测能否访问 artifact 内容主机：带超时 GET 探测路径；网络被拒时记为拒绝（并标记该环境），无应答或无法识别的状态记为不可达，2xx 或代理的 403/404 记为已探测可达。
  */
-//@ chunk-4xpk3fhh.js:1910-2846 placement
 async function probeContentHostEgress(target, hostUrl, signal) {
-  let o = getLiveState(),
-    s = () => {
-      (o.contentHostEgressUnanswered.delete(hostUrl), o.contentHostEgressProbed.set(hostUrl, Date.now()));
-    },
-    f = (p) => {
-      (logForDebugging(
-        `[artifact] egress probe of ${hostUrl}: ${p}; reading the host as unreachable for this check`,
-      ),
-        o.contentHostEgressProbed.delete(hostUrl),
-        o.contentHostEgressUnanswered.add(hostUrl));
-    },
-    l = () => {
-      (o.contentHostEgressProbed.delete(hostUrl),
-        o.contentHostEgressUnanswered.add(hostUrl),
-        o.contentHostEgressDenied.add(target.env));
-    },
-    response;
+  let liveState = getLiveState();
+  let s = () => {
+    liveState.contentHostEgressUnanswered.delete(hostUrl);
+    liveState.contentHostEgressProbed.set(hostUrl, Date.now());
+  };
+  let f = (p) => {
+    logForDebugging(
+      `[artifact] egress probe of ${hostUrl}: ${p}; reading the host as unreachable for this check`,
+    );
+    liveState.contentHostEgressProbed.delete(hostUrl);
+    liveState.contentHostEgressUnanswered.add(hostUrl);
+  };
+  let l = () => {
+    liveState.contentHostEgressProbed.delete(hostUrl);
+    liveState.contentHostEgressUnanswered.add(hostUrl);
+    liveState.contentHostEgressDenied.add(target.env);
+  };
+  let response;
   try {
-    response = await externalHttp.get(`${hostUrl}${q}`, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(x)]),
-      timeout: x,
+    response = await externalHttp.get(`${hostUrl}${WARMUP_PATH}`, {
+      signal: AbortSignal.any([signal, AbortSignal.timeout(PROBE_TIMEOUT_MS)]),
+      timeout: PROBE_TIMEOUT_MS,
       maxRedirects: 0,
-      maxContentLength: z,
+      maxContentLength: MAX_PROBE_RESPONSE_BYTES,
       responseType: "text",
-      validateStatus: () => !0,
+      validateStatus: () => true,
     });
   } catch (error) {
     if (signal.aborted) throw error;
-    if (rat(error)) return l();
+    if (isBlockedByProxyAllowlist(error)) return l();
     return f(isMaxContentLengthError(error) ? "an answer larger than the cap" : "no answer");
   }
-  if (iG(response.status, response.headers)) return l();
-  let h = () => Aae(response.headers, response.data, (p) => p);
+  if (isAllowlistBlockedResponse(response.status, response.headers)) return l();
+  let h = () => proxyDenialResult(response.headers, response.data, (p) => p);
   if (!(
     (response.status >= 200 && response.status < 300) ||
     (response.status === 403 && isForbiddenProxy(response.headers, h())) ||
@@ -110,5 +121,4 @@ async function probeContentHostEgress(target, hostUrl, signal) {
     return f(`unrecognised HTTP ${response.status}`);
   return s();
 }
-
 export { artifactHostUnreachable, probeArtifactHostEgress, artifactHostAnswerAtHand };

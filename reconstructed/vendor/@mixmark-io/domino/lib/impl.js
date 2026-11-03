@@ -6,55 +6,54 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ee } from "./utils.js";
-import { oa } from "./CSSStyleDeclaration.js";
-import { lr } from "./CharacterData.js";
-import { Cn } from "./Comment.js";
-import { Wr } from "./DOMException.js";
-import { Er } from "./DOMImplementation.js";
-import { xn } from "./DOMTokenList.js";
-import { fa } from "./Document.js";
-import { kn } from "./DocumentFragment.js";
-import { ha } from "./DocumentType.js";
-import { Ft } from "./Element.js";
-import { va } from "./HTMLParser.js";
-import { gn } from "./NamedNodeMap.js";
-import { xe } from "./Node.js";
-import { yt } from "./NodeList.js";
-import { hr } from "./NodeFilter.js";
-import { Mn } from "./ProcessingInstruction.js";
-import { Sn } from "./Text.js";
-import { ii } from "./Window.js";
-import { Un } from "./events.js";
-import { la } from "./htmlelts.js";
-import { Xn } from "./svg.js";
+import { require_utils } from "./utils.js";
+import { require_CSSStyleDeclaration } from "./CSSStyleDeclaration.js";
+import { require_CharacterData } from "./CharacterData.js";
+import { require_Comment } from "./Comment.js";
+import { require_DOMException } from "./DOMException.js";
+import { require_DOMImplementation } from "./DOMImplementation.js";
+import { require_DOMTokenList } from "./DOMTokenList.js";
+import { require_Document } from "./Document.js";
+import { require_DocumentFragment } from "./DocumentFragment.js";
+import { require_DocumentType } from "./DocumentType.js";
+import { require_Element } from "./Element.js";
+import { require_HTMLParser } from "./HTMLParser.js";
+import { require_NamedNodeMap } from "./NamedNodeMap.js";
+import { require_Node } from "./Node.js";
+import { require_NodeList } from "./NodeList.js";
+import { require_NodeFilter } from "./NodeFilter.js";
+import { require_ProcessingInstruction } from "./ProcessingInstruction.js";
+import { require_Text } from "./Text.js";
+import { require_Window } from "./Window.js";
+import { require_events } from "./events.js";
+import { require_htmlelts } from "./htmlelts.js";
+import { require_svg } from "./svg.js";
 
 //@ chunk-vwj6ccer.js:235889-236322 cjs-fingerprint
-var ni = x(function (_r, Rc) {
-  var ai = ee();
-  _r = Rc.exports = {
-    CSSStyleDeclaration: oa(),
-    CharacterData: lr(),
-    Comment: Cn(),
-    DOMException: Wr(),
-    DOMImplementation: Er(),
-    DOMTokenList: xn(),
-    Document: fa(),
-    DocumentFragment: kn(),
-    DocumentType: ha(),
-    Element: Ft(),
-    HTMLParser: va(),
-    NamedNodeMap: gn(),
-    Node: xe(),
-    NodeList: yt(),
-    NodeFilter: hr(),
-    ProcessingInstruction: Mn(),
-    Text: Sn(),
-    Window: ii(),
+var require_impl = x(function (cjsExports, cjsModule) {
+  var utils = require_utils();
+  cjsExports = cjsModule.exports = {
+    CSSStyleDeclaration: require_CSSStyleDeclaration(),
+    CharacterData: require_CharacterData(),
+    Comment: require_Comment(),
+    DOMException: require_DOMException(),
+    DOMImplementation: require_DOMImplementation(),
+    DOMTokenList: require_DOMTokenList(),
+    Document: require_Document(),
+    DocumentFragment: require_DocumentFragment(),
+    DocumentType: require_DocumentType(),
+    Element: require_Element(),
+    HTMLParser: require_HTMLParser(),
+    NamedNodeMap: require_NamedNodeMap(),
+    Node: require_Node(),
+    NodeList: require_NodeList(),
+    NodeFilter: require_NodeFilter(),
+    ProcessingInstruction: require_ProcessingInstruction(),
+    Text: require_Text(),
+    Window: require_Window(),
   };
-  ai.merge(_r, Un());
-  ai.merge(_r, la().elements);
-  ai.merge(_r, Xn().elements);
+  utils.merge(cjsExports, require_events());
+  utils.merge(cjsExports, require_htmlelts().elements);
+  utils.merge(cjsExports, require_svg().elements);
 });
-
-export { ni };
+export { require_impl };

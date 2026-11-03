@@ -16,21 +16,21 @@ import { DEFAULT_TRANSCRIPT_ASK_CONFIG } from "../../components/FeedbackSurvey/u
 import { isRemoteControlOfferable, getRemoteControlAtStartup } from "../../bridge/bridgeGates.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
 import { resolveSetting } from "../../utils/settings/userIntentSettings.js";
-import { Myt } from "../../components/Settings/configGates.js";
+import { shouldShowConfigGate } from "../../components/Settings/configGates.js";
 import { isBridgeEnabled } from "../../bridge/bridgeEntitlement.js";
-import { qrt } from "../../tools/PushNotificationTool/prompt.js";
+import { isKairosPushEnabled } from "../../tools/PushNotificationTool/prompt.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { getAgentId } from "../../utils/teammate.js";
 
 //@ chunk-pzv0vqyf.js:531-631 placement
-var RC_UPSELL_MAX = 3,
-  RC_TIP_MAX = 3,
-  RC_MIN_TURN_SECONDS = 20,
-  RC_READY_PUSH_TEXT = "Your Claude Code session is ready \u2014 continue from your phone anytime.";
+var RC_UPSELL_MAX = 3;
+var RC_TIP_MAX = 3;
+var RC_MIN_TURN_SECONDS = 20;
+var RC_READY_PUSH_TEXT = "Your Claude Code session is ready \u2014 continue from your phone anytime.";
+//@ chunk-pzv0vqyf.js:631-1493 placement
 /**
  * 长回合 Remote Control 提示配置（tengu_rc_long_turn_nudge）。
  */
-//@ chunk-pzv0vqyf.js:631-1493 placement
 function getLongTurnNudgeConfig() {
   if (antEnv.CLAUDE_CODE_FORCE_RC_LONG_TURN_NUDGE)
     return {
@@ -41,60 +41,82 @@ function getLongTurnNudgeConfig() {
       dayStartHour: 0,
       dayEndHour: 24,
     };
-  let e = getFeatureValue_CACHED_MAY_BE_STALE("tengu_rc_long_turn_nudge", null);
-  if (e === null || typeof e !== "object") return null;
-  let o =
-      typeof e.thresholdSec === "number" && Number.isFinite(e.thresholdSec)
-        ? Math.min(3600, Math.max(5, e.thresholdSec))
-        : 90,
-    n =
-      typeof e.probability === "number" && Number.isFinite(e.probability)
-        ? Math.min(1, Math.max(0, e.probability))
-        : 1,
-    r =
-      typeof e.maxImpressions === "number" && Number.isFinite(e.maxImpressions)
-        ? Math.trunc(e.maxImpressions)
-        : 3,
-    t = typeof e.impressionKey === "string" ? e.impressionKey : "",
-    a = (i, d) =>
-      typeof i === "number" && Number.isFinite(i) ? Math.min(24, Math.max(0, Math.trunc(i))) : d,
-    l = a(e.dayStartHour, 7),
-    p = a(e.dayEndHour, 21);
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
+    "tengu_rc_long_turn_nudge",
+    null,
+  );
+  if (featureValue_CACHED_MAY_BE_STALE === null || typeof featureValue_CACHED_MAY_BE_STALE !== "object")
+    return null;
+  let thresholdSec =
+    typeof featureValue_CACHED_MAY_BE_STALE.thresholdSec === "number" &&
+    Number.isFinite(featureValue_CACHED_MAY_BE_STALE.thresholdSec)
+      ? Math.min(3600, Math.max(5, featureValue_CACHED_MAY_BE_STALE.thresholdSec))
+      : 90;
+  let probability =
+    typeof featureValue_CACHED_MAY_BE_STALE.probability === "number" &&
+    Number.isFinite(featureValue_CACHED_MAY_BE_STALE.probability)
+      ? Math.min(1, Math.max(0, featureValue_CACHED_MAY_BE_STALE.probability))
+      : 1;
+  let maxImpressions =
+    typeof featureValue_CACHED_MAY_BE_STALE.maxImpressions === "number" &&
+    Number.isFinite(featureValue_CACHED_MAY_BE_STALE.maxImpressions)
+      ? Math.trunc(featureValue_CACHED_MAY_BE_STALE.maxImpressions)
+      : 3;
+  let impressionKey =
+    typeof featureValue_CACHED_MAY_BE_STALE.impressionKey === "string"
+      ? featureValue_CACHED_MAY_BE_STALE.impressionKey
+      : "";
+  let a = (i, d) =>
+    typeof i === "number" && Number.isFinite(i) ? Math.min(24, Math.max(0, Math.trunc(i))) : d;
+  let dayStartHour = a(featureValue_CACHED_MAY_BE_STALE.dayStartHour, 7);
+  let dayEndHour = a(featureValue_CACHED_MAY_BE_STALE.dayEndHour, 21);
   return {
-    thresholdSec: o,
-    probability: n,
-    maxImpressions: r,
-    impressionKey: t,
-    dayStartHour: l,
-    dayEndHour: p,
+    thresholdSec,
+    probability,
+    maxImpressions,
+    impressionKey,
+    dayStartHour,
+    dayEndHour,
   };
 }
+//@ chunk-pzv0vqyf.js:1493-1621 placement
 /**
  * 判断当前时间是否在白天时段内（起止配置无效时视为总是）。
  */
-//@ chunk-pzv0vqyf.js:1493-1621 placement
-function isWithinDayHours(e, o = new Date()) {
-  if (e.dayStartHour >= e.dayEndHour) return !0;
+function isWithinDayHours(longTurnNudgeConfig, o = new Date()) {
+  if (longTurnNudgeConfig.dayStartHour >= longTurnNudgeConfig.dayEndHour) return true;
   let hours = o.getHours();
-  return hours >= e.dayStartHour && hours < e.dayEndHour;
+  return hours >= longTurnNudgeConfig.dayStartHour && hours < longTurnNudgeConfig.dayEndHour;
 }
 //@ chunk-pzv0vqyf.js:1621-1697 placement
-function m(e, o) {
+/**
+ * 全局配置里的某个计数加一并保存。
+ */
+function bumpGlobalConfigCount(e, o) {
   let n = (getGlobalConfig()[e] ?? 0) + 1;
-  saveGlobalConfig((r) => ((r[e] ?? 0) >= n ? r : { ...r, [e]: n }), o);
+  saveGlobalConfig(
+    (r) =>
+      (r[e] ?? 0) >= n
+        ? r
+        : {
+            ...r,
+            [e]: n,
+          },
+    o,
+  );
 }
+//@ chunk-pzv0vqyf.js:1755-2115 placement
 /**
  * 权限请求时 Remote Control 提示配置（tengu_rc_permission_nudge）。
  */
-//@ chunk-pzv0vqyf.js:1755-2115 placement
 function getPermissionNudgeConfig() {
-  let e,
-    CLAUDE_CODE_RC_PERMISSION_NUDGE = antEnv.CLAUDE_CODE_RC_PERMISSION_NUDGE;
+  let e;
+  let CLAUDE_CODE_RC_PERMISSION_NUDGE = antEnv.CLAUDE_CODE_RC_PERMISSION_NUDGE;
   if (CLAUDE_CODE_RC_PERMISSION_NUDGE)
     try {
       e = jsonParse(CLAUDE_CODE_RC_PERMISSION_NUDGE);
     } catch {
-      e = void 0;
+      e = undefined;
     }
   e ??= getFeatureValue_CACHED_MAY_BE_STALE("tengu_rc_permission_nudge", DEFAULT_TRANSCRIPT_ASK_CONFIG);
   let n = (r, t) => (typeof r === "number" && Number.isFinite(r) ? r : t);
@@ -104,147 +126,197 @@ function getPermissionNudgeConfig() {
     maxImpressions: n(e?.maxImpressions, DEFAULT_TRANSCRIPT_ASK_CONFIG.maxImpressions),
   };
 }
+//@ chunk-pzv0vqyf.js:2115-2236 placement
 /**
  * 是否显示 Remote Control 推广：功能可提供、用户没用过、启动时未开启，且已显示次数未达上限。
  */
-//@ chunk-pzv0vqyf.js:2115-2236 placement
 function shouldShowRemoteControlUpsell() {
-  if (!isRemoteControlOfferable()) return !1;
-  let e = getGlobalConfig();
+  if (!isRemoteControlOfferable()) return false;
+  let globalConfig = getGlobalConfig();
   return (
-    !e.hasUsedRemoteControl &&
+    !globalConfig.hasUsedRemoteControl &&
     !getRemoteControlAtStartup() &&
-    (e.remoteControlUpsellSeenCount ?? 0) < RC_UPSELL_MAX
+    (globalConfig.remoteControlUpsellSeenCount ?? 0) < RC_UPSELL_MAX
   );
 }
 //@ chunk-pzv0vqyf.js:2236-2313 placement
-function VNs(e) {
-  (m("remoteControlUpsellSeenCount", e), logFeatureOk("tips_rc_upsell_show"));
+/**
+ * 记录 Remote Control 推广展示并打点。
+ */
+function noteRcUpsellShown(storageV5) {
+  bumpGlobalConfigCount("remoteControlUpsellSeenCount", storageV5);
+  logFeatureOk("tips_rc_upsell_show");
 }
 //@ chunk-pzv0vqyf.js:2313-2371 placement
-function b() {
-  return getGlobalConfig().hasUsedRemoteControl === !0 || getRemoteControlAtStartup();
+/**
+ * 是否用过 Remote Control，或设置为启动时开启。
+ */
+function hasUsedRemoteControlOrStartup() {
+  return getGlobalConfig().hasUsedRemoteControl === true || getRemoteControlAtStartup();
 }
 //@ chunk-pzv0vqyf.js:2371-2437 placement
-function JTo() {
-  return QTo() && (getGlobalConfig().pushNotifUpsellSeenCount ?? 0) < RC_TIP_MAX;
+/**
+ * 推送通知推广是否还应展示（展示次数未达上限）。
+ */
+function canShowPushUpsell() {
+  return isPushUpsellEligible() && (getGlobalConfig().pushNotifUpsellSeenCount ?? 0) < RC_TIP_MAX;
 }
 //@ chunk-pzv0vqyf.js:2437-2519 placement
-function QTo() {
+/**
+ * 是否有资格推广推送通知（可推广、未用过、未开推送且有实验资格）。
+ */
+function isPushUpsellEligible() {
   return (
-    isRemoteControlOfferable() && b() && resolveSetting("agentPushNotifEnabled", !1).value !== !0 && Myt()
+    isRemoteControlOfferable() &&
+    hasUsedRemoteControlOrStartup() &&
+    resolveSetting("agentPushNotifEnabled", false).value !== true &&
+    shouldShowConfigGate()
   );
 }
 //@ chunk-pzv0vqyf.js:2519-2594 placement
-function qNs(e) {
-  (m("pushNotifUpsellSeenCount", e), logFeatureOk("tips_push_upsell_show"));
+/**
+ * 记录推送推广展示并打点。
+ */
+function notePushUpsellShown(storageV5) {
+  bumpGlobalConfigCount("pushNotifUpsellSeenCount", storageV5);
+  logFeatureOk("tips_push_upsell_show");
 }
+//@ chunk-pzv0vqyf.js:2594-2809 placement
 /**
  * 长回合时的 Remote Control 提示是否还能显示：桥接可用，展示次数未达配置上限（负数为不限，0 为关闭；按配置键计数）。
  */
-//@ chunk-pzv0vqyf.js:2594-2809 placement
-function canShowLongTurnNudge(e) {
-  if (!isBridgeEnabled()) return !1;
-  if (e.maxImpressions === 0) return !1;
-  if (e.maxImpressions < 0) return !0;
-  let o = getGlobalConfig();
+function canShowLongTurnNudge(longTurnNudgeConfig) {
+  if (!isBridgeEnabled()) return false;
+  if (longTurnNudgeConfig.maxImpressions === 0) return false;
+  if (longTurnNudgeConfig.maxImpressions < 0) return true;
+  let globalConfig = getGlobalConfig();
   return (
-    ((o.rcLongTurnNudgeSeenKey ?? "") === e.impressionKey ? (o.rcLongTurnNudgeSeenCount ?? 0) : 0) <
-    e.maxImpressions
+    ((globalConfig.rcLongTurnNudgeSeenKey ?? "") === longTurnNudgeConfig.impressionKey
+      ? (globalConfig.rcLongTurnNudgeSeenCount ?? 0)
+      : 0) < longTurnNudgeConfig.maxImpressions
   );
 }
+//@ chunk-pzv0vqyf.js:2809-3061 placement
 /**
  * 记录长回合远程控制提示已展示（按展示键计数，键变化时重置）并打点。
  */
-//@ chunk-pzv0vqyf.js:2809-3061 placement
-function recordLongTurnNudgeShown(e, o) {
-  if (e.maxImpressions >= 0)
+function recordLongTurnNudgeShown(longTurnNudgeConfig, storageV5) {
+  if (longTurnNudgeConfig.maxImpressions >= 0)
     saveGlobalConfig((n) => {
-      let r = (n.rcLongTurnNudgeSeenKey ?? "") === e.impressionKey;
+      let r = (n.rcLongTurnNudgeSeenKey ?? "") === longTurnNudgeConfig.impressionKey;
       return {
         ...n,
         rcLongTurnNudgeSeenCount: r ? (n.rcLongTurnNudgeSeenCount ?? 0) + 1 : 1,
-        rcLongTurnNudgeSeenKey: e.impressionKey,
+        rcLongTurnNudgeSeenKey: longTurnNudgeConfig.impressionKey,
       };
-    }, o);
+    }, storageV5);
   logFeatureOk("tips_rc_long_turn_show");
 }
 //@ chunk-pzv0vqyf.js:3061-3140 placement
-function JNs(e) {
-  if (!isBridgeEnabled()) return !1;
-  return (getGlobalConfig().rcPermissionNudgeSeenCount ?? 0) < e;
+/**
+ * 权限提示里的远程控制推广是否还能展示（bridge 开启且未达上限）。
+ */
+function canShowPermissionNudge(maxImpressions) {
+  if (!isBridgeEnabled()) return false;
+  return (getGlobalConfig().rcPermissionNudgeSeenCount ?? 0) < maxImpressions;
 }
+//@ chunk-pzv0vqyf.js:3140-3274 placement
 /**
  * 记录权限提示中的远程控制提示展示次数并打点。
  */
-//@ chunk-pzv0vqyf.js:3140-3274 placement
-function recordPermissionNudgeShown(e) {
-  (saveGlobalConfig(
-    (o) => ({ ...o, rcPermissionNudgeSeenCount: (o.rcPermissionNudgeSeenCount ?? 0) + 1 }),
-    e,
-  ),
-    logFeatureOk("tips_rc_permission_nudge_show"));
+function recordPermissionNudgeShown(storageV5) {
+  saveGlobalConfig(
+    (o) => ({
+      ...o,
+      rcPermissionNudgeSeenCount: (o.rcPermissionNudgeSeenCount ?? 0) + 1,
+    }),
+    storageV5,
+  );
+  logFeatureOk("tips_rc_permission_nudge_show");
 }
+//@ chunk-pzv0vqyf.js:3274-3720 placement
 /**
  * 会话就绪推送提示配置（tengu_kairos_ready_nudge）。
  */
-//@ chunk-pzv0vqyf.js:3274-3720 placement
 function getKairosReadyNudgeConfig() {
-  if (!qrt()) return null;
-  let e = getFeatureValue_CACHED_MAY_BE_STALE("tengu_kairos_ready_nudge", null);
-  if (e === null || typeof e !== "object") return null;
-  let o =
-      typeof e.probability === "number" && Number.isFinite(e.probability)
-        ? Math.min(1, Math.max(0, e.probability))
-        : 1,
-    n =
-      typeof e.maxImpressions === "number" && Number.isFinite(e.maxImpressions)
-        ? Math.trunc(e.maxImpressions)
-        : 5,
-    r = typeof e.impressionKey === "string" ? e.impressionKey : "";
-  return { probability: o, maxImpressions: n, impressionKey: r };
+  if (!isKairosPushEnabled()) return null;
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
+    "tengu_kairos_ready_nudge",
+    null,
+  );
+  if (featureValue_CACHED_MAY_BE_STALE === null || typeof featureValue_CACHED_MAY_BE_STALE !== "object")
+    return null;
+  let probability =
+    typeof featureValue_CACHED_MAY_BE_STALE.probability === "number" &&
+    Number.isFinite(featureValue_CACHED_MAY_BE_STALE.probability)
+      ? Math.min(1, Math.max(0, featureValue_CACHED_MAY_BE_STALE.probability))
+      : 1;
+  let maxImpressions =
+    typeof featureValue_CACHED_MAY_BE_STALE.maxImpressions === "number" &&
+    Number.isFinite(featureValue_CACHED_MAY_BE_STALE.maxImpressions)
+      ? Math.trunc(featureValue_CACHED_MAY_BE_STALE.maxImpressions)
+      : 5;
+  let impressionKey =
+    typeof featureValue_CACHED_MAY_BE_STALE.impressionKey === "string"
+      ? featureValue_CACHED_MAY_BE_STALE.impressionKey
+      : "";
+  return {
+    probability,
+    maxImpressions,
+    impressionKey,
+  };
 }
+//@ chunk-pzv0vqyf.js:3720-3974 placement
 /**
  * 是否发送"会话已就绪，可在手机上继续"推送：已连接且未静音，不是后台/子代理会话，推送次数未达上限。
  */
-//@ chunk-pzv0vqyf.js:3720-3974 placement
-function canSendReadyPush(e, o, n) {
-  if (!o || n) return !1;
-  if (isBgSession() || getAgentId() != null) return !1;
-  if (e.maxImpressions === 0) return !1;
-  if (e.maxImpressions < 0) return !0;
-  let r = getGlobalConfig();
+function canSendReadyPush(kairosReadyNudgeConfig, replBridgeExplicit, n) {
+  if (!replBridgeExplicit || n) return false;
+  if (isBgSession() || getAgentId() != null) return false;
+  if (kairosReadyNudgeConfig.maxImpressions === 0) return false;
+  if (kairosReadyNudgeConfig.maxImpressions < 0) return true;
+  let globalConfig = getGlobalConfig();
   return (
-    ((r.remoteControlReadyPushKey ?? "") === e.impressionKey ? (r.remoteControlReadyPushCount ?? 0) : 0) <
-    e.maxImpressions
+    ((globalConfig.remoteControlReadyPushKey ?? "") === kairosReadyNudgeConfig.impressionKey
+      ? (globalConfig.remoteControlReadyPushCount ?? 0)
+      : 0) < kairosReadyNudgeConfig.maxImpressions
   );
 }
+//@ chunk-pzv0vqyf.js:3974-4239 placement
 /**
  * 记录"远程控制已就绪"推送已发送（按展示键计数，键变化时重置）并打点。
  */
-//@ chunk-pzv0vqyf.js:3974-4239 placement
-function recordReadyPushSent(e, o) {
-  if (e.maxImpressions >= 0)
+function recordReadyPushSent(kairosReadyNudgeConfig, storageV5) {
+  if (kairosReadyNudgeConfig.maxImpressions >= 0)
     saveGlobalConfig((n) => {
-      let r = (n.remoteControlReadyPushKey ?? "") === e.impressionKey;
+      let r = (n.remoteControlReadyPushKey ?? "") === kairosReadyNudgeConfig.impressionKey;
       return {
         ...n,
         remoteControlReadyPushCount: r ? (n.remoteControlReadyPushCount ?? 0) + 1 : 1,
-        remoteControlReadyPushKey: e.impressionKey,
+        remoteControlReadyPushKey: kairosReadyNudgeConfig.impressionKey,
       };
-    }, o);
+    }, storageV5);
   logFeatureOk("tips_rc_ready_push_send");
 }
+//@ chunk-pzv0vqyf.js:4239-4358 placement
 /**
  * 首次使用远程控制时在全局配置中标记 hasUsedRemoteControl。
  */
-//@ chunk-pzv0vqyf.js:4239-4358 placement
-function markRemoteControlUsed(e) {
+function markRemoteControlUsed(storageV5) {
   if (getGlobalConfig().hasUsedRemoteControl) return;
-  saveGlobalConfig((o) => (o.hasUsedRemoteControl ? o : { ...o, hasUsedRemoteControl: !0 }), e);
+  saveGlobalConfig(
+    (o) =>
+      o.hasUsedRemoteControl
+        ? o
+        : {
+            ...o,
+            hasUsedRemoteControl: true,
+          },
+    storageV5,
+  );
 }
 //@ chunk-pzv0vqyf.js:4358-4391 placement
-var C = ["mobile", "web", "desktop"];
+var REMOTE_SURFACES = ["mobile", "web", "desktop"];
 //@ chunk-pzv0vqyf.js:4391-4536 placement
 function toRemoteSurface(e) {
   switch (e) {
@@ -259,39 +331,41 @@ function toRemoteSurface(e) {
       return;
   }
 }
+//@ chunk-pzv0vqyf.js:4536-4706 placement
 /**
  * 记下用户通过哪种客户端（mobile/web/desktop）使用过 Remote Control（去重写入全局配置）。
  */
-//@ chunk-pzv0vqyf.js:4536-4706 placement
-function recordRemoteSurfaceSeen(e, o) {
-  let n = toRemoteSurface(e);
-  if (!n) return;
-  if (getSeenRemoteSurfaces(getGlobalConfig()).includes(n)) return;
+function recordRemoteSurfaceSeen(clientPlatform, o) {
+  let remoteSurface = toRemoteSurface(clientPlatform);
+  if (!remoteSurface) return;
+  if (getSeenRemoteSurfaces(getGlobalConfig()).includes(remoteSurface)) return;
   saveGlobalConfig((r) => {
-    let t = getSeenRemoteSurfaces(r);
-    if (t.includes(n)) return r;
-    return { ...r, remoteControlSurfacesSeen: [...t, n] };
+    let seenRemoteSurfaces = getSeenRemoteSurfaces(r);
+    if (seenRemoteSurfaces.includes(remoteSurface)) return r;
+    return {
+      ...r,
+      remoteControlSurfacesSeen: [...seenRemoteSurfaces, remoteSurface],
+    };
   }, o);
 }
+//@ chunk-pzv0vqyf.js:4706-4818 placement
 /**
  * 用户只用过 mobile 或 web 之一时，返回另一个（用于推荐）；都用过或都没用过返回 undefined。
  */
-//@ chunk-pzv0vqyf.js:4706-4818 placement
 function getUntriedRemoteSurface() {
-  let e = getSeenRemoteSurfaces(getGlobalConfig()),
-    included = e.includes("mobile"),
-    included_2 = e.includes("web");
+  let seenRemoteSurfaces = getSeenRemoteSurfaces(getGlobalConfig());
+  let included = seenRemoteSurfaces.includes("mobile");
+  let included_2 = seenRemoteSurfaces.includes("web");
   if (included === included_2) return;
   return included ? "web" : "mobile";
 }
 //@ chunk-pzv0vqyf.js:4818-4927 placement
-function getSeenRemoteSurfaces(e) {
-  let remoteControlSurfacesSeen = e.remoteControlSurfacesSeen;
+function getSeenRemoteSurfaces(globalConfig) {
+  let remoteControlSurfacesSeen = globalConfig.remoteControlSurfacesSeen;
   return Array.isArray(remoteControlSurfacesSeen)
-    ? remoteControlSurfacesSeen.filter((n) => C.some((r) => r === n))
+    ? remoteControlSurfacesSeen.filter((n) => REMOTE_SURFACES.some((r) => r === n))
     : [];
 }
-
 export {
   markRemoteControlUsed,
   recordRemoteSurfaceSeen,
@@ -304,13 +378,13 @@ export {
   isWithinDayHours,
   recordLongTurnNudgeShown,
   getPermissionNudgeConfig,
-  JNs,
+  canShowPermissionNudge,
   recordPermissionNudgeShown,
   shouldShowRemoteControlUpsell,
-  JTo,
+  canShowPushUpsell,
   RC_MIN_TURN_SECONDS,
-  VNs,
-  qNs,
+  noteRcUpsellShown,
+  notePushUpsellShown,
   getUntriedRemoteSurface,
-  QTo,
+  isPushUpsellEligible,
 };

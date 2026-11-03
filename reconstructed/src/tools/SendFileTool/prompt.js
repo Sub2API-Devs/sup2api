@@ -10,11 +10,14 @@
  */
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
 import { LISTAGENTS } from "../SendMessageTool/listAgents.js";
-import { b3e } from "../../utils/sessionAddresses.js";
+import { hasEnvironmentKindOtherThanBridge } from "../../utils/sessionAddresses.js";
 
 //@ chunk-rwnj2eyf.js:631-709 placement
-var SENDFILE = "SendFile",
-  Rri = "Send one or more files to another Claude Code session";
+/**
+ * SendFile 的一句话描述。
+ */
+var SENDFILE = "SendFile";
+var SEND_FILE_SHORT_DESCRIPTION = "Send one or more files to another Claude Code session";
 //@ chunk-rwnj2eyf.js:709-1807 placement
 function sendFileToolPrompt(e, r) {
   return `Send files to another Claude Code session \u2014 a peer session on this machine, or a Remote Control / cloud session on another machine. The receiving Claude gets the files on its own filesystem with @path references, plus your message.
@@ -28,10 +31,15 @@ Each file is capped at ${r} MiB, at most ${e} files per send. Files must exist o
 Example: ${SENDFILE}({ to: "devbox", files: ["report.pdf", "figures/plot.png"], message: "Here's the doc with figures." })`;
 }
 //@ chunk-rwnj2eyf.js:1807-1832 placement
-var DYr = "Remote Control";
+/**
+ * 会话类型标签 “Remote Control”。
+ */
+var REMOTE_CONTROL_LABEL = "Remote Control";
 //@ chunk-rwnj2eyf.js:1832-1874 placement
-function pYo(e) {
-  return b3e(e) ? "cloud" : DYr;
+/**
+ * 云会话返回 “cloud”，否则 “Remote Control”。
+ */
+function sessionKindLabel(session) {
+  return hasEnvironmentKindOtherThanBridge(session) ? "cloud" : REMOTE_CONTROL_LABEL;
 }
-
-export { SENDFILE, DYr, pYo, Rri, sendFileToolPrompt };
+export { SENDFILE, REMOTE_CONTROL_LABEL, sessionKindLabel, SEND_FILE_SHORT_DESCRIPTION, sendFileToolPrompt };

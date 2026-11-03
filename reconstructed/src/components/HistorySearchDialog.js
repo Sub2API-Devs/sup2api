@@ -10,7 +10,7 @@
  */
 import { useRegisterOverlay } from "../context/overlayContext.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
-import { Me } from "./design-system/ThemeProvider.js";
+import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { y, R, P, Q } from "../../vendor/react/cjs/react.production.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { getTimestampedHistory, isTransientHistoryReadError, HISTORY_SCOPES } from "../history.js";
@@ -21,7 +21,10 @@ import { useShortcutDisplay } from "../keybindings/useKeybindingDisplay.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { FuzzyPicker } from "./design-system/FuzzyPicker.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
@@ -33,12 +36,12 @@ import { wrapAnsi } from "../ink/wrapAnsi.js";
 import { OverflowHint } from "./CtrlOToExpand.js";
 
 //@ chunk-18hwfzwa.js:662972-663022 sole-consumer
-var HISTORY_DIALOG_VISIBLE_ROWS = 6,
-  AGe = 8,
-  k2t = 16777216,
-  v2t = 256,
-  C2t = 100,
-  _2t = 4;
+var HISTORY_DIALOG_VISIBLE_ROWS = 6;
+var PROMPT_ROW_GAP = 8;
+var MAX_SCAN_BYTES = 16777216;
+var ENTRY_OVERHEAD_BYTES = 256;
+var INITIAL_HISTORY_BATCH = 100;
+var HISTORY_BATCH_GROWTH = 4;
 //@ chunk-18hwfzwa.js:663022-663303 affinity
 function getHistoryScanStatusText(h, x) {
   if (!h) return "Loading\u2026";
@@ -53,207 +56,267 @@ function getHistoryScanStatusText(h, x) {
       return trimmed ? "No matching prompts" : "No history yet";
   }
 }
+//@ chunk-18hwfzwa.js:663303-666723 fingerprint = HistorySearchDialog (0.528)
 /**
  * 全屏历史搜索对话框：列出匹配的历史 prompt（fuzzy），显示扫描进度与截断状态，选中后回填。
  */
-//@ chunk-18hwfzwa.js:663303-666723 fingerprint = HistorySearchDialog (0.528)
-function HistorySearchDialog({ initialQuery: initialQuery, onSelect: onSelect, onCancel: onCancel }) {
+function HistorySearchDialog({ initialQuery, onSelect, onCancel }) {
   useRegisterOverlay("history-search");
-  let { columns: columns } = useTerminalSize(),
-    { storageV5: storageV5 } = Me(),
-    [ke, Re] = y("everywhere"),
-    [Be, He] = y(null),
-    [We, ze] = y(initialQuery ?? ""),
-    Xe = R({});
-  (P(() => {
+  let { columns } = useTerminalSize();
+  let { storageV5 } = useTheme_2();
+  let [ke, Re] = y("everywhere");
+  let [Be, He] = y(null);
+  let [query, setQuery] = y(initialQuery ?? "");
+  let Xe = R({});
+  P(() => {
     logFeatureOk("history_search_open");
-  }, []),
-    P(() => {
-      let Dt = Xe.current[ke];
-      if (Dt) {
-        He(Dt);
-        return;
-      }
-      He(null);
-      let Lt = !1,
-        oo = [];
-      return (
-        (async () => {
-          try {
-            let Xt = getTimestampedHistory(ke, storageV5),
-              io = 0,
-              so = C2t,
-              po = !1;
-            for await (let entry of Xt) {
-              if (Lt) return;
-              let { display: display, expandedDisplay: expandedDisplay } = entry,
-                index = display.indexOf(`
-`),
-                lower = display.toLowerCase();
-              if (
-                (oo.push({
-                  entry: entry,
-                  lower: lower,
-                  expandedLower: expandedDisplay === display ? lower : expandedDisplay.toLowerCase(),
-                  firstLine: index === -1 ? display : display.slice(0, index),
-                }),
-                (io += entry.textLength + v2t),
-                io >= k2t)
-              ) {
-                po = !0;
-                break;
-              }
-              if (oo.length >= so) (He({ items: oo.slice(), status: "scanning" }), (so *= _2t));
-            }
-            if (!Lt) {
-              let ao = { items: oo, status: po ? "truncated" : "complete" };
-              if (((Xe.current[ke] = ao), He(ao), po))
-                logFeatureSad("history_search_scan", "text_limit_reached");
-              else logFeatureOk("history_search_scan");
-            }
-          } catch (error) {
-            if (!Lt)
-              if (oo.length > 0)
-                (He({ items: oo, status: "truncated" }),
-                  logFeatureSad("history_search_scan", "picker_scan_interrupted"));
-              else
-                (He({ items: [], status: "failed" }),
-                  logFeatureBad("history_search_scan", "picker_scan_failed"));
-            if (isTransientHistoryReadError(error))
-              logForDebugging(`History picker read failed: ${errorMessage(error)}`, { level: "error" });
-            else logError(error);
+  }, []);
+  P(() => {
+    let Dt = Xe.current[ke];
+    if (Dt) {
+      He(Dt);
+      return;
+    }
+    He(null);
+    let Lt = false;
+    let oo = [];
+    (async () => {
+      try {
+        let reader = getTimestampedHistory(ke, storageV5);
+        let io = 0;
+        let so = INITIAL_HISTORY_BATCH;
+        let po = false;
+        for await (let entry of reader) {
+          if (Lt) return;
+          let { display, expandedDisplay } = entry;
+          let index = display.indexOf(`
+`);
+          let lower = display.toLowerCase();
+          oo.push({
+            entry,
+            lower,
+            expandedLower: expandedDisplay === display ? lower : expandedDisplay.toLowerCase(),
+            firstLine: index === -1 ? display : display.slice(0, index),
+          });
+          io += entry.textLength + ENTRY_OVERHEAD_BYTES;
+          if (io >= MAX_SCAN_BYTES) {
+            po = true;
+            break;
           }
-        })(),
-        () => {
-          Lt = !0;
+          if (oo.length >= so) {
+            He({
+              items: oo.slice(),
+              status: "scanning",
+            });
+            so *= HISTORY_BATCH_GROWTH;
+          }
         }
-      );
-    }, [ke, storageV5]));
-  let rt = useShortcutDisplay("historySearch:cycleScope", "HistorySearch", "ctrl+s");
+        if (!Lt) {
+          let ao = {
+            items: oo,
+            status: po ? "truncated" : "complete",
+          };
+          Xe.current[ke] = ao;
+          He(ao);
+          if (po) logFeatureSad("history_search_scan", "text_limit_reached");
+          else logFeatureOk("history_search_scan");
+        }
+      } catch (error) {
+        if (!Lt)
+          if (oo.length > 0) {
+            He({
+              items: oo,
+              status: "truncated",
+            });
+            logFeatureSad("history_search_scan", "picker_scan_interrupted");
+          } else {
+            He({
+              items: [],
+              status: "failed",
+            });
+            logFeatureBad("history_search_scan", "picker_scan_failed");
+          }
+        if (isTransientHistoryReadError(error))
+          logForDebugging(`History picker read failed: ${errorMessage(error)}`, {
+            level: "error",
+          });
+        else logError(error);
+      }
+    })();
+    return () => {
+      Lt = true;
+    };
+  }, [ke, storageV5]);
+  let shortcutDisplay = useShortcutDisplay("historySearch:cycleScope", "HistorySearch", "ctrl+s");
   useKeybinding(
     "historySearch:cycleScope",
     () => {
-      let index = HISTORY_SCOPES.indexOf(ke),
-        Lt = HISTORY_SCOPES[(index + 1) % HISTORY_SCOPES.length];
-      (Re(Lt), logEvent("tengu_history_picker_scope", { from: fromEnum(ke), to: fromEnum(Lt) }));
+      let index = HISTORY_SCOPES.indexOf(ke);
+      let Lt = HISTORY_SCOPES[(index + 1) % HISTORY_SCOPES.length];
+      Re(Lt);
+      logEvent("tengu_history_picker_scope", {
+        from: fromEnum(ke),
+        to: fromEnum(Lt),
+      });
     },
-    { context: "HistorySearch" },
+    {
+      context: "HistorySearch",
+    },
   );
   let filtered = Q(() => {
-      if (!Be) return [];
-      let items = Be.items,
-        lower = We.trim().toLowerCase();
-      if (!lower) return items;
-      let oo = Be.status === "scanning",
-        Xt = [],
-        io = [];
-      for (let item of items)
-        if (item.lower.includes(lower) || item.expandedLower.includes(lower)) Xt.push(item);
-        else if (!oo && fuzzyMatchScore(item.lower, lower)) io.push(item);
-      return Xt.concat(io);
-    }, [Be, We]),
-    At = columns >= 100,
-    It = At ? Math.floor((columns - 6) * 0.5) : columns - 6,
-    rowWidth = Math.max(20, It - AGe - 1),
-    Et = At ? Math.max(20, columns - It - 12) : Math.max(20, columns - 10);
-  return e(FuzzyPicker, {
-    title: r(Text, {
+    if (!Be) return [];
+    let items = Be.items;
+    let lower = query.trim().toLowerCase();
+    if (!lower) return items;
+    let oo = Be.status === "scanning";
+    let Xt = [];
+    let fuzzy = [];
+    for (let item of items)
+      if (item.lower.includes(lower) || item.expandedLower.includes(lower)) Xt.push(item);
+      else if (!oo && fuzzyMatchScore(item.lower, lower)) fuzzy.push(item);
+    return Xt.concat(fuzzy);
+  }, [Be, query]);
+  let previewOnRight = columns >= 100;
+  let listWidth = previewOnRight ? Math.floor((columns - 6) * 0.5) : columns - 6;
+  let rowWidth = Math.max(20, listWidth - PROMPT_ROW_GAP - 1);
+  let Et = previewOnRight ? Math.max(20, columns - listWidth - 12) : Math.max(20, columns - 10);
+  return jsxProd_default(FuzzyPicker, {
+    title: jsxProd_default_2(Text, {
       children: [
         "Search prompts ",
-        r(Text, { color: "suggestion", children: ["\xB7 ", ke] }),
+        jsxProd_default_2(Text, {
+          color: "suggestion",
+          children: ["\xB7 ", ke],
+        }),
         Be?.status === "truncated" &&
-          r(Text, {
-            dimColor: !0,
+          jsxProd_default_2(Text, {
+            dimColor: true,
             children: [" ", "\xB7 newest ", Be.items.length.toLocaleString(), " only"],
           }),
       ],
     }),
     placeholder: "Filter history\u2026",
-    initialQuery: initialQuery,
+    initialQuery,
     items: filtered,
-    getKey: (item_0) => String(item_0.entry.timestamp),
-    onQueryChange: ze,
-    onSelect: (item_1) => {
-      (logEvent("tengu_history_picker_select", { result_count: filtered.length, query_length: We.length }),
-        item_1.entry.resolve().then(
-          (q_0) => {
-            (logFeatureOk("history_search_accept"), onSelect(q_0));
-          },
-          (Lt) => {
-            throw (logFeatureBad("history_search_accept", "accept_resolve_failed"), Lt);
-          },
-        ));
+    getKey: (item) => String(item.entry.timestamp),
+    onQueryChange: setQuery,
+    onSelect: (item) => {
+      logEvent("tengu_history_picker_select", {
+        result_count: filtered.length,
+        query_length: query.length,
+      });
+      item.entry.resolve().then(
+        (q_0) => {
+          logFeatureOk("history_search_accept");
+          onSelect(q_0);
+        },
+        (error) => {
+          logFeatureBad("history_search_accept", "accept_resolve_failed");
+          throw error;
+        },
+      );
     },
-    onCancel: onCancel,
+    onCancel,
     resetKey: ke,
     extraHints: (Dt) => [
-      rt && e(KeyboardShortcutHint, { chord: rt, action: "scope", ...Dt }, "scope"),
-      EDITOR_MODES() && r(Text, { children: [Dt.terse ? "esc" : "Esc", " i / for slash commands"] }, "vim"),
+      shortcutDisplay &&
+        jsxProd_default(
+          KeyboardShortcutHint,
+          {
+            chord: shortcutDisplay,
+            action: "scope",
+            ...Dt,
+          },
+          "scope",
+        ),
+      EDITOR_MODES() &&
+        jsxProd_default_2(
+          Text,
+          {
+            children: [Dt.terse ? "esc" : "Esc", " i / for slash commands"],
+          },
+          "vim",
+        ),
     ],
-    emptyMessage: (Dt) => getHistoryScanStatusText(Be, Dt),
+    emptyMessage: (q_0) => getHistoryScanStatusText(Be, q_0),
     selectAction: "use",
     direction: "up",
-    previewPosition: At ? "right" : "bottom",
-    renderItem: (item_2, isFocused) => {
-      let oo = formatRelativeTimeAgo(new Date(item_2.entry.timestamp));
-      return r(Text, {
+    previewPosition: previewOnRight ? "right" : "bottom",
+    renderItem: (item, isFocused) => {
+      let oo = formatRelativeTimeAgo(new Date(item.entry.timestamp));
+      return jsxProd_default_2(Text, {
         children: [
-          r(Text, { dimColor: !0, children: [oo, " ".repeat(Math.max(0, AGe - bunStringWidth(oo)))] }),
-          r(Text, {
-            color: isFocused ? "suggestion" : void 0,
-            children: [" ", truncateToWidth(item_2.firstLine, rowWidth)],
+          jsxProd_default_2(Text, {
+            dimColor: true,
+            children: [oo, " ".repeat(Math.max(0, PROMPT_ROW_GAP - bunStringWidth(oo)))],
+          }),
+          jsxProd_default_2(Text, {
+            color: isFocused ? "suggestion" : undefined,
+            children: [" ", truncateToWidth(item.firstLine, rowWidth)],
           }),
         ],
       });
     },
     renderPreview: (item_3) => {
       let wrapped = item_3.entry.expandedDisplay
-          .split(
-            `
+        .split(
+          `
 `,
-          )
-          .filter((Ao) => Ao.trim() !== ""),
-        sliced = wrapped.slice(0, HISTORY_DIALOG_VISIBLE_ROWS),
-        mapped = sliced.map((Ao) => truncateToLength(Ao, Et * HISTORY_DIALOG_VISIBLE_ROWS)),
-        filtered = wrapAnsi(
-          mapped.join(`
-`),
-          Et,
-          { hard: !0 },
         )
-          .split(
-            `
+        .filter((line) => line.trim() !== "");
+      let sliced = wrapped.slice(0, HISTORY_DIALOG_VISIBLE_ROWS);
+      let mapped = sliced.map((Ao) => truncateToLength(Ao, Et * HISTORY_DIALOG_VISIBLE_ROWS));
+      let filtered = wrapAnsi(
+        mapped.join(`
+`),
+        Et,
+        {
+          hard: true,
+        },
+      )
+        .split(
+          `
 `,
-          )
-          .filter((Ao) => Ao.trim() !== ""),
-        reduced = sliced.reduce((Ao, Bo, Ro) => Ao + Math.ceil((Bo.length - mapped[Ro].length) / Et), 0),
-        po = wrapped.length - sliced.length + reduced,
-        ao = filtered.length > HISTORY_DIALOG_VISIBLE_ROWS || po > 0,
-        shown = filtered.slice(0, ao ? HISTORY_DIALOG_VISIBLE_ROWS - 1 : HISTORY_DIALOG_VISIBLE_ROWS),
-        bo = filtered.length - shown.length + po;
-      return r(Box, {
+        )
+        .filter((line) => line.trim() !== "");
+      let reduced = sliced.reduce((acc, Bo, Ro) => acc + Math.ceil((Bo.length - mapped[Ro].length) / Et), 0);
+      let po = wrapped.length - sliced.length + reduced;
+      let overflow = filtered.length > HISTORY_DIALOG_VISIBLE_ROWS || po > 0;
+      let shown = filtered.slice(0, overflow ? HISTORY_DIALOG_VISIBLE_ROWS - 1 : HISTORY_DIALOG_VISIBLE_ROWS);
+      let count = filtered.length - shown.length + po;
+      return jsxProd_default_2(Box, {
         flexDirection: "column",
         borderStyle: "round",
-        borderDimColor: !0,
+        borderDimColor: true,
         paddingX: 1,
         height: HISTORY_DIALOG_VISIBLE_ROWS + 2,
         children: [
-          shown.map((row, Bo) => e(Text, { dimColor: !0, children: row }, Bo)),
-          e(OverflowHint, { count: bo }),
+          shown.map((row, i) =>
+            jsxProd_default(
+              Text,
+              {
+                dimColor: true,
+                children: row,
+              },
+              i,
+            ),
+          ),
+          jsxProd_default(OverflowHint, {
+            count,
+          }),
         ],
       });
     },
   });
 }
 //@ chunk-18hwfzwa.js:666723-666845 affinity
-function fuzzyMatchScore(h, x) {
+function fuzzyMatchScore(lower, x) {
   let D = 0;
-  for (let L = 0; L < x.length; L++) {
-    let index = h.indexOf(x.charAt(L), D);
-    if (index === -1) return !1;
+  for (let idx = 0; idx < x.length; idx++) {
+    let index = lower.indexOf(x.charAt(idx), D);
+    if (index === -1) return false;
     D = index + 1;
   }
-  return !0;
+  return true;
 }
-
 export { HistorySearchDialog };

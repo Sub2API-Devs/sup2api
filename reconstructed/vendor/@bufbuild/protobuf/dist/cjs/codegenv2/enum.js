@@ -8,20 +8,24 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:378397-378745 cjs-require-graph
-var Ea = x(function (bD) {
-  Object.defineProperty(bD, "__esModule", { value: !0 });
-  bD.enumDesc = H7;
-  bD.tsEnum = K7;
-  function H7(e, n, ...r) {
-    if (r.length == 0) return e.enums[n];
-    let s = r.pop();
-    return r.reduce((h, y) => h.nestedMessages[y], e.messages[n]).nestedEnums[s];
+var require_enum = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.enumDesc = enumDesc;
+  cjsExports.tsEnum = tsEnum;
+  function enumDesc(file, path, ...paths) {
+    if (paths.length == 0) return file.enums[path];
+    let e = paths.pop();
+    return paths.reduce((acc, cur) => acc.nestedMessages[cur], file.messages[path]).nestedEnums[e];
   }
-  function K7(e) {
-    let n = {};
-    for (let r of e.values) ((n[r.localName] = r.number), (n[r.number] = r.localName));
-    return n;
+  function tsEnum(desc) {
+    let enumObject = {};
+    for (let value of desc.values) {
+      enumObject[value.localName] = value.number;
+      enumObject[value.number] = value.localName;
+    }
+    return enumObject;
   }
 });
-
-export { Ea };
+export { require_enum };

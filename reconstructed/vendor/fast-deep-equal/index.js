@@ -8,30 +8,34 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-dxsqk077.js:226-953 cjs-fingerprint
-var SZo = x(function (p, s) {
-  s.exports = function o(r, e) {
-    if (r === e) return !0;
-    if (r && e && typeof r == "object" && typeof e == "object") {
-      if (r.constructor !== e.constructor) return !1;
-      var u, t, f;
-      if (Array.isArray(r)) {
-        if (((u = r.length), u != e.length)) return !1;
-        for (t = u; t-- !== 0;) if (!o(r[t], e[t])) return !1;
-        return !0;
+var require_fast_deep_equal = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = function equal(a, b) {
+    if (a === b) return true;
+    if (a && b && typeof a == "object" && typeof b == "object") {
+      if (a.constructor !== b.constructor) return false;
+      var length;
+      var i;
+      var keys;
+      if (Array.isArray(a)) {
+        length = a.length;
+        if (length != b.length) return false;
+        for (i = length; i-- !== 0;) if (!equal(a[i], b[i])) return false;
+        return true;
       }
-      if (r.constructor === RegExp) return r.source === e.source && r.flags === e.flags;
-      if (r.valueOf !== Object.prototype.valueOf) return r.valueOf() === e.valueOf();
-      if (r.toString !== Object.prototype.toString) return r.toString() === e.toString();
-      if (((f = Object.keys(r)), (u = f.length), u !== Object.keys(e).length)) return !1;
-      for (t = u; t-- !== 0;) if (!Object.prototype.hasOwnProperty.call(e, f[t])) return !1;
-      for (t = u; t-- !== 0;) {
-        var n = f[t];
-        if (!o(r[n], e[n])) return !1;
+      if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
+      if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
+      if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
+      keys = Object.keys(a);
+      length = keys.length;
+      if (length !== Object.keys(b).length) return false;
+      for (i = length; i-- !== 0;) if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
+      for (i = length; i-- !== 0;) {
+        var key = keys[i];
+        if (!equal(a[key], b[key])) return false;
       }
-      return !0;
+      return true;
     }
-    return r !== r && e !== e;
+    return a !== a && b !== b;
   };
 });
-
-export { SZo };
+export { require_fast_deep_equal };

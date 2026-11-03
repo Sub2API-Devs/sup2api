@@ -19,7 +19,7 @@ import {
   getPromptId,
   isDiskless,
 } from "../../bootstrap/state.js";
-import { Ae, C } from "./gatewayIdentityAttributes.js";
+import { promClient_2, otelApi } from "./gatewayIdentityAttributes.js";
 import { activeOtelContext } from "./messageContentAttributes.js";
 import { eventRecordQueue, buildEventRecord } from "./thirdPartyEventRecords.js";
 import { getTelemetryAttributes } from "../telemetryAttributes.js";
@@ -31,7 +31,7 @@ import { logForDebugging } from "../debug.js";
 //@ chunk-p52gp8zk.js:14655-14702 placement
 class OTelEventState {
   nextSequence = 0;
-  warnedNoEventLogger = !1;
+  warnedNoEventLogger = false;
 }
 //@ chunk-p52gp8zk.js:14702-14727 placement
 var otelEventStateByHost = new HostScoped(() => new OTelEventState());
@@ -39,87 +39,104 @@ var otelEventStateByHost = new HostScoped(() => new OTelEventState());
 function isUserPromptLoggingEnabled_2() {
   return env.OTEL_LOG_USER_PROMPTS;
 }
+//@ chunk-p52gp8zk.js:14772-14814 fingerprint = redactIfDisabled (1)
 /**
  * OTEL_LOG_USER_PROMPTS 未开启时返回 <REDACTED>。
  */
-//@ chunk-p52gp8zk.js:14772-14814 fingerprint = redactIfDisabled (1)
 function redactIfDisabled(content) {
   return isUserPromptLoggingEnabled_2() ? content : "<REDACTED>";
 }
 //@ chunk-p52gp8zk.js:14814-14977 layout = redactIfDisabled (0.762)
 function redactIfDisabled_2(content) {
-  if (content === void 0) return { prompt: "<REDACTED>", prompt_text: "<REDACTED>" };
+  if (content === undefined)
+    return {
+      prompt: "<REDACTED>",
+      prompt_text: "<REDACTED>",
+    };
   let n = isUserPromptLoggingEnabled_2()
-    ? redactAccountMemoryText(() => accountMemoryRedactionKeys(getRootSession().host), void 0, content)
+    ? redactAccountMemoryText(() => accountMemoryRedactionKeys(getRootSession().host), undefined, content)
     : redactIfDisabled(content);
-  return { prompt: n, prompt_text: n };
+  return {
+    prompt: n,
+    prompt_text: n,
+  };
 }
 //@ chunk-p52gp8zk.js:14977-15055 layout
 function isAssistantResponseLoggingEnabled() {
   return env.OTEL_LOG_ASSISTANT_RESPONSES ?? env.OTEL_LOG_USER_PROMPTS;
 }
 //@ chunk-p52gp8zk.js:15055-15095 layout
-var nt = new Ae.W3CTraceContextPropagator();
+var traceContextPropagator = new promClient_2.W3CTraceContextPropagator();
 //@ chunk-p52gp8zk.js:15095-15314 layout
 function getEventContext() {
-  let e = activeOtelContext(),
-    spanContext = C.trace.getSpanContext(e);
-  if (spanContext && C.isSpanContextValid(spanContext)) return e;
+  let e = activeOtelContext();
+  let spanContext = otelApi.trace.getSpanContext(e);
+  if (spanContext && otelApi.isSpanContextValid(spanContext)) return e;
   if (getIsNonInteractiveSession() && env.TRACEPARENT)
-    return nt.extract(
+    return traceContextPropagator.extract(
       e,
-      { traceparent: env.TRACEPARENT, tracestate: env.TRACESTATE },
-      C.defaultTextMapGetter,
+      {
+        traceparent: env.TRACEPARENT,
+        tracestate: env.TRACESTATE,
+      },
+      otelApi.defaultTextMapGetter,
     );
   return;
 }
+//@ chunk-p52gp8zk.js:15314-16085 fingerprint = logOTelEvent (0.668)
 /**
  * 发 OTel 事件（claude_code.<name>）：属性含 getTelemetryAttributes、event.name/timestamp/sequence、prompt.id、workspace.host_paths、agent id；无事件 logger 时可跳过。
  */
-//@ chunk-p52gp8zk.js:15314-16085 fingerprint = logOTelEvent (0.668)
-async function logOTelEvent(e, n = {}, o, r) {
-  let of = otelEventStateByHost.of(getRootSession().host);
+async function logOTelEvent(e, metadata = {}, agentContext, hookOrigin) {
+  let s = otelEventStateByHost.of(getRootSession().host);
   if (
-    of.warnedNoEventLogger &&
+    s.warnedNoEventLogger &&
     getEventLogger() === null &&
     !isOTelInitPending() &&
     !env.CLAUDE_CODE_DISABLE_OTEL_EVENT_SKIP &&
     eventRecordQueue.isIdle() &&
-    eventRecordQueue.getRoad()?.isWatched(r) === !1
+    eventRecordQueue.getRoad()?.isWatched(hookOrigin) === false
   )
     return;
   let attributes = {
-      ...getTelemetryAttributes(),
-      "event.name": e,
-      "event.timestamp": new Date().toISOString(),
-      "event.sequence": of.nextSequence++,
-    },
-    promptId = getPromptId();
+    ...getTelemetryAttributes(),
+    "event.name": e,
+    "event.timestamp": new Date().toISOString(),
+    "event.sequence": s.nextSequence++,
+  };
+  let promptId = getPromptId();
   if (promptId) attributes["prompt.id"] = promptId;
   let workspaceDir = env.CLAUDE_CODE_WORKSPACE_HOST_PATHS;
   if (workspaceDir) attributes["workspace.host_paths"] = workspaceDir.split("|");
-  Object.assign(attributes, getWorkflowSpanAttributes(o));
-  for (let [m, E] of Object.entries(isDiskless() ? maskModelIdsInRecord(n) : n)) {
-    let g = m === "error" && isDiskless() && !/^[a-z0-9_]+$/.test(String(E));
-    if (E !== void 0 && !g) attributes[m] = E;
+  Object.assign(attributes, getWorkflowSpanAttributes(agentContext));
+  for (let [key, value] of Object.entries(isDiskless() ? maskModelIdsInRecord(metadata) : metadata)) {
+    let g = key === "error" && isDiskless() && !/^[a-z0-9_]+$/.test(String(value));
+    if (value !== undefined && !g) attributes[key] = value;
   }
   try {
-    Object.assign(attributes, agentAttributes(o));
+    Object.assign(attributes, agentAttributes(agentContext));
   } catch (error) {
-    logForDebugging(`[3P telemetry] Agent ids not stamped: ${String(error)}`, { level: "warn" });
+    logForDebugging(`[3P telemetry] Agent ids not stamped: ${String(error)}`, {
+      level: "warn",
+    });
   }
-  let date = new Date(),
-    y = getEventContext();
+  let loggedAt = new Date();
+  let eventContext = getEventContext();
   await eventRecordQueue.route(
-    () => buildEventRecord({ event: e, attributes: attributes, loggedAt: date, eventContext: y }),
-    r,
+    () =>
+      buildEventRecord({
+        event: e,
+        attributes,
+        loggedAt,
+        eventContext,
+      }),
+    hookOrigin,
   );
 }
 //@ chunk-a9ek44g8.js:2113-2157 fingerprint = isUserPromptLoggingEnabled (1)
 function isUserPromptLoggingEnabled() {
   return env.OTEL_LOG_USER_PROMPTS;
 }
-
 export {
   logOTelEvent,
   isUserPromptLoggingEnabled,

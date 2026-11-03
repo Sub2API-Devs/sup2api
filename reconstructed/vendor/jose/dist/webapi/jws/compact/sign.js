@@ -10,17 +10,18 @@ import { Oe } from "../flattened/sign.js";
 //@ chunk-5h78gfwc.js:46644-46950 esm-fingerprint
 class Me {
   #e;
-  constructor(e) {
-    this.#e = new Oe(e);
+  constructor(payload) {
+    this.#e = new Oe(payload);
   }
-  setProtectedHeader(e) {
-    return (this.#e.setProtectedHeader(e), this);
+  setProtectedHeader(protectedHeader) {
+    this.#e.setProtectedHeader(protectedHeader);
+    return this;
   }
-  async sign(e, t) {
-    let sign = await this.#e.sign(e, t);
-    if (sign.payload === void 0) throw TypeError("use the flattened module for creating JWS with b64: false");
-    return `${sign.protected}.${sign.payload}.${sign.signature}`;
+  async sign(key, options) {
+    let jws = await this.#e.sign(key, options);
+    if (jws.payload === undefined)
+      throw TypeError("use the flattened module for creating JWS with b64: false");
+    return `${jws.protected}.${jws.payload}.${jws.signature}`;
   }
 }
-
 export { Me };

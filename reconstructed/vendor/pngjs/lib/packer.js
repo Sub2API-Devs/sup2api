@@ -6,88 +6,96 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { se } from "./constants.js";
-import { dt } from "./crc.js";
-import { jr } from "./bitpacker.js";
-import { Zr } from "./filter-pack.js";
+import { require_constants } from "./constants.js";
+import { require_crc } from "./crc.js";
+import { require_bitpacker } from "./bitpacker.js";
+import { require_filter_pack } from "./filter-pack.js";
 
 //@ chunk-spjgqa4y.js:40773-42993 cjs-fingerprint
-var yt = x(function ($l, en) {
-  var y = se(),
-    $r = dt(),
-    os = jr(),
-    ss = Zr(),
-    Xr = importMetaRequire("zlib"),
-    z = (en.exports = function (t) {
-      if (
-        ((this._options = t),
-        (t.deflateChunkSize = t.deflateChunkSize || 32768),
-        (t.deflateLevel = t.deflateLevel != null ? t.deflateLevel : 9),
-        (t.deflateStrategy = t.deflateStrategy != null ? t.deflateStrategy : 3),
-        (t.inputHasAlpha = t.inputHasAlpha != null ? t.inputHasAlpha : !0),
-        (t.deflateFactory = t.deflateFactory || Xr.createDeflate),
-        (t.bitDepth = t.bitDepth || 8),
-        (t.colorType = typeof t.colorType === "number" ? t.colorType : y.COLORTYPE_COLOR_ALPHA),
-        (t.inputColorType =
-          typeof t.inputColorType === "number" ? t.inputColorType : y.COLORTYPE_COLOR_ALPHA),
-        [y.COLORTYPE_GRAYSCALE, y.COLORTYPE_COLOR, y.COLORTYPE_COLOR_ALPHA, y.COLORTYPE_ALPHA].indexOf(
-          t.colorType,
-        ) === -1)
-      )
-        throw Error("option color type:" + t.colorType + " is not supported at present");
-      if (
-        [y.COLORTYPE_GRAYSCALE, y.COLORTYPE_COLOR, y.COLORTYPE_COLOR_ALPHA, y.COLORTYPE_ALPHA].indexOf(
-          t.inputColorType,
-        ) === -1
-      )
-        throw Error("option input color type:" + t.inputColorType + " is not supported at present");
-      if (t.bitDepth !== 8 && t.bitDepth !== 16)
-        throw Error("option bit depth:" + t.bitDepth + " is not supported at present");
-    });
-  z.prototype.getDeflateOptions = function () {
+var require_packer = x(function (cjsExports, cjsModule) {
+  var constants = require_constants();
+  var CrcStream = require_crc();
+  var bitPacker = require_bitpacker();
+  var filter = require_filter_pack();
+  var zlib = importMetaRequire("zlib");
+  var Packer = (cjsModule.exports = function (options) {
+    this._options = options;
+    options.deflateChunkSize = options.deflateChunkSize || 32768;
+    options.deflateLevel = options.deflateLevel != null ? options.deflateLevel : 9;
+    options.deflateStrategy = options.deflateStrategy != null ? options.deflateStrategy : 3;
+    options.inputHasAlpha = options.inputHasAlpha != null ? options.inputHasAlpha : true;
+    options.deflateFactory = options.deflateFactory || zlib.createDeflate;
+    options.bitDepth = options.bitDepth || 8;
+    options.colorType =
+      typeof options.colorType === "number" ? options.colorType : constants.COLORTYPE_COLOR_ALPHA;
+    options.inputColorType =
+      typeof options.inputColorType === "number" ? options.inputColorType : constants.COLORTYPE_COLOR_ALPHA;
+    if (
+      [
+        constants.COLORTYPE_GRAYSCALE,
+        constants.COLORTYPE_COLOR,
+        constants.COLORTYPE_COLOR_ALPHA,
+        constants.COLORTYPE_ALPHA,
+      ].indexOf(options.colorType) === -1
+    )
+      throw Error("option color type:" + options.colorType + " is not supported at present");
+    if (
+      [
+        constants.COLORTYPE_GRAYSCALE,
+        constants.COLORTYPE_COLOR,
+        constants.COLORTYPE_COLOR_ALPHA,
+        constants.COLORTYPE_ALPHA,
+      ].indexOf(options.inputColorType) === -1
+    )
+      throw Error("option input color type:" + options.inputColorType + " is not supported at present");
+    if (options.bitDepth !== 8 && options.bitDepth !== 16)
+      throw Error("option bit depth:" + options.bitDepth + " is not supported at present");
+  });
+  Packer.prototype.getDeflateOptions = function () {
     return {
       chunkSize: this._options.deflateChunkSize,
       level: this._options.deflateLevel,
       strategy: this._options.deflateStrategy,
     };
   };
-  z.prototype.createDeflate = function () {
+  Packer.prototype.createDeflate = function () {
     return this._options.deflateFactory(this.getDeflateOptions());
   };
-  z.prototype.filterData = function (t, e, r) {
-    let n = os(t, e, r, this._options),
-      i = y.COLORTYPE_TO_BPP_MAP[this._options.colorType];
-    return ss(n, e, r, this._options, i);
+  Packer.prototype.filterData = function (data, width, height) {
+    let packedData = bitPacker(data, width, height, this._options);
+    let bpp = constants.COLORTYPE_TO_BPP_MAP[this._options.colorType];
+    return filter(packedData, width, height, this._options, bpp);
   };
-  z.prototype._packChunk = function (t, e) {
-    let r = e ? e.length : 0,
-      alloc = Buffer.alloc(r + 12);
-    if ((alloc.writeUInt32BE(r, 0), alloc.writeUInt32BE(t, 4), e)) e.copy(alloc, 8);
-    return (alloc.writeInt32BE($r.crc32(alloc.slice(4, alloc.length - 4)), alloc.length - 4), alloc);
+  Packer.prototype._packChunk = function (type, data) {
+    let len = data ? data.length : 0;
+    let buf = Buffer.alloc(len + 12);
+    buf.writeUInt32BE(len, 0);
+    buf.writeUInt32BE(type, 4);
+    if (data) data.copy(buf, 8);
+    buf.writeInt32BE(CrcStream.crc32(buf.slice(4, buf.length - 4)), buf.length - 4);
+    return buf;
   };
-  z.prototype.packGAMA = function (t) {
-    let alloc = Buffer.alloc(4);
-    return (alloc.writeUInt32BE(Math.floor(t * y.GAMMA_DIVISION), 0), this._packChunk(y.TYPE_gAMA, alloc));
+  Packer.prototype.packGAMA = function (gamma) {
+    let buf = Buffer.alloc(4);
+    buf.writeUInt32BE(Math.floor(gamma * constants.GAMMA_DIVISION), 0);
+    return this._packChunk(constants.TYPE_gAMA, buf);
   };
-  z.prototype.packIHDR = function (t, e) {
-    let alloc = Buffer.alloc(13);
-    return (
-      alloc.writeUInt32BE(t, 0),
-      alloc.writeUInt32BE(e, 4),
-      (alloc[8] = this._options.bitDepth),
-      (alloc[9] = this._options.colorType),
-      (alloc[10] = 0),
-      (alloc[11] = 0),
-      (alloc[12] = 0),
-      this._packChunk(y.TYPE_IHDR, alloc)
-    );
+  Packer.prototype.packIHDR = function (width, height) {
+    let buf = Buffer.alloc(13);
+    buf.writeUInt32BE(width, 0);
+    buf.writeUInt32BE(height, 4);
+    buf[8] = this._options.bitDepth;
+    buf[9] = this._options.colorType;
+    buf[10] = 0;
+    buf[11] = 0;
+    buf[12] = 0;
+    return this._packChunk(constants.TYPE_IHDR, buf);
   };
-  z.prototype.packIDAT = function (t) {
-    return this._packChunk(y.TYPE_IDAT, t);
+  Packer.prototype.packIDAT = function (data) {
+    return this._packChunk(constants.TYPE_IDAT, data);
   };
-  z.prototype.packIEND = function () {
-    return this._packChunk(y.TYPE_IEND, null);
+  Packer.prototype.packIEND = function () {
+    return this._packChunk(constants.TYPE_IEND, null);
   };
 });
-
-export { yt };
+export { require_packer };

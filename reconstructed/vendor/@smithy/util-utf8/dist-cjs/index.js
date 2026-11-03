@@ -6,34 +6,35 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { UQt } from "../../util-buffer-from/dist-cjs/index.js";
+import { require_util_buffer_from } from "../../util-buffer-from/dist-cjs/index.js";
 
 //@ chunk-wr8v03d0.js:1251-1939 cjs-fingerprint
-var IR = x(function (te) {
-  var O = UQt(),
-    q = (e) => {
-      let fromString = O.fromString(e, "utf8");
-      return new Uint8Array(
-        fromString.buffer,
-        fromString.byteOffset,
-        fromString.byteLength / Uint8Array.BYTES_PER_ELEMENT,
-      );
-    },
-    ee = (e) => {
-      if (typeof e === "string") return q(e);
-      if (ArrayBuffer.isView(e))
-        return new Uint8Array(e.buffer, e.byteOffset, e.byteLength / Uint8Array.BYTES_PER_ELEMENT);
-      return new Uint8Array(e);
-    },
-    re = (e) => {
-      if (typeof e === "string") return e;
-      if (typeof e !== "object" || typeof e.byteOffset !== "number" || typeof e.byteLength !== "number")
-        throw Error("@smithy/util-utf8: toUtf8 encoder function only accepts string | Uint8Array.");
-      return O.fromArrayBuffer(e.buffer, e.byteOffset, e.byteLength).toString("utf8");
-    };
-  te.fromUtf8 = q;
-  te.toUint8Array = ee;
-  te.toUtf8 = re;
+var require_util_utf8 = x(function (cjsExports) {
+  var import_util_buffer_from = require_util_buffer_from();
+  var fromUtf8 = (e) => {
+    let buf = import_util_buffer_from.fromString(e, "utf8");
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength / Uint8Array.BYTES_PER_ELEMENT);
+  };
+  var toUint8Array = (data) => {
+    if (typeof data === "string") return fromUtf8(data);
+    if (ArrayBuffer.isView(data))
+      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength / Uint8Array.BYTES_PER_ELEMENT);
+    return new Uint8Array(data);
+  };
+  var toUtf8 = (input) => {
+    if (typeof input === "string") return input;
+    if (
+      typeof input !== "object" ||
+      typeof input.byteOffset !== "number" ||
+      typeof input.byteLength !== "number"
+    )
+      throw Error("@smithy/util-utf8: toUtf8 encoder function only accepts string | Uint8Array.");
+    return import_util_buffer_from
+      .fromArrayBuffer(input.buffer, input.byteOffset, input.byteLength)
+      .toString("utf8");
+  };
+  cjsExports.fromUtf8 = fromUtf8;
+  cjsExports.toUint8Array = toUint8Array;
+  cjsExports.toUtf8 = toUtf8;
 });
-
-export { IR };
+export { require_util_utf8 };

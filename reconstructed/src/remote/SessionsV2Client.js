@@ -8,17 +8,17 @@
  * pieces: chunk-08945j39.js (12)
  * attribution: placement 11, affinity 1
  */
-import { randomUUID, randomUUID as randomUUID_2 } from "crypto";
+import { randomUUID } from "crypto";
 import {
-  Ot,
+  REPLAY_CLOCK_SKEW_MS,
   hasToolResultContent,
   hasNonTextContent,
-  ee,
+  toPrintableExcerpt,
   isHookCallbackControlRequest,
 } from "./controlRequestShape.js";
 import { createGzipFetchWrapper } from "../services/api/gzipRequestBody.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, T } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { BoundedUUIDSet } from "../bridge/bridgeMessaging.js";
 import { withDeadline, backoffDelayMs } from "../utils/sleep.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -50,79 +50,108 @@ import { recoverHostSessionsBearer, sendableHostSessionsBearer } from "../utils/
 import { logEvent } from "../services/analytics/index.js";
 import { SSEFrameBuffer } from "../cli/transports/SSETransport.js";
 import { logError } from "../utils/log.js";
-import { FORWARDED_MESSAGE_TYPES, pickSystemMessageFields, Ue } from "../services/homeSeed/firstSend.js";
+import {
+  FORWARDED_MESSAGE_TYPES,
+  pickSystemMessageFields,
+  FRAME_TRACK_INTERVAL_MS,
+} from "../services/homeSeed/firstSend.js";
 import { normalizeStreamEvent } from "./wireFrameShape.js";
 import { isPlainObject } from "../utils/isPlainObject.js";
 import { safeEmit, signClientEvent } from "../utils/telemetry/memorySummary.js";
-import { f$n, CXe } from "../services/remoteTools/awayTimings.js";
-import { Wt } from "./RemoteSessionManager.js";
+import {
+  RECONNECT_BACKOFF_BASE_MS,
+  SESSION_LIVENESS_TIMEOUT_MS,
+} from "../services/remoteTools/awayTimings.js";
+import { isTimeoutError } from "./RemoteSessionManager.js";
 
+//@ chunk-08945j39.js:11449-11700 placement
 /**
  * 远程会话客户端常量：重试/超时时长、致命 HTTP 状态集合、设备证明状态到 verified/unverified 的映射等。
  */
-//@ chunk-08945j39.js:11449-11700 placement
-var SESSION_CLIENT_LIMITS = null,
-  Le = 30000,
-  re = 5,
-  ce = 5000,
-  Mt = 30000,
-  $e = 30000,
-  qt = 30000,
-  Pt = new Set([401, 403, 404]),
-  Se = 4096,
-  At = {
-    verified: "verified",
-    verified_by_gate: "verified",
-    verified_keyless_device: "verified",
-    service_vouched: "verified",
-    absent: "unverified",
-    invalid: "unverified",
-  };
+var SESSION_CLIENT_LIMITS = null;
+var MAX_RECONNECT_BACKOFF_MS = 30000;
+var MAX_RECONNECT_ATTEMPTS = 5;
+var DRIFT_WATCH_INTERVAL_MS = 5000;
+var DOWN_GRACE_MS = 30000;
+var CONNECT_TIMEOUT_MS = 30000;
+var POST_EVENTS_TIMEOUT_MS = 30000;
+var PERMANENT_HTTP_STATUSES = new Set([401, 403, 404]);
+var STREAM_READ_CHUNK_BYTES = 4096;
+var DEVICE_ATTESTATION_VERDICTS = {
+  verified: "verified",
+  verified_by_gate: "verified",
+  verified_keyless_device: "verified",
+  service_vouched: "verified",
+  absent: "unverified",
+  invalid: "unverified",
+};
+//@ chunk-08945j39.js:11773-11928 placement
 /**
  * 把设备证明状态（可带 DEVICE_ATTESTATION_STATUS_ 前缀）映射为 verified/unverified/unknown。
  */
-//@ chunk-08945j39.js:11773-11928 placement
-function attestationStatus(e) {
-  if (typeof e !== "string") return "unknown";
-  let n = e.startsWith("DEVICE_ATTESTATION_STATUS_") ? e.slice(26).toLowerCase() : e;
-  return At[n] ?? "unknown";
+function attestationStatus(deviceAttestationStatus) {
+  if (typeof deviceAttestationStatus !== "string") return "unknown";
+  let n = deviceAttestationStatus.startsWith("DEVICE_ATTESTATION_STATUS_")
+    ? deviceAttestationStatus.slice(26).toLowerCase()
+    : deviceAttestationStatus;
+  return DEVICE_ATTESTATION_VERDICTS[n] ?? "unknown";
 }
+//@ chunk-08945j39.js:11940-12130 placement
 /**
  * 根据消息 created_at 计算发送时间、是否为重放（早于连接时间），以及按服务端时钟估算的延迟。
  */
-//@ chunk-08945j39.js:11940-12130 placement
-function messageTiming(e, n, s) {
+function messageTiming(e, connectedSince, serviceClock) {
   let i = typeof e.created_at === "string" ? Date.parse(e.created_at) : NaN;
-  if (Number.isNaN(i)) return { replayed: !0 };
-  return { sentAt: i, replayed: i < n + Ot, ...(s !== void 0 && { ageMs: serviceClockNow(s, i) - i }) };
+  if (Number.isNaN(i))
+    return {
+      replayed: true,
+    };
+  return {
+    sentAt: i,
+    replayed: i < connectedSince + REPLAY_CLOCK_SKEW_MS,
+    ...(serviceClock !== undefined && {
+      ageMs: serviceClockNow(serviceClock, i) - i,
+    }),
+  };
 }
+//@ chunk-08945j39.js:12592-12763 placement
 /**
  * 估算当前服务端时间（服务时间 + 本地流逝），遇到更晚的服务时间时校准。
  */
-//@ chunk-08945j39.js:12592-12763 placement
 function serviceClockNow(e, n) {
-  let now = Date.now(),
-    startTime = performance.now(),
-    r = e.serviceMs + Math.max(now - e.wallMs, startTime - e.monotonicMs);
-  if (n > r) return ((e.serviceMs = n), (e.wallMs = now), (e.monotonicMs = startTime), n);
+  let now = Date.now();
+  let startTime = performance.now();
+  let r = e.serviceMs + Math.max(now - e.wallMs, startTime - e.monotonicMs);
+  if (n > r) {
+    e.serviceMs = n;
+    e.wallMs = now;
+    e.monotonicMs = startTime;
+    return n;
+  }
   return r;
 }
+//@ chunk-08945j39.js:12763-12905 placement
 /**
  * CCR worker 标记与远程工具常量（结果过大、会话未激活、工具宿主结束）。
  */
-//@ chunk-08945j39.js:12763-12905 placement
-var CCR_WORKER_FLAG = createGzipFetchWrapper("ccr_worker", void 0),
-  REMOTE_TOOL_RESULT_TOO_LARGE = "remote_tool_result_too_large",
-  Ht = DoctorLazy(() => u({ error: u({ type: T("session_not_active") }) })),
-  TOOL_HOST_ENDED = "tool_host_ended";
+var CCR_WORKER_FLAG = createGzipFetchWrapper("ccr_worker", undefined);
+var REMOTE_TOOL_RESULT_TOO_LARGE = "remote_tool_result_too_large";
+var sessionNotActiveErrorSchema = DoctorLazy(() =>
+  u({
+    error: u({
+      type: literal("session_not_active"),
+    }),
+  }),
+);
+var TOOL_HOST_ENDED = "tool_host_ended";
 //@ chunk-08945j39.js:12905-12995 placement = extractErrorTypeFromData (1)
 function hasStringType(data) {
   return typeof data === "object" && data !== null && "type" in data && typeof data.type === "string";
 }
+//@ chunk-08945j39.js:12995-34473 placement
 /**
  * Sessions v2 客户端：连接状态机、事件流读写
  */
-//@ chunk-08945j39.js:12995-34473 placement
 class SessionsV2Client {
   sessionId;
   orgUuid;
@@ -139,7 +168,7 @@ class SessionsV2Client {
   lastDriftCheck = 0;
   lastHealthyAt;
   downSince;
-  driftRedial = !1;
+  driftRedial = false;
   dialsSinceUp = 0;
   lastSequenceNum = 0;
   issuedRequestIds = new Set();
@@ -149,59 +178,62 @@ class SessionsV2Client {
   trustedDeviceToken;
   trackedSends;
   servesSession;
-  rediallingPastBudget = !1;
+  rediallingPastBudget = false;
   connectedSince = 0;
-  resumed = !1;
-  serviceClock = void 0;
+  resumed = false;
+  serviceClock = undefined;
   eventSigner;
   controlOnly;
   admitProjectPersonMessages;
   withholdTrustedDeviceToken;
   constructor(
-    e,
-    n,
-    s,
-    i,
-    r,
-    S,
+    sessionId,
+    orgUuid,
+    getAccessToken,
+    callbacks,
+    onAuth401,
+    initialSequenceNum,
     {
-      trackSends: h = !1,
+      trackSends: h = false,
       keepRedialling: v,
       eventSigner: w,
-      controlOnly: R = !1,
-      admitProjectPersonMessages: y = !1,
-      withholdTrustedDeviceToken: b = !1,
+      controlOnly: R = false,
+      admitProjectPersonMessages: y = false,
+      withholdTrustedDeviceToken: b = false,
     } = {},
   ) {
-    this.sessionId = e;
-    this.orgUuid = n;
-    this.getAccessToken = s;
-    this.callbacks = i;
-    this.onAuth401 = r;
-    if (S !== void 0 && S > 0) this.lastSequenceNum = S;
-    ((this.trackedSends = h ? new Set() : null),
-      (this.servesSession = v ?? (() => !1)),
-      (this.eventSigner = w),
-      (this.controlOnly = R),
-      (this.admitProjectPersonMessages = y),
-      (this.withholdTrustedDeviceToken = b));
+    this.sessionId = sessionId;
+    this.orgUuid = orgUuid;
+    this.getAccessToken = getAccessToken;
+    this.callbacks = callbacks;
+    this.onAuth401 = onAuth401;
+    if (initialSequenceNum !== undefined && initialSequenceNum > 0) this.lastSequenceNum = initialSequenceNum;
+    this.trackedSends = h ? new Set() : null;
+    this.servesSession = v ?? (() => false);
+    this.eventSigner = w;
+    this.controlOnly = R;
+    this.admitProjectPersonMessages = y;
+    this.withholdTrustedDeviceToken = b;
   }
   get keepRedialling() {
     try {
       return this.servesSession();
     } catch {
-      return !1;
+      return false;
     }
   }
   serviceTimeMs() {
-    return this.serviceClock === void 0 ? void 0 : serviceClockNow(this.serviceClock, 0);
+    return this.serviceClock === undefined ? undefined : serviceClockNow(this.serviceClock, 0);
   }
   sendsInFlight() {
     let e = [...(this.trackedSends ?? [])];
-    return { count: e.length, settled: Promise.allSettled(e).then(() => {}) };
+    return {
+      count: e.length,
+      settled: Promise.allSettled(e).then(() => {}),
+    };
   }
   async flushSends(e) {
-    let { count: count, settled: settled } = this.sendsInFlight();
+    let { count, settled } = this.sendsInFlight();
     if (count > 0) await withDeadline(settled, e);
   }
   async connect() {
@@ -213,11 +245,11 @@ class SessionsV2Client {
       logForDebugging("[SessionsV2Client] Ignoring connect() \u2014 deliberately closed");
       return;
     }
-    ((this.state = "connecting"),
-      (this.closedCause = null),
-      this.dialsSinceUp++,
-      (this.connectedSince = Date.now()),
-      (this.resumed = this.lastSequenceNum > 0));
+    this.state = "connecting";
+    this.closedCause = null;
+    this.dialsSinceUp++;
+    this.connectedSince = Date.now();
+    this.resumed = this.lastSequenceNum > 0;
     let e = new URL(`${getOauthConfig().BASE_API_URL}/v1/code/sessions/${this.sessionId}/events/stream`);
     if (this.lastSequenceNum > 0) e.searchParams.set("from_sequence_num", String(this.lastSequenceNum));
     if (this.controlOnly) e.searchParams.set("control_only", "1");
@@ -228,267 +260,295 @@ class SessionsV2Client {
       s = await this.authHeaders();
     } catch (error) {
       if (this.abortController !== abortController) return;
-      (logForDebugging(
-        `[SessionsV2Client] Could not build the stream's credentials: ${errorMessage(error)}`,
-        { level: "error" },
-      ),
-        (this.abortController = null),
-        this.handleStreamEnd());
+      logForDebugging(`[SessionsV2Client] Could not build the stream's credentials: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      this.abortController = null;
+      this.handleStreamEnd();
       return;
     }
-    let i = { ...s.headers, Accept: "text/event-stream" };
+    let i = {
+      ...s.headers,
+      Accept: "text/event-stream",
+    };
     if (abortController.signal.aborted || this.abortController !== abortController) return;
     if (this.lastSequenceNum > 0) i["Last-Event-ID"] = String(this.lastSequenceNum);
-    (logForDebugging(
-      `[SessionsV2Client] Connecting to ${e.href} (from_sequence_num=${this.lastSequenceNum})`,
-    ),
-      this.readStream(e, i, abortController, s.bearer, s.withheld));
+    logForDebugging(`[SessionsV2Client] Connecting to ${e.href} (from_sequence_num=${this.lastSequenceNum})`);
+    this.readStream(e, i, abortController, s.bearer, s.withheld);
   }
   loadTrustedDeviceToken() {
     if (this.withholdTrustedDeviceToken) return Promise.resolve("");
-    let e = void 0,
-      n = () => {
-        if (this.trustedDeviceToken === e) this.trustedDeviceToken = void 0;
-      },
-      s = (async () => {
-        try {
-          let i = (await getTrustedDeviceToken()) ?? "";
-          if (!i) n();
-          return i;
-        } catch (error) {
-          return (
-            n(),
-            logForDebugging(
-              `[SessionsV2Client] trusted-device token unavailable, sending no td-v1 header: ${errorMessage(error)}`,
-            ),
-            ""
-          );
-        }
-      })();
-    return ((e = s), s);
+    let e = undefined;
+    let n = () => {
+      if (this.trustedDeviceToken === e) this.trustedDeviceToken = undefined;
+    };
+    let s = (async () => {
+      try {
+        let i = (await getTrustedDeviceToken()) ?? "";
+        if (!i) n();
+        return i;
+      } catch (error) {
+        n();
+        logForDebugging(
+          `[SessionsV2Client] trusted-device token unavailable, sending no td-v1 header: ${errorMessage(error)}`,
+        );
+        return "";
+      }
+    })();
+    e = s;
+    return s;
   }
   rereadTrustedDeviceToken() {
-    if (((this.trustedDeviceToken = void 0), isDeviceIdentityEnabledCached())) clearTrustedDeviceTokenCache();
+    this.trustedDeviceToken = undefined;
+    if (isDeviceIdentityEnabledCached()) clearTrustedDeviceTokenCache();
   }
   async recoverTrustedDeviceToken(e, n) {
     try {
-      if (this.withholdTrustedDeviceToken) return !1;
-      if (!(await isDeviceIdentityEnabled())) return !1;
-      if (!shouldCloudSessionEnroll(e))
-        return (logRefusalWithoutEnrollment("[SessionsV2Client]", e), this.rereadTrustedDeviceToken(), !1);
-      let s = await recoverFromUntrustedDevice(n || void 0);
-      if (!s) return !1;
-      return ((this.trustedDeviceToken = Promise.resolve(s)), !0);
+      if (this.withholdTrustedDeviceToken) return false;
+      if (!(await isDeviceIdentityEnabled())) return false;
+      if (!shouldCloudSessionEnroll(e)) {
+        logRefusalWithoutEnrollment("[SessionsV2Client]", e);
+        this.rereadTrustedDeviceToken();
+        return false;
+      }
+      let s = await recoverFromUntrustedDevice(n || undefined);
+      if (!s) return false;
+      this.trustedDeviceToken = Promise.resolve(s);
+      return true;
     } catch (error) {
-      return (
-        logForDebugging(`[SessionsV2Client] trusted-device re-enrollment failed: ${errorMessage(error)}`),
-        !1
-      );
+      logForDebugging(`[SessionsV2Client] trusted-device re-enrollment failed: ${errorMessage(error)}`);
+      return false;
     }
   }
-  async postEvents(e, n, s, i = qt) {
-    let r = await CCR_WORKER_FLAG(
+  async postEvents(e, n, s, i = POST_EVENTS_TIMEOUT_MS) {
+    let manifestData = await CCR_WORKER_FLAG(
       e,
       {
         method: "POST",
         headers: s,
         body: jsonStringify(n),
         signal: AbortSignal.timeout(i),
-        ...getProxyFetchOptions({ url: e }),
+        ...getProxyFetchOptions({
+          url: e,
+        }),
       },
       (w) => fetch(e, w),
     );
-    if (r.ok) {
-      let R = (await r.json()).results?.[0],
-        y = R ? parseInt(String(R.sequence_num), 10) : NaN;
-      return { ok: !0, sequence_num: isNaN(y) ? 0 : y };
+    if (manifestData.ok) {
+      let R = (await manifestData.json()).results?.[0];
+      let y = R ? parseInt(String(R.sequence_num), 10) : NaN;
+      return {
+        ok: true,
+        sequence_num: isNaN(y) ? 0 : y,
+      };
     }
-    let S,
-      h = !1,
-      v = r.status === 413;
-    if (r.status === 403 && isDeviceIdentityEnabledCached()) {
-      let w = await classifyForbiddenResponse(r);
-      S = w.reason === "untrusted_device" ? w.about : void 0;
-    } else if (r.status === 409) h = await Kt(r);
-    else if (r.status === 400) v = xt(await parseAndValidateManifestFromBytes(r));
-    else await drainResponseBody(r);
+    let refusal;
+    let inactive = false;
+    let tooLarge = manifestData.status === 413;
+    if (manifestData.status === 403 && isDeviceIdentityEnabledCached()) {
+      let w = await classifyForbiddenResponse(manifestData);
+      refusal = w.reason === "untrusted_device" ? w.about : undefined;
+    } else if (manifestData.status === 409) inactive = await isSessionNotActiveManifest(manifestData);
+    else if (manifestData.status === 400)
+      tooLarge = isRemoteToolResultTooLarge(await parseAndValidateManifestFromBytes(manifestData));
+    else await drainResponseBody(manifestData);
     return {
-      ok: !1,
-      status: r.status,
-      refusal: S,
-      inactive: h,
-      tooLarge: v,
+      ok: false,
+      status: manifestData.status,
+      refusal,
+      inactive,
+      tooLarge,
       sentDeviceToken: s["X-Trusted-Device-Token"],
     };
   }
   async readStream(e, n, s, i, r) {
-    let S,
-      h = !1,
-      v = setTimeout(() => {
-        ((h = !0), s.abort());
-      }, $e);
+    let S;
+    let h = false;
+    let timer = setTimeout(() => {
+      h = true;
+      s.abort();
+    }, CONNECT_TIMEOUT_MS);
     try {
       S = await fetch(e.href, {
         method: "GET",
         headers: n,
         signal: s.signal,
-        ...getProxyFetchOptions({ url: e.href }),
+        ...getProxyFetchOptions({
+          url: e.href,
+        }),
       });
     } catch (error) {
-      if ((clearTimeout(v), this.abortController !== s)) return;
+      clearTimeout(timer);
+      if (this.abortController !== s) return;
       if (h) {
-        (logForDebugging(`[SessionsV2Client] Connect timed out after ${$e}ms, reconnecting`, {
+        logForDebugging(`[SessionsV2Client] Connect timed out after ${CONNECT_TIMEOUT_MS}ms, reconnecting`, {
           level: "error",
-        }),
-          logFeatureSad("remote_connect", "remote_connect_timeout"),
-          this.handleStreamEnd());
+        });
+        logFeatureSad("remote_connect", "remote_connect_timeout");
+        this.handleStreamEnd();
         return;
       }
       if (s.signal.aborted) return;
-      if (
-        (logForDebugging(`[SessionsV2Client] Connect error: ${errorMessage(error)}`, { level: "error" }),
-        logFeatureSad("remote_connect", "remote_connect_request_failed"),
-        this.callbacks.onError?.(toError(error)),
-        this.abortController !== s)
-      )
-        return;
+      logForDebugging(`[SessionsV2Client] Connect error: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      logFeatureSad("remote_connect", "remote_connect_request_failed");
+      this.callbacks.onError?.(toError(error));
+      if (this.abortController !== s) return;
       this.handleStreamEnd();
       return;
     }
     if (!S.ok || !S.body) {
-      logForDebugging(`[SessionsV2Client] HTTP ${S.status} on SSE connect`, { level: "error" });
-      let k = S.status === 403 ? await classifyForbiddenResponse(S) : void 0;
-      if (k === void 0) await drainResponseBody(S);
-      let P = k?.reason;
-      if ((clearTimeout(v), this.abortController !== s)) return;
+      logForDebugging(`[SessionsV2Client] HTTP ${S.status} on SSE connect`, {
+        level: "error",
+      });
+      let k = S.status === 403 ? await classifyForbiddenResponse(S) : undefined;
+      if (k === undefined) await drainResponseBody(S);
+      let reason = k?.reason;
+      clearTimeout(timer);
+      if (this.abortController !== s) return;
       if (S.status === 401 && (r || this.onAuth401)) {
-        (logForDebugging(
+        logForDebugging(
           r
             ? "[SessionsV2Client] 401 on SSE connect that carried no credential \u2014 asking the holder again"
             : "[SessionsV2Client] 401 on SSE connect \u2014 refreshing",
-        ),
-          logFeatureBad("remote_connect", "remote_connect_auth_401"));
+        );
+        logFeatureBad("remote_connect", "remote_connect_auth_401");
         let q = r
           ? await recoverHostSessionsBearer(i, "withheld").then(
               () => this.nextDialCarriesCredential(),
               () => this.nextDialCarriesCredential(),
             )
-          : await (this.onAuth401?.(i) ?? Promise.resolve(!1)).catch(() => !1);
+          : await (this.onAuth401?.(i) ?? Promise.resolve(false)).catch(() => false);
         if (this.abortController !== s) return;
-        if (!q && this.reconnectAttempts >= re && this.keepRedialling) {
-          (logFeatureBad("remote_connect", "remote_connect_reconnect_exhausted"),
-            (this.state = "closed"),
-            (this.closedCause = "exhausted"),
-            this.callbacks.onClose?.());
+        if (!q && this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS && this.keepRedialling) {
+          logFeatureBad("remote_connect", "remote_connect_reconnect_exhausted");
+          this.state = "closed";
+          this.closedCause = "exhausted";
+          this.callbacks.onClose?.();
           return;
         }
         this.handleStreamEnd();
         return;
       }
       if (k?.reason === "untrusted_device") {
-        let recoverTrustedDeviceToken = await this.recoverTrustedDeviceToken(
-          k.about,
-          n["X-Trusted-Device-Token"],
-        );
+        let q = await this.recoverTrustedDeviceToken(k.about, n["X-Trusted-Device-Token"]);
         if (this.abortController !== s) return;
-        if (recoverTrustedDeviceToken) {
-          (logForDebugging(
+        if (q) {
+          logForDebugging(
             "[SessionsV2Client] untrusted_device on SSE connect \u2014 re-enrolled, reconnecting",
-          ),
-            logFeatureSad("remote_connect", "remote_connect_untrusted_device"),
-            this.handleStreamEnd());
+          );
+          logFeatureSad("remote_connect", "remote_connect_untrusted_device");
+          this.handleStreamEnd();
           return;
         }
       }
-      if (Pt.has(S.status)) {
-        (logFeatureBad(
+      if (PERMANENT_HTTP_STATUSES.has(S.status)) {
+        logFeatureBad(
           "remote_connect",
           k?.reason === "untrusted_device" && k.about.kind === "unrecognized"
             ? "remote_connect_unknown_sub_reason"
             : "remote_connect_permanent_failure",
           deviceIdentityTelemetry(n),
-        ),
-          (this.state = "closed"),
-          (this.closedCause = "permanentHttp"),
-          this.callbacks.onClose?.(P));
+        );
+        this.state = "closed";
+        this.closedCause = "permanentHttp";
+        this.callbacks.onClose?.(reason);
         return;
       }
-      (logFeatureSad("remote_connect", "remote_connect_http_error"), this.handleStreamEnd());
+      logFeatureSad("remote_connect", "remote_connect_http_error");
+      this.handleStreamEnd();
       return;
     }
-    if ((clearTimeout(v), this.abortController !== s)) {
+    clearTimeout(timer);
+    if (this.abortController !== s) {
       S.body.cancel().catch(() => {});
       return;
     }
-    let parse = Date.parse(S.headers.get("date") ?? "");
-    if (Number.isNaN(parse))
-      ((this.serviceClock = void 0),
-        logForDebugging(
-          "[SessionsV2Client] The stream answered without a Date header: frames on it cannot be dated against the service clock",
-          { level: "warn" },
-        ));
-    else
-      ((this.connectedSince = parse),
-        (this.serviceClock = { serviceMs: parse, wallMs: Date.now(), monotonicMs: performance.now() }));
-    ((this.state = "connected"), (this.reconnectAttempts = 0), (this.rediallingPastBudget = !1));
+    let timestamp = Date.parse(S.headers.get("date") ?? "");
+    if (Number.isNaN(timestamp)) {
+      this.serviceClock = undefined;
+      logForDebugging(
+        "[SessionsV2Client] The stream answered without a Date header: frames on it cannot be dated against the service clock",
+        {
+          level: "warn",
+        },
+      );
+    } else {
+      this.connectedSince = timestamp;
+      this.serviceClock = {
+        serviceMs: timestamp,
+        wallMs: Date.now(),
+        monotonicMs: performance.now(),
+      };
+    }
+    this.state = "connected";
+    this.reconnectAttempts = 0;
+    this.rediallingPastBudget = false;
     let R = {
-      gapMs: this.downSince === void 0 ? 0 : Date.now() - this.downSince,
+      gapMs: this.downSince === undefined ? 0 : Date.now() - this.downSince,
       driftRedial: this.driftRedial,
     };
-    if (this.downSince !== void 0)
+    if (this.downSince !== undefined)
       logEvent("tengu_remote_stream_regained", {
         gap_ms: R.gapMs,
         attempts: this.dialsSinceUp,
         drift_redial: R.driftRedial,
         keeps_redialling: this.keepRedialling,
       });
-    ((this.downSince = void 0),
-      (this.driftRedial = !1),
-      (this.dialsSinceUp = 0),
-      this.resetLivenessTimer(),
-      this.startDriftWatch(),
-      logForDebugging("[SessionsV2Client] Connected"),
-      logFeatureOk("remote_connect", deviceIdentityTelemetry(n)),
-      this.callbacks.onConnected?.(R));
-    let reader = S.body.getReader(),
-      b = new SSEFrameBuffer();
+    this.downSince = undefined;
+    this.driftRedial = false;
+    this.dialsSinceUp = 0;
+    this.resetLivenessTimer();
+    this.startDriftWatch();
+    logForDebugging("[SessionsV2Client] Connected");
+    logFeatureOk("remote_connect", deviceIdentityTelemetry(n));
+    this.callbacks.onConnected?.(R);
+    let reader = S.body.getReader();
+    let b = new SSEFrameBuffer();
     try {
-      while (!0) {
+      while (true) {
         let { done: k, value: P } = await reader.read();
         if (this.abortController !== s) return;
         if (k) break;
         for (let q of b.push(P)) {
           if (this.abortController !== s) return;
-          if ((this.resetLivenessTimer(), q.event && q.data)) this.handleFrame(q.event, q.id, q.data);
+          this.resetLivenessTimer();
+          if (q.event && q.data) this.handleFrame(q.event, q.id, q.data);
         }
       }
     } catch (error) {
       if (s.signal.aborted) return;
-      (logForDebugging(`[SessionsV2Client] Stream read error: ${errorMessage(error)}`, { level: "error" }),
-        logFeatureSad("remote_connect", "remote_connect_stream_error"));
+      logForDebugging(`[SessionsV2Client] Stream read error: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      logFeatureSad("remote_connect", "remote_connect_stream_error");
     } finally {
       reader.releaseLock();
     }
-    if (!s.signal.aborted) (logForDebugging("[SessionsV2Client] Stream ended"), this.handleStreamEnd());
+    if (!s.signal.aborted) {
+      logForDebugging("[SessionsV2Client] Stream ended");
+      this.handleStreamEnd();
+    }
   }
   handleFrame(e, n, s) {
     let i;
     try {
       i = jsonParse(s);
     } catch (error) {
-      (logError(
+      logError(
         withTelemetryMessage(
           Error(`[SessionsV2Client] Failed to parse ${e} frame: ${errorMessage(error)}`),
           "SessionsV2Client: failed to parse event frame",
         ),
-      ),
-        logFeatureSad("remote_connect", "remote_connect_frame_parse_failed"));
+      );
+      logFeatureSad("remote_connect", "remote_connect_frame_parse_failed");
       return;
     }
     switch (e) {
       case "client_event": {
-        let r = i,
-          S = parseInt(n ?? String(r.sequence_num), 10);
+        let r = i;
+        let S = parseInt(n ?? String(r.sequence_num), 10);
         if (!isNaN(S) && S > this.lastSequenceNum) this.lastSequenceNum = S;
         if (!hasStringType(r.payload)) {
           logForDebugging(
@@ -497,11 +557,13 @@ class SessionsV2Client {
           return;
         }
         if (r.payload.type === "control_response") {
-          let { response: response } = r.payload;
+          let { response } = r.payload;
           if (!response || typeof response !== "object" || typeof response.request_id !== "string") {
             logForDebugging(
               `[SessionsV2Client] Dropping malformed control_response from source=${r.source}`,
-              { level: "warn" },
+              {
+                level: "warn",
+              },
             );
             return;
           }
@@ -518,20 +580,24 @@ class SessionsV2Client {
           ) {
             logForDebugging(
               `[SessionsV2Client] Dropping worker-output-shaped user frame from source=${r.source} \u2014 only the worker produces tool results and execution output`,
-              { level: "warn" },
+              {
+                level: "warn",
+              },
             );
             return;
           }
           if (hasNonTextContent(r.payload)) {
             logForDebugging(
               `[SessionsV2Client] Dropping user frame with malformed content from source=${r.source}`,
-              { level: "warn" },
+              {
+                level: "warn",
+              },
             );
             return;
           }
-          let h = r.payload.message?.content;
-          if (!r.payload.parent_tool_use_id && Array.isArray(h)) {
-            for (let v of h) if (v.type === "tool_result") this.answeredToolUseIds.add(v.tool_use_id);
+          let content = r.payload.message?.content;
+          if (!r.payload.parent_tool_use_id && Array.isArray(content)) {
+            for (let v of content) if (v.type === "tool_result") this.answeredToolUseIds.add(v.tool_use_id);
           }
         }
         if (r.source !== "worker") {
@@ -539,7 +605,9 @@ class SessionsV2Client {
             if (this.issuedRequestIds.has(r.payload.response.request_id)) {
               logForDebugging(
                 `[SessionsV2Client] Dropping control_response for this client's request_id from source=${r.source} \u2014 only the worker may answer our RPCs`,
-                { level: "warn" },
+                {
+                  level: "warn",
+                },
               );
               return;
             }
@@ -552,18 +620,25 @@ class SessionsV2Client {
                 `[SessionsV2Client] Stripping prompt-redelivery fields from control_response with source=${r.source}`,
               );
               let {
-                pending_user_dialog_requests: pending_user_dialog_requests,
-                pending_permission_requests: pending_permission_requests,
-                pending_elicitation_requests: pending_elicitation_requests,
+                pending_user_dialog_requests: pendingUserDialogRequests,
+                pending_permission_requests: pendingPermissionRequests,
+                pending_elicitation_requests: pendingElicitationRequests,
                 ...R
               } = r.payload.response;
               this.deliver(
-                { ...r.payload, response: R },
+                {
+                  ...r.payload,
+                  response: R,
+                },
                 {
                   source: r.source,
-                  ...(!isNaN(S) && { sequenceNum: S }),
+                  ...(!isNaN(S) && {
+                    sequenceNum: S,
+                  }),
                   ...messageTiming(r, this.connectedSince, this.serviceClock),
-                  ...(this.resumed && { resumed: !0 }),
+                  ...(this.resumed && {
+                    resumed: true,
+                  }),
                 },
               );
               return;
@@ -574,36 +649,38 @@ class SessionsV2Client {
               typeof r.payload.request_id === "string" &&
               this.issuedRequestIds.has(r.payload.request_id)
             ) {
-              let h = "uuid" in r.payload ? r.payload.uuid : void 0;
-              if (typeof h !== "string" || h !== this.ownRequestUuids.get(r.payload.request_id)) {
+              let uuid = "uuid" in r.payload ? r.payload.uuid : undefined;
+              if (typeof uuid !== "string" || uuid !== this.ownRequestUuids.get(r.payload.request_id)) {
                 logForDebugging(
-                  `[SessionsV2Client] A copy of own request ${ee(r.payload.request_id)} from source=${ee(r.source)} under another event uuid \u2014 ignored`,
+                  `[SessionsV2Client] A copy of own request ${toPrintableExcerpt(r.payload.request_id)} from source=${toPrintableExcerpt(r.source)} under another event uuid \u2014 ignored`,
                 );
                 return;
               }
               let v = attestationStatus(r.device_attestation_status);
-              if (
-                (logForDebugging(
-                  `[SessionsV2Client] Own request ${ee(r.payload.request_id)} echoed from source=${ee(r.source)}: device proof ${ee(r.device_attestation_status)} (${v})`,
-                ),
-                v === "unverified")
-              )
-                this.rereadTrustedDeviceToken();
+              logForDebugging(
+                `[SessionsV2Client] Own request ${toPrintableExcerpt(r.payload.request_id)} echoed from source=${toPrintableExcerpt(r.source)}: device proof ${toPrintableExcerpt(r.device_attestation_status)} (${v})`,
+              );
+              if (v === "unverified") this.rereadTrustedDeviceToken();
               this.callbacks.onOwnRequestEchoed?.(r.payload.request_id, v);
               return;
             }
             logForDebugging(`[SessionsV2Client] Dropping ${r.payload.type} from source=${r.source}`);
             return;
           }
-        } else if (r.payload.type === "control_response")
-          (this.issuedRequestIds.delete(r.payload.response.request_id),
-            this.liveOnlyRequestIds.delete(r.payload.response.request_id),
-            this.ownRequestUuids.delete(r.payload.response.request_id));
+        } else if (r.payload.type === "control_response") {
+          this.issuedRequestIds.delete(r.payload.response.request_id);
+          this.liveOnlyRequestIds.delete(r.payload.response.request_id);
+          this.ownRequestUuids.delete(r.payload.response.request_id);
+        }
         this.deliver(r.payload, {
           source: r.source,
-          ...(!isNaN(S) && { sequenceNum: S }),
+          ...(!isNaN(S) && {
+            sequenceNum: S,
+          }),
           ...messageTiming(r, this.connectedSince, this.serviceClock),
-          ...(this.resumed && { resumed: !0 }),
+          ...(this.resumed && {
+            resumed: true,
+          }),
           ...(r.source === "worker" && isHookCallbackControlRequest(r)),
         });
         return;
@@ -611,12 +688,12 @@ class SessionsV2Client {
       case "ephemeral_event": {
         let r = i;
         if (r?.event_type === TOOL_HOST_ENDED) {
-          let h = typeof r.payload === "object" && r.payload !== null ? r.payload : {},
-            { work_id: work_id, reason: reason } = h;
+          let payload = typeof r.payload === "object" && r.payload !== null ? r.payload : {};
+          let { work_id: workId, reason } = payload;
           try {
             this.callbacks.onToolHostEnded?.({
-              workId: typeof work_id === "string" ? work_id : void 0,
-              reason: typeof reason === "string" ? reason : void 0,
+              workId: typeof workId === "string" ? workId : undefined,
+              reason: typeof reason === "string" ? reason : undefined,
             });
           } catch (error) {
             logForDebugging(`[SessionsV2Client] tool_host_ended handler threw: ${errorMessage(error)}`, {
@@ -632,15 +709,23 @@ class SessionsV2Client {
             typeof r.payload.response?.request_id === "string" &&
             this.liveOnlyRequestIds.delete(r.payload.response.request_id)
           ) {
-            (this.issuedRequestIds.delete(r.payload.response.request_id),
-              this.ownRequestUuids.delete(r.payload.response.request_id));
+            this.issuedRequestIds.delete(r.payload.response.request_id);
+            this.ownRequestUuids.delete(r.payload.response.request_id);
             let {
-              pending_user_dialog_requests: pending_user_dialog_requests,
-              pending_permission_requests: pending_permission_requests,
-              pending_elicitation_requests: pending_elicitation_requests,
+              pending_user_dialog_requests: pendingUserDialogRequests,
+              pending_permission_requests: pendingPermissionRequests,
+              pending_elicitation_requests: pendingElicitationRequests,
               ...y
             } = r.payload.response;
-            this.deliver({ ...r.payload, response: y }, { source: "worker" });
+            this.deliver(
+              {
+                ...r.payload,
+                response: y,
+              },
+              {
+                source: "worker",
+              },
+            );
             return;
           }
           let h = pickSystemMessageFields(payload);
@@ -650,7 +735,7 @@ class SessionsV2Client {
           }
           if (
             r.payload.type === "tool_progress" &&
-            r.payload.heartbeat === !0 &&
+            r.payload.heartbeat === true &&
             typeof r.payload.parent_tool_use_id === "string" &&
             !this.answeredToolUseIds.has(r.payload.parent_tool_use_id)
           ) {
@@ -672,32 +757,32 @@ class SessionsV2Client {
         return;
       }
       case "catch_up_truncated":
-        (logForDebugging("[SessionsV2Client] catch_up_truncated \u2014 transcript gap"),
-          logFeatureSad("remote_connect", "remote_catch_up_truncated"),
-          this.callbacks.onCatchUpTruncated?.());
+        logForDebugging("[SessionsV2Client] catch_up_truncated \u2014 transcript gap");
+        logFeatureSad("remote_connect", "remote_catch_up_truncated");
+        this.callbacks.onCatchUpTruncated?.();
         return;
       case "session_update": {
-        let r = i?.connection_status;
-        if (typeof r === "string")
+        let connectionStatus = i?.connection_status;
+        if (typeof connectionStatus === "string")
           try {
-            this.callbacks.onWorkerConnectionStatus?.(r);
+            this.callbacks.onWorkerConnectionStatus?.(connectionStatus);
           } catch (error) {
             logForDebugging(
               `[SessionsV2Client] worker connection status handler threw: ${errorMessage(error)}`,
-              { level: "error" },
+              {
+                level: "error",
+              },
             );
           }
         else logForDebugging("[SessionsV2Client] Ignoring session_update frame");
         return;
       }
       case "security_update": {
-        let r = i?.security_tier;
-        if (
-          (logForDebugging(
-            `[SessionsV2Client] security_update: tier ${typeof r === "string" ? ee(r) : typeof r}`,
-          ),
-          r === "elevated")
-        )
+        let securityTier = i?.security_tier;
+        logForDebugging(
+          `[SessionsV2Client] security_update: tier ${typeof securityTier === "string" ? toPrintableExcerpt(securityTier) : typeof securityTier}`,
+        );
+        if (securityTier === "elevated")
           try {
             this.callbacks.onSecurityTierRaised?.();
           } catch (error) {
@@ -708,14 +793,17 @@ class SessionsV2Client {
         return;
       }
       case "delivery_update": {
-        let r = isPlainObject(i) ? i : {},
-          { event_id: event_id, status: status } = r;
-        if (typeof event_id !== "string" || typeof status !== "string") {
+        let r = isPlainObject(i) ? i : {};
+        let { event_id: eventId, status } = r;
+        if (typeof eventId !== "string" || typeof status !== "string") {
           logForDebugging("[SessionsV2Client] Ignoring delivery_update frame");
           return;
         }
         try {
-          this.callbacks.onDeliveryUpdate?.({ eventId: event_id, status: status });
+          this.callbacks.onDeliveryUpdate?.({
+            eventId,
+            status,
+          });
         } catch (error) {
           logError(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -727,7 +815,9 @@ class SessionsV2Client {
         return;
       }
       default:
-        logForDebugging(`[SessionsV2Client] Unknown SSE event type '${e}'`, { level: "warn" });
+        logForDebugging(`[SessionsV2Client] Unknown SSE event type '${e}'`, {
+          level: "warn",
+        });
         return;
     }
   }
@@ -736,80 +826,110 @@ class SessionsV2Client {
       logFeatureSad("remote_connect", "remote_connect_frame_handler_threw");
   }
   handleStreamEnd() {
-    if ((this.markDown(), this.clearLivenessTimer(), this.clearDriftWatch(), this.state === "closed")) return;
+    this.markDown();
+    this.clearLivenessTimer();
+    this.clearDriftWatch();
+    if (this.state === "closed") return;
     this.abortController = null;
-    let e = this.reconnectAttempts >= re;
+    let e = this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS;
     if (e && !this.keepRedialling) {
-      (logForDebugging(`[SessionsV2Client] Reconnect budget exhausted (${re}), closing`),
-        logFeatureBad("remote_connect", "remote_connect_reconnect_exhausted"),
-        (this.state = "closed"),
-        (this.closedCause = "exhausted"),
-        this.callbacks.onClose?.());
+      logForDebugging(`[SessionsV2Client] Reconnect budget exhausted (${MAX_RECONNECT_ATTEMPTS}), closing`);
+      logFeatureBad("remote_connect", "remote_connect_reconnect_exhausted");
+      this.state = "closed";
+      this.closedCause = "exhausted";
+      this.callbacks.onClose?.();
       return;
     }
     if (!e) this.reconnectAttempts++;
-    else if (!this.rediallingPastBudget)
-      ((this.rediallingPastBudget = !0),
-        logFeatureSad("remote_connect", "remote_connect_redialling_past_budget"));
+    else if (!this.rediallingPastBudget) {
+      this.rediallingPastBudget = true;
+      logFeatureSad("remote_connect", "remote_connect_redialling_past_budget");
+    }
     this.state = "idle";
-    let n = e ? Le : backoffDelayMs({ attempt: this.reconnectAttempts, baseMs: f$n, capMs: Le });
-    if (
-      (logForDebugging(
-        `[SessionsV2Client] Reconnecting in ${n}ms (attempt ${this.reconnectAttempts}/${this.keepRedialling ? "\u221E" : re}, from_sequence_num=${this.lastSequenceNum})`,
-      ),
-      (this.reconnectTimer = setTimeout(() => {
-        if (((this.reconnectTimer = null), this.state === "closed")) return;
-        this.connect();
-      }, n)),
-      !e)
-    )
-      this.callbacks.onReconnecting?.();
+    let n = e
+      ? MAX_RECONNECT_BACKOFF_MS
+      : backoffDelayMs({
+          attempt: this.reconnectAttempts,
+          baseMs: RECONNECT_BACKOFF_BASE_MS,
+          capMs: MAX_RECONNECT_BACKOFF_MS,
+        });
+    logForDebugging(
+      `[SessionsV2Client] Reconnecting in ${n}ms (attempt ${this.reconnectAttempts}/${this.keepRedialling ? "\u221E" : MAX_RECONNECT_ATTEMPTS}, from_sequence_num=${this.lastSequenceNum})`,
+    );
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.state === "closed") return;
+      this.connect();
+    }, n);
+    if (!e) this.callbacks.onReconnecting?.();
   }
   onLivenessTimeout = () => {
-    ((this.livenessTimer = null),
-      logForDebugging("[SessionsV2Client] Liveness timeout, reconnecting", { level: "warn" }));
+    this.livenessTimer = null;
+    logForDebugging("[SessionsV2Client] Liveness timeout, reconnecting", {
+      level: "warn",
+    });
     try {
       let now = Date.now();
       this.callbacks.onStreamSilent?.({
-        suspended: now - this.lastDriftCheck > ce * 2 || now - (this.lastHealthyAt ?? now) > CXe + ce * 2,
+        suspended:
+          now - this.lastDriftCheck > DRIFT_WATCH_INTERVAL_MS * 2 ||
+          now - (this.lastHealthyAt ?? now) > SESSION_LIVENESS_TIMEOUT_MS + DRIFT_WATCH_INTERVAL_MS * 2,
       });
     } catch (error) {
       let n = error instanceof Error ? error : Error("not an Error");
       logError(n);
     }
-    (this.abortController?.abort(), (this.abortController = null), this.handleStreamEnd());
+    this.abortController?.abort();
+    this.abortController = null;
+    this.handleStreamEnd();
   };
   markDown() {
     let now = Date.now();
     this.downSince ??=
-      this.lastHealthyAt !== void 0 && now - this.lastHealthyAt >= Mt ? this.lastHealthyAt : now;
+      this.lastHealthyAt !== undefined && now - this.lastHealthyAt >= DOWN_GRACE_MS
+        ? this.lastHealthyAt
+        : now;
   }
   resetLivenessTimer() {
-    ((this.lastHealthyAt = Date.now()),
-      this.clearLivenessTimer(),
-      (this.livenessTimer = setTimeout(this.onLivenessTimeout, CXe)));
+    this.lastHealthyAt = Date.now();
+    this.clearLivenessTimer();
+    this.livenessTimer = setTimeout(this.onLivenessTimeout, SESSION_LIVENESS_TIMEOUT_MS);
   }
   clearLivenessTimer() {
-    if (this.livenessTimer) (clearTimeout(this.livenessTimer), (this.livenessTimer = null));
+    if (this.livenessTimer) {
+      clearTimeout(this.livenessTimer);
+      this.livenessTimer = null;
+    }
   }
   startDriftWatch() {
-    (this.clearDriftWatch(),
-      (this.lastDriftCheck = Date.now()),
-      (this.driftTimer = setInterval(() => {
-        let now = Date.now(),
-          n = now - this.lastDriftCheck;
-        if (((this.lastDriftCheck = now), n > ce * 2 && this.state === "connected"))
-          (logForDebugging(`[SessionsV2Client] Wall-clock drift ${n}ms \u2014 reconnecting after suspend`),
-            this.reconnectAfterSuspend());
-      }, ce)),
-      this.driftTimer.unref?.());
+    this.clearDriftWatch();
+    this.lastDriftCheck = Date.now();
+    this.driftTimer = setInterval(() => {
+      let now = Date.now();
+      let n = now - this.lastDriftCheck;
+      this.lastDriftCheck = now;
+      if (n > DRIFT_WATCH_INTERVAL_MS * 2 && this.state === "connected") {
+        logForDebugging(`[SessionsV2Client] Wall-clock drift ${n}ms \u2014 reconnecting after suspend`);
+        this.reconnectAfterSuspend();
+      }
+    }, DRIFT_WATCH_INTERVAL_MS);
+    this.driftTimer.unref?.();
   }
   clearDriftWatch() {
-    if (this.driftTimer) (clearInterval(this.driftTimer), (this.driftTimer = null));
+    if (this.driftTimer) {
+      clearInterval(this.driftTimer);
+      this.driftTimer = null;
+    }
   }
   sendEvent(e) {
     return this.trackSend(
-      this.postEvent(e).then((n) => (n.outcome === "accepted" ? { sequence_num: n.sequence_num } : null)),
+      this.postEvent(e).then((n) =>
+        n.outcome === "accepted"
+          ? {
+              sequence_num: n.sequence_num,
+            }
+          : null,
+      ),
     );
   }
   trackSend(e) {
@@ -824,170 +944,207 @@ class SessionsV2Client {
     return e;
   }
   async postEvent(e, n = {}) {
-    if (this.state === "closed")
-      return (
-        logForDebugging("[SessionsV2Client] Cannot send: closed", { level: "warn" }),
-        logFeatureBad("remote_send_event", "remote_send_event_closed"),
-        { outcome: "failed", cause: "closed" }
-      );
+    if (this.state === "closed") {
+      logForDebugging("[SessionsV2Client] Cannot send: closed", {
+        level: "warn",
+      });
+      logFeatureBad("remote_send_event", "remote_send_event_closed");
+      return {
+        outcome: "failed",
+        cause: "closed",
+      };
+    }
     let s = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${this.sessionId}/events`;
     try {
-      let startTime = performance.now(),
-        r = await signClientEvent(this.eventSigner, this.sessionId, e),
-        startTime_2 = performance.now(),
-        h = { session_id: this.sessionId, events: [r] },
-        { headers: headers, bearer: bearer, withheld: withheld } = await this.authHeaders(),
-        postEvents = await this.postEvents(s, h, headers, n.timeoutMs);
-      if (!postEvents.ok && postEvents.status === 401 && withheld)
-        (logForDebugging(
+      let startTime = performance.now();
+      let r = await signClientEvent(this.eventSigner, this.sessionId, e);
+      let startTime_2 = performance.now();
+      let h = {
+        session_id: this.sessionId,
+        events: [r],
+      };
+      let { headers, bearer, withheld } = await this.authHeaders();
+      let y = await this.postEvents(s, h, headers, n.timeoutMs);
+      if (!y.ok && y.status === 401 && withheld) {
+        logForDebugging(
           "[SessionsV2Client] 401 on a POST that carried no credential \u2014 asking the holder again + one resend",
-        ),
-          await recoverHostSessionsBearer(bearer, "withheld").catch(() => {}),
-          (postEvents = await this.postEvents(s, h, (await this.authHeaders()).headers, n.timeoutMs)));
-      else if (!postEvents.ok && postEvents.status === 401 && this.onAuth401) {
-        if (
-          (logForDebugging("[SessionsV2Client] 401 on POST \u2014 refreshing + retry"),
-          await this.onAuth401(bearer))
-        )
-          postEvents = await this.postEvents(s, h, (await this.authHeaders()).headers, n.timeoutMs);
+        );
+        await recoverHostSessionsBearer(bearer, "withheld").catch(() => {});
+        y = await this.postEvents(s, h, (await this.authHeaders()).headers, n.timeoutMs);
+      } else if (!y.ok && y.status === 401 && this.onAuth401) {
+        logForDebugging("[SessionsV2Client] 401 on POST \u2014 refreshing + retry");
+        if (await this.onAuth401(bearer))
+          y = await this.postEvents(s, h, (await this.authHeaders()).headers, n.timeoutMs);
       }
-      let b = !1;
+      let b = false;
       if (
-        !postEvents.ok &&
-        postEvents.refusal !== void 0 &&
-        (await this.recoverTrustedDeviceToken(postEvents.refusal, postEvents.sentDeviceToken))
+        !y.ok &&
+        y.refusal !== undefined &&
+        (await this.recoverTrustedDeviceToken(y.refusal, y.sentDeviceToken))
       ) {
         logForDebugging("[SessionsV2Client] untrusted_device on POST \u2014 re-enrolled, retrying");
         let headers = (await this.authHeaders()).headers;
-        ((postEvents = await this.postEvents(s, h, headers, n.timeoutMs)), (b = !0));
+        y = await this.postEvents(s, h, headers, n.timeoutMs);
+        b = true;
       }
-      if (!postEvents.ok) {
-        if (
-          (logForDebugging(
-            `[SessionsV2Client] POST /events returned ${postEvents.status}${postEvents.inactive ? " (session not active)" : ""}${postEvents.tooLarge ? " (too large)" : ""}`,
-            { level: "warn" },
-          ),
-          postEvents.inactive)
-        )
-          return (
-            logFeatureSad("remote_send_event", "remote_send_event_session_inactive"),
-            { outcome: "session_inactive" }
-          );
-        return (
-          logFeatureBad(
-            "remote_send_event",
-            postEvents.tooLarge
-              ? "remote_send_event_too_large"
-              : postEvents.refusal?.kind === "signature_wanted"
-                ? "remote_send_event_signature_wanted"
-                : postEvents.refusal?.kind === "unrecognized"
-                  ? "remote_send_event_unknown_sub_reason"
-                  : "remote_send_event_http_error",
-          ),
+      if (!y.ok) {
+        logForDebugging(
+          `[SessionsV2Client] POST /events returned ${y.status}${y.inactive ? " (session not active)" : ""}${y.tooLarge ? " (too large)" : ""}`,
           {
-            outcome: "failed",
-            cause: "http",
-            status: postEvents.status,
-            ...(postEvents.tooLarge && { tooLarge: !0 }),
-          }
+            level: "warn",
+          },
         );
+        if (y.inactive) {
+          logFeatureSad("remote_send_event", "remote_send_event_session_inactive");
+          return {
+            outcome: "session_inactive",
+          };
+        }
+        logFeatureBad(
+          "remote_send_event",
+          y.tooLarge
+            ? "remote_send_event_too_large"
+            : y.refusal?.kind === "signature_wanted"
+              ? "remote_send_event_signature_wanted"
+              : y.refusal?.kind === "unrecognized"
+                ? "remote_send_event_unknown_sub_reason"
+                : "remote_send_event_http_error",
+        );
+        return {
+          outcome: "failed",
+          cause: "http",
+          status: y.status,
+          ...(y.tooLarge && {
+            tooLarge: true,
+          }),
+        };
       }
       if (b) logFeatureSad("remote_send_event", "remote_send_event_untrusted_device");
       else logFeatureOk("remote_send_event");
       return {
         outcome: "accepted",
-        sequence_num: postEvents.sequence_num,
+        sequence_num: y.sequence_num,
         signMs: Math.round(startTime_2 - startTime),
         postMs: Math.round(performance.now() - startTime_2),
       };
     } catch (error) {
-      return (
-        logForDebugging(`[SessionsV2Client] POST /events failed: ${errorMessage(error)}`, { level: "warn" }),
-        logFeatureBad("remote_send_event", "remote_send_event_request_failed"),
-        { outcome: "failed", cause: Wt(error) ? "timeout" : "network" }
-      );
+      logForDebugging(`[SessionsV2Client] POST /events failed: ${errorMessage(error)}`, {
+        level: "warn",
+      });
+      logFeatureBad("remote_send_event", "remote_send_event_request_failed");
+      return {
+        outcome: "failed",
+        cause: isTimeoutError(error) ? "timeout" : "network",
+      };
     }
   }
-  sendControlResponse(e, n = randomUUID_2(), s = {}) {
-    return (
-      logForDebugging("[SessionsV2Client] Sending control_response"),
-      this.trackSend(this.postEvent({ ...e, uuid: n }, s))
+  sendControlResponse(e, uuid = randomUUID(), s = {}) {
+    logForDebugging("[SessionsV2Client] Sending control_response");
+    return this.trackSend(
+      this.postEvent(
+        {
+          ...e,
+          uuid,
+        },
+        s,
+      ),
     );
   }
   sendControlRequest(e, n) {
     return this.postControlRequest(e, n)?.requestId ?? null;
   }
   postControlRequest(e, n) {
-    if (this.state === "closed")
-      return (
-        logForDebugging("[SessionsV2Client] Cannot send control_request: closed", { level: "warn" }),
-        null
-      );
-    let s = randomUUID_2();
-    if (
-      (this.issuedRequestIds.add(s),
-      (e.subtype === "mcp_authenticate" || e.subtype === "mcp_status") && e.liveReply === !0)
-    )
+    if (this.state === "closed") {
+      logForDebugging("[SessionsV2Client] Cannot send control_request: closed", {
+        level: "warn",
+      });
+      return null;
+    }
+    let s = randomUUID();
+    this.issuedRequestIds.add(s);
+    if ((e.subtype === "mcp_authenticate" || e.subtype === "mcp_status") && e.liveReply === true)
       this.liveOnlyRequestIds.add(s);
-    if (this.issuedRequestIds.size > Ue) {
+    if (this.issuedRequestIds.size > FRAME_TRACK_INTERVAL_MS) {
       logForDebugging(
         "[SessionsV2Client] issuedRequestIds overflow \u2014 evicting oldest unanswered request_id",
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
       let S = this.issuedRequestIds.values().next().value;
-      if (S !== void 0)
-        (this.issuedRequestIds.delete(S), this.liveOnlyRequestIds.delete(S), this.ownRequestUuids.delete(S));
+      if (S !== undefined) {
+        this.issuedRequestIds.delete(S);
+        this.liveOnlyRequestIds.delete(S);
+        this.ownRequestUuids.delete(S);
+      }
     }
-    let i = { type: "control_request", request_id: s, request: e, uuid: randomUUID_2() };
-    (this.ownRequestUuids.set(s, i.uuid),
-      logForDebugging(`[SessionsV2Client] Sending control_request: ${e.subtype}`));
-    let trackSend = this.trackSend(
+    let i = {
+      type: "control_request",
+      request_id: s,
+      request: e,
+      uuid: randomUUID(),
+    };
+    this.ownRequestUuids.set(s, i.uuid);
+    logForDebugging(`[SessionsV2Client] Sending control_request: ${e.subtype}`);
+    let posted = this.trackSend(
       this.postEvent(i).then((S) => {
         if (S.outcome === "session_inactive" || (S.outcome === "failed" && S.cause === "http")) n?.(s);
         return S;
       }),
     );
-    return { requestId: s, posted: trackSend };
+    return {
+      requestId: s,
+      posted,
+    };
   }
   sendControlCancelRequest(e) {
     if (this.state === "closed") return;
-    (logForDebugging(`[SessionsV2Client] Sending control_cancel_request: ${e}`),
-      this.sendEvent({ type: "control_cancel_request", request_id: e, uuid: randomUUID_2() }));
+    logForDebugging(`[SessionsV2Client] Sending control_cancel_request: ${e}`);
+    this.sendEvent({
+      type: "control_cancel_request",
+      request_id: e,
+      uuid: randomUUID(),
+    });
   }
   isConnected() {
     return this.state === "connected";
   }
   close() {
-    if (
-      (logForDebugging("[SessionsV2Client] Closing"),
-      (this.state = "closed"),
-      (this.closedCause = "deliberate"),
-      this.clearLivenessTimer(),
-      this.clearDriftWatch(),
-      this.reconnectTimer)
-    )
-      (clearTimeout(this.reconnectTimer), (this.reconnectTimer = null));
-    (this.abortController?.abort(), (this.abortController = null));
+    logForDebugging("[SessionsV2Client] Closing");
+    this.state = "closed";
+    this.closedCause = "deliberate";
+    this.clearLivenessTimer();
+    this.clearDriftWatch();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.abortController?.abort();
+    this.abortController = null;
   }
   reconnect() {
     if (this.closedCause === "deliberate") {
       logForDebugging("[SessionsV2Client] Ignoring reconnect() \u2014 deliberately closed");
       return;
     }
-    if (
-      (logForDebugging("[SessionsV2Client] Force reconnect"),
-      this.markDown(),
-      (this.reconnectAttempts = 0),
-      this.clearLivenessTimer(),
-      this.clearDriftWatch(),
-      this.reconnectTimer)
-    )
-      (clearTimeout(this.reconnectTimer), (this.reconnectTimer = null));
-    (this.abortController?.abort(), (this.abortController = null), (this.state = "idle"), this.connect());
+    logForDebugging("[SessionsV2Client] Force reconnect");
+    this.markDown();
+    this.reconnectAttempts = 0;
+    this.clearLivenessTimer();
+    this.clearDriftWatch();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.abortController?.abort();
+    this.abortController = null;
+    this.state = "idle";
+    this.connect();
   }
   reconnectAfterSuspend() {
     if (this.state === "closed" || (this.driftRedial && this.state === "connecting")) return;
-    ((this.driftRedial = !0), this.reconnect());
+    this.driftRedial = true;
+    this.reconnect();
   }
   isRevivable() {
     return this.closedCause === "exhausted";
@@ -997,34 +1154,40 @@ class SessionsV2Client {
       !(
         this.keepRedialling &&
         this.state === "idle" &&
-        this.reconnectAttempts >= re &&
+        this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS &&
         this.reconnectTimer !== null
       ) &&
       this.closedCause !== "exhausted"
     )
-      return !1;
-    return (logFeatureSad("remote_connect", "remote_connect_revived_by_user_send"), this.reconnect(), !0);
+      return false;
+    logFeatureSad("remote_connect", "remote_connect_revived_by_user_send");
+    this.reconnect();
+    return true;
   }
   nextDialCarriesCredential() {
     try {
       return sendableHostSessionsBearer(this.getAccessToken()) !== null;
     } catch {
-      return !1;
+      return false;
     }
   }
   async authHeaders() {
-    let e = await (this.trustedDeviceToken ??= this.loadTrustedDeviceToken()),
-      accessToken = this.getAccessToken(),
-      s = sendableHostSessionsBearer(accessToken);
+    let e = await (this.trustedDeviceToken ??= this.loadTrustedDeviceToken());
+    let accessToken = this.getAccessToken();
+    let s = sendableHostSessionsBearer(accessToken);
     return {
       headers: {
-        ...(s !== null && { Authorization: `${$t}${s}` }),
+        ...(s !== null && {
+          Authorization: `${BEARER_PREFIX}${s}`,
+        }),
         "Content-Type": "application/json",
         "anthropic-version": "2023-06-01",
         "anthropic-client-platform": getClientPlatform(),
         "x-organization-uuid": this.orgUuid,
         "User-Agent": claudeCodeUserAgent(),
-        ...(e && { "X-Trusted-Device-Token": e }),
+        ...(e && {
+          "X-Trusted-Device-Token": e,
+        }),
       },
       bearer: s ?? accessToken,
       withheld: s === null,
@@ -1032,29 +1195,35 @@ class SessionsV2Client {
   }
 }
 //@ chunk-08945j39.js:34473-34490 placement
-var $t = "Bearer ";
+var BEARER_PREFIX = "Bearer ";
 //@ chunk-08945j39.js:34490-34605 placement
 function deviceIdentityTelemetry(e) {
   return {
-    trusted_device_token_sent: e["X-Trusted-Device-Token"] !== void 0,
+    trusted_device_token_sent: e["X-Trusted-Device-Token"] !== undefined,
     device_identity_flag_on: isDeviceIdentityEnabledCached(),
   };
 }
 //@ chunk-08945j39.js:34605-34779 placement
-async function classifyForbiddenResponse(e) {
-  let n = await parseAndValidateManifestFromBytes(e),
-    s = readUntrustedDeviceRefusal(n);
-  return s !== void 0
-    ? { reason: "untrusted_device", about: s }
-    : { reason: classifyElevatedAuthError(n) === "session_stale_relogin" ? "session_stale_relogin" : void 0 };
+async function classifyForbiddenResponse(manifestData) {
+  let n = await parseAndValidateManifestFromBytes(manifestData);
+  let untrustedDeviceRefusal = readUntrustedDeviceRefusal(n);
+  return untrustedDeviceRefusal !== undefined
+    ? {
+        reason: "untrusted_device",
+        about: untrustedDeviceRefusal,
+      }
+    : {
+        reason:
+          classifyElevatedAuthError(n) === "session_stale_relogin" ? "session_stale_relogin" : undefined,
+      };
 }
 //@ chunk-08945j39.js:34779-34831 placement
-function xt(e) {
-  return e !== void 0 && jsonStringify(e).includes(REMOTE_TOOL_RESULT_TOO_LARGE);
+function isRemoteToolResultTooLarge(e) {
+  return e !== undefined && jsonStringify(e).includes(REMOTE_TOOL_RESULT_TOO_LARGE);
 }
 //@ chunk-08945j39.js:34831-34895 affinity
-async function Kt(e) {
-  return Ht().safeParse(await parseAndValidateManifestFromBytes(e)).success;
+async function isSessionNotActiveManifest(manifestData) {
+  return sessionNotActiveErrorSchema().safeParse(await parseAndValidateManifestFromBytes(manifestData))
+    .success;
 }
-
-export { Se, SessionsV2Client };
+export { STREAM_READ_CHUNK_BYTES, SessionsV2Client };

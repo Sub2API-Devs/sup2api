@@ -6,20 +6,21 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { xl } from "../cjs/reflect/unsafe.js";
+import { require_unsafe } from "../cjs/reflect/unsafe.js";
 
 //@ chunk-fq0cr76a.js:445879-446147 cjs-fingerprint
-var E_ = x(function (_P) {
-  Object.defineProperty(_P, "__esModule", { value: !0 });
-  _P.isFieldSet = uJ;
-  _P.clearField = fJ;
-  var fy = xl();
-  function uJ(e, n) {
-    return n.parent.typeName == e.$typeName && fy.unsafeIsSet(e, n);
+var require_fields = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.isFieldSet = isFieldSet;
+  cjsExports.clearField = clearField;
+  var unsafe_js_1 = require_unsafe();
+  function isFieldSet(message, field) {
+    return field.parent.typeName == message.$typeName && unsafe_js_1.unsafeIsSet(message, field);
   }
-  function fJ(e, n) {
-    if (n.parent.typeName == e.$typeName) fy.unsafeClear(e, n);
+  function clearField(message, field) {
+    if (field.parent.typeName == message.$typeName) unsafe_js_1.unsafeClear(message, field);
   }
 });
-
-export { E_ };
+export { require_fields };

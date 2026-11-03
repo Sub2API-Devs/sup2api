@@ -6,45 +6,58 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ee } from "./utils.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:44606-45299 cjs-fingerprint
-var gn = x(function (_d, Ds) {
-  Ds.exports = Cs;
-  var qt = ee();
-  function Cs(e) {
-    this.element = e;
+var require_NamedNodeMap = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = NamedNodeMap;
+  var utils = require_utils();
+  function NamedNodeMap(element) {
+    this.element = element;
   }
-  Object.defineProperties(Cs.prototype, {
-    length: { get: qt.shouldOverride },
-    item: { value: qt.shouldOverride },
+  Object.defineProperties(NamedNodeMap.prototype, {
+    length: {
+      get: utils.shouldOverride,
+    },
+    item: {
+      value: utils.shouldOverride,
+    },
     getNamedItem: {
-      value: function (t) {
-        return this.element.getAttributeNode(t);
+      value: function (qualifiedName) {
+        return this.element.getAttributeNode(qualifiedName);
       },
     },
     getNamedItemNS: {
-      value: function (t, r) {
-        return this.element.getAttributeNodeNS(t, r);
+      value: function (namespace, localName) {
+        return this.element.getAttributeNodeNS(namespace, localName);
       },
     },
-    setNamedItem: { value: qt.nyi },
-    setNamedItemNS: { value: qt.nyi },
+    setNamedItem: {
+      value: utils.nyi,
+    },
+    setNamedItemNS: {
+      value: utils.nyi,
+    },
     removeNamedItem: {
-      value: function (t) {
-        var attributeNode = this.element.getAttributeNode(t);
-        if (attributeNode) return (this.element.removeAttribute(t), attributeNode);
-        qt.NotFoundError();
+      value: function (qualifiedName) {
+        var attr = this.element.getAttributeNode(qualifiedName);
+        if (attr) {
+          this.element.removeAttribute(qualifiedName);
+          return attr;
+        }
+        utils.NotFoundError();
       },
     },
     removeNamedItemNS: {
-      value: function (t, r) {
-        var attributeNodeNS = this.element.getAttributeNodeNS(t, r);
-        if (attributeNodeNS) return (this.element.removeAttributeNS(t, r), attributeNodeNS);
-        qt.NotFoundError();
+      value: function (ns, lname) {
+        var attr = this.element.getAttributeNodeNS(ns, lname);
+        if (attr) {
+          this.element.removeAttributeNS(ns, lname);
+          return attr;
+        }
+        utils.NotFoundError();
       },
     },
   });
 });
-
-export { gn };
+export { require_NamedNodeMap };

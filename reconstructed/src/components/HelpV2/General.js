@@ -11,67 +11,86 @@
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { PromptInputHelpMenu } from "../PromptInput/PromptInputHelpMenu.js";
 
 //@ chunk-yxcx2jtr.js:15530-15540 affinity
-var ne = 44;
+var GENERAL_COLUMN_WIDTH = 44;
 //@ chunk-yxcx2jtr.js:15540-16345 callgraph-witnessed = General (0.291)
 function General() {
-  let $ = w(8),
-    { rows: rows } = useTerminalSize(),
-    a = rows < ne;
-  const t = a ? 0 : 1,
-    i = a ? 0 : 1;
+  let $ = w(8);
+  let { rows } = useTerminalSize();
+  let a = rows < GENERAL_COLUMN_WIDTH;
+  const paddingY = a ? 0 : 1;
+  const gap = a ? 0 : 1;
   let m;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((m = e(Box, {
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    m = jsxProd_default(Box, {
       flexShrink: 0,
-      children: e(Text, {
+      children: jsxProd_default(Text, {
         children:
           "Claude understands your codebase, makes edits with your permission, and executes commands \u2014 right from your terminal.",
       }),
-    })),
-      ($[0] = m));
-  else m = $[0];
+    });
+    $[0] = m;
+  } else m = $[0];
   let o;
-  if ($[1] !== a)
-    ((o =
+  if ($[1] !== a) {
+    o =
       !a &&
-      e(Box, {
-        children: r(Text, {
-          dimColor: !0,
+      jsxProd_default(Box, {
+        children: jsxProd_default_2(Text, {
+          dimColor: true,
           children: [
             "New here? Run ",
-            e(Text, { color: "suggestion", children: "/powerup" }),
+            jsxProd_default(Text, {
+              color: "suggestion",
+              children: "/powerup",
+            }),
             " to learn the features most people miss.",
           ],
         }),
-      })),
-      ($[1] = a),
-      ($[2] = o));
-  else o = $[2];
+      });
+    $[1] = a;
+    $[2] = o;
+  } else o = $[2];
   let l;
-  if ($[3] === MEMO_CACHE_SENTINEL)
-    ((l = r(Box, {
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    l = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        e(Box, { flexShrink: 0, children: e(Text, { bold: !0, children: "Shortcuts" }) }),
-        e(PromptInputHelpMenu, { gap: 2, fixedWidth: !0 }),
+        jsxProd_default(Box, {
+          flexShrink: 0,
+          children: jsxProd_default(Text, {
+            bold: true,
+            children: "Shortcuts",
+          }),
+        }),
+        jsxProd_default(PromptInputHelpMenu, {
+          gap: 2,
+          fixedWidth: true,
+        }),
       ],
-    })),
-      ($[3] = l));
-  else l = $[3];
+    });
+    $[3] = l;
+  } else l = $[3];
   let u;
-  if ($[4] !== t || $[5] !== i || $[6] !== o)
-    ((u = r(Box, { flexDirection: "column", paddingY: t, gap: i, children: [m, o, l] })),
-      ($[4] = t),
-      ($[5] = i),
-      ($[6] = o),
-      ($[7] = u));
-  else u = $[7];
+  if ($[4] !== paddingY || $[5] !== gap || $[6] !== o) {
+    u = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      paddingY,
+      gap,
+      children: [m, o, l],
+    });
+    $[4] = paddingY;
+    $[5] = gap;
+    $[6] = o;
+    $[7] = u;
+  } else u = $[7];
   return u;
 }
-
 export { General };

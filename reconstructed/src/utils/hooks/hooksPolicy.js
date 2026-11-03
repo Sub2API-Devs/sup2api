@@ -12,8 +12,10 @@ import { isSafeMode } from "../envUtils.js";
 import { getSettingsForSource } from "../settings/settings.js";
 
 //@ chunk-2jdf5m4m.js:2564-2639 placement = _temp2 (1)
-function k() {
-  return isSafeMode() || getSettingsForSource("policySettings")?.allowManagedHooksOnly === !0;
+/**
+ * 判断是否处于"仅托管钩子"模式（安全模式或策略设置）。
+ */
+function isManagedHooksOnlyMode() {
+  return isSafeMode() || getSettingsForSource("policySettings")?.allowManagedHooksOnly === true;
 }
-
-export { k };
+export { isManagedHooksOnlyMode };

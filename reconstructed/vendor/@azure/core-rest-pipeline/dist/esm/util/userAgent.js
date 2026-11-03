@@ -5,28 +5,28 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import { Kl, Vl } from "./userAgentPlatform.js";
-import { jo } from "../constants.js";
+import { Kl, setPlatformSpecificData } from "./userAgentPlatform.js";
+import { SDK_VERSION_2 } from "../constants.js";
 
 //@ chunk-mrx6y2r5.js:55486-55579 esm-layout
-function _p(e) {
-  let t = [];
-  for (let [r, n] of e) {
-    let o = n ? `${r}/${n}` : r;
-    t.push(o);
+function getUserAgentString(telemetryInfo) {
+  let parts = [];
+  for (let [key, value] of telemetryInfo) {
+    let token = value ? `${key}/${value}` : key;
+    parts.push(token);
   }
-  return t.join(" ");
+  return parts.join(" ");
 }
 //@ chunk-mrx6y2r5.js:55579-55605 esm-layout
 function Yl() {
   return Kl();
 }
 //@ chunk-mrx6y2r5.js:55605-55718 esm-fingerprint
-async function Yo(e) {
-  let t = new Map();
-  (t.set("core-rest-pipeline", jo), await Vl(t));
-  let r = _p(t);
-  return e ? `${e} ${r}` : r;
+async function getUserAgentValue(prefix) {
+  let runtimeInfo = new Map();
+  runtimeInfo.set("core-rest-pipeline", SDK_VERSION_2);
+  await setPlatformSpecificData(runtimeInfo);
+  let defaultAgent = getUserAgentString(runtimeInfo);
+  return prefix ? `${prefix} ${defaultAgent}` : defaultAgent;
 }
-
-export { Yl, Yo };
+export { Yl, getUserAgentValue };

@@ -8,8 +8,17 @@
  * pieces: chunk-3n80spb1.js (10)
  * attribution: placement 10
  */
-import { j, qt, Fy, Se, dh } from "../../../vendor/react/cjs/react.production.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  init_react_production,
+  qt,
+  Fy,
+  Se,
+  isValidElement_default,
+} from "../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { _S } from "../../../vendor/chart.js/dist/chart.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
@@ -17,130 +26,222 @@ import { NoSelect } from "../../ink/components/Input.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-3n80spb1.js:421-425 placement
-j();
+init_react_production();
 //@ chunk-3n80spb1.js:425-507 placement
 function _(p, d) {
-  return e(Box, { width: 2, children: e(Text, { dimColor: !0, children: k[p] }) }, d);
+  return jsxProd_default(
+    Box,
+    {
+      width: 2,
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        children: TREE_CONNECTOR_GLYPHS[p],
+      }),
+    },
+    d,
+  );
 }
 //@ chunk-3n80spb1.js:507-567 placement
-var k = { branch: _S.branch, last: _S.last, pipe: _S.pipe, space: "" };
+var TREE_CONNECTOR_GLYPHS = {
+  branch: _S.branch,
+  last: _S.last,
+  pipe: _S.pipe,
+  space: "",
+};
 //@ chunk-3n80spb1.js:567-970 placement
-function TreeConnectorsRow(u) {
-  let a = w(7),
-    { connectors: connectors, children: children } = u,
-    o;
-  if (a[0] !== connectors)
-    ((o =
+function TreeConnectorsRow(props) {
+  let a = w(7);
+  let { connectors, children } = props;
+  let o;
+  if (a[0] !== connectors) {
+    o =
       connectors.length > 0 &&
-      e(NoSelect, {
-        "aria-hidden": !0,
-        fromLeftEdge: !0,
+      jsxProd_default(NoSelect, {
+        "aria-hidden": true,
+        fromLeftEdge: true,
         flexShrink: 0,
         flexDirection: "row",
         children: connectors.map(_),
-      })),
-      (a[0] = connectors),
-      (a[1] = o));
-  else o = a[1];
+      });
+    a[0] = connectors;
+    a[1] = o;
+  } else o = a[1];
   let l;
-  if (a[2] !== children)
-    ((l = e(Box, { flexGrow: 1, flexShrink: 1, children: children })), (a[2] = children), (a[3] = l));
-  else l = a[3];
+  if (a[2] !== children) {
+    l = jsxProd_default(Box, {
+      flexGrow: 1,
+      flexShrink: 1,
+      children,
+    });
+    a[2] = children;
+    a[3] = l;
+  } else l = a[3];
   let i;
-  if (a[4] !== o || a[5] !== l)
-    ((i = r(Box, { flexDirection: "row", children: [o, l] })), (a[4] = o), (a[5] = l), (a[6] = i));
-  else i = a[6];
+  if (a[4] !== o || a[5] !== l) {
+    i = jsxProd_default_2(Box, {
+      flexDirection: "row",
+      children: [o, l],
+    });
+    a[4] = o;
+    a[5] = l;
+    a[6] = i;
+  } else i = a[6];
   return i;
 }
 //@ chunk-3n80spb1.js:970-1022 placement
-var R = qt({ variant: "outline", ancestors: [] }),
-  f = qt(!0);
+var LIST_CONTEXT = qt({
+  variant: "outline",
+  ancestors: [],
+});
+var IS_LAST_ITEM_CONTEXT = qt(true);
 //@ chunk-3n80spb1.js:1022-1135 placement
-function wrapWithLastChildFlag(u, t = !0) {
-  let toArray = Fy.toArray(u);
-  return toArray.map((a, o) => e(f.Provider, { value: t && o === toArray.length - 1, children: a }, o));
+function wrapWithLastChildFlag(children, t = true) {
+  let c = Fy.toArray(children);
+  return c.map((children, o) =>
+    jsxProd_default(
+      IS_LAST_ITEM_CONTEXT.Provider,
+      {
+        value: t && o === c.length - 1,
+        children,
+      },
+      o,
+    ),
+  );
 }
 //@ chunk-3n80spb1.js:1135-1564 placement
-function Tree(u) {
-  let o = w(10),
-    { children: children, variant: variant } = u,
-    a = variant === void 0 ? "outline" : variant,
-    l;
-  if (o[0] === MEMO_CACHE_SENTINEL) ((l = []), (o[0] = l));
-  else l = o[0];
-  let i;
-  if (o[1] !== a) ((i = { variant: a, ancestors: l }), (o[1] = a), (o[2] = i));
-  else i = o[2];
-  let p;
-  if (o[3] !== children) ((p = wrapWithLastChildFlag(children)), (o[3] = children), (o[4] = p));
-  else p = o[4];
-  let d;
-  if (o[5] !== p) ((d = e(Box, { flexDirection: "column", children: p })), (o[5] = p), (o[6] = d));
-  else d = o[6];
+function Tree(props) {
+  let o = w(10);
+  let { children, variant } = props;
+  let variant_2 = variant === undefined ? "outline" : variant;
+  let ancestors;
+  if (o[0] === MEMO_CACHE_SENTINEL) {
+    ancestors = [];
+    o[0] = ancestors;
+  } else ancestors = o[0];
+  let value;
+  if (o[1] !== variant_2) {
+    value = {
+      variant: variant_2,
+      ancestors,
+    };
+    o[1] = variant_2;
+    o[2] = value;
+  } else value = o[2];
+  let children_2;
+  if (o[3] !== children) {
+    children_2 = wrapWithLastChildFlag(children);
+    o[3] = children;
+    o[4] = children_2;
+  } else children_2 = o[4];
+  let children_3;
+  if (o[5] !== children_2) {
+    children_3 = jsxProd_default(Box, {
+      flexDirection: "column",
+      children: children_2,
+    });
+    o[5] = children_2;
+    o[6] = children_3;
+  } else children_3 = o[6];
   let v;
-  if (o[7] !== i || o[8] !== d)
-    ((v = e(R.Provider, { value: i, children: d })), (o[7] = i), (o[8] = d), (o[9] = v));
-  else v = o[9];
+  if (o[7] !== value || o[8] !== children_3) {
+    v = jsxProd_default(LIST_CONTEXT.Provider, {
+      value,
+      children: children_3,
+    });
+    o[7] = value;
+    o[8] = children_3;
+    o[9] = v;
+  } else v = o[9];
   return v;
 }
 //@ chunk-3n80spb1.js:1564-2386 placement
-function TreeNode(u) {
-  let N = w(19),
-    { label: label, children: children, dimColor: dimColor, color: color } = u,
-    { variant: variant, ancestors: ancestors } = Se(R),
-    p = Se(f),
-    d = variant === "outline" ? "last" : p ? "last" : "branch",
-    v = variant === "outline" ? "space" : p ? "space" : "pipe",
-    m = label != null && label !== !1,
-    C = m ? label : children,
-    x;
-  if (N[0] !== ancestors || N[1] !== d) ((x = [...ancestors, d]), (N[0] = ancestors), (N[1] = d), (N[2] = x));
-  else x = N[2];
-  let b;
-  if (N[3] !== color || N[4] !== dimColor || N[5] !== C)
-    ((b = dh(C) ? C : e(Text, { dimColor: dimColor, color: color, children: C })),
-      (N[3] = color),
-      (N[4] = dimColor),
-      (N[5] = C),
-      (N[6] = b));
-  else b = N[6];
+function TreeNode(props) {
+  let N = w(19);
+  let { label, children, dimColor, color } = props;
+  let { variant, ancestors } = Se(LIST_CONTEXT);
+  let p = Se(IS_LAST_ITEM_CONTEXT);
+  let d = variant === "outline" ? "last" : p ? "last" : "branch";
+  let v = variant === "outline" ? "space" : p ? "space" : "pipe";
+  let m = label != null && label !== false;
+  let C = m ? label : children;
+  let connectors;
+  if (N[0] !== ancestors || N[1] !== d) {
+    connectors = [...ancestors, d];
+    N[0] = ancestors;
+    N[1] = d;
+    N[2] = connectors;
+  } else connectors = N[2];
+  let children_2;
+  if (N[3] !== color || N[4] !== dimColor || N[5] !== C) {
+    children_2 = isValidElement_default(C)
+      ? C
+      : jsxProd_default(Text, {
+          dimColor,
+          color,
+          children: C,
+        });
+    N[3] = color;
+    N[4] = dimColor;
+    N[5] = C;
+    N[6] = children_2;
+  } else children_2 = N[6];
   let P;
-  if (N[7] !== x || N[8] !== b)
-    ((P = e(TreeConnectorsRow, { connectors: x, children: b })), (N[7] = x), (N[8] = b), (N[9] = P));
-  else P = N[9];
+  if (N[7] !== connectors || N[8] !== children_2) {
+    P = jsxProd_default(TreeConnectorsRow, {
+      connectors,
+      children: children_2,
+    });
+    N[7] = connectors;
+    N[8] = children_2;
+    N[9] = P;
+  } else P = N[9];
   let T;
-  if (N[10] !== ancestors || N[11] !== children || N[12] !== v || N[13] !== m || N[14] !== variant)
-    ((T =
+  if (N[10] !== ancestors || N[11] !== children || N[12] !== v || N[13] !== m || N[14] !== variant) {
+    T =
       m &&
-      e(R.Provider, {
-        value: { variant: variant, ancestors: [...ancestors, v] },
+      jsxProd_default(LIST_CONTEXT.Provider, {
+        value: {
+          variant,
+          ancestors: [...ancestors, v],
+        },
         children: wrapWithLastChildFlag(children),
-      })),
-      (N[10] = ancestors),
-      (N[11] = children),
-      (N[12] = v),
-      (N[13] = m),
-      (N[14] = variant),
-      (N[15] = T));
-  else T = N[15];
+      });
+    N[10] = ancestors;
+    N[11] = children;
+    N[12] = v;
+    N[13] = m;
+    N[14] = variant;
+    N[15] = T;
+  } else T = N[15];
   let z;
-  if (N[16] !== P || N[17] !== T)
-    ((z = r(Box, { flexDirection: "column", children: [P, T] })), (N[16] = P), (N[17] = T), (N[18] = z));
-  else z = N[18];
+  if (N[16] !== P || N[17] !== T) {
+    z = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [P, T],
+    });
+    N[16] = P;
+    N[17] = T;
+    N[18] = z;
+  } else z = N[18];
   return z;
 }
 //@ chunk-3n80spb1.js:2386-2509 placement
-function TreeGroup(u) {
-  let a = w(3),
-    { children: children } = u,
-    c = Se(f),
-    o;
-  if (a[0] !== children || a[1] !== c)
-    ((o = wrapWithLastChildFlag(children, c)), (a[0] = children), (a[1] = c), (a[2] = o));
-  else o = a[2];
+function TreeGroup(props) {
+  let a = w(3);
+  let { children } = props;
+  let c = Se(IS_LAST_ITEM_CONTEXT);
+  let o;
+  if (a[0] !== children || a[1] !== c) {
+    o = wrapWithLastChildFlag(children, c);
+    a[0] = children;
+    a[1] = c;
+    a[2] = o;
+  } else o = a[2];
   return o;
 }
 //@ chunk-3n80spb1.js:2509-2550 placement
-var TreeConnectors = Object.assign(Tree, { Node: TreeNode, Group: TreeGroup });
-
+var TreeConnectors = Object.assign(Tree, {
+  Node: TreeNode,
+  Group: TreeGroup,
+});
 export { TreeConnectors, TreeConnectorsRow };

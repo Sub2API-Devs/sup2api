@@ -9,14 +9,13 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-ha3km179.js:14540-14651 fingerprint = matchesKeepGoingKeyword (1)
 /**
  * 输入（小写去空白）为 continue，或含 keep going / go on 时为真。
  */
-//@ chunk-ha3km179.js:14540-14651 fingerprint = matchesKeepGoingKeyword (1)
 function matchesKeepGoingKeyword(input) {
   let lowerInput = input.toLowerCase().trim();
-  if (lowerInput === "continue") return !0;
+  if (lowerInput === "continue") return true;
   return /\b(keep going|go on)\b/.test(lowerInput);
 }
-
 export { matchesKeepGoingKeyword };

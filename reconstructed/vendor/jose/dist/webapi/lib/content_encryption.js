@@ -5,17 +5,17 @@
  * pieces: chunk-2tyrgda4.js (14), chunk-5h78gfwc.js (16)
  * attribution: esm-layout 10, esm-fingerprint 20
  */
-import { f_2, c, k_2 } from "../../node/esm/util/errors.js";
-import { U } from "../../node/esm/lib/invalid_key_input.js";
-import { E_2, xe, W, p } from "./buffer_utils.js";
-import { H } from "./crypto_key.js";
-import { D } from "./key.js";
+import { JOSENotSupported, JWEInvalid, JWEDecryptionFailed } from "../../node/esm/util/errors.js";
+import { message_3 } from "../../node/esm/lib/invalid_key_input.js";
+import { concat, xe, init_buffer_utils, p } from "./buffer_utils.js";
+import { checkEncCryptoKey } from "./crypto_key.js";
+import { isCryptoKey } from "./key.js";
 import { Xa } from "../../../../../runtime/bun-runtime.js";
-import { v } from "../../browser/runtime/base64url.js";
+import { init_base64url } from "../../browser/runtime/base64url.js";
 
 //@ chunk-5h78gfwc.js:7205-7443 esm-fingerprint
-function ye(e) {
-  switch (e) {
+function ye(alg) {
+  switch (alg) {
     case "A128GCM":
       return 128;
     case "A192GCM":
@@ -28,19 +28,22 @@ function ye(e) {
     case "A256CBC-HS512":
       return 512;
     default:
-      throw new f_2(`Unsupported JWE Algorithm: ${e}`);
+      throw new JOSENotSupported(`Unsupported JWE Algorithm: ${alg}`);
   }
 }
 //@ chunk-5h78gfwc.js:7443-7503 esm-fingerprint
-var M_2 = (e) => crypto.getRandomValues(new Uint8Array(ye(e) >> 3));
+var generateCek = (alg) => crypto.getRandomValues(new Uint8Array(ye(alg) >> 3));
 //@ chunk-5h78gfwc.js:7503-7639 esm-fingerprint
-function le(e, t) {
-  let r = e.byteLength << 3;
-  if (r !== t) throw new c(`Invalid Content Encryption Key length. Expected ${t} bits, got ${r} bits`);
+function checkCekLength(cek, expected) {
+  let actual = cek.byteLength << 3;
+  if (actual !== expected)
+    throw new JWEInvalid(
+      `Invalid Content Encryption Key length. Expected ${expected} bits, got ${actual} bits`,
+    );
 }
 //@ chunk-5h78gfwc.js:7639-7891 esm-fingerprint
-function ke(e) {
-  switch (e) {
+function ivBitLength(alg) {
+  switch (alg) {
     case "A128GCM":
     case "A128GCMKW":
     case "A192GCM":
@@ -53,161 +56,227 @@ function ke(e) {
     case "A256CBC-HS512":
       return 128;
     default:
-      throw new f_2(`Unsupported JWE Algorithm: ${e}`);
+      throw new JOSENotSupported(`Unsupported JWE Algorithm: ${alg}`);
   }
 }
 //@ chunk-5h78gfwc.js:7891-7952 esm-fingerprint
-var _t = (e) => crypto.getRandomValues(new Uint8Array(ke(e) >> 3));
+var generateIv = (alg) => crypto.getRandomValues(new Uint8Array(ivBitLength(alg) >> 3));
 //@ chunk-5h78gfwc.js:7952-8044 esm-fingerprint
-function Xe(e, t) {
-  if (t.length << 3 !== ke(e)) throw new c("Invalid Initialization Vector length");
+function checkIvLength(enc, iv) {
+  if (iv.length << 3 !== ivBitLength(enc)) throw new JWEInvalid("Invalid Initialization Vector length");
 }
 //@ chunk-5h78gfwc.js:8044-8378 esm-fingerprint
-async function Ye(e, t, r) {
-  if (!(t instanceof Uint8Array)) throw TypeError(U(t, "Uint8Array"));
-  let n = parseInt(e.slice(1, 4), 10),
-    importKey = await crypto.subtle.importKey("raw", t.subarray(n >> 3), "AES-CBC", !1, [r]),
-    importKey_2 = await crypto.subtle.importKey(
-      "raw",
-      t.subarray(0, n >> 3),
-      { hash: `SHA-${n << 1}`, name: "HMAC" },
-      !1,
-      ["sign"],
-    );
-  return { encKey: importKey, macKey: importKey_2, keySize: n };
+async function cbcKeySetup(enc, cek, usage) {
+  if (!(cek instanceof Uint8Array)) throw TypeError(message_3(cek, "Uint8Array"));
+  let keySize = parseInt(enc.slice(1, 4), 10);
+  let encKey = await crypto.subtle.importKey("raw", cek.subarray(keySize >> 3), "AES-CBC", false, [usage]);
+  let macKey = await crypto.subtle.importKey(
+    "raw",
+    cek.subarray(0, keySize >> 3),
+    {
+      hash: `SHA-${keySize << 1}`,
+      name: "HMAC",
+    },
+    false,
+    ["sign"],
+  );
+  return {
+    encKey,
+    macKey,
+    keySize,
+  };
 }
 //@ chunk-5h78gfwc.js:8378-8479 esm-fingerprint
-async function qe(e, t, r) {
-  return new Uint8Array((await crypto.subtle.sign("HMAC", e, t)).slice(0, r >> 3));
+async function cbcHmacTag(macKey, macData, keySize) {
+  return new Uint8Array((await crypto.subtle.sign("HMAC", macKey, macData)).slice(0, keySize >> 3));
 }
 //@ chunk-5h78gfwc.js:8479-8715 esm-fingerprint
-async function Nt(e, t, r, n, i) {
-  let { encKey: encKey, macKey: macKey, keySize: keySize } = await Ye(e, r, "encrypt"),
-    uint8Array = new Uint8Array(await crypto.subtle.encrypt({ iv: n, name: "AES-CBC" }, encKey, t)),
-    d = E_2(i, n, uint8Array, xe(i.length << 3)),
-    u = await qe(macKey, d, keySize);
-  return { ciphertext: uint8Array, tag: u, iv: n };
+async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
+  let { encKey, macKey, keySize } = await cbcKeySetup(enc, cek, "encrypt");
+  let ciphertext = new Uint8Array(
+    await crypto.subtle.encrypt(
+      {
+        iv,
+        name: "AES-CBC",
+      },
+      encKey,
+      plaintext,
+    ),
+  );
+  let macData = concat(aad, iv, ciphertext, xe(aad.length << 3));
+  let tag = await cbcHmacTag(macKey, macData, keySize);
+  return {
+    ciphertext,
+    tag,
+    iv,
+  };
 }
 //@ chunk-5h78gfwc.js:8715-9133 esm-fingerprint
-async function Bt(e, t) {
-  if (!(e instanceof Uint8Array)) throw TypeError("First argument must be a buffer");
-  if (!(t instanceof Uint8Array)) throw TypeError("Second argument must be a buffer");
-  let r = { name: "HMAC", hash: "SHA-256" },
-    generateKey = await crypto.subtle.generateKey(r, !1, ["sign"]),
-    uint8Array = new Uint8Array(await crypto.subtle.sign(r, generateKey, e)),
-    uint8Array_2 = new Uint8Array(await crypto.subtle.sign(r, generateKey, t)),
-    a = 0,
-    s = -1;
-  while (++s < 32) a |= uint8Array[s] ^ uint8Array_2[s];
-  return a === 0;
+async function timingSafeEqual(a_2, b) {
+  if (!(a_2 instanceof Uint8Array)) throw TypeError("First argument must be a buffer");
+  if (!(b instanceof Uint8Array)) throw TypeError("Second argument must be a buffer");
+  let algorithm = {
+    name: "HMAC",
+    hash: "SHA-256",
+  };
+  let key = await crypto.subtle.generateKey(algorithm, false, ["sign"]);
+  let aHmac = new Uint8Array(await crypto.subtle.sign(algorithm, key, a_2));
+  let bHmac = new Uint8Array(await crypto.subtle.sign(algorithm, key, b));
+  let out = 0;
+  let i = -1;
+  while (++i < 32) out |= aHmac[i] ^ bHmac[i];
+  return out === 0;
 }
 //@ chunk-5h78gfwc.js:9133-9430 esm-fingerprint
-async function Lt(e, t, r, n, i, o) {
-  let { encKey: encKey, macKey: macKey, keySize: keySize } = await Ye(e, t, "decrypt"),
-    d = E_2(o, n, r, xe(o.length << 3)),
-    u = await qe(macKey, d, keySize),
-    m;
+async function cbcDecrypt(enc, cek, ciphertext, iv, tag, aad) {
+  let { encKey, macKey, keySize } = await cbcKeySetup(enc, cek, "decrypt");
+  let macData = concat(aad, iv, ciphertext, xe(aad.length << 3));
+  let expectedTag = await cbcHmacTag(macKey, macData, keySize);
+  let macCheckPassed;
   try {
-    m = await Bt(i, u);
+    macCheckPassed = await timingSafeEqual(tag, expectedTag);
   } catch {}
-  if (!m) throw new k_2();
-  let w;
+  if (!macCheckPassed) throw new JWEDecryptionFailed();
+  let plaintext;
   try {
-    w = new Uint8Array(await crypto.subtle.decrypt({ iv: n, name: "AES-CBC" }, encKey, r));
+    plaintext = new Uint8Array(
+      await crypto.subtle.decrypt(
+        {
+          iv,
+          name: "AES-CBC",
+        },
+        encKey,
+        ciphertext,
+      ),
+    );
   } catch {}
-  if (!w) throw new k_2();
-  return w;
+  if (!plaintext) throw new JWEDecryptionFailed();
+  return plaintext;
 }
 //@ chunk-5h78gfwc.js:9430-9752 esm-fingerprint
-async function $t(e, t, r, n, i) {
-  let o;
-  if (r instanceof Uint8Array) o = await crypto.subtle.importKey("raw", r, "AES-GCM", !1, ["encrypt"]);
-  else (H(r, e, "encrypt"), (o = r));
-  let uint8Array = new Uint8Array(
-      await crypto.subtle.encrypt({ additionalData: i, iv: n, name: "AES-GCM", tagLength: 128 }, o, t),
+async function gcmEncrypt(enc, plaintext, cek, iv, aad) {
+  let encKey;
+  if (cek instanceof Uint8Array)
+    encKey = await crypto.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
+  else {
+    checkEncCryptoKey(cek, enc, "encrypt");
+    encKey = cek;
+  }
+  let encrypted = new Uint8Array(
+    await crypto.subtle.encrypt(
+      {
+        additionalData: aad,
+        iv,
+        name: "AES-GCM",
+        tagLength: 128,
+      },
+      encKey,
+      plaintext,
     ),
-    sliced = uint8Array.slice(-16);
-  return { ciphertext: uint8Array.slice(0, -16), tag: sliced, iv: n };
+  );
+  let tag = encrypted.slice(-16);
+  return {
+    ciphertext: encrypted.slice(0, -16),
+    tag,
+    iv,
+  };
 }
 //@ chunk-5h78gfwc.js:9752-10045 esm-fingerprint
-async function Gt(e, t, r, n, i, o) {
-  let a;
-  if (t instanceof Uint8Array) a = await crypto.subtle.importKey("raw", t, "AES-GCM", !1, ["decrypt"]);
-  else (H(t, e, "decrypt"), (a = t));
+async function gcmDecrypt(enc, cek, ciphertext, iv, tag, aad) {
+  let encKey;
+  if (cek instanceof Uint8Array)
+    encKey = await crypto.subtle.importKey("raw", cek, "AES-GCM", false, ["decrypt"]);
+  else {
+    checkEncCryptoKey(cek, enc, "decrypt");
+    encKey = cek;
+  }
   try {
     return new Uint8Array(
       await crypto.subtle.decrypt(
-        { additionalData: o, iv: n, name: "AES-GCM", tagLength: 128 },
-        a,
-        E_2(r, i),
+        {
+          additionalData: aad,
+          iv,
+          name: "AES-GCM",
+          tagLength: 128,
+        },
+        encKey,
+        concat(ciphertext, tag),
       ),
     );
   } catch {
-    throw new k_2();
+    throw new JWEDecryptionFailed();
   }
 }
 //@ chunk-5h78gfwc.js:10045-10099 esm-fingerprint
-var Qe = "Unsupported JWE Content Encryption Algorithm";
+var unsupportedEnc = "Unsupported JWE Content Encryption Algorithm";
 //@ chunk-5h78gfwc.js:10099-10561 esm-fingerprint
-async function we(e, t, r, n, i) {
-  if (!D(r) && !(r instanceof Uint8Array))
-    throw TypeError(U(r, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
-  if (n) Xe(e, n);
-  else n = _t(e);
-  switch (e) {
+async function encrypt(enc, plaintext, cek, iv, aad) {
+  if (!isCryptoKey(cek) && !(cek instanceof Uint8Array))
+    throw TypeError(message_3(cek, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
+  if (iv) checkIvLength(enc, iv);
+  else iv = generateIv(enc);
+  switch (enc) {
     case "A128CBC-HS256":
     case "A192CBC-HS384":
     case "A256CBC-HS512":
-      if (r instanceof Uint8Array) le(r, parseInt(e.slice(-3), 10));
-      return Nt(e, t, r, n, i);
+      if (cek instanceof Uint8Array) checkCekLength(cek, parseInt(enc.slice(-3), 10));
+      return cbcEncrypt(enc, plaintext, cek, iv, aad);
     case "A128GCM":
     case "A192GCM":
     case "A256GCM":
-      if (r instanceof Uint8Array) le(r, parseInt(e.slice(1, 4), 10));
-      return $t(e, t, r, n, i);
+      if (cek instanceof Uint8Array) checkCekLength(cek, parseInt(enc.slice(1, 4), 10));
+      return gcmEncrypt(enc, plaintext, cek, iv, aad);
     default:
-      throw new f_2(Qe);
+      throw new JOSENotSupported(unsupportedEnc);
   }
 }
 //@ chunk-5h78gfwc.js:10561-11118 esm-fingerprint
-async function Se_5h78(e, t, r, n, i, o) {
-  if (!D(t) && !(t instanceof Uint8Array))
-    throw TypeError(U(t, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
-  if (!n) throw new c("JWE Initialization Vector missing");
-  if (!i) throw new c("JWE Authentication Tag missing");
-  switch ((Xe(e, n), e)) {
+async function decrypt(enc, cek, ciphertext, iv, tag, aad) {
+  if (!isCryptoKey(cek) && !(cek instanceof Uint8Array))
+    throw TypeError(message_3(cek, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
+  if (!iv) throw new JWEInvalid("JWE Initialization Vector missing");
+  if (!tag) throw new JWEInvalid("JWE Authentication Tag missing");
+  switch ((checkIvLength(enc, iv), enc)) {
     case "A128CBC-HS256":
     case "A192CBC-HS384":
     case "A256CBC-HS512":
-      if (t instanceof Uint8Array) le(t, parseInt(e.slice(-3), 10));
-      return Lt(e, t, r, n, i, o);
+      if (cek instanceof Uint8Array) checkCekLength(cek, parseInt(enc.slice(-3), 10));
+      return cbcDecrypt(enc, cek, ciphertext, iv, tag, aad);
     case "A128GCM":
     case "A192GCM":
     case "A256GCM":
-      if (t instanceof Uint8Array) le(t, parseInt(e.slice(1, 4), 10));
-      return Gt(e, t, r, n, i, o);
+      if (cek instanceof Uint8Array) checkCekLength(cek, parseInt(enc.slice(1, 4), 10));
+      return gcmDecrypt(enc, cek, ciphertext, iv, tag, aad);
     default:
-      throw new f_2(Qe);
+      throw new JOSENotSupported(unsupportedEnc);
   }
 }
 //@ chunk-2tyrgda4.js:1828-1848 esm-layout
-var P = Xa(() => {
-  v();
+var init_content_encryption = Xa(() => {
+  init_base64url();
 });
 //@ chunk-2tyrgda4.js:1848-1874 esm-layout
-var N, Q, f, re, s, y, Te, Ue, De;
+var N;
+var Q;
+var f;
+var re;
+var s;
+var y;
+var Te;
+var Ue;
+var De;
 //@ chunk-2tyrgda4.js:1874-3334 esm-layout
-var E = Xa(() => {
+var init_content_encryption_2 = Xa(() => {
   N = class N extends Error {
     static get code() {
       return "ERR_JOSE_GENERIC";
     }
-    constructor(e) {
+    constructor(message) {
       var t;
-      super(e);
-      ((this.code = "ERR_JOSE_GENERIC"),
-        (this.name = this.constructor.name),
-        (t = Error.captureStackTrace) === null || t === void 0 || t.call(Error, this, this.constructor));
+      super(message);
+      this.code = "ERR_JOSE_GENERIC";
+      this.name = this.constructor.name;
+      if (!((t = Error.captureStackTrace) === null || t === undefined)) t.call(Error, this, this.constructor);
     }
   };
   Q = class Q extends N {
@@ -231,7 +300,8 @@ var E = Xa(() => {
   re = class re extends N {
     constructor() {
       super(...arguments);
-      ((this.code = "ERR_JWE_DECRYPTION_FAILED"), (this.message = "decryption operation failed"));
+      this.code = "ERR_JWE_DECRYPTION_FAILED";
+      this.message = "decryption operation failed";
     }
     static get code() {
       return "ERR_JWE_DECRYPTION_FAILED";
@@ -276,8 +346,8 @@ var E = Xa(() => {
   De = class De extends N {
     constructor() {
       super(...arguments);
-      ((this.code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED"),
-        (this.message = "signature verification failed"));
+      this.code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
+      this.message = "signature verification failed";
     }
     static get code() {
       return "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
@@ -287,8 +357,8 @@ var E = Xa(() => {
 //@ chunk-2tyrgda4.js:3334-3340 esm-layout
 var k;
 //@ chunk-2tyrgda4.js:3340-3389 esm-layout
-var Ee = Xa(() => {
-  W();
+var init_content_encryption_3 = Xa(() => {
+  init_buffer_utils();
   k = p.getRandomValues.bind(p);
 });
 //@ chunk-2tyrgda4.js:3389-3641 esm-fingerprint
@@ -312,34 +382,69 @@ function Oe(e) {
 //@ chunk-2tyrgda4.js:3641-3681 esm-layout
 var Se = (e) => k(new Uint8Array(Oe(e) >> 3));
 //@ chunk-2tyrgda4.js:3681-3707 esm-layout
-var Ae = Xa(() => {
-  E();
-  Ee();
+var init_content_encryption_4 = Xa(() => {
+  init_content_encryption_2();
+  init_content_encryption_3();
 });
 //@ chunk-2tyrgda4.js:3707-3801 esm-fingerprint
 var yr = (e, t) => {
-    if (t.length << 3 !== Oe(e)) throw new s("Invalid Initialization Vector length");
-  },
-  ge;
+  if (t.length << 3 !== Oe(e)) throw new s("Invalid Initialization Vector length");
+};
+var ge;
 //@ chunk-2tyrgda4.js:3801-3833 esm-layout
-var Me = Xa(() => {
-  E();
-  Ae();
+var init_content_encryption_5 = Xa(() => {
+  init_content_encryption_2();
+  init_content_encryption_4();
   ge = yr;
 });
 //@ chunk-2tyrgda4.js:3833-3970 esm-fingerprint
-var wr = (e, t) => {
-    let r = e.byteLength << 3;
-    if (r !== t) throw new s(`Invalid Content Encryption Key length. Expected ${t} bits, got ${r} bits`);
-  },
-  j;
+var wr = (e, expected) => {
+  let actual = e.byteLength << 3;
+  if (actual !== expected)
+    throw new s(`Invalid Content Encryption Key length. Expected ${expected} bits, got ${actual} bits`);
+};
+var j;
 //@ chunk-2tyrgda4.js:9860-9873 esm-layout
 var F = () => {};
 //@ chunk-2tyrgda4.js:9873-9883 esm-layout
-var _r, ee;
+var _r;
+var ee;
 //@ chunk-2tyrgda4.js:9883-9952 esm-fingerprint
-var Fe = Xa(() => {
-  ((_r = [{ hash: "SHA-256", name: "HMAC" }, !0, ["sign"]]), (ee = _r));
+var init_content_encryption_6 = Xa(() => {
+  _r = [
+    {
+      hash: "SHA-256",
+      name: "HMAC",
+    },
+    true,
+    ["sign"],
+  ];
+  ee = _r;
 });
-
-export { E, j, wr, re, ge, f, Me, ee, Fe, s, k, Se_5h78, ye, M_2, Ee, P, F, Se, we, Ae, Q, y, De, Te, Ue };
+export {
+  init_content_encryption_2,
+  j,
+  wr,
+  re,
+  ge,
+  f,
+  init_content_encryption_5,
+  ee,
+  init_content_encryption_6,
+  s,
+  k,
+  decrypt,
+  ye,
+  generateCek,
+  init_content_encryption_3,
+  init_content_encryption,
+  F,
+  Se,
+  encrypt,
+  init_content_encryption_4,
+  Q,
+  y,
+  De,
+  Te,
+  Ue,
+};
