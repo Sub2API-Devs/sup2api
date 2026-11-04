@@ -55,6 +55,7 @@ func RequestRuntimeCatalog(capabilities []string) Document {
 		{"F-REQUEST-POLICY-MODE", "按请求选择 direct/build", RequestPolicyModeCapability},
 		{"F-REQUEST-CAPTURE", "请求日志记录最终上游请求", RequestCaptureCapability},
 		{"F-REQUEST-LOG-POLICY", "请求日志级别随请求下发", RequestLogPolicyCapability},
+		{"F-COUNT-TOKENS", "token 计数原样发到上游计数端点", RequestCountTokensCapability},
 	} {
 		if slices.Contains(capabilities, feature.capability) {
 			doc.Features = append(doc.Features, Feature{ID: feature.id, Title: feature.title, Category: "CC 执行上下文", Scope: "cc", Status: "supported", BodyPaths: []string{}, BetaHeaders: []string{}, Mechanisms: []string{feature.capability}, Reason: "Worker 与实际加载 CLI 的合同能力交集；不代表模型提供方验证已完成。"})

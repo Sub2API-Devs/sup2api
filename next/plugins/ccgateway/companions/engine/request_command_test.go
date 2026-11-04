@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -432,6 +433,13 @@ printf '%s' '{"input_tokens":8}'
 	out := count(g, `{"request_log":"off"}`)
 	if out.Code != 200 || out.Body.String() != `{"input_tokens":8}` {
 		t.Fatalf("%d %s", out.Code, out.Body.String())
+	}
+	// The core reads the capability from /healthz before routing a count.
+	build := g.CLIInfo
+	build.Capabilities = append(slices.Clone(build.Capabilities), "request_build")
+	declared := (&Gateway{CLIInfo: build, Runner: &Runner{}}).requestCapabilities()
+	if !slices.Contains(declared, features.RequestCountTokensCapability) {
+		t.Fatalf("not reported: %v", declared)
 	}
 	input, _ := os.ReadFile(filepath.Join(root, "input"))
 	if string(input) != raw {

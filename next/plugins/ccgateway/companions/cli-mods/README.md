@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-**下一候选（源码已改，ELF 待编译）：Claude Code 2.1.316 / `ccgateway-v47-count-tokens`**（插件 0.1.128）：在 v46 上加 `claude request --count`（能力 `request_count_tokens_v1`，2026-11-04 用户决定），把客户端字节原样发到上游计数端点，不加计费头、身份和会话。发布要先发插件（Worker 和 CLI），再发核心；未升级的账号核心会跳过，不影响账号状态。
+**下一候选（源码已改，ELF 待编译）：Claude Code 2.1.316 / `ccgateway-v47-count-tokens`**（插件 0.1.128）：在 v46 上加 `claude request --count`（能力 `request_count_tokens_v1`，2026-11-04 用户决定），把客户端字节原样发到上游计数端点，不加计费头、身份和会话。发布要先发核心（它才认计数目标并豁免资源），再发插件；未升级的账号核心会跳过，不影响账号状态。
 
 **候选（已在 ovh 编译与离线验证，待发布）：Claude Code 2.1.316 / `ccgateway-v46-shape-prompt-text`**（定制 ELF SHA-256 `2125d0b0953f3ee789f82fc39d4b6d7ec9ebb252f5ed88aac5189f46fd0b0b41`，插件版本 TBD，需要带同一次改动的 Worker）：v45 在 82 号账号实测后的修正——同一轮的派生 prompt id 不再随客户端的缓存标记变化；Worker 侧读压缩的应答、应答一结束就记入会话记忆，续接请求带上 `diagnostics.previous_message_id`、子代理带上父线程的 prompt id 与 agent type（[迁移记录](../../docs/CLAUDE-CODE-2.1.316-MIGRATION.md)第 12 节）。
 
