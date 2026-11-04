@@ -67,13 +67,6 @@ func isAccountBillingError(msg string) bool {
 	return strings.Contains(m, "credit balance is too low")
 }
 
-// isLongContextCreditsRequired detects the 429 Anthropic answers when a long
-// context request needs usage credits the organization does not have. It says
-// nothing about the account's limits, whatever reset headers come with it.
-func isLongContextCreditsRequired(msg string) bool {
-	return strings.Contains(strings.ToLower(msg), "usage credits are required for long context")
-}
-
 // ClassifyError implements pluginsdk.Platform.
 func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
 	now := p.now()
@@ -121,11 +114,6 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		if msg != "" {
 			resp.Reason += ": " + truncate(msg, 200)
 		}
-	case code == http.StatusTooManyRequests && isLongContextCreditsRequired(msg):
-		// The request's own shape is refused, not the account: no cooldown,
-		// no disable, and the client hears why.
-		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
-		resp.Reason = "long context request needs usage credits"
 	case code == http.StatusTooManyRequests:
 		classifyRateLimit(resp, in, source, now, cooldown)
 	case code == StatusOverloaded:
@@ -176,15 +164,15 @@ func classifyLocal(resp *pluginv1.ClassifyErrorResponse, headers map[string]stri
 // availability holds that family back until the reset, availability.go); any
 // other limit, a scoped one without a reset time included, disables the
 // account until it resets. An upstream answer that shows no used-up limit
-// (quotaExhausted) only gets a short cooldown.
+// (quotaExhausted) goes back to the client and leaves the account alone.
 //
 // Only an upstream HTTP answer names a limit: the Worker marks it
 // (requestfailure.SourceHTTP) and never relays a provider's x-ccgateway-*
 // headers (httpfacts.Apply), so a provider cannot claim the source.
 func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.ClassifyErrorRequest, source string, now time.Time, cooldown func(time.Duration, string)) {
 	if source == requestfailure.SourceHTTP && in.GetAccount().GetType() == AccountTypeManaged && !quotaExhausted(in.GetHeaders()) {
-		until, _ := rateLimitReset(map[string]string{"retry-after": in.GetHeaders()["retry-after"]}, now)
-		cooldown(min(until.Sub(now), defaultRateLimitCooldown), "upstream 429 without a used-up window")
+		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
+		resp.Reason = "upstream 429 without a used-up limit"
 		return
 	}
 	if source == requestfailure.SourceHTTP {
@@ -205,33 +193,28 @@ func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.Classi
 }
 
 // quotaExhausted reports whether a managed account's 429 means a limit is used
-// up. A shared window that is rejected or at 1 does, and so does a claim naming
-// a model-scoped window or a limit this plugin does not know. Both shared
-// windows showing room means it is not. Without that usage, a claim or a
-// Retry-After is taken at its word; a reset time alone is not: the long context
-// refusal has no window headers, no Retry-After, and only the billing period's
-// end in anthropic-ratelimit-unified-reset.
+// up: a shared window is rejected or at 1, the claim names a model-scoped window
+// or a limit this plugin does not know, or it names a shared window without
+// giving that window's usage. Reset times and Retry-After alone say nothing: the
+// long context refusal has no window headers and only the billing period's end
+// in anthropic-ratelimit-unified-reset.
 func quotaExhausted(h map[string]string) bool {
 	claim := h[claimHeader]
 	key := quotaClaimKey(claim)
 	if scopedQuota(key) || claim != "" && key == "" {
 		return true
 	}
-	readable := 0
 	for _, prefix := range unifiedWindowHeader {
 		ratio, err := strconv.ParseFloat(h[prefix+"-utilization"], 64)
-		known := err == nil && validUsage(ratio)
-		if known && ratio >= 1 || strings.EqualFold(h[prefix+"-status"], "rejected") {
+		if err == nil && validUsage(ratio) && ratio >= 1 || strings.EqualFold(h[prefix+"-status"], "rejected") {
 			return true
 		}
-		if known {
-			readable++
-		}
 	}
-	if readable == len(unifiedWindowHeader) {
-		return false
+	if prefix := unifiedWindowHeader[key]; prefix != "" {
+		ratio, err := strconv.ParseFloat(h[prefix+"-utilization"], 64)
+		return err != nil || !validUsage(ratio)
 	}
-	return claim != "" || h["retry-after"] != ""
+	return false
 }
 
 // The failure markers as the host passes headers (lowercase).
