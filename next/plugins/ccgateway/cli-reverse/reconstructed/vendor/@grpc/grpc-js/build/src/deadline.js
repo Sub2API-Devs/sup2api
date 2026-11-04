@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:191465-192412 cjs-fingerprint
-var Kr = x(function (cjsExports) {
+var require_deadline = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -62,4 +62,4 @@ var Kr = x(function (cjsExports) {
     return ((endDate.getTime() - startDate.getTime()) / 1000).toFixed(3) + "s";
   }
 });
-export { Kr };
+export { require_deadline };

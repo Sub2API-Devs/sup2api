@@ -81,6 +81,9 @@ JSX 在 2.1.316 里不存在（Bun 已编译掉），分析器遇到会报"不�
 - `var` 提升：声明出现在语法作用域里，绑定在函数 / 模块作用域里；记录"穿过的作用域"（passOccs），改名时与引用同等对待
   （`{let x;{var v}}` 把 v 改成 x 会成为语法错误，必须拦下）。
 - 直接 `eval`（被调用者是解析为全局的 `eval` 标识符）：调用处到模块作用域链上所有绑定冻结。
+  - **2026-11-04 收窄**：eval 的代码是静态可知的字符串时（字面量、无插值模板、`+` 拼接、`<字符串>.replace(<正则|字符串>, <字符串>)`），`scope.mjs` 先分析这段代码，只冻结其中自由名字解析到的绑定，并把这些名字记进链上每个作用域的 `evalNames`。改名器不会把链上的绑定改成这些名字（`visible-to-direct-eval` 冲突）。α 校验检查这些名字在改名前后解析到同一个绑定，或者都解析到全局。
+  - 唯一的实例是 protobufjs 的 `inquire`（`chunk-pwh5dx3n.js`）：`eval("quire".replace(/^/,"re"))`，算出来就是 `eval("require")`，而 `require` 在这个 chunk 里是全局名。因此这个 chunk 的冻结绑定从 129 个降到 0 个，原来按压缩名保留的 111 个名字都换成了可读名（顶层的 CommonJS 包装用 vendor 名 `require_<文件>`）。
+  - 代码不能静态求出时，仍按原规则冻结整条链。测试见 `tools/rename/test/rename.test.mjs`、`alpha-negative.test.mjs`。
 
 为了证明分析器本身没错，`test/babel-diff.mjs` 对每个标识符比较两边解析到的绑定（必须是双射）：
 original 全部 2,650 个模块、2,715,671 个标识符 0 差异；在三种压力改名输出上也 0 差异（排除上面说的 Babel 自身的

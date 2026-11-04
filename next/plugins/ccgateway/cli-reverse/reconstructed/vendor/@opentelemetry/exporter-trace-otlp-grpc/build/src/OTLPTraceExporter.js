@@ -6,7 +6,7 @@
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
-import { Ian } from "../../../otlp-grpc-exporter-base/build/src/index.js";
+import { require_otlp_grpc_exporter_base } from "../../../otlp-grpc-exporter-base/build/src/index.js";
 import { require_otlp_transformer } from "../../../otlp-transformer/build/src/index.js";
 import { require_otlp_exporter_base } from "../../../otlp-exporter-base/build/src/index.js";
 
@@ -16,7 +16,7 @@ var require_OTLPTraceExporter = __commonJS(function (cjsExports) {
     value: true,
   });
   cjsExports.OTLPTraceExporter = undefined;
-  var otlp_grpc_exporter_base_1 = Ian();
+  var otlp_grpc_exporter_base_1 = require_otlp_grpc_exporter_base();
   var otlp_transformer_1 = require_otlp_transformer();
   var otlp_exporter_base_1 = require_otlp_exporter_base();
   class OTLPTraceExporter extends otlp_exporter_base_1.OTLPExporterBase {

@@ -5,19 +5,19 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { Wd } from "./index-light.js";
-import { ao } from "./tokenize.js";
-import { Qd } from "./parse.js";
-import { th } from "./common.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_index_light } from "./index-light.js";
+import { require_tokenize } from "./tokenize.js";
+import { require_parse } from "./parse.js";
+import { require_common } from "./common.js";
 
 //@ chunk-pwh5dx3n.js:142798-142957 cjs-fingerprint
-var qs = x(function (cjsExports, cjsModule) {
-  var protobuf = (cjsModule.exports = Wd());
+var require_protobufjs = __commonJS(function (cjsExports, cjsModule) {
+  var protobuf = (cjsModule.exports = require_index_light());
   protobuf.build = "full";
-  protobuf.tokenize = ao();
-  protobuf.parse = Qd();
-  protobuf.common = th();
+  protobuf.tokenize = require_tokenize();
+  protobuf.parse = require_parse();
+  protobuf.common = require_common();
   protobuf.Root._configure(protobuf.Type, protobuf.parse, protobuf.common);
 });
-export { qs };
+export { require_protobufjs };

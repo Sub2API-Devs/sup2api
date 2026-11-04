@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:185569-185806 cjs-fingerprint
-var _o = x(function (cjsExports) {
+var require_compression_algorithms = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -20,4 +20,4 @@ var _o = x(function (cjsExports) {
     CompressionAlgorithms[(CompressionAlgorithms.gzip = 2)] = "gzip";
   })(CompressionAlgorithms || (cjsExports.CompressionAlgorithms = CompressionAlgorithms = {}));
 });
-export { _o };
+export { require_compression_algorithms };

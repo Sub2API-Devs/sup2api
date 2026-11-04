@@ -1,0 +1,1 @@
+{"file":"chunk-pwh5dx3n.js","key":"@78095","name":"require_inquire","source":"semantic","confidence":0.95,"note":"@protobufjs/inquire 的 CommonJS 包装：module.exports = inquire，用直接 eval 取 require 以躲过打包器（vendor 识别没认出这个包，按内容命名）"}

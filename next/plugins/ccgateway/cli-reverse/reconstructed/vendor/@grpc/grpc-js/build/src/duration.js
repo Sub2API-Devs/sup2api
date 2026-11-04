@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:287451-288349 cjs-fingerprint
-var zi = x(function (cjsExports) {
+var require_duration = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -58,4 +58,4 @@ var zi = x(function (cjsExports) {
     return `${duration.seconds}.${duration.nanos / scaleFactor}s`;
   }
 });
-export { zi };
+export { require_duration };

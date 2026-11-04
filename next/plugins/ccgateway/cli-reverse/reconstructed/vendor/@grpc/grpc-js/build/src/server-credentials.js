@@ -5,18 +5,18 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { fa } from "./tls-helpers.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_tls_helpers } from "./tls-helpers.js";
 
 //@ chunk-pwh5dx3n.js:281874-287451 cjs-fingerprint
-var dn = x(function (cjsExports) {
+var require_server_credentials = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.ServerCredentials = undefined;
   cjsExports.createCertificateProviderServerCredentials = createCertificateProviderServerCredentials;
   cjsExports.createServerCredentialsWithInterceptors = createServerCredentialsWithInterceptors;
-  var tls_helpers_1 = fa();
+  var tls_helpers_1 = require_tls_helpers();
   class ServerCredentials {
     constructor(serverConstructorOptions, contextOptions) {
       this.serverConstructorOptions = serverConstructorOptions;
@@ -255,4 +255,4 @@ var dn = x(function (cjsExports) {
     return new InterceptorServerCredentials(credentials, interceptors);
   }
 });
-export { dn };
+export { require_server_credentials };

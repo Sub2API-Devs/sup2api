@@ -5,31 +5,31 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { Ae } from "./connectivity-state.js";
-import { k } from "./constants.js";
-import { Kr } from "./deadline.js";
-import { ue } from "./metadata.js";
-import { kt } from "./picker.js";
-import { we } from "./uri-parser.js";
-import { K } from "./logging.js";
-import { Ui } from "./control-plane-status.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_constants } from "./constants.js";
+import { require_deadline } from "./deadline.js";
+import { require_metadata } from "./metadata.js";
+import { require_picker } from "./picker.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_logging } from "./logging.js";
+import { require_control_plane_status } from "./control-plane-status.js";
 
 //@ chunk-pwh5dx3n.js:237579-243577 cjs-fingerprint
-var Pp = x(function (cjsExports) {
+var require_load_balancing_call = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.LoadBalancingCall = undefined;
-  var connectivity_state_1 = Ae();
-  var constants_1 = k();
-  var deadline_1 = Kr();
-  var metadata_1 = ue();
-  var picker_1 = kt();
-  var uri_parser_1 = we();
-  var logging = K();
-  var control_plane_status_1 = Ui();
-  var http2 = Be("http2");
+  var connectivity_state_1 = require_connectivity_state();
+  var constants_1 = require_constants();
+  var deadline_1 = require_deadline();
+  var metadata_1 = require_metadata();
+  var picker_1 = require_picker();
+  var uri_parser_1 = require_uri_parser();
+  var logging = require_logging();
+  var control_plane_status_1 = require_control_plane_status();
+  var http2 = importMetaRequire("http2");
   var TRACER_NAME = "load_balancing_call";
   class LoadBalancingCall {
     constructor(channel, callConfig, methodName, host, credentials, deadline, callNumber) {
@@ -331,4 +331,4 @@ var Pp = x(function (cjsExports) {
   }
   cjsExports.LoadBalancingCall = LoadBalancingCall;
 });
-export { Pp };
+export { require_load_balancing_call };

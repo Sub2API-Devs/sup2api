@@ -5,26 +5,26 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { lu } from "./call.js";
-import { Ra } from "./channel.js";
-import { Ae } from "./connectivity-state.js";
-import { k } from "./constants.js";
-import { ue } from "./metadata.js";
-import { Ca } from "./client-interceptors.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_call } from "./call.js";
+import { require_channel } from "./channel.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_constants } from "./constants.js";
+import { require_metadata } from "./metadata.js";
+import { require_client_interceptors } from "./client-interceptors.js";
 
 //@ chunk-pwh5dx3n.js:63395-69757 cjs-fingerprint
-var Ta = x(function (cjsExports) {
+var require_client = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.Client = undefined;
-  var call_1 = lu();
-  var channel_1 = Ra();
-  var connectivity_state_1 = Ae();
-  var constants_1 = k();
-  var metadata_1 = ue();
-  var client_interceptors_1 = Ca();
+  var call_1 = require_call();
+  var channel_1 = require_channel();
+  var connectivity_state_1 = require_connectivity_state();
+  var constants_1 = require_constants();
+  var metadata_1 = require_metadata();
+  var client_interceptors_1 = require_client_interceptors();
   var CHANNEL_SYMBOL = Symbol();
   var INTERCEPTOR_SYMBOL = Symbol();
   var INTERCEPTOR_PROVIDER_SYMBOL = Symbol();
@@ -425,4 +425,4 @@ var Ta = x(function (cjsExports) {
   }
   cjsExports.Client = Client;
 });
-export { Ta };
+export { require_client };

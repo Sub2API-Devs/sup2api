@@ -5,18 +5,18 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { Yt } from "./field.js";
-import { Cr } from "./types.js";
-import { de } from "./util.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_field } from "./field.js";
+import { require_types } from "./types.js";
+import { require_util_2 } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:85940-86966 cjs-fingerprint
-var Ts = x(function (cjsExports, cjsModule) {
+var require_mapfield = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = MapField;
-  var Field = Yt();
+  var Field = require_field();
   ((MapField.prototype = Object.create(Field.prototype)).constructor = MapField).className = "MapField";
-  var types = Cr();
-  var util = de();
+  var types = require_types();
+  var util = require_util_2();
   function MapField(name, id, keyType, type, options, comment) {
     Field.call(this, name, id, type, undefined, undefined, options, comment);
     if (!util.isString(keyType)) throw TypeError("keyType must be a string");
@@ -60,4 +60,4 @@ var Ts = x(function (cjsExports, cjsModule) {
     };
   };
 });
-export { Ts };
+export { require_mapfield };

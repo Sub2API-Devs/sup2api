@@ -5,17 +5,17 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Ta } from "./client.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_client } from "./client.js";
 
 //@ chunk-pwh5dx3n.js:69757-71132 cjs-fingerprint
-var vs = x(function (cjsExports) {
+var require_make_client = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.makeClientConstructor = makeClientConstructor;
   cjsExports.loadPackageDefinition = loadPackageDefinition;
-  var client_1 = Ta();
+  var client_1 = require_client();
   var requesterFuncs = {
     unary: client_1.Client.prototype.makeUnaryRequest,
     server_stream: client_1.Client.prototype.makeServerStreamRequest,
@@ -81,4 +81,4 @@ var vs = x(function (cjsExports) {
     return result;
   }
 });
-export { vs };
+export { require_make_client };

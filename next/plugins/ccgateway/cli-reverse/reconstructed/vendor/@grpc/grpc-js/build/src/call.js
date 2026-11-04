@@ -5,11 +5,11 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { k } from "./constants.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_constants } from "./constants.js";
 
 //@ chunk-pwh5dx3n.js:52319-55095 cjs-fingerprint
-var lu = x(function (cjsExports) {
+var require_call = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -19,9 +19,9 @@ var lu = x(function (cjsExports) {
     cjsExports.ClientUnaryCallImpl =
       undefined;
   cjsExports.callErrorFromStatus = callErrorFromStatus;
-  var events_1 = Be("events");
-  var stream_1 = Be("stream");
-  var constants_1 = k();
+  var events_1 = importMetaRequire("events");
+  var stream_1 = importMetaRequire("stream");
+  var constants_1 = require_constants();
   function callErrorFromStatus(status, callerStack) {
     let message = `${status.code} ${constants_1.Status[status.code]}: ${status.details}`;
     let stack = `${Error(message).stack}
@@ -186,4 +186,4 @@ ${callerStack}`;
   }
   cjsExports.ClientDuplexStreamImpl = ClientDuplexStreamImpl;
 });
-export { lu };
+export { require_call };

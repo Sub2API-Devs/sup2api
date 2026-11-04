@@ -5,39 +5,39 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { ao } from "./tokenize.js";
-import { xs } from "./root.js";
-import { Ps } from "./type.js";
-import { Yt } from "./field.js";
-import { Ts } from "./mapfield.js";
-import { Sr } from "./oneof.js";
-import { nt } from "./enum.js";
-import { bs } from "./service.js";
-import { Rs } from "./method.js";
-import { Kt } from "./object.js";
-import { Cr } from "./types.js";
-import { de } from "./util.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_tokenize } from "./tokenize.js";
+import { require_root } from "./root.js";
+import { require_type } from "./type.js";
+import { require_field } from "./field.js";
+import { require_mapfield } from "./mapfield.js";
+import { require_oneof } from "./oneof.js";
+import { require_enum } from "./enum.js";
+import { require_service } from "./service.js";
+import { require_method } from "./method.js";
+import { require_object } from "./object.js";
+import { require_types } from "./types.js";
+import { require_util_2 } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:132937-141305 cjs-fingerprint
-var Qd = x(function (cjsExports, cjsModule) {
+var require_parse = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = parse;
   parse.filename = null;
   parse.defaults = {
     keepCase: false,
   };
-  var tokenize = ao();
-  var Root = xs();
-  var Type = Ps();
-  var Field = Yt();
-  var MapField = Ts();
-  var OneOf = Sr();
-  var Enum = nt();
-  var Service = bs();
-  var Method = Rs();
-  var ReflectionObject = Kt();
-  var types = Cr();
-  var util = de();
+  var tokenize = require_tokenize();
+  var Root = require_root();
+  var Type = require_type();
+  var Field = require_field();
+  var MapField = require_mapfield();
+  var OneOf = require_oneof();
+  var Enum = require_enum();
+  var Service = require_service();
+  var Method = require_method();
+  var ReflectionObject = require_object();
+  var types = require_types();
+  var util = require_util_2();
   var base10Re = /^[1-9][0-9]*$/;
   var base10NegRe = /^-?[1-9][0-9]*$/;
   var base16Re = /^0[x][0-9a-fA-F]+$/;
@@ -668,4 +668,4 @@ var Qd = x(function (cjsExports, cjsModule) {
     };
   }
 });
-export { Qd };
+export { require_parse };

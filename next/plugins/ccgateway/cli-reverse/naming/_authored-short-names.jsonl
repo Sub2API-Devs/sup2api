@@ -1,2 +1,3 @@
 {"file":"chunk-7vp249v4.js","key":"@54816","name":"_lt","package":"zod","source":"vendor-ref/node_modules/zod/v4/core/api.js:512 export function _lt"}
 {"file":"chunk-h6b7mazd.js","key":"@47490","name":"G","package":"axios","source":"vendor-ref/node_modules/axios/lib/utils.js:256 const G = getGlobal()"}
+{"file":"chunk-pwh5dx3n.js","key":"@78185","name":"mod","package":"@protobufjs/inquire","source":"npm @protobufjs/inquire@1.1.0 index.js:12 var mod = eval(...)(moduleName)"}

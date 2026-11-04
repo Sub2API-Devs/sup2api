@@ -5,14 +5,14 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-require-graph 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:340-453 cjs-require-graph
-var gl = x(function (cjsExports) {
+var require_version = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.VERSION = undefined;
   cjsExports.VERSION = "0.208.0";
 });
-export { gl };
+export { require_version };

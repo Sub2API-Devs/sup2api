@@ -57,6 +57,8 @@
 
 每行必须有 `file`，以及 `key`（偏移）、`top`（压缩名）、`export`（导出名）三者之一。
 
+注意：`naming/semantic-*.jsonl` 是由 `tools/naming/resolve.mjs` 读取的，它**只认 `key`**。写语义名时一律用偏移键；`top`、`export` 只适用于直接交给改名器（`tools/rename/lib/naming.mjs`）的表。
+
 ## 4. 偏移键 `@N`
 
 - `N` 是绑定**声明标识符**在 `original/<file>` 里的起始位置：Babel `node.start`（UTF-16 下标），与 `tools/ast/scan.mjs`、

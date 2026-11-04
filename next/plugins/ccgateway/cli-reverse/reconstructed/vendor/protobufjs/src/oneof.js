@@ -5,18 +5,18 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { Kt } from "./object.js";
-import { Yt } from "./field.js";
-import { de } from "./util.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_object } from "./object.js";
+import { require_field } from "./field.js";
+import { require_util_2 } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:119864-121933 cjs-fingerprint
-var Sr = x(function (cjsExports, cjsModule) {
+var require_oneof = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = OneOf;
-  var ReflectionObject = Kt();
+  var ReflectionObject = require_object();
   ((OneOf.prototype = Object.create(ReflectionObject.prototype)).constructor = OneOf).className = "OneOf";
-  var Field = Yt();
-  var util = de();
+  var Field = require_field();
+  var util = require_util_2();
   function OneOf(name, fieldNames, options, comment) {
     if (!Array.isArray(fieldNames)) {
       options = fieldNames;
@@ -105,4 +105,4 @@ var Sr = x(function (cjsExports, cjsModule) {
     };
   };
 });
-export { Sr };
+export { require_oneof };

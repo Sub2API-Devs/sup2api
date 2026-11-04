@@ -5,39 +5,39 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { Zt } from "./channelz.js";
-import { k } from "./constants.js";
-import { wo } from "./http_proxy.js";
-import { K } from "./logging.js";
-import { rt } from "./resolver.js";
-import { Pe } from "./subchannel-address.js";
-import { we } from "./uri-parser.js";
-import { ip } from "./subchannel-call.js";
-import { Ys } from "./call-number.js";
-import { ia } from "../../package.json.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_channelz } from "./channelz.js";
+import { require_constants } from "./constants.js";
+import { require_http_proxy } from "./http_proxy.js";
+import { require_logging } from "./logging.js";
+import { require_resolver } from "./resolver.js";
+import { require_subchannel_address } from "./subchannel-address.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_subchannel_call } from "./subchannel-call.js";
+import { require_call_number } from "./call-number.js";
+import { require_package } from "../../package.json.js";
 
 //@ chunk-pwh5dx3n.js:224816-236314 cjs-fingerprint
-var pp = x(function (cjsExports) {
+var require_transport = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.Http2SubchannelConnector = undefined;
-  var http2 = Be("http2");
-  var tls_1 = Be("tls");
-  var channelz_1 = Zt();
-  var constants_1 = k();
-  var http_proxy_1 = wo();
-  var logging = K();
-  var resolver_1 = rt();
-  var subchannel_address_1 = Pe();
-  var uri_parser_1 = we();
-  var net = Be("net");
-  var subchannel_call_1 = ip();
-  var call_number_1 = Ys();
+  var http2 = importMetaRequire("http2");
+  var tls_1 = importMetaRequire("tls");
+  var channelz_1 = require_channelz();
+  var constants_1 = require_constants();
+  var http_proxy_1 = require_http_proxy();
+  var logging = require_logging();
+  var resolver_1 = require_resolver();
+  var subchannel_address_1 = require_subchannel_address();
+  var uri_parser_1 = require_uri_parser();
+  var net = importMetaRequire("net");
+  var subchannel_call_1 = require_subchannel_call();
+  var call_number_1 = require_call_number();
   var TRACER_NAME = "transport";
   var FLOW_CONTROL_TRACER_NAME = "transport_flowctrl";
-  var clientVersion = ia().version;
+  var clientVersion = require_package().version;
   var {
     HTTP2_HEADER_AUTHORITY,
     HTTP2_HEADER_CONTENT_TYPE,
@@ -600,4 +600,4 @@ var pp = x(function (cjsExports) {
   }
   cjsExports.Http2SubchannelConnector = Http2SubchannelConnector;
 });
-export { pp };
+export { require_transport };

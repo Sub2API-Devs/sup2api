@@ -158,3 +158,20 @@ test('同一绑定多处声明（var a; var a;）按任一偏移都能命名', (
   const r = renameModule('m.js', src, { locals: { ['@' + src.lastIndexOf('a=')]: 'twice' } }, null);
   assert.equal(r.code, 'var twice=1;var twice=2;use(twice)');
 });
+
+test('直接 eval 的代码静态可知：只冻结它查的名字，其他绑定照常改名，也不会改成它查的名字', () => {
+  const src = 'function f(m){let a=1,b=2;return a+eval("quire".replace(/^/,"re"))(m)+b}';
+  const r = renameModule('m.js', src, { locals: { [at(src, 'm')]: 'moduleName', [at(src, 'a')]: 'require', [at(src, 'b')]: 'second' } }, null);
+  assert.equal(r.code, 'function f(moduleName){let require_2=1,second=2;return require_2+eval("quire".replace(/^/,"re"))(moduleName)+second}');
+  assert.equal(r.rejected.length, 0);
+  const own = 'function g(require,x){return eval("require")(x)}';
+  const r2 = renameModule('m.js', own, { locals: { [at(own, 'require')]: 'req', [at(own, 'x')]: 'id' } }, null);
+  assert.equal(r2.code, 'function g(require,id){return eval("require")(id)}');
+  assert.deepEqual(r2.rejected.map((x) => x.reason), ['frozen: direct-eval']);
+});
+
+test('直接 eval 的代码不可知：整条链冻结', () => {
+  const src = 'function f(a,s){return eval(s)+a}';
+  const r = renameModule('m.js', src, { locals: { [at(src, 'a')]: 'x' } }, null);
+  assert.equal(r.code, src);
+});

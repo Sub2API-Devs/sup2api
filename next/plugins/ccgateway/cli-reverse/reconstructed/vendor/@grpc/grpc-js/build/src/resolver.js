@@ -5,11 +5,11 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { we } from "./uri-parser.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_uri_parser } from "./uri-parser.js";
 
 //@ chunk-pwh5dx3n.js:11712-12568 cjs-fingerprint
-var rt = x(function (cjsExports) {
+var require_resolver = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -19,7 +19,7 @@ var rt = x(function (cjsExports) {
   cjsExports.createResolver = createResolver;
   cjsExports.getDefaultAuthority = getDefaultAuthority;
   cjsExports.mapUriDefaultScheme = mapUriDefaultScheme;
-  var uri_parser_1 = we();
+  var uri_parser_1 = require_uri_parser();
   cjsExports.CHANNEL_ARGS_CONFIG_SELECTOR_KEY = "grpc.internal.config_selector";
   var registeredResolvers = {};
   var defaultScheme = null;
@@ -51,4 +51,4 @@ var rt = x(function (cjsExports) {
     return target;
   }
 });
-export { rt };
+export { require_resolver };

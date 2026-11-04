@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:141305-142798 cjs-fingerprint
-var th = x(function (cjsExports, cjsModule) {
+var require_common = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = common;
   var commonRe = /\/|\./;
   function common(name, json) {
@@ -212,4 +212,4 @@ var th = x(function (cjsExports, cjsModule) {
     return common[file] || null;
   };
 });
-export { th };
+export { require_common };

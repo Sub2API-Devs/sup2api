@@ -5,16 +5,16 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Ki } from "../../../../@grpc/grpc-js/build/src/index.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_grpc_js } from "../../../../@grpc/grpc-js/build/src/index.js";
 
 //@ chunk-pwh5dx3n.js:385561-385939 cjs-fingerprint
-var Kv = x(function (cjsExports) {
+var require_create_service_client_constructor = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.createServiceClientConstructor = undefined;
-  var grpc = Ki();
+  var grpc = require_grpc_js();
   function createServiceClientConstructor(path, name) {
     return grpc.makeGenericClientConstructor(
       {
@@ -33,4 +33,4 @@ var Kv = x(function (cjsExports) {
   }
   cjsExports.createServiceClientConstructor = createServiceClientConstructor;
 });
-export { Kv };
+export { require_create_service_client_constructor };

@@ -28,11 +28,11 @@
  "vendor": {
   "top": {
    "bindings": 9265,
-   "minified": 114,
+   "minified": 4,
    "authenticShort": 57,
    "chosenShort": 17,
-   "readable": 98.8,
-   "readableByRefs": 98.6
+   "readable": 100,
+   "readableByRefs": 100
   },
   "param": {
    "bindings": 40333,

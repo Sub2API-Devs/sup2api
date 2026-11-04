@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:42367-44332 cjs-fingerprint
-var Pe = x(function (cjsExports) {
+var require_subchannel_address = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -20,7 +20,7 @@ var Pe = x(function (cjsExports) {
   cjsExports.endpointEqual = endpointEqual;
   cjsExports.endpointToString = endpointToString;
   cjsExports.endpointHasAddress = endpointHasAddress;
-  var net_1 = Be("net");
+  var net_1 = importMetaRequire("net");
   function isTcpSubchannelAddress(address) {
     return "port" in address;
   }
@@ -141,4 +141,4 @@ var Pe = x(function (cjsExports) {
   }
   cjsExports.EndpointMap = EndpointMap;
 });
-export { Pe };
+export { require_subchannel_address };

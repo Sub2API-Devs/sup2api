@@ -7,7 +7,7 @@
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_exporter_metrics_otlp_http } from "../../../exporter-metrics-otlp-http/build/src/index.js";
-import { Ian } from "../../../otlp-grpc-exporter-base/build/src/index.js";
+import { require_otlp_grpc_exporter_base } from "../../../otlp-grpc-exporter-base/build/src/index.js";
 import { require_otlp_transformer } from "../../../otlp-transformer/build/src/index.js";
 
 //@ chunk-6n5d7gpq.js:364-776 cjs-fingerprint
@@ -17,7 +17,7 @@ var require_OTLPMetricExporter = __commonJS(function (cjsExports) {
   });
   cjsExports.OTLPMetricExporter = undefined;
   var exporter_metrics_otlp_http_1 = require_exporter_metrics_otlp_http();
-  var otlp_grpc_exporter_base_1 = Ian();
+  var otlp_grpc_exporter_base_1 = require_otlp_grpc_exporter_base();
   var otlp_transformer_1 = require_otlp_transformer();
   class OTLPMetricExporter extends exporter_metrics_otlp_http_1.OTLPMetricExporterBase {
     constructor(config) {

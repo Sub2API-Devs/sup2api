@@ -1048,7 +1048,7 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 - `chunk-8t8n4kdh.js#yc`/`Cc`（subscriptions/listen 重开与 park 调参，`tengu_mcp_listen_reopen_park_tuning`）未细读。
 - `chunk-z1n5m6nf.js#xt`（`callMCPTool_2`）只读了主干，v2 对应实现 `callMCPTool`（`chunk-8t8n4kdh.js#Jn`，约 15.6 KB；写作时在 `_unattributed/`，现在 `services/mcp/client.ts`），未逐行比较两代差异。
 - `chunk-aepeg2w5.js#PV` 官方 MCP 注册表 / directory BFF 的可见性规则（`tengu_mcp_directory_bff`、`tengu_mcp_directory_visibility`）未细看。
-- 第 3 节 stdio 探测"兄弟进程"（`chunk-r1g76qsy.js#Sh`）在 316 v2 客户端里是否实际启用：CLI 的 stdio 传输 `Ht` 继承 SDK 基类，`_dispose` 存在于 chunk-8t8n4kdh 的 `jr` 类上，按 `fh()` 判定应启用，但未运行验证。
+- 第 3 节 stdio 探测"兄弟进程"（`chunk-r1g76qsy.js#Sh`）在 316 v2 客户端里是否实际启用：CLI 的 stdio 传输 `Ht` 继承 SDK 基类，`_dispose` 存在于 chunk-8t8n4kdh 的 `jr` 类上，按 `readStdioServerParams`（`chunk-r1g76qsy.js#fh`）判定应启用，但未运行验证。
 
 ### 11.2 插件
 

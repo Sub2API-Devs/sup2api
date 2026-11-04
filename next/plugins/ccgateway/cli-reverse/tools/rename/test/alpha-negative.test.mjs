@@ -142,3 +142,10 @@ test('跨模块负例：模块内导出名映射不是双射（两个导出改�
   const r = alphaTree(A, B);
   assert.equal(r.ok, false);
 });
+
+test('直接 eval 代码静态可知：改的是它不查的名字，通过；把绑定改成它查的名字，失败', () => {
+  assert.equal(alpha('function f(a){return eval("require")(a)}', 'function f(b){return eval("require")(b)}').ok, true);
+  const r = alpha('function f(a){return eval("require")(a)}', 'function f(require){return eval("require")(require)}');
+  assert.equal(r.ok, false);
+  assert.ok(kinds(r).includes('eval'));
+});

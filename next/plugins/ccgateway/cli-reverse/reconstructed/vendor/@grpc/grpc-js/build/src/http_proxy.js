@@ -5,30 +5,30 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { K } from "./logging.js";
-import { k } from "./constants.js";
-import { Pe } from "./subchannel-address.js";
-import { we } from "./uri-parser.js";
-import { Oo } from "./resolver-dns.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_logging } from "./logging.js";
+import { require_constants } from "./constants.js";
+import { require_subchannel_address } from "./subchannel-address.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_resolver_dns } from "./resolver-dns.js";
 
 //@ chunk-pwh5dx3n.js:211555-215072 cjs-fingerprint
-var wo = x(function (cjsExports) {
+var require_http_proxy = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.parseCIDR = parseCIDR;
   cjsExports.mapProxyName = mapProxyName;
   cjsExports.getProxiedConnection = getProxiedConnection;
-  var logging_1 = K();
-  var constants_1 = k();
-  var net_1 = Be("net");
-  var http = Be("http");
-  var logging = K();
-  var subchannel_address_1 = Pe();
-  var uri_parser_1 = we();
-  var url_1 = Be("url");
-  var resolver_dns_1 = Oo();
+  var logging_1 = require_logging();
+  var constants_1 = require_constants();
+  var net_1 = importMetaRequire("net");
+  var http = importMetaRequire("http");
+  var logging = require_logging();
+  var subchannel_address_1 = require_subchannel_address();
+  var uri_parser_1 = require_uri_parser();
+  var url_1 = importMetaRequire("url");
+  var resolver_dns_1 = require_resolver_dns();
   var TRACER_NAME = "proxy";
   function trace(text) {
     logging.trace(constants_1.LogVerbosity.DEBUG, TRACER_NAME, text);
@@ -211,4 +211,4 @@ var wo = x(function (cjsExports) {
     });
   }
 });
-export { wo };
+export { require_http_proxy };

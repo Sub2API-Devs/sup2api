@@ -5,56 +5,56 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Mr } from "./channel-credentials.js";
-import { Dc } from "./resolving-load-balancer.js";
-import { Ep } from "./subchannel-pool.js";
-import { kt } from "./picker.js";
-import { ue } from "./metadata.js";
-import { k } from "./constants.js";
-import { Js } from "./filter-stack.js";
-import { Eo } from "./compression-filter.js";
-import { rt } from "./resolver.js";
-import { K } from "./logging.js";
-import { wo } from "./http_proxy.js";
-import { we } from "./uri-parser.js";
-import { Ae } from "./connectivity-state.js";
-import { Zt } from "./channelz.js";
-import { Pp } from "./load-balancing-call.js";
-import { Kr } from "./deadline.js";
-import { Lp } from "./resolving-call.js";
-import { Ys } from "./call-number.js";
-import { Ui } from "./control-plane-status.js";
-import { Gp } from "./retrying-call.js";
-import { Bi } from "./subchannel-interface.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_channel_credentials } from "./channel-credentials.js";
+import { require_resolving_load_balancer } from "./resolving-load-balancer.js";
+import { require_subchannel_pool } from "./subchannel-pool.js";
+import { require_picker } from "./picker.js";
+import { require_metadata } from "./metadata.js";
+import { require_constants } from "./constants.js";
+import { require_filter_stack } from "./filter-stack.js";
+import { require_compression_filter } from "./compression-filter.js";
+import { require_resolver } from "./resolver.js";
+import { require_logging } from "./logging.js";
+import { require_http_proxy } from "./http_proxy.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_channelz } from "./channelz.js";
+import { require_load_balancing_call } from "./load-balancing-call.js";
+import { require_deadline } from "./deadline.js";
+import { require_resolving_call } from "./resolving-call.js";
+import { require_call_number } from "./call-number.js";
+import { require_control_plane_status } from "./control-plane-status.js";
+import { require_retrying_call } from "./retrying-call.js";
+import { require_subchannel_interface } from "./subchannel-interface.js";
 
 //@ chunk-pwh5dx3n.js:264834-277418 cjs-fingerprint
-var Io = x(function (cjsExports) {
+var require_internal_channel = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.InternalChannel = cjsExports.SUBCHANNEL_ARGS_EXCLUDE_KEY_PREFIX = undefined;
-  var channel_credentials_1 = Mr();
-  var resolving_load_balancer_1 = Dc();
-  var subchannel_pool_1 = Ep();
-  var picker_1 = kt();
-  var metadata_1 = ue();
-  var constants_1 = k();
-  var filter_stack_1 = Js();
-  var compression_filter_1 = Eo();
-  var resolver_1 = rt();
-  var logging_1 = K();
-  var http_proxy_1 = wo();
-  var uri_parser_1 = we();
-  var connectivity_state_1 = Ae();
-  var channelz_1 = Zt();
-  var load_balancing_call_1 = Pp();
-  var deadline_1 = Kr();
-  var resolving_call_1 = Lp();
-  var call_number_1 = Ys();
-  var control_plane_status_1 = Ui();
-  var retrying_call_1 = Gp();
-  var subchannel_interface_1 = Bi();
+  var channel_credentials_1 = require_channel_credentials();
+  var resolving_load_balancer_1 = require_resolving_load_balancer();
+  var subchannel_pool_1 = require_subchannel_pool();
+  var picker_1 = require_picker();
+  var metadata_1 = require_metadata();
+  var constants_1 = require_constants();
+  var filter_stack_1 = require_filter_stack();
+  var compression_filter_1 = require_compression_filter();
+  var resolver_1 = require_resolver();
+  var logging_1 = require_logging();
+  var http_proxy_1 = require_http_proxy();
+  var uri_parser_1 = require_uri_parser();
+  var connectivity_state_1 = require_connectivity_state();
+  var channelz_1 = require_channelz();
+  var load_balancing_call_1 = require_load_balancing_call();
+  var deadline_1 = require_deadline();
+  var resolving_call_1 = require_resolving_call();
+  var call_number_1 = require_call_number();
+  var control_plane_status_1 = require_control_plane_status();
+  var retrying_call_1 = require_retrying_call();
+  var subchannel_interface_1 = require_subchannel_interface();
   var MAX_TIMEOUT_TIME = 2147483647;
   var MIN_IDLE_TIMEOUT_MS = 1000;
   var DEFAULT_IDLE_TIMEOUT_MS = 1800000;
@@ -601,4 +601,4 @@ var Io = x(function (cjsExports) {
   }
   cjsExports.InternalChannel = InternalChannel;
 });
-export { Io };
+export { require_internal_channel };

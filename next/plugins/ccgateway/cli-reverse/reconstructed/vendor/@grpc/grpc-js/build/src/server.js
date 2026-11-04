@@ -5,19 +5,19 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { k } from "./constants.js";
-import { Og } from "./server-call.js";
-import { dn } from "./server-credentials.js";
-import { rt } from "./resolver.js";
-import { K } from "./logging.js";
-import { Pe } from "./subchannel-address.js";
-import { we } from "./uri-parser.js";
-import { Zt } from "./channelz.js";
-import { zo } from "./server-interceptors.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_constants } from "./constants.js";
+import { require_server_call } from "./server-call.js";
+import { require_server_credentials } from "./server-credentials.js";
+import { require_resolver } from "./resolver.js";
+import { require_logging } from "./logging.js";
+import { require_subchannel_address } from "./subchannel-address.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_channelz } from "./channelz.js";
+import { require_server_interceptors } from "./server-interceptors.js";
 
 //@ chunk-pwh5dx3n.js:308145-336716 cjs-fingerprint
-var dm = x(function (cjsExports) {
+var require_server = __commonJS(function (cjsExports) {
   var __runInitializers =
     (cjsExports && cjsExports.__runInitializers) ||
     function (thisArg, initializers, value) {
@@ -74,17 +74,17 @@ var dm = x(function (cjsExports) {
     value: true,
   });
   cjsExports.Server = undefined;
-  var http2 = Be("http2");
-  var util = Be("util");
-  var constants_1 = k();
-  var server_call_1 = Og();
-  var server_credentials_1 = dn();
-  var urlModule = rt();
-  var logging = K();
-  var subchannel_address_1 = Pe();
-  var uri_parser_1 = we();
-  var channelz_1 = Zt();
-  var server_interceptors_1 = zo();
+  var http2 = importMetaRequire("http2");
+  var util = importMetaRequire("util");
+  var constants_1 = require_constants();
+  var server_call_1 = require_server_call();
+  var server_credentials_1 = require_server_credentials();
+  var urlModule = require_resolver();
+  var logging = require_logging();
+  var subchannel_address_1 = require_subchannel_address();
+  var uri_parser_1 = require_uri_parser();
+  var channelz_1 = require_channelz();
+  var server_interceptors_1 = require_server_interceptors();
   var UNLIMITED_CONNECTION_AGE_MS = 2147483647;
   var KEEPALIVE_MAX_TIME_MS = 2147483647;
   var KEEPALIVE_TIMEOUT_MS = 20000;
@@ -1555,4 +1555,4 @@ var dm = x(function (cjsExports) {
     });
   }
 });
-export { dm };
+export { require_server };

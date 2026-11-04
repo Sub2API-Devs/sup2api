@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:453-1752 cjs-fingerprint
-var k = x(function (cjsExports) {
+var require_constants = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -56,4 +56,4 @@ var k = x(function (cjsExports) {
   cjsExports.DEFAULT_MAX_SEND_MESSAGE_LENGTH = -1;
   cjsExports.DEFAULT_MAX_RECEIVE_MESSAGE_LENGTH = 4194304;
 });
-export { k };
+export { require_constants };

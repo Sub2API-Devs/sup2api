@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:41007-42367 cjs-fingerprint
-var qc = x(function (cjsExports) {
+var require_channel_options = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -57,4 +57,4 @@ var qc = x(function (cjsExports) {
     return true;
   }
 });
-export { qc };
+export { require_channel_options };

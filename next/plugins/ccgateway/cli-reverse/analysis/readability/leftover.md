@@ -7,10 +7,9 @@
 | src | authored | 98 |
 | src | dead | 32 |
 | vendor | dead | 3 |
-| vendor | authored | 2 |
-| vendor | frozen | 111 |
+| vendor | authored | 3 |
 
-原因：`frozen` 所在 chunk 有直接 eval，改名器冻结整个 chunk；`dead` 从不被读取（0 引用或成员核实的死槽位）；`authored` 模块本身没有压缩（随包脚本等），短名是作者原名；`bundler` Bun 打包器自己的包装参数；`unnamed` 命名缺口。
+原因：`frozen` 直接 eval 能看到的绑定（eval 代码静态可知时只冻结它读的名字，不可知时冻结整条作用域链）；`dead` 从不被读取（0 引用或成员核实的死槽位）；`authored` 模块本身没有压缩（随包脚本等），短名是作者原名；`bundler` Bun 打包器自己的包装参数；`unnamed` 命名缺口。
 
 | 文件 | 绑定 | 压缩名 | 范围 | 引用 | 原因 | 说明 |
 |---|---|---|---|---|---|---|
@@ -106,117 +105,7 @@
 | src/services/api/errors.js | `chunk-gr2vfhah.js@3184` | `e` | param | 0 | dead | no references |
 | vendor/axios/dist/esm/axios.js | `chunk-h6b7mazd.js@47490` | `sn` | top | 2 | authored | axios: vendor-ref/node_modules/axios/lib/utils.js:256 const G = getGlobal() |
 | src/utils/windowsStdin.js | `chunk-j66yxmsq.js@372` | `t` | param | 0 | dead | no references |
-| vendor/@opentelemetry/otlp-grpc-exporter-base/build/src/version.js | `chunk-pwh5dx3n.js@344` | `gl` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/constants.js | `chunk-pwh5dx3n.js@457` | `k` | top | 38 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/package.json.js | `chunk-pwh5dx3n.js@1756` | `ia` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/logging.js | `chunk-pwh5dx3n.js@4537` | `K` | top | 26 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/error.js | `chunk-pwh5dx3n.js@5989` | `Qi` | top | 3 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/metadata.js | `chunk-pwh5dx3n.js@6298` | `ue` | top | 17 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/call-credentials.js | `chunk-pwh5dx3n.js@8826` | `rs` | top | 3 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/tls-helpers.js | `chunk-pwh5dx3n.js@10384` | `fa` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/uri-parser.js | `chunk-pwh5dx3n.js@10716` | `we` | top | 14 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/resolver.js | `chunk-pwh5dx3n.js@11716` | `rt` | top | 10 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/channel-credentials.js | `chunk-pwh5dx3n.js@12572` | `Mr` | top | 5 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/load-balancer.js | `chunk-pwh5dx3n.js@19815` | `Gt` | top | 7 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/service-config.js | `chunk-pwh5dx3n.js@21752` | `va` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/connectivity-state.js | `chunk-pwh5dx3n.js@30269` | `Ae` | top | 14 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/picker.js | `chunk-pwh5dx3n.js@30570` | `kt` | top | 8 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/backoff-timeout.js | `chunk-pwh5dx3n.js@31544` | `Ir` | top | 5 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/load-balancer-child-handler.js | `chunk-pwh5dx3n.js@33646` | `cs` | top | 3 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/resolving-load-balancer.js | `chunk-pwh5dx3n.js@36003` | `Dc` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/channel-options.js | `chunk-pwh5dx3n.js@41011` | `qc` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/subchannel-address.js | `chunk-pwh5dx3n.js@42371` | `Pe` | top | 13 | frozen | direct-eval |
-| vendor/@js-sdsl/ordered-map/dist/cjs/index.js | `chunk-pwh5dx3n.js@44336` | `Qc` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/admin.js | `chunk-pwh5dx3n.js@52027` | `fs` | top | 3 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/call.js | `chunk-pwh5dx3n.js@52323` | `lu` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/call-interface.js | `chunk-pwh5dx3n.js@55099` | `vr` | top | 6 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/client-interceptors.js | `chunk-pwh5dx3n.js@56654` | `Ca` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/client.js | `chunk-pwh5dx3n.js@63399` | `Ta` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/make-client.js | `chunk-pwh5dx3n.js@69761` | `vs` | top | 3 | frozen | direct-eval |
-| vendor/lodash.camelcase/index.js | `chunk-pwh5dx3n.js@71136` | `Qu` | top | 1 | frozen | direct-eval |
-| vendor/@protobufjs/codegen/index.js | `chunk-pwh5dx3n.js@76764` | `ed` | top | 1 | frozen | direct-eval |
-| vendor/unresolved-cjs/index.js | `chunk-pwh5dx3n.js@78095` | `td` | top | 1 | frozen | direct-eval |
-| vendor/unresolved-cjs/index.js | `chunk-pwh5dx3n.js@78185` | `mod` | local | 4 | frozen | direct-eval |
-| vendor/protobufjs/src/util/fetch.js | `chunk-pwh5dx3n.js@78407` | `id` | top | 1 | frozen | direct-eval |
-| vendor/@protobufjs/path/index.js | `chunk-pwh5dx3n.js@79296` | `ad` | top | 1 | frozen | direct-eval |
-| vendor/protobufjs/src/util/patterns.js | `chunk-pwh5dx3n.js@79824` | `ld` | top | 1 | frozen | direct-eval |
-| vendor/protobufjs/src/namespace.js | `chunk-pwh5dx3n.js@80383` | `zr` | top | 5 | frozen | direct-eval |
-| vendor/protobufjs/src/mapfield.js | `chunk-pwh5dx3n.js@85944` | `Ts` | top | 3 | frozen | direct-eval |
-| vendor/protobufjs/src/method.js | `chunk-pwh5dx3n.js@86970` | `Rs` | top | 3 | frozen | direct-eval |
-| vendor/protobufjs/src/service.js | `chunk-pwh5dx3n.js@88403` | `bs` | top | 3 | frozen | direct-eval |
-| vendor/protobufjs/src/message.js | `chunk-pwh5dx3n.js@90854` | `Os` | top | 3 | frozen | direct-eval |
-| vendor/protobufjs/src/decoder.js | `chunk-pwh5dx3n.js@91576` | `qa` | top | 2 | frozen | direct-eval |
-| vendor/protobufjs/src/verifier.js | `chunk-pwh5dx3n.js@93806` | `za` | top | 2 | frozen | direct-eval |
-| vendor/protobufjs/src/converter.js | `chunk-pwh5dx3n.js@96431` | `ja` | top | 2 | frozen | direct-eval |
-| vendor/protobufjs/src/wrappers.js | `chunk-pwh5dx3n.js@101572` | `Ga` | top | 2 | frozen | direct-eval |
-| vendor/protobufjs/src/type.js | `chunk-pwh5dx3n.js@102459` | `Ps` | top | 3 | frozen | direct-eval |
-| vendor/protobufjs/src/root.js | `chunk-pwh5dx3n.js@109309` | `xs` | top | 3 | frozen | direct-eval |
-| vendor/protobufjs/src/util.js | `chunk-pwh5dx3n.js@112811` | `de` | top | 17 | frozen | direct-eval |
-| vendor/protobufjs/src/types.js | `chunk-pwh5dx3n.js@114757` | `Cr` | top | 6 | frozen | direct-eval |
-| vendor/protobufjs/src/field.js | `chunk-pwh5dx3n.js@115257` | `Yt` | top | 7 | frozen | direct-eval |
-| vendor/protobufjs/src/oneof.js | `chunk-pwh5dx3n.js@119868` | `Sr` | top | 6 | frozen | direct-eval |
-| vendor/protobufjs/src/object.js | `chunk-pwh5dx3n.js@121937` | `Kt` | top | 7 | frozen | direct-eval |
-| vendor/protobufjs/src/enum.js | `chunk-pwh5dx3n.js@125758` | `nt` | top | 10 | frozen | direct-eval |
-| vendor/protobufjs/src/encoder.js | `chunk-pwh5dx3n.js@128338` | `Ka` | top | 2 | frozen | direct-eval |
-| vendor/protobufjs/src/index-light.js | `chunk-pwh5dx3n.js@129800` | `Wd` | top | 1 | frozen | direct-eval |
-| vendor/protobufjs/src/tokenize.js | `chunk-pwh5dx3n.js@130457` | `ao` | top | 2 | frozen | direct-eval |
-| vendor/protobufjs/src/parse.js | `chunk-pwh5dx3n.js@132941` | `Qd` | top | 1 | frozen | direct-eval |
-| vendor/protobufjs/src/common.js | `chunk-pwh5dx3n.js@141309` | `th` | top | 1 | frozen | direct-eval |
-| vendor/protobufjs/src/index.js | `chunk-pwh5dx3n.js@142802` | `qs` | top | 3 | frozen | direct-eval |
-| vendor/protobufjs/google/protobuf/descriptor.json.js | `chunk-pwh5dx3n.js@142961` | `oo` | top | 2 | frozen | direct-eval |
-| vendor/protobufjs/ext/descriptor/index.js | `chunk-pwh5dx3n.js@156552` | `uh` | top | 1 | frozen | direct-eval |
-| vendor/protobufjs/google/protobuf/api.json.js | `chunk-pwh5dx3n.js@168468` | `dh` | top | 1 | frozen | direct-eval |
-| vendor/protobufjs/google/protobuf/source_context.json.js | `chunk-pwh5dx3n.js@169333` | `hh` | top | 1 | frozen | direct-eval |
-| vendor/protobufjs/google/protobuf/type.json.js | `chunk-pwh5dx3n.js@169475` | `fh` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/proto-loader/build/src/util.js | `chunk-pwh5dx3n.js@171118` | `vh` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/proto-loader/build/src/index.js | `chunk-pwh5dx3n.js@172412` | `fo` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/channelz.js | `chunk-pwh5dx3n.js@175806` | `Zt` | top | 7 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/call-number.js | `chunk-pwh5dx3n.js@185439` | `Ys` | top | 3 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/compression-algorithms.js | `chunk-pwh5dx3n.js@185573` | `_o` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/filter.js | `chunk-pwh5dx3n.js@185810` | `So` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/compression-filter.js | `chunk-pwh5dx3n.js@186082` | `Eo` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/control-plane-status.js | `chunk-pwh5dx3n.js@190997` | `Ui` | top | 4 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/deadline.js | `chunk-pwh5dx3n.js@191469` | `Kr` | top | 5 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/filter-stack.js | `chunk-pwh5dx3n.js@192416` | `Js` | top | 3 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/single-subchannel-channel.js | `chunk-pwh5dx3n.js@193427` | `Cf` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/subchannel.js | `chunk-pwh5dx3n.js@198196` | `Pf` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/environment.js | `chunk-pwh5dx3n.js@205121` | `If` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/resolver-dns.js | `chunk-pwh5dx3n.js@205379` | `Oo` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/http_proxy.js | `chunk-pwh5dx3n.js@211559` | `wo` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/stream-decoder.js | `chunk-pwh5dx3n.js@215076` | `Ao` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/subchannel-call.js | `chunk-pwh5dx3n.js@216948` | `ip` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/transport.js | `chunk-pwh5dx3n.js@224820` | `pp` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/subchannel-pool.js | `chunk-pwh5dx3n.js@236318` | `Ep` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/load-balancing-call.js | `chunk-pwh5dx3n.js@237583` | `Pp` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/resolving-call.js | `chunk-pwh5dx3n.js@243581` | `Lp` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/retrying-call.js | `chunk-pwh5dx3n.js@250041` | `Gp` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/subchannel-interface.js | `chunk-pwh5dx3n.js@263234` | `Bi` | top | 4 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/internal-channel.js | `chunk-pwh5dx3n.js@264838` | `Io` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/channel.js | `chunk-pwh5dx3n.js@277422` | `Ra` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/server-call.js | `chunk-pwh5dx3n.js@278512` | `Og` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/server-credentials.js | `chunk-pwh5dx3n.js@281878` | `dn` | top | 3 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/duration.js | `chunk-pwh5dx3n.js@287455` | `zi` | top | 4 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/orca.js | `chunk-pwh5dx3n.js@288353` | `pn` | top | 3 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/server-interceptors.js | `chunk-pwh5dx3n.js@293538` | `zo` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/server.js | `chunk-pwh5dx3n.js@308149` | `dm` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/status-builder.js | `chunk-pwh5dx3n.js@336720` | `gm` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/load-balancer-pick-first.js | `chunk-pwh5dx3n.js@337194` | `ji` | top | 4 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/certificate-provider.js | `chunk-pwh5dx3n.js@346342` | `Im` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/experimental.js | `chunk-pwh5dx3n.js@349347` | `Vo` | top | 2 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/resolver-uds.js | `chunk-pwh5dx3n.js@354358` | `Hm` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/resolver-ip.js | `chunk-pwh5dx3n.js@354928` | `Vm` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/load-balancer-round-robin.js | `chunk-pwh5dx3n.js@356508` | `rv` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/load-balancer-outlier-detection.js | `chunk-pwh5dx3n.js@360048` | `pv` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/priority-queue.js | `chunk-pwh5dx3n.js@371594` | `yv` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/load-balancer-weighted-round-robin.js | `chunk-pwh5dx3n.js@372598` | `Av` | top | 1 | frozen | direct-eval |
-| vendor/@grpc/grpc-js/build/src/index.js | `chunk-pwh5dx3n.js@380542` | `Ki` | top | 4 | frozen | direct-eval |
-| vendor/@opentelemetry/otlp-grpc-exporter-base/build/src/create-service-client-constructor.js | `chunk-pwh5dx3n.js@385565` | `Kv` | top | 1 | frozen | direct-eval |
-| vendor/@opentelemetry/otlp-grpc-exporter-base/build/src/grpc-exporter-transport.js | `chunk-pwh5dx3n.js@385943` | `Ji` | top | 4 | frozen | direct-eval |
-| vendor/@opentelemetry/otlp-grpc-exporter-base/build/src/configuration/otlp-grpc-configuration.js | `chunk-pwh5dx3n.js@387590` | `ny` | top | 1 | frozen | direct-eval |
-| vendor/@opentelemetry/otlp-grpc-exporter-base/build/src/configuration/otlp-grpc-env-configuration.js | `chunk-pwh5dx3n.js@389020` | `fy` | top | 1 | frozen | direct-eval |
-| vendor/@opentelemetry/otlp-grpc-exporter-base/build/src/configuration/convert-legacy-otlp-grpc-options.js | `chunk-pwh5dx3n.js@391315` | `_y` | top | 1 | frozen | direct-eval |
-| vendor/@opentelemetry/otlp-grpc-exporter-base/build/src/otlp-grpc-export-delegate.js | `chunk-pwh5dx3n.js@391937` | `Ry` | top | 1 | frozen | direct-eval |
-| vendor/@opentelemetry/otlp-grpc-exporter-base/build/src/index.js | `chunk-pwh5dx3n.js@392341` | `Ian` | top | 1 | frozen | direct-eval |
+| vendor/unresolved-cjs/index.js | `chunk-pwh5dx3n.js@78185` | `mod` | local | 4 | authored | @protobufjs/inquire: npm @protobufjs/inquire@1.1.0 index.js:12 var mod = eval(...)(moduleName) |
 | src/components/ConsoleOAuthFlow.js | `chunk-s5p7fp0c.js@14022` | `Y` | local | 0 | dead | 死局部（naming-left-s0.md） |
 | src/services/homeSeed/notices.js | `chunk-twq47pff.js@58931` | `P` | local | 0 | dead | 死局部（naming-left-s0.md） |
 | src/services/extractMemories/extractMemories.js | `chunk-xr4xc2mq.js@16167` | `r` | param | 0 | dead | 参数从不读取（调用点传 `undefined`）（naming-left-s0.md） |

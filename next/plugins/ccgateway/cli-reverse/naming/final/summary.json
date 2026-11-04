@@ -1,10 +1,9 @@
 {
- "named": 100638,
- "suffixed": 2028,
+ "named": 100748,
+ "suffixed": 2031,
  "kept": 94,
- "imports": 85818,
+ "imports": 85832,
  "moduleClashes": 4,
- "frozen": 124,
  "locals": 487560,
  "sources": [
   "analysis/names/auto.jsonl",
@@ -91,6 +90,7 @@
   "naming/semantic-zzz-fixer3.jsonl",
   "naming/semantic-zzz-shapefix.jsonl",
   "naming/semantic-zzz-shapefix2.jsonl",
+  "naming/semantic-zzzz-eval-unfreeze.jsonl",
   "naming/semantic-zzzz-fixer4.jsonl",
   "naming/semantic-zzzz-lead-gap.jsonl"
  ]

@@ -5,37 +5,37 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Gt } from "./load-balancer.js";
-import { va } from "./service-config.js";
-import { Ae } from "./connectivity-state.js";
-import { rt } from "./resolver.js";
-import { kt } from "./picker.js";
-import { Ir } from "./backoff-timeout.js";
-import { k } from "./constants.js";
-import { ue } from "./metadata.js";
-import { K } from "./logging.js";
-import { we } from "./uri-parser.js";
-import { cs } from "./load-balancer-child-handler.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_load_balancer } from "./load-balancer.js";
+import { require_service_config } from "./service-config.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_resolver } from "./resolver.js";
+import { require_picker } from "./picker.js";
+import { require_backoff_timeout } from "./backoff-timeout.js";
+import { require_constants } from "./constants.js";
+import { require_metadata } from "./metadata.js";
+import { require_logging } from "./logging.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_load_balancer_child_handler } from "./load-balancer-child-handler.js";
 
 //@ chunk-pwh5dx3n.js:35999-41007 cjs-fingerprint
-var Dc = x(function (cjsExports) {
+var require_resolving_load_balancer = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.ResolvingLoadBalancer = undefined;
-  var load_balancer_1 = Gt();
-  var service_config_1 = va();
-  var connectivity_state_1 = Ae();
-  var resolver_1 = rt();
-  var picker_1 = kt();
-  var backoff_timeout_1 = Ir();
-  var constants_1 = k();
-  var metadata_1 = ue();
-  var logging = K();
-  var constants_2 = k();
-  var uri_parser_1 = we();
-  var load_balancer_child_handler_1 = cs();
+  var load_balancer_1 = require_load_balancer();
+  var service_config_1 = require_service_config();
+  var connectivity_state_1 = require_connectivity_state();
+  var resolver_1 = require_resolver();
+  var picker_1 = require_picker();
+  var backoff_timeout_1 = require_backoff_timeout();
+  var constants_1 = require_constants();
+  var metadata_1 = require_metadata();
+  var logging = require_logging();
+  var constants_2 = require_constants();
+  var uri_parser_1 = require_uri_parser();
+  var load_balancer_child_handler_1 = require_load_balancer_child_handler();
   var TRACER_NAME = "resolving_load_balancer";
   function trace(text) {
     logging.trace(constants_2.LogVerbosity.DEBUG, TRACER_NAME, text);
@@ -263,4 +263,4 @@ var Dc = x(function (cjsExports) {
   }
   cjsExports.ResolvingLoadBalancer = ResolvingLoadBalancer;
 });
-export { Dc };
+export { require_resolving_load_balancer };

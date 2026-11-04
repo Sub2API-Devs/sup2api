@@ -5,15 +5,15 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint+context 1
  */
-import { __commonJS as x } from "../../../../runtime/bun-runtime.js";
-import { require_aspromise as QPo } from "./aspromise.js";
-import { td } from "../../../unresolved-cjs/index.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
+import { require_aspromise } from "./aspromise.js";
+import { require_inquire } from "../../../unresolved-cjs/index.js";
 
 //@ chunk-pwh5dx3n.js:78403-79292 cjs-fingerprint+context
-var id = x(function (cjsExports, cjsModule) {
+var require_fetch = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = fetchFile;
-  var asPromise = QPo();
-  var requireModule = td();
+  var asPromise = require_aspromise();
+  var requireModule = require_inquire();
   var fs = requireModule("fs");
   function fetchFile(filename, options, callback) {
     if (typeof options === "function") {
@@ -54,4 +54,4 @@ var id = x(function (cjsExports, cjsModule) {
     xhr.send();
   };
 });
-export { id };
+export { require_fetch };

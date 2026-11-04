@@ -5,16 +5,16 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { Sr } from "./oneof.js";
-import { de } from "./util.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_oneof } from "./oneof.js";
+import { require_util_2 } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:121933-125754 cjs-fingerprint
-var Kt = x(function (cjsExports, cjsModule) {
+var require_object = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = ReflectionObject;
   ReflectionObject.className = "ReflectionObject";
-  var OneOf = Sr();
-  var util = de();
+  var OneOf = require_oneof();
+  var util = require_util_2();
   var Root;
   var editions2023Defaults = {
     enum_type: "OPEN",
@@ -187,4 +187,4 @@ var Kt = x(function (cjsExports, cjsModule) {
     Root = Root_;
   };
 });
-export { Kt };
+export { require_object };

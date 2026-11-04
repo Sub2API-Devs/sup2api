@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:5985-6294 cjs-fingerprint
-var Qi = x(function (cjsExports) {
+var require_error = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -24,4 +24,4 @@ var Qi = x(function (cjsExports) {
     else return null;
   }
 });
-export { Qi };
+export { require_error };

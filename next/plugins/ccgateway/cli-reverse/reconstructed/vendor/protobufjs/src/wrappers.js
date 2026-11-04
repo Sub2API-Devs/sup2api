@@ -5,13 +5,13 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { Os } from "./message.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_message } from "./message.js";
 
 //@ chunk-pwh5dx3n.js:101568-102455 cjs-fingerprint
-var Ga = x(function (cjsExports) {
+var require_wrappers = __commonJS(function (cjsExports) {
   var wrappers = cjsExports;
-  var Message = Os();
+  var Message = require_message();
   wrappers[".google.protobuf.Any"] = {
     fromObject: function (object, depth) {
       if (object && object["@type"]) {
@@ -52,4 +52,4 @@ var Ga = x(function (cjsExports) {
     },
   };
 });
-export { Ga };
+export { require_wrappers };

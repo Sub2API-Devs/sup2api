@@ -163,18 +163,31 @@ export function compareModule(file, srcA, srcB) {
   out.stats.bindings = realA.length;
   for (const [x, y] of mapAB) if (!x.implicit && x.name !== y.name) out.stats.renamedBindings++;
 
-  // 直接 eval：链上每个作用域可见的名字集合必须一致（eval 代码按名字查找）
+  // 直接 eval：eval 代码按名字查找。代码不可知时，链上每个作用域可见的名字集合必须一致；
+  // 静态可知时（scope.mjs evalNames），它查的名字在链上必须解析到对应的同一个绑定（或都是全局）
   if (anA.directEvals.length !== anB.directEvals.length) add('eval', `direct eval count ${anA.directEvals.length} vs ${anB.directEvals.length}`, null, null);
   if (anA.directEvals.length) {
+    const lookup = (s, n) => { for (; s; s = s.parent) { const b = s.names.get(n); if (b) return b; } return null; };
+    // 两边 AST 形状相同（上面已逐节点核对），scope.mjs 按同样的遍历顺序建作用域：按下标对应
+    const scopeMapAB = anA.scopes.length === anB.scopes.length ? new Map(anA.scopes.map((s, i) => [s, anB.scopes[i]])) : null;
     for (const sA of anA.scopes) {
       if (!sA.evalTainted) continue;
+      if (sA.evalNames !== null) {
+        const sB = scopeMapAB ? scopeMapAB.get(sA) : undefined;
+        for (const n of sA.evalNames ?? []) {
+          const bA = lookup(sA, n), bB = sB ? lookup(sB, n) : undefined;
+          if (sB === undefined) add('eval', `scope of a direct eval has no counterpart`, null, null);
+          else if ((bA ? mapAB.get(bA) : null) !== bB) add('eval', `name ${n} read by a direct eval resolves differently after renaming`, bA?.decls[0] ?? null, bB?.decls[0] ?? null);
+        }
+        continue;
+      }
       for (const [n, bA] of sA.names) {
         const bB = mapAB.get(bA);
         if (bB && bB.name !== n) add('eval', `binding ${n} visible to a direct eval was renamed to ${bB.name}`, bA.decls[0], bB.decls[0]);
       }
     }
     for (const sB of anB.scopes) {
-      if (!sB.evalTainted) continue;
+      if (!sB.evalTainted || sB.evalNames !== null) continue;
       for (const [n, bB] of sB.names) {
         const bA = mapBA.get(bB);
         if (bA && bA.name !== n) add('eval', `binding ${n} visible to a direct eval in B was renamed`, bA.decls[0], bB.decls[0]);

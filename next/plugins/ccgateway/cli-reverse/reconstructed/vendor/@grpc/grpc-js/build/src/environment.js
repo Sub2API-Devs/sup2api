@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:205117-205375 cjs-fingerprint
-var If = x(function (cjsExports) {
+var require_environment = __commonJS(function (cjsExports) {
   var _a;
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -18,4 +18,4 @@ var If = x(function (cjsExports) {
     ((_a = process.env.GRPC_NODE_USE_ALTERNATIVE_RESOLVER) !== null && _a !== undefined ? _a : "false") ===
     "true";
 });
-export { If };
+export { require_environment };

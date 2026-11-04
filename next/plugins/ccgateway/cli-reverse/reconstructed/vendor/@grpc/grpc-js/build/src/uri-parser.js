@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:10712-11712 cjs-fingerprint
-var we = x(function (cjsExports) {
+var require_uri_parser = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -75,4 +75,4 @@ var we = x(function (cjsExports) {
     return result;
   }
 });
-export { we };
+export { require_uri_parser };

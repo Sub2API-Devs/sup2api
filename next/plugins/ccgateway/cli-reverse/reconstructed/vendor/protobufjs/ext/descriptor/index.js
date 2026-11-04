@@ -5,17 +5,17 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../runtime/bun-runtime.js";
-import { qs } from "../../src/index.js";
-import { oo } from "../../google/protobuf/descriptor.json.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
+import { require_protobufjs } from "../../src/index.js";
+import { require_descriptor } from "../../google/protobuf/descriptor.json.js";
 
 //@ chunk-pwh5dx3n.js:156548-168464 cjs-fingerprint
-var uh = x(function (cjsExports, cjsModule) {
-  var $protobuf = qs();
+var require_descriptor_2 = __commonJS(function (cjsExports, cjsModule) {
+  var $protobuf = require_protobufjs();
   cjsModule.exports =
     cjsExports =
     $protobuf.descriptor =
-      $protobuf.Root.fromJSON(oo()).lookup(".google.protobuf");
+      $protobuf.Root.fromJSON(require_descriptor()).lookup(".google.protobuf");
   var { Namespace, Root, Enum, Type, Field, MapField, OneOf, Service, Method } = $protobuf;
   var patterns = $protobuf.util.patterns;
   var { numberRe, typeRefRe } = patterns;
@@ -585,4 +585,4 @@ var uh = x(function (cjsExports, cjsModule) {
       }
   }
 });
-export { uh };
+export { require_descriptor_2 };

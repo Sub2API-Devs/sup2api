@@ -5,27 +5,27 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { require_minimal as QGe } from "./util/minimal.js";
-import { require_roots as eIo } from "./roots.js";
-import { ed } from "../../@protobufjs/codegen/index.js";
-import { id } from "./util/fetch.js";
-import { ad } from "../../@protobufjs/path/index.js";
-import { ld } from "./util/patterns.js";
-import { Ps } from "./type.js";
-import { nt } from "./enum.js";
-import { xs } from "./root.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_minimal } from "./util/minimal.js";
+import { require_roots } from "./roots.js";
+import { require_codegen } from "../../@protobufjs/codegen/index.js";
+import { require_fetch } from "./util/fetch.js";
+import { require_path } from "../../@protobufjs/path/index.js";
+import { require_patterns } from "./util/patterns.js";
+import { require_type } from "./type.js";
+import { require_enum } from "./enum.js";
+import { require_root } from "./root.js";
 
 //@ chunk-pwh5dx3n.js:112807-114753 cjs-fingerprint
-var de = x(function (cjsExports, cjsModule) {
-  var util = (cjsModule.exports = QGe());
-  var roots = eIo();
+var require_util_2 = __commonJS(function (cjsExports, cjsModule) {
+  var util = (cjsModule.exports = require_minimal());
+  var roots = require_roots();
   var Type;
   var Enum;
-  util.codegen = ed();
-  util.fetch = id();
-  util.path = ad();
-  util.patterns = ld();
+  util.codegen = require_codegen();
+  util.fetch = require_fetch();
+  util.path = require_path();
+  util.patterns = require_patterns();
   var reservedRe = util.patterns.reservedRe;
   var unsafePropertyRe = util.patterns.unsafePropertyRe;
   util.fs = util.inquire("fs");
@@ -85,7 +85,7 @@ var de = x(function (cjsExports, cjsModule) {
       }
       return ctor.$type;
     }
-    if (!Type) Type = Ps();
+    if (!Type) Type = require_type();
     var type = new Type(typeName || ctor.name);
     util.decorateRoot.add(type);
     type.ctor = ctor;
@@ -102,7 +102,7 @@ var de = x(function (cjsExports, cjsModule) {
   var decorateEnumIndex = 0;
   util.decorateEnum = function (object) {
     if (object.$type) return object.$type;
-    if (!Enum) Enum = nt();
+    if (!Enum) Enum = require_enum();
     var enm = new Enum("Enum" + decorateEnumIndex++, object);
     util.decorateRoot.add(enm);
     Object.defineProperty(object, "$type", {
@@ -131,8 +131,8 @@ var de = x(function (cjsExports, cjsModule) {
   };
   Object.defineProperty(util, "decorateRoot", {
     get: function () {
-      return roots.decorated || (roots.decorated = new (xs())());
+      return roots.decorated || (roots.decorated = new (require_root())());
     },
   });
 });
-export { de };
+export { require_util_2 };

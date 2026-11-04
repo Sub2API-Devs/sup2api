@@ -5,21 +5,21 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { Kt } from "./object.js";
-import { Yt } from "./field.js";
-import { de } from "./util.js";
-import { Sr } from "./oneof.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_object } from "./object.js";
+import { require_field } from "./field.js";
+import { require_util_2 } from "./util.js";
+import { require_oneof } from "./oneof.js";
 
 //@ chunk-pwh5dx3n.js:80379-85940 cjs-fingerprint
-var zr = x(function (cjsExports, cjsModule) {
+var require_namespace = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Namespace;
-  var ReflectionObject = Kt();
+  var ReflectionObject = require_object();
   ((Namespace.prototype = Object.create(ReflectionObject.prototype)).constructor = Namespace).className =
     "Namespace";
-  var Field = Yt();
-  var util = de();
-  var OneOf = Sr();
+  var Field = require_field();
+  var util = require_util_2();
+  var OneOf = require_oneof();
   var Type;
   var Service;
   var Enum;
@@ -260,4 +260,4 @@ var zr = x(function (cjsExports, cjsModule) {
     Enum = Enum_;
   };
 });
-export { zr };
+export { require_namespace };

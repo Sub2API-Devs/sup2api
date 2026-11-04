@@ -5,13 +5,13 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { require_minimal as QGe } from "./util/minimal.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_minimal } from "./util/minimal.js";
 
 //@ chunk-pwh5dx3n.js:90850-91572 cjs-fingerprint
-var Os = x(function (cjsExports, cjsModule) {
+var require_message = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Message;
-  var util = QGe();
+  var util = require_minimal();
   function Message(properties) {
     if (properties)
       for (var keys = Object.keys(properties), i_2 = 0; i_2 < keys.length; ++i_2) {
@@ -48,4 +48,4 @@ var Os = x(function (cjsExports, cjsModule) {
     return this.$type.toObject(this, util.toJSONOptions);
   };
 });
-export { Os };
+export { require_message };

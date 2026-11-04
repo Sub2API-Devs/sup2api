@@ -5,17 +5,17 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { nt } from "./enum.js";
-import { Cr } from "./types.js";
-import { de } from "./util.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_enum } from "./enum.js";
+import { require_types } from "./types.js";
+import { require_util_2 } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:128334-129796 cjs-fingerprint
-var Ka = x(function (cjsExports, cjsModule) {
+var require_encoder = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = encoder;
-  var Enum = nt();
-  var types = Cr();
-  var util = de();
+  var Enum = require_enum();
+  var types = require_types();
+  var util = require_util_2();
   function genTypePartial(gen, field, fieldIndex, ref) {
     return field.delimited
       ? gen(
@@ -81,4 +81,4 @@ var Ka = x(function (cjsExports, cjsModule) {
     return gen("return w");
   }
 });
-export { Ka };
+export { require_encoder };

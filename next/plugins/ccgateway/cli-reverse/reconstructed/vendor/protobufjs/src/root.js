@@ -5,22 +5,22 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { zr } from "./namespace.js";
-import { Yt } from "./field.js";
-import { nt } from "./enum.js";
-import { Sr } from "./oneof.js";
-import { de } from "./util.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_namespace } from "./namespace.js";
+import { require_field } from "./field.js";
+import { require_enum } from "./enum.js";
+import { require_oneof } from "./oneof.js";
+import { require_util_2 } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:109305-112807 cjs-fingerprint
-var xs = x(function (cjsExports, cjsModule) {
+var require_root = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Root;
-  var Namespace = zr();
+  var Namespace = require_namespace();
   ((Root.prototype = Object.create(Namespace.prototype)).constructor = Root).className = "Root";
-  var Field = Yt();
-  var Enum = nt();
-  var OneOf = Sr();
-  var util = de();
+  var Field = require_field();
+  var Enum = require_enum();
+  var OneOf = require_oneof();
+  var util = require_util_2();
   var Type;
   var parse;
   var common;
@@ -217,4 +217,4 @@ var xs = x(function (cjsExports, cjsModule) {
     common = common_;
   };
 });
-export { xs };
+export { require_root };

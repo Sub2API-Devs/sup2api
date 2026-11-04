@@ -5,15 +5,15 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Qu } from "../../../../lodash.camelcase/index.js";
-import { qs } from "../../../../protobufjs/src/index.js";
-import { uh } from "../../../../protobufjs/ext/descriptor/index.js";
-import { vh } from "./util.js";
-import { require_long as hHr } from "../../../../long/umd/index.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_lodash_camelcase } from "../../../../lodash.camelcase/index.js";
+import { require_protobufjs } from "../../../../protobufjs/src/index.js";
+import { require_descriptor_2 } from "../../../../protobufjs/ext/descriptor/index.js";
+import { require_util } from "./util.js";
+import { require_long } from "../../../../long/umd/index.js";
 
 //@ chunk-pwh5dx3n.js:172408-175802 cjs-fingerprint
-var fo = x(function (cjsExports) {
+var require_proto_loader = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -26,11 +26,11 @@ var fo = x(function (cjsExports) {
     cjsExports.isAnyExtension =
     cjsExports.Long =
       undefined;
-  var camelCase = Qu();
-  var Protobuf = qs();
-  var descriptor = uh();
-  var util_1 = vh();
-  var Long = hHr();
+  var camelCase = require_lodash_camelcase();
+  var Protobuf = require_protobufjs();
+  var descriptor = require_descriptor_2();
+  var util_1 = require_util();
+  var Long = require_long();
   cjsExports.Long = Long;
   function isAnyExtension(obj) {
     return "@type" in obj && typeof obj["@type"] === "string";
@@ -196,4 +196,4 @@ var fo = x(function (cjsExports) {
   cjsExports.loadFileDescriptorSetFromObject = loadFileDescriptorSetFromObject;
   util_1.addCommonProtos();
 });
-export { fo };
+export { require_proto_loader };

@@ -5,24 +5,24 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../../runtime/bun-runtime.js";
-import { require_core as Qm } from "../../../../core/build/src/index.js";
-import { Ji } from "../grpc-exporter-transport.js";
-import { require_index_node_http as Eoe } from "../../../../otlp-exporter-base/build/src/index-node-http.js";
-import { require_api as Ol } from "../../../../api/build/src/index.js";
+import { __commonJS, importMetaRequire } from "../../../../../../runtime/bun-runtime.js";
+import { require_core } from "../../../../core/build/src/index.js";
+import { require_grpc_exporter_transport } from "../grpc-exporter-transport.js";
+import { require_index_node_http } from "../../../../otlp-exporter-base/build/src/index-node-http.js";
+import { require_api as require_api_2 } from "../../../../api/build/src/index.js";
 
 //@ chunk-pwh5dx3n.js:389016-391311 cjs-fingerprint
-var fy = x(function (cjsExports) {
+var require_otlp_grpc_env_configuration = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.getOtlpGrpcConfigurationFromEnv = undefined;
-  var core_1 = Qm();
-  var grpc_exporter_transport_1 = Ji();
-  var node_http_1 = Eoe();
-  var fs = Be("fs");
-  var path = Be("path");
-  var api_1 = Ol();
+  var core_1 = require_core();
+  var grpc_exporter_transport_1 = require_grpc_exporter_transport();
+  var node_http_1 = require_index_node_http();
+  var fs = importMetaRequire("fs");
+  var path = importMetaRequire("path");
+  var api_1 = require_api_2();
   function fallbackIfNullishOrBlank(signalSpecific, nonSignalSpecific) {
     if (signalSpecific != null && signalSpecific !== "") return signalSpecific;
     if (nonSignalSpecific != null && nonSignalSpecific !== "") return nonSignalSpecific;
@@ -125,4 +125,4 @@ var fy = x(function (cjsExports) {
   }
   cjsExports.getOtlpGrpcConfigurationFromEnv = getOtlpGrpcConfigurationFromEnv;
 });
-export { fy };
+export { require_otlp_grpc_env_configuration };

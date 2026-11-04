@@ -5,30 +5,30 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Ae } from "./connectivity-state.js";
-import { Ir } from "./backoff-timeout.js";
-import { K } from "./logging.js";
-import { k } from "./constants.js";
-import { we } from "./uri-parser.js";
-import { Pe } from "./subchannel-address.js";
-import { Zt } from "./channelz.js";
-import { Cf } from "./single-subchannel-channel.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_backoff_timeout } from "./backoff-timeout.js";
+import { require_logging } from "./logging.js";
+import { require_constants } from "./constants.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_subchannel_address } from "./subchannel-address.js";
+import { require_channelz } from "./channelz.js";
+import { require_single_subchannel_channel } from "./single-subchannel-channel.js";
 
 //@ chunk-pwh5dx3n.js:198192-205117 cjs-fingerprint
-var Pf = x(function (cjsExports) {
+var require_subchannel = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.Subchannel = undefined;
-  var connectivity_state_1 = Ae();
-  var backoff_timeout_1 = Ir();
-  var logging = K();
-  var constants_1 = k();
-  var uri_parser_1 = we();
-  var subchannel_address_1 = Pe();
-  var channelz_1 = Zt();
-  var single_subchannel_channel_1 = Cf();
+  var connectivity_state_1 = require_connectivity_state();
+  var backoff_timeout_1 = require_backoff_timeout();
+  var logging = require_logging();
+  var constants_1 = require_constants();
+  var uri_parser_1 = require_uri_parser();
+  var subchannel_address_1 = require_subchannel_address();
+  var channelz_1 = require_channelz();
+  var single_subchannel_channel_1 = require_single_subchannel_channel();
   var TRACER_NAME = "subchannel";
   var KEEPALIVE_MAX_TIME_MS = 2147483647;
   class Subchannel {
@@ -338,4 +338,4 @@ var Pf = x(function (cjsExports) {
   }
   cjsExports.Subchannel = Subchannel;
 });
-export { Pf };
+export { require_subchannel };

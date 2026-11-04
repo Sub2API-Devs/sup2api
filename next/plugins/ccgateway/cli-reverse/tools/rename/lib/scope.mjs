@@ -19,8 +19,12 @@
 //   - for (let/const …) 建循环作用域，for-in/of 的右侧表达式也在其中（TDZ 作用域）。
 //   - catch 参数一个作用域，catch 体再一个块作用域；catch 块里 `var e` 与参数 e 同名（Annex B.3.5）
 //     无法用单一绑定表示，两者都冻结（不改名）。
-//   - 直接 eval（被调用者是解析为全局的 `eval` 标识符）：从调用处到模块作用域链上所有作用域的绑定全部冻结。
+//   - 直接 eval（被调用者是解析为全局的 `eval` 标识符）：代码是静态可知的字符串时，只冻结 eval 代码里的自由名字
+//     解析到的绑定，并在调用处到模块作用域链上记下这些名字（evalNames，改名器不得把链上的绑定改成它们）；
+//     代码不可知时，链上所有作用域的绑定全部冻结。
 //   - 标签、属性名、私有名、import.meta 等不是绑定，不记录。
+import { parse as babelParse } from '@babel/parser';
+
 export const OCC = Symbol('occ');
 export const NAME_ROLE = Symbol('nameRole');
 
@@ -33,6 +37,7 @@ export class Scope {
     this.children = [];
     this.arrow = false;
     this.evalTainted = false;
+    this.evalNames = undefined; // 直接 eval 代码静态可知时它查找的名字；null = 不可知（整条链冻结）
     this.pre = 0;
     this.post = 0;
     if (parent) parent.children.push(this);
@@ -510,14 +515,27 @@ class Analyzer {
       }
     }
     this.globals = globals;
-    // 直接 eval：链上所有作用域的绑定冻结。
+    // 直接 eval：链上的作用域标记 evalTainted。
+    //   代码是静态可知的字符串（如 protobufjs inquire 的 eval("quire".replace(/^/,"re"))，即 eval("require")）时，
+    //   只冻结 eval 代码里出现的自由名字解析到的绑定，并把这些名字记在链上每个作用域的 evalNames 里：
+    //   改名器不得把链上的绑定改成这些名字（否则 eval 会查到它），α 校验也按此检查。
+    //   代码不可知时，链上所有作用域的绑定冻结。
     this.directEvals = [];
     for (const e of this.evalCalls) {
       if (e.node.callee[OCC].binding !== null || e.node.optional) continue;
       this.directEvals.push(e.node.start);
+      const names = evalFreeNames(e.node);
       for (let s = e.scope; s; s = s.parent) {
         s.evalTainted = true;
-        for (const b of s.names.values()) if (!b.frozen) b.frozen = 'direct-eval';
+        if (!names) { s.evalNames = null; for (const b of s.names.values()) if (!b.frozen) b.frozen = 'direct-eval'; continue; }
+        if (s.evalNames !== null) { s.evalNames ??= new Set(); for (const n of names) s.evalNames.add(n); }
+      }
+      if (!names) continue;
+      for (const n of names) {
+        for (let s = e.scope; s; s = s.parent) {
+          const b = s.names.get(n);
+          if (b) { if (!b.frozen) b.frozen = 'direct-eval'; break; }
+        }
       }
     }
     // 导出声明（export var/function/class）：导出名与绑定名是同一个词，冻结。
@@ -568,6 +586,38 @@ export function collectPatternIds(p, out) {
 // s 是否在 anc 的子树里（含 anc 自身）。
 export function inSubtree(s, anc) {
   return s.pre >= anc.pre && s.post <= anc.post;
+}
+
+// 直接 eval 的代码静态可知时，返回它查找的自由名字集合；否则 null。
+// 支持的写法：字符串字面量、无插值模板、字符串 + 字符串、<静态字符串>.replace(<正则字面量|静态字符串>, <静态字符串>)。
+function staticString(n) {
+  if (!n) return null;
+  if (n.type === 'StringLiteral') return n.value;
+  if (n.type === 'TemplateLiteral' && n.expressions.length === 0) return n.quasis[0].value.cooked ?? null;
+  if (n.type === 'BinaryExpression' && n.operator === '+') {
+    const a = staticString(n.left), b = staticString(n.right);
+    return a === null || b === null ? null : a + b;
+  }
+  if (n.type === 'CallExpression' && n.callee.type === 'MemberExpression' && !n.callee.computed && n.callee.property.type === 'Identifier'
+    && n.callee.property.name === 'replace' && n.arguments.length === 2) {
+    const str = staticString(n.callee.object), rep = staticString(n.arguments[1]);
+    const pat = n.arguments[0].type === 'RegExpLiteral' ? new RegExp(n.arguments[0].pattern, n.arguments[0].flags) : staticString(n.arguments[0]);
+    return str === null || rep === null || pat === null ? null : str.replace(pat, rep);
+  }
+  return null;
+}
+function evalFreeNames(call) {
+  const code = staticString(call.arguments[0]);
+  if (code === null || call.arguments.length !== 1) return null;
+  let an;
+  try {
+    // 模块代码是严格模式，eval 代码也是严格模式：它声明的变量留在 eval 自己的作用域里
+    an = analyze(babelParse('"use strict";' + code, { sourceType: 'script', errorRecovery: false }), '"use strict";' + code);
+  } catch { return null; }
+  if (an.unsupported?.length || an.directEvals.length) return null;
+  const names = [...an.globals.keys()];
+  if (names.includes('arguments')) return null;
+  return names;
 }
 
 export function analyze(ast, source) {

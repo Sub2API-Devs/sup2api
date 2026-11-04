@@ -5,20 +5,20 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { zr } from "./namespace.js";
-import { Rs } from "./method.js";
-import { de } from "./util.js";
-import { require_rpc as ZPo } from "./rpc.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_namespace } from "./namespace.js";
+import { require_method } from "./method.js";
+import { require_util_2 } from "./util.js";
+import { require_rpc } from "./rpc.js";
 
 //@ chunk-pwh5dx3n.js:88399-90850 cjs-fingerprint
-var bs = x(function (cjsExports, cjsModule) {
+var require_service = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Service;
-  var Namespace = zr();
+  var Namespace = require_namespace();
   ((Service.prototype = Object.create(Namespace.prototype)).constructor = Service).className = "Service";
-  var Method = Rs();
-  var util = de();
-  var rpc = ZPo();
+  var Method = require_method();
+  var util = require_util_2();
+  var rpc = require_rpc();
   var reservedRe = util.patterns.reservedRe;
   function Service(name, options) {
     Namespace.call(this, name, options);
@@ -118,4 +118,4 @@ var bs = x(function (cjsExports, cjsModule) {
     return rpcService;
   };
 });
-export { bs };
+export { require_service };

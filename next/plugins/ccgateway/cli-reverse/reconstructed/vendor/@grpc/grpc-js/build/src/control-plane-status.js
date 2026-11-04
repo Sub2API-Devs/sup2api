@@ -5,16 +5,16 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { k } from "./constants.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_constants } from "./constants.js";
 
 //@ chunk-pwh5dx3n.js:190993-191465 cjs-fingerprint
-var Ui = x(function (cjsExports) {
+var require_control_plane_status = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.restrictControlPlaneStatusCode = restrictControlPlaneStatusCode;
-  var constants_1 = k();
+  var constants_1 = require_constants();
   var INAPPROPRIATE_CONTROL_PLANE_CODES = [
     constants_1.Status.OK,
     constants_1.Status.INVALID_ARGUMENT,
@@ -38,4 +38,4 @@ var Ui = x(function (cjsExports) {
       };
   }
 });
-export { Ui };
+export { require_control_plane_status };

@@ -5,12 +5,12 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { k } from "./constants.js";
-import { ue } from "./metadata.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_constants } from "./constants.js";
+import { require_metadata } from "./metadata.js";
 
 //@ chunk-pwh5dx3n.js:278508-281874 cjs-fingerprint
-var Og = x(function (cjsExports) {
+var require_server_call = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -20,10 +20,10 @@ var Og = x(function (cjsExports) {
     cjsExports.ServerUnaryCallImpl =
       undefined;
   cjsExports.serverErrorToStatus = serverErrorToStatus;
-  var events_1 = Be("events");
-  var stream_1 = Be("stream");
-  var constants_1 = k();
-  var metadata_1 = ue();
+  var events_1 = importMetaRequire("events");
+  var stream_1 = importMetaRequire("stream");
+  var constants_1 = require_constants();
+  var metadata_1 = require_metadata();
   function serverErrorToStatus(error, overrideTrailers) {
     var _a;
     let status = {
@@ -233,4 +233,4 @@ var Og = x(function (cjsExports) {
   }
   cjsExports.ServerDuplexStreamImpl = ServerDuplexStreamImpl;
 });
-export { Og };
+export { require_server_call };

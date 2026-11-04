@@ -5,36 +5,36 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Ae } from "./connectivity-state.js";
-import { k } from "./constants.js";
-import { zi } from "./duration.js";
-import { Vo } from "./experimental.js";
-import { Gt } from "./load-balancer.js";
-import { cs } from "./load-balancer-child-handler.js";
-import { kt } from "./picker.js";
-import { Pe } from "./subchannel-address.js";
-import { Bi } from "./subchannel-interface.js";
-import { K } from "./logging.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_constants } from "./constants.js";
+import { require_duration } from "./duration.js";
+import { require_experimental } from "./experimental.js";
+import { require_load_balancer } from "./load-balancer.js";
+import { require_load_balancer_child_handler } from "./load-balancer-child-handler.js";
+import { require_picker } from "./picker.js";
+import { require_subchannel_address } from "./subchannel-address.js";
+import { require_subchannel_interface } from "./subchannel-interface.js";
+import { require_logging } from "./logging.js";
 
 //@ chunk-pwh5dx3n.js:360044-371590 cjs-fingerprint
-var pv = x(function (cjsExports) {
+var require_load_balancer_outlier_detection = __commonJS(function (cjsExports) {
   var _a;
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.OutlierDetectionLoadBalancer = cjsExports.OutlierDetectionLoadBalancingConfig = undefined;
   cjsExports.setup = setup;
-  var connectivity_state_1 = Ae();
-  var constants_1 = k();
-  var duration_1 = zi();
-  var experimental_1 = Vo();
-  var load_balancer_1 = Gt();
-  var load_balancer_child_handler_1 = cs();
-  var picker_1 = kt();
-  var subchannel_address_1 = Pe();
-  var subchannel_interface_1 = Bi();
-  var logging = K();
+  var connectivity_state_1 = require_connectivity_state();
+  var constants_1 = require_constants();
+  var duration_1 = require_duration();
+  var experimental_1 = require_experimental();
+  var load_balancer_1 = require_load_balancer();
+  var load_balancer_child_handler_1 = require_load_balancer_child_handler();
+  var picker_1 = require_picker();
+  var subchannel_address_1 = require_subchannel_address();
+  var subchannel_interface_1 = require_subchannel_interface();
+  var logging = require_logging();
   var TRACER_NAME = "outlier_detection";
   function trace(text) {
     logging.trace(constants_1.LogVerbosity.DEBUG, TRACER_NAME, text);
@@ -575,4 +575,4 @@ var pv = x(function (cjsExports) {
       );
   }
 });
-export { pv };
+export { require_load_balancer_outlier_detection };

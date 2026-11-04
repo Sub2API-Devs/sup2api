@@ -20,8 +20,8 @@
 | 声明对应 | 阅读树 81,667 个顶层声明，与官方构建的声明一一对应。每个声明前有一行 `//@ chunk-xxx.js:起-止 <放置依据>` 出处注释，可以追溯到原字节区间；末尾的 `(2.1.88 match: 名字, 相似度)` 是与旧版最相近的函数，只是线索，不一定是这个声明的名字 |
 | 一方代码 | 5,295（其中 353 个是动态加载用的再导出入口 `*.lazy.js`） 个文件，82.5 MB；其中 3,280 个文件是 2.1.88 没有、316 新增的 |
 | 第三方代码 | 264 个 npm 包，2,027 个文件，15.4 MB；与 npm 源码对齐，文件头写明包名和版本 |
-| 可读率（[`tools/verify/readability.mjs`](tools/verify/readability.mjs)） | 一方代码顶层 / 参数 / 局部均为 **100%**（剩余 2 / 60 / 68 个）；第三方 **98.8% / 100% / 100%**（剩余 114 / 1 / 1 个）。成员有意取的短名（`ids`、`ttl`、比较器的 `a/b`）与上游原名（ajv 的 `it`）计为可读，分别统计在 `analysis/readability/summary.json` 的 chosenShort、authenticShort 字段。函数钩子 worker（`src/plugins/functionHooks/hooks-worker/hooks-worker.js`，worker 线程里的另一个程序，不在扫描的 chunk 里，不计入上面的比例）的 208 个绑定另按 [`naming/worker-hooks-worker.json`](naming/worker-hooks-worker.json) 命名，改名时逐个核对引用的绑定不变（[`tools/emit/worker-names.mjs`](tools/emit/worker-names.mjs)） |
-| 剩余压缩名 | 共 246 个，全部有原因：`frozen` 111（直接 eval 冻结）、`dead` 35（从未读取）、`authored` 100（作者原名），**命名缺口 0**；逐条原因见 [`analysis/readability/leftover.md`](analysis/readability/leftover.md) |
+| 可读率（[`tools/verify/readability.mjs`](tools/verify/readability.mjs)） | 一方代码顶层 / 参数 / 局部均为 **100%**（剩余 2 / 60 / 68 个）；第三方也都是 **100%**（剩余 4 / 1 / 1 个）。成员有意取的短名（`ids`、`ttl`、比较器的 `a/b`）与上游原名（ajv 的 `it`）计为可读，分别统计在 `analysis/readability/summary.json` 的 chosenShort、authenticShort 字段。函数钩子 worker（`src/plugins/functionHooks/hooks-worker/hooks-worker.js`，worker 线程里的另一个程序，不在扫描的 chunk 里，不计入上面的比例）的 208 个绑定另按 [`naming/worker-hooks-worker.json`](naming/worker-hooks-worker.json) 命名，改名时逐个核对引用的绑定不变（[`tools/emit/worker-names.mjs`](tools/emit/worker-names.mjs)） |
+| 剩余压缩名 | 共 136 个，全部有原因：`dead` 35（从未读取）、`authored` 101（作者原名，对照过 npm 源码或是未压缩的随包脚本），**命名缺口 0**。原来还有 111 个 `frozen`：protobufjs 的直接 `eval` 让改名器冻结了整个 gRPC chunk，2026-11-04 改为只冻结 eval 实际读的名字（`require`），这 111 个都已命名；逐条原因见 [`analysis/readability/leftover.md`](analysis/readability/leftover.md) |
 | 构建 | `reconstructed/` 用 Bun 1.4.4 构建 0 错误，约 25 秒；运行时不读 `original/`、`runnable/`、`artifacts/` |
 | 运行一致 | 原版 vs 阅读树构建产物 **98/98** 场景一致；原版 vs 改名树 `runnable/` **98/98** 一致 |
 | 改名等价 | α 校验 0 差异：模块内、跨模块、文件级都是 0 |
@@ -177,7 +177,7 @@ bash tools/vendor/run.sh
 ## 已知限制
 
 - **剩余压缩名**：清单和原因见 `analysis/readability/leftover.md`。原因分四类：
-  - `frozen`：protobufjs 的 `inquire` 在所在 chunk 里用了直接 `eval`，改名器为保证语义冻结了整个 chunk。
+  - `frozen`：直接 `eval` 的代码不能静态求出时，改名器冻结调用处到模块作用域链上的所有绑定。目前没有这种情况：唯一的直接 eval 是 protobufjs `inquire` 的 `eval("quire".replace(/^/,"re"))`，能静态求出是 `require`，所以只冻结这个名字（`docs/process/rename.md` 2.2）。
   - `dead`：从未被读取的变量和参数。
   - `authored`：未压缩的随包脚本里，作者自己起的短名。
   - `unnamed`：命名缺口。

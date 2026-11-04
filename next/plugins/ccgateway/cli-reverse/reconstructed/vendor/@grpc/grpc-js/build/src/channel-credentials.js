@@ -5,28 +5,28 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { rs } from "./call-credentials.js";
-import { fa } from "./tls-helpers.js";
-import { we } from "./uri-parser.js";
-import { rt } from "./resolver.js";
-import { K } from "./logging.js";
-import { k } from "./constants.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_call_credentials } from "./call-credentials.js";
+import { require_tls_helpers } from "./tls-helpers.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_resolver } from "./resolver.js";
+import { require_logging } from "./logging.js";
+import { require_constants } from "./constants.js";
 
 //@ chunk-pwh5dx3n.js:12568-19811 cjs-fingerprint
-var Mr = x(function (cjsExports) {
+var require_channel_credentials = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.ChannelCredentials = undefined;
   cjsExports.createCertificateProviderChannelCredentials = createCertificateProviderChannelCredentials;
-  var tls_1 = Be("tls");
-  var call_credentials_1 = rs();
-  var tls_helpers_1 = fa();
-  var uri_parser_1 = we();
-  var resolver_1 = rt();
-  var logging_1 = K();
-  var constants_1 = k();
+  var tls_1 = importMetaRequire("tls");
+  var call_credentials_1 = require_call_credentials();
+  var tls_helpers_1 = require_tls_helpers();
+  var uri_parser_1 = require_uri_parser();
+  var resolver_1 = require_resolver();
+  var logging_1 = require_logging();
+  var constants_1 = require_constants();
   function verifyIsBufferOrNull(obj, friendlyName) {
     if (obj && !(obj instanceof Buffer)) throw TypeError(`${friendlyName}, if provided, must be a Buffer.`);
   }
@@ -423,4 +423,4 @@ var Mr = x(function (cjsExports) {
     }
   }
 });
-export { Mr };
+export { require_channel_credentials };

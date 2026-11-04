@@ -5,29 +5,29 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { vr } from "./call-interface.js";
-import { k } from "./constants.js";
-import { ue } from "./metadata.js";
-import { rt } from "./resolver.js";
-import { Pe } from "./subchannel-address.js";
-import { we } from "./uri-parser.js";
-import { K } from "./logging.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_call_interface } from "./call-interface.js";
+import { require_constants } from "./constants.js";
+import { require_metadata } from "./metadata.js";
+import { require_resolver } from "./resolver.js";
+import { require_subchannel_address } from "./subchannel-address.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_logging } from "./logging.js";
 
 //@ chunk-pwh5dx3n.js:354924-356504 cjs-fingerprint
-var Vm = x(function (cjsExports) {
+var require_resolver_ip = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.setup = setup;
-  var net_1 = Be("net");
-  var call_interface_1 = vr();
-  var constants_1 = k();
-  var metadata_1 = ue();
-  var resolver_1 = rt();
-  var subchannel_address_1 = Pe();
-  var uri_parser_1 = we();
-  var logging = K();
+  var net_1 = importMetaRequire("net");
+  var call_interface_1 = require_call_interface();
+  var constants_1 = require_constants();
+  var metadata_1 = require_metadata();
+  var resolver_1 = require_resolver();
+  var subchannel_address_1 = require_subchannel_address();
+  var uri_parser_1 = require_uri_parser();
+  var logging = require_logging();
   var TRACER_NAME = "ip_resolver";
   function trace(text) {
     logging.trace(constants_1.LogVerbosity.DEBUG, TRACER_NAME, text);
@@ -110,4 +110,4 @@ var Vm = x(function (cjsExports) {
     resolver_1.registerResolver(IPV6_SCHEME, IpResolver);
   }
 });
-export { Vm };
+export { require_resolver_ip };

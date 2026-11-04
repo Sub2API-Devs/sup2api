@@ -5,19 +5,19 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { k } from "./constants.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_constants } from "./constants.js";
 
 //@ chunk-pwh5dx3n.js:21748-30265 cjs-fingerprint
-var va = x(function (cjsExports) {
+var require_service_config = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.validateRetryThrottling = validateRetryThrottling;
   cjsExports.validateServiceConfig = validateServiceConfig;
   cjsExports.extractAndSelectServiceConfig = extractAndSelectServiceConfig;
-  var os = Be("os");
-  var constants_1 = k();
+  var os = importMetaRequire("os");
+  var constants_1 = require_constants();
   var DURATION_REGEX = /^\d+(\.\d{1,9})?s$/;
   var CLIENT_LANGUAGE_STRING = "node";
   function validateName(obj) {
@@ -283,4 +283,4 @@ var va = x(function (cjsExports) {
     return null;
   }
 });
-export { va };
+export { require_service_config };

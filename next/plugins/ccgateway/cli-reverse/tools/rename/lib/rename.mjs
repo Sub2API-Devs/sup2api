@@ -103,6 +103,8 @@ class Planner {
       }
     }
     if (this.through.get(S)?.get(X)) return 'captures-outer-or-global';
+    // 直接 eval 按名字查找：链上的绑定不能改成 eval 代码会查的名字（scope.mjs evalNames）
+    if (S.evalTainted && (S.evalNames === null || S.evalNames?.has(X))) return 'visible-to-direct-eval';
     // `module {`（如 class A extends module{…}）会被 Babel 当成 module blocks 提案语法而拒绝解析，避开。
     if (X === 'module') {
       for (const list of [b.decls, b.refs.map((r) => r.node)]) {

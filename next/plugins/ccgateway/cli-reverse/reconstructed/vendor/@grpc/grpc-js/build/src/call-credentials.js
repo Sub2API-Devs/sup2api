@@ -5,16 +5,16 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { ue } from "./metadata.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_metadata } from "./metadata.js";
 
 //@ chunk-pwh5dx3n.js:8822-10380 cjs-fingerprint
-var rs = x(function (cjsExports) {
+var require_call_credentials = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.CallCredentials = undefined;
-  var metadata_1 = ue();
+  var metadata_1 = require_metadata();
   function isCurrentOauth2Client(client) {
     return "getRequestHeaders" in client && typeof client.getRequestHeaders === "function";
   }
@@ -113,4 +113,4 @@ var rs = x(function (cjsExports) {
     }
   }
 });
-export { rs };
+export { require_call_credentials };

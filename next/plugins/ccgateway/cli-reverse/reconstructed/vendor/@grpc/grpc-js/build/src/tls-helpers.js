@@ -5,16 +5,16 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:10380-10712 cjs-fingerprint
-var fa = x(function (cjsExports) {
+var require_tls_helpers = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.CIPHER_SUITES = undefined;
   cjsExports.getDefaultRootsData = getDefaultRootsData;
-  var fs = Be("fs");
+  var fs = importMetaRequire("fs");
   cjsExports.CIPHER_SUITES = process.env.GRPC_SSL_CIPHER_SUITES;
   var DEFAULT_ROOTS_FILE_PATH = process.env.GRPC_DEFAULT_SSL_ROOTS_FILE_PATH;
   var defaultRootsData = null;
@@ -26,4 +26,4 @@ var fa = x(function (cjsExports) {
     return null;
   }
 });
-export { fa };
+export { require_tls_helpers };

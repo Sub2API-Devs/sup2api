@@ -6,7 +6,8 @@
 # Stages and their outputs are described in docs/PLAN.md and docs/process/lead.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-N="node --max-old-space-size=14000"
+# fs-retry: Windows briefly locks freshly written files (indexer, scanner); retry instead of failing the stage
+N="node --max-old-space-size=14000 --import ./tools/lib/fs-retry.mjs"
 step() { echo; echo "== $*"; }
 
 if [ "${SCAN:-0}" = 1 ]; then

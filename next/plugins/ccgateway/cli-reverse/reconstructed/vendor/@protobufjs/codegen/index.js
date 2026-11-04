@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:76760-78091 cjs-fingerprint
-var ed = x(function (cjsExports, cjsModule) {
+var require_codegen = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = codegen;
   var reservedRe =
     /^(?:do|if|in|for|let|new|try|var|case|else|enum|eval|false|null|this|true|void|with|break|catch|class|const|super|throw|while|yield|delete|export|import|public|return|static|switch|typeof|default|extends|finally|package|private|continue|debugger|function|arguments|interface|protected|implements|instanceof)$/;
@@ -86,4 +86,4 @@ var ed = x(function (cjsExports, cjsModule) {
     return reservedRe.test(name) ? name + "_" : name;
   }
 });
-export { ed };
+export { require_codegen };

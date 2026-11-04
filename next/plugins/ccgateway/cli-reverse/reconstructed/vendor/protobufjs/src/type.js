@@ -5,42 +5,42 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { zr } from "./namespace.js";
-import { nt } from "./enum.js";
-import { Sr } from "./oneof.js";
-import { Yt } from "./field.js";
-import { Ts } from "./mapfield.js";
-import { bs } from "./service.js";
-import { Os } from "./message.js";
-import { require_reader as _Hr } from "./reader.js";
-import { require_writer as yHr } from "./writer.js";
-import { de } from "./util.js";
-import { Ka } from "./encoder.js";
-import { qa } from "./decoder.js";
-import { za } from "./verifier.js";
-import { ja } from "./converter.js";
-import { Ga } from "./wrappers.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_namespace } from "./namespace.js";
+import { require_enum } from "./enum.js";
+import { require_oneof } from "./oneof.js";
+import { require_field } from "./field.js";
+import { require_mapfield } from "./mapfield.js";
+import { require_service } from "./service.js";
+import { require_message } from "./message.js";
+import { require_reader } from "./reader.js";
+import { require_writer } from "./writer.js";
+import { require_util_2 } from "./util.js";
+import { require_encoder } from "./encoder.js";
+import { require_decoder } from "./decoder.js";
+import { require_verifier } from "./verifier.js";
+import { require_converter } from "./converter.js";
+import { require_wrappers } from "./wrappers.js";
 
 //@ chunk-pwh5dx3n.js:102455-109305 cjs-fingerprint
-var Ps = x(function (cjsExports, cjsModule) {
+var require_type = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Type;
-  var Namespace = zr();
+  var Namespace = require_namespace();
   ((Type.prototype = Object.create(Namespace.prototype)).constructor = Type).className = "Type";
-  var Enum = nt();
-  var OneOf = Sr();
-  var Field = Yt();
-  var MapField = Ts();
-  var Service = bs();
-  var Message = Os();
-  var Reader = _Hr();
-  var Writer = yHr();
-  var util = de();
-  var encoder = Ka();
-  var decoder = qa();
-  var verifier = za();
-  var converter = ja();
-  var wrappers = Ga();
+  var Enum = require_enum();
+  var OneOf = require_oneof();
+  var Field = require_field();
+  var MapField = require_mapfield();
+  var Service = require_service();
+  var Message = require_message();
+  var Reader = require_reader();
+  var Writer = require_writer();
+  var util = require_util_2();
+  var encoder = require_encoder();
+  var decoder = require_decoder();
+  var verifier = require_verifier();
+  var converter = require_converter();
+  var wrappers = require_wrappers();
   function Type(name, options) {
     name = name.replace(/\W/g, "");
     Namespace.call(this, name, options);
@@ -333,4 +333,4 @@ var Ps = x(function (cjsExports, cjsModule) {
     };
   };
 });
-export { Ps };
+export { require_type };

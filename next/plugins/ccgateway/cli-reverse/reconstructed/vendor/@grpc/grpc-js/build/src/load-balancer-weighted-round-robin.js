@@ -5,35 +5,35 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Ae } from "./connectivity-state.js";
-import { k } from "./constants.js";
-import { zi } from "./duration.js";
-import { Gt } from "./load-balancer.js";
-import { ji } from "./load-balancer-pick-first.js";
-import { K } from "./logging.js";
-import { pn } from "./orca.js";
-import { kt } from "./picker.js";
-import { yv } from "./priority-queue.js";
-import { Pe } from "./subchannel-address.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_constants } from "./constants.js";
+import { require_duration } from "./duration.js";
+import { require_load_balancer } from "./load-balancer.js";
+import { require_load_balancer_pick_first } from "./load-balancer-pick-first.js";
+import { require_logging } from "./logging.js";
+import { require_orca } from "./orca.js";
+import { require_picker } from "./picker.js";
+import { require_priority_queue } from "./priority-queue.js";
+import { require_subchannel_address } from "./subchannel-address.js";
 
 //@ chunk-pwh5dx3n.js:372594-380538 cjs-fingerprint
-var Av = x(function (cjsExports) {
+var require_load_balancer_weighted_round_robin = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.WeightedRoundRobinLoadBalancingConfig = undefined;
   cjsExports.setup = setup;
-  var connectivity_state_1 = Ae();
-  var constants_1 = k();
-  var duration_1 = zi();
-  var load_balancer_1 = Gt();
-  var load_balancer_pick_first_1 = ji();
-  var logging = K();
-  var orca_1 = pn();
-  var picker_1 = kt();
-  var priority_queue_1 = yv();
-  var subchannel_address_1 = Pe();
+  var connectivity_state_1 = require_connectivity_state();
+  var constants_1 = require_constants();
+  var duration_1 = require_duration();
+  var load_balancer_1 = require_load_balancer();
+  var load_balancer_pick_first_1 = require_load_balancer_pick_first();
+  var logging = require_logging();
+  var orca_1 = require_orca();
+  var picker_1 = require_picker();
+  var priority_queue_1 = require_priority_queue();
+  var subchannel_address_1 = require_subchannel_address();
   var TRACER_NAME = "weighted_round_robin";
   function trace(text) {
     logging.trace(constants_1.LogVerbosity.DEBUG, TRACER_NAME, text);
@@ -426,4 +426,4 @@ var Av = x(function (cjsExports) {
     );
   }
 });
-export { Av };
+export { require_load_balancer_weighted_round_robin };

@@ -5,18 +5,18 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { rt } from "./resolver.js";
-import { vr } from "./call-interface.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_resolver } from "./resolver.js";
+import { require_call_interface } from "./call-interface.js";
 
 //@ chunk-pwh5dx3n.js:354354-354924 cjs-fingerprint
-var Hm = x(function (cjsExports) {
+var require_resolver_uds = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.setup = setup;
-  var resolver_1 = rt();
-  var call_interface_1 = vr();
+  var resolver_1 = require_resolver();
+  var call_interface_1 = require_call_interface();
   class UdsResolver {
     constructor(target, listener, channelOptions) {
       this.listener = listener;
@@ -52,4 +52,4 @@ var Hm = x(function (cjsExports) {
     resolver_1.registerResolver("unix", UdsResolver);
   }
 });
-export { Hm };
+export { require_resolver_uds };

@@ -5,18 +5,18 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Mr } from "./channel-credentials.js";
-import { Io } from "./internal-channel.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_channel_credentials } from "./channel-credentials.js";
+import { require_internal_channel } from "./internal-channel.js";
 
 //@ chunk-pwh5dx3n.js:277418-278508 cjs-fingerprint
-var Ra = x(function (cjsExports) {
+var require_channel = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.ChannelImplementation = undefined;
-  var channel_credentials_1 = Mr();
-  var internal_channel_1 = Io();
+  var channel_credentials_1 = require_channel_credentials();
+  var internal_channel_1 = require_internal_channel();
   class ChannelImplementation {
     constructor(target, credentials, options) {
       if (typeof target !== "string") throw TypeError("Channel target must be a string");
@@ -51,4 +51,4 @@ var Ra = x(function (cjsExports) {
   }
   cjsExports.ChannelImplementation = ChannelImplementation;
 });
-export { Ra };
+export { require_channel };

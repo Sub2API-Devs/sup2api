@@ -5,36 +5,36 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Ys } from "./call-number.js";
-import { Zt } from "./channelz.js";
-import { Eo } from "./compression-filter.js";
-import { Ae } from "./connectivity-state.js";
-import { k } from "./constants.js";
-import { Ui } from "./control-plane-status.js";
-import { Kr } from "./deadline.js";
-import { Js } from "./filter-stack.js";
-import { ue } from "./metadata.js";
-import { rt } from "./resolver.js";
-import { we } from "./uri-parser.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_call_number } from "./call-number.js";
+import { require_channelz } from "./channelz.js";
+import { require_compression_filter } from "./compression-filter.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_constants } from "./constants.js";
+import { require_control_plane_status } from "./control-plane-status.js";
+import { require_deadline } from "./deadline.js";
+import { require_filter_stack } from "./filter-stack.js";
+import { require_metadata } from "./metadata.js";
+import { require_resolver } from "./resolver.js";
+import { require_uri_parser } from "./uri-parser.js";
 
 //@ chunk-pwh5dx3n.js:193423-198192 cjs-fingerprint
-var Cf = x(function (cjsExports) {
+var require_single_subchannel_channel = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.SingleSubchannelChannel = undefined;
-  var call_number_1 = Ys();
-  var channelz_1 = Zt();
-  var compression_filter_1 = Eo();
-  var connectivity_state_1 = Ae();
-  var constants_1 = k();
-  var control_plane_status_1 = Ui();
-  var deadline_1 = Kr();
-  var filter_stack_1 = Js();
-  var metadata_1 = ue();
-  var resolver_1 = rt();
-  var uri_parser_1 = we();
+  var call_number_1 = require_call_number();
+  var channelz_1 = require_channelz();
+  var compression_filter_1 = require_compression_filter();
+  var connectivity_state_1 = require_connectivity_state();
+  var constants_1 = require_constants();
+  var control_plane_status_1 = require_control_plane_status();
+  var deadline_1 = require_deadline();
+  var filter_stack_1 = require_filter_stack();
+  var metadata_1 = require_metadata();
+  var resolver_1 = require_resolver();
+  var uri_parser_1 = require_uri_parser();
   class SubchannelCallWrapper {
     constructor(subchannel, method, filterStackFactory, options, callNumber) {
       var _a;
@@ -245,4 +245,4 @@ var Cf = x(function (cjsExports) {
   }
   cjsExports.SingleSubchannelChannel = SingleSubchannelChannel;
 });
-export { Cf };
+export { require_single_subchannel_channel };

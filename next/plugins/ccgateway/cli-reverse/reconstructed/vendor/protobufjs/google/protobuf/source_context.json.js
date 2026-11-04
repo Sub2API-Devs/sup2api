@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:169329-169471 cjs-fingerprint
-var hh = x(function (cjsExports, cjsModule) {
+var require_source_context = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     nested: {
       google: {
@@ -30,4 +30,4 @@ var hh = x(function (cjsExports, cjsModule) {
     },
   };
 });
-export { hh };
+export { require_source_context };

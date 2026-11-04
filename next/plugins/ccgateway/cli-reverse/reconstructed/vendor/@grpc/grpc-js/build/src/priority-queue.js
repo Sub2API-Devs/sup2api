@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:371590-372594 cjs-fingerprint
-var yv = x(function (cjsExports) {
+var require_priority_queue = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -80,4 +80,4 @@ var yv = x(function (cjsExports) {
   }
   cjsExports.PriorityQueue = PriorityQueue;
 });
-export { yv };
+export { require_priority_queue };

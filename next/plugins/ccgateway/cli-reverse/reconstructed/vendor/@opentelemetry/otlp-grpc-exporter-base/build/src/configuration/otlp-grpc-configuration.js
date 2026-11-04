@@ -5,13 +5,13 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../../runtime/bun-runtime.js";
-import { require_otlp_exporter_base as D9 } from "../../../../otlp-exporter-base/build/src/index.js";
-import { Ji } from "../grpc-exporter-transport.js";
-import { require_api as Ol } from "../../../../api/build/src/index.js";
+import { __commonJS, importMetaRequire } from "../../../../../../runtime/bun-runtime.js";
+import { require_otlp_exporter_base } from "../../../../otlp-exporter-base/build/src/index.js";
+import { require_grpc_exporter_transport } from "../grpc-exporter-transport.js";
+import { require_api as require_api_2 } from "../../../../api/build/src/index.js";
 
 //@ chunk-pwh5dx3n.js:387586-389016 cjs-fingerprint
-var ny = x(function (cjsExports) {
+var require_otlp_grpc_configuration = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -19,10 +19,10 @@ var ny = x(function (cjsExports) {
     cjsExports.mergeOtlpGrpcConfigurationWithDefaults =
     cjsExports.validateAndNormalizeUrl =
       undefined;
-  var otlp_exporter_base_1 = D9();
-  var grpc_exporter_transport_1 = Ji();
-  var url_1 = Be("url");
-  var api_1 = Ol();
+  var otlp_exporter_base_1 = require_otlp_exporter_base();
+  var grpc_exporter_transport_1 = require_grpc_exporter_transport();
+  var url_1 = importMetaRequire("url");
+  var api_1 = require_api_2();
   function validateAndNormalizeUrl(url) {
     url = url.trim();
     if (!url.match(/^([\w]{1,8}):\/\//)) url = `https://${url}`;
@@ -87,4 +87,4 @@ var ny = x(function (cjsExports) {
   }
   cjsExports.getOtlpGrpcDefaultConfiguration = getOtlpGrpcDefaultConfiguration;
 });
-export { ny };
+export { require_otlp_grpc_configuration };

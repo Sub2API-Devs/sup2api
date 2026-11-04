@@ -5,15 +5,15 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { nt } from "./enum.js";
-import { de } from "./util.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_enum } from "./enum.js";
+import { require_util_2 } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:96427-101568 cjs-fingerprint
-var ja = x(function (cjsExports) {
+var require_converter = __commonJS(function (cjsExports) {
   var converter = cjsExports;
-  var Enum = nt();
-  var util = de();
+  var Enum = require_enum();
+  var util = require_util_2();
   function genValuePartial_fromObject(gen, field, fieldIndex, prop) {
     var defaultAlreadyEmitted = false;
     if (field.resolvedType) {
@@ -278,4 +278,4 @@ var ja = x(function (cjsExports) {
     return gen("return d");
   };
 });
-export { ja };
+export { require_converter };

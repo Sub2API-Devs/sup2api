@@ -1,6 +1,6 @@
 # 声明级等价校验（tools/verify/decl-equiv.mjs）
 
-阅读树 `reconstructed`，7325 个文件，用时 71 秒。
+阅读树 `reconstructed`，7325 个文件，用时 69 秒。
 
 | 项 | 数 |
 |---|---|

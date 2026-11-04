@@ -5,13 +5,13 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { gl } from "./version.js";
-import { Ki } from "../../../../@grpc/grpc-js/build/src/index.js";
-import { Kv } from "./create-service-client-constructor.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_version } from "./version.js";
+import { require_grpc_js } from "../../../../@grpc/grpc-js/build/src/index.js";
+import { require_create_service_client_constructor } from "./create-service-client-constructor.js";
 
 //@ chunk-pwh5dx3n.js:385939-387586 cjs-fingerprint
-var Ji = x(function (cjsExports) {
+var require_grpc_exporter_transport = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -21,7 +21,7 @@ var Ji = x(function (cjsExports) {
     cjsExports.createSslCredentials =
     cjsExports.createInsecureCredentials =
       undefined;
-  var version_1 = gl();
+  var version_1 = require_version();
   var DEFAULT_USER_AGENT = `OTel-OTLP-Exporter-JavaScript/${version_1.VERSION}`;
   function createUserAgent(userAgent) {
     if (userAgent) return `${userAgent} ${DEFAULT_USER_AGENT}`;
@@ -33,17 +33,17 @@ var Ji = x(function (cjsExports) {
     return compression === "gzip" ? GRPC_COMPRESSION_GZIP : GRPC_COMPRESSION_NONE;
   }
   function createInsecureCredentials() {
-    let { credentials } = Ki();
+    let { credentials } = require_grpc_js();
     return credentials.createInsecure();
   }
   cjsExports.createInsecureCredentials = createInsecureCredentials;
   function createSslCredentials(rootCert, privateKey, certChain) {
-    let { credentials } = Ki();
+    let { credentials } = require_grpc_js();
     return credentials.createSsl(rootCert, privateKey, certChain);
   }
   cjsExports.createSslCredentials = createSslCredentials;
   function createEmptyMetadata() {
-    let { Metadata } = Ki();
+    let { Metadata } = require_grpc_js();
     return new Metadata();
   }
   cjsExports.createEmptyMetadata = createEmptyMetadata;
@@ -60,7 +60,7 @@ var Ji = x(function (cjsExports) {
     send(data, timeoutMillis) {
       let buffer = Buffer.from(data);
       if (this._client == null) {
-        let { createServiceClientConstructor } = Kv();
+        let { createServiceClientConstructor } = require_create_service_client_constructor();
         try {
           this._metadata = this._parameters.metadata();
         } catch (error) {
@@ -120,4 +120,4 @@ var Ji = x(function (cjsExports) {
   }
   cjsExports.createOtlpGrpcExporterTransport = createOtlpGrpcExporterTransport;
 });
-export { Ji };
+export { require_grpc_exporter_transport };

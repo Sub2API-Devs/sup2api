@@ -35,7 +35,7 @@ import { require_tls } from "../node-forge/lib/tls.js";
 import { require_util } from "../node-forge/lib/util.js";
 import { require_util_buffer_from } from "../@smithy/util-buffer-from/dist-cjs/index.js";
 import { require_util_utf8 } from "../@smithy/util-utf8/dist-cjs/index.js";
-import { require_long as hHr } from "../long/umd/index.js";
+import { require_long } from "../long/umd/index.js";
 
 //@ chunk-m4p5zn6n.js:3688-3917 cjs-unmatched
 var require_pathKey = __commonJS(function (moduleExports, moduleObj) {
@@ -242,13 +242,13 @@ var unsupportedModule = __commonJS(function (moduleExports, moduleObj) {
   };
 });
 //@ chunk-pwh5dx3n.js:78091-78403 cjs-unmatched
-var td = __commonJS(function (exports, module) {
+var require_inquire = __commonJS(function (exports, module) {
   module.exports = inquire;
   function inquire(moduleName) {
     try {
       var mod =
         moduleName === "long"
-          ? hHr()
+          ? require_long()
           : moduleName === "buffer"
             ? importMetaRequire("buffer")
             : moduleName === "fs"
@@ -271,5 +271,5 @@ export {
   unsupportedModule,
   require_pathKey,
   mergeStreamModule,
-  td,
+  require_inquire,
 };

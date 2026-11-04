@@ -5,18 +5,18 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { Kt } from "./object.js";
-import { zr } from "./namespace.js";
-import { de } from "./util.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_object } from "./object.js";
+import { require_namespace } from "./namespace.js";
+import { require_util_2 } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:125754-128334 cjs-fingerprint
-var nt = x(function (cjsExports, cjsModule) {
+var require_enum = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Enum;
-  var ReflectionObject = Kt();
+  var ReflectionObject = require_object();
   ((Enum.prototype = Object.create(ReflectionObject.prototype)).constructor = Enum).className = "Enum";
-  var Namespace = zr();
-  var util = de();
+  var Namespace = require_namespace();
+  var util = require_util_2();
   function Enum(name, values, options, comment, comments, valuesOptions) {
     ReflectionObject.call(this, name, options);
     if (values && typeof values !== "object") throw TypeError("values must be an object");
@@ -106,4 +106,4 @@ var nt = x(function (cjsExports, cjsModule) {
     return Namespace.isReservedName(this.reserved, name);
   };
 });
-export { nt };
+export { require_enum };

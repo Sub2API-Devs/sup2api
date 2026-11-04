@@ -5,20 +5,20 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { K } from "./logging.js";
-import { k } from "./constants.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_logging } from "./logging.js";
+import { require_constants } from "./constants.js";
 
 //@ chunk-pwh5dx3n.js:346338-349343 cjs-fingerprint
-var Im = x(function (cjsExports) {
+var require_certificate_provider = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.FileWatcherCertificateProvider = undefined;
-  var fs = Be("fs");
-  var logging = K();
-  var constants_1 = k();
-  var util_1 = Be("util");
+  var fs = importMetaRequire("fs");
+  var logging = require_logging();
+  var constants_1 = require_constants();
+  var util_1 = importMetaRequire("util");
   var TRACER_NAME = "certificate_provider";
   function trace(text) {
     logging.trace(constants_1.LogVerbosity.DEBUG, TRACER_NAME, text);
@@ -119,4 +119,4 @@ var Im = x(function (cjsExports) {
   }
   cjsExports.FileWatcherCertificateProvider = FileWatcherCertificateProvider;
 });
-export { Im };
+export { require_certificate_provider };

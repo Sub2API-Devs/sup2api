@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:1752-4533 cjs-fingerprint
-var ia = x(function (cjsExports, cjsModule) {
+var require_package = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     name: "@grpc/grpc-js",
     version: "1.14.4",
@@ -103,4 +103,4 @@ var ia = x(function (cjsExports, cjsModule) {
     ],
   };
 });
-export { ia };
+export { require_package };

@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:263230-264834 cjs-fingerprint
-var Bi = x(function (cjsExports) {
+var require_subchannel_interface = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -94,4 +94,4 @@ var Bi = x(function (cjsExports) {
   }
   cjsExports.BaseSubchannelWrapper = BaseSubchannelWrapper;
 });
-export { Bi };
+export { require_subchannel_interface };

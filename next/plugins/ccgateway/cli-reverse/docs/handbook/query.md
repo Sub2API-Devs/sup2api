@@ -1398,7 +1398,7 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 1. 总开关 `isFastModeEnabled`（`chunk-aepeg2w5.js#ys`）：第一方且未设 `CLAUDE_CODE_DISABLE_FAST_MODE`。
 2. 组织状态预取 `prefetchFastModeStatus`（`#zUe`）→ `fetchFastModeStatus`（`#l0`）`GET /api/claude_code_penguin_mode`（10 秒超时、30 秒节流），401/撤销时刷新 OAuth；结果写 `penguinModeOrgEnabled` 缓存。`CLAUDE_CODE_SKIP_FAST_MODE_ORG_CHECK` 跳过。
 3. 不可用原因 `getFastModeUnavailableReasonCode`（`#ED`）：not_first_party / disabled_by_env / GrowthBook `tengu_penguins_off` / model_not_allowed / 托管 `fastMode=false` 或 `fastModePerSessionOptIn` / SDK 需显式开启 / pending / 组织 disabled 原因（free、preference、extra_usage_disabled、network_error、unknown）。
-4. 模型支持：`_y()` 看 catalog 能力 `fast_mode`（opus-4-6 起）。
+4. 模型支持：`supportsFastMode`（`#_y`）看 catalog 能力 `fast_mode`（opus-4-6 起）。
 5. 请求：`queryModel` 在 fast 开、可用、未冷却、模型支持且未被拒时发 `speed:"fast"`。
 6. 运行期：被限流 → `triggerFastModeCooldown`（`#eEi`）；API 拒绝 → `handleFastModeRejectedByAPI`（`#tEi`）；超额拒绝 → `handleFastModeOverageRejection`（`#oEi`）；fallback 模型拒绝 fast → `markFallbackModelFastRejected`（本会话标准速度）。
 7. 状态 `getFastModeState`（`#Qte`）：on / cooldown / off，写入 SDK result 的 `fast_mode_state`。

@@ -1136,7 +1136,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 - 输入：`skill`（列表中的名字，不要猜）、`args?`。输出两种：inline（`success`、`commandName`、`allowedTools`、`model`、`status: "inline"`、`readOnly`）与 forked（`agentId`、`result`、`background`、`toolsUsedLine`）。
 - `isEnabled`：`!Wb()`（host 的 `disableSlashCommands` 未开）。
 - `validateInput`（`SkillTool` 的 `validateInput`）流程：
-  1. 去掉前导 `/`（记 `tengu_skill_tool_slash_prefix`）；`me()` 加载命令表，`oe()` 解析（可能结果：命中、listingName、suggestion、ambiguous、none）。
+  1. 去掉前导 `/`（记 `tengu_skill_tool_slash_prefix`）；`me()` 加载命令表，`resolveSkillName`（`#oe`）解析（可能结果：命中、listingName、suggestion、ambiguous、none）。
   2. 远端 skill 需要物化（`isSkillsSyncActive()`、`startPendingDownload`（`chunk-e6aww6q8.js#RCe`））时下载，失败返回 "could not be downloaded … Proceed without it."（errorCode 10）；有 `loadDefinition` 的先加载定义。
   3. MCP 来源 skill、被同步否决/主机目录隐藏的 skill 一律当作 Unknown。
   4. 未找到：目录作用域变体、listingName 提示正名、后缀匹配建议、编辑距离 ≤2 的近似名、插件加载错误说明。

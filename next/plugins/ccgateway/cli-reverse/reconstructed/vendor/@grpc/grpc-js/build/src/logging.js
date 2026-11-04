@@ -5,12 +5,12 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { k } from "./constants.js";
-import { ia } from "../../package.json.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_constants } from "./constants.js";
+import { require_package } from "../../package.json.js";
 
 //@ chunk-pwh5dx3n.js:4533-5985 cjs-fingerprint
-var K = x(function (cjsExports) {
+var require_logging = __commonJS(function (cjsExports) {
   var _a;
   var _b;
   var _c;
@@ -21,9 +21,9 @@ var K = x(function (cjsExports) {
   cjsExports.log = cjsExports.setLoggerVerbosity = cjsExports.setLogger = cjsExports.getLogger = undefined;
   cjsExports.trace = trace;
   cjsExports.isTracerEnabled = isTracerEnabled;
-  var constants_1 = k();
-  var process_1 = Be("process");
-  var clientVersion = ia().version;
+  var constants_1 = require_constants();
+  var process_1 = importMetaRequire("process");
+  var clientVersion = require_package().version;
   var DEFAULT_LOGGER = {
     error: (message, ...optionalParams) => {
       console.error("E " + message, ...optionalParams);
@@ -118,4 +118,4 @@ var K = x(function (cjsExports) {
     return !disabledTracers.has(tracer) && (allEnabled || enabledTracers.has(tracer));
   }
 });
-export { K };
+export { require_logging };

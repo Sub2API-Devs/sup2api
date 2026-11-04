@@ -5,18 +5,18 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { vs } from "./make-client.js";
-import { zi } from "./duration.js";
-import { Mr } from "./channel-credentials.js";
-import { Bi } from "./subchannel-interface.js";
-import { k } from "./constants.js";
-import { Ir } from "./backoff-timeout.js";
-import { Ae } from "./connectivity-state.js";
-import { fo } from "../../../proto-loader/build/src/index.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_make_client } from "./make-client.js";
+import { require_duration } from "./duration.js";
+import { require_channel_credentials } from "./channel-credentials.js";
+import { require_subchannel_interface } from "./subchannel-interface.js";
+import { require_constants } from "./constants.js";
+import { require_backoff_timeout } from "./backoff-timeout.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_proto_loader } from "../../../proto-loader/build/src/index.js";
 
 //@ chunk-pwh5dx3n.js:288349-293534 cjs-fingerprint
-var pn = x(function (cjsExports) {
+var require_orca = __commonJS(function (cjsExports) {
   var __dirname_2 =
     "/home/runner/work/claude-cli-internal/claude-cli-internal/node_modules/@grpc/grpc-js/build/src";
   Object.defineProperty(cjsExports, "__esModule", {
@@ -29,17 +29,17 @@ var pn = x(function (cjsExports) {
       undefined;
   cjsExports.createOrcaClient = createOrcaClient;
   cjsExports.createMetricsReader = createMetricsReader;
-  var make_client_1 = vs();
-  var duration_1 = zi();
-  var channel_credentials_1 = Mr();
-  var subchannel_interface_1 = Bi();
-  var constants_1 = k();
-  var backoff_timeout_1 = Ir();
-  var connectivity_state_1 = Ae();
+  var make_client_1 = require_make_client();
+  var duration_1 = require_duration();
+  var channel_credentials_1 = require_channel_credentials();
+  var subchannel_interface_1 = require_subchannel_interface();
+  var constants_1 = require_constants();
+  var backoff_timeout_1 = require_backoff_timeout();
+  var connectivity_state_1 = require_connectivity_state();
   var loadedOrcaProto = null;
   function loadOrcaProto() {
     if (loadedOrcaProto) return loadedOrcaProto;
-    let loaderLoadSync = fo().loadSync;
+    let loaderLoadSync = require_proto_loader().loadSync;
     let loadedProto = loaderLoadSync("xds/service/orca/v3/orca.proto", {
       keepCase: true,
       longs: String,
@@ -271,4 +271,4 @@ var pn = x(function (cjsExports) {
     return new OobMetricsDataProducer(subchannel);
   }
 });
-export { pn };
+export { require_orca };

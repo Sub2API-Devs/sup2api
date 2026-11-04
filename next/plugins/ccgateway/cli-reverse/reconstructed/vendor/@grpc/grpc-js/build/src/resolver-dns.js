@@ -5,36 +5,36 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { rt } from "./resolver.js";
-import { va } from "./service-config.js";
-import { k } from "./constants.js";
-import { vr } from "./call-interface.js";
-import { ue } from "./metadata.js";
-import { K } from "./logging.js";
-import { we } from "./uri-parser.js";
-import { Ir } from "./backoff-timeout.js";
-import { If } from "./environment.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_resolver } from "./resolver.js";
+import { require_service_config } from "./service-config.js";
+import { require_constants } from "./constants.js";
+import { require_call_interface } from "./call-interface.js";
+import { require_metadata } from "./metadata.js";
+import { require_logging } from "./logging.js";
+import { require_uri_parser } from "./uri-parser.js";
+import { require_backoff_timeout } from "./backoff-timeout.js";
+import { require_environment } from "./environment.js";
 
 //@ chunk-pwh5dx3n.js:205375-211555 cjs-fingerprint
-var Oo = x(function (cjsExports) {
+var require_resolver_dns = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.DEFAULT_PORT = undefined;
   cjsExports.setup = setup;
-  var resolver_1 = rt();
-  var dns_1 = Be("dns");
-  var service_config_1 = va();
-  var constants_1 = k();
-  var call_interface_1 = vr();
-  var metadata_1 = ue();
-  var logging = K();
-  var constants_2 = k();
-  var uri_parser_1 = we();
-  var net_1 = Be("net");
-  var backoff_timeout_1 = Ir();
-  var environment_1 = If();
+  var resolver_1 = require_resolver();
+  var dns_1 = importMetaRequire("dns");
+  var service_config_1 = require_service_config();
+  var constants_1 = require_constants();
+  var call_interface_1 = require_call_interface();
+  var metadata_1 = require_metadata();
+  var logging = require_logging();
+  var constants_2 = require_constants();
+  var uri_parser_1 = require_uri_parser();
+  var net_1 = importMetaRequire("net");
+  var backoff_timeout_1 = require_backoff_timeout();
+  var environment_1 = require_environment();
   var TRACER_NAME = "dns_resolver";
   function trace(text) {
     logging.trace(constants_2.LogVerbosity.DEBUG, TRACER_NAME, text);
@@ -291,4 +291,4 @@ var Oo = x(function (cjsExports) {
     resolver_1.registerDefaultScheme("dns");
   }
 });
-export { Oo };
+export { require_resolver_dns };

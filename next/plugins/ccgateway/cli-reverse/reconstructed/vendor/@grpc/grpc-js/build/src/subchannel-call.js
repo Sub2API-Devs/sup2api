@@ -5,25 +5,25 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { k } from "./constants.js";
-import { ue } from "./metadata.js";
-import { Ao } from "./stream-decoder.js";
-import { K } from "./logging.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_constants } from "./constants.js";
+import { require_metadata } from "./metadata.js";
+import { require_stream_decoder } from "./stream-decoder.js";
+import { require_logging } from "./logging.js";
 
 //@ chunk-pwh5dx3n.js:216944-224816 cjs-fingerprint
-var ip = x(function (cjsExports) {
+var require_subchannel_call = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.Http2SubchannelCall = undefined;
-  var http2 = Be("http2");
-  var os = Be("os");
-  var constants_1 = k();
-  var metadata_1 = ue();
-  var stream_decoder_1 = Ao();
-  var logging = K();
-  var constants_2 = k();
+  var http2 = importMetaRequire("http2");
+  var os = importMetaRequire("os");
+  var constants_1 = require_constants();
+  var metadata_1 = require_metadata();
+  var stream_decoder_1 = require_stream_decoder();
+  var logging = require_logging();
+  var constants_2 = require_constants();
   var TRACER_NAME = "subchannel_call";
   function getSystemErrorName(errno) {
     for (let [name, num] of Object.entries(os.constants.errno)) if (num === errno) return name;
@@ -432,4 +432,4 @@ var ip = x(function (cjsExports) {
   }
   cjsExports.Http2SubchannelCall = Http2SubchannelCall;
 });
-export { ip };
+export { require_subchannel_call };

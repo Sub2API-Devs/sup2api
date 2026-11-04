@@ -5,29 +5,29 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { Gt } from "./load-balancer.js";
-import { Ae } from "./connectivity-state.js";
-import { kt } from "./picker.js";
-import { K } from "./logging.js";
-import { k } from "./constants.js";
-import { Pe } from "./subchannel-address.js";
-import { ji } from "./load-balancer-pick-first.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_load_balancer } from "./load-balancer.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_picker } from "./picker.js";
+import { require_logging } from "./logging.js";
+import { require_constants } from "./constants.js";
+import { require_subchannel_address } from "./subchannel-address.js";
+import { require_load_balancer_pick_first } from "./load-balancer-pick-first.js";
 
 //@ chunk-pwh5dx3n.js:356504-360044 cjs-fingerprint
-var rv = x(function (cjsExports) {
+var require_load_balancer_round_robin = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.RoundRobinLoadBalancer = undefined;
   cjsExports.setup = setup;
-  var load_balancer_1 = Gt();
-  var connectivity_state_1 = Ae();
-  var picker_1 = kt();
-  var logging = K();
-  var constants_1 = k();
-  var subchannel_address_1 = Pe();
-  var load_balancer_pick_first_1 = ji();
+  var load_balancer_1 = require_load_balancer();
+  var connectivity_state_1 = require_connectivity_state();
+  var picker_1 = require_picker();
+  var logging = require_logging();
+  var constants_1 = require_constants();
+  var subchannel_address_1 = require_subchannel_address();
+  var load_balancer_pick_first_1 = require_load_balancer_pick_first();
   var TRACER_NAME = "round_robin";
   function trace(text) {
     logging.trace(constants_1.LogVerbosity.DEBUG, TRACER_NAME, text);
@@ -205,4 +205,4 @@ var rv = x(function (cjsExports) {
     );
   }
 });
-export { rv };
+export { require_load_balancer_round_robin };

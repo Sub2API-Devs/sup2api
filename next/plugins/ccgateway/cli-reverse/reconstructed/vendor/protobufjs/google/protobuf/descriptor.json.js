@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:142957-156548 cjs-fingerprint
-var oo = x(function (cjsExports, cjsModule) {
+var require_descriptor = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     nested: {
       google: {
@@ -1267,4 +1267,4 @@ var oo = x(function (cjsExports, cjsModule) {
     },
   };
 });
-export { oo };
+export { require_descriptor };

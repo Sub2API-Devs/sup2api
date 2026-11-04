@@ -5,16 +5,16 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
-import { Kt } from "./object.js";
-import { de } from "./util.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_object } from "./object.js";
+import { require_util_2 } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:86966-88399 cjs-fingerprint
-var Rs = x(function (cjsExports, cjsModule) {
+var require_method = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Method;
-  var ReflectionObject = Kt();
+  var ReflectionObject = require_object();
   ((Method.prototype = Object.create(ReflectionObject.prototype)).constructor = Method).className = "Method";
-  var util = de();
+  var util = require_util_2();
   function Method(
     name,
     type,
@@ -88,4 +88,4 @@ var Rs = x(function (cjsExports, cjsModule) {
     return ReflectionObject.prototype.resolve.call(this);
   };
 });
-export { Rs };
+export { require_method };

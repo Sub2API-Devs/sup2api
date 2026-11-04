@@ -5,17 +5,17 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { Qc } from "../../../../@js-sdsl/ordered-map/dist/cjs/index.js";
-import { Ae } from "./connectivity-state.js";
-import { k } from "./constants.js";
-import { Pe } from "./subchannel-address.js";
-import { fs } from "./admin.js";
-import { vs } from "./make-client.js";
-import { fo } from "../../../proto-loader/build/src/index.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_ordered_map } from "../../../../@js-sdsl/ordered-map/dist/cjs/index.js";
+import { require_connectivity_state } from "./connectivity-state.js";
+import { require_constants } from "./constants.js";
+import { require_subchannel_address } from "./subchannel-address.js";
+import { require_admin } from "./admin.js";
+import { require_make_client } from "./make-client.js";
+import { require_proto_loader } from "../../../proto-loader/build/src/index.js";
 
 //@ chunk-pwh5dx3n.js:175802-185435 cjs-fingerprint
-var Zt = x(function (cjsExports) {
+var require_channelz = __commonJS(function (cjsExports) {
   var __dirname_2 =
     "/home/runner/work/claude-cli-internal/claude-cli-internal/node_modules/@grpc/grpc-js/build/src";
   Object.defineProperty(cjsExports, "__esModule", {
@@ -36,13 +36,13 @@ var Zt = x(function (cjsExports) {
   cjsExports.getChannelzHandlers = getChannelzHandlers;
   cjsExports.getChannelzServiceDefinition = getChannelzServiceDefinition;
   cjsExports.setup = setup;
-  var net_1 = Be("net");
-  var ordered_map_1 = Qc();
-  var connectivity_state_1 = Ae();
-  var constants_1 = k();
-  var subchannel_address_1 = Pe();
-  var admin_1 = fs();
-  var make_client_1 = vs();
+  var net_1 = importMetaRequire("net");
+  var ordered_map_1 = require_ordered_map();
+  var connectivity_state_1 = require_connectivity_state();
+  var constants_1 = require_constants();
+  var subchannel_address_1 = require_subchannel_address();
+  var admin_1 = require_admin();
+  var make_client_1 = require_make_client();
   function channelRefToMessage(ref) {
     return {
       channel_id: ref.id,
@@ -574,7 +574,7 @@ var Zt = x(function (cjsExports) {
   var loadedChannelzDefinition = null;
   function getChannelzServiceDefinition() {
     if (loadedChannelzDefinition) return loadedChannelzDefinition;
-    let loaderLoadSync = fo().loadSync;
+    let loaderLoadSync = require_proto_loader().loadSync;
     let loadSync = loaderLoadSync("channelz.proto", {
       keepCase: true,
       longs: String,
@@ -591,4 +591,4 @@ var Zt = x(function (cjsExports) {
     admin_1.registerAdminService(getChannelzServiceDefinition, getChannelzHandlers);
   }
 });
-export { Zt };
+export { require_channelz };

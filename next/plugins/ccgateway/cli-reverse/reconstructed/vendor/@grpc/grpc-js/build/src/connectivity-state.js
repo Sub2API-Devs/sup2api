@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:30265-30566 cjs-fingerprint
-var Ae = x(function (cjsExports) {
+var require_connectivity_state = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -22,4 +22,4 @@ var Ae = x(function (cjsExports) {
     ConnectivityState[(ConnectivityState.SHUTDOWN = 4)] = "SHUTDOWN";
   })(ConnectivityState || (cjsExports.ConnectivityState = ConnectivityState = {}));
 });
-export { Ae };
+export { require_connectivity_state };

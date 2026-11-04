@@ -5,10 +5,10 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:79292-79820 cjs-fingerprint
-var ad = x(function (cjsExports) {
+var require_path = __commonJS(function (cjsExports) {
   var path = cjsExports;
   var isAbsolute = (path.isAbsolute = function (path) {
     return /^(?:\/|\w+:)/.test(path);
@@ -37,4 +37,4 @@ var ad = x(function (cjsExports) {
       : includePath;
   };
 });
-export { ad };
+export { require_path };

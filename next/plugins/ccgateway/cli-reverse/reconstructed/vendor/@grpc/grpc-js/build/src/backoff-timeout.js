@@ -5,18 +5,18 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { k } from "./constants.js";
-import { K } from "./logging.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_constants } from "./constants.js";
+import { require_logging } from "./logging.js";
 
 //@ chunk-pwh5dx3n.js:31540-33642 cjs-fingerprint
-var Ir = x(function (cjsExports) {
+var require_backoff_timeout = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.BackoffTimeout = undefined;
-  var constants_1 = k();
-  var logging = K();
+  var constants_1 = require_constants();
+  var logging = require_logging();
   var TRACER_NAME = "backoff";
   var INITIAL_BACKOFF_MS = 1000;
   var BACKOFF_MULTIPLIER = 1.6;
@@ -127,4 +127,4 @@ var Ir = x(function (cjsExports) {
   cjsExports.BackoffTimeout = BackoffTimeout;
   BackoffTimeout.nextId = 0;
 });
-export { Ir };
+export { require_backoff_timeout };

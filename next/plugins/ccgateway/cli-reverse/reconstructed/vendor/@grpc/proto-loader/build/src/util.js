@@ -5,15 +5,15 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x, importMetaRequire as Be } from "../../../../../runtime/bun-runtime.js";
-import { qs } from "../../../../protobufjs/src/index.js";
-import { dh } from "../../../../protobufjs/google/protobuf/api.json.js";
-import { oo } from "../../../../protobufjs/google/protobuf/descriptor.json.js";
-import { hh } from "../../../../protobufjs/google/protobuf/source_context.json.js";
-import { fh } from "../../../../protobufjs/google/protobuf/type.json.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { require_protobufjs } from "../../../../protobufjs/src/index.js";
+import { require_api } from "../../../../protobufjs/google/protobuf/api.json.js";
+import { require_descriptor } from "../../../../protobufjs/google/protobuf/descriptor.json.js";
+import { require_source_context } from "../../../../protobufjs/google/protobuf/source_context.json.js";
+import { require_type_2 } from "../../../../protobufjs/google/protobuf/type.json.js";
 
 //@ chunk-pwh5dx3n.js:171114-172408 cjs-fingerprint
-var vh = x(function (cjsExports) {
+var require_util = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -21,9 +21,9 @@ var vh = x(function (cjsExports) {
     cjsExports.loadProtosWithOptionsSync =
     cjsExports.loadProtosWithOptions =
       undefined;
-  var fs = Be("fs");
-  var path = Be("path");
-  var Protobuf = qs();
+  var fs = importMetaRequire("fs");
+  var path = importMetaRequire("path");
+  var Protobuf = require_protobufjs();
   function addIncludePathResolver(root, includePaths) {
     let originalResolvePath = root.resolvePath;
     root.resolvePath = (origin, target) => {
@@ -67,10 +67,10 @@ var vh = x(function (cjsExports) {
   }
   cjsExports.loadProtosWithOptionsSync = loadProtosWithOptionsSync;
   function addCommonProtos() {
-    let apiDescriptor = dh();
-    let descriptorDescriptor = oo();
-    let sourceContextDescriptor = hh();
-    let typeDescriptor = fh();
+    let apiDescriptor = require_api();
+    let descriptorDescriptor = require_descriptor();
+    let sourceContextDescriptor = require_source_context();
+    let typeDescriptor = require_type_2();
     Protobuf.common("api", apiDescriptor.nested.google.nested.protobuf.nested);
     Protobuf.common("descriptor", descriptorDescriptor.nested.google.nested.protobuf.nested);
     Protobuf.common("source_context", sourceContextDescriptor.nested.google.nested.protobuf.nested);
@@ -78,4 +78,4 @@ var vh = x(function (cjsExports) {
   }
   cjsExports.addCommonProtos = addCommonProtos;
 });
-export { vh };
+export { require_util };

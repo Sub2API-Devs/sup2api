@@ -5,11 +5,11 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
-import { ue } from "./metadata.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_metadata } from "./metadata.js";
 
 //@ chunk-pwh5dx3n.js:55095-56650 cjs-fingerprint
-var vr = x(function (cjsExports) {
+var require_call_interface = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -17,7 +17,7 @@ var vr = x(function (cjsExports) {
   cjsExports.statusOrFromValue = statusOrFromValue;
   cjsExports.statusOrFromError = statusOrFromError;
   cjsExports.isInterceptingListener = isInterceptingListener;
-  var metadata_1 = ue();
+  var metadata_1 = require_metadata();
   function statusOrFromValue(value) {
     return {
       ok: true,
@@ -86,4 +86,4 @@ var vr = x(function (cjsExports) {
   }
   cjsExports.InterceptingListenerImpl = InterceptingListenerImpl;
 });
-export { vr };
+export { require_call_interface };
