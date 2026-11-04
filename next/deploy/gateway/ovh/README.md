@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-05 核心 **0.1.242**（`6fd65922c`，北京时间 02:55–02:59；核心 manifest `22eb790d…2c74`，计划 `356a1fef99235adadc1c7a46973e0c77` completed/13，55 秒，没有暂停；**无迁移**，schema 仍 `d522e9a7…14d3`；Host API 仍 9；内置插件与 0.1.241 相同，插件和外壳不变）：
+- 内容：控制台拆分“概览”和“使用记录”两个菜单，使用记录页显示六项统计，新增 `/usage/realtime`、`/me/usage/realtime`（CONTRACTS §66.7）；管理员统计接口加进程内缓存（§66.3）。
+- 核验：两节点 0.1.242，api.prophey.ai `/readyz` 200，发布后 5 分钟错误日志 0；新接口未登录回 401（不是 404），线上前端资源含新页面。页面没有在浏览器里看过，发布后的请求状态没有查库（设备权限检查拦下了生产只读查询）。
+- 回滚：没有迁移，可以回到 0.1.241。
+- 脚本 `stage/0.1.242/`；备份 `backups/core-0.1.242`。
+
 2026-11-04 核心 **0.1.241** + ccgateway **0.1.129**（`ed8f932a1`，北京时间 21:36–21:45；核心 manifest `7314f88d…8e39`，计划 `f51988f0431babf60c2d2617a94b4b2a` completed/13，没有暂停；迁移 0086，Host API 9；插件包 `804841ec…2fe2`，rollout 231，用户同意新增 `scheduler.rank` 权限）：
 - 内容：从开发分支发，一次带上 RPM/TPM 精确窗口与预占（`6d8ea676c`）、满并发排队（`6571924c1`）、重试规则的原账号重试开关（`8a34be86f`）、默认 429 重试规则（`e07d4b57b`），以及 [粘性、负载、套餐](../../../docs/audits/2026-11-04-sticky-load-tier.md)。
 - 只发核心和插件，67 个 `ccg-*` 容器没变。Worker 和 CLI 没有全量升级：`rate_limit_tier` 还没有值，未升级账号的计数回 503。#109 跑的是上一版 Worker。
