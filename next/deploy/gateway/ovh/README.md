@@ -4,6 +4,14 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-04 核心 **0.1.239**（`f71ee5f77`，北京时间 13:06–13:10；核心 manifest `588338a9…7d03`，计划 `0ca53a5ae0b5fc84f388702bd2f4c1e5` completed/13；**无迁移**，Host API 仍 9，内置插件与 0.1.238 相同）：
+- 内容：修复插件建 schema 的并发竞态。所有插件角色都被授权执行同一对核心函数（`plugin_migrations_applied`、`plugin_migration_record`），权限各在一行 `pg_proc` 里；`Ensure` 只按插件加锁，滚动升级时两个节点同时启动不同插件就会一起改这行，其中一个报 `GRANT … tuple concurrently updated`、拿不到 DSN 直到重试（0.1.237、0.1.238 发布时各出现一次）。现在先查角色是否已有权限（线上已有，不再写），需要授权时在一把全局 advisory 锁里再查再授；删除插件的 `DROP OWNED` 也拿这把锁。新测试 `TestEnsureConcurrentPlugins` 修前在本机复现了线上同样的错误。
+- 发布前：Linux 核心 53 个包全过。
+- **计划在第 7 步（admit）暂停**，原因是已知的暂时性 "waiting for fresh follower observations"（两节点都已停，入口 503）；05:09:55 UTC `sub2api-shell resume`，4 秒后 api.prophey.ai 恢复 200，05:10:21 计划 completed。**入口 503 约 3 分钟**（约 05:07–05:10 UTC，北京 13:07–13:10）。`upgrade_observe.py` 只在暂停时退出、不会自动 resume，下次发布要盯着这一步。
+- 核验：两节点 current 都是 `588338a9…`，`/readyz` 与 api.prophey.ai 200；**两节点发布后 ERROR/WARN 均为 0，没有再出现 `concurrently updated`**；8 个插件都 enabled，dynweight、moderation 任务继续成功。
+- 回滚：同 schema、同 Host API，可自动回滚到 0.1.238。
+- 脚本 `stage/0.1.239/`；备份 `backups/core-0.1.239`（`9b3acdaa…`）。
+
 2026-11-04 核心 **0.1.238**（`88ad5db99`，北京时间 12:46–12:48；核心 manifest `1c2b9328…81d8`，计划 `fbcd30d13abf124c7361a94feedde6e0` completed/13，61 秒，没有暂停；**无迁移**，schema 仍 `6100539c…`；Host API 仍 9，外壳不用换；内置插件与 0.1.237 相同）：
 - 起因：agent team 分析插件任务超时冲突（manifest 允许 24 小时、框架只跑 1 小时、核心悄悄截断）。结论：保留 1 小时上限（River 其实按任务超时延后救回，但发布、插件升级 20–30 秒就中断运行），长工作分段续跑。
 - 内容（CONTRACTS §77.8）：上传时检查任务上限（全集群 3600 秒、每节点 600 秒、间隔 ≥5 秒；已存版本不再检查，登记时截断）；内容相同的包重新上传跳过检查；`RunJobResponse.continue_after_ms` / SDK `JobResult.ContinueAfter` 与“已续跑”状态（算成功，`scheduled_tasks.last_status` 仍记 succeeded，无迁移）；插件 API 返回 `effective_schedule`/`effective_timeout_sec`/`adjusted`，“任务”页签显示实际超时并标“已按上限调整”；`plugin_job_runs` 卡住判定 25 小时 → 2 小时；文档改正。
