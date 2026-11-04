@@ -175,12 +175,18 @@ func classifyLocal(resp *pluginv1.ClassifyErrorResponse, headers map[string]stri
 // another account, the account stays usable for other models (model
 // availability holds that family back until the reset, availability.go); any
 // other limit, a scoped one without a reset time included, disables the
-// account until it resets.
+// account until it resets. An answer whose usage headers show the 5h and 7d
+// windows have room is not a used-up account: a short cooldown at most.
 //
 // Only an upstream HTTP answer names a limit: the Worker marks it
 // (requestfailure.SourceHTTP) and never relays a provider's x-ccgateway-*
 // headers (httpfacts.Apply), so a provider cannot claim the source.
 func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.ClassifyErrorRequest, source string, now time.Time, cooldown func(time.Duration, string)) {
+	if source == requestfailure.SourceHTTP && in.GetAccount().GetType() == AccountTypeManaged && sharedWindowsHaveRoom(in.GetHeaders()) {
+		until, _ := rateLimitReset(map[string]string{"retry-after": in.GetHeaders()["retry-after"]}, now)
+		cooldown(min(until.Sub(now), defaultRateLimitCooldown), "upstream 429 with room left in the 5h and 7d windows")
+		return
+	}
 	if source == requestfailure.SourceHTTP {
 		resp.Quota = rejectedQuota(in, now)
 	}
@@ -196,6 +202,24 @@ func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.Classi
 		resp.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE,
 			Reason: resp.Reason, Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: until.Unix()}}
 	}
+}
+
+// sharedWindowsHaveRoom reports that a 429's own usage headers show the account
+// is not out of quota: both shared windows carry a utilization below 1, neither
+// is rejected, and the claim names no model-scoped window (those have no usage
+// header here). Anything less certain goes the usual way. A reset time on such
+// an answer is not how long the account is limited.
+func sharedWindowsHaveRoom(h map[string]string) bool {
+	if scopedQuota(quotaClaimKey(h[claimHeader])) {
+		return false
+	}
+	for _, prefix := range unifiedWindowHeader {
+		ratio, err := strconv.ParseFloat(h[prefix+"-utilization"], 64)
+		if err != nil || !validUsage(ratio) || ratio >= 1 || strings.EqualFold(h[prefix+"-status"], "rejected") {
+			return false
+		}
+	}
+	return true
 }
 
 // The failure markers as the host passes headers (lowercase).

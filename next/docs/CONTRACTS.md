@@ -4800,6 +4800,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 实现：`gateway/dispatch.go` 的 `pluginAutoDisable`、`applyPluginAccountState`；`core.AccountDirectory.AutoDisableUntil`（`account/directory.go`，走 `ApplyAccountAutomaticState`）。
 - CCGateway 已经这样分类 429（`classifyRateLimit`：托管账号禁用到 `anthropic-ratelimit-unified-reset` / `retry-after` 给出的时刻，没有时 60 秒），插件不用改；只要升级核心。
 - CCGateway 0.1.127 起（2026-11-04）：上游 429 的消息含 `Usage credits are required for long context` 时不算账号限流，不冷却、不禁用，也不看响应头里的重置时刻；没有故障策略时直接返回客户端。发布了故障策略时，是否换号仍由策略决定。
+- 同样从 CCGateway 0.1.127 起：托管账号的上游 429 只有额度真满才自动禁用。判断依据是这次响应自带的用量头：`5h`、`7d` 的 utilization 都小于 1、都不是 `rejected`，且 `representative-claim` 没有指向模型专属窗口时，只冷却（`retry-after`，最长 60 秒），不禁用，也不把窗口记为 rejected，响应头里的 reset 不当作限流时长。缺任一窗口的 utilization 时按原逻辑处理。
 
 ## 70. CCGateway 用量改为读响应头：请求时懒刷新、手动才主动查询（2026-10-30，用户要求）
 

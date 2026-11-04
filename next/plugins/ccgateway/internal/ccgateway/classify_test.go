@@ -202,3 +202,77 @@ func TestLongContextCreditsRequiredLeavesAccountAlone(t *testing.T) {
 		})
 	}
 }
+
+// Only a window that is really full disables the account: a 429 whose own usage
+// headers show room gets a short cooldown, whatever reset times come with it.
+func TestRateLimitDisablesOnlyWhenWindowIsFull(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	p := &Plugin{now: func() time.Time { return now }}
+	reset := now.Add(3 * time.Hour)
+	far := strconv.FormatInt(now.Add(29*24*time.Hour).Unix(), 10)
+	usage := func(fiveHour, week string, extra map[string]string) map[string]string {
+		h := map[string]string{sourceHeader: "http",
+			"anthropic-ratelimit-unified-5h-utilization": fiveHour, "anthropic-ratelimit-unified-5h-status": "allowed",
+			"anthropic-ratelimit-unified-7d-utilization": week, "anthropic-ratelimit-unified-7d-status": "allowed",
+			"anthropic-ratelimit-unified-7d-reset": strconv.FormatInt(reset.Unix(), 10),
+			"anthropic-ratelimit-unified-5h-reset": strconv.FormatInt(reset.Unix(), 10),
+			claimResetHeader:                       strconv.FormatInt(reset.Unix(), 10)}
+		for k, v := range extra {
+			h[k] = v
+		}
+		return h
+	}
+	classify := func(h map[string]string) *pluginv1.ClassifyErrorResponse {
+		out, err := p.ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Account: &pluginv1.Account{Type: AccountTypeManaged}, Status: 429, Headers: h,
+			BodyPrefix: []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"some other refusal"}}`)})
+		require.NoError(t, err)
+		return out
+	}
+
+	for name, tc := range map[string]struct {
+		extra    map[string]string
+		cooldown time.Duration
+	}{
+		"plain":             {nil, defaultRateLimitCooldown},
+		"short retry after": {map[string]string{"retry-after": "5"}, 5 * time.Second},
+		"long retry after":  {map[string]string{"retry-after": "604800"}, defaultRateLimitCooldown},
+		"claim names 7d":    {map[string]string{claimHeader: "seven_day"}, defaultRateLimitCooldown},
+		"far unified reset": {map[string]string{"anthropic-ratelimit-unified-status": "rejected", claimResetHeader: far}, defaultRateLimitCooldown},
+		"overage rejected":  {map[string]string{"anthropic-ratelimit-unified-overage-status": "rejected", "anthropic-ratelimit-unified-overage-reset": far}, defaultRateLimitCooldown},
+	} {
+		t.Run("room/"+name, func(t *testing.T) {
+			out := classify(usage("0.07", "0.27", tc.extra))
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, out.GetAction())
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, out.GetAccountEffect())
+			require.Equal(t, now.Add(tc.cooldown).Unix(), out.GetCooldownUntilUnix())
+			require.Nil(t, out.GetAutomaticState())
+			require.Nil(t, out.GetQuota())
+		})
+	}
+
+	for name, h := range map[string]map[string]string{
+		"7d full":     usage("0.07", "1.0", map[string]string{claimHeader: "seven_day", "anthropic-ratelimit-unified-7d-status": "rejected"}),
+		"5h full":     usage("1.0", "0.27", map[string]string{claimHeader: "five_hour", "anthropic-ratelimit-unified-5h-status": "rejected"}),
+		"7d over":     usage("0.07", "1.03", nil),
+		"7d rejected": usage("0.07", "0.97", map[string]string{"anthropic-ratelimit-unified-7d-status": "rejected"}),
+		"no 7d usage": {sourceHeader: "http", "anthropic-ratelimit-unified-5h-utilization": "0.07", "retry-after": "10800"},
+		"no usage":    {sourceHeader: "http", "retry-after": "10800"},
+	} {
+		t.Run("disable/"+name, func(t *testing.T) {
+			out := classify(h)
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, out.GetAccountEffect())
+			require.Equal(t, reset.Unix(), out.GetAutomaticState().GetUntilUnix())
+		})
+	}
+
+	// A model-scoped limit is judged by its claim: the shared windows having
+	// room says nothing about it.
+	out := classify(usage("0.07", "0.27", map[string]string{claimHeader: "seven_day_overage_included"}))
+	require.Nil(t, out.GetAutomaticState())
+	require.Equal(t, "scoped quota rejected: 7d_fable", out.GetReason())
+
+	// Only an upstream answer counts: without the marker the usual path runs.
+	h := usage("0.07", "0.27", map[string]string{"retry-after": "10800"})
+	delete(h, sourceHeader)
+	require.Equal(t, reset.Unix(), classify(h).GetAutomaticState().GetUntilUnix())
+}
