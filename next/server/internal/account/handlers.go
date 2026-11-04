@@ -71,7 +71,7 @@ type row struct {
 	SubscriptionType *string
 	// RateLimitTier is the tier the runtime reported, as the upstream names it.
 	RateLimitTier *string
-	AutoModels       *bool
+	AutoModels    *bool
 	// AutoDisabledSource says who wrote an automatic disable (0070):
 	// usageLimitSource or '' (plugins and failure policies).
 	AutoDisabledSource string
