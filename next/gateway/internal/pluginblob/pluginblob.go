@@ -16,7 +16,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/gateway/internal/peer"
 )
 
 // DefaultMaxBytes matches the core's plugin package limit: the ccgateway
@@ -35,10 +39,18 @@ func validSum(s string) bool {
 	return true
 }
 
+// DefaultMaxTotalBytes bounds the whole store unless configured: a node
+// may upload packages before any row references them, and GC only reclaims
+// unreferenced ones after a grace period, so the directory needs a ceiling.
+const DefaultMaxTotalBytes = 16 << 30
+
 // Store is a content-addressed directory.
 type Store struct {
-	Dir      string
-	MaxBytes int64
+	Dir           string
+	MaxBytes      int64
+	MaxTotalBytes int64
+
+	writes sync.Mutex // serializes the used-space check with the write
 }
 
 func (s *Store) path(sum string) string { return filepath.Join(s.Dir, sum[:2], sum) }
@@ -49,6 +61,36 @@ func (s *Store) max() int64 {
 	}
 	return DefaultMaxBytes
 }
+func (s *Store) maxTotal() int64 {
+	if s.MaxTotalBytes > 0 {
+		return s.MaxTotalBytes
+	}
+	return DefaultMaxTotalBytes
+}
+
+// used sums the stored packages and the temporary files of writes in flight.
+func (s *Store) used() (int64, error) {
+	var total int64
+	err := filepath.WalkDir(s.Dir, func(_ string, d os.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if info, err := d.Info(); err == nil {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total, err
+}
+
+// ErrStoreFull reports that a write would exceed the store's total size.
+var ErrStoreFull = errors.New("plugin package store is full")
 
 // Has reports whether the package is stored.
 func (s *Store) Has(sum string) bool {
@@ -65,18 +107,45 @@ func (s *Store) Write(sum string, r io.Reader) error {
 		return fmt.Errorf("invalid package digest")
 	}
 	file := s.path(sum)
+	if _, err := os.Stat(file); err == nil {
+		// Already stored under its digest: nothing to write, no space needed.
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 		return err
 	}
+	// The space check and the reservation of a temporary file happen under
+	// one lock; the copy itself runs concurrently with other writes, each
+	// bounded by the room it was granted.
+	s.writes.Lock()
+	used, err := s.used()
+	if err != nil {
+		s.writes.Unlock()
+		return err
+	}
+	room := s.maxTotal() - used
+	if room <= 0 {
+		s.writes.Unlock()
+		return ErrStoreFull
+	}
 	tmp, err := os.CreateTemp(filepath.Dir(file), ".write-")
+	s.writes.Unlock()
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name())
+	limit := s.max()
+	if room < limit {
+		limit = room
+	}
 	h := sha256.New()
-	n, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(r, s.max()+1))
-	if err == nil && n > s.max() {
-		err = fmt.Errorf("package exceeds %d bytes", s.max())
+	n, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(r, limit+1))
+	if err == nil && n > limit {
+		if limit < s.max() {
+			err = ErrStoreFull
+		} else {
+			err = fmt.Errorf("package exceeds %d bytes", s.max())
+		}
 	}
 	if err == nil && hex.EncodeToString(h.Sum(nil)) != sum {
 		err = errors.New("package digest mismatch")
@@ -135,16 +204,23 @@ func (s *Store) GC(referenced map[string]bool, grace time.Duration) (int, error)
 	return removed, err
 }
 
+// uploadsPerNode bounds concurrent peer uploads from one node; uploads
+// beyond it wait on the sender. Local core uploads are not limited.
+const uploadsPerNode = 2
+
 // Service answers the local core and, on the primary, the other nodes.
 type Service struct {
 	Store *Store
+	// uploading counts the peer uploads in flight per source node.
+	uploading sync.Map // node id -> *int32
 	// Primary reports whether this node is the primary and the primary's
 	// HTTPS peer origin.
 	Primary func(context.Context) (self bool, peerURL string, err error)
 	// NodesWithPackage returns the other enabled nodes that may hold the
 	// package digest; each is asked in turn and one without it answers 404.
 	NodesWithPackage func(context.Context, string) ([]NodeRef, error)
-	// Client is the authenticated node client; it only reaches the primary.
+	// Client is the authenticated node client; it may reach any enabled
+	// node (uploads go to the primary, fetches to whichever node holds it).
 	Client *http.Client
 }
 
@@ -197,8 +273,9 @@ func (s *Service) Local() http.Handler {
 	})
 }
 
-// Peer serves the primary's private endpoint /internal/plugin-blobs/<sha256>
-// after node authentication and authorization.
+// Peer serves the private endpoint /internal/plugin-blobs/<sha256> after
+// node authentication and authorization (the primary for uploads, any
+// enabled node for reads).
 func (s *Service) Peer() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sum, ok := sumFrom(r.URL.Path, "/internal/plugin-blobs/")
@@ -210,8 +287,28 @@ func (s *Service) Peer() http.Handler {
 		case http.MethodGet, http.MethodHead:
 			s.Store.serve(w, r, sum)
 		case http.MethodPut:
+			id, ok := peer.FromContext(r.Context())
+			if !ok {
+				peer.Failure(w, 401)
+				return
+			}
+			if r.ContentLength < 0 || r.ContentLength > s.Store.max() {
+				http.Error(w, "upload must declare a Content-Length within the package limit", http.StatusRequestEntityTooLarge)
+				return
+			}
+			release, ok := s.admitUpload(id.NodeID)
+			if !ok {
+				w.Header().Set("Retry-After", "5")
+				http.Error(w, "too many concurrent uploads from this node", http.StatusTooManyRequests)
+				return
+			}
+			defer release()
 			if err := s.Store.Write(sum, r.Body); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
+				status := http.StatusBadRequest
+				if errors.Is(err, ErrStoreFull) {
+					status = http.StatusInsufficientStorage
+				}
+				http.Error(w, err.Error(), status)
 				return
 			}
 			w.WriteHeader(http.StatusNoContent)
@@ -219,6 +316,17 @@ func (s *Service) Peer() http.Handler {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})
+}
+
+// admitUpload reserves one of node's concurrent upload slots.
+func (s *Service) admitUpload(node string) (release func(), ok bool) {
+	v, _ := s.uploading.LoadOrStore(node, new(int32))
+	n := v.(*int32)
+	if atomic.AddInt32(n, 1) > uploadsPerNode {
+		atomic.AddInt32(n, -1)
+		return nil, false
+	}
+	return func() { atomic.AddInt32(n, -1) }, true
 }
 
 var errNotFound = errors.New("package not found on the primary")

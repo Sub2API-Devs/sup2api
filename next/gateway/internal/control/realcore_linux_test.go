@@ -352,7 +352,7 @@ func TestRealCoreRollingUpgrade(t *testing.T) {
 		id := n.engine.Node.ID
 		redisKey := "s2a:peer:{" + dbname + "}:node:" + id
 		var before struct {
-			Key string `json:"auth_key"`
+			Key string `json:"auth_key_sha256"`
 		}
 		raw, e := rdb.Get(ctx, redisKey).Bytes()
 		if e != nil || json.Unmarshal(raw, &before) != nil {
@@ -366,7 +366,7 @@ func TestRealCoreRollingUpgrade(t *testing.T) {
 			t.Fatal(e)
 		}
 		var after struct {
-			Key  string `json:"auth_key"`
+			Key  string `json:"auth_key_sha256"`
 			Boot string `json:"shell_boot_id"`
 		}
 		for {

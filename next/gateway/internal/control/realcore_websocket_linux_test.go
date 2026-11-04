@@ -90,7 +90,7 @@ func TestRealCoreShellsCarryWebSocketsAcrossNodes(t *testing.T) {
 			return ""
 		}
 		var r struct {
-			Key string `json:"auth_key"`
+			Key string `json:"auth_key_sha256"`
 		}
 		_ = json.Unmarshal(raw, &r)
 		return r.Key

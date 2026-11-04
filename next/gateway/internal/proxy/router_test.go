@@ -559,3 +559,50 @@ func TestBusinessAuthFailuresPassButNodeFailuresBecome503(t *testing.T) {
 		}
 	}
 }
+
+func TestPrivateBoundsForwardedClientHeaders(t *testing.T) {
+	var seen http.Header
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { seen = r.Header.Clone(); w.WriteHeader(204) }))
+	defer up.Close()
+	_, b := testPeers(t)
+	r := New(Config{})
+	r.SetRoute(Route{Mode: "local-serving", LocalURL: up.URL, CoreBootID: "boot", Revision: 7})
+	handler := b.Middleware(r.Private())
+	send := func(set func(http.Header)) http.Header {
+		q := httptest.NewRequest("GET", "https://private/internal/forward/v1/videos", nil)
+		q.RemoteAddr = "10.9.8.7:4321"
+		q.Header.Set(peer.NodeHeader, "a")
+		q.Header.Set(peer.BootHeader, "a-boot")
+		q.Header.Set(peer.KeyHeader, strings.Repeat("a", 32))
+		q.Header.Set(hopHeader, "1")
+		q.Header.Set(revisionHeader, "7")
+		q.Header.Set(bootHeader, "boot")
+		set(q.Header)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, q)
+		if w.Code != 204 {
+			t.Fatalf("forward refused: %d", w.Code)
+		}
+		return seen
+	}
+	// A well-formed ingress is passed on unchanged.
+	h := send(func(h http.Header) { h.Set("X-Forwarded-For", "192.0.2.1"); h.Set("X-Forwarded-Proto", "https") })
+	if h.Get("X-Forwarded-For") != "192.0.2.1" || h.Get("X-Forwarded-Proto") != "https" {
+		t.Fatalf("ingress headers altered: %v", h)
+	}
+	// Lists, garbage, duplicates and side channels fall back to the observed peer.
+	h = send(func(h http.Header) {
+		h.Set("X-Forwarded-For", "203.0.113.5, 192.0.2.1")
+		h.Set("X-Forwarded-Proto", "gopher")
+		h.Set("X-Real-IP", "203.0.113.9")
+		h.Set("Forwarded", "for=203.0.113.9")
+		h.Set("X-Forwarded-Host", "evil.example")
+	})
+	if h.Get("X-Forwarded-For") != "10.9.8.7" || h.Get("X-Forwarded-Proto") != "https" || h.Get("X-Real-IP") != "" || h.Get("Forwarded") != "" || h.Get("X-Forwarded-Host") == "evil.example" {
+		t.Fatalf("spoofed headers reached the core: %v", h)
+	}
+	h = send(func(h http.Header) { h.Add("X-Forwarded-For", "192.0.2.1"); h.Add("X-Forwarded-For", "192.0.2.2") })
+	if h.Get("X-Forwarded-For") != "10.9.8.7" {
+		t.Fatalf("duplicate X-Forwarded-For accepted: %v", h)
+	}
+}

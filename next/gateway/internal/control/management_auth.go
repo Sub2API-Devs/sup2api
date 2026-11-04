@@ -24,6 +24,12 @@ import (
 // The shell writes the token to a mode-0600 file before it starts a core and
 // passes the core only the file's path (SUB2API_UPDATER_TOKEN_FILE). Local
 // operator commands read the same file.
+//
+// A mode-0600 file does not hide the token from a same-UID plugin by itself:
+// that separation comes from the plugin sandbox's Landlock rules, which deny
+// plugins the shell's state directory. The gateway therefore turns Landlock
+// on for the core it supervises (config.coreEnvironment) unless the operator
+// explicitly disables it.
 const managementTokenBytes = 32
 
 // NewManagementToken returns a fresh random management token.

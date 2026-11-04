@@ -47,6 +47,34 @@ func TestConfigPropagatesResolvedClusterStoresToCore(t *testing.T) {
 	if len(got.CoreEnv) != 3 {
 		t.Fatal("coreEnvironment mutated config slice")
 	}
+	if runtime.GOOS == "linux" {
+		if effective[pluginLandlockEnv] != "true" {
+			t.Fatalf("plugin Landlock is not on by default: %+v", effective)
+		}
+		got.PluginLandlockDisabled = true
+		if _, set := envMap(got.coreEnvironment())[pluginLandlockEnv]; set {
+			t.Fatal("plugin_landlock_disabled did not remove the default")
+		}
+		got.PluginLandlockDisabled = false
+		t.Setenv(pluginLandlockEnv, "false")
+		if _, set := envMap(got.coreEnvironment())[pluginLandlockEnv]; set {
+			t.Fatal("a value in the gateway's environment (inherited by the core) was overridden")
+		}
+		os.Unsetenv(pluginLandlockEnv)
+		got.CoreEnv = append(got.CoreEnv, pluginLandlockEnv+"=false")
+		if envMap(got.coreEnvironment())[pluginLandlockEnv] != "false" {
+			t.Fatal("an explicit core_env value was overridden")
+		}
+	}
+}
+
+func envMap(env []string) map[string]string {
+	out := map[string]string{}
+	for _, entry := range env {
+		key, value, _ := strings.Cut(entry, "=")
+		out[key] = value
+	}
+	return out
 }
 
 func TestPeerAuthKeySources(t *testing.T) {

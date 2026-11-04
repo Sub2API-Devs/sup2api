@@ -247,6 +247,7 @@ func (r *Router) Private() http.Handler {
 		q.Header.Del(bootHeader)
 		q.Header.Del(revisionHeader)
 		q.Header.Del(entryNodeHeader)
+		sanitizeForwarded(q)
 		r.serve(w, q, v.LocalURL, false, "")
 	})
 }
@@ -314,6 +315,28 @@ func (r *Router) serve(w http.ResponseWriter, q *http.Request, target string, re
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 	}}
 	p.ServeHTTP(w, q)
+}
+// sanitizeForwarded bounds what an authenticated node may tell the core about
+// the original client. The core trusts this gateway as its proxy, so the
+// forwarded headers must be exactly what the public ingress would have
+// produced: one X-Forwarded-For holding a single IP address and one
+// X-Forwarded-Proto of http or https. Anything else is replaced by the
+// connection actually observed, never passed through.
+func sanitizeForwarded(q *http.Request) {
+	for _, k := range []string{"Forwarded", "X-Forwarded-Host", "X-Real-IP"} {
+		q.Header.Del(k)
+	}
+	ip := net.ParseIP(strings.TrimSpace(q.Header.Get("X-Forwarded-For")))
+	if ip == nil || len(q.Header.Values("X-Forwarded-For")) != 1 {
+		q.Header.Set("X-Forwarded-For", directPeer(q))
+	} else {
+		q.Header.Set("X-Forwarded-For", ip.String())
+	}
+	proto := strings.ToLower(strings.TrimSpace(q.Header.Get("X-Forwarded-Proto")))
+	if len(q.Header.Values("X-Forwarded-Proto")) != 1 || (proto != "http" && proto != "https") {
+		proto = "https" // every private hop arrives over the peer TLS listener
+	}
+	q.Header.Set("X-Forwarded-Proto", proto)
 }
 func scrub(h http.Header) {
 	for k := range h {

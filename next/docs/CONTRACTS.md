@@ -2344,7 +2344,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 依据 [多节点同步规约](MULTINODE-SYNC-PROTOCOL.md)；验收与未覆盖范围见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)。四个协议号互相独立：gateway/core 控制协议 2（`runtime-contract.Protocol`）、业务集群协议 1、任务协议 1、Host API 5；SDK `protocol.HostAPIVersion` 必须等于 `runtime-contract.HostAPIVersion`，有测试约束。
 
-**节点身份。** 每节点一份可复用密钥：配置 `peer_auth_key`，或非空的 `SUB2API_PEER_AUTH_KEY` 覆盖它（空值视为未设置）；都没有时用 32 字节随机值。Redis 键 `s2a:peer:{cluster}:node:<node>` 保存 cluster/node/gateway boot/peer 协议/密钥/启用状态，TTL 30 秒、每 10 秒用 Lua 比较后续期，续期不换密钥、不能创建缺失键。登记缺失时所属网关在登记锁内复核 PG（启用、当前 boot、无其他活实例）后重建：配置模式复用原值，自动模式生成新值；不重启核心、不清除 PG 就绪。网关启动时登记失败不退出，保持维护态并重试。密钥不进入核心及插件环境，也不发往发布源。
+**节点身份。** 每节点一份可复用密钥：配置 `peer_auth_key`，或非空的 `SUB2API_PEER_AUTH_KEY` 覆盖它（空值视为未设置）；都没有时用 32 字节随机值。Redis 键 `s2a:peer:{cluster}:node:<node>` 保存 cluster/node/gateway boot/peer 协议/密钥的 SHA-256（`auth_key_sha256`，peer 协议 2，2026-11-05 起；密钥原文只在所属网关内存与配置中，读 Redis 不能冒充节点）/启用状态，TTL 30 秒、每 10 秒用 Lua 比较后续期，续期不换密钥、不能创建缺失键。登记缺失时所属网关在登记锁内复核 PG（启用、当前 boot、无其他活实例）后重建：配置模式复用原值，自动模式生成新值；不重启核心、不清除 PG 就绪。网关启动时登记失败不退出，保持维护态并重试。密钥不进入核心及插件环境，也不发往发布源。
 
 **节点请求。** 发送端只带自身 `X-Sub2api-Peer-Node/Boot/Key`，业务 `Authorization` 原样保留。接收端先认证（头数量/长度/格式、Redis 当前登记、常量时间比较、PG 当前 boot），再按方向、范围和批准制品授权：仅从节点→主节点转发，制品只限基线与活动计划。内部错误 401（来源登记或 boot 无效）、403（操作不允许）、409（目标 boot/路由变化）、503（无法验证或维护），带 `X-Sub2api-Peer-Error`，源网关统一映射为公网 503；核心自身的 401/403 原样返回，核心伪造的保留头被清除。转发保留原始路径与 query，不跟随重定向，业务请求不重放。
 

@@ -1,12 +1,18 @@
 // Package peer authenticates trusted cluster nodes with Redis-authoritative,
 // reusable per-node keys. It does not replay business requests or consume keys.
+//
+// Redis holds only the SHA-256 of each node's key (protocol 2). A reader of
+// the cache can therefore verify a node but cannot impersonate it; the key
+// itself lives only in its owner's memory and configuration.
 package peer
 
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -18,7 +24,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const Protocol = 1
+const Protocol = 2
 const NodeHeader = "X-Sub2api-Peer-Node"
 const BootHeader = "X-Sub2api-Peer-Boot"
 const KeyHeader = "X-Sub2api-Peer-Key"
@@ -43,8 +49,9 @@ type record struct {
 	Node     string `json:"node_id"`
 	Boot     string `json:"shell_boot_id"`
 	Protocol int    `json:"peer_protocol"`
-	Key      string `json:"auth_key"`
-	Enabled  bool   `json:"enabled"`
+	// KeyHash is hex(sha256(key)); the key itself is never stored.
+	KeyHash string `json:"auth_key_sha256"`
+	Enabled bool   `json:"enabled"`
 }
 type Manager struct {
 	config Config
@@ -62,6 +69,20 @@ func ValidID(s string) bool {
 		}
 	}
 	return true
+}
+// KeyHash is the Redis representation of a key.
+func KeyHash(key string) string { h := sha256.Sum256([]byte(key)); return hex.EncodeToString(h[:]) }
+func validHash(s string) bool {
+	if len(s) != 2*sha256.Size {
+		return false
+	}
+	_, err := hex.DecodeString(s)
+	return err == nil
+}
+
+// keyMatches compares a presented key with a stored hash in constant time.
+func keyMatches(hash, key string) bool {
+	return subtle.ConstantTimeCompare([]byte(hash), []byte(KeyHash(key))) == 1
 }
 func ValidateKey(s string) error {
 	if len(s) < 32 || len(s) > 512 {
@@ -115,7 +136,7 @@ func (m *Manager) redisKey(node string) string {
 	return "s2a:peer:{" + m.config.Cluster + "}:node:" + node
 }
 func (m *Manager) local(key string) record {
-	return record{m.config.Cluster, m.config.NodeID, m.config.BootID, Protocol, key, true}
+	return record{m.config.Cluster, m.config.NodeID, m.config.BootID, Protocol, KeyHash(key), true}
 }
 func randomKey() (string, error) {
 	b := make([]byte, 32)
@@ -158,7 +179,7 @@ func (m *Manager) Maintain(ctx context.Context) error {
 			if json.Unmarshal(value, &old) != nil || old.Cluster != m.config.Cluster || old.Node != m.config.NodeID || old.Boot != m.config.BootID || old.Protocol != Protocol || !old.Enabled {
 				return ErrConflict
 			}
-			if m.key == "" || subtle.ConstantTimeCompare([]byte(old.Key), []byte(m.key)) != 1 {
+			if m.key == "" || !keyMatches(old.KeyHash, m.key) {
 				return ErrConflict
 			}
 			if err = m.config.Validate(ctx, m.Identity()); err != nil {
@@ -210,7 +231,7 @@ func (m *Manager) read(ctx context.Context, node string) (record, error) {
 	if err != nil {
 		return r, ErrUnavailable
 	}
-	if json.Unmarshal(b, &r) != nil || r.Cluster != m.config.Cluster || r.Node != node || r.Protocol != Protocol || !r.Enabled || !ValidID(r.Boot) || ValidateKey(r.Key) != nil {
+	if json.Unmarshal(b, &r) != nil || r.Cluster != m.config.Cluster || r.Node != node || r.Protocol != Protocol || !r.Enabled || !ValidID(r.Boot) || !validHash(r.KeyHash) {
 		return r, ErrUnauthorized
 	}
 	return r, nil
@@ -226,7 +247,7 @@ func (m *Manager) credentials(ctx context.Context) (Identity, string, error) {
 	if err != nil {
 		return Identity{}, "", err
 	}
-	if r.Boot != m.config.BootID || subtle.ConstantTimeCompare([]byte(r.Key), []byte(key)) != 1 {
+	if r.Boot != m.config.BootID || !keyMatches(r.KeyHash, key) {
 		return Identity{}, "", ErrUnauthorized
 	}
 	id := m.Identity()
@@ -261,6 +282,11 @@ func (m *Manager) Revoke(ctx context.Context, node string) error {
 
 type identityContextKey struct{}
 
+// WithIdentity marks ctx as authenticated as id. Middleware does this for
+// the private listener; tests of handlers behind it use it directly.
+func WithIdentity(ctx context.Context, id Identity) context.Context {
+	return context.WithValue(ctx, identityContextKey{}, id)
+}
 func FromContext(ctx context.Context) (Identity, bool) {
 	v, ok := ctx.Value(identityContextKey{}).(Identity)
 	return v, ok
@@ -303,7 +329,7 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 			Failure(w, ErrorStatus(err))
 			return
 		}
-		if r.Boot != boot || subtle.ConstantTimeCompare([]byte(r.Key), []byte(key)) != 1 {
+		if r.Boot != boot || !keyMatches(r.KeyHash, key) {
 			Failure(w, 401)
 			return
 		}
@@ -316,7 +342,7 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 			Failure(w, ErrorStatus(err))
 			return
 		}
-		q = q.Clone(context.WithValue(q.Context(), identityContextKey{}, id))
+		q = q.Clone(WithIdentity(q.Context(), id))
 		Strip(q.Header)
 		next.ServeHTTP(w, q)
 	})

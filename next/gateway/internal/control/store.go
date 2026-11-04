@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -36,6 +37,7 @@ type Store struct {
 	Redis             redis.UniversalClient
 	RevokePeer        func(context.Context, string) error
 	nodeDirectory     atomic.Pointer[[]Node]
+	validNodes        sync.Map // node\x00boot -> time.Time until which the identity is known valid
 }
 
 // EnsureSchema installs or extends the shell schema. Shells starting together
@@ -812,16 +814,39 @@ func (s *Store) WithRegistration(ctx context.Context, node string, fn func(conte
 	}
 	return nil
 }
+// validateNodeCacheTTL bounds how long a positive ValidateNode answer is
+// reused. The private listener asks twice per request (source and self);
+// without the cache an unauthenticated flood turns into PG load. Every
+// authorized operation still reads the node row afresh (AuthorizePeer), so a
+// disabled node is refused there at once; only the identity check lags.
+const validateNodeCacheTTL = 2 * time.Second
+
 func (s *Store) ValidateNode(ctx context.Context, node, boot string) error {
+	cacheKey := node + "\x00" + boot
+	if until, ok := s.validNodes.Load(cacheKey); ok && time.Now().Before(until.(time.Time)) {
+		return nil
+	}
 	var ok bool
 	err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2 AND shell_boot_id=$3 AND enabled AND peer_protocol=$4 AND strategy=$5)`, s.Cluster, node, boot, PeerProtocol, PrimaryFirst).Scan(&ok)
 	if err != nil {
 		return err
 	}
 	if !ok {
+		s.validNodes.Delete(cacheKey)
 		return errors.New("node boot is disabled or not registered")
 	}
+	s.validNodes.Store(cacheKey, time.Now().Add(validateNodeCacheTTL))
 	return nil
+}
+
+// forgetNode drops cached identity answers of node on this gateway.
+func (s *Store) forgetNode(node string) {
+	s.validNodes.Range(func(k, _ any) bool {
+		if key, _ := k.(string); strings.HasPrefix(key, node+"\x00") {
+			s.validNodes.Delete(k)
+		}
+		return true
+	})
 }
 func (s *Store) DisableNode(ctx context.Context, node string) error {
 	return s.WithRegistration(ctx, node, func(ctx context.Context) error {
@@ -832,6 +857,7 @@ func (s *Store) DisableNode(ctx context.Context, node string) error {
 		if tag.RowsAffected() != 1 {
 			return pgx.ErrNoRows
 		}
+		s.forgetNode(node)
 		s.NotifyUpgrade(ctx)
 		if _, err = s.DB.Exec(ctx, `UPDATE updater.node_admissions SET serve_http=false,claim_background=false,coordinate_plugins=false,revision=revision+1 WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node); err != nil {
 			return err
@@ -871,6 +897,20 @@ func (s *Store) AuthorizePeer(ctx context.Context, source, boot, target, scope, 
 		// serves them locally and never forwards them again.
 		return nil
 	}
+	if enabled && source != target && scope == "plugin-artifact" {
+		// A package a node lacks may be read from any enabled node that holds
+		// it, the old primary after a primary change among them. Packages are
+		// digest-addressed and verified by the reader; only referenced ones
+		// are served.
+		referenced, err := s.packageReferenced(ctx, digest)
+		if err != nil {
+			return peer.ErrUnavailable
+		}
+		if !referenced {
+			return fmt.Errorf("%w: plugin package is not referenced by any version", peer.ErrForbidden)
+		}
+		return nil
+	}
 	if !enabled || target != primary || source == primary {
 		return fmt.Errorf("%w: peer direction is not permitted", peer.ErrForbidden)
 	}
@@ -880,16 +920,8 @@ func (s *Store) AuthorizePeer(ctx context.Context, source, boot, target, scope, 
 	switch scope {
 	case "plugin-upload":
 		// A follower's core stores an upload on the primary before any row
-		// names it; size and digest are checked while writing.
-		return nil
-	case "plugin-artifact":
-		referenced, err := s.packageReferenced(ctx, digest)
-		if err != nil {
-			return peer.ErrUnavailable
-		}
-		if !referenced {
-			return fmt.Errorf("%w: plugin package is not referenced by any version", peer.ErrForbidden)
-		}
+		// names it; size, digest, per-node concurrency and the store's total
+		// size are checked while writing.
 		return nil
 	}
 	if scope != "core-artifact" {
@@ -944,6 +976,28 @@ func (s *Store) AuthorizeTarget(ctx context.Context, self string, u *url.URL, of
 	for _, n := range nodes {
 		target, err := url.Parse(n.PeerURL)
 		if err == nil && n.Enabled && n.ID != self && target.Scheme == u.Scheme && target.Host == u.Host && (n.ID == primary || (offloading && n.Mode == "local")) {
+			return nil
+		}
+	}
+	return peer.ErrForbidden
+}
+
+// AuthorizeAnyNodeTarget lets self send its node key to any other enabled
+// node of the cluster. Only the plugin package client uses it: a package is
+// fetched from whichever node holds it (AuthorizePeer's plugin-artifact rule
+// is the receiving side).
+func (s *Store) AuthorizeAnyNodeTarget(ctx context.Context, self string, u *url.URL) error {
+	nodes := s.NodeDirectory()
+	if nodes == nil {
+		var err error
+		nodes, err = s.Nodes(ctx)
+		if err != nil {
+			return peer.ErrUnavailable
+		}
+	}
+	for _, n := range nodes {
+		target, err := url.Parse(n.PeerURL)
+		if err == nil && n.Enabled && n.ID != self && target.Scheme == u.Scheme && target.Host == u.Host {
 			return nil
 		}
 	}

@@ -49,7 +49,9 @@ sh deploy/gateway/package-release.sh ./stage ./publish ./keys/release.key releas
 - `peer_url` 必须能被另一节点访问，服务器证书DNS SAN必须包含相应主机名并允许ServerAuth。客户端验证CA及主机名，不再要求客户端证书或`allowed_peers`列表。
 - `peer_auth_key` 留空时自动生成节点密钥；也可在配置中指定至少32字节的独立随机密钥。非空的`SUB2API_PEER_AUTH_KEY`环境变量覆盖配置文件，空值视为未设置；Compose分别使用`NODE_A_PEER_AUTH_KEY`与`NODE_B_PEER_AUTH_KEY`，不要给两个节点填写同一个密钥。
 - 心跳只续期Redis登记，不更换密钥。登记丢失时自动模式生成新值，配置模式登记原值，其他节点直接读取新登记。普通缓存过期不重启核心；Redis不可用时拒绝新的节点间请求，已通过鉴权的流式请求按原有生命周期收尾。登记失败（节点被停用、同 ID 实例仍在线或 Redis 不可用）时网关不退出，保持维护态并持续重试。
-- `plugin_max_bytes`（可选，默认 1 GiB；ccgateway 插件包内含运行环境镜像，见 CONTRACTS §53.10）限制网关保存的单个插件包。插件包保存在状态卷的 `plugin-blobs/`，主节点保存全部非市场插件包，从节点只缓存自己拉取过的包。
+- `plugin_max_bytes`（可选，默认 1 GiB；ccgateway 插件包内含运行环境镜像，见 CONTRACTS §53.10）限制网关保存的单个插件包；`plugin_store_max_bytes`（可选，默认 16 GiB）限制整个 `plugin-blobs/` 目录，满了以后上传返回 507，直到 GC 清掉未引用的包。插件包保存在状态卷的 `plugin-blobs/`，主节点保存全部非市场插件包，从节点只缓存自己拉取过的包；节点间上传必须声明 `Content-Length`，每个来源节点最多 2 个并发上传。
+- Redis 登记只保存节点密钥的 SHA-256（peer 协议 2，2026-11-05 起）。更换网关版本时集群内所有网关必须一起换，期间不要创建核心升级计划；旧网关与新网关互不接受。`REDIS_URL` 走 TCP 时必须带密码，否则网关拒绝启动（`allow_unauthenticated_redis: true` 仅供隔离测试）。
+- 网关默认为其核心设置 `SUB2API_PLUGIN_LANDLOCK=true`（Linux）：管理 socket 令牌文件对同 UID 的插件没有隔离作用，隔离来自 Landlock。`core_env` 里显式给出的值优先；`plugin_landlock_disabled: true` 关闭默认值。
 - `release_origin` 下载使用系统根证书及 `ca.crt`，可用公开证书；内容由发布签名和摘要约束，节点密钥不会发往发布源。
 - `trusted_proxies` 默认为空；若前置 TLS 终止代理，填入其实际连接源 CIDR，代理须覆盖客户端带来的转发头。仅这些直接代理的单值 `http` / `https` 协议头可信。
 - 每节点的 `certs/<node>/` 放置 `node.crt`、`node.key` 和 `ca.crt`，权限须允许容器 UID 1000 读取。不要挂载 CA 私钥。
