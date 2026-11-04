@@ -23,7 +23,7 @@ name: CCGateway images
 
 on:
   push:
-    branches: [main, feat/next-platform]
+    branches: [main, develop]
     paths:
       - 'next/plugins/ccgateway/companions/**'
       - 'next/plugins/ccgateway/manifest.json'
