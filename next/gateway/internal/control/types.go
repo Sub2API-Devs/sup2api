@@ -118,7 +118,9 @@ type LockRunner interface {
 }
 
 const PrimaryFirst = "primary-first-v1"
-const PeerProtocol = 1
+// PeerProtocol 2: Redis registrations carry the SHA-256 of the node key
+// (peer.Protocol); every gateway of a cluster must agree.
+const PeerProtocol = 2
 
 // Steps are interpreted only for the persisted strategy. Never reinterpret a
 // pre-existing rolling plan's cursor using this stop-the-cluster algorithm.

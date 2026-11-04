@@ -2,6 +2,7 @@ package peer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -189,5 +190,56 @@ func TestPeerTransportDoesNotLeakOrFollowRedirect(t *testing.T) {
 	q.URL.Host = "evil.invalid"
 	if _, e = client.Do(q); e == nil || calls != 1 {
 		t.Fatal("key leaked to unregistered target")
+	}
+}
+
+func TestRedisHoldsOnlyKeyHashes(t *testing.T) {
+	_, r, create := setup(t)
+	ctx := context.Background()
+	m := create("a", "boot", "")
+	if e := m.Maintain(ctx); e != nil {
+		t.Fatal(e)
+	}
+	raw, e := r.Get(ctx, m.redisKey("a")).Bytes()
+	if e != nil {
+		t.Fatal(e)
+	}
+	var stored map[string]any
+	if e = json.Unmarshal(raw, &stored); e != nil {
+		t.Fatal(e)
+	}
+	if _, leaked := stored["auth_key"]; leaked || strings.Contains(string(raw), m.key) {
+		t.Fatal("registration carries the key itself")
+	}
+	if stored["auth_key_sha256"] != KeyHash(m.key) || stored["peer_protocol"] != float64(Protocol) {
+		t.Fatalf("unexpected registration %s", raw)
+	}
+	// A reader of the cache knows the hash; presenting it is not authentication.
+	h := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) { t.Error("hash accepted as key") }))
+	for _, key := range []string{KeyHash(m.key), strings.Repeat("x", 32)} {
+		q := httptest.NewRequest("GET", "https://node/", nil)
+		q.Header.Set(NodeHeader, "a")
+		q.Header.Set(BootHeader, "boot")
+		q.Header.Set(KeyHeader, key)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, q)
+		if w.Code != 401 {
+			t.Fatalf("%q accepted: %d", key, w.Code)
+		}
+	}
+	// An older registration that still carries a plaintext key (protocol 1)
+	// is not accepted.
+	old, _ := json.Marshal(map[string]any{"cluster_id": "cluster", "node_id": "b", "shell_boot_id": "boot", "peer_protocol": 1, "auth_key": strings.Repeat("b", 32), "enabled": true})
+	if e = r.Set(ctx, m.redisKey("b"), old, time.Minute).Err(); e != nil {
+		t.Fatal(e)
+	}
+	q := httptest.NewRequest("GET", "https://node/", nil)
+	q.Header.Set(NodeHeader, "b")
+	q.Header.Set(BootHeader, "boot")
+	q.Header.Set(KeyHeader, strings.Repeat("b", 32))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, q)
+	if w.Code != 401 {
+		t.Fatalf("protocol 1 registration accepted: %d", w.Code)
 	}
 }

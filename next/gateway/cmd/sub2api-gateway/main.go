@@ -75,6 +75,17 @@ type config struct {
 	// Authorization header. Only for migrating from a core release that does
 	// not send the token yet; a wrong token is rejected either way.
 	AllowTokenlessManagement bool `json:"allow_tokenless_management"`
+	// PluginStoreMaxBytes bounds the total size of stored plugin packages
+	// (default 16 GiB); uploads beyond it are refused until GC frees space.
+	PluginStoreMaxBytes int64 `json:"plugin_store_max_bytes"`
+	// PluginLandlockDisabled keeps the gateway from turning the plugin
+	// sandbox's Landlock rules on for its core. Without Landlock a plugin of
+	// the same UID can read the management token and the node state.
+	PluginLandlockDisabled bool `json:"plugin_landlock_disabled"`
+	// AllowUnauthenticatedRedis accepts a REDIS_URL without a password over
+	// TCP. Every reader of that cache can verify node identities and alter
+	// locks and registrations, so this is for isolated test setups only.
+	AllowUnauthenticatedRedis bool `json:"allow_unauthenticated_redis"`
 }
 
 func main() {
@@ -432,9 +443,12 @@ func (s *serveSet) build(ctx context.Context) error {
 	}
 	s.cleanup(func() { _ = redisClient.Close() })
 	if opt := redisClient.Options(); opt.Password == "" && opt.Network != "unix" {
-		// Plugins reach the cluster network; a cache without a password
-		// lets them read and write every node's keys, locks and peer keys.
-		slog.Warn("REDIS_URL has no password; enable requirepass on the cache and put the password in the URL")
+		// Every process on the cluster network that reaches an open cache
+		// can rewrite node registrations, locks and upgrade state.
+		if !c.AllowUnauthenticatedRedis {
+			return errors.New("REDIS_URL has no password; enable requirepass on the cache and put the password in the URL (or set allow_unauthenticated_redis for an isolated test setup)")
+		}
+		slog.Warn("REDIS_URL has no password and allow_unauthenticated_redis is set")
 	}
 	boot := make([]byte, 16)
 	if _, err = rand.Read(boot); err != nil {
@@ -536,7 +550,12 @@ func (s *serveSet) buildRuntime(ctx context.Context, peerManager *peer.Manager, 
 	}
 	rt.Peer = peerManager
 	rt.PeerArtifactClient = peer.NewClient(peerTransport, 30*time.Minute)
-	pluginBlobs := control.PluginBlobs(s.store, c.NodeID, c.Root, rt.PeerArtifactClient, c.PluginMaxBytes)
+	// Package fetches may reach any enabled node (the old primary after a
+	// primary change among them); only that client is authorized this way.
+	packageClient := peer.NewClient(peerManager.WrapTransport(proxy.PeerTransport(s.clientTLS), func(ctx context.Context, u *url.URL) error {
+		return s.store.AuthorizeAnyNodeTarget(ctx, c.NodeID, u)
+	}), 30*time.Minute)
+	pluginBlobs := control.PluginBlobs(s.store, c.NodeID, c.Root, packageClient, c.PluginMaxBytes, c.PluginStoreMaxBytes)
 	s.pluginBlobs = pluginBlobs
 	rt.PluginBlobs = pluginBlobs.Peer()
 	go control.CollectPluginBlobs(ctx, s.store, pluginBlobs, 10*time.Minute)
@@ -756,9 +775,30 @@ func readConfig(path string) (config, error) {
 // The supervised core must use this gateway's approved cluster stores. Append
 // these last so neither inherited process variables nor core_env can silently
 // point the child at a different database or lock namespace.
+//
+// On Linux the plugin sandbox's Landlock rules are turned on as well: they
+// are what keeps a plugin of the same UID away from the management token and
+// the node state. A value the operator set explicitly wins: in core_env, in
+// the gateway's own environment (the core inherits it), or by
+// plugin_landlock_disabled.
 func (c config) coreEnvironment() []string {
 	env := append([]string(nil), c.CoreEnv...)
+	_, inherited := os.LookupEnv(pluginLandlockEnv)
+	if runtime.GOOS == "linux" && !c.PluginLandlockDisabled && !inherited && !hasEnv(env, pluginLandlockEnv) {
+		env = append(env, pluginLandlockEnv+"=true")
+	}
 	return append(env, "DATABASE_URL="+c.DatabaseURL, "REDIS_URL="+c.RedisURL)
+}
+
+const pluginLandlockEnv = "SUB2API_PLUGIN_LANDLOCK"
+
+func hasEnv(env []string, key string) bool {
+	for _, kv := range env {
+		if k, _, _ := strings.Cut(kv, "="); k == key {
+			return true
+		}
+	}
+	return false
 }
 func importRelease(ctx context.Context, c config, m *release.Manager, raw string) (control.Release, error) {
 	var out control.Release

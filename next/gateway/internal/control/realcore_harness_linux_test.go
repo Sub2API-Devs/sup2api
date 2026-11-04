@@ -399,7 +399,7 @@ func (c *realCluster) startShell(id string) *realNode {
 	})
 	rt.Peer = pm
 	rt.PeerArtifactClient = peer.NewClient(peerTransport, time.Minute)
-	blobs := PluginBlobs(store, id, root, rt.PeerArtifactClient, 0)
+	blobs := PluginBlobs(store, id, root, rt.PeerArtifactClient, 0, 0)
 	rt.PluginBlobs = blobs.Peer()
 	// The core reaches its plugin packages through this socket, as under
 	// sub2api-gateway serve, with a per-boot token. Cores built before the

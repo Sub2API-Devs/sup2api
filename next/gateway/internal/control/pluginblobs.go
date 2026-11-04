@@ -12,10 +12,11 @@ import (
 )
 
 // PluginBlobs builds the plugin package service of node. Packages live under
-// root/plugin-blobs; client is the authenticated node client.
-func PluginBlobs(store *Store, node, root string, client *http.Client, maxBytes int64) *pluginblob.Service {
+// root/plugin-blobs; client is the authenticated node client that may reach
+// any enabled node (package fetches fall back to the other nodes).
+func PluginBlobs(store *Store, node, root string, client *http.Client, maxBytes, maxTotalBytes int64) *pluginblob.Service {
 	return &pluginblob.Service{
-		Store:  &pluginblob.Store{Dir: filepath.Join(root, "plugin-blobs"), MaxBytes: maxBytes},
+		Store:  &pluginblob.Store{Dir: filepath.Join(root, "plugin-blobs"), MaxBytes: maxBytes, MaxTotalBytes: maxTotalBytes},
 		Client: client,
 		Primary: func(ctx context.Context) (bool, string, error) {
 			return store.PrimaryPeer(ctx, node)
