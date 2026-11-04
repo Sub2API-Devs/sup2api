@@ -125,7 +125,7 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
    - 把消息队列里可折叠的 poll 事件、队列命令吸收进本轮（`absorbQueuedPollEvents` `#Rc`、`createFoldCommandFilter` `#wc`、`isCommandFoldable` `#dy`），产出 `command_lifecycle started`。
 3. **钩子已要求停止 / 宿主要求后台化**：返回 `hook_stopped` / `background_requested`。
 4. **消息预处理**
-   - 产出 `{type:"stream_request_start"}`。
+   - 产出 `type: "stream_request_start"` 事件。
    - `queryTracking = {chainId, depth+1, roundStartedAtMs}`。
    - `messagesForQuery` 先经 `transcriptTap.withArrivedRows`，再经 `utils/toolResultStorage.ts · applyToolResultBudget`（`chunk-jcnpfn31.js#eii`，大工具结果落盘，见第 11 节）。
 5. **模型决定**
@@ -177,7 +177,7 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
     - 循环唤醒（ScheduleWakeup 的 loop）单工具时也直接结束。
     - 之后跑 PostToolBatch 钩子，生成本轮附件（`getAttachments`，见第 11 节），MCP 工具中途刷新。
     - 到达 `maxTurns` 时产出 `max_turns_reached` 并返回 `max_turns`。
-    - 否则写入下一轮状态：`transition:{reason:"next_turn"}`，`messages = [...messagesForQuery, ...assistantMessages, ...toolResults]`，返回 NEXT_ROUND。
+    - 否则写入下一轮状态：`transition` 的 `reason: "next_turn"`，`messages = [...messagesForQuery, ...assistantMessages, ...toolResults]`，返回 NEXT_ROUND。
 
 终止原因（`reason`）全集：
 
@@ -259,7 +259,7 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
    - `thinking`：
      - 模型支持 adaptive 时为 `{type:"adaptive", display}`；
      - 否则 `{type:"enabled", budget_tokens: clamp(1024, max_tokens-1), display}`；
-     - 第一方且显式关闭时为 `{type:"disabled"}`，多余键由 `sanitizeDisabledThinking`（`#rSr`）去掉。
+     - 第一方且显式关闭时为 `type: "disabled"`，多余键由 `sanitizeDisabledThinking`（`#rSr`）去掉。
      - display 由会话设置与 highlights/updates 逻辑决定。
      - thinking-binding-controls 开启时附 `block_binding`。
    - thinking 开启时，`tool_choice: {type:"tool"}` 降为 auto；thinking 机械关闭且模型限制时 effort 被钳制。
@@ -448,7 +448,7 @@ queryModel 在每个响应结束时调用 `addToTotalSessionCost(cost, usage, mo
 ### 6. 未解之处
 
 - `chunk-e6aww6q8.js#e_n` 内 thinking-binding-controls 的 `ute()`（`chunk-w7m8zp6e.js#ute`）在第三方形状下为何为假只读到一半（与 OAuth/自定义 base URL 有关）。
-- `chunk-hwmsct5x.js#rh`（权限上下文头值，`eh()` 门控）具体写哪个头（`Lo()` 返回的头名）未展开。
+- `chunk-hwmsct5x.js#rh`（权限上下文头值，`isWigglyDoveHeaderEnabled()` 门控）具体写哪个头（`wigglyDoveHeaderName()` 返回的头名）未展开。
 - `chunk-tyg7f3ek.js#nI`（headless 引擎主体，约 35 KB）未归属、未命名。
 - `chunk-g54kbxqw.js#jpi` 后半段（磁盘基线比对）细节未逐行核对。
 
@@ -510,11 +510,11 @@ queryModel 在每个响应结束时调用 `addToTotalSessionCost(cost, usage, mo
 | 请求 | 触发 | 标签 / 机制 |
 |---|---|---|
 | 1 | 原样 | — |
-| 2 | `i1`：去掉 `thinking-token-count-2026-05-13` beta | `retry:thinking-token-count-unclaimed` |
-| 3 | `_Le`：去掉 `thinking.display` | `retry:thinking-display-unclaimed:<字段>`（此处为 withoutField） |
-| 4 | `Tae`：本次请求声明了延迟工具 → 抛 `ToolSearchRefusedError`（`#Yte`）；外层 `queryModelWithToolSearchRecovery` 以 `toolSearchRefusal` 重新调用一次 `queryModel`（去掉 `advanced-tool-use` beta，延迟工具全部内联，并加一条 critical_system_reminder）。新的 `queryModel` 调用重新构建 beta 列表，所以 thinking-token-count 又回来了 | 异常而非标签 |
-| 5 | 新调用里的 `i1` | `retry:thinking-token-count-unclaimed` |
-| 6 | 新调用里的 `_Le` | `retry:thinking-display-unclaimed:<字段>`（同上） |
+| 2 | `probeThinkingTokenCount`：去掉 `thinking-token-count-2026-05-13` beta | `retry:thinking-token-count-unclaimed` |
+| 3 | `probeThinkingDisplay`：去掉 `thinking.display` | `retry:thinking-display-unclaimed:<字段>`（此处为 withoutField） |
+| 4 | `maybeRefuseToolSearchFinal` → `refuseToolSearch`（`ToolSearchRefusedError` 的携带者）：本次请求声明了延迟工具、前面所有恢复都没接管 → 抛 `ToolSearchRefusedError`（`#Yte`）；外层 `queryModelWithToolSearchRecovery` 以 `toolSearchRefusal` 重新调用一次 `queryModel`（去掉 `advanced-tool-use` beta，延迟工具全部内联，并加一条 critical_system_reminder）。新的 `queryModel` 调用重新构建 beta 列表，所以 thinking-token-count 又回来了 | 异常而非标签 |
+| 5 | 新调用里的 `probeThinkingTokenCount` | `retry:thinking-token-count-unclaimed` |
+| 6 | 新调用里的 `probeThinkingDisplay` | `retry:thinking-display-unclaimed:<字段>`（同上） |
 
 第 6 次后所有识别器都返回空，`shouldRetry(400)` 为假 → `CannotRetryError` → `getAssistantMessageFromError` 生成 `API Error: 400 …` 文本。`-p` 模式把它写到 stdout 并退出 1。
 
@@ -628,7 +628,7 @@ ClaudeAILimits = { status: "allowed"|"allowed_warning"|"rejected", resetsAt?, un
 旧版 `getSystemPrompt` 是一个函数直接拼数组；316 改成"提示词组合器"三步，入口是 `constants/prompts.ts · getSystemPrompt`（`chunk-e6aww6q8.js#KI`，旧版名在 316 里落在了 `#Aur` 上，见 notes）。
 
 1. `constants/prompts.ts · getSystemPrompt(tools, model, options)`（`#KI`）
-   调 `composeSections(factsFn, renderFn)`（`WI.composeSections`，`chunk-e6aww6q8.js#RZn`），再 `orderPromptSections(sections, 动态分界标记)`（`chunk-e6aww6q8.js#J7n`）：先放所有 `scope === "shared"` 段，然后（全局缓存可用 `shouldUseGlobalCacheScope()` 时）插入 `__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__`（`chunk-dcmhvw5a.js` 导出 `h$`），再放 `scope:"session"` 段；最后每段过一次提示词消融替换 `y0e`。返回字符串数组。
+   调 `composeSections(factsFn, renderFn)`（插件槽 `promptComposeSlot.composeSections`，`chunk-e6aww6q8.js#RZn`），再 `orderPromptSections(sections, 动态分界标记)`（`chunk-e6aww6q8.js#J7n`）：先放所有 `scope === "shared"` 段，然后（全局缓存可用 `shouldUseGlobalCacheScope()` 时）插入 `__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__`（`chunk-dcmhvw5a.js` 导出 `h$`），再放 `scope:"session"` 段；最后每段过一次提示词消融替换 `y0e`。返回字符串数组。
 2. `computePromptFacts`（`#gan`）→ `buildPromptFacts`（`#a7e`）：事实 = `{model, promptModel, tools[名字], outputStyle{name,isKeepingCodingInstructions}, traits[]}`，traits ∈ `bare / lean / sdk-preset(excludeDynamicSections) / teammate / analysis / print / skills / send-user-message`。
 3. `composeSessionSystemPrompt`（`#kan`）
    - `decideSystemPromptSections`（`#Cur`）：`CLAUDE_CODE_SIMPLE` 时只产出 `bare` 段（`CWD: … Date: …`）。否则对每个会话段调用 `decideSection`（`#dh`）：段 key（如 `communication:<L>:send_user_msg`：communication 段在需要时加 `:send_user_msg` 后缀）在会话记录（`bootstrap promptAssembly`）里已有就回放（`replayRecordedSection` `#_an`），否则算决策、渲染并记录（`recordSectionAnswer` `#San`）。这保证同一会话里各段文本稳定、缓存不断。
@@ -674,7 +674,7 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
    - `CLAUDE_CODE_ATTRIBUTION_HEADER` 为假值时返回空串（除非 `ignoreEnvOptOut` 且第一方直连）。旧版还看 GrowthBook `tengu_attribution_header`，316 只看环境变量。
 5. `utils/api.ts · splitSysPromptPrefix`（`chunk-w5ndchqs.js#s2o`）切块并定 cacheScope：
    - 计费头块：`cacheScope:null`；身份行块：全局缓存模式下 `null`，否则 `"org"`；`# Reporting outcomes` 块（`akn`）单列 `null`；
-   - 全局缓存（`shouldUseGlobalCacheScope()`：第一方或 anthropicAws、开关 `nb()`、OAuth `Oi()`）且找到分界标记：分界前的静态部分 `cacheScope:"global"`，分界后动态部分 `"org"`（或静态被再切分时 `null`）；
+   - 全局缓存（`shouldUseGlobalCacheScope()`：`canSendFirstPartyBetas()`、`isFirstPartyAnthropicBaseUrl()`，且提供商为 firstParty 或 anthropicAws）且找到分界标记：分界前的静态部分 `cacheScope:"global"`，分界后动态部分 `"org"`（或静态被再切分时 `null`）；
    - 其他情况：其余文本合成一块 `"org"`。
    这对应实测：第三方 3 块（计费头、身份行带 cache_control、主提示词），第一方 4 块（计费头、身份行无 cache_control、静态 1,229 字 `scope: global`、动态 4,432 字）。
 6. `services/api/claude.ts · buildSystemPromptBlocks`（`#ZSr`）把块转成 `{type:"text", text, cache_control?}`，`scope:"global"` 时 `cache_control` 带 `scope`。
@@ -769,20 +769,20 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
 2. `promoteAndFilterThinking`（`#c8e`）：字符串 assistant 内容提升为文本块（记 `tengu_assistant_string_content_promoted`），反复过滤“只有思考”的孤立 assistant 与空白 assistant 直至稳定；`zvt` 再做一次 user 内容修整。
 3. 计算剥离计划：`thinkingStripPlan` = 传入计划 ∪ `thinking_stripped` 附件（`collectThinkingStripPlan`），`advisorStrippedIds` = 传入 ∪ 最后一个 `advisor_stripped` 附件之前的 id。
 4. `systemTurnsOn = rne(model)`：模型支持中途 system 消息（catalog 能力 `mid_conversation_system`；`CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM` 强开；HIPAA 下关闭；由 `utils/betas.ts · computeMidConvSystemSupport`（`chunk-aepeg2w5.js#d$`） 判定）。Sonnet 5（`shouldKeepMidConvSystemReminderTags`，`chunk-aepeg2w5.js#Cmr`）另有特殊处理（system 文本不再包 `<system-reminder>`）。
-5. `reorderAttachmentsForAPI`（`#bxs`）：附件上移到最近的 assistant 或 tool_result 之后；`vvt` 再按工具可见性重排。
+5. `reorderAttachmentsForAPI`（`#bxs`）：附件上移到最近的 assistant 或 tool_result 之后；`foldNotificationsIntoPoll` 再把排队通知折进轮询事件（只在有 Poll 工具且轮询事件折叠开启时）。
 6. 媒体错误自愈：扫描 API 错误消息（`errorDetails` 里的图片/文档错误），给之前的 user/附件消息标记要剥离的媒体类型（`stripTargets`）。
 7. 主循环 `for (message of orderedMessages)`：
    - `progress`、可忽略的 system（`F_`：非 local_command 的 system、虚拟、合成 API 错误等）→ 跳过；
    - `system/local_command` → 转成 user 消息，与前一条 user 合并；
    - `user` → 处理任务投递（taskDelivery）、task-notification 格式化、空内容丢弃、媒体剥离，然后 `mergeUserMessages` 合并到前一条 user；
    - `assistant` → 只保留 `web_search_result_location` 引用、同 `message.id` 的片段合并（`mergeAssistantMessagesById`）、按需移动 tool_use（`moveToolUsesToEnd`）；
-   - `attachment` → `D6n/Kbe`：**316 的附件优先用写入时预渲染好的 `rendered` 文本**（带 `renderedRole: user|system`），没有时才调用 `normalizeAttachmentForAPI`（`#ogt`）。得到的消息：
+   - `attachment` → `attachmentMessagesWithAnswer` 与 `attachmentToMessages`（`chunk-e6aww6q8.js#D6n` / `#Kbe`）：**316 的附件优先用写入时预渲染好的 `rendered` 文本**（带 `renderedRole: user|system`），没有时才调用 `normalizeAttachmentForAPI`（`#ogt`）。得到的消息：
      - `systemTurnsOn` 且该附件应提升为 system（`renderedRole==="system"` 或已知类型且不是 nested_memory/relevant_memories 等）→ 文本收集到 `fo`，在下一条非附件消息前由 `fs()` 生成一条 **`api_system` 消息**（`jde("")`，记录 `foldedAttachmentTypes`、工具增删 `toolAdditions/toolRemovals`）；这就是实测请求里第二条 `role:"system"` 的消息（环境块、延迟工具列表、代理类型、技能列表、日期）。
      - 否则包成 `<system-reminder>` 的 isMeta user 消息，合并进前一条 user（`mergeUserMessageWithReminders`：reminder 文本并入 tool_result，tool_result 置前）。
      - 角色与记录不符时记 `tengu_attachment_role_unknown_or_differs`。
 8. 收尾管道：`removeEmptyTextBlocksBetweenThinking`（`#DPs`）→ `filterOrphanedThinkingOnlyMessages`（`#B6n`）→ 必要时 `mergeAdjacentUserMessages` → `filterTrailingThinkingFromLastAssistant`（`#N6n`，最后一条 assistant 不能以思考结尾；`preserveTrailingThinking` 时保留，用于续写未完成思考）→ `filterWhitespaceOnlyAssistantMessages`（`#$6n`）→ `ensureNonEmptyAssistantContent`（`#LPs`）。
 9. `systemTurnsOn` 时合并相邻 `api_system`（`mergeAdjacentApiSystemMessages`，`#qxs`）；否则 reminderFold 开启时做数组级 smoosh（`countToolCallsSince`，`chunk-e6aww6q8.js#k6n`；该名是旧版匹配名，与行为不符）。
-10. 可选 `echoApiBlockOrder` 按原始块顺序重排；按计划剥离思考（`stripThinkingFromMessages`）与 advisor 块（`stripAdvisorBlocks`）；`Exs` 清理；`Uri` 校验工具引用；`tvt` 最后修整。
+10. 可选 `echoApiBlockOrder` 按原始块顺序重排；按计划剥离思考（`stripThinkingFromMessages`）与 advisor 块（`stripAdvisorBlocks`）；`sanitizeErrorToolResultContent`（`chunk-e6aww6q8.js#Exs`）清理；`dropRedundantEmptyPolls`（`chunk-e6aww6q8.js#tvt`）去掉冗余空 Poll；最后由 `services/tools/batchTools.js · countToolCallsSince`（`chunk-a76knw89.js#Uri`）把拆开的 batch 调用结果重新组合回单个 tool_result。
 
 `ensureToolResultPairing`（`#R_n`，在 `normalizeMessagesForRequest` 中调用）：删除会话恢复后孤立的 tool_result（首条时换成 `[Orphaned tool result removed due to conversation resume]`）、重复的 tool_use 与无结果的 server/mcp tool_use（夹在思考块间时换 `[Tool use removed]`，全删时 `[Tool use interrupted]`），为缺结果的 tool_use 补 `SYNTHETIC_TOOL_RESULT_PLACEHOLDER`；修复时记 `tengu_tool_result_pairing_repaired`。
 
@@ -913,7 +913,7 @@ queryLoop / processUserInputBase
 | peer_mentions → peer_mention | `getPeerMentionAttachments` `#_Pr` | 人工输入且有同伴会话 |
 | queued_commands → poll_events + queued_command | `getQueuedCommandAttachments` `#KKe`、`buildPollEventsAttachment` `#Wxr` | 消息队列里 mode 为 prompt/task-notification 的命令 |
 | sandbox_instructions | `getSandboxInstructionsAttachments`（`chunk-e6aww6q8.js#Kmn`） | 有沙箱 Bash 类工具 |
-| artifact_opening_prefetch | `prefetchArtifactOpening`（`chunk-e6aww6q8.js#rPr`） | 开关 `VCn()`，主线程首轮 |
+| artifact_opening_prefetch | `prefetchArtifactOpening`（`chunk-e6aww6q8.js#rPr`） | 开关 `shouldPrefetchArtifactOpening()`，主线程首轮 |
 | environment / model / session_settings | `detectEnvironmentDirectoryChange`（`#XCn`）/ `getRuntimeModelSwitchAnnouncements` / `getOutputStyleAndLanguageAttachments`（`#ZCn`） | 环境、运行时模型切换、会话设置（语言、输出风格）变化公告 |
 | ultrathink_effort | `#iPr` | 输入含 ultrathink 且开关开 |
 | deferred_tools_delta | `getDeferredToolsDeltaAttachments` `#TJn` | 工具搜索可用；延迟工具出现/撤回；`tengu_composed_treehouse` 加 deniedLead |
@@ -931,7 +931,7 @@ queryLoop / processUserInputBase
 | auto_mode / auto_mode_exit | `#tPr` / `#nPr` | auto 或 bypassPermissions 模式；`tengu_vivid_crown` |
 | todo_reminders → todo_reminder 或 task_reminder | `#FPr` / `#HPr` | 距上次 TodoWrite（或任务工具）与上次提醒都 ≥10 轮；`CLAUDE_CODE_TODO_REMINDER_MODE`、`tengu_soft_slate_nudge` |
 | tool_search_usage_reminder | `#UPr` | 实验配置 `Nas()` 非空，每 N 轮 |
-| teammate_mailbox / team_context | `#zPr`（316 恒为空） / `getTeamContextAttachment` `#qPr` | 代理团队模式 `Ko()` |
+| teammate_mailbox / team_context | `#zPr`（316 恒为空） / `getTeamContextAttachment` `#qPr` | 代理团队模式 `isAgentSwarmsEnabled()` |
 | agent_pending_messages → queued_command | `getAgentPendingMessageAttachments` `#zxr` | 子代理的待处理消息 |
 | critical_system_reminder | `#bCn` | `criticalSystemReminder_EXPERIMENTAL` |
 | spawned_loop_memory_withdrawal | `withdrawCoworkMemoryContext`（`chunk-s61vbvea.js#mVo`） | 子代理工具步骤后撤回协作记忆 |
@@ -989,7 +989,7 @@ queryLoop / processUserInputBase
 
 聚合预算：
 1. `query.ts · queryLoop` 每轮调用 `applyToolResultBudget`（`#eii`）→ `enforceToolResultBudget`（`#ae`）。
-2. 按"一次助手回答后的一组工具结果"分组（`#H`）。每组上限 200,000 字符（`qhr`，常量在 `chunk-yxnffbzs.js#Bge`）。
+2. 按"一次助手回答后的一组工具结果"分组（`#H`）。每组上限 200,000 字符（`MAX_RESULT_BYTES` = 200000，在 `RESULT_LIMITS` 语句内 `chunk-yxnffbzs.js#Bge`）。
 3. 候选按替换状态分三类（`#re`）：mustReapply（已替换，原样重放）、frozen（已见过，不再动）、fresh（新的）。
 4. 超预算时从 fresh 里按大小降序落盘（`#oe`、`#ie`）。
 5. 所有见过的 id 进 `seenIds`。一旦决定就不再改变，保证后续请求前缀字节稳定（提示词缓存）。
@@ -1126,7 +1126,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 
 调用链：`query.ts · queryLoop`（`chunk-ha3km179.js#xc`）→ `deps.autocompact`（`query/deps.ts · productionDeps` 把它绑定到 `yzr`，`chunk-e6aww6q8.js#yzr`）→ `services/compact/autoCompact.ts · shouldAutoCompact`（`#npr`）→ `calculateTokenWarningState`（`#pse`）。
 
-1. **自动压缩是否开启**：`isAutoCompactDisabledByEnv`（`chunk-9m4wzd68.js#o`，旧版名 isAutoCompactEnabled 语义相反）读 `DISABLE_COMPACT`/`DISABLE_AUTO_COMPACT`；`kf()`（同 chunk，未归属）= 未被 env 禁用 且 设置 `autoCompactEnabled`（默认 true）。
+1. **自动压缩是否开启**：`isAutoCompactDisabledByEnv`（`chunk-9m4wzd68.js#o`，旧版名 isAutoCompactEnabled 语义相反）读 `DISABLE_COMPACT`/`DISABLE_AUTO_COMPACT`；`isAutoCompactEnabled`（`chunk-9m4wzd68.js#kf`）= 未被 env 禁用 且 设置 `autoCompactEnabled`（默认 true）。
 2. **自动压缩窗口** `getAutoCompactWindow`（`#BS`，旧版 getEffectiveContextWindowSize）返回 `{window, configured, source}`，优先级：
    - 设置里嵌套的 `{ceiling, inner}` 取上限；
    - `CLAUDE_CODE_AUTO_COMPACT_WINDOW`（source=`env`）；
@@ -1142,7 +1142,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 6. **预计算压缩**：`isAtPrecomputeThreshold`（`#gQt`）用 `阈值 − 窗口×缓冲比例`；比例 `getPrecomputeBufferFraction`（`#w6o`）来自 GrowthBook `tengu_amber_moleskin`（按窗口大小、repl/sdk 区分的表）或 `tengu_amber_rokovoko`（默认 0.2）。queryLoop 在 `shouldArmPrecompute(...)`（`#Ojo`）为真时调 `armPrecomputedCompact`/`latchArmGate`（`#bzr`/`#_zr`）后台预先生成摘要（压缩前一轮就开始），真正压缩时 `runIdleCompaction` / `triggerReactiveCompact`（`#apr`/`#dJn`）直接换上（`precomputed_compact_swap`）。
 7. **是否压缩** `shouldAutoCompact`（`#npr`）：querySource 为 `compact` 或特定辅助来源、窗口已被 `usesLongContextWindow`（`chunk-e6aww6q8.js#F8n`）判为无需本地压缩、自动压缩关闭时为 false；token = `Tp` 估算（最近 usage + 之后消息粗估）− snip 节省 + 服务端已清理量；等级为 compact/blocked 即压缩。远程 fork 达到阈值但未达“无 PCT 覆盖阈值”时可跳过（`tengu_fork_early_compact`）。
 8. **熔断**：
-   - 快速回填：`checkRapidRefillBreaker`（`#ajr`）——压缩后不到 `RAPID_REFILL_TURN_WINDOW`=3 轮又需压缩，连续 3 次即 `trip` → autocompact 返回 `rapid_refill_breaker_tripped`，queryLoop 产出 `autocompact_thrashing` 错误并以 `{reason:"rapid_refill_breaker"}` 结束。
+   - 快速回填：`checkRapidRefillBreaker`（`#ajr`）——压缩后不到 `RAPID_REFILL_TURN_WINDOW`=3 轮又需压缩，连续 3 次即 `trip` → autocompact 返回 `rapid_refill_breaker_tripped`，queryLoop 产出 `autocompact_thrashing` 错误并以 `reason: "rapid_refill_breaker"` 结束。
    - 连续失败：`hzr`=3 次失败后返回 `failure_breaker_open`（同旧版 MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES）。
 
 #### autocompact 结果类型（`yzr` 返回，queryLoop 消费）
@@ -1321,7 +1321,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
    - 其余（Foundry 等）→ 默认 Sonnet。
    - 托管 `availableModels`+`enforceAvailableModels` 可把默认改到被允许的模型（`om()`）。
 4. `parseUserSpecifiedModel`（`#Ut`，写作时称 resolveModelSetting）→ `resolveModelAliasSetting`（`#fG`，写作时称 parseUserSpecifiedModel）：
-   - 别名：`opus`→`getDefaultOpusModel()`（`ANTHROPIC_DEFAULT_OPUS_MODEL` > settings 档位覆盖 > catalog 默认），`sonnet`/`opusplan`→`getDefaultSonnetModel`，`haiku`→默认 Haiku（`TD`），`fable`→默认 Fable（`getDefaultFableModel`，`chunk-aepeg2w5.js#E6e`），`best`→`NK()`（catalog `best: "fable"` 可用则 Fable，否则 Opus）；`[1m]` 后缀保留。
+   - 别名：`opus`→`getDefaultOpusModel()`（`ANTHROPIC_DEFAULT_OPUS_MODEL` > settings 档位覆盖 > catalog 默认），`sonnet`/`opusplan`→`getDefaultSonnetModel`，`haiku`→默认 Haiku（`TD`），`fable`→默认 Fable（`getDefaultFableModel`，`chunk-aepeg2w5.js#E6e`），`best`→`getDefaultMainLoopModelSetting_2()`（catalog `best: "fable"` 可用则 Fable，否则 Opus）；`[1m]` 后缀保留。
    - 旧 Opus（`claude-opus-4-0/4-1` 及带日期 id，`LEGACY_OPUS_FIRSTPARTY`）在第一方类提供商上自动换成默认 Opus，`CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP=1` 关闭。
 5. plan 模式：`getRuntimeMainLoopModel()`/`resolveRuntimeMainLoopModel()`（`chunk-aepeg2w5.js#by`、`chunk-aepeg2w5.js#u8t`）对 `opusplan`/`haiku` 设置做 plan 时升级（Opus/Sonnet），受白名单时降档并告警。
 6. 主循环每轮 `queryLoop` 里再经 fallback 链、拒答回退、额度同意等改写（见 query 手册）。
@@ -1443,7 +1443,7 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 
 ### 6. 未解之处
 
-- `Z_`、`tne`、`Fw`、`rm`、`om`、`ro`、`by`/`u8t`、`aS`、`gcr`、`_y` 等核心判定写作时在 `_unattributed` 的 `chunk-aepeg2w5`、`chunk-kswt4qha` 中，未纳入本领域命名（应归 `utils/model/model.ts`、`utils/effort.ts`、`utils/fastMode.ts`）；place-rest 后已落位并命名为 `getUserSpecifiedModelSetting`、`resolveDefaultMainLoopModelSetting`、`resolvePlanModeModel`、`envDefaultModel`、`resolveAvailableModels`、`isModelAllowed`、`getRuntimeMainLoopModel`/`resolveRuntimeMainLoopModel`、`resolveEffortValue`、`getDefaultEffortForModel`、`supportsFastMode`（分布在 `utils/model/` 多个文件与 `utils/effort.ts`、`utils/fastMode.ts`）。
+- `Z_`、`tne`、`Fw`、`rm`、`om`、`ro`、`by`（即 `resolveRuntimeMainLoopModel`，`chunk-aepeg2w5.js#u8t`）、`aS`、`gcr`、`_y` 等核心判定写作时在 `_unattributed` 的 `chunk-aepeg2w5`、`chunk-kswt4qha` 中，未纳入本领域命名（应归 `utils/model/model.ts`、`utils/effort.ts`、`utils/fastMode.ts`）；place-rest 后已落位并命名为 `getUserSpecifiedModelSetting`、`resolveDefaultMainLoopModelSetting`、`resolvePlanModeModel`、`envDefaultModel`、`resolveAvailableModels`、`isModelAllowed`、`getRuntimeMainLoopModel`/`resolveRuntimeMainLoopModel`（）、`resolveEffortValue`、`getDefaultEffortForModel`、`supportsFastMode`（分布在 `utils/model/` 多个文件与 `utils/effort.ts`、`utils/fastMode.ts`）。
 - 服务端模型目录（served catalog，`activeServedCatalog()`（`chunk-aepeg2w5.js#uR`）/`Xn()`）与 `modelKnowledge` 回调的完整语义未追完（`chunk-aepeg2w5.js:462260-462820`，`utils/model/modelDisplay.ts`）。
 - `chunk-e6aww6q8.js#cVe` 同句的 `FG` 槽用途未查清。
 - mythos 模型（无 bedrock id）在哪些条件下对用户可见（`isMythosModelValue`/`isMythosAvailable`：`chunk-aepeg2w5.js#c8t`、`chunk-aepeg2w5.js#rno`）未完全确认。
@@ -1465,7 +1465,7 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 | `metadata.user_id` = 由 `device_id`、`account_uuid`、`session_id` 组成的 JSON 字符串 | `getAPIMetadata`（`chunk-w5ndchqs.js#vVe`） |
 | `max_tokens` 为 128000、`thinking={type: adaptive, display: omitted}`、`output_config={effort: medium}` | 模型目录（`claude-opus-5-5` 的默认值），`buildRequestParams`，见第 13 节 |
 | `context_management.edits=[{type: clear_thinking_20251015, keep: all}]` | `getAPIContextManagement`（`chunk-e6aww6q8.js#$7t`），见第 12 节 |
-| 第一方 `diagnostics: {previous_message_id: null}` | `buildRequestParams` 末尾（条件 `t$()` 且 agentic） |
+| 第一方 `diagnostics: {previous_message_id: null}` | `buildRequestParams` 末尾（条件 `cacheDiagnosisOn()`、agentic 或 fork 点、有 betas、且非 `CLAUDE_CODE_SIMULATE_PROXY_USAGE`） |
 | 400 时 6 个请求逐级去特性 | `queryModel` 中 `onError` 返回的 retry 标签 + `queryModelWithToolSearchRecovery`，逐行对照见第 8 节 |
 
 ## 15. 配置项与环境变量（汇总，详见各节）
@@ -1543,8 +1543,8 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 
 ## 18. 引用校验结果
 
-校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-04 05:09（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 2969 处引用：路径 268/276（另 8 个只在 2.1.88 中存在），名字 1754/1760（另 6 个只在 2.1.88 中存在），字面量 365/367（另 2 个只在 2.1.88 中存在），声明id 566/566；占位符与含空格的说明性文字 421 处未检查。
-- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`costHook.ts`、`query/tokenBudget.ts`、`CLAUDE_CODE_UNATTENDED_RETRY`、`tengu_attribution_header`、`utils/streamlinedTransform.ts`、`streamlinedTransform`、`tengu_toolref_defer_j8m`、`services/compact/sessionMemoryCompact.ts`、`tengu_cached_microcompact`、`tengu_sm_compact*`、`utils/model/antModels.ts`
+- 共检查 2979 处引用：路径 268/276（另 8 个只在 2.1.88 中存在），名字 1761/1769（另 8 个只在 2.1.88 中存在），字面量 359/361（另 2 个只在 2.1.88 中存在），声明id 573/573；占位符与含空格的说明性文字 424 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`costHook.ts`、`query/tokenBudget.ts`、`CLAUDE_CODE_UNATTENDED_RETRY`、`Hgt`、`tengu_attribution_header`、`utils/streamlinedTransform.ts`、`streamlinedTransform`、`tengu_toolref_defer_j8m`、`services/compact/sessionMemoryCompact.ts`、`tengu_cached_microcompact`、`tengu_sm_compact*`、`utils/model/antModels.ts`
 - 未通过：0 处。

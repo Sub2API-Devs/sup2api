@@ -385,7 +385,7 @@ CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成
   - 下载 120 秒无数据就超时（`$un`）。
   - 先写到 staging，再校验（`Fun`），之后切换启动器符号链接并清理旧版本。
   - 运行中的版本由 `pidLock.ts` 的 PID 锁保护。
-  - 迁移到原生安装后，会卸载全局 npm 包（`t$o`），并删除 shell 配置里的 alias（`e$o`）。
+  - 迁移到原生安装后，会卸载全局 npm 包（`cleanupNpmInstallations`），并删除 shell 配置里的 alias（`cleanupShellAliases`）。
 - **npm-global / npm-local**：
   - 用 `npm view @anthropic-ai/claude-code@stable|latest` 查版本，再 `npm install -g`；
   - 先检查全局前缀是否可写（`checkGlobalInstallPermissions`，`chunk-6zvphrsz.js#VKs`）。
@@ -496,8 +496,8 @@ CCR 云容器里，代理令牌通过文件描述符传入（`CCR_AGENT_PROXY_TO
 
 ## 14. 引用校验结果
 
-校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-04 05:09（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 525 处引用：路径 65/65，字面量 181/181，声明id 84/84，名字 195/195；占位符与含空格的说明性文字 113 处未检查。
-
+- 共检查 525 处引用：路径 65/65，字面量 181/181，声明id 84/84，名字 194/195（另 1 个只在 2.1.88 中存在）；占位符与含空格的说明性文字 113 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`WRt`
 - 未通过：0 处。

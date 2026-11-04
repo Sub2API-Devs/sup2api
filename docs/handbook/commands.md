@@ -25,7 +25,7 @@
 
 | type | 执行方式 | 返回 |
 |---|---|---|
-| `local` | `load()` 得到模块，调用 `call(args, context, invokedName)` | `{type:"text", value, level?}`、`{type:"compact", …}`、`{type:"query", prompt}`、`{type:"skip"}` |
+| `local` | `load()` 得到模块，调用 `call(args, context, invokedName)` | `type: "text"`（带 value、level?）、`type: "compact"`（…）、`type: "query"`（带 prompt）、`type: "skip"` |
 | `local-jsx` | `load()`；没有 `load` 时由 `resolveCommandDialog`（`chunk-18hwfzwa.js#_P`）按 `dialogKey ?? name` 查 `nre` 懒加载。调用 `call(onDone, context, args, invokedName)` | React 节点，挂到 `localJsx.show`；结束时组件调用 `onDone(result, options)` |
 | `prompt` | `getPromptForCommand(args, context)` | ContentBlock 数组，作为用户消息送给模型（可 fork 到子代理执行） |
 
@@ -147,7 +147,7 @@
 `getCommands`（`chunk-e6aww6q8.js#Fp`）是会话取命令列表的唯一入口。它调用 `assembleCommands`（`chunk-e6aww6q8.js#nsr`），然后：
 
 - 用 `hookedCommands`（`chunk-e6aww6q8.js#Z6e`）应用插件的命令集钩子（可增删改命令）；
-- 用 `xZt` 应用插件隐藏表（hiddenBehindPlugin 的暂扣）。
+- 用 `hideSkillsBehindPlugins` 应用插件隐藏表（hiddenBehindPlugin 的暂扣）。
 
 `nsr` 依次做这些事：
 
@@ -196,7 +196,7 @@
 **常用谓词**（压缩名 → 含义）：
 
 - **登录与会话：**
-  - `_e`：无头会话；`vt`：claude.ai 订阅者；`Jae`：第三方 API（Bedrock/Vertex/Foundry）
+  - `_e`：无头会话；`vt`：claude.ai 订阅者；`isUsing3PServices`：第三方 API（Bedrock/Vertex/Foundry）
   - `On`：远程工作区；`Ft`：后台会话；`Ua`：协调者模式
 - **门控开关（谓词：开关）：**
   - `f6` ultraplan：tengu_ultraplan_config.enabled 且桥接可用且非远程
@@ -248,7 +248,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 **Remote Control 桥接**（手机/网页发来的斜杠命令）：
 
 - `isBridgeSafeCommand`（`chunk-e6aww6q8.js#Gwt`）：prompt 全可，local-jsx 全不可，local 需在 `BRIDGE_SAFE_COMMANDS`（压缩名 sJn，在 `chunk-e6aww6q8.js#tzr` 语句内）。
-- 插件注册的同名 local 命令通过 `wtt` 找桥接安全的孪生命令代答。
+- 插件注册的同名 local 命令通过 `findBridgeFallback` 找桥接安全的孪生命令代答。
 
 ## 5. 解析与执行
 
@@ -624,8 +624,8 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 
 ## 11. 引用校验结果
 
-校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-04 05:09（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 443 处引用：路径 49/51（另 2 个只在 2.1.88 中存在），名字 243/243，声明id 94/94，字面量 55/55；占位符与含空格的说明性文字 98 处未检查。
+- 共检查 442 处引用：路径 49/51（另 2 个只在 2.1.88 中存在），名字 243/243，声明id 94/94，字面量 54/54；占位符与含空格的说明性文字 99 处未检查。
 - 只在 2.1.88 中存在（删除项或旧名，预期如此）：`commands/thinkback-play/index.ts`、`commands/tag/tag.tsx`
 - 未通过：0 处。

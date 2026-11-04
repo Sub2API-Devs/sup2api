@@ -117,7 +117,7 @@ var GlobTool = buildTool({            // tools/GlobTool/GlobTool.ts（chunk-e6aw
 
 返回"当前环境下可能出现的全部内建工具"，按以下顺序（条件在括号里；无条件的固定出现，是否可用再看 `isEnabled`）：
 
-`Agent` → `Bash`（`jd()`：非 Windows，或 Windows 找到 Git Bash）→ `Glob`、`Grep`（不在 `getShadowedSearchToolNames()` 里，见 4.4）→ `ExitPlanMode` → `Read` → `Edit` → `Write` → V2 别名工具（`ga?.()`，外部构建为 null）→ `NotebookEdit` → `xo` 展开 → `WebFetch` → `TodoWrite` → `ReportFindings` → `WebSearch` → `TaskStop` → `AskUserQuestion` → `SendFeedback` → `Skill` → `SendToProject`/`SendToProjectContext` → `EnterPlanMode` → `DesignSync` → `ClaudeDesign`（非 essential-traffic-only）→ `Projects` → `TaskCreate/TaskGet/TaskUpdate/TaskList`（`isTodoV2Enabled()` = `CLAUDE_CODE_ENABLE_TASKS !== false`）→ `Artifact`（懒代理）→ Artifact 附加工具 → `AppifactRepl` → `LSP`（`Dqe()` = 常量 true）→ `EnterWorktree`、`ExitWorktree`（`YNt()` = 常量 true）→ `SendMessage` → `SendFile` → `ListAgents` → `ShareOnboardingGuide` → `Poll` → `Workflow` → `CronCreate/CronDelete/CronList` → 自托管 runner 工具（`Jr()`）→ `ScheduleWakeup` → `RemoteTrigger` → `SearchMcpRegistry` → `SuggestConnectors` → `ShowOnboardingRolePicker` → `OfferChromeSetup` → `ReadNotifications` → `ENABLE_STUB_TOOLS`（`enable__mcp__claude-in-chrome` 等桩）→ `ListConnectors` → `PLUGIN_SKILL_TOOLS` → `Monitor` → `SendUserMessage`（Brief）→ `SendUserFile` → `ProposeSkills` → `ProposeGoal` → `PublishPlugin` → `PushNotification` → `FetchInboxMessage` → `EndConversation` → `PowerShell`（`isPowerShellToolEnabled()`）→ `ListMcpResourcesTool` → `ReadMcpResourceTool` → `ReadMcpResourceDir` → `RefreshMcpTools`（`CLAUDE_CODE_ENABLE_REFRESH_MCP_TOOLS`）→ `ToolSearch`（`isToolSearchEnabledOptimistic()`）→ `WaitForMcpServers` → `GetTask`。
+`Agent` → `Bash`（`jd()`：非 Windows，或 Windows 找到 Git Bash）→ `Glob`、`Grep`（不在 `getShadowedSearchToolNames()` 里，见 4.4）→ `ExitPlanMode` → `Read` → `Edit` → `Write` → V2 别名工具（`ga?.()`，外部构建为 null）→ `NotebookEdit` → `xo` 展开 → `WebFetch` → `TodoWrite` → `ReportFindings` → `WebSearch` → `TaskStop` → `AskUserQuestion` → `SendFeedback` → `Skill` → `SendToProject`/`SendToProjectContext` → `EnterPlanMode` → `DesignSync` → `ClaudeDesign`（非 essential-traffic-only）→ `Projects` → `TaskCreate/TaskGet/TaskUpdate/TaskList`（`isTodoV2Enabled()` = `CLAUDE_CODE_ENABLE_TASKS !== false`）→ `Artifact`（懒代理）→ Artifact 附加工具 → `AppifactRepl` → `LSP`（`Dqe()` = 常量 true）→ `EnterWorktree`、`ExitWorktree`（`YNt()` = 常量 true）→ `SendMessage` → `SendFile` → `ListAgents` → `ShareOnboardingGuide` → `Poll` → `Workflow` → `CronCreate/CronDelete/CronList` → 自托管 runner 工具（`areWizardOperatorToolsEnabled()`）→ `ScheduleWakeup` → `RemoteTrigger` → `SearchMcpRegistry` → `SuggestConnectors` → `ShowOnboardingRolePicker` → `OfferChromeSetup` → `ReadNotifications` → `ENABLE_STUB_TOOLS`（`enable__mcp__claude-in-chrome` 等桩）→ `ListConnectors` → `PLUGIN_SKILL_TOOLS` → `Monitor` → `SendUserMessage`（Brief）→ `SendUserFile` → `ProposeSkills` → `ProposeGoal` → `PublishPlugin` → `PushNotification` → `FetchInboxMessage` → `EndConversation` → `PowerShell`（`isPowerShellToolEnabled()`）→ `ListMcpResourcesTool` → `ReadMcpResourceTool` → `ReadMcpResourceDir` → `RefreshMcpTools`（`CLAUDE_CODE_ENABLE_REFRESH_MCP_TOOLS`）→ `ToolSearch`（`isToolSearchEnabledOptimistic()`）→ `WaitForMcpServers` → `GetTask`。
 
 - 大部分 316 新工具在各自 chunk 里，`tools.ts` 用顶层 `require("./chunk-…")` 懒加载（`chunk-kxyd0g16.js#Zi`、`#fa` 两条 var 语句）；`ArtifactTool` 用 `createLazyProxy`（`#Qr`）先放一个只有头部属性的对象。
 - `tools.ts` 顶层执行 `registerAllBaseToolsProvider(getAllBaseTools)`（`Tool.ts · umi`），让 UI/消息层通过 `getAllBaseToolsFromRegistry()`（`QW`）按名查工具，避免循环依赖。
@@ -132,7 +132,7 @@ var GlobTool = buildTool({            // tools/GlobTool/GlobTool.ts（chunk-e6aw
 4. REPL 过滤（外部构建不生效）；`dGt(...)` 为真（WebFetch 子代理开启，`CLAUDE_CODE_WEB_FETCH_AGENT` 或 GrowthBook `tengu_clever_orbit`）时去掉 `WebFetch`，改由内建代理 `web-fetch` 承担。
 5. `onlyNames` 过滤，再逐个调用 `isEnabled()`。
 6. 嵌入式搜索开启但 Bash 不可用时，把 `Glob`、`Grep` 与其 V2 别名补回。
-7. 工具搜索相关（`P6s()` 有待连接 MCP 服务器，或 `ftt()` 已声明）且池中没有 MCP 资源工具、没有 ToolSearch、没有 WaitForMcpServers 时，追加 `WaitForMcpServers`。
+7. 工具搜索相关（`hasPendingMcpClients()` 有待连接 MCP 服务器，或 `isDeclared()` 已声明）且池中没有 MCP 资源工具、没有 ToolSearch、没有 WaitForMcpServers 时，追加 `WaitForMcpServers`。
 
 `/hooks` 命令用的 `getToolsWithHookOnlyTargets`（`chunk-ag5x7vhf.js#axs`，旧版名 `getTools` 是错配）在 getTools 结果后追加只会被 hook 匹配到的工具。
 
@@ -227,25 +227,25 @@ isDeferredToolInConversation(...)（#Gq）：请求级——已在本对话按�
 | Workflow | `chunk-y1shfdfm.js#gi` | `Sg()` | 否（同上） |
 | ListAgents | `chunk-kv9asrky.js#g` | `Pa()` | 否 |
 | Monitor | `chunk-b91jfdd4.js#Be` | `jd()` | 是 |
-| SendFeedback | `chunk-kxyd0g16.js#di` | `R5()` | 否 |
+| SendFeedback | `chunk-kxyd0g16.js#di` | `isFeedbackDraftsEnabled()` | 否 |
 | WaitForMcpServers | `chunk-e6aww6q8.js#h1o` | 工具搜索可用时关；有连接中的 MCP 服务器时开 | 否 |
 | ReadMcpResourceDir | `chunk-9ycd12hk.js#H` | 默认 | 是 |
 | RefreshMcpTools | `chunk-kxyd0g16.js#Ai` | 有 MCP 配置 | 否 |
 | GetTask | `chunk-kxyd0g16.js#ir` | 恒 false | — |
-| Poll | `chunk-b5fpmtr5.js#q` | `G2()` | 否 |
+| Poll | `chunk-b5fpmtr5.js#q` | `isPollEventIngressActive()` | 否 |
 | FetchInboxMessage | `chunk-psktkvhp.js#F` | `Wc() \|\| yEn()!==void 0` | 是 |
-| SendFile | `chunk-dq968kwq.js#Ce` | `y2e()` | 是 |
+| SendFile | `chunk-dq968kwq.js#Ce` | `isPeerSendFileEnabled()` | 是 |
 | SendUserFile | `chunk-gy7w3kfr.js#Ee` | firstParty 且 `allow_…` 或 `CLAUDE_CODE_ATTACHMENTS_BY_PATH` | `shouldDefer()` 动态 |
 | PushNotification | `chunk-4rqaac63.js#b` | GrowthBook `tengu_kairos_push_notifications` | 是 |
 | ProposeSkills | `chunk-2rkp9ne9.js#Ee` | 技能同步相关（`CLAUDE_CODE_SYNC_SKILLS`、`CLAUDE_CODE_SKILL_P…`） | — |
 | ProposeGoal | `chunk-1rwh0063.js#X` | 交互、非子代理、目标功能开启 | 是 |
-| PublishPlugin | `chunk-hcckvqyb.js#AOr` | `cGn()` | 是 |
+| PublishPlugin | `chunk-hcckvqyb.js#AOr` | `isPluginPublishAllowed()` | 是 |
 | EndConversation | `chunk-t1kwhq0j.js#_` | 当前模型支持 | 是 |
 | DesignSync / ClaudeDesign / Projects | `chunk-98n6ge4d.js#Qt` / `chunk-171dhyhe.js#At` / `chunk-eg496hkq.js#xn` | `UW()` / `kGe` / `allow_projects_tool` 且已登录 | DesignSync 是 |
 | SendToProject / SendToProjectContext | `chunk-dz3q485w.js#Ar`/`chunk-dz3q485w.js#no` | `kht()` | 是 |
 | Artifact / ArtifactComments / AppifactRepl | `chunk-cdrjna5f.js#WTe` 等 | Artifact 功能开启 | Artifact 否 |
 | SearchMcpRegistry / SuggestConnectors / ListConnectors | `chunk-1kxhadxb.js#c` 等 | `gHe` | 是 |
-| ShareOnboardingGuide / ShowOnboardingRolePicker / OfferChromeSetup / ReadNotifications | `chunk-kxyd0g16.js#Pn`/`chunk-kxyd0g16.js#Qt`/`chunk-kxyd0g16.js#to`/`chunk-kxyd0g16.js#An` | 各自 `sGt/Mn/dIr/NGn` | OfferChromeSetup 是 |
+| ShareOnboardingGuide / ShowOnboardingRolePicker / OfferChromeSetup / ReadNotifications | `chunk-kxyd0g16.js#Pn`/`chunk-kxyd0g16.js#Qt`/`chunk-kxyd0g16.js#to`/`chunk-kxyd0g16.js#An` | 各自 `isTeamOnboardingShareEnabled` / `isRemoteSession` / `isChromeSetupOfferEnabled` / `isQueuedNotificationsSupported` | OfferChromeSetup 是 |
 
 ## 5. 工具执行编排
 
@@ -392,7 +392,7 @@ AST 解析与语义检查不在本组：`utils/bash/ast.ts`（`w1`、`checkSeman
 | enablesCodeExecution | `true` |
 | ruleContentField | `"command"`（权限规则 `Bash(...)` 匹配的字段） |
 | maxResultSizeChars | getter：`settings.bashOutputMaxChars` ?? 30000（`chunk-bhxaz9j0.js#$rt`） |
-| persistenceThresholdCeiling | `Sdt`（持久化阈值上限） |
+| persistenceThresholdCeiling | `MAX_CONTEXT_TOKENS`（持久化阈值上限，`chunk-yxnffbzs.js#FD`） |
 | backgrounding | `"self"`（自己处理后台化） |
 | remoteExecution | `{supported:true, refusedInputFields, decidingInputFields:["command","run_in_background","dangerouslyDisableSandbox"]}` |
 | isConcurrencySafe(input) | `= isReadOnly(input)` |
@@ -400,7 +400,7 @@ AST 解析与语义检查不在本组：`utils/bash/ast.ts`（`w1`、`checkSeman
 | notReadOnlyReason | 给出不是只读的原因与具体子命令 |
 | isEnabled / shouldDefer / alwaysLoad | 未设置，取 `on()` 默认（见 core 组） |
 | suppressesAllPermissionUpdates | 输入带远程机器字段（`_host`）且非本机时为 true |
-| sandboxNetworkLists | 输入里的 `allowed_domains` 等（`J_e`） |
+| sandboxNetworkLists | 输入里的 `allowed_domains` 等（`getCommandNetworkLists`，`chunk-e6aww6q8.js#J_e`） |
 | toAutoClassifierInput | 一般为命令文本；带远程机器或网络放行时为对象 |
 | preparePermissionMatcher | `buildRuleRelevanceFilter(command)`（规则匹配器预编译） |
 | isSearchOrReadCommand | `isSearchOrReadBashCommand`：全部是 find/grep/rg…（搜索）、cat/head/jq…（读）、ls/tree/du（列目录） |
@@ -431,16 +431,16 @@ AST 解析与语义检查不在本组：`utils/bash/ast.ts`（`w1`、`checkSeman
 按顺序：
 1. 带远程机器字段但当前不支持 → errorCode 11。
 2. 沙箱策略拒绝（`sandboxPolicyRefusal`，`chunk-e6aww6q8.js#I0e`：Windows 严格沙箱模式下不可沙箱化的命令）→ errorCode 14，遥测 `sandbox_policy_refusal`。
-3. 长 sleep 拦截：后台任务未禁用、完成通知可用（`oie()`）、远程约束未禁止后台、未设 `run_in_background`、无 `shellWallCapMs` 时，`detectBlockedSleepPattern`（`#FAs`）发现首个子命令是 `sleep N` 且 N ≥ 25 秒（`kWr=25`）→ errorCode 10，提示改用 Monitor until 循环或 run_in_background。
+3. 长 sleep 拦截：后台任务未禁用、完成通知可用（`backgroundCompletionNoticeEnabled()`）、远程约束未禁止后台、未设 `run_in_background`、无 `shellWallCapMs` 时，`detectBlockedSleepPattern`（`#FAs`）发现首个子命令是 `sleep N` 且 N ≥ 25 秒（`MAX_BLOCKED_SLEEP_LINES` = 25）→ errorCode 10，提示改用 Monitor until 循环或 run_in_background。
 4. 同一目录同一命令已在后台运行且 TaskStop 可用、开关 `tengu_woolly_toast` 打开 → errorCode 15。
 5. 远程调用的后台槽位预留失败 → errorCode 12。
-6. `Ajt(input, useSandbox)`：带 `allowed_domains` 但命令不会进沙箱时拒绝；`PYt(command, cwd)`：含字面量 `rm` 时预先解析删除目标做检查（经主机 `LVn` 执行）。
+6. `checkAllowedDomainsInput(input, useSandbox)`：带 `allowed_domains` 但命令不会进沙箱时拒绝；`extractLiteralRmTargets(command, cwd)`：含字面量 `rm` 时预先解析删除目标做检查（经主机 `guardSyncedMemoryRemoval` 执行）。
 
 ##### 3.5 checkPermissions
 
 `create()` 返回对象的 `checkPermissions` → `mergeBashSubcommandVerdicts(…, await bashToolHasPermissionTwoPass(…))`：外层是通用 shell 权限包装（core/permissions 组），核心判定是 `bashPermissions · bashToolHasPermission`。崩溃时 `permissionCheckFailureDecision` → `denyCrashedCheckUnderCommandClamp`（带 bashCommandClamp 的代理直接拒绝）。
 
-`checkBashCommandClamp`（`chunk-e6aww6q8.js#hQ`）先检查代理的 `bashCommandClamps`（`findSpanNotCoveredByRuleGroups`，不匹配即拒绝，遥测 `tengu_bash_command_clamp_denied`），再在 `Mze`（原记名 runWithDivergentShapes，当前仍是压缩名）下调用 `bashToolHasPermission`；循环后续轮次可能执行不同命令时改为 `loop-later-pass` ask。`checkBashWithDeclarations`（`chunk-e6aww6q8.js#XVt`）再对声明前缀的多种读法分别检查并合并；`bashCommandIsSafeAsync`（`#VVt`）把"正常读法"与"refused 读法"两遍结果按严重度（`getDecisionSeverity`：allow 0/1、passthrough 2、ask 3–5、deny 6）择严。
+`checkBashCommandClamp`（`chunk-e6aww6q8.js#hQ`）先检查代理的 `bashCommandClamps`（`findSpanNotCoveredByRuleGroups`，不匹配即拒绝，遥测 `tengu_bash_command_clamp_denied`），再在 `runWithDivergentShapes`（`chunk-e6aww6q8.js#Mze`）下调用 `bashToolHasPermission`；循环后续轮次可能执行不同命令时改为 `loop-later-pass` ask。`checkBashWithDeclarations`（`chunk-e6aww6q8.js#XVt`）再对声明前缀的多种读法分别检查并合并；`bashCommandIsSafeAsync`（`#VVt`）把"正常读法"与"refused 读法"两遍结果按严重度（`getDecisionSeverity`：allow 0/1、passthrough 2、ask 3–5、deny 6）择严。
 
 `bashToolHasPermission`（`#Wze`）主流程：
 
@@ -455,7 +455,7 @@ AST 解析与语义检查不在本组：`utils/bash/ast.ts`（`w1`、`checkSeman
 9. cd 处理：去掉无效的 `cd <cwd>`；多个 cd → 逐步模拟 cd 目标是否都在工作目录内，并检查 rm 目标，否则 ask（`multi-cd`）；`cd X && …` 简单链可把有效 cwd 换成 X；cd + git → ask（`cd-git-compound`）；写 git 内部文件再运行 git → ask。
 10. 每个子命令 `bashToolCheckPermission`（`#tYt`）：精确 → 前缀/通配规则 → `checkPathConstraints` → 读封锁下的 sed/env/读命令 → allow 规则 → `checkSedConstraints` → `checkPermissionMode`（acceptEdits）→ 只读自动允许（非 `parseForSecurity` 失败、无可疑 env 前缀、无可疑裸赋值）。
 11. 任一子命令 deny → deny；整体路径约束 → 安全检查 `Iye`；全部 allow → allow（`subcommandResults`）。
-12. 否则可调用 `getCommandSubcommandPrefix`（前缀提取器，可能调用模型）得到建议前缀，逐子命令 `checkSubcommandPermissionWithSuggestions`，按 deny>ask>passthrough>allow 合并，建议规则最多 `aDo=5` 条，目标 `localSettings`。
+12. 否则可调用 `getCommandSubcommandPrefix`（前缀提取器，可能调用模型）得到建议前缀，逐子命令 `checkSubcommandPermissionWithSuggestions`，按 deny>ask>passthrough>allow 合并，建议规则最多 `MAX_COLLECTED_RULES` = 5 条，目标 `localSettings`。
 
 规则匹配（`filterRulesByContentsMatchingInput`，`#pQ`）：候选命令包括原文、去输出重定向、`stripSafeWrappers`（剥离安全 env、注释行、timeout/time/nice/stdbuf/nohup/command/builtin/noglob）后的形式；deny/ask 规则还会剥离全部前导 env 赋值与 sudo/env/strace/flock/… 包装（`unwrapCommandArgv`，`#owt`），防止 `FOO=1 rm` 或 `sudo rm` 绕过 deny。三种规则：exact、prefix（`xxx:*` 风格；prefix 不匹配复合命令，识别 `xargs <prefix>`）、wildcard。
 
@@ -569,7 +569,7 @@ acceptEdits（`checkPermissionMode`）：所有子命令都是 mkdir/touch/rm/rm
 | `tengu_crispy_glade` | 后台命令最长运行时间 |
 | `tengu_cosmic_shore` / `PVt()` | 后台截止时间 |
 | `tengu_woolly_toast` | 同命令仍在后台时拒绝重复启动 |
-| `tengu_violin_rosin` | 后台确认遥测/消息形态（`L0e`） |
+| `tengu_violin_rosin` | 后台确认遥测/消息形态（`isInputHoldOn()`，`chunk-e6aww6q8.js` 的 `plugins/functionHooks/inputHold.js`） |
 | `tengu_wild_octopus` | git 命令识别时再做包装剥离 |
 | `tengu_tender_thunder` | （readOnlyValidation 常量，用途未确认） |
 | `tengu_quiet_larkspur`、`tengu_plain_sorrel`、`tengu_umber_plover` | 沙箱 AST 自动允许中解释器/dd 参数的宽松规则 |
@@ -586,7 +586,7 @@ acceptEdits（`checkPermissionMode`）：所有子命令都是 mkdir/touch/rm/rm
 #### 7. 与 2.1.88 的差异（有 316 代码证据）
 
 1. **安全检查从正则转为 AST**：旧版 `bashSecurity.ts` 有约 25 个校验器（`validateIncompleteCommands`、`validateIFSInjection`、`validateObfuscatedFlags`、`validateBraceExpansion`、`validateMidWordHash`… 以及 "Zsh equals expansion"、"$[] legacy arithmetic expansion" 等消息）。316 中这些消息字符串在全部 chunk 中都不存在；`bashSecurity.ts` 名下剩下的是结果合并/严重度函数（`chunk-e6aww6q8.js#Av`/`chunk-e6aww6q8.js#Pv`/`chunk-e6aww6q8.js#Nye`/`chunk-e6aww6q8.js#J7`）。安全分析改由 `utils/bash/ast.ts` 的 `parseForSecurityFromAst`（`chunk-r01896cg.js#w1`）/ `checkSemantics` / `parseForSecurity` 完成，权限主流程按 `too-complex` / 语义失败 / 简单命令三条路径走（`#Wze`）。
-2. **两遍读法**：316 新增 `runWithRefusedReading`（`#Pze`）与 `bashCommandIsSafeAsync`（`#VVt`）的正常/refused 两遍检查、`Mze`（`#Mze`，原记名 runWithDivergentShapes，当前仍是压缩名）与声明前缀多读法（`checkBashWithDeclarations`，`#XVt`），旧版没有。
+2. **两遍读法**：316 新增 `runWithRefusedReading`（`#Pze`）与 `bashCommandIsSafeAsync`（`#VVt`）的正常/refused 两遍检查、`runWithDivergentShapes`（`chunk-e6aww6q8.js#Mze`）与声明前缀多读法（`checkBashWithDeclarations`，`#XVt`），旧版没有。
 3. **读封锁**：`permissions.blockReadsOutsideWorkingDirectories` 贯穿 Bash/PowerShell 路径校验（`hY(...)` 拒绝、`STRUCTURAL_MISS_KINDS` `#EYt`），旧版无。
 4. **bashMissKind**：ask 理由带分类（too-complex/semantics/multi-cd/shell-operators/cd-git-compound/process-substitution/loop-later-pass/sed-dangerous/no-rule-match…），旧版无。
 5. **bashCommandClamps**：代理级 Bash 命令限定（`denyForBashCommandClamp`/`denyCrashedCheckUnderCommandClamp`/`findSpanNotCoveredByRuleGroups`：`#L5s`/`#Ujr`/`#hDo`；PowerShell `#sn`/`#rn`），旧版无。
@@ -649,7 +649,7 @@ acceptEdits（`checkPermissionMode`）：所有子命令都是 mkdir/touch/rm/rm
 |---|---|---|
 | `--tools` 或 `--allowedTools` 里点名 `Glob` 或 `Grep` | `initializeToolPermissionContext` 计算 `se(m)`（`--tools` 保留列表包含 m，或某条 allowedTools 规则的 toolName 为 m），执行 `Bws([GLOB_TOOL_NAME, GREP_TOOL_NAME].some(se))`，写入 `host.launchOptions.searchToolsOptIn`；之后 `getSearchToolsOptIn()` 为真 → `hasEmbeddedSearchTools()` 为假 | `utils/permissions/permissionSetup.js` 第 539 行；`bootstrap/state.ts` · `getSearchToolsOptIn`/`setSearchToolsOptIn`（`chunk-ndmse9kj.js#Uws`/`chunk-ndmse9kj.js#Bws`） |
 | `CLAUDE_CODE_ENTRYPOINT=local-agent` | `FC()` 直接返回 false | `chunk-e6aww6q8.js#FC` |
-| Windows 且未找到 Git Bash | `jd()` 为假 → `Xoe()` 返回空集 | `chunk-g54kbxqw.js#jd` |
+| Windows 且未找到 Git Bash | `isBashAvailable()` 为假 → `getShadowedSearchToolNames()` 返回空集 | `chunk-g54kbxqw.js#jd` |
 
 与 2.1.88 的差异：旧版 `hasEmbeddedSearchTools` 读环境变量 `EMBEDDED_SEARCH_TOOLS`（只在 ant-native 构建里设置），并且对 `sdk-ts`/`sdk-py`/`sdk-cli` 三种入口也返回 false；316 变成构建常量 true，只排除 `local-agent`，新增"用户点名即恢复"的 `searchToolsOptIn`，并新增 `jd()`（Windows 需 Git Bash）条件。旧版 `tools.ts` 写法是 `...(hasEmbeddedSearchTools() ? [] : [GlobTool, GrepTool])`。
 
@@ -673,7 +673,7 @@ LSP 工具同理：旧版 `...(isEnvTruthy(process.env.ENABLE_LSP_TOOL) ? [LSPTo
 
 #### 3. Read（`tools/FileReadTool/*`）
 
-**输入 schema**（`chunk-e6aww6q8.js#wCr` fileReadInputSchema）：`file_path`（绝对路径）、`offset`（非负整数，可选）、`limit`（正整数，可选）、`pages`（字符串，空串视为未给；PDF 专用，每次最多 `H8=20` 页）、`allow_large`（布尔，可选）、以及在多机会话下的 `_host`（`p3()`）。
+**输入 schema**（`chunk-e6aww6q8.js#wCr` fileReadInputSchema）：`file_path`（绝对路径）、`offset`（非负整数，可选）、`limit`（正整数，可选）、`pages`（字符串，空串视为未给；PDF 专用，每次最多 `MAX_PDF_PAGES_PER_READ` = 20 页）、`allow_large`（布尔，可选）、以及在多机会话下的 `_host`（`p3()`）。
 
 **输出**（判别联合，`makeFileReadOutputSchema`）：`text`（filePath/content/numLines/startLine/totalLines/truncatedByTokenCap + 可选 artifactRead）、`image`（base64/type/originalSize/dimensions）、`notebook`（cells）、`pdf`（base64）、`parts`（PDF 页图：count/outputDir/firstPage/totalPages/pages）、`file_unchanged`（去重命中，source 可为 "seeded"）。
 
@@ -690,7 +690,7 @@ LSP 工具同理：旧版 `...(isEnvTruthy(process.env.ENABLE_LSP_TOOL) ? [LSPTo
 5. 按类型分派（`callInner`）：
    - `.ipynb`：`utils/notebook · readNotebook`，JSON 超过 maxSizeBytes 报错，token 校验后写 readFileState。
    - 图片（扩展名 png/jpg/jpeg/gif/webp，或无扩展名且末尾 16 字节魔数是图片）：`readImageWithTokenBudget`——校验魔数（扩展名是图片但内容不是时提示"多半是下载到了错误页"），按模型图片限制缩放（`utils/imageResizer · maybeResizeAndDownsampleImageBuffer`），超字节再压缩，估算 token 超限则压到 token 上限，最后兜底 400×400 JPEG q20；有尺寸信息时附一条 meta 用户消息说明坐标换算。
-   - PDF：给了 pages → `utils/pdf · extractPDFPages`（pdftoppm 渲染为 JPEG，再逐页缩放，返回 `parts`）；未给 pages → 先 `pdfinfo` 取页数：超过 10 页时，`tengu_misty_sunbeam` 开启则自动读前 min(10, 每次上限) 页并告知总页数，否则报错要求 pages；页数未知且文件大于 `tengu_immutable_tide` 阈值、pdftoppm 可用时也要求 pages；模型不支持整份 PDF（`$Yt`）时报错；否则 `readPDF` 整份 base64 作为 document 块。
+   - PDF：给了 pages → `utils/pdf · extractPDFPages`（pdftoppm 渲染为 JPEG，再逐页缩放，返回 `parts`）；未给 pages → 先 `pdfinfo` 取页数：超过 10 页时，`tengu_misty_sunbeam` 开启则自动读前 min(10, 每次上限) 页并告知总页数，否则报错要求 pages；页数未知且文件大于 `tengu_immutable_tide` 阈值、pdftoppm 可用时也要求 pages；模型不支持整份 PDF（`isNotClaude3Model`）时报错；否则 `readPDF` 整份 base64 作为 document 块。
    - 文本：`utils/readFileInRange · readFileInRange`。不带 limit 时按总大小 maxSizeBytes 拦截（`FileTooLargeError`）；带 limit 时不看总大小，只限制选区字节 `max(maxTokens × 128, 放宽字节)`（`SelectedRangeTooLargeError`）。随后 `validateContentTokens`：粗估 ≤ 上限/4 直接过，字符数 > 上限×128 直接判超，否则调 token 计数 API。**整文件读取（offset ≤ 1、无 limit、无 pages）超限时不再报错，而是自动截成第一页**：按 token/字符比例估行数并最多 6 轮缩减，正文前加 `[Truncated: PARTIAL view — <path>: showing lines 1-N of M total … Call Read with offset=N+1 limit=N for the next page, or Grep …]`，结果带 `truncatedByTokenCap: true`，readFileState 标 `isPartialView`。超长单行文件按字符截断。
 6. 写 `readFileState`（content、timestamp=floor(mtime)、offset、limit），记 `tengu_session_file_read`、`logFileOperation`；文件是 artifact 保存源时附覆盖说明；记忆文件加新鲜度前缀。
 7. ENOENT：先试 macOS 截图文件名的另一种空格（普通空格 ↔ U+202F）；仍不存在时报 "File does not exist. Note: your current working directory is …"，并给出 `findSimilarFile`（同名不同扩展名）或 `normalizePathForComparison`（路径落在 cwd 父目录时映射到 cwd）建议。
@@ -814,7 +814,7 @@ LSP 工具同理：旧版 `...(isEnvTruthy(process.env.ENABLE_LSP_TOOL) ? [LSPTo
 #### 12. 未解之处
 
 - `chunk-e6aww6q8.js#bVo`（Grep 真正的执行体）、`#M6r`（打开搜索根）、`chunk-82kqcve8.js#$a`（FileStateCache 类）、`chunk-e6aww6q8.js#Xoe`/`chunk-e6aww6q8.js#FC`（内嵌搜索开关）写作时都在 `_unattributed`、本组未命名；现为 `runGrep`、`resolveRipgrepTarget`、`RemoteFileState`、`getShadowedSearchToolNames`/`hasEmbeddedSearchTools`（待核实：`chunk-82kqcve8.js#$a` 现名 RemoteFileState，与"FileStateCache 类"的描述不一致）。
-- `y3o`（图片原始字节读取上限 `MAX_IMAGE_READ_BYTES` 的值）未追到定义。
+- 图片原始字节读取上限 `MAX_IMAGE_READ_BYTES` 的值未追到定义。
 - `jd()` 在 Windows 的真实语义（Git Bash 可用）推断自 `mre → findGitBashPath`，未在 Windows 上实测。
 
 ### 6.3 代理组：Agent、SendMessage、Task*、TodoWrite、任务存储
@@ -899,7 +899,7 @@ tools.ts · getAllBaseTools → AgentTool(won)
 
 | 约束 | 来源 |
 |---|---|
-| 嵌套深度：`depth >= OT()` 拒绝；`OT()` = `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 或 GrowthBook `tengu_hazel_trellis`，默认 3 | `chunk-k8xs47j2.js#OT` |
+| 嵌套深度：`depth >= getMaxSubagentSpawnDepth()` 拒绝；`getMaxSubagentSpawnDepth()` = `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 或 GrowthBook `tengu_hazel_trellis`，默认 3 | `chunk-k8xs47j2.js#OT` |
 | 并发：`taskRegistry.getConcurrentSubagents() >= CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`（默认 20），`tengu_amber_kestrel` 或 ultracode 豁免 | `checkSubagentConcurrencyLimit` |
 | 预算：`maxBudgetUsd` 用尽时不能再启动 | `assertCanLaunch` |
 | 队友（进程内）不能派生队友、不能后台派生、不能派生 `background:true` 的代理 | callAgentTool |
@@ -914,8 +914,8 @@ tools.ts · getAllBaseTools → AgentTool(won)
 
 ##### 1.6 子代理工具集（`agentToolUtils.ts`）
 
-- `filterToolsForAgent`（`#Iu`）：去掉子代理记忆模式禁止的工具；MCP 工具保留；plan 模式保留并补 ExitPlanMode；去掉仅主线程工具（`Akt` 集）；Poll 只给非队友；非内建代理再去掉 `csi` 集；云会话去掉 `usi` 集；SendMessage 只在 `xfn(agentId)`（未禁止对外消息或子代理发送已开放）时保留；**Agent 工具只在 `agentDepth < OT()` 时保留**；后台（isAsync）代理只保留异步安全工具 `EXTERNAL_ALWAYS_AVAILABLE_TOOLS`（`chunk-hg2zbde4.js#Ckt`）（队友可额外保留团队工具 `msi`）。队友版本把 SendMessage 设为 `alwaysLoad`（不走 ToolSearch 延迟）。
-- `resolveAgentTools`（`#mP`）：按定义 `tools`/`disallowedTools` 解析，支持 `*`、`Agent(type1,type2)`（同时产出 allowedAgentTypes）、`mcp__server`/`mcp__server__*`、工具别名/V1 底层名/Artifact 替身；**Glob/Grep 被嵌入式搜索取代**（`!Hw("Grep") && FC()`，即 bfs/ugrep 嵌入且 Grep 未被显式保留）且代理未拿到 Bash 时，把定义里写的 Glob/Grep 补回为真实工具；有 TaskStop/REPL 时自动带 GetTask。
+- `filterToolsForAgent`（`#Iu`）：去掉子代理记忆模式禁止的工具；MCP 工具保留；plan 模式保留并补 ExitPlanMode；去掉仅主线程工具（`EXTERNAL_ALWAYS_AVAILABLE_TOOLS` 集，`chunk-hg2zbde4.js#Akt` 语句内）；Poll 只给非队友；非内建代理再去掉 `EXTERNAL_ALWAYS_AVAILABLE_SET`（同一个 var 语句）；无盘会话去掉 `ONBOARDING_TOOL_NAMES`（`chunk-hg2zbde4.js#usi` 语句内）；`EXTERNAL_EXTRA_TOOL_NAMES`（外部构建为空集）里的工具只给协调者固定工具（`isCoordinatorPinnedTool`）；SendMessage 只在 `canSubagentSend()`（未禁止对外消息或子代理发送已开放）时保留；**Agent 工具只在 `agentDepth < getMaxSubagentSpawnDepth()` 时保留**；后台（isAsync）代理只保留异步安全工具 `EXTERNAL_ALWAYS_AVAILABLE_TOOLS_2`（`chunk-hg2zbde4.js#Ckt`）（队友可额外保留团队工具 `COORDINATOR_TASK_TOOL_NAMES`（`chunk-hg2zbde4.js#Ckt` 语句内））。队友版本把 SendMessage 设为 `alwaysLoad`（不走 ToolSearch 延迟）。
+- `resolveAgentTools`（`#mP`）：按定义 `tools`/`disallowedTools` 解析，支持 `*`、`Agent(type1,type2)`（同时产出 allowedAgentTypes）、`mcp__server`/`mcp__server__*`、工具别名/V1 底层名/Artifact 替身；**Glob/Grep 被嵌入式搜索取代**（`!isRemoteOnlyCheck("Grep") && hasEmbeddedSearchTools()`，即 bfs/ugrep 嵌入且 Grep 未被显式保留）且代理未拿到 Bash 时，把定义里写的 Glob/Grep 补回为真实工具；有 TaskStop/REPL 时自动带 GetTask。
 - fork 与 `resumeAgentBackground` 用 `useExactTools`：完整继承父工具池（保证 prompt cache 一致）。
 
 ##### 1.7 runAgent（`chunk-0h4e7gnq.js#pP`，`tools/AgentTool/runAgent.ts`）要点
@@ -939,7 +939,7 @@ tools.ts · getAllBaseTools → AgentTool(won)
 | agentType | 条件 | 工具 | 模型 | 其他 |
 |---|---|---|---|---|
 | `general-purpose` | 总是（default 模式） | `*` | 默认 | |
-| `statusline-setup` | 非 `--safe-mode`（`Gr()`） | Read, Edit | sonnet | color orange |
+| `statusline-setup` | 非 `--safe-mode`（`isSafeMode()`） | Read, Edit | sonnet | color orange |
 | `claude` | 未禁用 agent view（`CLAUDE_CODE_DISABLE_AGENT_VIEW` / `disableAgentView`） | `*` | 默认 | `appendSystemPrompt: !0`，后台作业叙述规范（FleetView 默认代理） |
 | `Explore` | `CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS` 未设 | 除 Agent/ExitPlanMode/Edit/Write/NotebookEdit 等 | inherit | omitClaudeMd，只读搜索 |
 | `Plan` | 同上 | 同 Explore | inherit | omitClaudeMd，只读规划 |
@@ -988,7 +988,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 
 - 列表 id：`getTaskListId` = `CLAUDE_CODE_TASK_LIST_ID` > 队友所属团队名 > 当前团队/会话列表/lead 团队 > 会话 id。
 - 位置：`<配置目录>/tasks/<listId>/<taskId>.json`（`getTaskOutputDir`（`chunk-nw7jbebs.js#NP`）= `join_2(getClaudeConfigDir(), "tasks", sanitizePathComponent(e))`）；`.highwatermark` 记录用过的最大 id，删除/重置后 id 不复用。云端（`X()`）会话改用 v5 键值存储 `task/<list>/<id>`，锁变成进程内 `taskList.locks.run`。
-- 锁：列表级锁文件 `<dir>/.lock`（`V(e,n)`，retries 30，5–100ms）用于创建/重置/带忙碌检查的认领；任务级锁 `<task>.json.lock` 用于更新。
+- 锁：列表级锁文件 `<dir>/.lock`（`lock(path, LOCK_OPTIONS_2)`，`LOCK_OPTIONS_2` = retries 30，5–100ms）用于创建/重置/带忙碌检查的认领；任务级锁 `<task>.json.lock` 用于更新。
 - 创建：`createTask` 在列表锁内取 `max(文件最大 id, high-water)+1`。
 - TaskUpdate：`status:"deleted"` 调 `deleteTask`（顺带从他人 blocks/blockedBy 中移除）；`completed` 前跑 TaskCompleted 钩子（阻塞则失败）；agent swarms 下 `in_progress` 且无 owner 时自动设为当前代理名，设置 owner 时往其邮箱写 `task_assignment`；`addBlocks`/`addBlockedBy` 调 `blockTask` 建双向依赖；metadata 合并时值 null 删除键。
 - TaskCreate：`coerceTaskCreateInput` 纠正常见错形（task 包裹、别名字段）；TaskCreated 钩子阻塞则删除新任务并报错；成功后 UI 切换到 tasks 展开视图。
@@ -1011,7 +1011,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 
 | 项 | 2.1.88 | 316 | 证据 |
 |---|---|---|---|
-| Agent `model` 枚举 | sonnet/opus/haiku | 加 `fable` | `chunk-ymw5z3js.js` `ohi=["sonnet","opus","haiku","fable"]` |
+| Agent `model` 枚举 | sonnet/opus/haiku | 加 `fable` | `AGENT_MODEL_CHOICES` = `["sonnet", "opus", "haiku", "fable"]`（`chunk-ymw5z3js.js`，落位 `tools/AgentTool/constants.js`） |
 | Agent `effort` 参数 | 无 | 新增，含相对 lower/higher | `chunk-0tkmvwy0.js#jo`（Go/qo） |
 | `run_in_background` 语义 | "Set to true to run in background" | 默认后台，传 false 才同步 | 同上描述文本 + `decideAgentLaunchMode` |
 | fork 选择方式 | 门开时省略 subagent_type 即 fork | 必须显式 `subagent_type:"fork"`，"never the default" | `FORK_AGENT` 的 `whenToUse`（`chunk-e6aww6q8.js#yq`） |
@@ -1025,7 +1025,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 | verificationAgent | `tengu_hive_evidence` 下的验证代理 | 同位置换成 `web-fetch` 代理 | `chunk-e6aww6q8.js#FSt` |
 | 新内建代理 | — | `claude`（FleetView 默认）、`web-fetch` | `CLAUDE_AGENT`（`chunk-fgpf3f12.js#e`，压缩名 F7e）、`WEB_FETCH_BUILTIN_AGENT`（`chunk-e6aww6q8.js#FSt`） |
 | 子代理交回 | 直接文本 | SubagentHandback 工具 + handoff 分类器审查 + SECURITY WARNING | `finalizeAgentTool`、`classifyHandoffIfNeeded` |
-| 深度/并发/预算上限 | 无显式深度上限 | `OT()` 默认 3、并发默认 20、预算检查 | `checkSubagentConcurrencyLimit` 等 |
+| 深度/并发/预算上限 | 无显式深度上限 | `getMaxSubagentSpawnDepth()` 默认 3、并发默认 20、预算检查 | `checkSubagentConcurrencyLimit` 等 |
 | 插件 `agent.spawn` 钩子、`requiredMcpServers` 等待、observer 代理 | 无 | 新增 | callAgentTool |
 | 代理记忆快照同步 | 有 | 只剩无引用 schema | `chunk-e6aww6q8.js#ZGl` |
 | 任务存储 | 文件 | 文件 + v5 键值存储、high-water mark ifAbsent 重试 | `createTask` |
@@ -1059,7 +1059,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 | `ReadMcpResourceTool`（别名 `ReadMcpResource`） | `chunk-9ycd12hk.js#G`（ReadMcpResourceTool，压缩名 fF） | 未声明 | 是 | 是 | 是 | 100000 | never | suppressesAlwaysAllowRule = `SFe()` |
 | `mcp`（模板）→ `mcp__<server>__<tool>` | `chunk-79gnqwq0.js#Ize` | 未声明 | 由 alwaysLoad 决定 | readOnlyHint | readOnlyHint 或 mayOverlap | 100000（大结果服务器可调） | self | isMcp；见 §3 |
 | `mcp__<server>__authenticate` | `chunk-rbwn7je9.js#pe` | 恒真 | — | 否 | 否 | 10000 | — | 权限直接 allow |
-| `Skill` | `chunk-a5k9jscj.js#vQe` | `!Wb()`（host 未禁用斜杠命令） | 否 | — | — | 100000 | never | preserveToolUseResultInSubagents = `Nw()`；call 走 runEngine |
+| `Skill` | `chunk-a5k9jscj.js#vQe` | `!Wb()`（host 未禁用斜杠命令） | 否 | — | — | 100000 | never | preserveToolUseResultInSubagents = `isSillyShoreGateOn()`；call 走 runEngine |
 | `WebFetch` | `chunk-e6aww6q8.js#Rw` | `!CLAUDE_CODE_DISABLE_WEB_FETCH && dn("allow_web_fetch")` | 是 | 是 | 是 | `FD` | detach | ruleContentField "url"；skipAggregateToolResultBudget；coerceInput |
 | `WebSearch` | `chunk-kxyd0g16.js#wo` | `allow_web_search` 且提供方支持 | 是 | 是 | 是 | 100000 | detach | coerceInput 去掉 mode；stripForCreation |
 | `CronCreate` | `chunk-kyk75gag.js#d`（CronCreateTool，压缩名 F） | `isKairosCronEnabled()` | 是 | — | — | 100000 | never | enablesCodeExecution |
@@ -1082,7 +1082,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 - 权限与执行：`checkPermissions` 恒为 `ask`（"Answer questions?"），由权限组件（`components/permissions/AskUserQuestionPermissionRequest/*`）展示并把答案写回输入；`call` 只是整理数据并记 `tengu_ask_user_question_completed`。HTML 预览格式下 `validateInput` 用 `validateHtmlPreview` 拒绝完整文档、script/style、非 HTML。
 - 结果映射（`mapToolResultToToolResultBlockParam`）：AFK 超时（`K` 生成说明）、用户要求追问（followUp，要求模型再调用一次且不要开始任务）、自由回复、所有答案都合规（"Your questions have been answered"）、答案需细读（"Read the answers carefully"）、未作答。
 - `validationErrorSteer`：少于 2 个选项的 choice 题被拒时，给模型特定指引（不要重试、不要凑第二个选项；扩展模式下改用 `kind:"text"`）。
-- prompt 组成：lean 模式与常规模式两套基础段；工具列表含 EnterPlanMode/ExitPlanMode（`_1r`）时附计划模式说明；GrowthBook `tengu_cinder_plover`、`tengu_cinder_wren` 远程追加文本；`cdi`（问题需自足）；扩展问题说明 `ldi`；按 `getQuestionPreviewFormat()` 追加 markdown/html preview 说明。
+- prompt 组成：lean 模式与常规模式两套基础段；工具列表含 EnterPlanMode/ExitPlanMode（`isPlanModeToolUnavailable` 为假）时附计划模式说明；GrowthBook `tengu_cinder_plover`、`tengu_cinder_wren` 远程追加文本；`cdi`（问题需自足）；扩展问题说明 `ldi`；按 `getQuestionPreviewFormat()` 追加 markdown/html preview 说明。
 - 与 2.1.88 差异：旧版 `shouldDefer: true`，316 去掉（初始即加载）；旧版 isEnabled 只看 KAIROS channels，316 改为 `ebe()`；新增扩展问题（kind/title/followUp）、afkTimeoutMs、validationErrorSteer、admitCardAnswer/shownCardInput（`chunk-a91k35xs.js#Hoe`）。
 
 #### 2. 计划模式：EnterPlanMode / ExitPlanMode
@@ -1137,12 +1137,12 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 - `isEnabled`：`!Wb()`（host 的 `disableSlashCommands` 未开）。
 - `validateInput`（`SkillTool` 的 `validateInput`）流程：
   1. 去掉前导 `/`（记 `tengu_skill_tool_slash_prefix`）；`me()` 加载命令表，`oe()` 解析（可能结果：命中、listingName、suggestion、ambiguous、none）。
-  2. 远端 skill 需要物化（`Zoe(session)`、`startPendingDownload`（`chunk-e6aww6q8.js#RCe`））时下载，失败返回 "could not be downloaded … Proceed without it."（errorCode 10）；有 `loadDefinition` 的先加载定义。
+  2. 远端 skill 需要物化（`isSkillsSyncActive()`、`startPendingDownload`（`chunk-e6aww6q8.js#RCe`））时下载，失败返回 "could not be downloaded … Proceed without it."（errorCode 10）；有 `loadDefinition` 的先加载定义。
   3. MCP 来源 skill、被同步否决/主机目录隐藏的 skill 一律当作 Unknown。
   4. 未找到：目录作用域变体、listingName 提示正名、后缀匹配建议、编辑距离 ≤2 的近似名、插件加载错误说明。
   5. 在自己 fork 出的上下文中再调用同一 skill → 拒绝（errorCode 9）。
   6. `checkSkillPermission`（`chunk-e6aww6q8.js#jKe`）检查：disable_model_invocation、not_loaded、not_allowlisted、override_disabled、not_prompt_type、mcp_prompt、deny_rule。
-- `checkPermissions`：Skill deny 规则（支持前缀匹配 `matchesSkillRule`）→ MCP skill 拒绝 → ask 规则（`B2()` 开时）→ allow 规则（插件边界可能 held-back）→ 只含安全属性的 prompt skill（`SAFE_SKILL_PROPERTIES` 表 `Ke`）或协调者只读加载直接允许 → 否则询问并建议 `Skill(name)` 或 `Skill(name:*)`。
+- `checkPermissions`：Skill deny 规则（支持前缀匹配 `matchesSkillRule`）→ MCP skill 拒绝 → ask 规则（`areSkillsConvertedAsPlugins()` 开时）→ allow 规则（插件边界可能 held-back）→ 只含安全属性的 prompt skill（`SAFE_SKILL_PROPERTIES` 表 `Ke`）或协调者只读加载直接允许 → 否则询问并建议 `Skill(name)` 或 `Skill(name:*)`。
 - `call` → `runEngine(runSkillInvocation)`（`chunk-a5k9jscj.js#je`）：
   - 已被停止的代理不能再启动 skill；设置 `options.activeSkill`。
   - fork 型（`NZn(...) === "fork"` 且非只读加载）：插件输入被 hold 时拒绝；`executeForkedSkill` 用 `prepareForkedCommandContext` 准备工具/权限层/文件读状态，可后台运行（返回 "Running in the background as @名字"），前台用 `runAgent`（querySource `agent:custom`）跑完并转发 `skill_progress`。
@@ -1177,7 +1177,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 
 #### 6. WebSearch（`tools/WebSearchTool/*`）
 
-- 输入：`query`（≥2）、`allowed_domains?`、`blocked_domains?`（二者不能同时给）；快搜实验 `getWebSearchFastMode()`（`CLAUDE_CODE_WEB_SEARCH_FAST_ARG` 或 GrowthBook `tengu_sleepy_shore`）开启时多一个 `mode`（standard/extended，默认 extended；选 `standard` 时 `_Qo` 为真，次级查询带 `search_profile: "fast"`）。实验关时 `coerceInput` 去掉多余的 mode。
+- 输入：`query`（≥2）、`allowed_domains?`、`blocked_domains?`（二者不能同时给）；快搜实验 `getWebSearchFastMode()`（`CLAUDE_CODE_WEB_SEARCH_FAST_ARG` 或 GrowthBook `tengu_sleepy_shore`）开启时多一个 `mode`（standard/extended，默认 extended；选 `standard` 时 `isStandardSearchMode()` 为真，次级查询带 `search_profile: "fast"`）。实验关时 `coerceInput` 去掉多余的 mode。
 - 输出：`query`、`results`（结果块 `{tool_use_id, content:[{title,url,snippet?}]}` 或文字）、`durationSeconds`、`searchCount`。
 - `isEnabled`：策略 `allow_web_search`；提供方 firstParty（或 `gI` 判定的兼容方）/foundry 开，vertex 看模型（`pno`），gateway 关，其他关。
 - 权限：`passthrough` + localSettings allow 建议。
@@ -1192,7 +1192,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 
 ##### EnterWorktree（`chunk-kxyd0g16.js#Di`）
 - 输入：`name?`（每段只允许字母数字 . _ -，总长 ≤64，`validateWorktreeSlug`（`chunk-e6aww6q8.js#EKe`）校验）或 `path?`（`git worktree list` 中已有的 worktree），二者互斥。输出 `worktreePath`、`worktreeBranch`、`message`。
-- `validateInput`：cwd 被固定的子代理（`M$()`）只能用 path；已在 worktree 会话中只能用 path。
+- `validateInput`：cwd 被固定的子代理（`hasOutermostCallFrame()`）只能用 path；已在 worktree 会话中只能用 path。
 - `checkPermissions`：新建直接允许；path 位于 `.claude/worktrees/` 管理位置内直接允许；否则 safetyCheck 询问（会迁移工作目录、写权限与 CLAUDE.md/settings 来源；路径做显示净化 `sanitizeForDisplay`），`classifierApprovable: false`。
 - `call`：子代理场景只切该代理 cwd（检查写权限），返回 `contextLayers: [{kind:"working_directory"}]`；主会话 `createWorktreeForSession`（git 或配置的 worktree hooks），切换 cwd/originalCwd，保存 worktree 状态，清理 cwd 相关缓存与系统提示段，消息区分 Created/Reused（已合并上游后重置）/Resumed/Entered。
 
@@ -1254,7 +1254,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 
 #### 12. 未解之处
 
-- `chunk-a91k35xs.js#Hoe` 的 `ebe()` 依赖 `zb()`（提问通道列表）与 `zue(cT())`，具体通道来源未追。
+- `chunk-a91k35xs.js#Hoe` 的 isEnabled 是 `canPromptUserForPermission()`，依赖 `getAllowedChannels()`（提问通道列表）与权限提示工具名（`hasPermissionPromptTool(getPermissionPromptToolName())`），具体通道来源未追。
 - `chunk-e6aww6q8.js#Rw` 的 `FD`（WebFetch maxResultSizeChars）、`Tnr`（次级模型输入上限）、`Nar`（旧副本阈值）、`webFetchCacheTtlMs()`（`chunk-g54kbxqw.js#E7o`，缓存 TTL）的值在其他 chunk，未读取。
 - `chunk-kxyd0g16.js#wo` 搜索预算 `taskRegistry.getWebSearchBudget()` 与 `maxWebSearchesPerSession()` 的具体上限未追。
 - `chunk-9ycd12hk.js#G` 的 `SFe()`（ReadMcpResource 是否需要权限）含义未确认。
@@ -1304,7 +1304,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 | ToolSearch 新增：已内联工具提示、MCP 服务器等待与重拨、失败原因分类文案、查询长度上限 | `chunk-e6aww6q8.js#ujr`、`chunk-s61vbvea.js#Mqo` |
 | 执行：`contextModifier` → `contextLayers`；新增 `detached` 结果、`afterResultCommitted`、中断宽限放弃、隔离锁、运行位置判定、工作目录变化检查、"选项本会话不可用"/"schema 未发送"提示 | `chunk-ha3km179.js#oi`、`chunk-e6aww6q8.js#$B`/`chunk-e6aww6q8.js#w3r`/`chunk-e6aww6q8.js#QNn`/`chunk-e6aww6q8.js#S3r` |
 | 工具池组装：机器级 MCP 工具、遮蔽内建规则、`TOOL_CATALOG` | `chunk-kxyd0g16.js#qNt`/`chunk-kxyd0g16.js#h5` |
-| Config、Tungsten、REPL、TeamCreate/TeamDelete、TaskOutput 不在外部构建中 | `Sn()` 恒 null；退役名单 `chunk-e6aww6q8.js#_0e` |
+| Config、Tungsten、REPL、TeamCreate/TeamDelete、TaskOutput 不在外部构建中 | 这些工具在外部构建中为 null；退役名单 `chunk-e6aww6q8.js#_0e` |
 
 ## 9. 未解之处
 
@@ -1317,8 +1317,8 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 
 ## 10. 引用校验结果
 
-校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-04 05:09（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 2559 处引用：路径 220/221（另 1 个只在 2.1.88 中存在），名字 1618/1629（另 11 个只在 2.1.88 中存在），字面量 379/383（另 4 个只在 2.1.88 中存在），声明id 323/323，路径·函数 3/3；占位符与含空格的说明性文字 369 处未检查。
-- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`contextModifier`、`validateIncompleteCommands`、`validateIFSInjection`、`validateObfuscatedFlags`、`validateBraceExpansion`、`validateMidWordHash`、`assistantAutoBackgrounded`、`ASSISTANT_BLOCKING_BUDGET_MS`、`USER_TYPE=ant`、`cell-N`、`tengu_hive_evidence`、`{plan}`、`tools/MCPTool/classifyForCollapse.ts`、`tengu_surreal_dali`
+- 共检查 2571 处引用：路径 223/224（另 1 个只在 2.1.88 中存在），名字 1627/1637（另 10 个只在 2.1.88 中存在），字面量 374/378（另 4 个只在 2.1.88 中存在），声明id 329/329，路径·函数 3/3；占位符与含空格的说明性文字 371 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`aGt`、`validateIncompleteCommands`、`validateIFSInjection`、`validateObfuscatedFlags`、`validateBraceExpansion`、`validateMidWordHash`、`assistantAutoBackgrounded`、`ASSISTANT_BLOCKING_BUDGET_MS`、`p3()`、`USER_TYPE=ant`、`cell-N`、`tengu_hive_evidence`、`tools/MCPTool/classifyForCollapse.ts`、`tengu_surreal_dali`
 - 未通过：0 处。

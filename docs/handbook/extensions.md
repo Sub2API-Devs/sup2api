@@ -41,14 +41,14 @@ REPL ─── useManageMCPConnections
           └─ getMcpToolsCommandsAndResources
                └─ 每个服务器：禁用/策略/缓存检查 → connectToServer
                     ├─ 建传输（stdio / http / sse / ws / claudeai-proxy / 进程内）
-                    ├─ auto 协商：server/discover ──(modern)──────────────────┐
+                    ├─ auto 协商：先发 discover 请求 ──(modern)──────────────────┐
                     │               └─(-32601 等 → legacy) initialize → initialized
                     └─ fetchToolsForClient / fetchCommandsForClient / fetchResourcesForClient
                          └─ buildMcpTool：mcp__srv__tool，默认延迟加载（ToolSearch）
 查询 ─── 提交 → UserPromptSubmit 钩子 → 模型 → PreToolUse 钩子 → 工具（MCP：callMCPTool）
           → PostToolUse 钩子 → … → Stop 钩子；LSP 诊断与 MCP instructions 作为附件进下一轮
 ```
-（注：上图中的 server/discover 是 JSON-RPC 方法名，不是文件路径；引用校验脚本把代码块里带斜杠的词按路径检查，会把它报为一处失效，属误报。）
+（注：图中 discover 协商用的 JSON-RPC 方法名是 server/discover，不是文件路径；校验脚本会把代码块里带斜杠的词按路径检查，所以图里只写 discover。）
 
 ## 1. 模块地图
 
@@ -260,7 +260,7 @@ v1 `connectToServer`（`chunk-z1n5m6nf.js#Xe`）结构相同，但没有协商�
 `type`：`connected`、`failed`（`error`、`errorCode`、可选 `displayDetail`/`proxyConnectStatus`）、`needs-auth`、`pending`（`reconnectAttempt`、`maxReconnectAttempts`）、`disabled`、`cached`（来自发现缓存，未连线；2.1.88 无）。connected 对象含 `client`、`capabilities`、`serverInfo`、`instructions`、`config`、`cleanup`、`protocolEra`、`transportErrorState` 等。
 
 #### 重连
-- `useManageMCPConnections`：远程传输 onclose → 自动重连最多 5 次，退避 1 s 起、上限 30 s（`chunk-dg4taswx.js` 常量 `eae=5`、`cCt`）；首次连接瞬时错误重试 3 次；失败后通知 "open /mcp to reconnect"。stdio/sdk 不自动重连。
+- `useManageMCPConnections`：远程传输 onclose → 自动重连最多 5 次，退避 1 s 起、上限 30 s（`ANSWER_STREAM_GRACE_MS` = 5（`chunk-dg4taswx.js#yfi` 语句内，落位 `services/mcp/mcpCallConstants.js`，在 `useManageMCPConnections` 里用作 `maxReconnectAttempts`）、`retryDelayMs`（`chunk-dg4taswx.js#cCt`））；首次连接瞬时错误重试 3 次；失败后通知 "open /mcp to reconnect"。stdio/sdk 不自动重连。
 - `reconnectMcpServerImpl`：清缓存 → `connectToServer` → 拉列表；needs-auth 时清缓存再试一次；账号变化返回 `IDENTITY_CHANGED`。
 
 ### 2.3 工具 / 提示词 / 资源映射
@@ -487,7 +487,7 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 
 钩子匹配器列表由 `SO`（`chunk-e6aww6q8.js#SO`，unattributed）→ `g4`/`f`（`chunk-7a5rgqvc.js`，unattributed）汇总，顺序：
 
-1. **启动快照**（`X2()` = `getHooksFromAllowedSources` 的缓存）：合并后的 settings `hooks`（user/project/local/flag/policy）。policy `disableAllHooks` → 空；policy `allowManagedHooksOnly` 或只允许插件定制（`isRestrictedToPluginOnly("hooks")`）→ 只取 policy 钩子；用户层 `disableAllHooks` 视受信层情况处理。
+1. **启动快照**（`getHooksConfigFromSnapshot()`（`chunk-2jdf5m4m.js#X2`）= `getHooksFromAllowedSources` 的缓存）：合并后的 settings `hooks`（user/project/local/flag/policy）。policy `disableAllHooks` → 空；policy `allowManagedHooksOnly` 或只允许插件定制（`isRestrictedToPluginOnly("hooks")`）→ 只取 policy 钩子；用户层 `disableAllHooks` 视受信层情况处理。
 2. **设备钩子**（`getPluginSettingsHooks(event)`）与**主线程代理钩子**（`getMainThreadAgentHooks()`，代理 frontmatter 注册的，managedOnly 时略过）。
 3. **注册钩子**（`getRegisteredHooks()`，`bootstrap/state`）：插件 `hooks/hooks.json`（带 pluginRoot/pluginId）、SDK `hooks` 回调（callback）、内部 callback。policy `disableAllHooks` 时只保留非插件、非设备的回调。
 4. **会话钩子**（`SessionHooksRegistry`）：skill frontmatter（`registerSkillHooks`，带 skillRoot，`once` 成功后移除）、agent frontmatter（`registerFrontmatterHooks`，子代理里 Stop 改成 SubagentStop）、`/goal` 等运行时注册、function 钩子（`addFunctionHook`，默认 5s 超时，回调参数是消息列表）。
@@ -553,7 +553,7 @@ command 钩子细节（`execCommandHook`）：
 |---|---|
 | 0 | 成功。stdout 若为 JSON 按输出协议处理；纯文本 stdout 作为 `hook_success` 附件（UserPromptSubmit/SessionStart/Setup 等会进入模型上下文，其余只在 transcript 模式显示） |
 | 2 | 阻断：stderr（为空则 “No stderr output”）作为 `blockingError` 反馈给模型/用户，具体含义见 `/hooks` 元数据（PreToolUse 阻止调用、Stop 让对话继续、UserPromptSubmit 抹去提示词…）。插件钩子 exit 2 但像“脚本丢失”时降级为非阻断错误 |
-| 其他 | 非阻断错误，stderr 只给用户看；PreToolUse/PermissionRequest 的失败会记到 `KE.noteHookFailure`；`onFailure: block` 时按 exit 2 处理（Stop 系与 async 钩子忽略 onFailure） |
+| 其他 | 非阻断错误，stderr 只给用户看；PreToolUse/PermissionRequest 的失败会记到 `attentionRegistryStore.noteHookFailure`；`onFailure: block` 时按 exit 2 处理（Stop 系与 async 钩子忽略 onFailure） |
 
 JSON 输出（`syncHookResponseSchema`，`types/hooks.ts`）：
 
@@ -624,7 +624,7 @@ prompt/agent 钩子协议：模型返回 `{ok, reason, impossible?}`（`hookResp
 5. 项目：从 cwd 向上到项目根的每级 `.claude/skills`（`Yoe("skills", …)`）。
 6. `--add-dir` 目录的 `.claude/skills`。
 7. 旧式 commands：`~/.claude/commands`、项目 `.claude/commands`、--add-dir 的 `.claude/commands`（loadedFrom=`commands_DEPRECATED`，子目录用 `:` 命名空间）。
-8. 插件 skill（`KTn()`，plugins 领域）。
+8. 插件 skill（`peekSessionCommands()`，plugins 领域注册的会话命令）。
 
 `isRestrictedToPluginOnly("skills")`（策略只允许插件）时只保留插件；`projectSettings` 来源关闭时不读项目和 --add-dir；`isBareMode()` 只读 --add-dir。被 `enabledPlugins` 设为 false 的 `<name>@<SKILLS_DIR>` 对应的用户/项目 skill 目录被跳过（看 `.claude-plugin/plugin.json` 的 name）。保留名冲突的 skill 拒绝加载并告警一次（`refuseReservedSkillName`）。单个 SKILL.md 有大小上限（`By`）。
 
@@ -1080,8 +1080,8 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 
 ## 12. 引用校验结果
 
-校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-04 05:09（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 2130 处引用：名字 1408/1413（另 5 个只在 2.1.88 中存在），路径 179/188（另 8 个只在 2.1.88 中存在），字面量 320/321（另 1 个只在 2.1.88 中存在），声明id 207/207，路径·函数 1/1；占位符与含空格的说明性文字 300 处未检查。
-- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`utils/computerUse/appNames.ts`、`utils/computerUse/computerUseLock.ts`、`utils/computerUse/wrapper.tsx`、`isPathSafe`、`bypass_permissions_disabled`、`textDocument/publishDiagnostics`、`true/false`、`getChicagoEnabled`、`computerUseLock.ts`、`appNames.ts`、`utils/plugins/gitAvailability.ts`、`permissionBehaviorSchema`、`--computer-use-mcp`
-- 未通过 1 处：server/discover
+- 共检查 2134 处引用：名字 1409/1416（另 7 个只在 2.1.88 中存在），路径 179/187（另 8 个只在 2.1.88 中存在），字面量 319/320（另 1 个只在 2.1.88 中存在），声明id 210/210，路径·函数 1/1；占位符与含空格的说明性文字 300 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`utils/computerUse/appNames.ts`、`utils/computerUse/computerUseLock.ts`、`utils/computerUse/wrapper.tsx`、`Bdn`、`TBt`、`isPathSafe`、`bypass_permissions_disabled`、`textDocument/publishDiagnostics`、`true/false`、`getChicagoEnabled`、`computerUseLock.ts`、`appNames.ts`、`utils/plugins/gitAvailability.ts`、`permissionBehaviorSchema`、`--computer-use-mcp`
+- 未通过：0 处。

@@ -56,7 +56,7 @@ UI 子系统是交互模式（非 `-p`）的全部界面：主屏幕 REPL、输�
 | 局部名 | 构造 | 作用（从构造参数与方法名读出） | 声明 id |
 |---|---|---|---|
 | `scope` | `ReplSessionScope` | 会话作用域：commands、renderingTools、dynamicMcpConfig、`requestDialog`、`dialogTransport`、`localJsx`、`addAutoConnectedIde`；`connect()/dispose()` | `chunk-18hwfzwa.js#NQ` |
-| `turn` / `transcript` / `sessionEngine` | `TurnController`（`chunk-18hwfzwa.js#ste`）+ 转录 store（`bte`）+ 引擎（`Mie` 或 props.engine） | 一个回合的生命周期：`guard`（isActive/isRunning）、`loading`、`stream`（toolProgress、userInputOnProcessing、responseLength）、`buildToolUseContext`、`submitIncomingPrompt`、`retractRateLimitAutoContinue`；转录 `apply({type:"append"})/getSnapshot/conversation` | `#ste`、`#bte` |
+| `turn` / `transcript` / `sessionEngine` | `TurnController`（`chunk-18hwfzwa.js#ste`）+ 转录 store（`bte`）+ 引擎（`runWithQueryParams(...)` 或传入的 engine） | 一个回合的生命周期：`guard`（isActive/isRunning）、`loading`、`stream`（toolProgress、userInputOnProcessing、responseLength）、`buildToolUseContext`、`submitIncomingPrompt`、`retractRateLimitAutoContinue`；转录 `apply({type:"append"})/getSnapshot/conversation` | `#ste`、`#bte` |
 | `chrome` | `ComposerChrome`（`chunk-18hwfzwa.js#ute`） | 输入区"外壳"状态：ideSelection、bashesDialog、退出流程、`openMessageSelector`、`setView` | `#ute` |
 | `networkPrompts` | `SandboxNetworkPrompts`（`chunk-18hwfzwa.js#MQ`） | 沙箱网络访问询问（经 requestDialog 或 bridge） | `#MQ` |
 | `sandbox` | `cz` | 沙箱启停与不可用原因（failIfUnavailable 时拒绝启动） | `#cz` |
@@ -117,7 +117,7 @@ REPLWithProviders
 
 ### 3.4 REPL 挂接的副作用 hooks（按代码顺序）
 
-`useRegistryOverride(session)`（`chunk-18hwfzwa.js#IEe`）、`useBackgroundStatusSync()`（`chunk-18hwfzwa.js#MEe`）（spinner 模式）、`useKeybindingWarnings()`、`useExternalDialogBridge(scope.dialogTransport)`（`chunk-18hwfzwa.js#EF`）（对话框传输）、`runStartupNotificationSpecs`（`chunk-18hwfzwa.js#LEe`）/`FeatureOfTheWeekClaim`（`chunk-18hwfzwa.js#OIe`）/`FEe`（启动通知、"feature of the week" 额度）、`useTrustedDeviceEnrolledNotice`（`chunk-18hwfzwa.js#EIe`）/`useInformationalMessageSink`（`chunk-18hwfzwa.js#MIe`）（转录里的 notice/system 消息）、`soe`（LSP 插件推荐）、`useClaudeCodeHintRecommendation`、`useIDEIntegration`、`useAwaySummaryOnce`（`chunk-18hwfzwa.js#VEe`，文件历史快照初始化；当前语义名与行为不符）、`useSessionBackgrounding`、`useSemanticPromptMarks`（`chunk-18hwfzwa.js#aMe`，OSC 133 语义提示：markTurnStart/markTurnDone）、`VN`（左箭头打开 agents 等手势）、`useLogMessages`（转录持久化）、`AIe`（bridge 回复）、`useQueueProcessor`、btw 历史重开器（`/btw`）、`useStartupNotifications`（`chunk-18hwfzwa.js#jEe`，空闲阈值；返回 idleThresholdMin，当前语义名与行为不符）、`useInboxPollerHook`（`chunk-18hwfzwa.js#rEe`）+ `useMailboxBridge`（swarm 收件箱）、`useScheduledTasks`（/loop、schedule_wakeup）、`useUsageLimitNotices`（`chunk-18hwfzwa.js#VIe`）（token 告警状态）、`getViewedTeammateTask`、`FIe`、面板坞相关 `PaneDockNamespace.usePanesAtOnce`/`PaneDockNamespace.useDockColumns`/`PaneDockNamespace.usePaneToastHold`/`PaneDockNamespace.useBarToasts`（`chunk-18hwfzwa.js#ah`）、`useTerminalViewportNamespace.useTerminalViewport(columns, rows, 占用列宽)`。
+`useRegistryOverride(session)`（`chunk-18hwfzwa.js#IEe`）、`useBackgroundStatusSync()`（`chunk-18hwfzwa.js#MEe`）（spinner 模式）、`useKeybindingWarnings()`、`useExternalDialogBridge(scope.dialogTransport)`（`chunk-18hwfzwa.js#EF`）（对话框传输）、`runStartupNotificationSpecs`（`chunk-18hwfzwa.js#LEe`）/`FeatureOfTheWeekClaim`（`chunk-18hwfzwa.js#OIe`）/`FEe`（启动通知、"feature of the week" 额度）、`useTrustedDeviceEnrolledNotice`（`chunk-18hwfzwa.js#EIe`）/`useInformationalMessageSink`（`chunk-18hwfzwa.js#MIe`）（转录里的 notice/system 消息）、`soe`（LSP 插件推荐）、`useClaudeCodeHintRecommendation`、`useIDEIntegration`、`useAwaySummaryOnce`（`chunk-18hwfzwa.js#VEe`，文件历史快照初始化；当前语义名与行为不符）、`useSessionBackgrounding`、`useSemanticPromptMarks`（`chunk-18hwfzwa.js#aMe`，OSC 133 语义提示：markTurnStart/markTurnDone）、`VN`（左箭头打开 agents 等手势）、`useLogMessages`（转录持久化）、`ReplBridgeConnector`（bridge 回复）、`useQueueProcessor`、btw 历史重开器（`/btw`）、`useStartupNotifications`（`chunk-18hwfzwa.js#jEe`，空闲阈值；返回 idleThresholdMin，当前语义名与行为不符）、`useInboxPollerHook`（`chunk-18hwfzwa.js#rEe`）+ `useMailboxBridge`（swarm 收件箱）、`useScheduledTasks`（/loop、schedule_wakeup）、`useUsageLimitNotices`（`chunk-18hwfzwa.js#VIe`）（token 告警状态）、`getViewedTeammateTask`、`FIe`、面板坞相关 `PaneDockNamespace.usePanesAtOnce`/`PaneDockNamespace.useDockColumns`/`PaneDockNamespace.usePaneToastHold`/`PaneDockNamespace.useBarToasts`（`chunk-18hwfzwa.js#ah`）、`useTerminalViewportNamespace.useTerminalViewport(columns, rows, 占用列宽)`。
 
 ### 3.5 对话框栈
 
@@ -335,15 +335,15 @@ REPLWithProviders
 ## 12. 未解之处
 
 - `chunk-18hwfzwa.js` 中一批未归属的核心类（`TurnController`（`chunk-18hwfzwa.js#ste`）、`SessionController`（`chunk-18hwfzwa.js#lz`）、`PromptSubmitController`（`chunk-18hwfzwa.js#yte`）、`ComposerChrome`（`chunk-18hwfzwa.js#ute`）、`PromptDraft`（`chunk-18hwfzwa.js#zY`）、`ScrollPin`（`chunk-18hwfzwa.js#Yee`）、`BackgroundGesture`（`chunk-18hwfzwa.js#XG`）、`ReplSessionScope`（`chunk-18hwfzwa.js#NQ`）、`XC` 对话框宿主、`DIALOG_REGISTRY`（`chunk-18hwfzwa.js#ZAe`）注册表、`Gee` 消息区、`PromptAreaWithBackgroundHint`/`Nke`/`PromptComposer`（`chunk-18hwfzwa.js#y8`/`chunk-18hwfzwa.js#Nke`/`chunk-18hwfzwa.js#Oet`）输入区、`TranscriptView`（`chunk-18hwfzwa.js#gQ`）转录视图、`_F` 屏幕框架）在 88 中没有对应文件，应由 lead 新建重组路径（建议放 `screens/repl/*`）。本手册按构造参数与方法名描述，内部逻辑未逐行核实。
-- `REPL` 的若干局部（`isInsidePanelHost`=`Se(lVt)`、`dialogOverPanel`=`VI()`、`exitState`=`Ie(chrome, BV)`、`hasTeamModal`/`isModalOpen`）语义只从用途推断，置信度 0.6。
+- `REPL` 的若干局部（`isInsidePanelHost`=`useContext(rootSessionSlot) !== null`、`dialogOverPanel`=`useHasBlockingDialog()`、`exitState`=`useStoreSelector(chrome, isExiting)`、`hasTeamModal`=`useHasModalDialog()`/`isModalOpen`=`useHasModalUserDialog()`）语义只从用途推断，置信度 0.6。
 - `components/agents/*` 与 `new-agent-creation/wizard-steps/*` 的内容与模块名明显不符（实为 Bedrock/Vertex/云网关设置向导等），旧版 `/agents` 创建向导在 316 的真实位置未确认。
 - `inputModes.ts` 中 `chunk-2rkp9ne9.js` 的 34 个声明（propose_skills 相关）真实归属未确认。
 - `PermissionRequest` 流程中 `repromptFilePermission`（`chunk-s4bxxzsw.js#pWn`）及其调用的 `usePermissionRequestLogging` 的旧版名不准确，后者实际是"显示并管理权限对话框"。
 
 ## 13. 引用校验结果
 
-校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-04 05:09（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 909 处引用：路径 85/87（另 2 个只在 2.1.88 中存在），字面量 122/122，名字 613/622（另 9 个只在 2.1.88 中存在），声明id 78/78；占位符与含空格的说明性文字 152 处未检查。
-- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`toolUseConfirmQueue`、`messages/*`、`SedEditPermissionRequest`、`UserBashOutputMessage`、`UserToolCanceledMessage`、`PromptInputStashNotice`、`useMergedTools/useMergedCommands`、`useElapsedTime`、`useSettingsChange`、`useSkillsChange`
+- 共检查 909 处引用：路径 85/87（另 2 个只在 2.1.88 中存在），字面量 123/123，名字 610/621（另 11 个只在 2.1.88 中存在），声明id 78/78；占位符与含空格的说明性文字 154 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`toolUseConfirmQueue`、`messages/*`、`FIe`、`V3e`、`SedEditPermissionRequest`、`UserBashOutputMessage`、`UserToolCanceledMessage`、`PromptInputStashNotice`、`useMergedTools/useMergedCommands`、`useElapsedTime`、`useSettingsChange`、`useSkillsChange`
 - 未通过：0 处。

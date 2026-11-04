@@ -121,7 +121,7 @@ tools/AgentTool/AgentTool.ts · AgentTool(agentInput…)
 | 字段 | 默认行为 |
 |---|---|
 | `abortController` | 父控制器的子控制器（`shareAbortController` 时共用） |
-| `getAppState` | 包一层，强制 `toolPermissionContext.shouldAvoidPermissionPrompts` 为 true，并追加 `{kind:"avoid_prompts"}` 权限层（共享 abort 或自带 getAppState 时不加） |
+| `getAppState` | 包一层，强制 `toolPermissionContext.shouldAvoidPermissionPrompts` 为 true，并追加 `kind: "avoid_prompts"` 权限层（共享 abort 或自带 getAppState 时不加） |
 | `setAppState` | 隔离：只允许回写父状态的 `frameUrls`（`shareSetAppState` 时共用） |
 | `readFileState` | 克隆（`stripSeededFromContext`） |
 | 文件历史 / denial tracking | 默认隔离（文件历史只转发 `touch` 操作） |
@@ -139,7 +139,7 @@ fork 子代理"继承整个对话"：
 - `utils/forkedAgent.ts · createCacheSafeParams(context)` 抽出系统提示词、user/system context、toolUseContext、父消息（`forkContextMessages`）、advisor 模型、sticky betas——这些与父请求一致，fork 的首个请求能命中父请求的提示缓存。
 - `tools/AgentTool/forkSubagent.ts · buildForkedMessages(directive, assistantMessage, forkToolUseId)`：复制父 assistant 消息（换 uuid），给其中每个 tool_use 补 tool_result：发起 fork 的那个写"Fork started — that fork is you."，其余写"This is the parent's call…"，最后附上 fork 指令文本。worktree 隔离时再加 `buildWorktreeNotice`。
 - `utils/forkedAgent.ts · runForkedAgent`（门面原名，外层维护活动 fork 计数）→ `runForkedAgentImpl`：
-  1. `createSubagentContext`（默认 `isBackgroundAgent`、`memoryCaller: "worker"`、`requireCanUseTool`；指定 model 时加 `{kind:"model"}` 权限层）；
+  1. `createSubagentContext`（默认 `isBackgroundAgent`、`memoryCaller: "worker"`、`requireCanUseTool`；指定 model 时加 `kind: "model"` 权限层）；
   2. 不声明 `ownPrefix` 时必须沿用父工具集（否则抛错，保证缓存前缀一致）；`toolCallRoutes` 只允许替换工具的 `call`；
   3. 初始消息 = 父消息 + promptMessages，记录 fork 点 uuid（`forkPointUuidOf`）；sticky betas 继承；
   4. 循环 `runQuery`，累计 usage、写 sidechain transcript（`skipTranscript` 时不写）；
@@ -166,7 +166,7 @@ fork 子代理"继承整个对话"：
 </task-notification>
 ```
 
-要点：先"认领" `notified` 标记（`Uee`），已通知过的不再发；投递对象由 `resolveNotificationRecipient` 决定——属主仍在运行的本地代理就发给属主，否则发给主线程，改投主线程时用 `stripOwnerOnlyHints` 去掉只对属主有意义的提示；属主结束时 `rerouteQueuedNotificationsToMain` 把排队的通知改投主线程。结果文本里含 Artifact 内容时附"转述内容视为数据"的提示。
+要点：先"认领" `notified` 标记（`claimTaskNotification`），已通知过的不再发；投递对象由 `resolveNotificationRecipient` 决定——属主仍在运行的本地代理就发给属主，否则发给主线程，改投主线程时用 `stripOwnerOnlyHints` 去掉只对属主有意义的提示；属主结束时 `rerouteQueuedNotificationsToMain` 把排队的通知改投主线程。结果文本里含 Artifact 内容时附"转述内容视为数据"的提示。
 
 ### 1.6 恢复与 SendMessage
 
@@ -226,7 +226,7 @@ ID = 前缀 + 8 位 36 进制随机字符（`generateTaskId`，crypto.randomByte
 `tasks/stopTask.ts · stopTask(taskId, context)`：
 
 1. 先按 ID 找，找不到时按名字/前缀模糊解析：ambiguous → `StopTaskError(…, "ambiguous")`，找不到 → `not_found`（附建议）。
-2. 观察者代理不能停自己（`not_owner`）；非属主代理不能停别人的任务（`Kvt` 属主判断）。
+2. 观察者代理不能停自己（`not_owner`）；非属主代理不能停别人的任务（`agentIdMatches` 属主判断）。
 3. "已结束但循环还没退出"的 workflow/代理：重新中止并杀掉进程组，返回带 note 的结果。
 4. 不在运行 → `not_running`；未知类型 → `unsupported_type`。
 5. 调用任务实现的 `kill`；local_agent 级联停止其子代理（`isCascadeStopExempt` / `isSparedFromCascadeStop` 豁免的除外，并发 `cascadeSpared` 事件）。
@@ -651,7 +651,7 @@ runBridgeLoop                                                     bridge/bridgeM
 | DELETE | `/v1/environments/bridge/{envId}` | deregisterEnvironment |
 | POST | `/v1/environments/bridge/{envId}/offline` | markEnvironmentOffline |
 | POST | `/v1/environments/{envId}/bridge/reconnect` | reconnectSession（`{session_id}`） |
-| POST | `/v1/sessions/{id}/archive` 或 `/v1/code/sessions/${toInfraSessionId(r)}/archive` | archiveSession（409 视为已归档） |
+| POST | `/v1/sessions/{id}/archive`（`useCcrV2SessionCrud` 为假）或 `/v1/code/sessions/${toInfraSessionId(sessionId)}/archive`（为真） | archiveSession（409 视为已归档） |
 | POST | `/v1/code/sessions/{id}/tool_hosts/refuse` | refuseToolHost |
 | GET | `/v1/code/sessions?limit=1`、`/v1/code/sessions/watch` (SSE) | sessionsWatch.mintResumeToken / open |
 | POST | `/v1/code/sessions/{id}/worker/register` | registerWorker |
@@ -996,8 +996,8 @@ GrowthBook（本领域非 bridge 部分）：`tengu_amber_flint`（团队）、`
 
 ## 13. 引用校验结果
 
-校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-04 05:09（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 1375 处引用：名字 998/1002（另 4 个只在 2.1.88 中存在），路径 155/159（另 4 个只在 2.1.88 中存在），字面量 173/175（另 2 个只在 2.1.88 中存在），声明id 39/39；占位符与含空格的说明性文字 222 处未检查。
+- 共检查 1374 处引用：名字 999/1003（另 4 个只在 2.1.88 中存在），路径 155/159（另 4 个只在 2.1.88 中存在），字面量 171/173（另 2 个只在 2.1.88 中存在），声明id 39/39；占位符与含空格的说明性文字 224 处未检查。
 - 只在 2.1.88 中存在（删除项或旧名，预期如此）：`approve/reject`、`Ctrl-C/D`、`secret.use_code_sessions`、`--session-timeout`、`sessionTimeoutMs`、`bridge/replBridge.ts`、`initBridgeCore`、`startWorkPollLoop`、`companionMuted`
 - 未通过：0 处。

@@ -174,7 +174,7 @@ mcpMount, toolsNarrowing, mcpServerPolicy, hostCredential                     //
 
 - 四个新增来源：
   - `mcpMount`：显示为 "Remote Control server mount"；
-  - `toolsNarrowing`：工具收窄，和 `command` 同属一组（`Qie`）；
+  - `toolsNarrowing`：工具收窄，和 `command` 同属一组（`NARROWING_RULE_SOURCES` = `["toolsNarrowing", "command"]`，`chunk-sfy7bm1n.js#_te`）；
   - `mcpServerPolicy`：MCP 服务器策略；
   - `hostCredential`：宿主凭据 deny。
   在路径规则里，这四个来源的根都取 cwd（`filesystem · rootPathForSource`）。
@@ -252,7 +252,7 @@ canUseTool = hooks/useCanUseTool.ts → utils/permissions/permissions.ts · hasP
 7. 沙箱或只读自动放行的 allow 可能被改为 ask，交服务端复核（`shouldRetagAskAsSandboxOverride`、`sandboxOverrideAskGuardsOn`；改标由 GrowthBook `tengu_curried_squirrel` 控制）。
 8. MCP 工具的 `effectiveMaxPermission === "ask"` 上限（`askCeilingReason`）。
 9. **bypassPermissions 模式**放行。不能放行的有两类：safetyCheck（例如 `.claude/settings.json`、`.git/`）和 plan 地板。
-10. **allow 规则**（*findApplicableAllowRule*，`Kkn`）。
+10. **allow 规则**（*findApplicableAllowRule*，`chunk-e6aww6q8.js#Kkn`）。
 11. `passthrough` 转为 `ask`，消息由 `createPermissionRequestMessage` 生成。
 
 `checkRuleBasedPermissions`（门面名，`chunk-e6aww6q8.js#jC`）是给 PreToolUse 钩子返回 allow/ask 时复核用的变体：它同样调用 `tool.checkPermissions` 并施加 plan 写地板（`planModeWriteFloor`），但只返回 deny/ask，其余情况返回 null（不做 bypass/allow 规则放行）；检查崩溃且 `crashIsObjection` 时返回 ask。
@@ -271,7 +271,7 @@ canUseTool = hooks/useCanUseTool.ts → utils/permissions/permissions.ts · hasP
 - **auto**，或 Chrome 类工具按域名授权：
   1. 以下情况回退给人工，不交分类器：safetyCheck（`classifierApprovable: !1`）、ask 规则意图（`carriesAskRuleIntent`）、plan 地板、钩子要求弹窗（`hookAskFloor`）。
   2. 用 acceptEdits 上下文重跑 `checkPermissions` 的快路径。能放行就放行，不调模型。
-  3. 安全工具白名单（`iwt`）。
+  3. 安全工具白名单（`onSafeAllowlist`，主要由 `isBrowserToolAutoAllowed`（`chunk-e6aww6q8.js#kWt`）判定）。
   4. 插件或合成调用跳过分类器。
   5. 调用 `yoloClassifier · classifyYoloAction`（本地 `localClassifierSite:"gate"`），或使用服务端分类器（`serverHeldShellAllowSource` 等）。
   6. 被拦截时 `recordAutoModeDenial` 计一次拒绝，`enforceAutoModeDenialLimits` 检查上限。超限后上报 `tengu_auto_mode_denial_limit_exceeded`：headless 会话抛 AbortError；交互会话回退人工，并带 `denialLimitFallback` 和限时自动拒绝窗口 `autoDenyWindow`（时长取 `CLAUDE_CODE_TICKLISH_WHISPER_TIMEOUT_MS`）。只有累计超限才清零计数。
@@ -724,8 +724,8 @@ ShellCommand 的行为：
 
 ## 16. 引用校验结果
 
-校验时间 2026-11-03 04:41（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-04 05:09（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 666 处引用：名字 388/391（另 3 个只在 2.1.88 中存在），路径 61/63（另 2 个只在 2.1.88 中存在），字面量 141/142（另 1 个只在 2.1.88 中存在），声明id 64/64，路径·函数 6/6；占位符与含空格的说明性文字 125 处未检查。
-- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`allow/ask`、`deny/ask`、`parse-unavailable`、`classify_result`、`CLAUDE_CODE_JSONL_TRANSCRIPT`、`CLAUDE_CODE_DUMP_AUTO_MODE`
+- 共检查 669 处引用：名字 387/391（另 4 个只在 2.1.88 中存在），路径 61/63（另 2 个只在 2.1.88 中存在），字面量 141/142（另 1 个只在 2.1.88 中存在），声明id 67/67，路径·函数 6/6；占位符与含空格的说明性文字 126 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`mQo`、`allow/ask`、`deny/ask`、`parse-unavailable`、`classify_result`、`CLAUDE_CODE_JSONL_TRANSCRIPT`、`CLAUDE_CODE_DUMP_AUTO_MODE`
 - 未通过：0 处。
