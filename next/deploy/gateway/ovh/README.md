@@ -4,6 +4,13 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-04 核心 **0.1.241** + ccgateway **0.1.129**（`ed8f932a1`，北京时间 21:36–21:45；核心 manifest `7314f88d…8e39`，计划 `f51988f0431babf60c2d2617a94b4b2a` completed/13，没有暂停；迁移 0086，Host API 9；插件包 `804841ec…2fe2`，rollout 231，用户同意新增 `scheduler.rank` 权限）：
+- 内容：从开发分支发，一次带上 RPM/TPM 精确窗口与预占（`6d8ea676c`）、满并发排队（`6571924c1`）、重试规则的原账号重试开关（`8a34be86f`）、默认 429 重试规则（`e07d4b57b`），以及 [粘性、负载、套餐](../../../docs/audits/2026-11-04-sticky-load-tier.md)。
+- 只发核心和插件，67 个 `ccg-*` 容器没变。Worker 和 CLI 没有全量升级：`rate_limit_tier` 还没有值，未升级账号的计数回 503。#109 跑的是上一版 Worker。
+- 核验：两节点 ok，`/readyz` 与 api.prophey.ai 200，发布后错误日志 0；发布后 6 分钟 messages 102 条 200、1 条 499，粘性命中 85、未命中 14。
+- 回滚：0.1.241 有迁移，不能自动回滚（只加一列，旧核心不读它，手动回滚 0.1.240 可行）；插件 `rollout.py rollback` 回 0.1.128。
+- 脚本 `stage/0.1.241/`、`stage/ccgateway-0.1.129/`；备份 `backups/core-0.1.241`。
+
 2026-11-04 核心 **0.1.240** + ccgateway **0.1.128**（token 计数，北京时间 19:29–19:40；核心 `b41fad7fb`，发布分支 `release/count-tokens-core`，基于 0.1.239 只摘计数，**不含**开发分支上的 RPM/TPM、排队、重试开关，下次发核心要留意；插件 `841ce6b16`，包 `124e30ad…f78a`，rollout 230）：
 - 内容（CONTRACTS §11.6）：CCGateway 支持 `/v1/messages/count_tokens`，CLI `request --count` 原样透传（`ccgateway-v47-count-tokens`，ELF `02688698…0e56`，能力 `request_count_tokens_v1`）；计数不占并发、RPM、TPM、额度，失败不影响账号，和粘性无关。
 - 只发核心和插件，容器不变。Worker 和 CLI 只有 #109（`d7d504c01f447da7d`）原地升级（`runtimes/<key>/worker {"image":"ccgateway-app:0.1.128","components":["worker","cli"]}`），其余账号用户要求暂不升级；未升级账号核心回 503（`lacks request_count_tokens_v1`）并换号，不冷却。

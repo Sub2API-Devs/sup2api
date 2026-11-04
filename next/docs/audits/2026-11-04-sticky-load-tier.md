@@ -118,9 +118,9 @@
 | 套餐倍率 | 不使用 |
 | 负载公式 | 请求 Fable 模型用 7d Fable，其他模型用 7d（与套餐无关） |
 
-## 9. 实施状态（2026-11-04 已实现，未发布）
+## 9. 实施状态（2026-11-04 已发布：核心 0.1.241、ccgateway 0.1.129）
 
-原计划的三个分支没有留下代码，改在 `feat/next-platform` 上直接实现。**线上核心是 0.1.240（发布分支 `release/count-tokens-core`，基于 0.1.239 只摘计数），本文“现状”说的都是开发分支，排队（6571924c1）、RPM/TPM（6d8ea676c）和重试开关（8a34be86f）线上都还没有。**
+原计划的三个分支没有留下代码，改在 `feat/next-platform` 上直接实现。这次发布连同排队（6571924c1）、RPM/TPM（6d8ea676c）和重试开关（8a34be86f）一起上线。Worker 没有全量升级，所以 `rate_limit_tier` 还没有值。
 
 | 项 | 实现 | 与原方案的差异 |
 |---|---|---|
@@ -133,12 +133,6 @@
 
 测试：miniredis + PG，见 `sticky_session_test.go`、`failure_policy_test.go`（`TestStickyClaimAndRelease`）、`rank_test.go`、`ccgateway/rank_test.go`。核心 53 个包、SDK、各插件全部通过，前端账号页 211 个用例和类型检查通过。本机没有 gcc，`-race` 没跑；并发只用测试验证了结果，没有检查数据竞争。
 
-## 10. 发布注意
+## 10. 发布记录
 
-- 从开发分支发核心时，排队、RPM/TPM、重试开关会一起上线，要先定好范围。
-- proto 有变化：先发核心（旧插件忽略新字段），再发 ccgateway 插件 **0.1.129**（0.1.128 已发布，只有计数）。外壳的 Host API 这次不变。
-- 插件新增 `scheduler.rank` 权限，升级时要同意。
-- 迁移 0086 随核心重启执行，幂等；加了列的核心不能自动回滚到旧 schema。
-- `rate_limit_tier` 要 Worker 升级后才有值，目前只有 #109 跑过新 Worker，且不含这次改动。
-- 粘性绑定值从 `v1:<代数>:<id>` 变成 `<id>`，新旧都能读。滚动发布时旧节点的 CAS 可能写失败，只影响那一次请求的绑定。
-- 本轮不改的配置：账号的 priority 和 weight、max_concurrency，以及 key_includes 里的 model（是否去掉由用户另行决定）。
+见 [ovh 部署记录](../../deploy/gateway/ovh/README.md)。后续：Worker 全量升级后 `rate_limit_tier` 才有值；粘性绑定值从 `v1:<代数>:<id>` 变成 `<id>`，新旧都能读；本轮不改的配置：账号的 priority 和 weight、max_concurrency，以及 key_includes 里的 model（是否去掉由用户另行决定）。
