@@ -17,3 +17,5 @@ artifacts/official/*/claude-linux-x64
 artifacts/versions/
 # capture logs migrated from sup2api are evidence, not build logs
 !research/**/*.log
+# 2.1.88 reference source, fetched by tools/fetch-references.sh (was a submodule)
+/references/claude-code-analysis/
