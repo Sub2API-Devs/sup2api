@@ -398,7 +398,8 @@ func weightedOrder(grp []core.AccountRef, rnd func() float64) {
 // consumes nothing: no key or account concurrency, no RPM or TPM, no quota, and
 // a failed count says nothing about the account, which keeps its state
 // (2026-11-04). An account that is cooling or disabled still does not serve it.
-// It follows the session's sticky binding but never makes one (sticky.go).
+// It has nothing to do with sticky sessions: the account is picked by weight,
+// and no binding is read or written (resolveSticky).
 func (c *call) tokenCounting() bool {
 	return strings.HasSuffix(c.ep.Protocol, ".count_tokens")
 }
