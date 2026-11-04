@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -168,5 +169,36 @@ func TestCLILoginRefusalDisables(t *testing.T) {
 		require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, out.GetAccountEffect(), tc.body)
 		require.False(t, out.GetLocalFailure(), tc.body)
 		require.Empty(t, out.GetClientErrorType(), "CC's message reaches the client as written")
+	}
+}
+
+// A long context request refused for lack of usage credits says nothing about
+// the account: whatever reset headers come with it, the account stays usable.
+func TestLongContextCreditsRequiredLeavesAccountAlone(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	p := &Plugin{now: func() time.Time { return now }}
+	reset := strconv.FormatInt(now.Add(29*24*time.Hour).Unix(), 10)
+	for _, tc := range []struct {
+		name    string
+		headers map[string]string
+	}{
+		{"no limit headers", map[string]string{sourceHeader: "http"}},
+		{"far reset on the unified limit", map[string]string{sourceHeader: "http",
+			"anthropic-ratelimit-unified-status": "rejected", "anthropic-ratelimit-unified-reset": reset,
+			"anthropic-ratelimit-unified-representative-claim": "seven_day"}},
+		{"retry after", map[string]string{sourceHeader: "http", "retry-after": "604800"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := p.ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{
+				Account: &pluginv1.Account{Type: AccountTypeManaged}, Status: 429, Headers: tc.headers,
+				BodyPrefix: []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"Usage credits are required for long context requests."}}`),
+			})
+			require.NoError(t, err)
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT, out.GetAction())
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED, out.GetAccountEffect())
+			require.Zero(t, out.GetCooldownUntilUnix())
+			require.Nil(t, out.GetAutomaticState())
+			require.Nil(t, out.GetQuota())
+		})
 	}
 }

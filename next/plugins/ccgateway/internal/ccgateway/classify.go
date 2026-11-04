@@ -67,6 +67,13 @@ func isAccountBillingError(msg string) bool {
 	return strings.Contains(m, "credit balance is too low")
 }
 
+// isLongContextCreditsRequired detects the 429 Anthropic answers when a long
+// context request needs usage credits the organization does not have. It says
+// nothing about the account's limits, whatever reset headers come with it.
+func isLongContextCreditsRequired(msg string) bool {
+	return strings.Contains(strings.ToLower(msg), "usage credits are required for long context")
+}
+
 // ClassifyError implements pluginsdk.Platform.
 func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
 	now := p.now()
@@ -114,6 +121,11 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		if msg != "" {
 			resp.Reason += ": " + truncate(msg, 200)
 		}
+	case code == http.StatusTooManyRequests && isLongContextCreditsRequired(msg):
+		// The request's own shape is refused, not the account: no cooldown,
+		// no disable, and the client hears why.
+		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
+		resp.Reason = "long context request needs usage credits"
 	case code == http.StatusTooManyRequests:
 		classifyRateLimit(resp, in, source, now, cooldown)
 	case code == StatusOverloaded:

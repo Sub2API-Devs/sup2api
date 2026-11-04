@@ -4799,6 +4799,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 没有故障策略时（旧路径）：带解除时间的 `automatic_state` 现在也按"禁用到解除时间"执行（以前只当作冷却），没有解除时间的仍是冷却，永久禁用仍只由管理员规则决定（§42）。
 - 实现：`gateway/dispatch.go` 的 `pluginAutoDisable`、`applyPluginAccountState`；`core.AccountDirectory.AutoDisableUntil`（`account/directory.go`，走 `ApplyAccountAutomaticState`）。
 - CCGateway 已经这样分类 429（`classifyRateLimit`：托管账号禁用到 `anthropic-ratelimit-unified-reset` / `retry-after` 给出的时刻，没有时 60 秒），插件不用改；只要升级核心。
+- CCGateway 0.1.127 起（2026-11-04）：上游 429 的消息含 `Usage credits are required for long context` 时不算账号限流，不冷却、不禁用，也不看响应头里的重置时刻；没有故障策略时直接返回客户端。发布了故障策略时，是否换号仍由策略决定。
 
 ## 70. CCGateway 用量改为读响应头：请求时懒刷新、手动才主动查询（2026-10-30，用户要求）
 
