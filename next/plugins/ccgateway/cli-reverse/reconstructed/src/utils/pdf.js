@@ -53,7 +53,7 @@ function describePageRange(range) {
   if (firstPage === lastPage) return `page ${firstPage}`;
   return `pages ${firstPage}-${lastPage}`;
 }
-//@ chunk-t0gq9gyw.js:46713-47385 fingerprint = readPDF (0.929)
+//@ chunk-t0gq9gyw.js:46713-47385 fingerprint (2.1.88 match: readPDF, 0.929)
 /**
  * 整份读取 PDF 为 base64（大小上限内），返回 pdf 类型结果或带原因的错误。
  */
@@ -236,7 +236,7 @@ var WINDOWS_MAX_PATH = 259;
 var PDFINFO_TIMEOUT_MS = 1e4;
 var STDIN_PATH = "-";
 var READ_CHUNK_BYTES = 1048576;
-//@ chunk-t0gq9gyw.js:49058-49264 layout = readJSONLFile (1)
+//@ chunk-t0gq9gyw.js:49058-49264 layout (2.1.88 match: readJSONLFile, 1)
 async function readJSONLFile(handle, size, signal) {
   let buf = Buffer.allocUnsafe(size);
   let totalRead = 0;
@@ -356,7 +356,7 @@ deferInit("chunk-t0gq9gyw.js:50510", () => {
 function getPdfToolAvailability() {
   return pdfToolAvailabilityByHost.of(getRootSession().host);
 }
-//@ chunk-t0gq9gyw.js:50572-50782 fingerprint = isPdftoppmAvailable (0.749)
+//@ chunk-t0gq9gyw.js:50572-50782 fingerprint (2.1.88 match: isPdftoppmAvailable, 0.749)
 /**
  * 检测 pdftoppm 是否可用（pdftoppm -v，结果缓存）。
  */
@@ -371,7 +371,7 @@ async function isPdftoppmAvailable() {
   if (available) pdfToolAvailability.markAvailable();
   return available;
 }
-//@ chunk-t0gq9gyw.js:50782-55214 fingerprint = extractPDFPages (0.581)
+//@ chunk-t0gq9gyw.js:50782-55214 fingerprint (2.1.88 match: extractPDFPages, 0.581)
 /**
  * 用 pdftoppm 把指定页区间渲染为 JPEG 到临时目录，返回 parts 结果（页数、输出目录）。
  */
@@ -787,7 +787,7 @@ async function listPdfSidecarPages(storage, outputDir, scope) {
     scope: sidecarScope,
   };
 }
-//@ chunk-cne5hsvz.js:19054-19108 fingerprint = getPDFPageCount (0.355)
+//@ chunk-cne5hsvz.js:19054-19108 fingerprint (2.1.88 match: getPDFPageCount, 0.355)
 /**
  * pdftoppm/pdfinfo 子进程选项（用 cwd、精简 env）。误配名。
  */

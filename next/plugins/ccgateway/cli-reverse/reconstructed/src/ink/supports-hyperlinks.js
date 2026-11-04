@@ -19,7 +19,7 @@ var supportsHyperlinksModule; // deferred: has load-time effects after a deferre
 deferInit("chunk-avfhvhz8.js:2914", () => {
   supportsHyperlinksModule = __toESM(supportsHyperlinksPackage(), 1);
 });
-//@ chunk-avfhvhz8.js:2930-3012 fingerprint = ADDITIONAL_HYPERLINK_TERMINALS (0.918)
+//@ chunk-avfhvhz8.js:2930-3012 fingerprint (2.1.88 match: ADDITIONAL_HYPERLINK_TERMINALS, 0.918)
 /**
  * supports-hyperlinks 之外额外认为支持 OSC 8 的终端名（TERM_PROGRAM / LC_TERMINAL）。
  */
@@ -43,7 +43,7 @@ function getForcedHyperlinkSetting(options) {
   if (!FORCE_HYPERLINK) return;
   return !(isEnvDefinedFalsy(FORCE_HYPERLINK) || parseInt(FORCE_HYPERLINK, 10) === 0);
 }
-//@ chunk-avfhvhz8.js:3166-3701 fingerprint = supportsHyperlinks (0.444)
+//@ chunk-avfhvhz8.js:3166-3701 fingerprint (2.1.88 match: supportsHyperlinks, 0.444)
 /**
  * 终端是否支持 OSC 8 超链接：显式设置 → supports-hyperlinks 包 → 额外终端名单 → JetBrains → Windows Terminal（不在 tmux 内）→ tmux ≥3.4 → LC_TERMINAL → TERM 含 kitty。
  */

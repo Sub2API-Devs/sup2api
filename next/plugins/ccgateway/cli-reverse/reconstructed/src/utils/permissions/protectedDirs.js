@@ -173,7 +173,7 @@ function isSystemVolumePath(inputPath) {
 function foldCasePair(value) {
   return value.toUpperCase().toLowerCase();
 }
-//@ chunk-aat7wt0p.js:14135-14220 placement = isDangerousFilePathToAutoEdit (1)
+//@ chunk-aat7wt0p.js:14135-14220 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
 function getRepoRootForWorktreePath(path) {
   return basename(dirname(path)) === "worktrees" && basename(dirname(dirname(path))) === ".claude"
     ? dirname(dirname(dirname(path)))

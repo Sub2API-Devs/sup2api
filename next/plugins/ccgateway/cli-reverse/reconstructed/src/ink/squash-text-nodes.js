@@ -41,7 +41,7 @@ function consumeAbsoluteNodeRemoved(node) {
   node.absoluteNodeRemoved = false;
   return wasRemoved;
 }
-//@ chunk-bzr73sfg.js:176152-176712 fingerprint = squashTextNodesToSegments (0.881)
+//@ chunk-bzr73sfg.js:176152-176712 fingerprint (2.1.88 match: squashTextNodesToSegments, 0.881)
 /**
  * 把 ink-text 子树压平成 {text, styles, hyperlink} 段：样式沿树合并，ink-link 的 href 作为超链接下传；跨文本节点被拆开的 UTF-16 代理对会拼回前一段。
  */
@@ -77,7 +77,7 @@ function squashTextNodesToSegments(node, inheritedStyles = {}, inheritedHyperlin
   }
   return out;
 }
-//@ chunk-bzr73sfg.js:176712-176949 fingerprint = squashTextNodes (1)
+//@ chunk-bzr73sfg.js:176712-176949 fingerprint (2.1.88 match: squashTextNodes, 1)
 /**
  * 把 ink-text 子树的纯文本拼起来（不带样式）。
  */

@@ -16,7 +16,7 @@ import { isEssentialTrafficOnly } from "./privacyLevel.js";
 import { setLastAPIRequest, setLastAPIRequestMessages } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bbtre4r8.js:14747-15020 facade-exports = getLogDisplayTitle (0.847)
+//@ chunk-bbtre4r8.js:14747-15020 facade-exports (2.1.88 match: getLogDisplayTitle, 0.847)
 function getLogDisplayTitle(log, defaultTitle) {
   let firstPromptText = log.firstPromptShown ?? log.firstPrompt;
   let isAutonomousPrompt = firstPromptText?.startsWith(`<${TICK}>`);
@@ -41,7 +41,7 @@ function dateToFilename(date) {
 //@ chunk-bbtre4r8.js:15080-15097 layout
 var MAX_REMEMBERED_ERRORS = 100;
 var MAX_REMEMBERED_ERROR_CHARS = 1000;
-//@ chunk-bbtre4r8.js:15097-16155 fingerprint = attachErrorLogSink (0.433)
+//@ chunk-bbtre4r8.js:15097-16155 fingerprint (2.1.88 match: attachErrorLogSink, 0.433)
 class attachErrorLogSink_2 {
   recentErrors = [];
   queue = [];
@@ -111,7 +111,7 @@ deferInit("chunk-bbtre4r8.js:16155", () => {
 function attachErrorLogSink(errorLogSink) {
   errorLogBuffer.attachSink(errorLogSink);
 }
-//@ chunk-bbtre4r8.js:16203-16666 facade-exports = logError (0.598)
+//@ chunk-bbtre4r8.js:16203-16666 facade-exports (2.1.88 match: logError, 0.598)
 /**
  * 记录错误：写入错误日志与内存环形缓冲（有长度上限），非生产时输出调试；被约 1790 处调用。
  */
@@ -144,7 +144,7 @@ function logError(error) {
 function getInMemoryErrors() {
   return [...errorLogBuffer.recentErrors];
 }
-//@ chunk-bbtre4r8.js:16709-16791 facade-exports = logMCPError (0.734)
+//@ chunk-bbtre4r8.js:16709-16791 facade-exports (2.1.88 match: logMCPError, 0.734)
 function logMCPError(serverName, error) {
   try {
     errorLogBuffer.dispatch({
@@ -154,7 +154,7 @@ function logMCPError(serverName, error) {
     });
   } catch {}
 }
-//@ chunk-bbtre4r8.js:16791-16875 facade-exports = logMCPDebug (0.734)
+//@ chunk-bbtre4r8.js:16791-16875 facade-exports (2.1.88 match: logMCPDebug, 0.734)
 function logMCPDebug(serverName, message) {
   try {
     errorLogBuffer.dispatch({
@@ -172,7 +172,7 @@ function keepsMCPDebug() {
     return true;
   }
 }
-//@ chunk-bbtre4r8.js:16949-17070 facade-exports = isMainThreadSource (1)
+//@ chunk-bbtre4r8.js:16949-17070 facade-exports (2.1.88 match: isMainThreadSource, 1)
 function captureAPIRequest(request, querySource, isEligible) {
   if (!querySource || !querySource.startsWith("repl_main_thread")) return;
   if (!isEligible) return;
@@ -180,7 +180,7 @@ function captureAPIRequest(request, querySource, isEligible) {
   setLastAPIRequest(requestWithoutMessages);
   setLastAPIRequestMessages(null);
 }
-//@ chunk-s67w32sp.js:5050-5139 fingerprint = dateToFilename (0.673)
+//@ chunk-s67w32sp.js:5050-5139 fingerprint (2.1.88 match: dateToFilename, 0.673)
 function dateToFilename_2(date) {
   let timestamp = Date.parse(date);
   return new Date(Number.isFinite(timestamp) ? timestamp : 0).toISOString();

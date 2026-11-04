@@ -14,8 +14,8 @@
 //   *-<hash>.<ext>   resources imported `with { type: "file" }`
 // The CLI runs on Bun: `bun dist/cli.js …`, or `npm start -- …` (= node build.mjs run -- …).
 //
-// Bun is looked up in this order: --bun, $BUN, node_modules/bun/bin/bun[.exe] in this directory
-// or any parent, `bun` on PATH. Any other version than 1.4.4 is refused unless --any-bun.
+// Bun is looked up in this order: --bun, $BUN, node_modules/bun/bin/bun[.exe] or
+// node_modules/@oven/bun-*/bin/bun[.exe] in this directory or any parent, `bun` on PATH. Any other version than 1.4.4 is refused unless --any-bun.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -36,13 +36,18 @@ const ENTRIES = [
   { entry: 'src/plugins/functionHooks/hooks-worker/hooks-worker.js', out: 'src/plugins/functionHooks/hooks-worker' },
 ];
 
+// `npm ci --ignore-scripts` skips the bun package's postinstall, which leaves only a placeholder in
+// node_modules/bun/bin; the real binary is in the platform package node_modules/@oven/bun-<os>-<arch>/bin
 function findBun() {
   const explicit = opt('--bun', process.env.BUN);
   if (explicit) return explicit;
   const exe = process.platform === 'win32' ? 'bun.exe' : 'bun';
+  const runs = (p) => fs.existsSync(p) && spawnSync(p, ['--version'], { encoding: 'utf8' }).status === 0;
   for (let d = ROOT; ; d = path.dirname(d)) {
-    const cand = path.join(d, 'node_modules', 'bun', 'bin', exe);
-    if (fs.existsSync(cand)) return cand;
+    const nm = path.join(d, 'node_modules');
+    const oven = path.join(nm, '@oven');
+    const platformBins = fs.existsSync(oven) ? fs.readdirSync(oven).filter((n) => n.startsWith('bun-')).map((n) => path.join(oven, n, 'bin', exe)) : [];
+    for (const cand of [path.join(nm, 'bun', 'bin', exe), ...platformBins]) if (runs(cand)) return cand;
     if (path.dirname(d) === d) break;
   }
   return 'bun';

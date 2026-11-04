@@ -173,11 +173,11 @@ function isAmbientTask(task) {
 function skipsTranscript(task) {
   return task.skipTranscript === true || (task.type === "monitor_ws" && task.ambient === true);
 }
-//@ chunk-6vnxsn99.js:25436-25501 placement = getSelectableBackgroundTasks (0.813)
+//@ chunk-6vnxsn99.js:25436-25501 placement (2.1.88 match: getSelectableBackgroundTasks, 0.813)
 function getSelectableBackgroundTasks(task) {
   return task.type === "local_agent" ? task.agentType : undefined;
 }
-//@ chunk-6vnxsn99.js:25501-25574 placement = _temp6 (0.765)
+//@ chunk-6vnxsn99.js:25501-25574 placement (2.1.88 match: _temp6, 0.765)
 function isIdleTeammateTask(t_1) {
   return t_1.type === "in_process_teammate" && t_1.isIdle && !isTeammateAwaitingInput(t_1);
 }
@@ -223,7 +223,7 @@ function isCompletedBackgroundAgent(task) {
     !("chatPinForfeited" in task && task.chatPinForfeited === true)
   );
 }
-//@ chunk-6vnxsn99.js:70426-70499 placement = isPanelAgentTask (0.819)
+//@ chunk-6vnxsn99.js:70426-70499 placement (2.1.88 match: isPanelAgentTask, 0.819)
 /**
  * 是否是面板子代理任务：本地代理、非 main-session、非 fork worker。
  */
@@ -320,7 +320,7 @@ function releaseIfFinished(taskId, taskRegistry) {
 function keepaliveReasons(task) {
   return task.keepaliveReasons ?? new Set();
 }
-//@ chunk-6vnxsn99.js:71401-71537 placement = clearMcpClientConfig (0.39)
+//@ chunk-6vnxsn99.js:71401-71537 placement (2.1.88 match: clearMcpClientConfig, 0.39)
 /**
  * 给本地代理任务的 keepaliveReasons 集合添加一个原因（已存在或不是本地代理任务则不变），防止任务被回收。与 MCP 无关，旧版名 clearMcpClientConfig 配错。
  */

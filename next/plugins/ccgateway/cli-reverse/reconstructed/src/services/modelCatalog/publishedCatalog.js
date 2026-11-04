@@ -49,7 +49,7 @@ function classifyKeySource(key) {
   if (key === undefined) return;
   return key === MANAGED_MODEL_CATALOG_PUBLIC_KEY ? "managed_key" : "compiled_roots";
 }
-//@ chunk-g6j7q15x.js:1657-1974 placement = base64URLEncode (1)
+//@ chunk-g6j7q15x.js:1657-1974 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   let match = /^-----BEGIN PUBLIC KEY-----([\s\S]*?)-----END PUBLIC KEY-----$/.exec(buffer.trim());
   if (match === null || match[1] === undefined) return;
@@ -307,7 +307,7 @@ function fileUrlToPathOf(state) {
 }
 //@ chunk-g6j7q15x.js:4937-4947 placement
 var CATALOG_FETCH_TIMEOUT_MS = 1e4;
-//@ chunk-g6j7q15x.js:4947-5481 placement = fetchTeamMemoryHashes (0.372)
+//@ chunk-g6j7q15x.js:4947-5481 placement (2.1.88 match: fetchTeamMemoryHashes, 0.372)
 async function fetchPublishedCatalog(state, { etag, noCache = false } = {}) {
   try {
     return state.kind === "file"
@@ -555,7 +555,7 @@ function toUint8Array(value) {
   if (typeof value === "string") return new TextEncoder().encode(value);
   return new Uint8Array(0);
 }
-//@ chunk-g6j7q15x.js:8219-8357 placement = isServerError (0.751)
+//@ chunk-g6j7q15x.js:8219-8357 placement (2.1.88 match: isServerError, 0.751)
 function isAxiosBodyOrResponseError(err) {
   return (
     typeof err === "object" &&

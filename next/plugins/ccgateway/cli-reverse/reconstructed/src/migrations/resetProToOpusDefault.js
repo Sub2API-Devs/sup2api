@@ -15,7 +15,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { getSettings_DEPRECATED } from "../utils/settings/settings.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-cjydagjy.js:13529-14073 fingerprint = resetProToOpusDefault (0.873)
+//@ chunk-cjydagjy.js:13529-14073 fingerprint (2.1.88 match: resetProToOpusDefault, 0.873)
 /**
  * 迁移：Pro 用户未显式选模型时记录切到 Opus 默认（只做一次，opusProMigrationComplete）。
  */

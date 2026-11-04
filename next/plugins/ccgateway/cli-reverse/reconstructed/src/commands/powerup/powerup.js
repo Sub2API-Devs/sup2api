@@ -20,7 +20,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { LessonFooter, PowerupLessons } from "../../components/onboarding/PowerupLessons.js";
 import { Pane } from "../../components/design-system/Pane.js";
 
-//@ chunk-19dk83fw.js:18639-19401 placement = MobileQRCode (0.23)
+//@ chunk-19dk83fw.js:18639-19401 placement (2.1.88 match: MobileQRCode, 0.23)
 function MobileQRCode(props) {
   let $ = useMemoCache(15);
   let { lesson, isUnlocked, onDone, onBack } = props;
@@ -92,7 +92,7 @@ function MobileQRCode(props) {
   } else pane = $[14];
   return pane;
 }
-//@ chunk-fxpvgzqn.js:13703-13764 placement = call (0.635)
+//@ chunk-fxpvgzqn.js:13703-13764 placement (2.1.88 match: call, 0.635)
 /**
  * /powerup 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

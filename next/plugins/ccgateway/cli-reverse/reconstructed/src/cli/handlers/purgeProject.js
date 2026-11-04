@@ -214,7 +214,7 @@ function historyLineMatchesProjects(line, projects) {
     return false;
   }
 }
-//@ chunk-5f8vf2zr.js:17350-17570 placement = getErrorsPath (1)
+//@ chunk-5f8vf2zr.js:17350-17570 placement (2.1.88 match: getErrorsPath, 1)
 async function anyTranscriptInProjects(projectDir, projects, storage) {
   let storageNames = await listTranscriptFileNames(storage, projectDir);
   let fileNames;
@@ -652,12 +652,12 @@ async function transcriptKeysForProject(storage, projectDir) {
   let keys = await listTranscriptKeysForProjectDir(storage, projectDir);
   return keys === null ? null : keys.filter((key) => normalizeUuidOrNull(key) !== null);
 }
-//@ chunk-5f8vf2zr.js:23016-23112 placement = getErrorsPath (1)
+//@ chunk-5f8vf2zr.js:23016-23112 placement (2.1.88 match: getErrorsPath, 1)
 async function listTranscriptFileNames(storage, projectDir) {
   let keys = await listTranscriptKeysForProjectDir(storage, projectDir);
   return keys === null ? null : keys.map((key) => `${key}.jsonl`).sort();
 }
-//@ chunk-5f8vf2zr.js:23112-23307 placement = getErrorsPath (1)
+//@ chunk-5f8vf2zr.js:23112-23307 placement (2.1.88 match: getErrorsPath, 1)
 async function listSessionTranscriptFiles(dir, storage) {
   let keys = await transcriptKeysForProject(storage, dir);
   if (keys !== null) return keys;

@@ -57,7 +57,7 @@ function needsTextNormalization(texts) {
     ? expandTabs(texts.map((text) => replaceInvalidUtf16(text)))
     : undefined;
 }
-//@ chunk-bzr73sfg.js:177245-177286 fingerprint = LayoutPositionType (0.606)
+//@ chunk-bzr73sfg.js:177245-177286 fingerprint (2.1.88 match: LayoutPositionType, 0.606)
 /**
  * position 样式 → yoga PositionType（absolute=2，其余 relative=1）。
  */
@@ -71,7 +71,7 @@ function toYogaPositionType(position) {
 function toYogaDisplay(display) {
   return display === "none" ? 1 : 0;
 }
-//@ chunk-bzr73sfg.js:177323-177414 fingerprint = LayoutWrap (0.792)
+//@ chunk-bzr73sfg.js:177323-177414 fingerprint (2.1.88 match: LayoutWrap, 0.792)
 function toYogaWrap(flexWrap) {
   switch (flexWrap) {
     case "wrap":
@@ -82,7 +82,7 @@ function toYogaWrap(flexWrap) {
       return 0;
   }
 }
-//@ chunk-bzr73sfg.js:177414-177533 fingerprint = LayoutFlexDirection (0.909)
+//@ chunk-bzr73sfg.js:177414-177533 fingerprint (2.1.88 match: LayoutFlexDirection, 0.909)
 function toYogaFlexDirection(flexDirection) {
   switch (flexDirection) {
     case "row":
@@ -95,7 +95,7 @@ function toYogaFlexDirection(flexDirection) {
       return 0;
   }
 }
-//@ chunk-bzr73sfg.js:177533-177693 fingerprint = LayoutAlign (1)
+//@ chunk-bzr73sfg.js:177533-177693 fingerprint (2.1.88 match: LayoutAlign, 1)
 function toYogaAlign(align, fallback) {
   switch (align) {
     case "auto":
@@ -112,7 +112,7 @@ function toYogaAlign(align, fallback) {
       return fallback;
   }
 }
-//@ chunk-bzr73sfg.js:177693-177867 fingerprint = LayoutJustify (0.917)
+//@ chunk-bzr73sfg.js:177693-177867 fingerprint (2.1.88 match: LayoutJustify, 0.917)
 function toYogaJustify(justify) {
   switch (justify) {
     case "center":
@@ -129,7 +129,7 @@ function toYogaJustify(justify) {
       return 0;
   }
 }
-//@ chunk-18hwfzwa.js:329889-329999 fingerprint = LayoutOverflow (0.368)
+//@ chunk-18hwfzwa.js:329889-329999 fingerprint (2.1.88 match: LayoutOverflow, 0.368)
 function LayoutOverflow() {
   let hasAutoDialog = useHasAutoDialog();
   let hasDialog = useTopUserDialog() !== null;

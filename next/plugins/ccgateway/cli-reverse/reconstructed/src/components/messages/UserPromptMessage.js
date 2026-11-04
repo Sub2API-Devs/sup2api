@@ -174,7 +174,7 @@ function getViewedAgentLabel(state) {
 function selectIsBriefOnly_2(state) {
   return state.isBriefOnly;
 }
-//@ chunk-ah34pb7m.js:114411-114456 placement = _temp2 (1)
+//@ chunk-ah34pb7m.js:114411-114456 placement (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId(s_0) {
   return s_0.viewingAgentTaskId;
 }
@@ -298,7 +298,7 @@ function UserPromptText(props) {
   } else boxElement = $[27];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:115862-117725 fingerprint = UserPromptMessage (0.706)
+//@ chunk-ah34pb7m.js:115862-117725 fingerprint (2.1.88 match: UserPromptMessage, 0.706)
 function UserPromptMessage(props) {
   let $ = useMemoCache(33);
   let {

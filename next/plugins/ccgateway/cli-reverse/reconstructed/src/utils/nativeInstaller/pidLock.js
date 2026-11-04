@@ -19,7 +19,7 @@ import { isENOENT, toError } from "../errors.js";
 
 //@ chunk-zw17mz74.js:17940-17955 affinity
 var LOCK_STALE_MS = 7200000;
-//@ chunk-zw17mz74.js:17955-18035 callgraph-witnessed = isProcessRunning (1)
+//@ chunk-zw17mz74.js:17955-18035 callgraph-witnessed (2.1.88 match: isProcessRunning, 1)
 function isProcessRunning(pid) {
   if (pid <= 1) return false;
   try {
@@ -29,7 +29,7 @@ function isProcessRunning(pid) {
     return false;
   }
 }
-//@ chunk-zw17mz74.js:18035-18230 fingerprint = isClaudeProcess (1)
+//@ chunk-zw17mz74.js:18035-18230 fingerprint (2.1.88 match: isClaudeProcess, 1)
 function isClaudeProcess(pid, expectedExecPath) {
   if (!isProcessRunning(pid)) return false;
   if (pid === process.pid) return true;
@@ -43,7 +43,7 @@ function isClaudeProcess(pid, expectedExecPath) {
     return true;
   }
 }
-//@ chunk-zw17mz74.js:18230-18439 fingerprint = readLockContent (1)
+//@ chunk-zw17mz74.js:18230-18439 fingerprint (2.1.88 match: readLockContent, 1)
 function readLockContent(lockFilePath) {
   let fs = getFsImplementation();
   try {
@@ -58,7 +58,7 @@ function readLockContent(lockFilePath) {
     return null;
   }
 }
-//@ chunk-zw17mz74.js:18439-18728 fingerprint = isLockActive (1)
+//@ chunk-zw17mz74.js:18439-18728 fingerprint (2.1.88 match: isLockActive, 1)
 function isLockActive(lockFilePath) {
   let content = readLockContent(lockFilePath);
   if (!content) return false;
@@ -81,7 +81,7 @@ function isLockActive(lockFilePath) {
 function writeLockFile(lockFilePath, lockContent) {
   writeAndPublishSync(lockFilePath, jsonStringify(lockContent, null, 2));
 }
-//@ chunk-zw17mz74.js:18763-19295 fingerprint = tryAcquireLock (1)
+//@ chunk-zw17mz74.js:18763-19295 fingerprint (2.1.88 match: tryAcquireLock, 1)
 /**
  * tryAcquireLock：写 {pid,version,execPath,acquiredAt} 的 PID 锁文件，持有者存活且是 Claude 进程时失败。
  */
@@ -118,7 +118,7 @@ async function tryAcquireLock(versionPath, lockFilePath) {
     return null;
   }
 }
-//@ chunk-zw17mz74.js:19295-19459 fingerprint = acquireProcessLifetimeLock (1)
+//@ chunk-zw17mz74.js:19295-19459 fingerprint (2.1.88 match: acquireProcessLifetimeLock, 1)
 async function acquireProcessLifetimeLock(versionPath, lockFilePath) {
   let release = await tryAcquireLock(versionPath, lockFilePath);
   if (!release) return false;
@@ -143,7 +143,7 @@ async function withProcessLock(versionPath, lockFilePath, callback) {
     release();
   }
 }
-//@ chunk-zw17mz74.js:19556-20027 fingerprint = cleanupStaleLocks (0.858)
+//@ chunk-zw17mz74.js:19556-20027 fingerprint (2.1.88 match: cleanupStaleLocks, 0.858)
 async function cleanupStaleLocks(locksDir) {
   let fs = getFsImplementation();
   let cleanedCount = 0;

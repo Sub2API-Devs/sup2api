@@ -20,14 +20,14 @@ import { isPolicyAllowed } from "../../services/policyLimits/index.js";
 import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
 import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 
-//@ chunk-aepeg2w5.js:818839-818904 placement = isHTTPConfig (1)
+//@ chunk-aepeg2w5.js:818839-818904 placement (2.1.88 match: isHTTPConfig, 1)
 /**
  * 判断是否指向 CCR 云端浏览器（remote-browser）MCP 端点的 http 配置：type 为 http，且 url 是 `/v2/ccr-sessions/<id>/remote-browser/mcp` 形式（无凭证/查询/hash），或是带 mcp_server_id 的代理形式。旧版名 isHTTPConfig 不准确。
  */
 function isRemoteBrowserHttpConfig(config) {
   return config.type === "http" && (isHttpsCcrUrl(config.url) || isRemoteBrowserCcrUrl(config.url));
 }
-//@ chunk-aepeg2w5.js:818904-818982 placement = toScopedConfig (1)
+//@ chunk-aepeg2w5.js:818904-818982 placement (2.1.88 match: toScopedConfig, 1)
 /**
  * 是否为托管的 Claude in Chrome 动态 MCP 服务器（切分可疑：与 print.ts 关系弱）。
  */
@@ -51,7 +51,7 @@ function isRemoteBrowserModeFloorOn() {
     isPolicyAllowed()
   );
 }
-//@ chunk-gz7b768t.js:5978-6058 placement = getToolNameForPermissionCheck (1)
+//@ chunk-gz7b768t.js:5978-6058 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * 判断工具是否是云端浏览器服务器的工具且模式下限生效（此时该工具不能被自动放行）。旧版名 getToolNameForPermissionCheck 配错。
  */
@@ -61,7 +61,7 @@ function isRemoteBrowserToolUnderModeFloor(tool) {
     isRemoteBrowserModeFloorOn()
   );
 }
-//@ chunk-gz7b768t.js:6271-6342 placement = getToolNameForPermissionCheck (1)
+//@ chunk-gz7b768t.js:6271-6342 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * 对仅有工具名的调用判断是否要拒绝在常规权限检查之外放行云端浏览器调用（把名字当作服务器名套用 SH）。
  */

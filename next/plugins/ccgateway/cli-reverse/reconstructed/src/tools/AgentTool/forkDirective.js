@@ -34,7 +34,7 @@ import { runAsyncAgentLifecycle } from "./agentToolUtils.js";
 import { agentModelRestrictionNotifier } from "../../utils/model/agentModelRestriction.js";
 import { getQuerySourceForAgent } from "../../utils/promptCategory.js";
 
-//@ chunk-7jbxc8kr.js:717-3444 placement = resumeAgentBackground (0.432)
+//@ chunk-7jbxc8kr.js:717-3444 placement (2.1.88 match: resumeAgentBackground, 0.432)
 /**
  * 以 fork 代理身份在后台启动一个"继承上下文"的子代理（被技能/钩子等内部调用，非 Agent 工具）：分配名字、注册后台任务、用父线程渲染好的系统提示词和全部消息、useExactTools 运行 runAgent；coordinator 模式或 endedByModel 时返回 null。
  */

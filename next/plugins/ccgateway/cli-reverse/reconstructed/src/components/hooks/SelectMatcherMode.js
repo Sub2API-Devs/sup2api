@@ -34,7 +34,7 @@ deferInit("chunk-bajxb7bf.js:43222", () => {
 function hookSource(h) {
   return h.source;
 }
-//@ chunk-bajxb7bf.js:43257-43462 fingerprint = _temp3 (0.838)
+//@ chunk-bajxb7bf.js:43257-43462 fingerprint (2.1.88 match: _temp3, 0.838)
 function renderMatcherItem(item) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -49,7 +49,7 @@ function renderMatcherItem(item) {
     item.matcher,
   );
 }
-//@ chunk-bajxb7bf.js:43462-44720 fingerprint = SelectMatcherMode (0.657)
+//@ chunk-bajxb7bf.js:43462-44720 fingerprint (2.1.88 match: SelectMatcherMode, 0.657)
 function SelectMatcherMode(props) {
   let $ = useMemoCache(26);
   let {

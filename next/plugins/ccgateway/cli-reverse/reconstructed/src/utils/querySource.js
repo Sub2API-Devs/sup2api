@@ -14,7 +14,7 @@ import { isCacheCold, findLastRealAssistantMessage } from "../services/compact/a
 import { CACHE_TTL_1H_MS, CACHE_TTL_5M_MS } from "../services/api/promptCacheBreakDetection.js";
 import { getLastMainThreadRequestAt } from "../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:2076386-2076482 placement = isMainThreadSource (1)
+//@ chunk-e6aww6q8.js:2076386-2076482 placement (2.1.88 match: isMainThreadSource, 1)
 function isMainThreadSource(messages, now = Date.now()) {
   if (!getPromptCachingEnabled(getMainLoopModel())) return false;
   return !isCacheCold(

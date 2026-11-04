@@ -290,7 +290,7 @@ function isOfficialOrBuiltinMarketplace(marketplace) {
 function isProjectLocalPlugin(plugin) {
   return plugin.scope === "project" && plugin.source.endsWith(`@${SKILLS_DIR}`);
 }
-//@ chunk-dcmhvw5a.js:139916-140039 fingerprint = SETTING_SOURCE_TO_SCOPE (1)
+//@ chunk-dcmhvw5a.js:139916-140039 fingerprint (2.1.88 match: SETTING_SOURCE_TO_SCOPE, 1)
 var SETTING_SOURCE_TO_SCOPE = {
   policySettings: "managed",
   userSettings: "user",
@@ -298,7 +298,7 @@ var SETTING_SOURCE_TO_SCOPE = {
   localSettings: "local",
   flagSettings: "flag",
 };
-//@ chunk-dcmhvw5a.js:140039-140259 placement = isChannelAllowlisted (0.684)
+//@ chunk-dcmhvw5a.js:140039-140259 placement (2.1.88 match: isChannelAllowlisted, 0.684)
 /**
  * isChannelAllowlisted（实为解析插件标识）：把 "name@marketplace"、npm 包名或裸名解析成 {name, marketplace?}。
  */
@@ -391,7 +391,7 @@ function marketplaceSuffix(pluginId) {
   let sliced = pluginId.slice(index + 1);
   return sliced === "" ? undefined : sliced;
 }
-//@ chunk-dcmhvw5a.js:140964-141111 callgraph-witnessed = parsePluginIdentifier (1)
+//@ chunk-dcmhvw5a.js:140964-141111 callgraph-witnessed (2.1.88 match: parsePluginIdentifier, 1)
 /**
  * 把 "name@marketplace" 拆成 {name, marketplace}；官方/内置/插件目录市场且 ID 不合法时只返回 name。
  */
@@ -435,7 +435,7 @@ function findPluginName(names, name) {
 function pluginsNamed(ids, name) {
   return ids.filter((id) => pluginNamesEqual(parsePluginIdentifier(id).name, name));
 }
-//@ chunk-dcmhvw5a.js:141353-141412 callgraph-witnessed = isOfficialMarketplaceName (0)
+//@ chunk-dcmhvw5a.js:141353-141412 callgraph-witnessed (2.1.88 match: isOfficialMarketplaceName, 0)
 /**
  * 市场名是否为官方市场（ALLOWED_OFFICIAL_MARKETPLACE_NAMES，忽略大小写）。
  */
@@ -523,13 +523,13 @@ deferInit("chunk-dcmhvw5a.js:141479", () => {
 function isKnownOfficialPluginName(marketplace, marketplace_2) {
   return isInlineOrSyncedSource(marketplace_2) && OFFICIAL_KNOWLEDGE_WORK_PLUGIN_NAMES.has(marketplace);
 }
-//@ chunk-dcmhvw5a.js:142367-142444 fingerprint = SCOPE_TO_EDITABLE_SOURCE (1)
+//@ chunk-dcmhvw5a.js:142367-142444 fingerprint (2.1.88 match: SCOPE_TO_EDITABLE_SOURCE, 1)
 var SCOPE_TO_EDITABLE_SOURCE = {
   user: "userSettings",
   project: "projectSettings",
   local: "localSettings",
 };
-//@ chunk-dcmhvw5a.js:142444-142544 fingerprint = scopeToSettingSource (1)
+//@ chunk-dcmhvw5a.js:142444-142544 fingerprint (2.1.88 match: scopeToSettingSource, 1)
 /**
  * 作用域 → 可写设置源（user→userSettings、project→projectSettings、local→localSettings）；managed 不可安装，抛错。
  */

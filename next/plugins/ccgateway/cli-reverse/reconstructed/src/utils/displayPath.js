@@ -31,7 +31,7 @@ var LONG_POSIX_PATH_LENGTH = 4096;
 function isLongPosixPath(path, maxLength) {
   return maxLength === posix && path.length >= LONG_POSIX_PATH_LENGTH;
 }
-//@ chunk-gqez588q.js:5257-5411 placement = BLACK_CIRCLE (0.728)
+//@ chunk-gqez588q.js:5257-5411 placement (2.1.88 match: BLACK_CIRCLE, 0.728)
 /**
  * 路径规范化候选：Windows 去 \\?\ 前缀并解析；macOS 加 /private、/Volumes 变体；Linux 去 /proc/self/root 前缀。旧版名 BLACK_CIRCLE 为错配。
  */

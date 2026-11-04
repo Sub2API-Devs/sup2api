@@ -183,7 +183,7 @@ function pickerMessages(pickerState) {
     ? restMessages
     : [systemMessage, ...(pickerState.account ? [pickerState.account.message] : []), ...restMessages];
 }
-//@ chunk-e6aww6q8.js:3306853-3308623 fingerprint = selectRelevantMemories (0.434)
+//@ chunk-e6aww6q8.js:3306853-3308623 fingerprint (2.1.88 match: selectRelevantMemories, 0.434)
 /**
  * 用小模型从记忆清单中挑选与当前查询相关的记忆（JSON schema 输出），结果用于自动注入相关记忆。
  */
@@ -305,7 +305,7 @@ ${query}`;
 var MEMORY_INDEX_NAME = "MEMORY.md";
 var _ = "Index of saved memories";
 var MEMORY_SCAN_TIMEOUT_MS = 5000;
-//@ chunk-7sekx49c.js:12145-12672 fingerprint = findRelevantMemories (0.534)
+//@ chunk-7sekx49c.js:12145-12672 fingerprint (2.1.88 match: findRelevantMemories, 0.534)
 /**
  * 列出可召回的记忆：MEMORY.md 索引本身 + scanMemoryFiles 结果（5 秒超时），去掉与入口同一 inode 的重复。
  */

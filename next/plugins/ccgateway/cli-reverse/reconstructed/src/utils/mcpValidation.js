@@ -23,7 +23,7 @@ var ESTIMATE_SKIP_RATIO = 0.5;
 var ESTIMATE_CERTAIN_RATIO = 4;
 var IMAGE_TOKEN_ESTIMATE = 1600;
 var DEFAULT_MAX_MCP_OUTPUT_TOKENS = 25000;
-//@ chunk-f8r3h98t.js:550-729 fingerprint = getMaxMcpOutputTokens (0.606)
+//@ chunk-f8r3h98t.js:550-729 fingerprint (2.1.88 match: getMaxMcpOutputTokens, 0.606)
 /**
  * getMaxMcpOutputTokens：MAX_MCP_OUTPUT_TOKENS > GrowthBook tengu_velvet_ibis.mcp_tool > 默认 25000。
  */
@@ -85,7 +85,7 @@ function capTextBlockMeta(content) {
 function isTextBlock(block) {
   return block.type === "text";
 }
-//@ chunk-f8r3h98t.js:1364-1402 layout = _temp (1)
+//@ chunk-f8r3h98t.js:1364-1402 layout (2.1.88 match: _temp, 1)
 function isImageBlock(c) {
   return c.type === "image";
 }
@@ -118,7 +118,7 @@ function imagesLeftOutText(imageCount) {
     ? "[Image left out: it did not fit in the tool output limit]"
     : `[${imageCount} images left out: they did not fit in the tool output limit]`;
 }
-//@ chunk-f8r3h98t.js:1809-2121 fingerprint = getTruncationMessage (1)
+//@ chunk-f8r3h98t.js:1809-2121 fingerprint (2.1.88 match: getTruncationMessage, 1)
 /**
  * getTruncationMessage：截断尾注 "[OUTPUT TRUNCATED - exceeded N token limit]" 加分页建议。
  */
@@ -129,7 +129,7 @@ ${TRUNCATION_MARKER_PREFIX}${getMaxMcpOutputTokens()} token limit]
 
 The tool output was truncated. If this MCP server provides pagination or filtering tools, use them to retrieve specific portions of the data. If pagination is not available, inform the user that you are working with truncated output and results may be incomplete.`;
 }
-//@ chunk-f8r3h98t.js:2121-3062 callgraph-fingerprint = truncateContentBlocks (0.475)
+//@ chunk-f8r3h98t.js:2121-3062 callgraph-fingerprint (2.1.88 match: truncateContentBlocks, 0.475)
 /**
  * truncateContentBlocks：按字符预算截断内容块；文本截到剩余预算，图片按 1600 token 估算并尝试压缩，放不下的图片计数后插入"N images left out"说明（可另存）。
  */
@@ -225,7 +225,7 @@ async function truncateContentBlocks(blocks, maxChars) {
   }
   return result;
 }
-//@ chunk-f8r3h98t.js:3062-3348 callgraph-witnessed = mcpContentNeedsTruncation (1)
+//@ chunk-f8r3h98t.js:3062-3348 callgraph-witnessed (2.1.88 match: mcpContentNeedsTruncation, 1)
 /**
  * mcpContentNeedsTruncation：先用粗估（≤上限×0.5 不截、> 上限×4 必截），中间区域用 API 计 token 判断是否超过 MCP 输出上限。
  */
@@ -266,7 +266,7 @@ async function mcpContentNeedsTruncation(content, credentials) {
     return contentSizeEstimate > getMaxMcpOutputTokens();
   }
 }
-//@ chunk-f8r3h98t.js:3348-3506 callgraph-witnessed = truncateMcpContent (0)
+//@ chunk-f8r3h98t.js:3348-3506 callgraph-witnessed (2.1.88 match: truncateMcpContent, 0)
 /**
  * truncateMcpContent：字符串按 token 上限×4 字符截断，块数组走 truncateContentBlocks，都追加截断说明。
  */
@@ -284,7 +284,7 @@ async function truncateMcpContent(content) {
     return truncatedBlocks;
   }
 }
-//@ chunk-f8r3h98t.js:3506-3578 callgraph-witnessed = truncateMcpContentIfNeeded (0)
+//@ chunk-f8r3h98t.js:3506-3578 callgraph-witnessed (2.1.88 match: truncateMcpContentIfNeeded, 0)
 /**
  * truncateMcpContentIfNeeded：需要时才截断。
  */

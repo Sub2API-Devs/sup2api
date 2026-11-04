@@ -47,7 +47,7 @@ deferInit("chunk-sfy7bm1n.js:1377", () => {
     value: false,
   }));
 });
-//@ chunk-sfy7bm1n.js:1477-1576 placement = getServerUrl (1)
+//@ chunk-sfy7bm1n.js:1477-1576 placement (2.1.88 match: getServerUrl, 1)
 function getServerUrl(serverName, config) {
   if (
     serverName === HEARTHBOT &&

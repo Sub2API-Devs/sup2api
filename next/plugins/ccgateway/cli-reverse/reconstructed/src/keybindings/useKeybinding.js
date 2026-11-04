@@ -25,7 +25,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-yzt83vwd.js:356", () => {
   init_react_production();
 });
-//@ chunk-yzt83vwd.js:360-598 fingerprint = useKeybinding (0.408)
+//@ chunk-yzt83vwd.js:360-598 fingerprint (2.1.88 match: useKeybinding, 0.408)
 /**
  * 注册一个动作处理器（默认 Global 上下文）；处理器存在引用里，换函数不用重新注册。
  */
@@ -53,7 +53,7 @@ function useKeybinding(action, handler, options = {}) {
 deferInit("chunk-1kwgxcw6.js:532", () => {
   init_react_production();
 });
-//@ chunk-1kwgxcw6.js:536-710 callgraph-witnessed = useKeybindings (0.168)
+//@ chunk-1kwgxcw6.js:536-710 callgraph-witnessed (2.1.88 match: useKeybindings, 0.168)
 /**
  * 把 app:interrupt / app:exit 绑到 Ctrl+C/Ctrl+D 双击退出逻辑（Global 上下文），返回退出提示状态。
  */

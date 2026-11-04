@@ -174,7 +174,7 @@ deferInit("chunk-xr4xc2mq.js:13452", () => {
   DELETE_COMMAND_NAMES = "rm|remove-item|ri|del|erase";
   regExp = new RegExp(`^(?:${DELETE_COMMAND_NAMES})$`, "i");
 });
-//@ chunk-xr4xc2mq.js:13556-13769 fingerprint = denyAutoMemTool (1)
+//@ chunk-xr4xc2mq.js:13556-13769 fingerprint (2.1.88 match: denyAutoMemTool, 1)
 /**
  * 拒绝记忆代理的工具调用并打 tengu_auto_mem_tool_denied（带原因）。
  */
@@ -343,12 +343,12 @@ async function parseAutoMemRm(command, memDir) {
   }
   return targets.length > 0 ? targets : undefined;
 }
-//@ chunk-xr4xc2mq.js:16054-16152 facade-exports = isSessionPlanFile (1)
+//@ chunk-xr4xc2mq.js:16054-16152 facade-exports (2.1.88 match: isSessionPlanFile, 1)
 function isAllowedAutoMemWritePath(path, dir) {
   let included = normalize(path).slice(dir.length).includes(":");
   return path.endsWith(".md") && !included && isAutoMemPathSafeForCarveout(path, dir);
 }
-//@ chunk-xr4xc2mq.js:16152-19866 facade-exports = createAutoMemCanUseTool (0.254)
+//@ chunk-xr4xc2mq.js:16152-19866 facade-exports (2.1.88 match: createAutoMemCanUseTool, 0.254)
 /**
  * 记忆提取/整理子代理的 canUseTool：拒绝 MCP 工具、需 hook 确认的调用、危险 shell 参数，只允许在记忆目录内读写，删除命令受限。
  */
@@ -625,7 +625,7 @@ function getAutoMemReadPath(messages, index) {
   }
   return isAllowedAutoMemWritePath(expanded, index) ? expanded : undefined;
 }
-//@ chunk-xr4xc2mq.js:21112-21361 layout = countToolCallsSince (1)
+//@ chunk-xr4xc2mq.js:21112-21361 layout (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(messages, sinceUuid) {
   let erroredToolUseIds = collectErroredToolUseIds(messages);
   let ids = [];
@@ -702,7 +702,7 @@ function getBillingFlags(context) {
 function resolveOverageAction(config, state) {
   return state.overageInUse && hasKnownPlanTier() ? config.whenOverage : "run";
 }
-//@ chunk-xr4xc2mq.js:22279-35636 facade-exports = initExtractMemories (0.363)
+//@ chunk-xr4xc2mq.js:22279-35636 facade-exports (2.1.88 match: initExtractMemories, 0.363)
 /**
  * 注册回合结束后的记忆提取器：跳过本区间已直接写过记忆、用户文字太少、权限规则拒绝写记忆、超额计费（when_overage=skip）、first look 判否等情况；按 everyNTurns（tengu_bramble_lintel，默认 1）节流，空闲 idle_flush_s 后补跑；并发时合并为尾随运行。
  */

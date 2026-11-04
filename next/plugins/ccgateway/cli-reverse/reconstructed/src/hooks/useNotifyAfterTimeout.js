@@ -20,7 +20,7 @@ import { notifyAsync } from "../utils/terminalProbe.js";
 function getTimeSinceLastInteraction(minimumIdleMs, sinceMs) {
   return Date.now() - Math.max(getLastInteractionTime(), sinceMs) >= minimumIdleMs;
 }
-//@ chunk-18hwfzwa.js:1445250-1445523 fingerprint = useNotifyAfterTimeout (1)
+//@ chunk-18hwfzwa.js:1445250-1445523 fingerprint (2.1.88 match: useNotifyAfterTimeout, 1)
 function useNotifyAfterTimeout(text, notificationType, isActive) {
   let terminal = useTerminalNotification();
   let { storageV5, credentials } = useTheme_2();

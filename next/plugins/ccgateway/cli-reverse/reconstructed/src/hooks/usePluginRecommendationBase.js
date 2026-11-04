@@ -23,7 +23,7 @@ import { classifyCommandSourceError } from "../utils/plugins/headersHelper.js";
 import { PluginFolderHeldError } from "../utils/plugins/crossMarketplaceInstall.js";
 import { findPluginNameCollision } from "../utils/plugins/pluginNameCollision.js";
 
-//@ chunk-18hwfzwa.js:1801339-1802617 fingerprint = installPluginAndNotify (0.441)
+//@ chunk-18hwfzwa.js:1801339-1802617 fingerprint (2.1.88 match: installPluginAndNotify, 0.441)
 async function installPluginAndNotify(
   pluginId,
   pluginName,

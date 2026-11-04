@@ -507,7 +507,7 @@ function noopChordHandler() {}
 function noopRegisterContext() {}
 //@ chunk-ag5x7vhf.js:206037-206052 affinity
 function noopUnregisterContext() {}
-//@ chunk-ag5x7vhf.js:206052-206622 fingerprint = StaticKeybindingProvider (0.84)
+//@ chunk-ag5x7vhf.js:206052-206622 fingerprint (2.1.88 match: StaticKeybindingProvider, 0.84)
 function StaticKeybindingProvider(props) {
   let $ = useMemoCache(7);
   let { children } = props;
@@ -565,13 +565,13 @@ function findFirstRealModel(messages) {
     }
   return;
 }
-//@ chunk-ag5x7vhf.js:206728-206831 layout = extractErrorDetail (1)
+//@ chunk-ag5x7vhf.js:206728-206831 layout (2.1.88 match: extractErrorDetail, 1)
 function contentBlockCount(data) {
   if (!("message" in data)) return 1;
   let content = data.message.content;
   return Array.isArray(content) ? content.length : 1;
 }
-//@ chunk-ag5x7vhf.js:206831-207617 fingerprint = streamRenderedMessages (0.538)
+//@ chunk-ag5x7vhf.js:206831-207617 fingerprint (2.1.88 match: streamRenderedMessages, 0.538)
 /**
  * 把消息用静态 Ink 渲染成文本流（/export 等导出用）。
  */
@@ -652,7 +652,7 @@ async function streamRenderedMessages(
     onProgress?.(offset + chunkSize);
   }
 }
-//@ chunk-ag5x7vhf.js:207617-207818 callgraph-fingerprint = renderMessagesToPlainText (0.347)
+//@ chunk-ag5x7vhf.js:207617-207818 callgraph-fingerprint (2.1.88 match: renderMessagesToPlainText, 0.347)
 async function renderMessagesToPlainText(
   messages,
   tools,

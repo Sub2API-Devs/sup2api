@@ -11,7 +11,7 @@
 import { isExtraUsageAllowed } from "../../utils/auth.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:2042062-2042811 fingerprint = extraUsageNonInteractive (0.462)
+//@ chunk-e6aww6q8.js:2042062-2042811 fingerprint (2.1.88 match: extraUsageNonInteractive, 0.462)
 /**
  * /usage-credits 命令对象（local-jsx）；描述：Configure usage credits or request them from your admin when you hit a limit；isEnabled: ()=>Px()&&!_e()；实现 chunk-2gtphf4m.js 的 Jpt。
  */

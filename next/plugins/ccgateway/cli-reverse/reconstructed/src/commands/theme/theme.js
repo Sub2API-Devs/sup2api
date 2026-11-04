@@ -23,7 +23,7 @@ import { getSafeModeExitHint } from "../../utils/envUtils.js";
 import { Pane } from "../../components/design-system/Pane.js";
 import { ThemePicker } from "../../components/ThemePicker.js";
 
-//@ chunk-3s4dbk22.js:23515-27511 fingerprint = ThemePickerCommand (0.344)
+//@ chunk-3s4dbk22.js:23515-27511 fingerprint (2.1.88 match: ThemePickerCommand, 0.344)
 function ThemePickerCommand(props) {
   let $ = useMemoCache(50);
   let { onDone } = props;
@@ -368,7 +368,7 @@ function ThemePickerCommand(props) {
   } else pane = $[49];
   return pane;
 }
-//@ chunk-3s4dbk22.js:27511-27549 callgraph-fingerprint = call (1)
+//@ chunk-3s4dbk22.js:27511-27549 callgraph-fingerprint (2.1.88 match: call, 1)
 /**
  * /theme 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

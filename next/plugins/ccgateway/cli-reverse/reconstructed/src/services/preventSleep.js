@@ -148,7 +148,7 @@ deferInit("chunk-0sfjpx19.js:49786", () => {
 function getSleepPreventer() {
   return sleepPreventerByHost.of(getRootSession().host);
 }
-//@ chunk-0sfjpx19.js:49848-49898 placement = getReservedShortcuts (1)
+//@ chunk-0sfjpx19.js:49848-49898 placement (2.1.88 match: getReservedShortcuts, 1)
 function isMacOS() {
   if (getPlatform() === "macos") return true;
   return false;

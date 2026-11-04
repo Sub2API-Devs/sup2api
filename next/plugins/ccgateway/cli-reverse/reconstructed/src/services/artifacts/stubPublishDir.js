@@ -195,7 +195,7 @@ async function publishToStubDir(dirPath, html, options) {
     err: null,
   };
 }
-//@ chunk-06y4szbn.js:35522-35655 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-06y4szbn.js:35522-35655 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 /**
  * 确保路径是目录（非目录先删）。名字配错。
  */
@@ -212,7 +212,7 @@ async function ensureDirectory(dirPath) {
     recursive: true,
   });
 }
-//@ chunk-06y4szbn.js:35655-35741 placement = convertDirectoryToZipInPlace (0.776)
+//@ chunk-06y4szbn.js:35655-35741 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.776)
 /**
  * 删除目标路径（递归、忽略不存在）后以独占方式（wx）写入新内容。通用文件替换工具，与插件 zip 缓存无关；旧版名 convertDirectoryToZipInPlace 与参数含义都不符。
  */

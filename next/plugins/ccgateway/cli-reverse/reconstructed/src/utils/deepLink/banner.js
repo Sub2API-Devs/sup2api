@@ -21,7 +21,7 @@ import { getCommonDir } from "../git/gitFilesystem.js";
  */
 var REPO_FETCH_STALE_MS = 604800000;
 var LONG_PREFILL_CHARS = 1000;
-//@ chunk-47mye09a.js:3580-4181 fingerprint = buildDeepLinkBanner (1)
+//@ chunk-47mye09a.js:3580-4181 fingerprint (2.1.88 match: buildDeepLinkBanner, 1)
 /**
  * 深链接会话的警示横幅：说明由外部深链接打开、所在目录；带 repo 时显示最近 fetch 时间（超期提示 CLAUDE.md 可能过期）；带预填 prompt 时提醒用户回车前检查（长 prompt 提示滚动查看）。
  */
@@ -43,7 +43,7 @@ function buildDeepLinkBanner(info) {
   return lines.join(`
 `);
 }
-//@ chunk-47mye09a.js:4181-4382 fingerprint = readLastFetchTime (1)
+//@ chunk-47mye09a.js:4181-4382 fingerprint (2.1.88 match: readLastFetchTime, 1)
 /**
  * 读 .git/FETCH_HEAD（及 common dir）的修改时间，取较新者作为最近 fetch 时间。
  */
@@ -58,7 +58,7 @@ async function readLastFetchTime(cwd) {
   if (worktreeFetch && commonFetch) return worktreeFetch > commonFetch ? worktreeFetch : commonFetch;
   return worktreeFetch ?? commonFetch;
 }
-//@ chunk-47mye09a.js:4382-4453 callgraph-fingerprint = mtimeOrUndefined (1)
+//@ chunk-47mye09a.js:4382-4453 callgraph-fingerprint (2.1.88 match: mtimeOrUndefined, 1)
 /**
  * stat 取 mtime，失败返回 undefined。
  */

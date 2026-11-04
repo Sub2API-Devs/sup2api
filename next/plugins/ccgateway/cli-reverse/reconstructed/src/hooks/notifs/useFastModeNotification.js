@@ -22,7 +22,7 @@ import {
 import { renderModelName } from "../../utils/model/modelDisplay.js";
 import { formatDuration } from "../../utils/format.js";
 
-//@ chunk-18hwfzwa.js:1759555-1759822 callgraph-fingerprint = ORG_CHANGED_KEY (0.268)
+//@ chunk-18hwfzwa.js:1759555-1759822 callgraph-fingerprint (2.1.88 match: ORG_CHANGED_KEY, 0.268)
 var FAST_MODE_COOLDOWN_STARTED = "fast-mode-cooldown-started";
 var FAST_MODE_COOLDOWN_EXPIRED = "fast-mode-cooldown-expired";
 var FAST_MODE_ORG_CHANGED = "fast-mode-org-changed";
@@ -66,7 +66,7 @@ function onOrgFastModeChangeNotice({ addNotification, fastMode, store }) {
     }
   });
 }
-//@ chunk-18hwfzwa.js:1760212-1760306 fingerprint = OVERAGE_REJECTED_KEY (0.581)
+//@ chunk-18hwfzwa.js:1760212-1760306 fingerprint (2.1.88 match: OVERAGE_REJECTED_KEY, 0.581)
 var OVERAGE_REJECTED_KEY = {
   id: "fast-mode-overage-rejected",
   deps: (noticeState) => [noticeState.addNotification, noticeState.store],
@@ -116,7 +116,7 @@ var fastModeCooldownNoticeSpec = {
   deps: (noticeState) => [noticeState.addNotification, noticeState.fastMode],
   setup: () => useFastModeNotification,
 };
-//@ chunk-18hwfzwa.js:1760910-1761307 fingerprint = useFastModeNotification (0.722)
+//@ chunk-18hwfzwa.js:1760910-1761307 fingerprint (2.1.88 match: useFastModeNotification, 0.722)
 function useFastModeNotification({ addNotification, fastMode }) {
   if (getIsRemoteMode()) return;
   if (!fastMode) return;
@@ -148,7 +148,7 @@ function useFastModeNotification({ addNotification, fastMode }) {
     unsubExpired();
   };
 }
-//@ chunk-18hwfzwa.js:1761307-1761522 fingerprint = getCooldownMessage (1)
+//@ chunk-18hwfzwa.js:1761307-1761522 fingerprint (2.1.88 match: getCooldownMessage, 1)
 function getCooldownMessage(reason, resetIn) {
   switch (reason) {
     case "overloaded":

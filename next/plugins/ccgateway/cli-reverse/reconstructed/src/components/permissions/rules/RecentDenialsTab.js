@@ -143,7 +143,7 @@ function withoutId(ids, id) {
   next.delete(id);
   return next;
 }
-//@ chunk-p2qwpk2k.js:27115-27860 fingerprint = RecentDenialsTab (0.316)
+//@ chunk-p2qwpk2k.js:27115-27860 fingerprint (2.1.88 match: RecentDenialsTab, 0.316)
 function RecentDenialsTab(props) {
   let $ = useMemoCache(15);
   let { onHeaderFocusChange, onStateChange, isMidTurn } = props;

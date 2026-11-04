@@ -73,7 +73,7 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:874435-874470 fingerprint = FILE_PREFIX (1)
+//@ chunk-aepeg2w5.js:874435-874470 fingerprint (2.1.88 match: FILE_PREFIX, 1)
 var EXPORTER_RUN_ID; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FAILED_EVENTS_KEY_PREFIX;
 deferInit("chunk-aepeg2w5.js:874435", () => {
@@ -85,7 +85,7 @@ function getFlatMigrationKey(index, text) {
   let sliced = createHash("sha256").update(text).digest("base64url").slice(0, 22);
   return `flat-migration.${index}.${sliced}`;
 }
-//@ chunk-aepeg2w5.js:874581-874628 layout = getStorageDir (1)
+//@ chunk-aepeg2w5.js:874581-874628 layout (2.1.88 match: getStorageDir, 1)
 /**
  * 1P 失败事件落盘目录 <配置目录>/telemetry。
  */
@@ -109,7 +109,7 @@ function dropForeignPrincipalEvents(events) {
     if (principalStamp === undefined || isRowOfCurrentPrincipal(principalStamp)) kept.push(rest);
   return kept;
 }
-//@ chunk-aepeg2w5.js:874758-892785 fingerprint = FirstPartyEventLoggingExporter (0.535)
+//@ chunk-aepeg2w5.js:874758-892785 fingerprint (2.1.88 match: FirstPartyEventLoggingExporter, 0.535)
 /**
  * 1P 事件导出器：POST <baseUrl 默认 https://api.anthropic.com>/api/event_logging/v2/batch（批 200、指数退避最多 8 次、OAuth/API key 认证可跳过）；失败批写入 <配置目录>/telemetry/1p_failed_events.<runId>… 下次重发；killswitch 时不发。
  */
@@ -1184,7 +1184,7 @@ function endpointHost(url) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:893255-893333 placement = getApiBaseUrlHost (0.812)
+//@ chunk-aepeg2w5.js:893255-893333 placement (2.1.88 match: getApiBaseUrlHost, 0.812)
 /**
  * ANTHROPIC_BASE_URL 非 api.anthropic.com 时返回其 host，作为 GrowthBook 属性。
  */
@@ -1253,7 +1253,7 @@ class DirectPostError extends Error {
     this.name = "DirectPostError";
   }
 }
-//@ chunk-aepeg2w5.js:894435-894682 fingerprint = getAxiosErrorContext (0.688)
+//@ chunk-aepeg2w5.js:894435-894682 fingerprint (2.1.88 match: getAxiosErrorContext, 0.688)
 /**
  * 从 axios 错误提取 request-id、status、code 便于日志。
  */
@@ -1267,7 +1267,7 @@ function getAxiosErrorContext(error) {
   if (error.message) parts.push(error.message);
   return parts.join(", ");
 }
-//@ chunk-4m46mxx9.js:6572-6590 fingerprint = getStorageDir (1)
+//@ chunk-4m46mxx9.js:6572-6590 fingerprint (2.1.88 match: getStorageDir, 1)
 /**
  * telemetry 插件的目录名 "telemetry"，导出为 MOD_FOLDER；registerPlugin 里 Zfr(B) 在该目录下解析 hooks 模块文件。
  */

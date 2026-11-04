@@ -16,7 +16,7 @@ import {
 import { getSessionIngressToken, setSessionIngressToken } from "../bootstrap/state.js";
 import { configureApiKeyHeaders } from "../services/api/client.js";
 
-//@ chunk-vv0zxx69.js:277-532 callgraph-witnessed = getTokenFromFileDescriptor (0.22)
+//@ chunk-vv0zxx69.js:277-532 callgraph-witnessed (2.1.88 match: getTokenFromFileDescriptor, 0.22)
 function getTokenFromFileDescriptor() {
   return getCredentialFromFd({
     envVar: "CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR",
@@ -47,7 +47,7 @@ async function loadSessionIngressToken(credentials) {
     skipInReviewOrigin: true,
   });
 }
-//@ chunk-vv0zxx69.js:864-954 fingerprint = getSessionIngressAuthToken (1)
+//@ chunk-vv0zxx69.js:864-954 fingerprint (2.1.88 match: getSessionIngressAuthToken, 1)
 /**
  * 远程会话 ingress 令牌：CLAUDE_CODE_SESSION_ACCESS_TOKEN 或 CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR 指向的文件描述符。
  */
@@ -60,7 +60,7 @@ function getSessionIngressAuthToken() {
 function hasSessionIngressAuthToken() {
   return getSessionIngressAuthToken() !== null;
 }
-//@ chunk-vv0zxx69.js:988-1191 fingerprint = getSessionIngressAuthHeaders (0.906)
+//@ chunk-vv0zxx69.js:988-1191 fingerprint (2.1.88 match: getSessionIngressAuthHeaders, 0.906)
 /**
  * ingress 请求头：sk-ant-sid 会话密钥用 Cookie sessionKey=，否则 Bearer，附 X-Organization-Uuid。
  */
@@ -77,7 +77,7 @@ function getSessionIngressAuthHeaders() {
   }
   return configureApiKeyHeaders(token);
 }
-//@ chunk-vv0zxx69.js:1249-1312 placement = getSessionIngressAuthToken (1)
+//@ chunk-vv0zxx69.js:1249-1312 placement (2.1.88 match: getSessionIngressAuthToken, 1)
 function getSessionIngressAuthToken_2(token) {
   process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN = token;
 }

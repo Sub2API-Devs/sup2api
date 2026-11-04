@@ -319,7 +319,7 @@ function hasStaticProviderCredential() {
     bearerFromEnvOrHeaders() !== undefined
   );
 }
-//@ chunk-bwyr6h72.js:4683-4907 placement = getCustomHeaders (1)
+//@ chunk-bwyr6h72.js:4683-4907 placement (2.1.88 match: getCustomHeaders, 1)
 function getCustomHeaders() {
   let customHeadersEnv = env.ANTHROPIC_CUSTOM_HEADERS;
   if (!customHeadersEnv) return "";

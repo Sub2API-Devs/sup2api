@@ -25,7 +25,7 @@ import { TextInput } from "../../../TextInput.js";
 import { ErrorText } from "../../../ErrorText.js";
 import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 
-//@ chunk-sx9xc5ee.js:19296-20653 callgraph-fingerprint = DescriptionStep (0.579)
+//@ chunk-sx9xc5ee.js:19296-20653 callgraph-fingerprint (2.1.88 match: DescriptionStep, 0.579)
 function DescriptionStep() {
   let $ = useMemoCache(17);
   let { goBack, goNext, updateWizardData, wizardData } = useWizard();

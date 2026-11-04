@@ -39,7 +39,7 @@ import { filterPluginDirs } from "../../plugins/functionHooks/hooksWorkerClient.
 import { getProviderState } from "../model/providerCaches.js";
 import { isRestrictedLaunch } from "../../services/daemon/relaunchArgs.js";
 
-//@ chunk-cne5hsvz.js:19463-21257 callgraph-witnessed = buildInheritedCliFlags (0.297)
+//@ chunk-cne5hsvz.js:19463-21257 callgraph-witnessed (2.1.88 match: buildInheritedCliFlags, 0.297)
 /**
  * 拼出 pane 型 teammate 继承的 CLI 参数：权限模式/计划模式、--proactivity、--disallowed-tools（无法原样重放的 deny 规则直接中止派生）、--tools、--model、--effort、--settings、--managed-settings、插件目录/URL、--mcp-config、--strict-mcp-config、--chrome 等。
  */
@@ -119,7 +119,7 @@ function buildInheritedCliFlags(options) {
   if (isRestrictedLaunch()) inheritedCliFlags.push("--restricted");
   return inheritedCliFlags.join(" ");
 }
-//@ chunk-ae5g0zb5.js:30138-30268 fingerprint = TEAMMATE_ENV_VARS (0.444)
+//@ chunk-ae5g0zb5.js:30138-30268 fingerprint (2.1.88 match: TEAMMATE_ENV_VARS, 0.444)
 /**
  * 需要透传给 pane 型 teammate 的环境变量（代理设置、CLAUDE_TEST_HEADED）。
  */

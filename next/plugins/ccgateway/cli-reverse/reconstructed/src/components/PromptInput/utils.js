@@ -10,12 +10,12 @@
  */
 import { supportsShiftEnter, hasUsedBackslashReturn } from "../../commands/terminalSetup/terminalSetup.js";
 
-//@ chunk-tzghj6zv.js:5821-5963 fingerprint = getNewlineInstructions (0.753)
+//@ chunk-tzghj6zv.js:5821-5963 fingerprint (2.1.88 match: getNewlineInstructions, 0.753)
 function getNewlineInstructions() {
   if (supportsShiftEnter()) return "shift + \u23CE for newline";
   return hasUsedBackslashReturn() ? "\\\u23CE for newline" : "backslash (\\) + return (\u23CE) for newline";
 }
-//@ chunk-18hwfzwa.js:50897-51162 fingerprint = isNonSpacePrintable (0.892)
+//@ chunk-18hwfzwa.js:50897-51162 fingerprint (2.1.88 match: isNonSpacePrintable, 0.892)
 function isNonSpacePrintable(input, key) {
   return (
     input !== "" &&
@@ -45,7 +45,7 @@ var MODE_LABELS = {
   vim: "Editor mode",
   "output-style": "Output style",
 };
-//@ chunk-q8cyy466.js:17242-17324 fingerprint = isVimModeEnabled (0.406)
+//@ chunk-q8cyy466.js:17242-17324 fingerprint (2.1.88 match: isVimModeEnabled, 0.406)
 function isVimModeEnabled(mode) {
   let target = mode && MODE_LABELS[mode] ? mode : "vim";
   return `/${target} moved \u2192 ${MODE_LABELS[target]} in /config`;

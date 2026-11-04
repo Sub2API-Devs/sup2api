@@ -36,7 +36,7 @@ deferInit("chunk-wphjdnre.js:492", () => {
 function getEarlyInputState() {
   return earlyInputSlot.of(getRootSession().host);
 }
-//@ chunk-wphjdnre.js:550-987 placement = startCapturingEarlyInput (0.706)
+//@ chunk-wphjdnre.js:550-987 placement (2.1.88 match: startCapturingEarlyInput, 0.706)
 /**
  * 在 REPL 就绪前捕获早期键盘输入。
  */
@@ -70,7 +70,7 @@ function startCapturingEarlyInput() {
     earlyInputState.capturing = false;
   }
 }
-//@ chunk-wphjdnre.js:987-1697 fingerprint = processChunk (0.797)
+//@ chunk-wphjdnre.js:987-1697 fingerprint (2.1.88 match: processChunk, 0.797)
 /**
  * 处理早期输入字节：Ctrl+C 退出 130、Ctrl+D 停止、退格、回车与普通字符。
  */
@@ -142,7 +142,7 @@ function processChunk(str) {
     offset++;
   }
 }
-//@ chunk-wphjdnre.js:1697-1862 placement = stopCapturingEarlyInput (0.741)
+//@ chunk-wphjdnre.js:1697-1862 placement (2.1.88 match: stopCapturingEarlyInput, 0.741)
 /**
  * stopCapturingEarlyInput：移除 readable 监听。
  */

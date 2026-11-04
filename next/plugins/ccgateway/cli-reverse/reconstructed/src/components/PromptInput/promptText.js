@@ -63,7 +63,7 @@ function addInlineTextContentsWithFallback(contents, text, normalizeFirst) {
     ? addInlineTextContents(contents, text, true)
     : next;
 }
-//@ chunk-18hwfzwa.js:919045-919127 placement = setCwdState (1)
+//@ chunk-18hwfzwa.js:919045-919127 placement (2.1.88 match: setCwdState, 1)
 function hasTextAfterNfcNormalize(cwd) {
   return [cwd, cwd.normalize("NFC")].some(
     (inputState) => findSlashMentionRanges(stripInvisibleChars_2(inputState).text).length > 0,
@@ -71,7 +71,7 @@ function hasTextAfterNfcNormalize(cwd) {
 }
 //@ chunk-18hwfzwa.js:919127-919144 placement
 var COMBINING_MARK_RE_2 = /\p{M}/u;
-//@ chunk-18hwfzwa.js:919144-919937 placement = needsWidthCompensation (0.769)
+//@ chunk-18hwfzwa.js:919144-919937 placement (2.1.88 match: needsWidthCompensation, 0.769)
 function endsWithCombiningMatch(haystack, needle) {
   let endIndex = needle.length;
   while (endIndex > 0) {

@@ -52,7 +52,7 @@ function scanNonAsciiParamName(ctx, start) {
   }
   return sawNonAscii ? index : -1;
 }
-//@ chunk-k5vy5m8c.js:659-844 facade-exports = SHELL_KEYWORDS (0.799)
+//@ chunk-k5vy5m8c.js:659-844 facade-exports (2.1.88 match: SHELL_KEYWORDS, 0.799)
 var DECL_KEYWORDS = new Set(["export", "declare", "typeset", "readonly", "local"]);
 var SHELL_KEYWORDS = new Set([
   "if",
@@ -71,7 +71,7 @@ var SHELL_KEYWORDS = new Set([
   "function",
   "select",
 ]);
-//@ chunk-k5vy5m8c.js:844-941 fingerprint = makeLexer (0.903)
+//@ chunk-k5vy5m8c.js:844-941 fingerprint (2.1.88 match: makeLexer, 0.903)
 function makeLexer(src) {
   return {
     src,
@@ -83,7 +83,7 @@ function makeLexer(src) {
     zshCondParenDiff: false,
   };
 }
-//@ chunk-k5vy5m8c.js:941-1078 fingerprint = advance (1)
+//@ chunk-k5vy5m8c.js:941-1078 fingerprint (2.1.88 match: advance, 1)
 function advance(L) {
   let code = L.src.charCodeAt(L.i);
   L.i++;
@@ -94,11 +94,11 @@ function advance(L) {
     L.i++;
   } else L.b += 3;
 }
-//@ chunk-k5vy5m8c.js:1078-1131 fingerprint = peek (1)
+//@ chunk-k5vy5m8c.js:1078-1131 fingerprint (2.1.88 match: peek, 1)
 function peek(L, off = 0) {
   return L.i + off < L.len ? L.src[L.i + off] : "";
 }
-//@ chunk-k5vy5m8c.js:1131-1412 fingerprint = byteAt (1)
+//@ chunk-k5vy5m8c.js:1131-1412 fingerprint (2.1.88 match: byteAt, 1)
 function byteAt(L, charIdx) {
   if (L.byteTable) return L.byteTable[charIdx];
   let uint32Array = new Uint32Array(L.len + 1);
@@ -187,7 +187,7 @@ function isIdentStart(char) {
 function isIdentChar(char) {
   return isIdentStart(char) || (char >= "0" && char <= "9");
 }
-//@ chunk-k5vy5m8c.js:1953-1989 callgraph-witnessed = isDigit (0)
+//@ chunk-k5vy5m8c.js:1953-1989 callgraph-witnessed (2.1.88 match: isDigit, 0)
 function isDigit(c) {
   return c >= "0" && c <= "9";
 }
@@ -221,7 +221,7 @@ function isHeredocDelimChar(char) {
     char !== "\\"
   );
 }
-//@ chunk-k5vy5m8c.js:2241-2397 layout = peek (1)
+//@ chunk-k5vy5m8c.js:2241-2397 layout (2.1.88 match: peek, 1)
 function skipBlanks(state) {
   while (state.i < state.len) {
     let char = state.src[state.i];
@@ -238,7 +238,7 @@ function skipBlanks(state) {
     } else break;
   }
 }
-//@ chunk-k5vy5m8c.js:2397-2531 layout = peek (1)
+//@ chunk-k5vy5m8c.js:2397-2531 layout (2.1.88 match: peek, 1)
 function skipBlanksNoCR(state) {
   while (state.i < state.len) {
     let char = state.src[state.i];
@@ -254,7 +254,7 @@ function skipBlanksNoCR(state) {
     } else break;
   }
 }
-//@ chunk-k5vy5m8c.js:2531-6872 fingerprint = nextToken (0.968)
+//@ chunk-k5vy5m8c.js:2531-6872 fingerprint (2.1.88 match: nextToken, 0.968)
 /**
  * 词法分析下一个 token（EOF/NEWLINE/COMMENT/OP/WORD/NUMBER…），cmd 上下文把 [ 视为运算符，arg 上下文视为单词字符。
  */
@@ -818,7 +818,7 @@ function parseCached(source, timeoutMs) {
   }
   return source_2;
 }
-//@ chunk-k5vy5m8c.js:7353-7887 fingerprint = parseSource (0.571)
+//@ chunk-k5vy5m8c.js:7353-7887 fingerprint (2.1.88 match: parseSource, 0.571)
 /**
  * 纯 TS bash 解析主函数：建立 lexer 与解析状态（节点上限 50000、默认 50ms 超时、UTF-8 字节偏移），parseProgram 产出 tree-sitter-bash 形状的节点树；超时/超预算返回 null；检测到 zsh 花括号/条件括号/$ 操作数/关键字错位等分歧时把根包成 ERROR。
  */
@@ -863,7 +863,7 @@ function parseSource(source, timeoutMs) {
     return null;
   }
 }
-//@ chunk-k5vy5m8c.js:7887-8048 callgraph-fingerprint = byteLengthUtf8 (1)
+//@ chunk-k5vy5m8c.js:7887-8048 callgraph-fingerprint (2.1.88 match: byteLengthUtf8, 1)
 function byteLengthUtf8(s_2) {
   let bytes = 0;
   for (let i = 0; i < s_2.length; i++) {
@@ -877,7 +877,7 @@ function byteLengthUtf8(s_2) {
   }
   return bytes;
 }
-//@ chunk-k5vy5m8c.js:8048-8221 fingerprint = checkBudget (1)
+//@ chunk-k5vy5m8c.js:8048-8221 fingerprint (2.1.88 match: checkBudget, 1)
 /**
  * 节点数超过 50000 或每 128 个节点检查一次超时，超出则标 aborted 并抛错中止解析。
  */
@@ -892,7 +892,7 @@ function checkBudget(P) {
     throw Error("timeout");
   }
 }
-//@ chunk-k5vy5m8c.js:8221-8314 fingerprint = mk (1)
+//@ chunk-k5vy5m8c.js:8221-8314 fingerprint (2.1.88 match: mk, 1)
 /**
  * 构造解析器语法树节点（消耗预算、切片文本、记录起止与子节点）。
  */
@@ -913,7 +913,7 @@ function makeNode(P, type, start, end, children) {
 function hasZshMultibyteName(text) {
   return /\$(?:\{(?:\([^)}]{0,32}\))?)?[#^=~+!]*(?:[A-Za-z_]\w*)?[\u0080-\uffff]/.test(text);
 }
-//@ chunk-k5vy5m8c.js:8417-8694 fingerprint = sliceBytes (1)
+//@ chunk-k5vy5m8c.js:8417-8694 fingerprint (2.1.88 match: sliceBytes, 1)
 function sliceBytes(P, startByte, endByte) {
   if (P.isAscii) return P.src.slice(startByte, endByte);
   let lex = P.L;
@@ -936,11 +936,11 @@ function sliceBytes(P, startByte, endByte) {
   }
   return P.src.slice(sc, lo);
 }
-//@ chunk-k5vy5m8c.js:8694-8743 callgraph-witnessed = leaf (0)
+//@ chunk-k5vy5m8c.js:8694-8743 callgraph-witnessed (2.1.88 match: leaf, 0)
 function leaf(P, type, tok) {
   return makeNode(P, type, tok.start, tok.end, []);
 }
-//@ chunk-k5vy5m8c.js:8743-9296 fingerprint = parseProgram (1)
+//@ chunk-k5vy5m8c.js:8743-9296 fingerprint (2.1.88 match: parseProgram, 1)
 /**
  * 解析整个程序：跳过前导空行，循环解析语句列表与注释，生成 program 节点。
  */
@@ -979,17 +979,17 @@ function parseProgram(P) {
   let progEnd = children.length > 0 ? P.srcBytes : progStart;
   return makeNode(P, "program", progStart, progEnd, children);
 }
-//@ chunk-k5vy5m8c.js:9296-9328 fingerprint = saveLex (1)
+//@ chunk-k5vy5m8c.js:9296-9328 fingerprint (2.1.88 match: saveLex, 1)
 function saveLex(L) {
   return L.b * MAX_INPUT_BYTES + L.i;
 }
-//@ chunk-k5vy5m8c.js:9328-9384 layout = saveLex (1)
+//@ chunk-k5vy5m8c.js:9328-9384 layout (2.1.88 match: saveLex, 1)
 function restoreLex(lex, offset) {
   let floored = Math.floor(offset / MAX_INPUT_BYTES);
   lex.i = offset - floored * MAX_INPUT_BYTES;
   lex.b = floored;
 }
-//@ chunk-k5vy5m8c.js:9384-10575 fingerprint = parseStatements (1)
+//@ chunk-k5vy5m8c.js:9384-10575 fingerprint (2.1.88 match: parseStatements, 1)
 /**
  * 解析语句序列直到 terminator：处理换行（触发 heredoc 正文扫描）、注释、; & 等分隔符。
  */
@@ -1083,7 +1083,7 @@ function parseStatements(P, terminator) {
   }
   return out;
 }
-//@ chunk-k5vy5m8c.js:10575-11107 fingerprint = parseAndOr (0.897)
+//@ chunk-k5vy5m8c.js:10575-11107 fingerprint (2.1.88 match: parseAndOr, 0.897)
 /**
  * 解析 && / || 链为 list 节点；右侧是 redirected_statement 时调整节点结构以对齐 tree-sitter。
  */
@@ -1118,7 +1118,7 @@ function parseAndOr(P) {
   }
   return left;
 }
-//@ chunk-k5vy5m8c.js:11107-11195 fingerprint = skipNewlines (1)
+//@ chunk-k5vy5m8c.js:11107-11195 fingerprint (2.1.88 match: skipNewlines, 1)
 function skipNewlines(P) {
   while (true) {
     let save = saveLex(P.L);
@@ -1128,7 +1128,7 @@ function skipNewlines(P) {
     }
   }
 }
-//@ chunk-k5vy5m8c.js:11195-11807 fingerprint = parsePipeline (1)
+//@ chunk-k5vy5m8c.js:11195-11807 fingerprint (2.1.88 match: parsePipeline, 1)
 /**
  * 解析 | / |& 管道。
  */
@@ -1172,7 +1172,7 @@ function parsePipeline(P) {
   let last = parts.at(-1);
   return makeNode(P, "pipeline", parts[0].startIndex, last.endIndex, parts);
 }
-//@ chunk-k5vy5m8c.js:11807-13993 fingerprint = parseCommand (1)
+//@ chunk-k5vy5m8c.js:11807-13993 fingerprint (2.1.88 match: parseCommand, 1)
 /**
  * 解析一条命令：复合语句（if/while/for/case/function/子 shell/{}/[[ ]]/(( ))）、声明、unset 或简单命令，并附加重定向。
  */
@@ -1282,7 +1282,7 @@ function parseCommand(P) {
   restoreLex(P.L, save);
   return parseSimpleCommand(P);
 }
-//@ chunk-k5vy5m8c.js:13993-17279 fingerprint = parseSimpleCommand (0.968)
+//@ chunk-k5vy5m8c.js:13993-17279 fingerprint (2.1.88 match: parseSimpleCommand, 0.968)
 /**
  * 解析简单命令：前缀赋值、命令名、参数、重定向混排。
  */
@@ -1500,7 +1500,7 @@ function parseSimpleCommand(P) {
   }
   return cmd;
 }
-//@ chunk-k5vy5m8c.js:17279-17530 fingerprint = maybeRedirect (1)
+//@ chunk-k5vy5m8c.js:17279-17530 fingerprint (2.1.88 match: maybeRedirect, 1)
 function maybeRedirect(P, node, allowHerestring = false) {
   let redirects = [];
   while (true) {
@@ -1518,7 +1518,7 @@ function maybeRedirect(P, node, allowHerestring = false) {
   let last = redirects.at(-1);
   return makeNode(P, "redirected_statement", node.startIndex, last.endIndex, [node, ...redirects]);
 }
-//@ chunk-k5vy5m8c.js:17530-18546 fingerprint = tryParseAssignment (1)
+//@ chunk-k5vy5m8c.js:17530-18546 fingerprint (2.1.88 match: tryParseAssignment, 1)
 function tryParseAssignment(P) {
   let save = saveLex(P.L);
   skipBlanks(P.L);
@@ -1601,7 +1601,7 @@ function tryParseAssignment(P) {
   let end = val ? val.endIndex : opEnd;
   return makeNode(P, "variable_assignment", startB, end, kids);
 }
-//@ chunk-k5vy5m8c.js:18546-18999 fingerprint = parseSubscriptIndexInline (1)
+//@ chunk-k5vy5m8c.js:18546-18999 fingerprint (2.1.88 match: parseSubscriptIndexInline, 1)
 function parseSubscriptIndexInline(P) {
   skipBlanks(P.L);
   let firstChar = peek(P.L);
@@ -1629,7 +1629,7 @@ function parseSubscriptIndexInline(P) {
   }
   return parseArithExpr(P, "]", "word");
 }
-//@ chunk-k5vy5m8c.js:18999-19383 fingerprint = parseSubscriptIndex (1)
+//@ chunk-k5vy5m8c.js:18999-19383 fingerprint (2.1.88 match: parseSubscriptIndex, 1)
 function parseSubscriptIndex(P, startB, endB) {
   let text = sliceBytes(P, startB, endB);
   if (/^\d+$/.test(text)) return makeNode(P, "number", startB, endB, []);
@@ -1645,7 +1645,7 @@ function parseSubscriptIndex(P, startB, endB) {
   }
   return makeNode(P, "word", startB, endB, []);
 }
-//@ chunk-k5vy5m8c.js:19383-19720 fingerprint = isRedirectLiteralStart (1)
+//@ chunk-k5vy5m8c.js:19383-19720 fingerprint (2.1.88 match: isRedirectLiteralStart, 1)
 function isRedirectLiteralStart(P) {
   let firstChar = peek(P.L);
   if (
@@ -1668,7 +1668,7 @@ function isRedirectLiteralStart(P) {
   if (P.stopToken === "]" && firstChar === "]") return false;
   return true;
 }
-//@ chunk-k5vy5m8c.js:19720-23489 fingerprint = tryParseRedirect (0.898)
+//@ chunk-k5vy5m8c.js:19720-23489 fingerprint (2.1.88 match: tryParseRedirect, 0.898)
 /**
  * 尝试解析一个重定向（含 fd 前缀、{var}、>&、&>、<<、<<<、heredoc 登记）。
  */
@@ -1970,7 +1970,7 @@ function tryParseRedirect(P, greedy = false) {
   restoreLex(P.L, save);
   return null;
 }
-//@ chunk-k5vy5m8c.js:23489-23791 fingerprint = parseProcessSub (1)
+//@ chunk-k5vy5m8c.js:23489-23791 fingerprint (2.1.88 match: parseProcessSub, 1)
 function parseProcessSub(P) {
   let firstChar = peek(P.L);
   if ((firstChar !== "<" && firstChar !== ">") || peek(P.L, 1) !== "(") return null;
@@ -1988,7 +1988,7 @@ function parseProcessSub(P) {
   } else close = makeNode(P, ")", P.L.b, P.L.b, []);
   return makeNode(P, "process_substitution", start, close.endIndex, [open, ...body, close]);
 }
-//@ chunk-k5vy5m8c.js:23791-24702 fingerprint = scanHeredocBodies (0.838)
+//@ chunk-k5vy5m8c.js:23791-24702 fingerprint (2.1.88 match: scanHeredocBodies, 0.838)
 /**
  * 在换行处扫描挂起的 heredoc 正文，回填 heredoc_body/heredoc_end 节点。
  */
@@ -2067,7 +2067,7 @@ function scanHeredocBodies(P) {
     hd.endEnd = P.L.b;
   }
 }
-//@ chunk-k5vy5m8c.js:24702-25295 fingerprint = parseHeredocBodyContent (0.888)
+//@ chunk-k5vy5m8c.js:24702-25295 fingerprint (2.1.88 match: parseHeredocBodyContent, 0.888)
 function parseHeredocBodyContent(P, start, end) {
   let saved = saveLex(P.L);
   restoreLexToByte(P, start);
@@ -2117,7 +2117,7 @@ function parseHeredocBodyContent(P, start, end) {
   restoreLex(P.L, saved);
   return out;
 }
-//@ chunk-k5vy5m8c.js:25295-25445 fingerprint = restoreLexToByte (1)
+//@ chunk-k5vy5m8c.js:25295-25445 fingerprint (2.1.88 match: restoreLexToByte, 1)
 function restoreLexToByte(P, targetByte) {
   if (!P.L.byteTable) byteAt(P.L, 0);
   let byteTable = P.L.byteTable;
@@ -2131,7 +2131,7 @@ function restoreLexToByte(P, targetByte) {
   P.L.i = lo;
   P.L.b = targetByte;
 }
-//@ chunk-k5vy5m8c.js:25445-26959 fingerprint = parseWord (1)
+//@ chunk-k5vy5m8c.js:25445-26959 fingerprint (2.1.88 match: parseWord, 1)
 /**
  * 解析一个词（裸词、引号串、$ 展开、反引号、花括号、拼接）。
  */
@@ -2276,7 +2276,7 @@ function parseWord(P, _ctx) {
   let last = parts.at(-1);
   return makeNode(P, "concatenation", first.startIndex, last.endIndex, parts);
 }
-//@ chunk-k5vy5m8c.js:26959-27431 fingerprint = parseBareWord (1)
+//@ chunk-k5vy5m8c.js:26959-27431 fingerprint (2.1.88 match: parseBareWord, 1)
 function parseBareWord(P) {
   let start = P.L.b;
   let startI = P.L.i;
@@ -2326,7 +2326,7 @@ function parseBareWord(P) {
   let type = /^-?\d+$/.test(text) ? "number" : "word";
   return makeNode(P, type, start, P.L.b, []);
 }
-//@ chunk-k5vy5m8c.js:27431-28102 fingerprint = tryParseBraceExpr (1)
+//@ chunk-k5vy5m8c.js:27431-28102 fingerprint (2.1.88 match: tryParseBraceExpr, 1)
 function tryParseBraceExpr(P) {
   let save = saveLex(P.L);
   if (peek(P.L) !== "{") return null;
@@ -2376,7 +2376,7 @@ function tryParseBraceExpr(P) {
     makeNode(P, "}", cStart, cEnd, []),
   ]);
 }
-//@ chunk-k5vy5m8c.js:28102-28833 fingerprint = tryParseBraceLikeCat (1)
+//@ chunk-k5vy5m8c.js:28102-28833 fingerprint (2.1.88 match: tryParseBraceLikeCat, 1)
 function tryParseBraceLikeCat(P) {
   if (peek(P.L) !== "{") return null;
   let oStart = P.L.b;
@@ -2449,7 +2449,7 @@ function tryParseBraceLikeCat(P) {
   }
   return inner;
 }
-//@ chunk-k5vy5m8c.js:28833-29683 fingerprint = parseDoubleQuoted (0.926)
+//@ chunk-k5vy5m8c.js:28833-29683 fingerprint (2.1.88 match: parseDoubleQuoted, 0.926)
 function parseDoubleQuoted(P) {
   let qStart = P.L.b;
   advance(P.L);
@@ -2532,7 +2532,7 @@ function parseDoubleQuoted(P) {
   P.inDquote--;
   return makeNode(P, "string", qStart, close.endIndex, parts);
 }
-//@ chunk-k5vy5m8c.js:29683-33849 fingerprint = parseDollarLike (0.813)
+//@ chunk-k5vy5m8c.js:29683-33849 fingerprint (2.1.88 match: parseDollarLike, 0.813)
 /**
  * 解析 $ 开头的结构：$var、${…}、$(…)、$((…))、$'…'、$"…"。
  */
@@ -2823,7 +2823,7 @@ function parseDollarLike(P) {
   }
   return dollar;
 }
-//@ chunk-k5vy5m8c.js:33849-36522 fingerprint = parseExpansionBody (0.958)
+//@ chunk-k5vy5m8c.js:33849-36522 fingerprint (2.1.88 match: parseExpansionBody, 0.958)
 function parseExpansionBody(P_2) {
   let out = [];
   skipBlanks(P_2.L);
@@ -3017,7 +3017,7 @@ function parseExpansionBody(P_2) {
   }
   return out;
 }
-//@ chunk-k5vy5m8c.js:36522-40380 fingerprint = parseExpansionRest (0.929)
+//@ chunk-k5vy5m8c.js:36522-40380 fingerprint (2.1.88 match: parseExpansionRest, 0.929)
 function parseExpansionRest(P, nodeType, stopAtSlash) {
   let start = P.L.b;
   if (nodeType === "word" && peek(P.L) === "(") {
@@ -3295,7 +3295,7 @@ function parseExpansionRest(P, nodeType, stopAtSlash) {
   let last = parts.at(-1);
   return makeNode(P, "concatenation", parts[0].startIndex, last.endIndex, parts);
 }
-//@ chunk-k5vy5m8c.js:40380-42063 fingerprint = parseExpansionRegexSegmented (0.813)
+//@ chunk-k5vy5m8c.js:40380-42063 fingerprint (2.1.88 match: parseExpansionRegexSegmented, 0.813)
 function parseExpansionRegexSegmented(P) {
   let out = [];
   let segStart = P.L.b;
@@ -3409,7 +3409,7 @@ function parseExpansionRegexSegmented(P) {
   flushRegex();
   return out;
 }
-//@ chunk-k5vy5m8c.js:42063-43368 fingerprint = parseBacktick (0.693)
+//@ chunk-k5vy5m8c.js:42063-43368 fingerprint (2.1.88 match: parseBacktick, 0.693)
 function parseBacktick(P) {
   let start = P.L.b;
   advance(P.L);
@@ -3487,7 +3487,7 @@ function parseBacktick(P) {
   if (body.length === 0) body.push(makeNode(P, "backtick_body_empty", open.endIndex, P.L.b, []));
   return makeNode(P, "command_substitution", start, close.endIndex, [open, ...body, close]);
 }
-//@ chunk-k5vy5m8c.js:43368-43967 fingerprint = parseIf (1)
+//@ chunk-k5vy5m8c.js:43368-43967 fingerprint (2.1.88 match: parseIf, 1)
 function parseIf(P, ifTok) {
   let ifKw = leaf(P, "if", ifTok);
   let kids = [ifKw];
@@ -3522,7 +3522,7 @@ function parseIf(P, ifTok) {
   let last = kids.at(-1);
   return makeNode(P, "if_statement", ifKw.startIndex, last.endIndex, kids);
 }
-//@ chunk-k5vy5m8c.js:43967-44134 fingerprint = parseWhile (1)
+//@ chunk-k5vy5m8c.js:43967-44134 fingerprint (2.1.88 match: parseWhile, 1)
 function parseWhile(P, kwTok) {
   let kw = leaf(P, kwTok.value, kwTok);
   let kids = [kw];
@@ -3533,7 +3533,7 @@ function parseWhile(P, kwTok) {
   let last = kids.at(-1);
   return makeNode(P, "while_statement", kw.startIndex, last.endIndex, kids);
 }
-//@ chunk-k5vy5m8c.js:44134-45635 fingerprint = parseFor (0.963)
+//@ chunk-k5vy5m8c.js:44134-45635 fingerprint (2.1.88 match: parseFor, 0.963)
 function parseFor(P, forTok) {
   let forKw = leaf(P, forTok.value, forTok);
   skipBlanks(P.L);
@@ -3625,7 +3625,7 @@ function parseFor(P, forTok) {
   let last = kids.at(-1);
   return makeNode(P, "for_statement", forKw.startIndex, last.endIndex, kids);
 }
-//@ chunk-k5vy5m8c.js:45635-45858 fingerprint = parseDoGroup (1)
+//@ chunk-k5vy5m8c.js:45635-45858 fingerprint (2.1.88 match: parseDoGroup, 1)
 function parseDoGroup(P) {
   skipNewlines(P);
   let save = saveLex(P.L);
@@ -3641,7 +3641,7 @@ function parseDoGroup(P) {
   let last = kids.at(-1);
   return makeNode(P, "do_group", doKw.startIndex, last.endIndex, kids);
 }
-//@ chunk-k5vy5m8c.js:45858-46217 fingerprint = parseCase (1)
+//@ chunk-k5vy5m8c.js:45858-46217 fingerprint (2.1.88 match: parseCase, 1)
 function parseCase(P, caseTok) {
   let caseKw = leaf(P, "case", caseTok);
   let kids = [caseKw];
@@ -3669,7 +3669,7 @@ function parseCase(P, caseTok) {
   let last = kids.at(-1);
   return makeNode(P, "case_statement", caseKw.startIndex, last.endIndex, kids);
 }
-//@ chunk-k5vy5m8c.js:46217-47332 fingerprint = parseCaseItem (1)
+//@ chunk-k5vy5m8c.js:46217-47332 fingerprint (2.1.88 match: parseCaseItem, 1)
 function parseCaseItem(P) {
   skipBlanks(P.L);
   let start = P.L.b;
@@ -3747,7 +3747,7 @@ function parseCaseItem(P) {
   let last = kids.at(-1);
   return makeNode(P, "case_item", start, last.endIndex, kids);
 }
-//@ chunk-k5vy5m8c.js:47332-48218 fingerprint = parseCasePattern (1)
+//@ chunk-k5vy5m8c.js:47332-48218 fingerprint (2.1.88 match: parseCasePattern, 1)
 function parseCasePattern(P) {
   skipBlanks(P.L);
   let save = saveLex(P.L);
@@ -3833,7 +3833,7 @@ function parseCasePattern(P) {
     hasExtglobParen || /[*?]/.test(text) || /^[-+?*@!][a-zA-Z]/.test(text) ? "extglob_pattern" : "word";
   return [makeNode(P, type, start, P.L.b, [])];
 }
-//@ chunk-k5vy5m8c.js:48218-48677 fingerprint = parseCasePatternSegmented (1)
+//@ chunk-k5vy5m8c.js:48218-48677 fingerprint (2.1.88 match: parseCasePatternSegmented, 1)
 function parseCasePatternSegmented(P) {
   let parts = [];
   let segStart = P.L.b;
@@ -3882,7 +3882,7 @@ function parseCasePatternSegmented(P) {
   flushSeg();
   return parts;
 }
-//@ chunk-k5vy5m8c.js:48677-49148 fingerprint = parseFunction (0.97)
+//@ chunk-k5vy5m8c.js:48677-49148 fingerprint (2.1.88 match: parseFunction, 0.97)
 function parseFunction(P, fnTok) {
   let fnKw = leaf(P, "function", fnTok);
   skipBlanks(P.L);
@@ -3911,7 +3911,7 @@ function parseFunction(P, fnTok) {
   let last = kids.at(-1);
   return makeNode(P, "function_definition", fnKw.startIndex, last.endIndex, kids);
 }
-//@ chunk-k5vy5m8c.js:49148-49959 fingerprint = parseDeclaration (0.917)
+//@ chunk-k5vy5m8c.js:49148-49959 fingerprint (2.1.88 match: parseDeclaration, 0.917)
 function parseDeclaration(P, kwTok) {
   let kw = leaf(P, kwTok.value, kwTok);
   let kids = [kw];
@@ -3973,7 +3973,7 @@ function parseDeclaration(P, kwTok) {
   let max = Math.max(node.endIndex, last_2.endIndex);
   return makeNode(P, "redirected_statement", kw.startIndex, max, [node, ...redirects]);
 }
-//@ chunk-k5vy5m8c.js:49959-50574 fingerprint = parseUnset (0.898)
+//@ chunk-k5vy5m8c.js:49959-50574 fingerprint (2.1.88 match: parseUnset, 0.898)
 function parseUnset(P, kwTok) {
   let kw = leaf(P, "unset", kwTok);
   let kids = [kw];
@@ -4017,7 +4017,7 @@ function parseUnset(P, kwTok) {
   let max = Math.max(node.endIndex, last_2.endIndex);
   return makeNode(P, "redirected_statement", kw.startIndex, max, [node, ...redirects]);
 }
-//@ chunk-k5vy5m8c.js:50574-50688 fingerprint = consumeKeyword (1)
+//@ chunk-k5vy5m8c.js:50574-50688 fingerprint (2.1.88 match: consumeKeyword, 1)
 function consumeKeyword(P, name, kids) {
   skipNewlines(P);
   let save = saveLex(P.L);
@@ -4029,7 +4029,7 @@ function consumeKeyword(P, name, kids) {
 function parseTestExpr(parser, closer) {
   return parseTestOr(parser, closer);
 }
-//@ chunk-k5vy5m8c.js:50720-51018 fingerprint = parseTestOr (1)
+//@ chunk-k5vy5m8c.js:50720-51018 fingerprint (2.1.88 match: parseTestOr, 1)
 function parseTestOr(P, closer) {
   let left = parseTestAnd(P, closer);
   if (!left) return null;
@@ -4052,7 +4052,7 @@ function parseTestOr(P, closer) {
   }
   return left;
 }
-//@ chunk-k5vy5m8c.js:51018-51316 layout = parseTestOr (1)
+//@ chunk-k5vy5m8c.js:51018-51316 layout (2.1.88 match: parseTestOr, 1)
 function parseTestAnd(P, closer) {
   let left = parseTestUnary(P, closer);
   if (!left) return null;
@@ -4075,7 +4075,7 @@ function parseTestAnd(P, closer) {
   }
   return left;
 }
-//@ chunk-k5vy5m8c.js:51316-51462 callgraph-witnessed = parseTestAnd (0.276)
+//@ chunk-k5vy5m8c.js:51316-51462 callgraph-witnessed (2.1.88 match: parseTestAnd, 0.276)
 function skipTestNewlinesAndComments(P, closer) {
   skipBlanks(P.L);
   if (closer === "]]")
@@ -4099,7 +4099,7 @@ function skipTestNewlinesAndComments(P, closer) {
       else break;
     }
 }
-//@ chunk-k5vy5m8c.js:51462-51763 fingerprint = parseTestUnary (1)
+//@ chunk-k5vy5m8c.js:51462-51763 fingerprint (2.1.88 match: parseTestUnary, 1)
 function parseTestUnary(P, closer) {
   skipTestNewlinesAndComments(P, closer);
   if (peek(P.L) === "(") {
@@ -4119,7 +4119,7 @@ function parseTestUnary(P, closer) {
   }
   return parseTestBinary(P, closer);
 }
-//@ chunk-k5vy5m8c.js:51763-52712 fingerprint = parseTestNegatablePrimary (0.716)
+//@ chunk-k5vy5m8c.js:51763-52712 fingerprint (2.1.88 match: parseTestNegatablePrimary, 0.716)
 function parseTestNegatablePrimary(P, closer) {
   skipTestNewlinesAndComments(P, closer);
   let char = peek(P.L);
@@ -4178,12 +4178,12 @@ function parseTestNegatablePrimary(P, closer) {
   }
   return parseTestPrimary(P, closer);
 }
-//@ chunk-k5vy5m8c.js:52712-52840 layout = parseTestOr (0.828)
+//@ chunk-k5vy5m8c.js:52712-52840 layout (2.1.88 match: parseTestOr, 0.828)
 function makeMissingRhsBinary(parser, left, op) {
   let node = makeNode(parser, "test_rhs_missing", op.endIndex, parser.L.b, []);
   return makeNode(parser, "binary_expression", left.startIndex, parser.L.b, [left, op, node]);
 }
-//@ chunk-k5vy5m8c.js:52840-54349 fingerprint = parseTestBinary (1)
+//@ chunk-k5vy5m8c.js:52840-54349 fingerprint (2.1.88 match: parseTestBinary, 1)
 function parseTestBinary(P, closer) {
   skipBlanks(P.L);
   let left = parseTestNegatablePrimary(P, closer);
@@ -4283,7 +4283,7 @@ function parseTestBinary(P, closer) {
   if (!right) return makeMissingRhsBinary(P, left, op);
   return makeNode(P, "binary_expression", left.startIndex, right.endIndex, [left, op, right]);
 }
-//@ chunk-k5vy5m8c.js:54349-55000 fingerprint = parseTestRegexRhs (0.921)
+//@ chunk-k5vy5m8c.js:54349-55000 fingerprint (2.1.88 match: parseTestRegexRhs, 0.921)
 function parseTestRegexRhs(parser, inRegexGroup) {
   skipBlanks(parser.L);
   let start = parser.L.b;
@@ -4335,7 +4335,7 @@ function parseTestRegexRhs(parser, inRegexGroup) {
   if (parser.L.b === start) return null;
   return makeNode(parser, "regex", start, parser.L.b, []);
 }
-//@ chunk-k5vy5m8c.js:55000-56538 fingerprint = parseTestExtglobRhs (0.83)
+//@ chunk-k5vy5m8c.js:55000-56538 fingerprint (2.1.88 match: parseTestExtglobRhs, 0.83)
 function parseTestExtglobRhs(P) {
   skipBlanks(P.L);
   let parts = [];
@@ -4494,7 +4494,7 @@ function parseTestExtglobRhs(P) {
   flushSeg();
   return parts;
 }
-//@ chunk-k5vy5m8c.js:56538-56707 fingerprint = parseTestPrimary (1)
+//@ chunk-k5vy5m8c.js:56538-56707 fingerprint (2.1.88 match: parseTestPrimary, 1)
 function parseTestPrimary(P, closer) {
   skipBlanks(P.L);
   if (closer === "]" && peek(P.L) === "]" && isWordBreakNotParen(peek(P.L, 1) ?? "")) return null;
@@ -4502,7 +4502,7 @@ function parseTestPrimary(P, closer) {
     return null;
   return parseWord(P, "arg");
 }
-//@ chunk-k5vy5m8c.js:56707-57004 fingerprint = ARITH_PREC (1)
+//@ chunk-k5vy5m8c.js:56707-57004 fingerprint (2.1.88 match: ARITH_PREC, 1)
 var ARITH_PREC = {
   "=": 2,
   "+=": 2,
@@ -4536,7 +4536,7 @@ var ARITH_PREC = {
   "**": 14,
 };
 var ARITH_RIGHT_ASSOC = new Set(["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "^=", "|=", "**"]);
-//@ chunk-k5vy5m8c.js:57004-57280 callgraph-witnessed = parseArithBinary (0.216)
+//@ chunk-k5vy5m8c.js:57004-57280 callgraph-witnessed (2.1.88 match: parseArithBinary, 0.216)
 function skipToArithStop(parser, saved, stop) {
   restoreLex(parser.L, saved);
   let depth = 0;
@@ -4558,14 +4558,14 @@ function skipToArithStop(parser, saved, stop) {
     advance(parser.L);
   }
 }
-//@ chunk-k5vy5m8c.js:57280-57355 fingerprint = parseArithExpr (0.743)
+//@ chunk-k5vy5m8c.js:57280-57355 fingerprint (2.1.88 match: parseArithExpr, 0.743)
 function parseArithExpr(P, stop, mode = "var") {
   P.inDquote++;
   let arithTernary = parseArithTernary(P, stop, mode);
   P.inDquote--;
   return arithTernary;
 }
-//@ chunk-k5vy5m8c.js:57355-57492 fingerprint = parseArithCommaList (1)
+//@ chunk-k5vy5m8c.js:57355-57492 fingerprint (2.1.88 match: parseArithCommaList, 1)
 function parseArithCommaList(P, stop, mode = "var") {
   let out = [];
   while (true) {
@@ -4580,7 +4580,7 @@ function parseArithCommaList(P, stop, mode = "var") {
   }
   return out;
 }
-//@ chunk-k5vy5m8c.js:57492-57873 fingerprint = parseArithTernary (1)
+//@ chunk-k5vy5m8c.js:57492-57873 fingerprint (2.1.88 match: parseArithTernary, 1)
 function parseArithTernary(P, stop, mode) {
   let cond = parseArithBinary(P, stop, 0, mode);
   if (!cond) return null;
@@ -4607,7 +4607,7 @@ function parseArithTernary(P, stop, mode) {
   }
   return cond;
 }
-//@ chunk-k5vy5m8c.js:57873-58913 fingerprint = scanArithOp (1)
+//@ chunk-k5vy5m8c.js:57873-58913 fingerprint (2.1.88 match: scanArithOp, 1)
 function scanArithOp(P) {
   let char = peek(P.L);
   let c1 = peek(P.L, 1);
@@ -4644,7 +4644,7 @@ function scanArithOp(P) {
   if (char === "=") return ["=", 1];
   return null;
 }
-//@ chunk-k5vy5m8c.js:58913-59266 layout = parseTestOr (1)
+//@ chunk-k5vy5m8c.js:58913-59266 layout (2.1.88 match: parseTestOr, 1)
 function parseArithBinary(parser, closer, minPrec, mode) {
   let left = parseArithUnary(parser, closer, mode);
   if (!left) return null;
@@ -4667,7 +4667,7 @@ function parseArithBinary(parser, closer, minPrec, mode) {
   }
   return left;
 }
-//@ chunk-k5vy5m8c.js:59266-59807 fingerprint = parseArithUnary (1)
+//@ chunk-k5vy5m8c.js:59266-59807 fingerprint (2.1.88 match: parseArithUnary, 1)
 function parseArithUnary(P, stop, mode) {
   skipBlanks(P.L);
   if (isArithStop(P, stop)) return null;
@@ -4698,7 +4698,7 @@ function parseArithUnary(P, stop, mode) {
   }
   return parseArithPostfix(P, stop, mode);
 }
-//@ chunk-k5vy5m8c.js:59807-60047 fingerprint = parseArithPostfix (1)
+//@ chunk-k5vy5m8c.js:59807-60047 fingerprint (2.1.88 match: parseArithPostfix, 1)
 function parseArithPostfix(P, stop, mode) {
   let prim = parseArithPrimary(P, stop, mode);
   if (!prim) return null;
@@ -4713,7 +4713,7 @@ function parseArithPostfix(P, stop, mode) {
   }
   return prim;
 }
-//@ chunk-k5vy5m8c.js:60047-61263 fingerprint = parseArithPrimary (1)
+//@ chunk-k5vy5m8c.js:60047-61263 fingerprint (2.1.88 match: parseArithPrimary, 1)
 function parseArithPrimary(P, stop, mode) {
   skipBlanks(P.L);
   if (isArithStop(P, stop)) return null;
@@ -4784,7 +4784,7 @@ function parseArithPrimary(P, stop, mode) {
   }
   return null;
 }
-//@ chunk-k5vy5m8c.js:61263-61524 callgraph-witnessed = isArithStop (1)
+//@ chunk-k5vy5m8c.js:61263-61524 callgraph-witnessed (2.1.88 match: isArithStop, 1)
 function isArithStop(P, stop) {
   let char = peek(P.L);
   if (stop === "))") return char === ")" && peek(P.L, 1) === ")";
@@ -4801,7 +4801,7 @@ function isArithStop(P, stop) {
 `
   );
 }
-//@ chunk-k5vy5m8c.js:61524-61752 callgraph-witnessed = skipBlanks (0.464)
+//@ chunk-k5vy5m8c.js:61524-61752 callgraph-witnessed (2.1.88 match: skipBlanks, 0.464)
 function skipQuotedSpan(parser, quote) {
   let last = quote.at(-1);
   if (quote === "$'") advance(parser.L);

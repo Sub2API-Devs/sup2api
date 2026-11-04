@@ -406,7 +406,7 @@ function getContentLink(tipId, host) {
 function hasConfiguredHooks() {
   return Object.keys(getSettings_DEPRECATED().hooks ?? {}).length > 0;
 }
-//@ chunk-4t8fx0s8.js:17420-17661 fingerprint = getRelevantTips (0.417)
+//@ chunk-4t8fx0s8.js:17420-17661 fingerprint (2.1.88 match: getRelevantTips, 0.417)
 function getRelevantTips({ id, text, advertisedCommand, isTriggered }) {
   return {
     id,
@@ -577,7 +577,7 @@ var FRONTEND_DEV_SERVER_COMMANDS = new Set([
   "live-server",
   "browser-sync",
 ]);
-//@ chunk-4t8fx0s8.js:20247-20420 fingerprint = isMarketplacePluginRelevant (0.708)
+//@ chunk-4t8fx0s8.js:20247-20420 fingerprint (2.1.88 match: isMarketplacePluginRelevant, 0.708)
 function isMarketplacePluginRelevant(context) {
   let { bashTools, readFileState } = context ?? {};
   if (bashTools) {
@@ -710,7 +710,7 @@ async function isAdvertisedCommandAvailable(advertisedCommand) {
   if (filtered.length === 0) return !isRemote;
   return filtered.some((command) => meetsAvailabilityRequirement(command) && isCommandEnabled(command));
 }
-//@ chunk-4t8fx0s8.js:21649-44371 fingerprint = externalTips (0.568)
+//@ chunk-4t8fx0s8.js:21649-44371 fingerprint (2.1.88 match: externalTips, 0.568)
 /**
  * 内置提示表（约 70 条）：每条有 id、content（可异步生成）、cooldownSessions、isRelevant 判定，涵盖 plan 模式、worktree、/memory、终端设置、桌面版、远程控制等。
  */

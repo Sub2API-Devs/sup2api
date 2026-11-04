@@ -17,7 +17,7 @@ import { getStickyBetas } from "../../bootstrap/state.js";
 import { mainAgentContext } from "../../utils/agentContext.js";
 import { getEmptyToolPermissionContext } from "../../Tool.js";
 
-//@ chunk-eavynfj6.js:25822-26912 fingerprint = generateAgent (0.37)
+//@ chunk-eavynfj6.js:25822-26912 fingerprint (2.1.88 match: generateAgent, 0.37)
 /**
  * 根据用户描述调用模型生成子代理配置（identifier、whenToUse、systemPrompt），支持中止与超时。
  */

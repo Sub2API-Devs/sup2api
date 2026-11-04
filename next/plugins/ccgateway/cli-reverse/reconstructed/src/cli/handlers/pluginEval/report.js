@@ -22,7 +22,7 @@ import { INVISIBLE_CHAR_CLASSES } from "../../../utils/confusables.js";
 //@ chunk-5wjwnxna.js:910-1023 placement
 var UNESCAPED_AMPERSAND = /&(?!(?:#\d{1,7}|#[Xx][0-9a-fA-F]{1,6}|\w+);)/g;
 var DISABLED_CHECKBOX_PREFIX_PATTERN = /^<input (?:checked="" )?disabled="" type="checkbox"> ?/;
-//@ chunk-5wjwnxna.js:1023-1111 placement = escapeXml (1)
+//@ chunk-5wjwnxna.js:1023-1111 placement (2.1.88 match: escapeXml, 1)
 function escapeXml(s) {
   return s.replace(UNESCAPED_AMPERSAND, "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -87,7 +87,7 @@ function createMarkdownHtmlCache() {
     return wrapped;
   };
 }
-//@ chunk-5wjwnxna.js:1973-2091 placement = formatPrice (1)
+//@ chunk-5wjwnxna.js:1973-2091 placement (2.1.88 match: formatPrice, 1)
 /**
  * 比例转百分比串（<1 时最多 99.9%）。疑似不属于 modelCost。
  */

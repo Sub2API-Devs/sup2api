@@ -101,7 +101,7 @@ This session began as a fork (copy) of another session that is still running: ${
     });
   }
 }
-//@ chunk-0sfjpx19.js:51143-51318 placement = buildTranscriptEntries (0.777)
+//@ chunk-0sfjpx19.js:51143-51318 placement (2.1.88 match: buildTranscriptEntries, 0.777)
 /**
  * 判断消息（或 queued_command 附件的 prompt）是否包含指定文本。旧版名 buildTranscriptEntries 误配。
  */

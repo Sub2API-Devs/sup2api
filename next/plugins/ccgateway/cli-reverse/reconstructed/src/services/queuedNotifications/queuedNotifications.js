@@ -233,7 +233,7 @@ function queuedNotificationCapabilities(tools, session, messagesInView) {
 function toolDescriptionOf(value) {
   return "description" in value && typeof value.description === "string" ? value.description : null;
 }
-//@ chunk-ynfbqx38.js:3082-3147 placement = processQueuedCommands (1)
+//@ chunk-ynfbqx38.js:3082-3147 placement (2.1.88 match: processQueuedCommands, 1)
 function isTaskNotificationFor(queued, value) {
   return queued.mode === "task-notification" && queued.value === value;
 }

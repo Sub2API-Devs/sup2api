@@ -45,7 +45,7 @@ import { NoProjectDirectoryError } from "../bootstrap/sessionSlices.js";
 import { isProtectedDirPath } from "../utils/permissions/protectedDirNames.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4vzb3taj.js:993-1052 fingerprint = AUTO_MEM_DIRNAME (1)
+//@ chunk-4vzb3taj.js:993-1052 fingerprint (2.1.88 match: AUTO_MEM_DIRNAME, 1)
 function AUTO_MEM_DIRNAME_2(appendSystemPromptHead) {
   return isSelfHostedRemoteEnvironment() && appendSystemPromptHead === undefined ? ["memory"] : undefined;
 }
@@ -116,7 +116,7 @@ function getAutoMemoryState() {
   if (isEnvDefinedFalsy(envClaudeCodeDisableAutoMemory)) return "forced_on";
   return isAutoMemoryOffByEnvironment() ? "off" : "unset";
 }
-//@ chunk-aepeg2w5.js:60280-60447 fingerprint = isAutoMemoryEnabled (0.611)
+//@ chunk-aepeg2w5.js:60280-60447 fingerprint (2.1.88 match: isAutoMemoryEnabled, 0.611)
 /**
  * CLAUDE_CODE_SIMPLE，或 CLAUDE_CODE_REMOTE 且未给 REMOTE_MEMORY_DIR/cowork 覆盖时返回 true（这些环境默认关自动记忆）。
  */
@@ -132,7 +132,7 @@ function isAutoMemoryOffByEnvironment() {
 function isIndexRecallEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mill_orange", false);
 }
-//@ chunk-aepeg2w5.js:60495-60560 placement = filterInjectedMemoryFiles (0.724)
+//@ chunk-aepeg2w5.js:60495-60560 placement (2.1.88 match: filterInjectedMemoryFiles, 0.724)
 /**
  * tengu_moth_copse 开启或设置了 CLAUDE_MEMORY_STORES 时，记忆文件由外部注入（不自己读 MEMORY.md）。
  */
@@ -156,7 +156,7 @@ function isAutoMemoryDisabledForCurrentMainLoopModel() {
   if (typeof model !== "string" || !includesAnyIgnoreCase(model, needles)) return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_umber_petrel", false);
 }
-//@ chunk-aepeg2w5.js:60829-60952 placement = isExtractModeActive (1)
+//@ chunk-aepeg2w5.js:60829-60952 placement (2.1.88 match: isExtractModeActive, 1)
 /**
  * 是否走"提取"模式写记忆：有 hosted post-turn 配置，或 tengu_passport_quail 开且（交互式或 tengu_slate_thimble）。
  */
@@ -165,7 +165,7 @@ function isExtractModeActive() {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_passport_quail", false)) return false;
   return !getIsNonInteractiveSession() || getFeatureValue_CACHED_MAY_BE_STALE("tengu_slate_thimble", false);
 }
-//@ chunk-aepeg2w5.js:60952-61073 placement = getMemoryBaseDir (1)
+//@ chunk-aepeg2w5.js:60952-61073 placement (2.1.88 match: getMemoryBaseDir, 1)
 /**
  * 记忆根目录：CLAUDE_CODE_REMOTE_MEMORY_DIR 或配置目录。
  */
@@ -187,7 +187,7 @@ var MEMORY_MD = "MEMORY.md";
 function getAccountMemoryMirrorPath() {
   return (join(getClaudeConfigDir(), "memory", "personal") + sep).normalize("NFC");
 }
-//@ chunk-aepeg2w5.js:61213-61520 callgraph-fingerprint = validateMemoryPath (0.503)
+//@ chunk-aepeg2w5.js:61213-61520 callgraph-fingerprint (2.1.88 match: validateMemoryPath, 0.503)
 /**
  * 校验记忆目录路径（可展开 ~），拒绝相对路径、裸盘符、NUL 等，返回带结尾分隔符的 NFC 路径。
  */
@@ -221,7 +221,7 @@ function isDangerousMemoryRoot(dir) {
     dir.includes("\x00")
   );
 }
-//@ chunk-aepeg2w5.js:61611-61676 fingerprint = getAutoMemPathOverride (1)
+//@ chunk-aepeg2w5.js:61611-61676 fingerprint (2.1.88 match: getAutoMemPathOverride, 1)
 /**
  * CLAUDE_COWORK_MEMORY_PATH_OVERRIDE 指定的自动记忆目录（经 validateMemoryPath 校验）。
  */
@@ -235,7 +235,7 @@ function getAutoMemPathOverride() {
 function getValidatedAutoMemDirSetting() {
   return validateMemoryPath(getAutoMemPathSetting().dir, true);
 }
-//@ chunk-aepeg2w5.js:61713-61964 callgraph-fingerprint = getAutoMemPathSetting (0.905)
+//@ chunk-aepeg2w5.js:61713-61964 callgraph-fingerprint (2.1.88 match: getAutoMemPathSetting, 0.905)
 /**
  * 按 policy→flag→(信任后)local/project→user 顺序取第一个设置了 autoMemoryDirectory 的来源。
  */
@@ -268,7 +268,7 @@ function getAutoMemPathSettingSource() {
 function hasAutoMemPathOverride() {
   return getAutoMemPathOverride() !== undefined;
 }
-//@ chunk-aepeg2w5.js:62049-63373 callgraph-witnessed = getAutoMemPath (0.243)
+//@ chunk-aepeg2w5.js:62049-63373 callgraph-witnessed (2.1.88 match: getAutoMemPath, 0.243)
 /**
  * 自动记忆目录解析器：CLAUDE_COWORK_MEMORY_PATH_OVERRIDE → autoMemoryDirectory 设置 → <记忆根>/projects/<清洗后的工作副本/git 根/项目根>/memory/；结果按项目根、信任状态、设置来源 memo。
  */

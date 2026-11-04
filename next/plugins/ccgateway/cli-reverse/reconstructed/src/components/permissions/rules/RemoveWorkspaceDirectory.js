@@ -19,7 +19,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 import { Dialog } from "../../design-system/Dialog.js";
 
-//@ chunk-p2qwpk2k.js:32506-33366 fingerprint = RemoveWorkspaceDirectory (0.681)
+//@ chunk-p2qwpk2k.js:32506-33366 fingerprint (2.1.88 match: RemoveWorkspaceDirectory, 0.681)
 function RemoveWorkspaceDirectory(props) {
   let $ = useMemoCache(15);
   let { directoryPath, onRemove, onCancel, permissionContext, setPermissionContext } = props;

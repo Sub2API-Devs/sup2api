@@ -9,7 +9,7 @@
  * attribution: fingerprint 4
  */
 
-//@ chunk-dcmhvw5a.js:214577-215444 fingerprint = TOOL_VALIDATION_CONFIG (1)
+//@ chunk-dcmhvw5a.js:214577-215444 fingerprint (2.1.88 match: TOOL_VALIDATION_CONFIG, 1)
 var TOOL_VALIDATION_CONFIG = {
   filePatternTools: ["Read", "Write", "Edit", "Glob", "NotebookRead", "NotebookEdit", "Cd"],
   bashPrefixTools: ["Bash"],
@@ -47,15 +47,15 @@ var TOOL_VALIDATION_CONFIG = {
     },
   },
 };
-//@ chunk-dcmhvw5a.js:215444-215499 fingerprint = isFilePatternTool (1)
+//@ chunk-dcmhvw5a.js:215444-215499 fingerprint (2.1.88 match: isFilePatternTool, 1)
 function isFilePatternTool(toolName) {
   return TOOL_VALIDATION_CONFIG.filePatternTools.includes(toolName);
 }
-//@ chunk-dcmhvw5a.js:215499-215553 fingerprint = isBashPrefixTool (1)
+//@ chunk-dcmhvw5a.js:215499-215553 fingerprint (2.1.88 match: isBashPrefixTool, 1)
 function isBashPrefixTool(toolName) {
   return TOOL_VALIDATION_CONFIG.bashPrefixTools.includes(toolName);
 }
-//@ chunk-dcmhvw5a.js:215553-215644 fingerprint = getCustomValidation (1)
+//@ chunk-dcmhvw5a.js:215553-215644 fingerprint (2.1.88 match: getCustomValidation, 1)
 function getCustomValidation(toolName) {
   return Object.hasOwn(TOOL_VALIDATION_CONFIG.customValidation, toolName)
     ? TOOL_VALIDATION_CONFIG.customValidation[toolName]

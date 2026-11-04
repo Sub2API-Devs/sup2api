@@ -23,7 +23,7 @@ function forgetMcpServerFor(plugin) {
   moduleStore.forget(plugin);
   if (serverKey !== undefined) currentSurfaceBinding()?.removeMcpServer(serverKey);
 }
-//@ chunk-e6aww6q8.js:55739-55775 placement = getMcpPrefix (1)
+//@ chunk-e6aww6q8.js:55739-55775 placement (2.1.88 match: getMcpPrefix, 1)
 var buildRawMcpToolName = (serverName, name) => `mcp__${normalizeNameForMCP(serverName)}__${name}`;
 //@ chunk-e6aww6q8.js:55775-55833 placement
 /**

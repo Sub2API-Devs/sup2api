@@ -28,7 +28,7 @@ import { isPolicyAllowed as isPolicyAllowed_2 } from "../../services/policyLimit
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1081954-1082146 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:1081954-1082146 fingerprint (2.1.88 match: _temp, 1)
 function logPostCompactSurveyAppeared(appearanceId) {
   logEvent("tengu_post_compact_survey_event", {
     event_type: lit_2("appeared"),
@@ -40,7 +40,7 @@ function logPostCompactSurveyAppeared(appearanceId) {
     survey_type: "post_compact",
   });
 }
-//@ chunk-18hwfzwa.js:1082146-1082370 fingerprint = _temp2 (1)
+//@ chunk-18hwfzwa.js:1082146-1082370 fingerprint (2.1.88 match: _temp2, 1)
 function logPostCompactSurveyResponded(appearanceId, selected) {
   logEvent("tengu_post_compact_survey_event", {
     event_type: lit_2("responded"),
@@ -54,7 +54,7 @@ function logPostCompactSurveyResponded(appearanceId, selected) {
     survey_type: "post_compact",
   });
 }
-//@ chunk-18hwfzwa.js:1082370-1082564 layout = _temp (0.826)
+//@ chunk-18hwfzwa.js:1082370-1082564 layout (2.1.88 match: _temp, 0.826)
 function logPostCompactSurveyAbandoned(appearanceId) {
   logEvent("tengu_post_compact_survey_event", {
     event_type: lit_2("abandoned"),
@@ -74,11 +74,11 @@ function isCompactBoundaryMessage(msg) {
 function messageUuidOf(msg) {
   return msg.uuid;
 }
-//@ chunk-18hwfzwa.js:1082627-1082680 fingerprint = POST_COMPACT_SURVEY_GATE (1)
+//@ chunk-18hwfzwa.js:1082627-1082680 fingerprint (2.1.88 match: POST_COMPACT_SURVEY_GATE, 1)
 var HIDE_THANKS_AFTER_MS = 5000;
 var TENGU_POST_COMPACT_SURVEY = "tengu_post_compact_survey";
 var POST_COMPACT_SURVEY_PROBABILITY = 0.2;
-//@ chunk-18hwfzwa.js:1082680-1082861 callgraph-fingerprint = hasMessageAfterBoundary (1)
+//@ chunk-18hwfzwa.js:1082680-1082861 callgraph-fingerprint (2.1.88 match: hasMessageAfterBoundary, 1)
 function hasMessageAfterBoundary(messages, boundaryUuid) {
   let boundaryIndex = messages.findIndex((msg) => msg.uuid === boundaryUuid);
   if (boundaryIndex === -1) return false;
@@ -88,7 +88,7 @@ function hasMessageAfterBoundary(messages, boundaryUuid) {
   }
   return false;
 }
-//@ chunk-18hwfzwa.js:1082861-1084481 fingerprint = usePostCompactSurvey (0.665)
+//@ chunk-18hwfzwa.js:1082861-1084481 fingerprint (2.1.88 match: usePostCompactSurvey, 0.665)
 function usePostCompactSurvey(messages, isLoading, t0, t1) {
   let $ = useMemoCache(26);
   let hasActivePrompt = t0 === undefined ? false : t0;

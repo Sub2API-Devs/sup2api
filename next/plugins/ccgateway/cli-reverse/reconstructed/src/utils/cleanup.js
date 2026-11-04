@@ -441,7 +441,7 @@ function cutoffDateFromDays(days) {
   let date = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   return Number.isNaN(date.getTime()) ? null : date;
 }
-//@ chunk-23fm9f0d.js:5838-5950 facade-majority = getCutoffDate (1)
+//@ chunk-23fm9f0d.js:5838-5950 facade-majority (2.1.88 match: getCutoffDate, 1)
 /**
  * 计算清理截止日期；cleanupPeriodDays=0 时返回 null（不清理）。
  */
@@ -505,7 +505,7 @@ function isValidReleaseSessionId(sessionId) {
 function desktopCleanupCutoff() {
   return getRetentionCutoff("desktopSessionCleanupPeriodDays", DEFAULT_DESKTOP_CLEANUP_DAYS);
 }
-//@ chunk-23fm9f0d.js:6478-6600 placement = _temp5 (1)
+//@ chunk-23fm9f0d.js:6478-6600 placement (2.1.88 match: _temp5, 1)
 function getRetentionCutoff(policyKey, defaultDays) {
   let userSettingDays = getSettingsForSourceTightenOnly("userSettings")?.[policyKey];
   let days =
@@ -548,7 +548,7 @@ function addCleanupResults(target, source) {
     filesPastCutoff: target.filesPastCutoff + source.filesPastCutoff,
   };
 }
-//@ chunk-23fm9f0d.js:7106-7217 fingerprint = convertFileNameToDate (1)
+//@ chunk-23fm9f0d.js:7106-7217 fingerprint (2.1.88 match: convertFileNameToDate, 1)
 function convertFileNameToDate(filename) {
   let isoStr = firstLineOf(filename, ".").replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, "T$1:$2:$3.$4Z");
   return new Date(isoStr);
@@ -587,7 +587,7 @@ async function cleanupFilesByNameDate(dirPath, cutoffDate, isMessagePath) {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:7611-8033 fingerprint = cleanupOldMessageFiles (0.7)
+//@ chunk-23fm9f0d.js:7611-8033 fingerprint (2.1.88 match: cleanupOldMessageFiles, 0.7)
 async function cleanupOldMessageFiles() {
   let fsImpl = getFsImplementation();
   let cutoffDate = getCutoffDate();
@@ -619,7 +619,7 @@ async function cleanupOldMessageFiles() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:8033-8321 fingerprint = unlinkIfOld (0.686)
+//@ chunk-23fm9f0d.js:8033-8321 fingerprint (2.1.88 match: unlinkIfOld, 0.686)
 async function unlinkIfOld(
   filePath,
   cutoffDate,
@@ -649,7 +649,7 @@ async function unlinkIfOld(
   }
   return true;
 }
-//@ chunk-23fm9f0d.js:8321-8396 fingerprint = tryRmdir (1)
+//@ chunk-23fm9f0d.js:8321-8396 fingerprint (2.1.88 match: tryRmdir, 1)
 async function tryRmdir(dirPath, fsImpl) {
   if (!(await isDirectory(dirPath, fsImpl))) return;
   try {
@@ -796,7 +796,7 @@ async function entryKind(dirent, entryPath, fsImpl) {
 async function cleanupOldVersionsThrottled(dirPath, fsImpl) {
   return (await fsImpl.lstat(dirPath)).mtimeMs;
 }
-//@ chunk-23fm9f0d.js:10289-10515 callgraph-witnessed = cleanupOldSessionFiles (0.308)
+//@ chunk-23fm9f0d.js:10289-10515 callgraph-witnessed (2.1.88 match: cleanupOldSessionFiles, 0.308)
 async function cleanupOldSessionFiles(result) {
   let cutoffDate = getCutoffDate();
   let result_2 = emptyCleanupResult();
@@ -1635,7 +1635,7 @@ async function cleanupMcpDiscoveryCache() {
   await tryRmdir(cacheDir, fsImplementation);
   return result;
 }
-//@ chunk-23fm9f0d.js:22112-22295 fingerprint = cleanupOldPlanFiles (0.745)
+//@ chunk-23fm9f0d.js:22112-22295 fingerprint (2.1.88 match: cleanupOldPlanFiles, 0.745)
 async function cleanupOldPlanFiles(baseDir) {
   if (isDiskless()) return emptyCleanupResult();
   let plansDir = join(getClaudeConfigDir(), "plans");
@@ -1650,7 +1650,7 @@ async function cleanupOldPlanFiles(baseDir) {
     resetPlanFileCacheToUnknown();
   }
 }
-//@ chunk-23fm9f0d.js:22295-22892 placement = getSessionId (0)
+//@ chunk-23fm9f0d.js:22295-22892 placement (2.1.88 match: getSessionId, 0)
 async function cleanupOldFilesInDirectory(
   subdirName,
   {
@@ -1711,7 +1711,7 @@ async function cleanupOldFilesInDirectory(
   if (removeEmptyBaseDir) await tryRmdir(rootDir, fsImplementation);
   return result;
 }
-//@ chunk-23fm9f0d.js:22969-23001 placement = getTaskOutputDir (1)
+//@ chunk-23fm9f0d.js:22969-23001 placement (2.1.88 match: getTaskOutputDir, 1)
 function getTaskOutputDir() {
   return cleanupOldFilesInDirectory("tasks");
 }
@@ -2063,7 +2063,7 @@ function cleanupRemovedPluginFiles() {
     false,
   );
 }
-//@ chunk-23fm9f0d.js:26521-27094 fingerprint = cleanupOldSessionEnvDirs (0.762)
+//@ chunk-23fm9f0d.js:26521-27094 fingerprint (2.1.88 match: cleanupOldSessionEnvDirs, 0.762)
 async function cleanupOldSessionEnvDirs() {
   let cutoffDate = getCutoffDate();
   let result = emptyCleanupResult();
@@ -2177,7 +2177,7 @@ async function cleanupTempTranscripts() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:27856-28265 placement = getOverlayPath (0.436)
+//@ chunk-23fm9f0d.js:27856-28265 placement (2.1.88 match: getOverlayPath, 0.436)
 /**
  * 清理过期的 speculation 目录（utils/cleanup 的一部分）。旧版名 getOverlayPath 为错配。
  */
@@ -2556,7 +2556,7 @@ async function cleanupDaemonFiles(storageV5, storageBackend) {
   await sweepJobDrafts();
   return result;
 }
-//@ chunk-23fm9f0d.js:32693-32955 fingerprint = cleanupOldDebugLogs (0.819)
+//@ chunk-23fm9f0d.js:32693-32955 fingerprint (2.1.88 match: cleanupOldDebugLogs, 0.819)
 async function cleanupOldDebugLogs() {
   let cutoffDate = getCutoffDate();
   let result = emptyCleanupResult();
@@ -2675,7 +2675,7 @@ var STAGING_MARKER_FILES = [
   ".last-cleanup",
   ".deep-link-register-failed",
 ];
-//@ chunk-23fm9f0d.js:34707-34993 facade-majority = cleanupOldFilesInDirectory (0.455)
+//@ chunk-23fm9f0d.js:34707-34993 facade-majority (2.1.88 match: cleanupOldFilesInDirectory, 0.455)
 /**
  * 删除配置目录下过期（1 天）的 staging 标记文件（.npm-cache-cleanup、.version-cleanup 等），每进程一次。
  */
@@ -2700,7 +2700,7 @@ async function reapStaleHousekeepingStagingFiles(claudeConfigDir, backgroundHous
       }),
   );
 }
-//@ chunk-23fm9f0d.js:34993-35584 callgraph-witnessed = cleanupOldFileHistoryBackups (0.645)
+//@ chunk-23fm9f0d.js:34993-35584 callgraph-witnessed (2.1.88 match: cleanupOldFileHistoryBackups, 0.645)
 async function cleanupOldFileHistoryBackups() {
   let cutoffDate = getCutoffDate();
   let fsImpl = emptyCleanupResult();
@@ -2803,7 +2803,7 @@ async function cleanupMemoryProposals() {
     await findModifiedFiles(join(getAutoMemPath(), "proposals"), cutoffDate, fsImplementation),
   );
 }
-//@ chunk-23fm9f0d.js:36895-39583 facade-majority = cleanupOldMessageFilesInBackground (0.123)
+//@ chunk-23fm9f0d.js:36895-39583 facade-majority (2.1.88 match: cleanupOldMessageFilesInBackground, 0.123)
 /**
  * 后台保留期清理（cleanupPeriodDays，默认 30 天）：错误日志、会话、计划、文件历史、调试日志、反馈包、MCP 缓存、worktree 等数十类数据，结果上报 tengu_retention_sweep。
  */
@@ -2969,7 +2969,7 @@ async function cleanupOldMessageFilesInBackground(storageV5) {
     historyEntriesPruned: historyPrune.entriesPruned,
   });
 }
-//@ chunk-4nhpaxz9.js:7688-7945 fingerprint = cleanupSingleDirectory (0.409)
+//@ chunk-4nhpaxz9.js:7688-7945 fingerprint (2.1.88 match: cleanupSingleDirectory, 0.409)
 async function cleanupSingleDirectory(dirPath, cutoffDate) {
   let mtimeMs = (await dirPath.fs.lstat(cutoffDate)).mtimeMs;
   let entries = await dirPath.fs.readdir(cutoffDate);

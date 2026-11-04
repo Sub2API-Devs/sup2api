@@ -52,7 +52,7 @@ var isValidPluginName = (plugin) =>
   plugin !== "" &&
   plugin.length <= MAX_PLUGIN_NAME_CHARS &&
   !CONTROL_OR_BIDI_CHARS_RE.test(plugin);
-//@ chunk-93zax7h2.js:5088-5167 fingerprint = CRON_FILE_REL (1)
+//@ chunk-93zax7h2.js:5088-5167 fingerprint (2.1.88 match: CRON_FILE_REL, 1)
 /**
  * 常量：缓存预热阈值 5 分钟、"每 N 分钟"表达式正则、任务文件相对路径 .claude/scheduled_tasks.json。
  */
@@ -78,7 +78,7 @@ function getCronFilePath(dir) {
 function isDurableCronUnavailable(dir) {
   return dir === undefined && getProjectConfigRoot() !== null;
 }
-//@ chunk-93zax7h2.js:5250-6510 fingerprint = readCronTasks (0.81)
+//@ chunk-93zax7h2.js:5250-6510 fingerprint (2.1.88 match: readCronTasks, 0.81)
 /**
  * 读 scheduled_tasks.json：跳过字段缺失、cron 非法或插件名非法的任务，返回规范化后的任务数组。
  */
@@ -161,7 +161,7 @@ async function readCronTasks(dir) {
 function isCronFileIgnored(dir) {
   return isWorkspaceRestricted() || isUnderRestrictedWorkspaceRoot(dir ?? getProjectRoot());
 }
-//@ chunk-93zax7h2.js:6552-6752 fingerprint = hasCronTasksSync (1)
+//@ chunk-93zax7h2.js:6552-6752 fingerprint (2.1.88 match: hasCronTasksSync, 1)
 /**
  * 同步检查任务文件里是否有任务（启动时决定是否开启调度）。
  */
@@ -179,7 +179,7 @@ function hasCronTasksSync(dir) {
   let tasks = parsed.tasks;
   return Array.isArray(tasks) && tasks.length > 0;
 }
-//@ chunk-93zax7h2.js:6752-7155 fingerprint = writeCronTasks (0.603)
+//@ chunk-93zax7h2.js:6752-7155 fingerprint (2.1.88 match: writeCronTasks, 0.603)
 /**
  * 写 scheduled_tasks.json（去掉运行时 durable 字段），.claude 不存在时先安全创建。
  */
@@ -260,7 +260,7 @@ async function removeCronTasks(ids, dir) {
   if (remaining.length === tasks.length) return;
   await writeCronTasks(remaining, dir);
 }
-//@ chunk-93zax7h2.js:7702-7867 fingerprint = markCronTasksFired (1)
+//@ chunk-93zax7h2.js:7702-7867 fingerprint (2.1.88 match: markCronTasksFired, 1)
 /**
  * 给持久化任务写 lastFiredAt。
  */
@@ -300,7 +300,7 @@ function nextCronRunMs(cron, fromMs, options) {
   let next = computeNextCronRun(fields, new Date(fromMs), options);
   return next ? next.getTime() : null;
 }
-//@ chunk-93zax7h2.js:8093-8245 fingerprint = DEFAULT_CRON_JITTER_CONFIG (0.923)
+//@ chunk-93zax7h2.js:8093-8245 fingerprint (2.1.88 match: DEFAULT_CRON_JITTER_CONFIG, 0.923)
 /**
  * 抖动默认值：recurringFrac 0.5、recurringCapMs 30 分钟、oneShotMaxMs 90 秒、oneShotFloorMs 0、oneShotMinuteMod 30、recurringMaxAgeMs 7 天、cacheLeadMs 15 秒。
  */
@@ -321,7 +321,7 @@ function jitterFrac(taskId) {
   let frac = parseInt(taskId.slice(0, 8), 16) / 4294967296;
   return Number.isFinite(frac) ? frac : 0;
 }
-//@ chunk-93zax7h2.js:8332-8610 fingerprint = jitteredNextCronRunMs (0.8)
+//@ chunk-93zax7h2.js:8332-8610 fingerprint (2.1.88 match: jitteredNextCronRunMs, 0.8)
 /**
  * 循环任务下次时间：在两次运行间隔内按 ID 比例延后（上限 recurringCapMs）；"每 N 分钟"且间隔≥5 分钟时改为提前 cacheLeadMs 触发以命中提示缓存。
  */
@@ -342,7 +342,7 @@ function jitteredNextCronRunMs(cron, fromMs, taskId, cfg = DEFAULT_CRON_JITTER_C
   let jitter = Math.min(jitterFrac(taskId) * cfg.recurringFrac * spanMs, cfg.recurringCapMs);
   return t1 + jitter;
 }
-//@ chunk-93zax7h2.js:8610-8832 fingerprint = oneShotJitteredNextCronRunMs (0.887)
+//@ chunk-93zax7h2.js:8610-8832 fingerprint (2.1.88 match: oneShotJitteredNextCronRunMs, 0.887)
 /**
  * 一次性任务时间：落在整点/半点（oneShotMinuteMod）时按 ID 比例提前最多 oneShotMaxMs，避免集中触发。
  */
@@ -355,7 +355,7 @@ function oneShotJitteredNextCronRunMs(cron, fromMs, taskId, cfg = DEFAULT_CRON_J
   let lead = cfg.oneShotFloorMs + jitterFrac(taskId) * (cfg.oneShotMaxMs - cfg.oneShotFloorMs);
   return Math.max(t1 - lead, fromMs);
 }
-//@ chunk-93zax7h2.js:8832-8946 fingerprint = addCronTask (0.827)
+//@ chunk-93zax7h2.js:8832-8946 fingerprint (2.1.88 match: addCronTask, 0.827)
 /**
  * 任务的下次触发时间（循环按 lastFiredAt/createdAt，一次性按 createdAt）。
  */
@@ -371,7 +371,7 @@ function nextFireTimeForTask(task, jitterConfig) {
 function roundToMinute(ms) {
   return new Date(Math.round(ms / 60000) * 60000);
 }
-//@ chunk-93zax7h2.js:9005-9121 placement = addCronTask (0.818)
+//@ chunk-93zax7h2.js:9005-9121 placement (2.1.88 match: addCronTask, 0.818)
 /**
  * 找出已错过（下次运行时间早于 now）的任务。
  */

@@ -55,7 +55,7 @@ import { EDITOR_MODES } from "../../utils/configConstants.js";
 import { checkHasTrustDialogAccepted } from "../../utils/config.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:795209-795259 placement = _temp5 (1)
+//@ chunk-18hwfzwa.js:795209-795259 placement (2.1.88 match: _temp5, 1)
 function selectRemoteConnectionStatus(s) {
   return s.remoteConnectionStatus;
 }
@@ -399,7 +399,7 @@ function FooterOpenSelected(props) {
   } else rowElement = $[8];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:798827-798873 placement = SEP_WIDTH (1)
+//@ chunk-18hwfzwa.js:798827-798873 placement (2.1.88 match: SEP_WIDTH, 1)
 var DOWN_ARROW_PREFIX; // deferred: uses BLACK_CIRCLE (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
 var DOWN_ARROW_PREFIX_WIDTH;
 var SEPARATOR_WIDTH;

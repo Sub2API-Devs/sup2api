@@ -215,7 +215,7 @@ function isNormalizationStarter(codePoint) {
   if (decomposed === undefined && !COMBINING_MARK_RE.test(String.fromCodePoint(codePoint))) return true;
   return combiningClassOf((decomposed ?? decomposeCodePoint(codePoint))[0]) === null;
 }
-//@ chunk-cgr0tezp.js:3584-3794 placement = needsWidthCompensation (1)
+//@ chunk-cgr0tezp.js:3584-3794 placement (2.1.88 match: needsWidthCompensation, 1)
 function nextStarterIndex(text, index) {
   let scanIndex = index;
   if (
@@ -231,7 +231,7 @@ function nextStarterIndex(text, index) {
   }
   return Math.min(scanIndex, text.length);
 }
-//@ chunk-cgr0tezp.js:3794-3960 placement = needsWidthCompensation (1)
+//@ chunk-cgr0tezp.js:3794-3960 placement (2.1.88 match: needsWidthCompensation, 1)
 function lastStarterIndex(char) {
   let index = char.length;
   while (index > 0) {
@@ -406,7 +406,7 @@ function isSafeRelativePath(workingDirectory) {
     /^(?:\/(?!\.\.?(?:\/|$))[A-Za-z0-9._+@-]+)+$/.test(workingDirectory)
   );
 }
-//@ chunk-cgr0tezp.js:5875-5973 placement = escapeXml (1)
+//@ chunk-cgr0tezp.js:5875-5973 placement (2.1.88 match: escapeXml, 1)
 /**
  * 转义 XML 文本并编码控制字符。
  */
@@ -420,7 +420,7 @@ function escapeXmlText(s) {
 function encodeControlChars(text) {
   return text.replace(CONTROL_CHARS_RE, (char) => `&#${char.charCodeAt(0)};`);
 }
-//@ chunk-cgr0tezp.js:6038-6108 placement = escapeXml (0.793)
+//@ chunk-cgr0tezp.js:6038-6108 placement (2.1.88 match: escapeXml, 0.793)
 /**
  * 转义尖括号。
  */
@@ -667,7 +667,7 @@ function stripIgnorables(text) {
 function isAsciiOnly(text) {
   return !/[^\0-\x7f]/.test(text);
 }
-//@ chunk-cgr0tezp.js:10213-10427 fingerprint = partiallySanitizeUnicode (0.81)
+//@ chunk-cgr0tezp.js:10213-10427 fingerprint (2.1.88 match: partiallySanitizeUnicode, 0.81)
 /**
  * 清洗提示词中的危险 Unicode（零宽、双向覆盖、标签字符等），防止隐藏指令注入。
  */

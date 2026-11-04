@@ -52,7 +52,7 @@ function installPluginsForHeadlessSerialized(pluginIds, storageV5, credentials) 
   );
   return pass;
 }
-//@ chunk-qna1q0cq.js:1665-3461 fingerprint = installPluginsForHeadless (0.914)
+//@ chunk-qna1q0cq.js:1665-3461 fingerprint (2.1.88 match: installPluginsForHeadless, 0.914)
 /**
  * headless/SDK 模式下安装插件：同步种子市场、对账声明的市场（zip 缓存模式下同步到 zip 缓存），安装缺失的启用插件，最后刷新插件缓存；记 tengu_headless_plugin_install。
  */

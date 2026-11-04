@@ -20,7 +20,7 @@ import { jsonStringify } from "../slowOperations.js";
 import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f25sswmp.js:2441-2871 placement = isToolResultBlockWithContent (0.805)
+//@ chunk-f25sswmp.js:2441-2871 placement (2.1.88 match: isToolResultBlockWithContent, 0.805)
 /**
  * 逐条检查 user 消息与工具结果里的图片，尺寸/大小超限时抛 ImageSizeError（发请求前）。
  */
@@ -234,7 +234,7 @@ function redactAccountMemory(messages, redactAll = isAccountMemoryRedactionOn(),
         epoch: `${redactedCount}:${lastRedactedUuid}`,
       };
 }
-//@ chunk-f25sswmp.js:4919-5189 placement = countToolCallsSince (1)
+//@ chunk-f25sswmp.js:4919-5189 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(messages, sinceUuid) {
   let memoryPausedToolUseIds = collectMemoryPausedToolUseIds(messages);
   for (let j = messages.length - 1; j >= 0; j--) {
@@ -270,7 +270,7 @@ function collectMemoryTextFields(input) {
   walk(input, "top");
   return texts;
 }
-//@ chunk-f25sswmp.js:5449-5971 placement = countToolCallsSince (1)
+//@ chunk-f25sswmp.js:5449-5971 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_2(messages, sinceUuid) {
   let texts = [];
   let memoryToolIds = new Set();

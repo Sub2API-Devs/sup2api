@@ -43,7 +43,7 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { BaseBox } from "./components/Box.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4ymxyb4g.js:8187-8248 fingerprint = INVERSE_CODE (0.705)
+//@ chunk-4ymxyb4g.js:8187-8248 fingerprint (2.1.88 match: INVERSE_CODE, 0.705)
 function inverseText(result) {
   colorSupport.ensureInit();
   return "\x1B[7m" + result + "\x1B[27m";
@@ -135,7 +135,7 @@ function dropDimIfColored(styles) {
     ? styles.filter((style) => style.code !== SGR_DIM)
     : styles;
 }
-//@ chunk-bzr73sfg.js:200783-201232 fingerprint = CharPool (1)
+//@ chunk-bzr73sfg.js:200783-201232 fingerprint (2.1.88 match: CharPool, 1)
 /**
  * 字符驻留池：字符串 → 下标；ASCII 单字符走 128 项快表；下标 0 是空格、1 是空串（宽字符的占位格）。
  */
@@ -176,7 +176,7 @@ class CharPool {
 var STYLE_POOL_SOFT_LIMIT = 4096;
 var STYLE_POOL_COMPACT_MIN = 512;
 var TRANSITION_CACHE_MAX = 8192;
-//@ chunk-bzr73sfg.js:201259-201524 fingerprint = HyperlinkPool (1)
+//@ chunk-bzr73sfg.js:201259-201524 fingerprint (2.1.88 match: HyperlinkPool, 1)
 /**
  * OSC 8 超链接驻留池：URL → 下标，0 表示无链接。
  */
@@ -200,7 +200,7 @@ class HyperlinkPool {
     return this.strings.length;
   }
 }
-//@ chunk-bzr73sfg.js:201524-201680 fingerprint = UNDERLINE_CODE (1)
+//@ chunk-bzr73sfg.js:201524-201680 fingerprint (2.1.88 match: UNDERLINE_CODE, 1)
 var INVERSE_CODE = {
   type: "ansi",
   code: SGR_INVERSE,
@@ -221,7 +221,7 @@ var YELLOW_FG_CODE = {
   code: SGR_FG_YELLOW,
   endCode: SGR_DEFAULT_FG,
 };
-//@ chunk-bzr73sfg.js:201680-204527 fingerprint = StylePool (0.543)
+//@ chunk-bzr73sfg.js:201680-204527 fingerprint (2.1.88 match: StylePool, 0.543)
 /**
  * 样式驻留池：AnsiCode 数组 → styleId（下标 <<1，最低位表示该样式在空格上可见，如背景/反显/下划线），上限约 2^14 个，超出后新组合退化为无样式并告警。transition(from,to) 缓存两样式间切换所需的 SGR 串；派生样式：withInverse、withUnderline、withCurrentMatch（搜索当前匹配：黄字+反显+粗体+下划线）、withSelectionBg（选区背景色，未设置时退回反显）；compact() 重建池并返回旧 id→新 id 的映射函数。
  */
@@ -390,7 +390,7 @@ deferInit("chunk-bzr73sfg.js:204527", () => {
     SGR_NO_OVERLINE,
   ]);
 });
-//@ chunk-bzr73sfg.js:204565-204634 fingerprint = hasVisibleSpaceEffect (1)
+//@ chunk-bzr73sfg.js:204565-204634 fingerprint (2.1.88 match: hasVisibleSpaceEffect, 1)
 /**
  * 样式里是否有在空格上也看得见的效果（反显、背景、下划线、上划线、删除线等关闭码判断）。
  */
@@ -440,7 +440,7 @@ function createScreenSegmenter(substitute) {
     tabWidth: DEFAULT_TAB_WIDTH,
   });
 }
-//@ chunk-bzr73sfg.js:204978-204991 callgraph-witnessed = EMPTY_CELL_VALUE (0)
+//@ chunk-bzr73sfg.js:204978-204991 callgraph-witnessed (2.1.88 match: EMPTY_CELL_VALUE, 0)
 var cellSetter;
 var EMPTY_CELL_VALUE = 0n;
 //@ chunk-bzr73sfg.js:204991-205056 layout
@@ -496,14 +496,14 @@ function isEmptyCellAt(screen, x, y) {
   if (x < 0 || y < 0 || x >= screen.width || y >= screen.height) return true;
   return isEmptyCellByIndex(screen, y * screen.width + x);
 }
-//@ chunk-bzr73sfg.js:205666-205716 fingerprint = internHyperlink (1)
+//@ chunk-bzr73sfg.js:205666-205716 fingerprint (2.1.88 match: internHyperlink, 1)
 /**
  * 把超链接 URL 驻留进屏幕的超链接池，返回下标。
  */
 function internHyperlink(screen, hyperlink) {
   return screen.hyperlinkPool.intern(hyperlink);
 }
-//@ chunk-bzr73sfg.js:205716-206180 fingerprint = createScreen (0.967)
+//@ chunk-bzr73sfg.js:205716-206180 fingerprint (2.1.88 match: createScreen, 0.967)
 /**
  * 创建屏幕缓冲：每格两个 Int32（字符下标、packWord1），同一块内存再用 BigInt64Array 视图做整格比较/清零；另有 noSelect（不可选中的格）、softWrap（每行的软换行标记）、damage（本帧改动矩形）。池子（字符/超链接/样式）在新旧两帧之间共享。
  */
@@ -530,7 +530,7 @@ function createScreen(width, height, styles, charPool, hyperlinkPool) {
     softWrap: new Int32Array(height),
   };
 }
-//@ chunk-bzr73sfg.js:206180-206677 fingerprint = resetScreen (1)
+//@ chunk-bzr73sfg.js:206180-206677 fingerprint (2.1.88 match: resetScreen, 1)
 /**
  * 把屏幕重置为指定尺寸并清空（容量不够才重新分配），damage 清掉。
  */
@@ -554,7 +554,7 @@ function resetScreen(screen, width, height) {
   screen.height = height;
   screen.damage = undefined;
 }
-//@ chunk-bzr73sfg.js:206677-207029 fingerprint = migrateScreenPools (1)
+//@ chunk-bzr73sfg.js:206677-207029 fingerprint (2.1.88 match: migrateScreenPools, 1)
 /**
  * 池子换代（字符池/超链接池重建、样式池 compact）后，把屏幕里每格的下标迁移到新池。
  */
@@ -586,7 +586,7 @@ function migrateScreenPools(screen, newCharPool, newHyperlinkPool, remapStyle) {
   screen.charPool = newCharPool;
   screen.hyperlinkPool = newHyperlinkPool;
 }
-//@ chunk-bzr73sfg.js:207029-207118 callgraph-witnessed = cellAt (1)
+//@ chunk-bzr73sfg.js:207029-207118 callgraph-witnessed (2.1.88 match: cellAt, 1)
 /**
  * 读 (x,y) 的格（越界返回 undefined）：{char, styleId, width, hyperlink}。
  */
@@ -594,7 +594,7 @@ function cellAt(screen, x, y) {
   if (x < 0 || y < 0 || x >= screen.width || y >= screen.height) return;
   return cellAtIndex(screen, y * screen.width + x);
 }
-//@ chunk-bzr73sfg.js:207118-207286 fingerprint = cellAtIndex (1)
+//@ chunk-bzr73sfg.js:207118-207286 fingerprint (2.1.88 match: cellAtIndex, 1)
 /**
  * 按线性下标读格。
  */
@@ -609,7 +609,7 @@ function cellAtIndex(screen, index) {
     hyperlink: hid === 0 ? undefined : screen.hyperlinkPool.get(hid),
   };
 }
-//@ chunk-bzr73sfg.js:207286-207514 fingerprint = visibleCellAtIndex (1)
+//@ chunk-bzr73sfg.js:207286-207514 fingerprint (2.1.88 match: visibleCellAtIndex, 1)
 /**
  * diff 输出用：读格，但跳过宽字符占位格，以及与上次输出样式相同的空白格（无需重画）。
  */
@@ -630,7 +630,7 @@ function visibleCellAtIndex(cells, charPool, hyperlinkPool, index, lastRenderedS
     hyperlink: hid === 0 ? undefined : hyperlinkPool.get(hid),
   };
 }
-//@ chunk-bzr73sfg.js:207514-207684 layout = cellAtIndex (1)
+//@ chunk-bzr73sfg.js:207514-207684 layout (2.1.88 match: cellAtIndex, 1)
 /**
  * 按 cells 数组下标（格下标×2）把格读进调用方提供的 out 对象，避免分配；diff 热路径用。
  */
@@ -643,7 +643,7 @@ function cellAtCI(screen, ci, out) {
   let hid = (word1 >>> HYPERLINK_SHIFT) & HYPERLINK_MASK;
   out.hyperlink = hid === 0 ? undefined : screen.hyperlinkPool.get(hid);
 }
-//@ chunk-bzr73sfg.js:207684-207802 fingerprint = charInCellAt (1)
+//@ chunk-bzr73sfg.js:207684-207802 fingerprint (2.1.88 match: charInCellAt, 1)
 /**
  * 读 (x,y) 格的字符。
  */
@@ -672,7 +672,7 @@ function setCellAt(screen, x, y, cell) {
   let atlasRecorder = screen.atlasRecorder;
   if (atlasRecorder.recording) atlasRecorder.record(charIndex, cell.styleId);
 }
-//@ chunk-bzr73sfg.js:208043-208209 fingerprint = diffEach (1)
+//@ chunk-bzr73sfg.js:208043-208209 fingerprint (2.1.88 match: diffEach, 1)
 /**
  * 原生 CellSegmenter 返回值打包格式：结束列 + 改动起始列·2^20 + 改动结束列·2^36；取出改动区间并入屏幕的 damage 矩形。
  */
@@ -713,7 +713,7 @@ function paintSegments(screen, x, y, segmenter) {
 function isMultiCodeUnitGrapheme(char) {
   return char.length > 2;
 }
-//@ chunk-bzr73sfg.js:208520-208935 fingerprint = setCellAt (0.918)
+//@ chunk-bzr73sfg.js:208520-208935 fingerprint (2.1.88 match: setCellAt, 0.918)
 /**
  * 后处理 damage 区域：宽字素（如 emoji 序列）实际显示宽度超出右边界时，换成占位字符并把到行尾的格清成空格，避免终端换行错位。
  */
@@ -738,7 +738,7 @@ function clampWideGraphemesAtRightEdge(screen) {
         });
     }
 }
-//@ chunk-bzr73sfg.js:208935-209318 fingerprint = setCellStyleId (1)
+//@ chunk-bzr73sfg.js:208935-209318 fingerprint (2.1.88 match: setCellStyleId, 1)
 /**
  * 只改一个格的 styleId（宽字符占位格跳过），并扩大 damage；选区高亮、搜索高亮用。
  */
@@ -771,14 +771,14 @@ function setCellStyleId(screen, x, y, styleId) {
       height: 1,
     };
 }
-//@ chunk-bzr73sfg.js:209318-209363 fingerprint = internCharString (1)
+//@ chunk-bzr73sfg.js:209318-209363 fingerprint (2.1.88 match: internCharString, 1)
 /**
  * 把字符驻留进屏幕字符池。
  */
 function internCharString(screen, char) {
   return screen.charPool.intern(char);
 }
-//@ chunk-bzr73sfg.js:209363-210531 fingerprint = blitRegion (1)
+//@ chunk-bzr73sfg.js:209363-210531 fingerprint (2.1.88 match: blitRegion, 1)
 /**
  * 把上一帧屏幕的一个矩形区域整块拷进当前帧（渲染缓存命中时跳过重画子树），连同 noSelect 和 softWrap；整行时一次 set。随后修补区域左右边界被切开的宽字符（清掉孤儿半格），并把区域并入 damage。
  */
@@ -871,7 +871,7 @@ function blitRegion(dst, src, regionX, regionY, maxX, maxY) {
   if (dst.damage) dst.damage = unionRect(dst.damage, damageRect);
   else dst.damage = damageRect;
 }
-//@ chunk-bzr73sfg.js:210531-211066 fingerprint = shiftRows (1)
+//@ chunk-bzr73sfg.js:210531-211066 fingerprint (2.1.88 match: shiftRows, 1)
 /**
  * 把 [top,bottom] 行区间整体上移（n>0）或下移 n 行并清空腾出的行（cells、noSelect、softWrap 一起），用于滚动优化（DECSTBM 滚动区域）。
  */
@@ -900,14 +900,14 @@ function shiftRows(screen, top, bottom, n) {
     softWrap.fill(0, top, top - n);
   }
 }
-//@ chunk-bzr73sfg.js:211066-211147 fingerprint = OSC8_REGEX (1)
+//@ chunk-bzr73sfg.js:211066-211147 fingerprint (2.1.88 match: OSC8_REGEX, 1)
 var OSC8_REGEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var OSC8_PREFIX;
 deferInit("chunk-bzr73sfg.js:211066", () => {
   OSC8_REGEX = new RegExp(`^${ESC}\\]8${SEP}${SEP}([^${BEL_2}]*)${BEL_2}$`);
   OSC8_PREFIX = `${ESC}]8${SEP}`;
 });
-//@ chunk-bzr73sfg.js:211147-211623 layout = diffEach (1)
+//@ chunk-bzr73sfg.js:211147-211623 layout (2.1.88 match: diffEach, 1)
 /**
  * 逐格比较两帧，只在 damage 区域（两帧 damage 之并，加上尺寸缩小露出的区域）内调用 cb(x, y, prevCell, nextCell)；cb 返回真则提前结束。宽度相同走 diffSameWidth，否则 diffDifferentWidth。
  */
@@ -997,7 +997,7 @@ function diffRowAdded(nextCells, next, rowCI, y, startX, endX, nextCell, cb) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:212122-212517 fingerprint = diffSameWidth (1)
+//@ chunk-bzr73sfg.js:212122-212517 fingerprint (2.1.88 match: diffSameWidth, 1)
 /**
  * 两帧宽度相同时的逐行 diff：两帧都有的行跳过相同格；只在旧帧的行报删除；只在新帧的行报新增（跳过全空格）。
  */
@@ -1036,7 +1036,7 @@ function diffSameWidth(prev, next, startX, endX, startY, endY, cb) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:212517-213222 layout = diffSameWidth (1)
+//@ chunk-bzr73sfg.js:212517-213222 layout (2.1.88 match: diffSameWidth, 1)
 /**
  * 两帧宽度不同时的逐行 diff（各自步长），同样分公共列、旧帧多出的列、新帧多出的列。
  */
@@ -1135,7 +1135,7 @@ function copyNoSelectRegion(dst, src, x1, y1, x2, y2) {
     dstIndex += dst.width;
   }
 }
-//@ chunk-bzr73sfg.js:213577-213752 fingerprint = markNoSelectRegion (1)
+//@ chunk-bzr73sfg.js:213577-213752 fingerprint (2.1.88 match: markNoSelectRegion, 1)
 /**
  * 把矩形区域的 noSelect 置为 value（<NoSelect> 包住的内容、行号栏等不参与选区复制）。
  */
@@ -1174,7 +1174,7 @@ function conservativeWidth(text) {
   }
   return Math.max(width, Bun.stringWidth(text, WIDE_AMBIGUOUS_OPTS));
 }
-//@ chunk-bzr73sfg.js:285537-286172 fingerprint = isEmptyCellByIndex (0.534)
+//@ chunk-bzr73sfg.js:285537-286172 fingerprint (2.1.88 match: isEmptyCellByIndex, 0.534)
 /**
  * 按保守宽度把文本折成多行（不超过 maxWidth）：单个字素都放不下时用 "[unreadable text]" 等占位替代，优先在空格处断行。
  */
@@ -1231,10 +1231,10 @@ function wrapTextConservatively(screen, maxWidth) {
   }
   return lines;
 }
-//@ chunk-bc20zedk.js:11835-11866 fingerprint = BOLD_CODE (0.759)
+//@ chunk-bc20zedk.js:11835-11866 fingerprint (2.1.88 match: BOLD_CODE, 0.759)
 var BOLD_OPEN = "\x1B[1m";
 var BOLD_CLOSE = "\x1B[22m";
-//@ chunk-ag5x7vhf.js:18368-18504 fingerprint = isEmptyCellAt (0.664)
+//@ chunk-ag5x7vhf.js:18368-18504 fingerprint (2.1.88 match: isEmptyCellAt, 0.664)
 function ScrollAnchor() {
   let $ = useMemoCache(2);
   let contextRef = useContext(ScrollAnchorContext);

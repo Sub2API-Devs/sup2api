@@ -214,7 +214,7 @@ function matchesToolboxServer(connection) {
     serverId: F688F3FC_1D05_5BD1_9C48_9854EC083044,
   });
 }
-//@ chunk-fra6697p.js:2500-2595 placement = isHTTPConfig (1)
+//@ chunk-fra6697p.js:2500-2595 placement (2.1.88 match: isHTTPConfig, 1)
 function isToolboxMcpServer(config) {
   if (config.config.type !== "http" || !isSameOriginAsCcr(config.config.url)) return false;
   return isDiskless() ? hasToolboxServerIdParam(config) : matchesToolboxServer(config);

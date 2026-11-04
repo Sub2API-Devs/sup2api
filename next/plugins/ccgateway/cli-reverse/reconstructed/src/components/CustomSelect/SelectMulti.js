@@ -87,7 +87,7 @@ function SelectMultiAccessible(props) {
   } else selectMultiElement = $[11];
   return selectMultiElement;
 }
-//@ chunk-nq7jz8ya.js:4044-8883 fingerprint = SelectMulti (0.732)
+//@ chunk-nq7jz8ya.js:4044-8883 fingerprint (2.1.88 match: SelectMulti, 0.732)
 /**
  * 多选：空格切换选中，回车提交选中集合，支持 compact 布局与可输入项。
  */

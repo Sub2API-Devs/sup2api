@@ -20,7 +20,7 @@ var execFileAsync; // deferred: has load-time effects after a deferred statement
 deferInit("chunk-f9pzpnqt.js:947", () => {
   execFileAsync = promisify(execFile);
 });
-//@ chunk-f9pzpnqt.js:961-1310 fingerprint = getWorktreePathsPortable (0.699)
+//@ chunk-f9pzpnqt.js:961-1310 fingerprint (2.1.88 match: getWorktreePathsPortable, 0.699)
 /**
  * 不依赖项目其余模块的 worktree 列表实现（供可移植模块/子进程使用）。
  */

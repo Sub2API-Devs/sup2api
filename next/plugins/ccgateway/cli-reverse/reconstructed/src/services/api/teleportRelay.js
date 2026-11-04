@@ -148,7 +148,7 @@ function isDeferredLoadingTool(tool) {
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-r1wk8q25.js:13646-13726 placement = hasThinkingContent (1)
+//@ chunk-r1wk8q25.js:13646-13726 placement (2.1.88 match: hasThinkingContent, 1)
 function isThinkingBlockLoose(m) {
   return isPlainObject(m) && (m.type === "thinking" || m.type === "redacted_thinking");
 }

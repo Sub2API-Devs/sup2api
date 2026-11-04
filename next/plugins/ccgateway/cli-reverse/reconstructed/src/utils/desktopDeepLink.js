@@ -35,13 +35,13 @@ deferInit("chunk-5nte8cwj.js:623", () => {
  * 桌面端最低可用版本（1.1.9669），低于它需先更新。
  */
 var MIN_DESKTOP_VERSION = "1.1.9669";
-//@ chunk-5nte8cwj.js:659-885 placement = isRunningFromBuildDirectory (0.964)
+//@ chunk-5nte8cwj.js:659-885 placement (2.1.88 match: isRunningFromBuildDirectory, 0.964)
 function isRunningFromBuildDirectory() {
   let mapped = [process.argv[1] || "", process.execPath || ""].map((path) => path.replaceAll("\\", "/"));
   let buildDirs = ["/build-ant/", "/build-ant-native/", "/build-external/", "/build-external-native/"];
   return mapped.some((path) => buildDirs.some((dir) => path.includes(dir)));
 }
-//@ chunk-5nte8cwj.js:885-1012 placement = ghIsDangerousCallback (0.784)
+//@ chunk-5nte8cwj.js:885-1012 placement (2.1.88 match: ghIsDangerousCallback, 0.784)
 function buildUrlWithParams(scheme, host, params = {}) {
   let url = new URL(`${scheme}://${host}`);
   for (let [key, value] of Object.entries(params)) url.searchParams.set(key, value);
@@ -58,7 +58,7 @@ function buildDesktopUrl(sessionId, scheme) {
       return `${buildUrlWithParams(scheme, "code/new")}?folder=${encodeURIComponent(sessionId.folder)}`;
   }
 }
-//@ chunk-5nte8cwj.js:1251-1399 fingerprint = isDesktopInstalled (0.4)
+//@ chunk-5nte8cwj.js:1251-1399 fingerprint (2.1.88 match: isDesktopInstalled, 0.4)
 async function isDesktopInstalled(scheme) {
   {
     let { code, stdout } = await execFileNoThrow("xdg-mime", [
@@ -70,7 +70,7 @@ async function isDesktopInstalled(scheme) {
   }
   return false;
 }
-//@ chunk-5nte8cwj.js:1399-1501 fingerprint = buildDesktopDeepLink (0.662)
+//@ chunk-5nte8cwj.js:1399-1501 fingerprint (2.1.88 match: buildDesktopDeepLink, 0.662)
 async function buildDesktopDeepLink() {
   if (isRunningFromBuildDirectory()) {
     if (await isDesktopInstalled("claude-dev")) return "claude-dev";
@@ -81,7 +81,7 @@ async function buildDesktopDeepLink() {
 async function getDesktopAppVersion() {
   return null;
 }
-//@ chunk-5nte8cwj.js:1615-2013 fingerprint = getDesktopInstallStatus (0.724)
+//@ chunk-5nte8cwj.js:1615-2013 fingerprint (2.1.88 match: getDesktopInstallStatus, 0.724)
 async function getDesktopInstallStatus() {
   let installed = await buildDesktopDeepLink();
   if (installed === null)
@@ -160,7 +160,7 @@ function describeOpenFailure(command, outcome) {
     detail: replaced.length === 0 ? summary : `${summary}: ${replaced}`,
   };
 }
-//@ chunk-5nte8cwj.js:2529-2718 fingerprint = openDeepLink (0.355)
+//@ chunk-5nte8cwj.js:2529-2718 fingerprint (2.1.88 match: openDeepLink, 0.355)
 async function openDeepLink(url, macApp) {
   logForDebugging(`Opening deep link: ${url}`);
   return describeOpenFailure(
@@ -202,7 +202,7 @@ async function openInDesktopOrBrowser({ webPath, desktopPath }) {
   }
   return (await openValidatedUrlSucceeded(getClaudeAiWebUrl(webPath))) ? "browser" : "none";
 }
-//@ chunk-5nte8cwj.js:3111-3680 callgraph-fingerprint = openCurrentSessionInDesktop (0.233)
+//@ chunk-5nte8cwj.js:3111-3680 callgraph-fingerprint (2.1.88 match: openCurrentSessionInDesktop, 0.233)
 async function openCurrentSessionInDesktop(sessionId) {
   let installed = await getDesktopInstallStatus();
   if (installed.status === "not-installed")

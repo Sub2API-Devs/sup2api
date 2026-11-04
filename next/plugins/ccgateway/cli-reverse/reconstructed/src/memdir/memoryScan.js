@@ -39,7 +39,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
  */
 var MAX_RECALL_HEADERS = 200;
 var ACCOUNT = "account";
-//@ chunk-s61vbvea.js:417225-417624 placement = getTeamMemEntrypoint (0.566)
+//@ chunk-s61vbvea.js:417225-417624 placement (2.1.88 match: getTeamMemEntrypoint, 0.566)
 /**
  * 根据 CLAUDE_MEMORY_STORES 计算扫描时要排除的索引文件（各 store 的 promptIndex、MEMORY.md）和 skills 目录前缀。
  */
@@ -69,7 +69,7 @@ function loadedIndexExclusions() {
     excludedPrefixes,
   };
 }
-//@ chunk-s61vbvea.js:417624-417778 placement = isTeamSubscriber (0.758)
+//@ chunk-s61vbvea.js:417624-417778 placement (2.1.88 match: isTeamSubscriber, 0.758)
 function recallVisibleTeamMounts(dir) {
   if (resolve(dir) !== resolve(getAutoMemPath())) return null;
   let mounts = new Set();
@@ -79,7 +79,7 @@ function recallVisibleTeamMounts(dir) {
   } catch {}
   return mounts;
 }
-//@ chunk-s61vbvea.js:417778-417916 placement = isTeamSubscriber (1)
+//@ chunk-s61vbvea.js:417778-417916 placement (2.1.88 match: isTeamSubscriber, 1)
 function isRecallVisiblePath(relativePath, teamMounts) {
   if (teamMounts === null) return true;
   let parts = relativePath.split(/[\\/]/);
@@ -97,7 +97,7 @@ function isRecallableMemoryFile(relativePath, exclusions, teamMounts) {
     isRecallVisiblePath(relativePath, teamMounts)
   );
 }
-//@ chunk-s61vbvea.js:418062-418173 placement = isSessionPlanFile (1)
+//@ chunk-s61vbvea.js:418062-418173 placement (2.1.88 match: isSessionPlanFile, 1)
 function isRecallCorpusFile(absolutePath) {
   let autoMemPath = getAutoMemPath();
   let expectedPrefix = relative(autoMemPath, absolutePath);
@@ -122,7 +122,7 @@ function firstHeadingOrLine(body) {
   }
   return null;
 }
-//@ chunk-s61vbvea.js:418304-419514 placement = scanMemoryFiles (0.316)
+//@ chunk-s61vbvea.js:418304-419514 placement (2.1.88 match: scanMemoryFiles, 0.316)
 /**
  * 扫描记忆目录下的 .md 文件（排除 MEMORY.md 与 memory store 的索引/skills），读取头部 frontmatter 得到 filename/description/type/mtime；可要求 no-follow 打开且单硬链接。
  */
@@ -230,7 +230,7 @@ async function readMemoryDirEntries(source, normalize) {
         recursive: true,
       });
 }
-//@ chunk-s61vbvea.js:419804-420044 placement = normalizeSource (0.771)
+//@ chunk-s61vbvea.js:419804-420044 placement (2.1.88 match: normalizeSource, 0.771)
 /**
  * 读目录项（名字配错）。
  */
@@ -428,7 +428,7 @@ async function readMemoryHeads(storeClient, projectKey, memoryDir, signal, inclu
     .map((fulfilled) => fulfilled.value)
     .sort((memoryA, memoryB) => memoryB.mtimeMs - memoryA.mtimeMs);
 }
-//@ chunk-s61vbvea.js:422368-422561 placement = formatMemoryManifest (1)
+//@ chunk-s61vbvea.js:422368-422561 placement (2.1.88 match: formatMemoryManifest, 1)
 /**
  * 把记忆列表格式化为 `- [type] file (ISO 时间): description` 清单，供提取/选择提示使用。
  */

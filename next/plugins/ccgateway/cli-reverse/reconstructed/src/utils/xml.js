@@ -19,11 +19,11 @@ import {
 import { sweepAskCopy } from "../tools/ArtifactTool/artifactUrls.js";
 import { truncateToLength } from "./stringUtils.js";
 
-//@ chunk-p5akk6be.js:24090-24168 fingerprint = escapeXmlAttr (1)
+//@ chunk-p5akk6be.js:24090-24168 fingerprint (2.1.88 match: escapeXmlAttr, 1)
 function escapeXmlAttr(s) {
   return escapeXml_2(s).replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 }
-//@ chunk-0wdgqhcf.js:12338-12464 fingerprint = escapeXml (1)
+//@ chunk-0wdgqhcf.js:12338-12464 fingerprint (2.1.88 match: escapeXml, 1)
 function escapeXml(text, maxLength = MAX_WARNING_TEXT_CHARS) {
   let replaced = (sweepAskCopy(text) ?? "")
     .replace(AMPERSAND_FORMS_RE, "&amp;")

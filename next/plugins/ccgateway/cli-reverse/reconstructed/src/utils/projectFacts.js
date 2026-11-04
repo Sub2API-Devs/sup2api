@@ -272,7 +272,7 @@ function extractHostname(url) {
     return null;
   }
 }
-//@ chunk-dsy6gyxv.js:5510-5649 placement = isPreapprovedUrl (1)
+//@ chunk-dsy6gyxv.js:5510-5649 placement (2.1.88 match: isPreapprovedUrl, 1)
 function isCratesIoIndexUrl(url) {
   try {
     let parsedUrl = new URL(url);

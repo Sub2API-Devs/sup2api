@@ -50,7 +50,7 @@ import { useLatchedBridgeNotice } from "./PromptInput/Notifications.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { Byline } from "./design-system/Byline.js";
 
-//@ chunk-hny2rpzz.js:2423-2645 fingerprint = _temp0 (0.616)
+//@ chunk-hny2rpzz.js:2423-2645 fingerprint (2.1.88 match: _temp0, 0.616)
 /**
  * MCP 工具结果中的文本条目，用 OutputLine 渲染。
  */
@@ -73,11 +73,11 @@ function McpTextOutputItem(s_8) {
   } else props = $[2];
   return props;
 }
-//@ chunk-18hwfzwa.js:643839-643889 fingerprint = _temp3 (1)
+//@ chunk-18hwfzwa.js:643839-643889 fingerprint (2.1.88 match: _temp3, 1)
 function selectReplBridgeReconnecting(s_1) {
   return s_1.replBridgeReconnecting;
 }
-//@ chunk-18hwfzwa.js:643985-644028 fingerprint = _temp6 (1)
+//@ chunk-18hwfzwa.js:643985-644028 fingerprint (2.1.88 match: _temp6, 1)
 function selectReplBridgeError(s_4) {
   return s_4.replBridgeError;
 }
@@ -85,15 +85,15 @@ function selectReplBridgeError(s_4) {
 function selectReplBridgeErrorKind(state) {
   return state.replBridgeErrorKind;
 }
-//@ chunk-18hwfzwa.js:644075-644121 fingerprint = _temp7 (1)
+//@ chunk-18hwfzwa.js:644075-644121 fingerprint (2.1.88 match: _temp7, 1)
 function selectReplBridgeExplicit(s_5) {
   return s_5.replBridgeExplicit;
 }
-//@ chunk-18hwfzwa.js:644166-644217 fingerprint = _temp8 (1)
+//@ chunk-18hwfzwa.js:644166-644217 fingerprint (2.1.88 match: _temp8, 1)
 function selectReplBridgeEnvironmentId(s_6) {
   return s_6.replBridgeEnvironmentId;
 }
-//@ chunk-18hwfzwa.js:644217-644264 fingerprint = _temp9 (1)
+//@ chunk-18hwfzwa.js:644217-644264 fingerprint (2.1.88 match: _temp9, 1)
 function selectReplBridgeSessionId(s_7) {
   return s_7.replBridgeSessionId;
 }
@@ -124,7 +124,7 @@ function disableReplBridgeState(prev) {
     replBridgeSessionGroupingId: undefined,
   };
 }
-//@ chunk-18hwfzwa.js:644583-644771 callgraph-fingerprint = _temp12 (0.368)
+//@ chunk-18hwfzwa.js:644583-644771 callgraph-fingerprint (2.1.88 match: _temp12, 0.368)
 function enableReplBridgeState(prev) {
   if (prev.replBridgeEnabled || prev.replBridgeError === undefined) {
     return prev;
@@ -151,7 +151,7 @@ function renderTextLine_4(children, key) {
     key,
   );
 }
-//@ chunk-18hwfzwa.js:644856-649982 fingerprint = BridgeDialog (0.557)
+//@ chunk-18hwfzwa.js:644856-649982 fingerprint (2.1.88 match: BridgeDialog, 0.557)
 /**
  * Remote Control 对话框：显示连接/会话状态与 URL（可切换二维码），d 键断开并关闭启动时自动连接，重试错误状态，显示 cwd 与分支。
  */

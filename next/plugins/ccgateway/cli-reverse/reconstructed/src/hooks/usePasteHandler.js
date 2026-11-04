@@ -139,7 +139,7 @@ var MACOS_SCREENSHOT_TEMP_RE = /\/TemporaryItems\/.*screencaptureui.*\/Screensho
 function getClipboardPlatform() {
   return imageLimitsForModel(getMainLoopModel());
 }
-//@ chunk-7p2hc4jn.js:51856-54705 callgraph-witnessed = usePasteHandler (0.228)
+//@ chunk-7p2hc4jn.js:51856-54705 callgraph-witnessed (2.1.88 match: usePasteHandler, 0.228)
 /**
  * 粘贴/拖放处理：长于阈值的按键序列视为粘贴；把粘贴文本按行拆分，识别图片路径（含 macOS 截图临时目录），并行读取图片并调用 onImagePaste，其余文本交 onPaste；空粘贴在 macOS/WSL 上改读剪贴板图片；粘贴期间吞掉紧随的回车并在结束后补发。
  */

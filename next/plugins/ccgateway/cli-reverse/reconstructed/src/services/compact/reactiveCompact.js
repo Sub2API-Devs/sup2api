@@ -484,7 +484,7 @@ function groupLeaveOutCandidates(messages, state) {
         group.tokens >= MIN_LEAVE_OUT_TOKENS && group.members.every((member) => member.mayBeReplaced),
     );
 }
-//@ chunk-e6aww6q8.js:2111433-2111584 placement = collectReadToolFilePaths (0.803)
+//@ chunk-e6aww6q8.js:2111433-2111584 placement (2.1.88 match: collectReadToolFilePaths, 0.803)
 function collectReadToolFilePaths_2(messages) {
   let input = messages?.input;
   return messages?.name === FILE_READ_TOOL_NAME &&

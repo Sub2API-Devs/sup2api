@@ -24,7 +24,7 @@ import { DESCRIPTION_2, getPrompt } from "./prompt.js";
 import { areTaskToolsEnabled, getTaskListId, listTasks } from "../../utils/tasks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nw7jbebs.js:5360-5656 callgraph-fingerprint = outputSchema (0.229)
+//@ chunk-nw7jbebs.js:5360-5656 callgraph-fingerprint (2.1.88 match: outputSchema, 0.229)
 /**
  * 任务存储 schema 与常量：TaskStatus、Task 记录（id/subject/description/activeForm/owner/status/blocks/blockedBy/metadata）、.highwatermark、最多 16 次 id 认领重试。
  */
@@ -52,7 +52,7 @@ deferInit("chunk-nw7jbebs.js:5360", () => {
   MAX_CREATE_ID_ATTEMPTS = 16;
   ID_CONFLICT_ERRNO_CODES = new Set(["ELOOP", "EISDIR", "ENXIO"]);
 });
-//@ chunk-kxyd0g16.js:151742-152943 fingerprint = TaskListTool (0.957)
+//@ chunk-kxyd0g16.js:151742-152943 fingerprint (2.1.88 match: TaskListTool, 0.957)
 /**
  * TaskList 工具（只读、并发安全、shouldDefer）：列出非 _internal 任务，blockedBy 过滤掉已完成的任务；输出 "#id [status] subject (owner) [blocked by …]"。
  */

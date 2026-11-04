@@ -40,7 +40,7 @@ function notificationChannelOption(channel) {
 }
 //@ chunk-9h8dr0qb.js:11348-11363 placement
 function noop_4() {}
-//@ chunk-9h8dr0qb.js:11363-12815 callgraph-fingerprint = ColorStep (0.188)
+//@ chunk-9h8dr0qb.js:11363-12815 callgraph-fingerprint (2.1.88 match: ColorStep, 0.188)
 function ColorStep(props) {
   let $ = useMemoCache(26);
   let {

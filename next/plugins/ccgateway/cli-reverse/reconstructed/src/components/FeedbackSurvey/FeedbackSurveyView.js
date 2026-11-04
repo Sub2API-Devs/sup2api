@@ -36,7 +36,7 @@ import { parseChord } from "../../keybindings/parser.js";
 import { getShortcutDisplayPlatform } from "../../utils/keyboardShortcuts.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:988815-989026 fingerprint = inputToResponse (0.631)
+//@ chunk-18hwfzwa.js:988815-989026 fingerprint (2.1.88 match: inputToResponse, 0.631)
 var RESPONSE_BY_KEY = {
   0: "dismissed",
   1: "bad",
@@ -72,9 +72,9 @@ function isSelectableResponseKey(key, allowFour = false) {
   if (key === "4") return allowFour;
   return key === "0" || key === "1" || key === "2" || key === "3";
 }
-//@ chunk-18hwfzwa.js:989108-989162 fingerprint = DEFAULT_MESSAGE (1)
+//@ chunk-18hwfzwa.js:989108-989162 fingerprint (2.1.88 match: DEFAULT_MESSAGE, 1)
 var DEFAULT_MESSAGE = "How is Claude doing this session? (optional)";
-//@ chunk-18hwfzwa.js:989162-990745 fingerprint = FeedbackSurveyView (0.496)
+//@ chunk-18hwfzwa.js:989162-990745 fingerprint (2.1.88 match: FeedbackSurveyView, 0.496)
 function FeedbackSurveyView(props) {
   let $ = useMemoCache(25);
   let { onSelect, inputValue, setInputValue, message, messageBold, mountDelayMs, showNotSure } = props;
@@ -563,7 +563,7 @@ function FeedbackRatingRow(props) {
   } else ratingElement = $[15];
   return ratingElement;
 }
-//@ chunk-18hwfzwa.js:999512-999590 placement = getReservedShortcuts (0.784)
+//@ chunk-18hwfzwa.js:999512-999590 placement (2.1.88 match: getReservedShortcuts, 0.784)
 function checkChordReserved(chord) {
   return formatKeyChords([parseChord(chord)], {
     platform: getShortcutDisplayPlatform() === "macos" ? "macos" : "other",

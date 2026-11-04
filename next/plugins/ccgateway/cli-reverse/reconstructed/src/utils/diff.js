@@ -301,7 +301,7 @@ function computeUnifiedDiff(oldText, newText, { context, timeout, maxSearchSteps
  */
 var DIFF_CONTEXT_LINES = 3;
 var DIFF_TIMEOUT_MS = 5000;
-//@ chunk-6zvepy0r.js:4558-4666 fingerprint = adjustHunkLineNumbers (1)
+//@ chunk-6zvepy0r.js:4558-4666 fingerprint (2.1.88 match: adjustHunkLineNumbers, 1)
 /**
  * 把 hunks 的 oldStart/newStart 统一平移 offset。
  */
@@ -313,7 +313,7 @@ function adjustHunkLineNumbers(hunks, offset) {
     newStart: hunk.newStart + offset,
   }));
 }
-//@ chunk-6zvepy0r.js:4666-5013 fingerprint = countLinesChanged (0.838)
+//@ chunk-6zvepy0r.js:4666-5013 fingerprint (2.1.88 match: countLinesChanged, 0.838)
 /**
  * 统计 patch 的增删行数（新建文件时按内容行数），用于 tengu_file_changed 等。
  */
@@ -360,7 +360,7 @@ function countLinesChanged(patch, modelId, fallbackAdditions, fallbackRemovals) 
 function logFileChanged(...args) {
   logEvent("tengu_file_changed", countLinesChanged(...args));
 }
-//@ chunk-6zvepy0r.js:5066-5360 fingerprint = getPatchFromContents (0.8)
+//@ chunk-6zvepy0r.js:5066-5360 fingerprint (2.1.88 match: getPatchFromContents, 0.8)
 /**
  * 由新旧内容生成结构化 patch：工具结果用快速 diff（带超时），显示用 structuredPatch；可忽略空白、单 hunk、制表符转空格。
  */
@@ -388,7 +388,7 @@ function getPatchFromContents({
   if (!hunks) return [];
   return convertTabs ? convertHunkLeadingTabs(hunks) : hunks;
 }
-//@ chunk-6zvepy0r.js:5360-5693 fingerprint = getPatchForDisplay (0.963)
+//@ chunk-6zvepy0r.js:5360-5693 fingerprint (2.1.88 match: getPatchForDisplay, 0.963)
 /**
  * 对原内容依次应用编辑后生成用于显示的 patch。
  */

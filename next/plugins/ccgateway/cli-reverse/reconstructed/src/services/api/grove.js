@@ -48,7 +48,7 @@ function getClientOsHeader() {
     "anthropic-client-os": getHostPlatformForAnalytics(),
   };
 }
-//@ chunk-vrsqcfp3.js:768-1386 fingerprint = updateGroveSettings (0.383)
+//@ chunk-vrsqcfp3.js:768-1386 fingerprint (2.1.88 match: updateGroveSettings, 0.383)
 /**
  * 读取账号设置 /api/oauth/account/settings（grove_enabled 等），带缓存。旧版名 updateGroveSettings 为错配，实际是 getGroveSettings。
  */
@@ -95,7 +95,7 @@ deferInit("chunk-vrsqcfp3.js:768", () => {
     () => "account",
   );
 });
-//@ chunk-vrsqcfp3.js:1386-1856 fingerprint = markGroveNoticeViewed (0.453)
+//@ chunk-vrsqcfp3.js:1386-1856 fingerprint (2.1.88 match: markGroveNoticeViewed, 0.453)
 /**
  * POST grove_notice_viewed。
  */
@@ -177,7 +177,7 @@ async function updateGroveSettings(groveEnabled, credentials, { onlyIfUnset = fa
     updateGroveSettings_2.cache.clear?.();
   }
 }
-//@ chunk-vrsqcfp3.js:2512-2953 fingerprint = isQualifiedForGrove (1)
+//@ chunk-vrsqcfp3.js:2512-2953 fingerprint (2.1.88 match: isQualifiedForGrove, 1)
 /**
  * 是否需要 Grove：读缓存配置，无缓存时后台拉取。
  */
@@ -201,7 +201,7 @@ async function isQualifiedForGrove(configWriteSource, credentials) {
   logForDebugging("Grove: Using fresh cached config");
   return cachedEntry.grove_enabled;
 }
-//@ chunk-vrsqcfp3.js:2953-3531 fingerprint = fetchAndStoreGroveConfig (0.904)
+//@ chunk-vrsqcfp3.js:2953-3531 fingerprint (2.1.88 match: fetchAndStoreGroveConfig, 0.904)
 /**
  * 拉取 Grove 配置并存入全局缓存。
  */
@@ -254,7 +254,7 @@ async function fetchAndStoreGroveConfig(accountId, configWriteSource, credential
     logForDebugging(`Grove: Failed to fetch and store config: ${err}`);
   }
 }
-//@ chunk-vrsqcfp3.js:3531-4327 fingerprint = getGroveNoticeConfig (0.655)
+//@ chunk-vrsqcfp3.js:3531-4327 fingerprint (2.1.88 match: getGroveNoticeConfig, 0.655)
 /**
  * GET /api/claude_code_grove 通知配置。
  */
@@ -312,7 +312,7 @@ deferInit("chunk-vrsqcfp3.js:3531", () => {
     () => "config",
   );
 });
-//@ chunk-vrsqcfp3.js:4327-4829 fingerprint = calculateShouldShowGrove (0.821)
+//@ chunk-vrsqcfp3.js:4327-4829 fingerprint (2.1.88 match: calculateShouldShowGrove, 0.821)
 /**
  * 是否显示 Grove 通知：未作出选择且（不在宽限期或到了提醒频率）。
  */
@@ -380,7 +380,7 @@ async function recordGroveChoiceSeen(groveConfig, configWriteSource, credentials
     logForDebugging(`Grove: could not save the Consumer Terms check: ${error}`);
   }
 }
-//@ chunk-vrsqcfp3.js:5415-6025 fingerprint = checkGroveForNonInteractive (0.667)
+//@ chunk-vrsqcfp3.js:5415-6025 fingerprint (2.1.88 match: checkGroveForNonInteractive, 0.667)
 /**
  * 非交互模式下检查 Grove：需要时打印提示或退出。
  */

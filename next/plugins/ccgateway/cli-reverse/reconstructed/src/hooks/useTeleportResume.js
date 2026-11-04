@@ -19,7 +19,7 @@ import { setTeleportedSessionInfo } from "../bootstrap/state.js";
 import { TeleportOperationError, errorMessage } from "../utils/errors.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 
-//@ chunk-0bntfk7p.js:1257-1971 fingerprint = useTeleportResume (0.793)
+//@ chunk-0bntfk7p.js:1257-1971 fingerprint (2.1.88 match: useTeleportResume, 0.793)
 function useTeleportResume(source) {
   let $ = useMemoCache(8);
   let [isResuming, setIsResuming] = useState(false);

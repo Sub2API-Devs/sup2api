@@ -36,7 +36,7 @@ import {
 import { arePromoOffersAllowed, isConsumerPlan as isConsumerPlan_2 } from "../../utils/planTiers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:499888-500019 fingerprint = CURRENCY_SYMBOLS (0.783)
+//@ chunk-s61vbvea.js:499888-500019 fingerprint (2.1.88 match: CURRENCY_SYMBOLS, 0.783)
 /**
  * 货币符号表；JPY/KRW/VND 为零小数位货币。
  */
@@ -156,7 +156,7 @@ async function fetchReferralRedemptions(campaign, credentials) {
     return response.data;
   });
 }
-//@ chunk-s61vbvea.js:501785-501879 placement = isConsumerPlan (0.894)
+//@ chunk-s61vbvea.js:501785-501879 placement (2.1.88 match: isConsumerPlan, 0.894)
 function isConsumerPlan() {
   let plan = getSubscriptionType();
   return !!(
@@ -166,7 +166,7 @@ function isConsumerPlan() {
     (plan === "max" || plan === "pro")
   );
 }
-//@ chunk-s61vbvea.js:501879-502222 fingerprint = checkCachedPassesEligibility (1)
+//@ chunk-s61vbvea.js:501879-502222 fingerprint (2.1.88 match: checkCachedPassesEligibility, 1)
 /**
  * 读缓存的 Passes 资格 {eligible, needsRefresh, hasCache}。
  */
@@ -206,7 +206,7 @@ function checkCachedPassesEligibility() {
 function formatMinorUnits(amount) {
   return formatCurrency(amount.amount_minor_units, amount.currency, "fit");
 }
-//@ chunk-s61vbvea.js:502287-502365 fingerprint = formatCreditAmount (0.734)
+//@ chunk-s61vbvea.js:502287-502365 fingerprint (2.1.88 match: formatCreditAmount, 0.734)
 /**
  * {amount_minor_units, currency}。旧版名 formatCreditAmount 为错配。
  */
@@ -259,7 +259,7 @@ function parseReferralCampaign(referralCodeDetails) {
   let parsed = referralCampaignSchema().safeParse(referralCodeDetails);
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-s61vbvea.js:502738-502869 fingerprint = getCachedReferrerReward (1)
+//@ chunk-s61vbvea.js:502738-502869 fingerprint (2.1.88 match: getCachedReferrerReward, 1)
 /**
  * 缓存中的推荐奖励金额。
  */
@@ -269,7 +269,7 @@ function getCachedReferrerReward() {
   let cachedEntry = getGlobalConfig().passesEligibilityCache?.[orgId];
   return parseCreditAmount(cachedEntry?.referrer_reward);
 }
-//@ chunk-s61vbvea.js:502869-503022 fingerprint = getCachedRemainingPasses (1)
+//@ chunk-s61vbvea.js:502869-503022 fingerprint (2.1.88 match: getCachedRemainingPasses, 1)
 /**
  * 缓存中的剩余 Pass 数。
  */
@@ -279,7 +279,7 @@ function getCachedRemainingPasses() {
   let config = getGlobalConfig().passesEligibilityCache?.[orgId]?.remaining_passes;
   return typeof config === "number" ? config : null;
 }
-//@ chunk-s61vbvea.js:503022-503691 fingerprint = fetchAndStorePassesEligibility (0.681)
+//@ chunk-s61vbvea.js:503022-503691 fingerprint (2.1.88 match: fetchAndStorePassesEligibility, 0.681)
 /**
  * 拉取并保存 Passes 资格（复用进行中请求）。
  */
@@ -326,7 +326,7 @@ async function fetchAndStorePassesEligibility(credentials, fetchCredentials) {
   })();
   return state.inFlight;
 }
-//@ chunk-s61vbvea.js:503691-504239 fingerprint = getCachedOrFetchPassesEligibility (0.889)
+//@ chunk-s61vbvea.js:503691-504239 fingerprint (2.1.88 match: getCachedOrFetchPassesEligibility, 0.889)
 /**
  * 读缓存，无缓存时后台拉取。
  */
@@ -354,7 +354,7 @@ async function getCachedOrFetchPassesEligibility(credentials, key) {
     referrer_reward: parseCreditAmount(rest.referrer_reward),
   };
 }
-//@ chunk-e6aww6q8.js:1878148-1878366 callgraph-fingerprint = fetchReferralEligibility (0.319)
+//@ chunk-e6aww6q8.js:1878148-1878366 callgraph-fingerprint (2.1.88 match: fetchReferralEligibility, 0.319)
 /**
  * 构建远程会话请求描述（url、组织头、bearer 与恢复回调）。旧版名 fetchReferralEligibility 为错配。
  */
@@ -375,7 +375,7 @@ function fetchReferralEligibility_2(credentials, storageV5, sessionId, profile, 
     reauthorized: false,
   };
 }
-//@ chunk-ag5x7vhf.js:94515-94708 fingerprint = shouldCheckForPasses (0.644)
+//@ chunk-ag5x7vhf.js:94515-94708 fingerprint (2.1.88 match: shouldCheckForPasses, 0.644)
 /**
  * 是否检查 Guest Passes（Max/Team 订阅、组织匹配等），返回组织 id。
  */

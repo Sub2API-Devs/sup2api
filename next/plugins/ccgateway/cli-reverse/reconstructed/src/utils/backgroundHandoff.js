@@ -204,7 +204,7 @@ deferInit("chunk-8fqgaf3a.js:11958", () => {
     "Still backgrounding after the current tool \u2014 a question is waiting for your answer.";
   TURN_STOPPED_BLOCK = backgroundBlockedMessage("the turn was stopped");
 });
-//@ chunk-8fqgaf3a.js:12182-12375 placement = _temp (1)
+//@ chunk-8fqgaf3a.js:12182-12375 placement (2.1.88 match: _temp, 1)
 function isToolResultUserMessage(c) {
   if (c.type !== "user") return false;
   let content = c.message?.content;

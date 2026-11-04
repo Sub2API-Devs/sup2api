@@ -92,7 +92,7 @@ function setRemoteSessionAwaits(awaits) {
 function isLocalRemoteCommand(command) {
   return LOCAL_REMOTE_COMMANDS.has(command.name);
 }
-//@ chunk-e6aww6q8.js:1730627-1730772 placement = prependModeCharacterToInput (1)
+//@ chunk-e6aww6q8.js:1730627-1730772 placement (2.1.88 match: prependModeCharacterToInput, 1)
 function prependModeCharacterToInput_2(input, inputMode, commands) {
   let trimmed = input.trim();
   if (trimmed === "") return true;

@@ -36,7 +36,7 @@ var TAIL_RENDER_ROWS = 30;
 var DEFAULT_ROW_HEIGHT_ESTIMATE = 1;
 var MAX_ROWS_PER_BATCH = 300;
 var MIN_ROWS_PER_BATCH = 25;
-//@ chunk-ag5x7vhf.js:151852-158046 fingerprint = useVirtualScroll (0.791)
+//@ chunk-ag5x7vhf.js:151852-158046 fingerprint (2.1.88 match: useVirtualScroll, 0.791)
 function useVirtualScroll(scrollRef, itemKeys, columns) {
   let heightCache = useRef(new Map());
   let offsetVersionRef = useRef(0);
@@ -455,7 +455,7 @@ function useVirtualScroll(scrollRef, itemKeys, columns) {
     scrollToIndex,
   };
 }
-//@ chunk-ag5x7vhf.js:158046-158178 affinity = dropSubtreeCache (0.775)
+//@ chunk-ag5x7vhf.js:158046-158178 affinity (2.1.88 match: dropSubtreeCache, 0.775)
 function hasDrawPending(node) {
   if (node.attributes.drawPending === true) return true;
   for (let child of node.childNodes) if (child.nodeName !== "#text" && hasDrawPending(child)) return true;

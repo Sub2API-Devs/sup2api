@@ -384,7 +384,7 @@ function groupByApiRound(messages) {
   if (currentRound.length > 0) rounds.push(currentRound);
   return rounds;
 }
-//@ chunk-e6aww6q8.js:2085728-2085802 placement = countUnseenAssistantTurns (1)
+//@ chunk-e6aww6q8.js:2085728-2085802 placement (2.1.88 match: countUnseenAssistantTurns, 1)
 function countNonProgressMessages(messages) {
   let messages_2 = messagesSinceCompactBoundary(messages).filter((message) => message.type !== "progress");
   return groupByApiRound(messages_2);
@@ -396,7 +396,7 @@ function countNonProgressMessages(messages) {
 function hasTooFewMessagesToCompact(messagesForQuery) {
   return countNonProgressMessages(messagesForQuery).length < 2;
 }
-//@ chunk-e6aww6q8.js:2134246-2138079 placement = createCompactionResultFromSessionMemory (0.132)
+//@ chunk-e6aww6q8.js:2134246-2138079 placement (2.1.88 match: createCompactionResultFromSessionMemory, 0.132)
 /**
  * 反应式/预计算压缩成功后组装 CompactionResult：清 readFileState、边界消息、保留消息（可剥 thinking）、压缩后附件、PostCompact 钩子、计算 postTokens，记 tengu_reactive_compact_succeeded。旧版名 createCompactionResultFromSessionMemory 为错配。
  */
@@ -745,7 +745,7 @@ async function fallbackPostCompactAttachments(
     hookResults: [],
   };
 }
-//@ chunk-e6aww6q8.js:2140059-2140258 placement = getTokenCountFromUsage (0.899)
+//@ chunk-e6aww6q8.js:2140059-2140258 placement (2.1.88 match: getTokenCountFromUsage, 0.899)
 function getTokenCountFromUsage_4(usage) {
   if (usage.type !== "assistant") return usage;
   return {
@@ -808,7 +808,7 @@ function applyPreservedMessages(messages, message, pending, initialMessages) {
   }
   return pending;
 }
-//@ chunk-e6aww6q8.js:2140841-2141025 placement = buildPostCompactMessages (0.833)
+//@ chunk-e6aww6q8.js:2140841-2141025 placement (2.1.88 match: buildPostCompactMessages, 0.833)
 function buildPostCompactMessages_2(plan, placement) {
   let mapped = plan.messagesToKeep.map(getTokenCountFromUsage_4);
   let ordered =
@@ -876,7 +876,7 @@ function stripMediaFromAttachment(attachment) {
     };
   return attachment;
 }
-//@ chunk-e6aww6q8.js:2407546-2408279 fingerprint = stripImagesFromMessages (0.888)
+//@ chunk-e6aww6q8.js:2407546-2408279 fingerprint (2.1.88 match: stripImagesFromMessages, 0.888)
 /**
  * 摘要请求前把消息里的 image/document 块（含 tool_result 内嵌）替换成 [image]/[document] 文本，附件同样处理。
  */
@@ -1079,7 +1079,7 @@ function stripNonEssentialContent(messages) {
     return message;
   });
 }
-//@ chunk-e6aww6q8.js:2409880-2409988 fingerprint = ERROR_MESSAGE_NOT_ENOUGH_MESSAGES (0.667)
+//@ chunk-e6aww6q8.js:2409880-2409988 fingerprint (2.1.88 match: ERROR_MESSAGE_NOT_ENOUGH_MESSAGES, 0.667)
 /**
  * 截头后插在开头的 meta 用户消息文本。
  */
@@ -1093,7 +1093,7 @@ var PTL_RETRY_MARKER = "[earlier conversation truncated for compaction retry]";
 function truncateHeadForPromptTooLong(messages, summaryResponse, bytesPerToken) {
   return truncateHeadForPTLRetry(messages, getPromptTooLongGap(summaryResponse), bytesPerToken);
 }
-//@ chunk-e6aww6q8.js:2410031-2410438 fingerprint = truncateHeadForPTLRetry (1)
+//@ chunk-e6aww6q8.js:2410031-2410438 fingerprint (2.1.88 match: truncateHeadForPTLRetry, 1)
 /**
  * 摘要请求 prompt too long 时丢弃最早的若干 API 轮次组：有超出量就丢到够为止，否则丢 20%；至少保留一组；开头变成 assistant 时补 PTL_RETRY_MARKER 用户消息。
  */
@@ -1127,7 +1127,7 @@ function truncateHeadForPTLRetry(messages, budget, bytesPerToken) {
     ];
   return sliced;
 }
-//@ chunk-e6aww6q8.js:2410438-2410569 fingerprint = ERROR_MESSAGE_PROMPT_TOO_LONG (0.667)
+//@ chunk-e6aww6q8.js:2410438-2410569 fingerprint (2.1.88 match: ERROR_MESSAGE_PROMPT_TOO_LONG, 0.667)
 /**
  * "Compaction blocked by PreCompact hook"。
  */
@@ -1152,7 +1152,7 @@ function throwIfPreCompactHookBlocked(preCompactHookResult, onNotification, hook
     });
   throw new CompactionError(`${COMPACTION_BLOCKED_BY_HOOK}: ${preCompactHookResult.blockedBy}`);
 }
-//@ chunk-e6aww6q8.js:2410874-2410971 fingerprint = ERROR_MESSAGE_INCOMPLETE_RESPONSE (1)
+//@ chunk-e6aww6q8.js:2410874-2410971 fingerprint (2.1.88 match: ERROR_MESSAGE_INCOMPLETE_RESPONSE, 1)
 /**
  * 压缩被中断（网络问题）的提示文本。
  */
@@ -1163,7 +1163,7 @@ var ERROR_MESSAGE_INCOMPLETE_RESPONSE =
  * 压缩专用错误类（无摘要、API 错误、钩子阻断）。
  */
 class CompactionError extends Error {}
-//@ chunk-e6aww6q8.js:2410995-2411131 fingerprint = buildPostCompactMessages (0.919)
+//@ chunk-e6aww6q8.js:2410995-2411131 fingerprint (2.1.88 match: buildPostCompactMessages, 0.919)
 /**
  * 按顺序拼出压缩后的消息：边界标记、摘要消息、替换段、保留消息、附件、钩子结果。
  */
@@ -1196,7 +1196,7 @@ function createClassifierOverflowReminder(callCount, names) {
     content: `Auto mode could not review ${description} because the conversation was too long for its classifier, so ${single ? "that call" : "those calls"} did not run. The conversation has now been compacted. If still needed, issue ${single ? "it" : "them"} again and ${single ? "it" : "they"} will be reviewed normally.`,
   });
 }
-//@ chunk-e6aww6q8.js:2411731-2411848 layout = buildPostCompactMessages (0.801)
+//@ chunk-e6aww6q8.js:2411731-2411848 layout (2.1.88 match: buildPostCompactMessages, 0.801)
 /**
  * 同 buildPostCompactMessages 但不含 messagesToKeep（queryLoop 产出压缩后行用）。
  */
@@ -1225,7 +1225,7 @@ function uniqueUuidsKeepLast(messages) {
   }
   return uuids.reverse();
 }
-//@ chunk-e6aww6q8.js:2411982-2412250 fingerprint = annotateBoundaryWithPreservedSegment (0.786)
+//@ chunk-e6aww6q8.js:2411982-2412250 fingerprint (2.1.88 match: annotateBoundaryWithPreservedSegment, 0.786)
 /**
  * 在边界消息 compactMetadata 上记录保留段（preservedSegment head/anchor/tail）与保留消息 uuid。
  */
@@ -1342,7 +1342,7 @@ function isHumanPromptMessage(message) {
     !isToolResultMessage(message)
   );
 }
-//@ chunk-e6aww6q8.js:2413235-2419147 fingerprint = compactConversation (0.673)
+//@ chunk-e6aww6q8.js:2413235-2419147 fingerprint (2.1.88 match: compactConversation, 0.673)
 /**
  * 整段压缩：PreCompact 钩子 → 选摘要提示词变体（qee，tengu_curried_trinket）→ streamCompactSummary（prompt too long 时 truncateHeadForPTLRetry 最多 3 次）→ 校验摘要 → 清空 readFileState → buildPostCompactAttachments → 边界消息（compact_boundary，含 preTokens/postTokens）与摘要用户消息（isCompactSummary）→ tengu_compact 遥测 → PostCompact 钩子。返回 CompactionResult。
  */
@@ -1713,7 +1713,7 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
     });
   }
 }
-//@ chunk-e6aww6q8.js:2419147-2424722 fingerprint = partialCompactConversation (0.726)
+//@ chunk-e6aww6q8.js:2419147-2424722 fingerprint (2.1.88 match: partialCompactConversation, 0.726)
 /**
  * 部分压缩（消息选择器）：direction=from 摘要选中点之后、保留之前；up_to 摘要之前、保留之后（保留部分可能剥离 thinking）。流程同 compactConversation，用 getPartialCompactPrompt，边界消息记录 userFeedback 与摘要条数，tengu_partial_compact 遥测。
  */
@@ -2086,7 +2086,7 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
     });
   }
 }
-//@ chunk-e6aww6q8.js:2424722-2425057 fingerprint = addErrorNotificationIfNeeded (0.853)
+//@ chunk-e6aww6q8.js:2424722-2425057 fingerprint (2.1.88 match: addErrorNotificationIfNeeded, 0.853)
 /**
  * 手动压缩失败时（非中止/消息不足/钩子阻断）弹出 "Error compacting conversation" 通知。
  */
@@ -2130,7 +2130,7 @@ function excludeSameModelFallbacks(modelInfo, fallbackModel) {
     Array.isArray(fallbackModel) ? fallbackModel : fallbackModel !== undefined ? [fallbackModel] : []
   ).filter((candidate) => !swapShrinksContextWindow(modelInfo, candidate));
 }
-//@ chunk-e6aww6q8.js:2425273-2425465 fingerprint = createCompactCanUseTool (1)
+//@ chunk-e6aww6q8.js:2425273-2425465 fingerprint (2.1.88 match: createCompactCanUseTool, 1)
 /**
  * 压缩用的 canUseTool：一律拒绝（"Tool use is not allowed during compaction"）。
  */
@@ -2144,7 +2144,7 @@ function createCompactCanUseTool() {
     },
   });
 }
-//@ chunk-e6aww6q8.js:2425465-2434278 fingerprint = streamCompactSummary (0.409)
+//@ chunk-e6aww6q8.js:2425465-2434278 fingerprint (2.1.88 match: streamCompactSummary, 0.409)
 /**
  * 发出摘要请求：默认（tengu_compact_cache_prefix 开）用 runForkedAgent 共享主会话缓存、单轮、拒绝工具；失败或无文本时回退到直连流式请求（去媒体、冷压缩去非必要内容、只带 Read/ToolSearch/MCP 工具定义、按模型/fallback 链与拒答回退重试）。返回 {response, mediaStripped}。
  */
@@ -2743,7 +2743,7 @@ async function buildPostCompactAttachments(
     hookResults,
   };
 }
-//@ chunk-e6aww6q8.js:2436079-2436651 fingerprint = createPostCompactFileAttachments (0.969)
+//@ chunk-e6aww6q8.js:2436079-2436651 fingerprint (2.1.88 match: createPostCompactFileAttachments, 0.969)
 /**
  * 按时间倒序取最近读过的文件（排除保留段里已读的、计划/记忆等特殊文件），每个最多 5000 token 重新生成文件附件，总预算 50000。
  */
@@ -2798,7 +2798,7 @@ async function createPostCompactFileAttachments(
     return false;
   });
 }
-//@ chunk-e6aww6q8.js:2436651-2436822 fingerprint = createPlanAttachmentIfNeeded (1)
+//@ chunk-e6aww6q8.js:2436651-2436822 fingerprint (2.1.88 match: createPlanAttachmentIfNeeded, 1)
 /**
  * 有计划文件时生成 plan_file_reference 附件。
  */
@@ -2812,7 +2812,7 @@ async function createPlanAttachmentIfNeeded(agentId, storageV5) {
     planContent,
   });
 }
-//@ chunk-e6aww6q8.js:2436822-2438287 fingerprint = createSkillAttachmentIfNeeded (0.537)
+//@ chunk-e6aww6q8.js:2436822-2438287 fingerprint (2.1.88 match: createSkillAttachmentIfNeeded, 0.537)
 /**
  * 已调用技能（含从对话中恢复的）按最近调用排序，单个截到 5000 token、总预算 25000，生成 invoked_skills 附件。
  */
@@ -2907,7 +2907,7 @@ function createSkillAttachmentIfNeeded(agentId, messages = [], messages_2 = []) 
     skills,
   });
 }
-//@ chunk-e6aww6q8.js:2438287-2438628 fingerprint = createPlanModeAttachmentIfNeeded (0.836)
+//@ chunk-e6aww6q8.js:2438287-2438628 fingerprint (2.1.88 match: createPlanModeAttachmentIfNeeded, 0.836)
 /**
  * 处于 plan 模式时生成完整 plan_mode 提醒附件。
  */
@@ -2972,7 +2972,7 @@ function createProjectsThreadAskAttachmentIfNeeded(preCompactMessages, messagesT
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:2439121-2439640 fingerprint = createAsyncAgentAttachmentsIfNeeded (0.903)
+//@ chunk-e6aww6q8.js:2439121-2439640 fingerprint (2.1.88 match: createAsyncAgentAttachmentsIfNeeded, 0.903)
 /**
  * 未取回的后台代理任务生成 task_status 附件（进度摘要或错误）。
  */
@@ -3060,7 +3060,7 @@ function collectPeerHandbackCommands(preCompactMessages, messagesToKeep) {
       : [],
   );
 }
-//@ chunk-e6aww6q8.js:2440475-2441038 fingerprint = collectReadToolFilePaths (1)
+//@ chunk-e6aww6q8.js:2440475-2441038 fingerprint (2.1.88 match: collectReadToolFilePaths, 1)
 /**
  * 保留消息中 Read 工具读过的文件路径（排除结果已被清理为桩的）。
  */
@@ -3290,7 +3290,7 @@ function analyzeOversizedPrefix(messages, modelInfo, autoCompactWindow, snipToke
 function isColdCompactEnabled() {
   return env.CLAUDE_CODE_COLD_COMPACT;
 }
-//@ chunk-ag5x7vhf.js:27597-27676 fingerprint = stripReinjectedAttachments (0.508)
+//@ chunk-ag5x7vhf.js:27597-27676 fingerprint (2.1.88 match: stripReinjectedAttachments, 0.508)
 /**
  * 附件类型为 skill_listing 或 agent_listing_delta（压缩后会重新注入的列表类附件）。旧版名 stripReinjectedAttachments 为错配（这里只是判断）。
  */

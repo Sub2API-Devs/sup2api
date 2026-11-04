@@ -176,7 +176,7 @@ function isSafeUrlPath(path) {
     SAFE_URL_CHARS_RE.test(path) && !path.split("/").some((segment) => segment === "." || segment === "..")
   );
 }
-//@ chunk-6mwt0myy.js:6122-6505 placement = parseGitRemote (0.781)
+//@ chunk-6mwt0myy.js:6122-6505 placement (2.1.88 match: parseGitRemote, 0.781)
 /**
  * 解析服务器 URL 为身份（协议、主机、路径）。
  */
@@ -245,7 +245,7 @@ function hostStandardKey(scheme, host) {
 function isOrgConnectorKey(key) {
   return `${key}-`.replace(/[_-]+/g, "-").startsWith(ORG_CONNECTOR);
 }
-//@ chunk-6mwt0myy.js:6852-7119 placement = ghIsDangerousCallback (0.773)
+//@ chunk-6mwt0myy.js:6852-7119 placement (2.1.88 match: ghIsDangerousCallback, 0.773)
 function ghIsDangerousCallback(input) {
   let serverUrlIdentity = parseServerUrlIdentity(input);
   if (serverUrlIdentity === undefined) return;
@@ -1113,7 +1113,7 @@ function compileMcpRuleMatcher(ruleName) {
         toolName !== undefined &&
         (wildcardMatcher ??= wildcardRuleRegex(toolName))(candidate.toolName)));
 }
-//@ chunk-6mwt0myy.js:21467-21719 placement = getToolNameForPermissionCheck (1)
+//@ chunk-6mwt0myy.js:21467-21719 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * 工具对应的 mcp__ 规则前缀。
  */
@@ -1149,7 +1149,7 @@ function parseMcpToolNameCandidates(ruleName) {
     toolName: ruleName.slice(prefix.length + 2),
   }));
 }
-//@ chunk-6mwt0myy.js:21897-22019 placement = getToolNameForPermissionCheck (1)
+//@ chunk-6mwt0myy.js:21897-22019 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function ruleWithinServerPrefix(ruleName, tool) {
   return (
     tool.mcpInfo

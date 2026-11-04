@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-hg2zbde4.js:12944-12967 fingerprint = EXIT_WORKTREE_TOOL_NAME (1)
+//@ chunk-hg2zbde4.js:12944-12967 fingerprint (2.1.88 match: EXIT_WORKTREE_TOOL_NAME, 1)
 /**
  * ExitWorktree 工具名常量。
  */

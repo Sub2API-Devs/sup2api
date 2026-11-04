@@ -197,7 +197,7 @@ function wholeBashRuleVerdict(toolPermissionContext, toolName) {
         },
       };
 }
-//@ chunk-a76knw89.js:40935-41189 placement = getDenyRuleForAgent (0.778)
+//@ chunk-a76knw89.js:40935-41189 placement (2.1.88 match: getDenyRuleForAgent, 0.778)
 function findBashRuleInList(toolPermissionContext, rules) {
   let bashAlias = toolPermissionContext.toolAliases?.[BASH_TOOL_NAME];
   let names = [BASH_TOOL_NAME, ...(bashAlias !== undefined ? [bashAlias] : [])];

@@ -12,7 +12,7 @@ import { analyzeCommand } from "./treeSitterAnalysis.js";
 import { isGuardOff, runGuarded, markGuardFired } from "./bashParserFlags.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1053980-1054036 callgraph-witnessed = visitNodes (0)
+//@ chunk-e6aww6q8.js:1053980-1054036 callgraph-witnessed (2.1.88 match: visitNodes, 0)
 /**
  * 深度优先访问 AST 每个节点。
  */
@@ -20,7 +20,7 @@ function visitNodes(node, visitor) {
   visitor(node);
   for (let child of node.children) visitNodes(child, visitor);
 }
-//@ chunk-e6aww6q8.js:1054036-1054221 fingerprint = extractPipePositions (0.858)
+//@ chunk-e6aww6q8.js:1054036-1054221 fingerprint (2.1.88 match: extractPipePositions, 0.858)
 /**
  * 收集所有 pipeline 中 | / |& 的字节区间并排序。
  */
@@ -34,7 +34,7 @@ function extractPipePositions(rootNode) {
   });
   return pipePositions.sort((leftRange, rightRange) => leftRange[0] - rightRange[0]);
 }
-//@ chunk-e6aww6q8.js:1054221-1054484 fingerprint = extractRedirectionNodes (0.822)
+//@ chunk-e6aww6q8.js:1054221-1054484 fingerprint (2.1.88 match: extractRedirectionNodes, 0.822)
 /**
  * 收集 > / >> 文件重定向的 {startIndex, endIndex, target, operator}。
  */
@@ -57,7 +57,7 @@ function extractRedirectionNodes(rootNode) {
   });
   return redirections;
 }
-//@ chunk-e6aww6q8.js:1054484-1055523 fingerprint = TreeSitterParsedCommand (1)
+//@ chunk-e6aww6q8.js:1054484-1055523 fingerprint (2.1.88 match: TreeSitterParsedCommand, 1)
 /**
  * 基于 AST 的命令对象：getPipeSegments 按管道字节位置切段，withoutOutputRedirections 按字节删除输出重定向并规整空白，getOutputRedirections 返回 {target, operator}；还携带 treeSitterAnalysis（引号上下文、复合结构、危险模式）。
  */
@@ -115,7 +115,7 @@ class TreeSitterParsedCommand {
     }));
   }
 }
-//@ chunk-e6aww6q8.js:1055523-1055598 callgraph-witnessed = buildParsedCommandFromRoot (0)
+//@ chunk-e6aww6q8.js:1055523-1055598 callgraph-witnessed (2.1.88 match: buildParsedCommandFromRoot, 0)
 /**
  * 由已解析的 AST 根构建 TreeSitterParsedCommand（管道位置、重定向、analyzeCommand 结果）。
  */
@@ -125,7 +125,7 @@ function buildParsedCommandFromRoot(command, root) {
   let analysis = analyzeCommand(root, command);
   return new TreeSitterParsedCommand(command, pipePositions, redirectionNodes, analysis);
 }
-//@ chunk-e6aww6q8.js:1055598-1055760 fingerprint = doParse (0.655)
+//@ chunk-e6aww6q8.js:1055598-1055760 fingerprint (2.1.88 match: doParse, 0.655)
 /**
  * 动态导入 parser 模块解析命令并构建 TreeSitterParsedCommand；失败返回 null（316 已无正则回退）。
  */
@@ -156,7 +156,7 @@ class CachedParsedCommand {
     return result;
   }
 }
-//@ chunk-e6aww6q8.js:1056000-1056016 callgraph-witnessed = ParsedCommand (0)
+//@ chunk-e6aww6q8.js:1056000-1056016 callgraph-witnessed (2.1.88 match: ParsedCommand, 0)
 /**
  * 全局 ParsedCommand 单例，parse(command) 返回 TreeSitterParsedCommand 或 null。
  */

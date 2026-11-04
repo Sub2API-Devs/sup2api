@@ -88,7 +88,7 @@ import { registerCleanup, registerPreExitFlush } from "../../utils/cleanupRegist
 import { createSignal } from "../../utils/signal.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3wek6r2k.js:29172-29300 fingerprint = scopeKey (0.642)
+//@ chunk-3wek6r2k.js:29172-29300 fingerprint (2.1.88 match: scopeKey, 0.642)
 /**
  * 构造一条 replay 用户消息（isReplay）。
  */
@@ -575,7 +575,7 @@ function getTextRhythm(timing) {
   };
   return timing.textRhythm;
 }
-//@ chunk-fp6aqx1j.js:9497-9736 fingerprint = accumulateStreamEvents (0.846)
+//@ chunk-fp6aqx1j.js:9497-9736 fingerprint (2.1.88 match: accumulateStreamEvents, 0.846)
 function accumulateStreamEvents(payload) {
   if (payload.type !== "stream_event" || payload.parent_tool_use_id != null) return false;
   let { event } = payload;
@@ -790,7 +790,7 @@ function getControlRequestSubtypeOfEvent(event) {
     ? request.subtype
     : undefined;
 }
-//@ chunk-fp6aqx1j.js:17066-17191 placement = mergeClients (1)
+//@ chunk-fp6aqx1j.js:17066-17191 placement (2.1.88 match: mergeClients, 1)
 function mergeClients(error) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode) return errnoCode;
@@ -798,7 +798,7 @@ function mergeClients(error) {
     return error.name;
   return;
 }
-//@ chunk-fp6aqx1j.js:17191-17320 fingerprint = CCRInitError (0.859)
+//@ chunk-fp6aqx1j.js:17191-17320 fingerprint (2.1.88 match: CCRInitError, 0.859)
 /**
  * CCRClient 初始化失败错误（reason + httpStatus）。
  */
@@ -1359,7 +1359,7 @@ function parseDeliveryEvent(event, eventId) {
     },
   };
 }
-//@ chunk-fp6aqx1j.js:25921-134287 callgraph-witnessed = CCRClient (0.237)
+//@ chunk-fp6aqx1j.js:25921-134287 callgraph-witnessed (2.1.88 match: CCRClient, 0.237)
 /**
  * CCRClient：云端 worker 与 CCR 会话服务的客户端：注册 worker（epoch）、心跳、上传事件/状态、接收 served call 与冲突处理（superseded_by_worker、epoch_stale）。
  */
@@ -6691,7 +6691,7 @@ function collectContentBlockField(message, blockType, field, names) {
     }
   return blocks;
 }
-//@ chunk-fp6aqx1j.js:138941-139051 placement = createChildAbortController (0.879)
+//@ chunk-fp6aqx1j.js:138941-139051 placement (2.1.88 match: createChildAbortController, 0.879)
 function createChildAbortController(signal) {
   return new Promise((resolve) => {
     if (signal.aborted) resolve();

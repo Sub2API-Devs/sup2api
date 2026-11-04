@@ -73,7 +73,7 @@ function renderCompactSummaryText(text, modelOnlyText) {
   text = rewriteToolsUsedSummaryTag(text);
   return text;
 }
-//@ chunk-ah34pb7m.js:38044-39964 fingerprint = CompactSummary (0.75)
+//@ chunk-ah34pb7m.js:38044-39964 fingerprint (2.1.88 match: CompactSummary, 0.75)
 function CompactSummary(props) {
   let $ = useMemoCache(24);
   let { message, screen } = props;

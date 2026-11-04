@@ -99,7 +99,7 @@ import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { UNREADABLE_PRINCIPAL } from "./policyVerdicts.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-55ht3bcx.js:7634-7707 placement = CACHE_FILENAME (1)
+//@ chunk-55ht3bcx.js:7634-7707 placement (2.1.88 match: CACHE_FILENAME, 1)
 /**
  * 策略状态里的重查间隔、被拒键名提示上限与「无戳」标记。
  */
@@ -478,7 +478,7 @@ function getCredentialIndependentIneligibleReason(options = {}) {
 function isPolicyLimitsEligible() {
   return getPolicyLimitsIneligibleReason() === undefined;
 }
-//@ chunk-55ht3bcx.js:14062-14490 placement = isPolicyLimitsEligible (0.63)
+//@ chunk-55ht3bcx.js:14062-14490 placement (2.1.88 match: isPolicyLimitsEligible, 0.63)
 function getPolicyLimitsIneligibleReason(options = {}) {
   let credentialIndependentIneligibleReason = getCredentialIndependentIneligibleReason(options);
   if (credentialIndependentIneligibleReason !== undefined) return credentialIndependentIneligibleReason;

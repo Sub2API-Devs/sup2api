@@ -36,7 +36,7 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 function isEscapeKey(event) {
   return event?.name === "escape" && !event.ctrl && !event.meta;
 }
-//@ chunk-ey2qag4x.js:26392-26433 layout = _temp (1)
+//@ chunk-ey2qag4x.js:26392-26433 layout (2.1.88 match: _temp, 1)
 function isImagePaste_6(c) {
   return c.type === "image";
 }
@@ -45,7 +45,7 @@ function inputOptionWidth(columns, maxIndexWidth, extraWidth, rightWidth) {
   let chromeWidth = 2 + maxIndexWidth + 2;
   return Math.max(1, columns - chromeWidth - extraWidth - rightWidth);
 }
-//@ chunk-ey2qag4x.js:26493-33398 fingerprint = SelectInputOption (0.907)
+//@ chunk-ey2qag4x.js:26493-33398 fingerprint (2.1.88 match: SelectInputOption, 0.907)
 function SelectInputOption(props) {
   let $ = useMemoCache(107);
   let {

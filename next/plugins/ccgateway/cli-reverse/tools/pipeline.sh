@@ -40,6 +40,8 @@ if [ "${VERIFY:-0}" = 1 ]; then
   # static checks on the reading tree (docs/process/lead.md, README "验证")
   [ -f analysis/verify/readable-check-original.json ] || $N tools/verify/readable-check.mjs original > /dev/null
   step readable-check;  $N tools/verify/readable-check.mjs | tail -1
+  # every declaration compared with the official bytes, up to renaming and the deminify rules
+  step decl-equiv;      $N tools/verify/decl-equiv.mjs 2>&1 | tail -1
   step readability;     $N tools/verify/readability.mjs analysis/readability naming/final 2>/dev/null | node -e 'const s=JSON.parse(require("fs").readFileSync(0));for(const t in s)for(const k in s[t])console.log(t,k,s[t][k].readable+"%",s[t][k].minified)'
   step leftover;        $N tools/verify/leftover.mjs analysis/readability
   step name-shape;      $N tools/verify/name-shape.mjs naming/final analysis/name-shape | head -6

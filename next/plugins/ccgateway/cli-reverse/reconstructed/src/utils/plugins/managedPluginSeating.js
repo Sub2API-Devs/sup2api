@@ -28,7 +28,7 @@ import { getManagedPlugins } from "./managedPlugins.js";
 import { isRemoteManagedSettingsVerifiedAndApprovedForSession } from "../../services/remoteManagedSettings/remoteSettingsState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-czx62zen.js:1537-1620 placement = _temp7 (1)
+//@ chunk-czx62zen.js:1537-1620 placement (2.1.88 match: _temp7, 1)
 function hasPolicySettings() {
   let settingsForSource = getSettingsForSource("policySettings");
   return settingsForSource !== null && Object.keys(settingsForSource).length > 0;

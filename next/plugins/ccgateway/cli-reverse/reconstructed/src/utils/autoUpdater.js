@@ -79,7 +79,7 @@ import {
 } from "./shellConfig.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:583010-583413 fingerprint = getNpmDistTags (0.347)
+//@ chunk-s61vbvea.js:583010-583413 fingerprint (2.1.88 match: getNpmDistTags, 0.347)
 async function getNpmDistTags(sessionId, prArg, prRepository) {
   if (isEssentialTrafficOnly()) return false;
   if (prRepository !== undefined && !regExp_11.test(prRepository)) return false;
@@ -106,7 +106,7 @@ async function getNpmDistTags(sessionId, prArg, prRepository) {
   await linkPrToSession(parsed, sessionId);
   return true;
 }
-//@ chunk-e6aww6q8.js:4149527-4149656 fingerprint = releaseLock (0.566)
+//@ chunk-e6aww6q8.js:4149527-4149656 fingerprint (2.1.88 match: releaseLock, 0.566)
 async function releaseLock_2(path) {
   let handle = await open(path, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
   try {
@@ -344,7 +344,7 @@ ${message}
     }
   gracefulShutdownSync(FAILED_VERSION_EXIT_CODE);
 }
-//@ chunk-6zvphrsz.js:8499-8765 fingerprint = assertMinVersion (0.615)
+//@ chunk-6zvphrsz.js:8499-8765 fingerprint (2.1.88 match: assertMinVersion, 0.615)
 function assertMinVersion(currentVersion, minVersion) {
   return `It looks like your version of Claude Code (${currentVersion}) needs an update.
 A newer version (${minVersion} or higher) is required to continue.
@@ -443,14 +443,14 @@ function isForceDowngradeActive(currentVersion, maxVersion, updaterKind) {
   );
   return false;
 }
-//@ chunk-6zvphrsz.js:9904-9969 fingerprint = getMaxVersionMessage (0.469)
+//@ chunk-6zvphrsz.js:9904-9969 fingerprint (2.1.88 match: getMaxVersionMessage, 0.469)
 /**
  * 版本上限的提示文案（external_message）。
  */
 async function getMaxVersionMessage() {
   return (await getMaxVersionConfig()).external_message || undefined;
 }
-//@ chunk-6zvphrsz.js:9969-10065 fingerprint = getMaxVersionConfig (1)
+//@ chunk-6zvphrsz.js:9969-10065 fingerprint (2.1.88 match: getMaxVersionConfig, 1)
 async function getMaxVersionConfig() {
   try {
     return await getDynamicConfig_BLOCKS_ON_INIT("tengu_max_version_config", {});
@@ -501,7 +501,7 @@ function getVersionSkipReason(targetVersion) {
   }
   return null;
 }
-//@ chunk-6zvphrsz.js:10942-11027 fingerprint = shouldSkipVersion (0.806)
+//@ chunk-6zvphrsz.js:10942-11027 fingerprint (2.1.88 match: shouldSkipVersion, 0.806)
 /**
  * shouldSkipVersion：目标版本应跳过时记日志并返回 true。
  */
@@ -512,7 +512,7 @@ function shouldSkipVersion(targetVersion) {
 }
 //@ chunk-6zvphrsz.js:11027-11040 layout
 var LOCK_TIMEOUT_MS = 300000;
-//@ chunk-6zvphrsz.js:11040-11084 fingerprint = getLockFilePath (1)
+//@ chunk-6zvphrsz.js:11040-11084 fingerprint (2.1.88 match: getLockFilePath, 1)
 function getLockFilePath() {
   return join(getClaudeConfigDir(), ".update.lock");
 }
@@ -561,7 +561,7 @@ async function acquireStorageUpdateLock(storage) {
   });
   return false;
 }
-//@ chunk-6zvphrsz.js:11940-12644 fingerprint = acquireLock (0.726)
+//@ chunk-6zvphrsz.js:11940-12644 fingerprint (2.1.88 match: acquireLock, 0.726)
 /**
  * acquireLock：~/.claude/.update.lock（或 v5 存储），5 分钟内的锁视为有效。
  */
@@ -666,7 +666,7 @@ function getGlobalPackageManager() {
     return "bun";
   return env.isRunningWithBun() && !isStandaloneExecutable() ? "bun" : "npm";
 }
-//@ chunk-6zvphrsz.js:13486-13851 fingerprint = getInstallationPrefix (0.788)
+//@ chunk-6zvphrsz.js:13486-13851 fingerprint (2.1.88 match: getInstallationPrefix, 0.788)
 async function getInstallationPrefix() {
   let isBun = getGlobalPackageManager() === "bun";
   let prefixResult = null;
@@ -788,7 +788,7 @@ ${runResult.stderr}`.includes(NATIVE_BINARY_MISSING_TEXT);
     durationMs: Date.now() - now,
   };
 }
-//@ chunk-6zvphrsz.js:15738-16063 fingerprint = checkGlobalInstallPermissions (1)
+//@ chunk-6zvphrsz.js:15738-16063 fingerprint (2.1.88 match: checkGlobalInstallPermissions, 1)
 /**
  * 检查 npm 全局前缀是否可写。
  */
@@ -823,7 +823,7 @@ async function checkGlobalInstallPermissions() {
     };
   }
 }
-//@ chunk-6zvphrsz.js:16063-17635 fingerprint = getLatestVersion (0.498)
+//@ chunk-6zvphrsz.js:16063-17635 fingerprint (2.1.88 match: getLatestVersion, 0.498)
 /**
  * getLatestVersion：npm view @anthropic-ai/claude-code@stable|latest version。
  */
@@ -1137,7 +1137,7 @@ async function newestPreservedOldBinary(state, retiredDirs) {
     );
   }
 }
-//@ chunk-6zvphrsz.js:21559-30009 callgraph-witnessed = installGlobalPackage (0.255)
+//@ chunk-6zvphrsz.js:21559-30009 callgraph-witnessed (2.1.88 match: installGlobalPackage, 0.255)
 /**
  * installGlobalPackage：持锁后用 npm（或 bun）全局安装指定版本，校验安装结果，失败分类上报。
  */
@@ -1534,7 +1534,7 @@ To fix this issue:
     await releaseLock(storage);
   }
 }
-//@ chunk-6zvphrsz.js:30009-30271 fingerprint = removeClaudeAliasesFromShellConfigs (1)
+//@ chunk-6zvphrsz.js:30009-30271 fingerprint (2.1.88 match: removeClaudeAliasesFromShellConfigs, 1)
 async function removeClaudeAliasesFromShellConfigs() {
   let configMap = getShellConfigPaths();
   for (let [, configFile] of Object.entries(configMap))

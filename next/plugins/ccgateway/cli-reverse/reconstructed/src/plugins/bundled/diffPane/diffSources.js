@@ -368,7 +368,7 @@ async function gitBackendOf(deps) {
  * 数组中满足条件的元素个数。
  */
 var countWhere = (items, predicate) => items.reduce((acc, item) => acc + (predicate(item) ? 1 : 0), 0);
-//@ chunk-wyqg6m3h.js:25624-25795 placement = adjustHunkLineNumbers (0.843)
+//@ chunk-wyqg6m3h.js:25624-25795 placement (2.1.88 match: adjustHunkLineNumbers, 0.843)
 /**
  * 从 hunk 的第 offset 行起切出子 hunk 并修正起始行号。
  */

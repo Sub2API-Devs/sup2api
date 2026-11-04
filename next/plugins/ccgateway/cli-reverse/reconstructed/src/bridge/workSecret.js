@@ -25,7 +25,7 @@ import { claudeCodeUserAgent } from "../utils/http.js";
 import { plainServiceText } from "./debugUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:238316-238366 fingerprint = buildSdkUrl (0.538)
+//@ chunk-aepeg2w5.js:238316-238366 fingerprint (2.1.88 match: buildSdkUrl, 0.538)
 /**
  * 允许使用 http:// 的本地主机名集合。
  */
@@ -33,10 +33,10 @@ var LOCALHOST_NAMES; // deferred: has load-time effects after a deferred stateme
 deferInit("chunk-aepeg2w5.js:238316", () => {
   LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 });
-//@ chunk-aepeg2w5.js:802859-802953 fingerprint = buildCCRv2SdkUrl (1)
+//@ chunk-aepeg2w5.js:802859-802953 fingerprint (2.1.88 match: buildCCRv2SdkUrl, 1)
 var CODE_SESSIONS_PATH = "/v1/code/sessions/";
 var CODE_TRIGGERS_PATH_PATTERN = /^\/v1\/code\/triggers(?:\?|$)|^\/v1\/code\/triggers\/[\w-]+$/;
-//@ chunk-ptaf548f.js:2436-3027 fingerprint = decodeWorkSecret (0.429)
+//@ chunk-ptaf548f.js:2436-3027 fingerprint (2.1.88 match: decodeWorkSecret, 0.429)
 /**
  * work secret schema（version=1、session_ingress_token、api_base_url，可选 claude_code_args、mcp_config、auto_mode_environment、worktree）与错误文案表。
  */
@@ -117,7 +117,7 @@ function buildCCRv2SdkUrl(apiBaseUrl, sessionId) {
   validateBridgeId(sessionId, "sessionId");
   return `${apiBaseUrl.replace(/\/+$/, "")}/v1/code/sessions/${sessionId}`;
 }
-//@ chunk-ptaf548f.js:3769-4326 fingerprint = registerWorker (0.762)
+//@ chunk-ptaf548f.js:3769-4326 fingerprint (2.1.88 match: registerWorker, 0.762)
 /**
  * POST {sessionUrl}/worker/register 注册 worker，返回 worker_epoch（字符串转数字，非安全整数报错）。
  */

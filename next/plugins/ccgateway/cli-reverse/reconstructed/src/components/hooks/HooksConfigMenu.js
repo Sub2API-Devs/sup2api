@@ -57,18 +57,18 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { SelectMatcherMode } from "./SelectMatcherMode.js";
 import { ViewHookMode } from "./ViewHookMode.js";
 
-//@ chunk-bajxb7bf.js:48218-48310 sole-consumer = _temp (1)
+//@ chunk-bajxb7bf.js:48218-48310 sole-consumer (2.1.88 match: _temp, 1)
 function areAllHooksDisabled() {
   return (
     getSettings_DEPRECATED()?.disableAllHooks === true &&
     getSettingsForSource("policySettings")?.disableAllHooks === true
   );
 }
-//@ chunk-bajxb7bf.js:48310-48380 sole-consumer = _temp2 (1)
+//@ chunk-bajxb7bf.js:48310-48380 sole-consumer (2.1.88 match: _temp2, 1)
 function areOnlyManagedHooksAllowed() {
   return getSettingsForSource("policySettings")?.allowManagedHooksOnly === true;
 }
-//@ chunk-bajxb7bf.js:48380-48410 callgraph-fingerprint = _temp3 (1)
+//@ chunk-bajxb7bf.js:48380-48410 callgraph-fingerprint (2.1.88 match: _temp3, 1)
 function selectMcp(s) {
   return s.mcp;
 }
@@ -96,7 +96,7 @@ function isCloudHook(hook) {
 function hookLabel(hook) {
   return hook.label;
 }
-//@ chunk-bajxb7bf.js:48728-57815 fingerprint = HooksConfigMenu (0.495)
+//@ chunk-bajxb7bf.js:48728-57815 fingerprint (2.1.88 match: HooksConfigMenu, 0.495)
 /**
  * /hooks 菜单：选择事件 → 匹配器 → hook → 详情；hooks 来自 user/project/local/policy/插件/会话，远程会话中标注哪些不会运行；只读，提示通过编辑 settings.json 或让 Claude 修改。
  */

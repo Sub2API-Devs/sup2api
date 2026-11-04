@@ -89,7 +89,7 @@ import { HostScoped } from "../utils/hostScoped.js";
 import { getPlatform } from "../utils/platform.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fpjsca9n.js:264-441 fingerprint = useAwaySummary (0.66)
+//@ chunk-fpjsca9n.js:264-441 fingerprint (2.1.88 match: useAwaySummary, 0.66)
 function useAwaySummary(isFocused) {
   if (isFocused) uiSignals.terminalFocusGainedAt = Date.now();
   if (!isFocused && uiSignals.terminalFocus === "blurred") return;
@@ -97,7 +97,7 @@ function useAwaySummary(isFocused) {
   setTerminalFocusForState(isFocused);
   uiSignals.terminalFocusChanged.emit();
 }
-//@ chunk-18hwfzwa.js:1792115-1792200 fingerprint = hasSummarySinceLastUserTurn (0.725)
+//@ chunk-18hwfzwa.js:1792115-1792200 fingerprint (2.1.88 match: hasSummarySinceLastUserTurn, 0.725)
 function hasSummarySinceLastUserTurn(messages) {
   let last = messages.at(-1);
   return last?.type === "system" && last.subtype === "away_summary";

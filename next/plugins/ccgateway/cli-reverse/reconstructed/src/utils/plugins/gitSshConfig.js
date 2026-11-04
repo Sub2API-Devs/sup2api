@@ -130,7 +130,7 @@ async function probeSshCommand(sshCommand, env, cwd) {
   clearTimeout(timer);
   return exitCode === 0;
 }
-//@ chunk-e6aww6q8.js:729785-729854 placement = killCaffeinate (1)
+//@ chunk-e6aww6q8.js:729785-729854 placement (2.1.88 match: killCaffeinate, 1)
 function killProcessGroup(pid) {
   try {
     if (pid !== undefined) process.kill(-pid, "SIGKILL");

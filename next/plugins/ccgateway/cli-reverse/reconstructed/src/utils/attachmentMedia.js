@@ -189,7 +189,7 @@ deferInit("chunk-qz53w8v8.js:3492", () => {
     deny: "the image is not held inline: its block names a URL or a file",
   });
 });
-//@ chunk-qz53w8v8.js:3584-3777 sole-consumer = buildImageToolResult (0.792)
+//@ chunk-qz53w8v8.js:3584-3777 sole-consumer (2.1.88 match: buildImageToolResult, 0.792)
 /**
  * （切分错误）从 image 块读出 base64 图片字节；URL/文件来源的图片返回拒绝说明。
  */
@@ -247,7 +247,7 @@ var makeImageAttachmentReader = (block) => ({
   attachment: describeImageAttachment(block),
   read: async (model) => readInlineImageBytes(await checkImageBlockSource(block, imageLimitsForModel(model))),
 });
-//@ chunk-qz53w8v8.js:4436-4530 sole-consumer = isMedia (1)
+//@ chunk-qz53w8v8.js:4436-4530 sole-consumer (2.1.88 match: isMedia, 1)
 function isMedia(block) {
   if (!isObjectBlock(block)) return [];
   return block.type === "image"
@@ -281,7 +281,7 @@ var imageAttachmentSource = (attachment) => ({
         )
       : EMPTY_IMAGE_PASTE,
 });
-//@ chunk-qz53w8v8.js:4764-4881 placement = _temp (1)
+//@ chunk-qz53w8v8.js:4764-4881 placement (2.1.88 match: _temp, 1)
 /**
  * 收集提示中的媒体来源：提示内容里的媒体块与粘贴内容中的图片。
  */

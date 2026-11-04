@@ -16,7 +16,7 @@ import { LOCAL_JSX_DIALOG } from "../commands/rate-limit-options/index.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { MessageActionsKeybindings } from "../components/messageActions.js";
 
-//@ chunk-18hwfzwa.js:177498-177569 fingerprint = NOOP_HELPERS (1)
+//@ chunk-18hwfzwa.js:177498-177569 fingerprint (2.1.88 match: NOOP_HELPERS, 1)
 /**
  * 提交命令时使用的空 helpers（setCursorOffset/clearBuffer/resetHistory 都是 no-op）。
  */
@@ -25,7 +25,7 @@ var NOOP_HELPERS = {
   clearBuffer: () => {},
   resetHistory: () => {},
 };
-//@ chunk-18hwfzwa.js:177569-178226 fingerprint = CommandKeybindingHandlers (0.727)
+//@ chunk-18hwfzwa.js:177569-178226 fingerprint (2.1.88 match: CommandKeybindingHandlers, 0.727)
 /**
  * 读取 keybinding 配置中 "command:<name>" 动作并绑定为提交 "/<name>"。
  */

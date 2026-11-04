@@ -67,7 +67,7 @@ function splitPluginCachePath(cachePath, versionRoot) {
   let parts = relPath.split(sep);
   return join(versionFromPath, ...parts) === cachePath ? parts : null;
 }
-//@ chunk-f3qhjfah.js:2910-2950 placement = getVersionedZipCachePath (1)
+//@ chunk-f3qhjfah.js:2910-2950 placement (2.1.88 match: getVersionedZipCachePath, 1)
 /**
  * 路径是否以 .zip 结尾。
  */
@@ -154,14 +154,14 @@ function marketplaceCacheSpace(name, kind, pluginsDirectory) {
     ? STORAGE_SPACES.marketplaceCache(name, kind)
     : null;
 }
-//@ chunk-f3qhjfah.js:3728-3771 fingerprint = PLUGINS_DIR (1)
+//@ chunk-f3qhjfah.js:3728-3771 fingerprint (2.1.88 match: PLUGINS_DIR, 1)
 /**
  * 路径是否为默认插件根目录 <configHome>/plugins。
  */
 function isDefaultPluginsDir(pluginsDir) {
   return pluginsDir === join(getClaudeConfigDir(), "plugins");
 }
-//@ chunk-f3qhjfah.js:3771-3953 layout = getMarketplacesCacheDir (1)
+//@ chunk-f3qhjfah.js:3771-3953 layout (2.1.88 match: getMarketplacesCacheDir, 1)
 function splitMarketplaceCachePath(cachePath, pluginsDir) {
   if (!isDefaultPluginsDir(pluginsDir)) return null;
   let marketplaceRoot = join(pluginsDir, "marketplaces");
@@ -180,16 +180,16 @@ function getMarketplaceStorageKey(cachePath, pluginsDirectory) {
   if (parts === null || parts.length < 2 || !areValidKeySegments(parts)) return null;
   return STORAGE_SPACES.marketplaceTree(parts[0], parts.slice(1));
 }
-//@ chunk-f3qhjfah.js:4634-4670 fingerprint = COWORK_PLUGINS_DIR (0.727)
+//@ chunk-f3qhjfah.js:4634-4670 fingerprint (2.1.88 match: COWORK_PLUGINS_DIR, 0.727)
 var PLUGINS_DIR_NAME = "plugins";
 var COWORK_PLUGINS_DIR_NAME = "cowork_plugins";
-//@ chunk-f3qhjfah.js:4670-4756 fingerprint = getPluginsDirectoryName (1)
+//@ chunk-f3qhjfah.js:4670-4756 fingerprint (2.1.88 match: getPluginsDirectoryName, 1)
 function getPluginsDirectoryName() {
   if (getUseCoworkPlugins()) return COWORK_PLUGINS_DIR_NAME;
   if (env.CLAUDE_CODE_USE_COWORK_PLUGINS) return COWORK_PLUGINS_DIR_NAME;
   return PLUGINS_DIR_NAME;
 }
-//@ chunk-f3qhjfah.js:4756-4820 layout = getPluginsDirectory (1)
+//@ chunk-f3qhjfah.js:4756-4820 layout (2.1.88 match: getPluginsDirectory, 1)
 /**
  * 是否使用默认插件目录（非 cowork、未设 CLAUDE_CODE_PLUGIN_CACHE_DIR）。
  */
@@ -203,7 +203,7 @@ function isUsingDefaultPluginsDirectory() {
 function isUsingCoworkPlugins() {
   return getPluginsDirectoryName() === COWORK_PLUGINS_DIR_NAME;
 }
-//@ chunk-f3qhjfah.js:4850-4938 layout = getPluginsDirectory (1)
+//@ chunk-f3qhjfah.js:4850-4938 layout (2.1.88 match: getPluginsDirectory, 1)
 /**
  * 插件根目录：CLAUDE_CODE_PLUGIN_CACHE_DIR 覆盖，否则 ~/.claude/plugins（cowork 模式或 CLAUDE_CODE_USE_COWORK_PLUGINS 时为 cowork_plugins）。
  */
@@ -212,7 +212,7 @@ function getPluginsDirectory() {
   if (envOverride) return expandTildeWithHome(envOverride);
   return join(getClaudeConfigDir(), getPluginsDirectoryName());
 }
-//@ chunk-f3qhjfah.js:4938-5046 fingerprint = getPluginSeedDirs (1)
+//@ chunk-f3qhjfah.js:4938-5046 fingerprint (2.1.88 match: getPluginSeedDirs, 1)
 /**
  * 解析 CLAUDE_CODE_PLUGIN_SEED_DIR（按路径分隔符分开的多个只读种子目录）。
  */
@@ -309,7 +309,7 @@ function unreadableKeptFileName(date, hash) {
 function isUnreadableKeptFileName(name) {
   return /^installed_plugins\.unreadable\.\d{4}-\d{2}-\d{2}\.[0-9a-f]{12}\.kept$/.test(name);
 }
-//@ chunk-f3qhjfah.js:6038-6080 layout = pluginDataDirPath (1)
+//@ chunk-f3qhjfah.js:6038-6080 layout (2.1.88 match: pluginDataDirPath, 1)
 /**
  * 插件持久数据目录 <plugins>/data/<转义后的插件 ID>（hooks/MCP 中的 ${CLAUDE_PLUGIN_DATA}）。
  */
@@ -326,7 +326,7 @@ function ensurePluginDataDir(pluginId) {
   getFsImplementation().mkdirSync(dir);
   return dir;
 }
-//@ chunk-f3qhjfah.js:6151-6516 fingerprint = getPluginDataDirSize (0.653)
+//@ chunk-f3qhjfah.js:6151-6516 fingerprint (2.1.88 match: getPluginDataDirSize, 0.653)
 /**
  * 统计插件数据目录大小（卸载时提示是否删除），空目录返回 null。
  */
@@ -361,7 +361,7 @@ async function getPluginDataDirSize(pluginId, { throwIfUnreadable = false } = {}
     human: formatFileSize(bytes),
   };
 }
-//@ chunk-f3qhjfah.js:6516-6714 fingerprint = deletePluginDataDir (0.724)
+//@ chunk-f3qhjfah.js:6516-6714 fingerprint (2.1.88 match: deletePluginDataDir, 0.724)
 /**
  * 删除插件数据目录，返回 removed/absent/failed。
  */
@@ -380,7 +380,7 @@ async function deletePluginDataDir(pluginId) {
     return "failed";
   }
 }
-//@ chunk-e6aww6q8.js:608444-608534 fingerprint = getPluginsDirectory (1)
+//@ chunk-e6aww6q8.js:608444-608534 fingerprint (2.1.88 match: getPluginsDirectory, 1)
 /**
  * zip 缓存模式时返回 CLAUDE_CODE_PLUGIN_CACHE_DIR（zip 缓存根），否则 undefined。
  */
@@ -470,7 +470,7 @@ function hasUnreadablePathComponent(path) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:733231-733301 placement = isFileWithinReadSizeLimit (1)
+//@ chunk-e6aww6q8.js:733231-733301 placement (2.1.88 match: isFileWithinReadSizeLimit, 1)
 /**
  * 文件是否存在（statSync，非 ENOENT 错误也视为存在）。误配名。
  */

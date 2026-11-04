@@ -24,7 +24,7 @@ import { countCharInString } from "../utils/stringUtils.js";
 import { countGraphemes } from "../ink/output.js";
 import { getSecuritySensitiveSetting } from "../utils/settings/settings.js";
 
-//@ chunk-530hfzwb.js:4643-5841 fingerprint = executeLineOp (0.678)
+//@ chunk-530hfzwb.js:4643-5841 fingerprint (2.1.88 match: executeLineOp, 0.678)
 /**
  * 操作符 + 移动（如 dw、c$、yj、dgj）：整行移动（j k G gg）按行处理；移动没动且不是包含式移动时只做空操作的副作用（c 进插入、y 清寄存器）；否则用 getOperatorRange 算范围（cw 特例、w 跨行截断、整行化判断）后应用操作并记录可重复的修改。
  */
@@ -119,7 +119,7 @@ function executeOperatorMotion(op, motion, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:5841-6069 fingerprint = executeOperatorFind (0.948)
+//@ chunk-530hfzwb.js:5841-6069 fingerprint (2.1.88 match: executeOperatorFind, 0.948)
 /**
  * 操作符 + 查找（如 dfx、ct)）：找到目标字符后对包含式范围应用操作，并记住这次查找供 ; , 重复。
  */
@@ -138,7 +138,7 @@ function executeOperatorFind(op, findType, char, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:6069-6362 fingerprint = executeOperatorTextObj (0.718)
+//@ chunk-530hfzwb.js:6069-6362 fingerprint (2.1.88 match: executeOperatorTextObj, 0.718)
 /**
  * 操作符 + 文本对象（如 diw、ca"、yi(）：用 findTextObject 求范围后应用；yi( 这类内容从换行开始时光标落到下一行。
  */
@@ -164,7 +164,7 @@ function executeOperatorTextObj(op, scope, objType, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:6362-6714 fingerprint = executeOperatorMotion (0.593)
+//@ chunk-530hfzwb.js:6362-6714 fingerprint (2.1.88 match: executeOperatorMotion, 0.593)
 /**
  * 双写操作符（dd、cc、yy、S、Y）：对从当前行起的 count 行做整行操作；count>1 但光标后已没有换行时不执行。
  */
@@ -203,7 +203,7 @@ function executeLineOp(op, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:6714-6960 fingerprint = executeX (0.853)
+//@ chunk-530hfzwb.js:6714-6960 fingerprint (2.1.88 match: executeX, 0.853)
 /**
  * x：删除光标处 count 个字符（不跨行），存入寄存器。
  */
@@ -239,7 +239,7 @@ function executeSubstitute(count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:7158-7421 fingerprint = executeReplace (0.952)
+//@ chunk-530hfzwb.js:7158-7421 fingerprint (2.1.88 match: executeReplace, 0.952)
 /**
  * r{char}：把光标起 count 个字素替换为该字符（遇到行尾则不执行）。
  */
@@ -265,7 +265,7 @@ function executeReplace(char, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:7421-7809 fingerprint = executeToggleCase (0.769)
+//@ chunk-530hfzwb.js:7421-7809 fingerprint (2.1.88 match: executeToggleCase, 0.769)
 /**
  * ~：切换光标起 count 个字素的大小写（NFC 规范化），光标后移。
  */
@@ -320,7 +320,7 @@ function executeJoinLines(count, ctx) {
   let min = Math.min(Math.max(count, 2) - 1, lines.length - lineIndex - 1);
   executeJoin(lines, lineIndex, min, ctx);
 }
-//@ chunk-530hfzwb.js:8060-8398 fingerprint = executeJoin (0.763)
+//@ chunk-530hfzwb.js:8060-8398 fingerprint (2.1.88 match: executeJoin, 0.763)
 /**
  * 合并行：去掉后续行行首空白，必要时补一个空格（下一行以 ) 开头或上一段以空白结尾时不补），光标停在最后一个连接点。
  */
@@ -351,7 +351,7 @@ function executeJoin(lines, lineIndex, joinCount, ctx) {
     count: joinCount + 1,
   });
 }
-//@ chunk-530hfzwb.js:8398-9239 fingerprint = executePaste (0.554)
+//@ chunk-530hfzwb.js:8398-9239 fingerprint (2.1.88 match: executePaste, 0.554)
 /**
  * p/P：按寄存器是否整行分两种：整行内容插到当前行下/上方并把光标放到首个非空字符；字符内容插到光标后/前，光标停在插入内容最后一个字素。
  */
@@ -424,7 +424,7 @@ function executePaste(after, count, ctx) {
     ctx.setOffset(lastGr);
   }
 }
-//@ chunk-530hfzwb.js:9239-9506 fingerprint = executeIndent (0.834)
+//@ chunk-530hfzwb.js:9239-9506 fingerprint (2.1.88 match: executeIndent, 0.834)
 /**
  * >> / <<：给当前行起 count 行加/减两个空格缩进（减时也去掉一个 tab 或最多两个空白）。
  */
@@ -446,7 +446,7 @@ function executeIndent(dir, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:9506-9778 fingerprint = executeOpenLine (0.808)
+//@ chunk-530hfzwb.js:9506-9778 fingerprint (2.1.88 match: executeOpenLine, 0.808)
 /**
  * o/O：在当前行下/上方插入空行并进入插入模式。
  */
@@ -497,7 +497,7 @@ function getLineStartOffset(lines, lineIndex) {
 `).length + (lineIndex > 0 ? 1 : 0)
   );
 }
-//@ chunk-530hfzwb.js:10019-11262 fingerprint = getOperatorRange (0.852)
+//@ chunk-530hfzwb.js:10019-11262 fingerprint (2.1.88 match: getOperatorRange, 0.852)
 /**
  * 操作符 + 移动的范围计算（vim 兼容细节）：cw 当作 ce；dw/yw 不越过行尾；包含式移动（e E $ %）把终点含进去；跨行删除且前面只有空白时整行化。最后把起止点推出占位符（图片/粘贴占位）之外。
  */
@@ -605,7 +605,7 @@ function getFindRange(cursor, target, _findType) {
     to,
   };
 }
-//@ chunk-530hfzwb.js:11567-11918 fingerprint = applyOperator (0.962)
+//@ chunk-530hfzwb.js:11567-11918 fingerprint (2.1.88 match: applyOperator, 0.962)
 /**
  * 对字符范围应用操作：内容写寄存器（整行时补换行）；yank 只移动光标；delete 删除并修正光标；change 删除后进入插入模式。
  */
@@ -745,7 +745,7 @@ function measureSpan(text, countLines) {
   }
   return countGraphemes(text);
 }
-//@ chunk-530hfzwb.js:13165-13449 fingerprint = getOperatorRangeForFind (0.907)
+//@ chunk-530hfzwb.js:13165-13449 fingerprint (2.1.88 match: getOperatorRangeForFind, 0.907)
 /**
  * 用记录的跨度从当前光标重建可视范围（. 重复可视操作时用）。
  */
@@ -780,7 +780,7 @@ function getRepeatVisualRange(cursor, target, _findType) {
     to: endOffset,
   };
 }
-//@ chunk-530hfzwb.js:13449-13676 layout = getOperatorRangeForFind (0.907)
+//@ chunk-530hfzwb.js:13449-13676 layout (2.1.88 match: getOperatorRangeForFind, 0.907)
 /**
  * 可视选区范围：字符可视为 [min, max+1)，整行可视扩到首行行首至末行换行之后。
  */
@@ -1189,7 +1189,7 @@ function replaceRangeWithRegister(content, registerLinewise, from, to, ctx, line
     ctx.setOffset(Math.max(from, from + replacement.length - (lastChar.length || 1)));
   }
 }
-//@ chunk-530hfzwb.js:18034-18245 fingerprint = executeOperatorG (0.768)
+//@ chunk-530hfzwb.js:18034-18245 fingerprint (2.1.88 match: executeOperatorG, 0.768)
 /**
  * 操作符 + G（如 dG、d3G）：整行操作到最后一行或第 count 行。
  */
@@ -1209,7 +1209,7 @@ function executeOperatorG(op, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:18245-18458 fingerprint = executeOperatorGg (0.767)
+//@ chunk-530hfzwb.js:18245-18458 fingerprint (2.1.88 match: executeOperatorGg, 0.767)
 /**
  * 操作符 + gg（如 dgg）：整行操作到第一行或第 count 行。
  */
@@ -1229,7 +1229,7 @@ function executeOperatorGg(op, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:18458-19048 affinity = applyOperator (0.753)
+//@ chunk-530hfzwb.js:18458-19048 affinity (2.1.88 match: applyOperator, 0.753)
 /**
  * 按行号范围做整行操作：整行内容写寄存器；yank 只移光标；delete 删行后光标到相应行首个非空；change 留一个空行进入插入模式。
  */

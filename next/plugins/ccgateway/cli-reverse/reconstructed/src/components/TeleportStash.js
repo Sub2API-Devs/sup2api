@@ -37,7 +37,7 @@ deferInit("chunk-qh0448cn.js:1233", () => {
 deferInit("chunk-qh0448cn.js:1237", () => {
   init_react_production();
 });
-//@ chunk-qh0448cn.js:1241-3194 fingerprint = TeleportStash (0.597)
+//@ chunk-qh0448cn.js:1241-3194 fingerprint (2.1.88 match: TeleportStash, 0.597)
 function TeleportStash({ onStashAndContinue, onCancel, cancelQuits }) {
   let [gitFileStatus, setGitFileStatus] = useState(null);
   let changedFiles = gitFileStatus !== null ? [...gitFileStatus.tracked, ...gitFileStatus.untracked] : [];

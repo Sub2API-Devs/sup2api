@@ -588,7 +588,7 @@ function shouldRouteBrowserCallToClassifier(
     getClassifiableBrowserAction(tool, input, callContext) !== undefined
   );
 }
-//@ chunk-e6aww6q8.js:1285193-1285387 placement = getToolNameForPermissionCheck (1)
+//@ chunk-e6aww6q8.js:1285193-1285387 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tool, input) {
   let { mcpInfo } = tool;
   let isReadOnlyAction =

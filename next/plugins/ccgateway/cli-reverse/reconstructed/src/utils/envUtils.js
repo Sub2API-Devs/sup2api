@@ -17,7 +17,7 @@ import { identity } from "./pathClassification.js";
 import { env } from "./env.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0777tkjc.js:292-434 fingerprint = isEnvTruthy (1)
+//@ chunk-0777tkjc.js:292-434 fingerprint (2.1.88 match: isEnvTruthy, 1)
 /**
  * 环境变量真值判断：1/true/yes/on（不区分大小写，布尔原样）。
  */
@@ -27,7 +27,7 @@ function isEnvTruthy(envVar) {
   let normalizedValue = String(envVar).toLowerCase().trim();
   return ["1", "true", "yes", "on"].includes(normalizedValue);
 }
-//@ chunk-0777tkjc.js:434-585 fingerprint = isEnvDefinedFalsy (1)
+//@ chunk-0777tkjc.js:434-585 fingerprint (2.1.88 match: isEnvDefinedFalsy, 1)
 /**
  * 环境变量是否明确设为假：0/false/no/off。
  */
@@ -88,7 +88,7 @@ function parseNumberWithSeparators(value) {
     ? parseInt(trimmed.replace(THOUSANDS_SEPARATOR_RE, ""), 10)
     : NaN;
 }
-//@ chunk-cgcrer2m.js:1040-2110 fingerprint = VERTEX_REGION_OVERRIDES (0.624)
+//@ chunk-cgcrer2m.js:1040-2110 fingerprint (2.1.88 match: VERTEX_REGION_OVERRIDES, 0.624)
 var VERTEX_REGION_OVERRIDES = [
   ["claude-3-5-sonnet", "VERTEX_REGION_CLAUDE_3_5_SONNET"],
   ["claude-3-7-sonnet", "VERTEX_REGION_CLAUDE_3_7_SONNET"],
@@ -111,7 +111,7 @@ var VERTEX_REGION_OVERRIDES = [
   ["claude-opus-4", "VERTEX_REGION_CLAUDE_4_0_OPUS"],
   ["claude-opus-5", "VERTEX_REGION_CLAUDE_5_OPUS"],
 ];
-//@ chunk-cgcrer2m.js:2110-2162 fingerprint = getClaudeConfigHomeDir (0.357)
+//@ chunk-cgcrer2m.js:2110-2162 fingerprint (2.1.88 match: getClaudeConfigHomeDir, 0.357)
 function getClaudeConfigHomeDir() {
   return process.env.CLAUDE_CONFIG_DIR;
 }
@@ -171,7 +171,7 @@ function isSameConfigDir(configHome) {
     ? claudeConfigDirOrNull === configHome
     : resolve(claudeConfigDirOrNull) === resolve(configHome);
 }
-//@ chunk-cgcrer2m.js:2677-2715 fingerprint = getTeamsDir (1)
+//@ chunk-cgcrer2m.js:2677-2715 fingerprint (2.1.88 match: getTeamsDir, 1)
 function getTeamsDir() {
   return join(getClaudeConfigDir(), "teams");
 }
@@ -214,7 +214,7 @@ function getPhysicalPath(path) {
   let realParentDir = nativeRealpathLong(parentDir) ?? parentDir;
   return identity(join(realParentDir, basename(resolvedPath)));
 }
-//@ chunk-cgcrer2m.js:3173-3269 fingerprint = hasNodeOption (1)
+//@ chunk-cgcrer2m.js:3173-3269 fingerprint (2.1.88 match: hasNodeOption, 1)
 function hasNodeOption(flag) {
   let nodeOptions = process.env.NODE_OPTIONS;
   if (!nodeOptions) return false;
@@ -249,7 +249,7 @@ function hasArgvFlag(flag) {
   let index_2 = argv.indexOf("--");
   return index_2 === -1 || index < index_2;
 }
-//@ chunk-cgcrer2m.js:3747-3816 fingerprint = isBareMode (0.883)
+//@ chunk-cgcrer2m.js:3747-3816 fingerprint (2.1.88 match: isBareMode, 0.883)
 /**
  * --bare 或 CLAUDE_CODE_SIMPLE：最小模式（跳过 CLAUDE.md、hooks、插件等）。
  */
@@ -285,7 +285,7 @@ function getBareModeExitHint() {
 function isSupervisedMode() {
   return isEnvTruthy(process.env.CLAUDE_CODE_SUPERVISED);
 }
-//@ chunk-cgcrer2m.js:4311-4558 fingerprint = parseEnvVars (1)
+//@ chunk-cgcrer2m.js:4311-4558 fingerprint (2.1.88 match: parseEnvVars, 1)
 function parseEnvVars(rawEnvArgs) {
   let parsedEnv = {};
   if (rawEnvArgs)
@@ -299,7 +299,7 @@ function parseEnvVars(rawEnvArgs) {
     }
   return parsedEnv;
 }
-//@ chunk-cgcrer2m.js:4558-4633 fingerprint = getDefaultVertexRegion (1)
+//@ chunk-cgcrer2m.js:4558-4633 fingerprint (2.1.88 match: getDefaultVertexRegion, 1)
 function getDefaultVertexRegion() {
   return nonEmptyOrUndefined(process.env.CLOUD_ML_REGION?.trim()) || "us-east5";
 }
@@ -315,7 +315,7 @@ function getVertexBaseUrlForRegion(region) {
       return `https://${region}-aiplatform.googleapis.com`;
   }
 }
-//@ chunk-cgcrer2m.js:4839-4918 fingerprint = shouldMaintainProjectWorkingDir (1)
+//@ chunk-cgcrer2m.js:4839-4918 fingerprint (2.1.88 match: shouldMaintainProjectWorkingDir, 1)
 function shouldMaintainProjectWorkingDir() {
   return isEnvTruthy(process.env.CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR);
 }
@@ -354,7 +354,7 @@ function getVertexRegionForModel(model) {
   }
   return getDefaultVertexRegion();
 }
-//@ chunk-bwbq4xvm.js:151303-151369 fingerprint = getAWSRegion (0.702)
+//@ chunk-bwbq4xvm.js:151303-151369 fingerprint (2.1.88 match: getAWSRegion, 0.702)
 function getAWSRegion() {
   return nonEmptyOrUndefined(env.AWS_REGION) || nonEmptyOrUndefined(env.AWS_DEFAULT_REGION);
 }

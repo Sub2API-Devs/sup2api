@@ -37,7 +37,7 @@ function MailboxProvider(props) {
   } else t2 = $[2];
   return t2;
 }
-//@ chunk-xe7zq1p4.js:12357-12465 fingerprint = useMailbox (1)
+//@ chunk-xe7zq1p4.js:12357-12465 fingerprint (2.1.88 match: useMailbox, 1)
 /**
  * 读取 Mailbox 上下文，不在 MailboxProvider 内时抛错。
  */

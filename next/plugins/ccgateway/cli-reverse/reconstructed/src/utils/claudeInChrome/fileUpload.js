@@ -1171,7 +1171,7 @@ var FILE_MIME_BY_EXT = {
   ".mp4": "video/mp4",
   ".webm": "video/webm",
 };
-//@ chunk-wn385gmf.js:19426-19500 placement = guessMimeType (1)
+//@ chunk-wn385gmf.js:19426-19500 placement (2.1.88 match: guessMimeType, 1)
 /**
  * 按扩展名猜 MIME（文档/图片/音视频），未知为 application/octet-stream。
  */

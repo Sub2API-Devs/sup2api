@@ -65,7 +65,7 @@ function shouldShowMessageTimestamp(message, showAssistant, showUser, isContinua
   }
   return false;
 }
-//@ chunk-ag5x7vhf.js:140413-140985 callgraph-fingerprint = MessageTimestamp (0.251)
+//@ chunk-ag5x7vhf.js:140413-140985 callgraph-fingerprint (2.1.88 match: MessageTimestamp, 0.251)
 function MessageTimestamp(props) {
   let $ = useMemoCache(12);
   let { message, isTranscriptMode, showMessageTimestamps, isSplitUserContinuation } = props;

@@ -43,7 +43,7 @@ import { truncatePathMiddle, Cursor } from "../utils/Cursor.js";
 import { findTextObject } from "./textObjects.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-530hfzwb.js:19998-20379 fingerprint = transition (1)
+//@ chunk-530hfzwb.js:19998-20379 fingerprint (2.1.88 match: transition, 1)
 /**
  * 普通模式状态机入口：按当前命令状态（idle/count/operator/operatorCount/operatorFind/operatorTextObj/find/g/operatorG/replace/indent）分派处理一个输入，返回 {next 下一状态} 或 {execute 要执行的动作}（可带 wanted 目标列）。
  */
@@ -73,7 +73,7 @@ function transition(state, input, ctx) {
       return fromIndent(state, input, ctx);
   }
 }
-//@ chunk-530hfzwb.js:20379-21423 fingerprint = handleNormalInput (0.433)
+//@ chunk-530hfzwb.js:20379-21423 fingerprint (2.1.88 match: handleNormalInput, 0.433)
 /**
  * 普通模式单键命令表：g r > < 进入子状态；~ x s S J p P D C Y ; , u i I a A o O 直接执行。
  */
@@ -261,7 +261,7 @@ function handleNormalInput(input, count, countTyped, ctx) {
     };
   return NORMAL_COMMANDS[input]?.(count, ctx) ?? null;
 }
-//@ chunk-530hfzwb.js:22339-22711 fingerprint = handleOperatorInput (0.95)
+//@ chunk-530hfzwb.js:22339-22711 fingerprint (2.1.88 match: handleOperatorInput, 0.95)
 /**
  * operator 状态下的后续键：i/a 进文本对象、f/F/t/T 进查找、移动键直接执行、G 到行、g 进 operatorG。
  */
@@ -305,7 +305,7 @@ function handleOperatorInput(op, count, countTyped, input, ctx) {
     };
   return null;
 }
-//@ chunk-530hfzwb.js:22711-22919 fingerprint = fromIdle (0.878)
+//@ chunk-530hfzwb.js:22711-22919 fingerprint (2.1.88 match: fromIdle, 0.878)
 /**
  * idle：1-9 开始计数，0 回行首，其他交给 handleNormalInput。
  */
@@ -325,7 +325,7 @@ function fromIdle(input, ctx) {
   if (result) return result;
   return {};
 }
-//@ chunk-530hfzwb.js:22919-23071 fingerprint = fromCount (0.794)
+//@ chunk-530hfzwb.js:22919-23071 fingerprint (2.1.88 match: fromCount, 0.794)
 /**
  * count：继续累积数字（上限 10000），否则带计数执行。
  */
@@ -345,7 +345,7 @@ function fromCount(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23071-23336 fingerprint = fromOperator (0.777)
+//@ chunk-530hfzwb.js:23071-23336 fingerprint (2.1.88 match: fromOperator, 0.777)
 /**
  * operator：同一操作符键（dd/cc/yy）做整行操作；1-9 开始移动计数；否则交给 handleOperatorInput。
  */
@@ -372,7 +372,7 @@ function fromOperator(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23336-23566 layout = fromOperatorTextObj (0.872)
+//@ chunk-530hfzwb.js:23336-23566 layout (2.1.88 match: fromOperatorTextObj, 0.872)
 /**
  * operatorCount（如 d3w）：累积移动计数，总计数 = 操作符计数 × 移动计数。
  */
@@ -397,7 +397,7 @@ function fromOperatorCount(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23566-23669 fingerprint = fromOperatorFind (0.803)
+//@ chunk-530hfzwb.js:23566-23669 fingerprint (2.1.88 match: fromOperatorFind, 0.803)
 function fromOperatorFind(state, input, ctx) {
   return {
     execute: () => {
@@ -406,7 +406,7 @@ function fromOperatorFind(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23669-23777 fingerprint = fromOperatorTextObj (1)
+//@ chunk-530hfzwb.js:23669-23777 fingerprint (2.1.88 match: fromOperatorTextObj, 1)
 function fromOperatorTextObj(state, input, ctx) {
   if (TEXT_OBJ_TYPES.has(input))
     return {
@@ -418,7 +418,7 @@ function fromOperatorTextObj(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23777-23926 fingerprint = fromFind (1)
+//@ chunk-530hfzwb.js:23777-23926 fingerprint (2.1.88 match: fromFind, 1)
 function fromFind(state, input, ctx) {
   return {
     execute: () => {
@@ -428,7 +428,7 @@ function fromFind(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23926-24261 fingerprint = fromG (1)
+//@ chunk-530hfzwb.js:23926-24261 fingerprint (2.1.88 match: fromG, 1)
 /**
  * g 前缀：gj/gk 按屏幕行移动，gg/{count}gg 跳到第一行/第 count 行。
  */
@@ -457,7 +457,7 @@ function fromG(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:24261-24483 layout = fromOperatorTextObj (0.876)
+//@ chunk-530hfzwb.js:24261-24483 layout (2.1.88 match: fromOperatorTextObj, 0.876)
 /**
  * operatorG：dgj/dgk 按屏幕行，dgg 到首行。
  */
@@ -479,7 +479,7 @@ function fromOperatorG(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:24483-24575 fingerprint = fromReplace (1)
+//@ chunk-530hfzwb.js:24483-24575 fingerprint (2.1.88 match: fromReplace, 1)
 function fromReplace(state, input, ctx) {
   if (input === "")
     return {
@@ -491,7 +491,7 @@ function fromReplace(state, input, ctx) {
     execute: () => executeReplace(input, state.count, ctx),
   };
 }
-//@ chunk-530hfzwb.js:24575-24674 layout = fromReplace (1)
+//@ chunk-530hfzwb.js:24575-24674 layout (2.1.88 match: fromReplace, 1)
 /**
  * indent：同一方向键（>> 或 <<）执行缩进，否则回 idle。
  */
@@ -506,7 +506,7 @@ function fromIndent(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:24674-24845 fingerprint = executeRepeatFind (1)
+//@ chunk-530hfzwb.js:24674-24845 fingerprint (2.1.88 match: executeRepeatFind, 1)
 /**
  * ; 与 ,：按上次查找（, 时方向反转）再找一次。
  */
@@ -774,7 +774,7 @@ function visualFromIdle(input, ctx) {
     }
   );
 }
-//@ chunk-530hfzwb.js:27117-27251 layout = fromCount (0.794)
+//@ chunk-530hfzwb.js:27117-27251 layout (2.1.88 match: fromCount, 0.794)
 function visualFromCount(state, input, ctx) {
   if (/[0-9]/.test(input))
     return {

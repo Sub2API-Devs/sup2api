@@ -58,7 +58,7 @@ import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 import { SUPPORTED_PLATFORMS } from "../../utils/platform.js";
 import { normalizeCaseForComparison } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-qchp9vrd.js:193455-193781 placement = hasSuccessfulToolCall (0.813)
+//@ chunk-qchp9vrd.js:193455-193781 placement (2.1.88 match: hasSuccessfulToolCall, 0.813)
 /**
  * 助手消息的 schema。
  */
@@ -540,7 +540,7 @@ async function checkGitVersionForEval(env) {
     "eval: git too old for env-scoped config",
   );
 }
-//@ chunk-qchp9vrd.js:201628-201680 placement = setCwdState (1)
+//@ chunk-qchp9vrd.js:201628-201680 placement (2.1.88 match: setCwdState, 1)
 function nfcKeyIfEnabled(cwd) {
   return SUPPORTED_PLATFORMS() ? normalizeCaseForComparison(cwd.normalize("NFC")) : cwd;
 }

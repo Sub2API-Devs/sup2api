@@ -126,7 +126,7 @@ var ULTRAPLAN_HANDOFF_FEEDBACK =
 var MAX_PLAN_DISPLAY_LENGTH = 200000;
 var PLAN_TOO_LARGE_TEXT =
   "(the plan is too large to be shown in full \u2014 approval is withheld; send feedback asking for a shorter plan, or press Esc)";
-//@ chunk-18hwfzwa.js:1347178-1347252 placement = createDisabledBypassPermissionsContext (0.769)
+//@ chunk-18hwfzwa.js:1347178-1347252 placement (2.1.88 match: createDisabledBypassPermissionsContext, 0.769)
 function buildSetCurrentModeUpdates(currentContext) {
   return [
     {
@@ -136,7 +136,7 @@ function buildSetCurrentModeUpdates(currentContext) {
     },
   ];
 }
-//@ chunk-18hwfzwa.js:1347252-1347759 fingerprint = autoNameSessionFromPlan (0.799)
+//@ chunk-18hwfzwa.js:1347252-1347759 fingerprint (2.1.88 match: autoNameSessionFromPlan, 0.799)
 function autoNameSessionFromPlan(plan, setAppState, isClearContext, storageV5, credentials) {
   if (isSessionPersistenceDisabled()) return;
   if (!isClearContext && getCurrentSessionTitle(getSessionId())) return;
@@ -178,7 +178,7 @@ function autoNameSessionFromPlan(plan, setAppState, isClearContext, storageV5, c
     })
     .catch(logError);
 }
-//@ chunk-18hwfzwa.js:1347759-1349532 fingerprint = buildPlanApprovalOptions (0.751)
+//@ chunk-18hwfzwa.js:1347759-1349532 fingerprint (2.1.88 match: buildPlanApprovalOptions, 0.751)
 function buildPlanApprovalOptions({
   showClearContext,
   showUltraplan,
@@ -286,7 +286,7 @@ function announcePermissionMode(mode) {
     hold: true,
   });
 }
-//@ chunk-18hwfzwa.js:1349577-1349866 fingerprint = getContextUsedPercent (1)
+//@ chunk-18hwfzwa.js:1349577-1349866 fingerprint (2.1.88 match: getContextUsedPercent, 1)
 function getContextUsedPercent(usage, permissionMode) {
   if (!usage) return null;
   let runtimeModel = getRuntimeMainLoopModel({
@@ -365,7 +365,7 @@ function exitPlanChoiceToResult(choice, state) {
   }
   return null;
 }
-//@ chunk-18hwfzwa.js:1350606-1359828 fingerprint = ExitPlanModePermissionRequest (0.679)
+//@ chunk-18hwfzwa.js:1350606-1359828 fingerprint (2.1.88 match: ExitPlanModePermissionRequest, 0.679)
 /**
  * 计划批准对话框：读取计划文件（缺失时提示先写计划），显示计划 Markdown 与上下文用量；选项由 buildPlanApprovalOptions 生成（清空上下文 + auto/acceptEdits/bypass、保留上下文、继续规划/反馈、ultraplan）；批准时设置模式并可清空上下文。
  */

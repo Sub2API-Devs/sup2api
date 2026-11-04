@@ -105,7 +105,7 @@ async function buildCacheSafePromptParts(context, forkContextMessages) {
     systemContext: cachedSystemContext,
   };
 }
-//@ chunk-p5wtay00.js:819-1123 fingerprint = getCacheSharingParams (0.585)
+//@ chunk-p5wtay00.js:819-1123 fingerprint (2.1.88 match: getCacheSharingParams, 0.585)
 async function getCacheSharingParams(context, forkContextMessages) {
   let systemPrompt = getToolPermissionContext(context);
   let defaultSysPrompt = await getSystemPrompt(
@@ -123,7 +123,7 @@ async function getCacheSharingParams(context, forkContextMessages) {
     appendSystemPrompt: context.options.appendSystemPrompt,
   });
 }
-//@ chunk-vrrvwm85.js:12092-12311 placement = buildMagicDocsUpdatePrompt (0.349)
+//@ chunk-vrrvwm85.js:12092-12311 placement (2.1.88 match: buildMagicDocsUpdatePrompt, 0.349)
 /**
  * /compact 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -183,7 +183,7 @@ async function call(args, { customInstructions, mainThreadAgentDefinition, trigg
     }
   }
 }
-//@ chunk-vrrvwm85.js:13047-16941 fingerprint = compactViaReactive (0.389)
+//@ chunk-vrrvwm85.js:13047-16941 fingerprint (2.1.88 match: compactViaReactive, 0.389)
 async function compactViaReactive(
   messages,
   context,
@@ -575,7 +575,7 @@ async function tryReusePrecomputedCompaction(session, context, newCustomInstruct
     },
   };
 }
-//@ chunk-vrrvwm85.js:18671-18900 fingerprint = buildDisplayText (0.9)
+//@ chunk-vrrvwm85.js:18671-18900 fingerprint (2.1.88 match: buildDisplayText, 0.9)
 function buildDisplayText(context, userDisplayMessage) {
   let upgradeMessage = getUpgradeMessage("tip");
   let expandShortcut = getShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");

@@ -30,7 +30,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { ShutdownRequestDisplay } from "./ShutdownMessage.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-ah34pb7m.js:84356-85037 fingerprint = PlanApprovalRequestDisplay (0.377)
+//@ chunk-ah34pb7m.js:84356-85037 fingerprint (2.1.88 match: PlanApprovalRequestDisplay, 0.377)
 function PlanApprovalRequestDisplay(props) {
   let $ = useMemoCache(12);
   let { request, senderName } = props;
@@ -88,7 +88,7 @@ function PlanApprovalRequestDisplay(props) {
   } else boxElement = $[11];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:85037-86383 callgraph-fingerprint = PlanApprovalResponseDisplay (0.272)
+//@ chunk-ah34pb7m.js:85037-86383 callgraph-fingerprint (2.1.88 match: PlanApprovalResponseDisplay, 0.272)
 function PlanApprovalResponseDisplay(props) {
   let $ = useMemoCache(20);
   let { response, senderName } = props;
@@ -206,7 +206,7 @@ function PlanApprovalResponseDisplay(props) {
   } else rejectedBox = $[19];
   return rejectedBox;
 }
-//@ chunk-ah34pb7m.js:86383-86535 fingerprint = tryRenderPlanApprovalMessage (1)
+//@ chunk-ah34pb7m.js:86383-86535 fingerprint (2.1.88 match: tryRenderPlanApprovalMessage, 1)
 function tryRenderPlanApprovalMessage(content, senderName) {
   let request = parseFrameForDisplay(PlanApprovalRequestMessageSchema(), content);
   if (request)

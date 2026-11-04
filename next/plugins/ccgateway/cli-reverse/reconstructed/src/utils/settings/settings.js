@@ -210,7 +210,7 @@ import { DEFAULTS_PLACEHOLDER, replacesDefaults } from "../permissions/autoModeR
 import { settingsSourceForPathByPriority } from "./settingsReview.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aat7wt0p.js:16206-17231 fingerprint = loadManagedFileSettings (0.344)
+//@ chunk-aat7wt0p.js:16206-17231 fingerprint (2.1.88 match: loadManagedFileSettings, 0.344)
 function pathTraversesUntrustedLink(
   base,
   parts,
@@ -298,7 +298,7 @@ function pathTraversesUntrustedLink(
   }
   return false;
 }
-//@ chunk-dcmhvw5a.js:429611-429843 placement = cacheToObject (0.679)
+//@ chunk-dcmhvw5a.js:429611-429843 placement (2.1.88 match: cacheToObject, 0.679)
 /**
  * 把设置覆盖层合并进设置对象（删除值为 undefined 的键）；误配名且归属错误。
  */
@@ -317,7 +317,7 @@ function cacheToObject(result, answers) {
     errors: [...result.errors, ...answers.errors],
   };
 }
-//@ chunk-dcmhvw5a.js:456962-457088 placement = getEnabledSettingSources (0.819)
+//@ chunk-dcmhvw5a.js:456962-457088 placement (2.1.88 match: getEnabledSettingSources, 0.819)
 /**
  * 同 getEnabledSettingSources，但基于传入的设置上下文。
  */
@@ -327,7 +327,7 @@ function getEnabledSettingSources(allowed) {
   result.add("policySettings");
   return SETTING_SOURCES.filter((source) => result.has(source));
 }
-//@ chunk-dcmhvw5a.js:457088-457142 fingerprint = getManagedSettingsFilePath (1)
+//@ chunk-dcmhvw5a.js:457088-457142 fingerprint (2.1.88 match: getManagedSettingsFilePath, 1)
 /**
  * <托管目录>/managed-settings.json；托管目录 macOS=/Library/Application Support/ClaudeCode，Windows=C:\Program Files\ClaudeCode，其他=/etc/claude-code。
  */
@@ -373,7 +373,7 @@ function parseSettingsFileUncached(path, content, pinned) {
     return settingsReadErrorResult(error, path);
   }
 }
-//@ chunk-dcmhvw5a.js:477334-477482 placement = getRelativeSettingsFilePathForSource (1)
+//@ chunk-dcmhvw5a.js:477334-477482 placement (2.1.88 match: getRelativeSettingsFilePathForSource, 1)
 function getRelativeSettingsFilePathForSource(source) {
   switch (source) {
     case "projectSettings":
@@ -386,7 +386,7 @@ function getRelativeSettingsFilePathForSource(source) {
 function isAdminPolicyOrigin(origin) {
   return origin === "helper" || origin === "plist" || origin === "hklm" || origin === "file";
 }
-//@ chunk-dcmhvw5a.js:485280-485330 fingerprint = getPolicySettingsOrigin (0.675)
+//@ chunk-dcmhvw5a.js:485280-485330 fingerprint (2.1.88 match: getPolicySettingsOrigin, 0.675)
 function getPolicySettingsOrigin_2() {
   return getPlatform() === "macos" ? "plist" : "hklm";
 }
@@ -425,7 +425,7 @@ function cloneModelPicker(picker) {
     }),
   };
 }
-//@ chunk-dcmhvw5a.js:511030-514083 placement = loadSettingsFromDisk (0.255)
+//@ chunk-dcmhvw5a.js:511030-514083 placement (2.1.88 match: loadSettingsFromDisk, 0.255)
 /**
  * 按 getEnabledSettingSourcesFor 的顺序（user→project→local→flag→policy，后者覆盖前者）逐来源读取并用 settingsMergeCustomizer 合并：policy 走 loadPolicySettings；local 先合并旧位置 cwd/.claude/settings.local.json；flag 合并 --settings 文件与 SDK 内联设置。最后 policy 的 availableModels/deniedModels/modelPicker 强制覆盖，并对 allowManagedReadPathsOnly/allowManagedDomainsOnly 下被忽略的 sandbox 条目给出警告。结果缓存在 store.mergedSettings。
  */
@@ -772,7 +772,7 @@ function getRuleAnchorRootForSource(source) {
 function getLegacyLocalSettingsFilePath() {
   return getLegacyLocalSettingsFilePath_3(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:95664-95757 placement = supportsPersistence (0.797)
+//@ chunk-q8cqcff6.js:95664-95757 placement (2.1.88 match: supportsPersistence, 0.797)
 function projectSettingsAliasesUserSettings() {
   let settingsFilePathForSource = getSettingsFilePathForSource("projectSettings");
   let settingsFilePathForSource_2 = getSettingsFilePathForSource("userSettings");
@@ -782,7 +782,7 @@ function projectSettingsAliasesUserSettings() {
     resolve(settingsFilePathForSource) === resolve(settingsFilePathForSource_2)
   );
 }
-//@ chunk-q8cqcff6.js:95757-95833 placement = _temp8 (1)
+//@ chunk-q8cqcff6.js:95757-95833 placement (2.1.88 match: _temp8, 1)
 function getLocalSettingsValidationErrors() {
   let settingsFilePathForSource = getSettingsFilePathForSource("localSettings");
   if (!settingsFilePathForSource) return [];
@@ -832,7 +832,7 @@ function getMachineAdminPolicyEnv() {
 function machinePolicyKeepsPriorityOver(orgUuid) {
   return isMdmLoadInFlight() || machinePolicyKeepsPriority(buildSettingsContext(), orgUuid);
 }
-//@ chunk-q8cqcff6.js:96336-96375 placement = getSettingsForSource (0)
+//@ chunk-q8cqcff6.js:96336-96375 placement (2.1.88 match: getSettingsForSource, 0)
 /**
  * 取某来源的有效设置（来源未启用返回 null），带 perSource 缓存。
  */
@@ -854,7 +854,7 @@ function settingsForSourceOrGuarded(source) {
     (isSettingSourceEnabled(source) ? null : getSettingsForSourceGuarded(source))
   );
 }
-//@ chunk-q8cqcff6.js:96479-96627 placement = _temp5 (1)
+//@ chunk-q8cqcff6.js:96479-96627 placement (2.1.88 match: _temp5, 1)
 function getSettingsForSourceGuarded(a_0) {
   if (isWorkspaceRestricted() && REPO_DIR_SETTING_SOURCES.has(a_0)) return null;
   if ((a_0 === "userSettings" || REPO_DIR_SETTING_SOURCES.has(a_0)) && usesSessionAccessToken()) return null;
@@ -1329,7 +1329,7 @@ function hasAttributionSettings(settings) {
       ("commitTrailers" in attribution || "commit" in attribution || "pr" in attribution))
   );
 }
-//@ chunk-q8cqcff6.js:102666-102907 placement = getSettingsForSourceUncached (0.566)
+//@ chunk-q8cqcff6.js:102666-102907 placement (2.1.88 match: getSettingsForSourceUncached, 0.566)
 function flagFileConsentDropped() {
   let remoteSettings = buildSettingsContext();
   let path = getSettingsFilePathForSource_3("flagSettings", remoteSettings);
@@ -1360,7 +1360,7 @@ function fileMayDropConsent(path, clamp = false) {
   if (!isPlainObject(parsed)) return true;
   return hasAttributionSettings(parsed);
 }
-//@ chunk-q8cqcff6.js:103087-103605 placement = getSettingsForSourceLenient_FOR_EDITING_ONLY_NOT_FOR_READING (0.192)
+//@ chunk-q8cqcff6.js:103087-103605 placement (2.1.88 match: getSettingsForSourceLenient_FOR_EDITING_ONLY_NOT_FOR_READING, 0.192)
 function getRawSettingFromRejectedSource(source, key) {
   let settingsContext = buildSettingsContext();
   let isRejected = (parsed) =>
@@ -1415,7 +1415,7 @@ async function sourceFileConsentDropped(source, storage) {
   }
   return fileMayDropConsent(path, source === "userSettings");
 }
-//@ chunk-q8cqcff6.js:103931-103994 placement = _temp5 (1)
+//@ chunk-q8cqcff6.js:103931-103994 placement (2.1.88 match: _temp5, 1)
 function isDefaultUserSettingsPath(a_0, filePath) {
   return a_0 === "userSettings" && basename(filePath) === USER_SETTINGS_FILE_NAMES.default;
 }
@@ -1564,7 +1564,7 @@ function getAdminPolicyTierSettings() {
 function getAdminAuthoredPolicySettings() {
   return getAdminAuthoredPolicySettings_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105717-105783 placement = getMcpAllowlistSettings (0.55)
+//@ chunk-q8cqcff6.js:105717-105783 placement (2.1.88 match: getMcpAllowlistSettings, 0.55)
 /**
  * getMcpAllowlistSettings：{slot: policySettings, adminTiers}。
  */
@@ -1592,16 +1592,16 @@ function getMcpPolicyCompositionForLogging(shadowedMcpPolicySources) {
     mcpShadowedKeyCount: shadowedMcpPolicySources.reduce((acc, { keys }) => acc + keys.length, 0),
   };
 }
-//@ chunk-q8cqcff6.js:106097-106136 placement = getInitialSettings (1)
+//@ chunk-q8cqcff6.js:106097-106136 placement (2.1.88 match: getInitialSettings, 1)
 /**
  * 合并后的设置（getSettingsWithErrors().settings 或 {}），旧版 getInitialSettings。
  */
 function getInitialSettings_2() {
   return getSettingsWithErrors_2().settings || {};
 }
-//@ chunk-q8cqcff6.js:106136-106146 placement = getSettings_DEPRECATED (0)
+//@ chunk-q8cqcff6.js:106136-106146 placement (2.1.88 match: getSettings_DEPRECATED, 0)
 var getSettings_DEPRECATED = getInitialSettings_2;
-//@ chunk-q8cqcff6.js:106146-106299 placement = getSettingsWithSources (1)
+//@ chunk-q8cqcff6.js:106146-106299 placement (2.1.88 match: getSettingsWithSources, 1)
 /**
  * 清缓存后返回合并结果与每个非空来源的设置，供 /status、doctor 展示。
  */
@@ -1633,7 +1633,7 @@ function getEffectiveSettingSource_2(key) {
   }
   return null;
 }
-//@ chunk-q8cqcff6.js:106411-106583 placement = getSettingsWithErrors (0.574)
+//@ chunk-q8cqcff6.js:106411-106583 placement (2.1.88 match: getSettingsWithErrors, 0.574)
 /**
  * 返回合并后的设置与全部错误，首次调用时 loadSettingsFromDisk 并缓存（启动剖析点 loadSettingsFromDisk_start/end）。
  */
@@ -1647,7 +1647,7 @@ function getSettingsWithErrors_2() {
   cached.mergedSettings = result;
   return result;
 }
-//@ chunk-q8cqcff6.js:106583-107046 placement = getManagedFileSettingsPresence (0.548)
+//@ chunk-q8cqcff6.js:106583-107046 placement (2.1.88 match: getManagedFileSettingsPresence, 0.548)
 /**
  * 检查托管目录中 managed-settings.json 与 managed-settings.d/*.json 是否有内容，供 /status 显示 file / drop-ins。
  */
@@ -1953,7 +1953,7 @@ function adminPolicyLoadFailureRefusesLaunch() {
     getFatalAdminPolicyLoadErrors().some((error) => !isPermissionDeniedPolicyError(error))
   );
 }
-//@ chunk-q8cqcff6.js:110633-110722 placement = _temp7 (1)
+//@ chunk-q8cqcff6.js:110633-110722 placement (2.1.88 match: _temp7, 1)
 function policyEntryWarnings() {
   try {
     let settings = getSettingsForSource("policySettings");
@@ -2052,7 +2052,7 @@ function formatManagedSettingsError(issue) {
 function updateSettingsForSource(source, transform, options, storage) {
   return updateSettingsForSourceWithTransform(source, () => transform, options, storage);
 }
-//@ chunk-q8cqcff6.js:112494-112706 placement = getEnabledSettingSources (0.888)
+//@ chunk-q8cqcff6.js:112494-112706 placement (2.1.88 match: getEnabledSettingSources, 0.888)
 function updateSettingsForSourceWithTransform(source, transform, options, storage) {
   if (source === "policySettings" || source === "flagSettings")
     return Promise.resolve({
@@ -2176,7 +2176,7 @@ function decodeStoredSettingsRecord(storedUserSettings, path) {
       );
   }
 }
-//@ chunk-q8cqcff6.js:113909-117127 callgraph-witnessed = updateSettingsForSource (0.24)
+//@ chunk-q8cqcff6.js:113909-117127 callgraph-witnessed (2.1.88 match: updateSettingsForSource, 0.24)
 async function updateSettingsForSource_2(source, transform, settingsFilePathForSource, options, storage) {
   let useStorage =
     isStorageV5Enabled() &&
@@ -2384,7 +2384,7 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
     error,
   };
 }
-//@ chunk-q8cqcff6.js:117127-117247 layout = _temp5 (1)
+//@ chunk-q8cqcff6.js:117127-117247 layout (2.1.88 match: _temp5, 1)
 async function mirrorUserSettingsWrite(storage, writtenPath) {
   let settingsPath = getSettingsFilePathForSource("userSettings");
   if (
@@ -2561,7 +2561,7 @@ function projectRemovalsOnly(original, merged) {
   }
   return original;
 }
-//@ chunk-q8cqcff6.js:119410-119791 placement = getManagedSettingsKeysForLogging (0.208)
+//@ chunk-q8cqcff6.js:119410-119791 placement (2.1.88 match: getManagedSettingsKeysForLogging, 0.208)
 /**
  * 列出托管设置里出现的键（permissions/sandbox/hooks 展开一层），用于遥测。
  */
@@ -2598,7 +2598,7 @@ function getSettingsAfterPluginLoad(key) {
 function getSecuritySensitiveSetting(key) {
   return getSecuritySensitiveSettingWithSources(key).map((entry) => entry.value);
 }
-//@ chunk-q8cqcff6.js:119970-120027 placement = TRUSTED_SETTING_SOURCES (1)
+//@ chunk-q8cqcff6.js:119970-120027 placement (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
 var SECURITY_SENSITIVE_SETTING_SOURCES = ["policySettings", "flagSettings", "userSettings"];
 //@ chunk-q8cqcff6.js:120027-120243 placement
 function getSecuritySensitiveSettingWithSources(key) {
@@ -2625,7 +2625,7 @@ function getSecuritySensitiveSettingWithSources(key) {
   }
   return values;
 }
-//@ chunk-q8cqcff6.js:120243-120489 placement = hasSkipDangerousModePermissionPrompt (1)
+//@ chunk-q8cqcff6.js:120243-120489 placement (2.1.88 match: hasSkipDangerousModePermissionPrompt, 1)
 /**
  * 任一来源（user/local/flag/policy，不含 project）设置了 skipDangerousModePermissionPrompt。
  */
@@ -2644,7 +2644,7 @@ function hasVouchedSkipDangerousModePermissionPrompt() {
     getSettingsForSource("userSettings")?.skipDangerousModePermissionPrompt
   );
 }
-//@ chunk-q8cqcff6.js:120625-120836 placement = hasSkipDangerousModePermissionPrompt (0.81)
+//@ chunk-q8cqcff6.js:120625-120836 placement (2.1.88 match: hasSkipDangerousModePermissionPrompt, 0.81)
 function hasSkipWorkflowUsageWarning() {
   return !!(
     getSettingsForSource("userSettings")?.skipWorkflowUsageWarning ||
@@ -2671,7 +2671,7 @@ function hasDisableClaudeAiConnectors() {
 function hasAutoModeOptIn() {
   return true;
 }
-//@ chunk-q8cqcff6.js:121057-121299 placement = hasSkipDangerousModePermissionPrompt (0.763)
+//@ chunk-q8cqcff6.js:121057-121299 placement (2.1.88 match: hasSkipDangerousModePermissionPrompt, 0.763)
 function isNotDisabledInTrustedSources(settingKey) {
   let pick = settingKey === "useAutoModeDuringPlan" ? getSettingsForSource : getSettingsForSourceTightenOnly;
   return ![
@@ -2686,7 +2686,7 @@ function isNotDisabledInTrustedSources(settingKey) {
       : null,
   ].some((settings) => settings?.[settingKey] === false);
 }
-//@ chunk-q8cqcff6.js:121299-121374 placement = _temp9 (1)
+//@ chunk-q8cqcff6.js:121299-121374 placement (2.1.88 match: _temp9, 1)
 function isDisabledAboveWorkloadFiles(a_4) {
   return [...getVouchedPolicyTierSettings(), getSettingsForSource("flagSettings")].some(
     (settings) => settings?.[a_4] === false,
@@ -2730,7 +2730,7 @@ deferInit("chunk-q8cqcff6.js:121739", () => {
   );
   AUTO_MODE_TRUSTED_SOURCES = ["userSettings", "flagSettings", "policySettings"];
 });
-//@ chunk-q8cqcff6.js:121945-123032 placement = getAutoModeConfig (0.293)
+//@ chunk-q8cqcff6.js:121945-123032 placement (2.1.88 match: getAutoModeConfig, 0.293)
 /**
  * 汇总 autoMode 分类器规则（allow/soft_deny/hard_deny/environment），只接受 user/flag/policy 来源；project/local 中的 autoMode 被忽略并打 tengu_settings_auto_mode_rules_untrusted_source_ignored。
  */
@@ -2914,13 +2914,13 @@ async function rawSettingsKeyPresence(key, storage, options) {
   if (unknowable) return "unknowable";
   return present ? "present" : "absent";
 }
-//@ chunk-6zvepy0r.js:10205-10335 fingerprint = rawSettingsContainsKey (0.783)
+//@ chunk-6zvepy0r.js:10205-10335 fingerprint (2.1.88 match: rawSettingsContainsKey, 0.783)
 async function resolveSettingsWritePath(key) {
   if (settingsSourceForPathByPriority(key) === "policySettings" || isInClaudeConfigHome(key)) return key;
   let vet = await vetRepoSettingsPathAsync(getFsImplementation(), key);
   return vet.linksResolvedPath ?? vet.resolvedPath;
 }
-//@ chunk-4xpk3fhh.js:11081-11176 fingerprint = getSettingsRootPathForSource (1)
+//@ chunk-4xpk3fhh.js:11081-11176 fingerprint (2.1.88 match: getSettingsRootPathForSource, 1)
 var TRUSTED_SETTING_SOURCES = ["policySettings", "flagSettings", "userSettings"];
 var REPO_SETTING_SOURCES = ["localSettings", "projectSettings"];
 export {

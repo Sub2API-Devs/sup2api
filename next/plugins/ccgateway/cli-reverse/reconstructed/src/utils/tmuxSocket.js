@@ -14,7 +14,7 @@ import { uniq, count } from "./collections.js";
 import { driveMountsForPath } from "./wslMounts.js";
 import { WINDOWS_PROFILE_FOLDER_NAMES, foldCaseSimple } from "./windowsProfileFolders.js";
 
-//@ chunk-dcmhvw5a.js:426871-426947 fingerprint = execTmux (1)
+//@ chunk-dcmhvw5a.js:426871-426947 fingerprint (2.1.88 match: execTmux, 1)
 function isPosixPlatform() {
   try {
     let platform = getPlatform();

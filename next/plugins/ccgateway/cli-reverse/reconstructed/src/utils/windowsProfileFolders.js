@@ -191,7 +191,7 @@ function classifyWindowsPathPrefix(path) {
     ? "unknown"
     : "named";
 }
-//@ chunk-aat7wt0p.js:2819-3049 placement = companionIntroText (1)
+//@ chunk-aat7wt0p.js:2819-3049 placement (2.1.88 match: companionIntroText, 1)
 /**
  * 在 token 序列中查找与模式序列匹配的位置（允许首字母、前缀与正则匹配），返回匹配结束位置。用途未确认。
  */

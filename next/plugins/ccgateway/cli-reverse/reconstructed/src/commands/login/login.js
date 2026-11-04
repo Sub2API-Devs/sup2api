@@ -15,7 +15,7 @@ import { readAdvisorModelSetting } from "../../utils/advisor.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { checkAutoModeInUse } from "../../utils/permissions/autoModeTransition.js";
 
-//@ chunk-tyg7f3ek.js:509827-510177 fingerprint = call (0.322)
+//@ chunk-tyg7f3ek.js:509827-510177 fingerprint (2.1.88 match: call, 0.322)
 function call({ session, source, getAppState, setAppState, storageV5 }) {
   applySettingsChange(session, source, setAppState, storageV5);
   if (isFastModeEnabled()) refreshFastModeFromSettings(getAppState, setAppState, storageV5);

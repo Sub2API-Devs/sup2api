@@ -26,7 +26,7 @@ import { textSignal, Box } from "../ink/components/Text.js";
 function negate_2(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:1667036-1668638 fingerprint = BashModeProgress (0.63)
+//@ chunk-18hwfzwa.js:1667036-1668638 fingerprint (2.1.88 match: BashModeProgress, 0.63)
 function BashModeProgress(props) {
   let $ = useMemoCache(29);
   let { input, progress, verbose } = props;

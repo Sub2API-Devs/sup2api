@@ -41,14 +41,14 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { parseJsonc, modifyJsonc, applyEdits } from "../../../vendor/jsonc-parser/lib/esm/main.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3235972-3236107 fingerprint = getNativeCSIuTerminalDisplayName (0.555)
+//@ chunk-e6aww6q8.js:3235972-3236107 fingerprint (2.1.88 match: getNativeCSIuTerminalDisplayName, 0.555)
 function getNativeCSIuTerminalDisplayName_2() {
   let detectionState = currentIdeDetectionState();
   if (detectionState.supportedVSCodeTerminal === IDE_NOT_YET_COMPUTED)
     detectionState.supportedVSCodeTerminal = isVSCodeIde(env.terminal);
   return detectionState.supportedVSCodeTerminal;
 }
-//@ chunk-xafnw064.js:256-441 facade-exports = shouldOfferTerminalSetup (1)
+//@ chunk-xafnw064.js:256-441 facade-exports (2.1.88 match: shouldOfferTerminalSetup, 1)
 function shouldOfferTerminalSetup() {
   return (
     (platform() === "darwin" && env.terminal === "Apple_Terminal") ||
@@ -59,7 +59,7 @@ function shouldOfferTerminalSetup() {
     env.terminal === "zed"
   );
 }
-//@ chunk-7p2hc4jn.js:2478-2622 fingerprint = NATIVE_CSIU_TERMINALS (0.87)
+//@ chunk-7p2hc4jn.js:2478-2622 fingerprint (2.1.88 match: NATIVE_CSIU_TERMINALS, 0.87)
 /**
  * NATIVE_CSIU_TERMINALS：同旧版。
  */
@@ -73,7 +73,7 @@ var NATIVE_CSIU_TERMINALS = {
   WarpTerminal: "Warp",
   "windows-terminal": "Windows Terminal",
 };
-//@ chunk-7p2hc4jn.js:2622-2933 fingerprint = isVSCodeRemoteSSH (0.885)
+//@ chunk-7p2hc4jn.js:2622-2933 fingerprint (2.1.88 match: isVSCodeRemoteSSH, 0.885)
 function isVSCodeRemoteSSH() {
   let askpassMain = env.VSCODE_GIT_ASKPASS_MAIN ?? "";
   let path = env.PATH ?? "";
@@ -97,7 +97,7 @@ function getNativeCSIuTerminalDisplayName() {
 function emptySuffix() {
   return "";
 }
-//@ chunk-7p2hc4jn.js:3047-3867 facade-exports = setupTerminal (0.804)
+//@ chunk-7p2hc4jn.js:3047-3867 facade-exports (2.1.88 match: setupTerminal, 0.804)
 async function setupTerminal(host, theme, storageV5) {
   let result = "";
   let anyInstalled = true;
@@ -179,7 +179,7 @@ async function enableITerm2ClipboardAccess(theme) {
     return `${color("warning", theme)("Couldn't update iTerm2 clipboard setting.")}${NEWLINE}${settingsPathHint}${NEWLINE}${NEWLINE}`;
   }
 }
-//@ chunk-7p2hc4jn.js:4778-4840 facade-exports = isShiftEnterKeyBindingInstalled (1)
+//@ chunk-7p2hc4jn.js:4778-4840 facade-exports (2.1.88 match: isShiftEnterKeyBindingInstalled, 1)
 function isShiftEnterKeyBindingInstalled() {
   return getGlobalConfig().shiftEnterKeyBindingInstalled === true;
 }
@@ -191,11 +191,11 @@ function supportsShiftEnter() {
   if (env.terminal && env.terminal in NATIVE_CSIU_TERMINALS) return true;
   return SHIFT_ENTER_BINDING_TERMINALS.includes(env.terminal ?? "") && isShiftEnterKeyBindingInstalled();
 }
-//@ chunk-7p2hc4jn.js:5053-5108 facade-exports = hasUsedBackslashReturn (1)
+//@ chunk-7p2hc4jn.js:5053-5108 facade-exports (2.1.88 match: hasUsedBackslashReturn, 1)
 function hasUsedBackslashReturn() {
   return getGlobalConfig().hasUsedBackslashReturn === true;
 }
-//@ chunk-7p2hc4jn.js:5108-5202 facade-exports = hasUsedBackslashReturn (1)
+//@ chunk-7p2hc4jn.js:5108-5202 facade-exports (2.1.88 match: hasUsedBackslashReturn, 1)
 function markBackslashReturnUsed(storageV5) {
   if (!getGlobalConfig().hasUsedBackslashReturn)
     saveGlobalConfig(
@@ -206,7 +206,7 @@ function markBackslashReturnUsed(storageV5) {
       storageV5,
     );
 }
-//@ chunk-7p2hc4jn.js:5202-6729 facade-exports = call (0.623)
+//@ chunk-7p2hc4jn.js:5202-6729 facade-exports (2.1.88 match: call, 0.623)
 async function call(onDone, context, args) {
   if (
     platform() === "darwin" &&
@@ -396,7 +396,7 @@ async function installVSCodeGpuAccelerationOff(host, editor, theme) {
     return `${color("warning", theme)(`Couldn't update ${editor} settings.json.`)}${NEWLINE}${manualHint}${NEWLINE}`;
   }
 }
-//@ chunk-7p2hc4jn.js:10303-12236 fingerprint = installBindingsForVSCodeTerminal (0.827)
+//@ chunk-7p2hc4jn.js:10303-12236 fingerprint (2.1.88 match: installBindingsForVSCodeTerminal, 0.827)
 async function installBindingsForVSCodeTerminal(host, editor = "VSCode", theme) {
   if (isVSCodeRemoteSSH())
     return `${color("warning", theme)(`Cannot install keybindings from a remote ${editor} session.`)}${NEWLINE}${NEWLINE}${editor} keybindings must be installed on your local machine, not the remote server.${NEWLINE}${NEWLINE}To install the Shift+Enter keybinding:${NEWLINE}1. Open ${editor} on your local machine (not connected to remote)${NEWLINE}2. Open the Command Palette (Cmd/Ctrl+Shift+P) \u2192 "Preferences: Open Keyboard Shortcuts (JSON)"${NEWLINE}3. Add this keybinding (the file must be a JSON array):${NEWLINE}${NEWLINE}${sequential.dim(`[
@@ -467,7 +467,7 @@ async function installBindingsForVSCodeTerminal(host, editor = "VSCode", theme) 
     throw Error(`Failed to install ${editor} terminal Shift+Enter key binding`);
   }
 }
-//@ chunk-7p2hc4jn.js:12236-12622 fingerprint = enableOptionAsMetaForProfile (1)
+//@ chunk-7p2hc4jn.js:12236-12622 fingerprint (2.1.88 match: enableOptionAsMetaForProfile, 1)
 async function enableOptionAsMetaForProfile(profileName) {
   let { code: addCode } = await execFileNoThrow("/usr/libexec/PlistBuddy", [
     "-c",
@@ -489,7 +489,7 @@ async function enableOptionAsMetaForProfile(profileName) {
   }
   return true;
 }
-//@ chunk-7p2hc4jn.js:12622-12975 fingerprint = disableAudioBellForProfile (1)
+//@ chunk-7p2hc4jn.js:12622-12975 fingerprint (2.1.88 match: disableAudioBellForProfile, 1)
 async function disableAudioBellForProfile(profileName) {
   let { code: addCode } = await execFileNoThrow("/usr/libexec/PlistBuddy", [
     "-c",
@@ -511,7 +511,7 @@ async function disableAudioBellForProfile(profileName) {
   }
   return true;
 }
-//@ chunk-7p2hc4jn.js:12975-15209 fingerprint = enableOptionAsMetaForTerminal (0.816)
+//@ chunk-7p2hc4jn.js:12975-15209 fingerprint (2.1.88 match: enableOptionAsMetaForTerminal, 0.816)
 async function enableOptionAsMetaForTerminal(theme, storageV5) {
   let supportsShiftReturn = (macOSMajorVersion() ?? 0) >= 27;
   let screenReaderMode = isScreenReaderMode();
@@ -586,7 +586,7 @@ async function enableOptionAsMetaForTerminal(theme, storageV5) {
     else throw Error(`${errorMessage} No backup was available to restore from.`);
   }
 }
-//@ chunk-7p2hc4jn.js:15209-16609 fingerprint = installBindingsForAlacritty (0.944)
+//@ chunk-7p2hc4jn.js:15209-16609 fingerprint (2.1.88 match: installBindingsForAlacritty, 0.944)
 async function installBindingsForAlacritty(theme) {
   let configPaths = [];
   let xdgConfigHome = env.XDG_CONFIG_HOME;
@@ -666,7 +666,7 @@ function isZedTerminalShiftEnterBinding(keymapEntry) {
     "shift-enter" in keymapEntry.bindings
   );
 }
-//@ chunk-7p2hc4jn.js:16742-19065 fingerprint = installBindingsForZed (0.572)
+//@ chunk-7p2hc4jn.js:16742-19065 fingerprint (2.1.88 match: installBindingsForZed, 0.572)
 async function installBindingsForZed(theme) {
   let XDG_CONFIG_HOME = getPlatform() === "linux" ? env.XDG_CONFIG_HOME : undefined;
   let zedDir = XDG_CONFIG_HOME ? join(XDG_CONFIG_HOME, "zed") : join(homedir(), ".config", "zed");

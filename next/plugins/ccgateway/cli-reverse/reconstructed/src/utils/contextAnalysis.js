@@ -18,7 +18,7 @@ import { sanitizeToolNameForAnalytics } from "../services/analytics/metadata.js"
 import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
 import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
 
-//@ chunk-e6aww6q8.js:1653817-1654688 fingerprint = analyzeContext (0.907)
+//@ chunk-e6aww6q8.js:1653817-1654688 fingerprint (2.1.88 match: analyzeContext, 0.907)
 /**
  * 按消息类型统计 token：附件计数、规整为 API 消息后逐块分类（人类/助手/本地命令输出/工具请求/工具结果/其他），并计算重复读同一文件的浪费。
  */
@@ -73,7 +73,7 @@ function analyzeContext(messages) {
   });
   return stats;
 }
-//@ chunk-e6aww6q8.js:1654688-1656109 fingerprint = processBlock (0.882)
+//@ chunk-e6aww6q8.js:1654688-1656109 fingerprint (2.1.88 match: processBlock, 0.882)
 /**
  * 单个内容块计 token 并归入统计桶；Read 工具记录文件路径用于重复读统计。
  */
@@ -160,7 +160,7 @@ function processBlock(block, message, stats, toolIds, readToolPaths, fileReads) 
       break;
   }
 }
-//@ chunk-e6aww6q8.js:1656109-1656217 layout = isMedia (0.815)
+//@ chunk-e6aww6q8.js:1656109-1656217 layout (2.1.88 match: isMedia, 0.815)
 /**
  * image/document 且 source.type=base64。
  */
@@ -179,7 +179,7 @@ function isBase64MediaBlock(block) {
 function increment(map, key, value) {
   map.set(key, (map.get(key) || 0) + value);
 }
-//@ chunk-e6aww6q8.js:1656262-1657467 fingerprint = tokenStatsToStatsigMetrics (1)
+//@ chunk-e6aww6q8.js:1656262-1657467 fingerprint (2.1.88 match: tokenStatsToStatsigMetrics, 1)
 /**
  * 把上下文统计转成遥测指标（各类 token、百分比、按工具细分）。
  */

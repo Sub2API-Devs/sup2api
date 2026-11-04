@@ -49,7 +49,7 @@ function artifactReadObservationIn(state) {
     };
   };
 }
-//@ chunk-06y4szbn.js:45322-45395 placement = getCurrentAgentInfo (0.426)
+//@ chunk-06y4szbn.js:45322-45395 placement (2.1.88 match: getCurrentAgentInfo, 0.426)
 function observationStamp(agentId, messageId, agentArg) {
   return (
     `${agentId ?? "main"}

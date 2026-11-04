@@ -14,7 +14,7 @@ import { init_react_production, useRef, useMemo } from "../../vendor/react/cjs/r
 init_react_production();
 //@ chunk-mtx4csef.js:14817-14821 placement
 init_react_production();
-//@ chunk-mtx4csef.js:14821-15070 fingerprint = isFileEditResult (0.874)
+//@ chunk-mtx4csef.js:14821-15070 fingerprint (2.1.88 match: isFileEditResult, 0.874)
 function isFileEditResult(result) {
   if (!result || typeof result !== "object") return false;
   let editResult = result;
@@ -24,11 +24,11 @@ function isFileEditResult(result) {
   let isNewFile = editResult.type === "create" && typeof editResult.content === "string";
   return hasFilePath && (hasStructuredPatch || isNewFile);
 }
-//@ chunk-mtx4csef.js:15070-15142 fingerprint = isFileWriteOutput (1)
+//@ chunk-mtx4csef.js:15070-15142 fingerprint (2.1.88 match: isFileWriteOutput, 1)
 function isFileWriteOutput(result) {
   return "type" in result && (result.type === "create" || result.type === "update");
 }
-//@ chunk-mtx4csef.js:15142-15286 fingerprint = countHunkLines (1)
+//@ chunk-mtx4csef.js:15142-15286 fingerprint (2.1.88 match: countHunkLines, 1)
 function countHunkLines(hunks) {
   let added = 0;
   let removed = 0;
@@ -49,7 +49,7 @@ function getUserPromptPreview(message) {
   if (text.length <= 30) return text;
   return text.slice(0, 29) + "\u2026";
 }
-//@ chunk-mtx4csef.js:15435-15590 fingerprint = computeTurnStats (1)
+//@ chunk-mtx4csef.js:15435-15590 fingerprint (2.1.88 match: computeTurnStats, 1)
 function computeTurnStats(turn) {
   let totalAdded = 0;
   let totalRemoved = 0;
@@ -63,7 +63,7 @@ function computeTurnStats(turn) {
     linesRemoved: totalRemoved,
   };
 }
-//@ chunk-mtx4csef.js:15590-17021 fingerprint = useTurnDiffs (1)
+//@ chunk-mtx4csef.js:15590-17021 fingerprint (2.1.88 match: useTurnDiffs, 1)
 function useTurnDiffs(messages) {
   let cache = useRef({
     completedTurns: [],

@@ -44,7 +44,7 @@ function getOutputStyleDirStyles(cwd, context) {
     () => getOutputStyleDirStyles_2(cwd, context),
   );
 }
-//@ chunk-e6aww6q8.js:805362-806189 fingerprint = getOutputStyleDirStyles (0.682)
+//@ chunk-e6aww6q8.js:805362-806189 fingerprint (2.1.88 match: getOutputStyleDirStyles, 0.682)
 /**
  * 从 managed/user/project 的 output-styles 目录加载 *.md 输出风格：name 取 frontmatter.name 或文件名，description 缺省取正文首行，keep-coding-instructions 解析为布尔；force-for-plugin 只对插件风格有效，这里告警忽略。
  */

@@ -20,7 +20,7 @@ import { dirIsInGitRepo } from "../git.js";
 import { logForDebugging } from "../debug.js";
 import { getErrnoCode } from "../errors.js";
 
-//@ chunk-q8cqcff6.js:4976-5114 fingerprint = isPathGitignored (0.926)
+//@ chunk-q8cqcff6.js:4976-5114 fingerprint (2.1.88 match: isPathGitignored, 0.926)
 /**
  * git check-ignore 判断路径是否被忽略，返回退出码。
  */
@@ -52,7 +52,7 @@ async function getConfiguredGlobalGitignorePath(cwd) {
   );
   return getGlobalGitignorePath(code === 0 ? stdout : "");
 }
-//@ chunk-q8cqcff6.js:5327-5544 fingerprint = getGlobalGitignorePath (0.901)
+//@ chunk-q8cqcff6.js:5327-5544 fingerprint (2.1.88 match: getGlobalGitignorePath, 0.901)
 /**
  * 全局 gitignore 路径：core.excludesfile，否则 $XDG_CONFIG_HOME/git/ignore 或 ~/.config/git/ignore。
  */
@@ -66,7 +66,7 @@ function getGlobalGitignorePath(excludesFile) {
   if (XDG_CONFIG_HOME && isAbsolute(XDG_CONFIG_HOME)) return join(XDG_CONFIG_HOME, "git", "ignore");
   return join(homedir(), ".config", "git", "ignore");
 }
-//@ chunk-q8cqcff6.js:5544-6612 fingerprint = addFileGlobRuleToGitignore (0.377)
+//@ chunk-q8cqcff6.js:5544-6612 fingerprint (2.1.88 match: addFileGlobRuleToGitignore, 0.377)
 /**
  * 把文件名规则（如 .claude/settings.local.json）写入全局 gitignore（必要时创建），并验证规则对样例路径生效；文件已被 index 跟踪时返回 already_tracked。
  */

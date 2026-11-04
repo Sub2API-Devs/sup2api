@@ -207,7 +207,7 @@ deferInit("chunk-e6aww6q8.js:1470793", () => {
 function getAttributionDisabledSignal() {
   return attributionDisabledSignalByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:1470859-1471133 fingerprint = getAttributionTexts (0.589)
+//@ chunk-e6aww6q8.js:1470859-1471133 fingerprint (2.1.88 match: getAttributionTexts, 0.589)
 /**
  * commit/PR 署名文本：settings.attribution.commit/pr 优先；includeCoAuthoredBy=false 时为空；默认 commit 为 `Co-Authored-By: <模型名> <noreply@anthropic.com>`，PR 为默认链接文本。
  */
@@ -300,7 +300,7 @@ function isTerminalOutput(content) {
   for (let tag of ARTIFACT_BLOCK_TAGS) if (content.includes(`<${tag}>`)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:1471994-1472387 fingerprint = countUserPromptsInMessages (1)
+//@ chunk-e6aww6q8.js:1471994-1472387 fingerprint (2.1.88 match: countUserPromptsInMessages, 1)
 function countUserPromptsInMessages(messages) {
   let count = 0;
   for (let message of messages) {
@@ -340,7 +340,7 @@ var PR_ATTRIBUTION_STATS_UNKNOWN; // deferred: has load-time effects after a def
 deferInit("chunk-e6aww6q8.js:1472571", () => {
   PR_ATTRIBUTION_STATS_UNKNOWN = Symbol("pr-attribution-stats-unknown");
 });
-//@ chunk-e6aww6q8.js:1472618-1473054 fingerprint = getPRAttributionData (0.624)
+//@ chunk-e6aww6q8.js:1472618-1473054 fingerprint (2.1.88 match: getPRAttributionData, 0.624)
 /**
  * 从 AppState.attribution 计算 PR 级 Claude 贡献数据，未知时返回 PR_ATTRIBUTION_STATS_UNKNOWN。
  */
@@ -378,7 +378,7 @@ deferInit("chunk-e6aww6q8.js:1473054", () => {
     MEMORY_WRITE,
   ]);
 });
-//@ chunk-e6aww6q8.js:1473088-1473370 callgraph-fingerprint = countMemoryFileAccessFromEntries (0.661)
+//@ chunk-e6aww6q8.js:1473088-1473370 callgraph-fingerprint (2.1.88 match: countMemoryFileAccessFromEntries, 0.661)
 function countMemoryFileAccessFromEntries(entries) {
   let count = 0;
   for (let entry of entries) {
@@ -393,7 +393,7 @@ function countMemoryFileAccessFromEntries(entries) {
   }
   return count;
 }
-//@ chunk-e6aww6q8.js:1473370-1473876 fingerprint = getTranscriptStats (0.865)
+//@ chunk-e6aww6q8.js:1473370-1473876 fingerprint (2.1.88 match: getTranscriptStats, 0.865)
 /**
  * 从当前转录统计用户提示数与记忆文件访问数（压缩边界后重新计数）。
  */
@@ -446,7 +446,7 @@ ${trailerLine}`
         : trailerLine;
   return applyAttributionTextHooks("pr", prText);
 }
-//@ chunk-e6aww6q8.js:1474044-1475050 fingerprint = getEnhancedPRAttribution (0.815)
+//@ chunk-e6aww6q8.js:1474044-1475050 fingerprint (2.1.88 match: getEnhancedPRAttribution, 0.815)
 /**
  * 增强版 PR 署名：在默认文本基础上附加 Claude 贡献比例、提示次数、记忆访问次数等统计；attribution.pr 或 includeCoAuthoredBy=false 时直接返回对应值。
  */
@@ -496,7 +496,7 @@ async function getEnhancedPRAttribution(getAppState, url, line, storageV5) {
   logForDebugging(`PR Attribution: returning summary: ${summary}`);
   return summary;
 }
-//@ chunk-tyg7f3ek.js:47443-47530 fingerprint = countUserPromptsFromEntries (1)
+//@ chunk-tyg7f3ek.js:47443-47530 fingerprint (2.1.88 match: countUserPromptsFromEntries, 1)
 function countUserPromptsFromEntries(entries, index) {
   let entry = entries[index];
   return !("isSidechain" in entry && entry.isSidechain === true) && isRealPromptAt(entries, index);

@@ -35,7 +35,7 @@ var WORD_CHAR_RE = /[\p{L}\p{N}_]/u;
  * 单个字素允许的最大显示宽度（超过按 128 处理）。
  */
 var MAX_CELL_WIDTH = 128;
-//@ chunk-yb0ajcmt.js:6811-7310 placement = getGraphemeSegmenter (0.781)
+//@ chunk-yb0ajcmt.js:6811-7310 placement (2.1.88 match: getGraphemeSegmenter, 0.781)
 /**
  * 按字素切分字符串并给出每段显示宽度（处理 emoji、组合字符、全角）。
  */
@@ -211,7 +211,7 @@ function linkCells(canvas, from, to, style = "solid") {
     canvas.styles[index_2] = Math.max(canvas.styles[index_2] ?? 0, index);
   }
 }
-//@ chunk-yb0ajcmt.js:8942-9047 placement = diff (0.775)
+//@ chunk-yb0ajcmt.js:8942-9047 placement (2.1.88 match: diff, 0.775)
 function unlinkCell(boxCanvas, toward, cell) {
   let bits =
     cell.x > toward.x

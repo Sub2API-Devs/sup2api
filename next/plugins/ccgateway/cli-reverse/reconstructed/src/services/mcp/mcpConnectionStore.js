@@ -456,7 +456,7 @@ function pendingRowsFor(state, configs) {
       config: value,
     }));
 }
-//@ chunk-kvr3v8w9.js:6520-6609 placement = getToolNameForPermissionCheck (1)
+//@ chunk-kvr3v8w9.js:6520-6609 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tool, serverName) {
   return tool.mcpInfo?.serverName === undefined
     ? commandBelongsToServer(tool, serverName)

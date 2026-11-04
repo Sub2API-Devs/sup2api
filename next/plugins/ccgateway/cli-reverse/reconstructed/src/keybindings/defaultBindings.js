@@ -13,7 +13,7 @@ import { alwaysTrue } from "../utils/slowOperations.js";
 import { satisfies } from "../utils/semver.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-6qssfmzs.js:420-7531 fingerprint = DEFAULT_BINDINGS (0.661)
+//@ chunk-6qssfmzs.js:420-7531 fingerprint (2.1.88 match: DEFAULT_BINDINGS, 0.661)
 /**
  * 默认绑定表（按上下文分块）。平台差异：Windows/WSL 图片粘贴用 alt+v（WSL 额外保留 ctrl+v），其余 ctrl+v；Windows 上运行时（Bun≥1.2.23 或 Node 22.17+/24.2+）支持 shift+tab 才用它切换模式，否则用 meta+m。完整表见手册。
  */

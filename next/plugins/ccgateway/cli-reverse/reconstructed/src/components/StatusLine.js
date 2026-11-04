@@ -106,7 +106,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 function textOrFallback(value, fallback) {
   return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }
-//@ chunk-hwmsct5x.js:187013-187320 fingerprint = statusLineShouldDisplay (0.301)
+//@ chunk-hwmsct5x.js:187013-187320 fingerprint (2.1.88 match: statusLineShouldDisplay, 0.301)
 function statusLineShouldDisplay() {
   let toastyBreezeConfig = getToastyBreezeConfig();
   return {
@@ -182,7 +182,7 @@ async function getStatusLineGitInfo(cwd) {
     repo: remoteUrl ? parseGitRemote(remoteUrl) : null,
   };
 }
-//@ chunk-e6aww6q8.js:3686344-3688795 fingerprint = buildStatusLineCommandInput (0.609)
+//@ chunk-e6aww6q8.js:3686344-3688795 fingerprint (2.1.88 match: buildStatusLineCommandInput, 0.609)
 function buildStatusLineCommandInput({
   session,
   permissionMode,
@@ -398,7 +398,7 @@ function getNextStatusLineRefreshAt(utilization) {
   ].filter((resetAt) => resetAt !== null && Number.isFinite(resetAt));
   return filtered.length === 0 ? null : Math.min(...filtered);
 }
-//@ chunk-e6aww6q8.js:3689495-3692443 fingerprint = StatusLineInner (0.455)
+//@ chunk-e6aww6q8.js:3689495-3692443 fingerprint (2.1.88 match: StatusLineInner, 0.455)
 class StatusLineInner {
   #e;
   #t;

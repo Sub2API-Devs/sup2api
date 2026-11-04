@@ -121,7 +121,7 @@ function artifactHeaderBlock() {
 <${TASK_TYPE}>${QUEUED_REMOTE_NOTIFICATIONS}</${TASK_TYPE}>
 `;
 }
-//@ chunk-bbtre4r8.js:8967-9049 fingerprint = OUTPUT_FILE_TAG (0.408)
+//@ chunk-bbtre4r8.js:8967-9049 fingerprint (2.1.88 match: OUTPUT_FILE_TAG, 0.408)
 /**
  * 任务通知子标签：output-file、status、summary、note；i7 为 "Background command " 前缀。
  */
@@ -231,7 +231,7 @@ function isForkBoilerplateMessage(message) {
     )
   );
 }
-//@ chunk-bbtre4r8.js:10168-10335 fingerprint = COMMON_INFO_ARGS (0.869)
+//@ chunk-bbtre4r8.js:10168-10335 fingerprint (2.1.88 match: COMMON_INFO_ARGS, 0.869)
 /**
  * "Your directive: "；fL 为帮助参数，S 为信息类参数。
  */
@@ -253,7 +253,7 @@ var COMMON_INFO_ARGS = [
   "?",
 ];
 var COMMON_INFO_ARGS_ALIAS = COMMON_INFO_ARGS;
-//@ chunk-e6aww6q8.js:2539151-2539169 fingerprint = SUMMARY_TAG (1)
+//@ chunk-e6aww6q8.js:2539151-2539169 fingerprint (2.1.88 match: SUMMARY_TAG, 1)
 /**
  * "summary" 标签名。
  */

@@ -155,7 +155,7 @@ async function verifyResolvedIdentity(fsImplementation, declaredPath, realPath) 
     real: realPath,
   };
 }
-//@ chunk-e6aww6q8.js:599728-599782 placement = getFileIdentity (0.794)
+//@ chunk-e6aww6q8.js:599728-599782 placement (2.1.88 match: getFileIdentity, 0.794)
 function getFileIdentity_2(left, right) {
   return left.dev === right.dev && left.ino === right.ino;
 }

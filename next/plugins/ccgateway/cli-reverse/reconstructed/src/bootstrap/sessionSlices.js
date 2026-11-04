@@ -72,7 +72,7 @@ function isSyntheticModelApiErrorMessage(message) {
     message.message?.model === SYNTHETIC_MODEL
   );
 }
-//@ chunk-ndmse9kj.js:36843-36912 placement = isSystemLocalCommandMessage (1)
+//@ chunk-ndmse9kj.js:36843-36912 placement (2.1.88 match: isSystemLocalCommandMessage, 1)
 function isSystemLocalCommandMessage(message) {
   return message.type === "system" && message.subtype === "local_command";
 }
@@ -323,7 +323,7 @@ function evaluateCompactSwap(
 function arraysEqual(rowUuids, otherRowUuids) {
   return otherRowUuids.every((rowUuid, index) => rowUuids[index] === rowUuid);
 }
-//@ chunk-ndmse9kj.js:40977-41173 placement = isHumanTurn (0.802)
+//@ chunk-ndmse9kj.js:40977-41173 placement (2.1.88 match: isHumanTurn, 0.802)
 /**
  * 找最后一条真实用户输入（非 meta、非工具结果）的 uuid。
  */

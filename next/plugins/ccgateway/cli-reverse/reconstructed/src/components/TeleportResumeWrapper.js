@@ -31,7 +31,7 @@ init_react_production();
 init_react_production();
 //@ chunk-0bntfk7p.js:1971-1975 placement
 init_react_production();
-//@ chunk-0bntfk7p.js:6828-8727 facade-exports = TeleportResumeWrapper (0.705)
+//@ chunk-0bntfk7p.js:6828-8727 facade-exports (2.1.88 match: TeleportResumeWrapper, 0.705)
 /**
  * teleport 恢复：显示进度，中断键取消（tengu_teleport_cancelled），完成后回调恢复的会话。
  */

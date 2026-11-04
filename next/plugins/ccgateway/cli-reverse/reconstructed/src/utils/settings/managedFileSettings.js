@@ -366,7 +366,7 @@ function describeManagedOverrides(written, restrictions) {
       }));
   });
 }
-//@ chunk-dcmhvw5a.js:461419-461466 placement = execTmux (1)
+//@ chunk-dcmhvw5a.js:461419-461466 placement (2.1.88 match: execTmux, 1)
 function shouldReadWindowsManagedSettingsFromWsl(asksOrg) {
   return getPlatform() === "wsl" && (!asksOrg || isWslEnvironment());
 }
@@ -469,7 +469,7 @@ function mergeManagedSettingsLayer(accumulator, tier, issues) {
   if (hasEffectivePolicyContent(settings) && !tier.errors.some((error) => error.onlySubstitutes))
     accumulator.authored = true;
 }
-//@ chunk-dcmhvw5a.js:462846-462901 placement = execTmux (1)
+//@ chunk-dcmhvw5a.js:462846-462901 placement (2.1.88 match: execTmux, 1)
 function managedFileSettingsDirs(asksOrg) {
   return getPlatform() === "wsl" && asksOrg
     ? [WSL_MANAGED_SETTINGS_DIR, getManagedFilePath()]
@@ -661,7 +661,7 @@ function handleFileSystemError(error, path) {
       level: "error",
     });
 }
-//@ chunk-dcmhvw5a.js:465614-465845 placement = parseSettingsFile (0.261)
+//@ chunk-dcmhvw5a.js:465614-465845 placement (2.1.88 match: parseSettingsFile, 0.261)
 /**
  * 带缓存地解析一个设置文件（pinned 内容按 \0pinned 另存一份），返回 settings 的深拷贝与错误列表。
  */

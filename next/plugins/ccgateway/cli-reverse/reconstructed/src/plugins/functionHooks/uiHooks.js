@@ -30,7 +30,7 @@ function isOtherPluginsHolder(site, origin) {
   let holder = site.holderNow();
   return holder !== undefined && holder !== origin.name;
 }
-//@ chunk-e6aww6q8.js:78362-78471 placement = _temp0 (0.773)
+//@ chunk-e6aww6q8.js:78362-78471 placement (2.1.88 match: _temp0, 0.773)
 var isForeignFocusTarget = (site, input) =>
   input.origin.kind === "plugin" &&
   site.owner !== undefined &&
@@ -47,7 +47,7 @@ deferInit("chunk-e6aww6q8.js:78471", () => {
     (registry) => registry().clear(),
   );
 });
-//@ chunk-e6aww6q8.js:78520-78631 placement = edges (0.505)
+//@ chunk-e6aww6q8.js:78520-78631 placement (2.1.88 match: edges, 0.505)
 function nearestScrollTop(site) {
   let { offset, bodyRows, top, bottom } = site;
   let clamped = bottom > offset + bodyRows ? Math.max(0, Math.min(top, bottom - bodyRows)) : offset;
@@ -68,7 +68,7 @@ function scrollTopForBlock(site, block) {
       return nearestScrollTop(site);
   }
 }
-//@ chunk-e6aww6q8.js:78827-78896 placement = _temp0 (0.773)
+//@ chunk-e6aww6q8.js:78827-78896 placement (2.1.88 match: _temp0, 0.773)
 /**
  * 不是本插件的站点
  */

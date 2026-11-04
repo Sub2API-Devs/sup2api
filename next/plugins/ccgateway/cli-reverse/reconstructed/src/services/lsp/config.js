@@ -14,7 +14,7 @@ import { getPluginLspServers } from "../../utils/plugins/lspPluginIntegration.js
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-e6aww6q8.js:4625529-4626294 fingerprint = getAllLspServers (0.963)
+//@ chunk-e6aww6q8.js:4625529-4626294 fingerprint (2.1.88 match: getAllLspServers, 0.963)
 /**
  * 收集所有已启用插件声明的 LSP 服务器（loadAllPlugins → getPluginLspServers），合并成 {名字: 配置}；任一插件加载失败时 loadFailed=true。316 中 LSP 配置只来自插件。
  */

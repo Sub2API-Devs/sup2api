@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-s61vbvea.js:377065-377152 fingerprint = isLocalShellTask (1)
+//@ chunk-s61vbvea.js:377065-377152 fingerprint (2.1.88 match: isLocalShellTask, 1)
 /**
  * 是否是 local_bash 任务。
  */

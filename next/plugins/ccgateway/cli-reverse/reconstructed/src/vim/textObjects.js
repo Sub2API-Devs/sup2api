@@ -11,7 +11,7 @@
 import { truncateToWidthNoEllipsis } from "../utils/truncate.js";
 import { isWordChar, isWhitespaceChar } from "../utils/Cursor.js";
 
-//@ chunk-530hfzwb.js:1194-1381 fingerprint = PAIRS (1)
+//@ chunk-530hfzwb.js:1194-1381 fingerprint (2.1.88 match: PAIRS, 1)
 /**
  * 文本对象的括号/引号配对表：( ) b → ()；[ ] → []；{ } B → {}；< > → <>；" ' ` 成对引号。
  */

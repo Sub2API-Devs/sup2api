@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-1nk4j4sn.js:15461-15636 fingerprint = tagMessagesWithToolUseID (1)
+//@ chunk-1nk4j4sn.js:15461-15636 fingerprint (2.1.88 match: tagMessagesWithToolUseID, 1)
 /**
  * 取消息关联的 tool_use_id：内容里第一个 tool_result 的 tool_use_id，否则 sourceToolUseID。
  */

@@ -1105,7 +1105,7 @@ function armPrecomputedCompact(input) {
   precompute.put(agentKey, entry);
   return true;
 }
-//@ chunk-e6aww6q8.js:2468415-2468948 placement = manuallyExtractSessionMemory (0.307)
+//@ chunk-e6aww6q8.js:2468415-2468948 placement (2.1.88 match: manuallyExtractSessionMemory, 0.307)
 /**
  * 手动触发会话记忆/预计算压缩：等待 precompute 结果就绪，返回压缩前 token 数，未就绪抛 PrecomputedCompactNotReadyError。
  */

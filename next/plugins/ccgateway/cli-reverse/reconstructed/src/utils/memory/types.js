@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:111514-111569 fingerprint = MEMORY_TYPE_VALUES (1)
+//@ chunk-e6aww6q8.js:111514-111569 fingerprint (2.1.88 match: MEMORY_TYPE_VALUES, 1)
 /**
  * 指令文件类型：User、Project、Local、Managed、AutoMem。
  */

@@ -19,7 +19,7 @@ import { toolByAlias } from "../services/tools/batchTools.js";
 import { resolveClaudePath } from "./deepLink/registerProtocol.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7dqf31r1.js:4635-4729 fingerprint = hasEmbeddedSearchTools (0.811)
+//@ chunk-7dqf31r1.js:4635-4729 fingerprint (2.1.88 match: hasEmbeddedSearchTools, 0.811)
 /**
  * 是否使用内嵌的搜索工具二进制（ripgrep 等），按入口（sdk-ts/sdk-py/sdk-cli 等）判断。
  */
@@ -67,7 +67,7 @@ function getShadowedSearchToolNames() {
   }
   return alias ?? shadowedNames;
 }
-//@ chunk-fb29jded.js:3379-3474 fingerprint = embeddedSearchToolsBinaryPath (0.676)
+//@ chunk-fb29jded.js:3379-3474 fingerprint (2.1.88 match: embeddedSearchToolsBinaryPath, 0.676)
 async function embeddedSearchToolsBinaryPath() {
   let claudePath = resolveClaudePath();
   try {

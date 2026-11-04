@@ -25,7 +25,7 @@ var MACOS_OPTION_CHAR_TO_KEY = {
 function isMacOptionChar(key) {
   return Object.hasOwn(MACOS_OPTION_CHAR_TO_KEY, key);
 }
-//@ chunk-x1mwqya5.js:22493-22606 fingerprint = getShortcutDisplay (0.741)
+//@ chunk-x1mwqya5.js:22493-22606 fingerprint (2.1.88 match: getShortcutDisplay, 0.741)
 /**
  * 发 tengu_keybinding_fallback_used：显示快捷键时找不到绑定、用了组件给的回退文字。
  */
@@ -206,7 +206,7 @@ deferInit("chunk-v6kts6xw.js:1399", () => {
     super: false,
   };
 });
-//@ chunk-v6kts6xw.js:2277-2419 affinity = keystrokeToString (0.803)
+//@ chunk-v6kts6xw.js:2277-2419 affinity (2.1.88 match: keystrokeToString, 0.803)
 function getModifierNames(ks) {
   let parts = [];
   if (ks.ctrl) parts.push("ctrl");

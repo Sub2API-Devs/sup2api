@@ -19,7 +19,7 @@ function windowsToWslPath(windowsPath) {
   if (!match) return null;
   return `/mnt/${match[1].toLowerCase()}${match[2].replaceAll("\\", "/")}`;
 }
-//@ chunk-j0y6ypnr.js:357-846 fingerprint = WindowsToWSLConverter (0.627)
+//@ chunk-j0y6ypnr.js:357-846 fingerprint (2.1.88 match: WindowsToWSLConverter, 0.627)
 class WindowsToWSLConverter {
   wslDistroName;
   constructor(wslDistroName) {

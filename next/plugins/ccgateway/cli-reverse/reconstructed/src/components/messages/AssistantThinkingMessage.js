@@ -19,7 +19,7 @@ import {
 import { THEREFORE } from "../../constants/figures.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 
-//@ chunk-ah34pb7m.js:63074-64176 fingerprint = AssistantThinkingMessage (0.517)
+//@ chunk-ah34pb7m.js:63074-64176 fingerprint (2.1.88 match: AssistantThinkingMessage, 0.517)
 /**
  * 思考块：非 verbose/transcript 时显示 "✻ Thinking…"（可 ctrl+o 展开），否则显示全文。
  */

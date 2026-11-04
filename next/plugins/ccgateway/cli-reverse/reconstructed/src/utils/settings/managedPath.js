@@ -141,7 +141,7 @@ deferInit("chunk-dcmhvw5a.js:428488", () => {
 function getManagedFilePath() {
   return managedPathCache.getManagedFilePath();
 }
-//@ chunk-dcmhvw5a.js:428547-428754 fingerprint = getManagedFilePath (0.801)
+//@ chunk-dcmhvw5a.js:428547-428754 fingerprint (2.1.88 match: getManagedFilePath, 0.801)
 /**
  * 托管设置根目录（按平台固定路径，见 getManagedSettingsFilePath）。
  */

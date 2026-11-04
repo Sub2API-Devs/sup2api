@@ -20,7 +20,7 @@ import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-18hwfzwa.js:1127615-1127663 affinity
 var HTTPS_CODE_CLAUDE_COM_DOCS_EN_COSTS = "https://code.claude.com/docs/en/costs";
-//@ chunk-18hwfzwa.js:1127663-1128195 fingerprint = CostThresholdDialog (0.635)
+//@ chunk-18hwfzwa.js:1127663-1128195 fingerprint (2.1.88 match: CostThresholdDialog, 0.635)
 function CostThresholdDialog(props) {
   let $ = useMemoCache(7);
   let { onDone } = props;

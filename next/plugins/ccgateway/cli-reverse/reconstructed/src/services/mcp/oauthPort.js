@@ -44,14 +44,14 @@ function defaultPortPolicy() {
     fallback: FALLBACK_OAUTH_PORT,
   };
 }
-//@ chunk-3tvkk9nn.js:470-527 fingerprint = buildRedirectUri (1)
+//@ chunk-3tvkk9nn.js:470-527 fingerprint (2.1.88 match: buildRedirectUri, 1)
 /**
  * buildRedirectUri：http://localhost:<port>/callback（默认端口 3118）。
  */
 function buildRedirectUri(port = FALLBACK_OAUTH_PORT) {
   return `http://localhost:${port}/callback`;
 }
-//@ chunk-3tvkk9nn.js:527-609 fingerprint = getMcpOAuthCallbackPort (1)
+//@ chunk-3tvkk9nn.js:527-609 fingerprint (2.1.88 match: getMcpOAuthCallbackPort, 1)
 /**
  * getMcpOAuthCallbackPort：读 MCP_OAUTH_CALLBACK_PORT（≤65535）。
  */
@@ -59,7 +59,7 @@ function getMcpOAuthCallbackPort() {
   let port = env.MCP_OAUTH_CALLBACK_PORT;
   return port !== undefined && port <= 65535 ? port : undefined;
 }
-//@ chunk-3tvkk9nn.js:609-952 fingerprint = findAvailablePort (0.667)
+//@ chunk-3tvkk9nn.js:609-952 fingerprint (2.1.88 match: findAvailablePort, 0.667)
 /**
  * findAvailablePort：OAuth 回调端口选择：环境变量 > 指定端口 > 在随机区间（Windows 39152–49151，其他 49152–65535）最多试 100 次 > 3118 > 由中继分配，都不行抛错。
  */

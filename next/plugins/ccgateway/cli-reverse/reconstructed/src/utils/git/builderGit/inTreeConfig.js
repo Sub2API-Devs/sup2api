@@ -559,7 +559,7 @@ var KNOWN_SAFE_EXTENSIONS; // deferred: has load-time effects after a deferred s
 deferInit("chunk-s61vbvea.js:273767", () => {
   KNOWN_SAFE_EXTENSIONS = new Set(["hookspath", "untrackedcache", "longpaths"]);
 });
-//@ chunk-s61vbvea.js:273826-273947 placement = isEnvDefinedFalsy (1)
+//@ chunk-s61vbvea.js:273826-273947 placement (2.1.88 match: isEnvDefinedFalsy, 1)
 function isEnvDefinedFalsy(envVar) {
   let lower = envVar.trim().toLowerCase();
   return !(["false", "no", "off", ""].includes(lower) || /^[-+]?(0x)?0+[kmg]?$/.test(lower));

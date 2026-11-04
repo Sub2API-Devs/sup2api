@@ -60,7 +60,7 @@ import { interpretWithAndGatedRetry } from "../../tools/BashTool/commandSemantic
 import { interpretPowerShellResult } from "../../tools/PowerShellTool/commandTelemetry.js";
 import { UNLIMITED_RATE_LIMITER } from "../taskLoopRegistry.js";
 
-//@ chunk-fym4r1th.js:50436-50521 fingerprint = looksLikePrompt (1)
+//@ chunk-fym4r1th.js:50436-50521 fingerprint (2.1.88 match: looksLikePrompt, 1)
 /**
  * 输出最后一行是否像交互式提示（匹配一组提示正则）。
  */
@@ -88,7 +88,7 @@ var INTERACTIVE_PROMPT_HINT =
 function shellAwaitingInputText(description) {
   return `${BACKGROUND_COMMAND_PREFIX}"${description}" appears to be waiting for interactive input`;
 }
-//@ chunk-e6aww6q8.js:4745578-4745856 fingerprint = enqueueShellNotification (0.511)
+//@ chunk-e6aww6q8.js:4745578-4745856 fingerprint (2.1.88 match: enqueueShellNotification, 0.511)
 /**
  * Monitor 任务结束文案：无输出结束 / stream ended / script failed / stopped。
  */
@@ -105,7 +105,7 @@ function formatMonitorTerminalSummary(description, status, exitCode, producedOut
       return `Monitor "${description}" stopped`;
   }
 }
-//@ chunk-e6aww6q8.js:4746265-4746602 fingerprint = startStallWatchdog (0.339)
+//@ chunk-e6aww6q8.js:4746265-4746602 fingerprint (2.1.88 match: startStallWatchdog, 0.339)
 /**
  * 为后台 shell 启动卡住检测：输出疑似停在交互式提示时，发一条带最后输出的 task-notification 提醒模型（monitor 不检测）。返回取消函数。
  */
@@ -365,7 +365,7 @@ async function backgroundShellCommand(request, context) {
     settled,
   };
 }
-//@ chunk-e6aww6q8.js:4751839-4752702 fingerprint = spawnShellTask (0.601)
+//@ chunk-e6aww6q8.js:4751839-4752702 fingerprint (2.1.88 match: spawnShellTask, 0.601)
 /**
  * 注册一个已在运行的后台 shell 任务（被收养的命令，isAdopted），命令结束时写结果/终止摘要并发通知、回收输出。
  */
@@ -432,7 +432,7 @@ function spawnShellTask(input, taskRegistry) {
     evictTaskOutput(taskId);
   });
 }
-//@ chunk-e6aww6q8.js:4752702-4753070 fingerprint = registerForeground (0.726)
+//@ chunk-e6aww6q8.js:4752702-4753070 fingerprint (2.1.88 match: registerForeground, 0.726)
 /**
  * 注册前台 shell 任务（isBackgrounded=false），返回 taskId（取自 shellCommand.taskOutput）。
  */
@@ -457,7 +457,7 @@ function registerForeground(input, taskRegistry, toolUseId) {
   taskRegistry.register(taskState);
   return taskId;
 }
-//@ chunk-e6aww6q8.js:4753070-4753275 callgraph-fingerprint = backgroundAll (0.451)
+//@ chunk-e6aww6q8.js:4753070-4753275 callgraph-fingerprint (2.1.88 match: backgroundAll, 0.451)
 /**
  * 把指定前台 shell 任务转后台（cause 为 user 或 deliver_message）。
  */
@@ -474,7 +474,7 @@ function backgroundShellTask(taskId, taskRegistry, options) {
     options?.backgroundedToDeliverMessage ? "deliver_message" : "user",
   );
 }
-//@ chunk-e6aww6q8.js:4753275-4753405 fingerprint = hasForegroundTasks (0.667)
+//@ chunk-e6aww6q8.js:4753275-4753405 fingerprint (2.1.88 match: hasForegroundTasks, 0.667)
 /**
  * 是否是前台任务：前台 shell（有 shellCommand）或前台子代理（非 main-session、非 fork worker）。
  */
@@ -552,7 +552,7 @@ function backgroundTaskByToolUseId(toolUseId, taskRegistry) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4754181-4754653 callgraph-witnessed = backgroundExistingForegroundTask (0.249)
+//@ chunk-e6aww6q8.js:4754181-4754653 callgraph-witnessed (2.1.88 match: backgroundExistingForegroundTask, 0.249)
 /**
  * 把已有前台 shell 转为后台：让 shellCommand 进入后台模式，置 isBackgrounded，启动卡住检测与保活，挂上结束处理 backgroundTask。
  */
@@ -634,7 +634,7 @@ async function readShellOutputSoFar(taskId, maxBytes) {
     return "";
   }
 }
-//@ chunk-e6aww6q8.js:4754919-4755252 callgraph-fingerprint = markTaskNotified (0.159)
+//@ chunk-e6aww6q8.js:4754919-4755252 callgraph-fingerprint (2.1.88 match: markTaskNotified, 0.159)
 /**
  * 标记 shell 任务已通知并写入最终状态（按退出结果算 completed/failed），记计数；返回是否由本次写入。
  */
@@ -659,7 +659,7 @@ function markTaskNotified(taskId, result, taskRegistry) {
   else if (status === "failed") logFeatureBad("task_local_shell", "task_local_shell_failed");
   return status !== undefined;
 }
-//@ chunk-e6aww6q8.js:4755252-4755400 callgraph-witnessed = unregisterForeground (0.269)
+//@ chunk-e6aww6q8.js:4755252-4755400 callgraph-witnessed (2.1.88 match: unregisterForeground, 0.269)
 /**
  * 前台 shell 结束时注销：仍在前台且未通知的任务直接移除并发终止事件。
  */
@@ -672,7 +672,7 @@ function unregisterForeground(taskId, status, taskRegistry) {
     summary: task.description,
   });
 }
-//@ chunk-e6aww6q8.js:4755400-4755434 layout = resolveProvider (0.84)
+//@ chunk-e6aww6q8.js:4755400-4755434 layout (2.1.88 match: resolveProvider, 0.84)
 /**
  * 按 shellType 选退出码/输出解释函数（bash/powershell 各一）；切分误归，应在 Bash/PowerShell 工具的 commandSemantics。
  */
@@ -680,7 +680,7 @@ var COMMAND_RESULT_INTERPRETERS = {
   bash: interpretWithAndGatedRetry,
   powershell: interpretPowerShellResult,
 };
-//@ chunk-e6aww6q8.js:4755434-4755494 layout = requestTeammateShutdown (1)
+//@ chunk-e6aww6q8.js:4755434-4755494 layout (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 是否是仍有活动（运行中或有存活子工作）的本地代理。
  */
@@ -731,7 +731,7 @@ function shellStatusForDisplay(result, shellCommand) {
   let { status } = getShellExitStatus(result, shellCommand);
   return status === "killed" ? "stopped" : status;
 }
-//@ chunk-e6aww6q8.js:4755933-4757064 callgraph-fingerprint = backgroundTask (0.234)
+//@ chunk-e6aww6q8.js:4755933-4757064 callgraph-fingerprint (2.1.88 match: backgroundTask, 0.234)
 /**
  * 后台 shell 结束处理：停卡住检测、flush 输出、（需要时）读输出尾部，写最终状态与终止摘要，生成 task-notification（monitor 不发），释放保活并回收输出。
  */
@@ -832,7 +832,7 @@ function backgroundTask({
     };
   });
 }
-//@ chunk-e6aww6q8.js:4757064-4757144 fingerprint = flushAndCleanup (1)
+//@ chunk-e6aww6q8.js:4757064-4757144 fingerprint (2.1.88 match: flushAndCleanup, 1)
 /**
  * flush 任务输出并清理 shellCommand，异常只记录。
  */
@@ -851,7 +851,7 @@ async function flushAndCleanup(shellCommand) {
 function getAtExitBehavior(taskRegistry) {
   return taskRegistry === UNLIMITED_RATE_LIMITER ? "leave" : "kill";
 }
-//@ chunk-kxyd0g16.js:17376-17488 fingerprint = LocalShellTask (0.794)
+//@ chunk-kxyd0g16.js:17376-17488 fingerprint (2.1.88 match: LocalShellTask, 0.794)
 /**
  * LocalShellTask 任务实现：kill → killTask（来源为 client 时记 by=client）。
  */

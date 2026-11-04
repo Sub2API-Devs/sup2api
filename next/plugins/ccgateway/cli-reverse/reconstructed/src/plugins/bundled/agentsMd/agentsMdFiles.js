@@ -79,7 +79,7 @@ function excludeDirs(files, excluded) {
  * 把若干指令文件按格式追加到已有段落之后。
  */
 var appendInstructionParts = (context, files) => [...(context ?? []), ...files.map(formatInstructionFile)];
-//@ chunk-16jhn3ak.js:1179-1229 placement = isMcpServerFromProjectOrLocalSettings (1)
+//@ chunk-16jhn3ak.js:1179-1229 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 var isMcpServerFromProjectOrLocalSettings = (config) => config.kind === "project" || config.kind === "local";
 //@ chunk-16jhn3ak.js:1229-1346 placement
 /**

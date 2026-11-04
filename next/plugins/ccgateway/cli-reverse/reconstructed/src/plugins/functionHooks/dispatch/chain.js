@@ -477,7 +477,7 @@ deferInit("chunk-4121qate.js:81127", () => {
     remainingMs: Number.POSITIVE_INFINITY,
   });
 });
-//@ chunk-4121qate.js:81193-81526 placement = CONSOLE_STDERR_METHODS (0.333)
+//@ chunk-4121qate.js:81193-81526 placement (2.1.88 match: CONSOLE_STDERR_METHODS, 0.333)
 function freezeHookCall(options) {
   let { call, signal, event, origin } = options;
   let fn = nullPrototypeFunction(call);
@@ -556,7 +556,7 @@ var createBottomStep =
       });
     }
   };
-//@ chunk-4121qate.js:82126-82327 placement = createCapacityWake (0.799)
+//@ chunk-4121qate.js:82126-82327 placement (2.1.88 match: createCapacityWake, 0.799)
 /**
  * 把源 AbortSignal 的中止转发到目标 controller，返回解除函数。
  */
@@ -706,7 +706,7 @@ var createHopHandler = (handler, members) => ({
       cutAt,
     }),
 });
-//@ chunk-4121qate.js:83723-83906 placement = generateUniqueTeammateName (0.611)
+//@ chunk-4121qate.js:83723-83906 placement (2.1.88 match: generateUniqueTeammateName, 0.611)
 var groupByHop = (handlers) =>
   handlers.reduce((acc, handler) => {
     let last = acc.at(-1);

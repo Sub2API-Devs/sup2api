@@ -131,7 +131,7 @@ function resolveMcpAccountIdentity() {
     orgUuid: organizationUuid,
   };
 }
-//@ chunk-e6aww6q8.js:2304486-2304529 placement = getResolvedDir (1)
+//@ chunk-e6aww6q8.js:2304486-2304529 placement (2.1.88 match: getResolvedDir, 1)
 /**
  * 目标是否未解析（kind!=="resolved"）。
  */

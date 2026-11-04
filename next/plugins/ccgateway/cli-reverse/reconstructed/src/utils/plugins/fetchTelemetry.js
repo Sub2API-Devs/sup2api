@@ -15,7 +15,7 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { normalizeGitRemoteUrl } from "../git.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v00h76b6.js:333-538 fingerprint = KNOWN_PUBLIC_HOSTS (0.947)
+//@ chunk-v00h76b6.js:333-538 fingerprint (2.1.88 match: KNOWN_PUBLIC_HOSTS, 0.947)
 var KNOWN_PUBLIC_HOSTS; // deferred: uses GITHUB_HOST (../git/githubUrl.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-v00h76b6.js:333", () => {
   KNOWN_PUBLIC_HOSTS = [
@@ -45,11 +45,11 @@ function classifyFetchHost(urlOrSpec) {
   let normalized = host.toLowerCase();
   return KNOWN_PUBLIC_HOSTS.find((host) => host === normalized) ?? "other";
 }
-//@ chunk-v00h76b6.js:710-762 layout = isOfficialRepo (1)
+//@ chunk-v00h76b6.js:710-762 layout (2.1.88 match: isOfficialRepo, 1)
 function isOfficialRepo_2(urlOrSpec) {
   return urlOrSpec.includes(`anthropics/${CLAUDE_PLUGINS_OFFICIAL}`);
 }
-//@ chunk-v00h76b6.js:762-1157 fingerprint = logPluginFetch (0.448)
+//@ chunk-v00h76b6.js:762-1157 fingerprint (2.1.88 match: logPluginFetch, 0.448)
 /**
  * 记录插件远程获取遥测 tengu_plugin_remote_fetch（来源类型、主机（公共主机才记明文）、结果、耗时、错误类别）。
  */
@@ -75,7 +75,7 @@ function logPluginFetch(source, urlOrSpec, outcome, durationMs, errorKind, isDir
     }),
   });
 }
-//@ chunk-v00h76b6.js:1157-1783 fingerprint = classifyFetchError (1)
+//@ chunk-v00h76b6.js:1157-1783 fingerprint (2.1.88 match: classifyFetchError, 1)
 /**
  * 把获取错误归类：dns_or_refused、timeout、conflict、auth、not_found、tls、invalid_schema、other 等。
  */
@@ -91,7 +91,7 @@ function classifyFetchError(error) {
   if (/Invalid response format|Invalid marketplace schema/i.test(msg)) return "invalid_schema";
   return "other";
 }
-//@ chunk-e6aww6q8.js:770392-770635 fingerprint = isOfficialRepo (1)
+//@ chunk-e6aww6q8.js:770392-770635 fingerprint (2.1.88 match: isOfficialRepo, 1)
 function isOfficialRepo(urlOrSpec) {
   let [, ...segments] = (normalizeGitRemoteUrl(urlOrSpec.replace(/\/+$/, "")) ?? "")
     .split("/")
@@ -101,7 +101,7 @@ function isOfficialRepo(urlOrSpec) {
   let isBareRepo = segments.length === 1;
   return isOwnerRepo ? `${segments[0]}/${segments[1]}` : isBareRepo ? `anthropics/${segments[0]}` : null;
 }
-//@ chunk-1kaj6e83.js:12100-12189 fingerprint = extractHost (0.664)
+//@ chunk-1kaj6e83.js:12100-12189 fingerprint (2.1.88 match: extractHost, 0.664)
 /**
  * URL 取 协议//主机。名字归属可疑（被 MCP auth 引用）。
  */

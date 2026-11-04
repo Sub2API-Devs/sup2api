@@ -12,7 +12,7 @@ import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
 
-//@ chunk-sfy7bm1n.js:7290-7807 fingerprint = CROSS_PLATFORM_CODE_EXEC (0.569)
+//@ chunk-sfy7bm1n.js:7290-7807 fingerprint (2.1.88 match: CROSS_PLATFORM_CODE_EXEC, 0.569)
 /**
  * 进入 auto 模式时会被剥离的“等价于任意代码执行”的 allow 规则前缀：解释器/包运行器（python、node、deno、npx、bun run…）、shell、ssh、eval/exec/env/xargs/sudo；网络/云 CLI（curl、wget、kubectl、aws、gcloud、gsutil）只在子命令落入 DANGEROUS_SUBCOMMANDS 或参数含 $/` 时算危险。
  */
@@ -164,7 +164,7 @@ function isDownloadPipedToShell(command) {
   }
   return false;
 }
-//@ chunk-2a8yx6fc.js:9604-9993 fingerprint = DANGEROUS_BASH_PATTERNS (0.327)
+//@ chunk-2a8yx6fc.js:9604-9993 fingerprint (2.1.88 match: DANGEROUS_BASH_PATTERNS, 0.327)
 /**
  * 云/集群 CLI 的破坏性子命令：kubectl/gcloud/az delete、aws s3 rm|rb 或 delete-*\/terminate-*、gsutil rm、terraform destroy、helm uninstall/delete。
  */

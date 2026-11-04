@@ -148,7 +148,7 @@ function isArtifactBatchWrite(input) {
     typeof input === "object" && input !== null && input.action === "write_db" && input.db_op === DB_BATCH_OP
   );
 }
-//@ chunk-qxvqcab6.js:8550-8641 placement = getDenyRuleForAgent (1)
+//@ chunk-qxvqcab6.js:8550-8641 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function formatRuleContentForDisplay(rule) {
   return markDisplayTokens(
     scrubArtifactEnvelopeTags(

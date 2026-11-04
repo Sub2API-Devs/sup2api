@@ -18,7 +18,7 @@ import { recordPluginUsage } from "../../utils/telemetry/pluginTelemetry.js";
 import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logEvent } from "../analytics/index.js";
 
-//@ chunk-e6aww6q8.js:4637897-4638030 affinity = severityToNumber (1)
+//@ chunk-e6aww6q8.js:4637897-4638030 affinity (2.1.88 match: severityToNumber, 1)
 /**
  * LSP 协议的数字严重级别 1..4 → "Error"/"Warning"/"Info"/"Hint"（未知按 Error）。
  */
@@ -36,7 +36,7 @@ function lspSeverityToName(severity) {
       return "Error";
   }
 }
-//@ chunk-e6aww6q8.js:4638030-4638566 fingerprint = formatDiagnosticsForAttachment (1)
+//@ chunk-e6aww6q8.js:4638030-4638566 fingerprint (2.1.88 match: formatDiagnosticsForAttachment, 1)
 /**
  * 把 publishDiagnostics 参数转成附件用的诊断文件：file:// URI 转本地路径（失败保留原 URI），严重级别转名字，code 转字符串。
  */
@@ -77,7 +77,7 @@ function formatDiagnosticsForAttachment(params) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:4638566-4641689 fingerprint = registerLSPNotificationHandlers (0.711)
+//@ chunk-e6aww6q8.js:4638566-4641689 fingerprint (2.1.88 match: registerLSPNotificationHandlers, 0.711)
 /**
  * 为每个 LSP 服务器注册 textDocument/publishDiagnostics 处理器（config.diagnostics===false 的跳过并上报 tengu_lsp_diagnostics_disabled）：丢弃版本早于当前文档版本的陈旧诊断，格式化后登记到会话的诊断登记表，等下一轮由附件系统作为 lsp 诊断注入对话；连续失败 3 次告警。返回注册统计。
  */

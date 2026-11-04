@@ -26,13 +26,13 @@ import {
 import { plural, sanitizeSessionTitle } from "../utils/stringUtils.js";
 import { getRemoteSessionUrl } from "../constants/product.js";
 
-//@ chunk-wbbfk060.js:13677-13732 fingerprint = QR_OPTIONS (1)
+//@ chunk-wbbfk060.js:13677-13732 fingerprint (2.1.88 match: QR_OPTIONS, 1)
 var QR_OPTIONS = {
   type: "utf8",
   errorCorrectionLevel: "L",
   small: true,
 };
-//@ chunk-wbbfk060.js:13732-19273 fingerprint = createBridgeLogger (0.801)
+//@ chunk-wbbfk060.js:13732-19273 fingerprint (2.1.88 match: createBridgeLogger, 0.801)
 /**
  * 创建终端日志/状态显示器：printBanner 打印连接地址与 QR，logSession*\/logStatus 输出事件，updateIdleStatus/updateReconnectingStatus/updateSessionStatus 重绘状态行（ANSI 回退清除），支持多会话列表与 spawn 模式显示。
  */

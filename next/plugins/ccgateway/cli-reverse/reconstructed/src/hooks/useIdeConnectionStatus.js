@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:3247040-3247357 fingerprint = useIdeConnectionStatus (1)
+//@ chunk-e6aww6q8.js:3247040-3247357 fingerprint (2.1.88 match: useIdeConnectionStatus, 1)
 function useIdeConnectionStatus(mcpClients) {
   let ideClient = mcpClients.find((client) => client.name === "ide");
   if (!ideClient)

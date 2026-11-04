@@ -162,7 +162,7 @@ var filtered; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (../managedEnvConstan
 deferInit("chunk-y1dxgk9v.js:2328", () => {
   filtered = MODEL_SELECTION_ENV_VARS.filter((envName) => /^ANTHROPIC_DEFAULT_[A-Z]+_MODEL$/.test(envName));
 });
-//@ chunk-y1dxgk9v.js:2394-2561 placement = applyModelOverrides (1)
+//@ chunk-y1dxgk9v.js:2394-2561 placement (2.1.88 match: applyModelOverrides, 1)
 /**
  * 模型是否出现在任一设置源的 modelOverrides 值或 ANTHROPIC_DEFAULT_*_MODEL 环境设置中。
  */
@@ -220,7 +220,7 @@ function hasNonPolicyModelAllowlist() {
     })
   );
 }
-//@ chunk-y1dxgk9v.js:3005-3094 placement = getEnabledSettingSources (1)
+//@ chunk-y1dxgk9v.js:3005-3094 placement (2.1.88 match: getEnabledSettingSources, 1)
 function isSetOnlyByEditableSources(envName) {
   return (
     projectLocalSources().some((sourceName) => isModelInSourceEnv(sourceName, envName)) &&
@@ -254,7 +254,7 @@ function isProjectOrDefaultedAgentSource(agent) {
 function projectLocalSources() {
   return getEnabledSettingSources().filter(isApiKeyHelperFromProjectOrLocalSettings);
 }
-//@ chunk-y1dxgk9v.js:3386-3457 placement = isApiKeyHelperFromProjectOrLocalSettings (0.831)
+//@ chunk-y1dxgk9v.js:3386-3457 placement (2.1.88 match: isApiKeyHelperFromProjectOrLocalSettings, 0.831)
 function isApiKeyHelperFromProjectOrLocalSettings(source) {
   return (
     source === "localSettings" || (source === "projectSettings" && !projectSettingsAliasesUserSettings())

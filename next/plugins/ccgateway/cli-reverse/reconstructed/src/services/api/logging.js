@@ -94,7 +94,7 @@ import { writeOtelResponseBody } from "../../utils/telemetry/otelRawBodies.js";
 import { isBetaTracingEnabled } from "../../utils/telemetry/betaSessionTracing.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1559771-1560221 fingerprint = GATEWAY_FINGERPRINTS (0.715)
+//@ chunk-e6aww6q8.js:1559771-1560221 fingerprint (2.1.88 match: GATEWAY_FINGERPRINTS, 0.715)
 /**
  * 已知 LLM 网关指纹：litellm、helicone、portkey、cloudflare-ai-gateway、kong、braintrust、bifrost（按响应头前缀）、databricks（按 host 后缀）。
  */
@@ -184,7 +184,7 @@ function entrypointForTelemetry(messageClientPlatform) {
   let found = KNOWN_ENTRYPOINTS.find((entrypoint) => entrypoint === messageClientPlatform);
   return fromEnumOpt(found) ?? lit_2("other");
 }
-//@ chunk-e6aww6q8.js:2540185-2540288 placement = _temp9 (0.529)
+//@ chunk-e6aww6q8.js:2540185-2540288 placement (2.1.88 match: _temp9, 0.529)
 function emptyUsageCounters() {
   return {
     inputTokens: 0,
@@ -387,7 +387,7 @@ function apiErrorFields({
 function getCustomApiBaseUrl() {
   return isDiskless() ? undefined : process.env.ANTHROPIC_BASE_URL;
 }
-//@ chunk-e6aww6q8.js:2543033-2543272 fingerprint = getAnthropicEnvMetadata (0.926)
+//@ chunk-e6aww6q8.js:2543033-2543272 fingerprint (2.1.88 match: getAnthropicEnvMetadata, 0.926)
 /**
  * 遥测用环境元数据：baseUrl、ANTHROPIC_MODEL、ANTHROPIC_SMALL_FAST_MODEL。
  */
@@ -405,7 +405,7 @@ function getAnthropicEnvMetadata() {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2543272-2544363 callgraph-witnessed = getBuildAgeMinutes (0.151)
+//@ chunk-e6aww6q8.js:2543272-2544363 callgraph-witnessed (2.1.88 match: getBuildAgeMinutes, 0.151)
 /**
  * 距构建时间（BUILD_TIME 2026-10-30T23:28:13Z）的分钟数。
  */
@@ -440,7 +440,7 @@ function getBuildAgeMinutes() {
   if (isNaN(buildTime)) return;
   return Math.floor((Date.now() - buildTime) / 60000);
 }
-//@ chunk-e6aww6q8.js:2544363-2545020 fingerprint = logAPIQuery (0.921)
+//@ chunk-e6aww6q8.js:2544363-2545020 fingerprint (2.1.88 match: logAPIQuery, 0.921)
 /**
  * 发请求前记 tengu_api_query：模型、消息数、temperature、betas、权限模式、querySource、thinking 类型、effort、fast mode、前一个 request id。
  */
@@ -489,7 +489,7 @@ function logAPIQuery({
     ...getAnthropicEnvMetadata(),
   });
 }
-//@ chunk-e6aww6q8.js:2545020-2549172 fingerprint = logAPIError (0.492)
+//@ chunk-e6aww6q8.js:2545020-2549172 fingerprint (2.1.88 match: logAPIError, 0.492)
 /**
  * 记 API 失败：tengu_api_error（错误类型、状态、耗时、重试次数、request id、是否回退非流式、网关等），并做相关诊断。
  */
@@ -1079,7 +1079,7 @@ deferInit("chunk-e6aww6q8.js:2553413", () => {
   loggedToolSchemaKeys = new HostScoped(() => new Set());
   MAX_LOGGED_TOOL_SCHEMA_KEYS = 512;
 });
-//@ chunk-e6aww6q8.js:2553448-2557974 fingerprint = logAPISuccess (0.505)
+//@ chunk-e6aww6q8.js:2553448-2557974 fingerprint (2.1.88 match: logAPISuccess, 0.505)
 /**
  * 记 tengu_api_success：模型、usage、耗时（含重试）、TTFT、首内容时间、stop_reason、成本、是否回退非流式、网关等；必要时记工具 schema 大小。
  */
@@ -1329,7 +1329,7 @@ function logAPISuccess({
   }
   setLastApiCompletionTimestamp(now);
 }
-//@ chunk-e6aww6q8.js:2557974-2562306 fingerprint = logAPISuccessAndDuration (0.59)
+//@ chunk-e6aww6q8.js:2557974-2562306 fingerprint (2.1.88 match: logAPISuccessAndDuration, 0.59)
 /**
  * 响应完成后汇总：统计输出文本/思考/工具输入长度，识别网关，累加 API 时长，调用 logAPISuccess。
  */

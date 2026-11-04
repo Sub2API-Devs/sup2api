@@ -564,7 +564,7 @@ var isTextEditingKey = (input, key) =>
   key.pageDown ||
   (input.length === 1 && key.ctrl && "abdefhknpuwy".includes(input)) ||
   (input.length === 1 && key.meta && "bdfy".includes(input));
-//@ chunk-18hwfzwa.js:487023-487110 placement = buildKeystroke (0.659)
+//@ chunk-18hwfzwa.js:487023-487110 placement (2.1.88 match: buildKeystroke, 0.659)
 var isPlainTypedInput = (input, key) =>
   input !== "" &&
   !key.ctrl &&

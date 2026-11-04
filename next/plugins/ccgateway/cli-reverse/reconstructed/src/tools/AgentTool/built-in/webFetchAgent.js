@@ -47,7 +47,7 @@ How to work:
 
 Expect follow-up questions about pages you have already read. Answer them from the content already in your context; only re-fetch when asked to, when you need a page you have not read yet, or when the content may have changed.`;
 }
-//@ chunk-e6aww6q8.js:2354943-2357250 placement = VERIFICATION_AGENT (0.275)
+//@ chunk-e6aww6q8.js:2354943-2357250 placement (2.1.88 match: VERIFICATION_AGENT, 0.275)
 /**
  * web-fetch 内建代理（旧版 verificationAgent 位置）：只有 WebFetch 工具，maxTurns 15，omitClaudeMd，满足订阅与 tengu_nimble_wren 条件时用 haiku，否则 inherit。
  */

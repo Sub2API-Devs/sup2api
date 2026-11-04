@@ -17,7 +17,7 @@ import {
 import { logMCPDebug } from "../../utils/log.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 
-//@ chunk-z1n5m6nf.js:155462-155558 placement = countToolCallsSince (1)
+//@ chunk-z1n5m6nf.js:155462-155558 placement (2.1.88 match: countToolCallsSince, 1)
 function getFirstToolUseId_2(message) {
   if (message.message.content[0]?.type !== "tool_use") return;
   return message.message.content[0].id;

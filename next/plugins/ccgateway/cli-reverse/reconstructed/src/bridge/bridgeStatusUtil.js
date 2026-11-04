@@ -33,7 +33,7 @@ function bridgeStatusLines(bridge, { crossSessionMessaging }, now = new Date()) 
 }
 //@ chunk-p55d7smm.js:876-888 placement
 var BRIDGE_STATUS_MAX_WIDTH = 150;
-//@ chunk-p55d7smm.js:888-1062 placement = timestamp (1)
+//@ chunk-p55d7smm.js:888-1062 placement (2.1.88 match: timestamp, 1)
 /**
  * 当前本地时间 HH:MM:SS。
  */
@@ -59,7 +59,7 @@ function computeGlimmerIndex(tick, messageWidth) {
   let cycleLength = messageWidth + 20;
   return messageWidth + 10 - (tick % cycleLength);
 }
-//@ chunk-p55d7smm.js:1172-1435 fingerprint = computeShimmerSegments (1)
+//@ chunk-p55d7smm.js:1172-1435 fingerprint (2.1.88 match: computeShimmerSegments, 1)
 /**
  * 把文本按显示宽度切成 before / shimmer / after 三段（高亮当前位置附近字符）。
  */
@@ -111,7 +111,7 @@ var STATUS_CONNECTING = {
   label: "/rc connecting\u2026",
   color: "warning",
 };
-//@ chunk-p55d7smm.js:1609-1730 fingerprint = getBridgeStatus (0.841)
+//@ chunk-p55d7smm.js:1609-1730 fingerprint (2.1.88 match: getBridgeStatus, 0.841)
 /**
  * 桥状态标签：error → 失败、reconnecting → 重连中、已连接或会话活动 → 活动、否则空闲。
  */
@@ -145,14 +145,14 @@ function buildActiveFooterText(url) {
  * 失败时页脚提示："Run /remote-control to retry"。
  */
 var FAILED_FOOTER_TEXT = "Run /remote-control to retry";
-//@ chunk-p55d7smm.js:1994-2053 fingerprint = wrapWithOsc8Link (1)
+//@ chunk-p55d7smm.js:1994-2053 fingerprint (2.1.88 match: wrapWithOsc8Link, 1)
 /**
  * 用 OSC 8 转义序列把文字包成终端超链接。
  */
 function wrapWithOsc8Link(text, url) {
   return `\x1B]8;;${url}\x07${text}\x1B]8;;\x07`;
 }
-//@ chunk-18hwfzwa.js:107652-107833 fingerprint = timestamp (1)
+//@ chunk-18hwfzwa.js:107652-107833 fingerprint (2.1.88 match: timestamp, 1)
 function formatClockTime(now) {
   let hour12 = now.getHours() % 12 || 12;
   let m = String(now.getMinutes()).padStart(2, "0");

@@ -50,7 +50,7 @@ import { checkReadPermissionForTool } from "../../utils/permissions/filesystem.j
 import { consumeReadPermission } from "../../utils/fsSafety/atomicWriteStaging.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1441401-1442549 fingerprint = outputSchema (0.549)
+//@ chunk-e6aww6q8.js:1441401-1442549 fingerprint (2.1.88 match: outputSchema, 0.549)
 var globInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var globOutputSchema;
 deferInit("chunk-e6aww6q8.js:1441401", () => {
@@ -128,7 +128,7 @@ async function assertGlobDirectoryExists(path, permittedPaths, checkContext) {
       "Path is not a directory",
     );
 }
-//@ chunk-e6aww6q8.js:1443397-1445523 fingerprint = GlobTool (0.653)
+//@ chunk-e6aww6q8.js:1443397-1445523 fingerprint (2.1.88 match: GlobTool, 0.653)
 /**
  * Glob 工具定义（name "Glob"）。只读、可并发；pattern 加可选 path；绝对路径模式自动拆出搜索目录；validateInput 查空字节；checkPermissions 读权限；call 用 ripgrep --files 按修改时间排序，默认最多 100 个，截断时给出说明。
  */

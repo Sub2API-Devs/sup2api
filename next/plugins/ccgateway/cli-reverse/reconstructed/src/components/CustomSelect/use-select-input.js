@@ -80,7 +80,7 @@ function usePasteIntoInputOption({ options, focusedValue, focusOption, canPaste 
 deferInit("chunk-ey2qag4x.js:34082", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:34086-37014 fingerprint = useSelectInput (0.738)
+//@ chunk-ey2qag4x.js:34086-37014 fingerprint (2.1.88 match: useSelectInput, 0.738)
 /**
  * Select 按键：select:next/previous/first/last、数字直选、回车提交、输入选项内的编辑与粘贴。
  */

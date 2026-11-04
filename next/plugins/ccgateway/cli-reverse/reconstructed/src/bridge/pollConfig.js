@@ -15,7 +15,7 @@ import { MAX_TIMER_DELAY_MS } from "../utils/timerDelayClamp.js";
 import { getFeatureValue_CACHED_WITH_REFRESH } from "../services/analytics/growthbook.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ptaf548f.js:956-2322 fingerprint = pollIntervalConfigSchema (0.639)
+//@ chunk-ptaf548f.js:956-2322 fingerprint (2.1.88 match: pollIntervalConfigSchema, 0.639)
 /**
  * poll 配置 schema：各间隔下限、sse 连接超时、watch_sessions 系列字段，并要求满载时心跳或轮询至少开一个。
  */
@@ -75,7 +75,7 @@ deferInit("chunk-ptaf548f.js:956", () => {
     ),
   );
 });
-//@ chunk-ptaf548f.js:2322-2436 fingerprint = getPollIntervalConfig (1)
+//@ chunk-ptaf548f.js:2322-2436 fingerprint (2.1.88 match: getPollIntervalConfig, 1)
 /**
  * 读取 tengu_bridge_poll_interval_config（5 分钟刷新），校验失败用默认值。
  */

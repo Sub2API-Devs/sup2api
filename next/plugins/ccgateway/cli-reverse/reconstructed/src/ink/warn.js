@@ -10,7 +10,7 @@
  */
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-24t3dkzb.js:6596-6720 fingerprint = ifNotInteger (1)
+//@ chunk-24t3dkzb.js:6596-6720 fingerprint (2.1.88 match: ifNotInteger, 1)
 /**
  * 值不是整数时记一条警告（Box 的 margin/padding/gap 等）。
  */

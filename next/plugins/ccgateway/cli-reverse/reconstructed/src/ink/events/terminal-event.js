@@ -10,7 +10,7 @@
  */
 import { InkEvent } from "./event.js";
 
-//@ chunk-bzr73sfg.js:190017-190998 fingerprint = TerminalEvent (0.981)
+//@ chunk-bzr73sfg.js:190017-190998 fingerprint (2.1.88 match: TerminalEvent, 0.981)
 /**
  * 终端 DOM 事件基类：type、时间戳、bubbles/cancelable、target/currentTarget/eventPhase，stopPropagation/stopImmediatePropagation/preventDefault，consume()=两者都做。
  */

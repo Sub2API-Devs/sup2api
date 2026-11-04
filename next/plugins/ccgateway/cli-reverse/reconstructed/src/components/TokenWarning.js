@@ -30,7 +30,7 @@ function selectAutoCompactWindow(appState) {
 function selectRemoteAutocompactState(appState) {
   return appState.remoteAutocompactState;
 }
-//@ chunk-18hwfzwa.js:784440-785667 fingerprint = TokenWarning (0.715)
+//@ chunk-18hwfzwa.js:784440-785667 fingerprint (2.1.88 match: TokenWarning, 0.715)
 function TokenWarning(props) {
   let $ = useMemoCache(17);
   let { tokenUsage, model } = props;
@@ -128,7 +128,7 @@ function TokenWarning(props) {
   } else warningElement_ = $[16];
   return warningElement_;
 }
-//@ chunk-18hwfzwa.js:802616-802710 fingerprint = CollapseLabel (0.376)
+//@ chunk-18hwfzwa.js:802616-802710 fingerprint (2.1.88 match: CollapseLabel, 0.376)
 function CollapseLabel(children, key) {
   return jsxProd_default(
     Text,

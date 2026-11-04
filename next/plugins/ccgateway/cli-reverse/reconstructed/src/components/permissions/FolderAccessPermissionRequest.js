@@ -93,7 +93,7 @@ var cardRows = (lines, columns) =>
   );
 //@ chunk-18hwfzwa.js:1359905-1359915 placement
 var MIN_CARD_ROWS = 2;
-//@ chunk-18hwfzwa.js:1359915-1359995 placement = _temp2 (1)
+//@ chunk-18hwfzwa.js:1359915-1359995 placement (2.1.88 match: _temp2, 1)
 function renderFileCardLine(line_0, i_1) {
   return jsxProd_default(
     Text,

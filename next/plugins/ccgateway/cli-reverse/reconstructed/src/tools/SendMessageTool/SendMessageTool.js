@@ -1241,7 +1241,7 @@ function getToAndMessageFields(input) {
 function getToField(input) {
   return [input.to];
 }
-//@ chunk-astf3mhy.js:32400-32464 sole-consumer = extractMarkupText (1)
+//@ chunk-astf3mhy.js:32400-32464 sole-consumer (2.1.88 match: extractMarkupText, 1)
 /**
  * 对象是否带 kind 字段（误配名 extractMarkupText）。
  */
@@ -1268,11 +1268,11 @@ class OutboxDedupMap extends Map {}
 function messageFieldSchema(description) {
   return union([plainMessageSchema(description), StructuredMessageSchema()]);
 }
-//@ chunk-astf3mhy.js:32632-32700 fingerprint = inputSchema (0.61)
+//@ chunk-astf3mhy.js:32632-32700 fingerprint (2.1.88 match: inputSchema, 0.61)
 function plainMessageSchema(descriptionText) {
   return stringSchema().describe(descriptionText ?? "Plain text message content");
 }
-//@ chunk-astf3mhy.js:32700-33558 fingerprint = StructuredMessage (0.489)
+//@ chunk-astf3mhy.js:32700-33558 fingerprint (2.1.88 match: StructuredMessage, 0.489)
 /**
  * 结构化消息 schema：shutdown_request{reason?} / shutdown_response{request_id, approve, reason?} / plan_approval_response{request_id, approve, feedback?}；及跨会话 message 字段说明与默认值。
  */
@@ -1645,7 +1645,7 @@ Nothing was subscribed either: a permission handler removed notify_when_idle fro
 Nothing was subscribed either (when a message rides along, the idle subscription is only made after that message is delivered).`
     : "";
 }
-//@ chunk-astf3mhy.js:39031-39170 fingerprint = findTeammateColor (1)
+//@ chunk-astf3mhy.js:39031-39170 fingerprint (2.1.88 match: findTeammateColor, 1)
 /**
  * 在 teamContext 中按名字找队友颜色。
  */
@@ -1684,7 +1684,7 @@ var CANNOT_RECEIVE_RESULT = {
       "That agent cannot receive messages (it is a background observer, or its status could not be verified).",
   },
 };
-//@ chunk-astf3mhy.js:39547-39637 layout = isTeammateAgentContext (0.828)
+//@ chunk-astf3mhy.js:39547-39637 layout (2.1.88 match: isTeammateAgentContext, 0.828)
 /**
  * 消息发送者名字：有 agentId 时按代理解析，否则用当前代理名，teammate 用 "teammate"，否则 team-lead。
  */
@@ -1692,7 +1692,7 @@ function getMessageSenderName(toolUseContext) {
   if (toolUseContext.agentId) return resolveSenderIdentity(toolUseContext, toolUseContext.agentId).from;
   return getAgentName() || (isTeammate() ? "teammate" : TEAM_LEAD);
 }
-//@ chunk-astf3mhy.js:39637-42328 fingerprint = handleMessage (0.316)
+//@ chunk-astf3mhy.js:39637-42328 fingerprint (2.1.88 match: handleMessage, 0.316)
 /**
  * 把消息写入团队队友的邮箱：按名字/成员 id 解析团队成员（必要时读团队文件），写 mailbox 并返回 routing 信息；队友不存在时提示用 Agent({name}) 派生。
  */
@@ -1929,7 +1929,7 @@ function buildInlineHandback(displayName, report, context) {
     },
   };
 }
-//@ chunk-astf3mhy.js:43832-44385 fingerprint = handleShutdownRequest (0.722)
+//@ chunk-astf3mhy.js:43832-44385 fingerprint (2.1.88 match: handleShutdownRequest, 0.722)
 /**
  * 向队友发送 shutdown_request（写邮箱，返回 request_id）。
  */
@@ -1975,7 +1975,7 @@ async function handleShutdownRequest(recipientName, agentName, reason, toolUseCo
     },
   };
 }
-//@ chunk-astf3mhy.js:44385-46236 fingerprint = handleShutdownApproval (0.793)
+//@ chunk-astf3mhy.js:44385-46236 fingerprint (2.1.88 match: handleShutdownApproval, 0.793)
 /**
  * 队友批准关机：向 team-lead 写确认，进程内队友中止自己的循环，pane 队友结束进程。只有队友身份能调用。
  */
@@ -2079,7 +2079,7 @@ async function handleShutdownApproval(requestId, context) {
     ...degradedExtra,
   };
 }
-//@ chunk-astf3mhy.js:46236-46688 fingerprint = handleShutdownRejection (0.883)
+//@ chunk-astf3mhy.js:46236-46688 fingerprint (2.1.88 match: handleShutdownRejection, 0.883)
 /**
  * 队友拒绝关机：向 team-lead 写拒绝消息（必须带 reason）。
  */
@@ -2130,7 +2130,7 @@ class SendMessagePreconditionError extends Error {
     this.name = "SendMessagePreconditionError";
   }
 }
-//@ chunk-astf3mhy.js:46777-47639 fingerprint = handlePlanApproval (0.652)
+//@ chunk-astf3mhy.js:46777-47639 fingerprint (2.1.88 match: handlePlanApproval, 0.652)
 /**
  * team-lead 批准队友的计划（plan_approval_response approve=true），写入队友邮箱。
  */
@@ -2186,7 +2186,7 @@ async function handlePlanApproval(recipientName, agentName, requestId, feedback,
     },
   };
 }
-//@ chunk-astf3mhy.js:47639-48281 fingerprint = handlePlanRejection (0.827)
+//@ chunk-astf3mhy.js:47639-48281 fingerprint (2.1.88 match: handlePlanRejection, 0.827)
 /**
  * team-lead 拒绝队友的计划并附反馈。
  */
@@ -2436,7 +2436,7 @@ function classifyRecipientKind(recipient) {
   if (isAddressableSlug(recipient)) return "agent";
   return "name";
 }
-//@ chunk-astf3mhy.js:51130-95535 callgraph-witnessed = SendMessageTool (0.177)
+//@ chunk-astf3mhy.js:51130-95535 callgraph-witnessed (2.1.88 match: SendMessageTool, 0.177)
 /**
  * SendMessage 工具定义（shouldDefer，maxResultSizeChars 100000）：输入 schema 随策略/跨会话/agent swarms 开关变化；validateInput 拒绝广播 "*"、协议帧、带 @ 的收件人、空消息与不合法的结构化消息；checkPermissions 处理跨机器隔离（isolatePeerMachines）与 bridge 授权，auto 模式交分类器；call 先跑插件 message 钩子再 deliver，按解析出的收件人类型路由到主会话、活动/停止/被驱逐的子代理（恢复）、本机会话（UDS）、云端会话（bridge）、队友邮箱或结构化协议处理。
  */
@@ -4930,7 +4930,7 @@ ${skippedSubscription.display}`
     },
   });
 });
-//@ chunk-18hwfzwa.js:1670037-1670156 callgraph-fingerprint = handleBroadcast (0.172)
+//@ chunk-18hwfzwa.js:1670037-1670156 callgraph-fingerprint (2.1.88 match: handleBroadcast, 0.172)
 /**
  * 发送者类别：进程内子代理 / 队友（带名字）/ 会话。
  */

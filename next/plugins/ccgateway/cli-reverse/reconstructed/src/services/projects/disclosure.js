@@ -13,7 +13,7 @@ import { plural } from "../../utils/stringUtils.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { HTTPS_CLAUDE_AI } from "../../constants/product.js";
 
-//@ chunk-dz3q485w.js:16805-16887 placement = formatPeakDay (1)
+//@ chunk-dz3q485w.js:16805-16887 placement (2.1.88 match: formatPeakDay, 1)
 function formatPeakDay(dateStr) {
   return dateStr.toLocaleDateString("en-US", {
     month: "short",

@@ -79,7 +79,7 @@ var GlobTool = buildTool({            // tools/GlobTool/GlobTool.ts（chunk-e6aw
 
 ### 3.2 字段
 
-用 `artifacts/tmp/tools/core/toolfields.mjs` 统计 316 全部 92 个工具定义对象的顶层键（数字是出现次数，标"新"的是 2.1.88 `Tool.ts` 里没有的名字）：
+用 `docs/handbook/data/tools/toolfields.mjs` 统计 316 全部 92 个工具定义对象的顶层键（数字是出现次数，标"新"的是 2.1.88 `Tool.ts` 里没有的名字）：
 
 | 类别 | 字段 |
 |---|---|
@@ -1041,7 +1041,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 
 
 > 本节由 dom-tools 的 misc 分组整理，供合并进 `docs/handbook/tools.md`。所有结论以 `original/` 2.1.316 代码为准；路径写法 `重组模块路径 · 函数名`，声明 id 为 `chunk-xxx.js#压缩名`。
-> 名字在命名表生效前，阅读树里部分符号仍是压缩名；括号中给出本组建议的语义名（`artifacts/tmp/tools/misc/semantic.jsonl`）。
+> 名字在命名表生效前，阅读树里部分符号仍是压缩名；括号中给出本组建议的语义名（`docs/handbook/data/tools/semantic.jsonl`）。
 
 #### 0. 属性速查表
 
@@ -1293,7 +1293,7 @@ schema 选择：策略 `messagingBeyondOwnAgentsDisabled` → 只能发本会话
 | 变化 | 316 证据 |
 |---|---|
 | 工具定义改为"定义对象 + `create(ctx)` 工厂"，工厂统一包装 call/validateInput/checkPermissions，并支持"工具在别处运行"（原生工具转发、跨机器） | `chunk-g54kbxqw.js#on`；88 个定义含 `create` |
-| 新增约 35 个工具字段：`backgrounding`、`remoteExecution`、`coerceInput`、`ruleContentField`、`whenToUse`、`stripForStorage/Creation`、`outputSchemaAcrossProcesses`、`persistenceThresholdCeiling`、`suppressesAlwaysAllowRule` 等 | 第 3.2 节统计（`artifacts/tmp/tools/core/toolfields.mjs`） |
+| 新增约 35 个工具字段：`backgrounding`、`remoteExecution`、`coerceInput`、`ruleContentField`、`whenToUse`、`stripForStorage/Creation`、`outputSchemaAcrossProcesses`、`persistenceThresholdCeiling`、`suppressesAlwaysAllowRule` 等 | 第 3.2 节统计（`docs/handbook/data/tools/toolfields.mjs`） |
 | 内建工具从约 40 个增至约 80 个；大部分新工具懒 require | `chunk-kxyd0g16.js#Yb`/`chunk-kxyd0g16.js#Zi`/`chunk-kxyd0g16.js#fa` |
 | Glob/Grep 默认不注册（嵌入式搜索变成构建常量），新增"点名即恢复"的 searchToolsOptIn 与 Windows Git Bash 条件 | `chunk-e6aww6q8.js#FC`/`chunk-e6aww6q8.js#Xoe`、`chunk-ndmse9kj.js#Uws`/`chunk-ndmse9kj.js#Bws` |
 | LSP、Worktree 工具总是注册（旧版靠 `ENABLE_LSP_TOOL`、`isWorktreeModeEnabled`） | `Dqe()`、`YNt()` 恒 true |

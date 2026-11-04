@@ -62,7 +62,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 function noPrUrlTemplate(ctx) {
   return null;
 }
-//@ chunk-e6aww6q8.js:1688129-1688492 fingerprint = ALLOWED_TOOLS (0.439)
+//@ chunk-e6aww6q8.js:1688129-1688492 fingerprint (2.1.88 match: ALLOWED_TOOLS, 0.439)
 /**
  * SLACK_POST_TOOLS：ToolSearch + slack send_message 工具。
  */
@@ -132,7 +132,7 @@ deferInit("chunk-e6aww6q8.js:1688611", () => {
 
 5. After creating/updating the PR, check if the user's CLAUDE.md mentions posting to Slack channels. If it does, use ToolSearch to search for "slack send message" tools. If ToolSearch finds a Slack tool, ask the user if they'd like you to post the PR URL to the relevant Slack channel. Only post if the user confirms. If ToolSearch returns no results or errors, skip this step silently\u2014do not mention the failure, do not attempt workarounds, and do not try alternative approaches.`;
 });
-//@ chunk-e6aww6q8.js:1689179-1692593 fingerprint = getPromptContent (0.482)
+//@ chunk-e6aww6q8.js:1689179-1692593 fingerprint (2.1.88 match: getPromptContent, 0.482)
 /**
  * getPromptContent：同旧版 commit-push-pr getPromptContent。
  */
@@ -252,7 +252,7 @@ You have the capability to call multiple tools in a single response. You MUST do
 
 Return the PR URL when you're done, so the user can see it.`;
 }
-//@ chunk-e6aww6q8.js:1692593-1693180 fingerprint = command (0.755)
+//@ chunk-e6aww6q8.js:1692593-1693180 fingerprint (2.1.88 match: command, 0.755)
 /**
  * /commit-push-pr 命令对象（prompt）；描述：Commit, push, and open a PR。
  */

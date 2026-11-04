@@ -45,7 +45,7 @@ deferInit("chunk-thjvqmbc.js:8461", () => {
   READONLY_HINT_FORMAT = stableEmptyObject(true);
   DEFAULT_CONFIRM_CANCEL_HINTS_2 = DEFAULT_CONFIRM_CANCEL_HINTS;
 });
-//@ chunk-thjvqmbc.js:8491-11137 fingerprint = Dialog (0.482)
+//@ chunk-thjvqmbc.js:8491-11137 fingerprint (2.1.88 match: Dialog, 0.482)
 /**
  * 对话框：标题（permission 等色）、副标题、内容、底部快捷键提示（Esc 取消 / 双击退出），可选 onCancel。
  */
@@ -381,7 +381,7 @@ function DialogTitle(props) {
 function pickFirst(first, second) {
   return first;
 }
-//@ chunk-thjvqmbc.js:11837-12013 placement = _temp (0.712)
+//@ chunk-thjvqmbc.js:11837-12013 placement (2.1.88 match: _temp, 0.712)
 function renderConfirmCancelHints(exitState) {
   return jsxProd_default_2(Byline, {
     children: [

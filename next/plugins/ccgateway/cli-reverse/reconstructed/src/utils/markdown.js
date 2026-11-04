@@ -53,7 +53,7 @@ import { getGitHostKind } from "./gitHosts.js";
 import { normalizeHostCached, GITHUB_HOST } from "./git/githubUrl.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-wj577vf9.js:13206-13268 fingerprint = configureMarked (0.369)
+//@ chunk-wj577vf9.js:13206-13268 fingerprint (2.1.88 match: configureMarked, 0.369)
 function configureMarked() {
   if (markedConfigStateMemo.configured) return;
   markedConfigStateMemo.set();
@@ -155,7 +155,7 @@ function formatTokenWindowed(token, theme, options) {
     ? rendered.replace(OSC8_LINK_PATTERN, "").replace(C1_OSC_RE, "").replace(ESC_NON_CSI_GLOBAL_RE, "")
     : rendered;
 }
-//@ chunk-wj577vf9.js:14028-19907 fingerprint = formatToken (0.729)
+//@ chunk-wj577vf9.js:14028-19907 fingerprint (2.1.88 match: formatToken, 0.729)
 function formatToken(token, theme, options) {
   let {
     listDepth = 0,
@@ -734,7 +734,7 @@ function tableHasExtraCells(lines, columnCount) {
   }
   return false;
 }
-//@ chunk-wj577vf9.js:21566-21767 placement = addToInMemoryErrorLog (0.678)
+//@ chunk-wj577vf9.js:21566-21767 placement (2.1.88 match: addToInMemoryErrorLog, 0.678)
 function addToInMemoryErrorLog(errorInfo) {
   let parts = errorInfo
     .replace(/\|/g, (match, offset, input) => {
@@ -757,7 +757,7 @@ function linkifyInline(text, theme, linkCap, parent, promptMode) {
 function withHyperlinks(text, theme, linkCap = supportsHyperlinks(), parent) {
   return text;
 }
-//@ chunk-wj577vf9.js:21866-22169 fingerprint = linkifyIssueReferences (0.327)
+//@ chunk-wj577vf9.js:21866-22169 fingerprint (2.1.88 match: linkifyIssueReferences, 0.327)
 function linkifyIssueReferences(text, themeName, linkCap = supportsHyperlinks()) {
   if (!linkCap) return text;
   if (!text.includes("#")) return text;
@@ -913,7 +913,7 @@ function listMarkerText_2(listDepth, { number, first, last }) {
       return number.toString();
   }
 }
-//@ chunk-wj577vf9.js:23580-23757 fingerprint = padAligned (1)
+//@ chunk-wj577vf9.js:23580-23757 fingerprint (2.1.88 match: padAligned, 1)
 function padAligned(content, displayWidth, targetWidth, align) {
   let padding = Math.max(0, targetWidth - displayWidth);
   if (align === "center") {

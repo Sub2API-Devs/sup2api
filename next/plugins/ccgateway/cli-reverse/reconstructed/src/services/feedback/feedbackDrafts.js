@@ -760,7 +760,7 @@ async function listFeedbackDrafts(options, storage) {
     expired,
   };
 }
-//@ chunk-kxyd0g16.js:76006-76187 placement = getErrorsPath (0.79)
+//@ chunk-kxyd0g16.js:76006-76187 placement (2.1.88 match: getErrorsPath, 0.79)
 function parseTranscriptPathUnder(draftTranscript, projectsDir) {
   if (!draftTranscript.endsWith(".jsonl")) return;
   let dir = dirname(draftTranscript);

@@ -152,7 +152,7 @@ function orderSchemaKeys(jsonSchema, zodSchema) {
     jsonSchema[key] = value;
   }
 }
-//@ chunk-dcmhvw5a.js:432542-432640 fingerprint = generateSettingsJSONSchema (1)
+//@ chunk-dcmhvw5a.js:432542-432640 fingerprint (2.1.88 match: generateSettingsJSONSchema, 1)
 function generateSettingsJSONSchema(flavor) {
   let schema = flavor ? buildWholeSettingsSchema(flavor) : wholeSettingsSchema();
   let jsonSchema = settingsJsonSchema(schema, {

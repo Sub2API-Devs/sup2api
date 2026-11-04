@@ -14,25 +14,25 @@ import { isPlainObjectNonArray } from "../plugins/bundled/claudeTest/appFacts.js
 import { APP_STATE_LABELS } from "../plugins/bundled/claudeTest/runState.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-m41h77x8.js:191-253 placement = joinContinuationLines (0.701)
+//@ chunk-m41h77x8.js:191-253 placement (2.1.88 match: joinContinuationLines, 0.701)
 /**
  * 把字符串重复 n 次（n 非有限或不大于 0 时视为 0）。旧版名 joinContinuationLines 误配，属第三方或通用工具。
  */
 function repeatString(text, count) {
   return text.repeat(Number.isFinite(count) && count > 0 ? count : 0);
 }
-//@ chunk-m41h77x8.js:253-315 placement = urlPatternToRegex (1)
+//@ chunk-m41h77x8.js:253-315 placement (2.1.88 match: urlPatternToRegex, 1)
 function urlPatternToRegex(pattern) {
   return pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-//@ chunk-m41h77x8.js:315-374 layout = capitalize (1)
+//@ chunk-m41h77x8.js:315-374 layout (2.1.88 match: capitalize, 1)
 /**
  * 首字母大写。
  */
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
-//@ chunk-m41h77x8.js:374-415 callgraph-witnessed = plural (0)
+//@ chunk-m41h77x8.js:374-415 callgraph-witnessed (2.1.88 match: plural, 0)
 /**
  * 按数量选单复数：n===1 用单数，否则用复数（默认单数加 s）。
  */
@@ -105,7 +105,7 @@ function repairUtf16(text) {
   if (typeof Buffer !== "undefined") return Buffer.from(text, "utf16le").toString("utf16le");
   return normalizeFullWidthDigits(text);
 }
-//@ chunk-m41h77x8.js:1221-1426 fingerprint = normalizeFullWidthDigits (1)
+//@ chunk-m41h77x8.js:1221-1426 fingerprint (2.1.88 match: normalizeFullWidthDigits, 1)
 function normalizeFullWidthDigits(input) {
   let parts = [];
   for (let start = 0; start < input.length; start += 8192) {
@@ -286,7 +286,7 @@ function countCharInString(str, char, start = 0) {
   }
   return count;
 }
-//@ chunk-m41h77x8.js:3357-3458 layout = normalizeFullWidthDigits (1)
+//@ chunk-m41h77x8.js:3357-3458 layout (2.1.88 match: normalizeFullWidthDigits, 1)
 function normalizeFullWidthDigits_2(input) {
   return input.replace(/[\uFF10-\uFF19]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 65248));
 }
@@ -297,9 +297,9 @@ function normalizeFullWidthDigits_2(input) {
 function replaceIdeographicSpace(input) {
   return input.replaceAll("\u3000", " ");
 }
-//@ chunk-m41h77x8.js:3507-3522 callgraph-witnessed = MAX_STRING_LENGTH (0)
+//@ chunk-m41h77x8.js:3507-3522 callgraph-witnessed (2.1.88 match: MAX_STRING_LENGTH, 0)
 var MAX_STRING_LENGTH = 33554432;
-//@ chunk-m41h77x8.js:3522-3741 fingerprint = safeJoinLines (1)
+//@ chunk-m41h77x8.js:3522-3741 fingerprint (2.1.88 match: safeJoinLines, 1)
 function safeJoinLines(lines, delimiter = ",", maxSize = MAX_STRING_LENGTH) {
   let result = "";
   for (let line of lines) {
@@ -315,7 +315,7 @@ function safeJoinLines(lines, delimiter = ",", maxSize = MAX_STRING_LENGTH) {
   }
   return result;
 }
-//@ chunk-m41h77x8.js:3741-4523 fingerprint = EndTruncatingAccumulator (1)
+//@ chunk-m41h77x8.js:3741-4523 fingerprint (2.1.88 match: EndTruncatingAccumulator, 1)
 /**
  * 有上限的字符串累加器：超过上限后丢弃后续内容并记录被截断的字节数（工具输出截断用）。
  */
@@ -577,7 +577,7 @@ ${fence}`;
  * 已以省略号结尾的文本模式。
  */
 var TRAILING_ELLIPSIS_RE = /(\u2026|\.\.\.)$/;
-//@ chunk-dcmhvw5a.js:141176-141231 placement = setCwdState (1)
+//@ chunk-dcmhvw5a.js:141176-141231 placement (2.1.88 match: setCwdState, 1)
 /**
  * NFC 规范化后转小写，用于大小写不敏感的名字/路径比较（被 50 多处使用）。
  */
@@ -592,7 +592,7 @@ function stripControlCharsTruncated(text) {
 function sanitizeSessionTitle(title) {
   return stripControlCharsTruncated(replaceControlChars(title.trim())).trim();
 }
-//@ chunk-ae5g0zb5.js:38606-39033 fingerprint = capitalize (1)
+//@ chunk-ae5g0zb5.js:38606-39033 fingerprint (2.1.88 match: capitalize, 1)
 function capitalize_2(configJson, fallbackName) {
   let parsed = null;
   try {

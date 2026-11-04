@@ -43,7 +43,7 @@ import { API_ERROR_TEXT } from "./spinnerStatus.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2582458-2582541 fingerprint = THINKING_BARE_WIDTH (1)
+//@ chunk-e6aww6q8.js:2582458-2582541 fingerprint (2.1.88 match: THINKING_BARE_WIDTH, 1)
 function THINKING_BARE_WIDTH(block, width) {
   try {
     return block.type === "thinking" ? width : undefined;
@@ -52,7 +52,7 @@ function THINKING_BARE_WIDTH(block, width) {
     return;
   }
 }
-//@ chunk-3mec1atf.js:12033-12139 callgraph-fingerprint = THINKING_INACTIVE (0.647)
+//@ chunk-3mec1atf.js:12033-12139 callgraph-fingerprint (2.1.88 match: THINKING_INACTIVE, 0.647)
 var SEPARATOR_WIDTH; // deferred: uses bunStringWidth (../../ink/stringWidth.js) of its import cycle while loading; runs once the cycle is complete
 var THINKING_TEXT_WIDTH;
 var SHOW_DETAILS_AFTER_MS;
@@ -87,7 +87,7 @@ function computeShimmerColor(time, thinkingIntensity, intensity) {
     intensity && thinkingIntensity > 0 ? parseRGB(color, intensity, roundToStep(thinkingIntensity)) : color,
   );
 }
-//@ chunk-3mec1atf.js:12268-14823 fingerprint = SpinnerAnimationRow (0.604)
+//@ chunk-3mec1atf.js:12268-14823 fingerprint (2.1.88 match: SpinnerAnimationRow, 0.604)
 function SpinnerAnimationRow({
   mode,
   reducedMotion,
@@ -662,7 +662,7 @@ function RetryStatusRow(props) {
   } else retryRow = $[56];
   return retryRow;
 }
-//@ chunk-3mec1atf.js:18871-19261 fingerprint = SpinnerModeGlyph (0.804)
+//@ chunk-3mec1atf.js:18871-19261 fingerprint (2.1.88 match: SpinnerModeGlyph, 0.804)
 function SpinnerModeGlyph(props) {
   let $ = useMemoCache(2);
   let { mode } = props;
@@ -702,7 +702,7 @@ function SpinnerModeGlyph(props) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:435231-435268 fingerprint = SEP_WIDTH (1)
+//@ chunk-18hwfzwa.js:435231-435268 fingerprint (2.1.88 match: SEP_WIDTH, 1)
 var SPINNER_PADDING = 2;
 var SPINNER_INDENT = "  ";
 var SPINNER_SEPARATOR = " \xB7 ";

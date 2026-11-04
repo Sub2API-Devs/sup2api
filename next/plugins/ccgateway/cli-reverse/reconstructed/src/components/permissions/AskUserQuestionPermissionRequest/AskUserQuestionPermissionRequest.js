@@ -83,7 +83,7 @@ import { useStoreSelector } from "../../../hooks/useStoreSelector.js";
 import { formatSourceLine } from "../../../utils/messages/nonUserMessages.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mvvq2nx1.js:18079-18303 fingerprint = convertImagesToBlocks (0.466)
+//@ chunk-mvvq2nx1.js:18079-18303 fingerprint (2.1.88 match: convertImagesToBlocks, 0.466)
 async function convertImagesToBlocks(block, limits, { timings } = {}) {
   let mediaType = sniffImageMediaType(block);
   if (mediaType === null) return null;
@@ -102,7 +102,7 @@ async function convertImagesToBlocks(block, limits, { timings } = {}) {
     return null;
   }
 }
-//@ chunk-18hwfzwa.js:1287178-1287222 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:1287178-1287222 fingerprint (2.1.88 match: _temp, 1)
 function hasOptionPreview(opt) {
   return opt.preview !== undefined;
 }
@@ -173,11 +173,11 @@ function useAfkTimeout({ enabled, timeoutMs, countdownThresholdMs, onTimeout }) 
 function ownValues(contents) {
   return Object.values(contents);
 }
-//@ chunk-18hwfzwa.js:1296530-1296572 layout = _temp (1)
+//@ chunk-18hwfzwa.js:1296530-1296572 layout (2.1.88 match: _temp, 1)
 function isImageBlock(c) {
   return c.type === "image";
 }
-//@ chunk-18hwfzwa.js:1296572-1296626 callgraph-fingerprint = _temp4 (1)
+//@ chunk-18hwfzwa.js:1296572-1296626 callgraph-fingerprint (2.1.88 match: _temp4, 1)
 function selectToolPermissionContextMode_2(s) {
   return s.toolPermissionContext.mode;
 }
@@ -190,7 +190,7 @@ function reportBuildResultFailure(error) {
   logFeatureBad("ask_user_question_answer", "build_result_failed");
   throw error;
 }
-//@ chunk-18hwfzwa.js:1296746-1296788 layout = _temp (1)
+//@ chunk-18hwfzwa.js:1296746-1296788 layout (2.1.88 match: _temp, 1)
 function isImageValue(c) {
   return c.type === "image";
 }
@@ -266,7 +266,7 @@ function getAfkTimeoutMs(askUserQuestionTimeout) {
       return null;
   }
 }
-//@ chunk-18hwfzwa.js:1297673-1298701 callgraph-fingerprint = AskUserQuestionPermissionRequest (0.242)
+//@ chunk-18hwfzwa.js:1297673-1298701 callgraph-fingerprint (2.1.88 match: AskUserQuestionPermissionRequest, 0.242)
 /**
  * AskUserQuestion 对话框入口：校验/改写问题后渲染 AskUserQuestionPermissionRequestBody。
  */
@@ -460,7 +460,7 @@ function describeQuestionRewriteViolation(questions, drawnQuestions) {
   }
   return;
 }
-//@ chunk-18hwfzwa.js:1300676-1310202 fingerprint = AskUserQuestionPermissionRequestBody (0.68)
+//@ chunk-18hwfzwa.js:1300676-1310202 fingerprint (2.1.88 match: AskUserQuestionPermissionRequestBody, 0.68)
 /**
  * 问答主体：多问题状态（useMultipleChoiceState）、导航条、单问题/预览视图、粘贴图片附件、提交页；提交时把答案（与图片）组装为工具结果。
  */
@@ -1364,7 +1364,7 @@ ${formatQuestionAnswers(questions, asked, answers, questionStates, args.isScreen
       }),
   };
 }
-//@ chunk-18hwfzwa.js:1312370-1312666 placement = generateSectionReminders (0.324)
+//@ chunk-18hwfzwa.js:1312370-1312666 placement (2.1.88 match: generateSectionReminders, 0.324)
 function formatQuestionAnswers(questions, asked, answers, questionStates, isScreenReader) {
   return questions.map((question, index) => {
     let answer = ownLookup(answers, question.key);
@@ -1384,7 +1384,7 @@ function formatQuestionAnswers(questions, asked, answers, questionStates, isScre
 function isPreviewCapableQuestion(question) {
   return !question.multiSelect && question.options.some((option) => option.preview !== undefined);
 }
-//@ chunk-18hwfzwa.js:1312744-1312910 placement = parseDataUri (0.518)
+//@ chunk-18hwfzwa.js:1312744-1312910 placement (2.1.88 match: parseDataUri, 0.518)
 /**
  * （切分错误）把一组图片按 limits 缩放成 image 块。
  */

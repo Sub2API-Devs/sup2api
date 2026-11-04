@@ -77,7 +77,7 @@ function markDreamTaskFailed(taskId, taskRegistry) {
     ambient: true,
   });
 }
-//@ chunk-rsht1tdj.js:7722-7814 fingerprint = DEFAULTS (0.522)
+//@ chunk-rsht1tdj.js:7722-7814 fingerprint (2.1.88 match: DEFAULTS, 0.522)
 /**
  * autoDream 默认阈值 minHours=24、minSessions=5，会话扫描节流 10 分钟。
  */
@@ -94,7 +94,7 @@ deferInit("chunk-rsht1tdj.js:7722", () => {
     minSessions: 5,
   };
 });
-//@ chunk-rsht1tdj.js:7814-8098 fingerprint = getConfig (1)
+//@ chunk-rsht1tdj.js:7814-8098 fingerprint (2.1.88 match: getConfig, 1)
 /**
  * 读取 tengu_onyx_plover 中的 minHours/minSessions，非法值回落到 24/5。
  */
@@ -126,7 +126,7 @@ function isAutoDreamAllowed() {
 function isAutoDreamForced() {
   return false;
 }
-//@ chunk-rsht1tdj.js:8225-13121 fingerprint = initAutoDream (0.65)
+//@ chunk-rsht1tdj.js:8225-13121 fingerprint (2.1.88 match: initAutoDream, 0.65)
 /**
  * autoDream（后台记忆整理）：每回合检查——tengu_onyx_plover 配置存在且 isAutoDreamAllowed；距上次整理 ≥ minHours（默认 24h）；10 分钟扫描节流；自上次整理后改动过的其他会话 ≥ minSessions（默认 5）；拿到 .consolidate-lock 后派生 dream 子代理整理记忆，失败回滚锁时间。
  */
@@ -400,7 +400,7 @@ ${sessionIds.map((id) => `- ${id}`).join(`
     }
   };
 }
-//@ chunk-rsht1tdj.js:13323-13882 fingerprint = makeDreamProgressWatcher (0.885)
+//@ chunk-rsht1tdj.js:13323-13882 fingerprint (2.1.88 match: makeDreamProgressWatcher, 0.885)
 /**
  * 监视 dream 子代理输出，更新任务进度（touch 的文件、文本）。
  */

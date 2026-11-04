@@ -222,7 +222,7 @@ function FileDialogQuestion(question) {
     ],
   });
 }
-//@ chunk-18hwfzwa.js:1380440-1386191 fingerprint = FilePermissionDialog (0.316)
+//@ chunk-18hwfzwa.js:1380440-1386191 fingerprint (2.1.88 match: FilePermissionDialog, 0.316)
 /**
  * 文件权限对话框：根据工具类型选择 file-edit-diff/file-write-diff/notebook-edit-diff 预览（或 IDE 中显示 diff），选项由 getFilePermissionOptions 生成，处理器表 PERMISSION_HANDLERS。
  */

@@ -21,7 +21,7 @@ import { DesktopUpsellStartup } from "../DesktopUpsell/DesktopUpsellStartup.js";
 
 //@ chunk-18hwfzwa.js:1108717-1108728 affinity
 var MAX_HINT_LABEL_WIDTH = 24;
-//@ chunk-18hwfzwa.js:1108728-1109652 fingerprint = PluginHintMenu (0.447)
+//@ chunk-18hwfzwa.js:1108728-1109652 fingerprint (2.1.88 match: PluginHintMenu, 0.447)
 function PluginHintMenu(props) {
   let $ = useMemoCache(11);
   let { pluginName, pluginDescription, marketplaceName, sourceCommand, onResponse } = props;

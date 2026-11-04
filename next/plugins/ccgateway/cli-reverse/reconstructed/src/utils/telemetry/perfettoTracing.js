@@ -29,7 +29,7 @@ deferInit("chunk-a9ek44g8.js:7182", () => {
 function perfettoRecorder() {
   return perfettoStateByHost.of(getRootSession().host).recorder;
 }
-//@ chunk-a9ek44g8.js:7252-7368 fingerprint = initializePerfettoTracing (0.442)
+//@ chunk-a9ek44g8.js:7252-7368 fingerprint (2.1.88 match: initializePerfettoTracing, 0.442)
 /**
  * Perfetto 追踪初始化（外部构建只记一行调试日志，CLAUDE_CODE_PERFETTO_TRACE）。
  */
@@ -62,7 +62,7 @@ function unregisterPerfettoAgent(agentId) {
   if (!recorder) return;
   recorder.unregisterAgent(agentId);
 }
-//@ chunk-e6aww6q8.js:1291797-1291919 fingerprint = registerAgent (0.327)
+//@ chunk-e6aww6q8.js:1291797-1291919 fingerprint (2.1.88 match: registerAgent, 0.327)
 function registerAgent(agentId, agentName, parentAgentId) {
   let agentId_2 = agentId?.agentId ?? parentAgentId;
   let agentContext = agentId?.agentContext;

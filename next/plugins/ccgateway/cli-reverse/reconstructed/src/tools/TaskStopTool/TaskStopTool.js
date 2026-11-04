@@ -30,7 +30,7 @@ import { isWaitingOnChildren } from "../../tasks/LocalAgentTask/keepalive.js";
 import { isObserverAgentTask } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:26589-29286 fingerprint = TaskStopTool (0.542)
+//@ chunk-kxyd0g16.js:26589-29286 fingerprint (2.1.88 match: TaskStopTool, 0.542)
 /**
  * TaskStop 工具（别名 KillShell/KillBash，并发安全、shouldDefer）：按 task_id（兼容 shell_id、队友/命名代理名）停止后台任务；远程执行开关（tengu_violin_varnish）下可停远程主机上的后台命令。
  */

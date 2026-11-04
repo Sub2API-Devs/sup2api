@@ -27,7 +27,7 @@ import { MCPServerDialogCopy } from "./MCPServerDialogCopy.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "./CustomSelect/select.js";
 
-//@ chunk-20skp6hd.js:1427-2791 fingerprint = MCPServerApprovalDialog (0.733)
+//@ chunk-20skp6hd.js:1427-2791 fingerprint (2.1.88 match: MCPServerApprovalDialog, 0.733)
 /**
  * 新 MCP 服务器批准：Use this server / Use all future servers / Continue without，结果写入 localSettings 的 enabled/disabled 列表。
  */

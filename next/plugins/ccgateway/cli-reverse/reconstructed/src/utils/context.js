@@ -19,7 +19,7 @@ import { env } from "./env.js";
 import { is1mContextDisabled, isCompactDisabledOrCustom } from "./model/contextWindow1m.js";
 import { isUnrecognizedModelWindow } from "../services/compact/autoCompactWindow.js";
 
-//@ chunk-aepeg2w5.js:474021-474238 fingerprint = calculateContextPercentages (1)
+//@ chunk-aepeg2w5.js:474021-474238 fingerprint (2.1.88 match: calculateContextPercentages, 1)
 /**
  * 上下文已用/剩余百分比（输入+缓存 token / 窗口），夹在 0–100。
  */
@@ -57,7 +57,7 @@ function getClientDataDefaultOutputTokens(model, antModel) {
   if (typeof heatherVale !== "number" || !Number.isInteger(heatherVale) || heatherVale <= 0) return null;
   return heatherVale;
 }
-//@ chunk-aepeg2w5.js:474509-474942 fingerprint = getModelMaxOutputTokens (0.453)
+//@ chunk-aepeg2w5.js:474509-474942 fingerprint (2.1.88 match: getModelMaxOutputTokens, 0.453)
 /**
  * 模型 max_output_tokens：{default, upperLimit}；来源依次为模型目录覆盖、目录 max_output_tokens、claude-3 老模型固定值、默认 32000/128000；再受 clientdata 默认值与能力表 max_tokens 约束。
  */
@@ -96,7 +96,7 @@ function getModelMaxOutputTokens(model) {
     upperLimit: maxTokens,
   };
 }
-//@ chunk-e6aww6q8.js:1550371-1550615 callgraph-fingerprint = getContextWindowForModel (0.4)
+//@ chunk-e6aww6q8.js:1550371-1550615 callgraph-fingerprint (2.1.88 match: getContextWindowForModel, 0.4)
 /**
  * 第一方直连、未禁用 1M、窗口 <1M 等条件下是否对未知模型强制窗口。旧版名 getContextWindowForModel 为错配（返回布尔）。
  */

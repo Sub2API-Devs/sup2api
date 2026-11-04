@@ -16,7 +16,7 @@ import { env } from "./env.js";
 import { getOauthConfig } from "../constants/oauth.js";
 import { fetchWithRequestBodyCompression } from "../services/api/gzipRequestBody.js";
 
-//@ chunk-vbtpanx5.js:4813-5265 fingerprint = preconnectAnthropicApi (0.678)
+//@ chunk-vbtpanx5.js:4813-5265 fingerprint (2.1.88 match: preconnectAnthropicApi, 0.678)
 /**
  * 预连接：每进程一次；只在第一方、非网关、无 HTTP(S)_PROXY/ANTHROPIC_UNIX_SOCKET/客户端证书时，对 ANTHROPIC_BASE_URL 或默认 API 发 HEAD /api/hello（10s 超时，忽略失败）。
  */

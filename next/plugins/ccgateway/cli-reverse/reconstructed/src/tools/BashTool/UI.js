@@ -39,7 +39,7 @@ import { RejectedToolUseMessage } from "../../components/messages/UserToolResult
 //@ chunk-s06523pk.js:2147-2161 affinity
 var MAX_PREVIEW_LINES = 2;
 var MAX_PREVIEW_CHARS = 160;
-//@ chunk-s06523pk.js:2161-2876 facade-exports = BackgroundHint (0.617)
+//@ chunk-s06523pk.js:2161-2876 facade-exports (2.1.88 match: BackgroundHint, 0.617)
 /**
  * Bash 运行中的"按 Ctrl+B 转后台"提示（tmux 下显示 ctrl+b ctrl+b）；非交互或后台任务禁用时不显示；按键触发 onBackground。
  */
@@ -110,7 +110,7 @@ function BackgroundHint(props) {
   } else element = $[9];
   return element;
 }
-//@ chunk-s06523pk.js:2876-3201 facade-exports = renderToolUseMessage (1)
+//@ chunk-s06523pk.js:2876-3201 facade-exports (2.1.88 match: renderToolUseMessage, 1)
 function renderToolUseMessage(input, { verbose, theme: _theme }) {
   let { command } = input;
   if (!command) return null;
@@ -139,7 +139,7 @@ function renderToolUseMessage(input, { verbose, theme: _theme }) {
   }
   return command;
 }
-//@ chunk-s06523pk.js:3201-3526 facade-exports = renderToolUseProgressMessage (0.963)
+//@ chunk-s06523pk.js:3201-3526 facade-exports (2.1.88 match: renderToolUseProgressMessage, 0.963)
 function renderToolUseProgressMessage(
   progressMessagesForMessage,
   { verbose, tools: _tools, terminalSize: _terminalSize, inProgressToolCallCount: _inProgressToolCallCount },
@@ -162,7 +162,7 @@ function renderToolUseProgressMessage(
 function renderToolUseQueuedMessage() {
   return WaitingLabel();
 }
-//@ chunk-s06523pk.js:3554-3807 facade-exports = renderToolResultMessage (0.829)
+//@ chunk-s06523pk.js:3554-3807 facade-exports (2.1.88 match: renderToolResultMessage, 0.829)
 function renderToolResultMessage(
   content,
   progressMessagesForMessage,
@@ -181,7 +181,7 @@ function renderToolResultMessage(
     command,
   });
 }
-//@ chunk-s06523pk.js:3807-3906 facade-exports = renderToolUseErrorMessage (1)
+//@ chunk-s06523pk.js:3807-3906 facade-exports (2.1.88 match: renderToolUseErrorMessage, 1)
 function renderToolUseErrorMessage(
   result,
   { verbose, progressMessagesForMessage: _progressMessagesForMessage, tools: _tools },
@@ -204,7 +204,7 @@ function isResultTruncated(result, { columns }) {
     )
   );
 }
-//@ chunk-hkh7sq9y.js:5285-5608 fingerprint = renderToolUseProgressMessage (0.963)
+//@ chunk-hkh7sq9y.js:5285-5608 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.963)
 function renderToolUseProgressMessage_2(
   progressMessagesForMessage,
   { verbose, tools: _tools, terminalSize: _terminalSize, inProgressToolCallCount: _inProgressToolCallCount },
@@ -223,7 +223,7 @@ function renderToolUseProgressMessage_2(
     verbose,
   });
 }
-//@ chunk-8ndmcarc.js:17835-17957 fingerprint = renderToolUseErrorMessage (1)
+//@ chunk-8ndmcarc.js:17835-17957 fingerprint (2.1.88 match: renderToolUseErrorMessage, 1)
 function renderToolUseErrorMessage_2(result, { progressMessagesForMessage, tools, verbose }) {
   return jsxProd_default_2(Fragment, {
     children: [
@@ -235,7 +235,7 @@ function renderToolUseErrorMessage_2(result, { progressMessagesForMessage, tools
     ],
   });
 }
-//@ chunk-8ndmcarc.js:17957-18097 shared-adjacent = renderToolUseErrorMessage (1)
+//@ chunk-8ndmcarc.js:17957-18097 shared-adjacent (2.1.88 match: renderToolUseErrorMessage, 1)
 function renderToolUseErrorMessage_3(result, { progressMessagesForMessage, tools, verbose }) {
   return jsxProd_default_2(Fragment, {
     children: [

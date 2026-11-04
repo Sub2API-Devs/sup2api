@@ -27,7 +27,7 @@ import { useState, useEffectEvent, useRef, useEffect } from "../../../vendor/rea
 import { useClock } from "../../ink/components/ClockContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:48678-48727 fingerprint = hold (1)
+//@ chunk-ag5x7vhf.js:48678-48727 fingerprint (2.1.88 match: hold, 1)
 var CLAWD_MIN_OFFSET = 3;
 var CLAWD_BASE_WIDTH = 9;
 var CLAWD_FRAME_WIDTH = 60;
@@ -449,7 +449,7 @@ var SHADOW_GLYPHS = {
   },
 };
 var nextFrameIndex = (index) => index + 1;
-//@ chunk-ag5x7vhf.js:53567-55252 callgraph-witnessed = AnimatedClawd (0.3)
+//@ chunk-ag5x7vhf.js:53567-55252 callgraph-witnessed (2.1.88 match: AnimatedClawd, 0.3)
 function AnimatedClawd(props) {
   let $ = useMemoCache(28);
   let options;
@@ -593,7 +593,7 @@ function AnimatedClawd(props) {
   } else clawd = $[27];
   return clawd;
 }
-//@ chunk-ag5x7vhf.js:55252-56868 fingerprint = useClawdAnimation (0.646)
+//@ chunk-ag5x7vhf.js:55252-56868 fingerprint (2.1.88 match: useClawdAnimation, 0.646)
 function useClawdAnimation(autoplay, name, delayMs, onComplete) {
   let $ = useMemoCache(40);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();

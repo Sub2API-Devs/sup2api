@@ -54,7 +54,7 @@ function maskEnvRefs(text) {
 function normalizeEnvRefs(text) {
   return text.replace(new RegExp(ENV_REF_PATTERN, "g"), (match, name) => `\${${name}}`);
 }
-//@ chunk-g2rygg7v.js:9217-9450 fingerprint = expandEnvVarsInString (0.537)
+//@ chunk-g2rygg7v.js:9217-9450 fingerprint (2.1.88 match: expandEnvVarsInString, 0.537)
 /**
  * expandEnvVarsInString（实为批量展开 headers）：对 headers 每个值做 ${VAR} 展开（远程目的地模式），返回 {staticHeaders, missingVars}。
  */

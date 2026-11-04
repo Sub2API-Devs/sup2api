@@ -43,7 +43,7 @@ deferInit("chunk-fq0cr76a.js:851744", () => {
 function bridgeSpawnDir() {
   return BRIDGE_SPAWN_DIR;
 }
-//@ chunk-fq0cr76a.js:851818-851954 placement = tryCreateExclusive (0.84)
+//@ chunk-fq0cr76a.js:851818-851954 placement (2.1.88 match: tryCreateExclusive, 0.84)
 /**
  * 确保某个私有目录存在（mode 0700）并返回路径。与调度锁无关。
  */

@@ -31,7 +31,7 @@ function ideSelectionLabel(connectionState, attribution) {
     return `${IDE_FILE_MARKER}In ${ideFileLabel(attribution.filePath)}`;
   return null;
 }
-//@ chunk-18hwfzwa.js:119927-120241 fingerprint = IdeStatusIndicator (0.31)
+//@ chunk-18hwfzwa.js:119927-120241 fingerprint (2.1.88 match: IdeStatusIndicator, 0.31)
 function IdeStatusIndicator({ ideStatus, ideName, isRemoteWorkspace, isViewingAgent, ideSelection }) {
   if (
     !ideSelection ||

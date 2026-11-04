@@ -31,7 +31,7 @@ function getUpgradeUrl(surface) {
 async function call(onDone, context) {
   return callUpgradeFromSurface(onDone, context, "upgrade_command");
 }
-//@ chunk-rw1dvz2v.js:634-2248 placement = call (0.541)
+//@ chunk-rw1dvz2v.js:634-2248 placement (2.1.88 match: call, 0.541)
 /**
  * 从不同入口触发 /upgrade（打开升级页并重新登录）。
  */

@@ -88,7 +88,7 @@ import { has1mSuffix } from "./contextWindow1m.js";
 import { MODEL_KEY_BY_FIRST_PARTY_ID } from "./configs.js";
 import { getUltraplanModel } from "../../commands/ultraplan.js";
 
-//@ chunk-aepeg2w5.js:438266-438374 placement = isExcludedModel (0.763)
+//@ chunk-aepeg2w5.js:438266-438374 placement (2.1.88 match: isExcludedModel, 0.763)
 function getDefaultHaikuModel() {
   let ANTHROPIC_DEFAULT_HAIKU_MODEL = env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
   if (ANTHROPIC_DEFAULT_HAIKU_MODEL !== undefined)
@@ -225,7 +225,7 @@ function resolveRuntimeMainLoopModel(input) {
     clampWarning,
   };
 }
-//@ chunk-aepeg2w5.js:440260-440317 placement = resolveSkillModelOverride (1)
+//@ chunk-aepeg2w5.js:440260-440317 placement (2.1.88 match: resolveSkillModelOverride, 1)
 /**
  * 去掉结尾所有 [1m] 再加一个 [1m]。旧版名 resolveSkillModelOverride_3 为错配。
  */
@@ -307,7 +307,7 @@ function availableFamilyDefault(model) {
   let familyDefault = familyDefaultFor(resolved) ?? resolved;
   return isUnavailableModel(familyDefault) ? null : familyDefault;
 }
-//@ chunk-aepeg2w5.js:441220-441255 placement = renderToolUseMessage (1)
+//@ chunk-aepeg2w5.js:441220-441255 placement (2.1.88 match: renderToolUseMessage, 1)
 /**
  * 返回 tne() 中的 setting 字段（被 fastMode 等多处使用）；旧版名 renderToolUseMessage 为误配。
  */

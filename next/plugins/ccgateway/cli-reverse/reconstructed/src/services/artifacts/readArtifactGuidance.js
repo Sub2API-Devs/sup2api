@@ -507,7 +507,7 @@ function isKnownTypeRead(read, inline, firstParty) {
 function referencesDbWrite(read, storeDeclared) {
   return storeDeclared && referencedAddonActions(read.text).has("write_db");
 }
-//@ chunk-6ht21p2a.js:46268-46421 placement = isFileReadDenied (0.77)
+//@ chunk-6ht21p2a.js:46268-46421 placement (2.1.88 match: isFileReadDenied, 0.77)
 function isFileReadDenied(read, owned, listing, isNew = false) {
   if (read?.kind !== "read" || !isKnownTypeRead(read, owned, listing)) return "";
   let typeKey = instructionsTypeKey(read.text);

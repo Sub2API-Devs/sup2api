@@ -39,7 +39,7 @@ import { OrgConfigConsentHost } from "./OrgConfigConsentHost.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:471582-471772 fingerprint = getTeleportErrors (1)
+//@ chunk-s61vbvea.js:471582-471772 fingerprint (2.1.88 match: getTeleportErrors, 1)
 async function getTeleportErrors(credentials, errorsToIgnore) {
   let errors = new Set();
   let [needsLogin, isGitClean] = await Promise.all([
@@ -59,7 +59,7 @@ var dismissedErrors; // deferred: has load-time effects after a deferred stateme
 deferInit("chunk-qh0448cn.js:3236", () => {
   dismissedErrors = new Set();
 });
-//@ chunk-qh0448cn.js:3251-5645 facade-majority = TeleportError (0.538)
+//@ chunk-qh0448cn.js:3251-5645 facade-majority (2.1.88 match: TeleportError, 0.538)
 /**
  * teleport 前置错误：需要登录时进入登录，需要 stash 时进入 TeleportStash，完成后继续。
  */

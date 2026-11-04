@@ -338,7 +338,7 @@ function rebaseHookOriginForAgent(spawnOptions, isRewritten) {
   if (isRewritten && isPlainKestrelOn() && getHookCaller(toolUseContext) !== undefined)
     toolUseContext.hookOrigin = rebaseHookOrigin(toolUseContext);
 }
-//@ chunk-0h4e7gnq.js:8161-8501 placement = getTokenCountFromUsage (1)
+//@ chunk-0h4e7gnq.js:8161-8501 placement (2.1.88 match: getTokenCountFromUsage, 1)
 /**
  * 把若干 usage 逐字段相加（输入/输出/缓存读/写），model 取最后一个。错归（代理轮次完成时读用量）。
  */
@@ -369,7 +369,7 @@ deferInit("chunk-0h4e7gnq.js:134868", () => {
   isPublishShapedArtifactAction =
     require("../ArtifactTool/AMPERSAND_FORMS.lazy.js").isPublishShapedArtifactAction;
 });
-//@ chunk-0h4e7gnq.js:135050-135711 fingerprint = filterToolsForAgent (0.521)
+//@ chunk-0h4e7gnq.js:135050-135711 fingerprint (2.1.88 match: filterToolsForAgent, 0.521)
 /**
  * 按子代理身份过滤工具池：去掉记忆受限工具与仅主线程工具，MCP 工具保留，plan 模式补 ExitPlanMode，Agent 工具只在深度未达上限时保留，异步代理只保留异步安全工具（队友可额外保留团队工具）；队友的 SendMessage 设为 alwaysLoad。
  */
@@ -616,7 +616,7 @@ function resolveAgentToolNames(toolUseContext) {
     ),
   );
 }
-//@ chunk-0h4e7gnq.js:139421-142580 fingerprint = resolveAgentTools (0.485)
+//@ chunk-0h4e7gnq.js:139421-142580 fingerprint (2.1.88 match: resolveAgentTools, 0.485)
 /**
  * resolveAgentTools：按代理定义的 tools/disallowedTools 从可用工具中解析出最终工具集，支持 "*"、Agent(type,…) 允许列表、mcp__server__* 通配、工具别名与 V1 底层名；Glob/Grep 被嵌入搜索替代时自动补回；有 TaskStop/REPL 时补 GetTask。返回 resolvedTools 与 valid/invalid/unavailable 明细。
  */
@@ -864,7 +864,7 @@ function resolveAgentTools(
     declaredAgentToolWithheld,
   };
 }
-//@ chunk-0h4e7gnq.js:142580-144612 callgraph-fingerprint = agentToolResultSchema (0.391)
+//@ chunk-0h4e7gnq.js:142580-144612 callgraph-fingerprint (2.1.88 match: agentToolResultSchema, 0.391)
 /**
  * 子代理完成结果 schema：agentId、content、totalTokens/totalToolUseCount/totalDurationMs、usage、toolStats、handback 等。
  */
@@ -949,7 +949,7 @@ deferInit("chunk-0h4e7gnq.js:142580", () => {
     }),
   );
 });
-//@ chunk-0h4e7gnq.js:144612-144742 layout = countToolCallsSince (1)
+//@ chunk-0h4e7gnq.js:144612-144742 layout (2.1.88 match: countToolCallsSince, 1)
 function countToolUseBlocks(messages) {
   let toolCallCount = 0;
   for (let message of messages)
@@ -958,7 +958,7 @@ function countToolUseBlocks(messages) {
     }
   return toolCallCount;
 }
-//@ chunk-0h4e7gnq.js:144742-145756 callgraph-fingerprint = countToolUses (0.163)
+//@ chunk-0h4e7gnq.js:144742-145756 callgraph-fingerprint (2.1.88 match: countToolUses, 0.163)
 /**
  * 统计子代理消息中的工具使用：读/搜索/Bash/编辑（含增删行数）/其他，叠加嵌套结果的 toolStats。
  */
@@ -1072,7 +1072,7 @@ function findTrailingModelFallback(messages) {
   }
   return;
 }
-//@ chunk-0h4e7gnq.js:146402-149674 fingerprint = finalizeAgentTool (0.374)
+//@ chunk-0h4e7gnq.js:146402-149674 fingerprint (2.1.88 match: finalizeAgentTool, 0.374)
 /**
  * finalizeAgentTool：从子代理消息中提取最后的文本报告，处理 SubagentHandback（send/flagged/withheld）、max turns、模型 fallback、持久化文件说明与长度截断，记录 tengu_agent_tool_completed 与 OTel subagent_completed，返回 agentToolResult。
  */
@@ -1374,7 +1374,7 @@ function fitReportWithPersistedFilesNote(reportBlocks, persistedFiles, harnessNo
     ],
   };
 }
-//@ chunk-0h4e7gnq.js:150581-150728 fingerprint = getLastToolUseName (1)
+//@ chunk-0h4e7gnq.js:150581-150728 fingerprint (2.1.88 match: getLastToolUseName, 1)
 /**
  * assistant 消息中最后一个 tool_use 的名字。
  */
@@ -1383,7 +1383,7 @@ function getLastToolUseName(message) {
   let block = message.message.content.findLast((block) => block.type === "tool_use");
   return block?.type === "tool_use" ? block.name : undefined;
 }
-//@ chunk-0h4e7gnq.js:150728-151013 fingerprint = emitTaskProgress (0.891)
+//@ chunk-0h4e7gnq.js:150728-151013 fingerprint (2.1.88 match: emitTaskProgress, 0.891)
 /**
  * 把进度跟踪器的最新统计发成任务进度事件（token、工具次数、最近活动）。
  */
@@ -1589,7 +1589,7 @@ var HANDOFF_SEVERITY_SITE = {
 function shouldClassifyHandoff(toolPermissionContext, handback) {
   return toolPermissionContext.mode === "auto" && handback !== "send" && handback !== "flagged";
 }
-//@ chunk-0h4e7gnq.js:153266-156224 fingerprint = classifyHandoffIfNeeded (0.527)
+//@ chunk-0h4e7gnq.js:153266-156224 fingerprint (2.1.88 match: classifyHandoffIfNeeded, 0.527)
 /**
  * classifyHandoffIfNeeded：auto 模式下用分类器审查子代理的动作与最终报告；被拦截时返回 SECURITY WARNING（flagged/refused/unavailable）附加到报告前，未拦截返回 null。
  */
@@ -1984,7 +1984,7 @@ function adoptSubagentPublishArmsAsync(agentId, context) {
     )
     .catch(logError);
 }
-//@ chunk-0h4e7gnq.js:159836-171592 callgraph-witnessed = runAsyncAgentLifecycle (0.225)
+//@ chunk-0h4e7gnq.js:159836-171592 callgraph-witnessed (2.1.88 match: runAsyncAgentLifecycle, 0.225)
 /**
  * runAsyncAgentLifecycle：后台子代理的生命周期——驱动 makeStream 产生的 runAgent 流，更新任务表/转录、进度与空闲状态、看门狗卡死检测，结束时 finalize 报告、可选 handoff 审查，并入队完成/失败/被杀通知；支持 /background 转后台与 keepalive 挂起。
  */

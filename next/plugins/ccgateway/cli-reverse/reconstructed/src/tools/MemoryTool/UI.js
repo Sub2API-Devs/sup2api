@@ -135,7 +135,7 @@ function renderMemoryReadResult(result, progressMessages, { verbose }) {
     }),
   });
 }
-//@ chunk-x5e9ztk0.js:7680-8000 placement = renderToolUseErrorMessage (0.343)
+//@ chunk-x5e9ztk0.js:7680-8000 placement (2.1.88 match: renderToolUseErrorMessage, 0.343)
 function renderToolUseErrorMessage(result, { verbose }) {
   if (typeof result !== "string")
     return jsxProd_default(FallbackToolUseErrorMessage, {

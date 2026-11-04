@@ -284,7 +284,7 @@ function filterPathsUnder(submodules, paths) {
     return mapped.some((prefix) => lowered.startsWith(prefix) || prefix.startsWith(lowered));
   });
 }
-//@ chunk-e6aww6q8.js:4197419-4197592 placement = resolveCwdReentry (0.844)
+//@ chunk-e6aww6q8.js:4197419-4197592 placement (2.1.88 match: resolveCwdReentry, 0.844)
 /**
  * （旧版名配错）规范化相对路径为小写键，. 为空串，跳出上级目录返回 undefined。
  */

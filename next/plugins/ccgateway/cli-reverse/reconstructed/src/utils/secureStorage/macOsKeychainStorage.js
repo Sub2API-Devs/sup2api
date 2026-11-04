@@ -56,7 +56,7 @@ function classifyKeychainError(stderr) {
 var KEYCHAIN_PROBE_TIMEOUT_MS = 2000;
 //@ chunk-b29hdd5e.js:2017-2026 affinity
 var KEYCHAIN_ITEM_NOT_FOUND_EXIT = 44;
-//@ chunk-b29hdd5e.js:2026-2212 fingerprint = doReadAsync (1)
+//@ chunk-b29hdd5e.js:2026-2212 fingerprint (2.1.88 match: doReadAsync, 1)
 /**
  * 用 security find-generic-password 探测钥匙串项是否不存在（退出码等于“未找到”）；出错返回 false。不是旧版的 doReadAsync。
  */

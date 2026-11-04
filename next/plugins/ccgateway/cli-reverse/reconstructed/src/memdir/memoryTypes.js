@@ -142,7 +142,7 @@ ${replaced}`;
 var MEMORY_LINKING_GUIDANCE_2 = [
   "In the body, link to related memories with `[[name]]`, where `name` is the other memory's `name:` slug. Link liberally \u2014 a `[[name]]` that doesn't match an existing memory yet is fine; it marks something worth writing later, not an error.",
 ];
-//@ chunk-82kqcve8.js:91137-91549 fingerprint = MEMORY_FRONTMATTER_EXAMPLE (0.639)
+//@ chunk-82kqcve8.js:91137-91549 fingerprint (2.1.88 match: MEMORY_FRONTMATTER_EXAMPLE, 0.639)
 /**
  * 记忆文件 frontmatter 示例（name/description/type）。
  */
@@ -162,7 +162,7 @@ function MEMORY_FRONTMATTER_EXAMPLE_2(types) {
     ...MEMORY_LINKING_GUIDANCE_2,
   ];
 }
-//@ chunk-82kqcve8.js:91549-91599 fingerprint = MEMORY_TYPES (1)
+//@ chunk-82kqcve8.js:91549-91599 fingerprint (2.1.88 match: MEMORY_TYPES, 1)
 /**
  * 记忆类型枚举：user、feedback、project、reference。
  */
@@ -212,7 +212,7 @@ function buildCompactMemoryTypesSection(types) {
 function selectMemoryTypesSection(fullSection, types = MEMORY_TYPES) {
   return isCompactMemoryTypesEnabled() ? buildCompactMemoryTypesSection(types) : fullSection;
 }
-//@ chunk-82kqcve8.js:92477-109264 fingerprint = TYPES_SECTION_COMBINED (0.854)
+//@ chunk-82kqcve8.js:92477-109264 fingerprint (2.1.88 match: TYPES_SECTION_COMBINED, 0.854)
 /**
  * 内置记忆系统提示里的“记忆类型”大段：user/feedback/project/reference 四类的描述、何时保存、如何使用、示例，以及团队/个人两个变体。
  */
@@ -367,7 +367,7 @@ function isMemoryLinkingEnabled() {
 function getMemoryLinkingLines() {
   return isMemoryLinkingEnabled() ? MEMORY_FRONTMATTER_EXAMPLE : [];
 }
-//@ chunk-82kqcve8.js:109346-111681 fingerprint = WHAT_NOT_TO_SAVE_SECTION (0.568)
+//@ chunk-82kqcve8.js:109346-111681 fingerprint (2.1.88 match: WHAT_NOT_TO_SAVE_SECTION, 0.568)
 /**
  * 记忆提示词里的三段规则：不该保存什么（代码模式、git 历史、调试结论…）、何时访问记忆、引用记忆前先核对现状。
  */

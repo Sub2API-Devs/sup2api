@@ -194,7 +194,7 @@ function usageErrorResponse(error) {
     anthropicError: hasProgressMessage(error.response?.data),
   };
 }
-//@ chunk-w5ndchqs.js:11138-11439 placement = hasProgressMessage (1)
+//@ chunk-w5ndchqs.js:11138-11439 placement (2.1.88 match: hasProgressMessage, 1)
 /**
  * 从对象中截取 {error:{type,message}} 摘要（API 错误）。
  */
@@ -278,7 +278,7 @@ function promoOfferStrings() {
     ),
   };
 }
-//@ chunk-w5ndchqs.js:12957-12973 placement = SEP_WIDTH (1)
+//@ chunk-w5ndchqs.js:12957-12973 placement (2.1.88 match: SEP_WIDTH, 1)
 var SEP = " \xB7 ";
 //@ chunk-w5ndchqs.js:12973-13279 placement
 function fillUsageTemplate(template, values) {
@@ -567,7 +567,7 @@ function usageEndpointPath(endpoint) {
       return `/api/oauth/usage?${STARRY_WATERFALL}=${endpoint.surface}&skip_spend=1`;
   }
 }
-//@ chunk-w5ndchqs.js:16789-18746 callgraph-fingerprint = fetchUtilization (0.181)
+//@ chunk-w5ndchqs.js:16789-18746 callgraph-fingerprint (2.1.88 match: fetchUtilization, 0.181)
 /**
  * 拉取订阅利用率（各窗口），失败结果可重放；auth_rejected 时等待挂起刷新后重试。
  */

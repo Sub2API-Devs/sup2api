@@ -163,7 +163,7 @@ function areHooksRestrictedForGoal() {
         personTurnedHooksOff()
     : shouldSkipSessionHooksByPolicy();
 }
-//@ chunk-bnwcqde4.js:2907-2979 placement = getValueFromInput (1)
+//@ chunk-bnwcqde4.js:2907-2979 placement (2.1.88 match: getValueFromInput, 1)
 function getValueFromInput(input) {
   let message = {
     type: "prompt",

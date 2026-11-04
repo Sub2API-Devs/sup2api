@@ -174,7 +174,7 @@ async function linkIntoHome(sourcePath, sourceHandle, targetPath, mode) {
   error.code = "HOME_SOURCE_EXCHANGED";
   throw error;
 }
-//@ chunk-jjyx5tf2.js:2925-2978 placement = getFileIdentity (0.794)
+//@ chunk-jjyx5tf2.js:2925-2978 placement (2.1.88 match: getFileIdentity, 0.794)
 function getFileIdentity(left, right) {
   return left?.ino === right.ino && left.dev === right.dev;
 }

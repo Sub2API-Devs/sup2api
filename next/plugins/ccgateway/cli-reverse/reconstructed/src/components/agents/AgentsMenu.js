@@ -54,13 +54,13 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { SearchBox } from "../SearchBox.js";
 import { ModelSelector } from "./ModelSelector.js";
 
-//@ chunk-82kqcve8.js:254881-255014 fingerprint = _temp6 (0.753)
+//@ chunk-82kqcve8.js:254881-255014 fingerprint (2.1.88 match: _temp6, 0.753)
 function getNonProjectAdditionalDirectories(a_1) {
   return Array.from(a_1.additionalWorkingDirectories.values())
     .filter((additionalWorkingDirectory) => additionalWorkingDirectory.source !== "projectSettings")
     .map((additionalWorkingDirectory) => additionalWorkingDirectory.path);
 }
-//@ chunk-18hwfzwa.js:342935-343157 fingerprint = _temp3 (0.687)
+//@ chunk-18hwfzwa.js:342935-343157 fingerprint (2.1.88 match: _temp3, 0.687)
 /**
  * 更新 AppState 的 toolPermissionContext（可传函数），仅在实际变化时于下一 tick 发出权限变更信号。
  */
@@ -80,7 +80,7 @@ function setToolPermissionContextAndNotify(setShowState, updater) {
     permissionModeSignal.emit();
   });
 }
-//@ chunk-18hwfzwa.js:687519-687576 fingerprint = _temp (0.673)
+//@ chunk-18hwfzwa.js:687519-687576 fingerprint (2.1.88 match: _temp, 0.673)
 function selectAgentDefinitionsActiveAgents(s) {
   return s.agentDefinitions.activeAgents;
 }
@@ -178,7 +178,7 @@ function wrapWithIndent(text, maxWidth) {
   return lines.join(`
 ${" ".repeat(RULE_LABEL_WIDTH)}`);
 }
-//@ chunk-p2qwpk2k.js:44417-49860 callgraph-witnessed = AgentsMenu (0.027)
+//@ chunk-p2qwpk2k.js:44417-49860 callgraph-witnessed (2.1.88 match: AgentsMenu, 0.027)
 function AgentsMenu(props) {
   let $ = useMemoCache(64);
   let {

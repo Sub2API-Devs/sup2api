@@ -14,7 +14,7 @@ import {
   AUTO_CONTINUE_CANCELLED_TEXT,
 } from "../components/rateLimit/quotaAutoResume.js";
 
-//@ chunk-18hwfzwa.js:465224-465321 fingerprint = _temp (0.576)
+//@ chunk-18hwfzwa.js:465224-465321 fingerprint (2.1.88 match: _temp, 0.576)
 function cancelQuotaAutoResumeWithNotice(addNotification, gesture) {
   cancelQuotaAutoResume(gesture);
   addNotification({

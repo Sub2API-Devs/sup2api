@@ -48,7 +48,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 function getIsFeedbackDisabled() {
   return !isFeedbackAllowed();
 }
-//@ chunk-18hwfzwa.js:999617-1001694 fingerprint = FeedbackSurvey (0.451)
+//@ chunk-18hwfzwa.js:999617-1001694 fingerprint (2.1.88 match: FeedbackSurvey, 0.451)
 function FeedbackSurvey({
   state,
   lastResponse,
@@ -283,7 +283,7 @@ var FOLLOWUP_TITLES = {
   fine: "Tell us more",
   not_sure: "Tell us more",
 };
-//@ chunk-18hwfzwa.js:1002626-1004284 fingerprint = FeedbackSurveyThanks (0.626)
+//@ chunk-18hwfzwa.js:1002626-1004284 fingerprint (2.1.88 match: FeedbackSurveyThanks, 0.626)
 function FeedbackSurveyThanks(props) {
   let $ = useMemoCache(24);
   let {

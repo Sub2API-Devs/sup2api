@@ -139,7 +139,7 @@ var CONFIG_SOURCE_LABELS = ["auto", ...SETTING_FIELD_LABELS];
 var CONFIG_BACKEND_LABELS = ["auto", "alwaysAsk", "disabled"];
 var TRANSPORT_LABELS = 1e5;
 var GLOBAL_CONFIG_FIELD_KINDS = 1e6;
-//@ chunk-aepeg2w5.js:76946-77163 facade-majority = DEFAULT_PROJECT_CONFIG (0.927)
+//@ chunk-aepeg2w5.js:76946-77163 facade-majority (2.1.88 match: DEFAULT_PROJECT_CONFIG, 0.927)
 var DEFAULT_PROJECT_CONFIG = {
   allowedTools: [],
   mcpContextUris: [],
@@ -150,7 +150,7 @@ var DEFAULT_PROJECT_CONFIG = {
   hasClaudeMdExternalIncludesApproved: false,
   hasClaudeMdExternalIncludesWarningShown: false,
 };
-//@ chunk-aepeg2w5.js:77163-77945 fingerprint = createDefaultGlobalConfig (0.948)
+//@ chunk-aepeg2w5.js:77163-77945 fingerprint (2.1.88 match: createDefaultGlobalConfig, 0.948)
 /**
  * 全局配置默认值（numStartups、theme=dark、autoCompactEnabled 等），读盘时与文件内容合并。
  */
@@ -196,7 +196,7 @@ function createDefaultGlobalConfig() {
     copyFullResponse: false,
   };
 }
-//@ chunk-aepeg2w5.js:77945-78062 facade-majority = TEST_GLOBAL_CONFIG_FOR_TESTING (0.483)
+//@ chunk-aepeg2w5.js:77945-78062 facade-majority (2.1.88 match: TEST_GLOBAL_CONFIG_FOR_TESTING, 0.483)
 var DEFAULT_GLOBAL_CONFIG; // deferred: uses createDefaultGlobalConfig of its import cycle while loading; runs once the cycle is complete
 var globalConfigStores;
 deferInit("chunk-aepeg2w5.js:77945", () => {
@@ -222,7 +222,7 @@ deferInit("chunk-aepeg2w5.js:77945", () => {
 function getConfigState() {
   return onProcessRootHost(globalConfigStores);
 }
-//@ chunk-aepeg2w5.js:78091-79146 facade-majority = GLOBAL_CONFIG_KEYS (0.88)
+//@ chunk-aepeg2w5.js:78091-79146 facade-majority (2.1.88 match: GLOBAL_CONFIG_KEYS, 0.88)
 var GLOBAL_CONFIG_KEYS = [
   "apiKeyHelper",
   "installMethod",
@@ -276,7 +276,7 @@ var GLOBAL_CONFIG_KEYS = [
 function isGlobalConfigKey(key) {
   return GLOBAL_CONFIG_KEYS.includes(key);
 }
-//@ chunk-aepeg2w5.js:79185-79235 facade-majority = PROJECT_CONFIG_KEYS (0.79)
+//@ chunk-aepeg2w5.js:79185-79235 facade-majority (2.1.88 match: PROJECT_CONFIG_KEYS, 0.79)
 var PROJECT_CONFIG_KEYS = ["allowedTools", "hasTrustDialogAccepted"];
 //@ chunk-aepeg2w5.js:79235-79276 facade-majority
 function resetTrustDialogAcceptedCache() {
@@ -319,7 +319,7 @@ var PERSISTED_TRUST_IGNORED =
 function ignoresPersistedTrust() {
   return ignoresPersistedTrust_2();
 }
-//@ chunk-aepeg2w5.js:79776-79866 facade-majority = computeTrustDialogAccepted (1)
+//@ chunk-aepeg2w5.js:79776-79866 facade-majority (2.1.88 match: computeTrustDialogAccepted, 1)
 function isTrustKeyPersistedTrusted(key) {
   if (isRestrictedWorkspaceTrustKey(key)) return false;
   return getGlobalConfigForTrust().projects?.[key]?.hasTrustDialogAccepted === true;
@@ -504,7 +504,7 @@ function checkLocalSettingsTrackedAt(dir) {
     return "untracked";
   }
 }
-//@ chunk-aepeg2w5.js:82524-82688 layout = computeTrustDialogAccepted (0.778)
+//@ chunk-aepeg2w5.js:82524-82688 layout (2.1.88 match: computeTrustDialogAccepted, 0.778)
 function computeTrustDialogAccepted_2() {
   if (env.CLAUDE_CODE_SANDBOXED) return true;
   if (getSessionTrustAccepted()) return true;
@@ -551,7 +551,7 @@ function persistedTrustBoundary(path) {
       }
     : null;
 }
-//@ chunk-aepeg2w5.js:83055-83289 layout = computeTrustDialogAccepted (1)
+//@ chunk-aepeg2w5.js:83055-83289 layout (2.1.88 match: computeTrustDialogAccepted, 1)
 function computeTrustDialogAccepted(config, path, identityFn) {
   let currentPath = normalizePathForConfigKey(path);
   while (true) {
@@ -574,7 +574,7 @@ function isPathTrusted(path, { advisoryNoFsProbe = false } = {}) {
   if (advisoryNoFsProbe) return computeTrustDialogAccepted(config, identity(resolve(path)), null) !== null;
   return findPersistedTrustKey(path) !== null;
 }
-//@ chunk-aepeg2w5.js:83404-83511 facade-majority = computeTrustDialogAccepted (1)
+//@ chunk-aepeg2w5.js:83404-83511 facade-majority (2.1.88 match: computeTrustDialogAccepted, 1)
 function findPersistedTrustKey(path) {
   let config = getGlobalConfigForTrust();
   let currentPath = getWorkspacePersistedTrustKey(path);
@@ -594,7 +594,7 @@ function setPathTrusted(dir, storageV5) {
 function setPathTrustedDurably(path, trusted) {
   return saveGlobalConfigDurably(makeTrustAcceptedUpdater(getWorkspacePersistedTrustKey(path)), trusted);
 }
-//@ chunk-aepeg2w5.js:83661-83835 layout = computeTrustDialogAccepted (1)
+//@ chunk-aepeg2w5.js:83661-83835 layout (2.1.88 match: computeTrustDialogAccepted, 1)
 function makeTrustAcceptedUpdater(workspacePersistedTrustKey) {
   return (value) => {
     if (value.projects?.[workspacePersistedTrustKey]?.hasTrustDialogAccepted) return value;
@@ -622,7 +622,7 @@ function isTestConfigMode() {
 function isProjectConfigKey(key) {
   return PROJECT_CONFIG_KEYS.includes(key);
 }
-//@ chunk-aepeg2w5.js:83949-84133 fingerprint = wouldLoseAuthState (0.837)
+//@ chunk-aepeg2w5.js:83949-84133 fingerprint (2.1.88 match: wouldLoseAuthState, 0.837)
 /**
  * 新读到的配置相对缓存是否丢失了 oauthAccount 或 hasCompletedOnboarding（防止并发写抹掉登录态）。
  */
@@ -743,7 +743,7 @@ function isOnlyCrashMarkerChange(before, after) {
 }
 //@ chunk-aepeg2w5.js:86188-86211 facade-majority
 var CONFIG_CRASH_MARKER_REENQUEUE_DELAYS_MS = [30000, 120000];
-//@ chunk-aepeg2w5.js:86211-86415 layout = getProjectsDir (0.798)
+//@ chunk-aepeg2w5.js:86211-86415 layout (2.1.88 match: getProjectsDir, 0.798)
 /**
  * 判断全局配置的改动是否只涉及低风险键：projects 下逐个项目比较，其余键必须都在 LOW_STAKES_GLOBAL_CONFIG_KEYS 里。
  */
@@ -951,7 +951,7 @@ function saveGlobalConfigQueued(updater, storageV5) {
     saveGlobalConfig_2(updater, optimisticConfig, storageV5, lockRetrySignal),
   );
 }
-//@ chunk-aepeg2w5.js:88825-90196 fingerprint = saveGlobalConfig (0.49)
+//@ chunk-aepeg2w5.js:88825-90196 fingerprint (2.1.88 match: saveGlobalConfig, 0.49)
 async function saveGlobalConfig_2(updater, storageV5, reason, lockRetrySignal) {
   let configState = getConfigState();
   let written = null;
@@ -1039,7 +1039,7 @@ async function saveGlobalConfig_2(updater, storageV5, reason, lockRetrySignal) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:90196-90339 fingerprint = reportConfigCacheStats (0.798)
+//@ chunk-aepeg2w5.js:90196-90339 fingerprint (2.1.88 match: reportConfigCacheStats, 0.798)
 function reportConfigCacheStats() {
   let { hits, misses } = getConfigState().takeCacheStats();
   let total = hits + misses;
@@ -1057,7 +1057,7 @@ deferInit("chunk-aepeg2w5.js:90339", () => {
     reportConfigCacheStats();
   });
 });
-//@ chunk-aepeg2w5.js:90359-90653 fingerprint = migrateConfigFields (0.723)
+//@ chunk-aepeg2w5.js:90359-90653 fingerprint (2.1.88 match: migrateConfigFields, 0.723)
 /**
  * 旧字段迁移：删 showSpinnerTree；由 autoUpdaterStatus 推出 installMethod/autoUpdates。
  */
@@ -1242,7 +1242,7 @@ async function refreshGlobalConfigFromDisk(storageV5) {
     return;
   installGlobalConfigFromDisk(priorStats, storageV5, storageV5);
 }
-//@ chunk-aepeg2w5.js:92974-93199 callgraph-witnessed = startGlobalConfigFreshnessWatcher (0.213)
+//@ chunk-aepeg2w5.js:92974-93199 callgraph-witnessed (2.1.88 match: startGlobalConfigFreshnessWatcher, 0.213)
 function installGlobalConfigFromDisk(text, outcome, stats) {
   let file = getConfigState();
   if (outcome.mtimeMs <= file.cache.mtime) return;
@@ -1436,7 +1436,7 @@ function writeThroughConfigCache(config) {
 function subscribeGlobalConfigInstalled(listener) {
   return getConfigState().installed.subscribe(listener);
 }
-//@ chunk-aepeg2w5.js:95774-95950 facade-majority = getGlobalConfig (0)
+//@ chunk-aepeg2w5.js:95774-95950 facade-majority (2.1.88 match: getGlobalConfig, 0)
 /**
  * 返回内存中的全局配置（~/.claude.json），未启用配置前访问会抛 Config accessed before allowed；测试模式返回测试配置。
  */
@@ -1558,14 +1558,14 @@ var TRUSTED_SOURCE_SHORT_NAMES = {
 function getCustomApiKeyStatus(globalConfig) {
   return customApiKeyStatusOf(getGlobalConfig(), globalConfig);
 }
-//@ chunk-aepeg2w5.js:97804-97935 facade-majority = getCustomApiKeyStatus (0.918)
+//@ chunk-aepeg2w5.js:97804-97935 facade-majority (2.1.88 match: getCustomApiKeyStatus, 0.918)
 function customApiKeyStatusOf(globalConfig, globalConfig_2) {
   let { approved, rejected } = customApiKeyResponsesOf(globalConfig);
   if (approved.includes(globalConfig_2)) return "approved";
   if (rejected.includes(globalConfig_2)) return "rejected";
   return "new";
 }
-//@ chunk-aepeg2w5.js:97935-98038 facade-majority = isCustomApiKeyApproved (0.816)
+//@ chunk-aepeg2w5.js:97935-98038 facade-majority (2.1.88 match: isCustomApiKeyApproved, 0.816)
 /**
  * 返回 customApiKeyResponses（approved/rejected 截断 key 列表）。
  */
@@ -1648,7 +1648,7 @@ function logConfigFallbackSuppressedUnreadable(reason) {
     caller: fromEnum(reason),
   });
 }
-//@ chunk-aepeg2w5.js:99209-99834 callgraph-witnessed = saveConfig (0.182)
+//@ chunk-aepeg2w5.js:99209-99834 callgraph-witnessed (2.1.88 match: saveConfig, 0.182)
 async function saveConfig(file, config, defaultConfig) {
   writeThroughConfigCache(file);
   let wrote = false;
@@ -1834,7 +1834,7 @@ async function listGlobalConfigBackups(backend) {
   let copyList = await listGlobalConfigCopies(backend, "backup", true);
   return copyList.ok ? ok_2(copyList.value.map((copy) => copy.stamp)) : copyList;
 }
-//@ chunk-aepeg2w5.js:101666-104445 fingerprint = saveConfigWithLock (0.489)
+//@ chunk-aepeg2w5.js:101666-104445 fingerprint (2.1.88 match: saveConfigWithLock, 0.489)
 /**
  * 对 ~/.claude.json 加 .lock 文件锁后读-改-写；锁等待过长记日志，锁被抢占时报 compromised；写前按间隔备份到 ~/.claude/backups。
  */
@@ -2456,7 +2456,7 @@ function installStorageConfigRead(backend, record, writeGeneration) {
     attachGlobalConfigStorageBackend(backend);
   }
 }
-//@ chunk-aepeg2w5.js:111647-112513 fingerprint = enableConfigs (0.435)
+//@ chunk-aepeg2w5.js:111647-112513 fingerprint (2.1.88 match: enableConfigs, 0.435)
 async function enableConfigs_2(backend, options) {
   let configState = getConfigState();
   let startTime = Date.now();
@@ -2499,7 +2499,7 @@ async function enableConfigs_2(backend, options) {
     duration_ms: Date.now() - startTime,
   });
 }
-//@ chunk-aepeg2w5.js:112513-112553 layout = getConfigBackupDir (1)
+//@ chunk-aepeg2w5.js:112513-112553 layout (2.1.88 match: getConfigBackupDir, 1)
 function getConfigBackupDir_2() {
   return join(getClaudeConfigDir(), "backups");
 }
@@ -2537,7 +2537,7 @@ function configBackedUpStderr(backupPath) {
  */
 var CONFIG_ALREADY_BACKED_UP_TEXT = `The corrupted file has already been backed up.
 `;
-//@ chunk-aepeg2w5.js:112871-112984 fingerprint = getConfig (0.309)
+//@ chunk-aepeg2w5.js:112871-112984 fingerprint (2.1.88 match: getConfig, 0.309)
 function getConfig(globalClaudeFile, backupPath) {
   return `A backup file exists at: ${backupPath}
 You can manually restore it by running: cp "${backupPath}" "${globalClaudeFile}"
@@ -2554,7 +2554,7 @@ Claude configuration file not found at: ${globalClaudeFile}
 `
   );
 }
-//@ chunk-aepeg2w5.js:113068-113629 fingerprint = findMostRecentBackup (0.793)
+//@ chunk-aepeg2w5.js:113068-113629 fingerprint (2.1.88 match: findMostRecentBackup, 0.793)
 /**
  * 在备份目录中找最近的 .claude.json.backup.<ts>，用于提示恢复。
  */
@@ -2742,7 +2742,7 @@ function clearProjectPathForConfigCache() {
 function getRawCurrentProjectConfigEntry() {
   return hasNoProjectDir() ? undefined : getGlobalConfig().projects?.[getProjectPathForConfig()];
 }
-//@ chunk-aepeg2w5.js:115744-115968 facade-majority = getCurrentProjectConfig (0.469)
+//@ chunk-aepeg2w5.js:115744-115968 facade-majority (2.1.88 match: getCurrentProjectConfig, 0.469)
 /**
  * 当前项目在 ~/.claude.json projects 字典里的配置（键为原始 cwd 的 git 根或 realpath），不存在时返回 DEFAULT_PROJECT_CONFIG；兼容 allowedTools 曾经是 JSON 字符串。
  */
@@ -2811,7 +2811,7 @@ function enqueueProjectConfigSave(updater, storageV5) {
     saveCurrentProjectConfig_2(updater, projectPath, optimisticConfig, storageV5, 0),
   );
 }
-//@ chunk-aepeg2w5.js:116723-118337 fingerprint = saveCurrentProjectConfig (0.436)
+//@ chunk-aepeg2w5.js:116723-118337 fingerprint (2.1.88 match: saveCurrentProjectConfig, 0.436)
 async function saveCurrentProjectConfig_2(updater, projectPath, baseConfig, storageV5, attempt) {
   let absolutePath = getConfigState();
   let written = null;
@@ -3223,7 +3223,7 @@ async function deleteProjectFieldsLocked(fields, store) {
 function isAutoUpdaterDisabled() {
   return getAutoUpdaterDisabledReason() !== null;
 }
-//@ chunk-aepeg2w5.js:122571-122877 facade-majority = shouldSkipPluginAutoupdate (0.253)
+//@ chunk-aepeg2w5.js:122571-122877 facade-majority (2.1.88 match: shouldSkipPluginAutoupdate, 0.253)
 function shouldSkipPluginAutoupdate() {
   if (env.FORCE_AUTOUPDATE_PLUGINS) return false;
   if (!env.CLAUDE_CODE_AUTOUPDATER_DISABLED_BY_HOST) return isAutoUpdaterDisabled();
@@ -3233,7 +3233,7 @@ function shouldSkipPluginAutoupdate() {
   if (skipReason !== null) logForDebugging(`Plugin autoupdate: off under the host's pin (${skipReason})`);
   return skipReason !== null;
 }
-//@ chunk-aepeg2w5.js:122877-123023 facade-majority = formatAutoUpdaterDisabledReason (0.808)
+//@ chunk-aepeg2w5.js:122877-123023 facade-majority (2.1.88 match: formatAutoUpdaterDisabledReason, 0.808)
 function formatAutoUpdaterDisabledReason(reason) {
   switch (reason.type) {
     case "development":
@@ -3251,7 +3251,7 @@ function formatAutoUpdaterDisabledReason(reason) {
 function getAutoUpdaterDisabledReason() {
   return getAutoUpdaterDisabledReason_2(isEnvTruthy(process.env.DISABLE_AUTOUPDATER));
 }
-//@ chunk-aepeg2w5.js:123085-123398 fingerprint = getAutoUpdaterDisabledReason (0.736)
+//@ chunk-aepeg2w5.js:123085-123398 fingerprint (2.1.88 match: getAutoUpdaterDisabledReason, 0.736)
 function getAutoUpdaterDisabledReason_2(env_2) {
   if (env.DISABLE_UPDATES)
     return {
@@ -3281,7 +3281,7 @@ function getAutoUpdaterDisabledReason_2(env_2) {
 }
 //@ chunk-aepeg2w5.js:123398-123422 layout
 var HEX64_ID_PATTERN = /^[0-9a-f]{64}$/;
-//@ chunk-aepeg2w5.js:123422-123684 facade-majority = getOrCreateUserID (0.664)
+//@ chunk-aepeg2w5.js:123422-123684 facade-majority (2.1.88 match: getOrCreateUserID, 0.664)
 /**
  * 读取或生成 userID（64 位 hex 随机串）并写回 ~/.claude.json；用于遥测 device_id 与 metadata.user_id。
  */
@@ -3380,7 +3380,7 @@ async function ensureRemoteControlMachineId(storageV5) {
     ? machineId
     : null;
 }
-//@ chunk-aepeg2w5.js:124717-124810 facade-majority = recordFirstStartTime (1)
+//@ chunk-aepeg2w5.js:124717-124810 facade-majority (2.1.88 match: recordFirstStartTime, 1)
 /**
  * 首次启动时写 firstStartTime 与 firstStartVersion。
  */
@@ -3409,7 +3409,7 @@ function stampFirstStart(globalConfig, firstStartTime) {
     }.VERSION,
   };
 }
-//@ chunk-aepeg2w5.js:125392-125613 facade-majority = getMemoryPath (1)
+//@ chunk-aepeg2w5.js:125392-125613 facade-majority (2.1.88 match: getMemoryPath, 1)
 /**
  * 记忆文件路径：User=<配置目录>/CLAUDE.md，Project=<cwd>/CLAUDE.md，Local=<cwd>/CLAUDE.local.md，Managed=<托管目录>/CLAUDE.md，AutoMem=自动记忆入口。
  */
@@ -3427,11 +3427,11 @@ function getMemoryPath(memoryType) {
       return getAutoMemEntrypoint();
   }
 }
-//@ chunk-aepeg2w5.js:125613-125662 facade-majority = getManagedClaudeRulesDir (1)
+//@ chunk-aepeg2w5.js:125613-125662 facade-majority (2.1.88 match: getManagedClaudeRulesDir, 1)
 function getManagedClaudeRulesDir() {
   return join(getManagedFilePath(), ".claude", "rules");
 }
-//@ chunk-aepeg2w5.js:125662-125701 facade-majority = getUserClaudeRulesDir (1)
+//@ chunk-aepeg2w5.js:125662-125701 facade-majority (2.1.88 match: getUserClaudeRulesDir, 1)
 function getUserClaudeRulesDir() {
   return join(getClaudeConfigDir(), "rules");
 }
@@ -3715,15 +3715,15 @@ deferInit("chunk-aepeg2w5.js:129194", () => {
 deferInit("chunk-aepeg2w5.js:129207", () => {
   registerSteerClientData(() => getCachedClientData());
 });
-//@ chunk-99h01h55.js:4844-4881 fingerprint = getUserClaudeRulesDir (1)
+//@ chunk-99h01h55.js:4844-4881 fingerprint (2.1.88 match: getUserClaudeRulesDir, 1)
 function getUserClaudeRulesDir_2(config) {
   return arrayField(config, "rules");
 }
-//@ chunk-23fm9f0d.js:32645-32693 fingerprint = getConfigBackupDir (1)
+//@ chunk-23fm9f0d.js:32645-32693 fingerprint (2.1.88 match: getConfigBackupDir, 1)
 function getConfigBackupDir() {
   return cleanupOldFilesMatching(join(getClaudeConfigDir(), "backups"), "", false);
 }
-//@ chunk-0h4e7gnq.js:157679-157918 fingerprint = removeProjectHistory (0.392)
+//@ chunk-0h4e7gnq.js:157679-157918 fingerprint (2.1.88 match: removeProjectHistory, 0.392)
 function removeProjectHistory(error, messages) {
   if (!(error instanceof AgentApiErrorTerminationError)) return null;
   if (!error.errorKind || !TRANSIENT_API_ERROR_KINDS.has(error.errorKind)) return null;

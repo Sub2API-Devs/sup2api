@@ -124,7 +124,7 @@ async function isMarkerDirOurs(dirPath) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:617191-617379 placement = scanDirectory (0.766)
+//@ chunk-e6aww6q8.js:617191-617379 placement (2.1.88 match: scanDirectory, 0.766)
 function scanDirectory(dirPath) {
   try {
     if (isInUseMarkerPath(dirPath)) {

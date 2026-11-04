@@ -220,11 +220,11 @@ function hasHostWorktreeDeclaration() {
  */
 var CONTROL_CHAR_RE = /\p{Cc}/u;
 var CONTROL_OR_FORMAT_CHAR_RE = /[\p{Cc}\p{Cf}]/u;
-//@ chunk-s61vbvea.js:432332-432383 placement = isDangerousFilePathToAutoEdit (1)
+//@ chunk-s61vbvea.js:432332-432383 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
 function getClaudeWorktreesDir(repoRoot) {
   return join(repoRoot, ".claude", "worktrees");
 }
-//@ chunk-s61vbvea.js:432383-432457 placement = isDangerousFilePathToAutoEdit (0.775)
+//@ chunk-s61vbvea.js:432383-432457 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 0.775)
 function getWorktreesDirSpec(repoRoot) {
   return {
     dir: getClaudeWorktreesDir(repoRoot),
@@ -900,7 +900,7 @@ function gitAncestorEntryPaths(path) {
     dir = parentDir;
   }
 }
-//@ chunk-s61vbvea.js:444669-444772 placement = isRealPathWithinTeamDir (1)
+//@ chunk-s61vbvea.js:444669-444772 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function readDirNamesCapped(realCandidate) {
   try {
     await lstat(realCandidate);
@@ -910,7 +910,7 @@ async function readDirNamesCapped(realCandidate) {
     return code === "ENOENT" || code === "ENOTDIR";
   }
 }
-//@ chunk-s61vbvea.js:444772-444863 placement = isRealPathWithinTeamDir (1)
+//@ chunk-s61vbvea.js:444772-444863 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function readDirNamesCappedSync(realCandidate) {
   try {
     lstatSync(realCandidate);
@@ -1335,7 +1335,7 @@ function linkedRepoRootOf(worktreePath) {
   let root = memoizeMap(getGitRepoCache().linkedFromRootByPin, worktreePath, canonicalRepoRootOrSentinel);
   return root === REPO_NEGATIVE_RESULT ? null : root;
 }
-//@ chunk-s61vbvea.js:451034-451166 placement = detectTerminal (0.92)
+//@ chunk-s61vbvea.js:451034-451166 placement (2.1.88 match: detectTerminal, 0.92)
 function detectTerminal(gitRoot, lexical, platform = "linux") {
   if (gitRoot === null) return false;
   let spelledRoot = platform === "darwin" ? isSystemVolumePath(gitRoot) : gitRoot;

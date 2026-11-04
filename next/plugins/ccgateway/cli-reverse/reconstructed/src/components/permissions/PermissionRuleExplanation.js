@@ -33,7 +33,7 @@ import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
 
-//@ chunk-0e8j1zzj.js:19288-19341 callgraph-fingerprint = _temp (1)
+//@ chunk-0e8j1zzj.js:19288-19341 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectToolPermissionContextMode(s) {
   return s.toolPermissionContext.mode;
 }
@@ -65,7 +65,7 @@ function findAskRule(decisionReason) {
   }
   return;
 }
-//@ chunk-0e8j1zzj.js:19762-21481 fingerprint = stringsForDecisionReason (0.747)
+//@ chunk-0e8j1zzj.js:19762-21481 fingerprint (2.1.88 match: stringsForDecisionReason, 0.747)
 function stringsForDecisionReason(decisionReason, toolType, permissionMode) {
   if (!decisionReason) return null;
   let displayTextOf = (field) => displayField(field).text;
@@ -165,7 +165,7 @@ ${displayTextOf(decisionReason.reason)}`
       return null;
   }
 }
-//@ chunk-0e8j1zzj.js:21481-24742 fingerprint = PermissionRuleExplanation (0.415)
+//@ chunk-0e8j1zzj.js:21481-24742 fingerprint (2.1.88 match: PermissionRuleExplanation, 0.415)
 /**
  * 规则解释：显示命中的规则及其来源（settings.json/插件 hooks.json/SKILL.md），auto 模式分类器原因，沙箱覆盖、连续拒绝等。
  */

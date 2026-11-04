@@ -76,7 +76,7 @@ deferInit("chunk-s61vbvea.js:601196", () => {
   DEVICE_BASH = "device_bash";
   DEVICE_SYNC_FILES_TOOLS = new Set(["sync_files"]);
 });
-//@ chunk-s61vbvea.js:601288-601454 placement = getToolNameForPermissionCheck (1)
+//@ chunk-s61vbvea.js:601288-601454 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * （归属疑误：远程设备）remote-devices 服务器工具列表过滤。
  */
@@ -92,7 +92,7 @@ function getToolNameForPermissionCheck_2(tool) {
     );
   });
 }
-//@ chunk-s61vbvea.js:601454-601549 placement = getToolNameForPermissionCheck (1)
+//@ chunk-s61vbvea.js:601454-601549 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck_3(tool) {
   return tool.filter(
     (entry) =>

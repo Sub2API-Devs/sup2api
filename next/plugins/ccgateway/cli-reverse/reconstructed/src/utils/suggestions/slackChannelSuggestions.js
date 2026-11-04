@@ -17,7 +17,7 @@ import { create, create_2 } from "../../../vendor/zod/lib/index.mjs";
 import { jsonParse } from "../slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:86360-86411 fingerprint = unwrapResults (0.71)
+//@ chunk-82kqcve8.js:86360-86411 fingerprint (2.1.88 match: unwrapResults, 0.71)
 function unwrapResults(text) {
   return findSlackChannelPositions(text, {
     results: MAX_SLACK_CHANNELS,
@@ -89,17 +89,17 @@ function expandBracePattern(position, budget) {
   budget.bytes -= results.length * position.length;
   return results;
 }
-//@ chunk-18hwfzwa.js:608844-608876 fingerprint = SLACK_SEARCH_TOOL (1)
+//@ chunk-18hwfzwa.js:608844-608876 fingerprint (2.1.88 match: SLACK_SEARCH_TOOL, 1)
 var SLACK_SEARCH_TOOL = "slack_search_channels";
 //@ chunk-18hwfzwa.js:608876-608949 layout
 function onKnownSlackChannelsChanged(session, listener) {
   return suggestionCacheBySessionRoot.of(session).knownSlackChannelsChanged.subscribe(listener);
 }
-//@ chunk-18hwfzwa.js:608949-609032 fingerprint = findSlackClient (1)
+//@ chunk-18hwfzwa.js:608949-609032 fingerprint (2.1.88 match: findSlackClient, 1)
 function findSlackClient(clients) {
   return clients.find((client) => client.type === "connected" && client.name.includes("slack"));
 }
-//@ chunk-18hwfzwa.js:609032-609424 fingerprint = fetchChannels (0.92)
+//@ chunk-18hwfzwa.js:609032-609424 fingerprint (2.1.88 match: fetchChannels, 0.92)
 async function fetchChannels(clients, query) {
   let slackClient = findSlackClient(clients);
   if (!slackClient || slackClient.type !== "connected") return [];
@@ -189,7 +189,7 @@ function findSlackChannelMentions(session, displayedValue) {
   }
   return positions;
 }
-//@ chunk-18hwfzwa.js:610123-610219 callgraph-fingerprint = mcpQueryFor (1)
+//@ chunk-18hwfzwa.js:610123-610219 callgraph-fingerprint (2.1.88 match: mcpQueryFor, 1)
 function mcpQueryFor(searchToken) {
   let lastSep = Math.max(searchToken.lastIndexOf("-"), searchToken.lastIndexOf("_"));
   return lastSep > 0 ? searchToken.slice(0, lastSep) : searchToken;
@@ -209,7 +209,7 @@ function findReusableCacheEntry(slackChannelsByQuery, mcpQuery, lower) {
     }
   return best;
 }
-//@ chunk-18hwfzwa.js:610363-611241 fingerprint = getSlackChannelSuggestions (0.557)
+//@ chunk-18hwfzwa.js:610363-611241 fingerprint (2.1.88 match: getSlackChannelSuggestions, 0.557)
 async function getSlackChannelSuggestions(session, clients, searchToken) {
   if (!searchToken) return [];
   let mcpQuery = mcpQueryFor(searchToken);

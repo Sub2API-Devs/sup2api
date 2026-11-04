@@ -48,7 +48,7 @@ import { plural } from "../../utils/stringUtils.js";
  */
 var MAX_CONCURRENT_FOLDER_WRITES = 3;
 var MAX_CONCURRENT_ATTACHMENTS = 32;
-//@ chunk-qq39x404.js:1106-1464 callgraph-fingerprint = resolveAttachments (0.165)
+//@ chunk-qq39x404.js:1106-1464 callgraph-fingerprint (2.1.88 match: resolveAttachments, 0.165)
 /**
  * 决定附件上传通道：CLAUDE_CODE_ATTACHMENTS_BY_PATH 时不上传；REPL bridge；CLAUDE_CODE_BRIEF_UPLOAD；CCR 环境；BYOC 远程；SDK 托管（tengu_async_goblet 控制）；否则 none。
  */
@@ -217,7 +217,7 @@ async function validateAttachmentsForCall(attachments, context) {
     },
   };
 }
-//@ chunk-qq39x404.js:4046-5176 fingerprint = validateAttachmentPaths (0.493)
+//@ chunk-qq39x404.js:4046-5176 fingerprint (2.1.88 match: validateAttachmentPaths, 0.493)
 /**
  * 逐个校验附件路径（已上传对象跳过）：diskless 会话不允许路径；拒绝 URL/UNC/网络挂载路径；--restricted 只能发工作目录内文件；permissions.blockReadsOutsideWorkingDirectories 时拒绝外部路径；必须是存在的普通文件（不存在时给出猜测路径）。
  */

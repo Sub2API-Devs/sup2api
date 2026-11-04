@@ -180,7 +180,7 @@ function normalizeAttributionProjectId(rawId) {
     value = value * 58n + BigInt(BASE58_ALPHABET.indexOf(char));
   return value <= MAX_UINT128 ? trimmed : undefined;
 }
-//@ chunk-m3nv29vw.js:2766-3104 placement = SETTING_SOURCE_TO_SCOPE (0.811)
+//@ chunk-m3nv29vw.js:2766-3104 placement (2.1.88 match: SETTING_SOURCE_TO_SCOPE, 0.811)
 /**
  * 归因 Project 的常量：设置来源标签、UUID 正则、base58 字母表与编码长度、128 位上限、状态文字与上次结果缓存。
  */

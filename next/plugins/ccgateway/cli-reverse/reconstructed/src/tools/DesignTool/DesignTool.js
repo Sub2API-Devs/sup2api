@@ -466,7 +466,7 @@ function redactToken(text, token) {
   if (!token) return text;
   return text.split(token).join("[redacted-oauth-token]");
 }
-//@ chunk-171dhyhe.js:19601-19752 placement = getOAuthHeaders (0.875)
+//@ chunk-171dhyhe.js:19601-19752 placement (2.1.88 match: getOAuthHeaders, 0.875)
 function getOAuthHeaders(accessToken) {
   return {
     Authorization: `Bearer ${accessToken}`,

@@ -11,7 +11,7 @@
 import { isImportEnabled, IMPORT_OFFER_INSTRUCTIONS, useNewInitPrompt } from "./import/index.js";
 import { env } from "../utils/env.js";
 
-//@ chunk-e6aww6q8.js:1698787-1722860 fingerprint = command (0.671)
+//@ chunk-e6aww6q8.js:1698787-1722860 fingerprint (2.1.88 match: command, 0.671)
 /**
  * getOldInitPrompt：同旧版 OLD_INIT_PROMPT。
  */

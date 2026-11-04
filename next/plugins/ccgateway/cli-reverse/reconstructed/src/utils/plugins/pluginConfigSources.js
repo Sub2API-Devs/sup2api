@@ -13,7 +13,7 @@ import { getSettingsForSource } from "../settings/settings.js";
 import { legacyPluginIds, canonicalPluginId } from "./pluginIdentifier.js";
 import { INLINE_PLUGIN_MARKETPLACE } from "../telemetry/pluginTelemetry.js";
 
-//@ chunk-5a30rzw4.js:305-361 placement = TRUSTED_SETTING_SOURCES (1)
+//@ chunk-5a30rzw4.js:305-361 placement (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
 var TRUSTED_SETTING_SOURCES = ["userSettings", "flagSettings", "policySettings"];
 //@ chunk-5a30rzw4.js:361-664 placement
 function trustedPluginSetting(pluginId) {

@@ -137,7 +137,7 @@ import {
 import { FileWriteTool } from "../tools/FileWriteTool/FileWriteTool.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-w5ndchqs.js:3633-3859 fingerprint = logAPIPrefix (0.752)
+//@ chunk-w5ndchqs.js:3633-3859 fingerprint (2.1.88 match: logAPIPrefix, 0.752)
 /**
  * 记录 system 第一块（计费头）的长度与哈希（tengu_sysprompt_block）。
  */
@@ -157,7 +157,7 @@ function logAPIPrefix(systemPrompt) {
     logError(withTelemetryMessage(toError(error), "system prompt block telemetry failed"));
   }
 }
-//@ chunk-w5ndchqs.js:3859-5496 fingerprint = splitSysPromptPrefix (0.969)
+//@ chunk-w5ndchqs.js:3859-5496 fingerprint (2.1.88 match: splitSysPromptPrefix, 0.969)
 /**
  * system 提示词数组切块（buildSystemPromptBlocks 的基础）：计费头 x-anthropic-billing-header 一块（无缓存），身份行一块，"# Reporting outcomes" 段单独一块；有 __SYSTEM_PROMPT_DYNAMIC_BOUNDARY__ 且 scope 可用时边界前为静态块（scope global，可按 STATIC_BREAKPOINT 再切）、边界后为动态块；否则其余合成一块（org）。实测第三方 3 块、第一方 4 块。
  */
@@ -305,7 +305,7 @@ function splitSysPromptPrefix(systemPrompt, options) {
     });
   return result;
 }
-//@ chunk-e6aww6q8.js:861006-861063 fingerprint = normalizeToolInputForAPI (0.524)
+//@ chunk-e6aww6q8.js:861006-861063 fingerprint (2.1.88 match: normalizeToolInputForAPI, 0.524)
 /**
  * 发回 API 前要从工具输入里去掉的字段：ExitPlanMode 的 plan/planFilePath。旧版名 normalizeToolInputForAPI 不准确。
  */
@@ -336,7 +336,7 @@ deferInit("chunk-e6aww6q8.js:1423789", () => {
 function waitForGate(sessionRoot) {
   return firstRequestGateByRoot.of(sessionRoot).promise;
 }
-//@ chunk-e6aww6q8.js:1423936-1424007 placement = withTimeout (0.805)
+//@ chunk-e6aww6q8.js:1423936-1424007 placement (2.1.88 match: withTimeout, 0.805)
 function withTimeout(sessionRoot) {
   return Promise.race([
     waitForGate(sessionRoot),
@@ -586,7 +586,7 @@ function shouldEnableWebSearchCitations(model) {
     (model === undefined || isNotLegacyClaude3(model))
   );
 }
-//@ chunk-e6aww6q8.js:1503586-1503822 callgraph-fingerprint = toolToAPISchema (0.215)
+//@ chunk-e6aww6q8.js:1503586-1503822 callgraph-fingerprint (2.1.88 match: toolToAPISchema, 0.215)
 /**
  * 工具输入 schema：inputJSONSchema 或 zod 转换；非 swarm 时去掉 swarm 字段；支持远程执行且未转发时去掉远程执行字段（含条目数组内）。
  */
@@ -612,7 +612,7 @@ async function shouldForwardRemoteTools(tools) {
     tools.some((tool) => getToolRemoteExecution(tool).supported) && (await isRemoteToolForwardingEnabled())
   );
 }
-//@ chunk-e6aww6q8.js:1503892-1503981 fingerprint = SWARM_FIELDS_BY_TOOL (1)
+//@ chunk-e6aww6q8.js:1503892-1503981 fingerprint (2.1.88 match: SWARM_FIELDS_BY_TOOL, 1)
 /**
  * 关闭 swarm 时从 schema 去掉的字段：ExitPlanMode 的 launchSwarm/teammateCount，Agent 的 name/team_name/mode。
  */
@@ -691,7 +691,7 @@ var toolDefinitionBuilder = null;
 function setToolDefinitionBuilder(toolToApiDefinition) {
   toolDefinitionBuilder ??= toolToApiDefinition;
 }
-//@ chunk-e6aww6q8.js:1504581-1504801 layout = calculateDeferredToolDescriptionChars (0.871)
+//@ chunk-e6aww6q8.js:1504581-1504801 layout (2.1.88 match: calculateDeferredToolDescriptionChars, 0.871)
 /**
  * 对工具的 inputJSONSchema 与 prompt 文本做 16 位哈希，用于检测工具描述是否变化。
  */
@@ -1246,7 +1246,7 @@ ${value}`,
     ...messages,
   ];
 }
-//@ chunk-e6aww6q8.js:1512400-1514113 fingerprint = logContextMetrics (0.709)
+//@ chunk-e6aww6q8.js:1512400-1514113 fingerprint (2.1.88 match: logContextMetrics, 0.709)
 /**
  * 统计并上报上下文规模：MCP 工具数/服务器数/schema token、CLAUDE.md 大小、git 状态等（tengu_context_size 一类事件）。
  */
@@ -1366,7 +1366,7 @@ async function logContextMetrics(
     }),
   });
 }
-//@ chunk-e6aww6q8.js:1514113-1516097 fingerprint = normalizeToolInput (0.518)
+//@ chunk-e6aww6q8.js:1514113-1516097 fingerprint (2.1.88 match: normalizeToolInput, 0.518)
 /**
  * 工具输入规整：Read.offset 字符串转数字；ExitPlanMode 补计划文件路径；Bash 去掉 cwd 前缀、修正转义；其他工具按各自规则。
  */

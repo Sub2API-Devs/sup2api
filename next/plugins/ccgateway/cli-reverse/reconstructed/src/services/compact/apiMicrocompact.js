@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:1537686-1537857 fingerprint = getAPIContextManagement (0.533)
+//@ chunk-e6aww6q8.js:1537686-1537857 fingerprint (2.1.88 match: getAPIContextManagement, 0.533)
 /**
  * 生成 API 侧 context_management：有 thinking 时加 {type:"clear_thinking_20251015", keep:"all"}，再追加可选的工具结果清理编辑（clear_tool_uses_20250919）；都没有时返回 undefined。queryModel 只在带 context-management beta 时放进请求体。
  */

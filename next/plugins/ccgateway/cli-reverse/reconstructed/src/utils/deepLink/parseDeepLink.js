@@ -147,7 +147,7 @@ function parseDeepLinkMarketplace(spec) {
   if (gitRef !== undefined && isAnthropicsGithubRepo(repoSlug))
     throw Error("Invalid marketplace in deep link: an Anthropic marketplace can't be pinned to a git ref");
 }
-//@ chunk-8gzm4s8j.js:3358-4400 fingerprint = parseDeepLink (0.626)
+//@ chunk-8gzm4s8j.js:3358-4400 fingerprint (2.1.88 match: parseDeepLink, 0.626)
 /**
  * 解析 claude-cli:// 深链接（也接受 claude-cli:）：install-plugin?plugin=&marketplace=（marketplace 缺省官方，raw # 报错）或 open?q=&cwd=&repo=；校验 cwd/repo/query/plugin/marketplace，返回 {action,…}。
  */

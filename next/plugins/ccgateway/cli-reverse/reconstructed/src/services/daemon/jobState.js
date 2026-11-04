@@ -1124,7 +1124,7 @@ function pinsFilePath() {
  * pin 判定的陈旧时间（5000 毫秒）。
  */
 var PIN_STALE_MS = 5000;
-//@ chunk-y162pn60.js:36097-36358 placement = getMcpAuthCache (1)
+//@ chunk-y162pn60.js:36097-36358 placement (2.1.88 match: getMcpAuthCache, 1)
 /**
  * 读取 MCP 认证缓存（v5 存储）条目。
  */
@@ -1216,7 +1216,7 @@ async function syncJobName(shortId, name, source, storageV5, matcher) {
     },
   );
 }
-//@ chunk-y162pn60.js:37197-37452 placement = updateSessionActivity (0.701)
+//@ chunk-y162pn60.js:37197-37452 placement (2.1.88 match: updateSessionActivity, 0.701)
 async function syncJobColor(ownJobShortId, effectiveAgentColor, storageV5) {
   let jobDir = getJobDir(ownJobShortId);
   let jobState = await readJobState(jobDir, storageV5);
@@ -1486,7 +1486,7 @@ async function writeJobGroup(jobDir, group, storageV5) {
     });
   invalidateJobStateCache(jobDir);
 }
-//@ chunk-y162pn60.js:41202-41490 placement = immediateFlushHistory (0.302)
+//@ chunk-y162pn60.js:41202-41490 placement (2.1.88 match: immediateFlushHistory, 0.302)
 async function withSortOrderLock(fn) {
   let lockPath = join(getJobsDir(), ".order");
   await mkdir(getJobsDir(), {
@@ -1948,7 +1948,7 @@ async function adoptRosterOrphans(jobs, rosterOrphans, storageV5) {
   });
   return [...jobs, ...mapped];
 }
-//@ chunk-y162pn60.js:47688-47810 placement = fetchInstallCountsFromGitHub (0.627)
+//@ chunk-y162pn60.js:47688-47810 placement (2.1.88 match: fetchInstallCountsFromGitHub, 0.627)
 /**
  * 任务状态 done/failed/stopped → success/failure/stopped。名字配错，见 lead 建议。
  */

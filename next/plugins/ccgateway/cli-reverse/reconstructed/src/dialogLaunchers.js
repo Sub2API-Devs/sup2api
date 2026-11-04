@@ -49,7 +49,7 @@ var SNAPSHOT_FIELD_POLICY = {
   max_thinking_tokens: "keep",
   flag_settings: "keep",
 };
-//@ chunk-agvbmc7h.js:2672-2742 fingerprint = launchSnapshotUpdateDialog (0.585)
+//@ chunk-agvbmc7h.js:2672-2742 fingerprint (2.1.88 match: launchSnapshotUpdateDialog, 0.585)
 function launchSnapshotUpdateDialog(permissionLayers) {
   if (!permissionLayers) return permissionLayers;
   return permissionLayers.filter((done) => SNAPSHOT_FIELD_POLICY[done.kind] === "keep");
@@ -78,7 +78,7 @@ function isVelvetyMangoEnabled() {
 async function keepResult(dialog, action) {
   return "keep";
 }
-//@ chunk-kgh2tnx9.js:19663-19868 fingerprint = launchInvalidSettingsDialog (0.614)
+//@ chunk-kgh2tnx9.js:19663-19868 fingerprint (2.1.88 match: launchInvalidSettingsDialog, 0.614)
 /**
  * launchInvalidSettingsDialog：设置文件校验失败时的对话框（继续/修复/退出）。
  */
@@ -93,7 +93,7 @@ async function launchInvalidSettingsDialog(root, props) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:19868-20354 fingerprint = launchTeleportResumeWrapper (0.397)
+//@ chunk-kgh2tnx9.js:19868-20354 fingerprint (2.1.88 match: launchTeleportResumeWrapper, 0.397)
 /**
  * launchTeleportResumeWrapper：teleport 恢复会话的包装界面（含组织配置同意与设置重载）。
  */
@@ -134,7 +134,7 @@ async function launchTeleportResumeWrapper(root) {
   }
   return result;
 }
-//@ chunk-kgh2tnx9.js:20354-20583 fingerprint = launchTeleportRepoMismatchDialog (0.826)
+//@ chunk-kgh2tnx9.js:20354-20583 fingerprint (2.1.88 match: launchTeleportRepoMismatchDialog, 0.826)
 /**
  * launchTeleportRepoMismatchDialog：teleport 目标仓库与当前目录不一致时选择路径。
  */
@@ -165,7 +165,7 @@ async function launchTeleportHostUnverifiedDialog(root, options) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:20797-20843 placement = PluginSettingsSchema (0.361)
+//@ chunk-kgh2tnx9.js:20797-20843 placement (2.1.88 match: PluginSettingsSchema, 0.361)
 /**
  * 远程文件模式对话框的启动函数（门面导出名 launchRemoteFileModeDialog），本构建为桩，直接返回 {pick: not_now}。与插件加载无关，旧版名 PluginSettingsSchema 配错。
  */
@@ -174,7 +174,7 @@ async function PluginSettingsSchema(root, options) {
     pick: "not_now",
   };
 }
-//@ chunk-kgh2tnx9.js:20843-20988 callgraph-fingerprint = launchAssistantSessionChooser (0.176)
+//@ chunk-kgh2tnx9.js:20843-20988 callgraph-fingerprint (2.1.88 match: launchAssistantSessionChooser, 0.176)
 /**
  * launchDeviceReenrollDialog：受信设备重新注册。
  */
@@ -398,7 +398,7 @@ ${exitExtra}`,
  * launchProviderSetupWizard：外部构建为空实现。
  */
 async function launchProviderSetupWizard(root, options) {}
-//@ chunk-kgh2tnx9.js:23420-23795 fingerprint = launchResumeChooser (0.681)
+//@ chunk-kgh2tnx9.js:23420-23795 fingerprint (2.1.88 match: launchResumeChooser, 0.681)
 /**
  * launchResumeChooser：动态导入 ResumeConversation 组件并渲染会话选择器。
  */

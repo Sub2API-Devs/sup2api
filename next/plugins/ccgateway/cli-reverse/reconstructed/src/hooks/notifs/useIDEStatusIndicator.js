@@ -11,7 +11,7 @@
 import { useIdeConnectionStatus } from "../useIdeConnectionStatus.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 
-//@ chunk-18hwfzwa.js:348364-348523 fingerprint = _temp2 (0.379)
+//@ chunk-18hwfzwa.js:348364-348523 fingerprint (2.1.88 match: _temp2, 0.379)
 function strandedResumeFailedNotification(hasShownHintRef_0, addNotification_0) {
   return {
     key: `stranded-resume-failed-${hasShownHintRef_0}`,
@@ -30,7 +30,7 @@ function ideStatusFromState(current) {
     showIDEInstallError: Boolean(current.ideInstallationStatus?.error) && status !== "connected",
   };
 }
-//@ chunk-18hwfzwa.js:1761687-1762535 fingerprint = useIDEStatusIndicator (0.719)
+//@ chunk-18hwfzwa.js:1761687-1762535 fingerprint (2.1.88 match: useIDEStatusIndicator, 0.719)
 /**
  * 启动通知规格：IDE 已断开（ide-status-disconnected）与 IDE 扩展安装失败（ide-status-install-error），状态恢复时自动移除。
  */

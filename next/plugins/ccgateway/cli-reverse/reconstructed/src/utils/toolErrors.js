@@ -63,7 +63,7 @@ function includesAnyIgnoreCase(haystack, needles) {
 //@ chunk-aepeg2w5.js:51477-51548 placement
 var MAX_ERROR_TEXT_CHARS = 1024;
 var TRUNCATION_MARKER_RE = /\n\n\.\.\. \[(\d+) characters truncated\] \.\.\.\n\n/g;
-//@ chunk-aepeg2w5.js:51548-51611 fingerprint = formatError (0.792)
+//@ chunk-aepeg2w5.js:51548-51611 fingerprint (2.1.88 match: formatError, 0.792)
 function formatError(error) {
   return `
 
@@ -107,7 +107,7 @@ function formatToolErrorMessage(error) {
 ${truncationNote}`
     : truncated;
 }
-//@ chunk-e6aww6q8.js:998547-998799 fingerprint = getErrorParts (1)
+//@ chunk-e6aww6q8.js:998547-998799 fingerprint (2.1.88 match: getErrorParts, 1)
 /**
  * 从工具错误中提取展示片段：Exit code、stderr、stdout。
  */
@@ -133,7 +133,7 @@ function formatValidationPath(path) {
     return index === 0 ? segmentStr : `${String(acc)}.${segmentStr}`;
   }, "");
 }
-//@ chunk-e6aww6q8.js:998972-1000528 fingerprint = formatZodValidationError (0.792)
+//@ chunk-e6aww6q8.js:998972-1000528 fingerprint (2.1.88 match: formatZodValidationError, 0.792)
 /**
  * 把工具输入的 zod 校验错误格式化为给模型看的文字（缺参数、类型不符、多余参数）。
  */

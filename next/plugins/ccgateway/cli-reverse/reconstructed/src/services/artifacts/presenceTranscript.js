@@ -13,7 +13,7 @@ import { parseArtifactUrlAnyCase } from "../../tools/ArtifactTool/constants.js";
 import { decodeBase58Uuid } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aqdf5t3e.js:24386-24667 placement = buildTranscriptEntries (0.777)
+//@ chunk-aqdf5t3e.js:24386-24667 placement (2.1.88 match: buildTranscriptEntries, 0.777)
 function findHumanMessagesContaining(messages, text) {
   let repoUrl = text.toLowerCase();
   let lines = [];
@@ -69,7 +69,7 @@ function mentionsCurrentRepoUrl(text, repoUrl) {
     .split(WHITESPACE_RE)
     .some((url) => getCurrentRepoHttpsUrl(url.replace(LEADING_PUNCT_RE, ""), repoUrl));
 }
-//@ chunk-aqdf5t3e.js:25199-25466 placement = getCurrentRepoHttpsUrl (0.803)
+//@ chunk-aqdf5t3e.js:25199-25466 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
 function getCurrentRepoHttpsUrl(url, repoName) {
   let replaced = url.replace(TRAILING_PUNCT_RE, "");
   if (ZERO_WIDTH_RE.test(replaced)) return false;
@@ -82,7 +82,7 @@ function getCurrentRepoHttpsUrl(url, repoName) {
     return parts.some((part, partIndex) => part === repoName && parts[partIndex - 1] === ARTIFACT_FILES);
   return parts[0] === repoName || decodeBase58Uuid(replaced) === repoName;
 }
-//@ chunk-aqdf5t3e.js:25466-25720 placement = extractErrorTypeFromData (1)
+//@ chunk-aqdf5t3e.js:25466-25720 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function joinTextContentOrNull(data) {
   if (typeof data === "string") return data;
   if (!Array.isArray(data)) return null;

@@ -70,7 +70,7 @@ import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutH
 //@ chunk-vrb44rx7.js:37819-37903 affinity
 var INVALID_MARKETPLACE_SOURCE_MESSAGE =
   "Invalid marketplace source format. Try: owner/repo, https://..., or ./path";
-//@ chunk-vrb44rx7.js:37903-43972 fingerprint = AddMarketplace (0.44)
+//@ chunk-vrb44rx7.js:37903-43972 fingerprint (2.1.88 match: AddMarketplace, 0.44)
 function AddMarketplace({
   inputValue,
   setInputValue,

@@ -20,7 +20,7 @@ import { isOfficialMarketplaceRef } from "../plugins/marketplaceNames.js";
 import { isManagedHookAllowed } from "../hooks.js";
 import { filterHooksByPluginHold } from "./hooksSettings.js";
 
-//@ chunk-s61vbvea.js:199570-199646 placement = _temp7 (0.778)
+//@ chunk-s61vbvea.js:199570-199646 placement (2.1.88 match: _temp7, 0.778)
 var policyHookKeysForEvent = (a_2) =>
   new Set(
     (getSettingsForSource("policySettings")?.hooks?.[a_2] ?? []).map((matcher) =>

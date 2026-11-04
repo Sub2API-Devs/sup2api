@@ -14,7 +14,7 @@ import { env } from "../../utils/env.js";
 import { isCommandEnabled } from "../../commands.js";
 import { getLoginAvailability } from "./loginAvailability.js";
 
-//@ chunk-e6aww6q8.js:1731476-1731822 fingerprint = default (0.788)
+//@ chunk-e6aww6q8.js:1731476-1731822 fingerprint (2.1.88 match: default, 0.788)
 /**
  * /login 命令对象：描述随是否已用 API key 登录变化，可用 DISABLE_LOGIN_COMMAND 禁用，登录被拒时隐藏。
  */

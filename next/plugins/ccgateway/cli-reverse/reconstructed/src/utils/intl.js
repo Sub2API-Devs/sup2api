@@ -20,7 +20,7 @@ function languageDisplayNames() {
     });
   return displayNamesCache;
 }
-//@ chunk-bfrv6ttc.js:296-379 fingerprint = getGraphemeSegmenter (1)
+//@ chunk-bfrv6ttc.js:296-379 fingerprint (2.1.88 match: getGraphemeSegmenter, 1)
 /**
  * 惰性创建并复用 Intl.Segmenter（grapheme 粒度），用于按用户可见字符切分字符串。
  */
@@ -31,12 +31,12 @@ function getGraphemeSegmenter() {
     });
   return INTL_CACHE;
 }
-//@ chunk-bfrv6ttc.js:379-478 fingerprint = firstGrapheme (1)
+//@ chunk-bfrv6ttc.js:379-478 fingerprint (2.1.88 match: firstGrapheme, 1)
 function firstGrapheme(text) {
   if (!text) return "";
   return getGraphemeSegmenter().segment(text)[Symbol.iterator]().next().value?.segment ?? "";
 }
-//@ chunk-bfrv6ttc.js:478-567 callgraph-witnessed = lastGrapheme (1)
+//@ chunk-bfrv6ttc.js:478-567 callgraph-witnessed (2.1.88 match: lastGrapheme, 1)
 function lastGrapheme(text) {
   if (!text) return "";
   let last = "";
@@ -78,7 +78,7 @@ function hasNonAsciiOrCr(text) {
   }
   return false;
 }
-//@ chunk-bfrv6ttc.js:1099-1179 fingerprint = getWordSegmenter (1)
+//@ chunk-bfrv6ttc.js:1099-1179 fingerprint (2.1.88 match: getWordSegmenter, 1)
 function getWordSegmenter() {
   if (!segmenterSingleton)
     segmenterSingleton = new Intl.Segmenter(undefined, {
@@ -100,7 +100,7 @@ function countWords(text) {
 }
 //@ chunk-bfrv6ttc.js:1332-1346 layout
 var relativeTimeFormatCache = new Map();
-//@ chunk-bfrv6ttc.js:1346-1475 fingerprint = getRelativeTimeFormat (1)
+//@ chunk-bfrv6ttc.js:1346-1475 fingerprint (2.1.88 match: getRelativeTimeFormat, 1)
 function getRelativeTimeFormat(style, numeric) {
   let key = `${style}:${numeric}`;
   let rtf = relativeTimeFormatCache.get(key);
@@ -115,14 +115,14 @@ function getRelativeTimeFormat(style, numeric) {
 }
 //@ chunk-bfrv6ttc.js:1475-1486 layout
 var timeZoneCache = null;
-//@ chunk-bfrv6ttc.js:1486-1567 fingerprint = getTimeZone (1)
+//@ chunk-bfrv6ttc.js:1486-1567 fingerprint (2.1.88 match: getTimeZone, 1)
 function getTimeZone() {
   if (!timeZoneCache) timeZoneCache = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return timeZoneCache;
 }
 //@ chunk-bfrv6ttc.js:1567-1578 layout
 var systemLocaleLanguageCache = null;
-//@ chunk-bfrv6ttc.js:1578-1716 fingerprint = getSystemLocaleLanguage (1)
+//@ chunk-bfrv6ttc.js:1578-1716 fingerprint (2.1.88 match: getSystemLocaleLanguage, 1)
 function getSystemLocaleLanguage() {
   if (systemLocaleLanguageCache === null)
     try {

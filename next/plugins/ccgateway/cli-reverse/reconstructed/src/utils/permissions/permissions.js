@@ -507,7 +507,7 @@ deferInit("chunk-sfy7bm1n.js:10488", () => {
 function isConversationEndTool(tool) {
   return !tool.mcpInfo && CONVERSATION_END_TOOLS.has(tool.name);
 }
-//@ chunk-sfy7bm1n.js:10749-11364 fingerprint = getAllowRules (0.577)
+//@ chunk-sfy7bm1n.js:10749-11364 fingerprint (2.1.88 match: getAllowRules, 0.577)
 /**
  * 收集 allow 规则；auto 模式下跳过危险规则（sme）与特定工具；CLAUDE_CODE_EVAL_CONFINED 时只用 cliArg；M() 判为被托管限制的来源之后的规则被截断。
  */
@@ -551,7 +551,7 @@ function getAllowRules(context) {
     else filtered?.push(rule);
   return filtered ?? rulesFromSettings;
 }
-//@ chunk-sfy7bm1n.js:11364-11517 layout = hasBashPermission (1)
+//@ chunk-sfy7bm1n.js:11364-11517 layout (2.1.88 match: hasBashPermission, 1)
 /**
  * 把某行为（allow/deny/ask）的各来源规则字符串展开成规则对象列表 {source, ruleBehavior, ruleValue}。
  */
@@ -577,7 +577,7 @@ function getDenyRules(context) {
 function getAskRules(context) {
   return collectRulesFromSettings(context.alwaysAskRules, "ask");
 }
-//@ chunk-sfy7bm1n.js:11619-11703 layout = getDenyRuleForAgent (1)
+//@ chunk-sfy7bm1n.js:11619-11703 layout (2.1.88 match: getDenyRuleForAgent, 1)
 /**
  * 工具是否命中整工具规则（规则无内容时按工具名匹配）。
  */
@@ -817,7 +817,7 @@ deferInit("chunk-sfy7bm1n.js:13834", () => {
     ],
   ]);
 });
-//@ chunk-sfy7bm1n.js:13929-14102 layout = getRuleByContentsForToolName (1)
+//@ chunk-sfy7bm1n.js:13929-14102 layout (2.1.88 match: getRuleByContentsForToolName, 1)
 function ruleCoversToolViaBroadContent({ ruleBehavior, ruleValue: { toolName, ruleContent } }, aliasName) {
   if (ruleContent === undefined || ruleBehavior === "allow") return false;
   return toolName === BASH_TOOL_NAME
@@ -1004,7 +1004,7 @@ function isConversationEndToolDenied(toolPermissionContext, tool) {
     }),
   );
 }
-//@ chunk-sfy7bm1n.js:16133-16236 layout = getDenyRuleForAgent (1)
+//@ chunk-sfy7bm1n.js:16133-16236 layout (2.1.88 match: getDenyRuleForAgent, 1)
 /**
  * 找 toolName 与 ruleContent 精确相等的 deny 规则（例如 Agent(type)）。
  */
@@ -1015,7 +1015,7 @@ function findDenyRuleWithContent(context, agentToolName, agentType) {
     ) || null
   );
 }
-//@ chunk-sfy7bm1n.js:16236-16340 layout = getDenyRuleForAgent (1)
+//@ chunk-sfy7bm1n.js:16236-16340 layout (2.1.88 match: getDenyRuleForAgent, 1)
 /**
  * 找 toolName 与 ruleContent 精确相等的 ask 规则。
  */
@@ -1026,7 +1026,7 @@ function findAskRuleWithContent(context, agentToolName, agentType) {
     ) || null
   );
 }
-//@ chunk-sfy7bm1n.js:16340-16528 fingerprint = filterDeniedAgents (1)
+//@ chunk-sfy7bm1n.js:16340-16528 fingerprint (2.1.88 match: filterDeniedAgents, 1)
 /**
  * 按 Agent(type) deny 规则过滤代理列表。
  */
@@ -1190,14 +1190,14 @@ function matchToolRule(context, tool, input, behavior) {
 function getContentRulesMapForTool(context, tool, behavior) {
   return getContentRulesMapForToolName(context, getToolNameForPermissionCheck_2(tool), behavior);
 }
-//@ chunk-sfy7bm1n.js:18630-18765 placement = getDenyRuleForAgent (1)
+//@ chunk-sfy7bm1n.js:18630-18765 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function getContentRulesMapForToolName(context, agentToolName, agentType) {
   let rulesByContent = new Map();
   for (let rule of getContentRulesForToolName(context, agentToolName, agentType))
     if (rule.ruleValue.ruleContent !== undefined) rulesByContent.set(rule.ruleValue.ruleContent, rule);
   return rulesByContent;
 }
-//@ chunk-sfy7bm1n.js:18765-19004 placement = getRuleByContentsForToolName (1)
+//@ chunk-sfy7bm1n.js:18765-19004 placement (2.1.88 match: getRuleByContentsForToolName, 1)
 function getContentRulesForToolName(context, toolName, behavior) {
   let allRules = [];
   switch (behavior) {
@@ -2256,7 +2256,7 @@ function getPermissionModeCycle(appState) {
     hasLeftProactivityBaseline(appState.toolPermissionContext),
   );
 }
-//@ chunk-e6aww6q8.js:1329439-1330061 fingerprint = getDenyRules (0.493)
+//@ chunk-e6aww6q8.js:1329439-1330061 fingerprint (2.1.88 match: getDenyRules, 0.493)
 /**
  * 把磁盘上（严格信任）各来源新出现的 deny 规则并入上下文（y$ 匹配的排前面），并按需开启 blockReadsOutsideWorkingDirectories。
  */
@@ -2424,7 +2424,7 @@ function scriptAsksToRunUnsandboxed(tool, input) {
     })
   );
 }
-//@ chunk-e6aww6q8.js:2953960-2954253 placement = persistDenialState (0.894)
+//@ chunk-e6aww6q8.js:2953960-2954253 placement (2.1.88 match: persistDenialState, 0.894)
 /**
  * 用更新函数修改拒绝跟踪状态：子代理写本地 localDenialTracking，主线程写 AppState.denialTracking；返回新状态。
  */
@@ -2674,7 +2674,7 @@ function appendAutoModeWarning(permissionContext, asks, heldByDenyRules) {
   let notice = takeNoServerCheckNotice(asks, heldByDenyRules);
   if (notice !== undefined) permissionContext.appendSystemMessage(createSystemMessage(notice, "warning"));
 }
-//@ chunk-e6aww6q8.js:2956707-2958079 placement = createPermissionRequestMessage (1)
+//@ chunk-e6aww6q8.js:2956707-2958079 placement (2.1.88 match: createPermissionRequestMessage, 1)
 /**
  * 按 decisionReason 生成请求确认的说明文字（classifier/hook/rule/subcommandResults/permissionPromptTool/sandboxOverride/workingDir/safetyCheck/mode/asyncAgent），默认 "Claude requested permissions to use X…"。
  */
@@ -2800,7 +2800,7 @@ function stripWholeToolGrantsForAsk(updates, tool, toolPermissionContext) {
     (ruleValue) => isWholeToolAllowRule(tool, ruleValue),
   );
 }
-//@ chunk-e6aww6q8.js:2958893-2959133 placement = permissionUpdateSchema (0.725)
+//@ chunk-e6aww6q8.js:2958893-2959133 placement (2.1.88 match: permissionUpdateSchema, 0.725)
 /**
  * 只保留“收紧”方向的权限更新：非 allow 的 addRules、移除 allow 的 removeRules、removeDirectories；replaceRules/setMode/addDirectories 一律丢弃。
  */
@@ -2830,7 +2830,7 @@ function permissionGrantScope(updates) {
   if (filtered.some((update) => supportsPersistence_2(update.destination))) return "always";
   return filtered.length > 0 ? "session" : "once";
 }
-//@ chunk-e6aww6q8.js:2959282-2959596 placement = buildPermissionUpdates (0.851)
+//@ chunk-e6aww6q8.js:2959282-2959596 placement (2.1.88 match: buildPermissionUpdates, 0.851)
 /**
  * 回答 MCP skill 加载 ask 时可应用的更新：普通更新经远程作用域过滤；allow addRules 只保留与本次 skill 规则完全一致、目的地为 session 或允许目的地的那条。
  */
@@ -2858,7 +2858,7 @@ function answerUpdatesForMcpSkillAsk(mode, allowedPrompts) {
       : [];
   });
 }
-//@ chunk-e6aww6q8.js:2959596-2959849 placement = _temp1 (1)
+//@ chunk-e6aww6q8.js:2959596-2959849 placement (2.1.88 match: _temp1, 1)
 function filterBuiltInAgentsByDeniedTools(agents, toolPermissionContext) {
   let denyIndex;
   return agents.filter((agent) => {
@@ -3075,7 +3075,7 @@ async function applyHookPermissionAllow(
     },
   };
 }
-//@ chunk-e6aww6q8.js:2962059-2962890 fingerprint = runPermissionRequestHooksForHeadlessAgent (0.704)
+//@ chunk-e6aww6q8.js:2962059-2962890 fingerprint (2.1.88 match: runPermissionRequestHooksForHeadlessAgent, 0.704)
 /**
  * 运行 PermissionRequest 钩子：allow（仅在允许由钩子放行时）经 Lkn 生效；deny 直接拒绝（interrupt 时中止）；远程执行跳过；异常记日志返回 null。
  */
@@ -3541,7 +3541,7 @@ function findApplicableAllowRule(tool, input, context, mode, getMode) {
     return allowRule;
   return null;
 }
-//@ chunk-e6aww6q8.js:2967060-3008254 callgraph-witnessed = hasPermissionsToUseTool (0.269)
+//@ chunk-e6aww6q8.js:2967060-3008254 callgraph-witnessed (2.1.88 match: hasPermissionsToUseTool, 0.269)
 /**
  * 主判定：先跑规则/工具检查（abn，经插件 tool.check 裁决 aWr）；allow 直接返回（清零连续拒绝）；ask 时按模式处理——dontAsk 转拒绝；auto 依次走安全检查/ask 规则回退、acceptEdits 模拟快路径、安全白名单、插件/合成调用跳过、分类器（本地或服务端），拦截时计拒绝并在超限时回退人工；bypassPermissions 对安全检查弹窗限时处理；最后无法弹窗时用钩子或拒绝。
  */
@@ -5971,7 +5971,7 @@ function enforceAutoModeDenialLimits(toolUseContext, state, tool, messageId, too
     });
   return true;
 }
-//@ chunk-e6aww6q8.js:3009537-3009605 placement = recordSuccess (1)
+//@ chunk-e6aww6q8.js:3009537-3009605 placement (2.1.88 match: recordSuccess, 1)
 /**
  * 工具调用放行后，若有连续拒绝则在上下文/AppState 中清零。
  */
@@ -5979,11 +5979,11 @@ function recordAutoModeSuccess(context) {
   let state = getDenialTrackingState(context);
   if (state.consecutiveDenials > 0) persistDenialState(context, resetConsecutiveDenials(state));
 }
-//@ chunk-e6aww6q8.js:3009605-3009689 placement = persistDenialState (0.756)
+//@ chunk-e6aww6q8.js:3009605-3009689 placement (2.1.88 match: persistDenialState, 0.756)
 function getDenialTrackingState(context) {
   return context.localDenialTracking ?? context.getAppState().denialTracking ?? createDenialTrackingState();
 }
-//@ chunk-e6aww6q8.js:3009689-3009861 fingerprint = persistDenialState (1)
+//@ chunk-e6aww6q8.js:3009689-3009861 fingerprint (2.1.88 match: persistDenialState, 1)
 /**
  * 写入拒绝跟踪状态（子代理写 localDenialTracking，否则写 AppState）。
  */
@@ -6176,7 +6176,7 @@ function stopTurnForMissingVerdict(tool, permissionContext, recorded, reason) {
     endsTurn: true,
   };
 }
-//@ chunk-e6aww6q8.js:3012579-3014177 fingerprint = handleDenialLimitExceeded (0.771)
+//@ chunk-e6aww6q8.js:3012579-3014177 fingerprint (2.1.88 match: handleDenialLimitExceeded, 0.771)
 /**
  * 拒绝超限（连续 3/累计 20）：headless 直接抛 AbortError；否则记日志，累计超限时清零计数，返回带 denialLimitFallback（可限时自动拒绝）的 ask 结果让人工审阅。
  */
@@ -6541,7 +6541,7 @@ function getEarlyDenial(tool, input, toolUseContext) {
         message: `Permission to use ${tool.name} has been denied.`,
       };
 }
-//@ chunk-e6aww6q8.js:3018318-3020395 placement = PermissionDecisionDebugInfo (0.162)
+//@ chunk-e6aww6q8.js:3018318-3020395 placement (2.1.88 match: PermissionDecisionDebugInfo, 0.162)
 /**
  * 只查规则与工具自检的权限检查（给 PreToolUse 钩子 allow/ask 后复核用）：提前裁决、deny 规则、整工具 ask 规则（沙箱自动放行例外）、tool.checkPermissions；hook allow 时施加 plan 写地板；检查崩溃且 crashIsObjection 时返回 ask；只返回 deny/ask，放行时返回 null。
  */
@@ -7185,7 +7185,7 @@ async function checkToolAndRulePermissions(
     );
   return resolvedResult;
 }
-//@ chunk-e6aww6q8.js:3027359-3027830 placement = deletePermissionRule (1)
+//@ chunk-e6aww6q8.js:3027359-3027830 placement (2.1.88 match: deletePermissionRule, 1)
 /**
  * 删除一条规则：policySettings/flagSettings/command 只读；可编辑层同时改文件；cliArg/session 只改内存。
  */
@@ -7211,7 +7211,7 @@ async function deletePermissionRule({ rule, initialContext, setToolPermissionCon
   }
   setToolPermissionContext(updatedContext);
 }
-//@ chunk-e6aww6q8.js:3027830-3028076 fingerprint = convertRulesToUpdates (1)
+//@ chunk-e6aww6q8.js:3027830-3028076 fingerprint (2.1.88 match: convertRulesToUpdates, 1)
 /**
  * 把规则列表按 来源:行为 分组，转换成 PermissionUpdate 列表（type 由调用方给定，destination 即来源）。
  */
@@ -7234,7 +7234,7 @@ function convertRulesToUpdates(rules, updateType) {
   }
   return updates;
 }
-//@ chunk-e6aww6q8.js:3028076-3028136 placement = applyPermissionRulesToPermissionContext (1)
+//@ chunk-e6aww6q8.js:3028076-3028136 placement (2.1.88 match: applyPermissionRulesToPermissionContext, 1)
 /**
  * 把规则列表作为 addRules 更新应用到上下文。
  */
@@ -7242,7 +7242,7 @@ function applyPermissionRulesToPermissionContext(context, rules, updates) {
   let updates_2 = convertRulesToUpdates(rules, "addRules");
   return applyPermissionUpdates(context, updates_2, updates);
 }
-//@ chunk-e6aww6q8.js:3028136-3028623 placement = syncPermissionRulesFromDisk (0.68)
+//@ chunk-e6aww6q8.js:3028136-3028623 placement (2.1.88 match: syncPermissionRulesFromDisk, 0.68)
 /**
  * 从磁盘重载规则：先清空各 settings 层（托管独占时还清空 cliArg/session 与 mcpMount allow），再按 replaceRules 写入。
  */
@@ -7303,7 +7303,7 @@ function holdRemovalWaiverOnAskAdjudicator(toolUseContext) {
   )
     getSessionFeatureValues().removalWaiverRulesClear = false;
 }
-//@ chunk-e6aww6q8.js:3028902-3028972 fingerprint = getUpdatedInputOrFallback (1)
+//@ chunk-e6aww6q8.js:3028902-3028972 fingerprint (2.1.88 match: getUpdatedInputOrFallback, 1)
 /**
  * 取结果中的 updatedInput，没有则用回退输入。
  */
@@ -7340,7 +7340,7 @@ function involvesSafetyCheck(decisionReason) {
       return true;
   }
 }
-//@ chunk-xr4xc2mq.js:14991-15271 fingerprint = checkRuleBasedPermissions (0.395)
+//@ chunk-xr4xc2mq.js:14991-15271 fingerprint (2.1.88 match: checkRuleBasedPermissions, 0.395)
 /**
  * 原因（含子命令递归）是否为非 allow 的规则原因，或读阻挡相关原因；第二参数选择检查哪一类。
  */
@@ -7354,14 +7354,14 @@ function isRuleOrReadBlockReason(decisionReason, kind) {
     : (decisionReason?.type === "safetyCheck" && decisionReason.circuitBreaker === "outsideReadsBlocked") ||
         (decisionReason?.type === "other" && decisionReason.reason === OUTSIDE_READS_BLOCKED_DENY_REASON);
 }
-//@ chunk-pc1rmcr2.js:3877-3941 fingerprint = PERMISSION_RULE_SOURCES (1)
+//@ chunk-pc1rmcr2.js:3877-3941 fingerprint (2.1.88 match: PERMISSION_RULE_SOURCES, 1)
 /**
  * 规则来源是否为会话级（cliArg、command、session）。
  */
 function isSessionScopedRuleSource(source) {
   return source === "cliArg" || source === "command" || source === "session";
 }
-//@ chunk-0h4e7gnq.js:136066-136964 callgraph-witnessed = toolMatchesRule (0.205)
+//@ chunk-0h4e7gnq.js:136066-136964 callgraph-witnessed (2.1.88 match: toolMatchesRule, 0.205)
 /**
  * 由 disallowedTools 规则串构建过滤器：工具名集合、裸名集合、MCP 服务器级禁用，isToolDisallowed(tool) 综合判断（Bash 被禁时一并禁用 Monitor 等等价工具）。
  */
@@ -7423,7 +7423,7 @@ function buildDisallowedToolsFilter(disallowedTools) {
     },
   };
 }
-//@ chunk-0wdgqhcf.js:53327-53451 fingerprint = getAskRules (0.546)
+//@ chunk-0wdgqhcf.js:53327-53451 fingerprint (2.1.88 match: getAskRules, 0.546)
 /**
  * 按键集合从 alwaysAskRules 中删除 ask 规则。
  */
@@ -7439,7 +7439,7 @@ function removeAskRulesByKey(toolPermissionContext, keys) {
         ),
       };
 }
-//@ chunk-8wvtd8sr.js:94302-94434 fingerprint = getDenyRuleForAgent (1)
+//@ chunk-8wvtd8sr.js:94302-94434 fingerprint (2.1.88 match: getDenyRuleForAgent, 1)
 /**
  * URL 类规则的精确域名：解析带类型前缀的规则内容，取出不含通配的域名；属于 WebFetch/浏览器类工具的规则族，误归入本模块。
  */
@@ -7448,7 +7448,7 @@ function getRuleExactDomain(askTypeRule) {
   let domain = typePrefixedValue === undefined ? undefined : typeNameWithoutQuotes(typePrefixedValue);
   return domain === undefined || domain === "" || domain.includes("*") ? undefined : domain;
 }
-//@ chunk-8wvtd8sr.js:94434-94519 shared-adjacent = getDenyRuleForAgent (1)
+//@ chunk-8wvtd8sr.js:94434-94519 shared-adjacent (2.1.88 match: getDenyRuleForAgent, 1)
 /**
  * 取该工具的 URL 规则中与给定 URL 匹配的那些；属于 WebFetch/浏览器类工具的规则族。
  */
@@ -7457,7 +7457,7 @@ function filterRulesMatchingUrls(context, agentToolName, agentType, agentType_2)
     matchesWildcardPattern(rule.ruleValue.ruleContent ?? "", agentType),
   );
 }
-//@ chunk-8wvtd8sr.js:354927-355436 fingerprint = hasPermissionsToUseToolInner (0.45)
+//@ chunk-8wvtd8sr.js:354927-355436 fingerprint (2.1.88 match: hasPermissionsToUseToolInner, 0.45)
 /**
  * 文件编辑权限结论（供编辑类 UI/预检用）：Edit 级 ask 规则或规则原因 → ask；mode 原因在 plan 下为带 plan 地板的 ask；allow 或 bypass/有 allow 规则且非安全检查 → allow；特定情况为 unseen。
  */
@@ -7544,19 +7544,19 @@ function isBypassImmuneDecision(decision, tool, toolUseContext) {
   if (tool.requiresUserInteraction?.()) return true;
   return decision.forcedByCaller === true || decision.personOnly === true;
 }
-//@ chunk-0e8j1zzj.js:44090-44119 fingerprint = applyPermissionRulesToPermissionContext (1)
+//@ chunk-0e8j1zzj.js:44090-44119 fingerprint (2.1.88 match: applyPermissionRulesToPermissionContext, 1)
 var RULE_ADDING_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-0e8j1zzj.js:44090", () => {
   RULE_ADDING_UPDATE_TYPES = new Set(["addRules"]);
 });
-//@ chunk-18hwfzwa.js:63873-63939 placement = createGetAppStateWithAllowedTools (1)
+//@ chunk-18hwfzwa.js:63873-63939 placement (2.1.88 match: createGetAppStateWithAllowedTools, 1)
 /**
  * 取权限上下文里的 alwaysAllowRules。
  */
 function getAlwaysAllowRules(appState) {
   return appState.toolPermissionContext.alwaysAllowRules;
 }
-//@ chunk-38x90rmj.js:8730-8822 fingerprint = getRuleByContentsForToolName (1)
+//@ chunk-38x90rmj.js:8730-8822 fingerprint (2.1.88 match: getRuleByContentsForToolName, 1)
 /**
  * 构造 Chrome 工具的域名 allow 规则对象。
  */

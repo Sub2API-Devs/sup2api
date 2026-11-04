@@ -163,7 +163,7 @@ deferInit("chunk-gjx0rh1b.js:77177", () => {
   MAX_REF_LIST_BYTES = 65536;
   MAX_REF_FILE_BYTES = (MAX_REF_TIPS + 1) * 65;
 });
-//@ chunk-gjx0rh1b.js:77228-77651 placement = readFileRange (0.819)
+//@ chunk-gjx0rh1b.js:77228-77651 placement (2.1.88 match: readFileRange, 0.819)
 async function readFileRange(path) {
   try {
     if (!(await lstat(path)).isFile()) return null;
@@ -1709,7 +1709,7 @@ function droppedRefsFailure(missing) {
     failReason: "git_error",
   };
 }
-//@ chunk-gjx0rh1b.js:122340-122460 placement = formatFailureDetails (0.777)
+//@ chunk-gjx0rh1b.js:122340-122460 placement (2.1.88 match: formatFailureDetails, 0.777)
 function formatFailureDetails(failures, includeReasons = DEFAULT_LISTED_FAILURES) {
   let joined = failures
     .slice(0, includeReasons)

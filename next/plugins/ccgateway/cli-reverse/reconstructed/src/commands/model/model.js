@@ -128,7 +128,7 @@ import { COMMON_HELP_ARGS } from "../../constants/xml.js";
 import { shortHash } from "../../utils/shortHash.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-d1cgs5na.js:1834-1903 fingerprint = renderModelLabel (1)
+//@ chunk-d1cgs5na.js:1834-1903 fingerprint (2.1.88 match: renderModelLabel, 1)
 function renderModelLabel(model) {
   let rendered = renderDefaultModelSetting_2(model ?? getDefaultMainLoopModelSetting());
   return model === null ? `${rendered} (default)` : rendered;
@@ -157,7 +157,7 @@ function diagnose1mAliasSwitch(setting) {
     };
   return null;
 }
-//@ chunk-d1cgs5na.js:12407-12554 fingerprint = isOpus1mUnavailable (1)
+//@ chunk-d1cgs5na.js:12407-12554 fingerprint (2.1.88 match: isOpus1mUnavailable, 1)
 function isOpus1mUnavailable(model) {
   let m = model.toLowerCase();
   if (!(m.includes("opus") && m.includes("[1m]"))) return false;
@@ -190,7 +190,7 @@ function requires1mEntitlementCheck(model) {
 function resolveRequestedModel(model) {
   return parseUserSpecifiedModel(model ?? getDefaultMainLoopModelSetting());
 }
-//@ chunk-d1cgs5na.js:12887-13152 placement = useMainLoopModel (0.833)
+//@ chunk-d1cgs5na.js:12887-13152 placement (2.1.88 match: useMainLoopModel, 0.833)
 function useMainLoopModel(
   model,
   mainLoopModel,
@@ -220,7 +220,7 @@ function useMainLoopModel(
     (model_2 === mainLoopModel_2 || getServedModelsForRequestedModel(mainLoopModel_2)?.has(model_2) === true)
   );
 }
-//@ chunk-d1cgs5na.js:13152-13461 fingerprint = ShowModelAndClose (0.354)
+//@ chunk-d1cgs5na.js:13152-13461 fingerprint (2.1.88 match: ShowModelAndClose, 0.354)
 function ShowModelAndClose(t0) {
   let mainLoopModel = toInlineCode(renderModelLabel(t0.mainLoopModel));
   let mainLoopModelForSession = resolveEffortLevel(t0);
@@ -236,7 +236,7 @@ Base model: ${mainLoopModel}`;
       : "";
   return `${CURRENT_MODEL_PREFIX}${mainLoopModel}${fallbackText}${effortSuffix}`;
 }
-//@ chunk-18hwfzwa.js:929434-929487 fingerprint = _temp2 (1)
+//@ chunk-18hwfzwa.js:929434-929487 fingerprint (2.1.88 match: _temp2, 1)
 function selectMainLoopModelForSession_2(s_0) {
   return s_0.mainLoopModelForSession;
 }
@@ -323,7 +323,7 @@ function trackRemoteModelListRefresh(cache, sessionId, startedAt, done) {
 function cloudModelRefusal(model, setAppState, storageV5) {
   return "";
 }
-//@ chunk-mvhmq2z8.js:17149-17189 callgraph-fingerprint = _temp (1)
+//@ chunk-mvhmq2z8.js:17149-17189 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectMainLoopModel(s) {
   return s.mainLoopModel;
 }
@@ -342,7 +342,7 @@ function textNotRefusal(text) {
 function selectMainLoopModelForFastMode(s) {
   return s.mainLoopModel;
 }
-//@ chunk-mvhmq2z8.js:17311-17359 layout = _temp2 (1)
+//@ chunk-mvhmq2z8.js:17311-17359 layout (2.1.88 match: _temp2, 1)
 function selectMainLoopModelForSession(s_0) {
   return s_0.mainLoopModelForSession;
 }
@@ -896,7 +896,7 @@ function CloudModelPickerLoader({ getMessages, onDone, storageV5, credentials, s
     isStandaloneCommand: true,
   });
 }
-//@ chunk-mvhmq2z8.js:24820-26826 fingerprint = ModelPickerWrapper (0.322)
+//@ chunk-mvhmq2z8.js:24820-26826 fingerprint (2.1.88 match: ModelPickerWrapper, 0.322)
 function ModelPickerWrapper(props) {
   let $ = useMemoCache(38);
   let { kept, getMessages, onDone, storageV5, credentials, session } = props;
@@ -1659,7 +1659,7 @@ function notifyModelDeprecation(modelId, addNotification) {
     invalidates: ["model-deprecation-warning"],
   });
 }
-//@ chunk-mvhmq2z8.js:33776-33941 callgraph-fingerprint = SetModelAndClose (0.23)
+//@ chunk-mvhmq2z8.js:33776-33941 callgraph-fingerprint (2.1.88 match: SetModelAndClose, 0.23)
 function SetModelAndClose(state) {
   let { onDone } = state;
   let isFastMode = useAppState(selectMainLoopModelForFastMode);
@@ -1676,7 +1676,7 @@ function SetModelAndClose(state) {
   );
   return null;
 }
-//@ chunk-mvhmq2z8.js:33941-34964 fingerprint = call (0.691)
+//@ chunk-mvhmq2z8.js:33941-34964 fingerprint (2.1.88 match: call, 0.691)
 /**
  * /model 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

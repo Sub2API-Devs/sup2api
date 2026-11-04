@@ -104,7 +104,7 @@ function firstLine(raw) {
     ) + 1,
   );
 }
-//@ chunk-wj577vf9.js:7224-7263 fingerprint = MarkdownBody (0.598)
+//@ chunk-wj577vf9.js:7224-7263 fingerprint (2.1.88 match: MarkdownBody, 0.598)
 function MarkdownBody(t0) {
   return t0?.type === "table";
 }
@@ -118,7 +118,7 @@ function isOnlyHtmlComments(raw) {
   }
   return trimmed === "";
 }
-//@ chunk-8wvtd8sr.js:14236-14561 fingerprint = StreamingMarkdown (0.419)
+//@ chunk-8wvtd8sr.js:14236-14561 fingerprint (2.1.88 match: StreamingMarkdown, 0.419)
 /**
  * 流式 Markdown：只对最后一个未闭合块重新 lex，前面已稳定的块复用。
  */
@@ -150,7 +150,7 @@ function StreamingMarkdown(text, offset) {
   }
   return null;
 }
-//@ chunk-18hwfzwa.js:1271476-1271755 fingerprint = Markdown (0.848)
+//@ chunk-18hwfzwa.js:1271476-1271755 fingerprint (2.1.88 match: Markdown, 0.848)
 /**
  * Markdown 组件：用缓存的 marked lexer 切成令牌，表格令牌交给 MarkdownTable，其余经 formatToken 转 ANSI 文本后用 Ansi 渲染。
  */

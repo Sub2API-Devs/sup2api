@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-18hwfzwa.js:798958-799024 fingerprint = highlightMatch (0.743)
+//@ chunk-18hwfzwa.js:798958-799024 fingerprint (2.1.88 match: highlightMatch, 0.743)
 /**
  * 匹配文本的默认样式，以及反色变体。
  */

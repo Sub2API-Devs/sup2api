@@ -104,14 +104,14 @@ var LAZY_COMPONENT_REGISTRY; // deferred: uses LazyRegistry of its import cycle 
 deferInit("chunk-kpa9nk58.js:494", () => {
   LAZY_COMPONENT_REGISTRY = new LazyRegistry();
 });
-//@ chunk-kpa9nk58.js:508-541 fingerprint = DoctorLazy (1)
+//@ chunk-kpa9nk58.js:508-541 fingerprint (2.1.88 match: DoctorLazy, 1)
 /**
  * React.lazy 包装（懒加载组件）。
  */
 function DoctorLazy(logArtifactGatesFrozen) {
   return LAZY_COMPONENT_REGISTRY.lazy(logArtifactGatesFrozen);
 }
-//@ chunk-g54kbxqw.js:35039-35119 fingerprint = DoctorWithPlugins (0.498)
+//@ chunk-g54kbxqw.js:35039-35119 fingerprint (2.1.88 match: DoctorWithPlugins, 0.498)
 /**
  * Doctor 屏幕用的插件信息适配（显示名转换）。
  */
@@ -159,7 +159,7 @@ function setupTokenExpiryInfo(expiresInDays) {
     seconds: LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS,
   };
 }
-//@ chunk-2f5p3gsj.js:1716-3537 facade-exports = setupTokenHandler (0.303)
+//@ chunk-2f5p3gsj.js:1716-3537 facade-exports (2.1.88 match: setupTokenHandler, 0.303)
 /**
  * claude setup-token：登录并生成长期有效的订阅令牌。
  */
@@ -273,7 +273,7 @@ setup-token creates a long-lived Claude.ai subscription token, which this machin
   await logFeatureOkAsync("cli_setup_token");
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-2f5p3gsj.js:3537-8026 facade-exports = Doctor (0.257)
+//@ chunk-2f5p3gsj.js:3537-8026 facade-exports (2.1.88 match: Doctor, 0.257)
 async function doctorHandler(storageV5) {
   logEvent("tengu_doctor_command", {});
   let catchError;
@@ -481,7 +481,7 @@ function describeLastUpdateAttempt(lastUpdateResult) {
       return `failed (${sanitizeDisplayText(lastUpdateResult.status)}) \u2014 ${dateText}`;
   }
 }
-//@ chunk-2f5p3gsj.js:8320-8994 facade-exports = installHandler (0.39)
+//@ chunk-2f5p3gsj.js:8320-8994 facade-exports (2.1.88 match: installHandler, 0.39)
 /**
  * claude install [target]：安装原生构建（stable/latest/版本号）；DISABLE_UPDATES 时直接退出。
  */

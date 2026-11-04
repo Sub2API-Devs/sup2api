@@ -9,7 +9,7 @@
  * attribution: placement 3, fingerprint 1
  */
 
-//@ chunk-xw83kd7e.js:191-352 placement = extractHttpStatus (1)
+//@ chunk-xw83kd7e.js:191-352 placement (2.1.88 match: extractHttpStatus, 1)
 /**
  * 兼容控制消息：requestId 转为 request_id。
  */
@@ -21,7 +21,7 @@ function normalizeControlMessage(err) {
     normalizeControlMessageKeys(message.response);
   return err;
 }
-//@ chunk-xw83kd7e.js:352-469 fingerprint = normalizeControlMessageKeys (0.812)
+//@ chunk-xw83kd7e.js:352-469 fingerprint (2.1.88 match: normalizeControlMessageKeys, 0.812)
 function normalizeControlMessageKeys(obj) {
   if ("requestId" in obj && !("request_id" in obj)) {
     let controlRequestId = getControlRequestId(obj);

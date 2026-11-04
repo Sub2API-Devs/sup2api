@@ -28,7 +28,7 @@ var cliBoxes; // deferred: has load-time effects after a deferred statement of i
 deferInit("chunk-zxbmtfmw.js:1619", () => {
   cliBoxes = __toESM(cliBoxesModule(), 1);
 });
-//@ chunk-zxbmtfmw.js:1635-1873 fingerprint = CUSTOM_BORDER_STYLES (0.948)
+//@ chunk-zxbmtfmw.js:1635-1873 fingerprint (2.1.88 match: CUSTOM_BORDER_STYLES, 0.948)
 /**
  * 在 cli-boxes 之外新增的边框样式：dashed（虚线）、quote（只有左侧竖条 ▎，用于引用块）。
  */
@@ -141,7 +141,7 @@ deferInit("chunk-wj577vf9.js:7539", () => {
       )
       .trimEnd();
 });
-//@ chunk-bzr73sfg.js:288217-288545 fingerprint = embedTextInBorder (1)
+//@ chunk-bzr73sfg.js:288217-288545 fingerprint (2.1.88 match: embedTextInBorder, 1)
 /**
  * 把标题文字嵌进一条边框线：按 start/center/end 与 offset 定位，太长则截断；返回 [左段, 文字, 右段]。
  */
@@ -179,7 +179,7 @@ function withBorderBackground(text, backgroundColor) {
       })
     : text;
 }
-//@ chunk-bzr73sfg.js:288660-290208 fingerprint = renderBorder (1)
+//@ chunk-bzr73sfg.js:288660-290208 fingerprint (2.1.88 match: renderBorder, 1)
 /**
  * 画 ink-box 的边框：按 borderStyle 取字符集，四边可单独关闭、单独着色/变暗；borderText 可把文字嵌进上或下边框；继承的背景色也涂到边框上。
  */

@@ -174,7 +174,7 @@ function tooLargeLimitFromError(errorDetails) {
   let match = IMAGE_TOO_LARGE_ERROR_RE.exec(errorDetails);
   return match ? Number(match[2]) : undefined;
 }
-//@ chunk-e6aww6q8.js:127565-127851 placement = isBase64ImageBlock (0.885)
+//@ chunk-e6aww6q8.js:127565-127851 placement (2.1.88 match: isBase64ImageBlock, 0.885)
 function isBase64ImageBlock(messagesForAPI, errorMessage) {
   let match = IMAGE_TOO_LARGE_ERROR_RE.exec(errorMessage);
   if (!match?.[1]) return messagesForAPI;

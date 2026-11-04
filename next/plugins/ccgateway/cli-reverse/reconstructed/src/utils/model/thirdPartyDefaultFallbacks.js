@@ -128,7 +128,7 @@ async function withProbeDeadline(label, promise, deadlineMs = STARTUP_PROBE_DEAD
     clearTimeout(timer);
   }
 }
-//@ chunk-4r745zza.js:1808-1971 placement = createFallbackStorage (0.51)
+//@ chunk-4r745zza.js:1808-1971 placement (2.1.88 match: createFallbackStorage, 0.51)
 /**
  * 在总时限内依次探测某提供者的回退默认值与文档默认值（第二次用剩余时间），返回两者结果；属于第三方提供者默认模型探测，误归 secureStorage（旧版名 createFallbackStorage 错配）。
  */

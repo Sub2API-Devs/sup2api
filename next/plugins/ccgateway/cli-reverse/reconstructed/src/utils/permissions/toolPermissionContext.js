@@ -269,7 +269,7 @@ function stripDangerousAllowRules(previousContext) {
     strippedDangerousRules: nextStripped,
   });
 }
-//@ chunk-agvbmc7h.js:3740-3801 placement = call (0.777)
+//@ chunk-agvbmc7h.js:3740-3801 placement (2.1.88 match: call, 0.777)
 function storedToolPermissionContext(toolUseContext) {
   return toolUseContext.getAppState().toolPermissionContext;
 }
@@ -394,7 +394,7 @@ function relaxForRemoteExecution(toolUseContext, context) {
     ? withModeAtRequest("default", relaxed)
     : relaxed;
 }
-//@ chunk-agvbmc7h.js:5553-5645 placement = configureEffortParams (0.608)
+//@ chunk-agvbmc7h.js:5553-5645 placement (2.1.88 match: configureEffortParams, 0.608)
 /**
  * 在权限层列表里取最后一个 kind=effort 的 effort 值（本轮 effort 覆盖）。旧版名 configureEffortParams 为错配。
  */
@@ -413,7 +413,7 @@ function getEffortValue(toolUseContext) {
     })
   );
 }
-//@ chunk-agvbmc7h.js:5734-5881 placement = _temp (0.427)
+//@ chunk-agvbmc7h.js:5734-5881 placement (2.1.88 match: _temp, 0.427)
 function getHelperEffort(toolUseContext, model) {
   return isSameModelSettings(model, getMainLoopModel(toolUseContext))
     ? {
@@ -470,7 +470,7 @@ function thinkingBudgetConfig(maxThinkingTokens) {
         budgetTokens: maxThinkingTokens,
       };
 }
-//@ chunk-agvbmc7h.js:6493-6547 placement = getNestedMemoryAttachments (0.431)
+//@ chunk-agvbmc7h.js:6493-6547 placement (2.1.88 match: getNestedMemoryAttachments, 0.431)
 function getUltracodeRequested(toolUseContext) {
   return toolUseContext.getAppState().ultracode === true;
 }

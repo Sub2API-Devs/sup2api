@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:2030075-2030344 fingerprint = reloadPlugins (0.611)
+//@ chunk-e6aww6q8.js:2030075-2030344 fingerprint (2.1.88 match: reloadPlugins, 0.611)
 /**
  * /reload-plugins 命令对象（local）；描述：Activate pending plugin changes in the current session；实现 chunk-8vqp1nqq.js 的 qr。
  */

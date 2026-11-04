@@ -38,7 +38,7 @@ function isShownCommand(command) {
 //@ chunk-yxcx2jtr.js:16429-16445 affinity
 var HELP_COLUMN_WIDTH = 44;
 var HELP_LIST_ROWS = 21;
-//@ chunk-yxcx2jtr.js:16445-19220 fingerprint = HelpV2 (0.573)
+//@ chunk-yxcx2jtr.js:16445-19220 fingerprint (2.1.88 match: HelpV2, 0.573)
 /**
  * /help 对话框：标签页切换（General、Commands、自定义命令），help:dismiss 或 Esc 关闭并发系统消息 "Help dialog dismissed"。
  */

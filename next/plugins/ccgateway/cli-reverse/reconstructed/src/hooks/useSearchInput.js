@@ -54,7 +54,7 @@ deferInit("chunk-tzghj6zv.js:5963", () => {
     "f12",
   ]);
 });
-//@ chunk-tzghj6zv.js:6203-6304 fingerprint = isYankKey (1)
+//@ chunk-tzghj6zv.js:6203-6304 fingerprint (2.1.88 match: isYankKey, 1)
 function isYankKey(text, key) {
   if (key.ctrl || key.meta) return false;
   if (NON_TEXT_KEYS.has(text)) return false;
@@ -67,18 +67,18 @@ function isYankKey(text, key) {
 function startsWithPunctuation(text) {
   return text.length > 0 && ".,?!:;)]".includes(text.charAt(0));
 }
-//@ chunk-tzghj6zv.js:6372-6561 fingerprint = isKillKey (1)
+//@ chunk-tzghj6zv.js:6372-6561 fingerprint (2.1.88 match: isKillKey, 1)
 function isKillKey(e) {
   if (e.ctrl && (e.key === "k" || e.key === "u" || e.key === "w")) return true;
   if ((e.meta || e.ctrl) && e.key === "backspace") return true;
   if (e.meta && !e.ctrl && e.key.toLowerCase() === "d") return true;
   return false;
 }
-//@ chunk-tzghj6zv.js:6561-6612 layout = isYankKey (1)
+//@ chunk-tzghj6zv.js:6561-6612 layout (2.1.88 match: isYankKey, 1)
 function isYankKey_2(e) {
   return (e.ctrl || e.meta) && e.key === "y";
 }
-//@ chunk-tzghj6zv.js:6612-6768 fingerprint = UNHANDLED_SPECIAL_KEYS (0.925)
+//@ chunk-tzghj6zv.js:6612-6768 fingerprint (2.1.88 match: UNHANDLED_SPECIAL_KEYS, 0.925)
 var UNHANDLED_SPECIAL_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-tzghj6zv.js:6612", () => {
   UNHANDLED_SPECIAL_KEYS = new Set([
@@ -104,7 +104,7 @@ deferInit("chunk-tzghj6zv.js:6612", () => {
     "f12",
   ]);
 });
-//@ chunk-tzghj6zv.js:6768-11964 fingerprint = useSearchInput (0.606)
+//@ chunk-tzghj6zv.js:6768-11964 fingerprint (2.1.88 match: useSearchInput, 0.606)
 /**
  * 搜索输入：维护 query/cursorOffset，处理字符输入、退格、Emacs kill/yank、左右移动，return 触发 onExit，escape 触发 onCancel；不处理翻页/滚轮等键。
  */

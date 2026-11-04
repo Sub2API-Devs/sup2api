@@ -325,7 +325,7 @@ function remoteSettingsCredentialKey() {
     ]),
   );
 }
-//@ chunk-4pc1m5n9.js:6493-6684 placement = getClientSurface (0.785)
+//@ chunk-4pc1m5n9.js:6493-6684 placement (2.1.88 match: getClientSurface, 0.785)
 function getClientSurface() {
   let userAgent = getUserAgent({
     ownEntrypoint: true,
@@ -339,7 +339,7 @@ function getClientSurface() {
         `, ${DESKTOP_3P_ENTRYPOINT}` +
         userAgent.slice(index + entrypointSuffix.length);
 }
-//@ chunk-4pc1m5n9.js:6684-6812 fingerprint = getRemoteManagedSettingsEndpoint (0.739)
+//@ chunk-4pc1m5n9.js:6684-6812 fingerprint (2.1.88 match: getRemoteManagedSettingsEndpoint, 0.739)
 /**
  * 远程托管设置端点：网关模式为 <gateway>/managed/settings，否则 <BASE_API_URL>/api/claude_code/settings。
  */
@@ -467,7 +467,7 @@ async function fetchRemoteSettingsMockOrNull(options) {
     };
   }
 }
-//@ chunk-4pc1m5n9.js:9352-12031 callgraph-fingerprint = getRemoteSettingsAuthHeaders (0.275)
+//@ chunk-4pc1m5n9.js:9352-12031 callgraph-fingerprint (2.1.88 match: getRemoteSettingsAuthHeaders, 0.275)
 async function getRemoteSettingsAuthHeaders(credentials, options) {
   if (hasManagedSettings()) {
     let credential = claimedCredential();
@@ -724,7 +724,7 @@ function wasResetDuringFetch(syncCacheResetEpoch) {
 function formatRemoteSettingsErrorKind(failure) {
   return failure.httpStatus !== undefined ? `${failure.errorKind}/${failure.httpStatus}` : failure.errorKind;
 }
-//@ chunk-4pc1m5n9.js:13849-14681 fingerprint = fetchWithRetry (0.314)
+//@ chunk-4pc1m5n9.js:13849-14681 fingerprint (2.1.88 match: fetchWithRetry, 0.314)
 async function fetchWithRetry(etag, options) {
   let remoteSettingsMockOrNull = await fetchRemoteSettingsMockOrNull(options.credentials);
   if (remoteSettingsMockOrNull) return remoteSettingsMockOrNull;
@@ -839,7 +839,7 @@ function classifyRemoteSettingsFailure(failure) {
     noResponse: failure.noResponse,
   });
 }
-//@ chunk-4pc1m5n9.js:15794-21412 fingerprint = fetchRemoteManagedSettings (0.355)
+//@ chunk-4pc1m5n9.js:15794-21412 fingerprint (2.1.88 match: fetchRemoteManagedSettings, 0.355)
 /**
  * 单次请求远程设置端点（OAuth Bearer 或 API key），区分 200/204/304/404 与失败类型，带重试。
  */
@@ -1211,7 +1211,7 @@ deferInit("chunk-4pc1m5n9.js:21412", () => {
   KEEP_STORED_STATEMENT = Symbol("keep the stored statement");
   BODY_JUST_RECEIVED = Symbol("the server sent the body now");
 });
-//@ chunk-4pc1m5n9.js:21497-22630 fingerprint = saveSettings (0.338)
+//@ chunk-4pc1m5n9.js:21497-22630 fingerprint (2.1.88 match: saveSettings, 0.338)
 /**
  * 把远程设置写入缓存（storage 后端或 <配置目录>/remote-settings.json）。
  */
@@ -1277,7 +1277,7 @@ async function saveSettings(settings, storageV5, signature, hybridOrgUuid, bodyR
     logForDebugging(`Remote settings: Failed to save helper consent - ${errorMessage(error)}`);
   }
 }
-//@ chunk-4pc1m5n9.js:23311-33728 callgraph-witnessed = fetchAndLoadRemoteManagedSettings (0.072)
+//@ chunk-4pc1m5n9.js:23311-33728 callgraph-witnessed (2.1.88 match: fetchAndLoadRemoteManagedSettings, 0.072)
 /**
  * 获取远程托管设置：不符合条件返回 ineligible；CLAUDE_CODE_REMOTE_SETTINGS_PATH 覆盖文件或受限子进程直接用本地快照；否则带缓存 checksum 请求端点（304 沿用缓存），校验签名/组织后写入 remote-settings.json 缓存并作为 policy 的 remote 层。
  */
@@ -1879,7 +1879,7 @@ async function fetchAndLoadRemoteManagedSettings(options) {
     };
   }
 }
-//@ chunk-4pc1m5n9.js:37968-38041 fingerprint = loadRemoteManagedSettings (1)
+//@ chunk-4pc1m5n9.js:37968-38041 fingerprint (2.1.88 match: loadRemoteManagedSettings, 1)
 function loadRemoteManagedSettings_2() {
   try {
     markPolicySettingsNotified();

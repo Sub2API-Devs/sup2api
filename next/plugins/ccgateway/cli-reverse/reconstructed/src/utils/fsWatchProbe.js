@@ -84,7 +84,7 @@ async function probeWatchOnFile(filePath, options) {
   logForDebugging(`[fs.watch probe] verdict: ${verdict}`);
   return verdict;
 }
-//@ chunk-82kqcve8.js:23616-23783 placement = getFileIdentity (0.867)
+//@ chunk-82kqcve8.js:23616-23783 placement (2.1.88 match: getFileIdentity, 0.867)
 async function getFileIdentity(filePath) {
   let handle = await open(filePath, "wx", PROBE_FILE_MODE);
   try {
@@ -149,7 +149,7 @@ function probeSettled(probeState) {
 function probeOutcomeLabel(probeState) {
   return probeState.hasFired ? "delivers" : probeState.wasRefused ? "refused" : "silent";
 }
-//@ chunk-82kqcve8.js:24457-24532 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-82kqcve8.js:24457-24532 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function removeRecursiveQuietly(dirPath) {
   try {
     await rm_2(dirPath, {

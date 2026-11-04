@@ -15,7 +15,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { isExpectedApiError, errorMessage } from "../../utils/errors.js";
 
-//@ chunk-zbtr7f5k.js:1393-2222 fingerprint = fetchAndStoreClaudeCodeFirstTokenDate (0.475)
+//@ chunk-zbtr7f5k.js:1393-2222 fingerprint (2.1.88 match: fetchAndStoreClaudeCodeFirstTokenDate, 0.475)
 /**
  * 已有缓存则跳过；否则 GET /api/organization/claude_code_first_token_date，校验日期后写入全局配置 claudeCodeFirstTokenDate。
  */

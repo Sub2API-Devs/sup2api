@@ -11,7 +11,7 @@
 import { defaultOpusLabel, isFastModeEnabled } from "../../utils/fastMode.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:2027306-2027748 fingerprint = fast (0.634)
+//@ chunk-e6aww6q8.js:2027306-2027748 fingerprint (2.1.88 match: fast, 0.634)
 /**
  * /fast 命令对象（local-jsx）；描述：{return`Toggle fast mode (${U4()})`}；isHidden: {return!ys()}；实现 chunk-sfatdaes.js 的 Fji。
  */

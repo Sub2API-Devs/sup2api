@@ -40,7 +40,7 @@ function defaultSettingsExtra() {
 function currentSettingsExtra() {
   return createSignal();
 }
-//@ chunk-9h8dr0qb.js:113394-116279 fingerprint = Settings (0.737)
+//@ chunk-9h8dr0qb.js:113394-116279 fingerprint (2.1.88 match: Settings, 0.737)
 /**
  * 设置对话框外壳：Status / Config / Usage / Stats（/ Gates 仅内部）标签页，关闭时发系统消息。
  */

@@ -177,9 +177,9 @@ function ExitFeedbackNudge(props) {
   } else nudgeElement = $[25];
   return nudgeElement;
 }
-//@ chunk-xs5f70ym.js:18245-18301 placement = GOODBYE_MESSAGES (1)
+//@ chunk-xs5f70ym.js:18245-18301 placement (2.1.88 match: GOODBYE_MESSAGES, 1)
 var GOODBYE_MESSAGES = ["Goodbye!", "See ya!", "Bye!", "Catch you later!"];
-//@ chunk-xs5f70ym.js:18301-18340 placement = getRandomGoodbyeMessage (1)
+//@ chunk-xs5f70ym.js:18301-18340 placement (2.1.88 match: getRandomGoodbyeMessage, 1)
 function getRandomGoodbyeMessage() {
   return sampleAlias(GOODBYE_MESSAGES) ?? "Goodbye!";
 }

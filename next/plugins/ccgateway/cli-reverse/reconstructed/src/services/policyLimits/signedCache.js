@@ -256,7 +256,7 @@ async function fetchPolicyLimitsResponse(requestOptions) {
     tunnelCredentialEpoch,
   };
 }
-//@ chunk-7t4fmt2f.js:13420-13539 placement = isTransientNetworkError (1)
+//@ chunk-7t4fmt2f.js:13420-13539 placement (2.1.88 match: isTransientNetworkError, 1)
 function isTransientNetworkError(error) {
   if (!axios_default.isAxiosError(error)) return;
   let rawEpochHeader = error.response?.headers?.[TUNNEL_CREDENTIAL_EPOCH_HEADER];

@@ -56,7 +56,7 @@ import { useAppState, useSetAppState } from "../../state/AppState.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { setMcpOnClose } from "../../services/mcp/mcpWireUtils.js";
 
-//@ chunk-fq0cr76a.js:916465-916672 fingerprint = _temp4 (0.691)
+//@ chunk-fq0cr76a.js:916465-916672 fingerprint (2.1.88 match: _temp4, 0.691)
 /**
  * 解析 "host:port"：端口 1–65535，host 非空；以冒号结尾的 host 必须是 IPv6。失败返回 undefined。
  */
@@ -92,7 +92,7 @@ function detectVSCodeFamily(name) {
     return "vscode";
   return null;
 }
-//@ chunk-5bdzenzx.js:16087-16147 sole-consumer = _temp (1)
+//@ chunk-5bdzenzx.js:16087-16147 sole-consumer (2.1.88 match: _temp, 1)
 function shouldAutoConnectIdeAnyway() {
   let config = getGlobalConfig();
   return !isSupportedTerminal() && config.autoConnectIde === true;
@@ -102,11 +102,11 @@ function countByName(acc, ide) {
   acc[ide.name] = (acc[ide.name] || 0) + 1;
   return acc;
 }
-//@ chunk-5bdzenzx.js:16207-16282 fingerprint = _temp2 (1)
+//@ chunk-5bdzenzx.js:16207-16282 fingerprint (2.1.88 match: _temp2, 1)
 function isVSCodeName(ide) {
   return ide.name === "VS Code" || ide.name === "Visual Studio Code";
 }
-//@ chunk-5bdzenzx.js:16282-16395 fingerprint = _temp3 (0.748)
+//@ chunk-5bdzenzx.js:16282-16395 fingerprint (2.1.88 match: _temp3, 0.748)
 function renderIdeWorkspaceRow(ide, index) {
   return jsxProd_default(
     BulletRow,
@@ -139,21 +139,21 @@ function renderRunningIde(running) {
     running,
   );
 }
-//@ chunk-5bdzenzx.js:16538-16585 placement = _temp (1)
+//@ chunk-5bdzenzx.js:16538-16585 placement (2.1.88 match: _temp, 1)
 function findIdeClient(s) {
   return s.mcp.clients.find(isIdeClient);
 }
 //@ chunk-5bdzenzx.js:16585-16600 placement
 function noop() {}
-//@ chunk-5bdzenzx.js:16600-16639 placement = _temp2 (1)
+//@ chunk-5bdzenzx.js:16600-16639 placement (2.1.88 match: _temp2, 1)
 function isNonIdeMcpClient(c) {
   return c.name !== "ide";
 }
-//@ chunk-5bdzenzx.js:16696-16751 sole-consumer = isIncludedMcpTool (1)
+//@ chunk-5bdzenzx.js:16696-16751 sole-consumer (2.1.88 match: isIncludedMcpTool, 1)
 function isIncludedMcpTool_2(tool) {
   return !tool.name?.startsWith("mcp__ide__");
 }
-//@ chunk-5bdzenzx.js:16751-16891 sole-consumer = _temp (0.819)
+//@ chunk-5bdzenzx.js:16751-16891 sole-consumer (2.1.88 match: _temp, 0.819)
 function withoutIdeMcpEntries(s) {
   return {
     ...s,
@@ -170,7 +170,7 @@ function withoutIdeEntry(value) {
   let { ide, ...rest } = value ?? {};
   return rest;
 }
-//@ chunk-5bdzenzx.js:16940-20006 fingerprint = IDEScreen (0.611)
+//@ chunk-5bdzenzx.js:16940-20006 fingerprint (2.1.88 match: IDEScreen, 0.611)
 function IDEScreen(props) {
   let $ = useMemoCache(45);
   let { availableIDEs, unavailableIDEs, selectedIDE, onClose, onSelect } = props;
@@ -435,14 +435,14 @@ https://code.claude.com/docs/en/jetbrains`
   } else hint = $[44];
   return hint;
 }
-//@ chunk-5bdzenzx.js:20006-20152 fingerprint = findCurrentIDE (1)
+//@ chunk-5bdzenzx.js:20006-20152 fingerprint (2.1.88 match: findCurrentIDE, 1)
 async function findCurrentIDE(availableIDEs, dynamicMcpConfig) {
   let currentConfig = dynamicMcpConfig?.ide;
   if (!currentConfig || (currentConfig.type !== "sse-ide" && currentConfig.type !== "ws-ide")) return null;
   for (let ide of availableIDEs) if (ide.url === currentConfig.url) return ide;
   return null;
 }
-//@ chunk-5bdzenzx.js:20152-20717 fingerprint = IDEOpenSelection (0.843)
+//@ chunk-5bdzenzx.js:20152-20717 fingerprint (2.1.88 match: IDEOpenSelection, 0.843)
 function IDEOpenSelection(props) {
   let $ = useMemoCache(13);
   let { availableIDEs, onSelectIDE, onDone } = props;
@@ -494,7 +494,7 @@ function IDEOpenSelection(props) {
   } else body = $[12];
   return body;
 }
-//@ chunk-5bdzenzx.js:20717-21294 fingerprint = RunningIDESelector (0.772)
+//@ chunk-5bdzenzx.js:20717-21294 fingerprint (2.1.88 match: RunningIDESelector, 0.772)
 function RunningIDESelector(props) {
   let $ = useMemoCache(13);
   let { runningIDEs, onSelectIDE, onDone } = props;
@@ -549,7 +549,7 @@ function RunningIDESelector(props) {
   } else t6 = $[12];
   return t6;
 }
-//@ chunk-5bdzenzx.js:21294-21455 fingerprint = InstallOnMount (1)
+//@ chunk-5bdzenzx.js:21294-21455 fingerprint (2.1.88 match: InstallOnMount, 1)
 function InstallOnMount(props) {
   let $ = useMemoCache(4);
   let { ide, onInstall } = props;
@@ -767,7 +767,7 @@ async function openProjectInIde(ide, targetPath, isWorktree, report) {
   logFeatureBad("ide_open_project", "ide_open_project_failed");
   report(`Failed to open in ${ide.name}. Try opening manually: ${targetPath}`);
 }
-//@ chunk-5bdzenzx.js:24052-24808 fingerprint = call (0.612)
+//@ chunk-5bdzenzx.js:24052-24808 fingerprint (2.1.88 match: call, 0.612)
 /**
  * /ide 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -819,7 +819,7 @@ async function call(onDone, context, args) {
 }
 //@ chunk-5bdzenzx.js:24808-24821 layout
 var IDE_CONNECT_TIMEOUT_MS = 35000;
-//@ chunk-5bdzenzx.js:24821-26672 fingerprint = IDECommandFlow (0.79)
+//@ chunk-5bdzenzx.js:24821-26672 fingerprint (2.1.88 match: IDECommandFlow, 0.79)
 function IDECommandFlow(props) {
   let $ = useMemoCache(27);
   let { availableIDEs, unavailableIDEs, currentIDE, onChangeDynamicMcpConfig, onDone } = props;
@@ -976,7 +976,7 @@ function IDECommandFlow(props) {
   } else helpText = $[26];
   return helpText;
 }
-//@ chunk-5bdzenzx.js:26672-27019 fingerprint = formatWorkspaceFolders (1)
+//@ chunk-5bdzenzx.js:26672-27019 fingerprint (2.1.88 match: formatWorkspaceFolders, 1)
 function formatWorkspaceFolders(folders, maxLength = 100) {
   if (folders.length === 0) return "";
   let cwd = getCwd();

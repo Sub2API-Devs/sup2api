@@ -131,7 +131,7 @@ function isNarrowPathRule(ruleContent) {
       .relativePattern,
   );
 }
-//@ chunk-dz36xfxg.js:15927-16152 placement = filterRulesByContentsMatchingInput (0.822)
+//@ chunk-dz36xfxg.js:15927-16152 placement (2.1.88 match: filterRulesByContentsMatchingInput, 0.822)
 /**
  * 规则的首个命令词是否可以被收窄（不是裸 shell/包装命令，也不属于特殊集合）。
  */
@@ -307,7 +307,7 @@ function formatDecisionMessage({ message, denied_by_rule: deniedByRule }) {
         MAX_REASON_CHARS,
       );
 }
-//@ chunk-dz36xfxg.js:17864-18409 placement = serializeDecisionReason (0.933)
+//@ chunk-dz36xfxg.js:17864-18409 placement (2.1.88 match: serializeDecisionReason, 0.933)
 /**
  * 把权限决定原因序列化成 SDK 线格式（rule/mode/classifier/hook/workingDir…）。
  */
@@ -356,7 +356,7 @@ function serializeDecisionReason(reason) {
       return reason;
   }
 }
-//@ chunk-dz36xfxg.js:18409-18547 placement = hasBashPermission (0.813)
+//@ chunk-dz36xfxg.js:18409-18547 placement (2.1.88 match: hasBashPermission, 0.813)
 function askRuleFromRule(rules) {
   if (rules?.ruleBehavior !== "ask") return;
   let rule = TOOL_HOST_PERMISSION_SCHEMAS().safeParse(formatPermissionRule(rules.ruleValue));
@@ -436,7 +436,7 @@ function flattenAskReasons(decisionReason) {
     );
   return [decisionReason];
 }
-//@ chunk-dz36xfxg.js:19413-19732 placement = serializeDecisionReason (0.954)
+//@ chunk-dz36xfxg.js:19413-19732 placement (2.1.88 match: serializeDecisionReason, 0.954)
 function isAskingDecisionReason(reason) {
   switch (reason?.type) {
     case undefined:

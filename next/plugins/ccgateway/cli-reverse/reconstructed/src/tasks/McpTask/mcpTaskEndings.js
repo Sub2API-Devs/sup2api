@@ -151,7 +151,7 @@ class McpTaskEndingsStore {
     }
   }
 }
-//@ chunk-r7bynxfq.js:2517-2706 placement = countToolCallsSince (1)
+//@ chunk-r7bynxfq.js:2517-2706 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(message) {
   if (message.type !== "assistant" || message.message.model === SYNTHETIC_MODEL) return false;
   let { content } = message.message;
@@ -219,7 +219,7 @@ function lookMcpTaskEndings(messages, count, session) {
 function stickyPromptRunId(message) {
   return regExp.exec(getStickyPromptText(message) ?? "")?.[1];
 }
-//@ chunk-r7bynxfq.js:3070-3463 placement = computeStickyPromptText (0.757)
+//@ chunk-r7bynxfq.js:3070-3463 placement (2.1.88 match: computeStickyPromptText, 0.757)
 function getTaskNotificationRunId(msg) {
   if (msg.type === "user")
     return msg.origin?.kind === "task-notification" && msg.origin.subkind === undefined
@@ -233,7 +233,7 @@ function getTaskNotificationRunId(msg) {
     ? safeIdentifierOrUndefined(msg.attachment.runId)
     : undefined;
 }
-//@ chunk-r7bynxfq.js:3463-3833 placement = buildTranscriptEntries (0.777)
+//@ chunk-r7bynxfq.js:3463-3833 placement (2.1.88 match: buildTranscriptEntries, 0.777)
 function getStickyPromptText(message) {
   if (getTaskNotificationRunId(message) === undefined) return;
   if (message.type === "attachment")

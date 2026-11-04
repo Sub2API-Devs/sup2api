@@ -55,7 +55,7 @@ import {
 import { isAbovePrepend, tiersBeneath, readBundledScan, readBundledFiles } from "./builtinHooksModule.js";
 import { importResolverCache } from "./moduleLoader.js";
 
-//@ chunk-bfnfj4kx.js:39347-39545 placement = createEmptyToolCounts (0.474)
+//@ chunk-bfnfj4kx.js:39347-39545 placement (2.1.88 match: createEmptyToolCounts, 0.474)
 /**
  * 有 stateReads/stateWrites 时按键排序输出 {reads, writes}，否则 undefined。旧版名 createEmptyToolCounts 为错配。
  */

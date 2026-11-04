@@ -21,7 +21,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
  * AUTOUPDATE_SETTING_SOURCES_TEXT：autoUpdate 有效的设置源说明。
  */
 var AUTOUPDATE_SETTING_SOURCES_TEXT = "user settings, --settings and managed settings";
-//@ chunk-e6aww6q8.js:4235114-4235157 placement = getAutoUpdateEnabledMarketplaces (1)
+//@ chunk-e6aww6q8.js:4235114-4235157 placement (2.1.88 match: getAutoUpdateEnabledMarketplaces, 1)
 /**
  * 插件目录市场的 autoUpdate 设置。
  */

@@ -758,7 +758,7 @@ function userRefusalRules(settings, behaviors) {
     (rule) => rule.ruleBehavior !== "allow" && behaviors.includes(rule.ruleBehavior),
   );
 }
-//@ chunk-s61vbvea.js:485826-485889 placement = hasBashPermission (1)
+//@ chunk-s61vbvea.js:485826-485889 placement (2.1.88 match: hasBashPermission, 1)
 function hasBashPermission(rules) {
   return `${rules.ruleBehavior}\x00${formatPermissionRule(rules.ruleValue)}`;
 }
@@ -809,7 +809,7 @@ var ALL_ZERO_RE = /^0+$/;
 function hasNonZeroHash(hash) {
   return !ALL_ZERO_RE.test(hash);
 }
-//@ chunk-s61vbvea.js:486464-486519 placement = ANTHROPIC_VERSION (0.816)
+//@ chunk-s61vbvea.js:486464-486519 placement (2.1.88 match: ANTHROPIC_VERSION, 0.816)
 /**
  * 组合的 beta 头值与 anthropic-version "2023-06-01"。
  */

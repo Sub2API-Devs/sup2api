@@ -11,11 +11,11 @@
 import { resolveSetting } from "./settings/userIntentSettings.js";
 import { resolveAutoNotificationChannel, sendToChannel } from "../services/notifier.js";
 
-//@ chunk-tzghj6zv.js:5760-5821 fingerprint = EDITOR_MODES (0.782)
+//@ chunk-tzghj6zv.js:5760-5821 fingerprint (2.1.88 match: EDITOR_MODES, 0.782)
 function EDITOR_MODES() {
   return resolveSetting("editorMode", "normal").value === "vim";
 }
-//@ chunk-q6rfp6n3.js:2370-2659 fingerprint = NOTIFICATION_CHANNELS (0.954)
+//@ chunk-q6rfp6n3.js:2370-2659 fingerprint (2.1.88 match: NOTIFICATION_CHANNELS, 0.954)
 async function NOTIFICATION_CHANNELS(preferredChannel, opts, terminal) {
   if (preferredChannel === "auto") {
     let channel = await resolveAutoNotificationChannel();

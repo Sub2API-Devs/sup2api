@@ -110,7 +110,7 @@ function isRemoteBrowserToolModeFloorActive(tool, toolPermissionContext) {
 function isRemoteBrowserUnderModeFloor(toolName) {
   return isRemoteBrowserToolName(toolName) && isRemoteBrowserModeFloorOn();
 }
-//@ chunk-e6aww6q8.js:934122-934198 placement = findMcpServerConnection (1)
+//@ chunk-e6aww6q8.js:934122-934198 placement (2.1.88 match: findMcpServerConnection, 1)
 /**
  * 判断工具名属于远程浏览器 MCP 服务器（服务器名等于 REMOTE_BROWSER，或通配匹配 mcp__<remote-browser>__）。
  */

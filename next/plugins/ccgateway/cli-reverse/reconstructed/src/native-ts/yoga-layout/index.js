@@ -8,7 +8,7 @@
  * pieces: chunk-bzr73sfg.js (75)
  * attribution: callgraph-witnessed 6, placement 1, layout 40, fingerprint 23, callgraph-fingerprint 3, file-local 2
  */
-//@ chunk-bzr73sfg.js:145717-145765 callgraph-witnessed = AUTO_VALUE (1)
+//@ chunk-bzr73sfg.js:145717-145765 callgraph-witnessed (2.1.88 match: AUTO_VALUE, 1)
 var UNDEFINED_VALUE = {
   unit: 0,
   value: NaN,
@@ -17,14 +17,14 @@ var AUTO_VALUE = {
   unit: 3,
   value: NaN,
 };
-//@ chunk-bzr73sfg.js:145765-145831 placement = sanitizePath (0.712)
+//@ chunk-bzr73sfg.js:145765-145831 placement (2.1.88 match: sanitizePath, 0.712)
 /**
  * 数值是否有限且绝对值不超过 2^31-1（能放进 Int32 布局存储）。
  */
 function isInt32Finite(value) {
   return Number.isFinite(value) && Math.abs(value) <= 2147483647;
 }
-//@ chunk-bzr73sfg.js:145831-145883 callgraph-witnessed = pointValue (1)
+//@ chunk-bzr73sfg.js:145831-145883 callgraph-witnessed (2.1.88 match: pointValue, 1)
 /**
  * 点值 {unit:1, value: 取整后的整数}；超出 Int32 返回 undefined。
  */
@@ -36,7 +36,7 @@ function pointValue(v) {
       }
     : UNDEFINED_VALUE;
 }
-//@ chunk-bzr73sfg.js:145883-145931 callgraph-witnessed = percentValue (1)
+//@ chunk-bzr73sfg.js:145883-145931 callgraph-witnessed (2.1.88 match: percentValue, 1)
 /**
  * 百分比值 {unit:2, value}；超出范围返回 undefined。
  */
@@ -48,7 +48,7 @@ function percentValue(v) {
       }
     : UNDEFINED_VALUE;
 }
-//@ chunk-bzr73sfg.js:145931-146056 callgraph-witnessed = resolveValue (1)
+//@ chunk-bzr73sfg.js:145931-146056 callgraph-witnessed (2.1.88 match: resolveValue, 1)
 /**
  * 把 Value 解析成具体数值：点值原样，百分比按 ownerSize 计算并取整（超范围为 NaN），其它 NaN。
  */
@@ -92,7 +92,7 @@ var SZ_CROSS = 2;
 function createInt32Cache(length) {
   return new Int32Array(length).fill(INT32_NAN);
 }
-//@ chunk-bzr73sfg.js:146250-146644 fingerprint = defaultStyle (1)
+//@ chunk-bzr73sfg.js:146250-146644 fingerprint (2.1.88 match: defaultStyle, 1)
 /**
  * 节点默认样式：方向/flexDirection column(0)、alignItems stretch、alignContent flex-start、positionType relative、flexBasis auto、宽高 auto，边距/内边距/边框/定位 9 个边全 undefined，gap 3 槽。
  */
@@ -129,7 +129,7 @@ var EDGE_LEFT = 0;
 var EDGE_TOP = 1;
 var EDGE_RIGHT = 2;
 var EDGE_BOTTOM = 3;
-//@ chunk-bzr73sfg.js:146668-146773 callgraph-witnessed = resolveEdge (0.186)
+//@ chunk-bzr73sfg.js:146668-146773 callgraph-witnessed (2.1.88 match: resolveEdge, 0.186)
 /**
  * 解析某个物理边的值（经 Start/End、Horizontal/Vertical、All 回退）；auto 在 allowAuto 时返回 NaN，否则 0。
  */
@@ -139,7 +139,7 @@ function resolveEdge(edges, physicalEdge, ownerSize, allowAuto = false) {
   if (edgeRaw.unit === 3) return allowAuto ? NaN : 0;
   return resolveValue(edgeRaw, ownerSize);
 }
-//@ chunk-bzr73sfg.js:146773-146925 callgraph-witnessed = resolveEdgeRaw (0.186)
+//@ chunk-bzr73sfg.js:146773-146925 callgraph-witnessed (2.1.88 match: resolveEdgeRaw, 0.186)
 /**
  * 取物理边的原始 Value：左/右先看 Start/End，再看本边、Horizontal/Vertical、All。
  */
@@ -152,16 +152,16 @@ function resolveEdgeRaw(edges, physicalEdge) {
   if (edge.unit === 0) edge = edges[8];
   return edge;
 }
-//@ chunk-bzr73sfg.js:146925-146966 callgraph-fingerprint = isMarginAuto (1)
+//@ chunk-bzr73sfg.js:146925-146966 callgraph-fingerprint (2.1.88 match: isMarginAuto, 1)
 function isMarginAuto(edges, physicalEdge) {
   return resolveEdgeRaw(edges, physicalEdge).unit === 3;
 }
-//@ chunk-bzr73sfg.js:146966-147038 callgraph-fingerprint = hasAnyAutoEdge (1)
+//@ chunk-bzr73sfg.js:146966-147038 callgraph-fingerprint (2.1.88 match: hasAnyAutoEdge, 1)
 function hasAnyEdgeWithUnit(edges, unit) {
   for (let i = 0; i < 9; i++) if (edges[i].unit === unit) return true;
   return false;
 }
-//@ chunk-bzr73sfg.js:147038-147108 callgraph-fingerprint = hasAnyDefinedEdge (1)
+//@ chunk-bzr73sfg.js:147038-147108 callgraph-fingerprint (2.1.88 match: hasAnyDefinedEdge, 1)
 function hasAnyDefinedEdge(edges) {
   for (let i = 0; i < 9; i++) if (edges[i].unit !== 0) return true;
   return false;
@@ -260,7 +260,7 @@ function trailingEdge(flexDirection) {
       return EDGE_TOP;
   }
 }
-//@ chunk-bzr73sfg.js:148028-148508 fingerprint = createConfig (0.721)
+//@ chunk-bzr73sfg.js:148028-148508 fingerprint (2.1.88 match: createConfig, 0.721)
 /**
  * 创建布局配置：pointScaleFactor 只能 0 或 1（Int32 存储，1 时布局结果取整）、errata、useWebDefaults；另含每次 calculateLayout 的统计计数（访问节点数、测量调用、缓存命中、存活节点数）与代数 generation。
  */
@@ -297,7 +297,7 @@ function createConfig() {
   };
   return config;
 }
-//@ chunk-bzr73sfg.js:148508-157070 fingerprint = Node (0.93)
+//@ chunk-bzr73sfg.js:148508-157070 fingerprint (2.1.88 match: Node, 0.93)
 /**
  * yoga 节点（纯 TS 移植，接口兼容 yoga-layout 的 Node）：style、layout（left/top/width/height 与 Int32Array 的 border/padding/margin）、父子关系、measureFunc、脏标记。多组 Int32 缓存：_lc/_mc 单槽布局/测量结果缓存（输入键 + 宽高）、_cIn/_cOut 8 槽多结果缓存、_mfC 4 槽测量函数缓存、_fb flex basis 缓存、_sz 本次的 basis/主轴/交叉轴尺寸。setter 改样式即 markDirty 并预算 _readsOwnerWidth/Height、_has* 标志；calculateLayout 自增 generation、从根 layoutNode，最后在 pointScaleFactor≠0 时取整。aspectRatio、boxSizing、dirtiedFunc 等为空实现。
  */
@@ -842,7 +842,7 @@ class Node {
 var DEFAULT_CONFIG = createConfig();
 var LAYOUT_CACHE_SLOTS = 8;
 var MEASURE_CACHE_SLOTS = 4;
-//@ chunk-bzr73sfg.js:157092-157491 fingerprint = cacheWrite (0.953)
+//@ chunk-bzr73sfg.js:157092-157491 fingerprint (2.1.88 match: cacheWrite, 0.953)
 /**
  * 把本次布局的输入键与结果宽高写进节点的 8 槽环形缓存（同一 generation 内复用；performLayout 时换代先清空）。
  */
@@ -898,7 +898,7 @@ function commitSingleCacheResult(node, performLayout) {
     node._mc[5] = height;
   }
 }
-//@ chunk-bzr73sfg.js:157598-157758 fingerprint = getYogaCounters (0.632)
+//@ chunk-bzr73sfg.js:157598-157758 fingerprint (2.1.88 match: getYogaCounters, 0.632)
 /**
  * 读最近一次 calculateLayout 的统计：访问节点数、测量调用、测量缓存命中、布局缓存命中、存活节点数。
  */
@@ -912,7 +912,7 @@ function getYogaCounters(node) {
     live: config.liveNodes,
   };
 }
-//@ chunk-bzr73sfg.js:157758-158548 fingerprint = layoutNode (0.491)
+//@ chunk-bzr73sfg.js:157758-158548 fingerprint (2.1.88 match: layoutNode, 0.491)
 /**
  * 布局缓存查找：未脏时依次查单槽布局缓存 _lc、8 槽缓存 _cIn/_cOut、单槽测量缓存 _mc，键为（可用宽高、宽高模式、依赖时的父宽高、强制宽高标志），命中则把宽高写进 out 并返回真。
  */
@@ -1690,7 +1690,7 @@ function breakIntoLines(children, availMain, isMainRow, flexDirection, ownerW, o
   lines.push(children.slice(lineStart));
   return lines;
 }
-//@ chunk-bzr73sfg.js:164793-165032 fingerprint = commitCacheOutputs (0.633)
+//@ chunk-bzr73sfg.js:164793-165032 fingerprint (2.1.88 match: commitCacheOutputs, 0.633)
 /**
  * baseline 对齐时计算一行的基线（最大上伸，写入 baselines[lineIndex]）与所需行高（上伸+下伸），返回不小于原行高的值。
  */
@@ -1817,7 +1817,7 @@ function applyRelativePosition(node, ownerW, ownerH, layout, left, top) {
   layout.left = left + leftOffset;
   layout.top = top + topOffset;
 }
-//@ chunk-bzr73sfg.js:165887-166915 fingerprint = layoutAbsoluteChild (0.944)
+//@ chunk-bzr73sfg.js:165887-166915 fingerprint (2.1.88 match: layoutAbsoluteChild, 0.944)
 /**
  * 布局绝对定位子节点：左右/上下都给定时由此推出宽高；以 EXACTLY/UNDEFINED 布局后，按 position 偏移或父节点的 justifyContent/alignItems（考虑反向与 wrap-reverse）定位。
  */
@@ -1949,7 +1949,7 @@ function cachedFlexBasis(child, flexDirection, availW, availH, crossMode, ownerW
   child._fbGen = generation;
   return basis;
 }
-//@ chunk-bzr73sfg.js:167542-167858 fingerprint = computeFlexBasis (0.65)
+//@ chunk-bzr73sfg.js:167542-167858 fingerprint (2.1.88 match: computeFlexBasis, 0.65)
 /**
  * 行方向 flex basis：flexBasis → width → 以内容测量（交叉轴约束按 stretch 决定 EXACTLY 或 AT_MOST，子树有测量函数时主轴给 AT_MOST）。
  */
@@ -2006,7 +2006,7 @@ function computeColumnFlexBasis(child, availH, availW, crossMode, ownerW, ownerH
   layoutNode(child, value_3, NaN, crossModeResolved, 0, ownerW, ownerH, false, false, false);
   return child.layout.height;
 }
-//@ chunk-bzr73sfg.js:168129-168248 fingerprint = hasMeasureFuncInSubtree (1)
+//@ chunk-bzr73sfg.js:168129-168248 fingerprint (2.1.88 match: hasMeasureFuncInSubtree, 1)
 /**
  * 子树中是否有带测量函数的节点（决定 basis 计算时是否给主轴上限）。
  */
@@ -2029,7 +2029,7 @@ function isFrozen(index) {
 function freeze(index) {
   frozenBits[index >>> 5] |= 1 << index;
 }
-//@ chunk-bzr73sfg.js:168389-169514 fingerprint = resolveFlexibleLengths (0.852)
+//@ chunk-bzr73sfg.js:168389-169514 fingerprint (2.1.88 match: resolveFlexibleLengths, 0.852)
 /**
  * 弹性长度分配（CSS flexbox 的冻结迭代算法）：按 grow/shrink 系数分配剩余空间，被 min/max 夹住的项冻结后重新分配，直到不再变化；grow/shrink 系数和小于 1 时只分配相应比例；最后用累计取整把尺寸写进 _sz（避免舍入误差累积）。
  */
@@ -2123,7 +2123,7 @@ function resolveFlexibleLengths(children, availableInnerMain, totalFlexBasis, is
     prevRounded = rounded;
   }
 }
-//@ chunk-bzr73sfg.js:169514-169622 fingerprint = isStretchAlign (1)
+//@ chunk-bzr73sfg.js:169514-169622 fingerprint (2.1.88 match: isStretchAlign, 1)
 /**
  * 子节点在交叉轴上是否拉伸（alignSelf 为 auto 时看父节点 alignItems，4 = stretch）。
  */
@@ -2133,7 +2133,7 @@ function isStretchAlign(child) {
   let align = child.style.alignSelf;
   return (align === 0 ? parent.style.alignItems : align) === 4;
 }
-//@ chunk-bzr73sfg.js:169622-169697 fingerprint = resolveChildAlign (1)
+//@ chunk-bzr73sfg.js:169622-169697 fingerprint (2.1.88 match: resolveChildAlign, 1)
 /**
  * 子节点实际交叉轴对齐：alignSelf 为 auto 时继承父节点 alignItems。
  */
@@ -2141,7 +2141,7 @@ function resolveChildAlign(parent, child) {
   let alignSelf = child.style.alignSelf;
   return alignSelf === 0 ? parent.style.alignItems : alignSelf;
 }
-//@ chunk-bzr73sfg.js:169697-170006 fingerprint = calculateBaseline (0.933)
+//@ chunk-bzr73sfg.js:169697-170006 fingerprint (2.1.88 match: calculateBaseline, 0.933)
 /**
  * 求节点基线：取第一行里 alignSelf=baseline 或标记为参考基线的子节点（否则第一个流内子节点）递归求基线加其 top；没有子节点时用自身高度。
  */
@@ -2165,7 +2165,7 @@ function calculateBaseline(node) {
   let node_2 = children[baselineIndex];
   return calculateBaseline(node_2) + node_2.layout.top;
 }
-//@ chunk-bzr73sfg.js:170006-170176 fingerprint = isBaselineLayout (1)
+//@ chunk-bzr73sfg.js:170006-170176 fingerprint (2.1.88 match: isBaselineLayout, 1)
 /**
  * 行方向容器且 alignItems 或某个子节点 alignSelf 为 baseline 时需要基线布局。
  */
@@ -2177,7 +2177,7 @@ function isBaselineLayout(node, flowChildren) {
     if (flowChildren[idx].style.alignSelf === 5) return true;
   return false;
 }
-//@ chunk-bzr73sfg.js:170176-170285 fingerprint = childMarginForAxis (1)
+//@ chunk-bzr73sfg.js:170176-170285 fingerprint (2.1.88 match: childMarginForAxis, 1)
 /**
  * 子节点在某轴上的前后外边距之和（没有外边距时快速返回 0）。
  */
@@ -2188,7 +2188,7 @@ function childMarginForAxis(child, axis, ownerWidth) {
   let trail = resolveEdge(margin, trailingEdge(axis), ownerWidth);
   return lead + trail;
 }
-//@ chunk-bzr73sfg.js:170285-170387 fingerprint = resolveGap (0.686)
+//@ chunk-bzr73sfg.js:170285-170387 fingerprint (2.1.88 match: resolveGap, 0.686)
 /**
  * 解析 gap：指定方向未设置时退回 gap[all]，负值按 0。
  */
@@ -2199,7 +2199,7 @@ function resolveGap(style, gutter, ownerSize) {
   let value = resolveValue(gapValue, ownerSize);
   return isDefined(value) ? Math.max(0, value) : 0;
 }
-//@ chunk-bzr73sfg.js:170387-170592 fingerprint = boundAxis (1)
+//@ chunk-bzr73sfg.js:170387-170592 fingerprint (2.1.88 match: boundAxis, 1)
 /**
  * 按 min/max 宽（或高）约束一个值（百分比按父尺寸）。
  */
@@ -2237,7 +2237,7 @@ function zeroLayout(layout) {
   layout.width = 0;
   layout.height = 0;
 }
-//@ chunk-bzr73sfg.js:170831-170895 fingerprint = zeroLayoutRecursive (0.794)
+//@ chunk-bzr73sfg.js:170831-170895 fingerprint (2.1.88 match: zeroLayoutRecursive, 0.794)
 /**
  * 把节点的布局清零并标脏（display:none 子树用）。
  */
@@ -2256,7 +2256,7 @@ function zeroChildrenLayout(node) {
     zeroChildrenLayout(node);
   }
 }
-//@ chunk-bzr73sfg.js:170983-171202 fingerprint = collectLayoutChildren (0.679)
+//@ chunk-bzr73sfg.js:170983-171202 fingerprint (2.1.88 match: collectLayoutChildren, 0.679)
 /**
  * 收集参与布局的子节点：display:none 的清零跳过；display:contents（2）的展开其子节点；绝对定位进 abs，其余进 flow。
  */
@@ -2276,7 +2276,7 @@ function collectLayoutChildren(node, flow, abs) {
     else flow.push(node);
   }
 }
-//@ chunk-bzr73sfg.js:171202-171357 fingerprint = roundLayout (0.847)
+//@ chunk-bzr73sfg.js:171202-171357 fingerprint (2.1.88 match: roundLayout, 0.847)
 /**
  * 递归把布局结果截断为整数（|0）。
  */
@@ -2289,7 +2289,7 @@ function roundLayout(node) {
   let children = node.children;
   for (let idx = 0, count = children.length; idx < count; idx++) roundLayout(children[idx]);
 }
-//@ chunk-bzr73sfg.js:171357-171629 fingerprint = parseDimension (1)
+//@ chunk-bzr73sfg.js:171357-171629 fingerprint (2.1.88 match: parseDimension, 1)
 /**
  * 把样式值（undefined/auto/数字/"50%"/数字字符串）解析成 yoga Value。
  */
@@ -2324,7 +2324,7 @@ function physicalEdge(edge) {
       return EDGE_LEFT;
   }
 }
-//@ chunk-bzr73sfg.js:171755-171893 fingerprint = YOGA_INSTANCE (1)
+//@ chunk-bzr73sfg.js:171755-171893 fingerprint (2.1.88 match: YOGA_INSTANCE, 1)
 /**
  * 对外的 yoga 实例：Config.create、Node.create/createDefault/createWithConfig（与 yoga-layout 包接口一致，destroy 为空）。
  */

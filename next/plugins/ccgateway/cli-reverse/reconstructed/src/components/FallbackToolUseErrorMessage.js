@@ -39,7 +39,7 @@ function getToolErrorText(result) {
 `);
   return joined.trim() === "" ? undefined : joined;
 }
-//@ chunk-t1sz4atx.js:749-1997 fingerprint = FallbackToolUseErrorMessage (0.731)
+//@ chunk-t1sz4atx.js:749-1997 fingerprint (2.1.88 match: FallbackToolUseErrorMessage, 0.731)
 /**
  * 工具错误兜底：字符串错误去掉 <tool_use_error> 标签，InputValidationError 显示 "Invalid tool parameters"，非 verbose 截断到若干行并提示 ctrl+o 展开。
  */

@@ -114,7 +114,7 @@ class NotebookReadError extends Error {
     this.name = "NotebookReadError";
   }
 }
-//@ chunk-e6aww6q8.js:3152599-3152736 fingerprint = isLargeOutputs (1)
+//@ chunk-e6aww6q8.js:3152599-3152736 fingerprint (2.1.88 match: isLargeOutputs, 1)
 function isLargeOutputs(outputs) {
   let size = 0;
   for (let output of outputs) {
@@ -124,14 +124,14 @@ function isLargeOutputs(outputs) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:3152736-3152840 fingerprint = processOutputText (1)
+//@ chunk-e6aww6q8.js:3152736-3152840 fingerprint (2.1.88 match: processOutputText, 1)
 function processOutputText(text) {
   if (!text) return "";
   let rawText = Array.isArray(text) ? text.join("") : text;
   let { truncatedContent } = formatOutput(rawText);
   return truncatedContent;
 }
-//@ chunk-e6aww6q8.js:3152840-3153051 fingerprint = extractImage (0.737)
+//@ chunk-e6aww6q8.js:3152840-3153051 fingerprint (2.1.88 match: extractImage, 0.737)
 function extractImage(data) {
   for (let mediaType of ["image/png", "image/jpeg"]) {
     let base64Data = data[mediaType];
@@ -145,7 +145,7 @@ function extractImage(data) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:3153051-3153394 fingerprint = processOutput (1)
+//@ chunk-e6aww6q8.js:3153051-3153394 fingerprint (2.1.88 match: processOutput, 1)
 function processOutput(output) {
   switch (output.output_type) {
     case "stream":
@@ -169,7 +169,7 @@ ${output.traceback.join(`
       };
   }
 }
-//@ chunk-e6aww6q8.js:3153394-3154075 fingerprint = processCell (0.893)
+//@ chunk-e6aww6q8.js:3153394-3154075 fingerprint (2.1.88 match: processCell, 0.893)
 function processCell(cell, index, codeLanguage, includeLargeOutputs) {
   let cellId = cell.id ?? `cell-${index}`;
   let cellData = {
@@ -195,7 +195,7 @@ function processCell(cell, index, codeLanguage, includeLargeOutputs) {
   }
   return cellData;
 }
-//@ chunk-e6aww6q8.js:3154075-3154362 fingerprint = cellContentToToolResult (1)
+//@ chunk-e6aww6q8.js:3154075-3154362 fingerprint (2.1.88 match: cellContentToToolResult, 1)
 function cellContentToToolResult(cell) {
   let metadata = [];
   if (cell.cellType !== "code") metadata.push(`<cell_type>${cell.cellType}</cell_type>`);
@@ -206,7 +206,7 @@ function cellContentToToolResult(cell) {
     type: "text",
   };
 }
-//@ chunk-e6aww6q8.js:3154362-3154557 fingerprint = cellOutputToToolResult (1)
+//@ chunk-e6aww6q8.js:3154362-3154557 fingerprint (2.1.88 match: cellOutputToToolResult, 1)
 function cellOutputToToolResult(output) {
   let outputs = [];
   if (output.text)
@@ -226,7 +226,7 @@ ${output.text}`,
     });
   return outputs;
 }
-//@ chunk-e6aww6q8.js:3154557-3154631 fingerprint = getToolResultFromCell (1)
+//@ chunk-e6aww6q8.js:3154557-3154631 fingerprint (2.1.88 match: getToolResultFromCell, 1)
 /**
  * 把 notebook 单元转成 tool_result 内容块（源码 + 各输出）。
  */
@@ -235,7 +235,7 @@ function getToolResultFromCell(cell) {
   let outputResults = cell.outputs?.flatMap(cellOutputToToolResult);
   return [contentResult, ...(outputResults ?? [])];
 }
-//@ chunk-e6aww6q8.js:3154631-3155317 fingerprint = readNotebook (0.73)
+//@ chunk-e6aww6q8.js:3154631-3155317 fingerprint (2.1.88 match: readNotebook, 0.73)
 /**
  * 读取 .ipynb：拒绝非普通文件与超过上限的文件，解析 JSON，按 Read 的格式处理所有单元（可按 cellId 取单个）。
  */

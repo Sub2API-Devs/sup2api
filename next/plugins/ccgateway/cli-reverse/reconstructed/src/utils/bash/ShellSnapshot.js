@@ -73,7 +73,7 @@ function getPluginPathEnv(env, extraDirs, delimiter) {
 var SNAPSHOT_TIMEOUT_MS = 1e4;
 var CLAUDE_CODE_EXECPATH = "CLAUDE_CODE_EXECPATH";
 var CLAUDE_CODE_INVOKED_SKILLS = "CLAUDE_CODE_INVOKED_SKILLS";
-//@ chunk-e6aww6q8.js:3052376-3053131 fingerprint = createArgv0ShellFunction (0.373)
+//@ chunk-e6aww6q8.js:3052376-3053131 fingerprint (2.1.88 match: createArgv0ShellFunction, 0.373)
 /**
  * 生成同名 shell 函数，以 ARGV0（zsh/Windows）或 exec -a（bash）把内置二进制伪装成 rg/bfs/ugrep 执行；CLAUDE_CODE_EXECPATH 不可执行时回落到系统命令；可指定遇到某些参数时直接走系统命令。
  */
@@ -108,7 +108,7 @@ function createArgv0ShellFunction(funcName, argv0, binaryPath = [], prependArgs 
   ].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:3053131-3053339 fingerprint = createRipgrepShellIntegration (1)
+//@ chunk-e6aww6q8.js:3053131-3053339 fingerprint (2.1.88 match: createRipgrepShellIntegration, 1)
 function createRipgrepShellIntegration() {
   let rgCommand = ripgrepCommand();
   if (rgCommand.argv0)
@@ -123,13 +123,13 @@ function createRipgrepShellIntegration() {
     snippet: rgCommand.rgArgs.length > 0 ? `${quotedPath} ${quotedArgs.join(" ")}` : quotedPath,
   };
 }
-//@ chunk-e6aww6q8.js:3053339-3053451 layout = VCS_DIRECTORIES_TO_EXCLUDE (0.903)
+//@ chunk-e6aww6q8.js:3053339-3053451 layout (2.1.88 match: VCS_DIRECTORIES_TO_EXCLUDE, 0.903)
 /**
  * shell 片段（rg 不存在时的判断）与内嵌 ugrep 的 VCS 排除目录列表。
  */
 var RG_NOT_AVAILABLE_TEST = "! hash rg 2>/dev/null && ! typeset -f rg >/dev/null 2>&1";
 var VCS_DIRECTORIES_FOR_UGREP = [".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
-//@ chunk-e6aww6q8.js:3053451-3053883 fingerprint = createFindGrepShellIntegration (0.613)
+//@ chunk-e6aww6q8.js:3053451-3053883 fingerprint (2.1.88 match: createFindGrepShellIntegration, 0.613)
 /**
  * 内置 find/grep 替换开启时，生成 find→bfs、grep→ugrep 的包装函数（ugrep 默认 -G --ignore-files --hidden -I 并排除 VCS 目录，危险选项回落系统 grep）。
  */
@@ -211,7 +211,7 @@ function getExtraSnapshotSnippet() {
 function getSnapshotOverride() {
   return null;
 }
-//@ chunk-e6aww6q8.js:3054952-3055069 fingerprint = getConfigFile (1)
+//@ chunk-e6aww6q8.js:3054952-3055069 fingerprint (2.1.88 match: getConfigFile, 1)
 /**
  * 按 shell 路径选择配置文件：含 zsh→~/.zshrc，含 bash→~/.bashrc，否则 ~/.profile。
  */
@@ -219,7 +219,7 @@ function getConfigFile(shellPath) {
   let fileName = shellPath.includes("zsh") ? ".zshrc" : shellPath.includes("bash") ? ".bashrc" : ".profile";
   return join(osModule.homedir(), fileName);
 }
-//@ chunk-e6aww6q8.js:3055069-3058104 fingerprint = getUserSnapshotContent (0.476)
+//@ chunk-e6aww6q8.js:3055069-3058104 fingerprint (2.1.88 match: getUserSnapshotContent, 0.476)
 /**
  * 导出用户 shell 状态的脚本片段：zsh 用 typeset -f / setopt，bash 用 shopt -p、逐函数 eval %q、set -o；别名最多 1000 条（Windows 去掉 winpty 别名）。
  */
@@ -384,7 +384,7 @@ function parseShellExports(stdout) {
   }
   return exportedVars;
 }
-//@ chunk-e6aww6q8.js:3059672-3061032 callgraph-witnessed = getClaudeCodeSnapshotContent (0.156)
+//@ chunk-e6aww6q8.js:3059672-3061032 callgraph-witnessed (2.1.88 match: getClaudeCodeSnapshotContent, 0.156)
 /**
  * Claude Code 自带的快照内容：rg 别名或函数（内置 ripgrep）、可选 find/grep 用内置 bfs/ugrep 替换、pkill 防误杀函数、PATH（Windows 下从登录 shell 探测，失败则在运行时追加插件目录）。
  */
@@ -458,7 +458,7 @@ ${heredocMarker}
   }
   return content;
 }
-//@ chunk-e6aww6q8.js:3061032-3062052 fingerprint = getSnapshotScript (1)
+//@ chunk-e6aww6q8.js:3061032-3062052 fingerprint (2.1.88 match: getSnapshotScript, 1)
 /**
  * 拼装快照脚本：source 用户配置（< /dev/null）、可选导出环境、清空快照文件、unalias -a、用户函数/选项/别名、Claude Code 自带内容，最后校验文件存在。
  */
@@ -495,7 +495,7 @@ async function getSnapshotScript(shellPath, snapshotPath, hasUserConfig, extraPa
       fi
     `;
 }
-//@ chunk-e6aww6q8.js:3062052-3064610 fingerprint = createAndSaveSnapshot (0.99)
+//@ chunk-e6aww6q8.js:3062052-3064610 fingerprint (2.1.88 match: createAndSaveSnapshot, 0.99)
 /**
  * 创建 shell 快照：按 shell 选择 .zshrc/.bashrc/.profile，在 Claude 配置目录 shell-snapshots/ 下生成 snapshot-<shell>-<时间>-<随机>.sh，用 shell -c -l 执行快照脚本（10s 超时，env 带 SHELL、GIT_EDITOR=true、CLAUDECODE=1，CLAUDE_CODE_DONT_INHERIT_ENV 时不继承环境）；成功后注册退出清理，并可解析导出的环境变量；失败上报 tengu_shell_snapshot_failed 等事件。返回快照路径或 undefined。
  */

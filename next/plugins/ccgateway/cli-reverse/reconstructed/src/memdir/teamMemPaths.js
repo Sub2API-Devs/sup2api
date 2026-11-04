@@ -24,7 +24,7 @@ import { getErrnoCode } from "../utils/errors.js";
 import { nfcLower } from "./memdir.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:129449-129528 fingerprint = PathTraversalError (1)
+//@ chunk-82kqcve8.js:129449-129528 fingerprint (2.1.88 match: PathTraversalError, 1)
 class PathTraversalError extends Error {
   constructor(message) {
     super(message);
@@ -43,7 +43,7 @@ deferInit("chunk-82kqcve8.js:129528", () => {
     }
   };
 });
-//@ chunk-82kqcve8.js:129626-130171 fingerprint = sanitizePathKey (1)
+//@ chunk-82kqcve8.js:129626-130171 fingerprint (2.1.88 match: sanitizePathKey, 1)
 /**
  * 校验团队记忆相对路径键：拒绝 NUL、URL 编码与 Unicode 归一化后的穿越、绝对路径等，抛 PathTraversalError。
  */
@@ -110,11 +110,11 @@ var teamStoreProbeSlot; // deferred: uses TeamStoreProbe of its import cycle whi
 deferInit("chunk-82kqcve8.js:130474", () => {
   teamStoreProbeSlot = new HostScoped(() => new TeamStoreProbe());
 });
-//@ chunk-82kqcve8.js:130499-130554 layout = setCwdState (1)
+//@ chunk-82kqcve8.js:130499-130554 layout (2.1.88 match: setCwdState, 1)
 function getMemoryDirNfc() {
   return (join(getAutoMemPath(), TEAM_MEMORY_SCOPE) + sep).normalize("NFC");
 }
-//@ chunk-82kqcve8.js:130554-130693 fingerprint = getTeamMemPath (0.729)
+//@ chunk-82kqcve8.js:130554-130693 fingerprint (2.1.88 match: getTeamMemPath, 0.729)
 /**
  * 记忆 store 的本地目录：user→自动记忆目录，account→<配置目录>/memory/personal/，team→<自动记忆目录>/team/<mount>/。
  */
@@ -151,7 +151,7 @@ async function checkPathInTeamMemDir(filePath, ...rest) {
     return "escape";
   }
 }
-//@ chunk-82kqcve8.js:131039-131582 fingerprint = realpathDeepestExisting (1)
+//@ chunk-82kqcve8.js:131039-131582 fingerprint (2.1.88 match: realpathDeepestExisting, 1)
 /**
  * 对最深的已存在祖先做 realpath，再拼回不存在的部分；检测悬空符号链接。
  */
@@ -179,7 +179,7 @@ async function realpathDeepestExisting(absolutePath) {
     }
   return absolutePath;
 }
-//@ chunk-82kqcve8.js:131582-131765 layout = isRealPathWithinTeamDir (1)
+//@ chunk-82kqcve8.js:131582-131765 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function isRealPathWithinTeamDir(realCandidate) {
   let realTeamDir;
   try {
@@ -202,7 +202,7 @@ function isTeamMemPath(filePath) {
   let teamDir = nfcLower(getMemoryDirNfc());
   return resolvedPath + sep === teamDir || resolvedPath.startsWith(teamDir);
 }
-//@ chunk-82kqcve8.js:131864-132114 fingerprint = validateTeamMemKey (1)
+//@ chunk-82kqcve8.js:131864-132114 fingerprint (2.1.88 match: validateTeamMemKey, 1)
 /**
  * 把团队记忆键解析为绝对路径并确认（含 realpath）未逃出团队目录。
  */

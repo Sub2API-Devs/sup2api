@@ -163,7 +163,7 @@ function knownToolNamesForServer(serverName) {
   if (serverName === REMOTE_BROWSER_SERVER_NAME && isPolicyAllowed()) return UPSTREAM_TOOL_NAME_SET;
   return;
 }
-//@ chunk-aepeg2w5.js:820486-820531 fingerprint = isToolDetailsLoggingEnabled (1)
+//@ chunk-aepeg2w5.js:820486-820531 fingerprint (2.1.88 match: isToolDetailsLoggingEnabled, 1)
 /**
  * OTEL_LOG_TOOL_DETAILS 是否开启（决定是否记录 MCP 服务器/工具名与工具输入）。
  */
@@ -1073,7 +1073,7 @@ function buildCcrMcpProxyUrls(prefix) {
     });
   });
 }
-//@ chunk-aepeg2w5.js:832856-832966 placement = toCompatSessionId (0.874)
+//@ chunk-aepeg2w5.js:832856-832966 placement (2.1.88 match: toCompatSessionId, 0.874)
 /**
  * 本进程自己的云会话 ID 前缀集合（cse_ 及已登记会话对应的前缀）。
  */
@@ -1085,7 +1085,7 @@ function ownSessionIdPrefixes() {
     ),
   ]);
 }
-//@ chunk-aepeg2w5.js:832966-833150 placement = getServerUrl (1)
+//@ chunk-aepeg2w5.js:832966-833150 placement (2.1.88 match: getServerUrl, 1)
 /**
  * 把服务器配置的 URL 映射到受支持的远程地址变体（用于策略匹配别名）。
  */
@@ -1298,7 +1298,7 @@ function isMcpFamilyToolName(name) {
     ARTIFACT_TOOL_NAME_SET.has(name)
   );
 }
-//@ chunk-aepeg2w5.js:856324-856493 fingerprint = sanitizeToolNameForAnalytics (1)
+//@ chunk-aepeg2w5.js:856324-856493 fingerprint (2.1.88 match: sanitizeToolNameForAnalytics, 1)
 /**
  * 工具名脱敏：MCP 工具（mcp__*）统一记为 mcp_tool，内置工具原样。
  */
@@ -1340,7 +1340,7 @@ function getUnknownToolAnalyticsName(toolName) {
   if (toolName.startsWith("mcp__")) return lit("mcp_tool");
   return lit("unknown_tool");
 }
-//@ chunk-aepeg2w5.js:856848-857094 fingerprint = mcpToolDetailsForAnalytics (1)
+//@ chunk-aepeg2w5.js:856848-857094 fingerprint (2.1.88 match: mcpToolDetailsForAnalytics, 1)
 function mcpToolDetailsForAnalytics(toolName, mcpServerType, mcpServerBaseUrl) {
   if (!mcpServerType) return {};
   let details = extractMcpToolDetails(toolName);
@@ -1393,7 +1393,7 @@ function toolSourceMetadata(mcpInfo) {
 function agentTypeForTelemetry(querySource) {
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(normalizeAgentQuerySource(querySource) ?? "");
 }
-//@ chunk-aepeg2w5.js:857516-857681 fingerprint = isAnalyticsToolDetailsLoggingEnabled (1)
+//@ chunk-aepeg2w5.js:857516-857681 fingerprint (2.1.88 match: isAnalyticsToolDetailsLoggingEnabled, 1)
 function isAnalyticsToolDetailsLoggingEnabled(mcpServerType, mcpServerBaseUrl) {
   if (process.env.CLAUDE_CODE_ENTRYPOINT === "local-agent") return true;
   if (mcpServerType === "claudeai-proxy") return true;
@@ -1418,7 +1418,7 @@ function isOfficialPluginServer(server) {
     return false;
   return isOfficialMarketplaceName_3(parsePluginIdentifier_2(server.pluginSource).marketplace);
 }
-//@ chunk-aepeg2w5.js:858054-858314 layout = getServerUrl (1)
+//@ chunk-aepeg2w5.js:858054-858314 layout (2.1.88 match: getServerUrl, 1)
 /**
  * isMcpServerLoggableInAnalytics：决定该服务器的工具名/详情能否进入遥测（内置、官方注册表 URL 等）。
  */
@@ -1499,7 +1499,7 @@ function loggableMcpToolName(serverName, toolName, loggable) {
   let normalized = normalizeNameForMCP(toolName);
   return knownNames.has(normalized) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(normalized) : undefined;
 }
-//@ chunk-aepeg2w5.js:858929-859106 fingerprint = extractMcpToolDetails (1)
+//@ chunk-aepeg2w5.js:858929-859106 fingerprint (2.1.88 match: extractMcpToolDetails, 1)
 function extractMcpToolDetails(toolName) {
   if (!toolName.startsWith("mcp__")) return;
   let parts = toolName.split("__");
@@ -1512,7 +1512,7 @@ function extractMcpToolDetails(toolName) {
     mcpToolName,
   };
 }
-//@ chunk-aepeg2w5.js:859106-859241 fingerprint = extractSkillName (1)
+//@ chunk-aepeg2w5.js:859106-859241 fingerprint (2.1.88 match: extractSkillName, 1)
 function extractSkillName(toolName, input) {
   if (toolName !== "Skill") return;
   if (typeof input === "object" && input !== null && "skill" in input && typeof input.skill === "string")
@@ -1594,7 +1594,7 @@ var MAX_ARRAY_ENTRIES = 128;
 var MAX_TOOL_INPUT_JSON_CHARS = 4096;
 var MAX_TOOL_INPUT_ITEMS = 20;
 var MAX_TOOL_INPUT_DEPTH = 2;
-//@ chunk-aepeg2w5.js:860426-860991 fingerprint = truncateToolInputValue (1)
+//@ chunk-aepeg2w5.js:860426-860991 fingerprint (2.1.88 match: truncateToolInputValue, 1)
 /**
  * 遥测用工具输入截断：字符串 512 字、嵌套深度/数组长度受限。
  */
@@ -1622,7 +1622,7 @@ function truncateToolInputValue(value, depth = 0) {
   }
   return String(value);
 }
-//@ chunk-aepeg2w5.js:860991-861102 layout = extractToolInputForTelemetry (1)
+//@ chunk-aepeg2w5.js:860991-861102 layout (2.1.88 match: extractToolInputForTelemetry, 1)
 function extractToolInputForTelemetry_2(input) {
   if (!isToolDetailsLoggingEnabled()) return;
   let truncated = truncateToolInputValue(input);
@@ -1641,7 +1641,7 @@ function getFileExtensionForAnalytics(filePath) {
   if (extension.length > MAX_EXTENSION_CHARS) return lit("other");
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(extension);
 }
-//@ chunk-aepeg2w5.js:861238-861404 fingerprint = FILE_COMMANDS (1)
+//@ chunk-aepeg2w5.js:861238-861404 fingerprint (2.1.88 match: FILE_COMMANDS, 1)
 /**
  * 统计文件扩展名时识别的命令与分隔正则。
  */
@@ -1671,7 +1671,7 @@ deferInit("chunk-aepeg2w5.js:861238", () => {
   COMMAND_SEPARATOR_RE = /\s*(?:&&|\|\||[;|])\s*/;
   WHITESPACE_RE = /\s+/;
 });
-//@ chunk-aepeg2w5.js:861404-861772 layout = getFileExtensionsFromBashCommand (1)
+//@ chunk-aepeg2w5.js:861404-861772 layout (2.1.88 match: getFileExtensionsFromBashCommand, 1)
 function getFileExtensionsFromBashCommand_2(command) {
   if (!command.includes(".")) return;
   let result;
@@ -1813,7 +1813,7 @@ function logToolFileActivity(toolName, observableInput, messageId) {
   else if (toolName === BRIEF_TOOL_NAME && Array.isArray(input.attachments))
     logDeliveredFiles(input.attachments, toolName, "brief", markName);
 }
-//@ chunk-aepeg2w5.js:863780-864019 layout = isMedia (1)
+//@ chunk-aepeg2w5.js:863780-864019 layout (2.1.88 match: isMedia, 1)
 function isMedia(block) {
   if (!block) return 0;
   let bytes = 0;
@@ -1892,7 +1892,7 @@ function localeOrNonconforming(locale) {
   if (LOCALE_RE.test(locale)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(locale);
   return lit("nonconforming");
 }
-//@ chunk-aepeg2w5.js:864906-865361 fingerprint = getAgentIdentification (0.874)
+//@ chunk-aepeg2w5.js:864906-865361 fingerprint (2.1.88 match: getAgentIdentification, 0.874)
 function getAgentIdentification() {
   let agentContext = contextKeyStorage.getStore();
   if (agentContext) {
@@ -1946,7 +1946,7 @@ function getVersionBase() {
   }.VERSION.match(/^\d+\.\d+\.\d+(?:-[a-z]+)?/);
   return match ? match[0] : undefined;
 }
-//@ chunk-aepeg2w5.js:865926-868471 fingerprint = buildEnvContext (0.806)
+//@ chunk-aepeg2w5.js:865926-868471 fingerprint (2.1.88 match: buildEnvContext, 0.806)
 /**
  * 构造环境上下文（进程内缓存）：platform/platformRaw/arch/nodeVersion/terminal/shell/包管理器/运行时/是否 CI/远程/GitHub Action、版本与构建时间、部署环境、WSL、Linux 发行版、VCS。
  */
@@ -2075,7 +2075,7 @@ function getMemoryPeaks() {
     ...eventMetadataStateByHost.of(getRootSession().host).memPeaks,
   };
 }
-//@ chunk-aepeg2w5.js:868966-869590 fingerprint = buildProcessMetrics (0.833)
+//@ chunk-aepeg2w5.js:868966-869590 fingerprint (2.1.88 match: buildProcessMetrics, 0.833)
 /**
  * 进程指标：RSS、堆、CPU 使用差值、内存峰值等。
  */
@@ -2130,7 +2130,7 @@ function withEventModel(currentModel, fn) {
     currentEventModel = previousModel;
   }
 }
-//@ chunk-aepeg2w5.js:869658-871072 fingerprint = getEventMetadata (0.64)
+//@ chunk-aepeg2w5.js:869658-871072 fingerprint (2.1.88 match: getEventMetadata, 0.64)
 /**
  * 构造每个事件附带的元数据：model、sessionId、userType=external、betas、envContext、isClaudeAiAuth、entrypoint、sessionKind、agentSdkVersion、isInteractive、clientType、processMetrics、SWE-bench id、agent 标识、subscriptionType、rh（仓库哈希）、head_sha（消费者计划）、promptId 等。
  */
@@ -2235,7 +2235,7 @@ async function getEventMetadata(options = {}) {
     }),
   };
 }
-//@ chunk-aepeg2w5.js:871072-874435 fingerprint = to1PEventFormat (0.865)
+//@ chunk-aepeg2w5.js:871072-874435 fingerprint (2.1.88 match: to1PEventFormat, 0.865)
 /**
  * 把内部事件元数据映射成 ClaudeCodeInternalEvent 字段：env（platform、arch、terminal、is_ci、version…）、core（session_id、model、user_type、betas、entrypoint、agent_id…）、process 指标 base64、其余放 additional_metadata。
  */
@@ -2399,7 +2399,7 @@ function to1PEventFormat(metadata, userMetadata, additionalMetadata = {}) {
     },
   };
 }
-//@ chunk-6vnxsn99.js:43721-44057 fingerprint = getFileExtensionsFromBashCommand (1)
+//@ chunk-6vnxsn99.js:43721-44057 fingerprint (2.1.88 match: getFileExtensionsFromBashCommand, 1)
 function getFileExtensionsFromBashCommand(command, simulatedSedEditFilePath) {
   let min = Math.min(command.length, simulatedSedEditFilePath.length);
   let prefixLen = 0;
@@ -2431,7 +2431,7 @@ function getFileExtensionsFromBashCommand(command, simulatedSedEditFilePath) {
     simulatedSedEditFilePath.slice(prefixLen, simulatedSedEditFilePath.length - suffixLen),
   ];
 }
-//@ chunk-18hwfzwa.js:1743869-1743938 fingerprint = extractToolInputForTelemetry (1)
+//@ chunk-18hwfzwa.js:1743869-1743938 fingerprint (2.1.88 match: extractToolInputForTelemetry, 1)
 function extractToolInputForTelemetry(toolName, input) {
   return toolName.length <= input ? toolName : `${truncateToLength(toolName, input)} \u2026[truncated]`;
 }

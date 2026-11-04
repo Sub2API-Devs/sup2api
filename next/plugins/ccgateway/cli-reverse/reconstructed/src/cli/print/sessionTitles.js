@@ -112,7 +112,7 @@ function settleOwedTitle(context) {
     logTitleChangeError(context, error);
   }
 }
-//@ chunk-nkdv7dw8.js:37344-37689 placement = getVerifyPlanReminderTurnCount (0.415)
+//@ chunk-nkdv7dw8.js:37344-37689 placement (2.1.88 match: getVerifyPlanReminderTurnCount, 0.415)
 /**
  * 从用户消息或 queued_command 附件中取真实用户输入（内容、来源），用于会话标题。旧版名 getVerifyPlanReminderTurnCount 为错配。
  */

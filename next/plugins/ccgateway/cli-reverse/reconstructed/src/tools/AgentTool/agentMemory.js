@@ -32,7 +32,7 @@ function sanitizeAgentTypeForPath(agentType) {
   let replaced = agentType.replace(/[^a-zA-Z0-9\-_]/g, "-");
   return replaced === "" ? "unknown" : replaced;
 }
-//@ chunk-82kqcve8.js:152365-152586 fingerprint = getLocalAgentMemoryDir (1)
+//@ chunk-82kqcve8.js:152365-152586 fingerprint (2.1.88 match: getLocalAgentMemoryDir, 1)
 /**
  * local scope 的代理记忆目录。
  */
@@ -49,7 +49,7 @@ function getLocalAgentMemoryDir(dirName) {
     );
   return join(getCwd(), ".claude", "agent-memory-local", dirName) + sep;
 }
-//@ chunk-82kqcve8.js:152586-152760 fingerprint = getAgentMemoryDir (1)
+//@ chunk-82kqcve8.js:152586-152760 fingerprint (2.1.88 match: getAgentMemoryDir, 1)
 /**
  * 代理持久记忆目录：project → <cwd>/.claude/agent-memory/<type>/，local → .claude/agent-memory-local/（或 CLAUDE_CODE_REMOTE_MEMORY_DIR 下），user → <记忆根>/agent-memory/<type>/。
  */
@@ -185,14 +185,14 @@ function splitExistingPathPrefix(fs, path, missingParts = []) {
     missing: missingParts,
   };
 }
-//@ chunk-82kqcve8.js:154398-154443 layout = isRealPathWithinTeamDir (1)
+//@ chunk-82kqcve8.js:154398-154443 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
 /**
  * realpath 后判断是否在团队记忆目录内；团队目录尚不存在时视为在内。
  */
 function isMissingOrNotDirError(realCandidate) {
   return isENOENT(realCandidate) || getErrnoCode(realCandidate) === "ENOTDIR";
 }
-//@ chunk-82kqcve8.js:154443-154893 fingerprint = isAgentMemoryPath (1)
+//@ chunk-82kqcve8.js:154443-154893 fingerprint (2.1.88 match: isAgentMemoryPath, 1)
 /**
  * 路径属于某个代理记忆目录时返回该记忆根前缀。
  */
@@ -226,7 +226,7 @@ function isInsideAgentMemoryDir(path) {
   let memoryRoot = isAgentMemoryPath(absolutePath);
   return memoryRoot !== null && !isProtectedDirPath(absolutePath, memoryRoot);
 }
-//@ chunk-82kqcve8.js:154956-155665 fingerprint = loadAgentMemoryPrompt (0.929)
+//@ chunk-82kqcve8.js:154956-155665 fingerprint (2.1.88 match: loadAgentMemoryPrompt, 0.929)
 /**
  * 生成代理记忆提示词（Persistent Agent Memory）：按 scope 给出写作指引，必要时创建目录，附加 CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES。
  */
@@ -266,7 +266,7 @@ function loadAgentMemoryPrompt(agentType, scope, storageV5, primedAgentMemory) {
     storageV5,
   );
 }
-//@ chunk-82kqcve8.js:155665-155789 callgraph-fingerprint = getMemoryScopeDisplay (0.358)
+//@ chunk-82kqcve8.js:155665-155789 callgraph-fingerprint (2.1.88 match: getMemoryScopeDisplay, 0.358)
 /**
  * user scope 且记忆根为默认位置时，返回记忆目录的显示信息。
  */

@@ -29,7 +29,7 @@ import { Dialog } from "./design-system/Dialog.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3236461-3236660 callgraph-fingerprint = shouldShowDisableAutoConnectDialog (0.47)
+//@ chunk-e6aww6q8.js:3236461-3236660 callgraph-fingerprint (2.1.88 match: shouldShowDisableAutoConnectDialog, 0.47)
 function shouldShowDisableAutoConnectDialog(force = false) {
   if (env.CLAUDE_CODE_AUTO_CONNECT_IDE === false) return false;
   if (isBareMode()) return force;
@@ -51,14 +51,14 @@ deferInit("chunk-5bdzenzx.js:14079", () => {
 deferInit("chunk-5bdzenzx.js:14107", () => {
   init_react_production();
 });
-//@ chunk-5bdzenzx.js:14111-14157 fingerprint = _temp (1)
+//@ chunk-5bdzenzx.js:14111-14157 fingerprint (2.1.88 match: _temp, 1)
 function withAutoConnectOff(current) {
   return {
     ...current,
     autoConnectIde: false,
   };
 }
-//@ chunk-5bdzenzx.js:14157-15420 fingerprint = IdeAutoConnectDialog (0.623)
+//@ chunk-5bdzenzx.js:14157-15420 fingerprint (2.1.88 match: IdeAutoConnectDialog, 0.623)
 function IdeAutoConnectDialog(props) {
   let $ = useMemoCache(20);
   let { onComplete } = props;
@@ -182,7 +182,7 @@ function IdeAutoConnectDialog(props) {
   } else dialog = $[19];
   return dialog;
 }
-//@ chunk-5bdzenzx.js:15420-15521 fingerprint = shouldShowAutoConnectDialog (1)
+//@ chunk-5bdzenzx.js:15420-15521 fingerprint (2.1.88 match: shouldShowAutoConnectDialog, 1)
 function shouldShowAutoConnectDialog() {
   let config = getGlobalConfig();
   return (
@@ -191,7 +191,7 @@ function shouldShowAutoConnectDialog() {
     config.hasIdeAutoConnectDialogBeenShown !== true
   );
 }
-//@ chunk-5bdzenzx.js:15521-16087 fingerprint = IdeDisableAutoConnectDialog (0.582)
+//@ chunk-5bdzenzx.js:15521-16087 fingerprint (2.1.88 match: IdeDisableAutoConnectDialog, 0.582)
 function IdeDisableAutoConnectDialog(props) {
   let $ = useMemoCache(11);
   let { onComplete } = props;

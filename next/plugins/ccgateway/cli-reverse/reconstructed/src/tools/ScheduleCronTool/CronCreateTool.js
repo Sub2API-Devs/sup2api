@@ -45,7 +45,7 @@ import { setScheduledTasksEnabled } from "../../bootstrap/state.js";
 import { formatCronFireTime } from "../../hooks/useScheduledTasks.js";
 import { truncate } from "../../utils/format.js";
 
-//@ chunk-kyk75gag.js:5317-8204 fingerprint = CronCreateTool (0.774)
+//@ chunk-kyk75gag.js:5317-8204 fingerprint (2.1.88 match: CronCreateTool, 0.774)
 /**
  * CronCreate 工具（shouldDefer，enablesCodeExecution；isEnabled = isKairosCronEnabled）。输入 cron（5 字段本地时间）、prompt、recurring（默认 true）、durable（仅 tengu_kairos_cron_durable 开启时生效）。权限：auto 模式下 passthrough 交给分类器，否则直接允许。validateInput：特定上下文拒绝、表达式非法、一年内无匹配日期、已有任务 ≥50、队友不能建 durable 任务。call 写入任务（durable 写 .claude/scheduled_tasks.json，否则只在会话内存），按抖动配置算下次触发时间。
  */

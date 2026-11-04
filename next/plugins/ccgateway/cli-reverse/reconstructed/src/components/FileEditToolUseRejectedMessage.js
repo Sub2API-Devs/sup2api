@@ -24,7 +24,7 @@ import { StructuredDiffList } from "./StructuredDiffList.js";
 
 //@ chunk-vnfdjr3f.js:627-636 affinity
 var MAX_DIFF_PREVIEW_LINES = 10;
-//@ chunk-vnfdjr3f.js:636-2341 fingerprint = FileEditToolUseRejectedMessage (0.879)
+//@ chunk-vnfdjr3f.js:636-2341 fingerprint (2.1.88 match: FileEditToolUseRejectedMessage, 0.879)
 /**
  * 编辑/写入被拒绝："User rejected update/write to <路径>"，写入显示被拒内容（高亮），编辑显示被拒 diff。
  */

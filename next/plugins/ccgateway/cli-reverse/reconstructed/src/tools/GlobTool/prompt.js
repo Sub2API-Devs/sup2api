@@ -13,7 +13,7 @@ import { getSubagentSteer } from "../../utils/model/subagentSteer.js";
 import { AGENT } from "../AgentTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:817674-817688 fingerprint = GLOB_TOOL_NAME (1)
+//@ chunk-aepeg2w5.js:817674-817688 fingerprint (2.1.88 match: GLOB_TOOL_NAME, 1)
 /**
  * Glob 工具名 "Glob"。
  */

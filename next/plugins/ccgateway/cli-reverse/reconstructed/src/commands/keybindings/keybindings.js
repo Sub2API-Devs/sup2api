@@ -25,7 +25,7 @@ import { getFsImplementation } from "../../utils/fsOperations.js";
 import { editFileInEditor } from "../../utils/promptEditor.js";
 import { isSafeMode, getSafeModeExitHint } from "../../utils/envUtils.js";
 
-//@ chunk-1nat7wre.js:4514-5347 fingerprint = call (0.623)
+//@ chunk-1nat7wre.js:4514-5347 fingerprint (2.1.88 match: call, 0.623)
 /**
  * /keybindings 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

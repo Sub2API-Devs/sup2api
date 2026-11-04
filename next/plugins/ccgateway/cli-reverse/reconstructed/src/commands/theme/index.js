@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:2026674-2026805 fingerprint = theme (0.698)
+//@ chunk-e6aww6q8.js:2026674-2026805 fingerprint (2.1.88 match: theme, 0.698)
 /**
  * /theme 命令对象（local-jsx）；描述：Change the theme；实现 chunk-3s4dbk22.js 的 Or。
  */

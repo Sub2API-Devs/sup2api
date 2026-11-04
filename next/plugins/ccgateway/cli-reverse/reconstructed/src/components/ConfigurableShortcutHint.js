@@ -13,7 +13,7 @@ import { useShortcutDisplay } from "../keybindings/useKeybindingDisplay.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 
-//@ chunk-4dnha4dk.js:332-644 fingerprint = ConfigurableShortcutHint (0.556)
+//@ chunk-4dnha4dk.js:332-644 fingerprint (2.1.88 match: ConfigurableShortcutHint, 0.556)
 function ConfigurableShortcutHint(props) {
   let $ = useMemoCache(7);
   let { action, context, fallback, description, parens, bold, terse, format } = props;

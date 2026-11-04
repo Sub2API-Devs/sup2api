@@ -37,7 +37,7 @@ import { marketplaceSourceOfEntry } from "../utils/plugins/headersHelper.js";
 import { updateSettingsForSourceWithTransform } from "../utils/settings/settings.js";
 import { saveGlobalConfig } from "../utils/config.js";
 
-//@ chunk-18hwfzwa.js:1802617-1802669 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:1802617-1802669 fingerprint (2.1.88 match: _temp, 1)
 function selectFileHistoryTrackedFiles(s) {
   return s.fileHistory.trackedFiles;
 }
@@ -139,7 +139,7 @@ function useLspRecommendationWatcher(requestDialog, schedule) {
   }
   useEffect(watchEffect, watchDeps);
 }
-//@ chunk-18hwfzwa.js:1803844-1804920 fingerprint = useLspPluginRecommendation (0.614)
+//@ chunk-18hwfzwa.js:1803844-1804920 fingerprint (2.1.88 match: useLspPluginRecommendation, 0.614)
 function useLspPluginRecommendation({ pluginId, pluginName }, response, addNotification, storageV5) {
   switch (
     (logForDebugging(`[useLspPluginRecommendation] User response: ${response} for ${pluginName}`), response)

@@ -16,7 +16,7 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link } from "../ink/components/Text.js";
 
-//@ chunk-20skp6hd.js:1144-1427 fingerprint = MCPServerDialogCopy (0.356)
+//@ chunk-20skp6hd.js:1144-1427 fingerprint (2.1.88 match: MCPServerDialogCopy, 0.356)
 function MCPServerDialogCopy() {
   let $ = useMemoCache(1);
   let t0;

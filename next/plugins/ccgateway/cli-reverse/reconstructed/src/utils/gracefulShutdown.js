@@ -93,7 +93,7 @@ import { TerminalModes } from "../ink/terminalModes.js";
 import { CLEAR_TERMINAL_TITLE } from "../ink/termio/osc.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:244110-244207 fingerprint = gracefulShutdown (0.464)
+//@ chunk-e6aww6q8.js:244110-244207 fingerprint (2.1.88 match: gracefulShutdown, 0.464)
 function gracefulShutdown_2(scope, lastRequestId) {
   if (!lastRequestId) return;
   logEvent("tengu_cache_eviction_hint", {
@@ -887,7 +887,7 @@ async function flushAnalyticsSinks() {
     await flushAnalyticsSinks();
   } catch {}
 }
-//@ chunk-e6aww6q8.js:284745-284809 fingerprint = CleanupTimeoutError (1)
+//@ chunk-e6aww6q8.js:284745-284809 fingerprint (2.1.88 match: CleanupTimeoutError, 1)
 class CleanupTimeoutError extends Error {
   constructor() {
     super("Cleanup timeout");
@@ -922,7 +922,7 @@ function currentShutdownCoordinator() {
 function setupGracefulShutdown(handles) {
   currentShutdownCoordinator().install(handles);
 }
-//@ chunk-e6aww6q8.js:285117-285158 placement = isChromeExtensionInstalledPortable (1)
+//@ chunk-e6aww6q8.js:285117-285158 placement (2.1.88 match: isChromeExtensionInstalledPortable, 1)
 function areShutdownHandlersInstalled() {
   return currentShutdownCoordinator().isInstalled();
 }
@@ -946,7 +946,7 @@ function markStartupActionStarted(expectsUiMount) {
 function exitIfStartupNeverMounted(detail) {
   currentShutdownCoordinator().exitIfStartupNeverMounted(detail);
 }
-//@ chunk-e6aww6q8.js:285414-285477 placement = shutdown1PEventLogging (0.371)
+//@ chunk-e6aww6q8.js:285414-285477 placement (2.1.88 match: shutdown1PEventLogging, 0.371)
 /**
  * 退出时 flush 并关闭 1P 事件日志 provider。
  */
@@ -980,7 +980,7 @@ function registerBeforeInteractiveShutdown(fn) {
 function clearBeforeInteractiveShutdown() {
   currentShutdownCoordinator().clearBeforeInteractiveShutdown();
 }
-//@ chunk-x6v6jz2y.js:2704-3042 fingerprint = cleanupTerminalModes (0.629)
+//@ chunk-x6v6jz2y.js:2704-3042 fingerprint (2.1.88 match: cleanupTerminalModes, 0.629)
 /**
  * 退出时恢复终端模式：关闭鼠标/焦点报告、离开备用屏幕、卸载 Ink、排空 stdin。
  */

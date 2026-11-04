@@ -22,7 +22,7 @@ import { Text, Box } from "../ink/components/Text.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-7hdssadt.js:493-1880 facade-exports = ApproveApiKey (0.444)
+//@ chunk-7hdssadt.js:493-1880 facade-exports (2.1.88 match: ApproveApiKey, 0.444)
 /**
  * 询问是否使用环境中的 ANTHROPIC_API_KEY（推荐否时使用订阅登录），结果记入配置的已批准/已拒绝列表。
  */

@@ -11,7 +11,7 @@
 import { BROADCAST_AGENT_TYPES } from "../../cli/remoteIO/gates.js";
 import { normalizeAgentIdOrNull } from "../../utils/agentId.js";
 
-//@ chunk-6vnxsn99.js:24622-24706 shared-adjacent = waitForTaskCompletion (0.87)
+//@ chunk-6vnxsn99.js:24622-24706 shared-adjacent (2.1.88 match: waitForTaskCompletion, 0.87)
 /**
  * 任务 running/pending 且不在前台。
  */
@@ -26,7 +26,7 @@ function waitForTaskCompletion(task) {
 function TaskOutputResultDisplay(t0) {
   return "isBackgrounded" in t0 && t0.isBackgrounded === false;
 }
-//@ chunk-z4g2ta8k.js:4871-5081 fingerprint = getTaskOutputData (0.311)
+//@ chunk-z4g2ta8k.js:4871-5081 fingerprint (2.1.88 match: getTaskOutputData, 0.311)
 /**
  * 是否为主线程默认启动的内建本地代理任务（遥测/显示判定）。
  */
@@ -42,7 +42,7 @@ function getTaskOutputData(task) {
     normalizeAgentIdOrNull(task.task_id) !== null
   );
 }
-//@ chunk-18hwfzwa.js:729446-729515 fingerprint = waitForTaskCompletion (0.87)
+//@ chunk-18hwfzwa.js:729446-729515 fingerprint (2.1.88 match: waitForTaskCompletion, 0.87)
 /**
  * 任务状态为 running 或 pending。
  */

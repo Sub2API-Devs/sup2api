@@ -13,7 +13,7 @@ import { logError } from "./log.js";
 import { logForDebugging } from "./debug.js";
 import { gracefulShutdownSync } from "./gracefulShutdown.js";
 
-//@ chunk-tyg7f3ek.js:490216-490840 fingerprint = createIdleTimeoutManager (0.847)
+//@ chunk-tyg7f3ek.js:490216-490840 fingerprint (2.1.88 match: createIdleTimeoutManager, 0.847)
 /**
  * 空闲退出管理：设置 CLAUDE_CODE_EXIT_AFTER_STOP_DELAY 时，回合结束后空闲超过该毫秒数即退出进程。
  */

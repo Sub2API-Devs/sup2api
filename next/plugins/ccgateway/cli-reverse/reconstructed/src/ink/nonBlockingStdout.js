@@ -21,7 +21,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7t3j7ybe.js:635-722 placement = RESET (1)
+//@ chunk-7t3j7ybe.js:635-722 placement (2.1.88 match: RESET, 1)
 var MAX_BUFFER_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_ITEMS;
 var RESET_BYTES;

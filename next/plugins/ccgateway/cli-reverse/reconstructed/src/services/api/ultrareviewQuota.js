@@ -27,7 +27,7 @@ import { tipLifetimeShownCount, recordTipShown } from "../tips/tipIds.js";
 import { getSessionsSinceTipShown } from "../tips/tipHistory.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-twvgrhqz.js:809-1486 fingerprint = fetchUltrareviewQuota (0.33)
+//@ chunk-twvgrhqz.js:809-1486 fingerprint (2.1.88 match: fetchUltrareviewQuota, 0.33)
 /**
  * 拉取 ultrareview 配额；fixture 环境变量优先。
  */

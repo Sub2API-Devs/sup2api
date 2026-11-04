@@ -257,14 +257,14 @@ import { isReservedDeviceName } from "../../../utils/windowsProfileFolders.js";
 import { makeTempSiblingPath } from "../../../utils/atomicPublishWrite.js";
 import { authoredByOthersPreamble, artifactAuthorshipWarning } from "../../../constants/xml.js";
 
-//@ chunk-0wdgqhcf.js:53181-53228 placement = NATIVE_HOST_MANIFEST_NAME (1)
+//@ chunk-0wdgqhcf.js:53181-53228 placement (2.1.88 match: NATIVE_HOST_MANIFEST_NAME, 1)
 /**
  * （误归此处）把 id 转成文件名后拼成 <dir>/<name>.json；与原生宿主无关。
  */
 function NATIVE_HOST_MANIFEST_NAME(dir, docId) {
   return join(dir, `${escapeDbPathSegment(docId)}.json`);
 }
-//@ chunk-0wdgqhcf.js:53228-53327 placement = renderToolResultMessage (0.417)
+//@ chunk-0wdgqhcf.js:53228-53327 placement (2.1.88 match: renderToolResultMessage, 0.417)
 /**
  * 拼 Chrome native host manifest 相关路径列表（get 操作且名字匹配时追加 manifest 路径）；与 ConfigTool 无关。
  */

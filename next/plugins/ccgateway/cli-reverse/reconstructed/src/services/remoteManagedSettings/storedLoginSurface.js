@@ -51,7 +51,7 @@ import { resolveOrgConfigPlan } from "../policyLimits/index.js";
 import { identity } from "../../utils/identity.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-mdb2vxrz.js:6591-6686 placement = isBigQueryMetricsEnabled (1)
+//@ chunk-mdb2vxrz.js:6591-6686 placement (2.1.88 match: isBigQueryMetricsEnabled, 1)
 function isBigQueryMetricsEnabled_2() {
   if (!hasStoredOAuthToken()) return false;
   let subscriptionType = getStoredOAuthSubscriptionType();

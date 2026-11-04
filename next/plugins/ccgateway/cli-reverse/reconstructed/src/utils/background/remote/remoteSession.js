@@ -37,7 +37,7 @@ import { getRemoteCaps } from "../../../remote/remoteMode.js";
 import { getStoredOauthAccountInfo } from "../../auth.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1775166-1776430 fingerprint = checkBackgroundRemoteSessionEligibility (0.664)
+//@ chunk-e6aww6q8.js:1775166-1776430 fingerprint (2.1.88 match: checkBackgroundRemoteSessionEligibility, 0.664)
 /**
  * 依次检查：CLAUDE_CODE_EVAL_CONFINED、策略 allow_remote_sessions、登录状态、是否在 git 仓库、是否有 GitHub 远端（允许 bundle 时可跳过）、GitHub App/账号连接；返回错误列表并记 bg_remote_eligibility_check。
  */

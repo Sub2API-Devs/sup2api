@@ -33,7 +33,7 @@ function toMultiselectOption(workflow) {
     value: workflow.value,
   };
 }
-//@ chunk-4v9zy7gn.js:15778-16180 fingerprint = renderInputGuide (0.527)
+//@ chunk-4v9zy7gn.js:15778-16180 fingerprint (2.1.88 match: renderInputGuide, 0.527)
 /**
  * GitHub Actions 工作流多选的选项（@claude 标记与自动代码审查）与底部按键提示行。
  */
@@ -69,7 +69,7 @@ var WORKFLOW_SELECT_HINTS = jsxProd_default_2(Byline, {
     }),
   ],
 });
-//@ chunk-4v9zy7gn.js:16180-17501 fingerprint = WorkflowMultiselectDialog (0.715)
+//@ chunk-4v9zy7gn.js:16180-17501 fingerprint (2.1.88 match: WorkflowMultiselectDialog, 0.715)
 /**
  * GitHub Actions 工作流多选：为每个选中的工作流在仓库中创建文件。
  */

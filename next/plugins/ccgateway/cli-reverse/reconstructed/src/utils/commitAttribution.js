@@ -61,7 +61,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
  * 匹配 64 位十六进制 sha256 摘要的正则。
  */
 var SHA256_HEX_RE = /^[0-9a-f]{64}$/;
-//@ chunk-38t4c9qz.js:251-466 callgraph-fingerprint = computeContentHash (0.567)
+//@ chunk-38t4c9qz.js:251-466 callgraph-fingerprint (2.1.88 match: computeContentHash, 0.567)
 /**
  * sha256 十六进制摘要（文本或字节），全局 140 余处用于内容比较。
  */
@@ -72,7 +72,7 @@ function computeContentHash(content) {
     });
   return createHash("sha256").update(content).digest("hex");
 }
-//@ chunk-82kqcve8.js:235773-235885 fingerprint = normalizeFilePath (1)
+//@ chunk-82kqcve8.js:235773-235885 fingerprint (2.1.88 match: normalizeFilePath, 1)
 function normalizeFilePath(filePath) {
   try {
     return getFsImplementation().realpathSync(filePath);
@@ -81,7 +81,7 @@ function normalizeFilePath(filePath) {
     return join(normalizeFilePath(dirname(filePath)), basename(filePath));
   }
 }
-//@ chunk-s61vbvea.js:206706-207384 fingerprint = sanitizeModelName (0.64)
+//@ chunk-s61vbvea.js:206706-207384 fingerprint (2.1.88 match: sanitizeModelName, 0.64)
 var sanitizeModelName = [
   ["fable-5-1", "claude-fable-5-1"],
   ["fable-5", "claude-fable-5"],
@@ -105,7 +105,7 @@ var sanitizeModelName = [
   ["haiku-4-5", "claude-haiku-4-5"],
   ["haiku-3-5", "claude-haiku-3-5"],
 ];
-//@ chunk-s61vbvea.js:290187-290489 fingerprint = isInternalModelRepo (0.696)
+//@ chunk-s61vbvea.js:290187-290489 fingerprint (2.1.88 match: isInternalModelRepo, 0.696)
 /**
  * 判断仓库是否为 Anthropic 内部模型仓库（决定署名中能否写具体模型名），结果缓存。
  */
@@ -135,7 +135,7 @@ function getModelFamilyForAttribution(rawModelName) {
   let found = sanitizeModelName.find(([prefix]) => rawModelName.includes(prefix));
   return found ? found[1] : "claude";
 }
-//@ chunk-s61vbvea.js:290564-290617 fingerprint = getClientSurface (1)
+//@ chunk-s61vbvea.js:290564-290617 fingerprint (2.1.88 match: getClientSurface, 1)
 function getClientSurface() {
   return env.CLAUDE_CODE_ENTRYPOINT ?? "cli";
 }
@@ -189,7 +189,7 @@ function resolveAttributionKey(filePath, options) {
     root: undefined,
   };
 }
-//@ chunk-s61vbvea.js:291144-291416 fingerprint = createEmptyAttributionState (0.893)
+//@ chunk-s61vbvea.js:291144-291416 fingerprint (2.1.88 match: createEmptyAttributionState, 0.893)
 /**
  * 新建署名状态：fileStates（文件 → Claude 贡献字符数与内容 hash）、客户端 surface、起始 HEAD、各类计数（提示、权限提示、Esc）。
  */
@@ -208,7 +208,7 @@ function createEmptyAttributionState() {
     verificationMethodsByCheckout: {},
   };
 }
-//@ chunk-s61vbvea.js:291416-291847 fingerprint = computeFileModificationState (0.902)
+//@ chunk-s61vbvea.js:291416-291847 fingerprint (2.1.88 match: computeFileModificationState, 0.902)
 /**
  * 计算单个文件修改后的署名状态（累计 Claude 贡献、内容 hash、mtime）。
  */
@@ -246,7 +246,7 @@ function computeFileModificationState(existingFileStates, filePath, oldContent, 
     return null;
   }
 }
-//@ chunk-s61vbvea.js:291847-292079 fingerprint = trackFileModification (1)
+//@ chunk-s61vbvea.js:291847-292079 fingerprint (2.1.88 match: trackFileModification, 1)
 /**
  * 记录 Claude 对一个文件的修改：按旧/新内容计算 Claude 贡献字符数并更新 fileStates（键为相对仓库根的路径）。
  */
@@ -274,7 +274,7 @@ function trackFileModification(state, filePath, oldContent, newContent, _userMod
 function isDeletedFileState(fileState) {
   return fileState.contentHash === "";
 }
-//@ chunk-s61vbvea.js:292120-292680 fingerprint = trackBulkFileChanges (0.982)
+//@ chunk-s61vbvea.js:292120-292680 fingerprint (2.1.88 match: trackBulkFileChanges, 0.982)
 /**
  * 批量记录文件变更（含删除）到署名状态。
  */
@@ -357,7 +357,7 @@ function trackFileDeletion(attribution, cwd) {
     fileStates: nextStates,
   };
 }
-//@ chunk-s61vbvea.js:293128-294149 fingerprint = restoreAttributionStateFromSnapshots (0.305)
+//@ chunk-s61vbvea.js:293128-294149 fingerprint (2.1.88 match: restoreAttributionStateFromSnapshots, 0.305)
 /**
  * resume 时从转录中的 attribution-snapshot 记录重建署名状态。
  */
@@ -440,7 +440,7 @@ async function realpathOrSelf_2(path) {
     return path;
   }
 }
-//@ chunk-s61vbvea.js:294310-296290 fingerprint = calculateCommitAttribution (0.831)
+//@ chunk-s61vbvea.js:294310-296290 fingerprint (2.1.88 match: calculateCommitAttribution, 0.831)
 /**
  * 计算一次提交的署名：合并各 surface 的 fileStates，对暂存（或指定）文件比对内容 hash 与 git diff 大小，得出 Claude 与人工贡献比例；排除生成文件。
  */
@@ -633,7 +633,7 @@ function getGitEnvForRepoRoot(repoRoot, { userLocale } = {}) {
         userLocale,
       });
 }
-//@ chunk-s61vbvea.js:296667-297170 callgraph-fingerprint = getGitDiffSize (0.26)
+//@ chunk-s61vbvea.js:296667-297170 callgraph-fingerprint (2.1.88 match: getGitDiffSize, 0.26)
 /**
  * git diff --numstat（默认 --cached）取各文件改动大小。
  */
@@ -692,12 +692,12 @@ async function getDeletedFiles(
     throw gitListingError("git diff --diff-filter=D", result);
   return new Set(result.stdout.split("\x00").filter(Boolean));
 }
-//@ chunk-2a8yx6fc.js:14314-14432 fingerprint = isInternalModelRepoCached (0.543)
+//@ chunk-2a8yx6fc.js:14314-14432 fingerprint (2.1.88 match: isInternalModelRepoCached, 0.543)
 function isInternalModelRepoCached(visibility) {
   let normalized = typeof visibility === "string" ? visibility.toLowerCase() : "";
   return normalized === "public" || normalized === "private" || normalized === "internal" ? normalized : null;
 }
-//@ chunk-gjx0rh1b.js:113077-113464 fingerprint = isFileDeleted (0.485)
+//@ chunk-gjx0rh1b.js:113077-113464 fingerprint (2.1.88 match: isFileDeleted, 0.485)
 async function isFileDeleted(gitRoot, commit, signal, options) {
   let isDeletedPath = (path) =>
     listGitRefs(gitRoot, [...GIT_READ_CONFIG_ARGS, ...path], {
@@ -773,7 +773,7 @@ function createCommitAttributionState() {
     armedTrailerFiles: new Map(),
   };
 }
-//@ chunk-89f54s6c.js:13743-13998 fingerprint = isGitTransientState (0.913)
+//@ chunk-89f54s6c.js:13743-13998 fingerprint (2.1.88 match: isGitTransientState, 0.913)
 async function isGitTransientState(cwd, fsApi) {
   if (
     (
@@ -792,7 +792,7 @@ async function isGitTransientState(cwd, fsApi) {
   let existingRefs = await findExistingRefs(cwd, SEQUENCER_STATE_FILES, fsApi);
   return existingRefs === null ? null : existingRefs.size > 0;
 }
-//@ chunk-18hwfzwa.js:119585-119627 fingerprint = getStagedFiles (0.456)
+//@ chunk-18hwfzwa.js:119585-119627 fingerprint (2.1.88 match: getStagedFiles, 0.456)
 function getStagedFiles(attribution) {
   return attribution?.source === "diff";
 }

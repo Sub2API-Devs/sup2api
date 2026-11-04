@@ -56,7 +56,7 @@ function getHistoryScanStatusText(scan, query) {
       return trimmed ? "No matching prompts" : "No history yet";
   }
 }
-//@ chunk-18hwfzwa.js:663303-666723 fingerprint = HistorySearchDialog (0.528)
+//@ chunk-18hwfzwa.js:663303-666723 fingerprint (2.1.88 match: HistorySearchDialog, 0.528)
 /**
  * 全屏历史搜索对话框：列出匹配的历史 prompt（fuzzy），显示扫描进度与截断状态，选中后回填。
  */

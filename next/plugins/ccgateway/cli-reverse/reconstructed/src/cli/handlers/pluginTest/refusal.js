@@ -111,13 +111,13 @@ function flagClientQuieted() {
   if (hasGrowthBookInitializeStarted())
     initializeGrowthBook().then(stopPeriodicGrowthBookRefresh, stopPeriodicGrowthBookRefresh);
 }
-//@ chunk-16wxtfnh.js:1658-1727 placement = getFeatureValue_CACHED_MAY_BE_STALE (1)
+//@ chunk-16wxtfnh.js:1658-1727 placement (2.1.88 match: getFeatureValue_CACHED_MAY_BE_STALE, 1)
 var savedFlags = DoctorLazy(() =>
   objectSchema({
     cachedGrowthBookFeatures: record(stringSchema(), unknown()).optional(),
   }),
 );
-//@ chunk-16wxtfnh.js:1727-1858 placement = getFeatureValue_CACHED_MAY_BE_STALE (1)
+//@ chunk-16wxtfnh.js:1727-1858 placement (2.1.88 match: getFeatureValue_CACHED_MAY_BE_STALE, 1)
 function isSavedSwitchOf(globalConfigFromDiskOrThrow) {
   let parsed = savedFlags().safeParse(globalConfigFromDiskOrThrow);
   let flag = parsed.success ? parsed.data.cachedGrowthBookFeatures?.[PLUGIN_HOOKS_MODULES_GATE] : undefined;

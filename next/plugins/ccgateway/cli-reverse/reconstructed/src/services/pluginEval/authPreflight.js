@@ -36,7 +36,7 @@ import {
 } from "../../utils/authFileDescriptor.js";
 import { loginToHandOn } from "../../utils/auth/launcherHostLogin.js";
 
-//@ chunk-qchp9vrd.js:112515-112606 placement = logEventTo1P (1)
+//@ chunk-qchp9vrd.js:112515-112606 placement (2.1.88 match: logEventTo1P, 1)
 async function logEventTo1P() {
   if (getAPIProvider() !== "firstParty")
     return {

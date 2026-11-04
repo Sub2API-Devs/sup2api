@@ -12,7 +12,7 @@ import { logError } from "../../../utils/log.js";
 import { withTelemetryMessage } from "../../../utils/errors.js";
 import { logFeatureBad, logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 
-//@ chunk-s4bxxzsw.js:3950-4589 fingerprint = handleCoordinatorPermission (0.46)
+//@ chunk-s4bxxzsw.js:3950-4589 fingerprint (2.1.88 match: handleCoordinatorPermission, 0.46)
 /**
  * 协调者模式：先运行自动权限检查，检查失败或需要人工时回到交互流程（reprompted）。
  */

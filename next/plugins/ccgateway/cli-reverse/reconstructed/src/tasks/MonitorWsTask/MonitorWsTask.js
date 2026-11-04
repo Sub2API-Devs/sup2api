@@ -38,7 +38,7 @@ import { stopMonitorTask } from "../MonitorTask/monitorDelivery.js";
 import { clearAutoReactNoticePending } from "../../services/artifacts/shareEntries.js";
 import { stoppedAfterAutoActionsNotice } from "../../tools/ArtifactTool/artifactNotices.js";
 
-//@ chunk-xf84t5b0.js:12774-12885 placement = requestTeammateShutdown (1)
+//@ chunk-xf84t5b0.js:12774-12885 placement (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 对属于某代理、满足谓词且运行中的任务逐个执行回调（用于代理退出时清理其任务）。
  */
@@ -396,7 +396,7 @@ function isArtifactAutoReactNotification(notification) {
     notification.origin?.kind === "task-notification" && notification.origin.source === "artifact-auto-react"
   );
 }
-//@ chunk-xf84t5b0.js:19373-19454 placement = processQueuedCommands (1)
+//@ chunk-xf84t5b0.js:19373-19454 placement (2.1.88 match: processQueuedCommands, 1)
 function processQueuedCommands(queuedCommands) {
   return (
     queuedCommands.origin?.kind === "task-notification" &&

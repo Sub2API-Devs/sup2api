@@ -40,7 +40,7 @@ deferInit("chunk-90s2c6g2.js:389", () => {
 function isWebFetchAgent_2(agentName) {
   return typeof agentName === "string" && normalizeAgentName(agentName) === NORMALIZED_WEB_FETCH_AGENT;
 }
-//@ chunk-90s2c6g2.js:473-535 placement = updateAgentFile (1)
+//@ chunk-90s2c6g2.js:473-535 placement (2.1.88 match: updateAgentFile, 1)
 /**
  * 是否为内置 web-fetch 代理定义。
  */

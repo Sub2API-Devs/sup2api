@@ -40,7 +40,7 @@ var lineWidthCache; // deferred: uses LineWidthCache of its import cycle while l
 deferInit("chunk-bzr73sfg.js:175544", () => {
   lineWidthCache = new LineWidthCache();
 });
-//@ chunk-bzr73sfg.js:175558-175595 callgraph-witnessed = lineWidth (0)
+//@ chunk-bzr73sfg.js:175558-175595 callgraph-witnessed (2.1.88 match: lineWidth, 0)
 /**
  * 取一行文本的显示宽度（带缓存）。
  */

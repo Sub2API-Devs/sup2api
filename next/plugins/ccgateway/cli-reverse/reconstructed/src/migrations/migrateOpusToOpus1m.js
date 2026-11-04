@@ -14,7 +14,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { logEvent } from "../services/analytics/index.js";
 
-//@ chunk-cjydagjy.js:10386-10767 fingerprint = migrateOpusToOpus1m (0.659)
+//@ chunk-cjydagjy.js:10386-10767 fingerprint (2.1.88 match: migrateOpusToOpus1m, 0.659)
 /**
  * 迁移：userSettings.model 为 opus 且允许 1M 时改成 opus[1m]。
  */

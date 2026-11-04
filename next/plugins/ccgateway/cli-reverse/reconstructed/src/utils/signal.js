@@ -10,7 +10,7 @@
  */
 import { bindAsyncResource } from "./asyncResourceBind.js";
 
-//@ chunk-0777tkjc.js:771-1031 callgraph-witnessed = createSignal (0.347)
+//@ chunk-0777tkjc.js:771-1031 callgraph-witnessed (2.1.88 match: createSignal, 0.347)
 /**
  * 创建简单信号：subscribe 返回退订函数，emit 依次调用所有监听者，聚合监听者抛出的错误。
  */

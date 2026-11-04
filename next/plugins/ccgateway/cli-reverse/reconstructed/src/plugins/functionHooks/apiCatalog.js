@@ -193,7 +193,7 @@ import {
 import { settingsSourceProblem, settingsReadInputOf, settingsRead } from "./api/settingsRead.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4017450-4017557 placement = getPlanPhase4Section (0.353)
+//@ chunk-e6aww6q8.js:4017450-4017557 placement (2.1.88 match: getPlanPhase4Section, 0.353)
 /**
  * 插件提供的文本被截断时（按插件/字段去重）提示一次。旧版名 getPlanPhase4Section 为错配。
  */

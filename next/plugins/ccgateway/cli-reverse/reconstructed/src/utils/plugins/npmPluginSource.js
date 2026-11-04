@@ -941,7 +941,7 @@ function npmPluginSource(name, options) {
     source: installVersion(name, options),
   };
 }
-//@ chunk-e6aww6q8.js:4414294-4414348 placement = installVersion (0.763)
+//@ chunk-e6aww6q8.js:4414294-4414348 placement (2.1.88 match: installVersion, 0.763)
 function installVersion(packageName, options) {
   return {
     source: "npm",

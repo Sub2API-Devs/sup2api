@@ -180,7 +180,7 @@ function requiresLocalPerson(ctx, result) {
     mustBeLeftToAPerson(result, ctx.tool, ctx.input, ctx.toolUseContext, ctx.toolUseID)
   );
 }
-//@ chunk-s4bxxzsw.js:39090-44358 fingerprint = handleInteractivePermission (0.477)
+//@ chunk-s4bxxzsw.js:39090-44358 fingerprint (2.1.88 match: handleInteractivePermission, 0.477)
 /**
  * 交互式权限竞速：除本地对话框外，同时向 Remote Control bridge 发送请求、监听 channel 回复、服务器审批 watcher 与 PermissionRequest hooks，任一方先给出决定即 claim 并 teardown 其余方。
  */

@@ -44,7 +44,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 
-//@ chunk-y8ff1x9z.js:4829-4861 fingerprint = TRIGGERS_BETA (1)
+//@ chunk-y8ff1x9z.js:4829-4861 fingerprint (2.1.88 match: TRIGGERS_BETA, 1)
 var TRIGGERS_BETA = "ccr-triggers-2026-01-30";
 //@ chunk-y8ff1x9z.js:4861-4936 layout
 function parseValidDate(nextRunAt) {
@@ -449,7 +449,7 @@ function condenseRunLogPage(page, budgetChars) {
     eventsShown: eventTexts.length,
   };
 }
-//@ chunk-y8ff1x9z.js:11957-12713 fingerprint = inputSchema (0.395)
+//@ chunk-y8ff1x9z.js:11957-12713 fingerprint (2.1.88 match: inputSchema, 0.395)
 /**
  * RemoteTrigger 输入 schema：action（list/get/create/update/run/create_webhook_trigger/list_runs/get_run_log）、trigger_id、session_id、cursor、body；输出 {status, json, summary}；he 为触发器响应中用于摘要的字段。
  */
@@ -703,7 +703,7 @@ function normalizeUserMessageEvents(events, wrapperField) {
   });
   return changed ? mapped : events;
 }
-//@ chunk-y8ff1x9z.js:15323-18849 fingerprint = RemoteTriggerTool (0.482)
+//@ chunk-y8ff1x9z.js:15323-18849 fingerprint (2.1.88 match: RemoteTriggerTool, 0.482)
 /**
  * RemoteTrigger 工具（shouldDefer，enablesCodeExecution，可并发；list/get/list_runs/get_run_log 为只读）。isEnabled：需要 claude.ai 订阅登录等前置（logEventTo1P_10()/vt()）、非 CLAUDE_CODE_REMOTE 环境、allow_remote_sessions 与 allow_routines 策略开关。权限：auto 模式交给分类器，否则允许。call 按 action 调 claude.ai /v1/code/triggers、/v1/code/webhook-triggers、/v1/code/sessions（anthropic-beta ccr-triggers-2026-01-30，teleport-org 认证，20 秒超时），list_runs/get_run_log 结果做压缩与不可信内容标注，create/update 后附调度摘要与管理链接。
  */

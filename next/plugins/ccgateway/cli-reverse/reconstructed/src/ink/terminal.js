@@ -223,7 +223,7 @@ function describeMetaKey() {
     ? "Shift (Option in iTerm2, Fn in Terminal.app)"
     : "Shift";
 }
-//@ chunk-dxdtyerk.js:2844-3048 placement = LINUX_TERMINALS (0.468)
+//@ chunk-dxdtyerk.js:2844-3048 placement (2.1.88 match: LINUX_TERMINALS, 0.468)
 /**
  * （误归 deepLink）终端/IDE 名称集合：支持某终端特性的终端列表与 VS Code 系编辑器列表。
  */
@@ -260,7 +260,7 @@ function sanitizeSessionName(id) {
   let sliced = id.replace(/[^A-Za-z0-9_.+-]/g, "-").slice(0, MAX_SESSION_NAME_CHARS);
   return sliced.length > 0 ? sliced : undefined;
 }
-//@ chunk-dxdtyerk.js:11085-11166 placement = base64URLEncode (1)
+//@ chunk-dxdtyerk.js:11085-11166 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(text, maxBytes) {
   let truncated = truncateUtf8Bytes(text.replace(URL_STRIP_RE, " "), maxBytes);
   return M.from(truncated).toString("base64");
@@ -315,7 +315,7 @@ function detectMinimalTerminal(terminalName) {
   if (/^rxvt(-|$)/.test(terminalName)) return "rxvt";
   return null;
 }
-//@ chunk-dxdtyerk.js:11887-12003 fingerprint = EXTENDED_KEYS_TERMINALS (0.914)
+//@ chunk-dxdtyerk.js:11887-12003 fingerprint (2.1.88 match: EXTENDED_KEYS_TERMINALS, 0.914)
 var EXTENDED_KEYS_TERMINALS = [
   "iTerm.app",
   "kitty",
@@ -561,7 +561,7 @@ function initialSyncOutput() {
     source: "env: no known terminal",
   };
 }
-//@ chunk-dxdtyerk.js:15361-15951 fingerprint = isSynchronizedOutputSupported (0.708)
+//@ chunk-dxdtyerk.js:15361-15951 fingerprint (2.1.88 match: isSynchronizedOutputSupported, 0.708)
 /**
  * 按环境变量猜测终端是否支持同步输出（DEC 2026）：iTerm2、WezTerm、Warp、Ghostty、Contour、VS Code、Alacritty、mintty、Rio、Tabby、kitty、foot、Zed、Windows Terminal、VTE ≥0.68；返回依据字符串或 undefined。
  */
@@ -591,7 +591,7 @@ function isSynchronizedOutputSupported_2() {
   if (parseInt(env.VTE_VERSION ?? "", 10) >= 6800) return `VTE_VERSION=${env.VTE_VERSION}`;
   return;
 }
-//@ chunk-brd2890s.js:3337-3474 fingerprint = isXtermJs (0.807)
+//@ chunk-brd2890s.js:3337-3474 fingerprint (2.1.88 match: isXtermJs, 0.807)
 /**
  * 是否运行在 xterm.js 终端（VS Code 等）：会话状态、TERM_PROGRAM=vscode，或 XTVERSION 应答以 xterm.js 开头。
  */
@@ -747,7 +747,7 @@ function shouldUseSynchronizedOutput(syncSupported = isSynchronizedOutputSupport
     env.WT_SESSION == null
   );
 }
-//@ chunk-24t3dkzb.js:2958-3320 fingerprint = isProgressReportingAvailable (0.938)
+//@ chunk-24t3dkzb.js:2958-3320 fingerprint (2.1.88 match: isProgressReportingAvailable, 0.938)
 /**
  * 终端是否支持 OSC 9;4 进度条：会话状态优先；ConEmu 支持；Ghostty ≥1.2.0、iTerm2 ≥3.6.6 支持；Windows Terminal 与非 TTY 不支持。
  */
@@ -771,7 +771,7 @@ function isExtendedKeysTerminal(terminal) {
   if (terminal != null) return EXTENDED_KEYS_TERMINALS.includes(terminal);
   return getTerminalCapabilities().now("extendedKeys");
 }
-//@ chunk-24t3dkzb.js:3400-3548 callgraph-fingerprint = supportsExtendedKeys (0.183)
+//@ chunk-24t3dkzb.js:3400-3548 callgraph-fingerprint (2.1.88 match: supportsExtendedKeys, 0.183)
 /**
  * 是否启用扩展键：tmux/screen 下不启用；能力表显示支持，且终端不在需要确认的名单里或已确认支持 kitty 键盘。
  */
@@ -783,7 +783,7 @@ function supportsExtendedKeys(terminal = env.terminal, capabilities = getTermina
     capabilities.confirmed("kittyKeyboard")
   );
 }
-//@ chunk-24t3dkzb.js:3548-3616 placement = kittyKeyboard (0.863)
+//@ chunk-24t3dkzb.js:3548-3616 placement (2.1.88 match: kittyKeyboard, 0.863)
 function popKittyKeyboardSequence() {
   return !hasUnknownSequencePrintingBug() &&
     (isExtendedKeysTerminal() || getTerminalCapabilities().now("kittyKeyboard"))
@@ -831,7 +831,7 @@ function recordSlowestWrite(stats, startedMs, bytes) {
       bytes,
     };
 }
-//@ chunk-24t3dkzb.js:4238-4838 fingerprint = writeDiffToTerminal (0.956)
+//@ chunk-24t3dkzb.js:4238-4838 fingerprint (2.1.88 match: writeDiffToTerminal, 0.956)
 /**
  * 把 Patch 列表拼成一个字符串一次写到终端：默认用同步输出（DEC 2026 BSU/ESU）包裹；clearTerminal 按主屏/备用屏用不同清屏方式；相对光标移动的 dy 夹在视口内；写失败（EPIPE）静默处理。
  */

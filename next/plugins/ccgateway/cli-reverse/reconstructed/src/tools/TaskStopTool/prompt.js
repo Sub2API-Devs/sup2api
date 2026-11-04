@@ -8,7 +8,7 @@
  * pieces: chunk-yt6b774j.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-yt6b774j.js:560-978 fingerprint = TASK_STOP_TOOL_NAME (0.369)
+//@ chunk-yt6b774j.js:560-978 fingerprint (2.1.88 match: TASK_STOP_TOOL_NAME, 0.369)
 /**
  * TaskStop 名字 "TaskStop"、别名 ["KillShell","KillBash"] 与提示词。
  */

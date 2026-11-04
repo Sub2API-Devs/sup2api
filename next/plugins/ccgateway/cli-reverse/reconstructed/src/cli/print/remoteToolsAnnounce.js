@@ -111,7 +111,7 @@ function safeHomedir() {
     return homedir();
   }
 }
-//@ chunk-tyg7f3ek.js:619761-619863 placement = getProjectDirsUpToHome (0.875)
+//@ chunk-tyg7f3ek.js:619761-619863 placement (2.1.88 match: getProjectDirsUpToHome, 0.875)
 function getProjectDirsUpToHome(subdir, cwd) {
   let homeDir = subdir.HOME !== undefined && isAbsolute(subdir.HOME) ? subdir.HOME : cwd();
   return join(homeDir, ".claude").normalize("NFC");

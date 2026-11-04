@@ -88,7 +88,7 @@ function preferredWantedValue(ctx, isInsert, wanted) {
   if (ctx.wanted !== undefined) return ctx.wanted ?? undefined;
   return isInsert ? undefined : wanted;
 }
-//@ chunk-530hfzwb.js:30218-41931 fingerprint = useVimInput (0.505)
+//@ chunk-530hfzwb.js:30218-41931 fingerprint (2.1.88 match: useVimInput, 0.505)
 /**
  * vim 输入：维护 NORMAL/INSERT/VISUAL/VISUAL LINE 状态，解析操作符(d/c/y)+动作、文本对象、计数与点重复；INSERT 下回落到 useTextInput。
  */

@@ -23,7 +23,7 @@ function isAllRuleReason(decisionReason) {
     return [...decisionReason.reasons.values()].every((reason) => isAllRuleReason(reason.decisionReason));
   return false;
 }
-//@ chunk-e6aww6q8.js:920729-921111 placement = serializeDecisionReason (0.967)
+//@ chunk-e6aww6q8.js:920729-921111 placement (2.1.88 match: serializeDecisionReason, 0.967)
 /**
  * 权限决定原因转换为给宿主显示的文本（rule/mode 等不显示，safetyCheck/classifier/hook 显示原因）。
  */

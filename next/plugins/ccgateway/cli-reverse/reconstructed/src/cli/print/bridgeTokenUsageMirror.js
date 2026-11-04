@@ -29,7 +29,7 @@ import {
 import { resolveEffortLevelOrNull } from "../../bridge/applyFlagSettings.js";
 import { viewTeammateOutput } from "../../components/teams/TeamsDialog.js";
 
-//@ chunk-0sfjpx19.js:45722-45986 placement = combineUsage (1)
+//@ chunk-0sfjpx19.js:45722-45986 placement (2.1.88 match: combineUsage, 1)
 /**
  * 把 usage 乘系数后累加到总计（输入、输出、缓存读、缓存写四项）。旧版名 combineUsage 不确切，属成本统计。
  */
@@ -41,7 +41,7 @@ function addScaledUsage(total, factor, usage) {
     cacheCreationInputTokens: total.cacheCreationInputTokens + factor * usage.cacheCreationInputTokens,
   };
 }
-//@ chunk-0sfjpx19.js:45986-46088 placement = combineUsage (1)
+//@ chunk-0sfjpx19.js:45986-46088 placement (2.1.88 match: combineUsage, 1)
 /**
  * 把 usage 转成 [输入, 输出, 缓存读, 缓存写] 元组。属成本统计。
  */

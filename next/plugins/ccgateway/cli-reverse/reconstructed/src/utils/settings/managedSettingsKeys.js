@@ -389,7 +389,7 @@ function firstLineBreakIndex(text) {
 function isAsciiWhitespaceCode(code) {
   return code === 9 || code === 32 || code === 10 || code === 13;
 }
-//@ chunk-dcmhvw5a.js:354099-354157 placement = needsWidthCompensation (1)
+//@ chunk-dcmhvw5a.js:354099-354157 placement (2.1.88 match: needsWidthCompensation, 1)
 function codePointAtOrUnit(text, index) {
   return text.codePointAt(index) ?? text.charCodeAt(index);
 }

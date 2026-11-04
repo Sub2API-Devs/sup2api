@@ -86,12 +86,12 @@ function createAbortController(maxListeners = DEFAULT_MAX_LISTENERS) {
   setMaxListeners(maxListeners, controller.signal);
   return controller;
 }
-//@ chunk-mq9v2gw5.js:785-853 fingerprint = propagateAbort (1)
+//@ chunk-mq9v2gw5.js:785-853 fingerprint (2.1.88 match: propagateAbort, 1)
 function propagateAbort(childRef) {
   let parent = this.deref();
   childRef.deref()?.abort(parent?.signal.reason);
 }
-//@ chunk-mq9v2gw5.js:853-946 fingerprint = removeAbortHandler (1)
+//@ chunk-mq9v2gw5.js:853-946 fingerprint (2.1.88 match: removeAbortHandler, 1)
 function removeAbortHandler(handlerRef) {
   let parent = this.deref();
   let handler = handlerRef.deref();
@@ -167,7 +167,7 @@ deferInit("chunk-mq9v2gw5.js:1521", () => {
 function isAskWithdrawnByAsker(signal) {
   return signal.aborted && unwrapAbortReason(signal.reason) === ASK_WITHDRAWN_BY_ASKER;
 }
-//@ chunk-mq9v2gw5.js:1638-1873 placement = createChildAbortController (0.879)
+//@ chunk-mq9v2gw5.js:1638-1873 placement (2.1.88 match: createChildAbortController, 0.879)
 /**
  * 为一次提问创建子控制器：子 abort 会向上 abort 父；撤回信号触发时子以 ask-withdrawn-by-asker 原因 abort（不影响父）。
  */
@@ -195,7 +195,7 @@ function turnAbortControllerOf(abortController) {
   while (controller instanceof PromptScopedAbortController) controller = controller.turnController;
   return controller;
 }
-//@ chunk-mq9v2gw5.js:1947-2157 placement = createCapacityWake (0.799)
+//@ chunk-mq9v2gw5.js:1947-2157 placement (2.1.88 match: createCapacityWake, 0.799)
 /**
  * 把父 AbortController 的中止转发给子控制器，返回解除转发的函数。
  */
@@ -232,7 +232,7 @@ deferInit("chunk-mq9v2gw5.js:2157", () => {
 function userAbortReason(abortKind) {
   return ABORT_REASONS[abortKind];
 }
-//@ chunk-mq9v2gw5.js:2745-2828 placement = AbortError (1)
+//@ chunk-mq9v2gw5.js:2745-2828 placement (2.1.88 match: AbortError, 1)
 function unwrapAbortReason(reason) {
   return reason instanceof DOMException && reason.name === "AbortError" ? reason.message : reason;
 }
@@ -286,7 +286,7 @@ deferInit("chunk-mq9v2gw5.js:3273", () => {
 function isSilentAbortReason(reason) {
   return SILENT_ABORT_REASONS.has(unwrapAbortReason(reason));
 }
-//@ chunk-mq9v2gw5.js:3392-3450 placement = sendShutdownRequestToMailbox (0.557)
+//@ chunk-mq9v2gw5.js:3392-3450 placement (2.1.88 match: sendShutdownRequestToMailbox, 0.557)
 /**
  * 中止原因是否是 shutdown。
  */
@@ -366,7 +366,7 @@ function isUserAttributableAbortKind(abortKind) {
       return false;
   }
 }
-//@ chunk-mq9v2gw5.js:4396-4499 placement = propagateAbort (1)
+//@ chunk-mq9v2gw5.js:4396-4499 placement (2.1.88 match: propagateAbort, 1)
 function propagateRecoverableAbort(controllerRef) {
   let parent = this.deref();
   if (!parent || !isUserInitiatedAbortReason(parent.signal.reason)) return;
@@ -394,7 +394,7 @@ function armRecoveryCeiling(abortController, timeoutMs, clock) {
     clock,
   );
 }
-//@ chunk-mq9v2gw5.js:4732-4872 placement = createChildAbortController (0.879)
+//@ chunk-mq9v2gw5.js:4732-4872 placement (2.1.88 match: createChildAbortController, 0.879)
 /**
  * 创建只传播可恢复类 abort 原因的子控制器，并挂 recovery-timeout 定时器，到期自动 abort。
  */
@@ -411,7 +411,7 @@ function createRecoveryAbortController(parentController, recoveryTimeoutMs, cloc
   );
   return abortController;
 }
-//@ chunk-ad2e1aj6.js:43157-43267 fingerprint = createChildAbortController (0.879)
+//@ chunk-ad2e1aj6.js:43157-43267 fingerprint (2.1.88 match: createChildAbortController, 0.879)
 function createChildAbortController_2(signal) {
   return new Promise((resolve) => {
     if (signal.aborted) resolve();

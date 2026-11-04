@@ -90,7 +90,7 @@ function isRemoteControlOfferable() {
 function isRunningInRemoteEnvironment() {
   return isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) || getIsRemoteMode();
 }
-//@ chunk-71c4j971.js:15670-15738 placement = isCseShimEnabled (1)
+//@ chunk-71c4j971.js:15670-15738 placement (2.1.88 match: isCseShimEnabled, 1)
 /**
  * GrowthBook 开关 tengu_bridge_repl_v2_cse_shim_enabled（默认开）的读取函数；用途见手册 Remote Control 开关表。
  */
@@ -262,7 +262,7 @@ function isQuotaRejectedReemitEnabled() {
 function getCcrAutoConnectDefault() {
   return resolveCcrAutoConnectDefault().value;
 }
-//@ chunk-71c4j971.js:17044-17380 placement = getCcrAutoConnectDefault (0.302)
+//@ chunk-71c4j971.js:17044-17380 placement (2.1.88 match: getCcrAutoConnectDefault, 0.302)
 /**
  * 启动时自动连接默认值及来源：远程环境 false；不可用时 false（org_policy/growthbook）；持久远程会话 true；组织策略 remote_control_at_startup；否则 tengu_cobalt_harbor。
  */

@@ -70,7 +70,7 @@ import { sleep } from "../../utils/sleep.js";
 import { isToolDroppedByDenyRules } from "../../utils/permissions/filterToolsByDenyRules.js";
 import { uniq } from "../../utils/collections.js";
 
-//@ chunk-e6aww6q8.js:50158-50309 placement = _temp (0.649)
+//@ chunk-e6aww6q8.js:50158-50309 placement (2.1.88 match: _temp, 0.649)
 /**
  * 校验工具输入并调用工具的 isReadOnly，是只读时返回 {isReadOnly: true}；出错记录日志并返回空对象。
  */
@@ -512,14 +512,14 @@ async function toolRegisterForPlugin(registration, plugin) {
     tool: rawMcpToolName,
   };
 }
-//@ chunk-e6aww6q8.js:3976621-3976724 placement = getMcpPrefix (1)
+//@ chunk-e6aww6q8.js:3976621-3976724 placement (2.1.88 match: getMcpPrefix, 1)
 var listServersInToolNames = (serverName) =>
   uniq(
     serverName
       .filter((toolName) => toolName.startsWith("mcp__"))
       .map((toolName) => toolName.split("__")[1] ?? ""),
   ).join(", ") || "none";
-//@ chunk-e6aww6q8.js:3976724-3976788 placement = getMcpPrefix (1)
+//@ chunk-e6aww6q8.js:3976724-3976788 placement (2.1.88 match: getMcpPrefix, 1)
 var mcpToolNameVariants = (server, tool) =>
   new Set([
     buildRawMcpToolName(server, tool),

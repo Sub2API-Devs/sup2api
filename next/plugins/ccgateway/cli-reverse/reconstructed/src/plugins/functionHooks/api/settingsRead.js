@@ -200,7 +200,7 @@ var SETTINGS_SOURCE_NAMES; // deferred: has load-time effects after a deferred s
 deferInit("chunk-s61vbvea.js:621772", () => {
   SETTINGS_SOURCE_NAMES = Object.freeze(["user", "project", "local", "flag", "policy"]);
 });
-//@ chunk-s61vbvea.js:621838-622071 placement = getSettingsWithAllErrors (0.614)
+//@ chunk-s61vbvea.js:621838-622071 placement (2.1.88 match: getSettingsWithAllErrors, 0.614)
 /**
  * 合并设置错误与插件、MCP 等来源的错误，供 /doctor 和 /status 展示。
  */

@@ -27,7 +27,7 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { installPluginAndNotify } from "./usePluginRecommendationBase.js";
 import { installPluginFromMarketplace } from "../utils/plugins/pluginInstallationHelpers.js";
 
-//@ chunk-18hwfzwa.js:1806264-1807723 fingerprint = useClaudeCodeHintRecommendation (0.695)
+//@ chunk-18hwfzwa.js:1806264-1807723 fingerprint (2.1.88 match: useClaudeCodeHintRecommendation, 0.695)
 function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
   let $ = useMemoCache(11);
   let { pendingHint } = useSession();

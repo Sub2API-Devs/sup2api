@@ -11,7 +11,7 @@
 import { MCP_CLAUDE_TEST_WRITE, regExp_17 } from "../../plugins/bundled/claudeTest/constants.js";
 import { renderToolUseMessage_3 } from "../../tools/MCPTool/UI.js";
 
-//@ chunk-e6aww6q8.js:4678621-4678802 placement = mergeClients (1)
+//@ chunk-e6aww6q8.js:4678621-4678802 placement (2.1.88 match: mergeClients, 1)
 function mergeClients_2(candidate) {
   if (candidate === null || typeof candidate !== "object" || !("name" in candidate) || !("text" in candidate))
     return null;

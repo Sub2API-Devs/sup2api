@@ -691,7 +691,7 @@ async function runJobClassification(
     syncPermissionNeeds(classifier, jobId);
   }
 }
-//@ chunk-wd9kxbpn.js:25784-26149 placement = countToolCallsSince (1)
+//@ chunk-wd9kxbpn.js:25784-26149 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(messages, sinceUuid) {
   for (let j = messages.length - 1; j >= 0; j--) {
     let content = messages[j]?.message.content;
@@ -1066,7 +1066,7 @@ var SCHEDULING_TOOL_NAMES; // deferred: uses CRON_CREATE_TOOL_NAME (../../tools/
 deferInit("chunk-wd9kxbpn.js:33035", () => {
   SCHEDULING_TOOL_NAMES = new Set([SCHEDULE_WAKEUP_TOOL_NAME, CRON_CREATE_TOOL_NAME, MONITOR]);
 });
-//@ chunk-wd9kxbpn.js:33062-33342 placement = countToolCallsSince (1)
+//@ chunk-wd9kxbpn.js:33062-33342 placement (2.1.88 match: countToolCallsSince, 1)
 function summarizeTopToolNames(messages) {
   let counts = new Map();
   for (let message of messages)

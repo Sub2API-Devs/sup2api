@@ -37,7 +37,7 @@ import { lsRemoteMarketplace } from "./marketplaceGitCheckout.js";
 import { redactUrlQuery } from "../redaction/urlRedaction.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f3qhjfah.js:2695-2741 fingerprint = getVersionFromPath (0.904)
+//@ chunk-f3qhjfah.js:2695-2741 fingerprint (2.1.88 match: getVersionFromPath, 0.904)
 /**
  * 旧版插件缓存根目录 <configHome>/plugins/cache。
  */
@@ -137,7 +137,7 @@ function verifyReviewedCommit({ pluginId, pluginName, source, boundByRecord, fet
     reviewedCommit: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4321780-4323479 fingerprint = calculatePluginVersion (0.569)
+//@ chunk-e6aww6q8.js:4321780-4323479 fingerprint (2.1.88 match: calculatePluginVersion, 0.569)
 /**
  * 计算插件版本（缓存目录名）：manifest.version > 条目 version > git commit sha（短）> archive sha256 > 内容哈希；command 来源按其输出目录内容哈希。
  */

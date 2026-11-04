@@ -64,7 +64,7 @@ function findOverrideCanonicalName(overrides, modelId) {
   }
   return;
 }
-//@ chunk-aepeg2w5.js:458656-458715 placement = applyModelOverrides (1)
+//@ chunk-aepeg2w5.js:458656-458715 placement (2.1.88 match: applyModelOverrides, 1)
 /**
  * settings.modelOverrides（读取失败为 undefined）。
  */
@@ -102,7 +102,7 @@ function resolveCanonicalModelName(modelId, options) {
   }
   return firstPartyNameToCanonical(modelId);
 }
-//@ chunk-aepeg2w5.js:459079-459175 placement = resolveSkillModelOverride (0.834)
+//@ chunk-aepeg2w5.js:459079-459175 placement (2.1.88 match: resolveSkillModelOverride, 0.834)
 /**
  * 模型规范名（[1m] 变体时同时返回带 [1m] 的形式），默认用当前主模型。
  */

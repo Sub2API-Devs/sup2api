@@ -20,7 +20,7 @@ import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTel
  * 回合结束时等待 unhide 应用的上限 5s。
  */
 var UNHIDE_TIMEOUT_MS = 5000;
-//@ chunk-ha3km179.js:52195-52979 fingerprint = cleanupComputerUseAfterTurn (0.693)
+//@ chunk-ha3km179.js:52195-52979 fingerprint (2.1.88 match: cleanupComputerUseAfterTurn, 0.693)
 /**
  * 回合结束清理 computer-use：恢复本回合隐藏的应用（最多等 5s，超时上报 unhide_timeout），若本回合用过则注销 ESC 热键并产出系统通知 "Claude is done using your computer"。
  */

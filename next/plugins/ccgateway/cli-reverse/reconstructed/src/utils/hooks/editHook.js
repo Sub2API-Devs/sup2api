@@ -228,7 +228,7 @@ function isSameHookCommand(hookCommand, config) {
     stableStringify(redactHttpHeaderValues(parsed.data)) === stableStringify(redactHttpHeaderValues(config))
   );
 }
-//@ chunk-azbt01vf.js:7060-7174 placement = isHTTPConfig (1)
+//@ chunk-azbt01vf.js:7060-7174 placement (2.1.88 match: isHTTPConfig, 1)
 function canonicalHookKey(config) {
   return stableStringify(
     config.type === "http" && config.headers !== undefined
@@ -274,7 +274,7 @@ function getHookMatcherKey(group) {
   if (matcher === undefined || matcher === null || matcher === "") return "";
   return typeof matcher === "string" ? matcher : null;
 }
-//@ chunk-azbt01vf.js:7746-8291 placement = isHTTPConfig (1)
+//@ chunk-azbt01vf.js:7746-8291 placement (2.1.88 match: isHTTPConfig, 1)
 /**
  * mergeHookPreservingHeaders：编辑 http hook 时保留原有未知字段与被遮蔽的 header 值（非 MCP；见 lead 建议）。
  */
@@ -315,7 +315,7 @@ function mergeHookPreservingHeaders(previous, hook) {
     delete merged.headers;
   return merged;
 }
-//@ chunk-azbt01vf.js:8291-8479 placement = convertToHookMatchers (0.839)
+//@ chunk-azbt01vf.js:8291-8479 placement (2.1.88 match: convertToHookMatchers, 0.839)
 /**
  * 统计设置对象里某事件、某 matcher 下与给定钩子相同的条目数。
  */

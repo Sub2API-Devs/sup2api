@@ -37,7 +37,7 @@ function recordSkillInvoked(session, name, storageV5, skillName = name) {
     };
   }, storageV5);
 }
-//@ chunk-e6aww6q8.js:2314225-2314409 fingerprint = recordSkillUsage (0.847)
+//@ chunk-e6aww6q8.js:2314225-2314409 fingerprint (2.1.88 match: recordSkillUsage, 0.847)
 function recordSkillUsage(name, fallbackName) {
   let skillUsage = getGlobalConfig().skillUsage ?? {};
   let entry = getOwn(skillUsage, name) ?? (fallbackName ? getOwn(skillUsage, fallbackName) : undefined);
@@ -47,7 +47,7 @@ function recordSkillUsage(name, fallbackName) {
     daysSinceUse: Math.floor((Date.now() - entry.lastUsedAt) / 86400000),
   };
 }
-//@ chunk-e6aww6q8.js:2314409-2314569 fingerprint = getSkillUsageScore (1)
+//@ chunk-e6aww6q8.js:2314409-2314569 fingerprint (2.1.88 match: getSkillUsageScore, 1)
 /**
  * 技能使用评分：按使用次数与最近使用时间计算排序分数。
  */

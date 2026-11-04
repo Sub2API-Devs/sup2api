@@ -72,7 +72,7 @@ function personOnlyDecisionFor(request) {
       }
     : undefined;
 }
-//@ chunk-hgrqcyvx.js:1484-1642 placement = decisionClassificationField (0.64)
+//@ chunk-hgrqcyvx.js:1484-1642 placement (2.1.88 match: decisionClassificationField, 0.64)
 /**
  * 该 tool_use 是否由用户决定：查 toolDecisions 中的来源为 user_temporary/user_permanent；没有记录时用全局判定。
  */

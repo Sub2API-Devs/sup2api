@@ -499,7 +499,7 @@ function analyzeAssignment(node, state, isIntegerContext) {
 function isStaticNode(node) {
   return !/expansion|substitution/.test(node.type) && node.children.every(isStaticNode);
 }
-//@ chunk-63f0f3kd.js:23959-24012 placement = toScopedConfig (0.805)
+//@ chunk-63f0f3kd.js:23959-24012 placement (2.1.88 match: toScopedConfig, 0.805)
 function dynamicValue(why, flags = DYNAMIC_VALUE_FLAGS) {
   return {
     kind: "dynamic",
@@ -560,7 +560,7 @@ var GIT_PROGRAM_NAMES; // deferred: uses POSIX_SHELL_NAMES (../../../utils/bash/
 deferInit("chunk-63f0f3kd.js:24808", () => {
   GIT_PROGRAM_NAMES = ["git", "git.exe", "git.real", ...SHELL_PROGRAM_NAMES];
 });
-//@ chunk-63f0f3kd.js:24850-25266 placement = urlPatternToRegex (0.838)
+//@ chunk-63f0f3kd.js:24850-25266 placement (2.1.88 match: urlPatternToRegex, 0.838)
 function urlPatternToRegex(pattern) {
   let replaced = pattern
     .slice(pattern.lastIndexOf("/") + 1)

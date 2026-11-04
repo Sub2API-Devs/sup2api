@@ -236,7 +236,7 @@ function fileUuidFilename(fileUuid, suffix) {
     ? `${fileUuid}-${safeFilenameSegment(suffix)}`
     : fileUuid;
 }
-//@ chunk-sdzpqjn8.js:18586-18703 placement = tryCreateExclusive (1)
+//@ chunk-sdzpqjn8.js:18586-18703 placement (2.1.88 match: tryCreateExclusive, 1)
 async function tryCreateExclusive(path, content) {
   return writeFile(path, content, {
     mode: 384,
@@ -380,7 +380,7 @@ function replaceUniqueText(content, oldStr, newStr) {
   if (index === -1 || content.indexOf(oldStr, index + oldStr.length) !== -1) return;
   return content.slice(0, index) + (newStr ?? "") + content.slice(index + oldStr.length);
 }
-//@ chunk-sdzpqjn8.js:20093-20603 placement = EXTENSION_TO_LANGUAGE (0.346)
+//@ chunk-sdzpqjn8.js:20093-20603 placement (2.1.88 match: EXTENSION_TO_LANGUAGE, 0.346)
 /**
  * 代码块语言名到文件扩展名的映射（导入对话时给代码工件取文件名），Qt 是这些扩展名加纯文本类扩展名的集合。
  */

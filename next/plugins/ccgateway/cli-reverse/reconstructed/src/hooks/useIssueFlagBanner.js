@@ -46,7 +46,7 @@ var FRUSTRATION_PATTERNS = [
   /\btry again\b/i,
   /\b(undo|revert) (that|this|it|what you)\b/i,
 ];
-//@ chunk-18hwfzwa.js:1763335-1763665 fingerprint = isSessionContainerCompatible (1)
+//@ chunk-18hwfzwa.js:1763335-1763665 fingerprint (2.1.88 match: isSessionContainerCompatible, 1)
 function isSessionContainerCompatible(messages) {
   for (let msg of messages) {
     if (msg.type !== "assistant") continue;

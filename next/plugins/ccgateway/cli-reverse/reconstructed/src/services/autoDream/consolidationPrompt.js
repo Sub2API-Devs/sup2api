@@ -26,7 +26,7 @@ Project CLAUDE.md instructions are loaded in your system prompt. For each memory
 - **Not a conflict** \u2014 the memory adds detail CLAUDE.md doesn't cover, or narrows a CLAUDE.md rule with a stated reason. Leave it.
 
 A \`feedback\` memory's "Why: the user corrected me" framing is not evidence it's newer than CLAUDE.md \u2014 CLAUDE.md may have been updated since.`;
-//@ chunk-rsht1tdj.js:3670-6613 fingerprint = buildConsolidationPrompt (0.585)
+//@ chunk-rsht1tdj.js:3670-6613 fingerprint (2.1.88 match: buildConsolidationPrompt, 0.585)
 /**
  * dream 整理提示：合并重复、删除过时、与 CLAUDE.md 对齐、可选团队记忆段。
  */

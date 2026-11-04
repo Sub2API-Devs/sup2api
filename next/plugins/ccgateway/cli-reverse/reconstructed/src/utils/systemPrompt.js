@@ -29,7 +29,7 @@ function effectiveSystemPromptText(options) {
   if (!servesDefault && !options.analysisOnly) setSharedMemoryServedViaTools(false);
   return prompt;
 }
-//@ chunk-e6aww6q8.js:2371009-2371933 fingerprint = buildEffectiveSystemPrompt (0.583)
+//@ chunk-e6aww6q8.js:2371009-2371933 fingerprint (2.1.88 match: buildEffectiveSystemPrompt, 0.583)
 /**
  * 选择生效系统提示词：overrideSystemPrompt 最优先；coordinator 模式且无主线程代理用 coordinator 提示词（+输出风格、+append）；主线程代理提示词替换默认（代理设置 appendSystemPrompt 时追加在默认后）；否则 --system-prompt（customSystemPrompt）或默认；最后追加 --append-system-prompt。返回 {prompt, servesDefault}。
  */

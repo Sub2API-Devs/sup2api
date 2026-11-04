@@ -206,7 +206,7 @@ async function openRegularFileSafely(filePath, mode, label) {
     throw error;
   }
 }
-//@ chunk-qchp9vrd.js:112323-112502 placement = getFileIdentity (0.865)
+//@ chunk-qchp9vrd.js:112323-112502 placement (2.1.88 match: getFileIdentity, 0.865)
 async function getFileIdentity(filePath, identity) {
   if (identity.ino === 0n) return;
   let stats = await lstat(filePath, {

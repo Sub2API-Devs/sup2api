@@ -211,7 +211,7 @@ function getAncestorPidsLinuxSync(pid, maxDepth = 12) {
 async function getAncestorPidsAsync(pid, maxDepth = 10) {
   return (await getAncestorPidsCheckedAsync(pid, maxDepth)).ancestors;
 }
-//@ chunk-qg0af0yq.js:14296-14868 placement = getAncestorPidsAsync (0.341)
+//@ chunk-qg0af0yq.js:14296-14868 placement (2.1.88 match: getAncestorPidsAsync, 0.341)
 async function getAncestorPidsCheckedAsync(pid, maxDepth = 10) {
   let script = `pid=${String(pid)}; for i in $(seq 1 ${maxDepth}); do ppid=$(ps -o ppid= -p $pid 2>/dev/null | tr -d ' '); if [ -z "$ppid" ]; then echo FAIL; exit 0; fi; if [ "$ppid" = "0" ] || [ "$ppid" = "1" ]; then echo END; exit 0; fi; echo $ppid; pid=$ppid; done`;
   let result = await execFileNoThrowWithCwd("sh", ["-c", script], {
@@ -233,7 +233,7 @@ async function getAncestorPidsCheckedAsync(pid, maxDepth = 10) {
     truncated: result.code === 0 && filtered.at(-1) !== "END" && filtered.at(-1) !== "FAIL",
   };
 }
-//@ chunk-qg0af0yq.js:14868-14993 placement = getProcessCommand (0.696)
+//@ chunk-qg0af0yq.js:14868-14993 placement (2.1.88 match: getProcessCommand, 0.696)
 function getProcessCommand(pid) {
   try {
     let command = `ps -o command= -p ${String(pid)}`;
@@ -346,7 +346,7 @@ var procStartTokenCache; // deferred: uses ProcStartTokenCache of its import cyc
 deferInit("chunk-qg0af0yq.js:15851", () => {
   procStartTokenCache = new HostScoped(() => new ProcStartTokenCache());
 });
-//@ chunk-qg0af0yq.js:15876-15935 placement = getClaudeSocketName (0.649)
+//@ chunk-qg0af0yq.js:15876-15935 placement (2.1.88 match: getClaudeSocketName, 0.649)
 /**
  * 本进程的 Claude tmux socket 名（按 pid 生成一次后缓存）。
  */

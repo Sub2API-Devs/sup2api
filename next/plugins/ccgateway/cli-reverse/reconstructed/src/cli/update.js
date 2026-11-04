@@ -48,7 +48,7 @@ import { recordUpdateResult } from "../utils/nativeInstaller/updateResult.js";
 import { isServerVersionMismatch } from "../utils/daemon/daemonLock.js";
 import { bgSupervisorNounCap } from "../utils/fleetGates.js";
 
-//@ chunk-rkjj4sjx.js:12375-42648 fingerprint = update (0.63)
+//@ chunk-rkjj4sjx.js:12375-42648 fingerprint (2.1.88 match: update, 0.63)
 /**
  * claude update：检查安装方式（native/npm-local/npm-global/package-manager/development），包管理器安装只提示命令（Homebrew/winget/apk…），原生安装走 installLatest，npm 安装走全局/本地 npm；处理多重安装与配置的 installMethod 不一致。
  */

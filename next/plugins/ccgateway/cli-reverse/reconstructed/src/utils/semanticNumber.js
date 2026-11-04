@@ -10,7 +10,7 @@
  */
 import { PROPOSED_OUTCOMES } from "../plugins/bundled/youShouldKnow/NoteCard.js";
 
-//@ chunk-bss4k1z9.js:20132-20331 fingerprint = semanticNumber (0.481)
+//@ chunk-bss4k1z9.js:20132-20331 fingerprint (2.1.88 match: semanticNumber, 0.481)
 function semanticNumber(inner) {
   if (typeof inner !== "object" || !inner) return false;
   let value = inner;

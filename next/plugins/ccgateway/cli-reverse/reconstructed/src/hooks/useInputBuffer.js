@@ -22,7 +22,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-18hwfzwa.js:864032", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:864036-865011 fingerprint = useInputBuffer (0.92)
+//@ chunk-18hwfzwa.js:864036-865011 fingerprint (2.1.88 match: useInputBuffer, 0.92)
 /**
  * 撤销缓冲：pushToBuffer 防抖记录 {text, cursorOffset, pastedContents}，undo 回到上一个快照，clearBuffer 清空；最多 maxBufferSize 条。
  */

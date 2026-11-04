@@ -9,7 +9,7 @@
  * attribution: fingerprint 3, layout 1
  */
 
-//@ chunk-wyqg6m3h.js:25928-26222 fingerprint = EXCLUDED_DIRECTORIES (0.954)
+//@ chunk-wyqg6m3h.js:25928-26222 fingerprint (2.1.88 match: EXCLUDED_DIRECTORIES, 0.954)
 var GENERATED_DIRECTORIES = [
   "/dist/",
   "/build/",
@@ -52,7 +52,7 @@ var GENERATED_FILENAME_PATTERNS = Object.freeze([
   /\.openapi\.[a-z]+$/i,
   /\.snap$/i,
 ]);
-//@ chunk-wyqg6m3h.js:26532-26735 fingerprint = EXCLUDED_FILENAMES (1)
+//@ chunk-wyqg6m3h.js:26532-26735 fingerprint (2.1.88 match: EXCLUDED_FILENAMES, 1)
 var GENERATED_FILENAMES = new Set([
   "package-lock.json",
   "yarn.lock",
@@ -67,7 +67,7 @@ var GENERATED_FILENAMES = new Set([
   "shrinkwrap.json",
   "npm-shrinkwrap.json",
 ]);
-//@ chunk-wyqg6m3h.js:26735-26852 fingerprint = EXCLUDED_EXTENSIONS (1)
+//@ chunk-wyqg6m3h.js:26735-26852 fingerprint (2.1.88 match: EXCLUDED_EXTENSIONS, 1)
 var GENERATED_SUFFIXES = [
   ".lock",
   ".min.js",

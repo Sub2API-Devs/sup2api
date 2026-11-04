@@ -378,7 +378,7 @@ deferInit("chunk-0m7em5b4.js:15201", () => {
 function resumeAgentBackground(options) {
   return resumeAgentExclusive(options, "notification");
 }
-//@ chunk-0m7em5b4.js:15326-15364 placement = INLINE_MARKETPLACE (1)
+//@ chunk-0m7em5b4.js:15326-15364 placement (2.1.88 match: INLINE_MARKETPLACE, 1)
 /**
  * 是否为 inline 市场插件 ID（--plugin-dir 加载）。
  */

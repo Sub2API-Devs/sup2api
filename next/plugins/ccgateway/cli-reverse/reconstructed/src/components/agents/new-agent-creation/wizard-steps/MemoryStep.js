@@ -33,7 +33,7 @@ import { ConfigurableShortcutHint } from "../../../ConfigurableShortcutHint.js";
 import { TextInput } from "../../../TextInput.js";
 import { ErrorText } from "../../../ErrorText.js";
 
-//@ chunk-y6fv30yg.js:11359-14249 callgraph-fingerprint = MemoryStep (0.315)
+//@ chunk-y6fv30yg.js:11359-14249 callgraph-fingerprint (2.1.88 match: MemoryStep, 0.315)
 function MemoryStep(props) {
   let $ = useMemoCache(48);
   let { projectsPromise } = props;

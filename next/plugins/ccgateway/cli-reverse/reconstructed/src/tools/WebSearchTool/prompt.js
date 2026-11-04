@@ -20,7 +20,7 @@ import { getLocalMonthYear } from "../../constants/common.js";
 import { leanPromptOf } from "../../utils/model/promptBundles.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p1bhnnws.js:8976-9018 fingerprint = WEB_SEARCH_TOOL_NAME (0.632)
+//@ chunk-p1bhnnws.js:8976-9018 fingerprint (2.1.88 match: WEB_SEARCH_TOOL_NAME, 0.632)
 /**
  * WebSearch 工具名 "WebSearch" 与特性开关键 allow_web_search。
  */
@@ -113,7 +113,7 @@ function fastSearchSystemHint(tools) {
 function fillMonthYear(text) {
   return text.replace(WEB_SEARCH_PROMPT_PARTS, getLocalMonthYear());
 }
-//@ chunk-22r83hv0.js:3000-4765 callgraph-fingerprint = getWebSearchPrompt (0.203)
+//@ chunk-22r83hv0.js:3000-4765 callgraph-fingerprint (2.1.88 match: getWebSearchPrompt, 0.203)
 /**
  * WebSearch 工具 prompt：lean 模式给短版；否则长版含 Sources 强制要求（CLAUDE_CODE_WEBSEARCH_CITATIONS 开启时换成引用说明）、仅限美国、使用当前月份年份。
  */

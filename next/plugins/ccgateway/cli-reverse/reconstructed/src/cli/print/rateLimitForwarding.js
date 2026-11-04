@@ -42,7 +42,7 @@ import { getReplBridgeHandle, getSdkHostedBridgeHandle } from "../../bridge/repl
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:20551-21087 placement = countToolCallsSince (1)
+//@ chunk-0sfjpx19.js:20551-21087 placement (2.1.88 match: countToolCallsSince, 1)
 function hasCronToolUse(messages, sinceUuid) {
   let targetMessage = messages[sinceUuid];
   if (
@@ -92,7 +92,7 @@ deferInit("chunk-0sfjpx19.js:21087", () => {
     }),
   );
 });
-//@ chunk-0sfjpx19.js:21218-21677 placement = sanitizeFileName (0.752)
+//@ chunk-0sfjpx19.js:21218-21677 placement (2.1.88 match: sanitizeFileName, 0.752)
 function findSingleToolCallPromptIndex(messages, toolName) {
   let readCallIds = countToolCallsSince_2(messages);
   let lastIndex = messages.findLastIndex((message) => {
@@ -133,7 +133,7 @@ function collectReadNotificationsResultIds(messages) {
   }
   return ids;
 }
-//@ chunk-0sfjpx19.js:21828-22030 placement = countToolCallsSince (1)
+//@ chunk-0sfjpx19.js:21828-22030 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_2(messages) {
   let ids = new Set();
   for (let message of messages) {
@@ -177,7 +177,7 @@ function textContentOf(content) {
 `)
     : null;
 }
-//@ chunk-0sfjpx19.js:22546-22644 placement = extractQuotaStatusFromError (0.772)
+//@ chunk-0sfjpx19.js:22546-22644 placement (2.1.88 match: extractQuotaStatusFromError, 0.772)
 /**
  * 被拒状态且重置时间已过。旧版名错配。
  */

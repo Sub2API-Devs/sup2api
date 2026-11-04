@@ -79,7 +79,7 @@ function procFdPath(fd) {
 }
 //@ chunk-t0gq9gyw.js:9686-9701 placement
 var O_NOFOLLOW_ANY = 2097152;
-//@ chunk-t0gq9gyw.js:9701-9808 placement = getReservedShortcuts (0.773)
+//@ chunk-t0gq9gyw.js:9701-9808 placement (2.1.88 match: getReservedShortcuts, 0.773)
 /**
  * macOS 上不跟随链接打开。
  */
@@ -276,7 +276,7 @@ async function statDirNoFollow(dirPath) {
 function isCheckableAbsolutePath(filePath) {
   return isAbsolute(filePath) && !isUntouchableSpelling(filePath) && !isProcFdPath(filePath);
 }
-//@ chunk-t0gq9gyw.js:12246-12393 placement = getFileIdentity (0.794)
+//@ chunk-t0gq9gyw.js:12246-12393 placement (2.1.88 match: getFileIdentity, 0.794)
 /**
  * 最后一个存在路径的身份（dev/ino）。
  */

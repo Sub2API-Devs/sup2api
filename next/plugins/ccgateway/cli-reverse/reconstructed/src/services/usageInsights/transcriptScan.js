@@ -841,7 +841,7 @@ async function aggregateRecentUsage(storageV5) {
   await scanTranscripts(minMtimeMs, (record) => addSkillAttribution(skillTokens, record), storageV5);
   return skillTokens;
 }
-//@ chunk-ya28b76p.js:10312-10772 placement = loadAllSubagentTranscriptsFromDisk (0.769)
+//@ chunk-ya28b76p.js:10312-10772 placement (2.1.88 match: loadAllSubagentTranscriptsFromDisk, 0.769)
 async function loadAllSubagentTranscriptsFromDisk(projectDir) {
   let entries;
   try {

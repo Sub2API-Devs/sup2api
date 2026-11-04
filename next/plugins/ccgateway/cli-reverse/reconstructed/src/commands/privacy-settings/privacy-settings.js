@@ -18,7 +18,7 @@ import { lit } from "../../services/analytics/safeMetadata.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { PrivacySettingsDialog, GroveDialog } from "../../components/grove/Grove.js";
 
-//@ chunk-p3x5wbde.js:13680-13891 fingerprint = FALLBACK_MESSAGE (0.667)
+//@ chunk-p3x5wbde.js:13680-13891 fingerprint (2.1.88 match: FALLBACK_MESSAGE, 0.667)
 /**
  * FALLBACK_MESSAGE：同旧版。
  */
@@ -26,7 +26,7 @@ var FALLBACK_MESSAGE =
   "Review and manage your privacy settings at https://claude.ai/settings/data-privacy-controls";
 var FETCH_FAILED_MESSAGE =
   "Unable to fetch your privacy settings at this time. Check https://claude.ai/settings/data-privacy-controls";
-//@ chunk-p3x5wbde.js:13891-14861 fingerprint = call (0.847)
+//@ chunk-p3x5wbde.js:13891-14861 fingerprint (2.1.88 match: call, 0.847)
 /**
  * /privacy-settings 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

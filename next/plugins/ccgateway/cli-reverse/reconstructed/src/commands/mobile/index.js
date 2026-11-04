@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1732969-1733123 fingerprint = mobile (0.895)
+//@ chunk-e6aww6q8.js:1732969-1733123 fingerprint (2.1.88 match: mobile, 0.895)
 /**
  * /mobile 命令对象（local-jsx）；描述：Show QR code to download the Claude mobile app；别名 ["ios","android"]；实现 chunk-7mtn3rbz.js 的 le。
  */

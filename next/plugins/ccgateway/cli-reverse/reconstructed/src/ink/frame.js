@@ -83,7 +83,7 @@ deferInit("chunk-bzr73sfg.js:253358", () => {
     }
   };
 });
-//@ chunk-bzr73sfg.js:253610-253719 fingerprint = emptyFrame (1)
+//@ chunk-bzr73sfg.js:253610-253719 fingerprint (2.1.88 match: emptyFrame, 1)
 /**
  * 空帧：0×0 屏幕、给定视口、光标在原点可见。
  */

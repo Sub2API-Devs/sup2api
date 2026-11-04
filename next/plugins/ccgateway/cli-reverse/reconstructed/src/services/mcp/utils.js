@@ -52,7 +52,7 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1wpnxx5r.js:15976-16167 fingerprint = getLoggingSafeMcpBaseUrl (0.636)
+//@ chunk-1wpnxx5r.js:15976-16167 fingerprint (2.1.88 match: getLoggingSafeMcpBaseUrl, 0.636)
 /**
  * getLoggingSafeMcpBaseUrl：去掉 query、用户名密码、hash 与末尾斜杠的 URL，用于遥测。
  */
@@ -69,14 +69,14 @@ function getLoggingSafeMcpBaseUrl(config) {
     return;
   }
 }
-//@ chunk-qaeygs3y.js:949-1013 fingerprint = isMcpTool (1)
+//@ chunk-qaeygs3y.js:949-1013 fingerprint (2.1.88 match: isMcpTool, 1)
 /**
  * isMcpTool：名字以 mcp__ 开头或 isMcp === true。
  */
 function isMcpTool(tool) {
   return tool.name?.startsWith("mcp__") || tool.isMcp === true;
 }
-//@ chunk-qaeygs3y.js:1013-1118 placement = findMcpServerConnection (0.857)
+//@ chunk-qaeygs3y.js:1013-1118 placement (2.1.88 match: findMcpServerConnection, 0.857)
 /**
  * 取工具所属 MCP 服务器名：mcpInfo.serverName，或从 mcp__<server>__<tool> 名字中解析。
  */
@@ -152,7 +152,7 @@ function isRetryableConnectionFailure(client) {
 function isRetriableOrForbidden(error) {
   return isRetryableRemoteFailure(error) || isProxyForbiddenFailure(error);
 }
-//@ chunk-e6aww6q8.js:3868647-3868733 placement = getMcpPrefix (1)
+//@ chunk-e6aww6q8.js:3868647-3868733 placement (2.1.88 match: getMcpPrefix, 1)
 /**
  * filterToolsByServer：按 mcp__server__ 前缀过滤工具。
  */
@@ -160,7 +160,7 @@ function filterToolsByServer(fullName, serverName) {
   let prefix = `mcp__${normalizeNameForMCP(serverName)}__`;
   return fullName.filter((tool) => tool.name?.startsWith(prefix));
 }
-//@ chunk-e6aww6q8.js:3868733-3868844 placement = getMcpPrefix (1)
+//@ chunk-e6aww6q8.js:3868733-3868844 placement (2.1.88 match: getMcpPrefix, 1)
 /**
  * commandBelongsToServer：命令名以 mcp__server__ 或 server: 开头。
  */
@@ -170,7 +170,7 @@ function commandBelongsToServer(command, serverName) {
   if (!name) return false;
   return name.startsWith(`mcp__${normalized}__`) || name.startsWith(`${normalized}:`);
 }
-//@ chunk-e6aww6q8.js:3868844-3868936 fingerprint = filterMcpPromptsByServer (1)
+//@ chunk-e6aww6q8.js:3868844-3868936 fingerprint (2.1.88 match: filterMcpPromptsByServer, 1)
 /**
  * 从命令列表中挑出属于某服务器、但不是 MCP 提示词命令的条目（即 MCP skills 等），用于刷新时保留/替换。
  */
@@ -218,7 +218,7 @@ function refetchReasonTelemetry(cause) {
       ? lit_2(BEFORE_HANDLER)
       : lit_2("notification");
 }
-//@ chunk-e6aww6q8.js:3869170-3869276 layout = isMcpServerFromProjectOrLocalSettings (0.81)
+//@ chunk-e6aww6q8.js:3869170-3869276 layout (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 0.81)
 /**
  * 判断 project/local 作用域的服务器是否声明在另一个工作区根（declaredIn 与当前根不同）。
  */
@@ -229,7 +229,7 @@ function isDeclaredUnderOtherWorkspaceRoot(config, workspaceRoot) {
     config.declaredIn !== workspaceRoot
   );
 }
-//@ chunk-e6aww6q8.js:3869276-3869649 fingerprint = excludeStalePluginClients (0.728)
+//@ chunk-e6aww6q8.js:3869276-3869649 fingerprint (2.1.88 match: excludeStalePluginClients, 0.728)
 /**
  * removeMcpClientsWhere：按谓词剔除客户端，并同步去掉其工具、命令、资源与资源模板，返回剩余状态与 stale 列表。
  */
@@ -288,7 +288,7 @@ function excludeStalePluginClients(mcp, configs, workspaceRoot) {
     return false;
   });
 }
-//@ chunk-e6aww6q8.js:3870114-3870484 fingerprint = describeMcpConfigFilePath (0.801)
+//@ chunk-e6aww6q8.js:3870114-3870484 fingerprint (2.1.88 match: describeMcpConfigFilePath, 0.801)
 /**
  * describeMcpConfigFilePath：作用域对应的配置位置描述（~/.claude.json、<项目>/.mcp.json、managed-mcp.json、managedMcpServers、claude.ai、agent frontmatter 等）。
  */
@@ -314,7 +314,7 @@ function describeMcpConfigFilePath(scope) {
       return scope;
   }
 }
-//@ chunk-e6aww6q8.js:3870484-3871018 fingerprint = getScopeLabel (0.849)
+//@ chunk-e6aww6q8.js:3870484-3871018 fingerprint (2.1.88 match: getScopeLabel, 0.849)
 /**
  * getScopeLabel：作用域的人类可读标签（Local/Project/User/Dynamic/Enterprise/Managed/claude.ai/Agent config）。
  */
@@ -340,7 +340,7 @@ function getScopeLabel(scope) {
       return scope;
   }
 }
-//@ chunk-e6aww6q8.js:3871018-3871173 fingerprint = ensureConfigScope (1)
+//@ chunk-e6aww6q8.js:3871018-3871173 fingerprint (2.1.88 match: ensureConfigScope, 1)
 /**
  * ensureConfigScope：校验 --scope 参数，缺省 local。
  */
@@ -350,7 +350,7 @@ function ensureConfigScope(scope) {
     throw Error(`Invalid scope: ${scope}. Must be one of: ${ConfigScopeSchema().options.join(", ")}`);
   return scope;
 }
-//@ chunk-e6aww6q8.js:3871173-3871393 fingerprint = ensureTransport (0.75)
+//@ chunk-e6aww6q8.js:3871173-3871393 fingerprint (2.1.88 match: ensureTransport, 0.75)
 /**
  * ensureTransport：校验 --transport，缺省 stdio，streamable-http 归为 http，只接受 stdio/sse/http。
  */
@@ -361,7 +361,7 @@ function ensureTransport(type) {
     throw Error(`Invalid transport type: ${type}. Must be one of: stdio, sse, http (or streamable-http)`);
   return type;
 }
-//@ chunk-e6aww6q8.js:3871393-3871695 fingerprint = parseHeaders (1)
+//@ chunk-e6aww6q8.js:3871393-3871695 fingerprint (2.1.88 match: parseHeaders, 1)
 /**
  * parseHeaders：把 "Name: value" 字符串数组解析成头对象，格式不对抛错。
  */
@@ -411,7 +411,7 @@ function isProjectMcpServerApprovedInSettings(serverName) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:3872056-3872307 fingerprint = getProjectMcpServerStatus (0.919)
+//@ chunk-e6aww6q8.js:3872056-3872307 fingerprint (2.1.88 match: getProjectMcpServerStatus, 0.919)
 /**
  * getProjectMcpServerStatus：.mcp.json 服务器审批状态 approved/rejected/pending；disabledMcpjsonServers 优先拒绝，未信任工作区时只看设置。
  */
@@ -428,7 +428,7 @@ function getProjectMcpServerStatus(serverName) {
     return "approved";
   return "pending";
 }
-//@ chunk-e6aww6q8.js:3872307-3872428 layout = getProjectMcpServerStatus (0.751)
+//@ chunk-e6aww6q8.js:3872307-3872428 layout (2.1.88 match: getProjectMcpServerStatus, 0.751)
 function getProjectMcpServerStatusFromSettings(serverName) {
   if (getSettings_DEPRECATED()?.disabledMcpjsonServers?.some((name) => isSameMcpServerName(name, serverName)))
     return "rejected";
@@ -474,7 +474,7 @@ function resolveProjectMcpServerApproval(serverName) {
     status: "pending",
   };
 }
-//@ chunk-e6aww6q8.js:3872749-3872931 fingerprint = getMcpServerScopeFromToolName (1)
+//@ chunk-e6aww6q8.js:3872749-3872931 fingerprint (2.1.88 match: getMcpServerScopeFromToolName, 1)
 /**
  * getMcpServerScopeFromToolName：从 mcp__server__tool 名反查服务器作用域，claude_ai_ 前缀无配置时视为 claudeai。
  */
@@ -496,18 +496,18 @@ function getMcpToolScope(tool) {
   if (!isMcpTool(tool)) return null;
   return tool.mcpInfo?.scope ?? getMcpServerScopeFromToolName(tool.name);
 }
-//@ chunk-e6aww6q8.js:3873006-3873063 layout = getServerCommandArray (1)
+//@ chunk-e6aww6q8.js:3873006-3873063 layout (2.1.88 match: getServerCommandArray, 1)
 /**
  * 判断是否 stdio 配置（type 为 stdio 或未写）。
  */
 function isStdioConfig(config) {
   return config.type === "stdio" || config.type === undefined;
 }
-//@ chunk-e6aww6q8.js:3873063-3873101 fingerprint = isSSEConfig (1)
+//@ chunk-e6aww6q8.js:3873063-3873101 fingerprint (2.1.88 match: isSSEConfig, 1)
 function isSSEConfig(config) {
   return config.type === "sse";
 }
-//@ chunk-e6aww6q8.js:3873101-3873140 layout = isHTTPConfig (1)
+//@ chunk-e6aww6q8.js:3873101-3873140 layout (2.1.88 match: isHTTPConfig, 1)
 function isHTTPConfig(config) {
   return config.type === "http";
 }
@@ -515,7 +515,7 @@ function isHTTPConfig(config) {
 function isWebSocketConfig(config) {
   return config.type === "ws";
 }
-//@ chunk-e6aww6q8.js:3873356-3874164 fingerprint = extractAgentMcpServers (1)
+//@ chunk-e6aww6q8.js:3873356-3874164 fingerprint (2.1.88 match: extractAgentMcpServers, 1)
 /**
  * extractAgentMcpServers：从代理定义的 mcpServers 中收集内联服务器配置，按名合并来源代理并给出 transport/needsAuth 摘要。
  */
@@ -612,7 +612,7 @@ deferInit("chunk-bk3xs38h.js:338", () => {
   ANTHROPIC_HOSTASKSPERUPLOADEDFILE = "anthropic/hostAsksPerUploadedFile";
   NON_DESCRIPTION_FIELDS = new Set(["description", "activeForm"]);
 });
-//@ chunk-bk3xs38h.js:442-926 callgraph-fingerprint = filterToolsByServer (0.172)
+//@ chunk-bk3xs38h.js:442-926 callgraph-fingerprint (2.1.88 match: filterToolsByServer, 0.172)
 /**
  * buildMcpToolPermissionOverrides：为扩展提供的 MCP 工具生成 checkPermissions（ask，建议会话级 allow 规则 mcp__server__tool）与 toAutoClassifierInput。
  */
@@ -669,7 +669,7 @@ function buildMcpToolPermissionOverrides(
  */
 var isNonReservedStdioConfig = (serverName, config) =>
   isStdioConfig(config) && !isReservedStdioServer(serverName, config);
-//@ chunk-wy9dbk5f.js:36800-36875 fingerprint = filterResourcesByServer (0.693)
+//@ chunk-wy9dbk5f.js:36800-36875 fingerprint (2.1.88 match: filterResourcesByServer, 0.693)
 var SetMcpServerEnabledInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-wy9dbk5f.js:36800", () => {
   SetMcpServerEnabledInputSchema = DoctorLazy(() =>

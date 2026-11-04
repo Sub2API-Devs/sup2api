@@ -238,7 +238,7 @@ async function clearAuthRelatedCaches(
   }
   resetCurrentLimits();
 }
-//@ chunk-zbtr7f5k.js:3736-5302 fingerprint = installOAuthTokens (0.505)
+//@ chunk-zbtr7f5k.js:3736-5302 fingerprint (2.1.88 match: installOAuthTokens, 0.505)
 /**
  * installOAuthTokens：保存 OAuth 令牌并更新账户/组织信息，区分同账号刷新与切换账号。
  */
@@ -366,7 +366,7 @@ function warnOrgCheckDeferred(message) {
 The sign-in was saved but could not be checked against your organization yet; Claude Code checks it again when it next starts.
 `);
 }
-//@ chunk-84jf153s.js:15691-23088 fingerprint = authLogin (0.367)
+//@ chunk-84jf153s.js:15691-23088 fingerprint (2.1.88 match: authLogin, 0.367)
 /**
  * claude auth login：--console/--claudeai/--sso/--email/--gateway-json 互斥检查，执行 OAuth 登录（或云网关登录），安装令牌、校验组织策略。
  */
@@ -826,7 +826,7 @@ function getConfigHomeIfNotOverridden() {
   }
   return getProjectsDir();
 }
-//@ chunk-84jf153s.js:23601-25349 fingerprint = authStatus (0.719)
+//@ chunk-84jf153s.js:23601-25349 fingerprint (2.1.88 match: authStatus, 0.719)
 /**
  * claude auth status：汇总令牌来源、API key 来源、提供方与账户信息，--json（默认）或 --text 输出。
  */

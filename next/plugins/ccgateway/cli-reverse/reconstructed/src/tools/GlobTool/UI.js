@@ -17,7 +17,7 @@ import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 import { FallbackToolUseErrorMessage } from "../../components/FallbackToolUseErrorMessage.js";
 
-//@ chunk-e6aww6q8.js:1439832-1439898 callgraph-fingerprint = getToolUseSummary (1)
+//@ chunk-e6aww6q8.js:1439832-1439898 callgraph-fingerprint (2.1.88 match: getToolUseSummary, 1)
 /**
  * Glob/Grep 工具使用摘要：截短后的 pattern。
  */
@@ -25,7 +25,7 @@ function getToolUseSummary_4(input) {
   if (!input?.pattern) return null;
   return truncate(input.pattern, MAX_DESCRIPTION_CHARS);
 }
-//@ chunk-ah34pb7m.js:18026-18368 callgraph-witnessed = renderToolUseErrorMessage (0.42)
+//@ chunk-ah34pb7m.js:18026-18368 callgraph-witnessed (2.1.88 match: renderToolUseErrorMessage, 0.42)
 /**
  * Glob/Grep 错误渲染：非 verbose 时显示 "File not found" 或 "Error searching files"。
  */

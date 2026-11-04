@@ -65,7 +65,7 @@ function findCatalogRowIdByWireId(wireId, { provider, generation, wireIdOf }) {
   }
   return publishedWireIds.rowIdByWireId.get(normalizeModelId(wireId));
 }
-//@ chunk-aepeg2w5.js:219085-219259 placement = isFoundationModel (1)
+//@ chunk-aepeg2w5.js:219085-219259 placement (2.1.88 match: isFoundationModel, 1)
 /**
  * 去掉合法区域前缀得到 "anthropic.<…>"，非 Bedrock 形式返回 undefined。旧版名 isFoundationModel_2 为错配。
  */

@@ -9,13 +9,13 @@
  * attribution: fingerprint 3
  */
 
-//@ chunk-ag5x7vhf.js:149008-149162 fingerprint = useTaskListWatcher (0.386)
+//@ chunk-ag5x7vhf.js:149008-149162 fingerprint (2.1.88 match: useTaskListWatcher, 0.386)
 function useTaskListWatcher({ enabled, isLoading, hasToolsInProgress, hasPendingBackgroundWork }) {
   if (!enabled) return null;
   if (isLoading || hasToolsInProgress || hasPendingBackgroundWork) return "indeterminate";
   return "completed";
 }
-//@ chunk-8xs34hez.js:5789-5988 fingerprint = findAvailableTask (1)
+//@ chunk-8xs34hez.js:5789-5988 fingerprint (2.1.88 match: findAvailableTask, 1)
 function findAvailableTask(tasks) {
   let unresolvedTaskIds = new Set(tasks.filter((t) => t.status !== "completed").map((t) => t.id));
   return tasks.find((task) => {
@@ -24,7 +24,7 @@ function findAvailableTask(tasks) {
     return task.blockedBy.every((id) => !unresolvedTaskIds.has(id));
   });
 }
-//@ chunk-8xs34hez.js:5988-6128 fingerprint = formatTaskAsPrompt (1)
+//@ chunk-8xs34hez.js:5988-6128 fingerprint (2.1.88 match: formatTaskAsPrompt, 1)
 function formatTaskAsPrompt(task) {
   let prompt = `Complete all open tasks. Start with task #${task.id}: 
 

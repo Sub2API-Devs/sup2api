@@ -91,7 +91,7 @@ var STORE_ERROR_CODES = new Set([
   "Failed",
   "ScopeNotFound",
 ]);
-//@ chunk-2tgyb8s4.js:1133-1239 placement = isConnectionError (1)
+//@ chunk-2tgyb8s4.js:1133-1239 placement (2.1.88 match: isConnectionError, 1)
 /**
  * 错误是否带已知的存储错误码。
  */

@@ -68,14 +68,14 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureSad } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a76knw89.js:8006-8070 placement = stripCacheControl (1)
+//@ chunk-a76knw89.js:8006-8070 placement (2.1.88 match: stripCacheControl, 1)
 /**
  * 取对象上的 cache_control（没有为 undefined）。旧版名 stripCacheControl 为错配。
  */
 function getCacheControl(items) {
   return "cache_control" in items ? items.cache_control : undefined;
 }
-//@ chunk-a76knw89.js:8070-8157 placement = stripCacheControl (1)
+//@ chunk-a76knw89.js:8070-8157 placement (2.1.88 match: stripCacheControl, 1)
 /**
  * 去掉对象的 cache_control 字段。
  */
@@ -201,7 +201,7 @@ function buildDeclaredToolSet(tools, tools_2, recordedOnly) {
     names: order,
   });
 }
-//@ chunk-a76knw89.js:45338-45405 placement = buildDiffableContent (0.675)
+//@ chunk-a76knw89.js:45338-45405 placement (2.1.88 match: buildDiffableContent, 0.675)
 /**
  * 工具定义比对时关心的键（name/description/input_schema/type 及附加键）。旧版名 buildDiffableContent 为错配；使用方在 chunk-a76knw89 的记录工具比较里。
  */
@@ -617,7 +617,7 @@ function isPinnedUpfrontTool(name, server, baseTools) {
       (pinnedName === name || (found !== undefined && toolMatchesName(found, pinnedName))),
   );
 }
-//@ chunk-a76knw89.js:50698-50803 placement = getToolNameForPermissionCheck (1)
+//@ chunk-a76knw89.js:50698-50803 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(toolName, server) {
   let mcpPrefix = getMcpPrefix(server);
   return {
@@ -691,7 +691,7 @@ function isLateToolAdditionsEnabled(declaredSet, { pool, keptDeferred, keepMcp }
     );
   });
 }
-//@ chunk-a76knw89.js:51695-51767 placement = mergeClients (1)
+//@ chunk-a76knw89.js:51695-51767 placement (2.1.88 match: mergeClients, 1)
 function mergeClients_2(schema) {
   return "name" in schema && typeof schema.name === "string" ? schema.name : undefined;
 }

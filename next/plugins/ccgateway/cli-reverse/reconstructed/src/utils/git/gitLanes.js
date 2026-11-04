@@ -527,7 +527,7 @@ async function runGitInLane(
     stderrOfGitAlone: retryResult.stderr,
   };
 }
-//@ chunk-6vnxsn99.js:14477-14925 placement = readHeadAndTail (0.802)
+//@ chunk-6vnxsn99.js:14477-14925 placement (2.1.88 match: readHeadAndTail, 0.802)
 /**
  * 危险 git 配置键正则（http/url/remote 代理与凭证、ssh 命令、bundle、gpg 等），用于拒绝不安全配置。
  */

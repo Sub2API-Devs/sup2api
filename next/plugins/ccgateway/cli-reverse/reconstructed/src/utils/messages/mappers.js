@@ -47,7 +47,7 @@ import { EXITPLANMODE_2 } from "../../tools/ExitPlanModeTool/constants.js";
 import { isDisklessSession, notePlanFileForgotten, getPlanFilePath, getPlan } from "../plans.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w5ndchqs.js:33580-33674 fingerprint = toSDKRateLimitInfo (0.578)
+//@ chunk-w5ndchqs.js:33580-33674 fingerprint (2.1.88 match: toSDKRateLimitInfo, 0.578)
 /**
  * 去掉 overageStatus/overageResetsAt/overageDisabledReason 后的限额信息（SDK rate_limit_info）。
  */
@@ -267,7 +267,7 @@ function isHttpStatus(apiErrorStatus) {
     apiErrorStatus <= 599
   );
 }
-//@ chunk-0h4e7gnq.js:34329-36733 fingerprint = toInternalMessages (0.356)
+//@ chunk-0h4e7gnq.js:34329-36733 fingerprint (2.1.88 match: toInternalMessages, 0.356)
 /**
  * SDK 消息数组转内部消息：assistant（含 local_command_source 转 local_command 系统消息）、user、系统事件（compact_boundary、model_fallback 等）还原。
  */
@@ -459,11 +459,11 @@ function sanitizeApiErrorMessage(message) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:36984-37073 placement = selectableUserMessagesFilter (1)
+//@ chunk-0h4e7gnq.js:36984-37073 placement (2.1.88 match: selectableUserMessagesFilter, 1)
 function selectableUserMessagesFilter(message) {
   return message.isMeta || message.isVisibleInTranscriptOnly || message.isCompactSummary || undefined;
 }
-//@ chunk-0h4e7gnq.js:37073-37997 fingerprint = toSDKCompactMetadata (0.528)
+//@ chunk-0h4e7gnq.js:37073-37997 fingerprint (2.1.88 match: toSDKCompactMetadata, 0.528)
 /**
  * 内部 compactMetadata（camelCase）转 SDK compact_metadata（snake_case），含 preserved_segment/preserved_messages。
  */
@@ -514,7 +514,7 @@ function toSDKCompactMetadata(meta) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:37997-38969 callgraph-witnessed = fromSDKCompactMetadata (0.528)
+//@ chunk-0h4e7gnq.js:37997-38969 callgraph-witnessed (2.1.88 match: fromSDKCompactMetadata, 0.528)
 /**
  * SDK compact_metadata 转内部 compactMetadata。
  */
@@ -688,7 +688,7 @@ function userMessageToSdkReplay(message, content) {
     isSynthetic: selectableUserMessagesFilter(message),
   };
 }
-//@ chunk-0h4e7gnq.js:43479-45297 fingerprint = toSDKMessages (0.431)
+//@ chunk-0h4e7gnq.js:43479-45297 fingerprint (2.1.88 match: toSDKMessages, 0.431)
 /**
  * 内部消息转 SDK 消息：assistant（带 session_id、request_id、tool_use_meta）、user（按来源分类）、system 子类型、附件等。
  */
@@ -850,7 +850,7 @@ function toSDKToolHostResultMessage(attachment, uuid, sessionId) {
     session_id: sessionId,
   };
 }
-//@ chunk-0h4e7gnq.js:45626-46448 callgraph-witnessed = localCommandOutputToSDKAssistantMessage (0.219)
+//@ chunk-0h4e7gnq.js:45626-46448 callgraph-witnessed (2.1.88 match: localCommandOutputToSDKAssistantMessage, 0.219)
 /**
  * 本地命令输出（local-command-stdout/stderr 标签）转 SDK assistant 文本消息。
  */
@@ -943,7 +943,7 @@ function toSDKModelConsentFallbackMessage(message) {
     content: message.content,
   };
 }
-//@ chunk-0h4e7gnq.js:49182-49444 fingerprint = normalizeAssistantMessageForSDK (1)
+//@ chunk-0h4e7gnq.js:49182-49444 fingerprint (2.1.88 match: normalizeAssistantMessageForSDK, 1)
 /**
  * 给 SDK 的 assistant message：去内部块，ExitPlanMode 的 tool_use 输入补上计划文本。
  */

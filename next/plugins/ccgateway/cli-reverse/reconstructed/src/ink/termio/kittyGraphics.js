@@ -69,7 +69,7 @@ function assertMediumName(name) {
       "kitty graphics: a file path or shared-memory name must be a non-empty string of at most 3072 bytes, no NUL",
     );
 }
-//@ chunk-m1vyn8g1.js:4222-4274 placement = base64URLEncode (1)
+//@ chunk-m1vyn8g1.js:4222-4274 placement (2.1.88 match: base64URLEncode, 1)
 var base64URLEncode = (buffer) => Buffer.from(buffer, "utf8").toString("base64");
 //@ chunk-m1vyn8g1.js:4274-4417 placement
 function imageIdColorSgr(imageId) {

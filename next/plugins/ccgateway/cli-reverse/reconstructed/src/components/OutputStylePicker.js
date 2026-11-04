@@ -39,7 +39,7 @@ init_react_production();
 function getConcreteOutputStyle() {
   return mapConfigsToOptions(OUTPUT_STYLE_CONFIG);
 }
-//@ chunk-9h8dr0qb.js:7597-7754 fingerprint = DEFAULT_OUTPUT_STYLE_DESCRIPTION (0.529)
+//@ chunk-9h8dr0qb.js:7597-7754 fingerprint (2.1.88 match: DEFAULT_OUTPUT_STYLE_DESCRIPTION, 0.529)
 var DEFAULT = "Default";
 var CONCISE_STYLE_DESCRIPTION = "Claude completes coding tasks efficiently and provides concise responses";
 var OUTPUT_STYLE_EFFECT_NOTE = "This changes how Claude Code communicates with you";
@@ -52,7 +52,7 @@ function mapConfigsToOptions(styles) {
     description: config?.description ?? CONCISE_STYLE_DESCRIPTION,
   }));
 }
-//@ chunk-9h8dr0qb.js:7869-8816 fingerprint = OutputStylePicker (0.601)
+//@ chunk-9h8dr0qb.js:7869-8816 fingerprint (2.1.88 match: OutputStylePicker, 0.601)
 function OutputStylePicker(props) {
   let $ = useMemoCache(15);
   let { initialStyle, onComplete, onCancel, isStandaloneCommand, visibleCount } = props;

@@ -38,7 +38,7 @@ init_react_production();
 function stripLineBreaks(text) {
   return text.replace(/[\r\n]/g, "");
 }
-//@ chunk-j1c0t4gs.js:939-1087 fingerprint = REMEMBER_DIRECTORY_OPTIONS (1)
+//@ chunk-j1c0t4gs.js:939-1087 fingerprint (2.1.88 match: REMEMBER_DIRECTORY_OPTIONS, 1)
 var REMEMBER_DIRECTORY_OPTIONS = [
   {
     value: "yes-session",
@@ -67,7 +67,7 @@ function WorkspaceDirectoryHint() {
   } else t0 = $[0];
   return t0;
 }
-//@ chunk-j1c0t4gs.js:1287-1555 fingerprint = DirectoryDisplay (0.521)
+//@ chunk-j1c0t4gs.js:1287-1555 fingerprint (2.1.88 match: DirectoryDisplay, 0.521)
 function DirectoryDisplay(props) {
   let $ = useMemoCache(5);
   let { path } = props;
@@ -97,7 +97,7 @@ function DirectoryDisplay(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-j1c0t4gs.js:1555-2553 fingerprint = DirectoryInput (0.739)
+//@ chunk-j1c0t4gs.js:1555-2553 fingerprint (2.1.88 match: DirectoryInput, 0.739)
 function DirectoryInput(props) {
   let $ = useMemoCache(16);
   let {
@@ -188,7 +188,7 @@ function DirectoryInput(props) {
   } else t5 = $[15];
   return t5;
 }
-//@ chunk-j1c0t4gs.js:2553-5100 fingerprint = AddWorkspaceDirectory (0.726)
+//@ chunk-j1c0t4gs.js:2553-5100 fingerprint (2.1.88 match: AddWorkspaceDirectory, 0.726)
 function AddWorkspaceDirectory(props) {
   let $ = useMemoCache(38);
   let { onAddDirectory, onAlreadyAccessible, onCancel, permissionContext, directoryPath } = props;

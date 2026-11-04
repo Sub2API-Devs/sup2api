@@ -91,7 +91,7 @@ import { collectProjectMcpServerNames } from "../../services/mcpServerApproval.j
 import { formatMcpServerLabel } from "../../utils/plugins/lspPluginIntegration.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:71956-72082 fingerprint = checkMcpServerHealth (0.518)
+//@ chunk-dcmhvw5a.js:71956-72082 fingerprint (2.1.88 match: checkMcpServerHealth, 0.518)
 /**
  * checkMcpServerHealth（实为缓存行可被替换判定）：cached 行在已有 connected/disabled/needs-auth 时不覆盖。
  */
@@ -192,7 +192,7 @@ async function checkMcpServerHealth(serverName, config, options) {
     };
   }
 }
-//@ chunk-h2rjy0z4.js:21290-23358 fingerprint = mcpRemoveHandler (0.333)
+//@ chunk-h2rjy0z4.js:21290-23358 fingerprint (2.1.88 match: mcpRemoveHandler, 0.333)
 /**
  * claude mcp remove：按作用域删除服务器并清理其安全存储里的认证缓存。
  */
@@ -454,7 +454,7 @@ deferInit("chunk-h2rjy0z4.js:24848", () => {
   REJECTED_STATUS = `${figures_default.cross} Rejected (see disabledMcpjsonServers in settings)`;
   DISABLED_FOR_PROJECT_STATUS = "\u2298 Disabled for this project (re-enable via /mcp)";
 });
-//@ chunk-h2rjy0z4.js:25033-25903 fingerprint = mcpListHandler (0.423)
+//@ chunk-h2rjy0z4.js:25033-25903 fingerprint (2.1.88 match: mcpListHandler, 0.423)
 /**
  * claude mcp list：列出全部 MCP 服务器并逐个做健康检查。
  */
@@ -536,7 +536,7 @@ async function mcpListHandler(root, storage, credentials) {
   await root.waitUntilExit();
   await gracefulShutdown(0);
 }
-//@ chunk-h2rjy0z4.js:25903-28016 fingerprint = mcpGetHandler (0.567)
+//@ chunk-h2rjy0z4.js:25903-28016 fingerprint (2.1.88 match: mcpGetHandler, 0.567)
 /**
  * claude mcp get <name>：单个服务器的配置、作用域与连接状态（密钥脱敏）。
  */
@@ -658,7 +658,7 @@ async function mcpGetHandler(root, name, storage, credentials) {
   );
   await gracefulShutdown(0);
 }
-//@ chunk-h2rjy0z4.js:28016-29211 fingerprint = mcpAddJsonHandler (0.498)
+//@ chunk-h2rjy0z4.js:28016-29211 fingerprint (2.1.88 match: mcpAddJsonHandler, 0.498)
 /**
  * claude mcp add-json：从 JSON 添加服务器（可带 client secret）。
  */
@@ -730,7 +730,7 @@ async function mcpAddJsonHandler(root, name, json, options, storage) {
     }),
   );
 }
-//@ chunk-h2rjy0z4.js:29211-29853 fingerprint = mcpAddFromDesktopHandler (0.737)
+//@ chunk-h2rjy0z4.js:29211-29853 fingerprint (2.1.88 match: mcpAddFromDesktopHandler, 0.737)
 /**
  * claude mcp add-from-claude-desktop：从 Claude Desktop 配置导入服务器。
  */
@@ -773,7 +773,7 @@ async function mcpAddFromDesktopHandler(options, storageV5) {
     return cliErrorAfterAnalyticsFlush(errorMessage(error));
   }
 }
-//@ chunk-h2rjy0z4.js:29853-32744 callgraph-fingerprint = mcpResetChoicesHandler (0.217)
+//@ chunk-h2rjy0z4.js:29853-32744 callgraph-fingerprint (2.1.88 match: mcpResetChoicesHandler, 0.217)
 /**
  * claude mcp reset-project-choices：重置 .mcp.json 项目服务器的批准/拒绝记录。
  */
@@ -910,7 +910,7 @@ function describeServerList(names, singleVerb, pluralVerb) {
     ? `1 server (${names[0]}) ${singleVerb}`
     : `${names.length} servers (${names.join(", ")}) ${pluralVerb}`;
 }
-//@ chunk-h2rjy0z4.js:32854-33032 affinity = expandEnvVars (0.913)
+//@ chunk-h2rjy0z4.js:32854-33032 affinity (2.1.88 match: expandEnvVars, 0.913)
 function isRemoteTransport(config) {
   switch (config.type) {
     case "sse":

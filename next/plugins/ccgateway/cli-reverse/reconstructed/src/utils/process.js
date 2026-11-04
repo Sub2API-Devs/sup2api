@@ -26,7 +26,7 @@ deferInit("chunk-j3nx1xyn.js:1084", () => {
   STREAM_GONE_CODES = new Set(["EPIPE", "EIO", "ENXIO", "EBADF"]);
   _ = new Set(["EISDIR", "ENOTCONN", "ECONNRESET"]);
 });
-//@ chunk-j3nx1xyn.js:1179-1325 placement = isConnectionError (1)
+//@ chunk-j3nx1xyn.js:1179-1325 placement (2.1.88 match: isConnectionError, 1)
 /**
  * 错误码是否属于可重试的瞬时网络/文件错误。
  */
@@ -37,7 +37,7 @@ function isStdinUnusableError(err) {
       : undefined;
   return code !== undefined && (_.has(code) || STREAM_GONE_CODES.has(code));
 }
-//@ chunk-j3nx1xyn.js:1325-1439 placement = registerProcessOutputErrorHandlers (0.639)
+//@ chunk-j3nx1xyn.js:1325-1439 placement (2.1.88 match: registerProcessOutputErrorHandlers, 0.639)
 /**
  * stdout/stderr 管道断开（EPIPE 等）时销毁流并回调，不让进程崩溃。
  */
@@ -318,7 +318,7 @@ function exitWithError(message) {
   if (!isDisklessProcess()) setBgExitCause("exit_with_error");
   process.exit(1);
 }
-//@ chunk-j3nx1xyn.js:5072-5412 placement = peekForStdinData (0.714)
+//@ chunk-j3nx1xyn.js:5072-5412 placement (2.1.88 match: peekForStdinData, 0.714)
 /**
  * peekForStdinData：在超时内探测 stdin 是否有数据或已结束。
  */
@@ -373,7 +373,7 @@ async function* iterateStreamUntilClose(stdin) {
     iterator.return?.().catch(() => {});
   }
 }
-//@ chunk-fy5kn7m3.js:27151-27228 placement = NEWLINE (1)
+//@ chunk-fy5kn7m3.js:27151-27228 placement (2.1.88 match: NEWLINE, 1)
 async function writeStdStreamOrThrow(streamName, data) {
   if (!(await writeStream(process[streamName], data)) && streamName === "stdout")
     throw new GhApiResponseError();
@@ -391,7 +391,7 @@ function writeStream(stream, data) {
     stream.off("close", fail);
   });
 }
-//@ chunk-ksvdmrg0.js:32581-32635 fingerprint = writeOut (1)
+//@ chunk-ksvdmrg0.js:32581-32635 fingerprint (2.1.88 match: writeOut, 1)
 function writeOut_2(stream, data) {
   if (stream.destroyed) return;
   stream.end(
@@ -400,7 +400,7 @@ function writeOut_2(stream, data) {
 `,
   );
 }
-//@ chunk-24t3dkzb.js:4009-4238 fingerprint = handleEPIPE (0.407)
+//@ chunk-24t3dkzb.js:4009-4238 fingerprint (2.1.88 match: handleEPIPE, 0.407)
 /**
  * 写 stdout，容忍死管道（EIO/EPIPE）时标记 stdoutDead。
  */

@@ -14,7 +14,7 @@ import { renderToolUseMessageFor } from "../messages/toolUseRenderers.js";
 import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-18hwfzwa.js:686691-687040 fingerprint = renderToolActivity (0.567)
+//@ chunk-18hwfzwa.js:686691-687040 fingerprint (2.1.88 match: renderToolActivity, 0.567)
 function renderToolActivity(activity, tools, theme, activeAgents) {
   let tool = findToolByName(tools, activity.toolName);
   if (!tool) return activity.toolName;

@@ -15,7 +15,7 @@ import { logError } from "../log.js";
 import { count } from "../collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:313222-313344 placement = extractErrorTypeFromData (1)
+//@ chunk-e6aww6q8.js:313222-313344 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function listBlockTypes(content) {
   return Array.isArray(content)
     ? content.map((block) =>

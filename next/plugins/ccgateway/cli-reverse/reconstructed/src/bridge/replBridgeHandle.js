@@ -411,7 +411,7 @@ function ownBridgePeerAddress() {
   let selfBridgeCompatId = getSelfBridgeCompatId();
   return selfBridgeCompatId ? bridgeAddressFromToken(selfBridgeCompatId) : undefined;
 }
-//@ chunk-5ktj1vf9.js:6824-6905 placement = getSelfBridgeCompatId (0.637)
+//@ chunk-5ktj1vf9.js:6824-6905 placement (2.1.88 match: getSelfBridgeCompatId, 0.637)
 /**
  * 若当前有非 outbound-only 的桥，返回其桥会话 ID 的 session_* 兼容形式，否则 undefined。
  */

@@ -19,7 +19,7 @@ import {
 } from "./fsOperations.js";
 import { detectLineEndings } from "./file.js";
 
-//@ chunk-7r5y3c3p.js:310-431 fingerprint = readFileSyncWithMetadata (0.755)
+//@ chunk-7r5y3c3p.js:310-431 fingerprint (2.1.88 match: readFileSyncWithMetadata, 0.755)
 /**
  * 读取文件时若经过符号链接则记调试日志。
  */
@@ -28,7 +28,7 @@ function readFileSyncWithMetadata(fsImplementation, filePath) {
   let { resolvedPath, isSymlink } = safeResolvePath(fsImplementation, filePath);
   if (isSymlink) logForDebugging(`Reading through symlink: ${filePath} -> ${resolvedPath}`);
 }
-//@ chunk-7r5y3c3p.js:431-489 placement = isFileWithinReadSizeLimit (1)
+//@ chunk-7r5y3c3p.js:431-489 placement (2.1.88 match: isFileWithinReadSizeLimit, 1)
 /**
  * statSync 后校验大小上限并返回 stats。
  */
@@ -103,7 +103,7 @@ function isNotRegularFileError(error) {
 function isFileTooLargeError(error) {
   return error != null && typeof error === "object" && "code" in error && error.code === "ERR_FILE_TOO_LARGE";
 }
-//@ chunk-7r5y3c3p.js:1419-1611 placement = encodePowerShellCommand (0.748)
+//@ chunk-7r5y3c3p.js:1419-1611 placement (2.1.88 match: encodePowerShellCommand, 0.748)
 /**
  * 按 BOM 判断缓冲区编码（FF FE → utf16le，否则 utf8）；切分误归。
  */
@@ -179,7 +179,7 @@ function decodeTextBuffer(buffer) {
 `,
     );
 }
-//@ chunk-7r5y3c3p.js:2264-2391 fingerprint = detectLineEndingsForString (1)
+//@ chunk-7r5y3c3p.js:2264-2391 fingerprint (2.1.88 match: detectLineEndingsForString, 1)
 /**
  * 统计 CRLF 与 LF 数量，多数为 CRLF 时返回 "CRLF"，否则 "LF"。
  */

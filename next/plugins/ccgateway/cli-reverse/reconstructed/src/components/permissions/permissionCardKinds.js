@@ -306,7 +306,7 @@ function fileUrlToAbsolutePath(value) {
     return null;
   }
 }
-//@ chunk-s4bxxzsw.js:7745-8009 sole-consumer = hasStringFormat (0.863)
+//@ chunk-s4bxxzsw.js:7745-8009 sole-consumer (2.1.88 match: hasStringFormat, 0.863)
 /**
  * getParamFormatHints：工具 inputJSONSchema 中 format=date-time 的参数表，供权限 UI 提示。
  */

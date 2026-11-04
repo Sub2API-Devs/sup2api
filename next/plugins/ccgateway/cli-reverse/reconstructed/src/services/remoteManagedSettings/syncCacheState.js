@@ -13,7 +13,7 @@ import { constants } from "fs";
 import { syncStampPath, isSymlinkPath, MAX_SYNC_STAMP_BYTES } from "./consentRecords.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
 
-//@ chunk-82kqcve8.js:161260-161594 placement = getSessionMemoryContent (0.632)
+//@ chunk-82kqcve8.js:161260-161594 placement (2.1.88 match: getSessionMemoryContent, 0.632)
 /**
  * 读取远程设置同步时间戳文件 <remote-settings>.synced-at（只接受 1–16 位数字，拒绝符号链接）。
  */

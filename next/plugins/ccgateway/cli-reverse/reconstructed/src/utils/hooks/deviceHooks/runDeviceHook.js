@@ -867,7 +867,7 @@ deferInit("chunk-mthxbav8.js:18620", () => {
   DEVICE_HOOKS_DISCONNECT = Symbol("deviceHooks.disconnect");
   DEVICE_HOOKS_DEADLINE = Symbol("deviceHooks.deadline");
 });
-//@ chunk-mthxbav8.js:18729-19107 placement = createBaseHookInput (0.526)
+//@ chunk-mthxbav8.js:18729-19107 placement (2.1.88 match: createBaseHookInput, 0.526)
 /**
  * 校验钩子输入里的 session_id/agent_id/prompt_id/tool_use_id 不含路径穿越、permission_mode/effort/agent_type 合法，用于设备钩子转发。旧版名 createBaseHookInput 配错。
  */

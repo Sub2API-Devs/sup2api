@@ -38,7 +38,7 @@ function createActivityState() {
     cleanupHandle: null,
   };
 }
-//@ chunk-frha7zp8.js:629-648 sole-consumer = getClientSurface (0.78)
+//@ chunk-frha7zp8.js:629-648 sole-consumer (2.1.88 match: getClientSurface, 0.78)
 var SESSION_ACTIVITY_KEY = "cli";
 var SESSION_ACTIVITY_TICK_MS = 1000;
 //@ chunk-frha7zp8.js:648-1703 sole-consumer
@@ -105,7 +105,7 @@ deferInit("chunk-frha7zp8.js:1703", () => {
 function getSessionActivityState() {
   return sessionActivityRegistry.of(getRootSession().host);
 }
-//@ chunk-frha7zp8.js:1761-2142 fingerprint = startHeartbeatTimer (0.498)
+//@ chunk-frha7zp8.js:1761-2142 fingerprint (2.1.88 match: startHeartbeatTimer, 0.498)
 /**
  * 活动期间定时发送会话保活心跳。
  */
@@ -131,7 +131,7 @@ function startHeartbeatTimer(state) {
     state,
   );
 }
-//@ chunk-frha7zp8.js:2142-2278 fingerprint = startIdleTimer (0.764)
+//@ chunk-frha7zp8.js:2142-2278 fingerprint (2.1.88 match: startIdleTimer, 0.764)
 /**
  * 活动结束 30 秒后记录 session_idle_30s。
  */
@@ -233,7 +233,7 @@ function getMainLoopRefcount() {
 function isSessionActive() {
   return getMainQueryRunning() || getMainLoopRefcount() > 0;
 }
-//@ chunk-frha7zp8.js:3315-4008 fingerprint = startSessionActivity (0.504)
+//@ chunk-frha7zp8.js:3315-4008 fingerprint (2.1.88 match: startSessionActivity, 0.504)
 /**
  * 开始会话活动计数，驱动心跳与空闲计时（session_activity_at_shutdown）。
  */
@@ -351,7 +351,7 @@ function isParkedOnUser(state) {
 }
 //@ chunk-z4g2ta8k.js:42463-42497 affinity
 var TENGU_ENCAPSULATED_HONEY = "tengu_encapsulated_honey";
-//@ chunk-z4g2ta8k.js:42497-42575 fingerprint = sendSessionActivitySignal (1)
+//@ chunk-z4g2ta8k.js:42497-42575 fingerprint (2.1.88 match: sendSessionActivitySignal, 1)
 function sendSessionActivitySignal() {
   return (
     env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES &&
@@ -359,7 +359,7 @@ function sendSessionActivitySignal() {
     getRemoteFeatureGateState(TENGU_ENCAPSULATED_HONEY) === "on"
   );
 }
-//@ chunk-z4g2ta8k.js:42575-42671 shared-adjacent = sendSessionActivitySignal (1)
+//@ chunk-z4g2ta8k.js:42575-42671 shared-adjacent (2.1.88 match: sendSessionActivitySignal, 1)
 function sendSessionActivitySignal_2() {
   return (
     env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES &&

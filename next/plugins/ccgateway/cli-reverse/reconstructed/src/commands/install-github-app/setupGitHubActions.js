@@ -32,7 +32,7 @@ class SetupCancelledError extends Error {
     this.name = "SetupCancelledError";
   }
 }
-//@ chunk-4v9zy7gn.js:42667-44266 fingerprint = createWorkflowFile (0.884)
+//@ chunk-4v9zy7gn.js:42667-44266 fingerprint (2.1.88 match: createWorkflowFile, 0.884)
 async function createWorkflowFile({
   repoName,
   branchName,
@@ -107,7 +107,7 @@ Need help? Common issues:
     throw Error(`Failed to create workflow file ${workflowPath}: ${createFileResult.stderr}${helpText}`);
   }
 }
-//@ chunk-4v9zy7gn.js:44266-47620 fingerprint = setupGitHubActions (0.889)
+//@ chunk-4v9zy7gn.js:44266-47620 fingerprint (2.1.88 match: setupGitHubActions, 0.889)
 async function setupGitHubActions(
   repoName,
   apiKeyOrOAuthToken,

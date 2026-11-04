@@ -10,7 +10,7 @@
  */
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:1693786-1694311 fingerprint = config (0.309)
+//@ chunk-e6aww6q8.js:1693786-1694311 fingerprint (2.1.88 match: config, 0.309)
 /**
  * /config 命令对象（local-jsx）；描述：Open settings；别名 ["settings"]；实现 chunk-ak1qv1dp.js 的 _。
  */

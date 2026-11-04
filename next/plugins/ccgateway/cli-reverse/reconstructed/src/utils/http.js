@@ -114,7 +114,7 @@ function setAiAgentEnv() {
 function withWorkloadStorage(storage, msg) {
   return workloadStorage.run(storage, () => cliError_2(msg));
 }
-//@ chunk-aepeg2w5.js:592568-593403 facade-exports = getUserAgent (0.584)
+//@ chunk-aepeg2w5.js:592568-593403 facade-exports (2.1.88 match: getUserAgent, 0.584)
 /**
  * API 请求 User-Agent：claude-cli/<版本> (external, <entrypoint>[, agent-sdk/<CLAUDE_AGENT_SDK_VERSION>][, client-app/<CLAUDE_AGENT_SDK_CLIENT_APP>][, workload/<workload>])，entrypoint 默认 cli。
  */
@@ -141,7 +141,7 @@ function getUserAgent(options) {
     }.VERSION
   } (external, ${entrypoint}${sdkSuffix}${clientApp}${workloadSuffix})`;
 }
-//@ chunk-aepeg2w5.js:593403-594216 facade-exports = getMCPUserAgent (0.567)
+//@ chunk-aepeg2w5.js:593403-594216 facade-exports (2.1.88 match: getMCPUserAgent, 0.567)
 /**
  * MCP 请求的 User-Agent（claude-code/<版本>，带 agent-sdk/client-app 后缀）。
  */
@@ -166,7 +166,7 @@ function getMCPUserAgent() {
     }.VERSION
   }${suffix}`;
 }
-//@ chunk-aepeg2w5.js:594216-594294 facade-exports = getWebFetchUserAgent (1)
+//@ chunk-aepeg2w5.js:594216-594294 facade-exports (2.1.88 match: getWebFetchUserAgent, 1)
 /**
  * WebFetch 用 UA：Claude-User (claude-code/<版本>; +https://support.anthropic.com/)。
  */
@@ -206,7 +206,7 @@ async function getAuthHeadersAsync(options = {}) {
     }
   return getAuthHeaders(options);
 }
-//@ chunk-aepeg2w5.js:594774-595468 facade-exports = getAuthHeaders (0.621)
+//@ chunk-aepeg2w5.js:594774-595468 facade-exports (2.1.88 match: getAuthHeaders, 0.621)
 /**
  * Anthropic 自有 API（profile、remote settings、sessions 等）的认证头：第三方提供方返回错误；订阅用户用 Bearer OAuth + oauth-2025-04-20 beta；网关不可用；否则 x-api-key，可选回退 ANTHROPIC_AUTH_TOKEN Bearer。
  */
@@ -385,7 +385,7 @@ async function drainResponseBody(response, { maxBytes = 65536, timeoutMs } = {})
     if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
   }
 }
-//@ chunk-9vvvg0d3.js:24960-25161 fingerprint = withOAuth401Retry (0.79)
+//@ chunk-9vvvg0d3.js:24960-25161 fingerprint (2.1.88 match: withOAuth401Retry, 0.79)
 /**
  * 包装请求：遇 401 触发 OAuth 刷新后重试一次（令牌被吊销时报错）。
  */

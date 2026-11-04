@@ -78,7 +78,7 @@ function sanitizeNotebookEditLines(diff) {
     lines: diff.lines.map(stripUnsafeChars),
   };
 }
-//@ chunk-18hwfzwa.js:1372186-1372294 sole-consumer = _temp (0.797)
+//@ chunk-18hwfzwa.js:1372186-1372294 sole-consumer (2.1.88 match: _temp, 0.797)
 function NotebookEllipsisRow(i) {
   return jsxProd_default(
     NoSelect,
@@ -116,7 +116,7 @@ function formatCellLabel(cellId) {
     SHORT_LABEL_WIDTH,
   );
 }
-//@ chunk-18hwfzwa.js:1372568-1373356 fingerprint = NotebookEditToolDiff (0.302)
+//@ chunk-18hwfzwa.js:1372568-1373356 fingerprint (2.1.88 match: NotebookEditToolDiff, 0.302)
 function NotebookEditToolDiff(props) {
   let $ = useMemoCache(8);
   let notebookPromise;
@@ -173,7 +173,7 @@ function NotebookEditToolDiff(props) {
   } else suspenseElement = $[7];
   return suspenseElement;
 }
-//@ chunk-18hwfzwa.js:1373356-1377043 fingerprint = NotebookEditToolDiffInner (0.769)
+//@ chunk-18hwfzwa.js:1373356-1377043 fingerprint (2.1.88 match: NotebookEditToolDiffInner, 0.769)
 function NotebookEditToolDiffInner(props) {
   let $ = useMemoCache(54);
   let {

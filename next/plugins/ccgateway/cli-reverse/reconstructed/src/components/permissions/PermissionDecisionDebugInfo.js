@@ -37,7 +37,7 @@ import { generateSuggestions } from "../../utils/permissions/filesystem.js";
 import { parseModeSuggestions } from "./consentRows.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:39273-39452 fingerprint = extractMode (0.676)
+//@ chunk-e6aww6q8.js:39273-39452 fingerprint (2.1.88 match: extractMode, 0.676)
 function extractMode(updates) {
   if (updates.behavior !== "allow") return updates;
   let { updatedPermissions } = updates;
@@ -80,13 +80,13 @@ function findDecidingRule(reason, behavior) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:50942-51058 fingerprint = PermissionDecisionInfoItem (0.631)
+//@ chunk-e6aww6q8.js:50942-51058 fingerprint (2.1.88 match: PermissionDecisionInfoItem, 0.631)
 function PermissionDecisionInfoItem(t0) {
   return t0?.type === "subcommandResults"
     ? [...t0.reasons.values()].some((reason) => PermissionDecisionInfoItem(reason.decisionReason))
     : isOutsideReadsBlockedAsk(t0);
 }
-//@ chunk-e6aww6q8.js:3765551-3767426 fingerprint = decisionReasonDisplayString (0.389)
+//@ chunk-e6aww6q8.js:3765551-3767426 fingerprint (2.1.88 match: decisionReasonDisplayString, 0.389)
 function decisionReasonDisplayString(reason, type, mode, permissionMode) {
   if (type !== undefined && type !== "config") {
     if (type === "hook") return "hook:PermissionRequest";
@@ -167,7 +167,7 @@ function formatClassifierReasonTag(classifierResult) {
   if (classifierResult.noVerdict) return `classifier:${reasonName}:no-verdict`;
   return `classifier:${reasonName}`;
 }
-//@ chunk-e6aww6q8.js:3767598-3767655 placement = getAutoModeDumpDir (0.607)
+//@ chunk-e6aww6q8.js:3767598-3767655 placement (2.1.88 match: getAutoModeDumpDir, 0.607)
 var CLASSIFIER_ANALYTICS_NAMES; // deferred: uses HOOK_EVENTS (../../entrypoints/sdk/coreSchemas.js) of its import cycle while loading; runs once the cycle is complete
 var HOOK_ANALYTICS_NAMES;
 var SUBCOMMANDS;
@@ -176,7 +176,7 @@ deferInit("chunk-e6aww6q8.js:3767598", () => {
   HOOK_ANALYTICS_NAMES = [...HOOK_EVENTS, TOOL_CHECK];
   SUBCOMMANDS = "subcommands:";
 });
-//@ chunk-18hwfzwa.js:1369049-1369244 fingerprint = extractDirectories (0.651)
+//@ chunk-18hwfzwa.js:1369049-1369244 fingerprint (2.1.88 match: extractDirectories, 0.651)
 function extractDirectories(filePath, operationType, toolPermissionContext) {
   let found = generateSuggestions(filePath, operationType, toolPermissionContext).find(
     (update) => update.type === "addDirectories",

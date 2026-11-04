@@ -18,7 +18,7 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { ManagedSettingsSecurityDialogHost } from "./ManagedSettingsSecurityDialog.js";
 
-//@ chunk-kz1epgqe.js:480-1002 placement = checkManagedSettingsSecurity (0.439)
+//@ chunk-kz1epgqe.js:480-1002 placement (2.1.88 match: checkManagedSettingsSecurity, 0.439)
 /**
  * 在 REPL 之外单独渲染托管设置安全确认对话框。
  */

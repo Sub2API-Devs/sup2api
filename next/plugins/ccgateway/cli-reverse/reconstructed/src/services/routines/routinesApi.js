@@ -930,7 +930,7 @@ function normalizeMcpServerUrl(serverUrl) {
  */
 var DEFAULT_MCP_DIRECTORY_KINDS = ["commercial", "gsuite", "enterprise", "health"];
 var MAX_MCP_DIRECTORY_PAGES = 20;
-//@ chunk-aepeg2w5.js:815127-815229 placement = validateURL (0.823)
+//@ chunk-aepeg2w5.js:815127-815229 placement (2.1.88 match: validateURL, 0.823)
 /**
  * 去掉 URL 的用户名/密码后交给 dO 处理。
  */

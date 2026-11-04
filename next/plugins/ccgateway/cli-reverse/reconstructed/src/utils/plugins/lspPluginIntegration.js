@@ -134,7 +134,7 @@ function describeLspConfigError(error) {
   if (error instanceof LspConfigReadError) return error.message;
   return error instanceof Error ? `Failed to parse JSON: ${error.message}` : "Failed to parse JSON file";
 }
-//@ chunk-e6aww6q8.js:600846-601987 fingerprint = loadPluginLspServers (0.745)
+//@ chunk-e6aww6q8.js:600846-601987 fingerprint (2.1.88 match: loadPluginLspServers, 0.745)
 /**
  * 读取插件的 LSP 服务器配置：插件根目录 .lsp.json + manifest.lspServers（路径或内联），校验 LspServerConfigSchema。
  */
@@ -203,7 +203,7 @@ async function loadPluginLspServers(plugin, errors = [], storageV5) {
   }
   return Object.keys(servers).length > 0 ? servers : undefined;
 }
-//@ chunk-e6aww6q8.js:601987-603661 fingerprint = loadLspServersFromManifest (0.8)
+//@ chunk-e6aww6q8.js:601987-603661 fingerprint (2.1.88 match: loadLspServersFromManifest, 0.8)
 /**
  * 处理 manifest.lspServers 中的每一项（文件路径做目录逃逸检查，内联对象直接校验）。
  */
@@ -388,7 +388,7 @@ function findLspExtensionConflicts(enabled) {
   }
   return errors;
 }
-//@ chunk-e6aww6q8.js:605292-606211 callgraph-witnessed = getPluginLspServers (0.257)
+//@ chunk-e6aww6q8.js:605292-606211 callgraph-witnessed (2.1.88 match: getPluginLspServers, 0.257)
 /**
  * 已启用插件的最终 LSP 服务器配置：解析 ${CLAUDE_PLUGIN_ROOT}/${user_config.X} 等变量，缺 command 的报错；名字加 plugin:<插件>: 前缀。
  */
@@ -443,7 +443,7 @@ async function getPluginLspServers(plugin, errors = [], storageV5, credentials) 
     }
   return addPluginScopeToServers(resolvedServers, plugin.name, plugin.repository);
 }
-//@ chunk-e6aww6q8.js:3817371-3817440 fingerprint = resolvePluginLspEnvironment (0.601)
+//@ chunk-e6aww6q8.js:3817371-3817440 fingerprint (2.1.88 match: resolvePluginLspEnvironment, 0.601)
 var PLUGIN_ENV_VAR_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PLUGIN_ENV_VAR_SET;
 deferInit("chunk-e6aww6q8.js:3817371", () => {

@@ -814,7 +814,7 @@ async function readUpToBytes(handle, maxBytes) {
 function normalizeWorktreePaths(options) {
   return typeof options.worktreePath === "string" ? [options.worktreePath] : options.worktreePath;
 }
-//@ chunk-2xm1rxms.js:15054-15129 placement = WORKTREE_PATH_TAG (0.798)
+//@ chunk-2xm1rxms.js:15054-15129 placement (2.1.88 match: WORKTREE_PATH_TAG, 0.798)
 /**
  * 有 worktreePath 时解析出仓库内 worktree 路径列表，否则 null。旧版名 WORKTREE_PATH_TAG 为错配。
  */

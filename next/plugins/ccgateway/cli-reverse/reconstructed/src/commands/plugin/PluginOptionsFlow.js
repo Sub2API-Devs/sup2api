@@ -45,7 +45,7 @@ import { SettingsDialogCancelBinding } from "../../utils/settings/mdm/constants.
 import { PluginOptionsDialog } from "./PluginOptionsDialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:222410-222714 fingerprint = findPluginOptionsTarget (0.49)
+//@ chunk-hwmsct5x.js:222410-222714 fingerprint (2.1.88 match: findPluginOptionsTarget, 0.49)
 function findPluginOptionsTarget(pluginId) {
   if (typeof pluginId.value !== "string") return null;
   let resolvedPluginId = pluginId.value === "default" ? null : stripAnsi(pluginId.value);
@@ -292,7 +292,7 @@ function formatInstallOutcome(props) {
   } else details = $[21];
   return details;
 }
-//@ chunk-vrb44rx7.js:47061-48783 fingerprint = PluginOptionsFlow (0.768)
+//@ chunk-vrb44rx7.js:47061-48783 fingerprint (2.1.88 match: PluginOptionsFlow, 0.768)
 function PluginOptionsFlow(props) {
   let $ = useMemoCache(24);
   let { plugin, pluginId, onDone } = props;

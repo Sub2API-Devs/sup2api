@@ -69,7 +69,7 @@ var GIT_STATUS_ARGS = ["--no-optional-locks", "status", "--short", IGNORE_SUBMOD
 async function computeGitStatus(session) {
   return getGitStatus(session);
 }
-//@ chunk-e6aww6q8.js:1353480-1355662 fingerprint = getGitStatus (0.787)
+//@ chunk-e6aww6q8.js:1353480-1355662 fingerprint (2.1.88 match: getGitStatus, 0.787)
 /**
  * 生成 gitStatus 文本："This is the git status at the start of the conversation…"、当前分支、主分支、Git user、Status（截断 2000 字）、Recent commits；非 git 仓库返回 null；worktree 时对比主检出。
  */
@@ -295,7 +295,7 @@ function getCachedSystemContext(session, cacheBreakerPhrase) {
   }
   return cached;
 }
-//@ chunk-e6aww6q8.js:1356944-1357428 fingerprint = getSystemContext (0.604)
+//@ chunk-e6aww6q8.js:1356944-1357428 fingerprint (2.1.88 match: getSystemContext, 0.604)
 /**
  * 系统上下文：CLAUDE_CODE_PERFORCE_MODE 时加 perforceMode 说明；其余为空对象（gitStatus 另行通告）。
  */
@@ -457,7 +457,7 @@ function mergeByPath(first, second) {
   let filtered = second.filter((file) => !seenPaths.has(file.path));
   return filtered.length > 0 ? first.concat(filtered) : first;
 }
-//@ chunk-e6aww6q8.js:1359784-1361624 fingerprint = getUserContext (0.462)
+//@ chunk-e6aww6q8.js:1359784-1361624 fingerprint (2.1.88 match: getUserContext, 0.462)
 /**
  * 构建用户上下文块 {claudeMd, userEmail?, attachedProject?, currentDate:"Today's date is …"}；CLAUDE.md 可被关闭；块可经 resolvePromptContext 钩子改写；这些块在请求里成为首条 user 消息前的 system-reminder 或 role=system 消息。
  */

@@ -15,7 +15,7 @@ import {
 } from "./review/ultrareviewPreconditions.js";
 import { getIsNonInteractiveSession } from "../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:1734862-1734927 fingerprint = CCR_TERMS_URL (1)
+//@ chunk-e6aww6q8.js:1734862-1734927 fingerprint (2.1.88 match: CCR_TERMS_URL, 1)
 /**
  * CCR_TERMS_URL：同旧版。
  */
@@ -24,7 +24,7 @@ var CCR_TERMS_URL = "https://code.claude.com/docs/en/claude-code-on-the-web";
 function getUltrareviewDescription() {
   return `Start a cloud agent that finds and verifies bugs in your branch (${getReviewDurationNote()}, ${getReviewCostNote()} USD) \xB7 Runs in a cloud session. See ${CCR_TERMS_URL}`;
 }
-//@ chunk-e6aww6q8.js:1735080-1735365 fingerprint = ultrareview (0.641)
+//@ chunk-e6aww6q8.js:1735080-1735365 fingerprint (2.1.88 match: ultrareview, 0.641)
 /**
  * /ultrareview 命令对象（local-jsx）；描述：{return Aen()}；isEnabled: ()=>UF()；实现 chunk-0eepcc6r.js 的 Mo。
  */

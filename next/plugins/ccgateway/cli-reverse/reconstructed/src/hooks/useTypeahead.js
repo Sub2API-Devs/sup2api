@@ -97,7 +97,7 @@ import { logError } from "../utils/log.js";
 import { needsShiftWorkaround } from "./useTextInput.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:558864-559060 placement = toolMatchesName (0.66)
+//@ chunk-18hwfzwa.js:558864-559060 placement (2.1.88 match: toolMatchesName, 0.66)
 /**
  * （旧版名 toolMatchesName 是错配）typeahead 里判断 "/xxx" 输入是否匹配候选命令：按命令元数据的 name、命令名和别名做模糊匹配，非命令候选直接通过。
  */
@@ -187,7 +187,7 @@ function isPrefixInsertion(query, previous, cursorOffset) {
     /^[a-z0-9_+-]*:$/.test(query.slice(insertStart, cursorOffset))
   );
 }
-//@ chunk-18hwfzwa.js:615841-615946 fingerprint = isPathMetadata (1)
+//@ chunk-18hwfzwa.js:615841-615946 fingerprint (2.1.88 match: isPathMetadata, 1)
 /**
  * 是否为 {type: "file"|"directory"} 路径元数据对象。
  */
@@ -208,7 +208,7 @@ function getPreservedSelection(prevSuggestions, prevSelection, newSuggestions) {
   let newIndex = newSuggestions.findIndex((item) => item.id === prevSelectedItem.id);
   return newIndex >= 0 ? newIndex : 0;
 }
-//@ chunk-18hwfzwa.js:616089-616194 fingerprint = buildResumeInputFromSuggestion (1)
+//@ chunk-18hwfzwa.js:616089-616194 fingerprint (2.1.88 match: buildResumeInputFromSuggestion, 1)
 function buildResumeInputFromSuggestion(suggestion) {
   let metadata = suggestion.metadata;
   return metadata?.sessionId ? `/resume ${metadata.sessionId}` : `/resume ${suggestion.displayText}`;
@@ -271,13 +271,13 @@ function normalizeEmptySuggestions(state) {
     ? state
     : EMPTY_AUTOCOMPLETE_STATE_2;
 }
-//@ chunk-18hwfzwa.js:617178-617320 fingerprint = extractSearchToken (1)
+//@ chunk-18hwfzwa.js:617178-617320 fingerprint (2.1.88 match: extractSearchToken, 1)
 function extractSearchToken(completionToken) {
   if (completionToken.isQuoted) return stripSuffix(completionToken.token.slice(2), '"');
   else if (completionToken.token.startsWith("@")) return completionToken.token.substring(1);
   else return completionToken.token;
 }
-//@ chunk-18hwfzwa.js:617320-617556 fingerprint = formatReplacementValue (1)
+//@ chunk-18hwfzwa.js:617320-617556 fingerprint (2.1.88 match: formatReplacementValue, 1)
 function formatReplacementValue(options) {
   let { displayText, mode, hasAtPrefix, needsQuotes, isQuoted, isComplete } = options;
   let space = isComplete ? " " : "";
@@ -286,7 +286,7 @@ function formatReplacementValue(options) {
   else if (hasAtPrefix) return mode === "bash" ? `${displayText}${space}` : `@${displayText}${space}`;
   else return displayText;
 }
-//@ chunk-18hwfzwa.js:617556-617794 fingerprint = applyShellSuggestion (1)
+//@ chunk-18hwfzwa.js:617556-617794 fingerprint (2.1.88 match: applyShellSuggestion, 1)
 function applyShellSuggestion(
   suggestion,
   input,
@@ -314,7 +314,7 @@ deferInit("chunk-18hwfzwa.js:617794", () => {
   );
   TEAM_NAME_CACHE_MS = 5000;
 });
-//@ chunk-18hwfzwa.js:617884-618116 placement = _temp (1)
+//@ chunk-18hwfzwa.js:617884-618116 placement (2.1.88 match: _temp, 1)
 function isCursorInTriggerToken(suggestion, input, cursorOffset, triggerRegex, setValue, setCursorOffset) {
   let match = input.slice(0, cursorOffset).match(triggerRegex);
   if (!match || match.index === undefined) return false;
@@ -325,7 +325,7 @@ function isCursorInTriggerToken(suggestion, input, cursorOffset, triggerRegex, s
   setCursorOffset(sliced.length + suggestion.displayText.length + 1);
   return true;
 }
-//@ chunk-18hwfzwa.js:618116-618319 fingerprint = generateBashSuggestions (1)
+//@ chunk-18hwfzwa.js:618116-618319 fingerprint (2.1.88 match: generateBashSuggestions, 1)
 /**
  * bash 模式补全：调用 shell completion，失败记 tengu_shell_completion_failed。
  */
@@ -341,7 +341,7 @@ async function generateBashSuggestions(shellCompletionAbort, host, input, cursor
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:618319-618462 fingerprint = applyDirectorySuggestion (1)
+//@ chunk-18hwfzwa.js:618319-618462 fingerprint (2.1.88 match: applyDirectorySuggestion, 1)
 function applyDirectorySuggestion(input, suggestionId, tokenStartPos, tokenLength, isDirectory) {
   let suffix = isDirectory ? "/" : " ";
   let before = input.slice(0, tokenStartPos);
@@ -352,7 +352,7 @@ function applyDirectorySuggestion(input, suggestionId, tokenStartPos, tokenLengt
     cursorPos: before.length + replacement.length,
   };
 }
-//@ chunk-18hwfzwa.js:618462-619115 fingerprint = extractCompletionToken (1)
+//@ chunk-18hwfzwa.js:618462-619115 fingerprint (2.1.88 match: extractCompletionToken, 1)
 function extractCompletionToken(text, cursorPos, includeAtSymbol = false) {
   if (!text) return null;
   let textBeforeCursor = text.substring(0, cursorPos);
@@ -396,7 +396,7 @@ function extractCompletionToken(text, cursorPos, includeAtSymbol = false) {
     isQuoted: false,
   };
 }
-//@ chunk-18hwfzwa.js:619115-619274 fingerprint = extractCommandNameAndArgs (1)
+//@ chunk-18hwfzwa.js:619115-619274 fingerprint (2.1.88 match: extractCommandNameAndArgs, 1)
 function extractCommandNameAndArgs(value) {
   if (isCommandInput(value)) {
     let spaceIndex = value.indexOf(" ");
@@ -416,7 +416,7 @@ function extractCommandNameAndArgs(value) {
 function hasCommandWithArguments(isAtEndWithWhitespace, value) {
   return !isAtEndWithWhitespace && value.includes(" ") && !value.endsWith(" ");
 }
-//@ chunk-18hwfzwa.js:619336-642027 fingerprint = useTypeahead (0.697)
+//@ chunk-18hwfzwa.js:619336-642027 fingerprint (2.1.88 match: useTypeahead, 0.697)
 /**
  * 补全核心：根据光标前的 token 判定触发类型——"/" 命令与命令参数、"@" 文件/目录/agent/MCP 资源、bash 模式下的命令/路径/变量（shell completion）、":" emoji、/resume 会话标题；生成建议写入 suggestionsStore，处理 autocomplete:accept/dismiss/next/previous 与 Tab 补全，接受后改写 draft 的 value 与光标。
  */

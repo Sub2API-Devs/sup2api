@@ -171,7 +171,7 @@ function useRegisterNotificationTranscriptSink(sink) {
     };
   }, [hostState, sink]);
 }
-//@ chunk-jvez4qde.js:1816-5286 fingerprint = useNotifications (0.595)
+//@ chunk-jvez4qde.js:1816-5286 fingerprint (2.1.88 match: useNotifications, 0.595)
 /**
  * 通知队列 hook：addNotification/removeNotification，按优先级出队、immediate 抢占、超时自动移除、diff 面板期间暂缓。
  */
@@ -437,7 +437,7 @@ function useNotifications() {
     processQueue,
   };
 }
-//@ chunk-jvez4qde.js:5286-5330 layout = PRIORITIES (1)
+//@ chunk-jvez4qde.js:5286-5330 layout (2.1.88 match: PRIORITIES, 1)
 /**
  * 通知优先级排序值：immediate 0、high 1、medium 2、low 3。
  */
@@ -463,7 +463,7 @@ function _(notices) {
     PRIORITIES[notice.priority] < PRIORITIES[acc.priority] ? notice : acc,
   );
 }
-//@ chunk-0h4e7gnq.js:40882-40987 fingerprint = PRIORITIES (1)
+//@ chunk-0h4e7gnq.js:40882-40987 fingerprint (2.1.88 match: PRIORITIES, 1)
 /**
  * 通知 color 字符串最长 64。
  */

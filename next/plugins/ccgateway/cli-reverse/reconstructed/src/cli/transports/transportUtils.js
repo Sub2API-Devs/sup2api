@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-1wpnxx5r.js:2162-2276 fingerprint = getTransportForUrl (0.738)
+//@ chunk-1wpnxx5r.js:2162-2276 fingerprint (2.1.88 match: getTransportForUrl, 0.738)
 /**
  * 把 ws:/wss: 协议改成 http:/https:。
  */

@@ -19,7 +19,7 @@ import { getShortcutDisplayPlatform } from "../../utils/keyboardShortcuts.js";
 import { formatKeyChords } from "../../keybindings/shortcutFormat.js";
 import { parseChord } from "../../keybindings/parser.js";
 
-//@ chunk-v6kts6xw.js:3401-4048 fingerprint = KeyboardShortcutHint (0.357)
+//@ chunk-v6kts6xw.js:3401-4048 fingerprint (2.1.88 match: KeyboardShortcutHint, 0.357)
 function KeyboardShortcutHint(props) {
   let $ = useMemoCache(15);
   let { chord, action, format, parens, bold, terse } = props;
@@ -92,7 +92,7 @@ function formatShortcutHint({ chord, action, format, parens = false, terse = fal
   let hintText = `${formattedChord}${terse ? " " : " to "}${action}`;
   return parens ? `(${hintText})` : hintText;
 }
-//@ chunk-v6kts6xw.js:4196-4247 placement = getReservedShortcuts (1)
+//@ chunk-v6kts6xw.js:4196-4247 placement (2.1.88 match: getReservedShortcuts, 1)
 function getShortcutPlatform() {
   return getShortcutDisplayPlatform() === "macos" ? "macos" : "other";
 }

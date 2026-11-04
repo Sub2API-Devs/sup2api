@@ -16,7 +16,7 @@ import { gatewayLog } from "../gateway/gatewayBanner.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1349195-1349330 placement = renderToolResultMessage (0.67)
+//@ chunk-1ny7cxrt.js:1349195-1349330 placement (2.1.88 match: renderToolResultMessage, 0.67)
 /**
  * 构造 Anthropic 风格的 JSON 错误响应（与 RemoteTrigger 无关）。
  */

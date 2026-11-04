@@ -64,7 +64,7 @@ function getFilePathFromToolInput(toolInput, toolInput_2) {
   let filePath = toolInput_2.file_path ?? toolInput_2.path;
   return filePath !== undefined && isTeamMemoryPath(filePath);
 }
-//@ chunk-e6aww6q8.js:4679035-4679333 placement = getSessionFileTypeFromInput (0.767)
+//@ chunk-e6aww6q8.js:4679035-4679333 placement (2.1.88 match: getSessionFileTypeFromInput, 0.767)
 function getSessionFileTypeFromInput_2(input) {
   if (typeof input !== "object" || input === null) return {};
   let { file_path: filePath, path, pattern, glob, command, query, content } = input;
@@ -126,7 +126,7 @@ deferInit("chunk-e6aww6q8.js:4679409", () => {
 function inputFilePath(toolInput) {
   return toolInput.file_path ?? toolInput.path;
 }
-//@ chunk-e6aww6q8.js:4679677-4679819 fingerprint = isMemorySearch (1)
+//@ chunk-e6aww6q8.js:4679677-4679819 fingerprint (2.1.88 match: isMemorySearch, 1)
 function isMemorySearch(input) {
   if (input.path) {
     if (isMemoryOrSessionFile(input.path) || isMemoryDirectory(input.path)) return true;
@@ -181,7 +181,7 @@ function commandAsHint(command) {
 function findToolByNameWithFallback(tools, name) {
   return findToolByName(tools, name) ?? findToolByName(getFileAndShellTools(), name);
 }
-//@ chunk-e6aww6q8.js:4680250-4682131 fingerprint = getToolSearchOrReadInfo (0.669)
+//@ chunk-e6aww6q8.js:4680250-4682131 fingerprint (2.1.88 match: getToolSearchOrReadInfo, 0.669)
 /**
  * 判断一个工具调用是否属于可折叠的搜索或读取，并返回其描述信息。
  */
@@ -318,7 +318,7 @@ function getToolSearchOrReadInfo(toolName, toolInput, tools) {
     isBash: isFullscreenEnvEnabled() ? !isCollapsible && included_2 : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4682131-4682565 fingerprint = getSearchOrReadFromContent (0.749)
+//@ chunk-e6aww6q8.js:4682131-4682565 fingerprint (2.1.88 match: getSearchOrReadFromContent, 0.749)
 function getSearchOrReadFromContent(content, tools) {
   if (content?.type === "tool_use" && content.name) {
     let info = getToolSearchOrReadInfo(content.name, content.input, tools);
@@ -376,7 +376,7 @@ var weakMap_17; // deferred: has load-time effects after a deferred statement of
 deferInit("chunk-e6aww6q8.js:4683047", () => {
   weakMap_17 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:4683067-4683236 layout = toolCallOf (1)
+//@ chunk-e6aww6q8.js:4683067-4683236 layout (2.1.88 match: toolCallOf, 1)
 function toolCallOf(msg) {
   if (msg.type === "assistant") {
     let firstBlock = msg.message.content[0];
@@ -406,7 +406,7 @@ function getToolCollapseInfoCached(msg, tools) {
   });
   return collapsibleToolInfo;
 }
-//@ chunk-e6aww6q8.js:4683457-4685204 callgraph-fingerprint = getCollapsibleToolInfo (0.157)
+//@ chunk-e6aww6q8.js:4683457-4685204 callgraph-fingerprint (2.1.88 match: getCollapsibleToolInfo, 0.157)
 function getCollapsibleToolInfo(msg, tools) {
   let currentTool = null;
   if (msg.type === "assistant") {
@@ -558,11 +558,11 @@ function isPlaceholderAssistantMessage(msg) {
   let content = msg.message.content[0];
   return content?.type === "text" && isPlaceholderAssistantText(content.text);
 }
-//@ chunk-e6aww6q8.js:4685742-4685844 fingerprint = isPreToolHookSummary (1)
+//@ chunk-e6aww6q8.js:4685742-4685844 fingerprint (2.1.88 match: isPreToolHookSummary, 1)
 function isPreToolHookSummary(msg) {
   return msg.type === "system" && msg.subtype === "stop_hook_summary" && msg.hookLabel === "PreToolUse";
 }
-//@ chunk-e6aww6q8.js:4685844-4686054 fingerprint = shouldSkipMessage (1)
+//@ chunk-e6aww6q8.js:4685844-4686054 fingerprint (2.1.88 match: shouldSkipMessage, 1)
 /**
  * 折叠搜索/读取组时可跳过的消息：思考块、附件、系统消息。
  */
@@ -602,24 +602,24 @@ function visibleThinkingOf(message) {
     memo: cached,
   };
 }
-//@ chunk-e6aww6q8.js:4686358-4686545 sole-consumer = toolCallOf (1)
+//@ chunk-e6aww6q8.js:4686358-4686545 sole-consumer (2.1.88 match: toolCallOf, 1)
 function toolCallOf_2(msg) {
   if (msg.type === "assistant") return msg.message.content[0]?.type === "tool_use";
   if (msg.type === "grouped_tool_use") return msg.messages[0]?.message.content[0]?.type === "tool_use";
   return false;
 }
-//@ chunk-e6aww6q8.js:4687096-4687199 fingerprint = getDisplayMessageFromCollapsed (1)
+//@ chunk-e6aww6q8.js:4687096-4687199 fingerprint (2.1.88 match: getDisplayMessageFromCollapsed, 1)
 function getDisplayMessageFromCollapsed(message) {
   let firstMsg = message.displayMessage;
   if (firstMsg.type === "grouped_tool_use") return firstMsg.displayMessage;
   return firstMsg;
 }
-//@ chunk-e6aww6q8.js:4687199-4687280 fingerprint = countToolUses (1)
+//@ chunk-e6aww6q8.js:4687199-4687280 fingerprint (2.1.88 match: countToolUses, 1)
 function countToolUses(msg) {
   if (msg.type === "grouped_tool_use") return msg.messages.length;
   return 1;
 }
-//@ chunk-e6aww6q8.js:4687280-4687594 fingerprint = getFilePathsFromReadMessage (1)
+//@ chunk-e6aww6q8.js:4687280-4687594 fingerprint (2.1.88 match: getFilePathsFromReadMessage, 1)
 function getFilePathsFromReadMessage(msg) {
   let paths = [];
   if (msg.type === "assistant") {
@@ -638,7 +638,7 @@ function getFilePathsFromReadMessage(msg) {
     }
   return paths;
 }
-//@ chunk-e6aww6q8.js:4687594-4688048 fingerprint = scanBashResultForGitOps (1)
+//@ chunk-e6aww6q8.js:4687594-4688048 fingerprint (2.1.88 match: scanBashResultForGitOps, 1)
 function scanBashResultForGitOps(msg, group) {
   if (msg.type !== "user") return;
   let out = msg.toolUseResult;
@@ -660,7 +660,7 @@ function scanBashResultForGitOps(msg, group) {
     if (commit || push || branch || pr) group.gitOpBashCount = (group.gitOpBashCount ?? 0) + 1;
   }
 }
-//@ chunk-e6aww6q8.js:4688048-4688611 fingerprint = createEmptyGroup (0.92)
+//@ chunk-e6aww6q8.js:4688048-4688611 fingerprint (2.1.88 match: createEmptyGroup, 0.92)
 function createEmptyGroup(currentGroup) {
   let group = {
     messages: [],
@@ -696,7 +696,7 @@ function createEmptyGroup(currentGroup) {
   }
   return group;
 }
-//@ chunk-e6aww6q8.js:4688611-4690684 fingerprint = createCollapsedGroup (0.849)
+//@ chunk-e6aww6q8.js:4688611-4690684 fingerprint (2.1.88 match: createCollapsedGroup, 0.849)
 function createCollapsedGroup(group, currentGroup) {
   let firstMsg = group.messages[0];
   let totalReadCount = group.readFilePaths.size > 0 ? group.readFilePaths.size : group.readOperationCount;
@@ -870,7 +870,7 @@ class IncrementalCollapser {
     this.lastFolded = 0;
   }
 }
-//@ chunk-e6aww6q8.js:4692234-4698662 fingerprint = collapseReadSearchGroups (0.515)
+//@ chunk-e6aww6q8.js:4692234-4698662 fingerprint (2.1.88 match: collapseReadSearchGroups, 0.515)
 function collapseReadSearchGroups(
   messages,
   tools,
@@ -1236,7 +1236,7 @@ function isUserPromptAttachment(attachment) {
   if (origin?.kind === "slack-ping") return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4699177-4699308 placement = computeStickyPromptText (0.865)
+//@ chunk-e6aww6q8.js:4699177-4699308 placement (2.1.88 match: computeStickyPromptText, 0.865)
 function isTaskNotificationAttachment(msg) {
   return (
     msg.type === "attachment" &&
@@ -1294,7 +1294,7 @@ function isCollapsibleToolResult(message) {
   if (message.type === "user") return message.message.content[0]?.type !== "tool_result";
   return isUserPromptAttachment(message);
 }
-//@ chunk-e6aww6q8.js:4708167-4709111 fingerprint = getSearchReadSummaryText (0.974)
+//@ chunk-e6aww6q8.js:4708167-4709111 fingerprint (2.1.88 match: getSearchReadSummaryText, 0.974)
 /**
  * 生成搜索/读取折叠摘要文本（进行时或过去时），包含记忆检索/读取/写入次数。
  */
@@ -1367,7 +1367,7 @@ function getSearchReadSummaryText(searchCount, readCount, isActive, memoryCounts
   let text = parts.join(", ");
   return isActive ? `${text}\u2026` : text;
 }
-//@ chunk-e6aww6q8.js:4709111-4709381 fingerprint = summarizeRecentActivities (1)
+//@ chunk-e6aww6q8.js:4709111-4709381 fingerprint (2.1.88 match: summarizeRecentActivities, 1)
 /**
  * 最近活动摘要：末尾连续的搜索/读取工具调用 ≥2 次时生成“Searched N, read M”类文本，否则取最后一条活动描述。
  */

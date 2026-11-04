@@ -14,7 +14,7 @@ import { logForDebugging } from "../debug.js";
 
 //@ chunk-18hwfzwa.js:607982-607996 affinity
 var SHELL_HISTORY_CACHE_TTL_MS = 60000;
-//@ chunk-18hwfzwa.js:607996-608512 fingerprint = getShellHistoryCommands (0.582)
+//@ chunk-18hwfzwa.js:607996-608512 fingerprint (2.1.88 match: getShellHistoryCommands, 0.582)
 async function getShellHistoryCommands(session, historyPath) {
   let cache = suggestionCacheBySessionRoot.of(session);
   let now = Date.now();
@@ -41,7 +41,7 @@ async function getShellHistoryCommands(session, historyPath) {
   cache.shellHistoryLoadedAt = now;
   return commands;
 }
-//@ chunk-18hwfzwa.js:608512-608635 fingerprint = prependToShellHistoryCache (0.708)
+//@ chunk-18hwfzwa.js:608512-608635 fingerprint (2.1.88 match: prependToShellHistoryCache, 0.708)
 function prependToShellHistoryCache(session, command) {
   let shellHistoryCommands = suggestionCacheBySessionRoot.of(session).shellHistoryCommands;
   if (!shellHistoryCommands) return;
@@ -49,7 +49,7 @@ function prependToShellHistoryCache(session, command) {
   if (idx !== -1) shellHistoryCommands.splice(idx, 1);
   shellHistoryCommands.unshift(command);
 }
-//@ chunk-18hwfzwa.js:608635-608844 fingerprint = getShellHistoryCompletion (1)
+//@ chunk-18hwfzwa.js:608635-608844 fingerprint (2.1.88 match: getShellHistoryCompletion, 1)
 async function getShellHistoryCompletion(session, input, historyPath) {
   if (!input || input.length < 2) return null;
   if (!input.trim()) return null;

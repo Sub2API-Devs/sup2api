@@ -26,7 +26,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-ah34pb7m.js:36053", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:36057-37715 fingerprint = AgentProgressLine (0.716)
+//@ chunk-ah34pb7m.js:36057-37715 fingerprint (2.1.88 match: AgentProgressLine, 0.716)
 function AgentProgressLine(props) {
   let $ = useMemoCache(32);
   let {

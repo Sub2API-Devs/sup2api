@@ -30,14 +30,14 @@ function getEraseScreenSequence() {
 function eraseViewportInPlace(rows) {
   return CURSOR_HOME + (ERASE_LINE + cursorDown(1)).repeat(rows) + CURSOR_HOME;
 }
-//@ chunk-24t3dkzb.js:3804-3840 fingerprint = isWindowsTerminal (0.487)
+//@ chunk-24t3dkzb.js:3804-3840 fingerprint (2.1.88 match: isWindowsTerminal, 0.487)
 /**
  * 是否在 Windows Terminal 中（WT_SESSION）。
  */
 function isWindowsTerminal() {
   return !!env.WT_SESSION;
 }
-//@ chunk-bzr73sfg.js:133891-134050 fingerprint = isMintty (0.585)
+//@ chunk-bzr73sfg.js:133891-134050 fingerprint (2.1.88 match: isMintty, 0.585)
 /**
  * 是否把 \b（0x08）当成 Ctrl+Backspace：CLAUDE_CODE_BS_AS_CTRL_BACKSPACE 显式真/假优先；否则只在 win32 且 TERM_PROGRAM 不是 mintty、TERM 不是 cygwin 时为真。
  */

@@ -11,7 +11,7 @@
 import { getMaxSubagentSpawnDepth } from "../tools/AgentTool/spawnDepth.js";
 import { AGENT } from "../tools/AgentTool/constants.js";
 
-//@ chunk-rqnncghm.js:191-208 placement = isCustomSubagentType (0.834)
+//@ chunk-rqnncghm.js:191-208 placement (2.1.88 match: isCustomSubagentType, 0.834)
 /**
  * coordinator worker 代理类型名 "worker"。
  */
@@ -63,7 +63,7 @@ Structure your response as:
 Good summary: "Added Redis cache implementation. Tests pass, typecheck clean. Committed abc123."
 Bad summary: "I looked at files X, Y, and Z. Y has the changes you mentioned."`;
 }
-//@ chunk-ncsga3m8.js:3383-3611 placement = FORK_AGENT (0.81)
+//@ chunk-ncsga3m8.js:3383-3611 placement (2.1.88 match: FORK_AGENT, 0.81)
 var COORDINATOR_WORKER_AGENT = {
   agentType: COORDINATOR_WORKER_AGENT_TYPE,
   whenToUse: "For executing tasks autonomously \u2014 research, implementation, or verification.",

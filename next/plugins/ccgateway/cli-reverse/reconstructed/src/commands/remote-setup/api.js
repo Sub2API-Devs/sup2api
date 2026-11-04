@@ -45,7 +45,7 @@ import { getOauthAccountInfo, getClaudeAIOAuthTokenOrigin } from "../../utils/au
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3nztfxrw.js:5177-5348 placement = getOAuthHeaders (0.778)
+//@ chunk-3nztfxrw.js:5177-5348 placement (2.1.88 match: getOAuthHeaders, 0.778)
 function getOAuthHeaders_3(accessToken) {
   return {
     "User-Agent": claudeCodeUserAgent(),
@@ -55,7 +55,7 @@ function getOAuthHeaders_3(accessToken) {
     "x-self-hosted-runner-version": RUNNER_CLIENT_VERSION,
   };
 }
-//@ chunk-3nztfxrw.js:8831-17921 callgraph-witnessed = createDefaultEnvironment (0.009)
+//@ chunk-3nztfxrw.js:8831-17921 callgraph-witnessed (2.1.88 match: createDefaultEnvironment, 0.009)
 function createDefaultEnvironment(config) {
   function debugLog(message) {
     config.onDebug?.(message);
@@ -477,7 +477,7 @@ function createDefaultEnvironment(config) {
     },
   };
 }
-//@ chunk-0wa2vg6f.js:713-925 fingerprint = RedactedGithubToken (1)
+//@ chunk-0wa2vg6f.js:713-925 fingerprint (2.1.88 match: RedactedGithubToken, 1)
 let GithubWebConnectionStatus; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-0wa2vg6f.js:713", () => {
   GithubWebConnectionStatus = class GithubWebConnectionStatus {
@@ -499,7 +499,7 @@ deferInit("chunk-0wa2vg6f.js:713", () => {
     }
   };
 });
-//@ chunk-0wa2vg6f.js:925-1708 fingerprint = importGithubToken (0.79)
+//@ chunk-0wa2vg6f.js:925-1708 fingerprint (2.1.88 match: importGithubToken, 0.79)
 async function importGithubToken(token, credentials) {
   let response;
   try {
@@ -633,7 +633,7 @@ async function getGithubConnectionStatus(credentials) {
   logFeatureOk("api_github_connection_status");
   return githubAuthStatus.isAuthenticated ? "connected" : "not_connected";
 }
-//@ chunk-0wa2vg6f.js:2514-2567 fingerprint = getCodeWebUrl (1)
+//@ chunk-0wa2vg6f.js:2514-2567 fingerprint (2.1.88 match: getCodeWebUrl, 1)
 function getCodeWebUrl() {
   return `${getOauthConfig().CLAUDE_AI_ORIGIN}/code`;
 }

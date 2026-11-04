@@ -17,14 +17,14 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p8fze0jh.js:19189-19211 callgraph-witnessed = OrderedListItemContext (1)
+//@ chunk-p8fze0jh.js:19189-19211 callgraph-witnessed (2.1.88 match: OrderedListItemContext, 1)
 var OrderedListItemContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-p8fze0jh.js:19189", () => {
   OrderedListItemContext = createContext({
     marker: "",
   });
 });
-//@ chunk-p8fze0jh.js:19211-19527 fingerprint = OrderedListItem (1)
+//@ chunk-p8fze0jh.js:19211-19527 fingerprint (2.1.88 match: OrderedListItem, 1)
 function OrderedListItem(props) {
   let $ = useMemoCache(7);
   let { children } = props;

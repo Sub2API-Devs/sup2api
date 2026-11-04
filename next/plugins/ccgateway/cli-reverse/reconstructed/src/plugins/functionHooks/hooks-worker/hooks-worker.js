@@ -1,44 +1,41 @@
 /**
  * plugins/functionHooks/hooks-worker/hooks-worker.js: the function-hooks worker (a worker thread's entry; a second program)
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64): the file of the same path in the
- * build, unchanged except that its imports of chunk exports name the reading tree's modules (its own
- * names are still the minified ones; it was not part of the scanned chunks). Started by
+ * build. It is not one of the scanned chunks: its names come from naming/worker-hooks-worker.json
+ * (renamed and checked by tools/emit/worker-names.mjs) and its imports name the reading tree's modules. Started by
  * plugins/functionHooks/hooksWorker.js; built as its own entry (build.mjs).
  */
-import { workerData as N } from "worker_threads";
+import { workerData } from "worker_threads";
+import { setMatcherLog, serializeMatcherList } from "../../../utils/hooks/functionHookMatchers.js";
+import { forwardAbort, hookScopeStore } from "../dispatch/chain.js";
+import { surfaceRowLedger, parseAskUserQuestionRenderRequest } from "../ui/treeConstants.js";
+import { markScrollActivity } from "../vm/vmGlobals.js";
+import { isUiEventName } from "../api/agentToolOps.js";
+import { rejectionText, unawaitedOpMessage } from "../vm/moduleLoader.js";
 import {
-  setMatcherLog as dCn,
-  serializeMatcherList as Tos,
-} from "../../../utils/hooks/functionHookMatchers.js";
-import { forwardAbort as Lk, hookScopeStore as rfr } from "../dispatch/chain.js";
-import { surfaceRowLedger as zte, parseAskUserQuestionRenderRequest as xrs } from "../ui/treeConstants.js";
-import { markScrollActivity as Ufr } from "../vm/vmGlobals.js";
-import { isUiEventName as y3t } from "../api/agentToolOps.js";
-import { rejectionText as jfr, unawaitedOpMessage as Deo } from "../vm/moduleLoader.js";
-import {
-  abortReasonText as yxt,
-  HooksError as He,
-  causeString as Aos,
-  nextNotPlainData as A3t,
-  argsNotPlainData as Xeo,
-  makeHooksOrPlainError as Cos,
-  settledIfPlainData as spr,
-  readWeakTag as Ros,
-  readTag as dpr,
+  abortReasonText,
+  HooksError,
+  causeString,
+  nextNotPlainData,
+  argsNotPlainData,
+  makeHooksOrPlainError,
+  settledIfPlainData,
+  readWeakTag,
+  readTag,
 } from "../hooksErrors.js";
-import { errorMessage as d } from "../../../utils/errors.js";
-import { setEventTableEntries as YUi } from "../../../utils/pathTable.js";
+import { errorMessage } from "../../../utils/errors.js";
+import { setEventTableEntries } from "../../../utils/pathTable.js";
 import {
-  createHookHostBridge as lrs,
-  MARKS_NEWEST_DISPATCH_SLOT as uZr,
-  MARKS_ANSWERS_SENT_SLOT as drs,
-  MARKS_ANSWERED_DISPATCH_SLOT as crs,
-  takePending as XJ,
+  createHookHostBridge,
+  MARKS_NEWEST_DISPATCH_SLOT,
+  MARKS_ANSWERS_SENT_SLOT,
+  MARKS_ANSWERED_DISPATCH_SLOT,
+  takePending,
 } from "../hostBridge.js";
 
-//@ src/plugins/functionHooks/hooks-worker/hooks-worker.js (original, imports rewritten)
-var B = (o) => ({
-  post: (n) => o.postMessage(n),
+//@ src/plugins/functionHooks/hooks-worker/hooks-worker.js (original; names from naming/worker-hooks-worker.json)
+var createWorkerState = (workerGlobal) => ({
+  post: (message) => workerGlobal.postMessage(message),
   ports: new Map(),
   pendingNext: new Map(),
   pendingSteps: new Map(),
@@ -46,347 +43,343 @@ var B = (o) => ({
   nextCounter: 0,
   opCounter: 0,
 });
-function S(o, n) {
-  let r = o.opFailureOf(n) ?? dpr(n);
-  if (r === undefined) return jfr(n);
-  return Deo(r);
+function describeRejection(bridge, reason) {
+  let failure = bridge.opFailureOf(reason) ?? readTag(reason);
+  if (failure === undefined) return rejectionText(reason);
+  return unawaitedOpMessage(failure);
 }
-var U = (o, n) => {
-  process.on("unhandledRejection", (r) =>
-    o.post({
+var reportUnhandledRejections = (state, bridge) => {
+  process.on("unhandledRejection", (reason) =>
+    state.post({
       type: "unhandled",
-      error: S(n, r),
+      error: describeRejection(bridge, reason),
     }),
   );
 };
-var w = ({ pending: o, key: n, send: r, onAbort: a, signal: v, notPlainMessage: u }) =>
-  new Promise((y, f) => {
-    let x = () => {};
-    o.set(n, {
-      resolve: (m) => {
-        x();
-        y(m);
+var awaitPortReply = ({ pending, key, send, onAbort, signal, notPlainMessage }) =>
+  new Promise((resolve, reject) => {
+    let stopAbortForwarder = () => {};
+    pending.set(key, {
+      resolve: (value) => {
+        stopAbortForwarder();
+        resolve(value);
       },
-      reject: (m) => {
-        x();
-        f(m);
+      reject: (error) => {
+        stopAbortForwarder();
+        reject(error);
       },
     });
     try {
-      r();
-    } catch (m) {
-      o.delete(n);
-      f(new He(u(m)));
+      send();
+    } catch (thrown) {
+      pending.delete(key);
+      reject(new HooksError(notPlainMessage(thrown)));
       return;
     }
-    x = Lk(v, {
-      abort: a,
+    stopAbortForwarder = forwardAbort(signal, {
+      abort: onAbort,
     });
   });
-var G = (o, n) => (r, a, v) => {
-  let u = ++o.nextCounter;
-  return w({
-    pending: o.pendingNext,
-    key: `${n}:${u}`,
+var makeNextCallback = (state, dispatchId) => (argument, signal, floors) => {
+  let nextId = ++state.nextCounter;
+  return awaitPortReply({
+    pending: state.pendingNext,
+    key: `${dispatchId}:${nextId}`,
     send: () =>
-      o.post({
+      state.post({
         type: "next",
-        id: n,
-        nextId: u,
-        argument: r,
-        floors: v,
+        id: dispatchId,
+        nextId,
+        argument,
+        floors,
       }),
     onAbort: () =>
-      o.post({
+      state.post({
         type: "next_abort",
-        id: n,
-        nextId: u,
-        reason: yxt(a),
-        ...spr(a),
+        id: dispatchId,
+        nextId,
+        reason: abortReasonText(signal),
+        ...settledIfPlainData(signal),
       }),
-    signal: a,
-    notPlainMessage: (y) => A3t(d(y)),
+    signal,
+    notPlainMessage: (thrown) => nextNotPlainData(errorMessage(thrown)),
   });
 };
-function z(
-  o,
-  {
-    environmentId: n,
-    op: r,
-    args: a,
-    signal: v,
-    dispatchId: u,
-    registration: y,
-    serving: f,
-    rootEvent: x,
-    pressing: m,
-  },
+function requestOp(
+  state,
+  { environmentId, op: opName, args, signal, dispatchId, registration, serving, rootEvent, pressing },
 ) {
-  let h = o.ports.get(n);
-  if (!h) return Promise.reject(new He(`${r}: the plugin's environment is unloaded`));
-  let { port: g } = h;
-  let k = ++o.opCounter;
-  if (u !== undefined && !y3t(r)) h.owedOps.set(k, u);
-  return w({
-    pending: h.pendingOps,
-    key: k,
+  let entry = state.ports.get(environmentId);
+  if (!entry) return Promise.reject(new HooksError(`${opName}: the plugin's environment is unloaded`));
+  let { port } = entry;
+  let opId = ++state.opCounter;
+  if (dispatchId !== undefined && !isUiEventName(opName)) entry.owedOps.set(opId, dispatchId);
+  return awaitPortReply({
+    pending: entry.pendingOps,
+    key: opId,
     send: () =>
-      g.postMessage({
+      port.postMessage({
         type: "op",
-        opId: k,
-        dispatchId: u,
-        registration: y,
-        serving: f,
-        rootEvent: x,
-        pressing: m,
-        op: r,
-        args: a,
+        opId,
+        dispatchId,
+        registration,
+        serving,
+        rootEvent,
+        pressing,
+        op: opName,
+        args,
       }),
-    onAbort: v
+    onAbort: signal
       ? () =>
-          g.postMessage({
+          port.postMessage({
             type: "op_abort",
-            opId: k,
-            reason: yxt(v),
+            opId,
+            reason: abortReasonText(signal),
           })
       : () => {},
-    signal: v,
-    notPlainMessage: (t) => Xeo(r, d(t)),
+    signal,
+    notPlainMessage: (thrown) => argsNotPlainData(opName, errorMessage(thrown)),
   });
 }
-var J = (o, n) => (r, a, v) => {
-  let u = ++o.nextCounter;
-  let y = false;
-  let f = false;
-  let x = () =>
-    w({
-      pending: o.pendingSteps,
-      key: `${n}:${u}`,
+var makeStreamNextCallback = (state, dispatchId) => (argument, signal, floors) => {
+  let nextId = ++state.nextCounter;
+  let sentOpen = false;
+  let isFinished = false;
+  let pullOnce = () =>
+    awaitPortReply({
+      pending: state.pendingSteps,
+      key: `${dispatchId}:${nextId}`,
       send: () => {
-        o.post({
+        state.post({
           type: "next_pull",
-          id: n,
-          nextId: u,
-          ...(y
+          id: dispatchId,
+          nextId,
+          ...(sentOpen
             ? {}
             : {
                 open: {
-                  argument: r,
-                  floors: v,
+                  argument,
+                  floors,
                 },
               }),
         });
-        y = true;
+        sentOpen = true;
       },
       onAbort: () =>
-        o.post({
+        state.post({
           type: "next_abort",
-          id: n,
-          nextId: u,
-          reason: yxt(a),
-          ...spr(a),
+          id: dispatchId,
+          nextId,
+          reason: abortReasonText(signal),
+          ...settledIfPlainData(signal),
         }),
-      signal: a,
-      notPlainMessage: (m) => A3t(d(m)),
+      signal,
+      notPlainMessage: (thrown) => nextNotPlainData(errorMessage(thrown)),
     });
   return (async function* () {
     try {
       while (true) {
-        let m = await x().catch((h) => {
-          f = true;
-          throw h;
+        let step = await pullOnce().catch((error) => {
+          isFinished = true;
+          throw error;
         });
-        if (m.done) {
-          f = true;
-          return m.value;
+        if (step.done) {
+          isFinished = true;
+          return step.value;
         }
-        yield m.value;
+        yield step.value;
       }
     } finally {
-      if (y && !f)
-        o.post({
+      if (sentOpen && !isFinished)
+        state.post({
           type: "next_close",
-          id: n,
-          nextId: u,
+          id: dispatchId,
+          nextId,
         });
     }
   })();
 };
-var Q = (
-  o,
-  { environmentId: n, op: r, args: a, signal: v, dispatchId: u, registration: y, serving: f, rootEvent: x },
+var requestOpStream = (
+  state,
+  { environmentId, op: opName, args, signal, dispatchId, registration, serving, rootEvent },
 ) =>
   (async function* () {
-    let m = () => new He(`${r}: the plugin's environment is unloaded`);
-    let h = o.ports.get(n);
-    if (!h) throw m();
-    let { port: g, pendingOps: k, owedOps: t } = h;
-    let e = ++o.opCounter;
-    let s = {
-      dispatchId: u,
-      registration: y,
-      serving: f,
-      rootEvent: x,
-      op: r,
-      args: a,
+    let unloadedError = () => new HooksError(`${opName}: the plugin's environment is unloaded`);
+    let entry = state.ports.get(environmentId);
+    if (!entry) throw unloadedError();
+    let { port, pendingOps, owedOps } = entry;
+    let opId = ++state.opCounter;
+    let openFrame = {
+      dispatchId,
+      registration,
+      serving,
+      rootEvent,
+      op: opName,
+      args,
     };
-    let p = false;
-    let i = false;
-    function l() {
-      if (o.ports.get(n) !== h) return Promise.reject(m());
-      if (u !== undefined) t.set(e, u);
-      return w({
-        pending: k,
-        key: e,
+    let sentOpen = false;
+    let isFinished = false;
+    function pullOnce() {
+      if (state.ports.get(environmentId) !== entry) return Promise.reject(unloadedError());
+      if (dispatchId !== undefined) owedOps.set(opId, dispatchId);
+      return awaitPortReply({
+        pending: pendingOps,
+        key: opId,
         send: () => {
-          g.postMessage({
+          port.postMessage({
             type: "op_pull",
-            opId: e,
-            ...(p
+            opId,
+            ...(sentOpen
               ? {}
               : {
-                  open: s,
+                  open: openFrame,
                 }),
           });
-          p = true;
+          sentOpen = true;
         },
-        onAbort: v
+        onAbort: signal
           ? () =>
-              g.postMessage({
+              port.postMessage({
                 type: "op_abort",
-                opId: e,
-                reason: yxt(v),
+                opId,
+                reason: abortReasonText(signal),
               })
           : () => {},
-        signal: v,
-        notPlainMessage: (c) => Xeo(r, d(c)),
+        signal,
+        notPlainMessage: (thrown) => argsNotPlainData(opName, errorMessage(thrown)),
       });
     }
     try {
       while (true) {
-        let c = await l().catch((b) => {
-          i = true;
-          throw b;
+        let step = await pullOnce().catch((error) => {
+          isFinished = true;
+          throw error;
         });
-        if (c.done) {
-          i = true;
-          return c.value;
+        if (step.done) {
+          isFinished = true;
+          return step.value;
         }
-        yield c.value;
+        yield step.value;
       }
     } finally {
-      if (p && !i)
-        g.postMessage({
+      if (sentOpen && !isFinished)
+        port.postMessage({
           type: "op_close",
-          opId: e,
+          opId,
         });
     }
   })();
-function M(o, n) {
-  if (o) Atomics.store(o, uZr, Math.max(Atomics.load(o, uZr), n));
+function recordNewestDispatch(marks, dispatchId) {
+  if (marks)
+    Atomics.store(
+      marks,
+      MARKS_NEWEST_DISPATCH_SLOT,
+      Math.max(Atomics.load(marks, MARKS_NEWEST_DISPATCH_SLOT), dispatchId),
+    );
 }
-function E(o, n, r) {
-  let a = (n.get(r) ?? 0) + 1;
-  n.set(r, a);
-  if (o) {
-    Atomics.store(o, crs, r);
-    Atomics.store(o, drs, a);
+function recordAnsweredDispatch(marks, answersByDispatch, dispatchId) {
+  let answerCount = (answersByDispatch.get(dispatchId) ?? 0) + 1;
+  answersByDispatch.set(dispatchId, answerCount);
+  if (marks) {
+    Atomics.store(marks, MARKS_ANSWERED_DISPATCH_SLOT, dispatchId);
+    Atomics.store(marks, MARKS_ANSWERS_SENT_SLOT, answerCount);
   }
 }
-function W(o) {
-  for (let n of o.pendingOps.values()) n.reject(new He("the plugin's environment was unloaded"));
-  o.pendingOps.clear();
+function rejectPendingOps(entry) {
+  for (let pending of entry.pendingOps.values())
+    pending.reject(new HooksError("the plugin's environment was unloaded"));
+  entry.pendingOps.clear();
 }
-function _(o, n) {
-  if (!(typeof o === "object" && o !== null && n in o)) return;
-  let a = Object.getOwnPropertyDescriptor(o, n)?.value;
-  return a instanceof SharedArrayBuffer ? new Int32Array(a) : undefined;
+function readSharedSlot(bootstrapData, key) {
+  if (!(typeof bootstrapData === "object" && bootstrapData !== null && key in bootstrapData)) return;
+  let slotValue = Object.getOwnPropertyDescriptor(bootstrapData, key)?.value;
+  return slotValue instanceof SharedArrayBuffer ? new Int32Array(slotValue) : undefined;
 }
-function I(o) {
-  let n = B(o);
-  let { post: r, ports: a, pendingNext: v, pendingSteps: u, streams: y } = n;
-  let f = new Map();
-  let x = _(N, "stamp");
-  let m = _(N, "marks");
-  let h = new Map();
-  dCn({
-    log: (k, t) =>
-      r({
+function startHooksWorker(workerGlobal) {
+  let state = createWorkerState(workerGlobal);
+  let { post, ports, pendingNext, pendingSteps, streams } = state;
+  let abortControllers = new Map();
+  let stamp = readSharedSlot(workerData, "stamp");
+  let marks = readSharedSlot(workerData, "marks");
+  let answersByDispatch = new Map();
+  setMatcherLog({
+    log: (text, level) =>
+      post({
         type: "log",
-        text: k,
-        level: t,
+        text,
+        level,
       }),
-    hookFailed: (k) =>
-      r({
+    hookFailed: (failure) =>
+      post({
         type: "hook_failed",
-        ...k,
+        ...failure,
       }),
   });
-  rfr.set((k) =>
-    r({
+  hookScopeStore.set((sighting) =>
+    post({
       type: "passed_by",
-      sighting: k,
+      sighting,
     }),
   );
-  let g = lrs({
-    hostOps: (k) => z(n, k),
-    hostStreamOps: (k) => Q(n, k),
-    stamp: x,
+  let bridge = createHookHostBridge({
+    hostOps: (request) => requestOp(state, request),
+    hostStreamOps: (request) => requestOpStream(state, request),
+    stamp,
   });
-  U(n, g);
-  o.onmessage = (k) => {
-    let t = k.data;
-    if (t.type === "ping") {
-      r({
+  reportUnhandledRejections(state, bridge);
+  workerGlobal.onmessage = (messageEvent) => {
+    let message = messageEvent.data;
+    if (message.type === "ping") {
+      post({
         type: "pong",
-        n: t.n,
+        n: message.n,
       });
       return;
     }
-    switch ((Ufr(x), t.type)) {
+    switch ((markScrollActivity(stamp), message.type)) {
       case "load": {
-        let { environmentId: e, port: s } = t;
-        let p = new Map();
-        let i = new Map();
-        a.set(e, {
-          port: s,
-          pendingOps: p,
-          owedOps: i,
+        let { environmentId, port: environmentPort } = message;
+        let pendingOps = new Map();
+        let owedOps = new Map();
+        ports.set(environmentId, {
+          port: environmentPort,
+          pendingOps,
+          owedOps,
         });
-        s.onmessage = (l) => {
-          let c = l.data;
-          Ufr(x);
-          if (c.type === "flush") {
-            s.postMessage({
+        environmentPort.onmessage = (portMessageEvent) => {
+          let frame = portMessageEvent.data;
+          markScrollActivity(stamp);
+          if (frame.type === "flush") {
+            environmentPort.postMessage({
               type: "flushed",
-              flushId: c.flushId,
+              flushId: frame.flushId,
             });
             return;
           }
-          let b = XJ(i, c.opId);
-          if (b !== undefined) E(m, h, b);
-          let P = XJ(p, c.opId);
-          if (c.type === "op_result") P?.resolve(c.value);
-          else P?.reject(new He(c.error));
+          let owedDispatchId = takePending(owedOps, frame.opId);
+          if (owedDispatchId !== undefined) recordAnsweredDispatch(marks, answersByDispatch, owedDispatchId);
+          let pending = takePending(pendingOps, frame.opId);
+          if (frame.type === "op_result") pending?.resolve(frame.value);
+          else pending?.reject(new HooksError(frame.error));
         };
-        g.load(e, t.args).then(
-          (l) => {
-            r({
+        bridge.load(environmentId, message.args).then(
+          (loaded) => {
+            post({
               type: "loaded",
-              environmentId: e,
-              registered: Tos(l.registered),
+              environmentId,
+              registered: serializeMatcherList(loaded.registered),
             });
           },
-          (l) => {
-            a.delete(e);
-            s.close();
-            let c = Aos(l);
-            r({
+          (loadError) => {
+            ports.delete(environmentId);
+            environmentPort.close();
+            let cause = causeString(loadError);
+            post({
               type: "load_error",
-              environmentId: e,
-              error: d(l),
-              ...(c !== undefined && {
-                cause: c,
+              environmentId,
+              error: errorMessage(loadError),
+              ...(cause !== undefined && {
+                cause,
               }),
             });
           },
@@ -394,307 +387,307 @@ function I(o) {
         return;
       }
       case "unload": {
-        g.unload(t.environmentId);
-        let e = XJ(a, t.environmentId);
-        if (e) {
-          e.port.close();
-          W(e);
+        bridge.unload(message.environmentId);
+        let entry = takePending(ports, message.environmentId);
+        if (entry) {
+          entry.port.close();
+          rejectPendingOps(entry);
         }
         return;
       }
       case "build": {
-        let { environmentId: e } = t;
+        let { environmentId } = message;
         try {
-          g.build(e, t.table, t.suppressed);
-          r({
+          bridge.build(environmentId, message.table, message.suppressed);
+          post({
             type: "built",
-            environmentId: e,
+            environmentId,
           });
-        } catch (s) {
-          r({
+        } catch (buildError) {
+          post({
             type: "built_error",
-            environmentId: e,
-            error: d(s),
+            environmentId,
+            error: errorMessage(buildError),
           });
         }
         return;
       }
       case "resolve": {
-        let { resolveId: e, environmentId: s, requests: p } = t;
+        let { resolveId, environmentId, requests } = message;
         Promise.resolve()
-          .then(() => g.resolveTables(s, p))
+          .then(() => bridge.resolveTables(environmentId, requests))
           .then(
             () =>
-              r({
+              post({
                 type: "resolved",
-                resolveId: e,
+                resolveId,
               }),
-            (i) =>
-              r({
+            (error) =>
+              post({
                 type: "resolve_error",
-                resolveId: e,
-                error: d(i),
+                resolveId,
+                error: errorMessage(error),
               }),
           );
         return;
       }
       case "call": {
-        let { callId: e, environmentId: s, call: p, callers: i } = t;
+        let { callId, environmentId, call, callers } = message;
         Promise.resolve()
           .then(() =>
-            g.callInterface(s, p, {
-              callId: e,
-              callers: i,
+            bridge.callInterface(environmentId, call, {
+              callId,
+              callers,
             }),
           )
           .then(
-            (l) => {
+            (value) => {
               try {
-                r({
+                post({
                   type: "call_result",
-                  callId: e,
-                  value: l,
+                  callId,
+                  value,
                 });
-              } catch (c) {
-                r({
+              } catch (cloneError) {
+                post({
                   type: "call_error",
-                  callId: e,
-                  error: `$.${p.name}.${p.method} returned a value that is not plain data: ${d(c)}`,
+                  callId,
+                  error: `$.${call.name}.${call.method} returned a value that is not plain data: ${errorMessage(cloneError)}`,
                 });
               }
             },
-            (l) =>
-              r({
+            (error) =>
+              post({
                 type: "call_error",
-                callId: e,
-                error: d(l),
+                callId,
+                error: errorMessage(error),
               }),
           );
         return;
       }
       case "dispatch": {
         let {
-          id: e,
-          event: s,
-          payload: p,
-          environments: i,
-          leftOut: l,
-          origin: c,
-          raise: b,
-          floors: P,
-          cutAt: H,
-          names: K,
-          dialogClients: C,
-          ended: L,
-        } = t;
-        let A = xrs(s, p);
-        YUi(s, K);
-        if (A !== undefined) zte.holdClients(A, C);
-        M(m, e);
-        let F = new AbortController();
-        f.set(e, F);
+          id: dispatchId,
+          event,
+          payload,
+          environments,
+          leftOut,
+          origin,
+          raise,
+          floors,
+          cutAt,
+          names,
+          dialogClients,
+          ended,
+        } = message;
+        let renderRequest = parseAskUserQuestionRenderRequest(event, payload);
+        setEventTableEntries(event, names);
+        if (renderRequest !== undefined) surfaceRowLedger.holdClients(renderRequest, dialogClients);
+        recordNewestDispatch(marks, dispatchId);
+        let abortController = new AbortController();
+        abortControllers.set(dispatchId, abortController);
         Promise.resolve()
           .then(() =>
-            g.dispatch(
+            bridge.dispatch(
               {
-                id: e,
-                event: s,
-                payload: p,
-                environments: i,
-                leftOut: l,
-                origin: c,
-                raise: b,
-                floors: P,
-                cutAt: H,
-                ended: L,
+                id: dispatchId,
+                event,
+                payload,
+                environments,
+                leftOut,
+                origin,
+                raise,
+                floors,
+                cutAt,
+                ended,
               },
-              G(n, e),
-              F.signal,
+              makeNextCallback(state, dispatchId),
+              abortController.signal,
             ),
           )
           .then(
-            (R) => {
+            (result) => {
               try {
-                r({
+                post({
                   type: "result",
-                  id: e,
-                  ...R,
+                  id: dispatchId,
+                  ...result,
                 });
-              } catch (j) {
-                r({
+              } catch (cloneError) {
+                post({
                   type: "error",
-                  id: e,
-                  error: `result not cloneable: ${d(j)}`,
-                  ...(R.withheld === true && {
+                  id: dispatchId,
+                  error: `result not cloneable: ${errorMessage(cloneError)}`,
+                  ...(result.withheld === true && {
                     withheld: true,
                   }),
                 });
               }
             },
-            (R) =>
-              r({
+            (dispatchFailure) =>
+              post({
                 type: "error",
-                id: e,
-                error: d(R),
-                ...(Ros(R)?.isNoted === true && {
+                id: dispatchId,
+                error: errorMessage(dispatchFailure),
+                ...(readWeakTag(dispatchFailure)?.isNoted === true && {
                   withheld: true,
                 }),
               }),
           )
           .finally(() => {
-            f.delete(e);
-            h.delete(e);
+            abortControllers.delete(dispatchId);
+            answersByDispatch.delete(dispatchId);
           });
         return;
       }
       case "dispatch_stream": {
-        let { id: e, type: s, ...p } = t;
-        M(m, e);
-        let i = new AbortController();
-        f.set(e, i);
+        let { id: dispatchId, type: messageType, ...streamRequest } = message;
+        recordNewestDispatch(marks, dispatchId);
+        let abortController = new AbortController();
+        abortControllers.set(dispatchId, abortController);
         try {
-          y.set(
-            e,
-            g.dispatchStream(
+          streams.set(
+            dispatchId,
+            bridge.dispatchStream(
               {
-                id: e,
-                ...p,
+                id: dispatchId,
+                ...streamRequest,
               },
-              J(n, e),
-              i.signal,
+              makeStreamNextCallback(state, dispatchId),
+              abortController.signal,
             ),
           );
-        } catch (l) {
-          f.delete(e);
-          h.delete(e);
-          r({
+        } catch (error) {
+          abortControllers.delete(dispatchId);
+          answersByDispatch.delete(dispatchId);
+          post({
             type: "error",
-            id: e,
-            error: d(l),
+            id: dispatchId,
+            error: errorMessage(error),
           });
         }
         return;
       }
       case "dialog_clients": {
-        zte.holdClients(t.site, t.clients);
+        surfaceRowLedger.holdClients(message.site, message.clients);
         return;
       }
       case "stream_pull": {
-        let p = function () {
-          y.delete(e);
-          f.delete(e);
-          h.delete(e);
+        let finishStream = function () {
+          streams.delete(dispatchId);
+          abortControllers.delete(dispatchId);
+          answersByDispatch.delete(dispatchId);
         };
-        let { id: e } = t;
-        let s = y.get(e);
-        if (s === undefined) {
-          r({
+        let { id: dispatchId } = message;
+        let stream = streams.get(dispatchId);
+        if (stream === undefined) {
+          post({
             type: "error",
-            id: e,
+            id: dispatchId,
             error: "no stream is open for this dispatch",
           });
           return;
         }
-        s.next().then(
-          (i) => {
-            if (i.done === true) p();
+        stream.next().then(
+          (step) => {
+            if (step.done === true) finishStream();
             try {
-              r({
+              post({
                 type: "stream_step",
-                id: e,
+                id: dispatchId,
                 step: {
-                  done: i.done === true,
-                  value: i.value,
+                  done: step.done === true,
+                  value: step.value,
                 },
               });
-            } catch (l) {
-              p();
-              s.return(undefined).catch(() => {
+            } catch (cloneError) {
+              finishStream();
+              stream.return(undefined).catch(() => {
                 return;
               });
-              r({
+              post({
                 type: "error",
-                id: e,
-                error: `a chunk that is not plain data: ${d(l)}`,
+                id: dispatchId,
+                error: `a chunk that is not plain data: ${errorMessage(cloneError)}`,
               });
             }
           },
-          (i) => {
-            p();
-            r({
+          (streamError) => {
+            finishStream();
+            post({
               type: "error",
-              id: e,
-              error: d(i),
+              id: dispatchId,
+              error: errorMessage(streamError),
             });
           },
         );
         return;
       }
       case "stream_close": {
-        let e = y.get(t.id);
-        y.delete(t.id);
-        f.delete(t.id);
-        e?.return(undefined).catch(() => {
+        let stream = streams.get(message.id);
+        streams.delete(message.id);
+        abortControllers.delete(message.id);
+        stream?.return(undefined).catch(() => {
           return;
         });
         return;
       }
       case "next_step": {
-        E(m, h, t.id);
-        XJ(u, `${t.id}:${t.nextId}`)?.resolve(t.step);
+        recordAnsweredDispatch(marks, answersByDispatch, message.id);
+        takePending(pendingSteps, `${message.id}:${message.nextId}`)?.resolve(message.step);
         return;
       }
       case "abort":
-        f.get(t.id)?.abort(Cos(t.reason, t.isSettled));
+        abortControllers.get(message.id)?.abort(makeHooksOrPlainError(message.reason, message.isSettled));
         return;
       case "press": {
-        let { pressId: e, environmentId: s, handle: p, e: i } = t;
+        let { pressId, environmentId, handle, e: event } = message;
         Promise.resolve()
           .then(() =>
-            g.press(
-              s,
+            bridge.press(
+              environmentId,
               {
-                handle: p,
-                sent: e,
+                handle,
+                sent: pressId,
               },
-              i,
+              event,
             ),
           )
           .then(
             () =>
-              r({
+              post({
                 type: "press_result",
-                pressId: e,
+                pressId,
               }),
-            (l) =>
-              r({
+            (error) =>
+              post({
                 type: "press_error",
-                pressId: e,
-                error: d(l),
+                pressId,
+                error: errorMessage(error),
               }),
           );
         return;
       }
       case "press_release":
-        g.releasePresses(t.environmentId, t.handles);
+        bridge.releasePresses(message.environmentId, message.handles);
         return;
       case "next_result":
       case "next_error": {
-        E(m, h, t.id);
-        let e = `${t.id}:${t.nextId}`;
-        let s = XJ(v, e);
-        if (t.type === "next_result") s?.resolve(t.result);
+        recordAnsweredDispatch(marks, answersByDispatch, message.id);
+        let pendingKey = `${message.id}:${message.nextId}`;
+        let pending = takePending(pendingNext, pendingKey);
+        if (message.type === "next_result") pending?.resolve(message.result);
         else {
-          let i = new He(t.error);
-          s?.reject(i);
-          XJ(u, e)?.reject(i);
+          let error = new HooksError(message.error);
+          pending?.reject(error);
+          takePending(pendingSteps, pendingKey)?.reject(error);
         }
         return;
       }
     }
   };
-  r({
+  post({
     type: "online",
   });
 }
-I(self);
+startHooksWorker(self);

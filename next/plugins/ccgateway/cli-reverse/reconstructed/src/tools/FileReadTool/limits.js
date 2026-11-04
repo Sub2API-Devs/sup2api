@@ -43,7 +43,7 @@ function setCachedReadingLimit(output, limitText) {
 function getCachedReadingLimit(output) {
   return weakMap.get(output);
 }
-//@ chunk-q7gky7a4.js:1253-1349 fingerprint = getEnvMaxTokens (1)
+//@ chunk-q7gky7a4.js:1253-1349 fingerprint (2.1.88 match: getEnvMaxTokens, 1)
 /**
  * 读取 CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS（正数才生效）。
  */
@@ -52,7 +52,7 @@ function getEnvMaxTokens() {
   if (override !== undefined && override > 0) return override;
   return;
 }
-//@ chunk-q7gky7a4.js:1349-1475 fingerprint = getDefaultFileReadingLimits (0.676)
+//@ chunk-q7gky7a4.js:1349-1475 fingerprint (2.1.88 match: getDefaultFileReadingLimits, 0.676)
 /**
  * 默认读取上限（缓存）：maxSizeBytes 256KB，maxTokens 取 CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS 或 25000。
  */

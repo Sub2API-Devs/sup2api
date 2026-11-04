@@ -12,7 +12,7 @@ import { isBridgeProjectsHintEnabled } from "./bridgeGates.js";
 
 //@ chunk-6w5h3e35.js:228-239 placement
 var SPAWN_SESSIONS_DEFAULT = 32;
-//@ chunk-6w5h3e35.js:239-4907 placement = printHelp (0.37)
+//@ chunk-6w5h3e35.js:239-4907 placement (2.1.88 match: printHelp, 0.37)
 /**
  * 打印 claude remote-control 的帮助。
  */

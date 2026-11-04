@@ -16,7 +16,7 @@ import { isEffortHintFlagOn } from "../utils/effort.js";
 import { import_reject } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 
-//@ chunk-1nat7wre.js:3947-4181 callgraph-fingerprint = filterReservedShortcuts (1)
+//@ chunk-1nat7wre.js:3947-4181 callgraph-fingerprint (2.1.88 match: filterReservedShortcuts, 1)
 /**
  * 从模板里去掉不可重绑的保留键（X5e）；空块整个丢弃。
  */
@@ -34,7 +34,7 @@ function filterReservedShortcuts(blocks) {
     })
     .filter((block) => Object.keys(block.bindings).length > 0);
 }
-//@ chunk-1nat7wre.js:4181-4514 fingerprint = generateKeybindingsTemplate (0.789)
+//@ chunk-1nat7wre.js:4181-4514 fingerprint (2.1.88 match: generateKeybindingsTemplate, 0.789)
 /**
  * 生成 keybindings.json 模板：$schema（schemastore）、$docs、去掉 FeedbackSurvey 等内部上下文和保留键后的默认绑定；effort 调节未开放时删掉 chat:increaseEffort/decreaseEffort。
  */

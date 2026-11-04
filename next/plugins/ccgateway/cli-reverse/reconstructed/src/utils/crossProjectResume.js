@@ -26,7 +26,7 @@ import { getErrnoCode } from "./errors.js";
 function getShellChainOperator() {
   return getPlatform() === "windows" ? ";" : "&&";
 }
-//@ chunk-b79vwm1h.js:20135-20477 callgraph-fingerprint = checkCrossProjectResume (0.251)
+//@ chunk-b79vwm1h.js:20135-20477 callgraph-fingerprint (2.1.88 match: checkCrossProjectResume, 0.251)
 /**
  * 所选会话属于其他项目时，给出 cd 到对应目录再 claude --resume 的提示（同仓库 worktree 可直接恢复）。
  */

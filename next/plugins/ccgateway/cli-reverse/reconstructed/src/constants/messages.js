@@ -8,7 +8,7 @@
  * pieces: chunk-ndmse9kj.js (1)
  * attribution: callgraph-witnessed 1
  */
-//@ chunk-ndmse9kj.js:35988-36671 callgraph-witnessed = NO_CONTENT_MESSAGE (0.2)
+//@ chunk-ndmse9kj.js:35988-36671 callgraph-witnessed (2.1.88 match: NO_CONTENT_MESSAGE, 0.2)
 /**
  * 消息相关固定文本常量："(no content)"、已删除图片说明、"No response requested."、合成模型名 "<synthetic>"、Auto Mode 标题、回滚不安全原因与说明、跨组织 thinking 不可用提示。
  */

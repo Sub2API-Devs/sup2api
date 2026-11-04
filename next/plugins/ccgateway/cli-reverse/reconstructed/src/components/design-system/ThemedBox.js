@@ -13,7 +13,7 @@ import { useResolvedTheme } from "./ThemeProvider.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseBox } from "../../ink/components/Box.js";
 
-//@ chunk-x6v6jz2y.js:5808-5964 fingerprint = resolveColor (1)
+//@ chunk-x6v6jz2y.js:5808-5964 fingerprint (2.1.88 match: resolveColor, 1)
 function resolveColor(color, theme) {
   if (!color) return;
   if (
@@ -25,7 +25,7 @@ function resolveColor(color, theme) {
     return color;
   return isBuiltinTheme(color) ? theme[color] : undefined;
 }
-//@ chunk-x6v6jz2y.js:5964-6240 fingerprint = ThemedBox (0.952)
+//@ chunk-x6v6jz2y.js:5964-6240 fingerprint (2.1.88 match: ThemedBox, 0.952)
 function ThemedBox(t0) {
   let resolvedTheme = useResolvedTheme();
   return jsxProd_default(BaseBox, {

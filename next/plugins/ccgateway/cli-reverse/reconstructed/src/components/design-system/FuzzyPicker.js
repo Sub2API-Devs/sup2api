@@ -51,7 +51,7 @@ function noop_3() {}
 var DEFAULT_VISIBLE_COUNT = 8;
 var PICKER_CHROME_ROWS = 10;
 var MIN_VISIBLE_COUNT = 2;
-//@ chunk-18hwfzwa.js:654682-661223 fingerprint = FuzzyPicker (0.812)
+//@ chunk-18hwfzwa.js:654682-661223 fingerprint (2.1.88 match: FuzzyPicker, 0.812)
 /**
  * 模糊搜索选择器：顶部（或底部）搜索框，按查询过滤并高亮，上下选择，回车确认，Esc 取消，无结果显示 "No results"。
  */
@@ -608,7 +608,7 @@ function FuzzyPicker(props) {
   } else pickerElement = $[114];
   return pickerElement;
 }
-//@ chunk-18hwfzwa.js:661223-662906 fingerprint = List (0.841)
+//@ chunk-18hwfzwa.js:661223-662906 fingerprint (2.1.88 match: List, 0.841)
 function List(props) {
   let $ = useMemoCache(38);
   let {

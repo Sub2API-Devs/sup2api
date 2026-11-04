@@ -194,7 +194,7 @@ function worktreeChangedMessage(worktreePath, tmuxEnded) {
 async function inspectWorktreeChanges(worktreePath, worktreesInside) {
   return null;
 }
-//@ chunk-18hwfzwa.js:1695109-1706346 fingerprint = WorktreeExitDialog (0.483)
+//@ chunk-18hwfzwa.js:1695109-1706346 fingerprint (2.1.88 match: WorktreeExitDialog, 0.483)
 /**
  * 退出 worktree 会话：检查未提交改动与 worktree 状态，选择保留或删除 worktree（必要时先确认丢弃改动），结束 tmux 会话并返回原目录。
  */

@@ -121,7 +121,7 @@ var BUILTIN_MARKETPLACE_OFF_NOTICE; // deferred: uses OFFICIAL_MARKETPLACE_DISPL
 deferInit("chunk-vrb44rx7.js:103318", () => {
   BUILTIN_MARKETPLACE_OFF_NOTICE = `${OFFICIAL_MARKETPLACE_DISPLAY} is off. Plugins you installed from it stay installed and keep updating. Turn it back on in /plugin \u2192 Marketplaces.`;
 });
-//@ chunk-vrb44rx7.js:103453-122462 fingerprint = ManageMarketplaces (0.48)
+//@ chunk-vrb44rx7.js:103453-122462 fingerprint (2.1.88 match: ManageMarketplaces, 0.48)
 function ManageMarketplaces({
   setViewState,
   error,
@@ -1610,7 +1610,7 @@ function ManageMarketplaces({
     ],
   });
 }
-//@ chunk-vrb44rx7.js:122462-123736 fingerprint = ManageMarketplacesKeyHints (0.783)
+//@ chunk-vrb44rx7.js:122462-123736 fingerprint (2.1.88 match: ManageMarketplacesKeyHints, 0.783)
 function ManageMarketplacesKeyHints(props) {
   let $ = useMemoCache(23);
   let { exitState, hasPendingActions, isOnInertRow, builtInRow } = props;

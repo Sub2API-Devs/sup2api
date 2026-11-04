@@ -21,7 +21,7 @@ import { SandboxManager } from "../utils/sandbox/sandbox-adapter.js";
 import { getPlatform } from "../utils/platform.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:107469-107652 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:107469-107652 fingerprint (2.1.88 match: _temp, 1)
 function renderViolationLine(v, i) {
   return jsxProd_default(
     Box,
@@ -35,7 +35,7 @@ function renderViolationLine(v, i) {
     `${v.timestamp.getTime()}-${i}`,
   );
 }
-//@ chunk-18hwfzwa.js:107833-108843 fingerprint = SandboxViolationExpandedView (0.667)
+//@ chunk-18hwfzwa.js:107833-108843 fingerprint (2.1.88 match: SandboxViolationExpandedView, 0.667)
 function SandboxViolationExpandedView() {
   let $ = useMemoCache(15);
   let t0;

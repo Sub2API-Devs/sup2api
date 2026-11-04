@@ -10,7 +10,7 @@
  */
 import { uniqByExport } from "../../vendor/lodash-es/uniqBy.js";
 
-//@ chunk-18hwfzwa.js:185079-185159 fingerprint = mergeClients (1)
+//@ chunk-18hwfzwa.js:185079-185159 fingerprint (2.1.88 match: mergeClients, 1)
 function mergeClients(initialClients, mcpClients) {
   if (initialClients && mcpClients && mcpClients.length > 0)
     return uniqByExport([...initialClients, ...mcpClients], "name");

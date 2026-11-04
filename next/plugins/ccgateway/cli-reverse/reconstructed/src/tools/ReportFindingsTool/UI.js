@@ -336,7 +336,7 @@ function useShimmerOffset(textWidth) {
   } else result = $[2];
   return result;
 }
-//@ chunk-ah34pb7m.js:28744-29075 placement = ShimmerChar (0.914)
+//@ chunk-ah34pb7m.js:28744-29075 placement (2.1.88 match: ShimmerChar, 0.914)
 /**
  * 闪烁文字。
  */

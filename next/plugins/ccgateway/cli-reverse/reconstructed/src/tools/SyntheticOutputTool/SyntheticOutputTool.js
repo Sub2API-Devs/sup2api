@@ -29,7 +29,7 @@ import { isClaudeTestPluginEnabled } from "../../plugins/bundled/claudeTest/brow
 import { hasPluginSkill } from "../../components/skills/SkillsMenu.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-22r83hv0.js:24633-24745 fingerprint = outputSchema (0.607)
+//@ chunk-22r83hv0.js:24633-24745 fingerprint (2.1.88 match: outputSchema, 0.607)
 var structuredOutputInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var structuredOutputOutputSchema;
 var STRUCTUREDOUTPUT;
@@ -42,7 +42,7 @@ deferInit("chunk-22r83hv0.js:24633", () => {
 function isNonInteractiveOrBgSession(toolContext) {
   return toolContext.isNonInteractiveSession || toolContext.isBgSession === true;
 }
-//@ chunk-22r83hv0.js:24814-25041 layout = countToolCallsSince (1)
+//@ chunk-22r83hv0.js:24814-25041 layout (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_2(messages, sinceUuid) {
   if (messages?.type !== "tool_use" || messages.name !== STRUCTUREDOUTPUT) return null;
   if (messages.id !== undefined && sinceUuid.has(messages.id)) return null;
@@ -50,7 +50,7 @@ function countToolCallsSince_2(messages, sinceUuid) {
   let text = input !== null && typeof input === "object" && "text" in input ? input.text : undefined;
   return typeof text === "string" && text.length > 0 ? text : null;
 }
-//@ chunk-22r83hv0.js:25041-26067 fingerprint = SyntheticOutputTool (0.815)
+//@ chunk-22r83hv0.js:25041-26067 fingerprint (2.1.88 match: SyntheticOutputTool, 0.815)
 /**
  * StructuredOutput 工具（SDK --json-schema 用）：输入是任意对象，call 时用 Ajv 校验后作为 structured_output 返回并结束回合；总是内联、只读、并发安全。
  */
@@ -191,7 +191,7 @@ function compileOutputSchemaValidator(node) {
     };
   }
 }
-//@ chunk-22r83hv0.js:26910-27797 callgraph-fingerprint = buildSyntheticOutputTool (0.281)
+//@ chunk-22r83hv0.js:26910-27797 callgraph-fingerprint (2.1.88 match: buildSyntheticOutputTool, 0.281)
 /**
  * 构造带 schema 校验的 StructuredOutput 工具：先编译 Ajv 校验器（拒绝过大或 $async schema），尝试派生严格模式 schema，检查 schema 是否不可满足，再返回 {tool, unsatisfiable?} 或 {error}。
  */
@@ -254,7 +254,7 @@ function buildSyntheticOutputTool(jsonSchema) {
     };
   }
 }
-//@ chunk-ae5g0zb5.js:106792-106956 fingerprint = isSyntheticOutputToolEnabled (0.699)
+//@ chunk-ae5g0zb5.js:106792-106956 fingerprint (2.1.88 match: isSyntheticOutputToolEnabled, 0.699)
 /**
  * （旧版名 isSyntheticOutputToolEnabled，存疑）交互式、主线程、非远程会话且若干特性开启时为真；与 StructuredOutput 的关系待确认。
  */

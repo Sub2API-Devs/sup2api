@@ -73,7 +73,7 @@ function usageReportFromData(data) {
   }
   return parsed.data;
 }
-//@ chunk-9689amr8.js:13258-14587 callgraph-fingerprint = call (0.272)
+//@ chunk-9689amr8.js:13258-14587 callgraph-fingerprint (2.1.88 match: call, 0.272)
 /**
  * /usage（旧 /cost）无头实现：订阅用户显示当前在用订阅额度还是超额、模型分组用量和近 24h/7d 使用分布；网关用户显示花费上限与重置时间；其他显示本会话总花费。
  */

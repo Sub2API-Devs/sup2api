@@ -30,12 +30,12 @@ import { getClaudeInChromePermissionOverrides } from "./permissionOverrides.js";
 function countVisibleTasks(tasks, options) {
   return count(Object.values(tasks), shouldHideTasksFooter) + countNonAmbientTasks(options);
 }
-//@ chunk-ah34pb7m.js:12714-12751 fingerprint = CHROME_EXTENSION_FOCUS_TAB_URL_BASE (1)
+//@ chunk-ah34pb7m.js:12714-12751 fingerprint (2.1.88 match: CHROME_EXTENSION_FOCUS_TAB_URL_BASE, 1)
 /**
  * 扩展聚焦标签页链接前缀 https://clau.de/chrome/tab/。
  */
 var CHROME_EXTENSION_FOCUS_TAB_URL_BASE = "https://clau.de/chrome/tab/";
-//@ chunk-ah34pb7m.js:12751-13077 fingerprint = renderChromeViewTabLink (0.801)
+//@ chunk-ah34pb7m.js:12751-13077 fingerprint (2.1.88 match: renderChromeViewTabLink, 0.801)
 /**
  * 终端支持超链接时，在工具行后显示 "[View Tab]" 链接（按输入里的 tabId）。
  */
@@ -63,7 +63,7 @@ function renderChromeViewTabLink(input) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:13077-14033 fingerprint = renderChromeToolResultMessage (1)
+//@ chunk-ah34pb7m.js:13077-14033 fingerprint (2.1.88 match: renderChromeToolResultMessage, 1)
 /**
  * Chrome 工具结果的简短摘要（Navigation completed、Tab created、Page read…），verbose 时显示完整结果。
  */
@@ -146,7 +146,7 @@ function createObjectResultRenderer(toolName) {
     return renderChromeToolResultMessage(output, toolName, verbose);
   };
 }
-//@ chunk-3k33hyyp.js:12061-13845 fingerprint = renderChromeToolUseMessage (1)
+//@ chunk-3k33hyyp.js:12061-13845 fingerprint (2.1.88 match: renderChromeToolUseMessage, 1)
 /**
  * Chrome 工具调用行的副标题：navigate 显示主机名、computer 显示动作与坐标/ref、find 显示 pattern 等；同时记录 tabId。
  */
@@ -225,7 +225,7 @@ function renderChromeToolUseMessage(input, toolName, verbose) {
   }
   return secondaryInfo.join(", ") || null;
 }
-//@ chunk-3k33hyyp.js:13845-14000 fingerprint = getClaudeInChromeMCPToolOverrides (0.784)
+//@ chunk-3k33hyyp.js:13845-14000 fingerprint (2.1.88 match: getClaudeInChromeMCPToolOverrides, 0.784)
 /**
  * 给 claude-in-chrome 的 MCP 工具覆盖显示名 "Claude in Chrome[tool]" 与渲染函数。
  */

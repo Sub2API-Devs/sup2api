@@ -25,7 +25,7 @@ import {
 import { init_react_production, createContext } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-mketzrwm.js:8086-8322 fingerprint = normalizeImageBlocks (1)
+//@ chunk-mketzrwm.js:8086-8322 fingerprint (2.1.88 match: normalizeImageBlocks, 1)
 /**
  * 给缺 media_type 的 base64 图片块补上（优先 mediaType 字段，否则从数据检测）。
  */
@@ -48,12 +48,12 @@ function normalizeImageBlocks(blocks) {
     };
   });
 }
-//@ chunk-mketzrwm.js:8322-8419 affinity = isMalformedBase64Image (1)
+//@ chunk-mketzrwm.js:8322-8419 affinity (2.1.88 match: isMalformedBase64Image, 1)
 function isMalformedBase64Image(block) {
   if (block.type !== "image" || block.source?.type !== "base64") return false;
   return !block.source.media_type;
 }
-//@ chunk-e6aww6q8.js:3100334-3100560 fingerprint = isMalformedBase64Image (1)
+//@ chunk-e6aww6q8.js:3100334-3100560 fingerprint (2.1.88 match: isMalformedBase64Image, 1)
 /**
  * 把可识别格式的 base64 图片包成 image 类型的 tool_result。
  */
@@ -191,7 +191,7 @@ deferInit("chunk-ah34pb7m.js:8081", () => {
     mcp_dropped_tools_delta: true,
   };
 });
-//@ chunk-ah34pb7m.js:9141-9262 fingerprint = extractInboundMessageFields (1)
+//@ chunk-ah34pb7m.js:9141-9262 fingerprint (2.1.88 match: extractInboundMessageFields, 1)
 /**
  * 对象是否带非空字符串 uuid。
  */

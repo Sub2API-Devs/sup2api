@@ -133,7 +133,7 @@ var TOOL_HOST_ID_RE = /^[a-z0-9][a-z0-9+._-]{0,31}(@[0-9][0-9A-Za-z.+_-]{0,23})?
 var MAX_INVENTORY_TOOLS = 96;
 var MAX_NONNEGATIVE_INT = 1e6;
 var MAX_INVENTORY_JSON_BYTES = 2048;
-//@ chunk-g54kbxqw.js:4036-4143 placement = detectTerminal (0.92)
+//@ chunk-g54kbxqw.js:4036-4143 placement (2.1.88 match: detectTerminal, 0.92)
 function detectTerminal(platform) {
   switch (platform) {
     case undefined:
@@ -145,7 +145,7 @@ function detectTerminal(platform) {
       return "other";
   }
 }
-//@ chunk-g54kbxqw.js:4143-4302 placement = EXTERNAL_PERMISSION_MODES (0.908)
+//@ chunk-g54kbxqw.js:4143-4302 placement (2.1.88 match: EXTERNAL_PERMISSION_MODES, 0.908)
 var SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 var SAFE_ID_WITH_BRACKETS_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._[\]-]{0,63}$/;
 var PERMISSION_MODE_WIRE_ORDER = ["default", "acceptEdits", "plan", "auto", "bypassPermissions", "dontAsk"];
@@ -659,7 +659,7 @@ function stampOutcomeKey({ status, outcome }) {
 var CONFIRM_REPOSITORY_TRUST = "confirm_repository_trust";
 var REQUEST_COMPUTER_FOLDER = "request_computer_folder";
 var LIST_COMPUTER_FOLDERS = "list_computer_folders";
-//@ chunk-s61vbvea.js:588836-588883 placement = getMcpPrefix (1)
+//@ chunk-s61vbvea.js:588836-588883 placement (2.1.88 match: getMcpPrefix, 1)
 function getMcpPrefix(actualToolName, expectedToolName) {
   return actualToolName === `mcp__${CLAUDE_CODE_REMOTE}__${expectedToolName}`;
 }

@@ -20,7 +20,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { jsonStringify } from "./slowOperations.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-eweqvj83.js:2697-2760 fingerprint = DETAILED_PROFILING (0.771)
+//@ chunk-eweqvj83.js:2697-2760 fingerprint (2.1.88 match: DETAILED_PROFILING, 0.771)
 var PROFILE_STARTUP; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
 var PROFILING_SAMPLE_RATE;
 var isProfilingSampledByRandom;
@@ -33,7 +33,7 @@ deferInit("chunk-eweqvj83.js:2697", () => {
 function isProfilingSampled() {
   return isProfilingSampledByRandom;
 }
-//@ chunk-eweqvj83.js:2784-2810 fingerprint = MARK_PREFIX (1)
+//@ chunk-eweqvj83.js:2784-2810 fingerprint (2.1.88 match: MARK_PREFIX, 1)
 var HEADLESS_PROFILING_ENABLED; // deferred: uses PROFILE_STARTUP of its import cycle while loading; runs once the cycle is complete
 var HEADLESS;
 deferInit("chunk-eweqvj83.js:2784", () => {
@@ -61,13 +61,13 @@ function getHeadlessProfilerState() {
 function getTurn0Marks() {
   return getHeadlessProfilerState().turn0Marks;
 }
-//@ chunk-eweqvj83.js:2964-3079 fingerprint = clearHeadlessMarks (1)
+//@ chunk-eweqvj83.js:2964-3079 fingerprint (2.1.88 match: clearHeadlessMarks, 1)
 function clearHeadlessMarks() {
   let perf = getPerformance();
   let allMarks = perf.getEntriesByType("mark");
   for (let mark of allMarks) if (mark.name.startsWith(HEADLESS)) perf.clearMarks(mark.name);
 }
-//@ chunk-eweqvj83.js:3079-3220 fingerprint = headlessProfilerStartTurn (0.907)
+//@ chunk-eweqvj83.js:3079-3220 fingerprint (2.1.88 match: headlessProfilerStartTurn, 0.907)
 function headlessProfilerStartTurn() {
   if (!isHeadlessProfilingActive()) return;
   let perf = getHeadlessProfilerState();
@@ -76,7 +76,7 @@ function headlessProfilerStartTurn() {
   getPerformance().mark(`${HEADLESS}turn_start`);
   if (PROFILE_STARTUP) logForDebugging(`[headlessProfiler] Started turn ${perf.current}`);
 }
-//@ chunk-eweqvj83.js:3220-3361 fingerprint = headlessProfilerCheckpoint (1)
+//@ chunk-eweqvj83.js:3220-3361 fingerprint (2.1.88 match: headlessProfilerCheckpoint, 1)
 /**
  * 记录 headless 剖析检查点（performance.mark headless_<name>）。
  */
@@ -88,7 +88,7 @@ function headlessProfilerCheckpoint(name) {
   if (PROFILE_STARTUP)
     logForDebugging(`[headlessProfiler] Checkpoint: ${name} at ${perf.now().toFixed(1)}ms`);
 }
-//@ chunk-eweqvj83.js:3361-5160 fingerprint = logHeadlessProfilerTurn (0.595)
+//@ chunk-eweqvj83.js:3361-5160 fingerprint (2.1.88 match: logHeadlessProfilerTurn, 0.595)
 /**
  * 非交互模式下（CLAUDE_CODE_PROFILE_STARTUP 或 5% 采样）汇总一轮的各检查点耗时并发 tengu 事件。
  */

@@ -182,7 +182,7 @@ function ownCcrSessionIdSpellings() {
 function sessionScopedServerIds(bareId) {
   return sessionScopedServerIds_2(bareId, CLAUDE_IN_CHROME_MCP_SERVER_NAME);
 }
-//@ chunk-1wpnxx5r.js:5669-5737 placement = toCompatSessionId (1)
+//@ chunk-1wpnxx5r.js:5669-5737 placement (2.1.88 match: toCompatSessionId, 1)
 /**
  * 为一个裸会话 ID 生成 cse_/session_ 两种前缀下的作用域服务器 ID。
  */
@@ -242,7 +242,7 @@ function isToolboxMcpServerConfig(config) {
     entries.flat().filter((value) => typeof value === "string"),
   );
 }
-//@ chunk-1wpnxx5r.js:6538-6658 placement = toCompatSessionId (1)
+//@ chunk-1wpnxx5r.js:6538-6658 placement (2.1.88 match: toCompatSessionId, 1)
 function memoryServerIdsForSessions(sessionIds) {
   return [
     A471CAF9_E559_5AD8_836C_4E5972877185,
@@ -874,7 +874,7 @@ function isBareWssUrl(url) {
     BRIDGE_HOSTS.has(parsed.hostname)
   );
 }
-//@ chunk-1wpnxx5r.js:15515-15619 affinity = unwrapCcrProxyUrl (0.858)
+//@ chunk-1wpnxx5r.js:15515-15619 affinity (2.1.88 match: unwrapCcrProxyUrl, 0.858)
 function getCcrProxyTargetUrl(url) {
   if (!isSameOriginAsCcr(url) || !URL.canParse(url)) return;
   return new URL(url).searchParams.get("mcp_url") || undefined;

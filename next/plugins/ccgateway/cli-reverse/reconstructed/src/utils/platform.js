@@ -40,7 +40,7 @@ deferInit("chunk-znrryf4y.js:418", () => {
 function platformOverrideValue() {
   return platformOverride.value;
 }
-//@ chunk-znrryf4y.js:485-606 fingerprint = getWslVersion (0.646)
+//@ chunk-znrryf4y.js:485-606 fingerprint (2.1.88 match: getWslVersion, 0.646)
 function getWslVersion_2() {
   if (platformOverrideValue()) return;
   try {
@@ -53,9 +53,9 @@ function getWslVersion_2() {
     return;
   }
 }
-//@ chunk-znrryf4y.js:606-630 layout = SUPPORTED_PLATFORMS (1)
+//@ chunk-znrryf4y.js:606-630 layout (2.1.88 match: SUPPORTED_PLATFORMS, 1)
 var SUPPORTED_PLATFORMS_2 = ["macos", "wsl"];
-//@ chunk-znrryf4y.js:630-2923 fingerprint = getPlatform (0.361)
+//@ chunk-znrryf4y.js:630-2923 fingerprint (2.1.88 match: getPlatform, 0.361)
 class PlatformDetector {
   sources;
   primedProcVersion;
@@ -219,7 +219,7 @@ function linuxDistroInfo() {
 function macOSMajorVersion() {
   return getPlatformDetector().getMacOSMajorVersion();
 }
-//@ chunk-znrryf4y.js:3469-3618 layout = VCS_MARKERS (1)
+//@ chunk-znrryf4y.js:3469-3618 layout (2.1.88 match: VCS_MARKERS, 1)
 var VCS_MARKERS_2 = [
   [".git", "git"],
   [".hg", "mercurial"],
@@ -230,7 +230,7 @@ var VCS_MARKERS_2 = [
   [".jj", "jujutsu"],
   [".sl", "sapling"],
 ];
-//@ chunk-znrryf4y.js:3618-3798 fingerprint = detectVcs (1)
+//@ chunk-znrryf4y.js:3618-3798 fingerprint (2.1.88 match: detectVcs, 1)
 async function detectVcs(dir) {
   let detected = new Set();
   if (process.env.P4PORT) detected.add("perforce");
@@ -241,7 +241,7 @@ async function detectVcs(dir) {
   } catch {}
   return [...detected];
 }
-//@ chunk-4m46mxx9.js:18087-18237 fingerprint = VCS_MARKERS (1)
+//@ chunk-4m46mxx9.js:18087-18237 fingerprint (2.1.88 match: VCS_MARKERS, 1)
 var VCS_MARKERS = [
   [".git", "git"],
   [".hg", "mercurial"],
@@ -252,7 +252,7 @@ var VCS_MARKERS = [
   [".jj", "jujutsu"],
   [".sl", "sapling"],
 ];
-//@ chunk-4m46mxx9.js:18237-18436 shared-adjacent = detectVcs (0.773)
+//@ chunk-4m46mxx9.js:18237-18436 shared-adjacent (2.1.88 match: detectVcs, 0.773)
 async function detectVcs_2(list, directory, hasP4Port) {
   let entries;
   try {
@@ -267,7 +267,7 @@ async function detectVcs_2(list, directory, hasP4Port) {
   ]);
   return vcsNames.length > 0 ? vcsNames.join(",") : undefined;
 }
-//@ chunk-qchp9vrd.js:201680-201749 fingerprint = SUPPORTED_PLATFORMS (1)
+//@ chunk-qchp9vrd.js:201680-201749 fingerprint (2.1.88 match: SUPPORTED_PLATFORMS, 1)
 function SUPPORTED_PLATFORMS() {
   let platform = getPlatform();
   return platform === "macos" || platform === "windows" || platform === "wsl";

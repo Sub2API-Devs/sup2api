@@ -33,7 +33,7 @@ function shouldShowAutoDefaultNudge(toolPermissionContext, { requireOnboarding =
     return defaultMode;
   return null;
 }
-//@ chunk-2b4rzray.js:782-1298 placement = AutoModeOptInDialog (0.312)
+//@ chunk-2b4rzray.js:782-1298 placement (2.1.88 match: AutoModeOptInDialog, 0.312)
 /**
  * auto 模式默认开启提示：accept 写 userSettings 为 auto，decline 保持；记录 tengu_auto_default_nudge_shown。
  */

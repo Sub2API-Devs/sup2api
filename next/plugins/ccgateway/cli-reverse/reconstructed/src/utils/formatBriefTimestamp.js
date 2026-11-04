@@ -25,7 +25,7 @@ var timestampCache; // deferred: has load-time effects after a deferred statemen
 deferInit("chunk-hzbq5ybv.js:384", () => {
   timestampCache = new Map();
 });
-//@ chunk-hzbq5ybv.js:398-510 fingerprint = getLocale (0.668)
+//@ chunk-hzbq5ybv.js:398-510 fingerprint (2.1.88 match: getLocale, 0.668)
 function getLocale() {
   let raw = env.LC_ALL || env.LC_TIME || env.LANG || "";
   if (timestampCache.has(raw)) return timestampCache.get(raw);
@@ -69,7 +69,7 @@ function formatBriefTimestamp(timestamp, now = new Date()) {
   let dateText = getDateTimeFormat(locale, withTimeZone(DATE_PART_FORMATS[bucket], timeZone)).format(date);
   return bucket === "week" ? `${dateText} ${timeText}` : `${dateText}, ${timeText}`;
 }
-//@ chunk-j64mp9kq.js:1424-1688 fingerprint = formatBriefTimestamp (0.766)
+//@ chunk-j64mp9kq.js:1424-1688 fingerprint (2.1.88 match: formatBriefTimestamp, 0.766)
 var TIMESTAMP_FORMATS = {
   today: {
     hour: "numeric",
@@ -98,7 +98,7 @@ var DATE_PART_FORMATS = {
     day: "numeric",
   },
 };
-//@ chunk-18hwfzwa.js:1146536-1146666 fingerprint = startOfDay (1)
+//@ chunk-18hwfzwa.js:1146536-1146666 fingerprint (2.1.88 match: startOfDay, 1)
 function startOfDay(startDate, endDate) {
   let toDayStartMs = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   return Math.round((toDayStartMs(endDate) - toDayStartMs(startDate)) / 86400000);

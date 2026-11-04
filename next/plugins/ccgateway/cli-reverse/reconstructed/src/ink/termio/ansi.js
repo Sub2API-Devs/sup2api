@@ -8,7 +8,7 @@
  * pieces: chunk-wz6vk74d.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-wz6vk74d.js:191-507 fingerprint = C0 (0.887)
+//@ chunk-wz6vk74d.js:191-507 fingerprint (2.1.88 match: C0, 0.887)
 /**
  * C0 控制字符码表（NUL…US 与 DEL）以及 ESC/BEL/分隔符、字符集复位与各转义引导符（CSI/OSC/DCS/APC/PM/SOS/ST）的字符码。
  */

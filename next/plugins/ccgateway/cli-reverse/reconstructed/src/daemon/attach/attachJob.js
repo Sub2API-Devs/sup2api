@@ -114,7 +114,7 @@ deferInit("chunk-vrr64ez0.js:10911", () => {
   buffer_10 = Buffer.from("\x1B[?9001", "ascii");
   CURSOR_HIDE_DELAY_MS = 100;
 });
-//@ chunk-vrr64ez0.js:11318-11407 placement = hasPrefix (1)
+//@ chunk-vrr64ez0.js:11318-11407 placement (2.1.88 match: hasPrefix, 1)
 function hasPrefix(src, start, prefix) {
   return (
     src.length - start >= prefix.length &&

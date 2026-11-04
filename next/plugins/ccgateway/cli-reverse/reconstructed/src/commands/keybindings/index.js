@@ -10,7 +10,7 @@
  */
 import { isKeybindingCustomizationEnabled } from "../../keybindings/loadUserBindings.js";
 
-//@ chunk-e6aww6q8.js:1722860-1723067 fingerprint = keybindings (0.628)
+//@ chunk-e6aww6q8.js:1722860-1723067 fingerprint (2.1.88 match: keybindings, 0.628)
 /**
  * /keybindings 命令对象（local）；描述：Open your keyboard shortcuts file；isEnabled: ()=>Iee()；实现 chunk-1nat7wre.js 的 T。
  */

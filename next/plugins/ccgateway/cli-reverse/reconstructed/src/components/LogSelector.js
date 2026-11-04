@@ -63,7 +63,7 @@ import { renderCompactSummaryText } from "./CompactSummary.js";
 import { renderPluginPromptColon } from "../utils/messages/pluginPrompts.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-52dd7zdd.js:457-534 fingerprint = _temp7 (0.578)
+//@ chunk-52dd7zdd.js:457-534 fingerprint (2.1.88 match: _temp7, 0.578)
 function createLogSinkRef() {
   let sink = {
     log() {},
@@ -76,7 +76,7 @@ function createLogSinkRef() {
     get: () => sink,
   };
 }
-//@ chunk-63641kq7.js:5273-5307 fingerprint = _temp2 (0.643)
+//@ chunk-63641kq7.js:5273-5307 fingerprint (2.1.88 match: _temp2, 0.643)
 var LogSelectorOptionsSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-63641kq7.js:5273", () => {
   LogSelectorOptionsSchema = DoctorLazy(() =>
@@ -85,7 +85,7 @@ deferInit("chunk-63641kq7.js:5273", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:485439-485686 fingerprint = getUniqueTags (0.489)
+//@ chunk-18hwfzwa.js:485439-485686 fingerprint (2.1.88 match: getUniqueTags, 0.489)
 function getUniqueTags(logs, tag, onConflict) {
   let seenRef = useRef(new Map());
   useEffect(() => {
@@ -121,7 +121,7 @@ var LOG_SHORTCUT_FORMAT = {
 var LOG_STALE_MS = 60000;
 var LOG_MAX_ENTRIES = 50;
 var LOG_RETRY_COUNT = 5;
-//@ chunk-b79vwm1h.js:7612-7686 fingerprint = formatSnippet (1)
+//@ chunk-b79vwm1h.js:7612-7686 fingerprint (2.1.88 match: formatSnippet, 1)
 function formatSnippet({ before, match, after }, highlightColor) {
   return sequential.dim(before) + highlightColor(match) + sequential.dim(after);
 }
@@ -132,7 +132,7 @@ function formatPrUrlsInQuery(searchQuery) {
     return prUrl ? `PR #${prUrl.prNumber} ${prUrl.prRepository}` : url;
   });
 }
-//@ chunk-b79vwm1h.js:7827-8165 fingerprint = extractSnippet (1)
+//@ chunk-b79vwm1h.js:7827-8165 fingerprint (2.1.88 match: extractSnippet, 1)
 function extractSnippet(text, query, contextChars) {
   let matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
   if (matchIndex === -1) return null;
@@ -148,7 +148,7 @@ function extractSnippet(text, query, contextChars) {
     after: afterRaw.replace(/\s+/g, " ").trimEnd() + (snippetEnd < text.length ? "\u2026" : ""),
   };
 }
-//@ chunk-b79vwm1h.js:8165-8496 fingerprint = buildLogLabel (0.948)
+//@ chunk-b79vwm1h.js:8165-8496 fingerprint (2.1.88 match: buildLogLabel, 0.948)
 function buildLogLabel(log, maxLabelWidth, options) {
   let { isGroupHeader = false, isChild = false, forkCount = 0 } = options || {};
   let prefixWidth = isGroupHeader && forkCount > 0 ? LOG_MIN_LINES : isChild ? LOG_MAX_LINES : 0;
@@ -165,7 +165,7 @@ function buildLogLabel(log, maxLabelWidth, options) {
     maxLabelWidth - prefixWidth - sidechainSuffix.length - forkSuffix.length - bunStringWidth(artifactSuffix);
   return `${normalizeAndTruncateToWidth(getLogDisplayTitle(log), maxSummaryWidth)}${sidechainSuffix}${forkSuffix}${artifactSuffix}`;
 }
-//@ chunk-b79vwm1h.js:8496-8641 fingerprint = buildLogMetadata (1)
+//@ chunk-b79vwm1h.js:8496-8641 fingerprint (2.1.88 match: buildLogMetadata, 1)
 function buildLogMetadata(log, options) {
   let { isChild = false, showProjectPath = false } = options || {};
   let childPadding = isChild ? "    " : "";
@@ -173,7 +173,7 @@ function buildLogMetadata(log, options) {
   let projectSuffix = showProjectPath && log.projectPath ? ` \xB7 ${log.projectPath}` : "";
   return childPadding + baseMetadata + projectSuffix;
 }
-//@ chunk-b79vwm1h.js:8641-18667 fingerprint = LogSelector (0.634)
+//@ chunk-b79vwm1h.js:8641-18667 fingerprint (2.1.88 match: LogSelector, 0.634)
 /**
  * 会话选择器：显示会话列表（标题、时间、消息数、分支/PR、标签），支持搜索（tengu_session_search_toggled）、所有项目切换、按 sessionId 分组、worktree 检测与预览。
  */
@@ -974,7 +974,7 @@ function ResumeSessionPane(props) {
   } else pane = $[4];
   return pane;
 }
-//@ chunk-b79vwm1h.js:18971-19421 callgraph-fingerprint = extractSearchableText (0.465)
+//@ chunk-b79vwm1h.js:18971-19421 callgraph-fingerprint (2.1.88 match: extractSearchableText, 0.465)
 function extractSearchableText(message) {
   if (message.type !== "user" && message.type !== "assistant") return "";
   let content = "message" in message ? message.message?.content : undefined;
@@ -997,7 +997,7 @@ function extractSearchableText(message) {
       .join(" ");
   return "";
 }
-//@ chunk-b79vwm1h.js:19421-19785 fingerprint = buildSearchableText (0.887)
+//@ chunk-b79vwm1h.js:19421-19785 fingerprint (2.1.88 match: buildSearchableText, 0.887)
 function buildSearchableText(log) {
   let messageText = (
     log.messages.length <= LOG_REFRESH_MS
@@ -1011,7 +1011,7 @@ function buildSearchableText(log) {
     `${[log.customTitle, log.aiTitle, log.summary, log.firstPromptShown ?? log.firstPrompt, log.gitBranch, log.tag, log.prNumber ? `PR #${log.prNumber}` : undefined, log.prRepository].filter(Boolean).join(" ")} ${messageText}`.trim();
   return fullText.length > LOG_MAX_BYTES ? fullText.slice(0, LOG_MAX_BYTES) : fullText;
 }
-//@ chunk-b79vwm1h.js:19785-19999 fingerprint = groupLogsBySessionId (1)
+//@ chunk-b79vwm1h.js:19785-19999 fingerprint (2.1.88 match: groupLogsBySessionId, 1)
 function groupLogsBySessionId(filteredLogs) {
   let groups = new Map();
   for (let log of filteredLogs) {

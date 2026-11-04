@@ -62,7 +62,7 @@ deferInit("chunk-e6aww6q8.js:325359", () => {
     ["EROFS", "erofs"],
   ]);
 });
-//@ chunk-e6aww6q8.js:325543-325627 placement = getUnameSR (0.793)
+//@ chunk-e6aww6q8.js:325543-325627 placement (2.1.88 match: getUnameSR, 0.793)
 function getUnameSR_2(errnoCode, platform) {
   if (errnoCode === undefined) return false;
   return (

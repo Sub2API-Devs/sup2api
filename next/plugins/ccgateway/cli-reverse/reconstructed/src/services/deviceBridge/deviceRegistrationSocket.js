@@ -971,7 +971,7 @@ function buildInitializeRequest() {
     },
   };
 }
-//@ chunk-ksxq075c.js:16679-16753 placement = _temp (1)
+//@ chunk-ksxq075c.js:16679-16753 placement (2.1.88 match: _temp, 1)
 /**
  * 判断响应是否针对合成 initialize 请求。
  */

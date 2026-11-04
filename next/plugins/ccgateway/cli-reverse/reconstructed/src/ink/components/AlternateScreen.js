@@ -37,7 +37,7 @@ deferInit("chunk-yag8rcpb.js:233", () => {
 deferInit("chunk-2f336bka.js:422", () => {
   init_react_production();
 });
-//@ chunk-2f336bka.js:426-1523 fingerprint = AlternateScreen (0.422)
+//@ chunk-2f336bka.js:426-1523 fingerprint (2.1.88 match: AlternateScreen, 0.422)
 /**
  * <AlternateScreen>：挂载时进入备用屏（DEC 1049）并按 mouseTracking（默认 full）开启鼠标跟踪、可选设置 surface 背景/前景色；内容高度固定为终端行数；卸载时退出备用屏、关闭鼠标、清选区并恢复扩展键与原生光标。进/出序列会尽量并入下一帧一起写（keepForNextFrame），避免闪烁。
  */

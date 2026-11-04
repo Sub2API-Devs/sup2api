@@ -88,7 +88,7 @@ function refreshUnusedResetIfNeeded(credentials, storageV5) {
   if (eligibleAnnouncements().some((announcement) => announcement.textIfUnusedLimitReset))
     refreshUnusedResetStatus(credentials, storageV5);
 }
-//@ chunk-dwh5z7zb.js:1285-1456 placement = getNext (0.452)
+//@ chunk-dwh5z7zb.js:1285-1456 placement (2.1.88 match: getNext, 0.452)
 /**
  * 可展示公告中优先级最高的一个（id/title/text/footer）的 JSON，没有则 false。旧版名 getNext 不准确；只被 headless 使用，疑似归错文件。
  */

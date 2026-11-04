@@ -11,7 +11,7 @@
 import { isClaudeSettingsPath } from "../permissions/filesystem.js";
 import { validateSettingsFileContent } from "./validation.js";
 
-//@ chunk-e6aww6q8.js:4644843-4645172 fingerprint = validateInputForSettingsFileEdit (1)
+//@ chunk-e6aww6q8.js:4644843-4645172 fingerprint (2.1.88 match: validateInputForSettingsFileEdit, 1)
 /**
  * Edit/Write 工具编辑 Claude 设置文件时，校验修改后的内容，失败则返回带完整 schema 的错误提示给模型。
  */

@@ -11,7 +11,7 @@
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { HelpV2 } from "../../components/HelpV2/HelpV2.js";
 
-//@ chunk-yxcx2jtr.js:19220-19288 fingerprint = call (1)
+//@ chunk-yxcx2jtr.js:19220-19288 fingerprint (2.1.88 match: call, 1)
 /**
  * /help 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

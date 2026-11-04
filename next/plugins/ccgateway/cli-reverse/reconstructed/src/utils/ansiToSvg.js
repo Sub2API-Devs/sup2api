@@ -8,7 +8,7 @@
  * pieces: chunk-t6e3jxy0.js (3)
  * attribution: affinity 1, fingerprint 1, callgraph-fingerprint 1
  */
-//@ chunk-t6e3jxy0.js:366-764 affinity = SETTLED_GREY (1)
+//@ chunk-t6e3jxy0.js:366-764 affinity (2.1.88 match: SETTLED_GREY, 1)
 var ANSI_FG_RGB = {
   30: {
     r: 0,
@@ -101,7 +101,7 @@ var DEFAULT_BG_RGB = {
   g: 30,
   b: 30,
 };
-//@ chunk-t6e3jxy0.js:764-1679 fingerprint = parseAnsi (1)
+//@ chunk-t6e3jxy0.js:764-1679 fingerprint (2.1.88 match: parseAnsi, 1)
 function parseAnsi(text) {
   let lines = [];
   let rawLines = text.split(`
@@ -188,7 +188,7 @@ function parseAnsi(text) {
   }
   return lines;
 }
-//@ chunk-t6e3jxy0.js:1679-2159 callgraph-fingerprint = get256Color (1)
+//@ chunk-t6e3jxy0.js:1679-2159 callgraph-fingerprint (2.1.88 match: get256Color, 1)
 function get256Color(index) {
   if (index < 16)
     return (

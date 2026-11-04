@@ -171,7 +171,7 @@ function fallbackModelForTeammate(model, agent) {
   logTeammateModelNotAllowed(model, steppedDown !== null);
   return steppedDown ?? resolveAgentModelDisplay(agent);
 }
-//@ chunk-cne5hsvz.js:18009-18115 placement = resolveAgentModelDisplay (1)
+//@ chunk-cne5hsvz.js:18009-18115 placement (2.1.88 match: resolveAgentModelDisplay, 1)
 /**
  * 默认队友模型：默认子代理模型不是 inherit 且有效时用之，否则回退。
  */

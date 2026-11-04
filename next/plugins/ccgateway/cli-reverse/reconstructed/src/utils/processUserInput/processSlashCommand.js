@@ -342,7 +342,7 @@ async function findCommandAfterHooks(commandName, waitForHooks, signal) {
     ? findCommand(commandName, await hookedCommands_2([]))
     : undefined;
 }
-//@ chunk-bc20zedk.js:33028-33069 fingerprint = formatSkillLoadingMetadata (0.84)
+//@ chunk-bc20zedk.js:33028-33069 fingerprint (2.1.88 match: formatSkillLoadingMetadata, 0.84)
 var formatSkillLoadingMetadata_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-bc20zedk.js:33028", () => {
   formatSkillLoadingMetadata_2 = Object.freeze({
@@ -354,7 +354,7 @@ var NON_HISTORY_COMMANDS; // deferred: has load-time effects after a deferred st
 deferInit("chunk-3g0djq3w.js:9865", () => {
   NON_HISTORY_COMMANDS = new Set(["clear", "resume", "help", "exit", "feedback"]);
 });
-//@ chunk-3g0djq3w.js:9925-10004 facade-exports = getValueFromInput (1)
+//@ chunk-3g0djq3w.js:9925-10004 facade-exports (2.1.88 match: getValueFromInput, 1)
 function isSlashCommandBlockedByEndedByModel(command, endedByModel) {
   if (!endedByModel) return false;
   return !(command && command.type !== "prompt" && NON_HISTORY_COMMANDS.has(command.name));
@@ -445,7 +445,7 @@ async function runForkStopHooks(context, extraMessages, hookExecutors) {
     requestQuery,
   };
 }
-//@ chunk-3g0djq3w.js:11339-16950 fingerprint = executeForkedSlashCommand (0.467)
+//@ chunk-3g0djq3w.js:11339-16950 fingerprint (2.1.88 match: executeForkedSlashCommand, 0.467)
 /**
  * executeForkedSlashCommand：context: fork 的技能在子代理里运行。
  */
@@ -964,7 +964,7 @@ function commandThrowTextForTranscript(error, name, session) {
   }
   return escapeForkedSkillTag(String(error));
 }
-//@ chunk-3g0djq3w.js:18263-28569 facade-exports = processSlashCommand (0.357)
+//@ chunk-3g0djq3w.js:18263-28569 facade-exports (2.1.88 match: processSlashCommand, 0.357)
 /**
  * processSlashCommand：解析 /命令 参数、查找命令、策略检查，分派到本地命令、prompt 命令（技能）或 fork 子代理执行。
  */
@@ -1901,7 +1901,7 @@ function headlessUnavailableResult(command, args, submitUuid) {
     resultText: message,
   };
 }
-//@ chunk-3g0djq3w.js:30765-42876 callgraph-witnessed = getMessagesForSlashCommand (0.288)
+//@ chunk-3g0djq3w.js:30765-42876 callgraph-witnessed (2.1.88 match: getMessagesForSlashCommand, 0.288)
 /**
  * getMessagesForSlashCommand：执行具体斜杠命令并生成消息（local-jsx、local、prompt 三类）。
  */
@@ -2870,7 +2870,7 @@ function formatSkillLoadingMetadata(skillName, _progressMessage = "loading") {
 function isSkillLoadingMetadata(metadataText, skillName) {
   return metadataText === formatSkillLoadingMetadata(skillName);
 }
-//@ chunk-3g0djq3w.js:43818-43957 fingerprint = formatSlashCommandLoadingMetadata (1)
+//@ chunk-3g0djq3w.js:43818-43957 fingerprint (2.1.88 match: formatSlashCommandLoadingMetadata, 1)
 function formatSlashCommandLoadingMetadata(commandName, args) {
   return [
     `<${COMMAND_MESSAGE}>${commandName}</${COMMAND_MESSAGE}>`,
@@ -2879,7 +2879,7 @@ function formatSlashCommandLoadingMetadata(commandName, args) {
   ].filter(Boolean).join(`
 `);
 }
-//@ chunk-3g0djq3w.js:43957-44243 fingerprint = formatCommandLoadingMetadata (0.703)
+//@ chunk-3g0djq3w.js:43957-44243 fingerprint (2.1.88 match: formatCommandLoadingMetadata, 0.703)
 function formatCommandLoadingMetadata(command, args) {
   if (command.userInvocable !== false) return formatSlashCommandLoadingMetadata(command.name, args);
   if (
@@ -2893,7 +2893,7 @@ function formatCommandLoadingMetadata(command, args) {
     return formatSkillLoadingMetadata(command.name, command.progressMessage);
   return formatSlashCommandLoadingMetadata(command.name, args);
 }
-//@ chunk-3g0djq3w.js:45446-45742 facade-exports = processPromptSlashCommand (1)
+//@ chunk-3g0djq3w.js:45446-45742 facade-exports (2.1.88 match: processPromptSlashCommand, 1)
 /**
  * processPromptSlashCommand：只处理 prompt 型命令，展开为消息。
  */
@@ -2926,7 +2926,7 @@ async function processPromptSlashCommand(
     readOnly,
   );
 }
-//@ chunk-3g0djq3w.js:45742-50793 fingerprint = getMessagesForPromptSlashCommand (0.431)
+//@ chunk-3g0djq3w.js:45742-50793 fingerprint (2.1.88 match: getMessagesForPromptSlashCommand, 0.431)
 /**
  * getMessagesForPromptSlashCommand：prompt 型命令/技能展开为消息（含 MCP prompt、禁止模型调用检查）。
  */

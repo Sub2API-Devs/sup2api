@@ -273,7 +273,7 @@ function getRemoteSessionOrigin(joinResponse) {
     ? CLAUDE_CODE_REMOTE_SESSION_ORIGIN
     : undefined;
 }
-//@ chunk-hm0ce8vc.js:59069-59108 placement = review (0.384)
+//@ chunk-hm0ce8vc.js:59069-59108 placement (2.1.88 match: review, 0.384)
 /**
  * isReviewOriginSession：旧版名 review 配错。
  */

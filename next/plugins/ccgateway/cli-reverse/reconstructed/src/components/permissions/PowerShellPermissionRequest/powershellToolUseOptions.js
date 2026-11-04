@@ -18,7 +18,7 @@ import { deferInit } from "../../../../runtime/deferred-init.js";
 deferInit("chunk-18hwfzwa.js:1395417", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1395421-1396518 fingerprint = powershellToolUseOptions (0.902)
+//@ chunk-18hwfzwa.js:1395421-1396518 fingerprint (2.1.88 match: powershellToolUseOptions, 0.902)
 function powershellToolUseOptions({
   suggestionsRow = null,
   onRejectFeedbackChange,

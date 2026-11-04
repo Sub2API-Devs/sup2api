@@ -70,7 +70,7 @@ function getRemoteOtlpEndpoint(signal) {
     return null;
   }
 }
-//@ chunk-ry7mqags.js:1369-1415 placement = buildAssistantDailyLogPrompt (0.59)
+//@ chunk-ry7mqags.js:1369-1415 placement (2.1.88 match: buildAssistantDailyLogPrompt, 0.59)
 function hasRemoteOtelLogsEndpoint() {
   return isDiskless() && getRemoteOtlpEndpoint("logs") !== null;
 }

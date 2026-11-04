@@ -24,7 +24,7 @@ import {
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { COMMAND_NAME_SEPARATORS } from "./commandSuggestions.js";
 
-//@ chunk-23fm9f0d.js:11309-11802 fingerprint = scanDirectoryForPaths (0.669)
+//@ chunk-23fm9f0d.js:11309-11802 fingerprint (2.1.88 match: scanDirectoryForPaths, 0.669)
 async function scanDirectoryForPaths(dir, fs, { requireCompleteWalk = false } = {}) {
   let newestMtime = -1 / 0;
   let entries = await fs.readdir(dir).catch((entry) => {
@@ -58,7 +58,7 @@ async function scanDirectoryForPaths(dir, fs, { requireCompleteWalk = false } = 
   }
   return newestMtime === -1 / 0 ? null : newestMtime;
 }
-//@ chunk-18hwfzwa.js:550848-551040 fingerprint = parsePartialPath (1)
+//@ chunk-18hwfzwa.js:550848-551040 fingerprint (2.1.88 match: parsePartialPath, 1)
 function parsePartialPath(partialPath, basePath) {
   if (!partialPath)
     return {
@@ -124,7 +124,7 @@ async function scanDirectoryCached(session, directory) {
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:551707-552066 fingerprint = getDirectoryCompletions (1)
+//@ chunk-18hwfzwa.js:551707-552066 fingerprint (2.1.88 match: getDirectoryCompletions, 1)
 /**
  * 目录补全：解析部分路径，列出匹配的子目录（带缓存，隐藏目录除外）。
  */
@@ -148,7 +148,7 @@ async function getDirectoryCompletions(session, input, options = {}) {
       },
     }));
 }
-//@ chunk-18hwfzwa.js:552066-552196 placement = resolveCwdReentry (1)
+//@ chunk-18hwfzwa.js:552066-552196 placement (2.1.88 match: resolveCwdReentry, 1)
 /**
  * （旧版名配错）文本是否像路径（~/、/、./、../、~、.、..），用于输入补全。
  */
@@ -205,7 +205,7 @@ async function scanPathEntries(session, directory) {
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:552867-553468 fingerprint = getPathCompletions (0.871)
+//@ chunk-18hwfzwa.js:552867-553468 fingerprint (2.1.88 match: getPathCompletions, 0.871)
 async function getPathCompletions(session, input, options = {}) {
   if (isRemoteSessionAvailable()) return [];
   let { basePath = getCwd(), maxResults = 10, keepDotPrefix = false } = options;
@@ -254,7 +254,7 @@ function matchesCommandWords(query, candidates, separators = COMMAND_NAME_SEPARA
     return filtered.some((part, index) => filtered.slice(index).join("").startsWith(joined));
   });
 }
-//@ chunk-18hwfzwa.js:930340-930395 fingerprint = scanDirectory (0.766)
+//@ chunk-18hwfzwa.js:930340-930395 fingerprint (2.1.88 match: scanDirectory, 0.766)
 function scanDirectory(dirPath) {
   return dirPath.description === "directory";
 }

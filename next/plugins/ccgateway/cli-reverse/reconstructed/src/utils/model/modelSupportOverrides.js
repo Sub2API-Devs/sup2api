@@ -12,7 +12,7 @@ import { getProviderState } from "./providerCaches.js";
 import { usesFirstPartyModelIds } from "./providers.js";
 import { sameModelSpelling } from "./modelIds.js";
 
-//@ chunk-aepeg2w5.js:475473-476082 fingerprint = TIERS (0.771)
+//@ chunk-aepeg2w5.js:475473-476082 fingerprint (2.1.88 match: TIERS, 0.771)
 /**
  * 档位环境变量对：ANTHROPIC_DEFAULT_{FABLE,OPUS,SONNET,HAIKU}_MODEL 与对应 _SUPPORTED_CAPABILITIES。
  */
@@ -51,7 +51,7 @@ function getCapabilityOverrideCached(model, capability) {
   capabilityOverrides.set(cacheKey, override);
   return override;
 }
-//@ chunk-aepeg2w5.js:476239-476485 fingerprint = get3PModelCapabilityOverride (0.794)
+//@ chunk-aepeg2w5.js:476239-476485 fingerprint (2.1.88 match: get3PModelCapabilityOverride, 0.794)
 /**
  * 非第一方类提供商时：模型等于某档 ANTHROPIC_DEFAULT_*_MODEL 且设了能力列表，则返回该能力是否在列表中；否则 undefined。
  */

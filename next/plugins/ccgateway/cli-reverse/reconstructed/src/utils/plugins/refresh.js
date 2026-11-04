@@ -39,7 +39,7 @@ import { getHostState } from "../hostEnvironment.js";
 import { skillsChangedSignal } from "./pluginsChangedSignal.js";
 import { count } from "../collections.js";
 
-//@ chunk-7nse75qx.js:453-519 fingerprint = mergePluginErrors (1)
+//@ chunk-7nse75qx.js:453-519 fingerprint (2.1.88 match: mergePluginErrors, 1)
 /**
  * 名字是否属于插件/LSP 管理器来源（lsp-manager 或 plugin: 前缀）。
  */
@@ -68,7 +68,7 @@ var pluginIdsWithSource = (dynamicMcpConfig) =>
 async function noReloadPlugins(enabled, enabled_2) {
   return 0;
 }
-//@ chunk-4q6mp9e8.js:1309-3503 fingerprint = refreshActivePlugins (0.701)
+//@ chunk-4q6mp9e8.js:1309-3503 fingerprint (2.1.88 match: refreshActivePlugins, 0.701)
 /**
  * /reload-plugins 与安装后刷新：清空插件相关缓存、重新加载插件（完整或 cacheOnly）、刷新命令/代理/输出样式/MCP/LSP、重新注册 hooks，汇总各组件数量与错误供界面展示。
  */

@@ -483,7 +483,7 @@ function truncateListItem(item) {
 function quotedListItem(item) {
   return `"${truncateListItem(item)}"`;
 }
-//@ chunk-e6aww6q8.js:606988-607082 placement = formatFailureDetails (0.777)
+//@ chunk-e6aww6q8.js:606988-607082 placement (2.1.88 match: formatFailureDetails, 0.777)
 /**
  * 列表前 N 项用逗号连接，多余的写“and N more”。
  */
@@ -491,21 +491,21 @@ function formatFailureDetails_2(items) {
   let remaining = items.length - MAX_LISTED_ITEMS;
   return items.slice(0, MAX_LISTED_ITEMS).join(", ") + (remaining > 0 ? ` and ${remaining} more` : "");
 }
-//@ chunk-e6aww6q8.js:724353-724409 fingerprint = getVersionedZipCachePath (1)
+//@ chunk-e6aww6q8.js:724353-724409 fingerprint (2.1.88 match: getVersionedZipCachePath, 1)
 /**
  * 路径是否以 .zip 结尾（忽略大小写）。
  */
 function isZipPathCaseInsensitive(path) {
   return path.toLowerCase().endsWith(".zip");
 }
-//@ chunk-e6aww6q8.js:4324611-4324691 fingerprint = resolveGitSubdirUrl (0.712)
+//@ chunk-e6aww6q8.js:4324611-4324691 fingerprint (2.1.88 match: resolveGitSubdirUrl, 0.712)
 /**
  * GitHub owner/repo 转克隆 URL：偏好 HTTPS 时 https://github.com/x.git，否则 git@github.com:x.git。
  */
 function githubRepoToCloneUrl(url) {
   return preferHttpsGitTransport() ? `https://github.com/${url}.git` : `git@${GITHUB_HOST}:${url}.git`;
 }
-//@ chunk-e6aww6q8.js:4391044-4391264 fingerprint = installFromNpm (0.359)
+//@ chunk-e6aww6q8.js:4391044-4391264 fingerprint (2.1.88 match: installFromNpm, 0.359)
 /**
  * 构造 npm 命令的 --registry 参数；作用域包另加 --@scope:registry。
  */
@@ -519,7 +519,7 @@ function buildNpmRegistryArgs(options, packageName) {
     ? ["--registry", options.registry]
     : ["--registry", options.registry, `--${packageSpec}:registry=${options.registry}`];
 }
-//@ chunk-e6aww6q8.js:4496936-4497084 placement = discoverSkillDirsForPaths (0.562)
+//@ chunk-e6aww6q8.js:4496936-4497084 placement (2.1.88 match: discoverSkillDirsForPaths, 0.562)
 /**
  * skill 显示路径：project 作用域且在 .claude/skills 下显示为 ./ 相对路径，否则缩写主目录。
  */
@@ -990,7 +990,7 @@ var weakSet_7; // deferred: has load-time effects after a deferred statement of 
 deferInit("chunk-e6aww6q8.js:4506435", () => {
   weakSet_7 = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:4506455-4506493 placement = getVersionedCachePath (0)
+//@ chunk-e6aww6q8.js:4506455-4506493 placement (2.1.88 match: getVersionedCachePath, 0)
 /**
  * 版本化缓存目录 <plugins>/cache/<marketplace>/<plugin>/<version>。
  */
@@ -1092,7 +1092,7 @@ function reportUncheckablePath(errors, source, name, component, relPath, unknown
     errno: unknown.errno ?? "UNKNOWN",
   });
 }
-//@ chunk-e6aww6q8.js:4507791-4508003 placement = _temp2 (1)
+//@ chunk-e6aww6q8.js:4507791-4508003 placement (2.1.88 match: _temp2, 1)
 async function statPluginPath(storageV5, fullPath) {
   let result =
     isStorageV5Enabled() && storageV5 !== undefined
@@ -1204,7 +1204,7 @@ async function pickUsableInstallation(installations, { storageV5, trustedRoots =
   }
   return fallback ?? relevant[0];
 }
-//@ chunk-e6aww6q8.js:4509239-4509280 placement = getVersionedZipCachePath (1)
+//@ chunk-e6aww6q8.js:4509239-4509280 placement (2.1.88 match: getVersionedZipCachePath, 1)
 /**
  * 版本化缓存的 zip 路径（目录路径 + .zip）。
  */
@@ -1221,7 +1221,7 @@ async function findSeedCachePath(pluginId, version) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:4509388-4509485 placement = formatRelativeTimeAgo (0.75)
+//@ chunk-e6aww6q8.js:4509388-4509485 placement (2.1.88 match: formatRelativeTimeAgo, 0.75)
 async function probeSeedForPlugin(pluginId, version, mode) {
   return (
     (await findSeedCachePath(pluginId, version)) ??
@@ -1348,7 +1348,7 @@ async function copyPluginDir(sourceDir, targetDir, containmentRoot, useStorageBa
     true,
   );
 }
-//@ chunk-e6aww6q8.js:4510744-4510950 placement = isRealPathWithinTeamDir (1)
+//@ chunk-e6aww6q8.js:4510744-4510950 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function lstatChildBigintOrUndefined(realCandidate) {
   for (let seedDir of getPluginSeedDirs()) {
     let pluginDir = dirname(getLegacyCachePath(seedDir, realCandidate, "_"));
@@ -1633,7 +1633,7 @@ async function isStorageScopeEmpty(storageV5, scope) {
   } while (cursor !== undefined);
   return true;
 }
-//@ chunk-e6aww6q8.js:4515261-4521669 placement = copyPluginToVersionedCache (0.356)
+//@ chunk-e6aww6q8.js:4515261-4521669 placement (2.1.88 match: copyPluginToVersionedCache, 0.356)
 /**
  * 把插件复制进版本化缓存 <plugins>/cache/<marketplace>/<plugin>/<version>（zip 缓存开启时再打成 .zip）。已有完整缓存直接复用；其他会话正在用时推迟覆盖；种子缓存命中直接用；link 模式建立链接农场；复制后装依赖、拉 binaries，再原子发布。返回最终路径。
  */
@@ -2117,7 +2117,7 @@ var CLONE_STEP_FAILED; // deferred: has load-time effects after a deferred state
 deferInit("chunk-e6aww6q8.js:4524665", () => {
   CLONE_STEP_FAILED = Symbol("pluginCloneStepFailed");
 });
-//@ chunk-e6aww6q8.js:4524705-4526454 fingerprint = gitClone (0.736)
+//@ chunk-e6aww6q8.js:4524705-4526454 fingerprint (2.1.88 match: gitClone, 0.736)
 /**
  * git 克隆插件仓库：校验 sha/ref、--depth 1（有 sha 时 fetch 该提交）、可禁用子模块、校验钉住的提交。
  */
@@ -2253,7 +2253,7 @@ async function gitClone_2(gitUrl, targetPath, ref, sha, { isDirectoryPlugin, noS
   );
   return pinned;
 }
-//@ chunk-e6aww6q8.js:4526454-4526599 fingerprint = installFromGit (1)
+//@ chunk-e6aww6q8.js:4526454-4526599 fingerprint (2.1.88 match: installFromGit, 1)
 async function installFromGit(gitUrl, targetPath, ref, sha, options) {
   let safeUrl = parsePluginGitUrl(gitUrl);
   let pinnedSha = await gitClone_2(safeUrl, targetPath, ref, sha, options);
@@ -2261,7 +2261,7 @@ async function installFromGit(gitUrl, targetPath, ref, sha, options) {
   logForDebugging(`Cloned repository from ${redactUrlQuery(safeUrl)}${refMessage} to ${targetPath}`);
   return pinnedSha;
 }
-//@ chunk-e6aww6q8.js:4526599-4527713 fingerprint = installFromGitHub (0.49)
+//@ chunk-e6aww6q8.js:4526599-4527713 fingerprint (2.1.88 match: installFromGitHub, 0.49)
 /**
  * github 来源安装：校验 owner/repo，按 SSH 配置情况先 SSH 后 HTTPS（或直接 HTTPS）克隆，失败时回退另一种传输。
  */
@@ -2372,7 +2372,7 @@ function gitEnvWithCMessages(env) {
     LC_MESSAGES: "C",
   };
 }
-//@ chunk-e6aww6q8.js:4528527-4531133 fingerprint = installFromGitSubdir (0.721)
+//@ chunk-e6aww6q8.js:4528527-4531133 fingerprint (2.1.88 match: installFromGitSubdir, 0.721)
 /**
  * git-subdir 来源安装：部分克隆（--filter=tree:0）+ sparse-checkout 只取子目录，校验 sha，复制子目录到目标。需要 git ≥2.25。
  */
@@ -2519,7 +2519,7 @@ async function installFromGitSubdir(
     });
   }
 }
-//@ chunk-e6aww6q8.js:4531133-4531330 fingerprint = installFromLocal (0.745)
+//@ chunk-e6aww6q8.js:4531133-4531330 fingerprint (2.1.88 match: installFromLocal, 0.745)
 async function installFromLocal(
   sourcePath,
   targetPath,
@@ -2548,7 +2548,7 @@ async function installFromLocal(
 function getTemporaryCachePath(source) {
   return makeTempCachePathName(generateTemporaryCacheNameForPlugin(source));
 }
-//@ chunk-e6aww6q8.js:4531365-4531639 fingerprint = generateTemporaryCacheNameForPlugin (0.683)
+//@ chunk-e6aww6q8.js:4531365-4531639 fingerprint (2.1.88 match: generateTemporaryCacheNameForPlugin, 0.683)
 function generateTemporaryCacheNameForPlugin(source) {
   if (typeof source === "string") return "local";
   switch (source.source) {
@@ -2587,7 +2587,7 @@ function redactPluginSourceForLog(source) {
       }),
   };
 }
-//@ chunk-e6aww6q8.js:4531882-4534542 placement = cachePlugin (0.458)
+//@ chunk-e6aww6q8.js:4531882-4534542 placement (2.1.88 match: cachePlugin, 0.458)
 /**
  * 按来源把插件下载/复制到临时目录：npm、github/url/git-subdir（git 克隆、sha 钉住校验）、archive（https zip）、command、本地路径；storageV5 下在插件缓存内分配暂存区。返回 {path, manifest, gitCommitSha…} 供 copyPluginToVersionedCache 使用。
  */
@@ -2895,7 +2895,7 @@ async function installFromArchive(
     }
   });
 }
-//@ chunk-e6aww6q8.js:4537104-4539060 placement = loadPluginManifest (0.364)
+//@ chunk-e6aww6q8.js:4537104-4539060 placement (2.1.88 match: loadPluginManifest, 0.364)
 /**
  * 读取并解析 .claude-plugin/plugin.json（找不到再试候选路径），先确认清单路径不经符号链接逃出插件目录；JSON 损坏或 schema 失败抛 TelemetrySafeError；返回 {manifest, manifestPath, depConstraints}。没有 manifest 时用目录名合成。
  */
@@ -3035,7 +3035,7 @@ JSON parse error: ${errorMsg}`,
     depConstraints: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4539060-4540263 fingerprint = loadPluginHooks (0.496)
+//@ chunk-e6aww6q8.js:4539060-4540263 fingerprint (2.1.88 match: loadPluginHooks, 0.496)
 /**
  * 读取 hooks/hooks.json：校验 PluginHooksSchema，返回 hooks 配置与 hooks 模块（modules）列表。
  */
@@ -3245,7 +3245,7 @@ function resolveWithinDir(baseDir, targetPath) {
     return null;
   return resolvedTarget;
 }
-//@ chunk-e6aww6q8.js:4542132-4543378 fingerprint = validatePluginPaths (0.466)
+//@ chunk-e6aww6q8.js:4542132-4543378 fingerprint (2.1.88 match: validatePluginPaths, 0.466)
 /**
  * 校验 manifest 中声明的组件路径：都要在插件目录内且存在，逃逸或不存在的记 path-traversal/path-not-found 错误，返回有效路径。
  */
@@ -3340,7 +3340,7 @@ async function validatePluginPaths(
   }
   return validPaths;
 }
-//@ chunk-e6aww6q8.js:4543378-4546074 fingerprint = finishLoadingPluginFromPath (0.446)
+//@ chunk-e6aww6q8.js:4543378-4546074 fingerprint (2.1.88 match: finishLoadingPluginFromPath, 0.446)
 /**
  * 处理 manifest 或 marketplace 条目中 commands 的对象形式（name → {source|content,…}）与路径数组：解析路径、校验逃逸、内联内容注册，结果写入插件对象。
  */
@@ -3526,7 +3526,7 @@ async function finishLoadingPluginFromPath(plugin, commands, options, storageV5)
   if (validPaths.length > 0)
     plugin.commandsPaths = mode === "append" ? [...(plugin.commandsPaths || []), ...validPaths] : validPaths;
 }
-//@ chunk-e6aww6q8.js:4547805-4555972 placement = createPluginFromPath (0.485)
+//@ chunk-e6aww6q8.js:4547805-4555972 placement (2.1.88 match: createPluginFromPath, 0.485)
 /**
  * 由插件目录构造 LoadedPlugin：读 manifest；默认目录 commands/、agents/、skills/、output-styles/、themes/、workflows/ 存在即挂 *Path，manifest 指定的路径挂 *Paths（并做目录逃逸检查）；根目录 SKILL.md 视为单技能插件；读 hooks/hooks.json 与 manifest.hooks、monitors、mcpServers、lspServers、settings、userConfig 等；错误收集到 errors 数组。
  */
@@ -4082,7 +4082,7 @@ function parsePluginSettings(raw) {
   if (Object.keys(data).length === 0) return;
   return data;
 }
-//@ chunk-e6aww6q8.js:4556154-4557356 fingerprint = loadPluginSettings (0.6)
+//@ chunk-e6aww6q8.js:4556154-4557356 fingerprint (2.1.88 match: loadPluginSettings, 0.6)
 /**
  * 读取插件根目录 settings.json（或 manifest.settings），只保留白名单键，作为插件启用期间合并进用户设置的值。
  */
@@ -4385,7 +4385,7 @@ function getEnabledPluginEntries() {
 function hasMarketplaceBackedPlugins() {
   return getEnabledPluginEntries().length > 0;
 }
-//@ chunk-e6aww6q8.js:4560460-4573903 callgraph-witnessed = loadPluginsFromMarketplaces (0.141)
+//@ chunk-e6aww6q8.js:4560460-4573903 callgraph-witnessed (2.1.88 match: loadPluginsFromMarketplaces, 0.141)
 /**
  * 加载全部市场插件：读 known_marketplaces 与 enabledPlugins，套用 strictKnownMarketplaces/blockedMarketplaces 策略，对每个启用插件找安装记录与缓存（cacheOnly 时缓存缺失只报 plugin-cache-miss），调用 loadPluginFromMarketplaceEntry；收集 errors/warnings。
  */
@@ -5810,7 +5810,7 @@ async function loadCachedMarketplacePlugin(
   if (extractedFrom !== undefined && loaded !== null) loaded.extractedFrom = extractedFrom;
   return loaded;
 }
-//@ chunk-e6aww6q8.js:4582994-4590867 fingerprint = loadPluginFromMarketplaceEntry (0.385)
+//@ chunk-e6aww6q8.js:4582994-4590867 fingerprint (2.1.88 match: loadPluginFromMarketplaceEntry, 0.385)
 /**
  * 按 marketplace 条目加载一个插件：相对路径来源直接在市场目录里读；远程来源走安装记录/版本化缓存，必要时 cachePlugin + copyPluginToVersionedCache；校验钉住的 sha/integrity/archiveSha256；strict=false 时用条目合成 manifest；最后 createPluginFromPath 并合并条目里的组件声明。
  */
@@ -7025,7 +7025,7 @@ function isUnderOriginalCwd(targetPath) {
     alreadyComparable: true,
   });
 }
-//@ chunk-e6aww6q8.js:4600925-4601068 placement = ghIsDangerousCallback (1)
+//@ chunk-e6aww6q8.js:4600925-4601068 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function ghIsDangerousCallback(_rawCommand, args) {
   return (args ? replaceAll(_rawCommand, args, redactUrlQuery(args)) : _rawCommand)
     .split(/(\s+)/)
@@ -7053,7 +7053,7 @@ function redactUrlsInLoadError(rawText) {
   });
   return redactUrlsInMessage(replaced).replace(/\?[^\s"']*/g, "");
 }
-//@ chunk-e6aww6q8.js:4601393-4607537 callgraph-witnessed = loadSessionOnlyPlugins (0.231)
+//@ chunk-e6aww6q8.js:4601393-4607537 callgraph-witnessed (2.1.88 match: loadSessionOnlyPlugins, 0.231)
 /**
  * 加载会话级插件（--plugin-dir 目录、--plugin-url 归档、claude.ai 同步目录）：url 先下载解压到会话缓存；每个目录走 createPluginFromPath；市场名默认 inline（同步的为 synced）。
  */
@@ -7471,7 +7471,7 @@ async function loadSessionOnlyPlugins(
     warnings,
   };
 }
-//@ chunk-e6aww6q8.js:4607537-4607820 placement = isRealPathWithinTeamDir (0.772)
+//@ chunk-e6aww6q8.js:4607537-4607820 placement (2.1.88 match: isRealPathWithinTeamDir, 0.772)
 async function listDirNamesSet(storageV5, dir) {
   let storageKey = isStorageV5Enabled() && storageV5 !== undefined ? thinkbackStorageKey(dir) : null;
   if (storageV5 !== undefined && storageKey !== null) {
@@ -7753,7 +7753,7 @@ function countAdmittedPluginNames(plugins, managedEntries) {
     }
   return counts;
 }
-//@ chunk-e6aww6q8.js:4612370-4617007 callgraph-fingerprint = mergePluginSources (0.184)
+//@ chunk-e6aww6q8.js:4612370-4617007 callgraph-fingerprint (2.1.88 match: mergePluginSources, 0.184)
 /**
  * 合并各来源插件（session/marketplace/skills-dir/synced/builtin），同名时按 托管策略 > 会话 > 市场 的优先级去重，托管锁定（managed）条目可强制启用/禁用，记录冲突警告。
  */
@@ -8092,7 +8092,7 @@ function trackPluginLoad(load) {
     pluginRegistry.pluginLoadsRunning--;
   });
 }
-//@ chunk-e6aww6q8.js:4618570-4618631 fingerprint = loadAllPlugins (0.743)
+//@ chunk-e6aww6q8.js:4618570-4618631 fingerprint (2.1.88 match: loadAllPlugins, 0.743)
 var cacheOnlyLoadOptions = (storageV5) => ({
   cacheOnly: true,
   storageV5,
@@ -8310,7 +8310,7 @@ function collectOfficialAttestations_2(allPlugins) {
   for (let source of conflicting) bySource.delete(source);
   return bySource;
 }
-//@ chunk-e6aww6q8.js:4621253-4624204 fingerprint = assemblePluginLoadResult (0.337)
+//@ chunk-e6aww6q8.js:4621253-4624204 fingerprint (2.1.88 match: assemblePluginLoadResult, 0.337)
 /**
  * 插件加载总装：并行跑市场加载、会话插件（--plugin-dir/--plugin-url）、claude.ai 同步插件、skills-dir 插件，再合并内置插件，mergePluginSources 去重，verifyAndDemote 处理依赖不满足的降级，最后（非预览且设置未变时）执行副作用：缓存插件 settings、清理旧缓存等。返回 {enabled, disabled, errors, warnings}。
  */
@@ -8494,7 +8494,7 @@ async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
     readUnder,
   };
 }
-//@ chunk-e6aww6q8.js:4624204-4624432 layout = getVersionedZipCachePath (1)
+//@ chunk-e6aww6q8.js:4624204-4624432 layout (2.1.88 match: getVersionedZipCachePath, 1)
 async function releaseUnusedPluginCaches(pluginId, version) {
   if (isDiskless()) return;
   let cacheRoot = anchoredPluginCachePath();
@@ -8515,7 +8515,7 @@ async function releaseUnusedPluginCaches(pluginId, version) {
 async function releaseSyncedDirsNotIn(plugins, storageV5) {
   await releaseMarkersOutside(syncedPluginsRoot(), new Set(plugins.map((plugin) => plugin.path)), storageV5);
 }
-//@ chunk-e6aww6q8.js:4624502-4624736 placement = clearPluginCache (0.483)
+//@ chunk-e6aww6q8.js:4624502-4624736 placement (2.1.88 match: clearPluginCache, 0.483)
 /**
  * 清空 loadAllPlugins/loadAllPluginsCacheOnly 的缓存 Promise（附原因日志），并清掉依赖插件列表的下游缓存；安装/卸载/刷新后调用。
  */
@@ -8549,7 +8549,7 @@ function refillPluginLoadCacheOnly(storageV5, label) {
   });
   return allPluginsCacheOnly;
 }
-//@ chunk-e6aww6q8.js:4624946-4625173 fingerprint = mergePluginSettings (1)
+//@ chunk-e6aww6q8.js:4624946-4625173 fingerprint (2.1.88 match: mergePluginSettings, 1)
 function mergePluginSettings(plugins) {
   let merged;
   for (let plugin of plugins) {
@@ -8565,7 +8565,7 @@ function mergePluginSettings(plugins) {
   }
   return merged;
 }
-//@ chunk-e6aww6q8.js:4625173-4625422 fingerprint = cachePluginSettings (0.667)
+//@ chunk-e6aww6q8.js:4625173-4625422 fingerprint (2.1.88 match: cachePluginSettings, 0.667)
 function cachePluginSettings(plugins) {
   let settings = mergePluginSettings(plugins);
   let hadSettings = Object.keys(pluginCommandBase() ?? {}).length > 0;
@@ -8589,7 +8589,7 @@ function findMatchingSourceCommand(source, installations) {
     )
   )?.sourceCommand;
 }
-//@ chunk-g6j7q15x.js:4001-4202 fingerprint = validateGitUrl (0.458)
+//@ chunk-g6j7q15x.js:4001-4202 fingerprint (2.1.88 match: validateGitUrl, 0.458)
 /**
  * 判断 URL 类型：file（本机）、hosted（官方地址）、custom_url（其他 http(s)）。
  */
@@ -8599,14 +8599,14 @@ function validateGitUrl(url) {
   if (url.protocol !== "https:" && url.protocol !== "http:") return;
   return url.toString() === _ ? "hosted" : "custom_url";
 }
-//@ chunk-3wek6r2k.js:15714-15773 fingerprint = loadAllPluginsCacheOnly (0.661)
+//@ chunk-3wek6r2k.js:15714-15773 fingerprint (2.1.88 match: loadAllPluginsCacheOnly, 0.661)
 /**
  * 是否同步安装插件（传入值存在且 CLAUDE_CODE_SYNC_PLUGIN_INSTALL）。
  */
 function shouldSyncPluginInstall(isNonInteractiveSession) {
   return isNonInteractiveSession && env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL;
 }
-//@ chunk-5aas12zq.js:24411-24816 fingerprint = copyDir (0.664)
+//@ chunk-5aas12zq.js:24411-24816 fingerprint (2.1.88 match: copyDir, 0.664)
 /**
  * 递归复制目录（带缓存的目录创建）。
  */
@@ -8641,7 +8641,7 @@ async function copyDir_2(root) {
   }
   return;
 }
-//@ chunk-9tyqgtn4.js:20076-20329 fingerprint = loadPluginFromMarketplaceEntryCacheOnly (0.344)
+//@ chunk-9tyqgtn4.js:20076-20329 fingerprint (2.1.88 match: loadPluginFromMarketplaceEntryCacheOnly, 0.344)
 /**
  * 从一次 cacheOnly 加载结果中找出缓存缺失的启用插件，供后台补装。
  */

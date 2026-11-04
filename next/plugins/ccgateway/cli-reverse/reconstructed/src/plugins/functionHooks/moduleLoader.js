@@ -268,7 +268,7 @@ var resolveImportSpec = (specifier, importerPath) =>
   [".", "..", "./", "../"].includes(specifier)
     ? resolve(dirname(importerPath), specifier, "index")
     : resolve(dirname(importerPath), specifier);
-//@ chunk-bfnfj4kx.js:9822-9894 placement = resolveCwdReentry (1)
+//@ chunk-bfnfj4kx.js:9822-9894 placement (2.1.88 match: resolveCwdReentry, 1)
 /**
  * （旧版名配错）是否为 . / .. 或以 ./ ../ 开头。
  */
@@ -293,7 +293,7 @@ deferInit("chunk-bfnfj4kx.js:10106", () => {
  */
 var oversizedModuleError = (pluginName, path) =>
   new PluginModuleReadError(`${pluginName}: ${path} is over ${MAX_MODULE_BYTES} bytes and was not read`);
-//@ chunk-bfnfj4kx.js:10200-10349 placement = readJSONLFile (1)
+//@ chunk-bfnfj4kx.js:10200-10349 placement (2.1.88 match: readJSONLFile, 1)
 async function readJSONLFile(handle, byteLimit) {
   let buf = Buffer.allocUnsafe(byteLimit);
   let totalRead = 0;

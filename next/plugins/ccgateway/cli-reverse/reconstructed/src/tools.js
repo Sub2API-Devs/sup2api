@@ -296,7 +296,7 @@ deferInit("chunk-kxyd0g16.js:155210", () => {
 function getReplTool() {
   return null;
 }
-//@ chunk-kxyd0g16.js:155681-156481 facade-exports = getAllBaseTools (0)
+//@ chunk-kxyd0g16.js:155681-156481 facade-exports (2.1.88 match: getAllBaseTools, 0)
 /**
  * getAllBaseTools：当前环境下可能出现的全部内建工具（尚未经 isEnabled 与权限过滤）。固定项有 Agent、ExitPlanMode、Read、Edit、Write、NotebookEdit、WebFetch、TodoWrite、ReportFindings、WebSearch、TaskStop、AskUserQuestion、SendFeedback、Skill、EnterPlanMode、SendMessage、Cron 三件套、ScheduleWakeup、Workflow、MCP 资源工具、WaitForMcpServers 等；条件项：Bash（jd()）、Glob/Grep（未被嵌入式搜索遮蔽）、Task* 四件（isTodoV2Enabled）、LSP（Dqe）、Worktree 两件（YNt）、PowerShell（Bt）、ToolSearch（isToolSearchEnabledOptimistic）、RefreshMcpTools（CLAUDE_CODE_ENABLE_REFRESH_MCP_TOOLS）。
  */
@@ -498,7 +498,7 @@ var getTools = (toolPermissionContext, options) => {
   return filterToolsByNames(filtered_2, options?.onlyNames);
 };
 var TOOL_POOL_MEMO_TTL_MS = 30000;
-//@ chunk-kxyd0g16.js:157842-158035 facade-exports = getRuleByContentsForTool (0)
+//@ chunk-kxyd0g16.js:157842-158035 facade-exports (2.1.88 match: getRuleByContentsForTool, 0)
 /**
  * assembleToolPool(permissionContext, mcpTools, opts)：内建工具（getTools）与 MCP 工具（含机器级 MCP 工具，按名去重、拒绝规则过滤、遮蔽内建的规则处理）各自按名排序后拼接，再按名去重（内建优先）。REPL 与子代理都用它组装工具池。
  */
@@ -528,7 +528,7 @@ var TOOL_CATALOG = {
   getTools,
   assembleToolPool,
 };
-//@ chunk-azz22fvc.js:4057-4123 fingerprint = getPowerShellTool (0.524)
+//@ chunk-azz22fvc.js:4057-4123 fingerprint (2.1.88 match: getPowerShellTool, 0.524)
 /**
  * require 并返回 PowerShellTool（不检查启用条件）。
  */

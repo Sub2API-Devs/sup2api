@@ -233,7 +233,7 @@ function bindingFolderCandidates(filePath, findGitRoot = findCanonicalGitRoot) {
   let resolvedRoot = findGitRoot(path) ?? path;
   return rawRoot === resolvedRoot ? [resolvedRoot] : [rawRoot, resolvedRoot];
 }
-//@ chunk-s61vbvea.js:499148-499209 placement = setCwdState (1)
+//@ chunk-s61vbvea.js:499148-499209 placement (2.1.88 match: setCwdState, 1)
 function foldCaseIf(cwd, foldCase) {
   return foldCase ? cwd.normalize("NFC").toLowerCase() : cwd;
 }
@@ -245,7 +245,7 @@ function isPathInside(cwd, cwd_2, foldCase, { isAbsolute, relative, sep } = path
     (relativePath !== ".." && !relativePath.startsWith(".." + sep) && !isAbsolute(relativePath))
   );
 }
-//@ chunk-s61vbvea.js:499342-499399 placement = setCwdState (0.757)
+//@ chunk-s61vbvea.js:499342-499399 placement (2.1.88 match: setCwdState, 0.757)
 function nfcOnMacos(cwd) {
   return getPlatform_2() === "macos" ? cwd.normalize("NFC") : cwd;
 }
@@ -267,7 +267,7 @@ function realpathSafe(filePath, readRealpath = (run) => run()) {
     };
   }
 }
-//@ chunk-s61vbvea.js:499633-499702 placement = getResolvedDir (0.798)
+//@ chunk-s61vbvea.js:499633-499702 placement (2.1.88 match: getResolvedDir, 0.798)
 function resolvePathCached(filePath) {
   let result = realpathSafe(filePath);
   return "resolved" in result ? result.resolved : nfcOnMacos(resolve(filePath));

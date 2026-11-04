@@ -264,7 +264,7 @@ import { getEmail } from "./user.js";
 import { getDesignConsentKey } from "../services/design/designApi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3g8vhh6f.js:809-824 fingerprint = isTeamSubscriber (1)
+//@ chunk-3g8vhh6f.js:809-824 fingerprint (2.1.88 match: isTeamSubscriber, 1)
 /**
  * 团队记忆的目录名 "team"：记忆文件路径 …/memory/team/<file> 里以 n[2]===aDn 判定属于团队记忆（另一支是个人记忆）；导出为 aDn。
  */
@@ -296,7 +296,7 @@ function isGatewayLoginForced() {
   let { forceLoginMethod, forceLoginGatewayUrl } = getHostPolicyLoginPins();
   return forceLoginMethod === "gateway" || forceLoginGatewayUrl !== undefined;
 }
-//@ chunk-aepeg2w5.js:288708-288779 fingerprint = getRateLimitTier (1)
+//@ chunk-aepeg2w5.js:288708-288779 fingerprint (2.1.88 match: getRateLimitTier, 1)
 /**
  * 环境覆盖的限流档位；本构建中覆盖开关被编译成恒为 null。
  */
@@ -306,7 +306,7 @@ function getRateLimitTier_2() {
   return null;
   return oauthTokens.rateLimitTier;
 }
-//@ chunk-aepeg2w5.js:288779-288856 fingerprint = getSubscriptionType (1)
+//@ chunk-aepeg2w5.js:288779-288856 fingerprint (2.1.88 match: getSubscriptionType, 1)
 /**
  * 环境覆盖的订阅类型；本构建中恒为 null。
  */
@@ -316,7 +316,7 @@ function hasSubscriptionTypeOverride() {
   return null;
   return oauthTokens.subscriptionType || MAX;
 }
-//@ chunk-aepeg2w5.js:288856-288929 layout = getSubscriptionType (1)
+//@ chunk-aepeg2w5.js:288856-288929 layout (2.1.88 match: getSubscriptionType, 1)
 function getStoredSubscriptionType() {
   let oauthTokens = getMockRateLimitState();
   return oauthTokens.enabled && oauthTokens.subscriptionType !== null && false;
@@ -336,11 +336,11 @@ var MAX_HELPER_STDERR_CHARS = 16384;
 function isManagedOAuthContext() {
   return env.CLAUDE_CODE_REMOTE || isHostEntrypoint();
 }
-//@ chunk-aepeg2w5.js:504644-504710 facade-majority = withoutHostManagedProviderVars (1)
+//@ chunk-aepeg2w5.js:504644-504710 facade-majority (2.1.88 match: withoutHostManagedProviderVars, 1)
 function isHostManagedProviderAuth() {
   return env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST || isLauncherStartedProcess();
 }
-//@ chunk-aepeg2w5.js:504710-504845 facade-majority = getBridgeBaseUrl (0.653)
+//@ chunk-aepeg2w5.js:504710-504845 facade-majority (2.1.88 match: getBridgeBaseUrl, 0.653)
 /**
  * Remote Control 可用时返回 BASE_API_URL 规范化后的基址，否则 false。
  */
@@ -1035,7 +1035,7 @@ function isBareModeAuthRestricted() {
   if (!isBareMode()) return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:514990-515409 facade-majority = isAnthropicAuthEnabled (0.662)
+//@ chunk-aepeg2w5.js:514990-515409 facade-majority (2.1.88 match: isAnthropicAuthEnabled, 0.662)
 /**
  * 是否走 Anthropic 第一方认证（Claude.ai OAuth）。--bare 且仅 bare 凭证、第三方提供方、profile（WIF）时为 false；存在 ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY / apiKeyHelper / API key FD（且非远程会话）时也为 false。ANTHROPIC_UNIX_SOCKET 时只看 CLAUDE_CODE_OAUTH_TOKEN。
  */
@@ -1067,7 +1067,7 @@ function isAnthropicAuthEnabled() {
     ((apiKeyHelper || hasDescriptorKey) && !isManagedOAuth);
   return !(nonFirstParty || shouldDisableAuth);
 }
-//@ chunk-aepeg2w5.js:515409-515842 facade-majority = bothAuthMethodsNotice (0.523)
+//@ chunk-aepeg2w5.js:515409-515842 facade-majority (2.1.88 match: bothAuthMethodsNotice, 0.523)
 function describeHowToDisableAuthTokenSource(source) {
   switch (source) {
     case "claude.ai":
@@ -1088,7 +1088,7 @@ function describeHowToDisableAuthTokenSource(source) {
 function effectiveAuthTokenEnv() {
   return isAntBuild() ? undefined : env.ANTHROPIC_AUTH_TOKEN;
 }
-//@ chunk-aepeg2w5.js:515898-516563 facade-majority = getAuthTokenSource (0.886)
+//@ chunk-aepeg2w5.js:515898-516563 facade-majority (2.1.88 match: getAuthTokenSource, 0.886)
 /**
  * 判定 Bearer 令牌来源，顺序：ANTHROPIC_AUTH_TOKEN → CLAUDE_CODE_OAUTH_TOKEN（或宿主启动器令牌）→ OAuth 令牌 FD / CCR 令牌文件 → apiKeyHelper → profile（WIF）→ 已存 claude.ai OAuth（需 user:inference）→ none。--bare 下只认 apiKeyHelper。
  */
@@ -1336,7 +1336,7 @@ function getApiKeyPrefixBucket() {
   if (sliced === "admin") return "sk_ant_admin";
   return "sk_ant_other";
 }
-//@ chunk-aepeg2w5.js:518935-519061 facade-majority = hasAnthropicApiKeyAuth (1)
+//@ chunk-aepeg2w5.js:518935-519061 facade-majority (2.1.88 match: hasAnthropicApiKeyAuth, 1)
 /**
  * 是否存在可用的 API key（不执行 apiKeyHelper）。
  */
@@ -1354,7 +1354,7 @@ function hasAnthropicApiKeyAuth() {
 function hasAnthropicApiKey() {
   return getAnthropicApiKeySafe() != null;
 }
-//@ chunk-aepeg2w5.js:519094-520173 facade-majority = getAnthropicApiKeyWithSource (0.569)
+//@ chunk-aepeg2w5.js:519094-520173 facade-majority (2.1.88 match: getAnthropicApiKeyWithSource, 0.569)
 /**
  * 取 API key 及来源：--bare 下只认 ANTHROPIC_API_KEY 与 apiKeyHelper；优先第三方时直接用 ANTHROPIC_API_KEY；否则依次为已审批（customApiKeyResponses.approved）的 ANTHROPIC_API_KEY → CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR → apiKeyHelper（缓存值）→ 全局配置 primaryApiKey（/login managed key）。skipRetrievingKeyFromApiKeyHelper 只报来源不执行。
  */
@@ -1478,7 +1478,7 @@ function onEnvApiKeyApprovalFlipped(onCredentialMayHaveChanged) {
   ];
   return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }
-//@ chunk-aepeg2w5.js:520517-520651 facade-majority = getConfiguredApiKeyHelper (0.742)
+//@ chunk-aepeg2w5.js:520517-520651 facade-majority (2.1.88 match: getConfiguredApiKeyHelper, 0.742)
 /**
  * 取 apiKeyHelper 命令：--bare 只认 flagSettings；宿主托管提供方时忽略；否则取合并设置（R6e 过滤不可信来源）。
  */
@@ -1488,7 +1488,7 @@ function getConfiguredApiKeyHelper() {
   let mergedSettings = getSettings_DEPRECATED() || {};
   return warnPinnedHelper("apiKeyHelper", mergedSettings.apiKeyHelper);
 }
-//@ chunk-aepeg2w5.js:520651-520810 layout = isApiKeyHelperFromProjectOrLocalSettings (0.814)
+//@ chunk-aepeg2w5.js:520651-520810 layout (2.1.88 match: isApiKeyHelperFromProjectOrLocalSettings, 0.814)
 /**
  * apiKeyHelper 是否来自项目/本地设置（需要工作区信任）。
  */
@@ -1503,7 +1503,7 @@ function isApiKeyHelperFromProjectOrLocalSettings() {
     isHookedMergeAnswer("apiKeyHelper")
   );
 }
-//@ chunk-aepeg2w5.js:520810-520901 facade-majority = getConfiguredAwsAuthRefresh (0.52)
+//@ chunk-aepeg2w5.js:520810-520901 facade-majority (2.1.88 match: getConfiguredAwsAuthRefresh, 0.52)
 /**
  * 设置中的 awsAuthRefresh 命令（经可信来源过滤）。
  */
@@ -1512,7 +1512,7 @@ function getConfiguredAwsAuthRefresh() {
   let mergedSettings = getSettings_DEPRECATED() || {};
   return warnPinnedHelper("awsAuthRefresh", mergedSettings.awsAuthRefresh);
 }
-//@ chunk-aepeg2w5.js:520901-521068 facade-majority = isAwsAuthRefreshFromProjectSettings (0.783)
+//@ chunk-aepeg2w5.js:520901-521068 facade-majority (2.1.88 match: isAwsAuthRefreshFromProjectSettings, 0.783)
 function isAwsAuthRefreshFromProjectSettings() {
   let awsAuthRefresh = getConfiguredAwsAuthRefresh();
   if (!awsAuthRefresh) return false;
@@ -1524,7 +1524,7 @@ function isAwsAuthRefreshFromProjectSettings() {
     isHookedMergeAnswer("awsAuthRefresh")
   );
 }
-//@ chunk-aepeg2w5.js:521068-521168 fingerprint = getConfiguredAwsCredentialExport (0.519)
+//@ chunk-aepeg2w5.js:521068-521168 fingerprint (2.1.88 match: getConfiguredAwsCredentialExport, 0.519)
 /**
  * 设置中的 awsCredentialExport 命令。
  */
@@ -1533,7 +1533,7 @@ function getConfiguredAwsCredentialExport() {
   let mergedSettings = getSettings_DEPRECATED() || {};
   return warnPinnedHelper("awsCredentialExport", mergedSettings.awsCredentialExport);
 }
-//@ chunk-aepeg2w5.js:521168-521349 facade-majority = isAwsCredentialExportFromProjectSettings (0.781)
+//@ chunk-aepeg2w5.js:521168-521349 facade-majority (2.1.88 match: isAwsCredentialExportFromProjectSettings, 0.781)
 function isAwsCredentialExportFromProjectSettings() {
   let awsCredentialExport = getConfiguredAwsCredentialExport();
   if (!awsCredentialExport) return false;
@@ -1545,7 +1545,7 @@ function isAwsCredentialExportFromProjectSettings() {
     isHookedMergeAnswer("awsCredentialExport")
   );
 }
-//@ chunk-aepeg2w5.js:521349-521558 facade-majority = calculateApiKeyHelperTTL (0.908)
+//@ chunk-aepeg2w5.js:521349-521558 facade-majority (2.1.88 match: calculateApiKeyHelperTTL, 0.908)
 /**
  * apiKeyHelper 结果缓存 TTL：CLAUDE_CODE_API_KEY_HELPER_TTL_MS（>=0）否则默认 5 分钟。
  */
@@ -1575,7 +1575,7 @@ deferInit("chunk-aepeg2w5.js:521558", () => {
     lastFailure: null,
   }));
 });
-//@ chunk-aepeg2w5.js:521631-521713 facade-majority = createBudgetTracker (0.62)
+//@ chunk-aepeg2w5.js:521631-521713 facade-majority (2.1.88 match: createBudgetTracker, 0.62)
 function getApiKeyHelperElapsedMs() {
   let startedAt = apiKeyHelperStates.of(getRootSession().host).inflight?.startedAt;
   return startedAt ? Date.now() - startedAt : 0;
@@ -1596,7 +1596,7 @@ function isOauthExpiryFresh(promise) {
   let expirySeconds = decodeJwtExpiry(promise);
   return expirySeconds === null || Date.now() < expirySeconds * 1000 - JWT_EXPIRY_SKEW_MS;
 }
-//@ chunk-aepeg2w5.js:521895-521977 facade-majority = getApiKeyFromApiKeyHelper (0.655)
+//@ chunk-aepeg2w5.js:521895-521977 facade-majority (2.1.88 match: getApiKeyFromApiKeyHelper, 0.655)
 function getColdApiKeyHelperRun() {
   let inflight = apiKeyHelperStates.of(getRootSession().host).inflight;
   return inflight?.startedAt ? inflight.promise : null;
@@ -1640,7 +1640,7 @@ async function getApiKeyFromApiKeyHelper(isNonInteractiveSession) {
   if (state.inflight) return state.inflight.promise;
   return startFetch();
 }
-//@ chunk-aepeg2w5.js:522578-523255 fingerprint = _runAndCache (0.627)
+//@ chunk-aepeg2w5.js:522578-523255 fingerprint (2.1.88 match: _runAndCache, 0.627)
 /**
  * 执行 apiKeyHelper 并写缓存；失败时打印红字错误，若有旧缓存则沿用并刷新时间戳，否则缓存一个空格占位并记录 lastFailure（epoch 变化后的结果丢弃）。
  */
@@ -1686,7 +1686,7 @@ async function _runAndCache(state, isNonInteractiveSession, isBackground, epoch)
     if (epoch === state.epoch) state.inflight = null;
   }
 }
-//@ chunk-aepeg2w5.js:523255-524614 fingerprint = _executeApiKeyHelper (0.54)
+//@ chunk-aepeg2w5.js:523255-524614 fingerprint (2.1.88 match: _executeApiKeyHelper, 0.54)
 /**
  * 运行 apiKeyHelper：来自项目/本地设置且工作区未信任时拒绝（tengu_apiKeyHelper_missing_trust11）；在项目根执行，超时 10 分钟，输出 trim 后作为 key。
  */
@@ -1799,7 +1799,7 @@ var awsAuthRefreshStates; // deferred: uses AwsAuthRefreshState of its import cy
 deferInit("chunk-aepeg2w5.js:525061", () => {
   awsAuthRefreshStates = new HostScoped(() => new AwsAuthRefreshState());
 });
-//@ chunk-aepeg2w5.js:525087-527401 fingerprint = runAwsAuthRefresh (0.349)
+//@ chunk-aepeg2w5.js:525087-527401 fingerprint (2.1.88 match: runAwsAuthRefresh, 0.349)
 /**
  * 按需运行 awsAuthRefresh：先用 STS GetCallerIdentity 检查现有凭证是否有效，无效才执行刷新命令（IDE 配置探测时跳过）。
  */
@@ -1969,7 +1969,7 @@ var AWS_AUTH_REFRESH_TIMEOUT_MS = 180000;
 function refreshAwsAuth(...args) {
   return refreshAwsAuth_2(...args).then((result) => result === "ok");
 }
-//@ chunk-aepeg2w5.js:527996-529663 fingerprint = refreshAwsAuth (0.581)
+//@ chunk-aepeg2w5.js:527996-529663 fingerprint (2.1.88 match: refreshAwsAuth, 0.581)
 /**
  * 运行 awsAuthRefresh 命令（字符串走 shell，或 {file,args,env} 走 execFile），超时 3 分钟，输出转发到 AwsAuthStatusManager 供 UI 显示，返回 ok/failed。
  */
@@ -2077,7 +2077,7 @@ function refreshAwsAuth_2(awsAuthRefresh, signal, onSpawned) {
     });
   });
 }
-//@ chunk-aepeg2w5.js:529663-531308 fingerprint = getAwsCredsFromCredentialExport (0.703)
+//@ chunk-aepeg2w5.js:529663-531308 fingerprint (2.1.88 match: getAwsCredsFromCredentialExport, 0.703)
 /**
  * 运行 awsCredentialExport 命令（项目设置来源需信任），解析 STS 形状的 JSON 输出得到 AWS 凭证（AccessKeyId/SecretAccessKey/SessionToken）。
  */
@@ -2323,7 +2323,7 @@ function resetAwsAuthRefreshCooldown() {
   state.lastRefreshAt = null;
   state.epoch++;
 }
-//@ chunk-aepeg2w5.js:533611-533702 facade-majority = getConfiguredGcpAuthRefresh (0.524)
+//@ chunk-aepeg2w5.js:533611-533702 facade-majority (2.1.88 match: getConfiguredGcpAuthRefresh, 0.524)
 /**
  * 设置中的 gcpAuthRefresh 命令。
  */
@@ -2332,7 +2332,7 @@ function getConfiguredGcpAuthRefresh() {
   let mergedSettings = getSettings_DEPRECATED() || {};
   return warnPinnedHelper("gcpAuthRefresh", mergedSettings.gcpAuthRefresh);
 }
-//@ chunk-aepeg2w5.js:533702-533869 facade-majority = isGcpAuthRefreshFromProjectSettings (0.784)
+//@ chunk-aepeg2w5.js:533702-533869 facade-majority (2.1.88 match: isGcpAuthRefreshFromProjectSettings, 0.784)
 function isGcpAuthRefreshFromProjectSettings() {
   let gcpAuthRefresh = getConfiguredGcpAuthRefresh();
   if (!gcpAuthRefresh) return false;
@@ -2362,7 +2362,7 @@ function getConfiguredVertexProjectId() {
     env.ANTHROPIC_VERTEX_PROJECT_ID
   );
 }
-//@ chunk-aepeg2w5.js:534017-534670 facade-majority = checkGcpCredentialsValid (0.489)
+//@ chunk-aepeg2w5.js:534017-534670 facade-majority (2.1.88 match: checkGcpCredentialsValid, 0.489)
 /**
  * 用 google-auth-library 取一次 access token 检查 GCP 凭证（scope cloud-platform，项目取 GCLOUD_PROJECT/ANTHROPIC_VERTEX_PROJECT_ID 等），5 秒超时，返回 valid/invalid/timeout。
  */
@@ -2421,7 +2421,7 @@ function markGcpCredentialsRejected() {
 }
 //@ chunk-aepeg2w5.js:534888-534903 layout
 var GCP_AUTH_REFRESH_TTL_MS = 3600000;
-//@ chunk-aepeg2w5.js:534903-537379 fingerprint = runGcpAuthRefresh (0.324)
+//@ chunk-aepeg2w5.js:534903-537379 fingerprint (2.1.88 match: runGcpAuthRefresh, 0.324)
 /**
  * 按需运行 gcpAuthRefresh（如 gcloud auth application-default login）：先检查 GCP 凭证，无效才执行，结果按 1 小时缓存。
  */
@@ -2558,7 +2558,7 @@ async function runGcpAuthRefresh() {
 }
 //@ chunk-aepeg2w5.js:537379-537393 layout
 var GCP_AUTH_REFRESH_TIMEOUT_MS = 180000;
-//@ chunk-aepeg2w5.js:537393-538481 facade-majority = refreshGcpAuth (0.712)
+//@ chunk-aepeg2w5.js:537393-538481 facade-majority (2.1.88 match: refreshGcpAuth, 0.712)
 function refreshGcpAuth(gcpAuthRefresh, signal, onSpawned) {
   if (isDisklessSession()) {
     logForDebugging(`GCP auth refresh: ${DISKLESS_PROGRAM_REFUSAL}`);
@@ -2664,7 +2664,7 @@ function clearGcpCredentialsCache() {
   gcpRefreshMemos.of(host).cache.clear();
   gcpAuthRefreshStates.of(host).rejectedByApi = false;
 }
-//@ chunk-aepeg2w5.js:538839-538951 facade-majority = prefetchGcpCredentialsIfSafe (0)
+//@ chunk-aepeg2w5.js:538839-538951 facade-majority (2.1.88 match: prefetchGcpCredentialsIfSafe, 0)
 /**
  * 启动时在安全情况下预取 Vertex 用的 GCP 凭证。
  */
@@ -2675,7 +2675,7 @@ function prefetchGcpCredentialsIfSafe() {
   }
   gcpRefreshMemos.of(getRootSession().host)();
 }
-//@ chunk-aepeg2w5.js:538951-539101 facade-majority = prefetchAwsCredentialsAndBedRockInfoIfSafe (0)
+//@ chunk-aepeg2w5.js:538951-539101 facade-majority (2.1.88 match: prefetchAwsCredentialsAndBedRockInfoIfSafe, 0)
 /**
  * 启动时在安全的情况下（无需信任或已信任）预取 Bedrock 用的 AWS 凭证。
  */
@@ -2689,7 +2689,7 @@ function prefetchAwsCredentialsAndBedRockInfoIfSafe() {
   awsCredentialMemos.of(getRootSession().host).helper();
   getModelStrings();
 }
-//@ chunk-aepeg2w5.js:539101-539234 fingerprint = getApiKeyFromConfigOrMacOSKeychain (0.726)
+//@ chunk-aepeg2w5.js:539101-539234 fingerprint (2.1.88 match: getApiKeyFromConfigOrMacOSKeychain, 0.726)
 /**
  * 读取 /login 创建并保存在 ~/.claude.json 的 primaryApiKey，来源记为 '/login managed key'；宿主托管或 diskless 时返回 null。316 这里不再读 macOS 钥匙串。
  */
@@ -2733,7 +2733,7 @@ function getApiKeyFromConfigOrMacOSKeychain() {
 function isValidApiKey(apiKey) {
   return /^[a-zA-Z0-9-_]+$/.test(apiKey);
 }
-//@ chunk-aepeg2w5.js:539537-540498 facade-majority = saveApiKey (0.812)
+//@ chunk-aepeg2w5.js:539537-540498 facade-majority (2.1.88 match: saveApiKey, 0.812)
 /**
  * 保存 /login 得到的 API key：校验字符集，写入全局配置 primaryApiKey，并把截断值加入 customApiKeyResponses.approved（macOS 上同时 security add-generic-password 写钥匙串）。
  */
@@ -2784,7 +2784,7 @@ async function saveApiKey(apiKey, saveOptions) {
   apiKeyConfigCache.clear();
   clearLegacyApiKeyPrefetch();
 }
-//@ chunk-aepeg2w5.js:540498-540605 facade-majority = removeApiKey (0.752)
+//@ chunk-aepeg2w5.js:540498-540605 facade-majority (2.1.88 match: removeApiKey, 0.752)
 /**
  * 删除保存的 primaryApiKey（及钥匙串项）。
  */
@@ -3014,7 +3014,7 @@ function storageKindForTelemetry() {
 }
 //@ chunk-aepeg2w5.js:543925-543963 facade-majority
 var OAUTH_TOKEN_SAVE_FAILED_WARNING = "Failed to save OAuth tokens";
-//@ chunk-aepeg2w5.js:543963-544048 facade-majority = isBigQueryMetricsEnabled (1)
+//@ chunk-aepeg2w5.js:543963-544048 facade-majority (2.1.88 match: isBigQueryMetricsEnabled, 1)
 function isProfilePlanDowngrade(previousType, nextType) {
   return (
     (previousType === "team" || previousType === "enterprise") &&
@@ -3113,7 +3113,7 @@ async function backfillStoredOAuthTier({
     return "failed";
   }
 }
-//@ chunk-aepeg2w5.js:545376-546640 facade-majority = saveOAuthTokensIfNeeded (0.676)
+//@ chunk-aepeg2w5.js:545376-546640 facade-majority (2.1.88 match: saveOAuthTokensIfNeeded, 0.676)
 /**
  * 把 OAuth 令牌写入安全存储的 claudeAiOauth（accessToken/refreshToken/expiresAt/scopes/subscriptionType/rateLimitTier…）；非 claude.ai scope 或仅推理令牌（无 refresh/expires）不保存。
  */
@@ -3296,14 +3296,14 @@ function isRefreshTokenDead(tokens) {
 function hasDeadStoredRefreshToken(storageData) {
   return storageData?.claudeAiOauth?.refreshToken === "";
 }
-//@ chunk-aepeg2w5.js:547716-547770 placement = CLAUDE_AI_INFERENCE_SCOPE (1)
+//@ chunk-aepeg2w5.js:547716-547770 placement (2.1.88 match: CLAUDE_AI_INFERENCE_SCOPE, 1)
 /**
  * CLAUDE_CODE_OAUTH_SCOPES（空白分隔）覆盖，否则用默认 ["user:inference"]。旧版名 CLAUDE_AI_INFERENCE_SCOPE 为错配。
  */
 function getRequestedOAuthScopes(defaultScopes = ["user:inference"]) {
   return oauthScopesFromEnv() ?? [...defaultScopes];
 }
-//@ chunk-aepeg2w5.js:547939-548126 placement = isUsingOAuth (0.294)
+//@ chunk-aepeg2w5.js:547939-548126 placement (2.1.88 match: isUsingOAuth, 0.294)
 function isUsingOAuth(accessToken) {
   return {
     accessToken,
@@ -3319,7 +3319,7 @@ function getLauncherOAuthTokens() {
   let accessToken = usableLauncherHostLoginToken();
   return accessToken === null ? null : isUsingOAuth(accessToken);
 }
-//@ chunk-aepeg2w5.js:548178-548630 fingerprint = getClaudeAIOAuthTokens (0.703)
+//@ chunk-aepeg2w5.js:548178-548630 fingerprint (2.1.88 match: getClaudeAIOAuthTokens, 0.703)
 /**
  * 同步读取 Claude.ai OAuth 令牌：CLAUDE_CODE_OAUTH_TOKEN 优先（包装成无 refreshToken 的令牌对象）；其次 OAuth FD；宿主托管时返回 null；再读安全存储（钥匙串 / .credentials.json）的 claudeAiOauth。
  */
@@ -3414,7 +3414,7 @@ function getClaudeAIOAuthTokenOrigin() {
   let accessToken = getSecureStorage().read()?.claudeAiOauth?.accessToken;
   return classifyBearerAgainstStore(oAuthTokenOrigin, accessToken);
 }
-//@ chunk-aepeg2w5.js:549597-549736 facade-majority = getClaudeAIOAuthTokensAsync (0.854)
+//@ chunk-aepeg2w5.js:549597-549736 facade-majority (2.1.88 match: getClaudeAIOAuthTokensAsync, 0.854)
 async function getClaudeAIOAuthTokenOriginAsync(credentials) {
   let secureStorage = getOAuthTokenOrigin();
   if (typeof secureStorage === "string") return secureStorage;
@@ -3696,7 +3696,7 @@ async function recoverCloudSessionsBearer(accessToken, credentials, storageV5, r
   if ((await ensureHostSessionsBearer()) !== null) return true;
   return handleOAuth401Error(accessToken, credentials, storageV5);
 }
-//@ chunk-aepeg2w5.js:553258-553795 facade-majority = checkAndRefreshOAuthTokenIfNeeded (0.189)
+//@ chunk-aepeg2w5.js:553258-553795 facade-majority (2.1.88 match: checkAndRefreshOAuthTokenIfNeeded, 0.189)
 /**
  * 检查并按需刷新 OAuth 令牌的入口：按（令牌, 存储层级, 是否非第一方登录）合并并发调用，再走 checkAndRefreshOAuthTokenIfNeededImpl。
  */
@@ -4042,7 +4042,7 @@ function getClaudeAIOAuthTokensAsync(credentials) {
   }
   return isLauncherStartedProcess() ? promise.then((tokens) => tokens ?? getLauncherOAuthTokens()) : promise;
 }
-//@ chunk-aepeg2w5.js:558478-558753 fingerprint = getClaudeAIOAuthTokensAsync (1)
+//@ chunk-aepeg2w5.js:558478-558753 fingerprint (2.1.88 match: getClaudeAIOAuthTokensAsync, 1)
 /**
  * 异步版 getClaudeAIOAuthTokens，支持 storage v5 后端读取。
  */
@@ -4097,7 +4097,7 @@ function sameOwnerAccount(previousAccount, nextAccount) {
     (previousAccount?.organizationUuid || undefined) === (nextAccount?.organizationUuid || undefined)
   );
 }
-//@ chunk-aepeg2w5.js:559169-559376 facade-majority = hasVoiceAuth (0.484)
+//@ chunk-aepeg2w5.js:559169-559376 facade-majority (2.1.88 match: hasVoiceAuth, 0.484)
 /**
  * 取语音所需的 OAuth access token 与账户/组织 UUID，没有 token 返回 undefined。
  */
@@ -4174,7 +4174,7 @@ function oauthRefreshLockOptions(configDir, onCompromised) {
     },
   };
 }
-//@ chunk-aepeg2w5.js:560119-560181 layout = getTaskListLockPath (1)
+//@ chunk-aepeg2w5.js:560119-560181 layout (2.1.88 match: getTaskListLockPath, 1)
 /**
  * 返回 realpath(path)+".lock" 锁文件路径。
  */
@@ -4460,7 +4460,7 @@ function isExpectedOAuthRefreshError(error, { isDefaultFirstPartyClient }) {
     isExpectedApiError(error)
   );
 }
-//@ chunk-aepeg2w5.js:563220-567727 fingerprint = checkAndRefreshOAuthTokenIfNeededImpl (0.377)
+//@ chunk-aepeg2w5.js:563220-567727 fingerprint (2.1.88 match: checkAndRefreshOAuthTokenIfNeededImpl, 0.377)
 /**
  * 刷新 OAuth 令牌：未过期（提前 5 分钟判定）返回 not_needed；无 refresh token、已知失效或账户冻结直接返回原因；在配置目录加文件锁（ELOCKED 时随机退避重试 5 次，必要时接管死锁持有者），锁内再次确认后调用 refreshOAuthToken 并写回安全存储。
  */
@@ -4732,11 +4732,11 @@ function hasStoredUsableClaudeAILogin() {
     isUsableClaudeAILoginRecord(getSecureStorage().read()?.claudeAiOauth ?? null)
   );
 }
-//@ chunk-aepeg2w5.js:567887-567942 facade-majority = isUsingOAuth (0.688)
+//@ chunk-aepeg2w5.js:567887-567942 facade-majority (2.1.88 match: isUsingOAuth, 0.688)
 function isUsableClaudeAILoginRecord(claudeAIOAuthTokens) {
   return shouldUseClaudeAIAuth(claudeAIOAuthTokens?.scopes) && !!claudeAIOAuthTokens?.accessToken;
 }
-//@ chunk-aepeg2w5.js:567942-568015 facade-majority = hasProfileScope (1)
+//@ chunk-aepeg2w5.js:567942-568015 facade-majority (2.1.88 match: hasProfileScope, 1)
 /**
  * OAuth 令牌是否带 user:profile scope（决定能否拉 /api/oauth/profile）。
  */
@@ -4850,7 +4850,7 @@ function canAuthenticateChromeBridge() {
 function getStoredOAuthTokenExpiresAt() {
   return getClaudeAIOAuthTokens()?.expiresAt ?? null;
 }
-//@ chunk-aepeg2w5.js:569398-569449 facade-majority = getSubscriptionType (1)
+//@ chunk-aepeg2w5.js:569398-569449 facade-majority (2.1.88 match: getSubscriptionType, 1)
 function getStoredOAuthSubscriptionType() {
   return getClaudeAIOAuthTokens()?.subscriptionType ?? null;
 }
@@ -4875,7 +4875,7 @@ function is1PApiCustomer() {
   if (isClaudeAISubscriber()) return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:569742-569793 facade-majority = getOauthAccountInfo (1)
+//@ chunk-aepeg2w5.js:569742-569793 facade-majority (2.1.88 match: getOauthAccountInfo, 1)
 /**
  * 认证启用时返回全局配置 oauthAccount。
  */
@@ -4887,14 +4887,14 @@ function getAuthenticatedAccountInfo() {
   if (!isAnthropicAuthEnabled()) return;
   return getAuthenticatedAccount() ?? undefined;
 }
-//@ chunk-aepeg2w5.js:569844-569883 facade-majority = getOauthAccountInfo (1)
+//@ chunk-aepeg2w5.js:569844-569883 facade-majority (2.1.88 match: getOauthAccountInfo, 1)
 /**
  * 直接读全局配置 oauthAccount（不检查认证是否启用）。
  */
 function getStoredOauthAccountInfo() {
   return getGlobalConfig().oauthAccount;
 }
-//@ chunk-aepeg2w5.js:569883-570090 fingerprint = isOverageProvisioningAllowed (0.694)
+//@ chunk-aepeg2w5.js:569883-570090 fingerprint (2.1.88 match: isOverageProvisioningAllowed, 0.694)
 var isOverageProvisioningAllowed_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-aepeg2w5.js:569883", () => {
   isOverageProvisioningAllowed_2 = new Set([
@@ -4916,7 +4916,7 @@ function isOverageProvisioningAllowed() {
   if (!isClaudeAISubscriber() || !billingType) return false;
   return isOverageProvisioningAllowed_2.has(billingType);
 }
-//@ chunk-aepeg2w5.js:570168-570261 facade-majority = isExtraUsageAllowed (1)
+//@ chunk-aepeg2w5.js:570168-570261 facade-majority (2.1.88 match: isExtraUsageAllowed, 1)
 function isExtraUsageAllowed() {
   if (env.DISABLE_EXTRA_USAGE_COMMAND) return false;
   if (getLspManager() !== null) return true;
@@ -4926,7 +4926,7 @@ function isExtraUsageAllowed() {
 function getUsageCreditsCommand() {
   return isExtraUsageAllowed() ? artifactPathPrefix("usage-credits") : undefined;
 }
-//@ chunk-aepeg2w5.js:570315-570439 facade-majority = hasClaudeAiBillingAccess (0.864)
+//@ chunk-aepeg2w5.js:570315-570439 facade-majority (2.1.88 match: hasClaudeAiBillingAccess, 0.864)
 /**
  * Claude.ai 账单权限：组织角色为 admin/billing/owner/primary_owner。
  */
@@ -4943,7 +4943,7 @@ function getTurnOnUsageCreditsStep() {
       : "ask your admin to turn on usage credits";
   return `turn on usage credits at ${USAGE_SETTINGS_URL}`;
 }
-//@ chunk-aepeg2w5.js:570648-570742 facade-majority = hasOpusAccess (1)
+//@ chunk-aepeg2w5.js:570648-570742 facade-majority (2.1.88 match: hasOpusAccess, 1)
 function hasOpusAccess() {
   let subscriptionType = getSubscriptionType();
   return (
@@ -4954,7 +4954,7 @@ function hasOpusAccess() {
     subscriptionType === null
   );
 }
-//@ chunk-aepeg2w5.js:570742-570864 facade-majority = getSubscriptionType (1)
+//@ chunk-aepeg2w5.js:570742-570864 facade-majority (2.1.88 match: getSubscriptionType, 1)
 /**
  * 当前 Claude.ai 订阅类型（max/pro/team/enterprise…）：认证启用时取 OAuth 令牌的 subscriptionType，缺失时从 profile 推断。
  */
@@ -4965,7 +4965,7 @@ function getSubscriptionType() {
   if (!oauthTokens) return null;
   return oauthTokens.subscriptionType ?? getSubscriptionTypeFromProfile() ?? null;
 }
-//@ chunk-aepeg2w5.js:570864-571055 layout = hasOpusAccess (0.933)
+//@ chunk-aepeg2w5.js:570864-571055 layout (2.1.88 match: hasOpusAccess, 0.933)
 function getSubscriptionTypeFromProfile() {
   if (!credentialIsOwnStoredLogin()) return null;
   switch (getBgDispatcherPlanInfo().subscriptionType) {
@@ -5004,22 +5004,22 @@ function ownStoredLoginPlanAttributes() {
     rateLimitTier: claudeAIOAuthTokens.rateLimitTier ?? null,
   };
 }
-//@ chunk-aepeg2w5.js:571372-571407 facade-majority = getRequestTooLargeErrorMessage (1)
+//@ chunk-aepeg2w5.js:571372-571407 facade-majority (2.1.88 match: getRequestTooLargeErrorMessage, 1)
 function isMaxSubscriber() {
   return getSubscriptionType() === "max";
 }
-//@ chunk-aepeg2w5.js:571407-571443 facade-majority = isTeamSubscriber (1)
+//@ chunk-aepeg2w5.js:571407-571443 facade-majority (2.1.88 match: isTeamSubscriber, 1)
 function isTeamSubscriber() {
   return getSubscriptionType() === "team";
 }
-//@ chunk-aepeg2w5.js:571443-571511 facade-majority = isTeamPremiumSubscriber (1)
+//@ chunk-aepeg2w5.js:571443-571511 facade-majority (2.1.88 match: isTeamPremiumSubscriber, 1)
 /**
  * team 订阅且 rateLimitTier 为 default_claude_max_5x。
  */
 function isTeamPremiumSubscriber() {
   return getSubscriptionType() === "team" && getRateLimitTier() === "default_claude_max_5x";
 }
-//@ chunk-aepeg2w5.js:571511-571553 facade-majority = isEnterpriseSubscriber (1)
+//@ chunk-aepeg2w5.js:571511-571553 facade-majority (2.1.88 match: isEnterpriseSubscriber, 1)
 /**
  * 订阅类型为 enterprise。
  */
@@ -5030,11 +5030,11 @@ function isEnterpriseSubscriber() {
 function isEnterprisePAYGSubscriber() {
   return getSubscriptionType() === "enterprise" && getSeatTier() === "enterprise_usage_based";
 }
-//@ chunk-aepeg2w5.js:571629-571664 facade-majority = isProSubscriber (1)
+//@ chunk-aepeg2w5.js:571629-571664 facade-majority (2.1.88 match: isProSubscriber, 1)
 function isProSubscriber() {
   return getSubscriptionType() === "pro";
 }
-//@ chunk-aepeg2w5.js:571664-571796 facade-majority = getRateLimitTier (1)
+//@ chunk-aepeg2w5.js:571664-571796 facade-majority (2.1.88 match: getRateLimitTier, 1)
 /**
  * 当前限流档位：令牌 rateLimitTier，缺失时从 profile 取。
  */
@@ -5048,7 +5048,7 @@ function getRateLimitTier() {
 }
 //@ chunk-aepeg2w5.js:571796-571828 layout
 var RATE_LIMIT_TIER_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
-//@ chunk-aepeg2w5.js:571828-571926 layout = getRateLimitTier (1)
+//@ chunk-aepeg2w5.js:571828-571926 layout (2.1.88 match: getRateLimitTier, 1)
 function getRateLimitTierFromProfile() {
   if (!credentialIsOwnStoredLogin()) return null;
   let oauthTokens = getBgDispatcherPlanInfo().rateLimitTier;
@@ -5068,7 +5068,7 @@ function getPlanDisplayNameLabel(oauthAccountInfo) {
     ? `Claude ${planDisplayName}`
     : null;
 }
-//@ chunk-aepeg2w5.js:572058-572303 facade-majority = getSubscriptionName (1)
+//@ chunk-aepeg2w5.js:572058-572303 facade-majority (2.1.88 match: getSubscriptionName, 1)
 /**
  * 订阅显示名：Claude Enterprise / Claude Team / Claude Max / Claude Pro 等。
  */
@@ -5095,13 +5095,13 @@ function getSubscriptionName() {
 function isUsing3PServices() {
   return !isFirstPartyProvider();
 }
-//@ chunk-aepeg2w5.js:572330-572467 facade-majority = getConfiguredOtelHeadersHelper (0.409)
+//@ chunk-aepeg2w5.js:572330-572467 facade-majority (2.1.88 match: getConfiguredOtelHeadersHelper, 0.409)
 function getConfiguredOtelHeadersHelper() {
   if (isSafeMode()) return getSettingsForSource("policySettings")?.otelHeadersHelper;
   let mergedSettings = getSettings_DEPRECATED() || {};
   return warnPinnedHelper("otelHeadersHelper", mergedSettings.otelHeadersHelper);
 }
-//@ chunk-aepeg2w5.js:572467-572643 facade-majority = isOtelHeadersHelperFromProjectOrLocalSettings (0.784)
+//@ chunk-aepeg2w5.js:572467-572643 facade-majority (2.1.88 match: isOtelHeadersHelperFromProjectOrLocalSettings, 0.784)
 function isOtelHeadersHelperFromProjectOrLocalSettings() {
   let otelHeadersHelper = getConfiguredOtelHeadersHelper();
   if (!otelHeadersHelper) return false;
@@ -5168,7 +5168,7 @@ function prefetchOtelHeadersFromHelper() {
   state.prefetched = true;
   getOtelHeadersFromHelper().catch(() => {});
 }
-//@ chunk-aepeg2w5.js:573292-575524 facade-majority = getOtelHeadersFromHelper (0.321)
+//@ chunk-aepeg2w5.js:573292-575524 facade-majority (2.1.88 match: getOtelHeadersFromHelper, 0.321)
 /**
  * 运行 otelHeadersHelper 生成 OTel 导出头（JSON 对象），缓存 29 分钟；项目/本地设置来源需信任，失败记录 lastFailure 并发信号。
  */
@@ -5316,7 +5316,7 @@ async function getOtelHeadersFromHelper() {
   })();
   return state.inflight;
 }
-//@ chunk-aepeg2w5.js:575524-575568 facade-majority = isConsumerPlan (1)
+//@ chunk-aepeg2w5.js:575524-575568 facade-majority (2.1.88 match: isConsumerPlan, 1)
 /**
  * plan 为 max 或 pro。
  */
@@ -5328,7 +5328,7 @@ function isConsumerSubscriber() {
   let subscriptionType = getSubscriptionType();
   return isClaudeAISubscriber() && subscriptionType !== null && isConsumerPlan(subscriptionType);
 }
-//@ chunk-aepeg2w5.js:575623-576098 facade-majority = getAccountInformation (0.951)
+//@ chunk-aepeg2w5.js:575623-576098 facade-majority (2.1.88 match: getAccountInformation, 0.951)
 /**
  * /status 等显示的账户信息：tokenSource 或订阅名、apiKeySource、组织名、邮箱（仅 claude.ai 或 /login managed key 时）。第三方提供方返回 undefined。
  */
@@ -5354,7 +5354,7 @@ function getAccountInformation() {
     accountInfo.email = email;
   return accountInfo;
 }
-//@ chunk-aepeg2w5.js:576098-576283 facade-majority = AccountInfoSchema (0.477)
+//@ chunk-aepeg2w5.js:576098-576283 facade-majority (2.1.88 match: AccountInfoSchema, 0.477)
 /**
  * 当前账户信息（email、organization、subscriptionType、tokenSource、apiKeySource、apiProvider），用于 initialize 响应。
  */
@@ -5490,7 +5490,7 @@ async function getAnthropicApiKeyWithSourceAsyncSafe(options = {}) {
     };
   }
 }
-//@ chunk-aepeg2w5.js:577826-577965 facade-majority = hasAnthropicApiKeyAuth (1)
+//@ chunk-aepeg2w5.js:577826-577965 facade-majority (2.1.88 match: hasAnthropicApiKeyAuth, 1)
 async function hasAnthropicApiKeyAuthAsync() {
   try {
     let { key, source } = await getAnthropicApiKeyWithSourceAsync({
@@ -5529,7 +5529,7 @@ async function isAnthropicAuthEnabledAsync() {
     ((apiKeyHelper || hasDescriptorKey) && !isManagedOAuthContext());
   return !(nonFirstParty || shouldDisableAuth);
 }
-//@ chunk-aepeg2w5.js:578381-579061 facade-majority = getAuthTokenSource (0.886)
+//@ chunk-aepeg2w5.js:578381-579061 facade-majority (2.1.88 match: getAuthTokenSource, 0.886)
 /**
  * getAuthTokenSource 的异步版本（storage v5 读取令牌）。
  */
@@ -5603,7 +5603,7 @@ async function is1PApiCustomerAsync(credentials) {
   if (await isClaudeAISubscriberAsync(credentials)) return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:579305-579370 facade-majority = getOauthAccountInfo (1)
+//@ chunk-aepeg2w5.js:579305-579370 facade-majority (2.1.88 match: getOauthAccountInfo, 1)
 async function getOauthAccountInfoAsync() {
   return (await isAnthropicAuthEnabledAsync()) ? getGlobalConfig().oauthAccount : undefined;
 }
@@ -5613,7 +5613,7 @@ async function isOverageProvisioningAllowedAsync(credentials) {
   if (!(await isClaudeAISubscriberAsync(credentials)) || !billingType) return false;
   return isOverageProvisioningAllowed_2.has(billingType);
 }
-//@ chunk-aepeg2w5.js:579472-579616 facade-majority = getSubscriptionType (1)
+//@ chunk-aepeg2w5.js:579472-579616 facade-majority (2.1.88 match: getSubscriptionType, 1)
 async function getSubscriptionTypeAsync(credentials) {
   if (getStoredSubscriptionType()) return hasSubscriptionTypeOverride();
   if (!(await isAnthropicAuthEnabledAsync())) return null;
@@ -5621,7 +5621,7 @@ async function getSubscriptionTypeAsync(credentials) {
   if (!oauthTokens) return null;
   return oauthTokens.subscriptionType ?? getSubscriptionTypeFromProfile() ?? null;
 }
-//@ chunk-aepeg2w5.js:579616-579725 facade-majority = hasOpusAccess (1)
+//@ chunk-aepeg2w5.js:579616-579725 facade-majority (2.1.88 match: hasOpusAccess, 1)
 async function hasOpusAccessAsync(credentials) {
   let subscriptionType = await getSubscriptionTypeAsync(credentials);
   return (
@@ -5632,7 +5632,7 @@ async function hasOpusAccessAsync(credentials) {
     subscriptionType === null
   );
 }
-//@ chunk-aepeg2w5.js:579725-579879 facade-majority = getRateLimitTier (1)
+//@ chunk-aepeg2w5.js:579725-579879 facade-majority (2.1.88 match: getRateLimitTier, 1)
 async function getRateLimitTierAsync(credentials) {
   let oauthTokens = getRateLimitTier_2();
   if (oauthTokens !== null) return oauthTokens;
@@ -5645,22 +5645,22 @@ async function getRateLimitTierAsync(credentials) {
 async function getSeatTierAsync() {
   return (await getOauthAccountInfoAsync())?.seatTier ?? null;
 }
-//@ chunk-aepeg2w5.js:579936-579986 facade-majority = getRequestTooLargeErrorMessage (1)
+//@ chunk-aepeg2w5.js:579936-579986 facade-majority (2.1.88 match: getRequestTooLargeErrorMessage, 1)
 async function isMaxSubscriberAsync(credentials) {
   return (await getSubscriptionTypeAsync(credentials)) === "max";
 }
-//@ chunk-aepeg2w5.js:579986-580037 facade-majority = isTeamSubscriber (1)
+//@ chunk-aepeg2w5.js:579986-580037 facade-majority (2.1.88 match: isTeamSubscriber, 1)
 async function isTeamSubscriberAsync(credentials) {
   return (await getSubscriptionTypeAsync(credentials)) === "team";
 }
-//@ chunk-aepeg2w5.js:580037-580128 facade-majority = isTeamPremiumSubscriber (1)
+//@ chunk-aepeg2w5.js:580037-580128 facade-majority (2.1.88 match: isTeamPremiumSubscriber, 1)
 async function isTeamPremiumSubscriberAsync(credentials) {
   return (
     (await getSubscriptionTypeAsync(credentials)) === "team" &&
     (await getRateLimitTierAsync(credentials)) === "default_claude_max_5x"
   );
 }
-//@ chunk-aepeg2w5.js:580128-580185 facade-majority = isEnterpriseSubscriber (1)
+//@ chunk-aepeg2w5.js:580128-580185 facade-majority (2.1.88 match: isEnterpriseSubscriber, 1)
 async function isEnterpriseSubscriberAsync(credentials) {
   return (await getSubscriptionTypeAsync(credentials)) === "enterprise";
 }
@@ -5671,11 +5671,11 @@ async function isEnterprisePAYGSubscriberAsync(credentials) {
     (await getSeatTierAsync()) === "enterprise_usage_based"
   );
 }
-//@ chunk-aepeg2w5.js:580282-580332 facade-majority = isProSubscriber (1)
+//@ chunk-aepeg2w5.js:580282-580332 facade-majority (2.1.88 match: isProSubscriber, 1)
 async function isProSubscriberAsync(plan) {
   return (await getSubscriptionTypeAsync(plan)) === "pro";
 }
-//@ chunk-aepeg2w5.js:580332-580599 facade-majority = getSubscriptionName (1)
+//@ chunk-aepeg2w5.js:580332-580599 facade-majority (2.1.88 match: getSubscriptionName, 1)
 async function getSubscriptionNameAsync(credentials) {
   let subscriptionType = await getSubscriptionTypeAsync(credentials);
   if (subscriptionType !== null) {
@@ -5704,7 +5704,7 @@ async function isConsumerSubscriberAsync(credentials) {
     isConsumerPlan(subscriptionType)
   );
 }
-//@ chunk-aepeg2w5.js:580678-581208 facade-majority = getAccountInformation (0.951)
+//@ chunk-aepeg2w5.js:580678-581208 facade-majority (2.1.88 match: getAccountInformation, 0.951)
 /**
  * getAccountInformation 的异步版本（storage v5）。
  */
@@ -5753,7 +5753,7 @@ async function providerAllowlistRefusal(apiProvider) {
     message: refusal.message,
   };
 }
-//@ chunk-aepeg2w5.js:581544-581630 layout = hasAnthropicApiKeyAuth (1)
+//@ chunk-aepeg2w5.js:581544-581630 layout (2.1.88 match: hasAnthropicApiKeyAuth, 1)
 // deferred: uses setWifProfileBaseUrlInUse (./model/allowedProviders.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-aepeg2w5.js:581544", () => {
   setWifProfileBaseUrlInUse(() =>
@@ -5965,7 +5965,7 @@ deferInit("chunk-aepeg2w5.js:585984", () => {
   UNREADABLE_POLICY_ERRNOS = ["EACCES", "EPERM", "EBUSY", "EIO", "EISDIR", "ELOOP"];
   regExp_30 = new RegExp(`\\b(${UNREADABLE_POLICY_ERRNOS.join("|")})\\b`);
 });
-//@ chunk-aepeg2w5.js:586082-588528 facade-majority = validateForceLoginOrg (0.287)
+//@ chunk-aepeg2w5.js:586082-588528 facade-majority (2.1.88 match: validateForceLoginOrg, 0.287)
 /**
  * 见 AD：托管设置组织 pin 校验。
  */
@@ -6321,24 +6321,24 @@ function checkForcedLoginMethod(isClaudeAi) {
  * GCP 凭据检查超时的错误类型。
  */
 class GcpCredentialsTimeoutError extends Error {}
-//@ chunk-g54kbxqw.js:60108-60183 fingerprint = isManagedOAuthContext (0.881)
+//@ chunk-g54kbxqw.js:60108-60183 fingerprint (2.1.88 match: isManagedOAuthContext, 0.881)
 function isManagedOAuthContext_2() {
   return process.env.CLAUDE_CODE_ENTRYPOINT === "claude-desktop";
 }
-//@ chunk-cdz6g143.js:407-459 fingerprint = invalidateOAuthCacheIfDiskChanged (0.513)
+//@ chunk-cdz6g143.js:407-459 fingerprint (2.1.88 match: invalidateOAuthCacheIfDiskChanged, 0.513)
 /**
  * 凭证文件名常量：.credentials.json（明文 OAuth 凭证）与 .device-keys.json（设备密钥）。
  */
 var CREDENTIALS_FILE_NAME = ".credentials.json";
 var DEVICE_KEYS_FILE_NAME = ".device-keys.json";
-//@ chunk-cdz6g143.js:459-519 placement = getProjectDirsUpToHome (1)
+//@ chunk-cdz6g143.js:459-519 placement (2.1.88 match: getProjectDirsUpToHome, 1)
 /**
  * 设备密钥文件路径 `~/.claude/.device-keys.json`（NFC 规范化）。与 markdown 配置无关，旧版名 getProjectDirsUpToHome 配错。
  */
 function getDeviceKeysFilePath() {
   return join(homedir(), ".claude", DEVICE_KEYS_FILE_NAME).normalize("NFC");
 }
-//@ chunk-71c4j971.js:14757-14813 fingerprint = getOauthAccountInfo (1)
+//@ chunk-71c4j971.js:14757-14813 fingerprint (2.1.88 match: getOauthAccountInfo, 1)
 function getOauthAccountInfo_2() {
   try {
     return getGlobalConfig().oauthAccount;
@@ -6346,7 +6346,7 @@ function getOauthAccountInfo_2() {
     return;
   }
 }
-//@ chunk-4xpk3fhh.js:18749-18830 fingerprint = hasOpusAccess (1)
+//@ chunk-4xpk3fhh.js:18749-18830 fingerprint (2.1.88 match: hasOpusAccess, 1)
 function hasOpusAccess_2(subscriptionType) {
   return (
     subscriptionType === "team" ||
@@ -6361,7 +6361,7 @@ function hasOpusAccess_2(subscriptionType) {
  * 并发 401 处理结果缓存的条数上限（1000）。
  */
 var MAX_401_HANDLERS = 1000;
-//@ chunk-e6aww6q8.js:2297165-2297458 fingerprint = handleOAuth401Error (0.67)
+//@ chunk-e6aww6q8.js:2297165-2297458 fingerprint (2.1.88 match: handleOAuth401Error, 0.67)
 /**
  * 按 key 合并并发的 401 处理，结果缓存（LRU 1000）避免同一令牌重复刷新。
  */
@@ -6392,7 +6392,7 @@ var oauth401DedupByHost; // deferred: uses OAuth401Deduper of its import cycle w
 deferInit("chunk-e6aww6q8.js:2297458", () => {
   oauth401DedupByHost = new HostScoped(() => new OAuth401Deduper());
 });
-//@ chunk-4pc1m5n9.js:13047-13220 fingerprint = hasAnthropicApiKeyAuth (1)
+//@ chunk-4pc1m5n9.js:13047-13220 fingerprint (2.1.88 match: hasAnthropicApiKeyAuth, 1)
 async function hasAnthropicApiKeyAuth_2(options) {
   let gatewayAuth = getGatewayAuth();
   if (gatewayAuth)
@@ -6416,7 +6416,7 @@ async function hasAnthropicApiKeyAuth_2(options) {
  * 等待 401 处理完成的超时（5 秒）。
  */
 var OAUTH_401_RACE_TIMEOUT_MS = 5000;
-//@ chunk-171dhyhe.js:50428-50760 fingerprint = handleOAuth401ErrorImpl (0.484)
+//@ chunk-171dhyhe.js:50428-50760 fingerprint (2.1.88 match: handleOAuth401ErrorImpl, 0.484)
 async function handleOAuth401ErrorImpl_2(usedAccessToken, signal, storage) {
   let tokens;
   if (isStorageV5Enabled() && storage !== undefined) tokens = await getClaudeAIOAuthTokensAsync(storage);

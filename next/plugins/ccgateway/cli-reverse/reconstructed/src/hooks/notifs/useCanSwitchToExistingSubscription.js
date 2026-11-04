@@ -15,7 +15,7 @@ import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { SUBSCRIPTION_SWITCH, CC_CE_MIGRATE_MAX_IMPRESSIONS } from "../../utils/subscriptionNoticeIds.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-ag5x7vhf.js:87298-87483 fingerprint = getExistingClaudeSubscription (1)
+//@ chunk-ag5x7vhf.js:87298-87483 fingerprint (2.1.88 match: getExistingClaudeSubscription, 1)
 async function getExistingClaudeSubscription() {
   if (isClaudeAISubscriber()) return null;
   let profile = await getOauthProfileFromApiKey();
@@ -28,7 +28,7 @@ async function getExistingClaudeSubscription() {
 function useCanSwitchToExistingSubscription() {
   return (getGlobalConfig().seenNotifications?.[SUBSCRIPTION_SWITCH] ?? 0) < CC_CE_MIGRATE_MAX_IMPRESSIONS;
 }
-//@ chunk-ag5x7vhf.js:87543-87709 fingerprint = _temp2 (0.411)
+//@ chunk-ag5x7vhf.js:87543-87709 fingerprint (2.1.88 match: _temp2, 0.411)
 function recordSubscriptionNoticeShown(storageV5) {
   saveGlobalConfig((config) => {
     let seenNotifications = config.seenNotifications ?? {};

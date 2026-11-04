@@ -35,7 +35,7 @@ import { regExp_2 } from "../../ink/layout/node.js";
 import { getColorModuleUnavailableReason } from "../../components/StructuredDiff/colorDiff.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cwwxybjc.js:1032-1076 fingerprint = rgb (1)
+//@ chunk-cwwxybjc.js:1032-1076 fingerprint (2.1.88 match: rgb, 1)
 /**
  * 真彩色 Color（a=255）。
  */
@@ -47,7 +47,7 @@ function rgb(r, g, b) {
     a: 255,
   };
 }
-//@ chunk-cwwxybjc.js:1076-1114 layout = rgb (1)
+//@ chunk-cwwxybjc.js:1076-1114 layout (2.1.88 match: rgb, 1)
 /**
  * 调色板索引色（a=0，r 存索引）。
  */
@@ -59,7 +59,7 @@ function ansiIdx(index) {
     a: 0,
   };
 }
-//@ chunk-cwwxybjc.js:1114-1138 callgraph-fingerprint = DEFAULT_BG (1)
+//@ chunk-cwwxybjc.js:1114-1138 callgraph-fingerprint (2.1.88 match: DEFAULT_BG, 1)
 /**
  * 终端默认色标记（a=1，输出 39/49）。
  */
@@ -69,7 +69,7 @@ var DEFAULT_BG = {
   b: 0,
   a: 1,
 };
-//@ chunk-cwwxybjc.js:1138-1229 fingerprint = detectColorMode (0.919)
+//@ chunk-cwwxybjc.js:1138-1229 fingerprint (2.1.88 match: detectColorMode, 0.919)
 /**
  * 颜色模式：主题名含 ansi → ansi；chalk 级别≥3 → truecolor；否则 color256。
  */
@@ -102,7 +102,7 @@ function ansi256FromRgb(r_2, g_2, b_2) {
   let dCube = (r_2 - cubeR) ** 2 + (g_2 - cubeG) ** 2 + (b_2 - cb) ** 2;
   return (r_2 - greyRgb) ** 2 + (g_2 - greyRgb) ** 2 + (b_2 - greyRgb) ** 2 < dCube ? greyIdx : cubeIdx;
 }
-//@ chunk-cwwxybjc.js:1597-1904 fingerprint = colorToEscape (1)
+//@ chunk-cwwxybjc.js:1597-1904 fingerprint (2.1.88 match: colorToEscape, 1)
 /**
  * Color 转 SGR 转义：索引色 0-7/8-15 用 30-37/90-97（背景 40/100），其余用 38;5；默认色 39/49；真彩色 38;2 或降级到 256 色。
  */
@@ -118,7 +118,7 @@ function colorToEscape(c_2, fg, mode) {
   if (mode === "truecolor") return `\x1B[${codeType};2;${c_2.r};${c_2.g};${c_2.b}m`;
   return `\x1B[${codeType};5;${ansi256FromRgb(c_2.r, c_2.g, c_2.b)}m`;
 }
-//@ chunk-cwwxybjc.js:1904-2026 fingerprint = asTerminalEscaped (1)
+//@ chunk-cwwxybjc.js:1904-2026 fingerprint (2.1.88 match: asTerminalEscaped, 1)
 /**
  * 把 [样式, 文本] 块序列拼成带转义的一行（可只输出前景、整行变暗），以 RESET 开头结尾。
  */
@@ -131,7 +131,7 @@ function asTerminalEscaped(blocks, mode, skipBackground, dim) {
   }
   return out + ANSI_RESET;
 }
-//@ chunk-cwwxybjc.js:2026-2138 fingerprint = defaultSyntaxThemeName (1)
+//@ chunk-cwwxybjc.js:2026-2138 fingerprint (2.1.88 match: defaultSyntaxThemeName, 1)
 /**
  * 按界面主题选语法主题名：ansi → ansi；dark → Monokai Extended；其他 → GitHub。
  */
@@ -140,7 +140,7 @@ function defaultSyntaxThemeName(themeName) {
   if (themeName.includes("dark")) return "Monokai Extended";
   return "GitHub";
 }
-//@ chunk-cwwxybjc.js:2138-3828 fingerprint = STORAGE_KEYWORDS (0.577)
+//@ chunk-cwwxybjc.js:2138-3828 fingerprint (2.1.88 match: STORAGE_KEYWORDS, 0.577)
 /**
  * highlight.js 作用域到颜色的映射：Monokai Extended（深色）、GitHub（浅色）、ANSI 16 色；STORAGE_KEYWORDS（const/let/function/class/def/fn/struct 等）在 keyword 作用域里改用 _storage 颜色。
  */
@@ -234,7 +234,7 @@ deferInit("chunk-cwwxybjc.js:2138", () => {
     ["meta", ansiIdx(8)],
   ]);
 });
-//@ chunk-cwwxybjc.js:3828-4884 fingerprint = buildTheme (1)
+//@ chunk-cwwxybjc.js:3828-4884 fingerprint (2.1.88 match: buildTheme, 1)
 /**
  * 按主题名与颜色模式组装 diff 主题：增删行背景、增删单词背景、增删标记色、前景、语法作用域表；有 dark/light × 普通/色盲友好（daltonized，新增行用蓝色）× ansi 几种组合；256 色下深色主题的增行背景改用调色板索引。
  */
@@ -312,7 +312,7 @@ function buildTheme(themeName, mode) {
     scopes: GITHUB_SCOPES,
   };
 }
-//@ chunk-cwwxybjc.js:5146-5687 sole-consumer = toInkColor (1)
+//@ chunk-cwwxybjc.js:5146-5687 sole-consumer (2.1.88 match: toInkColor, 1)
 function toInkColor(color) {
   if (color === undefined) return null;
   let match = /^rgb\(\s?(\d{1,3}),\s?(\d{1,3}),\s?(\d{1,3})\s?\)$/.exec(color);
@@ -349,14 +349,14 @@ function applyThemeDiffColors(theme, diffColors, dimmed) {
     deleteWord: inkColor_4 ?? theme.deleteWord,
   };
 }
-//@ chunk-cwwxybjc.js:5961-6031 affinity = asTerminalEscaped (1)
+//@ chunk-cwwxybjc.js:5961-6031 affinity (2.1.88 match: asTerminalEscaped, 1)
 function defaultStyle(theme) {
   return {
     foreground: theme.foreground,
     background: theme.background,
   };
 }
-//@ chunk-cwwxybjc.js:6031-6139 fingerprint = lineBackground (1)
+//@ chunk-cwwxybjc.js:6031-6139 fingerprint (2.1.88 match: lineBackground, 1)
 function lineBackground(marker, theme) {
   switch (marker) {
     case "+":
@@ -367,7 +367,7 @@ function lineBackground(marker, theme) {
       return theme.background;
   }
 }
-//@ chunk-cwwxybjc.js:6139-6248 fingerprint = wordBackground (1)
+//@ chunk-cwwxybjc.js:6139-6248 fingerprint (2.1.88 match: wordBackground, 1)
 function wordBackground(marker, theme) {
   switch (marker) {
     case "+":
@@ -378,7 +378,7 @@ function wordBackground(marker, theme) {
       return theme.background;
   }
 }
-//@ chunk-cwwxybjc.js:6248-6368 fingerprint = decorationColor (1)
+//@ chunk-cwwxybjc.js:6248-6368 fingerprint (2.1.88 match: decorationColor, 1)
 function decorationColor(marker, theme) {
   switch (marker) {
     case "+":
@@ -389,7 +389,7 @@ function decorationColor(marker, theme) {
       return theme.foreground;
   }
 }
-//@ chunk-cwwxybjc.js:6368-6499 fingerprint = FILENAME_LANGS (0.588)
+//@ chunk-cwwxybjc.js:6368-6499 fingerprint (2.1.88 match: FILENAME_LANGS, 0.588)
 var FILENAME_LANGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-cwwxybjc.js:6368", () => {
   FILENAME_LANGS = new Map([
@@ -400,7 +400,7 @@ deferInit("chunk-cwwxybjc.js:6368", () => {
     ["CMakeLists", "cmake"],
   ]);
 });
-//@ chunk-cwwxybjc.js:6499-7046 fingerprint = detectLanguage (0.973)
+//@ chunk-cwwxybjc.js:6499-7046 fingerprint (2.1.88 match: detectLanguage, 0.973)
 /**
  * 识别文件语言：先按文件名（Dockerfile/Makefile 等），再按扩展名，再按首行 shebang（bash/python/node/ruby/perl）或 <?php、<?xml。
  */
@@ -431,7 +431,7 @@ function detectLanguage(filePath, firstLine) {
   }
   return null;
 }
-//@ chunk-cwwxybjc.js:7046-7234 fingerprint = scopeColor (1)
+//@ chunk-cwwxybjc.js:7046-7234 fingerprint (2.1.88 match: scopeColor, 1)
 /**
  * 作用域取色：keyword 中的声明类关键字用 _storage 色；找不到完整作用域时退回首段（如 title.function → title）；都没有用前景色。
  */
@@ -441,7 +441,7 @@ function scopeColor(scope, text, theme) {
     return theme.scopes.get("_storage") ?? theme.foreground;
   return theme.scopes.get(scope) ?? theme.scopes.get(firstLineOf(scope, ".")) ?? theme.foreground;
 }
-//@ chunk-cwwxybjc.js:7234-7412 layout = asTerminalEscaped (1)
+//@ chunk-cwwxybjc.js:7234-7412 layout (2.1.88 match: asTerminalEscaped, 1)
 /**
  * 递归展开 highlight.js 的 emitter 节点树，按继承的作用域给每段文本配色。
  */
@@ -459,7 +459,7 @@ function flattenHljsNode(node, theme, parentScope, out) {
       ]);
     } else flattenHljsNode(child, theme, scope, out);
 }
-//@ chunk-cwwxybjc.js:7412-7554 fingerprint = hasRootNode (1)
+//@ chunk-cwwxybjc.js:7412-7554 fingerprint (2.1.88 match: hasRootNode, 1)
 function hasRootNode(emitter) {
   return (
     typeof emitter === "object" &&
@@ -470,7 +470,7 @@ function hasRootNode(emitter) {
     "children" in emitter.rootNode
   );
 }
-//@ chunk-cwwxybjc.js:7554-8116 fingerprint = highlightLine (0.706)
+//@ chunk-cwwxybjc.js:7554-8116 fingerprint (2.1.88 match: highlightLine, 0.706)
 /**
  * 高亮一行代码：语言未知直接用默认样式；长行先换成受限语言（O2o）避免慢；累计复杂度超过阈值后不再高亮；highlight.js 抛错时关闭此文件的高亮；emitter 形状不符记一次错误。
  */
@@ -525,7 +525,7 @@ function sanitizeBlocks(blocks) {
  * 单词级 diff 改动占比超过 40% 时放弃单词高亮（整行变化太大）。
  */
 var CHANGE_THRESHOLD = 0.4;
-//@ chunk-cwwxybjc.js:8283-8624 callgraph-fingerprint = tokenize (1)
+//@ chunk-cwwxybjc.js:8283-8624 callgraph-fingerprint (2.1.88 match: tokenize, 1)
 /**
  * 单词级 diff 的分词：字母数字下划线连续段、空白连续段、其他按单个码点。
  */
@@ -576,7 +576,7 @@ function findAdjacentPairs(markers) {
     } else i++;
   return pairs;
 }
-//@ chunk-cwwxybjc.js:8888-9191 fingerprint = wordDiffStrings (1)
+//@ chunk-cwwxybjc.js:8888-9191 fingerprint (2.1.88 match: wordDiffStrings, 1)
 /**
  * 两行之间的单词级 diff：返回旧行被删范围和新行新增范围；改动占比超过 40% 时返回空。
  */
@@ -614,7 +614,7 @@ function wordDiffStrings(oldStr, newStr) {
   if (totalLen > 0 && changedLen / totalLen > CHANGE_THRESHOLD) return [[], []];
   return [oldRanges, newRanges];
 }
-//@ chunk-cwwxybjc.js:9191-9305 callgraph-witnessed = removeNewlines (1)
+//@ chunk-cwwxybjc.js:9191-9305 callgraph-witnessed (2.1.88 match: removeNewlines, 1)
 function splitBlocksOnNewlines(h) {
   h.lines = h.lines.map((line) =>
     line.flatMap(([style, text]) =>
@@ -664,7 +664,7 @@ function appendedWidth(prefix, text) {
   let sliced = prefix.slice(-WIDTH_CONTEXT_CHARS);
   return textWidth(sliced + text) - textWidth(sliced);
 }
-//@ chunk-cwwxybjc.js:9760-9835 layout = asTerminalEscaped (1)
+//@ chunk-cwwxybjc.js:9760-9835 layout (2.1.88 match: asTerminalEscaped, 1)
 function styleEscape(style, mode, skipBackground) {
   return (
     colorToEscape(style.foreground, true, mode) +
@@ -705,7 +705,7 @@ function expandTabs(blocks) {
   }
   return out;
 }
-//@ chunk-cwwxybjc.js:10217-11590 layout = addMarker (0.806)
+//@ chunk-cwwxybjc.js:10217-11590 layout (2.1.88 match: addMarker, 0.806)
 /**
  * 把一行的样式块按宽度折行（纯 ASCII 快速路径，其余按字素宽度）；超长时截断并加省略号；有增删标记时用行背景色补齐到整宽。
  */
@@ -823,7 +823,7 @@ function wrapLines(wrappedLine, effectiveWidth, theme, mode, skipBackground) {
     }
   }
 }
-//@ chunk-cwwxybjc.js:11590-11901 fingerprint = addLineNumber (1)
+//@ chunk-cwwxybjc.js:11590-11901 fingerprint (2.1.88 match: addLineNumber, 1)
 /**
  * 在每个折行前加行号栏（首行显示行号，续行空白；上下文行变暗）。
  */
@@ -839,7 +839,7 @@ function addLineNumber(h, theme, maxDigits, fullDim) {
     h.lines[i].unshift([style, wrapped]);
   }
 }
-//@ chunk-cwwxybjc.js:11901-12041 fingerprint = addMarker (1)
+//@ chunk-cwwxybjc.js:11901-12041 fingerprint (2.1.88 match: addMarker, 1)
 function addMarker(h, theme) {
   if (!h.marker) return;
   let style = {
@@ -848,7 +848,7 @@ function addMarker(h, theme) {
   };
   for (let line of h.lines) line.unshift([style, h.marker]);
 }
-//@ chunk-cwwxybjc.js:12041-12146 callgraph-fingerprint = dimContent (1)
+//@ chunk-cwwxybjc.js:12041-12146 callgraph-fingerprint (2.1.88 match: dimContent, 1)
 /**
  * ansi 模式下删除行整行变暗。
  */
@@ -900,7 +900,7 @@ function snapRangesToGraphemes(text, ranges) {
   }
   return snapped;
 }
-//@ chunk-cwwxybjc.js:12637-13280 fingerprint = applyBackground (1)
+//@ chunk-cwwxybjc.js:12637-13280 fingerprint (2.1.88 match: applyBackground, 1)
 /**
  * 给增删行着背景：单词级改动范围用单词背景，其余用行背景（按样式块切分）。
  */
@@ -964,7 +964,7 @@ function applyBackground(h_2, theme, ranges) {
     h_2.lines[idx] = newLine;
   }
 }
-//@ chunk-cwwxybjc.js:13280-13396 layout = computeGutterWidth (1)
+//@ chunk-cwwxybjc.js:13280-13396 layout (2.1.88 match: computeGutterWidth, 1)
 function getMaxLineNumber(patch) {
   let maxLineNumber = Math.max(0, patch.oldStart + patch.oldLines - 1);
   let max = Math.max(0, patch.newStart + patch.newLines - 1);
@@ -977,7 +977,7 @@ function normalizeMarker(marker) {
 //@ chunk-cwwxybjc.js:13441-13453 layout
 var DIFF_GUTTER_BLOCKS = 2;
 var FILE_GUTTER_BLOCKS = 1;
-//@ chunk-cwwxybjc.js:13453-14737 fingerprint = ColorDiff (0.801)
+//@ chunk-cwwxybjc.js:13453-14737 fingerprint (2.1.88 match: ColorDiff, 0.801)
 /**
  * 带语法高亮与单词级 diff 的 hunk 渲染器（2.1.88 中替代原生 Rust color-diff 的 TS 实现）：buildRows 依次求颜色模式、主题（可被用户 diff 颜色覆盖）、语言、行号，配对增删行做单词 diff，逐行高亮（删除行不高亮）、着背景、折行、加标记与行号；render 输出整行，renderSplit 输出行号栏与内容两列。
  */
@@ -1075,7 +1075,7 @@ class ColorDiff {
     };
   }
 }
-//@ chunk-cwwxybjc.js:14737-15473 fingerprint = ColorFile (0.671)
+//@ chunk-cwwxybjc.js:14737-15473 fingerprint (2.1.88 match: ColorFile, 0.671)
 /**
  * 整文件语法高亮渲染器（带行号，不做 diff）。
  */
@@ -1132,7 +1132,7 @@ class ColorFile {
     };
   }
 }
-//@ chunk-cwwxybjc.js:15473-15520 callgraph-fingerprint = getSyntaxTheme (0.397)
+//@ chunk-cwwxybjc.js:15473-15520 callgraph-fingerprint (2.1.88 match: getSyntaxTheme, 0.397)
 function getSyntaxTheme(themeName) {
   return {
     theme: defaultSyntaxThemeName(themeName),

@@ -10,7 +10,7 @@
  */
 import { isStreamCutContinuation } from "../messages.js";
 
-//@ chunk-g54kbxqw.js:43903-44392 placement = getTokenCountFromUsage (0.798)
+//@ chunk-g54kbxqw.js:43903-44392 placement (2.1.88 match: getTokenCountFromUsage, 0.798)
 function getTokenCountFromUsage(usage) {
   let counts = {
     input_tokens: usage.input_tokens ?? 0,
@@ -33,7 +33,7 @@ function totalTokensOf(usage) {
   let tokenCountFromUsage = getTokenCountFromUsage(usage);
   return getTokenCountFromUsage_2(tokenCountFromUsage) + tokenCountFromUsage.output_tokens;
 }
-//@ chunk-g54kbxqw.js:44450-44544 placement = getTokenCountFromUsage (0.857)
+//@ chunk-g54kbxqw.js:44450-44544 placement (2.1.88 match: getTokenCountFromUsage, 0.857)
 function getTokenCountFromUsage_2(usage) {
   return usage.input_tokens + usage.cache_creation_input_tokens + usage.cache_read_input_tokens;
 }

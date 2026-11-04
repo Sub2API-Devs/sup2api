@@ -11,7 +11,7 @@
 import { useNotifications } from "../../context/notifications.js";
 import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-18hwfzwa.js:433650-433876 callgraph-fingerprint = usePluginInstallationStatus (0.338)
+//@ chunk-18hwfzwa.js:433650-433876 callgraph-fingerprint (2.1.88 match: usePluginInstallationStatus, 0.338)
 function usePluginInstallationStatus(noticeKey, priority, status, renderStatus, options) {
   let { addNotification, removeNotification } = useNotifications();
   useEffect(() => {

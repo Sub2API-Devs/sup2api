@@ -337,7 +337,7 @@ function plainDataOrThrow(text) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3735329-3735553 placement = base64URLEncode (0.79)
+//@ chunk-e6aww6q8.js:3735329-3735553 placement (2.1.88 match: base64URLEncode, 0.79)
 function base64URLEncode(buffer) {
   let decoded = plainDataOrThrow(Buffer.from(buffer, "base64").toString("utf8"));
   if (!isToolResultBody(decoded)) return;

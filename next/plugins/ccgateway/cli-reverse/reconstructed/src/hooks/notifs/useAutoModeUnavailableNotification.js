@@ -14,7 +14,7 @@ import {
   getAutoModeUnavailableNotification,
 } from "../../utils/permissions/permissionSetup.js";
 
-//@ chunk-18hwfzwa.js:1756430-1756892 fingerprint = useAutoModeUnavailableNotification (0.739)
+//@ chunk-18hwfzwa.js:1756430-1756892 fingerprint (2.1.88 match: useAutoModeUnavailableNotification, 0.739)
 var useAutoModeUnavailableNotification = {
   id: "auto-mode-unavailable",
   deps: (noticeState) => [

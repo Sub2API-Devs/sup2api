@@ -41,7 +41,7 @@ import {
 import { isSettingSourceEnabled } from "../settings/constants.js";
 import { hasPolicySettings } from "../plugins/managedPluginSeating.js";
 
-//@ chunk-w5j5chas.js:647-792 placement = isHTTPConfig (0.785)
+//@ chunk-w5j5chas.js:647-792 placement (2.1.88 match: isHTTPConfig, 0.785)
 function redactHttpHeaderValues(config) {
   if (config.type !== "http" || config.headers === undefined) return config;
   return {
@@ -161,7 +161,7 @@ function hookSourceLabel(hook) {
     }),
   };
 }
-//@ chunk-w5j5chas.js:2544-2798 placement = getEnabledSettingSources (0.773)
+//@ chunk-w5j5chas.js:2544-2798 placement (2.1.88 match: getEnabledSettingSources, 0.773)
 function getManagedHooksForEventMatcher(event, matcher) {
   let labels = [];
   for (let sourceName of ["flagSettings", "policySettings"]) {

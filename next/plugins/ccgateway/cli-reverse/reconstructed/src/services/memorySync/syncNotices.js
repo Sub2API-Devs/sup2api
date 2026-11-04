@@ -253,7 +253,7 @@ function heldLocalOnlyPaths(store) {
 //@ chunk-s61vbvea.js:145778-145958 placement
 var HELD_FILES_ADVICE =
   "They may be copies of memories another session deleted. Editing one ends its hold, so sync treats it like any other memory file. Ask the user before deleting any of them.";
-//@ chunk-s61vbvea.js:145958-146067 placement = formatFailureDetails (0.777)
+//@ chunk-s61vbvea.js:145958-146067 placement (2.1.88 match: formatFailureDetails, 0.777)
 function formatFailureDetails(paths) {
   let joined = paths.slice(0, MAX_LISTED_PATHS).map(quoteMemoryFilePath).join(", ");
   let moreText = paths.length > MAX_LISTED_PATHS ? ` and ${paths.length - MAX_LISTED_PATHS} more` : "";

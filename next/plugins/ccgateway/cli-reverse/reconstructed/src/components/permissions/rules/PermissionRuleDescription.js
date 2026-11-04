@@ -49,7 +49,7 @@ function describeRuleShape(ruleValue) {
 }
 //@ chunk-p2qwpk2k.js:20255-20259 placement
 init_react_production();
-//@ chunk-p2qwpk2k.js:21751-22240 callgraph-witnessed = PermissionRuleDescription (0.302)
+//@ chunk-p2qwpk2k.js:21751-22240 callgraph-witnessed (2.1.88 match: PermissionRuleDescription, 0.302)
 function PermissionRuleDescription(props) {
   let $ = useMemoCache(13);
   let { ruleValue } = props;

@@ -9,7 +9,7 @@
  * attribution: fingerprint 2
  */
 
-//@ chunk-08945j39.js:4045-4170 fingerprint = emitTaskTerminatedSdk (0.565)
+//@ chunk-08945j39.js:4045-4170 fingerprint (2.1.88 match: emitTaskTerminatedSdk, 0.565)
 function emitTaskTerminatedSdk(awaitingFinish, message) {
   return (
     message.type === "system" &&
@@ -18,7 +18,7 @@ function emitTaskTerminatedSdk(awaitingFinish, message) {
     awaitingFinish.delete(message.task_id)
   );
 }
-//@ chunk-54xbtc53.js:27546-27635 fingerprint = drainSdkEvents (0.429)
+//@ chunk-54xbtc53.js:27546-27635 fingerprint (2.1.88 match: drainSdkEvents, 0.429)
 function drainSdkEvents(result, cloudSessionId, viewUrl) {
   return cloudSessionId === undefined
     ? result

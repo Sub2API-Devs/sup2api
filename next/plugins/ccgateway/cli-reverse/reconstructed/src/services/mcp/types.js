@@ -35,7 +35,7 @@ import { hasStoredOAuthToken } from "../../utils/auth.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:65746-65872 fingerprint = ConfigScopeSchema (0.885)
+//@ chunk-dcmhvw5a.js:65746-65872 fingerprint (2.1.88 match: ConfigScopeSchema, 0.885)
 /**
  * ConfigScopeSchema：MCP 配置作用域枚举 local/user/project/dynamic/enterprise/claudeai/managed/agent；MANAGED_CONFIG_SCOPES = enterprise、managed。
  */
@@ -54,7 +54,7 @@ deferInit("chunk-dcmhvw5a.js:65746", () => {
 function isManagedConfigScope(scope) {
   return MANAGED_CONFIG_SCOPES.includes(scope);
 }
-//@ chunk-dcmhvw5a.js:65910-65971 fingerprint = TransportSchema (0.945)
+//@ chunk-dcmhvw5a.js:65910-65971 fingerprint (2.1.88 match: TransportSchema, 0.945)
 /**
  * TransportSchema：stdio/sse/sse-ide/http/ws/sdk。
  */
@@ -415,14 +415,14 @@ function getMcpInfoFromConnection(connection) {
 function isPluginServerConfig(config) {
   return config?.pluginSource !== undefined;
 }
-//@ chunk-21ppfwx8.js:22724-22803 fingerprint = McpWebSocketServerConfigSchema (0.375)
+//@ chunk-21ppfwx8.js:22724-22803 fingerprint (2.1.88 match: McpWebSocketServerConfigSchema, 0.375)
 /**
  * hasHeadersHelper：配置带非空 headersHelper。
  */
 function hasHeadersHelper(config) {
   return typeof config.headersHelper === "string" && config.headersHelper !== "";
 }
-//@ chunk-x8dej8aq.js:1829-2251 fingerprint = McpJsonConfigSchema (0.407)
+//@ chunk-x8dej8aq.js:1829-2251 fingerprint (2.1.88 match: McpJsonConfigSchema, 0.407)
 /**
  * mightHaveMcpServers：任一作用域有服务器、需要显示自动连接对话框、插件可能提供 MCP 或插件加载出错时返回 true（宁可多判），用于决定是否初始化 MCP。
  */
@@ -455,7 +455,7 @@ async function mightHaveMcpServers(storageV5) {
 function isPositiveSafeInteger(value) {
   return typeof value === "number" && Number.isInteger(value) && value > 0 && value < 9223372036854776000;
 }
-//@ chunk-5aas12zq.js:41600-41940 fingerprint = McpOAuthConfigSchema (0.468)
+//@ chunk-5aas12zq.js:41600-41940 fingerprint (2.1.88 match: McpOAuthConfigSchema, 0.468)
 /**
  * isValidMcpOAuthConfig：clientId、callbackPort、authServerMetadataUrl（须 https）、scopes、xaa 的形状校验。
  */

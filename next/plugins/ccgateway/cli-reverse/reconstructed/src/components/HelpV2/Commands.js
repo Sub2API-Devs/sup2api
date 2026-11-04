@@ -15,7 +15,7 @@ import { toRuleOption, noopRulePicker } from "../permissions/rules/CloudSessionR
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 
-//@ chunk-p2qwpk2k.js:19779-20255 fingerprint = Commands (0.526)
+//@ chunk-p2qwpk2k.js:19779-20255 fingerprint (2.1.88 match: Commands, 0.526)
 /**
  * /help 的命令标签页：列出可用命令及描述，按名称排序。
  */

@@ -67,7 +67,7 @@ function shouldUseCcrWebSearchProxy(session) {
   if (!env.CLAUDE_CODE_WEBSEARCH_USE_CCR_PROXY) return false;
   return !!ccrSessionIdForRefs(session);
 }
-//@ chunk-kxyd0g16.js:39494-40157 callgraph-fingerprint = renderToolUseMessage (0.208)
+//@ chunk-kxyd0g16.js:39494-40157 callgraph-fingerprint (2.1.88 match: renderToolUseMessage, 0.208)
 /**
  * 经 CCR 代理（route "web-search"）执行搜索；CLAUDE_CODE_WEBSEARCH_CITATIONS 开启时保留并截断 snippet、标题，丢弃超长 URL。
  */
@@ -138,7 +138,7 @@ function countSearchResultBlocks(blocks) {
   for (let block of blocks) if (block != null && typeof block !== "string") count++;
   return count;
 }
-//@ chunk-ah34pb7m.js:29468-29830 fingerprint = renderToolUseProgressMessage (0.651)
+//@ chunk-ah34pb7m.js:29468-29830 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.651)
 /**
  * WebSearch 进度渲染：query_update 显示 "Searching: …"，search_results_received 显示结果数。
  */
@@ -166,7 +166,7 @@ function renderToolUseProgressMessage_4(progressMessages) {
       return null;
   }
 }
-//@ chunk-ah34pb7m.js:29830-30138 fingerprint = renderToolResultMessage (0.695)
+//@ chunk-ah34pb7m.js:29830-30138 fingerprint (2.1.88 match: renderToolResultMessage, 0.695)
 /**
  * WebSearch 结果渲染："Did N searches in Xs/ms"。
  */
@@ -187,7 +187,7 @@ function renderToolResultMessage_9(output) {
     }),
   });
 }
-//@ chunk-ah34pb7m.js:243111-243164 fingerprint = getSearchSummary (0.655)
+//@ chunk-ah34pb7m.js:243111-243164 fingerprint (2.1.88 match: getSearchSummary, 0.655)
 /**
  * 子代理 UI 用：本次是否有搜索或读取动作（searchCount 或 readCount > 0）。
  */

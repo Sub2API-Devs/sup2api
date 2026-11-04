@@ -40,7 +40,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 deferInit("chunk-18hwfzwa.js:721881", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:721885-721954 fingerprint = _temp2 (1)
+//@ chunk-18hwfzwa.js:721885-721954 fingerprint (2.1.88 match: _temp2, 1)
 function renderOutputLine(line_0, i_1) {
   return jsxProd_default(
     Text,
@@ -51,7 +51,7 @@ function renderOutputLine(line_0, i_1) {
     i_1,
   );
 }
-//@ chunk-18hwfzwa.js:721954-722090 fingerprint = getTaskOutput (1)
+//@ chunk-18hwfzwa.js:721954-722090 fingerprint (2.1.88 match: getTaskOutput, 1)
 async function getTaskOutput(shell) {
   try {
     let result = await tailOutputOfTask(shell.id);
@@ -66,7 +66,7 @@ async function getTaskOutput(shell) {
     };
   }
 }
-//@ chunk-18hwfzwa.js:722090-725128 fingerprint = ShellDetailDialog (0.637)
+//@ chunk-18hwfzwa.js:722090-725128 fingerprint (2.1.88 match: ShellDetailDialog, 0.637)
 /**
  * 后台 shell / monitor 详情：命令、运行时长、输出尾部（截断行数），可停止。
  */
@@ -312,7 +312,7 @@ function ShellDetailDialog(props) {
   } else t26 = $[50];
   return t26;
 }
-//@ chunk-18hwfzwa.js:725128-726327 fingerprint = ShellOutputContent (0.835)
+//@ chunk-18hwfzwa.js:725128-726327 fingerprint (2.1.88 match: ShellOutputContent, 0.835)
 function ShellOutputContent(props) {
   let $ = useMemoCache(19);
   let { outputPromise, columns } = props;

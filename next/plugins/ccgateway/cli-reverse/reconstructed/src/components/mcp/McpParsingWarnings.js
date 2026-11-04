@@ -110,7 +110,7 @@ function scopeServersSnapshot(warning) {
 function isApprovedServer(server) {
   return getEffectiveProjectMcpServerStatus(server) === "approved";
 }
-//@ chunk-4xzsbgqr.js:1231-1298 fingerprint = _temp3 (1)
+//@ chunk-4xzsbgqr.js:1231-1298 fingerprint (2.1.88 match: _temp3, 1)
 function hasFatalError(t0) {
   let { config } = t0;
   return filterErrors(config.errors, "fatal").length > 0;
@@ -120,7 +120,7 @@ function hasWarningError(t0) {
   let { config } = t0;
   return filterErrors(config.errors, "warning").length > 0;
 }
-//@ chunk-4xzsbgqr.js:1367-1495 fingerprint = _temp5 (1)
+//@ chunk-4xzsbgqr.js:1367-1495 fingerprint (2.1.88 match: _temp5, 1)
 /**
  * 渲染一个作用域的配置错误与警告。
  */
@@ -159,7 +159,7 @@ function renderConflictNode(conflict, index) {
     `conflict-${index}`,
   );
 }
-//@ chunk-4xzsbgqr.js:1677-4246 fingerprint = McpConfigErrorSection (0.412)
+//@ chunk-4xzsbgqr.js:1677-4246 fingerprint (2.1.88 match: McpConfigErrorSection, 0.412)
 function McpConfigErrorSection(props) {
   let $ = useMemoCache(56);
   let { scope, parsingErrors, warnings } = props;
@@ -413,7 +413,7 @@ function McpConfigErrorSection(props) {
   } else section = $[55];
   return section;
 }
-//@ chunk-4xzsbgqr.js:4246-5320 fingerprint = McpParsingWarnings (0.411)
+//@ chunk-4xzsbgqr.js:4246-5320 fingerprint (2.1.88 match: McpParsingWarnings, 0.411)
 function McpParsingWarnings() {
   let $ = useMemoCache(3);
   let diagnostics;
@@ -509,7 +509,7 @@ function McpParsingWarnings() {
   } else t5 = $[2];
   return t5;
 }
-//@ chunk-4xzsbgqr.js:5320-5391 fingerprint = filterErrors (1)
+//@ chunk-4xzsbgqr.js:5320-5391 fingerprint (2.1.88 match: filterErrors, 1)
 function filterErrors(errors, severity) {
   return errors.filter((e) => e.mcpErrorMetadata?.severity === severity);
 }

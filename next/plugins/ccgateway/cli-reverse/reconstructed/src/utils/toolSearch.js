@@ -72,7 +72,7 @@ import { agentTypeForTelemetry } from "../services/analytics/metadata.js";
 import { awaitArtifactRosterSafe } from "../services/artifacts/rosterWait.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:282328-282438 fingerprint = isToolResultBlockWithContent (1)
+//@ chunk-4121qate.js:282328-282438 fingerprint (2.1.88 match: isToolResultBlockWithContent, 1)
 function toSlimTranscriptMessage(obj) {
   let { message, agentId } = obj;
   return {
@@ -82,7 +82,7 @@ function toSlimTranscriptMessage(obj) {
     }),
   };
 }
-//@ chunk-5jgfyd2q.js:191-283 fingerprint = isToolReferenceBlock (1)
+//@ chunk-5jgfyd2q.js:191-283 fingerprint (2.1.88 match: isToolReferenceBlock, 1)
 /**
  * 判断内容块是 tool_reference。
  */
@@ -94,14 +94,14 @@ function joinWithNewline(a, b) {
   return `${a}
 ${b}`;
 }
-//@ chunk-5jgfyd2q.js:319-397 fingerprint = isToolReferenceWithName (1)
+//@ chunk-5jgfyd2q.js:319-397 fingerprint (2.1.88 match: isToolReferenceWithName, 1)
 /**
  * 判断内容块是带字符串 tool_name 的 tool_reference。
  */
 function isToolReferenceWithName(obj) {
   return isToolReferenceBlock(obj) && "tool_name" in obj && typeof obj.tool_name === "string";
 }
-//@ chunk-5jgfyd2q.js:397-527 layout = isToolResultBlockWithContent (1)
+//@ chunk-5jgfyd2q.js:397-527 layout (2.1.88 match: isToolResultBlockWithContent, 1)
 function isToolResultBlockWithContent(obj) {
   return (
     typeof obj === "object" &&
@@ -148,7 +148,7 @@ function collectToolReferences(tools, opts) {
   }
   return refs;
 }
-//@ chunk-mp7v59a0.js:6956-7177 fingerprint = parseAutoPercentage (1)
+//@ chunk-mp7v59a0.js:6956-7177 fingerprint (2.1.88 match: parseAutoPercentage, 1)
 function parseAutoPercentage(value) {
   if (!value.startsWith("auto:")) return null;
   let percentStr = value.slice(5);
@@ -159,12 +159,12 @@ function parseAutoPercentage(value) {
   }
   return Math.max(0, Math.min(100, percent));
 }
-//@ chunk-mp7v59a0.js:7177-7247 fingerprint = isAutoToolSearchMode (1)
+//@ chunk-mp7v59a0.js:7177-7247 fingerprint (2.1.88 match: isAutoToolSearchMode, 1)
 function isAutoToolSearchMode(value) {
   if (!value) return false;
   return value === "auto" || value.startsWith("auto:");
 }
-//@ chunk-mp7v59a0.js:7247-7495 fingerprint = getToolSearchMode (0.928)
+//@ chunk-mp7v59a0.js:7247-7495 fingerprint (2.1.88 match: getToolSearchMode, 0.928)
 /**
  * getToolSearchMode：实验 beta 关闭或 HIPAA（且非 force）→ standard；force → tst；ENABLE_TOOL_SEARCH 为 auto:0 → tst、auto:100 → standard、auto/auto:N → tst-auto、真值 → tst、假值 → standard；未设置默认 tst。
  */
@@ -180,7 +180,7 @@ function getToolSearchMode() {
   if (isEnvDefinedFalsy(value)) return "standard";
   return "tst";
 }
-//@ chunk-mp7v59a0.js:7495-7665 callgraph-fingerprint = DEFAULT_UNSUPPORTED_MODEL_PATTERNS (0.177)
+//@ chunk-mp7v59a0.js:7495-7665 callgraph-fingerprint (2.1.88 match: DEFAULT_UNSUPPORTED_MODEL_PATTERNS, 0.177)
 var DEFAULT_UNSUPPORTED_MODEL_PATTERNS = [
   "claude-3-opus",
   "claude-3-sonnet",
@@ -207,7 +207,7 @@ function isVertexModelWithoutToolSearch(canonicalName) {
     !isModelVersionAtLeast(model, VERTEX_TOOL_SEARCH_MIN_VERSIONS)
   );
 }
-//@ chunk-mp7v59a0.js:7841-7956 fingerprint = getUnsupportedToolReferencePatterns (1)
+//@ chunk-mp7v59a0.js:7841-7956 fingerprint (2.1.88 match: getUnsupportedToolReferencePatterns, 1)
 function getUnsupportedToolReferencePatterns() {
   try {
     let patterns = getFeatureValue_CACHED_MAY_BE_STALE("tengu_tool_search_unsupported_models", null);
@@ -304,7 +304,7 @@ function maybeAddBrowserBatchToChromeSelect(chromeSystemPrompt) {
     ? prompt
     : chromeSystemPrompt;
 }
-//@ chunk-mp7v59a0.js:8908-9262 fingerprint = isToolSearchEnabledOptimistic (0.823)
+//@ chunk-mp7v59a0.js:8908-9262 fingerprint (2.1.88 match: isToolSearchEnabledOptimistic, 0.823)
 /**
  * isToolSearchEnabledOptimistic：模式不是 standard 即为真（只记一次调试日志）。决定 getAllBaseTools 是否注册 ToolSearch。316 删掉了旧版"自定义 ANTHROPIC_BASE_URL 时关闭"的分支。
  */
@@ -323,7 +323,7 @@ function isToolSearchEnabledOptimistic() {
     );
   return true;
 }
-//@ chunk-e6aww6q8.js:1639966-1641577 fingerprint = getDeferredToolsDelta (0.383)
+//@ chunk-e6aww6q8.js:1639966-1641577 fingerprint (2.1.88 match: getDeferredToolsDelta, 0.383)
 /**
  * 扫描历史消息里的 deferred_tools_delta 附件，重建已宣告、按块露出、断开撤回、线上隐藏、定义撤回、已列出、上次 pending/needsAuth/failed 等集合，供 getDeferredToolsDelta 与 ToolSearch 使用。
  */
@@ -412,7 +412,7 @@ function isToolSearchLockedOffByDefault() {
 }
 //@ chunk-e6aww6q8.js:2388503-2388514 layout
 var DEFAULT_AUTO_TOOL_SEARCH_PERCENTAGE = 10;
-//@ chunk-e6aww6q8.js:2388514-2388653 fingerprint = getAutoToolSearchPercentage (1)
+//@ chunk-e6aww6q8.js:2388514-2388653 fingerprint (2.1.88 match: getAutoToolSearchPercentage, 1)
 function getAutoToolSearchPercentage() {
   let value = process.env.ENABLE_TOOL_SEARCH;
   if (!value) return DEFAULT_AUTO_TOOL_SEARCH_PERCENTAGE;
@@ -490,7 +490,7 @@ async function countDeferredToolTokens(deferredTools, getToolPermissionContext, 
 function isToolSearchToolAvailable(tools) {
   return tools.some((tool) => toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME));
 }
-//@ chunk-e6aww6q8.js:2389323-2389673 fingerprint = calculateDeferredToolDescriptionChars (1)
+//@ chunk-e6aww6q8.js:2389323-2389673 fingerprint (2.1.88 match: calculateDeferredToolDescriptionChars, 1)
 /**
  * 估算延迟工具定义的字符数：名字 + prompt 文本 + 输入 JSON schema 长度之和。
  */
@@ -571,7 +571,7 @@ function toolSearchRejectedOn(requestState, model) {
       [...getRefusedBetasForModel(toProviderWireModelId(model))].includes(toolSearchBeta))
   );
 }
-//@ chunk-e6aww6q8.js:2390280-2392265 facade-exports = isToolSearchEnabled (0.724)
+//@ chunk-e6aww6q8.js:2390280-2392265 facade-exports (2.1.88 match: isToolSearchEnabled, 0.724)
 /**
  * isToolSearchEnabled（请求级）：先看不可用原因（模型/Vertex/Foundry 不支持、没有工具、未注册、ToolSearch 被禁用），再看本对话是否已"无 ToolSearch 运行过"（保持关闭直到压缩/清空）、端点是否拒绝过；然后按模式：tst 开、standard 关、tst-auto 比较延迟工具 token 数与上下文窗口百分比阈值。每次决策记 tengu_tool_search_mode_decision。
  */
@@ -682,7 +682,7 @@ async function isToolSearchEnabled(
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:2392265-2393097 facade-exports = extractDiscoveredToolNames (0.715)
+//@ chunk-e6aww6q8.js:2392265-2393097 facade-exports (2.1.88 match: extractDiscoveredToolNames, 0.715)
 /**
  * extractDiscoveredToolNames：从历史里收集已发现的延迟工具名：压缩边界携带的 preCompactDiscoveredTools、deferred_tools_delta 的 surfacedNames、tool_result 里的 tool_reference 块。
  */
@@ -980,7 +980,7 @@ function getDeferredToolsDelta(
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2397299-2397728 fingerprint = checkAutoThreshold (1)
+//@ chunk-e6aww6q8.js:2397299-2397728 fingerprint (2.1.88 match: checkAutoThreshold, 1)
 /**
  * checkAutoThreshold：tst-auto 模式下比较延迟工具的 token 数（按 API 计数缓存）与 getAutoToolSearchTokenThreshold；计数失败时退回字符数估算（chars/2.5）。
  */

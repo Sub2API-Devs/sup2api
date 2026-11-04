@@ -26,7 +26,7 @@ function parseSplitOutput(output) {
   if (match && match[1]) return match[1].trim();
   return "";
 }
-//@ chunk-vdskh52v.js:1253-1372 fingerprint = getLeaderSessionId (1)
+//@ chunk-vdskh52v.js:1253-1372 fingerprint (2.1.88 match: getLeaderSessionId, 1)
 /**
  * 从 ITERM_SESSION_ID 取 leader 会话 ID（冒号后部分）。
  */
@@ -37,7 +37,7 @@ function getLeaderSessionId() {
   if (colonIndex === -1) return null;
   return itermSessionId.slice(colonIndex + 1);
 }
-//@ chunk-vdskh52v.js:1372-3907 fingerprint = ITermBackend (0.923)
+//@ chunk-vdskh52v.js:1372-3907 fingerprint (2.1.88 match: ITermBackend, 0.923)
 /**
  * iTerm2 后端：首个 teammate 从 leader 会话垂直分屏，之后从上一个 teammate 分屏；目标会话已死时剪除并重试；发命令前先发 Ctrl-U 清行；不支持边框颜色/标题。
  */

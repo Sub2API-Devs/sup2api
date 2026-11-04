@@ -57,7 +57,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-tzghj6zv.js:31073", () => {
   init_react_production();
 });
-//@ chunk-tzghj6zv.js:31077-32357 fingerprint = getErrorType (0.508)
+//@ chunk-tzghj6zv.js:31077-32357 fingerprint (2.1.88 match: getErrorType, 0.508)
 /**
  * 把更新错误分类（signature_verification、checksum_mismatch、超时、网络等）。
  */
@@ -138,7 +138,7 @@ function updateButtonLabel() {
 function measureUpdateLabel() {
   return renderWithForceUpdate(updateButtonLabel);
 }
-//@ chunk-tzghj6zv.js:32835-37733 fingerprint = NativeAutoUpdater (0.553)
+//@ chunk-tzghj6zv.js:32835-37733 fingerprint (2.1.88 match: NativeAutoUpdater, 0.553)
 /**
  * 原生安装的自动更新：下载新版本、验证签名与校验和、失败按类型（超时/校验失败/网络）记录，成功提示 /restart。
  */

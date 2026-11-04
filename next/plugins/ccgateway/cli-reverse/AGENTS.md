@@ -37,7 +37,7 @@
 
 ## 本机环境（Windows + Git Bash）
 
-- Node 24。没有全局 bun，Bun 1.4.4 由本目录的 npm 包 `bun@1.4.4` 提供（`node_modules/bun/bin/bun.exe`）。新检出后先在本目录执行 `npm ci --ignore-scripts`，再执行 `bash tools/fetch-references.sh` 拉取 2.1.88 参考源码（原来是子模块）。没有 rg、bc。`python` 是 WindowsApps 的占位符，不能用。
+- Node 24。没有全局 bun，Bun 1.4.4 由本目录的 npm 包 `bun@1.4.4` 提供：装包时不跑 postinstall，`node_modules/bun/bin/bun.exe` 只是占位文件，真正的二进制在 `node_modules/@oven/bun-windows-x64/bin/bun.exe`，`build.mjs` 和 `tools/verify/run.mjs` 会自动找到它。新检出后先在本目录执行 `npm ci --ignore-scripts`，再执行 `bash tools/fetch-references.sh` 拉取 2.1.88 参考源码（原来是子模块）。没有 rg、bc。`python` 是 WindowsApps 的占位符，不能用。
 - **heredoc 和 `node -e` 会吞反斜杠、执行反引号**。正则、Markdown、模板字符串这类内容，一律用 Edit 或 Write 工具写；必须用 shell 时，heredoc 写成 `<<'EOF'`。写完 grep 一下确认内容没被改。
 - 访问外网（下载官方 ELF、npm）要走本机代理：`HTTPS_PROXY=http://127.0.0.1:7890`。Node 自带的 fetch 还要加 `NODE_USE_ENV_PROXY=1`。
 

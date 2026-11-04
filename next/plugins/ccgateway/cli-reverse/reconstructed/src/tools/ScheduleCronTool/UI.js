@@ -21,14 +21,14 @@ import { init_react_production } from "../../../vendor/react/cjs/react.productio
 import { parseScheduleInput } from "../../utils/cron.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-93kwxas0.js:163163-163196 fingerprint = renderListResultMessage (0.512)
+//@ chunk-93kwxas0.js:163163-163196 fingerprint (2.1.88 match: renderListResultMessage, 0.512)
 /**
  * 取 CronList 输出中的任务数组（缺省为空数组）。
  */
 function renderListResultMessage(output) {
   return output.jobs ?? [];
 }
-//@ chunk-ah34pb7m.js:35256-35430 fingerprint = renderCreateResultMessage (0.503)
+//@ chunk-ah34pb7m.js:35256-35430 fingerprint (2.1.88 match: renderCreateResultMessage, 0.503)
 /**
  * CronCreate 结果渲染："Scheduled <id> (人类可读时间表 下次时间)"。
  */
@@ -119,7 +119,7 @@ function cronPromptFieldHint() {
 function validateScheduleInput(scheduleText) {
   return scheduleText.trim() === "" ? null : (parseScheduleInput(scheduleText).error ?? null);
 }
-//@ chunk-vde9a20m.js:1004-1114 fingerprint = renderCreateToolUseMessage (0.616)
+//@ chunk-vde9a20m.js:1004-1114 fingerprint (2.1.88 match: renderCreateToolUseMessage, 0.616)
 /**
  * 把输入文本解析成 cron 并返回 "人类可读 · cron"，解析失败返回 undefined。
  */

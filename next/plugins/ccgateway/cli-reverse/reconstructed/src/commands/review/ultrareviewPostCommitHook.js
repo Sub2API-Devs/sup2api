@@ -34,7 +34,7 @@ async function ultrareviewPostCommitHook(hookInput, toolUseId, hookOptions, hook
       }
     : {};
 }
-//@ chunk-e9cc3yq9.js:4028-4152 placement = registerSessionFileAccessHooks (1)
+//@ chunk-e9cc3yq9.js:4028-4152 placement (2.1.88 match: registerSessionFileAccessHooks, 1)
 function registerSessionFileAccessHooks() {
   let hook = {
     type: "callback",

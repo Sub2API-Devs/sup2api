@@ -24,7 +24,7 @@ import { createLSPServerInstance } from "./LSPServerInstance.js";
  * 已打开文档的上限 50；超过时按 LRU 对最早的文档发 textDocument/didClose。
  */
 var MAX_OPEN_DOCUMENTS = 50;
-//@ chunk-e6aww6q8.js:4632981-4637859 fingerprint = createLSPServerManager (0.814)
+//@ chunk-e6aww6q8.js:4632981-4637859 fingerprint (2.1.88 match: createLSPServerManager, 0.814)
 /**
  * LSP 服务器管理器：initialize() 通过 getAllLspServers 读取插件提供的服务器配置，校验 command/extensionToLanguage，为每个创建实例并建立扩展名→服务器映射（同一扩展名只用第一个）。提供 getServerForFile/ensureServerStarted（按需懒启动）/sendRequest/openFile(didOpen)/changeFile(didChange 全量)/saveFile(didSave)/isFileOpen/getDocumentVersion/shutdown，并维护文档版本号与 LRU 淘汰。
  */

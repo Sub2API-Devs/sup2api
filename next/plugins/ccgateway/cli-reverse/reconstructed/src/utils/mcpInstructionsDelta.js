@@ -15,7 +15,7 @@ import { isDiscoveryCacheOn } from "../services/mcp/mcpAccountKey.js";
 import { logEvent } from "../services/analytics/index.js";
 import { compareStringsGrouped } from "./stringUtils.js";
 
-//@ chunk-e6aww6q8.js:2311501-2313126 fingerprint = getMcpInstructionsDelta (0.82)
+//@ chunk-e6aww6q8.js:2311501-2313126 fingerprint (2.1.88 match: getMcpInstructionsDelta, 0.82)
 /**
  * getMcpInstructionsDelta：对比消息中已宣布的 mcp_instructions_delta 附件与当前已连接服务器的 instructions，算出新增/变更与已断开的服务器，返回 {addedNames, addedBlocks, addedServerInstructions?, removedNames} 或 null；可选在服务器 pending 时暂不撤回。
  */

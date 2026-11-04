@@ -41,7 +41,7 @@ import { createSystemMessage } from "../utils/messages.js";
 function isHookBlockingErrorAttachment(message) {
   return message.type === "attachment" && message.attachment.type === "hook_blocking_error";
 }
-//@ chunk-ha3km179.js:79692-79799 placement = call (0.504)
+//@ chunk-ha3km179.js:79692-79799 placement (2.1.88 match: call, 0.504)
 function call(deps) {
   try {
     if (postSamplingHookRegistry.of(deps.toolUseContext.session.host).hooks.includes(rememberTurnParams))
@@ -50,7 +50,7 @@ function call(deps) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:79799-79958 placement = updateMagicDocs (0.636)
+//@ chunk-ha3km179.js:79799-79958 placement (2.1.88 match: updateMagicDocs, 0.636)
 function maybeStartPrecomputeAfterTurn(context) {
   try {
     if (
@@ -64,7 +64,7 @@ function maybeStartPrecomputeAfterTurn(context) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:79958-82467 fingerprint = handleStopHooks (0.499)
+//@ chunk-ha3km179.js:79958-82467 fingerprint (2.1.88 match: handleStopHooks, 0.499)
 /**
  * handleStopHooks（工具/MCP 结束本轮、循环定时唤醒时调用）：主线程保存 cacheSafeParams；跑 Stop 钩子（阻断在此路径下被丢弃只记日志）；收集钩子错误发通知；有 endTurnSource 时执行收尾反应；中止时补偿。
  */

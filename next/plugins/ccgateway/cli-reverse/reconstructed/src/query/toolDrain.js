@@ -483,7 +483,7 @@ function lastTurnReminderState(messages) {
     text: `${LINKED_BUT_NOT_SENT_PREFIX} ${joined}. The user did not write this note and cannot see it. It is about your reply above only. A link to a file that you did not send may not open for them. If they should have a file, call ${SEND_USER_FILE_TOOL_NAME} with it now, then say in one short line that you sent it, or that the send failed. If they should have none, end your turn with no text. Do not repeat your reply, and do not mention this note.`,
   };
 }
-//@ chunk-ha3km179.js:74891-74973 placement = buildTranscriptEntries (0.777)
+//@ chunk-ha3km179.js:74891-74973 placement (2.1.88 match: buildTranscriptEntries, 0.777)
 function isQueuedCommandAttachment(message) {
   return message.type === "attachment" && message.attachment.type === "queued_command";
 }
@@ -496,7 +496,7 @@ function isReminderMessage(message) {
     message.message.content.startsWith(LINKED_BUT_NOT_SENT_PREFIX)
   );
 }
-//@ chunk-ha3km179.js:75098-75409 placement = collectRecentSuccessfulTools (0.869)
+//@ chunk-ha3km179.js:75098-75409 placement (2.1.88 match: collectRecentSuccessfulTools, 0.869)
 /**
  * 收集助手文本块与 SendUserMessage 调用的 message 文本。旧版名 collectRecentSuccessfulTools 为错配；归属存疑。
  */

@@ -22,7 +22,7 @@ import { getSessionId } from "../../bootstrap/state.js";
 //@ chunk-18hwfzwa.js:921233-921250 affinity
 var QUEUED_UP_HINT_COUNT = 3;
 var AGENT_NAME_MAX_LENGTH = 20;
-//@ chunk-18hwfzwa.js:921250-922094 fingerprint = usePromptInputPlaceholder (0.467)
+//@ chunk-18hwfzwa.js:921250-922094 fingerprint (2.1.88 match: usePromptInputPlaceholder, 0.467)
 function usePromptInputPlaceholder({ isInputEmpty, submitCount, hasMessages, viewingAgentName }) {
   let queuedCommands = useCommandQueue();
   let promptSuggestionEnabled = useAppState((state) => state.promptSuggestionEnabled);

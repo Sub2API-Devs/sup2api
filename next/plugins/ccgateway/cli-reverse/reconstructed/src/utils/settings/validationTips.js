@@ -70,7 +70,7 @@ function collectValidationTips(value, includeInternal) {
     }
   for (let child of Object.values(node)) collectValidationTips(child, includeInternal);
 }
-//@ chunk-dcmhvw5a.js:433495-437157 fingerprint = TIP_MATCHERS (0.876)
+//@ chunk-dcmhvw5a.js:433495-437157 fingerprint (2.1.88 match: TIP_MATCHERS, 0.876)
 /**
  * SETTINGS_TIP_RULES：设置校验提示规则（同一声明共 2 个绑定）。
  */
@@ -183,7 +183,7 @@ var settingsTipRules = {
   env: `${HTTPS_CODE_CLAUDE_COM_DOCS_EN}/settings#environment-variables`,
   hooks: `${HTTPS_CODE_CLAUDE_COM_DOCS_EN}/hooks`,
 };
-//@ chunk-dcmhvw5a.js:437157-437432 fingerprint = getValidationTip (1)
+//@ chunk-dcmhvw5a.js:437157-437432 fingerprint (2.1.88 match: getValidationTip, 1)
 function getValidationTip(context) {
   let matcher = SETTINGS_TIP_RULES.find((m) => m.matches(context));
   if (!matcher) return null;

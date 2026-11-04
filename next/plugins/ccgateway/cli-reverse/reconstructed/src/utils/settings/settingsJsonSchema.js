@@ -11,7 +11,7 @@
 import { toJSONSchema } from "../../../vendor/zod/v4/core/json-schema-processors.js";
 import { identity } from "../../services/daemon/sessionCron.js";
 
-//@ chunk-y162pn60.js:11062-11350 placement = generateSettingsJSONSchema (0.88)
+//@ chunk-y162pn60.js:11062-11350 placement (2.1.88 match: generateSettingsJSONSchema, 0.88)
 function generateSettingsJSONSchema(schema) {
   let propertyNames = new Set();
   let collectProperties = (jsonSchema) => {

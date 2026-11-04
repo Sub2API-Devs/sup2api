@@ -19,7 +19,7 @@ import { formatTokens } from "../utils/format.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 
-//@ chunk-10q8r8ck.js:16647-16988 fingerprint = _temp (0.831)
+//@ chunk-10q8r8ck.js:16647-16988 fingerprint (2.1.88 match: _temp, 0.831)
 /**
  * 渲染一条 /context 优化建议：严重度图标、标题、可节省 token 数与说明。
  */
@@ -65,7 +65,7 @@ function renderContextSuggestion(suggestion, i) {
     i,
   );
 }
-//@ chunk-10q8r8ck.js:16988-17306 fingerprint = ContextSuggestions (0.431)
+//@ chunk-10q8r8ck.js:16988-17306 fingerprint (2.1.88 match: ContextSuggestions, 0.431)
 function ContextSuggestions(props) {
   let $ = useMemoCache(5);
   let { suggestions } = props;

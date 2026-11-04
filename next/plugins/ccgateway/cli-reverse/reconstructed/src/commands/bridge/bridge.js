@@ -64,27 +64,27 @@ import {
 import { nullStub3 } from "../../utils/externalBuildStubs.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:643741-643788 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:643741-643788 fingerprint (2.1.88 match: _temp, 1)
 function selectBridgeConnected_2(s) {
   return s.replBridgeConnected;
 }
-//@ chunk-18hwfzwa.js:643788-643839 fingerprint = _temp6 (1)
+//@ chunk-18hwfzwa.js:643788-643839 fingerprint (2.1.88 match: _temp6, 1)
 function selectBridgeSessionActive_2(s_1) {
   return s_1.replBridgeSessionActive;
 }
-//@ chunk-18hwfzwa.js:643889-643937 fingerprint = _temp5 (1)
+//@ chunk-18hwfzwa.js:643889-643937 fingerprint (2.1.88 match: _temp5, 1)
 function selectBridgeConnectUrl_2(s_0) {
   return s_0.replBridgeConnectUrl;
 }
-//@ chunk-18hwfzwa.js:643937-643985 fingerprint = _temp4 (1)
+//@ chunk-18hwfzwa.js:643937-643985 fingerprint (2.1.88 match: _temp4, 1)
 function selectBridgeSessionUrl_2(s) {
   return s.replBridgeSessionUrl;
 }
-//@ chunk-18hwfzwa.js:644121-644166 fingerprint = _temp2 (1)
+//@ chunk-18hwfzwa.js:644121-644166 fingerprint (2.1.88 match: _temp2, 1)
 function selectBridgeEnabled_2(s_0) {
   return s_0.replBridgeEnabled;
 }
-//@ chunk-18hwfzwa.js:1785048-1785137 fingerprint = _temp7 (0.688)
+//@ chunk-18hwfzwa.js:1785048-1785137 fingerprint (2.1.88 match: _temp7, 0.688)
 function isBridgeInboundAllowed(prev) {
   let state = prev.getState();
   return state.replBridgeEnabled && !state.replBridgeOutboundOnly;
@@ -191,7 +191,7 @@ function ProTrialExpiredDialog(props) {
   } else body = $[14];
   return body;
 }
-//@ chunk-fnmk6x3n.js:18799-18853 fingerprint = call (0.627)
+//@ chunk-fnmk6x3n.js:18799-18853 fingerprint (2.1.88 match: call, 0.627)
 /**
  * /pro-trial-expired 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -206,15 +206,15 @@ async function call(onDone, context) {
 deferInit("chunk-k7ve8htw.js:18017", () => {
   init_react_production();
 });
-//@ chunk-k7ve8htw.js:18021-18067 sole-consumer = _temp (1)
+//@ chunk-k7ve8htw.js:18021-18067 sole-consumer (2.1.88 match: _temp, 1)
 function selectBridgeConnected(s) {
   return s.replBridgeConnected;
 }
-//@ chunk-k7ve8htw.js:18067-18111 affinity = _temp2 (1)
+//@ chunk-k7ve8htw.js:18067-18111 affinity (2.1.88 match: _temp2, 1)
 function selectBridgeEnabled(s_0) {
   return s_0.replBridgeEnabled;
 }
-//@ chunk-k7ve8htw.js:18111-18160 fingerprint = _temp3 (1)
+//@ chunk-k7ve8htw.js:18111-18160 fingerprint (2.1.88 match: _temp3, 1)
 function selectBridgeOutboundOnly(s_1) {
   return s_1.replBridgeOutboundOnly;
 }
@@ -232,7 +232,7 @@ function oauthAccountKey() {
 function gatewayAuthSnapshot() {
   return getGatewayAuth();
 }
-//@ chunk-k7ve8htw.js:18285-18355 layout = shouldShowRemoteCallout (0.779)
+//@ chunk-k7ve8htw.js:18285-18355 layout (2.1.88 match: shouldShowRemoteCallout, 0.779)
 function shouldShowRemoteCallout(state) {
   return state.remoteDialogSeen
     ? state
@@ -241,15 +241,15 @@ function shouldShowRemoteCallout(state) {
         remoteDialogSeen: true,
       };
 }
-//@ chunk-k7ve8htw.js:18355-18402 layout = _temp4 (1)
+//@ chunk-k7ve8htw.js:18355-18402 layout (2.1.88 match: _temp4, 1)
 function selectBridgeSessionUrl(s) {
   return s.replBridgeSessionUrl;
 }
-//@ chunk-k7ve8htw.js:18402-18449 layout = _temp5 (1)
+//@ chunk-k7ve8htw.js:18402-18449 layout (2.1.88 match: _temp5, 1)
 function selectBridgeConnectUrl(s_0) {
   return s_0.replBridgeConnectUrl;
 }
-//@ chunk-k7ve8htw.js:18449-18499 layout = _temp6 (1)
+//@ chunk-k7ve8htw.js:18449-18499 layout (2.1.88 match: _temp6, 1)
 function selectBridgeSessionActive(s_1) {
   return s_1.replBridgeSessionActive;
 }
@@ -317,7 +317,7 @@ function renderListItem(item) {
 //@ chunk-k7ve8htw.js:19081-19276 layout
 var PROJECT_FIXED_WHEN_CONNECTED_MESSAGE =
   "Remote Control is already connected \u2014 a session's Project is fixed when it's created. Disconnect first, then re-run /remote-control --project to start a new session in the Project.";
-//@ chunk-k7ve8htw.js:19276-23125 fingerprint = BridgeToggle (0.346)
+//@ chunk-k7ve8htw.js:19276-23125 fingerprint (2.1.88 match: BridgeToggle, 0.346)
 function BridgeToggle(props) {
   let $ = useMemoCache(25);
   let { onDone, name, sessionGroupingId, context } = props;
@@ -602,7 +602,7 @@ function BridgeToggle(props) {
   }
   return null;
 }
-//@ chunk-k7ve8htw.js:23125-27247 fingerprint = BridgeDisconnectDialog (0.423)
+//@ chunk-k7ve8htw.js:23125-27247 fingerprint (2.1.88 match: BridgeDisconnectDialog, 0.423)
 function BridgeDisconnectDialog(props) {
   let $ = useMemoCache(91);
   let { onDone, sessionGroupingId } = props;

@@ -117,7 +117,7 @@ function linkTargetOf(text, link) {
       : undefined) ?? link.url
   );
 }
-//@ chunk-5aas12zq.js:26240-26468 layout = isUrl (1)
+//@ chunk-5aas12zq.js:26240-26468 layout (2.1.88 match: isUrl, 1)
 function isUrl_2(text, end) {
   let index = end + 2;
   let schemeLength = text.startsWith("https://", index) ? 8 : text.startsWith("http://", index) ? 7 : 0;
@@ -219,7 +219,7 @@ function countLineNesting(line) {
   }
   return depth;
 }
-//@ chunk-5aas12zq.js:28154-28345 placement = setCwdState (0.845)
+//@ chunk-5aas12zq.js:28154-28345 placement (2.1.88 match: setCwdState, 0.845)
 async function findFileCaseInsensitive(cwd) {
   let lowerNames = new Set(README_CANDIDATES.map((candidate) => candidate.toLowerCase()));
   return (

@@ -58,7 +58,7 @@ import { isENOENT } from "../../errors.js";
 import { getFsImplementation } from "../../fsOperations.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:470165-470468 callgraph-fingerprint = parseCommandOutputAsSettings (0.209)
+//@ chunk-dcmhvw5a.js:470165-470468 callgraph-fingerprint (2.1.88 match: parseCommandOutputAsSettings, 0.209)
 function parseCommandOutputAsSettings(stdout) {
   let data = clone(stdout);
   let issues = [
@@ -81,7 +81,7 @@ function parseCommandOutputAsSettings(stdout) {
     errors: issues,
   };
 }
-//@ chunk-q8cqcff6.js:9000-9107 fingerprint = EMPTY_RESULT (0.729)
+//@ chunk-q8cqcff6.js:9000-9107 fingerprint (2.1.88 match: EMPTY_RESULT, 0.729)
 var EMPTY_MDM_RESULT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_MDM_SETTINGS;
 deferInit("chunk-q8cqcff6.js:9000", () => {
@@ -95,7 +95,7 @@ deferInit("chunk-q8cqcff6.js:9000", () => {
     errors: [],
   });
 });
-//@ chunk-q8cqcff6.js:9107-9983 fingerprint = startMdmSettingsLoad (0.742)
+//@ chunk-q8cqcff6.js:9107-9983 fingerprint (2.1.88 match: startMdmSettingsLoad, 0.742)
 /**
  * MDM 设置加载器：启动时异步读取 macOS plist 或 Windows 注册表 HKLM/HKCU\SOFTWARE\Policies\ClaudeCode\Settings（WSL 下可继承 Windows），完成后打 tengu_managed_settings_os_read。
  */
@@ -313,7 +313,7 @@ function managedDocumentUnreadableError(label, reason, userWritable, unreadErrno
     }),
   };
 }
-//@ chunk-q8cqcff6.js:12878-13074 fingerprint = parseRegQueryStdout (0.627)
+//@ chunk-q8cqcff6.js:12878-13074 fingerprint (2.1.88 match: parseRegQueryStdout, 0.627)
 /**
  * 从 reg query 输出中提取 REG_SZ/REG_EXPAND_SZ 值（默认值名 Settings）。
  */
@@ -654,7 +654,7 @@ async function managedFileHasContent(path, store) {
     return true;
   }
 }
-//@ chunk-q8cqcff6.js:17167-17659 fingerprint = hasManagedSettingsFile (0.617)
+//@ chunk-q8cqcff6.js:17167-17659 fingerprint (2.1.88 match: hasManagedSettingsFile, 0.617)
 async function hasManagedSettingsFile(store) {
   if (!isWsl() || !mdmLoader().wslInherits) return "";
   let parts = [];

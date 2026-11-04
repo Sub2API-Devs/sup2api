@@ -27,7 +27,7 @@ import { jsonParseRaw } from "../../utils/slowOperations.js";
 import { isUncachedSystemBlock } from "./promptCacheBreakDetection.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2603522-2603807 fingerprint = initFingerprint (0.508)
+//@ chunk-e6aww6q8.js:2603522-2603807 fingerprint (2.1.88 match: initFingerprint, 0.508)
 /**
  * 判断 400 "differing field(s)" 错误是否涉及 system/tools（缓存前缀快照不一致），用于决定是否重新初始化提示词快照。
  */
@@ -39,7 +39,7 @@ function initFingerprint(error, fields) {
   let mapped = match[1].split(",").map((field) => field.trim().toLowerCase());
   return (fields.system && mapped.includes("system")) || (fields.tools && mapped.includes("tools"));
 }
-//@ chunk-k7fgdyw5.js:1618-1738 fingerprint = appendToFile (0.853)
+//@ chunk-k7fgdyw5.js:1618-1738 fingerprint (2.1.88 match: appendToFile, 0.853)
 /**
  * 追加写文件，目录不存在时先建目录再写。
  */
@@ -52,7 +52,7 @@ async function appendToFile(dirPath, filePath, text) {
     await fsImplementation.appendFile(filePath, text);
   }
 }
-//@ chunk-23fm9f0d.js:28667-28730 fingerprint = getDumpPromptsPath (1)
+//@ chunk-23fm9f0d.js:28667-28730 fingerprint (2.1.88 match: getDumpPromptsPath, 1)
 /**
  * dump-prompts 文件路径（配置目录下 dump-prompts/*.jsonl）。
  */
@@ -125,7 +125,7 @@ function clearDumpPromptState() {
 function noopDump(body) {
   return;
 }
-//@ chunk-98z6pwp4.js:1364-1426 placement = getDumpPromptsPath (1)
+//@ chunk-98z6pwp4.js:1364-1426 placement (2.1.88 match: getDumpPromptsPath, 1)
 function getDumpPromptsPath_2(agentIdOrSessionId) {
   return join(getClaudeConfigDir(), "dump-prompts", `${agentIdOrSessionId ?? getSessionId()}.jsonl`);
 }
@@ -175,7 +175,7 @@ function writePromptDump(bodyText, timestamp, state, filePath, storageTarget) {
     state.dumpInFlight = false;
   }
 }
-//@ chunk-98z6pwp4.js:1727-2233 callgraph-fingerprint = createDumpPromptsFetch (0.259)
+//@ chunk-98z6pwp4.js:1727-2233 callgraph-fingerprint (2.1.88 match: createDumpPromptsFetch, 0.259)
 /**
  * 开启转储时返回包装 fetch：POST 且有请求体时异步写转储（同一代理同时只有一个在写），然后照常发请求；未开启返回默认 fetch。
  */

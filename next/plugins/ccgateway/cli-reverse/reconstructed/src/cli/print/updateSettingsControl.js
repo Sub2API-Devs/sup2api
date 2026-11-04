@@ -41,7 +41,7 @@ deferInit("chunk-tyg7f3ek.js:620538", () => {
     userSettings: new Set(["effortLevel"]),
   };
 });
-//@ chunk-tyg7f3ek.js:621394-621456 placement = supportsPersistence (0.79)
+//@ chunk-tyg7f3ek.js:621394-621456 placement (2.1.88 match: supportsPersistence, 0.79)
 function isLocalOrUserSettings(destination) {
   return destination === "localSettings" || destination === "userSettings";
 }

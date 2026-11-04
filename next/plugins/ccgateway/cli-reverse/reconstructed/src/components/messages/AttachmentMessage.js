@@ -242,7 +242,7 @@ function isNonBlank_2(text) {
 function isNonBlank_3(text) {
   return text.trim() !== "";
 }
-//@ chunk-ah34pb7m.js:127748-145759 fingerprint = AttachmentMessage (0.493)
+//@ chunk-ah34pb7m.js:127748-145759 fingerprint (2.1.88 match: AttachmentMessage, 0.493)
 /**
  * 附件分派：按 attachment.type 渲染——file/directory/notebook/pdf_reference（"Read N lines"）、file_unchanged、diagnostics、selected_lines_in_ide/diff、hook_*（成功/阻塞错误/非阻塞错误/取消/系统消息/权限决定）、async_hook_response、skill_listing/invoked_skills/dynamic_skill、relevant_memories/nested_memory/account_memory_recall、plan_file_reference、queued_command、task_status、teammate_shutdown_batch、goal_status、tool_hosts_* 等；不在 NULL_RENDERING_TYPES 中的才显示。
  */
@@ -1716,7 +1716,7 @@ function AttachmentMessage(props) {
     }
   }
 }
-//@ chunk-ah34pb7m.js:145759-146048 fingerprint = TaskStatusMessage (1)
+//@ chunk-ah34pb7m.js:145759-146048 fingerprint (2.1.88 match: TaskStatusMessage, 1)
 function TaskStatusMessage(props) {
   let $ = useMemoCache(4);
   let { attachment } = props;
@@ -1744,7 +1744,7 @@ function TaskStatusMessage(props) {
   } else t1 = $[3];
   return t1;
 }
-//@ chunk-ah34pb7m.js:146048-146614 fingerprint = GenericTaskStatus (0.778)
+//@ chunk-ah34pb7m.js:146048-146614 fingerprint (2.1.88 match: GenericTaskStatus, 0.778)
 function GenericTaskStatus(props) {
   let $ = useMemoCache(6);
   let { attachment } = props;
@@ -1794,7 +1794,7 @@ function GenericTaskStatus(props) {
   } else statusBox = $[5];
   return statusBox;
 }
-//@ chunk-ah34pb7m.js:146614-147479 fingerprint = TeammateTaskStatus (0.749)
+//@ chunk-ah34pb7m.js:146614-147479 fingerprint (2.1.88 match: TeammateTaskStatus, 0.749)
 function TeammateTaskStatus(props) {
   let $ = useMemoCache(13);
   let { attachment } = props;
@@ -1906,7 +1906,7 @@ Expected schema:`,
   let trimmed_2 = trimmed.slice(lineStart).trim();
   return trimmed_2.length > 200 ? trimmed_2.slice(0, 200) + "\u2026" : trimmed_2;
 }
-//@ chunk-ah34pb7m.js:148151-148396 fingerprint = Line (0.832)
+//@ chunk-ah34pb7m.js:148151-148396 fingerprint (2.1.88 match: Line, 0.832)
 function Line(props) {
   let $ = useMemoCache(4);
   let { dimColor, children, color } = props;

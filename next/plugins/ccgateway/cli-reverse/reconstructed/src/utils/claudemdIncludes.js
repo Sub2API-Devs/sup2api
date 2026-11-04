@@ -47,7 +47,7 @@ function collectAtReferenceSpellings(filePath, text) {
       }
     : UNVETTABLE;
 }
-//@ chunk-axmbhcjg.js:5934-6215 placement = extractIncludePathsFromTokens (0.968)
+//@ chunk-axmbhcjg.js:5934-6215 placement (2.1.88 match: extractIncludePathsFromTokens, 0.968)
 function extractIncludePathsFromTokens(textContent) {
   let textContent_2 = (textContent) =>
     textContent.flatMap((elements) => {
@@ -144,7 +144,7 @@ function hasUnvettedInclude(text, isAllowed = allowAllIncludes) {
 function extractIncludePathsFromText(text) {
   return extractIncludePathsFromTokens_2(lexMarkdown(text));
 }
-//@ chunk-axmbhcjg.js:7104-7431 placement = extractIncludePathsFromTokens (0.968)
+//@ chunk-axmbhcjg.js:7104-7431 placement (2.1.88 match: extractIncludePathsFromTokens, 0.968)
 function extractIncludePathsFromTokens_2(textContent) {
   let textContent_2 = (textContent) =>
     textContent.flatMap((elements) => {

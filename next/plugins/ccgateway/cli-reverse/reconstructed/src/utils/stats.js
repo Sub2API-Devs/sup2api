@@ -33,7 +33,7 @@ import { listedProjectKey } from "./sessionStoragePortable.js";
 
 //@ chunk-e6aww6q8.js:302775-302788 affinity
 var SESSION_START_ENTRY_WINDOW_MS = 5000;
-//@ chunk-e6aww6q8.js:302788-303694 fingerprint = readSessionStartDate (0.359)
+//@ chunk-e6aww6q8.js:302788-303694 fingerprint (2.1.88 match: readSessionStartDate, 0.359)
 function readSessionStartDate(cache, entries, currentMsg, seen) {
   let time = new Date(currentMsg.timestamp).getTime();
   if (Number.isNaN(time)) return;
@@ -86,7 +86,7 @@ function readSessionStartDate(cache, entries, currentMsg, seen) {
 function todayDateString() {
   return toDateString(new Date());
 }
-//@ chunk-9h8dr0qb.js:77213-77280 fingerprint = getNextDay (1)
+//@ chunk-9h8dr0qb.js:77213-77280 fingerprint (2.1.88 match: getNextDay, 1)
 function getNextDay() {
   let date = new Date();
   date.setDate(date.getDate() - 1);
@@ -108,7 +108,7 @@ function isPlainRecord(value) {
 function isPrototypeKey(key) {
   return key in Object.prototype;
 }
-//@ chunk-9h8dr0qb.js:77795-79905 placement = mergeCacheWithNewStats (0.85)
+//@ chunk-9h8dr0qb.js:77795-79905 placement (2.1.88 match: mergeCacheWithNewStats, 0.85)
 /**
  * 合并统计缓存与新统计（缓存日期不可用时重置为全量重扫）。
  */
@@ -210,7 +210,7 @@ function mergeCacheWithNewStats_2(parsed) {
     longestSession,
   };
 }
-//@ chunk-9h8dr0qb.js:79905-80025 placement = combineUsage (1)
+//@ chunk-9h8dr0qb.js:79905-80025 placement (2.1.88 match: combineUsage, 1)
 function totalUsageTokens(usage) {
   return (
     (usage.inputTokens || 0) +
@@ -219,7 +219,7 @@ function totalUsageTokens(usage) {
     (usage.cacheCreationInputTokens || 0)
   );
 }
-//@ chunk-9h8dr0qb.js:80025-82770 fingerprint = processSessionFiles (0.986)
+//@ chunk-9h8dr0qb.js:80025-82770 fingerprint (2.1.88 match: processSessionFiles, 0.986)
 async function processSessionFiles(sessionFiles, options = {}, firstMessageByFile, mtimeMsByFile) {
   let { fromDate, toDate } = options;
   let fs = getFsImplementation();
@@ -395,7 +395,7 @@ async function processSessionFiles(sessionFiles, options = {}, firstMessageByFil
     ...{},
   };
 }
-//@ chunk-9h8dr0qb.js:82770-83495 fingerprint = getAllSessionFiles (1)
+//@ chunk-9h8dr0qb.js:82770-83495 fingerprint (2.1.88 match: getAllSessionFiles, 1)
 async function getAllSessionFiles(storage) {
   let projectsDir = getProjectsDir();
   if (isStorageV5Enabled() && storage !== undefined) return collectStatsFromTranscripts(storage, projectsDir);
@@ -564,7 +564,7 @@ async function collectStatsFromTranscripts(storage, projectsDir) {
     mtimeMsByFile,
   };
 }
-//@ chunk-9h8dr0qb.js:85174-87409 fingerprint = cacheToStats (0.982)
+//@ chunk-9h8dr0qb.js:85174-87409 fingerprint (2.1.88 match: cacheToStats, 0.982)
 function cacheToStats(cache, todayStats) {
   let dailyActivityMap = new Map();
   for (let day of cache.dailyActivity)
@@ -686,7 +686,7 @@ function cacheToStats(cache, todayStats) {
 }
 //@ chunk-9h8dr0qb.js:87409-87418 layout
 var CACHE_MAX_STALENESS_DAYS = 7;
-//@ chunk-9h8dr0qb.js:87418-88578 fingerprint = aggregateClaudeCodeStats (0.582)
+//@ chunk-9h8dr0qb.js:87418-88578 fingerprint (2.1.88 match: aggregateClaudeCodeStats, 0.582)
 async function aggregateClaudeCodeStats(storage) {
   let { files: allSessionFiles, mtimeMsByFile } = await getAllSessionFiles(storage);
   if (allSessionFiles.length === 0) return getEmptyStats();
@@ -783,7 +783,7 @@ async function aggregateClaudeCodeStats(storage) {
   );
   return cacheToStats(updatedCache, todayStats);
 }
-//@ chunk-9h8dr0qb.js:88578-88824 fingerprint = aggregateClaudeCodeStatsForRange (0.885)
+//@ chunk-9h8dr0qb.js:88578-88824 fingerprint (2.1.88 match: aggregateClaudeCodeStatsForRange, 0.885)
 async function aggregateClaudeCodeStatsForRange(range, storage) {
   if (range === "all") return aggregateClaudeCodeStats(storage);
   let { files: allSessionFiles, mtimeMsByFile } = await getAllSessionFiles(storage);
@@ -803,7 +803,7 @@ async function aggregateClaudeCodeStatsForRange(range, storage) {
   );
   return processedStatsToClaudeCodeStats(stats);
 }
-//@ chunk-9h8dr0qb.js:88824-89732 fingerprint = processedStatsToClaudeCodeStats (0.973)
+//@ chunk-9h8dr0qb.js:88824-89732 fingerprint (2.1.88 match: processedStatsToClaudeCodeStats, 0.973)
 function processedStatsToClaudeCodeStats(stats) {
   let dailyActivitySorted = stats.dailyActivity
     .slice()
@@ -865,7 +865,7 @@ function addDaysToDateString(dateStr, days) {
 function nextDateString(dateStr) {
   return addDaysToDateString(dateStr, 1);
 }
-//@ chunk-9h8dr0qb.js:89841-90437 fingerprint = calculateStreaks (0.822)
+//@ chunk-9h8dr0qb.js:89841-90437 fingerprint (2.1.88 match: calculateStreaks, 0.822)
 function calculateStreaks(dailyActivity) {
   if (dailyActivity.length === 0)
     return {
@@ -919,7 +919,7 @@ function calculateStreaks(dailyActivity) {
     longestStreakEnd,
   };
 }
-//@ chunk-9h8dr0qb.js:90437-90785 fingerprint = getEmptyStats (1)
+//@ chunk-9h8dr0qb.js:90437-90785 fingerprint (2.1.88 match: getEmptyStats, 1)
 function getEmptyStats() {
   return {
     totalSessions: 0,

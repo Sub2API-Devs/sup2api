@@ -20,7 +20,7 @@ import { ListItem } from "./design-system/ListItem.js";
 
 //@ chunk-b7gstm5r.js:20584-20613 affinity
 var DEV_BAR_TOOL_CALLING_TITLE = "Remote tool calling";
-//@ chunk-b7gstm5r.js:20613-21639 fingerprint = DevBar (0.33)
+//@ chunk-b7gstm5r.js:20613-21639 fingerprint (2.1.88 match: DevBar, 0.33)
 function DevBar(props) {
   let $ = useMemoCache(20);
   let { state, isFocused, notice } = props;
@@ -111,7 +111,7 @@ function DevBar(props) {
   } else box = $[19];
   return box;
 }
-//@ chunk-b7gstm5r.js:21639-21796 placement = _temp (0.798)
+//@ chunk-b7gstm5r.js:21639-21796 placement (2.1.88 match: _temp, 0.798)
 /**
  * React Compiler 产物：缩进 2 的灰色文本行组件（DevBar 使用），与 AskUserQuestion 无关。
  */
@@ -132,7 +132,7 @@ function IndentedInactiveText(props) {
   } else box = $[1];
   return box;
 }
-//@ chunk-18hwfzwa.js:514449-514523 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:514449-514523 fingerprint (2.1.88 match: _temp, 1)
 function formatOperationTiming(op) {
   return `${op.operation} (${Math.round(op.durationMs)}ms)`;
 }

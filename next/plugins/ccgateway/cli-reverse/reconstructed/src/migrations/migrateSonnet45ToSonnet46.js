@@ -17,7 +17,7 @@ import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
-//@ chunk-cjydagjy.js:11557-12267 fingerprint = migrateSonnet45ToSonnet46 (0.869)
+//@ chunk-cjydagjy.js:11557-12267 fingerprint (2.1.88 match: migrateSonnet45ToSonnet46, 0.869)
 /**
  * 迁移（仅 firstParty）：Sonnet 4.5 全名 → sonnet 别名（Sonnet 4.6 起）。
  */

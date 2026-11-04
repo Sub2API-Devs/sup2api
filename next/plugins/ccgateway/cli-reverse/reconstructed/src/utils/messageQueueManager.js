@@ -179,7 +179,7 @@ function isCheckinNotification(message) {
       message.origin.source === "shell-checkin")
   );
 }
-//@ chunk-e6aww6q8.js:194598-194657 placement = processQueuedCommands (1)
+//@ chunk-e6aww6q8.js:194598-194657 placement (2.1.88 match: processQueuedCommands, 1)
 function processQueuedCommands(queuedCommands) {
   return isMainAgentCommand(queuedCommands) && queuedCommands.mode === "task-notification";
 }
@@ -298,7 +298,7 @@ function setQueueInstaller(installer) {
 function getProcessedQueuedCommands() {
   return queueInstallerSingleton.registered();
 }
-//@ chunk-e6aww6q8.js:552455-552644 fingerprint = PRIORITY_ORDER (0.375)
+//@ chunk-e6aww6q8.js:552455-552644 fingerprint (2.1.88 match: PRIORITY_ORDER, 0.375)
 /**
  * {now:0, next:1, later:2}。
  */
@@ -386,7 +386,7 @@ function isRefillableInput(input) {
     !isPassiveOrAttachedCommand(input)
   );
 }
-//@ chunk-e6aww6q8.js:553284-553337 placement = prependModeCharacterToInput (1)
+//@ chunk-e6aww6q8.js:553284-553337 placement (2.1.88 match: prependModeCharacterToInput, 1)
 function shouldPrependModeChar(input, mode) {
   return isRefillableInput(input) && (mode || input.mode !== "bash");
 }
@@ -447,11 +447,11 @@ function isSendableQueuedCommand(command) {
 function isPassiveMainAgentCommand(command) {
   return command.passive === true && isMainAgentCommand(command) && true;
 }
-//@ chunk-e6aww6q8.js:554154-554211 placement = isSlashCommand (1)
+//@ chunk-e6aww6q8.js:554154-554211 placement (2.1.88 match: isSlashCommand, 1)
 function isSlashCommand_2(cmd) {
   return looksLikeSlashInput(cmd.value) && !cmd.skipSlashCommands;
 }
-//@ chunk-e6aww6q8.js:554211-554290 placement = getValueFromInput (1)
+//@ chunk-e6aww6q8.js:554211-554290 placement (2.1.88 match: getValueFromInput, 1)
 function getValueFromInput(commands, isMainThreadQuery) {
   runIgnoringAbort(() => {
     if (isMainThreadQuery && commands.some((command) => command.mode === "prompt" && isOwnWordTurn(command)))
@@ -485,7 +485,7 @@ function dedupePollEvents(commands) {
   if (batchIds.size === entries.length) return commands;
   return commands.filter((command) => command.mode !== "poll-event" || batchIds.has(command));
 }
-//@ chunk-e6aww6q8.js:554767-554815 placement = getValueFromInput (1)
+//@ chunk-e6aww6q8.js:554767-554815 placement (2.1.88 match: getValueFromInput, 1)
 function isPromptModeQueuedCommand(input) {
   return isMainAgentCommand(input) && input.mode === "prompt";
 }
@@ -506,7 +506,7 @@ function extractTextFromValue(value) {
 `,
       );
 }
-//@ chunk-e6aww6q8.js:554899-555159 fingerprint = extractImagesFromValue (0.858)
+//@ chunk-e6aww6q8.js:554899-555159 fingerprint (2.1.88 match: extractImagesFromValue, 0.858)
 /**
  * 从内容块中取出 base64 图片为 paste 记录（id、mediaType、filename）。
  */
@@ -553,7 +553,7 @@ function splitStampedImages(content, imagePasteIds) {
     manufactured,
   };
 }
-//@ chunk-e6aww6q8.js:555410-555554 callgraph-fingerprint = popAllEditable (0.232)
+//@ chunk-e6aww6q8.js:555410-555554 callgraph-fingerprint (2.1.88 match: popAllEditable, 0.232)
 /**
  * 可编辑命令弹回输入框：图片换成 [Image #n] 引用并重新编号。
  */
@@ -2251,14 +2251,14 @@ var getQueuedPeerMessageCount; // deferred: loads other modules while loading; r
 deferInit("chunk-ha3km179.js:79488", () => {
   getQueuedPeerMessageCount = require("../bridge/projectsReplyEvaluation.js");
 });
-//@ chunk-0sfjpx19.js:15971-16045 fingerprint = enqueuePendingNotification (0.592)
+//@ chunk-0sfjpx19.js:15971-16045 fingerprint (2.1.88 match: enqueuePendingNotification, 0.592)
 /**
  * 已验证的 Slack 人类消息且优先级为 later。旧版名 enqueuePendingNotification 为错配。
  */
 function isSlackLaterNotification(command) {
   return command.verifiedSlackHumanTurn === true && command.priority === "later";
 }
-//@ chunk-18hwfzwa.js:1655060-1655107 fingerprint = snapshot (0.673)
+//@ chunk-18hwfzwa.js:1655060-1655107 fingerprint (2.1.88 match: snapshot, 0.673)
 /**
  * {status:null,next:null}。旧版名 snapshot 为错配。
  */
@@ -2269,7 +2269,7 @@ deferInit("chunk-18hwfzwa.js:1655060", () => {
     next: null,
   });
 });
-//@ chunk-18hwfzwa.js:1661253-1661334 fingerprint = isSlashCommand (1)
+//@ chunk-18hwfzwa.js:1661253-1661334 fingerprint (2.1.88 match: isSlashCommand, 1)
 /**
  * 值以 / 开头的命令；peer/slack 来源且 skipSlashCommands 时不算。
  */

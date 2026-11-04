@@ -8,7 +8,7 @@
  * pieces: chunk-dcmhvw5a.js (5)
  * attribution: fingerprint 2, file-local 2, layout 1
  */
-//@ chunk-dcmhvw5a.js:213036-213187 fingerprint = ESCAPED_STAR_PLACEHOLDER (0.5)
+//@ chunk-dcmhvw5a.js:213036-213187 fingerprint (2.1.88 match: ESCAPED_STAR_PLACEHOLDER, 0.5)
 var ESCAPED_STAR_RE = new RegExp("\x00ESCAPED_STAR\x00", "g");
 var ESCAPED_BACKSLASH_RE = new RegExp("\x00ESCAPED_BACKSLASH\x00", "g");
 var GLOBSTAR_SEGMENT_RE = /\/(?:\*\*\/)+/g;
@@ -53,7 +53,7 @@ function endsWithUnescapedStar(pattern) {
   }
   return backslashCount % 2 === 0;
 }
-//@ chunk-dcmhvw5a.js:213535-214175 fingerprint = matchWildcardPattern (0.584)
+//@ chunk-dcmhvw5a.js:213535-214175 fingerprint (2.1.88 match: matchWildcardPattern, 0.584)
 /**
  * Shell 规则通配匹配：\* 与 \\ 为字面量，/**\/ 匹配零或多级目录，* 匹配任意字符（含换行，s 标志）；"cmd *" 只有一个 * 时尾部参数可省略；含 NUL 的模式拒绝；可选忽略大小写、折叠空白。
  */

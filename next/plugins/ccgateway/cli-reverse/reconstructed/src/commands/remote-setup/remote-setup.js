@@ -91,7 +91,7 @@ function parseOAuthScopesHeader(stdout) {
     .filter((scope) => scope !== "");
   return filtered.length === 0 ? null : filtered;
 }
-//@ chunk-ajkmgejw.js:15423-16011 fingerprint = checkLoginState (0.853)
+//@ chunk-ajkmgejw.js:15423-16011 fingerprint (2.1.88 match: checkLoginState, 0.853)
 async function checkLoginState(credentials) {
   if (!(await hasValidOAuthToken(credentials)))
     return {
@@ -133,7 +133,7 @@ async function checkLoginState(credentials) {
     token: new GithubWebConnectionStatus(trimmed),
   };
 }
-//@ chunk-ajkmgejw.js:16011-16577 fingerprint = errorMessage (0.776)
+//@ chunk-ajkmgejw.js:16011-16577 fingerprint (2.1.88 match: errorMessage, 0.776)
 function errorMessage(err, codeUrl) {
   switch (err.kind) {
     case "not_signed_in":
@@ -175,7 +175,7 @@ function WorkflowScopeWarning() {
   } else warningBox = $[0];
   return warningBox;
 }
-//@ chunk-ajkmgejw.js:17082-21764 fingerprint = Web (0.691)
+//@ chunk-ajkmgejw.js:17082-21764 fingerprint (2.1.88 match: Web, 0.691)
 /**
  * remote-setup 的 Web 连接向导组件（Web，4.6KB）：选择/生成 Remote Control 会话名并展示连接信息。
  */

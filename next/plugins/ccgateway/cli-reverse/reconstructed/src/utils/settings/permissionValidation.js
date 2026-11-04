@@ -93,7 +93,7 @@ function validateWildcardToolName(toolName) {
     examples: ["mcp__puppeteer__*", "mcp__github__get_*"],
   };
 }
-//@ chunk-dcmhvw5a.js:216720-221819 fingerprint = validatePermissionRule (0.5)
+//@ chunk-dcmhvw5a.js:216720-221819 fingerprint (2.1.88 match: validatePermissionRule, 0.5)
 /**
  * 校验单条权限规则 Tool 或 Tool(content) 的格式，按工具类型检查内容（文件模式、Bash 前缀等）。
  */
@@ -313,7 +313,7 @@ deferInit("chunk-dcmhvw5a.js:221819", () => {
   permissionRuleSchema = DoctorLazy(() => PermissionRuleSchema());
   allowPermissionRuleSchema = DoctorLazy(() => PermissionRuleSchema("allow"));
 });
-//@ chunk-dcmhvw5a.js:221860-222126 fingerprint = PermissionRuleSchema (0.903)
+//@ chunk-dcmhvw5a.js:221860-222126 fingerprint (2.1.88 match: PermissionRuleSchema, 0.903)
 function PermissionRuleSchema(mode) {
   return stringSchema().superRefine((val, ctx) => {
     let result = validatePermissionRule(val, mode);

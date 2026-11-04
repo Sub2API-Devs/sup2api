@@ -48,7 +48,7 @@ function effortStatusText(
   let shownLevel = isScreenReaderEnabled && spokenLevel !== level ? `${spokenLevel} (${level})` : spokenLevel;
   return `${prefix} ${shownLevel}${ultracodeSuffix} \xB7 ${actionText}`;
 }
-//@ chunk-18hwfzwa.js:154708-154864 fingerprint = effortLevelToSymbol (0.879)
+//@ chunk-18hwfzwa.js:154708-154864 fingerprint (2.1.88 match: effortLevelToSymbol, 0.879)
 function effortLevelToSymbol(level) {
   switch (level) {
     case "low":
@@ -65,7 +65,7 @@ function effortLevelToSymbol(level) {
       return FILLED_CIRCLE;
   }
 }
-//@ chunk-18hwfzwa.js:154864-155087 placement = treeify (0.193)
+//@ chunk-18hwfzwa.js:154864-155087 placement (2.1.88 match: treeify, 0.193)
 /**
  * 用主题渐变色渲染 ULTRACODE 字样（可高亮某个字符）；误配名 treeify，归属错误。
  */

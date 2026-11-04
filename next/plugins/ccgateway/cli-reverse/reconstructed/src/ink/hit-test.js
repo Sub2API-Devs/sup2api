@@ -116,7 +116,7 @@ function findSelectionScope(root, col, row) {
   }
   return scope && scope.x2 > scope.x1 ? scope : undefined;
 }
-//@ chunk-bzr73sfg.js:255304-255785 fingerprint = dispatchClick (0.76)
+//@ chunk-bzr73sfg.js:255304-255785 fingerprint (2.1.88 match: dispatchClick, 0.76)
 /**
  * 派发点击：命中测试找目标；不是窗口激活点击时，最近的有 tabIndex 的祖先获得焦点；然后沿父链调用 onClick（填好 localCol/localRow），立即停止传播则结束；返回是否有处理器没调 allowDefault()（即点击被消费）。
  */
@@ -152,7 +152,7 @@ function dispatchClick(root, event) {
   }
   return handled;
 }
-//@ chunk-bzr73sfg.js:255785-256096 fingerprint = dispatchHover (1)
+//@ chunk-bzr73sfg.js:255785-256096 fingerprint (2.1.88 match: dispatchHover, 1)
 /**
  * 悬停派发：命中节点及其祖先中有 onMouseEnter/Leave 的组成新集合，与旧集合比较后分别调用 onMouseLeave/onMouseEnter（不冒泡）。
  */
@@ -177,7 +177,7 @@ function dispatchHover(root, col, row, hovered, pointerMode = false) {
       n._eventHandlers?.onMouseEnter?.();
     }
 }
-//@ chunk-bzr73sfg.js:256096-256529 placement = dispatchHover (0.794)
+//@ chunk-bzr73sfg.js:256096-256529 placement (2.1.88 match: dispatchHover, 0.794)
 /**
  * 重绘后重新判定悬停：只针对带 hoverFollowsPaint 属性的节点（内容移动到鼠标下方或移走时触发 enter/leave），返回是否有变化。
  */
@@ -265,7 +265,7 @@ function shiftCachedLayouts(node, dy) {
     }
   }
 }
-//@ chunk-bzr73sfg.js:314874-315335 fingerprint = hitTest (0.489)
+//@ chunk-bzr73sfg.js:314874-315335 fingerprint (2.1.88 match: hitTest, 0.489)
 /**
  * 零高度节点的子树不绘制，但仍按 yoga 布局写入 cachedLayout（标 unpainted），使点击命中测试与焦点几何可用。
  */

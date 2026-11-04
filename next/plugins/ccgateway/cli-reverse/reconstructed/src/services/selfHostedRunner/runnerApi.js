@@ -65,7 +65,7 @@ function assertFirstPartyRunnerApi() {
 //@ chunk-ja1jtv44.js:1330-1531 placement
 var NOT_LOGGED_IN_RUNNER_TEXT =
   "Not logged in. Environment-management endpoints require the operator OAuth session \u2014 run `claude login`, then re-invoke this tool. (`ANTHROPIC_API_KEY` will not work for these endpoints.)";
-//@ chunk-ja1jtv44.js:1531-1632 placement = getBridgeBaseUrl (1)
+//@ chunk-ja1jtv44.js:1531-1632 placement (2.1.88 match: getBridgeBaseUrl, 1)
 /**
  * API 基址：ANTHROPIC_BASE_URL（去尾部 /），否则 OAuth 配置的 BASE_API_URL。
  */

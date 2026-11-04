@@ -190,7 +190,7 @@ import { isShellToolName } from "../shared/textSearchTools.js";
 import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
 import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
 
-//@ chunk-v0yfsee9.js:89450-89734 fingerprint = PS_READ_COMMANDS (0.818)
+//@ chunk-v0yfsee9.js:89450-89734 fingerprint (2.1.88 match: PS_READ_COMMANDS, 0.818)
 /**
  * PowerShell 折叠显示用的命令集合：搜索（select-string/get-childitem/findstr/where.exe）、读（get-content/get-item/test-path…）、中性（write-output/write-host）。
  */
@@ -211,7 +211,7 @@ var PS_READ_COMMANDS = new Set([
   "format-hex",
 ]);
 var PS_SEMANTIC_NEUTRAL_COMMANDS = new Set(["write-output", "write-host"]);
-//@ chunk-v0yfsee9.js:89734-90162 placement = classifyMcpToolForCollapse (1)
+//@ chunk-v0yfsee9.js:89734-90162 placement (2.1.88 match: classifyMcpToolForCollapse, 1)
 /**
  * PowerShell 命令是否只是搜索/读取（用于结果折叠）：按 ; 和 | 拆分，跳过 write-output 等，所有段都必须是已知搜索或读取命令。
  */
@@ -257,7 +257,7 @@ function isSearchOrReadPowerShellCommand(command) {
     isRead,
   };
 }
-//@ chunk-v0yfsee9.js:90162-90209 fingerprint = DISALLOWED_AUTO_BACKGROUND_COMMANDS (1)
+//@ chunk-v0yfsee9.js:90162-90209 fingerprint (2.1.88 match: DISALLOWED_AUTO_BACKGROUND_COMMANDS, 1)
 /**
  * 超时后自动转后台的等待时间（1000 毫秒）。
  */
@@ -274,7 +274,7 @@ async function isAutobackgroundingAllowed(command) {
   let canonical = resolveToCanonical(firstWord);
   return !DISALLOWED_AUTO_BACKGROUND_COMMANDS.includes(canonical);
 }
-//@ chunk-v0yfsee9.js:90310-90646 fingerprint = detectBlockedSleepPattern (1)
+//@ chunk-v0yfsee9.js:90310-90646 fingerprint (2.1.88 match: detectBlockedSleepPattern, 1)
 /**
  * 检测首段为 Start-Sleep/sleep N（N≥阈值）的阻塞写法；validateInput 据此拒绝（仅在 Monitor 可用等条件下）。
  */
@@ -312,7 +312,7 @@ function shouldUsePowerShellSandbox(input, sandboxContext) {
 function isWindowsPlatform() {
   return getPlatform() === "windows";
 }
-//@ chunk-v0yfsee9.js:90810-93611 fingerprint = outputSchema (0.54)
+//@ chunk-v0yfsee9.js:90810-93611 fingerprint (2.1.88 match: outputSchema, 0.54)
 /**
  * PowerShell 输入/输出 schema：command（拒绝隐藏控制字符）、timeout、description、run_in_background（后台禁用时去掉）、dangerouslyDisableSandbox，Windows 上可带远程机器字段；输出含 stdout/stderr/interrupted/持久化/后台任务/gitOperation。远程执行配置 no。
  */
@@ -489,7 +489,7 @@ function makeShellCallContext(baseContext, callOptions) {
     },
   };
 }
-//@ chunk-v0yfsee9.js:94856-105226 fingerprint = PowerShellTool (0.461)
+//@ chunk-v0yfsee9.js:94856-105226 fingerprint (2.1.88 match: PowerShellTool, 0.461)
 /**
  * PowerShell 工具定义（name=PowerShell，searchHint "execute Windows PowerShell commands"）。只读即并发安全；validateInput 拒绝 BOM/U+180E 不可见字符、沙箱策略拒绝、长 Start-Sleep；checkPermissions 走 powershellPermissions，dangerouslyDisableSandbox 时额外要求"在沙箱外运行"确认；call 与 Bash 类似（进度、后台化、持久化、git 操作识别、cwd 重置），版本记入遥测。
  */
@@ -1146,7 +1146,7 @@ ${ENDED_INSTEAD_OF_BACKGROUND_MESSAGE}`
     };
   },
 });
-//@ chunk-v0yfsee9.js:105226-110221 fingerprint = runPowerShellCommand (0.565)
+//@ chunk-v0yfsee9.js:105226-110221 fingerprint (2.1.88 match: runPowerShellCommand, 0.565)
 /**
  * 执行 PowerShell 命令的异步生成器：计算超时、检测 PowerShell 是否可用（不可用时返回 "PowerShell is not available on this system."）、exec(shell=powershell)、超时/回合中断/用户转后台、2 秒后产出进度。
  */

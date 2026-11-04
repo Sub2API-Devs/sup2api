@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:3037421-3037573 fingerprint = nohup (1)
+//@ chunk-e6aww6q8.js:3037421-3037573 fingerprint (2.1.88 match: nohup, 1)
 /**
  * nohup 命令的补全 spec。
  */

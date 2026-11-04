@@ -35,7 +35,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js"
 import { LOW_PRIORITY_STATE } from "../lowPriorityMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:187495-187674 placement = clearMockEarlyWarning (0.331)
+//@ chunk-hwmsct5x.js:187495-187674 placement (2.1.88 match: clearMockEarlyWarning, 0.331)
 /**
  * 低优先级等待（额度恢复）常量：默认重试间隔 20s、间隔夹在 5s–10min、默认最大等待 20min、最大等待夹在 1min–6h、抖动 ±30%、心跳 120s、重置判定余量 60s、重置后 60s。旧版名 clearMockEarlyWarning 为错配；应归低优先级等待模块。
  */

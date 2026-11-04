@@ -17,7 +17,7 @@ import { saveGlobalConfig } from "../utils/config.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
-//@ chunk-cjydagjy.js:9439-10044 fingerprint = migrateLegacyOpusToCurrent (0.818)
+//@ chunk-cjydagjy.js:9439-10044 fingerprint (2.1.88 match: migrateLegacyOpusToCurrent, 0.818)
 /**
  * 迁移（仅 firstParty）：userSettings.model 为 Opus 4/4.1 的全名时改成当前 opus 别名。
  */

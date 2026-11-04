@@ -81,7 +81,7 @@ deferInit("chunk-04ybzhw5.js:416", () => {
 function useQueuedMessageContext() {
   return useContext(queuedMessageContext);
 }
-//@ chunk-04ybzhw5.js:461-806 fingerprint = QueuedMessageProvider (0.464)
+//@ chunk-04ybzhw5.js:461-806 fingerprint (2.1.88 match: QueuedMessageProvider, 0.464)
 /**
  * 为排队消息子树提供 {isQueued:true,isFirst,selectionHighlight,noticeSystemLines}。
  */

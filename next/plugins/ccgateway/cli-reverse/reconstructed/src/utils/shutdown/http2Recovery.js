@@ -11,7 +11,7 @@
 
 //@ chunk-e6aww6q8.js:244366-244427 placement
 var HTTP2_STREAM_CLOSED_PATTERN = /^Stream closed with error code NGHTTP2_[A-Z0-9_]+$/;
-//@ chunk-e6aww6q8.js:244427-244589 placement = shortErrorStack (0.824)
+//@ chunk-e6aww6q8.js:244427-244589 placement (2.1.88 match: shortErrorStack, 0.824)
 var HTTP2_SESSION_CLOSED_RE = /^Session closed with error code \d+$/;
 var stackHasFrame = (stack, framePattern) =>
   typeof stack === "string" &&

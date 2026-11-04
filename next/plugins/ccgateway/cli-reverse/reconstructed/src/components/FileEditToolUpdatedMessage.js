@@ -23,7 +23,7 @@ import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { CtrlOToExpand } from "./CtrlOToExpand.js";
 import { StructuredDiffList } from "./StructuredDiffList.js";
 
-//@ chunk-dcmhvw5a.js:383995-384090 fingerprint = _temp4 (0.685)
+//@ chunk-dcmhvw5a.js:383995-384090 fingerprint (2.1.88 match: _temp4, 0.685)
 function editSizeOf(script) {
   return {
     bytes: Buffer.byteLength(script, "utf8"),
@@ -43,7 +43,7 @@ function editSizeOf(script) {
 function isAddedLine(__0) {
   return __0.startsWith("+");
 }
-//@ chunk-vnfdjr3f.js:2381-2421 callgraph-fingerprint = _temp2 (1)
+//@ chunk-vnfdjr3f.js:2381-2421 callgraph-fingerprint (2.1.88 match: _temp2, 1)
 function addAddedLines(acc, hunk) {
   return acc + count(hunk.lines, isAddedLine);
 }
@@ -55,7 +55,7 @@ function isRemovedLine(line) {
 function addRemovedLines(acc, hunk) {
   return acc + count(hunk.lines, isRemovedLine);
 }
-//@ chunk-vnfdjr3f.js:2507-3881 fingerprint = FileEditToolUpdatedMessage (0.834)
+//@ chunk-vnfdjr3f.js:2507-3881 fingerprint (2.1.88 match: FileEditToolUpdatedMessage, 0.834)
 /**
  * 编辑成功消息："Added N lines, removed M lines"，非 condensed 时下方显示 StructuredDiffList。
  */

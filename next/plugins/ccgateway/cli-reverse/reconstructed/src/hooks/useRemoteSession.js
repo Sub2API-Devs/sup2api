@@ -451,7 +451,7 @@ var replyChannelConfig = null;
 //@ chunk-18hwfzwa.js:266584-266602 affinity
 var REFUSAL_RETRY_DELAY_MS = 750;
 var MAX_REFUSAL_RETRIES = 3;
-//@ chunk-18hwfzwa.js:266602-308155 callgraph-witnessed = useRemoteSession (0.184)
+//@ chunk-18hwfzwa.js:266602-308155 callgraph-witnessed (2.1.88 match: useRemoteSession, 0.184)
 /**
  * 远程（云）会话：订阅云端事件流，把消息写入本地转录；发送用户提示（确认送达，否则提示 "Couldn't send your message"）；转发权限请求/中断；断线重连与状态显示。
  */

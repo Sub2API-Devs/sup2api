@@ -36,7 +36,7 @@ function parseContextStopHeader(headers) {
   let normalized = typeof headerValue === "string" ? headerValue.trim().toLowerCase() : "";
   return normalized === "org" || normalized === "credential" ? normalized : undefined;
 }
-//@ chunk-82kqcve8.js:64930-65145 placement = getRetryAfter (0.889)
+//@ chunk-82kqcve8.js:64930-65145 placement (2.1.88 match: getRetryAfter, 0.889)
 /**
  * 从普通头对象解析 retry-after（秒或 HTTP 日期）为毫秒，非正数忽略，上限 1 小时。旧版名 getRetryAfter 为同名族错配（另一个 getRetryAfter 是 #GQe）。疑似归错文件（chunk-82kqcve8 属其他 HTTP 客户端）。
  */
@@ -213,7 +213,7 @@ function getStopError(error, what) {
         `${what}: HTTP ${error.status} (stop: ${contextStopHeader})`,
       );
 }
-//@ chunk-82kqcve8.js:67707-67827 placement = isPermanentFailure (0.566)
+//@ chunk-82kqcve8.js:67707-67827 placement (2.1.88 match: isPermanentFailure, 0.566)
 function throwForSkippedRequest(skip, what) {
   if (skip.reason === "no-auth") throw new MemoryPermanentError("no_oauth", `${what}: ${skip.detail}`);
   throw new MemoryUnavailableError(`${what}: ${skip.reason}`);

@@ -102,14 +102,14 @@ function DiffFileList(props) {
   } else list = $[8];
   return list;
 }
-//@ chunk-mtx4csef.js:19087-19131 fingerprint = _temp (1)
+//@ chunk-mtx4csef.js:19087-19131 fingerprint (2.1.88 match: _temp, 1)
 function turnDiffEntry(turn) {
   return {
     type: "turn",
     turn,
   };
 }
-//@ chunk-mtx4csef.js:19131-19619 fingerprint = turnDiffToDiffData (0.851)
+//@ chunk-mtx4csef.js:19131-19619 fingerprint (2.1.88 match: turnDiffToDiffData, 0.851)
 function turnDiffToDiffData(turn) {
   let files = Array.from(turn.files.values())
     .map((file) => ({
@@ -139,7 +139,7 @@ function turnDiffToDiffData(turn) {
     baseMode: "auto",
   };
 }
-//@ chunk-mtx4csef.js:19619-25927 fingerprint = DiffDialog (0.557)
+//@ chunk-mtx4csef.js:19619-25927 fingerprint (2.1.88 match: DiffDialog, 0.557)
 function DiffDialog(props) {
   let $ = useMemoCache(83);
   let { messages, onDone } = props;

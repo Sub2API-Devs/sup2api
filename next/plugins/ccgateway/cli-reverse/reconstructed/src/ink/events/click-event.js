@@ -51,7 +51,7 @@ deferInit("chunk-bzr73sfg.js:172404", () => {
     }
   };
 });
-//@ chunk-bzr73sfg.js:258255-258541 fingerprint = ClickEvent (0.495)
+//@ chunk-bzr73sfg.js:258255-258541 fingerprint (2.1.88 match: ClickEvent, 0.495)
 /**
  * 把指针事件派给节点的 onPointer，换算成节点内的局部坐标（含像素精度 fine）；节点已从树上摘下时只派发 up。
  */

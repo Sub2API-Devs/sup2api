@@ -15,7 +15,7 @@ import { isFirstPartyRemoteSession } from "../userDataRoots.js";
 import { env } from "../env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a76knw89.js:18781-18828 fingerprint = executeCloudPersistence (0.657)
+//@ chunk-a76knw89.js:18781-18828 fingerprint (2.1.88 match: executeCloudPersistence, 0.657)
 /**
  * 云端文件持久化执行器的单例占位（默认返回 ok:false）。
  */
@@ -27,7 +27,7 @@ deferInit("chunk-a76knw89.js:18781", () => {
     failed: false,
   }));
 });
-//@ chunk-azz22fvc.js:1314-1422 fingerprint = isFilePersistenceEnabled (0.39)
+//@ chunk-azz22fvc.js:1314-1422 fingerprint (2.1.88 match: isFilePersistenceEnabled, 0.39)
 /**
  * 是否启用文件持久化：无覆盖、满足前置条件且设置了 CLAUDE_CODE_REMOTE_SESSION_ID 与 CLAUDE_CODE_ENVIRONMENT_KIND。
  */

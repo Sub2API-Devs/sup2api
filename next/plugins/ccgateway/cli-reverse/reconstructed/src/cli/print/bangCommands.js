@@ -300,7 +300,7 @@ function quoteBangCommand(command) {
       : chars.join("");
   return `(! ${escapeXml(quoted)})`;
 }
-//@ chunk-tyg7f3ek.js:127377-127499 placement = createChildAbortController (0.879)
+//@ chunk-tyg7f3ek.js:127377-127499 placement (2.1.88 match: createChildAbortController, 0.879)
 function abortSignalPromise(signal) {
   return new Promise((resolve) => {
     if (signal.aborted) resolve(undefined);

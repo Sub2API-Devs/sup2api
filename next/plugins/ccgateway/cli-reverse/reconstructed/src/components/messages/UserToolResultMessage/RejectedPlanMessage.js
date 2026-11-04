@@ -18,7 +18,7 @@ import { Text, Box } from "../../../ink/components/Text.js";
 import { MessageResponse } from "../../MessageResponse.js";
 import { MarkdownText_2 } from "../../pluginUi/render/MarkdownBlock.js";
 
-//@ chunk-ah34pb7m.js:14788-15144 fingerprint = RejectedPlanMessage (0.802)
+//@ chunk-ah34pb7m.js:14788-15144 fingerprint (2.1.88 match: RejectedPlanMessage, 0.802)
 function RejectedPlanMessage(props) {
   let $ = useMemoCache(3);
   let { plan } = props;

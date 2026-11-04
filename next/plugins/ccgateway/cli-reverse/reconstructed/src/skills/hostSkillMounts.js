@@ -323,7 +323,7 @@ async function checkNotSymlink(filePath) {
     return toReadFailure(error);
   }
 }
-//@ chunk-f9asxqh1.js:27337-27430 placement = readJsonFile (0.83)
+//@ chunk-f9asxqh1.js:27337-27430 placement (2.1.88 match: readJsonFile, 0.83)
 /**
  * 安全读取文本文件：同一设备、普通文件、大小不超过上限，否则返回原因。
  */

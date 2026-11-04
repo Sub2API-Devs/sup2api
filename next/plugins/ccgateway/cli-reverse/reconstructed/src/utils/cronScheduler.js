@@ -75,7 +75,7 @@ var loopSentinelModule = require("./loop/LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
 var CHECK_INTERVAL_MS = 1000;
 var WATCH_DEBOUNCE_MS = 300;
 var LOCK_PROBE_INTERVAL_MS = 5000;
-//@ chunk-hnzqng4j.js:4876-4973 fingerprint = isRecurringTaskAged (1)
+//@ chunk-hnzqng4j.js:4876-4973 fingerprint (2.1.88 match: isRecurringTaskAged, 1)
 /**
  * 循环任务是否已超过最长存活时间（permanent 除外，maxAge 为 0 表示不限）。
  */
@@ -129,7 +129,7 @@ var keptBackTaskKeys = identity(new Set(), (set) => set.clear());
 function taskKey(dir, taskId) {
   return `${dir ?? ""}\x00${taskId}`;
 }
-//@ chunk-hnzqng4j.js:5716-12204 facade-exports = createCronScheduler (0.654)
+//@ chunk-hnzqng4j.js:5716-12204 facade-exports (2.1.88 match: createCronScheduler, 0.654)
 /**
  * 创建调度器：start 时（已启用或有任务时开启定时任务功能）抢调度锁、加载任务、每秒 check；check 对每个可归属本会话的任务计算带抖动的下次时间，到点调用 onFire/onFireTask，
  * 循环任务重排（超龄则最后一次后删除）、一次性任务删除、持久化 lastFiredAt；首次加载时把错过的一次性任务交给 onMissed 或生成提示。返回 {start, stop, getNextFireTime, checkNow}。
@@ -566,7 +566,7 @@ function createCronScheduler(options) {
     },
   };
 }
-//@ chunk-hnzqng4j.js:12204-12727 facade-exports = buildMissedTaskNotification (0.806)
+//@ chunk-hnzqng4j.js:12204-12727 facade-exports (2.1.88 match: buildMissedTaskNotification, 0.806)
 /**
  * 生成错过的一次性任务提示：说明已从文件删除，要求先用 AskUserQuestion 确认再执行，并列出每个任务的时间描述与提示词。
  */

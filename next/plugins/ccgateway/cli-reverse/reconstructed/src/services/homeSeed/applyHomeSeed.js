@@ -53,7 +53,7 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-twq47pff.js:36275-36405 placement = formatRecentMessages (1)
+//@ chunk-twq47pff.js:36275-36405 placement (2.1.88 match: formatRecentMessages, 1)
 function formatRecentMessages(homeReal, entry) {
   try {
     return processMemoryFile(
@@ -65,7 +65,7 @@ function formatRecentMessages(homeReal, entry) {
     return false;
   }
 }
-//@ chunk-twq47pff.js:36405-36571 placement = getOutputStyleAttachment (0.676)
+//@ chunk-twq47pff.js:36405-36571 placement (2.1.88 match: getOutputStyleAttachment, 0.676)
 /**
  * 路径在技能根目录内且不是 output_style 类型。旧版名 getOutputStyleAttachment 为错配；归错文件（技能改进相关）。
  */
@@ -75,7 +75,7 @@ function isSkillPathOutsideOutputStyles(input, options) {
   let report = workingFileDestination(deps.split(sep).join("/"));
   return report !== null && report.kind !== "output_style";
 }
-//@ chunk-twq47pff.js:36571-36663 placement = isFileReadDenied (1)
+//@ chunk-twq47pff.js:36571-36663 placement (2.1.88 match: isFileReadDenied, 1)
 /**
  * 读 ccr-home-seed.json 并解析。归错文件。
  */
@@ -139,7 +139,7 @@ var cloudSettingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.j
 deferInit("chunk-twq47pff.js:37274", () => {
   cloudSettingsSchema = DoctorLazy(() => record(stringSchema(), unknown()));
 });
-//@ chunk-twq47pff.js:37301-37351 placement = isRealPathWithinTeamDir (1)
+//@ chunk-twq47pff.js:37301-37351 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundCode_2(realCandidate) {
   return realCandidate === "ENOENT" || realCandidate === "ENOTDIR";
 }
@@ -924,7 +924,7 @@ async function writeHomeSidecar(ctx, seed) {
   }
   return true;
 }
-//@ chunk-twq47pff.js:49023-49173 placement = readJSONLFile (1)
+//@ chunk-twq47pff.js:49023-49173 placement (2.1.88 match: readJSONLFile, 1)
 async function readJSONLFile(path, size) {
   let buf = Buffer.allocUnsafe(size);
   let totalRead = 0;

@@ -441,7 +441,7 @@ function getAxPreparkMs() {
 function rewriteHeldAnnouncement() {
   return env.CLAUDE_AX_REWRITE_HELD_ANNOUNCEMENT ?? false;
 }
-//@ chunk-vd0bcd16.js:5819-5898 placement = getToolsForDefaultPreset (0.54)
+//@ chunk-vd0bcd16.js:5819-5898 placement (2.1.88 match: getToolsForDefaultPreset, 0.54)
 /**
  * （旧版名 getToolsForDefaultPreset 是错配）屏幕阅读器模式开启时返回子进程环境 {CLAUDE_AX_SCREEN_READER:"1"}，否则空对象。
  */

@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-7fw14qgv.js:2195-2904 fingerprint = FpsTracker (0.901)
+//@ chunk-7fw14qgv.js:2195-2904 fingerprint (2.1.88 match: FpsTracker, 0.901)
 class FpsTracker {
   frameDurations = [];
   totalFrames = 0;

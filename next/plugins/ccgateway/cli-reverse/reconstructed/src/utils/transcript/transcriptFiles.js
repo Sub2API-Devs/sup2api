@@ -619,7 +619,7 @@ function collectLinearChain(logs, currentSessionId, index, options) {
   }
   return ids;
 }
-//@ chunk-e6aww6q8.js:302227-302289 placement = filterResumableSessions (1)
+//@ chunk-e6aww6q8.js:302227-302289 placement (2.1.88 match: filterResumableSessions, 1)
 function filterResumableSessions(logs, currentSessionId) {
   return logs.isSidechain === currentSessionId.isSidechain && isAuxiliaryEntry(logs);
 }

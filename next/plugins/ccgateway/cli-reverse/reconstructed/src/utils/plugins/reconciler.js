@@ -33,14 +33,14 @@ import { CLAUDEAI_MARKETPLACE_PREFIX } from "./schemas.js";
 import { pathExists } from "../fsSafety/atomicWriteStaging.js";
 import { storageRootFor } from "../settings/settingsStorage.js";
 
-//@ chunk-dcmhvw5a.js:125770-125834 fingerprint = normalizeSource (1)
+//@ chunk-dcmhvw5a.js:125770-125834 fingerprint (2.1.88 match: normalizeSource, 1)
 /**
  * 来源是否为本地（file 或 directory）。旧版名 normalizeSource 名不副实，见 lead 建议。
  */
 function isLocalMarketplaceSource(source) {
   return source.source === "file" || source.source === "directory";
 }
-//@ chunk-rrq1mnv6.js:5312-5627 fingerprint = diffMarketplaces (1)
+//@ chunk-rrq1mnv6.js:5312-5627 fingerprint (2.1.88 match: diffMarketplaces, 1)
 /**
  * 比较 settings 声明的市场（extraKnownMarketplaces）与已落盘的 known_marketplaces：返回 缺失、来源变化、已一致 三组。
  */
@@ -67,7 +67,7 @@ function diffMarketplaces(declared, materialized, opts) {
     upToDate,
   };
 }
-//@ chunk-rrq1mnv6.js:5627-7892 fingerprint = reconcileMarketplaces (0.726)
+//@ chunk-rrq1mnv6.js:5627-7892 fingerprint (2.1.88 match: reconcileMarketplaces, 0.726)
 /**
  * 市场对账：对缺失或来源变化的声明市场执行 addMarketplaceSource（安装/更新），返回 installed/updated/failed/upToDate/skipped。启动与 headless 安装时调用。
  */
@@ -218,7 +218,7 @@ async function reconcileMarketplaces(opts) {
     skipped,
   };
 }
-//@ chunk-rrq1mnv6.js:7892-8056 sole-consumer = normalizeSource (1)
+//@ chunk-rrq1mnv6.js:7892-8056 sole-consumer (2.1.88 match: normalizeSource, 1)
 function normalizeSource(source, projectRoot) {
   if ((source.source === "directory" || source.source === "file") && !isAbsolute(source.path)) {
     let projectConfigRoot = getProjectConfigRoot();

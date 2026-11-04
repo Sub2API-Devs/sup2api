@@ -10,7 +10,7 @@
  */
 import { randomBytes } from "crypto";
 
-//@ chunk-bwbq4xvm.js:775327-782403 fingerprint = ADJECTIVES (0.695)
+//@ chunk-bwbq4xvm.js:775327-782403 fingerprint (2.1.88 match: ADJECTIVES, 0.695)
 /**
  * 形容词词表（随机 slug 用）。
  */
@@ -757,7 +757,7 @@ var NOUNS = [
   "yawning",
   "zooming",
 ];
-//@ chunk-bwbq4xvm.js:782403-782449 fingerprint = randomInt (1)
+//@ chunk-bwbq4xvm.js:782403-782449 fingerprint (2.1.88 match: randomInt, 1)
 /**
  * crypto 随机整数 [0, max)。
  */

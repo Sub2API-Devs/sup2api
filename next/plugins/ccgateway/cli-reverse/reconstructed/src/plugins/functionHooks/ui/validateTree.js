@@ -249,7 +249,7 @@ function clientProblem(element) {
  * @@ hunk 头里行号/行数允许的最大值（1e9）。
  */
 var MAX_LINE_NUMBER = 1e9;
-//@ chunk-4121qate.js:148116-148593 placement = hunkSchema (0.352)
+//@ chunk-4121qate.js:148116-148593 placement (2.1.88 match: hunkSchema, 0.352)
 /**
  * 把统一 diff 文本解析为 hunks（去掉 "\ No newline" 行）；无 hunk 头或行号越界时返回 {kind:"refused", problem}。
  */
@@ -368,7 +368,7 @@ function hasPlacedBox(drawn) {
     (drawn.children ?? []).some(hasPlacedBox)
   );
 }
-//@ chunk-4121qate.js:150214-150330 placement = setAttribute (0.839)
+//@ chunk-4121qate.js:150214-150330 placement (2.1.88 match: setAttribute, 0.839)
 var heldTexts = (nodes) =>
   nodes.flatMap((node) => {
     let isString = typeof node === "string";

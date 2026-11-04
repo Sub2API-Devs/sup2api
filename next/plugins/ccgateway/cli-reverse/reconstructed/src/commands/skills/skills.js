@@ -78,7 +78,7 @@ function skillNameOf(command) {
 function isStorableSkillName(name) {
   return !isNotProtoKey(name);
 }
-//@ chunk-00qhwn8e.js:19262-19306 placement = _temp0 (1)
+//@ chunk-00qhwn8e.js:19262-19306 placement (2.1.88 match: _temp0, 1)
 function isPluginSkill(a_5) {
   return a_5.source === "plugin";
 }
@@ -831,7 +831,7 @@ function SkillsMenu(props) {
   } else dialog = $[143];
   return dialog;
 }
-//@ chunk-00qhwn8e.js:27856-28005 fingerprint = call (0.637)
+//@ chunk-00qhwn8e.js:27856-28005 fingerprint (2.1.88 match: call, 0.637)
 /**
  * /skills 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

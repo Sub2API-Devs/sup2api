@@ -10,7 +10,7 @@
  */
 import { typeOf, typeUrlOf } from "../../tools/ArtifactTool/permissions/dbWriteInputs.js";
 
-//@ chunk-e6aww6q8.js:1050226-1050740 fingerprint = collectQuoteSpans (1)
+//@ chunk-e6aww6q8.js:1050226-1050740 fingerprint (2.1.88 match: collectQuoteSpans, 1)
 /**
  * 收集 AST 中单引号串、$'…'、双引号串、引号分界的 heredoc 的字节区间。
  */
@@ -76,7 +76,7 @@ function replaceSpansKeepQuotes(command, spans) {
     result = result.slice(0, start) + open + close + result.slice(end);
   return result;
 }
-//@ chunk-e6aww6q8.js:1051213-1051802 fingerprint = extractQuoteContext (1)
+//@ chunk-e6aww6q8.js:1051213-1051802 fingerprint (2.1.88 match: extractQuoteContext, 1)
 /**
  * 生成三种去引号视图：withDoubleQuotes（只去单引号内容与双引号定界符）、fullyUnquoted（去掉所有引号区间）、unquotedKeepQuoteChars（清空引号内容但保留引号字符）。供基于文本的危险模式检查。
  */
@@ -120,7 +120,7 @@ function extractQuoteContext(rootNode, command) {
     unquotedKeepQuoteChars,
   };
 }
-//@ chunk-e6aww6q8.js:1051802-1053276 fingerprint = extractCompoundStructure (0.888)
+//@ chunk-e6aww6q8.js:1051802-1053276 fingerprint (2.1.88 match: extractCompoundStructure, 0.888)
 /**
  * 提取顶层复合结构：运算符序列（&& || ;）、各段文本，以及是否有管道、子 shell、命令组。
  */
@@ -217,7 +217,7 @@ function extractCompoundStructure(rootNode, command) {
     segments,
   };
 }
-//@ chunk-e6aww6q8.js:1053276-1053462 layout = hasActualOperatorNodes (1)
+//@ chunk-e6aww6q8.js:1053276-1053462 layout (2.1.88 match: hasActualOperatorNodes, 1)
 /**
  * AST 中是否有 ; && || 或 list 节点。
  */
@@ -231,7 +231,7 @@ function hasActualOperatorNodes(rootNode) {
   }
   return walk(node);
 }
-//@ chunk-e6aww6q8.js:1053462-1053850 fingerprint = extractDangerousPatterns (1)
+//@ chunk-e6aww6q8.js:1053462-1053850 fingerprint (2.1.88 match: extractDangerousPatterns, 1)
 /**
  * 统计 AST 中是否出现命令替换、进程替换、参数展开、heredoc、注释。
  */
@@ -271,7 +271,7 @@ function extractDangerousPatterns(rootNode) {
     hasComment,
   };
 }
-//@ chunk-e6aww6q8.js:1053850-1053980 fingerprint = analyzeCommand (1)
+//@ chunk-e6aww6q8.js:1053850-1053980 fingerprint (2.1.88 match: analyzeCommand, 1)
 /**
  * 汇总 AST 分析：quoteContext、compoundStructure、hasActualOperatorNodes、dangerousPatterns。
  */
@@ -283,7 +283,7 @@ function analyzeCommand(rootNode, command) {
     dangerousPatterns: extractDangerousPatterns(rootNode),
   };
 }
-//@ chunk-8wvtd8sr.js:106702-106809 fingerprint = hasActualOperatorNodes (1)
+//@ chunk-8wvtd8sr.js:106702-106809 fingerprint (2.1.88 match: hasActualOperatorNodes, 1)
 /**
  * 判断工具输入是否为带过滤条件的 action='list' 调用，某工具的 checkPermissions 据此补默认 scope。旧版名 hasActualOperatorNodes 误配，与 Bash 无关。
  */

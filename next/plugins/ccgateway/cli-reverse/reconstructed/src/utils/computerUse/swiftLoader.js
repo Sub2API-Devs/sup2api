@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-ha3km179.js:51099-51167 fingerprint = requireComputerUseSwift (0.683)
+//@ chunk-ha3km179.js:51099-51167 fingerprint (2.1.88 match: requireComputerUseSwift, 0.683)
 /**
  * linux 构建里 @ant/computer-use-swift 不可用，直接抛 "macOS-only"。
  */

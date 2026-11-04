@@ -13,7 +13,7 @@ import { osc, OSC } from "./termio/osc.js";
 import { transmitKittyImage } from "./termio/kittyGraphics.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-m1vyn8g1.js:5517-5604 fingerprint = decrqm (1)
+//@ chunk-m1vyn8g1.js:5517-5604 fingerprint (2.1.88 match: decrqm, 1)
 /**
  * DECRQM 查询某 DEC 模式（CSI ? n $ p），匹配 DECRPM 应答。
  */
@@ -23,7 +23,7 @@ function decrqm(mode) {
     match: (response) => response.type === "decrpm" && response.mode === mode,
   };
 }
-//@ chunk-m1vyn8g1.js:5604-5680 fingerprint = kittyKeyboard (1)
+//@ chunk-m1vyn8g1.js:5604-5680 fingerprint (2.1.88 match: kittyKeyboard, 1)
 /**
  * kitty 键盘协议标志查询 CSI ? u。
  */
@@ -33,7 +33,7 @@ function kittyKeyboard() {
     match: (response) => response.type === "kittyKeyboard",
   };
 }
-//@ chunk-m1vyn8g1.js:5680-5758 fingerprint = cursorPosition (1)
+//@ chunk-m1vyn8g1.js:5680-5758 fingerprint (2.1.88 match: cursorPosition, 1)
 /**
  * 光标位置查询（DECXCPR，CSI ? 6 n）。
  */
@@ -43,7 +43,7 @@ function cursorPosition() {
     match: (response) => response.type === "cursorPosition",
   };
 }
-//@ chunk-m1vyn8g1.js:5758-5838 fingerprint = oscColor (1)
+//@ chunk-m1vyn8g1.js:5758-5838 fingerprint (2.1.88 match: oscColor, 1)
 /**
  * OSC 颜色查询（OSC n ; ?），如 OSC 11 背景色。
  */
@@ -53,7 +53,7 @@ function oscColor(code) {
     match: (response) => response.type === "osc" && response.code === code,
   };
 }
-//@ chunk-m1vyn8g1.js:5838-5973 layout = oscColor (0.824)
+//@ chunk-m1vyn8g1.js:5838-5973 layout (2.1.88 match: oscColor, 0.824)
 function programStatusQuery() {
   return {
     request: osc(OSC.PROGRAM_STATUS, "?"),
@@ -61,7 +61,7 @@ function programStatusQuery() {
       response.type === "osc" && response.code === OSC.PROGRAM_STATUS && response.data.startsWith("?"),
   };
 }
-//@ chunk-m1vyn8g1.js:5973-6046 fingerprint = xtversion (1)
+//@ chunk-m1vyn8g1.js:5973-6046 fingerprint (2.1.88 match: xtversion, 1)
 /**
  * XTVERSION 查询（CSI > 0 q），应答 DCS > | 终端名 版本 ST。
  */
@@ -95,7 +95,7 @@ var DA1_SENTINEL; // deferred: has load-time effects after a deferred statement 
 deferInit("chunk-m1vyn8g1.js:6209", () => {
   DA1_SENTINEL = csi("c");
 });
-//@ chunk-m1vyn8g1.js:6223-7949 fingerprint = TerminalQuerier (0.583)
+//@ chunk-m1vyn8g1.js:6223-7949 fingerprint (2.1.88 match: TerminalQuerier, 0.583)
 /**
  * 终端查询器：查询排队写到 stdout（输入未接管时先缓存），应答由 App 的输入解析交给 onResponse 按 match 匹配并 resolve；flush() 发 DA1 哨兵，哨兵应答到达时把前面未应答的查询都 resolve 为 undefined；owed() 统计还欠的应答数（退出前要读干净）；resync 丢弃排队并可插入 barrier；主题变化通知（CSI ? 997）分发给订阅者。
  */

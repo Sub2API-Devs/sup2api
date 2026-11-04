@@ -90,7 +90,7 @@ function serializeAutoModeDenialKey(tool, input) {
 //@ chunk-18hwfzwa.js:1647742-1647776 affinity
 var AUTO_MODE_NOTICE_MAX_COLUMNS = 40;
 var AUTO_MODE_DENIED = "auto-mode-denied";
-//@ chunk-18hwfzwa.js:1647776-1652841 fingerprint = useCanUseTool (0.447)
+//@ chunk-18hwfzwa.js:1647776-1652841 fingerprint (2.1.88 match: useCanUseTool, 0.447)
 /**
  * canUseTool 主流程：每次工具调用返回一个 Promise。先匹配最近拒绝记录；调用 hasPermissionsToUseTool（规则 + 模式 + auto 分类器）得出 allow/deny/ask；allow 时记录日志直接 buildAllow；ask 时取工具 description，进入 pWn（交互式请求：本地对话框 + bridge + channel + hooks 竞速）；deny 记录拒绝；中止时 resolveIfAborted。
  */

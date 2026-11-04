@@ -102,7 +102,7 @@ var plainTextAvailability;
 function primarySecureStoreKind() {
   return "file";
 }
-//@ chunk-b29hdd5e.js:6458-6495 facade-majority = getSecureStorage (0)
+//@ chunk-b29hdd5e.js:6458-6495 facade-majority (2.1.88 match: getSecureStorage, 0)
 /**
  * 返回安全存储实现；本构建（linux）中平台存储变量为空，恒为 plainTextStorage。
  */

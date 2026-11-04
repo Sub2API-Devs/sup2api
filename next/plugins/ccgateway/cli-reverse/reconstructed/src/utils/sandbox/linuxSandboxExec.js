@@ -135,7 +135,7 @@ function apparmorUsernsSetting() {
     return;
   }
 }
-//@ chunk-fq0cr76a.js:903275-903620 placement = isMacOsKeychainLocked (0.393)
+//@ chunk-fq0cr76a.js:903275-903620 placement (2.1.88 match: isMacOsKeychainLocked, 0.393)
 /**
  * 试跑一次 bubblewrap（干净 PATH、cwd=/、带超时），返回 {ran, exitCode, stderr}，用于沙箱依赖检查判断 bwrap 能否启动。旧版名 isMacOsKeychainLocked 错配，应归沙箱依赖探测。
  */

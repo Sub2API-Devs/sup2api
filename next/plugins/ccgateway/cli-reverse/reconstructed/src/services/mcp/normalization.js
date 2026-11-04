@@ -16,7 +16,7 @@ import { stripPrefix } from "../../utils/stringUtils.js";
  */
 var CLAUDE_AI_NAME_PREFIX = "claude.ai ";
 var CLAUDE_AI = "claude_ai_";
-//@ chunk-knckn35w.js:228-365 callgraph-witnessed = normalizeNameForMCP (0)
+//@ chunk-knckn35w.js:228-365 callgraph-witnessed (2.1.88 match: normalizeNameForMCP, 0)
 /**
  * normalizeNameForMCP：把服务器/工具名中非 [a-zA-Z0-9_-] 的字符换成 _；claude.ai 连接器名再折叠连续下划线并去掉首尾 _。
  */
@@ -67,7 +67,7 @@ function findServersByName(clients, serverName) {
   let normalized = normalizeNameForMCP(serverName);
   return clients.filter((client) => normalizeNameForMCP(client.name) === normalized);
 }
-//@ chunk-ah34pb7m.js:157437-157480 fingerprint = CLAUDEAI_SERVER_PREFIX (1)
+//@ chunk-ah34pb7m.js:157437-157480 fingerprint (2.1.88 match: CLAUDEAI_SERVER_PREFIX, 1)
 /**
  * CLAUDEAI_SERVER_PREFIX（实为判断）：名字是否以 "claude.ai " 开头。
  */

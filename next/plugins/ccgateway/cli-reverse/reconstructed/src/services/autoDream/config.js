@@ -13,7 +13,7 @@ import { getInitialSettings_2 } from "../../utils/settings/settings.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-rsht1tdj.js:1080-1128 fingerprint = isAutoDreamEnabled (0.799)
+//@ chunk-rsht1tdj.js:1080-1128 fingerprint (2.1.88 match: isAutoDreamEnabled, 0.799)
 /**
  * 返回 tengu_onyx_plover 原值；为 null 表示 autoDream 关闭。
  */

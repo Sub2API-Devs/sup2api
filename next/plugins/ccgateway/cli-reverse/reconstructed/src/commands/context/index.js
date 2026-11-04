@@ -17,7 +17,7 @@ import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 function isContextCommandForceHidden() {
   return false;
 }
-//@ chunk-e6aww6q8.js:1694962-1695347 fingerprint = contextNonInteractive (0.582)
+//@ chunk-e6aww6q8.js:1694962-1695347 fingerprint (2.1.88 match: contextNonInteractive, 0.582)
 /**
  * /context 命令对象（local-jsx）；描述：Visualize current context usage as a colored grid；isEnabled: ()=>!_e()&&!aen()；实现 chunk-10q8r8ck.js 的 Yn。
  */

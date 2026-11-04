@@ -18,7 +18,7 @@ import { jsonStringify } from "./slowOperations.js";
 import { env } from "./env.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-nsfjm4vg.js:422-572 placement = propagateAbort (1)
+//@ chunk-nsfjm4vg.js:422-572 placement (2.1.88 match: propagateAbort, 1)
 function propagateAbort(parents, weakChild) {
   let aborted = false;
   for (let parent of parents) {
@@ -30,7 +30,7 @@ function propagateAbort(parents, weakChild) {
   parents.add(new WeakRef(weakChild));
   return true;
 }
-//@ chunk-nsfjm4vg.js:572-679 placement = propagateAbort (1)
+//@ chunk-nsfjm4vg.js:572-679 placement (2.1.88 match: propagateAbort, 1)
 /**
  * 取出仍存活的弱引用并清理已回收的。
  */
@@ -60,7 +60,7 @@ deferInit("chunk-nsfjm4vg.js:679", () => {
 function isDiagLogging() {
   return diagLoggingStarted;
 }
-//@ chunk-nsfjm4vg.js:720-764 placement = getAgentContext (1)
+//@ chunk-nsfjm4vg.js:720-764 placement (2.1.88 match: getAgentContext, 1)
 /**
  * 当前是否在诊断异步作用域内。
  */
@@ -136,7 +136,7 @@ deferInit("chunk-nsfjm4vg.js:1660", () => {
 function getDiagnosticWriter() {
   return onProcessRootHost(diagnosticWriterByHost);
 }
-//@ chunk-nsfjm4vg.js:1709-1902 callgraph-witnessed = logForDiagnosticsNoPII (0.237)
+//@ chunk-nsfjm4vg.js:1709-1902 callgraph-witnessed (2.1.88 match: logForDiagnosticsNoPII, 0.237)
 /**
  * 无 PII 的诊断日志：设置 CLAUDE_CODE_DIAGNOSTICS_FILE 时向该文件追加 JSON 行（timestamp/level/event/data），默认排队写。
  */
@@ -212,7 +212,7 @@ function formatDiagnosticLine(level, event, data) {
 function flushDiagnosticLogs() {
   return getDiagnosticWriter().flush();
 }
-//@ chunk-nsfjm4vg.js:3136-3198 layout = getDiagnosticLogFile (1)
+//@ chunk-nsfjm4vg.js:3136-3198 layout (2.1.88 match: getDiagnosticLogFile, 1)
 function getDiagnosticLogFile_2() {
   return isDisklessForDiagnostics() ? undefined : env.CLAUDE_CODE_DIAGNOSTICS_FILE;
 }
@@ -220,7 +220,7 @@ function getDiagnosticLogFile_2() {
 function isDisklessForDiagnostics() {
   return isInDiagScope() ? isDiskless() : isDisklessProcess();
 }
-//@ chunk-nsfjm4vg.js:3233-3471 fingerprint = withDiagnosticsTiming (1)
+//@ chunk-nsfjm4vg.js:3233-3471 fingerprint (2.1.88 match: withDiagnosticsTiming, 1)
 async function withDiagnosticsTiming(event, fn, getData) {
   let startTime = Date.now();
   logForDiagnosticsNoPII("info", `${event}_started`);
@@ -239,7 +239,7 @@ async function withDiagnosticsTiming(event, fn, getData) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:313160-313222 fingerprint = getDiagnosticLogFile (1)
+//@ chunk-e6aww6q8.js:313160-313222 fingerprint (2.1.88 match: getDiagnosticLogFile, 1)
 function getDiagnosticLogFile() {
   return Boolean(env.CLAUDE_CODE_DIAGNOSTICS_FILE);
 }

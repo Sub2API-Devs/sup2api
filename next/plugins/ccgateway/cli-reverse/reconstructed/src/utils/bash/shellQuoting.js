@@ -29,7 +29,7 @@ function containsMultilineString(command) {
   let doubleQuoteMultiline = /"(?:[^"\\]|\\.)*\n(?:[^"\\]|\\.)*"/;
   return singleQuoteMultiline.test(command) || doubleQuoteMultiline.test(command);
 }
-//@ chunk-e6aww6q8.js:3065431-3065603 fingerprint = quoteShellCommand (0.841)
+//@ chunk-e6aww6q8.js:3065431-3065603 fingerprint (2.1.88 match: quoteShellCommand, 0.841)
 /**
  * 把命令包装成可交给 eval 的单引号字符串；含 heredoc 或多行字符串时整体单引号，非 heredoc 时追加 < /dev/null。
  */
@@ -57,7 +57,7 @@ function shouldAddStdinRedirect(command) {
 }
 //@ chunk-e6aww6q8.js:3065727-3065783 layout
 var WINDOWS_NUL_REDIRECT_RE = /(\d?&?>+[ \t]*)[Nn][Uu][Ll](?=\s|$|[|&;)\n])/g;
-//@ chunk-e6aww6q8.js:3065783-3065897 fingerprint = rewriteWindowsNullRedirect (1)
+//@ chunk-e6aww6q8.js:3065783-3065897 fingerprint (2.1.88 match: rewriteWindowsNullRedirect, 1)
 /**
  * 把 Windows 风格的 >NUL / 2>nul 改写为 /dev/null（命令含 < $ 反引号时不改）。
  */

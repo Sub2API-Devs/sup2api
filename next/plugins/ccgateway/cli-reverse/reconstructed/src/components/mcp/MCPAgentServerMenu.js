@@ -41,7 +41,7 @@ import { ModelSelector } from "../agents/ModelSelector.js";
 function getMcpAuthModule() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpAuthModule();
 }
-//@ chunk-cpqpnzp4.js:18067-21061 fingerprint = MCPAgentServerMenu (0.595)
+//@ chunk-cpqpnzp4.js:18067-21061 fingerprint (2.1.88 match: MCPAgentServerMenu, 0.595)
 function MCPAgentServerMenu({ agentServer, onCancel, onComplete }) {
   let complete = useCallback(
     (message, ...rest) =>

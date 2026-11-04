@@ -118,7 +118,7 @@ deferInit("chunk-fq0cr76a.js:878480", () => {
 function ripgrepStatus() {
   return ripgrepStatusSlot.of(getRootSession().host);
 }
-//@ chunk-fq0cr76a.js:878582-878972 fingerprint = getRipgrepConfig (0.659)
+//@ chunk-fq0cr76a.js:878582-878972 fingerprint (2.1.88 match: getRipgrepConfig, 0.659)
 /**
  * 决定 ripgrep 来源：USE_BUILTIN_RIPGREP 设为假值时优先系统 rg；Bun 单文件可执行时用自身（argv0=rg，内嵌）；否则系统 rg。
  */
@@ -210,7 +210,7 @@ function explainRipgrepNotFound(error) {
   }
   return error;
 }
-//@ chunk-fq0cr76a.js:879855-879933 fingerprint = ripgrepCommand (1)
+//@ chunk-fq0cr76a.js:879855-879933 fingerprint (2.1.88 match: ripgrepCommand, 1)
 /**
  * 当前 ripgrep 命令（路径、前置参数、argv0）。
  */
@@ -292,7 +292,7 @@ var BENIGN_KILL_SIGNALS; // deferred: has load-time effects after a deferred sta
 deferInit("chunk-fq0cr76a.js:880858", () => {
   BENIGN_KILL_SIGNALS = new Set(["SIGHUP", "SIGINT", "SIGPIPE"]);
 });
-//@ chunk-fq0cr76a.js:880905-881001 fingerprint = isEagainError (1)
+//@ chunk-fq0cr76a.js:880905-881001 fingerprint (2.1.88 match: isEagainError, 1)
 function isEagainError(stderr) {
   return stderr.includes("os error 11") || stderr.includes("Resource temporarily unavailable");
 }
@@ -304,7 +304,7 @@ var RESOURCE_EXHAUSTION_CODES; // deferred: has load-time effects after a deferr
 deferInit("chunk-fq0cr76a.js:881001", () => {
   RESOURCE_EXHAUSTION_CODES = new Set(["EAGAIN", "ENOMEM", "EMFILE", "ENFILE"]);
 });
-//@ chunk-fq0cr76a.js:881055-881175 fingerprint = RipgrepTimeoutError (0.773)
+//@ chunk-fq0cr76a.js:881055-881175 fingerprint (2.1.88 match: RipgrepTimeoutError, 0.773)
 /**
  * ripgrep 超时错误，带部分结果。
  */
@@ -526,7 +526,7 @@ function assertNoNullBytesForRipgrep(args, target, spawnCwd) {
       nullByteSource.telemetry,
     );
 }
-//@ chunk-fq0cr76a.js:885549-885666 layout = isRealPathWithinTeamDir (1)
+//@ chunk-fq0cr76a.js:885549-885666 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function pathExistsStat(realCandidate) {
   try {
     await stat(realCandidate);
@@ -949,7 +949,7 @@ function isStrictSubpath(relativePath) {
     !pathModule_2.isAbsolute(relativePath)
   );
 }
-//@ chunk-fq0cr76a.js:891994-894506 fingerprint = ripGrepRaw (0.57)
+//@ chunk-fq0cr76a.js:891994-894506 fingerprint (2.1.88 match: ripGrepRaw, 0.57)
 /**
  * ripGrepRaw：spawn ripgrep，按字节上限收集 stdout/stderr，支持 stdin 管道与继承 fd，macOS 自动排除 ~/Library 受保护目录。
  */
@@ -1174,7 +1174,7 @@ function ripGrepRaw(
   }
   return child;
 }
-//@ chunk-fq0cr76a.js:894506-895018 fingerprint = ripGrepFileCount (0.912)
+//@ chunk-fq0cr76a.js:894506-895018 fingerprint (2.1.88 match: ripGrepFileCount, 0.912)
 async function ripGrepFileCount(args, target, abortSignal) {
   assertProgramLaunchAllowed();
   let { rgPath, rgArgs, argv0 } = ripgrepCommand();
@@ -1214,10 +1214,10 @@ async function ripGrepFileCount(args, target, abortSignal) {
     });
   });
 }
-//@ chunk-fq0cr76a.js:895018-895043 layout = killCaffeinate (0.805)
+//@ chunk-fq0cr76a.js:895018-895043 layout (2.1.88 match: killCaffeinate, 0.805)
 var RIPGREP_KILL_SIGNAL = "SIGKILL";
 var RIPGREP_KILL_GRACE_MS = 5000;
-//@ chunk-fq0cr76a.js:895043-896024 fingerprint = ripGrepStream (0.631)
+//@ chunk-fq0cr76a.js:895043-896024 fingerprint (2.1.88 match: ripGrepStream, 0.631)
 /**
  * 流式运行 ripgrep，逐批回调输出行（SIGKILL 结束）。
  */
@@ -1310,7 +1310,7 @@ function getAlternateRootSpellings(path, target) {
     alternates.push(lexicalWithSep + path.slice(canonicalWithSep.length));
   return alternates;
 }
-//@ chunk-fq0cr76a.js:896386-899328 fingerprint = ripGrep (0.505)
+//@ chunk-fq0cr76a.js:896386-899328 fingerprint (2.1.88 match: ripGrep, 0.505)
 /**
  * 运行 ripgrep 并返回行数组：首次使用时自检；处理超时（WSL 60s、其他 20s，可由 CLAUDE_CODE_GLOB_TIMEOUT_SECONDS 覆盖）、资源耗尽重试、输出超限。
  */
@@ -1533,7 +1533,7 @@ async function ripGrep_2(args, target, signal, options) {
 function countFilesRounded(dirPath, abortSignal, ignorePatterns = []) {
   return ripgrepStatus().countFilesRounded(dirPath, abortSignal, ignorePatterns);
 }
-//@ chunk-fq0cr76a.js:899388-899763 fingerprint = countFilesRoundedRg (0.852)
+//@ chunk-fq0cr76a.js:899388-899763 fingerprint (2.1.88 match: countFilesRoundedRg, 0.852)
 /**
  * 用 rg --files --hidden 统计目录文件数（家目录本身或其祖先时跳过）。
  */
@@ -1561,7 +1561,7 @@ async function countFilesRoundedRg(dirPath, abortSignal, ignorePatterns) {
       });
   }
 }
-//@ chunk-fq0cr76a.js:899763-899859 layout = getRipgrepStatus (1)
+//@ chunk-fq0cr76a.js:899763-899859 layout (2.1.88 match: getRipgrepStatus, 1)
 /**
  * ripgrep 状态：模式、路径、是否可用。
  */
@@ -1573,7 +1573,7 @@ function getRipgrepStatus_2() {
     working: ripgrepStatus().status?.working ?? null,
   };
 }
-//@ chunk-fq0cr76a.js:899859-900715 fingerprint = testRipgrepOnFirstUse (0.902)
+//@ chunk-fq0cr76a.js:899859-900715 fingerprint (2.1.88 match: testRipgrepOnFirstUse, 0.902)
 /**
  * 首次使用时运行 rg --version 自检并记录可用性。
  */
@@ -1649,7 +1649,7 @@ function splitNulDelimitedOutput(lines, mode, separator = "nul") {
   }
   return result;
 }
-//@ chunk-aqdf5t3e.js:8562-8617 fingerprint = getRipgrepStatus (1)
+//@ chunk-aqdf5t3e.js:8562-8617 fingerprint (2.1.88 match: getRipgrepStatus, 1)
 /**
  * 订阅 ripgrep 可用状态变化。
  */

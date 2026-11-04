@@ -25,7 +25,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 var MAX_DIAGNOSTICS_PER_FILE = 10;
 var MAX_TOTAL_DIAGNOSTICS = 30;
 var MAX_DELIVERED_FILES = 500;
-//@ chunk-e6aww6q8.js:589895-590023 fingerprint = severityToNumber (1)
+//@ chunk-e6aww6q8.js:589895-590023 fingerprint (2.1.88 match: severityToNumber, 1)
 /**
  * 诊断严重级别名 Error/Warning/Info/Hint → 1..4，用于排序（未知按 4）。
  */
@@ -43,7 +43,7 @@ function severityToNumber(severity) {
       return 4;
   }
 }
-//@ chunk-e6aww6q8.js:590023-590143 fingerprint = createDiagnosticKey (1)
+//@ chunk-e6aww6q8.js:590023-590143 fingerprint (2.1.88 match: createDiagnosticKey, 1)
 /**
  * 用 message/severity/range/source/code 拼 JSON 作为诊断去重键。
  */
@@ -56,7 +56,7 @@ function createDiagnosticKey(diag) {
     code: diag.code || null,
   });
 }
-//@ chunk-e6aww6q8.js:590143-593739 fingerprint = checkForLSPDiagnostics (0.598)
+//@ chunk-e6aww6q8.js:590143-593739 fingerprint (2.1.88 match: checkForLSPDiagnostics, 0.598)
 /**
  * LSP 诊断登记表（每个会话根一份）。register() 暂存服务器推来的诊断；takePending() 合并未投递条目、按 URI 去重并剔除已投递过的诊断、按严重级别排序后截断（每文件 10、总 30），记录为已投递并返回 [{serverName, files}]；另有 clearPending/resetAll/clearDeliveredForFile/clearPendingForFile/pendingCount。
  */

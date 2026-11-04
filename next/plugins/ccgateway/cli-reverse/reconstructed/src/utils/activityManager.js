@@ -208,7 +208,7 @@ var activeTimeLedgerByHost; // deferred: uses ActiveTimeLedger of its import cyc
 deferInit("chunk-3jjz3v21.js:3521", () => {
   activeTimeLedgerByHost = new HostScoped(() => new ActiveTimeLedger());
 });
-//@ chunk-3jjz3v21.js:3544-5126 fingerprint = ActivityManager (0.953)
+//@ chunk-3jjz3v21.js:3544-5126 fingerprint (2.1.88 match: ActivityManager, 0.953)
 class ActivityManager {
   activeOperations = new Set();
   lastUserActivityTime = 0;
@@ -311,7 +311,7 @@ deferInit("chunk-3jjz3v21.js:5147", () => {
 function getActivityState() {
   return activityStateByHost.of(getRootSession().host);
 }
-//@ chunk-3jjz3v21.js:5205-5386 callgraph-witnessed = activityManager (0.357)
+//@ chunk-3jjz3v21.js:5205-5386 callgraph-witnessed (2.1.88 match: activityManager, 0.357)
 var activityManager = {
   recordUserActivity: () => ActivityManager.getInstance().recordUserActivity(),
   startCLIActivity: (operationId) => ActivityManager.getInstance().startCLIActivity(operationId),

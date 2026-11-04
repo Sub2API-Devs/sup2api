@@ -15,7 +15,7 @@ import { TMUX as TMUX_2 } from "../constants.js";
 import { logForDebugging } from "../../debug.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-kqv6vz5m.js:370-382 fingerprint = IT2_COMMAND (1)
+//@ chunk-kqv6vz5m.js:370-382 fingerprint (2.1.88 match: IT2_COMMAND, 1)
 var IT2_COMMAND = "it2";
 //@ chunk-kqv6vz5m.js:382-494 layout
 /**
@@ -55,7 +55,7 @@ var backendRegistryState; // deferred: uses createBackendRegistryState of its im
 deferInit("chunk-kqv6vz5m.js:692", () => {
   backendRegistryState = createBackendRegistryState();
 });
-//@ chunk-kqv6vz5m.js:704-731 fingerprint = ORIGINAL_TMUX_PANE (0.713)
+//@ chunk-kqv6vz5m.js:704-731 fingerprint (2.1.88 match: ORIGINAL_TMUX_PANE, 0.713)
 var TMUX; // deferred: uses env (../../env.js) of its import cycle while loading; runs once the cycle is complete
 var TMUX_PANE;
 deferInit("chunk-kqv6vz5m.js:704", () => {
@@ -98,7 +98,7 @@ function getUserTmuxSocket() {
 async function isTmuxAvailable() {
   return (await execFileNoThrow(TMUX_2, ["-V"])).code === 0;
 }
-//@ chunk-kqv6vz5m.js:935-1142 facade-exports = isInITerm2 (0.718)
+//@ chunk-kqv6vz5m.js:935-1142 facade-exports (2.1.88 match: isInITerm2, 0.718)
 /**
  * 是否在 iTerm2：TERM_PROGRAM=iTerm.app、ITERM_SESSION_ID 或 terminal=iTerm.app，结果缓存。
  */

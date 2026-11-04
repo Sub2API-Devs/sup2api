@@ -70,7 +70,7 @@ function canOfferLowPriority(limits, nowMs = Date.now()) {
     isLowPriorityEnabled()
   );
 }
-//@ chunk-77a3xzkb.js:896-1024 placement = extractQuotaStatusFromError (1)
+//@ chunk-77a3xzkb.js:896-1024 placement (2.1.88 match: extractQuotaStatusFromError, 1)
 /**
  * 是否可提供低优先级等待（未被拒、存在重置点且未处于其他等待状态）。旧版名错配；疑似归错文件。
  */

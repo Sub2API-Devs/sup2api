@@ -22,7 +22,7 @@ import {
   SESSION_HISTORY_MAX_PAGES,
 } from "../cli/headlessCloud/openBareCloudSession.js";
 
-//@ chunk-kgtpkbhq.js:6745-7196 fingerprint = createHistoryAuthCtx (0.566)
+//@ chunk-kgtpkbhq.js:6745-7196 fingerprint (2.1.88 match: createHistoryAuthCtx, 0.566)
 /**
  * 构造会话端点：v2 用 /v1/code/sessions/{cse_id}{suffix} + OAuth 头；v1 兼容路径用 /v1/sessions/{session_id}{suffix} + ccr-byoc beta 与 x-organization-uuid；可附 X-Trusted-Device-Token。
  */
@@ -59,7 +59,7 @@ function buildSessionEndpoint(label, baseUrl, accessToken, sessionId, options, p
     id: compatSessionId,
   };
 }
-//@ chunk-08945j39.js:78703-78925 fingerprint = fetchLatestEvents (0.435)
+//@ chunk-08945j39.js:78703-78925 fingerprint (2.1.88 match: fetchLatestEvents, 0.435)
 /**
  * 取会话最新一页事件（倒序），失败记 assistant_history_load。
  */
@@ -77,7 +77,7 @@ async function fetchLatestEvents(ctx, limit = DEFAULT_EVENT_PAGE_SIZE, options) 
     else logFeatureOk("assistant_history_load");
   return events;
 }
-//@ chunk-08945j39.js:78925-79028 fingerprint = fetchOlderEvents (0.553)
+//@ chunk-08945j39.js:78925-79028 fingerprint (2.1.88 match: fetchOlderEvents, 0.553)
 /**
  * 取更早一页会话事件（按游标倒序翻页）。
  */
@@ -93,7 +93,7 @@ async function fetchOlderEvents(ctx, cursor, limit = DEFAULT_EVENT_PAGE_SIZE, op
     options,
   );
 }
-//@ chunk-fe6rs39h.js:150538-150807 fingerprint = fetchPage (0.361)
+//@ chunk-fe6rs39h.js:150538-150807 fingerprint (2.1.88 match: fetchPage, 0.361)
 /**
  * 向前翻页查找远程会话最近的回合状态，返回是否仍在进行（under_way）。
  */

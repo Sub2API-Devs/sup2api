@@ -136,7 +136,7 @@ function needsAuthNoticeServers(clients, connectionState, storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-ag5x7vhf.js:69757-69870 placement = findChromeClient (1)
+//@ chunk-ag5x7vhf.js:69757-69870 placement (2.1.88 match: findChromeClient, 1)
 function findChromeClient(clients) {
   let noticedList = stringArrayOf(getGlobalConfig());
   if (noticedList.length === 0) return 0;
@@ -181,15 +181,15 @@ function selectUnknownModelWindowModel(appState) {
 function selectReplBridgeAutoOn(state) {
   return state.replBridgeAutoOnByDefault;
 }
-//@ chunk-ag5x7vhf.js:113128-113175 sole-consumer = _temp4 (1)
+//@ chunk-ag5x7vhf.js:113128-113175 sole-consumer (2.1.88 match: _temp4, 1)
 function selectReplBridgeSessionUrl(s) {
   return s.replBridgeSessionUrl;
 }
-//@ chunk-ag5x7vhf.js:113175-113220 sole-consumer = _temp (1)
+//@ chunk-ag5x7vhf.js:113175-113220 sole-consumer (2.1.88 match: _temp, 1)
 function countNeedsAuthServers(s) {
   return countNeedsAuthServers_2(s.mcp.clients, MCP_CONNECTION_CHECKS);
 }
-//@ chunk-ag5x7vhf.js:113220-113262 sole-consumer = _temp (1)
+//@ chunk-ag5x7vhf.js:113220-113262 sole-consumer (2.1.88 match: _temp, 1)
 function countChromeClients(s) {
   return findChromeClient(s.mcp.clients);
 }
@@ -240,7 +240,7 @@ function useMemoryFiles(showGuestPassesUpsell, storageV5, credentials) {
   useEffect(loadEffect, loadDeps);
   return memoryFiles;
 }
-//@ chunk-ag5x7vhf.js:113588-117168 callgraph-witnessed = LogoV2 (0.17)
+//@ chunk-ag5x7vhf.js:113588-117168 callgraph-witnessed (2.1.88 match: LogoV2, 0.17)
 function LogoV2(props) {
   let $ = useMemoCache(28);
   let options;

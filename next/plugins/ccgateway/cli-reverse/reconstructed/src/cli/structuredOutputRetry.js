@@ -85,7 +85,7 @@ function hasSuccessfulToolCallSince(initialMessages, marker) {
     return;
   }
 }
-//@ chunk-mx88mbsd.js:1284-1763 placement = hasSuccessfulToolCall (1)
+//@ chunk-mx88mbsd.js:1284-1763 placement (2.1.88 match: hasSuccessfulToolCall, 1)
 function hasSuccessfulToolCall(messages) {
   let mostRecentToolUseId = new Set();
   for (let message of messages) {

@@ -427,7 +427,7 @@ async function routeToolCall(tool, requestedName, input, toolUseContext, options
     }
   }
 }
-//@ chunk-dtv8x2hx.js:72924-72973 placement = getToolNameForPermissionCheck (1)
+//@ chunk-dtv8x2hx.js:72924-72973 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tool) {
   return tool.mcpInfo?.serverName === REMOTE_DEVICES;
 }

@@ -213,7 +213,7 @@ function truncateHunks(hunks, maxLines) {
     hiddenLines: hiddenLineCount,
   };
 }
-//@ chunk-femza1ss.js:3154-3296 fingerprint = extractSandboxViolations (1)
+//@ chunk-femza1ss.js:3154-3296 fingerprint (2.1.88 match: extractSandboxViolations, 1)
 /**
  * 从 stderr 去掉 <sandbox_violations> 块，返回 cleanedStderr。
  */
@@ -226,7 +226,7 @@ function extractSandboxViolations(stderr) {
     cleanedStderr: stripSandboxViolations(stderr).trim(),
   };
 }
-//@ chunk-femza1ss.js:3296-3462 fingerprint = extractCwdResetWarning (1)
+//@ chunk-femza1ss.js:3296-3462 fingerprint (2.1.88 match: extractCwdResetWarning, 1)
 /**
  * 从 stderr 提取末尾 "Shell cwd was reset to …" 行，返回去掉该行的 stderr 和警告文本。
  */
@@ -243,7 +243,7 @@ function extractCwdResetWarning(stderr) {
     cwdResetWarning,
   };
 }
-//@ chunk-femza1ss.js:3462-5404 fingerprint = BashToolResultMessage (0.657)
+//@ chunk-femza1ss.js:3462-5404 fingerprint (2.1.88 match: BashToolResultMessage, 0.657)
 /**
  * Bash 结果渲染：剥离 <sandbox_violations> 和 "Shell cwd was reset" 行，分别显示 stdout/stderr、cwd 提示、编辑 diff，空输出显示 returnCodeInterpretation / Done / (No output)，后台任务显示 "Running in the background"。
  */

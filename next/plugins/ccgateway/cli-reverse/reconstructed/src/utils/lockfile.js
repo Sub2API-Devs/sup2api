@@ -17,7 +17,7 @@ import { validateStateRef, stateGetForPlugin } from "../plugins/functionHooks/ap
 function requireProperLockfile() {
   return properLockfileIndex();
 }
-//@ chunk-bmbhxpfm.js:22165-22265 fingerprint = lock (0.659)
+//@ chunk-bmbhxpfm.js:22165-22265 fingerprint (2.1.88 match: lock, 0.659)
 /**
  * lock：proper-lockfile 加锁并让返回的释放函数支持 `await using`（Symbol.asyncDispose）。全局配置、history、OAuth 刷新等都用它。
  */
@@ -52,7 +52,7 @@ async function releaseLockQuietly(release, label) {
     });
   }
 }
-//@ chunk-1tz177x8.js:39326-39353 fingerprint = check (0.689)
+//@ chunk-1tz177x8.js:39326-39353 fingerprint (2.1.88 match: check, 0.689)
 var check = {
   check: validateStateRef,
   run: stateGetForPlugin,

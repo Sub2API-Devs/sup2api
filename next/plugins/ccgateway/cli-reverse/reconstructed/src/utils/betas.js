@@ -61,7 +61,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growt
 import { has1mSuffix_2, modelHasNative1MContext } from "./model/contextWindow1m.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:152526-152582 placement = _temp (0.699)
+//@ chunk-bwbq4xvm.js:152526-152582 placement (2.1.88 match: _temp, 0.699)
 function freezeHeaderEntry(q_0, index_0) {
   return Object.freeze({
     name: q_0,
@@ -328,7 +328,7 @@ deferInit("chunk-bwbq4xvm.js:155764", () => {
     BETA_OAUTH_AUTH,
   ]);
 });
-//@ chunk-bwbq4xvm.js:155825-155897 fingerprint = shouldIncludeFirstPartyOnlyBetas (0.838)
+//@ chunk-bwbq4xvm.js:155825-155897 fingerprint (2.1.88 match: shouldIncludeFirstPartyOnlyBetas, 0.838)
 /**
  * 是否发第一方专属 beta：firstParty、anthropicAws/GoogleCloud、foundry。
  */
@@ -336,7 +336,7 @@ function shouldIncludeFirstPartyOnlyBetas() {
   let apiProvider = getAPIProvider();
   return apiProvider === "firstParty" || isClaudePlatformProvider(apiProvider) || apiProvider === "foundry";
 }
-//@ chunk-bwbq4xvm.js:155897-155965 fingerprint = shouldUseGlobalCacheScope (0.633)
+//@ chunk-bwbq4xvm.js:155897-155965 fingerprint (2.1.88 match: shouldUseGlobalCacheScope, 0.633)
 /**
  * CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS 或 HIPAA 组织。旧版名 shouldUseGlobalCacheScope 为错配。
  */
@@ -364,7 +364,7 @@ function unlessHipaa(beta) {
 function canSendFirstPartyBetas() {
   return shouldIncludeFirstPartyOnlyBetas() && !areExperimentalBetasDisabled();
 }
-//@ chunk-aepeg2w5.js:219037-219085 fingerprint = getModelBetas (1)
+//@ chunk-aepeg2w5.js:219037-219085 fingerprint (2.1.88 match: getModelBetas, 1)
 /**
  * Bedrock 返回模型 id 的跨区域推理配置变体列表，其他提供商返回 [id]。旧版名 getModelBetas 为错配。
  */
@@ -434,7 +434,7 @@ function rejectContextBetaForModel(model) {
     },
   );
 }
-//@ chunk-aepeg2w5.js:444296-444410 fingerprint = getToolSearchBetaHeader (0.788)
+//@ chunk-aepeg2w5.js:444296-444410 fingerprint (2.1.88 match: getToolSearchBetaHeader, 0.788)
 /**
  * 第三方云（bedrock/vertex/mantle）上该模型是否需要工具搜索 beta 头。
  */
@@ -457,7 +457,7 @@ function defaultMaxOutputTokens(model) {
     getModelMaxOutputTokens(model).default
   );
 }
-//@ chunk-aepeg2w5.js:475236-475473 fingerprint = modelSupportsStructuredOutputs (0.717)
+//@ chunk-aepeg2w5.js:475236-475473 fingerprint (2.1.88 match: modelSupportsStructuredOutputs, 0.717)
 /**
  * 3.x 及 opus-4-0/4-1/4-5/4-6、sonnet-4-0/4-5/4-6、haiku-4-5 这批老模型（第三方云上不接受新 beta）。旧版名错配。
  */
@@ -490,7 +490,7 @@ var MODEL_RELEASE_ORDER = [
   "claude-opus-4-7",
   "claude-opus-4-8",
 ];
-//@ chunk-aepeg2w5.js:476681-476786 fingerprint = modelSupportsAutoMode (0.377)
+//@ chunk-aepeg2w5.js:476681-476786 fingerprint (2.1.88 match: modelSupportsAutoMode, 0.377)
 /**
  * 模型是否早于参照模型（3.x 一律算更早）。旧版名 modelSupportsAutoMode 为错配。
  */
@@ -515,7 +515,7 @@ var SDK_ALLOWED_BETAS; // deferred: uses BETA_CLAUDE_CODE of its import cycle wh
 deferInit("chunk-aepeg2w5.js:480291", () => {
   SDK_ALLOWED_BETAS = new Set([BETA_LONG_CONTEXT]);
 });
-//@ chunk-aepeg2w5.js:480312-480442 fingerprint = partitionBetasByAllowlist (1)
+//@ chunk-aepeg2w5.js:480312-480442 fingerprint (2.1.88 match: partitionBetasByAllowlist, 1)
 /**
  * 把 SDK 传入的 beta 分成白名单内/外两组。
  */
@@ -532,7 +532,7 @@ function partitionBetasByAllowlist(betas) {
     disallowed,
   };
 }
-//@ chunk-aepeg2w5.js:480442-480804 facade-exports = filterAllowedSdkBetas (1)
+//@ chunk-aepeg2w5.js:480442-480804 facade-exports (2.1.88 match: filterAllowedSdkBetas, 1)
 /**
  * 过滤 SDK 自定义 betas：订阅用户直接忽略并警告；不在白名单的逐个警告。
  */
@@ -549,7 +549,7 @@ function filterAllowedSdkBetas(sdkBetas) {
     );
   return allowed.length > 0 ? allowed : undefined;
 }
-//@ chunk-aepeg2w5.js:480804-481034 facade-exports = modelSupportsISP (0.609)
+//@ chunk-aepeg2w5.js:480804-481034 facade-exports (2.1.88 match: modelSupportsISP, 0.609)
 /**
  * 模型是否支持交错思考（interleaved-thinking beta）：能力覆盖优先；foundry 一律支持；第一方系提供商除 3.x 外都支持；haiku-4-5 与 3.x 不支持。
  */
@@ -570,7 +570,7 @@ function modelSupportsISP(model) {
 function vertexModelSupportsWebSearch(model) {
   return !isOlderModelThan(model, "claude-opus-4-0");
 }
-//@ chunk-aepeg2w5.js:481082-481269 fingerprint = modelSupportsContextManagement (0.427)
+//@ chunk-aepeg2w5.js:481082-481269 fingerprint (2.1.88 match: modelSupportsContextManagement, 0.427)
 /**
  * 模型是否支持 context-management（API 侧 clear_thinking 等编辑）。
  */
@@ -689,7 +689,7 @@ function modelSupportsTemperature(model) {
 function modelHidesThinkingByDefault(model) {
   return !isOlderModelThan(getCanonicalName(model), "claude-opus-4-7");
 }
-//@ chunk-aepeg2w5.js:482494-482594 facade-exports = getToolSearchBetaHeader (0.788)
+//@ chunk-aepeg2w5.js:482494-482594 facade-exports (2.1.88 match: getToolSearchBetaHeader, 0.788)
 /**
  * 第三方云是否接受 thinking-binding-controls beta（vertex 接受；bedrock/mantle 上老模型不接受）。
  */
@@ -706,7 +706,7 @@ function thirdPartyAcceptsDangerousToolUseBeta(provider, resolvedModel) {
   if (provider !== "bedrock" && provider !== "mantle") return true;
   return !isLegacyStructuredOutputModel(getCanonicalName(resolvedModel));
 }
-//@ chunk-aepeg2w5.js:482669-482727 facade-exports = logEventTo1P (1)
+//@ chunk-aepeg2w5.js:482669-482727 facade-exports (2.1.88 match: logEventTo1P, 1)
 /**
  * 非第一方、非 anthropicAws/GoogleCloud 的提供商（auto mode 第三方选项）。
  */
@@ -721,7 +721,7 @@ function isAutoMode3POptIn() {
 function shouldAllowAfkModeBeta() {
   return canSendFirstPartyBetas() || isAutoMode3POptIn();
 }
-//@ chunk-aepeg2w5.js:482761-482808 placement = MITIGATION_EXEMPT_MODELS (1)
+//@ chunk-aepeg2w5.js:482761-482808 placement (2.1.88 match: MITIGATION_EXEMPT_MODELS, 1)
 /**
  * 模型是否排在 claude-opus-4-6 之前（modelSupportsAutoMode 的排序比较）；被快速模式支持判断使用。归属与旧版名均疑似错误。
  */
@@ -802,7 +802,7 @@ function shouldUseGlobalCacheScope() {
   let apiProvider = getAPIProvider();
   return apiProvider === "firstParty" || apiProvider === "anthropicAws";
 }
-//@ chunk-aepeg2w5.js:483829-484719 fingerprint = getAllModelBetas (0.528)
+//@ chunk-aepeg2w5.js:483829-484719 fingerprint (2.1.88 match: getAllModelBetas, 0.528)
 /**
  * 每轮附加 beta 条件表（getMergedBetas 用）：per-turn-control、timing、mid-conversation-tool-changes、inline-tools。
  */

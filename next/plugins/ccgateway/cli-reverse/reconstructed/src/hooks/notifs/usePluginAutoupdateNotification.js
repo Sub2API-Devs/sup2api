@@ -17,7 +17,7 @@ import { refreshActivePlugins } from "../../utils/plugins/refresh.js";
 import { PluginsStateStore } from "../../utils/plugins/pluginLoadStatus.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-18hwfzwa.js:1773348-1775970 fingerprint = usePluginAutoupdateNotification (0.325)
+//@ chunk-18hwfzwa.js:1773348-1775970 fingerprint (2.1.88 match: usePluginAutoupdateNotification, 0.325)
 var usePluginAutoupdateNotification = {
   id: "plugin-autoupdate",
   deps: (noticeState) => [noticeState.store, noticeState.storageV5, noticeState.credentials],

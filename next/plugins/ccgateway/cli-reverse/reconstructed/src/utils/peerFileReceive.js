@@ -43,7 +43,7 @@ var FILE_TRANSFERS = "file-transfers";
 function logPeerFileTransfer(message) {
   logForDebugging(`[peer-file-transfer] ${message}`);
 }
-//@ chunk-qcc88jq1.js:1101-1301 placement = sanitizeFileName (0.785)
+//@ chunk-qcc88jq1.js:1101-1301 placement (2.1.88 match: sanitizeFileName, 0.785)
 /**
  * 清洗附件文件名：取 basename、非法字符换 _、保留 ≤16 字符扩展名、总长 ≤200。
  */

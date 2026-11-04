@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:100853-100948 fingerprint = maybeRemoveApiKeyFromMacOSKeychainThrows (0.434)
+//@ chunk-e6aww6q8.js:100853-100948 fingerprint (2.1.88 match: maybeRemoveApiKeyFromMacOSKeychainThrows, 0.434)
 function maybeRemoveApiKeyFromMacOSKeychainThrows(latest, previous) {
   return (
     latest.platform === previous.platform &&

@@ -49,7 +49,7 @@ import { spellingIn, settingsEnvKeptForChildren } from "../subprocessEnv.js";
 import { isSecretEnvValue } from "../settings/policyHelper/helperEnv.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7wdbg1ct.js:11743-11818 placement = _temp9 (1)
+//@ chunk-7wdbg1ct.js:11743-11818 placement (2.1.88 match: _temp9, 1)
 /**
  * protectedSettingSourcesWithFlag：受保护设置源（含 flagSettings）。
  */

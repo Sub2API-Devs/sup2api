@@ -258,7 +258,7 @@ deferInit("chunk-42jte3st.js:2947", () => {
     }),
   );
 });
-//@ chunk-42jte3st.js:3072-3713 placement = yieldMissingToolResultBlocks (0.847)
+//@ chunk-42jte3st.js:3072-3713 placement (2.1.88 match: yieldMissingToolResultBlocks, 0.847)
 /**
  * 从历史中收集 Agent/Task 工具调用的 name → 子代理 agentId（解析 tool_use 输入与 toolUseResult），与已有映射合并；没有新增时返回 null。旧版名配错（不是 yieldMissingToolResultBlocks）。
  */

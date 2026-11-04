@@ -194,7 +194,7 @@ var sameRows = (messages, rows) =>
     let row = rows[index];
     return row !== undefined && message.handle === row.handle && pluginRow(message) === pluginRow(row);
   });
-//@ chunk-e6aww6q8.js:1540395-1540565 placement = getTokenCountFromUsage (0.899)
+//@ chunk-e6aww6q8.js:1540395-1540565 placement (2.1.88 match: getTokenCountFromUsage, 0.899)
 var getTokenCountFromUsage_2 = (usage) => ({
   ...usage,
   uuid: randomUUID(),
@@ -311,7 +311,7 @@ var SESSION_COMPACT_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRule
 deferInit("chunk-e6aww6q8.js:1541784", () => {
   SESSION_COMPACT_RULES = UI_ENV_SITE_RULES["session.compact"];
 });
-//@ chunk-e6aww6q8.js:1541814-1542130 placement = getTokenCountFromUsage (1)
+//@ chunk-e6aww6q8.js:1541814-1542130 placement (2.1.88 match: getTokenCountFromUsage, 1)
 function getTokenCountFromUsage_3(usage) {
   return usage === undefined ||
     (usage.input_tokens === 0 &&

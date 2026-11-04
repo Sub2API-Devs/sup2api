@@ -370,7 +370,7 @@ function useThinkingStatusTimer(mode) {
 function selectIsBriefOnly(state) {
   return state.isBriefOnly;
 }
-//@ chunk-3mec1atf.js:19297-19342 sole-consumer = _temp2 (1)
+//@ chunk-3mec1atf.js:19297-19342 sole-consumer (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId(s_0) {
   return s_0.viewingAgentTaskId;
 }
@@ -380,7 +380,7 @@ function selectPrefersReducedMotion(state) {
 }
 //@ chunk-3mec1atf.js:19396-19412 affinity
 var ELLIPSIS = "\u2026";
-//@ chunk-3mec1atf.js:19412-20766 callgraph-witnessed = SpinnerWithVerb (0.269)
+//@ chunk-3mec1atf.js:19412-20766 callgraph-witnessed (2.1.88 match: SpinnerWithVerb, 0.269)
 function SpinnerWithVerb(props) {
   let $ = useMemoCache(24);
   let {
@@ -497,7 +497,7 @@ function SpinnerWithVerb(props) {
   } else renderSpinner = $[23];
   return actionKeysNamespace.useRenderHook(renderInput, renderSpinner);
 }
-//@ chunk-3mec1atf.js:20766-23768 fingerprint = SpinnerWithVerbInner (0.639)
+//@ chunk-3mec1atf.js:20766-23768 fingerprint (2.1.88 match: SpinnerWithVerbInner, 0.639)
 function SpinnerWithVerbInner({
   mode,
   loadingStartTimeRef,
@@ -726,7 +726,7 @@ function computeSpinnerLabelBudget(columns, backgroundCount, extra) {
     rightText: backgroundText,
   };
 }
-//@ chunk-3mec1atf.js:23961-25052 fingerprint = BriefSpinner (0.824)
+//@ chunk-3mec1atf.js:23961-25052 fingerprint (2.1.88 match: BriefSpinner, 0.824)
 function BriefSpinner({ mode, overrideMessage }) {
   let settingsState = useSettingsState();
   let settings = useIsScreenReaderEnabled();
@@ -821,7 +821,7 @@ function BriefSpinner({ mode, overrideMessage }) {
     ],
   });
 }
-//@ chunk-3mec1atf.js:25052-25685 fingerprint = BriefIdleStatus (0.584)
+//@ chunk-3mec1atf.js:25052-25685 fingerprint (2.1.88 match: BriefIdleStatus, 0.584)
 function BriefIdleStatus() {
   let remoteConnectionStatus = useAppState((state) => state.remoteConnectionStatus);
   let connStatus = useAppState(
@@ -877,7 +877,7 @@ function BriefIdleStatus() {
     }),
   });
 }
-//@ chunk-3mec1atf.js:25685-26284 fingerprint = Spinner (0.535)
+//@ chunk-3mec1atf.js:25685-26284 fingerprint (2.1.88 match: Spinner, 0.535)
 function Spinner() {
   let $ = useMemoCache(9);
   let settings = useIsScreenReaderEnabled();
@@ -998,7 +998,7 @@ function applyStreamTokenEvent({ entries, responseLength, event }) {
     return Math.max(responseLength, entry.responseLengthBaseline + event.outputTokens * 4);
   return responseLength;
 }
-//@ chunk-3mec1atf.js:27537-27757 fingerprint = findNextPendingTask (1)
+//@ chunk-3mec1atf.js:27537-27757 fingerprint (2.1.88 match: findNextPendingTask, 1)
 function findNextPendingTask(tasks) {
   if (!tasks) return;
   let pendingTasks = tasks.filter((t) => t.status === "pending");

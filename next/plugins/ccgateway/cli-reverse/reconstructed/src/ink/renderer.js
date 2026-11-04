@@ -16,7 +16,7 @@ import { consumeAbsoluteNodeRemoved } from "./squash-text-nodes.js";
 import { renderNodeToOutputAlias } from "./render-to-screen-reader.js";
 import { markDirty } from "./dom.js";
 
-//@ chunk-bzr73sfg.js:320291-321779 fingerprint = createRenderer (0.898)
+//@ chunk-bzr73sfg.js:320291-321779 fingerprint (2.1.88 match: createRenderer, 0.898)
 /**
  * 创建帧渲染函数：每次调用用根节点的 yoga 尺寸建/复用 Output，从根 renderNodeToOutput（上一帧被污染或布局异常时不 blit），收尾处理行尾宽字素，返回 Frame：screen、viewport（备用屏时高度 +1）、cursor（主屏放在内容末尾，备用屏放在最后一行）、scrollHint、followScroll、layoutShifted、staleAbsolutePaint、scrollDrainPending。
  */

@@ -1,0 +1,582 @@
+{"file":"chunk-a91k35xs.js","key":"@4789","name":"questionOptionSchema","source":"semantic","confidence":0.9,"note":"label/description/preview"}
+{"file":"chunk-a91k35xs.js","key":"@5359","name":"questionOptionSchemaOptionalDescription","source":"semantic","confidence":0.75,"note":"host 允许选项描述可选时"}
+{"file":"chunk-a91k35xs.js","key":"@6704","name":"choiceQuestionSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-a91k35xs.js","key":"@6720","name":"choiceQuestionSchemaOptionalDescription","source":"semantic","confidence":0.65}
+{"file":"chunk-a91k35xs.js","key":"@6737","name":"QUESTION_KINDS","source":"semantic","confidence":0.85,"note":"choice/text/number"}
+{"file":"chunk-a91k35xs.js","key":"@6767","name":"extendedQuestionSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-a91k35xs.js","key":"@8133","name":"refinedExtendedQuestionSchema","source":"semantic","confidence":0.7,"note":"按 kind 校验字段组合"}
+{"file":"chunk-a91k35xs.js","key":"@9259","name":"questionAnnotationSchema","source":"semantic","confidence":0.8,"note":"preview/notes"}
+{"file":"chunk-a91k35xs.js","key":"@9467","name":"ANNOTATIONS_DESCRIPTION","source":"semantic","confidence":0.7}
+{"file":"chunk-a91k35xs.js","key":"@9581","name":"annotationsInputSchema","source":"semantic","confidence":0.7}
+{"file":"chunk-a91k35xs.js","key":"@9627","name":"annotationsOutputSchema","source":"semantic","confidence":0.7,"note":"带 unanswered"}
+{"file":"chunk-a91k35xs.js","key":"@10278","name":"UNIQUENESS_REFINE","source":"semantic","confidence":0.85,"note":"旧版同名：问题文本唯一、每题选项 label 唯一"}
+{"file":"chunk-a91k35xs.js","key":"@10572","name":"MAX_ARRAY_LENGTH","source":"semantic","confidence":0.7,"note":"4294967295"}
+{"file":"chunk-a91k35xs.js","key":"@10585","name":"MAX_ENTRIES_FOR_CLASSIFIER","source":"semantic","confidence":0.6,"note":"256"}
+{"file":"chunk-a91k35xs.js","key":"@10591","name":"answerValueSchema","source":"semantic","confidence":0.65,"note":"数组答案用 \", \" 连接成字符串"}
+{"file":"chunk-a91k35xs.js","key":"@10805","name":"answerFieldsSchema","source":"semantic","confidence":0.65,"note":"answers/annotations/metadata"}
+{"file":"chunk-a91k35xs.js","key":"@11575","name":"askUserQuestionInputSchema","source":"semantic","confidence":0.8}
+{"file":"chunk-a91k35xs.js","key":"@11593","name":"askUserQuestionInputSchemaOptionalDescription","source":"semantic","confidence":0.65}
+{"file":"chunk-a91k35xs.js","key":"@11612","name":"extendedAskUserQuestionInputSchema","source":"semantic","confidence":0.75,"note":"title + 扩展问题（host extendedQuestionsEnabled）"}
+{"file":"chunk-a91k35xs.js","key":"@12055","name":"askUserQuestionOutputSchema","source":"semantic","confidence":0.8}
+{"file":"chunk-a91k35xs.js","key":"@12584","name":"extendedAskUserQuestionOutputSchema","source":"semantic","confidence":0.7,"note":"followUp"}
+{"file":"chunk-a91k35xs.js","key":"@12806","name":"NOTES_ONLY_ANSWER","source":"semantic","confidence":0.75,"note":"\"(notes only)\""}
+{"file":"chunk-a91k35xs.js","key":"@12834","name":"formatAfkTimeoutMessage","source":"semantic","confidence":0.8}
+{"file":"chunk-a91k35xs.js","key":"@13061","name":"toShownCardInput","source":"semantic","confidence":0.7,"note":"shownCardInput：扩展模式下补 kind=choice"}
+{"file":"chunk-a91k35xs.js","key":"@13255","name":"AskUserQuestionTool","source":"semantic","confidence":0.95}
+{"file":"chunk-e6aww6q8.js","key":"@1729612","name":"toQuestionSummaryInput","source":"semantic","confidence":0.5,"note":"旧版名 UNIQUENESS_REFINE 配错：清洗输入，只保留第一题的问题文本与最多 4 个选项 label"}
+{"file":"chunk-e6aww6q8.js","key":"@1729846","name":"takeFirstFourObjects","source":"semantic","confidence":0.65}
+{"file":"chunk-4121qate.js","key":"@9205","name":"parseAskUserQuestionRenderRequest","source":"semantic","confidence":0.6,"note":"ui.render 事件且 component 为 AskUserQuestion 时取 requestId/surface"}
+{"file":"chunk-aepeg2w5.js","key":"@18155","name":"getLazyHtml","source":"semantic","confidence":0.4,"note":"旧版名 PREVIEW_FEATURE_PROMPT 配错：取节点缓存的 html（innerHTML 访问器）"}
+{"file":"chunk-aepeg2w5.js","key":"@18072","name":"getInnerHtml","source":"semantic","confidence":0.5}
+{"file":"chunk-aepeg2w5.js","key":"@18107","name":"setInnerHtml","source":"semantic","confidence":0.5}
+{"file":"chunk-aepeg2w5.js","key":"@408090","name":"formatModelRestrictedNotice","source":"semantic","confidence":0.65,"note":"旧版名 ASK_USER_QUESTION_TOOL_PROMPT 配错：组织限制模型时的提示 \"Model X is restricted…\""}
+{"file":"chunk-ft22tw4r.js","key":"@616","name":"ASK_USER_QUESTION_DESCRIPTION","source":"semantic","confidence":0.85}
+{"file":"chunk-ft22tw4r.js","key":"@766","name":"PREVIEW_FEATURE_PROMPTS","source":"semantic","confidence":0.8,"note":"markdown/html 两种 preview 说明"}
+{"file":"chunk-ft22tw4r.js","key":"@2083","name":"ASK_USER_QUESTION_BASE_PROMPT","source":"semantic","confidence":0.75}
+{"file":"chunk-ft22tw4r.js","key":"@2549","name":"ASK_USER_QUESTION_PROMPT_WITH_PLAN_NOTE","source":"semantic","confidence":0.7}
+{"file":"chunk-ft22tw4r.js","key":"@2935","name":"EXTENDED_QUESTIONS_PROMPT","source":"semantic","confidence":0.75}
+{"file":"chunk-ft22tw4r.js","key":"@3900","name":"ASK_ONLY_WHEN_NEEDED_PROMPT","source":"semantic","confidence":0.6}
+{"file":"chunk-ft22tw4r.js","key":"@4167","name":"STANDALONE_QUESTION_PROMPT","source":"semantic","confidence":0.6}
+{"file":"chunk-kxyd0g16.js","key":"@29476","name":"preUploadedFileSchema","source":"semantic","confidence":0.8,"note":"{file_uuid,file_name,size,is_image,media_type}"}
+{"file":"chunk-kxyd0g16.js","key":"@29705","name":"MESSAGE_FIELD_DESCRIPTION","source":"semantic","confidence":0.7}
+{"file":"chunk-kxyd0g16.js","key":"@29766","name":"briefInputSchemaWithAttachments","source":"semantic","confidence":0.8,"note":"message/attachments/status"}
+{"file":"chunk-kxyd0g16.js","key":"@30430","name":"briefInputSchemaMessageOnly","source":"semantic","confidence":0.8}
+{"file":"chunk-kxyd0g16.js","key":"@30479","name":"getAttachmentsIfEnabled","source":"semantic","confidence":0.7}
+{"file":"chunk-kxyd0g16.js","key":"@30541","name":"briefOutputSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-kxyd0g16.js","key":"@31163","name":"BriefTool","source":"semantic","confidence":0.9,"note":"name \"SendUserMessage\"，别名 Brief"}
+{"file":"chunk-tvzx5sxd.js","key":"@385","name":"BRIEF_GATE_REFRESH_MS","source":"semantic","confidence":0.6}
+{"file":"chunk-ah34pb7m.js","key":"@23801","name":"renderAttachmentRow","source":"semantic","confidence":0.75}
+{"file":"chunk-qq39x404.js","key":"@1115","name":"getAttachmentUploadLane","source":"semantic","confidence":0.7,"note":"旧版名 resolveAttachments 不确切：决定上传通道 none/repl/env_brief_upload/env_ccr/env_byoc/sdk_hosted"}
+{"file":"chunk-qq39x404.js","key":"@1473","name":"isRenderedLocallyLane","source":"semantic","confidence":0.6,"note":"sdk_hosted 且桌面本地渲染"}
+{"file":"chunk-qq39x404.js","key":"@1514","name":"ATTACHMENT_MIME_BY_EXT","source":"semantic","confidence":0.8}
+{"file":"chunk-qq39x404.js","key":"@2512","name":"getAttachmentMimeType","source":"semantic","confidence":0.8}
+{"file":"chunk-qq39x404.js","key":"@2557","name":"isMislabeledImageCopy","source":"semantic","confidence":0.55,"note":"预览副本的 media_type 与扩展名不符"}
+{"file":"chunk-qq39x404.js","key":"@2710","name":"isPreUploadedAttachment","source":"semantic","confidence":0.75}
+{"file":"chunk-qq39x404.js","key":"@2757","name":"suggestAttachmentPath","source":"semantic","confidence":0.6,"note":"ENOENT 时猜测正确路径"}
+{"file":"chunk-qq39x404.js","key":"@2966","name":"checkAttachmentPathShape","source":"semantic","confidence":0.65,"note":"拒绝 URL、UNC、会触发网络挂载的路径"}
+{"file":"chunk-qq39x404.js","key":"@3666","name":"CANNOT_ATTACH_PATH_MESSAGE","source":"semantic","confidence":0.7,"note":"diskless 会话不能附加文件路径"}
+{"file":"chunk-qq39x404.js","key":"@3761","name":"validateAttachments","source":"semantic","confidence":0.75}
+{"file":"chunk-qq39x404.js","key":"@3806","name":"validateAttachmentsForCall","source":"semantic","confidence":0.65,"note":"restricted 或禁止工作目录外读取时同时记录被判定的路径与文件身份"}
+{"file":"chunk-f5te1san.js","key":"@228","name":"ENDED_TURN_WITHOUT_BRIEF_MESSAGE","source":"semantic","confidence":0.7}
+{"file":"chunk-f5te1san.js","key":"@286","name":"BRIEF_TOOL_DESCRIPTION","source":"semantic","confidence":0.85}
+{"file":"chunk-f5te1san.js","key":"@319","name":"BRIEF_TOOL_PROMPT_WITH_ATTACHMENTS","source":"semantic","confidence":0.75}
+{"file":"chunk-f5te1san.js","key":"@1269","name":"BRIEF_TOOL_PROMPT","source":"semantic","confidence":0.75}
+{"file":"chunk-f5te1san.js","key":"@1626","name":"BRIEF_PROACTIVE_SECTION","source":"semantic","confidence":0.75,"note":"旧版同名（匹配结果名）"}
+{"file":"chunk-7kpfrhzn.js","key":"@6752","name":"MIB","source":"semantic","confidence":0.85}
+{"file":"chunk-7kpfrhzn.js","key":"@6762","name":"MAX_UPLOAD_BYTES","source":"semantic","confidence":0.6,"note":"Lue"}
+{"file":"chunk-7kpfrhzn.js","key":"@6768","name":"MAX_STREAMED_UPLOAD_BYTES","source":"semantic","confidence":0.55,"note":"Lun"}
+{"file":"chunk-7kpfrhzn.js","key":"@6775","name":"BUFFERED_UPLOAD_MAX_BYTES","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@6780","name":"UPLOAD_LIMIT_MEMORY_MS","source":"semantic","confidence":0.6,"note":"服务器告知的上限记 10 分钟"}
+{"file":"chunk-7kpfrhzn.js","key":"@6790","name":"LOST_ANSWER_BYTES_THRESHOLD","source":"semantic","confidence":0.45}
+{"file":"chunk-7kpfrhzn.js","key":"@6808","name":"formatMiB","source":"semantic","confidence":0.8}
+{"file":"chunk-7kpfrhzn.js","key":"@6855","name":"formatUploadLimitError","source":"semantic","confidence":0.75}
+{"file":"chunk-7kpfrhzn.js","key":"@6974","name":"UPLOAD_TIMEOUT_MS","source":"semantic","confidence":0.75,"note":"35 秒"}
+{"file":"chunk-7kpfrhzn.js","key":"@6983","name":"RESENDABLE_FAILURE_CODES","source":"semantic","confidence":0.65}
+{"file":"chunk-7kpfrhzn.js","key":"@7033","name":"TEMPORARY_HTTP_STATUSES","source":"semantic","confidence":0.65}
+{"file":"chunk-7kpfrhzn.js","key":"@7059","name":"PERMANENT_NETWORK_ERROR_CODES","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7110","name":"MAX_UPLOAD_POSTS","source":"semantic","confidence":0.65,"note":"3"}
+{"file":"chunk-7kpfrhzn.js","key":"@7115","name":"RESEND_MIN_MAX_BYTES","source":"semantic","confidence":0.5,"note":"30 MiB"}
+{"file":"chunk-7kpfrhzn.js","key":"@7123","name":"RESEND_BACKOFF_FLOOR_MS","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7130","name":"RESEND_BACKOFF_BASE_MS","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7138","name":"RESEND_DEADLINE_MS","source":"semantic","confidence":0.5}
+{"file":"chunk-7kpfrhzn.js","key":"@7147","name":"RESEND_DEADLINE_LARGE_MS","source":"semantic","confidence":0.5}
+{"file":"chunk-7kpfrhzn.js","key":"@7157","name":"MAX_CONCURRENT_RESENDS","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7162","name":"RESEND_COOLDOWN_MS","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7171","name":"IMAGE_MIME_BY_EXT","source":"semantic","confidence":0.75}
+{"file":"chunk-7kpfrhzn.js","key":"@7360","name":"PREVIEW_COPY_FORMAT_BY_EXT","source":"semantic","confidence":0.65,"note":"bmp/tif→png，heic/heif/avif→jpeg"}
+{"file":"chunk-7kpfrhzn.js","key":"@7450","name":"PREVIEW_JPEG_QUALITY","source":"semantic","confidence":0.75}
+{"file":"chunk-7kpfrhzn.js","key":"@7456","name":"RETRYABLE_COPY_FAILURES","source":"semantic","confidence":0.4}
+{"file":"chunk-7kpfrhzn.js","key":"@7517","name":"hasAuxiliaryAlphaImage","source":"semantic","confidence":0.6,"note":"HEIF/AVIF 的辅助 alpha 图"}
+{"file":"chunk-7kpfrhzn.js","key":"@7680","name":"isTruncatedBmp","source":"semantic","confidence":0.6}
+{"file":"chunk-7kpfrhzn.js","key":"@8148","name":"readIsoBmffBoxes","source":"semantic","confidence":0.65,"note":"解析 ISO BMFF（HEIF/MP4）盒子"}
+{"file":"chunk-7kpfrhzn.js","key":"@8454","name":"readHeifPrimaryItemTransform","source":"semantic","confidence":0.6,"note":"irot/imir：旋转与镜像"}
+{"file":"chunk-7kpfrhzn.js","key":"@9357","name":"isMultiPageTiff","source":"semantic","confidence":0.65}
+{"file":"chunk-7kpfrhzn.js","key":"@9678","name":"makePreviewCopy","source":"semantic","confidence":0.65,"note":"非常见格式图片转 png/jpeg 预览副本（sharp），各种不可处理情况返回 undefined"}
+{"file":"chunk-7kpfrhzn.js","key":"@11228","name":"logUploadDebug","source":"semantic","confidence":0.6,"note":"旧版名 debug 保留语义更清楚"}
+{"file":"chunk-7kpfrhzn.js","key":"@11267","name":"checkUploadAllowed","source":"semantic","confidence":0.75,"note":"非 firstParty、仅必要流量、allow_send_file 策略禁止时拒绝"}
+{"file":"chunk-7kpfrhzn.js","key":"@11969","name":"getUploadAuth","source":"semantic","confidence":0.65}
+{"file":"chunk-7kpfrhzn.js","key":"@12066","name":"getUploadUrl","source":"semantic","confidence":0.75,"note":"默认 {BASE}/api/oauth/file_upload"}
+{"file":"chunk-7kpfrhzn.js","key":"@12127","name":"isStoredLoginRefused","source":"semantic","confidence":0.5}
+{"file":"chunk-7kpfrhzn.js","key":"@12185","name":"httpStatusFailureCode","source":"semantic","confidence":0.75}
+{"file":"chunk-7kpfrhzn.js","key":"@12315","name":"uploadSuccessSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-7kpfrhzn.js","key":"@12370","name":"uploadTooLargeSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-7kpfrhzn.js","key":"@12455","name":"uploadBufferForUuid","source":"semantic","confidence":0.55,"note":"旧版名 uploadResponseSchema 配错：上传 buffer 返回 file_uuid 或错误"}
+{"file":"chunk-7kpfrhzn.js","key":"@12540","name":"logUploadFailure","source":"semantic","confidence":0.65}
+{"file":"chunk-7kpfrhzn.js","key":"@12634","name":"handleUploadResponse","source":"semantic","confidence":0.75,"note":"201 解析 file_uuid；413 记录服务器上限；其余转错误并分类是否可重发"}
+{"file":"chunk-7kpfrhzn.js","key":"@13703","name":"buildUploadHeaders","source":"semantic","confidence":0.8}
+{"file":"chunk-7kpfrhzn.js","key":"@13913","name":"uploadBuffer","source":"semantic","confidence":0.75,"note":"multipart POST（35 秒超时，不跟随重定向）"}
+{"file":"chunk-7kpfrhzn.js","key":"@14942","name":"countUploadPost","source":"semantic","confidence":0.6}
+{"file":"chunk-7kpfrhzn.js","key":"@15003","name":"getResendBlocker","source":"semantic","confidence":0.6,"note":"超期/冷却/并发重发过多"}
+{"file":"chunk-7kpfrhzn.js","key":"@15246","name":"waitForResendSlot","source":"semantic","confidence":0.6}
+{"file":"chunk-7kpfrhzn.js","key":"@15510","name":"uploadWithResends","source":"semantic","confidence":0.65}
+{"file":"chunk-7kpfrhzn.js","key":"@16431","name":"uploadToProjectFolder","source":"semantic","confidence":0.6,"note":"经 door 通道把文件写进项目文件夹，重名时加时间戳再试"}
+{"file":"chunk-7kpfrhzn.js","key":"@19656","name":"timestampedFileName","source":"semantic","confidence":0.7}
+{"file":"chunk-7kpfrhzn.js","key":"@19804","name":"IMAGE_SNIFF_BYTES","source":"semantic","confidence":0.55,"note":"512 KiB"}
+{"file":"chunk-7kpfrhzn.js","key":"@19829","name":"readAndScaleImage","source":"semantic","confidence":0.6}
+{"file":"chunk-7kpfrhzn.js","key":"@20115","name":"uploadScaledImage","source":"semantic","confidence":0.65}
+{"file":"chunk-7kpfrhzn.js","key":"@20560","name":"uploadBriefAttachment","source":"semantic","confidence":0.85,"note":"旧版同名"}
+{"file":"chunk-7kpfrhzn.js","key":"@23144","name":"answerMayBeLost","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@23245","name":"getKnownServerUploadLimit","source":"semantic","confidence":0.65}
+{"file":"chunk-7kpfrhzn.js","key":"@23349","name":"uploadBufferedAttachment","source":"semantic","confidence":0.55,"note":"先尝试预览副本，否则上传原文件"}
+{"file":"chunk-7kpfrhzn.js","key":"@24356","name":"uploadStreamWithAuth","source":"semantic","confidence":0.6}
+{"file":"chunk-7kpfrhzn.js","key":"@24587","name":"uploadStream","source":"semantic","confidence":0.6,"note":"流式 multipart POST"}
+{"file":"chunk-mdb2vxrz.js","key":"@4866","name":"getUrlHost","source":"semantic","confidence":0.75}
+{"file":"chunk-mdb2vxrz.js","key":"@4921","name":"isFirstPartyBaseUrl","source":"semantic","confidence":0.55,"note":"旧版名 getBridgeBaseUrl 配错：未设置或与官方 BASE_API_URL 同 host 时为 true"}
+{"file":"chunk-wn385gmf.js","key":"@18640","name":"FILE_MIME_BY_EXT","source":"semantic","confidence":0.65}
+{"file":"chunk-ja1jtv44.js","key":"@1540","name":"getApiBaseUrl","source":"semantic","confidence":0.55,"note":"ANTHROPIC_BASE_URL（去尾 /）或 OAuth BASE_API_URL"}
+{"file":"chunk-qcqdqsn4.js","key":"@4218","name":"GIT_CONFIG_TIMEOUT_MS","source":"semantic","confidence":0.7}
+{"file":"chunk-qcqdqsn4.js","key":"@4233","name":"readGitConfigPath","source":"semantic","confidence":0.7,"note":"git config <scope> --includes --type=path --get <key>，失败为空串"}
+{"file":"chunk-qcqdqsn4.js","key":"@4401","name":"readSystemAndGlobalGitConfigPath","source":"semantic","confidence":0.65,"note":"返回 {system, systemOrigin, global}"}
+{"file":"chunk-qcqdqsn4.js","key":"@4604","name":"getGitConfigScopesWithValue","source":"semantic","confidence":0.6,"note":"旧版名 getValue 不确切：返回设置了该键的作用域列表 [\"system\",\"global\"]"}
+{"file":"chunk-qcqdqsn4.js","key":"@4727","name":"readGitConfigPathWithOrigin","source":"semantic","confidence":0.65,"note":"--show-origin -z 解析值与来源文件"}
+{"file":"chunk-wyqg6m3h.js","key":"@64134","name":"applyDiffPanelPreference","source":"semantic","confidence":0.45,"note":"旧版名 outputSchema 配错：读/迁移内置 diff 面板偏好，为 true 时启用 diff 插件面板"}
+{"file":"chunk-0wdgqhcf.js","key":"@53237","name":"getNativeHostManifestPaths","source":"semantic","confidence":0.45,"note":"旧版名 renderToolResultMessage 配错：拼 native host manifest 路径列表"}
+{"file":"chunk-kyk75gag.js","key":"@5321","name":"MAX_CRON_JOBS","source":"semantic","confidence":0.85,"note":"50"}
+{"file":"chunk-kyk75gag.js","key":"@5326","name":"cronCreateInputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-kyk75gag.js","key":"@5897","name":"cronCreateOutputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-kyk75gag.js","key":"@6013","name":"CronCreateTool","source":"semantic","confidence":0.95}
+{"file":"chunk-e1hwptaj.js","key":"@4666","name":"cronDeleteInputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-e1hwptaj.js","key":"@4731","name":"cronDeleteOutputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-e1hwptaj.js","key":"@4752","name":"CronDeleteTool","source":"semantic","confidence":0.95}
+{"file":"chunk-8985aafb.js","key":"@4789","name":"cronListInputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-8985aafb.js","key":"@4805","name":"cronListOutputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-8985aafb.js","key":"@4965","name":"CronListTool","source":"semantic","confidence":0.95}
+{"file":"chunk-gzp2tk59.js","key":"@385","name":"NEXT_FIRE_AT_DESCRIPTION","source":"semantic","confidence":0.75}
+{"file":"chunk-gzp2tk59.js","key":"@467","name":"CRON_GATE_REFRESH_MS","source":"semantic","confidence":0.6,"note":"GrowthBook 门控缓存 5 分钟"}
+{"file":"chunk-gzp2tk59.js","key":"@476","name":"RECURRING_MAX_AGE_DAYS","source":"semantic","confidence":0.85}
+{"file":"chunk-gzp2tk59.js","key":"@1027","name":"getDurableParamDescription","source":"semantic","confidence":0.8}
+{"file":"chunk-93kwxas0.js","key":"@163172","name":"getCronListJobs","source":"semantic","confidence":0.5,"note":"旧版名 renderListResultMessage 不确切：只返回 output.jobs ?? []"}
+{"file":"chunk-79gnqwq0.js","key":"@389","name":"MCP_TOOL_PROMPT_PLACEHOLDER","source":"semantic","confidence":0.7,"note":"模板工具的空 prompt，真实值由 services/mcp/client 覆盖"}
+{"file":"chunk-79gnqwq0.js","key":"@394","name":"MCP_TOOL_DESCRIPTION_PLACEHOLDER","source":"semantic","confidence":0.7}
+{"file":"chunk-79gnqwq0.js","key":"@436","name":"mcpInputSchema","source":"semantic","confidence":0.85,"note":"passthrough 空对象"}
+{"file":"chunk-79gnqwq0.js","key":"@465","name":"mcpOutputSchema","source":"semantic","confidence":0.85,"note":"string | 内容块数组 | 结构化"}
+{"file":"chunk-79gnqwq0.js","key":"@569","name":"blankBase64DocumentData","source":"semantic","confidence":0.75,"note":"stripForCreation：把 base64 document 块的 data 清空"}
+{"file":"chunk-79gnqwq0.js","key":"@687","name":"dropBlankDocuments","source":"semantic","confidence":0.75,"note":"回传模型前去掉被清空的 document 块"}
+{"file":"chunk-79gnqwq0.js","key":"@759","name":"isBlankBase64Document","source":"semantic","confidence":0.8}
+{"file":"chunk-79gnqwq0.js","key":"@848","name":"hasBase64DocumentData","source":"semantic","confidence":0.8}
+{"file":"chunk-ncz9bgnh.js","key":"@2521","name":"passthroughTypedObjectSchema","source":"semantic","confidence":0.5,"note":"旧版名 inputSchema 配错：{type}.passthrough()，被 chromeNativeHost 使用"}
+{"file":"chunk-hny2rpzz.js","key":"@831","name":"LARGE_MCP_RESPONSE_TOKENS","source":"semantic","confidence":0.8,"note":"10000，超过时提示大响应"}
+{"file":"chunk-hny2rpzz.js","key":"@1482","name":"renderMcpToolResultMessage","source":"semantic","confidence":0.75,"note":"非 verbose 时先尝试 Slack 发送结果紧凑显示"}
+{"file":"chunk-hny2rpzz.js","key":"@2925","name":"SLACK_MESSAGE_LINK_REGEX","source":"semantic","confidence":0.85}
+{"file":"chunk-e6aww6q8.js","key":"@4678118","name":"C1_CONTROL_CHARS_REGEX","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@4678137","name":"escapeC1ControlChars","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@4678219","name":"CONTROL_CHARS_REGEX","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@4678256","name":"stripControlChars","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@4236082","name":"getMergedOperatorDeclaredExtras","source":"semantic","confidence":0.5,"note":"旧版名 tryUnwrapTextPayload 配错：合并各来源 extras 并按输入做 memo（operatorDeclaredMemo），与 MCP UI 无关"}
+{"file":"chunk-q8cqcff6.js","key":"@32811","name":"CONNECTION_STRING_NAME_REGEX","source":"semantic","confidence":0.75}
+{"file":"chunk-q8cqcff6.js","key":"@32868","name":"isConnectionStringName","source":"semantic","confidence":0.75}
+{"file":"chunk-q8cqcff6.js","key":"@32913","name":"MIXED_CASE_AUTH_WORDS","source":"semantic","confidence":0.6,"note":"[\"OAuth\",\"NextAuth\"]，拆驼峰前先归一"}
+{"file":"chunk-q8cqcff6.js","key":"@32946","name":"camelToSnakeEnvName","source":"semantic","confidence":0.6,"note":"旧版名 normalize（MCP 工具名归一）配错：先归一 OAuth/NextAuth，再拆驼峰为下划线"}
+{"file":"chunk-q8cqcff6.js","key":"@33107","name":"CONNECTION_STRING_ENV_GLOBS","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@33292","name":"SECRET_NAME_WORDS","source":"semantic","confidence":0.7}
+{"file":"chunk-q8cqcff6.js","key":"@33580","name":"SECRET_NAME_SUFFIX_WORDS","source":"semantic","confidence":0.6,"note":"只在 _ 后出现时算（PWD/PASS/JWT）"}
+{"file":"chunk-q8cqcff6.js","key":"@33604","name":"SECRET_NAME_ANYWHERE_WORDS","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@33659","name":"SECRET_NAME_PLURAL_WORDS","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@33703","name":"SECRET_ENV_NAME_REGEX","source":"semantic","confidence":0.75}
+{"file":"chunk-q8cqcff6.js","key":"@33817","name":"EXTRA_SECRET_ENV_GLOBS","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@33872","name":"GIT_CONFIG_KEY_ENV_REGEX","source":"semantic","confidence":0.7}
+{"file":"chunk-q8cqcff6.js","key":"@33922","name":"isGitConfigEnvName","source":"semantic","confidence":0.8}
+{"file":"chunk-q8cqcff6.js","key":"@34008","name":"isGitConfigOrProxyEnvName","source":"semantic","confidence":0.75}
+{"file":"chunk-q8cqcff6.js","key":"@34044","name":"PROXY_ENV_NAME_REGEX","source":"semantic","confidence":0.8}
+{"file":"chunk-q8cqcff6.js","key":"@34258","name":"isSecretEnvValue","source":"semantic","confidence":0.6,"note":"JVM 类选项变量看 gIn 是否删改，其他按值是否像密钥（zO）"}
+{"file":"chunk-q8cqcff6.js","key":"@34321","name":"redactJvmOptionsEnvValue","source":"semantic","confidence":0.65,"note":"GOFLAGS 与 JAVA_TOOL_OPTIONS/MAVEN_OPTS 等：逐词标记含密钥的 -D/口令参数并删去，无法安全处理时返回空串"}
+{"file":"chunk-q8cqcff6.js","key":"@35467","name":"SAFE_ARG_CHARS_REGEX","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@35500","name":"SAFE_ARG_CHARS_WITH_PIPE_REGEX","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@35534","name":"AUTH_VALUE_PREFIX_REGEX","source":"semantic","confidence":0.65,"note":"Bearer/Basic/token/authorization: 之后的下一个词是凭证"}
+{"file":"chunk-q8cqcff6.js","key":"@35651","name":"isValueTakingFlag","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@35717","name":"BUILD_TOOL_VALUE_FLAGS_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@35966","name":"ENCRYPT_PASSWORD_FLAG_REGEX","source":"semantic","confidence":0.7}
+{"file":"chunk-q8cqcff6.js","key":"@36031","name":"ENCRYPT_PASSWORD_INLINE_REGEX","source":"semantic","confidence":0.7}
+{"file":"chunk-q8cqcff6.js","key":"@36107","name":"isJvmOptionToken","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@36363","name":"JVM_X_OPTION_REGEX","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@37045","name":"tokensContainSecret","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@37152","name":"isSecretJvmToken","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@37386","name":"expandNestedDefineWords","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@37429","name":"parseNestedDefineValue","source":"semantic","confidence":0.55,"note":"-Dx= 后面又是一串选项时拆开"}
+{"file":"chunk-q8cqcff6.js","key":"@37560","name":"isUnparseableNestedDefine","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@37645","name":"isSecretArgToken","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@38018","name":"looksLikePathValue","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@38056","name":"JVM_NON_SECRET_OPTION_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@38374","name":"CLASSPATH_FLAG_REGEX","source":"semantic","confidence":0.65}
+{"file":"chunk-q8cqcff6.js","key":"@38556","name":"PATH_SYSTEM_PROPERTY_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@38950","name":"JVM_OPTIONS_ENV_NAMES","source":"semantic","confidence":0.7}
+{"file":"chunk-q8cqcff6.js","key":"@39250","name":"normalizeEnvNameForMatch","source":"semantic","confidence":0.7,"note":"大写、去 INPUT_ 前缀、- 换 _"}
+{"file":"chunk-q8cqcff6.js","key":"@39324","name":"JAVA_OPTIONS_ENV_NAMES","source":"semantic","confidence":0.65}
+{"file":"chunk-q8cqcff6.js","key":"@39434","name":"JVM_OPTIONS_ENV_NAME_SET","source":"semantic","confidence":0.65}
+{"file":"chunk-q8cqcff6.js","key":"@39450","name":"DEFAULT_CREDENTIAL_DEFINE_REGEX","source":"semantic","confidence":0.55,"note":"代理用户/口令、trustStorePassword=changeit 等视为残留可保留"}
+{"file":"chunk-q8cqcff6.js","key":"@39628","name":"splitQuotedWords","source":"semantic","confidence":0.7,"note":"按空白切词、处理引号，引号不闭合返回 null"}
+{"file":"chunk-q8cqcff6.js","key":"@39917","name":"camelToSnake","source":"semantic","confidence":0.65}
+{"file":"chunk-q8cqcff6.js","key":"@40014","name":"SETTINGS_FILE_PROPERTY_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@40290","name":"parseMavenSettingsFlag","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@40540","name":"parseSbtDirFlag","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@40645","name":"stripJavaLauncherPrefix","source":"semantic","confidence":0.6,"note":"去掉 -J 前缀"}
+{"file":"chunk-q8cqcff6.js","key":"@40693","name":"normalizeDefineFlag","source":"semantic","confidence":0.65,"note":"--define= → -D"}
+{"file":"chunk-q8cqcff6.js","key":"@40744","name":"normalizeDefineArgs","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@40906","name":"isSecretPropertyAssignment","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@40981","name":"isSecretPropertyName","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@41155","name":"SECRET_ID_SUFFIX_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@41198","name":"SONAR_SECRET_PROPERTIES","source":"semantic","confidence":0.7}
+{"file":"chunk-q8cqcff6.js","key":"@41257","name":"SONAR_KEY_NAME_REGEX","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@41322","name":"SONAR_NON_SECRET_PROPERTIES","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@41369","name":"isScalarNonSecretValue","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@41500","name":"isCredentialPropertyName","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@41943","name":"hasSecretQualifierSegment","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@42161","name":"SECRET_SEGMENT_REGEX","source":"semantic","confidence":0.6}
+{"file":"chunk-q8cqcff6.js","key":"@42244","name":"NON_SECRET_TAIL_SEGMENT_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@42828","name":"isSecretEnvName","source":"semantic","confidence":0.7,"note":"被 services/mcp/config 等使用"}
+{"file":"chunk-q8cqcff6.js","key":"@42949","name":"AUTH0_PREFIX_REGEX","source":"semantic","confidence":0.65}
+{"file":"chunk-q8cqcff6.js","key":"@42963","name":"AUTH0_PREFIX_GLOB","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@42988","name":"BUNDLE_NON_SECRET_WORDS","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@43076","name":"BUNDLE_HOST_PATTERN","source":"semantic","confidence":0.5}
+{"file":"chunk-q8cqcff6.js","key":"@43133","name":"BUNDLE_CREDENTIAL_ENV_REGEX","source":"semantic","confidence":0.6,"note":"Bundler BUNDLE_<HOST>__ 凭证变量"}
+{"file":"chunk-q8cqcff6.js","key":"@43216","name":"BUNDLE_CREDENTIAL_GLOB","source":"semantic","confidence":0.5}
+{"file":"chunk-q8cqcff6.js","key":"@43302","name":"BUNDLE_NON_SECRET_GLOBS","source":"semantic","confidence":0.5}
+{"file":"chunk-q8cqcff6.js","key":"@43433","name":"CLAUDE_CODE_NON_SECRET_ENV_NAMES","source":"semantic","confidence":0.7}
+{"file":"chunk-q8cqcff6.js","key":"@43762","name":"CLAUDE_CODE_SKIP_AUTH_ENV_REGEX","source":"semantic","confidence":0.7}
+{"file":"chunk-q8cqcff6.js","key":"@43811","name":"isNonSecretClaudeCodeEnvName","source":"semantic","confidence":0.7}
+{"file":"chunk-s61vbvea.js","key":"@84113","name":"MEMORY_FILE_TOOL_REGEX","source":"semantic","confidence":0.5,"note":"旧版名 SEARCH_TOOLS 配错：memory read/write/str_replace/append 工具名"}
+{"file":"chunk-s61vbvea.js","key":"@84170","name":"MEMORY_VERSION_LINE_REGEX","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@84211","name":"MEMORY_FILE_HEADER_REGEX","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@84233","name":"MEMORY_SEARCH_TOOL_NAME","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@84251","name":"MEMORY_DOCUMENT_PREAMBLE_REGEX","source":"semantic","confidence":0.5}
+{"file":"chunk-v0yfsee9.js","key":"@89743","name":"isSearchOrReadPowerShellCommand","source":"semantic","confidence":0.75,"note":"旧版名 classifyMcpToolForCollapse 配错：按 ; | 拆 PowerShell 命令，查 Gs/Ks/Xs（select-string/get-childitem…）判断搜索/读取"}
+{"file":"chunk-9ycd12hk.js","key":"@1118","name":"listMcpResourcesInputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-9ycd12hk.js","key":"@1210","name":"listMcpResourcesOutputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-9ycd12hk.js","key":"@1484","name":"sanitizeResourceListForCreation","source":"semantic","confidence":0.65,"note":"有 MCP 入站通道时 stripForCreation：只保留字符串字段"}
+{"file":"chunk-9ycd12hk.js","key":"@1787","name":"stringOr","source":"semantic","confidence":0.7}
+{"file":"chunk-9ycd12hk.js","key":"@8601","name":"requireMcpModules","source":"semantic","confidence":0.6}
+{"file":"chunk-9ycd12hk.js","key":"@8652","name":"getMcpErrorClassification","source":"semantic","confidence":0.65}
+{"file":"chunk-9ycd12hk.js","key":"@8710","name":"getMcpClientModule","source":"semantic","confidence":0.7}
+{"file":"chunk-9ycd12hk.js","key":"@8752","name":"getMcpDirectoryReadModule","source":"semantic","confidence":0.7}
+{"file":"chunk-9ycd12hk.js","key":"@8796","name":"readMcpResourceInputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-9ycd12hk.js","key":"@8898","name":"readMcpResourceOutputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-9ycd12hk.js","key":"@9262","name":"ReadMcpResourceTool","source":"semantic","confidence":0.95}
+{"file":"chunk-sfy7bm1n.js","key":"@4494","name":"LIST_MCP_RESOURCES_DESCRIPTION","source":"semantic","confidence":0.85}
+{"file":"chunk-sfy7bm1n.js","key":"@4802","name":"LIST_MCP_RESOURCES_PROMPT","source":"semantic","confidence":0.85}
+{"file":"chunk-sfy7bm1n.js","key":"@6018","name":"READ_MCP_RESOURCE_DESCRIPTION","source":"semantic","confidence":0.85}
+{"file":"chunk-sfy7bm1n.js","key":"@6279","name":"READ_MCP_RESOURCE_PROMPT","source":"semantic","confidence":0.85}
+{"file":"chunk-ah34pb7m.js","key":"@14453","name":"makeSummaryResultRenderer","source":"semantic","confidence":0.5,"note":"旧版名 renderToolResultMessage 不确切：按键查 RESULT_SUMMARY，返回一行摘要的渲染函数（computerUse 使用）"}
+{"file":"chunk-a5k9jscj.js","key":"@31098","name":"getEnterPlanModePrompt","source":"semantic","confidence":0.75}
+{"file":"chunk-a5k9jscj.js","key":"@31119","name":"enterPlanModeInputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-a5k9jscj.js","key":"@31136","name":"enterPlanModeOutputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-a5k9jscj.js","key":"@31215","name":"EnterPlanModeTool","source":"semantic","confidence":0.95}
+{"file":"chunk-3s7ydtfd.js","key":"@40273","name":"MAX_COLUMN_SUMMARY_LINES","source":"semantic","confidence":0.5}
+{"file":"chunk-3s7ydtfd.js","key":"@40283","name":"MAX_SAMPLE_TEXT_CHARS","source":"semantic","confidence":0.5}
+{"file":"chunk-3s7ydtfd.js","key":"@40293","name":"MAX_SAMPLE_VALUES","source":"semantic","confidence":0.5}
+{"file":"chunk-3s7ydtfd.js","key":"@40686","name":"describeColumnKinds","source":"semantic","confidence":0.5,"note":"按 number/time/text 统计列单元格并给示例"}
+{"file":"chunk-3s7ydtfd.js","key":"@41016","name":"describeColumn","source":"semantic","confidence":0.5}
+{"file":"chunk-3s7ydtfd.js","key":"@41141","name":"makeTableColumnSummarizer","source":"semantic","confidence":0.45}
+{"file":"chunk-3s7ydtfd.js","key":"@41248","name":"summarizeTableColumns","source":"semantic","confidence":0.45}
+{"file":"chunk-3s7ydtfd.js","key":"@41090","name":"formatTableHeaderLine","source":"semantic","confidence":0.45,"note":"旧版名 renderToolUseRejectedMessage 配错"}
+{"file":"chunk-7sw8gya5.js","key":"@950","name":"renderDimBulletLine","source":"semantic","confidence":0.5,"note":"旧版名 renderToolResultMessage 配错：显示 \"· 文本\" 行（ManagedSettingsSecurityDialog 用）"}
+{"file":"chunk-fnhsh6ng.js","key":"@5430","name":"allowedPromptSchema","source":"semantic","confidence":0.8,"note":"已废弃"}
+{"file":"chunk-fnhsh6ng.js","key":"@5605","name":"exitPlanModeInputSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-fnhsh6ng.js","key":"@5707","name":"DISKLESS_EXIT_PLAN_INPUT_JSON_SCHEMA","source":"semantic","confidence":0.75,"note":"无磁盘会话直接给 plan 字段的 JSON schema"}
+{"file":"chunk-fnhsh6ng.js","key":"@5868","name":"MAX_PLAN_JSON_BYTES","source":"semantic","confidence":0.8,"note":"32768，审批卡片上限"}
+{"file":"chunk-fnhsh6ng.js","key":"@5876","name":"exitPlanModeNormalizedInputSchema","source":"semantic","confidence":0.7,"note":"含 normalizeToolInput 注入的 plan/planFilePath"}
+{"file":"chunk-fnhsh6ng.js","key":"@6084","name":"exitPlanModeOutputSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-fnhsh6ng.js","key":"@3025","name":"EXIT_PLAN_MODE_PROMPT","source":"semantic","confidence":0.85,"note":"读计划文件的版本"}
+{"file":"chunk-fnhsh6ng.js","key":"@4849","name":"EXIT_PLAN_MODE_DISKLESS_PROMPT","source":"semantic","confidence":0.8,"note":"plan 作为参数的版本"}
+{"file":"chunk-ft22tw4r.js","key":"@255","name":"MAX_QUESTION_HEADER_CHARS","source":"semantic","confidence":0.8,"note":"12"}
+{"file":"chunk-ft22tw4r.js","key":"@262","name":"FOLLOW_UP_REQUEST_TEXT","source":"semantic","confidence":0.7}
+{"file":"chunk-ft22tw4r.js","key":"@302","name":"FOLLOW_UP_REQUEST_NOTE","source":"semantic","confidence":0.6}
+{"file":"chunk-y8ff1x9z.js","key":"@4870","name":"parseValidDate","source":"semantic","confidence":0.8}
+{"file":"chunk-y8ff1x9z.js","key":"@4940","name":"cursorPageSchema","source":"semantic","confidence":0.8,"note":"{data[], next_cursor}"}
+{"file":"chunk-y8ff1x9z.js","key":"@4993","name":"RUN_LOG_HEADER_RESERVE","source":"semantic","confidence":0.5,"note":"800"}
+{"file":"chunk-y8ff1x9z.js","key":"@4999","name":"MAX_EVENT_LINE_CHARS","source":"semantic","confidence":0.6,"note":"4000"}
+{"file":"chunk-y8ff1x9z.js","key":"@5006","name":"MAX_SKIPPED_KINDS_LISTED","source":"semantic","confidence":0.65,"note":"6"}
+{"file":"chunk-y8ff1x9z.js","key":"@5010","name":"UNTRUSTED_RUN_CONTENT_NOTE","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@5165","name":"NON_TRANSCRIPT_SYSTEM_SUBTYPES","source":"semantic","confidence":0.65}
+{"file":"chunk-y8ff1x9z.js","key":"@5467","name":"truncatedStringSchema","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@5510","name":"runEventSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@5591","name":"contentBlockSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@5740","name":"messagePayloadSchema","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@5816","name":"resultPayloadSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@5993","name":"MAX_SANITIZE_INPUT_CHARS","source":"semantic","confidence":0.55,"note":"16000"}
+{"file":"chunk-y8ff1x9z.js","key":"@6010","name":"sanitizeAndTruncate","source":"semantic","confidence":0.7,"note":"清理不可见字符后截断，附 \"[+N chars]\""}
+{"file":"chunk-y8ff1x9z.js","key":"@6141","name":"asRecord","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@6176","name":"readTruncatedString","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@6248","name":"readNumber","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@6313","name":"unreadableEventLines","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@6361","name":"toolResultContentToText","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@6663","name":"formatMessageEventLines","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@7465","name":"formatSystemEventLines","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@8823","name":"formatResultEventLines","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@9270","name":"formatRunEventLines","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@10181","name":"getEventKindLabel","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@10311","name":"formatSkippedEventsNote","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@10601","name":"eventTypeSchema","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@10675","name":"condenseRunLogPage","source":"semantic","confidence":0.75,"note":"按预算从新到旧装入事件行，再反转为时间顺序，附跳过/分页说明"}
+{"file":"chunk-y8ff1x9z.js","key":"@11961","name":"remoteTriggerInputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-y8ff1x9z.js","key":"@12516","name":"remoteTriggerOutputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-y8ff1x9z.js","key":"@12574","name":"triggerResponseSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@12722","name":"formatTriggerScheduleSummary","source":"semantic","confidence":0.75,"note":"\"→ Scheduled …\" / \"→ Disabled …\" 与 claude.ai 管理链接"}
+{"file":"chunk-y8ff1x9z.js","key":"@13325","name":"REMOTE_TRIGGER_MAX_RESULT_CHARS","source":"semantic","confidence":0.75,"note":"100000"}
+{"file":"chunk-y8ff1x9z.js","key":"@13331","name":"LIST_RUNS_PAGE_SIZE","source":"semantic","confidence":0.85,"note":"10"}
+{"file":"chunk-y8ff1x9z.js","key":"@13337","name":"RUN_LOG_PAGE_SIZE","source":"semantic","confidence":0.85,"note":"200"}
+{"file":"chunk-y8ff1x9z.js","key":"@13344","name":"RUN_LOG_JSON_RESERVE","source":"semantic","confidence":0.5}
+{"file":"chunk-y8ff1x9z.js","key":"@13351","name":"runSessionRowSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-y8ff1x9z.js","key":"@13538","name":"formatUnexpectedPageShape","source":"semantic","confidence":0.7}
+{"file":"chunk-y8ff1x9z.js","key":"@13649","name":"formatListRunsResult","source":"semantic","confidence":0.8}
+{"file":"chunk-y8ff1x9z.js","key":"@14305","name":"formatRunLogResult","source":"semantic","confidence":0.8}
+{"file":"chunk-y8ff1x9z.js","key":"@14637","name":"fillUserEventFields","source":"semantic","confidence":0.65,"note":"给 job_config.ccr.events / session_request.events 中缺 type/role 的用户消息补 type:\"user\"、role:\"user\""}
+{"file":"chunk-y8ff1x9z.js","key":"@14973","name":"normalizeUserMessageEvents","source":"semantic","confidence":0.65}
+{"file":"chunk-y8ff1x9z.js","key":"@15327","name":"RemoteTriggerTool","source":"semantic","confidence":0.95}
+{"file":"chunk-szfapcvd.js","key":"@214","name":"REMOTE_TRIGGER_DESCRIPTION","source":"semantic","confidence":0.85}
+{"file":"chunk-szfapcvd.js","key":"@414","name":"REMOTE_TRIGGER_PROMPT","source":"semantic","confidence":0.85}
+{"file":"chunk-1ny7cxrt.js","key":"@1349204","name":"jsonErrorResponse","source":"semantic","confidence":0.6,"note":"旧版名 renderToolResultMessage 配错：构造 {type:\"error\",error:{type,message}} 的 Response.json"}
+{"file":"chunk-zethn0a3.js","key":"@3806","name":"splitSessionIdFromToolArgs","source":"semantic","confidence":0.55,"note":"旧版名 renderToolUseMessage 配错：从输入中拆出 session_id，其余作为 toolArgs"}
+{"file":"chunk-a5k9jscj.js","key":"@5600","name":"userTypedSkillThisTurn","source":"semantic","confidence":0.7,"note":"主会话本轮用户真实输入（非 meta/压缩/工具结果/命令消息）里是否打出了该 skill 名"}
+{"file":"chunk-a5k9jscj.js","key":"@10403","name":"skillInputSchema","source":"semantic","confidence":0.9,"note":"skill/args"}
+{"file":"chunk-a5k9jscj.js","key":"@10577","name":"skillOutputSchema","source":"semantic","confidence":0.9,"note":"inline 与 forked 两种结果的 union"}
+{"file":"chunk-a5k9jscj.js","key":"@11786","name":"makeSkillCommandSource","source":"semantic","confidence":0.65,"note":"{storageV5, mcpCommands(), mcpClients()} 供 me() 加载命令列表"}
+{"file":"chunk-a5k9jscj.js","key":"@11903","name":"runSkillInvocation","source":"semantic","confidence":0.75,"note":"旧版名 SkillTool 指工具对象；这里是 call 交给 runEngine 执行的引擎函数：解析 skill，fork 型交给 executeForkedSkill，否则 processPromptSlashCommand 展开为新消息并返回 contextLayers"}
+{"file":"chunk-a5k9jscj.js","key":"@15634","name":"SkillTool","source":"semantic","confidence":0.9,"note":"工具定义对象（name \"Skill\"）"}
+{"file":"chunk-a5k9jscj.js","key":"@24547","name":"SAFE_SKILL_PROPERTIES","source":"semantic","confidence":0.85,"note":"只含这些属性的 prompt 型 skill 无需询问即可执行"}
+{"file":"chunk-a5k9jscj.js","key":"@11945","name":"toolUseContext","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@12209","name":"skillName","source":"semantic","confidence":0.8,"note":"去掉前导 / 的名字"}
+{"file":"chunk-a5k9jscj.js","key":"@12270","name":"invokingSkill","source":"semantic","confidence":0.6,"note":"activeSkill ?? spawnedBySkill"}
+{"file":"chunk-a5k9jscj.js","key":"@12328","name":"isReadOnlyLoad","source":"semantic","confidence":0.7,"note":"wme(ctx)：协调者模式下只读加载"}
+{"file":"chunk-a5k9jscj.js","key":"@12337","name":"completed","source":"semantic","confidence":0.6}
+{"file":"chunk-a5k9jscj.js","key":"@12350","name":"commands","source":"semantic","confidence":0.75}
+{"file":"chunk-a5k9jscj.js","key":"@12368","name":"resolution","source":"semantic","confidence":0.7}
+{"file":"chunk-a5k9jscj.js","key":"@13136","name":"invokedSkillKey","source":"semantic","confidence":0.7}
+{"file":"chunk-a5k9jscj.js","key":"@13171","name":"priorInvocation","source":"semantic","confidence":0.6}
+{"file":"chunk-a5k9jscj.js","key":"@13252","name":"skillToolUseId","source":"semantic","confidence":0.6}
+{"file":"chunk-a5k9jscj.js","key":"@13276","name":"isHandedOff","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@13324","name":"processed","source":"semantic","confidence":0.7,"note":"processPromptSlashCommand 结果"}
+{"file":"chunk-a5k9jscj.js","key":"@13462","name":"allowedTools","source":"semantic","confidence":0.85}
+{"file":"chunk-a5k9jscj.js","key":"@13488","name":"skillModel","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@13512","name":"skillEffort","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@13759","name":"queryDepth","source":"semantic","confidence":0.75}
+{"file":"chunk-a5k9jscj.js","key":"@13788","name":"invocationTrigger","source":"semantic","confidence":0.75}
+{"file":"chunk-a5k9jscj.js","key":"@13842","name":"skillSource","source":"semantic","confidence":0.7}
+{"file":"chunk-a5k9jscj.js","key":"@13879","name":"skillBodyChars","source":"semantic","confidence":0.75}
+{"file":"chunk-a5k9jscj.js","key":"@14840","name":"readOnlyContent","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@14892","name":"newMessages","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@15124","name":"contextLayers","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@15213","name":"effectiveModel","source":"semantic","confidence":0.65}
+{"file":"chunk-a5k9jscj.js","key":"@16052","name":"toolContext","source":"semantic","confidence":0.75}
+{"file":"chunk-a5k9jscj.js","key":"@16321","name":"skillName","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@16342","name":"downloadFailure","source":"semantic","confidence":0.6}
+{"file":"chunk-a5k9jscj.js","key":"@16344","name":"isWithheld","source":"semantic","confidence":0.6}
+{"file":"chunk-a5k9jscj.js","key":"@16349","name":"commands","source":"semantic","confidence":0.75}
+{"file":"chunk-a5k9jscj.js","key":"@16363","name":"resolution","source":"semantic","confidence":0.7}
+{"file":"chunk-a5k9jscj.js","key":"@16387","name":"unprefixedName","source":"semantic","confidence":0.6,"note":"zw(name)"}
+{"file":"chunk-a5k9jscj.js","key":"@16575","name":"definitionTarget","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@19587","name":"suggestedName","source":"semantic","confidence":0.7}
+{"file":"chunk-a5k9jscj.js","key":"@19652","name":"pluginLoadStatus","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@20244","name":"invocationBlock","source":"semantic","confidence":0.7,"note":"jKe(...)：不可由模型调用的原因"}
+{"file":"chunk-a5k9jscj.js","key":"@21398","name":"skillName","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@21467","name":"resolution","source":"semantic","confidence":0.7}
+{"file":"chunk-a5k9jscj.js","key":"@22336","name":"heldBackAllowRule","source":"semantic","confidence":0.6}
+{"file":"chunk-a5k9jscj.js","key":"@22817","name":"heldBackKind","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@22930","name":"heldBackReason","source":"semantic","confidence":0.55}
+{"file":"chunk-csq9ftr9.js","key":"@9675","name":"sanitizeSkillNameForTelemetry","source":"semantic","confidence":0.75,"note":"内置/打包/官方用原名，MCP 记 mcp，其他记 custom + 哈希"}
+{"file":"chunk-csq9ftr9.js","key":"@9985","name":"getSkillPluginTelemetryFields","source":"semantic","confidence":0.75,"note":"官方市场插件才上报真实名，否则 third-party"}
+{"file":"chunk-e6aww6q8.js","key":"@2804899","name":"getToolNameKinds","source":"semantic","confidence":0.6,"note":"旧版名 getAllCommands 配错：工具名 → \"mcp\"/\"static\" 映射（含 DeferredToolPlaceholder）"}
+{"file":"chunk-e6aww6q8.js","key":"@959439","name":"isUnprefixedSkillListingEnabled","source":"semantic","confidence":0.5,"note":"旧版名 formatCommandDescription 配错：非插件 prompt 命令且 k2e 且 V1t()"}
+{"file":"chunk-e6aww6q8.js","key":"@2297489","name":"DEFAULT_SKILL_LISTING_BUDGET_FRACTION","source":"semantic","confidence":0.75,"note":"上下文窗口的 1%"}
+{"file":"chunk-e6aww6q8.js","key":"@2297498","name":"CHARS_PER_TOKEN","source":"semantic","confidence":0.7,"note":"4"}
+{"file":"chunk-e6aww6q8.js","key":"@2297504","name":"DEFAULT_CONTEXT_TOKENS","source":"semantic","confidence":0.65,"note":"200000"}
+{"file":"chunk-e6aww6q8.js","key":"@2297519","name":"MAX_REMOTE_SKILL_BUDGET","source":"semantic","confidence":0.6}
+{"file":"chunk-e6aww6q8.js","key":"@2297527","name":"DEFAULT_SKILL_DESC_MAX_CHARS","source":"semantic","confidence":0.75,"note":"1536，可由 settings.skillListingMaxDescChars 覆盖"}
+{"file":"chunk-e6aww6q8.js","key":"@2297545","name":"getSkillDescMaxChars","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2297971","name":"skillDigestCache","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2297996","name":"getSkillListingDigest","source":"semantic","confidence":0.7,"note":"名字+描述的 16 位内容哈希（WeakMap 缓存）"}
+{"file":"chunk-e6aww6q8.js","key":"@2298203","name":"getSkillListingLabel","source":"semantic","confidence":0.6,"note":"必要时显示 \"全名 (短名)\""}
+{"file":"chunk-e6aww6q8.js","key":"@2298336","name":"isBundledPromptSkill","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2298399","name":"analyzeSkillListingBudget","source":"semantic","confidence":0.65,"note":"算预算占用与会被截断描述的 skill（/context 用）"}
+{"file":"chunk-e6aww6q8.js","key":"@2299625","name":"truncateSkillDescription","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2301076","name":"SKILL_TOOL_PROMPT","source":"semantic","confidence":0.85}
+{"file":"chunk-e6aww6q8.js","key":"@2302529","name":"SKILL_TOOL_COORDINATOR_ADDENDUM","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2303192","name":"getSkillToolPrompt","source":"semantic","confidence":0.85}
+{"file":"chunk-a5k9jscj.js","key":"@4439","name":"isPluginSkillAliasHit","source":"semantic","confidence":0.55,"note":"旧版名 formatCommandDescription_2 配错：插件 prompt 命令通过别名（非正名）命中"}
+{"file":"chunk-ykab7xp3.js","key":"@11815","name":"isSkillToolOrigin","source":"semantic","confidence":0.7,"note":"消息 origin 是否来自 Skill 工具"}
+{"file":"chunk-a5k9jscj.js","key":"@6062","name":"command","source":"semantic","confidence":0.85}
+{"file":"chunk-a5k9jscj.js","key":"@6064","name":"skillName","source":"semantic","confidence":0.85}
+{"file":"chunk-a5k9jscj.js","key":"@6066","name":"args","source":"semantic","confidence":0.85}
+{"file":"chunk-a5k9jscj.js","key":"@6068","name":"toolUseContext","source":"semantic","confidence":0.85}
+{"file":"chunk-a5k9jscj.js","key":"@6070","name":"canUseTool","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@6072","name":"parentMessage","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@6074","name":"invokingSkill","source":"semantic","confidence":0.6}
+{"file":"chunk-a5k9jscj.js","key":"@6076","name":"onProgress","source":"semantic","confidence":0.85}
+{"file":"chunk-a5k9jscj.js","key":"@6078","name":"timing","source":"semantic","confidence":0.8}
+{"file":"chunk-a5k9jscj.js","key":"@7163","name":"runInBackground","source":"semantic","confidence":0.6,"note":"$zn(command, ctx)：skill 声明后台运行"}
+{"file":"chunk-a5k9jscj.js","key":"@7810","name":"agentDefinition","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@2181851","name":"formatHttpErrorResult","source":"semantic","confidence":0.85,"note":"拼 \"The server returned HTTP …\" 与 Retry-After，提示改用带认证的工具"}
+{"file":"chunk-e6aww6q8.js","key":"@2182173","name":"webFetchInputSchema","source":"semantic","confidence":0.9,"note":"zod：url/prompt/offset"}
+{"file":"chunk-e6aww6q8.js","key":"@2182524","name":"webFetchOutputSchema","source":"semantic","confidence":0.9,"note":"zod：bytes/code/codeText/result/durationMs/url/artifactRead"}
+{"file":"chunk-e6aww6q8.js","key":"@2183255","name":"withArtifactDomainRuleContents","source":"semantic","confidence":0.7,"note":"旧版名 webFetchToolInputToPermissionRuleContent 不符：把 ruleContent 和每个 artifact URL 的 domain:host 合成规则内容列表"}
+{"file":"chunk-e6aww6q8.js","key":"@2183374","name":"getWebFetchToolUseSummary","source":"semantic","confidence":0.85,"note":"getToolUseSummary：截断显示 url"}
+{"file":"chunk-e6aww6q8.js","key":"@2183433","name":"makeWebFetchCallContext","source":"semantic","confidence":0.75,"note":"把工具实例上下文和单次调用上下文合成一个 getter 视图（session/permissions/signal/toolUseId…）"}
+{"file":"chunk-e6aww6q8.js","key":"@2201668","name":"throwIfAskLetGo","source":"semantic","confidence":0.7,"note":"用户放弃回答提问（wasLetGo）时抛 no_prompt"}
+{"file":"chunk-e6aww6q8.js","key":"@2201748","name":"buildWebFetchAllowSuggestions","source":"semantic","confidence":0.85,"note":"权限建议：在 localSettings 加 WebFetch(ruleContent) allow"}
+{"file":"chunk-e6aww6q8.js","key":"@2201877","name":"hasArtifactReadAccess","source":"semantic","confidence":0.65,"note":"Cin(...) !== \"none\"：当前工具集能否读 artifact"}
+{"file":"chunk-dcmhvw5a.js","key":"@214331","name":"buildToolAllowSuggestion","source":"semantic","confidence":0.75,"note":"通用：localSettings 加 toolName(ruleContent) allow；被 PowerShell 权限使用"}
+{"file":"chunk-dcmhvw5a.js","key":"@214455","name":"buildToolPrefixAllowSuggestion","source":"semantic","confidence":0.75,"note":"ruleContent 为 \"前缀 *\""}
+{"file":"chunk-9tgt55am.js","key":"@12818","name":"buildArtifactReplyAllowSuggestion","source":"semantic","confidence":0.7,"note":"Artifact 工具 ACTION_REPLY 规则建议"}
+{"file":"chunk-e6aww6q8.js","key":"@2185221","name":"toolContext","source":"semantic","confidence":0.75,"note":"create(e)：工具实例上下文"}
+{"file":"chunk-e6aww6q8.js","key":"@2185228","name":"checkPermissions","source":"semantic","confidence":0.9,"note":"create 内返回的 checkPermissions"}
+{"file":"chunk-e6aww6q8.js","key":"@2185236","name":"input","source":"semantic","confidence":0.85}
+{"file":"chunk-e6aww6q8.js","key":"@2185238","name":"callContext","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2185247","name":"ctx","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2185258","name":"pendingAskDecision","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2185265","name":"deferredArtifactCheck","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2185272","name":"notePersonOnlyAsk","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2185279","name":"artifactViewerUrl","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2185286","name":"artifactUrls","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@2185291","name":"artifactNoticeLane","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2185565","name":"parsedArtifact","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@2185596","name":"viewerUrl","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@2185664","name":"denyByRule","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@2185848","name":"askByRule","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@2186278","name":"findArtifactRule","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2190277","name":"ruleContent","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2190287","name":"ruleContents","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2190300","name":"checkDenyRules","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2190577","name":"checkAskRules","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2190514","name":"askExtras","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2191022","name":"allowRule","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2192128","name":"callContext","source":"semantic","confidence":0.75,"note":"call(r, s) 的第二参数"}
+{"file":"chunk-e6aww6q8.js","key":"@2192135","name":"ctx","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2192226","name":"abortHolder","source":"semantic","confidence":0.6}
+{"file":"chunk-e6aww6q8.js","key":"@2192320","name":"webFetchCache","source":"semantic","confidence":0.8,"note":"toolState.get(S1o)：urls/domainChecks/targetFailures"}
+{"file":"chunk-e6aww6q8.js","key":"@2192344","name":"isDedupShadowOn","source":"semantic","confidence":0.7,"note":"tengu_rosy_flute"}
+{"file":"chunk-e6aww6q8.js","key":"@2192379","name":"isProjectsSession","source":"semantic","confidence":0.7,"note":"CLAUDE_CODE_PROJECTS_SESSION"}
+{"file":"chunk-e6aww6q8.js","key":"@2192418","name":"fetchHistory","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2192492","name":"priorFetch","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2192506","name":"promptHash","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2192604","name":"callKey","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2192636","name":"priorCall","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2192657","name":"ownToolUseId","source":"semantic","confidence":0.65,"note":"只在 parentMessage 真含此 tool_use 时取 toolUseId"}
+{"file":"chunk-e6aww6q8.js","key":"@2192928","name":"noteSkipReason","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2194035","name":"earlierFailure","source":"semantic","confidence":0.7,"note":"tengu_patient_finch"}
+{"file":"chunk-e6aww6q8.js","key":"@2194699","name":"fetched","source":"semantic","confidence":0.75,"note":"getURLMarkdownContent 结果"}
+{"file":"chunk-e6aww6q8.js","key":"@2196337","name":"isSubagentCaller","source":"semantic","confidence":0.6,"note":"FKt(agentContext)"}
+{"file":"chunk-e6aww6q8.js","key":"@2198124","name":"isPreapproved","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2198148","name":"storedCopyNote","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@2198876","name":"remainingText","source":"semantic","confidence":0.7,"note":"从 offset 起的文本"}
+{"file":"chunk-e6aww6q8.js","key":"@2200812","name":"historyEntry","source":"semantic","confidence":0.6}
+{"file":"chunk-e6aww6q8.js","key":"@1635338","name":"isUrlUnderPrefix","source":"semantic","confidence":0.7,"note":"规范化后 startsWith(prefix + \"/\")"}
+{"file":"chunk-e6aww6q8.js","key":"@1635395","name":"normalizeUrlForCompare","source":"semantic","confidence":0.7,"note":"旧版名 isPermittedRedirect 不符：主机名小写、去掉用户名/密码/端口，保留其余原文"}
+{"file":"chunk-e6aww6q8.js","key":"@2167838","name":"isAllowedAnthropicRepoPath","source":"semantic","confidence":0.65,"note":"github.com / raw.githubusercontent.com 只放行仓库根、tree|blob/main、refs/heads/main"}
+{"file":"chunk-e6aww6q8.js","key":"@2168002","name":"isPreapprovedHostPath","source":"semantic","confidence":0.85,"note":"HOSTNAME_ONLY 或 PATH_PREFIXES 匹配；拒绝编码过的 / \\ ."}
+{"file":"chunk-e6aww6q8.js","key":"@2169364","name":"WEB_FETCH_CACHE_MAX_BYTES","source":"semantic","confidence":0.8,"note":"50 MB"}
+{"file":"chunk-e6aww6q8.js","key":"@2169383","name":"WebFetchCache","source":"semantic","confidence":0.8,"note":"toolState 槽：urls（LRU 50MB）、domainChecks（5 分钟）、targetFailures（5 分钟）"}
+{"file":"chunk-e6aww6q8.js","key":"@2169751","name":"turndownServicePromise","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2169764","name":"getTurndownService","source":"semantic","confidence":0.85,"note":"懒加载 turndown，去掉 style/script/noscript/iframe"}
+{"file":"chunk-e6aww6q8.js","key":"@2169908","name":"MAX_URL_LENGTH","source":"semantic","confidence":0.85,"note":"2000"}
+{"file":"chunk-e6aww6q8.js","key":"@2169917","name":"MAX_HTTP_CONTENT_LENGTH","source":"semantic","confidence":0.85,"note":"10 MB"}
+{"file":"chunk-e6aww6q8.js","key":"@2169930","name":"FETCH_TIMEOUT_MS","source":"semantic","confidence":0.85,"note":"60 秒"}
+{"file":"chunk-e6aww6q8.js","key":"@2169940","name":"DOMAIN_CHECK_TIMEOUT_MS","source":"semantic","confidence":0.85,"note":"10 秒"}
+{"file":"chunk-e6aww6q8.js","key":"@2169948","name":"DOMAIN_CHECK_DEADLINE_MS","source":"semantic","confidence":0.7,"note":"30 秒"}
+{"file":"chunk-e6aww6q8.js","key":"@2169958","name":"MAX_REDIRECTS","source":"semantic","confidence":0.85,"note":"10"}
+{"file":"chunk-e6aww6q8.js","key":"@2169965","name":"MAX_HTML_FOR_MARKDOWN","source":"semantic","confidence":0.7,"note":"1 MB，超过截断后转 markdown"}
+{"file":"chunk-e6aww6q8.js","key":"@2169992","name":"htmlToMarkdown","source":"semantic","confidence":0.85}
+{"file":"chunk-e6aww6q8.js","key":"@2171257","name":"isPermittedRedirect","source":"semantic","confidence":0.85,"note":"同协议/端口、无凭证、去 www 后主机相同；预批准路径不能跳到非预批准路径"}
+{"file":"chunk-e6aww6q8.js","key":"@2171583","name":"stripWww","source":"semantic","confidence":0.9}
+{"file":"chunk-e6aww6q8.js","key":"@2171624","name":"REDIRECT_STATUS_CODES","source":"semantic","confidence":0.9}
+{"file":"chunk-e6aww6q8.js","key":"@2171674","name":"getWithDeadline","source":"semantic","confidence":0.7,"note":"外层 deadline（nte()）包裹 getWithPermittedRedirects"}
+{"file":"chunk-e6aww6q8.js","key":"@2173433","name":"isHttpErrorInfo","source":"semantic","confidence":0.85}
+{"file":"chunk-e6aww6q8.js","key":"@2173484","name":"PROXY_ERROR_EVENT_CODES","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2173727","name":"TARGET_ERROR_EVENT_CODES","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2174268","name":"REMEMBERED_TARGET_ERRORS","source":"semantic","confidence":0.65,"note":"会记入 targetFailures 的目标站错误"}
+{"file":"chunk-e6aww6q8.js","key":"@2174404","name":"SITE_ANSWER_ERRORS","source":"semantic","confidence":0.6,"note":"作为站点答复（vXn）而非异常抛出的错误"}
+{"file":"chunk-e6aww6q8.js","key":"@2174682","name":"proxyErrorEventCode","source":"semantic","confidence":0.65}
+{"file":"chunk-e6aww6q8.js","key":"@2178362","name":"truncateToMaxMarkdown","source":"semantic","confidence":0.75,"note":"截到 Tnr 字符"}
+{"file":"chunk-e6aww6q8.js","key":"@2313433","name":"DOMAIN_CACHE_MAX","source":"semantic","confidence":0.6}
+{"file":"chunk-e6aww6q8.js","key":"@2313441","name":"DOMAIN_CACHE_TTL_MS","source":"semantic","confidence":0.6}
+{"file":"chunk-e6aww6q8.js","key":"@2313461","name":"createDomainCache","source":"semantic","confidence":0.6,"note":"旧版名 DOMAIN_CHECK_CACHE 是常量名；这里是工厂函数 new LRU({max:500, ttl:5min})"}
+{"file":"chunk-e6aww6q8.js","key":"@2171919","name":"url","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2171921","name":"signal","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2171923","name":"redirectChecker","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2171925","name":"depth","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2171927","name":"deadlineSignal","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2171962","name":"response","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2173027","name":"redirectUrl","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2175069","name":"session","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2175071","name":"url","source":"semantic","confidence":0.85}
+{"file":"chunk-e6aww6q8.js","key":"@2175073","name":"abortHolder","source":"semantic","confidence":0.6}
+{"file":"chunk-e6aww6q8.js","key":"@2175075","name":"cache","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2175077","name":"persistedToolResultFiles","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2175079","name":"storage","source":"semantic","confidence":0.6}
+{"file":"chunk-e6aww6q8.js","key":"@2175081","name":"timing","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2175704","name":"proxyResult","source":"semantic","confidence":0.7}
+{"file":"chunk-e6aww6q8.js","key":"@2177453","name":"response","source":"semantic","confidence":0.75}
+{"file":"chunk-e6aww6q8.js","key":"@2177871","name":"contentType","source":"semantic","confidence":0.8}
+{"file":"chunk-e6aww6q8.js","key":"@2178405","name":"prompt","source":"semantic","confidence":0.85}
+{"file":"chunk-e6aww6q8.js","key":"@2178407","name":"markdown","source":"semantic","confidence":0.85}
+{"file":"chunk-e6aww6q8.js","key":"@2178409","name":"options","source":"semantic","confidence":0.8}
+{"file":"chunk-dsy6gyxv.js","key":"@5387","name":"extractHostname","source":"semantic","confidence":0.6,"note":"与 WebFetch 无关（crates.io 索引脚本），匹配错"}
+{"file":"chunk-dsy6gyxv.js","key":"@5519","name":"isCratesIoIndexUrl","source":"semantic","confidence":0.6,"note":"旧版名 isPreapprovedUrl 不符：判断是否 rust-lang/crates.io-index"}
+{"file":"chunk-dsy6gyxv.js","key":"@5658","name":"extractHostsFromConfig","source":"semantic","confidence":0.55,"note":"按正则从配置文本（去掉 # ; 注释行）提取主机名"}
+{"file":"chunk-aepeg2w5.js","key":"@251123","name":"getHttpsHostname","source":"semantic","confidence":0.65,"note":"旧版名不符：仅 https 且无凭证/端口时返回主机名（去尾点）"}
+{"file":"chunk-aepeg2w5.js","key":"@815136","name":"stripUrlCredentials","source":"semantic","confidence":0.6,"note":"旧版名不符：清空用户名密码后交给 dO"}
+{"file":"chunk-1wpnxx5r.js","key":"@15818","name":"isKnownProxyEndpointUrl","source":"semantic","confidence":0.55,"note":"旧版名不符：解包 CCR 代理 URL 后主机在集合 T 且 path===ae"}
+{"file":"chunk-2a8yx6fc.js","key":"@24195","name":"extractSafeHostname","source":"semantic","confidence":0.6,"note":"旧版名 validateURL 不符：从 URL 提取主机名，带 @ 的凭证形式做防伪"}
+{"file":"chunk-4j20twbf.js","key":"@1249","name":"isWithinSanitizeBudget","source":"semantic","confidence":0.55,"note":"旧版名 URL_CACHE 不符：size<=maxSize 且 sixteenthsToSanitize<=上限"}
+{"file":"chunk-f3qhjfah.js","key":"@51007","name":"normalizeBaseUrl","source":"semantic","confidence":0.6,"note":"旧版名不符：主机名规范化并补尾部 /"}
+{"file":"chunk-fy5kn7m3.js","key":"@34783","name":"isSameOriginWithoutCredentials","source":"semantic","confidence":0.65,"note":"旧版名不符：协议与 host 相同且原 URL 无凭证"}
+{"file":"chunk-yqnmafqp.js","key":"@5551","name":"urlHasCredentials","source":"semantic","confidence":0.65,"note":"旧版名 validateURL 不符：带用户名/密码或解析失败时为 true"}
+{"file":"chunk-g54kbxqw.js","key":"@143356","name":"COPYRIGHT_GUIDELINES","source":"semantic","confidence":0.8,"note":"125 字引用上限、不复述歌词等"}
+{"file":"chunk-g54kbxqw.js","key":"@143804","name":"untrustedFenceRegex","source":"semantic","confidence":0.6}
+{"file":"chunk-g54kbxqw.js","key":"@143816","name":"escapeUntrustedFence","source":"semantic","confidence":0.7,"note":"内容里出现 fence 标签名时加反斜杠"}
+{"file":"chunk-g54kbxqw.js","key":"@143883","name":"untrustedContentLead","source":"semantic","confidence":0.7}
+{"file":"chunk-g54kbxqw.js","key":"@144101","name":"untrustedContentTrail","source":"semantic","confidence":0.7}
+{"file":"chunk-rce5b6h0.js","key":"@209","name":"WEB_FETCH_RULE_CONTENT_FIELD","source":"semantic","confidence":0.75,"note":"\"url\"，作为 ruleContentField"}
+{"file":"chunk-e6aww6q8.js","key":"@2165708","name":"PREAPPROVED_HOSTS","source":"semantic","confidence":0.9}
+{"file":"chunk-e6aww6q8.js","key":"@2167783","name":"PATH_RESTRICTED_HOSTS","source":"semantic","confidence":0.65,"note":"github.com 与 raw.githubusercontent.com：只放行仓库根与 main 分支路径"}
+{"file":"chunk-kxyd0g16.js","key":"@40242","name":"webSearchInputSchema","source":"semantic","confidence":0.9,"note":"query(min 2)/allowed_domains/blocked_domains"}
+{"file":"chunk-kxyd0g16.js","key":"@40498","name":"webSearchInputSchemaWithMode","source":"semantic","confidence":0.8,"note":"开启快搜实验（XAt）时加 mode: standard|extended，默认 extended"}
+{"file":"chunk-kxyd0g16.js","key":"@40614","name":"searchResultBlockSchema","source":"semantic","confidence":0.8,"note":"{tool_use_id, content:[{title,url,snippet?}]}"}
+{"file":"chunk-kxyd0g16.js","key":"@41848","name":"getWebSearchToolUseSummary","source":"semantic","confidence":0.85}
+{"file":"chunk-kxyd0g16.js","key":"@39509","name":"ccrProxyWebSearch","source":"semantic","confidence":0.8,"note":"旧版名 renderToolUseMessage 配错：经 CCR 代理 route \"web-search\" 搜索，返回 {ok, results}"}
+{"file":"chunk-kxyd0g16.js","key":"@43718","name":"ctx","source":"semantic","confidence":0.7}
+{"file":"chunk-kxyd0g16.js","key":"@43754","name":"searchProfile","source":"semantic","confidence":0.8,"note":"mode===\"standard\" 且快搜实验开时为 \"fast\""}
+{"file":"chunk-kxyd0g16.js","key":"@43839","name":"maxSearches","source":"semantic","confidence":0.7,"note":"FVr()：每会话/每轮上限"}
+{"file":"chunk-kxyd0g16.js","key":"@44062","name":"budgetScope","source":"semantic","confidence":0.75,"note":"非交互为 \"turn\"，否则 \"session\""}
+{"file":"chunk-kxyd0g16.js","key":"@45452","name":"proxyResult","source":"semantic","confidence":0.8,"note":"覆盖自动名 finally"}
+{"file":"chunk-kxyd0g16.js","key":"@46214","name":"searchModel","source":"semantic","confidence":0.75,"note":"tengu_plum_vx3 开时用 Uw()（小模型），否则主循环模型"}
+{"file":"chunk-kxyd0g16.js","key":"@47180","name":"currentServerToolUseId","source":"semantic","confidence":0.7}
+{"file":"chunk-kxyd0g16.js","key":"@47187","name":"partialInputJson","source":"semantic","confidence":0.75}
+{"file":"chunk-kxyd0g16.js","key":"@47192","name":"progressCounter","source":"semantic","confidence":0.7}
+{"file":"chunk-kxyd0g16.js","key":"@47196","name":"queryByToolUseId","source":"semantic","confidence":0.75}
+{"file":"chunk-kxyd0g16.js","key":"@47206","name":"apiErrorText","source":"semantic","confidence":0.7}
+{"file":"chunk-kxyd0g16.js","key":"@47227","name":"streamEvent","source":"semantic","confidence":0.7}
+{"file":"chunk-kxyd0g16.js","key":"@47532","name":"contentBlock","source":"semantic","confidence":0.8,"note":"覆盖自动名 content_block"}
+{"file":"chunk-kxyd0g16.js","key":"@49077","name":"resultText","source":"semantic","confidence":0.7}
+{"file":"chunk-hwmsct5x.js","key":"@248148","name":"TOOL_NAME_TOKEN_REGEX","source":"semantic","confidence":0.6}
+{"file":"chunk-hwmsct5x.js","key":"@248180","name":"parseToolNamesFromText","source":"semantic","confidence":0.55,"note":"旧版名 makeToolSchema 配错：从文本中解析工具名列表（含 web_search 关键词兜底）"}
+{"file":"chunk-ah34pb7m.js","key":"@29394","name":"countSearchResultBlocks","source":"semantic","confidence":0.8}
+{"file":"chunk-ah34pb7m.js","key":"@243120","name":"hasSearchOrReadActivity","source":"semantic","confidence":0.6,"note":"旧版名 getSearchSummary 实为布尔：searchCount>0 || readCount>0"}
+{"file":"chunk-kxyd0g16.js","key":"@120662","name":"UNSAFE_DISPLAY_CHARS_REGEX","source":"semantic","confidence":0.7,"note":"控制/格式/私用/不可见字符与非普通空格"}
+{"file":"chunk-kxyd0g16.js","key":"@120772","name":"sanitizeForDisplay","source":"semantic","confidence":0.75}
+{"file":"chunk-kxyd0g16.js","key":"@120812","name":"QUOTE_LIKE_CHARS_REGEX","source":"semantic","confidence":0.7}
+{"file":"chunk-kxyd0g16.js","key":"@120900","name":"enterWorktreeInputSchema","source":"semantic","confidence":0.9,"note":"name/path 互斥"}
+{"file":"chunk-kxyd0g16.js","key":"@121648","name":"enterWorktreeOutputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-kxyd0g16.js","key":"@121722","name":"EnterWorktreeTool","source":"semantic","confidence":0.95}
+{"file":"chunk-j2t139r9.js","key":"@57520","name":"normalizeRefineMessage","source":"semantic","confidence":0.5,"note":"zod 自定义 refine 的参数归一（属于 zod 第三方代码）"}
+{"file":"chunk-j2t139r9.js","key":"@57645","name":"zodCustom","source":"semantic","confidence":0.5,"note":"旧版名 inputSchema 配错：zod 的 custom()（第三方）"}
+{"file":"chunk-wd9kxbpn.js","key":"@18177","name":"syncWorktreeMetadataFromProgress","source":"semantic","confidence":0.4,"note":"旧版名 renderToolResultMessage 配错：按进度消息更新已保存的 worktree 元数据"}
+{"file":"chunk-kxyd0g16.js","key":"@126993","name":"getExitWorktreePrompt","source":"semantic","confidence":0.85}
+{"file":"chunk-kxyd0g16.js","key":"@128973","name":"exitWorktreeInputSchema","source":"semantic","confidence":0.9,"note":"action keep/remove、discard_changes"}
+{"file":"chunk-kxyd0g16.js","key":"@129286","name":"exitWorktreeOutputSchema","source":"semantic","confidence":0.9}
+{"file":"chunk-kxyd0g16.js","key":"@129790","name":"DISCARD_CONFIRM_HINT","source":"semantic","confidence":0.7}
+{"file":"chunk-kxyd0g16.js","key":"@130470","name":"countNestedWorktrees","source":"semantic","confidence":0.45,"note":"外部构建中恒为 0（内部功能被裁剪）"}
+{"file":"chunk-kxyd0g16.js","key":"@130494","name":"formatNestedWorktreesNote","source":"semantic","confidence":0.45,"note":"外部构建中恒为空串"}
+{"file":"chunk-kxyd0g16.js","key":"@130524","name":"restoreSessionAfterWorktreeExit","source":"semantic","confidence":0.75,"note":"回到原 cwd（不存在时依次回退 worktree/home/临时目录），必要时迁移权限锚点与项目根，清空 worktree 状态与 cwd 相关缓存"}
+{"file":"chunk-kxyd0g16.js","key":"@131838","name":"formatCwdRestoredMessage","source":"semantic","confidence":0.8}
+{"file":"chunk-kxyd0g16.js","key":"@132113","name":"ExitWorktreeTool","source":"semantic","confidence":0.95}
+{"file":"chunk-kxyd0g16.js","key":"@130527","name":"session","source":"semantic","confidence":0.75}
+{"file":"chunk-kxyd0g16.js","key":"@130529","name":"originalCwd","source":"semantic","confidence":0.85}
+{"file":"chunk-kxyd0g16.js","key":"@130531","name":"preEnterOriginalCwd","source":"semantic","confidence":0.8}
+{"file":"chunk-kxyd0g16.js","key":"@130533","name":"wasProjectRootOriginal","source":"semantic","confidence":0.6}
+{"file":"chunk-kxyd0g16.js","key":"@130535","name":"worktreePath","source":"semantic","confidence":0.85}
+{"file":"chunk-kxyd0g16.js","key":"@130537","name":"liveLaunchAnchor","source":"semantic","confidence":0.8}
+{"file":"chunk-kxyd0g16.js","key":"@130539","name":"storage","source":"semantic","confidence":0.6}
+{"file":"chunk-kxyd0g16.js","key":"@130546","name":"restoredCwd","source":"semantic","confidence":0.85}
+{"file":"chunk-kxyd0g16.js","key":"@130550","name":"originalCwdMissing","source":"semantic","confidence":0.85}
+{"file":"chunk-kxyd0g16.js","key":"@130897","name":"fellBackToWorktree","source":"semantic","confidence":0.85}
+{"file":"chunk-kxyd0g16.js","key":"@130908","name":"newOriginalCwd","source":"semantic","confidence":0.6}
+{"file":"chunk-kxyd0g16.js","key":"@130919","name":"keepsAnchor","source":"semantic","confidence":0.6}

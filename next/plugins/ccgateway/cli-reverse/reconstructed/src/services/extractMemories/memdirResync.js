@@ -276,7 +276,7 @@ function hasMaxTurnsReached(messages) {
 function lastAssistantWasApiError(messages) {
   return messages.findLast((message) => message.type === "assistant")?.isApiErrorMessage === true;
 }
-//@ chunk-xr4xc2mq.js:4979-5520 placement = hasSuccessfulToolCall (1)
+//@ chunk-xr4xc2mq.js:4979-5520 placement (2.1.88 match: hasSuccessfulToolCall, 1)
 function hasSuccessfulToolCall(messages, sinceUuid, countMutating) {
   let inRange = sinceUuid === undefined;
   let successfulWriteIds = new Set();
@@ -473,7 +473,7 @@ function summarizeUserTurns(messages, sinceUuid) {
     ),
   };
 }
-//@ chunk-xr4xc2mq.js:7698-7895 placement = collectReadToolFilePaths (1)
+//@ chunk-xr4xc2mq.js:7698-7895 placement (2.1.88 match: collectReadToolFilePaths, 1)
 function collectReadToolFilePaths(messages) {
   if (
     messages.type !== "tool_use" ||

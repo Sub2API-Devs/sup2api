@@ -22,7 +22,7 @@ import { TASK_GET_DESCRIPTION, TASK_GET_PROMPT } from "./prompt.js";
 import { areTaskToolsEnabled, getTaskListId, getTask } from "../../utils/tasks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:142476-143782 fingerprint = TaskGetTool (0.911)
+//@ chunk-kxyd0g16.js:142476-143782 fingerprint (2.1.88 match: TaskGetTool, 0.911)
 /**
  * TaskGet 工具（只读、并发安全、shouldDefer）：按 taskId 返回 subject/description/status/blocks/blockedBy。
  */

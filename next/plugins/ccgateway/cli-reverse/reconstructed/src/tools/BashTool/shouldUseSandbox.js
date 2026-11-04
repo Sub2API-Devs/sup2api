@@ -164,7 +164,7 @@ function containsExcludedWord(text, settings) {
   let words = new Set(text.split(/[\s;|&(){}<>`'"]+/));
   return settings.commands.some((command) => !command.includes(" ") && words.has(command));
 }
-//@ chunk-e6aww6q8.js:1262642-1262797 placement = detectGateway (0.488)
+//@ chunk-e6aww6q8.js:1262642-1262797 placement (2.1.88 match: detectGateway, 0.488)
 /**
  * 反复剥掉命令前的 timeout/time/nice/nohup 等包装命令前缀（Bash 沙箱判定用）。旧版名 detectGateway 为错配，应归 tools/BashTool/shouldUseSandbox.ts。
  */
@@ -184,7 +184,7 @@ function stripWrapperCommandPrefixes(command, settings) {
   }
   return current;
 }
-//@ chunk-e6aww6q8.js:1262870-1263289 callgraph-fingerprint = containsExcludedCommand (0.189)
+//@ chunk-e6aww6q8.js:1262870-1263289 callgraph-fingerprint (2.1.88 match: containsExcludedCommand, 0.189)
 /**
  * 判断命令是否命中沙箱 excludedCommands（及设置里的子串/命令列表）；bash 按子命令逐个匹配，PowerShell 走专用匹配。
  */
@@ -447,7 +447,7 @@ function sandboxPolicyRefusal(disableUnsandboxed, command, userTypedDisable, she
     nextStep,
   );
 }
-//@ chunk-e6aww6q8.js:1267983-1268149 layout = filterRulesByContentsMatchingInput (1)
+//@ chunk-e6aww6q8.js:1267983-1268149 layout (2.1.88 match: filterRulesByContentsMatchingInput, 1)
 /**
  * 单条已解析规则（prefix/exact/wildcard）是否匹配命令文本。
  */
@@ -461,7 +461,7 @@ function matchesShellRule(rule, command) {
       return matchesCommandRule(rule.pattern, command);
   }
 }
-//@ chunk-e6aww6q8.js:1268149-1268611 facade-majority = shouldUseSandbox (0.465)
+//@ chunk-e6aww6q8.js:1268149-1268611 facade-majority (2.1.88 match: shouldUseSandbox, 0.465)
 /**
  * 决定这次 shell 调用是否进沙箱：强制沙箱环境直接 true；沙箱未启用 false；Windows bash 无可用实现 false；dangerouslyDisableSandbox 仅在允许非沙箱命令（或用户手动 ! 命令）且未被强制时生效；命中 excludedCommands 设置的命令不进沙箱。
  */

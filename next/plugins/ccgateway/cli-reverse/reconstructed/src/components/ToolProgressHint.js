@@ -51,7 +51,7 @@ deferInit("chunk-s06523pk.js:1067", () => {
   PROGRESS_HINT_CHORD = "ctrl+x ctrl+b";
   _ = new Set([PROGRESS_HINT_KEY, PROGRESS_HINT_CHORD].map((chord) => chordToString(parseChord(chord))));
 });
-//@ chunk-s06523pk.js:1138-1324 placement = LEGACY_AGENT_TOOL_NAME (0.566)
+//@ chunk-s06523pk.js:1138-1324 placement (2.1.88 match: LEGACY_AGENT_TOOL_NAME, 0.566)
 /**
  * 检测键位绑定中 Task 上下文的 task:background 是否被改动/冲突（与 Agent 工具名无关，切分误归）。
  */

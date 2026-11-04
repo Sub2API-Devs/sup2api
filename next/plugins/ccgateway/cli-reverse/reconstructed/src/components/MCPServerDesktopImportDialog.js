@@ -54,7 +54,7 @@ function logImportReadFailure(error) {
 function isNotNull_2(value) {
   return value !== null;
 }
-//@ chunk-h2rjy0z4.js:16328-20032 fingerprint = MCPServerDesktopImportDialog (0.523)
+//@ chunk-h2rjy0z4.js:16328-20032 fingerprint (2.1.88 match: MCPServerDesktopImportDialog, 0.523)
 function MCPServerDesktopImportDialog(props) {
   let $ = useMemoCache(39);
   let { servers, scope, onDone } = props;

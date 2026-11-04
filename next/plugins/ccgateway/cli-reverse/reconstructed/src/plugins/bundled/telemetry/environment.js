@@ -232,7 +232,7 @@ function pickValidId(value) {
     ? value
     : undefined;
 }
-//@ chunk-4m46mxx9.js:16148-16533 placement = companionUserId (0.502)
+//@ chunk-4m46mxx9.js:16148-16533 placement (2.1.88 match: companionUserId, 0.502)
 /**
  * 从 ~/.claude.json 读取 userID（作为 deviceId）、oauthAccount 的 accountUuid/organizationUuid，按需包含邮箱。
  */
@@ -317,7 +317,7 @@ async function readMachineFacts(run, env) {
     runtimes: runtimes.replace(/,$/, ""),
   };
 }
-//@ chunk-4m46mxx9.js:17405-17511 placement = detectTerminal (0.92)
+//@ chunk-4m46mxx9.js:17405-17511 placement (2.1.88 match: detectTerminal, 0.92)
 function detectTerminal(hostPlatform, platformRaw) {
   return (
     ["win32", "darwin", "linux"].find((name) => name === hostPlatform) ??

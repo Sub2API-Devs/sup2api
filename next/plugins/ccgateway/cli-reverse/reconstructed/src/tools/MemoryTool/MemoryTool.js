@@ -11,7 +11,7 @@
 import { MEMORY_TOOL_PREFIX } from "../../memdir/memoryTool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:84109-84365 placement = SEARCH_TOOLS (0.344)
+//@ chunk-s61vbvea.js:84109-84365 placement (2.1.88 match: SEARCH_TOOLS, 0.344)
 /**
  * memory 文件工具名（read/write/str_replace/append）、版本行、文件头与 memory_document 前言的正则，以及 memory search 工具名；与 MCP 折叠分类无关。
  */

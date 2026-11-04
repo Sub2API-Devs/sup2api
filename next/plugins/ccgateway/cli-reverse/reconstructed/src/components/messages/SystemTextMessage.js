@@ -70,7 +70,7 @@ import { openPath } from "../../utils/browser.js";
 import { FilePathLink } from "../FilePathLink.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1538140-1538417 fingerprint = _temp (0.705)
+//@ chunk-e6aww6q8.js:1538140-1538417 fingerprint (2.1.88 match: _temp, 0.705)
 /**
  * 把工具耗时列表编码为 "tool=ms;tool=ms"（数量与总长有上限），用于请求头。
  */
@@ -102,7 +102,7 @@ var CODE_HERE_OR_AT = " \xB7 code here or at ";
 function selectMaxProseWidth(state) {
   return state.settings.maxProseWidth;
 }
-//@ chunk-ah34pb7m.js:65591-66292 fingerprint = ThinkingMessage (0.463)
+//@ chunk-ah34pb7m.js:65591-66292 fingerprint (2.1.88 match: ThinkingMessage, 0.463)
 function ThinkingMessage(props) {
   let $ = useMemoCache(13);
   let { content, addMargin, trailer } = props;
@@ -495,7 +495,7 @@ function SyncStatusRow(props) {
     }
   }
 }
-//@ chunk-ah34pb7m.js:193409-193425 fingerprint = _temp4 (1)
+//@ chunk-ah34pb7m.js:193409-193425 fingerprint (2.1.88 match: _temp4, 1)
 var WORKED = "Worked";
 //@ chunk-ah34pb7m.js:193425-193486 layout
 function pickTurnCompletionVerb(uuid) {
@@ -581,7 +581,7 @@ function computeTurnDurationInfo({
 function sumDurationMs(sum, entry) {
   return sum + (entry.durationMs ?? 0);
 }
-//@ chunk-ah34pb7m.js:194632-194811 fingerprint = _temp2 (0.851)
+//@ chunk-ah34pb7m.js:194632-194811 fingerprint (2.1.88 match: _temp2, 0.851)
 function renderStopHookCommandLine(info, idx) {
   return jsxProd_default_2(
     Text,
@@ -599,7 +599,7 @@ function renderStopHookCommandLine(info, idx) {
     `cmd-${idx}`,
   );
 }
-//@ chunk-ah34pb7m.js:194811-194993 fingerprint = _temp3 (0.718)
+//@ chunk-ah34pb7m.js:194811-194993 fingerprint (2.1.88 match: _temp3, 0.718)
 function renderStopHookCommandLineCompact(info, idx) {
   return jsxProd_default_2(
     Text,
@@ -635,7 +635,7 @@ function renderStopHookFeedbackLine(line, index) {
     `feedback-${index}`,
   );
 }
-//@ chunk-ah34pb7m.js:195139-195248 placement = _temp0 (0.683)
+//@ chunk-ah34pb7m.js:195139-195248 placement (2.1.88 match: _temp0, 0.683)
 function agentRef(a) {
   return {
     id: a.id,
@@ -663,7 +663,7 @@ function isLivelyAvalancheEnabled() {
 //@ chunk-ah34pb7m.js:195458-195478 layout
 var memoryQualifierApi = null;
 var accountMemoryModule = null;
-//@ chunk-ah34pb7m.js:195478-200180 fingerprint = SystemTextMessage (0.561)
+//@ chunk-ah34pb7m.js:195478-200180 fingerprint (2.1.88 match: SystemTextMessage, 0.561)
 /**
  * 系统消息分派：turn_duration（"Worked for …"、预算/后台 agent）、memory_saved/account_memory_saved、away_summary、agents_killed、stop_hook_summary（"Ran N hooks"）、bridge_status（"/remote-control is active"）、api_error、model_fallback/model_refusal_*、permission_denied/permission_retry、scheduled_task_fire、cloud_session_status 等；其余按 level 着色显示文本。
  */
@@ -1068,7 +1068,7 @@ function SystemTextMessage(props) {
   } else t4 = $[64];
   return t4;
 }
-//@ chunk-ah34pb7m.js:200180-201377 fingerprint = StopHookSummaryMessage (0.765)
+//@ chunk-ah34pb7m.js:200180-201377 fingerprint (2.1.88 match: StopHookSummaryMessage, 0.765)
 function StopHookSummaryMessage(props) {
   let $ = useMemoCache(2);
   let { message, addMargin, verbose, isTranscriptMode } = props;
@@ -1196,7 +1196,7 @@ function StopHookSummaryMessage(props) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:201377-202330 fingerprint = SystemTextMessageInner (0.721)
+//@ chunk-ah34pb7m.js:201377-202330 fingerprint (2.1.88 match: SystemTextMessageInner, 0.721)
 function SystemTextMessageInner(props) {
   let $ = useMemoCache(19);
   let { content, addMargin, dot, color, dimColor, highlight } = props;
@@ -1407,7 +1407,7 @@ function TurnDurationRow(props) {
   } else renderHook = $[20];
   return actionKeysNamespace.useRenderHook(renderInput, renderHook);
 }
-//@ chunk-ah34pb7m.js:204046-206407 fingerprint = TurnDurationMessage (0.466)
+//@ chunk-ah34pb7m.js:204046-206407 fingerprint (2.1.88 match: TurnDurationMessage, 0.466)
 /**
  * 回合耗时消息："✻ <随机完成动词> for Xm Ys"，附带 token 用量、提醒（nudge）计数与仍在后台运行的 agent/工作流数。
  */
@@ -1623,7 +1623,7 @@ function TurnDurationMessage(props) {
 }
 //@ chunk-ah34pb7m.js:206407-206439 layout
 var TENGU_LIVELY_AVALANCHE = "tengu_lively_avalanche";
-//@ chunk-ah34pb7m.js:206439-207625 fingerprint = MemorySavedMessage (0.642)
+//@ chunk-ah34pb7m.js:206439-207625 fingerprint (2.1.88 match: MemorySavedMessage, 0.642)
 function MemorySavedMessage(props) {
   let $ = useMemoCache(18);
   let { message, addMargin, verbose } = props;
@@ -1790,7 +1790,7 @@ function MemoryFilePath(p) {
   } else wrapperElement = $[11];
   return wrapperElement;
 }
-//@ chunk-ah34pb7m.js:207996-208617 fingerprint = MemoryFileRow (0.734)
+//@ chunk-ah34pb7m.js:207996-208617 fingerprint (2.1.88 match: MemoryFileRow, 0.734)
 function MemoryFileRow(props) {
   let $ = useMemoCache(16);
   let { path } = props;
@@ -1857,7 +1857,7 @@ function MemoryFileRow(props) {
   } else t8 = $[15];
   return t8;
 }
-//@ chunk-ah34pb7m.js:208617-209574 fingerprint = BridgeStatusMessage (0.355)
+//@ chunk-ah34pb7m.js:208617-209574 fingerprint (2.1.88 match: BridgeStatusMessage, 0.355)
 function BridgeStatusMessage(props) {
   let $ = useMemoCache(13);
   let { message, addMargin } = props;

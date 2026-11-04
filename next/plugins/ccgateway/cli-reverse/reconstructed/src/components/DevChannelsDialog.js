@@ -23,11 +23,11 @@ import { Dialog } from "./design-system/Dialog.js";
 function exitZeroNow() {
   gracefulShutdownSync(0);
 }
-//@ chunk-jmdd9gvn.js:13650-13744 layout = _temp2 (1)
+//@ chunk-jmdd9gvn.js:13650-13744 layout (2.1.88 match: _temp2, 1)
 function exitZeroToo(c) {
   return c.kind === "plugin" ? `plugin:${c.name}@${c.marketplace}` : `server:${c.name}`;
 }
-//@ chunk-jmdd9gvn.js:13744-14784 fingerprint = DevChannelsDialog (0.658)
+//@ chunk-jmdd9gvn.js:13744-14784 fingerprint (2.1.88 match: DevChannelsDialog, 0.658)
 function DevChannelsDialog(props) {
   let $ = useMemoCache(13);
   let { channels, onAccept } = props;

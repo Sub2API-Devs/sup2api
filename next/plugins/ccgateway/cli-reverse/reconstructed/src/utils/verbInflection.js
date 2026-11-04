@@ -175,7 +175,7 @@ function toPastTense(text) {
   if (Object.hasOwn(DOUBLED_PROGRESSIVE, lower)) return DOUBLED_PROGRESSIVE[lower].slice(0, -3) + "ed";
   return text + "ed";
 }
-//@ chunk-sddr5zxg.js:2666-2744 placement = capitalize (1)
+//@ chunk-sddr5zxg.js:2666-2744 placement (2.1.88 match: capitalize, 1)
 function capitalize(str, text) {
   return /^[A-Z]/.test(str) ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }

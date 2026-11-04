@@ -20,7 +20,7 @@ import { initializeIdeIntegration, abortIdeSearch } from "../utils/ide.js";
 import { IDE_ONBOARDING_DIALOG } from "../screens/replDialogState.js";
 import { errorMessage } from "../utils/errors.js";
 
-//@ chunk-18hwfzwa.js:1688782-1690353 fingerprint = useIDEIntegration (0.621)
+//@ chunk-18hwfzwa.js:1688782-1690353 fingerprint (2.1.88 match: useIDEIntegration, 0.621)
 /**
  * IDE 集成：检测可连接的 IDE（ws-ide/sse-ide），按 autoConnectIde 设置/flag 自动连接并加入动态 MCP 配置，必要时自动安装扩展，返回 {installationStatus, installExtension}。
  */

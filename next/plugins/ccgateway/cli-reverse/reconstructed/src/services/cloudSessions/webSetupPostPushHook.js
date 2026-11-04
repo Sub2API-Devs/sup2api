@@ -85,7 +85,7 @@ function isGithubPushTarget(gitOperation, eventType) {
   let cachedRemoteHost = getCachedRemoteHost();
   return cachedRemoteHost !== null && isGithubDotCom(cachedRemoteHost);
 }
-//@ chunk-m2yw48pg.js:6876-7032 placement = GIT_PUSH_RE (0.494)
+//@ chunk-m2yw48pg.js:6876-7032 placement (2.1.88 match: GIT_PUSH_RE, 0.494)
 /**
  * 命令里的每个 git push 都不带额外选项且只推 origin 时为真；webSetupPostPushHook 用它限定只在普通推送后触发。
  */
@@ -100,7 +100,7 @@ function isPlainPushToOrigin(command) {
     )
   );
 }
-//@ chunk-m2yw48pg.js:7032-7156 placement = registerSessionFileAccessHooks (1)
+//@ chunk-m2yw48pg.js:7032-7156 placement (2.1.88 match: registerSessionFileAccessHooks, 1)
 function registerSessionFileAccessHooks() {
   let hook = {
     type: "callback",

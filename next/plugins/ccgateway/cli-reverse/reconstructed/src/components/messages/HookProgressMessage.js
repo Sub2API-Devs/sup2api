@@ -17,7 +17,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { MessageResponse } from "../MessageResponse.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-ah34pb7m.js:64280-65544 fingerprint = HookProgressMessage (0.838)
+//@ chunk-ah34pb7m.js:64280-65544 fingerprint (2.1.88 match: HookProgressMessage, 0.838)
 /**
  * hook 进度："Running <事件> hooks…"，完成后 "N <事件> hooks ran"。
  */

@@ -64,7 +64,7 @@ deferInit("chunk-dcmhvw5a.js:71850", () => {
     }),
   );
 });
-//@ chunk-dcmhvw5a.js:75983-76003 fingerprint = OFFICIAL_GITHUB_ORG (1)
+//@ chunk-dcmhvw5a.js:75983-76003 fingerprint (2.1.88 match: OFFICIAL_GITHUB_ORG, 1)
 var OFFICIAL_GITHUB_ORG = "anthropics";
 //@ chunk-dcmhvw5a.js:76003-76060 layout
 /**
@@ -279,7 +279,7 @@ function HeadersHelperCommandSchema() {
         "headersHelper must be printable ASCII (letters, digits, punctuation, single spaces) with no runs of 4 or more spaces",
     });
 }
-//@ chunk-dcmhvw5a.js:79995-80535 fingerprint = ALLOWED_OFFICIAL_MARKETPLACE_NAMES (0.589)
+//@ chunk-dcmhvw5a.js:79995-80535 fingerprint (2.1.88 match: ALLOWED_OFFICIAL_MARKETPLACE_NAMES, 0.589)
 /**
  * 官方市场保留名清单：官方（claude-plugins-official 等 14 个）、社区（claude-community…）、插件目录（anthropic-plugin-directory）；并集 RESERVED_MARKETPLACE_NAMES 只能由 anthropics/* 的 GitHub 来源使用。
  */
@@ -331,12 +331,12 @@ function isOfficialMarketplaceName(marketplaceName) {
     OFFICIAL_VERTICAL_MARKETPLACE_NAMES.includes(normalizedName)
   );
 }
-//@ chunk-dcmhvw5a.js:80607-80672 fingerprint = NO_AUTO_UPDATE_OFFICIAL_MARKETPLACES (0.667)
+//@ chunk-dcmhvw5a.js:80607-80672 fingerprint (2.1.88 match: NO_AUTO_UPDATE_OFFICIAL_MARKETPLACES, 0.667)
 var NO_AUTO_UPDATE_OFFICIAL_MARKETPLACES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-dcmhvw5a.js:80607", () => {
   NO_AUTO_UPDATE_OFFICIAL_MARKETPLACES = new Set(["knowledge-work-plugins", "first-party-plugins"]);
 });
-//@ chunk-dcmhvw5a.js:80672-80903 callgraph-witnessed = isMarketplaceAutoUpdate (0.377)
+//@ chunk-dcmhvw5a.js:80672-80903 callgraph-witnessed (2.1.88 match: isMarketplaceAutoUpdate, 0.377)
 /**
  * 市场是否自动更新：显式参数 > 条目 autoUpdate > claudeai/pluginDirectory 来源默认开 > 官方名（knowledge-work-plugins、first-party-plugins 除外）默认开。
  */
@@ -446,7 +446,7 @@ function isAnthropicsGitUrl(url) {
   let trimmed = url.trim();
   return trimmed.includes(":") && isAnthropicsGithubRepo(trimmed);
 }
-//@ chunk-dcmhvw5a.js:82055-82472 fingerprint = validateOfficialNameSource (0.975)
+//@ chunk-dcmhvw5a.js:82055-82472 fingerprint (2.1.88 match: validateOfficialNameSource, 0.975)
 /**
  * 保留市场名只允许 github/git 来源且仓库在 anthropics/ 下；违反时返回错误文案，否则 null。
  */
@@ -470,7 +470,7 @@ function isAnthropicsMarketplaceSource(source) {
   }
   return source.source === "git" && source.url !== undefined && isAnthropicsGitUrl(source.url);
 }
-//@ chunk-dcmhvw5a.js:82611-83957 fingerprint = McpbPath (0.36)
+//@ chunk-dcmhvw5a.js:82611-83957 fingerprint (2.1.88 match: McpbPath, 0.36)
 /**
  * 插件 manifest 路径类基础 schema（RelativePath 必须以 ./ 开头，JSON/Markdown/MCPB 路径变体）和保留市场名表：inline、builtin、skills-dir、synced、claude-plugin-test、npm 以及预留的 pip/uv/cargo/github/gh。
  */
@@ -563,7 +563,7 @@ function refineNotPackageMarketplaceName(name, context) {
       message: `Marketplace name "${name_2}" is reserved for ${RESERVED_MARKETPLACE_NAME_PURPOSES[name_2]}`,
     });
 }
-//@ chunk-dcmhvw5a.js:84358-85131 fingerprint = MarketplaceNameSchema (0.598)
+//@ chunk-dcmhvw5a.js:84358-85131 fingerprint (2.1.88 match: MarketplaceNameSchema, 0.598)
 /**
  * 市场名 schema 工厂：非空、无空格、无控制/双向字符、无路径分隔符与 ..、不仿冒官方（检测函数由参数给出）、不占用保留名。
  */
@@ -603,7 +603,7 @@ deferInit("chunk-dcmhvw5a.js:84358", () => {
 function MarketplaceNameStrictSchema(isImpersonating) {
   return buildMarketplaceNameSchema(isImpersonating).superRefine(refineNotPackageMarketplaceName);
 }
-//@ chunk-dcmhvw5a.js:85175-101864 callgraph-witnessed = LspServerConfigSchema (0.255)
+//@ chunk-dcmhvw5a.js:85175-101864 callgraph-witnessed (2.1.88 match: LspServerConfigSchema, 0.255)
 /**
  * 插件 manifest（.claude-plugin/plugin.json）各组成部分的 zod schema：元数据、hooks、commands、agents、skills、outputStyles、themes、workflows、mcpServers、userConfig、channels、LSP 服务器、monitors（后台监视命令）等；都用 lazySchema 包裹。
  */
@@ -1175,7 +1175,7 @@ function isValidNpmPackageName(name) {
     (SCOPED_NPM_NAME_RE.test(name) || UNSCOPED_NPM_NAME_RE.test(name))
   );
 }
-//@ chunk-dcmhvw5a.js:101949-102252 fingerprint = NpmPackageNameSchema (0.835)
+//@ chunk-dcmhvw5a.js:101949-102252 fingerprint (2.1.88 match: NpmPackageNameSchema, 0.835)
 /**
  * npm 包名 schema（禁止 `..` 与 `//`、须为合法 npm 名）及同一语句里的插件二进制相关常量：二进制文件名正则、sha256 正则、下载并发 16、单插件最多 64 个二进制、1 MiB 常量、二进制 pin schema。
  */
@@ -1572,7 +1572,7 @@ function hasGithubWildcard(url) {
   } catch {}
   return path_2.includes("*");
 }
-//@ chunk-dcmhvw5a.js:108311-115001 fingerprint = MarketplaceSourceSchema (0.644)
+//@ chunk-dcmhvw5a.js:108311-115001 fingerprint (2.1.88 match: MarketplaceSourceSchema, 0.644)
 /**
  * 市场来源（marketplace source）的判别联合 schema：url、github、git、npm、file、directory、skills-dir（策略哨兵）、hostPattern、pathPattern、settings（settings.json 内联市场）。参数为 true 时 settings 名字只做宽松校验（读 known_marketplaces.json 用）。
  */
@@ -1895,7 +1895,7 @@ deferInit("chunk-dcmhvw5a.js:117658", () => {
 function getKnownMarketplaceSourceSchema() {
   return MarketplaceSourceLenientSchema();
 }
-//@ chunk-dcmhvw5a.js:117705-118445 fingerprint = gitSha (0.34)
+//@ chunk-dcmhvw5a.js:117705-118445 fingerprint (2.1.88 match: gitSha, 0.34)
 /**
  * 市场来源相关 schema：策略名单用的来源 schema（额外支持 pluginDirectory 哨兵）、已知市场来源 schema、40 位 git SHA schema、sha256 十六进制 schema，以及 archive URL 必须 https 且不得指向回环/链路本地/云元数据地址的错误文案。
  */
@@ -1940,7 +1940,7 @@ function isSafeArchiveUrl(url) {
     return false;
   }
 }
-//@ chunk-dcmhvw5a.js:118545-125707 fingerprint = PluginSourceSchema (0.467)
+//@ chunk-dcmhvw5a.js:118545-125707 fingerprint (2.1.88 match: PluginSourceSchema, 0.467)
 /**
  * 插件来源 schema：相对路径（相对市场根）、npm、url（git）、github、git-subdir（稀疏检出子目录）、archive（https zip + sha256）、command（本地命令打印插件目录，copy/link 模式）、unsupported（解析失败占位）。SettingsMarketplacePluginSchema 是 settings 内联市场的插件条目，只允许远程来源。
  */
@@ -2117,7 +2117,7 @@ deferInit("chunk-dcmhvw5a.js:118545", () => {
 function isRelativeSourcePath(source) {
   return typeof source === "string" && source.startsWith("./");
 }
-//@ chunk-dcmhvw5a.js:125834-129217 fingerprint = PluginMarketplaceEntrySchema (0.392)
+//@ chunk-dcmhvw5a.js:125834-129217 fingerprint (2.1.88 match: PluginMarketplaceEntrySchema, 0.392)
 /**
  * marketplace.json 中一个插件条目：manifest 字段全部可选 + name/source/headers/headersHelper/category/tags/strict（默认 true）/relevance（topic + signals：cli、hosts、filesRead、manifestDeps、cwd，用于“Working with X?”提示与推荐）。
  */
@@ -2402,7 +2402,7 @@ function applyMarketplacePluginRoot(marketplace) {
     plugins: marketplace.plugins.map((plugin) => resolveBareSourceUnderPluginRoot(plugin, pluginRoot)),
   };
 }
-//@ chunk-dcmhvw5a.js:131787-133304 fingerprint = PluginMarketplaceSchema (0.71)
+//@ chunk-dcmhvw5a.js:131787-133304 fingerprint (2.1.88 match: PluginMarketplaceSchema, 0.71)
 /**
  * marketplace.json schema：name、version、description、owner、plugins（逐条宽容解析）、forceRemoveDeletedPlugins、metadata.pluginRoot、allowCrossMarketplaceDependenciesOn、renames（旧名→新名/null）。
  */
@@ -2519,7 +2519,7 @@ function isNpmPluginId(pluginId) {
     isValidNpmPackageName(pluginId.slice(0, -NPM_MARKETPLACE_SUFFIX.length))
   );
 }
-//@ chunk-dcmhvw5a.js:133777-136457 fingerprint = PluginInstallationEntrySchema (0.508)
+//@ chunk-dcmhvw5a.js:133777-136457 fingerprint (2.1.88 match: PluginInstallationEntrySchema, 0.508)
 /**
  * 插件 ID（name@marketplace 或 <package>@npm）、依赖引用（名字[@市场][@^版本]或 {name,marketplace}）以及 installed_plugins.json 的 V1/V2 schema；V2 每个插件 ID 对应一组安装条目（scope、projectPath、installPath、version、gitCommitSha、auto…）。
  */
@@ -2670,7 +2670,7 @@ function parseInstalledPluginsV2Leniently(file) {
     firstUnparseableError,
   };
 }
-//@ chunk-dcmhvw5a.js:136838-137274 fingerprint = KnownMarketplaceSchema (0.763)
+//@ chunk-dcmhvw5a.js:136838-137274 fingerprint (2.1.88 match: KnownMarketplaceSchema, 0.763)
 /**
  * known_marketplaces.json：市场名 → {source, installLocation, lastUpdated, autoUpdate}。claude.ai 同步的市场名以 claudeai- 开头（org/default/account）。
  */
@@ -2693,14 +2693,14 @@ deferInit("chunk-dcmhvw5a.js:136838", () => {
   CLAUDEAI_MARKETPLACE_PREFIX = "claudeai-";
   CLAUDEAI_MARKETPLACE_KINDS = ["org", "default", "account"];
 });
-//@ chunk-yf5m6p65.js:4323-4363 fingerprint = PluginManifestOutputStylesSchema (0.375)
+//@ chunk-yf5m6p65.js:4323-4363 fingerprint (2.1.88 match: PluginManifestOutputStylesSchema, 0.375)
 /**
  * 清掉全局缓存的输出样式（名字配错）。
  */
 function clearCachedOutputStyles() {
   getPluginRegistry().outputStyles = undefined;
 }
-//@ chunk-bfnfj4kx.js:4629-4766 fingerprint = PluginManifestSchema (0.355)
+//@ chunk-bfnfj4kx.js:4629-4766 fingerprint (2.1.88 match: PluginManifestSchema, 0.355)
 function PluginManifestSchema_2(cell, prior) {
   if (cell.shape === undefined) return prior === undefined ? cell.initial : prior;
   let current = prior;

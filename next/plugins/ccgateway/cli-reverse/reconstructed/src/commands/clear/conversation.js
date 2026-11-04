@@ -126,7 +126,7 @@ import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
 //@ chunk-231n2j4w.js:1904-1924 affinity
 var RESPONSE_PAIR_RETIREMENT_HOOK = null;
 var PAUSE_STAMPS_CARRY_HOOK = null;
-//@ chunk-231n2j4w.js:1924-6914 facade-exports = clearConversation (0.403)
+//@ chunk-231n2j4w.js:1924-6914 facade-exports (2.1.88 match: clearConversation, 0.403)
 async function* clearConversation({
   session,
   setMessages,

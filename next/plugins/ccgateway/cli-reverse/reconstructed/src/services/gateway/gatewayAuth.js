@@ -36,7 +36,7 @@ import { getSecureStorage } from "../../utils/secureStorage/index.js";
 import { mutateEveryCredentialLeg } from "../../utils/secureStorage/credentialLegs.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:492087-492281 placement = JwtBearerResponseSchema (0.393)
+//@ chunk-aepeg2w5.js:492087-492281 placement (2.1.88 match: JwtBearerResponseSchema, 0.393)
 /**
  * 网关令牌提前刷新的余量，以及网关令牌响应与吊销端点发现的 schema。
  */
@@ -530,7 +530,7 @@ async function discoverRevocationEndpoint(url, baseUrl) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:498575-498909 placement = _fetchMetricsEnabled (0.366)
+//@ chunk-aepeg2w5.js:498575-498909 placement (2.1.88 match: _fetchMetricsEnabled, 0.366)
 /**
  * 网关登出：POST 撤销网关令牌。旧版名 _fetchMetricsEnabled 为错配；应归登出/网关模块。
  */

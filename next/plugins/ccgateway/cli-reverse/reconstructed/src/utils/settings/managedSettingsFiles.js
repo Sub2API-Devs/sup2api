@@ -21,7 +21,7 @@ import { readWslInheritFlag } from "./types.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { isManagedSettingsDropInName } from "./managedFileSettings.js";
 
-//@ chunk-q8cqcff6.js:17707-17768 placement = isRealPathWithinTeamDir (1)
+//@ chunk-q8cqcff6.js:17707-17768 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundErrno_5(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";

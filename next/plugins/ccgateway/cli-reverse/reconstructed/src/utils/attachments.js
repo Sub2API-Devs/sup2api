@@ -485,7 +485,7 @@ import { getTokenCountFromUsage as getTokenCountFromUsage_5 } from "./messages/u
 import { getSessionCostUSD } from "../cost-tracker.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bnwcqde4.js:4394-4502 fingerprint = createAttachmentMessage (1)
+//@ chunk-bnwcqde4.js:4394-4502 fingerprint (2.1.88 match: createAttachmentMessage, 1)
 /**
  * 把一个 Attachment 包成内部 attachment 消息 {type:"attachment", uuid, timestamp, attachment}（jlr 规整附件字段）。
  */
@@ -497,7 +497,7 @@ function createAttachmentMessage(condition, condition_2) {
     attachment: buildGoalSentinelAttachment(condition, condition_2),
   };
 }
-//@ chunk-e6aww6q8.js:117298-117385 fingerprint = memoryHeader (1)
+//@ chunk-e6aww6q8.js:117298-117385 fingerprint (2.1.88 match: memoryHeader, 1)
 /**
  * 记忆文件标题行："<相对时间> Memory: <路径>:"，无时间时 "Memory: <路径>:"；relevant_memories 附件与 normalizeAttachmentForAPI 共用。
  */
@@ -510,7 +510,7 @@ function memoryHeader(path, mtimeMs) {
 Memory: ${displayPath}:`
     : `Memory: ${displayPath}:`;
 }
-//@ chunk-e6aww6q8.js:195424-195506 fingerprint = INLINE_NOTIFICATION_MODES (1)
+//@ chunk-e6aww6q8.js:195424-195506 fingerprint (2.1.88 match: INLINE_NOTIFICATION_MODES, 1)
 /**
  * origin.kind 为 task-notification 时返回 "task-notification"，否则 "prompt"。旧版名 INLINE_NOTIFICATION_MODES 为错配（那是常量集合 jxr）。
  */
@@ -545,7 +545,7 @@ var MAX_SCANNED_ENTRIES = 1e4;
  * 目录项列出上限 1000。
  */
 var MAX_LISTED_ENTRIES = 1000;
-//@ chunk-e6aww6q8.js:1328056-1328376 placement = sanitizeAppNames (0.528)
+//@ chunk-e6aww6q8.js:1328056-1328376 placement (2.1.88 match: sanitizeAppNames, 0.528)
 /**
  * （误归 computerUse）过滤被拒绝的目录项，最多扫描 1 万、列出 1000，超出追加 "… and N more entries"。
  */
@@ -565,7 +565,7 @@ async function filterListableEntries(entries, ctx, signal) {
   }
   return index < entries.length ? [...names, `\u2026 and ${entries.length - index} more entries`] : names;
 }
-//@ chunk-e6aww6q8.js:1351122-1351244 fingerprint = getNestedMemoryAttachmentsForFile (0.777)
+//@ chunk-e6aww6q8.js:1351122-1351244 fingerprint (2.1.88 match: getNestedMemoryAttachmentsForFile, 0.777)
 /**
  * 记忆文件是否计入：tengu_paper_halyard 开时排除 Project/Local 类型，其余要求有内容。旧版名 getNestedMemoryAttachmentsForFile 为错配。
  */
@@ -637,7 +637,7 @@ The tier is enforced by the frontmost-app check: if a tier-"read" app is in fron
  */
 var SLACK_MCP_POSTING_GUIDANCE =
   "Before posting a new message to a Slack channel the user didn't name, read its topic and description with slack_search_channels, and if they say that kind of message belongs elsewhere, tell the user instead of posting.";
-//@ chunk-e6aww6q8.js:2311297-2311501 placement = pinCacheEdits (0.707)
+//@ chunk-e6aww6q8.js:2311297-2311501 placement (2.1.88 match: pinCacheEdits, 0.707)
 /**
  * MCP 服务器附加说明块：Slack MCP 的发帖提示，以及（未禁用时）computer-use 说明。旧版名 pinCacheEdits 为错配；属于 MCP 说明，归错文件。
  */
@@ -665,7 +665,7 @@ function getMcpServerInstructionBlocks(mcpClients) {
         ...mapped,
       ];
 }
-//@ chunk-e6aww6q8.js:3310228-3310295 fingerprint = TODO_REMINDER_CONFIG (1)
+//@ chunk-e6aww6q8.js:3310228-3310295 fingerprint (2.1.88 match: TODO_REMINDER_CONFIG, 1)
 /**
  * {TURNS_SINCE_WRITE:10, TURNS_BETWEEN_REMINDERS:10}：距上次 TodoWrite 与上次提醒都满 10 轮才发 todo_reminder。
  */
@@ -685,7 +685,7 @@ function getTodoReminderMode() {
     ? "off"
     : "baseline";
 }
-//@ chunk-e6aww6q8.js:3310443-3310552 fingerprint = PLAN_MODE_ATTACHMENT_CONFIG (0.8)
+//@ chunk-e6aww6q8.js:3310443-3310552 fingerprint (2.1.88 match: PLAN_MODE_ATTACHMENT_CONFIG, 0.8)
 /**
  * {TURNS_BETWEEN_MAINTENANCE:10}：ultra effort 维持期间每 10 轮重发一次精简 ultra_effort_enter。
  */
@@ -717,7 +717,7 @@ function getUltraEffortReminderInterval() {
   if (positiveInt_2 !== undefined) return positiveInt_2;
   return ULTRA_EFFORT_CONFIG.TURNS_BETWEEN_MAINTENANCE;
 }
-//@ chunk-e6aww6q8.js:3310891-3310925 fingerprint = RELEVANT_MEMORIES_CONFIG (1)
+//@ chunk-e6aww6q8.js:3310891-3310925 fingerprint (2.1.88 match: RELEVANT_MEMORIES_CONFIG, 1)
 /**
  * {MAX_SESSION_BYTES:61440}：一个会话里相关记忆附件累计上限 60KB，超过不再预取。
  */
@@ -733,7 +733,7 @@ function areAttachmentsDisabled(toolUseContext) {
     env.CLAUDE_CODE_DISABLE_ATTACHMENTS || env.CLAUDE_CODE_SIMPLE || toolUseContext.options.bareFork,
   );
 }
-//@ chunk-e6aww6q8.js:3311033-3319176 fingerprint = getAttachments (0.511)
+//@ chunk-e6aww6q8.js:3311033-3319176 fingerprint (2.1.88 match: getAttachments, 0.511)
 /**
  * getAttachments：每轮生成附件的入口。子代理委托观察时返回空；附件被禁用时只给队列命令、代理列表增量、沙箱说明等。否则在 1 秒超时的独立 AbortController 下并发运行各生成器（每个经 maybe 包装、计时、出错返回空）：用户输入类（@ 文件、MCP 资源、代理/技能/同伴提及）、全线程类（队列命令、环境、模型、延迟工具/代理/MCP 增量、变更文件、嵌套记忆、技能列表、计划/自动模式、待办、团队、关键提醒、token/预算提醒…）、仅主线程类（IDE 选区/打开文件、输出风格、诊断、任务状态、异步钩子、记忆更新、withheld 记忆、token 用量）。结果经 dedupeWithheldMemory 去重。
  */
@@ -1329,7 +1329,7 @@ function dedupeWithheldMemory(attachments) {
         ];
   });
 }
-//@ chunk-e6aww6q8.js:3319423-3320109 fingerprint = maybe (0.706)
+//@ chunk-e6aww6q8.js:3319423-3320109 fingerprint (2.1.88 match: maybe, 0.706)
 /**
  * maybe(label, fn)：运行一个附件生成器并计时；5% 采样记 tengu_attachment_compute_duration（大小、数量、是否出错）；出错时记日志并返回空数组，不影响其他附件。
  */
@@ -1373,7 +1373,7 @@ async function maybe(label, f) {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3320109-3320157 layout = INLINE_NOTIFICATION_MODES (1)
+//@ chunk-e6aww6q8.js:3320109-3320157 layout (2.1.88 match: INLINE_NOTIFICATION_MODES, 1)
 /**
  * 能作为队列命令附件送入的模式集合：prompt、task-notification。
  */
@@ -1756,7 +1756,7 @@ async function buildPastedImageBlocks(pastedContents, limits) {
     ids: filtered.map((attachment) => attachment.id),
   };
 }
-//@ chunk-e6aww6q8.js:3325029-3325400 fingerprint = getPlanModeAttachmentTurnCount (0.9)
+//@ chunk-e6aww6q8.js:3325029-3325400 fingerprint (2.1.88 match: getPlanModeAttachmentTurnCount, 0.9)
 /**
  * 从最新往回数自上一条 plan_mode/plan_mode_reentry 附件以来的真实用户轮数；遇到 plan_mode_exit 停止。
  */
@@ -1916,7 +1916,7 @@ function getSilentTurnReminderAttachment(messages, mainLoopModel, nowMs) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3326819-3327007 fingerprint = countPlanModeAttachmentsSinceLastExit (1)
+//@ chunk-e6aww6q8.js:3326819-3327007 fingerprint (2.1.88 match: countPlanModeAttachmentsSinceLastExit, 1)
 /**
  * 最近一次 plan_mode_exit 之后的 plan_mode 附件数（决定完整/精简提醒）。
  */
@@ -1931,7 +1931,7 @@ function countPlanModeAttachmentsSinceLastExit(messages) {
   }
   return count;
 }
-//@ chunk-e6aww6q8.js:3327007-3327339 layout = countPlanModeAttachmentsSinceLastExit (0.837)
+//@ chunk-e6aww6q8.js:3327007-3327339 layout (2.1.88 match: countPlanModeAttachmentsSinceLastExit, 0.837)
 /**
  * 最近一条 plan_mode 附件的 planFilePath/planGoesToExitTool；先遇到 plan_mode_exit 返回 null。
  */
@@ -1971,7 +1971,7 @@ function buildPlanModeAttachment(reminderType, agentId, tools) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3327508-3328319 fingerprint = getPlanModeAttachments (0.856)
+//@ chunk-e6aww6q8.js:3327508-3328319 fingerprint (2.1.88 match: getPlanModeAttachments, 0.856)
 /**
  * 计划模式（permission mode=plan）时产出 plan_mode 附件：首轮或每 5 轮一次，每 5 次一次完整版，其余精简；计划文件状态变化时立即重发；曾退出后重新进入时给 plan_mode_reentry。
  */
@@ -2024,7 +2024,7 @@ async function getPlanModeAttachments(planSlugSeed, messages, toolUseContext, op
   });
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3328319-3328611 fingerprint = getPlanModeExitAttachment (0.8)
+//@ chunk-e6aww6q8.js:3328319-3328611 fingerprint (2.1.88 match: getPlanModeExitAttachment, 0.8)
 /**
  * 刚离开计划模式时产出一次 plan_mode_exit（带计划文件路径与是否存在）。
  */
@@ -2053,7 +2053,7 @@ async function getPlanModeExitAttachment(messages, toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3328611-3328823 fingerprint = countAutoModeAttachmentsSinceLastExit (1)
+//@ chunk-e6aww6q8.js:3328611-3328823 fingerprint (2.1.88 match: countAutoModeAttachmentsSinceLastExit, 1)
 /**
  * 返回最近一条 auto_mode 附件（遇到 auto_mode_exit 返回 null）。旧版名 countAutoModeAttachmentsSinceLastExit 不准确。
  */
@@ -2066,7 +2066,7 @@ function getLastAutoModeAttachment(messages) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3328823-3329537 callgraph-fingerprint = getAutoModeAttachments (0.186)
+//@ chunk-e6aww6q8.js:3328823-3329537 callgraph-fingerprint (2.1.88 match: getAutoModeAttachments, 0.186)
 /**
  * auto/bypassPermissions 模式下产出 auto_mode 附件（同意流程、bashFirst、steerOnly、finishExposedWork 等字段），已发过且状态未变则不重复。
  */
@@ -2120,7 +2120,7 @@ async function getAutoModeAttachments(messages, toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3329537-3329793 fingerprint = getAutoModeExitAttachment (0.507)
+//@ chunk-e6aww6q8.js:3329537-3329793 fingerprint (2.1.88 match: getAutoModeExitAttachment, 0.507)
 /**
  * 离开 auto 模式时产出一次 auto_mode_exit（主线程）。
  */
@@ -2140,7 +2140,7 @@ async function getAutoModeExitAttachment(messages, toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3334304-3334413 fingerprint = getUltrathinkEffortAttachment (0.855)
+//@ chunk-e6aww6q8.js:3334304-3334413 fingerprint (2.1.88 match: getUltrathinkEffortAttachment, 0.855)
 /**
  * 输入含 ultrathink 关键词且开关开启时产出 ultrathink_effort（记 tengu_ultrathink）。
  */
@@ -2623,7 +2623,7 @@ function buildToolRevocationClassifier(toolUseContext) {
     connectingServersOf: (toolName) => pendingServersForTool(toolName, toolUseContext.options.mcpClients),
   };
 }
-//@ chunk-e6aww6q8.js:3339285-3340409 fingerprint = getAgentListingDeltaAttachment (0.709)
+//@ chunk-e6aww6q8.js:3339285-3340409 fingerprint (2.1.88 match: getAgentListingDeltaAttachment, 0.709)
 /**
  * 有 Agent 工具时，对比历史 agent_listing_delta，产出可用代理类型的增减（addedTypes/removedTypes/addedLines）。
  */
@@ -2693,7 +2693,7 @@ function getNeedsAuthMcpServerNames(mcpClients, tools = []) {
     )
     .map((mcpClient) => mcpClient.name);
 }
-//@ chunk-e6aww6q8.js:3340643-3340968 fingerprint = getMcpInstructionsDeltaAttachment (0.777)
+//@ chunk-e6aww6q8.js:3340643-3340968 fingerprint (2.1.88 match: getMcpInstructionsDeltaAttachment, 0.777)
 /**
  * MCP 服务器 instructions 的增减 → mcp_instructions_delta；含内置服务器附加说明。
  */
@@ -2759,7 +2759,7 @@ function getMcpDroppedToolsAttachment(toolUseContext, messages) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3341091-3341174 fingerprint = getCriticalSystemReminderAttachment (0.764)
+//@ chunk-e6aww6q8.js:3341091-3341174 fingerprint (2.1.88 match: getCriticalSystemReminderAttachment, 0.764)
 /**
  * 有 criticalSystemReminder_EXPERIMENTAL 文本时产出 critical_system_reminder（宿主 promptReminder 也复用它）。
  */
@@ -2801,7 +2801,7 @@ async function getOutputStyleAttachment(toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3341636-3342183 fingerprint = getSelectedLinesFromIDE (0.751)
+//@ chunk-e6aww6q8.js:3341636-3342183 fingerprint (2.1.88 match: getSelectedLinesFromIDE, 0.751)
 /**
  * IDE 选区：diff 视图选区给 selected_lines_in_diff；普通选区（连接了 IDE MCP、路径未被拒）给 selected_lines_in_ide（行号、内容、显示路径）。
  */
@@ -2843,7 +2843,7 @@ async function getSelectedLinesFromIDE(ideSelection, toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3342183-3342595 fingerprint = getDirectoriesToProcess (0.715)
+//@ chunk-e6aww6q8.js:3342183-3342595 fingerprint (2.1.88 match: getDirectoriesToProcess, 0.715)
 /**
  * 计算从 cwd 到目标文件之间需要加载 CLAUDE.md 的目录：嵌套目录、cwd 及其祖先、worktree 信息、检出目标路径。
  */
@@ -2890,14 +2890,14 @@ function isAdditionalDirWithoutNestedMemory(dir) {
     getDirectoriesToProcess(join(dir, "CLAUDE.md"), originalCwd).nestedDirs.length === 0
   );
 }
-//@ chunk-e6aww6q8.js:3342705-3342782 callgraph-fingerprint = isInstructionsMemoryType (1)
+//@ chunk-e6aww6q8.js:3342705-3342782 callgraph-fingerprint (2.1.88 match: isInstructionsMemoryType, 1)
 /**
  * 记忆类型是否为 User/Project/Local/Managed。
  */
 function isInstructionsMemoryType_2(type) {
   return type === "User" || type === "Project" || type === "Local" || type === "Managed";
 }
-//@ chunk-e6aww6q8.js:3342782-3344175 fingerprint = memoryFilesToAttachments (0.665)
+//@ chunk-e6aww6q8.js:3342782-3344175 fingerprint (2.1.88 match: memoryFilesToAttachments, 0.665)
 /**
  * 把记忆文件（CLAUDE.md 等）转成 nested_memory 附件：跳过已读文件、已在上下文里的相同内容；超长时按模型截断（记 context_claude_md_load nested_file_cut）。
  */
@@ -3180,7 +3180,7 @@ async function getNestedMemoryAttachmentsForFile(
   }
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3346117-3346436 fingerprint = getOpenedFileFromIDE (0.784)
+//@ chunk-e6aww6q8.js:3346117-3346436 fingerprint (2.1.88 match: getOpenedFileFromIDE, 0.784)
 /**
  * IDE 打开文件：附带该文件触发的嵌套记忆，再加 opened_file_in_ide。
  */
@@ -3376,7 +3376,7 @@ async function getAtMentionedFileAttachments(
   );
   return [...result.attached, ...result.hookContexts].filter(Boolean);
 }
-//@ chunk-e6aww6q8.js:3348324-3352037 fingerprint = processAtMentionedFiles (0.3)
+//@ chunk-e6aww6q8.js:3348324-3352037 fingerprint (2.1.88 match: processAtMentionedFiles, 0.3)
 /**
  * 处理 @ 提及的文件/目录：解析 #L 行范围，权限检查（拒绝/网络路径跳过），目录列出、文件生成 file/compact_file_reference/pdf_reference 等，记 tengu_at_mention_* 事件。
  */
@@ -3639,7 +3639,7 @@ async function processAtMentionedFiles(
     hookContexts,
   };
 }
-//@ chunk-e6aww6q8.js:3352037-3352324 fingerprint = processAgentMentions (0.595)
+//@ chunk-e6aww6q8.js:3352037-3352324 fingerprint (2.1.88 match: processAgentMentions, 0.595)
 /**
  * @agent-xxx 或 @"xxx (agent)" 提及 → agent_mention 附件（找不到的代理丢弃）。
  */
@@ -3879,7 +3879,7 @@ deferInit("chunk-e6aww6q8.js:3355812", () => {
   MAX_CHANGED_FILE_SNIPPET_CHARS = 16384;
   changedFilesOrderByState = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:3355842-3358973 fingerprint = getChangedFiles (0.432)
+//@ chunk-e6aww6q8.js:3355842-3358973 fingerprint (2.1.88 match: getChangedFiles, 0.432)
 /**
  * 检查已读文件（readFileState）在磁盘上是否变化：变化的文本文件给 edited_text_file（diff 片段，总长 16KB 内），图片给 edited_image_file；计划模式下跳过。
  */
@@ -4138,7 +4138,7 @@ function isAlreadyReadWhole(readFileState, filePath, earlierReadsMayBeCleared) {
     (!earlierReadsMayBeCleared || readFileState.get(filePath)?.offset === undefined)
   );
 }
-//@ chunk-e6aww6q8.js:3359508-3360723 fingerprint = getRelevantMemoryAttachments (0.541)
+//@ chunk-e6aww6q8.js:3359508-3360723 fingerprint (2.1.88 match: getRelevantMemoryAttachments, 0.541)
 /**
  * 相关记忆检索：按提及的代理记忆或自动记忆目录列出候选，用记忆选择器挑选，读取后生成 relevant_memories（可含账户召回）。
  */
@@ -4262,7 +4262,7 @@ async function getRelevantMemoryAttachments(
     ...accountAttachments,
   ];
 }
-//@ chunk-e6aww6q8.js:3360723-3361031 fingerprint = collectSurfacedMemories (0.869)
+//@ chunk-e6aww6q8.js:3360723-3361031 fingerprint (2.1.88 match: collectSurfacedMemories, 0.869)
 /**
  * 统计对话里已出现的相关记忆路径与总字节数（含账户召回）。
  */
@@ -4283,7 +4283,7 @@ function collectSurfacedMemories(messages) {
     totalBytes,
   };
 }
-//@ chunk-e6aww6q8.js:3361031-3361660 fingerprint = readMemoriesForSurfacing (0.843)
+//@ chunk-e6aww6q8.js:3361031-3361660 fingerprint (2.1.88 match: readMemoriesForSurfacing, 0.843)
 /**
  * 读取选中的记忆文件：限制为普通文件/目录内，截断时附提示（用 Read 看全文），返回 {path, content, mtimeMs, header, limit}。
  */
@@ -4337,7 +4337,7 @@ deferInit("chunk-e6aww6q8.js:3361660", () => {
     "compact",
   ]);
 });
-//@ chunk-e6aww6q8.js:3361745-3363462 fingerprint = startRelevantMemoryPrefetch (0.544)
+//@ chunk-e6aww6q8.js:3361745-3363462 fingerprint (2.1.88 match: startRelevantMemoryPrefetch, 0.544)
 /**
  * 在 queryLoop 入口启动相关记忆预取：主线程、非跳过来源、自动记忆或账户召回开启、最后一条用户消息有空白（或含 CJK）、会话预算未超 60KB 时，异步调用 getRelevantMemoryAttachments，返回可 using 释放的句柄。
  */
@@ -4514,7 +4514,7 @@ function isToolResultBlock_3(b) {
 function hasToolResultContent(content) {
   return Array.isArray(content) && content.some(isToolResultBlock_3);
 }
-//@ chunk-e6aww6q8.js:3364245-3364589 fingerprint = filterDuplicateMemoryAttachments (0.9)
+//@ chunk-e6aww6q8.js:3364245-3364589 fingerprint (2.1.88 match: filterDuplicateMemoryAttachments, 0.9)
 /**
  * 去掉已读过的相关记忆，把新记忆写入 readFileState 并记入已呈现集合；空的附件丢弃。
  */
@@ -4550,7 +4550,7 @@ function filterDuplicateMemoryAttachments(attachments, readFileState, session, e
 function getSkillAttachmentExtras(tools) {
   return {};
 }
-//@ chunk-e6aww6q8.js:3364614-3365645 fingerprint = getDynamicSkillAttachments (0.901)
+//@ chunk-e6aww6q8.js:3364614-3365645 fingerprint (2.1.88 match: getDynamicSkillAttachments, 0.901)
 /**
  * 文件操作触发的新技能目录：扫描技能目录，产出 dynamic_skill 附件（目录、技能名）。
  */
@@ -4627,7 +4627,7 @@ async function getDynamicSkillAttachments(toolUseContext) {
 async function getSkillListingAttachmentsLazy(...args) {
   return getSkillListingAttachments(...args);
 }
-//@ chunk-e6aww6q8.js:3365687-3366805 fingerprint = getSkillListingAttachments (0.674)
+//@ chunk-e6aww6q8.js:3365687-3366805 fingerprint (2.1.88 match: getSkillListingAttachments, 0.674)
 /**
  * 有 Skill 工具时产出 skill_listing：首次完整列表，之后只给新增（对比历史 digest），带技能数与名字。
  */
@@ -4687,7 +4687,7 @@ async function getSkillListingAttachments(toolUseContext, messages) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3366805-3367028 fingerprint = extractAtMentionedFiles (0.486)
+//@ chunk-e6aww6q8.js:3366805-3367028 fingerprint (2.1.88 match: extractAtMentionedFiles, 0.486)
 /**
  * 从输入中提取 @ 文件提及（@"带空格路径" 与普通 @path，排除 (agent)）。
  */
@@ -4744,7 +4744,7 @@ function extractAgentMentions(content) {
   for (let m of unquotedMatches) results.push(m.slice(m.indexOf("@") + 1));
   return uniq(results);
 }
-//@ chunk-e6aww6q8.js:3367674-3367881 fingerprint = parseAtMentionedFileLines (1)
+//@ chunk-e6aww6q8.js:3367674-3367881 fingerprint (2.1.88 match: parseAtMentionedFileLines, 1)
 /**
  * 解析 "file#L10-20" 形式的行范围。
  */
@@ -4785,7 +4785,7 @@ function hasFileEditTools(tools) {
     alwaysFalseStream(tools)
   );
 }
-//@ chunk-e6aww6q8.js:3368126-3368301 fingerprint = getDiagnosticAttachments (0.782)
+//@ chunk-e6aww6q8.js:3368126-3368301 fingerprint (2.1.88 match: getDiagnosticAttachments, 0.782)
 /**
  * IDE MCP 新诊断 → diagnostics 附件（isNew）。
  */
@@ -4802,7 +4802,7 @@ async function getDiagnosticAttachments(tools, session) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3368301-3368866 fingerprint = getLSPDiagnosticAttachments (0.958)
+//@ chunk-e6aww6q8.js:3368301-3368866 fingerprint (2.1.88 match: getLSPDiagnosticAttachments, 0.958)
 /**
  * LSP 待发诊断 → diagnostics 附件。
  */
@@ -4835,7 +4835,7 @@ async function getLSPDiagnosticAttachments(tools, toolUseContext) {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3368866-3369068 fingerprint = getAttachmentMessages (0.686)
+//@ chunk-e6aww6q8.js:3368866-3369068 fingerprint (2.1.88 match: getAttachmentMessages, 0.686)
 /**
  * getAttachmentMessages：调用 getAttachments，记 tengu_attachments（类型与 token 估算），逐个包装成 attachment 消息产出；记录本轮附件耗时。
  */
@@ -4885,7 +4885,7 @@ function buildAttachmentsEventPayload(attachments, querySource) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3369320-3370101 fingerprint = tryGetPDFReference (0.732)
+//@ chunk-e6aww6q8.js:3369320-3370101 fingerprint (2.1.88 match: tryGetPDFReference, 0.732)
 /**
  * PDF 超过页数/大小阈值或模型按页读取时，返回 pdf_reference（只给引用，不内联内容）。
  */
@@ -4940,7 +4940,7 @@ async function tryGetPDFReference(filename, mainLoopModel, fileHandle) {
   } catch {}
   return null;
 }
-//@ chunk-e6aww6q8.js:3370101-3373785 fingerprint = generateFileAttachment (0.627)
+//@ chunk-e6aww6q8.js:3370101-3373785 fingerprint (2.1.88 match: generateFileAttachment, 0.627)
 /**
  * 生成单个文件的附件：权限检查后按类型产出 text/image/notebook/pdf/pdf_reference/compact_file_reference/already_read_file 等，支持 offset/limit。
  */
@@ -5252,7 +5252,7 @@ async function generateFileAttachment(
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3374007-3374459 fingerprint = getTodoReminderTurnCounts (1)
+//@ chunk-e6aww6q8.js:3374007-3374459 fingerprint (2.1.88 match: getTodoReminderTurnCounts, 1)
 /**
  * 统计距上次 TodoWrite 与上次 todo_reminder 的助手轮数。
  */
@@ -5287,7 +5287,7 @@ function getTodoReminderTurnCounts(messages) {
     turnsSinceLastReminder: assistantTurnsSinceReminder,
   };
 }
-//@ chunk-e6aww6q8.js:3374608-3375014 fingerprint = getTodoReminderAttachments (0.943)
+//@ chunk-e6aww6q8.js:3374608-3375014 fingerprint (2.1.88 match: getTodoReminderAttachments, 0.943)
 /**
  * 有 TodoWrite 工具、提醒模式非 off、距上次写与上次提醒都 ≥10 轮时产出 todo_reminder（当前待办内容）。
  */
@@ -5313,7 +5313,7 @@ async function getTodoReminderAttachments(messages, toolUseContext) {
   }
   return [];
 }
-//@ chunk-e6aww6q8.js:3375014-3375477 fingerprint = getTaskReminderTurnCounts (1)
+//@ chunk-e6aww6q8.js:3375014-3375477 fingerprint (2.1.88 match: getTaskReminderTurnCounts, 1)
 /**
  * 统计距上次任务管理工具调用与上次 task_reminder 的助手轮数。
  */
@@ -5352,7 +5352,7 @@ function getTaskReminderTurnCounts(messages) {
     turnsSinceLastReminder: assistantTurnsSinceReminder,
   };
 }
-//@ chunk-e6aww6q8.js:3375477-3375851 fingerprint = getTaskReminderAttachments (0.791)
+//@ chunk-e6aww6q8.js:3375477-3375851 fingerprint (2.1.88 match: getTaskReminderAttachments, 0.791)
 /**
  * 任务工具（新任务系统）版提醒 → task_reminder，条件同 todo。
  */
@@ -5488,7 +5488,7 @@ async function getToolSearchUsageReminderAttachment(
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3377501-3377849 fingerprint = getUnifiedTaskAttachments (0.833)
+//@ chunk-e6aww6q8.js:3377501-3377849 fingerprint (2.1.88 match: getUnifiedTaskAttachments, 0.833)
 /**
  * 后台任务状态变化 → task_status 附件（状态、描述、增量摘要、输出文件路径）。
  */
@@ -5554,7 +5554,7 @@ function getMemoryUpdateAttachments(toolUseContext, messages = []) {
     })),
   );
 }
-//@ chunk-e6aww6q8.js:3378450-3379394 fingerprint = getAsyncHookResponseAttachments (0.774)
+//@ chunk-e6aww6q8.js:3378450-3379394 fingerprint (2.1.88 match: getAsyncHookResponseAttachments, 0.774)
 /**
  * 已完成的异步钩子响应 → async_hook_response 系列附件（SessionStart 重复输出跳过）。
  */
@@ -5649,7 +5649,7 @@ async function getTeammateMailboxAttachments(toolUseContext) {
   if (!isAgentSwarmsEnabled()) return [];
   return [];
 }
-//@ chunk-e6aww6q8.js:3379852-3380299 fingerprint = getTeamContextAttachment (0.901)
+//@ chunk-e6aww6q8.js:3379852-3380299 fingerprint (2.1.88 match: getTeamContextAttachment, 0.901)
 /**
  * 代理团队成员首轮产出 team_context（团队名、配置与任务列表路径、是否有任务工具）。
  */
@@ -5684,7 +5684,7 @@ function getTeamContextAttachment(messages) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3380299-3380461 fingerprint = getTokenUsageAttachment (1)
+//@ chunk-e6aww6q8.js:3380299-3380461 fingerprint (2.1.88 match: getTokenUsageAttachment, 1)
 /**
  * CLAUDE_CODE_ENABLE_TOKEN_USAGE_ATTACHMENT 时产出 token_usage（已用/总量/剩余）。
  */
@@ -5739,7 +5739,7 @@ function getTotalTokensReminderAttachment(
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3380786-3381047 layout = getTokenCountFromUsage (0.754)
+//@ chunk-e6aww6q8.js:3380786-3381047 layout (2.1.88 match: getTokenCountFromUsage, 0.754)
 /**
  * 最近一次压缩边界之后各回答 usage 的输入 token（首个与最后一个中较小者）。
  */
@@ -5762,7 +5762,7 @@ function getMinInputTokensSinceLastCompact(usage) {
   }
   return firstTotal === undefined || lastTotal === undefined ? undefined : Math.min(firstTotal, lastTotal);
 }
-//@ chunk-e6aww6q8.js:3381047-3381159 fingerprint = getMaxBudgetUsdAttachment (1)
+//@ chunk-e6aww6q8.js:3381047-3381159 fingerprint (2.1.88 match: getMaxBudgetUsdAttachment, 1)
 /**
  * 设置了 --max-budget-usd 时产出 budget_usd（已用/总额/剩余美元）。
  */

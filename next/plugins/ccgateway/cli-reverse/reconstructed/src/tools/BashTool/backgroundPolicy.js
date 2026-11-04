@@ -28,7 +28,7 @@ function classifyBashBackgrounding(toolCall, input, version, permissionContext, 
     return "foreground";
   return hasBackgroundRunRule(toolCall, permissionContext) ? "under_a_rule" : "kept";
 }
-//@ chunk-dz36xfxg.js:37035-37128 placement = inputSchema (0.67)
+//@ chunk-dz36xfxg.js:37035-37128 placement (2.1.88 match: inputSchema, 0.67)
 /**
  * deny/ask 规则是否对该工具的 run_in_background:true 生效。
  */

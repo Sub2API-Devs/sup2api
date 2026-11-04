@@ -799,7 +799,7 @@ function writeInitialPrompt(queryInstance, prompt, abortController, verbatimProm
 }
 //@ chunk-y805ph4h.js:76871-76935 placement
 var RETRYABLE_RM_ERRORS = new Set(["EBUSY", "EMFILE", "ENFILE", "ENOTEMPTY", "EPERM"]);
-//@ chunk-y805ph4h.js:76935-77083 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-y805ph4h.js:76935-77083 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 /**
  * 带重试的递归删除（EBUSY/EPERM 等最多 5 次）。名字配错。
  */

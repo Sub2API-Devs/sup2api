@@ -46,7 +46,7 @@ deferInit("chunk-e6aww6q8.js:205981", () => {
   SESSION_INGRESS_BASE_BACKOFF_MS = 500;
   sessionAppendLock = createKeyedQueue();
 });
-//@ chunk-e6aww6q8.js:206009-207815 fingerprint = appendSessionLogImpl (0.968)
+//@ chunk-e6aww6q8.js:206009-207815 fingerprint (2.1.88 match: appendSessionLogImpl, 0.968)
 /**
  * PUT 追加会话日志：带 Last-Uuid，409 时按服务器最后 uuid 修正重试，5xx/网络错误退避重试。
  */
@@ -145,7 +145,7 @@ async function appendSessionLogImpl(sessionId, entry, url, headers) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:207815-208094 fingerprint = appendSessionLog (0.877)
+//@ chunk-e6aww6q8.js:207815-208094 fingerprint (2.1.88 match: appendSessionLog, 0.877)
 /**
  * 用会话 JWT 追加日志。
  */
@@ -163,7 +163,7 @@ async function appendSessionLog(sessionId, entry, url) {
   };
   return sessionAppendLock.run(sessionId, () => appendSessionLogImpl(sessionId, entry, url, headers));
 }
-//@ chunk-e6aww6q8.js:208094-208428 fingerprint = getSessionLogs (0.831)
+//@ chunk-e6aww6q8.js:208094-208428 fingerprint (2.1.88 match: getSessionLogs, 0.831)
 /**
  * 用会话 JWT 读取日志。
  */
@@ -186,7 +186,7 @@ async function getSessionLogs(sessionId, url) {
   }
   return logs;
 }
-//@ chunk-e6aww6q8.js:208428-208643 fingerprint = getSessionLogsViaOAuth (1)
+//@ chunk-e6aww6q8.js:208428-208643 fingerprint (2.1.88 match: getSessionLogsViaOAuth, 1)
 /**
  * 用 OAuth 读取 /v1/session_ingress/session/<id>。
  */
@@ -199,7 +199,7 @@ async function getSessionLogsViaOAuth(sessionId, accessToken, orgUUID, refusesRe
   };
   return await fetchSessionLogsFromUrl(sessionId, url, headers, refusesRedirects);
 }
-//@ chunk-e6aww6q8.js:208838-213786 fingerprint = getTeleportEvents (0.456)
+//@ chunk-e6aww6q8.js:208838-213786 fingerprint (2.1.88 match: getTeleportEvents, 0.456)
 /**
  * 分页拉取 teleport 事件（每页 1000，最多 100 页）。
  */
@@ -443,7 +443,7 @@ function sessionLogsFetchError() {
 function noopSessionHook(refusesRedirects, status) {
   return;
 }
-//@ chunk-e6aww6q8.js:214006-215375 fingerprint = fetchSessionLogsFromUrl (0.795)
+//@ chunk-e6aww6q8.js:214006-215375 fingerprint (2.1.88 match: fetchSessionLogsFromUrl, 0.795)
 /**
  * GET 会话日志（可 CLAUDE_AFTER_LAST_COMPACT 只取最后一次压缩之后）。
  */
@@ -508,7 +508,7 @@ async function fetchSessionLogsFromUrl(sessionId, url, headers, refusesRedirects
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:215375-215483 fingerprint = findLastUuid (1)
+//@ chunk-e6aww6q8.js:215375-215483 fingerprint (2.1.88 match: findLastUuid, 1)
 /**
  * 日志条目中最后一个 uuid。
  */

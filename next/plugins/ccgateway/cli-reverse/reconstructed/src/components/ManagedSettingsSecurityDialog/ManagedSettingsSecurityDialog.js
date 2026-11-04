@@ -53,7 +53,7 @@ deferInit("chunk-7sw8gya5.js:909", () => {
 function incrementByOne(value) {
   return value + 1;
 }
-//@ chunk-7sw8gya5.js:941-1077 placement = renderToolResultMessage (0.676)
+//@ chunk-7sw8gya5.js:941-1077 placement (2.1.88 match: renderToolResultMessage, 0.676)
 /**
  * 渲染一行 "· 文本"（灰色圆点前缀），供托管设置安全对话框使用。
  */
@@ -252,7 +252,7 @@ function ManagedSettingsSecurityDialogHost(props) {
   } else dialog = $[1];
   return dialog;
 }
-//@ chunk-7sw8gya5.js:3998-9257 fingerprint = ManagedSettingsSecurityDialog (0.312)
+//@ chunk-7sw8gya5.js:3998-9257 fingerprint (2.1.88 match: ManagedSettingsSecurityDialog, 0.312)
 /**
  * 托管设置安全对话框：比较危险设置与上次批准时是否变化，列出变化项（hooks、apiKeyHelper、env 等），批准后记录，拒绝则退出。
  */

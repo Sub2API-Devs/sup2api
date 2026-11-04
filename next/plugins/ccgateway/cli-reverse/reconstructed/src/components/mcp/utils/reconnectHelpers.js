@@ -93,7 +93,7 @@ function formatMcpHealthError(client) {
   let combined = displayDetail ? `${baseError} ${displayDetail}`.trim() : baseError;
   return combined === "" ? combined : sanitize(combined);
 }
-//@ chunk-8433gxg0.js:1343-2737 fingerprint = handleReconnectResult (0.557)
+//@ chunk-8433gxg0.js:1343-2737 fingerprint (2.1.88 match: handleReconnectResult, 0.557)
 function handleReconnectResult(result, name, options, detail) {
   switch (result.client.type) {
     case "connected":
@@ -157,7 +157,7 @@ function handleReconnectResult(result, name, options, detail) {
       };
   }
 }
-//@ chunk-8433gxg0.js:2737-3053 fingerprint = handleReconnectError (0.443)
+//@ chunk-8433gxg0.js:2737-3053 fingerprint (2.1.88 match: handleReconnectError, 0.443)
 function handleReconnectError(error, name, options) {
   let errorMessage_2 = options.config
     ? redactMcpErrorDetail(name, options.config, errorMessage(error))

@@ -13,7 +13,7 @@ import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermai
 import { sleep } from "../../utils/sleep.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 
-//@ chunk-fp6aqx1j.js:10761-15407 fingerprint = WorkerStateUploader (0.341)
+//@ chunk-fp6aqx1j.js:10761-15407 fingerprint (2.1.88 match: WorkerStateUploader, 0.341)
 /**
  * WorkerStateUploader：合并 worker 状态补丁（external/internal_metadata 深合并）并节流上传。
  */
@@ -248,7 +248,7 @@ function diffMetadataAgainst(metadata, against) {
   }
   return Object.keys(out).length > 0 ? out : null;
 }
-//@ chunk-fp6aqx1j.js:15576-15795 fingerprint = coalescePatches (1)
+//@ chunk-fp6aqx1j.js:15576-15795 fingerprint (2.1.88 match: coalescePatches, 1)
 function coalescePatches(base, overlay) {
   let merged = {
     ...base,

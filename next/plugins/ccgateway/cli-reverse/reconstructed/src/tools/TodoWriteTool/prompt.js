@@ -26,7 +26,7 @@ function todoWritePromptFor(model, leanPrompt) {
     ? TODO_WRITE_DESCRIPTION_2
     : TODO_WRITE_PROMPT;
 }
-//@ chunk-kxyd0g16.js:52020-61420 fingerprint = DESCRIPTION (1)
+//@ chunk-kxyd0g16.js:52020-61420 fingerprint (2.1.88 match: DESCRIPTION, 1)
 /**
  * TodoWrite 提示词与描述。
  */

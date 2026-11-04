@@ -90,14 +90,14 @@ var TRANSCRIPT_MESSAGE_TYPES; // deferred: has load-time effects after a deferre
 deferInit("chunk-tyg7f3ek.js:588935", () => {
   TRANSCRIPT_MESSAGE_TYPES = new Set(["user", "assistant", "attachment", "system", "progress"]);
 });
-//@ chunk-tyg7f3ek.js:589005-589179 affinity = isLegacyProgressEntry (0.8)
+//@ chunk-tyg7f3ek.js:589005-589179 affinity (2.1.88 match: isLegacyProgressEntry, 0.8)
 function isLegacyProgressEntry(entry) {
   if (typeof entry !== "object" || entry === null) return false;
   let type = "type" in entry ? entry.type : undefined;
   let uuid = "uuid" in entry ? entry.uuid : undefined;
   return typeof type === "string" && TRANSCRIPT_MESSAGE_TYPES.has(type) && typeof uuid === "string";
 }
-//@ chunk-tyg7f3ek.js:589179-589288 placement = getParentSessionId (0.704)
+//@ chunk-tyg7f3ek.js:589179-589288 placement (2.1.88 match: getParentSessionId, 0.704)
 var getParentSessionId; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-tyg7f3ek.js:589179", () => {
   getParentSessionId = DoctorLazy(() =>
@@ -664,7 +664,7 @@ function mcpServersToReconnect(clients, configs, added, reuseConnected) {
           (client.type === "pending" || (reuseConnected && client.type === "connected")))),
   );
 }
-//@ chunk-tyg7f3ek.js:597358-597627 placement = findChromeClient (0.791)
+//@ chunk-tyg7f3ek.js:597358-597627 placement (2.1.88 match: findChromeClient, 0.791)
 function mergeMcpToolsAndCommands(clients, added, removed, previous, next) {
   let mapped = clients
     .filter(

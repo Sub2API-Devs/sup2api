@@ -8,7 +8,7 @@
  * pieces: chunk-jbgqd2rg.js (1)
  * attribution: facade-majority 1
  */
-//@ chunk-jbgqd2rg.js:191-1518 facade-majority = BRIDGE_LOGIN_INSTRUCTION (0.138)
+//@ chunk-jbgqd2rg.js:191-1518 facade-majority (2.1.88 match: BRIDGE_LOGIN_INSTRUCTION, 0.138)
 /**
  * Remote Control 的用户提示文字集合：需要 claude.ai 订阅、未登录、沙箱设置提示、文件夹已被服务（bridge_folder_already_served）、排队等。
  */

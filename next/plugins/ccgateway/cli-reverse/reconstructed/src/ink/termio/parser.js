@@ -28,7 +28,7 @@ function reopenSgr(activeCodes) {
   let joined = activeCodes.filter((activeCode) => activeCode !== "").join(";");
   return joined === "" || joined.length > MAX_SGR_REOPEN ? "" : `\x1B[${joined}m`;
 }
-//@ chunk-ksvdmrg0.js:25163-25498 fingerprint = segmentGraphemes (0.707)
+//@ chunk-ksvdmrg0.js:25163-25498 fingerprint (2.1.88 match: segmentGraphemes, 0.707)
 /**
  * 把一行带 ANSI 的文本按显示宽度硬折，换行处关闭活动样式、下一行重新打开。
  */
@@ -165,7 +165,7 @@ function decModeToAction(mode, enabled) {
       return null;
   }
 }
-//@ chunk-x6v6jz2y.js:9402-11679 fingerprint = parseCSI (0.733)
+//@ chunk-x6v6jz2y.js:9402-11679 fingerprint (2.1.88 match: parseCSI, 0.733)
 /**
  * 解析一个 CSI 序列为语义动作：SGR 单独返回参数串；光标移动/定位、擦除、插删行列、滚动与滚动区域、保存恢复光标、光标形状（DECSCUSR）、DEC 私有模式开关。
  */
@@ -399,7 +399,7 @@ function parseCSI(rawSequence) {
     sequence: rawSequence,
   };
 }
-//@ chunk-x6v6jz2y.js:11679-11846 fingerprint = identifySequence (0.866)
+//@ chunk-x6v6jz2y.js:11679-11846 fingerprint (2.1.88 match: identifySequence, 0.866)
 /**
  * 按第二个字节判断转义序列种类：csi / osc / esc。
  */
@@ -411,7 +411,7 @@ function identifySequence(seq) {
   if (second === 93) return "osc";
   return "esc";
 }
-//@ chunk-x6v6jz2y.js:11846-14043 fingerprint = Parser (0.769)
+//@ chunk-x6v6jz2y.js:11846-14043 fingerprint (2.1.88 match: Parser, 0.769)
 /**
  * 终端输出语义解析器（Ansi 组件、测试与录屏用）：分词后把文本切成带当前样式的字素段、BEL 单独成动作；SGR 更新内部样式；OSC 8 维护当前链接；forOutput 模式下保留可能被后续字节续上的尾部字素（ZWJ、区域旗帜、代理对）。
  */

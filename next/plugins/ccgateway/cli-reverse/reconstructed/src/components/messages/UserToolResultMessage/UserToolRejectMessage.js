@@ -22,7 +22,7 @@ import { safeParseToolInput, filterToolProgressMessages } from "../../../Tool.js
 function selectActiveAgents_4_2(state) {
   return state.agentDefinitions.activeAgents;
 }
-//@ chunk-ah34pb7m.js:217470-218291 fingerprint = UserToolRejectMessage (0.451)
+//@ chunk-ah34pb7m.js:217470-218291 fingerprint (2.1.88 match: UserToolRejectMessage, 0.451)
 function UserToolRejectMessage(props) {
   let $ = useMemoCache(15);
   let { input, progressMessagesForMessage, isInterrupted, style, tool, tools, verbose, isTranscriptMode } =

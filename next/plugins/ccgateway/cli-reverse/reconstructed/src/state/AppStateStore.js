@@ -33,7 +33,7 @@ import { isBetaHeaderAllowed } from "../utils/betas.js";
 import { shouldEnablePromptSuggestion } from "../services/PromptSuggestion/promptSuggestion.js";
 import { isAwaySummaryEnabled } from "../services/awaySummary.js";
 
-//@ chunk-pyk0acyv.js:540-3233 fingerprint = getDefaultAppState (0.414)
+//@ chunk-pyk0acyv.js:540-3233 fingerprint (2.1.88 match: getDefaultAppState, 0.414)
 /**
  * AppState 默认值：settings、tasks、transcripts、toolPermissionContext（队友需 plan 时初始为 plan）、mcp/plugins、todos、fileHistory、attribution、thinking/fastMode/effort 等 UI 与会话状态，以及大量 artifact 授权字段。
  */

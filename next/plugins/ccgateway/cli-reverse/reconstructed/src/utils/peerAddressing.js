@@ -195,7 +195,7 @@ function isAddressablePeerName(name) {
 }
 //@ chunk-e6aww6q8.js:3196709-3196728 placement
 var UNQUOTED_MENTION_NAME_PATTERN = /^[\w-]+$/;
-//@ chunk-e6aww6q8.js:3196728-3196928 placement = resolveTeamName (0.412)
+//@ chunk-e6aww6q8.js:3196728-3196928 placement (2.1.88 match: resolveTeamName, 0.412)
 /**
  * 汇总可寻址对象（会话列表、团队文件、云端、bridge）供 @ 补全与附件使用（切分误归 AgentTool）。
  */

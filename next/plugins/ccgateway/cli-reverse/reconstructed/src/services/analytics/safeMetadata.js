@@ -72,18 +72,18 @@ function bundledFileStemForAnalytics_KNOWN_IS_BUILD_TIME(stem, bundleSources) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(stem)
     : lit("none");
 }
-//@ chunk-0wqny7vr.js:723-768 placement = inputSchema (0.391)
+//@ chunk-0wqny7vr.js:723-768 placement (2.1.88 match: inputSchema, 0.391)
 function agentTypeForAnalytics_GATE_EVALUATED(agentType, gate) {
   return gate ? fromSanitizer_SANITIZER_OUTPUT_ONLY(agentType) : lit("custom");
 }
-//@ chunk-0wqny7vr.js:768-830 placement = updateAgentFile (1)
+//@ chunk-0wqny7vr.js:768-830 placement (2.1.88 match: updateAgentFile, 1)
 function agentTypeForAnalyticsFromDefinition(agentDefinition) {
   return agentTypeForAnalytics_GATE_EVALUATED(
     agentDefinition.agentType,
     agentDefinition.source === "built-in",
   );
 }
-//@ chunk-0wqny7vr.js:830-880 placement = getPluginHookCounts (0.74)
+//@ chunk-0wqny7vr.js:830-880 placement (2.1.88 match: getPluginHookCounts, 0.74)
 /**
  * 插件钩子遥测用的插件标识：官方插件用哈希/名，否则 third-party。
  */

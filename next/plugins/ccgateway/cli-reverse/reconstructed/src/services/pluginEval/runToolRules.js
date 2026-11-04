@@ -38,7 +38,7 @@ import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { LSP_TOOL_NAME } from "../../tools/LSPTool/UI.js";
 
-//@ chunk-qchp9vrd.js:119534-119692 placement = SAFE_READ_ONLY_TOOLS (0.494)
+//@ chunk-qchp9vrd.js:119534-119692 placement (2.1.88 match: SAFE_READ_ONLY_TOOLS, 0.494)
 /**
  * 推测执行中允许的安全只读工具名集合。
  */

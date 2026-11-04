@@ -84,7 +84,7 @@ import { samePath } from "../../utils/file.js";
 import { identity } from "../../utils/pathClassification.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-twvgrhqz.js:714-809 fingerprint = checkOverageGate (0.329)
+//@ chunk-twvgrhqz.js:714-809 fingerprint (2.1.88 match: checkOverageGate, 0.329)
 var checkOverageGate_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-twvgrhqz.js:714", () => {
   checkOverageGate_2 = DoctorLazy(() =>
@@ -1217,7 +1217,7 @@ ${lowCreditsLine}`
 }
 //@ chunk-zn8pzrw0.js:24881-24890 placement
 var RESULT_RELAY_MARGIN_MINUTES = 3;
-//@ chunk-zn8pzrw0.js:24890-30797 placement = launchRemoteReview (0.427)
+//@ chunk-zn8pzrw0.js:24890-30797 placement (2.1.88 match: launchRemoteReview, 0.427)
 async function launchRemoteReview(scope, context, billingNote, options) {
   let invocation = options?.invocation ?? "/code-review ultra";
   let failedResult = (text) => ({

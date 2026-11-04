@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-ptaf548f.js:532-956 fingerprint = DEFAULT_POLL_CONFIG (0.704)
+//@ chunk-ptaf548f.js:532-956 fingerprint (2.1.88 match: DEFAULT_POLL_CONFIG, 0.704)
 var DEFAULT_POLL_CONFIG = {
   non_exclusive_heartbeat_interval_ms: 0,
   multisession_poll_interval_ms_not_at_capacity: 2000,

@@ -10,7 +10,7 @@
  */
 import { ALLOW_LARGE_PARAM } from "../FileReadTool/constants.js";
 
-//@ chunk-bwbq4xvm.js:174061-175345 callgraph-witnessed = CLAUDE_FOLDER_PERMISSION_PATTERN (0.122)
+//@ chunk-bwbq4xvm.js:174061-175345 callgraph-witnessed (2.1.88 match: CLAUDE_FOLDER_PERMISSION_PATTERN, 0.122)
 /**
  * 文件编辑类常量：工具名 "Edit"、.claude 目录会话权限模式（项目 /.claude/**、全局 ~/.claude/**）、各类拒绝/失败文案（未读、只读了开头、目录被拒、Read deny、文件已变），以及不可写编码原因表。
  */

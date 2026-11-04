@@ -30,11 +30,11 @@ import { registerCleanup } from "./cleanupRegistry.js";
 import { writePendingWakeup } from "./scheduledWakeup.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3g8vhh6f.js:747-809 fingerprint = getErrorsPath (1)
+//@ chunk-3g8vhh6f.js:747-809 fingerprint (2.1.88 match: getErrorsPath, 1)
 function hasJsonlFiles(session) {
   return storageNameSpellings(session).some((spelling) => spelling.endsWith(".jsonl"));
 }
-//@ chunk-7t4fmt2f.js:2483-2597 fingerprint = _clearLogWritersForTesting (0.685)
+//@ chunk-7t4fmt2f.js:2483-2597 fingerprint (2.1.88 match: _clearLogWritersForTesting, 0.685)
 function setDisposableInterval(callback, intervalMs, options = {}) {
   let interval = setInterval(callback, intervalMs);
   if (options.unref) interval.unref?.();
@@ -42,19 +42,19 @@ function setDisposableInterval(callback, intervalMs, options = {}) {
     [Symbol.dispose]: () => clearInterval(interval),
   };
 }
-//@ chunk-k7fgdyw5.js:667-695 callgraph-witnessed = DATE (0)
+//@ chunk-k7fgdyw5.js:667-695 callgraph-witnessed (2.1.88 match: DATE, 0)
 var getTodayLogDate; // deferred: uses dateToFilename (./log.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-k7fgdyw5.js:667", () => {
   getTodayLogDate = memoizeAlias(() => dateToFilename(new Date()));
 });
-//@ chunk-k7fgdyw5.js:695-744 layout = getErrorsPath (1)
+//@ chunk-k7fgdyw5.js:695-744 layout (2.1.88 match: getErrorsPath, 1)
 /**
  * 错误日志文件 <缓存目录 claude-cli>/errors/<YYYY-MM-DD>.jsonl。
  */
 function getErrorLogFilePath() {
   return join(CACHE_PATHS.errors(), getTodayLogDate() + ".jsonl");
 }
-//@ chunk-k7fgdyw5.js:744-796 fingerprint = getMCPLogsPath (1)
+//@ chunk-k7fgdyw5.js:744-796 fingerprint (2.1.88 match: getMCPLogsPath, 1)
 /**
  * MCP 日志文件 <缓存目录>/mcp-logs-<server>/<日期>.jsonl。
  */
@@ -65,7 +65,7 @@ function getMCPLogsPath(serverName) {
 function logErrorSinkNoop(message, errorLogFilePath, perRuntimePath) {
   return;
 }
-//@ chunk-k7fgdyw5.js:1763-2016 affinity = extractErrorDetail (1)
+//@ chunk-k7fgdyw5.js:1763-2016 affinity (2.1.88 match: extractErrorDetail, 1)
 function extractErrorMessage(data) {
   if (typeof data === "string") return data;
   if (data && typeof data === "object") {
@@ -81,7 +81,7 @@ function extractErrorMessage(data) {
   }
   return;
 }
-//@ chunk-k7fgdyw5.js:2016-2343 fingerprint = logErrorImpl (0.949)
+//@ chunk-k7fgdyw5.js:2016-2343 fingerprint (2.1.88 match: logErrorImpl, 0.949)
 /**
  * 错误日志 sink：调试日志记一行 error，并把 {error} 追加到 <缓存目录>/errors/<日期>.jsonl。
  */
@@ -104,7 +104,7 @@ function logErrorImpl(message, error) {
     error: `${context}${errorStr}`,
   });
 }
-//@ chunk-k7fgdyw5.js:2343-2553 callgraph-witnessed = logMCPErrorImpl (0.738)
+//@ chunk-k7fgdyw5.js:2343-2553 callgraph-witnessed (2.1.88 match: logMCPErrorImpl, 0.738)
 function logMCPErrorImpl(sink, serverName, error) {
   logForDebugging(`MCP server "${serverName}" ${error}`, {
     level: "error",
@@ -126,7 +126,7 @@ function logMCPErrorImpl(sink, serverName, error) {
 function shouldSkipMcpDebugLogFiles() {
   return env.CLAUDE_CODE_SKIP_MCP_DEBUG_LOG_FILES === true && isRemoteManagedEnvironment();
 }
-//@ chunk-k7fgdyw5.js:2623-2794 fingerprint = logMCPDebugImpl (0.859)
+//@ chunk-k7fgdyw5.js:2623-2794 fingerprint (2.1.88 match: logMCPDebugImpl, 0.859)
 function logMCPDebugImpl(sink, serverName, message) {
   logForDebugging(`MCP server "${serverName}": ${message}`);
   if (shouldSkipMcpDebugLogFiles()) return;
@@ -149,7 +149,7 @@ function initializeErrorLogSink() {
       : `Error log sink initialized; ${droppedBeforeSink} events logged before it attached were dropped`,
   );
 }
-//@ chunk-k7fgdyw5.js:2970-3106 fingerprint = initializeErrorLogSink (0.586)
+//@ chunk-k7fgdyw5.js:2970-3106 fingerprint (2.1.88 match: initializeErrorLogSink, 0.586)
 /**
  * 创建错误日志 sink：logError / logMCPError / logMCPDebug（MCP 写 <缓存目录>/mcp-logs-<server>/<日期>.jsonl）。
  */
@@ -161,7 +161,7 @@ function initializeErrorLogSink_2(options) {
     keepsMCPDebug: () => !shouldSkipMcpDebugLogFiles() || debugLogTakesLevel("debug"),
   };
 }
-//@ chunk-425yaf76.js:1126-1477 fingerprint = createJsonlWriter (1)
+//@ chunk-425yaf76.js:1126-1477 fingerprint (2.1.88 match: createJsonlWriter, 1)
 class SerialWriteQueue {
   #o = Promise.resolve();
   #r = 0;

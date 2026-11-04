@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: placement 1
  */
-//@ chunk-e6aww6q8.js:3105639-3106355 placement = PIPELINE_TAIL_CMDLETS (0.467)
+//@ chunk-e6aww6q8.js:3105639-3106355 placement (2.1.88 match: PIPELINE_TAIL_CMDLETS, 0.467)
 /**
  * （切分错误）PowerShell/Windows 命令退出码语义：grep/rg/findstr 的 1 为无匹配、robocopy 的 0–7 为成功，其他非 0 为错误。
  */

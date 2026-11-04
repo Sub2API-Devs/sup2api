@@ -172,7 +172,7 @@ function isRemoteBrowserScoped(mcpClientsFromAccessor) {
     clients.every((client) => client.name !== REMOTE_BROWSER_SERVER_NAME || toScopedConfig(client))
   );
 }
-//@ chunk-aepeg2w5.js:819099-819163 placement = isHTTPConfig (1)
+//@ chunk-aepeg2w5.js:819099-819163 placement (2.1.88 match: isHTTPConfig, 1)
 /**
  * 是否为 claude.ai 代理 MCP 服务器。
  */
@@ -183,7 +183,7 @@ function isClaudeAiProxyServer(config) {
     isCcrSessionMcpUrl(config.url)
   );
 }
-//@ chunk-aepeg2w5.js:819163-819308 placement = toScopedConfig (0.78)
+//@ chunk-aepeg2w5.js:819163-819308 placement (2.1.88 match: toScopedConfig, 0.78)
 /**
  * MCP 配置的 url 有效且作用域合法（动态作用域须来自插件）。
  */
@@ -236,7 +236,7 @@ function isLocalBrowserServerConfig(name, config) {
     LOOPBACK_HOSTNAMES.has(parsed.hostname)
   );
 }
-//@ chunk-aepeg2w5.js:819702-819751 placement = getServerCommandArray (1)
+//@ chunk-aepeg2w5.js:819702-819751 placement (2.1.88 match: getServerCommandArray, 1)
 /**
  * 是否为 stdio 配置。
  */

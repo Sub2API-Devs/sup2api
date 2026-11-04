@@ -719,7 +719,7 @@ function maskQuotedAndComments(text, maskQuoted) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1085826-1086797 placement = findTokenBudgetPositions (0.538)
+//@ chunk-e6aww6q8.js:1085826-1086797 placement (2.1.88 match: findTokenBudgetPositions, 0.538)
 /**
  * 把一行 shell 命令规整（去续行、反引号、$() 与子 shell，拆 ; | && 等）后提取每段调用的命令名，并识别 find -exec/-ok 内的命令（最多 8 个）。
  */

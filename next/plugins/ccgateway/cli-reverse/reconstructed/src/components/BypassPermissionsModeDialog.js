@@ -25,11 +25,11 @@ import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 
 //@ chunk-styvqsd2.js:13694-13698 placement
 init_react_production();
-//@ chunk-styvqsd2.js:13698-13762 fingerprint = _temp (1)
+//@ chunk-styvqsd2.js:13698-13762 fingerprint (2.1.88 match: _temp, 1)
 function logBypassDialogShown() {
   logEvent("tengu_bypass_permissions_mode_dialog_shown", {});
 }
-//@ chunk-styvqsd2.js:13762-15105 fingerprint = BypassPermissionsModeDialog (0.672)
+//@ chunk-styvqsd2.js:13762-15105 fingerprint (2.1.88 match: BypassPermissionsModeDialog, 0.672)
 /**
  * Bypass Permissions 模式确认：说明不会再请求许可的风险，接受写入 userSettings，拒绝退出。
  */

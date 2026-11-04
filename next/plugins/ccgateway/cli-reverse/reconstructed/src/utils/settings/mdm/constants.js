@@ -21,11 +21,11 @@ import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../keybindings/useKeybinding.js";
 import { useRegisterTabsNavigationOwner } from "../../../components/design-system/Tabs.js";
 
-//@ chunk-zw3bhs13.js:337-442 fingerprint = WINDOWS_REGISTRY_KEY_PATH_HKLM (0.548)
+//@ chunk-zw3bhs13.js:337-442 fingerprint (2.1.88 match: WINDOWS_REGISTRY_KEY_PATH_HKLM, 0.548)
 var WINDOWS_REGISTRY_KEY_PATH_HKLM = "HKLM\\SOFTWARE\\Policies\\ClaudeCode";
 var WINDOWS_REGISTRY_KEY_PATH_HKCU = "HKCU\\SOFTWARE\\Policies\\ClaudeCode";
 var SETTINGS = "Settings";
-//@ chunk-e6aww6q8.js:2373815-2374050 fingerprint = PLUTIL_ARGS_PREFIX (1)
+//@ chunk-e6aww6q8.js:2373815-2374050 fingerprint (2.1.88 match: PLUTIL_ARGS_PREFIX, 1)
 async function countToolTokensPerItem(
   tools,
   getToolPermissionContext,
@@ -61,7 +61,7 @@ async function countToolTokensPerItem(
     defs.map((def) => roughTokenCountEstimationForFileType(jsonStringify(def), "json")),
   );
 }
-//@ chunk-vrb44rx7.js:51594-51744 fingerprint = WINDOWS_REGISTRY_VALUE_NAME (0.603)
+//@ chunk-vrb44rx7.js:51594-51744 fingerprint (2.1.88 match: WINDOWS_REGISTRY_VALUE_NAME, 0.603)
 function SettingsDialogCancelBinding(props) {
   let $ = useMemoCache(1);
   let { onCancel, children } = props;

@@ -847,7 +847,7 @@ function resolveThroughRoot(repoRoot, targetPath) {
     ? resolvedTarget
     : join(realRoot, resolvedTarget.slice(resolvedRoot.length));
 }
-//@ chunk-e6aww6q8.js:4783689-4784244 placement = writeRemoteEntriesToLocal (0.346)
+//@ chunk-e6aww6q8.js:4783689-4784244 placement (2.1.88 match: writeRemoteEntriesToLocal, 0.346)
 async function isSafeGitObjectsDir(objectsDir, repoRoot, depth = 0, visited = new Set()) {
   if (depth > MAX_ALTERNATE_DEPTH || visited.has(objectsDir)) return false;
   visited.add(objectsDir);
@@ -886,7 +886,7 @@ async function isSafeGitObjectsDir(objectsDir, repoRoot, depth = 0, visited = ne
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4784244-4784577 placement = isErrnoException (0.582)
+//@ chunk-e6aww6q8.js:4784244-4784577 placement (2.1.88 match: isErrnoException, 0.582)
 async function isDirFreeOfSymlinks(dirPath) {
   let entries;
   try {

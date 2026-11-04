@@ -28,7 +28,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { DiffFrame } from "../FileEditToolDiff.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-mthxbav8.js:4203-4469 fingerprint = getContentFieldValue (0.677)
+//@ chunk-mthxbav8.js:4203-4469 fingerprint (2.1.88 match: getContentFieldValue, 0.677)
 function getContentFieldValue(config) {
   switch (config.type) {
     case "command":
@@ -44,7 +44,7 @@ function getContentFieldValue(config) {
       return config.file ?? scriptHookDisplayLabel(config.script ?? "");
   }
 }
-//@ chunk-bajxb7bf.js:44720-46942 fingerprint = ViewHookMode (0.41)
+//@ chunk-bajxb7bf.js:44720-46942 fingerprint (2.1.88 match: ViewHookMode, 0.41)
 function ViewHookMode(props) {
   let $ = useMemoCache(45);
   let { selectedHook, eventSupportsMatcher, onCancel } = props;
@@ -268,7 +268,7 @@ function hookTypeLabel(config) {
       return "Script hook";
   }
 }
-//@ chunk-bajxb7bf.js:47988-48218 fingerprint = getContentFieldLabel (0.684)
+//@ chunk-bajxb7bf.js:47988-48218 fingerprint (2.1.88 match: getContentFieldLabel, 0.684)
 function getContentFieldLabel(config) {
   switch (config.type) {
     case "command":

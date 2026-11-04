@@ -184,7 +184,7 @@ function fileDeviceKeyBackend(getPath) {
     },
   };
 }
-//@ chunk-x58vpmpd.js:3004-4016 placement = macOsKeychainStorage (0.647)
+//@ chunk-x58vpmpd.js:3004-4016 placement (2.1.88 match: macOsKeychainStorage, 0.647)
 /**
  * 设备密钥的 macOS 钥匙串后端：read 用 security 读出并解析设备密钥文档（无登录钥匙串、读失败、格式不对分别处理），write 以十六进制写入（短命令走 security -i），带写锁。属于 deviceKeyStore，不是 macOsKeychainStorage。
  */

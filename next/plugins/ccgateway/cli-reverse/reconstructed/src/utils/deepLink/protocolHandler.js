@@ -19,7 +19,7 @@ import { formatMarketplaceInstallCommand } from "../../commands/plugin/parseArgs
 import { launchInTerminal } from "./terminalLauncher.js";
 import { getKnownPathsForRepo, filterExistingPaths } from "../githubRepoPathMapping.js";
 
-//@ chunk-bh9w80kx.js:10523-11432 fingerprint = handleDeepLinkUri (0.685)
+//@ chunk-bh9w80kx.js:10523-11432 fingerprint (2.1.88 match: handleDeepLinkUri, 0.685)
 /**
  * `claude --handle-uri <uri>` 的处理：解析深链接；open 时解析工作目录（cwd 或按 repo 查本地克隆）并读最近 fetch 时间，install-plugin 时在家目录用预置 query 安装插件；然后在终端里启动新的 claude 会话。返回退出码并上报 deep_link_handle。
  */
@@ -76,7 +76,7 @@ async function handleDeepLinkUri(uri) {
   logFeatureOk("deep_link_handle");
   return 0;
 }
-//@ chunk-bh9w80kx.js:11432-11696 fingerprint = resolveCwd (1)
+//@ chunk-bh9w80kx.js:11432-11696 fingerprint (2.1.88 match: resolveCwd, 1)
 /**
  * 确定深链接会话的工作目录：显式 cwd；否则按 repo 在已知路径中找存在的本地克隆；都没有用家目录。
  */

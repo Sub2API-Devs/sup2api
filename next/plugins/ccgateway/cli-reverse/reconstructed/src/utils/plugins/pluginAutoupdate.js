@@ -63,7 +63,7 @@ import { sleep } from "../sleep.js";
 import { resolveMissingDependencies } from "./dependencyInstall.js";
 import { classifyPluginCommandError } from "../telemetry/pluginTelemetry.js";
 
-//@ chunk-e6aww6q8.js:693187-693320 fingerprint = getAutoUpdateEnabledMarketplaces (1)
+//@ chunk-e6aww6q8.js:693187-693320 fingerprint (2.1.88 match: getAutoUpdateEnabledMarketplaces, 1)
 /**
  * 设置 known_marketplaces 中某市场的 autoUpdate（名字配错）。
  */
@@ -514,7 +514,7 @@ function reresolveCommandSourcesOnce(storage) {
   })();
   return pluginRegistry.commandSourceReresolve;
 }
-//@ chunk-0nv5pv9r.js:9182-11937 callgraph-witnessed = autoUpdateMarketplacesAndPluginsInBackground (0.183)
+//@ chunk-0nv5pv9r.js:9182-11937 callgraph-witnessed (2.1.88 match: autoUpdateMarketplacesAndPluginsInBackground, 0.183)
 /**
  * 后台自动更新：刷新开启 autoUpdate 的市场（refreshMarketplaceDeduped），更新这些市场里已安装的插件、刷新 command 来源与插件目录插件，记 tengu_plugin_autoupdate_pass；自动更新器被禁用时跳过。
  */
@@ -671,7 +671,7 @@ function autoUpdateMarketplacesAndPluginsInBackground(storageV5) {
     }
   })();
 }
-//@ chunk-9tyqgtn4.js:19012-19284 fingerprint = updatePluginsForMarketplaces (0.673)
+//@ chunk-9tyqgtn4.js:19012-19284 fingerprint (2.1.88 match: updatePluginsForMarketplaces, 0.673)
 /**
  * 把一组插件目录批量构造成插件对象（不记遥测），汇总成功与错误。
  */

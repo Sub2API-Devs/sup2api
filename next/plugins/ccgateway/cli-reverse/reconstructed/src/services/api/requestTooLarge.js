@@ -60,7 +60,7 @@ function mediaBytesInMessages(messagesForAPI) {
     0,
   );
 }
-//@ chunk-e6aww6q8.js:173956-174007 placement = isMedia (1)
+//@ chunk-e6aww6q8.js:173956-174007 placement (2.1.88 match: isMedia, 1)
 /**
  * 块类型是 image 或 document。
  */

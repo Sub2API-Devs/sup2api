@@ -628,7 +628,7 @@ function unrefSleep(ms) {
     unref: true,
   });
 }
-//@ chunk-fpvb8c85.js:9235-9307 placement = isLocalMcpServer (1)
+//@ chunk-fpvb8c85.js:9235-9307 placement (2.1.88 match: isLocalMcpServer, 1)
 function isLocalMcpServer(config) {
   return config.type !== undefined && config.type !== "stdio" && config.type !== "sdk";
 }

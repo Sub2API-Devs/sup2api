@@ -11,7 +11,7 @@
 import { getComputerUseSession } from "./session.js";
 import { unsupportedModule } from "../../../vendor/unresolved-cjs/index.js";
 
-//@ chunk-hrs3dad1.js:5672-5858 fingerprint = requireComputerUseInput (0.855)
+//@ chunk-hrs3dad1.js:5672-5858 fingerprint (2.1.88 match: requireComputerUseInput, 0.855)
 /**
  * 懒加载 @ant/computer-use-input 原生模块（缓存在 ComputerUseSession），平台不支持时抛错。
  */

@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:2034776-2034929 fingerprint = stickers (0.864)
+//@ chunk-e6aww6q8.js:2034776-2034929 fingerprint (2.1.88 match: stickers, 0.864)
 /**
  * /stickers 命令对象（local）；描述：Order Claude Code stickers；实现 chunk-ekn75w8p.js 的 s。
  */

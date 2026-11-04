@@ -66,7 +66,7 @@ function readAndClearBgExitDetail(jobDir, expectedCause) {
 `);
   return index !== -1 && contents.slice(0, index) === expectedCause ? contents.slice(index + 1) : undefined;
 }
-//@ chunk-j3nx1xyn.js:932-1084 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-j3nx1xyn.js:932-1084 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 function readAndDeleteSmallFile(path) {
   try {
     let stats = lstatSync(path);

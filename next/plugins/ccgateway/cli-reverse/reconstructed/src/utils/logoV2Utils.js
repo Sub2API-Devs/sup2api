@@ -22,7 +22,7 @@ import { getAPIProvider, THIRD_PARTY_PROVIDER_LABELS } from "./model/providers.j
 import { isClaudeAISubscriber, getSubscriptionName } from "./auth.js";
 import { getInitialSettings_2 } from "./settings/settings.js";
 
-//@ chunk-8jypjjdf.js:18653-18713 fingerprint = getLayoutMode (1)
+//@ chunk-8jypjjdf.js:18653-18713 fingerprint (2.1.88 match: getLayoutMode, 1)
 function getLayoutMode(columns) {
   if (columns >= 70) return "horizontal";
   return "compact";
@@ -67,7 +67,7 @@ function truncatePathForDisplay(path, maxLength) {
   if (middleParts.length === 0) return `${first}${separator}${ellipsis}${separator}${last}`;
   return `${first}${separator}${ellipsis}${separator}${middleParts.join(separator)}${separator}${last}`;
 }
-//@ chunk-8jypjjdf.js:19333-20174 fingerprint = getLogoDisplayData (0.471)
+//@ chunk-8jypjjdf.js:19333-20174 fingerprint (2.1.88 match: getLogoDisplayData, 0.471)
 /**
  * 欢迎框（Logo v2）显示数据：版本、cwd、账号/计费信息等。
  */
@@ -115,7 +115,7 @@ function getLogoDisplayData() {
     agentName,
   };
 }
-//@ chunk-8jypjjdf.js:20174-20372 fingerprint = formatModelAndBilling (0.846)
+//@ chunk-8jypjjdf.js:20174-20372 fingerprint (2.1.88 match: formatModelAndBilling, 0.846)
 function formatModelAndBilling(modelName, billingType, availableWidth, modelDisplay) {
   if (bunStringWidth(modelDisplay) + 3 + bunStringWidth(billingType) > availableWidth)
     return {
@@ -129,7 +129,7 @@ function formatModelAndBilling(modelName, billingType, availableWidth, modelDisp
     truncatedBilling: billingType,
   };
 }
-//@ chunk-t3sg9e26.js:1126-1313 fingerprint = truncatePath (0.711)
+//@ chunk-t3sg9e26.js:1126-1313 fingerprint (2.1.88 match: truncatePath, 0.711)
 function truncatePath(env, keyName, includeCaseInsensitive) {
   let middleParts = [];
   for (let [key, value] of Object.entries(env)) {

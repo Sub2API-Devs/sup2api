@@ -215,7 +215,7 @@ function isDisplayOnlyHistoricalMessage(message) {
     message.display_only === true
   );
 }
-//@ chunk-1qpz7qcd.js:3190-3281 placement = extractErrorTypeFromData (1)
+//@ chunk-1qpz7qcd.js:3190-3281 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 是否是带字符串 type 字段的对象。
  */

@@ -9,6 +9,6 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-s61vbvea.js:461142-461181 fingerprint = isUltrareviewEnabled (1)
+//@ chunk-s61vbvea.js:461142-461181 fingerprint (2.1.88 match: isUltrareviewEnabled, 1)
 var ULTRA_REVIEW_CONFIG_FLAG = "tengu_review_bughunter_config";
 export { ULTRA_REVIEW_CONFIG_FLAG };

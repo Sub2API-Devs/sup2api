@@ -77,11 +77,11 @@ import { logError } from "../utils/log.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:197534-197606 fingerprint = GITHUB_ISSUES_REPO_URL (0.432)
+//@ chunk-hwmsct5x.js:197534-197606 fingerprint (2.1.88 match: GITHUB_ISSUES_REPO_URL, 0.432)
 function GITHUB_ISSUES_REPO_URL() {
   return "https://github.com/anthropics/claude-code/issues";
 }
-//@ chunk-4121qate.js:62271-62421 fingerprint = sanitizeAndLogError (0.507)
+//@ chunk-4121qate.js:62271-62421 fingerprint (2.1.88 match: sanitizeAndLogError, 0.507)
 function sanitizeAndLogError(err) {
   let wrapped = (...args) => {
     try {
@@ -94,7 +94,7 @@ function sanitizeAndLogError(err) {
   Object.setPrototypeOf(wrapped, null);
   return wrapped;
 }
-//@ chunk-hm0ce8vc.js:67174-67301 fingerprint = loadRawTranscriptJsonl (0.519)
+//@ chunk-hm0ce8vc.js:67174-67301 fingerprint (2.1.88 match: loadRawTranscriptJsonl, 0.519)
 function loadRawTranscriptJsonl(message) {
   let json = jsonStringify(message) ?? String(message);
   let byteLength = Buffer.byteLength(json, "utf8");
@@ -105,7 +105,7 @@ function requestIdHeader(headers) {
   let requestId = headers?.["request-id"];
   return isSessionsToken(requestId) ? requestId : undefined;
 }
-//@ chunk-xx1vmpsq.js:18966-20766 fingerprint = submitFeedback (0.33)
+//@ chunk-xx1vmpsq.js:18966-20766 fingerprint (2.1.88 match: submitFeedback, 0.33)
 /**
  * 提交反馈到 /api/claude_cli_feedback（检查策略 allow_product_feedback 与大小），返回 feedback ID。
  */
@@ -376,7 +376,7 @@ async function runThenAbandon(handleCancel, tracker) {
     tracker.abandon();
   }
 }
-//@ chunk-seqjkch8.js:3773-12089 fingerprint = Feedback (0.317)
+//@ chunk-seqjkch8.js:3773-12089 fingerprint (2.1.88 match: Feedback, 0.317)
 /**
  * /feedback：输入描述 → 确认是否附带记录 → 提交（submitFeedback）→ 显示 feedback ID 与可打开的 GitHub issue 链接。
  */
@@ -1043,7 +1043,7 @@ function Feedback({
     }),
   });
 }
-//@ chunk-seqjkch8.js:12089-13311 fingerprint = createGitHubIssueUrl (0.585)
+//@ chunk-seqjkch8.js:12089-13311 fingerprint (2.1.88 match: createGitHubIssueUrl, 0.585)
 function createGitHubIssueUrl(feedbackId, errorsText, description) {
   let shortTitle = truncateToLength(redactSecrets(errorsText), MAX_ISSUE_TITLE_CHARS);
   let sanitizedTitle = redactSecrets(description);
@@ -1090,7 +1090,7 @@ function createGitHubIssueUrl(feedbackId, errorsText, description) {
   }
   return errorSuffix + errorsJson + encodedSuffix + encodedPrefix;
 }
-//@ chunk-seqjkch8.js:13311-14915 fingerprint = generateTitle (0.938)
+//@ chunk-seqjkch8.js:13311-14915 fingerprint (2.1.88 match: generateTitle, 0.938)
 /**
  * 用模型为公开 issue 生成简洁技术标题（不超过 80 字符），失败回落 "Bug Report"。
  */
@@ -1147,7 +1147,7 @@ function isEmptyOrTemplate(title) {
   let trimmed = title.trim();
   return trimmed === "" || REFUSAL_PREFIX_RE.test(trimmed);
 }
-//@ chunk-seqjkch8.js:15088-15279 fingerprint = createFallbackTitle (1)
+//@ chunk-seqjkch8.js:15088-15279 fingerprint (2.1.88 match: createFallbackTitle, 1)
 function createFallbackTitle(description) {
   let firstLine = getFirstLine(description);
   if (firstLine.length <= 60 && firstLine.length > 5) return firstLine;

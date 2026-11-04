@@ -12,7 +12,7 @@ import { bridgeHostState, toCompatSessionId_2 } from "./bridgeHostState.js";
 
 //@ chunk-s7k22nbx.js:4004-4029 placement
 var SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
-//@ chunk-s7k22nbx.js:4029-4121 placement = validateBridgeId (1)
+//@ chunk-s7k22nbx.js:4029-4121 placement (2.1.88 match: validateBridgeId, 1)
 /**
  * 校验 ID 只含安全字符，否则抛 "Invalid <名称>: contains unsafe characters"。
  */
@@ -43,7 +43,7 @@ function toCompatSessionId(sessionId) {
 function remoteRowId(sessionId) {
   return `remote-${sessionId.slice(-8)}`;
 }
-//@ chunk-s7k22nbx.js:4397-4474 placement = toCompatSessionId (1)
+//@ chunk-s7k22nbx.js:4397-4474 placement (2.1.88 match: toCompatSessionId, 1)
 /**
  * session_xxx → cse_xxx（其它原样）。
  */
@@ -65,7 +65,7 @@ function inSessionIdCostumeOf(reference, id) {
 function sessionIdBody(id) {
   return id.replace(/^(?:session|cse)_/, "");
 }
-//@ chunk-s7k22nbx.js:4588-4677 placement = toCompatSessionId (1)
+//@ chunk-s7k22nbx.js:4588-4677 placement (2.1.88 match: toCompatSessionId, 1)
 /**
  * 是否是带前缀（session_ / cse_）且字符安全的会话 ID。
  */

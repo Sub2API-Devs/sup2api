@@ -3046,7 +3046,7 @@ function openingControlRequest(openResult, declaredKinds) {
     return openResult.initialPrompt === undefined && declaredKinds.length > 0 ? "declare_dialog_kinds" : null;
   return openResult.workerAwaitsAnswer === true ? "rearm_parked_prompt" : null;
 }
-//@ chunk-fe6rs39h.js:119178-119288 placement = isHTTPConfig (1)
+//@ chunk-fe6rs39h.js:119178-119288 placement (2.1.88 match: isHTTPConfig, 1)
 function isRetryableHttpFailure(config) {
   return (
     config.outcome === "failed" &&

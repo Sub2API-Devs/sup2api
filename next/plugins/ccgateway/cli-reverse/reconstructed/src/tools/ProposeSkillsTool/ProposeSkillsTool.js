@@ -150,7 +150,7 @@ function findNotOwnedSkill(target, commands) {
     ? firstOwnedElsewhere
     : undefined;
 }
-//@ chunk-2rkp9ne9.js:13049-13119 placement = getValueFromInput (1)
+//@ chunk-2rkp9ne9.js:13049-13119 placement (2.1.88 match: getValueFromInput, 1)
 function getValueFromInput(input) {
   return input.flatMap((command) => (command.type === "prompt" && isSyncedSkill(command) ? [command] : []));
 }
@@ -972,7 +972,7 @@ deferInit("chunk-2rkp9ne9.js:19840", () => {
 function afterLastColon(name) {
   return name.slice(name.lastIndexOf(":") + 1);
 }
-//@ chunk-2rkp9ne9.js:26925-27014 placement = getValueFromInput (1)
+//@ chunk-2rkp9ne9.js:26925-27014 placement (2.1.88 match: getValueFromInput, 1)
 function getValueFromInput_2(target, commands) {
   return commands.some(
     (command) =>
@@ -981,7 +981,7 @@ function getValueFromInput_2(target, commands) {
       (skillDisplayName(command) === target || stripSyncedSkillPrefix(getCommandName(command)) === target),
   );
 }
-//@ chunk-2rkp9ne9.js:27014-27061 placement = ADMIN_TRUSTED_SOURCES (0.758)
+//@ chunk-2rkp9ne9.js:27014-27061 placement (2.1.88 match: ADMIN_TRUSTED_SOURCES, 0.758)
 var ADMIN_TRUSTED_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-2rkp9ne9.js:27014", () => {
   ADMIN_TRUSTED_SOURCES = new Set(["plugin", "bundled", "builtin"]);
@@ -1361,7 +1361,7 @@ async function resolveSkillProposals(
 var CURRENT_SKILL_MD_OPEN_TAG = `
 <current_skill_md>
 `;
-//@ chunk-2rkp9ne9.js:35217-35311 placement = getSnippetForPatch (0.297)
+//@ chunk-2rkp9ne9.js:35217-35311 placement (2.1.88 match: getSnippetForPatch, 0.297)
 /**
  * 把 SKILL.md 内容加行号并包进 <current_skill_md> 标签（技能同步提示用；归属疑似错误）。
  */

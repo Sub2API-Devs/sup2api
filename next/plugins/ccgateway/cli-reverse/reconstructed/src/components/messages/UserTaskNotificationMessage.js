@@ -48,7 +48,7 @@ import { capIdFrameField, IDLE_ID_FIELD_RECEIVE_BOUND } from "../../utils/teamma
 
 //@ chunk-ah34pb7m.js:99135-99144 placement
 var NOTIFICATION_INDENT = 2;
-//@ chunk-ah34pb7m.js:99144-99279 placement = getStatusColor (1)
+//@ chunk-ah34pb7m.js:99144-99279 placement (2.1.88 match: getStatusColor, 1)
 function getStatusColor(status) {
   switch (status) {
     case "completed":
@@ -61,7 +61,7 @@ function getStatusColor(status) {
       return "text";
   }
 }
-//@ chunk-ah34pb7m.js:99279-99385 placement = _temp (1)
+//@ chunk-ah34pb7m.js:99279-99385 placement (2.1.88 match: _temp, 1)
 function completedTaskResultText(taskDelivery) {
   let taskResultOrNull = parseTaskResultOrNull(taskDelivery);
   return taskResultOrNull?.status === "completed"
@@ -69,7 +69,7 @@ function completedTaskResultText(taskDelivery) {
 `)
     : "";
 }
-//@ chunk-ah34pb7m.js:99385-99918 placement = renderToolUseErrorMessage (0.161)
+//@ chunk-ah34pb7m.js:99385-99918 placement (2.1.88 match: renderToolUseErrorMessage, 0.161)
 /**
  * 某消息组件（taskDelivery/origin 参数），误配为 NotebookEdit 的错误渲染；归属疑似错误。
  */

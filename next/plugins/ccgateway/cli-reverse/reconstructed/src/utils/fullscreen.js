@@ -67,14 +67,14 @@ var fullscreenProbeState; // deferred: uses createFullscreenProbeState of its im
 deferInit("chunk-cxdk9p3j.js:979", () => {
   fullscreenProbeState = createFullscreenProbeState();
 });
-//@ chunk-cxdk9p3j.js:990-1134 fingerprint = isTmuxControlModeEnvHeuristic (1)
+//@ chunk-cxdk9p3j.js:990-1134 fingerprint (2.1.88 match: isTmuxControlModeEnvHeuristic, 1)
 function isTmuxControlModeEnvHeuristic() {
   if (!env.TMUX) return false;
   if (env.TERM_PROGRAM !== "iTerm.app") return false;
   let term = env.TERM ?? "";
   return !term.startsWith("screen") && !term.startsWith("tmux");
 }
-//@ chunk-cxdk9p3j.js:1134-1511 fingerprint = probeTmuxControlModeSync (0.896)
+//@ chunk-cxdk9p3j.js:1134-1511 fingerprint (2.1.88 match: probeTmuxControlModeSync, 0.896)
 function probeTmuxControlModeSync(state) {
   state.tmuxControlModeProbed = isTmuxControlModeEnvHeuristic();
   if (state.tmuxControlModeProbed) return;
@@ -192,7 +192,7 @@ function isFreshInstallCached(state) {
   if (freshInstall !== undefined) state.freshInstallCached = freshInstall;
   return freshInstall ?? false;
 }
-//@ chunk-cxdk9p3j.js:3000-3812 callgraph-witnessed = isFullscreenEnvEnabled (0.273)
+//@ chunk-cxdk9p3j.js:3000-3812 callgraph-witnessed (2.1.88 match: isFullscreenEnvEnabled, 0.273)
 function isFullscreenEnvEnabled(state = fullscreenProbeState) {
   if (getEntrypointKind() === "local-agent") return false;
   if (env.CLAUDE_CODE_SESSION_KIND === "bg") return true;
@@ -324,7 +324,7 @@ function getNoFlickerEnvOverride() {
   if (env.CLAUDE_CODE_NO_FLICKER === false) return "off";
   return;
 }
-//@ chunk-cxdk9p3j.js:5370-5590 fingerprint = isMouseTrackingEnabled (0.31)
+//@ chunk-cxdk9p3j.js:5370-5590 fingerprint (2.1.88 match: isMouseTrackingEnabled, 0.31)
 function isMouseTrackingEnabled() {
   if (env.CLAUDE_CODE_DISABLE_MOUSE !== undefined) return env.CLAUDE_CODE_DISABLE_MOUSE ? "off" : "full";
   if (env.CLAUDE_CODE_DISABLE_MOUSE_CLICKS !== undefined)
@@ -375,7 +375,7 @@ function subscribeFullscreenObserved(listener) {
 function isFullscreenActive(state = fullscreenProbeState) {
   return getIsInteractive() && isFullscreenEnvEnabled(state);
 }
-//@ chunk-cxdk9p3j.js:5961-6274 fingerprint = maybeGetTmuxMouseHint (0.566)
+//@ chunk-cxdk9p3j.js:5961-6274 fingerprint (2.1.88 match: maybeGetTmuxMouseHint, 0.566)
 async function maybeGetTmuxMouseHint(state = fullscreenProbeState) {
   if (!env.TMUX) return null;
   if (!isFullscreenActive(state) || isTmuxControlMode(state)) return null;

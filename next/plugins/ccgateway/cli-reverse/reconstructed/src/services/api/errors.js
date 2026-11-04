@@ -220,14 +220,14 @@ import { getConnectionTimeoutMs } from "../mcp/client.js";
 import { SdkError, SdkErrorCode } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gr2vfhah.js:1029-1081 fingerprint = API_ERROR_MESSAGE_PREFIX (0.667)
+//@ chunk-gr2vfhah.js:1029-1081 fingerprint (2.1.88 match: API_ERROR_MESSAGE_PREFIX, 0.667)
 /**
  * "API Error"；TBe=1000；d$="Prompt is too long"。
  */
 var API_ERROR_MESSAGE_PREFIX = "API Error";
 var API_ERROR_CONST_1000 = 1000;
 var PROMPT_TOO_LONG_ERROR_MESSAGE = "Prompt is too long";
-//@ chunk-gr2vfhah.js:1081-1242 callgraph-fingerprint = isPromptTooLongMessage (1)
+//@ chunk-gr2vfhah.js:1081-1242 callgraph-fingerprint (2.1.88 match: isPromptTooLongMessage, 1)
 /**
  * assistant API 错误消息的文本以 "Prompt is too long" 开头。
  */
@@ -361,7 +361,7 @@ function isInvalidRequestStartingWith(error, prefix) {
     error_2.message.startsWith(prefix)
   );
 }
-//@ chunk-s61vbvea.js:54508-54639 placement = detectPromptTooLong (0.667)
+//@ chunk-s61vbvea.js:54508-54639 placement (2.1.88 match: detectPromptTooLong, 0.667)
 /**
  * 判断错误消息是否为“提示词过长”（prompt is too long / input is too long for requested model）。
  */
@@ -369,14 +369,14 @@ function isPromptTooLongMessage(message) {
   let lower = message.toLowerCase();
   return lower.includes("prompt is too long") || lower.includes("input is too long for requested model");
 }
-//@ chunk-s61vbvea.js:59778-59820 fingerprint = getErrorMessageIfRefusal (0.333)
+//@ chunk-s61vbvea.js:59778-59820 fingerprint (2.1.88 match: getErrorMessageIfRefusal, 0.333)
 /**
  * stop_reason 为 refusal。
  */
 function getErrorMessageIfRefusal(block) {
   return parseAdvisorResult(block) === "refusal";
 }
-//@ chunk-e6aww6q8.js:123593-123865 fingerprint = getPdfTooLargeErrorMessage (1)
+//@ chunk-e6aww6q8.js:123593-123865 fingerprint (2.1.88 match: getPdfTooLargeErrorMessage, 1)
 /**
  * PDF 过大提示（页数/字节上限）；SDK/非交互与交互模式文案不同。
  */
@@ -386,7 +386,7 @@ function getPdfTooLargeErrorMessage() {
     ? `PDF too large (${limits}). Try reading the file a different way (e.g., extract text with pdftotext).`
     : `PDF too large (${limits}). Double press esc to go back and try again, or use pdftotext to convert to text first.`;
 }
-//@ chunk-e6aww6q8.js:123865-124062 fingerprint = getPdfPasswordProtectedErrorMessage (1)
+//@ chunk-e6aww6q8.js:123865-124062 fingerprint (2.1.88 match: getPdfPasswordProtectedErrorMessage, 1)
 /**
  * PDF 有密码保护提示。
  */
@@ -395,7 +395,7 @@ function getPdfPasswordProtectedErrorMessage() {
     ? "PDF is password protected. Try using a CLI tool to extract or convert the PDF."
     : "PDF is password protected. Please double press esc to edit your message and try again.";
 }
-//@ chunk-e6aww6q8.js:124062-124265 fingerprint = getPdfInvalidErrorMessage (1)
+//@ chunk-e6aww6q8.js:124062-124265 fingerprint (2.1.88 match: getPdfInvalidErrorMessage, 1)
 /**
  * PDF 无效提示。
  */
@@ -404,7 +404,7 @@ function getPdfInvalidErrorMessage() {
     ? "The PDF file was not valid. Try converting it to text first (e.g., pdftotext)."
     : "The PDF file was not valid. Double press esc to go back and try again with a different file.";
 }
-//@ chunk-e6aww6q8.js:124265-124455 fingerprint = getImageTooLargeErrorMessage (1)
+//@ chunk-e6aww6q8.js:124265-124455 fingerprint (2.1.88 match: getImageTooLargeErrorMessage, 1)
 /**
  * 图片过大提示。
  */
@@ -743,7 +743,7 @@ function hasInvalidCredentialPrefix(text) {
     INVALID_ENV_HEADER_MESSAGE,
   ].some((prefix) => text.startsWith(`${prefix} \xB7 `));
 }
-//@ chunk-e6aww6q8.js:1571945-1572145 fingerprint = startsWithApiErrorPrefix (1)
+//@ chunk-e6aww6q8.js:1571945-1572145 fingerprint (2.1.88 match: startsWithApiErrorPrefix, 1)
 /**
  * 文本以 "API Error"、"Please run /login · API Error" 或 AWS/Google Cloud 凭证错误前缀开头。
  */
@@ -759,7 +759,7 @@ function startsWithApiErrorPrefix(text) {
     text.startsWith(GATEWAY_REFUSED)
   );
 }
-//@ chunk-e6aww6q8.js:1572145-1572319 fingerprint = parsePromptTooLongTokenCounts (1)
+//@ chunk-e6aww6q8.js:1572145-1572319 fingerprint (2.1.88 match: parsePromptTooLongTokenCounts, 1)
 /**
  * 从 "prompt is too long: N tokens > M" 解析实际与上限 token 数。
  */
@@ -770,7 +770,7 @@ function parsePromptTooLongTokenCounts(rawMessage) {
     limitTokens: match ? parseInt(match[2], 10) : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1572319-1572501 fingerprint = getPromptTooLongTokenGap (0.781)
+//@ chunk-e6aww6q8.js:1572319-1572501 fingerprint (2.1.88 match: getPromptTooLongTokenGap, 0.781)
 /**
  * 提示词过长错误消息的超出量 {gap, actual}。
  */
@@ -857,7 +857,7 @@ function getMediaErrorFromApiError(error) {
   if (!(error instanceof APIError) || error.status !== 400) return;
   return classifyMediaError(error.message);
 }
-//@ chunk-e6aww6q8.js:1573830-1573924 fingerprint = isMediaSizeErrorMessage (1)
+//@ chunk-e6aww6q8.js:1573830-1573924 fingerprint (2.1.88 match: isMediaSizeErrorMessage, 1)
 /**
  * API 错误消息的详情是请求过大或媒体错误。
  */
@@ -868,7 +868,7 @@ function isMediaSizeErrorMessage(msg) {
     isRequestTooLargeOrMediaDetail(msg.errorDetails)
   );
 }
-//@ chunk-e6aww6q8.js:1573924-1573960 fingerprint = CREDIT_BALANCE_TOO_LOW_ERROR_MESSAGE (1)
+//@ chunk-e6aww6q8.js:1573924-1573960 fingerprint (2.1.88 match: CREDIT_BALANCE_TOO_LOW_ERROR_MESSAGE, 1)
 /**
  * "Credit balance is too low"。
  */
@@ -914,7 +914,7 @@ function isCreditBalanceTooLow(error) {
 function isOrganizationDisabled(error) {
   return error instanceof Error && error.message.toLowerCase().includes("organization has been disabled");
 }
-//@ chunk-e6aww6q8.js:1574871-1574972 placement = _temp2 (1)
+//@ chunk-e6aww6q8.js:1574871-1574972 placement (2.1.88 match: _temp2, 1)
 /**
  * 判断错误是超时类：特定超时错误类型，或消息里含 timeout 的另一类错误。
  */
@@ -957,7 +957,7 @@ function isImageTooLargeError(error) {
     error.message.includes("maximum")
   );
 }
-//@ chunk-e6aww6q8.js:1575353-1575489 fingerprint = isMediaSizeError (0.692)
+//@ chunk-e6aww6q8.js:1575353-1575489 fingerprint (2.1.88 match: isMediaSizeError, 0.692)
 /**
  * 400 多图模式下尺寸超限。旧版名 isMediaSizeError 近似。
  */
@@ -1060,7 +1060,7 @@ function isBedrockModelIdError(error) {
     error.message.toLowerCase().includes("model id")
   );
 }
-//@ chunk-e6aww6q8.js:1576495-1576542 fingerprint = INVALID_API_KEY_ERROR_MESSAGE (1)
+//@ chunk-e6aww6q8.js:1576495-1576542 fingerprint (2.1.88 match: INVALID_API_KEY_ERROR_MESSAGE, 1)
 /**
  * "Not logged in · Please run /login"。
  */
@@ -1151,7 +1151,7 @@ function getTokenRevokedMessage() {
 function getNotLoggedInMessage() {
   return isArtifactMountMode() ? AUTH_REQUIRED_MESSAGE : INVALID_API_KEY_ERROR_MESSAGE;
 }
-//@ chunk-e6aww6q8.js:1580057-1580129 layout = isConsumerPlan (1)
+//@ chunk-e6aww6q8.js:1580057-1580129 layout (2.1.88 match: isConsumerPlan, 1)
 /**
  * pro/max 用户为付款问题提示，其他为组织禁用提示。旧版名 isConsumerPlan 为错配。
  */
@@ -1167,7 +1167,7 @@ function getSubscriptionUnavailableMessage() {
 function isRemoteSession() {
   return env.CLAUDE_CODE_REMOTE;
 }
-//@ chunk-e6aww6q8.js:1580172-1582680 fingerprint = logToolUseToolResultMismatch (0.791)
+//@ chunk-e6aww6q8.js:1580172-1582680 fingerprint (2.1.88 match: logToolUseToolResultMismatch, 0.791)
 /**
  * tool_use/tool_result 不匹配错误时，定位该 tool_use 在规范化前后消息中的位置并记录遥测（只记角色/块类型摘要）。
  */
@@ -1302,7 +1302,7 @@ function logToolUseToolResultMismatch(toolUseId, messages, messagesForAPI) {
     });
   } catch (error) {}
 }
-//@ chunk-e6aww6q8.js:1582680-1582854 fingerprint = isValidAPIMessage (1)
+//@ chunk-e6aww6q8.js:1582680-1582854 fingerprint (2.1.88 match: isValidAPIMessage, 1)
 /**
  * 对象形如 API Message（content 数组、model 字符串、usage 对象）。
  */
@@ -2075,7 +2075,7 @@ ${assistantMessageFromError.errorDetails ?? ""}`,
 function getRewindHint() {
   return getIsNonInteractiveSession() ? "" : " Run /rewind to recover the conversation.";
 }
-//@ chunk-e6aww6q8.js:1594272-1610377 callgraph-witnessed = getAssistantMessageFromError (0.242)
+//@ chunk-e6aww6q8.js:1594272-1610377 callgraph-witnessed (2.1.88 match: getAssistantMessageFromError, 0.242)
 /**
  * 把任意 API 异常转成 assistant 错误消息（Fs）：超时、图片/PDF、DLP、off-switch、额度与用量信用、1M 上下文需信用、提示词过长（可压缩时提示 /compact）、媒体、effort 与 thinking 冲突、工具配对错误、Opus 不可用、余额不足、各类认证（API key、OAuth 吊销、组织禁用、云凭证、网关）、模型不存在等，error 字段取 server_error/invalid_request/rate_limit/billing_error/authentication_failed/model_not_found/… 。
  */
@@ -2862,7 +2862,7 @@ class NoApiAttemptsLeftError extends Error {
     super("Not sent: no API attempts left");
   }
 }
-//@ chunk-e6aww6q8.js:1610844-1615671 fingerprint = classifyAPIError (0.405)
+//@ chunk-e6aww6q8.js:1610844-1615671 fingerprint (2.1.88 match: classifyAPIError, 0.405)
 /**
  * 遥测用 API 错误分类：aborted/api_timeout/repeated_529/rate_limit/server_overload/prompt_too_long/pdf_*\/image_*\/tool_use_mismatch/invalid_model/credit_balance_low/invalid_api_key/token_revoked/auth_error/ssl_cert_error/connection_error/unknown 等约 60 类。
  */
@@ -3033,7 +3033,7 @@ function classifyAPIError(error) {
     return "connection_error";
   return "unknown";
 }
-//@ chunk-e6aww6q8.js:1615671-1616007 fingerprint = categorizeRetryableAPIError (0.752)
+//@ chunk-e6aww6q8.js:1615671-1616007 fingerprint (2.1.88 match: categorizeRetryableAPIError, 0.752)
 /**
  * 可重试错误的粗分类：overloaded/rate_limit/authentication_failed/server_error/cloud_credential_error/unknown。
  */
@@ -3215,7 +3215,7 @@ function isLongContextCreditsRequired(message) {
     message.includes("Usage credits are required for long context")
   );
 }
-//@ chunk-e6aww6q8.js:1619784-1619885 placement = isMediaSizeErrorMessage (1)
+//@ chunk-e6aww6q8.js:1619784-1619885 placement (2.1.88 match: isMediaSizeErrorMessage, 1)
 /**
  * API 错误消息详情是长上下文需信用。旧版名错配。
  */
@@ -3273,7 +3273,7 @@ var intentProviderSlot; // deferred: uses IntentProvider of its import cycle whi
 deferInit("chunk-e6aww6q8.js:1620226", () => {
   intentProviderSlot = new HostScoped(() => new IntentProvider());
 });
-//@ chunk-8t8n4kdh.js:79910-80092 fingerprint = API_TIMEOUT_ERROR_MESSAGE (0.717)
+//@ chunk-8t8n4kdh.js:79910-80092 fingerprint (2.1.88 match: API_TIMEOUT_ERROR_MESSAGE, 0.717)
 /**
  * 给请求 promise 挂超时：到时用 RequestTimeout 错误中止控制器，完成后清计时器。旧版名 API_TIMEOUT_ERROR_MESSAGE 为错配；疑似第三方/其他 HTTP 客户端代码。
  */

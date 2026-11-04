@@ -122,7 +122,7 @@ deferInit("chunk-hg2zbde4.js:13279", () => {
   EXTERNAL_ALWAYS_AVAILABLE_TOOLS = getAlwaysAvailableToolNames("external");
   EXTERNAL_ALWAYS_AVAILABLE_SET = new Set([...EXTERNAL_ALWAYS_AVAILABLE_TOOLS]);
 });
-//@ chunk-hg2zbde4.js:13323-13471 placement = cleanMessagesForLogging (1)
+//@ chunk-hg2zbde4.js:13323-13471 placement (2.1.88 match: cleanMessagesForLogging, 1)
 function cleanMessagesForLogging(names) {
   return new Set([
     FILE_READ_TOOL_NAME,
@@ -205,7 +205,7 @@ deferInit("chunk-hg2zbde4.js:13572", () => {
     WORKFLOW_TOOL_NAME,
   ]);
 });
-//@ chunk-hg2zbde4.js:13673-13753 fingerprint = PR_ACTIVITY_TOOL_SUFFIXES (0.87)
+//@ chunk-hg2zbde4.js:13673-13753 fingerprint (2.1.88 match: PR_ACTIVITY_TOOL_SUFFIXES, 0.87)
 var SUBSCRIBE_PR_ACTIVITY = "subscribe_pr_activity";
 var PR_ACTIVITY_TOOL_SUFFIXES = [SUBSCRIBE_PR_ACTIVITY, "unsubscribe_pr_activity"];
 var PR_ACTIVITY_MCP_SERVERS = [CLAUDE_CODE_REMOTE, "github"];
@@ -273,7 +273,7 @@ function applyCoordinatorToolFilter(tools, filter = () => false) {
       (!any && filter(tool)),
   );
 }
-//@ chunk-0nt1vzp1.js:1538-1733 placement = mergeAndFilterTools (0.504)
+//@ chunk-0nt1vzp1.js:1538-1733 placement (2.1.88 match: mergeAndFilterTools, 0.504)
 /**
  * 合并内建与 MCP 工具（按名去重、按权限过滤），MCP/外部工具分区与内建分区各自排序；协调者模式下再按协调者规则过滤。打印模式与 SDK 用它。
  */

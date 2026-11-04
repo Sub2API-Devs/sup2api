@@ -17,7 +17,7 @@ import {
 import { Spinner } from "../Spinner.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-znr63w8n.js:1479-1987 fingerprint = WorkerBadge (0.721)
+//@ chunk-znr63w8n.js:1479-1987 fingerprint (2.1.88 match: WorkerBadge, 0.721)
 /**
  * 队友徽章：显示发起请求的队友名与颜色（被 37 处使用）。
  */

@@ -21,7 +21,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 var SSE_EVENT_SEPARATOR_RE = /\r?\n\r?\n/;
 var CHARS_PER_OUTPUT_TOKEN = 4;
 var DATA_PREFIX_LENGTH = 80;
-//@ chunk-1ny7cxrt.js:1442945-1443051 placement = getParentCacheSuppressReason (0.426)
+//@ chunk-1ny7cxrt.js:1442945-1443051 placement (2.1.88 match: getParentCacheSuppressReason, 0.426)
 /**
  * SSE 用量解析器的初始状态（usage 0、是否见到、估算输出字符）。旧版名 getParentCacheSuppressReason 为错配，归错文件。
  */

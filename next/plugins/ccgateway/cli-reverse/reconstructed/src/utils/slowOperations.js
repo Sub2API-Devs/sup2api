@@ -106,7 +106,7 @@ function createSlowOperationLogger() {
 }
 //@ chunk-cgr0tezp.js:19108-19118 layout
 var slowLogging = createSlowOperationLogger;
-//@ chunk-cgr0tezp.js:19118-19202 fingerprint = jsonStringify (1)
+//@ chunk-cgr0tezp.js:19118-19202 fingerprint (2.1.88 match: jsonStringify, 1)
 /**
  * JSON.stringify 包装（慢操作计时点）。
  */
@@ -143,7 +143,7 @@ function jsonlJoin(items) {
 `;
   return out;
 }
-//@ chunk-cgr0tezp.js:19410-19509 fingerprint = jsonParse (0.745)
+//@ chunk-cgr0tezp.js:19410-19509 fingerprint (2.1.88 match: jsonParse, 0.745)
 /**
  * JSON.parse 包装（慢操作计时点）。
  */
@@ -158,7 +158,7 @@ var jsonParse = (text, reviver) => {
 function jsonParseRaw(text) {
   return JSON.parse(text);
 }
-//@ chunk-cgr0tezp.js:19545-19628 fingerprint = clone (1)
+//@ chunk-cgr0tezp.js:19545-19628 fingerprint (2.1.88 match: clone, 1)
 /**
  * structuredClone 包装，带慢操作计时（超阈值记调试日志）。
  */
@@ -166,7 +166,7 @@ function clone(value, options) {
   using span = slowLogging`structuredClone(${lengthOrValue(value)})`;
   return structuredClone(value, options);
 }
-//@ chunk-cgr0tezp.js:19628-19703 fingerprint = writeFileSync_DEPRECATED (0.409)
+//@ chunk-cgr0tezp.js:19628-19703 fingerprint (2.1.88 match: writeFileSync_DEPRECATED, 0.409)
 function writeFileSync_DEPRECATED(value, replacer, space) {
   using span = slowLogging`fs.writeFileSync(${value}, ${lengthOrValue(replacer)})`;
   writeFileSync(value, replacer, space);
@@ -175,7 +175,7 @@ function writeFileSync_DEPRECATED(value, replacer, space) {
 function lengthOrValue(value) {
   return typeof value === "string" ? value.length : value;
 }
-//@ chunk-4121qate.js:71907-72078 fingerprint = AntSlowLogger (0.323)
+//@ chunk-4121qate.js:71907-72078 fingerprint (2.1.88 match: AntSlowLogger, 0.323)
 function AntSlowLogger(hookKey, message) {
   let report = slowHookReports_2.get(hookKey);
   slowHookReports_2.delete(hookKey);

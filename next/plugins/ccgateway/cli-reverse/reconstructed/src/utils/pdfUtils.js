@@ -24,11 +24,11 @@ function isPDFExtension(ext) {
   }
   return;
 }
-//@ chunk-aepeg2w5.js:458281-458354 fingerprint = isPDFSupported (0.502)
+//@ chunk-aepeg2w5.js:458281-458354 fingerprint (2.1.88 match: isPDFSupported, 0.502)
 function isPDFSupported() {
   return ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"];
 }
-//@ chunk-g54kbxqw.js:132012-132036 fingerprint = DOCUMENT_EXTENSIONS (1)
+//@ chunk-g54kbxqw.js:132012-132036 fingerprint (2.1.88 match: DOCUMENT_EXTENSIONS, 1)
 /**
  * 文档扩展名集合（pdf）。
  */
@@ -36,7 +36,7 @@ var DOCUMENT_EXTENSIONS; // deferred: has load-time effects after a deferred sta
 deferInit("chunk-g54kbxqw.js:132012", () => {
   DOCUMENT_EXTENSIONS = new Set(["pdf"]);
 });
-//@ chunk-g54kbxqw.js:132036-132232 fingerprint = parsePDFPageRange (1)
+//@ chunk-g54kbxqw.js:132036-132232 fingerprint (2.1.88 match: parsePDFPageRange, 1)
 /**
  * 解析 pages 参数："N"、"N-M" 或 "N-"，1 基，非法返回 null。
  */

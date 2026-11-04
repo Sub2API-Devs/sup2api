@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1696260-1696406 fingerprint = help (0.7)
+//@ chunk-e6aww6q8.js:1696260-1696406 fingerprint (2.1.88 match: help, 0.7)
 /**
  * /help 命令对象（local-jsx）；描述：Show help and available commands；实现 chunk-yxcx2jtr.js 的 as。
  */

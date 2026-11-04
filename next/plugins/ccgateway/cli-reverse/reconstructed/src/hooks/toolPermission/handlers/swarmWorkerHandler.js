@@ -22,7 +22,7 @@ import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../../services/an
 import { logError } from "../../../utils/log.js";
 import { toError } from "../../../utils/errors.js";
 
-//@ chunk-18hwfzwa.js:1645261-1647210 fingerprint = handleSwarmWorkerPermission (0.64)
+//@ chunk-18hwfzwa.js:1645261-1647210 fingerprint (2.1.88 match: handleSwarmWorkerPermission, 0.64)
 /**
  * 队友权限：把请求写入领导的 mailbox（permission_swarm_forward），注册回调等待 useSwarmPermissionPoller 收到回复；写入失败时提示无法送达。
  */

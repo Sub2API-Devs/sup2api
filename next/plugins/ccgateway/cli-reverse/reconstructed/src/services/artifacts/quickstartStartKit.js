@@ -240,7 +240,7 @@ async function readFirstPartyTypeSkill(request) {
 function isReservedKitPath(path) {
   return path === "index.html" || path === TYPE_INSTRUCTIONS_FILE || path.startsWith("artifact-type/");
 }
-//@ chunk-965tj7mg.js:10469-10603 placement = formatFailureDetails (0.777)
+//@ chunk-965tj7mg.js:10469-10603 placement (2.1.88 match: formatFailureDetails, 0.777)
 function formatFailureDetails(failures) {
   let limit = failures.length - 3;
   return (

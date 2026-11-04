@@ -794,7 +794,7 @@ function flattenContentForHost(content) {
 function isToolUseBlock(block) {
   return typeof block === "object" && block !== null && "type" in block && block.type === "tool_use";
 }
-//@ chunk-fe6rs39h.js:58421-58649 placement = extractErrorTypeFromData (1)
+//@ chunk-fe6rs39h.js:58421-58649 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function hasSplitTextMatch(data) {
   let flattened = data.flatMap((block) =>
     typeof block === "object" &&

@@ -15,7 +15,7 @@ import { env } from "../utils/env.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-cjydagjy.js:7542-8258 fingerprint = migrateAutoUpdatesToSettings (0.82)
+//@ chunk-cjydagjy.js:7542-8258 fingerprint (2.1.88 match: migrateAutoUpdatesToSettings, 0.82)
 /**
  * 迁移：全局配置 autoUpdates=false（且非原生安装保护）→ userSettings.env.DISABLE_AUTOUPDATER=1，并清除旧字段。
  */

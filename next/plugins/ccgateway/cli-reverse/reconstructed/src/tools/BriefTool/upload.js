@@ -272,7 +272,7 @@ function formatUploadLimitError(size, limit) {
   if (limit === undefined) return `${formatMiB(size)} exceeds the upload limit`;
   return `${formatMiB(size)} exceeds the ${formatMiB_2(limit)} upload limit`;
 }
-//@ chunk-7kpfrhzn.js:6970-7276 fingerprint = MIME_BY_EXT (0.83)
+//@ chunk-7kpfrhzn.js:6970-7276 fingerprint (2.1.88 match: MIME_BY_EXT, 0.83)
 /**
  * 判定不可重发的 errno 集合（ENOTFOUND、ERR_INVALID_URL 与证书类错误）。
  */
@@ -295,7 +295,7 @@ var IMAGE_MIME_BY_EXT = {
   ".gif": "image/gif",
   ".webp": "image/webp",
 };
-//@ chunk-7kpfrhzn.js:7276-7356 fingerprint = guessMimeType (1)
+//@ chunk-7kpfrhzn.js:7276-7356 fingerprint (2.1.88 match: guessMimeType, 1)
 function guessMimeType(filename) {
   let ext = extname(filename).toLowerCase();
   return IMAGE_MIME_BY_EXT[ext] ?? "application/octet-stream";
@@ -516,7 +516,7 @@ async function makePreviewCopy(bytes, filePath, signal, telemetry, copyLock) {
     releaseCopyLock();
   }
 }
-//@ chunk-7kpfrhzn.js:11219-11258 fingerprint = debug (1)
+//@ chunk-7kpfrhzn.js:11219-11258 fingerprint (2.1.88 match: debug, 1)
 function logUploadDebug(msg) {
   logForDebugging(`[brief:upload] ${msg}`);
 }
@@ -553,7 +553,7 @@ function checkUploadAllowed(props) {
   }
   return null;
 }
-//@ chunk-7kpfrhzn.js:11887-11954 fingerprint = getBridgeBaseUrl (1)
+//@ chunk-7kpfrhzn.js:11887-11954 fingerprint (2.1.88 match: getBridgeBaseUrl, 1)
 function getBridgeBaseUrl() {
   return getBridgeBaseUrlOverride() ?? env.ANTHROPIC_BASE_URL ?? getOauthConfig().BASE_API_URL;
 }
@@ -603,7 +603,7 @@ var uploadTooLargeSchema = DoctorLazy(() =>
     }),
   }),
 );
-//@ chunk-7kpfrhzn.js:12440-12531 fingerprint = uploadResponseSchema (0.525)
+//@ chunk-7kpfrhzn.js:12440-12531 fingerprint (2.1.88 match: uploadResponseSchema, 0.525)
 async function uploadResponseSchema(buffer, filename, mimeType, signal, telemetry, credentials) {
   let uploadResult = await uploadBuffer(buffer, filename, mimeType, signal, telemetry, credentials);
   return "error" in uploadResult ? uploadResult : uploadResult.file_uuid;
@@ -702,7 +702,7 @@ async function uploadScaledImage(scaledImage, filename, ctx, telemetryFields, po
     },
   };
 }
-//@ chunk-7kpfrhzn.js:20545-23135 callgraph-witnessed = uploadBriefAttachment (0.164)
+//@ chunk-7kpfrhzn.js:20545-23135 callgraph-witnessed (2.1.88 match: uploadBriefAttachment, 0.164)
 /**
  * 上传 Brief 附件到 Anthropic 文件存储：策略/提供方检查（仅 firstParty、非仅必要流量、allow_send_file 策略），取 OAuth 凭证，等待轮次，按大小选择缓冲上传（可生成预览副本或缩放图）或流式上传，支持有限次重发与服务器上限记忆，返回 file_uuid 或错误。
  */

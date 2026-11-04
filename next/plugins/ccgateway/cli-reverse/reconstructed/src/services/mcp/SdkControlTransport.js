@@ -18,7 +18,7 @@ import { isPlainObject } from "../../utils/isPlainObject.js";
 function isJsonRpcRequest(message) {
   return "method" in message && "id" in message && message.id !== null;
 }
-//@ chunk-mdk8a5r0.js:480-2760 fingerprint = SdkControlClientTransport (0.329)
+//@ chunk-mdk8a5r0.js:480-2760 fingerprint (2.1.88 match: SdkControlClientTransport, 0.329)
 /**
  * SdkControlClientTransport：CLI 侧连接 SDK 宿主进程内 MCP 服务器的传输，消息经 control 通道 sendMcpMessage 转发。可带 manifest（initializeResult/toolsListResult）在本地重放 initialize 与首个 tools/list，不匹配时 dropManifest 并记录原因（outcome）。
  */
@@ -162,7 +162,7 @@ function isValidResultMeta(result) {
   let relatedTask = _meta["io.modelcontextprotocol/related-task"];
   return relatedTask === undefined || (isPlainObject(relatedTask) && typeof relatedTask.taskId === "string");
 }
-//@ chunk-mdk8a5r0.js:3070-3347 fingerprint = SdkControlServerTransport (1)
+//@ chunk-mdk8a5r0.js:3070-3347 fingerprint (2.1.88 match: SdkControlServerTransport, 1)
 /**
  * SdkControlServerTransport：SDK 宿主侧的服务器传输，send 直接调用 sendMcpMessage。
  */

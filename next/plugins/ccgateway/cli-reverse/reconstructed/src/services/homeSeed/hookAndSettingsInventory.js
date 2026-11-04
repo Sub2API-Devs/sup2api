@@ -364,7 +364,7 @@ async function countUnloadedProjectSkills() {
     (error) => (["ENOENT", "ENOTDIR"].includes(getErrnoCode(error) ?? "") ? 0 : 1),
   );
 }
-//@ chunk-axmbhcjg.js:32897-33009 placement = _temp (0.703)
+//@ chunk-axmbhcjg.js:32897-33009 placement (2.1.88 match: _temp, 0.703)
 /**
  * 判断设置里（主设置或任一来源）是否配置了 agent。
  */
@@ -413,7 +413,7 @@ function isPathUnder(child, parent) {
   let rel = relative(child, parent);
   return rel !== "" && rel.split(sep)[0] !== ".." && !isAbsolute(rel);
 }
-//@ chunk-axmbhcjg.js:33314-33399 placement = _temp8 (1)
+//@ chunk-axmbhcjg.js:33314-33399 placement (2.1.88 match: _temp8, 1)
 /**
  * 某设置来源对应的配置文件路径（localSettings 还带旧路径）。
  */
@@ -423,7 +423,7 @@ function settingsPathsForSource(a_3) {
     a_3 === "localSettings" ? getLegacyLocalSettingsFilePath() : undefined,
   ].filter((source) => source !== undefined);
 }
-//@ chunk-axmbhcjg.js:33399-33507 placement = isClaudeSettingsPath (1)
+//@ chunk-axmbhcjg.js:33399-33507 placement (2.1.88 match: isClaudeSettingsPath, 1)
 /**
  * 列出每个附加目录下的 .claude/settings.json 与 settings.local.json 路径。旧版名 isClaudeSettingsPath 误配。
  */

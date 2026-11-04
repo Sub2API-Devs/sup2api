@@ -143,7 +143,7 @@ deferInit("chunk-ah34pb7m.js:44067", () => {
     upgrade_or_extra_usage: "/upgrade or /usage-credits to finish what you\u2019re working on.",
   };
 });
-//@ chunk-ah34pb7m.js:44584-45072 fingerprint = getUpsellMessage (0.336)
+//@ chunk-ah34pb7m.js:44584-45072 fingerprint (2.1.88 match: getUpsellMessage, 0.336)
 function getUpsellMessage({
   shouldShowUpsell,
   isMax20x,
@@ -167,7 +167,7 @@ function getUpsellMessage({
   if (serverHidesUpgrade) return isExtraUsageAvailable ? "extra_usage" : null;
   return isExtraUsageAvailable ? "upgrade_or_extra_usage" : "upgrade";
 }
-//@ chunk-ah34pb7m.js:45072-48024 fingerprint = RateLimitMessage (0.312)
+//@ chunk-ah34pb7m.js:45072-48024 fingerprint (2.1.88 match: RateLimitMessage, 0.312)
 /**
  * 限流消息：根据订阅（pro/max/team/enterprise）与 overage 状态给出建议（/upgrade、/usage-credits、/login、联系管理员），显示重置时间。
  */

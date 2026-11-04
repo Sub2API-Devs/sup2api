@@ -183,7 +183,7 @@ function divider(ctx) {
     "\u2500".repeat(Math.max(1, ctx.columns)),
   );
 }
-//@ chunk-wyqg6m3h.js:37555-37587 placement = _temp2 (1)
+//@ chunk-wyqg6m3h.js:37555-37587 placement (2.1.88 match: _temp2, 1)
 var fileKeyOf = (url) => `file:${sanitizeName(url.path)}`;
 //@ chunk-wyqg6m3h.js:37587-37650 placement
 var statTextOf = (added, removed) =>
@@ -1329,7 +1329,7 @@ var entryKindsOf = (ctx) => (dir) =>
     (entries) => new Map(entries.map((entry) => [entry.name, entry.kind])),
     () => null,
   );
-//@ chunk-wyqg6m3h.js:51237-51348 placement = isEnvTruthy (0.824)
+//@ chunk-wyqg6m3h.js:51237-51348 placement (2.1.88 match: isEnvTruthy, 0.824)
 var isEnvTruthy = (settings, envValue) =>
   settings.fileCheckpointingEnabled !== false &&
   !["1", "true", "yes", "on"].includes((envValue ?? "").trim().toLowerCase());
@@ -1337,7 +1337,7 @@ var isEnvTruthy = (settings, envValue) =>
 var isOnPaneSurface = (props) => props.surface !== "mobile";
 //@ chunk-wyqg6m3h.js:51381-51432 placement
 var messageOf = (error) => (error instanceof Error ? error.message : String(error));
-//@ chunk-wyqg6m3h.js:51432-51489 placement = getFileModificationTimeAsync (1)
+//@ chunk-wyqg6m3h.js:51432-51489 placement (2.1.88 match: getFileModificationTimeAsync, 1)
 /**
  * 返回"取 mtime 或 null"的函数（柯里化）。
  */

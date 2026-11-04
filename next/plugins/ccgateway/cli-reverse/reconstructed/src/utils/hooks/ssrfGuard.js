@@ -132,7 +132,7 @@ function hasWildcardPunycodeLabel(parsedUrl, portPlaceholder) {
       )
   );
 }
-//@ chunk-e6aww6q8.js:3403690-3403774 callgraph-witnessed = isBlockedAddress (0)
+//@ chunk-e6aww6q8.js:3403690-3403774 callgraph-witnessed (2.1.88 match: isBlockedAddress, 0)
 /**
  * 判断 IP 是否属于 HTTP 钩子禁止访问的私有/链路本地地址（回环 127.0.0.1、::1 允许）。
  */
@@ -162,7 +162,7 @@ function isBlockedV4(address) {
   if (firstOctet === 192 && secondOctet === 168) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:3404101-3404347 fingerprint = isBlockedV6 (1)
+//@ chunk-e6aww6q8.js:3404101-3404347 fingerprint (2.1.88 match: isBlockedV6, 1)
 function isBlockedV6(address) {
   let lower = address.toLowerCase();
   if (lower === "::1") return false;
@@ -174,7 +174,7 @@ function isBlockedV6(address) {
   if (firstHextet && firstHextet.length === 4 && firstHextet >= "fe80" && firstHextet <= "febf") return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:3404347-3404949 fingerprint = expandIPv6Groups (1)
+//@ chunk-e6aww6q8.js:3404347-3404949 fingerprint (2.1.88 match: expandIPv6Groups, 1)
 function expandIPv6Groups(addr) {
   let tailHextets = [];
   if (addr.includes(".")) {
@@ -222,7 +222,7 @@ function extractMappedIPv4(addr) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3405135-3405632 fingerprint = ssrfGuardedLookup (1)
+//@ chunk-e6aww6q8.js:3405135-3405632 fingerprint (2.1.88 match: ssrfGuardedLookup, 1)
 /**
  * HTTP 钩子的 DNS lookup：解析出的任一地址被禁止就报 ERR_HTTP_HOOK_BLOCKED_ADDRESS。
  */
@@ -284,7 +284,7 @@ function ssrfGuardedLookup(hostname, options, callback) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:3405632-3405872 fingerprint = ssrfError (1)
+//@ chunk-e6aww6q8.js:3405632-3405872 fingerprint (2.1.88 match: ssrfError, 1)
 function ssrfError(hostname, address) {
   let err = Error(
     `HTTP hook blocked: ${hostname} resolves to ${address} (private/link-local address). Loopback (127.0.0.1, ::1) is allowed for local dev.`,

@@ -122,7 +122,7 @@ function serializeFrontmatter(frontmatter) {
 }
 //@ chunk-82kqcve8.js:82465-82494 layout
 var YAML_SPECIAL_CHARS_RE = /[{}[\]*&#!|>%@`]|: /;
-//@ chunk-82kqcve8.js:82494-82960 fingerprint = quoteProblematicValues (1)
+//@ chunk-82kqcve8.js:82494-82960 fingerprint (2.1.88 match: quoteProblematicValues, 1)
 /**
  * 给含 YAML 特殊字符的单行值加双引号，避免 frontmatter 解析失败。
  */
@@ -238,7 +238,7 @@ var STRICT_FRONTMATTER_REGEX = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)
 function normalizeFrontmatterKeys(frontmatter, sourceName) {
   return frontmatter;
 }
-//@ chunk-82kqcve8.js:84024-85922 callgraph-witnessed = parseFrontmatter (0.146)
+//@ chunk-82kqcve8.js:84024-85922 callgraph-witnessed (2.1.88 match: parseFrontmatter, 0.146)
 /**
  * 解析 markdown 的 YAML frontmatter（--- 块）：返回 frontmatter、frontmatterAsWritten、content、parseError；untrusted 时拒绝超长/过深/含锚点的块；quoteLossyValues 模式会给会丢信息的值加引号并报告 rewriteHazard。
  */
@@ -392,7 +392,7 @@ function splitPathInFrontmatter(input) {
   if (input && typeof input === "object" && !Array.isArray(input)) return input;
   return {};
 }
-//@ chunk-82kqcve8.js:87346-87479 callgraph-witnessed = parsePositiveIntFromFrontmatter (1)
+//@ chunk-82kqcve8.js:87346-87479 callgraph-witnessed (2.1.88 match: parsePositiveIntFromFrontmatter, 1)
 /**
  * 把 frontmatter 值解析为正整数，否则 undefined。
  */
@@ -424,7 +424,7 @@ function parseExperimentalCacheTtl(frontmatter) {
   let cacheTtlValue = Object.entries(experimental).find(([key]) => normalizeKey(key) === "cachettl")?.[1];
   return CACHE_TTL_VALUES.find((allowedValue) => allowedValue === cacheTtlValue);
 }
-//@ chunk-82kqcve8.js:87715-87970 fingerprint = coerceDescriptionToString (1)
+//@ chunk-82kqcve8.js:87715-87970 fingerprint (2.1.88 match: coerceDescriptionToString, 1)
 /**
  * description 转字符串：字符串去空白，数字/布尔转字符串，其他类型告警并返回 null。
  */
@@ -484,12 +484,12 @@ function parseBooleanishFrontmatter(value) {
   if (isEnvDefinedFalsy(text)) return false;
   return;
 }
-//@ chunk-82kqcve8.js:88477-88506 fingerprint = FRONTMATTER_SHELLS (1)
+//@ chunk-82kqcve8.js:88477-88506 fingerprint (2.1.88 match: FRONTMATTER_SHELLS, 1)
 /**
  * frontmatter 支持的 shell 列表：bash、powershell。
  */
 var FRONTMATTER_SHELLS = ["bash", "powershell"];
-//@ chunk-82kqcve8.js:88506-88757 fingerprint = parseShellFrontmatter (1)
+//@ chunk-82kqcve8.js:88506-88757 fingerprint (2.1.88 match: parseShellFrontmatter, 1)
 /**
  * 解析 shell frontmatter，只接受 bash/powershell，其他值告警后回退 bash（返回 undefined）。
  */

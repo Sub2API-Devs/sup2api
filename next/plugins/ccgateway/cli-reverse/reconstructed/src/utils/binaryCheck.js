@@ -12,7 +12,7 @@ import { logForDebugging } from "./debug.js";
 import { SAFE_PATH_RE, installedSummaries } from "../hooks/useAwaySummary.js";
 import { whichAsync } from "./which.js";
 
-//@ chunk-18hwfzwa.js:1797785-1798239 fingerprint = isBinaryInstalled (0.836)
+//@ chunk-18hwfzwa.js:1797785-1798239 fingerprint (2.1.88 match: isBinaryInstalled, 0.836)
 async function isBinaryInstalled(session, command) {
   if (!command || !command.trim()) {
     logForDebugging("[binaryCheck] Empty command provided, returning false");

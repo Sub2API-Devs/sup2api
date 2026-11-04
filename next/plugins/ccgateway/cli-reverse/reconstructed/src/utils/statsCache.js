@@ -24,7 +24,7 @@ import { jsonParse, jsonStringify } from "./slowOperations.js";
 import { mergeCacheWithNewStats_2 } from "./stats.js";
 import { errorMessage } from "./errors.js";
 
-//@ chunk-ae5g0zb5.js:76247-76500 fingerprint = saveStatsCache (0.461)
+//@ chunk-ae5g0zb5.js:76247-76500 fingerprint (2.1.88 match: saveStatsCache, 0.461)
 async function saveStatsCache(path, content) {
   let tempPath = `${path}.${randomBytes(6).toString("hex")}.tmp`;
   try {
@@ -47,7 +47,7 @@ async function saveStatsCache(path, content) {
     throw error;
   }
 }
-//@ chunk-9h8dr0qb.js:72773-72822 fingerprint = STATS_CACHE_FILENAME (1)
+//@ chunk-9h8dr0qb.js:72773-72822 fingerprint (2.1.88 match: STATS_CACHE_FILENAME, 1)
 var STATS_CACHE_VERSION = 5;
 var MIN_STATS_CACHE_VERSION = 1;
 var DAILY_MODEL_TOKENS_VERSION = 5;
@@ -74,7 +74,7 @@ async function withStatsCacheLock(fn) {
 function getStatsCachePath() {
   return join(getClaudeConfigDir(), STATS_CACHE_JSON);
 }
-//@ chunk-9h8dr0qb.js:72971-73212 fingerprint = getEmptyCache (0.949)
+//@ chunk-9h8dr0qb.js:72971-73212 fingerprint (2.1.88 match: getEmptyCache, 0.949)
 function getEmptyCache() {
   return {
     version: STATS_CACHE_VERSION,
@@ -91,7 +91,7 @@ function getEmptyCache() {
     shotDistribution: {},
   };
 }
-//@ chunk-9h8dr0qb.js:73212-73860 layout = getEmptyCache (0.949)
+//@ chunk-9h8dr0qb.js:73212-73860 layout (2.1.88 match: getEmptyCache, 0.949)
 function getEmptyCache_2(parsed) {
   if (
     typeof parsed.version !== "number" ||
@@ -121,7 +121,7 @@ function getEmptyCache_2(parsed) {
     shotDistribution: parsed.shotDistribution,
   };
 }
-//@ chunk-9h8dr0qb.js:73860-74741 fingerprint = loadStatsCache (0.809)
+//@ chunk-9h8dr0qb.js:73860-74741 fingerprint (2.1.88 match: loadStatsCache, 0.809)
 /**
  * 读取 /stats 用的缓存 <配置目录>/stats-cache.json（或 storage state/stats-cache），版本不符时重算。
  */
@@ -201,7 +201,7 @@ async function writeStatsCache(cache, storage) {
     });
   }
 }
-//@ chunk-9h8dr0qb.js:75277-77074 fingerprint = mergeCacheWithNewStats (0.956)
+//@ chunk-9h8dr0qb.js:75277-77074 fingerprint (2.1.88 match: mergeCacheWithNewStats, 0.956)
 function mergeCacheWithNewStats(existingCache, newStats, newLastComputedDate) {
   let dailyActivityMap = new Map();
   for (let day of existingCache.dailyActivity)
@@ -289,7 +289,7 @@ function mergeCacheWithNewStats(existingCache, newStats, newLastComputedDate) {
     hourCounts,
   };
 }
-//@ chunk-9h8dr0qb.js:77074-77179 fingerprint = toDateString (1)
+//@ chunk-9h8dr0qb.js:77074-77179 fingerprint (2.1.88 match: toDateString, 1)
 function toDateString(date) {
   let dateStr = date.toISOString().split("T")[0];
   if (!dateStr) throw Error("Invalid ISO date string");

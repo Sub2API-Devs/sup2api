@@ -40,7 +40,7 @@ import {
   isInferenceProfileArn,
 } from "../utils/model/bedrock.js";
 
-//@ chunk-aepeg2w5.js:133402-133642 fingerprint = countTokensWithBedrock (0.523)
+//@ chunk-aepeg2w5.js:133402-133642 fingerprint (2.1.88 match: countTokensWithBedrock, 0.523)
 /**
  * Bedrock CountTokensCommand（invokeModel body，anthropic_version bedrock-2023-05-31）计数。
  */
@@ -74,7 +74,7 @@ async function countTokensWithBedrock(client, modelId, body, abortSignal) {
 function tokensFromLength(length, bytesPerToken = 4) {
   return Math.round(length / bytesPerToken);
 }
-//@ chunk-g54kbxqw.js:92245-92316 callgraph-witnessed = roughTokenCountEstimation (0)
+//@ chunk-g54kbxqw.js:92245-92316 callgraph-witnessed (2.1.88 match: roughTokenCountEstimation, 0)
 /**
  * 字符串长度按 4 字节/token（或指定）粗估。
  */
@@ -95,7 +95,7 @@ function getCachedJsonLength(value, cache) {
   cache.set(value, json.length);
   return json.length;
 }
-//@ chunk-g54kbxqw.js:92499-92586 fingerprint = bytesPerTokenForFileType (1)
+//@ chunk-g54kbxqw.js:92499-92586 fingerprint (2.1.88 match: bytesPerTokenForFileType, 1)
 /**
  * json/jsonl/jsonc 按 2 字节/token，其余 4。
  */
@@ -136,7 +136,7 @@ function roughTokenCountEstimationForContent(content, bytesPerToken, jsonLengthC
     totalTokens += roughTokenCountEstimationForBlock(block, bytesPerToken, jsonLengthCache);
   return totalTokens;
 }
-//@ chunk-g54kbxqw.js:92803-93689 fingerprint = roughTokenCountEstimationForBlock (0.814)
+//@ chunk-g54kbxqw.js:92803-93689 fingerprint (2.1.88 match: roughTokenCountEstimationForBlock, 0.814)
 /**
  * 单个内容块粗估：text/thinking/redacted 按长度，文本文档按扩展名系数，image/document 固定 2000，tool_use 名+输入 JSON 长度，tool_result 递归。
  */
@@ -199,7 +199,7 @@ function thinkingParamFor(runtimeModel, resolvedModel = runtimeModel) {
         budget_tokens: DEFAULT_THINKING_BUDGET,
       };
 }
-//@ chunk-e6aww6q8.js:978007-978228 fingerprint = hasThinkingBlocks (1)
+//@ chunk-e6aww6q8.js:978007-978228 fingerprint (2.1.88 match: hasThinkingBlocks, 1)
 /**
  * API 消息中是否有 thinking/redacted_thinking 块（计数请求需带 thinking 参数）。
  */
@@ -217,7 +217,7 @@ function hasThinkingBlocks(messages) {
     }
   return false;
 }
-//@ chunk-e6aww6q8.js:978228-978657 layout = stripCallerFieldFromAssistantMessage (0.762)
+//@ chunk-e6aww6q8.js:978228-978657 layout (2.1.88 match: stripCallerFieldFromAssistantMessage, 0.762)
 /**
  * 计数请求前去掉 tool_use.caller 与 tool_result 里的 tool_reference 块。
  */
@@ -302,7 +302,7 @@ async function countTextTokensWithAPI(content, credentials) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:978963-979897 fingerprint = countMessagesTokensWithAPI (0.688)
+//@ chunk-e6aww6q8.js:978963-979897 fingerprint (2.1.88 match: countMessagesTokensWithAPI, 0.688)
 /**
  * countTokens API 计数（VCR 可录放）：Bedrock 走 CountTokensCommand；否则 anthropic.beta.messages.countTokens（只带允许的 beta，含 thinking 时带 thinking）；网关回 501 时用小模型采样回退。
  */
@@ -373,7 +373,7 @@ async function countMessagesTokensWithAPI(messages, tools, requestedModel, optio
     }
   });
 }
-//@ chunk-e6aww6q8.js:979897-980616 fingerprint = countTokensViaHaikuFallback (0.803)
+//@ chunk-e6aww6q8.js:979897-980616 fingerprint (2.1.88 match: countTokensViaHaikuFallback, 0.803)
 /**
  * 用小模型发 max_tokens=1（有 thinking 时 2048）的真实请求，读 usage 的输入+缓存 token 作为计数。
  */

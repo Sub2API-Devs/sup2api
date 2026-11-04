@@ -45,7 +45,7 @@ function shouldShowModelLabel(message, isBrief) {
     message.message.content.some((state) => state.type === "text")
   );
 }
-//@ chunk-ag5x7vhf.js:141082-141728 fingerprint = hasContentAfterIndex (0.897)
+//@ chunk-ag5x7vhf.js:141082-141728 fingerprint (2.1.88 match: hasContentAfterIndex, 0.897)
 function hasContentAfterIndex(messages, tools, excludedIds) {
   for (let i = messages.length - 1; i >= 0; i--) {
     let msg = messages[i];
@@ -74,7 +74,7 @@ function hasContentAfterIndex(messages, tools, excludedIds) {
   }
   return -1;
 }
-//@ chunk-ag5x7vhf.js:141728-145756 fingerprint = MessageRowImpl (0.817)
+//@ chunk-ag5x7vhf.js:141728-145756 fingerprint (2.1.88 match: MessageRowImpl, 0.817)
 /**
  * 消息列表单行：决定是否显示时间戳/模型、是否仍在流式（isMessageStreaming）、工具是否全部完成，渲染 Message；transcript 屏与折叠分组有特殊处理。
  */
@@ -404,7 +404,7 @@ function MessageRowImpl(props) {
   } else t10 = $[79];
   return t10;
 }
-//@ chunk-ag5x7vhf.js:146130-146586 fingerprint = allToolsResolved (0.655)
+//@ chunk-ag5x7vhf.js:146130-146586 fingerprint (2.1.88 match: allToolsResolved, 0.655)
 function allToolsResolved(msg, resolvedToolUseIDs) {
   if (msg.type === "grouped_tool_use")
     return msg.messages.every((m) => {
@@ -422,7 +422,7 @@ function allToolsResolved(msg, resolvedToolUseIDs) {
   let toolUseID = getToolUseID(msg);
   return !toolUseID || resolvedToolUseIDs.has(toolUseID);
 }
-//@ chunk-ag5x7vhf.js:146586-147355 fingerprint = areMessageRowPropsEqual (0.751)
+//@ chunk-ag5x7vhf.js:146586-147355 fingerprint (2.1.88 match: areMessageRowPropsEqual, 0.751)
 function areMessageRowPropsEqual(prev, next) {
   if (prev.message !== next.message) return false;
   if (prev.screen !== next.screen) return false;
@@ -446,7 +446,7 @@ function areMessageRowPropsEqual(prev, next) {
   if (isStreaming || !isResolved) return false;
   return true;
 }
-//@ chunk-ag5x7vhf.js:147355-147372 callgraph-witnessed = MessageRow (0)
+//@ chunk-ag5x7vhf.js:147355-147372 callgraph-witnessed (2.1.88 match: MessageRow, 0)
 /**
  * MessageRow = React.memo(MessageRowImpl, areMessageRowPropsEqual)。
  */
@@ -454,7 +454,7 @@ var MessageRow; // deferred: uses MessageRowImpl of its import cycle while loadi
 deferInit("chunk-ag5x7vhf.js:147355", () => {
   MessageRow = memo(MessageRowImpl, areMessageRowPropsEqual);
 });
-//@ chunk-ag5x7vhf.js:172936-173244 fingerprint = isMessageStreaming (0.863)
+//@ chunk-ag5x7vhf.js:172936-173244 fingerprint (2.1.88 match: isMessageStreaming, 0.863)
 /**
  * 判断消息是否仍在流式输出：与当前流式工具 ID 比较，按 assistant/user/grouped_tool_use/collapsed_read_search 分类检查。
  */

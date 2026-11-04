@@ -29,7 +29,7 @@ import {
 import { DiffFrame } from "../FileEditToolDiff.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-bwbq4xvm.js:760324-760384 fingerprint = tryRenderShutdownMessage (0.663)
+//@ chunk-bwbq4xvm.js:760324-760384 fingerprint (2.1.88 match: tryRenderShutdownMessage, 0.663)
 function tryRenderShutdownMessage(request, originator, response) {
   return {
     request,
@@ -37,7 +37,7 @@ function tryRenderShutdownMessage(request, originator, response) {
     response,
   };
 }
-//@ chunk-kf9b436m.js:303-739 fingerprint = ShutdownRequestDisplay (0.704)
+//@ chunk-kf9b436m.js:303-739 fingerprint (2.1.88 match: ShutdownRequestDisplay, 0.704)
 function ShutdownRequestDisplay(props) {
   let $ = useMemoCache(10);
   let { children, color, title } = props;
@@ -197,7 +197,7 @@ function ShutdownRejectedMessage(props) {
   } else t4 = $[7];
   return t4;
 }
-//@ chunk-ah34pb7m.js:83141-83471 placement = tryRenderPlanApprovalMessage (0.786)
+//@ chunk-ah34pb7m.js:83141-83471 placement (2.1.88 match: tryRenderPlanApprovalMessage, 0.786)
 /**
  * 解析文本是否为关闭请求/拒绝，返回对应组件。
  */

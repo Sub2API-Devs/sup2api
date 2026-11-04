@@ -14,7 +14,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Text } from "../../ink/components/Text.js";
 import { DesktopUpsellStartup } from "../DesktopUpsell/DesktopUpsellStartup.js";
 
-//@ chunk-18hwfzwa.js:1194526-1195547 fingerprint = LspRecommendationMenu (0.429)
+//@ chunk-18hwfzwa.js:1194526-1195547 fingerprint (2.1.88 match: LspRecommendationMenu, 0.429)
 function LspRecommendationMenu(props) {
   let $ = useMemoCache(10);
   let { pluginName, pluginDescription, marketplaceName, fileExtension, onResponse } = props;

@@ -126,7 +126,7 @@ function isUncachedSystemBlock(block) {
     (text.startsWith(X_ANTHROPIC_BILLING_HEADER) || text === REPORTING_OUTCOMES_SECTION)
   );
 }
-//@ chunk-1t61stbc.js:1428-1515 fingerprint = computeHash (0.745)
+//@ chunk-1t61stbc.js:1428-1515 fingerprint (2.1.88 match: computeHash, 0.745)
 /**
  * 对象 JSON 序列化后用 Bun.hash 取 32 位哈希。
  */
@@ -251,7 +251,7 @@ function getCacheCreationTtl(usage) {
 }
 //@ chunk-1t61stbc.js:3947-3961 placement
 var MAIN = "main";
-//@ chunk-1t61stbc.js:3961-4050 placement = runPostCompactCleanup (0.926)
+//@ chunk-1t61stbc.js:3961-4050 placement (2.1.88 match: runPostCompactCleanup, 0.926)
 /**
  * 第二个参数为假（非代理请求）且 querySource 为 repl_main_thread*、sdk、compact 时为真，供提示缓存断裂检测决定是否跟踪；不是压缩后清理。
  */
@@ -927,7 +927,7 @@ function maxSafeIntSchema() {
 function blocksTotalLength(parts) {
   return parts.blocks.reduce((acc, block) => acc + block.length, 0);
 }
-//@ chunk-g54kbxqw.js:60085-60108 fingerprint = getCacheBreakDiffPath (0.618)
+//@ chunk-g54kbxqw.js:60085-60108 fingerprint (2.1.88 match: getCacheBreakDiffPath, 0.618)
 /**
  * 缓存断裂状态文件名前缀 "cache-break-"（cache-break-state-<会话>.json）。
  */
@@ -1281,7 +1281,7 @@ function stripSnapshotPayload(payload) {
   } = payload;
   return rest;
 }
-//@ chunk-g54kbxqw.js:65579-66075 placement = destroyWorktree (0.326)
+//@ chunk-g54kbxqw.js:65579-66075 placement (2.1.88 match: destroyWorktree, 0.326)
 /**
  * 把各来源的上一状态（去掉大字段）排队持久化到磁盘，空则删除文件。与团队/worktree 无关。
  */
@@ -1326,7 +1326,7 @@ function persistPreviousStates() {
       .catch(() => {});
   } catch {}
 }
-//@ chunk-g54kbxqw.js:66075-66231 fingerprint = TRACKED_SOURCE_PREFIXES (0.811)
+//@ chunk-g54kbxqw.js:66075-66231 fingerprint (2.1.88 match: TRACKED_SOURCE_PREFIXES, 0.811)
 /**
  * 参与跟踪的 querySource 前缀：repl_main_thread、sdk、agent:custom/default/builtin。
  */
@@ -1349,14 +1349,14 @@ function isCacheReadDrop(prevCacheReadTokens, cacheReadTokens) {
     prevCacheReadTokens - cacheReadTokens >= MIN_CACHE_MISS_TOKENS
   );
 }
-//@ chunk-g54kbxqw.js:66275-66318 fingerprint = isExcludedModel (1)
+//@ chunk-g54kbxqw.js:66275-66318 fingerprint (2.1.88 match: isExcludedModel, 1)
 /**
  * 模型名含 haiku 的不做断裂检测。
  */
 function isExcludedModel(model) {
   return model.includes("haiku");
 }
-//@ chunk-g54kbxqw.js:66318-66487 fingerprint = getTrackingKey (1)
+//@ chunk-g54kbxqw.js:66318-66487 fingerprint (2.1.88 match: getTrackingKey, 1)
 /**
  * querySource → 跟踪键：compact 归到 compact_fork；主线程归 repl_main_thread；代理按 agentId；其他来源不跟踪（null）。
  */
@@ -1367,7 +1367,7 @@ function getTrackingKey(querySource, agentId) {
     if (querySource.startsWith(prefix)) return agentId || querySource;
   return null;
 }
-//@ chunk-g54kbxqw.js:66487-66595 layout = stripCacheControl (1)
+//@ chunk-g54kbxqw.js:66487-66595 layout (2.1.88 match: stripCacheControl, 1)
 /**
  * 数组每项去掉 cache_control。
  */
@@ -1386,7 +1386,7 @@ function getBlockText(block) {
   let text = block.text;
   return typeof text === "string" ? text : undefined;
 }
-//@ chunk-g54kbxqw.js:66659-66752 fingerprint = computePerToolHashes (1)
+//@ chunk-g54kbxqw.js:66659-66752 fingerprint (2.1.88 match: computePerToolHashes, 1)
 /**
  * 每个工具 schema 的哈希表（按工具名）。
  */
@@ -1482,7 +1482,7 @@ function cleanupAgentTracking(agentId) {
     agentId.delete(evictable);
   }
 }
-//@ chunk-g54kbxqw.js:68283-73678 fingerprint = recordPromptState (0.62)
+//@ chunk-g54kbxqw.js:68283-73678 fingerprint (2.1.88 match: recordPromptState, 0.62)
 /**
  * 请求前记录本次提示词状态（各项哈希、消息哈希），与上次对比得到 pendingChanges。
  */
@@ -2005,7 +2005,7 @@ function getPendingChangesForSource(source, trackingKey) {
     callNumber: previous?.callCount,
   };
 }
-//@ chunk-g54kbxqw.js:76966-78865 fingerprint = checkResponseForCacheBreak (0.586)
+//@ chunk-g54kbxqw.js:76966-78865 fingerprint (2.1.88 match: checkResponseForCacheBreak, 0.586)
 /**
  * 把变化标志转成人可读的原因列表（model changed、system prompt changed (+N chars) 等）。
  */
@@ -2611,7 +2611,7 @@ function logCacheDiagnosisReceived(info, detail) {
     logError(error);
   }
 }
-//@ chunk-g54kbxqw.js:89316-89585 fingerprint = notifyCacheDeletion (0.413)
+//@ chunk-g54kbxqw.js:89316-89585 fingerprint (2.1.88 match: notifyCacheDeletion, 0.413)
 /**
  * 通知缓存被有意删除（如工具结果清除），下一次 cache_read 下降不算意外断裂。
  */
@@ -2630,7 +2630,7 @@ function notifyCacheDeletion(querySource, agentId) {
     if (previous) previous.cacheDeletionsPending = true;
   }
 }
-//@ chunk-g54kbxqw.js:89585-90016 fingerprint = notifyCompaction (0.499)
+//@ chunk-g54kbxqw.js:89585-90016 fingerprint (2.1.88 match: notifyCompaction, 0.499)
 /**
  * 通知发生压缩：重置相关来源的上次 cache_read，避免误报。
  */

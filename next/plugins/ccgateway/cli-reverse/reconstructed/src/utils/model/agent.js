@@ -60,7 +60,7 @@ function hasNewerFamilyThanOpus(modelList) {
   );
   return includesAnyIgnoreCase(modelList, needles);
 }
-//@ chunk-e6aww6q8.js:1426182-1426268 callgraph-witnessed = getDefaultSubagentModel (0.711)
+//@ chunk-e6aww6q8.js:1426182-1426268 callgraph-witnessed (2.1.88 match: getDefaultSubagentModel, 0.711)
 /**
  * CLAUDE_CODE_SUBAGENT_MODEL（未设或 inherit 时为 "inherit"）。
  */
@@ -70,7 +70,7 @@ function getDefaultSubagentModel() {
     ? CLAUDE_CODE_SUBAGENT_MODEL
     : "inherit";
 }
-//@ chunk-e6aww6q8.js:1426268-1427225 fingerprint = getAgentModel (0.609)
+//@ chunk-e6aww6q8.js:1426268-1427225 fingerprint (2.1.88 match: getAgentModel, 0.609)
 /**
  * 子代理模型：工作流环境模型优先；Agent 工具参数 model，其次 frontmatter model，再次 CLAUDE_CODE_SUBAGENT_MODEL，否则继承主模型（plan 模式按 opusplan 规则）；别名与父模型同族时直接用父模型；Bedrock 继承父模型区域前缀；不被允许时降档或回落继承并回调原因。
  */
@@ -241,7 +241,7 @@ function warnSubagentModelNotAllowed(spec, steppedDown) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:1428506-1428591 placement = isOpus1mUnavailable (1)
+//@ chunk-e6aww6q8.js:1428506-1428591 placement (2.1.88 match: isOpus1mUnavailable, 1)
 function isOpus1mUnavailable(model) {
   if (
     modelFamilyOf(model, getCanonicalName(model)) === "opus" &&
@@ -269,7 +269,7 @@ function modelMatchesFamilyAlias(spec, model) {
     isOpusAliasCandidate(model, canonicalName)
   );
 }
-//@ chunk-4r745zza.js:639-768 fingerprint = aliasMatchesParentTier (1)
+//@ chunk-4r745zza.js:639-768 fingerprint (2.1.88 match: aliasMatchesParentTier, 1)
 /**
  * 用当前提供商 catalog 别名的 sonnet/opus/haiku 键构造档位默认表（srt），任一缺失返回 undefined。
  */

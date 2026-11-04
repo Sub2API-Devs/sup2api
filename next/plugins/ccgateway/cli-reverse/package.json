@@ -5,11 +5,14 @@
   "type": "module",
   "description": "AST-based reconstruction of the official Claude Code CLI 2.1.316 into a readable project",
   "scripts": {
+    "build": "node reconstructed/build.mjs",
     "verify": "node tools/verify/compare.mjs original original",
     "verify:runnable": "node tools/verify/compare.mjs original runnable",
     "verify:scenarios": "node tools/verify/scenarios.mjs original",
     "verify:run": "node tools/verify/run.mjs",
-    "verify:upstream": "node tools/verify/fake-upstream.mjs"
+    "verify:upstream": "node tools/verify/fake-upstream.mjs",
+    "verify:readable": "node tools/verify/compare.mjs original reconstructed/dist --name original-vs-reconstructed-dist",
+    "verify:decl": "node --max-old-space-size=12000 tools/verify/decl-equiv.mjs"
   },
   "devDependencies": {
     "@babel/generator": "^8.1.0",

@@ -109,7 +109,7 @@ deferInit("chunk-2jdf5m4m.js:1421", () => {
 function currentHooksSnapshots() {
   return onProcessRootHost(hooksSnapshotsRegistry);
 }
-//@ chunk-2jdf5m4m.js:1470-1741 fingerprint = getHooksFromAllowedSources (0.899)
+//@ chunk-2jdf5m4m.js:1470-1741 fingerprint (2.1.88 match: getHooksFromAllowedSources, 0.899)
 /**
  * 计算启动时快照的钩子配置：policy disableAllHooks → {}；allowManagedHooksOnly 或仅插件策略 → policy 钩子；用户层 disableAllHooks 时视情况保留受信层；否则合并 settings 钩子。
  */
@@ -162,7 +162,7 @@ function keepsOwnHooksDespiteDisableAll() {
 function ownHooksOffForUnreadablePolicy() {
   return isDisableAllHooksUserOnly() && policySettingsUnreadable();
 }
-//@ chunk-2jdf5m4m.js:2130-2317 placement = getHooksFromAllowedSources (0.83)
+//@ chunk-2jdf5m4m.js:2130-2317 placement (2.1.88 match: getHooksFromAllowedSources, 0.83)
 /**
  * disableAllHooks 只在用户层设置、受信层（policy 等）没有禁用时为 true。
  */
@@ -188,7 +188,7 @@ function isDisableAllHooksUserOnly() {
 function shouldAllowManagedHooksOnly(disableAllHooks = getSettings_DEPRECATED().disableAllHooks) {
   return isSafeMode() || shouldAllowManagedHooksOnlyByPolicy(disableAllHooks);
 }
-//@ chunk-2jdf5m4m.js:2373-2532 placement = shouldAllowManagedHooksOnly (0.843)
+//@ chunk-2jdf5m4m.js:2373-2532 placement (2.1.88 match: shouldAllowManagedHooksOnly, 0.843)
 /**
  * policy 设 allowManagedHooksOnly，或非 policy 层设 disableAllHooks 时只允许 managed 钩子。
  */
@@ -202,13 +202,13 @@ function shouldAllowManagedHooksOnlyByPolicy(disableAllHooks = getSettings_DEPRE
 function shouldHoldDeviceHooksByPolicy() {
   return isManagedHooksOnlyMode() || policySettingsUnreadable();
 }
-//@ chunk-2jdf5m4m.js:2639-2684 placement = formatDangerousSettingsList (0.483)
+//@ chunk-2jdf5m4m.js:2639-2684 placement (2.1.88 match: formatDangerousSettingsList, 0.483)
 function areRepoHooksElsewhereStoodDown() {
   return (
     shouldDisableAllHooksIncludingManaged() || isManagedHooksOnlyMode() || isRestrictedToPluginOnly("hooks")
   );
 }
-//@ chunk-2jdf5m4m.js:2684-2723 placement = _temp5 (1)
+//@ chunk-2jdf5m4m.js:2684-2723 placement (2.1.88 match: _temp5, 1)
 function userSettingsTightenOnly() {
   return getSettingsForSourceTightenOnly("userSettings");
 }
@@ -231,7 +231,7 @@ function policySettingsUnreadable() {
 function areDeviceHooksStoodDown() {
   return shouldHoldDeviceHooksByPolicy() || isRestrictedToPluginOnly("hooks");
 }
-//@ chunk-2jdf5m4m.js:2913-2977 placement = _temp (1)
+//@ chunk-2jdf5m4m.js:2913-2977 placement (2.1.88 match: _temp, 1)
 function shouldDisableAllHooksIncludingManaged() {
   return getSettingsForSource("policySettings")?.disableAllHooks === true;
 }
@@ -288,7 +288,7 @@ function getUserHooksFromSnapshot() {
     (isPersonalConfigRestricted() ? (getSettingsForSource("userSettings")?.hooks ?? {}) : {})
   );
 }
-//@ chunk-e6aww6q8.js:874759-874823 callgraph-fingerprint = shouldDisableAllHooksIncludingManaged (0.434)
+//@ chunk-e6aww6q8.js:874759-874823 callgraph-fingerprint (2.1.88 match: shouldDisableAllHooksIncludingManaged, 0.434)
 /**
  * 返回生效的 statusLine：只允许 managed 钩子时用 policySettings.statusLine。
  */

@@ -8,7 +8,7 @@
  * pieces: chunk-qg0af0yq.js (3)
  * attribution: fingerprint 3
  */
-//@ chunk-qg0af0yq.js:18766-18956 fingerprint = SWARM_SESSION_NAME (0.322)
+//@ chunk-qg0af0yq.js:18766-18956 fingerprint (2.1.88 match: SWARM_SESSION_NAME, 0.322)
 /**
  * 团队常量：TEAM_LEAD="team-lead"、成员名正则、不可用提示、tmux 会话 claude-swarm / 窗口 swarm-view、pane 占位命令 cat。
  */
@@ -21,14 +21,14 @@ var CLAUDE_SWARM = "claude-swarm";
 var SWARM_VIEW = "swarm-view";
 var TMUX = "tmux";
 var CAT = "cat";
-//@ chunk-qg0af0yq.js:18956-19007 fingerprint = getSwarmSocketName (1)
+//@ chunk-qg0af0yq.js:18956-19007 fingerprint (2.1.88 match: getSwarmSocketName, 1)
 /**
  * 外部 swarm tmux socket 名：claude-swarm-<pid>。
  */
 function getSwarmSocketName() {
   return `claude-swarm-${process.pid}`;
 }
-//@ chunk-qg0af0yq.js:19007-19046 fingerprint = TEAMMATE_COMMAND_ENV_VAR (1)
+//@ chunk-qg0af0yq.js:19007-19046 fingerprint (2.1.88 match: TEAMMATE_COMMAND_ENV_VAR, 1)
 /**
  * 指定 pane 型 teammate 启动命令的环境变量名 CLAUDE_CODE_TEAMMATE_COMMAND。
  */

@@ -50,7 +50,7 @@ function disableColorIfNoColor() {
   }
   return false;
 }
-//@ chunk-4ymxyb4g.js:7659-7744 fingerprint = boostChalkLevelForXtermJs (1)
+//@ chunk-4ymxyb4g.js:7659-7744 fingerprint (2.1.88 match: boostChalkLevelForXtermJs, 1)
 /**
  * 在 VS Code 终端（xterm.js）里，chalk 颜色等级为 256 色时提升为真彩色。
  */
@@ -89,7 +89,7 @@ function boostChalkLevelForTruecolorTerms() {
   }
   return false;
 }
-//@ chunk-4ymxyb4g.js:8006-8111 fingerprint = clampChalkLevelForTmux (1)
+//@ chunk-4ymxyb4g.js:8006-8111 fingerprint (2.1.88 match: clampChalkLevelForTmux, 1)
 /**
  * tmux 下把 chalk 等级降到 256 色（tmux 默认不透传真彩），设置 CLAUDE_CODE_TMUX_TRUECOLOR 时不降。
  */
@@ -169,7 +169,7 @@ function levelGeneration() {
 function clampForAttacher(colorLevel) {
   colorSupport.clampForAttacher(colorLevel);
 }
-//@ chunk-g3xfp0ds.js:4974-5419 fingerprint = applyTextStyles (0.937)
+//@ chunk-g3xfp0ds.js:4974-5419 fingerprint (2.1.88 match: applyTextStyles, 0.937)
 /**
  * 把 TextStyles 用 chalk 套到文本上：反显、删除线、下划线、斜体、粗体、暗淡；faintInk 与 color 相同且为标准 ANSI 色时额外加暗淡；最后前景色、背景色。
  */
@@ -195,7 +195,7 @@ function applyTextStyles(text, styles) {
   if (styles.backgroundColor) result = colorize(result, styles.backgroundColor, "background");
   return result;
 }
-//@ chunk-g3xfp0ds.js:5419-5481 fingerprint = applyColor (1)
+//@ chunk-g3xfp0ds.js:5419-5481 fingerprint (2.1.88 match: applyColor, 1)
 /**
  * 只套前景色。
  */
@@ -203,7 +203,7 @@ function applyColor(text, color) {
   if (!color) return text;
   return colorize(text, color, "foreground");
 }
-//@ chunk-cwwxybjc.js:4884-5146 fingerprint = colorize (0.57)
+//@ chunk-cwwxybjc.js:4884-5146 fingerprint (2.1.88 match: colorize, 0.57)
 var ANSI_COLOR_INDEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-cwwxybjc.js:4884", () => {
   ANSI_COLOR_INDEX = new Map([

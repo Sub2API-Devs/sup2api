@@ -140,7 +140,7 @@ function applySubagentThinkingDisplay(
     displayExplicit: false,
   };
 }
-//@ chunk-aepeg2w5.js:477934-478018 fingerprint = isUltrathinkEnabled (0.795)
+//@ chunk-aepeg2w5.js:477934-478018 fingerprint (2.1.88 match: isUltrathinkEnabled, 0.795)
 /**
  * ultrathink 关键字是否生效：未设 CLAUDE_CODE_DISABLE_ULTRATHINK 且 tengu_turtle_carbon（默认开）。
  */
@@ -156,7 +156,7 @@ function isUltrathinkEnabled() {
 function hasUltrathinkKeyword(text) {
   return /\bultrathink\b/i.test(text);
 }
-//@ chunk-aepeg2w5.js:478066-478362 fingerprint = RAINBOW_COLORS (0.667)
+//@ chunk-aepeg2w5.js:478066-478362 fingerprint (2.1.88 match: RAINBOW_COLORS, 0.667)
 /**
  * ultrathink 高亮用的七色主题键；同句 i$ 为对应 shimmer 版本。
  */
@@ -314,7 +314,7 @@ function modelSupportsAdaptiveThinkingByCatalog(model) {
   if (canonicalName === "claude-mythos-5") return true;
   return hasFirstPartyCapabilities(getProviderForModel(model));
 }
-//@ chunk-aepeg2w5.js:480035-480243 fingerprint = shouldEnableThinkingByDefault (0.592)
+//@ chunk-aepeg2w5.js:480035-480243 fingerprint (2.1.88 match: shouldEnableThinkingByDefault, 0.592)
 /**
  * 默认关闭思考的原因：MAX_THINKING_TOKENS<=0 或 settings.alwaysThinkingEnabled=false；否则 null（默认开）。
  */

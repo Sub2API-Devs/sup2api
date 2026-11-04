@@ -64,7 +64,7 @@ var systemClock; // deferred: uses SystemClock of its import cycle while loading
 deferInit("chunk-eabawhjj.js:679", () => {
   systemClock = new SystemClock();
 });
-//@ chunk-eabawhjj.js:694-1079 facade-exports = sleep (0.91)
+//@ chunk-eabawhjj.js:694-1079 facade-exports (2.1.88 match: sleep, 0.91)
 /**
  * 可被 AbortSignal 中断的 sleep；可选 abort 时抛错或静默返回、unref 定时器。
  */
@@ -122,7 +122,7 @@ function fullJitterBackoffMs({
 function rejectWithMessage(reject, message) {
   reject(Error(message));
 }
-//@ chunk-eabawhjj.js:1302-1445 facade-exports = withTimeout (1)
+//@ chunk-eabawhjj.js:1302-1445 facade-exports (2.1.88 match: withTimeout, 1)
 function withTimeout(promise, ms, message) {
   let timer;
   let timeoutPromise = new Promise((resolve, reject) => {
@@ -137,7 +137,7 @@ var scheduleUnrefTimeout = (callback, delayMs) => {
   let timer = setTimeout(callback, delayMs);
   return () => clearTimeout(timer);
 };
-//@ chunk-eabawhjj.js:1508-1623 facade-exports = withTimeout (1)
+//@ chunk-eabawhjj.js:1508-1623 facade-exports (2.1.88 match: withTimeout, 1)
 function withDeadline(promise, ms, message = scheduleUnrefTimeout) {
   let timer = () => {};
   let timeoutPromise = new Promise((resolve) => {
@@ -172,7 +172,7 @@ async function raceWithAbortSignal(promise, signal, makeAbortError) {
     signal.removeEventListener("abort", onAbort);
   }
 }
-//@ chunk-82kqcve8.js:187814-187944 placement = withTimeout (1)
+//@ chunk-82kqcve8.js:187814-187944 placement (2.1.88 match: withTimeout, 1)
 /**
  * 等待 promise 或 ms 毫秒超时，二者先到为准；返回 promise 是否在超时前结束（不抛错）。
  */
@@ -190,7 +190,7 @@ async function raceWithTimeout(promise, waitCapMs) {
   ]);
   return finishedFirst;
 }
-//@ chunk-p7xf186d.js:9239-9387 fingerprint = withTimeout (1)
+//@ chunk-p7xf186d.js:9239-9387 fingerprint (2.1.88 match: withTimeout, 1)
 function withTimeout_2(promise, ms, message) {
   let timer;
   let timeoutPromise = new Promise((resolve, reject) => {

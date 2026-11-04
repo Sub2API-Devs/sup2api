@@ -366,7 +366,7 @@ function mcpApprovalPersistNotice(result) {
   logFeatureOk("mcp_project_approval_dialog");
   return null;
 }
-//@ chunk-7fw14qgv.js:5082-5168 facade-exports = exitWithMessage (0.308)
+//@ chunk-7fw14qgv.js:5082-5168 facade-exports (2.1.88 match: exitWithMessage, 0.308)
 /**
  * endInkWithError：在 Ink 里显示红色错误后卸载并退出。
  */
@@ -403,7 +403,7 @@ function showSettingsLoadHold(root) {
     }),
   );
 }
-//@ chunk-7fw14qgv.js:5443-5531 facade-exports = exitWithError (0.655)
+//@ chunk-7fw14qgv.js:5443-5531 facade-exports (2.1.88 match: exitWithError, 0.655)
 /**
  * exitWithError：exitWithMessage 的错误色版本（可带未发送的提示）。
  */
@@ -457,7 +457,7 @@ ${options.unsentPrompt}`,
   );
   process.exit(exitCode);
 }
-//@ chunk-7fw14qgv.js:6114-6275 facade-exports = showSetupDialog (0.644)
+//@ chunk-7fw14qgv.js:6114-6275 facade-exports (2.1.88 match: showSetupDialog, 0.644)
 /**
  * showSetupDialog：在已有 Ink 根上显示一个对话框，返回其 done 回调的值。
  */
@@ -625,7 +625,7 @@ async function showSetupScreens(
   );
   return setupResult;
 }
-//@ chunk-7fw14qgv.js:8171-13351 facade-exports = showSetupScreens (0.356)
+//@ chunk-7fw14qgv.js:8171-13351 facade-exports (2.1.88 match: showSetupScreens, 0.356)
 /**
  * 构造 setup 步骤序列（setupSteps）：每步是一个可能显示的对话框（信任、bypass 确认、开发通道、云默认等）。
  */
@@ -1285,7 +1285,7 @@ function ProviderUpgradeDialog(props) {
   } else dialogElement = $[26];
   return dialogElement;
 }
-//@ chunk-7fw14qgv.js:17824-18587 facade-exports = getRenderContext (0.98)
+//@ chunk-7fw14qgv.js:17824-18587 facade-exports (2.1.88 match: getRenderContext, 0.98)
 /**
  * getRenderContext：构造 Ink 渲染选项、FPS 统计、帧耗时日志（CLAUDE_CODE_FRAME_TIMING_LOG）。
  */
@@ -1350,7 +1350,7 @@ function startMemoryWatcherLazy(storageV5, credentials) {
     mod.startMemoryWatcher(storageV5, credentials),
   );
 }
-//@ chunk-d4eg9at2.js:10206-10308 fingerprint = renderAndRun (1)
+//@ chunk-d4eg9at2.js:10206-10308 fingerprint (2.1.88 match: renderAndRun, 1)
 function renderAndRun_2(root, message, exitCode) {
   root.render(
     jsxProd_default(RenderOnceAndExit, {

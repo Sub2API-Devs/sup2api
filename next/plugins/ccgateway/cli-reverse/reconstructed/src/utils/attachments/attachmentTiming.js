@@ -10,7 +10,7 @@
  */
 import { queryProfileStorage } from "../queryProfiler.js";
 
-//@ chunk-e6aww6q8.js:2481777-2481814 placement = getAgentContext (1)
+//@ chunk-e6aww6q8.js:2481777-2481814 placement (2.1.88 match: getAgentContext, 1)
 function getAttachmentTimingStore() {
   return queryProfileStorage.getStore();
 }

@@ -50,7 +50,7 @@ async function probeAppExecLink(linkPath) {
   }
   return probePath(targetPath);
 }
-//@ chunk-e2fknt7w.js:1727-2791 fingerprint = findPowerShell (0.39)
+//@ chunk-e2fknt7w.js:1727-2791 fingerprint (2.1.88 match: findPowerShell, 0.39)
 /**
  * 查找 PowerShell：diskless 返回 null；先 pwsh（Linux snap 版换成 /opt/microsoft 或 /usr/bin 下的直装版），Windows 再查 Program Files、WindowsApps、.dotnet/tools，最后回退 powershell 5（含 System32 固定路径）。
  */
@@ -166,7 +166,7 @@ function getResolvedPowerShellEdition() {
   let path = getResolvedPowerShellPath();
   return typeof path === "string" ? powerShellEditionFromPath(path) : path;
 }
-//@ chunk-e2fknt7w.js:3550-3656 fingerprint = getPowerShellEdition (1)
+//@ chunk-e2fknt7w.js:3550-3656 fingerprint (2.1.88 match: getPowerShellEdition, 1)
 function powerShellEditionFromPath(path) {
   return path
     .split(/[/\\]/)

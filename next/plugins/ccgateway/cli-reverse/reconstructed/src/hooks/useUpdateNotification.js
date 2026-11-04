@@ -17,7 +17,7 @@ import {
   numberSchema,
 } from "../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-hddjmtjj.js:53438-53634 fingerprint = getSemverPart (0.622)
+//@ chunk-hddjmtjj.js:53438-53634 fingerprint (2.1.88 match: getSemverPart, 0.622)
 var getSemverPart = DoctorLazy(() =>
   objectSchema({
     httpUrl: stringSchema().optional(),

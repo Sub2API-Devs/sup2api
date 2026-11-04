@@ -57,7 +57,7 @@ import { buildRefusalMessage } from "../services/api/safeguardMessages.js";
 import { machineLabelForMessage } from "../bridge/deviceRegistration.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0h4e7gnq.js:14624-14668 fingerprint = convertStreamEvent (1)
+//@ chunk-0h4e7gnq.js:14624-14668 fingerprint (2.1.88 match: convertStreamEvent, 1)
 var convertStreamEvent = (msg) => ({
   type: "stream_event",
   event: msg,
@@ -106,7 +106,7 @@ function deltaEventForKind(delta) {
       return textDeltaEvent(delta);
   }
 }
-//@ chunk-0h4e7gnq.js:38969-39244 fingerprint = convertCompactBoundaryMessage (0.876)
+//@ chunk-0h4e7gnq.js:38969-39244 fingerprint (2.1.88 match: convertCompactBoundaryMessage, 0.876)
 /**
  * 把 SDK compact_boundary 消息转成本地"Conversation compacted"系统消息。
  */
@@ -201,7 +201,7 @@ function createConsentFallbackMessage(frame) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-0h4e7gnq.js:46697-46808 placement = createToolUseSummaryMessage (0.751)
+//@ chunk-0h4e7gnq.js:46697-46808 placement (2.1.88 match: createToolUseSummaryMessage, 0.751)
 function createToolUseSummaryMessage(frame) {
   return {
     type: "tool_use_summary",
@@ -310,7 +310,7 @@ function isControlFrame(parsed) {
     )
   );
 }
-//@ chunk-3xdfvx0n.js:1545-2223 callgraph-fingerprint = convertAssistantMessage (0.199)
+//@ chunk-3xdfvx0n.js:1545-2223 callgraph-fingerprint (2.1.88 match: convertAssistantMessage, 0.199)
 /**
  * SDK assistant → 本地 assistant 消息（remoteSourced，带 API 错误字段、verification_required 改写、云记忆工具 ID）。
  */
@@ -397,7 +397,7 @@ function filterDisplayableErrors(errors) {
       !entry.startsWith("[session_crash]"),
   );
 }
-//@ chunk-3xdfvx0n.js:2821-3356 fingerprint = convertResultMessage (0.662)
+//@ chunk-3xdfvx0n.js:2821-3356 fingerprint (2.1.88 match: convertResultMessage, 0.662)
 /**
  * 非 success 的 result → warning 级 informational（errors 拼接，去掉诊断前缀）；success → "Session completed successfully"。
  */
@@ -430,7 +430,7 @@ function convertResultMessage(msg) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-3xdfvx0n.js:3356-3613 fingerprint = convertStatusMessage (1)
+//@ chunk-3xdfvx0n.js:3356-3613 fingerprint (2.1.88 match: convertStatusMessage, 1)
 function convertStatusMessage(msg) {
   let status = msg.status;
   if (typeof status !== "string" || status === "") return null;
@@ -443,7 +443,7 @@ function convertStatusMessage(msg) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-3xdfvx0n.js:3613-3997 layout = convertCompactBoundaryMessage (0.821)
+//@ chunk-3xdfvx0n.js:3613-3997 layout (2.1.88 match: convertCompactBoundaryMessage, 0.821)
 /**
  * system/compact_boundary 帧 → 本地 compact_boundary（缺 compact_metadata 丢弃）。
  */
@@ -780,7 +780,7 @@ function createRemoteRateLimitAdopter(isEnabled, via) {
     },
   };
 }
-//@ chunk-3xdfvx0n.js:8660-13943 fingerprint = convertSDKMessage (0.489)
+//@ chunk-3xdfvx0n.js:8660-13943 fingerprint (2.1.88 match: convertSDKMessage, 0.489)
 /**
  * SDK 消息总适配：control_* 忽略；assistant → message；user 中 tool_result → message，子代理/合成/普通文本按选项忽略或转换；stream_event；result（非 success）；system 的 status/compact_boundary/model_refusal_fallback/model_fallback/model_consent_fallback/informational/tool_host_result/local_command_output；env_manager_log；conversation_reset；其它忽略。
  */

@@ -51,7 +51,7 @@ import { isSubagentHistoryEnabled } from "../components/messages/UserPromptMessa
 import { isInterruptionOnlyMessage } from "../utils/messages.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-96sthk2s.js:301-429 fingerprint = isCoordinatorMode (0.779)
+//@ chunk-96sthk2s.js:301-429 fingerprint (2.1.88 match: isCoordinatorMode, 0.779)
 /**
  * 是否处于协调者模式：CLAUDE_CODE_COORDINATOR_MODE 为真，且不是（某受限场景且非 CLAUDE_CODE_REMOTE）。
  */
@@ -75,7 +75,7 @@ function prActivityServerPreference() {
   let [firstServer, ...restServers] = PR_ACTIVITY_MCP_SERVERS.map((server) => `\`${getMcpPrefix(server)}\``);
   return `When your tool list has both a ${firstServer} copy and a ${restServers.join(" or ")} copy, call the ${firstServer} one.`;
 }
-//@ chunk-09njdshr.js:1303-1336 placement = _temp (1)
+//@ chunk-09njdshr.js:1303-1336 placement (2.1.88 match: _temp, 1)
 /**
  * 函数 isCoordinatorEnvSet（环境变量为 "true"）；位于「并入旧版已有路径：协调者模式」模块。
  */
@@ -133,7 +133,7 @@ var SKILL_BRIEFING_GUIDANCE = `Before you brief a worker on work a listed skill 
 function isCoordinatorMode() {
   return isCoordinatorMode_2();
 }
-//@ chunk-09njdshr.js:2402-2873 facade-exports = matchSessionMode (0.9)
+//@ chunk-09njdshr.js:2402-2873 facade-exports (2.1.88 match: matchSessionMode, 0.9)
 /**
  * 恢复会话时让协调者模式与会话记录的 mode 一致：设置/删除 CLAUDE_CODE_COORDINATOR_MODE，记 tengu_coordinator_mode_switched，返回给用户的提示文字。
  */
@@ -158,7 +158,7 @@ function matchSessionMode(sessionMode) {
     ? "Entered coordinator mode to match resumed session."
     : "Exited coordinator mode to match resumed session.";
 }
-//@ chunk-09njdshr.js:2873-4525 facade-exports = getCoordinatorUserContext (0.549)
+//@ chunk-09njdshr.js:2873-4525 facade-exports (2.1.88 match: getCoordinatorUserContext, 0.549)
 /**
  * 生成协调者的 workerToolsContext：列出 worker 可用工具（CLAUDE_CODE_SIMPLE 时只有 Bash/PowerShell/Read/Edit/Agent）、Artifact 交付提示、MCP 服务器名、scratchpad 目录、skill 指引。
  */
@@ -223,7 +223,7 @@ ${SKILL_BRIEFING_GUIDANCE}`;
     workerToolsContext: content,
   };
 }
-//@ chunk-09njdshr.js:4525-22803 facade-exports = getCoordinatorSystemPrompt (0.418)
+//@ chunk-09njdshr.js:4525-22803 facade-exports (2.1.88 match: getCoordinatorSystemPrompt, 0.418)
 /**
  * 协调者系统提示词：角色、工具（Agent/SendMessage/TaskStop/Workflow/Skill/PR 订阅/跨会话 peer）、worker 能力、模型参数规则（CLAUDE_CODE_COORDINATOR_FORCE_WORKER_INHERIT_MODEL/CLAUDE_CODE_SUBAGENT_MODEL_FORCE 时禁用）、通讯工具模式差异等。
  */
@@ -539,7 +539,7 @@ function tagCoordinatorOrigin(messages, task, cache) {
     return tagged;
   });
 }
-//@ chunk-18hwfzwa.js:223006-223340 placement = extractTitleText (0.668)
+//@ chunk-18hwfzwa.js:223006-223340 placement (2.1.88 match: extractTitleText, 0.668)
 /**
  * 是否是不以 `<` 开头的纯文本人类输入（非 meta、非压缩摘要、非工具结果）。
  */

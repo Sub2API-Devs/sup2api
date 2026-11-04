@@ -1045,7 +1045,7 @@ function readyRow(ui, url, actions) {
     ]),
   );
 }
-//@ chunk-bss4k1z9.js:30857-31017 placement = registerEscHotkey (0.311)
+//@ chunk-bss4k1z9.js:30857-31017 placement (2.1.88 match: registerEscHotkey, 0.311)
 /**
  * （匹配存疑）按条件去掉按钮的 hotkey/plain 属性并设置 leadInk/hasStarColumn，属于 UI 主题，不是 ESC 热键注册。
  */

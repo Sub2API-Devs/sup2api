@@ -157,7 +157,7 @@ deferInit("chunk-e6aww6q8.js:1367698", () => {
     syncedSkillNext: objectKeysArray(SKILL_SAVE_OUTCOMES).optional().catch(undefined),
   }));
 });
-//@ chunk-e6aww6q8.js:1412568-1413761 fingerprint = outputSchema (0.542)
+//@ chunk-e6aww6q8.js:1412568-1413761 fingerprint (2.1.88 match: outputSchema, 0.542)
 /**
  * Write 的 zod schema：输入 file_path/content；输出 type(create|update)/filePath/content/structuredPatch/originalFile/gitDiff/userModified/staged；跨进程版附 memdirStamped。
  */
@@ -253,7 +253,7 @@ async function assertWriteReadStateFresh({
   if (isFullFileView(lastRead) && matchesContentHash(lastRead, stripBom_2(diskContent))) return;
   throw new FileStateError(FILE_UNEXPECTEDLY_MODIFIED_ERROR);
 }
-//@ chunk-e6aww6q8.js:1414204-1419759 fingerprint = FileWriteTool (0.425)
+//@ chunk-e6aww6q8.js:1414204-1419759 fingerprint (2.1.88 match: FileWriteTool, 0.425)
 /**
  * Write 工具定义（name "Write"）。validateInput：空字节、不稳定路径、用户电脑路径、工作树隔离、子代理禁止写 REPORT/SUMMARY/FINDINGS/ANALYSIS*.md、记忆目录 lint、deny/Read deny、目录/非普通文件、Perforce 只读、只读过开头、必须先读且未被修改。
  */

@@ -46,7 +46,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 //@ chunk-4121qate.js:49576-49612 affinity
 var runInContext = vmModule_2.runInContext;
 var EvalErrorClass = EvalError;
-//@ chunk-4121qate.js:49612-49745 fingerprint = SubAgentContext (0.609)
+//@ chunk-4121qate.js:49612-49745 fingerprint (2.1.88 match: SubAgentContext, 0.609)
 function SubAgentContext(sandbox, options) {
   let context = vmModule_2.createContext(sandbox, options);
   let subject;
@@ -59,7 +59,7 @@ function SubAgentContext(sandbox, options) {
   markUntrusted(context, subject);
   return context;
 }
-//@ chunk-bn7jsn5n.js:537-635 fingerprint = ctrlOToExpand (1)
+//@ chunk-bn7jsn5n.js:537-635 fingerprint (2.1.88 match: ctrlOToExpand, 1)
 function ctrlOToExpand() {
   let shortcut = getShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
   return sequential.dim(`(${shortcut} to expand)`);
@@ -97,7 +97,7 @@ function SubAgentProvider(props) {
   } else fragment = $[1];
   return fragment;
 }
-//@ chunk-mt2ya4ef.js:673-973 fingerprint = CtrlOToExpand (0.751)
+//@ chunk-mt2ya4ef.js:673-973 fingerprint (2.1.88 match: CtrlOToExpand, 0.751)
 /**
  * "(ctrl+o to expand)" 提示：按当前 keybinding 显示，子代理上下文内不显示。
  */

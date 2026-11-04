@@ -35,7 +35,7 @@ function useBlinkingDot(enabled, intervalMs = BLINK_INTERVAL_MS) {
   let isVisible = Math.floor(time / intervalMs) % 2 === 0;
   return [ref, isVisible];
 }
-//@ chunk-ah34pb7m.js:40095-40534 fingerprint = ToolUseLoader (0.573)
+//@ chunk-ah34pb7m.js:40095-40534 fingerprint (2.1.88 match: ToolUseLoader, 0.573)
 function ToolUseLoader({ isError, isNeutral = false, isUnresolved, shouldAnimate }) {
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let prefersReducedMotion = usePrefersReducedMotion();

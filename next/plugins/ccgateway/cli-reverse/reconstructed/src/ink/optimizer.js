@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-bzr73sfg.js:275127-275860 fingerprint = optimize (1)
+//@ chunk-bzr73sfg.js:275127-275860 fingerprint (2.1.88 match: optimize, 1)
 /**
  * Patch 列表窥孔优化：去掉空输出/零移动/空样式，合并相邻 cursorMove、styleStr，相邻 cursorTo 与光标显隐只留最后一个，重复超链接去掉。
  */

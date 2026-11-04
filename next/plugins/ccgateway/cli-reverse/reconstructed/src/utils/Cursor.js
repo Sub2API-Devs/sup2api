@@ -20,7 +20,7 @@ import { currentToolPermissionContext } from "./permissions/currentPermissionCon
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:76332-76361 fingerprint = pushToKillRing (0.819)
+//@ chunk-4121qate.js:76332-76361 fingerprint (2.1.88 match: pushToKillRing, 0.819)
 var pushToKillRing = ["prepend", "append"];
 //@ chunk-7p2hc4jn.js:19779-20193 placement
 /**
@@ -103,7 +103,7 @@ function replaceWithSpaces(text) {
 var isWordChar = (char) => WORD_CHAR_RE.test(char);
 var isWhitespaceChar = (char) => WHITESPACE_RE.test(char);
 var isPunctuationChar = (char) => char.length > 0 && !isWhitespaceChar(char) && !isWordChar(char);
-//@ chunk-7p2hc4jn.js:20663-34257 fingerprint = Cursor (0.818)
+//@ chunk-7p2hc4jn.js:20663-34257 fingerprint (2.1.88 match: Cursor, 0.818)
 /**
  * 输入框光标模型：基于按显示宽度换行的文本（MeasuredText），实现左右/上下/词移动、删除、kill ring、vim 动作等。
  */
@@ -843,7 +843,7 @@ class MeasuredLine {
     return this.text === other.text && this.startOffset === other.startOffset;
   }
 }
-//@ chunk-7p2hc4jn.js:34619-38481 fingerprint = MeasuredText (0.898)
+//@ chunk-7p2hc4jn.js:34619-38481 fingerprint (2.1.88 match: MeasuredText, 0.898)
 /**
  * 按终端宽度换行并缓存行信息的文本，提供偏移与行列互转。
  */
@@ -1087,7 +1087,7 @@ function getCursorDisplayColumn(cursor, wantedColumn) {
     ? displayColumn + charDisplayWidth("\t", displayColumn) - 1
     : displayColumn;
 }
-//@ chunk-530hfzwb.js:1022-1145 placement = truncateStartToWidth (1)
+//@ chunk-530hfzwb.js:1022-1145 placement (2.1.88 match: truncateStartToWidth, 1)
 /**
  * 从起点累加显示宽度，超过宽度时返回该处偏移（误配名）。
  */
@@ -1103,7 +1103,7 @@ function truncateStartToWidth(text, startIndex, endIndex, cursorDisplayColumn) {
 function charDisplayWidth(segment, column) {
   return segment === "\t" ? DEFAULT_TAB_WIDTH - (column % DEFAULT_TAB_WIDTH) : bunStringWidth(segment);
 }
-//@ chunk-530hfzwb.js:19092-19200 placement = wrapText (1)
+//@ chunk-530hfzwb.js:19092-19200 placement (2.1.88 match: wrapText, 1)
 /**
  * 返回行首空白之后第一个非空白字符的偏移（误配名 wrapText）。
  */
@@ -1115,7 +1115,7 @@ function wrapText(text) {
   }
   return currentWidth;
 }
-//@ chunk-530hfzwb.js:28612-28975 placement = truncatePathMiddle (0.223)
+//@ chunk-530hfzwb.js:28612-28975 placement (2.1.88 match: truncatePathMiddle, 0.223)
 /**
  * 按逻辑行移动光标并保持期望列（误配名 truncatePathMiddle，属输入框光标）。
  */
@@ -1259,7 +1259,7 @@ function measureText(text, columns) {
     lines: Object.freeze(lines),
   });
 }
-//@ chunk-tzghj6zv.js:48601-48746 fingerprint = WrappedLine (0.613)
+//@ chunk-tzghj6zv.js:48601-48746 fingerprint (2.1.88 match: WrappedLine, 0.613)
 function WrappedLine(measured, index) {
   let lineIndex = clampIndex(index, 0, Math.max(0, measured.lines.length - 1));
   return (

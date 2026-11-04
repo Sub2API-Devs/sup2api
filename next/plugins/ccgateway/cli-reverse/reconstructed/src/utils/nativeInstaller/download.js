@@ -204,7 +204,7 @@ function httpGet(url, options) {
     ? publicCdnGuardedClient.get(url, options)
     : externalHttp.get(url, options);
 }
-//@ chunk-zw17mz74.js:4803-5961 fingerprint = getLatestVersionFromBinaryRepo (0.413)
+//@ chunk-zw17mz74.js:4803-5961 fingerprint (2.1.88 match: getLatestVersionFromBinaryRepo, 0.413)
 /**
  * 从二进制仓库读 stable/latest 通道的版本号（带重试）。
  */
@@ -276,7 +276,7 @@ async function getLatestVersionFromBinaryRepo(channel = "latest", baseUrl, authC
   else logFeatureOk("update_check");
   return trimmed;
 }
-//@ chunk-zw17mz74.js:5961-6486 fingerprint = getLatestVersion (0.716)
+//@ chunk-zw17mz74.js:5961-6486 fingerprint (2.1.88 match: getLatestVersion, 0.716)
 /**
  * 把 stable/latest/具体版本解析为要安装的版本号（拒绝 99.99.* 测试版本）。
  */
@@ -323,7 +323,7 @@ var VERSION_CHECK_TIMEOUT_MS_2 = 1e4;
 var RETRY_BASE_DELAY_MS = 1000;
 var VERSION_CHECK_BUDGET_MS = MAX_DOWNLOAD_RETRIES * (VERSION_CHECK_TIMEOUT_MS_2 + RETRY_BASE_DELAY_MS);
 var VERSION_CHECK_TOTAL_MS = 2 * VERSION_CHECK_BUDGET_MS;
-//@ chunk-zw17mz74.js:6632-6708 fingerprint = getStallTimeoutMs (1)
+//@ chunk-zw17mz74.js:6632-6708 fingerprint (2.1.88 match: getStallTimeoutMs, 1)
 function getStallTimeoutMs() {
   return Number(env.CLAUDE_CODE_STALL_TIMEOUT_MS_FOR_TESTING) || DEFAULT_STALL_TIMEOUT_MS;
 }
@@ -331,7 +331,7 @@ function getStallTimeoutMs() {
 function getDownloadDeadlineMs() {
   return Number(env.CLAUDE_CODE_DOWNLOAD_DEADLINE_MS_FOR_TESTING) || DOWNLOAD_DEADLINE_MS;
 }
-//@ chunk-zw17mz74.js:6788-6917 fingerprint = StallTimeoutError (0.667)
+//@ chunk-zw17mz74.js:6788-6917 fingerprint (2.1.88 match: StallTimeoutError, 0.667)
 /**
  * 下载 120 秒无数据时抛出的错误。
  */
@@ -553,7 +553,7 @@ async function downloadAndVerifyBinary(url, expectedChecksum, destPath, requestO
 function signatureEnforcementFlag() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_elegant_pancake", null);
 }
-//@ chunk-zw17mz74.js:9784-9840 layout = formatRelativeTimeAgo (0.75)
+//@ chunk-zw17mz74.js:9784-9840 layout (2.1.88 match: formatRelativeTimeAgo, 0.75)
 function formatRelativeTimeAgo(date, options = signatureEnforcementFlag()) {
   return date === "always" ? options !== false : options === true;
 }
@@ -742,7 +742,7 @@ async function fetchReleaseManifest(
     metadataDropRetried: dropRetried,
   };
 }
-//@ chunk-zw17mz74.js:12952-15273 fingerprint = downloadVersionFromBinaryRepo (0.425)
+//@ chunk-zw17mz74.js:12952-15273 fingerprint (2.1.88 match: downloadVersionFromBinaryRepo, 0.425)
 /**
  * 从 downloads.claude.ai/claude-code-releases 下载指定版本：读 manifest.zst.json、按平台取二进制并校验 sha256 与签名。
  */
@@ -932,7 +932,7 @@ async function fileMatchesChecksum(filePath, expectedHash) {
     return false;
   }
 }
-//@ chunk-zw17mz74.js:16353-16640 callgraph-witnessed = downloadVersion (0.166)
+//@ chunk-zw17mz74.js:16353-16640 callgraph-witnessed (2.1.88 match: downloadVersion, 0.166)
 async function downloadVersion(version, stagingPath, { explicitVersionRequested, requireEnforcingRelease }) {
   let { signatureVerified, expectedChecksum } = await downloadVersionFromBinaryRepo(
     version,

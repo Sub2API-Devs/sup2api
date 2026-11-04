@@ -25,7 +25,7 @@ import { exceedsLineLimit } from "../../utils/terminal.js";
 //@ chunk-hkh7sq9y.js:5013-5027 affinity
 var MAX_COMMAND_DISPLAY_LINES = 2;
 var MAX_COMMAND_DISPLAY_CHARS = 160;
-//@ chunk-hkh7sq9y.js:5027-5285 fingerprint = renderToolUseMessage (1)
+//@ chunk-hkh7sq9y.js:5027-5285 fingerprint (2.1.88 match: renderToolUseMessage, 1)
 /**
  * PowerShell 工具调用的显示：非 verbose 时命令超过 2 行或 160 字符则截断加省略号。
  */
@@ -59,7 +59,7 @@ function renderToolUseMessage(input, { verbose, theme: _theme }) {
 function renderToolUseQueuedMessage() {
   return WaitingLabel();
 }
-//@ chunk-hkh7sq9y.js:5634-6325 fingerprint = renderToolResultMessage (0.799)
+//@ chunk-hkh7sq9y.js:5634-6325 fingerprint (2.1.88 match: renderToolResultMessage, 0.799)
 /**
  * PowerShell 结果渲染：图片提示、stdout/stderr、后台运行/Interrupted/返回码解释/(No output)、超时显示。
  */
@@ -127,7 +127,7 @@ function renderToolResultMessage(
     ],
   });
 }
-//@ chunk-hkh7sq9y.js:6325-6422 placement = renderToolUseErrorMessage (1)
+//@ chunk-hkh7sq9y.js:6325-6422 placement (2.1.88 match: renderToolUseErrorMessage, 1)
 function renderToolUseErrorMessage(
   result,
   { verbose, progressMessagesForMessage: _progressMessagesForMessage, tools: _tools },

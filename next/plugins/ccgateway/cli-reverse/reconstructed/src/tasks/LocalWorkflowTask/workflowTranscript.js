@@ -278,7 +278,7 @@ function contentToText(blocks) {
   let filtered = blocks.filter(isContentBlock);
   return filtered.length === 0 ? "" : `(${filtered.map((block) => block.type).join(", ")} content)`;
 }
-//@ chunk-axsvbsqv.js:5625-5872 placement = _temp7 (1)
+//@ chunk-axsvbsqv.js:5625-5872 placement (2.1.88 match: _temp7, 1)
 function inputFieldsPreview(opt) {
   if (opt === undefined || opt === null) return [];
   return (typeof opt === "object" && !Array.isArray(opt) ? Object.entries(opt) : [["input", opt]]).map(

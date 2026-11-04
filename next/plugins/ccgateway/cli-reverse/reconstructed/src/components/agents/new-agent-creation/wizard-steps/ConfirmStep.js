@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-8wvtd8sr.js:382724-382848 fingerprint = _temp (0.589)
+//@ chunk-8wvtd8sr.js:382724-382848 fingerprint (2.1.88 match: _temp, 0.589)
 function formatQuotedNameList(toolNames) {
   let mapped = toolNames.map((toolName) => `"${toolName}"`);
   return mapped.length <= 2

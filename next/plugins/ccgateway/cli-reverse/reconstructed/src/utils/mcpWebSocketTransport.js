@@ -16,7 +16,7 @@ import { jsonParse, jsonStringify } from "./slowOperations.js";
 //@ chunk-29pqxdaf.js:1914-1927 affinity
 var WS_CONNECTING = 0;
 var WS_OPEN = 1;
-//@ chunk-29pqxdaf.js:1927-3927 fingerprint = WebSocketTransport (0.856)
+//@ chunk-29pqxdaf.js:1927-3927 fingerprint (2.1.88 match: WebSocketTransport, 0.856)
 /**
  * WebSocketTransport：基于 Bun WebSocket 的 MCP 传输（ws 与 ws-ide），等待 open 后 start；单条消息超过上限（16 MiB）时报错并关闭；send 前检查 OPEN 状态。
  */

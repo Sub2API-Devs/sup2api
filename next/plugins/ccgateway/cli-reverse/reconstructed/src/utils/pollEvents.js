@@ -649,7 +649,7 @@ function hasPollEventsAttachmentSince(messages, sinceIndex) {
   }
   return false;
 }
-//@ chunk-22r83hv0.js:12223-12619 placement = countToolCallsSince (1)
+//@ chunk-22r83hv0.js:12223-12619 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(messages, sinceUuid) {
   let message = messages[sinceUuid];
   let content = message?.message?.content;

@@ -53,8 +53,14 @@ export const FAKE_API_KEY = 'sk-ant-api03-verify-fake-key-not-a-real-credential-
 
 export function bunPath() {
   if (process.env.VERIFY_BUN) return process.env.VERIFY_BUN;
-  const exe = path.join(projectRoot, 'node_modules', 'bun', 'bin', process.platform === 'win32' ? 'bun.exe' : 'bun');
-  if (!fs.existsSync(exe)) throw new Error(`找不到 ${exe}，请在项目根运行 npm i`);
+  // npm ci --ignore-scripts 不跑 bun 包的 postinstall，node_modules/bun/bin 里只有占位文件；真正的二进制在 @oven/bun-<平台>/bin
+  const name = process.platform === 'win32' ? 'bun.exe' : 'bun';
+  const nm = path.join(projectRoot, 'node_modules');
+  const oven = path.join(nm, '@oven');
+  const cands = [path.join(nm, 'bun', 'bin', name)];
+  if (fs.existsSync(oven)) for (const n of fs.readdirSync(oven)) if (n.startsWith('bun-')) cands.push(path.join(oven, n, 'bin', name));
+  const exe = cands.find((p) => fs.existsSync(p) && spawnSync(p, ['--version'], { encoding: 'utf8' }).status === 0);
+  if (!exe) throw new Error(`找不到能运行的 Bun（试过 ${cands.join('、')}），请在本目录运行 npm ci --ignore-scripts`);
   return exe;
 }
 

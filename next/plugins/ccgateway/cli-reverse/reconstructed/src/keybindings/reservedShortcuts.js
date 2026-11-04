@@ -10,7 +10,7 @@
  */
 import { getPlatform } from "../utils/platform.js";
 
-//@ chunk-6qssfmzs.js:7531-8790 fingerprint = MACOS_RESERVED (0.618)
+//@ chunk-6qssfmzs.js:7531-8790 fingerprint (2.1.88 match: MACOS_RESERVED, 0.618)
 /**
  * 保留快捷键：NON_REBINDABLE（ctrl+c/ctrl+d 硬编码、ctrl+m=Enter、ctrl+[=Esc、ctrl+i=Tab、ctrl+h=Backspace、capslock 收不到）；TERMINAL_RESERVED（ctrl+z SIGTSTP 警告、ctrl+\ SIGQUIT）；MACOS_RESERVED（cmd+c/v/x/q/w/tab/space）。
  */
@@ -100,7 +100,7 @@ var MACOS_RESERVED = [
     severity: "error",
   },
 ];
-//@ chunk-6qssfmzs.js:8790-8872 placement = getReservedShortcuts (1)
+//@ chunk-6qssfmzs.js:8790-8872 placement (2.1.88 match: getReservedShortcuts, 1)
 function getReservedShortcuts() {
   let platform = getPlatform();
   let reserved = [...NON_REBINDABLE, ...TERMINAL_RESERVED];
@@ -120,7 +120,7 @@ var KEY_ALIASES = {
   "caps-lock": "capslock",
   caps_lock: "capslock",
 };
-//@ chunk-6qssfmzs.js:9131-9545 fingerprint = normalizeStep (0.892)
+//@ chunk-6qssfmzs.js:9131-9545 fingerprint (2.1.88 match: normalizeStep, 0.892)
 function normalizeStep(step) {
   let parts = step.split("+");
   let modifiers = [];

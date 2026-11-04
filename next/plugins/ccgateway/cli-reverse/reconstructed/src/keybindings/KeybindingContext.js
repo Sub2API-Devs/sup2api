@@ -23,7 +23,7 @@ var KeybindingContext; // deferred: has load-time effects after a deferred state
 deferInit("chunk-8pssrarc.js:1788", () => {
   KeybindingContext = createContext(null);
 });
-//@ chunk-8pssrarc.js:1803-3569 fingerprint = KeybindingProvider (0.611)
+//@ chunk-8pssrarc.js:1803-3569 fingerprint (2.1.88 match: KeybindingProvider, 0.611)
 /**
  * KeybindingContext 的 Provider：对外提供 resolve（按当前待定和弦解析）、getDisplayText、registerHandler（按动作登记处理器并发 handlersChanged）、hasHandler/runAction（只算非回退处理器）、registerPreDispatch、singleKeyEvent、活动上下文登记等。
  */
@@ -185,7 +185,7 @@ function getPrimaryHandlers(registry, action) {
 function useKeybindingContext() {
   return useContext(KeybindingContext);
 }
-//@ chunk-8pssrarc.js:3661-3917 fingerprint = useRegisterKeybindingContext (1)
+//@ chunk-8pssrarc.js:3661-3917 fingerprint (2.1.88 match: useRegisterKeybindingContext, 1)
 /**
  * 组件挂载且 isActive 时把上下文加入活动集合，卸载时移除（layout effect，保证首个按键前生效）。
  */

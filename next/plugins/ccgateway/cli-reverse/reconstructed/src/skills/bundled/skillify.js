@@ -34,7 +34,7 @@ function extractUserMessages(messages) {
   ]);
   return DESIGN_SUBCOMMANDS.filter((subcommand) => availableValues.has(subcommand.value));
 }
-//@ chunk-hantmvxa.js:111319-111817 callgraph-fingerprint = registerSkillifySkill (0.199)
+//@ chunk-hantmvxa.js:111319-111817 callgraph-fingerprint (2.1.88 match: registerSkillifySkill, 0.199)
 /**
  * 注册 /design 内置 skill（Claude Design：sync/login/consent/revoke/import/export/status 子命令），survivesBundledKillSwitch，带 policyGate；只能用户调用。
  */

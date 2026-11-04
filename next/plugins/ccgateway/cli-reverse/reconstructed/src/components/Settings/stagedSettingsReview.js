@@ -155,7 +155,7 @@ function hasMoreContent(original, candidate) {
 function normalizeSpaces(text) {
   return sanitizeEscaped(tildify(text), "\uFFFD").replace(/ +/g, " ");
 }
-//@ chunk-61a1pjwa.js:16972-16986 placement = _temp18 (1)
+//@ chunk-61a1pjwa.js:16972-16986 placement (2.1.88 match: _temp18, 1)
 var SPACE_CHAR = "    ";
 //@ chunk-61a1pjwa.js:16986-17017 layout
 function sanitizeWithSpaces(text) {
@@ -201,7 +201,7 @@ function textHeight(text, columns) {
 //@ chunk-61a1pjwa.js:17431-17516 placement
 var NON_PRINTABLE_PATTERN = /[\x00-\x08\x0b-\x1f\x7f]|[^\x00-\x7f]/gu;
 var NON_ASCII_OR_CONTROL_RE = /[\x00-\x1f\x7f]|[^\x00-\x7f]/gu;
-//@ chunk-61a1pjwa.js:17516-17577 placement = getErrnoPath (1)
+//@ chunk-61a1pjwa.js:17516-17577 placement (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath(message, field) {
   return message.match(field === "path" ? NON_ASCII_OR_CONTROL_RE : NON_PRINTABLE_PATTERN)?.length ?? 0;
 }
@@ -877,7 +877,7 @@ function StagedSettingsReview({ changes, deps, onDone, wording = STAGED_CHANGE_W
     }),
   });
 }
-//@ chunk-61a1pjwa.js:28222-28245 placement = COPY_DIR (1)
+//@ chunk-61a1pjwa.js:28222-28245 placement (2.1.88 match: COPY_DIR, 1)
 var COPY_DIR = `claude ${APPLY_PROJECT_SETTINGS}`;
 //@ chunk-61a1pjwa.js:28245-28277 placement
 function normalizePathForDisplay(path) {

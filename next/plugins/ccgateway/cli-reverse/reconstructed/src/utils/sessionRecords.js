@@ -13,7 +13,7 @@ import { readFile } from "fs/promises";
 import { timingSafeEqual } from "crypto";
 import { jsonParse } from "./slowOperations.js";
 
-//@ chunk-g4mgfvqt.js:409-448 placement = getSessionsDir (1)
+//@ chunk-g4mgfvqt.js:409-448 placement (2.1.88 match: getSessionsDir, 1)
 function getSessionsDir(configDir) {
   return join(configDir, "sessions");
 }

@@ -59,7 +59,7 @@ import { memoryScopeForPath } from "../../utils/memoryFileDetection.js";
 import { isCommentNotificationText } from "../artifacts/comments/autoreactState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xx1vmpsq.js:20766-20827 placement = logEventTo1P (1)
+//@ chunk-xx1vmpsq.js:20766-20827 placement (2.1.88 match: logEventTo1P, 1)
 function logEventTo1P() {
   return isFeedbackAllowed() && getAPIProvider() === "firstParty" && feedbackCredentialStatus() === null;
 }
@@ -399,7 +399,7 @@ var KEEP_VERBATIM_FIELDS; // deferred: has load-time effects after a deferred st
 deferInit("chunk-xx1vmpsq.js:26066", () => {
   KEEP_VERBATIM_FIELDS = new Set(["type", "description", "title"]);
 });
-//@ chunk-xx1vmpsq.js:26113-26201 placement = redactSecrets (0.815)
+//@ chunk-xx1vmpsq.js:26113-26201 placement (2.1.88 match: redactSecrets, 0.815)
 function redactSecrets(content) {
   return typeof content === "string" || (content !== null && typeof content === "object")
     ? "[REDACTED]"

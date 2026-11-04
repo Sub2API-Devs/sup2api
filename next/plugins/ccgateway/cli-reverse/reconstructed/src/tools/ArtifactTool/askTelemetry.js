@@ -114,7 +114,7 @@ function approvalSourceLabel(source) {
       return "other";
   }
 }
-//@ chunk-8wvtd8sr.js:23064-23172 placement = buildPermissionUpdates (0.774)
+//@ chunk-8wvtd8sr.js:23064-23172 placement (2.1.88 match: buildPermissionUpdates, 0.774)
 function buildPermissionUpdates(sessionScoped) {
   return {
     type: "addRules",

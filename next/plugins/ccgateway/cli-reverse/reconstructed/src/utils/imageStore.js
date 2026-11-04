@@ -26,7 +26,7 @@ import { makeTempSiblingPath, retryFsOp } from "./atomicPublishWrite.js";
 import { mintPasteId, formatImageRef } from "../history.js";
 import { PasteEvent } from "../ink/frame.js";
 
-//@ chunk-p52gp8zk.js:9282-9407 fingerprint = evictOldestIfAtCap (0.629)
+//@ chunk-p52gp8zk.js:9282-9407 fingerprint (2.1.88 match: evictOldestIfAtCap, 0.629)
 function evictOldestIfAtCap(frame, records, totalBytes) {
   let remaining = totalBytes;
   while (remaining > EVENT_RECORD_LIMITS && records.size > 0) {
@@ -37,11 +37,11 @@ function evictOldestIfAtCap(frame, records, totalBytes) {
   }
   return remaining;
 }
-//@ chunk-4121qate.js:154104-154140 fingerprint = getImagePath (1)
+//@ chunk-4121qate.js:154104-154140 fingerprint (2.1.88 match: getImagePath, 1)
 var getImagePath = (entry) => Object.hasOwn(entry, "png");
-//@ chunk-23fm9f0d.js:2810-2831 fingerprint = IMAGE_STORE_DIR (1)
+//@ chunk-23fm9f0d.js:2810-2831 fingerprint (2.1.88 match: IMAGE_STORE_DIR, 1)
 var IMAGE_STORE_DIR = "image-cache";
-//@ chunk-23fm9f0d.js:2831-3149 fingerprint = cleanupOldImageCaches (0.943)
+//@ chunk-23fm9f0d.js:2831-3149 fingerprint (2.1.88 match: cleanupOldImageCaches, 0.943)
 /**
  * 清理 image-cache 下其他会话的旧图片缓存目录。
  */
@@ -132,7 +132,7 @@ function storedImagePath(content) {
   let mediaType = detectImageFormatFromBase64(content.content.slice(0, BASE64_SNIFF_CHARS));
   return join(imageStoreDir, `${content.id}.${MIME_TO_EXTENSION[mediaType]}`);
 }
-//@ chunk-08s5p3av.js:5069-5172 placement = _temp (1)
+//@ chunk-08s5p3av.js:5069-5172 placement (2.1.88 match: _temp, 1)
 /**
  * 为图片内容计算缓存路径并记录到粘贴内容中。
  */
@@ -151,7 +151,7 @@ async function storeImageAndRecord(content, record) {
   if (imagePath) record((pathsById) => mapSetBounded(pathsById, content.id, imagePath));
   return imagePath;
 }
-//@ chunk-08s5p3av.js:5248-5458 placement = _temp (1)
+//@ chunk-08s5p3av.js:5248-5458 placement (2.1.88 match: _temp, 1)
 /**
  * 保存粘贴内容中的所有图片，并把缓存路径记录回粘贴内容。
  */
@@ -170,7 +170,7 @@ async function storePastedImages(pasteContents, record) {
     });
   return storedById;
 }
-//@ chunk-08s5p3av.js:5458-6143 fingerprint = storeImage (0.689)
+//@ chunk-08s5p3av.js:5458-6143 fingerprint (2.1.88 match: storeImage, 0.689)
 /**
  * 把粘贴的图片存入 image-cache/<sessionId>/，返回路径。
  */
@@ -235,7 +235,7 @@ function mapSetBounded(pathsById, id, path) {
   next.set(id, path);
   return next;
 }
-//@ chunk-93kwxas0.js:45837-46084 fingerprint = cacheImagePath (0.654)
+//@ chunk-93kwxas0.js:45837-46084 fingerprint (2.1.88 match: cacheImagePath, 0.654)
 function cacheImagePath(getPastedContents, handlePaste, { onMinted } = {}) {
   return (content, options) => {
     let pastedContents = getPastedContents();

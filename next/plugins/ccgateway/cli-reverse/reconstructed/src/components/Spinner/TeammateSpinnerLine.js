@@ -18,7 +18,7 @@ function isObject(value) {
 function toSpinnerLine(value) {
   return typeof value === "string" ? wireName(value) : value;
 }
-//@ chunk-a76knw89.js:19316-19845 fingerprint = getMessagePreview (0.334)
+//@ chunk-a76knw89.js:19316-19845 fingerprint (2.1.88 match: getMessagePreview, 0.334)
 function getMessagePreview(messages) {
   if (Array.isArray(messages)) return messages.map(getMessagePreview);
   if (!isObject(messages)) return messages;

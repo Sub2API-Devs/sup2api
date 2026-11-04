@@ -38,7 +38,7 @@ function selectToolPermissionContext(appState) {
  * 导出值：WORKFLOW_HINT_TEXT（"workflows run best with it on"）；位于「设置校验错误与权限模式冲突（如 workflow auto 不可用）的通知」模块。
  */
 var WORKFLOW_HINT_TEXT = "\xB7 workflows run best with it on";
-//@ chunk-0e8j1zzj.js:24837-25579 callgraph-fingerprint = useSettingsErrors (0.187)
+//@ chunk-0e8j1zzj.js:24837-25579 callgraph-fingerprint (2.1.88 match: useSettingsErrors, 0.187)
 function useSettingsErrors(requestSource) {
   let $ = useMemoCache(10);
   let toolPermissionContext = useAppState(selectToolPermissionContext);
@@ -111,7 +111,7 @@ function useSettingsErrors(requestSource) {
 function invalidSettingsEntries() {
   return splitStatusNotices(formatInvalidSettingNotice().errors).invalidEntries;
 }
-//@ chunk-18hwfzwa.js:1787214-1787279 fingerprint = SETTINGS_ERRORS_NOTIFICATION_KEY (0.672)
+//@ chunk-18hwfzwa.js:1787214-1787279 fingerprint (2.1.88 match: SETTINGS_ERRORS_NOTIFICATION_KEY, 0.672)
 var SETTINGS_ERRORS_NOTIFICATION_KEY = {
   id: "settings-errors",
   deps: (noticeState) => [noticeState.store],

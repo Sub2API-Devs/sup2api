@@ -40,7 +40,7 @@ function stickyRootsFor(roots) {
 function anyPairMatches(leftPaths, rightPaths) {
   return leftPaths.some((leftPath) => rightPaths.some((rightPath) => isSameCommandPath(leftPath, rightPath)));
 }
-//@ chunk-s61vbvea.js:308674-308853 placement = setCwdState (0.757)
+//@ chunk-s61vbvea.js:308674-308853 placement (2.1.88 match: setCwdState, 0.757)
 function pathsOverlapForPlatform(leftPaths, rightPaths) {
   let normalizePath =
     getPlatform_2() === "windows"

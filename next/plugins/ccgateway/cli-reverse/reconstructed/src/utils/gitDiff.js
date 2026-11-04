@@ -58,7 +58,7 @@ import { getCachedRepository } from "./detectRepository.js";
 import { isFileWithinSizeBound } from "./file.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-6vnxsn99.js:44679-44798 fingerprint = fetchGitDiffHunks (0.599)
+//@ chunk-6vnxsn99.js:44679-44798 fingerprint (2.1.88 match: fetchGitDiffHunks, 0.599)
 /**
  * git diff 的固定参数与限制常量：单次超时 5000ms、按文件统计上限 50 个、超过 500 个文件只给总计、单文件 1MB 等。
  */
@@ -324,7 +324,7 @@ async function fetchDiffWithoutHead(abortSignal, repoDir, diffOptions) {
   await appendUntrackedToDiffStats(diff, abortSignal, repoDir, undefined, false, diffOptions);
   return diff;
 }
-//@ chunk-6vnxsn99.js:47963-48319 fingerprint = parseGitNumstat (0.756)
+//@ chunk-6vnxsn99.js:47963-48319 fingerprint (2.1.88 match: parseGitNumstat, 0.756)
 /**
  * 解析 git diff --numstat 输出为 {path: {added, removed, isBinary}}。
  */
@@ -443,7 +443,7 @@ async function fetchDiffStats(rev, abortSignal, repoDir, diffOptions, maxFiles =
     };
   return rawNumstat;
 }
-//@ chunk-6vnxsn99.js:49351-49547 placement = execFileNoThrow (0.676)
+//@ chunk-6vnxsn99.js:49351-49547 placement (2.1.88 match: execFileNoThrow, 0.676)
 /**
  * 运行 git diff 系列命令（不抛异常），给定 cwd 时附带额外环境。切分上属 utils/gitDiff。
  */
@@ -524,7 +524,7 @@ function diffBaseRef(result) {
   if (result.noCommits) return "--cached";
   return result.source.kind === "branch" ? result.source.baseRef : "HEAD";
 }
-//@ chunk-6vnxsn99.js:50210-50701 fingerprint = fetchGitDiff (0.559)
+//@ chunk-6vnxsn99.js:50210-50701 fingerprint (2.1.88 match: fetchGitDiff, 0.559)
 /**
  * /diff 等用的工作区 diff 统计入口：合并/变基中返回 null；先 --shortstat 判断规模（超过 500 文件只给总数），再 --numstat 取最多 50 个文件的增删行，并补充未跟踪文件。
  */
@@ -848,7 +848,7 @@ function unquoteGitPathBytes(text) {
   }
   return Buffer.from(bytes).toString("utf8");
 }
-//@ chunk-6vnxsn99.js:54582-55767 fingerprint = parseGitDiff (0.959)
+//@ chunk-6vnxsn99.js:54582-55767 fingerprint (2.1.88 match: parseGitDiff, 0.959)
 /**
  * 把统一 diff 文本解析成按文件的 hunk 列表。
  */
@@ -1101,7 +1101,7 @@ async function classifyMergeBase(mergeBase, baseBranch, runOptions) {
     baseBranch,
   };
 }
-//@ chunk-6vnxsn99.js:57974-58839 fingerprint = fetchUntrackedFiles (0.717)
+//@ chunk-6vnxsn99.js:57974-58839 fingerprint (2.1.88 match: fetchUntrackedFiles, 0.717)
 /**
  * 列出未跟踪文件并估算行数，补进 diff 统计。
  */
@@ -1165,7 +1165,7 @@ async function fetchUntrackedFiles(maxFiles, abortSignal, repoDir, includePreSes
   }
   return perFileStats;
 }
-//@ chunk-6vnxsn99.js:58839-59093 fingerprint = parseShortstat (1)
+//@ chunk-6vnxsn99.js:58839-59093 fingerprint (2.1.88 match: parseShortstat, 1)
 /**
  * 解析 `N files changed, X insertions, Y deletions`。
  */
@@ -1197,7 +1197,7 @@ function isPatchWithinSizeLimit(singleFileGitDiff) {
     Buffer.byteLength(singleFileGitDiff.patch, "utf8") <= MAX_TOOL_DIFF_PATCH_BYTES
   );
 }
-//@ chunk-6vnxsn99.js:59338-60133 fingerprint = fetchSingleFileGitDiff (0.753)
+//@ chunk-6vnxsn99.js:59338-60133 fingerprint (2.1.88 match: fetchSingleFileGitDiff, 0.753)
 /**
  * 取单个文件相对基准的 diff（工具调用后展示/上报用）。
  */
@@ -1264,7 +1264,7 @@ async function fetchSingleFileGitDiff(absoluteFilePath) {
     repository,
   };
 }
-//@ chunk-6vnxsn99.js:60133-60430 fingerprint = parseRawDiffToToolUseDiff (1)
+//@ chunk-6vnxsn99.js:60133-60430 fingerprint (2.1.88 match: parseRawDiffToToolUseDiff, 1)
 function parseRawDiffToToolUseDiff(filename, rawDiff, status) {
   let lines = rawDiff.split(`
 `);
@@ -1314,7 +1314,7 @@ async function realpathGitDir(startPath) {
   let gitDir = await getGitDir(startPath);
   return gitDir === null ? null : realpath(gitDir).catch(() => null);
 }
-//@ chunk-6vnxsn99.js:60833-60939 placement = detectWorktreeMainRepoPath (0.742)
+//@ chunk-6vnxsn99.js:60833-60939 placement (2.1.88 match: detectWorktreeMainRepoPath, 0.742)
 /**
  * 若 cwd 是 <repo>.git/worktrees/<name> 形式则返回主仓库 .git 路径，否则原样返回（切分上属 utils/gitDiff 一带）。
  */
@@ -1346,7 +1346,7 @@ function getDiffBaseRef(checkoutPath) {
   if (!baseRef) return;
   return baseRef.startsWith("-") ? null : baseRef;
 }
-//@ chunk-6vnxsn99.js:61233-61524 fingerprint = getDiffRef (0.888)
+//@ chunk-6vnxsn99.js:61233-61524 fingerprint (2.1.88 match: getDiffRef, 0.888)
 async function getDiffRef(dirs, checkoutPath) {
   let diffBaseRef = getDiffBaseRef(checkoutPath);
   function runGit(args) {
@@ -1361,7 +1361,7 @@ async function getDiffRef(dirs, checkoutPath) {
   if (code === 0 && stdout.trim()) return stdout.trim();
   return "HEAD";
 }
-//@ chunk-6vnxsn99.js:61524-61830 fingerprint = generateSyntheticDiff (1)
+//@ chunk-6vnxsn99.js:61524-61830 fingerprint (2.1.88 match: generateSyntheticDiff, 1)
 async function generateSyntheticDiff(gitPath, absoluteFilePath) {
   try {
     if (!(await isFileWithinSizeBound(absoluteFilePath, MAX_SINGLE_FILE_DIFF_BYTES))) return null;
@@ -1385,7 +1385,7 @@ ${addedLines}`;
     return null;
   }
 }
-//@ chunk-wyqg6m3h.js:19052-19107 fingerprint = isInTransientGitState (0.849)
+//@ chunk-wyqg6m3h.js:19052-19107 fingerprint (2.1.88 match: isInTransientGitState, 0.849)
 var TRANSIENT_STATE_FILES = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"];
 export {
   getDiffRepoRoot,

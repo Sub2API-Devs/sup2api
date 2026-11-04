@@ -95,7 +95,7 @@ function isShownOrAcceptedSuggestion(promptSuggestion) {
 function suggestionTextOrNull(suggestion) {
   return suggestion.status === "empty" ? null : suggestion.text;
 }
-//@ chunk-3sjj4q4c.js:1685-2333 fingerprint = shouldEnablePromptSuggestion (1)
+//@ chunk-3sjj4q4c.js:1685-2333 fingerprint (2.1.88 match: shouldEnablePromptSuggestion, 1)
 /**
  * 是否启用提示建议：CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION 优先；否则需 tengu_chomp_inflection、交互会话、非 swarm 队员、设置 promptSuggestionEnabled 不为 false。记 tengu_prompt_suggestion_init。
  */
@@ -152,7 +152,7 @@ function isPromptSuggestionSettingEnabled() {
   if (CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION !== undefined) return CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION;
   return getInitialSettings_2()?.promptSuggestionEnabled !== false;
 }
-//@ chunk-3sjj4q4c.js:2458-2985 fingerprint = getSuggestionSuppressReason (0.675)
+//@ chunk-3sjj4q4c.js:2458-2985 fingerprint (2.1.88 match: getSuggestionSuppressReason, 0.675)
 /**
  * 应用状态层面的抑制原因：disabled、pending_permission、elicitation_active、plan_mode、rate_limit、usage_credits。
  */
@@ -174,7 +174,7 @@ function getSuggestionSuppressReason(appState, billedToUsageCredits) {
   }
   return null;
 }
-//@ chunk-3sjj4q4c.js:2985-3673 fingerprint = tryGenerateSuggestion (0.653)
+//@ chunk-3sjj4q4c.js:2985-3673 fingerprint (2.1.88 match: tryGenerateSuggestion, 0.653)
 /**
  * 生成前的各项检查（中止、对话太短、上次回答出错、抑制原因、缓存冷、未采用连击节流），通过后生成并过滤建议。
  */
@@ -241,7 +241,7 @@ async function tryGenerateSuggestion(
     generationRequestId,
   };
 }
-//@ chunk-3sjj4q4c.js:3673-4710 fingerprint = executePromptSuggestion (0.473)
+//@ chunk-3sjj4q4c.js:3673-4710 fingerprint (2.1.88 match: executePromptSuggestion, 0.473)
 /**
  * 主线程 REPL 每轮结束后触发：检查焦点，生成建议并放到输入框占位；被阻塞任务时写入 suggestedReply。
  */
@@ -381,7 +381,7 @@ Stay silent if a suggestion could be unsafe or inappropriate \u2014 including an
 Format: 2-12 words, match the user's style. Or nothing.
 
 Reply with ONLY the suggestion, no quotes or explanation.`;
-//@ chunk-3sjj4q4c.js:6549-7215 fingerprint = generateSuggestion (0.932)
+//@ chunk-3sjj4q4c.js:6549-7215 fingerprint (2.1.88 match: generateSuggestion, 0.932)
 /**
  * fork 一次（prompt_suggestion，拒绝工具）收集 assistant 文本候选与请求 id。
  */
@@ -424,7 +424,7 @@ async function generateSuggestion(abortController, promptId, cacheSafeParams) {
     generationRequestId,
   };
 }
-//@ chunk-3sjj4q4c.js:8009-10528 fingerprint = shouldFilterSuggestion (1)
+//@ chunk-3sjj4q4c.js:8009-10528 fingerprint (2.1.88 match: shouldFilterSuggestion, 1)
 /**
  * 过滤不合格建议：done、元文本、括号包裹、错误消息、前缀标签、词数过少/过多、过长、多句、格式化、评价语、Claude 口吻。
  */
@@ -531,7 +531,7 @@ function shouldFilterSuggestion(suggestion, promptId) {
     }
   return false;
 }
-//@ chunk-3sjj4q4c.js:10528-10868 fingerprint = logSuggestionOutcome (0.808)
+//@ chunk-3sjj4q4c.js:10528-10868 fingerprint (2.1.88 match: logSuggestionOutcome, 0.808)
 /**
  * 记录建议被采纳/忽略及相似度、耗时。
  */
@@ -555,7 +555,7 @@ function logSuggestionOutcome(suggestion, userInput, emittedAt, generationReques
     similarity,
   });
 }
-//@ chunk-3sjj4q4c.js:10868-11051 fingerprint = logSuggestionSuppressed (0.589)
+//@ chunk-3sjj4q4c.js:10868-11051 fingerprint (2.1.88 match: logSuggestionSuppressed, 0.589)
 /**
  * 记录建议被抑制及原因。
  */

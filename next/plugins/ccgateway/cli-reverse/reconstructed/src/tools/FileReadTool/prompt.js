@@ -12,7 +12,7 @@ import { leanPromptOf, leanRewriteOf } from "../../utils/model/promptBundles.js"
 import { NO_REREAD_AFTER_EDIT_NOTE } from "../../constants/promptSections.js";
 import { isNotClaude3Model } from "../../utils/model/claude3Models.js";
 
-//@ chunk-g54kbxqw.js:132415-132983 fingerprint = FILE_UNCHANGED_STUB (0.333)
+//@ chunk-g54kbxqw.js:132415-132983 fingerprint (2.1.88 match: FILE_UNCHANGED_STUB, 0.333)
 /**
  * Read 相关提示片段：不要读回刚编辑的文件；编辑成功尾注；三种"文件未变"去重文案。
  */
@@ -49,7 +49,7 @@ function isFileUnchangedStub(content) {
     content.startsWith(ALREADY_IN_CONTEXT_PREFIX)
   );
 }
-//@ chunk-g54kbxqw.js:133232-133682 fingerprint = DESCRIPTION (0.333)
+//@ chunk-g54kbxqw.js:133232-133682 fingerprint (2.1.88 match: DESCRIPTION, 0.333)
 /**
  * Read 提示常量：截断说明前缀、默认读取 2000 行、工具描述、cat -n 格式说明（两种）、"只读需要的部分"说明。
  */
@@ -60,7 +60,7 @@ var LINE_FORMAT_INSTRUCTION = "- Results are returned using cat -n format, with 
 var TAB_AWARE_LINE_FORMAT_INSTRUCTION = `${LINE_FORMAT_INSTRUCTION}. Each line is the line number, a single separator (a tab or \`:\`), then the verbatim file content (including any leading whitespace).`;
 var OFFSET_INSTRUCTION =
   "- When you already know which part of the file you need, only read that part. This can be important for larger files.";
-//@ chunk-g54kbxqw.js:133682-135755 fingerprint = renderPromptTemplate (0.469)
+//@ chunk-g54kbxqw.js:133682-135755 fingerprint (2.1.88 match: renderPromptTemplate, 0.469)
 /**
  * 生成 Read 提示词：lean 模式短版；完整版说明绝对路径、默认 2000 行、图片、PDF（模型支持时，超过 10 页必须给 pages，每次最多 20 页）、notebook、目录不可读、截图。
  */

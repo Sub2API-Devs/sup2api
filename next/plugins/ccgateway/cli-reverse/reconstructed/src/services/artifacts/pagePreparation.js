@@ -472,7 +472,7 @@ function isFrameHeadPreambleOnly(html) {
     return isFramePreambleOnly(trimmed.slice(6, -7));
   return isFramePreambleOnly(trimmed);
 }
-//@ chunk-06y4szbn.js:55738-56021 placement = resolveMetadataBuf (0.737)
+//@ chunk-06y4szbn.js:55738-56021 placement (2.1.88 match: resolveMetadataBuf, 0.737)
 function exciseFrameAssetServeBlock(carry, chunkBuf = () => true) {
   let offset = 4;
   let firstNl = carry.indexOf(FRAME_RUNTIME_SENTINELS);

@@ -166,7 +166,7 @@ function KeybindingRoot(props) {
   } else wrappedChildren = $[3];
   return wrappedChildren;
 }
-//@ chunk-xe7zq1p4.js:4577-5904 fingerprint = KeybindingSetup (0.742)
+//@ chunk-xe7zq1p4.js:4577-5904 fingerprint (2.1.88 match: KeybindingSetup, 0.742)
 /**
  * 快捷键系统根组件：首次渲染同步加载绑定，挂载后启动文件监视并订阅热重载；维护待定和弦（超时 Je 毫秒自动取消并弹出 "… cancelled" 通知）、活动上下文集合、动作处理器注册表、预分发处理器、单键事件引用；向下提供 KeybindingProvider，外面包一层 ChordInterceptor。
  */
@@ -290,7 +290,7 @@ function isReservedKeyEvent(keyEvent) {
     RESERVED_KEYSTROKES.some((reservedKeystroke) => keystrokesEqual(reservedKeystroke, keystroke))
   );
 }
-//@ chunk-xe7zq1p4.js:6225-10406 fingerprint = ChordInterceptor (0.407)
+//@ chunk-xe7zq1p4.js:6225-10406 fingerprint (2.1.88 match: ChordInterceptor, 0.407)
 /**
  * 根 Box（keybindingScope=Global、tabIndex=-1，始终在焦点链上）的捕获阶段键盘/滚轮处理器，统一做快捷键分发。两种模式：legacy——在「有处理器的上下文 + 活动上下文 + Global」里 resolveKeyWithChordState，处理和弦开始/取消/解绑/匹配，匹配后按注册表调用单键处理器（回退处理器在保留键或无修饰键时跳过）；scopeChain——按焦点节点到根的 keybindingScope 链（以及抢先作用域 preemptiveScopes）解析，匹配后先把动作作为事件派给 DOM 节点（onAction），未处理再落回注册表；文本输入框获得焦点时无修饰单字符直接交给预分发。消费的事件 preventDefault + stopImmediatePropagation。滚轮事件转成 wheelup/wheeldown 按键参与同一套解析。
  */

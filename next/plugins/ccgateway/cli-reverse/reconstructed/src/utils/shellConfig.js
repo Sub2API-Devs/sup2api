@@ -26,7 +26,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-6zvphrsz.js:4527-4559 affinity
 var CLAUDE_ALIAS_REGEX = /^\s*alias\s+claude\s*=/;
-//@ chunk-6zvphrsz.js:4559-4900 fingerprint = getShellConfigPaths (0.661)
+//@ chunk-6zvphrsz.js:4559-4900 fingerprint (2.1.88 match: getShellConfigPaths, 0.661)
 /**
  * 各 shell 的 rc 文件路径：zsh 用 $ZDOTDIR/.zshrc，bash 在 macOS 取已存在的 .bash_profile/.bash_login/.profile（另给 .bashrc），其他平台 .bashrc，fish 用 ~/.config/fish/config.fish。
  */
@@ -51,7 +51,7 @@ function getShellConfigPaths(options) {
     fish: join(home, ".config/fish/config.fish"),
   };
 }
-//@ chunk-6zvphrsz.js:4900-5149 fingerprint = filterClaudeAliases (1)
+//@ chunk-6zvphrsz.js:4900-5149 fingerprint (2.1.88 match: filterClaudeAliases, 1)
 /**
  * 从 rc 文件行中去掉指向本地安装 claude 的 alias claude=… 行，返回 {filtered, hadAlias}；安装器/迁移用。
  */
@@ -97,7 +97,7 @@ async function readFileLinesOrNull(filePath) {
     throw e;
   }
 }
-//@ chunk-6zvphrsz.js:5339-5482 fingerprint = writeFileLines (1)
+//@ chunk-6zvphrsz.js:5339-5482 fingerprint (2.1.88 match: writeFileLines, 1)
 /**
  * 把行数组写回文件并 datasync。
  */
@@ -131,7 +131,7 @@ deferInit("chunk-6zvphrsz.js:5482", () => {
     "ETIMEDOUT",
   ]);
 });
-//@ chunk-6zvphrsz.js:5614-5981 callgraph-witnessed = findClaudeAlias (0)
+//@ chunk-6zvphrsz.js:5614-5981 callgraph-witnessed (2.1.88 match: findClaudeAlias, 0)
 /**
  * 在 zsh/bash/fish 配置文件里查找 `alias claude=` 的目标；读不了的文件记日志跳过。
  */
@@ -163,7 +163,7 @@ async function findClaudeAlias(options) {
   }
   return null;
 }
-//@ chunk-6zvphrsz.js:5981-6186 fingerprint = findValidClaudeAlias (1)
+//@ chunk-6zvphrsz.js:5981-6186 fingerprint (2.1.88 match: findValidClaudeAlias, 1)
 /**
  * 在 rc 文件中找 claude 别名，展开 ~ 后目标存在（文件或符号链接）才返回别名目标。
  */

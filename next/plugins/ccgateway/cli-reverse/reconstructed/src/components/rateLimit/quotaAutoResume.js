@@ -155,7 +155,7 @@ deferInit("chunk-fm6h4dv7.js:2653", () => {
 function isAutoResumeOfferEnabled(upgradePaths) {
   return usageCreditsCommand.isEnabled() && (upgradePaths === undefined || upgradePaths.includes("overage"));
 }
-//@ chunk-fm6h4dv7.js:2732-2832 placement = isBigQueryMetricsEnabled (1)
+//@ chunk-fm6h4dv7.js:2732-2832 placement (2.1.88 match: isBigQueryMetricsEnabled, 1)
 function isBigQueryMetricsEnabled(upgradePaths) {
   let subscriptionType = getSubscriptionType();
   let isC4EOrTeamUser = subscriptionType === "team" || subscriptionType === "enterprise";

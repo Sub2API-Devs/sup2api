@@ -23,7 +23,7 @@ import { useAppStoreDirect } from "../state/AppState.js";
 import { createTaskFramework } from "../utils/task/framework.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4007097-4007333 fingerprint = useVoiceState (0.675)
+//@ chunk-e6aww6q8.js:4007097-4007333 fingerprint (2.1.88 match: useVoiceState, 0.675)
 /**
  * 等待 store 状态满足谓词或超时（返回 true/false）。旧版名 useVoiceState 为错配。
  */
@@ -67,7 +67,7 @@ function createVoiceStore() {
     levelSmoother: resetGitFileWatcher,
   };
 }
-//@ chunk-yj65zw1g.js:487-625 fingerprint = DEFAULT_STATE (0.925)
+//@ chunk-yj65zw1g.js:487-625 fingerprint (2.1.88 match: DEFAULT_STATE, 0.925)
 /**
  * 语音默认状态 {voiceState:"idle", voiceError:null, …}。
  */
@@ -104,7 +104,7 @@ function VoiceProvider(props) {
   } else providerElement = $[2];
   return providerElement;
 }
-//@ chunk-yj65zw1g.js:877-983 fingerprint = useVoiceStore (1)
+//@ chunk-yj65zw1g.js:877-983 fingerprint (2.1.88 match: useVoiceStore, 1)
 /**
  * 读取 Voice 上下文，不在 VoiceProvider 内抛错。
  */
@@ -122,7 +122,7 @@ function useVoiceStore() {
 function useVoiceStateStore() {
   return useVoiceStore().store;
 }
-//@ chunk-yj65zw1g.js:1240-1277 callgraph-fingerprint = useGetVoiceState (1)
+//@ chunk-yj65zw1g.js:1240-1277 callgraph-fingerprint (2.1.88 match: useGetVoiceState, 1)
 /**
  * 语音 store 的 getState。
  */
@@ -134,7 +134,7 @@ function useGetVoiceState() {
 deferInit("chunk-hxkp4105.js:300", () => {
   init_react_production();
 });
-//@ chunk-hxkp4105.js:304-379 fingerprint = useSetVoiceState (0.688)
+//@ chunk-hxkp4105.js:304-379 fingerprint (2.1.88 match: useSetVoiceState, 0.688)
 /**
  * 返回绑定 AppState store 的 setter（ih 包装）。
  */

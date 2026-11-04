@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-bwbq4xvm.js:775269-775289 fingerprint = POWERSHELL_TOOL_NAME (1)
+//@ chunk-bwbq4xvm.js:775269-775289 fingerprint (2.1.88 match: POWERSHELL_TOOL_NAME, 1)
 /**
  * PowerShell 工具名常量 "PowerShell"。
  */

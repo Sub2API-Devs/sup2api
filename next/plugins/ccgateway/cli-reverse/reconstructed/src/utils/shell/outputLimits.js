@@ -25,7 +25,7 @@ var DEFAULT_OUTPUT_LIMIT_CHARS = 30000;
 function getConfiguredBashOutputMaxChars() {
   return clampOutputLimit(getInitialSettings_2().bashOutputMaxChars) ?? DEFAULT_OUTPUT_LIMIT_CHARS;
 }
-//@ chunk-bhxaz9j0.js:898-1058 fingerprint = getMaxOutputLength (0.879)
+//@ chunk-bhxaz9j0.js:898-1058 fingerprint (2.1.88 match: getMaxOutputLength, 0.879)
 /**
  * Bash 输出最大字符数：settings.bashOutputMaxChars（夹在上下限之间）优先，否则 BASH_MAX_OUTPUT_LENGTH（默认 30000，上限 150000）。
  */

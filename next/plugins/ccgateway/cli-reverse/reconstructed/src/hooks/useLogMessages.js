@@ -269,7 +269,7 @@ class TranscriptRecorder {
     return true;
   }
 }
-//@ chunk-18hwfzwa.js:1622007-1622704 fingerprint = useLogMessages (0.317)
+//@ chunk-18hwfzwa.js:1622007-1622704 fingerprint (2.1.88 match: useLogMessages, 0.317)
 function useLogMessages(
   messages,
   ignore = false,

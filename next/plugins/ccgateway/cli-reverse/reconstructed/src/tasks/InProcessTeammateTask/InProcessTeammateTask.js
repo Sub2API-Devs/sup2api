@@ -18,7 +18,7 @@ import { slugifySessionName } from "../../utils/sessionAddresses.js";
 import { isWaitingOnChildren } from "../LocalAgentTask/keepalive.js";
 import { similarNames } from "../../utils/settings/managedEnvKeys.js";
 
-//@ chunk-v5mxhgy9.js:554-721 fingerprint = InProcessTeammateTask (0.789)
+//@ chunk-v5mxhgy9.js:554-721 fingerprint (2.1.88 match: InProcessTeammateTask, 0.789)
 /**
  * InProcessTeammateTask 任务实现：kill 时调用 killInProcessTeammate，等待移出团队与 OS 侧拆除完成；k 为 10 秒超时常量。
  */
@@ -31,7 +31,7 @@ var InProcessTeammateTask = {
   },
 };
 var TEAMMATE_TEARDOWN_TIMEOUT_MS = 1e4;
-//@ chunk-v5mxhgy9.js:2171-2311 fingerprint = findTeammateTaskByAgentId (1)
+//@ chunk-v5mxhgy9.js:2171-2311 fingerprint (2.1.88 match: findTeammateTaskByAgentId, 1)
 /**
  * 按 agentId 找 teammate 任务，优先运行中的。
  */
@@ -89,7 +89,7 @@ function resolveTeammateTask(idOrName, tasks) {
     status: "not_found",
   };
 }
-//@ chunk-v5mxhgy9.js:3006-3099 layout = findTeammateTaskByAgentId (1)
+//@ chunk-v5mxhgy9.js:3006-3099 layout (2.1.88 match: findTeammateTaskByAgentId, 1)
 /**
  * 所有运行中 teammate 的 agentId。
  */
@@ -105,7 +105,7 @@ function getRunningTeammateAgentIds(tasks) {
 function getAllInProcessTeammateTasks(tasks) {
   return Object.values(tasks).filter(isInProcessTeammateTask);
 }
-//@ chunk-phrnybk8.js:533-874 fingerprint = injectUserMessageToTeammate (0.809)
+//@ chunk-phrnybk8.js:533-874 fingerprint (2.1.88 match: injectUserMessageToTeammate, 0.809)
 /**
  * 向 teammate 注入一条用户消息：追加到 pendingUserMessages 并写入 transcript；任务已结束则丢弃。
  */
@@ -155,7 +155,7 @@ function fuzzyResolveAgentByName(name, taskRegistry, getAppState) {
   let matchedName = similarNames(name, [...bySlug.keys()], 1)[0];
   return matchedName === undefined ? undefined : bySlug.get(matchedName);
 }
-//@ chunk-kxyd0g16.js:19982-20267 fingerprint = getRunningTeammatesSorted (0.872)
+//@ chunk-kxyd0g16.js:19982-20267 fingerprint (2.1.88 match: getRunningTeammatesSorted, 0.872)
 /**
  * 按规范化名字找 teammate 任务（每个 agentId 一条），有运行中的只返回运行中的。
  */
@@ -171,7 +171,7 @@ function getRunningTeammatesSorted(normalizedName, tasks) {
   let filtered = all.filter((task) => task.status === "running");
   return filtered.length > 0 ? filtered : all;
 }
-//@ chunk-18hwfzwa.js:729174-729220 fingerprint = requestTeammateShutdown (1)
+//@ chunk-18hwfzwa.js:729174-729220 fingerprint (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 任务是否在运行（status==="running"）。
  */

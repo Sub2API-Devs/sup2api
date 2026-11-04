@@ -10,7 +10,7 @@
  */
 import { clampScrollTop } from "../events/event-handlers.js";
 
-//@ chunk-18hwfzwa.js:1822566-1822891 fingerprint = useTerminalViewport (0.89)
+//@ chunk-18hwfzwa.js:1822566-1822891 fingerprint (2.1.88 match: useTerminalViewport, 0.89)
 function findRowOwner(row, container, entries) {
   let baseTop = 0;
   for (let ancestor = container ?? undefined; ancestor; ancestor = ancestor.parentNode)

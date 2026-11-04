@@ -17,7 +17,7 @@ import { whichAsync } from "../which.js";
 import { logForDebugging } from "../debug.js";
 import { moveKeeperPid } from "../toolCgroup.js";
 
-//@ chunk-bh9w80kx.js:3781-4323 fingerprint = MACOS_TERMINALS (0.753)
+//@ chunk-bh9w80kx.js:3781-4323 fingerprint (2.1.88 match: MACOS_TERMINALS, 0.753)
 /**
  * 深链接可用的终端清单：macOS（iTerm2、Ghostty、Kitty、Alacritty、WezTerm、Terminal.app）与 Linux（ghostty、kitty、alacritty、wezterm、gnome-terminal、konsole、xfce4-terminal、mate-terminal、tilix、xterm）。
  */
@@ -66,7 +66,7 @@ var LINUX_TERMINALS = [
   "tilix",
   "xterm",
 ];
-//@ chunk-bh9w80kx.js:4323-5035 fingerprint = detectMacosTerminal (0.968)
+//@ chunk-bh9w80kx.js:4323-5035 fingerprint (2.1.88 match: detectMacosTerminal, 0.968)
 /**
  * macOS 终端选择：全局配置 deepLinkTerminal → TERM_PROGRAM → mdfind 查 bundle id → /Applications 下是否存在，最后默认 Terminal.app。
  */
@@ -126,7 +126,7 @@ async function detectMacosTerminal() {
     command: "Terminal",
   };
 }
-//@ chunk-bh9w80kx.js:5035-5292 fingerprint = detectLinuxTerminal (1)
+//@ chunk-bh9w80kx.js:5035-5292 fingerprint (2.1.88 match: detectLinuxTerminal, 1)
 /**
  * Linux 终端选择：$TERMINAL → x-terminal-emulator → 清单中第一个可执行的。
  */
@@ -156,7 +156,7 @@ async function detectLinuxTerminal() {
   }
   return null;
 }
-//@ chunk-bh9w80kx.js:5292-5626 fingerprint = detectWindowsTerminal (0.739)
+//@ chunk-bh9w80kx.js:5292-5626 fingerprint (2.1.88 match: detectWindowsTerminal, 0.739)
 /**
  * Windows 终端选择：wt.exe → pwsh.exe → powershell.exe → cmd.exe（ComSpec）。
  */
@@ -184,7 +184,7 @@ async function detectWindowsTerminal() {
     command: env.ComSpec || `${env.SystemRoot || "C:\\Windows"}\\System32\\cmd.exe`,
   };
 }
-//@ chunk-bh9w80kx.js:5626-5752 layout = detectTerminal (0.92)
+//@ chunk-bh9w80kx.js:5626-5752 layout (2.1.88 match: detectTerminal, 0.92)
 /**
  * 按平台选择终端（分派到 macOS/Linux/Windows 的检测函数）。
  */
@@ -200,7 +200,7 @@ async function detectTerminal() {
       return null;
   }
 }
-//@ chunk-bh9w80kx.js:5752-6228 fingerprint = launchInTerminal (0.649)
+//@ chunk-bh9w80kx.js:5752-6228 fingerprint (2.1.88 match: launchInTerminal, 0.649)
 /**
  * 在检测到的终端里启动 claude，附带 --deep-link-origin、--deep-link-repo、--deep-link-last-fetch、--prefill 等参数，按平台分派。
  */
@@ -230,7 +230,7 @@ async function launchInTerminal(claudePath, action) {
       return false;
   }
 }
-//@ chunk-bh9w80kx.js:6228-7575 fingerprint = launchMacosTerminal (1)
+//@ chunk-bh9w80kx.js:6228-7575 fingerprint (2.1.88 match: launchMacosTerminal, 1)
 /**
  * macOS 启动：iTerm/Terminal.app 用 osascript 执行登录 shell 命令，Ghostty/Alacritty/kitty/WezTerm 用 open -na 传参与工作目录；失败回退 Terminal.app。
  */
@@ -318,7 +318,7 @@ end tell`;
     cwd,
   );
 }
-//@ chunk-bh9w80kx.js:7575-8341 fingerprint = launchLinuxTerminal (1)
+//@ chunk-bh9w80kx.js:7575-8341 fingerprint (2.1.88 match: launchLinuxTerminal, 1)
 /**
  * Linux 启动：按终端名拼工作目录与执行参数（gnome-terminal --、konsole -e、kitty --directory 等），未知终端用 -e 并以 cwd 启动。
  */
@@ -369,7 +369,7 @@ async function launchLinuxTerminal(terminal, claudePath, claudeArgs, cwd) {
     cwd: spawnCwd,
   });
 }
-//@ chunk-bh9w80kx.js:8341-8775 fingerprint = launchWindowsTerminal (0.827)
+//@ chunk-bh9w80kx.js:8341-8775 fingerprint (2.1.88 match: launchWindowsTerminal, 0.827)
 /**
  * Windows 启动：Windows Terminal（-d cwd -- …，; 需转义）、PowerShell（-NoExit -Command & '…'）、cmd（/k 原样参数）。
  */
@@ -399,7 +399,7 @@ async function launchWindowsTerminal(terminal, claudePath, action) {
     cwd: action.cwd,
   });
 }
-//@ chunk-bh9w80kx.js:8775-9174 fingerprint = spawnDetached (0.93)
+//@ chunk-bh9w80kx.js:8775-9174 fingerprint (2.1.88 match: spawnDetached, 0.93)
 /**
  * 分离启动终端进程（detached、stdio ignore、unref）；带 cwd 失败时不带 cwd 重试。
  */
@@ -494,7 +494,7 @@ function psQuote(value) {
     );
   return `'${value.replaceAll('"', "").replaceAll("'", "''")}'`;
 }
-//@ chunk-bh9w80kx.js:10426-10523 fingerprint = cmdQuote (1)
+//@ chunk-bh9w80kx.js:10426-10523 fingerprint (2.1.88 match: cmdQuote, 1)
 /**
  * cmd.exe 参数加引号（去掉 " 和 %、换行变空格、尾部反斜杠加倍）。
  */

@@ -400,7 +400,7 @@ function logAgentSkillPreload(skill, agentId, isBuiltIn) {
     ...buildServerAttributionFields(skill),
   });
 }
-//@ chunk-0h4e7gnq.js:82485-82634 placement = getDestructiveCommandWarning (0.499)
+//@ chunk-0h4e7gnq.js:82485-82634 placement (2.1.88 match: getDestructiveCommandWarning, 0.499)
 /**
  * 取子代理最近一次自我报告的文本，有 warning 时拼在前面；报告来源与当前一致时不取，返回 undefined。被 runAgent 使用。
  */
@@ -608,7 +608,7 @@ async function* abortedToolResults(abortedCall, messageUtils, innerIterator, que
     });
   }
 }
-//@ chunk-0h4e7gnq.js:85666-85808 placement = countToolCallsSince (1)
+//@ chunk-0h4e7gnq.js:85666-85808 placement (2.1.88 match: countToolCallsSince, 1)
 function getToolUseIds(message) {
   return message.type === "assistant" && Array.isArray(message.message.content)
     ? message.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : []))
@@ -696,7 +696,7 @@ function resolveAgentMcpServers(agentType, agentSource, mcpServer) {
     isNewlyCreated: true,
   };
 }
-//@ chunk-0h4e7gnq.js:86788-89986 fingerprint = initializeAgentMcpServers (0.321)
+//@ chunk-0h4e7gnq.js:86788-89986 fingerprint (2.1.88 match: initializeAgentMcpServers, 0.321)
 /**
  * 连接代理 frontmatter 中声明的 MCP 服务器：受 strictPluginOnlyCustomization、--strict-mcp-config、--bare/--safe-mode、远程模式、企业 MCP 配置、云会话、CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG、项目审批与托管策略限制；返回合并后的 clients、该代理专属工具和 cleanup。
  */
@@ -899,7 +899,7 @@ async function initializeAgentMcpServers(
     cleanup,
   };
 }
-//@ chunk-0h4e7gnq.js:89986-90133 fingerprint = isRecordableMessage (1)
+//@ chunk-0h4e7gnq.js:89986-90133 fingerprint (2.1.88 match: isRecordableMessage, 1)
 /**
  * 可记录到子代理转录的消息类型：assistant/user/progress 与 compact_boundary 系统消息。
  */
@@ -960,7 +960,7 @@ async function persistAgentMetadata(agentId, resumed, context, storageV5) {
   }
   await writeAgentMetadata(agentId, context, storageV5);
 }
-//@ chunk-0h4e7gnq.js:91216-91503 placement = isDangerousFilePathToAutoEdit (1)
+//@ chunk-0h4e7gnq.js:91216-91503 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
 /**
  * 把 .claude/worktrees/<名>/<相对路径> 映射回主仓库中的对应路径（防 .. 逃逸）；不在 worktree 下且位于允许根内返回 null，否则原样返回。旧版名 isDangerousFilePathToAutoEdit 误配，应归 worktree 相关模块。
  */
@@ -997,7 +997,7 @@ function isBypassPermissionsAuthorized(permissionContext) {
  */
 var STREAM_TOKEN_ESTIMATE_THROTTLE_MS = 500;
 var MAX_PRELOADED_SKILLS = 32;
-//@ chunk-0h4e7gnq.js:91627-118485 facade-exports = runAgent (0.281)
+//@ chunk-0h4e7gnq.js:91627-118485 facade-exports (2.1.88 match: runAgent, 0.281)
 /**
  * runAgent：子代理主循环（async generator）。解析模型（uYs）、权限模式（spawn 模式/定义 permissionMode/bubble/bypass 授权）、工具集（resolveAgentTools，fork 时 useExactTools 原样继承）、系统提示词与 CLAUDE.md/附件、frontmatter MCP 服务器与 skills 预加载、SubagentStart/SubagentStop 钩子，创建子代理 ToolUseContext 后调用 query 循环，逐条 yield 消息并记录 sidechain 转录；结束时清理 MCP、钩子、监视任务与 worktree 根。
  */
@@ -2806,7 +2806,7 @@ function stopMonitorWsTasksForAgent(agentId, taskRegistry) {
 function isPlainSpawnShape({ stickyBetas, useExactTools, name, recordedUuids }) {
   return stickyBetas === undefined && !useExactTools && name === undefined && recordedUuids === undefined;
 }
-//@ chunk-0h4e7gnq.js:118625-118977 facade-exports = countToolCallsSince (1)
+//@ chunk-0h4e7gnq.js:118625-118977 facade-exports (2.1.88 match: countToolCallsSince, 1)
 function filterIncompleteToolCalls(messages) {
   let resolvedToolUseIds = new Set();
   for (let message of messages)
@@ -2829,7 +2829,7 @@ function filterIncompleteToolCalls(messages) {
     return true;
   });
 }
-//@ chunk-0h4e7gnq.js:118977-119175 fingerprint = getAgentSystemPrompt (0.746)
+//@ chunk-0h4e7gnq.js:118977-119175 fingerprint (2.1.88 match: getAgentSystemPrompt, 0.746)
 /**
  * 渲染代理系统提示词（含已加载的代理记忆）；失败时回退默认子代理提示词。
  */

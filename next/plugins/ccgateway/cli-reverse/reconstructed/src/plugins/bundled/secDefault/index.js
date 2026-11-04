@@ -467,7 +467,7 @@ var isProtectedEnvKey = (ctx, name) =>
  * 托管 MCP 列表不可读
  */
 var isManagedMcpUnreadable = (ctx) => ctx.managedMcpServersUnreadable === true;
-//@ chunk-ykab7xp3.js:10079-10123 placement = setCwdState (1)
+//@ chunk-ykab7xp3.js:10079-10123 placement (2.1.88 match: setCwdState, 1)
 var nfcLower = (cwd) => cwd.normalize("NFC").toLowerCase();
 //@ chunk-ykab7xp3.js:10123-10205 placement
 /**
@@ -581,7 +581,7 @@ function orderOrgToolsFirst(ctx, orgTools, otherTools) {
         ],
       };
 }
-//@ chunk-ykab7xp3.js:11646-11761 placement = getMcpPrefix (1)
+//@ chunk-ykab7xp3.js:11646-11761 placement (2.1.88 match: getMcpPrefix, 1)
 function getMcpPrefix(ctx, serverName, toolName, cwd) {
   let prefix = `${normalizeToolPrefix(`mcp__${serverName}__${toolName}`)}_`;
   return (

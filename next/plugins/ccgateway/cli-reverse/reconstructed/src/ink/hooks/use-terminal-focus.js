@@ -16,7 +16,7 @@ import { useContext } from "../../../vendor/react/cjs/react.production.js";
  * 终端焦点上下文
  */
 var TerminalFocusContext = TerminalFocusContext_2;
-//@ chunk-cg10fy59.js:792-846 placement = useTerminalFocus (1)
+//@ chunk-cg10fy59.js:792-846 placement (2.1.88 match: useTerminalFocus, 1)
 /**
  * 读取终端窗口当前是否有焦点。
  */

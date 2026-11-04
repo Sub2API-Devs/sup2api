@@ -10,7 +10,7 @@
  */
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:1733646-1734080 fingerprint = rename (0.625)
+//@ chunk-e6aww6q8.js:1733646-1734080 fingerprint (2.1.88 match: rename, 0.625)
 /**
  * /rename 命令对象（local-jsx）；描述：Rename the current conversation；别名 ["name"]；实现 chunk-wqa2f5xk.js 的 Hzi。
  */

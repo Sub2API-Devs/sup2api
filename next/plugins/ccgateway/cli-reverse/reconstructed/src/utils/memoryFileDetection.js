@@ -32,7 +32,7 @@ function toComparable(p) {
   let posixForm = toPosix(p);
   return memoryFileDetectionDisabled ? posixForm.toLowerCase() : posixForm;
 }
-//@ chunk-e6aww6q8.js:1463553-1463744 fingerprint = detectSessionFileType (0.887)
+//@ chunk-e6aww6q8.js:1463553-1463744 fingerprint (2.1.88 match: detectSessionFileType, 0.887)
 function detectSessionFileType_2(filePath) {
   let configDir = getClaudeConfigDirOrNull();
   if (configDir === null) return null;
@@ -42,7 +42,7 @@ function detectSessionFileType_2(filePath) {
   if (normalized.includes("/projects/") && normalized.endsWith(".jsonl")) return "session_transcript";
   return null;
 }
-//@ chunk-e6aww6q8.js:1463744-1463907 fingerprint = detectSessionPatternType (0.922)
+//@ chunk-e6aww6q8.js:1463744-1463907 fingerprint (2.1.88 match: detectSessionPatternType, 0.922)
 /**
  * glob 模式是否指向会话转录（projects/**\/*.jsonl）。
  */
@@ -57,7 +57,7 @@ function isAutoMemFilePath(filePath) {
   if (isAutoMemoryEnabled()) return isAutoMemPath(filePath);
   return false;
 }
-//@ chunk-e6aww6q8.js:1463952-1464029 fingerprint = memoryScopeForPath (1)
+//@ chunk-e6aww6q8.js:1463952-1464029 fingerprint (2.1.88 match: memoryScopeForPath, 1)
 /**
  * 记忆路径的作用域：team 或 personal。
  */
@@ -82,7 +82,7 @@ function isMemoryOrSessionFile(filePath) {
   if (isAutoMemPattern(filePath)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:1464181-1464635 fingerprint = isMemoryDirectory (1)
+//@ chunk-e6aww6q8.js:1464181-1464635 fingerprint (2.1.88 match: isMemoryDirectory, 1)
 /**
  * 路径是否为记忆目录（agent-memory、agent-memory-local、projects/*\/memory 等）。
  */
@@ -140,7 +140,7 @@ function isShellCommandTargetingMemory(command) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1465045-1465221 fingerprint = isAutoManagedMemoryPattern (1)
+//@ chunk-e6aww6q8.js:1465045-1465221 fingerprint (2.1.88 match: isAutoManagedMemoryPattern, 1)
 function isAutoManagedMemoryPattern(pattern) {
   if (detectSessionPatternType(pattern) !== null) return true;
   if (

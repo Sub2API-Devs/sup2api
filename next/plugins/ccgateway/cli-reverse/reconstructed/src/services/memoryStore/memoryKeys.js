@@ -31,7 +31,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
  * 记忆存储里排除的顶层目录（team、logs、sessions、proposals）。
  */
 var EXCLUDED_TOP_LEVEL_DIRS = ["team", "logs", "sessions", "proposals"];
-//@ chunk-a477qqne.js:1379-1456 placement = setCwdState (1)
+//@ chunk-a477qqne.js:1379-1456 placement (2.1.88 match: setCwdState, 1)
 /**
  * 归一化记忆键路径段（NFC、去尾部点空格、小写）。
  */
@@ -55,7 +55,7 @@ function isExcludedMemoryKey(key) {
 function getPersonalMemoryDir() {
   return getAutoMemPath();
 }
-//@ chunk-a477qqne.js:1709-1867 placement = isRealPathWithinTeamDir (1)
+//@ chunk-a477qqne.js:1709-1867 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function isRealPathWithinAutoMemDir(realCandidate) {
   let realTeamDir;
   try {
@@ -91,7 +91,7 @@ async function resolvePersonalMemoryPath(key) {
       );
   return resolvedPath;
 }
-//@ chunk-a477qqne.js:2344-2493 placement = isTeamSubscriber (1)
+//@ chunk-a477qqne.js:2344-2493 placement (2.1.88 match: isTeamSubscriber, 1)
 async function isTeamSubscriber() {
   let mapped = EXCLUDED_TOP_LEVEL_DIRS.map((subtree) =>
     subtree === "team" ? getMemoryDirNfc().replace(/[/\\]+$/, "") : join(getAutoMemPath(), subtree),
@@ -103,7 +103,7 @@ async function isTeamSubscriber() {
     } catch {}
   return resolvedDirs;
 }
-//@ chunk-a477qqne.js:2493-2704 placement = setCwdState (1)
+//@ chunk-a477qqne.js:2493-2704 placement (2.1.88 match: setCwdState, 1)
 function isOutsideAllowedRoot(cwd) {
   let autoMemPathOrNull = getAutoMemPathOrNull();
   if (autoMemPathOrNull === null) return false;

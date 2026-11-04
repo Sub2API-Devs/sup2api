@@ -87,13 +87,13 @@ function describeMcpToolForLog(tool, mcpClients) {
     ...mcpToolAnalyticsFields(tool.name, isLoggable),
   };
 }
-//@ chunk-e6aww6q8.js:3760835-3760875 fingerprint = CODE_EDITING_TOOLS (1)
+//@ chunk-e6aww6q8.js:3760835-3760875 fingerprint (2.1.88 match: CODE_EDITING_TOOLS, 1)
 var CODE_EDITING_TOOLS = ["Edit", "Write", "NotebookEdit"];
 //@ chunk-e6aww6q8.js:3760875-3760914 file-local
 function isCodeEditingTool(toolName) {
   return CODE_EDITING_TOOLS.includes(toolName);
 }
-//@ chunk-e6aww6q8.js:3760914-3761121 fingerprint = buildCodeEditToolAttributes (1)
+//@ chunk-e6aww6q8.js:3760914-3761121 fingerprint (2.1.88 match: buildCodeEditToolAttributes, 1)
 async function buildCodeEditToolAttributes(tool, input, decision, source) {
   let language;
   if (tool.getPath && input) {
@@ -112,7 +112,7 @@ async function buildCodeEditToolAttributes(tool, input, decision, source) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3761121-3761383 fingerprint = sourceToString (1)
+//@ chunk-e6aww6q8.js:3761121-3761383 fingerprint (2.1.88 match: sourceToString, 1)
 function sourceToString(source) {
   if (source.type === "classifier") return "classifier";
   switch (source.type) {
@@ -128,7 +128,7 @@ function sourceToString(source) {
       return "unknown";
   }
 }
-//@ chunk-e6aww6q8.js:3761704-3761889 fingerprint = baseMetadata (0.921)
+//@ chunk-e6aww6q8.js:3761704-3761889 fingerprint (2.1.88 match: baseMetadata, 0.921)
 function baseMetadata(tool, messageId, waitMs, mcpClients) {
   return {
     messageID: sanitizeMarkName(messageId),
@@ -167,7 +167,7 @@ function destructiveCommandFields(tool, input, permissionMode) {
     permission_mode: fromEnum(permissionMode),
   };
 }
-//@ chunk-e6aww6q8.js:3762233-3762841 fingerprint = logApprovalEvent (0.825)
+//@ chunk-e6aww6q8.js:3762233-3762841 fingerprint (2.1.88 match: logApprovalEvent, 0.825)
 function logApprovalEvent(tool, messageId, source, waitMs, extraFields, mcpClients, promptFields) {
   if (source === "config") {
     logEvent("tengu_tool_use_granted_in_config", {
@@ -212,7 +212,7 @@ function logApprovalEvent(tool, messageId, source, waitMs, extraFields, mcpClien
       break;
   }
 }
-//@ chunk-e6aww6q8.js:3762841-3763211 fingerprint = logRejectionEvent (0.763)
+//@ chunk-e6aww6q8.js:3762841-3763211 fingerprint (2.1.88 match: logRejectionEvent, 0.763)
 function logRejectionEvent(tool, messageId, source, waitMs, extraFields, mcpClients, promptFields) {
   if (source === "config") {
     logEvent("tengu_tool_use_denied_in_config", {
@@ -352,7 +352,7 @@ function logPermissionDecision(logContext, outcome, shownAtMs) {
       );
   } catch {}
 }
-//@ chunk-e6aww6q8.js:3764485-3765505 fingerprint = logPermissionDecision (0.585)
+//@ chunk-e6aww6q8.js:3764485-3765505 fingerprint (2.1.88 match: logPermissionDecision, 0.585)
 /**
  * 记录一次权限决策：批准/拒绝事件、来源（config/classifier/hook/user_permanent/user_temporary/user_abort）、OTEL tool_decision。
  */

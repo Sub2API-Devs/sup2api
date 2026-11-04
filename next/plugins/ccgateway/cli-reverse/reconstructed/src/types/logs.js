@@ -23,7 +23,7 @@ function isCommonInfoArg(arg) {
  */
 var MAX_LOG_LINE_CHARS = 64;
 var MAX_LOGS = 100;
-//@ chunk-bbtre4r8.js:10396-10549 fingerprint = sortLogs (1)
+//@ chunk-bbtre4r8.js:10396-10549 fingerprint (2.1.88 match: sortLogs, 1)
 function sortLogs(logs) {
   return logs.sort((left, right) => {
     let modifiedDiff = right.modified.getTime() - left.modified.getTime();

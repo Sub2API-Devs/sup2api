@@ -63,7 +63,7 @@ function sessionTempDirRealpath() {
 function taskRootUnderTemp(id) {
   return join_2(getClaudeTempDirRealpath(), sanitizePath(id)) + sep_2;
 }
-//@ chunk-g54kbxqw.js:46626-46742 placement = normalizeFilePath (1)
+//@ chunk-g54kbxqw.js:46626-46742 placement (2.1.88 match: normalizeFilePath, 1)
 function normalizeFilePath(filePath) {
   if (
     isNonWslUncPath(filePath) ||

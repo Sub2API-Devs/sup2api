@@ -19,7 +19,7 @@ import { Box, Text } from "../ink/components/Text.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:1196896-1198240 fingerprint = IdleReturnDialog (0.463)
+//@ chunk-18hwfzwa.js:1196896-1198240 fingerprint (2.1.88 match: IdleReturnDialog, 0.463)
 function IdleReturnDialog(props) {
   let $ = useMemoCache(22);
   let {

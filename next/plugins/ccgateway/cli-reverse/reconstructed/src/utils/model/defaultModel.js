@@ -504,7 +504,7 @@ function resolveAvailableModels(model, envFamily, concreteBaseline) {
   if (firstSkipped !== undefined) return firstSkipped.adopt();
   return steered !== null ? adoptEntry(steered) : null;
 }
-//@ chunk-aepeg2w5.js:450425-450565 placement = getFastModeModel (0.455)
+//@ chunk-aepeg2w5.js:450425-450565 placement (2.1.88 match: getFastModeModel, 0.455)
 /**
  * 判断别名解析出的模型是否应加 [1m]：旧模型或非 claude- 前缀按规则；opus 在第一方时看 isOpus1mMergeEnabled。旧版名 getFastModeModel 为错配，应归 utils/model/model.ts。
  */
@@ -514,7 +514,7 @@ function eligible1mSuffixTarget(model, options) {
   if (!canonical.startsWith("claude-")) return true;
   return canonical.includes("opus") && usesFirstPartyModelIds() ? isOpus1mMergeEnabled() : true;
 }
-//@ chunk-aepeg2w5.js:450565-450738 placement = modelMatchesVersionPrefix (0.776)
+//@ chunk-aepeg2w5.js:450565-450738 placement (2.1.88 match: modelMatchesVersionPrefix, 0.776)
 /**
  * 去掉 [1m] 后的规范名是否为不支持 1M 合并的旧模型（3.x、opus-4-0/4-1/4-5、haiku-4-5）。
  */
@@ -528,7 +528,7 @@ function isKnownNon1mTarget(model, entry) {
     trimmed_2 !== trimmed && entry?.overridesMap === undefined && isLegacyNo1mModel(getCanonicalName(trimmed))
   );
 }
-//@ chunk-aepeg2w5.js:450738-450923 placement = aliasMatchesParentTier (0.756)
+//@ chunk-aepeg2w5.js:450738-450923 placement (2.1.88 match: aliasMatchesParentTier, 0.756)
 /**
  * [族, ANTHROPIC_DEFAULT_*_MODEL 值, 序号, 内置默认取值函数]（haiku/sonnet/opus）。
  */
@@ -712,7 +712,7 @@ function isWindowSilentDefaultPick(model) {
     (isModelKeyAlias(lower) && lower === strip1mSuffix(lower))
   );
 }
-//@ chunk-aepeg2w5.js:454094-454270 placement = modelMatchesVersionPrefix (1)
+//@ chunk-aepeg2w5.js:454094-454270 placement (2.1.88 match: modelMatchesVersionPrefix, 1)
 /**
  * 别名展开成内置默认模型（小写）；旧 Opus 4/4.1 在重映射时展开成最新 Opus。
  */

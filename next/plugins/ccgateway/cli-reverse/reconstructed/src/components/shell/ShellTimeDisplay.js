@@ -13,7 +13,7 @@ import { formatDuration } from "../../utils/format.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-dnj0hze9.js:809-1425 fingerprint = ShellTimeDisplay (1)
+//@ chunk-dnj0hze9.js:809-1425 fingerprint (2.1.88 match: ShellTimeDisplay, 1)
 function ShellTimeDisplay(props) {
   let $ = useMemoCache(10);
   let { elapsedTimeSeconds, timeoutMs } = props;

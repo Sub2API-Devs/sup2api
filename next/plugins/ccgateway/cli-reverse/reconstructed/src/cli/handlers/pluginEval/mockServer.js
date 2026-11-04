@@ -235,7 +235,7 @@ async function readFixture(fixturePath) {
 //@ chunk-vzw8h259.js:13638-13660 placement
 var MAX_AGENT_INPUT_SUBSTITUTION_CHARS = 16384;
 var MAX_AGENT_INPUT_CHARS = 16384;
-//@ chunk-vzw8h259.js:13660-13724 placement = extractToolInputForTelemetry (1)
+//@ chunk-vzw8h259.js:13660-13724 placement (2.1.88 match: extractToolInputForTelemetry, 1)
 function extractToolInputForTelemetry(input) {
   return input.length > MAX_AGENT_INPUT_CHARS
     ? `${truncateToLength(input, MAX_AGENT_INPUT_CHARS)}\u2026[truncated]`

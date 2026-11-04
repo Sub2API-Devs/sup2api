@@ -18,7 +18,7 @@ import {
   noEventPriority,
 } from "../../../vendor/yoga-layout/dist/src/generated/YGEnums.js";
 
-//@ chunk-bzr73sfg.js:188315-188447 fingerprint = getHandler (1)
+//@ chunk-bzr73sfg.js:188315-188447 fingerprint (2.1.88 match: getHandler, 1)
 /**
  * 取节点上某事件类型的冒泡或捕获处理器。
  */
@@ -31,7 +31,7 @@ function getHandler(node, eventType, capture) {
   if (!propName) return;
   return handlers[propName];
 }
-//@ chunk-bzr73sfg.js:188447-188704 fingerprint = collectListeners (1)
+//@ chunk-bzr73sfg.js:188447-188704 fingerprint (2.1.88 match: collectListeners, 1)
 /**
  * 从目标沿父链收集监听器：捕获处理器放前面（unshift），冒泡处理器放后面（事件不冒泡时只取目标自身），标注阶段。
  */
@@ -58,7 +58,7 @@ function collectListeners(target, event) {
   }
   return listeners;
 }
-//@ chunk-bzr73sfg.js:188704-188979 fingerprint = processDispatchQueue (0.875)
+//@ chunk-bzr73sfg.js:188704-188979 fingerprint (2.1.88 match: processDispatchQueue, 0.875)
 /**
  * 按顺序执行监听器：立即停止传播则中断，停止传播则在换节点时中断；处理器抛错只记日志。
  */
@@ -78,7 +78,7 @@ function processDispatchQueue(listeners, event) {
     previousNode = node;
   }
 }
-//@ chunk-bzr73sfg.js:188979-189183 fingerprint = getEventPriority (0.905)
+//@ chunk-bzr73sfg.js:188979-189183 fingerprint (2.1.88 match: getEventPriority, 0.905)
 /**
  * 事件类型 → React 更新优先级：离散事件（按键、点击、焦点、粘贴、action）为 Discrete，连续事件（resize/scroll/wheel/mousemove）为 Continuous，其余 Default。
  */
@@ -101,7 +101,7 @@ function getEventPriority(eventType) {
       return defaultEventPriority;
   }
 }
-//@ chunk-bzr73sfg.js:189183-190017 fingerprint = Dispatcher (0.956)
+//@ chunk-bzr73sfg.js:189183-190017 fingerprint (2.1.88 match: Dispatcher, 0.956)
 /**
  * Ink 的 DOM 事件分发器：dispatch 收集监听器并执行，返回是否未被 preventDefault；dispatchDiscrete 走 reconciler.discreteUpdates；dispatchContinuous 临时把优先级设为 Continuous。resolveEventPriority 供 reconciler 的 getCurrentUpdatePriority 使用。
  */

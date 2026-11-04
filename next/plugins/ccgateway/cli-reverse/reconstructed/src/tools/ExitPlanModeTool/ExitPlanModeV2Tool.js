@@ -59,7 +59,7 @@ import { toolMissingInDiskless } from "../AgentTool/agentEffort.js";
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fnhsh6ng.js:5426-6724 fingerprint = outputSchema (0.634)
+//@ chunk-fnhsh6ng.js:5426-6724 fingerprint (2.1.88 match: outputSchema, 0.634)
 /**
  * ExitPlanMode 的 schema：allowedPrompts（已废弃）、diskless 下的 plan JSON schema、32768 字节上限、注入 plan/planFilePath 的规范化输入、输出（plan/isAgent/filePath/hasTaskTool/planWasEdited/awaitingLeaderApproval/requestId）。
  */
@@ -121,7 +121,7 @@ deferInit("chunk-fnhsh6ng.js:5426", () => {
     }),
   );
 });
-//@ chunk-fnhsh6ng.js:6834-13234 fingerprint = ExitPlanModeV2Tool (0.715)
+//@ chunk-fnhsh6ng.js:6834-13234 fingerprint (2.1.88 match: ExitPlanModeV2Tool, 0.715)
 /**
  * ExitPlanMode 工具（V2；shouldDefer，非只读，requiresUserInteraction 除队友外为真）。isEnabled：有 channels 的非交互会话或无可用提问通道的非交互会话时关闭。diskless 会话（host launchOptions.diskless）改用 `plan` 参数（≤32768 字节 JSON），否则从计划文件读取。validateInput：fork 子代理不能退出；非计划模式报错提示先 EnterPlanMode。checkPermissions：队友直接允许，否则询问 "Exit plan mode?"。call：队友需审批时把 plan_approval_request 写入 team-lead 邮箱并返回等待状态；否则恢复 prePlanMode（auto 模式不可用时回退 default 并发通知，恢复/剥离危险规则），结果附已批准的计划与计划文件路径。
  */

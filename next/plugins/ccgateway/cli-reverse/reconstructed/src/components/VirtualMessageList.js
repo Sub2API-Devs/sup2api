@@ -222,7 +222,7 @@ function stickyPromptText(promptText, msg) {
   promptText.set(msg, result);
   return result;
 }
-//@ chunk-ag5x7vhf.js:160559-160996 fingerprint = computeStickyPromptText (0.933)
+//@ chunk-ag5x7vhf.js:160559-160996 fingerprint (2.1.88 match: computeStickyPromptText, 0.933)
 function computeStickyPromptText(msg) {
   let raw = null;
   if (msg.type === "user") {
@@ -242,7 +242,7 @@ function computeStickyPromptText(msg) {
   if (t.startsWith("<") || t === "") return null;
   return t;
 }
-//@ chunk-ag5x7vhf.js:160996-161474 fingerprint = VirtualItem (0.854)
+//@ chunk-ag5x7vhf.js:160996-161474 fingerprint (2.1.88 match: VirtualItem, 0.854)
 function VirtualItem({
   itemKey,
   msg,
@@ -275,7 +275,7 @@ function VirtualItem({
     }),
   });
 }
-//@ chunk-ag5x7vhf.js:161474-172316 fingerprint = VirtualMessageList (0.833)
+//@ chunk-ag5x7vhf.js:161474-172316 fingerprint (2.1.88 match: VirtualMessageList, 0.833)
 /**
  * 虚拟滚动消息列表：useVirtualScroll 计算可见区间，只挂载视口内的 VirtualItem；支持搜索索引（warmSearchIndex/setSearchQuery）、高亮跳转与 StickyTracker 置顶提示。
  */
@@ -1051,7 +1051,7 @@ function scrollToElement(handle, node, computedTop) {
   handle.scrollToElement(node, topMargin);
   raiseScrollHeight(handle);
 }
-//@ chunk-ag5x7vhf.js:172392-172537 sole-consumer = dropSubtreeCache (0.771)
+//@ chunk-ag5x7vhf.js:172392-172537 sole-consumer (2.1.88 match: dropSubtreeCache, 0.771)
 function leadingTopMargin(node) {
   let margin = 0;
   let child = node.childNodes[0];
@@ -1074,7 +1074,7 @@ function findStreamingMessageIndex(messages, streamingToolUseIDs) {
       message.uuid.slice(0, UUID_PREFIX_LENGTH) === streamingToolUseIDs.slice(0, UUID_PREFIX_LENGTH),
   );
 }
-//@ chunk-ag5x7vhf.js:172708-172936 sole-consumer = countToolCallsSince (1)
+//@ chunk-ag5x7vhf.js:172708-172936 sole-consumer (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_3(msg) {
   let firstBlock = msg.type === "assistant" || msg.type === "user" ? msg.message.content[0] : undefined;
   if (typeof firstBlock !== "object") return msg.uuid;
@@ -1124,7 +1124,7 @@ function LayoutSubscriber(props) {
   useEffect(subscribeEffect, subscribeDeps);
   return null;
 }
-//@ chunk-ag5x7vhf.js:173905-175325 fingerprint = StickyTracker (0.777)
+//@ chunk-ag5x7vhf.js:173905-175325 fingerprint (2.1.88 match: StickyTracker, 0.777)
 function StickyTracker({
   messages,
   start,

@@ -16,7 +16,7 @@ import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js"
 import { isValidRemotePathSegment } from "../../services/autoModeSetup/homeRepoScan.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:196286-196948 fingerprint = GIT_LOG_DISPLAY_FLAGS (0.352)
+//@ chunk-82kqcve8.js:196286-196948 fingerprint (2.1.88 match: GIT_LOG_DISPLAY_FLAGS, 0.352)
 /**
  * git 只读子命令共用的 flag 白名单片段（flag → 参数类型 none/string/number）。另含 %G / %(signature) 格式占位正则：会触发 gpg 验签（执行外部程序），所以格式串里出现即视为危险。
  */
@@ -112,7 +112,7 @@ function hasDangerousGitFormatArg(args) {
   }
   return false;
 }
-//@ chunk-82kqcve8.js:197581-208126 fingerprint = GIT_READ_ONLY_COMMANDS (0.995)
+//@ chunk-82kqcve8.js:197581-208126 fingerprint (2.1.88 match: GIT_READ_ONLY_COMMANDS, 0.995)
 /**
  * git 只读子命令白名单（git diff/log/show/status/blame/ls-files/rev-parse/branch/tag/worktree list 等 24 项）：每项 safeFlags + 可选 additionalCommandIsDangerousCallback（拦格式串、写操作参数）。
  */
@@ -790,7 +790,7 @@ var TILDE_USER_PATTERN = /^~(?!\/|$)/;
 function isTildeUserPath(pathOrCommand) {
   return TILDE_USER_PATTERN.test(pathOrCommand);
 }
-//@ chunk-82kqcve8.js:208334-208696 layout = ghIsDangerousCallback (1)
+//@ chunk-82kqcve8.js:208334-208696 layout (2.1.88 match: ghIsDangerousCallback, 1)
 /**
  * gh 只读命令的附加危险检查：参数含 ~、占位符、URL（://）、@ 或两个以上 '/'（可能指向其他主机/仓库）时视为危险。
  */
@@ -813,7 +813,7 @@ function ghIsDangerousCallback(_rawCommand, args) {
   }
   return false;
 }
-//@ chunk-82kqcve8.js:208696-215177 fingerprint = GH_READ_ONLY_COMMANDS (0.97)
+//@ chunk-82kqcve8.js:208696-215177 fingerprint (2.1.88 match: GH_READ_ONLY_COMMANDS, 0.97)
 /**
  * gh 只读子命令白名单（pr/issue/repo/run/release/workflow/label/search 的 view/list/status 等）。
  */
@@ -1229,7 +1229,7 @@ function hasDockerDangerousFlag(args) {
     return false;
   });
 }
-//@ chunk-82kqcve8.js:215424-217047 fingerprint = RIPGREP_READ_ONLY_COMMANDS (0.876)
+//@ chunk-82kqcve8.js:215424-217047 fingerprint (2.1.88 match: RIPGREP_READ_ONLY_COMMANDS, 0.876)
 /**
  * docker logs/inspect 与 rg 的只读 flag 白名单：每个 flag 标注值类型；docker 另有回调拦截改连接目标的 flag、~ 展开与危险参数。
  */
@@ -1387,7 +1387,7 @@ function isFlagToken(token) {
 }
 //@ chunk-82kqcve8.js:218105-218134 layout
 var TENGU_AMBER_THIMBLE = "tengu_amber_thimble";
-//@ chunk-82kqcve8.js:218134-218339 fingerprint = validateFlagArgument (1)
+//@ chunk-82kqcve8.js:218134-218339 fingerprint (2.1.88 match: validateFlagArgument, 1)
 /**
  * 校验 flag 参数值是否符合类型：none 无值、number 纯数字、string 任意、char 单字符、{} / EOF 字面量。
  */
@@ -1412,7 +1412,7 @@ function validateFlagArgument(value, argType) {
 //@ chunk-82kqcve8.js:218339-218382 layout
 var URL_SCHEME_SEPARATOR_PATTERN = /:[\\/]{2}/;
 var TENGU_JAUNTY_HONEY = "tengu_jaunty_honey";
-//@ chunk-82kqcve8.js:218382-219856 fingerprint = validateFlags (0.839)
+//@ chunk-82kqcve8.js:218382-219856 fingerprint (2.1.88 match: validateFlags, 0.839)
 /**
  * 按白名单逐个校验 token：未知 flag、需值却缺值、值以 - 开头、值类型不符一律 false；支持 `--`、组合短 flag（全为 none 型）、grep/rg 的 -A3 粘连数字、git 的 -<数字>、xargs 目标命令；Windows 上 git 参数含 :// 或占位符且 tengu_jaunty_honey 开时直接拒绝；tengu_amber_thimble 放宽 flag 识别。
  */
@@ -1530,7 +1530,7 @@ function validateFlags(tokens, startIndex, config, options) {
   }
   return true;
 }
-//@ chunk-2a8yx6fc.js:24598-24834 fingerprint = ghIsDangerousCallback (1)
+//@ chunk-2a8yx6fc.js:24598-24834 fingerprint (2.1.88 match: ghIsDangerousCallback, 1)
 /**
  * 从 git remote URL（scheme:// 或 scp 风格 host:path）取主机名，单字母主机（Windows 盘符）排除，主机名不合法返回 undefined。属于 auto mode 环境采集的 repo 信息，误归只读校验（旧版名 ghIsDangerousCallback 错配）。
  */

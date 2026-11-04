@@ -150,7 +150,7 @@ function isAutoModePermissionSurface(toolPermissionContext) {
       !toolPermissionContext.isBypassPermissionsModeAvailable)
   );
 }
-//@ chunk-bwbq4xvm.js:171819-171879 placement = handleAutoModeTransition (0.799)
+//@ chunk-bwbq4xvm.js:171819-171879 placement (2.1.88 match: handleAutoModeTransition, 0.799)
 function isAutoClassifierActive(fromMode, toMode = false) {
   return fromMode === "auto" || (fromMode === "plan" && !toMode && isAutoModeActive());
 }

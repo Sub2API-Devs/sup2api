@@ -56,7 +56,7 @@ import { getLastInteractionTime } from "../bootstrap/state.js";
 import { getPrStatus, currentPrStatusFetcher } from "../utils/ghPrStatus.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-qgpgvvwv.js:624-808 fingerprint = INITIAL_STATE (0.568)
+//@ chunk-qgpgvvwv.js:624-808 fingerprint (2.1.88 match: INITIAL_STATE, 0.568)
 function INITIAL_STATE(reference, url) {
   if (!reference || !url) return null;
   let isCrOnly = reference.kind === "cr" && false;

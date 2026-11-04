@@ -62,7 +62,7 @@ deferInit("chunk-ymw5z3js.js:253", () => {
   SUBAGENT_TYPE_REQUIRED =
     "subagent_type is required: the general-purpose agent is not available in this session";
 });
-//@ chunk-4121qate.js:289509-289524 fingerprint = AGENT_TOOL_NAME (1)
+//@ chunk-4121qate.js:289509-289524 fingerprint (2.1.88 match: AGENT_TOOL_NAME, 1)
 /**
  * "Agent"：Agent 工具名常量（同块为其他模块代码）。
  */

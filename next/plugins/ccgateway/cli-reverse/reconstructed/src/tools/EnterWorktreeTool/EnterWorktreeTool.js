@@ -59,7 +59,7 @@ var UNSAFE_DISPLAY_CHARS_REGEX =
 function sanitizeForDisplay(text) {
   return text.replace(UNSAFE_DISPLAY_CHARS_REGEX, "\uFFFD");
 }
-//@ chunk-kxyd0g16.js:120808-126914 fingerprint = EnterWorktreeTool (0.302)
+//@ chunk-kxyd0g16.js:120808-126914 fingerprint (2.1.88 match: EnterWorktreeTool, 0.302)
 /**
  * EnterWorktree 工具（shouldDefer，未声明 isEnabled）。输入 name（新建，按段校验，≤64）或 path（进入现有 worktree），二者互斥。validateInput：被固定 cwd 的子代理只能用 path；已在 worktree 会话中只能用 path 切换。checkPermissions：新建直接允许；path 在 .claude/worktrees 管理位置内直接允许，否则以 safetyCheck 询问（会迁移工作目录、写权限和项目配置来源，classifier 不可代批）。call：子代理场景只切换该代理 cwd 并返回 working_directory contextLayer；主会话新建/进入 worktree（git 或配置的 hooks），切 cwd、originalCwd，保存 worktree 状态并清缓存，消息区分 Created/Reused/Resumed/Entered。 EnterWorktree 输入 schema（name/path 互斥）与输出 schema（worktreePath/worktreeBranch/message）。
  */

@@ -378,7 +378,7 @@ function lastAssistantText(messages) {
   }
   return "";
 }
-//@ chunk-e6aww6q8.js:3753398-3753484 placement = extractErrorTypeFromData (1)
+//@ chunk-e6aww6q8.js:3753398-3753484 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function unwrapUserMessage(data) {
   if ("type" in data) return;
   let { message } = data;

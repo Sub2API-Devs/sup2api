@@ -29,7 +29,7 @@ import { getMcpConfigsByScope } from "../../services/mcp/config.js";
 import { getInstalledPlugins } from "../../utils/plugins/installedPluginsManager.js";
 import { findPluginName, parsePluginIdentifier_2 } from "../../utils/plugins/pluginIdentifier.js";
 
-//@ chunk-ag5x7vhf.js:70603-71065 fingerprint = _temp (0.498)
+//@ chunk-ag5x7vhf.js:70603-71065 fingerprint (2.1.88 match: _temp, 0.498)
 /**
  * 汇总启动横幅 Channels 提示所需的状态：允许的频道列表、本会话是否关闭、策略判定是否待定、是否第三方提供商、是否被策略屏蔽、显示文本以及不在允许列表里的条目。
  */
@@ -65,7 +65,7 @@ function getChannelsNoticeState() {
 function hasNonDevChannel(channel) {
   return !channel.dev;
 }
-//@ chunk-ag5x7vhf.js:71095-71209 callgraph-fingerprint = _temp3 (0.662)
+//@ chunk-ag5x7vhf.js:71095-71209 callgraph-fingerprint (2.1.88 match: _temp3, 0.662)
 function renderChannelWarningRow(u) {
   return jsxProd_default_2(
     Text,
@@ -87,7 +87,7 @@ function renderChannelWarningRowAlt(entry) {
     `${formatChannelEntry(entry.entry)}:${entry.why}`,
   );
 }
-//@ chunk-ag5x7vhf.js:71323-73721 fingerprint = ChannelsNotice (0.375)
+//@ chunk-ag5x7vhf.js:71323-73721 fingerprint (2.1.88 match: ChannelsNotice, 0.375)
 function ChannelsNotice() {
   let $ = useMemoCache(38);
   let [t0] = useState(getChannelsNoticeState);
@@ -278,11 +278,11 @@ function ChannelsNotice() {
   } else activeBox = $[37];
   return activeBox;
 }
-//@ chunk-ag5x7vhf.js:73721-73816 placement = _temp2 (1)
+//@ chunk-ag5x7vhf.js:73721-73816 placement (2.1.88 match: _temp2, 1)
 function formatChannelEntry(c) {
   return c.kind === "plugin" ? `plugin:${c.name}@${c.marketplace}` : `server:${c.name}`;
 }
-//@ chunk-ag5x7vhf.js:73816-74592 fingerprint = findUnmatched (0.97)
+//@ chunk-ag5x7vhf.js:73816-74592 fingerprint (2.1.88 match: findUnmatched, 0.97)
 function findUnmatched(entries, allowlist) {
   let scopes = ["enterprise", "managed", "user", "project", "local"];
   let configured = new Set();

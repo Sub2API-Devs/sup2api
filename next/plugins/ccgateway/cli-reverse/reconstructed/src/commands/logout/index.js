@@ -10,7 +10,7 @@
  */
 import { env } from "../../utils/env.js";
 
-//@ chunk-e6aww6q8.js:1731822-1732051 fingerprint = default (0.732)
+//@ chunk-e6aww6q8.js:1731822-1732051 fingerprint (2.1.88 match: default, 0.732)
 /**
  * /logout 命令对象（local-jsx）；描述：Sign out from your Anthropic account；isEnabled: ()=>!i.DISABLE_LOGOUT_COMMAND；实现 chunk-tndsj50r.js 的 u。
  */

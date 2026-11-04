@@ -43,7 +43,7 @@ import { writeToMailbox } from "../../utils/teammateMailbox.js";
 import { swarmHostState } from "../../utils/swarm/hostState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:146123-150001 fingerprint = TaskUpdateTool (0.765)
+//@ chunk-kxyd0g16.js:146123-150001 fingerprint (2.1.88 match: TaskUpdateTool, 0.765)
 /**
  * TaskUpdate 工具（并发安全、shouldDefer）：更新 subject/description/activeForm/owner/metadata（null 删除键）、status（deleted 即删除），completed 前跑 TaskCompleted 钩子；agent swarms 下 in_progress 自动认领 owner、设置 owner 时给其邮箱发 task_assignment；addBlocks/addBlockedBy 建立双向依赖。
  */

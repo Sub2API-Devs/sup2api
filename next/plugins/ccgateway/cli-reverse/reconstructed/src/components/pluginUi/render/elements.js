@@ -583,7 +583,7 @@ ${fieldText.slice(min_2)}`,
 deferInit("chunk-bc20zedk.js:11053", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:11057-11116 placement = isConnectionError (1)
+//@ chunk-bc20zedk.js:11057-11116 placement (2.1.88 match: isConnectionError, 1)
 var collectCodeSegments = (err) =>
   err.flatMap((block) =>
     block.type === "code" ? [block] : collectCodeSegments(checkAgentDescriptions(block)),

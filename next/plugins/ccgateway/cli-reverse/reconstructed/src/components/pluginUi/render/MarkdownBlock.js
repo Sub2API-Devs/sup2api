@@ -1095,7 +1095,7 @@ function freezeStreamChunk(chunk, text, length, prefixOnly) {
 }
 //@ chunk-bc20zedk.js:26077-26089 placement
 var MAX_BASH_COMMAND_SCAN_CHARS = 1536;
-//@ chunk-bc20zedk.js:26089-26258 placement = getFileExtensionsFromBashCommand (1)
+//@ chunk-bc20zedk.js:26089-26258 placement (2.1.88 match: getFileExtensionsFromBashCommand, 1)
 function getFileExtensionsFromBashCommand(command) {
   let index = command.lastIndexOf(`
 `);

@@ -52,7 +52,7 @@ import { pluginGrantProvenanceOf } from "../permissions/permissionsLoader.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bfnfj4kx.js:75173-75190 fingerprint = loadAgentsFromDirectory (0.741)
+//@ chunk-bfnfj4kx.js:75173-75190 fingerprint (2.1.88 match: loadAgentsFromDirectory, 0.741)
 /**
  * agents 目录名 "agents"，导出为 yos；加载 agents 文件时用它拼目录。
  */
@@ -127,7 +127,7 @@ function getBuiltinPluginAgentsSource(pluginName) {
       }
     : filesSource;
 }
-//@ chunk-e6aww6q8.js:2318132-2318179 placement = isMcpServerFromProjectOrLocalSettings (1)
+//@ chunk-e6aww6q8.js:2318132-2318179 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 var MAX_PLUGIN_AGENT_FILE_BYTES = 1048576;
 var PLUGIN_AGENT_SCOPES = ["user", "project", "local"];
 //@ chunk-e6aww6q8.js:2318179-2318359 placement
@@ -213,7 +213,7 @@ async function loadAgentFile(
 //@ chunk-e6aww6q8.js:2318755-2318873 layout
 var PLUGIN_AGENT_FORBIDDEN_FIELDS = ["permissionMode", "hooks", "mcpServers"];
 var PLUGIN_AGENT_IGNORED_FIELDS = ["initialPrompt", "observer", "observerMessage", "observeSubagents"];
-//@ chunk-e6aww6q8.js:2318873-2321705 fingerprint = loadAgentFromFile (0.676)
+//@ chunk-e6aww6q8.js:2318873-2321705 fingerprint (2.1.88 match: loadAgentFromFile, 0.676)
 /**
  * 从插件的 agents/*.md 解析一个代理定义：frontmatter（name、description、tools、model、color…，插件代理禁止 permissionMode/hooks/mcpServers 等字段），名字加 <插件>: 命名空间，正文作为系统提示（替换插件变量与 user_config）。
  */
@@ -444,7 +444,7 @@ async function loadBuiltinPluginAgents(plugin, loadedPaths, credentials) {
     )
   ).filter((agent) => agent !== null);
 }
-//@ chunk-e6aww6q8.js:2322206-2323863 fingerprint = loadPluginAgents (0.827)
+//@ chunk-e6aww6q8.js:2322206-2323863 fingerprint (2.1.88 match: loadPluginAgents, 0.827)
 /**
  * 加载所有启用插件的代理（缓存在全局 agents），扫描 agentsPath/agentsPaths 下的 markdown。
  */

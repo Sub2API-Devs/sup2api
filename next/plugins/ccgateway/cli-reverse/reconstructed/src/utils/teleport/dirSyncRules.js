@@ -964,7 +964,7 @@ function withWindowsSandboxSpellings(settings) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1910215-1910292 placement = getEnabledSettingSources (1)
+//@ chunk-e6aww6q8.js:1910215-1910292 placement (2.1.88 match: getEnabledSettingSources, 1)
 function getWritableSettingsPathForSource(source) {
   return source === "policySettings" || source === "flagSettings"
     ? undefined
@@ -1079,7 +1079,7 @@ function classifySyncedFileSensitivity(
 }
 //@ chunk-e6aww6q8.js:1911738-1911748 placement
 var MAX_LISTED_FAILURES = 3;
-//@ chunk-e6aww6q8.js:1911748-1911921 placement = formatFailureDetails (0.777)
+//@ chunk-e6aww6q8.js:1911748-1911921 placement (2.1.88 match: formatFailureDetails, 0.777)
 function formatFailureDetails_3(errors) {
   if (errors === undefined || errors.length === 0) return "";
   let mapped = errors

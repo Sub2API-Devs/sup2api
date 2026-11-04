@@ -24,7 +24,7 @@ import {
 import { sequential } from "../../utils/sequential.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-m4knadjm.js:578-1599 fingerprint = validateDirectoryForWorkspace (0.585)
+//@ chunk-m4knadjm.js:578-1599 fingerprint (2.1.88 match: validateDirectoryForWorkspace, 0.585)
 async function validateDirectoryForWorkspace(directoryPath, permissionContext) {
   if (!directoryPath)
     return {
@@ -102,7 +102,7 @@ async function validateDirectoryForWorkspace(directoryPath, permissionContext) {
     absolutePath,
   };
 }
-//@ chunk-m4knadjm.js:1599-3015 fingerprint = addDirHelpMessage (0.67)
+//@ chunk-m4knadjm.js:1599-3015 fingerprint (2.1.88 match: addDirHelpMessage, 0.67)
 function addDirHelpMessage(result) {
   switch (result.resultType) {
     case "emptyPath":

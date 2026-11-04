@@ -17,7 +17,7 @@ import { lit } from "../services/analytics/safeMetadata.js";
 import { setUserMsgOptIn } from "../bootstrap/state.js";
 import { BRIEF_TOOL_NAME } from "../tools/BriefTool/prompt.js";
 
-//@ chunk-gv7qjj2t.js:3446-3517 fingerprint = DEFAULT_BRIEF_CONFIG (1)
+//@ chunk-gv7qjj2t.js:3446-3517 fingerprint (2.1.88 match: DEFAULT_BRIEF_CONFIG, 1)
 /**
  * DEFAULT_BRIEF_CONFIG：同旧版。
  */
@@ -29,13 +29,13 @@ var BRIEF_CONFIG_SCHEMA = DoctorLazy(() =>
 var DEFAULT_BRIEF_CONFIG = {
   enable_slash_command: false,
 };
-//@ chunk-gv7qjj2t.js:3517-3614 fingerprint = getBriefConfig (1)
+//@ chunk-gv7qjj2t.js:3517-3614 fingerprint (2.1.88 match: getBriefConfig, 1)
 function getBriefConfig() {
   let raw = getFeatureValue_CACHED_MAY_BE_STALE("tengu_kairos_brief_config", DEFAULT_BRIEF_CONFIG);
   let parsed = BRIEF_CONFIG_SCHEMA().safeParse(raw);
   return parsed.success ? parsed.data : DEFAULT_BRIEF_CONFIG;
 }
-//@ chunk-gv7qjj2t.js:3614-4541 fingerprint = brief (0.95)
+//@ chunk-gv7qjj2t.js:3614-4541 fingerprint (2.1.88 match: brief, 0.95)
 /**
  * /brief 命令对象（local-jsx）；描述：Toggle brief-only mode；isEnabled: ()=>i().enable_slash_command。
  */

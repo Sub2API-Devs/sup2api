@@ -514,7 +514,7 @@ var PRIVATE_DNS_SUFFIXES = [
   ".private",
   ".ts.net",
 ];
-//@ chunk-3wek6r2k.js:58940-59143 placement = expandEnvVars (0.858)
+//@ chunk-3wek6r2k.js:58940-59143 placement (2.1.88 match: expandEnvVars, 0.858)
 /**
  * classifyServerLocation：遥测用服务器位置分类：stdio、managed（宿主类型）、localhost、private_network、public、other。
  */

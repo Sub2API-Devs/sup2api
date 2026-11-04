@@ -73,7 +73,7 @@ import { viewportInfo } from "./surfaceBinding.js";
 import { buildPluginAppendRow } from "./api/sessionAppend.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:180389-180428 placement = withModifiers (1)
+//@ chunk-4121qate.js:180389-180428 placement (2.1.88 match: withModifiers, 1)
 /**
  * （误归 computerUse）按 "press"+两个参数用分隔符拼键。
  */
@@ -1022,7 +1022,7 @@ var MARKS_ANSWERS_SENT_SLOT = 2;
  * marks 共享数组里「已应答的分发序号」的槽位。
  */
 var MARKS_ANSWERED_DISPATCH_SLOT = 1;
-//@ chunk-1tz177x8.js:37817-37920 placement = isComputerUseLock (0.575)
+//@ chunk-1tz177x8.js:37817-37920 placement (2.1.88 match: isComputerUseLock, 0.575)
 /**
  * （误归 computerUse）会话目标：字符串原样返回，对象取 sessionId 或 agentId。
  */

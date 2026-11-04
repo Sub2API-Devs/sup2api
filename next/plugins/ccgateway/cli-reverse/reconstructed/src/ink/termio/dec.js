@@ -10,7 +10,7 @@
  */
 import { csi } from "./csi.js";
 
-//@ chunk-ebxn0psw.js:227-482 fingerprint = DEC (0.869)
+//@ chunk-ebxn0psw.js:227-482 fingerprint (2.1.88 match: DEC, 0.869)
 /**
  * DEC 私有模式编号常量表（光标显示、备用屏、鼠标模式、焦点事件、括号粘贴、同步更新等）。
  */
@@ -37,7 +37,7 @@ function decset(mode) {
 function decreset(mode) {
   return csi(`?${mode}l`);
 }
-//@ chunk-ebxn0psw.js:552-1168 placement = DEC (0.815)
+//@ chunk-ebxn0psw.js:552-1168 placement (2.1.88 match: DEC, 0.815)
 /**
  * 预生成的 DEC 模式序列：同步输出开始/结束（BSU/ESU）、括号粘贴、焦点事件、主题通知、光标显隐、备用屏 1049、关闭 win32-input-mode、鼠标跟踪（1000+1002+1003+1006 全开，或只开点击 1000+1006）、像素鼠标 1016。
  */

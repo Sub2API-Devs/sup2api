@@ -30,7 +30,7 @@ function commandListDisplay(commands) {
     name: commands.name ? sanitizeTeammateLabel(commands.name) : "",
   };
 }
-//@ chunk-66jn0ssz.js:3592-3810 fingerprint = commandListDisplayTruncated (0.389)
+//@ chunk-66jn0ssz.js:3592-3810 fingerprint (2.1.88 match: commandListDisplayTruncated, 0.389)
 function commandListDisplayTruncated(commands) {
   let { from } = commandListDisplay(commands);
   let { name } = commandListDisplay(commands);
@@ -41,7 +41,7 @@ function commandListDisplayTruncated(commands) {
       : "";
   return `Dropped a peer message from ${fromLabel}: ${PEER_MESSAGE_DROP_REASONS[commands.reason]}.${suppressedSuffix}`;
 }
-//@ chunk-0e8j1zzj.js:4945-5290 callgraph-fingerprint = formatPathList (0.257)
+//@ chunk-0e8j1zzj.js:4945-5290 callgraph-fingerprint (2.1.88 match: formatPathList, 0.257)
 function formatPathList(paths) {
   if (paths.length === 0) return "";
   if (paths.length === 1)
@@ -89,7 +89,7 @@ function formatPathList(paths) {
     ],
   });
 }
-//@ chunk-18hwfzwa.js:1390271-1390671 fingerprint = generateShellSuggestionsLabel (0.551)
+//@ chunk-18hwfzwa.js:1390271-1390671 fingerprint (2.1.88 match: generateShellSuggestionsLabel, 0.551)
 function generateShellSuggestionsLabel(updates) {
   let allRules = updates.filter((update) => update.type === "addRules").flatMap((update) => update.rules);
   if (allRules.length === 0 || allRules.length > CONSENT_ROW_LIMITS) return null;

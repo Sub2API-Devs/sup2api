@@ -11,7 +11,7 @@
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-e6aww6q8.js:2323863-2323942 fingerprint = saveSyncedMeta (0.656)
+//@ chunk-e6aww6q8.js:2323863-2323942 fingerprint (2.1.88 match: saveSyncedMeta, 0.656)
 /**
  * 代理记忆快照的元数据 schema（updatedAt / syncedFrom）；316 中无引用，快照同步功能已不存在。
  */

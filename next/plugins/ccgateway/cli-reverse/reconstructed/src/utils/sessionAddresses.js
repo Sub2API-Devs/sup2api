@@ -61,7 +61,7 @@ function getMessagingKeyName(pid, socketPath) {
     throw Error("refusing to derive a messaging key name for a non-canonical socket path");
   return `${pid}.${hash}.key`;
 }
-//@ chunk-e7z1g8a9.js:4556-4831 placement = recordConsolidation (0.434)
+//@ chunk-e7z1g8a9.js:4556-4831 placement (2.1.88 match: recordConsolidation, 0.434)
 async function writeSessionPeerRecord(socketPath, peerToken, store, { sweepPermitted }) {
   if (isStorageV5Enabled() && store !== undefined) return ensureMessagingKeyDir(store, socketPath, peerToken);
   let sessionsDir = getSessionsDir();
@@ -331,7 +331,7 @@ var AUTH_HANDSHAKE_LENGTH; // deferred: uses authHandshakeJson of its import cyc
 deferInit("chunk-e7z1g8a9.js:7520", () => {
   AUTH_HANDSHAKE_LENGTH = authHandshakeJson("0".repeat(PEER_TOKEN_BYTES * 2)).length;
 });
-//@ chunk-e7z1g8a9.js:7556-7633 placement = extractErrorTypeFromData (1)
+//@ chunk-e7z1g8a9.js:7556-7633 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 是否是指定 type 的对象。
  */

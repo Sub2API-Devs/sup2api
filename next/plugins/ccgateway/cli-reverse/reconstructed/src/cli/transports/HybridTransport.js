@@ -10,7 +10,7 @@
  */
 import { plainServiceText } from "../../bridge/debugUtils.js";
 
-//@ chunk-fp6aqx1j.js:25628-25921 fingerprint = convertWsUrlToPostUrl (0.356)
+//@ chunk-fp6aqx1j.js:25628-25921 fingerprint (2.1.88 match: convertWsUrlToPostUrl, 0.356)
 function convertWsUrlToPostUrl(url, getAuthHeaders) {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     let text = plainServiceText(url.protocol, "session_url_protocol");

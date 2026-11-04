@@ -1071,7 +1071,7 @@ var ARTIFACT_TOOL_HEAD = {
     return withholdingReason === null && !isBuiltInArtifactHiddenForMcp();
   },
 };
-//@ chunk-qxvqcab6.js:14966-15043 placement = createNodeWsClient (1)
+//@ chunk-qxvqcab6.js:14966-15043 placement (2.1.88 match: createNodeWsClient, 1)
 /**
  * 判断一个对象是否自带 `mcp` 键（Object.hasOwn）。被 artifact/页面配置相关代码使用，与 MCP 客户端无关；旧版名 createNodeWsClient 配错。
  */
@@ -1392,7 +1392,7 @@ function dbBatchPayloadsForConsent(writes) {
   if (flattened.length <= MAX_CONSENT_PAYLOADS_LISTED) return flattened.join("; ");
   return `${flattened[0]} and ${flattened.length - 1} more ${plural(flattened.length - 1, "payload")}`;
 }
-//@ chunk-8wvtd8sr.js:366582-366698 placement = getClaudeConfigFiles (0.418)
+//@ chunk-8wvtd8sr.js:366582-366698 placement (2.1.88 match: getClaudeConfigFiles, 0.418)
 function dbBatchFileSpellings(cwd) {
   return cwd.flatMap((subdir) =>
     subdir.filePath !== undefined

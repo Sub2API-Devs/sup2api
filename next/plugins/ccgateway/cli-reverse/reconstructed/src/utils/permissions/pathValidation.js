@@ -65,7 +65,7 @@ import { containsVulnerableUncPath } from "../shell/readOnlyCommandValidation.js
 //@ chunk-fq0cr76a.js:1064037-1064057 affinity
 var MAX_LISTED_DIRECTORIES = 5;
 var BRACE_PATTERN = /[{}]/;
-//@ chunk-fq0cr76a.js:1064057-1064209 facade-exports = formatDirectoryList (1)
+//@ chunk-fq0cr76a.js:1064057-1064209 facade-exports (2.1.88 match: formatDirectoryList, 1)
 /**
  * 把目录列表格式化为 'a', 'b', and N more（最多显示若干个）。
  */
@@ -77,7 +77,7 @@ function formatDirectoryList(directories) {
     .map((dir) => `'${dir}'`)
     .join(", ")}, and ${dirCount - MAX_LISTED_DIRECTORIES} more`;
 }
-//@ chunk-fq0cr76a.js:1064209-1064414 facade-exports = getGlobBaseDirectory (1)
+//@ chunk-fq0cr76a.js:1064209-1064414 facade-exports (2.1.88 match: getGlobBaseDirectory, 1)
 /**
  * 返回通配符之前的目录部分（Windows 上兼顾反斜杠）。
  */
@@ -92,7 +92,7 @@ function getGlobBaseDirectory(filePath) {
   if (lastSepIndex === -1) return ".";
   return beforeGlob.substring(0, lastSepIndex) || "/";
 }
-//@ chunk-fq0cr76a.js:1064414-1064720 facade-exports = isPathInSandboxWriteAllowlist (0.719)
+//@ chunk-fq0cr76a.js:1064414-1064720 facade-exports (2.1.88 match: isPathInSandboxWriteAllowlist, 0.719)
 /**
  * 沙箱开启且 deny 列表完整时，路径的每种拼写都在沙箱写允许列表内（且不在 denyWithinAllow 内）才返回 true；用于沙箱下自动放行 Bash 写操作。
  */
@@ -184,7 +184,7 @@ function isOnlyOutsideWorkingFoldersRefusal(result) {
     result.isInWorkingDir === false
   );
 }
-//@ chunk-fq0cr76a.js:1065577-1068271 facade-exports = isPathAllowed (0.56)
+//@ chunk-fq0cr76a.js:1065577-1068271 facade-exports (2.1.88 match: isPathAllowed, 0.56)
 /**
  * （文件系统权限）判断路径是否允许：先查各种拼写的 deny 规则；路径无法解析时按读封锁返回安全检查；再判断是否在工作目录/允许规则内。被 Bash、PowerShell 与文件工具共用。
  */
@@ -439,7 +439,7 @@ var UNC_ADMIN_SHARE = /^\\\\([^\\]+)\\([a-z])\$(?=$|\\)/;
 var MACOS_VOL_FILE_PATH_RE = /^\/\.(?:vol|file)(?:\/|$)/i;
 var WINDOWS_ABSOLUTE_PREFIX_RE = /^(?:[A-Za-z]:[\\/]|[\\/]{2}|[\\/]\?\?[\\/])/;
 var WINDOWS_DEVICE_OR_ADMIN_PATH_RE = /^[\\/]{2}(?:[?.][\\/]|;|[^\\/]+[\\/]admin\$(?=$|[\\/]))/i;
-//@ chunk-fq0cr76a.js:1068856-1069027 facade-exports = getReservedShortcuts (1)
+//@ chunk-fq0cr76a.js:1068856-1069027 facade-exports (2.1.88 match: getReservedShortcuts, 1)
 /**
  * 判断路径（含各种拼写）是否为受保护系统路径：Windows 设备或管理路径、macOS /.vol 等内核重定向路径、其他系统根。旧版名 getReservedShortcuts 误配。
  */
@@ -615,7 +615,7 @@ function hasReadDenyRule(toolPermissionContext) {
     ),
   );
 }
-//@ chunk-fq0cr76a.js:1071093-1071666 callgraph-fingerprint = isPathAllowed (0.429)
+//@ chunk-fq0cr76a.js:1071093-1071666 callgraph-fingerprint (2.1.88 match: isPathAllowed, 0.429)
 /**
  * 处理含 “目录/..” 的路径：逐段解析符号链接后再判定（Windows 直接 undefined）；读操作若 .. 前有 glob 且开启了外部读拦截或有 Read deny 规则，返回不可判定的 safetyCheck。
  */
@@ -693,7 +693,7 @@ function resolveTraversalAndCheck(path, cwd, toolPermissionContext, operationTyp
     resolvedPath,
   };
 }
-//@ chunk-fq0cr76a.js:1072315-1073578 facade-exports = validatePath (0.837)
+//@ chunk-fq0cr76a.js:1072315-1073578 facade-exports (2.1.88 match: validatePath, 0.837)
 /**
  * Bash/PowerShell 路径参数校验入口：UNC、~user/~+/~-、$ % ` = 等 shell 展开、目录后的 .. 遍历、写目标含花括号、写目标含 glob 一律要人工确认；读的 glob 按基目录判定；其余解析为绝对路径后交给 isPathAllowed。返回 {allowed, resolvedPath, decisionReason}。
  */
@@ -802,7 +802,7 @@ function validateResolvedOperand(inputPath, toolPermissionContext, operationType
  * GLOB_PATTERN_REGEX：同旧版 utils/permissions/pathValidation.ts（误归 commands.ts）。
  */
 var GLOB_PATTERN_REGEX = /[*?[\]{}]/;
-//@ chunk-s61vbvea.js:208075-208341 placement = getCommands (0.674)
+//@ chunk-s61vbvea.js:208075-208341 placement (2.1.88 match: getCommands, 0.674)
 /**
  * getGlobBaseDirectory：同旧版 pathValidation.getGlobBaseDirectory；旧版名 getCommands 配错。
  */

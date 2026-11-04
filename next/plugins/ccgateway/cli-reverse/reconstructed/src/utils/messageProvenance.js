@@ -413,7 +413,7 @@ function classifyMessageFrame(message) {
       };
   }
 }
-//@ chunk-aepeg2w5.js:610484-610710 placement = extractErrorTypeFromData (1)
+//@ chunk-aepeg2w5.js:610484-610710 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 提取内容中的文本。
  */
@@ -456,7 +456,7 @@ function isWhimsicalElephantOn() {
     false
   );
 }
-//@ chunk-aepeg2w5.js:610929-610976 placement = generatePlaceholders (1)
+//@ chunk-aepeg2w5.js:610929-610976 placement (2.1.88 match: generatePlaceholders, 1)
 function randomHexToken() {
   return randomBytes(MAX_REMINDER_ID_CHARS / 2).toString("hex");
 }
@@ -758,7 +758,7 @@ function forwardableContent(message, isFirstMessage, replyById, toolResults, inc
       ];
   }
 }
-//@ chunk-aepeg2w5.js:615925-616009 placement = isNullRenderingAttachment (0.846)
+//@ chunk-aepeg2w5.js:615925-616009 placement (2.1.88 match: isNullRenderingAttachment, 0.846)
 function isNullRenderingAttachment(msg) {
   return msg.findIndex(
     (message) => !(message.type === "attachment" && isForwardedQueuedCommand(message.attachment)),
@@ -1392,7 +1392,7 @@ function parseForwardedQueuedCommand(attachment) {
         source,
       };
 }
-//@ chunk-aepeg2w5.js:623815-623988 placement = isNullRenderingAttachment (1)
+//@ chunk-aepeg2w5.js:623815-623988 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function isNullRenderingAttachment_2(msg) {
   let byKey = new Map();
   for (let message of msg) {
@@ -1405,7 +1405,7 @@ function isNullRenderingAttachment_2(msg) {
   }
   return [...byKey.values()];
 }
-//@ chunk-aepeg2w5.js:623988-624033 placement = generatePlaceholders (1)
+//@ chunk-aepeg2w5.js:623988-624033 placement (2.1.88 match: generatePlaceholders, 1)
 function randomHex16() {
   return randomBytes(16).toString("hex");
 }

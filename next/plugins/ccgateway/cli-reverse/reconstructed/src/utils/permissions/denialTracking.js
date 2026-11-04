@@ -11,7 +11,7 @@
 import { bunHashPair } from "../pastedContent.js";
 import { canonicalFingerprint } from "../../services/api/requestFingerprint.js";
 
-//@ chunk-e6aww6q8.js:1297367-1297416 fingerprint = DENIAL_LIMITS (1)
+//@ chunk-e6aww6q8.js:1297367-1297416 fingerprint (2.1.88 match: DENIAL_LIMITS, 1)
 /**
  * 自动模式拒绝上限：连续 3 次或累计 20 次后回退到人工确认。
  */
@@ -20,7 +20,7 @@ var DENIAL_LIMITS = {
   maxTotal: 20,
 };
 var TIMED_FALLBACK_AUTO_DENY_MS = 120000;
-//@ chunk-e6aww6q8.js:1297416-1297475 fingerprint = createDenialTrackingState (1)
+//@ chunk-e6aww6q8.js:1297416-1297475 fingerprint (2.1.88 match: createDenialTrackingState, 1)
 /**
  * 初始拒绝跟踪状态 {consecutiveDenials:0, totalDenials:0}。
  */
@@ -30,7 +30,7 @@ function createDenialTrackingState() {
     totalDenials: 0,
   };
 }
-//@ chunk-e6aww6q8.js:1297475-1297576 layout = createDenialTrackingState (1)
+//@ chunk-e6aww6q8.js:1297475-1297576 layout (2.1.88 match: createDenialTrackingState, 1)
 /**
  * 连续与累计拒绝数各加一。
  */
@@ -118,7 +118,7 @@ function resetConsecutiveDenials(state) {
     rewriteDenials: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1298534-1298626 fingerprint = shouldFallbackToPrompting (1)
+//@ chunk-e6aww6q8.js:1298534-1298626 fingerprint (2.1.88 match: shouldFallbackToPrompting, 1)
 /**
  * 连续拒绝 ≥3 或累计 ≥20 时需回退到人工确认。
  */

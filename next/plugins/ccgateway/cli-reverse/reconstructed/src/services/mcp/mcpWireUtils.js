@@ -37,7 +37,7 @@ function isStructuredContentBase64Envelope(value) {
     Object.keys(value).length === 1
   );
 }
-//@ chunk-aqt8xcjw.js:717-871 placement = base64URLEncode (1)
+//@ chunk-aqt8xcjw.js:717-871 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   if (!isStructuredContentBase64Envelope(buffer)) return;
   let encoded = buffer[STRUCTURED_CONTENT_JSON_BASE64_KEY];

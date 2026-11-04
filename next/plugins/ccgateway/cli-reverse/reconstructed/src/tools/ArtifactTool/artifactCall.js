@@ -877,7 +877,7 @@ function parseImageLine(line, idPattern) {
     bytes: buffer,
   };
 }
-//@ chunk-tmx5d02z.js:24012-24504 placement = buildImageContentBlocks (0.455)
+//@ chunk-tmx5d02z.js:24012-24504 placement (2.1.88 match: buildImageContentBlocks, 0.455)
 /**
  * 图片压缩为 PNG/JPEG base64，失败或过大返回 {refused}。归属存疑（某工具的图片收集）。
  */

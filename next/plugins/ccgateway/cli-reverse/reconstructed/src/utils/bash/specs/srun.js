@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:3039711-3040109 fingerprint = srun (1)
+//@ chunk-e6aww6q8.js:3039711-3040109 fingerprint (2.1.88 match: srun, 1)
 /**
  * srun 命令的补全 spec。
  */

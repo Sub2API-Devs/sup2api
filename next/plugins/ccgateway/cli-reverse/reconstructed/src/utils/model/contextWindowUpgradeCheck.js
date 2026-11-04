@@ -16,7 +16,7 @@ import {
 import { modelHasNative1MContext } from "./contextWindow1m.js";
 import { getDefaultOpusModel, getDefaultSonnetModel } from "./model.js";
 
-//@ chunk-z21je308.js:242-457 fingerprint = getAvailableUpgrade (1)
+//@ chunk-z21je308.js:242-457 fingerprint (2.1.88 match: getAvailableUpgrade, 1)
 /**
  * 当前设置为 opus/sonnet、1M 可用且未在用 1M 时返回 {alias:"opus[1m]" 或 "sonnet[1m]", name, multiplier:5}。
  */
@@ -44,7 +44,7 @@ function getAvailableUpgrade() {
     };
   return null;
 }
-//@ chunk-z21je308.js:457-659 fingerprint = getUpgradeMessage (1)
+//@ chunk-z21je308.js:457-659 fingerprint (2.1.88 match: getUpgradeMessage, 1)
 /**
  * warning 场景返回 "/model <alias>"，tip 场景返回 "Tip: You have access to … with 5x more context"。
  */

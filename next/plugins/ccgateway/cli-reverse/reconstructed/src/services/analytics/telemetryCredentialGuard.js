@@ -70,7 +70,7 @@ function hostOfUrl(url) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:130385-130452 placement = getCurrentRepoHttpsUrl (0.803)
+//@ chunk-aepeg2w5.js:130385-130452 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
 function getCurrentRepoHttpsUrl(host) {
   return (
     isFirstPartyAnthropicHost(`https://${host}`) ||

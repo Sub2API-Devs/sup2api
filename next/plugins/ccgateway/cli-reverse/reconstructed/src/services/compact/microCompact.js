@@ -121,7 +121,7 @@ deferInit("chunk-g54kbxqw.js:146902", () => {
     FILE_WRITE_TOOL_NAME,
   ]);
 });
-//@ chunk-g54kbxqw.js:146965-147371 callgraph-fingerprint = calculateToolResultTokens (0.748)
+//@ chunk-g54kbxqw.js:146965-147371 callgraph-fingerprint (2.1.88 match: calculateToolResultTokens, 0.748)
 /**
  * 估算 tool_result 的 token：文本按字符粗估，图片固定 2000，文档/搜索结果按块估算。
  */
@@ -139,7 +139,7 @@ function calculateToolResultTokens(block) {
     return sum;
   }, 0);
 }
-//@ chunk-g54kbxqw.js:147371-147568 placement = countToolCallsSince (1)
+//@ chunk-g54kbxqw.js:147371-147568 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(messages) {
   let ids = [];
   for (let message of messages)
@@ -150,7 +150,7 @@ function countToolCallsSince(messages) {
     }
   return ids;
 }
-//@ chunk-g54kbxqw.js:147568-147840 placement = hasMemoryFileRead (1)
+//@ chunk-g54kbxqw.js:147568-147840 placement (2.1.88 match: hasMemoryFileRead, 1)
 function hasMemoryFileRead(messages, toolUseIds) {
   let paths = [];
   for (let message of messages) {
@@ -214,7 +214,7 @@ function selectClearableToolUses(messages, keepRecent) {
     candidates,
   };
 }
-//@ chunk-g54kbxqw.js:148408-148938 placement = isMedia (1)
+//@ chunk-g54kbxqw.js:148408-148938 placement (2.1.88 match: isMedia, 1)
 /**
  * 把指定 tool_use_id 的 tool_result 内容替换成清理文本（hint_clears 用）。
  */
@@ -256,7 +256,7 @@ function replaceToolResultContent(messages, clearSet, replacements) {
       : message;
   });
 }
-//@ chunk-g54kbxqw.js:148938-149648 fingerprint = maybeTimeBasedMicrocompact (0.588)
+//@ chunk-g54kbxqw.js:148938-149648 fingerprint (2.1.88 match: maybeTimeBasedMicrocompact, 0.588)
 /**
  * keep-recent 型 microcompact（context_hint 触发）：保留最近 N 个可清理工具结果，节省 ≥20000 token 时把其余结果替换为清理文本（可先持久化原文），记 tengu_time_based_microcompact，并抑制压缩警告、通知缓存删除。
  */
@@ -619,7 +619,7 @@ function recordIdleClearingServerReport({ returnAfterIdle, contextManagement, us
     logIdleClearingFailure(error, "sad", "reading_response_threw");
   }
 }
-//@ chunk-g54kbxqw.js:154388-155243 fingerprint = estimateMessageTokens (0.375)
+//@ chunk-g54kbxqw.js:154388-155243 fingerprint (2.1.88 match: estimateMessageTokens, 0.375)
 /**
  * 根据 applied_edits 中清掉的工具结果，在 context_management 上补 client_estimated_cleared_input_tokens。旧版名 estimateMessageTokens 不准确。
  */
@@ -682,7 +682,7 @@ function isIdleClearingActive(mode, analysis) {
   if (mode === "shadow") return false;
   return analysis.repliesSinceIdle === 0 ? mode === "on" : analysis.serverClearedSinceIdle;
 }
-//@ chunk-e6aww6q8.js:4906272-4906316 fingerprint = TIME_BASED_MC_CLEARED_MESSAGE (1)
+//@ chunk-e6aww6q8.js:4906272-4906316 fingerprint (2.1.88 match: TIME_BASED_MC_CLEARED_MESSAGE, 1)
 /**
  * microcompact 清理后的替换文本 "[Old tool result content cleared]"。
  */

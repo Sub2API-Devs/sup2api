@@ -216,7 +216,7 @@ function useSandboxNetworkHost() {
   };
   return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
-//@ chunk-18hwfzwa.js:1431580-1431813 placement = isToolFromMcpServer (0.657)
+//@ chunk-18hwfzwa.js:1431580-1431813 placement (2.1.88 match: isToolFromMcpServer, 0.657)
 /**
  * getDialogMcpServerName：从对话框栈条目 payload 取服务器名。
  */
@@ -486,7 +486,7 @@ function useBlockedText(blockedOn) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:1434524-1434579 placement = _temp (1)
+//@ chunk-18hwfzwa.js:1434524-1434579 placement (2.1.88 match: _temp, 1)
 function hasPendingWorkerRequest(state) {
   return state.pendingWorkerRequest !== null;
 }

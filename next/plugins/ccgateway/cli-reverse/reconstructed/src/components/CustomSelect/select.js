@@ -121,7 +121,7 @@ function useSelectWheel({
     },
   };
 }
-//@ chunk-ey2qag4x.js:43459-43500 layout = _temp7 (1)
+//@ chunk-ey2qag4x.js:43459-43500 layout (2.1.88 match: _temp7, 1)
 function isInputOption(opt) {
   return opt.type === "input";
 }
@@ -129,11 +129,11 @@ function isInputOption(opt) {
 function hasDescription(opt) {
   return opt.description;
 }
-//@ chunk-ey2qag4x.js:43538-43579 layout = _temp (1)
+//@ chunk-ey2qag4x.js:43538-43579 layout (2.1.88 match: _temp, 1)
 function isImagePaste(c) {
   return c.type === "image";
 }
-//@ chunk-ey2qag4x.js:43579-43620 layout = _temp (1)
+//@ chunk-ey2qag4x.js:43579-43620 layout (2.1.88 match: _temp, 1)
 function isImagePaste_2(c) {
   return c.type === "image";
 }
@@ -143,15 +143,15 @@ function boldTextStyle() {
     bold: true,
   };
 }
-//@ chunk-ey2qag4x.js:43650-43691 layout = _temp (1)
+//@ chunk-ey2qag4x.js:43650-43691 layout (2.1.88 match: _temp, 1)
 function isImagePaste_3(c) {
   return c.type === "image";
 }
-//@ chunk-ey2qag4x.js:43691-43732 layout = _temp (1)
+//@ chunk-ey2qag4x.js:43691-43732 layout (2.1.88 match: _temp, 1)
 function isImagePaste_4(c) {
   return c.type === "image";
 }
-//@ chunk-ey2qag4x.js:43732-43773 layout = _temp (1)
+//@ chunk-ey2qag4x.js:43732-43773 layout (2.1.88 match: _temp, 1)
 function isImagePaste_5(c) {
   return c.type === "image";
 }
@@ -163,7 +163,7 @@ var NO_COMMITTED_ROW; // deferred: has load-time effects after a deferred statem
 deferInit("chunk-ey2qag4x.js:43773", () => {
   NO_COMMITTED_ROW = Symbol("NO_COMMITTED_ROW");
 });
-//@ chunk-ey2qag4x.js:44614-57659 fingerprint = Select (0.772)
+//@ chunk-ey2qag4x.js:44614-57659 fingerprint (2.1.88 match: Select, 0.772)
 /**
  * 通用单选：按 layout 渲染选项（可带描述、两栏、数字前缀），useSelectState 管理焦点与视口，支持 input 类型选项（就地编辑）、onFocus/onChange/onCancel。
  */
@@ -1298,7 +1298,7 @@ function SelectOptionRow(props) {
 deferInit("chunk-8jypjjdf.js:1309", () => {
   init_react_production();
 });
-//@ chunk-8jypjjdf.js:1313-1642 fingerprint = TwoColumnRow (0.736)
+//@ chunk-8jypjjdf.js:1313-1642 fingerprint (2.1.88 match: TwoColumnRow, 0.736)
 function TwoColumnRow(t0) {
   let $ = useMemoCache(10);
   let active;
@@ -1340,7 +1340,7 @@ function TwoColumnRow(t0) {
   } else t2 = $[9];
   return t2;
 }
-//@ chunk-ag5x7vhf.js:86912-87298 fingerprint = _temp4 (0.641)
+//@ chunk-ag5x7vhf.js:86912-87298 fingerprint (2.1.88 match: _temp4, 0.641)
 /**
  * "自动模式成为默认"的状态提示组件：显示标题、说明与链接，并在显示时记为已读。
  */
@@ -1417,7 +1417,7 @@ var MULTI_CLICK_MIN_MS = 150;
 var MULTI_CLICK_MAX_MS_2 = 400;
 var CLICK_TIME_SLOP_MS = 60;
 var CLICK_CELL_SLOP = 1;
-//@ chunk-r68xwcze.js:1134-1211 placement = comparePoints (0.803)
+//@ chunk-r68xwcze.js:1134-1211 placement (2.1.88 match: comparePoints, 0.803)
 function isNearPoint(a, b) {
   return Math.abs(b.col - a.col) <= CLICK_CELL_SLOP && Math.abs(b.row - a.row) <= CLICK_CELL_SLOP;
 }
@@ -3032,7 +3032,7 @@ function cursorIndexFor(item) {
     ? maxStatusIconWidth()
     : bunStringWidth(reactNodeText(icon));
 }
-//@ chunk-r68xwcze.js:19202-19250 fingerprint = getTextContent (0.673)
+//@ chunk-r68xwcze.js:19202-19250 fingerprint (2.1.88 match: getTextContent, 0.673)
 function getTextContent(node) {
   return metaTexts(node.props.meta).length > 0;
 }

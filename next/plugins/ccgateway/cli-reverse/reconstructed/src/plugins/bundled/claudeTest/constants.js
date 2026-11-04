@@ -588,7 +588,7 @@ function expandSkillDirPlaceholders(text, skillDir) {
     .replaceAll("${CLAUDE_SKILL_DIR}/../run", () => `${skillDir}/skills/run`)
     .replaceAll("${CLAUDE_SKILL_DIR}", () => `${skillDir}/skills/run`);
 }
-//@ chunk-ae5g0zb5.js:29795-29884 placement = getEssentialTrafficOnlyReason (0.775)
+//@ chunk-ae5g0zb5.js:29795-29884 placement (2.1.88 match: getEssentialTrafficOnlyReason, 0.775)
 function getEssentialTrafficOnlyReason() {
   return (
     isEssentialTrafficOnly() ||

@@ -125,7 +125,7 @@ function shouldLoadPermissionRules(hooks, marketplaceRef) {
   if (shouldHold) markOrganizationAskHeld();
   return shouldHold;
 }
-//@ chunk-anrta56w.js:1379-1459 facade-majority = shouldAllowManagedPermissionRulesOnly (1)
+//@ chunk-anrta56w.js:1379-1459 facade-majority (2.1.88 match: shouldAllowManagedPermissionRulesOnly, 1)
 /**
  * policySettings.allowManagedPermissionRulesOnly=true 时只使用托管策略里的权限规则。
  */
@@ -301,7 +301,7 @@ function getPluginOriginInfo(command) {
       }
     : undefined;
 }
-//@ chunk-anrta56w.js:4337-4385 facade-majority = _temp0 (1)
+//@ chunk-anrta56w.js:4337-4385 facade-majority (2.1.88 match: _temp0, 1)
 function arePluginHooksHeld(a_5) {
   return isPersonalConfigRestricted() && isUntrustedRuleOrigin("plugin", pluginGrantProvenanceOf(a_5));
 }
@@ -351,7 +351,7 @@ function areCommandHooksHeld(command) {
 }
 //@ chunk-anrta56w.js:4774-4803 file-local
 var SUPPORTED_RULE_BEHAVIORS = ["allow", "deny", "ask"];
-//@ chunk-anrta56w.js:4803-4983 facade-majority = settingsJsonToRules (1)
+//@ chunk-anrta56w.js:4803-4983 facade-majority (2.1.88 match: settingsJsonToRules, 1)
 /**
  * 把一个 settings JSON 的 permissions.allow/deny/ask 转成规则对象列表（带来源）。
  */
@@ -644,7 +644,7 @@ var EDITABLE_SETTING_SOURCES; // deferred: uses EDITABLE_SETTING_SOURCES (../set
 deferInit("chunk-anrta56w.js:8674", () => {
   EDITABLE_SETTING_SOURCES = EDITABLE_SETTING_SOURCES_2;
 });
-//@ chunk-anrta56w.js:8683-9266 facade-majority = deletePermissionRuleFromSettings (0.709)
+//@ chunk-anrta56w.js:8683-9266 facade-majority (2.1.88 match: deletePermissionRuleFromSettings, 0.709)
 /**
  * 从可编辑 settings 文件删除一条规则（按规范化串比较）；localSettings 另查实际文件确认。
  */
@@ -691,7 +691,7 @@ async function deletePermissionRuleFromSettings(rule, storageV5) {
     return false;
   }
 }
-//@ chunk-anrta56w.js:9266-9736 facade-majority = addPermissionRulesToSettings (0.549)
+//@ chunk-anrta56w.js:9266-9736 facade-majority (2.1.88 match: addPermissionRulesToSettings, 0.549)
 /**
  * 把规则追加写入某层 settings（去重）；托管独占时拒绝。
  */
@@ -730,7 +730,7 @@ async function addPermissionRulesToSettings({ ruleValues, ruleBehavior }, destin
     return false;
   }
 }
-//@ chunk-bwpc82tt.js:6091-6346 fingerprint = getEmptyPermissionSettingsJson (0.688)
+//@ chunk-bwpc82tt.js:6091-6346 fingerprint (2.1.88 match: getEmptyPermissionSettingsJson, 0.688)
 /**
  * 从设置对象中只提取限制性权限（deny 与 ask 的字符串数组），没有则返回 null。
  */

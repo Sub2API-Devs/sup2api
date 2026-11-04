@@ -417,7 +417,7 @@ function isClientStatus(connectStatus) {
     connectStatus !== 429
   );
 }
-//@ chunk-fy5kn7m3.js:33400-33712 placement = ghIsDangerousCallback (0.808)
+//@ chunk-fy5kn7m3.js:33400-33712 placement (2.1.88 match: ghIsDangerousCallback, 0.808)
 function ghIsDangerousCallback(_rawCommand, args) {
   assertCleanEndpoint(_rawCommand);
   let parsedUrl;
@@ -484,7 +484,7 @@ function checkGhRedirect(location, url, apiBase) {
         : ""),
   );
 }
-//@ chunk-fy5kn7m3.js:34774-34873 placement = isPermittedRedirect (0.763)
+//@ chunk-fy5kn7m3.js:34774-34873 placement (2.1.88 match: isPermittedRedirect, 0.763)
 /**
  * 两个 URL 协议与 host 相同且原 URL 不带凭证。
  */

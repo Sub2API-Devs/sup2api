@@ -19,7 +19,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-18hwfzwa.js:786752-787614 fingerprint = SandboxPromptFooterHint (0.808)
+//@ chunk-18hwfzwa.js:786752-787614 fingerprint (2.1.88 match: SandboxPromptFooterHint, 0.808)
 function SandboxPromptFooterHint() {
   let $ = useMemoCache(7);
   let [recentViolationCount, setRecentViolationCount] = useState(0);

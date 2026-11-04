@@ -14,7 +14,7 @@ import { readdir } from "fs/promises";
 import { getExtensionIds } from "./setup.js";
 import { isFsInaccessible } from "../errors.js";
 
-//@ chunk-s61vbvea.js:505358-506446 fingerprint = CHROMIUM_BROWSERS (0.937)
+//@ chunk-s61vbvea.js:505358-506446 fingerprint (2.1.88 match: CHROMIUM_BROWSERS, 0.937)
 /**
  * 扩展检测用的浏览器顺序与各平台用户数据目录。
  */
@@ -71,7 +71,7 @@ var CHROMIUM_BROWSERS = {
     },
   },
 };
-//@ chunk-s61vbvea.js:506446-506819 fingerprint = getAllBrowserDataPathsPortable (0.976)
+//@ chunk-s61vbvea.js:506446-506819 fingerprint (2.1.88 match: getAllBrowserDataPathsPortable, 0.976)
 /**
  * 列出当前平台各浏览器的用户数据目录（linux 构建中平台常量折叠为 linux）。
  */
@@ -109,7 +109,7 @@ function getAllBrowserDataPathsPortable() {
   }
   return paths;
 }
-//@ chunk-s61vbvea.js:506819-507541 fingerprint = detectExtensionInstallationPortable (1)
+//@ chunk-s61vbvea.js:506819-507541 fingerprint (2.1.88 match: detectExtensionInstallationPortable, 1)
 /**
  * 在各浏览器的 Default/Profile N 目录下找扩展目录，返回 {isInstalled, browser}。
  */

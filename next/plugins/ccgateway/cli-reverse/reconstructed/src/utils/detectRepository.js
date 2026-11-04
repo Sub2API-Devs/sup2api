@@ -55,7 +55,7 @@ function isGitLabMergeRequestUrl(url) {
 }
 //@ chunk-vkh471k3.js:1068-1083 layout
 var DEFAULT_INVOCATION_ENCODING = undefined;
-//@ chunk-vkh471k3.js:1083-1199 placement = readFileLines (0.607)
+//@ chunk-vkh471k3.js:1083-1199 placement (2.1.88 match: readFileLines, 0.607)
 /**
  * 按 {file, args, cwd, env} 执行一次调用（不继承环境、默认编码），属于外部命令调用工具，误归 shellConfig（旧版名 readFileLines 错配）。
  */
@@ -88,7 +88,7 @@ function primeCurrentRepository() {
   if (cwdOrNull === null) return;
   if (env.GIT_DIR || findGitRoot(cwdOrNull) !== null) detectCurrentRepositoryWithHost(cwdOrNull);
 }
-//@ chunk-vkh471k3.js:1403-1515 facade-majority = detectCurrentRepository (0.395)
+//@ chunk-vkh471k3.js:1403-1515 facade-majority (2.1.88 match: detectCurrentRepository, 0.395)
 async function detectCurrentRepository() {
   let result = await detectCurrentRepositoryWithHost();
   if (!result) return null;
@@ -172,7 +172,7 @@ async function getOriginPushUrl(cwd) {
     answered: url !== null || exitCode === 2,
   };
 }
-//@ chunk-vkh471k3.js:2453-3470 facade-majority = detectCurrentRepositoryWithHost (0.702)
+//@ chunk-vkh471k3.js:2453-3470 facade-majority (2.1.88 match: detectCurrentRepositoryWithHost, 0.702)
 /**
  * 从 origin URL 解析当前仓库 {host, owner, name}，按 cwd 缓存。
  */
@@ -253,7 +253,7 @@ async function detectCurrentRepositoryWithHost(cwd, options) {
     return null;
   }
 }
-//@ chunk-vkh471k3.js:3470-3582 facade-majority = getCachedRepository (0.302)
+//@ chunk-vkh471k3.js:3470-3582 facade-majority (2.1.88 match: getCachedRepository, 0.302)
 function getCachedRepository() {
   let parsed = getGitRepoCache().repositoryByCwd.get(getCwd());
   if (!parsed || !isGithubDotCom(parsed.host)) return null;
@@ -298,7 +298,7 @@ function isCachedGitHubRepo() {
   let cached = repositoryByCwd.get(cwd);
   return !!cached && isGithubDotCom(cached.host);
 }
-//@ chunk-vkh471k3.js:4226-4771 facade-majority = parseGitRemote (1)
+//@ chunk-vkh471k3.js:4226-4771 facade-majority (2.1.88 match: parseGitRemote, 1)
 /**
  * 解析 git 远程 URL（ssh/https/git 协议）为 host/owner/name。
  */
@@ -333,7 +333,7 @@ function parseGitRemote(input) {
   }
   return parseGitRemote_2(trimmed);
 }
-//@ chunk-vkh471k3.js:4771-5243 layout = parseGitRemote (0.793)
+//@ chunk-vkh471k3.js:4771-5243 layout (2.1.88 match: parseGitRemote, 0.793)
 function parseGitRemote_2(input) {
   let protocol;
   let hostPart;
@@ -379,7 +379,7 @@ function parseRepoSlug(input) {
     name: match[2],
   };
 }
-//@ chunk-vkh471k3.js:5480-5827 facade-majority = parseGitHubRepository (0.809)
+//@ chunk-vkh471k3.js:5480-5827 facade-majority (2.1.88 match: parseGitHubRepository, 0.809)
 function parseGitHubRepository(input) {
   let trimmed = input.trim();
   let parsed = parseGitRemote(trimmed);
@@ -404,7 +404,7 @@ var REPO_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/;
 function isValidRepoSegment(repo) {
   return REPO_SEGMENT_PATTERN.test(repo) && !repo.startsWith("-") && repo !== "." && repo !== "..";
 }
-//@ chunk-vkh471k3.js:5923-6082 callgraph-witnessed = looksLikeRealHostname (1)
+//@ chunk-vkh471k3.js:5923-6082 callgraph-witnessed (2.1.88 match: looksLikeRealHostname, 1)
 function looksLikeRealHostname(host) {
   if (!/^[A-Za-z0-9.-]+$/.test(host) || host.startsWith("-") || !host.includes(".")) return false;
   let lastSegment = host.split(".").pop();

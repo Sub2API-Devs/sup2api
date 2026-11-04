@@ -25,7 +25,7 @@ import { isENOENT } from "./errors.js";
 import { readAllPages } from "./pagedRead.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:29553-29581 fingerprint = PASTE_STORE_DIR (1)
+//@ chunk-s61vbvea.js:29553-29581 fingerprint (2.1.88 match: PASTE_STORE_DIR, 1)
 var PASTE_STORE_DIR = "paste-cache";
 var MAX_RETAINED_FAILED_CHARS = 1e7;
 //@ chunk-s61vbvea.js:29581-30463 layout
@@ -100,7 +100,7 @@ var PASTE_HASH_PATTERN = /^[0-9a-f]{16}$/;
 function assertValidPasteHash(hash) {
   if (!PASTE_HASH_PATTERN.test(hash)) throw Error("invalid paste-content hash");
 }
-//@ chunk-s61vbvea.js:30725-30773 layout = getPastePath (1)
+//@ chunk-s61vbvea.js:30725-30773 layout (2.1.88 match: getPastePath, 1)
 function getPastePath_2(hash) {
   assertValidPasteHash(hash);
   return join(getPasteStoreDir(), `${hash}.txt`);
@@ -116,7 +116,7 @@ function storePastedTextQueued(hash, text, storageV5) {
   pasteStoreState.markInFlight(hash, text);
   return storePastedText(hash, text, storageV5, pasteStoreState);
 }
-//@ chunk-s61vbvea.js:30882-31496 callgraph-fingerprint = storePastedText (0.283)
+//@ chunk-s61vbvea.js:30882-31496 callgraph-fingerprint (2.1.88 match: storePastedText, 0.283)
 /**
  * 把长粘贴文本写入 paste-cache/<hash>.txt（diskless 时跳过）。
  */
@@ -152,7 +152,7 @@ async function storePastedText(hash, text, storageV5, pasteStoreState) {
     logFeatureSad("paste_store", "paste_store_write_failed");
   }
 }
-//@ chunk-s61vbvea.js:31496-31861 fingerprint = retrievePastedText (0.703)
+//@ chunk-s61vbvea.js:31496-31861 fingerprint (2.1.88 match: retrievePastedText, 0.703)
 /**
  * 按 hash 读取 paste-cache 中的粘贴文本。
  */
@@ -176,7 +176,7 @@ async function retrievePastedText(hash, storageV5) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:31861-32179 fingerprint = cleanupOldPastes (0.748)
+//@ chunk-s61vbvea.js:31861-32179 fingerprint (2.1.88 match: cleanupOldPastes, 0.748)
 /**
  * 删除超过保留期的旧粘贴文件。
  */
@@ -257,7 +257,7 @@ async function cleanupPasteStagingFiles(pasteStoreDir, cutoffTime) {
     } catch {}
   }
 }
-//@ chunk-eg496hkq.js:44035-44104 fingerprint = getPastePath (1)
+//@ chunk-eg496hkq.js:44035-44104 fingerprint (2.1.88 match: getPastePath, 1)
 function getPastePath(hash, id) {
   return `${hash}-${id.replace(/[^a-zA-Z0-9-]/g, "_")}.txt`;
 }

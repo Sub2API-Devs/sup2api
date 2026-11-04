@@ -12,7 +12,7 @@ import { formatFileSize } from "./format.js";
 import { isPlainObject as isPlainObject_2 } from "./isPlainObject.js";
 import { logEvent } from "../services/analytics/index.js";
 
-//@ chunk-f25sswmp.js:1463-1847 fingerprint = ImageSizeError (0.92)
+//@ chunk-f25sswmp.js:1463-1847 fingerprint (2.1.88 match: ImageSizeError, 0.92)
 class ImageSizeError extends Error {
   constructor(oversizedImages, maxSize) {
     let message;
@@ -36,7 +36,7 @@ function isBase64ImageBlock(block) {
   if (!("type" in source) || source.type !== "base64") return false;
   return "data" in source && typeof source.data === "string";
 }
-//@ chunk-f25sswmp.js:2288-2441 fingerprint = validateImagesForAPI (1)
+//@ chunk-f25sswmp.js:2288-2441 fingerprint (2.1.88 match: validateImagesForAPI, 1)
 function validateImagesForAPI(block, index, maxBytes, tooLarge) {
   let base64Size = block.source.data.length;
   if (base64Size > maxBytes) {
@@ -50,7 +50,7 @@ function validateImagesForAPI(block, index, maxBytes, tooLarge) {
     });
   }
 }
-//@ chunk-171dhyhe.js:44240-44358 fingerprint = isBase64ImageBlock (1)
+//@ chunk-171dhyhe.js:44240-44358 fingerprint (2.1.88 match: isBase64ImageBlock, 1)
 function isBase64ImageBlock_2(block) {
   return block.type === "image" && block.source.type === "base64"
     ? block.source.data.length

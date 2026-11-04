@@ -133,7 +133,7 @@ deferInit("chunk-p5akk6be.js:284", () => {
     ],
   ]);
 });
-//@ chunk-p5akk6be.js:23659-23753 placement = escapeXml (1)
+//@ chunk-p5akk6be.js:23659-23753 placement (2.1.88 match: escapeXml, 1)
 function escapeXml_2(s) {
   return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -509,7 +509,7 @@ deferInit("chunk-p5akk6be.js:26876", () => {
     };
   })();
 });
-//@ chunk-p5akk6be.js:28927-29024 placement = COMMAND_SUBSTITUTION_PATTERNS (0.602)
+//@ chunk-p5akk6be.js:28927-29024 placement (2.1.88 match: COMMAND_SUBSTITUTION_PATTERNS, 0.602)
 /**
  * 把字符串中的形近 Unicode 字符折叠成 ASCII（前后各折叠一次，中间做规范化并去附加符号），用于防同形字绕过。
  */
@@ -559,7 +559,7 @@ function confusableTagScrubPattern(tags, tags_2) {
 function escapedCharPrefix(char) {
   return `${char}\\`;
 }
-//@ chunk-p5akk6be.js:29624-29666 placement = CHANNEL_TAG (1)
+//@ chunk-p5akk6be.js:29624-29666 placement (2.1.88 match: CHANNEL_TAG, 1)
 /**
  * 生成匹配 channel 标签（带 source 属性）的扫描器。旧版名 CHANNEL_TAG 为错配。
  */
@@ -630,11 +630,11 @@ deferInit("chunk-p5akk6be.js:29946", () => {
   MAX_FOLDED_CHAR_CACHE = 32768;
   uint8Array = new Uint8Array(4352);
 });
-//@ chunk-p5akk6be.js:30310-30370 placement = normalizeFullWidthDigits (1)
+//@ chunk-p5akk6be.js:30310-30370 placement (2.1.88 match: normalizeFullWidthDigits, 1)
 function normalizeFullWidthDigits(input) {
   return String.fromCharCode(PRIVATE_USE_BASE + input.charCodeAt(0));
 }
-//@ chunk-p5akk6be.js:30370-30430 placement = normalizeFullWidthDigits (1)
+//@ chunk-p5akk6be.js:30370-30430 placement (2.1.88 match: normalizeFullWidthDigits, 1)
 function normalizeFullWidthDigits_2(input) {
   return String.fromCharCode(PRIVATE_USE_PAIR_BASE + input.charCodeAt(0));
 }

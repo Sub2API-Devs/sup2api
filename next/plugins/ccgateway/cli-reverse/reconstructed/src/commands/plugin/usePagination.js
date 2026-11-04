@@ -12,7 +12,7 @@ import { useRef, useState, useMemo, useCallback } from "../../../vendor/react/cj
 
 //@ chunk-vrb44rx7.js:69906-69915 affinity
 var DEFAULT_MAX_VISIBLE = 5;
-//@ chunk-vrb44rx7.js:69915-71007 fingerprint = usePagination (0.7)
+//@ chunk-vrb44rx7.js:69915-71007 fingerprint (2.1.88 match: usePagination, 0.7)
 function usePagination({
   totalItems,
   maxVisible = DEFAULT_MAX_VISIBLE,

@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-tdjxcxnv.js:191-210 fingerprint = TODO_WRITE_TOOL_NAME (1)
+//@ chunk-tdjxcxnv.js:191-210 fingerprint (2.1.88 match: TODO_WRITE_TOOL_NAME, 1)
 /**
  * "TodoWrite"。
  */

@@ -8,7 +8,7 @@
  * pieces: chunk-ag5x7vhf.js (2)
  * attribution: fingerprint 1, placement 1
  */
-//@ chunk-ag5x7vhf.js:22436-24025 fingerprint = NULL_RENDERING_TYPES (0.472)
+//@ chunk-ag5x7vhf.js:22436-24025 fingerprint (2.1.88 match: NULL_RENDERING_TYPES, 0.472)
 /**
  * 不在界面渲染的附件类型清单（钩子上下文、各类提醒、delta、环境/模型/语言、提示快照等），XT 为其 Set。
  */

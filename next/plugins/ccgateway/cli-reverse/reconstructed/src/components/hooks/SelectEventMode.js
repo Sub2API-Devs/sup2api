@@ -17,7 +17,7 @@ import { useEnterEscape } from "./cloudHooks.js";
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-bajxb7bf.js:40776-41839 fingerprint = SelectEventMode (0.324)
+//@ chunk-bajxb7bf.js:40776-41839 fingerprint (2.1.88 match: SelectEventMode, 0.324)
 function SelectEventMode(props) {
   let $ = useMemoCache(22);
   let { hookEventMetadata, hooksByEvent, onSelectEvent, onCancel } = props;

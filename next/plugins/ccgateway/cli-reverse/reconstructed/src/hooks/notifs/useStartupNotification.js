@@ -9,6 +9,6 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-18hwfzwa.js:1786045-1786113 fingerprint = useStartupNotification (0.631)
+//@ chunk-18hwfzwa.js:1786045-1786113 fingerprint (2.1.88 match: useStartupNotification, 0.631)
 function useStartupNotification({ addNotification, removeNotification, storageV5 }) {}
 export { useStartupNotification };

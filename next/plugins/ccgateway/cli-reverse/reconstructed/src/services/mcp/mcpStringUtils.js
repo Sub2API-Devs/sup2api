@@ -20,9 +20,9 @@ import { isRemoteBrowserClassifierEnabled } from "../../utils/permissions/classi
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6mwt0myy.js:18150-18165 fingerprint = getMcpPrefix (1)
+//@ chunk-6mwt0myy.js:18150-18165 fingerprint (2.1.88 match: getMcpPrefix, 1)
 var MCP_TOOL_PREFIX = "mcp__";
-//@ chunk-6mwt0myy.js:18165-18311 fingerprint = mcpInfoFromString (1)
+//@ chunk-6mwt0myy.js:18165-18311 fingerprint (2.1.88 match: mcpInfoFromString, 1)
 /**
  * mcpInfoFromString：把 mcp__server__tool 拆成 {serverName, toolName}（工具名可含 __），不是 mcp 前缀返回 null。
  */
@@ -36,14 +36,14 @@ function mcpInfoFromString(toolString) {
     toolName,
   };
 }
-//@ chunk-6mwt0myy.js:18311-18350 callgraph-witnessed = buildMcpToolName (0)
+//@ chunk-6mwt0myy.js:18311-18350 callgraph-witnessed (2.1.88 match: buildMcpToolName, 0)
 /**
  * getMcpPrefix：mcp__<规范化服务器名>__。
  */
 function getMcpPrefix(serverName) {
   return `${MCP_TOOL_PREFIX}${normalizeNameForMCP(serverName)}__`;
 }
-//@ chunk-6mwt0myy.js:18350-18470 shared-adjacent = getToolNameForPermissionCheck (1)
+//@ chunk-6mwt0myy.js:18350-18470 shared-adjacent (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * isToolFromMcpServer：工具 mcpInfo.serverName 等于给定名，或名字以该服务器前缀开头。
  */
@@ -183,7 +183,7 @@ function mergeMcpServerPolicyRules(toolPermissionContext, policies, mode) {
     alwaysAskRules: askRules,
   };
 }
-//@ chunk-6mwt0myy.js:20222-20305 placement = getToolNameForPermissionCheck (1)
+//@ chunk-6mwt0myy.js:20222-20305 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * 工具的完整名（MCP 工具带前缀）。
  */
@@ -205,7 +205,7 @@ function getMcpToolAliasNames(tool) {
   );
   return uniq([...ruleNames, ...flattened]).filter((alias) => alias !== toolName);
 }
-//@ chunk-6mwt0myy.js:20569-20634 layout = getMcpPrefix (1)
+//@ chunk-6mwt0myy.js:20569-20634 layout (2.1.88 match: getMcpPrefix, 1)
 /**
  * getMcpDisplayName：去掉 mcp__server__ 前缀得到工具显示名。
  */
@@ -213,7 +213,7 @@ function getMcpDisplayName(fullName, serverName) {
   let prefix = `mcp__${normalizeNameForMCP(serverName)}__`;
   return fullName.replace(prefix, "");
 }
-//@ chunk-6mwt0myy.js:20634-20771 fingerprint = extractMcpToolDisplayName (1)
+//@ chunk-6mwt0myy.js:20634-20771 fingerprint (2.1.88 match: extractMcpToolDisplayName, 1)
 /**
  * extractMcpToolDisplayName：从 "server - Tool (MCP)" 形式的用户可见名取出工具部分。
  */
@@ -224,7 +224,7 @@ function extractMcpToolDisplayName(userFacingName) {
   if (dashIndex !== -1) return withoutSuffix.substring(dashIndex + 3).trim();
   return withoutSuffix;
 }
-//@ chunk-6mwt0myy.js:21056-21160 placement = addPluginScopeToLspServers (0.709)
+//@ chunk-6mwt0myy.js:21056-21160 placement (2.1.88 match: addPluginScopeToLspServers, 0.709)
 /**
  * isSameMcpServerName：plugin: 名精确比较，其他比较规范化名。
  */
@@ -274,7 +274,7 @@ function isRemoteBrowserReadWithoutClassifier(tool, input, toolPermissionContext
  */
 var REMOTE_BROWSER_OUTSIDE_CHECKS_REFUSED =
   "Tools of MCP server 'remote-browser' (the cloud browser) can only be called by the model in this session, where each call gets auto mode's safety check or a person's approval; this call would skip both.";
-//@ chunk-e6aww6q8.js:993330-993627 callgraph-fingerprint = getMcpDisplayName (0.535)
+//@ chunk-e6aww6q8.js:993330-993627 callgraph-fingerprint (2.1.88 match: getMcpDisplayName, 0.535)
 /**
  * resolveMcpConnectionForTool：按工具名找对应服务器连接；多个同规范化名的已连接服务器时返回 ambiguous。
  */

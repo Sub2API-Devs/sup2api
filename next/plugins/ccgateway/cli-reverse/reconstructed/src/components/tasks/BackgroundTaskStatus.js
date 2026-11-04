@@ -25,7 +25,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { useState } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-e6aww6q8.js:293537-293658 fingerprint = _temp0 (0.314)
+//@ chunk-e6aww6q8.js:293537-293658 fingerprint (2.1.88 match: _temp0, 0.314)
 /**
  * 判断转录条目是否位于最后一个压缩边界之前（attribution-snapshot 需在最后一个非保留边界之后才算）。
  */
@@ -35,16 +35,16 @@ function isBeforeCompactBoundary(pill, { idx, type: entryType }) {
     (entryType !== "attribution-snapshot" || idx > pill.lastNonPreservedBoundaryIdx)
   );
 }
-//@ chunk-18hwfzwa.js:133842-133882 fingerprint = _temp4 (1)
+//@ chunk-18hwfzwa.js:133842-133882 fingerprint (2.1.88 match: _temp4, 1)
 function selectExpandedView(s_1) {
   return s_1.expandedView;
 }
-//@ chunk-18hwfzwa.js:444877-444973 fingerprint = _temp6 (1)
+//@ chunk-18hwfzwa.js:444877-444973 fingerprint (2.1.88 match: _temp6, 1)
 function isTaskStillActive(t_1) {
   if (t_1.type === "in_process_teammate") return !isTerminalTaskStatus(t_1.status);
   return !isTerminalTaskStatus(t_1.status) || hasCompletedWithFindings(t_1);
 }
-//@ chunk-18hwfzwa.js:805876-805909 callgraph-fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:805876-805909 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectTasks_3(s) {
   return s.tasks;
 }
@@ -52,7 +52,7 @@ function selectTasks_3(s) {
 function countRemoteBackgroundTasks(appState) {
   return countNonAmbientTasks(appState.remoteBackgroundTasks);
 }
-//@ chunk-18hwfzwa.js:805963-806502 fingerprint = BackgroundTaskStatus (0.373)
+//@ chunk-18hwfzwa.js:805963-806502 fingerprint (2.1.88 match: BackgroundTaskStatus, 0.373)
 function BackgroundTaskStatus(props) {
   let $ = useMemoCache(8);
   let { tasksSelected, onOpenDialog } = props;
@@ -102,7 +102,7 @@ function BackgroundTaskStatus(props) {
   if (earlyReturnValue !== EARLY_RETURN_SENTINEL) return earlyReturnValue;
   return footerElement;
 }
-//@ chunk-18hwfzwa.js:806502-806983 fingerprint = SummaryPill (0.795)
+//@ chunk-18hwfzwa.js:806502-806983 fingerprint (2.1.88 match: SummaryPill, 0.795)
 function SummaryPill(props) {
   let $ = useMemoCache(8);
   let { selected, onClick, children } = props;

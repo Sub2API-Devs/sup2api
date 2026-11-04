@@ -15,7 +15,7 @@ import { cutHunks, displayPathOf, isBodyLine } from "./gitDiffRead.js";
 import { todoProgressOf } from "../../../tasks/RemoteAgentTask/RemoteAgentTask.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-wyqg6m3h.js:28722-28943 placement = adjustHunkLineNumbers (0.843)
+//@ chunk-wyqg6m3h.js:28722-28943 placement (2.1.88 match: adjustHunkLineNumbers, 0.843)
 /**
  * 从不可信数据中筛出形状合法的 hunks。
  */

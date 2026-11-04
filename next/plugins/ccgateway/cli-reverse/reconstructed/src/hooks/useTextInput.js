@@ -218,7 +218,7 @@ function logLeftArrowGesture(decision, nowMs, state) {
       return;
   }
 }
-//@ chunk-7p2hc4jn.js:41484-41592 placement = setCwdState (1)
+//@ chunk-7p2hc4jn.js:41484-41592 placement (2.1.88 match: setCwdState, 1)
 var rangesBefore = (ranges, limit) => ranges.filter((range) => range.start < limit);
 var isNfcStable = (text, virtualTextLayout) =>
   text.normalize("NFC") === text && virtualTextLayout.text.normalize("NFC") === virtualTextLayout.text;
@@ -370,7 +370,7 @@ function mapInput(input_map) {
     return (map.get(input) ?? noopTextInputCallback)(input);
   };
 }
-//@ chunk-7p2hc4jn.js:43067-50977 fingerprint = useTextInput (0.462)
+//@ chunk-7p2hc4jn.js:43067-50977 fingerprint (2.1.88 match: useTextInput, 0.462)
 /**
  * 文本输入核心：把按键映射为 Cursor 操作（ctrl+a/e/b/f/h/d/k/u/w/y、alt+b/f/d、方向键、home/end、换行 \⏎/shift+⏎），上下键在多行内移动或触发历史；Esc 双击清空（escape-again-to-clear），Ctrl-C 清空或退出提示；Apple Terminal 特判；返回 onInput、渲染文本与光标位置。
  */

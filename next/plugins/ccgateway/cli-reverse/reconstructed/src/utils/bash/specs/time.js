@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:3040109-3040233 fingerprint = time (1)
+//@ chunk-e6aww6q8.js:3040109-3040233 fingerprint (2.1.88 match: time, 1)
 /**
  * time 命令的补全 spec。
  */

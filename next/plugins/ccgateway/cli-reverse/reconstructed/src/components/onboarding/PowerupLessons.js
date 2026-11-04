@@ -415,7 +415,7 @@ function Highlight(props) {
   } else highlightElement = $[1];
   return highlightElement;
 }
-//@ chunk-19dk83fw.js:5203-5331 placement = EffortIndicatorSymbol (1)
+//@ chunk-19dk83fw.js:5203-5331 placement (2.1.88 match: EffortIndicatorSymbol, 1)
 function EffortIndicatorSymbol(props) {
   let $ = useMemoCache(2);
   let { children } = props;

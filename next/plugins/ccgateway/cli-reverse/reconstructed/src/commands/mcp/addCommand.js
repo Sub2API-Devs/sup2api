@@ -27,7 +27,7 @@ import { redactSecrets_3 } from "../../services/teamMemorySync/secretScanner.js"
 import { claudeCommand } from "../../utils/worktreeResumeHint.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-4vq0yytw.js:12058-16442 fingerprint = registerMcpAddCommand (0.821)
+//@ chunk-4vq0yytw.js:12058-16442 fingerprint (2.1.88 match: registerMcpAddCommand, 0.821)
 function registerMcpAddCommand(mcp, register) {
   mcp
     .command("add <name> <commandOrUrl> [args...]")

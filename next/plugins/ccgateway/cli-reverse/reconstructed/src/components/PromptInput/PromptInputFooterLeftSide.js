@@ -135,7 +135,7 @@ import { getPlatform } from "../../utils/platform.js";
 import { Byline } from "../design-system/Byline.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5cp2fssw.js:14565-14629 fingerprint = ProactiveCountdown (0.737)
+//@ chunk-5cp2fssw.js:14565-14629 fingerprint (2.1.88 match: ProactiveCountdown, 0.737)
 function ProactiveCountdown(ms) {
   return formatDuration(Math.max(0, ms), {
     mostSignificantOnly: true,
@@ -562,7 +562,7 @@ deferInit("chunk-18hwfzwa.js:824084", () => {
   coordinatorModeModule = require("../../coordinator/coordinatorMode.js");
   VOICE_HINT_MAX_IMPRESSIONS = 3;
 });
-//@ chunk-18hwfzwa.js:824129-829071 fingerprint = PromptInputFooterLeftSide (0.393)
+//@ chunk-18hwfzwa.js:824129-829071 fingerprint (2.1.88 match: PromptInputFooterLeftSide, 0.393)
 /**
  * 页脚左侧：显示权限模式（shift+tab 循环 default/acceptEdits/plan/auto/bypass）、"Press Ctrl-C again to exit"、后台任务计数（可点开）、PR 状态、语音提示、catchupReplay/detach 提示。
  */
@@ -980,7 +980,7 @@ function getZero(attentionBudget) {
 function getFooterIndicatorConfig() {
   return getCachedClientData()?.footer_indicator;
 }
-//@ chunk-18hwfzwa.js:829169-839108 fingerprint = ModeIndicator (0.519)
+//@ chunk-18hwfzwa.js:829169-839108 fingerprint (2.1.88 match: ModeIndicator, 0.519)
 /**
  * 权限模式指示与切换提示（shift+tab），含 frame/artifact 链接（tengu_copper_thistle）。
  */
@@ -2076,7 +2076,7 @@ deferInit("chunk-18hwfzwa.js:839458", () => {
     return pillElement;
   });
 });
-//@ chunk-18hwfzwa.js:840126-840417 fingerprint = getSpinnerHintParts (0.72)
+//@ chunk-18hwfzwa.js:840126-840417 fingerprint (2.1.88 match: getSpinnerHintParts, 0.72)
 function getSpinnerHintParts(isLoading, chord, chord_2, tasksV2, expandedView) {
   let toggleAction = expandedView === "tasks" ? "hide tasks" : "show tasks";
   let showToggleHint = tasksV2;
@@ -2119,7 +2119,7 @@ function getSpinnerHintParts(isLoading, chord, chord_2, tasksV2, expandedView) {
       : []),
   ];
 }
-//@ chunk-18hwfzwa.js:840417-840503 fingerprint = isPrStatusEnabled (1)
+//@ chunk-18hwfzwa.js:840417-840503 fingerprint (2.1.88 match: isPrStatusEnabled, 1)
 function isPrStatusEnabled(terminalFocusState) {
   if (isBgSession() && terminalFocusState === "unknown") return false;
   return getGlobalConfig().prStatusFooterEnabled ?? true;

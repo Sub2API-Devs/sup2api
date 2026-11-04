@@ -129,7 +129,7 @@ function powerShellChoiceToResult(choice, payload, unaryEvent, extra = {}) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:1399269-1403401 fingerprint = PowerShellPermissionRequest (0.473)
+//@ chunk-18hwfzwa.js:1399269-1403401 fingerprint (2.1.88 match: PowerShellPermissionRequest, 0.473)
 /**
  * PowerShell 权限对话框（同 Bash 结构，选项来自 powershellToolUseOptions）。
  */

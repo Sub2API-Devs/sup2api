@@ -15,7 +15,7 @@ import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runti
 import { Text, Box } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 
-//@ chunk-vrb44rx7.js:52001-52587 fingerprint = PluginTrustWarning (0.578)
+//@ chunk-vrb44rx7.js:52001-52587 fingerprint (2.1.88 match: PluginTrustWarning, 0.578)
 function PluginTrustWarning() {
   let $ = useMemoCache(3);
   let t0;

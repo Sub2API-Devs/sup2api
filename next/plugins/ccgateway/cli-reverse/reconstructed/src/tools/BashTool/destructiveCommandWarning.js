@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:1005118-1007274 fingerprint = DESTRUCTIVE_PATTERNS (0.664)
+//@ chunk-e6aww6q8.js:1005118-1007274 fingerprint (2.1.88 match: DESTRUCTIVE_PATTERNS, 0.664)
 /**
  * 破坏性命令模式表（git reset --hard、push --force、clean -f、checkout .、stash drop、branch -D、--no-verify、commit --amend、rm -rf、SQL DROP/TRUNCATE/DELETE、kubectl delete、terraform destroy），每项带 category 与提示文字。
  */

@@ -8,7 +8,7 @@
  * pieces: chunk-cy6qaqnq.js (4)
  * attribution: fingerprint 1, placement 3
  */
-//@ chunk-cy6qaqnq.js:191-216 fingerprint = REPL_TOOL_NAME (1)
+//@ chunk-cy6qaqnq.js:191-216 fingerprint (2.1.88 match: REPL_TOOL_NAME, 1)
 /**
  * REPL 工具名常量 "REPL"。
  */

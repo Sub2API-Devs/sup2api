@@ -46,7 +46,7 @@ import {
 } from "./chartSchema.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-3s7ydtfd.js:22902-23118 placement = saveTag (0.566)
+//@ chunk-3s7ydtfd.js:22902-23118 placement (2.1.88 match: saveTag, 0.566)
 function saveTag(scope) {
   let parts = typeof scope === "string" ? scope.split(",") : [];
   let keys = parts.length <= MAX_SERIES_PAIRS ? parts.map((part) => METRIC_KEY_RE.exec(part)?.[1]) : [];
@@ -1670,7 +1670,7 @@ var describeNonScalarColumn = (isList) =>
 var describeTableColumn = (column, listColumns = []) =>
   `${column.name}: ` +
   (columnKindSummary(column).join(", ") || describeNonScalarColumn(listColumns.includes(column.name)));
-//@ chunk-3s7ydtfd.js:41086-41137 placement = renderToolUseRejectedMessage (0.792)
+//@ chunk-3s7ydtfd.js:41086-41137 placement (2.1.88 match: renderToolUseRejectedMessage, 0.792)
 var renderToolUseRejectedMessage = (table) =>
   `${tableSource(table)}, ${formatCount(table.rows.length, "row")}:`;
 //@ chunk-3s7ydtfd.js:41137-41244 placement

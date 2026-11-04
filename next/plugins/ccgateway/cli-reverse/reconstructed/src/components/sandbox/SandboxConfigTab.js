@@ -31,7 +31,7 @@ function renderDimLine(w, i) {
     i,
   );
 }
-//@ chunk-55w3ydvj.js:14076-16494 fingerprint = SandboxConfigTab (0.616)
+//@ chunk-55w3ydvj.js:14076-16494 fingerprint (2.1.88 match: SandboxConfigTab, 0.616)
 function SandboxConfigTab() {
   let $ = useMemoCache(3);
   let isEnabled = SandboxManager.isSandboxingEnabled();

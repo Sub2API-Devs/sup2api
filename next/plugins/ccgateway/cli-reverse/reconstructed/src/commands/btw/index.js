@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1686098-1686326 fingerprint = btw (0.686)
+//@ chunk-e6aww6q8.js:1686098-1686326 fingerprint (2.1.88 match: btw, 0.686)
 /**
  * /btw 命令对象（local-jsx）；描述：Ask a quick side question without interrupting the main conversation；实现 chunk-583vs41k.js 的 pr。
  */

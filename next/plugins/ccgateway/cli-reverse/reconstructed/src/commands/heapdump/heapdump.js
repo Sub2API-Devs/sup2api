@@ -13,7 +13,7 @@ import { performHeapDump } from "../../utils/heapDumpService.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-dhgx9s0b.js:2263-2840 fingerprint = call (0.478)
+//@ chunk-dhgx9s0b.js:2263-2840 fingerprint (2.1.88 match: call, 0.478)
 /**
  * /heapdump 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

@@ -19,7 +19,7 @@ import { getToolPermissionContext } from "../../utils/permissions/toolPermission
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { HooksConfigMenu } from "../../components/hooks/HooksConfigMenu.js";
 
-//@ chunk-ag5x7vhf.js:205711-205838 placement = getTools (0.757)
+//@ chunk-ag5x7vhf.js:205711-205838 placement (2.1.88 match: getTools, 0.757)
 /**
  * （旧版名 getTools 是错配）/hooks 命令用的工具名来源：在 getTools 结果后追加只会出现在 hook 匹配器里的工具（REPL 内部原语 X9n，WebFetch 子代理开启且非简单模式时的 WebFetch），过滤 isEnabled 与拒绝规则。
  */
@@ -42,7 +42,7 @@ function appendToolsNotInList(tools, extraTools) {
   let filtered = extraTools.filter((extraTool) => !toolNames.has(extraTool.name));
   return filtered.length > 0 ? [...tools, ...filtered] : tools;
 }
-//@ chunk-bajxb7bf.js:57815-57944 fingerprint = call (0.856)
+//@ chunk-bajxb7bf.js:57815-57944 fingerprint (2.1.88 match: call, 0.856)
 /**
  * /hooks 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

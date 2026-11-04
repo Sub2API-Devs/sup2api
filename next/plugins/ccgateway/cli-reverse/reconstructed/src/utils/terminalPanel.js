@@ -10,7 +10,7 @@
  */
 import { useTopAutoDialogHidden, useTopUserDialog } from "../state/dialogQueue.js";
 
-//@ chunk-18hwfzwa.js:329730-329787 fingerprint = TMUX_SESSION (1)
+//@ chunk-18hwfzwa.js:329730-329787 fingerprint (2.1.88 match: TMUX_SESSION, 1)
 function TMUX_SESSION() {
   let topAutoDialogHidden = useTopAutoDialogHidden("panel");
   return useTopUserDialog() !== null && topAutoDialogHidden;

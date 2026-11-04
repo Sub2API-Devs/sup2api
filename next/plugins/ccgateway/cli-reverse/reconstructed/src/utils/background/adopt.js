@@ -1192,7 +1192,7 @@ deferInit("chunk-jbv0t0w5.js:18528", () => {
   COPY_CHUNK_BYTES = 1048576;
   ADOPT_RELINK_MARK = ".adopt-relink.";
 });
-//@ chunk-jbv0t0w5.js:18634-18720 placement = generatePlaceholders (0.792)
+//@ chunk-jbv0t0w5.js:18634-18720 placement (2.1.88 match: generatePlaceholders, 0.792)
 function makeAdoptRelinkName(targetPath) {
   return `${targetPath}${ADOPT_RELINK_MARK}${process.pid}.${Date.now()}.${randomBytes(4).toString("hex")}`;
 }
@@ -1829,7 +1829,7 @@ function parseJsonOrNull(text) {
     return null;
   }
 }
-//@ chunk-jbv0t0w5.js:28818-28966 placement = readJSONLFile (1)
+//@ chunk-jbv0t0w5.js:28818-28966 placement (2.1.88 match: readJSONLFile, 1)
 async function readJSONLFile(filePath) {
   let buf = Buffer.allocUnsafe(MAX_META_BYTES);
   let totalRead = 0;

@@ -103,7 +103,7 @@ async function postForkFailureNotice(sessionId, credentials) {
     });
   }
 }
-//@ chunk-vx1xamz5.js:1785-2171 placement = fetchReferralRedemptions (0.233)
+//@ chunk-vx1xamz5.js:1785-2171 placement (2.1.88 match: fetchReferralRedemptions, 0.233)
 /**
  * 远程控制分叉时尝试登记推荐兑换。
  */

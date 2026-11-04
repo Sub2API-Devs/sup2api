@@ -67,7 +67,7 @@ var ADVISOR_ERROR_CODES = [
   "execution_time_exceeded",
   "unavailable",
 ];
-//@ chunk-s61vbvea.js:59050-59172 placement = isToolResultBlockWithContent (1)
+//@ chunk-s61vbvea.js:59050-59172 placement (2.1.88 match: isToolResultBlockWithContent, 1)
 function getObjectContent(obj) {
   if (!("content" in obj)) return;
   let content = obj.content;
@@ -121,7 +121,7 @@ function getAdvisorRefusalText(contentBlock) {
   let text = objectContent.text;
   return typeof text === "string" && text ? text : undefined;
 }
-//@ chunk-s61vbvea.js:59970-59994 fingerprint = isAdvisorBlock (0.55)
+//@ chunk-s61vbvea.js:59970-59994 fingerprint (2.1.88 match: isAdvisorBlock, 0.55)
 /**
  * API 判定进程级拒绝顾问后置真。
  */
@@ -402,7 +402,7 @@ function getConfiguredAdvisorModel() {
   if (!isAdvisorToolEnabled()) return;
   return readAdvisorModelSetting(getInitialSettings_2());
 }
-//@ chunk-s61vbvea.js:62610-62709 layout = getExperimentAdvisorModels (1)
+//@ chunk-s61vbvea.js:62610-62709 layout (2.1.88 match: getExperimentAdvisorModels, 1)
 /**
  * 设置对象中非空的 advisorModel。旧版名 getExperimentAdvisorModels_2 为错配。
  */
@@ -411,7 +411,7 @@ function readAdvisorModelSetting(settings) {
     ? settings.advisorModel
     : undefined;
 }
-//@ chunk-s61vbvea.js:62709-62790 fingerprint = getAdvisorUsage (1)
+//@ chunk-s61vbvea.js:62709-62790 fingerprint (2.1.88 match: getAdvisorUsage, 1)
 /**
  * 从 usage.iterations 取 type=advisor_message 的顾问用量（cost-tracker 单独计价）。
  */
@@ -680,7 +680,7 @@ The current conversation ${model === undefined ? "runs without the advisor" : `k
 function isSameAdvisorModel(leftModel, model) {
   return isSameModelFamilyId(leftModel, model);
 }
-//@ chunk-9b6702jm.js:3402-3449 fingerprint = getExperimentAdvisorModels (1)
+//@ chunk-9b6702jm.js:3402-3449 fingerprint (2.1.88 match: getExperimentAdvisorModels, 1)
 /**
  * 把 advisorModel 写进全局配置。旧版名 getExperimentAdvisorModels 为错配。
  */

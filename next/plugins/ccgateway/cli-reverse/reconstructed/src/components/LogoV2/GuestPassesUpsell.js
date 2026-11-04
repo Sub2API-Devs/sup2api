@@ -110,7 +110,7 @@ function CompanyAnnouncementNotice() {
   } else notice = $[9];
   return notice;
 }
-//@ chunk-ag5x7vhf.js:79655-79841 fingerprint = resetIfPassesRefreshed (1)
+//@ chunk-ag5x7vhf.js:79655-79841 fingerprint (2.1.88 match: resetIfPassesRefreshed, 1)
 function resetIfPassesRefreshed(storageV5) {
   let remaining = getCachedRemainingPasses();
   if (remaining == null || remaining <= 0) return;
@@ -126,7 +126,7 @@ function resetIfPassesRefreshed(storageV5) {
       storageV5,
     );
 }
-//@ chunk-ag5x7vhf.js:79841-80009 fingerprint = shouldShowGuestPassesUpsell (1)
+//@ chunk-ag5x7vhf.js:79841-80009 fingerprint (2.1.88 match: shouldShowGuestPassesUpsell, 1)
 function shouldShowGuestPassesUpsell(storageV5) {
   let { eligible, hasCache } = checkCachedPassesEligibility();
   if (!eligible || !hasCache) return false;
@@ -136,7 +136,7 @@ function shouldShowGuestPassesUpsell(storageV5) {
   if (config.hasVisitedPasses) return false;
   return true;
 }
-//@ chunk-ag5x7vhf.js:80009-80161 fingerprint = incrementGuestPassesSeenCount (1)
+//@ chunk-ag5x7vhf.js:80009-80161 fingerprint (2.1.88 match: incrementGuestPassesSeenCount, 1)
 function incrementGuestPassesSeenCount(storageV5) {
   let newCount = 0;
   saveGlobalConfig((prev) => {
@@ -150,7 +150,7 @@ function incrementGuestPassesSeenCount(storageV5) {
     seen_count: newCount,
   });
 }
-//@ chunk-ag5x7vhf.js:80161-80518 fingerprint = GuestPassesUpsell (0.607)
+//@ chunk-ag5x7vhf.js:80161-80518 fingerprint (2.1.88 match: GuestPassesUpsell, 0.607)
 function GuestPassesUpsell() {
   let $ = useMemoCache(1);
   let t0;

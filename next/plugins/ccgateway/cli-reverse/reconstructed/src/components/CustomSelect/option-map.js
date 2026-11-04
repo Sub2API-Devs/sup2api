@@ -45,7 +45,7 @@ function isFunction(value) {
 function isFunction_2(value) {
   return typeof value === "function";
 }
-//@ chunk-ey2qag4x.js:37352-37574 fingerprint = OptionMap (1)
+//@ chunk-ey2qag4x.js:37352-37574 fingerprint (2.1.88 match: OptionMap, 1)
 class OptionMap extends Map {
   first;
   last;

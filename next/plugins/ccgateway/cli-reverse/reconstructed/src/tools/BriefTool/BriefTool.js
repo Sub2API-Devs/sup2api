@@ -52,7 +52,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tvzx5sxd.js:381-394 affinity
 var BRIEF_GATE_REFRESH_MS = 300000;
-//@ chunk-tvzx5sxd.js:394-467 facade-exports = isBriefEntitled (1)
+//@ chunk-tvzx5sxd.js:394-467 facade-exports (2.1.88 match: isBriefEntitled, 1)
 /**
  * Brief 授权：CLAUDE_CODE_BRIEF 环境变量或 GrowthBook tengu_kairos_brief（默认 false，5 分钟刷新）。
  */
@@ -87,7 +87,7 @@ function getBriefEnforceText() {
     ? featureValue_CACHED_MAY_BE_STALE
     : BRIEF_MODE_REPLY_REMINDER;
 }
-//@ chunk-kxyd0g16.js:29472-30470 fingerprint = inputSchema (0.62)
+//@ chunk-kxyd0g16.js:29472-30470 fingerprint (2.1.88 match: inputSchema, 0.62)
 /**
  * Brief 输入 schema：已上传文件对象、带附件与 status 的完整版、只有 message 的精简版。
  */
@@ -131,7 +131,7 @@ deferInit("chunk-kxyd0g16.js:29472", () => {
 function getAttachmentsIfEnabled(input) {
   return isBriefEnabled() && "attachments" in input ? input.attachments : undefined;
 }
-//@ chunk-kxyd0g16.js:30537-33507 fingerprint = BriefTool (0.489)
+//@ chunk-kxyd0g16.js:30537-33507 fingerprint (2.1.88 match: BriefTool, 0.489)
 /**
  * SendUserMessage 工具（别名 Brief，briefStandalone，只读可并发）。isEnabled：fH()（Brief 可用：用户开通 tengu_kairos_brief/CLAUDE_CODE_BRIEF 等）或 Mqe()（CLAUDE_CODE_PEWTER_OWL_TOOL 或 pewter_owl_tool 开关）。fH() 为真时输入含 attachments（本地路径或已上传 file_uuid）与 status（normal/proactive），否则只有 message。call：记录 tengu_brief_send；有附件时先做路径校验（restricted、工作目录外读取限制），再按上传通道上传；结果文本说明附件是否送达（本地渲染时提示只在桌面可见，失败时 is_error）。 Brief 输出 schema：message、attachments（路径、大小、是否图片、file_uuid、上传错误、缩放信息）、sentAt、rendered_locally。
  */

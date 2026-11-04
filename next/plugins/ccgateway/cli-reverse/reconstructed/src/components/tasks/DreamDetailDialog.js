@@ -26,7 +26,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 function hasTurnText(t) {
   return t.text !== "";
 }
-//@ chunk-18hwfzwa.js:701013-701228 fingerprint = _temp2 (1)
+//@ chunk-18hwfzwa.js:701013-701228 fingerprint (2.1.88 match: _temp2, 1)
 function renderDreamTurn(turn, i) {
   return jsxProd_default_2(
     Box,
@@ -49,7 +49,7 @@ function renderDreamTurn(turn, i) {
 }
 //@ chunk-18hwfzwa.js:701228-701238 layout
 var MAX_VISIBLE_TURNS = 6;
-//@ chunk-18hwfzwa.js:701238-704222 fingerprint = DreamDetailDialog (0.639)
+//@ chunk-18hwfzwa.js:701238-704222 fingerprint (2.1.88 match: DreamDetailDialog, 0.639)
 /**
  * 记忆整理（dream）任务详情：涉及的会话与文件数、当前步骤与工具活动。
  */

@@ -509,7 +509,7 @@ function pluginUpdateSummary(updatedCount, policyRefusedCount, failedCount) {
           : "No marketplaces needed updating";
   return icon === null ? text : `${icon} ${text}`;
 }
-//@ chunk-d4eg9at2.js:4007-4192 facade-exports = handleMarketplaceError (0.768)
+//@ chunk-d4eg9at2.js:4007-4192 facade-exports (2.1.88 match: handleMarketplaceError, 0.768)
 /**
  * 插件/市场命令出错的统一处理：策略拒绝打印 refused，其他错误记日志并以错误退出。
  */
@@ -540,7 +540,7 @@ async function reportOperationFailure(error, commandLine, jsonPayload, error_2 =
 function asMarketplaceError(error, maxChars = 300) {
   return error instanceof CommandSourceError ? error : printableName(errorMessage(error), maxChars);
 }
-//@ chunk-d4eg9at2.js:4378-4885 fingerprint = printValidationResult (0.867)
+//@ chunk-d4eg9at2.js:4378-4885 fingerprint (2.1.88 match: printValidationResult, 0.867)
 function printValidationResult(result) {
   let lines = [];
   if (result.errors.length > 0) {
@@ -574,7 +574,7 @@ function printValidationResult(result) {
 //@ chunk-d4eg9at2.js:4885-5108 layout
 var VALID_PLUGIN_DIR_SHAPES =
   "one with .claude-plugin/plugin.json, or one with no plugin.json and a skills/<name>/SKILL.md; a symbolic link in place of the folder, of skills, of <name> or of SKILL.md does not count, and SKILL.md must be a file";
-//@ chunk-d4eg9at2.js:5108-8930 facade-exports = pluginValidateHandler (0.276)
+//@ chunk-d4eg9at2.js:5108-8930 facade-exports (2.1.88 match: pluginValidateHandler, 0.276)
 /**
  * claude plugin validate：校验插件/市场目录结构与清单。
  */
@@ -1209,7 +1209,7 @@ function MarketplaceResultLines(props) {
  */
 var INVALID_MARKETPLACE_SOURCE_MESSAGE =
   "Invalid marketplace source format. Try: owner/repo, https://..., or ./path";
-//@ chunk-d4eg9at2.js:17941-22612 facade-exports = marketplaceAddHandler (0.454)
+//@ chunk-d4eg9at2.js:17941-22612 facade-exports (2.1.88 match: marketplaceAddHandler, 0.454)
 /**
  * claude plugin marketplace add：添加市场（owner/repo、URL 或路径），支持 --claudeai、--from-link、--resolve-only。
  */
@@ -1600,7 +1600,7 @@ async function addClaudeAiMarketplaceCommand(ink, name, settings, credentials) {
   await ink.waitUntilExit();
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:25089-25201 layout = readHeadAndTail (0.802)
+//@ chunk-d4eg9at2.js:25089-25201 layout (2.1.88 match: readHeadAndTail, 0.802)
 function readHeadAndTail(text) {
   return /^[A-Za-z0-9._/\\:~-]{1,200}$/.test(text)
     ? text
@@ -1615,7 +1615,7 @@ function displaySafeUrl(url) {
     ? url
     : readHeadAndTail(url);
 }
-//@ chunk-d4eg9at2.js:25286-28897 facade-exports = marketplaceListHandler (0.405)
+//@ chunk-d4eg9at2.js:25286-28897 facade-exports (2.1.88 match: marketplaceListHandler, 0.405)
 /**
  * claude plugin marketplace list。
  */
@@ -1827,7 +1827,7 @@ async function marketplaceListHandler(root, options, settings) {
   await renderAndRun(renderRoot, view);
   await logFeatureOkAsync("cli_marketplace_list");
 }
-//@ chunk-d4eg9at2.js:28897-30866 facade-exports = marketplaceRemoveHandler (0.274)
+//@ chunk-d4eg9at2.js:28897-30866 facade-exports (2.1.88 match: marketplaceRemoveHandler, 0.274)
 /**
  * claude plugin marketplace remove。
  */
@@ -1962,7 +1962,7 @@ function ManagedMarketplaceNotice() {
   } else element = $[0];
   return element;
 }
-//@ chunk-d4eg9at2.js:31326-33318 facade-exports = marketplaceUpdateHandler (0.472)
+//@ chunk-d4eg9at2.js:31326-33318 facade-exports (2.1.88 match: marketplaceUpdateHandler, 0.472)
 /**
  * claude plugin marketplace update。
  */
@@ -2117,7 +2117,7 @@ function SuccessLine(props) {
 function isValidInstallScope(scope) {
   return VALID_INSTALLABLE_SCOPES.some((scopeName) => scopeName === scope);
 }
-//@ chunk-d4eg9at2.js:33561-33752 facade-exports = pluginInstallHandler (0.744)
+//@ chunk-d4eg9at2.js:33561-33752 facade-exports (2.1.88 match: pluginInstallHandler, 0.744)
 /**
  * 校验 --scope（默认 user；--cowork 只能 user），非法时退出。
  */
@@ -2305,7 +2305,7 @@ async function pluginInstallHandler(root, spec, options, storageV5) {
   await renderRoot.waitUntilExit();
   await gracefulShutdown(0);
 }
-//@ chunk-d4eg9at2.js:36170-36520 facade-exports = pluginUninstallHandler (0.343)
+//@ chunk-d4eg9at2.js:36170-36520 facade-exports (2.1.88 match: pluginUninstallHandler, 0.343)
 /**
  * claude plugin uninstall：卸载插件（--keep-data、--prune、--json）。
  */
@@ -2352,7 +2352,7 @@ async function pluginPruneHandler(getRoot, options, storage) {
   await logFeatureOkAsync("cli_plugin_prune");
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:36768-37499 facade-exports = enablePlugin (0.424)
+//@ chunk-d4eg9at2.js:36768-37499 facade-exports (2.1.88 match: enablePlugin, 0.424)
 async function pluginEnableHandler(getRoot, plugin, options, storage) {
   if (options.cowork) setUseCoworkPlugins(true);
   let scope = pluginEnableHandler_2(options);
@@ -2413,7 +2413,7 @@ async function pluginEnableHandler(getRoot, plugin, options, storage) {
   await logFeatureOkAsync("cli_plugin_enable");
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:37499-38038 facade-exports = pluginDisableHandler (0.651)
+//@ chunk-d4eg9at2.js:37499-38038 facade-exports (2.1.88 match: pluginDisableHandler, 0.651)
 /**
  * claude plugin disable：禁用单个或 --all 全部插件。
  */
@@ -2448,7 +2448,7 @@ async function pluginDisableHandler(getRoot, plugin, options, storage) {
   await logFeatureOkAsync("cli_plugin_disable");
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:38038-38432 facade-exports = pluginUpdateHandler (0.778)
+//@ chunk-d4eg9at2.js:38038-38432 facade-exports (2.1.88 match: pluginUpdateHandler, 0.778)
 /**
  * claude plugin update：按作用域更新插件。
  */
@@ -2694,7 +2694,7 @@ function hasInventoryRows(options) {
     options.standaloneWarningRows.length > 0
   );
 }
-//@ chunk-d4eg9at2.js:43027-43872 fingerprint = pluginListHandler (0.486)
+//@ chunk-d4eg9at2.js:43027-43872 fingerprint (2.1.88 match: pluginListHandler, 0.486)
 function pluginListHandler_2(options) {
   if (!hasInventoryRows(options)) return [];
   let { standaloneErrorRows, standaloneWarningRows } = options;
@@ -2906,7 +2906,7 @@ function parseStringRecord(value) {
  */
 var MAX_VALUES_STDIN_BYTES = 262144;
 var MAX_OPTION_VALUE_BYTES = 65536;
-//@ chunk-d4eg9at2.js:46615-46781 placement = getOptions (0.609)
+//@ chunk-d4eg9at2.js:46615-46781 placement (2.1.88 match: getOptions, 0.609)
 async function getOptions() {
   process.stdin.setEncoding("utf8");
   let text = "";

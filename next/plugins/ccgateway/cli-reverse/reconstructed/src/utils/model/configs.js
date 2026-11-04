@@ -39,7 +39,7 @@ import { getAPIProvider } from "./providers.js";
 import { isContextBetaRefused } from "../betas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v9tcvh08.js:27281-28064 fingerprint = ALL_MODEL_CONFIGS (0.424)
+//@ chunk-v9tcvh08.js:27281-28064 fingerprint (2.1.88 match: ALL_MODEL_CONFIGS, 0.424)
 /**
  * 按模型代号的模型配置表（haiku35 … sonnet46/5、opus40 … 5.5、fable5/5.1 等，外加 mythos 的多提供者 id）。
  */
@@ -258,7 +258,7 @@ function autoCompactWindowsCache() {
  * 1e6。
  */
 var ONE_MILLION_TOKENS = 1e6;
-//@ chunk-aepeg2w5.js:473754-474021 fingerprint = CLAUDE_SONNET_4_6_CONFIG (0.301)
+//@ chunk-aepeg2w5.js:473754-474021 fingerprint (2.1.88 match: CLAUDE_SONNET_4_6_CONFIG, 0.301)
 /**
  * claude-sonnet-4-6（非 1M 变体）时读客户端数据 kelp_forest_sonnet 作为上下文窗口覆盖（200k 到 1M 之间）。旧版名 CLAUDE_SONNET_4_6_CONFIG 为错配。
  */

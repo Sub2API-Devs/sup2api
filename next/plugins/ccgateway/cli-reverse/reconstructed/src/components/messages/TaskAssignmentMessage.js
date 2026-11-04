@@ -32,11 +32,11 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { StatusIcon } from "../design-system/StatusIcon.js";
 import { MessageResponse } from "../MessageResponse.js";
 
-//@ chunk-aqdf5t3e.js:29576-29636 fingerprint = getTaskAssignmentSummary (0.446)
+//@ chunk-aqdf5t3e.js:29576-29636 fingerprint (2.1.88 match: getTaskAssignmentSummary, 0.446)
 function getTaskAssignmentSummary(state, assignment, slug, taskId) {
   if (state.supervisors.get(slug) === assignment) assignment.taskId = taskId;
 }
-//@ chunk-ah34pb7m.js:83471-84268 fingerprint = TaskAssignmentDisplay (0.488)
+//@ chunk-ah34pb7m.js:83471-84268 fingerprint (2.1.88 match: TaskAssignmentDisplay, 0.488)
 function TaskAssignmentDisplay(props) {
   let $ = useMemoCache(16);
   let { assignment, senderName } = props;
@@ -110,7 +110,7 @@ function TaskAssignmentDisplay(props) {
   } else boxElement = $[15];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:84268-84356 fingerprint = tryRenderTaskAssignmentMessage (0.717)
+//@ chunk-ah34pb7m.js:84268-84356 fingerprint (2.1.88 match: tryRenderTaskAssignmentMessage, 0.717)
 function tryRenderTaskAssignmentMessage(content, senderName) {
   let assignment = isTaskAssignment(content);
   if (assignment)

@@ -38,7 +38,7 @@ import { WorkerBadge } from "../permissions/WorkerBadge.js";
 import { color } from "../design-system/color.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 
-//@ chunk-cpqpnzp4.js:37997-40831 fingerprint = MCPReconnect (0.613)
+//@ chunk-cpqpnzp4.js:37997-40831 fingerprint (2.1.88 match: MCPReconnect, 0.613)
 function MCPReconnect(props) {
   let $ = useMemoCache(30);
   let { serverName, onComplete } = props;

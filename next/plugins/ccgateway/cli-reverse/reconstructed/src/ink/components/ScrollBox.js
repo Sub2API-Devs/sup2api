@@ -32,7 +32,7 @@ deferInit("chunk-01xdq6fy.js:460", () => {
 function increment(count) {
   return count + 1;
 }
-//@ chunk-01xdq6fy.js:492-3446 fingerprint = ScrollBox (0.89)
+//@ chunk-01xdq6fy.js:492-3446 fingerprint (2.1.88 match: ScrollBox, 0.89)
 /**
  * <ScrollBox>：overflow 为 scroll 的 ink-box（默认作为选区范围 selectionScope），内容放在一列子 Box 中。通过 ref 暴露命令式 API：scrollTo / scrollToElement（锚定到元素，start/center/end/nearest）/ scrollBy（累积到 pendingScrollDelta，由渲染时逐帧排水）/ scrollToBottom（重新开启粘底）、读 scrollTop/高度/视口、isSticky、subscribe、setClampBounds；滚动只标脏并在微任务里触发重绘，不走 React 状态。stickyScroll 让内容增长时自动跟到底，followGrowth=false 关闭位置跟随。
  */

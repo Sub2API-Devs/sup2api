@@ -38,7 +38,7 @@ function getDatavizDesignAddendum() {
 function isArtifactDesignSkillEnabled() {
   return isArtifactToolRegistered() && !isBuiltInArtifactHiddenForMcp();
 }
-//@ chunk-hantmvxa.js:26478-26641 placement = registerLoopSkill (0.574)
+//@ chunk-hantmvxa.js:26478-26641 placement (2.1.88 match: registerLoopSkill, 0.574)
 /**
  * 注册 artifact-design 内置 skill（模型可调用、用户不可见），isEnabled 由 artifact 功能门控。旧版此处匹配为 registerLoopSkill，实为不同 skill。
  */

@@ -11,7 +11,7 @@
 import { createHash } from "crypto";
 import { base64URLEncode } from "./auth-code-listener.js";
 
-//@ chunk-b8krr1px.js:5027-5092 fingerprint = generateCodeChallenge (1)
+//@ chunk-b8krr1px.js:5027-5092 fingerprint (2.1.88 match: generateCodeChallenge, 1)
 /**
  * PKCE：sha256(verifier) 的 base64url。
  */

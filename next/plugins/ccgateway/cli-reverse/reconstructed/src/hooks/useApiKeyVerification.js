@@ -95,7 +95,7 @@ class ApiKeyVerification {
     return this.#e === "missing" || this.#e === "invalid";
   }
 }
-//@ chunk-18hwfzwa.js:186312-186519 fingerprint = useApiKeyVerification (0.836)
+//@ chunk-18hwfzwa.js:186312-186519 fingerprint (2.1.88 match: useApiKeyVerification, 0.836)
 function useApiKeyVerification() {
   if (getAPIProvider() === "gateway" && !getGatewayAuth()) return "missing";
   if (!isAnthropicAuthEnabled() || isClaudeAISubscriber()) return "valid";

@@ -14,7 +14,7 @@ import { countCharInString, firstLineOf } from "../stringUtils.js";
 import { splitCommand } from "./commands.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1047628-1047821 fingerprint = isKnownSubcommand (1)
+//@ chunk-e6aww6q8.js:1047628-1047821 fingerprint (2.1.88 match: isKnownSubcommand, 1)
 /**
  * 参数是否为 spec 中的子命令名（大小写不敏感，支持别名数组）。
  */
@@ -27,7 +27,7 @@ function isKnownSubcommand(arg, spec) {
       : sub.name.toLowerCase() === lower,
   );
 }
-//@ chunk-e6aww6q8.js:3034349-3034450 fingerprint = WRAPPER_COMMANDS (1)
+//@ chunk-e6aww6q8.js:3034349-3034450 fingerprint (2.1.88 match: WRAPPER_COMMANDS, 1)
 /**
  * 前缀提取用的常量：纯数字参数正则、环境变量赋值正则、总视为包装命令的集合（nice），以及转数组的辅助函数。
  */
@@ -41,14 +41,14 @@ deferInit("chunk-e6aww6q8.js:3034349", () => {
   ALWAYS_WRAPPER_COMMANDS = new Set(["nice"]);
   toArray = (val) => (Array.isArray(val) ? val : [val]);
 });
-//@ chunk-e6aww6q8.js:3034450-3034588 layout = isKnownSubcommand (1)
+//@ chunk-e6aww6q8.js:3034450-3034588 layout (2.1.88 match: isKnownSubcommand, 1)
 function isExactSubcommand(arg, spec) {
   if (!spec?.subcommands?.length) return false;
   return spec.subcommands.some((sub) =>
     Array.isArray(sub.name) ? sub.name.includes(arg) : sub.name === arg,
   );
 }
-//@ chunk-e6aww6q8.js:3034588-3035162 fingerprint = getCommandPrefixStatic (1)
+//@ chunk-e6aww6q8.js:3034588-3035162 fingerprint (2.1.88 match: getCommandPrefixStatic, 1)
 /**
  * 用 Fig spec 静态计算命令前缀（用于“始终允许 xxx 开头的命令”建议）：递归最多 10 层/包装 2 层；包装命令（nice 或 spec 中 isCommand 参数）递归取被包装命令前缀；前缀词数少于 MH 要求时返回 null 前缀；保留前导 VAR=val。
  */
@@ -85,7 +85,7 @@ async function getCommandPrefixStatic(specRegistry, command, recursionDepth = 0,
     commandPrefix: prefix ? envPrefix + prefix : null,
   };
 }
-//@ chunk-e6aww6q8.js:3035162-3035729 fingerprint = handleWrapper (1)
+//@ chunk-e6aww6q8.js:3035162-3035729 fingerprint (2.1.88 match: handleWrapper, 1)
 /**
  * 处理包装命令（timeout/nohup/srun…）：按 spec 的 isCommand 参数位置或第一个非选项参数找到被包装命令，递归取其前缀并拼上包装名。
  */
@@ -123,7 +123,7 @@ async function handleWrapper(specRegistry, wrapperName, args, recursionDepth, wr
   );
   return !result?.commandPrefix ? null : `${wrapperName} ${result.commandPrefix}`;
 }
-//@ chunk-e6aww6q8.js:3035729-3036137 fingerprint = getCompoundCommandPrefixesStatic (1)
+//@ chunk-e6aww6q8.js:3035729-3036137 fingerprint (2.1.88 match: getCompoundCommandPrefixesStatic, 1)
 /**
  * 复合命令的前缀：用 splitCommand 拆子命令，逐个求前缀（可用回调排除），按首词分组后取最长公共前缀。
  */
@@ -170,7 +170,7 @@ function longestCommonPrefix(strings) {
   }
   return words.slice(0, Math.max(1, commonWords)).join(" ");
 }
-//@ chunk-e6aww6q8.js:3036378-3036577 layout = getCompoundCommandPrefixesStatic (1)
+//@ chunk-e6aww6q8.js:3036378-3036577 layout (2.1.88 match: getCompoundCommandPrefixesStatic, 1)
 /**
  * 复合命令逐子命令求前缀，去掉命令自带的 VAR=val，再按 spec 逐层扩展子命令，返回去重后的前缀列表。
  */
@@ -217,7 +217,7 @@ async function extendPrefixBySpec(command, prefix) {
   }
   return parts.join(" ");
 }
-//@ chunk-e6aww6q8.js:3037078-3037238 placement = isKnownSubcommand (1)
+//@ chunk-e6aww6q8.js:3037078-3037238 placement (2.1.88 match: isKnownSubcommand, 1)
 function findSubcommandSpec(arg, spec) {
   if (!arg?.subcommands?.length) return null;
   let lower = spec.toLowerCase();

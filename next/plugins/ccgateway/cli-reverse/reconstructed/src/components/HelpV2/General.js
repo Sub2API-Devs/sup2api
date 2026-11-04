@@ -20,7 +20,7 @@ import { PromptInputHelpMenu } from "../PromptInput/PromptInputHelpMenu.js";
 
 //@ chunk-yxcx2jtr.js:15530-15540 affinity
 var GENERAL_COLUMN_WIDTH = 44;
-//@ chunk-yxcx2jtr.js:15540-16345 callgraph-witnessed = General (0.291)
+//@ chunk-yxcx2jtr.js:15540-16345 callgraph-witnessed (2.1.88 match: General, 0.291)
 function General() {
   let $ = useMemoCache(8);
   let { rows } = useTerminalSize();

@@ -653,7 +653,7 @@ var PRE_TOOL_HOOK_TIMEOUT_MESSAGE =
   "PreToolUse hook did not respond before its timeout (host client may be unreachable). The tool call was not executed; other configured hooks may not have completed.";
 var PRE_TOOL_HOOK_ERROR_MESSAGE =
   "PreToolUse hook failed with an unexpected error. The tool call was not executed; other configured hooks may not have completed.";
-//@ chunk-e6aww6q8.js:3886174-3888827 fingerprint = runPostToolUseHooks (0.685)
+//@ chunk-e6aww6q8.js:3886174-3888827 fingerprint (2.1.88 match: runPostToolUseHooks, 0.685)
 /**
  * runPostToolUseHooks：工具成功后执行 PostToolUse hooks，产出 hook 消息、附加上下文、阻止继续，支持 hook 改写 MCP 工具输出（updatedMCPToolOutput）。
  */
@@ -821,7 +821,7 @@ async function* runPostToolUseHooks(
     logError(withTelemetryMessage(toError(error), "PostToolUse hook dispatch failed"));
   }
 }
-//@ chunk-e6aww6q8.js:3888827-3890783 fingerprint = runPostToolUseFailureHooks (0.806)
+//@ chunk-e6aww6q8.js:3888827-3890783 fingerprint (2.1.88 match: runPostToolUseFailureHooks, 0.806)
 /**
  * runPostToolUseFailureHooks：工具失败（含中断）后执行 PostToolUseFailure hooks，产出 hook 消息与附加上下文。
  */
@@ -997,7 +997,7 @@ function getHookUpdatedInput(hookPermissionResult, input) {
       : undefined) ?? input
   );
 }
-//@ chunk-e6aww6q8.js:3891167-3894038 fingerprint = resolveHookPermissionDecision (0.405)
+//@ chunk-e6aww6q8.js:3891167-3894038 fingerprint (2.1.88 match: resolveHookPermissionDecision, 0.405)
 /**
  * resolveHookPermissionDecision：把 PreToolUse hook 的权限结论与正常权限流程合并。hook allow 仍要过 deny/ask 规则；hook ask 或无结论走 canUseTool；返回最终决策与（可能被改写的）输入。
  */
@@ -1280,7 +1280,7 @@ async function runPermissionPipeline(decision, request) {
     input: request.input,
   };
 }
-//@ chunk-e6aww6q8.js:3894954-3900124 fingerprint = runPreToolUseHooks (0.724)
+//@ chunk-e6aww6q8.js:3894954-3900124 fingerprint (2.1.88 match: runPreToolUseHooks, 0.724)
 /**
  * runPreToolUseHooks：执行 PreToolUse hooks。产出 message、hookPermissionResult（allow/deny/ask/defer）、hookUpdatedInput（改写后再过 validateInput）、preventContinuation/stopReason、additionalContext、stop；hook 超时或异常时视为阻止执行并给出固定文案。
  */

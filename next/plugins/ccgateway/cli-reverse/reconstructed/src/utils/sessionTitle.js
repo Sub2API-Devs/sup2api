@@ -490,7 +490,7 @@ function syncTitleToRemoteSession(title, update) {
 function firstHumanTurn(messages) {
   return messages.find(isHumanTurn_3);
 }
-//@ chunk-q6msdgx4.js:2627-3004 fingerprint = extractConversationText (0.878)
+//@ chunk-q6msdgx4.js:2627-3004 fingerprint (2.1.88 match: extractConversationText, 0.878)
 /**
  * 抽取会话中用户与助手的可见文本（跳过 meta），用于生成标题。
  */
@@ -536,7 +536,7 @@ Return JSON with a single "title" field. Capitalize the first letter of the titl
     }),
   );
 });
-//@ chunk-q6msdgx4.js:6131-7119 fingerprint = generateSessionTitle (0.592)
+//@ chunk-q6msdgx4.js:6131-7119 fingerprint (2.1.88 match: generateSessionTitle, 0.592)
 /**
  * 用小模型根据对话文本生成会话标题（JSON {title}），使用用户的语言。
  */

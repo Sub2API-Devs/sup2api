@@ -1094,7 +1094,7 @@ async function runSdkHostCommand(request, canUseTool, context) {
     );
   return result;
 }
-//@ chunk-tyg7f3ek.js:566023-566112 placement = singleQuoteForEval (1)
+//@ chunk-tyg7f3ek.js:566023-566112 placement (2.1.88 match: singleQuoteForEval, 1)
 function shellQuoteIfNeeded(s) {
   return /^[A-Za-z0-9_./:@+,-]+$/.test(s) ? s : `'${s.replaceAll("'", `'"'"'`)}'`;
 }

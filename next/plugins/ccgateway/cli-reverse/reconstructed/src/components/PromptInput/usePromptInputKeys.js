@@ -17,7 +17,7 @@ import { renderCompactSummaryText } from "../CompactSummary.js";
 import { escapePastedContentTag } from "../../utils/userTurnTags.js";
 import { MAX_HISTORY_ENTRIES } from "../../history.js";
 
-//@ chunk-18hwfzwa.js:877453-877576 placement = SpeechBubble (0.305)
+//@ chunk-18hwfzwa.js:877453-877576 placement (2.1.88 match: SpeechBubble, 0.305)
 /**
  * 编辑器等待提示条的边框样式（按模式取边框色，只画上下边）。
  */
@@ -83,7 +83,7 @@ function isDeleteKey(key) {
 function isDeleteOrKillKey(key) {
   return isDeleteKey(key) || (key.ctrl && (key.key === "u" || key.key === "w" || key.key === "k"));
 }
-//@ chunk-18hwfzwa.js:878476-878607 placement = decodeModifier (0.87)
+//@ chunk-18hwfzwa.js:878476-878607 placement (2.1.88 match: decodeModifier, 0.87)
 function getPrintableKey(modifier) {
   if (modifier === null) return null;
   let keystroke = keyEventToKeystroke(modifier);
@@ -128,7 +128,7 @@ function queuedHumanRows(viewSelectionMode, { queuedRowIds }) {
 function selectCommands(state) {
   return state.commands;
 }
-//@ chunk-18hwfzwa.js:879104-879143 placement = _temp (1)
+//@ chunk-18hwfzwa.js:879104-879143 placement (2.1.88 match: _temp, 1)
 function selectMcpClients2(s) {
   return s.mcp.clients;
 }

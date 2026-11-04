@@ -14,7 +14,7 @@ import { lt_2 as lt } from "../utils/semver.js";
 import { getFeatureValue_DEPRECATED } from "../services/analytics/growthbook.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4cm44bmp.js:25351-26670 fingerprint = DEFAULT_ENV_LESS_BRIDGE_CONFIG (0.894)
+//@ chunk-4cm44bmp.js:25351-26670 fingerprint (2.1.88 match: DEFAULT_ENV_LESS_BRIDGE_CONFIG, 0.894)
 /**
  * 默认配置与 schema：init_retry_*、http_timeout_ms、uuid_dedup_buffer_size、heartbeat_interval_ms/jitter、token_refresh_buffer_ms、teardown_archive_timeout_ms、connect_timeout_ms、oauth_retry_*、min_version。
  */
@@ -65,13 +65,13 @@ deferInit("chunk-4cm44bmp.js:25351", () => {
     }),
   );
 });
-//@ chunk-4cm44bmp.js:26670-26787 fingerprint = getEnvLessBridgeConfig (1)
+//@ chunk-4cm44bmp.js:26670-26787 fingerprint (2.1.88 match: getEnvLessBridgeConfig, 1)
 async function getEnvLessBridgeConfig() {
   let raw = await getFeatureValue_DEPRECATED("tengu_bridge_repl_v2_config", DEFAULT_ENV_LESS_BRIDGE_CONFIG);
   let parsed = envLessBridgeConfigSchema().safeParse(raw);
   return parsed.success ? parsed.data : DEFAULT_ENV_LESS_BRIDGE_CONFIG;
 }
-//@ chunk-4cm44bmp.js:26787-28000 fingerprint = checkEnvLessBridgeMinVersion (0.511)
+//@ chunk-4cm44bmp.js:26787-28000 fingerprint (2.1.88 match: checkEnvLessBridgeMinVersion, 0.511)
 /**
  * 当前版本低于配置的 min_version 时返回提示文本（要求 claude update），否则 null。
  */

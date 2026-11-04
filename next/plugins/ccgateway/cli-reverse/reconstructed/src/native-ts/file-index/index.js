@@ -41,7 +41,7 @@ var PENALTY_GAP_EXTENSION = 1;
 var TOP_LEVEL_CACHE_LIMIT = 100;
 var MAX_QUERY_LEN = 64;
 var CHUNK_MS = 4;
-//@ chunk-dcmhvw5a.js:45090-48582 fingerprint = FileIndex (0.826)
+//@ chunk-dcmhvw5a.js:45090-48582 fingerprint (2.1.88 match: FileIndex, 0.826)
 /**
  * 文件路径模糊搜索索引（2.1.88 中替代原生 Rust 实现的 TS 版）：每个路径存小写形式、a-z 位图（快速排除不含查询字母的路径）、长度、文件名起点及文件名位图。search：位图过滤后贪心找子序列，计算连续/间隙得分，路径与文件名两种匹配取高者，加边界/驼峰加分与短路径加分，维护大小为 limit 的有序 top-k；最后按名次归一化成 0..1 分数（含 test 的路径略降权）并给出匹配位置。异步构建时分片让出事件循环，部分就绪即可查询。
  */
@@ -335,7 +335,7 @@ function mapLowerPositionsToOriginal(path, positions) {
     lowerIndex += lowerLen;
   }
 }
-//@ chunk-dcmhvw5a.js:49309-49677 fingerprint = computeTopLevelEntries (0.74)
+//@ chunk-dcmhvw5a.js:49309-49677 fingerprint (2.1.88 match: computeTopLevelEntries, 0.74)
 /**
  * 空查询时展示的顶层条目：各路径第一段去重（最多 limit 个），按长度再字典序排序。
  */

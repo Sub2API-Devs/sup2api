@@ -13,7 +13,7 @@ import { isClaudeAISubscriber, getAuthTokenSource, hasAnthropicApiKey } from "./
 import { isUsageBasedBilling } from "./planTiers.js";
 import { getGlobalConfig } from "./config.js";
 
-//@ chunk-hwmsct5x.js:177706-178037 fingerprint = hasConsoleBillingAccess (1)
+//@ chunk-hwmsct5x.js:177706-178037 fingerprint (2.1.88 match: hasConsoleBillingAccess, 1)
 /**
  * Console 账单权限（决定是否显示费用提示）：DISABLE_COST_WARNINGS 关闭；API 用户需组织角色 admin/billing 或工作区角色 workspace_admin/workspace_billing。
  */

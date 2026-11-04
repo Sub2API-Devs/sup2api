@@ -207,7 +207,7 @@ function isPresencePing(userPromptText) {
   if (/^(hi+|hello+|he+y+|yo+)$/.test(trimmed_2)) return true;
   return PRESENCE_PINGS.has(trimmed_2);
 }
-//@ chunk-ha3km179.js:16471-16506 placement = getValueFromInput (1)
+//@ chunk-ha3km179.js:16471-16506 placement (2.1.88 match: getValueFromInput, 1)
 var getValueFromInput = (command, waited) => waited && command.mode === "prompt";
 //@ chunk-ha3km179.js:16506-16601 placement
 /**
@@ -235,7 +235,7 @@ function filterPromptSubmissions(commands, messageQueue) {
     else if (!getValueFromInput(command, waited)) deliverable.push(command);
   return queuedDeliverable(deliverable, messageQueue);
 }
-//@ chunk-ha3km179.js:16786-16861 placement = processQueuedCommands (1)
+//@ chunk-ha3km179.js:16786-16861 placement (2.1.88 match: processQueuedCommands, 1)
 var processQueuedCommands = (queuedCommands) =>
   queuedCommands.mode === "task-notification"
     ? {
@@ -1033,7 +1033,7 @@ function buildEditToolUses(filePath, edits, toolUseIds) {
     })),
   );
 }
-//@ chunk-ha3km179.js:28032-28113 placement = hasMemoryFileRead (1)
+//@ chunk-ha3km179.js:28032-28113 placement (2.1.88 match: hasMemoryFileRead, 1)
 function hasMemoryFileRead(filePath, id) {
   return synthesizedAssistantMessage([
     {
@@ -1535,7 +1535,7 @@ function attachmentToTimelineEvents(attachment, pairing) {
       return null;
   }
 }
-//@ chunk-ha3km179.js:34422-34648 placement = extractErrorTypeFromData (1)
+//@ chunk-ha3km179.js:34422-34648 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function joinNonEmptyText(data) {
   if (typeof data === "string") return data.trim() ? data : undefined;
   if (Array.isArray(data)) {

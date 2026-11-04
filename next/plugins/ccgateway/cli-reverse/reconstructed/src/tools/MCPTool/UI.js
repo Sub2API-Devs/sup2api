@@ -44,7 +44,7 @@ var CONTROL_CHARS_REGEX = /[\x00-\x1f\x7f-\x9f]/g;
 function stripControlChars(text) {
   return text.replace(CONTROL_CHARS_REGEX, "");
 }
-//@ chunk-e6aww6q8.js:4678288-4678495 callgraph-fingerprint = renderToolUseMessage (0.651)
+//@ chunk-e6aww6q8.js:4678288-4678495 callgraph-fingerprint (2.1.88 match: renderToolUseMessage, 0.651)
 /**
  * MCP 工具调用参数的单行显示：优先用 jQ 专用格式，否则 "键: JSON值" 用逗号连接，并转义 C1 控制字符。
  */
@@ -82,7 +82,7 @@ function firstKeyLabel(entry) {
 }
 //@ chunk-hny2rpzz.js:827-837 layout
 var LARGE_MCP_RESPONSE_TOKENS = 1e4;
-//@ chunk-hny2rpzz.js:837-1473 fingerprint = renderToolUseProgressMessage (0.88)
+//@ chunk-hny2rpzz.js:837-1473 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.88)
 /**
  * MCP 工具进度渲染：无进度显示 "Running…"；有 total 时画 20 宽进度条和百分比；否则显示进度消息或 "Processing… N"。
  */
@@ -168,7 +168,7 @@ function renderMcpToolResultMessage(doc, progressMessages, { verbose, input }) {
   }
   return renderToolResultMessage(output, verbose);
 }
-//@ chunk-hny2rpzz.js:1679-2423 fingerprint = renderToolResultMessage (0.834)
+//@ chunk-hny2rpzz.js:1679-2423 fingerprint (2.1.88 match: renderToolResultMessage, 0.834)
 /**
  * 渲染 MCP 结果内容：估算 token 超过 10000 时加大响应警告；数组逐块渲染（图片显示 [Image]）；空结果显示 (No content)。
  */
@@ -245,7 +245,7 @@ function renderToolResultMessage(output, verbose) {
     });
   return contentElement;
 }
-//@ chunk-hny2rpzz.js:2645-2921 fingerprint = parseJsonEntries (1)
+//@ chunk-hny2rpzz.js:2645-2921 fingerprint (2.1.88 match: parseJsonEntries, 1)
 function parseJsonEntries(content, { maxChars, maxKeys }) {
   let trimmed = content.trim();
   if (trimmed.length === 0 || trimmed.length > maxChars || trimmed[0] !== "{") return null;
@@ -262,7 +262,7 @@ function parseJsonEntries(content, { maxChars, maxKeys }) {
 }
 //@ chunk-hny2rpzz.js:2921-2993 layout
 var SLACK_MESSAGE_LINK_REGEX = /^https:\/\/[a-z0-9-]+\.slack\.com\/archives\/([A-Z0-9]+)\/p\d+$/;
-//@ chunk-hny2rpzz.js:2993-3448 fingerprint = trySlackSendCompact (1)
+//@ chunk-hny2rpzz.js:2993-3448 fingerprint (2.1.88 match: trySlackSendCompact, 1)
 /**
  * 识别 Slack 发送消息的 JSON 结果，取 message_link 与频道名，用于紧凑显示。
  */
@@ -299,7 +299,7 @@ function isLargeMcpOutput(output, options) {
     return output.some((block) => block.type === "text" && exceedsLineLimit(block.text, columns));
   return false;
 }
-//@ chunk-ah34pb7m.js:256016-256269 callgraph-fingerprint = MCPTextOutput (0.169)
+//@ chunk-ah34pb7m.js:256016-256269 callgraph-fingerprint (2.1.88 match: MCPTextOutput, 0.169)
 /**
  * 结构化 MCP 文本输出渲染：能按 schema 解析时显示摘要，否则按普通文本行显示。
  */

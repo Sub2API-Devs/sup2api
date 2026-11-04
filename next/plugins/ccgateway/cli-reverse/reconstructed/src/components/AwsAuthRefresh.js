@@ -27,7 +27,7 @@ import { Box, Text } from "../ink/components/Text.js";
 import { Spinner } from "./Spinner.js";
 import { AwsAuthStatusBox } from "./AwsAuthStatusBox.js";
 
-//@ chunk-s5p7fp0c.js:24518-25025 placement = call (0.356)
+//@ chunk-s5p7fp0c.js:24518-25025 placement (2.1.88 match: call, 0.356)
 function call(props) {
   let $ = useMemoCache(4);
   let { onComplete } = props;

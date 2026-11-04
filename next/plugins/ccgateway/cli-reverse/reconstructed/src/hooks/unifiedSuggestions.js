@@ -18,7 +18,7 @@ import { isMcpAppResource } from "../services/mcp/toolNameLimits.js";
 import { literalPrefixBeforeBrace } from "../utils/suggestions/uriTemplate.js";
 import { Fuse } from "../../vendor/fuse.js/dist/fuse.mjs";
 
-//@ chunk-18hwfzwa.js:611275-611822 fingerprint = createSuggestionFromSource (0.772)
+//@ chunk-18hwfzwa.js:611275-611822 fingerprint (2.1.88 match: createSuggestionFromSource, 0.772)
 function createSuggestionFromSource(source) {
   switch (source.type) {
     case "file":
@@ -59,7 +59,7 @@ var MAX_DESCRIPTION_WIDTH = 60;
 function truncateDescription(description) {
   return truncateToWidth(description, MAX_DESCRIPTION_WIDTH);
 }
-//@ chunk-18hwfzwa.js:611871-612236 fingerprint = generateAgentSuggestions (1)
+//@ chunk-18hwfzwa.js:611871-612236 fingerprint (2.1.88 match: generateAgentSuggestions, 1)
 function generateAgentSuggestions(agents, query, showOnEmpty = false) {
   if (!query && !showOnEmpty) return [];
   try {
@@ -82,7 +82,7 @@ function generateAgentSuggestions(agents, query, showOnEmpty = false) {
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:612236-613736 fingerprint = generateUnifiedSuggestions (0.807)
+//@ chunk-18hwfzwa.js:612236-613736 fingerprint (2.1.88 match: generateUnifiedSuggestions, 0.807)
 /**
  * 统一 @ 建议：并行收集文件、MCP 资源/资源模板、agent 建议，转换成统一建议项并截断描述。
  */

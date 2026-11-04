@@ -148,7 +148,7 @@ function lastValueSlot(args, index) {
 function looksLikeOption(arg) {
   return arg.length > 1 && arg.startsWith("-");
 }
-//@ chunk-c5gdqf78.js:2917-2970 placement = eagerParseCliFlag (1)
+//@ chunk-c5gdqf78.js:2917-2970 placement (2.1.88 match: eagerParseCliFlag, 1)
 /**
  * eagerParseCliFlag：commander 解析前直接从 argv 取某个标志的最后一个值。
  */
@@ -352,7 +352,7 @@ function isNonInteractiveFlag(flag) {
 function isConnectUrlArg(arg) {
   return arg.startsWith("cc://") || arg.startsWith("cc+unix://");
 }
-//@ chunk-c5gdqf78.js:5862-6024 placement = isHelpCommand (0.693)
+//@ chunk-c5gdqf78.js:5862-6024 placement (2.1.88 match: isHelpCommand, 0.693)
 function mayDispatchSubcommand(command = process.argv.slice(2)) {
   if (command.some((arg) => arg === "--help" || /^-[^-]*h/.test(arg))) return true;
   for (let argIndex = 0; argIndex < command.length; argIndex = lastValueSlot(command, argIndex) + 1)

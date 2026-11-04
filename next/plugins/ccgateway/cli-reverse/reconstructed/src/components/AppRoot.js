@@ -22,7 +22,7 @@ import { FpsMetricsProvider } from "../context/fpsMetrics.js";
 import { QueueProvider } from "../context/QueuedMessageContext.js";
 import { StorageCredentialsProvider } from "./design-system/ThemeProvider.js";
 
-//@ chunk-xe7zq1p4.js:16717-18127 placement = App (0.592)
+//@ chunk-xe7zq1p4.js:16717-18127 placement (2.1.88 match: App, 0.592)
 function AppRoot(props) {
   let $ = useMemoCache(32);
   let {

@@ -36,7 +36,7 @@ import { useAppState } from "../../state/AppState.js";
 import { isRemoteSessionAvailable, hasRemoteCap } from "../../remote/remoteMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:795165-795209 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:795165-795209 fingerprint (2.1.88 match: _temp, 1)
 function selectRemoteSessionUrl_2(s) {
   return s.remoteSessionUrl;
 }
@@ -78,7 +78,7 @@ deferInit("chunk-7mtn3rbz.js:5465", () => {
     )
     .filter((line) => line.length > 0);
 });
-//@ chunk-7mtn3rbz.js:5675-7261 fingerprint = SessionInfo (0.309)
+//@ chunk-7mtn3rbz.js:5675-7261 fingerprint (2.1.88 match: SessionInfo, 0.309)
 function SessionInfo(props) {
   let $ = useMemoCache(25);
   let { onDone } = props;
@@ -248,7 +248,7 @@ async function sessionInfoCall(onDone) {
 deferInit("chunk-3rb87ry3.js:5244", () => {
   init_react_production();
 });
-//@ chunk-3rb87ry3.js:5248-5290 placement = _temp (1)
+//@ chunk-3rb87ry3.js:5248-5290 placement (2.1.88 match: _temp, 1)
 function selectRemoteSessionUrl(s) {
   return s.remoteSessionUrl;
 }

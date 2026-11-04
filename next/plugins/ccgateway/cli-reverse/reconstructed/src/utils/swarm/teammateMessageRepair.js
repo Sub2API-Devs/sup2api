@@ -194,7 +194,7 @@ function mailboxKeyOf(input, fromString, fromKey) {
   let keyObject = fromKey(input.key);
   return keyObject === undefined ? undefined : internMailboxKey(keyObject);
 }
-//@ chunk-nw7jbebs.js:3924-4019 placement = propagateAbort (1)
+//@ chunk-nw7jbebs.js:3924-4019 placement (2.1.88 match: propagateAbort, 1)
 var internedFrozenTagCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var finalizationRegistry;
 deferInit("chunk-nw7jbebs.js:3924", () => {

@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-fym4r1th.js:6681-6843 fingerprint = useTeammateViewAutoExit (0.626)
+//@ chunk-fym4r1th.js:6681-6843 fingerprint (2.1.88 match: useTeammateViewAutoExit, 0.626)
 function useTeammateViewAutoExit(status) {
   switch (status) {
     case "pending":

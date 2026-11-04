@@ -693,7 +693,7 @@ function redactHostPrefix(text) {
   if (UNDEFINED_PLACEHOLDER_RE.test(sliced)) return text;
   return `<host>${PORT_SUFFIX_RE.exec(sliced)?.[0] ?? ""}${sliced_2}`;
 }
-//@ chunk-aepeg2w5.js:398412-398606 placement = ghIsDangerousCallback (0.806)
+//@ chunk-aepeg2w5.js:398412-398606 placement (2.1.88 match: ghIsDangerousCallback, 0.806)
 function ghIsDangerousCallback(_rawCommand, args) {
   if (_rawCommand.includes("://")) return -1;
   let homeMatchIndex = _rawCommand.search(HOME_TILDE_RE);

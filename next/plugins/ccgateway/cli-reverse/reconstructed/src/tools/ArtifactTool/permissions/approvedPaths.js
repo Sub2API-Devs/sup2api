@@ -168,7 +168,7 @@ function describeCommentAuthorAccess(
  */
 var MAX_LISTED_FAILURES = 5;
 var MAX_LISTED_FAILURE_REASONS = 10;
-//@ chunk-qxvqcab6.js:11878-11981 placement = formatFailureDetails (0.777)
+//@ chunk-qxvqcab6.js:11878-11981 placement (2.1.88 match: formatFailureDetails, 0.777)
 function formatFailureDetails(failures, includeReasons) {
   let moreText = failures.length > includeReasons ? ` and ${failures.length - includeReasons} more` : "";
   return `${failures.slice(0, includeReasons).join(", ")}${moreText}`;

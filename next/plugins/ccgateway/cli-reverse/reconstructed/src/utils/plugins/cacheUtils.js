@@ -62,7 +62,7 @@ import { isProcessRunning as isProcessRunning_2 } from "../genericProcessUtils.j
 import { getProcessCreationTimeMsAsync } from "../processIdentity.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f3qhjfah.js:2620-2695 fingerprint = ORPHANED_AT_FILENAME (0.405)
+//@ chunk-f3qhjfah.js:2620-2695 fingerprint (2.1.88 match: ORPHANED_AT_FILENAME, 0.405)
 /**
  * ORPHAN_MARKER_FILE：版本目录的孤儿标记文件名；IN_USE_MARKER_FILE：使用中标记文件名；GCS_SHA_MARKER_FILE：GCS sha 标记文件名（同一声明共 4 个绑定）。
  */
@@ -136,7 +136,7 @@ function getCacheRootComparable() {
 }
 //@ chunk-e6aww6q8.js:4181423-4181437 placement
 var CACHE_CLEAR_THROTTLE_MS = 30000;
-//@ chunk-e6aww6q8.js:4181437-4182126 callgraph-witnessed = markPluginVersionOrphaned (0.224)
+//@ chunk-e6aww6q8.js:4181437-4182126 callgraph-witnessed (2.1.88 match: markPluginVersionOrphaned, 0.224)
 /**
  * 给不再被任何安装记录引用的版本缓存目录写 .orphaned_at 时间戳（拒绝符号链接与缓存根之外的路径）。
  */
@@ -188,7 +188,7 @@ async function markPluginVersionOrphaned(versionPath, storageV5) {
 //@ chunk-e6aww6q8.js:4182126-4182154 layout
 var ORPHAN_GRACE_PERIOD_MS = 21600000;
 var ORPHAN_SWEEP_INTERVAL_MS = 600000;
-//@ chunk-e6aww6q8.js:4182154-4183321 callgraph-witnessed = cleanupOrphanedPluginVersionsInBackground (0.277)
+//@ chunk-e6aww6q8.js:4182154-4183321 callgraph-witnessed (2.1.88 match: cleanupOrphanedPluginVersionsInBackground, 0.277)
 /**
  * 后台清理孤儿版本：没有安装记录引用的版本目录先打 .orphaned_at，超过 6 小时（会话未在使用）再删除；zip 缓存模式跳过。
  */
@@ -304,7 +304,7 @@ async function cleanupOrphanedPluginVersionsInBackground(storageV5) {
 function getOrphanedAtPath(versionPath) {
   return join(versionPath, ORPHAN_MARKER_FILE);
 }
-//@ chunk-e6aww6q8.js:4183353-4183697 fingerprint = removeOrphanedAtMarker (0.74)
+//@ chunk-e6aww6q8.js:4183353-4183697 fingerprint (2.1.88 match: removeOrphanedAtMarker, 0.74)
 async function removeOrphanedAtMarker(versionPath, storageV5) {
   if (await isSymlinkOrFalse(versionPath)) return;
   let orphanedAtPath = getOrphanedAtPath(versionPath);
@@ -326,7 +326,7 @@ async function removeOrphanedAtMarker(versionPath, storageV5) {
     logForDebugging(`Failed to remove .orphaned_at: ${versionPath}: ${error}`);
   }
 }
-//@ chunk-e6aww6q8.js:4183697-4183802 fingerprint = getInstalledVersionPaths (0.744)
+//@ chunk-e6aww6q8.js:4183697-4183802 fingerprint (2.1.88 match: getInstalledVersionPaths, 0.744)
 function getInstalledVersionPaths(walkRoot) {
   try {
     return collectInstallRecordPaths(loadInstalledPluginsSync(), walkRoot);
@@ -379,7 +379,7 @@ function collectInstallRecordPaths(installedPlugins, walkRoot) {
     keys,
   };
 }
-//@ chunk-e6aww6q8.js:4184293-4185266 fingerprint = processOrphanedPluginVersion (0.389)
+//@ chunk-e6aww6q8.js:4184293-4185266 fingerprint (2.1.88 match: processOrphanedPluginVersion, 0.389)
 async function processOrphanedPluginVersion(versionPath, now, storageV5) {
   if (await isSymlinkOrFalse(versionPath)) return;
   let orphanedAtPath = getOrphanedAtPath(versionPath);
@@ -445,7 +445,7 @@ async function processOrphanedPluginVersion(versionPath, now, storageV5) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:4185266-4185783 fingerprint = removeIfEmpty (0.302)
+//@ chunk-e6aww6q8.js:4185266-4185783 fingerprint (2.1.88 match: removeIfEmpty, 0.302)
 async function removeIfEmpty(dirPath) {
   let entries;
   try {
@@ -544,7 +544,7 @@ async function listSubdirectoriesSafe(dirPath) {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:4186581-4186787 placement = isRealPathWithinTeamDir (0.775)
+//@ chunk-e6aww6q8.js:4186581-4186787 placement (2.1.88 match: isRealPathWithinTeamDir, 0.775)
 async function isNotFoundCause(versionPath, pid) {
   if (!(pid === 1 || isProcessRunning_2(pid))) return false;
   let realTeamDir;
@@ -558,7 +558,7 @@ async function isNotFoundCause(versionPath, pid) {
   let processCreationTimeMs = await getProcessCreationTimeMsAsync(pid);
   return processCreationTimeMs === null || processCreationTimeMs <= realTeamDir;
 }
-//@ chunk-hddjmtjj.js:10518-10744 fingerprint = readSubdirs (0.703)
+//@ chunk-hddjmtjj.js:10518-10744 fingerprint (2.1.88 match: readSubdirs, 0.703)
 /**
  * 递归复制目录（可按名字过滤）。名字配错，见 lead 建议。
  */

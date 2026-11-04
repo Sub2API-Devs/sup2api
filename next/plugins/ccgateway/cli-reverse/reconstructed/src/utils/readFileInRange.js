@@ -30,7 +30,7 @@ import { statChain, openNoFollow } from "./fsSafety/pathRevalidation.js";
 import { isSentinelInode } from "./slowOperations.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-wn385gmf.js:19715-20071 fingerprint = FileTooLargeError (0.887)
+//@ chunk-wn385gmf.js:19715-20071 fingerprint (2.1.88 match: FileTooLargeError, 0.887)
 /**
  * 文件总大小超过 maxSizeBytes 的错误（带 sizeInBytes/maxSizeBytes）。
  */
@@ -62,7 +62,7 @@ class SelectedRangeTooLargeError extends Error {
     this.name = "SelectedRangeTooLargeError";
   }
 }
-//@ chunk-wn385gmf.js:20454-21238 fingerprint = readFileInRange (0.505)
+//@ chunk-wn385gmf.js:20454-21238 fingerprint (2.1.88 match: readFileInRange, 0.505)
 /**
  * 按行区间读文件：目录报 EISDIR；小于快速路径阈值的普通文件整读（超过 maxBytes 抛 FileTooLargeError），检测编码后切行；否则流式读取。返回内容、行数、总行数、字节数、mtime、notText。
  */
@@ -128,7 +128,7 @@ async function readFileInRange(filePath, offset = 0, maxLines, maxBytes, signal,
       : undefined,
   );
 }
-//@ chunk-wn385gmf.js:21238-22228 fingerprint = readFileInRangeFast (1)
+//@ chunk-wn385gmf.js:21238-22228 fingerprint (2.1.88 match: readFileInRangeFast, 1)
 /**
  * 内存中按行切片（处理 BOM、CRLF、字节截断与选区上限）。
  */
@@ -222,7 +222,7 @@ function readFileInRangeFast(text, totalBytes, mtimeMs, offset, maxLines, maxByt
     truncatedByBytes,
   };
 }
-//@ chunk-wn385gmf.js:22228-22291 fingerprint = streamOnOpen (1)
+//@ chunk-wn385gmf.js:22228-22291 fingerprint (2.1.88 match: streamOnOpen, 1)
 function streamOnOpen(fd) {
   fstat(fd, (err, stats) => {
     this.resolveMtime(err ? 0 : stats.mtimeMs);
@@ -238,7 +238,7 @@ function streamOnDataWithBomDetection(chunk) {
   let decoded = this.decoder.write(chunk);
   if (decoded.length > 0) streamOnData.call(this, decoded);
 }
-//@ chunk-wn385gmf.js:22436-24210 fingerprint = streamOnData (0.885)
+//@ chunk-wn385gmf.js:22436-24210 fingerprint (2.1.88 match: streamOnData, 0.885)
 function streamOnData(chunk) {
   let chunk_2 = chunk;
   if (this.isFirstChunk) {
@@ -313,7 +313,7 @@ function streamOnData(chunk) {
     }
   }
 }
-//@ chunk-wn385gmf.js:24210-24985 fingerprint = streamOnEnd (0.923)
+//@ chunk-wn385gmf.js:24210-24985 fingerprint (2.1.88 match: streamOnEnd, 0.923)
 /**
  * 流式读取结束：冲刷解码器与最后一行，完成统计。
  */
@@ -347,7 +347,7 @@ function streamOnEnd() {
     });
   });
 }
-//@ chunk-wn385gmf.js:24985-25653 fingerprint = readFileInRangeStreaming (0.846)
+//@ chunk-wn385gmf.js:24985-25653 fingerprint (2.1.88 match: readFileInRangeStreaming, 0.846)
 function readFileInRangeStreaming(
   filePath,
   offset,

@@ -32,7 +32,7 @@ function isPlainTextStorageAvailable() {
   plainTextStoragePromise = Promise.resolve(false);
   return plainTextStoragePromise;
 }
-//@ chunk-b29hdd5e.js:2351-2455 fingerprint = getStoragePath (1)
+//@ chunk-b29hdd5e.js:2351-2455 fingerprint (2.1.88 match: getStoragePath, 1)
 /**
  * 明文凭据位置：<配置目录>/.credentials.json。
  */
@@ -276,7 +276,7 @@ function getCredentialBackend(store) {
       ? disklessCredentialBackend
       : fileCredentialBackend;
 }
-//@ chunk-b29hdd5e.js:4947-5478 fingerprint = plainTextStorage (0.372)
+//@ chunk-b29hdd5e.js:4947-5478 fingerprint (2.1.88 match: plainTextStorage, 0.372)
 /**
  * 明文安全存储（name=plaintext）：同步 read 读 .credentials.json（宿主托管时可读本地副本）；readAsync/readAsyncStrict/update/delete 按情况选宿主后端、文件后端或 diskless 空后端；写入返回 "Warning: Storing credentials in plaintext."。
  */

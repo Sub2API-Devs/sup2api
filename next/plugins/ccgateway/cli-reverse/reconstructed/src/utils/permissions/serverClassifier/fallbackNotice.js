@@ -272,7 +272,7 @@ function isVelvetHeronOn() {
 }
 //@ chunk-e6aww6q8.js:1301957-1301974 placement
 var BILLING_NOTICE_ACK_TTL_MS = 86400000;
-//@ chunk-e6aww6q8.js:1301974-1302190 placement = hasOpusAccess (0.768)
+//@ chunk-e6aww6q8.js:1301974-1302190 placement (2.1.88 match: hasOpusAccess, 0.768)
 function hasOpusAccess() {
   let subscriptionType = getSubscriptionType();
   if (

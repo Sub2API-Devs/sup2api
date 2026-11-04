@@ -15,7 +15,7 @@ import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 import { sleep } from "../utils/sleep.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3nztfxrw.js:5466-5501 placement = extractErrorTypeFromData (1)
+//@ chunk-3nztfxrw.js:5466-5501 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function getErrorBodyType(data) {
   return getErrorBodyField(data, "type");
 }

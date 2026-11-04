@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:2029796-2030075 fingerprint = plugin (0.704)
+//@ chunk-e6aww6q8.js:2029796-2030075 fingerprint (2.1.88 match: plugin, 0.704)
 /**
  * /plugin 命令对象（local-jsx）；描述：Manage Claude Code plugins；别名 ["plugins","marketplace"]；实现 chunk-qey4tpm4.js 的 p。
  */

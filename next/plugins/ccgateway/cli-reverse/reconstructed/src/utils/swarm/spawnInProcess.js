@@ -37,7 +37,7 @@ import { getToolPermissionContext } from "../permissions/toolPermissionContext.j
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
 
-//@ chunk-v5mxhgy9.js:721-2171 fingerprint = killInProcessTeammate (0.504)
+//@ chunk-v5mxhgy9.js:721-2171 fingerprint (2.1.88 match: killInProcessTeammate, 0.504)
 /**
  * 终止同进程 teammate：标 killed 并中止、触发 onIdle 回调；带超时等 pane 拆除；从 teamContext 与团队文件移除成员；发 stopped 通知。返回 {killed, memberRemoval, osTeardown}。
  */
@@ -161,7 +161,7 @@ function getTeammatePermissionMode(parentMode, planModeRequired) {
   if (parentMode === "plan" || parentMode === "dontAsk") return "default";
   return parentMode;
 }
-//@ chunk-5t8enyd9.js:921-2645 facade-exports = spawnInProcessTeammate (0.658)
+//@ chunk-5t8enyd9.js:921-2645 facade-exports (2.1.88 match: spawnInProcessTeammate, 0.658)
 /**
  * 派生同进程 teammate：生成 agentId（name@team）与 t 前缀任务 ID，建 teammate 上下文与 in_process_teammate 任务，在 agentNameRegistry 注册名字（被活着的代理占用时另分配名字）。返回 {ok, agentId, taskId, abortController, teammateContext}。
  */

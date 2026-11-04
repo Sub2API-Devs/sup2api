@@ -398,7 +398,7 @@ function supportsNonInteractive(cmd) {
 function isUserInvocableSkill(cmd) {
   return cmd.userInvocable !== false && !isSkillOff(cmd);
 }
-//@ chunk-e6aww6q8.js:956496-956544 placement = mergeClients (1)
+//@ chunk-e6aww6q8.js:956496-956544 placement (2.1.88 match: mergeClients, 1)
 function mergeClients(cmd) {
   return uniqByExport(cmd, "name").filter(isUserInvocableSkill);
 }
@@ -452,7 +452,7 @@ function isKilledHostCatalogSkill(cmd) {
 function isAccountSkillsWrapperPlugin(pluginInfo) {
   return pluginInfo.repository === ANTHROPIC_SKILLS_PLUGIN_ID && pluginInfo.accountSkillsWrapper === true;
 }
-//@ chunk-e6aww6q8.js:958820-958965 placement = getCommandId (0.769)
+//@ chunk-e6aww6q8.js:958820-958965 placement (2.1.88 match: getCommandId, 0.769)
 function getCommandId(cmd) {
   return (
     cmd.type === "prompt" &&
@@ -604,7 +604,7 @@ function dropReservedAliases(cmd, isReserved) {
     aliases: kept.length ? kept : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:960963-961037 placement = getMcpPrefix (1)
+//@ chunk-e6aww6q8.js:960963-961037 placement (2.1.88 match: getMcpPrefix, 1)
 function isQualifiedToolReference(name, serverName) {
   return name.includes(":") || name.startsWith("mcp__") || serverName.has(name);
 }
@@ -672,7 +672,7 @@ function hideDuplicateCatalogSkills(commands, syncedCommands) {
   for (let cmd of syncedCommands) if (isSyncedSkill(cmd)) syncedNames.add(foldName_2(cmd.name));
   return commands.filter((cmd) => !isHostCatalogSkill(cmd) || !syncedNames.has(foldName_2(cmd.name)));
 }
-//@ chunk-e6aww6q8.js:961865-961959 placement = filterMcpPromptsByServer (0.897)
+//@ chunk-e6aww6q8.js:961865-961959 placement (2.1.88 match: filterMcpPromptsByServer, 0.897)
 function filterMcpPromptCommands(commands) {
   return commands.filter(
     (command) => command.type === "prompt" && (command.loadedFrom === "mcp" || command.isMcp === true),

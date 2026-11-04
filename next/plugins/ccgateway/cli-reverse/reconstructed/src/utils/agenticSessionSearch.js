@@ -28,7 +28,7 @@ import { stripAnsiAndControls } from "./printableName.js";
 import { localIsoDate } from "../services/projects/contextFile.js";
 import { tagUntrustedArtifactContent } from "./messages/untrustedArtifactContent.js";
 
-//@ chunk-dz3q485w.js:25436-25549 fingerprint = logContainsQuery (0.517)
+//@ chunk-dz3q485w.js:25436-25549 fingerprint (2.1.88 match: logContainsQuery, 0.517)
 /**
  * 会话标题：自定义标题 > AI 标题 > 摘要 > 首条提示 > "untitled session"。
  */
@@ -47,7 +47,7 @@ function elideMiddle(text) {
 [\u2026 middle of the session omitted \u2026]
 ${takeLastChars(text, SESSION_TAIL_CHARS).trimStart()}`;
 }
-//@ chunk-dz3q485w.js:25692-26683 callgraph-witnessed = agenticSessionSearch (0.059)
+//@ chunk-dz3q485w.js:25692-26683 callgraph-witnessed (2.1.88 match: agenticSessionSearch, 0.059)
 /**
  * 读取最近的会话日志（只取通过检查的），生成标题/日期/分支/转写摘要列表，汇总 MCP 调用、使用过的工具与时间跨度。
  */

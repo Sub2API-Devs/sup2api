@@ -37,7 +37,7 @@ import {
 } from "../services/voiceStreamSTT.js";
 import { useStoreSelector } from "./useStoreSelector.js";
 
-//@ chunk-0777tkjc.js:1031-2049 fingerprint = LANGUAGE_NAME_TO_CODE (1)
+//@ chunk-0777tkjc.js:1031-2049 fingerprint (2.1.88 match: LANGUAGE_NAME_TO_CODE, 1)
 /**
  * 语言名（含本地写法）到 STT 语言代码的映射。
  */
@@ -111,7 +111,7 @@ var SUPPORTED_STT_LANGUAGES = new Set([
   "sv",
   "no",
 ]);
-//@ chunk-0777tkjc.js:2049-2285 fingerprint = normalizeLanguageForSTT (1)
+//@ chunk-0777tkjc.js:2049-2285 fingerprint (2.1.88 match: normalizeLanguageForSTT, 1)
 function normalizeLanguageForSTT(language) {
   if (!language)
     return {
@@ -179,7 +179,7 @@ var VOICE_CONNECT_TIMEOUT_MS = 5000;
 var VOICE_SESSION_TIMEOUT_MS = 15000;
 var VOICE_MAX_SESSION_MS = 120000;
 var VOICE_SAMPLE_CHUNK = 16;
-//@ chunk-a658aeqp.js:5499-5688 fingerprint = computeLevel (1)
+//@ chunk-a658aeqp.js:5499-5688 fingerprint (2.1.88 match: computeLevel, 1)
 function computeLevel(chunk) {
   let samples = chunk.length >> 1;
   if (samples === 0) return 0;
@@ -213,7 +213,7 @@ function describeEmptyTranscription({ hadAudioSignal, wsConnected }) {
     errorCode: "voice_transcription_no_speech",
   };
 }
-//@ chunk-a658aeqp.js:6145-18557 fingerprint = useVoice (0.702)
+//@ chunk-a658aeqp.js:6145-18557 fingerprint (2.1.88 match: useVoice, 0.702)
 /**
  * 语音引擎类：管理麦克风录音、电平计算、连接语音转写服务、静音超时自动结束与错误映射（no audio/no speech/连接失败）。
  */

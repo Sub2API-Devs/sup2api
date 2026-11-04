@@ -67,7 +67,7 @@ deferInit("chunk-e6aww6q8.js:4793271", () => {
   sharedWatcherReady = null;
   exitHookInstalled = false;
 });
-//@ chunk-e6aww6q8.js:4793443-4793479 placement = chordToDisplayString (1)
+//@ chunk-e6aww6q8.js:4793443-4793479 placement (2.1.88 match: chordToDisplayString, 1)
 function isLinux() {
   return getPlatform() === "linux";
 }

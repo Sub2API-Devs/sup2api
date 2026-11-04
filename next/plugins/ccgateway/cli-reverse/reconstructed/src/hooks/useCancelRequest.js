@@ -180,7 +180,7 @@ var noopUnsubscribeFactory = () => () => {};
 var LOOP_WAKEUP_CANCELLED = "loop-wakeup-cancelled";
 var LOOP_WAKEUP_CANCELLED_TEXT = "Pending wakeup cancelled";
 var GESTURE_WINDOW_MS = 1000;
-//@ chunk-18hwfzwa.js:466747-473810 fingerprint = CancelRequestHandler (0.522)
+//@ chunk-18hwfzwa.js:466747-473810 fingerprint (2.1.88 match: CancelRequestHandler, 0.522)
 function CancelRequestHandler(props) {
   let {
     onCancel,

@@ -102,7 +102,7 @@ function hasDedicatedSmallFastModel() {
     (getAPIProvider() === "gateway" && isModelAllowed(getDefaultHaikuModel()))
   );
 }
-//@ chunk-aepeg2w5.js:427399-427471 placement = logEventTo1P (1)
+//@ chunk-aepeg2w5.js:427399-427471 placement (2.1.88 match: logEventTo1P, 1)
 function areBuiltinModelsKnownHosted() {
   let apiProvider = getAPIProvider();
   return (
@@ -258,7 +258,7 @@ function getUserSpecifiedModelSetting() {
   if (model !== undefined) return vetUserSpecifiedModel(model, "explicit");
   return getBaselineModelSetting();
 }
-//@ chunk-aepeg2w5.js:429160-429302 placement = getUserSpecifiedModelSetting (0.36)
+//@ chunk-aepeg2w5.js:429160-429302 placement (2.1.88 match: getUserSpecifiedModelSetting, 0.36)
 /**
  * 用户指定的主模型设置：启动时的初始模型（--model）优先，否则 ANTHROPIC_MODEL，再否则 settings.model；经 normalizeModelSetting 过滤（不在白名单则尝试替代、未解析的拒绝）。
  */

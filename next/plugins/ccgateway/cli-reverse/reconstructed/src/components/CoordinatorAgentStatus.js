@@ -110,7 +110,7 @@ function teammateRowState(agentTask) {
   let notResumable = agentTask.identity.resumableAgentId === undefined;
   return failedOrStopped ? "ended" : notResumable ? "elsewhere" : undefined;
 }
-//@ chunk-e6aww6q8.js:4007333-4007709 callgraph-witnessed = CoordinatorTaskPanel (0.123)
+//@ chunk-e6aww6q8.js:4007333-4007709 callgraph-witnessed (2.1.88 match: CoordinatorTaskPanel, 0.123)
 async function showAgentTaskView(store, options) {
   if (options.agentId === undefined) {
     exitTeammateView((prevState) => store.setState(prevState));
@@ -133,7 +133,7 @@ async function showAgentTaskView(store, options) {
   );
   return store.getState().viewingAgentTaskId === agentTask.id ? "shown" : "moved";
 }
-//@ chunk-18hwfzwa.js:171209-171289 fingerprint = _temp (0.667)
+//@ chunk-18hwfzwa.js:171209-171289 fingerprint (2.1.88 match: _temp, 0.667)
 function hasUncarriedLaunchSettings(s) {
   return (
     listUncarriedLaunchSettings(s.toolPermissionContext, getForkRestrictedLaunchConfig()).length > 0 ||
@@ -569,7 +569,7 @@ function selectUltracode(state) {
 function selectTaskDecorations(state) {
   return state.taskDecorations;
 }
-//@ chunk-18hwfzwa.js:440055-440101 placement = _temp2 (1)
+//@ chunk-18hwfzwa.js:440055-440101 placement (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId(s_0) {
   return s_0.viewingAgentTaskId;
 }
@@ -585,7 +585,7 @@ function selectSlackTagConnected(state) {
 function selectCoordinatorTaskIndex(state) {
   return state.coordinatorTaskIndex;
 }
-//@ chunk-18hwfzwa.js:440239-440292 placement = getTaskOutputDir (0.766)
+//@ chunk-18hwfzwa.js:440239-440292 placement (2.1.88 match: getTaskOutputDir, 0.766)
 function getTaskOutputDir(state) {
   return state.footerSelection === "tasks";
 }
@@ -632,7 +632,7 @@ function selectTasks_2_2(state) {
 function selectTaskDecorations_2(state) {
   return state.taskDecorations;
 }
-//@ chunk-18hwfzwa.js:440770-440816 placement = _temp2 (1)
+//@ chunk-18hwfzwa.js:440770-440816 placement (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId_2(s_0) {
   return s_0.viewingAgentTaskId;
 }
@@ -734,7 +734,7 @@ function isTeammateDueForEviction(task, dueAt, setVoiceState) {
 function isAwaitingInputTeammate(task) {
   return isTeammateAwaitingInput(task);
 }
-//@ chunk-18hwfzwa.js:442224-442818 fingerprint = getVisibleAgentTasks (1)
+//@ chunk-18hwfzwa.js:442224-442818 fingerprint (2.1.88 match: getVisibleAgentTasks, 1)
 function getVisibleAgentTasks(tasks, viewingAgentTaskId) {
   let viewedTask = viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined;
   let agentId = isPanelAgentTask(viewedTask) ? viewedTask.agentId : undefined;
@@ -772,7 +772,7 @@ function getVisibleAgentTasks(tasks, viewingAgentTaskId) {
   walk(undefined);
   return ordered;
 }
-//@ chunk-18hwfzwa.js:442818-443034 layout = _temp6 (0.781)
+//@ chunk-18hwfzwa.js:442818-443034 layout (2.1.88 match: _temp6, 0.781)
 function nearestVisibleAncestorId(tasks, task, ancestorTaskIds) {
   if (task.type === "in_process_teammate") return;
   let seen = new Set();
@@ -864,7 +864,7 @@ function getVisibleBackgroundTasks(tasks, taskDecorations, viewingAgentTaskId, e
     }
   return rows;
 }
-//@ chunk-18hwfzwa.js:443995-444095 placement = _temp6 (0.765)
+//@ chunk-18hwfzwa.js:443995-444095 placement (2.1.88 match: _temp6, 0.765)
 function isOtherIdleTeammate(task, viewingAgentTaskId) {
   return (
     task.type === "in_process_teammate" &&
@@ -923,7 +923,7 @@ function agentRowPrefixWidth() {
 }
 //@ chunk-18hwfzwa.js:444755-444764 placement
 var AGENT_ROW_WIDTH_RESERVE = 2;
-//@ chunk-18hwfzwa.js:444764-444877 placement = getStatusColor (1)
+//@ chunk-18hwfzwa.js:444764-444877 placement (2.1.88 match: getStatusColor, 1)
 function getStatusColor(status) {
   switch (status) {
     case "completed":
@@ -935,7 +935,7 @@ function getStatusColor(status) {
       return;
   }
 }
-//@ chunk-18hwfzwa.js:444973-446087 fingerprint = AgentLine (0.401)
+//@ chunk-18hwfzwa.js:444973-446087 fingerprint (2.1.88 match: AgentLine, 0.401)
 function AgentLine(task, now, turnStartTime, idleAsDone) {
   let queuedCount =
     task.type === "in_process_teammate" ? task.pendingUserMessages.length : task.pendingMessages.length;
@@ -1853,7 +1853,7 @@ function makeVisibleTaskCountSelector() {
     return count;
   };
 }
-//@ chunk-18hwfzwa.js:456117-457026 fingerprint = MainLine (0.512)
+//@ chunk-18hwfzwa.js:456117-457026 fingerprint (2.1.88 match: MainLine, 0.512)
 function MainLine(props) {
   let $ = useMemoCache(16);
   let { isSelected, isViewed, labelWidth, moreAbove, onClick } = props;

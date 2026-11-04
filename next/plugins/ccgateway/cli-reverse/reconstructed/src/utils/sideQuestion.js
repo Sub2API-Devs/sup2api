@@ -31,7 +31,7 @@ var BTW_CUT_OFF_NOTICE = "_(This answer was cut off before it finished. Ask agai
 var BTW_CUT_OFF_OMITTED = "(That answer was cut off before it finished, so it is omitted here.)";
 var TOOL_RESULT_PENDING_PLACEHOLDER =
   "[No result yet \u2014 this call is still in progress in the main conversation (running, awaiting approval, or queued)]";
-//@ chunk-pphytj9x.js:1043-1186 facade-exports = findBtwTriggerPositions (1)
+//@ chunk-pphytj9x.js:1043-1186 facade-exports (2.1.88 match: findBtwTriggerPositions, 1)
 /**
  * 文本中所有 /btw 触发位置。
  */
@@ -47,7 +47,7 @@ function findBtwTriggerPositions(text) {
       });
   return positions;
 }
-//@ chunk-pphytj9x.js:1186-3891 facade-exports = runSideQuestion (0.558)
+//@ chunk-pphytj9x.js:1186-3891 facade-exports (2.1.88 match: runSideQuestion, 0.558)
 /**
  * /btw 旁路提问：带上历史 btw 问答与进行中工具的占位结果，加 system-reminder 约束（无工具、单轮），fork 一次（side_question）；整理回答并写入 btwHistory。
  */
@@ -185,7 +185,7 @@ Simply answer the question with the information you have.</system-reminder>
     throw error;
   }
 }
-//@ chunk-pphytj9x.js:3891-4422 layout = getLastToolUseName (0.849)
+//@ chunk-pphytj9x.js:3891-4422 layout (2.1.88 match: getLastToolUseName, 0.849)
 /**
  * 为最后一条 assistant 中未配对的 tool_use 合成 tool_result（isMeta 用户消息），用于中断后修复消息序列。
  */
@@ -214,7 +214,7 @@ function createMissingToolResultsMessage(message) {
     isMeta: true,
   });
 }
-//@ chunk-pphytj9x.js:4422-5175 fingerprint = extractSideQuestionResponse (0.78)
+//@ chunk-pphytj9x.js:4422-5175 fingerprint (2.1.88 match: extractSideQuestionResponse, 0.78)
 /**
  * 从 fork 输出整理旁路回答：文本（必要时附无工具/截断说明）；模型改调工具或 API 错误时给出合成说明。
  */

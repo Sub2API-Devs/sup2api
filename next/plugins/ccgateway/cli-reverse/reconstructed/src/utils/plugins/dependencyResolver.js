@@ -128,7 +128,7 @@ function readManifestDependencyPins(rawCandidate) {
   }
   return pins.size > 0 ? pins : undefined;
 }
-//@ chunk-czx62zen.js:4562-4673 callgraph-witnessed = qualifyDependency (1)
+//@ chunk-czx62zen.js:4562-4673 callgraph-witnessed (2.1.88 match: qualifyDependency, 1)
 /**
  * 依赖引用补全市场：不带 @marketplace 的依赖名按声明它的插件所在市场补全（inline 等保留市场除外）。
  */
@@ -330,7 +330,7 @@ function collectConstraintsOn(dependencyId, plugins) {
   }
   return constraints;
 }
-//@ chunk-czx62zen.js:7322-8079 fingerprint = resolveDependencyClosure (0.846)
+//@ chunk-czx62zen.js:7322-8079 fingerprint (2.1.88 match: resolveDependencyClosure, 0.846)
 /**
  * 解析安装一个插件需要的依赖闭包（DFS）：跨市场依赖只在根市场 allowCrossMarketplaceDependenciesOn 允许时接受；检测环；已安装的跳过。返回按安装顺序的 ID 列表或错误。
  */
@@ -399,7 +399,7 @@ async function resolveDependencyClosure(
     closure,
   };
 }
-//@ chunk-czx62zen.js:8079-9787 fingerprint = verifyAndDemote (0.749)
+//@ chunk-czx62zen.js:8079-9787 fingerprint (2.1.88 match: verifyAndDemote, 0.749)
 /**
  * 加载后的依赖校验：反复把依赖未满足（找不到、未启用、版本约束不符）的启用插件降级为禁用，直到不动点；返回被降级集合与 dependency-unsatisfied 错误。
  */
@@ -518,7 +518,7 @@ function verifyAndDemote(plugins) {
 function findReverseDependentNames(pluginId, plugins) {
   return findReverseDependents(pluginId, plugins).map((dependent) => dependent.name);
 }
-//@ chunk-czx62zen.js:9836-9971 fingerprint = findReverseDependents (0.826)
+//@ chunk-czx62zen.js:9836-9971 fingerprint (2.1.88 match: findReverseDependents, 0.826)
 /**
  * 找出依赖给定插件的已启用插件（反向依赖），用于禁用/卸载时警告。
  */
@@ -652,7 +652,7 @@ function displaySafePluginId(pluginId) {
 function quoteName(name) {
   return name.startsWith("\u201C") ? name : `"${name}"`;
 }
-//@ chunk-czx62zen.js:11564-11767 fingerprint = formatDependencyCountSuffix (0.804)
+//@ chunk-czx62zen.js:11564-11767 fingerprint (2.1.88 match: formatDependencyCountSuffix, 0.804)
 /**
  * 生成“（并安装了 N 个依赖：a, b…）”后缀文本。
  */
@@ -688,7 +688,7 @@ function missingDependenciesHint(dependencyIds, marketplaceMissing) {
       : `${joined} and ${count - MAX_DISPLAY_NAME_SEGMENTS} more.`;
   return ` \u2014 ${count} ${plural(count, "dependency", "dependencies")} still unresolved: ${idsText}${marketplaceHint}`;
 }
-//@ chunk-czx62zen.js:12170-12277 fingerprint = formatReverseDependentsSuffix (1)
+//@ chunk-czx62zen.js:12170-12277 fingerprint (2.1.88 match: formatReverseDependentsSuffix, 1)
 /**
  * 生成“ — warning: required by …”后缀文本。
  */
@@ -696,7 +696,7 @@ function formatReverseDependentsSuffix(rdeps) {
   if (!rdeps || rdeps.length === 0) return "";
   return ` \u2014 warning: required by ${rdeps.map(displaySafePluginId).join(", ")}`;
 }
-//@ chunk-e6aww6q8.js:4320708-4320786 fingerprint = getEnabledPluginIdsForScope (0.707)
+//@ chunk-e6aww6q8.js:4320708-4320786 fingerprint (2.1.88 match: getEnabledPluginIdsForScope, 0.707)
 /**
  * 构造把一组插件 ID 全部设为 false 的 enabledPlugins 补丁。
  */

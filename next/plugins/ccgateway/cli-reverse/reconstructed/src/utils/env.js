@@ -43,12 +43,12 @@ import { deferInit } from "../../runtime/deferred-init.js";
 function isDisklessEnvProbe() {
   return isDiskless();
 }
-//@ chunk-jhrww53q.js:49673-49764 fingerprint = isWslEnvironment (1)
+//@ chunk-jhrww53q.js:49673-49764 fingerprint (2.1.88 match: isWslEnvironment, 1)
 function isWslEnvironment() {
   if (isDisklessEnvProbe()) return false;
   return getFsImplementation().existsSync("/proc/sys/fs/binfmt_misc/WSLInterop");
 }
-//@ chunk-jhrww53q.js:49764-49897 placement = readFileSafe (0.594)
+//@ chunk-jhrww53q.js:49764-49897 placement (2.1.88 match: readFileSafe, 0.594)
 /**
  * 读取 /sys/hypervisor/uuid（判断云主机），误归到 utils/file。
  */
@@ -104,7 +104,7 @@ function describeGlobalConfigFile() {
 async function probeInternalNetworkAccess() {
   return null;
 }
-//@ chunk-jhrww53q.js:50373-50433 callgraph-witnessed = isCommandAvailable (0)
+//@ chunk-jhrww53q.js:50373-50433 callgraph-witnessed (2.1.88 match: isCommandAvailable, 0)
 async function isCommandAvailable(command) {
   try {
     return !!(await whichAsync(command));
@@ -112,7 +112,7 @@ async function isCommandAvailable(command) {
     return false;
   }
 }
-//@ chunk-jhrww53q.js:50433-50571 fingerprint = detectPackageManagers (1)
+//@ chunk-jhrww53q.js:50433-50571 fingerprint (2.1.88 match: detectPackageManagers, 1)
 async function detectPackageManagers() {
   let packageManagers = [];
   if (await isCommandAvailable("npm")) packageManagers.push("npm");
@@ -120,7 +120,7 @@ async function detectPackageManagers() {
   if (await isCommandAvailable("pnpm")) packageManagers.push("pnpm");
   return packageManagers;
 }
-//@ chunk-jhrww53q.js:50571-50709 fingerprint = detectRuntimes (1)
+//@ chunk-jhrww53q.js:50571-50709 fingerprint (2.1.88 match: detectRuntimes, 1)
 async function detectRuntimes() {
   let runtimes = [];
   if (await isCommandAvailable("bun")) runtimes.push("bun");
@@ -266,7 +266,7 @@ async function detectBuildTools() {
 function detectedBuildTools() {
   return getEnvProbe().getDetectedBuildTools();
 }
-//@ chunk-jhrww53q.js:52128-52268 fingerprint = isNpmFromWindowsPath (0.798)
+//@ chunk-jhrww53q.js:52128-52268 fingerprint (2.1.88 match: isNpmFromWindowsPath, 0.798)
 function isNpmFromWindowsPath(probe) {
   try {
     if (!probe.isWslEnvironment()) return false;
@@ -277,11 +277,11 @@ function isNpmFromWindowsPath(probe) {
     return false;
   }
 }
-//@ chunk-jhrww53q.js:52268-52344 fingerprint = isConductor (1)
+//@ chunk-jhrww53q.js:52268-52344 fingerprint (2.1.88 match: isConductor, 1)
 function isConductor() {
   return process.env.__CFBundleIdentifier === "com.conductor.app";
 }
-//@ chunk-jhrww53q.js:52344-52519 facade-exports = JETBRAINS_IDES (1)
+//@ chunk-jhrww53q.js:52344-52519 facade-exports (2.1.88 match: JETBRAINS_IDES, 1)
 var JETBRAINS_IDES = [
   "pycharm",
   "intellij",
@@ -314,7 +314,7 @@ function isWindsurfOrDevin(text) {
     /appdata[\\/]local[\\/](programs[\\/])?devin[\\/]/.test(lower)
   );
 }
-//@ chunk-jhrww53q.js:52730-54683 fingerprint = detectTerminal (0.976)
+//@ chunk-jhrww53q.js:52730-54683 fingerprint (2.1.88 match: detectTerminal, 0.976)
 function detectTerminal() {
   if (process.env.CURSOR_TRACE_ID) return "cursor";
   let askpassPath = process.env.VSCODE_GIT_ASKPASS_MAIN?.toLowerCase() ?? "";
@@ -489,7 +489,7 @@ function isDockerenvPresent() {
 function detectDeploymentEnvironment() {
   return getEnvProbe().detectDeploymentEnvironment();
 }
-//@ chunk-jhrww53q.js:56632-58727 fingerprint = detectDeploymentEnvironment (0.881)
+//@ chunk-jhrww53q.js:56632-58727 fingerprint (2.1.88 match: detectDeploymentEnvironment, 0.881)
 function detectDeploymentEnvironment_2(probe) {
   if (isEnvTruthy(process.env.CODESPACES)) return "codespaces";
   if (process.env.GITPOD_WORKSPACE_ID) return "gitpod";
@@ -530,7 +530,7 @@ function detectDeploymentEnvironment_2(probe) {
   if (env_2.platform === "win32") return "unknown-win32";
   return "unknown";
 }
-//@ chunk-jhrww53q.js:58727-58822 layout = isSSHSession (1)
+//@ chunk-jhrww53q.js:58727-58822 layout (2.1.88 match: isSSHSession, 1)
 function isSSHSession_2() {
   return !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT || process.env.SSH_TTY);
 }
@@ -545,7 +545,7 @@ function isSpawnedByServer() {
     process.env.CLAUDE_SSH_RUN_DIR !== undefined
   );
 }
-//@ chunk-jhrww53q.js:58982-59422 fingerprint = env (0.871)
+//@ chunk-jhrww53q.js:58982-59422 fingerprint (2.1.88 match: env, 0.871)
 var env_2; // deferred: uses isEnvTruthy (./envUtils.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-jhrww53q.js:58982", () => {
   env_2 = {
@@ -573,7 +573,7 @@ deferInit("chunk-jhrww53q.js:58982", () => {
     detectDeploymentEnvironment,
   };
 });
-//@ chunk-jhrww53q.js:59422-59550 facade-exports = getHostPlatformForAnalytics (1)
+//@ chunk-jhrww53q.js:59422-59550 facade-exports (2.1.88 match: getHostPlatformForAnalytics, 1)
 function getHostPlatformForAnalytics() {
   let override = process.env.CLAUDE_CODE_HOST_PLATFORM;
   if (override === "win32" || override === "darwin" || override === "linux") return override;
@@ -640,7 +640,7 @@ deferInit("chunk-jhrww53q.js:76138", () => {
   udsInboxShape = require("./udsMessaging/udsInboxShape.lazy.js").udsInboxShape;
   udsEnv = createEnvAccessor(udsInboxShape, null);
 });
-//@ chunk-aepeg2w5.js:751986-752249 fingerprint = hasInternetAccess (0.427)
+//@ chunk-aepeg2w5.js:751986-752249 fingerprint (2.1.88 match: hasInternetAccess, 0.427)
 async function hasInternetAccess_2() {
   try {
     let { externalHttp } = await import("../services/http/externalHttp.lazy.js");
@@ -655,7 +655,7 @@ async function hasInternetAccess_2() {
     return false;
   }
 }
-//@ chunk-cdz6g143.js:519-632 fingerprint = getGlobalClaudeFile (0.833)
+//@ chunk-cdz6g143.js:519-632 fingerprint (2.1.88 match: getGlobalClaudeFile, 0.833)
 /**
  * 带第一个 OAUTH 后缀的全局配置文件默认名（.claude<后缀>.json）。
  */
@@ -669,12 +669,12 @@ deferInit("chunk-cdz6g143.js:519", () => {
   mapped = OAUTH_GLOBAL_FILE_SUFFIXES.map((suffix) => `.claude${suffix}.json`);
   GLOBAL_CLAUDE_FILE_NAMES = [...mapped, LEGACY_CONFIG_JSON, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME];
 });
-//@ chunk-cxdk9p3j.js:1606-1705 fingerprint = isSSHSession (1)
+//@ chunk-cxdk9p3j.js:1606-1705 fingerprint (2.1.88 match: isSSHSession, 1)
 function isSSHSession() {
   if (getPlatform() !== "windows") return false;
   return Boolean(env.SSH_CONNECTION || env.SSH_CLIENT || env.SSH_TTY);
 }
-//@ chunk-4m46mxx9.js:12064-12238 fingerprint = JETBRAINS_IDES (1)
+//@ chunk-4m46mxx9.js:12064-12238 fingerprint (2.1.88 match: JETBRAINS_IDES, 1)
 var JETBRAINS_IDES_2 = [
   "pycharm",
   "intellij",

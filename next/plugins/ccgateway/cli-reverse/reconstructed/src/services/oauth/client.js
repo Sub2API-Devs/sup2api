@@ -98,7 +98,7 @@ function parseScopes(scopeString) {
   if (typeof scopeString !== "string") return [];
   return scopeString.split(" ").filter(Boolean);
 }
-//@ chunk-aepeg2w5.js:296120-296969 facade-exports = buildAuthUrl (0.957)
+//@ chunk-aepeg2w5.js:296120-296969 facade-exports (2.1.88 match: buildAuthUrl, 0.957)
 /**
  * 拼 OAuth authorize URL：claude.ai 用 CLAUDE_AI_AUTHORIZE_URL，Console 用 CONSOLE_AUTHORIZE_URL；参数 code=true、client_id、response_type=code、redirect_uri（手动模式 MANUAL_REDIRECT_URL，否则 http://localhost:<port>/callback）、scope、PKCE S256、state，可选 orgUUID/login_hint/login_method。
  */
@@ -142,7 +142,7 @@ function buildAuthUrl({
   if (loginMethod) authUrl.searchParams.append("login_method", loginMethod);
   return authUrl.toString();
 }
-//@ chunk-aepeg2w5.js:296969-297709 facade-exports = exchangeCodeForTokens (0.816)
+//@ chunk-aepeg2w5.js:296969-297709 facade-exports (2.1.88 match: exchangeCodeForTokens, 0.816)
 /**
  * 用授权码 + code_verifier 向 TOKEN_URL 换取令牌（grant_type=authorization_code）。
  */
@@ -183,7 +183,7 @@ async function exchangeCodeForTokens(
   logFeatureOk("oauth_token_exchange");
   return response.data;
 }
-//@ chunk-aepeg2w5.js:297709-300375 facade-exports = refreshOAuthToken (0.686)
+//@ chunk-aepeg2w5.js:297709-300375 facade-exports (2.1.88 match: refreshOAuthToken, 0.686)
 /**
  * 用 refresh token 换新令牌（POST TOKEN_URL，30 秒超时，可带 expires_in），成功打 tengu_oauth_token_refresh_success；必要时补拉 profile 更新订阅信息与 oauthAccount。
  */
@@ -366,7 +366,7 @@ async function revokeOAuthTokenAcknowledged(token, clientId, tokenTypeHint = "re
 async function revokeOAuthToken(refreshToken, clientId) {
   await revokeOAuthTokenAcknowledged(refreshToken, clientId);
 }
-//@ chunk-aepeg2w5.js:301055-301806 facade-exports = fetchAndStoreUserRoles (0.813)
+//@ chunk-aepeg2w5.js:301055-301806 facade-exports (2.1.88 match: fetchAndStoreUserRoles, 0.813)
 /**
  * 拉取 ROLES_URL（organization_role / workspace_role）并写入 oauthAccount。
  */
@@ -409,7 +409,7 @@ async function fetchAndStoreUserRoles(accessToken, storageV5) {
   });
   logFeatureOk("oauth_fetch_roles");
 }
-//@ chunk-aepeg2w5.js:301806-302642 facade-exports = createAndStoreApiKey (0.589)
+//@ chunk-aepeg2w5.js:301806-302642 facade-exports (2.1.88 match: createAndStoreApiKey, 0.589)
 /**
  * Console 登录后用 OAuth 令牌调用 API_KEY_URL 创建 API key 并保存（tengu_oauth_api_key）。
  */
@@ -471,7 +471,7 @@ function isOAuthTokenExpired(expiresAt, now = Date.now()) {
   if (expiresAt === null) return false;
   return now + 300000 >= expiresAt;
 }
-//@ chunk-aepeg2w5.js:302710-302829 facade-exports = fetchProfileInfo (0.606)
+//@ chunk-aepeg2w5.js:302710-302829 facade-exports (2.1.88 match: fetchProfileInfo, 0.606)
 var SUBSCRIPTION_TYPE_BY_ORG_TYPE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-aepeg2w5.js:302710", () => {
   SUBSCRIPTION_TYPE_BY_ORG_TYPE = new Map([
@@ -585,7 +585,7 @@ async function fetchProfileInfo(accessToken) {
     originStamped: oauthProfileWithOriginFromOauthToken?.stamped,
   };
 }
-//@ chunk-aepeg2w5.js:304677-304931 facade-exports = getOrganizationUUID (0.873)
+//@ chunk-aepeg2w5.js:304677-304931 facade-exports (2.1.88 match: getOrganizationUUID, 0.873)
 /**
  * 组织 UUID：oauthAccount.organizationUuid，缺失时拉 profile。
  */
@@ -600,7 +600,7 @@ async function getOrganizationUUID() {
   if (!profileOrgUUID) return null;
   return profileOrgUUID;
 }
-//@ chunk-aepeg2w5.js:304931-306619 facade-exports = populateOAuthAccountInfoIfNeeded (0.733)
+//@ chunk-aepeg2w5.js:304931-306619 facade-exports (2.1.88 match: populateOAuthAccountInfoIfNeeded, 0.733)
 /**
  * oauthAccount 缺字段时拉 profile 补全（可覆盖 env 提供的账户信息）。
  */
@@ -714,7 +714,7 @@ function getPlanDisplayName(profile) {
     ? planDisplayNameFromProfile(profile)
     : (getGlobalConfig().oauthAccount?.planDisplayName ?? null);
 }
-//@ chunk-aepeg2w5.js:307324-308809 facade-exports = storeOAuthAccountInfo (0.667)
+//@ chunk-aepeg2w5.js:307324-308809 facade-exports (2.1.88 match: storeOAuthAccountInfo, 0.667)
 /**
  * 写全局配置 oauthAccount：accountUuid、emailAddress、organizationUuid、displayName、hasExtraUsageEnabled、billingType、accountCreatedAt、subscriptionCreatedAt、seatTier、planDisplayName 等。
  */
@@ -798,14 +798,14 @@ function parseOAuthErrorBody(body) {
     description: record.error_description,
   };
 }
-//@ chunk-aepeg2w5.js:309012-309170 facade-exports = isTransientNetworkError (1)
+//@ chunk-aepeg2w5.js:309012-309170 facade-exports (2.1.88 match: isTransientNetworkError, 1)
 function isAccountOnHoldError(error) {
   if (!axios_default.isAxiosError(error) || !error.response) return false;
   let status = error.response.status;
   if (status !== 400 && status !== 401 && status !== 403) return false;
   return classifyOAuthErrorResponse(error.response.data) !== null;
 }
-//@ chunk-aepeg2w5.js:309170-309250 facade-exports = isTransientNetworkError (1)
+//@ chunk-aepeg2w5.js:309170-309250 facade-exports (2.1.88 match: isTransientNetworkError, 1)
 function getAccountOnHoldErrorUrl(error) {
   return (
     (axios_default.isAxiosError(error) ? classifyOAuthErrorResponse(error.response?.data) : null)?.url ??
@@ -830,7 +830,7 @@ function isInvalidScopeError(error) {
   if (!axios_default.isAxiosError(error) || error.response?.status !== 400) return false;
   return parseOAuthErrorBody(error.response.data).code === "invalid_scope";
 }
-//@ chunk-aepeg2w5.js:309566-309633 facade-exports = isTransientNetworkError (1)
+//@ chunk-aepeg2w5.js:309566-309633 facade-exports (2.1.88 match: isTransientNetworkError, 1)
 function isOAuthTokenRequestRefused(error) {
   return axios_default.isAxiosError(error) && isNonRetryableClientError(error.response?.status);
 }
@@ -839,7 +839,7 @@ var FATAL_OAUTH_ERROR_CODES; // deferred: has load-time effects after a deferred
 deferInit("chunk-aepeg2w5.js:309633", () => {
   FATAL_OAUTH_ERROR_CODES = new Set(["invalid_client", "invalid_scope", "unauthorized_client"]);
 });
-//@ chunk-aepeg2w5.js:309706-309850 facade-exports = isTransientNetworkError (1)
+//@ chunk-aepeg2w5.js:309706-309850 facade-exports (2.1.88 match: isTransientNetworkError, 1)
 function isExpectedOAuthTokenError(error) {
   if (!axios_default.isAxiosError(error) || error.response?.status !== 400) return false;
   let { code } = parseOAuthErrorBody(error.response.data);

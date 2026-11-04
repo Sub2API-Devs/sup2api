@@ -17,12 +17,12 @@ import {
 } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5hsd6qen.js:3444-3534 facade-exports = SETTING_SOURCES (1)
+//@ chunk-5hsd6qen.js:3444-3534 facade-exports (2.1.88 match: SETTING_SOURCES, 1)
 /**
  * 设置来源的合并顺序（低→高）：userSettings、projectSettings、localSettings、flagSettings、policySettings。
  */
 var SETTING_SOURCES = ["userSettings", "projectSettings", "localSettings", "flagSettings", "policySettings"];
-//@ chunk-5hsd6qen.js:3534-3751 facade-exports = getSettingSourceName (1)
+//@ chunk-5hsd6qen.js:3534-3751 facade-exports (2.1.88 match: getSettingSourceName, 1)
 function getSettingSourceName(source) {
   switch (source) {
     case "userSettings":
@@ -37,7 +37,7 @@ function getSettingSourceName(source) {
       return "managed";
   }
 }
-//@ chunk-5hsd6qen.js:3751-4101 facade-exports = getSourceDisplayName (0.827)
+//@ chunk-5hsd6qen.js:3751-4101 facade-exports (2.1.88 match: getSourceDisplayName, 0.827)
 function getSourceDisplayName(source) {
   switch (source) {
     case "userSettings":
@@ -62,7 +62,7 @@ function getSourceDisplayName(source) {
       return CLAUDE_AI_SYNC_LABEL;
   }
 }
-//@ chunk-5hsd6qen.js:4101-4703 facade-exports = getSettingSourceDisplayNameLowercase (0.77)
+//@ chunk-5hsd6qen.js:4101-4703 facade-exports (2.1.88 match: getSettingSourceDisplayNameLowercase, 0.77)
 function getSettingSourceDisplayNameLowercase(source) {
   switch (source) {
     case "userSettings":
@@ -155,7 +155,7 @@ function getEnabledSettingSources() {
 function isSettingSourceEnabled(source) {
   return getEnabledSettingSources().includes(source);
 }
-//@ chunk-5hsd6qen.js:5498-5706 facade-exports = parseSettingSourcesFlag (0.698)
+//@ chunk-5hsd6qen.js:5498-5706 facade-exports (2.1.88 match: parseSettingSourcesFlag, 0.698)
 /**
  * 可由 --setting-sources 选择的三个来源 [user, project, local]；同语句定义仓库目录来源列表/集合与 flag 名映射。
  */
@@ -178,13 +178,13 @@ deferInit("chunk-5hsd6qen.js:5498", () => {
     source,
   ]);
 });
-//@ chunk-5hsd6qen.js:5706-5796 facade-exports = supportsPersistence (0.756)
+//@ chunk-5hsd6qen.js:5706-5796 facade-exports (2.1.88 match: supportsPersistence, 0.756)
 var SOURCES = ["localSettings", "projectSettings", "userSettings"];
 var INLINE_FLAG_SETTINGS_LABEL = "--settings (inline JSON)";
 //@ chunk-5hsd6qen.js:5796-5868 facade-exports
 var REPO_UNGRANTABLE_DEFAULT_MODES = ["auto", "bypassPermissions"];
 var HOST_FREE_FORM_SETTINGS_KEY = "organizationFreeFormSettings";
-//@ chunk-6zvepy0r.js:6733-6780 fingerprint = getEnabledSettingSources (1)
+//@ chunk-6zvepy0r.js:6733-6780 fingerprint (2.1.88 match: getEnabledSettingSources, 1)
 var SETTING_SOURCES_BY_PRIORITY; // deferred: uses EDITABLE_SETTING_SOURCES of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-6zvepy0r.js:6733", () => {
   SETTING_SOURCES_BY_PRIORITY = ["policySettings", "flagSettings", ...EDITABLE_SETTING_SOURCES];

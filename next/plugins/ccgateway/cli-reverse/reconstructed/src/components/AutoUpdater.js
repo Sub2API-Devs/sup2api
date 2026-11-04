@@ -114,7 +114,7 @@ function useChangedVersion(
 }
 //@ chunk-tzghj6zv.js:22448-22457 layout
 var MAX_UPDATE_RESTARTS = 2;
-//@ chunk-tzghj6zv.js:22457-31073 fingerprint = AutoUpdater (0.576)
+//@ chunk-tzghj6zv.js:22457-31073 fingerprint (2.1.88 match: AutoUpdater, 0.576)
 /**
  * JS 安装的自动更新：间隔检查最新版本，跳过无权限或 claude.exe 被锁的情况，执行全局安装并显示结果。
  */

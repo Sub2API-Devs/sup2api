@@ -109,7 +109,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Blockquote } from "../Blockquote.js";
 import { TextInput } from "../TextInput.js";
 
-//@ chunk-tn4j580p.js:17770-17833 fingerprint = resetTypeahead (0.475)
+//@ chunk-tn4j580p.js:17770-17833 fingerprint (2.1.88 match: resetTypeahead, 0.475)
 function resetTypeahead(ta) {
   ta.writers.delete(ta.signal);
   clearTimeout(ta.timer);
@@ -118,7 +118,7 @@ function resetTypeahead(ta) {
 function getNowMs() {
   return Date.now();
 }
-//@ chunk-18hwfzwa.js:1205190-1205353 placement = filterSwarmFieldsFromSchema (0.664)
+//@ chunk-18hwfzwa.js:1205190-1205353 placement (2.1.88 match: filterSwarmFieldsFromSchema, 0.664)
 /**
  * JSON schema 的 required 里只保留 properties 中确实存在的字段名。旧版名 filterSwarmFieldsFromSchema 为错配。
  */
@@ -128,7 +128,7 @@ function getDeclaredRequiredFields(requestedSchema) {
   let propertyNames = new Set(objectFieldEntries(requestedSchema?.properties).map(([name]) => name));
   return required.filter((name) => typeof name === "string" && propertyNames.has(name));
 }
-//@ chunk-18hwfzwa.js:1206341-1206411 fingerprint = RESOLVING_SPINNER_CHARS (1)
+//@ chunk-18hwfzwa.js:1206341-1206411 fingerprint (2.1.88 match: RESOLVING_SPINNER_CHARS, 1)
 var RESOLVING_SPINNER_CHARS = "\u280B\u2819\u2839\u2838\u283C\u2834\u2826\u2827\u2807\u280F";
 //@ chunk-18hwfzwa.js:1206411-1206722 layout
 /**
@@ -162,7 +162,7 @@ function ResolvingSpinner() {
   } else spinner = $[4];
   return spinner;
 }
-//@ chunk-18hwfzwa.js:1206722-1207211 fingerprint = formatDateDisplay (1)
+//@ chunk-18hwfzwa.js:1206722-1207211 fingerprint (2.1.88 match: formatDateDisplay, 1)
 function formatDateDisplay(isoValue, schema) {
   try {
     let date = new Date(isoValue);
@@ -190,7 +190,7 @@ function formatDateDisplay(isoValue, schema) {
     return isoValue;
   }
 }
-//@ chunk-18hwfzwa.js:1207211-1209040 fingerprint = ElicitationDialog (0.354)
+//@ chunk-18hwfzwa.js:1207211-1209040 fingerprint (2.1.88 match: ElicitationDialog, 0.354)
 /**
  * MCP elicitation：form 模式按 requestedSchema 渲染字段（校验、日期格式化），URL 模式打开链接并等待；结果 accept/decline/cancel 回传服务器。
  */
@@ -400,7 +400,7 @@ function useInputGuard(prefilled) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:1209978-1220738 fingerprint = ElicitationFormDialog (0.541)
+//@ chunk-18hwfzwa.js:1209978-1220738 fingerprint (2.1.88 match: ElicitationFormDialog, 0.541)
 function ElicitationFormDialog({ serverName, pluginSource, params, onResponse }) {
   let { message, requestedSchema } = params;
   let { credentials } = useTheme_2();
@@ -1188,7 +1188,7 @@ ${scrollWindow}`
     }),
   });
 }
-//@ chunk-18hwfzwa.js:1220738-1231333 fingerprint = ElicitationURLDialog (0.683)
+//@ chunk-18hwfzwa.js:1220738-1231333 fingerprint (2.1.88 match: ElicitationURLDialog, 0.683)
 function ElicitationURLDialog(props) {
   let $ = useMemoCache(163);
   let {

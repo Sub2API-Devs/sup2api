@@ -23,7 +23,7 @@ import { useAnimationFrame } from "../../ink/components/Input.js";
 import { SpinnerGlyph } from "../Spinner/SpinnerGlyph.js";
 import { GlimmerMessage } from "../Spinner/GlimmerMessage.js";
 
-//@ chunk-g54kbxqw.js:24571-24641 fingerprint = createExplanationPromise (0.742)
+//@ chunk-g54kbxqw.js:24571-24641 fingerprint (2.1.88 match: createExplanationPromise, 0.742)
 function createExplanationPromise(props) {
   let { [REMOTE_TOOL_CALL_META]: remoteMeta, ...rest } = props;
   return {
@@ -31,7 +31,7 @@ function createExplanationPromise(props) {
     toolInput: rest,
   };
 }
-//@ chunk-s5p7fp0c.js:12107-12637 callgraph-fingerprint = usePermissionExplainerUI (0.189)
+//@ chunk-s5p7fp0c.js:12107-12637 callgraph-fingerprint (2.1.88 match: usePermissionExplainerUI, 0.189)
 function usePermissionExplainerUI(props) {
   let $ = useMemoCache(9);
   let { message, detail, onCancel } = props;
@@ -88,7 +88,7 @@ function usePermissionExplainerUI(props) {
 var MAX_EXPLANATION_CHARS = 4000;
 var EXPLANATION_NOTICE_TIMEOUT_MS = 1e4;
 var ISSUE_URL_PREFIX = "https://github.com/anthropics/claude-code/issues/";
-//@ chunk-18hwfzwa.js:781672-781742 fingerprint = getRiskColor (1)
+//@ chunk-18hwfzwa.js:781672-781742 fingerprint (2.1.88 match: getRiskColor, 1)
 function getRiskColor(riskLevel) {
   return {
     text: `#${riskLevel}`,
@@ -96,7 +96,7 @@ function getRiskColor(riskLevel) {
     url: `${ISSUE_URL_PREFIX}${riskLevel}`,
   };
 }
-//@ chunk-0eepcc6r.js:19212-19899 fingerprint = ShimmerLoadingText (0.544)
+//@ chunk-0eepcc6r.js:19212-19899 fingerprint (2.1.88 match: ShimmerLoadingText, 0.544)
 function ShimmerLoadingText() {
   let $ = useMemoCache(12);
   let settingsState = useSettingsState();

@@ -23,15 +23,15 @@ import { RemoteServerMenuLoader, MCPToolListView } from "./MCPToolListView.js";
 import { MCPToolDetailView } from "./MCPToolDetailView.js";
 import { MCPAgentServerMenu } from "./MCPAgentServerMenu.js";
 
-//@ chunk-cpqpnzp4.js:32585-32615 callgraph-fingerprint = _temp (1)
+//@ chunk-cpqpnzp4.js:32585-32615 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectMcp(s) {
   return s.mcp;
 }
-//@ chunk-cpqpnzp4.js:32615-32658 callgraph-fingerprint = _temp2 (1)
+//@ chunk-cpqpnzp4.js:32615-32658 callgraph-fingerprint (2.1.88 match: _temp2, 1)
 function selectAgentDefinitions(s_0) {
   return s_0.agentDefinitions;
 }
-//@ chunk-cpqpnzp4.js:32658-32697 layout = _temp2 (1)
+//@ chunk-cpqpnzp4.js:32658-32697 layout (2.1.88 match: _temp2, 1)
 function isNotIdeServer(c) {
   return c.name !== "ide";
 }
@@ -39,7 +39,7 @@ function isNotIdeServer(c) {
 function isNotSelectedServer(client) {
   return !isArtifacts404Failure(client);
 }
-//@ chunk-cpqpnzp4.js:32727-32784 callgraph-fingerprint = _temp4 (1)
+//@ chunk-cpqpnzp4.js:32727-32784 callgraph-fingerprint (2.1.88 match: _temp4, 1)
 function compareServerNames(a, b) {
   return a.name.localeCompare(b.name);
 }
@@ -92,7 +92,7 @@ async function toServerInfo(client) {
 function negate(value) {
   return !value;
 }
-//@ chunk-cpqpnzp4.js:33299-37993 fingerprint = MCPSettings (0.774)
+//@ chunk-cpqpnzp4.js:33299-37993 fingerprint (2.1.88 match: MCPSettings, 0.774)
 /**
  * /mcp：服务器列表 → 服务器菜单（stdio/remote/agent）→ 工具列表 → 工具详情；无服务器时提示运行 claude doctor。
  */

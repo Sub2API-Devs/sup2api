@@ -178,7 +178,7 @@ function getDiscoverVerdicts(storage) {
   cliOwnedState.discoverVerdictsRead ??= readDiscoverVerdicts(storage).catch(() => ({}));
   return cliOwnedState.discoverVerdictsRead;
 }
-//@ chunk-8t8n4kdh.js:29804-30040 placement = ensureScratchpadDir (0.624)
+//@ chunk-8t8n4kdh.js:29804-30040 placement (2.1.88 match: ensureScratchpadDir, 0.624)
 /**
  * 把 MCP discover 判定结果写入状态：有托管存储时写存储（0600），否则在本地路径原子写入（目录 0700、文件 0600），失败返回错误。旧版名 ensureScratchpadDir 误配，应归 MCP 模块。
  */

@@ -418,7 +418,7 @@ function sameSettingLabels(current, prev) {
 function stopClickPropagation(event) {
   event.stopImmediatePropagation();
 }
-//@ chunk-9h8dr0qb.js:16144-41746 fingerprint = Config (0.475)
+//@ chunk-9h8dr0qb.js:16144-41746 fingerprint (2.1.88 match: Config, 0.475)
 /**
  * /config 主体：可搜索的设置列表，布尔项回车切换、枚举项左右切换（主题、编辑器模式 normal/vim、通知方式、自动压缩、显示回合耗时、自动复制、减少动画、输出样式、模型、语言等），修改写入对应 settings 并记录事件。
  */
@@ -2189,7 +2189,7 @@ function Config({
                                 }),
   });
 }
-//@ chunk-9h8dr0qb.js:41746-42307 fingerprint = THEME_LABELS (0.713)
+//@ chunk-9h8dr0qb.js:41746-42307 fingerprint (2.1.88 match: THEME_LABELS, 0.713)
 /**
  * /config 里设置值的显示文案：thinking 中途切换警告、主题选项名、通知渠道名。
  */

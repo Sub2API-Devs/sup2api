@@ -15,7 +15,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-4v9zy7gn.js:29707-30650 fingerprint = CreatingStep (0.89)
+//@ chunk-4v9zy7gn.js:29707-30650 fingerprint (2.1.88 match: CreatingStep, 0.89)
 function CreatingStep(props) {
   let $ = useMemoCache(9);
   let {

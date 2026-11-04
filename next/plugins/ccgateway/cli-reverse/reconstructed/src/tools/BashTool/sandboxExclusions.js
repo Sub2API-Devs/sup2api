@@ -468,7 +468,7 @@ function splitMarkingQuotedGlobs(text) {
   }
   return result.split(/[ \t]+/);
 }
-//@ chunk-e6aww6q8.js:1250157-1251258 placement = isDockerSafe (0.772)
+//@ chunk-e6aww6q8.js:1250157-1251258 placement (2.1.88 match: isDockerSafe, 0.772)
 /**
  * （旧版名配错，切分错误）判断命令参数能否执行任意代码：解释器 -e/--eval、git config 中可执行的键、docker -H、bun/deno 运行脚本、通配参数等；被输入模式与沙箱排除检查使用。
  */
@@ -699,7 +699,7 @@ function isUnsandboxableProgram(word, shell) {
     (shell === "powershell" && POWERSHELL_INVOKE_COMMANDS.has(program))
   );
 }
-//@ chunk-e6aww6q8.js:1253000-1253309 placement = prependModeCharacterToInput (0.779)
+//@ chunk-e6aww6q8.js:1253000-1253309 placement (2.1.88 match: prependModeCharacterToInput, 0.779)
 function prependModeCharacterToInput(
   command,
   expandedCommand = command,
@@ -1188,7 +1188,7 @@ deferInit("chunk-e6aww6q8.js:1259031", () => {
   DOCKER_VALUE_SHORT_FLAGS = ["c", "H", "l"];
   DOCKER_SAFE_GLOBAL_FLAGS = new Set(["-D", "--debug", "--tls", "--tlsverify", "-v", "--version", "--help"]);
 });
-//@ chunk-e6aww6q8.js:1259665-1259967 placement = isDockerSafe (0.772)
+//@ chunk-e6aww6q8.js:1259665-1259967 placement (2.1.88 match: isDockerSafe, 0.772)
 function isDockerSafe_2(program, argv) {
   if (program !== "docker") return false;
   let sliced = argv.slice(1);
@@ -1249,7 +1249,7 @@ function hasGitGlobArgument(argv) {
 function hasUnquotedGlob(command) {
   return GLOB_CHAR_RE.test(stripQuotedRegions(command));
 }
-//@ chunk-e6aww6q8.js:1260426-1260478 placement = DANGEROUS_GIT_GLOBAL_FLAGS (0.549)
+//@ chunk-e6aww6q8.js:1260426-1260478 placement (2.1.88 match: DANGEROUS_GIT_GLOBAL_FLAGS, 0.549)
 /**
  * 危险 git 全局选项：-c、-C、--git-dir、--work-tree。被 utils/git.ts 等使用。
  */

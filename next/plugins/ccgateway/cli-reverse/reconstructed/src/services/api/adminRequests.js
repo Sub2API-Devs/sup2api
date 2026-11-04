@@ -41,7 +41,7 @@ var GITHUB_APP_ERROR_MESSAGES = {
   idp_conditional_access:
     "Your GitHub organization's identity provider (Microsoft Entra ID) has a Conditional Access policy that is blocking Claude. Ask your GitHub Enterprise or Entra ID admin to allow Claude in that policy.",
 };
-//@ chunk-s61vbvea.js:468180-469320 fingerprint = createAdminRequest (0.308)
+//@ chunk-s61vbvea.js:468180-469320 fingerprint (2.1.88 match: createAdminRequest, 0.308)
 /**
  * GitHub App 状态未定时请求服务端重新同步。旧版名 createAdminRequest 为错配。
  */
@@ -111,7 +111,7 @@ async function createAdminRequest({ orgUUID, accessToken, owner, repo, timeoutMs
     };
   }
 }
-//@ chunk-e6aww6q8.js:208643-208838 fingerprint = checkAdminRequestEligibility (0.407)
+//@ chunk-e6aww6q8.js:208643-208838 fingerprint (2.1.88 match: checkAdminRequestEligibility, 0.407)
 /**
  * 拉取远程会话 /v1/code/sessions/<id>/teleport-events（带组织头与可信设备令牌）。旧版名错配。
  */

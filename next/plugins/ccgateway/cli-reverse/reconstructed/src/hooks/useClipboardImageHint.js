@@ -18,7 +18,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-81qqq1aq.js:899", () => {
   init_react_production();
 });
-//@ chunk-81qqq1aq.js:903-1467 fingerprint = useClipboardImageHint (0.747)
+//@ chunk-81qqq1aq.js:903-1467 fingerprint (2.1.88 match: useClipboardImageHint, 0.747)
 var CLIPBOARD_IMAGE_HINT = "clipboard-image-hint";
 var CLIPBOARD_HINT_DELAY_MS = 1000;
 var CLIPBOARD_HINT_COOLDOWN_MS = 30000;

@@ -21,7 +21,7 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-095ptjmr.js:3004-3989 fingerprint = WizardDialogLayout (0.585)
+//@ chunk-095ptjmr.js:3004-3989 fingerprint (2.1.88 match: WizardDialogLayout, 0.585)
 function WizardDialogLayout(props) {
   let $ = useMemoCache(15);
   let { title: titleOverride, color, children, subtitle, footerText } = props;

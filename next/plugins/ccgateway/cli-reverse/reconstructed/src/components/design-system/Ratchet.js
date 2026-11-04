@@ -28,7 +28,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 deferInit("chunk-04svxz07.js:384", () => {
   init_react_production();
 });
-//@ chunk-04svxz07.js:388-1067 fingerprint = Ratchet (0.75)
+//@ chunk-04svxz07.js:388-1067 fingerprint (2.1.88 match: Ratchet, 0.75)
 function Ratchet({ children, lock = "always", restartKey }) {
   let [viewportRef, { isVisible }, restart] = useTerminalViewport();
   let { rows, columns } = useTerminalSize();

@@ -123,7 +123,7 @@ deferInit("chunk-cxyewwc3.js:267", () => {
   );
   MAX_FILE_ATTACHMENTS = 256;
 });
-//@ chunk-cxyewwc3.js:413-648 fingerprint = extractInboundAttachments (1)
+//@ chunk-cxyewwc3.js:413-648 fingerprint (2.1.88 match: extractInboundAttachments, 1)
 /**
  * 从入站帧的 file_attachments 字段取出并校验附件列表（截断到上限）。
  */
@@ -150,7 +150,7 @@ deferInit("chunk-cxyewwc3.js:648", () => {
 function shouldQueryInboundAttachment(input) {
   return inboundAttachmentQuerySchema().safeParse(input).data?.shouldQuery;
 }
-//@ chunk-23fm9f0d.js:23001-23035 fingerprint = uploadsDir (1)
+//@ chunk-23fm9f0d.js:23001-23035 fingerprint (2.1.88 match: uploadsDir, 1)
 function uploadsDir() {
   return cleanupOldFilesInDirectory("uploads");
 }
@@ -286,7 +286,7 @@ function imageExceedsDimension(data, maxDim) {
   let webpHeader = parseWebpHeader(data);
   return webpHeader !== undefined && Math.max(webpHeader.width, webpHeader.height) > maxDim;
 }
-//@ chunk-n4bsg1hp.js:3533-3581 fingerprint = debug (1)
+//@ chunk-n4bsg1hp.js:3533-3581 fingerprint (2.1.88 match: debug, 1)
 function debug(msg) {
   logForDebugging(`[bridge:inbound-attach] ${msg}`);
 }
@@ -501,7 +501,7 @@ function recordSavedName(totals, savedName, attachment) {
     attachment.file_uuid.toLowerCase(),
   ]);
 }
-//@ chunk-n4bsg1hp.js:7611-7749 fingerprint = attachmentSchema (0.694)
+//@ chunk-n4bsg1hp.js:7611-7749 fingerprint (2.1.88 match: attachmentSchema, 0.694)
 /**
  * 附件保存文件名：file_uuid 前缀（或稳定形式）+ 清洗后的原文件名。
  */
@@ -1643,7 +1643,7 @@ async function resolveInboundAttachments(
     },
   };
 }
-//@ chunk-n4bsg1hp.js:24801-25067 fingerprint = prependPathRefs (1)
+//@ chunk-n4bsg1hp.js:24801-25067 fingerprint (2.1.88 match: prependPathRefs, 1)
 function prependPathRefs(content, prefix) {
   if (!prefix) return content;
   if (typeof content === "string") return injectPeerFilePrefix(content, prefix);
@@ -2168,7 +2168,7 @@ function prefetchInboundAttachments(attachments, { issuedAt, credentials, onlyTh
   );
   return fields.started_count;
 }
-//@ chunk-n4bsg1hp.js:33852-33884 placement = tryReadFileForSync (1)
+//@ chunk-n4bsg1hp.js:33852-33884 placement (2.1.88 match: tryReadFileForSync, 1)
 function logPrefetchOutcome(eventName, fields) {
   logForDiagnosticsNoPII("info", eventName, fields);
 }
@@ -2559,7 +2559,7 @@ async function refreshTokenForDownload(staleToken, sessionId, credentials, signa
     abortController.abort();
   }
 }
-//@ chunk-n4bsg1hp.js:39585-41897 callgraph-fingerprint = resolveOne (0.249)
+//@ chunk-n4bsg1hp.js:39585-41897 callgraph-fingerprint (2.1.88 match: resolveOne, 0.249)
 /**
  * 下载单个文件：GET {base}/api/oauth/files/{uuid}/content（可要 model_copy），带静默超时与字节上限，可溢写到磁盘；返回 data / file / failure。
  */
@@ -2749,7 +2749,7 @@ function stalledFailure(hasHeaders) {
     beforeHeaders: !hasHeaders,
   };
 }
-//@ chunk-n4bsg1hp.js:42279-42404 placement = createChildAbortController (0.879)
+//@ chunk-n4bsg1hp.js:42279-42404 placement (2.1.88 match: createChildAbortController, 0.879)
 function createChildAbortController(signal) {
   return new Promise((resolve) => {
     if (signal.aborted) {

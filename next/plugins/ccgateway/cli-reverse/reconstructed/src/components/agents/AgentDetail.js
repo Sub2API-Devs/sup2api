@@ -42,7 +42,7 @@ import { AgentNavigationFooter } from "./AgentNavigationFooter.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { Pane } from "../design-system/Pane.js";
 
-//@ chunk-18hwfzwa.js:1259603-1264443 callgraph-fingerprint = AgentDetail (0.23)
+//@ chunk-18hwfzwa.js:1259603-1264443 callgraph-fingerprint (2.1.88 match: AgentDetail, 0.23)
 function AgentDetail(props) {
   let $ = useMemoCache(92);
   let { onDone, tmuxAvailable, wouldTakeAnswer } = props;

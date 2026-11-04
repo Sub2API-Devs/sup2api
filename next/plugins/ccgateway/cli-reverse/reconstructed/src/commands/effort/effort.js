@@ -94,7 +94,7 @@ function formatValidEffortOptions(model) {
   let ultracodeHint = isUltracodeAvailable(model) ? ", ultracode [on|off]" : "";
   return `${allowedEffortLevels.join(", ")}, auto${ultracodeHint}`;
 }
-//@ chunk-kcvmr83c.js:1293-1382 fingerprint = ApplyEffortAndClose (0.364)
+//@ chunk-kcvmr83c.js:1293-1382 fingerprint (2.1.88 match: ApplyEffortAndClose, 0.364)
 function ApplyEffortAndClose({ effortUpdate }) {
   return (
     effortUpdate !== undefined && effortUpdate.ultracode === undefined && effortUpdate.value === undefined
@@ -144,7 +144,7 @@ function forwardEffortToRemote(effortLevel, ultracodeConfirmed) {
     .catch(logError);
   return null;
 }
-//@ chunk-kcvmr83c.js:2188-3672 fingerprint = setEffortValue (0.66)
+//@ chunk-kcvmr83c.js:2188-3672 fingerprint (2.1.88 match: setEffortValue, 0.66)
 async function setEffortValue(effortLevel, state, shouldPersist, ultracodeConfirmed, options) {
   let model = getMainLoopModel();
   let level = typeof effortLevel === "string" ? clampEffortToCap(effortLevel, model) : effortLevel;
@@ -231,7 +231,7 @@ function shouldSaveEffortDefault({ asDefault, levelChanged, chosen, model }) {
     (levelChanged || effectiveEffortOverride(chosen) !== undefined || carriedEffortOnly(model) === undefined)
   );
 }
-//@ chunk-kcvmr83c.js:3843-4201 fingerprint = showCurrentEffort (0.571)
+//@ chunk-kcvmr83c.js:3843-4201 fingerprint (2.1.88 match: showCurrentEffort, 0.571)
 function showCurrentEffort(currentLevel, model, ultracode) {
   let ultracodeSuffix = isUltracodeActive(ultracode, model) ? " \xB7 Ultracode on" : "";
   let effectiveValue = effectiveEffortOverride(currentLevel);
@@ -254,7 +254,7 @@ function showCurrentEffort(currentLevel, model, ultracode) {
     message: `Current effort level: ${effortValueToString(effectiveValue)} (${description})${ultracodeSuffix}`,
   };
 }
-//@ chunk-kcvmr83c.js:4201-4979 fingerprint = unsetEffortLevel (0.605)
+//@ chunk-kcvmr83c.js:4201-4979 fingerprint (2.1.88 match: unsetEffortLevel, 0.605)
 async function unsetEffortLevel(state, shouldPersist, ultracodeConfirmed, options) {
   ultracodeConfirmed?.({
     value: undefined,
@@ -339,7 +339,7 @@ function parseUltracodeArg(normalized) {
   if (second === undefined || second === "on") return true;
   return second === "off" ? false : undefined;
 }
-//@ chunk-kcvmr83c.js:5758-5988 fingerprint = executeEffort (0.503)
+//@ chunk-kcvmr83c.js:5758-5988 fingerprint (2.1.88 match: executeEffort, 0.503)
 async function executeEffort(state, shouldPersist, ultracodeConfirmed = true, options, appState) {
   let normalized = state.toLowerCase();
   if (getEffortEnvOverride_2(state))
@@ -443,7 +443,7 @@ async function effortCommandCall(args, context) {
     ).message,
   };
 }
-//@ chunk-3rwvzn82.js:14905-14998 callgraph-witnessed = ShowCurrentEffort (1)
+//@ chunk-3rwvzn82.js:14905-14998 callgraph-witnessed (2.1.88 match: ShowCurrentEffort, 1)
 function ShowCurrentEffort(t0) {
   let { onDone } = t0;
   let currentLevel = useQueuedMessageText();
@@ -453,7 +453,7 @@ function ShowCurrentEffort(t0) {
   onDone(message);
   return null;
 }
-//@ chunk-3rwvzn82.js:32635-32873 fingerprint = call (0.89)
+//@ chunk-3rwvzn82.js:32635-32873 fingerprint (2.1.88 match: call, 0.89)
 /**
  * /effort 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

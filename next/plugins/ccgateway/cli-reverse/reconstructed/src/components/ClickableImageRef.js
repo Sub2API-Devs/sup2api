@@ -15,7 +15,7 @@ import { toSafeFileUrl } from "../services/mcp/xaa.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link } from "../ink/components/Text.js";
 
-//@ chunk-ey2qag4x.js:23011-23710 fingerprint = ClickableImageRef (0.889)
+//@ chunk-ey2qag4x.js:23011-23710 fingerprint (2.1.88 match: ClickableImageRef, 0.889)
 function ClickableImageRef(props) {
   let $ = useMemoCache(15);
   let { imageId, backgroundColor, isSelected } = props;

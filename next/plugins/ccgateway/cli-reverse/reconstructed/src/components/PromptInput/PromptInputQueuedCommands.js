@@ -75,7 +75,7 @@ function selectAbortController2(state) {
 function selectToolPermissionContextMode2(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-18hwfzwa.js:121190-121237 placement = _temp2 (1)
+//@ chunk-18hwfzwa.js:121190-121237 placement (2.1.88 match: _temp2, 1)
 function selectHasViewedAgentTask(s_0) {
   return !!s_0.viewingAgentTaskId;
 }
@@ -119,7 +119,7 @@ function queuedCommandOriginLabel(commands) {
 function getQueuedCommandText(command) {
   return typeof command.value === "string" ? parseTaskNotification(command.value, command.origin) : null;
 }
-//@ chunk-18hwfzwa.js:121885-121992 fingerprint = processQueuedCommands (1)
+//@ chunk-18hwfzwa.js:121885-121992 fingerprint (2.1.88 match: processQueuedCommands, 1)
 function processQueuedCommands(commands, run) {
   return {
     value: buildCollapsedNotification(run, commands.length - 1),
@@ -132,7 +132,7 @@ function processQueuedCommands(commands, run) {
 function summarizeQueuedCommand(queue) {
   return collapseNotificationRuns(queue, getQueuedCommandText, processQueuedCommands);
 }
-//@ chunk-18hwfzwa.js:122030-122160 placement = processQueuedCommands (1)
+//@ chunk-18hwfzwa.js:122030-122160 placement (2.1.88 match: processQueuedCommands, 1)
 function isTaskNotificationCommand(queuedCommands) {
   return (
     queuedCommands.mode === "task-notification" &&
@@ -291,7 +291,7 @@ function QueuedCommandsList(props) {
   } else container = $[22];
   return container;
 }
-//@ chunk-18hwfzwa.js:124299-125411 fingerprint = PromptInputQueuedCommandsImpl (0.313)
+//@ chunk-18hwfzwa.js:124299-125411 fingerprint (2.1.88 match: PromptInputQueuedCommandsImpl, 0.313)
 /**
  * 排队命令预览：把 queuedCommands 的文本/图片内容截断显示在输入框上方（图片块显示占位）。
  */

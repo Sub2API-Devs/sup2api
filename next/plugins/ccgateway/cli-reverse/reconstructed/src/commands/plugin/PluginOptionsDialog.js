@@ -27,7 +27,7 @@ function valueOption(value) {
     value,
   };
 }
-//@ chunk-ca06bv0t.js:3228-3596 fingerprint = buildFinalValues (0.825)
+//@ chunk-ca06bv0t.js:3228-3596 fingerprint (2.1.88 match: buildFinalValues, 0.825)
 function buildFinalValues(fields, collected, configSchema, initialValues) {
   let finalValues = {};
   for (let fieldKey of fields) {
@@ -48,7 +48,7 @@ function buildFinalValues(fields, collected, configSchema, initialValues) {
   }
   return finalValues;
 }
-//@ chunk-ca06bv0t.js:3596-4870 callgraph-fingerprint = PluginOptionsDialog (0.261)
+//@ chunk-ca06bv0t.js:3596-4870 callgraph-fingerprint (2.1.88 match: PluginOptionsDialog, 0.261)
 function PluginOptionsDialog(props) {
   let $ = useMemoCache(22);
   let { title, subtitle, configSchema, initialValues, onSave, onCancel } = props;

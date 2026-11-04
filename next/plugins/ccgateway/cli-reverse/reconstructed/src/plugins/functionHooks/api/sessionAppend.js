@@ -140,7 +140,7 @@ function systemMessageText(message) {
   let content = "content" in message ? message.content : undefined;
   return typeof content === "string" && content !== "" ? content : undefined;
 }
-//@ chunk-3xb70ww4.js:1874-2112 placement = sanitizeFileName (1)
+//@ chunk-3xb70ww4.js:1874-2112 placement (2.1.88 match: sanitizeFileName, 1)
 /**
  * 把各类消息（user/assistant/attachment/system）转成纯文本块列表。
  */
@@ -286,7 +286,7 @@ function reconcileAppendContent(original, next) {
       : [];
   });
 }
-//@ chunk-3xb70ww4.js:3760-3824 placement = hasThinkingContent (1)
+//@ chunk-3xb70ww4.js:3760-3824 placement (2.1.88 match: hasThinkingContent, 1)
 var THINKING_AND_RESULT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-3xb70ww4.js:3760", () => {
   THINKING_AND_RESULT_TYPES = new Set(["thinking", "redacted_thinking", "tool_result"]);

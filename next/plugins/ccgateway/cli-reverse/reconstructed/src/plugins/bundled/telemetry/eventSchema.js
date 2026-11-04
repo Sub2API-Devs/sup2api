@@ -331,7 +331,7 @@ var ENTRYPOINT_ALIASES = {
 };
 //@ chunk-4m46mxx9.js:10463-10493 placement
 var isNonEmpty = (value) => value !== undefined && value !== "";
-//@ chunk-4m46mxx9.js:10493-10567 placement = isEnvTruthy (1)
+//@ chunk-4m46mxx9.js:10493-10567 placement (2.1.88 match: isEnvTruthy, 1)
 var isEnvTruthy = (envVar) => ["1", "true", "yes", "on"].includes((envVar ?? "").trim().toLowerCase());
 //@ chunk-4m46mxx9.js:10567-10948 placement
 /**

@@ -16,7 +16,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bc20zedk.js:5225-5283 affinity
 var BOUNDARY_THROW_TEXT = "a boundary caught a throw (message not reported)";
-//@ chunk-bc20zedk.js:5283-6145 fingerprint = SentryErrorBoundary (0.319)
+//@ chunk-bc20zedk.js:5283-6145 fingerprint (2.1.88 match: SentryErrorBoundary, 0.319)
 let SentryErrorBoundary; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-bc20zedk.js:5283", () => {
   SentryErrorBoundary = class SentryErrorBoundary extends REACT_PROFILER_TYPE {

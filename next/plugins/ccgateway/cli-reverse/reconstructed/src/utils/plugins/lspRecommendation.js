@@ -20,7 +20,7 @@ import { getPluginDisplayName } from "../../components/ManagedSettingsSecurityDi
 
 //@ chunk-18hwfzwa.js:1798239-1798249 affinity
 var MAX_LSP_RECOMMENDATIONS = 5;
-//@ chunk-18hwfzwa.js:1798249-1798529 fingerprint = extractLspInfoFromManifest (1)
+//@ chunk-18hwfzwa.js:1798249-1798529 fingerprint (2.1.88 match: extractLspInfoFromManifest, 1)
 function extractLspInfoFromManifest(lspServers) {
   if (!lspServers) return null;
   if (typeof lspServers === "string") {
@@ -41,7 +41,7 @@ function extractLspInfoFromManifest(lspServers) {
 function isRecord(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-18hwfzwa.js:1798582-1798880 fingerprint = extractFromServerConfigRecord (1)
+//@ chunk-18hwfzwa.js:1798582-1798880 fingerprint (2.1.88 match: extractFromServerConfigRecord, 1)
 function extractFromServerConfigRecord(serverConfigs) {
   let extensions = new Set();
   let command = null;
@@ -57,7 +57,7 @@ function extractFromServerConfigRecord(serverConfigs) {
     command,
   };
 }
-//@ chunk-18hwfzwa.js:1798880-1799413 fingerprint = getLspPluginsFromMarketplaces (1)
+//@ chunk-18hwfzwa.js:1798880-1799413 fingerprint (2.1.88 match: getLspPluginsFromMarketplaces, 1)
 async function getLspPluginsFromMarketplaces(storageV5) {
   let result = new Map();
   try {
@@ -89,7 +89,7 @@ async function getLspPluginsFromMarketplaces(storageV5) {
   }
   return result;
 }
-//@ chunk-18hwfzwa.js:1799413-1800597 fingerprint = getMatchingLspPlugins (1)
+//@ chunk-18hwfzwa.js:1799413-1800597 fingerprint (2.1.88 match: getMatchingLspPlugins, 1)
 /**
  * 按文件扩展名在市场中找提供对应 LSP 服务器的插件（排除已安装和用户拒绝过的），用于“安装 LSP 插件？”提示。
  */
@@ -146,7 +146,7 @@ async function getMatchingLspPlugins(session, filePath, storageV5) {
     command: info.command,
   }));
 }
-//@ chunk-18hwfzwa.js:1800597-1800801 fingerprint = addToNeverSuggest (1)
+//@ chunk-18hwfzwa.js:1800597-1800801 fingerprint (2.1.88 match: addToNeverSuggest, 1)
 /**
  * 把插件加入 LSP 推荐“永不推荐”列表（全局 lspRecommendationNeverPlugins）。
  */
@@ -161,7 +161,7 @@ function addToNeverSuggest(pluginId, storageV5) {
   }, storageV5);
   logForDebugging(`[lspRecommendation] Added ${pluginId} to never suggest`);
 }
-//@ chunk-18hwfzwa.js:1800801-1800971 fingerprint = incrementIgnoredCount (1)
+//@ chunk-18hwfzwa.js:1800801-1800971 fingerprint (2.1.88 match: incrementIgnoredCount, 1)
 /**
  * LSP 推荐被忽略次数 +1（多次忽略后自动关闭）。
  */
@@ -175,7 +175,7 @@ function incrementIgnoredCount(storageV5) {
   }, storageV5);
   logForDebugging("[lspRecommendation] Incremented ignored count");
 }
-//@ chunk-18hwfzwa.js:1800971-1801080 fingerprint = isLspRecommendationsDisabled (1)
+//@ chunk-18hwfzwa.js:1800971-1801080 fingerprint (2.1.88 match: isLspRecommendationsDisabled, 1)
 function isLspRecommendationsDisabled() {
   let config = getGlobalConfig();
   return (

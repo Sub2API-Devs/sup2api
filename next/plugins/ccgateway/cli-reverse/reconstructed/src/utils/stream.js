@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-63641kq7.js:6066-7195 fingerprint = Stream (0.897)
+//@ chunk-63641kq7.js:6066-7195 fingerprint (2.1.88 match: Stream, 0.897)
 /**
  * Stream：push 式异步迭代器（queue + 挂起的 read promise），done() 结束，error() 抛给消费者，return() 时调用回调。
  */

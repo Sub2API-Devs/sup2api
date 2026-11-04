@@ -156,7 +156,7 @@ var MAX_EDITABLE_FILE_BYTES = 1073741824;
 function isRefreshedBehindModel(editResult) {
   return editResult?.refreshedBehindModel === true;
 }
-//@ chunk-e6aww6q8.js:4649110-4649429 affinity = areFileEditsInputsEquivalent (0.819)
+//@ chunk-e6aww6q8.js:4649110-4649429 affinity (2.1.88 match: areFileEditsInputsEquivalent, 0.819)
 /**
  * 仅在远程调用或跨机器输入时对 Edit 的 old/new_string 运行 normalizeFileEditInput；本地调用原样返回。
  */
@@ -182,7 +182,7 @@ function normalizeEditInputForRemote(input1, input2) {
         new_string: normalizedEdit.new_string,
       };
 }
-//@ chunk-e6aww6q8.js:4649429-4656768 fingerprint = FileEditTool (0.557)
+//@ chunk-e6aww6q8.js:4649429-4656768 fingerprint (2.1.88 match: FileEditTool, 0.557)
 /**
  * Edit 工具定义（name "Edit"）。精确字符串替换：validateInput 依次查空字节/不稳定路径/用户电脑路径/工作树隔离/记忆目录 lint、old==new、deny 规则、Read deny、1GiB 上限、Perforce 只读、文件不存在/已存在、.ipynb、必须先 Read 且未被外部修改（可自动恢复）、匹配唯一性、settings 文件校验；call 交给 editFileToolCall。
  */
@@ -968,7 +968,7 @@ async function editFileToolCall(input, context, parentMessage) {
     ...fingerprintResult,
   };
 }
-//@ chunk-e6aww6q8.js:4661702-4661872 fingerprint = readFileForEdit (0.838)
+//@ chunk-e6aww6q8.js:4661702-4661872 fingerprint (2.1.88 match: readFileForEdit, 0.838)
 /**
  * 读取待编辑文件：句柄为 null 或文件不存在时返回空内容（utf8/LF、fileExists:false），否则返回 readExisting 的内容/编码/行尾。
  */

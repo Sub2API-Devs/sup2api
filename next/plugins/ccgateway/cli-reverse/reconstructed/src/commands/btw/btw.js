@@ -82,7 +82,7 @@ import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { saveGlobalConfig } from "../../utils/config.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1536810-1537121 fingerprint = stripInProgressAssistantMessage (0.622)
+//@ chunk-e6aww6q8.js:1536810-1537121 fingerprint (2.1.88 match: stripInProgressAssistantMessage, 0.622)
 function stripInProgressAssistantMessage(messages) {
   for (let idx = messages.length - 1; idx >= 0; idx--) {
     let message = messages[idx];
@@ -136,7 +136,7 @@ deferInit("chunk-583vs41k.js:14329", () => {
     }),
   );
 });
-//@ chunk-583vs41k.js:14618-22270 callgraph-witnessed = BtwSideQuestion (0.187)
+//@ chunk-583vs41k.js:14618-22270 callgraph-witnessed (2.1.88 match: BtwSideQuestion, 0.187)
 function BtwSideQuestion({ question, initialResponse, initialFallbackNotice, inFlight, context, onDone }) {
   let doneRef = useRef(false);
   let finish = useCallback(
@@ -925,7 +925,7 @@ function describeRetryStatus(status) {
       return "API error";
   }
 }
-//@ chunk-583vs41k.js:24966-26103 fingerprint = buildCacheSafeParams (0.457)
+//@ chunk-583vs41k.js:24966-26103 fingerprint (2.1.88 match: buildCacheSafeParams, 0.457)
 async function buildCacheSafeParams(context, transcript) {
   let messages = context.messages;
   if (transcript) {
@@ -1008,7 +1008,7 @@ async function buildCacheSafeParams(context, transcript) {
     advisorModel: context.getAdvisorSetting(),
   };
 }
-//@ chunk-583vs41k.js:26103-26780 fingerprint = call (0.574)
+//@ chunk-583vs41k.js:26103-26780 fingerprint (2.1.88 match: call, 0.574)
 /**
  * /btw 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

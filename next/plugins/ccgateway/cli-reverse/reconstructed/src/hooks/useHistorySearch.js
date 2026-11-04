@@ -65,7 +65,7 @@ function findMatchCursorOffset(text, pastedContents, needle) {
   });
   return last ? last.index : text.length;
 }
-//@ chunk-18hwfzwa.js:535949-538827 fingerprint = useHistorySearch (0.689)
+//@ chunk-18hwfzwa.js:535949-538827 fingerprint (2.1.88 match: useHistorySearch, 0.689)
 /**
  * Ctrl+R 历史搜索：打开时流式读取全部历史（history_search_scan），输入时增量匹配（含粘贴文本内容），accept 把匹配填回输入框，execute 直接提交，cancel 恢复原输入；记录 history_search_open/accept/execute 事件。
  */

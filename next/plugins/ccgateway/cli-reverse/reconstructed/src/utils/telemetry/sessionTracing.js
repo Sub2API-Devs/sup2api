@@ -60,7 +60,7 @@ import { extractMcpToolDetails, isToolDetailsLoggingEnabled } from "../../servic
 import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:857456-857516 fingerprint = isToolContentLoggingEnabled (1)
+//@ chunk-aepeg2w5.js:857456-857516 fingerprint (2.1.88 match: isToolContentLoggingEnabled, 1)
 function isToolContentLoggingEnabled() {
   return isEnvTruthy(process.env.OTEL_LOG_TOOL_CONTENT);
 }
@@ -239,7 +239,7 @@ var interactionSequenceByHost; // deferred: uses InteractionSequenceState of its
 deferInit("chunk-a9ek44g8.js:8442", () => {
   interactionSequenceByHost = new HostScoped(() => new InteractionSequenceState());
 });
-//@ chunk-a9ek44g8.js:8467-8625 fingerprint = isEnhancedTelemetryEnabled (0.624)
+//@ chunk-a9ek44g8.js:8467-8625 fingerprint (2.1.88 match: isEnhancedTelemetryEnabled, 0.624)
 /**
  * CLAUDE_CODE_ENHANCED_TELEMETRY_BETA（或 ENABLE_ENHANCED_TELEMETRY_BETA）为真时启用会话追踪 span。
  */
@@ -387,7 +387,7 @@ function buildErrorSpanStatus(error) {
       }),
   };
 }
-//@ chunk-a9ek44g8.js:10138-10221 fingerprint = getTracer (0.932)
+//@ chunk-a9ek44g8.js:10138-10221 fingerprint (2.1.88 match: getTracer, 0.932)
 function getTracer() {
   return otelApi_4.trace.getTracer("com.anthropic.claude_code.tracing", "1.0.0");
 }
@@ -400,7 +400,7 @@ function getLiveSpanState(stateKey) {
   let state = getActiveContext().getValue(stateKey);
   return state && !state.ended ? state : undefined;
 }
-//@ chunk-a9ek44g8.js:10311-10435 callgraph-fingerprint = ensureCleanupInterval (0.174)
+//@ chunk-a9ek44g8.js:10311-10435 callgraph-fingerprint (2.1.88 match: ensureCleanupInterval, 0.174)
 function ensureCleanupInterval(stateKey, spanState) {
   spanAttributesByContext.set(spanState.span, spanState);
   let nextContext = otelApi_4.trace
@@ -417,7 +417,7 @@ function endSpanState(stateKey, spanState) {
   if (getActiveContext().getValue(stateKey) === spanState)
     otelContextManager.enterWith(spanState.priorContext);
 }
-//@ chunk-a9ek44g8.js:10560-10614 fingerprint = createSpanAttributes (1)
+//@ chunk-a9ek44g8.js:10560-10614 fingerprint (2.1.88 match: createSpanAttributes, 1)
 function createSpanAttributes(spanType, customAttributes = {}) {
   return {
     ...getSpanBaseAttributes(),
@@ -507,7 +507,7 @@ function getConversationIdAttributes(agentContext) {
       return {};
   }
 }
-//@ chunk-a9ek44g8.js:11535-12593 fingerprint = startInteractionSpan (0.527)
+//@ chunk-a9ek44g8.js:11535-12593 fingerprint (2.1.88 match: startInteractionSpan, 0.527)
 /**
  * 开始一次用户交互的 claude_code.interaction span。
  */
@@ -583,7 +583,7 @@ function startInteractionSpan(prompt, traceContexts) {
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:12593-12691 layout = redactIfDisabled (0.778)
+//@ chunk-a9ek44g8.js:12593-12691 layout (2.1.88 match: redactIfDisabled, 0.778)
 function redactIfDisabled(content) {
   return env.OTEL_LOG_USER_PROMPTS && !isTracingRedacted()
     ? redactAccountMemoryText(() => accountMemoryRedactionKeys(getRootSession().host), undefined, content)
@@ -635,7 +635,7 @@ function withTurnTraceContexts(contexts, handler, fallbackTraceparent) {
   };
   return otelContextManager.with(getActiveContext().setValue(TURN_TRACE_CONTEXTS_KEY, traceState), handler);
 }
-//@ chunk-a9ek44g8.js:13267-13503 fingerprint = endInteractionSpan (0.841)
+//@ chunk-a9ek44g8.js:13267-13503 fingerprint (2.1.88 match: endInteractionSpan, 0.841)
 function endInteractionSpan() {
   let spanContext = getLiveSpanState(INTERACTION_STATE_KEY);
   if (!spanContext) return;
@@ -651,7 +651,7 @@ function endInteractionSpan() {
   spanContext.span.end();
   endSpanState(INTERACTION_STATE_KEY, spanContext);
 }
-//@ chunk-a9ek44g8.js:13503-14459 fingerprint = startLLMRequestSpan (0.751)
+//@ chunk-a9ek44g8.js:13503-14459 fingerprint (2.1.88 match: startLLMRequestSpan, 0.751)
 function startLLMRequestSpan(
   model,
   agentContext,
@@ -754,7 +754,7 @@ function parseTraceparent(traceparent) {
   );
   return otelApi_4.trace.getSpanContext(traceContext);
 }
-//@ chunk-a9ek44g8.js:14801-16622 fingerprint = endLLMRequestSpan (0.561)
+//@ chunk-a9ek44g8.js:14801-16622 fingerprint (2.1.88 match: endLLMRequestSpan, 0.561)
 function endLLMRequestSpan(span, metadata) {
   if (!span) return;
   let spanState = spanAttributesByContext.get(span);
@@ -828,7 +828,7 @@ function endLLMRequestSpan(span, metadata) {
   }
   spanState.span.end();
 }
-//@ chunk-a9ek44g8.js:16622-17392 fingerprint = startToolSpan (0.573)
+//@ chunk-a9ek44g8.js:16622-17392 fingerprint (2.1.88 match: startToolSpan, 0.573)
 function startToolSpan(toolName, agentContext, extraAttributes, toolInput, toolUseId, notRecorded = false) {
   let perfettoSpanId = isPerfettoRecording() ? startPerfettoToolSpan(toolName, extraAttributes) : undefined;
   let activeContext = getActiveContext();
@@ -886,7 +886,7 @@ function startToolSpan(toolName, agentContext, extraAttributes, toolInput, toolU
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:17392-17917 fingerprint = startToolBlockedOnUserSpan (0.886)
+//@ chunk-a9ek44g8.js:17392-17917 fingerprint (2.1.88 match: startToolBlockedOnUserSpan, 0.886)
 function startToolBlockedOnUserSpan(agentContext) {
   let perfettoSpanId = isPerfettoRecording() ? startPerfettoUserInputSpan("tool_permission") : undefined;
   let activeContext = getActiveContext();
@@ -946,7 +946,7 @@ function endToolBlockedOnUserSpan(decision, source) {
   blockedSpanContext.span.end();
   endSpanState(BLOCKED_STATE_KEY, blockedSpanContext);
 }
-//@ chunk-a9ek44g8.js:18198-18475 fingerprint = startToolExecutionSpan (0.831)
+//@ chunk-a9ek44g8.js:18198-18475 fingerprint (2.1.88 match: startToolExecutionSpan, 0.831)
 function startToolExecutionSpan(agentContext, toolUseId) {
   let tracer = getActiveContext();
   if (!isSessionTracingEnabled()) return otelApi_4.trace.getActiveSpan() || getTracer().startSpan("dummy");
@@ -989,7 +989,7 @@ function endToolExecutionSpan(metadata) {
   liveSpanState.span.end();
   endSpanState(EXECUTION_STATE_KEY, liveSpanState);
 }
-//@ chunk-a9ek44g8.js:18850-19231 fingerprint = endToolSpan (0.787)
+//@ chunk-a9ek44g8.js:18850-19231 fingerprint (2.1.88 match: endToolSpan, 0.787)
 function endToolSpan(toolUseId, toolContent, resultTokens, notRecorded = false) {
   let toolSpanContext = toolUseId ? spanAttributesByContext.get(toolUseId) : getLiveSpanState(TOOL_STATE_KEY);
   if (!toolSpanContext || toolSpanContext.ended) return;
@@ -1029,7 +1029,7 @@ function stringifyToolContentForSpan(content) {
   ).join(`
 `);
 }
-//@ chunk-a9ek44g8.js:19463-19740 fingerprint = addToolContentEvent (0.901)
+//@ chunk-a9ek44g8.js:19463-19740 fingerprint (2.1.88 match: addToolContentEvent, 0.901)
 function addToolContentEvent(span, eventName, attributes) {
   if (!shouldRecordToolContent(span)) return;
   let currentSpanCtx = spanAttributesByContext.get(span);
@@ -1134,7 +1134,7 @@ async function withToolExecutionSpan(name, options, run) {
     }
   });
 }
-//@ chunk-a9ek44g8.js:20822-21218 callgraph-witnessed = executeInSpan (0.244)
+//@ chunk-a9ek44g8.js:20822-21218 callgraph-witnessed (2.1.88 match: executeInSpan, 0.244)
 function executeInSpan(agentContext) {
   if (!isPerfettoTracingEnabled()) return;
   let tracer = getActiveContext();
@@ -1184,7 +1184,7 @@ function endSubagentSpan(span, metadata) {
 function isAnyBetaTracingEnabled() {
   return isBetaTracingEnabled() || isPerfettoTracingEnabled();
 }
-//@ chunk-a9ek44g8.js:21463-21822 fingerprint = startHookSpan (0.866)
+//@ chunk-a9ek44g8.js:21463-21822 fingerprint (2.1.88 match: startHookSpan, 0.866)
 function startHookSpan(hookEvent, hookNameForTelemetry, numHooks, hookDefinitionsJson, agentContext) {
   if (!isAnyBetaTracingEnabled()) return otelApi_4.trace.getActiveSpan() || getTracer().startSpan("dummy");
   let tracer = getTracer();
@@ -1215,7 +1215,7 @@ function startHookSpan(hookEvent, hookNameForTelemetry, numHooks, hookDefinition
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:21822-22365 fingerprint = endHookSpan (0.837)
+//@ chunk-a9ek44g8.js:21822-22365 fingerprint (2.1.88 match: endHookSpan, 0.837)
 function endHookSpan(span, metadata) {
   if (!isAnyBetaTracingEnabled()) return;
   let spanState = spanAttributesByContext.get(span);

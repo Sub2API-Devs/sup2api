@@ -70,7 +70,7 @@ deferInit("chunk-e6aww6q8.js:2477343", () => {
 function getQueryProfileState() {
   return queryProfileStateSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:2477409-2477509 fingerprint = startQueryProfile (0.849)
+//@ chunk-e6aww6q8.js:2477409-2477509 fingerprint (2.1.88 match: startQueryProfile, 0.849)
 /**
  * 开始一次查询剖析：清 mark、计数加一、打 query_user_input_received。
  */
@@ -80,7 +80,7 @@ function startQueryProfile() {
   getQueryProfileState().startQuery();
   queryCheckpoint("query_user_input_received");
 }
-//@ chunk-e6aww6q8.js:2477509-2477577 callgraph-witnessed = queryCheckpoint (0.162)
+//@ chunk-e6aww6q8.js:2477509-2477577 callgraph-witnessed (2.1.88 match: queryCheckpoint, 0.162)
 /**
  * 打一个剖析检查点（mark + 内存快照）；关闭时什么也不做。queryLoop/queryModel 里大量调用（query_fn_entry、query_api_request_sent 等）。
  */
@@ -89,7 +89,7 @@ function queryCheckpoint(name) {
   getPerformance().mark(name);
   getQueryProfileState().snapshotMemory(name);
 }
-//@ chunk-e6aww6q8.js:2477577-2477631 fingerprint = endQueryProfile (1)
+//@ chunk-e6aww6q8.js:2477577-2477631 fingerprint (2.1.88 match: endQueryProfile, 1)
 /**
  * 结束剖析（query_profile_end）。
  */
@@ -97,7 +97,7 @@ function endQueryProfile() {
   if (!isQueryProfilingEnabled) return;
   queryCheckpoint("query_profile_end");
 }
-//@ chunk-e6aww6q8.js:2477631-2477999 fingerprint = getSlowWarning (0.872)
+//@ chunk-e6aww6q8.js:2477631-2477999 fingerprint (2.1.88 match: getSlowWarning, 0.872)
 /**
  * 按耗时给检查点加 SLOW/VERY SLOW 等提示。
  */
@@ -110,7 +110,7 @@ function getSlowWarning(deltaMs, name) {
   if (name.includes("client_creation") && deltaMs > 50) return " \u26A0\uFE0F  client creation";
   return "";
 }
-//@ chunk-e6aww6q8.js:2477999-2478970 fingerprint = getQueryProfileReport (0.96)
+//@ chunk-e6aww6q8.js:2477999-2478970 fingerprint (2.1.88 match: getQueryProfileReport, 0.96)
 /**
  * 生成查询剖析报告文本（未开启时提示设置 CLAUDE_CODE_PROFILE_QUERY=1）。
  */
@@ -164,7 +164,7 @@ function getQueryProfileReport() {
   return lines.join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2478970-2480157 fingerprint = getPhaseSummary (0.994)
+//@ chunk-e6aww6q8.js:2478970-2480157 fingerprint (2.1.88 match: getPhaseSummary, 0.994)
 /**
  * 按阶段（上下文加载、自动压缩、查询准备、网络、工具执行等）汇总耗时。
  */

@@ -531,7 +531,7 @@ function catalogSurface() {
   if (isHostEntrypoint()) return "ccd";
   return "cc";
 }
-//@ chunk-c0w5a81j.js:1260-3112 placement = fetchTeamMemoryOnce (0.268)
+//@ chunk-c0w5a81j.js:1260-3112 placement (2.1.88 match: fetchTeamMemoryOnce, 0.268)
 async function fetchServedCatalogOnce(state, repoSlug, { etag } = {}) {
   let endpoint = catalogEndpointForScope(state);
   try {

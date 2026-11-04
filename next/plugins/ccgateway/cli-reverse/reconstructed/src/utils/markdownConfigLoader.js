@@ -45,7 +45,7 @@ import { parseFrontmatter } from "./frontmatterParser.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "./pagedRead.js";
 import { formatStorageError } from "./storage/storageErrors.js";
 
-//@ chunk-2xm1rxms.js:37944-38224 fingerprint = getFileIdentity (1)
+//@ chunk-2xm1rxms.js:37944-38224 fingerprint (2.1.88 match: getFileIdentity, 1)
 async function getFileIdentity_2(pathA, pathB) {
   let [statsA, statsB, parentStatsB] = await Promise.all([
     lstat(pathA, {
@@ -69,13 +69,13 @@ async function getFileIdentity_2(pathA, pathB) {
     !(parentStatsB.dev === statsB.dev && parentStatsB.ino === statsB.ino)
   );
 }
-//@ chunk-e6aww6q8.js:797747-797837 fingerprint = CLAUDE_CONFIG_DIRECTORIES (0.71)
+//@ chunk-e6aww6q8.js:797747-797837 fingerprint (2.1.88 match: CLAUDE_CONFIG_DIRECTORIES, 0.71)
 /**
  * markdown 配置文件单文件上限 1 MiB，及配置子目录清单 CLAUDE_CONFIG_DIRECTORIES：commands、agents、output-styles、skills、workflows、routines。
  */
 var MAX_MARKDOWN_FILE_BYTES = 1048576;
 var CLAUDE_CONFIG_DIRECTORIES = ["commands", "agents", "output-styles", "skills", "workflows", "routines"];
-//@ chunk-e6aww6q8.js:797837-798020 fingerprint = extractDescriptionFromMarkdown (1)
+//@ chunk-e6aww6q8.js:797837-798020 fingerprint (2.1.88 match: extractDescriptionFromMarkdown, 1)
 /**
  * 从 markdown 正文取第一行非空文本作描述（去掉 # 标题符），超过 100 字符截断。
  */
@@ -125,7 +125,7 @@ function parseSlashCommandToolsFromFrontmatter(toolsValue) {
   if (parsed === null) return [];
   return parsed;
 }
-//@ chunk-e6aww6q8.js:798426-798574 layout = getFileIdentity (1)
+//@ chunk-e6aww6q8.js:798426-798574 layout (2.1.88 match: getFileIdentity, 1)
 /**
  * 返回文件的 dev:ino 身份字符串，用于去重；无盘会话或 inode 不可靠时返回 null。
  */
@@ -217,7 +217,7 @@ async function getProjectDirsUpToHome(subdir, cwd) {
   }
   return existingDirs;
 }
-//@ chunk-e6aww6q8.js:799474-799688 layout = isInGlobalClaudeFolder (1)
+//@ chunk-e6aww6q8.js:799474-799688 layout (2.1.88 match: isInGlobalClaudeFolder, 1)
 function isInGlobalClaudeFolder(projectDirs, subdir, cwd) {
   if (cwd === null || isDiskless() || getProjectConfigRoot() !== null) return;
   let absolutePath = findGitRoot(cwd);
@@ -240,7 +240,7 @@ function loadMarkdownFilesCached(subdir, cwd, storage) {
     () => loadMarkdownFilesForSubdir(subdir, cwd, storage, managedFolderWritable),
   );
 }
-//@ chunk-e6aww6q8.js:799791-801646 fingerprint = loadMarkdownFilesForSubdir (0.951)
+//@ chunk-e6aww6q8.js:799791-801646 fingerprint (2.1.88 match: loadMarkdownFilesForSubdir, 0.951)
 /**
  * 加载某个配置子目录（agents/commands/skills/output-styles…）的全部 markdown：managed、用户（可走 storageV5）、项目各级、--add-dir（仅 agents）四路并行，按 inode 去重，记 tengu_dir_search。
  */
@@ -358,7 +358,7 @@ async function loadMarkdownFilesForSubdir(subdir, cwd, storage, managedSettingsF
   });
   return deduplicatedFiles;
 }
-//@ chunk-e6aww6q8.js:801646-802683 fingerprint = findMarkdownFilesNative (1)
+//@ chunk-e6aww6q8.js:801646-802683 fingerprint (2.1.88 match: findMarkdownFilesNative, 1)
 /**
  * 不用 ripgrep 时的递归 .md 查找：跟随符号链接，按 dev:ino 防环，受 AbortSignal 限时。
  */
@@ -426,7 +426,7 @@ async function findMarkdownFilesNative(dir, signal) {
   await walk(dir);
   return files;
 }
-//@ chunk-e6aww6q8.js:802683-803802 fingerprint = loadMarkdownFiles (0.551)
+//@ chunk-e6aww6q8.js:802683-803802 fingerprint (2.1.88 match: loadMarkdownFiles, 0.551)
 /**
  * 列出目录下全部 .md（ripgrep --files --follow 或原生遍历，3 秒超时），逐个读取并解析 frontmatter；超限或非常规文件跳过。
  */

@@ -54,7 +54,7 @@ function guardAccountMemoryHookRewrite(tool, hookEvent, hookSource) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1000528-1000663 placement = isUnrecognizedKeysIssue (1)
+//@ chunk-e6aww6q8.js:1000528-1000663 placement (2.1.88 match: isUnrecognizedKeysIssue, 1)
 function isUnrecognizedKeysIssue(issue) {
   return (Array.isArray(issue) ? issue : []).filter(
     (issue) => issue?.code === "unrecognized_keys" && Array.isArray(issue.keys) && Array.isArray(issue.path),
@@ -235,7 +235,7 @@ The tool input from the model was valid.`,
     input: enforced ? restored : input,
   };
 }
-//@ chunk-e6aww6q8.js:1003124-1003251 placement = getKnownModelOption (0.315)
+//@ chunk-e6aww6q8.js:1003124-1003251 placement (2.1.88 match: getKnownModelOption, 0.315)
 /**
  * "<event> hook (source) for <工具名>"。旧版名 getKnownModelOption 为错配，与模型无关（钩子模块）。
  */

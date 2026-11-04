@@ -45,7 +45,7 @@ import { isScratchpadDisplayPath } from "../../utils/permissions/filesystem.js";
 import { FileEditToolUpdatedMessage } from "../../components/FileEditToolUpdatedMessage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1412415-1412500 fingerprint = userFacingName (1)
+//@ chunk-e6aww6q8.js:1412415-1412500 fingerprint (2.1.88 match: userFacingName, 1)
 /**
  * Write 的用户可见名：计划文件 "Updated plan"，否则 "Write"。
  */
@@ -53,7 +53,7 @@ function userFacingName(input) {
   if (input?.file_path?.startsWith(getPlansDirectory())) return "Updated plan";
   return "Write";
 }
-//@ chunk-e6aww6q8.js:1412500-1412568 callgraph-fingerprint = getToolUseSummary (1)
+//@ chunk-e6aww6q8.js:1412500-1412568 callgraph-fingerprint (2.1.88 match: getToolUseSummary, 1)
 /**
  * Write 工具使用摘要：显示路径。
  */
@@ -61,7 +61,7 @@ function getToolUseSummary_3(input) {
   if (!input?.file_path) return null;
   return getDisplayPath(input.file_path);
 }
-//@ chunk-e6aww6q8.js:4648833-4648901 callgraph-fingerprint = renderToolUseMessage (0.52)
+//@ chunk-e6aww6q8.js:4648833-4648901 callgraph-fingerprint (2.1.88 match: renderToolUseMessage, 0.52)
 /**
  * Edit/Write 工具调用渲染：显示路径。
  */
@@ -74,7 +74,7 @@ function renderToolUseMessage_2(input) {
 deferInit("chunk-ek7g58h7.js:1019", () => {
   init_react_production();
 });
-//@ chunk-ek7g58h7.js:1072-1318 sole-consumer = measureText (0.861)
+//@ chunk-ek7g58h7.js:1072-1318 sole-consumer (2.1.88 match: measureText, 0.861)
 function countWrappedLines(text, maxWidth, limit = 1 / 0) {
   let noWrap = maxWidth <= 0 || !Number.isFinite(maxWidth);
   let lineCount = 0;
@@ -129,7 +129,7 @@ function PreviousContentReplacedNote() {
   } else element = $[0];
   return element;
 }
-//@ chunk-ek7g58h7.js:1591-3786 facade-majority = FileWriteToolCreatedMessage (0.46)
+//@ chunk-ek7g58h7.js:1591-3786 facade-majority (2.1.88 match: FileWriteToolCreatedMessage, 0.46)
 /**
  * Write 新建文件结果的终端渲染：显示行数与带高亮的内容预览（非 verbose 时截断）。
  */
@@ -344,7 +344,7 @@ function isUpdateWithOmittedDiff({ type: resultType, content, structuredPatch, o
     content !== ""
   );
 }
-//@ chunk-ek7g58h7.js:3942-4117 facade-majority = isResultTruncated (0.818)
+//@ chunk-ek7g58h7.js:3942-4117 facade-majority (2.1.88 match: isResultTruncated, 0.818)
 function isResultTruncated(result, { columns }) {
   let { type: resultType, content } = result;
   if (resultType !== "create" && !isUpdateWithOmittedDiff(result)) return false;
@@ -352,7 +352,7 @@ function isResultTruncated(result, { columns }) {
   let lineBudget = content.endsWith(LINE_SEPARATOR) ? MAX_PREVIEW_LINES + 1 : MAX_PREVIEW_LINES;
   return exceedsWrappedLineLimit(content, Math.max(1, columns - 12), lineBudget);
 }
-//@ chunk-ek7g58h7.js:4117-4289 facade-majority = renderToolUseMessage (1)
+//@ chunk-ek7g58h7.js:4117-4289 facade-majority (2.1.88 match: renderToolUseMessage, 1)
 function renderToolUseMessage(file_path, { verbose }) {
   if (!file_path.file_path) return null;
   if (file_path.file_path.startsWith(getPlansDirectory())) return "";
@@ -361,7 +361,7 @@ function renderToolUseMessage(file_path, { verbose }) {
     children: verbose ? file_path.file_path : getDisplayPath(file_path.file_path),
   });
 }
-//@ chunk-ek7g58h7.js:4289-4401 facade-majority = renderToolUseRejectedMessage (1)
+//@ chunk-ek7g58h7.js:4289-4401 facade-majority (2.1.88 match: renderToolUseRejectedMessage, 1)
 function renderToolUseRejectedMessage({ file_path, content }, { style, verbose }) {
   return jsxProd_default(WriteRejectionDiff, {
     filePath: file_path,
@@ -370,7 +370,7 @@ function renderToolUseRejectedMessage({ file_path, content }, { style, verbose }
     verbose,
   });
 }
-//@ chunk-ek7g58h7.js:4401-5107 fingerprint = WriteRejectionDiff (1)
+//@ chunk-ek7g58h7.js:4401-5107 fingerprint (2.1.88 match: WriteRejectionDiff, 1)
 function WriteRejectionDiff(props) {
   let $ = useMemoCache(20);
   let { filePath, content, style, verbose } = props;
@@ -442,7 +442,7 @@ function WriteRejectionDiff(props) {
   } else t5 = $[19];
   return t5;
 }
-//@ chunk-ek7g58h7.js:5107-5644 fingerprint = WriteRejectionBody (0.819)
+//@ chunk-ek7g58h7.js:5107-5644 fingerprint (2.1.88 match: WriteRejectionBody, 0.819)
 function WriteRejectionBody(props) {
   let $ = useMemoCache(8);
   let { promise, filePath, firstLine, createFallback, style, verbose } = props;
@@ -490,7 +490,7 @@ function WriteRejectionBody(props) {
   } else t1 = $[7];
   return t1;
 }
-//@ chunk-ek7g58h7.js:5644-6076 fingerprint = loadRejectionDiff (0.898)
+//@ chunk-ek7g58h7.js:5644-6076 fingerprint (2.1.88 match: loadRejectionDiff, 0.898)
 async function loadRejectionDiff(filePath, content) {
   try {
     let fullFilePath = isAbsolute(filePath) ? filePath : resolve(getCwd(), filePath);
@@ -535,7 +535,7 @@ async function loadRejectionDiff(filePath, content) {
     };
   }
 }
-//@ chunk-ek7g58h7.js:6076-6304 facade-majority = renderToolUseErrorMessage (0.509)
+//@ chunk-ek7g58h7.js:6076-6304 facade-majority (2.1.88 match: renderToolUseErrorMessage, 0.509)
 function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
   if (
     !verbose &&
@@ -568,7 +568,7 @@ function renderToolResultMessage(result, progressMessages, { style, verbose }) {
     verbose,
   });
 }
-//@ chunk-ek7g58h7.js:6474-7479 fingerprint = renderToolResultMessage (0.785)
+//@ chunk-ek7g58h7.js:6474-7479 fingerprint (2.1.88 match: renderToolResultMessage, 0.785)
 function renderToolResultMessage_2(
   result,
   _progressMessagesForMessage,

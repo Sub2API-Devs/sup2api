@@ -9,7 +9,7 @@
  * attribution: fingerprint 2
  */
 
-//@ chunk-ag5x7vhf.js:120290-120451 fingerprint = isTeammateShutdownAttachment (1)
+//@ chunk-ag5x7vhf.js:120290-120451 fingerprint (2.1.88 match: isTeammateShutdownAttachment, 1)
 function isTeammateShutdownAttachment(msg) {
   return (
     msg.type === "attachment" &&
@@ -18,7 +18,7 @@ function isTeammateShutdownAttachment(msg) {
     msg.attachment.status === "completed"
   );
 }
-//@ chunk-ag5x7vhf.js:120451-120727 fingerprint = collapseTeammateShutdowns (1)
+//@ chunk-ag5x7vhf.js:120451-120727 fingerprint (2.1.88 match: collapseTeammateShutdowns, 1)
 /**
  * 把多条队友关闭通知合并为一个 teammate_shutdown_batch 附件。
  */

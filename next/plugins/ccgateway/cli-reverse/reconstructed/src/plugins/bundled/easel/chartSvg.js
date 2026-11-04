@@ -176,7 +176,7 @@ var themeVars = (mode) =>
  * 深色模式媒体查询
  */
 var DARK_MODE_MEDIA = "@media (prefers-color-scheme: dark)";
-//@ chunk-3s7ydtfd.js:81075-81486 placement = ansiToSvg (0.408)
+//@ chunk-3s7ydtfd.js:81075-81486 placement (2.1.88 match: ansiToSvg, 0.408)
 function ansiToSvg(chart) {
   let shapes = chart.shapes.some((span) => span.kind === "stack" && !span.parts.every(hasSvgHeight))
     ? chart.shapes

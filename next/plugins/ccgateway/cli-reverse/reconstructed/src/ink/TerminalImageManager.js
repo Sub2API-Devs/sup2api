@@ -77,7 +77,7 @@ function cellChangedAt(prev, next, index) {
     prev.cells[cellIndex] !== next.cells[cellIndex] || prev.cells[cellIndex + 1] !== next.cells[cellIndex + 1]
   );
 }
-//@ chunk-bzr73sfg.js:268849-269023 placement = diff (1)
+//@ chunk-bzr73sfg.js:268849-269023 placement (2.1.88 match: diff, 1)
 function indexesToRuns(indexes, width) {
   let runs = [];
   for (let index of indexes) {

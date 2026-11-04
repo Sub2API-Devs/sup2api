@@ -148,7 +148,7 @@ function logDegradedTurnTail() {
     logEvent("tengu_turn_tail_analysis_degraded", {});
   } catch {}
 }
-//@ chunk-aepeg2w5.js:602463-602793 placement = buildTranscriptEntries (0.777)
+//@ chunk-aepeg2w5.js:602463-602793 placement (2.1.88 match: buildTranscriptEntries, 0.777)
 /**
  * 回合是否由定时触发。
  */

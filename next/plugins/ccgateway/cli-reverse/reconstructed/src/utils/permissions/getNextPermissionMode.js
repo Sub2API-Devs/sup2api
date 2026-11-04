@@ -17,7 +17,7 @@ import {
 import { logForDebugging } from "../debug.js";
 import { getNextPermissionMode_2 } from "../../types/permissions.js";
 
-//@ chunk-kswt4qha.js:2557-2947 fingerprint = getNextPermissionMode (0.536)
+//@ chunk-kswt4qha.js:2557-2947 fingerprint (2.1.88 match: getNextPermissionMode, 0.536)
 /**
  * 主动性档位 → 启动权限模式：ask→auto（可用时）否则 default；default→auto（可用时）否则沿用基线模式（基线为 auto 或不可用的 bypass 时回 default）；proactive→bypassPermissions（可用时）→auto→acceptEdits。
  */
@@ -40,7 +40,7 @@ function permissionModeForProactivityLevel(level, availability, baselineMode) {
       return availability.isAutoModeAvailable ? "auto" : "acceptEdits";
   }
 }
-//@ chunk-n4pvm0gt.js:337-537 fingerprint = canCycleToAuto (1)
+//@ chunk-n4pvm0gt.js:337-537 fingerprint (2.1.88 match: canCycleToAuto, 1)
 /**
  * Shift+Tab 能否循环到 auto：context.isAutoModeAvailable 与实时闸门 isAutoModeGateEnabled（d_）都为真；否则打调试日志说明原因。
  */
@@ -60,7 +60,7 @@ function canCycleToAuto(ctx) {
 function canCycleToBypassPermissions(context) {
   return !!context.isBypassPermissionsModeAvailable && !isBypassPermissionsModeDisabled();
 }
-//@ chunk-n4pvm0gt.js:903-982 fingerprint = cyclePermissionMode (1)
+//@ chunk-n4pvm0gt.js:903-982 fingerprint (2.1.88 match: cyclePermissionMode, 1)
 /**
  * 计算下一个模式并调用 transitionPermissionMode 准备上下文（进入 auto 时剥离危险 allow 规则等），返回 {nextMode, context}。
  */
@@ -81,7 +81,7 @@ function cyclePermissionModes(context) {
   if (canCycleToBypassPermissions(context)) modes.push("bypassPermissions");
   return modes;
 }
-//@ chunk-18hwfzwa.js:643382-643509 placement = peek (0.809)
+//@ chunk-18hwfzwa.js:643382-643509 placement (2.1.88 match: peek, 0.809)
 /**
  * 按可用权限模式列表（plan/default/acceptEdits，可加 auto、bypassPermissions）循环取下一个或上一个。旧版名 peek 为错配。
  */

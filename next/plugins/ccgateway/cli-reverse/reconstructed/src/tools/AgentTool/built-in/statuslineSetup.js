@@ -24,7 +24,7 @@ function windowsStatuslinePathNote() {
    backslashes as escape characters and the path will not resolve.
 `;
 }
-//@ chunk-e6aww6q8.js:2338653-2351964 fingerprint = STATUSLINE_SETUP_AGENT (1)
+//@ chunk-e6aww6q8.js:2338653-2351964 fingerprint (2.1.88 match: STATUSLINE_SETUP_AGENT, 1)
 /**
  * statusline-setup 内建代理：工具 Read/Edit，model sonnet，color orange。
  */

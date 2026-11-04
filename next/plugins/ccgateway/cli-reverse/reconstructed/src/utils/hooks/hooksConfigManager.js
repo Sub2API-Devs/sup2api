@@ -14,7 +14,7 @@ import { SESSION_END_REASONS_2, HOOK_EVENTS } from "../../entrypoints/sdk/coreSc
 import { getAllHooks, sortMatchersByPriority } from "./hooksSettings.js";
 import { getRegisteredHooks } from "../../bootstrap/state.js";
 
-//@ chunk-409rw9nn.js:382-13560 fingerprint = getHookEventMetadata (0.846)
+//@ chunk-409rw9nn.js:382-13560 fingerprint (2.1.88 match: getHookEventMetadata, 0.846)
 /**
  * /hooks 界面用的事件元数据：每个事件的摘要、退出码语义说明和 matcher 字段（tool_name、notification_type、source、trigger、agent_type、error、reason、mcp_server_name、load_reason、to_model、command_name 等）及候选值。
  */
@@ -353,7 +353,7 @@ Other exit codes - display the original delta`,
     },
   };
 }
-//@ chunk-409rw9nn.js:13560-14063 callgraph-witnessed = groupHooksByEventAndMatcher (0.297)
+//@ chunk-409rw9nn.js:13560-14063 callgraph-witnessed (2.1.88 match: groupHooksByEventAndMatcher, 0.297)
 /**
  * 把所有钩子（各 settings、会话、插件注册）按事件和 matcher 分组，供 /hooks 界面展示。
  */

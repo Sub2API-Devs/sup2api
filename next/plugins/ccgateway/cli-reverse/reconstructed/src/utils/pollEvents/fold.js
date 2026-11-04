@@ -52,7 +52,7 @@ function isPollEventsFoldEnabled() {
 }
 //@ chunk-e6aww6q8.js:169522-169562 placement
 var EVENT_AT_PATTERN = /^<event\b[^>]*?\bat="([^"]*)"/;
-//@ chunk-e6aww6q8.js:169562-169796 placement = sanitizeFileName (1)
+//@ chunk-e6aww6q8.js:169562-169796 placement (2.1.88 match: sanitizeFileName, 1)
 /**
  * 把连续的附件消息段中可折叠的 task-notification 排队命令并入 poll_events 附件（与入站附件无关）。
  */
@@ -296,7 +296,7 @@ var foldedToolResults; // deferred: has load-time effects after a deferred state
 deferInit("chunk-e6aww6q8.js:173402", () => {
   foldedToolResults = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:173422-173536 placement = sanitizeFileName (1)
+//@ chunk-e6aww6q8.js:173422-173536 placement (2.1.88 match: sanitizeFileName, 1)
 /**
  * 若消息带有别名记录且 uuid 相同，返回别名消息，否则原样返回。
  */

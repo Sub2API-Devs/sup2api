@@ -542,7 +542,7 @@ function refuseUnadmittedApiCall(runtime, { spelling, caller, isClock }) {
     );
   return known;
 }
-//@ chunk-e6aww6q8.js:3716099-3716275 placement = returnValue (1)
+//@ chunk-e6aww6q8.js:3716099-3716275 placement (2.1.88 match: returnValue, 1)
 async function* returnValue(args, ctx) {
   let done = false;
   try {
@@ -572,7 +572,7 @@ function staleAdmittingList(state, env) {
     ? state.admitting
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3716501-3716552 placement = getErrnoPath (0.778)
+//@ chunk-e6aww6q8.js:3716501-3716552 placement (2.1.88 match: getErrnoPath, 0.778)
 function getErrnoPath(hookContext) {
   return {
     field: "path",

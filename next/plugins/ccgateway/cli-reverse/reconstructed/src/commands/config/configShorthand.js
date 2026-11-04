@@ -480,7 +480,7 @@ var FLAG_PLUGIN_CONFIG_NOTE = "Set by --settings for this session (pluginConfigs
 function pluginSettingOption(source, key, defaultValue) {
   return trustedPluginSetting(source).options?.[key] ?? defaultValue;
 }
-//@ chunk-snd3g4y1.js:38791-38971 placement = getEnabledSettingSources (0.836)
+//@ chunk-snd3g4y1.js:38791-38971 placement (2.1.88 match: getEnabledSettingSources, 0.836)
 function getPluginOptionLockingSource(source, key) {
   let hasOption = (pluginId) => {
     let pluginConfigs = getSettingsForSource(pluginId)?.pluginConfigs;

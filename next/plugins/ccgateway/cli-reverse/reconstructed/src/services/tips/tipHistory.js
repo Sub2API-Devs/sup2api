@@ -10,7 +10,7 @@
  */
 import { getGlobalConfig } from "../../utils/config.js";
 
-//@ chunk-jv3bzw2x.js:1564-1651 fingerprint = recordTipShown (1)
+//@ chunk-jv3bzw2x.js:1564-1651 fingerprint (2.1.88 match: recordTipShown, 1)
 /**
  * 某提示距上次显示经过了多少次启动（numStartups 差值）；从未显示返回 Infinity。用于冷却判断。
  */

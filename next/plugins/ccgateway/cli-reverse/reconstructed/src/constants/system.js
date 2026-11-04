@@ -61,7 +61,7 @@ var ATTRIBUTION_PROJECT_ID_RE = /^claude_proj_(?:staging_|local_)?01[1-9A-HJ-NP-
 function isSubscriberAttributionEligible(agentContext) {
   return agentContext.isSubscriber && canSendSubscriberAttribution();
 }
-//@ chunk-3b05zaw0.js:786-2921 callgraph-witnessed = getAttributionHeader (0.295)
+//@ chunk-3b05zaw0.js:786-2921 callgraph-witnessed (2.1.88 match: getAttributionHeader, 0.295)
 /**
  * 生成计费归属头文本 "x-anthropic-billing-header: cc_version=<版本>.<3位指纹>; cc_entrypoint=<入口>;"，按条件追加 cch=00000（第一方 OAuth 或 vertex，发送前由原生层替换）、cc_workload、cc_is_subagent、cc_prev_req、cc_prompt_id、cc_turn_origin、cc_prompt_index/cc_turn_index、cc_gateway、cc_project、cc_prev_msg 等字段；CLAUDE_CODE_ATTRIBUTION_HEADER 为假值时返回空串。
  */
@@ -286,7 +286,7 @@ function isFirstPartyDirectApi() {
 function canSendSubscriberAttribution() {
   return isFirstPartyDirectApi() && !env.CLAUDE_CODE_REMOTE && !isAttributionHeaderDisabled();
 }
-//@ chunk-3b05zaw0.js:4367-4434 fingerprint = isAttributionHeaderEnabled (1)
+//@ chunk-3b05zaw0.js:4367-4434 fingerprint (2.1.88 match: isAttributionHeaderEnabled, 1)
 /**
  * CLAUDE_CODE_ATTRIBUTION_HEADER 为假值（0/false/no/off）。旧版名 isAttributionHeaderEnabled 语义相反。
  */
@@ -301,7 +301,7 @@ var ATTRIBUTION_PROJECT_SOURCE_SET; // deferred: uses ATTRIBUTION_PROJECT_SOURCE
 deferInit("chunk-3b05zaw0.js:4434", () => {
   ATTRIBUTION_PROJECT_SOURCE_SET = new Set(ATTRIBUTION_PROJECT_SOURCES);
 });
-//@ chunk-w5ndchqs.js:2709-2972 fingerprint = DEFAULT_PREFIX (0.5)
+//@ chunk-w5ndchqs.js:2709-2972 fingerprint (2.1.88 match: DEFAULT_PREFIX, 0.5)
 /**
  * 身份行（system 第 2 块）："You are Claude Code, Anthropic's official CLI for Claude."；Ue 为 Agent SDK 内运行的 CLI 版本，Ie 为 "You are a Claude agent, built on Anthropic's Claude Agent SDK."；J 为三者集合。
  */
@@ -325,7 +325,7 @@ deferInit("chunk-w5ndchqs.js:2709", () => {
 function isCliSyspromptPrefix(text) {
   return CLI_SYSPROMPT_PREFIX_SET.has(text);
 }
-//@ chunk-w5ndchqs.js:3004-3172 fingerprint = getCLISyspromptPrefix (0.887)
+//@ chunk-w5ndchqs.js:3004-3172 fingerprint (2.1.88 match: getCLISyspromptPrefix, 0.887)
 /**
  * 选择身份行：vertex 恒为 CLI 行；有录制值用录制值；非交互（-p/SDK）时有 --append-system-prompt 用 "running within the Claude Agent SDK" 行，否则用 "Claude agent, built on … Agent SDK" 行；交互用 CLI 行。
  */

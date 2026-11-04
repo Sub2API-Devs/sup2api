@@ -58,7 +58,7 @@ function parseSafeInteger(value) {
 }
 //@ chunk-tp07j3pd.js:758-771 placement
 var STALE_AFTER_MS = 300000;
-//@ chunk-tp07j3pd.js:771-895 placement = isBlockedV4 (0.697)
+//@ chunk-tp07j3pd.js:771-895 placement (2.1.88 match: isBlockedV4, 0.697)
 /**
  * 时间戳是否早于 5 分钟前。旧版名 isBlockedV4 配错（与 SSRF 无关）。
  */

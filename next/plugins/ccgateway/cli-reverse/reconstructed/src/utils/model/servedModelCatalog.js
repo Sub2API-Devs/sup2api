@@ -730,7 +730,7 @@ async function verifySignedDocument(publishedCatalogCache, source) {
     },
   };
 }
-//@ chunk-c0w5a81j.js:10739-10877 placement = base64URLEncode (1)
+//@ chunk-c0w5a81j.js:10739-10877 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   let buffer_2 = Buffer.from(buffer, "base64");
   if (buffer_2.toString("base64") !== buffer) return;

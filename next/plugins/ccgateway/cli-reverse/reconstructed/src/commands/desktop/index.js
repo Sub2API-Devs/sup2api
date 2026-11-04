@@ -12,7 +12,7 @@ import { muslTargetTriple } from "../../utils/envDynamic.js";
 import { getPlatform } from "../../utils/platform.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 
-//@ chunk-9d1pf3s4.js:765-800 fingerprint = isSupportedPlatform (0.437)
+//@ chunk-9d1pf3s4.js:765-800 fingerprint (2.1.88 match: isSupportedPlatform, 0.437)
 function isSupportedPlatform() {
   return muslTargetTriple(getPlatform(), "x64");
 }
@@ -30,7 +30,7 @@ function isDesktopCommandForceHidden() {
 function isDesktopCommandEnabled() {
   return isDesktopCommandForceHidden() && !isRemoteSessionAvailable();
 }
-//@ chunk-e6aww6q8.js:1687904-1688101 fingerprint = desktop (0.971)
+//@ chunk-e6aww6q8.js:1687904-1688101 fingerprint (2.1.88 match: desktop, 0.971)
 /**
  * /desktop 命令对象（local-jsx）；描述：Continue the current session in Claude Desktop；别名 ["app"]；availability ["claude-ai"]；isEnabled: lRe；isHidden: {return!lRe()}；实现 chunk-ds2d8kad.js 的 ue。
  */

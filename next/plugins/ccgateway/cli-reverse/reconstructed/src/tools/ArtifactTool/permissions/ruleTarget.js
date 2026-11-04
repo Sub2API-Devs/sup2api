@@ -45,7 +45,7 @@ function normalizeUrlPattern(pattern) {
     .replace(/\.(?=$|:\d+$)/, "");
   return `${lower}://${replaced}${match[3] ?? ""}`;
 }
-//@ chunk-rbtj21yz.js:924-1357 placement = getServerUrl (1)
+//@ chunk-rbtj21yz.js:924-1357 placement (2.1.88 match: getServerUrl, 1)
 /**
  * 按 "url:<模式>" 键在映射中查找与服务器（slug/env/URL）匹配的值。归属疑为插件/连接器选项映射。
  */

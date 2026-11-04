@@ -141,14 +141,14 @@ function extractSessionFromResponse(payload) {
   if (session === null || typeof session !== "object" || typeof session.id !== "string") return;
   return session;
 }
-//@ chunk-aepeg2w5.js:781236-781349 fingerprint = fetchSession (0.343)
+//@ chunk-aepeg2w5.js:781236-781349 fingerprint (2.1.88 match: fetchSession, 0.343)
 /**
  * Sessions API 的错误文案常量组（会话不存在、无效 id、会话过期）。
  */
 var SESSION_NOT_FOUND_MESSAGE = "Session not found:";
 var INVALID_SESSION_ID_MESSAGE = "invalid session ID";
 var SESSION_EXPIRED_MESSAGE = "Session expired. Please run /login to sign in again.";
-//@ chunk-aepeg2w5.js:782331-782400 placement = CCR_BYOC_BETA_HEADER (1)
+//@ chunk-aepeg2w5.js:782331-782400 placement (2.1.88 match: CCR_BYOC_BETA_HEADER, 1)
 var RETRY_DELAYS_MS = [2000, 4000, 8000, 16000];
 var MAX_SESSION_API_RETRIES = RETRY_DELAYS_MS.length;
 var CCR_BYOC_BETA = "ccr-byoc-2025-07-29";
@@ -167,7 +167,7 @@ function sessionsApiWire(apiVersion, baseUrl, credentials) {
         },
       };
 }
-//@ chunk-aepeg2w5.js:782551-782667 placement = isTransientNetworkError (1)
+//@ chunk-aepeg2w5.js:782551-782667 placement (2.1.88 match: isTransientNetworkError, 1)
 function isTransientNetworkError(error) {
   if (!axios_default.isAxiosError(error)) return false;
   if (!error.response) return true;
@@ -181,7 +181,7 @@ function isTransientNetworkError(error) {
 function axiosGetWithRetry(url, options) {
   return axiosGetWithRetry_2(url, () => options);
 }
-//@ chunk-aepeg2w5.js:782704-783021 fingerprint = axiosGetWithRetry (1)
+//@ chunk-aepeg2w5.js:782704-783021 fingerprint (2.1.88 match: axiosGetWithRetry, 1)
 async function axiosGetWithRetry_2(url, config) {
   let lastError;
   for (let attempt = 0; attempt <= MAX_SESSION_API_RETRIES; attempt++)
@@ -202,7 +202,7 @@ async function axiosGetWithRetry_2(url, config) {
     }
   throw lastError;
 }
-//@ chunk-aepeg2w5.js:783021-783317 fingerprint = CodeSessionSchema (0.888)
+//@ chunk-aepeg2w5.js:783021-783317 fingerprint (2.1.88 match: CodeSessionSchema, 0.888)
 var CodeSessionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-aepeg2w5.js:783021", () => {
   CodeSessionSchema = DoctorLazy(() =>
@@ -247,7 +247,7 @@ async function primeSessionsApiBearer({ refresh, credentials }) {
     credentials,
   });
 }
-//@ chunk-aepeg2w5.js:783613-783654 fingerprint = prepareApiRequest (0.73)
+//@ chunk-aepeg2w5.js:783613-783654 fingerprint (2.1.88 match: prepareApiRequest, 0.73)
 var prepareApiRequest_2 = "Unable to get organization UUID";
 //@ chunk-aepeg2w5.js:783654-783738 placement
 class CloudSessionAccessError extends Error {
@@ -256,7 +256,7 @@ class CloudSessionAccessError extends Error {
     this.name = "CloudSessionAccessError";
   }
 }
-//@ chunk-aepeg2w5.js:783738-784178 placement = getMyAdminRequests (0.212)
+//@ chunk-aepeg2w5.js:783738-784178 placement (2.1.88 match: getMyAdminRequests, 0.212)
 /**
  * 取云会话调用所需的 {accessToken, orgUUID, profile}：仅第一方提供商；必要时刷新 OAuth。旧版名 getMyAdminRequests 不准确。
  */
@@ -308,7 +308,7 @@ function repoFromGitSource(gitSource) {
     default_branch: gitSource.revision || undefined,
   };
 }
-//@ chunk-aepeg2w5.js:784360-785105 placement = fetchCodeSessionsFromSessionsAPI (0.443)
+//@ chunk-aepeg2w5.js:784360-785105 placement (2.1.88 match: fetchCodeSessionsFromSessionsAPI, 0.443)
 /**
  * GET /v1/code/sessions 列出云端会话（teleport_sessions_list）。
  */
@@ -350,7 +350,7 @@ async function fetchCodeSessionsFromSessionsAPI() {
     }
   });
 }
-//@ chunk-aepeg2w5.js:785105-785257 placement = getOAuthHeaders (0.875)
+//@ chunk-aepeg2w5.js:785105-785257 placement (2.1.88 match: getOAuthHeaders, 0.875)
 function getOAuthHeaders(accessToken) {
   return {
     Authorization: `Bearer ${accessToken}`,
@@ -359,7 +359,7 @@ function getOAuthHeaders(accessToken) {
     "anthropic-client-platform": getClientPlatform(),
   };
 }
-//@ chunk-aepeg2w5.js:785257-785308 placement = getGroveSettings (0.554)
+//@ chunk-aepeg2w5.js:785257-785308 placement (2.1.88 match: getGroveSettings, 0.554)
 /**
  * User-Agent + OAuth 认证头。旧版名 getGroveSettings 为错配。
  */
@@ -413,7 +413,7 @@ async function sendCloudSessionEvent(sessionId, options, credentials) {
     serverNow: Number.isFinite(timestamp) ? timestamp : undefined,
   };
 }
-//@ chunk-aepeg2w5.js:786206-786317 placement = getBranchFromSession (1)
+//@ chunk-aepeg2w5.js:786206-786317 placement (2.1.88 match: getBranchFromSession, 1)
 function getBranchFromSession(session) {
   return session.session_context.outcomes?.find((outcome) => outcome.type === "git_repository")?.git_info
     ?.branches[0];
@@ -875,7 +875,7 @@ async function sendSessionHistoryEvents(infraSessionId, events, credentials) {
     droppedEvents: uploadedCount,
   };
 }
-//@ chunk-aepeg2w5.js:793010-793525 placement = updateSessionTitle (0.66)
+//@ chunk-aepeg2w5.js:793010-793525 placement (2.1.88 match: updateSessionTitle, 0.66)
 /**
  * 更新云会话标题（/v1/code/sessions/<id>）。
  */
@@ -989,7 +989,7 @@ function sessionsApiAccessTokenWithCcrFallback(profile) {
     ? sessionsApiAccessTokenNow(profile)
     : (readHostSessionsBearer() ?? getAccessTokenWithCcrFallback());
 }
-//@ chunk-aepeg2w5.js:794445-795880 placement = pollRemoteSessionEvents (0.527)
+//@ chunk-aepeg2w5.js:794445-795880 placement (2.1.88 match: pollRemoteSessionEvents, 0.527)
 /**
  * 轮询远程会话事件（after_id 分页），用于 teleport 拉取日志。
  */
@@ -1094,7 +1094,7 @@ async function pollRemoteSessionEvents(sessionId, afterId, opts) {
     metadataFetchError,
   };
 }
-//@ chunk-aepeg2w5.js:795880-796493 placement = archiveRemoteSession (0.535)
+//@ chunk-aepeg2w5.js:795880-796493 placement (2.1.88 match: archiveRemoteSession, 0.535)
 /**
  * POST /v1/code/sessions/<id>/archive 归档云会话。
  */
@@ -1532,14 +1532,14 @@ function isStalledUpload(seen) {
     seen.bytes_flushed + FLUSH_PROGRESS_SLACK_BYTES < seen.body_bytes
   );
 }
-//@ chunk-0qx6sn4e.js:3581-3725 fingerprint = isTransientNetworkError (1)
+//@ chunk-0qx6sn4e.js:3581-3725 fingerprint (2.1.88 match: isTransientNetworkError, 1)
 function isTransientNetworkError_2(error) {
   if (!axios_default.isAxiosError(error)) return false;
   let status = error.response?.status;
   if (status !== undefined) return status >= 500 && status < 600;
   return error.code !== undefined && TRANSIENT_NETWORK_ERRNOS.has(error.code);
 }
-//@ chunk-3nztfxrw.js:5348-5466 fingerprint = getOAuthHeaders (1)
+//@ chunk-3nztfxrw.js:5348-5466 fingerprint (2.1.88 match: getOAuthHeaders, 1)
 function getOAuthHeaders_2(accessToken) {
   return {
     Authorization: `Bearer ${accessToken}`,

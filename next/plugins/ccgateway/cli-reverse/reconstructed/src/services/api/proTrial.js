@@ -16,7 +16,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-aepeg2w5.js:288982-289234 placement = initializationState (0.51)
+//@ chunk-aepeg2w5.js:288982-289234 placement (2.1.88 match: initializationState, 0.51)
 /**
  * （匹配存疑）恒返回 null 的死代码函数，后面是按 "not-started"/"expired"/数字算 endsAt 的不可达分支；与 LSP 无关。
  */

@@ -83,7 +83,7 @@ function isSafePresenceString(text) {
     !hasUnsafeCodePoint(text)
   );
 }
-//@ chunk-b0a246e7.js:2269-2707 placement = jitterFrac (0.6)
+//@ chunk-b0a246e7.js:2269-2707 placement (2.1.88 match: jitterFrac, 0.6)
 /**
  * 递归清洗 presence 值（深度、数组长度、字符串安全检查），非法返回 undefined。
  */

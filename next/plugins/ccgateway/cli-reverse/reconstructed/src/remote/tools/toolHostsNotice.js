@@ -217,7 +217,7 @@ var SKIPPED_DEVICE_TOOLS; // deferred: has load-time effects after a deferred st
 deferInit("chunk-s61vbvea.js:593213", () => {
   SKIPPED_DEVICE_TOOLS = new Set(["get_device_info", "list_devices"]);
 });
-//@ chunk-s61vbvea.js:593264-593355 placement = getToolNameForPermissionCheck (1)
+//@ chunk-s61vbvea.js:593264-593355 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tool) {
   return tool.some(
     (tool) => tool.mcpInfo?.serverName === REMOTE_DEVICES && !SKIPPED_DEVICE_TOOLS.has(tool.mcpInfo.toolName),

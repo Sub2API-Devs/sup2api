@@ -146,7 +146,7 @@ function selectAgent(state) {
 function selectUltracode(state) {
   return state.ultracode;
 }
-//@ chunk-ag5x7vhf.js:61994-64759 fingerprint = CondensedLogo (0.508)
+//@ chunk-ag5x7vhf.js:61994-64759 fingerprint (2.1.88 match: CondensedLogo, 0.508)
 function CondensedLogo(props) {
   let $ = useMemoCache(34);
   let options;

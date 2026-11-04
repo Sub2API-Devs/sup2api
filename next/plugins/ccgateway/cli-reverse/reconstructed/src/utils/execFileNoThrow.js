@@ -34,7 +34,7 @@ import { SAFE_GIT_REPO_ARGS, GIT_CONFIG_PARAMETERS_LIMIT } from "./git/gitSafeEn
 //@ chunk-sycgf9xs.js:13305-13323 affinity
 var MS_PER_SECOND = 1000;
 var SECONDS_PER_MINUTE_2 = 60;
-//@ chunk-sycgf9xs.js:13323-13686 facade-exports = execSyncWithDefaults_DEPRECATED (0.916)
+//@ chunk-sycgf9xs.js:13323-13686 facade-exports (2.1.88 match: execSyncWithDefaults_DEPRECATED, 0.916)
 /**
  * 同步执行 shell 命令（默认 10 分钟超时、1MB 输出），失败或无输出返回 null。
  */
@@ -131,7 +131,7 @@ function execFileNoThrowWithCwd(file, args, options) {
     options === undefined ? execFileCore(file, args) : execFileCore(file, args, options),
   );
 }
-//@ chunk-sycgf9xs.js:14533-14602 affinity = stopRecording (0.781)
+//@ chunk-sycgf9xs.js:14533-14602 affinity (2.1.88 match: stopRecording, 0.781)
 /**
  * 向进程组（-pid）发 SIGTERM；pid ≤ 1 时不做，错误忽略。旧版名 stopRecording 是错配。
  */
@@ -335,7 +335,7 @@ function watchStdinErrors(child) {
   });
   return state;
 }
-//@ chunk-sycgf9xs.js:17601-17721 fingerprint = getErrorMessage (1)
+//@ chunk-sycgf9xs.js:17601-17721 fingerprint (2.1.88 match: getErrorMessage, 1)
 /**
  * 取执行失败的错误文本：shortMessage 优先，其次信号名，最后错误码字符串。
  */
@@ -737,7 +737,7 @@ maxBuffer exceeded`,
     ...processGroupFlags,
   };
 }
-//@ chunk-s61vbvea.js:531652-531881 fingerprint = execFileNoThrowWithCwd (0.521)
+//@ chunk-s61vbvea.js:531652-531881 fingerprint (2.1.88 match: execFileNoThrowWithCwd, 0.521)
 /**
  * 在指定目录运行 git（带固定前置参数），成功返回去空白的 stdout，失败/非零返回 undefined。
  */

@@ -95,7 +95,7 @@ function describeGitConfigUnreadable(failure) {
       return `the repository's own git config sets ${failure.lfsKey === undefined ? failure.key : `${failure.key}, an entry git-lfs reads as ${failure.lfsKey}`}, which names a program git-lfs would run for any LFS path, on checkout and on status alike (${UNSAFE_CONFIG_HINT})`;
   }
 }
-//@ chunk-8t9z960d.js:1911-2054 placement = readHeadAndTail (0.802)
+//@ chunk-8t9z960d.js:1911-2054 placement (2.1.88 match: readHeadAndTail, 0.802)
 var GIT_INCLUDEIF_PATH_PATTERN = /^includeif\..*\.path$/s;
 var INCLUDEIF_PATH_RE =
   /lfs.customtransfer..+?.path|^lfs\.(?:.*\.)?standalonetransferagent$|^lfs\.extension\./su;

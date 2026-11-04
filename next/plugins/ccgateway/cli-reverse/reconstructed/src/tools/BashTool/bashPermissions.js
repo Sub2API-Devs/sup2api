@@ -213,7 +213,7 @@ import { POWERSHELL_TOOL_NAME } from "../PowerShellTool/toolName.js";
 import { findDirectoryChangeIndex } from "./bgWorktreeGuard/bgWorktreeCommandGuard.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:214446-214577 placement = buildSuggestions (1)
+//@ chunk-dcmhvw5a.js:214446-214577 placement (2.1.88 match: buildSuggestions, 1)
 /**
  * 通用前缀权限建议：规则内容为 "<前缀> *"。
  */
@@ -279,7 +279,7 @@ function getSubcommandPrefix(command) {
   while (depth < maxDepth && wordPattern.test(sliced[depth] ?? "")) depth++;
   return depth < maxDepth ? null : sliced.slice(0, depth).join(" ");
 }
-//@ chunk-e6aww6q8.js:1164960-1165276 fingerprint = BARE_SHELL_PREFIXES (0.706)
+//@ chunk-e6aww6q8.js:1164960-1165276 fingerprint (2.1.88 match: BARE_SHELL_PREFIXES, 0.706)
 /**
  * 会把后续参数当命令执行的"裸 shell/包装"命令名（sh/bash/zsh/pwsh/env/xargs/sudo/timeout/nohup/strace…）；规则建议不会为这些前缀生成前缀规则。
  */
@@ -377,7 +377,7 @@ function suggestionForPrefix(prefix) {
 function matchesCommandRule(rule, command) {
   return matchWildcardPattern(rule, command, false, true);
 }
-//@ chunk-e6aww6q8.js:1166321-1166857 fingerprint = SAFE_ENV_VARS (0.91)
+//@ chunk-e6aww6q8.js:1166321-1166857 fingerprint (2.1.88 match: SAFE_ENV_VARS, 0.91)
 /**
  * Bash 安全环境变量白名单（GO*\/RUST_*\/NODE_ENV/PYTHON*\/LANG/LC_*\/TERM/NO_COLOR/TZ/CI…）；wQ 是规则内容解析函数的别名（exact/prefix/wildcard）。
  */
@@ -572,7 +572,7 @@ function stripSafeWrappers(command, stripEnvVars = true, stripComments = true) {
 }
 //@ chunk-e6aww6q8.js:1168849-1168878 layout
 var TIMEOUT_FLAG_VALUE_RE = /^[A-Za-z0-9_.+-]+$/;
-//@ chunk-e6aww6q8.js:1168878-1169375 fingerprint = skipTimeoutFlags (1)
+//@ chunk-e6aww6q8.js:1168878-1169375 fingerprint (2.1.88 match: skipTimeoutFlags, 1)
 /**
  * 在 timeout 的 argv 中跳过它的选项（--foreground、-k/-s 带值等），返回时长参数下标；遇到未知选项返回 -1。
  */
@@ -597,7 +597,7 @@ function skipTimeoutFlags(a) {
   }
   return i;
 }
-//@ chunk-e6aww6q8.js:1169375-1169778 fingerprint = stripWrappersFromArgv (1)
+//@ chunk-e6aww6q8.js:1169375-1169778 fingerprint (2.1.88 match: stripWrappersFromArgv, 1)
 /**
  * argv 版包装剥离：反复去掉 time [-p]、nohup、timeout <选项> <时长>、nice -n N，返回真正的命令 argv。
  */
@@ -896,7 +896,7 @@ function unwrapCommandArgv(argv) {
     argv_2 = argv_2.slice(idx);
   }
 }
-//@ chunk-e6aww6q8.js:1173302-1174805 fingerprint = filterRulesByContentsMatchingInput (0.797)
+//@ chunk-e6aww6q8.js:1173302-1174805 fingerprint (2.1.88 match: filterRulesByContentsMatchingInput, 0.797)
 /**
  * 在一组 Bash 规则里找出与输入命令匹配的规则：候选命令包括原文、去重定向、stripSafeWrappers 后，以及（deny/ask 时）剥离全部 env 与包装后的形式；exact/prefix/wildcard 三种规则，prefix 匹配拒绝复合命令，并识别 xargs 前缀。
  */
@@ -997,7 +997,7 @@ function filterRulesByContentsMatchingInput(
     })
     .map(([, rule]) => rule);
 }
-//@ chunk-e6aww6q8.js:1174805-1175298 fingerprint = matchingRulesForInput (0.781)
+//@ chunk-e6aww6q8.js:1174805-1175298 fingerprint (2.1.88 match: matchingRulesForInput, 0.781)
 /**
  * 对输入分别求匹配的 deny、ask、allow 规则（deny/ask 剥离全部 env 与包装、不做复合检查；allow 不剥离）。
  */
@@ -1133,7 +1133,7 @@ function denyCrashedCheckUnderCommandClamp(checkName, shellPermission) {
     };
   return;
 }
-//@ chunk-e6aww6q8.js:1176759-1177404 placement = bashToolCheckExactMatchPermission (0.921)
+//@ chunk-e6aww6q8.js:1176759-1177404 placement (2.1.88 match: bashToolCheckExactMatchPermission, 0.921)
 /**
  * 精确规则检查：deny→拒绝、ask→询问、allow→允许，否则 passthrough 并附精确命令的规则建议。
  */
@@ -1396,7 +1396,7 @@ function isSandboxReadBlockEnforceable(permissionContext) {
     hasBlockReadsOutsideWorkingDirectories()
   );
 }
-//@ chunk-e6aww6q8.js:1181714-1183399 fingerprint = bashToolCheckPermission (0.772)
+//@ chunk-e6aww6q8.js:1181714-1183399 fingerprint (2.1.88 match: bashToolCheckPermission, 0.772)
 /**
  * 单个子命令的权限判定：精确规则 → 前缀/通配规则 → 路径约束（checkPathConstraints）→ 读封锁下的 sed/env/读命令检查 → allow 规则 → sed 约束 → 权限模式（acceptEdits）→ 只读命令自动允许；否则 passthrough 并给出前缀建议。
  */
@@ -1676,7 +1676,7 @@ function checkSandboxAutoAllowForAst(
   if (hasCd && hasRm) return null;
   return decision;
 }
-//@ chunk-e6aww6q8.js:1185390-1188803 fingerprint = checkSandboxAutoAllow (0.592)
+//@ chunk-e6aww6q8.js:1185390-1188803 fingerprint (2.1.88 match: checkSandboxAutoAllow, 0.592)
 /**
  * AST 过于复杂时的沙箱自动允许：逐个片段检查 deny/ask 规则，再用一长串启发式（heredoc、${!x}、/proc/*\/environ、引号/展开、test/find/jobs/print/set 的危险用法）排除，全部通过则 allow（有 ask 规则则 ask）。
  */
@@ -1907,7 +1907,7 @@ function stripSafeLeadingAssignments(words) {
   }
   return assignmentCount === 0 ? words : words.slice(assignmentCount);
 }
-//@ chunk-e6aww6q8.js:1189178-1190057 layout = checkSemanticsDeny (0.881)
+//@ chunk-e6aww6q8.js:1189178-1190057 layout (2.1.88 match: checkSemanticsDeny, 0.881)
 /**
  * 对整条命令和每个 AST 子命令查 prefix deny/ask 规则；没有命中则以"沙箱自动允许"理由 allow。
  */
@@ -1982,7 +1982,7 @@ function checkRulesForSandboxAutoAllow(input, toolPermissionContext, commands) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1190057-1190400 fingerprint = filterCdCwdSubcommands (0.641)
+//@ chunk-e6aww6q8.js:1190057-1190400 fingerprint (2.1.88 match: filterCdCwdSubcommands, 0.641)
 /**
  * 过滤掉 "cd <当前目录>" 这种无效 cd 子命令（参数是纯路径、无 env/重定向/通配），返回剩余子命令及对应 AST。
  */
@@ -2033,7 +2033,7 @@ function isSimpleAndChain(command) {
   if (command.replaceAll("&&", "").includes("&")) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:1197312-1197749 fingerprint = checkEarlyExitDeny (0.959)
+//@ chunk-e6aww6q8.js:1197312-1197749 fingerprint (2.1.88 match: checkEarlyExitDeny, 0.959)
 /**
  * 对整条命令做提前检查：prefix deny → 拒绝；精确 deny → 拒绝；prefix ask → 询问；精确匹配非 passthrough 时返回它；否则 null。
  */
@@ -2110,7 +2110,7 @@ function findDangerousVariableRemoval(
     logDangerousRmShape("eval_trap_string");
   return dangerousVariableRemovalInText;
 }
-//@ chunk-e6aww6q8.js:1198326-1199186 sole-consumer = checkSemanticsDeny (0.783)
+//@ chunk-e6aww6q8.js:1198326-1199186 sole-consumer (2.1.88 match: checkSemanticsDeny, 0.783)
 /**
  * AST 过于复杂（too-complex）时的拒绝路径：整命令/各片段的 deny 规则、读封锁、空变量删除、AST 上的危险删除检查；只有精确 allow 规则覆盖整条命令时才返回 allow。
  */
@@ -2436,7 +2436,7 @@ async function checkDangerousRemovals(
 //@ chunk-e6aww6q8.js:1203520-1203541 sole-consumer
 var FALLBACK_RULE_LEFT_CHARS = 32;
 var FALLBACK_RULE_TOTAL_CHARS = 20000;
-//@ chunk-e6aww6q8.js:1222420-1222925 fingerprint = checkSemanticsDeny (0.891)
+//@ chunk-e6aww6q8.js:1222420-1222925 fingerprint (2.1.88 match: checkSemanticsDeny, 0.891)
 /**
  * 语义检查失败时的规则检查：整命令提前检查 + 每个 AST 子命令的 deny 规则；allow 仅当规则内容等于整条命令。
  */
@@ -2552,7 +2552,7 @@ function applyReadBlockToStructuralAsk(decision, input, toolPermissionContext) {
     return outsideReadsTooComplexAsk(decisionReason.reason);
   return decision;
 }
-//@ chunk-e6aww6q8.js:1223955-1224531 layout = checkSemanticsDeny (0.828)
+//@ chunk-e6aww6q8.js:1223955-1224531 layout (2.1.88 match: checkSemanticsDeny, 0.828)
 /**
  * 对已得出的 ask 结果，再用整条命令、各片段、子命令理由键逐一查 deny/ask 规则：命中 deny 改为拒绝，命中 ask 记到 matchedAskRule。
  */
@@ -2681,7 +2681,7 @@ async function checkBashPermissionWithSandbox(input, permissionContext, astNode,
   }
   return context;
 }
-//@ chunk-e6aww6q8.js:1225707-1225784 layout = validateShellMetacharacters (1)
+//@ chunk-e6aww6q8.js:1225707-1225784 layout (2.1.88 match: validateShellMetacharacters, 1)
 /**
  * 结果是 passthrough 或普通 ask（可被其他读法覆盖）。
  */
@@ -2720,7 +2720,7 @@ function buildTooComplexAsk(reason) {
     suggestions: [],
   };
 }
-//@ chunk-e6aww6q8.js:1226145-1226675 fingerprint = checkCommandAndSuggestRules (0.671)
+//@ chunk-e6aww6q8.js:1226145-1226675 fingerprint (2.1.88 match: checkCommandAndSuggestRules, 0.671)
 /**
  * 两遍运行注入/安全检查（正常模式和 refused 模式），取更严格的结果；refused 才有的 ask 在可安全降级时转为 passthrough。
  */
@@ -3005,7 +3005,7 @@ async function checkBashCommandClamp(
 //@ chunk-e6aww6q8.js:1231663-1231802 affinity
 var GIT_AFTER_CD_READ_BLOCK_REASON =
   "git after a directory change, or after writes to files git reads (HEAD, config, hooks), cannot be checked against the read block";
-//@ chunk-e6aww6q8.js:1231802-1243231 fingerprint = bashToolHasPermission (0.438)
+//@ chunk-e6aww6q8.js:1231802-1243231 fingerprint (2.1.88 match: bashToolHasPermission, 0.438)
 /**
  * Bash 权限检查主入口：tree-sitter 解析 → 语义检查 → too-complex/语义失败的专用路径 → 沙箱自动允许 → 精确规则 → 管道/操作符分段 → cd 处理（多个 cd、cd+git、git 内部文件）→ 每个子命令 bashToolCheckPermission → 路径约束 → 安全检查 → 汇总为 allow/ask/deny/passthrough 并合并最多 aDo 条建议规则（写 localSettings）。
  */
@@ -3825,7 +3825,7 @@ function matchesArgvAfterUnwrap(commandText, normalizeArgv, matchesArgv) {
       : getCommandArgv(commandText.replace(LEADING_TIME_PREFIX_RE, ""));
   return matchesArgv(normalizeArgv(candidateArgv));
 }
-//@ chunk-e6aww6q8.js:1243435-1243583 fingerprint = isNormalizedGitCommand (0.939)
+//@ chunk-e6aww6q8.js:1243435-1243583 fingerprint (2.1.88 match: isNormalizedGitCommand, 0.939)
 /**
  * 规范化后的命令是否是 git 命令（含 time/nohup 等包装后的 git、xargs git）。
  */
@@ -3957,7 +3957,7 @@ function mergeBashSubcommandVerdicts(input, context, result, mergeMode) {
     message: "Run outside of the sandbox",
   };
 }
-//@ chunk-fnhsh6ng.js:2095-2231 fingerprint = startSpeculativeClassifierCheck (1)
+//@ chunk-fnhsh6ng.js:2095-2231 fingerprint (2.1.88 match: startSpeculativeClassifierCheck, 1)
 /**
  * 把当前权限模式规整为分类器使用的模式（bypassPermissions 被禁用或 auto 不可用时回落为 default）。
  */
@@ -3967,7 +3967,7 @@ function resolveAvailablePermissionMode(permissionMode) {
   if (allowDescriptions === "auto" && !isAutoModeGateEnabled()) return "default";
   return allowDescriptions;
 }
-//@ chunk-m79qv8gp.js:11458-11568 fingerprint = awaitClassifierAutoApproval (0.353)
+//@ chunk-m79qv8gp.js:11458-11568 fingerprint (2.1.88 match: awaitClassifierAutoApproval, 0.353)
 /**
  * 判断对象上是否带有 classifier:true 的决策标记。
  */
@@ -3975,7 +3975,7 @@ function isClassifierDecision(decision) {
   let metadata = Reflect.get(decision, ASSET_TARGET_PIN_TAG);
   return typeof metadata === "object" && metadata !== null && Reflect.get(metadata, "classifier") === true;
 }
-//@ chunk-v0yfsee9.js:75146-75763 fingerprint = bashToolCheckExactMatchPermission (1)
+//@ chunk-v0yfsee9.js:75146-75763 fingerprint (2.1.88 match: bashToolCheckExactMatchPermission, 1)
 /**
  * PowerShell 的精确规则检查（命令先规范化），deny/ask/allow 规则命中即返回，否则 passthrough 并附精确命令建议。
  */
@@ -4028,7 +4028,7 @@ function powershellToolCheckExactMatchPermission_2(input, toolPermissionContext)
     suggestions: suggestionForExactCommand_2(command),
   };
 }
-//@ chunk-63f0f3kd.js:106273-106715 fingerprint = isNormalizedCdCommand (0.91)
+//@ chunk-63f0f3kd.js:106273-106715 fingerprint (2.1.88 match: isNormalizedCdCommand, 0.91)
 /**
  * 从 cd/pushd 的 argv 求目标目录：无参数为 homedir，popd、pushd 无参、±N 栈操作、多个参数、"-" 返回 undefined。
  */

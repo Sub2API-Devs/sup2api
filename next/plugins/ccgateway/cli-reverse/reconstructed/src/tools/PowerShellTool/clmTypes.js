@@ -9,7 +9,7 @@
  * attribution: fingerprint 1, file-local 1, callgraph-witnessed 1
  */
 
-//@ chunk-v0yfsee9.js:58675-61506 fingerprint = CLM_ALLOWED_TYPES (1)
+//@ chunk-v0yfsee9.js:58675-61506 fingerprint (2.1.88 match: CLM_ALLOWED_TYPES, 1)
 /**
  * PowerShell 受限语言模式（CLM）允许的 .NET 类型白名单；normalizeTypeName 去掉数组/泛型后缀并小写，isClmAllowedType 判断类型是否允许（供 powershellSecurity 检查类型字面量）。
  */
@@ -164,7 +164,7 @@ function normalizeTypeName(name) {
     .replace(/\[.*\]$/, "")
     .trim();
 }
-//@ chunk-v0yfsee9.js:61593-61629 callgraph-witnessed = isClmAllowedType (0)
+//@ chunk-v0yfsee9.js:61593-61629 callgraph-witnessed (2.1.88 match: isClmAllowedType, 0)
 /**
  * .NET 类型名是否在 PowerShell 受限语言模式（CLM）允许列表里。
  */

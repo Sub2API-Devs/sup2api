@@ -55,7 +55,7 @@ function renderBylineItem(item, index) {
     isValidElement_default(item) ? (item.key ?? index) : index,
   );
 }
-//@ chunk-k1hxk1ex.js:519-790 callgraph-witnessed = Byline (0.375)
+//@ chunk-k1hxk1ex.js:519-790 callgraph-witnessed (2.1.88 match: Byline, 0.375)
 function Byline(props) {
   let $ = useMemoCache(5);
   let { children } = props;

@@ -242,7 +242,7 @@ function matchTrustedRoot(path, extraRoots) {
     }
   );
 }
-//@ chunk-f3qhjfah.js:30106-30208 placement = getReservedShortcuts (1)
+//@ chunk-f3qhjfah.js:30106-30208 placement (2.1.88 match: getReservedShortcuts, 1)
 function normalizePathForPlatform(path) {
   switch (getPlatform()) {
     case "windows":
@@ -335,7 +335,7 @@ function normalizeLocalMarketplaceSource(source, home) {
         path: normalized,
       };
 }
-//@ chunk-f3qhjfah.js:30996-31173 placement = getErrnoPath (1)
+//@ chunk-f3qhjfah.js:30996-31173 placement (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath(marketplaceSource, corroboratingSource) {
   let localSourcePath = getLocalSourcePath(marketplaceSource);
   if (
@@ -357,7 +357,7 @@ function getErrnoPath(marketplaceSource, corroboratingSource) {
     return [];
   return [localSourcePath];
 }
-//@ chunk-f3qhjfah.js:31173-31324 placement = normalizeSource (0.757)
+//@ chunk-f3qhjfah.js:31173-31324 placement (2.1.88 match: normalizeSource, 0.757)
 /**
  * 返回本地市场来源的路径（directory → path，file → 其所在目录…），非本地返回 undefined。
  */
@@ -540,7 +540,7 @@ async function resolveMarketplaceEntryPath(
     entryPath,
   };
 }
-//@ chunk-f3qhjfah.js:33312-33616 placement = getFileIdentity (1)
+//@ chunk-f3qhjfah.js:33312-33616 placement (2.1.88 match: getFileIdentity, 1)
 async function getFileIdentity(filePath) {
   if (getPlatform() === "windows") return false;
   if (hasBackslash(filePath)) return true;
@@ -764,7 +764,7 @@ function getMarketplaceSources(pluginId, knownMarketplaces, marketplaces) {
 }
 //@ chunk-f3qhjfah.js:36718-36752 placement
 var MARKETPLACE_JSON_RE = /[\\/]marketplace\.json$/i;
-//@ chunk-f3qhjfah.js:36752-36899 placement = getServerUrl (1)
+//@ chunk-f3qhjfah.js:36752-36899 placement (2.1.88 match: getServerUrl, 1)
 function getServerUrl(location, marketplaceSource, isDirectory) {
   if (isDirectory === true) return location;
   if (marketplaceSource?.source === "url" || (marketplaceSource === undefined && /\.json$/i.test(location)))
@@ -804,7 +804,7 @@ function entryResolutionError(resolution, marketplaceInstallLocation, source) {
 //@ chunk-f3qhjfah.js:37423-37714 placement
 var PLAIN_DIRECTORY_WALK_NOTE =
   " The marketplace directory's own path cannot be resolved reliably on this platform (for example, a backslash in one of its components), so only plain directories are accepted as entries there (no links); move the marketplace (or the plugins directory) to a plain path to lift that.";
-//@ chunk-f3qhjfah.js:37831-37917 placement = setCwdState (1)
+//@ chunk-f3qhjfah.js:37831-37917 placement (2.1.88 match: setCwdState, 1)
 function normalizeRegistryKey(cwd) {
   let normalized = resolve(cwd).normalize("NFC");
   return getPlatform() === "windows" ? normalized.toLowerCase() : normalized;

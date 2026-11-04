@@ -13,7 +13,7 @@ import { logForDebugging } from "./debug.js";
 import { PROVIDER_ENV_VARS } from "./managedEnvConstants.js";
 import { jsonStringifyRaw } from "./slowOperations.js";
 
-//@ chunk-aepeg2w5.js:341893-342255 fingerprint = validateBoundedIntEnvVar (1)
+//@ chunk-aepeg2w5.js:341893-342255 fingerprint (2.1.88 match: validateBoundedIntEnvVar, 1)
 function validateBoundedIntEnvVar(name, value, defaultValue, upperLimit) {
   if (!value)
     return {

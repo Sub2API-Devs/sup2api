@@ -23,7 +23,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { toError, isSyscallError } from "./errors.js";
 import { logError } from "./log.js";
 
-//@ chunk-0ffn6ajs.js:683-3241 fingerprint = captureMemoryDiagnostics (0.836)
+//@ chunk-0ffn6ajs.js:683-3241 fingerprint (2.1.88 match: captureMemoryDiagnostics, 0.836)
 /**
  * 采集内存诊断：/proc/self/smaps_rollup、fd 数、堆统计。
  */
@@ -136,7 +136,7 @@ async function captureMemoryDiagnostics(trigger, dumpNumber = 0) {
     }.VERSION,
   };
 }
-//@ chunk-0ffn6ajs.js:3241-4354 facade-exports = performHeapDump (0.807)
+//@ chunk-0ffn6ajs.js:3241-4354 facade-exports (2.1.88 match: performHeapDump, 0.807)
 /**
  * 写堆快照与内存诊断（/heapdump 或内存超限触发）。
  */
@@ -199,7 +199,7 @@ async function performHeapDump(trigger = "manual", dumpNumber = 0) {
     };
   }
 }
-//@ chunk-0ffn6ajs.js:4354-4446 fingerprint = writeHeapSnapshot (0.846)
+//@ chunk-0ffn6ajs.js:4354-4446 fingerprint (2.1.88 match: writeHeapSnapshot, 0.846)
 async function writeHeapSnapshot(filepath) {
   writeFileSync(filepath, Bun.generateHeapSnapshot("v8", "arraybuffer"), {
     mode: 384,

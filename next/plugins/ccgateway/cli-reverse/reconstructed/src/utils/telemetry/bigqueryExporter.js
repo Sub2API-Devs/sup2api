@@ -104,7 +104,7 @@ function shutdownTimeoutMs() {
 function reportMetricsAtShutdown(exporter) {
   exporter.reportInFlightAtShutdown();
 }
-//@ chunk-9vvvg0d3.js:25205-31114 fingerprint = BigQueryMetricsExporter (0.642)
+//@ chunk-9vvvg0d3.js:25205-31114 fingerprint (2.1.88 match: BigQueryMetricsExporter, 0.642)
 /**
  * BigQuery 指标导出器：POST <BASE_API_URL>/api/claude_code/metrics（OAuth/API key），失败重试与 OAuth 刷新。
  */

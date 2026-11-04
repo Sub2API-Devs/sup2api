@@ -1814,7 +1814,7 @@ import { uniqByExport } from "../../vendor/lodash-es/uniqBy.js";
 import { SIDE_QUESTION_MAX_AGENTS } from "../components/PromptInput/AgentsPill.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-j387qrdq.js:628-800 placement = finalContextTokensFromLastResponse (0.778)
+//@ chunk-j387qrdq.js:628-800 placement (2.1.88 match: finalContextTokensFromLastResponse, 0.778)
 function finalContextTokensFromLastResponse(messages) {
   if (messages == null || typeof messages.input_tokens !== "number") return;
   if (typeof messages.output_tokens === "number") return messages;
@@ -1898,7 +1898,7 @@ function controlErrorResponse(requestId, error, errorCode, model) {
     },
   };
 }
-//@ chunk-j387qrdq.js:1470-1747 fingerprint = emitLoadError (0.898)
+//@ chunk-j387qrdq.js:1470-1747 fingerprint (2.1.88 match: emitLoadError, 0.898)
 /**
  * 构造加载失败时的 result 消息（subtype error_during_execution）。
  */
@@ -1923,7 +1923,7 @@ function emitLoadError(sessionId, errors, userMessageUuid) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:553953-554048 fingerprint = canBatchWith (0.667)
+//@ chunk-e6aww6q8.js:553953-554048 fingerprint (2.1.88 match: canBatchWith, 0.667)
 /**
  * 排队的命令能否与前一条合并发送（同为普通 prompt 且来源允许）。
  */
@@ -1936,7 +1936,7 @@ function canBatchWith(command) {
     isHumanDrivenOrigin(command.origin)
   );
 }
-//@ chunk-e6aww6q8.js:1818531-1818725 placement = isSystemLocalCommandMessage (1)
+//@ chunk-e6aww6q8.js:1818531-1818725 placement (2.1.88 match: isSystemLocalCommandMessage, 1)
 /**
  * 为每条 assistant 生成“用户轮序号:message.id”键，其他消息为 undefined。
  */
@@ -1952,7 +1952,7 @@ function assistantTurnKeys(message) {
     return;
   });
 }
-//@ chunk-e6aww6q8.js:1830039-1830121 fingerprint = removeInterruptedMessage (1)
+//@ chunk-e6aww6q8.js:1830039-1830121 fingerprint (2.1.88 match: removeInterruptedMessage, 1)
 /**
  * 从消息数组里删除被中断的消息及其后一条。
  */
@@ -1980,7 +1980,7 @@ function restoreInterruptedPrompt(messages, interruption, pendingRows) {
   messages.splice(replaceMarker ? index : index + 1, 0, ...missingRows);
   return true;
 }
-//@ chunk-e6aww6q8.js:1830419-1831267 placement = isNotEmptyMessage (0.275)
+//@ chunk-e6aww6q8.js:1830419-1831267 placement (2.1.88 match: isNotEmptyMessage, 0.275)
 /**
  * 续写时删除哨兵后的 "(no content)" 占位 assistant，并在只剩系统消息时去掉 "Continue from where you left off." 提示（tengu_silly_waterfall 等开关）。
  */
@@ -2093,7 +2093,7 @@ function carryConfiguredCommand(desiredConfig, previousConfig) {
       }
     : desiredConfig;
 }
-//@ chunk-nkdv7dw8.js:8742-12607 fingerprint = handleMcpSetServers (0.339)
+//@ chunk-nkdv7dw8.js:8742-12607 fingerprint (2.1.88 match: handleMcpSetServers, 0.339)
 /**
  * 处理 mcp_set_servers：按 SDK 给出的服务器集合增删改动态 MCP 服务器并重连。
  */
@@ -2985,7 +2985,7 @@ async function reconcileMcpServersImpl(
     newState: buildMcpStatusList(newState, settled, getAppState?.().mcp.clients),
   };
 }
-//@ chunk-nkdv7dw8.js:20914-21884 fingerprint = reconcileMcpServers (0.344)
+//@ chunk-nkdv7dw8.js:20914-21884 fingerprint (2.1.88 match: reconcileMcpServers, 0.344)
 /**
  * reconcileMcpServers：比较期望与现有 MCP 配置，替换变化的连接。
  */
@@ -3069,7 +3069,7 @@ async function reconcileMcpServers(
     },
   };
 }
-//@ chunk-tyg7f3ek.js:50315-50620 placement = calculateMessagesToKeepIndex (0.415)
+//@ chunk-tyg7f3ek.js:50315-50620 placement (2.1.88 match: calculateMessagesToKeepIndex, 0.415)
 /**
  * headless 会话：返回一个惰性函数，算出停放（被打断）轮次已收进的发送消息 uuid 集合。旧版名 calculateMessagesToKeepIndex 为错配，属于 cli/print 的轮次停放逻辑。
  */
@@ -3103,7 +3103,7 @@ function getParkedTurnSendUuids(prompt, uuid, firstUuid) {
     }
   };
 }
-//@ chunk-tyg7f3ek.js:127589-127752 fingerprint = getStructuredIO (0.513)
+//@ chunk-tyg7f3ek.js:127589-127752 fingerprint (2.1.88 match: getStructuredIO, 0.513)
 function getStructuredIO(inputPrompt, options) {
   return {
     type: "user",
@@ -3118,7 +3118,7 @@ function getStructuredIO(inputPrompt, options) {
     isReplay: true,
   };
 }
-//@ chunk-tyg7f3ek.js:375915-378573 fingerprint = handleOrphanedPermissionResponse (0.458)
+//@ chunk-tyg7f3ek.js:375915-378573 fingerprint (2.1.88 match: handleOrphanedPermissionResponse, 0.458)
 async function handleOrphanedPermissionResponse({
   message,
   setAppState,
@@ -3350,7 +3350,7 @@ function registerStartupSdkEventForwarder(headlessIO) {
   setTaskNotificationListener(flush);
   flush();
 }
-//@ chunk-tyg7f3ek.js:628732-652107 callgraph-witnessed = runHeadless (0.247)
+//@ chunk-tyg7f3ek.js:628732-652107 callgraph-witnessed (2.1.88 match: runHeadless, 0.247)
 /**
  * runHeadless（-p 模式主函数）：建立输入输出（StructuredIO 或 RemoteIO）、沙箱初始化、加载初始消息（--continue/--resume）、驱动 runHeadlessStreaming，最后按 --output-format 输出：text 打印最终结果，json 输出 result 对象（--verbose 输出全部消息数组），stream-json 逐行已输出。退出码：结果 is_error 为 1。
  */
@@ -4690,7 +4690,7 @@ function isModelDifferentFromRestricted(userSpecifiedModel, restrictedStartupMod
     parseUserSpecifiedModel(userSpecifiedModel) !== parseUserSpecifiedModel(restrictedStartupModel)
   );
 }
-//@ chunk-tyg7f3ek.js:652157-652293 layout = createModelSwitchBreadcrumbs (1)
+//@ chunk-tyg7f3ek.js:652157-652293 layout (2.1.88 match: createModelSwitchBreadcrumbs, 1)
 function createModelSwitchBreadcrumbs(frame, userSpecifiedModel, prevModel) {
   if (
     "model" in frame &&
@@ -4740,7 +4740,7 @@ function canJoinOAuthFlow(state, withClaudeAi, forceLoginOrgUUID, orgUuid) {
     orgUuid - state.startedAt < OAUTH_FLOW_JOIN_WINDOW_MS
   );
 }
-//@ chunk-tyg7f3ek.js:652708-850597 callgraph-witnessed = runHeadlessStreaming (0.158)
+//@ chunk-tyg7f3ek.js:652708-850597 callgraph-witnessed (2.1.88 match: runHeadlessStreaming, 0.158)
 /**
  * runHeadlessStreaming：headless 主循环。读取输入消息与 control_request（initialize、interrupt、set_model、set_permission_mode、mcp_set_servers、rewind_files 等约 90 种子类型），排队执行查询轮次并产出 SDK 消息。
  */
@@ -17009,7 +17009,7 @@ function explicitMcpConfigRequestsWait(configs, bridgeCarrier, waitMs) {
 function relayMcpWaitLeft(elapsedMs, budgetMs, now) {
   return Math.max(TRANSPORT_FALLBACK_TIMEOUT_MS, Math.round(elapsedMs + budgetMs - now));
 }
-//@ chunk-tyg7f3ek.js:850766-853865 fingerprint = createCanUseToolWithPermissionPrompt (0.384)
+//@ chunk-tyg7f3ek.js:850766-853865 fingerprint (2.1.88 match: createCanUseToolWithPermissionPrompt, 0.384)
 /**
  * 包装 canUseTool：规则判定为 ask 时转给 --permission-prompt-tool 指定的 MCP 工具；工具不可用时拒绝并说明。
  */
@@ -17197,7 +17197,7 @@ function createCanUseToolWithPermissionPrompt(permissionPromptTool, isServerSwep
     () => permissionPromptTool !== null && !isServerSwept(),
   );
 }
-//@ chunk-tyg7f3ek.js:853865-853988 layout = countToolCallsSince (1)
+//@ chunk-tyg7f3ek.js:853865-853988 layout (2.1.88 match: countToolCallsSince, 1)
 function messageHasToolUseId(messages, sinceUuid) {
   let content = messages?.message?.content;
   if (!Array.isArray(content)) return false;
@@ -17213,7 +17213,7 @@ var PERMISSION_PROMPT_TOOL_NOT_FOUND_NO_MCP_TOOLS_TELEMETRY_MESSAGE =
   "Error: MCP tool <redacted> (passed via --permission-prompt-tool) not found. Available MCP tools: none";
 var PERMISSION_PROMPT_TOOL_NOT_MCP_TELEMETRY_MESSAGE =
   "Error: tool <redacted> (passed via --permission-prompt-tool) must be an MCP tool";
-//@ chunk-tyg7f3ek.js:854298-855389 fingerprint = getCanUseToolFn (0.812)
+//@ chunk-tyg7f3ek.js:854298-855389 fingerprint (2.1.88 match: getCanUseToolFn, 0.812)
 /**
  * 根据输入格式与 --permission-prompts 选择 canUseTool：stdio 走 StructuredIO 请求宿主，none 自动拒绝，否则走权限提示工具。
  */
@@ -17357,7 +17357,7 @@ function seatMainThreadAgentFromPool(
     restrictedAgentModel,
   };
 }
-//@ chunk-tyg7f3ek.js:856133-861179 fingerprint = handleInitializeRequest (0.344)
+//@ chunk-tyg7f3ek.js:856133-861179 fingerprint (2.1.88 match: handleInitializeRequest, 0.344)
 /**
  * 处理 initialize 控制请求：注册 SDK 钩子回调、提示建议、代理、MCP 服务器、输出样式等，回复 initialize 响应（命令、代理、模型、账户、pid、版本…）。
  */
@@ -17748,7 +17748,7 @@ async function _buildInitializeResponsePayloadForTesting(
   if (capabilitySources.length > 0) accountSettings.capabilities = capabilitySources;
   return accountSettings;
 }
-//@ chunk-tyg7f3ek.js:863492-863977 fingerprint = handleRewindFiles (0.957)
+//@ chunk-tyg7f3ek.js:863492-863977 fingerprint (2.1.88 match: handleRewindFiles, 0.957)
 /**
  * 处理 rewind_files：检查文件历史检查点，dry-run 或回滚文件。
  */
@@ -17786,7 +17786,7 @@ async function handleRewindFiles(userMessageId, appState, options) {
     skippedLinks: filesChanged?.skippedLinks,
   };
 }
-//@ chunk-tyg7f3ek.js:863977-865145 fingerprint = handleChannelEnable (0.902)
+//@ chunk-tyg7f3ek.js:863977-865145 fingerprint (2.1.88 match: handleChannelEnable, 0.902)
 /**
  * 处理 channel_enable：为已连接的插件 MCP 服务器注册频道通知。
  */
@@ -17848,7 +17848,7 @@ function handleChannelEnable(requestId, serverName, connectionPool, output, mess
   });
   output.enqueue(controlSuccessResponse(requestId));
 }
-//@ chunk-tyg7f3ek.js:865145-865881 fingerprint = reregisterChannelHandlerAfterReconnect (0.926)
+//@ chunk-tyg7f3ek.js:865145-865881 fingerprint (2.1.88 match: reregisterChannelHandlerAfterReconnect, 0.926)
 function reregisterChannelHandlerAfterReconnect(connection, messageQueue) {
   if (connection.type !== "connected") return;
   if (
@@ -18213,7 +18213,7 @@ function queueMemoryNotices(outputFormat) {
       outputFormat,
     });
 }
-//@ chunk-tyg7f3ek.js:869960-882005 fingerprint = loadInitialMessages (0.315)
+//@ chunk-tyg7f3ek.js:869960-882005 fingerprint (2.1.88 match: loadInitialMessages, 0.315)
 /**
  * 加载 -p 模式的初始消息：--continue 取最近会话，--resume 按 ID/名称/文件恢复（含 --resume-session-at 截断、--fork-session），失败写启动失败结果。
  */
@@ -19066,7 +19066,7 @@ function createHeadlessIO(prompt, options, turnHandoff, carriedWrites, stageCall
     );
   return remoteIO;
 }
-//@ chunk-tyg7f3ek.js:884037-884082 sole-consumer = mergeClients (0.78)
+//@ chunk-tyg7f3ek.js:884037-884082 sole-consumer (2.1.88 match: mergeClients, 0.78)
 function mergeClients(...lists) {
   return uniqByExport(lists.flat(), "name");
 }
@@ -19074,7 +19074,7 @@ function mergeClients(...lists) {
 function mergeClientsWithCommsServers(...lists) {
   return [...mergeClients(...lists), ...lists.flat().filter(isCommsRoledServer)];
 }
-//@ chunk-18hwfzwa.js:810094-810309 fingerprint = trackReceivedMessageUuid (0.591)
+//@ chunk-18hwfzwa.js:810094-810309 fingerprint (2.1.88 match: trackReceivedMessageUuid, 0.591)
 function trackReceivedMessageUuid(countsByAgent, agents) {
   let seenIds = new Set();
   for (let { id, tokenCount } of agents) {

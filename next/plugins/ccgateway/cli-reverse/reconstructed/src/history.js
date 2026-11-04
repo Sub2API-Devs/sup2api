@@ -71,7 +71,7 @@ import { isOwnTempName } from "./utils/atomicPublishWrite.js";
 import { isHashTempFile } from "./services/memorySync/syncFiles.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:34066-34244 fingerprint = resolveStoredPastedContent (0.799)
+//@ chunk-s61vbvea.js:34066-34244 fingerprint (2.1.88 match: resolveStoredPastedContent, 0.799)
 var MAX_HISTORY_ITEMS; // deferred: uses DoctorLazy (./cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_CLEARED_DRAFTS;
 var MAX_CLEARED_DRAFTS_CHARS;
@@ -97,12 +97,12 @@ deferInit("chunk-s61vbvea.js:34066", () => {
 function getPastedTextRefNumLines(text) {
   return (text.match(/\r\n|\r|\n/g) || []).length;
 }
-//@ chunk-s61vbvea.js:34301-34398 fingerprint = formatPastedTextRef (0.508)
+//@ chunk-s61vbvea.js:34301-34398 fingerprint (2.1.88 match: formatPastedTextRef, 0.508)
 function formatPastedTextRef(id, numLines, label = "Pasted text") {
   if (numLines === 0) return `[${label} #${id}]`;
   return `[${label} #${id} +${numLines} lines]`;
 }
-//@ chunk-s61vbvea.js:34398-34436 fingerprint = formatImageRef (1)
+//@ chunk-s61vbvea.js:34398-34436 fingerprint (2.1.88 match: formatImageRef, 1)
 function formatImageRef(id) {
   return `[Image #${id}]`;
 }
@@ -164,7 +164,7 @@ function addPastedEntry(display, pastedContents, lookup, refs) {
 }
 //@ chunk-s61vbvea.js:35101-35165 layout
 var LEADING_COMBINING_MARKS = /^[\p{M}\u1161-\u1175\u11A8-\u11C2\u{16D67}\u{16D68}]+/u;
-//@ chunk-s61vbvea.js:35165-35275 layout = setCwdState (0.843)
+//@ chunk-s61vbvea.js:35165-35275 layout (2.1.88 match: setCwdState, 0.843)
 function nfcVariants(cwd) {
   let normalized = cwd.normalize("NFC");
   let stripped = normalized.replace(LEADING_COMBINING_MARKS, "").trimStart();
@@ -554,7 +554,7 @@ async function* readHistoryRecordsBackward(storage) {
     fromSeq = nextSeq;
   }
 }
-//@ chunk-s61vbvea.js:39871-40221 fingerprint = getTimestampedHistory (0.47)
+//@ chunk-s61vbvea.js:39871-40221 fingerprint (2.1.88 match: getTimestampedHistory, 0.47)
 var getTimestampedHistory_2; // deferred: uses DoctorLazy (./cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-s61vbvea.js:39871", () => {
   getTimestampedHistory_2 = DoctorLazy(() =>
@@ -1494,7 +1494,7 @@ function renumberPastedContents({ display, pastedContents, allowCurrentEpochSkip
     pastedContents: contents,
   };
 }
-//@ chunk-e6aww6q8.js:932812-933012 fingerprint = removeLastFromHistory (0.389)
+//@ chunk-e6aww6q8.js:932812-933012 fingerprint (2.1.88 match: removeLastFromHistory, 0.389)
 class HistoryWriterStack {
   writers = [];
   register(writer) {
@@ -1511,7 +1511,7 @@ class HistoryWriterStack {
     this.writers.at(-1)?.(line);
   }
 }
-//@ chunk-ez320trn.js:7416-7526 fingerprint = getHistory (0.7)
+//@ chunk-ez320trn.js:7416-7526 fingerprint (2.1.88 match: getHistory, 0.7)
 async function getHistory_2(slug, deadlineSignal, context) {
   let [publishedReadme, publishedReadme_2] = await Promise.all([
     readPublishedReadme(slug, README_MD, false, deadlineSignal, context),
@@ -1535,7 +1535,7 @@ var SKILL_WATCH_TIMEOUT_MS = 600000;
 var SKILL_WATCH_MAX_WAIT_MS = 40000;
 var SKILL_WATCH_BACKOFF_MS = 2000;
 var SKILL_WATCH_ENABLED = true;
-//@ chunk-2njac0sx.js:935-1112 callgraph-fingerprint = addToPromptHistory (0.208)
+//@ chunk-2njac0sx.js:935-1112 callgraph-fingerprint (2.1.88 match: addToPromptHistory, 0.208)
 async function collectPromptCommandHashes(command) {
   let skillDirCommands = await getSkillDirCommandsCached(getProjectRoot(), command);
   let originalCwd = getOriginalCwd();
@@ -1672,19 +1672,19 @@ function readPromptText(text) {
         pastedContents: {},
       };
 }
-//@ chunk-ha3km179.js:54258-54310 fingerprint = logEntryToHistoryEntry (1)
+//@ chunk-ha3km179.js:54258-54310 fingerprint (2.1.88 match: logEntryToHistoryEntry, 1)
 var logEntryToHistoryEntry = (logEntry, display, pastedContents) => ({
   ...logEntry,
   display,
   pastedContents,
 });
-//@ chunk-8t8n4kdh.js:174068-174129 fingerprint = addToHistory (1)
+//@ chunk-8t8n4kdh.js:174068-174129 fingerprint (2.1.88 match: addToHistory, 1)
 function addToHistory_2() {
   return isSessionPersistenceDisabled() || env.CLAUDE_CODE_SKIP_PROMPT_HISTORY;
 }
 //@ chunk-0eyv3mzk.js:584-632 affinity
 var URL_HOST_PATTERN = /https?:\/\/([^\s/?#'"`<>\\)\];&|(,]+)/gi;
-//@ chunk-0eyv3mzk.js:632-839 fingerprint = parseReferences (0.696)
+//@ chunk-0eyv3mzk.js:632-839 fingerprint (2.1.88 match: parseReferences, 0.696)
 function parseReferences(input) {
   if (!input) return [];
   let hosts = [];
@@ -1698,7 +1698,7 @@ function parseReferences(input) {
   }
   return hosts;
 }
-//@ chunk-5f8vf2zr.js:28166-28267 fingerprint = makeLogEntryReader (0.56)
+//@ chunk-5f8vf2zr.js:28166-28267 fingerprint (2.1.88 match: makeLogEntryReader, 0.56)
 async function dirHasHistoryFile(claudeConfigDir) {
   try {
     return (await readdir(claudeConfigDir)).some(

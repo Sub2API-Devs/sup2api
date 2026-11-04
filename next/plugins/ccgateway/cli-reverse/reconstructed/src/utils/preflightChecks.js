@@ -26,14 +26,14 @@ import {
 import { Box, Text } from "../ink/components/Text.js";
 import { Spinner } from "../components/Spinner.js";
 
-//@ chunk-p8fze0jh.js:16221-16276 callgraph-fingerprint = _temp (0.39)
+//@ chunk-p8fze0jh.js:16221-16276 callgraph-fingerprint (2.1.88 match: _temp, 0.39)
 function exitPreflightFailed() {
   setBgExitCause("preflight_endpoint");
   process.exit(1);
 }
 //@ chunk-p8fze0jh.js:16276-16287 layout
 var PREFLIGHT_TIMEOUT_MS = 1e4;
-//@ chunk-p8fze0jh.js:16287-17402 fingerprint = checkEndpoints (0.823)
+//@ chunk-p8fze0jh.js:16287-17402 fingerprint (2.1.88 match: checkEndpoints, 0.823)
 /**
  * 启动预检：用 10 秒超时请求 <BASE_API_URL>/api/hello 与 <TOKEN_URL 源>/v1/oauth/hello（走代理设置），返回第一个失败的错误说明。
  */
@@ -106,7 +106,7 @@ async function checkEndpoints() {
     };
   }
 }
-//@ chunk-p8fze0jh.js:17402-19010 fingerprint = PreflightStep (0.303)
+//@ chunk-p8fze0jh.js:17402-19010 fingerprint (2.1.88 match: PreflightStep, 0.303)
 /**
  * 首次运行的连通性检查界面：显示 Checking connectivity...，失败时提示 Unable to connect to Anthropic services 并退出。
  */

@@ -62,11 +62,11 @@ import { vetRepoSettingsPath, getFsImplementation } from "../fsOperations.js";
 import { hasDotSegment } from "../pathClassification.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:10635-10676 callgraph-fingerprint = startMdmPoll (0.169)
+//@ chunk-q8cqcff6.js:10635-10676 callgraph-fingerprint (2.1.88 match: startMdmPoll, 0.169)
 function startMdmPoll() {
   return withAskedWhere(mdmLoader()).hkcu ?? EMPTY_MDM_SETTINGS;
 }
-//@ chunk-82kqcve8.js:24807-34017 callgraph-fingerprint = initialize (0.232)
+//@ chunk-82kqcve8.js:24807-34017 callgraph-fingerprint (2.1.88 match: initialize, 0.232)
 /**
  * 设置文件变更检测器：监视各来源设置文件与 managed-settings.d（文件事件或轮询），MDM 定时重读，变化时按来源发出 ConfigChange 事件并触发重新加载。
  */
@@ -725,7 +725,7 @@ function isUserSettingsSource(session) {
     ? settingsFilePathForSource
     : undefined;
 }
-//@ chunk-82kqcve8.js:34153-36037 fingerprint = getWatchTargets (0.327)
+//@ chunk-82kqcve8.js:34153-36037 fingerprint (2.1.88 match: getWatchTargets, 0.327)
 async function getWatchTargets(session) {
   let dirToSettingsFiles = new Map();
   let dirsWithExistingFiles = new Set();
@@ -883,7 +883,7 @@ function isMissingPathError(dir) {
   }
   return true;
 }
-//@ chunk-82kqcve8.js:36340-36561 fingerprint = settingSourceToConfigChangeSource (1)
+//@ chunk-82kqcve8.js:36340-36561 fingerprint (2.1.88 match: settingSourceToConfigChangeSource, 1)
 function settingSourceToConfigChangeSource(source) {
   switch (source) {
     case "userSettings":
@@ -897,7 +897,7 @@ function settingSourceToConfigChangeSource(source) {
       return "policy_settings";
   }
 }
-//@ chunk-82kqcve8.js:36561-36765 fingerprint = getSourceForPath (0.807)
+//@ chunk-82kqcve8.js:36561-36765 fingerprint (2.1.88 match: getSourceForPath, 0.807)
 function getSourceForPath(path) {
   let normalizedPath = pathModule.normalize(path);
   let dropInDir = getDropInDir();

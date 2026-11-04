@@ -424,7 +424,7 @@ class TranscriptStream {
 function clearIfAny(list) {
   return list.length > 0 ? [] : list;
 }
-//@ chunk-18hwfzwa.js:1510570-1510660 placement = buildTranscriptEntries (0.777)
+//@ chunk-18hwfzwa.js:1510570-1510660 placement (2.1.88 match: buildTranscriptEntries, 0.777)
 function isHumanTurnOrQueuedCommand(message) {
   return (
     isHumanTurn_2(message) || (message.type === "attachment" && message.attachment.type === "queued_command")

@@ -55,7 +55,7 @@ import { waitForTaskCompletion } from "../tools/TaskOutputTool/TaskOutputTool.js
 import { isLocalAgent } from "../state/teammateViewHelpers.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:20267-20423 placement = getSelectableBackgroundTasks (0.759)
+//@ chunk-kxyd0g16.js:20267-20423 placement (2.1.88 match: getSelectableBackgroundTasks, 0.759)
 function getSelectableBackgroundTasks(matchesName, taskRegistry, getAppState) {
   let agentNameRegistry = getAppState?.().agentNameRegistry;
   if (!agentNameRegistry) return;
@@ -125,7 +125,7 @@ function emitCascadeSpared(stoppedAgentId, sparedAgentIds, killedBy, taskRegistr
     taskRegistry,
   });
 }
-//@ chunk-kxyd0g16.js:21165-21323 fingerprint = StopTaskError (0.446)
+//@ chunk-kxyd0g16.js:21165-21323 fingerprint (2.1.88 match: StopTaskError, 0.446)
 /**
  * TaskStop 拒绝错误，code 为 not_found / ambiguous / not_running / not_owner / unsupported_type，带任务当前状态。
  */
@@ -142,7 +142,7 @@ deferInit("chunk-kxyd0g16.js:21165", () => {
     }
   };
 });
-//@ chunk-kxyd0g16.js:21323-21515 layout = killAllRunningAgentTasks (0.849)
+//@ chunk-kxyd0g16.js:21323-21515 layout (2.1.88 match: killAllRunningAgentTasks, 0.849)
 /**
  * 列出代理名字注册表里仍在运行（或有存活工作）的本地代理名字。
  */
@@ -178,7 +178,7 @@ function formatTaskNotFoundMessage(taskId, taskRegistry, getAppState, suggestion
  */
 var MCP_TASK_STOPPED_NOTE =
   "No result will follow. The MCP server may already have done some of the work, or may still finish it.";
-//@ chunk-kxyd0g16.js:21925-25016 fingerprint = stopTask (0.445)
+//@ chunk-kxyd0g16.js:21925-25016 fingerprint (2.1.88 match: stopTask, 0.445)
 /**
  * 停止任务：先按 ID 查，查不到时按名字/前缀模糊解析（ambiguous/suggestion）；观察者代理不能停自己、非属主不能停；对"已结束但循环未退出"的 workflow/代理重新发中止并杀进程组；
  * 否则调用任务实现的 kill，并对 local_agent 级联停止其子代理（豁免的除外）；shell 任务补发 stopped 通知、通知属主代理或 SDK 来源。返回 {taskId, taskType, command, note?}。

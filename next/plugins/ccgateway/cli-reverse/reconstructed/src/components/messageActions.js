@@ -47,7 +47,7 @@ import {
 import { Text, Box } from "../ink/components/Text.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-mketzrwm.js:6314-6704 fingerprint = stripSystemReminders (0.873)
+//@ chunk-mketzrwm.js:6314-6704 fingerprint (2.1.88 match: stripSystemReminders, 0.873)
 function stripSystemReminders(text) {
   let rawText = text.trimStart();
   let hasSystemReminder = false;
@@ -68,7 +68,7 @@ function stripSystemReminders(text) {
   if (!hasSystemReminder) return text;
   return match === "" ? text : match;
 }
-//@ chunk-e6aww6q8.js:3427430-3427980 fingerprint = copyTextOf (0.33)
+//@ chunk-e6aww6q8.js:3427430-3427980 fingerprint (2.1.88 match: copyTextOf, 0.33)
 async function copyTextOf(session, timeoutMs = HOOK_RESPONSE_POLL_MS) {
   let postSwitch = postSwitchSlot.of(session);
   if (postSwitch.inFlight.size > 0 && postSwitch.landedOn?.sessionId === session.id)
@@ -97,7 +97,7 @@ async function copyTextOf(session, timeoutMs = HOOK_RESPONSE_POLL_MS) {
     return true;
   });
 }
-//@ chunk-e6aww6q8.js:4152232-4152286 fingerprint = isApplicable (0.461)
+//@ chunk-e6aww6q8.js:4152232-4152286 fingerprint (2.1.88 match: isApplicable, 0.461)
 var isApplicable; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-e6aww6q8.js:4152232", () => {
   isApplicable = DoctorLazy(() =>
@@ -119,7 +119,7 @@ function toolResultText(message, toolUseIds) {
   }
   return matched;
 }
-//@ chunk-e6aww6q8.js:4686715-4686968 layout = toolCallOf (1)
+//@ chunk-e6aww6q8.js:4686715-4686968 layout (2.1.88 match: toolCallOf, 1)
 function toolCallOf_3(msg) {
   if (msg.type === "assistant") {
     let block = msg.message.content[0];
@@ -219,7 +219,7 @@ function mergeCollapsedReadSearch(target, source) {
   target.latestThinkingSummary = source.latestThinkingSummary ?? target.latestThinkingSummary;
   target.messages.push(...source.messages);
 }
-//@ chunk-e6aww6q8.js:4703309-4707177 fingerprint = isNavigableMessage (0.31)
+//@ chunk-e6aww6q8.js:4703309-4707177 fingerprint (2.1.88 match: isNavigableMessage, 0.31)
 function isNavigableMessage(collapsedBase, tools, getTaskStats, isLoading = false, options = {}) {
   if (options.transcriptV2) return collapsedBase;
   let result = [];
@@ -514,7 +514,7 @@ function createCollapsedToolGroup(message, toolName, inputs, tools) {
   } else group.otherToolCount = count_2;
   return group;
 }
-//@ chunk-yzt83vwd.js:598-940 fingerprint = MessageActionsKeybindings (0.41)
+//@ chunk-yzt83vwd.js:598-940 fingerprint (2.1.88 match: MessageActionsKeybindings, 0.41)
 function MessageActionsKeybindings(handlers, options = {}) {
   let { context = "Global", isActive = true } = options;
   let keybindingContext = useKeybindingContext();
@@ -540,7 +540,7 @@ function MessageActionsKeybindings(handlers, options = {}) {
     };
   }, [context, joined, keybindingContext, isActive, state]);
 }
-//@ chunk-ag5x7vhf.js:175325-175697 fingerprint = NAVIGABLE_TYPES (0.459)
+//@ chunk-ag5x7vhf.js:175325-175697 fingerprint (2.1.88 match: NAVIGABLE_TYPES, 0.459)
 function NAVIGABLE_TYPES(message) {
   let key;
   switch (message.type) {
@@ -565,13 +565,13 @@ function NAVIGABLE_TYPES(message) {
   }
   return asSafePathKey(key);
 }
-//@ chunk-ag5x7vhf.js:175697-175824 sole-consumer = extractErrorTypeFromData (1)
+//@ chunk-ag5x7vhf.js:175697-175824 sole-consumer (2.1.88 match: extractErrorTypeFromData, 1)
 function messageTypeLabel(data) {
   if (data === undefined) return "?";
   let blockType = typeof data === "object" && data !== null && "type" in data ? data.type : undefined;
   return isKnownContentBlockType(blockType) ? blockType : "unknown";
 }
-//@ chunk-tyg7f3ek.js:448270-448342 fingerprint = useMessageActions (0.347)
+//@ chunk-tyg7f3ek.js:448270-448342 fingerprint (2.1.88 match: useMessageActions, 0.347)
 function useMessageActions(turnStartClock, arg1, arg2) {
   if (turnStartClock === undefined) return;
   try {
@@ -580,7 +580,7 @@ function useMessageActions(turnStartClock, arg1, arg2) {
     logError(error);
   }
 }
-//@ chunk-0e8j1zzj.js:40067-41402 fingerprint = MessageActionsBar (0.516)
+//@ chunk-0e8j1zzj.js:40067-41402 fingerprint (2.1.88 match: MessageActionsBar, 0.516)
 function MessageActionsBar(props) {
   let $ = useMemoCache(38);
   let { keyText, contentColumns } = props;
@@ -736,7 +736,7 @@ function MessageActionsBar(props) {
   } else footerElement = $[37];
   return footerElement;
 }
-//@ chunk-hyjyj8hj.js:1107-2074 fingerprint = PRIMARY_INPUT (0.377)
+//@ chunk-hyjyj8hj.js:1107-2074 fingerprint (2.1.88 match: PRIMARY_INPUT, 0.377)
 /**
  * 各内置工具的输入路径字段与响应中路径字段的表，供钩子输入路径处理用；同一声明派生 responseMembers 与 responseNested 集合。
  */

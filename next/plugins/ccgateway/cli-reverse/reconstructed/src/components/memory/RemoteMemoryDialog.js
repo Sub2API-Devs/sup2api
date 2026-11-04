@@ -55,7 +55,7 @@ import { MemoryCommand } from "../../commands/memory/memory.js";
 init_react_production();
 //@ chunk-c55mbvfz.js:15776-15780 placement
 init_react_production();
-//@ chunk-c55mbvfz.js:15780-15853 placement = _temp2 (1)
+//@ chunk-c55mbvfz.js:15780-15853 placement (2.1.88 match: _temp2, 1)
 function renderPathLine(line, i_1) {
   return jsxProd_default(
     Text,

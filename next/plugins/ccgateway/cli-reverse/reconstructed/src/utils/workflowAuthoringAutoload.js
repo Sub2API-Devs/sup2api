@@ -73,7 +73,7 @@ async function autoloadWorkflowAuthoringSkill(attachments, messages, context) {
     }),
   ].map(markToolSummaryMessage);
 }
-//@ chunk-70r0mv35.js:12698-12794 placement = isNullRenderingAttachment (1)
+//@ chunk-70r0mv35.js:12698-12794 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function isNullRenderingAttachment(msg, messages, matchesTrigger) {
   return (
     msg.type === "attachment" &&

@@ -18,7 +18,7 @@ import { getGlobalConfig, saveGlobalConfig } from "./config.js";
 import { pathExists } from "./fsSafety/atomicWriteStaging.js";
 import { getRemoteUrlForDir } from "./git/gitFilesystem.js";
 
-//@ chunk-md1x7k3r.js:493-997 fingerprint = updateGithubRepoPathMapping (0.935)
+//@ chunk-md1x7k3r.js:493-997 fingerprint (2.1.88 match: updateGithubRepoPathMapping, 0.935)
 async function updateGithubRepoPathMapping(storageV5) {
   try {
     let repo = await detectCurrentRepository();
@@ -57,7 +57,7 @@ async function updateGithubRepoPathMapping(storageV5) {
     logForDebugging(`Error updating repo path mapping: ${error}`);
   }
 }
-//@ chunk-md1x7k3r.js:997-1076 fingerprint = getKnownPathsForRepo (1)
+//@ chunk-md1x7k3r.js:997-1076 fingerprint (2.1.88 match: getKnownPathsForRepo, 1)
 function getKnownPathsForRepo(repo) {
   let config = getGlobalConfig();
   let repoKey = repo.toLowerCase();
@@ -80,7 +80,7 @@ async function validateRepoAtPath(path, expectedRepo) {
     return false;
   }
 }
-//@ chunk-md1x7k3r.js:1309-1598 fingerprint = removePathFromRepo (1)
+//@ chunk-md1x7k3r.js:1309-1598 fingerprint (2.1.88 match: removePathFromRepo, 1)
 function removePathFromRepo(repo, pathToRemove, storageV5) {
   let config = getGlobalConfig();
   let repoKey = repo.toLowerCase();

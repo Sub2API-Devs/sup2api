@@ -43,7 +43,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 function hasChannelCapability(capabilities) {
   return !!capabilities?.experimental?.["claude/channel"];
 }
-//@ chunk-0zzdrwpn.js:803-1131 facade-exports = ChannelMessageNotificationSchema (0.5)
+//@ chunk-0zzdrwpn.js:803-1131 facade-exports (2.1.88 match: ChannelMessageNotificationSchema, 0.5)
 /**
  * channel 通知 schema 与方法名常量：notifications/claude/channel（content+meta）、.../permission（request_id+behavior）、.../permission_request，以及 meta 键名正则。
  */
@@ -75,7 +75,7 @@ deferInit("chunk-0zzdrwpn.js:803", () => {
   CHANNEL_PERMISSION_REQUEST_METHOD = "notifications/claude/channel/permission_request";
   CHANNEL_META_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 });
-//@ chunk-0zzdrwpn.js:1131-1488 facade-exports = wrapChannelMessage (0.335)
+//@ chunk-0zzdrwpn.js:1131-1488 facade-exports (2.1.88 match: wrapChannelMessage, 0.335)
 /**
  * wrapChannelMessage：把 channel 推送包装成 <channel source="server" k="v"…>内容</channel> 文本；非标识符的 meta 键丢弃并告警，值做 XML 转义。
  */
@@ -103,7 +103,7 @@ function partitionBy(items, predicate) {
   for (let item of items) (predicate(item) ? matching : rest).push(item);
   return [matching, rest];
 }
-//@ chunk-0zzdrwpn.js:1564-1654 facade-exports = getEffectiveChannelAllowlist (0.729)
+//@ chunk-0zzdrwpn.js:1564-1654 facade-exports (2.1.88 match: getEffectiveChannelAllowlist, 0.729)
 /**
  * getEffectiveChannelAllowlist：组织策略 allowedChannelPlugins 优先，否则用 GrowthBook ledger 列表，返回 {entries, source}。
  */
@@ -125,7 +125,7 @@ function getEffectiveChannelAllowlist(allowedChannelPlugins) {
 function isChannelGateHardRevocation(kind) {
   return kind === "provider" || kind === "disabled" || kind === "capability" || kind === "era";
 }
-//@ chunk-0zzdrwpn.js:1737-1875 facade-exports = isBigQueryMetricsEnabled (0.824)
+//@ chunk-0zzdrwpn.js:1737-1875 facade-exports (2.1.88 match: isBigQueryMetricsEnabled, 0.824)
 /**
  * 判断组织策略是否禁止 channel：一方订阅时 team/enterprise 账号必须显式 channelsEnabled=true；其他情况策略对象存在且未开启即禁止。旧版名 isBigQueryMetricsEnabled 配错。
  */
@@ -139,7 +139,7 @@ function isChannelsPolicyBlocked(policySettings) {
   }
   return policySettings !== null && policySettings.channelsEnabled !== true;
 }
-//@ chunk-0zzdrwpn.js:1875-2042 facade-exports = findChannelEntry (0.886)
+//@ chunk-0zzdrwpn.js:1875-2042 facade-exports (2.1.88 match: findChannelEntry, 0.886)
 /**
  * findChannelEntry：在本会话 --channels 列表中查找服务器条目（server 条目按名字；plugin 条目按 plugin:<name>:… 前缀）。
  */
@@ -153,7 +153,7 @@ function findChannelEntry(serverName, channels) {
           parts[1] === pluginDisplayKey(channel.name, `${channel.name}@${channel.marketplace}`)),
   );
 }
-//@ chunk-0zzdrwpn.js:2042-2220 facade-exports = _temp2 (0.669)
+//@ chunk-0zzdrwpn.js:2042-2220 facade-exports (2.1.88 match: _temp2, 0.669)
 /**
  * 判断 channel 白名单条目是否指向给定插件：条目解析出的 marketplace 必须相同，插件名在 dev 模式下精确比较、否则大小写不敏感比较。
  */
@@ -166,7 +166,7 @@ function isPluginNamedByChannelEntry(pluginSource, entry) {
     (entry.dev ? installed.name === expectedName : pluginNamesEqual(installed.name, expectedName))
   );
 }
-//@ chunk-0zzdrwpn.js:2220-4002 facade-exports = gateChannelServer (0.734)
+//@ chunk-0zzdrwpn.js:2220-4002 facade-exports (2.1.88 match: gateChannelServer, 0.734)
 /**
  * gateChannelServer：决定是否为服务器注册 channel 通知。依次检查 claude/channel 能力、modern 协议（无主动通知路径）、一方 API、功能开关、组织策略 channelsEnabled、--channels 列表、插件市场与 allowlist（allowedChannelPlugins 或 GrowthBook tengu_harbor_ledger），返回 {action:'register'} 或 {action:'skip',kind,reason}。
  */

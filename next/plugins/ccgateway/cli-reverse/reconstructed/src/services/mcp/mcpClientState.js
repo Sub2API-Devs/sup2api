@@ -78,7 +78,7 @@ function setMcpClientInAppState(state, serverName, result, options) {
     },
   };
 }
-//@ chunk-efym3dq7.js:1154-1314 placement = findChromeClient (0.769)
+//@ chunk-efym3dq7.js:1154-1314 placement (2.1.88 match: findChromeClient, 0.769)
 function findChromeClient(dynamicMcpState, serverName, tools) {
   if (!dynamicMcpState.clients.some((client) => client.name === serverName && client.type === "connected"))
     return dynamicMcpState;

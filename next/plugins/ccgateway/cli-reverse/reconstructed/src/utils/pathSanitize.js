@@ -61,7 +61,7 @@ function isNetworkPathAfterNormalize(normalized) {
     (escapesParentDir(normalized) && isNetworkRelatedPath("/" + normalized))
   );
 }
-//@ chunk-yr49hy5m.js:645-717 placement = resolveCwdReentry (0.844)
+//@ chunk-yr49hy5m.js:645-717 placement (2.1.88 match: resolveCwdReentry, 0.844)
 /**
  * （旧版名配错）规范化后是否跳出上级目录（.. 或 ../ 开头）。
  */

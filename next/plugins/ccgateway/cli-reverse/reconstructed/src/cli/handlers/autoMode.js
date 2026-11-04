@@ -60,7 +60,7 @@ import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { sideQueryWithCounter } from "../../utils/sideQuery.js";
 
-//@ chunk-aepeg2w5.js:851418-851673 fingerprint = formatRulesForCritique (0.557)
+//@ chunk-aepeg2w5.js:851418-851673 fingerprint (2.1.88 match: formatRulesForCritique, 0.557)
 function formatRulesForCritique_2(status) {
   if (status.code !== 0) return;
   let changedCount = 0;
@@ -86,7 +86,7 @@ function ruleLabelOf(rule) {
   let separatorIndex = rule.search(/[:[]/);
   return (separatorIndex === -1 ? rule : rule.slice(0, separatorIndex)).trimEnd();
 }
-//@ chunk-2a8yx6fc.js:11389-11595 fingerprint = autoModeConfigHandler (0.842)
+//@ chunk-2a8yx6fc.js:11389-11595 fingerprint (2.1.88 match: autoModeConfigHandler, 0.842)
 /**
  * 合并用户 autoMode 设置与内置默认规则（allow/soft_deny/hard_deny/environment 四段）。
  */
@@ -100,7 +100,7 @@ function autoModeConfigHandler_2(autoModeConfig) {
     environment: expandDefaultsPlaceholder(autoModeConfig?.environment, config.environment, identity),
   };
 }
-//@ chunk-t2bgh7t8.js:15206-15307 placement = renderAndRun (1)
+//@ chunk-t2bgh7t8.js:15206-15307 placement (2.1.88 match: renderAndRun, 1)
 async function renderAndRun(root, element) {
   root.render(
     jsxProd_default(RenderOnceAndExit, {
@@ -120,7 +120,7 @@ async function runAutoModeDefaults(root, filter) {
   );
   await logFeatureOkAsync("cli_auto_mode_defaults");
 }
-//@ chunk-t2bgh7t8.js:15398-15684 placement = autoModeConfigHandler (0.842)
+//@ chunk-t2bgh7t8.js:15398-15684 placement (2.1.88 match: autoModeConfigHandler, 0.842)
 function autoModeConfigHandler_3(defaultExternalAutoModeRules, filterArg) {
   let normalizeLabel = (label) =>
     label
@@ -291,7 +291,7 @@ For each rule, evaluate:
 4. **Actionability**: Is the rule specific enough for the classifier to act on?
 
 Be concise and constructive. Only comment on rules that could be improved. If all rules look good, say so.`;
-//@ chunk-t2bgh7t8.js:19793-21319 fingerprint = autoModeCritiqueHandler (0.525)
+//@ chunk-t2bgh7t8.js:19793-21319 fingerprint (2.1.88 match: autoModeCritiqueHandler, 0.525)
 /**
  * claude auto-mode critique：把用户的 autoMode 规则发给模型点评（CRITIQUE_SYSTEM_PROMPT）。
  */

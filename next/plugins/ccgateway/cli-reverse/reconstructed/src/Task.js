@@ -12,7 +12,7 @@ import { randomBytes } from "crypto";
 import { isDiskless } from "./bootstrap/state.js";
 import { getTaskOutputPath } from "./utils/task/diskOutput.js";
 
-//@ chunk-c0cahhqh.js:1040-1298 fingerprint = TASK_ID_PREFIXES (0.673)
+//@ chunk-c0cahhqh.js:1040-1298 fingerprint (2.1.88 match: TASK_ID_PREFIXES, 0.673)
 /**
  * 任务类型 → ID 前缀字母（b/a/r/t/w/m/s/k/d/e/n/p），以及 ID 随机部分用的 36 进制字母表。
  */
@@ -44,7 +44,7 @@ function isTaskIdOfType(taskType, taskId) {
       .every((char) => TASK_ID_ALPHABET.includes(char))
   );
 }
-//@ chunk-c0cahhqh.js:1583-1674 callgraph-witnessed = generateTaskId (0)
+//@ chunk-c0cahhqh.js:1583-1674 callgraph-witnessed (2.1.88 match: generateTaskId, 0)
 /**
  * 生成任务 ID：类型前缀（未知类型用 x）+ 8 个随机 36 进制字符（crypto.randomBytes）。
  */
@@ -55,7 +55,7 @@ function generateTaskId(type) {
   for (let i = 0; i < 8; i++) id_2 += TASK_ID_ALPHABET[bytes[i] % TASK_ID_ALPHABET.length];
   return id_2;
 }
-//@ chunk-c0cahhqh.js:1674-1834 fingerprint = createTaskStateBase (1)
+//@ chunk-c0cahhqh.js:1674-1834 fingerprint (2.1.88 match: createTaskStateBase, 1)
 /**
  * 构造所有任务共有的基础状态：status=pending、startTime、outputFile（非远程模式才有，指向任务输出文件）、outputOffset=0、notified=false。
  */
@@ -74,7 +74,7 @@ function createTaskStateBase(id, type, description, toolUseId) {
     notified: false,
   };
 }
-//@ chunk-ah34pb7m.js:11803-11869 fingerprint = isTerminalTaskStatus (1)
+//@ chunk-ah34pb7m.js:11803-11869 fingerprint (2.1.88 match: isTerminalTaskStatus, 1)
 /**
  * 任务状态是否为终态（completed / failed / killed）。
  */

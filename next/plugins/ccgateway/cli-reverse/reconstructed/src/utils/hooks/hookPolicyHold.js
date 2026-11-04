@@ -185,7 +185,7 @@ function hooksNotRunningMessage() {
     return message;
   }
 }
-//@ chunk-e6aww6q8.js:754359-754458 placement = createMemoryFileCanUseTool (0.484)
+//@ chunk-e6aww6q8.js:754359-754458 placement (2.1.88 match: createMemoryFileCanUseTool, 0.484)
 /**
  * 只允许 Edit 指定记忆文件的 canUseTool（会话记忆更新代理用）。
  */

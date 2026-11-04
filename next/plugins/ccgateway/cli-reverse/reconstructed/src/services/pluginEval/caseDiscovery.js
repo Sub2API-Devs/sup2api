@@ -71,7 +71,7 @@ import { getClaudeConfigDir } from "../../utils/envUtils.js";
 import { isUncOrDeviceSpelling } from "../../utils/fsJunctions.js";
 import { enumeratePluginMcpServers } from "./mocks/pluginMcpEnumeration.js";
 
-//@ chunk-qchp9vrd.js:75370-75527 placement = BASH_LIST_COMMANDS (0.768)
+//@ chunk-qchp9vrd.js:75370-75527 placement (2.1.88 match: BASH_LIST_COMMANDS, 0.768)
 /**
  * （切分错误，属插件评测）按 "模式:目录" 缓存插件目录的属主/权限检查结果；已信任时直接 true。
  */
@@ -766,7 +766,7 @@ function matchesCaseFilter(caseSpec, filter) {
   }
   return true;
 }
-//@ chunk-qchp9vrd.js:86190-86318 placement = urlPatternToRegex (1)
+//@ chunk-qchp9vrd.js:86190-86318 placement (2.1.88 match: urlPatternToRegex, 1)
 function urlPatternToRegex(caseGlob, name) {
   return new RegExp(
     `^${caseGlob
@@ -1101,7 +1101,7 @@ async function pathExistsLstat(filePath) {
     return !isNotFoundErrno_3(error);
   }
 }
-//@ chunk-qchp9vrd.js:91399-91460 placement = isRealPathWithinTeamDir (1)
+//@ chunk-qchp9vrd.js:91399-91460 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundErrno_3(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";
@@ -1123,7 +1123,7 @@ async function parseCaseYamlFile(caseFilePath) {
   if (typeof parsed !== "object" || Array.isArray(parsed)) throw Error("case.yaml must be a YAML object");
   return parsed;
 }
-//@ chunk-qchp9vrd.js:91776-91809 placement = loadMagicDocsPrompt (0.476)
+//@ chunk-qchp9vrd.js:91776-91809 placement (2.1.88 match: loadMagicDocsPrompt, 0.476)
 var MAGIC_DOCS_PROMPT_FILES = ["case.yaml", "prompt.md"];
 //@ chunk-qchp9vrd.js:91809-91846 placement
 function isMagicDocsPromptFile(basename) {

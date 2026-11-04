@@ -85,7 +85,7 @@ function isCmdExecutableName(name) {
   );
   return /^cmd(?:\.exe)?$/i.test(sliced);
 }
-//@ chunk-v0yfsee9.js:22330-22447 fingerprint = SAFE_PATH_ELEMENT_TYPES (0.33)
+//@ chunk-v0yfsee9.js:22330-22447 fingerprint (2.1.88 match: SAFE_PATH_ELEMENT_TYPES, 0.33)
 function classifyElementType(elementType) {
   if (elementType === undefined || elementType === "StringConstant") return "literal";
   return elementType === "ExpandableString" ? "expands" : "unknown";
@@ -573,7 +573,7 @@ function scanPsVariableEnd(text, startIndex) {
   while (index < text.length && /[\p{L}\p{Nd}_:]/u.test(text[index])) index++;
   return index === startIndex + 1 ? startIndex : index;
 }
-//@ chunk-v0yfsee9.js:28781-39050 fingerprint = CMDLET_PATH_CONFIG (0.974)
+//@ chunk-v0yfsee9.js:28781-39050 fingerprint (2.1.88 match: CMDLET_PATH_CONFIG, 0.974)
 /**
  * 每个 cmdlet 的路径参数配置 CMDLET_PATH_CONFIG：操作类型（read/write/create）、路径参数、仅叶名参数、已知开关和带值参数、位置参数跳过数，覆盖 Set/Add/Get-Content、Copy/Move/Remove/New-Item、Out-File、Export-*、Compress/Expand-Archive、Invoke-WebRequest 等。
  */
@@ -1087,7 +1087,7 @@ function hasComplexColonValue(rawValue) {
     rawValue_2.includes("$")
   );
 }
-//@ chunk-v0yfsee9.js:40018-40169 layout = formatDirectoryList (1)
+//@ chunk-v0yfsee9.js:40018-40169 layout (2.1.88 match: formatDirectoryList, 1)
 function formatDirectoryList(directories) {
   let dirCount = directories.length;
   if (dirCount <= MAX_DIRS_TO_LIST) return directories.map((dir) => `'${dir}'`).join(", ");
@@ -1160,7 +1160,7 @@ function resolveDangerousRemovalPath(rawPath, cwd) {
 function isUnchangedByBasicNormalize(pathArg) {
   return stripPsParameterPrefix(pathArg) === pathArg;
 }
-//@ chunk-v0yfsee9.js:40881-41126 fingerprint = dangerousRemovalDeny (0.879)
+//@ chunk-v0yfsee9.js:40881-41126 fingerprint (2.1.88 match: dangerousRemovalDeny, 0.879)
 /**
  * 构造"删除受保护系统路径"的 deny 结果（safetyCheck，分类器不可批准）。
  */
@@ -1270,7 +1270,7 @@ function checkCmdRemovalOfProtectedPath(element, cwd, compoundCommandHasCd) {
   }
   return;
 }
-//@ chunk-v0yfsee9.js:42674-42919 fingerprint = checkDenyRuleForGuessedPath (1)
+//@ chunk-v0yfsee9.js:42674-42919 fingerprint (2.1.88 match: checkDenyRuleForGuessedPath, 1)
 /**
  * 对猜测出的路径拼写检查 read/edit deny 规则，返回命中的规则。
  */
@@ -1290,7 +1290,7 @@ function checkDenyRuleForGuessedPath(strippedPath, cwd, toolPermissionContext, o
   }
   return null;
 }
-//@ chunk-v0yfsee9.js:42919-46978 fingerprint = validatePath (0.794)
+//@ chunk-v0yfsee9.js:42919-46978 fingerprint (2.1.88 match: validatePath, 0.794)
 /**
  * PowerShell 路径校验：对提供程序路径、反引号转义、:: 前缀等多种拼写先查 deny 规则；再按操作类型判断是否在允许的工作目录内（含读封锁、UNC、设备路径等）。
  */
@@ -1536,7 +1536,7 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
     resolvedPath,
   };
 }
-//@ chunk-v0yfsee9.js:46978-47149 layout = getGlobBaseDirectory (1)
+//@ chunk-v0yfsee9.js:46978-47149 layout (2.1.88 match: getGlobBaseDirectory, 1)
 function getGlobBaseDirectory(filePath) {
   let globMatch = firstGlobCharIndex(filePath);
   if (globMatch === -1) return filePath;
@@ -1564,7 +1564,7 @@ deferInit("chunk-v0yfsee9.js:47149", () => {
     "test-path",
   ]);
 });
-//@ chunk-v0yfsee9.js:47323-48577 fingerprint = extractPathsFromCommand (0.595)
+//@ chunk-v0yfsee9.js:47323-48577 fingerprint (2.1.88 match: extractPathsFromCommand, 0.595)
 /**
  * 按 CMDLET_PATH_CONFIG 从 cmdlet 参数中提取路径：识别参数缩写、冒号绑定值、位置参数，标记无法验证的参数（变量、表达式）与可选写入。
  */
@@ -1674,7 +1674,7 @@ function extractPathsFromCommand(cmd) {
     optionalWrite: config.optionalWrite ?? false,
   };
 }
-//@ chunk-v0yfsee9.js:48577-48932 fingerprint = checkPathConstraints (0.962)
+//@ chunk-v0yfsee9.js:48577-48932 fingerprint (2.1.88 match: checkPathConstraints, 0.962)
 /**
  * PowerShell 路径约束：逐条语句检查，deny 立即返回，优先返回安全检查类 ask。
  */
@@ -1804,7 +1804,7 @@ function checkNativeCommandReads(command, cwd, permissionContext, hasCd) {
   }
   return runtimeAsk;
 }
-//@ chunk-v0yfsee9.js:50520-50839 sole-consumer = isItemTypeParamAbbrev (0.791)
+//@ chunk-v0yfsee9.js:50520-50839 sole-consumer (2.1.88 match: isItemTypeParamAbbrev, 0.791)
 /**
  * New-Item 参数中是否同时有 -ItemType *link/junction 与 -Value（创建链接到指定目标）。
  */
@@ -1835,7 +1835,7 @@ function askOutsideReadBlock(blockedPath, decisionReason, blockedPath_2) {
     decisionReason,
   };
 }
-//@ chunk-v0yfsee9.js:51261-58675 fingerprint = checkPathConstraintsForStatement (0.91)
+//@ chunk-v0yfsee9.js:51261-58675 fingerprint (2.1.88 match: checkPathConstraintsForStatement, 0.91)
 /**
  * 单条 PowerShell 语句的路径约束：cd 复合命令要询问；对每个命令提取路径并校验（读封锁、git 安全相关写 cmdlet、受保护删除路径、cmd /c 删除、管道/嵌套命令、重定向目标），返回 deny/ask/passthrough。
  */

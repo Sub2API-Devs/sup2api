@@ -78,7 +78,7 @@ import { formatFileSize } from "../../utils/format.js";
 import { replaceLineBreaks } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4663432-4664942 fingerprint = outputSchema (0.748)
+//@ chunk-e6aww6q8.js:4663432-4664942 fingerprint (2.1.88 match: outputSchema, 0.748)
 var notebookEditInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var notebookEditOutputSchema;
 deferInit("chunk-e6aww6q8.js:4663432", () => {
@@ -122,7 +122,7 @@ deferInit("chunk-e6aww6q8.js:4663432", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:4665018-4672012 fingerprint = NotebookEditTool (0.807)
+//@ chunk-e6aww6q8.js:4665018-4672012 fingerprint (2.1.88 match: NotebookEditTool, 0.807)
 /**
  * NotebookEdit 工具定义（name "NotebookEdit"，shouldDefer）。替换/插入/删除单元；必须先 Read 且未被修改；按 cell_id 或数字下标定位；nbformat 4.5 及以上时新单元生成 8 位 id；code 单元替换后清空输出；写前检查大小上限。
  */

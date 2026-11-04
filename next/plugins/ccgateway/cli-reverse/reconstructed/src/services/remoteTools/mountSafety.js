@@ -117,7 +117,7 @@ function classifyMountForServing(cwd, otherSide) {
     anyPairSameOrUnder([...windowsPowerShellProfileDirs(), ...windowsAutoRunDirs()], bases)
   );
 }
-//@ chunk-e2fknt7w.js:19169-19284 placement = execTmux (0.805)
+//@ chunk-e2fknt7w.js:19169-19284 placement (2.1.88 match: execTmux, 0.805)
 function filterWslMountedPaths(paths) {
   return getPlatform() === "wsl"
     ? paths.filter((path) => {
@@ -190,7 +190,7 @@ function isRemoteUncHost(path) {
 }
 //@ chunk-e2fknt7w.js:20000-20091 placement
 var IPV4_PATTERN = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d?)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-//@ chunk-e2fknt7w.js:20376-20453 affinity = execTmux (1)
+//@ chunk-e2fknt7w.js:20376-20453 affinity (2.1.88 match: execTmux, 1)
 function touchesWindowsRootFromWsl(args, opts) {
   if (getPlatform() !== "wsl") return false;
   return args.some((arg) => windowsProfileRoots(arg, opts).some(isRootOrSensitiveProfileAncestor));
@@ -294,7 +294,7 @@ deferInit("chunk-e2fknt7w.js:21539", () => {
   windowsProfileMountCache = identity(new Map(), (cache) => cache.clear());
   ROOT_MOUNT_POINTS = new Set(["/", "/mnt"]);
 });
-//@ chunk-e2fknt7w.js:21598-21732 placement = isRealPathWithinTeamDir (1)
+//@ chunk-e2fknt7w.js:21598-21732 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function hasWindowsUserProfileDirs(realCandidate) {
   return WINDOWS_PROFILE_ROOT_NAMES.some((name) => {
     try {

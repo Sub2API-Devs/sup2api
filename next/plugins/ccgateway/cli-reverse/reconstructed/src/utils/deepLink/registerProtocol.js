@@ -87,7 +87,7 @@ function resolveLaunchTarget(options = {}) {
     target: scriptPath,
   };
 }
-//@ chunk-qrnm62fg.js:922-961 callgraph-fingerprint = resolveClaudePath (0.328)
+//@ chunk-qrnm62fg.js:922-961 callgraph-fingerprint (2.1.88 match: resolveClaudePath, 0.328)
 /**
  * 本地安装的 claude 路径 <用户 bin 目录>/claude。
  */
@@ -138,7 +138,7 @@ async function findLatestInstalledVersion() {
 function isRunningFromVersionsDir() {
   return process.execPath.startsWith(join(getXDGDataHome(), "claude", "versions") + sep);
 }
-//@ chunk-fb29jded.js:701-922 callgraph-witnessed = APP_NAME (0.232)
+//@ chunk-fb29jded.js:701-922 callgraph-witnessed (2.1.88 match: APP_NAME, 0.232)
 /**
  * 协议处理器常量：macOS 包 ~/Applications/Claude Code URL Handler.app（bundle id com.anthropic.claude-code-url-handler）、Linux .desktop 文件名。
  */
@@ -156,35 +156,35 @@ deferInit("chunk-fb29jded.js:701", () => {
   MACOS_APP_DIR = pathModule.join(osModule.homedir(), "Applications", MACOS_APP_NAME);
   MACOS_SYMLINK_PATH = pathModule.join(MACOS_APP_DIR, "Contents", "MacOS", "claude");
 });
-//@ chunk-fb29jded.js:922-973 fingerprint = linuxDesktopPath (1)
+//@ chunk-fb29jded.js:922-973 fingerprint (2.1.88 match: linuxDesktopPath, 1)
 /**
  * Linux .desktop 文件路径 $XDG_DATA_HOME/applications/claude-code-url-handler.desktop。
  */
 function linuxDesktopPath() {
   return pathModule.join(getXDGDataHome(), "applications", DESKTOP_FILE_NAME);
 }
-//@ chunk-fb29jded.js:973-1068 fingerprint = WINDOWS_REG_KEY (0.667)
+//@ chunk-fb29jded.js:973-1068 fingerprint (2.1.88 match: WINDOWS_REG_KEY, 0.667)
 /**
  * Windows 注册表键 HKCU\Software\Classes\claude-cli 及 shell\open\command；注册失败后的退避 24h。
  */
 var WINDOWS_REG_KEY = `HKEY_CURRENT_USER\\Software\\Classes\\${paths}`;
 var WINDOWS_COMMAND_KEY = `${WINDOWS_REG_KEY}\\shell\\open\\command`;
 var FAILURE_BACKOFF_MS = 86400000;
-//@ chunk-fb29jded.js:1068-1118 fingerprint = linuxExecLine (1)
+//@ chunk-fb29jded.js:1068-1118 fingerprint (2.1.88 match: linuxExecLine, 1)
 /**
  * Linux .desktop 的 Exec 行："<claude>" --handle-uri %u。
  */
 function linuxExecLine(claudePath) {
   return `Exec="${claudePath}" --handle-uri %u`;
 }
-//@ chunk-fb29jded.js:1118-1165 fingerprint = windowsCommandValue (1)
+//@ chunk-fb29jded.js:1118-1165 fingerprint (2.1.88 match: windowsCommandValue, 1)
 /**
  * Windows 注册表命令值："<claude>" --handle-uri "%1"。
  */
 function windowsCommandValue(claudePath) {
   return `"${claudePath}" --handle-uri "%1"`;
 }
-//@ chunk-fb29jded.js:1165-2336 fingerprint = registerMacos (1)
+//@ chunk-fb29jded.js:1165-2336 fingerprint (2.1.88 match: registerMacos, 1)
 /**
  * macOS：重建 URL Handler.app（Info.plist 声明 CFBundleURLSchemes claude-cli、LSBackgroundOnly），把 MacOS/claude 符号链接到 claude 可执行文件，并用 lsregister -R 注册。
  */
@@ -240,7 +240,7 @@ async function registerMacos(claudePath) {
   );
   logForDebugging(`Registered ${paths}:// protocol handler at ${MACOS_APP_DIR}`);
 }
-//@ chunk-fb29jded.js:2336-2844 fingerprint = registerLinux (1)
+//@ chunk-fb29jded.js:2336-2844 fingerprint (2.1.88 match: registerLinux, 1)
 /**
  * Linux：写 .desktop（MimeType x-scheme-handler/claude-cli），有 xdg-mime 时设为默认处理器。
  */
@@ -273,7 +273,7 @@ MimeType=x-scheme-handler/${paths};
   }
   logForDebugging(`Registered ${paths}:// protocol handler at ${linuxDesktopPath()}`);
 }
-//@ chunk-fb29jded.js:2844-3184 fingerprint = registerWindows (1)
+//@ chunk-fb29jded.js:2844-3184 fingerprint (2.1.88 match: registerWindows, 1)
 /**
  * Windows：reg add 写 URL 协议键与 open 命令。
  */
@@ -293,7 +293,7 @@ async function registerWindows(claudePath) {
   }
   logForDebugging(`Registered ${paths}:// protocol handler in Windows registry`);
 }
-//@ chunk-fb29jded.js:3184-3379 callgraph-witnessed = registerProtocolHandler (0.599)
+//@ chunk-fb29jded.js:3184-3379 callgraph-witnessed (2.1.88 match: registerProtocolHandler, 0.599)
 /**
  * 按平台注册 claude-cli:// 协议处理器（linux 构建常量折叠为 registerLinux）。
  */
@@ -313,7 +313,7 @@ async function registerProtocolHandler(claudePath) {
       throw Error("Unsupported platform: linux");
   }
 }
-//@ chunk-fb29jded.js:3474-3767 fingerprint = isProtocolHandlerCurrent (0.972)
+//@ chunk-fb29jded.js:3474-3767 fingerprint (2.1.88 match: isProtocolHandlerCurrent, 0.972)
 /**
  * 检查已注册的处理器是否指向当前 claude 路径（macOS 读符号链接、Linux 读 .desktop、Windows 查注册表）。
  */
@@ -337,7 +337,7 @@ async function isProtocolHandlerCurrent(claudePath) {
     return false;
   }
 }
-//@ chunk-fb29jded.js:3767-4756 fingerprint = ensureDeepLinkProtocolRegistered (0.698)
+//@ chunk-fb29jded.js:3767-4756 fingerprint (2.1.88 match: ensureDeepLinkProtocolRegistered, 0.698)
 /**
  * 后台自动注册深链接协议：设置 disableDeepLinkRegistration="disable" 时跳过；已是最新则跳过；24h 内失败过（失败标记文件 .deep-link-register-failed 或 storageV5 state）则跳过；EACCES/ENOSPC 失败时写失败标记。
  */

@@ -158,7 +158,7 @@ import { restoreSkillStateFromMessages } from "../../utils/conversationRecovery.
 import { getSubagentSteer } from "../../utils/model/subagentSteer.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-csq9ftr9.js:9850-9976 fingerprint = isOfficialMarketplaceSkill (1)
+//@ chunk-csq9ftr9.js:9850-9976 fingerprint (2.1.88 match: isOfficialMarketplaceSkill, 1)
 /**
  * skill 是否来自官方市场插件。
  */
@@ -166,7 +166,7 @@ function isOfficialMarketplaceSkill(command) {
   if (command.source !== "plugin" || !command.pluginInfo?.repository) return false;
   return isOfficialMarketplaceName_3(parsePluginIdentifier_2(command.pluginInfo.repository).marketplace);
 }
-//@ chunk-e6aww6q8.js:2804890-2805133 fingerprint = getAllCommands (0.414)
+//@ chunk-e6aww6q8.js:2804890-2805133 fingerprint (2.1.88 match: getAllCommands, 0.414)
 /**
  * 构造工具名 → 来源（mcp / static）映射，额外登记 DeferredToolPlaceholder 为 static；供 API 层判定工具类别。
  */
@@ -245,7 +245,7 @@ function listSkillCommands(commands, isMainAgent) {
   let filtered = commands.filter(isSkillToolCommand);
   return isMainAgent ? filterCommandsByAllowlist(filtered, getSessionSkillAllowlist()) : filtered;
 }
-//@ chunk-a5k9jscj.js:4430-4535 sole-consumer = formatCommandDescription (0.874)
+//@ chunk-a5k9jscj.js:4430-4535 sole-consumer (2.1.88 match: formatCommandDescription, 0.874)
 /**
  * 插件 prompt skill 是否是通过别名（不是正名）被命中的。
  */
@@ -371,7 +371,7 @@ function userTypedSkillThisTurn(commandName, toolContext) {
   }
   return false;
 }
-//@ chunk-a5k9jscj.js:6044-10399 fingerprint = executeForkedSkill (0.557)
+//@ chunk-a5k9jscj.js:6044-10399 fingerprint (2.1.88 match: executeForkedSkill, 0.557)
 /**
  * 以子代理执行 fork 型 skill：准备 fork 上下文（工具集、权限层、文件读状态、技能正文），可选后台运行（返回 "Running in the background as @名字"）；前台用 runAgent 跑完，转发子代理进度（skill_progress），最终返回 forked 结果文本与首行 toolsUsedLine。
  */
@@ -669,7 +669,7 @@ async function executeForkedSkill(
     clearInvokedSkillsForAgent(agentId);
   }
 }
-//@ chunk-a5k9jscj.js:10399-11777 fingerprint = outputSchema (0.662)
+//@ chunk-a5k9jscj.js:10399-11777 fingerprint (2.1.88 match: outputSchema, 0.662)
 /**
  * Skill 输入 schema（skill 名、args 可选）与输出 schema（inline：allowedTools/model/readOnly；forked：agentId/result/background/toolsUsedLine）。
  */
@@ -727,7 +727,7 @@ function makeSkillCommandSource(toolUseContext) {
     mcpClients: () => currentMcpClients(toolUseContext),
   };
 }
-//@ chunk-a5k9jscj.js:11888-15630 fingerprint = SkillTool (0.407)
+//@ chunk-a5k9jscj.js:11888-15630 fingerprint (2.1.88 match: SkillTool, 0.407)
 /**
  * Skill 调用主体（runEngine 执行）：停止中的代理不能再启动 skill；解析 skill 名（重名报歧义），设置 options.activeSkill；fork 型 skill（且非只读加载）交给 executeForkedSkill；否则 processPromptSlashCommand 展开 skill 正文为新消息（过滤进度与命令标签消息，标注 toolUseID），记录遥测，返回 allowedTools/模型/effort 三类 contextLayers 供后续回合生效。
  */
@@ -954,7 +954,7 @@ async function runSkillInvocation({
     if (isReadOnlyLoad || !completed) toolUseContext.options.activeSkill = activeSkill;
   }
 }
-//@ chunk-a5k9jscj.js:15630-25436 fingerprint = SAFE_SKILL_PROPERTIES (0.302)
+//@ chunk-a5k9jscj.js:15630-25436 fingerprint (2.1.88 match: SAFE_SKILL_PROPERTIES, 0.302)
 /**
  * Skill 工具定义（name "Skill"，backgrounding never，maxResultSizeChars 100000；isEnabled 为 !Wb()）。validateInput：去前导 /，解析命令（可能需要从远端物化或加载定义），拒绝 MCP 来源 skill、被同步否决或主机目录隐藏的 skill，未找到时给出近似名/目录作用域变体/插件加载错误提示，拒绝在自己 fork 的上下文里递归调用，并用 jKe 检查 disable-model-invocation、未加白名单等。checkPermissions：Skill deny 规则 → MCP skill 拒绝 → ask 规则 → allow 规则（含插件边界 held-back 情况）→ 只含安全属性的 prompt skill 或协调者只读加载直接允许 → 否则询问并建议加 Skill(name) 或 Skill(name:*) 规则。call 通过 runEngine 执行 runSkillInvocation。
  */
@@ -1645,7 +1645,7 @@ function dedupeRenderedSkillContent({
   if (elided) logForDebugging(`SkillTool eliding byte-identical re-invocation of skill ${commandName}`);
   return mapped;
 }
-//@ chunk-a5k9jscj.js:26706-26818 placement = tagMessagesWithToolUseID (1)
+//@ chunk-a5k9jscj.js:26706-26818 placement (2.1.88 match: tagMessagesWithToolUseID, 1)
 /**
  * tagMessagesWithToolUseID：给 user 消息加 sourceToolUseID（技能/命令展开出的消息归属到发起它的工具调用）。
  */
@@ -1660,7 +1660,7 @@ function tagMessagesWithToolUseID(messages, toolUseID) {
     return m;
   });
 }
-//@ chunk-a5k9jscj.js:26818-26944 placement = countToolCallsSince (1)
+//@ chunk-a5k9jscj.js:26818-26944 placement (2.1.88 match: countToolCallsSince, 1)
 function findToolUseIdByName(messages, sinceUuid) {
   let found = messages.message.content.find((block) => block.type === "tool_use" && block.name === sinceUuid);
   return found && found.type === "tool_use" ? found.id : undefined;

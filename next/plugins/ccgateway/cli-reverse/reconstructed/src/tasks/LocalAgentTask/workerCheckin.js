@@ -43,7 +43,7 @@ function ticksUntilCheckin(checkinCount, scheduleMs, pollMs) {
   let delayMs = scheduleMs[Math.min(checkinCount, scheduleMs.length - 1)];
   return Math.ceil(delayMs / pollMs);
 }
-//@ chunk-e6aww6q8.js:4709812-4709911 placement = isPanelAgentTask (0.77)
+//@ chunk-e6aww6q8.js:4709812-4709911 placement (2.1.88 match: isPanelAgentTask, 0.77)
 /**
  * 运行中的、可见的子代理任务：local_agent、非观察者、非 main-session、未到终态。
  */
@@ -60,7 +60,7 @@ function isRunningVisibleSubagent(task) {
  * 表示"在等子工作"的保活原因前缀：bash:、agent:、workflow:。
  */
 var CHILD_WORK_KEEPALIVE_PREFIXES = ["bash:", "agent:", "workflow:"];
-//@ chunk-e6aww6q8.js:4709950-4710095 placement = isPanelAgentTask (0.77)
+//@ chunk-e6aww6q8.js:4709950-4710095 placement (2.1.88 match: isPanelAgentTask, 0.77)
 /**
  * 子代理已停但仍有子工作（保活原因以 bash:/agent:/workflow: 开头）在跑。
  */

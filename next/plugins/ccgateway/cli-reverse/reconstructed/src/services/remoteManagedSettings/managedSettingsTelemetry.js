@@ -162,7 +162,7 @@ deferInit("chunk-151tygw9.js:8716", () => {
     "sandbox.network.socksProxyPort",
   ]);
 });
-//@ chunk-151tygw9.js:8799-9295 placement = isInBundledMode (0.822)
+//@ chunk-151tygw9.js:8799-9295 placement (2.1.88 match: isInBundledMode, 0.822)
 function telemetrySafeValue(value, schema, path, knownTools) {
   switch (typeof value) {
     case "string":

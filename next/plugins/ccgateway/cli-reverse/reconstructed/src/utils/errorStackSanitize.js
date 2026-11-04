@@ -69,7 +69,7 @@ function unifyCliBundlePath(filePath) {
 }
 //@ chunk-sycgf9xs.js:1188-1260 layout
 var BUN_BUNDLE_PATH_RE = /^(?:\/(?:\$bunfs|~BUN)|\/?[A-Za-z]:[\\/](?:\$bunfs|~BUN))[\\/]/;
-//@ chunk-sycgf9xs.js:1260-1336 placement = formatUri (1)
+//@ chunk-sycgf9xs.js:1260-1336 placement (2.1.88 match: formatUri, 1)
 function formatUri_2(uri) {
   let path = uri.startsWith("file://") ? uri.slice(7) : uri;
   return BUN_BUNDLE_PATH_RE.test(path);

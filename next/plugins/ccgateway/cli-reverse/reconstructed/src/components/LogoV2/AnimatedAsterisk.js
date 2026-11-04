@@ -27,7 +27,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 function prefersReducedMotion() {
   return isReducedMotion(getInitialSettings_2().prefersReducedMotion);
 }
-//@ chunk-ag5x7vhf.js:83820-83873 layout = SETTLED_GREY (1)
+//@ chunk-ag5x7vhf.js:83820-83873 layout (2.1.88 match: SETTLED_GREY, 1)
 var ASTERISK_SPIN_MS; // deferred: uses toRGBColor (../Spinner/utils.js) of its import cycle while loading; runs once the cycle is complete
 var ASTERISK_TURN_COUNT;
 var ASTERISK_SETTLE_MS;
@@ -42,7 +42,7 @@ deferInit("chunk-ag5x7vhf.js:83820", () => {
     b: 153,
   });
 });
-//@ chunk-ag5x7vhf.js:83873-84754 fingerprint = AnimatedAsterisk (0.765)
+//@ chunk-ag5x7vhf.js:83873-84754 fingerprint (2.1.88 match: AnimatedAsterisk, 0.765)
 function AnimatedAsterisk(props) {
   let $ = useMemoCache(22);
   let { char } = props;
@@ -134,7 +134,7 @@ function AnimatedAsterisk(props) {
   } else spinner = $[21];
   return spinner;
 }
-//@ chunk-18hwfzwa.js:785671-785728 fingerprint = SETTLED_GREY (1)
+//@ chunk-18hwfzwa.js:785671-785728 fingerprint (2.1.88 match: SETTLED_GREY, 1)
 var ASTERISK_RAY_COUNT = 20;
 var ASTERISK_SPIN_PERIOD_MS = 4000;
 var ASTERISK_TICK_MS = ASTERISK_SPIN_PERIOD_MS / ASTERISK_RAY_COUNT;

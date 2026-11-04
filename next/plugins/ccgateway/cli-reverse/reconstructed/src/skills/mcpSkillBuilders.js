@@ -10,7 +10,7 @@
  */
 import { loaderSideHolder } from "../services/memorySync/syncFiles.js";
 
-//@ chunk-s61vbvea.js:90219-90368 fingerprint = getMCPSkillBuilders (0.795)
+//@ chunk-s61vbvea.js:90219-90368 fingerprint (2.1.88 match: getMCPSkillBuilders, 0.795)
 function getMCPSkillBuilders() {
   let loaderSide = loaderSideHolder.loaderSide;
   if (!loaderSide)

@@ -45,7 +45,7 @@ function useFastModeOnForModel(model, fallbackModel) {
 deferInit("chunk-18hwfzwa.js:538877", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:538881-540532 fingerprint = usePromptSuggestion (0.817)
+//@ chunk-18hwfzwa.js:538881-540532 fingerprint (2.1.88 match: usePromptSuggestion, 0.817)
 /**
  * 预测建议：tengu_prompt_suggestion 开启时显示模型生成的下一句建议，Tab/→ 接受，记录 shown/accepted/ignored。
  */

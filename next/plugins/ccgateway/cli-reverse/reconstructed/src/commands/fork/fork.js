@@ -90,7 +90,7 @@ function selectSessionEffort(state) {
 function selectToolPermissionContextAdditionalWorkingDirectories(state) {
   return state.toolPermissionContext.additionalWorkingDirectories;
 }
-//@ chunk-d62reftv.js:15889-15954 placement = createGetAppStateWithAllowedTools (1)
+//@ chunk-d62reftv.js:15889-15954 placement (2.1.88 match: createGetAppStateWithAllowedTools, 1)
 function getAlwaysAllowRules(appState) {
   return appState.toolPermissionContext.alwaysAllowRules;
 }

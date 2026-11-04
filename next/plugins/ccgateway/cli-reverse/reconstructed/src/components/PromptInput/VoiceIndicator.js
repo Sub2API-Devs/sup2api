@@ -28,7 +28,7 @@ import { roundToStep, toRGBColor, parseRGB } from "../Spinner/utils.js";
 function selectVoiceMode(state) {
   return state.settings.voice?.mode ?? "hold";
 }
-//@ chunk-tzghj6zv.js:20429-20484 placement = SETTLED_GREY (1)
+//@ chunk-tzghj6zv.js:20429-20484 placement (2.1.88 match: SETTLED_GREY, 1)
 var VOICE_DIM_COLOR = {
   r: 153,
   g: 153,
@@ -128,7 +128,7 @@ function KeepHoldingHint() {
   } else hintElement = $[0];
   return hintElement;
 }
-//@ chunk-tzghj6zv.js:21177-21690 fingerprint = ProcessingShimmer (0.589)
+//@ chunk-tzghj6zv.js:21177-21690 fingerprint (2.1.88 match: ProcessingShimmer, 0.589)
 function ProcessingShimmer() {
   let $ = useMemoCache(8);
   let settings = useSettingsState();
@@ -176,7 +176,7 @@ function ProcessingShimmer() {
   } else t2 = $[7];
   return t2;
 }
-//@ chunk-18hwfzwa.js:787748-787830 fingerprint = VoiceIndicatorImpl (0.678)
+//@ chunk-18hwfzwa.js:787748-787830 fingerprint (2.1.88 match: VoiceIndicatorImpl, 0.678)
 function VoiceIndicatorImpl(t0) {
   return t0.voiceState === "recording" || t0.voiceState === "processing";
 }

@@ -58,7 +58,7 @@ async function readEmbeddedInfoPlist(execPath) {
     await fd.close();
   }
 }
-//@ chunk-x4gcvpxy.js:1111-1560 placement = MACOS_SYMLINK_PATH (0.623)
+//@ chunk-x4gcvpxy.js:1111-1560 placement (2.1.88 match: MACOS_SYMLINK_PATH, 0.623)
 /**
  * （误归 deepLink）在 XDG data 下建 ClaudeCode.app：写内嵌 Info.plist、把当前可执行文件硬链接为 Contents/MacOS/claude，返回路径；失败返回 null。
  */
@@ -90,7 +90,7 @@ async function ensureMacAppBundleLink() {
     return null;
   }
 }
-//@ chunk-x4gcvpxy.js:1560-2021 fingerprint = detectHomebrew (0.303)
+//@ chunk-x4gcvpxy.js:1560-2021 fingerprint (2.1.88 match: detectHomebrew, 0.303)
 /**
  * macOS 上为后台进程准备稳定路径/TCC 相关处理（切分可疑：旧版名 detectHomebrew 不符）。
  */
@@ -117,11 +117,11 @@ async function detectHomebrew() {
     });
   } catch {}
 }
-//@ chunk-hntsfzas.js:2480-2555 fingerprint = isDistroFamily (1)
+//@ chunk-hntsfzas.js:2480-2555 fingerprint (2.1.88 match: isDistroFamily, 1)
 function isDistroFamily(osRelease, families) {
   return families.includes(osRelease.id) || osRelease.idLike.some((like) => families.includes(like));
 }
-//@ chunk-hntsfzas.js:2555-4839 fingerprint = getPackageManager (0.31)
+//@ chunk-hntsfzas.js:2555-4839 fingerprint (2.1.88 match: getPackageManager, 0.31)
 class getPackageManager_2 {
   sources;
   osRelease;
@@ -227,7 +227,7 @@ class getPackageManager_2 {
     return "unknown";
   }
 }
-//@ chunk-hntsfzas.js:4839-4993 fingerprint = getOsRelease (0.424)
+//@ chunk-hntsfzas.js:4839-4993 fingerprint (2.1.88 match: getOsRelease, 0.424)
 var osReleaseClientPerHost; // deferred: uses getPackageManager_2 of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-hntsfzas.js:4839", () => {
   osReleaseClientPerHost = new HostScoped(

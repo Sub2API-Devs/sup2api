@@ -18,7 +18,7 @@ import {
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-18hwfzwa.js:415192-415610 callgraph-fingerprint = PromptDialog (0.182)
+//@ chunk-18hwfzwa.js:415192-415610 callgraph-fingerprint (2.1.88 match: PromptDialog, 0.182)
 function PromptDialog(props) {
   let $ = useMemoCache(6);
   let { message, onCancel, escAction } = props;

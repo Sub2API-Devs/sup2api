@@ -67,7 +67,7 @@ deferInit("chunk-9ncz9ams.js:1126", () => {
   REGEX_SPECIAL_CHARS_RE = /[\\^$.*+?()[\]{}|]/g;
   REGEX_SPECIAL_CHARS_PROBE = RegExp(REGEX_SPECIAL_CHARS_RE.source);
 });
-//@ chunk-9ncz9ams.js:1173-1238 placement = urlPatternToRegex (1)
+//@ chunk-9ncz9ams.js:1173-1238 placement (2.1.88 match: urlPatternToRegex, 1)
 function urlPatternToRegex(pattern) {
   pattern = toStringExport(pattern);
   return pattern && REGEX_SPECIAL_CHARS_PROBE.test(pattern)
@@ -76,7 +76,7 @@ function urlPatternToRegex(pattern) {
 }
 //@ chunk-9ncz9ams.js:1238-1246 placement
 var urlPatternToRegexCached = urlPatternToRegex;
-//@ chunk-9ncz9ams.js:1246-1322 placement = isInGlobalClaudeFolder (1)
+//@ chunk-9ncz9ams.js:1246-1322 placement (2.1.88 match: isInGlobalClaudeFolder, 1)
 function getClaudeConfigDirs() {
   return uniq(
     [getClaudeConfigDirOrNull(), join(homedir(), ".claude"), keychainProjectDirs()].filter(

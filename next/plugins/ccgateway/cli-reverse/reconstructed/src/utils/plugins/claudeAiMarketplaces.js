@@ -144,7 +144,7 @@ function isValidAccountMarketplaceName(name) {
     MarketplaceNameSchema().safeParse(name).success
   );
 }
-//@ chunk-e6aww6q8.js:674603-674648 placement = setCwdState (1)
+//@ chunk-e6aww6q8.js:674603-674648 placement (2.1.88 match: setCwdState, 1)
 function nfcBasename(cwd) {
   return normalizePathSegment(cwd.normalize("NFC"));
 }
@@ -286,7 +286,7 @@ async function fetchClaudeAiMarketplaceRows({ etag, credentials }) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:676594-676702 placement = uploadTeamMemory (0.184)
+//@ chunk-e6aww6q8.js:676594-676702 placement (2.1.88 match: uploadTeamMemory, 0.184)
 function classifySyncError(error) {
   let { kind, status: httpStatus } = classifyAxiosError(error);
   return kind === "http" || kind === "auth"

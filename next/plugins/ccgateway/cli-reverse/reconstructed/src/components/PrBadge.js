@@ -32,7 +32,7 @@ deferInit("chunk-qgpgvvwv.js:599", () => {
 });
 //@ chunk-qgpgvvwv.js:603-624 placement
 var CURRENT_PR = "current-pr";
-//@ chunk-qgpgvvwv.js:808-976 fingerprint = getPrStatusColor (1)
+//@ chunk-qgpgvvwv.js:808-976 fingerprint (2.1.88 match: getPrStatusColor, 1)
 function getPrStatusColor(state) {
   switch (state) {
     case "approved":
@@ -65,7 +65,7 @@ function usePrActionEffect(state, url, kind) {
 function selectPrUrlTemplate(state) {
   return state.settings?.prUrlTemplate;
 }
-//@ chunk-qgpgvvwv.js:1135-2596 fingerprint = PrBadge (0.723)
+//@ chunk-qgpgvvwv.js:1135-2596 fingerprint (2.1.88 match: PrBadge, 0.723)
 function PrBadge(props) {
   let $ = useMemoCache(41);
   let { number, url, reviewState, bold, color, dimColor, inverse, underline, hidePrefix, kind } = props;
@@ -207,7 +207,7 @@ function PrBadge(props) {
   } else rowElement = $[40];
   return rowElement;
 }
-//@ chunk-qgpgvvwv.js:2596-2763 layout = getPrStatusColor (1)
+//@ chunk-qgpgvvwv.js:2596-2763 layout (2.1.88 match: getPrStatusColor, 1)
 function getPrStatusColor_2(state) {
   switch (state) {
     case "approved":

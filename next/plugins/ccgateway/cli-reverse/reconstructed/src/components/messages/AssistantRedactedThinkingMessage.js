@@ -16,7 +16,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:43247-43543 fingerprint = AssistantRedactedThinkingMessage (0.369)
+//@ chunk-ah34pb7m.js:43247-43543 fingerprint (2.1.88 match: AssistantRedactedThinkingMessage, 0.369)
 function AssistantRedactedThinkingMessage(props) {
   let $ = useMemoCache(3);
   let { addMargin } = props;

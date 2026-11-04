@@ -76,7 +76,7 @@ function getReservedSkillNamespace(name) {
 }
 //@ chunk-e6aww6q8.js:957910-957918 placement
 var reservedNamespaceLookupCache;
-//@ chunk-e6aww6q8.js:957918-958131 placement = FileStateCache (0.529)
+//@ chunk-e6aww6q8.js:957918-958131 placement (2.1.88 match: FileStateCache, 0.529)
 /**
  * 按名字查保留技能命名空间（anthropic-skills）的缓存版：超过折叠长度上限直接匹配，否则走 LRU（8192 条 / 4 MB）。与文件状态缓存无关，名字曾误作 FileStateCache。
  */

@@ -23,7 +23,7 @@ import {
 } from "../permissions/approvalPayloadSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2651592-2651710 fingerprint = hasStringFormat (1)
+//@ chunk-e6aww6q8.js:2651592-2651710 fingerprint (2.1.88 match: hasStringFormat, 1)
 function hasStringFormat(outputFormat, outputConfig, betas, model) {
   if (
     !outputFormat ||
@@ -45,9 +45,9 @@ deferInit("chunk-s4bxxzsw.js:7715", () => {
 function looksLikeIsoDate(stringValue) {
   return /^\d{4}-\d{2}-\d{2}(T|$)/.test(stringValue.trim());
 }
-//@ chunk-18hwfzwa.js:1201517-1201578 fingerprint = isEnumSchema (1)
+//@ chunk-18hwfzwa.js:1201517-1201578 fingerprint (2.1.88 match: isEnumSchema, 1)
 var isEnumSchema = (schema) => schema.type === "string" && ("enum" in schema || "oneOf" in schema);
-//@ chunk-18hwfzwa.js:1201578-1201716 fingerprint = isMultiSelectEnumSchema (1)
+//@ chunk-18hwfzwa.js:1201578-1201716 fingerprint (2.1.88 match: isMultiSelectEnumSchema, 1)
 function isMultiSelectEnumSchema(schema) {
   return (
     schema.type === "array" &&
@@ -67,7 +67,7 @@ function isConstOption(schema) {
 function isString(value) {
   return typeof value === "string";
 }
-//@ chunk-18hwfzwa.js:1201850-1202070 fingerprint = getMultiSelectValues (1)
+//@ chunk-18hwfzwa.js:1201850-1202070 fingerprint (2.1.88 match: getMultiSelectValues, 1)
 /**
  * getMultiSelectValues：多选 schema（items.anyOf 的 const 或 items.enum）的取值列表。
  */
@@ -80,7 +80,7 @@ function getMultiSelectValues(schema) {
     return Array.isArray(schema.items.enum) ? schema.items.enum.filter(isString) : [];
   return [];
 }
-//@ chunk-18hwfzwa.js:1202070-1202291 fingerprint = getMultiSelectLabels (1)
+//@ chunk-18hwfzwa.js:1202070-1202291 fingerprint (2.1.88 match: getMultiSelectLabels, 1)
 /**
  * getMultiSelectLabels：多选 schema 的显示标签（anyOf 的 title 或 enum 值）。
  */
@@ -98,7 +98,7 @@ function getMultiSelectLabel(schema, value) {
   let index = getMultiSelectValues(schema).indexOf(value);
   return index >= 0 ? (getMultiSelectLabels(schema)[index] ?? value) : value;
 }
-//@ chunk-18hwfzwa.js:1202358-1202542 fingerprint = getEnumValues (1)
+//@ chunk-18hwfzwa.js:1202358-1202542 fingerprint (2.1.88 match: getEnumValues, 1)
 /**
  * getEnumValues：单选 schema（oneOf const 或 enum）的取值列表。
  */
@@ -110,7 +110,7 @@ function getEnumValues(schema) {
   if ("enum" in schema) return Array.isArray(schema.enum) ? schema.enum.filter(isString) : [];
   return [];
 }
-//@ chunk-18hwfzwa.js:1202542-1202837 fingerprint = getEnumLabels (1)
+//@ chunk-18hwfzwa.js:1202542-1202837 fingerprint (2.1.88 match: getEnumLabels, 1)
 /**
  * getEnumLabels：单选 schema 的显示标签（oneOf title、enumNames 或 enum 值）。
  */
@@ -132,7 +132,7 @@ function getEnumLabel(schema, value) {
   let index = getEnumValues(schema).indexOf(value);
   return index >= 0 ? (getEnumLabels(schema)[index] ?? value) : value;
 }
-//@ chunk-18hwfzwa.js:1202904-1204340 fingerprint = getZodSchema (0.947)
+//@ chunk-18hwfzwa.js:1202904-1204340 fingerprint (2.1.88 match: getZodSchema, 0.947)
 /**
  * getZodSchema：把 elicitation 的原始属性 schema 转成 zod（枚举、字符串长度与 email/uri/date/date-time 格式、数字范围/整数、布尔），错误消息面向用户。
  */
@@ -209,7 +209,7 @@ function getZodSchema(schema) {
   if (schema.type === "boolean") return coerceBoolean();
   throw Error(`Unsupported schema: ${jsonStringify(schema)}`);
 }
-//@ chunk-18hwfzwa.js:1204340-1204501 fingerprint = validateElicitationInput (1)
+//@ chunk-18hwfzwa.js:1204340-1204501 fingerprint (2.1.88 match: validateElicitationInput, 1)
 /**
  * validateElicitationInput：用 getZodSchema 校验输入字符串，返回 {isValid, value|error}。
  */
@@ -225,7 +225,7 @@ function validateElicitationInput(stringValue, schema) {
     error: parseResult.error.issues.map((e) => e.message).join("; "),
   };
 }
-//@ chunk-18hwfzwa.js:1204501-1204600 fingerprint = isDateTimeSchema (1)
+//@ chunk-18hwfzwa.js:1204501-1204600 fingerprint (2.1.88 match: isDateTimeSchema, 1)
 function isDateTimeSchema(schema) {
   return (
     schema.type === "string" &&
@@ -233,7 +233,7 @@ function isDateTimeSchema(schema) {
     (schema.format === "date" || schema.format === "date-time")
   );
 }
-//@ chunk-18hwfzwa.js:1204600-1204791 fingerprint = validateElicitationInputAsync (1)
+//@ chunk-18hwfzwa.js:1204600-1204791 fingerprint (2.1.88 match: validateElicitationInputAsync, 1)
 /**
  * validateElicitationInputAsync：同步校验失败且字段为 date/date-time、输入不像 ISO 日期时，调用 parseNaturalLanguageDateTime 解析后再校验。
  */

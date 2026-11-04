@@ -51,11 +51,11 @@ import { TranscriptModeProvider } from "../messages/transcriptModeContext.js";
 import { agentProgressSelector } from "../../tools/AgentTool/UI.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:57940-58017 fingerprint = STAGES (0.317)
+//@ chunk-hantmvxa.js:57940-58017 fingerprint (2.1.88 match: STAGES, 0.317)
 function STAGES(maxFindings) {
   return maxFindings === "all" ? "all findings" : `\u2264${maxFindings} ${plural(maxFindings, "finding")}`;
 }
-//@ chunk-azz22fvc.js:1568-1635 fingerprint = AGENT_VERB (0.384)
+//@ chunk-azz22fvc.js:1568-1635 fingerprint (2.1.88 match: AGENT_VERB, 0.384)
 function AGENT_VERB(agentId) {
   return (
     agentId.length > 0 &&
@@ -73,7 +73,7 @@ deferInit("chunk-18hwfzwa.js:708595", () => {
 deferInit("chunk-18hwfzwa.js:708599", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:708603-709181 fingerprint = formatToolUseSummary (0.898)
+//@ chunk-18hwfzwa.js:708603-709181 fingerprint (2.1.88 match: formatToolUseSummary, 0.898)
 function formatToolUseSummary(name, input, maxWidth) {
   if (name === EXITPLANMODE_2) return "Review the plan in your browser";
   if (!input || typeof input !== "object") return name;
@@ -99,7 +99,7 @@ function formatToolUseSummary(name, input, maxWidth) {
     }
   return name;
 }
-//@ chunk-18hwfzwa.js:709181-709285 fingerprint = PHASE_LABEL (0.819)
+//@ chunk-18hwfzwa.js:709181-709285 fingerprint (2.1.88 match: PHASE_LABEL, 0.819)
 var ULTRAPLAN_STATUS_LABELS = {
   needs_input: "input required",
   plan_ready: "ready",
@@ -108,7 +108,7 @@ var ULTRAPLAN_STATUS_SHORT = {
   needs_input: "waiting",
   plan_ready: "done",
 };
-//@ chunk-18hwfzwa.js:709285-713110 fingerprint = UltraplanSessionDetail (0.62)
+//@ chunk-18hwfzwa.js:709285-713110 fingerprint (2.1.88 match: UltraplanSessionDetail, 0.62)
 function UltraplanSessionDetail(props) {
   let $ = useMemoCache(74);
   let { session, onDone, onBack, onKill } = props;
@@ -517,14 +517,14 @@ function StopUltraplanConfirm(props) {
   } else dialogElement = $[14];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:714091-714198 fingerprint = STAGE_LABELS (0.772)
+//@ chunk-18hwfzwa.js:714091-714198 fingerprint (2.1.88 match: STAGE_LABELS, 0.772)
 var REVIEW_STAGES = ["finding", "verifying", "synthesizing"];
 var REVIEW_STAGE_LABELS = {
   finding: "Find",
   verifying: "Verify",
   synthesizing: "Dedupe",
 };
-//@ chunk-18hwfzwa.js:714198-715118 fingerprint = StagePipeline (0.627)
+//@ chunk-18hwfzwa.js:714198-715118 fingerprint (2.1.88 match: StagePipeline, 0.627)
 function StagePipeline(props) {
   let $ = useMemoCache(15);
   let { stage, completed, hasProgress } = props;
@@ -617,7 +617,7 @@ function StagePipeline(props) {
   } else t6 = $[14];
   return t6;
 }
-//@ chunk-18hwfzwa.js:715118-715405 fingerprint = reviewCountsLine (1)
+//@ chunk-18hwfzwa.js:715118-715405 fingerprint (2.1.88 match: reviewCountsLine, 1)
 function reviewCountsLine(session) {
   let reviewProgress = session.reviewProgress;
   if (!reviewProgress) return session.status === "completed" ? "done" : "setting up";
@@ -630,7 +630,7 @@ function reviewCountsLine(session) {
   }
   return formatReviewStageCounts(reviewProgress.stage, reviewProgress.bugsFound, verified, refuted);
 }
-//@ chunk-18hwfzwa.js:715405-716385 callgraph-fingerprint = _temp (0.156)
+//@ chunk-18hwfzwa.js:715405-716385 callgraph-fingerprint (2.1.88 match: _temp, 0.156)
 /**
  * "停止 ultrareview？"确认对话框：归档云会话、停止本地跟踪并丢弃已有发现。
  */
@@ -714,7 +714,7 @@ function StopUltrareviewConfirm(exitState) {
   } else dialogElement = $[9];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:716385-719172 fingerprint = ReviewSessionDetail (0.743)
+//@ chunk-18hwfzwa.js:716385-719172 fingerprint (2.1.88 match: ReviewSessionDetail, 0.743)
 function ReviewSessionDetail(props) {
   let $ = useMemoCache(50);
   let { session, onDone, onBack, onKill } = props;
@@ -955,7 +955,7 @@ function ReviewSessionDetail(props) {
   } else t20 = $[49];
   return t20;
 }
-//@ chunk-18hwfzwa.js:719172-721881 fingerprint = RemoteSessionDetailDialog (0.679)
+//@ chunk-18hwfzwa.js:719172-721881 fingerprint (2.1.88 match: RemoteSessionDetailDialog, 0.679)
 /**
  * 云会话详情：ultraplan 显示阶段与计划审阅（在浏览器中查看），ultrareview 显示发现/验证计数，可终止或归档会话。
  */

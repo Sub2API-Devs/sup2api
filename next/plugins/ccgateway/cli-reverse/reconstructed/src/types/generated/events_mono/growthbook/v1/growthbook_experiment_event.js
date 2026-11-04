@@ -11,7 +11,7 @@
 import { PublicApiAuth, PublicApiAuth_2 } from "../../common/v1/auth.js";
 import { Timestamp } from "../../../google/protobuf/timestamp.js";
 
-//@ chunk-aepeg2w5.js:679042-679380 fingerprint = createBaseGrowthbookExperimentEvent (0.815)
+//@ chunk-aepeg2w5.js:679042-679380 fingerprint (2.1.88 match: createBaseGrowthbookExperimentEvent, 0.815)
 function createBaseGrowthbookExperimentEvent() {
   return {
     event_id: "",
@@ -33,7 +33,7 @@ function createBaseGrowthbookExperimentEvent() {
     prompt_id: undefined,
   };
 }
-//@ chunk-aepeg2w5.js:679380-682497 fingerprint = GrowthbookExperimentEvent (0.867)
+//@ chunk-aepeg2w5.js:679380-682497 fingerprint (2.1.88 match: GrowthbookExperimentEvent, 0.867)
 var GrowthbookExperimentEvent = {
   fromJSON(object) {
     return {
@@ -117,13 +117,13 @@ var GrowthbookExperimentEvent = {
     return message;
   },
 };
-//@ chunk-aepeg2w5.js:682497-682588 sole-consumer = fromTimestamp (1)
+//@ chunk-aepeg2w5.js:682497-682588 sole-consumer (2.1.88 match: fromTimestamp, 1)
 function fromTimestamp_2(t) {
   let millis = (t.seconds || 0) * 1000;
   millis += (t.nanos || 0) / 1e6;
   return new globalThis.Date(millis);
 }
-//@ chunk-aepeg2w5.js:682588-682733 sole-consumer = fromJsonTimestamp (1)
+//@ chunk-aepeg2w5.js:682588-682733 sole-consumer (2.1.88 match: fromJsonTimestamp, 1)
 function fromJsonTimestamp_2(o) {
   if (o instanceof globalThis.Date) return o;
   else if (typeof o === "string") return new globalThis.Date(o);

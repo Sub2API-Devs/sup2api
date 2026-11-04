@@ -460,7 +460,7 @@ function withheldFileReferenceErrorForLog(toolInfo, messageText, name = "McpTool
 var BASE64_BLOB_RE = /^[\r\n]*[A-Za-z0-9+/_-][A-Za-z0-9+/_\r\n-]*(?:=[\r\n]*){0,2}$/;
 var MAX_TRACKED_SIZE_ENTRIES = 100;
 var MIN_SIZE_ENTRIES = 16;
-//@ chunk-kc2qkj8w.js:12340-12575 placement = base64URLEncode (1)
+//@ chunk-kc2qkj8w.js:12340-12575 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(base64, reference) {
   if (typeof base64 !== "string") return;
   let buffer = Buffer.from(base64, "base64");

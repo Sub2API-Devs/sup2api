@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-mz6f608r.js:4378-4487 fingerprint = getClaudeCodeUserAgent (0.492)
+//@ chunk-mz6f608r.js:4378-4487 fingerprint (2.1.88 match: getClaudeCodeUserAgent, 0.492)
 function getClaudeCodeUserAgent(options) {
   return {
     params: {

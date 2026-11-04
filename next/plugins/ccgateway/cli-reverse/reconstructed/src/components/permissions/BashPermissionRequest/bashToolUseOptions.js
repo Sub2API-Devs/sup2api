@@ -22,12 +22,12 @@ import {
   directoryRow,
 } from "../consentRows.js";
 
-//@ chunk-18hwfzwa.js:1325769-1325863 fingerprint = stripBashRedirections (1)
+//@ chunk-18hwfzwa.js:1325769-1325863 fingerprint (2.1.88 match: stripBashRedirections, 1)
 function stripBashRedirections(command) {
   let { commandWithoutRedirections, redirections } = extractOutputRedirections(command);
   return redirections.length > 0 ? commandWithoutRedirections : command;
 }
-//@ chunk-18hwfzwa.js:1325863-1327111 layout = powershellToolUseOptions (0.831)
+//@ chunk-18hwfzwa.js:1325863-1327111 layout (2.1.88 match: powershellToolUseOptions, 0.831)
 function powershellToolUseOptions_2({
   suggestionsRow = null,
   decisionReason,
@@ -124,7 +124,7 @@ function parseBashConsentSuggestions(suggestions, options) {
       parseSuggestionRows(suggestion, BASH_TOOL_NAME, stripBashRedirections, options),
   });
 }
-//@ chunk-18hwfzwa.js:1327242-1327894 callgraph-fingerprint = bashToolUseOptions (0.243)
+//@ chunk-18hwfzwa.js:1327242-1327894 callgraph-fingerprint (2.1.88 match: bashToolUseOptions, 0.243)
 /**
  * Bash 权限选项：允许一次；"Yes, and don't ask again for <前缀/命令>"（应用建议规则或编辑后的前缀）；可选开启 auto 模式；拒绝（可附反馈）。
  */

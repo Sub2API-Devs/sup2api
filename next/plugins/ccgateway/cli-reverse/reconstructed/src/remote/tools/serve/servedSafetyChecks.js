@@ -394,7 +394,7 @@ function readsNetworkPath(tool, input, toolPermissionContext) {
     ) || !paths.some((path) => hasSuspiciousWindowsPathPattern(path, trustedNetworkDirectories))
   );
 }
-//@ chunk-tr0s0d0k.js:41226-41271 placement = handleAutoModeTransition (0.799)
+//@ chunk-tr0s0d0k.js:41226-41271 placement (2.1.88 match: handleAutoModeTransition, 0.799)
 function isAutoOrPlanMode(sessionMode) {
   return sessionMode === "auto" || sessionMode === "plan";
 }

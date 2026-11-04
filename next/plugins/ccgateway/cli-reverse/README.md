@@ -17,15 +17,16 @@
 
 | 项 | 结果 |
 |---|---|
-| 声明对应 | 阅读树 81,667 个顶层声明，与官方构建的声明一一对应。每个声明前有一行 `//@ chunk-xxx.js:起-止` 出处注释，可以追溯到原字节区间 |
+| 声明对应 | 阅读树 81,667 个顶层声明，与官方构建的声明一一对应。每个声明前有一行 `//@ chunk-xxx.js:起-止 <放置依据>` 出处注释，可以追溯到原字节区间；末尾的 `(2.1.88 match: 名字, 相似度)` 是与旧版最相近的函数，只是线索，不一定是这个声明的名字 |
 | 一方代码 | 5,295（其中 353 个是动态加载用的再导出入口 `*.lazy.js`） 个文件，82.5 MB；其中 3,280 个文件是 2.1.88 没有、316 新增的 |
 | 第三方代码 | 264 个 npm 包，2,027 个文件，15.4 MB；与 npm 源码对齐，文件头写明包名和版本 |
-| 可读率（[`tools/verify/readability.mjs`](tools/verify/readability.mjs)） | 一方代码顶层 / 参数 / 局部均为 **100%**（剩余 2 / 60 / 68 个）；第三方 **98.8% / 100% / 100%**（剩余 114 / 1 / 1 个）。成员有意取的短名（`ids`、`ttl`、比较器的 `a/b`）与上游原名（ajv 的 `it`）计为可读，分别统计在 `analysis/readability/summary.json` 的 chosenShort、authenticShort 字段 |
+| 可读率（[`tools/verify/readability.mjs`](tools/verify/readability.mjs)） | 一方代码顶层 / 参数 / 局部均为 **100%**（剩余 2 / 60 / 68 个）；第三方 **98.8% / 100% / 100%**（剩余 114 / 1 / 1 个）。成员有意取的短名（`ids`、`ttl`、比较器的 `a/b`）与上游原名（ajv 的 `it`）计为可读，分别统计在 `analysis/readability/summary.json` 的 chosenShort、authenticShort 字段。函数钩子 worker（`src/plugins/functionHooks/hooks-worker/hooks-worker.js`，worker 线程里的另一个程序，不在扫描的 chunk 里，不计入上面的比例）的 208 个绑定另按 [`naming/worker-hooks-worker.json`](naming/worker-hooks-worker.json) 命名，改名时逐个核对引用的绑定不变（[`tools/emit/worker-names.mjs`](tools/emit/worker-names.mjs)） |
 | 剩余压缩名 | 共 246 个，全部有原因：`frozen` 111（直接 eval 冻结）、`dead` 35（从未读取）、`authored` 100（作者原名），**命名缺口 0**；逐条原因见 [`analysis/readability/leftover.md`](analysis/readability/leftover.md) |
 | 构建 | `reconstructed/` 用 Bun 1.4.4 构建 0 错误，约 25 秒；运行时不读 `original/`、`runnable/`、`artifacts/` |
 | 运行一致 | 原版 vs 阅读树构建产物 **98/98** 场景一致；原版 vs 改名树 `runnable/` **98/98** 一致 |
 | 改名等价 | α 校验 0 差异：模块内、跨模块、文件级都是 0 |
 | 去压缩等价 | 2,650 个模块的 printer 校验和规范形校验都是 0 差异 |
+| 声明级等价 | 逐个声明拿阅读树和官方原始字节比结构（[`tools/verify/decl-equiv.mjs`](tools/verify/decl-equiv.mjs)，不依赖场景，覆盖每一行）：81,667 个里 81,662 个一致；官方每条顶层语句都有着落，阅读树没有多出来的逻辑。剩下 5 个都在第三方包里，是有意按 npm 源码写法还原的（`var X = class e {…}` 写成 `class X {…}`，正则 flags `ig` 写成 `gi`），见 [`analysis/verify/decl-equiv.md`](analysis/verify/decl-equiv.md) |
 | 静态校验 | 0 解析错误、0 重复声明、0 缺失导入；自由标识符 32 个，与原版集合相同 |
 | 文档引用 | 架构文档和 10 本手册的代码引用逐条校验，失效 0 处 |
 
@@ -65,7 +66,7 @@ naming/               命名与文档输入：semantic-*（语义名）、docs-*
 tools/                流水线工具：extract / ast / vendor / segment / naming / rename / emit / build / verify / q.mjs；versions/ 是版本对比工具
 research/             官方 CLI 行为研究（从 ccgateway 文档与 sup2api artifacts 复制的快照）：请求组装、计费头、附件、第一方/第三方形状、各版本变化、实抓请求
 docs/                 架构、手册、过程记录
-references/           旧版源码子模块（只读）
+references/           旧版源码 2.1.88（只读，不入库；bash tools/fetch-references.sh 拉取）
 ```
 
 ## 构建和运行阅读树
@@ -90,7 +91,7 @@ npm start -- --version
 bun reconstructed/dist/cli.js -p "hello"
 ```
 
-`build.mjs` 按以下顺序找 Bun：`--bun <路径>`、环境变量 `$BUN`、本目录或上级目录的 `node_modules/bun`、`PATH` 里的 `bun`。在仓库根目录执行过 `npm ci` 后，会用根目录装好的 Bun 1.4.4。
+`build.mjs` 按以下顺序找 Bun：`--bun <路径>`、环境变量 `$BUN`、本目录或上级目录的 `node_modules/bun/bin/bun[.exe]` 或 `node_modules/@oven/bun-<平台>/bin/bun[.exe]`、`PATH` 里的 `bun`。在本目录执行过 `npm ci --ignore-scripts` 后，会用装好的 Bun 1.4.4（不跑 postinstall 时 `node_modules/bun/bin` 里只是占位文件，真正的二进制在 `@oven/bun-<平台>` 包里）。
 
 ## 从官方二进制重建全部内容
 
@@ -132,6 +133,7 @@ bash tools/vendor/run.sh
 | α 等价 | `node tools/rename/apply.mjs original naming/final runnable --force --check` | 改名前后 AST 只差绑定名，绑定对应是双射，跨模块导入导出一致 |
 | 去压缩等价 | `node tools/emit/deminify-dir.mjs runnable <out> --check-printer --check-canonical` | `!0 → true`、拆逗号表达式等改写不改变语义；改写后的树同样跑 98 个场景 |
 | 静态完整性 | `node tools/verify/readable-check.mjs` | 81,667 个声明齐全且各出现一次，可解析、无重复、导入都能解析，自由标识符与原版相同 |
+| 声明级等价 | `node --max-old-space-size=12000 tools/verify/decl-equiv.mjs` | 每个声明出处注释后面的代码，与官方原始字节在去掉名字、去压缩改写和阅读树布局（`export`、`deferInit` 包装、模块路径）之后结构相同，绑定关系一一对应；场景没走到的代码也覆盖 |
 | 可读率 | `node tools/verify/readability.mjs` 和 `node tools/verify/leftover.mjs` | 各类绑定的可读比例，以及剩余压缩名的逐条原因 |
 | 名字形态 | `node tools/verify/name-shape.mjs naming/final analysis/name-shape` | 名字和初值形态不符的地方（例如 `isX` 是字符串）全部人工裁决过 |
 | 文档引用 | `node tools/verify/doc-refs.mjs . docs/ARCHITECTURE.md docs/handbook/*.md` | 文档里的路径、声明 id、函数名、字面量在阅读树中都存在 |
@@ -179,7 +181,10 @@ bash tools/vendor/run.sh
   - `dead`：从未被读取的变量和参数。
   - `authored`：未压缩的随包脚本里，作者自己起的短名。
   - `unnamed`：命名缺口。
-- **`_2` 后缀**：同一作用域内语义相同的两个名字（例如两个 `entry`）里，后出现的那个带 `_2` 后缀，共 2,028 处。
+- **`_2` 后缀**：同一作用域内两个声明起了同一个名字时，后出现的那个带 `_2`（`_3`…）后缀。一方代码顶层有 1,777 个这样的名字。2026-11-04 核对：其中 697 个和不带后缀的那个是同一份代码（Bun 把同一函数内联进了不同 chunk）；**另外 967 个代码不同**，例如 `src/utils/errors.js` 的 `getErrnoPath` 与 `getErrnoPath_2`、`ThemeProvider.js` 的 `useTheme`（返回 `[主题, 设置函数]`）与 `useTheme_2`（读 context）。这些名字还需要逐个区分。
+- **React Compiler 记忆化缓存**：316 的界面组件是 React Compiler 编译过的，565 个文件里有 `if ($[41] !== width) { … $[41] = width; … } else x = $[40];` 这样的按下标缓存，`t0`、`t1` 是编译器的临时变量名。这是官方产物本来的样子，去掉会改变重新渲染的行为，所以阅读树保留了它。读组件时，可以把每段缓存当成一次 `useMemo` 来看。
+- **大文件**：`src/cli/print.js` 有 19,127 行（2.1.88 的 `print.ts` 是 5,594 行），`src/services/mcp/client.js` 有 16,083 行。这两个文件声明不多（print.js 69 个），主要是单个函数在 316 里变大了。`src/utils/releaseNotes.js` 里有一个 9 万字符的字符串字面量。
+- **第三方包的写法**：少数第三方声明按 npm 源码的写法还原（`var X = class e {…}` 写成 `class X {…}`），和官方字节在提升和暂时性死区上有细微差别。声明级校验列出了全部 5 处。
 - **延迟初始化包装**：阅读树按源模块拆成了几千个 ES 模块，模块之间有一个 3,675 个模块组成的导入环（官方构建启动时只求值 8 个 chunk）。为了保持官方的求值顺序，有 5,801 条顶层语句被包在 `deferInit("<chunk>:<偏移>", () => {…})` 里，等导入环加载完成后再按官方顺序执行，每处都有注释说明原因。其中 2,852 条只是为了保持副作用的先后顺序，用更细的副作用分析可以减少。做法和等价性论证见 [`docs/process/buildable.md`](docs/process/buildable.md)。
 - **启动速度**：阅读树构建的 CLI 比官方慢约 0.6 秒。官方用的是 bytecode 编译，而 `--compile --bytecode` 在这棵树上生成 bytecode 失败，没有深究。
 - **和官方原生二进制的运行时差异**：官方 ELF 内嵌的是私有修订的 Bun 1.4.4。它在发送前把计费头里的 `cch=00000` 改写成按请求计算的值，报告的 Node 版本是 v26.12.1；公开的 Bun 1.4.4 不改写 `cch`，报 v26.3.0。阅读树构建的 CLI 跑在公开 Bun 上，所以这两处与官方原生运行时不同（对拍时两边都在公开 Bun 上跑，因此一致）。见 [`research/README.md`](research/README.md)。

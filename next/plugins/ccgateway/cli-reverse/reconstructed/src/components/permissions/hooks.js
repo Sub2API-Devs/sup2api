@@ -104,7 +104,7 @@ import { otherDialogOnScreen, onBlockingDialogChange } from "../../services/requ
 import { sanitizeName } from "../../plugins/bundled/diffPane/diffModel.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-re9y5nwg.js:459-587 placement = parseSkillPaths (0.822)
+//@ chunk-re9y5nwg.js:459-587 placement (2.1.88 match: parseSkillPaths, 0.822)
 /**
  * 判断 frontmatter 字符串是否为指定前缀下、以 /** 结尾且不含 .. 的目录 glob。
  */
@@ -341,7 +341,7 @@ function forgetSessionEditRules(session, ruleContents) {
   if (editRuleContents === undefined) return;
   for (let ruleContent of getSessionEditRuleContents(ruleContents)) editRuleContents.delete(ruleContent);
 }
-//@ chunk-re9y5nwg.js:3176-3322 placement = propagateAbort (1)
+//@ chunk-re9y5nwg.js:3176-3322 placement (2.1.88 match: propagateAbort, 1)
 function propagateAbort(updates) {
   let sessionEditRuleContents = getSessionEditRuleContents(updates);
   if (sessionEditRuleContents.length === 0) return;
@@ -354,7 +354,7 @@ function propagateAbort(updates) {
     for (let sessionEditRuleContent of sessionEditRuleContents) parent.delete(sessionEditRuleContent);
   }
 }
-//@ chunk-re9y5nwg.js:3322-3811 callgraph-fingerprint = decisionReasonToString (0.167)
+//@ chunk-re9y5nwg.js:3322-3811 callgraph-fingerprint (2.1.88 match: decisionReasonToString, 0.167)
 /**
  * 把决策原因映射为日志 surface 字符串（rule/session/host_dialog 等）。
  */
@@ -594,7 +594,7 @@ var counterSlot; // deferred: uses MonotonicCounter of its import cycle while lo
 deferInit("chunk-s4bxxzsw.js:49241", () => {
   counterSlot = new HostScoped(() => new MonotonicCounter());
 });
-//@ chunk-s4bxxzsw.js:49266-60333 callgraph-witnessed = usePermissionRequestLogging (0.155)
+//@ chunk-s4bxxzsw.js:49266-60333 callgraph-witnessed (2.1.88 match: usePermissionRequestLogging, 0.155)
 /**
  * 打开并管理一个权限对话框：用 toolUseContext.requestDialog(dialog, descriptor, …) 入对话框队列，记录 tengu_tool_use_show_permission_request，处理对话框结果（allow/reject/反馈/模式切换/规则持久化）、超时与中止，结束时执行 teardown。
  */
@@ -1348,7 +1348,7 @@ function showPermissionDialog(request, claimState, spec) {
   });
   showDialog();
 }
-//@ chunk-wyqg6m3h.js:36666-36692 fingerprint = permissionResultToLog (0.387)
+//@ chunk-wyqg6m3h.js:36666-36692 fingerprint (2.1.88 match: permissionResultToLog, 0.387)
 var askKeyOf = (permissionResult) => `ask:${sanitizeName(permissionResult)}`;
 export {
   isSkillDirGlob,

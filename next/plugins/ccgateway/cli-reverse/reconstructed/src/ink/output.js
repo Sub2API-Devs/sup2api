@@ -36,7 +36,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { LINK_END, link } from "./termio/osc.js";
 import { RESET } from "./outputReplay.js";
 
-//@ chunk-bfrv6ttc.js:567-648 callgraph-fingerprint = flushBuffer (0.346)
+//@ chunk-bfrv6ttc.js:567-648 callgraph-fingerprint (2.1.88 match: flushBuffer, 0.346)
 function countGraphemes(text) {
   if (!text) return 0;
   let count = 0;
@@ -241,7 +241,7 @@ var DIRECTION_MARKS = {
   ltr: "\u200E",
   rtl: "\u200F",
 };
-//@ chunk-bzr73sfg.js:279540-279648 fingerprint = intersectClip (1)
+//@ chunk-bzr73sfg.js:279540-279648 fingerprint (2.1.88 match: intersectClip, 1)
 /**
  * 两个裁剪矩形求交（未定义的边视为无限）。
  */
@@ -254,7 +254,7 @@ function intersectClip(parent, child) {
     y2: minDefined(parent.y2, child.y2),
   };
 }
-//@ chunk-bzr73sfg.js:279648-279900 layout = intersectClip (0.795)
+//@ chunk-bzr73sfg.js:279648-279900 layout (2.1.88 match: intersectClip, 0.795)
 function isClipRedundant(outerClip, clip, rect) {
   if (clip === undefined) return true;
   let x1 = maxDefined(outerClip?.x1, rect?.x) ?? -1 / 0;
@@ -283,7 +283,7 @@ function minDefined(a, b) {
 }
 //@ chunk-bzr73sfg.js:280068-280078 layout
 var NO_ABSOLUTE_CLEARS = [];
-//@ chunk-bzr73sfg.js:280078-285029 fingerprint = Output (0.81)
+//@ chunk-bzr73sfg.js:280078-285029 fingerprint (2.1.88 match: Output, 0.81)
 /**
  * 渲染操作缓冲：renderNodeToOutput 往里记 write/blit/shift/clear/clip/noSelect 操作，get() 依次落到屏幕：clear 只扩大 damage（绝对定位节点的清除会阻止被其覆盖的 blit）；blit 从上一帧拷贝未变子树；write 按裁剪区截断文字（Bun.sliceAnsi）后用 LineCellSegmenter 切分并 paint，同时写软换行标记；最后应用 noSelect。writeDirected 支持 RTL 文本右对齐。写入远多于拷贝时记日志。
  */
@@ -681,7 +681,7 @@ function writeLineToScreen(screen, line, x, y, segmenter, direction, clip) {
   if (clip !== undefined) x = segmenter.keepColumns(x, clip.x1, clip.x2);
   return segmenter.count === 0 ? x : paintSegments(screen, x, y, segmenter);
 }
-//@ chunk-ag5x7vhf.js:17851-18348 fingerprint = writeLineToScreen (0.806)
+//@ chunk-ag5x7vhf.js:17851-18348 fingerprint (2.1.88 match: writeLineToScreen, 0.806)
 /**
  * 把屏幕的一行转回带样式与超链接的 ANSI 字符串（跳过占位格，去掉行尾无效空格），renderToScreen 用来把离屏渲染结果变成文本行。
  */

@@ -31,11 +31,11 @@ import { stripAnsi } from "../utils/stripAnsi.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-cwwxybjc.js:991-1032 fingerprint = ANSI_BOLD_END (0.532)
+//@ chunk-cwwxybjc.js:991-1032 fingerprint (2.1.88 match: ANSI_BOLD_END, 0.532)
 var ANSI_RESET = "\x1B[0m";
 var ANSI_DIM = "\x1B[2m";
 var ANSI_NORMAL_INTENSITY = "\x1B[22m";
-//@ chunk-bc20zedk.js:11866-12030 fingerprint = wrapText (1)
+//@ chunk-bc20zedk.js:11866-12030 fingerprint (2.1.88 match: wrapText, 1)
 function wrapText(text, width, options) {
   if (width <= 0) return [text];
   let trimmedText = text.trimEnd();
@@ -118,7 +118,7 @@ deferInit("chunk-bc20zedk.js:12030", () => {
     return tableNode;
   });
 });
-//@ chunk-bc20zedk.js:12707-15392 fingerprint = MarkdownTable (0.688)
+//@ chunk-bc20zedk.js:12707-15392 fingerprint (2.1.88 match: MarkdownTable, 0.688)
 /**
  * Markdown 表格：计算各列自然宽度，按终端宽度收缩并换行，支持 left/center/right 对齐；宽度实在不够时改为每行纵向"列名: 值"布局。
  */

@@ -12,21 +12,21 @@ import { getGraphemeSegmenter } from "../utils/intl.js";
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "../utils/sanitization.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-gfseh2w1.js:191-220 fingerprint = BUN_STRING_WIDTH_OPTS (1)
+//@ chunk-gfseh2w1.js:191-220 fingerprint (2.1.88 match: BUN_STRING_WIDTH_OPTS, 1)
 /**
  * Bun.stringWidth 选项：东亚歧义宽度按窄。
  */
 var BUN_STRING_WIDTH_OPTS = {
   ambiguousIsNarrow: true,
 };
-//@ chunk-gfseh2w1.js:220-263 fingerprint = bunStringWidth (0.617)
+//@ chunk-gfseh2w1.js:220-263 fingerprint (2.1.88 match: bunStringWidth, 0.617)
 /**
  * 字符串显示宽度：Bun.stringWidth（歧义宽度按窄）。
  */
 function bunStringWidth(str) {
   return Bun.stringWidth(str, BUN_STRING_WIDTH_OPTS);
 }
-//@ chunk-t0gq9gyw.js:5412-5691 fingerprint = stringWidthJavaScript (0.677)
+//@ chunk-t0gq9gyw.js:5412-5691 fingerprint (2.1.88 match: stringWidthJavaScript, 0.677)
 /**
  * 找出文本里会被渲染成零宽的字符（不可见格式符、零宽字素等），返回其码点；没有返回 undefined。
  */

@@ -14,11 +14,11 @@ import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runti
 import { Text } from "../../ink/components/Text.js";
 import { WRITE_NEW_FEEDBACK_LABEL } from "../../commands/feedback/FeedbackQueue.js";
 
-//@ chunk-18hwfzwa.js:120864-120911 fingerprint = _temp2 (1)
+//@ chunk-18hwfzwa.js:120864-120911 fingerprint (2.1.88 match: _temp2, 1)
 function selectIsViewingAgentTask(s_0) {
   return !!s_0.viewingAgentTaskId;
 }
-//@ chunk-v517dzda.js:14478-14680 fingerprint = HideRow (0.818)
+//@ chunk-v517dzda.js:14478-14680 fingerprint (2.1.88 match: HideRow, 0.818)
 function HideRow(props) {
   let $ = useMemoCache(3);
   let { isSelected } = props;

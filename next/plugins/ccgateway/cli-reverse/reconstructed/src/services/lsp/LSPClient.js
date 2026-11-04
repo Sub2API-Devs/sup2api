@@ -238,7 +238,7 @@ class LSPServerCrashError extends Error {
     this.name = "LSPServerCrashError";
   }
 }
-//@ chunk-t4ksmxzx.js:63006-68015 fingerprint = createLSPClient (0.708)
+//@ chunk-t4ksmxzx.js:63006-68015 fingerprint (2.1.88 match: createLSPClient, 0.708)
 /**
  * 创建一个 LSP 客户端：start() 在工具 cgroup（toolCgroupClass "lsp"）里用 stdio 管道启动语言服务器，用 vscode-jsonrpc 的 StreamMessageReader/Writer 建立连接并开 Verbose trace；initialize() 发 initialize 请求 + initialized 通知。进程崩溃、协议违规、连接错误都会置 startFailed 并回调 onCrash；连接就绪前注册的 onNotification/onRequest 会缓存后补挂。stop() 发 shutdown + exit，可带超时，最后杀进程（Windows 按 pid 强杀）。
  */

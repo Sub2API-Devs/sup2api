@@ -141,7 +141,7 @@ import { getPluginPathEnv } from "./bash/ShellSnapshot.js";
 import { setBunOptions } from "./permissions/protectedSettingsPaths.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:52893-53070 fingerprint = isExecutable (0.639)
+//@ chunk-s61vbvea.js:52893-53070 fingerprint (2.1.88 match: isExecutable, 0.639)
 /**
  * 判断 shell 路径可执行：先 access X_OK，失败时（非 Windows 绝对路径的特定错误直接 false）再跑 `--version` 看退出码。
  */
@@ -158,7 +158,7 @@ async function isExecutable(shellPath) {
     return code === 0;
   }
 }
-//@ chunk-s61vbvea.js:53070-53411 fingerprint = findSuitableShell (0.774)
+//@ chunk-s61vbvea.js:53070-53411 fingerprint (2.1.88 match: findSuitableShell, 0.774)
 /**
  * 生成候选 shell 列表：CLAUDE_CODE_SHELL、SHELL（含 bash/zsh 的）、which 结果，以及 /bin、/usr/bin、/usr/local/bin、/opt/homebrew/bin 下的 bash/zsh；SHELL 含 bash 时 bash 优先。
  */
@@ -448,7 +448,7 @@ function arraysEqual(pluginBinPaths, enabledPluginBinPaths) {
 function getPsProvider() {
   return getPsProviderForHostState(shellPaths());
 }
-//@ chunk-e6aww6q8.js:3077356-3077504 fingerprint = getPsProvider (0.784)
+//@ chunk-e6aww6q8.js:3077356-3077504 fingerprint (2.1.88 match: getPsProvider, 0.784)
 /**
  * 惰性创建并缓存（存于宿主状态 powerShellProvider）PowerShell 提供者：先 getCachedPowerShellPath 找 pwsh/powershell，找不到抛 "PowerShell is not available"。
  */
@@ -459,7 +459,7 @@ function getPsProviderForHostState(hostState) {
   });
   return hostState.powerShellProvider;
 }
-//@ chunk-e6aww6q8.js:3077504-3077572 fingerprint = resolveProvider (1)
+//@ chunk-e6aww6q8.js:3077504-3077572 fingerprint (2.1.88 match: resolveProvider, 1)
 /**
  * shellType → 提供者获取函数表：bash 走 getBashProviderForHost(RTn) 取 .provider，powershell 走 getPsProvider。
  */
@@ -467,7 +467,7 @@ var resolveProvider = {
   bash: async (hostState, options) => (await getOrCreateShellConfig(hostState, options)).provider,
   powershell: getPsProviderForHostState,
 };
-//@ chunk-e6aww6q8.js:3077572-3093643 placement = exec (0.197)
+//@ chunk-e6aww6q8.js:3077572-3093643 placement (2.1.88 match: exec, 0.197)
 /**
  * Shell 工具的统一执行入口 exec(command, abortSignal, shellType, options)。顺序：diskless 会话直接拒绝 → 取 bash/powershell 提供者 → 生成执行 id 与 TMPDIR → provider.buildExecCommand 拼出命令串（快照 source、cwd 落盘文件等）→ 校验 cwd（被删/被换链接/与权限检查时不一致都拒绝，必要时回退到项目根/家目录/临时目录）、worktree 隔离防逃逸 → 若 shouldUseSandbox：合并逐命令 denyRead/denyWrite、scrub 沙箱配置，调用 SandboxManager.wrapWithSandbox（POSIX，得到包装后的命令串）或 wrapWithSandboxArgv（Windows，得到 argv/env），strict 模式下无隔离则拒绝 → spawn（cgroup、env 覆盖、Windows PowerShell 启动器）→ 包成 ShellCommandImpl；结束后读 cwd 文件更新会话 cwd、清理沙箱、改写 Windows 沙箱错误码说明。失败一律返回 createFailedCommand（E2BIG、磁盘满单独提示）。
  */
@@ -1370,7 +1370,7 @@ function resolveCwd(path, baseCwd) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:3093839-3093968 placement = setCwd (0.53)
+//@ chunk-e6aww6q8.js:3093839-3093968 placement (2.1.88 match: setCwd, 0.53)
 /**
  * 工作目录不存在时抛出的错误类，带 path 字段。
  */

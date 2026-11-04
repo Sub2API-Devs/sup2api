@@ -28,7 +28,7 @@ var weakMap_14; // deferred: has load-time effects after a deferred statement of
 deferInit("chunk-e6aww6q8.js:4673725", () => {
   weakMap_14 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:4673745-4673820 placement = _temp (0.787)
+//@ chunk-e6aww6q8.js:4673745-4673820 placement (2.1.88 match: _temp, 0.787)
 function completedCommandSummary(msg) {
   let userPromptText = getUserPromptText(msg);
   return userPromptText?.status === "completed" ? userPromptText.summary : null;
@@ -38,7 +38,7 @@ var stickyTextCache; // deferred: has load-time effects after a deferred stateme
 deferInit("chunk-e6aww6q8.js:4673820", () => {
   stickyTextCache = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:4673840-4674254 placement = computeStickyPromptText (0.8)
+//@ chunk-e6aww6q8.js:4673840-4674254 placement (2.1.88 match: computeStickyPromptText, 0.8)
 function getUserPromptText(msg) {
   let summary = stickyTextCache.get(msg);
   if (summary === undefined) {
@@ -73,7 +73,7 @@ function parseTaskNotification(text, origin) {
     taskType: tag_2 !== null && !tag_2.includes("<") ? tag_2 : null,
   };
 }
-//@ chunk-e6aww6q8.js:4674453-4674532 placement = processQueuedCommands (1)
+//@ chunk-e6aww6q8.js:4674453-4674532 placement (2.1.88 match: processQueuedCommands, 1)
 function processQueuedCommands_3(text, origin) {
   if (origin && origin.kind !== "task-notification") return null;
   return bareTaskNotification(text);

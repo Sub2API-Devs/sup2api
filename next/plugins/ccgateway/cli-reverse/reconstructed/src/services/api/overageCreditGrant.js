@@ -29,7 +29,7 @@ import { isBgSession } from "../../utils/concurrentSessions.js";
 import { encodePathSegment } from "./apiPath.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:3058-3214 fingerprint = invalidateOverageCreditGrantCache (0.667)
+//@ chunk-06y4szbn.js:3058-3214 fingerprint (2.1.88 match: invalidateOverageCreditGrantCache, 0.667)
 /**
  * 缓存的赠送信息属于当前账号与组织时返回。旧版名 invalidateOverageCreditGrantCache 不准确。
  */
@@ -44,14 +44,14 @@ function invalidateOverageCreditGrantCache(orgId) {
     return;
   return orgId.data;
 }
-//@ chunk-zn8pzrw0.js:3581-3648 fingerprint = formatGrantAmount (0.582)
+//@ chunk-zn8pzrw0.js:3581-3648 fingerprint (2.1.88 match: formatGrantAmount, 0.582)
 /**
  * 旧版名 formatGrantAmount 为错配。
  */
 function isUsdCurrency(info) {
   return typeof info === "string" && info.toUpperCase() === "USD";
 }
-//@ chunk-0ba63vr9.js:4406-4536 fingerprint = getCachedOverageCreditGrant (0.587)
+//@ chunk-0ba63vr9.js:4406-4536 fingerprint (2.1.88 match: getCachedOverageCreditGrant, 0.587)
 /**
  * 取未过期的资格缓存。
  */
@@ -215,7 +215,7 @@ function markUpsellFulfilled(command) {
     };
   });
 }
-//@ chunk-0ba63vr9.js:6311-6770 fingerprint = refreshOverageCreditGrantCache (0.791)
+//@ chunk-0ba63vr9.js:6311-6770 fingerprint (2.1.88 match: refreshOverageCreditGrantCache, 0.791)
 /**
  * 更新资格缓存（可只在缺失/过期时写）。
  */
@@ -333,7 +333,7 @@ function startOverageClaim(orgId, setAppState, credentials) {
       });
     });
 }
-//@ chunk-9cjx5pnm.js:14005-14069 fingerprint = fetchOverageCreditGrant (0.561)
+//@ chunk-9cjx5pnm.js:14005-14069 fingerprint (2.1.88 match: fetchOverageCreditGrant, 0.561)
 /**
  * /api/oauth/organizations/<orgId>。旧版名 fetchOverageCreditGrant 为错配。
  */

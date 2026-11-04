@@ -422,7 +422,7 @@ async function checkGitDirRealpath(gitDir, home, platform, isExcluded) {
     return isENOENT(error) ? "missing" : "refused";
   }
 }
-//@ chunk-2a8yx6fc.js:6470-6651 placement = getReservedShortcuts (1)
+//@ chunk-2a8yx6fc.js:6470-6651 placement (2.1.88 match: getReservedShortcuts, 1)
 function isReservedName(name, platform) {
   if (SKIPPED_HOME_DIRS.has(name)) return true;
   let lower = name.toLowerCase();

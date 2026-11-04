@@ -69,7 +69,7 @@ import {
   MAX_WINDOW_TOKENS,
 } from "../services/compact/autoCompactWindow.js";
 
-//@ chunk-e6aww6q8.js:2371933-2371999 fingerprint = MANUAL_COMPACT_BUFFER_NAME (0.536)
+//@ chunk-e6aww6q8.js:2371933-2371999 fingerprint (2.1.88 match: MANUAL_COMPACT_BUFFER_NAME, 0.536)
 /**
  * /context 分类里的 “Compact buffer” 名称。
  */
@@ -150,7 +150,7 @@ function createCountEach(count, useBulk) {
     return mapped;
   };
 }
-//@ chunk-e6aww6q8.js:2372766-2372966 fingerprint = countTokensWithFallback (0.652)
+//@ chunk-e6aww6q8.js:2372766-2372966 fingerprint (2.1.88 match: countTokensWithFallback, 0.652)
 /**
  * 计 token：count_tokens 不可用时退回本地估算。
  */
@@ -249,7 +249,7 @@ async function toolsToApiDefinitions(
     ),
   );
 }
-//@ chunk-e6aww6q8.js:2374050-2374347 fingerprint = countToolDefinitionTokens (0.863)
+//@ chunk-e6aww6q8.js:2374050-2374347 fingerprint (2.1.88 match: countToolDefinitionTokens, 0.863)
 /**
  * 计算一组工具定义的 token 数（走 count_tokens，失败时本地估算），扣除固定开销。
  */
@@ -296,7 +296,7 @@ function extractSectionName(content) {
       .find((line) => line.trim().length > 0) ?? "";
   return firstLine.length > 40 ? firstLine.slice(0, 40) + "\u2026" : firstLine;
 }
-//@ chunk-e6aww6q8.js:2374513-2375019 fingerprint = countSystemTokens (0.767)
+//@ chunk-e6aww6q8.js:2374513-2375019 fingerprint (2.1.88 match: countSystemTokens, 0.767)
 async function countSystemTokens(session, systemPrompt, skipSystemContext, count, countEach) {
   let systemContext = skipSystemContext ? {} : await getCachedSystemContext(session);
   let namedEntries = [
@@ -331,7 +331,7 @@ async function countSystemTokens(session, systemPrompt, skipSystemContext, count
     redirectedContextTokens: 0,
   };
 }
-//@ chunk-e6aww6q8.js:2375019-2375386 fingerprint = countMemoryFileTokens (0.796)
+//@ chunk-e6aww6q8.js:2375019-2375386 fingerprint (2.1.88 match: countMemoryFileTokens, 0.796)
 async function countMemoryFileTokens(session, storageV5, countEach) {
   if (isClaudeMdLoadingDisabled())
     return {
@@ -364,7 +364,7 @@ async function countMemoryFileTokens(session, storageV5, countEach) {
     memoryFileDetails,
   };
 }
-//@ chunk-e6aww6q8.js:2375386-2376771 fingerprint = countBuiltInToolTokens (0.727)
+//@ chunk-e6aww6q8.js:2375386-2376771 fingerprint (2.1.88 match: countBuiltInToolTokens, 0.727)
 async function countBuiltInToolTokens(
   tools,
   getToolPermissionContext,
@@ -492,7 +492,7 @@ async function countBuiltInToolTokens(
 function findSkillTool(tools) {
   return findToolByName(tools, SKILL);
 }
-//@ chunk-e6aww6q8.js:2376803-2377107 fingerprint = countSlashCommandTokens (1)
+//@ chunk-e6aww6q8.js:2376803-2377107 fingerprint (2.1.88 match: countSlashCommandTokens, 1)
 async function countSlashCommandTokens(
   tools,
   getToolPermissionContext,
@@ -534,7 +534,7 @@ async function countSlashCommandTokens(
     },
   };
 }
-//@ chunk-e6aww6q8.js:2377107-2377953 fingerprint = countSkillTokens (0.611)
+//@ chunk-e6aww6q8.js:2377107-2377953 fingerprint (2.1.88 match: countSkillTokens, 0.611)
 async function countSkillTokens(
   tools,
   getToolPermissionContext,
@@ -612,7 +612,7 @@ async function countSkillTokens(
     };
   }
 }
-//@ chunk-e6aww6q8.js:2377953-2379476 fingerprint = countMcpToolTokens (0.832)
+//@ chunk-e6aww6q8.js:2377953-2379476 fingerprint (2.1.88 match: countMcpToolTokens, 0.832)
 async function countMcpToolTokens(
   tools,
   getToolPermissionContext,
@@ -778,7 +778,7 @@ async function countMcpInstructionsTokens(mcpClients, count) {
     })),
   };
 }
-//@ chunk-e6aww6q8.js:2380044-2380450 fingerprint = countCustomAgentTokens (0.812)
+//@ chunk-e6aww6q8.js:2380044-2380450 fingerprint (2.1.88 match: countCustomAgentTokens, 0.812)
 async function countCustomAgentTokens(agentDefinitions, countEach, localPaths) {
   let customAgents = agentDefinitions.activeAgents.filter((activeAgent) => activeAgent.source !== "built-in");
   let agentDetails = [];
@@ -809,7 +809,7 @@ async function countCustomAgentTokens(agentDefinitions, countEach, localPaths) {
     agentDetails,
   };
 }
-//@ chunk-e6aww6q8.js:2380450-2380710 fingerprint = processAssistantMessage (1)
+//@ chunk-e6aww6q8.js:2380450-2380710 fingerprint (2.1.88 match: processAssistantMessage, 1)
 function processAssistantMessage(msg, breakdown) {
   for (let block of msg.message.content) {
     let blockStr = jsonStringify(block);
@@ -821,7 +821,7 @@ function processAssistantMessage(msg, breakdown) {
     } else breakdown.assistantMessageTokens += blockTokens;
   }
 }
-//@ chunk-e6aww6q8.js:2380710-2381108 fingerprint = processUserMessage (1)
+//@ chunk-e6aww6q8.js:2380710-2381108 fingerprint (2.1.88 match: processUserMessage, 1)
 function processUserMessage(msg, breakdown, toolUseIdToName) {
   if (typeof msg.message.content === "string") {
     let tokens = roughTokenCountEstimation(msg.message.content);
@@ -842,7 +842,7 @@ function processUserMessage(msg, breakdown, toolUseIdToName) {
     } else breakdown.userMessageTokens += blockTokens;
   }
 }
-//@ chunk-e6aww6q8.js:2381108-2381268 fingerprint = processAttachment (1)
+//@ chunk-e6aww6q8.js:2381108-2381268 fingerprint (2.1.88 match: processAttachment, 1)
 function processAttachment(msg, breakdown) {
   let contentStr = roughTokenCountEstimationForObject(msg.attachment);
   breakdown.attachmentTokens += contentStr;
@@ -852,7 +852,7 @@ function processAttachment(msg, breakdown) {
     (breakdown.attachmentsByType.get(attachType) || 0) + contentStr,
   );
 }
-//@ chunk-e6aww6q8.js:2381268-2382161 fingerprint = approximateMessageTokens (0.831)
+//@ chunk-e6aww6q8.js:2381268-2382161 fingerprint (2.1.88 match: approximateMessageTokens, 0.831)
 /**
  * 按消息类型（assistant 工具调用、user 工具结果、附件）累计估算 token，并按工具名分类。
  */
@@ -913,7 +913,7 @@ async function approximateMessageTokens(messages, skipTranscriptCount, countTran
   breakdown.totalTokens = approximateMessageTokens ?? 0;
   return breakdown;
 }
-//@ chunk-e6aww6q8.js:2382161-2388424 fingerprint = analyzeContextUsage (0.756)
+//@ chunk-e6aww6q8.js:2382161-2388424 fingerprint (2.1.88 match: analyzeContextUsage, 0.756)
 /**
  * /context 的统计：分别计算系统提示、工具定义、MCP 工具、自定义 agent、记忆文件、技能、斜杠命令、消息与附件的 token，加上自动压缩缓冲与剩余空间，生成分类数据和网格。
  */

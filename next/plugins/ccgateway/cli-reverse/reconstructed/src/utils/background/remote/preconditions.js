@@ -33,7 +33,7 @@ import { jsonStringify } from "../../slowOperations.js";
 import { isEssentialTrafficOnly } from "../../privacyLevel.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:463956-464015 fingerprint = checkIsGitClean (1)
+//@ chunk-s61vbvea.js:463956-464015 fingerprint (2.1.88 match: checkIsGitClean, 1)
 async function checkIsGitClean() {
   return await getIsClean({
     ignoreUntracked: true,
@@ -74,7 +74,7 @@ async function isInGitRepo(cwd) {
  */
 var GITHUB_APP_CHECK_TIMEOUT_MS = 15000;
 var MIN_RESYNC_BUDGET_MS = 1000;
-//@ chunk-s61vbvea.js:464412-467594 fingerprint = checkGithubAppInstalled (0.615)
+//@ chunk-s61vbvea.js:464412-467594 fingerprint (2.1.88 match: checkGithubAppInstalled, 0.615)
 /**
  * 调 /api/oauth/organizations/{org}/code/repos/{owner}/{repo} 查 GitHub App 是否安装；状态未定时可请求服务端重新同步；非一方 API、无 token、无组织时返回未安装。
  */
@@ -325,7 +325,7 @@ function githubUserFacingError(status, body) {
 async function isGithubAppInstalled(owner, repo, signal) {
   return (await checkGithubAppInstalled(owner, repo, signal)).appInstalled;
 }
-//@ chunk-s61vbvea.js:470485-471223 fingerprint = checkGithubTokenSynced (0.98)
+//@ chunk-s61vbvea.js:470485-471223 fingerprint (2.1.88 match: checkGithubTokenSynced, 0.98)
 async function checkGithubTokenSynced() {
   try {
     let consoleProfile = isConsoleProfileSessionsCredential();
@@ -366,7 +366,7 @@ async function checkGithubTokenSynced() {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:471223-471582 fingerprint = checkRepoForRemoteAccess (0.6)
+//@ chunk-s61vbvea.js:471223-471582 fingerprint (2.1.88 match: checkRepoForRemoteAccess, 0.6)
 /**
  * 判断仓库的远程访问方式：github-app、token-sync 或 none（附原因）。
  */

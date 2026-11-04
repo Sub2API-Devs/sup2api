@@ -13,7 +13,7 @@ import { useGlobalExitKeybindings } from "../../keybindings/useKeybinding.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-8jawqfvg.js:332-632 fingerprint = AgentNavigationFooter (0.695)
+//@ chunk-8jawqfvg.js:332-632 fingerprint (2.1.88 match: AgentNavigationFooter, 0.695)
 function AgentNavigationFooter(props) {
   let $ = useMemoCache(3);
   let { children, exitActive, onInterrupt, italic } = props;

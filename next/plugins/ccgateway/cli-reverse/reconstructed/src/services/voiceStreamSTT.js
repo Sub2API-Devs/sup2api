@@ -29,7 +29,7 @@ import { getWebSocketProxyUrl } from "../utils/proxy.js";
 import { guardTestWebSocket } from "../utils/testNetworkGuard.js";
 import { jsonParse } from "../utils/slowOperations.js";
 
-//@ chunk-a5nx0r17.js:698-829 fingerprint = FINALIZE_TIMEOUTS_MS (0.408)
+//@ chunk-a5nx0r17.js:698-829 fingerprint (2.1.88 match: FINALIZE_TIMEOUTS_MS, 0.408)
 /**
  * 协议常量：KeepAlive 与 CloseStream 帧、端点路径、keepalive 间隔 8s、收尾超时（safety 5s、noData 1.5s）。
  */
@@ -85,7 +85,7 @@ function shouldForwardTypedInterims() {
   if (env.CLAUDE_CODE_VOICE_FORWARD_INTERIMS_TYPED) return true;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_brick_follow", false);
 }
-//@ chunk-a5nx0r17.js:1499-1581 facade-exports = isVoiceStreamAvailable (1)
+//@ chunk-a5nx0r17.js:1499-1581 facade-exports (2.1.88 match: isVoiceStreamAvailable, 1)
 /**
  * 是否可用语音流：Anthropic 登录且有 OAuth access token。
  */
@@ -123,7 +123,7 @@ function formatKeytermsHeader(keyterms) {
 function getVoiceStreamBaseUrlOverride() {
   return;
 }
-//@ chunk-a5nx0r17.js:1861-6120 facade-exports = connectVoiceStream (0.851)
+//@ chunk-a5nx0r17.js:1861-6120 facade-exports (2.1.88 match: connectVoiceStream, 0.851)
 /**
  * 建立语音转写 WebSocket：OAuth Bearer 认证，参数 linear16/16000/单声道/endpointing 300ms/utterance_end 1000ms/language，可带关键词头；返回连接对象（send、finalize、close 等）。
  */

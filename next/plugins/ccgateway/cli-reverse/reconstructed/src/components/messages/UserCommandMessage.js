@@ -22,7 +22,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 
-//@ chunk-ah34pb7m.js:105017-105109 placement = PERSISTED_OUTPUT_CLOSING_TAG (0.398)
+//@ chunk-ah34pb7m.js:105017-105109 placement (2.1.88 match: PERSISTED_OUTPUT_CLOSING_TAG, 0.398)
 /**
  * "<bash-stdout>"/"</bash-stdout>"/"<persisted-output>"/"</persisted-output>" 标签常量。
  */
@@ -30,7 +30,7 @@ var BASH_STDOUT_OPEN_TAG = "<bash-stdout>";
 var BASH_STDOUT_CLOSE_TAG = "</bash-stdout>";
 var PERSISTED_OUTPUT_TAG = "<persisted-output>";
 var PERSISTED_OUTPUT_CLOSING_TAG = "</persisted-output>";
-//@ chunk-ah34pb7m.js:105191-105335 placement = BASH_STDERR_TAG (0.645)
+//@ chunk-ah34pb7m.js:105191-105335 placement (2.1.88 match: BASH_STDERR_TAG, 0.645)
 /**
  * 从 bash-stdout/bash-stderr 标签包装的文本中拆出 stdout/stderr（处理 persisted-output 包装并反转义）。旧版名 BASH_STDERR_TAG 是常量名，这里是函数。
  */
@@ -109,7 +109,7 @@ function BashOutputBlock(props) {
   } else resultElement = $[4];
   return resultElement;
 }
-//@ chunk-ah34pb7m.js:105999-106929 fingerprint = UserCommandMessage (0.39)
+//@ chunk-ah34pb7m.js:105999-106929 fingerprint (2.1.88 match: UserCommandMessage, 0.39)
 function UserCommandMessage(props) {
   let $ = useMemoCache(14);
   let { addMargin, param, followsSpeakerLabel } = props;

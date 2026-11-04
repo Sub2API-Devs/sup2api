@@ -38,7 +38,7 @@ var BEDROCK_SETUP_STEPS = [
   BedrockModelCheckStep,
   BedrockSaveStep,
 ];
-//@ chunk-sx9xc5ee.js:23475-23866 fingerprint = CreateAgentWizard (0.552)
+//@ chunk-sx9xc5ee.js:23475-23866 fingerprint (2.1.88 match: CreateAgentWizard, 0.552)
 function CreateAgentWizard(props) {
   let $ = useMemoCache(7);
   let { onComplete, onCancel, exitOnCtrlCD } = props;

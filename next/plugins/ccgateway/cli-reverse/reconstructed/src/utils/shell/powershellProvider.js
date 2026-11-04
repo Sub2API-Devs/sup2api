@@ -20,7 +20,7 @@ import { noPromptEnvDefaults } from "../gitSafeExec.js";
 import { withholdsDaemonForceColor } from "../subprocessEnv.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:858490-858642 fingerprint = buildPowerShellArgs (0.503)
+//@ chunk-e6aww6q8.js:858490-858642 fingerprint (2.1.88 match: buildPowerShellArgs, 0.503)
 function buildPowerShellArgs() {
   let args = ["-NoProfile", "-NonInteractive"];
   if (!env.CLAUDE_CODE_POWERSHELL_RESPECT_EXECUTION_POLICY) args.push("-ExecutionPolicy", "Bypass");
@@ -103,7 +103,7 @@ var PS_DEFAULT_CHILD_ENV = {
   PYTHONIOENCODING: "utf-8:surrogateescape",
   NO_COLOR: "1",
 };
-//@ chunk-e6aww6q8.js:859730-860963 fingerprint = createPowerShellProvider (0.685)
+//@ chunk-e6aww6q8.js:859730-860963 fingerprint (2.1.88 match: createPowerShellProvider, 0.685)
 /**
  * 创建 PowerShell 提供者：命令后追加记录 $LASTEXITCODE 与 (Get-Location) 到 claude-pwd-ps-<id> 文件的片段；POSIX 沙箱下改用 -EncodedCommand（UTF-16LE base64）；环境补 PYTHONIOENCODING、NO_COLOR，沙箱时设 TMPDIR。
  */

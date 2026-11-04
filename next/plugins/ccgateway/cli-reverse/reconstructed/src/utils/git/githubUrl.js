@@ -20,7 +20,7 @@ var WEB_URL_SCHEMES; // deferred: has load-time effects after a deferred stateme
 deferInit("chunk-fb1cwb1a.js:263", () => {
   WEB_URL_SCHEMES = new Set(["http", "https", "ws", "wss", "ftp"]);
 });
-//@ chunk-fb1cwb1a.js:314-642 placement = ghIsDangerousCallback (0.806)
+//@ chunk-fb1cwb1a.js:314-642 placement (2.1.88 match: ghIsDangerousCallback, 0.806)
 /**
  * 判断字符串是否为 ssh/git 形式的 URL（含反斜杠伪装）。
  */

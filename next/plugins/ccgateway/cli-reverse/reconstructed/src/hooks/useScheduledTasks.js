@@ -55,7 +55,7 @@ import { getSessionProject } from "../bootstrap/sessionSlices.js";
 import { SerialWriteQueue } from "../utils/errorLogSink.js";
 import { loopKeepaliveSetting, hasLoopTask, scheduleKeepaliveWakeup } from "../utils/loop/loopWakeups.js";
 
-//@ chunk-k8enqm3s.js:228-481 fingerprint = formatCronFireTime (0.874)
+//@ chunk-k8enqm3s.js:228-481 fingerprint (2.1.88 match: formatCronFireTime, 0.874)
 function formatCronFireTime(date, options) {
   return date
     .toLocaleString("en-US", {
@@ -242,7 +242,7 @@ function getSpanDurationSeconds(messages, fireIdx) {
 //@ chunk-4m1yk02k.js:15052-15096 affinity
 var scheduledTasksModule = require("../utils/loop/LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
 var SCHEDULED_TASKS_PLACEHOLDER = null;
-//@ chunk-4m1yk02k.js:15096-17139 fingerprint = useScheduledTasks (0.512)
+//@ chunk-4m1yk02k.js:15096-17139 fingerprint (2.1.88 match: useScheduledTasks, 0.512)
 function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, disabled = false }) {
   let commandQueueOrDefault = useCommandQueueOrDefault();
   let isLoadingRef = useEffectEvent(() => isLoading);

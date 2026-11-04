@@ -12,7 +12,7 @@ import { isValidStatusCacheLine } from "../../services/api/metricsOptOut.js";
 
 //@ chunk-3n6ygrtf.js:3624-3632 affinity
 var FEED_ROW_HEIGHT = 8;
-//@ chunk-3n6ygrtf.js:3632-3774 callgraph-fingerprint = Feed (0.152)
+//@ chunk-3n6ygrtf.js:3632-3774 callgraph-fingerprint (2.1.88 match: Feed, 0.152)
 function Feed(t0) {
   let sliced = Object.entries(t0)
     .filter(([, value]) => isValidStatusCacheLine(value))
@@ -20,7 +20,7 @@ function Feed(t0) {
     .slice(0, FEED_ROW_HEIGHT);
   return Object.fromEntries(sliced);
 }
-//@ chunk-ag5x7vhf.js:10200-10306 fingerprint = calculateFeedWidth (0.333)
+//@ chunk-ag5x7vhf.js:10200-10306 fingerprint (2.1.88 match: calculateFeedWidth, 0.333)
 function calculateFeedWidth(config) {
   return (
     (config.data !== null && (config.data.suggestions.length > 0 || !!config.data.emptyMessage)) ||

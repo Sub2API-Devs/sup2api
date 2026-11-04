@@ -330,7 +330,7 @@ function syncOrganizationAskPolicy() {
 function isPrometheusOnly(metricsExporterKinds) {
   return metricsExporterKinds.length > 0 && metricsExporterKinds.every((kind) => kind === "prometheus");
 }
-//@ chunk-vbtpanx5.js:5329-5626 fingerprint = setMeterState (0.423)
+//@ chunk-vbtpanx5.js:5329-5626 fingerprint (2.1.88 match: setMeterState, 0.423)
 /**
  * 初始化 OTel meter 并安装 claude_code.* 计数器到 telemetryHandles。
  */
@@ -377,7 +377,7 @@ deferInit("chunk-vbtpanx5.js:5694", () => {
 function getInitState() {
   return initStateSlot.of(getRootSession().host);
 }
-//@ chunk-vbtpanx5.js:5752-10681 fingerprint = init (0.6)
+//@ chunk-vbtpanx5.js:5752-10681 fingerprint (2.1.88 match: init, 0.6)
 /**
  * init 本体：启用配置（v5 存储后端/远程设置预热/fd 凭证）、standalone 代理中继、应用安全环境变量与 CA、OAuth 账户信息、优雅退出注册、1P 事件日志、mTLS 与全局代理、预连 Anthropic API、CCR 代理（CLAUDE_CODE_REMOTE）、Windows shell 检查、scratchpad 目录；配置错误时弹 InvalidConfig 对话框或退出。
  */
@@ -665,7 +665,7 @@ async function initImpl(options = {}) {
 function init(options) {
   return (getInitState().promise ??= initImpl(options));
 }
-//@ chunk-vbtpanx5.js:10723-11549 facade-exports = initializeTelemetryAfterTrust (0.505)
+//@ chunk-vbtpanx5.js:10723-11549 facade-exports (2.1.88 match: initializeTelemetryAfterTrust, 0.505)
 /**
  * 信任建立后初始化 OpenTelemetry：需要等待远程托管设置时延后到其完成，否则立即初始化（只做一次）。
  */

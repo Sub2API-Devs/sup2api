@@ -11,7 +11,7 @@
 import { env } from "../utils/env.js";
 import { isBareMode } from "../utils/envUtils.js";
 
-//@ chunk-3wek6r2k.js:101113-101178 fingerprint = useAfterFirstRender (0.326)
+//@ chunk-3wek6r2k.js:101113-101178 fingerprint (2.1.88 match: useAfterFirstRender, 0.326)
 function useAfterFirstRender() {
   return env.CLAUDE_CODE_EXIT_AFTER_FIRST_RENDER || isBareMode();
 }

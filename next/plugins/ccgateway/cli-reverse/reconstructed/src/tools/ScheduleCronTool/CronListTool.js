@@ -33,7 +33,7 @@ import { cronToHuman } from "../../utils/cron.js";
 import { formatCronFireTime } from "../../hooks/useScheduledTasks.js";
 import { truncate } from "../../utils/format.js";
 
-//@ chunk-8985aafb.js:4785-6031 fingerprint = CronListTool (0.865)
+//@ chunk-8985aafb.js:4785-6031 fingerprint (2.1.88 match: CronListTool, 0.865)
 /**
  * CronList 工具（只读可并发）：列出任务（代理上下文中只列本代理的），附人类可读时间表与下次触发时间。
  */

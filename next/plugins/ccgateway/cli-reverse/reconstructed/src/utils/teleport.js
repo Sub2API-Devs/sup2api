@@ -244,14 +244,14 @@ import { subscribeGithubPullRequest } from "../bridge/githubPrSubscription.js";
 
 //@ chunk-e6aww6q8.js:1941496-1941556 affinity
 var ENV_SETUP_ONBOARDING_URL = "https://claude.ai/code/onboarding?magic=env-setup";
-//@ chunk-e6aww6q8.js:1941556-1941737 fingerprint = createTeleportResumeSystemMessage (1)
+//@ chunk-e6aww6q8.js:1941556-1941737 fingerprint (2.1.88 match: createTeleportResumeSystemMessage, 1)
 function createTeleportResumeSystemMessage(branchError) {
   if (branchError === null) return createSystemMessage("Session resumed", "suggestion");
   let formattedError =
     branchError instanceof TeleportOperationError ? branchError.formattedMessage : branchError.message;
   return createSystemMessage(`Session resumed without branch: ${formattedError}`, "warning");
 }
-//@ chunk-e6aww6q8.js:1941737-1941916 fingerprint = createTeleportResumeUserMessage (1)
+//@ chunk-e6aww6q8.js:1941737-1941916 fingerprint (2.1.88 match: createTeleportResumeUserMessage, 1)
 function createTeleportResumeUserMessage() {
   return createUserMessage({
     content: `This session is being continued from another machine. Application state may have changed. The updated working directory is ${getOriginalCwd()}`,
@@ -263,7 +263,7 @@ var DEFAULT_BACKGROUND_TASK_TITLE = {
   title: BACKGROUND_TASK_TITLE,
   branchName: "claude/background-task",
 };
-//@ chunk-e6aww6q8.js:1941972-1942300 facade-exports = validateGitState (0.852)
+//@ chunk-e6aww6q8.js:1941972-1942300 facade-exports (2.1.88 match: validateGitState, 0.852)
 /**
  * teleport 前要求工作区干净（tengu_teleport_error_git_not_clean）。
  */
@@ -281,7 +281,7 @@ async function validateGitState() {
     );
   }
 }
-//@ chunk-e6aww6q8.js:1942300-1942776 fingerprint = fetchFromOrigin (1)
+//@ chunk-e6aww6q8.js:1942300-1942776 fingerprint (2.1.88 match: fetchFromOrigin, 1)
 async function fetchFromOrigin(branch) {
   let fetchArgs = branch
     ? [...GIT_SAFE_GLOBAL_ARGS, "fetch", SAFE_UPLOAD_PACK_ARG_2, "origin", `${branch}:${branch}`]
@@ -313,7 +313,7 @@ async function fetchFromOrigin(branch) {
         level: "error",
       });
 }
-//@ chunk-e6aww6q8.js:1942776-1943374 fingerprint = ensureUpstreamIsSet (1)
+//@ chunk-e6aww6q8.js:1942776-1943374 fingerprint (2.1.88 match: ensureUpstreamIsSet, 1)
 async function ensureUpstreamIsSet(branchName) {
   let repoRootOrCwd = getRepoRootOrCwd();
   let execOptions = {
@@ -367,7 +367,7 @@ function userCheckoutSpawnTerms() {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1943712-1945237 facade-exports = stashToCleanState (0.369)
+//@ chunk-e6aww6q8.js:1943712-1945237 facade-exports (2.1.88 match: stashToCleanState, 0.369)
 /**
  * teleport 前把工作区 stash 到干净状态：先检查被 assume-unchanged/被文件夹替换的已跟踪路径（存在则拒绝，避免 stash 丢数据），再 add 未跟踪文件并 git stash push。
  */
@@ -437,7 +437,7 @@ async function stashToCleanState(options, { cwd, env }) {
   );
   return code === 0;
 }
-//@ chunk-e6aww6q8.js:1945237-1945804 fingerprint = checkoutBranch (1)
+//@ chunk-e6aww6q8.js:1945237-1945804 fingerprint (2.1.88 match: checkoutBranch, 1)
 async function checkoutBranch(branchName, execOptions) {
   let result = await execFileNoThrowWithCwd(
     gitExe(),
@@ -470,7 +470,7 @@ async function checkoutBranch(branchName, execOptions) {
   }
   await ensureUpstreamIsSet(branchName);
 }
-//@ chunk-e6aww6q8.js:1945804-1945931 fingerprint = getCurrentBranch (1)
+//@ chunk-e6aww6q8.js:1945804-1945931 fingerprint (2.1.88 match: getCurrentBranch, 1)
 async function getCurrentBranch() {
   let repoRootOrCwd = getRepoRootOrCwd();
   let { stdout: currentBranch } = await execFileNoThrowWithCwd(
@@ -487,7 +487,7 @@ async function getCurrentBranch() {
 function deserializeRemoteSessionLog(log) {
   return markRemoteSourced(deserializeToMessages(log, true));
 }
-//@ chunk-e6aww6q8.js:1945969-1946379 facade-exports = processMessagesForTeleportResume (0)
+//@ chunk-e6aww6q8.js:1945969-1946379 facade-exports (2.1.88 match: processMessagesForTeleportResume, 0)
 function processMessagesForTeleportResume(log, branchError, environmentKind) {
   let messagesWithTeleportNotice = [
     ...deserializeRemoteSessionLog(log),
@@ -507,7 +507,7 @@ function processMessagesForTeleportResume(log, branchError, environmentKind) {
     );
   return messagesWithTeleportNotice;
 }
-//@ chunk-e6aww6q8.js:1946379-1946895 facade-exports = checkOutTeleportedSessionBranch (0.832)
+//@ chunk-e6aww6q8.js:1946379-1946895 facade-exports (2.1.88 match: checkOutTeleportedSessionBranch, 0.832)
 /**
  * fetch 并检出云会话所在分支，设置 upstream。
  */
@@ -542,7 +542,7 @@ async function checkOutTeleportedSessionBranch(branch) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1946895-1948437 facade-exports = validateSessionRepository (0.94)
+//@ chunk-e6aww6q8.js:1946895-1948437 facade-exports (2.1.88 match: validateSessionRepository, 0.94)
 /**
  * 检查云会话关联的 git 仓库与当前目录是否一致（含 host），不一致返回 mismatch。
  */
@@ -656,7 +656,7 @@ function formatRepoMismatchDisplay(mismatch) {
     currentDisplay: hostsDiffer ? `${mismatch.currentHost}/${mismatch.currentRepo}` : mismatch.currentRepo,
   };
 }
-//@ chunk-e6aww6q8.js:1948699-1950938 facade-exports = teleportResumeCodeSession (0.74)
+//@ chunk-e6aww6q8.js:1948699-1950938 facade-exports (2.1.88 match: teleportResumeCodeSession, 0.74)
 /**
  * 把云端会话拉回本地继续：校验仓库匹配、拉取会话日志、检出对应分支，返回消息与分支。
  */
@@ -766,7 +766,7 @@ This repo is ${sequential.bold(currentDisplay)}.
     );
   }
 }
-//@ chunk-e6aww6q8.js:1950938-1951179 facade-exports = handleTeleportPrerequisites (0.836)
+//@ chunk-e6aww6q8.js:1950938-1951179 facade-exports (2.1.88 match: handleTeleportPrerequisites, 0.836)
 async function handleTeleportPrerequisites(root, showErrors, options) {
   let teleportErrors = await getTeleportErrors(undefined, showErrors);
   if (teleportErrors.size > 0) {
@@ -1000,7 +1000,7 @@ ${failureText}
     failDetail,
   };
 }
-//@ chunk-e6aww6q8.js:1955574-1956933 facade-exports = teleportFromSessionsAPI (0.864)
+//@ chunk-e6aww6q8.js:1955574-1956933 facade-exports (2.1.88 match: teleportFromSessionsAPI, 0.864)
 /**
  * 从 Sessions API 拉取远程会话的事件日志并转换为本地消息。
  */
@@ -2052,7 +2052,7 @@ async function getCloudSessionAccessToken(credentials, storageV5) {
 async function hasRecoveredBearer(heldToken, withheld) {
   return (await recoverHostSessionsBearer(heldToken, withheld ? "withheld" : "refused")) !== "not_held";
 }
-//@ chunk-e6aww6q8.js:1973235-2009090 facade-exports = teleportToRemote (0.247)
+//@ chunk-e6aww6q8.js:1973235-2009090 facade-exports (2.1.88 match: teleportToRemote, 0.247)
 /**
  * 创建云端会话（Claude Code on the web）：检查第一方与策略 allow_remote_sessions、选择环境、打包/上传 git 状态、绑定设备，POST /v1/code/sessions 并发送初始消息与控制事件。
  */
@@ -4047,7 +4047,7 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
 function isSuccessStatus(status) {
   return status >= 200 && status < 300;
 }
-//@ chunk-e6aww6q8.js:2009127-2009992 facade-exports = sendEventToRemoteSession (0.362)
+//@ chunk-e6aww6q8.js:2009127-2009992 facade-exports (2.1.88 match: sendEventToRemoteSession, 0.362)
 /**
  * 向远程会话发送 interrupt 控制请求（中断当前回合）。
  */
@@ -4127,7 +4127,7 @@ function subscribeRemoteSessionToPR(sessionId, repo, prNumber) {
     onUnauthorized: recoverHostSessionsBearer,
   });
 }
-//@ chunk-18hwfzwa.js:1459225-1459274 fingerprint = teleportToRemoteWithErrorHandling (0.308)
+//@ chunk-18hwfzwa.js:1459225-1459274 fingerprint (2.1.88 match: teleportToRemoteWithErrorHandling, 0.308)
 function teleportToRemoteWithErrorHandling_2(options) {
   return options.initialMessage !== null;
 }

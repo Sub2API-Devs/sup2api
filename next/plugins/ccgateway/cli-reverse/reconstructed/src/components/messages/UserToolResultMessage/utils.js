@@ -26,7 +26,7 @@ var BRIEF_TOOL_NAME_SET; // deferred: has load-time effects after a deferred sta
 deferInit("chunk-ah34pb7m.js:220405", () => {
   BRIEF_TOOL_NAME_SET = new Set([BRIEF_TOOL_NAME]);
 });
-//@ chunk-ah34pb7m.js:220426-220929 fingerprint = useGetToolFromMessages (1)
+//@ chunk-ah34pb7m.js:220426-220929 fingerprint (2.1.88 match: useGetToolFromMessages, 1)
 function useGetToolFromMessages(toolUseID, tools, lookups) {
   let $ = useMemoCache(8);
   let toolName = lookups.toolUseByToolUseID.get(toolUseID)?.name;

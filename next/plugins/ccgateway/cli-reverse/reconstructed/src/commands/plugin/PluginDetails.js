@@ -122,7 +122,7 @@ function useCatalogEntryPromise(pluginId) {
   } else content = $[2];
   return content;
 }
-//@ chunk-vrb44rx7.js:60622-60772 placement = formatPeakDay (0.754)
+//@ chunk-vrb44rx7.js:60622-60772 placement (2.1.88 match: formatPeakDay, 0.754)
 function formatPeakDay(dateStr) {
   let date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return;

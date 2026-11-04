@@ -33,7 +33,7 @@ function renderText(node, i) {
 }
 //@ chunk-887tgx6t.js:785-796 layout
 var DIM_ALPHA = 0.4;
-//@ chunk-887tgx6t.js:796-1192 fingerprint = StructuredDiffFallback (1)
+//@ chunk-887tgx6t.js:796-1192 fingerprint (2.1.88 match: StructuredDiffFallback, 1)
 function StructuredDiffFallback(props) {
   let $ = useMemoCache(10);
   let { patch, dim, width } = props;
@@ -67,7 +67,7 @@ function StructuredDiffFallback(props) {
   } else t3 = $[9];
   return t3;
 }
-//@ chunk-887tgx6t.js:1192-1389 fingerprint = transformLinesToObjects (0.933)
+//@ chunk-887tgx6t.js:1192-1389 fingerprint (2.1.88 match: transformLinesToObjects, 0.933)
 function transformLinesToObjects(lines) {
   return lines.map((code) => {
     let type = code.startsWith("+") ? "add" : code.startsWith("-") ? "remove" : "nochange";
@@ -81,7 +81,7 @@ function transformLinesToObjects(lines) {
     };
   });
 }
-//@ chunk-887tgx6t.js:1389-1929 fingerprint = processAdjacentLines (1)
+//@ chunk-887tgx6t.js:1389-1929 fingerprint (2.1.88 match: processAdjacentLines, 1)
 function processAdjacentLines(lineObjects) {
   let processedLines = [];
   let i = 0;
@@ -131,13 +131,13 @@ function processAdjacentLines(lineObjects) {
   }
   return processedLines;
 }
-//@ chunk-887tgx6t.js:1929-1978 fingerprint = calculateWordDiffs (1)
+//@ chunk-887tgx6t.js:1929-1978 fingerprint (2.1.88 match: calculateWordDiffs, 1)
 function calculateWordDiffs(oldText, newText) {
   return diffWordsWithSpace(oldText, newText, {
     ignoreCase: false,
   });
 }
-//@ chunk-887tgx6t.js:1978-3595 fingerprint = generateWordDiffElements (0.948)
+//@ chunk-887tgx6t.js:1978-3595 fingerprint (2.1.88 match: generateWordDiffElements, 0.948)
 function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
   let { type, i, wordDiff, matchedLine, originalCode } = item;
   if (!wordDiff || !matchedLine) return null;
@@ -267,7 +267,7 @@ function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
     );
   });
 }
-//@ chunk-887tgx6t.js:3595-4741 fingerprint = formatDiff (0.931)
+//@ chunk-887tgx6t.js:3595-4741 fingerprint (2.1.88 match: formatDiff, 0.931)
 function formatDiff(lines, startingLineNumber, width, dim, overrideTheme) {
   let safeWidth = Math.max(1, Math.floor(width));
   let lineObjects = transformLinesToObjects(lines);
@@ -351,7 +351,7 @@ function formatDiff(lines, startingLineNumber, width, dim, overrideTheme) {
     });
   });
 }
-//@ chunk-887tgx6t.js:4741-5314 fingerprint = numberDiffLines (0.952)
+//@ chunk-887tgx6t.js:4741-5314 fingerprint (2.1.88 match: numberDiffLines, 0.952)
 function numberDiffLines(diff, startLine) {
   let i = startLine;
   let result = [];

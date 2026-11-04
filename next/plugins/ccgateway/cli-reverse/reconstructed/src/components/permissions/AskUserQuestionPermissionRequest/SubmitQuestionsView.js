@@ -25,7 +25,7 @@ import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/i
 import { PermissionRuleExplanation } from "../PermissionRuleExplanation.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 
-//@ chunk-18hwfzwa.js:1293852-1295825 fingerprint = SubmitQuestionsView (0.78)
+//@ chunk-18hwfzwa.js:1293852-1295825 fingerprint (2.1.88 match: SubmitQuestionsView, 0.78)
 function SubmitQuestionsView(props) {
   let $ = useMemoCache(24);
   let { questions, currentQuestionIndex, answers, allQuestionsAnswered, permissionResult, onFinalResponse } =

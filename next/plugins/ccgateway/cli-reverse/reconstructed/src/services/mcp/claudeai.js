@@ -108,7 +108,7 @@ function fetchClaudeAiConfigsOnce(credentials) {
     cliOwnedState.claudeAiConfigsFetch = fetchClaudeAIMcpConfigsIfEligible(credentials);
   return cliOwnedState.claudeAiConfigsFetch;
 }
-//@ chunk-0qx6sn4e.js:4466-9777 fingerprint = fetchClaudeAIMcpConfigsIfEligible (0.42)
+//@ chunk-0qx6sn4e.js:4466-9777 fingerprint (2.1.88 match: fetchClaudeAIMcpConfigsIfEligible, 0.42)
 /**
  * fetchClaudeAIMcpConfigsIfEligible：拉取 claude.ai 组织连接器列表（GET {BASE_API_URL}/v1/mcp_servers?limit=1000&include_additional_installs=true）。依次检查 ENABLE_CLAUDEAI_MCP_SERVERS、disableClaudeAiConnectors、安全模式、一方提供商、API key 优先、user:mcp_servers 作用域；瞬时错误按退避重试，非 401/429 错误时去掉 include_additional_installs 再试一次。结果转成 "claude.ai <显示名>" 的 claudeai-proxy 配置（含 stateless、cached_init/discover、discoverSupport 等），显示名冲突加 (2)。
  */
@@ -485,7 +485,7 @@ function hasClaudeAiMcpEverConnected(name) {
 function getEverConnectedClaudeAiMcpSet() {
   return new Set(getEverConnectedClaudeAiMcps(getGlobalConfig()));
 }
-//@ chunk-0qx6sn4e.js:11146-11198 fingerprint = markClaudeAiMcpConnected (1)
+//@ chunk-0qx6sn4e.js:11146-11198 fingerprint (2.1.88 match: markClaudeAiMcpConnected, 1)
 function getEverConnectedClaudeAiMcps(name) {
   return stringArray(name.claudeAiMcpEverConnected);
 }

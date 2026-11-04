@@ -311,7 +311,7 @@ function notB(value) {
 //@ chunk-18hwfzwa.js:136428-136451 layout
 var VERBOSE_LABEL = "verbose ";
 var FOOTER_PADDING = 2;
-//@ chunk-18hwfzwa.js:136451-138080 fingerprint = TranscriptModeFooter (0.696)
+//@ chunk-18hwfzwa.js:136451-138080 fingerprint (2.1.88 match: TranscriptModeFooter, 0.696)
 /**
  * transcript 模式（ctrl+o）底部页脚：显示 "Showing detailed transcript"、切换快捷键、滚动/打开编辑器提示或搜索计数；宽度不足时退化为 "? for shortcuts"。
  */
@@ -670,7 +670,7 @@ function TranscriptHelpFooter() {
   } else helpRow = $[22];
   return helpRow;
 }
-//@ chunk-18hwfzwa.js:140845-142030 fingerprint = TranscriptSearchBar (0.76)
+//@ chunk-18hwfzwa.js:140845-142030 fingerprint (2.1.88 match: TranscriptSearchBar, 0.76)
 /**
  * transcript 搜索栏（/）：useSearchInput 读输入，首次打开时预热搜索索引（indexing… / indexed in Nms），查询变化后调用 jumpRef.setSearchQuery 并高亮。
  */
@@ -1370,7 +1370,7 @@ function nextTitleFrame(f) {
 var TITLE_SPINNER_FRAMES = ["\u25D0", "\u25D1"];
 var TITLE_IDLE_PREFIX = "\u2733";
 var TITLE_FRAME_INTERVAL_MS = 960;
-//@ chunk-18hwfzwa.js:1426059-1426386 fingerprint = AnimatedTerminalTitle (0.545)
+//@ chunk-18hwfzwa.js:1426059-1426386 fingerprint (2.1.88 match: AnimatedTerminalTitle, 0.545)
 /**
  * 终端标题组件：从 titles 存储取标题，工作中且终端聚焦时以 960ms 交替 ◐/◑ 前缀，否则 ✳；在 tmux 等复用器下受 tengu_static_title_under_mux 控制改为静态。
  */
@@ -1479,7 +1479,7 @@ function selectSessionId(state) {
 function selectReplTab(state) {
   return state.replTab;
 }
-//@ chunk-18hwfzwa.js:1822956-1823013 sole-consumer = _temp (1)
+//@ chunk-18hwfzwa.js:1822956-1823013 sole-consumer (2.1.88 match: _temp, 1)
 function selectFileHistoryTrackedFilesSize(s) {
   return s.fileHistory.trackedFiles.size;
 }
@@ -1534,7 +1534,7 @@ function hideDiffPanel(state) {
 function createReplayHandleSlot() {
   return new ReplayHandleSlot();
 }
-//@ chunk-18hwfzwa.js:1823473-1823521 sole-consumer = _temp (1)
+//@ chunk-18hwfzwa.js:1823473-1823521 sole-consumer (2.1.88 match: _temp, 1)
 function isCompletedStatus(state) {
   return state.status === "completed";
 }
@@ -2861,11 +2861,11 @@ function createNullStore() {
 function selectReplTabB(state) {
   return state.replTab;
 }
-//@ chunk-18hwfzwa.js:1839090-1839131 sole-consumer = _temp (1)
+//@ chunk-18hwfzwa.js:1839090-1839131 sole-consumer (2.1.88 match: _temp, 1)
 function selectMcpClientsReplC(s) {
   return s.mcp.clients;
 }
-//@ chunk-18hwfzwa.js:1839131-1839179 sole-consumer = _temp (1)
+//@ chunk-18hwfzwa.js:1839131-1839179 sole-consumer (2.1.88 match: _temp, 1)
 function selectPendingWorkerRequest_2(state) {
   return state.pendingWorkerRequest;
 }
@@ -2953,7 +2953,7 @@ function logDiffSidebarRenderError(error, info) {
       : undefined,
   );
 }
-//@ chunk-18hwfzwa.js:1839991-1840048 fingerprint = useScheduledTasks (0.524)
+//@ chunk-18hwfzwa.js:1839991-1840048 fingerprint (2.1.88 match: useScheduledTasks, 0.524)
 var useScheduledTasks; // deferred: loads other modules while loading; runs once its import cycle is complete
 deferInit("chunk-18hwfzwa.js:1839991", () => {
   useScheduledTasks = require("../hooks/useScheduledTasks.js").useScheduledTasks;
@@ -2999,7 +2999,7 @@ function REPL(props) {
   } else queueWrapper = $[7];
   return queueWrapper;
 }
-//@ chunk-18hwfzwa.js:1840431-1878241 callgraph-witnessed = REPL (0.129)
+//@ chunk-18hwfzwa.js:1840431-1878241 callgraph-witnessed (2.1.88 match: REPL, 0.129)
 /**
  * 主交互屏幕（316 重写为“控制器 + 外部 store”架构）。按 props 建立一组长生命周期控制器（useState 初始化器里 new）：ReplSessionScope、TurnController+转录 store、ComposerChrome、SessionController、PromptSubmitController、ScrollPin、PromptDraft、IdleNudge、BackgroundGesture 等，
  * 再用 useLayoutEffect 一次性 bindHost 把 mainLoopModel/canUseTool/通知等宿主能力注入各控制器。渲染：transcript 屏返回 gQ 转录视图；prompt 屏返回 FullscreenLayout{scrollable=Gee 消息列表, abovePrompt=通知/任务/权限区, bottom=y8 输入区, sidebar=diff 侧栏, dock=面板坞}，

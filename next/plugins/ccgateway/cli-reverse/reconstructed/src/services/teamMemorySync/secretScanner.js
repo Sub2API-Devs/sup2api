@@ -46,7 +46,7 @@ function redactMatches(target, pattern, redactMatchKeepPrefix) {
   }
   return applyTextEdits(target, edits);
 }
-//@ chunk-cgr0tezp.js:43347-43695 placement = initCharAscii (0.716)
+//@ chunk-cgr0tezp.js:43347-43695 placement (2.1.88 match: initCharAscii, 0.716)
 function applyTextEdits(target, edits) {
   if (edits.length === 0) return target;
   let { text, origin } = target;
@@ -72,7 +72,7 @@ function applyTextEdits(target, edits) {
     origin: table,
   };
 }
-//@ chunk-cgr0tezp.js:51715-60332 fingerprint = SECRET_RULES (0.516)
+//@ chunk-cgr0tezp.js:51715-60332 fingerprint (2.1.88 match: SECRET_RULES, 0.516)
 /**
  * 密钥扫描的规则表与全部正则片段：键名模式、值形态、JWT、各云厂商令牌规则，以及置信度与预筛标记。
  */
@@ -545,7 +545,7 @@ function findPrivateKeyBlock(text, lastIndex) {
 function containsPrivateKey(text) {
   return findPrivateKeyBlock(text, 0) !== null;
 }
-//@ chunk-cgr0tezp.js:60677-60821 layout = redactSecrets (0.815)
+//@ chunk-cgr0tezp.js:60677-60821 layout (2.1.88 match: redactSecrets, 0.815)
 function redactSecrets_2(content) {
   let pemBlocks = findPemBlocks(content);
   if (pemBlocks.length === 0) return content;
@@ -795,7 +795,7 @@ function mergeRanges(sshUrlUserinfoSpans) {
   }
   return merged;
 }
-//@ chunk-cgr0tezp.js:63945-64293 placement = redactSecrets (0.815)
+//@ chunk-cgr0tezp.js:63945-64293 placement (2.1.88 match: redactSecrets, 0.815)
 /**
  * 按原文位置映射对跟踪文本做遮盖。
  */
@@ -1113,14 +1113,14 @@ function redactObjectKeys(keys) {
     return candidate;
   });
 }
-//@ chunk-cgr0tezp.js:68132-68247 placement = redactSecrets (0.815)
+//@ chunk-cgr0tezp.js:68132-68247 placement (2.1.88 match: redactSecrets, 0.815)
 function redactSecrets_3(content) {
   let result = Object.create(null);
   for (let [key, value] of Object.entries(content))
     result[key] = SECRET_KEY_NAME_RE.test(key) ? "[REDACTED]" : value;
   return result;
 }
-//@ chunk-cgr0tezp.js:76919-77194 fingerprint = ruleIdToLabel (0.957)
+//@ chunk-cgr0tezp.js:76919-77194 fingerprint (2.1.88 match: ruleIdToLabel, 0.957)
 /**
  * 规则 id 片段到展示标签的映射（aws→AWS、jwt→JWT 等）。
  */
@@ -1145,11 +1145,11 @@ var ruleIdToLabel = {
   hashicorp: "HashiCorp",
   sendgrid: "SendGrid",
 };
-//@ chunk-nmregrje.js:1741-1805 fingerprint = ANT_KEY_PFX (0.628)
+//@ chunk-nmregrje.js:1741-1805 fingerprint (2.1.88 match: ANT_KEY_PFX, 0.628)
 function ANT_KEY_PFX(url, body, storage, rollout = "api") {
   return isFirstPartyAnthropicHost(url) ? decideGzip(url, bodyCharCount(body), storage, rollout) : undefined;
 }
-//@ chunk-s61vbvea.js:569876-570050 fingerprint = getCompiledRules (0.704)
+//@ chunk-s61vbvea.js:569876-570050 fingerprint (2.1.88 match: getCompiledRules, 0.704)
 function getTextAfterLastRuleMatch(text) {
   let lastMatchIndex = -1;
   for (let { re } of [...GH_PR_ACTIONS, ...GLAB_MR_ACTIONS]) {
@@ -1159,9 +1159,9 @@ function getTextAfterLastRuleMatch(text) {
   }
   return lastMatchIndex < 0 ? undefined : getPrAction(text.slice(lastMatchIndex));
 }
-//@ chunk-151tygw9.js:7043-7062 fingerprint = redactSecrets (0.815)
+//@ chunk-151tygw9.js:7043-7062 fingerprint (2.1.88 match: redactSecrets, 0.815)
 var REDACTED_PLACEHOLDER = "[REDACTED]";
-//@ chunk-jy3v56kg.js:27929-28144 fingerprint = scanForSecrets (0.425)
+//@ chunk-jy3v56kg.js:27929-28144 fingerprint (2.1.88 match: scanForSecrets, 0.425)
 /**
  * 扫描文本中的密钥（规则 id 与标签）。
  */

@@ -14,7 +14,7 @@ import { getShortcutDisplayPlatform } from "../utils/keyboardShortcuts.js";
 import { getPlatform } from "../utils/platform.js";
 import { isMacOptionChar, MACOS_OPTION_CHAR_TO_KEY } from "./shortcutFormat.js";
 
-//@ chunk-x1mwqya5.js:18182-18414 fingerprint = getKeyName (0.754)
+//@ chunk-x1mwqya5.js:18182-18414 fingerprint (2.1.88 match: getKeyName, 0.754)
 /**
  * 按键事件名到绑定键名的映射（return→enter 等，含 wheelup/wheeldown）。
  */
@@ -35,7 +35,7 @@ var KEY_EVENT_NAME_TO_KEY = {
   home: "home",
   end: "end",
 };
-//@ chunk-x1mwqya5.js:19738-19968 fingerprint = matchesBinding (0.472)
+//@ chunk-x1mwqya5.js:19738-19968 fingerprint (2.1.88 match: matchesBinding, 0.472)
 /**
  * 找出上下文 A 的单键绑定在上下文 B 里会被解释成别的动作的那些动作（用于冲突提示）。
  */

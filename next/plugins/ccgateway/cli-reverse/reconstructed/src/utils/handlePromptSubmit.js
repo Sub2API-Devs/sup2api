@@ -132,7 +132,7 @@ import { isScreeningPendingEntry } from "./historyFile.js";
  * 提交框里被视为"退出"的输入（exit、quit、:q 等）。
  */
 var EXIT_COMMAND_WORDS = ["exit", "quit", ":q", ":q!", ":wq", ":wq!"];
-//@ chunk-18hwfzwa.js:1475438-1483880 fingerprint = handlePromptSubmit (0.391)
+//@ chunk-18hwfzwa.js:1475438-1483880 fingerprint (2.1.88 match: handlePromptSubmit, 0.391)
 /**
  * 处理输入框提交：斜杠命令、bash 模式、图片/粘贴、排队（正在运行时入队），最终调用 executeUserInput。
  */
@@ -678,7 +678,7 @@ async function handlePromptSubmit(params) {
     storageV5: params.storageV5,
   });
 }
-//@ chunk-18hwfzwa.js:1483880-1492425 fingerprint = executeUserInput (0.357)
+//@ chunk-18hwfzwa.js:1483880-1492425 fingerprint (2.1.88 match: executeUserInput, 0.357)
 /**
  * 执行一次用户输入：处理成消息、写入历史与转录，启动查询循环。
  */
@@ -1305,7 +1305,7 @@ function resurrectCutCommands({
   }
   if (!turnReplaced) turn.setAbortController(null);
 }
-//@ chunk-18hwfzwa.js:1493685-1493732 placement = prependModeCharacterToInput (1)
+//@ chunk-18hwfzwa.js:1493685-1493732 placement (2.1.88 match: prependModeCharacterToInput, 1)
 function prependModeCharacterToInput(command) {
   return command.mode === "bash" || isSlashCommand_2(command);
 }

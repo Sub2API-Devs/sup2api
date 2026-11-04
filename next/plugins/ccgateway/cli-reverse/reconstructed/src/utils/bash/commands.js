@@ -35,7 +35,7 @@ import {
 import { dedupeMapKeys } from "../../tools/BashTool/bashCommandHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-r01896cg.js:23179-23263 fingerprint = isCommandList (0.464)
+//@ chunk-r01896cg.js:23179-23263 fingerprint (2.1.88 match: isCommandList, 0.464)
 /**
  * 递归判断语法树中是否含 comment 节点。
  */
@@ -62,14 +62,14 @@ function hasStatementLexingDifferential(text) {
     ZSH_NUMERIC_GLOB_RE.test(text)
   );
 }
-//@ chunk-38axkkfw.js:455-517 placement = nodeTypeId (1)
+//@ chunk-38axkkfw.js:455-517 placement (2.1.88 match: nodeTypeId, 1)
 /**
  * AST 中是否有 ERROR 节点。
  */
 function parseHasErrorNode(nodeType) {
   return nodeType.type === "ERROR" || nodeType.children.some(parseHasErrorNode);
 }
-//@ chunk-38axkkfw.js:517-626 placement = STRUCTURAL_TYPES (0.852)
+//@ chunk-38axkkfw.js:517-626 placement (2.1.88 match: STRUCTURAL_TYPES, 0.852)
 /**
  * 拆分子命令时的字符上限（65536）。
  */
@@ -393,7 +393,7 @@ function hasZshExecutableParenInBraceExpansion(command) {
   walk(root);
   return found;
 }
-//@ chunk-38axkkfw.js:4333-4458 placement = tryParseShellCommand (0)
+//@ chunk-38axkkfw.js:4333-4458 placement (2.1.88 match: tryParseShellCommand, 0)
 /**
  * shell-quote 风格回退：解析命令并返回第一条命令的去引号参数列表；超长或失败返回空数组。
  */
@@ -649,7 +649,7 @@ function unquoteNodeText(node) {
       return node.text;
   }
 }
-//@ chunk-38axkkfw.js:8726-11128 placement = extractOutputRedirections (0.149)
+//@ chunk-38axkkfw.js:8726-11128 placement (2.1.88 match: extractOutputRedirections, 0.149)
 /**
  * 从命令中提取输出重定向（> >> &> >| >&）：返回 {commandWithoutRedirections, redirections:[{target, operator}], hasDangerousRedirection, dangerousRedirectionReason}；目标含 ~ 通配 ! = 或变量、多目标、<& 异常、/dev/tcp|udp 等标为危险（shell_expansion / network_device）。
  */
@@ -790,7 +790,7 @@ function extractOutputRedirections(cmd) {
     dangerousRedirectionReason: dangerReason,
   };
 }
-//@ chunk-e6aww6q8.js:1149287-1150001 fingerprint = hasDangerousExpansion (0.641)
+//@ chunk-e6aww6q8.js:1149287-1150001 fingerprint (2.1.88 match: hasDangerousExpansion, 0.641)
 /**
  * 扫描字符串（用于 test 等命令参数）：未在单引号内的 $var 返回 'variable'，未加引号的 * ? [..] 返回 'glob'，否则 false；处理转义、反引号、注释与双引号。
  */
@@ -891,7 +891,7 @@ function classifyDangerousExpansion(target) {
   }
   return sawGlob ? "glob" : false;
 }
-//@ chunk-e6aww6q8.js:1231407-1231663 fingerprint = handleRedirection (0.395)
+//@ chunk-e6aww6q8.js:1231407-1231663 fingerprint (2.1.88 match: handleRedirection, 0.395)
 /**
  * 把子命令判定结果组装成 Map（子命令文本→判定）；同一子命令文本出现多次时把它的重定向拼进键名以区分。
  */

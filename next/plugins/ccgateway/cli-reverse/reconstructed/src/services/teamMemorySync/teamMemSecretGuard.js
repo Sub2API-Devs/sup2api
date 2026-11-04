@@ -11,7 +11,7 @@
 import { scanSecretsInVariants } from "../memoryStore/memoryKeys.js";
 import { uniq } from "../../utils/collections.js";
 
-//@ chunk-a477qqne.js:26963-27326 fingerprint = checkTeamMemSecrets (0.518)
+//@ chunk-a477qqne.js:26963-27326 fingerprint (2.1.88 match: checkTeamMemSecrets, 0.518)
 /**
  * 写团队/共享记忆前检查密钥，命中则拒绝（reason=secret），提示记忆存储不是放凭证的地方。
  */

@@ -33,7 +33,7 @@ import { getSessionId } from "../../bootstrap/state.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-t1kwhq0j.js:11958-12351 placement = countToolCallsSince (1)
+//@ chunk-t1kwhq0j.js:11958-12351 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(messages, sinceUuid, force = false) {
   let toolCallCount = sinceUuid !== undefined || force;
   let sawAssistantMessage = false;

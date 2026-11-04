@@ -13,7 +13,7 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { sanitizeMarkName } from "./startupMarks.js";
 import { platformOrOther } from "../services/analytics/metadata.js";
 
-//@ chunk-s4bxxzsw.js:26748-27036 fingerprint = logUnaryEvent (1)
+//@ chunk-s4bxxzsw.js:26748-27036 fingerprint (2.1.88 match: logUnaryEvent, 1)
 /**
  * 发 tengu_unary_event（接受/拒绝类一元事件，含 completion_type、language_name、message_id）。
  */

@@ -1652,7 +1652,7 @@ function isNonRootUser() {
   let uid = process.getuid?.();
   return uid !== undefined && uid !== 0;
 }
-//@ chunk-ae5g0zb5.js:105680-105720 placement = SUPPORTED_PLATFORMS (0.811)
+//@ chunk-ae5g0zb5.js:105680-105720 placement (2.1.88 match: SUPPORTED_PLATFORMS, 0.811)
 var SUPPORTED_PLATFORMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-ae5g0zb5.js:105680", () => {
   SUPPORTED_PLATFORMS = new Set(["linux", "macos", "wsl"]);

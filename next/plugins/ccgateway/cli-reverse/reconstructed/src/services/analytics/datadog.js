@@ -89,7 +89,7 @@ function scheduleFlush({ maxBatchSize, getFlushIntervalMs, post }) {
     },
   };
 }
-//@ chunk-w6mc5gr3.js:1500-10735 facade-exports = DATADOG_ALLOWED_EVENTS (0.243)
+//@ chunk-w6mc5gr3.js:1500-10735 facade-exports (2.1.88 match: DATADOG_ALLOWED_EVENTS, 0.243)
 /**
  * Datadog 常量：端点 https://http-intake.logs.us5.datadoghq.com/api/v2/logs、客户端 token pubea5604404508cdd34afb69e6f42a05bc、白名单事件集合与按事件的字段白名单。
  */
@@ -426,7 +426,7 @@ function filterDatadogEventFields(eventName, fields) {
   if (allowlist === undefined) return fields;
   return pickByHelper(fields, (value, key) => key === "sample_rate" || allowlist.has(key));
 }
-//@ chunk-w6mc5gr3.js:10837-11351 fingerprint = TAG_FIELDS (0.532)
+//@ chunk-w6mc5gr3.js:10837-11351 fingerprint (2.1.88 match: TAG_FIELDS, 0.532)
 var TAG_FIELDS = [
   "arch",
   "attach_cold",
@@ -529,7 +529,7 @@ function dropHashedFields(allData, toSnakeCase) {
     if (HASHED_FIELD_NAMES_SNAKE.has(snakeKey) || DROPPED_FIELD_NAMES.has(snakeKey)) delete allData[key];
   }
 }
-//@ chunk-w6mc5gr3.js:12281-12370 placement = sanitizeToolName (1)
+//@ chunk-w6mc5gr3.js:12281-12370 placement (2.1.88 match: sanitizeToolName, 1)
 /**
  * 遥测用工具名：MCP 工具一律 mcp。旧版名 sanitizeToolName 尚可，但归属应在 services/analytics。
  */
@@ -838,7 +838,7 @@ function applyFeatureSampling(eventName, properties) {
     sample_rate: rateTable,
   };
 }
-//@ chunk-w6mc5gr3.js:17167-18699 facade-exports = trackDatadogEvent (0.503)
+//@ chunk-w6mc5gr3.js:17167-18699 facade-exports (2.1.88 match: trackDatadogEvent, 0.503)
 /**
  * 发送 Datadog 日志：仅第一方 API、事件在 243 个白名单内、未被出口拒绝暂停；合并事件元数据与 envContext，字段转 snake_case、工具名和模型名脱敏，ddtags 取 TAG_FIELDS，service=claude-code env=external，进入批量发送器（默认 15 秒刷新）。
  */
@@ -933,7 +933,7 @@ async function trackDatadogEvent(eventName, properties) {
 function getDatadogShutdownTimeoutMs() {
   return getFlushIntervalMs() + 5000;
 }
-//@ chunk-w6mc5gr3.js:18728-18791 fingerprint = getFlushIntervalMs (1)
+//@ chunk-w6mc5gr3.js:18728-18791 fingerprint (2.1.88 match: getFlushIntervalMs, 1)
 /**
  * Datadog 批量刷新间隔：CLAUDE_CODE_DATADOG_FLUSH_INTERVAL_MS 或 15000。
  */
@@ -959,14 +959,14 @@ async function isLogsHostUnresolvable() {
 function canReachDatadog() {
   return getUsableProxyUrl() === undefined || shouldBypassProxy(DATADOG_LOGS_ENDPOINT);
 }
-//@ chunk-9cjx5pnm.js:19928-19986 fingerprint = flushLogs (0.586)
+//@ chunk-9cjx5pnm.js:19928-19986 fingerprint (2.1.88 match: flushLogs, 0.586)
 var flushLogs; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-9cjx5pnm.js:19928", () => {
   flushLogs = Object.freeze({
     "Content-Type": "application/json",
   });
 });
-//@ chunk-12wyw8h8.js:8193-8261 fingerprint = getUserBucket (1)
+//@ chunk-12wyw8h8.js:8193-8261 fingerprint (2.1.88 match: getUserBucket, 1)
 function getUserBucket(userId) {
   return createHash("sha256").update(jsonStringify(userId), "utf8").digest("hex");
 }

@@ -74,7 +74,7 @@ function shouldSteerCostToHost() {
 function shouldInjectAgentListViaReminder() {
   return isRemoteAgentIsolationAvailable() && !isPersonalConfigRestricted();
 }
-//@ chunk-e6aww6q8.js:3265305-3265587 fingerprint = getToolsDescription (1)
+//@ chunk-e6aww6q8.js:3265305-3265587 fingerprint (2.1.88 match: getToolsDescription, 1)
 /**
  * 把代理的 tools/disallowedTools 描述为 "All tools" / "All tools except …" / 列表 / "None"。
  */
@@ -91,7 +91,7 @@ function getToolsDescription(agent) {
   else if (hasDenylist) return `All tools except ${disallowedTools.join(", ")}`;
   return "All tools";
 }
-//@ chunk-e6aww6q8.js:3265587-3265697 fingerprint = formatAgentLine (0.863)
+//@ chunk-e6aww6q8.js:3265587-3265697 fingerprint (2.1.88 match: formatAgentLine, 0.863)
 /**
  * 格式化一行代理说明："- 类型: whenToUse (Tools: …)"。
  */
@@ -106,7 +106,7 @@ function formatAgentLine(agent, lean) {
  */
 var AGENT_LIST_IN_REMINDER_NOTE =
   "Available agent types are listed in <system-reminder> messages in the conversation.";
-//@ chunk-e6aww6q8.js:3265791-3286110 callgraph-witnessed = getPrompt (0.176)
+//@ chunk-e6aww6q8.js:3265791-3286110 callgraph-witnessed (2.1.88 match: getPrompt, 0.176)
 /**
  * Agent 工具提示词生成：按 fork 可用、coordinator、lean 提示、后台默认、worktree 隔离建议、模型混用、预算说明等拼装"何时 fork / 如何写 prompt / 示例 / 不该用的情况"各段。
  */

@@ -42,7 +42,7 @@ deferInit("chunk-e6aww6q8.js:3405872", () => {
     "RES_OPTIONS",
   ];
 });
-//@ chunk-e6aww6q8.js:3406153-3406459 fingerprint = getSandboxProxyConfig (0.683)
+//@ chunk-e6aww6q8.js:3406153-3406459 fingerprint (2.1.88 match: getSandboxProxyConfig, 0.683)
 /**
  * 沙箱网络开启时返回 HTTP 钩子使用的本地代理配置（127.0.0.1:port，带 srt 认证）。
  */
@@ -65,7 +65,7 @@ async function getSandboxProxyConfig() {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3406459-3406567 fingerprint = getHttpHookPolicy (1)
+//@ chunk-e6aww6q8.js:3406459-3406567 fingerprint (2.1.88 match: getHttpHookPolicy, 1)
 /**
  * 读取 HTTP 钩子策略：allowedHttpHookUrls 与 httpHookAllowedEnvVars。
  */
@@ -80,7 +80,7 @@ function getHttpHookPolicy() {
 function sanitizeHeaderValue(value) {
   return value.replace(/[\r\n\x00]/g, "");
 }
-//@ chunk-e6aww6q8.js:3406618-3407035 fingerprint = interpolateEnvVars (0.8)
+//@ chunk-e6aww6q8.js:3406618-3407035 fingerprint (2.1.88 match: interpolateEnvVars, 0.8)
 /**
  * 在 header 值里插值 $VAR/${VAR}：不在 allowedEnvVars 的变量与凭证类变量替换为空串，结果去掉 CR/LF/NUL。
  */
@@ -122,7 +122,7 @@ function getProcessEnvForHttpHook() {
     blankList: scrubbedEnvKeys(),
   };
 }
-//@ chunk-e6aww6q8.js:3407087-3409333 fingerprint = execHttpHook (0.84)
+//@ chunk-e6aww6q8.js:3407087-3409333 fingerprint (2.1.88 match: execHttpHook, 0.84)
 /**
  * 执行 http 钩子：POST JSON 到 url；受 allowedHttpHookUrls 白名单约束，headers 中只插值 allowedEnvVars（且与策略 httpHookAllowedEnvVars 取交集，凭证类变量不插值）；不跟随重定向；经沙箱代理或 SSRF 防护的 DNS 查询发送；返回 ok/statusCode/body。
  */

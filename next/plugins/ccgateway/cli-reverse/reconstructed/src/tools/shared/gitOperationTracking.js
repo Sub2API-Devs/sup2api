@@ -55,7 +55,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 function gitCmdRe(verb, suffix = "") {
   return new RegExp(`\\bgit(?:\\s+-[cC]\\s+\\S+|\\s+--[^\\s=]+=\\S+)*\\s+${verb}\\b${suffix}`);
 }
-//@ chunk-s61vbvea.js:567998-568018 fingerprint = GIT_COMMIT_RE (1)
+//@ chunk-s61vbvea.js:567998-568018 fingerprint (2.1.88 match: GIT_COMMIT_RE, 1)
 var GIT_COMMIT_RE; // deferred: uses gitCmdRe of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-s61vbvea.js:567998", () => {
   GIT_COMMIT_RE = gitCmdRe("commit");
@@ -125,7 +125,7 @@ deferInit("chunk-s61vbvea.js:568052", () => {
 function ghPrCmdRe(subcmd, suffix = "") {
   return new RegExp(`\\bgh\\s+pr\\s+${subcmd}\\b${suffix}`);
 }
-//@ chunk-s61vbvea.js:568658-569467 fingerprint = GH_PR_ACTIONS (0.738)
+//@ chunk-s61vbvea.js:568658-569467 fingerprint (2.1.88 match: GH_PR_ACTIONS, 0.738)
 /**
  * gh pr 子命令表 GH_PR_ACTIONS（create/edit/merge/comment/close/ready…→ 动作与遥测 op），以及 gh pr checkout N 正则；tc 为 glab mr 等同类表。
  */
@@ -287,7 +287,7 @@ deferInit("chunk-s61vbvea.js:570386", () => {
     ["--internal", "internal"],
   ]);
 });
-//@ chunk-s61vbvea.js:570665-571016 placement = buildDeepLink (0.415)
+//@ chunk-s61vbvea.js:570665-571016 placement (2.1.88 match: buildDeepLink, 0.415)
 /**
  * （误归 deepLink）从 Bash 命令中解析每个 gh repo create 的仓库名与可见性，用于上报 tengu_gh_repo_created。
  */
@@ -373,7 +373,7 @@ deferInit("chunk-s61vbvea.js:571614", () => {
   GITLAB_MR_REMOTE_RE =
     /^remote:[ \t]+View merge request for \S+:[ \t]*\r?\n[ \t]*remote:[ \t]+(https?:\/\/[^/\s"]+\/[^\s"]+?\/-\/merge_requests\/\d{1,9})(?!\d)/m;
 });
-//@ chunk-s61vbvea.js:571987-572147 fingerprint = parsePrUrl (0.878)
+//@ chunk-s61vbvea.js:571987-572147 fingerprint (2.1.88 match: parsePrUrl, 0.878)
 /**
  * 从 URL 解析 PR 编号、仓库、提供方。
  */
@@ -421,7 +421,7 @@ function isValidPrUrl(prUrl) {
  * 判断 git 分支名是否安全（排除 HEAD、选项、@{ 等）。
  */
 var SAFE_BRANCH_NAME_RE = /^(?!HEAD$)(?!-)(?!.*@\{)[A-Za-z0-9._\/+@#-]{1,255}$/;
-//@ chunk-s61vbvea.js:572685-572831 layout = getTaskListLockPath (1)
+//@ chunk-s61vbvea.js:572685-572831 layout (2.1.88 match: getTaskListLockPath, 1)
 /**
  * git 分支名安全检查（切分误归 utils/tasks）。
  */
@@ -658,7 +658,7 @@ function isGhApiPullCreate(command) {
 function pushedBranchOf(command) {
   return (command.split(GIT_PUSH_RE)[1] ?? "").split(/[&|;\n]/)[0] ?? "";
 }
-//@ chunk-s61vbvea.js:575539-575680 layout = parsePrUrl (0.792)
+//@ chunk-s61vbvea.js:575539-575680 layout (2.1.88 match: parsePrUrl, 0.792)
 function parsePrNumberFromText(url) {
   let match = url.match(/[Pp]ull request (?:(\S+)#)?#?(\d{1,9})\b/);
   return match?.[2]
@@ -682,7 +682,7 @@ function parseRefFromCommand(command, verb) {
   }
   return;
 }
-//@ chunk-s61vbvea.js:575857-576546 fingerprint = detectGitOperation (1)
+//@ chunk-s61vbvea.js:575857-576546 fingerprint (2.1.88 match: detectGitOperation, 1)
 /**
  * 从命令与输出识别 git/gh 操作：提交（sha、committed/amended/cherry-picked、分支）、推送分支、合并/变基、PR 创建/动作等，生成结果的 gitOperation 字段（给客户端展示，不给模型）。
  */
@@ -935,7 +935,7 @@ function countGitOpsFromCommand(command) {
     (isApiPrCreate(command, actions.some(Boolean)) ? 1 : 0);
   if (createCount > 0) getPrCounter()?.add(createCount);
 }
-//@ chunk-s61vbvea.js:578996-581324 fingerprint = trackGitOperations (0.49)
+//@ chunk-s61vbvea.js:578996-581324 fingerprint (2.1.88 match: trackGitOperations, 0.49)
 /**
  * 命令成功（退出码 0）后跟踪 git 操作：遥测 tengu_git_operation（commit/commit_amend/push/merge/rebase/pr_*），累加提交/PR 计数，识别 PR URL 与 gh pr checkout，记录推送分支以便稍后查 PR；返回是否解决了 PR（BashTool 据此 markPrResolvedThisSession）。
  */

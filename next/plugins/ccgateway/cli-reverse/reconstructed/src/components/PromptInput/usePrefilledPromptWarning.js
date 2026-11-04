@@ -16,7 +16,7 @@ import { LONG_PREFILL_CHARS } from "../../utils/deepLink/banner.js";
 
 //@ chunk-18hwfzwa.js:772584-772615 placement
 var LAUNCH_PROMPT_WARNING = "launch-prompt-warning";
-//@ chunk-18hwfzwa.js:772615-772919 placement = useBuddyNotification (0.7)
+//@ chunk-18hwfzwa.js:772615-772919 placement (2.1.88 match: useBuddyNotification, 0.7)
 /**
  * 有预填或来自外部链接的提示词时，显示一条固定的警告通知，提醒按回车前先检查。
  */

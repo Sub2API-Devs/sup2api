@@ -38,7 +38,7 @@ function cloudOnlyDependencyMessage(sameNameSyncedPlugin) {
 function pluginErrorText(error) {
   return stripInvisibleKeepEmoji(getPluginErrorMessage(error));
 }
-//@ chunk-f3qhjfah.js:14423-19933 fingerprint = getPluginErrorMessage (0.728)
+//@ chunk-f3qhjfah.js:14423-19933 fingerprint (2.1.88 match: getPluginErrorMessage, 0.728)
 function getPluginErrorMessage(error) {
   switch (error.type) {
     case "generic-error":

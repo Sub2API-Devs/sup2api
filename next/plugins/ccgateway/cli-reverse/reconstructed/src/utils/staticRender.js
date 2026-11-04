@@ -39,7 +39,7 @@ var staticRenderStorageSlot; // deferred: has load-time effects after a deferred
 deferInit("chunk-h6f3feta.js:471", () => {
   staticRenderStorageSlot = createContext(false);
 });
-//@ chunk-h6f3feta.js:486-740 callgraph-fingerprint = RenderOnceAndExit (1)
+//@ chunk-h6f3feta.js:486-740 callgraph-fingerprint (2.1.88 match: RenderOnceAndExit, 1)
 function RenderOnceAndExit(props) {
   let $ = useMemoCache(5);
   let { children } = props;
@@ -70,7 +70,7 @@ function RenderOnceAndExit(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-h6f3feta.js:740-816 layout = renderAndRun (1)
+//@ chunk-h6f3feta.js:740-816 layout (2.1.88 match: renderAndRun, 1)
 /**
  * 在 Ink 根上渲染元素并等待退出（子命令用的简化版 renderAndRun）。
  */
@@ -82,7 +82,7 @@ async function renderAndRun(root, element) {
   );
   await root.waitUntilExit();
 }
-//@ chunk-h6f3feta.js:816-1126 fingerprint = renderToAnsiString (0.915)
+//@ chunk-h6f3feta.js:816-1126 fingerprint (2.1.88 match: renderToAnsiString, 0.915)
 /**
  * 把 React/Ink 节点离屏渲染为 ANSI 字符串（导出、截图用）。
  */

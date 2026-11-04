@@ -45,19 +45,19 @@ deferInit("chunk-dcmhvw5a.js:437432", () => {
     }).strict(),
   );
 });
-//@ chunk-dcmhvw5a.js:437494-437540 fingerprint = isInvalidTypeIssue (1)
+//@ chunk-dcmhvw5a.js:437494-437540 fingerprint (2.1.88 match: isInvalidTypeIssue, 1)
 function isInvalidTypeIssue(issue) {
   return issue.code === "invalid_type";
 }
-//@ chunk-dcmhvw5a.js:437540-437587 fingerprint = isInvalidValueIssue (1)
+//@ chunk-dcmhvw5a.js:437540-437587 fingerprint (2.1.88 match: isInvalidValueIssue, 1)
 function isInvalidValueIssue(issue) {
   return issue.code === "invalid_value";
 }
-//@ chunk-dcmhvw5a.js:437587-437638 fingerprint = isUnrecognizedKeysIssue (1)
+//@ chunk-dcmhvw5a.js:437587-437638 fingerprint (2.1.88 match: isUnrecognizedKeysIssue, 1)
 function isUnrecognizedKeysIssue(issue) {
   return issue.code === "unrecognized_keys";
 }
-//@ chunk-dcmhvw5a.js:437638-437681 fingerprint = isTooSmallIssue (1)
+//@ chunk-dcmhvw5a.js:437638-437681 fingerprint (2.1.88 match: isTooSmallIssue, 1)
 function isTooSmallIssue(issue) {
   return issue.code === "too_small";
 }
@@ -83,7 +83,7 @@ function explainUnloadableGuardHooks(issues) {
       : issue,
   );
 }
-//@ chunk-dcmhvw5a.js:438186-438308 fingerprint = getReceivedType (1)
+//@ chunk-dcmhvw5a.js:438186-438308 fingerprint (2.1.88 match: getReceivedType, 1)
 function getReceivedType(value) {
   if (value === null) return "null";
   if (value === undefined) return "undefined";
@@ -95,7 +95,7 @@ function extractReceivedFromMessage(msg) {
   let match = msg.match(/received (\w+)/);
   return match ? match[1] : undefined;
 }
-//@ chunk-dcmhvw5a.js:438376-439575 fingerprint = formatZodError (0.935)
+//@ chunk-dcmhvw5a.js:438376-439575 fingerprint (2.1.88 match: formatZodError, 0.935)
 /**
  * 把 zod 错误转成 {file,path,message} 列表，附带 validationTips 里的修正提示与文档链接。
  */
@@ -169,7 +169,7 @@ function formatZodError(error, filePath) {
       };
     });
 }
-//@ chunk-dcmhvw5a.js:439575-440624 fingerprint = validateSettingsFileContent (0.508)
+//@ chunk-dcmhvw5a.js:439575-440624 fingerprint (2.1.88 match: validateSettingsFileContent, 0.508)
 /**
  * 校验设置文件文本（编辑 settings.json 前后用），返回是否合法与错误说明。
  */
@@ -345,7 +345,7 @@ function staticPayloadWarnings(settings) {
   }
   return warnings;
 }
-//@ chunk-dcmhvw5a.js:442221-443201 fingerprint = filterInvalidPermissionRules (0.686)
+//@ chunk-dcmhvw5a.js:442221-443201 fingerprint (2.1.88 match: filterInvalidPermissionRules, 0.686)
 /**
  * 从 permissions.allow/deny/ask 中剔除格式错误的规则并给出警告，避免整份设置作废。
  */

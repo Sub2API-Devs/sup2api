@@ -13,7 +13,7 @@ import { logForDebugging } from "../debug.js";
 
 //@ chunk-th02cny1.js:261-303 placement
 var OTEL_DIAG_ERROR_PREFIX = "[3P telemetry] OTEL diag error:";
-//@ chunk-th02cny1.js:303-565 fingerprint = ClaudeCodeDiagLogger (0.75)
+//@ chunk-th02cny1.js:303-565 fingerprint (2.1.88 match: ClaudeCodeDiagLogger, 0.75)
 /**
  * OTel 诊断 logger：把 OTel 内部 error/warn 写到调试日志（[3P telemetry] 前缀）。
  */

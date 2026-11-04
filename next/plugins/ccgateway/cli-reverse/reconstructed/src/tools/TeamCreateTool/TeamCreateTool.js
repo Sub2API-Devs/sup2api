@@ -28,7 +28,7 @@ import { env } from "../../utils/env.js";
 import { getTaskOutputDir, ensureTaskListDir } from "../../utils/tasks.js";
 import { AGENT_COLOR_NAMES } from "../AgentTool/agentColorManager.js";
 
-//@ chunk-6cc2zqkz.js:3286-4232 fingerprint = TeamCreateTool (0.482)
+//@ chunk-6cc2zqkz.js:3286-4232 fingerprint (2.1.88 match: TeamCreateTool, 0.482)
 /**
  * 建立会话唯一的隐式团队：写团队文件（lead 成员 team-lead，in-process 后端）、迁移会话任务列表目录、注册清理，返回 teamContext 与队友颜色分配。316 没有 TeamCreate 工具，此函数由会话启动流程调用。
  */

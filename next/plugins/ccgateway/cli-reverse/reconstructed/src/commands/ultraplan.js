@@ -83,7 +83,7 @@ import { escapeXml_2 as escapeXml } from "../utils/confusables.js";
 import { createAbortController } from "../utils/abortController.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:436484-436867 callgraph-fingerprint = getUltraplanModel (0.333)
+//@ chunk-aepeg2w5.js:436484-436867 callgraph-fingerprint (2.1.88 match: getUltraplanModel, 0.333)
 function getUltraplanModel(family, model) {
   if (getAPIProvider() === "firstParty") return false;
   let modelOverrides = getInitialSettings_2().modelOverrides;
@@ -109,7 +109,7 @@ function getUltraplanModel(family, model) {
     !isAliasFamilyUnavailable(family)
   );
 }
-//@ chunk-fym4r1th.js:50778-51176 fingerprint = DEFAULT_INSTRUCTIONS (0.696)
+//@ chunk-fym4r1th.js:50778-51176 fingerprint (2.1.88 match: DEFAULT_INSTRUCTIONS, 0.696)
 function DEFAULT_INSTRUCTIONS(taskId, onPrompt, onResume) {
   let taskOutputPath = getTaskOutputPath(taskId);
   let lastSize = 0;
@@ -156,7 +156,7 @@ function DEFAULT_INSTRUCTIONS(taskId, onPrompt, onResume) {
     clearInterval(interval);
   };
 }
-//@ chunk-s61vbvea.js:33608-33648 fingerprint = buildLaunchMessage (1)
+//@ chunk-s61vbvea.js:33608-33648 fingerprint (2.1.88 match: buildLaunchMessage, 1)
 function buildLaunchMessage(disconnectedBridge) {
   return findBtwTriggerPositions(disconnectedBridge, "ultraplan");
 }
@@ -402,7 +402,7 @@ function isUltraplanEnabled() {
     !getIsRemoteMode()
   );
 }
-//@ chunk-e6aww6q8.js:2014222-2014383 callgraph-fingerprint = CCR_TERMS_URL (0.43)
+//@ chunk-e6aww6q8.js:2014222-2014383 callgraph-fingerprint (2.1.88 match: CCR_TERMS_URL, 0.43)
 /**
  * ULTRAPLAN_PROMPTS：simple_plan/visual_plan/three_subagents_with_critique。
  */
@@ -473,7 +473,7 @@ function getUltraplanPromptText(identifier) {
   let entry = ULTRAPLAN_PROMPTS[identifier];
   return (typeof entry === "string" ? entry : entry.default).trimEnd();
 }
-//@ chunk-e6aww6q8.js:2015533-2015669 fingerprint = buildUltraplanPrompt (1)
+//@ chunk-e6aww6q8.js:2015533-2015669 fingerprint (2.1.88 match: buildUltraplanPrompt, 1)
 function buildUltraplanPrompt(blurb, seedPlan, identifier) {
   let parts = [];
   if (seedPlan) parts.push("Here is a draft plan to refine:", "", seedPlan, "");
@@ -482,7 +482,7 @@ function buildUltraplanPrompt(blurb, seedPlan, identifier) {
   return parts.join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2015669-2018378 fingerprint = startDetachedPoll (0.616)
+//@ chunk-e6aww6q8.js:2015669-2018378 fingerprint (2.1.88 match: startDetachedPoll, 0.616)
 function startDetachedPoll({
   taskId,
   sessionId,
@@ -644,7 +644,7 @@ function buildLaunchingMessage(disconnectedBridge) {
   return `${DIAMOND_GLYPH} ultraplan
 ${prefix}Starting a cloud session\u2026`;
 }
-//@ chunk-e6aww6q8.js:2018474-2018636 fingerprint = buildSessionReadyMessage (0.8)
+//@ chunk-e6aww6q8.js:2018474-2018636 fingerprint (2.1.88 match: buildSessionReadyMessage, 0.8)
 function buildSessionReadyMessage(url) {
   return `${DIAMOND_GLYPH} ultraplan \xB7 Monitor the cloud session at ${url}
 You can continue working \u2014 when the ${DIAMOND_GLYPH} fills, press \u2193 to view results`;
@@ -666,13 +666,13 @@ function getUltraplanUsage() {
   ].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2018878-2019065 fingerprint = buildAlreadyActiveMessage (1)
+//@ chunk-e6aww6q8.js:2018878-2019065 fingerprint (2.1.88 match: buildAlreadyActiveMessage, 1)
 function buildAlreadyActiveMessage(url) {
   return url
     ? `ultraplan: already polling. Open ${url} to check status, or wait for the plan to land here.`
     : "ultraplan: already launching. Please wait for the session to start.";
 }
-//@ chunk-e6aww6q8.js:2019065-2019611 fingerprint = stopUltraplan (0.899)
+//@ chunk-e6aww6q8.js:2019065-2019611 fingerprint (2.1.88 match: stopUltraplan, 0.899)
 async function stopUltraplan(taskId, sessionId, setAppState, updateAppState, queue, storageV5) {
   await RemoteAgentTask.kill(taskId, setAppState, updateAppState, undefined, storageV5);
   updateAppState((prev) =>
@@ -702,7 +702,7 @@ Session: ${url}`,
     isMeta: true,
   });
 }
-//@ chunk-e6aww6q8.js:2019611-2020376 fingerprint = launchUltraplan (0.59)
+//@ chunk-e6aww6q8.js:2019611-2020376 fingerprint (2.1.88 match: launchUltraplan, 0.59)
 async function launchUltraplan(opts) {
   let {
     arg,
@@ -759,7 +759,7 @@ async function launchUltraplan(opts) {
   });
   return buildLaunchingMessage(disconnectedBridge);
 }
-//@ chunk-e6aww6q8.js:2020376-2022801 fingerprint = launchDetached (0.802)
+//@ chunk-e6aww6q8.js:2020376-2022801 fingerprint (2.1.88 match: launchDetached, 0.802)
 async function launchDetached(opts) {
   let {
     arg: blurb,
@@ -923,7 +923,7 @@ ${reasons}`,
     );
   }
 }
-//@ chunk-e6aww6q8.js:2022801-2023546 fingerprint = call (0.563)
+//@ chunk-e6aww6q8.js:2022801-2023546 fingerprint (2.1.88 match: call, 0.563)
 /**
  * call：/ultraplan 的 call（rrn.load 直接给出）。
  */
@@ -1119,7 +1119,7 @@ async function runUltraplanConsentFlow({ arg, source, context, onDone }) {
     display: "skip",
   });
 }
-//@ chunk-e6aww6q8.js:2025505-2025765 fingerprint = default (0.563)
+//@ chunk-e6aww6q8.js:2025505-2025765 fingerprint (2.1.88 match: default, 0.563)
 /**
  * /ultraplan 命令对象（local-jsx）；描述：{return`Draft an editable plan in a cloud session (${MXn().timeEstimate}) \xB7 See ${wbe}`}；availability ["claude-ai"]；isEnabled: ()=>f6()。
  */

@@ -95,7 +95,7 @@ function shouldOfferAutoModeEnvOnboarding() {
     return false;
   return true;
 }
-//@ chunk-18hwfzwa.js:149719-149784 placement = INTERNAL_PERMISSION_MODES (1)
+//@ chunk-18hwfzwa.js:149719-149784 placement (2.1.88 match: INTERNAL_PERMISSION_MODES, 1)
 /**
  * 启动时是否提供 auto 模式选项：来自回退时看 atn("auto") 或 nAr，否则看 qgo（UI 层逻辑，误归入 types/permissions）。
  */

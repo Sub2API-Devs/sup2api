@@ -50,7 +50,7 @@ import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { resetLoopState } from "../../utils/loop/loopWakeups.js";
 
-//@ chunk-gbtb0mjv.js:5877-5922 fingerprint = DEFAULT_INTERVAL (0.659)
+//@ chunk-gbtb0mjv.js:5877-5922 fingerprint (2.1.88 match: DEFAULT_INTERVAL, 0.659)
 /**
  * 延迟 require 的提示词模块。
  */

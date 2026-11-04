@@ -14,7 +14,7 @@ import { getPlatform } from "../../utils/platform.js";
 import { isWindowsSandboxEnabled } from "../../utils/sandbox/windowsSandbox.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
 
-//@ chunk-e6aww6q8.js:2033747-2034576 fingerprint = command (0.871)
+//@ chunk-e6aww6q8.js:2033747-2034576 fingerprint (2.1.88 match: command, 0.871)
 /**
  * /sandbox 命令对象（local-jsx）；描述：{let e=Ke.isSandboxingEnabled(),n=Ke.isAutoAllowBashIfSandboxedEnabled(),r=Ke.areUnsandboxedCommandsAllowed(),s=Ke.areSandboxSettingsLockedB；isHidden: {return!Ke.isSupportedPlatform()||!Ke.isPlatformInEnabledList()}；实现 chunk-55w3ydvj.js 的 Hn。
  */

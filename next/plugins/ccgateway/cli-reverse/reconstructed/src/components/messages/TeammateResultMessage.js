@@ -339,7 +339,7 @@ deferInit("chunk-ah34pb7m.js:98476", () => {
   monitorEventCache = new Map();
   monitorEventCacheStore = createContext(monitorEventCache);
 });
-//@ chunk-ah34pb7m.js:98504-98541 placement = SEP_WIDTH (1)
+//@ chunk-ah34pb7m.js:98504-98541 placement (2.1.88 match: SEP_WIDTH, 1)
 var MONITOR_FIELD_MAX_LENGTH = 500;
 var MONITOR_BODY_MAX_LENGTH = 4000;
 var MONITOR_DESCRIPTION_MIN_WIDTH = 12;

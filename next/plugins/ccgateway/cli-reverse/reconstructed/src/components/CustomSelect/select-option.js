@@ -12,7 +12,7 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ListItem } from "../design-system/ListItem.js";
 
-//@ chunk-ey2qag4x.js:25844-26333 fingerprint = SelectOption (0.897)
+//@ chunk-ey2qag4x.js:25844-26333 fingerprint (2.1.88 match: SelectOption, 0.897)
 function SelectOption(props) {
   let $ = useMemoCache(10);
   let {

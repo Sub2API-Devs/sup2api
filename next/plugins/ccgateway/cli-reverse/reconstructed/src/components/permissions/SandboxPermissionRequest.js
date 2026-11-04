@@ -47,7 +47,7 @@ var SANDBOX_RULE_UPDATE_TYPES; // deferred: has load-time effects after a deferr
 deferInit("chunk-18hwfzwa.js:1248689", () => {
   SANDBOX_RULE_UPDATE_TYPES = new Set(["addRules"]);
 });
-//@ chunk-18hwfzwa.js:1248719-1252276 fingerprint = SandboxPermissionRequest (0.396)
+//@ chunk-18hwfzwa.js:1248719-1252276 fingerprint (2.1.88 match: SandboxPermissionRequest, 0.396)
 /**
  * 沙箱网络请求：显示请求访问的主机，选项允许一次 / 永久允许该域名（写 userSettings 的 sandbox 规则）/ 拒绝。
  */

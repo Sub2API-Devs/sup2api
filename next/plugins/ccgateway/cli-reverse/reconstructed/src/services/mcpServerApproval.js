@@ -13,7 +13,7 @@ import { loadAllPluginsCacheOnly } from "../utils/plugins/pluginLoader.js";
 import { isProjectLocalPlugin } from "../utils/plugins/pluginIdentifier.js";
 import { getPluginMcpServers } from "../utils/plugins/mcpPluginIntegration.js";
 
-//@ chunk-20skp6hd.js:4564-4885 fingerprint = handleMcpjsonServerApprovals (0.524)
+//@ chunk-20skp6hd.js:4564-4885 fingerprint (2.1.88 match: handleMcpjsonServerApprovals, 0.524)
 /**
  * collectProjectMcpServerNames：收集 project 作用域（.mcp.json）与已启用、需审批插件提供的服务器名，返回 {serverNames, pluginServerNames, rootServers}，供 .mcp.json 审批对话框使用。
  */

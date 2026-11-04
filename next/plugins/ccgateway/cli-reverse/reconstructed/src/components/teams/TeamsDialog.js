@@ -34,11 +34,11 @@ import { SYSTEM } from "../../utils/swarm/constants.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-82kqcve8.js:37066-37112 fingerprint = viewTeammateOutput (0.388)
+//@ chunk-82kqcve8.js:37066-37112 fingerprint (2.1.88 match: viewTeammateOutput, 0.388)
 function viewTeammateOutput() {
   return isFocusModeFlag() ? "focus" : "default";
 }
-//@ chunk-e6aww6q8.js:1296816-1297008 callgraph-fingerprint = cycleAllTeammateModes (0.2)
+//@ chunk-e6aww6q8.js:1296816-1297008 callgraph-fingerprint (2.1.88 match: cycleAllTeammateModes, 0.2)
 /**
  * 一次性切换所有队友的权限模式（default/auto 循环）。
  */
@@ -56,7 +56,7 @@ function cycleAllTeammateModes(teammates, teamName, isBypassAvailable) {
     return "default";
   return teammates;
 }
-//@ chunk-e6aww6q8.js:3014808-3014916 fingerprint = cycleTeammateMode (0.655)
+//@ chunk-e6aww6q8.js:3014808-3014916 fingerprint (2.1.88 match: cycleTeammateMode, 0.655)
 function cycleTeammateMode(toolPermissionContext, settings, suggestedRules, suggestedRules_2) {
   return (
     isBypassAllowedInMode(
@@ -67,7 +67,7 @@ function cycleTeammateMode(toolPermissionContext, settings, suggestedRules, sugg
     ) && !isWebToolRestrictedInRelay(toolPermissionContext.name)
   );
 }
-//@ chunk-19dk83fw.js:4454-5071 fingerprint = TeammateDetailView (0.314)
+//@ chunk-19dk83fw.js:4454-5071 fingerprint (2.1.88 match: TeammateDetailView, 0.314)
 function TeammateDetailView() {
   let $ = useMemoCache(11);
   let [modeIndex, setModeIndex] = useState(0);
@@ -131,7 +131,7 @@ function TeammateDetailView() {
   } else frameElement = $[10];
   return frameElement;
 }
-//@ chunk-18hwfzwa.js:1686214-1687162 fingerprint = killTeammate (0.495)
+//@ chunk-18hwfzwa.js:1686214-1687162 fingerprint (2.1.88 match: killTeammate, 0.495)
 /**
  * 关停队友：发送 shutdown，等待完成并从 inbox 移除，记录 teammate_terminated。
  */

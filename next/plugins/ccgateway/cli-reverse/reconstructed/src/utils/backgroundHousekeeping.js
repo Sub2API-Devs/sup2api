@@ -51,7 +51,7 @@ async function isLastCleanupSentinelFresh(storageV5) {
     return false;
   }
 }
-//@ chunk-0nv5pv9r.js:12206-13290 facade-majority = startBackgroundHousekeeping (0.047)
+//@ chunk-0nv5pv9r.js:12206-13290 facade-majority (2.1.88 match: startBackgroundHousekeeping, 0.047)
 /**
  * 后台维护（每宿主一次）：初始化 extractMemories/autoDream、后台更新插件；交互式时注册 deep link；延迟执行慢操作（用户 1 分钟内有操作则推迟）：清理旧消息文件、写 .last-cleanup、清理旧版本。
  */

@@ -8,7 +8,7 @@
  * pieces: chunk-gdnkn2q4.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-gdnkn2q4.js:214-254 fingerprint = EXIT_PLAN_MODE_TOOL_NAME (1)
+//@ chunk-gdnkn2q4.js:214-254 fingerprint (2.1.88 match: EXIT_PLAN_MODE_TOOL_NAME, 1)
 /**
  * ExitPlanMode 工具名常量（两个导出同值 "ExitPlanMode"）。
  */

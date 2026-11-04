@@ -502,7 +502,7 @@ function loginCompletion(context, onDone, outcome, { envTokenWasSet = false, env
     autoContinue,
   ];
 }
-//@ chunk-vrmtstb0.js:9588-9776 placement = launchAndDone (0.376)
+//@ chunk-vrmtstb0.js:9588-9776 placement (2.1.88 match: launchAndDone, 0.376)
 function loginAutoContinueOptions(session, outcome) {
   if (outcome.accountSwitched || outcome.relaunching) return;
   let lastAssistantMessage = getLastAssistantMessage(session.messages);
@@ -533,7 +533,7 @@ function envTokenWarningRoute(input) {
   if (!input.envTokenWasSet || input.gatewayActive) return "none";
   return input.willAutoQuery ? "out-of-band" : "inline";
 }
-//@ chunk-vrmtstb0.js:10480-10652 placement = call (0.512)
+//@ chunk-vrmtstb0.js:10480-10652 placement (2.1.88 match: call, 0.512)
 function buildLoginDoneMessage(onDone, context) {
   if (!onDone) return "Login interrupted";
   let message = context.bridgeDisconnected
@@ -601,7 +601,7 @@ async function call(onDone, context) {
     onHybridSignIn: undefined,
   });
 }
-//@ chunk-vrmtstb0.js:11396-13635 placement = Login (0.296)
+//@ chunk-vrmtstb0.js:11396-13635 placement (2.1.88 match: Login, 0.296)
 function Login(props) {
   let $ = useMemoCache(38);
   let mainLoopModel = useMainLoopModel();

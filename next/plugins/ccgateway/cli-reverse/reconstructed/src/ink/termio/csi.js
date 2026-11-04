@@ -10,7 +10,7 @@
  */
 import { ESC, ESC_TYPE, SEP } from "./ansi.js";
 
-//@ chunk-wz6vk74d.js:544-685 fingerprint = CSI_RANGE (0.882)
+//@ chunk-wz6vk74d.js:544-685 fingerprint (2.1.88 match: CSI_RANGE, 0.882)
 var CSI_PREFIX = ESC + String.fromCharCode(ESC_TYPE.CSI);
 var CSI_RANGE = {
   PARAM_START: 48,
@@ -20,19 +20,19 @@ var CSI_RANGE = {
   FINAL_START: 64,
   FINAL_END: 126,
 };
-//@ chunk-wz6vk74d.js:685-741 fingerprint = isCSIParam (1)
+//@ chunk-wz6vk74d.js:685-741 fingerprint (2.1.88 match: isCSIParam, 1)
 function isCSIParam(byte) {
   return byte >= CSI_RANGE.PARAM_START && byte <= CSI_RANGE.PARAM_END;
 }
-//@ chunk-wz6vk74d.js:741-811 fingerprint = isCSIIntermediate (1)
+//@ chunk-wz6vk74d.js:741-811 fingerprint (2.1.88 match: isCSIIntermediate, 1)
 function isCSIIntermediate(byte) {
   return byte >= CSI_RANGE.INTERMEDIATE_START && byte <= CSI_RANGE.INTERMEDIATE_END;
 }
-//@ chunk-wz6vk74d.js:811-867 fingerprint = isCSIFinal (1)
+//@ chunk-wz6vk74d.js:811-867 fingerprint (2.1.88 match: isCSIFinal, 1)
 function isCSIFinal(byte) {
   return byte >= CSI_RANGE.FINAL_START && byte <= CSI_RANGE.FINAL_END;
 }
-//@ chunk-wz6vk74d.js:867-1008 callgraph-witnessed = csi (0)
+//@ chunk-wz6vk74d.js:867-1008 callgraph-witnessed (2.1.88 match: csi, 0)
 /**
  * 按参数拼接 CSI 控制序列（空参数返回前缀、单参数直接拼、多参数用分号连接）。
  */
@@ -43,7 +43,7 @@ function csi(...args) {
   let final = args.at(-1);
   return `${CSI_PREFIX}${params.join(SEP)}${final}`;
 }
-//@ chunk-wz6vk74d.js:1008-1536 fingerprint = CSI (0.785)
+//@ chunk-wz6vk74d.js:1008-1536 fingerprint (2.1.88 match: CSI, 0.785)
 /**
  * CSI 终结字节表：光标移动、擦除（ED/EL/ECH）、滚动（SU/SD）、模式设置（SM/RM）、SGR、DSR、DECSCUSR、DECSTBM 等。
  */
@@ -184,7 +184,7 @@ function scrollDown(n = 1) {
 function setScrollRegion(top, bottom) {
   return csi(top, bottom, "r");
 }
-//@ chunk-wz6vk74d.js:2218-2359 callgraph-fingerprint = PASTE_START (0.286)
+//@ chunk-wz6vk74d.js:2218-2359 callgraph-fingerprint (2.1.88 match: PASTE_START, 0.286)
 /**
  * 常用 CSI 常量：复位滚动区域、括号粘贴开始/结束标记、焦点进/出、kitty 键盘协议压栈（>5u：消歧+报告所有键为转义码；legacy >1u）与弹栈（<u）、modifyOtherKeys 开关（>4;2m / >4m）。
  */

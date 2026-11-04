@@ -18,7 +18,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-x2j6c7xd.js:303", () => {
   init_react_production();
 });
-//@ chunk-x2j6c7xd.js:307-518 fingerprint = useShortcutDisplay (0.781)
+//@ chunk-x2j6c7xd.js:307-518 fingerprint (2.1.88 match: useShortcutDisplay, 0.781)
 /**
  * 组件里显示某动作快捷键的 hook：从 KeybindingContext 取显示文字；拿不到时用回退文字并记一次回退事件；动作被解绑时返回空串。
  */

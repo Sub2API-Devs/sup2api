@@ -653,7 +653,7 @@ async function isWritableSharedFile(filePath, stats) {
     !stats.isDirectory() && stats.nlink > 1 && (isOwnUid(stats.uid) || (await isPossiblyWritable(filePath)))
   );
 }
-//@ chunk-7wdbg1ct.js:8912-8989 placement = getFileIdentity (0.794)
+//@ chunk-7wdbg1ct.js:8912-8989 placement (2.1.88 match: getFileIdentity, 0.794)
 function getFileIdentity(filePath) {
   return filePath.isDirectory() && filePath.ino !== 0n ? `${filePath.dev}:${filePath.ino}` : undefined;
 }

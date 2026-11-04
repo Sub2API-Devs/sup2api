@@ -96,12 +96,12 @@ import { openPath } from "../../utils/browser.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1350609-1350685 fingerprint = _temp (1)
+//@ chunk-e6aww6q8.js:1350609-1350685 fingerprint (2.1.88 match: _temp, 1)
 function filterAutoMemWhenDisabled(f_1) {
   if (!isMemoryRecallEnabled()) return f_1;
   return f_1.filter((entry) => entry.type !== "AutoMem");
 }
-//@ chunk-18hwfzwa.js:728716-728758 fingerprint = _temp5 (0.75)
+//@ chunk-18hwfzwa.js:728716-728758 fingerprint (2.1.88 match: _temp5, 0.75)
 function isDreamTask(t) {
   return t.type === "dream";
 }
@@ -123,7 +123,7 @@ deferInit("chunk-c55mbvfz.js:31816", () => {
 });
 //@ chunk-c55mbvfz.js:31842-31854 layout
 var OPEN_FOLDER_API = null;
-//@ chunk-c55mbvfz.js:31854-31901 fingerprint = OPEN_FOLDER_PREFIX (1)
+//@ chunk-c55mbvfz.js:31854-31901 fingerprint (2.1.88 match: OPEN_FOLDER_PREFIX, 1)
 var ORG_PICKER_API = null;
 var MEMORY_DIALOG_API = null;
 var OPEN_FOLDER_VALUE = "__open_folder__";
@@ -193,7 +193,7 @@ function loadOrgMemoryRows(cache, storageV5, signal) {
 //@ chunk-c55mbvfz.js:32834-32905 layout
 var ORG_PICKER_VALUE = "__org_memory_project_picker__";
 var ORG_MEMORY_OFF_VALUE = "__org_memory_project_off__";
-//@ chunk-c55mbvfz.js:32905-41847 callgraph-witnessed = MemoryFileSelector (0.159)
+//@ chunk-c55mbvfz.js:32905-41847 callgraph-witnessed (2.1.88 match: MemoryFileSelector, 0.159)
 /**
  * /memory：列出可编辑的记忆文件（用户/项目/本地 CLAUDE.md、自动记忆目录），以及团队/账号记忆同步状态（paused/active），选择后用编辑器打开。
  */

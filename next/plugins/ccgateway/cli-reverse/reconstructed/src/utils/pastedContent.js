@@ -135,7 +135,7 @@ ${sliced_2}`,
     });
   return segments;
 }
-//@ chunk-km6vv5ys.js:1204-1343 placement = createContentSummary (0.501)
+//@ chunk-km6vv5ys.js:1204-1343 placement (2.1.88 match: createContentSummary, 0.501)
 /**
  * （切分错误）去掉 pasted_content 包装，只保留块正文。
  */

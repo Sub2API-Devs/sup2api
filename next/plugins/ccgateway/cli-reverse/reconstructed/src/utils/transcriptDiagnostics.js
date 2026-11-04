@@ -116,7 +116,7 @@ function describeMessageTypeSafe(msg) {
     return "describe_failed";
   }
 }
-//@ chunk-ah34pb7m.js:10440-10494 placement = extractErrorTypeFromData (1)
+//@ chunk-ah34pb7m.js:10440-10494 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function describeMessageType(data) {
   return describeTypeField(readField(data, "type"), (isKnownType) =>
     KNOWN_MESSAGE_ENTRY_TYPES.has(isKnownType),
@@ -157,7 +157,7 @@ function describeUuidField(record) {
   if (typeof uuid === "string") return uuid === "" ? "string_empty" : "string";
   return uuid === undefined ? "undefined" : getReceivedType(uuid);
 }
-//@ chunk-ah34pb7m.js:11132-11204 placement = getReceivedType (0.776)
+//@ chunk-ah34pb7m.js:11132-11204 placement (2.1.88 match: getReceivedType, 0.776)
 function getReceivedType(value) {
   return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 }

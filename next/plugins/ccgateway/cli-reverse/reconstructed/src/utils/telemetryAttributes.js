@@ -67,7 +67,7 @@ deferInit("chunk-p52gp8zk.js:2759", () => {
     return result;
   });
 });
-//@ chunk-p52gp8zk.js:3163-4749 fingerprint = getTelemetryAttributes (0.672)
+//@ chunk-p52gp8zk.js:3163-4749 fingerprint (2.1.88 match: getTelemetryAttributes, 0.672)
 /**
  * OTel 公共属性：user.id、session.id（OTEL_METRICS_INCLUDE_SESSION_ID）、app.version（OTEL_METRICS_INCLUDE_VERSION）、organization.id、user.email、user.account_uuid、terminal.type 及 OTEL_RESOURCE_ATTRIBUTES。
  */

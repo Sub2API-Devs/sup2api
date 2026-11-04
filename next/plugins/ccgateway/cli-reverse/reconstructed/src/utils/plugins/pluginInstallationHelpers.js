@@ -163,7 +163,7 @@ import { claudeCommand } from "../worktreeResumeHint.js";
 import { redactUrlsInMessage } from "../redaction/urlRedaction.js";
 import { CommandSourceError } from "./commandSource.js";
 
-//@ chunk-e6aww6q8.js:4354776-4354890 fingerprint = registerPluginInstallation (0.567)
+//@ chunk-e6aww6q8.js:4354776-4354890 fingerprint (2.1.88 match: registerPluginInstallation, 0.567)
 /**
  * 两条安装记录是否等价（路径、更新时间相同且 auto 标记不降级）。
  */
@@ -174,7 +174,7 @@ function registerPluginInstallation(existing, next) {
     (next.auto !== true || existing.auto === true)
   );
 }
-//@ chunk-e6aww6q8.js:4365510-4366714 callgraph-fingerprint = cacheAndRegisterPlugin (0.165)
+//@ chunk-e6aww6q8.js:4365510-4366714 callgraph-fingerprint (2.1.88 match: cacheAndRegisterPlugin, 0.165)
 /**
  * 把一个 marketplace 插件下载缓存并写入安装记录（拒绝不安全的条目路径）。
  */
@@ -281,7 +281,7 @@ async function cacheAndRegisterPlugin(
       (cacheResult.repo && cacheResult.sha === null) || (isOfficialPinned && pinnedShaValue === undefined),
   };
 }
-//@ chunk-e6aww6q8.js:4366714-4366773 placement = getVersionedZipCachePath (1)
+//@ chunk-e6aww6q8.js:4366714-4366773 placement (2.1.88 match: getVersionedZipCachePath, 1)
 /**
  * 安装路径是否存在（zip 查文件，目录查缓存完整）。
  */
@@ -432,7 +432,7 @@ function mergePreviousProducerPaths(record, producerPath) {
     .filter((path) => path !== "")
     .slice(-MAX_PREVIOUS_PRODUCER_PATHS);
 }
-//@ chunk-e6aww6q8.js:4431505-4431671 fingerprint = validatePathWithinBase (1)
+//@ chunk-e6aww6q8.js:4431505-4431671 fingerprint (2.1.88 match: validatePathWithinBase, 1)
 /**
  * 解析 base 下的相对路径，越界抛“Path traversal detected”。
  */
@@ -443,7 +443,7 @@ function validatePathWithinBase(basePath, relativePath) {
     throw Error(`Path traversal detected: "${relativePath}" would escape the base directory`);
   return resolvedPath;
 }
-//@ chunk-e6aww6q8.js:4450972-4451911 fingerprint = formatResolutionError (0.713)
+//@ chunk-e6aww6q8.js:4450972-4451911 fingerprint (2.1.88 match: formatResolutionError, 0.713)
 /**
  * 依赖解析错误转文本：依赖环、跨市场依赖不被允许（提示 allowCrossMarketplaceDependenciesOn）、依赖找不到等。
  */
@@ -470,7 +470,7 @@ function formatResolutionError(r_2) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:4462968-4478634 callgraph-witnessed = installResolvedPlugin (0.121)
+//@ chunk-e6aww6q8.js:4462968-4478634 callgraph-witnessed (2.1.88 match: installResolvedPlugin, 0.121)
 /**
  * 安装已解析好的插件（核心安装流程）：解析依赖闭包、逐个缓存（cachePlugin+copyPluginToVersionedCache）、写安装记录与 enabledPlugins、处理 command 来源同意、userConfig、失败回滚；返回安装结果与依赖信息。
  */
@@ -1467,7 +1467,7 @@ function logInstallFailed({ reason, errorKind, pluginId, entry, marketplaceName,
     }),
   });
 }
-//@ chunk-e6aww6q8.js:4478990-4483311 fingerprint = installPluginFromMarketplace (0.494)
+//@ chunk-e6aww6q8.js:4478990-4483311 fingerprint (2.1.88 match: installPluginFromMarketplace, 0.494)
 /**
  * 从市场安装一个插件（界面/推荐用的简化入口）：取条目、调用 installResolvedPlugin，失败记 tengu_plugin_install_failed。
  */

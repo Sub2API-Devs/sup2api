@@ -45,7 +45,7 @@ function dedupeMapKeys(entries) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1159327-1162254 fingerprint = segmentedCommandPermissionResult (0.634)
+//@ chunk-e6aww6q8.js:1159327-1162254 fingerprint (2.1.88 match: segmentedCommandPermissionResult, 0.634)
 /**
  * 管道分段的权限合成：逐段（去掉输出重定向后）检查，任一 deny 即拒；多个 cd、cd+git 组合、创建 git 内部文件再运行 git 都要求确认；全部 allow 才放行，否则 ask 并合并建议规则。
  */
@@ -251,12 +251,12 @@ async function segmentedCommandPermissionResult(
     suggestions: suggestions.length > 0 ? suggestions : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1162254-1162364 fingerprint = buildSegmentWithoutRedirections (1)
+//@ chunk-e6aww6q8.js:1162254-1162364 fingerprint (2.1.88 match: buildSegmentWithoutRedirections, 1)
 async function buildSegmentWithoutRedirections(segmentCommand) {
   if (!segmentCommand.includes(">")) return segmentCommand;
   return (await ParsedCommand.parse(segmentCommand))?.withoutOutputRedirections() ?? segmentCommand;
 }
-//@ chunk-e6aww6q8.js:1162364-1162555 fingerprint = checkCommandOperatorPermissions (1)
+//@ chunk-e6aww6q8.js:1162364-1162555 fingerprint (2.1.88 match: checkCommandOperatorPermissions, 1)
 /**
  * 解析命令（可复用已有 tree-sitter 根），有子 shell/命令组直接 ask；有管道则按段走 segmentedCommandPermissionResult，否则 passthrough。
  */
@@ -288,7 +288,7 @@ async function checkCommandOperatorPermissions(
     findExtraAsk,
   );
 }
-//@ chunk-e6aww6q8.js:1162555-1163042 fingerprint = bashToolCheckCommandOperatorPermissions (0.845)
+//@ chunk-e6aww6q8.js:1162555-1163042 fingerprint (2.1.88 match: bashToolCheckCommandOperatorPermissions, 0.845)
 async function bashToolCheckCommandOperatorPermissions(
   input,
   bashToolHasPermission,

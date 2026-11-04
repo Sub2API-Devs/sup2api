@@ -289,7 +289,7 @@ function transcriptShareFailure(errorCode) {
     errorCode,
   };
 }
-//@ chunk-18hwfzwa.js:1020432-1021210 fingerprint = submitTranscriptShare (0.331)
+//@ chunk-18hwfzwa.js:1020432-1021210 fingerprint (2.1.88 match: submitTranscriptShare, 0.331)
 async function submitTranscriptShare(payload, credentials) {
   try {
     let response = await withOAuth401Retry(
@@ -346,7 +346,7 @@ async function submitTranscriptShare(payload, credentials) {
     };
   }
 }
-//@ chunk-18hwfzwa.js:1021210-1021254 placement = executePush (0.329)
+//@ chunk-18hwfzwa.js:1021210-1021254 placement (2.1.88 match: executePush, 0.329)
 function isHttpErrorLabel(status) {
   return concatSafe(lit_2("http_"), fromNumber(status));
 }

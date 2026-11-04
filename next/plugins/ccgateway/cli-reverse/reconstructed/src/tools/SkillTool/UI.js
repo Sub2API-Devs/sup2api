@@ -21,7 +21,7 @@ import { buildSubagentLookups } from "../../utils/messages.js";
 import { SubAgentProvider, OverflowHint } from "../../components/CtrlOToExpand.js";
 import { hasAutoModeBlockedToolResult } from "../../components/messages/teamMemCollapsed.js";
 
-//@ chunk-a5k9jscj.js:3304-3587 fingerprint = renderToolUseMessage (0.607)
+//@ chunk-a5k9jscj.js:3304-3587 fingerprint (2.1.88 match: renderToolUseMessage, 0.607)
 /**
  * Skill 调用的单行显示：skill 名（旧 commands 目录来源加 /），有队友作者时附 "· by 作者"。
  */
@@ -34,12 +34,12 @@ function renderToolUseMessage({ skill }, { commands, teammateAuthorOf }) {
   let author = teammateAuthorOf?.(command?.type === "prompt" ? command.source : undefined, skillName) ?? null;
   return author ? `${displayName} \xB7 by ${author}` : displayName;
 }
-//@ chunk-8ndmcarc.js:16633-16740 affinity = countToolCallsSince (1)
+//@ chunk-8ndmcarc.js:16633-16740 affinity (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(result) {
   let firstBlock = result.data.message.message.content[0];
   return firstBlock?.type === "tool_use" || firstBlock?.type === "tool_result";
 }
-//@ chunk-8ndmcarc.js:16740-17181 fingerprint = renderToolResultMessage (0.915)
+//@ chunk-8ndmcarc.js:16740-17181 fingerprint (2.1.88 match: renderToolResultMessage, 0.915)
 /**
  * Skill 结果渲染：forked 显示 Done/Running in the background；inline 显示 "Successfully loaded skill · N tools allowed · 模型"。
  */
@@ -68,7 +68,7 @@ function renderToolResultMessage(output) {
     }),
   });
 }
-//@ chunk-8ndmcarc.js:17181-17835 fingerprint = renderToolUseProgressMessage (0.846)
+//@ chunk-8ndmcarc.js:17181-17835 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.846)
 /**
  * Skill/子代理进度渲染：非 verbose 只显示最近几条工具调用，折叠其余并显示隐藏数量。
  */

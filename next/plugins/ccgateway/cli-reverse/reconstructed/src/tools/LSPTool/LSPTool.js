@@ -61,7 +61,7 @@ import {
 } from "./formatters.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:94254-94337 fingerprint = toLocation (1)
+//@ chunk-kxyd0g16.js:94254-94337 fingerprint (2.1.88 match: toLocation, 1)
 /**
  * LocationLink 转 Location（targetUri + targetSelectionRange/targetRange）。
  */
@@ -71,7 +71,7 @@ function toLocation(item) {
     range: item.targetSelectionRange || item.targetRange,
   };
 }
-//@ chunk-kxyd0g16.js:94337-94374 fingerprint = isLocationLink (1)
+//@ chunk-kxyd0g16.js:94337-94374 fingerprint (2.1.88 match: isLocationLink, 1)
 /**
  * 是否为 LSP LocationLink（含 targetUri）。
  */
@@ -91,7 +91,7 @@ function hasUncOrNetworkPath(filePath, resolvedPath) {
     isNetworkOrSpecialPath(resolvedPath)
   );
 }
-//@ chunk-kxyd0g16.js:103920-105186 fingerprint = outputSchema (0.801)
+//@ chunk-kxyd0g16.js:103920-105186 fingerprint (2.1.88 match: outputSchema, 0.801)
 var MAX_LSP_FILE_SIZE_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var lspInputSchema;
 var lspOutputSchema;
@@ -147,7 +147,7 @@ deferInit("chunk-kxyd0g16.js:103920", () => {
     }),
   );
 });
-//@ chunk-kxyd0g16.js:105853-109919 fingerprint = LSPTool (0.883)
+//@ chunk-kxyd0g16.js:105853-109919 fingerprint (2.1.88 match: LSPTool, 0.883)
 /**
  * LSP 工具定义（name "LSP"）。shouldDefer，只在有 LSP 服务器曾连接（hasEverConnected）时启用；只读、可并发；九种操作；文件需存在且不超过 10MB；结果过滤 gitignore 位置后格式化。
  */
@@ -422,7 +422,7 @@ deferInit("chunk-kxyd0g16.js:105853", () => {
     },
   });
 });
-//@ chunk-kxyd0g16.js:109919-110976 fingerprint = getMethodAndParams (1)
+//@ chunk-kxyd0g16.js:109919-110976 fingerprint (2.1.88 match: getMethodAndParams, 1)
 /**
  * 把工具输入转换为 LSP 方法与参数（1 基行列转 0 基，文件转 file:// URI）。
  */
@@ -531,7 +531,7 @@ function countSymbols(symbols) {
     if (symbol.children && symbol.children.length > 0) count += countSymbols(symbol.children);
   return count;
 }
-//@ chunk-kxyd0g16.js:111083-111137 callgraph-fingerprint = countUniqueFilesFromCallItems (1)
+//@ chunk-kxyd0g16.js:111083-111137 callgraph-fingerprint (2.1.88 match: countUniqueFilesFromCallItems, 1)
 function countUniqueFilesFromCallItems(items) {
   return new Set(items.map((item) => item.uri)).size;
 }
@@ -544,7 +544,7 @@ function uriToFilePath(uri) {
   } catch {}
   return filePath;
 }
-//@ chunk-kxyd0g16.js:111268-111776 fingerprint = filterGitIgnoredLocations (1)
+//@ chunk-kxyd0g16.js:111268-111776 fingerprint (2.1.88 match: filterGitIgnoredLocations, 1)
 /**
  * 用 git check-ignore 批量过滤 LSP 返回位置中被 gitignore 的文件。
  */
@@ -578,11 +578,11 @@ async function filterGitIgnoredLocations(locations, cwd) {
     return !filePath || !ignoredPaths.has(filePath);
   });
 }
-//@ chunk-kxyd0g16.js:111776-111813 layout = isLocationLink (1)
+//@ chunk-kxyd0g16.js:111776-111813 layout (2.1.88 match: isLocationLink, 1)
 function isLocationLink_2(item) {
   return "targetUri" in item;
 }
-//@ chunk-kxyd0g16.js:111813-111914 layout = toLocation (1)
+//@ chunk-kxyd0g16.js:111813-111914 layout (2.1.88 match: toLocation, 1)
 function toLocation_2(item) {
   if (isLocationLink_2(item))
     return {
@@ -591,7 +591,7 @@ function toLocation_2(item) {
     };
   return item;
 }
-//@ chunk-kxyd0g16.js:111914-114110 fingerprint = formatResult (0.96)
+//@ chunk-kxyd0g16.js:111914-114110 fingerprint (2.1.88 match: formatResult, 0.96)
 /**
  * 按操作类型格式化 LSP 结果，返回 {formatted, resultCount, fileCount}。
  */

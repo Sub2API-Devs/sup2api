@@ -37,7 +37,7 @@ import { TextInput } from "../../TextInput.js";
 import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { Byline } from "../../design-system/Byline.js";
 
-//@ chunk-18hwfzwa.js:1278846-1287012 fingerprint = PreviewQuestionView (0.787)
+//@ chunk-18hwfzwa.js:1278846-1287012 fingerprint (2.1.88 match: PreviewQuestionView, 0.787)
 function PreviewQuestionView(props) {
   let $ = useMemoCache(122);
   let {

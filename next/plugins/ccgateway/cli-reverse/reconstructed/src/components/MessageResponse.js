@@ -29,7 +29,7 @@ deferInit("chunk-wq9366y3.js:380", () => {
 deferInit("chunk-wq9366y3.js:384", () => {
   init_react_production();
 });
-//@ chunk-wq9366y3.js:388-1065 fingerprint = MessageResponse (0.639)
+//@ chunk-wq9366y3.js:388-1065 fingerprint (2.1.88 match: MessageResponse, 0.639)
 /**
  * 工具结果缩进容器：首行前缀 "⎿"，嵌套时不重复；前缀 aria-hidden；被 100+ 处使用。
  */

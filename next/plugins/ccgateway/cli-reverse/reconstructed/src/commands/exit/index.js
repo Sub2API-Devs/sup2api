@@ -17,7 +17,7 @@ import { isBgSession } from "../../utils/concurrentSessions.js";
 function getExitDescription() {
   return isBgSession() ? "Detach from this background session (it keeps running)" : "Exit the CLI";
 }
-//@ chunk-e6aww6q8.js:2037575-2037905 fingerprint = exit (0.606)
+//@ chunk-e6aww6q8.js:2037575-2037905 fingerprint (2.1.88 match: exit, 0.606)
 /**
  * /exit 命令对象（local-jsx）；描述：{return Arn()}；别名 ["quit"]；实现 chunk-xs5f70ym.js 的 Pe。
  */

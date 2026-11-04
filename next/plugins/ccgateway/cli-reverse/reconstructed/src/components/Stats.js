@@ -50,7 +50,7 @@ import { stripAnsi } from "../utils/stripAnsi.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { sequential } from "../utils/sequential.js";
 
-//@ chunk-18hwfzwa.js:1668742-1668823 fingerprint = DATE_RANGE_ORDER (0.539)
+//@ chunk-18hwfzwa.js:1668742-1668823 fingerprint (2.1.88 match: DATE_RANGE_ORDER, 0.539)
 function DATE_RANGE_ORDER(toolProgress) {
   for (let toolProgressEntry of toolProgress.values())
     if (DEFAULT_PROGRESS_DISPLAY[toolProgressEntry.kind] === "all") return true;
@@ -62,7 +62,7 @@ function DATE_RANGE_ORDER(toolProgress) {
  */
 var ISO_DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}/;
 var ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-//@ chunk-9h8dr0qb.js:77547-77702 placement = evaluateTimeBasedTrigger (0.576)
+//@ chunk-9h8dr0qb.js:77547-77702 placement (2.1.88 match: evaluateTimeBasedTrigger, 0.576)
 /**
  * 严格的 YYYY-MM-DD 字符串，日期有效则原样返回，否则 null。错归（统计界面 mergeCacheWithNewStats 使用），旧版名 evaluateTimeBasedTrigger 为错配。
  */
@@ -93,7 +93,7 @@ function firstItem(items) {
   let [first] = items;
   return first;
 }
-//@ chunk-9h8dr0qb.js:90990-91107 fingerprint = _temp1 (1)
+//@ chunk-9h8dr0qb.js:90990-91107 fingerprint (2.1.88 match: _temp1, 1)
 function renderModelLegendItem(item, i) {
   return jsxProd_default_2(
     Text,
@@ -110,14 +110,14 @@ function renderModelLegendItem(item, i) {
     item.model,
   );
 }
-//@ chunk-9h8dr0qb.js:91107-91213 layout = formatPeakDay (0.864)
+//@ chunk-9h8dr0qb.js:91107-91213 layout (2.1.88 match: formatPeakDay, 0.864)
 function formatPeakDay_2(dateStr) {
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
 }
-//@ chunk-9h8dr0qb.js:91213-91299 fingerprint = DATE_RANGE_LABELS (0.948)
+//@ chunk-9h8dr0qb.js:91213-91299 fingerprint (2.1.88 match: DATE_RANGE_LABELS, 0.948)
 var STATS_RANGE_LABELS = {
   "7d": "Last 7 days",
   "30d": "Last 30 days",
@@ -129,7 +129,7 @@ function getNextDateRange(current) {
   let currentIndex = STATS_RANGES.indexOf(current);
   return STATS_RANGES[(currentIndex + 1) % STATS_RANGES.length];
 }
-//@ chunk-9h8dr0qb.js:91361-91575 fingerprint = createAllTimeStatsPromise (1)
+//@ chunk-9h8dr0qb.js:91361-91575 fingerprint (2.1.88 match: createAllTimeStatsPromise, 1)
 function createAllTimeStatsPromise(storage) {
   return aggregateClaudeCodeStatsForRange("all", storage)
     .then((data) => {
@@ -163,7 +163,7 @@ var EMPTY_ACTIVITY_STATS = {
 function emptyStatsProvider(storageV5) {
   return Promise.resolve(EMPTY_ACTIVITY_STATS);
 }
-//@ chunk-9h8dr0qb.js:91736-92964 callgraph-witnessed = Stats (0.296)
+//@ chunk-9h8dr0qb.js:91736-92964 callgraph-witnessed (2.1.88 match: Stats, 0.296)
 /**
  * /stats：活跃热力图、token 用量图表、常用模型、峰值日与连续天数等统计。
  */
@@ -274,7 +274,7 @@ function Stats(props) {
   } else columnBoxElement = $[20];
   return columnBoxElement;
 }
-//@ chunk-9h8dr0qb.js:92964-96305 fingerprint = StatsContent (0.519)
+//@ chunk-9h8dr0qb.js:92964-96305 fingerprint (2.1.88 match: StatsContent, 0.519)
 function StatsContent(props) {
   let $ = useMemoCache(50);
   let { allTimePromise, activeTimePromise } = props;
@@ -552,7 +552,7 @@ function StatsContent(props) {
   } else t12 = $[49];
   return t12;
 }
-//@ chunk-9h8dr0qb.js:96305-96800 fingerprint = DateRangeSelector (0.89)
+//@ chunk-9h8dr0qb.js:96305-96800 fingerprint (2.1.88 match: DateRangeSelector, 0.89)
 function DateRangeSelector(props) {
   let $ = useMemoCache(9);
   let { dateRange, isLoading } = props;
@@ -650,7 +650,7 @@ function formatCacheTokens(usage) {
     `${formatNumber(usage.cacheCreationInputTokens || 0)} write`
   );
 }
-//@ chunk-9h8dr0qb.js:97388-103714 fingerprint = OverviewTab (0.688)
+//@ chunk-9h8dr0qb.js:97388-103714 fingerprint (2.1.88 match: OverviewTab, 0.688)
 function OverviewTab(props) {
   let $ = useMemoCache(102);
   let { stats, allTimeStats, dateRange, selectorRange, isLoading } = props;
@@ -1237,7 +1237,7 @@ function OverviewTab(props) {
   } else content = $[101];
   return content;
 }
-//@ chunk-9h8dr0qb.js:103714-105109 fingerprint = BOOK_COMPARISONS (0.823)
+//@ chunk-9h8dr0qb.js:103714-105109 fingerprint (2.1.88 match: BOOK_COMPARISONS, 0.823)
 /**
  * 书籍 token 数对照表。
  */
@@ -1381,7 +1381,7 @@ var TOKEN_COMPARISONS = [
     minutes: 480,
   },
 ];
-//@ chunk-9h8dr0qb.js:105109-105714 fingerprint = generateFunFactoid (0.651)
+//@ chunk-9h8dr0qb.js:105109-105714 fingerprint (2.1.88 match: generateFunFactoid, 0.651)
 function generateFunFactoid(stats) {
   let factoids = [];
   let totalTokens = 0;
@@ -1408,7 +1408,7 @@ function generateFunFactoid(stats) {
   let randomIndex = Math.floor(Math.random() * factoids.length);
   return factoids[randomIndex];
 }
-//@ chunk-9h8dr0qb.js:105714-108735 fingerprint = ModelsTab (0.61)
+//@ chunk-9h8dr0qb.js:105714-108735 fingerprint (2.1.88 match: ModelsTab, 0.61)
 function ModelsTab(props) {
   let $ = useMemoCache(61);
   let { stats, selectorRange, isLoading } = props;
@@ -1728,7 +1728,7 @@ function ModelsTab(props) {
   } else content = $[60];
   return content;
 }
-//@ chunk-9h8dr0qb.js:108735-109824 fingerprint = ModelEntry (0.556)
+//@ chunk-9h8dr0qb.js:108735-109824 fingerprint (2.1.88 match: ModelEntry, 0.556)
 function ModelEntry(props) {
   let $ = useMemoCache(27);
   let { model, usage, totalTokens } = props;
@@ -1825,7 +1825,7 @@ function ModelEntry(props) {
   } else t10 = $[26];
   return t10;
 }
-//@ chunk-9h8dr0qb.js:109824-110697 fingerprint = generateTokenChart (0.82)
+//@ chunk-9h8dr0qb.js:109824-110697 fingerprint (2.1.88 match: generateTokenChart, 0.82)
 function generateTokenChart(dailyTokens, models, terminalWidth) {
   if (dailyTokens.length < 2 || models.length === 0) return null;
   let yAxisWidth = 7;
@@ -1881,7 +1881,7 @@ function generateTokenChart(dailyTokens, models, terminalWidth) {
     xAxisLabels,
   };
 }
-//@ chunk-9h8dr0qb.js:110697-111044 callgraph-fingerprint = generateXAxisLabels (0.39)
+//@ chunk-9h8dr0qb.js:110697-111044 callgraph-fingerprint (2.1.88 match: generateXAxisLabels, 0.39)
 function generateXAxisLabels(data, _chartWidth, yAxisOffset) {
   if (data.length === 0) return "";
   let numLabels = Math.min(4, Math.max(2, Math.floor(data.length / 8)));
@@ -1905,7 +1905,7 @@ function generateXAxisLabels(data, _chartWidth, yAxisOffset) {
   }
   return result;
 }
-//@ chunk-9h8dr0qb.js:111044-111190 fingerprint = handleScreenshot (0.953)
+//@ chunk-9h8dr0qb.js:111044-111190 fingerprint (2.1.88 match: handleScreenshot, 0.953)
 async function handleScreenshot(stats, activeTab, tab, setStatus, clock) {
   setStatus("copying\u2026");
   let ansiText = renderStatsToAnsi(stats, activeTab, tab);
@@ -1913,7 +1913,7 @@ async function handleScreenshot(stats, activeTab, tab, setStatus, clock) {
   setStatus(result.success ? "copied!" : "copy failed");
   clock.setTimeout(() => setStatus(null), 2000);
 }
-//@ chunk-9h8dr0qb.js:111190-111487 fingerprint = renderStatsToAnsi (1)
+//@ chunk-9h8dr0qb.js:111190-111487 fingerprint (2.1.88 match: renderStatsToAnsi, 1)
 function renderStatsToAnsi(stats, theme, tab) {
   let lines = [];
   if (tab === "Overview") lines.push(...renderOverviewToAnsi(stats, theme));
@@ -1930,7 +1930,7 @@ function renderStatsToAnsi(stats, theme, tab) {
   return lines.join(`
 `);
 }
-//@ chunk-9h8dr0qb.js:111487-112580 fingerprint = renderOverviewToAnsi (0.843)
+//@ chunk-9h8dr0qb.js:111487-112580 fingerprint (2.1.88 match: renderOverviewToAnsi, 0.843)
 function renderOverviewToAnsi(stats, theme) {
   let lines = [];
   let theme_2 = getThemeWithOverrides(resolveSetting("theme", "dark").value);
@@ -1982,7 +1982,7 @@ function renderOverviewToAnsi(stats, theme) {
   lines.push(sequential.gray(`Stats from the last ${stats.totalDays} days`));
   return lines;
 }
-//@ chunk-9h8dr0qb.js:112580-113320 fingerprint = renderModelsToAnsi (0.958)
+//@ chunk-9h8dr0qb.js:112580-113320 fingerprint (2.1.88 match: renderModelsToAnsi, 0.958)
 function renderModelsToAnsi(stats) {
   let lines = [];
   let { modelEntries, totalTokens } = sortModelUsage(stats.modelUsage);

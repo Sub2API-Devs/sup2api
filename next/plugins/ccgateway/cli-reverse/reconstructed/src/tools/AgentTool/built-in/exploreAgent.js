@@ -23,7 +23,7 @@ import { FILE_WRITE_TOOL_NAME } from "../../FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../NotebookEditTool/constants.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:179523-181888 fingerprint = getExploreSystemPrompt (0.647)
+//@ chunk-e6aww6q8.js:179523-181888 fingerprint (2.1.88 match: getExploreSystemPrompt, 0.647)
 function getExploreSystemPrompt() {
   let embedded = isBashAvailable();
   let shellToolName = embedded ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
@@ -68,7 +68,7 @@ NOTE: You are meant to be a fast agent that returns output as quickly as possibl
 
 Complete the user's search request efficiently and report your findings clearly.`;
 }
-//@ chunk-e6aww6q8.js:181888-183116 fingerprint = EXPLORE_AGENT (0.716)
+//@ chunk-e6aww6q8.js:181888-183116 fingerprint (2.1.88 match: EXPLORE_AGENT, 0.716)
 /**
  * Explore 内建代理及其 whenToUse 文本；EXPLORE_AGENT_MIN_QUERIES=3 用于主提示词"超过 3 次查询改用 Explore"。
  */

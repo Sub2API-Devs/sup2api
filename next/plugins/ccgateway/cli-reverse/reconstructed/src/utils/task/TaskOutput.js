@@ -88,7 +88,7 @@ deferInit("chunk-e6aww6q8.js:253502", () => {
 function taskOutputRegistry() {
   return taskOutputRegistryByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:253568-257176 fingerprint = TaskOutput (0.786)
+//@ chunk-e6aww6q8.js:253568-257176 fingerprint (2.1.88 match: TaskOutput, 0.786)
 /**
  * 后台任务输出缓冲：内存保存最近输出、超限时落盘到 .output 文件并给出截断提示。
  */

@@ -59,7 +59,7 @@ function connectorScopedAgentId(agentIdPrefix, uuid) {
     return;
   }
 }
-//@ chunk-6mwt0myy.js:1501-1694 fingerprint = BASE58 (1)
+//@ chunk-6mwt0myy.js:1501-1694 fingerprint (2.1.88 match: BASE58, 1)
 function BASE58(encoded) {
   if (encoded.length !== 22) return;
   let radix = BigInt(58);
@@ -71,16 +71,16 @@ function BASE58(encoded) {
   }
   return value;
 }
-//@ chunk-dcmhvw5a.js:71894-71956 callgraph-fingerprint = getConnectedClaudeAIConnectors (0.455)
+//@ chunk-dcmhvw5a.js:71894-71956 callgraph-fingerprint (2.1.88 match: getConnectedClaudeAIConnectors, 0.455)
 /**
  * getConnectedClaudeAIConnectors（实为 isConnectedOrCached）：连接状态为 connected 或 cached。
  */
 function isConnectedOrCached(mcpClients) {
   return mcpClients.type === "connected" || mcpClients.type === "cached";
 }
-//@ chunk-m3arwd1y.js:12143-12210 affinity = BASE58 (1)
+//@ chunk-m3arwd1y.js:12143-12210 affinity (2.1.88 match: BASE58, 1)
 var BASE58_2 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-//@ chunk-m3arwd1y.js:12210-12528 fingerprint = taggedIdToUUID (1)
+//@ chunk-m3arwd1y.js:12210-12528 fingerprint (2.1.88 match: taggedIdToUUID, 1)
 function taggedIdToUUID(taggedId) {
   let normalizedId = normalizeConnectorId(taggedId);
   let prefix = "mcpsrv_";
@@ -107,7 +107,7 @@ function isClaudeAiConnectorConfig(config) {
 function isUsableClaudeAiConnector(client) {
   return isConnectedOrCached(client) && isClaudeAiConnectorConfig(client.config);
 }
-//@ chunk-m3arwd1y.js:12677-12870 placement = _temp2 (1)
+//@ chunk-m3arwd1y.js:12677-12870 placement (2.1.88 match: _temp2, 1)
 function collectClaudeAiConnectors(client_0) {
   let connectors = [];
   for (let client of client_0) {
@@ -123,7 +123,7 @@ function collectClaudeAiConnectors(client_0) {
   }
   return connectors;
 }
-//@ chunk-m3arwd1y.js:12870-12935 layout = SCOPE_ORDER (0.845)
+//@ chunk-m3arwd1y.js:12870-12935 layout (2.1.88 match: SCOPE_ORDER, 0.845)
 var SCOPE_ORDER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-m3arwd1y.js:12870", () => {
   SCOPE_ORDER = new Set(["local", "user", "project", "enterprise", "managed"]);
@@ -227,13 +227,13 @@ function buildConnectorsInfo({
 }
 //@ chunk-m3arwd1y.js:19179-19242 layout
 var SCHEDULE_MENU_QUESTION = "What would you like to do with scheduled cloud agents?";
-//@ chunk-m3arwd1y.js:19242-19315 fingerprint = formatSetupNotes (1)
+//@ chunk-m3arwd1y.js:19242-19315 fingerprint (2.1.88 match: formatSetupNotes, 1)
 function formatSetupNotes(notes) {
   return `\u26A0 Heads-up:
 ${notes.map((n) => `- ${n}`).join(`
 `)}`;
 }
-//@ chunk-m3arwd1y.js:19315-19454 fingerprint = getCurrentRepoHttpsUrl (1)
+//@ chunk-m3arwd1y.js:19315-19454 fingerprint (2.1.88 match: getCurrentRepoHttpsUrl, 1)
 async function getCurrentRepoHttpsUrl() {
   let remoteUrl = await getRemoteUrl();
   if (!remoteUrl) return null;
@@ -241,7 +241,7 @@ async function getCurrentRepoHttpsUrl() {
   if (!parsed || isNestedGitLabProject(parsed)) return null;
   return `https://${parsed.host}/${parsed.owner}/${parsed.name}`;
 }
-//@ chunk-m3arwd1y.js:19454-31118 fingerprint = buildPrompt (0.832)
+//@ chunk-m3arwd1y.js:19454-31118 fingerprint (2.1.88 match: buildPrompt, 0.832)
 /**
  * /schedule skill 的主提示词：列出/创建/更新/运行远程定时代理的流程、仓库与环境选择、连接器说明。
  */
@@ -466,7 +466,7 @@ Start by understanding their intent and working through the appropriate workflow
     : ""
 }`;
 }
-//@ chunk-m3arwd1y.js:31118-37070 fingerprint = registerScheduleRemoteAgentsSkill (0.411)
+//@ chunk-m3arwd1y.js:31118-37070 fingerprint (2.1.88 match: registerScheduleRemoteAgentsSkill, 0.411)
 /**
  * 注册 /schedule 内置 skill（管理定时云端代理 routines）：需要 claude.ai 登录、非 CLAUDE_CODE_REMOTE、且策略允许 routines。
  */

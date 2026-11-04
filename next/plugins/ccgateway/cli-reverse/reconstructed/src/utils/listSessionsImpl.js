@@ -24,7 +24,7 @@ import { validateUuid, readSessionLite } from "./sessionStoragePortable.js";
 import { findContinuedInSessionId } from "./backgroundSessionResume.js";
 import { stripBomAndCarriageReturn } from "./remoteFileState.js";
 
-//@ chunk-6zvphrsz.js:19666-19861 fingerprint = gatherAllCandidates (1)
+//@ chunk-6zvphrsz.js:19666-19861 fingerprint (2.1.88 match: gatherAllCandidates, 1)
 async function gatherAllCandidates() {
   return (
     await Promise.all(
@@ -49,7 +49,7 @@ function getProjectKeyIfValid(projectPath) {
     ? projectKeyIfRepresentable
     : undefined;
 }
-//@ chunk-19fynvg9.js:605-1662 fingerprint = listCandidates (0.444)
+//@ chunk-19fynvg9.js:605-1662 fingerprint (2.1.88 match: listCandidates, 0.444)
 /**
  * 列出某项目目录（或全部）下的 .jsonl 会话候选及 mtime。
  */
@@ -147,7 +147,7 @@ async function listCandidates(projectsDir, includeMtime, projectPath, storage, b
 }
 //@ chunk-19fynvg9.js:1662-1671 layout
 var CANDIDATE_READ_CONCURRENCY = 32;
-//@ chunk-19fynvg9.js:1671-2014 callgraph-fingerprint = readCandidate (0.239)
+//@ chunk-19fynvg9.js:1671-2014 callgraph-fingerprint (2.1.88 match: readCandidate, 0.239)
 /**
  * 读取候选会话文件头尾，提取摘要信息（标题、首条提示、cwd、分支）。
  */
@@ -179,7 +179,7 @@ async function readCandidate(projectsDir, sessionId, storage) {
   }
   return;
 }
-//@ chunk-1bmxdqa0.js:16776-16861 fingerprint = listSessionsImpl (0.817)
+//@ chunk-1bmxdqa0.js:16776-16861 fingerprint (2.1.88 match: listSessionsImpl, 0.817)
 /**
  * SDK listSessions 实现：扫描项目目录候选会话文件并读取 lite 信息。
  */

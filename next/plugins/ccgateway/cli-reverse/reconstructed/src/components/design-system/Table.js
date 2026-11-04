@@ -61,7 +61,7 @@ function isTextLike(cell) {
   if (isValidElement_default(cell) && cell.type === fragmentTypeExport) return true;
   return false;
 }
-//@ chunk-2nmyajw8.js:875-970 placement = StyledText (1)
+//@ chunk-2nmyajw8.js:875-970 placement (2.1.88 match: StyledText, 1)
 function applyEmphasis(cell, style, isHeader) {
   if (!isTextLike(cell)) return cell;
   return jsxProd_default(Text, {
@@ -280,7 +280,7 @@ function Table(props) {
   } else table = $[11];
   return table;
 }
-//@ chunk-2nmyajw8.js:3202-3234 placement = FlexDirection (1)
+//@ chunk-2nmyajw8.js:3202-3234 placement (2.1.88 match: FlexDirection, 1)
 var FlexDirectionRow; // deferred: uses Table of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-2nmyajw8.js:3202", () => {
   FlexDirectionRow = Object.assign(Table, {

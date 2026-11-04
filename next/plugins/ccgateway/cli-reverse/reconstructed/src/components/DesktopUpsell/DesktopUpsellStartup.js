@@ -23,18 +23,18 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 
-//@ chunk-4t8fx0s8.js:13747-13804 fingerprint = DESKTOP_UPSELL_DEFAULT (0.667)
+//@ chunk-4t8fx0s8.js:13747-13804 fingerprint (2.1.88 match: DESKTOP_UPSELL_DEFAULT, 0.667)
 var DESKTOP_UPSELL_DEFAULT = {
   enable_shortcut_tip: false,
   enable_contextual_tip: false,
 };
-//@ chunk-4t8fx0s8.js:13804-13854 fingerprint = getDesktopUpsellConfig (1)
+//@ chunk-4t8fx0s8.js:13804-13854 fingerprint (2.1.88 match: getDesktopUpsellConfig, 1)
 function getDesktopUpsellConfig() {
   return getDynamicConfig_CACHED_MAY_BE_STALE("tengu_desktop_upsell", DESKTOP_UPSELL_DEFAULT);
 }
 //@ chunk-18hwfzwa.js:1106798-1106812 affinity
 var DESKTOP_UPSELL_TIMEOUT_MS = 30000;
-//@ chunk-18hwfzwa.js:1106812-1108717 callgraph-fingerprint = DesktopUpsellStartup (0.167)
+//@ chunk-18hwfzwa.js:1106812-1108717 callgraph-fingerprint (2.1.88 match: DesktopUpsellStartup, 0.167)
 function DesktopUpsellStartup(props) {
   let $ = useMemoCache(33);
   let {

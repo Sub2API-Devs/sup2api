@@ -188,7 +188,7 @@ function formatCertificatesLeftOutWarning(trustBundles) {
   if (max === 0) return;
   return `[runner:warn] governed git: the certificate file the runner builds for Anthropic-managed git (the git mount) leaves out ${max} ${plural(max, "certificate")} because of Claude Code's deny list, from this machine's public certificate authorities or the file GIT_SSL_CAINFO names. A git given this file does not trust ${plural(max, "it", "them")} for the mount.`;
 }
-//@ chunk-hm0ce8vc.js:44223-44345 placement = handleFileDescriptorRedirection (0.389)
+//@ chunk-hm0ce8vc.js:44223-44345 placement (2.1.88 match: handleFileDescriptorRedirection, 0.389)
 /**
  * 按角色（如 prep）计算 git 挂载的信任判定：把 operator、routing、target、trustBundle 交给 Oln，取其 decision。旧版名 handleFileDescriptorRedirection 误配，属 runner/挂载模块。
  */
@@ -594,7 +594,7 @@ function sslEntriesOfCommandScope(childGitEnvironment) {
       /^http\..+\.sslCAInfo$/i.test(configKey),
   );
 }
-//@ chunk-hm0ce8vc.js:57692-57972 placement = shellQuote (0.768)
+//@ chunk-hm0ce8vc.js:57692-57972 placement (2.1.88 match: shellQuote, 0.768)
 function shellQuote(existing, entries) {
   if (entries.length === 0) return {};
   let base = existing === undefined || existing === null ? "" : String(existing);

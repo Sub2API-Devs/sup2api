@@ -283,7 +283,7 @@ function hostIdentityMatches(hostPattern, host) {
   let hostKey = normalizeDomainKey(`domain:${host}`);
   return patternKey.includes("*") ? domainRuleMatches(patternKey, hostKey) : patternKey === hostKey;
 }
-//@ chunk-fq0cr76a.js:853952-854002 fingerprint = getExcludedCommands (0.74)
+//@ chunk-fq0cr76a.js:853952-854002 fingerprint (2.1.88 match: getExcludedCommands, 0.74)
 function getTrustedExcludedCommands() {
   return collectFromSandboxSettings((settings) => settings.excludedCommands);
 }
@@ -374,7 +374,7 @@ function matchesNameReading(path, readings, cache, nocase = false) {
       : path.startsWith(`${name}/`) && matchesGuardedGlob(path.slice(name.length), pattern, cache, nocase),
   );
 }
-//@ chunk-fq0cr76a.js:905263-905425 placement = LayoutMeasureMode (0.654)
+//@ chunk-fq0cr76a.js:905263-905425 placement (2.1.88 match: LayoutMeasureMode, 0.654)
 function matchesRuntimeGlobBy(path, pattern, caseMode, matchFn) {
   return (
     matchFn(pattern, path) ||
@@ -481,7 +481,7 @@ function getGlobBaseDirectory_2(pattern) {
   if (getPlatform() === "windows") return win32.dirname(literalPrefix.replace(/[/\\]+$/, "\\_"));
   return literalPrefix.endsWith("/") ? literalPrefix.replace(/\/+$/, "") || "/" : dirname(literalPrefix);
 }
-//@ chunk-fq0cr76a.js:906746-906971 placement = permissionRuleValueFromString (0.361)
+//@ chunk-fq0cr76a.js:906746-906971 placement (2.1.88 match: permissionRuleValueFromString, 0.361)
 /**
  * 把规则串（如 `Read(//secret/**)`、`WebFetch(domain:x)`）解析成 {toolName, ruleContent}，Windows 上对反斜杠路径单独处理转义。
  */
@@ -905,7 +905,7 @@ function areWindowsLocalConnectionsOn() {
     ) === true
   );
 }
-//@ chunk-fq0cr76a.js:912640-912793 fingerprint = areSandboxSettingsLockedByPolicy (0.861)
+//@ chunk-fq0cr76a.js:912640-912793 fingerprint (2.1.88 match: areSandboxSettingsLockedByPolicy, 0.861)
 /**
  * 只看 policySettings：托管层设置了 sandbox.enabled / autoAllowBashIfSandboxed / allowUnsandboxedCommands 任一项即视为沙箱设置被托管锁定（SandboxManager.areSandboxSettingsLockedByManagedSettings）。
  */
@@ -1091,7 +1091,7 @@ function getEffectiveFilesystemPolicy() {
 function sandboxExportsChildTmpDir() {
   return getPlatform() === "windows" || getEffectiveFilesystemPolicy() !== "relaxed";
 }
-//@ chunk-fq0cr76a.js:914935-915158 placement = getSettingsRootPathForSource (0.836)
+//@ chunk-fq0cr76a.js:914935-915158 placement (2.1.88 match: getSettingsRootPathForSource, 0.836)
 function isSandboxEnabledInSettings() {
   return [
     ...getAllPolicyTierSettings(),
@@ -1101,7 +1101,7 @@ function isSandboxEnabledInSettings() {
     isSettingSourceEnabled("localSettings") ? getSettingsForSource("localSettings") : null,
   ].some((settings) => settings?.sandbox?.enabled === true);
 }
-//@ chunk-fq0cr76a.js:915158-915245 placement = shouldAllowManagedSandboxDomainsOnly (0.821)
+//@ chunk-fq0cr76a.js:915158-915245 placement (2.1.88 match: shouldAllowManagedSandboxDomainsOnly, 0.821)
 /**
  * 任一托管/可信层设置了 sandbox.network.allowManagedDomainsOnly 时为真：网络白名单只认托管层。
  */
@@ -1139,7 +1139,7 @@ function perCommandNetworkListsForRuntime(sandboxNetworkLists) {
       : normalizeIpv6HostEntries([...sandboxNetworkLists.allow]),
   };
 }
-//@ chunk-fq0cr76a.js:915461-915579 placement = supportsPersistence (0.79)
+//@ chunk-fq0cr76a.js:915461-915579 placement (2.1.88 match: supportsPersistence, 0.79)
 /**
  * 沙箱设置写到哪一层：仅允许托管域名时不可写；托管策略锁定时只写 userSettings（若启用），否则 localSettings。
  */
@@ -2541,11 +2541,11 @@ function normalizeDirEntryPattern(pattern, path) {
     ? normalizeWindowsDirPath(path)
     : path;
 }
-//@ chunk-fq0cr76a.js:935046-935087 placement = isInGlobalClaudeFolder (1)
+//@ chunk-fq0cr76a.js:935046-935087 placement (2.1.88 match: isInGlobalClaudeFolder, 1)
 function isInGlobalClaudeFolder(filePath) {
   return resolve(filePath, ".claude", ATOMIC_WRITE_DIRNAME);
 }
-//@ chunk-fq0cr76a.js:935087-935255 placement = _temp8 (1)
+//@ chunk-fq0cr76a.js:935087-935255 placement (2.1.88 match: _temp8, 1)
 function getAtomicWriteDirs(a_3 = true) {
   let dirs = new Set();
   dirs.add(isInGlobalClaudeFolder(getOriginalCwd()));
@@ -7087,7 +7087,7 @@ function ensureSandboxRuntimeSeeded() {
   }
   return;
 }
-//@ chunk-fq0cr76a.js:1016125-1016391 fingerprint = checkDependencies (0.632)
+//@ chunk-fq0cr76a.js:1016125-1016391 fingerprint (2.1.88 match: checkDependencies, 0.632)
 /**
  * 检查沙箱依赖（ripgrep 路径交给 sandbox-runtime 的 checkDependencies），Linux/WSL 在运行时未初始化时额外试跑一次 bubblewrap。
  */
@@ -7124,7 +7124,7 @@ function shouldForceSandboxOn() {
   if (!getSandboxGbConfig().disableNoSandbox) return false;
   return !isScrubEnabled() && !isEnvTruthy(env.IS_SANDBOX) && !envDynamicProbe.getIsBubblewrapSandbox();
 }
-//@ chunk-fq0cr76a.js:1016520-1016662 fingerprint = getSandboxEnabledSetting (1)
+//@ chunk-fq0cr76a.js:1016520-1016662 fingerprint (2.1.88 match: getSandboxEnabledSetting, 1)
 /**
  * 沙箱是否在设置里开启（含强制开启）；读设置失败记日志返回 false。
  */
@@ -7148,7 +7148,7 @@ function isScrubOnlySandboxMode() {
 function isAutoAllowSupported() {
   return !isScrubEnabled() && getPlatform() !== "windows";
 }
-//@ chunk-fq0cr76a.js:1016745-1016829 fingerprint = isAutoAllowBashIfSandboxedEnabled (1)
+//@ chunk-fq0cr76a.js:1016745-1016829 fingerprint (2.1.88 match: isAutoAllowBashIfSandboxedEnabled, 1)
 /**
  * sandbox.autoAllowBashIfSandboxed（默认 true）；scrub 模式或 Windows 下不支持。
  */
@@ -7156,7 +7156,7 @@ function isAutoAllowBashIfSandboxedEnabled() {
   if (!isAutoAllowSupported()) return false;
   return getSettings_DEPRECATED()?.sandbox?.autoAllowBashIfSandboxed ?? true;
 }
-//@ chunk-fq0cr76a.js:1016829-1016944 fingerprint = areUnsandboxedCommandsAllowed (0.749)
+//@ chunk-fq0cr76a.js:1016829-1016944 fingerprint (2.1.88 match: areUnsandboxedCommandsAllowed, 0.749)
 /**
  * 是否禁止沙箱外执行：GrowthBook forbidUnsandboxedCommands、可信层 allowUnsandboxedCommands=false 或合并设置 allowUnsandboxedCommands===false。
  */
@@ -7200,13 +7200,13 @@ function isUserFailIfUnavailableUnderMandate() {
     isAdminSandboxMandate()
   );
 }
-//@ chunk-fq0cr76a.js:1017371-1017454 layout = _temp9 (0.769)
+//@ chunk-fq0cr76a.js:1017371-1017454 layout (2.1.88 match: _temp9, 0.769)
 function hasTrustedSandboxSetting(a_4) {
   return [getPolicySettingsIfEnabled(), getSettingsForSource("flagSettings")].some(
     (settings) => settings?.sandbox?.[a_4] !== undefined,
   );
 }
-//@ chunk-fq0cr76a.js:1017454-1017705 callgraph-fingerprint = convertToSandboxRuntimeConfig (0.269)
+//@ chunk-fq0cr76a.js:1017454-1017705 callgraph-fingerprint (2.1.88 match: convertToSandboxRuntimeConfig, 0.269)
 /**
  * 可信层（托管/--settings）有网络限制：管理员强制、strictAllowlist、deniedDomains 或 WebFetch(domain:) 的 deny 规则。
  */
@@ -8056,7 +8056,7 @@ function isUnsandboxedFallbackClosedByTrustedSource() {
 deferInit("chunk-fq0cr76a.js:1030390", () => {
   setUserTempRoot(() => getSandboxGbConfig().requireSandboxedAttempt === true);
 });
-//@ chunk-fq0cr76a.js:1030432-1030521 fingerprint = isSandboxRequired (1)
+//@ chunk-fq0cr76a.js:1030432-1030521 fingerprint (2.1.88 match: isSandboxRequired, 1)
 /**
  * 沙箱是否“必需”：设置开启、平台在 enabledPlatforms 内、且 sandbox.failIfUnavailable（或管理员强制下用户设置的 failIfUnavailable）。
  */
@@ -8076,7 +8076,7 @@ function isSupportedPlatform() {
   if (getPlatform() === "windows") return isWindowsSandboxEnabled();
   return getSandboxAdapterState().baseIsSupportedPlatform();
 }
-//@ chunk-fq0cr76a.js:1030604-1030819 fingerprint = isPlatformInEnabledList (0.881)
+//@ chunk-fq0cr76a.js:1030604-1030819 fingerprint (2.1.88 match: isPlatformInEnabledList, 0.881)
 /**
  * 托管设置 sandbox.enabledPlatforms 未设为 true；空数组为 false；否则当前平台须在列表里。
  */
@@ -8239,7 +8239,7 @@ function getProfileReadSecurityWarnings() {
           )}${warning.paths.length > 5 ? ", \u2026" : ""}. Only their owner or an administrator can close them.`,
     );
 }
-//@ chunk-fq0cr76a.js:1033336-1034966 callgraph-witnessed = getSandboxUnavailableReason (0.196)
+//@ chunk-fq0cr76a.js:1033336-1034966 callgraph-witnessed (2.1.88 match: getSandboxUnavailableReason, 0.196)
 /**
  * 沙箱开启但无法使用的原因：平台不支持（WSL1、Windows 门控、其他系统）、diskless、Windows allowLocalBinding 变更需重启、需重新安装、依赖缺失（给出 apt install bubblewrap socat 或 /sandbox 提示）。
  */
@@ -8360,7 +8360,7 @@ function canMaskCredentialWarningFire() {
   let scrubAvailable = isScrubEnabled() && true && isScrubSandboxAvailable();
   return (getSandboxEnabledSetting() || scrubAvailable) && isPlatformInEnabledList();
 }
-//@ chunk-fq0cr76a.js:1037441-1037949 fingerprint = getLinuxGlobPatternWarnings (0.952)
+//@ chunk-fq0cr76a.js:1037441-1037949 fingerprint (2.1.88 match: getLinuxGlobPatternWarnings, 0.952)
 /**
  * Linux/WSL 上 Edit/Read 规则里含 bubblewrap 无法表达的 glob（尾部 /** 之外）时返回这些规则用于告警。
  */
@@ -8458,7 +8458,7 @@ function getInvalidInjectHostEntries() {
     return [];
   }
 }
-//@ chunk-fq0cr76a.js:1038926-1039022 placement = getEnabledSettingSources (0.863)
+//@ chunk-fq0cr76a.js:1038926-1039022 placement (2.1.88 match: getEnabledSettingSources, 0.863)
 /**
  * flagSettings 或 policySettings 是否设置了指定的 sandbox 键。
  */
@@ -8478,7 +8478,7 @@ function areSandboxSettingsOverriddenByFlagOrPolicy() {
     isSandboxSettingOverriddenByPolicy("allowUnsandboxedCommands")
   );
 }
-//@ chunk-fq0cr76a.js:1039124-1039749 fingerprint = setSandboxSettings (0.67)
+//@ chunk-fq0cr76a.js:1039124-1039749 fingerprint (2.1.88 match: setSandboxSettings, 0.67)
 /**
  * 把 sandbox.enabled/autoAllowBashIfSandboxed/allowUnsandboxedCommands 写入 localSettings（只写变化项）。
  */
@@ -8730,7 +8730,7 @@ function toCommandNotWrappedError(error, signal) {
     ? error
     : describeUnreadableSandboxError(error, "commandNotWrapped");
 }
-//@ chunk-fq0cr76a.js:1045280-1045432 fingerprint = wrapWithSandbox (0.558)
+//@ chunk-fq0cr76a.js:1045280-1045432 fingerprint (2.1.88 match: wrapWithSandbox, 0.558)
 /**
  * 门面 wrapWithSandbox：ensureInitializedForWrap 后调用 sandbox-runtime 把命令串包成沙箱命令（macOS sandbox-exec 配置 / Linux bwrap+seccomp+socat 代理）。
  */
@@ -9412,7 +9412,7 @@ async function resetSandbox() {
   for (let signalName of EXIT_SIGNALS) process.off(signalName, announceWindowsPermissionRemoval);
   return SandboxManager_2.reset();
 }
-//@ chunk-fq0cr76a.js:1056457-1057166 placement = addToExcludedCommands (0.534)
+//@ chunk-fq0cr76a.js:1056457-1057166 placement (2.1.88 match: addToExcludedCommands, 0.534)
 /**
  * 把命令（优先取建议规则 Bash(prefix:*) 的前缀）加入 sandbox.excludedCommands；管理员强制或 Windows 严格模式写 userSettings，否则 localSettings；强制下用户设置被禁用则拒绝。
  */
@@ -9495,7 +9495,7 @@ function afterSandboxedCommand(extra, deferredSnapshot, options) {
       sandboxAdapterState.readDenyRootLookFinishedAt = readDenyRootLookFinishedAt;
   }
 }
-//@ chunk-fq0cr76a.js:1057777-1062179 placement = SandboxManager (0.43)
+//@ chunk-fq0cr76a.js:1057777-1062179 placement (2.1.88 match: SandboxManager, 0.43)
 /**
  * Claude Code 侧的 SandboxManager 门面对象：汇总初始化、启用/必需判断、托管锁定、排除命令、网络与文件系统授权、wrapWithSandbox/wrapWithSandboxArgv、依赖检查、refreshConfig/reset 等；getConfig/getFsReadConfig 转发 vendor 的运行中配置并做额外处理。
  */
@@ -9837,7 +9837,7 @@ function ensurePrivateDirChain(
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:1909100-1909192 fingerprint = shouldAllowManagedReadPathsOnly (0.819)
+//@ chunk-e6aww6q8.js:1909100-1909192 fingerprint (2.1.88 match: shouldAllowManagedReadPathsOnly, 0.819)
 /**
  * 任一托管/可信层设置了 sandbox.filesystem.allowManagedReadPathsOnly 时为真：allowRead 只认可信层。
  */

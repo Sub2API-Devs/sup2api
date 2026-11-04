@@ -34,7 +34,7 @@ import {
 } from "./plugins/safeCopy.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-k176arn3.js:3097-3154 placement = atomicWriteToZipCache (0.651)
+//@ chunk-k176arn3.js:3097-3154 placement (2.1.88 match: atomicWriteToZipCache, 0.651)
 /**
  * 生成 <路径>.tmp.<随机> 临时文件名。
  */
@@ -300,7 +300,7 @@ class PublishRefusedError extends Error {
     this.name = "PublishRefusedError";
   }
 }
-//@ chunk-k176arn3.js:5983-6260 placement = isFsInaccessible (0.815)
+//@ chunk-k176arn3.js:5983-6260 placement (2.1.88 match: isFsInaccessible, 0.815)
 async function isFsInaccessible(filePath, dirPath) {
   if (dirPath === undefined) return filePath;
   try {
@@ -336,7 +336,7 @@ async function isOwnedByOtherUser(dirPath) {
  * 原子发布重命名的尝试次数（3）。
  */
 var MAX_PUBLISH_RENAME_ATTEMPTS = 3;
-//@ chunk-k176arn3.js:6384-6502 placement = getUnameSR (0.793)
+//@ chunk-k176arn3.js:6384-6502 placement (2.1.88 match: getUnameSR, 0.793)
 async function getUnameSR(path, platform) {
   if (platform !== "win32") return false;
   try {
@@ -368,7 +368,7 @@ function exclusiveCreateTakenError(path, unameSR) {
     },
   );
 }
-//@ chunk-k176arn3.js:6677-6861 placement = tryCreateExclusive (0.782)
+//@ chunk-k176arn3.js:6677-6861 placement (2.1.88 match: tryCreateExclusive, 0.782)
 async function tryCreateExclusive(targetPath, platform, createTemp) {
   for (let idx = 1; ; idx++) {
     let path = makeTempSiblingPath(targetPath);
@@ -385,7 +385,7 @@ async function tryCreateExclusive(targetPath, platform, createTemp) {
     }
   }
 }
-//@ chunk-k176arn3.js:6861-7046 placement = writeIfMissing (0.817)
+//@ chunk-k176arn3.js:6861-7046 placement (2.1.88 match: writeIfMissing, 0.817)
 /**
  * 原子方式只在文件不存在时写入（wx 标志，失败清理临时文件）。
  */
@@ -445,12 +445,12 @@ async function writeNewFile(path, content, mode, platform = "linux") {
     flag: "wx",
   });
 }
-//@ chunk-k176arn3.js:7477-7543 placement = chordToDisplayString (1)
+//@ chunk-k176arn3.js:7477-7543 placement (2.1.88 match: chordToDisplayString, 1)
 async function assertSafeThenWrite(sourcePath, platform, platform_2 = "linux") {
   await assertPathSafeAsync(platform, platform_2);
   await copyFileNoFollow(sourcePath, platform, COPY_EXCLUSIVE_FLAGS);
 }
-//@ chunk-k176arn3.js:7543-7641 placement = chordToDisplayString (1)
+//@ chunk-k176arn3.js:7543-7641 placement (2.1.88 match: chordToDisplayString, 1)
 async function assertPathSafeAsync(chord, platform = "linux") {
   let unameSR = await getUnameSR(chord, platform);
   if (unameSR === true) throw exclusiveCreateTakenError(chord, unameSR);
@@ -721,7 +721,7 @@ function writeNoFollowSync(path, snapshot) {
     return false;
   }
 }
-//@ chunk-k176arn3.js:10537-10643 placement = getUnameSR (0.793)
+//@ chunk-k176arn3.js:10537-10643 placement (2.1.88 match: getUnameSR, 0.793)
 function getUnameSR_2(path, platform) {
   if (platform !== "win32") return false;
   try {
@@ -735,13 +735,13 @@ function getUnameSR_2(path, platform) {
         };
   }
 }
-//@ chunk-k176arn3.js:10643-10730 placement = chordToDisplayString (1)
+//@ chunk-k176arn3.js:10643-10730 placement (2.1.88 match: chordToDisplayString, 1)
 function assertPathSafeSync(chord, platform = "linux") {
   let unameSR = getUnameSR_2(chord, platform);
   if (unameSR === true) throw exclusiveCreateTakenError(chord, unameSR);
   if (unameSR !== false) throw unameSR.cause;
 }
-//@ chunk-k176arn3.js:10730-10962 placement = writeIfMissing (0.817)
+//@ chunk-k176arn3.js:10730-10962 placement (2.1.88 match: writeIfMissing, 0.817)
 function writeIfMissing_2(targetPath, content, mode, platform = "linux") {
   for (let idx = 1; ; idx++) {
     let path = makeTempSiblingPath(targetPath);

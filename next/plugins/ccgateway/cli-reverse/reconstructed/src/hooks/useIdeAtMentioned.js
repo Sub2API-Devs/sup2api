@@ -26,7 +26,7 @@ import { identityId2 } from "../types/ids.js";
 import { ElicitationCompleteNotificationSchema } from "../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tzghj6zv.js:5035-5158 fingerprint = AtMentionedSchema (0.599)
+//@ chunk-tzghj6zv.js:5035-5158 fingerprint (2.1.88 match: AtMentionedSchema, 0.599)
 var AT_MENTIONED; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var IdeAtMentionedParamsSchema;
 deferInit("chunk-tzghj6zv.js:5035", () => {
@@ -92,7 +92,7 @@ function formatAtMention(mention, trailingText) {
 deferInit("chunk-tzghj6zv.js:5756", () => {
   init_react_production();
 });
-//@ chunk-z1n5m6nf.js:88103-88192 fingerprint = useIdeAtMentioned (0.56)
+//@ chunk-z1n5m6nf.js:88103-88192 fingerprint (2.1.88 match: useIdeAtMentioned, 0.56)
 function useIdeAtMentioned_2(mcpClients, onAtMentioned) {
   identityId2(mcpClients.client).setNotificationHandler(
     ElicitationCompleteNotificationSchema,

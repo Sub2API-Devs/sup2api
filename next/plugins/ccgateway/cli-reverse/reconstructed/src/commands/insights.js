@@ -88,7 +88,7 @@ import { roundToMinute } from "../utils/cronTasks.js";
 import { formatBriefTimestamp } from "../utils/formatBriefTimestamp.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3a1caa6f.js:3079-3216 fingerprint = getRemoteHostSessionCount (0.407)
+//@ chunk-3a1caa6f.js:3079-3216 fingerprint (2.1.88 match: getRemoteHostSessionCount, 0.407)
 function getRemoteHostSessionCount(env, options = {}) {
   let allowsSsh = env?.GIT_ALLOW_PROTOCOL?.split(":").includes("ssh") ?? false;
   return sanitizePathForGit(
@@ -134,7 +134,7 @@ function textBlocksOf(content) {
     .map(stripXmlTags)
     .filter((text) => text !== "");
 }
-//@ chunk-01p2saxj.js:708-1642 fingerprint = formatTranscriptForFacets (0.397)
+//@ chunk-01p2saxj.js:708-1642 fingerprint (2.1.88 match: formatTranscriptForFacets, 0.397)
 function formatTranscriptForFacets(messages, options) {
   let lines = [];
   let seen = new Set();
@@ -179,7 +179,7 @@ function formatTranscriptForFacets(messages, options) {
 function insightsModel() {
   return areBuiltinModelsKnownHosted() ? getDefaultOpusModel() : getMainLoopModel();
 }
-//@ chunk-yt6zn9vg.js:12554-15582 fingerprint = LABEL_MAP (0.741)
+//@ chunk-yt6zn9vg.js:12554-15582 fingerprint (2.1.88 match: LABEL_MAP, 0.741)
 /**
  * /insights 会话元数据缓存的 zod 结构（消息数、工具计数、语言、git 提交、token、代码行变化、权限模式等）；Ve 是扩展名到语言名表，qe 是分面键到显示名的表。
  */
@@ -308,15 +308,15 @@ deferInit("chunk-yt6zn9vg.js:12554", () => {
     essential: "Essential",
   };
 });
-//@ chunk-yt6zn9vg.js:15582-15625 fingerprint = getDataDir (1)
+//@ chunk-yt6zn9vg.js:15582-15625 fingerprint (2.1.88 match: getDataDir, 1)
 function getDataDir() {
   return join(getClaudeConfigDir(), "usage-data");
 }
-//@ chunk-yt6zn9vg.js:15625-15664 fingerprint = getFacetsDir (1)
+//@ chunk-yt6zn9vg.js:15625-15664 fingerprint (2.1.88 match: getFacetsDir, 1)
 function getFacetsDir() {
   return join(getDataDir(), "facets");
 }
-//@ chunk-yt6zn9vg.js:15664-15709 fingerprint = getSessionMetaDir (1)
+//@ chunk-yt6zn9vg.js:15664-15709 fingerprint (2.1.88 match: getSessionMetaDir, 1)
 function getSessionMetaDir() {
   return join(getDataDir(), "session-meta");
 }
@@ -328,11 +328,11 @@ function facetsStorePath(sessionId) {
 function sessionMetaStorePath(sessionId) {
   return STORAGE_SPACES.userConfigDir("usage-data", ["session-meta", `${sessionId}.json`]);
 }
-//@ chunk-yt6zn9vg.js:15867-15924 layout = getDataDir (0.8)
+//@ chunk-yt6zn9vg.js:15867-15924 layout (2.1.88 match: getDataDir, 0.8)
 function getDataDir_2(name) {
   return STORAGE_SPACES.userConfigDir("usage-data", [name]);
 }
-//@ chunk-yt6zn9vg.js:15924-16399 callgraph-fingerprint = saveSessionMeta (0.26)
+//@ chunk-yt6zn9vg.js:15924-16399 callgraph-fingerprint (2.1.88 match: saveSessionMeta, 0.26)
 async function saveSessionMeta(htmlReport, sessionId, storageV5) {
   let metaPath = join(getDataDir(), `report-${sessionId}.html`);
   if (isStorageV5Enabled() && storageV5) {
@@ -381,7 +381,7 @@ function chunkArray(items, size) {
   for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
   return chunks;
 }
-//@ chunk-yt6zn9vg.js:16675-16794 callgraph-fingerprint = loadCachedSessionMeta (0.327)
+//@ chunk-yt6zn9vg.js:16675-16794 callgraph-fingerprint (2.1.88 match: loadCachedSessionMeta, 0.327)
 function loadCachedSessionMeta(sessionId) {
   return createJsonStore(
     join(getSessionMetaDir(), `${sessionId}.json`),
@@ -448,7 +448,7 @@ function categorizeToolError(content) {
     )?.[1] ?? "Other"
   );
 }
-//@ chunk-yt6zn9vg.js:18423-20612 fingerprint = extractToolStats (0.708)
+//@ chunk-yt6zn9vg.js:18423-20612 fingerprint (2.1.88 match: extractToolStats, 0.708)
 function extractToolStats(log) {
   let toolCounts = {};
   let languages = {};
@@ -619,7 +619,7 @@ function extractToolStats(log) {
     destructiveCommandCount: mcpCalls,
   };
 }
-//@ chunk-yt6zn9vg.js:20612-20857 layout = wordDiffStrings (1)
+//@ chunk-yt6zn9vg.js:20612-20857 layout (2.1.88 match: wordDiffStrings, 1)
 function countLineChanges(oldStr, newStr) {
   let lineCounts = new Map();
   for (let line of oldStr.split(`
@@ -673,7 +673,7 @@ function isReadOnlyBashCommandCached(command) {
   }
   return fresh;
 }
-//@ chunk-yt6zn9vg.js:21085-22424 fingerprint = logToSessionMeta (0.918)
+//@ chunk-yt6zn9vg.js:21085-22424 fingerprint (2.1.88 match: logToSessionMeta, 0.918)
 function logToSessionMeta(log) {
   let stats = extractToolStats(log);
   let sessionId = getSessionIdFromLog(log) || "unknown";
@@ -731,14 +731,14 @@ function logToSessionMeta(log) {
     destructive_command_count: stats.destructiveCommandCount,
   };
 }
-//@ chunk-yt6zn9vg.js:22424-22597 fingerprint = deduplicateSessionBranches (0.759)
+//@ chunk-yt6zn9vg.js:22424-22597 fingerprint (2.1.88 match: deduplicateSessionBranches, 0.759)
 function deduplicateSessionBranches(meta, otherMeta) {
   if (!otherMeta) return true;
   if (meta.user_message_count !== otherMeta.user_message_count)
     return meta.user_message_count > otherMeta.user_message_count;
   return meta.duration_minutes > otherMeta.duration_minutes;
 }
-//@ chunk-yt6zn9vg.js:22597-22902 layout = formatTranscriptWithSummarization (0.799)
+//@ chunk-yt6zn9vg.js:22597-22902 layout (2.1.88 match: formatTranscriptWithSummarization, 0.799)
 function formatTranscriptWithSummarization_2(log) {
   let chunks = [];
   let meta = logToSessionMeta(log);
@@ -755,7 +755,7 @@ function formatTranscriptWithSummarization_2(log) {
   return chunks.join(`
 `);
 }
-//@ chunk-yt6zn9vg.js:22902-23229 fingerprint = SUMMARIZE_CHUNK_PROMPT (1)
+//@ chunk-yt6zn9vg.js:22902-23229 fingerprint (2.1.88 match: SUMMARIZE_CHUNK_PROMPT, 1)
 var SUMMARIZE_CHUNK_PROMPT = `Summarize this portion of a Claude Code session transcript. Focus on:
 1. What the user asked for
 2. What Claude did (tools used, files modified)
@@ -766,7 +766,7 @@ Keep it concise - 3-5 sentences. Preserve specific details like file names, erro
 
 TRANSCRIPT CHUNK:
 `;
-//@ chunk-yt6zn9vg.js:23229-23659 fingerprint = summarizeTranscriptChunk (0.924)
+//@ chunk-yt6zn9vg.js:23229-23659 fingerprint (2.1.88 match: summarizeTranscriptChunk, 0.924)
 async function summarizeTranscriptChunk(chunk, credentials, sectionTitle = "", options) {
   try {
     let result = await queryHaiku({
@@ -800,7 +800,7 @@ deferInit("chunk-yt6zn9vg.js:23659", () => {
     running: false,
   }));
 });
-//@ chunk-yt6zn9vg.js:23698-24184 fingerprint = formatTranscriptWithSummarization (0.939)
+//@ chunk-yt6zn9vg.js:23698-24184 fingerprint (2.1.88 match: formatTranscriptWithSummarization, 0.939)
 async function formatTranscriptWithSummarization(log, credentials, sectionTitle, options) {
   let fullTranscript = formatTranscriptWithSummarization_2(log);
   if (fullTranscript.length <= 30000) return fullTranscript;
@@ -836,7 +836,7 @@ async function formatTranscriptWithSummarization(log, credentials, sectionTitle,
 `)
   );
 }
-//@ chunk-yt6zn9vg.js:24184-24401 fingerprint = loadCachedFacets (1)
+//@ chunk-yt6zn9vg.js:24184-24401 fingerprint (2.1.88 match: loadCachedFacets, 1)
 async function loadCachedFacets(sessionId, storageV5) {
   if (storageV5) {
     let [facet] = await getMcpAuthCache([sessionId], storageV5);
@@ -859,7 +859,7 @@ async function loadCachedFacets(sessionId, storageV5) {
     return null;
   }
 }
-//@ chunk-yt6zn9vg.js:24401-24570 layout = getMcpAuthCache (1)
+//@ chunk-yt6zn9vg.js:24401-24570 layout (2.1.88 match: getMcpAuthCache, 1)
 function getMcpAuthCache(sessionIds, storageV5) {
   return batchReadWithFallback(sessionIds, facetsStorePath, storageV5, async (key, file) => {
     let parsed;
@@ -875,7 +875,7 @@ function getMcpAuthCache(sessionIds, storageV5) {
     return parsed;
   });
 }
-//@ chunk-yt6zn9vg.js:24570-24974 fingerprint = saveFacets (0.557)
+//@ chunk-yt6zn9vg.js:24570-24974 fingerprint (2.1.88 match: saveFacets, 0.557)
 async function saveFacets(facets, storageV5) {
   if (!isDiskless())
     try {
@@ -913,7 +913,7 @@ async function loadSessionMeta(sessionId, storageV5) {
     return null;
   }
 }
-//@ chunk-yt6zn9vg.js:25116-25299 layout = getMcpAuthCache (0.763)
+//@ chunk-yt6zn9vg.js:25116-25299 layout (2.1.88 match: getMcpAuthCache, 0.763)
 function getMcpAuthCache_2(sessionIds, storageV5) {
   return batchReadWithFallback(sessionIds, sessionMetaStorePath, storageV5, (data) => {
     try {
@@ -1004,7 +1004,7 @@ async function writeSessionMetaCache(meta, storageV5) {
     logError(error);
   }
 }
-//@ chunk-yt6zn9vg.js:26559-27969 fingerprint = extractFacetsFromAPI (0.971)
+//@ chunk-yt6zn9vg.js:26559-27969 fingerprint (2.1.88 match: extractFacetsFromAPI, 0.971)
 async function extractFacetsFromAPI(log, sessionId, credentials, sectionTitle, options) {
   try {
     let transcript = await formatTranscriptWithSummarization(log, credentials, sectionTitle, options);
@@ -1054,7 +1054,7 @@ RESPOND WITH ONLY A VALID JSON OBJECT matching this schema:
     return null;
   }
 }
-//@ chunk-yt6zn9vg.js:27969-28795 fingerprint = detectMultiClauding (0.958)
+//@ chunk-yt6zn9vg.js:27969-28795 fingerprint (2.1.88 match: detectMultiClauding, 0.958)
 function detectMultiClauding(sessions) {
   let allSessionMessages = [];
   for (let session of sessions)
@@ -1106,7 +1106,7 @@ function detectMultiClauding(sessions) {
     user_messages_during: messagesDuringMulticlaude.size,
   };
 }
-//@ chunk-yt6zn9vg.js:28795-32723 fingerprint = aggregateData (0.891)
+//@ chunk-yt6zn9vg.js:28795-32723 fingerprint (2.1.88 match: aggregateData, 0.891)
 function aggregateData(sessions, facets) {
   let result = {
     total_sessions: sessions.length,
@@ -1331,7 +1331,7 @@ function autoModeTipText(autoModeReco) {
       return "Tip: you already use auto mode \u2014 run /auto-mode-setup once to teach it your environment and improve its decisions.";
   }
 }
-//@ chunk-yt6zn9vg.js:34323-39924 fingerprint = INSIGHT_SECTIONS (0.937)
+//@ chunk-yt6zn9vg.js:34323-39924 fingerprint (2.1.88 match: INSIGHT_SECTIONS, 0.937)
 var INSIGHT_SECTIONS = [
   {
     name: "project_areas",
@@ -1461,7 +1461,7 @@ Find something genuinely interesting or amusing from the session summaries.`,
     maxTokens: 8192,
   },
 ];
-//@ chunk-yt6zn9vg.js:39924-40569 fingerprint = generateSectionInsight (0.803)
+//@ chunk-yt6zn9vg.js:39924-40569 fingerprint (2.1.88 match: generateSectionInsight, 0.803)
 async function generateSectionInsight(section, dataContext, credentials, storageV5, options) {
   try {
     let result = await queryHaiku({
@@ -1521,7 +1521,7 @@ DATA:
     };
   }
 }
-//@ chunk-yt6zn9vg.js:40569-44394 fingerprint = generateParallelInsights (0.942)
+//@ chunk-yt6zn9vg.js:40569-44394 fingerprint (2.1.88 match: generateParallelInsights, 0.942)
 async function generateParallelInsights(data, facets, credentials, storageV5, options) {
   let facetSummaries = Array.from(facets.values())
     .slice(0, 50)
@@ -1659,11 +1659,11 @@ ${horizonText}`,
   if (atAGlanceResult.result) insights.at_a_glance = atAGlanceResult.result;
   return insights;
 }
-//@ chunk-yt6zn9vg.js:44394-44470 fingerprint = escapeHtmlWithBold (1)
+//@ chunk-yt6zn9vg.js:44394-44470 fingerprint (2.1.88 match: escapeHtmlWithBold, 1)
 function escapeHtmlWithBold(text) {
   return escapeXmlAttr(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
-//@ chunk-yt6zn9vg.js:44470-44657 fingerprint = SATISFACTION_ORDER (0.699)
+//@ chunk-yt6zn9vg.js:44470-44657 fingerprint (2.1.88 match: SATISFACTION_ORDER, 0.699)
 var SATISFACTION_ORDER = ["frustrated", "dissatisfied", "likely_satisfied", "satisfied", "happy", "unsure"];
 var OUTCOME_ORDER = [
   "not_achieved",
@@ -1672,7 +1672,7 @@ var OUTCOME_ORDER = [
   "fully_achieved",
   "unclear_from_transcript",
 ];
-//@ chunk-yt6zn9vg.js:44657-45251 fingerprint = generateBarChart (1)
+//@ chunk-yt6zn9vg.js:44657-45251 fingerprint (2.1.88 match: generateBarChart, 1)
 function generateBarChart(data, color, maxItems = 6, fixedOrder) {
   let entries;
   if (fixedOrder)
@@ -1697,7 +1697,7 @@ function generateBarChart(data, color, maxItems = 6, fixedOrder) {
   }).join(`
 `);
 }
-//@ chunk-yt6zn9vg.js:45251-46100 fingerprint = generateResponseTimeHistogram (1)
+//@ chunk-yt6zn9vg.js:45251-46100 fingerprint (2.1.88 match: generateResponseTimeHistogram, 1)
 function generateResponseTimeHistogram(times) {
   if (times.length === 0) return '<p class="empty">No response time data</p>';
   let buckets = {
@@ -1729,7 +1729,7 @@ function generateResponseTimeHistogram(times) {
   }).join(`
 `);
 }
-//@ chunk-yt6zn9vg.js:46100-46851 fingerprint = generateTimeOfDayChart (1)
+//@ chunk-yt6zn9vg.js:46100-46851 fingerprint (2.1.88 match: generateTimeOfDayChart, 1)
 function generateTimeOfDayChart(messageHours) {
   if (messageHours.length === 0) return '<p class="empty">No time data</p>';
   let periods = [
@@ -1773,7 +1773,7 @@ function countValues(messageHours) {
   for (let messageHour of messageHours) hourCounts[messageHour] = (hourCounts[messageHour] || 0) + 1;
   return jsonStringify(hourCounts);
 }
-//@ chunk-yt6zn9vg.js:46919-90609 fingerprint = generateHtmlReport (0.967)
+//@ chunk-yt6zn9vg.js:46919-90609 fingerprint (2.1.88 match: generateHtmlReport, 0.967)
 function generateHtmlReport(data, insights, htmlReport) {
   let markdownToHtml = (md) => {
     if (!md) return "";
@@ -2738,7 +2738,7 @@ async function listSessionFilesForInsights(storage) {
   sessions.sort((a, b) => b.mtime - a.mtime);
   return sessions;
 }
-//@ chunk-yt6zn9vg.js:92317-95879 fingerprint = generateUsageReport (0.578)
+//@ chunk-yt6zn9vg.js:92317-95879 fingerprint (2.1.88 match: generateUsageReport, 0.578)
 async function generateUsageReport(options) {
   let remoteStats;
   let sessionFiles =
@@ -2977,7 +2977,7 @@ function safeEntries(obj) {
 function safeKeys(obj) {
   return obj ? Object.keys(obj) : [];
 }
-//@ chunk-yt6zn9vg.js:95966-98489 fingerprint = usageReport (0.681)
+//@ chunk-yt6zn9vg.js:95966-98489 fingerprint (2.1.88 match: usageReport, 0.681)
 /**
  * /insights 命令对象（prompt）；描述：Generate a report analyzing your Claude Code sessions。
  */
@@ -3149,7 +3149,7 @@ ${header}${summaryText}
 
 Give the user this summary in your own words. There is no report file to open, so don't mention one. End by asking whether they want to dig into any section or try one of the suggestions.`;
 }
-//@ chunk-yt6zn9vg.js:99520-99729 layout = countToolCallsSince (1)
+//@ chunk-yt6zn9vg.js:99520-99729 layout (2.1.88 match: countToolCallsSince, 1)
 function normalizeToolUseNames(names) {
   if (names.type !== "assistant" || !Array.isArray(names.message.content)) return names;
   return {
@@ -3202,7 +3202,7 @@ function currentSessionAsLog(messages) {
     sessionId,
   };
 }
-//@ chunk-yt6zn9vg.js:100192-100565 fingerprint = isValidSessionFacets (1)
+//@ chunk-yt6zn9vg.js:100192-100565 fingerprint (2.1.88 match: isValidSessionFacets, 1)
 function isValidSessionFacets(obj) {
   if (!obj || typeof obj !== "object") return false;
   let value = obj;
@@ -3220,7 +3220,7 @@ function isValidSessionFacets(obj) {
 }
 //@ chunk-yt6zn9vg.js:100565-100575 affinity
 var insightsCommand = insightsCommandDefinition;
-//@ chunk-23fm9f0d.js:39583-39849 fingerprint = scanAllSessions (0.665)
+//@ chunk-23fm9f0d.js:39583-39849 fingerprint (2.1.88 match: scanAllSessions, 0.665)
 async function scanAllSessions(dir, options, onEntry) {
   if (options === null) return true;
   let entries = await fsPromisesModule
@@ -3237,7 +3237,7 @@ async function scanAllSessions(dir, options, onEntry) {
   }
   return false;
 }
-//@ chunk-ah34pb7m.js:35940-36053 fingerprint = hasValidDates (0.343)
+//@ chunk-ah34pb7m.js:35940-36053 fingerprint (2.1.88 match: hasValidDates, 0.343)
 function hasValidDates(log) {
   let minute = roundToMinute(log ?? Number.NaN);
   return Number.isNaN(minute.getTime()) ? "" : `, next run ${formatBriefTimestamp(minute.toISOString())}`;

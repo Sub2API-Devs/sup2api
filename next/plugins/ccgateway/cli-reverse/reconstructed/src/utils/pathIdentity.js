@@ -34,7 +34,7 @@ function foldCaseForCompare(text) {
   for (let character of text) folded += character.toLowerCase();
   return foldCaseBasic(folded).replace(/\u03C2/g, "\u03C3");
 }
-//@ chunk-b00ssqeq.js:713-781 placement = getReservedShortcuts (1)
+//@ chunk-b00ssqeq.js:713-781 placement (2.1.88 match: getReservedShortcuts, 1)
 function normalizeCaseForPlatform(text) {
   let platform = getPlatform();
   return platform === "windows" || platform === "macos" ? foldCaseBasic(text) : text;
@@ -81,7 +81,7 @@ function stripTrailingSeparators(inputPath) {
   let replaced = inputPath.replace(getPlatform() === "windows" ? /[\\/]+$/ : /\/+$/, "");
   return replaced === "" ? inputPath : replaced;
 }
-//@ chunk-b00ssqeq.js:1301-1376 placement = setCwdState (0.757)
+//@ chunk-b00ssqeq.js:1301-1376 placement (2.1.88 match: setCwdState, 0.757)
 function normalizePathKey(cwd) {
   let inputPath = stripTrailingSeparators(cwd);
   return normalizeCaseForPlatform(getPlatform() === "macos" ? inputPath.normalize("NFC") : inputPath);
@@ -96,7 +96,7 @@ function findSamePath(cwd, candidates) {
   let cwdKey = normalizePathKey(cwd);
   return candidates.find((candidate) => normalizePathKey(normalize(candidate)) === cwdKey) ?? null;
 }
-//@ chunk-b00ssqeq.js:1508-1576 placement = setCwdState (0.757)
+//@ chunk-b00ssqeq.js:1508-1576 placement (2.1.88 match: setCwdState, 0.757)
 function nfcOnMacos(cwd) {
   let inputPath = stripTrailingSeparators(cwd);
   return getPlatform() === "macos" ? inputPath.normalize("NFC") : inputPath;

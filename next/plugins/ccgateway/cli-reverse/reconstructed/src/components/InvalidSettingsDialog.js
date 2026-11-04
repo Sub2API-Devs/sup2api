@@ -35,7 +35,7 @@ function isSubstituted(error) {
 function isWarning(error) {
   return error.severity === "warning";
 }
-//@ chunk-td6byj4s.js:15487-17218 fingerprint = InvalidSettingsDialog (0.523)
+//@ chunk-td6byj4s.js:15487-17218 fingerprint (2.1.88 match: InvalidSettingsDialog, 0.523)
 function InvalidSettingsDialog(props) {
   let $ = useMemoCache(21);
   let { settingsErrors, onContinue, onFix, onExit } = props;

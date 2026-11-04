@@ -58,7 +58,7 @@ function toRipgrepExcludeGlob(excludedPath, ripgrepDisplayRoot, insideWorktree =
   let upPath = relative(excludedPath, ripgrepDisplayRoot);
   return !(upPath === ".." || upPath.startsWith(`..${sep}`)) && !isAbsolute(upPath) ? "!**" : null;
 }
-//@ chunk-e6aww6q8.js:1436772-1437164 fingerprint = extractGlobBaseDirectory (1)
+//@ chunk-e6aww6q8.js:1436772-1437164 fingerprint (2.1.88 match: extractGlobBaseDirectory, 1)
 function extractGlobBaseDirectory(pattern) {
   let globChars = /[*?[{]/;
   let match = pattern.match(globChars);
@@ -156,7 +156,7 @@ async function globFiles(pattern, cwd, { limit, offset }, abortSignal, permissio
     await ripgrepTarget.close();
   }
 }
-//@ chunk-e6aww6q8.js:1437868-1439124 fingerprint = glob (0.551)
+//@ chunk-e6aww6q8.js:1437868-1439124 fingerprint (2.1.88 match: glob, 0.551)
 /**
  * 用 ripgrep --files --glob 列文件（--sort=modified，默认 --no-ignore 与 --hidden，可由 CLAUDE_CODE_GLOB_NO_IGNORE/CLAUDE_CODE_GLOB_HIDDEN 关闭），附读取忽略模式与排除目录，按 deny 规则过滤，分页返回。
  */

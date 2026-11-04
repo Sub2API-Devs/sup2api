@@ -54,7 +54,7 @@ import { forkStickyBetaLatches } from "../../bootstrap/stateSlices.js";
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:40238-40942 fingerprint = inputSchema (0.49)
+//@ chunk-kxyd0g16.js:40238-40942 fingerprint (2.1.88 match: inputSchema, 0.49)
 /**
  * WebSearch 输入 schema：query（≥2 字符）、allowed_domains、blocked_domains；Ts 在快搜实验开启时追加 mode（standard/extended，默认 extended，描述取远程配置）；bs 为单条搜索结果块 schema。
  */
@@ -94,14 +94,14 @@ deferInit("chunk-kxyd0g16.js:40238", () => {
     });
   });
 });
-//@ chunk-kxyd0g16.js:40942-40981 placement = getSnippet (0.688)
+//@ chunk-kxyd0g16.js:40942-40981 placement (2.1.88 match: getSnippet, 0.688)
 /**
  * 返回去掉 snippet 字段的对象（归属疑似错误）。
  */
 function omitSnippet({ snippet, ...rest }) {
   return rest;
 }
-//@ chunk-kxyd0g16.js:40981-41296 fingerprint = outputSchema (0.735)
+//@ chunk-kxyd0g16.js:40981-41296 fingerprint (2.1.88 match: outputSchema, 0.735)
 /**
  * WebSearch 输出 schema：query、results（结果块或模型文字混排）、durationSeconds、searchCount。
  */
@@ -118,7 +118,7 @@ deferInit("chunk-kxyd0g16.js:40981", () => {
     }),
   );
 });
-//@ chunk-kxyd0g16.js:41296-41839 fingerprint = makeOutputFromSearchResponse (0.949)
+//@ chunk-kxyd0g16.js:41296-41839 fingerprint (2.1.88 match: makeOutputFromSearchResponse, 0.949)
 /**
  * 把次级查询的 content 块整理成输出：server_tool_use 处切分文字段，web_search_tool_result 转成 {tool_use_id, content:[{title,url}]}，错误块转成 "Web search error: <code>"；searchCount 取两类块计数的最大值。
  */
@@ -171,7 +171,7 @@ function getWebSearchToolUseSummary(input) {
   if (!input?.query) return null;
   return truncate(input.query, MAX_DESCRIPTION_CHARS);
 }
-//@ chunk-kxyd0g16.js:41901-49449 fingerprint = WebSearchTool (0.584)
+//@ chunk-kxyd0g16.js:41901-49449 fingerprint (2.1.88 match: WebSearchTool, 0.584)
 /**
  * WebSearch 工具定义（name "WebSearch"，shouldDefer，只读可并发，maxResultSizeChars 100000）。isEnabled：需要 allow_web_search 开关，且 API 提供方为 firstParty（或 gI 判定的兼容方）/foundry，vertex 看模型是否支持，gateway 一律关。call：先扣会话/轮次搜索预算（用尽时返回不搜索的说明，禁止用 curl/浏览器绕开）；有 CCR 代理时走代理；否则用 web_search_20250305 服务端工具（max_uses 8，强制 toolChoice）发起一次次级流式查询，从流里解析 query 增量与结果数做进度。checkPermissions 返回 passthrough + localSettings allow 建议。
  */

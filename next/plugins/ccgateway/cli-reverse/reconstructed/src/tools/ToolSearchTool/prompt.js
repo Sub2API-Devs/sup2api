@@ -30,7 +30,7 @@ import { TOOL_SEARCH_DESCRIPTION } from "../../constants/promptSections.js";
 import { toolSearchFetchRuleConfig } from "../../services/analytics/juniperShoalConfig.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nt81pzj6.js:191-331 placement = TOOL_SEARCH_TOOL_NAME (0.474)
+//@ chunk-nt81pzj6.js:191-331 placement (2.1.88 match: TOOL_SEARCH_TOOL_NAME, 0.474)
 /**
  * ToolSearch 与 DeferredToolPlaceholder 名字、占位工具描述常量。
  */
@@ -38,7 +38,7 @@ var TOOL_SEARCH_TOOL_NAME = "ToolSearch";
 var DEFERREDTOOLPLACEHOLDER = "DeferredToolPlaceholder";
 var DEFERRED_PLACEHOLDER_NOTE =
   "Reserved placeholder that keeps deferred tool loading active; never call this tool.";
-//@ chunk-3h9nvmn3.js:1727-3074 callgraph-fingerprint = BRIEF_TOOL_NAME (0.2)
+//@ chunk-3h9nvmn3.js:1727-3074 callgraph-fingerprint (2.1.88 match: BRIEF_TOOL_NAME, 0.2)
 var BRIEF_TOOL_NAME; // deferred: loads other modules while loading; runs once its import cycle is complete
 var SPECIAL_DEFERRABLE_TOOLS;
 var TOOL_SEARCH_PROMPT_HEAD;
@@ -80,7 +80,7 @@ function isDeferredToolByEngine(tool, nonDeferrableBuiltins) {
   if (alwaysFalseDefer()) return false;
   return isDeferredTool_2(tool);
 }
-//@ chunk-3h9nvmn3.js:3217-3309 fingerprint = isDeferredTool (0.586)
+//@ chunk-3h9nvmn3.js:3217-3309 fingerprint (2.1.88 match: isDeferredTool, 0.586)
 /**
  * 基础延迟判定：MCP 工具一律延迟；tengu_shiny_stardust 开启时 ReportFindings/Workflow/ShareOnboardingGuide 延迟；否则看 shouldDefer。
  */

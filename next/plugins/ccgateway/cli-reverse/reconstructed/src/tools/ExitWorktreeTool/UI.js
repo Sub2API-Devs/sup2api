@@ -16,7 +16,7 @@ import {
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:30882-31204 fingerprint = renderToolResultMessage (0.78)
+//@ chunk-ah34pb7m.js:30882-31204 fingerprint (2.1.88 match: renderToolResultMessage, 0.78)
 /**
  * ExitWorktree 结果渲染：Kept/Removed worktree（分支名）与返回的目录。
  */

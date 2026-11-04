@@ -268,7 +268,7 @@ ${formatDiffSnippet(prevText, nextText)}`,
       return;
   }
 }
-//@ chunk-e6aww6q8.js:1519928-1520021 placement = buildSearchingPastContextSection (1)
+//@ chunk-e6aww6q8.js:1519928-1520021 placement (2.1.88 match: buildSearchingPastContextSection, 1)
 function formatDiffSnippet(diff, limit) {
   let sliced =
     limit.length <= MAX_INLINE_DIFF_CHARS

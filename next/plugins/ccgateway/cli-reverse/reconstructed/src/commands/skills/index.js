@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1735872-1736007 fingerprint = skills (0.707)
+//@ chunk-e6aww6q8.js:1735872-1736007 fingerprint (2.1.88 match: skills, 0.707)
 /**
  * /skills 命令对象（local-jsx）；描述：List available skills；实现 chunk-00qhwn8e.js 的 Rr。
  */

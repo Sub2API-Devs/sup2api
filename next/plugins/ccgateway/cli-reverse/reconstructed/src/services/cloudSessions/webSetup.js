@@ -38,7 +38,7 @@ function githubNotConnectedMessage(subject = "this repository") {
     : `Connect it on the web at ${githubUrl}`;
   return `GitHub isn't connected to your Claude account, so ${subject} can't be cloned in the cloud. ${advice}`;
 }
-//@ chunk-pemtjbn7.js:3122-3367 placement = web (0.749)
+//@ chunk-pemtjbn7.js:3122-3367 placement (2.1.88 match: web, 0.749)
 /**
  * /web-setup 命令对象（local-jsx）；描述：Set up cloud sessions with your GitHub account；availability ["claude-ai"]；isEnabled: o$e；isHidden: {return!dn("allow_remote_sessions")||!dn("allow_quick_web_setup")}；实现 chunk-ajkmgejw.js 的 et。
  */

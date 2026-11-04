@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:2028446-2028628 fingerprint = branch (0.801)
+//@ chunk-e6aww6q8.js:2028446-2028628 fingerprint (2.1.88 match: branch, 0.801)
 /**
  * /branch 命令对象（local-jsx）；描述：Create a branch of the current conversation at this point；实现 chunk-khj4kcw5.js 的 _e。
  */

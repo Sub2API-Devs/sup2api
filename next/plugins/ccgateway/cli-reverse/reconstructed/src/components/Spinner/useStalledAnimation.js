@@ -10,7 +10,7 @@
  */
 import { useRef } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-3mec1atf.js:7371-7948 fingerprint = useStalledAnimation (0.835)
+//@ chunk-3mec1atf.js:7371-7948 fingerprint (2.1.88 match: useStalledAnimation, 0.835)
 function useStalledAnimation(
   time,
   currentResponseLength,

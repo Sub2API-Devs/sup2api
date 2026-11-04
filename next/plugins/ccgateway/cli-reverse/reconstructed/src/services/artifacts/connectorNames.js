@@ -27,7 +27,7 @@ import { scrubArtifactEnvelopeTags, sweepAskCopy } from "../../tools/ArtifactToo
 import { truncateWithEscapes, sanitizeDisplayText } from "./capabilityDeclaration.js";
 import { truncateCodePoints } from "../../utils/stringUtils.js";
 
-//@ chunk-99h01h55.js:4051-4264 placement = getMcpPrefix (1)
+//@ chunk-99h01h55.js:4051-4264 placement (2.1.88 match: getMcpPrefix, 1)
 /**
  * （归属疑误：通用显示名校验）字符串可原样作为可声明名（长度、字符集、非 mcp__ 前缀等）。
  */

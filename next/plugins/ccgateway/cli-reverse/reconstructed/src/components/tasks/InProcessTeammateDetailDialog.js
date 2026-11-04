@@ -41,7 +41,7 @@ deferInit("chunk-18hwfzwa.js:704222", () => {
 function selectAgentDefinitionsActiveAgents_2(appState) {
   return appState.agentDefinitions.activeAgents;
 }
-//@ chunk-18hwfzwa.js:704283-708595 fingerprint = InProcessTeammateDetailDialog (0.709)
+//@ chunk-18hwfzwa.js:704283-708595 fingerprint (2.1.88 match: InProcessTeammateDetailDialog, 0.709)
 /**
  * 进程内队友详情：状态（运行/完成/被杀）、当前活动、token、最近消息与提示。
  */

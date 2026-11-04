@@ -348,7 +348,7 @@ function getPluginInstallCount(plugin, counts) {
   }
   return count;
 }
-//@ chunk-ca06bv0t.js:7345-7586 placement = _temp (0.705)
+//@ chunk-ca06bv0t.js:7345-7586 placement (2.1.88 match: _temp, 0.705)
 /**
  * 按安装量降序排序插件，同量时插件目录内的优先并保持原顺序，其余按名称排序。（误归 HelpV2/Commands）
  */

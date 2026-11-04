@@ -47,7 +47,7 @@ function isCcrAutoModeApplySet(config) {
     environmentVariables[CCR_AUTO_MODE_APPLY] === "1"
   );
 }
-//@ chunk-3nztfxrw.js:1355-1597 placement = autoModeConfigHandler (0.823)
+//@ chunk-3nztfxrw.js:1355-1597 placement (2.1.88 match: autoModeConfigHandler, 0.823)
 /**
  * 读取 CCR 会话下发的 autoMode allow/environment/soft_deny 配置状态（absent/present/invalid）。
  */
@@ -227,7 +227,7 @@ function validateRunnerLabel(label, field) {
     throw Error(`Invalid ${field}: contains unsafe characters or exceeds ${MAX_ENV_TOKEN_CHARS} characters`);
   return label;
 }
-//@ chunk-3nztfxrw.js:5006-5177 placement = getOAuthHeaders (0.778)
+//@ chunk-3nztfxrw.js:5006-5177 placement (2.1.88 match: getOAuthHeaders, 0.778)
 function getOAuthHeaders(accessToken) {
   return {
     "User-Agent": claudeCodeUserAgent(),

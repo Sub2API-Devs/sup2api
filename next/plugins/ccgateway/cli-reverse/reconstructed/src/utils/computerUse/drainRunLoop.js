@@ -12,14 +12,14 @@ import { getComputerUseSession } from "./session.js";
 import { requireComputerUseSwift } from "./swiftLoader.js";
 import { logForDebugging } from "../debug.js";
 
-//@ chunk-ha3km179.js:51167-51204 fingerprint = drainTick (1)
+//@ chunk-ha3km179.js:51167-51204 fingerprint (2.1.88 match: drainTick, 1)
 /**
  * 驱动一次 macOS 主线程 run loop（Swift 模块 _drainMainRunLoop）。
  */
 function drainTick(cu) {
   cu._drainMainRunLoop();
 }
-//@ chunk-ha3km179.js:51204-51371 fingerprint = retain (0.77)
+//@ chunk-ha3km179.js:51204-51371 fingerprint (2.1.88 match: retain, 0.77)
 /**
  * 引用计数 +1，首次时每 1ms 泵一次主 run loop。
  */
@@ -33,7 +33,7 @@ function retain() {
     });
   }
 }
-//@ chunk-ha3km179.js:51371-51606 fingerprint = release (0.77)
+//@ chunk-ha3km179.js:51371-51606 fingerprint (2.1.88 match: release, 0.77)
 /**
  * 引用计数 -1，归零时停止 run loop 泵。
  */
@@ -54,7 +54,7 @@ function release() {
  * 原生 computer-use 调用默认超时 30s。
  */
 var NATIVE_CALL_TIMEOUT_MS = 30000;
-//@ chunk-ha3km179.js:51619-51708 fingerprint = timeoutReject (1)
+//@ chunk-ha3km179.js:51619-51708 fingerprint (2.1.88 match: timeoutReject, 1)
 /**
  * 原生 computer-use 调用超时错误。
  */
@@ -75,7 +75,7 @@ function rejectWithNativeTimeout(promise, timeoutMs) {
  * release 的别名，供 ESC 热键注销时释放 run loop 泵。
  */
 var releasePump = release;
-//@ chunk-ha3km179.js:51748-51947 fingerprint = drainRunLoop (0.838)
+//@ chunk-ha3km179.js:51748-51947 fingerprint (2.1.88 match: drainRunLoop, 0.838)
 /**
  * 在 run loop 泵保持期间执行原生调用，超时（默认 30s）抛 NativeCallTimeoutError。
  */

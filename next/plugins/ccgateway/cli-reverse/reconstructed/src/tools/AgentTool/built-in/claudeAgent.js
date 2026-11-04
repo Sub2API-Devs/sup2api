@@ -11,7 +11,7 @@
 import { AGENT } from "../constants.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-fgpf3f12.js:227-2351 placement = getMagicDocsAgent (0.611)
+//@ chunk-fgpf3f12.js:227-2351 placement (2.1.88 match: getMagicDocsAgent, 0.611)
 /**
  * 内置 claude 代理定义（FleetView 默认代理）。
  */

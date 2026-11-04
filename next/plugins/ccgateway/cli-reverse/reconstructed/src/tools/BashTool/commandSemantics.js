@@ -13,7 +13,7 @@ import { toolInputText } from "../../plugins/functionHooks/sites/toolSites.js";
 import { splitCommand, lastCommandIsAndGated } from "../../utils/bash/commands.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3777431-3777561 fingerprint = interpretCommandResult (0.67)
+//@ chunk-e6aww6q8.js:3777431-3777561 fingerprint (2.1.88 match: interpretCommandResult, 0.67)
 function interpretCommandResult_2(messages, toolUseId) {
   for (let message of messages) {
     let toolResultBlock = findToolResultBlock(message, toolUseId);
@@ -29,7 +29,7 @@ function interpretCommandResult_2(messages, toolUseId) {
     text: "",
   };
 }
-//@ chunk-e6aww6q8.js:4740100-4740536 fingerprint = COMMAND_SEMANTICS (0.845)
+//@ chunk-e6aww6q8.js:4740100-4740536 fingerprint (2.1.88 match: COMMAND_SEMANTICS, 0.845)
 /**
  * 命令退出码语义表：默认非 0 即错误；grep/rg/egrep/fgrep/find/diff/test/[ 的退出码 1 只是"无匹配/不同/条件为假"，≥2 才算错误。
  */

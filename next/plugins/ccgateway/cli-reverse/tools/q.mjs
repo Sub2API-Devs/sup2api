@@ -46,7 +46,7 @@ const idOf = (d) => `${d.file}#${d.names[0] ?? '@' + d.start}`;
 const label = (d) => {
   const id = idOf(d);
   const m = match.get(id), s = seg.get(id);
-  return `${id}${m?.refName ? `  = ${m.refName}` : ''}  [${s?.path ?? m?.refFile ?? '?'}${s ? ' · ' + s.method : ''}]`;
+  return `${id}${m?.refName ? `  (2.1.88 match: ${m.refName})` : ''}  [${s?.path ?? m?.refFile ?? '?'}${s ? ' · ' + s.method : ''}]`;
 };
 
 function resolve(x) {

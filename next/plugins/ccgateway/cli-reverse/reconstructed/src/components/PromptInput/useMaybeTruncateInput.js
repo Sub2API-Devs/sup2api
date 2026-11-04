@@ -21,7 +21,7 @@ deferInit("chunk-18hwfzwa.js:877127", () => {
     kind: "landing",
   });
 });
-//@ chunk-18hwfzwa.js:877167-877453 fingerprint = useMaybeTruncateInput (0.694)
+//@ chunk-18hwfzwa.js:877167-877453 fingerprint (2.1.88 match: useMaybeTruncateInput, 0.694)
 function useMaybeTruncateInput(draft, setCursorOffset) {
   let value = useStoreSelector(draft, selectDraftValue);
   let pastedContents = useStoreSelector(draft, selectPastedContents);

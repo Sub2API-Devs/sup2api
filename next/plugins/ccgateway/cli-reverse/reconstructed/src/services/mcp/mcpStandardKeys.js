@@ -192,7 +192,7 @@ function isIdentityTrackedServer(serverName, mcpInfo) {
     (mcpInfo.scope !== "dynamic" || isMintedDynamicServer(serverName, mcpInfo))
   );
 }
-//@ chunk-a76knw89.js:18411-18781 placement = expandEnvVars (0.771)
+//@ chunk-a76knw89.js:18411-18781 placement (2.1.88 match: expandEnvVars, 0.771)
 /**
  * getServerIdentityKey：按 URL、命令行或 IDE 生成服务器身份键 {key, pinned}，保留名与 claude.ai 连接器固定为规范化名。
  */
@@ -249,7 +249,7 @@ function compareByName(tools) {
       : [],
   );
 }
-//@ chunk-a76knw89.js:19129-19213 placement = mergeClients (1)
+//@ chunk-a76knw89.js:19129-19213 placement (2.1.88 match: mergeClients, 1)
 function mergeClients(client) {
   return "name" in client && typeof client.name === "string"
     ? {

@@ -209,7 +209,7 @@ function containsEngineNode(node) {
  * 字符串或 engine 类型
  */
 var isStringOrEngineType = (element) => typeof element === "string" || isEngineOrSvg(element.type);
-//@ chunk-4121qate.js:176927-176977 placement = withModifiers (0.799)
+//@ chunk-4121qate.js:176927-176977 placement (2.1.88 match: withModifiers, 0.799)
 var withModifiers_2 = (element) =>
   isPressableType(element.type) && "press" in element && isPlainObject(element.press);
 //@ chunk-4121qate.js:176977-177256 placement
@@ -244,7 +244,7 @@ function restampPress(element, handle) {
       };
   }
 }
-//@ chunk-4121qate.js:177256-177367 placement = setAttribute (0.839)
+//@ chunk-4121qate.js:177256-177367 placement (2.1.88 match: setAttribute, 0.839)
 function mapChildren(element, mapChild) {
   let node = element;
   let children = "children" in node ? node.children : undefined;
@@ -324,7 +324,7 @@ function collectHoverScopes(element) {
     ...childElements(node, collectHoverScopes),
   ];
 }
-//@ chunk-4121qate.js:178035-178087 placement = _temp (1)
+//@ chunk-4121qate.js:178035-178087 placement (2.1.88 match: _temp, 1)
 /**
  * image 元素键
  */

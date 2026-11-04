@@ -81,7 +81,7 @@ function getPackageManagerUpgradeCommand(packageManager, pkgName) {
       return null;
   }
 }
-//@ chunk-tzghj6zv.js:38669-38943 fingerprint = PackageManagerAutoUpdater (0.442)
+//@ chunk-tzghj6zv.js:38669-38943 fingerprint (2.1.88 match: PackageManagerAutoUpdater, 0.442)
 function PackageManagerAutoUpdater_2(packageManager, pkgName) {
   switch (packageManager) {
     case "homebrew":

@@ -889,7 +889,7 @@ function jobNeedsLine(job, display, status, columns) {
 function groupCollapseKey(groupMode, group) {
   return group === "pinned" ? "pinned" : `${groupMode}:${group}`;
 }
-//@ chunk-93kwxas0.js:81909-82123 placement = prependModeCharacterToInput (1)
+//@ chunk-93kwxas0.js:81909-82123 placement (2.1.88 match: prependModeCharacterToInput, 1)
 function prependModeCharacterToInput(text, mode, jobs, cwdFilter) {
   let prNumber = mode === "bash" ? null : parsePrNumber(text);
   let prMatcher = prNumber ? prUrlMatcher(prNumber) : undefined;

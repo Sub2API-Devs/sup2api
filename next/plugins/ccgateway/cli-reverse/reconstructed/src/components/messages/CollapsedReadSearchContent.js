@@ -114,7 +114,7 @@ import { firstLineOf, getFirstLine, capitalize, plural } from "../../utils/strin
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 
-//@ chunk-ah34pb7m.js:157480-157568 placement = countToolUses (0.815)
+//@ chunk-ah34pb7m.js:157480-157568 placement (2.1.88 match: countToolUses, 0.815)
 function countToolUses(msg) {
   return msg.type === "grouped_tool_use" ? msg.results : msg.type === "user" ? [msg] : [];
 }
@@ -122,7 +122,7 @@ function countToolUses(msg) {
 function isToolResultBlock(block) {
   return block.type === "tool_result";
 }
-//@ chunk-ah34pb7m.js:157615-157658 placement = _temp2 (1)
+//@ chunk-ah34pb7m.js:157615-157658 placement (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId_2(s_0) {
   return s_0.viewingAgentTaskId;
 }
@@ -248,7 +248,7 @@ function CollapsedReadSearchGroup(props) {
   } else containerElement = $[27];
   return actionKeysNamespace.useRenderHook(summaryElement, containerElement);
 }
-//@ chunk-ah34pb7m.js:159047-162030 fingerprint = VerboseToolUse (0.513)
+//@ chunk-ah34pb7m.js:159047-162030 fingerprint (2.1.88 match: VerboseToolUse, 0.513)
 function VerboseToolUse(props) {
   let $ = useMemoCache(54);
   let {
@@ -534,7 +534,7 @@ function VerboseToolUse(props) {
   } else boxContent = $[53];
   return boxContent;
 }
-//@ chunk-ah34pb7m.js:166083-185246 fingerprint = CollapsedReadSearchContent (0.58)
+//@ chunk-ah34pb7m.js:166083-185246 fingerprint (2.1.88 match: CollapsedReadSearchContent, 0.58)
 /**
  * 折叠读/搜索组：统计 Read/Grep/Glob 等调用次数显示一行摘要（进行中显示当前目标），verbose 或 transcript 下逐个渲染 VerboseToolUse；含权限规则命中/本地错误等标记。
  */

@@ -30,7 +30,7 @@ import {
 } from "../consentRows.js";
 import { generateSuggestions } from "../../../utils/permissions/filesystem.js";
 
-//@ chunk-18hwfzwa.js:1367850-1369049 callgraph-fingerprint = handleAcceptSession (0.255)
+//@ chunk-18hwfzwa.js:1367850-1369049 callgraph-fingerprint (2.1.88 match: handleAcceptSession, 0.255)
 function handleAcceptSession(filePath, operationType, toolPermissionContext) {
   let isProjectClaudeFolder = isInClaudeFolder(filePath);
   let isGlobalClaudeFolder = isInGlobalClaudeFolder(filePath);
@@ -105,7 +105,7 @@ function handleAcceptSession(filePath, operationType, toolPermissionContext) {
     value: "yes-session",
   };
 }
-//@ chunk-18hwfzwa.js:1378346-1378871 fingerprint = PERMISSION_HANDLERS (0.396)
+//@ chunk-18hwfzwa.js:1378346-1378871 fingerprint (2.1.88 match: PERMISSION_HANDLERS, 0.396)
 function PERMISSION_HANDLERS(option, payload, feedback) {
   switch (option.type) {
     case "accept-once":

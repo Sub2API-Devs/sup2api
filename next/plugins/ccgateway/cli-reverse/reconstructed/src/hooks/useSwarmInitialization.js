@@ -18,7 +18,7 @@ import { readTeamFileAsync } from "../utils/swarm/teamHelpers.js";
 import { initializeTeammateHooks } from "../utils/swarm/teammateInit.js";
 import { getDynamicTeamContext } from "../utils/teammate.js";
 
-//@ chunk-18hwfzwa.js:220439-221010 fingerprint = useSwarmInitialization (1)
+//@ chunk-18hwfzwa.js:220439-221010 fingerprint (2.1.88 match: useSwarmInitialization, 1)
 function useSwarmInitialization(initialMessages, { enabled = true } = {}) {
   let session = useSession();
   let setAppState = useSetAppState();

@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:252316-252979 fingerprint = CircularBuffer (1)
+//@ chunk-e6aww6q8.js:252316-252979 fingerprint (2.1.88 match: CircularBuffer, 1)
 class CircularBuffer {
   capacity;
   buffer;

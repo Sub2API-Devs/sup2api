@@ -34,7 +34,7 @@ function renderDimInstruction(instruction, i) {
     i,
   );
 }
-//@ chunk-4v9zy7gn.js:47693-47961 fingerprint = _temp2 (1)
+//@ chunk-4v9zy7gn.js:47693-47961 fingerprint (2.1.88 match: _temp2, 1)
 function renderWarning(warning, index) {
   return jsxProd_default_2(
     Box,
@@ -62,7 +62,7 @@ function renderWarning(warning, index) {
     index,
   );
 }
-//@ chunk-4v9zy7gn.js:47961-48997 fingerprint = WarningsStep (0.398)
+//@ chunk-4v9zy7gn.js:47961-48997 fingerprint (2.1.88 match: WarningsStep, 0.398)
 function WarningsStep(props) {
   let $ = useMemoCache(9);
   let { warnings, onContinue } = props;

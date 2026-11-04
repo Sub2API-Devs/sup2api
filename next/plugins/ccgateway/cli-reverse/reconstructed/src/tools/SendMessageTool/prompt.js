@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-astf3mhy.js:22929-22970 fingerprint = DESCRIPTION (1)
+//@ chunk-astf3mhy.js:22929-22970 fingerprint (2.1.88 match: DESCRIPTION, 1)
 /**
  * SendMessage 描述 "Send a message to another agent"。
  */

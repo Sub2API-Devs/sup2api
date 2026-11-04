@@ -427,7 +427,7 @@ function probeWorktreeConfigFile(gitDir) {
     },
   );
 }
-//@ chunk-s61vbvea.js:284211-284350 placement = getFileIdentity (0.787)
+//@ chunk-s61vbvea.js:284211-284350 placement (2.1.88 match: getFileIdentity, 0.787)
 async function getFileIdentity(filePath) {
   try {
     let stats = await lstat(filePath, {
@@ -588,7 +588,7 @@ function holdDirectory() {
     },
   };
 }
-//@ chunk-s61vbvea.js:286361-286483 placement = getFileIdentity (1)
+//@ chunk-s61vbvea.js:286361-286483 placement (2.1.88 match: getFileIdentity, 1)
 async function getFileIdentity_2(filePath) {
   try {
     let stats = await lstat(filePath, {
@@ -647,7 +647,7 @@ function gitDirComparisonKey(gitDir, launchDir) {
     delimiter,
   );
 }
-//@ chunk-s61vbvea.js:287034-287203 placement = scanDirectory (0.766)
+//@ chunk-s61vbvea.js:287034-287203 placement (2.1.88 match: scanDirectory, 0.766)
 async function probePathKind(commonDir, commonDir_2) {
   let currentPath = commonDir;
   for (let part of commonDir_2.slice(0, -1)) {

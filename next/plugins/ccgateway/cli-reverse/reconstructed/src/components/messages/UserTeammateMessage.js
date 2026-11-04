@@ -43,7 +43,7 @@ import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-q7z2h94h.js:1585-1737 fingerprint = parseTeammateMessages (0.361)
+//@ chunk-q7z2h94h.js:1585-1737 fingerprint (2.1.88 match: parseTeammateMessages, 0.361)
 var parseTeammateMessages_2 = (text) => ({
   started: ({ agentId, model, teammateId }) =>
     text.done({
@@ -607,7 +607,7 @@ function TeammateMessageItems(props) {
   } else boxElement = $[10];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:94605-95673 fingerprint = TeammateMessageContent (0.583)
+//@ chunk-ah34pb7m.js:94605-95673 fingerprint (2.1.88 match: TeammateMessageContent, 0.583)
 function TeammateMessageContent(props) {
   let $ = useMemoCache(23);
   let { displayName, inkColor, content, summary, labelView, headerless } = props;

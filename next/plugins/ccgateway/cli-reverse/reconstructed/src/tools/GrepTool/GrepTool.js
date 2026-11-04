@@ -150,7 +150,7 @@ function normalizeGrepInputAliases(rawInput) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:1446577-1449071 fingerprint = inputSchema (0.841)
+//@ chunk-e6aww6q8.js:1446577-1449071 fingerprint (2.1.88 match: inputSchema, 0.841)
 /**
  * Grep 输入 schema（pattern/path/glob/output_mode/-B/-A/-C/context/-n/-i/-o/type/head_limit/offset/multiline）、VCS 目录排除列表、默认 head_limit 250。
  */
@@ -211,7 +211,7 @@ deferInit("chunk-e6aww6q8.js:1446577", () => {
   VCS_DIRECTORIES_TO_EXCLUDE = [".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
   DEFAULT_HEAD_LIMIT = 250;
 });
-//@ chunk-e6aww6q8.js:1449071-1449232 fingerprint = applyHeadLimit (1)
+//@ chunk-e6aww6q8.js:1449071-1449232 fingerprint (2.1.88 match: applyHeadLimit, 1)
 /**
  * 按 offset/limit 截取结果（limit 为 0 表示不限，未给时 250），返回是否实际截断。
  */
@@ -229,7 +229,7 @@ function applyHeadLimit(items, limit, offset = 0) {
     appliedLimit: wasTruncated ? effectiveLimit : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1449232-1449343 fingerprint = formatLimitInfo (1)
+//@ chunk-e6aww6q8.js:1449232-1449343 fingerprint (2.1.88 match: formatLimitInfo, 1)
 /**
  * 把实际 limit/offset 格式化为 "limit: N, offset: M"。
  */
@@ -239,7 +239,7 @@ function formatLimitInfo(appliedLimit, appliedOffset) {
   if (appliedOffset) parts.push(`offset: ${appliedOffset}`);
   return parts.join(", ");
 }
-//@ chunk-e6aww6q8.js:1449343-1452555 fingerprint = GrepTool (0.619)
+//@ chunk-e6aww6q8.js:1449343-1452555 fingerprint (2.1.88 match: GrepTool, 0.619)
 /**
  * Grep 工具定义（name "Grep"）。只读、可并发、maxResultSizeChars 20000；ripgrep 正则搜索，三种 output_mode，head_limit 默认 250、offset 分页；validateInput 查空字节与 head_limit/offset 为非负整数。
  */
@@ -486,7 +486,7 @@ async function assertGrepPathExists(path, permittedPaths, checkContext) {
  * 表示“不适用”的 undefined 常量，用于空结果的 appliedLimit/appliedOffset。
  */
 var NOT_APPLICABLE = undefined;
-//@ chunk-e6aww6q8.js:1453038-1453463 fingerprint = outputSchema (0.764)
+//@ chunk-e6aww6q8.js:1453038-1453463 fingerprint (2.1.88 match: outputSchema, 0.764)
 /**
  * 搜索目标不可打开时按 output_mode 返回空结果。
  */

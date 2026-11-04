@@ -30,7 +30,7 @@ import {
 } from "../agentListing.js";
 import { wrapNonUserMessage } from "../messages/nonUserMessages.js";
 
-//@ chunk-xx1vmpsq.js:36221-37461 fingerprint = processTextPrompt (0.523)
+//@ chunk-xx1vmpsq.js:36221-37461 fingerprint (2.1.88 match: processTextPrompt, 0.523)
 /**
  * processTextPrompt：普通文本提示转为用户消息并上报 tengu_input_prompt。
  */

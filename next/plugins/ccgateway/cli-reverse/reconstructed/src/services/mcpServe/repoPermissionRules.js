@@ -78,7 +78,7 @@ function readBashRules(settings, source) {
     ask: hasBashPermission(rules, "ask"),
   };
 }
-//@ chunk-y12tyg2v.js:1256-1339 placement = hasBashPermission (1)
+//@ chunk-y12tyg2v.js:1256-1339 placement (2.1.88 match: hasBashPermission, 1)
 function hasBashPermission(rules, behavior) {
   return rules
     .filter((rule) => rule.ruleBehavior === behavior)

@@ -11,7 +11,7 @@
 import { env } from "./env.js";
 import { getSubscriptionType, getRateLimitTier } from "./auth.js";
 
-//@ chunk-e6aww6q8.js:4862127-4862337 fingerprint = getPlanModeV2AgentCount (1)
+//@ chunk-e6aww6q8.js:4862127-4862337 fingerprint (2.1.88 match: getPlanModeV2AgentCount, 1)
 function getPlanModeV2AgentCount() {
   let count = env.CLAUDE_CODE_PLAN_V2_AGENT_COUNT;
   if (count !== undefined && count > 0 && count <= 10) return count;
@@ -21,7 +21,7 @@ function getPlanModeV2AgentCount() {
   if (subscriptionType === "enterprise" || subscriptionType === "team") return 3;
   return 1;
 }
-//@ chunk-e6aww6q8.js:4862337-4862444 fingerprint = getPlanModeV2ExploreAgentCount (1)
+//@ chunk-e6aww6q8.js:4862337-4862444 fingerprint (2.1.88 match: getPlanModeV2ExploreAgentCount, 1)
 function getPlanModeV2ExploreAgentCount() {
   let count = env.CLAUDE_CODE_PLAN_V2_EXPLORE_AGENT_COUNT;
   if (count !== undefined && count > 0 && count <= 10) return count;

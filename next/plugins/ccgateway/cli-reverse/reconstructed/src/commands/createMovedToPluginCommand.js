@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:1750424-1750738 fingerprint = createMovedToPluginCommand (0.828)
+//@ chunk-e6aww6q8.js:1750424-1750738 fingerprint (2.1.88 match: createMovedToPluginCommand, 0.828)
 /**
  * createMovedToPluginCommand：同旧版。
  */

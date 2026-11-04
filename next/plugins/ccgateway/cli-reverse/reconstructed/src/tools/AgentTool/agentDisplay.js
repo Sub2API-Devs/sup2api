@@ -10,7 +10,7 @@
  */
 import { WEB_FETCH_AGENT, isWebFetchAgent_2 } from "../WebFetchTool/harnessNotes.js";
 
-//@ chunk-e6aww6q8.js:2206709-2206783 placement = updateAgentFile (1)
+//@ chunk-e6aww6q8.js:2206709-2206783 placement (2.1.88 match: updateAgentFile, 1)
 function updateAgentFile(agents) {
   return agents.find((agent) => agent.agentType === WEB_FETCH_AGENT)?.source === "built-in";
 }

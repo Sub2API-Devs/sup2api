@@ -12,7 +12,7 @@ import { splitSlashCommandInput } from "../commands.js";
 import { getPromptId } from "../bootstrap/state.js";
 import { logUserPromptEvent } from "./telemetry/userPromptEvent.js";
 
-//@ chunk-b5rfb1p7.js:402-745 fingerprint = parseSlashCommand (0.66)
+//@ chunk-b5rfb1p7.js:402-745 fingerprint (2.1.88 match: parseSlashCommand, 0.66)
 /**
  * 解析斜杠命令输入：返回命令名、参数和是否 MCP 命令（名字后跟 (MCP) 标记）；不以 / 开头返回 null。
  */

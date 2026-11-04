@@ -53,7 +53,7 @@ async function readSystemAndGlobalGitConfigPath(key, env) {
     }),
   };
 }
-//@ chunk-qcqdqsn4.js:4589-4712 placement = getValue (0.649)
+//@ chunk-qcqdqsn4.js:4589-4712 placement (2.1.88 match: getValue, 0.649)
 /**
  * 返回该 git 配置键在哪些作用域（system/global）被设置。
  */
@@ -91,7 +91,7 @@ async function readGitConfigPathWithOrigin(args, key, env) {
     origin: stripFilePrefix(stdout.slice(0, index)),
   };
 }
-//@ chunk-qcqdqsn4.js:5033-5148 placement = _temp2 (1)
+//@ chunk-qcqdqsn4.js:5033-5148 placement (2.1.88 match: _temp2, 1)
 var stripFilePrefix = (value) => (value.startsWith("file:") ? value.slice(5) : value);
 var stripTrailingSlashes = (value) => (value.length > 1 ? value.replace(/[\\/]+$/, "") : value);
 var isNormalizedAbsolutePath = (value) => isAbsolute(value) && resolve(value) === stripTrailingSlashes(value);

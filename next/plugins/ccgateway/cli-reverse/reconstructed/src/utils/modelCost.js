@@ -58,7 +58,7 @@ import { init_react_production } from "../../vendor/react/cjs/react.production.j
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:367398-367966 fingerprint = COST_TIER_3_15 (0.897)
+//@ chunk-aepeg2w5.js:367398-367966 fingerprint (2.1.88 match: COST_TIER_3_15, 0.897)
 /**
  * 价格档 $5/$25 每百万 token（缓存写 5m 6.25、1h 10，读 0.5，web 搜索 $0.01/次）；也是未知模型的默认价（DEFAULT_MODEL_COSTS）。
  */
@@ -188,7 +188,7 @@ function buildCatalogModelCosts() {
   }
   return costsById;
 }
-//@ chunk-aepeg2w5.js:369155-369256 layout = MODEL_COSTS (1)
+//@ chunk-aepeg2w5.js:369155-369256 layout (2.1.88 match: MODEL_COSTS, 1)
 /**
  * 内置价格表：catalog 价格，外加 fable-5 与 mythos-5 显式为 $10/$50。覆盖错配旧名 MODEL_COSTS_2。
  */
@@ -261,7 +261,7 @@ function selectLongPromptCosts(modelCosts, usage) {
     ? longPrompt
     : modelCosts;
 }
-//@ chunk-aepeg2w5.js:369898-370150 fingerprint = tokensToUSDCost (0.896)
+//@ chunk-aepeg2w5.js:369898-370150 fingerprint (2.1.88 match: tokensToUSDCost, 0.896)
 /**
  * 按价格表算一次请求的美元成本：输入/输出/缓存读/缓存写（5m 与 1h 分价）/web 搜索，乘以 inference_geo 倍率；超长提示词换长提示词价。
  */
@@ -355,7 +355,7 @@ function getCanonicalPricingModel(model) {
     identity: true,
   });
 }
-//@ chunk-aepeg2w5.js:370883-370942 fingerprint = getModelCosts (0.859)
+//@ chunk-aepeg2w5.js:370883-370942 fingerprint (2.1.88 match: getModelCosts, 0.859)
 /**
  * 非 fast 时返回促销借用的计价模型 id。旧版名 getModelCosts 为错配（真正的 getModelCosts 是 #e8t）。
  */
@@ -423,7 +423,7 @@ function getModelCosts(model, usage) {
     DEFAULT_MODEL_COSTS
   );
 }
-//@ chunk-aepeg2w5.js:371623-371706 fingerprint = trackUnknownModelCost (1)
+//@ chunk-aepeg2w5.js:371623-371706 fingerprint (2.1.88 match: trackUnknownModelCost, 1)
 /**
  * 未知模型成本：记 tengu_unknown_model_cost 并标记“成本可能不准”（formatTotalCost 显示提示）。
  */
@@ -695,7 +695,7 @@ function calculateCostFromTokenCounts(model, tokens, options) {
   };
   return calculateUSDCost(model, usage);
 }
-//@ chunk-aepeg2w5.js:375149-375226 layout = formatPrice (1)
+//@ chunk-aepeg2w5.js:375149-375226 layout (2.1.88 match: formatPrice, 1)
 /**
  * 整数 $N，否则保留两位小数。
  */
@@ -703,7 +703,7 @@ function formatPriceUSD(price) {
   if (Number.isInteger(price)) return `$${price}`;
   return `$${price.toFixed(2)}`;
 }
-//@ chunk-aepeg2w5.js:375226-375442 fingerprint = formatModelPricing (0.622)
+//@ chunk-aepeg2w5.js:375226-375442 fingerprint (2.1.88 match: formatModelPricing, 0.622)
 /**
  * 价格串 "$in/$out per Mtok"，有长提示词价时追加 "(… for prompts over N)"。
  */
@@ -737,7 +737,7 @@ function lookupModelCosts(model) {
       : undefined) || undefined
   );
 }
-//@ chunk-e6aww6q8.js:2400901-2401522 fingerprint = calculateCostFromTokens (0.755)
+//@ chunk-e6aww6q8.js:2400901-2401522 fingerprint (2.1.88 match: calculateCostFromTokens, 0.755)
 /**
  * 解析 usage.iterations：每项 {type, model, 各 token 数}，type=fallback_message 的 model 记为 servedFallbackModel。旧版名 calculateCostFromTokens 为错配。
  */
@@ -781,7 +781,7 @@ deferInit("chunk-18hwfzwa.js:1101521", () => {
 function isEffortCostShown() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_marbled_teal", false);
 }
-//@ chunk-18hwfzwa.js:1744468-1744518 fingerprint = MODEL_COSTS (1)
+//@ chunk-18hwfzwa.js:1744468-1744518 fingerprint (2.1.88 match: MODEL_COSTS, 1)
 /**
  * 模型（去掉 [1m]、按身份归一）是否 claude-fable-5-1。旧版名 MODEL_COSTS 为错配。
  */

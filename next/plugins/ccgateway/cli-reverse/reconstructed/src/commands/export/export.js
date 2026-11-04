@@ -27,7 +27,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { ExportDialog } from "../../components/ExportDialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1165854-1166245 fingerprint = extractFirstPrompt (0.686)
+//@ chunk-e6aww6q8.js:1165854-1166245 fingerprint (2.1.88 match: extractFirstPrompt, 0.686)
 function extractFirstPrompt_2(messages) {
   if (!messages.includes("<<")) return null;
   let index = messages.indexOf("<<");
@@ -53,7 +53,7 @@ function getExportFilename(messages, date = new Date(), origin = "stored") {
   let summary = sanitizeFilename(getFirstPromptSummary(messages, origin));
   return summary ? `${timestamp}-${summary}.txt` : `conversation-${timestamp}.txt`;
 }
-//@ chunk-x1p3yktn.js:373-645 fingerprint = formatTimestamp (1)
+//@ chunk-x1p3yktn.js:373-645 fingerprint (2.1.88 match: formatTimestamp, 1)
 function formatTimestamp(date) {
   let year = date.getFullYear();
   let month = String(date.getMonth() + 1).padStart(2, "0");
@@ -115,7 +115,7 @@ function resolveExportPath(agentType) {
   let originalCwd = getCaps().workspace === "remote" ? getOriginalCwd() : undefined;
   return expandPath(fileName, originalCwd);
 }
-//@ chunk-am3vy82s.js:18716-18832 placement = copySnapshotToLocal (0.77)
+//@ chunk-am3vy82s.js:18716-18832 placement (2.1.88 match: copySnapshotToLocal, 0.77)
 /**
  * /export 命令：写出文件（flush）并返回路径。
  */
@@ -130,7 +130,7 @@ async function writeExportFile(agentType, scope) {
   });
   return snapshotMemDir;
 }
-//@ chunk-am3vy82s.js:21471-21916 fingerprint = call (0.574)
+//@ chunk-am3vy82s.js:21471-21916 fingerprint (2.1.88 match: call, 0.574)
 /**
  * /export 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

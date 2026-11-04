@@ -108,7 +108,7 @@ function buildVertexEnvSettings(wizardData) {
   if (wizardData.pinHaiku) envOverrides.ANTHROPIC_DEFAULT_HAIKU_MODEL = wizardData.pinHaiku;
   return envOverrides;
 }
-//@ chunk-y6fv30yg.js:3522-5539 placement = ConfirmStep (0.161)
+//@ chunk-y6fv30yg.js:3522-5539 placement (2.1.88 match: ConfirmStep, 0.161)
 function ConfirmStep(props) {
   let $ = useMemoCache(30);
   let { onComplete } = props;

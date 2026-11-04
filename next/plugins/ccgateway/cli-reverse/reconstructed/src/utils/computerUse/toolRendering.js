@@ -29,7 +29,7 @@ function isComputerUseServer(serverName) {
 function isHostedDesktopSession() {
   return env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_HOSTED_DESKTOP;
 }
-//@ chunk-dcmhvw5a.js:205322-206103 fingerprint = getComputerUseMCPRenderingOverrides (0.588)
+//@ chunk-dcmhvw5a.js:205322-206103 fingerprint (2.1.88 match: getComputerUseMCPRenderingOverrides, 0.588)
 /**
  * region/duration 两个参数键（只读截图/缩放时允许的输入）。
  */
@@ -80,7 +80,7 @@ var CU_TOOL_NAMES = [
   "release_full_control",
   "request_full_control",
 ];
-//@ chunk-ah34pb7m.js:14137-14444 fingerprint = RESULT_SUMMARY (1)
+//@ chunk-ah34pb7m.js:14137-14444 fingerprint (2.1.88 match: RESULT_SUMMARY, 1)
 /**
  * computer-use 工具结果的简短摘要（Captured/Clicked/Typed…）。
  */
@@ -100,7 +100,7 @@ var RESULT_SUMMARY = {
   left_click_drag: "Dragged",
   open_application: "Opened",
 };
-//@ chunk-ah34pb7m.js:14444-14627 placement = renderToolResultMessage (1)
+//@ chunk-ah34pb7m.js:14444-14627 placement (2.1.88 match: renderToolResultMessage, 1)
 /**
  * 生成"非 verbose 时显示一行固定摘要"的结果渲染函数（摘要表 RESULT_SUMMARY 按 key 查）。
  */

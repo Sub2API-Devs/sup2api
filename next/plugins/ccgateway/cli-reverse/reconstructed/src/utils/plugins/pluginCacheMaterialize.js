@@ -947,7 +947,7 @@ async function stampMaterializedTree(label, root, mode, sharedPath = false) {
   }
   return complete;
 }
-//@ chunk-e6aww6q8.js:710637-710712 placement = scanDirectory (0.766)
+//@ chunk-e6aww6q8.js:710637-710712 placement (2.1.88 match: scanDirectory, 0.766)
 async function scanDirectory_2(dirPath) {
   let transientSentinel = await toTransientSentinel(removePathEntry(dirPath));
   return transientSentinel !== REFUSED_SYMBOL && transientSentinel !== "directory";
@@ -963,7 +963,7 @@ async function isOnDifferentFilesystem(leftPath, rightPath) {
   });
   return sameFs === null ? null : !sameFs;
 }
-//@ chunk-e6aww6q8.js:710903-711052 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-e6aww6q8.js:710903-711052 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 /**
  * 目录项检查后递归扫描或删除（名字配错）。
  */
@@ -1484,7 +1484,7 @@ async function rescreenMarkerDir(versionDir, markerDir) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:718560-718714 placement = getFileIdentity (0.865)
+//@ chunk-e6aww6q8.js:718560-718714 placement (2.1.88 match: getFileIdentity, 0.865)
 async function getFileIdentity_3(filePath, stat) {
   let current = await lstat(filePath, {
     bigint: true,
@@ -1609,7 +1609,7 @@ async function materializeVersionLinks(versionPath, cacheRoot, copyDir, deferral
 var TEMP_SUFFIX_MARK = ".tmp~";
 var TEMP_SUFFIX_HEX_RE = /^[0-9a-f]{8}$/;
 var TEMP_SUFFIX_RE = /\.tmp~[0-9a-f]{8}$/;
-//@ chunk-e6aww6q8.js:720652-720711 placement = generatePlaceholders (1)
+//@ chunk-e6aww6q8.js:720652-720711 placement (2.1.88 match: generatePlaceholders, 1)
 function makeTempSiblingName(baseName) {
   return `${baseName}${TEMP_SUFFIX_MARK}${randomBytes(4).toString("hex")}`;
 }

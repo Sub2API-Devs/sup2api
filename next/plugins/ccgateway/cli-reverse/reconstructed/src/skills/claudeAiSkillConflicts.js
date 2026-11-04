@@ -86,7 +86,7 @@ function getLowerTierSkillOverride(command, { skipLocalBareKey = false } = {}) {
     lookupTiers(command.name) ?? (bareName != null ? (localOverride ?? lookupTiers(bareName)) : undefined)
   );
 }
-//@ chunk-ygke3hz8.js:1645-1728 placement = filterMcpPromptsByServer (0.787)
+//@ chunk-ygke3hz8.js:1645-1728 placement (2.1.88 match: filterMcpPromptsByServer, 0.787)
 function commandBelongsToServer(commands, serverName) {
   return commands.loadedFrom === "mcp"
     ? strongestOverride_2(serverName, [commands.name, ...qualifiedOverrideNames(commands)])

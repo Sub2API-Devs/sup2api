@@ -14,7 +14,7 @@ import { parseUpdates, renderResourceUpdateRow } from "./UserResourceUpdateMessa
 import { Box } from "../../ink/components/Text.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
-//@ chunk-ah34pb7m.js:118642-119088 fingerprint = UserAgentNotificationMessage (0.623)
+//@ chunk-ah34pb7m.js:118642-119088 fingerprint (2.1.88 match: UserAgentNotificationMessage, 0.623)
 function UserAgentNotificationMessage(props) {
   let $ = useMemoCache(12);
   let { addMargin, param } = props;

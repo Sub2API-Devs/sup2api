@@ -193,7 +193,7 @@ var TERMINATOR_RE = /[;|&\n]/g;
 var LINE_SPAN_COST = 64;
 var MAX_SSH_USERINFO_SCAN = 2048;
 var URL_SCAN_STOP_RE = /[\s"'`]/g;
-//@ chunk-cgr0tezp.js:46236-46468 placement = ghIsDangerousCallback (1)
+//@ chunk-cgr0tezp.js:46236-46468 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function findSshUrlUserinfoSpans(text) {
   let spans = [];
   let stopAt = nextMatchIndex(text, URL_SCAN_STOP_RE);

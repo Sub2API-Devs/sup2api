@@ -18,7 +18,7 @@ import { getErrnoCode } from "./errors.js";
 import { safeParseJSON } from "./json.js";
 import { McpStdioServerConfigSchema } from "../services/mcp/types.js";
 
-//@ chunk-2sv0rqj8.js:1143-2088 fingerprint = getClaudeDesktopConfigPath (0.969)
+//@ chunk-2sv0rqj8.js:1143-2088 fingerprint (2.1.88 match: getClaudeDesktopConfigPath, 0.969)
 /**
  * Claude Desktop 配置文件路径（macOS Application Support/Claude/claude_desktop_config.json，WSL 下映射 Windows APPDATA）。
  */
@@ -74,7 +74,7 @@ async function getClaudeDesktopConfigPath() {
     "Could not find Claude Desktop config file in Windows. Make sure Claude Desktop is installed on Windows.",
   );
 }
-//@ chunk-2sv0rqj8.js:2088-2655 fingerprint = readClaudeDesktopMcpServers (0.763)
+//@ chunk-2sv0rqj8.js:2088-2655 fingerprint (2.1.88 match: readClaudeDesktopMcpServers, 0.763)
 /**
  * 读取 Claude Desktop 配置中的 mcpServers，用于从桌面版导入 MCP 服务器。
  */

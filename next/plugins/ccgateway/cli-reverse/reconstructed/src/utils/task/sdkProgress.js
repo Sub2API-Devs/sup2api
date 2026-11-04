@@ -10,7 +10,7 @@
  */
 import { enqueueTaskNotification as enqueueTaskNotification_2, getRunId } from "./taskNotifications.js";
 
-//@ chunk-e6aww6q8.js:4713141-4713493 fingerprint = emitTaskProgress (0.911)
+//@ chunk-e6aww6q8.js:4713141-4713493 fingerprint (2.1.88 match: emitTaskProgress, 0.911)
 function emitTaskProgress(params) {
   enqueueTaskNotification_2({
     type: "system",

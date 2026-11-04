@@ -21,7 +21,7 @@ function formatDuration(ms) {
   let rounded = Math.round((ms % 60000) / 1000);
   return rounded > 0 ? `${m}m ${rounded}s` : `${m}m`;
 }
-//@ chunk-aepeg2w5.js:275783-275974 fingerprint = decodeJwtPayload (1)
+//@ chunk-aepeg2w5.js:275783-275974 fingerprint (2.1.88 match: decodeJwtPayload, 1)
 /**
  * 解码 JWT payload（兼容 sk-ant-si- 前缀），失败返回 null。
  */
@@ -56,7 +56,7 @@ function getJwtSessionId(token) {
     ? payload.session_id
     : undefined;
 }
-//@ chunk-aepeg2w5.js:276276-276397 fingerprint = decodeJwtExpiry (1)
+//@ chunk-aepeg2w5.js:276276-276397 fingerprint (2.1.88 match: decodeJwtExpiry, 1)
 /**
  * 从 JWT 负载取 exp（秒），无法解析返回 null。
  */
@@ -74,7 +74,7 @@ var DEFAULT_REFRESH_BUFFER_MS = 300000;
 var FOLLOWUP_REFRESH_MS = 1800000;
 var DEFAULT_MAX_FAILURES = 3;
 var RETRY_DELAY_MS = 60000;
-//@ chunk-aepeg2w5.js:276436-279315 fingerprint = createTokenRefreshScheduler (0.831)
+//@ chunk-aepeg2w5.js:276436-279315 fingerprint (2.1.88 match: createTokenRefreshScheduler, 0.831)
 /**
  * 按 sessionId 调度 token 刷新：schedule（解 JWT exp，提前 buffer 刷新，可自适应 20%）、scheduleFromExpiresIn、refreshNow、cancel、cancelAll；
  * 刷新时取新 OAuth token 调 onRefresh，失败按次数重试，耗尽调 onExhausted；每次调度递增代号，过期回调直接丢弃。

@@ -35,7 +35,7 @@ import { formatFileSize } from "../../utils/format.js";
 var DEBUG_TAIL_LINES = 20;
 var MAX_DEBUG_LOG_BYTES = 65536;
 var MAX_DEBUG_SETTINGS_CHARS = 8192;
-//@ chunk-hantmvxa.js:102091-103906 fingerprint = registerDebugSkill (0.766)
+//@ chunk-hantmvxa.js:102091-103906 fingerprint (2.1.88 match: registerDebugSkill, 0.766)
 /**
  * 注册 /debug 内置 skill：打开本会话调试日志，读取最近的 debug 日志与设置信息拼成诊断提示词；只能用户调用（disableModelInvocation）。
  */

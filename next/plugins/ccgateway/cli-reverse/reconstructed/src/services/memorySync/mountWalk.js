@@ -816,7 +816,7 @@ async function dropPulledFile(store, key, startPath) {
   store.pullDropped.add(key);
   await removeEmptyParentDirs(store.mountDir, startPath);
 }
-//@ chunk-s61vbvea.js:117229-117395 placement = setCwdState (1)
+//@ chunk-s61vbvea.js:117229-117395 placement (2.1.88 match: setCwdState, 1)
 async function removeEmptyParentDirs(mountDir, startPath) {
   let normalized = resolve(mountDir).normalize("NFC");
   for (

@@ -47,7 +47,7 @@ function skillLoadedSource(skillName, command, invocationTrigger, agentContext) 
     agentContext,
   );
 }
-//@ chunk-csq9ftr9.js:9328-9469 fingerprint = logSkillsLoaded (0.497)
+//@ chunk-csq9ftr9.js:9328-9469 fingerprint (2.1.88 match: logSkillsLoaded, 0.497)
 /**
  * 会话开始时为每个已加载 Skill 发 tengu_skill_loaded 事件（带插件来源字段）。
  */

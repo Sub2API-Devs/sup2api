@@ -33,7 +33,7 @@ import { StreamClosedAbortError } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1778329-1778957 fingerprint = outputSchema (0.334)
+//@ chunk-e6aww6q8.js:1778329-1778957 fingerprint (2.1.88 match: outputSchema, 0.334)
 /**
  * TaskCreate 校验失败时的纠正提示：一次只建一个任务；误用 Agent 参数（prompt/subagent_type）时提示改用 Agent。
  */
@@ -49,7 +49,7 @@ function getTaskCreateValidationSteer(rawInput) {
     return "This call used Agent-tool parameters (`prompt`/`subagent_type`). TaskCreate adds an item to the task list and takes `subject` and `description` string parameters. To delegate work to a subagent, use the Agent tool instead.";
   return null;
 }
-//@ chunk-kxyd0g16.js:140086-141693 fingerprint = TaskCreateTool (0.715)
+//@ chunk-kxyd0g16.js:140086-141693 fingerprint (2.1.88 match: TaskCreateTool, 0.715)
 /**
  * TaskCreate 工具（shouldDefer，isEnabled=任务工具启用且 todo 类工具可用）：在当前任务列表创建一条 pending 任务，运行 TaskCreated 钩子，钩子阻塞时删除刚建任务并报错；结果 "Task #id created successfully: subject"。isConcurrencySafe=false。
  */

@@ -18,7 +18,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
  */
 var BACKGROUND_TASK_TITLE = "Background task";
 var REMOTE_TASK_TITLE = "Remote task";
-//@ chunk-s61vbvea.js:475466-475539 placement = setCwdState (1)
+//@ chunk-s61vbvea.js:475466-475539 placement (2.1.88 match: setCwdState, 1)
 function nfcLowerNfc(cwd) {
   return cwd.normalize("NFC").toLowerCase().normalize("NFC");
 }
@@ -27,7 +27,7 @@ var SPECIAL_LATIN_RE = /[\u017f\u212a\ufb00-\ufb06]/;
 //@ chunk-s61vbvea.js:475576-475637 placement
 var WSL_MNT_DRIVE_PATTERN = /^\/mnt\/[a-z](?:\/|$)/i;
 var WSL_MNT_ROOT_RE = /^\/mnt(?:\/[a-z])?\/?$/i;
-//@ chunk-s61vbvea.js:475637-475683 placement = execTmux (1)
+//@ chunk-s61vbvea.js:475637-475683 placement (2.1.88 match: execTmux, 1)
 function isWslMntRoot(path) {
   return getPlatform_2() === "wsl" && WSL_MNT_ROOT_RE.test(path);
 }

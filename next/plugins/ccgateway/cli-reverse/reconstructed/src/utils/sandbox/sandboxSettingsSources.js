@@ -37,7 +37,7 @@ function sandboxSettingsChain() {
     isSettingSourceEnabled("userSettings") ? getSettingsForSource("userSettings") : null,
   ];
 }
-//@ chunk-fq0cr76a.js:853372-853425 placement = _temp7 (1)
+//@ chunk-fq0cr76a.js:853372-853425 placement (2.1.88 match: _temp7, 1)
 function getPolicySettingsIfEnabled() {
   return isPolicySlotAdminOrParentComposed() ? getSettingsForSource("policySettings") : null;
 }

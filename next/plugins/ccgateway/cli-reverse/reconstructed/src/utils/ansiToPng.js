@@ -52,7 +52,7 @@ var fontGlyphs; // deferred: uses decodeFont of its import cycle while loading; 
 deferInit("chunk-t6e3jxy0.js:17354", () => {
   fontGlyphs = decodeFont();
 });
-//@ chunk-t6e3jxy0.js:17364-17535 fingerprint = decodeFont (1)
+//@ chunk-t6e3jxy0.js:17364-17535 fingerprint (2.1.88 match: decodeFont, 1)
 function decodeFont() {
   let buf = inflateRawSync(Buffer.from(FONT_DATA_BASE64, "base64"));
   let count = buf.readUInt16LE(0);
@@ -66,7 +66,7 @@ function decodeFont() {
   }
   return map;
 }
-//@ chunk-t6e3jxy0.js:17535-18156 fingerprint = ansiToPng (1)
+//@ chunk-t6e3jxy0.js:17535-18156 fingerprint (2.1.88 match: ansiToPng, 1)
 function ansiToPng(ansiText, options = {}) {
   let { scale = 1, paddingX = 48, paddingY = 48, borderRadius = 16, background = DEFAULT_BG_RGB } = options;
   let lines = parseAnsi(ansiText);
@@ -114,7 +114,7 @@ function lineWidthCells(line) {
   for (let span of line) widthCells += bunStringWidth(span.text);
   return widthCells;
 }
-//@ chunk-t6e3jxy0.js:18216-18302 callgraph-fingerprint = fillBackground (1)
+//@ chunk-t6e3jxy0.js:18216-18302 callgraph-fingerprint (2.1.88 match: fillBackground, 1)
 function fillBackground(px, bg) {
   for (let i = 0; i < px.length; i += 4) {
     px[i] = bg.r;
@@ -133,7 +133,7 @@ var BLOCK_SHADE_RATIOS = {
   9619: 0.75,
   9608: 1,
 };
-//@ chunk-t6e3jxy0.js:18346-18581 callgraph-fingerprint = blitShade (1)
+//@ chunk-t6e3jxy0.js:18346-18581 callgraph-fingerprint (2.1.88 match: blitShade, 1)
 function blitShade(px, width, x, y, fg, bg, alpha, scale) {
   let rounded = Math.round(fg.r * alpha + bg.r * (1 - alpha));
   let rounded_2 = Math.round(fg.g * alpha + bg.g * (1 - alpha));
@@ -150,7 +150,7 @@ function blitShade(px, width, x, y, fg, bg, alpha, scale) {
     }
   }
 }
-//@ chunk-t6e3jxy0.js:18581-18878 callgraph-fingerprint = blitGlyph (1)
+//@ chunk-t6e3jxy0.js:18581-18878 callgraph-fingerprint (2.1.88 match: blitGlyph, 1)
 function blitGlyph(px, width, x, y, glyph, color, bold, scale) {
   for (let idx = 0; idx < GLYPH_HEIGHT; idx++)
     for (let idx_2 = 0; idx_2 < GLYPH_WIDTH; idx_2++) {
@@ -209,7 +209,7 @@ function crc32(data) {
   for (let i = 0; i < data.length; i++) crc = CRC_TABLE[(crc ^ data[i]) & 255] ^ (crc >>> 8);
   return (crc ^ 4294967295) >>> 0;
 }
-//@ chunk-t6e3jxy0.js:19388-19581 fingerprint = chunk (1)
+//@ chunk-t6e3jxy0.js:19388-19581 fingerprint (2.1.88 match: chunk, 1)
 function chunk(type, data) {
   let body = Buffer.alloc(4 + data.length);
   body.write(type, 0, "ascii");
@@ -220,7 +220,7 @@ function chunk(type, data) {
   out.writeUInt32BE(crc32(body), 8 + data.length);
   return out;
 }
-//@ chunk-t6e3jxy0.js:19581-19902 fingerprint = encodePng (1)
+//@ chunk-t6e3jxy0.js:19581-19902 fingerprint (2.1.88 match: encodePng, 1)
 function encodePng(px, width, height) {
   let ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);

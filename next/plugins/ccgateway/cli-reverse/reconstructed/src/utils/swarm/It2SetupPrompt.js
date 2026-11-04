@@ -193,7 +193,7 @@ function It2Installing(props) {
   } else elements = $[5];
   return elements;
 }
-//@ chunk-18hwfzwa.js:1266381-1268003 fingerprint = It2SetupPrompt (0.535)
+//@ chunk-18hwfzwa.js:1266381-1268003 fingerprint (2.1.88 match: It2SetupPrompt, 0.535)
 /**
  * it2 安装失败界面：显示错误与手动安装命令，选项为重试、改用 tmux（tmux 可用时）、取消。
  */

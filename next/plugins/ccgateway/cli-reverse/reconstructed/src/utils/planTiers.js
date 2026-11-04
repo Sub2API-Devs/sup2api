@@ -46,7 +46,7 @@ import { isOutOfCreditsReason } from "./fastMode.js";
 import { isPolicyAllowed } from "../services/policyLimits/policyEvidence.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:178037-178159 placement = isConsumerPlan (1)
+//@ chunk-hwmsct5x.js:178037-178159 placement (2.1.88 match: isConsumerPlan, 1)
 function isConsumerPlan() {
   let rateLimitTierOverride = getRateLimitTierOverride();
   if (rateLimitTierOverride !== null) return rateLimitTierOverride;
@@ -62,7 +62,7 @@ function isConsumerPlan() {
 function isUsageBasedBilling() {
   return getOauthAccountInfo()?.billingType === "usage_based";
 }
-//@ chunk-hwmsct5x.js:178214-178269 placement = logEventTo1P (1)
+//@ chunk-hwmsct5x.js:178214-178269 placement (2.1.88 match: logEventTo1P, 1)
 function isPromoOffersBlocked() {
   return isEnterpriseSubscriber_2() || getAPIProvider() !== "firstParty" || isEssentialTrafficOnly();
 }
@@ -241,7 +241,7 @@ function hasKnownPlanTier() {
     (isEnterpriseSubscriber_2() && getSeatTier() === null && getRateLimitTier() === null)
   );
 }
-//@ chunk-hwmsct5x.js:180428-180469 placement = isEnterpriseSubscriber (1)
+//@ chunk-hwmsct5x.js:180428-180469 placement (2.1.88 match: isEnterpriseSubscriber, 1)
 var CreditsOnlyTiersSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var DEFAULT_CREDITS_ONLY_TIERS;
 deferInit("chunk-hwmsct5x.js:180428", () => {
@@ -274,7 +274,7 @@ function getCreditsOnlyTiers() {
   }
   return cachedFlags.creditsOnlyTiers.parsed;
 }
-//@ chunk-hwmsct5x.js:180807-180904 placement = isEnterpriseSubscriber (1)
+//@ chunk-hwmsct5x.js:180807-180904 placement (2.1.88 match: isEnterpriseSubscriber, 1)
 function isEnterpriseSubscriber() {
   let subscriptionType = getSubscriptionType();
   if (subscriptionType === "enterprise" && !isEnterprisePAYGSubscriber()) return true;
@@ -462,7 +462,7 @@ function needsConsentCreditsOrOut(userSpecifiedModel) {
 }
 //@ chunk-m024s3ph.js:336-365 placement
 var ALLOW_PROMO_OFFERS = "allow_promo_offers";
-//@ chunk-m024s3ph.js:365-429 placement = logEventTo1P (1)
+//@ chunk-m024s3ph.js:365-429 placement (2.1.88 match: logEventTo1P, 1)
 function arePromoOffersAllowed() {
   return (
     !isPromoOffersBlocked() &&

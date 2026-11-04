@@ -223,7 +223,7 @@ function renderServerStatusLine(client, toolCount, theme) {
     ],
   });
 }
-//@ chunk-vrb44rx7.js:9935-26449 fingerprint = MCPRemoteServerMenu (0.498)
+//@ chunk-vrb44rx7.js:9935-26449 fingerprint (2.1.88 match: MCPRemoteServerMenu, 0.498)
 /**
  * 远程 MCP 服务器菜单：显示状态与能力，执行 OAuth 认证（tengu_claudeai_mcp_auth_completed）、重连、清除认证、启用/禁用、查看工具。
  */

@@ -21,7 +21,7 @@ import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { useResolvedTheme } from "../components/design-system/ThemeProvider.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tzghj6zv.js:4400-4919 fingerprint = useCopyOnSelect (0.724)
+//@ chunk-tzghj6zv.js:4400-4919 fingerprint (2.1.88 match: useCopyOnSelect, 0.724)
 /**
  * 全屏模式下选区完成即写剪贴板（clipboard_write），可在 /config 关闭。
  */
@@ -69,7 +69,7 @@ function useCopyOnSelect(selection, isActive, onCopied) {
   }, [isActive, selection]);
   return copyController;
 }
-//@ chunk-tzghj6zv.js:4919-5010 fingerprint = useSelectionBgColor (1)
+//@ chunk-tzghj6zv.js:4919-5010 fingerprint (2.1.88 match: useSelectionBgColor, 1)
 function useSelectionBgColor(selection) {
   let themeName = useResolvedTheme();
   useEffect(() => {

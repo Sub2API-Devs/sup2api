@@ -48,7 +48,7 @@ import { memorySkillCommands } from "../../services/memorySync/memorySkills.js";
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:959430-959509 fingerprint = formatCommandDescription (1)
+//@ chunk-e6aww6q8.js:959430-959509 fingerprint (2.1.88 match: formatCommandDescription, 1)
 /**
  * 命令是否可以用不带插件前缀的名字列出/调用（非插件 prompt 命令且满足 k2e 与 V1t()）。
  */
@@ -69,7 +69,7 @@ var DEFAULT_SKILL_DESC_MAX_CHARS = 1536;
 function getSkillDescMaxChars() {
   return getInitialSettings_2().skillListingMaxDescChars ?? DEFAULT_SKILL_DESC_MAX_CHARS;
 }
-//@ chunk-e6aww6q8.js:2297593-2297882 fingerprint = getCharBudget (0.358)
+//@ chunk-e6aww6q8.js:2297593-2297882 fingerprint (2.1.88 match: getCharBudget, 0.358)
 /**
  * skill 列表的字符预算：SLASH_COMMAND_TOOL_CHAR_BUDGET 环境变量优先；否则上下文窗口 × 4 字符/token × skillListingBudgetFraction（默认 1%），未配置时可被 GrowthBook tengu_typed_pebble 抬高（上限 100000）。
  */
@@ -228,7 +228,7 @@ function truncateSkillDescription(command) {
   let skillDescMaxChars = getSkillDescMaxChars();
   return desc.length > skillDescMaxChars ? desc.slice(0, skillDescMaxChars - 1) + "\u2026" : desc;
 }
-//@ chunk-e6aww6q8.js:2299697-2301072 fingerprint = formatCommandsWithinBudget (0.508)
+//@ chunk-e6aww6q8.js:2299697-2301072 fingerprint (2.1.88 match: formatCommandsWithinBudget, 0.508)
 /**
  * 把 skill 列表格式化成 "- 名字: 描述" 行；超预算时保留打包 skill 与 name-only 项的全文，其余按优先级在剩余预算内保留描述、超出的只留名字，并记 tengu_skill_descriptions_truncated。
  */
@@ -336,7 +336,7 @@ async function getSkillToolPrompt(options = {}) {
   let basePrompt = leanRewriteOf(options) ? SKILL_TOOL_DESCRIPTION : SKILL_TOOL_PROMPT;
   return isCoordinatorMode_2() ? basePrompt + SKILL_TOOL_COORDINATOR_ADDENDUM : basePrompt;
 }
-//@ chunk-e6aww6q8.js:2303242-2303366 fingerprint = getSkillToolInfo (1)
+//@ chunk-e6aww6q8.js:2303242-2303366 fingerprint (2.1.88 match: getSkillToolInfo, 1)
 /**
  * 统计 skill 总数与可进入列表的数量（analyzeContext 使用）。
  */

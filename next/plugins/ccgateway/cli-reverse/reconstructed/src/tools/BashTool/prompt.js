@@ -339,7 +339,7 @@ function renderCommitAndPrSection(surface) {
   if (section) logPrGuidanceRendered(surface);
   return section;
 }
-//@ chunk-e6aww6q8.js:1482491-1489405 fingerprint = getCommitAndPRInstructions (0.348)
+//@ chunk-e6aww6q8.js:1482491-1489405 fingerprint (2.1.88 match: getCommitAndPRInstructions, 0.348)
 /**
  * 完整版"# Committing changes with git / # Creating pull requests"提示：Git 安全协议、提交与 PR 步骤、HEREDOC 示例；提交/PR 结尾署名来自归属设置（S8t），TodoV2 启用时提到 TaskCreate。
  */
@@ -616,7 +616,7 @@ function getMachinesSection() {
 - When the user's task needs something only their machine has (the note lists what), go straight there with \`${HOST_TOOL_INPUT_FIELD}\` rather than checking here first with "which"; if a command failed here for want of one, run the part that failed there. A change outside the project still needs the user's go-ahead; a tool that installs on Linux is installed here unless the user asks otherwise.
 - A listed machine can go offline and come back: do not call one the note lists as not reachable, and never sleep, poll or schedule a wait for one; do the rest of the task here, and check it once when the user says it is back or asks you to try again.`;
 }
-//@ chunk-e6aww6q8.js:1493393-1497830 fingerprint = getSimplePrompt (0.845)
+//@ chunk-e6aww6q8.js:1493393-1497830 fingerprint (2.1.88 match: getSimplePrompt, 0.845)
 /**
  * Bash 工具完整描述：精简模式走 yYo；否则拼出工具说明、Windows 提示、专用工具优先（无内嵌搜索时含 Glob/Grep）、# Instructions（路径加引号、少用 cd、超时、后台、git、sleep 规则）、提交/PR 指南、# Machines。
  */
@@ -791,7 +791,7 @@ function getSandboxMechanismSuffix() {
   if (platform === "linux" || platform === "wsl") return " (Linux bubblewrap)";
   return "";
 }
-//@ chunk-e6aww6q8.js:3200766-3232364 fingerprint = getSimpleSandboxSection (0.314)
+//@ chunk-e6aww6q8.js:3200766-3232364 fingerprint (2.1.88 match: getSimpleSandboxSection, 0.314)
 /**
  * 系统提示里的沙箱节：沙箱启用时列出文件系统读写限制、网络限制、何时可用 dangerouslyDisableSandbox 或 allowed_domains、macOS 本地端口、Windows localhost/Schannel/证书/Maven/git 等平台注意事项。
  */

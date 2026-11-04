@@ -12,7 +12,7 @@ import { count } from "../utils/collections.js";
 import { FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH } from "../constants/figures.js";
 import { isAutoReactArmedMonitorTask } from "./MonitorWsTask/MonitorWsTask.js";
 
-//@ chunk-1fg1sa83.js:302-1852 fingerprint = getPillLabel (0.699)
+//@ chunk-1fg1sa83.js:302-1852 fingerprint (2.1.88 match: getPillLabel, 0.699)
 /**
  * 生成后台任务胶囊文字：全部同类型时按类型给专门文案（如 "2 shells, 1 monitor"、"ultraplan ready"、"3 cloud sessions"、"dreaming"），否则回退为 "N background tasks"。
  */
@@ -94,7 +94,7 @@ function getPillLabelWithExtra(tasks, extraCount) {
 function formatBackgroundTaskCount(count) {
   return `${count} background ${count === 1 ? "task" : "tasks"}`;
 }
-//@ chunk-1fg1sa83.js:1966-2096 fingerprint = pillNeedsCta (1)
+//@ chunk-1fg1sa83.js:1966-2096 fingerprint (2.1.88 match: pillNeedsCta, 1)
 /**
  * 只有一个 ultraplan 远程任务且有阶段时，胶囊需要显示行动提示。
  */

@@ -22,7 +22,7 @@ import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:187858-187925 fingerprint = OrderedListContext (0.722)
+//@ chunk-dcmhvw5a.js:187858-187925 fingerprint (2.1.88 match: OrderedListContext, 0.722)
 function OrderedListContext(items, marker) {
   return Object.freeze(items.filter((item) => item.marker === marker));
 }
@@ -33,7 +33,7 @@ deferInit("chunk-p8fze0jh.js:19527", () => {
     marker: "",
   });
 });
-//@ chunk-p8fze0jh.js:19549-20134 fingerprint = OrderedListComponent (0.858)
+//@ chunk-p8fze0jh.js:19549-20134 fingerprint (2.1.88 match: OrderedListComponent, 0.858)
 function OrderedListComponent(props) {
   let $ = useMemoCache(9);
   let { children } = props;

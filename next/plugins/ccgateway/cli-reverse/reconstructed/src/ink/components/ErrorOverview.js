@@ -24,7 +24,7 @@ function isTooLongError(line) {
   let { value } = line;
   return value.length > MAX_ERROR_LENGTH;
 }
-//@ chunk-bzr73sfg.js:227193-227254 sole-consumer = formatUri (1)
+//@ chunk-bzr73sfg.js:227193-227254 sole-consumer (2.1.88 match: formatUri, 1)
 var stripFileUrlPrefix = (file) => file?.replace(`file://${process.cwd()}/`, "");
 var MAX_ERROR_LENGTH = 200;
 //@ chunk-bzr73sfg.js:227254-227366 affinity
@@ -39,7 +39,7 @@ function isInternalStackPath(path) {
     path.startsWith("node:")
   );
 }
-//@ chunk-bzr73sfg.js:227366-229377 fingerprint = ErrorOverview (0.868)
+//@ chunk-bzr73sfg.js:227366-229377 fingerprint (2.1.88 match: ErrorOverview, 0.868)
 /**
  * 渲染出错时的错误页：ERROR 标题与消息、出错位置、读源码显示附近几行（超长行不显示）、解析后的堆栈。
  */

@@ -41,7 +41,7 @@ import { logPluginFetch, classifyFetchError } from "./fetchTelemetry.js";
 import { HostScoped } from "../hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a477qqne.js:22307-22609 fingerprint = saveInstallCountsCache (0.666)
+//@ chunk-a477qqne.js:22307-22609 fingerprint (2.1.88 match: saveInstallCountsCache, 0.666)
 /**
  * 原子写文件（临时文件 + rename）。名字配错，见 lead 建议。
  */
@@ -167,7 +167,7 @@ async function readPluginCatalogCacheRaw(cachePath, allowStale) {
     encoding: "utf-8",
   });
 }
-//@ chunk-e6aww6q8.js:4222139-4222714 fingerprint = loadInstallCountsCache (0.312)
+//@ chunk-e6aww6q8.js:4222139-4222714 fingerprint (2.1.88 match: loadInstallCountsCache, 0.312)
 /**
  * 读取插件目录缓存文件（校验结构与版本，可允许过期）。
  */
@@ -200,7 +200,7 @@ async function loadInstallCountsCache(cachePath, { allowStale = false } = {}) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4222714-4223137 fingerprint = INSTALL_COUNTS_CACHE_FILENAME (0.491)
+//@ chunk-e6aww6q8.js:4222714-4223137 fingerprint (2.1.88 match: INSTALL_COUNTS_CACHE_FILENAME, 0.491)
 /**
  * 写插件目录缓存（存储后端或文件）。名字配错，见 lead 建议。
  */
@@ -271,7 +271,7 @@ var catalogFetchOnce; // deferred: uses OncePromise of its import cycle while lo
 deferInit("chunk-e6aww6q8.js:4223614", () => {
   catalogFetchOnce = new HostScoped(() => new OncePromise());
 });
-//@ chunk-e6aww6q8.js:4223641-4223982 fingerprint = getInstallCounts (0.402)
+//@ chunk-e6aww6q8.js:4223641-4223982 fingerprint (2.1.88 match: getInstallCounts, 0.402)
 /**
  * 取插件目录（安装数等）：优先 24 小时内的本地缓存，过期则联网获取并写缓存。
  */
@@ -370,7 +370,7 @@ async function estimatePluginTokenCost(pluginId, canonicalName, storageV5) {
     isEstimate: true,
   };
 }
-//@ chunk-e6aww6q8.js:4224703-4224911 callgraph-fingerprint = formatInstallCount (1)
+//@ chunk-e6aww6q8.js:4224703-4224911 callgraph-fingerprint (2.1.88 match: formatInstallCount, 1)
 /**
  * 安装数格式化：<1000 原样，千用 k，百万用 M。
  */

@@ -42,7 +42,7 @@ import { SelectMultiAccessible } from "../../CustomSelect/SelectMulti.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
 
-//@ chunk-18hwfzwa.js:1287012-1287066 callgraph-fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:1287012-1287066 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectToolPermissionContextMode(s) {
   return s.toolPermissionContext.mode;
 }
@@ -55,11 +55,11 @@ function toSelectOption(option) {
     description: replaceLineBreaks(option.displayDescription),
   };
 }
-//@ chunk-18hwfzwa.js:1287222-1287263 fingerprint = _temp4 (1)
+//@ chunk-18hwfzwa.js:1287222-1287263 fingerprint (2.1.88 match: _temp4, 1)
 function isNotOtherOption(v) {
   return v !== "__other__";
 }
-//@ chunk-18hwfzwa.js:1287263-1293852 fingerprint = QuestionView (0.754)
+//@ chunk-18hwfzwa.js:1287263-1293852 fingerprint (2.1.88 match: QuestionView, 0.754)
 function QuestionView(props) {
   let $ = useMemoCache(76);
   let {

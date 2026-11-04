@@ -7,7 +7,7 @@
  */
 import { symbolExport } from "./_root.js";
 
-//@ chunk-a16kyqj3.js:391-473 placement = substituteVariables (0.576)
+//@ chunk-a16kyqj3.js:391-473 placement (2.1.88 match: substituteVariables, 0.576)
 var objectProto = Object.prototype;
 var { hasOwnProperty, toString: nativeObjectToString } = objectProto;
 var symToStringTag = symbolExport ? symbolExport.toStringTag : undefined;

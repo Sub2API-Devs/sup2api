@@ -284,7 +284,7 @@ function cloudCreateCancelMessage(state) {
 deferInit("chunk-pfn09c5f.js:14252", () => {
   init_react_production();
 });
-//@ chunk-pfn09c5f.js:14256-14503 fingerprint = STEPS (1)
+//@ chunk-pfn09c5f.js:14256-14503 fingerprint (2.1.88 match: STEPS, 1)
 var TELEPORT_SPINNER_FRAMES = ["\u25D0", "\u25D3", "\u25D1", "\u25D2"];
 var TELEPORT_STEPS = [
   {
@@ -304,7 +304,7 @@ var TELEPORT_STEPS = [
     label: "Checking out branch",
   },
 ];
-//@ chunk-pfn09c5f.js:14503-15625 fingerprint = TeleportProgress (0.916)
+//@ chunk-pfn09c5f.js:14503-15625 fingerprint (2.1.88 match: TeleportProgress, 0.916)
 function TeleportProgress(props) {
   let $ = useMemoCache(16);
   let { currentStep, sessionId } = props;
@@ -419,7 +419,7 @@ function TeleportProgress(props) {
   } else t7 = $[15];
   return t7;
 }
-//@ chunk-pfn09c5f.js:15625-15941 fingerprint = teleportWithProgress (0.866)
+//@ chunk-pfn09c5f.js:15625-15941 fingerprint (2.1.88 match: teleportWithProgress, 0.866)
 async function teleportWithProgress(root, sessionId) {
   let setStep = () => {};
   function TeleportProgressWrapper() {

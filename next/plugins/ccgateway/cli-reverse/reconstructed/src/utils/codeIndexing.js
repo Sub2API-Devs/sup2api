@@ -10,7 +10,7 @@
  */
 import { getOwn } from "./objectSafety.js";
 
-//@ chunk-e6aww6q8.js:4757189-4758807 fingerprint = MCP_SERVER_PATTERNS (0.862)
+//@ chunk-e6aww6q8.js:4757189-4758807 fingerprint (2.1.88 match: MCP_SERVER_PATTERNS, 0.862)
 /**
  * 代码索引工具识别表：CLI 命令名映射与 MCP 服务器名正则。
  */
@@ -161,7 +161,7 @@ var MCP_SERVER_PATTERNS = [
     tool: "claude-context",
   },
 ];
-//@ chunk-e6aww6q8.js:4758807-4758997 fingerprint = detectCodeIndexingFromCommand (1)
+//@ chunk-e6aww6q8.js:4758807-4758997 fingerprint (2.1.88 match: detectCodeIndexingFromCommand, 1)
 /**
  * 从 shell 命令首词（npx/bunx 时取第二词）识别代码索引工具（sourcegraph/cody/aider 等）。
  */
@@ -176,7 +176,7 @@ function detectCodeIndexingFromCommand(command) {
   }
   return getOwn(CLI_COMMAND_PATTERNS, firstWord);
 }
-//@ chunk-e6aww6q8.js:4758997-4759074 callgraph-witnessed = detectCodeIndexingFromMcpServerName (1)
+//@ chunk-e6aww6q8.js:4758997-4759074 callgraph-witnessed (2.1.88 match: detectCodeIndexingFromMcpServerName, 1)
 /**
  * 从 MCP 服务器名识别代码索引工具。
  */

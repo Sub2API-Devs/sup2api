@@ -88,7 +88,7 @@ async function ensurePrivateTempRoot() {
 async function getPrivateTempRoot() {
   return (await ensurePrivateTempRoot())?.root ?? null;
 }
-//@ chunk-fq0cr76a.js:639733-639914 placement = getFileIdentity (0.794)
+//@ chunk-fq0cr76a.js:639733-639914 placement (2.1.88 match: getFileIdentity, 0.794)
 async function getFileIdentity(path, identity) {
   let bashEditDiffDir = getBashEditDiffDir();
   let rootStats = await statOwnedPrivateDir(bashEditDiffDir);

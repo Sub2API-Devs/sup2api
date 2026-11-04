@@ -134,7 +134,7 @@ function getCedarEmberCopy() {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:2046524-2046541 placement = SEP_WIDTH (1)
+//@ chunk-e6aww6q8.js:2046524-2046541 placement (2.1.88 match: SEP_WIDTH, 1)
 /**
  * 终端/摘要输出里多处使用的分隔串 " · "（split/join 与 trim 后拼接）。
  */

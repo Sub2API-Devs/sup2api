@@ -21,18 +21,18 @@ import { saveGlobalConfig } from "./config.js";
 import { logError } from "./log.js";
 import { env } from "./env.js";
 
-//@ chunk-6zvphrsz.js:2575-2612 callgraph-fingerprint = getLocalClaudePath (1)
+//@ chunk-6zvphrsz.js:2575-2612 callgraph-fingerprint (2.1.88 match: getLocalClaudePath, 1)
 function getLocalClaudePath() {
   return join(filterManagedDisabledPlugins(), "claude");
 }
-//@ chunk-6zvphrsz.js:2612-2696 fingerprint = isRunningFromLocalInstallation (1)
+//@ chunk-6zvphrsz.js:2612-2696 fingerprint (2.1.88 match: isRunningFromLocalInstallation, 1)
 /**
  * 是否从 ~/.claude/local 的本地安装运行。
  */
 function isRunningFromLocalInstallation() {
   return (process.argv[1] || "").includes("/.claude/local/node_modules/");
 }
-//@ chunk-6zvphrsz.js:2696-2830 fingerprint = writeIfMissing (1)
+//@ chunk-6zvphrsz.js:2696-2830 fingerprint (2.1.88 match: writeIfMissing, 1)
 async function writeIfMissing(path, content, mode) {
   try {
     await writeFile(path, content, {
@@ -46,7 +46,7 @@ async function writeIfMissing(path, content, mode) {
     throw e;
   }
 }
-//@ chunk-6zvphrsz.js:2830-3181 fingerprint = ensureLocalPackageEnvironment (0.925)
+//@ chunk-6zvphrsz.js:2830-3181 fingerprint (2.1.88 match: ensureLocalPackageEnvironment, 0.925)
 async function ensureLocalPackageEnvironment() {
   try {
     let localInstallDir = filterManagedDisabledPlugins();
@@ -81,7 +81,7 @@ exec "${localInstallDir}/node_modules/.bin/claude" "$@"`,
     return false;
   }
 }
-//@ chunk-6zvphrsz.js:3181-4276 fingerprint = installOrUpdateClaudePackage (0.571)
+//@ chunk-6zvphrsz.js:3181-4276 fingerprint (2.1.88 match: installOrUpdateClaudePackage, 0.571)
 /**
  * installOrUpdateClaudePackage：在 ~/.claude/local 下用 npm 安装（本地安装方式）。
  */
@@ -138,7 +138,7 @@ async function installOrUpdateClaudePackage(channel, specificVersion, storageV5)
     return "install_failed";
   }
 }
-//@ chunk-6zvphrsz.js:4276-4375 fingerprint = localInstallationExists (1)
+//@ chunk-6zvphrsz.js:4276-4375 fingerprint (2.1.88 match: localInstallationExists, 1)
 /**
  * 本地安装（~/.claude/local/node_modules/.bin/claude）是否存在。
  */
@@ -150,7 +150,7 @@ async function localInstallationExists() {
     return false;
   }
 }
-//@ chunk-6zvphrsz.js:4375-4527 fingerprint = getShellType (1)
+//@ chunk-6zvphrsz.js:4375-4527 fingerprint (2.1.88 match: getShellType, 1)
 /**
  * 从 SHELL 推断 shell 类型（zsh/bash/fish/unknown）。
  */

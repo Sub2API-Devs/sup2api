@@ -8,7 +8,7 @@
  * pieces: chunk-bzr73sfg.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-bzr73sfg.js:288084-288217 fingerprint = getMaxWidth (0.706)
+//@ chunk-bzr73sfg.js:288084-288217 fingerprint (2.1.88 match: getMaxWidth, 0.706)
 /**
  * yoga 节点的内容宽度：计算宽度减左右内边距与边框。
  */

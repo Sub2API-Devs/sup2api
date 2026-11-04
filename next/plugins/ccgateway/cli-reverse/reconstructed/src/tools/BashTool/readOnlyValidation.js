@@ -72,7 +72,7 @@ import { getCwd } from "../../utils/cwd.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1127784-1130683 fingerprint = FD_SAFE_FLAGS (0.67)
+//@ chunk-e6aww6q8.js:1127784-1130683 fingerprint (2.1.88 match: FD_SAFE_FLAGS, 0.67)
 /**
  * fd 与 grep 的安全选项表（选项 → none/number/string 值类型），以及开关名 tengu_tender_thunder 与 refused 读法用的 AsyncLocalStorage。
  */
@@ -269,7 +269,7 @@ deferInit("chunk-e6aww6q8.js:1130784", () => {
 function runWithDivergentShapes(kind, fn) {
   return divergentShapeStorage.run(kind, fn);
 }
-//@ chunk-e6aww6q8.js:1130838-1144132 fingerprint = COMMAND_ALLOWLIST (0.835)
+//@ chunk-e6aww6q8.js:1130838-1144132 fingerprint (2.1.88 match: COMMAND_ALLOWLIST, 0.835)
 /**
  * 只读命令白名单 COMMAND_ALLOWLIST：xargs、git 只读子命令、file、sed、sort、man、help、netstat、ps、base64、grep、rg、fd、checksum、tree、date、hostname、info、lsof、pgrep、tput、ss、jq、uniq、history、arch、ifconfig、pyright 等，每项给出安全选项表、可选 regex 与额外危险回调。_Ca 是含内部 aki 命令的扩展表。
  */
@@ -1170,7 +1170,7 @@ deferInit("chunk-e6aww6q8.js:1130838", () => {
     },
   };
 });
-//@ chunk-e6aww6q8.js:1144132-1144210 fingerprint = getCommandAllowlist (0.427)
+//@ chunk-e6aww6q8.js:1144132-1144210 fingerprint (2.1.88 match: getCommandAllowlist, 0.427)
 /**
  * 返回只读白名单；Windows 上去掉 xargs。
  */
@@ -1182,7 +1182,7 @@ function getCommandAllowlist() {
   }
   return allowlist;
 }
-//@ chunk-e6aww6q8.js:1144210-1144304 fingerprint = SAFE_TARGET_COMMANDS_FOR_XARGS (0.82)
+//@ chunk-e6aww6q8.js:1144210-1144304 fingerprint (2.1.88 match: SAFE_TARGET_COMMANDS_FOR_XARGS, 0.82)
 var SAFE_XARGS_OUTPUT_COMMANDS = ["echo", "printf", "wc"];
 var SAFE_XARGS_FILTER_COMMANDS = ["grep", "egrep", "fgrep", "head", "tail"];
 var SAFE_TARGET_COMMANDS_FOR_XARGS = [...SAFE_XARGS_OUTPUT_COMMANDS, ...SAFE_XARGS_FILTER_COMMANDS];
@@ -1204,7 +1204,7 @@ function isXargsToSafeFilter(argv) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1144738-1145795 fingerprint = isCommandSafeViaFlagParsing (0.624)
+//@ chunk-e6aww6q8.js:1144738-1145795 fingerprint (2.1.88 match: isCommandSafeViaFlagParsing, 0.624)
 /**
  * 按白名单解析选项判断命令是否只读：匹配命令前缀、git ls-remote 只允许选项、参数含 $ 或花括号展开即否、逐个校验选项与值、regex/反引号/换行限制、额外危险回调。
  */
@@ -1278,14 +1278,14 @@ function isCommandSafeViaFlagParsing(command) {
     return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:1145795-1145870 fingerprint = makeRegexForSafeCommand (1)
+//@ chunk-e6aww6q8.js:1145795-1145870 fingerprint (2.1.88 match: makeRegexForSafeCommand, 1)
 /**
  * 为只读命令生成正则：命令后不能出现 < > ( ) $ ` | { } & ; 换行。
  */
 function makeRegexForSafeCommand(command) {
   return new RegExp(`^${command}(?:\\s|$)[^<>()$\`|{}&;\\n\\r]*$`);
 }
-//@ chunk-e6aww6q8.js:1145870-1146704 fingerprint = READONLY_COMMANDS (0.719)
+//@ chunk-e6aww6q8.js:1145870-1146704 fingerprint (2.1.88 match: READONLY_COMMANDS, 0.719)
 /**
  * 基础只读命令列表（cat/head/tail/wc/stat/id/uname/df/du/realpath/diff/true/false/sleep/which/expr/seq…）及派生集合；find 的写动作（-delete/-exec/-fprint…）；printf 格式检查正则；固定只读 argv（claude -h、node -v、python --version、ip addr）。
  */
@@ -1567,7 +1567,7 @@ function hasUnsafeGlobSource(command) {
     isSourceGlobRecordingEnabled()
   );
 }
-//@ chunk-e6aww6q8.js:1150423-1150962 fingerprint = isCommandReadOnly (0.704)
+//@ chunk-e6aww6q8.js:1150423-1150962 fingerprint (2.1.88 match: isCommandReadOnly, 0.704)
 /**
  * 单条命令是否只读：排除 UNC 路径、未加引号变量；先走选项白名单解析，再走只读正则（find 写动作、git -c/--exec-path/--config-env 除外）。
  */
@@ -1613,7 +1613,7 @@ function isGitInternalPath(path) {
     .replace(/\u017f/g, "s");
   return GIT_INTERNAL_PATH_PATTERNS.some((pattern) => pattern.test(normalized));
 }
-//@ chunk-e6aww6q8.js:1151209-1151247 fingerprint = NON_CREATING_WRITE_COMMANDS (1)
+//@ chunk-e6aww6q8.js:1151209-1151247 fingerprint (2.1.88 match: NON_CREATING_WRITE_COMMANDS, 1)
 /**
  * 不新建文件的写命令（rm/rmdir/sed），提取写路径时排除。
  */
@@ -1621,7 +1621,7 @@ var NON_CREATING_WRITE_COMMANDS; // deferred: has load-time effects after a defe
 deferInit("chunk-e6aww6q8.js:1151209", () => {
   NON_CREATING_WRITE_COMMANDS = new Set(["rm", "rmdir", "sed"]);
 });
-//@ chunk-e6aww6q8.js:1151247-1151500 fingerprint = extractWritePathsFromSubcommand (0.889)
+//@ chunk-e6aww6q8.js:1151247-1151500 fingerprint (2.1.88 match: extractWritePathsFromSubcommand, 0.889)
 /**
  * 从子命令中提取会创建/写入的路径（写/建类命令，排除 rm/rmdir/sed）。
  */
@@ -1637,7 +1637,7 @@ function extractWritePathsFromSubcommand(subcommand) {
   if (!extractor) return [];
   return extractor(argv.slice(1));
 }
-//@ chunk-e6aww6q8.js:1151500-1151910 fingerprint = commandWritesToGitInternalPaths (0.835)
+//@ chunk-e6aww6q8.js:1151500-1151910 fingerprint (2.1.88 match: commandWritesToGitInternalPaths, 0.835)
 /**
  * 命令是否会写入 git 内部路径（HEAD/objects/refs/hooks），含 cp/mv 到当前目录的情形和输出重定向；用于阻止"先造 git 结构再运行 git"的攻击。
  */
@@ -1674,7 +1674,7 @@ function hasBackgroundOperator(node) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1155859-1159153 fingerprint = checkReadOnlyConstraints (0.416)
+//@ chunk-e6aww6q8.js:1155859-1159153 fingerprint (2.1.88 match: checkReadOnlyConstraints, 0.416)
 /**
  * Bash 只读判定：tree-sitter 解析，too-complex、子 shell、后台 &、可疑裸赋值、未加引号变量、UNC 路径、cd+git、裸仓库迹象/不可信 .git 重定向、写 git 内部文件、沙箱下非原始目录的 git 都不算只读；每个简单命令检查重定向、env 前缀、UNC、通配，再走只读白名单。全部通过返回 allow，否则 passthrough（带 notReadOnlyCommand）。BashTool.isReadOnly 与 isConcurrencySafe 依赖它。
  */

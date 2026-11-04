@@ -11,7 +11,7 @@
 import { permissionRuleValueFromString } from "./permissionRuleParser.js";
 import { PERMISSION_CARD_REGISTRY } from "../../components/permissions/permissionCardRegistry.js";
 
-//@ chunk-e6aww6q8.js:2916203-2916427 fingerprint = PROMPT_PREFIX (0.483)
+//@ chunk-e6aww6q8.js:2916203-2916427 fingerprint (2.1.88 match: PROMPT_PREFIX, 0.483)
 /**
  * 汇总 alwaysDenyRules 中所有规则串（去重），跳过 toolsNarrowing/command 来源和 "prompt:" 内容的规则，供分类器提示词使用。
  */
@@ -26,7 +26,7 @@ function collectDenyRuleStringsForClassifier(context) {
   }
   return [...ruleStrings];
 }
-//@ chunk-s4bxxzsw.js:45959-46009 fingerprint = classifyBashCommand (0.426)
+//@ chunk-s4bxxzsw.js:45959-46009 fingerprint (2.1.88 match: classifyBashCommand, 0.426)
 function classifyBashCommand(tool) {
   return PERMISSION_CARD_REGISTRY.find((card) => card.matches(tool));
 }

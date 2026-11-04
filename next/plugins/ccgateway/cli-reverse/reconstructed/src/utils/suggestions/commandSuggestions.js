@@ -37,7 +37,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
  */
 var COMMAND_NAME_SEPARATORS = /[:_-]/g;
 var DESCRIPTION_HIT_BUCKET = 10;
-//@ chunk-dcmhvw5a.js:42775-44768 fingerprint = getCommandFuse (0.637)
+//@ chunk-dcmhvw5a.js:42775-44768 fingerprint (2.1.88 match: getCommandFuse, 0.637)
 class getCommandFuse {
   items;
   fuse;
@@ -202,7 +202,7 @@ function getCommandFuseIndex(cache, commands, namespaced) {
   }
   return namespaced ? cache.commandMatcherIndex.namespaced : cache.commandMatcherIndex.plain;
 }
-//@ chunk-18hwfzwa.js:554166-554268 fingerprint = isCommandMetadata (1)
+//@ chunk-18hwfzwa.js:554166-554268 fingerprint (2.1.88 match: isCommandMetadata, 1)
 function isCommandMetadata(metadata) {
   return (
     typeof metadata === "object" &&
@@ -217,7 +217,7 @@ var MID_INPUT_EXCLUDED_COMMANDS; // deferred: has load-time effects after a defe
 deferInit("chunk-18hwfzwa.js:554268", () => {
   MID_INPUT_EXCLUDED_COMMANDS = new Set([...DIR_ARG_COMMANDS, "resume", "plugin", "plugins", "marketplace"]);
 });
-//@ chunk-18hwfzwa.js:554335-554732 fingerprint = findMidInputSlashCommand (1)
+//@ chunk-18hwfzwa.js:554335-554732 fingerprint (2.1.88 match: findMidInputSlashCommand, 1)
 /**
  * 在光标附近找输入中间的 /命令 token，供中途补全。
  */
@@ -264,7 +264,7 @@ function getCommandSuggestionsForQuery(session, partialCommand, commands) {
     ? getFilteredCommandSuggestions(session, partialCommand, commands)
     : generateCommandSuggestions(session, "/", commands);
 }
-//@ chunk-18hwfzwa.js:555129-555374 fingerprint = getBestCommandMatch (1)
+//@ chunk-18hwfzwa.js:555129-555374 fingerprint (2.1.88 match: getBestCommandMatch, 1)
 function getBestCommandMatch(partialCommand, commands) {
   let query = commands.toLowerCase();
   for (let suggestion of partialCommand) {
@@ -323,7 +323,7 @@ function isCommandInput(input) {
   let name = index === -1 ? input.slice(1) : input.slice(1, index);
   return isValidCommandToken(name);
 }
-//@ chunk-18hwfzwa.js:556150-556349 fingerprint = getCommandId (1)
+//@ chunk-18hwfzwa.js:556150-556349 fingerprint (2.1.88 match: getCommandId, 1)
 function getCommandId(cmd) {
   let commandName = cmd.name;
   if (cmd.type === "prompt") {
@@ -354,7 +354,7 @@ function getCommandSourceBadge(session, command, vouchedIds) {
       return;
   }
 }
-//@ chunk-18hwfzwa.js:556683-557215 fingerprint = createCommandSuggestionItem (0.733)
+//@ chunk-18hwfzwa.js:556683-557215 fingerprint (2.1.88 match: createCommandSuggestionItem, 0.733)
 function createCommandSuggestionItem(session, command, showSource, vouchedIds, matchedAlias, query) {
   let commandName = getCommandName(command);
   let aliasText = matchedAlias && matchedAlias !== commandName ? ` (${matchedAlias})` : "";
@@ -387,7 +387,7 @@ function createCommandSuggestionItem(session, command, showSource, vouchedIds, m
     }),
   };
 }
-//@ chunk-18hwfzwa.js:557215-558864 fingerprint = generateCommandSuggestions (0.704)
+//@ chunk-18hwfzwa.js:557215-558864 fingerprint (2.1.88 match: generateCommandSuggestions, 0.704)
 /**
  * 根据输入生成斜杠命令补全候选（模糊匹配命令名与别名，隐藏命令除外）。
  */
@@ -469,7 +469,7 @@ function generateCommandSuggestions(session, input, commands) {
   }
   return withMeta;
 }
-//@ chunk-18hwfzwa.js:559688-560361 fingerprint = applyCommandSuggestion (0.315)
+//@ chunk-18hwfzwa.js:559688-560361 fingerprint (2.1.88 match: applyCommandSuggestion, 0.315)
 function applyCommandSuggestion({
   suggestion,
   shouldExecute,

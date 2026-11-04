@@ -40,7 +40,7 @@ import { stopAllRunningTasks } from "../../tasks/stopTask.js";
 import { endActivity, startSessionActivity } from "../../utils/sessionActivity.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 
-//@ chunk-tyg7f3ek.js:170455-170980 placement = makeResultMessage (0.805)
+//@ chunk-tyg7f3ek.js:170455-170980 placement (2.1.88 match: makeResultMessage, 0.805)
 /**
  * 把暂存的若干 result 消息与新 result 合并：取第一个失败的作为主体，usage/num_turns/duration_ms 累加，permission_denials 合并，并清空暂存。
  */

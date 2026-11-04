@@ -180,12 +180,12 @@ import { ZodError } from "../../vendor/zod/v4/classic/errors.js";
 import { drainRegisteredWriteQueues } from "../utils/settings/writeQueues.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2818055-2818085 fingerprint = SANDBOX_NETWORK_ACCESS_TOOL_NAME (1)
+//@ chunk-e6aww6q8.js:2818055-2818085 fingerprint (2.1.88 match: SANDBOX_NETWORK_ACCESS_TOOL_NAME, 1)
 /**
  * 沙箱网络访问权限请求的工具名 SandboxNetworkAccess。
  */
 var SANDBOX_NETWORK_ACCESS_TOOL_NAME = "SandboxNetworkAccess";
-//@ chunk-fp6aqx1j.js:18843-19042 fingerprint = buildRequiresActionDetails (0.512)
+//@ chunk-fp6aqx1j.js:18843-19042 fingerprint (2.1.88 match: buildRequiresActionDetails, 0.512)
 function buildRequiresActionDetails(input) {
   return {
     tool_name: input.tool_name,
@@ -196,7 +196,7 @@ function buildRequiresActionDetails(input) {
     tool_use_id: input.tool_use_id,
   };
 }
-//@ chunk-6j594vm1.js:19866-21542 fingerprint = executePermissionRequestHooksForSDK (0.516)
+//@ chunk-6j594vm1.js:19866-21542 fingerprint (2.1.88 match: executePermissionRequestHooksForSDK, 0.516)
 /**
  * SDK 模式下先执行 PermissionRequest 钩子，钩子给出 allow/deny 时直接返回。
  */
@@ -347,7 +347,7 @@ async function executePermissionRequestHooksForSDK(
     }
   return;
 }
-//@ chunk-na0b3c5q.js:9613-51278 callgraph-witnessed = StructuredIO (0.256)
+//@ chunk-na0b3c5q.js:9613-51278 callgraph-witnessed (2.1.88 match: StructuredIO, 0.256)
 /**
  * StructuredIO：stream-json 协议的本地实现。read() 按行（\n）读 stdin，processLine 解析每行：keep_alive 丢弃、update_environment_variables 按白名单应用、control_response 匹配挂起请求、control_request 交给调用方、user/assistant/system 消息透传；sendRequest 发出 control_request（can_use_tool、hook_callback、elicitation、mcp_message…）并等待回复；write 输出 NDJSON。
  */

@@ -11,11 +11,11 @@
 import { viewedTaskParts } from "./teammateViewHelpers.js";
 import { describeAgentTask } from "../plugins/functionHooks/sessionApi.js";
 
-//@ chunk-0e8j1zzj.js:11902-11968 shared-adjacent = getViewedTeammateTask (0.76)
+//@ chunk-0e8j1zzj.js:11902-11968 shared-adjacent (2.1.88 match: getViewedTeammateTask, 0.76)
 function getViewedTeammateTask_2(appState) {
   return viewedTaskParts(appState.viewingAgentTaskId, appState.tasks).teammate;
 }
-//@ chunk-0e8j1zzj.js:11968-12141 fingerprint = getActiveAgentForInput (0.822)
+//@ chunk-0e8j1zzj.js:11968-12141 fingerprint (2.1.88 match: getActiveAgentForInput, 0.822)
 /**
  * 当前输入框指向的代理：leader（主线程）、viewed（正在查看的队友）或 named_agent。
  */
@@ -50,7 +50,7 @@ function getActiveAgentName(appState) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:481398-481499 fingerprint = getViewedTeammateTask (1)
+//@ chunk-18hwfzwa.js:481398-481499 fingerprint (2.1.88 match: getViewedTeammateTask, 1)
 function getViewedTeammateTask(appState) {
   let viewingAgentTaskId = appState.viewingAgentTaskId;
   let task = viewingAgentTaskId === undefined ? undefined : appState.tasks[viewingAgentTaskId];

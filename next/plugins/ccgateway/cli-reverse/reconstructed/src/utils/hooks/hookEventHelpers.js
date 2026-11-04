@@ -55,7 +55,7 @@ function clearHistoryWriter(prevProgressState) {
 function writeHistoryEntry(entry) {
   currentHistoryWriter().write(entry);
 }
-//@ chunk-e6aww6q8.js:934527-934583 placement = isToolReferenceWithName (1)
+//@ chunk-e6aww6q8.js:934527-934583 placement (2.1.88 match: isToolReferenceWithName, 1)
 function getToolNameField(obj) {
   return "tool_name" in obj ? obj.tool_name : undefined;
 }

@@ -503,7 +503,7 @@ function holdsWholeToolReadRule(permissionCtx) {
 function filterRulesForRemoteSynced(rules, requestedPath, realPath) {
   return isRemoteSyncedPath(requestedPath, realPath) ? rules.filter(isUserOrRepoSource) : rules;
 }
-//@ chunk-edh48dyx.js:5398-5469 placement = _temp5 (1)
+//@ chunk-edh48dyx.js:5398-5469 placement (2.1.88 match: _temp5, 1)
 /**
  * 规则来源不是用户设置也不是仓库目录来源。
  */

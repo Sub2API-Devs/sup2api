@@ -327,7 +327,7 @@ function countHiddenCommandBlocks(localMessage, allTextBlocks) {
 function takeLast(items, count) {
   return items.slice(Math.max(0, items.length - count));
 }
-//@ chunk-e6aww6q8.js:2517585-2517698 placement = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:2517585-2517698 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_8(content) {
   return Array.isArray(content)
     ? content.flatMap((block) =>
@@ -1035,7 +1035,7 @@ function findReferentAssistant(messages, beforeIndex) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2527079-2527233 placement = buildTranscriptEntries (0.777)
+//@ chunk-e6aww6q8.js:2527079-2527233 placement (2.1.88 match: buildTranscriptEntries, 0.777)
 /**
  * user 消息或 queued_command 附件是否是经核实的转发人类发言（verifiedSlackHumanTurn 且非 meta）。
  */

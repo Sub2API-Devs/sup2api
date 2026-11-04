@@ -174,7 +174,7 @@ deferInit("chunk-82kqcve8.js:47832", () => {
     }),
   );
 });
-//@ chunk-82kqcve8.js:48002-48043 placement = getCacheDir (1)
+//@ chunk-82kqcve8.js:48002-48043 placement (2.1.88 match: getCacheDir, 1)
 /**
  * ~/.claude/cache/org-memory-discovery.json。旧版名 getCacheDir_2 为错配（记忆发现模块）。
  */
@@ -1187,7 +1187,7 @@ function rebuildMemoryPromptOnLateSettle() {
 function discoverOrgMemoryStoresForDecision(storageV5, credentials) {
   return getOrgMemoryDiscovery().discoverForDecision(storageV5, credentials);
 }
-//@ chunk-82kqcve8.js:63312-63356 placement = _pendingAssistantChat (1)
+//@ chunk-82kqcve8.js:63312-63356 placement (2.1.88 match: _pendingAssistantChat, 1)
 /**
  * 发现组织级记忆存储（切分可疑）。
  */

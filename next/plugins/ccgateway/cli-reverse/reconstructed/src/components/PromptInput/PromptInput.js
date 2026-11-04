@@ -191,7 +191,7 @@ import { VimTextInput } from "../VimTextInput.js";
 import { TextInput } from "../TextInput.js";
 import { Divider } from "../design-system/Divider.js";
 
-//@ chunk-18hwfzwa.js:155398-155528 fingerprint = buildBorderText (0.791)
+//@ chunk-18hwfzwa.js:155398-155528 fingerprint (2.1.88 match: buildBorderText, 0.791)
 /**
  * 拼输入框上边框文字（如会话标题/状态）。
  */
@@ -206,7 +206,7 @@ function buildBorderText(segments) {
       }
     : undefined;
 }
-//@ chunk-18hwfzwa.js:879241-879289 sole-consumer = _temp2 (1)
+//@ chunk-18hwfzwa.js:879241-879289 sole-consumer (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId_3(s_0) {
   return s_0.viewingAgentTaskId;
 }
@@ -307,7 +307,7 @@ var MIN_INPUT_ROWS = 5;
 var MIN_FULLSCREEN_INPUT_ROWS = 3;
 var INPUT_BADGE_GUTTER = 3;
 var INPUT_RIGHT_GUTTER = 2;
-//@ chunk-18hwfzwa.js:880403-918585 fingerprint = PromptInput (0.391)
+//@ chunk-18hwfzwa.js:880403-918585 fingerprint (2.1.88 match: PromptInput, 0.391)
 /**
  * 主输入框。从 PromptDraft 订阅 value/cursorOffset/mode/pastedContents/interimRange/decorations，从 scope 取 commands；组合：模式指示 + TextInput/VimTextInput（由 editorMode 决定）+ 建议列表（useTypeahead）+ 历史（useArrowKeyHistory / Ctrl+R）+ 粘贴（usePasteHandler，图片转 [Image #N]）+ 语音（useVoiceIntegration）+ 页脚/帮助菜单。
  * 关键行为：输入首字符 ! 切到 bash 模式；@队友 提及高亮；超长输入自动折叠；排队命令可上箭头回到编辑（queueEditIndex）；alt+w 切换 workflow 关键词；提交时调用 onSubmit(value, helpers)。

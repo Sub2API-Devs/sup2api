@@ -20,7 +20,7 @@ import { Text, Box } from "../ink/components/Text.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { TextInput } from "./TextInput.js";
 
-//@ chunk-9h8dr0qb.js:10277-11300 fingerprint = LanguagePicker (0.822)
+//@ chunk-9h8dr0qb.js:10277-11300 fingerprint (2.1.88 match: LanguagePicker, 0.822)
 function LanguagePicker(props) {
   let $ = useMemoCache(13);
   let { initialLanguage, onComplete, onCancel } = props;

@@ -84,7 +84,7 @@ import { getRemoteCaps } from "../../../remote/remoteMode.js";
 import { CloudTasksDialog } from "../../tasks/CloudTasksDialog.js";
 import { BackgroundTasksDialog } from "../../tasks/BackgroundTasksDialog.js";
 
-//@ chunk-18hwfzwa.js:1327894-1333385 fingerprint = BashPermissionRequestInner (0.378)
+//@ chunk-18hwfzwa.js:1327894-1333385 fingerprint (2.1.88 match: BashPermissionRequestInner, 0.378)
 /**
  * Bash 权限对话框主体：显示命令（可编辑前缀）、说明、复合命令子结果、沙箱信息与规则解释；选项来自 bashToolUseOptions，反馈模式由 useShellPermissionFeedback 管理；accept/reject 时调用 onAllow/onReject 并可持久化规则。
  */
@@ -505,7 +505,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
     }),
   });
 }
-//@ chunk-pw933apk.js:17859-18119 fingerprint = BashPermissionRequest (0.311)
+//@ chunk-pw933apk.js:17859-18119 fingerprint (2.1.88 match: BashPermissionRequest, 0.311)
 /**
  * /tasks 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

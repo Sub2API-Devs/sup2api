@@ -534,7 +534,7 @@ function emitSafely(signal, ...args) {
     logError(error);
   }
 }
-//@ chunk-fp6aqx1j.js:20341-20599 fingerprint = notifySessionStateChanged (0.33)
+//@ chunk-fp6aqx1j.js:20341-20599 fingerprint (2.1.88 match: notifySessionStateChanged, 0.33)
 /**
  * 通知会话状态变化（idle/running/requires_action），供 SDK/远程控制显示。
  */

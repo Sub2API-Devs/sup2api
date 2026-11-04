@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-aepeg2w5.js:894682-894709 fingerprint = SINK_KILLSWITCH_CONFIG_NAME (1)
+//@ chunk-aepeg2w5.js:894682-894709 fingerprint (2.1.88 match: SINK_KILLSWITCH_CONFIG_NAME, 1)
 /**
  * sink killswitch 动态配置名 tengu_frond_boric（{datadog: bool, firstParty: bool}）。
  */

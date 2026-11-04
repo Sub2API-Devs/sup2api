@@ -15,7 +15,7 @@ import { extractTextContent_2 } from "../messages.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { logError } from "../log.js";
 
-//@ chunk-18hwfzwa.js:1199300-1201454 fingerprint = parseNaturalLanguageDateTime (0.95)
+//@ chunk-18hwfzwa.js:1199300-1201454 fingerprint (2.1.88 match: parseNaturalLanguageDateTime, 0.95)
 /**
  * parseNaturalLanguageDateTime：用小模型（querySource mcp_datetime_parse）把自然语言日期/时间转成 ISO 8601，无法解析返回失败；用于 elicitation 表单的 date/date-time 字段。
  */

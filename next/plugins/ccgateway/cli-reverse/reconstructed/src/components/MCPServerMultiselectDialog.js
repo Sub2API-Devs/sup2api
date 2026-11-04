@@ -33,7 +33,7 @@ import { Byline } from "./design-system/Byline.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 
-//@ chunk-20skp6hd.js:2795-4353 fingerprint = MCPServerMultiselectDialog (0.684)
+//@ chunk-20skp6hd.js:2795-4353 fingerprint (2.1.88 match: MCPServerMultiselectDialog, 0.684)
 /**
  * 多个新 MCP 服务器的多选启用，结果写入 localSettings。
  */

@@ -54,7 +54,7 @@ if (process.env.CLAUDE_CODE_REMOTE === "true") {
   let existing = process.env.NODE_OPTIONS || "";
   process.env.NODE_OPTIONS = existing ? `${existing} --max-old-space-size=8192` : "--max-old-space-size=8192";
 }
-//@ cli.js:1084-1336 placement = isDebugToStdErr (0.489)
+//@ cli.js:1084-1336 placement (2.1.88 match: isDebugToStdErr, 0.489)
 /**
  * 参数里是否只有调试类标志（--debug[=…]/-d/--debug-to-stderr/-d2e/--debug-file <path>）；用于判断“claude agents”或裸 claude 是否可以直接进入 agents 视图。
  */

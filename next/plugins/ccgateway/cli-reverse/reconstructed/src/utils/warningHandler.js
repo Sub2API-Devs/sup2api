@@ -20,7 +20,7 @@ import { logForDebugging } from "./debug.js";
 
 //@ chunk-shkzs7rp.js:26694-26706 affinity
 var MAX_WARNING_KEYS = 1000;
-//@ chunk-shkzs7rp.js:26706-27010 fingerprint = isRunningFromBuildDirectory (1)
+//@ chunk-shkzs7rp.js:26706-27010 fingerprint (2.1.88 match: isRunningFromBuildDirectory, 1)
 /**
  * 是否从开发构建目录运行（argv[1]/execPath 含 /build-ant/、/build-external/ 等）。
  */
@@ -40,7 +40,7 @@ var IGNORED_WARNING_PATTERNS = [
   /MaxListenersExceededWarning.*AbortSignal/,
   /MaxListenersExceededWarning.*EventTarget/,
 ];
-//@ chunk-shkzs7rp.js:27105-27853 fingerprint = initializeWarningHandler (0.629)
+//@ chunk-shkzs7rp.js:27105-27853 fingerprint (2.1.88 match: initializeWarningHandler, 0.629)
 /**
  * 接管 process 'warning' 事件：非开发构建时移除默认监听并禁止默认输出，按名称去重上报 tengu_node_warning，忽略 MaxListenersExceededWarning（AbortSignal/EventTarget）。
  */

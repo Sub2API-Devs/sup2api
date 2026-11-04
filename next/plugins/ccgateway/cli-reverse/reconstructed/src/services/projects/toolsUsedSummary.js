@@ -93,7 +93,7 @@ function isClaudeAiConnectorClient(client) {
 function isConnectedOrCachedClient(client) {
   return client.type === "connected" || client.type === "cached";
 }
-//@ chunk-dz3q485w.js:20716-20766 placement = findCurrentIDE (0.867)
+//@ chunk-dz3q485w.js:20716-20766 placement (2.1.88 match: findCurrentIDE, 0.867)
 function findCurrentIDE(type) {
   return type === "sse-ide" || type === "ws-ide";
 }
@@ -214,7 +214,7 @@ function serverWhereText(config, machineLabel) {
       return "not matched to one server configured in this session";
   }
 }
-//@ chunk-dz3q485w.js:22466-22541 placement = isLocalMcpServer (0.883)
+//@ chunk-dz3q485w.js:22466-22541 placement (2.1.88 match: isLocalMcpServer, 0.883)
 function isLocalMcpServer(config) {
   return (config.transport ?? "stdio") === "stdio" || config.transport === "sdk";
 }

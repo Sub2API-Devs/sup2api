@@ -148,7 +148,7 @@ async function loadListedAgentDefinition(agent, signal) {
   if (loaded === undefined || loaded.agentType !== agent.agentType || loaded.source !== "plugin") return;
   return loaded;
 }
-//@ chunk-e6aww6q8.js:2357250-2357674 facade-exports = getBuiltInAgents (0.599)
+//@ chunk-e6aww6q8.js:2357250-2357674 facade-exports (2.1.88 match: getBuiltInAgents, 0.599)
 /**
  * 内建代理列表：CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS（非交互）→ 空；coordinator 模式 → worker；否则 general-purpose、statusline-setup（非 --safe-mode）、claude（未禁用 agent view 时）、Explore+Plan（oG 开关）、web-fetch（V2：WebFetch 可用且策略允许）、claude-code-guide（非 SDK 入口）。
  */
@@ -185,7 +185,7 @@ deferInit("chunk-e6aww6q8.js:2357674", () => {
     union([stringSchema(), record(stringSchema(), McpServerConfigSchema())]),
   );
 });
-//@ chunk-e6aww6q8.js:2357713-2357764 placement = WORKTREE_TAG (0.703)
+//@ chunk-e6aww6q8.js:2357713-2357764 placement (2.1.88 match: WORKTREE_TAG, 0.703)
 /**
  * 代理定义 isolation 字段 schema：worktree/remote。旧版名 WORKTREE_TAG 为错配。
  */
@@ -217,7 +217,7 @@ deferInit("chunk-e6aww6q8.js:2357828", () => {
       .transform((value) => (value?.trim() ? value : undefined)),
   );
 });
-//@ chunk-e6aww6q8.js:2357893-2358619 fingerprint = AgentJsonSchema (0.704)
+//@ chunk-e6aww6q8.js:2357893-2358619 fingerprint (2.1.88 match: AgentJsonSchema, 0.704)
 /**
  * --agents JSON 里单个代理的 schema（description/prompt/tools/disallowedTools/model/effort/permissionMode/mcpServers/hooks/maxTurns/autoCompactWindow/skills/initialPrompt/memory/background/omitClaudeMd/isolation/observer…）。
  */
@@ -318,7 +318,7 @@ var agentDefinitionsRecordSchema; // deferred: uses DoctorLazy (../../cli/handle
 deferInit("chunk-e6aww6q8.js:2359725", () => {
   agentDefinitionsRecordSchema = DoctorLazy(() => record(stringSchema(), AgentJsonSchema()));
 });
-//@ chunk-e6aww6q8.js:2359754-2359848 facade-exports = estimateSkillFrontmatterTokens (0.714)
+//@ chunk-e6aww6q8.js:2359754-2359848 facade-exports (2.1.88 match: estimateSkillFrontmatterTokens, 0.714)
 /**
  * 把代理定义列表映射为 {name: agentType, description: whenToUse, model}；旧版名 estimateSkillFrontmatterTokens 配错。
  */
@@ -329,15 +329,15 @@ function toAgentInfos(skill) {
     model: agent.model,
   }));
 }
-//@ chunk-e6aww6q8.js:2359848-2359892 facade-exports = _temp1 (1)
+//@ chunk-e6aww6q8.js:2359848-2359892 facade-exports (2.1.88 match: _temp1, 1)
 function isBuiltInAgent(a_9) {
   return a_9.source === "built-in";
 }
-//@ chunk-e6aww6q8.js:2359892-2359935 facade-exports = _temp0 (1)
+//@ chunk-e6aww6q8.js:2359892-2359935 facade-exports (2.1.88 match: _temp0, 1)
 function isPluginAgent(a_5) {
   return a_5.source === "plugin";
 }
-//@ chunk-e6aww6q8.js:2359935-2360473 facade-exports = getActiveAgentsFromList (0.94)
+//@ chunk-e6aww6q8.js:2359935-2360473 facade-exports (2.1.88 match: getActiveAgentsFromList, 0.94)
 /**
  * 按优先级合并代理定义（built-in < plugin < user < project < flag < policy，后者覆盖同名），按类型名排序返回活动代理。
  */
@@ -405,7 +405,7 @@ function findDuplicateAgentDefinitions(allAgents, activeAgents) {
   }
   return duplicates.sort((left, right) => compareStringsGrouped(left.agentType, right.agentType));
 }
-//@ chunk-e6aww6q8.js:2361204-2361266 facade-exports = getDeferredToolTokenCount (1)
+//@ chunk-e6aww6q8.js:2361204-2361266 facade-exports (2.1.88 match: getDeferredToolTokenCount, 1)
 /**
  * 在上下文对象上补 allAgents 与 activeAgents（由代理定义列表计算）。
  */
@@ -416,7 +416,7 @@ function rebuildAgentDefinitions(definitions, allAgents) {
     activeAgents: getActiveAgentsFromList(allAgents),
   };
 }
-//@ chunk-e6aww6q8.js:2361266-2361446 facade-exports = hasRequiredMcpServers (1)
+//@ chunk-e6aww6q8.js:2361266-2361446 facade-exports (2.1.88 match: hasRequiredMcpServers, 1)
 /**
  * 代理 requiredMcpServers 的每个模式都能在可用服务器名中找到（子串、大小写不敏感）。
  */
@@ -458,7 +458,7 @@ function agentReadForTheSeat(fallback, cwd, overrides) {
     return fallback;
   }
 }
-//@ chunk-e6aww6q8.js:2361693-2362792 fingerprint = getAgentDefinitionsWithOverrides (0.639)
+//@ chunk-e6aww6q8.js:2361693-2362792 fingerprint (2.1.88 match: getAgentDefinitionsWithOverrides, 0.639)
 /**
  * 加载全部代理定义：--bare 等限制下只给内建代理；否则读取 .claude/agents 等 markdown、其他目录项目代理、插件代理、运行时注册代理，合并去重、报告重名并登记颜色。
  */
@@ -566,7 +566,7 @@ function getRuntimeRegisteredPluginAgents() {
 function isRunTimeRegisteredAgent(agent) {
   return agent.source === "plugin" && agent.registeredAtRunTime === true;
 }
-//@ chunk-e6aww6q8.js:2363213-2363409 facade-exports = isCustomAgent (0.879)
+//@ chunk-e6aww6q8.js:2363213-2363409 facade-exports (2.1.88 match: isCustomAgent, 0.879)
 /**
  * 把运行时注册的插件代理插到 plugin/built-in 段之后。
  */
@@ -590,7 +590,7 @@ function clearAgentDefinitionsCache() {
   getHostState().markdownFiles.clear();
   clearPluginAgents();
 }
-//@ chunk-e6aww6q8.js:2363487-2364027 fingerprint = getParseError (0.505)
+//@ chunk-e6aww6q8.js:2363487-2364027 fingerprint (2.1.88 match: getParseError, 0.505)
 /**
  * 代理 frontmatter 解析失败的原因文本（缺 name/description、name 以 - 开头、过长、含 ":"）。
  */
@@ -606,7 +606,7 @@ function getParseError(frontmatter) {
     return lit_2('Missing required "description" field in frontmatter');
   return lit_2("Unknown parsing error");
 }
-//@ chunk-e6aww6q8.js:2364027-2364722 fingerprint = parseHooksFromFrontmatter (0.392)
+//@ chunk-e6aww6q8.js:2364027-2364722 fingerprint (2.1.88 match: parseHooksFromFrontmatter, 0.392)
 /**
  * 解析 frontmatter hooks；PreToolUse/PermissionRequest 写在顶层（hooks 之外）时报错。
  */
@@ -660,7 +660,7 @@ function parseHooksFromFrontmatter(frontmatter, agentType) {
     unloadableGuard: false,
   };
 }
-//@ chunk-e6aww6q8.js:2364722-2366212 fingerprint = parseAgentFromJson (0.756)
+//@ chunk-e6aww6q8.js:2364722-2366212 fingerprint (2.1.88 match: parseAgentFromJson, 0.756)
 /**
  * 从 JSON 定义解析单个代理（--agents / 插件注册）。
  */
@@ -772,7 +772,7 @@ function parseAgentFromJson(name, definition, source = "flagSettings") {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:2366212-2366465 facade-exports = parseAgentsFromJson (1)
+//@ chunk-e6aww6q8.js:2366212-2366465 facade-exports (2.1.88 match: parseAgentsFromJson, 1)
 /**
  * 解析 --agents JSON 字符串为代理定义列表。
  */
@@ -827,7 +827,7 @@ function validateAgentsJson(agentsJson) {
     );
   return null;
 }
-//@ chunk-e6aww6q8.js:2367009-2370917 facade-exports = parseAgentFromMarkdown (0.66)
+//@ chunk-e6aww6q8.js:2367009-2370917 facade-exports (2.1.88 match: parseAgentFromMarkdown, 0.66)
 /**
  * 从 markdown frontmatter 解析代理定义：校验 name/description，读取 tools、disallowedTools、model、color、background、omitClaudeMd、memory、isolation、effort、permissionMode、maxTurns、autoCompactWindow、mcpServers、hooks、skills、observer 等，非法值记录并忽略。
  */
@@ -1090,7 +1090,7 @@ function parseAgentFromMarkdown(
  */
 var getMcpServerNamesOfTools = (availableServers) =>
   uniq(availableServers.flatMap((tool) => getMcpServerNameOfTool(tool) ?? []));
-//@ chunk-0tkmvwy0.js:5940-6083 fingerprint = hasRequiredMcpServers (1)
+//@ chunk-0tkmvwy0.js:5940-6083 fingerprint (2.1.88 match: hasRequiredMcpServers, 1)
 /**
  * 返回代理 requiredMcpServers 中没有任何可用 MCP 服务器匹配（子串、大小写不敏感）的项。
  */

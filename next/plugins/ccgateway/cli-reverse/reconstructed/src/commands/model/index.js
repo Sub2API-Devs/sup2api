@@ -12,7 +12,7 @@ import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { renderModelName } from "../../utils/model/modelDisplay.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 
-//@ chunk-e6aww6q8.js:2040656-2041085 fingerprint = default (0.569)
+//@ chunk-e6aww6q8.js:2040656-2041085 fingerprint (2.1.88 match: default, 0.569)
 /**
  * /model 命令对象（local）；描述：Set the AI model for Claude Code；isEnabled: ()=>_e()；isHidden: {return!_e()}；实现 chunk-0pmcg6nh.js 的 b。
  */

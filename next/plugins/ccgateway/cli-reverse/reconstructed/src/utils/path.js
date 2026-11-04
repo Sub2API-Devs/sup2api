@@ -67,7 +67,7 @@ function stripShellQuotes(command) {
   }
   return parsed.endsWith(".sh") ? `bash ${command}` : command;
 }
-//@ chunk-648vry02.js:2479-3085 placement = posixPathToWindowsPath (1)
+//@ chunk-648vry02.js:2479-3085 placement (2.1.88 match: posixPathToWindowsPath, 1)
 /**
  * Windows 路径转 POSIX 形式（C:\a\b → /c/a/b，UNC 转正斜杠），LRU 缓存；同语句含反方向转换。
  */
@@ -122,7 +122,7 @@ function expandPath(path, baseDir) {
   if (resolved === null) throw new NoProjectDirectoryError();
   return resolved;
 }
-//@ chunk-648vry02.js:3308-3799 fingerprint = expandPath (0.684)
+//@ chunk-648vry02.js:3308-3799 fingerprint (2.1.88 match: expandPath, 0.684)
 function expandPath_2(path, baseDir) {
   if (typeof path !== "string") throw TypeError(`Path must be a string, received ${typeof path}`);
   if (baseDir !== null && typeof baseDir !== "string")
@@ -156,7 +156,7 @@ function expandStablePath(inputPath, baseDir) {
   if (expandPath(resolved, baseDir) !== resolved) throw new UnstablePathError();
   return resolved;
 }
-//@ chunk-648vry02.js:4006-4067 placement = _temp4 (0.715)
+//@ chunk-648vry02.js:4006-4067 placement (2.1.88 match: _temp4, 0.715)
 function isFullyQualifiedPath(p_0) {
   return isAbsolute(p_0) && (sep === posix.sep || parse(p_0).root.length > 1);
 }
@@ -173,7 +173,7 @@ function toRelativePath(absolutePath) {
   let relativePath = relative(getCwd(), absolutePath);
   return relativePath.startsWith("..") ? absolutePath : relativePath;
 }
-//@ chunk-648vry02.js:4189-4303 placement = isFileWithinReadSizeLimit (1)
+//@ chunk-648vry02.js:4189-4303 placement (2.1.88 match: isFileWithinReadSizeLimit, 1)
 /**
  * 路径若是目录返回自身，否则返回其所在目录（UNC 等特殊路径直接取 dirname）。误配名。
  */
@@ -218,13 +218,13 @@ function anchorPathUnnormalized(inputPath, platform = "linux") {
   if (platform === "win32" && /^[a-zA-Z]:/.test(inputPath)) return inputPath;
   return getUnameSR(getCwd(), inputPath, platform);
 }
-//@ chunk-648vry02.js:4837-4967 placement = getUnameSR (0.793)
+//@ chunk-648vry02.js:4837-4967 placement (2.1.88 match: getUnameSR, 0.793)
 function getUnameSR(baseDir, relativePath, platform) {
   if (relativePath === "") return baseDir;
   if (platform === "win32" ? /[\\/]$/.test(baseDir) : baseDir.endsWith("/")) return baseDir + relativePath;
   return baseDir + (platform === "win32" ? "\\" : "/") + relativePath;
 }
-//@ chunk-s61vbvea.js:476278-476488 placement = SPINNER_FRAMES (0.711)
+//@ chunk-s61vbvea.js:476278-476488 placement (2.1.88 match: SPINNER_FRAMES, 0.711)
 /**
  * 列出给定路径的各级父目录（由近到远逆序后输出、跨路径去重），wipStash 用它找各级 .gitattributes。
  */
@@ -250,7 +250,7 @@ function toDarwinPrivatePath(inputPath, platform = "linux") {
   if (platform !== "darwin") return inputPath;
   return /^\/(tmp|var|etc)(\/|$)/.test(inputPath) ? `/private${inputPath}` : inputPath;
 }
-//@ chunk-0wdgqhcf.js:45290-45344 placement = chordToDisplayString (1)
+//@ chunk-0wdgqhcf.js:45290-45344 placement (2.1.88 match: chordToDisplayString, 1)
 function isDifferentPath(inputPath, real, platform = "linux") {
   return real !== inputPath && real !== toDarwinPrivatePath(inputPath, platform);
 }

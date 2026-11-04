@@ -29,7 +29,7 @@ import {
   TIME_PART_PAD_WIDTH,
 } from "./easelMessages.js";
 
-//@ chunk-3s7ydtfd.js:11293-11336 placement = parseISOString (1)
+//@ chunk-3s7ydtfd.js:11293-11336 placement (2.1.88 match: parseISOString, 1)
 var parseISOString = (s) => Date.UTC(s[0] ?? 0, ...s.slice(1));
 //@ chunk-3s7ydtfd.js:11336-11412 placement
 /**

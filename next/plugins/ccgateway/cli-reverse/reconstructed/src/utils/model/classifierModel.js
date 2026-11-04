@@ -57,7 +57,7 @@ import { getPublicModelDisplayName } from "./modelDisplay.js";
 import { getUltraplanModel } from "../../commands/ultraplan.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:433227-433312 placement = resolveSkillModelOverride (1)
+//@ chunk-aepeg2w5.js:433227-433312 placement (2.1.88 match: resolveSkillModelOverride, 1)
 /**
  * n 为 [1m] 或原生 1M 而 e 不是且 e 不是旧模型时给 e 加 [1m]。旧版名 resolveSkillModelOverride_2 为错配。
  */

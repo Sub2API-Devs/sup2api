@@ -23,7 +23,7 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession, isDiskless } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-9mf2agcn.js:6169-6235 placement = getClaudeTempDir (0.437)
+//@ chunk-9mf2agcn.js:6169-6235 placement (2.1.88 match: getClaudeTempDir, 0.437)
 /**
  * Claude 临时根目录：CLAUDE_CODE_TMPDIR，否则系统 tmpdir()。
  */
@@ -106,7 +106,7 @@ deferInit("chunk-9mf2agcn.js:7740", () => {
   tempDirState = new HostScoped(() => new TempDirState());
   TEMP_ROOT_VOLUME_FULL = "temp_root_volume_full";
 });
-//@ chunk-9mf2agcn.js:7791-7846 placement = modelMatchesVersionPrefix (0.808)
+//@ chunk-9mf2agcn.js:7791-7846 placement (2.1.88 match: modelMatchesVersionPrefix, 0.808)
 /**
  * "claude-<uid>"（临时目录名等）。旧版名 modelMatchesVersionPrefix_2 为错配，与模型无关。
  */
@@ -212,7 +212,7 @@ function socketSafeTmpdir() {
   if (Buffer.byteLength(tmp) <= MAX_SAFE_TMPDIR_BYTES) return tmp;
   return tmpdir_2();
 }
-//@ chunk-9mf2agcn.js:9192-9352 placement = generateTempFilePath (1)
+//@ chunk-9mf2agcn.js:9192-9352 placement (2.1.88 match: generateTempFilePath, 1)
 /**
  * 在临时目录下生成带随机后缀的临时文件路径。
  */

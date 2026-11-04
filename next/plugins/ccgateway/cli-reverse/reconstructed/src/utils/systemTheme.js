@@ -17,7 +17,7 @@ import {
 import { isBuiltinThemeName, getTheme, mergeThemeOverrides } from "./theme.js";
 import { env } from "./env.js";
 
-//@ chunk-34977376.js:317-377 callgraph-witnessed = getSystemThemeName (0.736)
+//@ chunk-34977376.js:317-377 callgraph-witnessed (2.1.88 match: getSystemThemeName, 0.736)
 function getSystemThemeName() {
   return getCustomThemeRegistry().cachedSystemTheme() ?? detectFromColorFgBg() ?? "dark";
 }
@@ -40,7 +40,7 @@ function setSystemTheme(theme) {
 function onSystemThemeChange(listener) {
   return getCustomThemeRegistry().onSystemThemeChange(listener);
 }
-//@ chunk-34977376.js:566-665 callgraph-fingerprint = resolveThemeSetting (0.592)
+//@ chunk-34977376.js:566-665 callgraph-fingerprint (2.1.88 match: resolveThemeSetting, 0.592)
 function resolveThemeSetting(setting) {
   if (setting === "auto") return getSystemThemeName();
   if (isBuiltinThemeName(setting)) return setting;
@@ -57,13 +57,13 @@ function getThemeWithOverrides(setting) {
   if (!customThemeRef) return theme;
   return mergeThemeOverrides(theme, getCachedCustomTheme(customThemeRef)?.overrides);
 }
-//@ chunk-34977376.js:753-852 fingerprint = themeFromOscColor (1)
+//@ chunk-34977376.js:753-852 fingerprint (2.1.88 match: themeFromOscColor, 1)
 function themeFromOscColor(data) {
   let rgb = parseOscRgb(data);
   if (!rgb) return;
   return 0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b > 0.5 ? "light" : "dark";
 }
-//@ chunk-34977376.js:852-1135 callgraph-fingerprint = parseOscRgb (1)
+//@ chunk-34977376.js:852-1135 callgraph-fingerprint (2.1.88 match: parseOscRgb, 1)
 function parseOscRgb(data) {
   let rgbMatch = /^rgba?:([0-9a-f]{1,4})\/([0-9a-f]{1,4})\/([0-9a-f]{1,4})/i.exec(data);
   if (rgbMatch)
@@ -89,7 +89,7 @@ function hexComponent(hex) {
   let max = 16 ** hex.length - 1;
   return parseInt(hex, 16) / max;
 }
-//@ chunk-34977376.js:1194-1385 fingerprint = detectFromColorFgBg (0.815)
+//@ chunk-34977376.js:1194-1385 fingerprint (2.1.88 match: detectFromColorFgBg, 0.815)
 /**
  * 从 COLORFGBG 环境变量推断终端背景：背景色号 0–6 或 8 为 dark，其余 light。
  */

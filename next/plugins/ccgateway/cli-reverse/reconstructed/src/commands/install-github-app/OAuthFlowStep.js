@@ -41,13 +41,13 @@ import { FocusColumn } from "../../components/design-system/FocusColumn.js";
 import { Box, Text, Link } from "../../ink/components/Text.js";
 import { OAuthStatusPanel } from "./OptionalActionsSetupStep.js";
 
-//@ chunk-4r7nqnx2.js:5057-5096 fingerprint = PASTE_HERE_MSG (1)
+//@ chunk-4r7nqnx2.js:5057-5096 fingerprint (2.1.88 match: PASTE_HERE_MSG, 1)
 var PASTE_HERE_MSG = "Paste code here if prompted > ";
 //@ chunk-4v9zy7gn.js:34294-34298 placement
 init_react_production();
-//@ chunk-4v9zy7gn.js:34298-34338 layout = PASTE_HERE_MSG (1)
+//@ chunk-4v9zy7gn.js:34298-34338 layout (2.1.88 match: PASTE_HERE_MSG, 1)
 var PASTE_HERE_MSG_2 = "Paste code here if prompted > ";
-//@ chunk-4v9zy7gn.js:34338-37793 fingerprint = OAuthFlowStep (0.659)
+//@ chunk-4v9zy7gn.js:34338-37793 fingerprint (2.1.88 match: OAuthFlowStep, 0.659)
 function OAuthFlowStep({ onSuccess, onCancel }) {
   let [oauthStatus, setOAuthStatus] = useState({
     state: "starting",

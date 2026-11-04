@@ -28,7 +28,7 @@ import { getActionDisplayText } from "../../keybindings/match.js";
 import { cycleModeBindingName } from "../../keybindings/cycleModeBinding.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:173895-173991 fingerprint = generateContextsTable (1)
+//@ chunk-hantmvxa.js:173895-173991 fingerprint (2.1.88 match: generateContextsTable, 1)
 function generateContextsTable() {
   return markdownTable(
     ["Context", "Description"],
@@ -38,7 +38,7 @@ function generateContextsTable() {
     ]),
   );
 }
-//@ chunk-hantmvxa.js:173991-174320 fingerprint = generateActionsTable (1)
+//@ chunk-hantmvxa.js:173991-174320 fingerprint (2.1.88 match: generateActionsTable, 1)
 function generateActionsTable() {
   let actionInfo = {};
   for (let block of DEFAULT_BINDINGS)
@@ -79,7 +79,7 @@ function isDocumentedContext(contextName) {
   if (contextName === "ProactivityMenu") return false;
   return !TEMPLATE_EXCLUDED_CONTEXTS.includes(contextName);
 }
-//@ chunk-hantmvxa.js:174882-175379 fingerprint = inferContextFromAction (0.92)
+//@ chunk-hantmvxa.js:174882-175379 fingerprint (2.1.88 match: inferContextFromAction, 0.92)
 function inferContextFromAction(action) {
   let prefix = action.split(":")[0];
   return (
@@ -107,7 +107,7 @@ function inferContextFromAction(action) {
     }[prefix ?? ""] ?? "Unknown"
   );
 }
-//@ chunk-hantmvxa.js:175379-175809 fingerprint = generateReservedShortcuts (1)
+//@ chunk-hantmvxa.js:175379-175809 fingerprint (2.1.88 match: generateReservedShortcuts, 1)
 function generateReservedShortcuts() {
   let lines = [];
   lines.push("### Non-rebindable (errors)");
@@ -124,7 +124,7 @@ function generateReservedShortcuts() {
   return lines.join(`
 `);
 }
-//@ chunk-hantmvxa.js:175809-180828 fingerprint = SECTION_DOCTOR (0.46)
+//@ chunk-hantmvxa.js:175809-180828 fingerprint (2.1.88 match: SECTION_DOCTOR, 0.46)
 /**
  * keybindings-help 提示词所用的示例 keybindings.json、解绑/改绑/组合键示例与各段说明文本。
  */
@@ -315,7 +315,7 @@ deferInit("chunk-hantmvxa.js:175809", () => {
   ].join(`
 `);
 });
-//@ chunk-hantmvxa.js:180828-181417 fingerprint = registerKeybindingsSkill (1)
+//@ chunk-hantmvxa.js:180828-181417 fingerprint (2.1.88 match: registerKeybindingsSkill, 1)
 /**
  * 注册 keybindings-help 内置 skill（只供模型调用）：生成上下文表、动作表、保留快捷键清单和 ~/.claude/keybindings.json 示例；isKeybindingCustomizationEnabled 门控。
  */
@@ -365,7 +365,7 @@ ${args}`);
     },
   });
 }
-//@ chunk-hantmvxa.js:181417-181559 fingerprint = markdownTable (1)
+//@ chunk-hantmvxa.js:181417-181559 fingerprint (2.1.88 match: markdownTable, 1)
 function markdownTable(headers, rows) {
   let separator = headers.map(() => "---");
   return [
@@ -375,7 +375,7 @@ function markdownTable(headers, rows) {
   ].join(`
 `);
 }
-//@ chunk-4t8fx0s8.js:21139-21206 fingerprint = UNBIND_EXAMPLE (0.6)
+//@ chunk-4t8fx0s8.js:21139-21206 fingerprint (2.1.88 match: UNBIND_EXAMPLE, 0.6)
 function UNBIND_EXAMPLE() {
   let bindings = keybindingsState.bindings ?? loadKeybindingsSyncWithWarnings();
   return getActionDisplayText(cycleModeBindingName(bindings), "Chat", bindings);

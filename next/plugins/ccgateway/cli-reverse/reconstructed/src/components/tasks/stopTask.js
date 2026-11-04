@@ -159,7 +159,7 @@ function stopWorkflowTask({ taskId, taskStatus, taskRegistry, setAppState }) {
 //@ chunk-18hwfzwa.js:464691-464713 placement
 var liveDocWatchController = null;
 var KILL_AGENTS_CONFIRM_MS = 3000;
-//@ chunk-18hwfzwa.js:464713-464827 placement = hasActiveInProcessTeammates (0.883)
+//@ chunk-18hwfzwa.js:464713-464827 placement (2.1.88 match: hasActiveInProcessTeammates, 0.883)
 /**
  * 任务是否仍活动：运行中（或有存活工作）的本地代理，或运行中的同进程 teammate。
  */
@@ -175,7 +175,7 @@ function interruptIfStoppable(stoppableWork) {
   stoppableWork.interrupt();
   return true;
 }
-//@ chunk-18hwfzwa.js:464909-465053 placement = isPanelAgentTask (0.809)
+//@ chunk-18hwfzwa.js:464909-465053 placement (2.1.88 match: isPanelAgentTask, 0.809)
 /**
  * 任务是否显示在代理面板：特性开启时为后台可中止子代理、运行中的 main-session、或运行中的 in-process teammate；否则退回 teammate 活动判断。
  */

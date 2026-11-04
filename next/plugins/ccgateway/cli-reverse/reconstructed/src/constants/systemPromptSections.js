@@ -20,7 +20,7 @@ import {
   sectionIdOf,
 } from "../plugins/functionHooks/promptComposition.js";
 
-//@ chunk-e6aww6q8.js:104482-104539 fingerprint = systemPromptSection (1)
+//@ chunk-e6aww6q8.js:104482-104539 fingerprint (2.1.88 match: systemPromptSection, 1)
 /**
  * 定义一个可缓存的系统提示词分段 {name, compute, cacheBreak:false}；同名段在会话内只计算一次（bootstrap promptAssembly 缓存）。
  */

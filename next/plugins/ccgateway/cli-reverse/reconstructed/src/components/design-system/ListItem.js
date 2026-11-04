@@ -25,7 +25,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ey2qag4x.js:19808-22111 fingerprint = ListItem (0.589)
+//@ chunk-ey2qag4x.js:19808-22111 fingerprint (2.1.88 match: ListItem, 0.589)
 function ListItem(props) {
   let $ = useMemoCache(47);
   let {

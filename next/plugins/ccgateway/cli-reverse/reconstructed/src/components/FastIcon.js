@@ -20,7 +20,7 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { Text } from "../ink/components/Text.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-1n1kvmcz.js:1102-1254 fingerprint = getFastIconString (0.69)
+//@ chunk-1n1kvmcz.js:1102-1254 fingerprint (2.1.88 match: getFastIconString, 0.69)
 function getFastIconString(applyColor = true, cooldown = false) {
   if (!applyColor) return LIGHTNING;
   let themeName = getThemeWithOverrides(resolveSetting("theme", "dark").value);
@@ -42,7 +42,7 @@ deferInit("chunk-18hwfzwa.js:514527", () => {
 deferInit("chunk-18hwfzwa.js:514531", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:514535-514768 fingerprint = FastIcon (0.772)
+//@ chunk-18hwfzwa.js:514535-514768 fingerprint (2.1.88 match: FastIcon, 0.772)
 function FastIcon(props) {
   let $ = useMemoCache(2);
   let { cooldown } = props;

@@ -19,7 +19,7 @@ import {
 import { resolveBorderStyle } from "./render-border.js";
 import { bunStringWidth } from "./stringWidth.js";
 
-//@ chunk-bzr73sfg.js:177867-178055 fingerprint = applyPositionStyles (0.943)
+//@ chunk-bzr73sfg.js:177867-178055 fingerprint (2.1.88 match: applyPositionStyles, 0.943)
 /**
  * 把 position/top/bottom/left/right 样式写进 yoga 节点。
  */
@@ -30,7 +30,7 @@ var applyPositionStyles = (node, style) => {
   if ("left" in style) applyPositionEdge(node, 0, style.left);
   if ("right" in style) applyPositionEdge(node, 2, style.right);
 };
-//@ chunk-bzr73sfg.js:178055-178223 fingerprint = applyPositionEdge (1)
+//@ chunk-bzr73sfg.js:178055-178223 fingerprint (2.1.88 match: applyPositionEdge, 1)
 /**
  * 写一个定位边：字符串按百分比、数字按点、其它清空（NaN）。
  */

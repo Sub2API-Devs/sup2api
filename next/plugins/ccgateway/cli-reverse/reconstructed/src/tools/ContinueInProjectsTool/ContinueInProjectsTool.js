@@ -79,7 +79,7 @@ import {
   stringSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-dz3q485w.js:42510-42583 placement = detectMagicDocHeader (0.654)
+//@ chunk-dz3q485w.js:42510-42583 placement (2.1.88 match: detectMagicDocHeader, 0.654)
 function omitDisplayFields(content) {
   let { name: displayName, icon, color, instructions, ...rest } = content;
   return rest;

@@ -70,7 +70,7 @@ import { execFileNoThrow } from "./execFileNoThrow.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e7z1g8a9.js:4175-4216 fingerprint = getSessionsDir (1)
+//@ chunk-e7z1g8a9.js:4175-4216 fingerprint (2.1.88 match: getSessionsDir, 1)
 function getSessionsDir() {
   return join(getClaudeConfigDir(), "sessions");
 }
@@ -341,7 +341,7 @@ function whenSessionRegistered() {
   let sessionRegistryState = getSessionRegistryState();
   return sessionRegistryState.registration ?? Promise.resolve(sessionRegistryState.registered);
 }
-//@ chunk-aepeg2w5.js:839545-839655 placement = envSessionKind (1)
+//@ chunk-aepeg2w5.js:839545-839655 placement (2.1.88 match: envSessionKind, 1)
 function envSessionKind() {
   let k = env.CLAUDE_CODE_SESSION_KIND;
   if (k === "bg" || k === "daemon" || k === "daemon-worker") return k;
@@ -482,7 +482,7 @@ function registerSession(storageV5) {
   sessionRegistryState.registration = registration;
   return registration;
 }
-//@ chunk-aepeg2w5.js:841280-843999 fingerprint = registerSession (0.359)
+//@ chunk-aepeg2w5.js:841280-843999 fingerprint (2.1.88 match: registerSession, 0.359)
 async function registerSession_2(sessionRegistryState, storageV5) {
   if (!shouldRegisterPidFile()) return false;
   let deferred = Promise.withResolvers();
@@ -640,7 +640,7 @@ async function registerSession_2(sessionRegistryState, storageV5) {
     deferred.resolve();
   }
 }
-//@ chunk-aepeg2w5.js:843999-844740 fingerprint = updatePidFile (0.503)
+//@ chunk-aepeg2w5.js:843999-844740 fingerprint (2.1.88 match: updatePidFile, 0.503)
 async function updatePidFile(patch, storageV5) {
   let pidFile = join(getSessionsDir(), `${process.pid}.json`);
   let sessionRegistryState = getSessionRegistryState();
@@ -773,7 +773,7 @@ async function updateSessionMessagingSocketPath(messagingSocketPath, storageV5) 
     storageV5,
   );
 }
-//@ chunk-aepeg2w5.js:845818-845874 placement = updateSessionBridgeId (1)
+//@ chunk-aepeg2w5.js:845818-845874 placement (2.1.88 match: updateSessionBridgeId, 1)
 async function updateSessionBridgeId(bridgeSessionId, storageV5) {
   await updatePidFile(
     {
@@ -1193,7 +1193,7 @@ deferInit("chunk-aepeg2w5.js:851362", () => {
   tmuxQueryCacheByRoot = new SessionRootSlot(() => new Map());
   ANSI_ESCAPE_RE = /\x1b\[[0-9;]*m/g;
 });
-//@ chunk-6cc2zqkz.js:5352-5496 fingerprint = countConcurrentSessions (0.372)
+//@ chunk-6cc2zqkz.js:5352-5496 fingerprint (2.1.88 match: countConcurrentSessions, 0.372)
 async function countConcurrentSessions_2() {
   return {
     pid: process.pid,

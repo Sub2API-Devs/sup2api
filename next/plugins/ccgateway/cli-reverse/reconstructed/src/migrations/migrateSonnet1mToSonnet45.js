@@ -14,7 +14,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { getMainLoopModelOverride, setMainLoopModelOverride } from "../bootstrap/state.js";
 
-//@ chunk-cjydagjy.js:11037-11557 fingerprint = migrateSonnet1mToSonnet45 (0.651)
+//@ chunk-cjydagjy.js:11037-11557 fingerprint (2.1.88 match: migrateSonnet1mToSonnet45, 0.651)
 /**
  * 迁移：sonnet[1m] → sonnet-4-5-20250929[1m]（只做一次，sonnet1m45MigrationComplete）。
  */

@@ -127,7 +127,7 @@ var TENGU_GOOFY_JELLYFISH = "tengu_goofy_jellyfish";
 function getAutoCompactDisabledByEnvModel() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_GOOFY_JELLYFISH, "");
 }
-//@ chunk-9m4wzd68.js:536-621 fingerprint = isAutoCompactEnabled (0.807)
+//@ chunk-9m4wzd68.js:536-621 fingerprint (2.1.88 match: isAutoCompactEnabled, 0.807)
 /**
  * DISABLE_COMPACT 或 DISABLE_AUTO_COMPACT 为真时返回 true（是“被环境变量禁用”，不是“已启用”；真正的启用判断是同 chunk 的 kf：未被 env 禁用且设置 autoCompactEnabled 默认 true）。旧版名 isAutoCompactEnabled 语义相反。
  */
@@ -304,7 +304,7 @@ async function* runCompactionAsStream(runCompaction, context) {
   yield* stream;
   return result;
 }
-//@ chunk-e6aww6q8.js:1548685-1549181 callgraph-witnessed = getEffectiveContextWindowSize (0.174)
+//@ chunk-e6aww6q8.js:1548685-1549181 callgraph-witnessed (2.1.88 match: getEffectiveContextWindowSize, 0.174)
 /**
  * 计算自动压缩用的有效上下文窗口 {window, configured, source}：嵌套 ceiling 配置取上限；CLAUDE_CODE_AUTO_COMPACT_WINDOW（source=env）；settings 的 autoCompactWindow（可按模型 byModel）；否则走 bUo（clientdata/实验/模型默认/unknown-model/auto）。window 不超过模型上下文窗口。
  */
@@ -348,7 +348,7 @@ function getAutoCompactWindow(modelInfo, windowSetting, sdkBetas = getSdkBetas()
 function getPrecomputeBufferFraction(model, autoCompactWindow, fact) {
   return resolvePrecomputeFraction(model, autoCompactWindow, fact).fraction;
 }
-//@ chunk-e6aww6q8.js:1552802-1553297 callgraph-fingerprint = getAutoCompactThreshold (0.186)
+//@ chunk-e6aww6q8.js:1552802-1553297 callgraph-fingerprint (2.1.88 match: getAutoCompactThreshold, 0.186)
 /**
  * 自动压缩阈值配置 {enabled, precomputeBufferFraction, testPctOverride, testBlockingOverride}：CLAUDE_AUTOCOMPACT_PCT_OVERRIDE（百分比）、CLAUDE_CODE_BLOCKING_LIMIT_OVERRIDE（阻断 token 数）；远程 200k 窗口下可被 tengu_peppy_gosling 抬高百分比。
  */
@@ -480,7 +480,7 @@ function checkRapidRefillBreaker(state) {
     consecutiveRapidRefills: refills,
   };
 }
-//@ chunk-e6aww6q8.js:1554046-1554156 fingerprint = autoCompactIfNeeded (0.387)
+//@ chunk-e6aww6q8.js:1554046-1554156 fingerprint (2.1.88 match: autoCompactIfNeeded, 0.387)
 /**
  * 压缩成功后的跟踪状态 {compacted:true, turnId, turnCounter:0, consecutiveFailures:0, consecutiveRapidRefills}。旧版名 autoCompactIfNeeded 为错配。
  */
@@ -500,7 +500,7 @@ function createCompactTracking(turnId, consecutiveRapidRefills) {
 var AUTOCOMPACT_THRASHING_TEXT =
   "Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row.";
 var AUTOCOMPACT_THRASHING_NOTICE = `${AUTOCOMPACT_THRASHING_TEXT} A file being read or a tool output is likely too large for the context window. Try reading in smaller chunks, or use /clear to start fresh.`;
-//@ chunk-e6aww6q8.js:2443672-2444540 fingerprint = shouldAutoCompact (0.312)
+//@ chunk-e6aww6q8.js:2443672-2444540 fingerprint (2.1.88 match: shouldAutoCompact, 0.312)
 /**
  * 是否需要自动压缩：compact 自身/特定来源/自动压缩关闭时为 false；token = 估算上下文 − snip 节省 + 服务端已清理量，calculateTokenWarningState 为 compact 或 blocked 时为 true；远程 fork 忽略 PCT 覆盖再判一次。
  */

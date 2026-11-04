@@ -368,7 +368,7 @@ function isToolUseLikeBlock(block) {
   let type = block.type;
   return type === "tool_use" || type === "server_tool_use" || type === "mcp_tool_use";
 }
-//@ chunk-e6aww6q8.js:1820781-1820863 placement = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:1820781-1820863 placement (2.1.88 match: hasThinkingContent, 1)
 function isThinkingBlockObject(m) {
   return isPlainObjectMessage(m) && (m.type === "thinking" || m.type === "redacted_thinking");
 }
@@ -709,7 +709,7 @@ function getTerminalMcpTools() {
       .filter(Boolean),
   );
 }
-//@ chunk-e6aww6q8.js:1825660-1826100 placement = hasSuccessfulToolCall (0.85)
+//@ chunk-e6aww6q8.js:1825660-1826100 placement (2.1.88 match: hasSuccessfulToolCall, 0.85)
 function hasSuccessfulToolCall_2(messages) {
   let terminalMcpTools = getTerminalMcpTools();
   if (terminalMcpTools.size === 0) return false;
@@ -1616,7 +1616,7 @@ function classifyTrailingToolUse(messages) {
     };
   return classifyTurnState(filterThinkingOnlyUntilStable(normalizedMessages), true, NO_INTERACTIVE_TOOLS);
 }
-//@ chunk-e6aww6q8.js:1842770-1842928 placement = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:1842770-1842928 placement (2.1.88 match: countToolCallsSince, 1)
 function messageHasToolUse(messages, sinceUuid) {
   return messages.type === "assistant" && Array.isArray(messages.message.content)
     ? messages.message.content.flatMap((block) =>
@@ -2015,7 +2015,7 @@ function isAfterCaveatInput(messages, startIndex) {
 function userPromptSourceKind(row) {
   return row.type === "user" && row.promptSource === undefined ? bashCommandTagKindOf(row) : undefined;
 }
-//@ chunk-e6aww6q8.js:1847907-1848104 placement = isSyntheticMessage (1)
+//@ chunk-e6aww6q8.js:1847907-1848104 placement (2.1.88 match: isSyntheticMessage, 1)
 function isSyntheticMessage_2(messages, startIndex) {
   if (!isContextAppendMessage(messages[startIndex])) return false;
   for (let idx = startIndex - 1; idx >= 0; idx--) {
@@ -2118,7 +2118,7 @@ function isInterruptMarkerText(message) {
   let text = singleTextContent(message.message.content);
   return text === INTERRUPT_MESSAGE || text === INTERRUPT_MESSAGE_FOR_TOOL_USE;
 }
-//@ chunk-e6aww6q8.js:1849055-1849177 placement = processQueuedCommands (1)
+//@ chunk-e6aww6q8.js:1849055-1849177 placement (2.1.88 match: processQueuedCommands, 1)
 function processQueuedCommands_2(queuedCommands) {
   if (queuedCommands.origin?.kind !== "task-notification") return false;
   return singleTextContent(queuedCommands.message.content)?.startsWith(`<${TASK_NOTIFICATION}>`) ?? false;

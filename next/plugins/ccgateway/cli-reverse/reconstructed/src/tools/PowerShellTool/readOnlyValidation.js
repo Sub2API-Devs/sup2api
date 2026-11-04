@@ -63,7 +63,7 @@ function isActionParamAlias(paramName) {
     COMMON_ACTION_PARAMS.some((alias) => alias.startsWith(paramName))
   );
 }
-//@ chunk-s67vc0kc.js:2474-2577 placement = checkTokenBudget (0.447)
+//@ chunk-s67vc0kc.js:2474-2577 placement (2.1.88 match: checkTokenBudget, 0.447)
 /**
  * ActionPreference 取值（silentlycontinue/stop/continue/ignore 及数字）。
  */
@@ -320,12 +320,12 @@ function isSafeVerbAbbreviation(prefix) {
   if (prefix.length < 3) return false;
   return SAFE_VERB_PREFIXES.some((safeVerb) => safeVerb.startsWith(prefix));
 }
-//@ chunk-s67vc0kc.js:5106-5156 fingerprint = DOTNET_READ_ONLY_FLAGS (0.7)
+//@ chunk-s67vc0kc.js:5106-5156 fingerprint (2.1.88 match: DOTNET_READ_ONLY_FLAGS, 0.7)
 var DOTNET_READ_ONLY_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-s67vc0kc.js:5106", () => {
   DOTNET_READ_ONLY_FLAGS = new Set(["--list-runtimes", "--list-sdks"]);
 });
-//@ chunk-s67vc0kc.js:5156-5548 fingerprint = argLeaksValue (1)
+//@ chunk-s67vc0kc.js:5156-5548 fingerprint (2.1.88 match: argLeaksValue, 1)
 /**
  * 参数是否可能泄露/展开值：非字符串常量参数含 $ ( @ { [，或参数绑定的子元素不是字符串常量，或冒号绑定值含表达式。
  */
@@ -351,7 +351,7 @@ function argLeaksValue(_cmd, element) {
   }
   return false;
 }
-//@ chunk-s67vc0kc.js:5548-12203 fingerprint = CMDLET_ALLOWLIST (0.943)
+//@ chunk-s67vc0kc.js:5548-12203 fingerprint (2.1.88 match: CMDLET_ALLOWLIST, 0.943)
 /**
  * PowerShell 只读 cmdlet 白名单 CMDLET_ALLOWLIST（Get-ChildItem/Get-Content/Select-String/Get-Process/Test-Path/… 以及 git/gh/docker/dotnet 外部命令），每项列安全参数与额外危险回调；还有安全输出命令、管道尾部格式化命令、默认 PATHEXT 扩展名表。
  */
@@ -882,7 +882,7 @@ function resolveToCanonical(name) {
   if (alias) return alias.toLowerCase();
   return lower;
 }
-//@ chunk-s67vc0kc.js:13757-14013 fingerprint = isCwdChangingCmdlet (0.734)
+//@ chunk-s67vc0kc.js:13757-14013 fingerprint (2.1.88 match: isCwdChangingCmdlet, 0.734)
 /**
  * 是否改变工作目录：Set-Location/Push-Location/Pop-Location/New-PSDrive、cd..、cd\、盘符切换，Windows 上还有 ndr/mount。
  */
@@ -916,7 +916,7 @@ function isAllowlistedPipelineTail(cmd, originalCommand) {
   if (!PIPELINE_TAIL_CMDLETS.has(canonical)) return false;
   return isAllowlistedCommand(cmd, originalCommand);
 }
-//@ chunk-s67vc0kc.js:14132-14300 fingerprint = isProvablySafeStatement (1)
+//@ chunk-s67vc0kc.js:14132-14300 fingerprint (2.1.88 match: isProvablySafeStatement, 1)
 /**
  * 语句是否可证明安全：PipelineAst 且所有元素都是 CommandAst。
  */
@@ -954,7 +954,7 @@ function hasSyncSecurityConcerns(command) {
   if (/::/.test(trimmed)) return true;
   return false;
 }
-//@ chunk-s67vc0kc.js:14692-15510 fingerprint = isReadOnlyCommand (1)
+//@ chunk-s67vc0kc.js:14692-15510 fingerprint (2.1.88 match: isReadOnlyCommand, 1)
 /**
  * PowerShell 只读判定：解析成功、无脚本块/子表达式/可展开字符串/splatting/成员调用/赋值/停止解析；复合命令中不能有改目录；重定向只能到 null；每段管道首命令在白名单、后续命令是白名单或无参数安全输出；不能有嵌套命令。
  */
@@ -1177,7 +1177,7 @@ function isHazyPeachFlagOn() {
     safe: true,
   });
 }
-//@ chunk-s67vc0kc.js:18086-20051 callgraph-witnessed = isAllowlistedCommand (0.662)
+//@ chunk-s67vc0kc.js:18086-20051 callgraph-witnessed (2.1.88 match: isAllowlistedCommand, 0.662)
 /**
  * 单个 PowerShell 命令是否在只读白名单内：外部程序仅允许 where.exe；查白名单配置、regex、额外危险回调；参数必须是字符串常量或参数（值不可展开）；再按配置校验参数，git/docker/dotnet 走专用检查。
  */
@@ -1276,7 +1276,7 @@ function isAllowlistedCommand(cmd, originalCommand) {
   }
   return true;
 }
-//@ chunk-s67vc0kc.js:20051-20256 fingerprint = isExternalCommandSafe (1)
+//@ chunk-s67vc0kc.js:20051-20256 fingerprint (2.1.88 match: isExternalCommandSafe, 1)
 /**
  * 外部命令（git/gh/docker/dotnet）只读判定入口。
  */
@@ -1296,7 +1296,7 @@ function isExternalCommandSafe(command, args) {
       return false;
   }
 }
-//@ chunk-s67vc0kc.js:20256-20536 layout = GIT_GLOBAL_FLAGS_WITH_VALUES (0.832)
+//@ chunk-s67vc0kc.js:20256-20536 layout (2.1.88 match: GIT_GLOBAL_FLAGS_WITH_VALUES, 0.832)
 var GIT_UNSAFE_GLOBAL_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GIT_GLOBAL_FLAGS_WITH_VALUE;
 var GIT_CONFIG_FLAGS;
@@ -1364,7 +1364,7 @@ function isGitSafePS(args) {
   if (!argsTokenShapeMatch(args, normalizedArgs)) return false;
   return isGitSafe(args) && isGitSafe(normalizedArgs);
 }
-//@ chunk-s67vc0kc.js:20943-21780 fingerprint = isGitSafe (0.873)
+//@ chunk-s67vc0kc.js:20943-21780 fingerprint (2.1.88 match: isGitSafe, 0.873)
 /**
  * git 参数只读判定：Windows 引号风险、$ 变量、危险全局选项（-c/-C/--git-dir…）、按 GIT_READ_ONLY_COMMANDS 查子命令并校验选项，ls-remote 只允许选项。
  */
@@ -1451,7 +1451,7 @@ deferInit("chunk-s67vc0kc.js:21868", () => {
     "--tls",
   ];
 });
-//@ chunk-s67vc0kc.js:21985-22567 fingerprint = isDockerSafe (1)
+//@ chunk-s67vc0kc.js:21985-22567 fingerprint (2.1.88 match: isDockerSafe, 1)
 /**
  * docker 参数只读判定：无变量、无危险全局选项（-H/--host/--tls…），子命令在只读列表或配置内并校验选项。
  */

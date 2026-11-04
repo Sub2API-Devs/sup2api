@@ -15,7 +15,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logError } from "../utils/log.js";
 
-//@ chunk-cjydagjy.js:12860-13529 fingerprint = resetAutoModeOptInForDefaultOffer (0.841)
+//@ chunk-cjydagjy.js:12860-13529 fingerprint (2.1.88 match: resetAutoModeOptInForDefaultOffer, 0.841)
 /**
  * 迁移：自动模式默认提供时，重置旧的 skipAutoPermissionPrompt（只做一次）。
  */

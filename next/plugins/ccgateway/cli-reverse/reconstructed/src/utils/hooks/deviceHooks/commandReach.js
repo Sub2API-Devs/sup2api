@@ -2254,7 +2254,7 @@ async function checkHookSourceReach(source, ctx) {
   let all = flattened.every((relative) => relative.split(sep).some((segment) => segment.startsWith(".")));
   return source.source === "local" && all ? null : SYNC_ROOT_REASONS;
 }
-//@ chunk-mthxbav8.js:112660-112810 placement = convertToHookMatchers (0.839)
+//@ chunk-mthxbav8.js:112660-112810 placement (2.1.88 match: convertToHookMatchers, 0.839)
 /**
  * 把 {hooks:{事件:[matcher]}} 展平成 {source, event, matcher, hook} 列表。
  */
@@ -2320,7 +2320,7 @@ function readShebang(bytes) {
 var DOT_DOT_SEGMENT_RE = /(?:^|\/)\.\.(?:\/|$)/;
 var SAFE_DEVICE_PATH_RE =
   /^\/dev\/(?:null|zero|full|u?random|tty\d*|pts(?:\/.*)?|ptmx|std(?:in|out|err)|fd(?:\/.*)?|dtracehelper|autofs_nowait)$/;
-//@ chunk-mthxbav8.js:113857-113891 placement = filterManagedDisabledPlugins (1)
+//@ chunk-mthxbav8.js:113857-113891 placement (2.1.88 match: filterManagedDisabledPlugins, 1)
 function filterManagedDisabledPlugins(plugins) {
   return plugins === "local";
 }

@@ -25,7 +25,7 @@ import { reportChainFailure } from "../dispatch/chain.js";
 import { hookMembersFor } from "../hookDispatch.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:627912-628172 placement = _temp4 (0.682)
+//@ chunk-s61vbvea.js:627912-628172 placement (2.1.88 match: _temp4, 0.682)
 /**
  * user 消息首块是否为拒绝/中断类错误 tool_result。
  */

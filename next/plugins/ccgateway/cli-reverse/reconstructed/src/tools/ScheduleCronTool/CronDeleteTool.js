@@ -21,7 +21,7 @@ import {
 import { getCronFilePath, listAllCronTasks, removeCronTasks } from "../../utils/cronTasks.js";
 import { getTeammateContext } from "../../utils/teammate.js";
 
-//@ chunk-e1hwptaj.js:4662-5616 fingerprint = CronDeleteTool (0.868)
+//@ chunk-e1hwptaj.js:4662-5616 fingerprint (2.1.88 match: CronDeleteTool, 0.868)
 /**
  * CronDelete 工具：按 id 取消任务；不存在或属于其他代理时拒绝。
  */

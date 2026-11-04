@@ -20,7 +20,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { getSettings_DEPRECATED } from "../utils/settings/settings.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:809547-819458 fingerprint = OUTPUT_STYLE_CONFIG (0.495)
+//@ chunk-e6aww6q8.js:809547-819458 fingerprint (2.1.88 match: OUTPUT_STYLE_CONFIG, 0.495)
 /**
  * 内置输出风格提示词片段：Insights 说明、Proactive 的完整段与简述、Concise 的完整段与简述；zI 为默认风格名 "default"；GZ 为内置风格表（default:null、Proactive、Concise、Explanatory、Learning）。
  */
@@ -193,7 +193,7 @@ function getAllOutputStylesCached(sessionContext, storageV5) {
     () => getAllOutputStyles(sessionContext, storageV5),
   );
 }
-//@ chunk-e6aww6q8.js:819540-820209 fingerprint = getAllOutputStyles (0.634)
+//@ chunk-e6aww6q8.js:819540-820209 fingerprint (2.1.88 match: getAllOutputStyles, 0.634)
 /**
  * 所有输出风格：内置 + 插件 + 用户 + 项目 + 策略（后者覆盖前者）；outputStyles 被策略锁定时只给内置。
  */
@@ -244,7 +244,7 @@ async function getAllOutputStyles(sessionContext, storageV5) {
       };
   return allStyles;
 }
-//@ chunk-e6aww6q8.js:820209-820265 layout = _temp1 (1)
+//@ chunk-e6aww6q8.js:820209-820265 layout (2.1.88 match: _temp1, 1)
 /**
  * null（默认）或 built-in 来源。
  */
@@ -266,7 +266,7 @@ var STYLE_SAVE_UNAVAILABLE_MESSAGE =
 function clearOutputStylesCache() {
   getHostState().allOutputStyles.clear();
 }
-//@ chunk-e6aww6q8.js:820618-820991 fingerprint = getOutputStyleConfig (1)
+//@ chunk-e6aww6q8.js:820618-820991 fingerprint (2.1.88 match: getOutputStyleConfig, 1)
 /**
  * 当前输出风格配置：插件强制风格优先（多个时警告取第一个），否则 settings.outputStyle（默认 default→null）。
  */
@@ -290,7 +290,7 @@ async function getOutputStyleConfig() {
   let outputStyle = getSettings_DEPRECATED()?.outputStyle || DEFAULT;
   return allStyles[outputStyle] ?? null;
 }
-//@ chunk-e6aww6q8.js:820991-821035 fingerprint = hasCustomOutputStyle (1)
+//@ chunk-e6aww6q8.js:820991-821035 fingerprint (2.1.88 match: hasCustomOutputStyle, 1)
 /**
  * 当前设置的输出风格名（默认 "default"）。
  */

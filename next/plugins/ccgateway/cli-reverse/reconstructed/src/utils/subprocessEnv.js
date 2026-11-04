@@ -372,7 +372,7 @@ function isScrubEnabled() {
   subprocessEnvState.setScrubEnabledLatched(enabled);
   return enabled;
 }
-//@ chunk-rtnapjwv.js:6065-6216 placement = isReplModeEnabled (0.161)
+//@ chunk-rtnapjwv.js:6065-6216 placement (2.1.88 match: isReplModeEnabled, 0.161)
 /**
  * REPL 模式：If() 为真，或未显式关闭 CLAUDE_CODE_SUBPROCESS_ENV_SCRUB 且入口为 local-agent。外部构建 getReplTool 恒 null，REPL 工具实际不存在。
  */
@@ -399,7 +399,7 @@ deferInit("chunk-rtnapjwv.js:6216", () => {
   SYSTEM_TOP_DIRS = ["home", "root", "tmp", "var", "opt", "run", "mnt"].map((dir) => `/${dir}`);
   CURRENT_DIR = ".";
 });
-//@ chunk-rtnapjwv.js:6432-6535 placement = isInClaudeFolder (1)
+//@ chunk-rtnapjwv.js:6432-6535 placement (2.1.88 match: isInClaudeFolder, 1)
 function isInClaudeFolder(filePath) {
   let dirs = new Set();
   for (let rootResolver of [storageRootFor, findCanonicalGitRoot, noUncachedRoot])
@@ -1151,7 +1151,7 @@ function getScrubbedEnvNames() {
     };
   return scrubbedEnvNamesCache.names;
 }
-//@ chunk-3zy56vtn.js:8263-8318 fingerprint = subprocessEnv (0.782)
+//@ chunk-3zy56vtn.js:8263-8318 fingerprint (2.1.88 match: subprocessEnv, 0.782)
 function subprocessEnv_2(names) {
   return names.flatMap((name) => [name, `INPUT_${name}`]);
 }

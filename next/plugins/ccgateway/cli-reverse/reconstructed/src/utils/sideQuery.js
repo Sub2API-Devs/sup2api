@@ -167,7 +167,7 @@ async function sideQueryWithCounter(opts) {
 }
 //@ chunk-e6aww6q8.js:2808844-2808854 placement
 var activeSideQueryCount = 0;
-//@ chunk-e6aww6q8.js:2808854-2817687 fingerprint = sideQuery (0.349)
+//@ chunk-e6aww6q8.js:2808854-2817687 fingerprint (2.1.88 match: sideQuery, 0.349)
 /**
  * 旁路查询：用独立的小请求（不进主对话）调用模型完成分类/摘要等辅助任务，支持结构化输出与超时。
  */
@@ -732,7 +732,7 @@ function describeApiErrorForPlugin(error, userSpecifiedModel) {
     kind: assistantMessageFromApiError.error ?? "unknown",
   };
 }
-//@ chunk-e6aww6q8.js:2817781-2817849 placement = stripCacheControl (1)
+//@ chunk-e6aww6q8.js:2817781-2817849 placement (2.1.88 match: stripCacheControl, 1)
 function stripCacheControl(items) {
   return "cache_control" in items && Boolean(items.cache_control);
 }
@@ -745,7 +745,7 @@ function withoutCacheControl(block) {
       }
     : block;
 }
-//@ chunk-e6aww6q8.js:2817909-2818055 placement = stripCacheControl (0.857)
+//@ chunk-e6aww6q8.js:2817909-2818055 placement (2.1.88 match: stripCacheControl, 0.857)
 function stripCacheControl_3(block, ttl) {
   if (!("cache_control" in block) || !block.cache_control || block.cache_control.ttl) return block;
   return {

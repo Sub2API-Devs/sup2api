@@ -24,7 +24,7 @@ import { Divider } from "./Divider.js";
 var PANE_PADDING = 2;
 var PANE_PADDING_X = 1;
 var PANE_WIDTH_RESERVE = 2;
-//@ chunk-gtxctzsd.js:389-859 fingerprint = Pane (1)
+//@ chunk-gtxctzsd.js:389-859 fingerprint (2.1.88 match: Pane, 1)
 function Pane(props) {
   let $ = useMemoCache(9);
   let { children, color } = props;

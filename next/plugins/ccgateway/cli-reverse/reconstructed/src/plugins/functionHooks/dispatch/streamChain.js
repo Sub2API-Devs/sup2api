@@ -198,7 +198,7 @@ var streamChainSlot; // deferred: has load-time effects after a deferred stateme
 deferInit("chunk-4121qate.js:219410", () => {
   streamChainSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-4121qate.js:219445-219640 placement = returnValue (0.765)
+//@ chunk-4121qate.js:219445-219640 placement (2.1.88 match: returnValue, 0.765)
 async function* forwardGenerator(as) {
   let done = false;
   try {
@@ -392,7 +392,7 @@ async function closeGeneratorQuietly(generator) {
     abortController.abort();
   }
 }
-//@ chunk-4121qate.js:221489-221728 placement = returnValue (0.765)
+//@ chunk-4121qate.js:221489-221728 placement (2.1.88 match: returnValue, 0.765)
 async function* forwardGeneratorWithErrorHook(source, onValue = () => {}) {
   let done = false;
   async function next() {

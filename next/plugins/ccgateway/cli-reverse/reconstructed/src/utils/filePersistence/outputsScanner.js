@@ -19,7 +19,7 @@ import {
   parseFrontmatter,
 } from "../frontmatterParser.js";
 
-//@ chunk-82kqcve8.js:178237-178347 fingerprint = getEnvironmentKind (1)
+//@ chunk-82kqcve8.js:178237-178347 fingerprint (2.1.88 match: getEnvironmentKind, 1)
 /**
  * 读取 CLAUDE_CODE_ENVIRONMENT_KIND，只接受 byoc 或 anthropic_cloud。
  */
@@ -30,7 +30,7 @@ function getEnvironmentKind() {
 }
 //@ chunk-23fm9f0d.js:36356-36380 affinity
 var SKILL_PROPOSAL = "skill-proposal";
-//@ chunk-23fm9f0d.js:36380-36895 fingerprint = findModifiedFiles (0.349)
+//@ chunk-23fm9f0d.js:36380-36895 fingerprint (2.1.88 match: findModifiedFiles, 0.349)
 /**
  * 扫描输出目录中修改过的 .md 文件（跳过符号链接，统计错误数）。
  */

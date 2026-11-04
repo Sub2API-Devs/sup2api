@@ -83,7 +83,7 @@ function parseEnvironmentsResponse(body) {
     "fetchEnvironments: HTTP 200 JSON body without a valid environments array",
   );
 }
-//@ chunk-f25sswmp.js:16728-18042 fingerprint = fetchEnvironments (0.379)
+//@ chunk-f25sswmp.js:16728-18042 fingerprint (2.1.88 match: fetchEnvironments, 0.379)
 /**
  * GET /v1/environment_providers 列出可用的云端环境（仅第一方）。
  */
@@ -184,7 +184,7 @@ function classifyEnvironmentError(value) {
     ? "malformed_response"
     : "error";
 }
-//@ chunk-f25sswmp.js:18146-19007 fingerprint = createDefaultCloudEnvironment (0.867)
+//@ chunk-f25sswmp.js:18146-19007 fingerprint (2.1.88 match: createDefaultCloudEnvironment, 0.867)
 /**
  * POST /v1/environment_providers/cloud/create 创建默认云环境。
  */

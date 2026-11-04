@@ -445,12 +445,12 @@ async function copyFileSafely(relPath, srcDir, destDir, entries, stats) {
     } else stats.notCopied++;
   }
 }
-//@ chunk-hddjmtjj.js:8458-8560 placement = detectTerminal (0.86)
+//@ chunk-hddjmtjj.js:8458-8560 placement (2.1.88 match: detectTerminal, 0.86)
 function detectTerminal(path, platform = "linux") {
   let normalized = identity(path);
   return platform === "darwin" || platform === "win32" ? normalized.toUpperCase().toLowerCase() : normalized;
 }
-//@ chunk-hddjmtjj.js:8560-8861 placement = getReservedShortcuts (1)
+//@ chunk-hddjmtjj.js:8560-8861 placement (2.1.88 match: getReservedShortcuts, 1)
 async function isOutsideDirectory(claudeConfigDir, otherPath) {
   if (!otherPath) return false;
   let configReal = await isUnderSymlink(resolve(claudeConfigDir));

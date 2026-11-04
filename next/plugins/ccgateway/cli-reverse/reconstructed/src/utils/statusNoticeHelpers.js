@@ -10,7 +10,7 @@
  */
 import { roughTokenCountEstimation } from "../services/tokenEstimation.js";
 
-//@ chunk-ag5x7vhf.js:70439-70599 fingerprint = getAgentDescriptionsTotalTokens (1)
+//@ chunk-ag5x7vhf.js:70439-70599 fingerprint (2.1.88 match: getAgentDescriptionsTotalTokens, 1)
 function getAgentDescriptionsTotalTokens(agentDefinitions) {
   if (!agentDefinitions) return 0;
   return agentDefinitions.activeAgents

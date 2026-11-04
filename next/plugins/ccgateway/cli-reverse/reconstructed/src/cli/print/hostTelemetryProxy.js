@@ -45,7 +45,7 @@ import { importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:532948-532998 placement = preferThirdPartyAuthentication (0.76)
+//@ chunk-tyg7f3ek.js:532948-532998 placement (2.1.88 match: preferThirdPartyAuthentication, 0.76)
 function notifyVscodeHost(event, config) {
   if (shouldShowFeedbackSurvey(event, "claude-vscode")) recordSurveyShown(event, config);
 }

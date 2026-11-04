@@ -37,11 +37,11 @@ import { logError } from "../log.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { readStringListAt } from "../../services/claudeGateway/desktopSettings.js";
 
-//@ chunk-cgr0tezp.js:29083-29143 fingerprint = getResolvedDir (1)
+//@ chunk-cgr0tezp.js:29083-29143 fingerprint (2.1.88 match: getResolvedDir, 1)
 function getResolvedPath(target) {
   return target.kind === "resolved" ? identity(target.path) : undefined;
 }
-//@ chunk-aepeg2w5.js:327126-327537 fingerprint = readPendingPermissions (0.309)
+//@ chunk-aepeg2w5.js:327126-327537 fingerprint (2.1.88 match: readPendingPermissions, 0.309)
 /**
  * 为一次带锁的操作计算锁/结果/持有者/接管请求文件路径（按命令与参数哈希）。与团队权限无关。
  */
@@ -70,11 +70,11 @@ function getOperationLockPaths(operation, command, readEnv = identityReader) {
     requestPath: `${filePath}.takeover.json`,
   };
 }
-//@ chunk-ay9hyszk.js:884-969 fingerprint = generateRequestId (1)
+//@ chunk-ay9hyszk.js:884-969 fingerprint (2.1.88 match: generateRequestId, 1)
 function generateRequestId() {
   return `perm-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
-//@ chunk-ay9hyszk.js:969-1490 fingerprint = createPermissionRequest (0.959)
+//@ chunk-ay9hyszk.js:969-1490 fingerprint (2.1.88 match: createPermissionRequest, 0.959)
 /**
  * 构造权限请求记录（id、worker 身份与颜色、团队名、工具名、输入、建议等），缺团队/worker 信息时抛错。
  */
@@ -109,7 +109,7 @@ function isTeammateContextReady() {
   let agentId = getAgentId();
   return !!teamName && !!agentId && !isTeamLeadDefault();
 }
-//@ chunk-ay9hyszk.js:1618-1769 fingerprint = getLeaderName (0.553)
+//@ chunk-ay9hyszk.js:1618-1769 fingerprint (2.1.88 match: getLeaderName, 0.553)
 /**
  * 确认团队文件存在后返回 leader 名（固定 team-lead）。
  */
@@ -136,7 +136,7 @@ async function deliverViaMailbox(recipient, message, teamName, label, storage) {
   logForDebugging(`[PermissionSync] Sent ${label}`);
   return true;
 }
-//@ chunk-ay9hyszk.js:1940-2548 fingerprint = sendPermissionRequestViaMailbox (0.939)
+//@ chunk-ay9hyszk.js:1940-2548 fingerprint (2.1.88 match: sendPermissionRequestViaMailbox, 0.939)
 /**
  * worker 把权限请求作为 permission_request 帧写入 leader 的 inbox。
  */
@@ -174,7 +174,7 @@ async function sendPermissionRequestViaMailbox(request, storage) {
     return false;
   }
 }
-//@ chunk-ay9hyszk.js:2548-3140 fingerprint = sendPermissionResponseViaMailbox (0.853)
+//@ chunk-ay9hyszk.js:2548-3140 fingerprint (2.1.88 match: sendPermissionResponseViaMailbox, 0.853)
 /**
  * leader 把审批结果（approved→success、否则 error）作为 permission_response 写入 worker 的 inbox。
  */
@@ -218,14 +218,14 @@ async function sendPermissionResponseViaMailbox(
     return false;
   }
 }
-//@ chunk-ay9hyszk.js:3140-3230 fingerprint = generateSandboxRequestId (1)
+//@ chunk-ay9hyszk.js:3140-3230 fingerprint (2.1.88 match: generateSandboxRequestId, 1)
 /**
  * 生成沙箱权限请求 ID：sandbox-<时间戳>-<随机>。
  */
 function generateSandboxRequestId() {
   return `sandbox-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
-//@ chunk-ay9hyszk.js:3230-4309 fingerprint = sendSandboxPermissionRequestViaMailbox (0.755)
+//@ chunk-ay9hyszk.js:3230-4309 fingerprint (2.1.88 match: sendSandboxPermissionRequestViaMailbox, 0.755)
 /**
  * worker 请求沙箱网络访问某主机：写 sandbox_permission_request 到 leader 的 inbox，记 swarm_sandbox_permission_request。
  */
@@ -280,7 +280,7 @@ async function sendSandboxPermissionRequestViaMailbox(host, requestId, teamName,
     return false;
   }
 }
-//@ chunk-ay9hyszk.js:4309-4787 fingerprint = sendSandboxPermissionResponseViaMailbox (0.884)
+//@ chunk-ay9hyszk.js:4309-4787 fingerprint (2.1.88 match: sendSandboxPermissionResponseViaMailbox, 0.884)
 /**
  * leader 回复沙箱主机权限（sandbox_permission_response）。
  */
@@ -326,12 +326,12 @@ var findInstallPreferenceEntry = (entries, plugin, status) =>
 //@ chunk-9cjx5pnm.js:19726-19768 sole-consumer
 var installPreferenceValue = (installPreferenceEntry) =>
   installPreferenceEntry === undefined ? "available" : undefined;
-//@ chunk-9cjx5pnm.js:19768-19806 affinity = _temp0 (1)
+//@ chunk-9cjx5pnm.js:19768-19806 affinity (2.1.88 match: _temp0, 1)
 var pluginInstallSource = (a_5) => ({
   kind: "plugin",
   id: a_5.id,
 });
-//@ chunk-9cjx5pnm.js:19806-19928 fingerprint = pollForResponse (0.385)
+//@ chunk-9cjx5pnm.js:19806-19928 fingerprint (2.1.88 match: pollForResponse, 0.385)
 var buildInstallPreferenceFields = (plugin, entries) => ({
   source: pluginInstallSource(plugin),
   proposed_install_preference: installPreferenceValue(
@@ -339,7 +339,7 @@ var buildInstallPreferenceFields = (plugin, entries) => ({
   ),
   predecessor_uuid: findInstallPreferenceEntry(entries, plugin, "denied")?.uuid,
 });
-//@ chunk-1ny7cxrt.js:1385435-1385609 fingerprint = getPermissionDir (0.573)
+//@ chunk-1ny7cxrt.js:1385435-1385609 fingerprint (2.1.88 match: getPermissionDir, 0.573)
 /**
  * 从设置的 permissions.deny 里挑出不带参数、非 MCP 的工具名，作为 disabledBuiltinTools。与团队权限同步无关。
  */

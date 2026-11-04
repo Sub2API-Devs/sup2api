@@ -11,7 +11,7 @@
 import { getSessionId } from "../bootstrap/state.js";
 import { env } from "../utils/env.js";
 
-//@ chunk-ha3km179.js:142768-142929 fingerprint = buildQueryConfig (0.827)
+//@ chunk-ha3km179.js:142768-142929 fingerprint (2.1.88 match: buildQueryConfig, 0.827)
 /**
  * buildQueryConfig：{sessionId, gates:{emitToolUseSummaries: CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES, isAnt:false, fastModeEnabled: !CLAUDE_CODE_DISABLE_FAST_MODE}}。
  */

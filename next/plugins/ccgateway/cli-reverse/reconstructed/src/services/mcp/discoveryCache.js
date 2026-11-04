@@ -98,7 +98,7 @@ deferInit("chunk-0qyh5wah.js:3003", () => {
   buffer = Buffer.from("mcp-dc", "utf8");
   KEY_B64_RE = /^[A-Za-z0-9+/]{43}=$/;
 });
-//@ chunk-0qyh5wah.js:3089-3207 placement = base64URLEncode (1)
+//@ chunk-0qyh5wah.js:3089-3207 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   if (typeof buffer !== "string" || !KEY_B64_RE.test(buffer)) return;
   let buffer_2 = Buffer.from(buffer, "base64");
@@ -1281,7 +1281,7 @@ async function deleteEntryAndBump(path, serverName, cacheKey) {
   if (cacheKey !== undefined) bumpDeleteGeneration(cacheKey);
   await serializeDiscoveryWrite(path, serverName, () => deleteDiscoveryEntry(path, getStorageV5()));
 }
-//@ chunk-0qyh5wah.js:21646-21736 placement = withTimeout (0.805)
+//@ chunk-0qyh5wah.js:21646-21736 placement (2.1.88 match: withTimeout, 0.805)
 async function withTimeout(promise, timeoutMs) {
   await Promise.race([
     promise.then(

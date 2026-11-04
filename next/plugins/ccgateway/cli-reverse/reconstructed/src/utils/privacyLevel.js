@@ -10,7 +10,7 @@
  */
 import { isEnvTruthy } from "./envUtils.js";
 
-//@ chunk-bbtre4r8.js:14063-14283 fingerprint = getPrivacyLevel (0.92)
+//@ chunk-bbtre4r8.js:14063-14283 fingerprint (2.1.88 match: getPrivacyLevel, 0.92)
 /**
  * 隐私级别：CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC→essential-traffic；DISABLE_TELEMETRY 或 DO_NOT_TRACK→no-telemetry；否则 default。
  */
@@ -20,7 +20,7 @@ function getPrivacyLevel() {
   if (isEnvTruthy(process.env.DO_NOT_TRACK)) return "no-telemetry";
   return "default";
 }
-//@ chunk-bbtre4r8.js:14283-14332 fingerprint = isEssentialTrafficOnly (1)
+//@ chunk-bbtre4r8.js:14283-14332 fingerprint (2.1.88 match: isEssentialTrafficOnly, 1)
 /**
  * 是否仅必要流量（essential-traffic）。
  */
@@ -34,7 +34,7 @@ function isEssentialTrafficOnly() {
 function isTelemetryDisabled() {
   return getPrivacyLevel() !== "default";
 }
-//@ chunk-bbtre4r8.js:14371-14503 fingerprint = getEssentialTrafficOnlyReason (1)
+//@ chunk-bbtre4r8.js:14371-14503 fingerprint (2.1.88 match: getEssentialTrafficOnlyReason, 1)
 /**
  * 返回导致仅必要流量的环境变量名（CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC）或 null。
  */

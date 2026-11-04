@@ -35,7 +35,7 @@ import { Dialog } from "../design-system/Dialog.js";
 var SHORTCUT_FORMAT = {
   keyCase: "lower",
 };
-//@ chunk-3v13eg2e.js:3183-4849 fingerprint = PermissionDialog (0.755)
+//@ chunk-3v13eg2e.js:3183-4849 fingerprint (2.1.88 match: PermissionDialog, 0.755)
 /**
  * 权限对话框外框：圆角边框（permission 色）、标题 "Permission Required: …"、可选副标题与队友徽章。
  */

@@ -69,7 +69,7 @@ function indexLinkedMemoryPaths(indexContent, memoryDir) {
     )
     .map((relativePath) => join(memoryDir, relativePath));
 }
-//@ chunk-e6aww6q8.js:1319092-1319152 placement = setCwdState (1)
+//@ chunk-e6aww6q8.js:1319092-1319152 placement (2.1.88 match: setCwdState, 1)
 function nfcLowerPath(cwd) {
   return resolve_2(cwd).normalize("NFC").toLowerCase();
 }
@@ -215,7 +215,7 @@ function filterManagedInstructions(instructions, options) {
     return instructions.filter((instruction) => instruction.type === "Managed");
   return instructions;
 }
-//@ chunk-e6aww6q8.js:1320841-1320897 placement = getFileIdentity (0.794)
+//@ chunk-e6aww6q8.js:1320841-1320897 placement (2.1.88 match: getFileIdentity, 0.794)
 var getFileIdentity_5 = (leftStat, rightStat) =>
   !isSentinelInode(leftStat.ino) && leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
 //@ chunk-e6aww6q8.js:1320930-1320995 placement
@@ -403,7 +403,7 @@ async function readDirIfSpellingsStable(path, expected, readPath) {
   );
   return (await spellingsUnchanged(path, expected, signal)) ? result : undefined;
 }
-//@ chunk-e6aww6q8.js:1323603-1323703 placement = getReservedShortcuts (1)
+//@ chunk-e6aww6q8.js:1323603-1323703 placement (2.1.88 match: getReservedShortcuts, 1)
 async function checkPathRefused(path, expected, context) {
   let isMacos = getPlatform() === "macos";
   return openReadBoundToApproval(
@@ -458,7 +458,7 @@ async function stashAttachedReadPermission(inputPath, expandedPath, context) {
     toolUseId,
   };
 }
-//@ chunk-e6aww6q8.js:1324295-1324369 placement = isFileReadDenied (1)
+//@ chunk-e6aww6q8.js:1324295-1324369 placement (2.1.88 match: isFileReadDenied, 1)
 var isFileReadDenied = (filePath, toolPermissionContext) =>
   filePath.some(
     (filePath) =>
@@ -466,7 +466,7 @@ var isFileReadDenied = (filePath, toolPermissionContext) =>
         isDirectory: true,
       }) !== null,
   );
-//@ chunk-e6aww6q8.js:1324369-1324441 placement = isFileReadDenied (1)
+//@ chunk-e6aww6q8.js:1324369-1324441 placement (2.1.88 match: isFileReadDenied, 1)
 var isFileReadDenied_2 = (filePath, toolPermissionContext) =>
   filePath.some(
     (path) => matchingDenyRuleForDirectoryContents(path, toolPermissionContext, "read") !== null,

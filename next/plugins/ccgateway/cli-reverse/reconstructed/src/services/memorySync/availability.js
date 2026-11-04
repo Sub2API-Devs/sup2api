@@ -164,7 +164,7 @@ function isMultiStoreSyncAvailable() {
 function memorySyncAwaitsVerdict() {
   return isMemoryPromptIndexEligible() && isPolicyVerdictAbsent();
 }
-//@ chunk-82kqcve8.js:121866-121911 placement = useFrustrationDetection (0.391)
+//@ chunk-82kqcve8.js:121866-121911 placement (2.1.88 match: useFrustrationDetection, 0.391)
 /**
  * 是否处于"挫败检测"可触发状态（功能开启且记忆同步状态为 closed）。
  */

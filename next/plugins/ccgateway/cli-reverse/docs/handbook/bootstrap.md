@@ -440,7 +440,7 @@ CCR 云容器里，代理令牌通过文件描述符传入（`CCR_AGENT_PROXY_TO
 
 ## 11. 环境变量与特性开关
 
-本领域代码读取的环境变量共 122 个，清单在 `artifacts/tmp/bootstrap/env.tsv`。实测数量见 verify.md 7.1：`--version` 读 11 个，`--help` 读 149 个，`-p hi` 读 519 个。启动阶段的主要变量：
+本领域代码读取的环境变量共 122 个，清单在 `docs/handbook/data/bootstrap/env.tsv`。实测数量见 verify.md 7.1：`--version` 读 11 个，`--help` 读 149 个，`-p hi` 读 519 个。启动阶段的主要变量：
 
 - **入口**：
   - CLAUDE_CODE_REMOTE、CLAUDE_CODE_REMOTE_SESSION_ORIGIN；

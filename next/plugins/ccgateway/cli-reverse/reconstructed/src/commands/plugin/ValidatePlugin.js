@@ -34,7 +34,7 @@ function succeededResult(result) {
 function hasWarnings(result) {
   return result.warnings.length > 0;
 }
-//@ chunk-vrb44rx7.js:214803-217501 fingerprint = ValidatePlugin (0.654)
+//@ chunk-vrb44rx7.js:214803-217501 fingerprint (2.1.88 match: ValidatePlugin, 0.654)
 function ValidatePlugin(props) {
   let $ = useMemoCache(5);
   let { onComplete, path } = props;

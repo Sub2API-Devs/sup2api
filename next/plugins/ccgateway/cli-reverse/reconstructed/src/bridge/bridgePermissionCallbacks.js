@@ -56,7 +56,7 @@ function rewriteAnthropicSourcesForCcr(server, sources) {
 var APPROVALTICKET = "approvalTicket";
 var ANTHROPIC_APPROVALTICKET = "anthropic/approvalTicket";
 var MAX_APPROVAL_TICKET_CHARS = 8192;
-//@ chunk-gv8haye8.js:812-979 fingerprint = isBridgePermissionResponse (1)
+//@ chunk-gv8haye8.js:812-979 fingerprint (2.1.88 match: isBridgePermissionResponse, 1)
 /**
  * allow 决定若带非空且不超长的审批票据（APPROVALTICKET 字段）则返回票据，否则 undefined。
  */

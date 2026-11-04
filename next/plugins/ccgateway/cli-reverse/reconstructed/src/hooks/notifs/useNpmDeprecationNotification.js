@@ -22,7 +22,7 @@ var trustedDeviceEnrolledNotice = {
   fact: "this computer was enrolled as a trusted device for your account",
   hint: " \xB7 you'll also get an email \xB7 not expected? review your devices in claude.ai settings",
 };
-//@ chunk-18hwfzwa.js:1624076-1624350 fingerprint = _temp (0.302)
+//@ chunk-18hwfzwa.js:1624076-1624350 fingerprint (2.1.88 match: _temp, 0.302)
 function useTrustedDeviceEnrolledNotice(addNotification, transcript) {
   useEffect(() => {
     function listener() {

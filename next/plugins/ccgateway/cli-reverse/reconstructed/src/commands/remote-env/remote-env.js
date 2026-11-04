@@ -11,7 +11,7 @@
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { RemoteEnvironmentDialog } from "../../components/RemoteEnvironmentDialog.js";
 
-//@ chunk-zj31az9x.js:19855-19900 callgraph-fingerprint = call (1)
+//@ chunk-zj31az9x.js:19855-19900 callgraph-fingerprint (2.1.88 match: call, 1)
 /**
  * /remote-env 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

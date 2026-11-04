@@ -372,7 +372,7 @@ async function memoryItemStampContext(toolContext, filePath, previous, content, 
     memoryDir: getAutoMemPath(),
   });
 }
-//@ chunk-a477qqne.js:31565-31959 placement = isSessionPlanFile (1)
+//@ chunk-a477qqne.js:31565-31959 placement (2.1.88 match: isSessionPlanFile, 1)
 /**
  * 把记忆路径映射到账户镜像路径。
  */
@@ -408,7 +408,7 @@ async function mapToMirrorPath(absolutePath) {
 function stripTrailingSeparators(memoryDirNfc) {
   return memoryDirNfc.length > 1 ? memoryDirNfc.replace(/[\\/]+$/, "") : memoryDirNfc;
 }
-//@ chunk-a477qqne.js:32018-32383 placement = getFileIdentity (0.794)
+//@ chunk-a477qqne.js:32018-32383 placement (2.1.88 match: getFileIdentity, 0.794)
 /**
  * 解析记忆镜像根。
  */
@@ -689,7 +689,7 @@ function parseIfVersion(ifVersion) {
         raw: ifVersion,
       };
 }
-//@ chunk-a477qqne.js:44608-44719 placement = isOperator (0.691)
+//@ chunk-a477qqne.js:44608-44719 placement (2.1.88 match: isOperator, 0.691)
 /**
  * 构造读文件成功结果 {outcome:'ok', path, version, bytes, content, op}。旧版名 isOperator 误配，与 Bash 无关。
  */

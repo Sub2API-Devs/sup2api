@@ -390,7 +390,7 @@ async function stagedCopiesUnchanged(workTree, copies) {
     )
   ).every(Boolean);
 }
-//@ chunk-gjx0rh1b.js:17950-18020 placement = getFileIdentity (0.794)
+//@ chunk-gjx0rh1b.js:17950-18020 placement (2.1.88 match: getFileIdentity, 0.794)
 function getFileIdentity(filePath) {
   return filePath.dev === 0n || filePath.ino === 0n ? null : `${filePath.dev}:${filePath.ino}`;
 }
@@ -3313,7 +3313,7 @@ function fileStampFromBigStats(stats) {
     ino: stats.ino,
   };
 }
-//@ chunk-gjx0rh1b.js:64290-64417 placement = isRealPathWithinTeamDir (0.77)
+//@ chunk-gjx0rh1b.js:64290-64417 placement (2.1.88 match: isRealPathWithinTeamDir, 0.77)
 async function lstatBigintOrNull(path, stat = lstat) {
   try {
     return await stat(path, {
@@ -3913,7 +3913,7 @@ async function unlinkWithRetry(path) {
       await sleep(50);
     }
 }
-//@ chunk-gjx0rh1b.js:73312-73562 placement = convertDirectoryToZipInPlace (0.79)
+//@ chunk-gjx0rh1b.js:73312-73562 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.79)
 /**
  * 清理以 PID 命名的过期目录：名字里的 PID 对应进程已不存在、且目录修改时间超过保留时限时递归删除；出错静默忽略。
  */

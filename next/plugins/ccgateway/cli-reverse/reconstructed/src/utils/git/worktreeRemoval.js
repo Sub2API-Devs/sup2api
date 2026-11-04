@@ -307,7 +307,7 @@ async function vetWorktreeForRemoval(dirPath, zipPath, { rootIsCanonical = false
     await worktreeBase.held.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:28767-28869 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-2xm1rxms.js:28767-28869 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function convertDirectoryToZipInPlace(dirPath, zipPath, zipData = {}) {
   if (typeof (await vetWorktreeForRemoval(dirPath, zipPath, zipData)) === "object")
     await rm(dirPath, {

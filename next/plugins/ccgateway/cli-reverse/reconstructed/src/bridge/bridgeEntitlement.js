@@ -359,7 +359,7 @@ function describeRemoteControlPolicyVerdict() {
   if (remoteControlPolicyVerdict === "unavailable") return REMOTE_CONTROL_POLICY_UNVERIFIED_MESSAGE;
   return remoteControlPolicyMessage();
 }
-//@ chunk-71c4j971.js:8824-8955 placement = checkBridgePrerequisites (0.556)
+//@ chunk-71c4j971.js:8824-8955 placement (2.1.88 match: checkBridgePrerequisites, 0.556)
 function remoteControlPolicyDeniedReason() {
   return policyDeniedReason(
     "allow_remote_control",

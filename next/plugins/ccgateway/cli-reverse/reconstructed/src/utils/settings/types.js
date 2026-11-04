@@ -111,7 +111,7 @@ deferInit("chunk-dcmhvw5a.js:222126", () => {
   POLICY_HELPER_LOG_LEVELS = ["off", "basic", "full"];
   policyHelperScriptRefSchema = DoctorLazy(() => record(stringSchema(), coerceString()));
 });
-//@ chunk-dcmhvw5a.js:222212-225428 fingerprint = PermissionsSchema (0.81)
+//@ chunk-dcmhvw5a.js:222212-225428 fingerprint (2.1.88 match: PermissionsSchema, 0.81)
 function PermissionsSchema(groups) {
   return objectSchema({
     allow: array(allowPermissionRuleSchema())
@@ -154,7 +154,7 @@ function PermissionsSchema(groups) {
       .describe("Additional directories to include in the permission scope"),
   }).passthrough();
 }
-//@ chunk-dcmhvw5a.js:225428-230167 fingerprint = AllowedMcpServerEntrySchema (0.418)
+//@ chunk-dcmhvw5a.js:225428-230167 fingerprint (2.1.88 match: AllowedMcpServerEntrySchema, 0.418)
 /**
  * tipEntrySchema：提示条目 schema；skillsSettingsSchema：技能设置 schema；agentsSettingsSchema：代理设置 schema（同一声明共 11 个绑定）。
  */
@@ -508,7 +508,7 @@ function validateInlineHelper(config, platform) {
   }).safeParse(config);
   return result.success ? null : result.error.issues[0]?.message || "invalid inline helper config";
 }
-//@ chunk-dcmhvw5a.js:237074-237115 layout = SUPPORTED_PLATFORMS (0.811)
+//@ chunk-dcmhvw5a.js:237074-237115 layout (2.1.88 match: SUPPORTED_PLATFORMS, 0.811)
 var SUPPORTED_PLATFORMS = ["macos", "linux", "windows", "wsl"];
 //@ chunk-dcmhvw5a.js:237115-237167 layout
 /**
@@ -671,7 +671,7 @@ deferInit("chunk-dcmhvw5a.js:240582", () => {
 function policyHelperEntrySchemaFor(os, defaultSettingsSchema = STATIC_PAYLOAD_SCHEMA()) {
   return os === "default" ? STATIC_PAYLOAD_SCHEMA() : policyHelperEntrySchema(os, defaultSettingsSchema);
 }
-//@ chunk-dcmhvw5a.js:240672-240862 fingerprint = CUSTOMIZATION_SURFACES (0.945)
+//@ chunk-dcmhvw5a.js:240672-240862 fingerprint (2.1.88 match: CUSTOMIZATION_SURFACES, 0.945)
 /**
  * 插件专属定制限制：_E 是 strictPluginOnlyCustomization 的 schema（逐项过滤，非数组原样放行）；oJt 是允许的定制组件名单 ["skills","agents","hooks","mcp"]，名单外会在校验时给出 unknown-surface 的说明。
  */
@@ -749,7 +749,7 @@ deferInit("chunk-dcmhvw5a.js:241078", () => {
   configVariantUnionSchema = () =>
     numberSchema().int().min(TRANSPORT_LABELS).max(GLOBAL_CONFIG_FIELD_KINDS).optional().catch(undefined);
 });
-//@ chunk-dcmhvw5a.js:242189-314583 fingerprint = SettingsSchema (0.419)
+//@ chunk-dcmhvw5a.js:242189-314583 fingerprint (2.1.88 match: SettingsSchema, 0.419)
 /**
  * settings.json 的完整 zod schema（约 187 个顶层键：认证 helper、env、permissions、hooks、model、sandbox、插件/市场、遥测相关等）。strictPolicyHelperKeys 时 policyHelper 键严格校验。
  */
@@ -3797,19 +3797,19 @@ function buildPolicyTolerantSettingsSchema(report, sourceSalt, settingsContext) 
       return value;
     });
 }
-//@ chunk-dcmhvw5a.js:348175-348237 fingerprint = isMcpServerNameEntry (1)
+//@ chunk-dcmhvw5a.js:348175-348237 fingerprint (2.1.88 match: isMcpServerNameEntry, 1)
 function isMcpServerNameEntry(entry) {
   return "serverName" in entry && entry.serverName !== undefined;
 }
-//@ chunk-dcmhvw5a.js:348237-348305 fingerprint = isMcpServerCommandEntry (1)
+//@ chunk-dcmhvw5a.js:348237-348305 fingerprint (2.1.88 match: isMcpServerCommandEntry, 1)
 function isMcpServerCommandEntry(entry) {
   return "serverCommand" in entry && entry.serverCommand !== undefined;
 }
-//@ chunk-dcmhvw5a.js:348305-348365 fingerprint = isMcpServerUrlEntry (1)
+//@ chunk-dcmhvw5a.js:348305-348365 fingerprint (2.1.88 match: isMcpServerUrlEntry, 1)
 function isMcpServerUrlEntry(entry) {
   return "serverUrl" in entry && entry.serverUrl !== undefined;
 }
-//@ chunk-5nte8cwj.js:1184-1251 fingerprint = EnvironmentVariablesSchema (0.544)
+//@ chunk-5nte8cwj.js:1184-1251 fingerprint (2.1.88 match: EnvironmentVariablesSchema, 0.544)
 function EnvironmentVariablesSchema(version) {
   let desktopVersion = semverModuleForDesktop.coerce(version);
   return desktopVersion !== null && semverGt(desktopVersion.version, MIN_DESKTOP_VERSION);

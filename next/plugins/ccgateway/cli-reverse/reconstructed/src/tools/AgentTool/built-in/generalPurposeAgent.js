@@ -9,7 +9,7 @@
  * attribution: fingerprint 2
  */
 
-//@ chunk-e6aww6q8.js:2336389-2337872 fingerprint = SHARED_PREFIX (0.667)
+//@ chunk-e6aww6q8.js:2336389-2337872 fingerprint (2.1.88 match: SHARED_PREFIX, 0.667)
 function SHARED_PREFIX() {
   return `${"You are an agent for Claude Code, Anthropic's official CLI for Claude. Given the user's message, you should use the tools available to complete the task. Complete the task fully\u2014don't gold-plate, but don't leave it half-done."} When you complete the task, respond with a concise report covering what was done and any key findings \u2014 the caller will relay this to the user, so it only needs the essentials.
 
@@ -27,7 +27,7 @@ Guidelines:
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested.
 - You are already the dedicated agent for this task. Do the work directly \u2014 do not re-delegate your entire assignment to another single subagent.`}`;
 }
-//@ chunk-e6aww6q8.js:2337872-2338270 fingerprint = GENERAL_PURPOSE_AGENT (1)
+//@ chunk-e6aww6q8.js:2337872-2338270 fingerprint (2.1.88 match: GENERAL_PURPOSE_AGENT, 1)
 /**
  * general-purpose 内建代理：工具 *，系统提示词 SHARED_PREFIX。
  */

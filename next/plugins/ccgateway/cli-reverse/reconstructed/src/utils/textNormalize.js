@@ -40,7 +40,7 @@ var MAX_DISPLAY_TITLE_CHARS = 100;
 function sanitizeAndTrim(cwd) {
   return sanitizeArtifactTitle(sanitizeDisplayText(cwd));
 }
-//@ chunk-c6bzd0wx.js:535-780 placement = setCwdState (0.838)
+//@ chunk-c6bzd0wx.js:535-780 placement (2.1.88 match: setCwdState, 0.838)
 function sanitizeDisplayText(cwd) {
   let normalized = cwd.normalize("NFC");
   return Array.from(normalized, (char) => (isDecisionSurfaceControl(char.codePointAt(0) ?? 0) ? " " : char))
@@ -73,7 +73,7 @@ function truncateSingleLine(description, maxLength) {
 //@ chunk-c6bzd0wx.js:1022-1188 placement
 var STATUS_DOT_RE =
   /[\u20DD-\u20E4\u23FA\u25C9\u25CB\u25CE\u25CF\u25EF\u26AA\u26AB\u26AC\u29BE\u29BF\u2B24\u2B55\u2B58\u{1F534}\u{1F535}\u{1F785}-\u{1F78B}\u{1F7E0}-\u{1F7E4}]/gu;
-//@ chunk-c6bzd0wx.js:1188-1240 placement = setCwdState (1)
+//@ chunk-c6bzd0wx.js:1188-1240 placement (2.1.88 match: setCwdState, 1)
 function sanitizeTitleText(cwd) {
   return sanitizeArtifactTitle(stripJoinerSequences(cwd.normalize("NFC"), false));
 }
@@ -128,7 +128,7 @@ function isZeroWidthJoiner(codePoint) {
 function isJoinerOrVariationSelector(codePoint) {
   return isZeroWidthJoiner(codePoint) || isVariationSelector(codePoint);
 }
-//@ chunk-c6bzd0wx.js:1836-1962 placement = setCwdState (0.838)
+//@ chunk-c6bzd0wx.js:1836-1962 placement (2.1.88 match: setCwdState, 0.838)
 function sanitizeInvisibleChars(cwd) {
   let joined = Array.from(cwd.normalize("NFC"), (char) =>
     isDecisionSurfaceControl(char.codePointAt(0) ?? 0) ? " " : char,

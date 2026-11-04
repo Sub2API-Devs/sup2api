@@ -41,7 +41,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-zef67v87.js:778", () => {
   init_react_production();
 });
-//@ chunk-zef67v87.js:782-819 placement = _temp4 (1)
+//@ chunk-zef67v87.js:782-819 placement (2.1.88 match: _temp4, 1)
 function selectExpandedView(s_1) {
   return s_1.expandedView;
 }
@@ -82,14 +82,14 @@ function ExpandedTaskList(props) {
 }
 //@ chunk-zef67v87.js:1150-1163 layout
 var TASK_REFRESH_MS = 30000;
-//@ chunk-zef67v87.js:1163-1290 callgraph-fingerprint = byIdAsc (1)
+//@ chunk-zef67v87.js:1163-1290 callgraph-fingerprint (2.1.88 match: byIdAsc, 1)
 function byIdAsc(a, b) {
   let aNum = parseInt(a.id, 10);
   let bNum = parseInt(b.id, 10);
   if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
   return a.id.localeCompare(b.id);
 }
-//@ chunk-zef67v87.js:1290-3878 fingerprint = TaskListV2 (0.943)
+//@ chunk-zef67v87.js:1290-3878 fingerprint (2.1.88 match: TaskListV2, 0.943)
 function TaskListV2({ tasks, isStandalone = false }) {
   let teamContext = useAppState((appState) => appState.teamContext);
   let appStateTasks = useAppState((s_0) => s_0.tasks);
@@ -258,7 +258,7 @@ function TaskListV2({ tasks, isStandalone = false }) {
     children: content,
   });
 }
-//@ chunk-zef67v87.js:3878-4080 fingerprint = getTaskIcon (1)
+//@ chunk-zef67v87.js:3878-4080 fingerprint (2.1.88 match: getTaskIcon, 1)
 function getTaskIcon(status) {
   switch (status) {
     case "completed":
@@ -278,7 +278,7 @@ function getTaskIcon(status) {
       };
   }
 }
-//@ chunk-zef67v87.js:4080-5736 fingerprint = TaskItem (0.926)
+//@ chunk-zef67v87.js:4080-5736 fingerprint (2.1.88 match: TaskItem, 0.926)
 function TaskItem(props) {
   let $ = useMemoCache(37);
   let { task, ownerColor, openBlockers, activity, ownerActive, columns } = props;

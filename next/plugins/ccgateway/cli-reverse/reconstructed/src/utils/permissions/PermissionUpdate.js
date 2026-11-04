@@ -186,7 +186,7 @@ function checkBypassPermissionsEnv(toolPermissionContext) {
     ? "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS has no effect while the Windows registry cannot be read for managed settings: dangerous rm commands keep their usual checks, and can run without a prompt in bypass permissions mode if the registry later becomes readable. If you didn't set it, check your shell profile."
     : "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS is set, so dangerous rm commands can run without a prompt in bypass permissions mode once managed settings and plugin hooks have loaded. If you didn't set it, check your shell profile.";
 }
-//@ chunk-82kqcve8.js:222106-222303 placement = getDenyRuleForAgent (0.771)
+//@ chunk-82kqcve8.js:222106-222303 placement (2.1.88 match: getDenyRuleForAgent, 0.771)
 function hasPathScopedRules(context) {
   return (
     context.blockReadsOutsideWorkingDirectories === true ||
@@ -254,7 +254,7 @@ deferInit("chunk-82kqcve8.js:222545", () => {
     ask: "alwaysAskRules",
   };
 });
-//@ chunk-82kqcve8.js:222841-222960 fingerprint = extractRules (1)
+//@ chunk-82kqcve8.js:222841-222960 fingerprint (2.1.88 match: extractRules, 1)
 /**
  * 从更新列表中取出所有 addRules 的规则值。
  */
@@ -540,7 +540,7 @@ function applyValidatedPermissionUpdate(context, update, { announce = true } = {
 function logIfAnnounced(announce, message) {
   if (announce) logForDebugging(message);
 }
-//@ chunk-82kqcve8.js:226850-228601 fingerprint = applyPermissionUpdate (0.884)
+//@ chunk-82kqcve8.js:226850-228601 fingerprint (2.1.88 match: applyPermissionUpdate, 0.884)
 /**
  * 把一条（已校验的）更新应用到 ToolPermissionContext：setMode（bypass 不可用时拒绝）、addRules/replaceRules/removeRules（按目的地写入对应规则表）、addDirectories/removeDirectories。
  */
@@ -682,7 +682,7 @@ function applyPermissionUpdates(context, updates, options = {}) {
     };
   return next;
 }
-//@ chunk-82kqcve8.js:229269-229355 layout = supportsPersistence (1)
+//@ chunk-82kqcve8.js:229269-229355 layout (2.1.88 match: supportsPersistence, 1)
 /**
  * 只有 localSettings/userSettings/projectSettings 可持久化。
  */
@@ -703,7 +703,7 @@ async function persistValidatedPermissionUpdate(update, storage) {
   }
   return persistPermissionUpdate(validated.update, storage);
 }
-//@ chunk-82kqcve8.js:229462-231258 fingerprint = persistPermissionUpdate (0.963)
+//@ chunk-82kqcve8.js:229462-231258 fingerprint (2.1.88 match: persistPermissionUpdate, 0.963)
 /**
  * 把更新写入 settings 文件（仅三个可写层）：addRules/removeRules/replaceRules 改 permissions.allow|deny|ask，add/removeDirectories 改 additionalDirectories，setMode 写 defaultMode；setMode bypassPermissions 只在会话内生效，不落盘。
  */
@@ -836,7 +836,7 @@ async function persistPermissionUpdate(update, storage) {
 async function persistPermissionUpdates(updates, storageV5) {
   for (let update of updates) await persistValidatedPermissionUpdate(update, storageV5);
 }
-//@ chunk-82kqcve8.js:231311-231561 fingerprint = createReadRuleSuggestion (0.838)
+//@ chunk-82kqcve8.js:231311-231561 fingerprint (2.1.88 match: createReadRuleSuggestion, 0.838)
 /**
  * 为目录生成 Read(<dir>/**) 的 allow 规则建议（转义 glob，绝对路径前加 /）；根目录返回 undefined。
  */
@@ -863,7 +863,7 @@ function createReadRuleSuggestion(dirPath, destination = "session") {
     destination,
   };
 }
-//@ chunk-1de6ar4n.js:264-309 placement = isIt2CliAvailable (0.65)
+//@ chunk-1de6ar4n.js:264-309 placement (2.1.88 match: isIt2CliAvailable, 0.65)
 /**
  * 给权限上下文追加附加工作目录（来源 session）。与 it2 无关。
  */
@@ -874,7 +874,7 @@ function addSessionWorkingDirectories(toolPermissionContext) {
     "session",
   );
 }
-//@ chunk-4kzs0ch0.js:1689-1845 fingerprint = supportsPersistence (1)
+//@ chunk-4kzs0ch0.js:1689-1845 fingerprint (2.1.88 match: supportsPersistence, 1)
 /**
  * 与磁盘已存规则合并：目的地为 user/project/local 设置时，把已存规则放前、再加上新规则中非特殊形式的项。
  */

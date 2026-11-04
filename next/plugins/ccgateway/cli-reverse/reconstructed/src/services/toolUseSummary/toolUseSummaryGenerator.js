@@ -34,7 +34,7 @@ Examples:
 - Created signup endpoint
 - Read config.json
 - Ran failing tests`;
-//@ chunk-ha3km179.js:37084-38220 fingerprint = generateToolUseSummary (0.789)
+//@ chunk-ha3km179.js:37084-38220 fingerprint (2.1.88 match: generateToolUseSummary, 0.789)
 /**
  * 用小模型（queryHaikuWithFallback）根据工具名/输入/输出（各截 300 字符）和上一句回答意图生成摘要标签；失败返回 null。
  */
@@ -111,7 +111,7 @@ Label:`,
     return null;
   }
 }
-//@ chunk-ha3km179.js:38220-38341 fingerprint = truncateJson (1)
+//@ chunk-ha3km179.js:38220-38341 fingerprint (2.1.88 match: truncateJson, 1)
 /**
  * JSON 序列化并截断到指定长度。
  */

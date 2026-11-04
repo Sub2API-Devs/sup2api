@@ -56,7 +56,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 function scrollStepLines(isSelecting, isPaging, isFast) {
   return !isPaging && (isSelecting || false || isFast) ? 3 : 1;
 }
-//@ chunk-24t3dkzb.js:2023-2169 fingerprint = readScrollSpeedBase (1)
+//@ chunk-24t3dkzb.js:2023-2169 fingerprint (2.1.88 match: readScrollSpeedBase, 1)
 function readScrollSpeedBase(isSelecting, isPaging, isFast) {
   let baseLines = scrollStepLines(isSelecting, isPaging, isFast);
   let raw = env.CLAUDE_CODE_SCROLL_SPEED;
@@ -64,7 +64,7 @@ function readScrollSpeedBase(isSelecting, isPaging, isFast) {
   let n = parseFloat(raw);
   return Number.isNaN(n) || n <= 0 ? baseLines : Math.min(n, 20);
 }
-//@ chunk-tzghj6zv.js:2704-2950 fingerprint = shouldClearSelectionOnKey (0.934)
+//@ chunk-tzghj6zv.js:2704-2950 fingerprint (2.1.88 match: shouldClearSelectionOnKey, 0.934)
 function shouldClearSelectionOnKey(key) {
   if (key.wheelUp || key.wheelDown || key.escape) return false;
   if (key.pageUp || key.pageDown) return false;
@@ -181,7 +181,7 @@ function buildCopiedNotification(text) {
 var DRAG_SCROLL_STEP_ROWS = 2;
 var DRAG_SCROLL_TICK_MS = 50;
 var MAX_DRAG_TICKS = 200;
-//@ chunk-18hwfzwa.js:108876-110291 fingerprint = useDragToScroll (0.788)
+//@ chunk-18hwfzwa.js:108876-110291 fingerprint (2.1.88 match: useDragToScroll, 0.788)
 function useDragToScroll(scrollRef, selection, isActive, onScroll, options) {
   let clock = useClock();
   let timerRef = useRef(null);
@@ -281,7 +281,7 @@ function isSameScrollScope(event, scope) {
   let node = event?.scope?.node;
   return !node || node === scope?.getDomElement();
 }
-//@ chunk-18hwfzwa.js:110363-110555 fingerprint = dragScrollDirection (1)
+//@ chunk-18hwfzwa.js:110363-110555 fingerprint (2.1.88 match: dragScrollDirection, 1)
 function dragScrollDirection(sel, top, bottom, alreadyScrollingDir = 0) {
   if (!sel?.isDragging || !sel.anchor || !sel.focus) return 0;
   let row = sel.focus.row;
@@ -307,7 +307,7 @@ var WHEEL_DECAY_CAP_AFTER_MS = 80;
 var WHEEL_DECAY_CAP_LOW = 3;
 var WHEEL_DECAY_CAP_HIGH = 36;
 var WHEEL_RESET_WINDOW_MS = 500;
-//@ chunk-18hwfzwa.js:110671-110830 callgraph-fingerprint = selectionFocusMoveForKey (0.247)
+//@ chunk-18hwfzwa.js:110671-110830 callgraph-fingerprint (2.1.88 match: selectionFocusMoveForKey, 0.247)
 function selectionFocusMoveForKey(input, key) {
   if (key.upArrow || key.downArrow || key.home || key.end) return true;
   if (input.length !== 1) return false;
@@ -319,7 +319,7 @@ var WHEEL_FRACTION_STEP = 0.35;
 var WHEEL_ACCEL_BASE_STEP = 0.008;
 var WHEEL_ACCEL_PER_TICK = 0.4;
 var WHEEL_ACCEL_MAX = 4;
-//@ chunk-18hwfzwa.js:110867-112542 fingerprint = computeWheelStep (0.674)
+//@ chunk-18hwfzwa.js:110867-112542 fingerprint (2.1.88 match: computeWheelStep, 0.674)
 function computeWheelStep(state, dir, now) {
   if (state.jediTerm.trackpadGesture) {
     let gapMs = now - state.time;
@@ -421,7 +421,7 @@ function computeWheelStep(state, dir, now) {
   state.frac = total - rows;
   return rows;
 }
-//@ chunk-18hwfzwa.js:112542-112735 fingerprint = initWheelAccel (0.683)
+//@ chunk-18hwfzwa.js:112542-112735 fingerprint (2.1.88 match: initWheelAccel, 0.683)
 function initWheelAccel(
   useDecayCurve = false,
   base = 1,
@@ -445,7 +445,7 @@ function initWheelAccel(
     accelEnabled,
   };
 }
-//@ chunk-18hwfzwa.js:112735-113142 fingerprint = initAndLogWheelAccel (0.434)
+//@ chunk-18hwfzwa.js:112735-113142 fingerprint (2.1.88 match: initAndLogWheelAccel, 0.434)
 function initAndLogWheelAccel(jediTermInput) {
   let xtermJs = hasCursorUpViewportYankBug();
   let accelEnabled = resolveSetting("wheelScrollAccelerationEnabled", true).value;
@@ -480,7 +480,7 @@ function useWheelScrollStep() {
 var AUTO_COPY_CONFIG_HINT = "auto-copy-config-hint";
 var AUTO_COPY_HINT_SESSION_LIMIT = 10;
 var AUTO_COPY_HINT_SKIP_SESSIONS = 5;
-//@ chunk-18hwfzwa.js:113420-117547 fingerprint = ScrollKeybindingHandler (0.573)
+//@ chunk-18hwfzwa.js:113420-117547 fingerprint (2.1.88 match: ScrollKeybindingHandler, 0.573)
 function ScrollKeybindingHandler({
   scrollViewport,
   isActive,
@@ -726,7 +726,7 @@ function scrollToBottomRespectingAutoScroll(scrollHandle) {
   else scrollHandle.scrollTo(Math.max(0, scrollHandle.getScrollHeight() - scrollHandle.getViewportHeight()));
   return true;
 }
-//@ chunk-18hwfzwa.js:117698-117913 fingerprint = jumpBy (0.903)
+//@ chunk-18hwfzwa.js:117698-117913 fingerprint (2.1.88 match: jumpBy, 0.903)
 function jumpBy(handle, delta, markCap = true) {
   let max = Math.max(0, handle.getScrollHeight() - handle.getViewportHeight());
   let target = Math.min(handle.getScrollTop(), max) + handle.getPendingDelta() + delta;
@@ -735,14 +735,14 @@ function jumpBy(handle, delta, markCap = true) {
   handle.scrollTo(Math.max(0, target));
   return false;
 }
-//@ chunk-18hwfzwa.js:117913-118074 fingerprint = scrollDown (0.903)
+//@ chunk-18hwfzwa.js:117913-118074 fingerprint (2.1.88 match: scrollDown, 0.903)
 function scrollDown(s, amount) {
   let max = Math.max(0, s.getScrollHeight() - s.getViewportHeight());
   if (s.getScrollTop() + s.getPendingDelta() + amount >= max) return scrollToBottomRespectingAutoScroll(s);
   s.scrollBy(amount);
   return false;
 }
-//@ chunk-18hwfzwa.js:118074-118190 fingerprint = scrollUp (1)
+//@ chunk-18hwfzwa.js:118074-118190 fingerprint (2.1.88 match: scrollUp, 1)
 function scrollUp(handle, amount, markCap = true) {
   if (handle.getScrollTop() + handle.getPendingDelta() - amount <= 0) {
     if (markCap) markScrollbackCapReached();
@@ -751,7 +751,7 @@ function scrollUp(handle, amount, markCap = true) {
   }
   handle.scrollBy(-amount);
 }
-//@ chunk-18hwfzwa.js:118190-118634 fingerprint = applyModalPagerAction (0.928)
+//@ chunk-18hwfzwa.js:118190-118634 fingerprint (2.1.88 match: applyModalPagerAction, 0.928)
 function applyModalPagerAction(s, act, onBeforeJump = true) {
   switch (act) {
     case null:

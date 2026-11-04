@@ -25,7 +25,7 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "./e
 import { identity } from "./identity.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hq88884p.js:28542-28581 placement = filterToBundledAndMcp (0.596)
+//@ chunk-hq88884p.js:28542-28581 placement (2.1.88 match: filterToBundledAndMcp, 0.596)
 /**
  * 一次性告警去重集合。
  */
@@ -549,7 +549,7 @@ function pemStartsWithRaw(block, cert) {
   let { raw } = cert;
   return buffer.length > raw.length && buffer.subarray(0, raw.length).equals(raw);
 }
-//@ chunk-hq88884p.js:39130-39484 placement = hashContent (0.605)
+//@ chunk-hq88884p.js:39130-39484 placement (2.1.88 match: hashContent, 0.605)
 /**
  * 解析内置根证书 PEM，按 sha256 只保留允许列表中的证书，返回 base64 原文与哈希。
  */
@@ -827,7 +827,7 @@ function hasSeenTrustOverride() {
   caCertState.trustOverrideSeen ||= hasCaEnvOverride();
   return caCertState.trustOverrideSeen;
 }
-//@ chunk-hq88884p.js:44055-44199 placement = formatShortcut (1)
+//@ chunk-hq88884p.js:44055-44199 placement (2.1.88 match: formatShortcut, 1)
 function formatShortcut(shortcut) {
   return shortcut
     .split(
@@ -1206,7 +1206,7 @@ function refreshCaState(state, useClientCert) {
 function clearCACertsCache() {
   clearCACertsCache_2(getCaCertState());
 }
-//@ chunk-hq88884p.js:50773-50854 fingerprint = clearCACertsCache (0.855)
+//@ chunk-hq88884p.js:50773-50854 fingerprint (2.1.88 match: clearCACertsCache, 0.855)
 function clearCACertsCache_2(caCertState) {
   caCertState.certificates.cache.clear?.();
   logForDebugging("Cleared CA certificates cache");

@@ -249,7 +249,7 @@ function splitNoticeDetail(tone, noticeText, { linkify }) {
     linkify,
   };
 }
-//@ chunk-ah34pb7m.js:187857-189153 fingerprint = CompactBoundaryMessage (0.436)
+//@ chunk-ah34pb7m.js:187857-189153 fingerprint (2.1.88 match: CompactBoundaryMessage, 0.436)
 /**
  * 压缩边界："✻ Conversation compacted (ctrl+o for history)"，说明早先消息保存在 transcript 中。
  */

@@ -10,12 +10,12 @@
  */
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
 
-//@ chunk-kxyd0g16.js:137578-137622 fingerprint = DESCRIPTION (1)
+//@ chunk-kxyd0g16.js:137578-137622 fingerprint (2.1.88 match: DESCRIPTION, 1)
 /**
  * TaskCreate 描述。
  */
 var DESCRIPTION = "Create a new task in the task list";
-//@ chunk-kxyd0g16.js:137622-140086 fingerprint = getPrompt (0.8)
+//@ chunk-kxyd0g16.js:137622-140086 fingerprint (2.1.88 match: getPrompt, 0.8)
 /**
  * TaskCreate 提示词（agent swarms 下补充分配给队友的说明）。
  */

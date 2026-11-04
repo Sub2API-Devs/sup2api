@@ -8,7 +8,7 @@
  * pieces: chunk-f5te1san.js (1)
  * attribution: facade-exports 1
  */
-//@ chunk-f5te1san.js:191-2834 facade-exports = BRIEF_PROACTIVE_SECTION (0.627)
+//@ chunk-f5te1san.js:191-2834 facade-exports (2.1.88 match: BRIEF_PROACTIVE_SECTION, 0.627)
 /**
  * SendUserMessage/Brief 名称常量、description、两版 prompt 与"未调用即结束回合"的提示。
  */

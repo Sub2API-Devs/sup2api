@@ -114,7 +114,7 @@ function isExecInfluencingVar(name) {
 function isNonLocaleExecInfluencingVar(name) {
   return !/^(?:LANG|LANGUAGE|LC_[A-Z]+)$/i.test(name) && isExecInfluencingVar(name);
 }
-//@ chunk-whwptcwy.js:1663-1845 placement = DECLARATION_COMMANDS (0.701)
+//@ chunk-whwptcwy.js:1663-1845 placement (2.1.88 match: DECLARATION_COMMANDS, 0.701)
 /**
  * 声明命令集合、可执行代码的命令集合（eval 类、zsh 危险内建、shell 程序、包装命令、xargs、parallel），Claude 配置目录下的敏感文件名（.config.json、.credentials.json、.device-keys.json），以及开关名 tengu_toasty_hammock。属只读命令判定的辅助模块。
  */
@@ -601,7 +601,7 @@ function describeSubcommandResults(command) {
           EXEC_CAPABLE_COMMANDS.has(baseName))),
   };
 }
-//@ chunk-whwptcwy.js:8543-8704 placement = spawnScriptArgs (0.635)
+//@ chunk-whwptcwy.js:8543-8704 placement (2.1.88 match: spawnScriptArgs, 0.635)
 function hasPlaceholderInArgs(simple) {
   let [program, ...args] = simple.argv;
   return (

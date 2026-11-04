@@ -44,7 +44,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Text } from "../../ink/components/Text.js";
 import { gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
 
-//@ chunk-th8w37yz.js:2187-4545 facade-exports = performLogout (0.295)
+//@ chunk-th8w37yz.js:2187-4545 facade-exports (2.1.88 match: performLogout, 0.295)
 async function performLogout({
   clearOnboarding = false,
   preserveInProcessTokens = false,
@@ -195,7 +195,7 @@ async function performLogout({
 }
 //@ chunk-th8w37yz.js:4545-4565 affinity
 async function noopAsync() {}
-//@ chunk-th8w37yz.js:5345-5650 facade-exports = authLogout (0.251)
+//@ chunk-th8w37yz.js:5345-5650 facade-exports (2.1.88 match: authLogout, 0.251)
 /**
  * 登出（fleet 宿主侧）：清除凭证与 onboarding 后退出。
  */
@@ -259,7 +259,7 @@ function signOutFailureMessage(error, reason, detail) {
       return `Couldn't confirm the sign-out from "${error}": Claude Code could not read the macOS keychain, so a saved sign-in may still be there. The keychain may be locked. Unlock it, for example with \`security unlock-keychain\`, then ${detail}.`;
   }
 }
-//@ chunk-tndsj50r.js:12979-13456 fingerprint = call (0.431)
+//@ chunk-tndsj50r.js:12979-13456 fingerprint (2.1.88 match: call, 0.431)
 /**
  * /logout 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

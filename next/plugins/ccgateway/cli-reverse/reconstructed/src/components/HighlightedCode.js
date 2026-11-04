@@ -43,7 +43,7 @@ import { shrinkTerminalSize } from "./Messages.js";
 import { TerminalSizeContext } from "../ink/terminalModes.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-yqj79cx2.js:3215-5545 fingerprint = HighlightedCode (0.345)
+//@ chunk-yqj79cx2.js:3215-5545 fingerprint (2.1.88 match: HighlightedCode, 0.345)
 /**
  * 语法高亮代码：{code, filePath, width, dim, startLine, lineNumbers}；按扩展名选语言，结果缓存，超长截断为 "… from line N"。
  */
@@ -406,7 +406,7 @@ function CodeLineRow(props) {
   } else row = $[7];
   return row;
 }
-//@ chunk-ag5x7vhf.js:150071-150628 fingerprint = CodeLine (0.514)
+//@ chunk-ag5x7vhf.js:150071-150628 fingerprint (2.1.88 match: CodeLine, 0.514)
 function CodeLine(props) {
   let $ = useMemoCache(13);
   let { verbose, children } = props;

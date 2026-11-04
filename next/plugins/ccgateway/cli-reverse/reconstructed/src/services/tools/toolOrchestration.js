@@ -19,14 +19,14 @@ function concurrencyBucket(concurrentCount) {
   if (concurrentCount <= 2) return concurrentCount === 0 ? "0" : concurrentCount === 1 ? "1" : "2";
   return concurrentCount < 10 ? "3_to_9" : "10_plus";
 }
-//@ chunk-0h4e7gnq.js:30092-30156 fingerprint = getMaxToolUseConcurrency (1)
+//@ chunk-0h4e7gnq.js:30092-30156 fingerprint (2.1.88 match: getMaxToolUseConcurrency, 1)
 /**
  * 最大并发工具数：CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY，默认 10。
  */
 function getMaxToolUseConcurrency() {
   return env.CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY ?? 10;
 }
-//@ chunk-0h4e7gnq.js:30156-30706 fingerprint = runTools (0.709)
+//@ chunk-0h4e7gnq.js:30156-30706 fingerprint (2.1.88 match: runTools, 0.709)
 /**
  * runTools：非流式路径的工具编排。按 partitionToolCalls 分批，并发安全批次用 runToolsConcurrently（上下文修改层按 tool_use 顺序在批次结束后统一应用），其余批次串行；产出消息、newContext 与 set_in_progress_tool_use_ids 事件。
  */
@@ -75,7 +75,7 @@ async function* runTools(toolUseMessages, assistantMessages, canUseTool, toolUse
         };
       }
 }
-//@ chunk-0h4e7gnq.js:30706-31015 fingerprint = partitionToolCalls (1)
+//@ chunk-0h4e7gnq.js:30706-31015 fingerprint (2.1.88 match: partitionToolCalls, 1)
 /**
  * 把一条回答里的 tool_use 按"连续的并发安全调用"分批：输入解析成功且 isConcurrencySafe(input) 为真才算安全，异常视为不安全。
  */
@@ -101,7 +101,7 @@ function partitionToolCalls(toolUseMessages, tools, toolAliases) {
     return acc;
   }, []);
 }
-//@ chunk-0h4e7gnq.js:31015-31392 fingerprint = runToolsSerially (0.349)
+//@ chunk-0h4e7gnq.js:31015-31392 fingerprint (2.1.88 match: runToolsSerially, 0.349)
 /**
  * 串行执行一批 tool_use，每个调用产生的 contextLayers 立即应用到后续调用的上下文。
  */
@@ -139,7 +139,7 @@ async function* runToolsSerially(toolUseMessages, assistantMessages, canUseTool,
     };
   }
 }
-//@ chunk-0h4e7gnq.js:31392-31657 callgraph-witnessed = runToolsConcurrently (0.258)
+//@ chunk-0h4e7gnq.js:31392-31657 callgraph-witnessed (2.1.88 match: runToolsConcurrently, 0.258)
 /**
  * 并发执行一批 tool_use，上限 getMaxToolUseConcurrency()，各调用结束时发出移除进行中 id 的事件。
  */

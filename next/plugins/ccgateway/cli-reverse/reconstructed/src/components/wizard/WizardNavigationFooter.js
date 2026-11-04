@@ -32,7 +32,7 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:653476-654611 callgraph-fingerprint = WizardNavigationFooter (0.258)
+//@ chunk-18hwfzwa.js:653476-654611 callgraph-fingerprint (2.1.88 match: WizardNavigationFooter, 0.258)
 function WizardNavigationFooter(props) {
   let $ = useMemoCache(22);
   let { onDone, cloudRowCheck } = props;

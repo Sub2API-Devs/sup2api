@@ -22,7 +22,7 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { CollapsedLinesDivider, UltrathinkHighlightedText } from "./CollapsedLines.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 
-//@ chunk-j64mp9kq.js:2673-4795 fingerprint = HighlightedThinkingText (0.414)
+//@ chunk-j64mp9kq.js:2673-4795 fingerprint (2.1.88 match: HighlightedThinkingText, 0.414)
 function HighlightedThinkingText(props) {
   let $ = useMemoCache(34);
   let { text, useBriefLayout, timestamp, bodyOnly, awaitingModel, markLinks } = props;

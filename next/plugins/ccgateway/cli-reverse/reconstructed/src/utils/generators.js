@@ -22,14 +22,14 @@ import {
   MAX_EVIDENCE_FIELD_CHARS,
 } from "../services/usageInsights/recommendations.js";
 
-//@ chunk-e6aww6q8.js:922105-922183 placement = returnValue (1)
+//@ chunk-e6aww6q8.js:922105-922183 placement (2.1.88 match: returnValue, 1)
 async function returnValue_2(as) {
   let e;
   do e = await as.next();
   while (!e.done);
   return e.value;
 }
-//@ chunk-e6aww6q8.js:922183-922573 fingerprint = all (1)
+//@ chunk-e6aww6q8.js:922183-922573 fingerprint (2.1.88 match: all, 1)
 /**
  * 并发合并多个异步生成器（最多 n 个同时运行），按产出先后交错 yield 各生成器的值。
  */
@@ -107,7 +107,7 @@ function releasingAsyncIterator(inner) {
   };
   return wrapper;
 }
-//@ chunk-0sxtya66.js:3695-3948 fingerprint = returnValue (1)
+//@ chunk-0sxtya66.js:3695-3948 fingerprint (2.1.88 match: returnValue, 1)
 function returnValue(buffer, end, evidenceByTool) {
   let fieldStart = indexOfBytes(buffer, TOOL_USE_TYPE_MARKER, 0, end);
   while (fieldStart >= 0) {

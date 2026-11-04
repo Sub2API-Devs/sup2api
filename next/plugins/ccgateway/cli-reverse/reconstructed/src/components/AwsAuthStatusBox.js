@@ -61,7 +61,7 @@ function renderLineWithLinks(line, index) {
 }
 //@ chunk-znr63w8n.js:745-768 layout
 var URL_PATTERN = /https?:\/\/\S+/;
-//@ chunk-znr63w8n.js:768-1479 fingerprint = AwsAuthStatusBox (0.535)
+//@ chunk-znr63w8n.js:768-1479 fingerprint (2.1.88 match: AwsAuthStatusBox, 0.535)
 function AwsAuthStatusBox() {
   let $ = useMemoCache(10);
   let t0;

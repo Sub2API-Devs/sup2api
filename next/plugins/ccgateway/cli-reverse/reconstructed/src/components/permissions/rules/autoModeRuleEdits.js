@@ -563,11 +563,11 @@ function toDisplayRuleNoTag(rule) {
 function ruleSource(rule) {
   return rule.source;
 }
-//@ chunk-p2qwpk2k.js:42357-42407 placement = _temp5 (1)
+//@ chunk-p2qwpk2k.js:42357-42407 placement (2.1.88 match: _temp5, 1)
 function isUserSettingsRule(a_0) {
   return a_0.source === "userSettings";
 }
-//@ chunk-p2qwpk2k.js:42407-42457 placement = _temp5 (1)
+//@ chunk-p2qwpk2k.js:42407-42457 placement (2.1.88 match: _temp5, 1)
 function isNonUserSettingsRule(a_0) {
   return a_0.source !== "userSettings";
 }

@@ -22,7 +22,7 @@ import { logForDebugging } from "./debug.js";
 import { require_sts } from "../../vendor/@aws-sdk/nested-clients/dist-cjs/submodules/sts/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:156069-156148 fingerprint = isAwsCredentialsProviderError (1)
+//@ chunk-bwbq4xvm.js:156069-156148 fingerprint (2.1.88 match: isAwsCredentialsProviderError, 1)
 function isAwsCredentialsProviderError(err) {
   return findInCauseChain(err, (cause) => cause.name === "CredentialsProviderError") !== undefined;
 }
@@ -33,7 +33,7 @@ var AWS_AUTH_ERROR_PATTERN =
 function isAwsCredentialError(name, message) {
   return AWS_AUTH_ERROR_PATTERN.test(`${name ?? ""} ${message ?? ""}`);
 }
-//@ chunk-bwbq4xvm.js:157701-157947 fingerprint = isValidAwsStsOutput (0.85)
+//@ chunk-bwbq4xvm.js:157701-157947 fingerprint (2.1.88 match: isValidAwsStsOutput, 0.85)
 /**
  * 校验对象是否为 STS 凭证形状（AccessKeyId/SecretAccessKey/SessionToken 字符串）。
  */
@@ -112,7 +112,7 @@ async function getAwsProfileRegionHints() {
   }
   return false;
 }
-//@ chunk-bwbq4xvm.js:158912-159363 fingerprint = clearAwsIniCache (0.549)
+//@ chunk-bwbq4xvm.js:158912-159363 fingerprint (2.1.88 match: clearAwsIniCache, 0.549)
 /**
  * 清 AWS SDK 的 ini 凭证文件缓存，让刷新后的 ~/.aws/credentials 生效。
  */
@@ -158,7 +158,7 @@ var AssumeRoleCommand; // deferred: uses awsSdkModule of its import cycle while 
 deferInit("chunk-nm3tp7ry.js:560", () => {
   AssumeRoleCommand = awsSdkModule.AssumeRoleCommand;
 });
-//@ chunk-nm3tp7ry.js:586-604 fingerprint = checkStsCallerIdentity (0.333)
+//@ chunk-nm3tp7ry.js:586-604 fingerprint (2.1.88 match: checkStsCallerIdentity, 0.333)
 var STSClient; // deferred: uses awsSdkModule of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-nm3tp7ry.js:586", () => {
   STSClient = awsSdkModule.STSClient;

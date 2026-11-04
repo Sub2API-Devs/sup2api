@@ -357,7 +357,7 @@ function findIntermediateUncJunctionAsync(fsImpl, path, options, signal, onStat)
     return fsImpl.readlink(step.path);
   });
 }
-//@ chunk-cgr0tezp.js:23428-23543 placement = returnValue (0.769)
+//@ chunk-cgr0tezp.js:23428-23543 placement (2.1.88 match: returnValue, 0.769)
 function returnValue(steps, runStep) {
   let stepResult;
   for (;;) {
@@ -372,7 +372,7 @@ function returnValue(steps, runStep) {
     }
   }
 }
-//@ chunk-cgr0tezp.js:23543-23701 placement = returnValue (0.769)
+//@ chunk-cgr0tezp.js:23543-23701 placement (2.1.88 match: returnValue, 0.769)
 async function returnValue_2(path, signal, runStep) {
   let stepResult;
   for (;;) {
@@ -977,7 +977,7 @@ function stripDotSegments(path, platform = "linux") {
   if (platform === "win32" && /^[A-Za-z]:$/.test(replaced)) return replaced + path[2];
   return replaced;
 }
-//@ chunk-cgr0tezp.js:31047-32818 placement = resolveDeepestExistingAncestorSync (0.643)
+//@ chunk-cgr0tezp.js:31047-32818 placement (2.1.88 match: resolveDeepestExistingAncestorSync, 0.643)
 /**
  * 对不存在的路径，找到最深的已存在祖先并 realpath，再拼回剩余部分（权限检查用于新建文件）。
  */
@@ -1475,7 +1475,7 @@ function permissionCheckSpellings(result) {
     ? [...result.spellings, resolvedPath]
     : result.spellings;
 }
-//@ chunk-cgr0tezp.js:36743-40014 placement = NodeFsOperations (0.851)
+//@ chunk-cgr0tezp.js:36743-40014 placement (2.1.88 match: NodeFsOperations, 0.851)
 var NodeFsOperations = {
   cwd() {
     return process.cwd();
@@ -1705,7 +1705,7 @@ var NodeFsOperations = {
     }
   },
 };
-//@ chunk-cgr0tezp.js:40014-40038 placement = getFsImplementation (0)
+//@ chunk-cgr0tezp.js:40014-40038 placement (2.1.88 match: getFsImplementation, 0)
 /**
  * 返回全局文件系统抽象 NodeFsOperations（同步/异步 fs 包装，可在测试或宿主模式下替换）。全局约 400 处调用，项目内几乎所有文件读写都经过它。
  */
@@ -1743,7 +1743,7 @@ function processChdir(dirPath) {
     },
   );
 }
-//@ chunk-cgr0tezp.js:40367-40709 placement = readFileRange (1)
+//@ chunk-cgr0tezp.js:40367-40709 placement (2.1.88 match: readFileRange, 1)
 async function readFileRange(path, offset, maxBytes) {
   await using openedHandle = typeof path === "string" ? await open(path, "r") : null;
   let handle = typeof path === "string" ? openedHandle : path;
@@ -1780,7 +1780,7 @@ async function readHandleUpTo(handle, maxBytes, kind) {
   }
   return Buffer.concat(chunks, totalRead);
 }
-//@ chunk-cgr0tezp.js:40974-41352 placement = readFileRange (1)
+//@ chunk-cgr0tezp.js:40974-41352 placement (2.1.88 match: readFileRange, 1)
 /**
  * 按字节范围读取文件片段。
  */
@@ -1940,7 +1940,7 @@ function createOffsetMappedText(text) {
     origin: int32Array,
   };
 }
-//@ chunk-jhrww53q.js:47434-47579 fingerprint = safeResolvePath (0.602)
+//@ chunk-jhrww53q.js:47434-47579 fingerprint (2.1.88 match: safeResolvePath, 0.602)
 function safeResolvePath_2(entryStats) {
   return (
     !entryStats.isDirectory() &&
@@ -1971,7 +1971,7 @@ function isPathMatchedForPermission(rawPath, permissionCtx) {
   }
   return getPathsForPermissionCheck_2(rawPath, permissionCtx);
 }
-//@ chunk-e6aww6q8.js:1152140-1153141 callgraph-fingerprint = getPathsForPermissionCheck (0.425)
+//@ chunk-e6aww6q8.js:1152140-1153141 callgraph-fingerprint (2.1.88 match: getPathsForPermissionCheck, 0.425)
 /**
  * 返回权限检查需要比对的路径集合（原始、规范化、符号链接解析后）。
  */
@@ -2033,7 +2033,7 @@ function getPathsForPermissionCheck_2(rawPath, baseCwd) {
   } while (walkDir !== normalized_2 && walkDir !== dirname(walkDir));
   return false;
 }
-//@ chunk-e6aww6q8.js:1337160-1337480 fingerprint = isDuplicatePath (0.685)
+//@ chunk-e6aww6q8.js:1337160-1337480 fingerprint (2.1.88 match: isDuplicatePath, 0.685)
 function isDuplicatePath_2(fsImplementation, patterns) {
   let mapped = patterns.map((pattern) => pattern.replaceAll("\\", "/"));
   for (let pattern of mapped) {
@@ -2054,7 +2054,7 @@ function isDuplicatePath_2(fsImplementation, patterns) {
   }
   return mapped;
 }
-//@ chunk-awy329vy.js:49206-49477 fingerprint = readLinesReverse (0.747)
+//@ chunk-awy329vy.js:49206-49477 fingerprint (2.1.88 match: readLinesReverse, 0.747)
 async function readLinesReverse_2(filePath, maxBytes) {
   let handle;
   try {

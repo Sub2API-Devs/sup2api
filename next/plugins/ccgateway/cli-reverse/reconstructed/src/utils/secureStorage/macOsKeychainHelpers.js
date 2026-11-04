@@ -17,9 +17,9 @@ import { getOauthConfig } from "../../constants/oauth.js";
 import { HostScoped } from "../hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gwwacf44.js:442-465 fingerprint = CREDENTIALS_SERVICE_SUFFIX (1)
+//@ chunk-gwwacf44.js:442-465 fingerprint (2.1.88 match: CREDENTIALS_SERVICE_SUFFIX, 1)
 var CREDENTIALS_SERVICE_SUFFIX = "-credentials";
-//@ chunk-gwwacf44.js:465-600 layout = getProjectDirsUpToHome (0.855)
+//@ chunk-gwwacf44.js:465-600 layout (2.1.88 match: getProjectDirsUpToHome, 0.855)
 /**
  * 安全存储使用的配置目录：CLAUDE_SECURESTORAGE_CONFIG_DIR 优先（空串退回 ~/.claude），否则用 Claude 配置目录；NFC 归一。用于钥匙串服务名后缀。旧版名 getProjectDirsUpToHome 错配。
  */
@@ -36,7 +36,7 @@ function getProjectDirsUpToHome() {
 function keychainProjectDirs() {
   return isDiskless() ? null : getProjectDirsUpToHome();
 }
-//@ chunk-gwwacf44.js:636-906 fingerprint = getMacOsKeychainStorageServiceName (0.839)
+//@ chunk-gwwacf44.js:636-906 fingerprint (2.1.88 match: getMacOsKeychainStorageServiceName, 0.839)
 /**
  * macOS 钥匙串服务名："Claude Code" + OAuth 后缀 + 后缀 + （设置了 CLAUDE_CONFIG_DIR / CLAUDE_SECURESTORAGE_CONFIG_DIR 时）配置目录 sha256 前 8 位。
  */
@@ -57,7 +57,7 @@ function getMacOsKeychainStorageServiceName(serviceSuffix = "") {
 }
 //@ chunk-gwwacf44.js:906-932 layout
 var SAFE_USERNAME_PATTERN = /^[a-zA-Z0-9._-]+$/;
-//@ chunk-gwwacf44.js:932-1064 fingerprint = getUsername (1)
+//@ chunk-gwwacf44.js:932-1064 fingerprint (2.1.88 match: getUsername, 1)
 /**
  * 钥匙串账户名：USER 或 os.userInfo，非 [A-Za-z0-9._-] 时用 claude-code-user。
  */
@@ -95,7 +95,7 @@ deferInit("chunk-gwwacf44.js:1229", () => {
 function getKeychainCacheState() {
   return KEYCHAIN_CACHE_PER_HOST.of(getRootSession().host);
 }
-//@ chunk-gwwacf44.js:1289-1413 fingerprint = keychainCacheState (0.861)
+//@ chunk-gwwacf44.js:1289-1413 fingerprint (2.1.88 match: keychainCacheState, 0.861)
 /**
  * 把钥匙串读缓存标为过期（保留数据、cachedAt 归零），代数加一并清除进行中的读取与失败记录。
  */
@@ -109,7 +109,7 @@ function markKeychainCacheStale() {
   keychainCacheState.readInFlight = null;
   keychainCacheState.lastReadFailure = null;
 }
-//@ chunk-gwwacf44.js:1413-1528 callgraph-fingerprint = clearKeychainCache (0.861)
+//@ chunk-gwwacf44.js:1413-1528 callgraph-fingerprint (2.1.88 match: clearKeychainCache, 0.861)
 /**
  * 清空钥匙串读缓存（数据置空），代数加一并清除进行中的读取与失败记录。
  */
@@ -123,7 +123,7 @@ function clearKeychainCache() {
   keychainCacheState.readInFlight = null;
   keychainCacheState.lastReadFailure = null;
 }
-//@ chunk-gwwacf44.js:1528-1689 fingerprint = primeKeychainCacheFromPrefetch (0.831)
+//@ chunk-gwwacf44.js:1528-1689 fingerprint (2.1.88 match: primeKeychainCacheFromPrefetch, 0.831)
 function primeKeychainCacheFromPrefetch(stdout, generation, state = getKeychainCacheState()) {
   if (state.cache.cachedAt !== 0 || state.generation !== generation) return;
   let data = null;

@@ -1030,7 +1030,7 @@ async function pruneOrphanedAutoDeps(orphans, scope, projectPath, { deleteDataDi
   );
   return removedIds;
 }
-//@ chunk-e6aww6q8.js:4454381-4454578 placement = hasPendingUpdates (0.783)
+//@ chunk-e6aww6q8.js:4454381-4454578 placement (2.1.88 match: hasPendingUpdates, 0.783)
 /**
  * 插件在该作用域的设置中被启用且对应安装路径（缓存）存在。
  */
@@ -1078,7 +1078,7 @@ async function installPathExists(pluginId, installPath, storageV5) {
   }
   return pathStatOk(absolute);
 }
-//@ chunk-e6aww6q8.js:4455009-4455288 placement = hasPendingUpdates (0.783)
+//@ chunk-e6aww6q8.js:4455009-4455288 placement (2.1.88 match: hasPendingUpdates, 0.783)
 /**
  * 插件在该作用域是否有缓存仍存在的安装记录（优先当前项目的记录）。
  */

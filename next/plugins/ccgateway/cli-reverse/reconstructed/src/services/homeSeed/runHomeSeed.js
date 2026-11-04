@@ -1041,7 +1041,7 @@ function leftBehindSummary(plan) {
 }
 //@ chunk-mxpjbr4y.js:26876-26926 placement
 var START_NEW_SESSION_HINT = "; start a new cloud session to try again";
-//@ chunk-mxpjbr4y.js:26926-26974 placement = _temp5 (1)
+//@ chunk-mxpjbr4y.js:26926-26974 placement (2.1.88 match: _temp5, 1)
 function userSettingsDisplayPath(a_0) {
   return tildify(getSettingsFilePathForSource("userSettings") ?? a_0);
 }

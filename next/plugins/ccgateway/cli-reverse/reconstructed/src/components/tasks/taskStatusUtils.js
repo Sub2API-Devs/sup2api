@@ -25,7 +25,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Byline } from "../design-system/Byline.js";
 import { summarizeRecentActivities } from "../../utils/collapseReadSearch.js";
 
-//@ chunk-ah34pb7m.js:11869-12036 fingerprint = getTaskStatusIcon (0.527)
+//@ chunk-ah34pb7m.js:11869-12036 fingerprint (2.1.88 match: getTaskStatusIcon, 0.527)
 function getTaskStatusIcon(status) {
   if (status === "running") return BLACK_CIRCLE;
   if (status === "completed") return figures_default.tick;
@@ -33,7 +33,7 @@ function getTaskStatusIcon(status) {
   if (status === "paused") return PAUSE_GLYPH;
   return figures_default.circle;
 }
-//@ chunk-ah34pb7m.js:12036-12200 fingerprint = getTaskStatusColor (0.743)
+//@ chunk-ah34pb7m.js:12036-12200 fingerprint (2.1.88 match: getTaskStatusColor, 0.743)
 function getTaskStatusColor(status) {
   if (status === "completed") return "success";
   if (status === "failed") return "error";
@@ -48,7 +48,7 @@ function isTerminalStatus(status) {
     [...(status.keepaliveReasons ?? [])].some((reason) => reason !== FLAG_IDLE_WINDOW)
   );
 }
-//@ chunk-ah34pb7m.js:12424-12578 callgraph-witnessed = shouldHideTasksFooter (0.373)
+//@ chunk-ah34pb7m.js:12424-12578 callgraph-witnessed (2.1.88 match: shouldHideTasksFooter, 0.373)
 function shouldHideTasksFooter(task) {
   if (isAmbientTask(task)) return false;
   if (isCoordinatorPanelActive()) return waitForTaskCompletion(task) || isBackgroundTask(task);
@@ -107,7 +107,7 @@ function TaskDetailFooterHints(props) {
   } else bylineElement = $[8];
   return bylineElement;
 }
-//@ chunk-18hwfzwa.js:691937-692158 fingerprint = describeTeammateActivity (0.921)
+//@ chunk-18hwfzwa.js:691937-692158 fingerprint (2.1.88 match: describeTeammateActivity, 0.921)
 function describeTeammateActivity(t) {
   if (t.awaitingPlanApproval) return "awaiting approval";
   if (t.isIdle) return "idle";

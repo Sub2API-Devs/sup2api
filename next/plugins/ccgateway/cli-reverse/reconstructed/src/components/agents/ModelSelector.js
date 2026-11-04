@@ -14,7 +14,7 @@ import { NO_COMMITTED_ROW, Select_2 } from "../CustomSelect/select.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Select } from "../CustomSelect/selectTypeahead.js";
 
-//@ chunk-ey2qag4x.js:43807-44614 callgraph-fingerprint = ModelSelector (0.251)
+//@ chunk-ey2qag4x.js:43807-44614 callgraph-fingerprint (2.1.88 match: ModelSelector, 0.251)
 /**
  * 通用选择组件（Select 封装），被 115 处使用——旧版名 ModelSelector 可能是错配。
  */

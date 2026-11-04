@@ -19,7 +19,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { GITHUB_ACTION_SETUP_DOCS_URL } from "../../constants/github-app.js";
 
-//@ chunk-4v9zy7gn.js:32810-34294 fingerprint = InstallAppStep (0.475)
+//@ chunk-4v9zy7gn.js:32810-34294 fingerprint (2.1.88 match: InstallAppStep, 0.475)
 function InstallAppStep(props) {
   let $ = useMemoCache(12);
   let { repoUrl, onSubmit } = props;

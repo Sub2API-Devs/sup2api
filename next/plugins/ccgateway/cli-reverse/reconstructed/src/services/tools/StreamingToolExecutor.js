@@ -105,7 +105,7 @@ function messageHasToolResultFor(message, toolUseId) {
     message.message.content.some((block) => block.type === "tool_result" && block.tool_use_id === toolUseId)
   );
 }
-//@ chunk-ha3km179.js:58961-69131 fingerprint = StreamingToolExecutor (0.548)
+//@ chunk-ha3km179.js:58961-69131 fingerprint (2.1.88 match: StreamingToolExecutor, 0.548)
 /**
  * StreamingToolExecutor：流式回答期间边收 tool_use 边执行。addTool 时判定并发安全并排队；processQueue 保证"并发安全的可以同时跑，不安全的独占"；结果按收到顺序产出（getCompletedResults/getRemainingResults），进度消息随时产出；中断/流式回退时生成合成错误结果（interrupted、cancelled、Streaming fallback、Conversation ended）。未知工具直接生成 "No such tool available" 错误，并用 TOOL_CATALOG 给建议。
  */

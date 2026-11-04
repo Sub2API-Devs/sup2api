@@ -646,7 +646,7 @@ function appendLines(message, extraLines) {
     : [message.trimEnd(), ...extraLines].join(`
 `);
 }
-//@ chunk-12wyw8h8.js:10606-12383 fingerprint = handlePluginCommandError (0.387)
+//@ chunk-12wyw8h8.js:10606-12383 fingerprint (2.1.88 match: handlePluginCommandError, 0.387)
 /**
  * CLI 插件子命令的统一错误处理：打 tengu_plugin_command_failed 遥测（命令、作用域、failureCode 分类），JSON 模式输出结构化结果，否则打印错误并以非零退出。
  */
@@ -1117,7 +1117,7 @@ async function checkCommandSourceSwitch(pluginArg, options = {}, storageV5) {
     storageV5,
   });
 }
-//@ chunk-12wyw8h8.js:18894-20371 callgraph-fingerprint = installPlugin (0.272)
+//@ chunk-12wyw8h8.js:18894-20371 callgraph-fingerprint (2.1.88 match: installPlugin, 0.272)
 /**
  * claude plugin install：调用 installPluginOp，打印结果与依赖/警告，记 tengu_plugin_installed_cli。
  */
@@ -1288,7 +1288,7 @@ async function resolvePluginArgument(
     aliased: false,
   };
 }
-//@ chunk-12wyw8h8.js:20975-22074 fingerprint = uninstallPlugin (0.306)
+//@ chunk-12wyw8h8.js:20975-22074 fingerprint (2.1.88 match: uninstallPlugin, 0.306)
 /**
  * claude plugin uninstall：解析插件名，调用 uninstallPluginOp，记 tengu_plugin_uninstalled_cli。
  */
@@ -1462,7 +1462,7 @@ Not a TTY \u2014 run \`claude plugin prune${scopeFlag} -y\` to remove.`;
   });
   return `Removed ${removed.length} auto-installed ${plural(removed.length, "plugin", "plugins")}: ${removed.map((pluginId) => stripInvisibleKeepEmoji(parsePluginIdentifier(pluginId).name)).join(", ")}`;
 }
-//@ chunk-12wyw8h8.js:23480-24055 fingerprint = disablePlugin (0.565)
+//@ chunk-12wyw8h8.js:23480-24055 fingerprint (2.1.88 match: disablePlugin, 0.565)
 /**
  * claude plugin disable：调用 disablePluginOp 并输出结果。
  */
@@ -1516,7 +1516,7 @@ async function disablePlugin(pluginArg, scope, storageV5, options = {}) {
     );
   }
 }
-//@ chunk-12wyw8h8.js:24055-24375 fingerprint = disableAllPlugins (0.738)
+//@ chunk-12wyw8h8.js:24055-24375 fingerprint (2.1.88 match: disableAllPlugins, 0.738)
 /**
  * claude plugin disable --all：禁用全部可禁用插件（组织要求的插件除外）。
  */
@@ -1543,7 +1543,7 @@ async function disableAllPlugins(storageV5, options = {}) {
     );
   }
 }
-//@ chunk-12wyw8h8.js:24375-26148 fingerprint = updatePluginCli (0.378)
+//@ chunk-12wyw8h8.js:24375-26148 fingerprint (2.1.88 match: updatePluginCli, 0.378)
 /**
  * claude plugin update：检查并更新插件（显式模式，处理 headersHelper/command 来源确认），输出版本变化。
  */

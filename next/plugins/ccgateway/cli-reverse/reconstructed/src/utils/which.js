@@ -10,7 +10,7 @@
  */
 import { delimiter, isAbsolute } from "path";
 
-//@ chunk-jhrww53q.js:49257-49296 fingerprint = bunWhich (0.601)
+//@ chunk-jhrww53q.js:49257-49296 fingerprint (2.1.88 match: bunWhich, 0.601)
 function bunWhich(command) {
   return identityPath(command, Bun.which(command));
 }

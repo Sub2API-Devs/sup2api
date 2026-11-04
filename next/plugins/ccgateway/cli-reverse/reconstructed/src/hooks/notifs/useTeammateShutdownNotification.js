@@ -12,7 +12,7 @@ import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { keepaliveReasons } from "../../tasks/taskKinds.js";
 import { FLAG_IDLE_WINDOW } from "../../tasks/LocalAgentTask/keepalive.js";
 
-//@ chunk-e6aww6q8.js:4718644-4718761 fingerprint = useTeammateLifecycleNotification (0.759)
+//@ chunk-e6aww6q8.js:4718644-4718761 fingerprint (2.1.88 match: useTeammateLifecycleNotification, 0.759)
 function useTeammateLifecycleNotification(task) {
   if (!isLocalAgent(task)) return false;
   return (
@@ -30,7 +30,7 @@ function parseCount(notif) {
 function foldTeammatesStarted(notif, notification) {
   return makeSpawnNotif(parseCount(notif) + 1);
 }
-//@ chunk-18hwfzwa.js:1788103-1788257 fingerprint = makeSpawnNotif (0.664)
+//@ chunk-18hwfzwa.js:1788103-1788257 fingerprint (2.1.88 match: makeSpawnNotif, 0.664)
 function makeSpawnNotif(count) {
   return {
     key: "teammate-spawn",
@@ -45,7 +45,7 @@ function makeSpawnNotif(count) {
 function foldTeammatesShutdown(acc, _incoming) {
   return makeShutdownNotif(parseCount(acc) + 1);
 }
-//@ chunk-18hwfzwa.js:1788296-1788457 fingerprint = makeShutdownNotif (0.664)
+//@ chunk-18hwfzwa.js:1788296-1788457 fingerprint (2.1.88 match: makeShutdownNotif, 0.664)
 function makeShutdownNotif(count) {
   return {
     key: "teammate-shutdown",

@@ -10,7 +10,7 @@
  */
 import { sep, win32, posix } from "path";
 
-//@ chunk-axmbhcjg.js:8926-8997 placement = isSessionPlanFile (0.784)
+//@ chunk-axmbhcjg.js:8926-8997 placement (2.1.88 match: isSessionPlanFile, 0.784)
 /**
  * MAX_POSIX_PATH_LENGTH：POSIX 路径长度上限。
  */
@@ -18,7 +18,7 @@ var MD_EXTENSION = ".md";
 var MAX_POSIX_PATH_LENGTH = 50000;
 var platformPath = sep === win32.sep ? win32 : posix;
 var PATH_SEPARATOR_RE = sep === win32.sep ? /[\\/]+/ : /\/+/;
-//@ chunk-axmbhcjg.js:8997-9070 placement = setCwdState (1)
+//@ chunk-axmbhcjg.js:8997-9070 placement (2.1.88 match: setCwdState, 1)
 function toPosixNfcPath(path, sep) {
   return (sep === "/" ? path : path.split(sep).join("/")).normalize("NFC");
 }

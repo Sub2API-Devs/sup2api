@@ -32,7 +32,7 @@ import { logEvent } from "../analytics/index.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { logAuthEvent } from "../../utils/telemetry/thirdPartyEventRecords.js";
 
-//@ chunk-b8krr1px.js:5448-8992 fingerprint = OAuthService (0.65)
+//@ chunk-b8krr1px.js:5448-8992 fingerprint (2.1.88 match: OAuthService, 0.65)
 /**
  * OAuth 登录服务：生成 code verifier，启动本地回调监听（失败时可退回手动粘贴授权码），打开浏览器授权，换取令牌后清理监听器。
  */

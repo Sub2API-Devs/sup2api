@@ -274,7 +274,7 @@ function consumePermissionStash(session, filePath, accessKind) {
     );
   return;
 }
-//@ chunk-847rdpmn.js:4621-4662 placement = isFileReadDenied (1)
+//@ chunk-847rdpmn.js:4621-4662 placement (2.1.88 match: isFileReadDenied, 1)
 /**
  * 取出读取权限暂存。
  */

@@ -19,7 +19,7 @@ import { todoToolsEnabled } from "../../utils/sessionKind.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:61420-62488 fingerprint = TodoWriteTool (0.74)
+//@ chunk-kxyd0g16.js:61420-62488 fingerprint (2.1.88 match: TodoWriteTool, 0.74)
 /**
  * TodoWrite 工具（strict、shouldDefer）：isEnabled = 任务工具未启用 且 todo 类工具可用；把整份 todos 存入按 agentId/会话的内存表，全部完成时清空。
  */

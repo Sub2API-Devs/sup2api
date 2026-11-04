@@ -19,7 +19,7 @@ import { withholdHeldReceipt, redeliveryKind } from "./readReceipts.js";
 import { evaluateInboundAttestationWithPolicy } from "./attestationGate.js";
 import { errorMessage } from "../utils/errors.js";
 
-//@ chunk-fp6aqx1j.js:172333-177999 fingerprint = createV2ReplTransport (0.45)
+//@ chunk-fp6aqx1j.js:172333-177999 fingerprint (2.1.88 match: createV2ReplTransport, 0.45)
 /**
  * 建 v2 传输：epoch 取 /bridge 给的值或调 registerWorker；SSETransport 读 `{sessionUrl}/worker/events/stream`，CCRClient 负责写事件、心跳、投递回执、内部事件；
  * epoch 不匹配等请求路径终态时按 4090/4094 关闭，心跳失败而 SSE 正常时 4093，初始化失败 4091；connect() 先 initialize(epoch) 成功后再开读流（outboundOnly 不开）。

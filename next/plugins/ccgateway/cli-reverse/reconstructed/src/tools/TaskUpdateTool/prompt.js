@@ -8,7 +8,7 @@
  * pieces: chunk-kxyd0g16.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-kxyd0g16.js:143782-146123 fingerprint = DESCRIPTION (1)
+//@ chunk-kxyd0g16.js:143782-146123 fingerprint (2.1.88 match: DESCRIPTION, 1)
 /**
  * TaskUpdate 描述与提示词。
  */

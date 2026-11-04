@@ -24,7 +24,7 @@ import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 import { isOfficialMarketplaceName_3 } from "./pluginIdentifier.js";
 
-//@ chunk-rrq1mnv6.js:3531-3783 callgraph-fingerprint = detectDelistedPlugins (0.296)
+//@ chunk-rrq1mnv6.js:3531-3783 callgraph-fingerprint (2.1.88 match: detectDelistedPlugins, 0.296)
 /**
  * 找出某市场里已下架（marketplace.json 不再列出且未改名）的已安装插件 ID。
  */
@@ -42,7 +42,7 @@ function detectDelistedPlugins(installedPlugins, marketplace, marketplaceName) {
   }
   return delisted;
 }
-//@ chunk-rrq1mnv6.js:3783-5265 fingerprint = detectAndUninstallDelistedPlugins (0.523)
+//@ chunk-rrq1mnv6.js:3783-5265 fingerprint (2.1.88 match: detectAndUninstallDelistedPlugins, 0.523)
 /**
  * 启动时扫描所有市场：设置了 forceRemoveDeletedPlugins 的市场中被下架的已安装插件自动卸载并标记（flagged），记 tengu_plugin_delisted_enforcement。
  */

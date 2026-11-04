@@ -1449,7 +1449,7 @@ function vouchPreToolUse(entry, state, deps, reason = "in_hand") {
       : `not run \u2014 ${state.displayName} has too many hook requests from the cloud session in hand at once; retry`,
   );
 }
-//@ chunk-mthxbav8.js:46317-46428 placement = isToolReferenceWithName (0.848)
+//@ chunk-mthxbav8.js:46317-46428 placement (2.1.88 match: isToolReferenceWithName, 0.848)
 function formatToolNameSuffix(obj) {
   return "tool_name" in obj && typeof obj.tool_name === "string"
     ? `:${sanitizeDisplayText(obj.tool_name, {

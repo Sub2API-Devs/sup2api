@@ -32,7 +32,7 @@ import { uniqByExport } from "../../../../vendor/lodash-es/uniqBy.js";
 import { getSettings_DEPRECATED } from "../../../utils/settings/settings.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2324498-2332456 fingerprint = getClaudeCodeGuideBasePrompt (0.757)
+//@ chunk-e6aww6q8.js:2324498-2332456 fingerprint (2.1.88 match: getClaudeCodeGuideBasePrompt, 0.757)
 function getClaudeCodeGuideBasePrompt() {
   let localSearchHint =
     hasEmbeddedSearchTools() && isBashAvailable()
@@ -122,7 +122,7 @@ In THIS session: ${availability.text} ${skillDoctorNote}
 
 ${bundledText}`;
 }
-//@ chunk-e6aww6q8.js:2333149-2333908 fingerprint = getFeedbackGuideline (0.404)
+//@ chunk-e6aww6q8.js:2333149-2333908 fingerprint (2.1.88 match: getFeedbackGuideline, 0.404)
 function getFeedbackGuideline() {
   if (isUsing3PServices() || !isFeedbackAllowed())
     return `- When you cannot find an answer or the feature doesn't exist, direct the user to ${
@@ -140,7 +140,7 @@ function getFeedbackGuideline() {
     }`;
   return "- When you cannot find an answer or the feature doesn't exist, direct the user to use /feedback to report a feature request or bug";
 }
-//@ chunk-e6aww6q8.js:2333908-2336389 fingerprint = CLAUDE_CODE_GUIDE_AGENT (0.869)
+//@ chunk-e6aww6q8.js:2333908-2336389 fingerprint (2.1.88 match: CLAUDE_CODE_GUIDE_AGENT, 0.869)
 /**
  * claude-code-guide 内建代理：model haiku、permissionMode dontAsk，工具 Glob/Grep/Read/WebFetch/WebSearch（嵌入搜索时 Bash/Read/WebFetch/WebSearch），系统提示词附带本项目自定义 skills 列表等。
  */

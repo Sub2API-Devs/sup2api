@@ -34,7 +34,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-ey2qag4x.js:23710", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:23714-25844 fingerprint = VimTextInput (0.629)
+//@ chunk-ey2qag4x.js:23714-25844 fingerprint (2.1.88 match: VimTextInput, 0.629)
 /**
  * vim 模式输入框：在 TextInput 基础上显示当前 vim 模式（NORMAL/VISUAL/VISUAL LINE）。
  */

@@ -18,7 +18,7 @@ import { getProjectDir } from "../../utils/sessionStoragePortable.js";
 import { execFileNoThrowWithCwd } from "../../utils/execFileNoThrow.js";
 import { normalizeGitRemoteUrl } from "../../utils/git.js";
 
-//@ chunk-e6aww6q8.js:1737819-1738199 placement = METADATA_TYPE_MARKERS (0.44)
+//@ chunk-e6aww6q8.js:1737819-1738199 placement (2.1.88 match: METADATA_TYPE_MARKERS, 0.44)
 /**
  * MAX_FIRST_MESSAGE_CHARS：首条消息截断长度（200）；MAX_SESSION_DESCRIPTORS：会话描述条数上限（60）；COMMAND_NAME_RE：transcript 里的斜杠命令名（同一声明共 13 个绑定）。
  */

@@ -100,7 +100,7 @@ function isStopInterruption(rows, index) {
       ))
   );
 }
-//@ chunk-tyg7f3ek.js:48248-48652 placement = countUserPromptsFromEntries (0.786)
+//@ chunk-tyg7f3ek.js:48248-48652 placement (2.1.88 match: countUserPromptsFromEntries, 0.786)
 function countUserPromptsFromEntries_3(entries, uuid, enabled) {
   let messageIndex = findMessageIndex(entries, uuid, enabled);
   let entry = entries[messageIndex];

@@ -10,7 +10,7 @@
  */
 import { count } from "../utils/collections.js";
 
-//@ chunk-4cm44bmp.js:18886-19536 fingerprint = FlushGate (0.774)
+//@ chunk-4cm44bmp.js:18886-19536 fingerprint (2.1.88 match: FlushGate, 0.774)
 /**
  * 刷新闸：start 后 enqueue 的条目被暂存；end 取出全部并关闭；evictOldest 按谓词只保留最新 N 条（计入 evictedCount）；drop 丢弃；deactivate 只关闭。
  */

@@ -9,7 +9,7 @@
  * attribution: fingerprint 1, facade-exports 1
  */
 
-//@ chunk-rzwvw294.js:191-534 fingerprint = InProcessTransport (1)
+//@ chunk-rzwvw294.js:191-534 fingerprint (2.1.88 match: InProcessTransport, 1)
 /**
  * 进程内 MCP 传输：一对互为 peer 的传输，send 用 queueMicrotask 把消息投给对端 onmessage；close 同时关闭对端。
  */
@@ -39,7 +39,7 @@ class InProcessTransport {
     }
   }
 }
-//@ chunk-rzwvw294.js:534-610 facade-exports = createLinkedTransportPair (1)
+//@ chunk-rzwvw294.js:534-610 facade-exports (2.1.88 match: createLinkedTransportPair, 1)
 /**
  * createLinkedTransportPair：创建并互相绑定两个 InProcessTransport，返回 [clientSide, serverSide]，用于 Chrome/Computer Use 等进程内 MCP 服务器。
  */

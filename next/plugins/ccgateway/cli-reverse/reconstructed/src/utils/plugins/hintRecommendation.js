@@ -32,7 +32,7 @@ deferInit("chunk-18hwfzwa.js:1804920", () => {
 });
 //@ chunk-18hwfzwa.js:1804924-1804936 layout
 var MAX_PLUGIN_HINTS_PER_SESSION = 100;
-//@ chunk-18hwfzwa.js:1804936-1805306 fingerprint = maybeRecordPluginHint (0.607)
+//@ chunk-18hwfzwa.js:1804936-1805306 fingerprint (2.1.88 match: maybeRecordPluginHint, 0.607)
 /**
  * 记录 CLI/工具输出中的 <claude-code-hint> 插件推荐（全局 claudeCodeHints，每会话最多一次）。
  */
@@ -55,7 +55,7 @@ function maybeRecordPluginHint(hint, pendingHint) {
   hintedPluginIds.add(pluginId);
   pendingHint.offer(hint);
 }
-//@ chunk-18hwfzwa.js:1805306-1805970 fingerprint = resolvePluginHint (0.814)
+//@ chunk-18hwfzwa.js:1805306-1805970 fingerprint (2.1.88 match: resolvePluginHint, 0.814)
 /**
  * 解析插件推荐：已安装（含别名 ID）则丢弃，否则从市场取条目供提示安装。
  */
@@ -93,7 +93,7 @@ async function resolvePluginHint(hint, storageV5) {
     sourceCommand: hint.sourceCommand,
   };
 }
-//@ chunk-18hwfzwa.js:1805970-1806131 fingerprint = markHintPluginShown (1)
+//@ chunk-18hwfzwa.js:1805970-1806131 fingerprint (2.1.88 match: markHintPluginShown, 1)
 /**
  * 记下某插件推荐已展示过（全局配置 claudeCodeHints.plugin）。
  */
@@ -110,7 +110,7 @@ function markHintPluginShown(pluginId, storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-18hwfzwa.js:1806131-1806264 fingerprint = disableHintRecommendations (1)
+//@ chunk-18hwfzwa.js:1806131-1806264 fingerprint (2.1.88 match: disableHintRecommendations, 1)
 /**
  * 关闭插件推荐（claudeCodeHints.disabled=true）。
  */

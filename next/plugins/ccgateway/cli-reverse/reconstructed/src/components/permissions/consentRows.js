@@ -51,7 +51,7 @@ var INVALID_TOOL_NAME_TEXT = "(invalid tool name)";
 function isStorableRuleValue(value) {
   return isRuleRoundTripStable(value);
 }
-//@ chunk-0e8j1zzj.js:2910-3356 placement = extractRules (0.859)
+//@ chunk-0e8j1zzj.js:2910-3356 placement (2.1.88 match: extractRules, 0.859)
 /**
  * 过滤外部传入的更新列表：addRules 只保留形状合法且可存储的规则，其他类型原样保留。
  */

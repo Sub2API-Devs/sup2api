@@ -113,7 +113,7 @@ var COMMAND_SPEC = {
 };
 //@ chunk-wyqg6m3h.js:28319-28379 placement
 var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-//@ chunk-wyqg6m3h.js:28379-28418 placement = CODE_EDITING_TOOLS (1)
+//@ chunk-wyqg6m3h.js:28379-28418 placement (2.1.88 match: CODE_EDITING_TOOLS, 1)
 var CODE_EDITING_TOOLS = ["Edit", "Write", "NotebookEdit"];
 //@ chunk-wyqg6m3h.js:28418-28495 placement
 function mayHaveWritten(result) {
@@ -122,7 +122,7 @@ function mayHaveWritten(result) {
 }
 //@ chunk-wyqg6m3h.js:28495-28524 placement
 var SHELL_TOOLS = ["Bash", "PowerShell"];
-//@ chunk-wyqg6m3h.js:28524-28543 placement = TODO_WRITE_TOOL_NAME (1)
+//@ chunk-wyqg6m3h.js:28524-28543 placement (2.1.88 match: TODO_WRITE_TOOL_NAME, 1)
 /**
  * "TodoWrite"（另一块中的副本）。
  */

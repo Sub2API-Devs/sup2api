@@ -15,12 +15,12 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-jhrww53q.js:49897-49964 fingerprint = getIsDocker (0.479)
+//@ chunk-jhrww53q.js:49897-49964 fingerprint (2.1.88 match: getIsDocker, 0.479)
 function getIsDocker() {
   if (isDisklessEnvProbe()) return false;
   return getFsImplementation().existsSync("/.dockerenv");
 }
-//@ chunk-hvpfdswb.js:1601-1666 fingerprint = isMuslEnvironment (1)
+//@ chunk-hvpfdswb.js:1601-1666 fingerprint (2.1.88 match: isMuslEnvironment, 1)
 function isMuslEnvironment_2(platform) {
   return env.platform !== "linux" && platform.startsWith(`${CCR_TOKEN_DIR}/`);
 }
@@ -91,7 +91,7 @@ class EnvironmentProbe {
     return this.antDspEnvGateSettled ?? false;
   }
 }
-//@ chunk-aepeg2w5.js:753511-753829 fingerprint = getIsBubblewrapSandbox (0.442)
+//@ chunk-aepeg2w5.js:753511-753829 fingerprint (2.1.88 match: getIsBubblewrapSandbox, 0.442)
 /**
  * 按 host 缓存的 Linux 沙箱探测槽：new W(() => new yx({platform:"linux", isDockerenvPresent, isBubblewrapEnvSet, probeInternalNetworkAccess, …}))；gs() 返回 cj.of(B().host)，所以同一进程里每个 host 只有一个探测实例，不是可直接调用的函数。
  */
@@ -124,7 +124,7 @@ function isMuslEnvironment() {
 function isAndroidEnvironment() {
   return false;
 }
-//@ chunk-aepeg2w5.js:753924-754397 fingerprint = getTerminalWithJetBrainsDetectionAsync (0.532)
+//@ chunk-aepeg2w5.js:753924-754397 fingerprint (2.1.88 match: getTerminalWithJetBrainsDetectionAsync, 0.532)
 var NON_INTERACTIVE_TERMINAL; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
 var envDynamicProbe;
 deferInit("chunk-aepeg2w5.js:753924", () => {
@@ -151,7 +151,7 @@ deferInit("chunk-aepeg2w5.js:753924", () => {
     isAndroidEnvironment,
   };
 });
-//@ chunk-aepeg2w5.js:754397-754516 fingerprint = envDynamic (0.44)
+//@ chunk-aepeg2w5.js:754397-754516 fingerprint (2.1.88 match: envDynamic, 0.44)
 async function envDynamic() {
   if (envDynamicProbe.getIsBubblewrapSandbox()) return "bubblewrap";
   if (await envDynamicProbe.getIsDocker()) return "docker";

@@ -22,11 +22,11 @@ import {
 import { isZincHarborOn } from "../plugins/functionHooks/inputHold.js";
 import { stopTask } from "../components/tasks/stopTask.js";
 
-//@ chunk-18hwfzwa.js:440816-440861 fingerprint = stepTeammateSelection (0.345)
+//@ chunk-18hwfzwa.js:440816-440861 fingerprint (2.1.88 match: stepTeammateSelection, 0.345)
 function stepTeammateSelection(state) {
   return state.viewSelectionMode;
 }
-//@ chunk-18hwfzwa.js:1438068-1438659 fingerprint = useBackgroundTaskNavigation (0.49)
+//@ chunk-18hwfzwa.js:1438068-1438659 fingerprint (2.1.88 match: useBackgroundTaskNavigation, 0.49)
 function useBackgroundTaskNavigation({ inputOwnsEscape, isTranscriptScreen, isPanelOpen }) {
   let appStoreDirect = useAppStoreDirect();
   let viewSelectionMode = useAppState((state) => state.viewSelectionMode);

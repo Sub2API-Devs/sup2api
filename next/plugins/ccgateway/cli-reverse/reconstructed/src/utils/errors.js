@@ -29,7 +29,7 @@ class MalformedCommandError extends Error {}
 class CliUserError extends Error {
   name = "CliUserError";
 }
-//@ chunk-2g090z7k.js:2473-2544 placement = AbortError (1)
+//@ chunk-2g090z7k.js:2473-2544 placement (2.1.88 match: AbortError, 1)
 class AbortError extends Error {
   constructor(message) {
     super(message);
@@ -41,7 +41,7 @@ let StreamClosedAbortError; // deferred: uses AbortError of its import cycle whi
 deferInit("chunk-2g090z7k.js:2544", () => {
   StreamClosedAbortError = class StreamClosedAbortError extends AbortError {};
 });
-//@ chunk-2g090z7k.js:2565-2728 placement = isAbortError (0.47)
+//@ chunk-2g090z7k.js:2565-2728 placement (2.1.88 match: isAbortError, 0.47)
 /**
  * 判断是否为中断错误（AbortError、内部取消、name=AbortError 或 axios __CANCEL__）。
  */
@@ -56,7 +56,7 @@ function isAbortError(e) {
     return false;
   }
 }
-//@ chunk-2g090z7k.js:2728-2869 placement = ConfigParseError (1)
+//@ chunk-2g090z7k.js:2728-2869 placement (2.1.88 match: ConfigParseError, 1)
 class ConfigParseError extends Error {
   filePath;
   defaultConfig;
@@ -67,7 +67,7 @@ class ConfigParseError extends Error {
     this.defaultConfig = defaultConfig;
   }
 }
-//@ chunk-2g090z7k.js:2869-3251 placement = ShellError (0.698)
+//@ chunk-2g090z7k.js:2869-3251 placement (2.1.88 match: ShellError, 0.698)
 class ShellError extends Error {
   stdout;
   stderr;
@@ -88,7 +88,7 @@ class ShellError extends Error {
     this.sandboxed = details.sandboxed;
   }
 }
-//@ chunk-2g090z7k.js:3251-3377 placement = TeleportOperationError (0.815)
+//@ chunk-2g090z7k.js:3251-3377 placement (2.1.88 match: TeleportOperationError, 0.815)
 class TeleportOperationError extends Error {
   formattedMessage;
   constructor(message, formattedMessage) {
@@ -97,7 +97,7 @@ class TeleportOperationError extends Error {
     this.name = "TeleportOperationError";
   }
 }
-//@ chunk-2g090z7k.js:3377-3532 placement = TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (0.878)
+//@ chunk-2g090z7k.js:3377-3532 placement (2.1.88 match: TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, 0.878)
 /**
  * 可上报遥测的错误类型：构造时显式给出不含代码和路径的遥测消息。
  */
@@ -226,14 +226,14 @@ function hasExactErrorMessage(error, message) {
 function toError(e) {
   return e instanceof Error ? e : Error(String(e));
 }
-//@ chunk-2g090z7k.js:4717-4777 placement = errorMessage (0)
+//@ chunk-2g090z7k.js:4717-4777 placement (2.1.88 match: errorMessage, 0)
 /**
  * 把任意值转成错误消息字符串。
  */
 function errorMessage(e) {
   return e instanceof Error ? e.message : String(e);
 }
-//@ chunk-2g090z7k.js:4777-4876 placement = isConnectionError (1)
+//@ chunk-2g090z7k.js:4777-4876 placement (2.1.88 match: isConnectionError, 1)
 /**
  * 取错误对象的字符串 code（如 ENOENT），没有返回 undefined。全项目大量使用。
  */
@@ -404,14 +404,14 @@ function findInCauseChain(error, matches, maxDepth = 5) {
   }
   return;
 }
-//@ chunk-2g090z7k.js:7534-7571 placement = getErrnoCode (0)
+//@ chunk-2g090z7k.js:7534-7571 placement (2.1.88 match: getErrnoCode, 0)
 /**
  * 取错误的 errno code（如 ENOENT）。
  */
 function isENOENT(e) {
   return getErrnoCode(e) === "ENOENT";
 }
-//@ chunk-2g090z7k.js:7571-7632 placement = isRealPathWithinTeamDir (1)
+//@ chunk-2g090z7k.js:7571-7632 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isPathAbsent(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";
@@ -441,7 +441,7 @@ function isHttpServerConnReset(error) {
     return false;
   }
 }
-//@ chunk-2g090z7k.js:7956-8057 placement = getErrnoPath (1)
+//@ chunk-2g090z7k.js:7956-8057 placement (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath(e) {
   if (e && typeof e === "object" && "path" in e && typeof e.path === "string") return e.path;
   return;
@@ -560,7 +560,7 @@ function isExpectedApiError(error, apiError) {
 function isMaxContentLengthError(error) {
   return error instanceof Error && /maxContentLength size of .* exceeded/.test(error.message);
 }
-//@ chunk-2g090z7k.js:9599-10010 placement = classifyAxiosError (1)
+//@ chunk-2g090z7k.js:9599-10010 placement (2.1.88 match: classifyAxiosError, 1)
 /**
  * 把 axios 错误分类为 auth/timeout/network/http/other 并给出状态码。
  */
@@ -608,7 +608,7 @@ function isNonRetryableClientError(status) {
     status !== 429
   );
 }
-//@ chunk-sycgf9xs.js:3842-4108 fingerprint = shortErrorStack (0.88)
+//@ chunk-sycgf9xs.js:3842-4108 fingerprint (2.1.88 match: shortErrorStack, 0.88)
 function shortErrorStack(error, maxFrames) {
   try {
     let stack = typeof error.stack === "string" ? error.stack : "";
@@ -625,13 +625,13 @@ function shortErrorStack(error, maxFrames) {
   } catch {}
   return error;
 }
-//@ chunk-06y4szbn.js:173375-173506 fingerprint = getErrnoPath (1)
+//@ chunk-06y4szbn.js:173375-173506 fingerprint (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath_2(error) {
   if (error === null || typeof error !== "object" || !("path" in error)) return;
   let path = error.path;
   return typeof path === "string" && ARTIFACT_DOC_PATH_RE.test(path) ? path : undefined;
 }
-//@ chunk-e6aww6q8.js:1386147-1386405 callgraph-witnessed = isENOENT (0)
+//@ chunk-e6aww6q8.js:1386147-1386405 callgraph-witnessed (2.1.88 match: isENOENT, 0)
 async function isENOENT_2(filePath) {
   let parentDir = dirname(filePath);
   try {
@@ -658,11 +658,11 @@ async function isENOENT_2(filePath) {
       });
   }
 }
-//@ chunk-24t3dkzb.js:4838-4916 placement = isConnectionError (1)
+//@ chunk-24t3dkzb.js:4838-4916 placement (2.1.88 match: isConnectionError, 1)
 function getErrorCodeString(err) {
   return err && typeof err === "object" && "code" in err ? String(err.code) : undefined;
 }
-//@ chunk-hm0ce8vc.js:32169-32240 fingerprint = isFsInaccessible (0.878)
+//@ chunk-hm0ce8vc.js:32169-32240 fingerprint (2.1.88 match: isFsInaccessible, 0.878)
 var isFsInaccessible_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-hm0ce8vc.js:32169", () => {
   isFsInaccessible_2 = new Set(["ENOENT", "ELOOP", "ENOTDIR", "EISDIR", "EACCES", "EPERM"]);

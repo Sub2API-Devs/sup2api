@@ -19,7 +19,7 @@ import { logForDebugging } from "./debug.js";
 import { applyRelaunchTerminalSize } from "./relaunchTerminalSize.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-rr03x1jm.js:510-1001 fingerprint = getStdinOverride (0.316)
+//@ chunk-rr03x1jm.js:510-1001 fingerprint (2.1.88 match: getStdinOverride, 0.316)
 function getStdinOverride() {
   if (process.stdin.isTTY)
     return {
@@ -75,7 +75,7 @@ var stdinOverrideCache; // deferred: uses stdinOverrideCell of its import cycle 
 deferInit("chunk-rr03x1jm.js:1075", () => {
   stdinOverrideCache = new stdinOverrideCell();
 });
-//@ chunk-rr03x1jm.js:1089-1225 facade-exports = getBaseRenderOptions (0.509)
+//@ chunk-rr03x1jm.js:1089-1225 facade-exports (2.1.88 match: getBaseRenderOptions, 0.509)
 function getBaseRenderOptions(exitOnCtrlC = false) {
   applyRelaunchTerminalSize();
   let stdin = stdinOverrideCache.get();

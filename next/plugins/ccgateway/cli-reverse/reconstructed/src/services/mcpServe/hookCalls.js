@@ -325,7 +325,7 @@ function hooksDisabledForSources(sources) {
     shouldSkipHookDueToTrust()
   );
 }
-//@ chunk-wy9dbk5f.js:23186-23310 placement = getEnabledSettingSources (0.752)
+//@ chunk-wy9dbk5f.js:23186-23310 placement (2.1.88 match: getEnabledSettingSources, 0.752)
 function isDisableAllHooksEffective(sources) {
   return (
     [...sources, "flagSettings", "policySettings"]

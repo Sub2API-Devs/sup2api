@@ -497,11 +497,11 @@ function classifyBridgeEntry(client) {
       return "connecting";
   }
 }
-//@ chunk-25sm7c4g.js:33293-33355 placement = findChromeClient (1)
+//@ chunk-25sm7c4g.js:33293-33355 placement (2.1.88 match: findChromeClient, 1)
 function findChromeClient(clients) {
   return clients.find((client) => client.type === "connected" && getServerUrl(client));
 }
-//@ chunk-25sm7c4g.js:33355-33483 placement = getServerUrl (1)
+//@ chunk-25sm7c4g.js:33355-33483 placement (2.1.88 match: getServerUrl, 1)
 function getServerUrl(config) {
   return (
     config.name === REMOTE_DEVICES_SERVER_NAME &&

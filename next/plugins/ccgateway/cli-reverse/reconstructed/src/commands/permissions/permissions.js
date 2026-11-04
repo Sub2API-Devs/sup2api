@@ -22,7 +22,7 @@ import { PermissionRuleList } from "../../components/permissions/rules/Permissio
 import { createPermissionRetryMessage, createSystemMessage } from "../../utils/messages.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
 
-//@ chunk-p2qwpk2k.js:93185-93554 callgraph-witnessed = call (0.288)
+//@ chunk-p2qwpk2k.js:93185-93554 callgraph-witnessed (2.1.88 match: call, 0.288)
 /**
  * /permissions 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

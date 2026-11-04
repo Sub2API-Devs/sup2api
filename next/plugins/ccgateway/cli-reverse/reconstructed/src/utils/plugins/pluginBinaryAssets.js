@@ -1163,7 +1163,7 @@ async function renameReplacing(tempPath, targetPath) {
     await rename(tempPath, targetPath);
   }
 }
-//@ chunk-e6aww6q8.js:4385310-4385619 placement = convertDirectoryToZipInPlace (0.79)
+//@ chunk-e6aww6q8.js:4385310-4385619 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.79)
 /**
  * 清理目录中过期的临时文件（点文件与普通文件不同期限；存储后端模式走存储层）。
  */
@@ -1207,7 +1207,7 @@ async function sweepExpiredStorageEntries(dirPath, storageV5, namespace) {
   } while (cursor);
   await convertDirectoryToZipInPlace_2(dirPath, (name) => name.startsWith("."));
 }
-//@ chunk-e6aww6q8.js:4385888-4386116 placement = convertDirectoryToZipInPlace (0.79)
+//@ chunk-e6aww6q8.js:4385888-4386116 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.79)
 async function convertDirectoryToZipInPlace_2(dirPath, zipPath) {
   let names;
   try {
@@ -1228,7 +1228,7 @@ async function convertDirectoryToZipInPlace_2(dirPath, zipPath) {
       });
   }
 }
-//@ chunk-e6aww6q8.js:4386116-4386180 placement = generatePlaceholders (0.792)
+//@ chunk-e6aww6q8.js:4386116-4386180 placement (2.1.88 match: generatePlaceholders, 0.792)
 function makePidRandomId() {
   return `${process.pid}-${randomBytes(6).toString("hex")}`;
 }

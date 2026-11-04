@@ -65,7 +65,7 @@ function createDropReporterState() {
     reportedDropReasons: new Set(),
   };
 }
-//@ chunk-ndmse9kj.js:60955-63812 fingerprint = setMeter (0.718)
+//@ chunk-ndmse9kj.js:60955-63812 fingerprint (2.1.88 match: setMeter, 0.718)
 class TelemetryHandles {
   #e = null;
   #t = null;
@@ -1186,7 +1186,7 @@ function inboundAttachmentDownloadRegistry() {
 function arrivingInboundFileRegistry() {
   return currentSession().sessionScratch.arrivingInboundFiles();
 }
-//@ chunk-ndmse9kj.js:76383-76463 facade-majority = getSessionProjectDir (0.624)
+//@ chunk-ndmse9kj.js:76383-76463 facade-majority (2.1.88 match: getSessionProjectDir, 0.624)
 /**
  * 会话状态函数 getSessionProjectDir：涉及当前会话的 identity.projectDir。
  */
@@ -1223,7 +1223,7 @@ function getPermissionScreenAnchor() {
 function isHomeDirectorySession() {
   return getOriginalCwd() === homedir();
 }
-//@ chunk-ndmse9kj.js:76669-76728 facade-majority = getProjectRoot (1)
+//@ chunk-ndmse9kj.js:76669-76728 facade-majority (2.1.88 match: getProjectRoot, 1)
 /**
  * 会话状态函数 getProjectRoot：优先取异步上下文覆盖对象的 projectRoot；
  */
@@ -1253,7 +1253,7 @@ function setSessionProject(patch) {
   });
   if (patch.originalCwd !== undefined) emitOriginalCwdChanged(session);
 }
-//@ chunk-ndmse9kj.js:76923-76959 facade-majority = setOriginalCwd (0.445)
+//@ chunk-ndmse9kj.js:76923-76959 facade-majority (2.1.88 match: setOriginalCwd, 0.445)
 /**
  * setOriginalCwd：只改 originalCwd。
  */
@@ -1274,7 +1274,7 @@ deferInit("chunk-ndmse9kj.js:76959", () => {
 function onOriginalCwdChange(listener) {
   return originalCwdListeners.of(currentSession()).subscribe(listener);
 }
-//@ chunk-ndmse9kj.js:77030-77067 facade-majority = getProjectRoot (1)
+//@ chunk-ndmse9kj.js:77030-77067 facade-majority (2.1.88 match: getProjectRoot, 1)
 /**
  * setProjectRoot：只改 projectRoot。
  */
@@ -1313,7 +1313,7 @@ function resetStartTime() {
 function getSessionStartTime() {
   return currentSession().costLedger.sessionStartTime();
 }
-//@ chunk-ndmse9kj.js:77230-77303 facade-majority = getDirectConnectServerUrl (0.7)
+//@ chunk-ndmse9kj.js:77230-77303 facade-majority (2.1.88 match: getDirectConnectServerUrl, 0.7)
 /**
  * 状态访问器：读取当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 directConnectServerUrl()。
  */
@@ -1550,7 +1550,7 @@ function addToTotalCostState(cost, modelUsage, model) {
 function addToSpentTokens(tokens) {
   currentSession().costLedger.recordSpentTokens(tokens);
 }
-//@ chunk-ndmse9kj.js:79577-79628 facade-majority = getTotalCostUSD (0.713)
+//@ chunk-ndmse9kj.js:79577-79628 facade-majority (2.1.88 match: getTotalCostUSD, 0.713)
 /**
  * 状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalCostUSD()。
  */
@@ -1571,7 +1571,7 @@ function addSideQueryCostUSD(costUsd) {
 function getSideQueryCostUSD() {
   return currentSession().costLedger.sideQueryCostUSD();
 }
-//@ chunk-ndmse9kj.js:79738-79793 facade-majority = getTotalAPIDuration (0.72)
+//@ chunk-ndmse9kj.js:79738-79793 facade-majority (2.1.88 match: getTotalAPIDuration, 0.72)
 /**
  * 状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalAPIDuration()。
  */
@@ -1585,14 +1585,14 @@ function getTotalAPIDuration() {
 function getTotalDuration() {
   return currentSession().costLedger.totalDuration();
 }
-//@ chunk-ndmse9kj.js:79846-79916 facade-majority = getTotalAPIDurationWithoutRetries (0.72)
+//@ chunk-ndmse9kj.js:79846-79916 facade-majority (2.1.88 match: getTotalAPIDurationWithoutRetries, 0.72)
 /**
  * 状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalAPIDurationWithoutRetries()。
  */
 function getTotalAPIDurationWithoutRetries() {
   return currentSession().costLedger.totalAPIDurationWithoutRetries();
 }
-//@ chunk-ndmse9kj.js:79916-79973 facade-majority = getTotalToolDuration (0.72)
+//@ chunk-ndmse9kj.js:79916-79973 facade-majority (2.1.88 match: getTotalToolDuration, 0.72)
 /**
  * 状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalToolDuration()。
  */
@@ -1606,7 +1606,7 @@ function getTotalToolDuration() {
 function addToToolDuration(durationMs) {
   currentSession().costLedger.recordToolDuration(durationMs);
 }
-//@ chunk-ndmse9kj.js:80026-80087 facade-majority = getStatsStore (0.729)
+//@ chunk-ndmse9kj.js:80026-80087 facade-majority (2.1.88 match: getStatsStore, 0.729)
 /**
  * 状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 statsStore()。
  */
@@ -1655,14 +1655,14 @@ function resetInteractionBaseline() {
 function addToTotalLinesChanged(numAdditions, numRemovals) {
   currentSession().costLedger.recordLinesChanged(numAdditions, numRemovals);
 }
-//@ chunk-ndmse9kj.js:80424-80479 facade-majority = getTotalLinesAdded (0.72)
+//@ chunk-ndmse9kj.js:80424-80479 facade-majority (2.1.88 match: getTotalLinesAdded, 0.72)
 /**
  * 状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalLinesAdded()。
  */
 function getTotalLinesAdded() {
   return currentSession().costLedger.totalLinesAdded();
 }
-//@ chunk-ndmse9kj.js:80479-80536 facade-majority = getTotalLinesRemoved (0.72)
+//@ chunk-ndmse9kj.js:80479-80536 facade-majority (2.1.88 match: getTotalLinesRemoved, 0.72)
 /**
  * 状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalLinesRemoved()。
  */
@@ -1711,7 +1711,7 @@ function getTotalWebSearchRequests() {
 function setHasUnknownModelCost() {
   currentSession().costLedger.markUnknownModelCost();
 }
-//@ chunk-ndmse9kj.js:80897-80956 facade-majority = setHasUnknownModelCost (0.72)
+//@ chunk-ndmse9kj.js:80897-80956 facade-majority (2.1.88 match: setHasUnknownModelCost, 0.72)
 /**
  * 状态访问器：读取当前会话的 费用账本（costLedger） 上的 hasUnknownModelCost()。
  */
@@ -1732,7 +1732,7 @@ function addSafetyStop() {
 function getSafetyStops() {
   return currentSession().costLedger.safetyStops();
 }
-//@ chunk-ndmse9kj.js:81056-81116 facade-majority = getLastMainRequestId (0.728)
+//@ chunk-ndmse9kj.js:81056-81116 facade-majority (2.1.88 match: getLastMainRequestId, 0.728)
 /**
  * 状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastMainRequestId()。
  */
@@ -1848,7 +1848,7 @@ function stageResumeJournalSeed(seed) {
     session.requestJournal.applyResumeSeed(seed);
   else session.requestJournal.stageResumeSeed(seed);
 }
-//@ chunk-ndmse9kj.js:82207-82276 facade-majority = getLastApiCompletionTimestamp (0.736)
+//@ chunk-ndmse9kj.js:82207-82276 facade-majority (2.1.88 match: getLastApiCompletionTimestamp, 0.736)
 /**
  * 状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastApiCompletionTimestamp()。
  */
@@ -1872,7 +1872,7 @@ function markPostCompaction(contextTokens, { keepsCachedPrefix = false } = {}) {
   requestJournal.replaceLastMainThreadContextTokens(contextTokens);
   if (!keepsCachedPrefix) requestJournal.replaceLastMainThreadRequest(null, null);
 }
-//@ chunk-ndmse9kj.js:82540-82667 facade-majority = markPostCompaction (0.544)
+//@ chunk-ndmse9kj.js:82540-82667 facade-majority (2.1.88 match: markPostCompaction, 0.544)
 /**
  * 读取并清除“刚压缩过”标记。
  */
@@ -1882,7 +1882,7 @@ function consumePostCompaction() {
   session.requestJournal.replacePendingPostCompaction(false);
   return pending;
 }
-//@ chunk-ndmse9kj.js:82667-82727 facade-majority = flushInteractionTime_inner (0.693)
+//@ chunk-ndmse9kj.js:82667-82727 facade-majority (2.1.88 match: flushInteractionTime_inner, 0.693)
 /**
  * 状态访问器：读取当前会话的 用户在场（userPresence） 上的 lastInteractionTime()。
  */
@@ -1959,7 +1959,7 @@ function getIsScrollDraining() {
 async function waitForScrollIdle() {
   return currentSession().userPresence.waitForScrollIdle();
 }
-//@ chunk-ndmse9kj.js:83278-83327 facade-majority = getModelUsage (0.679)
+//@ chunk-ndmse9kj.js:83278-83327 facade-majority (2.1.88 match: getModelUsage, 0.679)
 /**
  * 状态访问器：读取当前会话的 费用账本（costLedger） 上的 modelUsage()。
  */
@@ -1994,14 +1994,14 @@ function getUsageSinceLastResult() {
 function takeUsageSinceLastResult() {
   return currentSession().costLedger.takeUsageSinceLastResult();
 }
-//@ chunk-ndmse9kj.js:83564-83628 facade-majority = getMainLoopModelOverride (0.717)
+//@ chunk-ndmse9kj.js:83564-83628 facade-majority (2.1.88 match: getMainLoopModelOverride, 0.717)
 /**
  * 状态访问器：读取当前会话的 模型选择（modelSelection） 上的 mainLoopModelOverride()。
  */
 function getMainLoopModelOverride() {
   return currentSession().modelSelection.mainLoopModelOverride();
 }
-//@ chunk-ndmse9kj.js:83628-83691 facade-majority = getInitialMainLoopModel (0.699)
+//@ chunk-ndmse9kj.js:83628-83691 facade-majority (2.1.88 match: getInitialMainLoopModel, 0.699)
 /**
  * 状态访问器：读取当前会话的 模型选择（modelSelection） 上的 initialMainLoopModel()。
  */
@@ -2315,7 +2315,7 @@ function getInitialEnvDefaultModel() {
 function setInitialEnvDefaultModel(model) {
   currentSession().modelSelection.replaceInitialEnvDefaultModel(model);
 }
-//@ chunk-ndmse9kj.js:86970-87041 facade-majority = getSdkBetas (0.724)
+//@ chunk-ndmse9kj.js:86970-87041 facade-majority (2.1.88 match: getSdkBetas, 0.724)
 /**
  * 会话状态函数 getSdkBetas：优先取异步上下文覆盖对象的 sdkBetas；涉及当前会话的 surfaceCapabilities.sdkBetas。
  */
@@ -2496,7 +2496,7 @@ function getProjectConfigRoot() {
 function setProjectConfigRoot(root) {
   currentSession().host.launchOptions.replaceProjectConfigRoot(root);
 }
-//@ chunk-ndmse9kj.js:88752-88816 facade-majority = getModelStrings (0.7)
+//@ chunk-ndmse9kj.js:88752-88816 facade-majority (2.1.88 match: getModelStrings, 0.7)
 /**
  * 状态访问器：读取当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 modelStrings()。
  */
@@ -2545,7 +2545,7 @@ function recordProbeRefutedDocumentDefault(candidate) {
 function getProbeRefutedDocumentDefaults() {
   return currentSession().host.modelStringsCache.probeRefutedDocumentDefaults();
 }
-//@ chunk-ndmse9kj.js:89248-89313 facade-majority = getLoggerProvider (0.729)
+//@ chunk-ndmse9kj.js:89248-89313 facade-majority (2.1.88 match: getLoggerProvider, 0.729)
 /**
  * 状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 loggerProvider()。
  */
@@ -2559,7 +2559,7 @@ function getLoggerProvider() {
 function setLoggerProvider(loggerProvider) {
   currentSession().host.telemetryHandles.replaceLoggerProvider(loggerProvider);
 }
-//@ chunk-ndmse9kj.js:89380-89442 facade-majority = getEventLogger (0.711)
+//@ chunk-ndmse9kj.js:89380-89442 facade-majority (2.1.88 match: getEventLogger, 0.711)
 /**
  * 状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 eventLogger()。
  */
@@ -2615,7 +2615,7 @@ function isOTelInitPending() {
 function getHostOtelState() {
   return currentSession().host.telemetryHandles.hostOtel();
 }
-//@ chunk-ndmse9kj.js:89899-89964 facade-majority = getTracerProvider (0.729)
+//@ chunk-ndmse9kj.js:89899-89964 facade-majority (2.1.88 match: getTracerProvider, 0.729)
 /**
  * 状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 tracerProvider()。
  */
@@ -2664,7 +2664,7 @@ function getCachedOtlpHttpAgentFactory(useProxy, trustProfile) {
 function setCachedOtlpHttpAgentFactory(useProxy, trustProfile, factory) {
   currentSession().host.telemetryHandles.replaceCachedOtlpHttpAgentFactory(useProxy, trustProfile, factory);
 }
-//@ chunk-ndmse9kj.js:90429-90489 facade-majority = getIsNonInteractiveSession (0.711)
+//@ chunk-ndmse9kj.js:90429-90489 facade-majority (2.1.88 match: getIsNonInteractiveSession, 0.711)
 /**
  * getIsNonInteractiveSession：!launchOptions.isInteractive()。
  */
@@ -2726,7 +2726,7 @@ function isUnclaimedSpare() {
   let claimState = currentSession().host.launchOptions.spareClaimState();
   return claimState === "parked" || claimState === "claiming" || claimState === "failed";
 }
-//@ chunk-ndmse9kj.js:91137-91197 facade-majority = getIsInteractive (0.711)
+//@ chunk-ndmse9kj.js:91137-91197 facade-majority (2.1.88 match: getIsInteractive, 0.711)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 isInteractive()。
  */
@@ -2754,7 +2754,7 @@ function isNoDialogLaunch() {
 function markNoDialogLaunch() {
   currentSession().host.launchOptions.markNoDialogLaunch();
 }
-//@ chunk-ndmse9kj.js:91390-91540 facade-majority = setIsInteractive (0.384)
+//@ chunk-ndmse9kj.js:91390-91540 facade-majority (2.1.88 match: setIsInteractive, 0.384)
 /**
  * setIsInteractive：写 launchOptions.isInteractive；变化时让所有 HostScoped 缓存失效。
  */
@@ -2905,7 +2905,7 @@ function markPrintInputClosed() {
 function isPrintInputClosed() {
   return currentSession().host.launchOptions.printInputClosed();
 }
-//@ chunk-ndmse9kj.js:93063-93121 facade-majority = getClientType (0.739)
+//@ chunk-ndmse9kj.js:93063-93121 facade-majority (2.1.88 match: getClientType, 0.739)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 clientType()。
  */
@@ -2919,7 +2919,7 @@ function getClientType() {
 function setClientType(clientType) {
   currentSession().host.launchOptions.replaceClientType(clientType);
 }
-//@ chunk-ndmse9kj.js:93181-93261 facade-majority = getSdkAgentProgressSummariesEnabled (0.763)
+//@ chunk-ndmse9kj.js:93181-93261 facade-majority (2.1.88 match: getSdkAgentProgressSummariesEnabled, 0.763)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 sdkAgentProgressSummariesEnabled()。
  */
@@ -2947,7 +2947,7 @@ function getRendererModeForAnalytics() {
 function setRendererModeForAnalytics(mode) {
   currentSession().host.launchOptions.replaceRendererMode(mode);
 }
-//@ chunk-ndmse9kj.js:93465-93536 facade-majority = getStrictToolResultPairing (0.763)
+//@ chunk-ndmse9kj.js:93465-93536 facade-majority (2.1.88 match: getStrictToolResultPairing, 0.763)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 strictToolResultPairing()。
  */
@@ -3210,7 +3210,7 @@ function markPollEventWiringForRun(launchOptions) {
     markPollEventIngress(ownEventsSink);
   if (launchOptions.ownEventsRequested) markOwnEventDeliveryRequested();
 }
-//@ chunk-ndmse9kj.js:96558-96617 facade-majority = getUserMsgOptIn (0.763)
+//@ chunk-ndmse9kj.js:96558-96617 facade-majority (2.1.88 match: getUserMsgOptIn, 0.763)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 userMsgOptIn()。
  */
@@ -3280,7 +3280,7 @@ function getSessionStartType() {
 function setSessionStartType(startType) {
   currentSession().host.launchOptions.replaceSessionStartType(startType);
 }
-//@ chunk-ndmse9kj.js:97220-97289 facade-majority = getQuestionPreviewFormat (0.763)
+//@ chunk-ndmse9kj.js:97220-97289 facade-majority (2.1.88 match: getQuestionPreviewFormat, 0.763)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 questionPreviewFormat()。
  */
@@ -3322,14 +3322,14 @@ function getQuestionOptionDescriptionsOptional() {
 function setQuestionOptionDescriptionsOptional(optional) {
   currentSession().host.launchOptions.replaceQuestionOptionDescriptionsOptional(optional);
 }
-//@ chunk-ndmse9kj.js:97672-97729 facade-majority = getAgentColorMap (0.739)
+//@ chunk-ndmse9kj.js:97672-97729 facade-majority (2.1.88 match: getAgentColorMap, 0.739)
 /**
  * 状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 agentColorMap()。
  */
 function getAgentColorMap() {
   return currentSession().sessionScratch.agentColorMap();
 }
-//@ chunk-ndmse9kj.js:97729-97793 facade-majority = getFlagSettingsPath (0.725)
+//@ chunk-ndmse9kj.js:97729-97793 facade-majority (2.1.88 match: getFlagSettingsPath, 0.725)
 /**
  * 状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 flagSettingsPath()。
  */
@@ -3399,7 +3399,7 @@ function getFlagSettingsFilePinnedContent() {
 function setFlagSettingsFilePinnedContent(content) {
   currentSession().host.settingsSource.replaceFlagSettingsFilePinnedContent(content);
 }
-//@ chunk-ndmse9kj.js:98452-98518 facade-majority = getFlagSettingsInline (0.719)
+//@ chunk-ndmse9kj.js:98452-98518 facade-majority (2.1.88 match: getFlagSettingsInline, 0.719)
 /**
  * 状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 flagSettingsInline()。
  */
@@ -3448,7 +3448,7 @@ function setParentManagedSettingsInvalid(invalid) {
 function getParentOrganizationSettings() {
   return currentSession().host.settingsSource.parentOrganizationSettings();
 }
-//@ chunk-ndmse9kj.js:98968-99079 facade-majority = getSessionIngressToken (0.53)
+//@ chunk-ndmse9kj.js:98968-99079 facade-majority (2.1.88 match: getSessionIngressToken, 0.53)
 /**
  * 会话状态函数 getSessionIngressToken：涉及当前会话的 host.credentialSlots.sessionIngressToken。
  */
@@ -3458,7 +3458,7 @@ function getSessionIngressToken() {
     ? context.secrets.sessionIngressToken
     : currentSession().host.credentialSlots.sessionIngressToken();
 }
-//@ chunk-ndmse9kj.js:99079-99202 facade-majority = setSessionIngressToken (0.411)
+//@ chunk-ndmse9kj.js:99079-99202 facade-majority (2.1.88 match: setSessionIngressToken, 0.411)
 /**
  * 会话状态函数 setSessionIngressToken：涉及当前会话的 host.credentialSlots.replaceSessionIngressToken。
  */
@@ -3467,7 +3467,7 @@ function setSessionIngressToken(token) {
   if (context) context.secrets.sessionIngressToken = token;
   else currentSession().host.credentialSlots.replaceSessionIngressToken(token);
 }
-//@ chunk-ndmse9kj.js:99202-99267 facade-majority = getOauthTokenFromFd (0.739)
+//@ chunk-ndmse9kj.js:99202-99267 facade-majority (2.1.88 match: getOauthTokenFromFd, 0.739)
 /**
  * 状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 oauthTokenFromFd()。
  */
@@ -3537,7 +3537,7 @@ function getOauthScopesFromFd() {
 function setOauthScopesFromFd(scopes) {
   currentSession().host.credentialSlots.replaceOauthScopesFromFd(scopes);
 }
-//@ chunk-ndmse9kj.js:99913-99975 facade-majority = getApiKeyFromFd (0.739)
+//@ chunk-ndmse9kj.js:99913-99975 facade-majority (2.1.88 match: getApiKeyFromFd, 0.739)
 /**
  * 状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 apiKeyFromFd()。
  */
@@ -3765,7 +3765,7 @@ function setGatewayRefreshInFlight(inFlight) {
 function setLastAPIRequest(request) {
   currentSession().requestJournal.replaceLastAPIRequest(request);
 }
-//@ chunk-ndmse9kj.js:102163-102221 facade-majority = setLastAPIRequest (0.736)
+//@ chunk-ndmse9kj.js:102163-102221 facade-majority (2.1.88 match: setLastAPIRequest, 0.736)
 /**
  * 状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastAPIRequest()。
  */
@@ -3800,7 +3800,7 @@ function setLastAPIRequestMessages(messages) {
 function setLastClassifierRequests(requests) {
   currentSession().requestJournal.replaceLastClassifierRequests(requests);
 }
-//@ chunk-ndmse9kj.js:102497-102563 facade-majority = setLastClassifierRequests (0.736)
+//@ chunk-ndmse9kj.js:102497-102563 facade-majority (2.1.88 match: setLastClassifierRequests, 0.736)
 /**
  * 状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastClassifierRequests()。
  */
@@ -3816,7 +3816,7 @@ function setCachedClaudeMdContent(claudeMd) {
   if (agentContext) agentContext.cachedClaudeMdContent = claudeMd;
   else currentSession().sessionFlags.replaceCachedClaudeMdContent(claudeMd);
 }
-//@ chunk-ndmse9kj.js:102674-102773 facade-majority = setCachedClaudeMdContent (0.74)
+//@ chunk-ndmse9kj.js:102674-102773 facade-majority (2.1.88 match: setCachedClaudeMdContent, 0.74)
 /**
  * 会话状态函数 getCachedClaudeMdContent：涉及当前会话的 sessionFlags.cachedClaudeMdContent。
  */
@@ -3836,7 +3836,7 @@ function getAllowedSettingSources() {
     ? settingsSource.allowedSettingSourcesWithoutRepoDirSources()
     : settingsSource.allowedSettingSources();
 }
-//@ chunk-ndmse9kj.js:102958-103028 facade-majority = getAllowedSettingSources (0.725)
+//@ chunk-ndmse9kj.js:102958-103028 facade-majority (2.1.88 match: getAllowedSettingSources, 0.725)
 /**
  * 状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 allowedSettingSources()。
  */
@@ -3850,7 +3850,7 @@ function getAllowedSettingSourcesAsConfigured() {
 function setAllowedSettingSources(sources) {
   currentSession().host.settingsSource.replaceAllowedSettingSources(sources);
 }
-//@ chunk-ndmse9kj.js:103100-103182 facade-majority = preferThirdPartyAuthentication (0.88)
+//@ chunk-ndmse9kj.js:103100-103182 facade-majority (2.1.88 match: preferThirdPartyAuthentication, 0.88)
 /**
  * 会话状态函数 preferThirdPartyAuthentication：涉及当前会话的 host.launchOptions.clientType。
  */
@@ -3864,7 +3864,7 @@ function preferThirdPartyAuthentication() {
 function setInlinePlugins(plugins) {
   currentSession().host.extensionsConfig.replaceInlinePlugins(plugins);
 }
-//@ chunk-ndmse9kj.js:103247-103310 facade-majority = setInlinePlugins (0.729)
+//@ chunk-ndmse9kj.js:103247-103310 facade-majority (2.1.88 match: setInlinePlugins, 0.729)
 /**
  * 状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 inlinePlugins()。
  */
@@ -4101,7 +4101,7 @@ function getPluginsSyncVetoed() {
 function setChromeFlagOverride(chrome) {
   currentSession().host.extensionsConfig.replaceChromeFlagOverride(chrome);
 }
-//@ chunk-ndmse9kj.js:105608-105677 facade-majority = setChromeFlagOverride (0.729)
+//@ chunk-ndmse9kj.js:105608-105677 facade-majority (2.1.88 match: setChromeFlagOverride, 0.729)
 /**
  * 状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 chromeFlagOverride()。
  */
@@ -4145,7 +4145,7 @@ function setUseCoworkPlugins(enabled) {
   session.host.settingsSource.replaceUseCoworkPlugins(enabled);
   SETTINGS_CACHE_STORE_SLOT.of(session.host).invalidateAll();
 }
-//@ chunk-ndmse9kj.js:106053-106118 facade-majority = setUseCoworkPlugins (0.732)
+//@ chunk-ndmse9kj.js:106053-106118 facade-majority (2.1.88 match: setUseCoworkPlugins, 0.732)
 /**
  * 状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 useCoworkPlugins()。
  */
@@ -4201,7 +4201,7 @@ function getLocalUploadsRoot() {
 function setSessionBypassPermissionsMode(enabled) {
   currentSession().host.launchOptions.replaceSessionBypassPermissionsMode(enabled);
 }
-//@ chunk-ndmse9kj.js:106594-106670 facade-majority = setSessionBypassPermissionsMode (0.763)
+//@ chunk-ndmse9kj.js:106594-106670 facade-majority (2.1.88 match: setSessionBypassPermissionsMode, 0.763)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 sessionBypassPermissionsMode()。
  */
@@ -4215,7 +4215,7 @@ function getSessionBypassPermissionsMode() {
 function setScheduledTasksEnabled(enabled) {
   currentSession().host.launchOptions.replaceScheduledTasksEnabled(enabled);
 }
-//@ chunk-ndmse9kj.js:106740-106809 facade-majority = setScheduledTasksEnabled (0.756)
+//@ chunk-ndmse9kj.js:106740-106809 facade-majority (2.1.88 match: setScheduledTasksEnabled, 0.756)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 scheduledTasksEnabled()。
  */
@@ -4229,7 +4229,7 @@ function getScheduledTasksEnabled() {
 function onScheduledTasksEnabled(listener) {
   return currentSession().host.launchOptions.onScheduledTasksEnabled(listener);
 }
-//@ chunk-ndmse9kj.js:106882-106950 facade-majority = getSessionCronTasks (0.588)
+//@ chunk-ndmse9kj.js:106882-106950 facade-majority (2.1.88 match: getSessionCronTasks, 0.588)
 /**
  * 会话状态函数 getSessionCronTasks：优先取异步上下文覆盖对象的 sessionCronTasks；涉及当前会话的 sessionCron.tasks。
  */
@@ -4338,7 +4338,7 @@ function setLoopEnded(ended) {
   currentSession().sessionCron.replaceEnded(ended);
   if (ended) currentSession().sessionCron.changed.emit();
 }
-//@ chunk-ndmse9kj.js:107822-108262 facade-majority = removeSessionCronTasks (0.227)
+//@ chunk-ndmse9kj.js:107822-108262 facade-majority (2.1.88 match: removeSessionCronTasks, 0.227)
 /**
  * removeSessionCronTasks：按 id 删除会话级定时任务，返回删除数；删掉 loop 任务时触发唤醒。
  */
@@ -4387,7 +4387,7 @@ function announcePendingLoopWakeup(payload) {
 function setSessionTrustAccepted(accepted) {
   currentSession().sessionFlags.replaceSessionTrustAccepted(accepted);
 }
-//@ chunk-ndmse9kj.js:108513-108575 facade-majority = setSessionTrustAccepted (0.747)
+//@ chunk-ndmse9kj.js:108513-108575 facade-majority (2.1.88 match: setSessionTrustAccepted, 0.747)
 /**
  * 状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 sessionTrustAccepted()。
  */
@@ -4415,7 +4415,7 @@ function getHomeTrustDialogAccepted() {
 function setSessionPersistenceDisabled(disabled) {
   currentSession().host.launchOptions.replaceSessionPersistenceDisabled(disabled);
 }
-//@ chunk-ndmse9kj.js:108783-108856 facade-majority = setSessionPersistenceDisabled (0.763)
+//@ chunk-ndmse9kj.js:108783-108856 facade-majority (2.1.88 match: setSessionPersistenceDisabled, 0.763)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 sessionPersistenceDisabled()。
  */
@@ -4502,7 +4502,7 @@ function getProjectDirForTools() {
     ? (toolsMachine.directory?.path ?? null)
     : (getProjectConfigRoot() ?? getProjectRootOrNull());
 }
-//@ chunk-ndmse9kj.js:109517-109576 facade-majority = hasExitedPlanModeInSession (0.747)
+//@ chunk-ndmse9kj.js:109517-109576 facade-majority (2.1.88 match: hasExitedPlanModeInSession, 0.747)
 /**
  * 状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 hasExitedPlanMode()。
  */
@@ -4565,7 +4565,7 @@ function onProactivitySelectorGateChanged(listener) {
 function replaceProactivityHostGateSubscription(subscription) {
   currentSession().host.proactivity.replaceHostGateSubscription(subscription);
 }
-//@ chunk-ndmse9kj.js:110087-110156 facade-majority = needsPlanModeExitAttachment (0.747)
+//@ chunk-ndmse9kj.js:110087-110156 facade-majority (2.1.88 match: needsPlanModeExitAttachment, 0.747)
 /**
  * 状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 needsPlanModeExitAttachment()。
  */
@@ -4589,7 +4589,7 @@ function handlePlanModeTransition(fromMode, toMode) {
   if (fromMode === "plan" && toMode !== "plan")
     currentSession().sessionFlags.replaceNeedsPlanModeExitAttachment(true);
 }
-//@ chunk-ndmse9kj.js:110408-110477 facade-majority = needsAutoModeExitAttachment (0.747)
+//@ chunk-ndmse9kj.js:110408-110477 facade-majority (2.1.88 match: needsAutoModeExitAttachment, 0.747)
 /**
  * 状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 needsAutoModeExitAttachment()。
  */
@@ -4614,7 +4614,7 @@ function handleAutoModeTransition(fromMode, toMode) {
   if (toIsAuto && !fromIsAuto) currentSession().sessionFlags.replaceNeedsAutoModeExitAttachment(false);
   if (fromIsAuto && !toIsAuto) currentSession().sessionFlags.replaceNeedsAutoModeExitAttachment(true);
 }
-//@ chunk-ndmse9kj.js:110782-110857 facade-majority = hasShownLspRecommendationThisSession (0.747)
+//@ chunk-ndmse9kj.js:110782-110857 facade-majority (2.1.88 match: hasShownLspRecommendationThisSession, 0.747)
 /**
  * 状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 lspRecommendationShownThisSession()。
  */
@@ -4635,7 +4635,7 @@ function setLspRecommendationShownThisSession(shown) {
 function setInitJsonSchema(jsonSchema) {
   currentSession().host.launchOptions.replaceInitJsonSchema(jsonSchema);
 }
-//@ chunk-ndmse9kj.js:110998-111060 facade-majority = setInitJsonSchema (0.763)
+//@ chunk-ndmse9kj.js:110998-111060 facade-majority (2.1.88 match: setInitJsonSchema, 0.763)
 /**
  * 状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 initJsonSchema()。
  */
@@ -4719,7 +4719,7 @@ function swapMcpServerTools(owner, serverName, config) {
 function getHookHolder() {
   return getAgentContext() ?? currentSession().hookRegistry.holder();
 }
-//@ chunk-ndmse9kj.js:111791-111988 facade-majority = registerHookCallbacks (1)
+//@ chunk-ndmse9kj.js:111791-111988 facade-majority (2.1.88 match: registerHookCallbacks, 1)
 /**
  * registerHookCallbacks：把 SDK/插件注册的钩子按事件追加到 registeredHooks，并发出钩子变化信号。
  */
@@ -4733,7 +4733,7 @@ function registerHookCallbacks(hooks) {
   }
   emitHookStoresChanged();
 }
-//@ chunk-ndmse9kj.js:111988-112029 facade-majority = registerHookCallbacks (1)
+//@ chunk-ndmse9kj.js:111988-112029 facade-majority (2.1.88 match: registerHookCallbacks, 1)
 /**
  * getRegisteredHooks：当前钩子持有者里注册的 SDK/插件钩子。
  */
@@ -4802,7 +4802,7 @@ function replaceRegisteredPluginHooks(hooksByKey) {
     );
   registerHookCallbacks(keptHooks);
 }
-//@ chunk-ndmse9kj.js:112557-112834 fingerprint = clearRegisteredPluginHooks (0.671)
+//@ chunk-ndmse9kj.js:112557-112834 fingerprint (2.1.88 match: clearRegisteredPluginHooks, 0.671)
 function clearRegisteredPluginHooks() {
   let hookHolder = getHookHolder();
   if (!hookHolder.registeredHooks) return;
@@ -4836,14 +4836,14 @@ function emitHookStoresChanged() {
 function onHookStoresChanged(recheckMcpCgroupRelease) {
   return onProcessRootHost(hooksChangedSignal).subscribe(recheckMcpCgroupRelease);
 }
-//@ chunk-ndmse9kj.js:112929-112986 facade-majority = getPlanSlugCache (0.739)
+//@ chunk-ndmse9kj.js:112929-112986 facade-majority (2.1.88 match: getPlanSlugCache, 0.739)
 /**
  * 状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 planSlugCache()。
  */
 function getPlanSlugCache() {
   return currentSession().sessionScratch.planSlugCache();
 }
-//@ chunk-ndmse9kj.js:112986-113075 facade-majority = getSessionCreatedTeams (0.739)
+//@ chunk-ndmse9kj.js:112986-113075 facade-majority (2.1.88 match: getSessionCreatedTeams, 0.739)
 /**
  * 会话状态函数 getSessionCreatedTeams：优先取异步上下文覆盖对象的 sessionCreatedTeams；涉及当前会话的 sessionScratch.sessionCreatedTeams。
  */
@@ -4984,7 +4984,7 @@ function getInheritedTeamName() {
 function setInheritedTeamName(teamName) {
   currentSession().sessionFlags.replaceInheritedTeamName(teamName);
 }
-//@ chunk-ndmse9kj.js:114436-114564 facade-majority = setTeleportedSessionInfo (0.583)
+//@ chunk-ndmse9kj.js:114436-114564 facade-majority (2.1.88 match: setTeleportedSessionInfo, 0.583)
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceTeleportedSessionInfo()。
  */
@@ -4995,7 +4995,7 @@ function setTeleportedSessionInfo(info) {
     sessionId: info.sessionId,
   });
 }
-//@ chunk-ndmse9kj.js:114564-114627 facade-majority = getTeleportedSessionInfo (0.747)
+//@ chunk-ndmse9kj.js:114564-114627 facade-majority (2.1.88 match: getTeleportedSessionInfo, 0.747)
 /**
  * 状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 teleportedSessionInfo()。
  */
@@ -5009,7 +5009,7 @@ function getTeleportedSessionInfo() {
 function markFirstTeleportMessageLogged() {
   currentSession().sessionFlags.markFirstTeleportMessageLogged();
 }
-//@ chunk-ndmse9kj.js:114692-114867 facade-majority = addInvokedSkill (0.822)
+//@ chunk-ndmse9kj.js:114692-114867 facade-majority (2.1.88 match: addInvokedSkill, 0.822)
 /**
  * addInvokedSkill：记录本会话调用过的技能（压缩后重新注入用），键为 agentId:skillName。
  */
@@ -5033,7 +5033,7 @@ function addInvokedSkill(
     }),
   });
 }
-//@ chunk-ndmse9kj.js:114867-114916 facade-majority = getInvokedSkills (0.747)
+//@ chunk-ndmse9kj.js:114867-114916 facade-majority (2.1.88 match: getInvokedSkills, 0.747)
 /**
  * 状态访问器：读取当前会话的 已调用技能（invokedSkills） 上的 skills()。
  */
@@ -5053,7 +5053,7 @@ function updateInvokedSkillContent(key, content) {
       content,
     });
 }
-//@ chunk-ndmse9kj.js:115020-115139 facade-majority = getInvokedSkillsForAgent (0.747)
+//@ chunk-ndmse9kj.js:115020-115139 facade-majority (2.1.88 match: getInvokedSkillsForAgent, 0.747)
 /**
  * 会话状态函数 getInvokedSkillsForAgent：涉及当前会话的 invokedSkills.skills。
  */
@@ -5077,7 +5077,7 @@ function clearInvokedSkills(preservedAgentIds) {
   for (let [key, skill] of session.invokedSkills.skills())
     if (skill.agentId === null || !preservedAgentIds.has(skill.agentId)) session.invokedSkills.forget(key);
 }
-//@ chunk-ndmse9kj.js:115324-115433 facade-majority = clearInvokedSkillsForAgent (0.586)
+//@ chunk-ndmse9kj.js:115324-115433 facade-majority (2.1.88 match: clearInvokedSkillsForAgent, 0.586)
 /**
  * clearInvokedSkillsForAgent：清除某代理的已调用技能。
  */
@@ -5093,7 +5093,7 @@ function clearInvokedSkillsForAgent(agentId) {
 function addSlowOperation(operationName, durationMs) {
   currentSession().host.diagnostics.recordSlowOperation(operationName, durationMs);
 }
-//@ chunk-ndmse9kj.js:115497-115557 facade-majority = getSlowOperations (0.608)
+//@ chunk-ndmse9kj.js:115497-115557 facade-majority (2.1.88 match: getSlowOperations, 0.608)
 /**
  * 状态访问器：读取当前会话的 host（host） → 诊断（diagnostics） 上的 slowOperations()。
  */
@@ -5107,7 +5107,7 @@ function getSlowOperations() {
 function getDevBarAlert() {
   return currentSession().host.diagnostics.devBarAlert();
 }
-//@ chunk-ndmse9kj.js:115614-115708 facade-majority = getMainThreadAgentType (0.68)
+//@ chunk-ndmse9kj.js:115614-115708 facade-majority (2.1.88 match: getMainThreadAgentType, 0.68)
 /**
  * 会话状态函数 getMainThreadAgentType：涉及当前会话的 hookRegistry.mainThreadAgentType。
  */
@@ -5117,7 +5117,7 @@ function getMainThreadAgentType() {
     ? agentContext.mainThreadAgentType
     : currentSession().hookRegistry.mainThreadAgentType();
 }
-//@ chunk-ndmse9kj.js:115708-115815 facade-majority = setMainThreadAgentType (0.496)
+//@ chunk-ndmse9kj.js:115708-115815 facade-majority (2.1.88 match: setMainThreadAgentType, 0.496)
 /**
  * 会话状态函数 setMainThreadAgentType：涉及当前会话的 hookRegistry.replaceMainThreadAgentType。
  */
@@ -5277,7 +5277,7 @@ function getVimSharedState() {
 function setVimSharedState(initialPersistentState) {
   currentSession().sessionScratch.replaceVimSharedState(initialPersistentState);
 }
-//@ chunk-ndmse9kj.js:117170-117259 facade-majority = getAdditionalDirectoriesForClaudeMd (0.729)
+//@ chunk-ndmse9kj.js:117170-117259 facade-majority (2.1.88 match: getAdditionalDirectoriesForClaudeMd, 0.729)
 /**
  * 会话状态函数 getAdditionalDirectoriesForClaudeMd：涉及当前会话的 host.extensionsConfig.additionalDirectoriesForClaudeMd。
  */
@@ -5305,7 +5305,7 @@ function getClaudeMdAdditionalDirectoriesAsked() {
 function setClaudeMdAdditionalDirectoriesAsked(addedDirectories) {
   currentSession().host.extensionsConfig.askClaudeMdAdditionalDirectories(addedDirectories);
 }
-//@ chunk-ndmse9kj.js:117506-117571 facade-majority = getAllowedChannels (0.729)
+//@ chunk-ndmse9kj.js:117506-117571 facade-majority (2.1.88 match: getAllowedChannels, 0.729)
 /**
  * 状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 allowedChannels()。
  */
@@ -5319,7 +5319,7 @@ function getAllowedChannels() {
 function setAllowedChannels(channels) {
   currentSession().host.extensionsConfig.replaceAllowedChannels(channels);
 }
-//@ chunk-ndmse9kj.js:117639-117704 facade-majority = getHasDevChannels (0.729)
+//@ chunk-ndmse9kj.js:117639-117704 facade-majority (2.1.88 match: getHasDevChannels, 0.729)
 /**
  * 状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 hasDevChannels()。
  */
@@ -5333,7 +5333,7 @@ function getHasDevChannels() {
 function setHasDevChannels(hasDevChannels) {
   currentSession().host.extensionsConfig.replaceHasDevChannels(hasDevChannels);
 }
-//@ chunk-ndmse9kj.js:117771-117842 facade-majority = getPromptCache1hAllowlist (0.75)
+//@ chunk-ndmse9kj.js:117771-117842 facade-majority (2.1.88 match: getPromptCache1hAllowlist, 0.75)
 /**
  * 状态访问器：读取当前会话的 host（host） → 请求锁存（requestLatches） 上的 promptCache1hAllowlist()。
  */
@@ -5678,63 +5678,63 @@ function getMainQueryRunning() {
 function setMainLoopStatus(status) {
   currentSession().surfaceCapabilities.replaceMainLoopStatus(status);
 }
-//@ chunk-xdkvf45x.js:295-360 fingerprint = getSessionCounter (0.729)
+//@ chunk-xdkvf45x.js:295-360 fingerprint (2.1.88 match: getSessionCounter, 0.729)
 /**
  * getSessionCounter：OTel 计数器 claude_code.session.count。
  */
 function getSessionCounter() {
   return rootSession().host.telemetryHandles.sessionCounter();
 }
-//@ chunk-xdkvf45x.js:360-421 fingerprint = getLocCounter (0.729)
+//@ chunk-xdkvf45x.js:360-421 fingerprint (2.1.88 match: getLocCounter, 0.729)
 /**
  * getLocCounter：claude_code.lines_of_code.count。
  */
 function getLocCounter() {
   return rootSession().host.telemetryHandles.locCounter();
 }
-//@ chunk-xdkvf45x.js:421-481 fingerprint = getPrCounter (0.729)
+//@ chunk-xdkvf45x.js:421-481 fingerprint (2.1.88 match: getPrCounter, 0.729)
 /**
  * getPrCounter：claude_code.pull_request.count。
  */
 function getPrCounter() {
   return rootSession().host.telemetryHandles.prCounter();
 }
-//@ chunk-xdkvf45x.js:481-545 fingerprint = getCommitCounter (0.729)
+//@ chunk-xdkvf45x.js:481-545 fingerprint (2.1.88 match: getCommitCounter, 0.729)
 /**
  * getCommitCounter：claude_code.commit.count。
  */
 function getCommitCounter() {
   return rootSession().host.telemetryHandles.commitCounter();
 }
-//@ chunk-xdkvf45x.js:545-607 fingerprint = getCostCounter (0.729)
+//@ chunk-xdkvf45x.js:545-607 fingerprint (2.1.88 match: getCostCounter, 0.729)
 /**
  * getCostCounter：claude_code.cost.usage。
  */
 function getCostCounter() {
   return rootSession().host.telemetryHandles.costCounter();
 }
-//@ chunk-xdkvf45x.js:607-670 fingerprint = getTokenCounter (0.729)
+//@ chunk-xdkvf45x.js:607-670 fingerprint (2.1.88 match: getTokenCounter, 0.729)
 /**
  * getTokenCounter：claude_code.token.usage。
  */
 function getTokenCounter() {
   return rootSession().host.telemetryHandles.tokenCounter();
 }
-//@ chunk-xdkvf45x.js:670-748 fingerprint = getCodeEditToolDecisionCounter (0.729)
+//@ chunk-xdkvf45x.js:670-748 fingerprint (2.1.88 match: getCodeEditToolDecisionCounter, 0.729)
 /**
  * getCodeEditToolDecisionCounter：claude_code.code_edit_tool.decision。
  */
 function getCodeEditToolDecisionCounter() {
   return rootSession().host.telemetryHandles.codeEditToolDecisionCounter();
 }
-//@ chunk-xdkvf45x.js:748-816 fingerprint = getActiveTimeCounter (0.729)
+//@ chunk-xdkvf45x.js:748-816 fingerprint (2.1.88 match: getActiveTimeCounter, 0.729)
 /**
  * getActiveTimeCounter：claude_code.active_time.total。
  */
 function getActiveTimeCounter() {
   return rootSession().host.telemetryHandles.activeTimeCounter();
 }
-//@ chunk-xdkvf45x.js:816-880 fingerprint = getMeterProvider (0.729)
+//@ chunk-xdkvf45x.js:816-880 fingerprint (2.1.88 match: getMeterProvider, 0.729)
 /**
  * getMeterProvider：OTel MeterProvider。
  */

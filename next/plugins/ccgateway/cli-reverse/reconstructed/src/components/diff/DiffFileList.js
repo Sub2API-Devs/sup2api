@@ -27,7 +27,7 @@ import { isMenuOpen } from "../CustomSelect/select.js";
 import { diffLineToPlainText } from "./diffText.js";
 import { DiffStatCounts } from "../PrBadge.js";
 
-//@ chunk-18hwfzwa.js:1239149-1239902 callgraph-fingerprint = DiffFileList (0.197)
+//@ chunk-18hwfzwa.js:1239149-1239902 callgraph-fingerprint (2.1.88 match: DiffFileList, 0.197)
 function DiffFileList(props) {
   let $ = useMemoCache(12);
   let { reason } = props;
@@ -96,7 +96,7 @@ function DiffFileList(props) {
   } else quote = $[11];
   return quote;
 }
-//@ chunk-mtx4csef.js:17588-18112 callgraph-fingerprint = FileItem (0.322)
+//@ chunk-mtx4csef.js:17588-18112 callgraph-fingerprint (2.1.88 match: FileItem, 0.322)
 function FileItem(props) {
   let $ = useMemoCache(11);
   let { file } = props;
@@ -147,7 +147,7 @@ function FileItem(props) {
   } else t6 = $[10];
   return t6;
 }
-//@ chunk-mtx4csef.js:18112-19087 fingerprint = FileStats (0.494)
+//@ chunk-mtx4csef.js:18112-19087 fingerprint (2.1.88 match: FileStats, 0.494)
 function FileStats(props) {
   let $ = useMemoCache(16);
   let { file, isSelected } = props;

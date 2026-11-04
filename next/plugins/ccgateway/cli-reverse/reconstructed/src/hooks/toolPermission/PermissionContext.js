@@ -61,7 +61,7 @@ import { applyMcpServerAllowRule } from "../../services/mcp/mcpStandardKeys.js";
 function createPermissionQueueOps({ feedback, contentBlocks, isSubagent }) {
   return !feedback && !contentBlocks?.length && !isSubagent;
 }
-//@ chunk-s4bxxzsw.js:32586-32724 fingerprint = createResolveOnce (1)
+//@ chunk-s4bxxzsw.js:32586-32724 fingerprint (2.1.88 match: createResolveOnce, 1)
 function createResolveOnce(resolve) {
   let claimed = false;
   let delivered = false;
@@ -82,7 +82,7 @@ function createResolveOnce(resolve) {
     },
   };
 }
-//@ chunk-s4bxxzsw.js:32724-37374 fingerprint = createPermissionContext (0.746)
+//@ chunk-s4bxxzsw.js:32724-37374 fingerprint (2.1.88 match: createPermissionContext, 0.746)
 /**
  * 为一次权限请求创建上下文对象：logDecision、logCancelled、persistPermissions（写规则）、setModeFromBridge、resolveIfAborted、buildAllow、cancelAndAbort、runHooks。
  */

@@ -20,12 +20,12 @@ import { generateTempFilePath } from "./tempDir.js";
 import { countCharInString } from "./stringUtils.js";
 import { writeFileSync_DEPRECATED } from "./slowOperations.js";
 
-//@ chunk-0dfh72mg.js:2541-2583 fingerprint = EDITOR_OVERRIDES (1)
+//@ chunk-0dfh72mg.js:2541-2583 fingerprint (2.1.88 match: EDITOR_OVERRIDES, 1)
 var EDITOR_OVERRIDES = {
   code: "code -w",
   subl: "subl --wait",
 };
-//@ chunk-0dfh72mg.js:2583-3468 fingerprint = editFileInEditor (0.539)
+//@ chunk-0dfh72mg.js:2583-3468 fingerprint (2.1.88 match: editFileInEditor, 0.539)
 function editFileInEditor(filePath, cursorOffset) {
   let fs = getFsImplementation();
   let inkInstance = getSecondRootError().get(process.stdout);
@@ -142,7 +142,7 @@ function recollapsePastedContent(finalContent) {
   if (contentIndex === -1) return finalContent;
   return finalContent.slice(contentIndex + PROMPT_EDITOR_REPLY_MARKER.length).replace(/^\r?\n\r?\n?/, "");
 }
-//@ chunk-0dfh72mg.js:4328-4749 fingerprint = editPromptInEditor (1)
+//@ chunk-0dfh72mg.js:4328-4749 fingerprint (2.1.88 match: editPromptInEditor, 1)
 /**
  * 在外部编辑器（$EDITOR/$VISUAL）中编辑当前提示词，返回编辑后的内容；可附带 Claude 上一条回复作参考（保存时去掉）。
  */

@@ -41,7 +41,7 @@ function isVersionHeldWithSource(agentId, slug, ver) {
     !observedWithoutSource(agentId.agentId, slug, ver)
   );
 }
-//@ chunk-q84dhc5d.js:1000-1070 placement = validateContentTokens (0.63)
+//@ chunk-q84dhc5d.js:1000-1070 placement (2.1.88 match: validateContentTokens, 0.63)
 /**
  * 取有效的 Read token 上限：调用上下文的 fileReadingLimits.maxTokens，否则默认值。
  */

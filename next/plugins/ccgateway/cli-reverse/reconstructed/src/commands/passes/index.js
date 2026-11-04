@@ -10,7 +10,7 @@
  */
 import { getCachedReferrerReward, checkCachedPassesEligibility } from "../../services/api/referral.js";
 
-//@ chunk-e6aww6q8.js:2027748-2028028 fingerprint = default (0.786)
+//@ chunk-e6aww6q8.js:2027748-2028028 fingerprint (2.1.88 match: default, 0.786)
 /**
  * /passes 命令对象（local-jsx）；描述：{if(drt())return"Share a free week of Claude Code with friends and earn usage credits";return"Share a free week of Claude Code with friends"；isHidden: {let{eligible:e,hasCache:n}=qvt();return!e||!n}；实现 chunk-aa3cndeh.js 的 Da。
  */

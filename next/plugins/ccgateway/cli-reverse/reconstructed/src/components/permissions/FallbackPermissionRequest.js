@@ -112,7 +112,7 @@ function fallbackDialogRows(isCompact, terminalSize) {
     ? Math.max(FALLBACK_MIN_ROWS, Math.min(FALLBACK_MAX_ROWS, terminalSize.rows - FALLBACK_ROWS_RESERVED))
     : FALLBACK_MIN_ROWS;
 }
-//@ chunk-0e8j1zzj.js:44528-54584 fingerprint = FallbackPermissionRequest (0.322)
+//@ chunk-0e8j1zzj.js:44528-54584 fingerprint (2.1.88 match: FallbackPermissionRequest, 0.322)
 /**
  * 通用权限请求：渲染工具的 renderToolUseMessage 摘要（失败时退回参数表格），显示规则解释；选项允许一次/不再询问（工具级规则）/启用 auto/拒绝并反馈。
  */

@@ -263,7 +263,7 @@ function toolListingVerdict(newTools) {
     ...getCliOwnedState().toolListingVerdicts.get(newTools),
   };
 }
-//@ chunk-1dth5azr.js:7773-7871 placement = findChromeClient (0.783)
+//@ chunk-1dth5azr.js:7773-7871 placement (2.1.88 match: findChromeClient, 0.783)
 function isSameConnectedClient(a, b) {
   return a === b || (a?.type === "connected" && b?.type === "connected" && a.client === b.client);
 }

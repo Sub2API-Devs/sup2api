@@ -17,7 +17,7 @@ import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
 import { getPlatform } from "../../utils/platform.js";
 import { posixPathToWindowsPath } from "../../utils/path.js";
 
-//@ chunk-hvmwwjxr.js:462-551 placement = getTeammateCommand (1)
+//@ chunk-hvmwwjxr.js:462-551 placement (2.1.88 match: getTeammateCommand, 1)
 /**
  * 再启动自身的 argv 前缀：[execPath, argv[1]?]。
  */
@@ -71,7 +71,7 @@ function getEvalReadRoots(originalCwd, toolPermissionContext) {
       .map((dir) => (getPlatform() === "windows" ? posixPathToWindowsPath(dir) : dir)),
   ];
 }
-//@ chunk-hvmwwjxr.js:1154-1266 placement = getServerCommandArray (0.769)
+//@ chunk-hvmwwjxr.js:1154-1266 placement (2.1.88 match: getServerCommandArray, 0.769)
 function buildSelfStdioServerConfig(stubDir, evalReadRoots) {
   let [execPath = process.execPath, ...rest] = getSelfExecArgv();
   return {

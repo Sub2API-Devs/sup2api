@@ -26,7 +26,7 @@ function appendAgentTranscriptMessage(taskId, message, taskRegistry) {
     messages: [...transcript.messages, message],
   }));
 }
-//@ chunk-e6aww6q8.js:4718996-4719155 placement = queuePendingMessage (0.752)
+//@ chunk-e6aww6q8.js:4718996-4719155 placement (2.1.88 match: queuePendingMessage, 0.752)
 /**
  * 取出并清空子代理的 pendingMessages。
  */

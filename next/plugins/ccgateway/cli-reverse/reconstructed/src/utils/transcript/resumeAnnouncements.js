@@ -80,11 +80,11 @@ deferInit("chunk-e6aww6q8.js:304352", () => {
   REANNOUNCED_ATTACHMENT_TYPE_SET = REANNOUNCED_ATTACHMENT_TYPES;
   weakSet = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:304380-304453 placement = isCompactBoundaryMessage (1)
+//@ chunk-e6aww6q8.js:304380-304453 placement (2.1.88 match: isCompactBoundaryMessage, 1)
 function isCompactBoundaryMessage_2(message) {
   return message.type === "system" && message.subtype === "compact_boundary";
 }
-//@ chunk-e6aww6q8.js:304453-304590 placement = isNullRenderingAttachment (1)
+//@ chunk-e6aww6q8.js:304453-304590 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function getNullRenderingAttachmentType(msg) {
   if (msg.type !== "attachment" || !isPlainObject_5(msg.attachment)) return;
   let msg_2 = msg.attachment.type;

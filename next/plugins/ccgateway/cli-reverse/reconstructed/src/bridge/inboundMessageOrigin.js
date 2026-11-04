@@ -704,7 +704,7 @@ function getTeammateMessageSender(text) {
   if (typeof text !== "string") return;
   return text.match(regExp_2)?.[1];
 }
-//@ chunk-mketzrwm.js:7690-7925 placement = extractErrorTypeFromData (1)
+//@ chunk-mketzrwm.js:7690-7925 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 内容（字符串或文本块）中是否带 teammate 消息信封。
  */

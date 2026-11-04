@@ -106,7 +106,7 @@ import {
 
 //@ chunk-bbtre4r8.js:8796-8823 affinity
 var ARTIFACT_ROOM_VIEW = "artifact-room-view";
-//@ chunk-bbtre4r8.js:8823-8875 fingerprint = enqueueUltraplanFailureNotification (0.531)
+//@ chunk-bbtre4r8.js:8823-8875 fingerprint (2.1.88 match: enqueueUltraplanFailureNotification, 0.531)
 /**
  * 生成 artifact-room-view 类型 task-notification 的开头片段。
  */
@@ -115,14 +115,14 @@ function artifactRoomViewNotificationHeader() {
 <${TASK_TYPE}>${ARTIFACT_ROOM_VIEW}</${TASK_TYPE}>
 `;
 }
-//@ chunk-2vae0cjf.js:872-933 fingerprint = getRemoteTaskSessionUrl (1)
+//@ chunk-2vae0cjf.js:872-933 fingerprint (2.1.88 match: getRemoteTaskSessionUrl, 1)
 /**
  * 是否运行在云会话环境（设置了 SESSION_INGRESS_URL）。
  */
 function isInCloudSession() {
   return process.env.SESSION_INGRESS_URL !== undefined;
 }
-//@ chunk-mdb2vxrz.js:6503-6591 fingerprint = checkRemoteAgentEligibility (0.641)
+//@ chunk-mdb2vxrz.js:6503-6591 fingerprint (2.1.88 match: checkRemoteAgentEligibility, 0.641)
 /**
  * 远程代理是否可用：返回 {eligible} 或 {eligible:false, ineligibleReason}。
  */
@@ -137,7 +137,7 @@ function checkRemoteAgentEligibility() {
         ineligibleReason,
       };
 }
-//@ chunk-e6aww6q8.js:1766933-1767726 fingerprint = RemoteAgentTask (0.663)
+//@ chunk-e6aww6q8.js:1766933-1767726 fingerprint (2.1.88 match: RemoteAgentTask, 0.663)
 /**
  * RemoteAgentTask 任务实现：kill 时标 killed 并发 stopped 通知，归档远程会话；ultrareview 记取消、ultraplan 记 tengu_ultraplan_stopped 并清掉会话 URL；最后回收输出、删元数据。
  */
@@ -296,7 +296,7 @@ function extractWorkflowResultFromLog(events) {
     ? (markerEvent.summary ?? "Remote dynamic workflow completed")
     : "Remote dynamic workflow completed";
 }
-//@ chunk-e6aww6q8.js:1782966-1783048 fingerprint = REMOTE_TASK_TYPES (0.875)
+//@ chunk-e6aww6q8.js:1782966-1783048 fingerprint (2.1.88 match: REMOTE_TASK_TYPES, 0.875)
 /**
  * 远程任务子类型：remote-agent、ultraplan、ultrareview、autofix-pr、remote-workflow。
  */
@@ -305,7 +305,7 @@ var REMOTE_TASK_TYPES = ["remote-agent", "ultraplan", "ultrareview", "autofix-pr
 function isRemoteTaskType(value) {
   return REMOTE_TASK_TYPES.includes(value ?? "");
 }
-//@ chunk-e6aww6q8.js:1783091-1783206 fingerprint = persistRemoteAgentMetadata (1)
+//@ chunk-e6aww6q8.js:1783091-1783206 fingerprint (2.1.88 match: persistRemoteAgentMetadata, 1)
 /**
  * 写入远程代理任务元数据（用于 --resume 后恢复轮询），失败只记日志。
  */
@@ -339,7 +339,7 @@ async function checkRemoteSessionEligibility({ allowBundle = false, cwd, storage
 //@ chunk-e6aww6q8.js:1783408-1783525 layout
 var CLOUD_SESSIONS_POLICY_DISABLED_MESSAGE =
   "Cloud sessions are disabled by your organization's policy. Contact your organization admin to enable them.";
-//@ chunk-e6aww6q8.js:1783525-1784439 fingerprint = formatPreconditionError (0.519)
+//@ chunk-e6aww6q8.js:1783525-1784439 fingerprint (2.1.88 match: formatPreconditionError, 0.519)
 /**
  * 把前置条件错误（not_logged_in / not_in_git_repo / no_git_remote / github_app_not_installed / github_not_connected / policy_blocked / eval_confined）格式化成给用户的说明。
  */
@@ -397,7 +397,7 @@ function extractPlanFromLog(log) {
       .trim() || null
   );
 }
-//@ chunk-e6aww6q8.js:1785192-1785715 fingerprint = extractReviewFromLog (1)
+//@ chunk-e6aww6q8.js:1785192-1785715 fingerprint (2.1.88 match: extractReviewFromLog, 1)
 /**
  * 从远程事件日志提取 <remote-review> 标签内容：依次查 hook 输出、assistant 文本、所有 hook stdout 拼接。
  */
@@ -671,7 +671,7 @@ Cloud review did not produce output (${reasonText}). ${getReviewFailureGuidance(
     },
   );
 }
-//@ chunk-e6aww6q8.js:1791364-1792261 fingerprint = registerRemoteAgentTask (0.766)
+//@ chunk-e6aww6q8.js:1791364-1792261 fingerprint (2.1.88 match: registerRemoteAgentTask, 0.766)
 /**
  * 注册远程代理任务：生成 r 前缀 ID，写任务状态与元数据，并启动会话事件轮询。返回 {taskId, sessionId, cleanup}。
  */
@@ -738,7 +738,7 @@ function registerRemoteAgentTask(options) {
     cleanup: stopPolling,
   };
 }
-//@ chunk-e6aww6q8.js:1792261-1792396 fingerprint = restoreRemoteAgentTasks (0.667)
+//@ chunk-e6aww6q8.js:1792261-1792396 fingerprint (2.1.88 match: restoreRemoteAgentTasks, 0.667)
 /**
  * 恢复会话时重建远程代理任务（包一层计时与异常保护）。
  */
@@ -749,7 +749,7 @@ async function restoreRemoteAgentTasks(context) {
     logForDebugging(`restoreRemoteAgentTasks failed: ${String(e)}`);
   }
 }
-//@ chunk-e6aww6q8.js:1792396-1793568 fingerprint = restoreRemoteAgentTasksImpl (0.862)
+//@ chunk-e6aww6q8.js:1792396-1793568 fingerprint (2.1.88 match: restoreRemoteAgentTasksImpl, 0.862)
 /**
  * 逐个读取保存的远程任务元数据：会话 404 删除元数据、已归档删除、其余重建 running 状态（restoredOnResume）并重新开始轮询。
  */
@@ -890,7 +890,7 @@ function deepEqual(left, right) {
     );
   return false;
 }
-//@ chunk-e6aww6q8.js:1794599-1804021 fingerprint = startRemoteSessionPolling (0.341)
+//@ chunk-e6aww6q8.js:1794599-1804021 fingerprint (2.1.88 match: startRemoteSessionPolling, 0.341)
 /**
  * 每秒轮询远程会话事件：追加输出与 todo、处理 control_request（满足条件时本地中继权限）/control_response/control_cancel_request；
  * 判定完成（result/归档/空闲 N 次/审查超时）、失败、等待输入阻塞（tengu_coral_anchor）、remote-workflow 完成；审查任务解析进度标签与结果；出错时计 404 次数。返回停止函数。
@@ -1470,7 +1470,7 @@ function startRemoteSessionPolling(taskId, context, permissionRelay) {
     withdrawAllRelays();
   };
 }
-//@ chunk-0sfjpx19.js:71972-73095 callgraph-fingerprint = enqueueRemoteNotification (0.203)
+//@ chunk-0sfjpx19.js:71972-73095 callgraph-fingerprint (2.1.88 match: enqueueRemoteNotification, 0.203)
 /**
  * 恢复会话时，对上次进程中没有结束记录的后台任务发一条汇总 task-notification（标 failed 或 stopped，列出任务 id）。
  */
@@ -1504,7 +1504,7 @@ ${joined}
     shouldQuery: false,
   });
 }
-//@ chunk-wyqg6m3h.js:28543-28722 fingerprint = extractTodoListFromLog (0.378)
+//@ chunk-wyqg6m3h.js:28543-28722 fingerprint (2.1.88 match: extractTodoListFromLog, 0.378)
 /**
  * 从远程日志找最后一次 TodoWrite，返回 {done, total}。
  */
@@ -1516,7 +1516,7 @@ function todoProgressOf(log) {
     total: mapped.length,
   };
 }
-//@ chunk-18hwfzwa.js:122371-122727 fingerprint = enqueueRemoteReviewNotification (1)
+//@ chunk-18hwfzwa.js:122371-122727 fingerprint (2.1.88 match: enqueueRemoteReviewNotification, 1)
 /**
  * 排队的 task-notification 超过上限时，把多出来的合并成一条汇总通知。
  */

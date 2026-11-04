@@ -37,7 +37,7 @@ function isToolSearchForceOverride() {
     return false;
   }
 }
-//@ chunk-mp7v59a0.js:949-1047 placement = isAutoToolSearchMode (0.787)
+//@ chunk-mp7v59a0.js:949-1047 placement (2.1.88 match: isAutoToolSearchMode, 0.787)
 function isToolSearchEnvBlockingForce(value) {
   if (value.startsWith("auto:")) {
     let intLoose = parseIntLoose(value.slice(5));

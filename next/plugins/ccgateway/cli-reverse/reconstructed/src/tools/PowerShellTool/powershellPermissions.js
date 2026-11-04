@@ -85,7 +85,7 @@ import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js"
 import { getCwd } from "../../utils/cwd.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:214175-214322 fingerprint = filterRulesByContentsMatchingInput (1)
+//@ chunk-dcmhvw5a.js:214175-214322 fingerprint (2.1.88 match: filterRulesByContentsMatchingInput, 1)
 /**
  * 把规则内容解析成 {type:prefix,prefix} / {type:wildcard,pattern} / {type:exact,command}。
  */
@@ -106,7 +106,7 @@ function parseShellPermissionRule(pattern) {
     command: pattern,
   };
 }
-//@ chunk-dcmhvw5a.js:214322-214446 placement = buildSuggestions (1)
+//@ chunk-dcmhvw5a.js:214322-214446 placement (2.1.88 match: buildSuggestions, 1)
 /**
  * 通用权限建议：localSettings 里为 toolName(ruleContent) 加 allow 规则。PowerShell/Bash 权限请求复用。
  */
@@ -125,7 +125,7 @@ function buildToolAllowSuggestion(toolName, ruleContent) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3017371-3017889 callgraph-fingerprint = powershellToolCheckExactMatchPermission (0.276)
+//@ chunk-e6aww6q8.js:3017371-3017889 callgraph-fingerprint (2.1.88 match: powershellToolCheckExactMatchPermission, 0.276)
 /**
  * 命中 ask 规则时仍运行工具自己的 checkPermissions：deny 优先，ask 时带上 matchedAskRule；检查崩溃时按 crashIsObjection 决定是否以"检查崩溃"询问。
  */
@@ -167,7 +167,7 @@ async function powershellToolCheckExactMatchPermission(tool, input, callOptions,
   }
   return defaultAsk;
 }
-//@ chunk-v0yfsee9.js:50839-50968 fingerprint = GIT_SAFETY_WRITE_CMDLETS (0.583)
+//@ chunk-v0yfsee9.js:50839-50968 fingerprint (2.1.88 match: GIT_SAFETY_WRITE_CMDLETS, 0.583)
 /**
  * 在读封锁下也视为需检查读路径的写类 cmdlet（Copy-Item、Move-Item、Compress/Expand-Archive、Invoke-WebRequest/RestMethod、New-Item）。
  */
@@ -183,7 +183,7 @@ deferInit("chunk-v0yfsee9.js:50839", () => {
     "new-item",
   ]);
 });
-//@ chunk-v0yfsee9.js:71945-72369 fingerprint = GIT_SAFETY_ARCHIVE_EXTRACTORS (0.646)
+//@ chunk-v0yfsee9.js:71945-72369 fingerprint (2.1.88 match: GIT_SAFETY_ARCHIVE_EXTRACTORS, 0.646)
 /**
  * 会写文件的 cmdlet 集合、归档解压程序集合（tar/unzip/7z/gzip/Expand-Archive）、原生复制程序集合（xcopy/robocopy），用于 git 内部路径与归档攻击检查。
  */
@@ -303,7 +303,7 @@ function suggestionForExactCommand_2(command) {
     return [];
   return buildToolAllowSuggestion(POWERSHELL_TOOL_NAME, trimPsWhitespace(command));
 }
-//@ chunk-v0yfsee9.js:73536-74944 layout = filterRulesByContentsMatchingInput (1)
+//@ chunk-v0yfsee9.js:73536-74944 layout (2.1.88 match: filterRulesByContentsMatchingInput, 1)
 /**
  * PowerShell 规则匹配：大小写不敏感；命令名去模块前缀并解析别名为规范 cmdlet；支持 exact/prefix/wildcard，prefix 不匹配复合命令。
  */
@@ -399,7 +399,7 @@ function filterRulesByContentsMatchingInput(input, rules, matchMode, behavior) {
     })
     .map(([, rule]) => rule);
 }
-//@ chunk-v0yfsee9.js:74944-75146 fingerprint = matchingRulesForInput (1)
+//@ chunk-v0yfsee9.js:74944-75146 fingerprint (2.1.88 match: matchingRulesForInput, 1)
 /**
  * PowerShell 版：分别求匹配的 deny/ask/allow 规则。
  */
@@ -420,7 +420,7 @@ function matchingRulesForInput_2(input, toolPermissionContext, matchMode) {
     matchingAllowRules,
   };
 }
-//@ chunk-v0yfsee9.js:75763-76479 fingerprint = powershellToolCheckPermission (1)
+//@ chunk-v0yfsee9.js:75763-76479 fingerprint (2.1.88 match: powershellToolCheckPermission, 1)
 /**
  * 单个 PowerShell 子命令的规则检查：精确规则 → 前缀 deny/ask → allow 规则，否则 passthrough 并附建议。
  */
@@ -478,7 +478,7 @@ function powershellToolCheckPermission(input, toolPermissionContext) {
 }
 //@ chunk-v0yfsee9.js:76479-76508 layout
 var TENGU_PLUMB_KESTREL = "tengu_plumb_kestrel";
-//@ chunk-v0yfsee9.js:76508-77218 fingerprint = getSubCommandsForPermissionCheck (1)
+//@ chunk-v0yfsee9.js:76508-77218 fingerprint (2.1.88 match: getSubCommandsForPermissionCheck, 1)
 /**
  * 把解析结果展开为需逐个检查权限的子命令（含嵌套命令），标记无参数的安全输出命令；解析失败时整体作为一条。
  */
@@ -577,7 +577,7 @@ function denyCrashedCheckUnderCommandClamp(shellPermission) {
     };
   return;
 }
-//@ chunk-v0yfsee9.js:77953-89450 fingerprint = powershellToolHasPermission (0.777)
+//@ chunk-v0yfsee9.js:77953-89450 fingerprint (2.1.88 match: powershellToolHasPermission, 0.777)
 /**
  * PowerShell 权限主流程：空命令允许；精确/前缀 deny、ask 规则；UNC 路径；解析失败要求确认；安全检查（powershellCommandIsSafe）；using/#Requires/后台 & 要确认；非文件系统提供程序与 UNC 参数；cd+git、裸仓库迹象、写 git 内部路径/.git、xcopy/robocopy+git、Windows 5.1 cwd 优先解析的命令遮蔽、解压归档后接命令；路径约束；只读命令允许；文件重定向；acceptEdits 模式；最后逐个子命令判定并汇总。
  */

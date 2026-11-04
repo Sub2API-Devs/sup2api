@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-aepeg2w5.js:630315-630358 fingerprint = getGrowthBookClientKey (0.617)
+//@ chunk-aepeg2w5.js:630315-630358 fingerprint (2.1.88 match: getGrowthBookClientKey, 0.617)
 /**
  * GrowthBook SDK 客户端 key（sdk-zAZezfDKGoZuXXKe）。
  */

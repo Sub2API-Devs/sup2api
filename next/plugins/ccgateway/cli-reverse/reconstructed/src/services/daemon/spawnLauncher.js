@@ -673,7 +673,7 @@ async function spawnDetached(argv, env, stderr, cwd) {
         child,
       };
 }
-//@ chunk-ksvdmrg0.js:15023-15500 placement = spawnCaffeinate (0.305)
+//@ chunk-ksvdmrg0.js:15023-15500 placement (2.1.88 match: spawnCaffeinate, 0.305)
 /**
  * macOS 后台守护进程用：试运行 /bin/launchctl asuser <uid> /usr/bin/true，成功则返回该前缀让子进程进入用户 GUI（Aqua）会话；打 tengu_bg_daemon_macos_aqua_wrap。
  */

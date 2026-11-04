@@ -64,7 +64,7 @@ function getSleepGuidance() {
     - If you must poll an external process, use a check command rather than sleeping first.
     - If you must sleep, keep the duration short to avoid blocking the user.`;
 }
-//@ chunk-mx04m55e.js:2348-4157 fingerprint = getEditionSection (1)
+//@ chunk-mx04m55e.js:2348-4157 fingerprint (2.1.88 match: getEditionSection, 1)
 /**
  * 按 PowerShell 版本（desktop 5.1 / core 7+ / unknown）生成语法注意事项：&&/||、三元、?? 等是否可用。
  */
@@ -91,7 +91,7 @@ async function getPowerShellPrompt() {
     backgroundRuns: !isBackgroundTasksOff(),
   });
 }
-//@ chunk-mx04m55e.js:4322-12435 fingerprint = getPrompt (0.812)
+//@ chunk-mx04m55e.js:4322-12435 fingerprint (2.1.88 match: getPrompt, 0.812)
 /**
  * PowerShell 工具提示词：版本节、已验证构建工具、目录验证、语法说明、Unix 命令对照、退出码注意、交互命令禁忌、here-string 用法、超时/输出截断、专用工具优先、并行/顺序、git 规则、sleep 规则。
  */

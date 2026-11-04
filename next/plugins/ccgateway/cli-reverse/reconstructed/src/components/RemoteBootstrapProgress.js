@@ -473,7 +473,7 @@ function BootstrapStatusLine(props) {
     }
   }
 }
-//@ chunk-h93cnm7e.js:6345-6706 placement = _temp (0.696)
+//@ chunk-h93cnm7e.js:6345-6706 placement (2.1.88 match: _temp, 0.696)
 /**
  * 按宽度截断显示的多行输出（暗色、缩进 6），无输出时不渲染；实际只被 RemoteBootstrapProgress 使用。
  */

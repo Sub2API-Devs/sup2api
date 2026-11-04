@@ -23,7 +23,7 @@ import { env } from "../../utils/env.js";
 //@ chunk-n1nr1qar.js:445-459 affinity
 var WELCOME_MAX_COLUMNS = 58;
 var WELCOME_MAX_ROWS = 30;
-//@ chunk-n1nr1qar.js:459-8150 fingerprint = WelcomeV2 (0.836)
+//@ chunk-n1nr1qar.js:459-8150 fingerprint (2.1.88 match: WelcomeV2, 0.836)
 function WelcomeV2() {
   let $ = useMemoCache(39);
   let [theme] = useTheme();
@@ -518,7 +518,7 @@ function WelcomeV2() {
   } else t16 = $[38];
   return t16;
 }
-//@ chunk-n1nr1qar.js:8150-15429 fingerprint = AppleTerminalWelcomeV2 (0.832)
+//@ chunk-n1nr1qar.js:8150-15429 fingerprint (2.1.88 match: AppleTerminalWelcomeV2, 0.832)
 function AppleTerminalWelcomeV2(props) {
   let $ = useMemoCache(44);
   let { theme, welcomeMessage } = props;

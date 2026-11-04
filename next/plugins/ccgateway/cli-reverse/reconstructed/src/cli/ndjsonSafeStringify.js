@@ -39,7 +39,7 @@ function shouldEscapeLineTerminators() {
     safe: true,
   });
 }
-//@ chunk-2kh2r6st.js:575-652 fingerprint = escapeJsLineTerminators (1)
+//@ chunk-2kh2r6st.js:575-652 fingerprint (2.1.88 match: escapeJsLineTerminators, 1)
 /**
  * JSON 序列化后把 U+2028/U+2029 转义，保证 NDJSON 一行一条。
  */

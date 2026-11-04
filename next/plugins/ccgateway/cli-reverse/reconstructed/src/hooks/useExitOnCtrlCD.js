@@ -40,7 +40,7 @@ function useExitKeybindingEntries(shouldIntercept, exitOverride, isEnabled = tru
     exitState,
   };
 }
-//@ chunk-1kwgxcw6.js:897-1290 fingerprint = useExitOnCtrlCD (0.787)
+//@ chunk-1kwgxcw6.js:897-1290 fingerprint (2.1.88 match: useExitOnCtrlCD, 0.787)
 /**
  * 双击退出：app:interrupt（Ctrl-C）/app:exit（Ctrl-D）第一次只显示 "Press X again to exit"，超时内再按才退出。
  */

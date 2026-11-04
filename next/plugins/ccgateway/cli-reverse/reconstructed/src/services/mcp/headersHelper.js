@@ -43,7 +43,7 @@ import { ConfigScopeSchema } from "./types.js";
 import { marketplaceOf, marketplaceSuffix } from "../../utils/plugins/pluginIdentifier.js";
 import { BUILTIN } from "../../utils/telemetry/pluginTelemetry.js";
 
-//@ chunk-g2rygg7v.js:6768-7014 placement = AGENT_SOURCE_GROUPS (0.642)
+//@ chunk-g2rygg7v.js:6768-7014 placement (2.1.88 match: AGENT_SOURCE_GROUPS, 0.642)
 /**
  * 代理/配置来源分组：projectSettings/localSettings → repo，plugin/additionalDirectory → thirdParty，user/flag/policy/built-in → operator。
  */
@@ -97,7 +97,7 @@ function needsWorkspaceTrust(config, pluginRoot) {
   if (config.scope === "project") return true;
   return config.agentSource !== undefined && getAgentSourceTrustGroup(config.agentSource) !== "operator";
 }
-//@ chunk-g2rygg7v.js:7419-9217 fingerprint = getMcpHeadersFromHelper (0.442)
+//@ chunk-g2rygg7v.js:7419-9217 fingerprint (2.1.88 match: getMcpHeadersFromHelper, 0.442)
 /**
  * getMcpHeadersFromHelper：运行配置的 headersHelper 命令取动态请求头。仓库内配置需要已持久化的工作区信任；cwd 为插件根或项目根；注入 CLAUDE_CODE_MCP_SERVER_NAME/URL、CLAUDE_PLUGIN_ROOT。失败返回 null 并记日志。
  */
@@ -307,7 +307,7 @@ function mcpServerTelemetry(serverConfig, redirectUri) {
     redirect_kind: fromEnum(redirectUri ? "custom" : "loopback"),
   };
 }
-//@ chunk-16jhn3ak.js:441-476 fingerprint = isMcpServerFromProjectOrLocalSettings (1)
+//@ chunk-16jhn3ak.js:441-476 fingerprint (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 /**
  * 设置层级名单 ["project","local","user"]：v$s = (kind) => !bMr.includes(kind)，用来判断某个 kind 是否属于这三层设置；导出为 bMr。
  */

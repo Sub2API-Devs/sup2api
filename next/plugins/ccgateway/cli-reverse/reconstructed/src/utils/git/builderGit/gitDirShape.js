@@ -269,7 +269,7 @@ async function areRefDirsEmpty(commonDir, projectRoot) {
     )
   ).every(Boolean);
 }
-//@ chunk-s61vbvea.js:238476-238713 placement = normalizeSource (1)
+//@ chunk-s61vbvea.js:238476-238713 placement (2.1.88 match: normalizeSource, 1)
 async function normalizeSource_2(source, projectRoot) {
   let entries = await listDirRawNames(source);
   if (entries === null) return false;

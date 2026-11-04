@@ -24,7 +24,7 @@ var teammateContextStorage; // deferred: has load-time effects after a deferred 
 deferInit("chunk-fxf1mb10.js:456", () => {
   teammateContextStorage = new AsyncLocalStorage();
 });
-//@ chunk-fxf1mb10.js:468-502 facade-exports = getAgentContext (1)
+//@ chunk-fxf1mb10.js:468-502 facade-exports (2.1.88 match: getAgentContext, 1)
 /**
  * 取当前同进程 teammate 上下文。
  */
@@ -38,14 +38,14 @@ function getTeammateContext() {
 function runWithTeammateContext(teammateContext, fn) {
   return teammateContextStorage.run(teammateContext, fn);
 }
-//@ chunk-fxf1mb10.js:538-581 facade-exports = getAgentContext (1)
+//@ chunk-fxf1mb10.js:538-581 facade-exports (2.1.88 match: getAgentContext, 1)
 /**
  * 当前是否运行在同进程 teammate 上下文中。
  */
 function isInProcessTeammate() {
   return teammateContextStorage.getStore() !== undefined;
 }
-//@ chunk-fxf1mb10.js:667-799 facade-exports = getParentSessionId (0.445)
+//@ chunk-fxf1mb10.js:667-799 facade-exports (2.1.88 match: getParentSessionId, 0.445)
 /**
  * 父会话 ID：同进程 teammate 取其上下文，否则取动态团队上下文或 CLI 传入的父会话 ID。
  */
@@ -114,7 +114,7 @@ function getAgentId() {
   if (inProcessCtx) return inProcessCtx.agentId;
   return getTeammateProcessState().dynamicTeamContext?.agentId;
 }
-//@ chunk-fxf1mb10.js:1443-1533 facade-exports = getAgentName (0.607)
+//@ chunk-fxf1mb10.js:1443-1533 facade-exports (2.1.88 match: getAgentName, 0.607)
 /**
  * 当前 teammate 的名字。
  */
@@ -134,7 +134,7 @@ function getTeamName(teamContext) {
   if (dynamicTeamContext?.teamName) return dynamicTeamContext.teamName;
   return teamContext?.teamName;
 }
-//@ chunk-fxf1mb10.js:1664-1759 facade-exports = isTeammate (0.615)
+//@ chunk-fxf1mb10.js:1664-1759 facade-exports (2.1.88 match: isTeammate, 0.615)
 /**
  * 当前进程/上下文是否是 teammate（同进程上下文存在，或动态上下文有 agentId 和 teamName）。
  */
@@ -205,7 +205,7 @@ function getTeammateColor() {
   if (teammateContext) return teammateContext.color;
   return getTeammateProcessState().dynamicTeamContext?.color;
 }
-//@ chunk-fxf1mb10.js:3025-3190 facade-exports = isPlanModeRequired (0.808)
+//@ chunk-fxf1mb10.js:3025-3190 facade-exports (2.1.88 match: isPlanModeRequired, 0.808)
 /**
  * teammate 是否必须先走计划模式：上下文的 planModeRequired，否则看 CLAUDE_CODE_PLAN_MODE_REQUIRED。
  */
@@ -225,7 +225,7 @@ function hasNonLeadTeammate(teamContext) {
   let { leadAgentId, teammates } = teamContext;
   return Object.keys(teammates).some((key) => key !== leadAgentId);
 }
-//@ chunk-fxf1mb10.js:3293-3405 facade-exports = isTeamLead (1)
+//@ chunk-fxf1mb10.js:3293-3405 facade-exports (2.1.88 match: isTeamLead, 1)
 /**
  * 当前是否是 team lead：自身 agentId 等于 leadAgentId，或自身没有 agentId（主进程）。
  */
@@ -237,7 +237,7 @@ function isTeamLead(teamContext) {
   if (!myAgentId) return true;
   return false;
 }
-//@ chunk-fxf1mb10.js:3405-3531 facade-exports = hasActiveInProcessTeammates (1)
+//@ chunk-fxf1mb10.js:3405-3531 facade-exports (2.1.88 match: hasActiveInProcessTeammates, 1)
 /**
  * 是否有运行中的同进程 teammate。
  */
@@ -246,7 +246,7 @@ function hasActiveInProcessTeammates(appState) {
     if (task.type === "in_process_teammate" && task.status === "running") return true;
   return false;
 }
-//@ chunk-fxf1mb10.js:3531-3668 facade-exports = hasWorkingInProcessTeammates (1)
+//@ chunk-fxf1mb10.js:3531-3668 facade-exports (2.1.88 match: hasWorkingInProcessTeammates, 1)
 /**
  * 是否有运行中且非空闲的同进程 teammate。
  */
@@ -255,7 +255,7 @@ function hasWorkingInProcessTeammates(appState) {
     if (task.type === "in_process_teammate" && task.status === "running" && !task.isIdle) return true;
   return false;
 }
-//@ chunk-fxf1mb10.js:3668-4111 facade-exports = waitForTeammatesToBecomeIdle (1)
+//@ chunk-fxf1mb10.js:3668-4111 facade-exports (2.1.88 match: waitForTeammatesToBecomeIdle, 1)
 /**
  * 等待所有工作中的同进程 teammate 变为空闲：给它们挂 onIdleCallbacks，全部回调后 resolve。
  */
@@ -292,7 +292,7 @@ function waitForTeammatesToBecomeIdle(setAppState, appState) {
     });
   });
 }
-//@ chunk-fnhsh6ng.js:6724-6834 fingerprint = getTeamName (0.634)
+//@ chunk-fnhsh6ng.js:6724-6834 fingerprint (2.1.88 match: getTeamName, 0.634)
 /**
  * 取 teammate 上下文：toolUseContext 自带的 teammateContext，否则用动态团队上下文（有 agentId 与 teamName 时）。
  */

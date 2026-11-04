@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-j387qrdq.js:263-628 fingerprint = EMPTY_USAGE (0.906)
+//@ chunk-j387qrdq.js:263-628 fingerprint (2.1.88 match: EMPTY_USAGE, 0.906)
 /**
  * 空 usage：所有 token 计数为 0，server_tool_use 为 0，service_tier=standard，speed/fallback_credit 为 null 一类默认值。
  */

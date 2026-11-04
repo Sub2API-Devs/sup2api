@@ -260,7 +260,7 @@ function killRunningShellCommands() {
   for (let liveShellCommand of Array.from(shellCommandRegistry().liveShellCommands))
     if (liveShellCommand.status === "running") liveShellCommand.kill();
 }
-//@ chunk-e6aww6q8.js:259223-259680 fingerprint = StreamWrapper (0.813)
+//@ chunk-e6aww6q8.js:259223-259680 fingerprint (2.1.88 match: StreamWrapper, 0.813)
 /**
  * 把子进程 stdout/stderr 流按 utf-8 转发到 TaskOutput（writeStdout/writeStderr），ended 在 end/close 时完成。
  */
@@ -299,7 +299,7 @@ class StreamWrapper {
     this.#r = () => {};
   }
 }
-//@ chunk-e6aww6q8.js:259680-265449 fingerprint = ShellCommandImpl (0.616)
+//@ chunk-e6aww6q8.js:259680-265449 fingerprint (2.1.88 match: ShellCommandImpl, 0.616)
 /**
  * 运行中 shell 命令对象：状态 running/backgrounded/completed/killed；超时（可自动转后台）、abort、输出文件大小看门狗（超限或文件被替换则杀）；完成时组装 {code,stdout,stderr,interrupted,backgroundTaskId,outputFilePath,shellUsage(wall/cpu),leftRunningPgid,timedOut…}；kill 先 SIGTERM 进程树、1.5s 后 SIGKILL；background() 转后台并把输出落盘。
  */
@@ -723,7 +723,7 @@ function wrapSpawn(
     timing,
   );
 }
-//@ chunk-e6aww6q8.js:265530-265807 fingerprint = AbortedShellCommand (0.952)
+//@ chunk-e6aww6q8.js:265530-265807 fingerprint (2.1.88 match: AbortedShellCommand, 0.952)
 /**
  * 未执行即中止的命令占位：结果 code 145、"Command aborted before execution"、interrupted。
  */
@@ -845,7 +845,7 @@ function isProcessTreeGone(pid, startTokens) {
     }
   return allGone;
 }
-//@ chunk-e6aww6q8.js:266865-267146 fingerprint = createFailedCommand (0.932)
+//@ chunk-e6aww6q8.js:266865-267146 fingerprint (2.1.88 match: createFailedCommand, 0.932)
 /**
  * 构造未启动即失败的命令对象：code 1、stderr=原因、preSpawnError（可带 preSpawnErrorCode 如 e2big）。
  */
@@ -873,7 +873,7 @@ function createFailedCommand(preSpawnError, errorCode) {
     cleanup() {},
   };
 }
-//@ chunk-e6aww6q8.js:4822317-4822395 fingerprint = createAbortedCommand (0.627)
+//@ chunk-e6aww6q8.js:4822317-4822395 fingerprint (2.1.88 match: createAbortedCommand, 0.627)
 /**
  * 结果没有 backgroundTaskId 时原样返回，否则去掉 shellUsage 字段（具体用途未完全确认）。
  */

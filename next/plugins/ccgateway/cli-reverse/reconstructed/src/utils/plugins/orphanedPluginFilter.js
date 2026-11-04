@@ -17,7 +17,7 @@ import { isENOENT } from "../errors.js";
 import { ripGrep_2, ripgrepStorageOverride } from "../ripgrep.js";
 import { ORPHAN_MARKER_FILE } from "./cacheUtils.js";
 
-//@ chunk-e6aww6q8.js:1435631-1436326 fingerprint = getGlobExclusionsForPluginCache (0.908)
+//@ chunk-e6aww6q8.js:1435631-1436326 fingerprint (2.1.88 match: getGlobExclusionsForPluginCache, 0.908)
 /**
  * 为 Grep/Glob 生成排除插件缓存里孤儿版本目录的 glob（避免搜到已废弃的旧版本）。
  */

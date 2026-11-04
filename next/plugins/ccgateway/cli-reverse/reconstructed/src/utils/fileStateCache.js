@@ -87,7 +87,7 @@ function serializeErrorText(text) {
     ? `${collapsedText.slice(0, MAX_SERIALIZED_ERROR_CHARS - 1)}\u2026`
     : collapsedText;
 }
-//@ chunk-82kqcve8.js:80891-81142 fingerprint = cloneFileStateCache (0.55)
+//@ chunk-82kqcve8.js:80891-81142 fingerprint (2.1.88 match: cloneFileStateCache, 0.55)
 /**
  * 复制 readFileState（同容量），可把 seededFromContext 置为 false，保留 start-only 标记；子代理/分叉用。
  */
@@ -117,7 +117,7 @@ function clearFileStateCacheKeepingSeeds(readFileState) {
   readFileState.clear();
   for (let [filePath, cacheEntry] of seedEntries) readFileState.set(filePath, cacheEntry);
 }
-//@ chunk-82kqcve8.js:81269-81394 callgraph-fingerprint = mergeFileStateCaches (1)
+//@ chunk-82kqcve8.js:81269-81394 callgraph-fingerprint (2.1.88 match: mergeFileStateCaches, 1)
 /**
  * 合并两个 readFileState，同一路径取时间戳较新的记录。
  */

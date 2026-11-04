@@ -56,14 +56,14 @@ deferInit("chunk-vr8smdd9.js:10741", () => {
     }),
   );
 });
-//@ chunk-vr8smdd9.js:10863-10925 fingerprint = isMcpbSource (1)
+//@ chunk-vr8smdd9.js:10863-10925 fingerprint (2.1.88 match: isMcpbSource, 1)
 /**
  * 来源是否为 MCPB 包（.mcpb 或旧名 .dxt）。
  */
 function isMcpbSource(source) {
   return source.endsWith(".mcpb") || source.endsWith(".dxt");
 }
-//@ chunk-vr8smdd9.js:10925-10997 layout = isUrl (1)
+//@ chunk-vr8smdd9.js:10925-10997 layout (2.1.88 match: isUrl, 1)
 function isUrl_2(source) {
   return source.startsWith("http://") || source.startsWith("https://");
 }
@@ -74,11 +74,11 @@ function isUrl_2(source) {
 function isLocalMcpbSource(source) {
   return isMcpbSource(source) && !isUrl_2(source);
 }
-//@ chunk-vr8smdd9.js:11034-11075 fingerprint = getMcpbCacheDir (1)
+//@ chunk-vr8smdd9.js:11034-11075 fingerprint (2.1.88 match: getMcpbCacheDir, 1)
 function getMcpbCacheDir(pluginPath) {
   return join(pluginPath, ".mcpb-cache");
 }
-//@ chunk-vr8smdd9.js:11075-11180 fingerprint = getMetadataPath (1)
+//@ chunk-vr8smdd9.js:11075-11180 fingerprint (2.1.88 match: getMetadataPath, 1)
 function getMetadataPath(cacheDir, source) {
   let sourceHash = createHash("md5").update(source).digest("hex").substring(0, 8);
   return join(cacheDir, `${sourceHash}.metadata.json`);
@@ -94,7 +94,7 @@ function mcpbMetadataStore(cacheDir, source) {
 function pluginServerKey(pluginId, serverName) {
   return `${pluginId}/${serverName}`;
 }
-//@ chunk-vr8smdd9.js:11301-11610 fingerprint = loadMcpServerUserConfig (0.908)
+//@ chunk-vr8smdd9.js:11301-11610 fingerprint (2.1.88 match: loadMcpServerUserConfig, 0.908)
 /**
  * 读取某插件 MCP 服务器的用户配置：非敏感值来自 settings，敏感值来自安全存储 pluginSecrets["插件/服务器"]。
  */
@@ -117,7 +117,7 @@ async function loadMcpServerUserConfig(pluginId, serverName, storageV5) {
     return null;
   }
 }
-//@ chunk-vr8smdd9.js:11610-13130 fingerprint = saveMcpServerUserConfig (0.936)
+//@ chunk-vr8smdd9.js:11610-13130 fingerprint (2.1.88 match: saveMcpServerUserConfig, 0.936)
 /**
  * 保存某插件 MCP 服务器的用户配置（敏感值进安全存储）。
  */
@@ -214,7 +214,7 @@ async function saveMcpServerUserConfig(pluginId, serverName, config, schema, sto
     throw Error(`Failed to save user configuration for ${pluginId}/${serverName}: ${errorObj.message}`);
   }
 }
-//@ chunk-vr8smdd9.js:13130-14254 fingerprint = validateUserConfig (0.955)
+//@ chunk-vr8smdd9.js:13130-14254 fingerprint (2.1.88 match: validateUserConfig, 0.955)
 /**
  * 按 userConfig schema 校验值：必填、类型（string/number/boolean/directory/file）、min/max、options。
  */
@@ -253,7 +253,7 @@ function validateUserConfig(values, schema) {
     errors,
   };
 }
-//@ chunk-vr8smdd9.js:14254-14680 fingerprint = generateMcpConfig (0.708)
+//@ chunk-vr8smdd9.js:14254-14680 fingerprint (2.1.88 match: generateMcpConfig, 0.708)
 /**
  * 由 MCPB manifest 与解压目录生成 MCP 服务器配置（动态导入 @anthropic-ai/mcpb 的 getMcpConfigForManifest，代入用户配置与系统目录）。
  */
@@ -283,7 +283,7 @@ async function generateMcpConfig(manifest, extractedPath, userConfig = {}) {
     }),
   };
 }
-//@ chunk-vr8smdd9.js:14680-14819 fingerprint = loadCacheMetadata (0.642)
+//@ chunk-vr8smdd9.js:14680-14819 fingerprint (2.1.88 match: loadCacheMetadata, 0.642)
 async function loadCacheMetadata(cacheDir, source) {
   try {
     return await mcpbMetadataStore(cacheDir, source).read();
@@ -294,12 +294,12 @@ async function loadCacheMetadata(cacheDir, source) {
     return null;
   }
 }
-//@ chunk-vr8smdd9.js:14819-14887 callgraph-fingerprint = saveCacheMetadata (0.555)
+//@ chunk-vr8smdd9.js:14819-14887 callgraph-fingerprint (2.1.88 match: saveCacheMetadata, 0.555)
 async function saveCacheMetadata(cacheDir, source, metadata) {
   await getFsImplementation().mkdir(cacheDir);
   await mcpbMetadataStore(cacheDir, source).write(metadata);
 }
-//@ chunk-vr8smdd9.js:14887-15619 fingerprint = downloadMcpb (1)
+//@ chunk-vr8smdd9.js:14887-15619 fingerprint (2.1.88 match: downloadMcpb, 1)
 /**
  * 下载 .mcpb/.dxt 包（记录 tengu_plugin_remote_fetch），返回字节。
  */
@@ -339,7 +339,7 @@ async function downloadMcpb(url, destPath, onProgress) {
     throw fullError;
   }
 }
-//@ chunk-vr8smdd9.js:15619-16246 fingerprint = extractMcpbContents (1)
+//@ chunk-vr8smdd9.js:15619-16246 fingerprint (2.1.88 match: extractMcpbContents, 1)
 /**
  * 把 MCPB 包内容写到解压目录（恢复文件权限位，回报进度）。
  */
@@ -373,7 +373,7 @@ async function extractMcpbContents(unzipped, extractPath, modes, onProgress) {
   logForDebugging(`Extracted ${filesWritten} files to ${extractPath}`);
   if (onProgress) onProgress(`Extraction complete (${filesWritten} files)`);
 }
-//@ chunk-vr8smdd9.js:16246-16969 fingerprint = checkMcpbChanged (0.742)
+//@ chunk-vr8smdd9.js:16246-16969 fingerprint (2.1.88 match: checkMcpbChanged, 0.742)
 /**
  * 判断 MCPB 源是否变化（本地文件 mtime/哈希、远程按缓存元数据），决定是否重新解压。
  */
@@ -421,7 +421,7 @@ async function checkMcpbChanged(source, pluginPath) {
   }
   return false;
 }
-//@ chunk-vr8smdd9.js:16969-20170 fingerprint = loadMcpbFile (0.926)
+//@ chunk-vr8smdd9.js:16969-20170 fingerprint (2.1.88 match: loadMcpbFile, 0.926)
 /**
  * 加载 MCPB 包：缓存于 <插件>/.mcpb-cache/<hash>，未变化复用；否则下载/读取、校验 manifest、解压、生成 MCP 配置；需要用户配置时返回 needs-config 与 schema。
  */
@@ -626,7 +626,7 @@ async function loadMcpbFile(
     contentHash,
   };
 }
-//@ chunk-5aas12zq.js:25474-25909 fingerprint = isUrl (1)
+//@ chunk-5aas12zq.js:25474-25909 fingerprint (2.1.88 match: isUrl, 1)
 function isUrl(source) {
   let links = [];
   let urlStart = -1;

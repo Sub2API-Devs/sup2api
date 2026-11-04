@@ -73,7 +73,7 @@ import { buildExtractCombinedPrompt } from "../services/extractMemories/prompts.
 import { getInitialSettings_2 } from "../utils/settings/settings.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-xfwvhp77.js:336-397 fingerprint = ENTRYPOINT_NAME (1)
+//@ chunk-xfwvhp77.js:336-397 fingerprint (2.1.88 match: ENTRYPOINT_NAME, 1)
 /**
  * 自动记忆入口文件名 MEMORY.md 及截断上限：200 行、25000 字节；单个记忆文件建议 ≤4096 字节。
  */
@@ -100,7 +100,7 @@ function measureEntrypoint(text) {
     byteCount: trimmed.length,
   };
 }
-//@ chunk-xfwvhp77.js:487-542 layout = setCwdState (1)
+//@ chunk-xfwvhp77.js:487-542 layout (2.1.88 match: setCwdState, 1)
 function nfcLower(cwd) {
   return cwd.normalize("NFC").toLowerCase();
 }
@@ -114,7 +114,7 @@ function memoryIndexDirPrefix(promptIndex) {
   let sliced = promptIndex.slice(0, lastSlashIndex + 1);
   return sliced.split("/").some((segment) => segment.startsWith(".")) ? "" : sliced;
 }
-//@ chunk-xfwvhp77.js:679-950 fingerprint = DIR_EXISTS_GUIDANCE (0.667)
+//@ chunk-xfwvhp77.js:679-950 fingerprint (2.1.88 match: DIR_EXISTS_GUIDANCE, 0.667)
 var DIR_EXISTS_GUIDANCE =
   "This directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence).";
 var DIRS_EXIST_GUIDANCE =
@@ -192,7 +192,7 @@ function stripDisallowedMemoryChars(text) {
   }
   return result;
 }
-//@ chunk-82kqcve8.js:141711-141732 fingerprint = AUTO_MEM_DISPLAY_NAME (1)
+//@ chunk-82kqcve8.js:141711-141732 fingerprint (2.1.88 match: AUTO_MEM_DISPLAY_NAME, 1)
 var AUTO_MEM_DISPLAY_NAME = "auto memory";
 //@ chunk-82kqcve8.js:141732-141755 layout
 function getExtraMemoryDirs() {
@@ -203,7 +203,7 @@ function getExtraMemoryDirs() {
  * 首次存储拉取的等待上限
  */
 var FIRST_STORE_PULL_WAIT_DEADLINE_MS_2 = FIRST_STORE_PULL_WAIT_DEADLINE_MS;
-//@ chunk-82kqcve8.js:141766-142679 fingerprint = truncateEntrypointContent (0.719)
+//@ chunk-82kqcve8.js:141766-142679 fingerprint (2.1.88 match: truncateEntrypointContent, 0.719)
 /**
  * 截断 MEMORY.md 入口：超过 200 行或 25000 字节时截断并追加说明哪些行被删掉。
  */
@@ -293,7 +293,7 @@ function wrapFetchedMemoryIndex(storeDescription, indexPath, content) {
   ].join(`
 `);
 }
-//@ chunk-82kqcve8.js:143019-143236 fingerprint = ensureMemoryDirExists (0.709)
+//@ chunk-82kqcve8.js:143019-143236 fingerprint (2.1.88 match: ensureMemoryDirExists, 0.709)
 /**
  * 创建记忆目录（storage 或 mkdir -p），失败只记 debug。
  */
@@ -313,7 +313,7 @@ async function ensureMemoryDirExists(memoryDir, teamDir) {
     });
   }
 }
-//@ chunk-82kqcve8.js:143236-143634 fingerprint = logMemoryDirCounts (0.896)
+//@ chunk-82kqcve8.js:143236-143634 fingerprint (2.1.88 match: logMemoryDirCounts, 0.896)
 /**
  * 统计记忆目录文件数等并打 tengu_memdir_loaded。
  */
@@ -393,7 +393,7 @@ async function countMemoryDirEntries(storeClient, projectKey) {
     total_subdir_count: subdirCount,
   };
 }
-//@ chunk-82kqcve8.js:143985-146145 fingerprint = buildMemoryLines (0.424)
+//@ chunk-82kqcve8.js:143985-146145 fingerprint (2.1.88 match: buildMemoryLines, 0.424)
 /**
  * 记忆系统使用说明（文件型记忆、类型、frontmatter、什么不该存、只读时提示）。
  */
@@ -457,7 +457,7 @@ function isRegularMemoryEntrypoint(fs, entrypoint) {
   logForDebugging(`agent memory: ${entrypoint} is not a regular file; not read`);
   return false;
 }
-//@ chunk-82kqcve8.js:146373-147499 fingerprint = buildMemoryPrompt (0.75)
+//@ chunk-82kqcve8.js:146373-147499 fingerprint (2.1.88 match: buildMemoryPrompt, 0.75)
 /**
  * 生成单个记忆目录的提示：读取 <dir>/MEMORY.md（可要求普通文件），拼接 buildMemoryLines 的说明与索引内容。
  */
@@ -528,7 +528,7 @@ function buildMemoryPrompt(options, primedContent) {
   return lines.join(`
 `);
 }
-//@ chunk-82kqcve8.js:147499-151627 callgraph-witnessed = loadMemoryPrompt (0.281)
+//@ chunk-82kqcve8.js:147499-151627 callgraph-witnessed (2.1.88 match: loadMemoryPrompt, 0.281)
 /**
  * 构建系统提示里的 auto memory 段：cowork 指南覆盖、团队/个人组合提示、只读判断等，确保目录存在并打 tengu_memdir_loaded。
  */

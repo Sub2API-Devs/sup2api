@@ -120,7 +120,7 @@ import {
 } from "../../constants/prompts.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:420461-420644 fingerprint = getDefaultHaikuModel (0.317)
+//@ chunk-aepeg2w5.js:420461-420644 fingerprint (2.1.88 match: getDefaultHaikuModel, 0.317)
 /**
  * 模型是否等于某档 ANTHROPIC_DEFAULT_{FABLE,OPUS,SONNET,HAIKU}_MODEL。旧版名 getDefaultHaikuModel 为错配。
  */
@@ -451,7 +451,7 @@ function isAntInternalFastModelId(modelId) {
  * catalog 键 "opus5"。
  */
 var OPUS5_KEY = "opus5";
-//@ chunk-aepeg2w5.js:432998-433227 fingerprint = getDefaultOpusModel (0.711)
+//@ chunk-aepeg2w5.js:432998-433227 fingerprint (2.1.88 match: getDefaultOpusModel, 0.711)
 /**
  * 默认 Opus（带上下文后缀继承）：ANTHROPIC_DEFAULT_OPUS_MODEL，否则第一方从 opus5 起按 OPUS_FALLBACK_ORDER 轮转取第一个被允许的 Opus 字符串；与 n 的 [1m] 一致化。
  */
@@ -471,7 +471,7 @@ function resolveDefaultOpusModel(currentModel) {
   }
   return inherit1mSuffix(identityModelId(ANTHROPIC_DEFAULT_OPUS_MODEL), currentModel);
 }
-//@ chunk-aepeg2w5.js:436867-437117 placement = aliasMatchesParentTier (0.852)
+//@ chunk-aepeg2w5.js:436867-437117 placement (2.1.88 match: aliasMatchesParentTier, 0.852)
 /**
  * 档位别名（opus/sonnet/haiku/fable）在 settings 档位覆盖里配置的模型：映射到 catalog 键则取模型字符串表中的值，否则解析成提供商 id。
  */
@@ -595,7 +595,7 @@ function getDefaultOpusModel() {
 function getDefaultOpusBuiltin(rawModelStrings = getModelStrings()) {
   return catalogFamilyDefaultKey("opus", rawModelStrings) ?? rawModelStrings.opus55;
 }
-//@ chunk-aepeg2w5.js:438102-438212 placement = getDefaultSonnetModel (0.276)
+//@ chunk-aepeg2w5.js:438102-438212 placement (2.1.88 match: getDefaultSonnetModel, 0.276)
 /**
  * 默认 Sonnet：ANTHROPIC_DEFAULT_SONNET_MODEL，否则 settings 档位覆盖，否则 catalog sonnet 档（第一方 claude-sonnet-5-5）。
  */
@@ -605,7 +605,7 @@ function getDefaultSonnetModel() {
     return identityModelId(strip1mTagWhereBuiltIn(ANTHROPIC_DEFAULT_SONNET_MODEL));
   return tierOverrideModel("sonnet") ?? getDefaultSonnetBuiltin();
 }
-//@ chunk-aepeg2w5.js:459417-459696 fingerprint = firstPartyNameToCanonical (0.849)
+//@ chunk-aepeg2w5.js:459417-459696 fingerprint (2.1.88 match: firstPartyNameToCanonical, 0.849)
 /**
  * 一组旧模型规范名；getAgentToolCallFormatVersion 一类判断（命中返回 4，否则 3）用。旧版名 firstPartyNameToCanonical 为错配。
  */
@@ -628,7 +628,7 @@ deferInit("chunk-aepeg2w5.js:459417", () => {
     "claude-haiku-4-5",
   ]);
 });
-//@ chunk-aepeg2w5.js:464052-464521 fingerprint = parseUserSpecifiedModel (0.775)
+//@ chunk-aepeg2w5.js:464052-464521 fingerprint (2.1.88 match: parseUserSpecifiedModel, 0.775)
 /**
  * 解析用户写的模型：别名（fable/opusplan/sonnet/haiku/opus/best，可带 [1m]）展开成对应档默认模型；旧 Opus 4/4.1 在重映射开启时换成默认 Opus；其余保留并规范 [1m] 后缀。
  */
@@ -675,7 +675,7 @@ function resolveModelAliasSetting(modelInput) {
 function resolveModelAliasSpelling(model) {
   return isModelKeyAliasOrResolved(model.toLowerCase().trim()) ? parseUserSpecifiedModel(model) : model;
 }
-//@ chunk-aepeg2w5.js:464580-464626 placement = resolveAgentModelDisplay (1)
+//@ chunk-aepeg2w5.js:464580-464626 placement (2.1.88 match: resolveAgentModelDisplay, 1)
 /**
  * model 为 "inherit" 时返回 undefined，否则原样返回（技能/命令的模型字段）。
  */
@@ -706,7 +706,7 @@ function resolveSkillModelOverride(model, mainLoopModel) {
   if (mainHasNative1m && supports1mBeta(resolved)) return model + "[1m]";
   return model;
 }
-//@ chunk-aepeg2w5.js:464951-465048 fingerprint = LEGACY_OPUS_FIRSTPARTY (1)
+//@ chunk-aepeg2w5.js:464951-465048 fingerprint (2.1.88 match: LEGACY_OPUS_FIRSTPARTY, 1)
 /**
  * 旧 Opus 第一方 id（4.0/4.1 及带日期形式），用于自动重映射。
  */
@@ -723,14 +723,14 @@ var LEGACY_OPUS_FIRSTPARTY = [
 function isLegacyOpusFirstParty(model) {
   return LEGACY_OPUS_FIRSTPARTY.includes(model);
 }
-//@ chunk-aepeg2w5.js:465086-465149 placement = isLegacyModelRemapEnabled (1)
+//@ chunk-aepeg2w5.js:465086-465149 placement (2.1.88 match: isLegacyModelRemapEnabled, 1)
 /**
  * 旧模型重映射是否开启（未设 CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP）。
  */
 function isLegacyModelRemapEnabled() {
   return !env.CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP;
 }
-//@ chunk-aepeg2w5.js:465149-465304 placement = modelDisplayString (0.478)
+//@ chunk-aepeg2w5.js:465149-465304 placement (2.1.88 match: modelDisplayString, 0.478)
 /**
  * 模型设置的显示串：null 显示 "Default (<默认模型>)"；别名显示 "alias (解析后)"。
  */
@@ -746,7 +746,7 @@ function modelDisplayString(model) {
     ) || "unknown model"
   );
 }
-//@ chunk-aepeg2w5.js:465304-465608 fingerprint = getMarketingNameForModel (0.47)
+//@ chunk-aepeg2w5.js:465304-465608 fingerprint (2.1.88 match: getMarketingNameForModel, 0.47)
 /**
  * claude-3-x 系列的营销名（Claude 3.7 Sonnet 等）。
  */
@@ -934,7 +934,7 @@ var SECONDARY_CONTEXT_WINDOW = 200000;
 var MAX_CONTEXT_WINDOW_1M = 1e6;
 var SMALL_FAST_MAX_OUTPUT_TOKENS = 32000;
 var MAX_OUTPUT_TOKENS_LIMIT = 128000;
-//@ chunk-hwmsct5x.js:200437-200502 placement = CLAUDE_4_5_OR_4_6_MODEL_IDS (0.463)
+//@ chunk-hwmsct5x.js:200437-200502 placement (2.1.88 match: CLAUDE_4_5_OR_4_6_MODEL_IDS, 0.463)
 /**
  * sonnet/opus/haiku/fable → 对应默认模型 getter 的结果。旧版名 CLAUDE_4_5_OR_4_6_MODEL_IDS 为错配。
  */
@@ -946,7 +946,7 @@ function getDefaultModelForFamily(family) {
     fable: getDefaultFableModel,
   }[family]();
 }
-//@ chunk-e6aww6q8.js:1428769-1428917 fingerprint = getSmallFastModel (1)
+//@ chunk-e6aww6q8.js:1428769-1428917 fingerprint (2.1.88 match: getSmallFastModel, 1)
 /**
  * 自定义模型名能否按 opus 别名对待：不含已知族名、不是已知模型或档位默认、也不是 ANTHROPIC_SMALL_FAST_MODEL。旧版名 getSmallFastModel 为错配。
  */
@@ -956,7 +956,7 @@ function isOpusAliasCandidate(model, canonicalName) {
   let ANTHROPIC_SMALL_FAST_MODEL = env.ANTHROPIC_SMALL_FAST_MODEL;
   return !(ANTHROPIC_SMALL_FAST_MODEL !== undefined && sameModelSpelling(ANTHROPIC_SMALL_FAST_MODEL, model));
 }
-//@ chunk-e6aww6q8.js:3333467-3333681 fingerprint = getRuntimeMainLoopModel (0.687)
+//@ chunk-e6aww6q8.js:3333467-3333681 fingerprint (2.1.88 match: getRuntimeMainLoopModel, 0.687)
 /**
  * 运行时模型（含 plan 模式切换）与上次公告不同时生成模型公告附件。旧版名 getRuntimeMainLoopModel 不准确。
  */
@@ -976,7 +976,7 @@ async function getRuntimeModelSwitchAnnouncements(context, messages) {
     ? []
     : [await buildModelEnvInfoAttachment(modelInfo)];
 }
-//@ chunk-d1cgs5na.js:12054-12136 fingerprint = renderDefaultModelSetting (1)
+//@ chunk-d1cgs5na.js:12054-12136 fingerprint (2.1.88 match: renderDefaultModelSetting, 1)
 /**
  * 默认模型设置展开：opusplan 返回 [默认 Opus, 解析后]，否则 [解析后]。
  */
@@ -985,7 +985,7 @@ function renderDefaultModelSetting(setting) {
     ? [getDefaultOpusModel(), parseUserSpecifiedModel(setting)]
     : [parseUserSpecifiedModel(setting)];
 }
-//@ chunk-095ptjmr.js:6087-6140 fingerprint = resolveSkillModelOverride (1)
+//@ chunk-095ptjmr.js:6087-6140 fingerprint (2.1.88 match: resolveSkillModelOverride, 1)
 /**
  * 已有 [1m] 原样返回，否则追加 [1m]。旧版名 resolveSkillModelOverride 为错配。
  */

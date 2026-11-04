@@ -382,7 +382,7 @@ function resolveBridgeImmediateCommand_2(text, commands, renderMode, author) {
 }
 //@ chunk-18hwfzwa.js:1575268-1575278 layout
 var MAX_BRIDGE_INIT_FAILURES = 3;
-//@ chunk-18hwfzwa.js:1575278-1611905 callgraph-witnessed = useReplBridge (0.238)
+//@ chunk-18hwfzwa.js:1575278-1611905 callgraph-witnessed (2.1.88 match: useReplBridge, 0.238)
 /**
  * Remote Control 桥：启用后注册环境并建立会话，把本地消息/工具结果/权限请求转发到 claude.ai，把远程提示、权限回复、命令（/clear、fork、模式切换、teleport pull）应用到本地；处理错误与重连。
  */

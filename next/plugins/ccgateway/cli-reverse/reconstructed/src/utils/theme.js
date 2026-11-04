@@ -112,7 +112,7 @@ function isBuiltinTheme(color) {
 function isSelectableThemeName(name) {
   return typeof name === "string" && (CONFIG_SOURCE_LABELS.includes(name) || name.startsWith("custom:"));
 }
-//@ chunk-g3xfp0ds.js:6429-20980 fingerprint = lightDaltonizedTheme (0.647)
+//@ chunk-g3xfp0ds.js:6429-20980 fingerprint (2.1.88 match: lightDaltonizedTheme, 0.647)
 /**
  * 六套主题调色板（每套约 75 个颜色键：claude、permission、planMode、autoAccept、bashBorder、promptBorder、diffAdded/Removed(+Dimmed/Word)、success/error/warning、subtle/inactive、userMessageBackground、rainbow_*、*_FOR_SUBAGENTS_ONLY 等）。
  */
@@ -560,7 +560,7 @@ var DARK_DALTONIZED_THEME = {
   rainbow_indigo_shimmer: "rgb(195,180,230)",
   rainbow_violet_shimmer: "rgb(230,180,210)",
 };
-//@ chunk-g3xfp0ds.js:20980-21158 fingerprint = getTheme (1)
+//@ chunk-g3xfp0ds.js:20980-21158 fingerprint (2.1.88 match: getTheme, 1)
 /**
  * 按主题名取调色板：light/light-ansi/dark-ansi/light-daltonized/dark-daltonized，其他（含 dark）返回 dark 调色板。
  */
@@ -580,7 +580,7 @@ function getTheme(themeName) {
       return DARK_THEME;
   }
 }
-//@ chunk-g3xfp0ds.js:21158-21443 layout = toInkColor (1)
+//@ chunk-g3xfp0ds.js:21158-21443 layout (2.1.88 match: toInkColor, 1)
 /**
  * 颜色值是否合法：rgb(r,g,b)、#RGB/#RRGGBB、ansi256(n)、ansi:<名字>。
  */
@@ -602,7 +602,7 @@ function mergeThemeOverrides(theme, overrides) {
     if (Object.hasOwn(theme, key) && isValidThemeColor(value)) merged[key] = value;
   return merged;
 }
-//@ chunk-g3xfp0ds.js:21567-21625 layout = chalkForChart (1)
+//@ chunk-g3xfp0ds.js:21567-21625 layout (2.1.88 match: chalkForChart, 1)
 var chalkForChart; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-g3xfp0ds.js:21567", () => {
   chalkForChart =
@@ -612,7 +612,7 @@ deferInit("chunk-g3xfp0ds.js:21567", () => {
         })
       : sequential;
 });
-//@ chunk-g3xfp0ds.js:21625-21925 fingerprint = themeColorToAnsi (0.797)
+//@ chunk-g3xfp0ds.js:21625-21925 fingerprint (2.1.88 match: themeColorToAnsi, 0.797)
 /**
  * 把主题色值转为 ANSI 转义（rgb → 真彩、ansi: → 16 色）。
  */

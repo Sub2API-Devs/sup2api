@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-wbbfk060.js:19273-19719 fingerprint = createCapacityWake (1)
+//@ chunk-wbbfk060.js:19273-19719 fingerprint (2.1.88 match: createCapacityWake, 1)
 /**
  * 创建可唤醒信号：signal() 返回合并了外部中止与"唤醒"的一次性 signal，wake() 触发当前等待结束（会话结束腾出容量时调用）。
  */

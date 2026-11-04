@@ -64,7 +64,7 @@ deferInit("chunk-wyqg6m3h.js:5223", () => {
     registerPlugin: () => registerPlugin,
   });
 });
-//@ chunk-wyqg6m3h.js:64119-64346 placement = outputSchema (0.36)
+//@ chunk-wyqg6m3h.js:64119-64346 placement (2.1.88 match: outputSchema, 0.36)
 /**
  * 读取 diff 面板的已保存开关（缺省时把内置面板的旧偏好迁过来），开启时注册 diff 插件面板。与 ConfigTool 无关。
  */

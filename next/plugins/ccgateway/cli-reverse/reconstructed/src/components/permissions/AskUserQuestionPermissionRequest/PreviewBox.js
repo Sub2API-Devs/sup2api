@@ -112,7 +112,7 @@ function layoutNode(node) {
 function nodeWidth(text) {
   return bunStringWidth(text);
 }
-//@ chunk-18hwfzwa.js:1271318-1271476 fingerprint = BOX_CHARS (1)
+//@ chunk-18hwfzwa.js:1271318-1271476 fingerprint (2.1.88 match: BOX_CHARS, 1)
 var BOX_CHARS = {
   topLeft: "\u250C",
   topRight: "\u2510",
@@ -123,7 +123,7 @@ var BOX_CHARS = {
   teeLeft: "\u251C",
   teeRight: "\u2524",
 };
-//@ chunk-18hwfzwa.js:1271755-1274144 fingerprint = PreviewBoxBody (0.928)
+//@ chunk-18hwfzwa.js:1271755-1274144 fingerprint (2.1.88 match: PreviewBoxBody, 0.928)
 function PreviewBoxBody(props) {
   let $ = useMemoCache(37);
   let { content, maxLines, minHeight, minWidth, maxWidth, highlight } = props;

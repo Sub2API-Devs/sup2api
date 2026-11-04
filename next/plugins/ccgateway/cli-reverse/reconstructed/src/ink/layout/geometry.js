@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-bzr73sfg.js:199445-199617 fingerprint = unionRect (1)
+//@ chunk-bzr73sfg.js:199445-199617 fingerprint (2.1.88 match: unionRect, 1)
 /**
  * 两个矩形的并（包围盒）。
  */

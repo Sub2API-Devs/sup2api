@@ -66,7 +66,7 @@ function groupClaudeAiConnectors(connectors) {
   }
   return [...groups.values()];
 }
-//@ chunk-9xyz2gbc.js:1459-1643 placement = getMcpPrefix (1)
+//@ chunk-9xyz2gbc.js:1459-1643 placement (2.1.88 match: getMcpPrefix, 1)
 /**
  * （归属疑误：权限/系统提示）从 mcp__<ls>__<sub>__* 工具名中取子服务器名集合。
  */

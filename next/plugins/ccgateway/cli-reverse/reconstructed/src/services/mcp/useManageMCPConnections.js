@@ -160,7 +160,7 @@ import { revokeStoredMcpTokens } from "./revokeTokens.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7nse75qx.js:307-453 fingerprint = getErrorKey (0.72)
+//@ chunk-7nse75qx.js:307-453 fingerprint (2.1.88 match: getErrorKey, 0.72)
 function getErrorKey(error) {
   let plugin = "plugin" in error ? error.plugin : "no-plugin";
   let serverSuffix = error.type === "mcpb-needs-config" ? `:${error.serverName}` : "";
@@ -303,7 +303,7 @@ var SCOPE_TO_TELEMETRY_SOURCE = {
 //@ chunk-18hwfzwa.js:1711287-1711320 layout
 var MAX_INITIAL_CONNECT_RETRIES = 3;
 var CLAUDEAI_LIST_RETRY_DELAYS_MS = [5000, 15000, 45000];
-//@ chunk-18hwfzwa.js:1711320-1737581 fingerprint = useManageMCPConnections (0.547)
+//@ chunk-18hwfzwa.js:1711320-1737581 fingerprint (2.1.88 match: useManageMCPConnections, 0.547)
 /**
  * useManageMCPConnections：REPL 中管理 MCP 连接的 React hook。初始化时 getMcpToolsCommandsAndResources 批量连接并写入 AppState.mcp；注册 list_changed（工具/提示词/资源）处理、channel 通知、elicitation、远程传输断线自动重连（最多 5 次，指数退避 1s 起、上限 30s）、首次连接瞬时错误重试 3 次、claude.ai 连接器列表后台重试；对外提供 reconnectMcpServer 与 toggleMcpServer。
  */
@@ -2088,7 +2088,7 @@ function detachClientAndClearCache(client) {
 function getMcpClientModule() {
   return require("./emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-18hwfzwa.js:1737748-1737859 fingerprint = getTransportDisplayName (1)
+//@ chunk-18hwfzwa.js:1737748-1737859 fingerprint (2.1.88 match: getTransportDisplayName, 1)
 /**
  * getTransportDisplayName：http → HTTP，ws/ws-ide → WebSocket，其他 → SSE。
  */

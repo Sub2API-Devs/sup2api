@@ -69,7 +69,7 @@ init_react_production();
 function isNotebookEditTool(tool) {
   return tool === BASH_TOOL_NAME || tool.startsWith(BASH_TOOL_NAME + "(");
 }
-//@ chunk-8rmevhsy.js:14096-14260 fingerprint = _temp2 (1)
+//@ chunk-8rmevhsy.js:14096-14260 fingerprint (2.1.88 match: _temp2, 1)
 function isLegacyProjectCommandWithBashAllow(command) {
   return (
     command.type === "prompt" &&
@@ -82,7 +82,7 @@ function isLegacyProjectCommandWithBashAllow(command) {
 function isFileEditTool(tool) {
   return tool === BASH_TOOL_NAME || tool.startsWith(BASH_TOOL_NAME + "(");
 }
-//@ chunk-8rmevhsy.js:14314-14513 fingerprint = _temp4 (1)
+//@ chunk-8rmevhsy.js:14314-14513 fingerprint (2.1.88 match: _temp4, 1)
 function isProjectSkillWithBashAllow(command) {
   return (
     command.type === "prompt" &&
@@ -93,14 +93,14 @@ function isProjectSkillWithBashAllow(command) {
     command.allowedTools?.some(isFileEditTool)
   );
 }
-//@ chunk-8rmevhsy.js:14513-14569 fingerprint = _temp5 (1)
+//@ chunk-8rmevhsy.js:14513-14569 fingerprint (2.1.88 match: _temp5, 1)
 function withTrustAccepted(current) {
   return {
     ...current,
     hasTrustDialogAccepted: true,
   };
 }
-//@ chunk-8rmevhsy.js:14569-20723 fingerprint = TrustDialog (0.487)
+//@ chunk-8rmevhsy.js:14569-20723 fingerprint (2.1.88 match: TrustDialog, 0.487)
 /**
  * 工作区信任对话框：列出项目中会自动执行或放权的配置（hooks、MCP 服务器、bash 权限、apiKeyHelper、OTEL headers helper、AWS/GCP 命令、危险 env、技能/插件），用户选择信任后写入项目配置；拒绝则退出。
  */

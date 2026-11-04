@@ -28,7 +28,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 function getEnterPlanModePrompt() {
   return enterPlanModeToolPrompt();
 }
-//@ chunk-a5k9jscj.js:31115-33172 fingerprint = EnterPlanModeTool (0.578)
+//@ chunk-a5k9jscj.js:31115-33172 fingerprint (2.1.88 match: EnterPlanModeTool, 0.578)
 /**
  * EnterPlanMode 工具（shouldDefer，只读可并发，isEnabled 跟随 ExitPlanModeV2Tool.isEnabled）。子代理不能进入计划模式；diskless 会话且当前不是 auto/plan 时需要用户亲自确认（personOnly、classifier 不可代批），否则直接允许。call 记录模式切换，把权限上下文切到 plan（prepareContextForPlanMode 保存 prePlanMode），结果附带计划模式要求：只读探索、需要时用 AskUserQuestion、完成后用 ExitPlanMode。
  */

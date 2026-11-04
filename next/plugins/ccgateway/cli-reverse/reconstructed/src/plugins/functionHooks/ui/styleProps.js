@@ -141,7 +141,7 @@ var SPACE_AXIS = {
   paddingTop: "down",
   paddingBottom: "down",
 };
-//@ chunk-4121qate.js:110180-110278 placement = applyGapStyles (0.349)
+//@ chunk-4121qate.js:110180-110278 placement (2.1.88 match: applyGapStyles, 0.349)
 var SPACE_PAIRS = {
   gap: ["columnGap", "rowGap"],
   margin: ["marginX", "marginY"],
@@ -162,7 +162,7 @@ var OFFSET_PROPS; // deferred: has load-time effects after a deferred statement 
 deferInit("chunk-4121qate.js:110387", () => {
   OFFSET_PROPS = new Set(["top", "left", "right", "bottom"]);
 });
-//@ chunk-4121qate.js:110436-111172 placement = applyFlexStyles (0.426)
+//@ chunk-4121qate.js:110436-111172 placement (2.1.88 match: applyFlexStyles, 0.426)
 var PROP_VALUES; // deferred: uses BORDER_STYLES of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-4121qate.js:110436", () => {
   PROP_VALUES = {
@@ -253,7 +253,7 @@ deferInit("chunk-4121qate.js:111172", () => {
 });
 //@ chunk-4121qate.js:111808-111820 placement
 var SIZE_LIMIT = 1e4;
-//@ chunk-4121qate.js:111820-111879 placement = applyDimensionStyles (0.373)
+//@ chunk-4121qate.js:111820-111879 placement (2.1.88 match: applyDimensionStyles, 0.373)
 var SIZE_PROPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-4121qate.js:111820", () => {
   SIZE_PROPS = new Set(["width", "height", "minWidth", "minHeight"]);

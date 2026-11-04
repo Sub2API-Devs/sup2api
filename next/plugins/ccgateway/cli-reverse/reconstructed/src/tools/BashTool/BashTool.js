@@ -294,7 +294,7 @@ function omitUnsandboxedFields(schema, fieldNames) {
   );
   return schema.omit(omitShape);
 }
-//@ chunk-e6aww6q8.js:1178453-1178560 fingerprint = BASH_SEMANTIC_NEUTRAL_COMMANDS (0.59)
+//@ chunk-e6aww6q8.js:1178453-1178560 fingerprint (2.1.88 match: BASH_SEMANTIC_NEUTRAL_COMMANDS, 0.59)
 /**
  * 不读写文件的命令集合（echo/printf/test/[/which/type/basename/dirname/df 等）；沙箱"读封锁"检查（chunk-e6aww6q8.js#kDo）遇到这些命令直接放过。
  */
@@ -315,7 +315,7 @@ deferInit("chunk-e6aww6q8.js:1178453", () => {
     "df",
   ]);
 });
-//@ chunk-e6aww6q8.js:3105251-3105639 fingerprint = COMMON_BACKGROUND_COMMANDS (0.602)
+//@ chunk-e6aww6q8.js:3105251-3105639 fingerprint (2.1.88 match: COMMON_BACKGROUND_COMMANDS, 0.602)
 /**
  * 常见长时间运行/构建类命令前缀（npm、cargo、docker、pytest、gh、bazel、nix…），与 wget 合成遥测里的 command_type 白名单；也被后台任务模块使用。
  */
@@ -506,7 +506,7 @@ function outputContainsFileView(commandOutput, viewContent, isNumbered) {
         .includes(normalizedViewContent))
   );
 }
-//@ chunk-e6aww6q8.js:4767414-4768090 fingerprint = applySedEdit (0.531)
+//@ chunk-e6aww6q8.js:4767414-4768090 fingerprint (2.1.88 match: applySedEdit, 0.531)
 /**
  * Bash 执行完后，把 cat/head/tail/sed -n 等单纯查看文件的命令识别出来（chunk-e6aww6q8.js#Kzo），读取文件（≤10MB）并按查看范围写入 readFileState，使后续 Edit 不再要求先 Read；已有记录则只触发嵌套 CLAUDE.md 附件。requiresExitZero 的规格只在退出码 0 时生效。
  */
@@ -955,7 +955,7 @@ function isPinnedPromptInSystemPrompt(shellCallContext) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:4819586-4820079 fingerprint = BASH_READ_COMMANDS (0.539)
+//@ chunk-e6aww6q8.js:4819586-4820079 fingerprint (2.1.88 match: BASH_READ_COMMANDS, 0.539)
 /**
  * Bash 工具常量：换行、进度阈值 2000ms，以及搜索/读/列目录/中性/静默命令集合（用于折叠显示 isSearchOrReadCommand 与 noOutputExpected）。
  */
@@ -1016,7 +1016,7 @@ deferInit("chunk-e6aww6q8.js:4819586", () => {
     "wait",
   ]);
 });
-//@ chunk-e6aww6q8.js:4820079-4820479 fingerprint = isSearchOrReadBashCommand (1)
+//@ chunk-e6aww6q8.js:4820079-4820479 fingerprint (2.1.88 match: isSearchOrReadBashCommand, 1)
 /**
  * 判断命令是否全部由搜索（find/grep/rg…）、读（cat/head/jq…）、列目录（ls/tree/du）命令组成（echo 等中性命令忽略），返回 {isSearch,isRead,isList}，供界面折叠显示。
  */
@@ -1074,7 +1074,7 @@ function isSilentBashCommand(command) {
   }
   return sawCommand;
 }
-//@ chunk-e6aww6q8.js:4820641-4822292 fingerprint = fullInputSchema (0.509)
+//@ chunk-e6aww6q8.js:4820641-4822292 fingerprint (2.1.88 match: fullInputSchema, 0.509)
 /**
  * Bash 输入 schema：command（拒绝会在审批框里隐藏的控制字符）、timeout、description、run_in_background、dangerouslyDisableSandbox，以及条件附加的字段；后台任务被禁用时去掉 run_in_background。
  */
@@ -1168,7 +1168,7 @@ function getCommandTypeForLogging(command) {
   }
   return lit_2("other");
 }
-//@ chunk-e6aww6q8.js:4822689-4827035 fingerprint = outputSchema (0.557)
+//@ chunk-e6aww6q8.js:4822689-4827035 fingerprint (2.1.88 match: outputSchema, 0.557)
 /**
  * Bash 输出 schema：stdout/stderr/interrupted/isImage、后台任务相关（backgroundTaskId、timedOutAfterMs、backgroundedBy*）、持久化输出、沙箱、各种给模型的提示（memoryLimitNote/triggeredNote/staleReadFileStateHint/ghRateLimitHint）、gitOperation 与 bashEditDiff。
  */
@@ -1358,7 +1358,7 @@ function isAutobackgroundingAllowed(command) {
   if (!baseCommand) return true;
   return !DISALLOWED_AUTO_BACKGROUND_COMMANDS.includes(baseCommand);
 }
-//@ chunk-e6aww6q8.js:4827802-4828082 fingerprint = detectBlockedSleepPattern (1)
+//@ chunk-e6aww6q8.js:4827802-4828082 fingerprint (2.1.88 match: detectBlockedSleepPattern, 1)
 /**
  * 检测"sleep N（N≥阈值）"开头的阻塞写法，返回描述；validateInput 据此拒绝并建议改用 Monitor 或 run_in_background。
  */
@@ -1578,7 +1578,7 @@ async function findStaleReadFileStateEntries(command, readFileState, commandStar
   );
   return stalePaths;
 }
-//@ chunk-e6aww6q8.js:4830635-4848828 facade-exports = BashTool (0.388)
+//@ chunk-e6aww6q8.js:4830635-4848828 facade-exports (2.1.88 match: BashTool, 0.388)
 /**
  * Bash 工具定义（name=Bash）。只读命令并发安全；checkPermissions 委托 bashPermissions；call 负责沙箱决策、执行（runShellCommand）、进度、错误转 ShellError、输出持久化/图片、git 操作识别、编辑 diff、已读文件过期提示和遥测。
  */
@@ -2764,7 +2764,7 @@ ${backgroundCwdHint}`;
     },
   });
 });
-//@ chunk-e6aww6q8.js:4848828-4854744 fingerprint = runShellCommand (0.466)
+//@ chunk-e6aww6q8.js:4848828-4854744 fingerprint (2.1.88 match: runShellCommand, 0.466)
 /**
  * 执行一条 Bash 命令的异步生成器：计算超时（前台/后台上限、子代理上限、远程约束），处理显式 run_in_background、超时自动转后台、用户 Ctrl+B / 回合中断转后台；2 秒后开始产出进度并登记为前台任务；返回执行结果或后台任务 id。
  */

@@ -10,7 +10,7 @@
  */
 import { getDeprecationStatusLine } from "../../utils/model/deprecation.js";
 
-//@ chunk-18hwfzwa.js:1758852-1759190 fingerprint = useDeprecationWarningNotification (0.754)
+//@ chunk-18hwfzwa.js:1758852-1759190 fingerprint (2.1.88 match: useDeprecationWarningNotification, 0.754)
 var useDeprecationWarningNotification = {
   id: "model-deprecation-warning",
   deps: (noticeState) => [

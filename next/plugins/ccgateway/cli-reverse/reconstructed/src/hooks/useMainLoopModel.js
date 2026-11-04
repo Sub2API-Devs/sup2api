@@ -45,11 +45,11 @@ function resolveMainLoopModel(mainLoopModelForSession, mainLoopModel) {
     getDefaultMainLoopModelSetting()
   );
 }
-//@ chunk-kxxfj8vr.js:537-610 placement = useMainLoopModel (1)
+//@ chunk-kxxfj8vr.js:537-610 placement (2.1.88 match: useMainLoopModel, 1)
 function getMainLoopModelFromState(state) {
   return parseUserSpecifiedModel(resolveMainLoopModel(state.mainLoopModelForSession, state.mainLoopModel));
 }
-//@ chunk-kxxfj8vr.js:610-746 placement = useMainLoopModel (1)
+//@ chunk-kxxfj8vr.js:610-746 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModelSetting() {
   let mainLoopModel = useAppState((state) => state.mainLoopModel);
   let mainLoopModelForSession = useAppState((state) => state.mainLoopModelForSession);
@@ -61,7 +61,7 @@ function useMainLoopModelSetting() {
     [mainLoopModelForSession, mainLoopModel, forceRender, settingsState, mainLoopModelVersion],
   );
 }
-//@ chunk-kxxfj8vr.js:746-882 placement = useMainLoopModel (1)
+//@ chunk-kxxfj8vr.js:746-882 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModel_2() {
   let mainLoopModel = useAppState((state) => state.mainLoopModel);
   let mainLoopModelForSession = useAppState((state) => state.mainLoopModelForSession);
@@ -73,7 +73,7 @@ function useMainLoopModel_2() {
     [mainLoopModelForSession, mainLoopModel, forceRender, settingsState, mainLoopModelVersion],
   );
 }
-//@ chunk-kxxfj8vr.js:882-1056 placement = useMainLoopModel (1)
+//@ chunk-kxxfj8vr.js:882-1056 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModel() {
   let mainLoopModel = useAppState((state) => state.mainLoopModel);
   let mainLoopModelForSession = useAppState((state) => state.mainLoopModelForSession);

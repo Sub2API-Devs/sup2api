@@ -25,7 +25,7 @@ import { formatBriefTimestamp } from "../../utils/formatBriefTimestamp.js";
 import { NoSelect } from "../../ink/components/Input.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 
-//@ chunk-ah34pb7m.js:23792-24125 fingerprint = _temp (0.855)
+//@ chunk-ah34pb7m.js:23792-24125 fingerprint (2.1.88 match: _temp, 0.855)
 function renderAttachmentRow(att) {
   let canLink = isAbsolute(att.path) && att.pathValidated && !isUntouchableSpelling(att.path);
   return jsxProd_default_2(
@@ -54,7 +54,7 @@ function renderAttachmentRow(att) {
     att.file_uuid ?? att.path,
   );
 }
-//@ chunk-ah34pb7m.js:24125-25088 fingerprint = renderToolResultMessage (0.868)
+//@ chunk-ah34pb7m.js:24125-25088 fingerprint (2.1.88 match: renderToolResultMessage, 0.868)
 /**
  * SendUserMessage 结果渲染：转录模式、仅 Brief 模式（Claude 标签+时间）与普通模式三种布局，附附件列表。
  */
@@ -154,7 +154,7 @@ function renderToolResultMessage_6(output, _progressMessages, options) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:25088-25329 fingerprint = AttachmentList (1)
+//@ chunk-ah34pb7m.js:25088-25329 fingerprint (2.1.88 match: AttachmentList, 1)
 /**
  * 附件列表组件：每行显示 [image]/[file]、可点击路径与大小。
  */

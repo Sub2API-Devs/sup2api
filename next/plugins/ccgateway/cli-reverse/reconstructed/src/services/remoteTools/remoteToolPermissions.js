@@ -761,7 +761,7 @@ function validateRemoteInputShape(toolPermissionContext, tool, parsedInput, beha
     );
   }, null);
 }
-//@ chunk-dtv8x2hx.js:23832-23910 placement = hasBashPermission (1)
+//@ chunk-dtv8x2hx.js:23832-23910 placement (2.1.88 match: hasBashPermission, 1)
 function hasBashPermission(rules) {
   return collectAskRules(rules).map((rule) =>
     permissionRuleIdentityKey(rule.source, rule.ruleBehavior, rule.ruleValue),

@@ -18,7 +18,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 deferInit("chunk-dnj0hze9.js:455", () => {
   init_react_production();
 });
-//@ chunk-dnj0hze9.js:459-536 fingerprint = useAnimationFrame (1)
+//@ chunk-dnj0hze9.js:459-536 fingerprint (2.1.88 match: useAnimationFrame, 1)
 /**
  * 动画帧钩子：返回 [ref, 当前时钟值, 可见性读取函数]；组件不在可见区域时停止跟随时钟（省 CPU）。
  */

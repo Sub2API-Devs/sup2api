@@ -92,7 +92,7 @@ function isRateLimitErrorMessage(text) {
     LIMIT_MESSAGE_PREFIX_PATTERNS.some((pattern) => pattern.test(text))
   );
 }
-//@ chunk-dcmhvw5a.js:50322-50625 fingerprint = RATE_LIMIT_ERROR_PREFIXES (0.403)
+//@ chunk-dcmhvw5a.js:50322-50625 fingerprint (2.1.88 match: RATE_LIMIT_ERROR_PREFIXES, 0.403)
 /**
  * 限额文案前缀表：错误类、预警类（"You've used"/"You're close to"）、overage 类（"Now using usage credits" 等），用于识别限额消息。
  */
@@ -132,7 +132,7 @@ function rateLimitWindowLabel(limits) {
       return null;
   }
 }
-//@ chunk-w5ndchqs.js:20707-21273 fingerprint = getRateLimitMessage (0.621)
+//@ chunk-w5ndchqs.js:20707-21273 fingerprint (2.1.88 match: getRateLimitMessage, 0.621)
 /**
  * 由额度状态得到 {message, severity}：overage 预警、被拒（错误）、allowed_warning（团队/企业已开 extra usage 时不提示）。
  */
@@ -170,7 +170,7 @@ function getRateLimitMessage(limits, model, threshold) {
   }
   return null;
 }
-//@ chunk-w5ndchqs.js:21273-21361 callgraph-fingerprint = getRateLimitErrorMessage (1)
+//@ chunk-w5ndchqs.js:21273-21361 callgraph-fingerprint (2.1.88 match: getRateLimitErrorMessage, 1)
 /**
  * 只取错误级文案。
  */
@@ -179,7 +179,7 @@ function getRateLimitErrorMessage(limits, model) {
   if (message && message.severity === "error") return message.message;
   return null;
 }
-//@ chunk-w5ndchqs.js:21361-21455 callgraph-fingerprint = getRateLimitWarning (1)
+//@ chunk-w5ndchqs.js:21361-21455 callgraph-fingerprint (2.1.88 match: getRateLimitWarning, 1)
 /**
  * 只取警告级文案。
  */
@@ -188,7 +188,7 @@ function getRateLimitWarning(limits, model, threshold) {
   if (message && message.severity === "warning") return message.message;
   return null;
 }
-//@ chunk-w5ndchqs.js:24419-24734 callgraph-fingerprint = getLimitReachedText (0.332)
+//@ chunk-w5ndchqs.js:24419-24734 callgraph-fingerprint (2.1.88 match: getLimitReachedText, 0.332)
 /**
  * 被拒时的"You've hit your <限额>"文案（按限额类型）。
  */
@@ -218,7 +218,7 @@ function toUtilizationPercent(fraction) {
   if (fraction === undefined || !Number.isFinite(fraction) || fraction <= 0 || fraction >= 1) return;
   return Math.min(99, Math.floor(Math.round(fraction * 1e4) / 100));
 }
-//@ chunk-w5ndchqs.js:24857-25556 fingerprint = getEarlyWarningText (0.526)
+//@ chunk-w5ndchqs.js:24857-25556 fingerprint (2.1.88 match: getEarlyWarningText, 0.526)
 /**
  * 预警文案："You've used N% of your <限额>" 等。
  */
@@ -263,7 +263,7 @@ function getEarlyWarningText(limits) {
     .filter(Boolean)
     .join(" \xB7 ");
 }
-//@ chunk-w5ndchqs.js:25556-26197 fingerprint = getWarningUpsellText (0.61)
+//@ chunk-w5ndchqs.js:25556-26197 fingerprint (2.1.88 match: getWarningUpsellText, 0.61)
 /**
  * 按订阅类型的升级/购买提示。
  */
@@ -343,7 +343,7 @@ function getProRunwayTip(claudeAiLimits, mainLoopModel, effortValue) {
     };
   return null;
 }
-//@ chunk-w5ndchqs.js:26898-27538 fingerprint = getUsingOverageText (0.407)
+//@ chunk-w5ndchqs.js:26898-27538 fingerprint (2.1.88 match: getUsingOverageText, 0.407)
 /**
  * 正在使用 overage 时的提示文案。
  */
@@ -402,7 +402,7 @@ function getAskAdminSuffix() {
     ? ` \xB7 run ${usageCreditsCommand} to ask your admin for a higher limit`
     : " \xB7 ask your admin for a higher limit";
 }
-//@ chunk-w5ndchqs.js:27765-27877 fingerprint = formatLimitReachedText (0.403)
+//@ chunk-w5ndchqs.js:27765-27877 fingerprint (2.1.88 match: formatLimitReachedText, 0.403)
 /**
  * "You've hit your <限额><重置时间>[ · progress saved]"。
  */

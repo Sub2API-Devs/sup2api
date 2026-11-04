@@ -211,7 +211,7 @@ function shouldBackgroundForkedSkill(input, toolContext, forceForeground) {
     return false;
   return input.background ?? true;
 }
-//@ chunk-0fs3a553.js:3543-6441 placement = updateMagicDoc (0.152)
+//@ chunk-0fs3a553.js:3543-6441 placement (2.1.88 match: updateMagicDoc, 0.152)
 async function runForkedAgent({
   agentId,
   agentDefinition,

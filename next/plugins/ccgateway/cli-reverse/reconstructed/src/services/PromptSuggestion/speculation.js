@@ -31,7 +31,7 @@ function stripSuggestionWrapper(candidate) {
     )
     .trim();
 }
-//@ chunk-3sjj4q4c.js:7745-8009 fingerprint = generatePipelinedSuggestion (0.351)
+//@ chunk-3sjj4q4c.js:7745-8009 fingerprint (2.1.88 match: generatePipelinedSuggestion, 0.351)
 /**
  * 生成建议并取第一个非空候选。
  */

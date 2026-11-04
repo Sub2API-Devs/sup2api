@@ -65,7 +65,7 @@ var REPORT_STATE_TEXT = {
   stopped: null,
   from: null,
 };
-//@ chunk-ae5g0zb5.js:39033-39267 placement = CompanionFloatingBubble (0.32)
+//@ chunk-ae5g0zb5.js:39033-39267 placement (2.1.88 match: CompanionFloatingBubble, 0.32)
 /**
  * 解析服务健康状态 JSON：up / down / busy（端口占用）。
  */
@@ -245,7 +245,7 @@ function collapseAndTruncate(text, maxChars) {
   let trimmed = text.replace(regExp, " ").replace(/ {2,}/g, " ").trim();
   return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars - 1)}\u2026` : trimmed;
 }
-//@ chunk-ae5g0zb5.js:40778-40837 placement = capitalize (1)
+//@ chunk-ae5g0zb5.js:40778-40837 placement (2.1.88 match: capitalize, 1)
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }

@@ -47,9 +47,9 @@ function isSelfHostedEnvironment(environment) {
 function findFirst(list, predicate) {
   return list.find(predicate);
 }
-//@ chunk-f25sswmp.js:15292-15348 layout = TRUSTED_SETTING_SOURCES (1)
+//@ chunk-f25sswmp.js:15292-15348 layout (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
 var TRUSTED_SETTING_SOURCES = ["policySettings", "flagSettings", "userSettings"];
-//@ chunk-f25sswmp.js:15348-15653 fingerprint = getEnvironmentSelectionInfo (0.447)
+//@ chunk-f25sswmp.js:15348-15653 fingerprint (2.1.88 match: getEnvironmentSelectionInfo, 0.447)
 /**
  * 计算可用云环境与当前选择。
  */

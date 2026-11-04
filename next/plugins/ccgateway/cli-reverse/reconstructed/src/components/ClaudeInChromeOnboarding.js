@@ -29,14 +29,14 @@ import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-hthm3h8y.js:5447-5451 placement
 init_react_production();
-//@ chunk-hthm3h8y.js:5451-5518 fingerprint = _temp (1)
+//@ chunk-hthm3h8y.js:5451-5518 fingerprint (2.1.88 match: _temp, 1)
 function markClaudeInChromeOnboarded(current) {
   return {
     ...current,
     hasCompletedClaudeInChromeOnboarding: true,
   };
 }
-//@ chunk-hthm3h8y.js:5561-7326 fingerprint = ClaudeInChromeOnboarding (0.392)
+//@ chunk-hthm3h8y.js:5561-7326 fingerprint (2.1.88 match: ClaudeInChromeOnboarding, 0.392)
 function ClaudeInChromeOnboarding(props) {
   let $ = useMemoCache(22);
   let { onDone } = props;

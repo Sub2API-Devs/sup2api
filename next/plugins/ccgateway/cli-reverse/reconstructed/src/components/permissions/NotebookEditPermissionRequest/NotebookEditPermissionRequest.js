@@ -28,7 +28,7 @@ import { logError } from "../../../utils/log.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../../utils/errors.js";
 import { Blockquote } from "../../Blockquote.js";
 
-//@ chunk-18hwfzwa.js:1379060-1380440 callgraph-fingerprint = NotebookEditPermissionRequest (0.16)
+//@ chunk-18hwfzwa.js:1379060-1380440 callgraph-fingerprint (2.1.88 match: NotebookEditPermissionRequest, 0.16)
 function NotebookEditPermissionRequest(payload, theme, languageName, paddingX) {
   let content = payload.content;
   switch (content.kind) {

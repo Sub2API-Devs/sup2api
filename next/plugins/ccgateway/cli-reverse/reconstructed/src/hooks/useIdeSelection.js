@@ -16,7 +16,7 @@ import { onMcpNotification } from "../services/mcp/mcpWireUtils.js";
 import { logError } from "../utils/log.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:208035-208244 fingerprint = SelectionChangedSchema (0.834)
+//@ chunk-18hwfzwa.js:208035-208244 fingerprint (2.1.88 match: SelectionChangedSchema, 0.834)
 var SelectionChangedSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-18hwfzwa.js:208035", () => {
   SelectionChangedSchema = DoctorLazy(() =>
@@ -41,7 +41,7 @@ deferInit("chunk-18hwfzwa.js:208035", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:208244-208743 fingerprint = useIdeSelection (0.876)
+//@ chunk-18hwfzwa.js:208244-208743 fingerprint (2.1.88 match: useIdeSelection, 0.876)
 function useIdeSelection(mcpClients, onSelect) {
   let handlersRegistered = useRef(false);
   let currentIDERef = useRef(null);

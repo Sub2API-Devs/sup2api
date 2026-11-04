@@ -38,7 +38,7 @@ import { isPluginBlockedByPolicy } from "./marketplacePolicy.js";
 import { needsAuthCacheSpace } from "../../services/mcp/needsAuthCache.js";
 import { jsonParse } from "../slowOperations.js";
 
-//@ chunk-4121qate.js:274600-274614 fingerprint = isPersistableScope (1)
+//@ chunk-4121qate.js:274600-274614 fingerprint (2.1.88 match: isPersistableScope, 1)
 var FLAG_SCOPE = "flag";
 //@ chunk-pd0t5xas.js:2621-2655 facade-exports
 /**
@@ -47,7 +47,7 @@ var FLAG_SCOPE = "flag";
 async function checkEnabledPlugins() {
   return enabledPluginIds();
 }
-//@ chunk-pd0t5xas.js:2655-2976 facade-exports = checkEnabledPlugins (1)
+//@ chunk-pd0t5xas.js:2655-2976 facade-exports (2.1.88 match: checkEnabledPlugins, 1)
 /**
  * 启动时列出设置（含 --add-dir）中启用的插件 ID。
  */
@@ -70,7 +70,7 @@ function enabledPluginIds() {
     }
   return enabledPlugins;
 }
-//@ chunk-pd0t5xas.js:2976-3800 facade-exports = getPluginEditableScopes (1)
+//@ chunk-pd0t5xas.js:2976-3800 facade-exports (2.1.88 match: getPluginEditableScopes, 1)
 /**
  * 每个已启用插件 ID 当前由哪个可编辑作用域（user/project/local）决定，优先级 local > project > user。
  */
@@ -137,7 +137,7 @@ function editableScopeOf(map, pluginId) {
   for (let [key, value] of map) if (nfcLower(key) === lowered) return value;
   return;
 }
-//@ chunk-e6aww6q8.js:4458476-4459079 fingerprint = installSelectedPlugins (0.466)
+//@ chunk-e6aww6q8.js:4458476-4459079 fingerprint (2.1.88 match: installSelectedPlugins, 0.466)
 /**
  * 如果输入的插件 ID 是某已安装插件的别名（同一插件在另一市场/ID），返回已安装的那个 ID。
  */
@@ -196,7 +196,7 @@ async function installSelectedPlugins(pluginId, storageV5) {
   }
   return;
 }
-//@ chunk-rbwn7je9.js:1925-2104 fingerprint = findMissingPlugins (0.515)
+//@ chunk-rbwn7je9.js:1925-2104 fingerprint (2.1.88 match: findMissingPlugins, 0.515)
 /**
  * 经存储层读取一个 JSON 文件（失败返回空对象）。名字配错，见 lead 建议。
  */

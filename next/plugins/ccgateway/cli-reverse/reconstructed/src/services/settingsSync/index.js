@@ -23,7 +23,7 @@ import { isInstructionsMemoryType_3, MAX_INCLUDE_DEPTH, processMdRules } from ".
 import { INCLUDE_EXTERNAL, MAX_INCLUDE_READS } from "../homeSeed/homeInventory.js";
 import { CLAUDE_MD, RULES } from "../homeSeed/workingFiles.js";
 
-//@ chunk-aepeg2w5.js:129791-129852 callgraph-fingerprint = getSettingsSyncEndpoint (1)
+//@ chunk-aepeg2w5.js:129791-129852 callgraph-fingerprint (2.1.88 match: getSettingsSyncEndpoint, 1)
 function getSettingsSyncEndpoint() {
   try {
     return hostOfUrl(getOauthConfig().BASE_API_URL);
@@ -31,7 +31,7 @@ function getSettingsSyncEndpoint() {
     return;
   }
 }
-//@ chunk-s61vbvea.js:500862-501122 callgraph-fingerprint = fetchUserSettingsOnce (0.351)
+//@ chunk-s61vbvea.js:500862-501122 callgraph-fingerprint (2.1.88 match: fetchUserSettingsOnce, 0.351)
 function fetchUserSettingsOnce(error) {
   if (error instanceof ReferralEligibilityUnavailableError) return error.errorCode;
   let { kind, status } = classifyAxiosError(error);
@@ -47,7 +47,7 @@ function fetchUserSettingsOnce(error) {
       return "request_failed";
   }
 }
-//@ chunk-e6aww6q8.js:3156204-3156535 callgraph-fingerprint = buildEntriesFromLocalFiles (0.234)
+//@ chunk-e6aww6q8.js:3156204-3156535 callgraph-fingerprint (2.1.88 match: buildEntriesFromLocalFiles, 0.234)
 function buildEntriesFromLocalFiles(projectId) {
   if (projectId === getMemoryPath("User")) return STORAGE_SPACES.state("user-memory");
   let rulesPrefix = getUserClaudeRulesDir() + sep;
@@ -72,14 +72,14 @@ function buildEntriesFromLocalFiles(projectId) {
 function bannerWithCodeHere(bannerKind, codeUrl) {
   return `${CLOUD_SESSION_BANNERS[bannerKind]}${CODE_HERE_OR_AT}${codeUrl}`;
 }
-//@ chunk-e4xept39.js:379-445 fingerprint = tryReadFileForSync (1)
+//@ chunk-e4xept39.js:379-445 fingerprint (2.1.88 match: tryReadFileForSync, 1)
 function tryReadFileForSync(sessionId, remoteSessionUrl, isCloudSession) {
   let content = bannerWithCodeHere(sessionId, remoteSessionUrl);
   return isCloudSession
     ? createCloudSessionStatusMessage(sessionId, remoteSessionUrl, content)
     : createSystemMessage(content, "info");
 }
-//@ chunk-axmbhcjg.js:8417-8926 callgraph-fingerprint = applyRemoteEntriesToLocal (0.178)
+//@ chunk-axmbhcjg.js:8417-8926 callgraph-fingerprint (2.1.88 match: applyRemoteEntriesToLocal, 0.178)
 async function applyRemoteEntriesToLocal(configDir, counters, signal) {
   let includeReader = (rulesDir, ruleType) => () =>
     isInstructionsMemoryType_3(

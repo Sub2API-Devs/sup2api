@@ -193,7 +193,7 @@ function getCwdOrNull() {
   if (getCurrentCallFrame()?.cwd === undefined && getOriginalCwdOrNull() === null) return null;
   return getCwd();
 }
-//@ chunk-fnk5kvbf.js:3095-3179 callgraph-witnessed = getCwd (0)
+//@ chunk-fnk5kvbf.js:3095-3179 callgraph-witnessed (2.1.88 match: getCwd, 0)
 /**
  * 当前工作目录：优先取按调用覆盖的 cwd（runWithCwdOverride），失败时回退会话原始 cwd；没有项目目录时原样抛出。
  */
@@ -254,7 +254,7 @@ function skipFinishedCalls(frame) {
   while (current?.call?.isOver === true) current = current.call.outer;
   return current;
 }
-//@ chunk-fnk5kvbf.js:3469-3505 placement = getAgentContext (1)
+//@ chunk-fnk5kvbf.js:3469-3505 placement (2.1.88 match: getAgentContext, 1)
 function getCurrentCallFrame() {
   return skipFinishedCalls(remoteCallFrameStorage.getStore());
 }
@@ -278,7 +278,7 @@ function realPathOutcome(outcome) {
       return false;
   }
 }
-//@ chunk-aepeg2w5.js:852825-852839 placement = agentContextStorage (0)
+//@ chunk-aepeg2w5.js:852825-852839 placement (2.1.88 match: agentContextStorage, 0)
 /**
  * 一个存 {key} 的 AsyncLocalStorage，由 utils/cwd.ts 与 print 使用（看用法更像按调用链覆盖的 key，而不是代理上下文）。
  */
@@ -298,14 +298,14 @@ function runWithContextKey(key, fn) {
     fn,
   );
 }
-//@ chunk-aepeg2w5.js:852882-852923 placement = getAgentContext (1)
+//@ chunk-aepeg2w5.js:852882-852923 placement (2.1.88 match: getAgentContext, 1)
 /**
  * 取当前 ALS 上下文的 key。
  */
 function getContextKey() {
   return contextKeyStorage_2.getStore()?.key;
 }
-//@ chunk-aepeg2w5.js:852923-852976 placement = getAgentContext (1)
+//@ chunk-aepeg2w5.js:852923-852976 placement (2.1.88 match: getAgentContext, 1)
 /**
  * 清空当前 ALS 上下文的 key。
  */
@@ -353,7 +353,7 @@ var contextKeyStorage; // deferred: has load-time effects after a deferred state
 deferInit("chunk-aepeg2w5.js:853637", () => {
   contextKeyStorage = new AsyncLocalStorage();
 });
-//@ chunk-aepeg2w5.js:853652-853777 callgraph-fingerprint = runWithCwdOverride (0.279)
+//@ chunk-aepeg2w5.js:853652-853777 callgraph-fingerprint (2.1.88 match: runWithCwdOverride, 0.279)
 function runWithCwdOverride(cwd, fn) {
   if (!("turnAttributionKey" in cwd)) cwd.turnAttributionKey = getContextKey();
   return contextKeyStorage.run(cwd, () => runWithContextKey(cwd.turnAttributionKey, fn));

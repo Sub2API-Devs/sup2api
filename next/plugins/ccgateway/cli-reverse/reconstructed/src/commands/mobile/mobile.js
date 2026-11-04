@@ -80,7 +80,7 @@ class ClaudeInChromeSessionState {
     this.disconnectedAnswerTexts = new Set();
   }
 }
-//@ chunk-3q7pey4p.js:2093-2141 fingerprint = _temp2 (1)
+//@ chunk-3q7pey4p.js:2093-2141 fingerprint (2.1.88 match: _temp2, 1)
 /**
  * 判断持久化的平台是否为移动端（ios/android）。
  */

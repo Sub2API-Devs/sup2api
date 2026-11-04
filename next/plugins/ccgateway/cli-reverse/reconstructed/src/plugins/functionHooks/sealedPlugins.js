@@ -274,7 +274,7 @@ async function readSealedPluginTexts(loaderContext, plugin, modulePath) {
   logFeatureOk("plugin_sealed_read");
   return digest.texts;
 }
-//@ chunk-e6aww6q8.js:762453-762563 placement = buildMcpUserConfig (0.767)
+//@ chunk-e6aww6q8.js:762453-762563 placement (2.1.88 match: buildMcpUserConfig, 0.767)
 var pickNonSensitiveOptions = (plugin, serverName) =>
   filterEntriesToNullProto(plugin, (key, optionName) => {
     let userConfig = serverName.manifest.userConfig ?? {};

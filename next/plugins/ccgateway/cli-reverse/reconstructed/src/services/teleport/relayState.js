@@ -274,7 +274,7 @@ function verifyPreAnchorIntact(lineUuids) {
   revertTeleportCache("context_reduced", "main", mismatch);
   return false;
 }
-//@ chunk-fft78xw8.js:3857-3918 placement = runtimeState (1)
+//@ chunk-fft78xw8.js:3857-3918 placement (2.1.88 match: runtimeState, 1)
 /**
  * 旧版名 runtimeState 为错配。
  */

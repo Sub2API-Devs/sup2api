@@ -46,7 +46,7 @@ deferInit("chunk-f3qhjfah.js:1740", () => {
   PLUGIN_LINK_HEADER = `
 [mode: link]`;
 });
-//@ chunk-f3qhjfah.js:2141-2203 placement = getThinkbackSkillDir (1)
+//@ chunk-f3qhjfah.js:2141-2203 placement (2.1.88 match: getThinkbackSkillDir, 1)
 function getThinkbackSkillDir() {
   let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
   return claudeConfigDirOrNull === null ? null : join(claudeConfigDirOrNull, "skills");

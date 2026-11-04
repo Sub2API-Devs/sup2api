@@ -302,7 +302,7 @@ function getEffectivePluginRoot(result) {
     ? result.resolvedPath
     : null;
 }
-//@ chunk-5aas12zq.js:6384-6432 placement = isInGlobalClaudeFolder (0.775)
+//@ chunk-5aas12zq.js:6384-6432 placement (2.1.88 match: isInGlobalClaudeFolder, 0.775)
 function isInGlobalClaudeFolder(filePath) {
   return pathModule.basename(filePath) === ".claude";
 }
@@ -578,7 +578,7 @@ ${rest.reason}`;
   }
   return [...byFileAndReason.values()];
 }
-//@ chunk-5aas12zq.js:12887-13011 placement = formatFailureDetails (0.777)
+//@ chunk-5aas12zq.js:12887-13011 placement (2.1.88 match: formatFailureDetails, 0.777)
 function formatFailureDetails(items) {
   let mapped = items.slice(0, MAX_LISTED_NAMES).map((item) => extractToolInputForTelemetry(item, 100));
   let remaining = items.length - mapped.length;

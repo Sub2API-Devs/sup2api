@@ -203,7 +203,7 @@ ${MEMORY_LINKING_GUIDANCE}`
 function isTeamMemoryPath(filePath) {
   return canUseTeamMemory() && isTeamMemPath(filePath);
 }
-//@ chunk-82kqcve8.js:132188-135953 fingerprint = buildCombinedMemoryPrompt (0.748)
+//@ chunk-82kqcve8.js:132188-135953 fingerprint (2.1.88 match: buildCombinedMemoryPrompt, 0.748)
 /**
  * 团队+个人记忆组合提示（team/ 子目录说明、作用域选择）。
  */

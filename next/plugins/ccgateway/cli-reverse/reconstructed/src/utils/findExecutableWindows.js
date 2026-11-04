@@ -67,7 +67,7 @@ function hasWindowsExecutableExt(candidatePath) {
   let index = replaced.lastIndexOf(".");
   return index > 0 && WINDOWS_EXECUTABLE_EXTS.has(replaced.slice(index));
 }
-//@ chunk-hvmek2df.js:876-1441 placement = findExecutable (0.461)
+//@ chunk-hvmek2df.js:876-1441 placement (2.1.88 match: findExecutable, 0.461)
 /**
  * 在 PATH 中查找可执行文件（Windows 处理 PATHEXT 扩展名），结果缓存。
  */

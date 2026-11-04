@@ -47,7 +47,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 function isSinkKilled(sink) {
   return getDynamicConfig_CACHED_MAY_BE_STALE(SINK_KILLSWITCH_CONFIG_NAME, {})?.[sink] === true;
 }
-//@ chunk-aepeg2w5.js:894752-894789 fingerprint = EVENT_SAMPLING_CONFIG_NAME (1)
+//@ chunk-aepeg2w5.js:894752-894789 fingerprint (2.1.88 match: EVENT_SAMPLING_CONFIG_NAME, 1)
 /**
  * 事件采样动态配置名 tengu_event_sampling_config（{<event>: {sample_rate}}）。
  */
@@ -56,7 +56,7 @@ var EVENT_SAMPLING_CONFIG_NAME = "tengu_event_sampling_config";
 function getEventSamplingConfig() {
   return getDynamicConfig_CACHED_MAY_BE_STALE(EVENT_SAMPLING_CONFIG_NAME, {});
 }
-//@ chunk-aepeg2w5.js:894821-894896 facade-exports = logEventImpl (1)
+//@ chunk-aepeg2w5.js:894821-894896 facade-exports (2.1.88 match: logEventImpl, 1)
 /**
  * 按采样率随机决定是否发送，返回实际采样率或 0。
  */
@@ -65,14 +65,14 @@ function shouldSampleEvent(eventName) {
   if (!rate) return null;
   return rollSampleRate(rate.sample_rate);
 }
-//@ chunk-aepeg2w5.js:894896-895026 facade-exports = shouldSampleEvent (0.568)
+//@ chunk-aepeg2w5.js:894896-895026 facade-exports (2.1.88 match: shouldSampleEvent, 0.568)
 function rollSampleRate(sampleRate) {
   if (typeof sampleRate !== "number" || !(sampleRate >= 0 && sampleRate <= 1)) return null;
   if (sampleRate >= 1) return null;
   if (sampleRate <= 0) return 0;
   return Math.random() < sampleRate ? sampleRate : 0;
 }
-//@ chunk-aepeg2w5.js:895026-895071 fingerprint = BATCH_CONFIG_NAME (1)
+//@ chunk-aepeg2w5.js:895026-895071 fingerprint (2.1.88 match: BATCH_CONFIG_NAME, 1)
 var DEFAULT_1P_BATCH_DELAY_MS = 2000;
 var TENGU_1P_EVENT_BATCH_CONFIG = "tengu_1p_event_batch_config";
 //@ chunk-aepeg2w5.js:895071-895102 layout
@@ -140,7 +140,7 @@ function shouldAttachAuthWithoutProfileScope() {
 function is1PEventLoggingEnabled() {
   return !isFirstPartyTelemetryBlocked();
 }
-//@ chunk-aepeg2w5.js:895848-896167 fingerprint = logEventTo1PAsync (0.666)
+//@ chunk-aepeg2w5.js:895848-896167 fingerprint (2.1.88 match: logEventTo1PAsync, 0.666)
 /**
  * 把事件转成 1P 格式（to1PEventFormat：event_name、client_timestamp、env、process、auth、additional_metadata 等）后作为 OTel LogRecord 发给 com.anthropic.claude_code.events logger。
  */
@@ -227,14 +227,14 @@ async function logEventTo1PAwaitable(eventName, metadataWithSampleRate = {}) {
   if (isSinkKilled("firstParty")) return;
   return trackInFlightEmit(emitsInFlight, firstPartyEventLogger, eventName, metadataWithSampleRate, stamp);
 }
-//@ chunk-aepeg2w5.js:896768-896801 fingerprint = getEnvironmentForGrowthBook (1)
+//@ chunk-aepeg2w5.js:896768-896801 fingerprint (2.1.88 match: getEnvironmentForGrowthBook, 1)
 /**
  * GrowthBook 实验事件的 environment，外部构建恒为 production。
  */
 function getEnvironmentForGrowthBook() {
   return "production";
 }
-//@ chunk-aepeg2w5.js:896801-897582 facade-exports = logGrowthBookExperimentTo1P (0.825)
+//@ chunk-aepeg2w5.js:896801-897582 facade-exports (2.1.88 match: logGrowthBookExperimentTo1P, 0.825)
 /**
  * 把 GrowthBook 实验曝光作为 GrowthbookExperimentEvent 发到 1P 事件日志（experiment_id、variation_id、user_attributes、device_id、session_id 等）。
  */
@@ -377,7 +377,7 @@ function clampMaxQueueSize(maxQueueSize) {
     ? Math.min(maxQueueSize, MAX_FLUSH_ITEMS)
     : MAX_FLUSH_ITEMS;
 }
-//@ chunk-aepeg2w5.js:899678-901197 facade-exports = initialize1PEventLogging (0.565)
+//@ chunk-aepeg2w5.js:899678-901197 facade-exports (2.1.88 match: initialize1PEventLogging, 0.565)
 /**
  * 初始化 1P 事件日志：读 tengu_1p_event_batch_config（延迟、批大小、队列、path/baseUrl、skipAuth），创建 FirstPartyEventLoggingExporter + BatchLogRecordProcessor 和 LoggerProvider（resource service.name=claude-code）。不允许时清空预排队。
  */
@@ -470,7 +470,7 @@ function reinitialize1PEventLoggingIfConfigChanged() {
   });
   return state.reinitInFlight;
 }
-//@ chunk-aepeg2w5.js:901578-902197 callgraph-fingerprint = reinitialize1PEventLoggingIfConfigChanged (0.2)
+//@ chunk-aepeg2w5.js:901578-902197 callgraph-fingerprint (2.1.88 match: reinitialize1PEventLoggingIfConfigChanged, 0.2)
 async function reinitialize1PEventLoggingIfConfigChanged_2(host) {
   if (!is1PEventLoggingEnabled() || !host.firstPartyEventLoggerProvider) return;
   let newConfig = get1PEventBatchConfig();

@@ -26,7 +26,7 @@ import { findTelemetrySafeCause, urlHostname } from "./headersHelper.js";
 import { urlFromRequestOptions, sameOrigin, isPrivateHost } from "../network/privateHostCheck.js";
 import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 
-//@ chunk-21ppfwx8.js:19578-20569 placement = downloadAndVerifyBinary (0.301)
+//@ chunk-21ppfwx8.js:19578-20569 placement (2.1.88 match: downloadAndVerifyBinary, 0.301)
 /**
  * 下载插件归档（URL 策略检查、User-Agent、arraybuffer）并校验（切分可疑：属于插件下载）。
  */

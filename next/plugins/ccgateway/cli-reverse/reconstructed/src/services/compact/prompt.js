@@ -11,7 +11,7 @@
 import { LOCAL_COMMAND_STDOUT } from "../../constants/xml.js";
 import { isTextBlock } from "../../utils/messages/textLineCount.js";
 
-//@ chunk-5dq2r0r3.js:264-446 fingerprint = getCompactUserSummaryMessage (0.508)
+//@ chunk-5dq2r0r3.js:264-446 fingerprint (2.1.88 match: getCompactUserSummaryMessage, 0.508)
 /**
  * 摘要消息开头的“本会话从耗尽上下文的前一段对话继续”说明。
  */
@@ -227,7 +227,7 @@ ${SECURITY_INSTRUCTIONS_NOTE}${USER_MESSAGE_DEFINITION_NOTE}
 
 There may be additional summarization instructions provided in the included context. If so, remember to follow these instructions when creating the summary.`;
 }
-//@ chunk-e6aww6q8.js:2096480-2102762 callgraph-fingerprint = PARTIAL_COMPACT_UP_TO_PROMPT (0.18)
+//@ chunk-e6aww6q8.js:2096480-2102762 callgraph-fingerprint (2.1.88 match: PARTIAL_COMPACT_UP_TO_PROMPT, 0.18)
 /**
  * 摘要提示词变体表：control、no_scratchpad、no_scratchpad_capped、no_scratchpad_keep_asks、lean、short、short_v2、capped。
  */
@@ -418,7 +418,7 @@ REMINDER: Do NOT call any tools. Respond with plain text only \u2014 ` +
     `${toolRule}. Tool calls will be rejected and you will fail the task.`
   );
 }
-//@ chunk-e6aww6q8.js:2102922-2103064 fingerprint = getPartialCompactPrompt (1)
+//@ chunk-e6aww6q8.js:2102922-2103064 fingerprint (2.1.88 match: getPartialCompactPrompt, 1)
 /**
  * 部分压缩提示词：禁止工具前缀 + from/up_to 模板 + 可选附加指令 + 禁止工具后缀。
  */
@@ -433,7 +433,7 @@ ${customInstructions}`;
   prompt += getNoToolsTrailer(REPLY_SHAPE_ANALYSIS_AND_SUMMARY);
   return prompt;
 }
-//@ chunk-e6aww6q8.js:2103064-2103214 fingerprint = getCompactPrompt (0.688)
+//@ chunk-e6aww6q8.js:2103064-2103214 fingerprint (2.1.88 match: getCompactPrompt, 0.688)
 /**
  * 整段压缩提示词：按变体取回复形状与正文（可带转录路径），追加自定义指令与禁止工具后缀。
  */
@@ -454,7 +454,7 @@ ${customInstructions}`;
  */
 var ANALYSIS_BLOCK_RE = /<analysis>[\s\S]*?<\/analysis>/;
 var SUMMARY_BLOCK_RE = /<summary>([\s\S]*?)<\/summary>/;
-//@ chunk-e6aww6q8.js:2103292-2103426 fingerprint = formatCompactSummary (1)
+//@ chunk-e6aww6q8.js:2103292-2103426 fingerprint (2.1.88 match: formatCompactSummary, 1)
 /**
  * 去掉 analysis 块，把 summary 块换成 "Summary:" 前缀，压缩多余空行。
  */

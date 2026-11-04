@@ -62,7 +62,7 @@ import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-b5fpmtr5.js:12039-12293 placement = IMAGE_MIME_TYPES (0.667)
+//@ chunk-b5fpmtr5.js:12039-12293 placement (2.1.88 match: IMAGE_MIME_TYPES, 0.667)
 var emptyObjectSchema = DoctorLazy(() => zodStrictObject({}));
 var mediaBlockSchema = DoctorLazy(() =>
   union([

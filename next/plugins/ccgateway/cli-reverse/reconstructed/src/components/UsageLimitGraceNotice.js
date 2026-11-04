@@ -94,7 +94,7 @@ function parseGraceNoticeCopy(featureValue_CACHED_MAY_BE_STALE) {
     help_url_credits_on: getCurrentRepoHttpsUrl(data.help_url_credits_on) ?? helpUrl,
   };
 }
-//@ chunk-18hwfzwa.js:1653707-1653810 placement = getCurrentRepoHttpsUrl (0.803)
+//@ chunk-18hwfzwa.js:1653707-1653810 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
 function getCurrentRepoHttpsUrl(rawUrl) {
   let parsed = cleanTaskDescription(rawUrl);
   if (parsed === undefined) return;

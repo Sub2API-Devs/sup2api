@@ -553,7 +553,7 @@ function textResultWithRequestId(result, requestId) {
 }
 //@ chunk-m8444q1d.js:15604-15608 placement
 init_react_production();
-//@ chunk-m8444q1d.js:15608-15791 placement = autoModeConfigHandler (0.842)
+//@ chunk-m8444q1d.js:15608-15791 placement (2.1.88 match: autoModeConfigHandler, 0.842)
 function autoModeConfigHandler(props) {
   return {
     environment: props.environment,

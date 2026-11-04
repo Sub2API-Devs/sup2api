@@ -110,7 +110,7 @@ async function removeLinkOrDir(entryPath) {
 }
 //@ chunk-jhrww53q.js:48343-48352 layout
 var RM_CONCURRENCY = 16;
-//@ chunk-jhrww53q.js:48352-48857 placement = isLocalMarketplaceSource (0.272)
+//@ chunk-jhrww53q.js:48352-48857 placement (2.1.88 match: isLocalMarketplaceSource, 0.272)
 /**
  * 递归删除目录树（每批 16 个并发），不跟随符号链接（Windows 下也识别 junction）；删完发现目录又被写入时抛 ENOTEMPTY。旧版名 isLocalMarketplaceSource 是误配。
  */

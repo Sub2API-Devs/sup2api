@@ -67,7 +67,7 @@ function expandField(field, range) {
   if (out.size === 0) return null;
   return Array.from(out).sort((left, right) => left - right);
 }
-//@ chunk-93zax7h2.js:1453-1673 fingerprint = parseCronExpression (1)
+//@ chunk-93zax7h2.js:1453-1673 fingerprint (2.1.88 match: parseCronExpression, 1)
 /**
  * 解析 5 字段 cron 表达式（支持 *、*\/n、a-b/n、列表，星期 7 视为 0），返回各字段展开后的数组，非法返回 null。
  */
@@ -97,7 +97,7 @@ function isNonexistentLocalTime(date) {
   date_2.setMinutes(date_2.getMinutes());
   return date_2.getTime() !== date.getTime();
 }
-//@ chunk-93zax7h2.js:1777-2698 fingerprint = computeNextCronRun (0.879)
+//@ chunk-93zax7h2.js:1777-2698 fingerprint (2.1.88 match: computeNextCronRun, 0.879)
 /**
  * 从给定时间的下一分钟开始逐分钟/小时/天跳跃查找下一个匹配时刻（最多约一年）；日与星期都受限时按 OR 语义；oneShot 时 DST 缺口内逐分钟前进。
  */
@@ -154,16 +154,16 @@ function computeNextCronRun(fields, from, { oneShot = false } = {}) {
   }
   return null;
 }
-//@ chunk-93zax7h2.js:2698-2777 fingerprint = DAY_NAMES (1)
+//@ chunk-93zax7h2.js:2698-2777 fingerprint (2.1.88 match: DAY_NAMES, 1)
 var DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-//@ chunk-93zax7h2.js:2777-2885 fingerprint = formatLocalTime (1)
+//@ chunk-93zax7h2.js:2777-2885 fingerprint (2.1.88 match: formatLocalTime, 1)
 function formatLocalTime(minute, hour) {
   return new Date(2000, 0, 1, hour, minute).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   });
 }
-//@ chunk-93zax7h2.js:2885-3031 fingerprint = formatUtcTimeAsLocal (1)
+//@ chunk-93zax7h2.js:2885-3031 fingerprint (2.1.88 match: formatUtcTimeAsLocal, 1)
 function formatUtcTimeAsLocal(minute, hour) {
   let date = new Date();
   date.setUTCHours(hour, minute, 0, 0);
@@ -173,7 +173,7 @@ function formatUtcTimeAsLocal(minute, hour) {
     timeZoneName: "short",
   });
 }
-//@ chunk-93zax7h2.js:3031-4148 fingerprint = cronToHuman (1)
+//@ chunk-93zax7h2.js:3031-4148 fingerprint (2.1.88 match: cronToHuman, 1)
 /**
  * cron 转人类可读文本（Every minute / Every N hours / Every day at … / Weekdays at …），无法描述时原样返回；utc 选项把 UTC 时间换算成本地显示。
  */

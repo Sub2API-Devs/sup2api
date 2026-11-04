@@ -46,7 +46,7 @@ var LSP_ERROR_CONTENT_MODIFIED = -32801;
 var MAX_RETRIES_FOR_TRANSIENT_ERRORS = 3;
 var RETRY_BASE_DELAY_MS = 500;
 var DEFAULT_REQUEST_TIMEOUT_MS = 60000;
-//@ chunk-e6aww6q8.js:4626614-4632777 fingerprint = createLSPServerInstance (0.717)
+//@ chunk-e6aww6q8.js:4626614-4632777 fingerprint (2.1.88 match: createLSPServerInstance, 0.717)
 /**
  * 创建一个 LSP 服务器实例（状态机 stopped/starting/running/stopping/error）。start() 串行化并发启动、受 restartOnCrash/maxRestarts 约束；启动时注册 workspace/configuration（按 settings 回答）、忽略 client/registerCapability，发 initialize（clientInfo "Claude Code"+版本，声明 hover/definition/references/documentSymbol/callHierarchy/publishDiagnostics 能力），有 settings 时推 workspace/didChangeConfiguration。sendRequest 对 ContentModified 指数退避重试并带 requestTimeout。各步骤上报 lsp_server_start/lsp_request 等健康指标。
  */

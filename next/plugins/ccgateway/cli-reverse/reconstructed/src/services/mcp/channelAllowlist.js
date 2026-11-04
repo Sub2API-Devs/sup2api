@@ -18,7 +18,7 @@ import { findChannelEntry, isPluginNamedByChannelEntry } from "./channelNotifica
 import { getAllowedChannels } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-124m26t7.js:375-423 callgraph-fingerprint = ChannelAllowlistSchema (0.366)
+//@ chunk-124m26t7.js:375-423 callgraph-fingerprint (2.1.88 match: ChannelAllowlistSchema, 0.366)
 /**
  * ChannelAllowlistSchema：GrowthBook tengu_harbor_ledger 的形状 [{marketplace, plugin}]。
  */
@@ -33,7 +33,7 @@ deferInit("chunk-124m26t7.js:375", () => {
     ),
   );
 });
-//@ chunk-124m26t7.js:423-518 facade-exports = getChannelAllowlist (1)
+//@ chunk-124m26t7.js:423-518 facade-exports (2.1.88 match: getChannelAllowlist, 1)
 /**
  * getChannelAllowlist：读 GrowthBook tengu_harbor_ledger 并校验，失败返回空数组。
  */
@@ -42,7 +42,7 @@ function getChannelAllowlist() {
   let parsed = ChannelAllowlistSchema().safeParse(raw);
   return parsed.success ? parsed.data : [];
 }
-//@ chunk-124m26t7.js:518-582 facade-exports = isChannelsEnabled (0.673)
+//@ chunk-124m26t7.js:518-582 facade-exports (2.1.88 match: isChannelsEnabled, 0.673)
 /**
  * isChannelsEnabled：dn("allow_channels") 且 GrowthBook tengu_harbor 为真。
  */
@@ -58,7 +58,7 @@ function isChannelsOffForSession() {
   let denyKind = policyDenyKind("allow_channels");
   return denyKind !== null && denyKind !== "cache_miss" && denyKind !== "route_missing";
 }
-//@ chunk-124m26t7.js:713-847 facade-exports = getVersionedCachePathIn (0.472)
+//@ chunk-124m26t7.js:713-847 facade-exports (2.1.88 match: getVersionedCachePathIn, 0.472)
 /**
  * 在指定插件根目录下拼版本化缓存路径（cache/<marketplace>/<plugin>/<version>，名字经转义）。
  */

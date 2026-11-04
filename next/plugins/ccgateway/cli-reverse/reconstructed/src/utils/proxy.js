@@ -158,7 +158,7 @@ function proxyState() {
 function disableKeepAlive() {
   proxyState().keepAliveDisabled = true;
 }
-//@ chunk-hq88884p.js:61832-62017 fingerprint = getAddressFamily (1)
+//@ chunk-hq88884p.js:61832-62017 fingerprint (2.1.88 match: getAddressFamily, 1)
 function getAddressFamily(options) {
   switch (options.family) {
     case 0:
@@ -229,18 +229,18 @@ function getUsableProxyUrl(env = process.env) {
   }
   return proxyUrlWithSource.value;
 }
-//@ chunk-hq88884p.js:62782-62872 facade-exports = getNoProxy (1)
+//@ chunk-hq88884p.js:62782-62872 facade-exports (2.1.88 match: getNoProxy, 1)
 function noProxyUnion(env) {
   let { no_proxy: noProxy, NO_PROXY } = env;
   if (noProxy && NO_PROXY && noProxy !== NO_PROXY) return `${noProxy},${NO_PROXY}`;
   return noProxy || NO_PROXY;
 }
-//@ chunk-hq88884p.js:62872-62962 facade-exports = getNoProxy (1)
+//@ chunk-hq88884p.js:62872-62962 facade-exports (2.1.88 match: getNoProxy, 1)
 function getNoProxy(env = process.env) {
   if (env.no_proxy === "*" || env.NO_PROXY === "*") return "*";
   return noProxyUnion(env);
 }
-//@ chunk-hq88884p.js:62962-63363 facade-exports = shouldBypassProxy (0.872)
+//@ chunk-hq88884p.js:62962-63363 facade-exports (2.1.88 match: shouldBypassProxy, 0.872)
 /**
  * 按 NO_PROXY/no_proxy 判断 URL 是否绕过代理（支持 *、域名后缀、端口、IP）。
  */
@@ -290,7 +290,7 @@ function shouldBypassProxyForHost(url, noProxy) {
       return ipInCidr(hostname, `${entry}/${family === 4 ? 32 : 128}`);
     });
 }
-//@ chunk-hq88884p.js:63661-63830 fingerprint = createHttpsProxyAgent (0.738)
+//@ chunk-hq88884p.js:63661-63830 fingerprint (2.1.88 match: createHttpsProxyAgent, 0.738)
 /**
  * 创建 https-proxy-agent，带 mTLS 与 CA。
  */
@@ -350,7 +350,7 @@ function getCachedProxyAgent(uri) {
   }
   return agent;
 }
-//@ chunk-hq88884p.js:64134-64411 fingerprint = getProxyAgent (1)
+//@ chunk-hq88884p.js:64134-64411 fingerprint (2.1.88 match: getProxyAgent, 1)
 /**
  * 按代理 URL 创建 undici ProxyAgent / https-proxy-agent，带 Proxy-Authorization（proxyAuthHelper）与 mTLS。
  */
@@ -535,7 +535,7 @@ function prefetchProxyAuthFromHelperIfSafe() {
   if (isProxyAuthHelperFromRepo(state) && !state.proxyAuthHelperConfig.trustAccepted()) return;
   getProxyAuthFromHelper();
 }
-//@ chunk-hq88884p.js:66627-67328 facade-exports = getProxyFetchOptions (0.434)
+//@ chunk-hq88884p.js:66627-67328 facade-exports (2.1.88 match: getProxyFetchOptions, 0.434)
 /**
  * 给 fetch 调用生成代理选项（dispatcher/proxy 与 Proxy-Authorization 头），无需代理时只带 TLS 选项。
  */
@@ -662,7 +662,7 @@ function applyAxiosAgents(config, agentFor) {
     httpsAgent: config.httpsAgent ?? getMTLSAgent(host),
   });
 }
-//@ chunk-hq88884p.js:67743-68094 facade-exports = configureGlobalAgents (0.752)
+//@ chunk-hq88884p.js:67743-68094 facade-exports (2.1.88 match: configureGlobalAgents, 0.752)
 /**
  * 启动时安装全局代理：设置 undici 全局 dispatcher 与 axios 请求拦截器，使所有 HTTP 走代理/mTLS。
  */
@@ -722,7 +722,7 @@ async function getAWSClientProxyConfig(options) {
     }),
   };
 }
-//@ chunk-hq88884p.js:68461-68767 facade-exports = getAWSClientProxyConfig (0.369)
+//@ chunk-hq88884p.js:68461-68767 facade-exports (2.1.88 match: getAWSClientProxyConfig, 0.369)
 async function getAWSProxyRequestHandler(options) {
   let proxyUrl = getUsableProxyUrl();
   let timeoutOptions = options.requestTimeoutMs !== undefined && {
@@ -744,16 +744,16 @@ async function getAWSProxyRequestHandler(options) {
     ...timeoutOptions,
   });
 }
-//@ chunk-hq88884p.js:68767-68831 facade-exports = clearProxyCache (0.766)
+//@ chunk-hq88884p.js:68767-68831 facade-exports (2.1.88 match: clearProxyCache, 0.766)
 function clearProxyCache() {
   proxyState().agents.clear();
   logForDebugging("Cleared proxy agent cache");
 }
-//@ chunk-bwbq4xvm.js:161605-161660 fingerprint = createAxiosInstance (0.565)
+//@ chunk-bwbq4xvm.js:161605-161660 fingerprint (2.1.88 match: createAxiosInstance, 0.565)
 function createAxiosInstance() {
   if (!hasAxiosProxyInterceptor()) axios_default.interceptors.request.use(axiosTestEgressInterceptor);
 }
-//@ chunk-1ny7cxrt.js:1312506-1312578 fingerprint = getNoProxy (1)
+//@ chunk-1ny7cxrt.js:1312506-1312578 fingerprint (2.1.88 match: getNoProxy, 1)
 function getNoProxy_2() {
   return process.env.NO_PROXY || process.env.no_proxy || undefined;
 }

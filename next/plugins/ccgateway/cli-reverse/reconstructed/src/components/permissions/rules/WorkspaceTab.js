@@ -29,7 +29,7 @@ init_react_production();
 function selectOriginalCwd(state) {
   return state.originalCwd;
 }
-//@ chunk-p2qwpk2k.js:33408-33468 fingerprint = _temp (1)
+//@ chunk-p2qwpk2k.js:33408-33468 fingerprint (2.1.88 match: _temp, 1)
 function toWorkspaceDirRow(path) {
   return {
     path,
@@ -45,7 +45,7 @@ function dirPath(dir) {
 function displayDirPath(dirPath) {
   return stripInvisibleChars(dirPath);
 }
-//@ chunk-p2qwpk2k.js:33529-35210 fingerprint = WorkspaceTab (0.849)
+//@ chunk-p2qwpk2k.js:33529-35210 fingerprint (2.1.88 match: WorkspaceTab, 0.849)
 function WorkspaceTab(props) {
   let $ = useMemoCache(29);
   let {

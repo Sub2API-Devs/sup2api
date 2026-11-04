@@ -267,7 +267,7 @@ function rowWithContent(row, message) {
     }
   }
 }
-//@ chunk-1nk4j4sn.js:14869-15092 placement = extractErrorDetail (1)
+//@ chunk-1nk4j4sn.js:14869-15092 placement (2.1.88 match: extractErrorDetail, 1)
 /**
  * 用新消息内容覆盖旧消息（同类型时只换 content），返回旧对象。与 bridge 无关。
  */

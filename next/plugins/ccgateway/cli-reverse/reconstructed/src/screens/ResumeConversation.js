@@ -137,7 +137,7 @@ import { isSafeIdSegment_2 } from "../utils/agentId.js";
 import { shellQuoteArgs } from "../utils/bash/bashPipeCommand.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:651055-651381 callgraph-fingerprint = NoConversationsMessage (0.241)
+//@ chunk-18hwfzwa.js:651055-651381 callgraph-fingerprint (2.1.88 match: NoConversationsMessage, 0.241)
 function NoConversationsMessage(props) {
   let $ = useMemoCache(5);
   let { cloudRowCheck } = props;
@@ -204,7 +204,7 @@ function parsePrIdentifier(value) {
   if (urlMatch?.[1]) return parseInt(urlMatch[1], 10);
   return null;
 }
-//@ chunk-jde8wnzx.js:27790-35725 fingerprint = ResumeConversation (0.539)
+//@ chunk-jde8wnzx.js:27790-35725 fingerprint (2.1.88 match: ResumeConversation, 0.539)
 function ResumeConversation({
   commands,
   worktreePaths,

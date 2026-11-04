@@ -1466,7 +1466,7 @@ function describeRule(rule) {
 function isDefined(value) {
   return value !== undefined;
 }
-//@ chunk-p2qwpk2k.js:67020-67069 fingerprint = _temp5 (1)
+//@ chunk-p2qwpk2k.js:67020-67069 fingerprint (2.1.88 match: _temp5, 1)
 function isNotAddNewRule(opt) {
   return opt.value !== "add-new-rule";
 }
@@ -1482,7 +1482,7 @@ function trimTrailingNewlines(text) {
 function isNotEnvSection(rule) {
   return rule.section !== "environment";
 }
-//@ chunk-p2qwpk2k.js:67196-67408 fingerprint = RuleSourceText (1)
+//@ chunk-p2qwpk2k.js:67196-67408 fingerprint (2.1.88 match: RuleSourceText, 1)
 function RuleSourceText(props) {
   let $ = useMemoCache(4);
   let { rule } = props;
@@ -1546,7 +1546,7 @@ function ruleCommandTexts(rows, source) {
 function quoteRuleIfBracketed(ruleText) {
   return /[[\]]/.test(ruleText) && !ruleText.startsWith('"') ? jsonStringify(ruleText) : ruleText;
 }
-//@ chunk-p2qwpk2k.js:68321-68423 fingerprint = getRuleBehaviorLabel (1)
+//@ chunk-p2qwpk2k.js:68321-68423 fingerprint (2.1.88 match: getRuleBehaviorLabel, 1)
 function getRuleBehaviorLabel(ruleBehavior) {
   switch (ruleBehavior) {
     case "allow":
@@ -1557,7 +1557,7 @@ function getRuleBehaviorLabel(ruleBehavior) {
       return "ask";
   }
 }
-//@ chunk-p2qwpk2k.js:68423-70911 fingerprint = RuleDetails (0.466)
+//@ chunk-p2qwpk2k.js:68423-70911 fingerprint (2.1.88 match: RuleDetails, 0.466)
 function RuleDetails(props) {
   let $ = useMemoCache(37);
   let { rule, onDelete, onCancel } = props;
@@ -1773,7 +1773,7 @@ function RuleDetails(props) {
   } else result = $[36];
   return result;
 }
-//@ chunk-p2qwpk2k.js:70911-72535 fingerprint = RulesTabContent (0.883)
+//@ chunk-p2qwpk2k.js:70911-72535 fingerprint (2.1.88 match: RulesTabContent, 0.883)
 function RulesTabContent(props) {
   let $ = useMemoCache(37);
   let {
@@ -1932,7 +1932,7 @@ function RulesTabContent(props) {
   } else t9 = $[36];
   return t9;
 }
-//@ chunk-p2qwpk2k.js:72535-73563 fingerprint = PermissionRulesTab (0.911)
+//@ chunk-p2qwpk2k.js:72535-73563 fingerprint (2.1.88 match: PermissionRulesTab, 0.911)
 function PermissionRulesTab(t0) {
   let $ = useMemoCache(23);
   let header;
@@ -2012,7 +2012,7 @@ function PermissionRulesTab(t0) {
   } else t7 = $[22];
   return t7;
 }
-//@ chunk-p2qwpk2k.js:73563-93185 fingerprint = PermissionRuleList (0.52)
+//@ chunk-p2qwpk2k.js:73563-93185 fingerprint (2.1.88 match: PermissionRuleList, 0.52)
 /**
  * /permissions 界面：Recent（auto 模式拦截）/Allow/Ask/Deny/Workspace 标签，规则按来源显示，可查看详情、删除（policySettings 不可删）、新增规则与目录。
  */

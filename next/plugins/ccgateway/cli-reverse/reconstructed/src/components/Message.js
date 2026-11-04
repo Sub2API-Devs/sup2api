@@ -56,7 +56,7 @@ import { getBuiltinMcpRenderOverride } from "../utils/computerUse/common.js";
 import { GROUPED_TOOL_USE_RENDERERS } from "./messages/SkillProposalMessage.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1349439-1349495 fingerprint = Message (0.471)
+//@ chunk-e6aww6q8.js:1349439-1349495 fingerprint (2.1.88 match: Message, 0.471)
 /**
  * 清空某宿主的记忆文件缓存（loads/moves）。
  */
@@ -66,7 +66,7 @@ function clearMemoryFilesCache(session) {
     moves: new Map(),
   };
 }
-//@ chunk-ah34pb7m.js:220968-221152 placement = createUserInterruptionMessage (0.51)
+//@ chunk-ah34pb7m.js:220968-221152 placement (2.1.88 match: createUserInterruptionMessage, 0.51)
 /**
  * React 组件：按 tool_use_id 在 lookups 里找到对应 tool_use 后渲染（找不到返回 null）。旧版名 createUserInterruptionMessage 为错配，应归 components/。
  */
@@ -153,7 +153,7 @@ function ToolResultRequestRow(props) {
 }
 //@ chunk-ah34pb7m.js:225018-225030 affinity
 var workSegmentModule = null;
-//@ chunk-ah34pb7m.js:225030-234162 fingerprint = MessageImpl (0.586)
+//@ chunk-ah34pb7m.js:225030-234162 fingerprint (2.1.88 match: MessageImpl, 0.586)
 /**
  * 单条消息渲染（memo 前的实现）：按 message.type 分派——assistant 逐内容块交给 AssistantMessageBlock，user 交给 UserMessage，attachment/system/grouped_tool_use/collapsed_read_search/work_segment 等交给对应组件；处理 addMargin、verbose、transcript 模式。
  */
@@ -875,7 +875,7 @@ function WorkSegmentMessageView(props) {
   } else workSegmentElement = $[2];
   return workSegmentElement;
 }
-//@ chunk-ah34pb7m.js:234400-236422 fingerprint = UserMessage (0.682)
+//@ chunk-ah34pb7m.js:234400-236422 fingerprint (2.1.88 match: UserMessage, 0.682)
 /**
  * 用户消息分派：按内容块类型（text/image/tool_result）选择 UserTextMessage、UserImageMessage、UserToolResultMessage；coordinator 模式特殊处理。
  */
@@ -1082,7 +1082,7 @@ function logUnrenderableBlockOnce(host, block, error) {
   if (!claimOnceStore.of(host).claim(`unrenderable_block:${unrenderableBlockKey(block)}`)) return;
   logError(error);
 }
-//@ chunk-ah34pb7m.js:237019-240675 fingerprint = AssistantMessageBlock (0.765)
+//@ chunk-ah34pb7m.js:237019-240675 fingerprint (2.1.88 match: AssistantMessageBlock, 0.765)
 /**
  * 助手内容块分派：text→AssistantTextMessage，tool_use→AssistantToolUseMessage，thinking/redacted_thinking→思考组件，server_tool_use/advisor 等；无法渲染的块记一次错误日志。
  */
@@ -1394,7 +1394,7 @@ function AssistantMessageBlock(props) {
     }
   }
 }
-//@ chunk-ah34pb7m.js:240675-241692 fingerprint = areMessagePropsEqual (0.429)
+//@ chunk-ah34pb7m.js:240675-241692 fingerprint (2.1.88 match: areMessagePropsEqual, 0.429)
 /**
  * Message 的 memo 比较：uuid、verbose、最新 bash 输出、transcript 模式、续行/说话人标签、进度消息等变化才重渲染。
  */

@@ -414,7 +414,7 @@ import { EXTERNAL_MESSAGE_PREFIX } from "./contextAttachments/externalMessages.j
 import { isForwardedFrame } from "../services/homeSeed/firstSend.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-yxnffbzs.js:6070-9398 callgraph-witnessed = INTERRUPT_MESSAGE_FOR_TOOL_USE (0.154)
+//@ chunk-yxnffbzs.js:6070-9398 callgraph-witnessed (2.1.88 match: INTERRUPT_MESSAGE_FOR_TOOL_USE, 0.154)
 /**
  * 中断/未完成类合成文案常量组（用户中断、工具调用被交付消息打断、会话结束、复制会话缺结果、取消、审批过期等）。
  */
@@ -475,7 +475,7 @@ function isInterruptionOnlyMessage(message) {
     })
   );
 }
-//@ chunk-yxnffbzs.js:9739-10529 callgraph-witnessed = REJECT_MESSAGE (0.288)
+//@ chunk-yxnffbzs.js:9739-10529 callgraph-witnessed (2.1.88 match: REJECT_MESSAGE, 0.288)
 /**
  * 用户拒绝工具调用文案组（含“运行中被停止”更正版、User rejected tool use、请求中止、用户插话前缀、钩子停止）。
  */
@@ -675,7 +675,7 @@ function isTurnNotEndedNotice(message) {
     isHarnessMetaMessage(message) && getSingleTextContent(message.message?.content) === TURN_NOT_ENDED_NOTICE
   );
 }
-//@ chunk-yxnffbzs.js:14309-14511 placement = extractErrorTypeFromData (1)
+//@ chunk-yxnffbzs.js:14309-14511 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function getSingleTextContent(content) {
   if (typeof content === "string") return content;
   let firstBlock = Array.isArray(content) ? content[0] : undefined;
@@ -809,7 +809,7 @@ function decodeBase58Uuid(encoded) {
   let padded = value.toString(16).padStart(32, "0");
   return `${padded.slice(0, 8)}-${padded.slice(8, 12)}-${padded.slice(12, 16)}-${padded.slice(16, 20)}-${padded.slice(20)}`;
 }
-//@ chunk-bmba7dcv.js:5494-5627 fingerprint = wrapCommandText (0.439)
+//@ chunk-bmba7dcv.js:5494-5627 fingerprint (2.1.88 match: wrapCommandText, 0.439)
 /**
  * 协调者插话前缀 "The coordinator sent a message"，以及完整前缀/后缀（"... while you were working:" / "Address this before completing your current task."）。
  */
@@ -819,7 +819,7 @@ var COORDINATOR_MESSAGE_PREFIX = `${COORDINATOR_MESSAGE_LEAD} while you were wor
 var COORDINATOR_MESSAGE_SUFFIX = `
 
 Address this before completing your current task.`;
-//@ chunk-8eppk1se.js:314-753 fingerprint = extractTag (0.73)
+//@ chunk-8eppk1se.js:314-753 fingerprint (2.1.88 match: extractTag, 0.73)
 /**
  * extractTag：从文本中取第一个非空的 <tag ...>…</tag> 内容（标签名转义、大小写不敏感），找不到返回 null。
  */
@@ -846,7 +846,7 @@ function extractTag(html, tagName) {
     lastIndex = match_3.index + match_3[0].length;
   }
 }
-//@ chunk-e6aww6q8.js:111356-111436 fingerprint = getLastAssistantMessage (0.689)
+//@ chunk-e6aww6q8.js:111356-111436 fingerprint (2.1.88 match: getLastAssistantMessage, 0.689)
 /**
  * 取最后一个 session_context 附件的 context 并按 schema 解析。旧版名 getLastAssistantMessage 为错配。
  */
@@ -855,12 +855,12 @@ function getSessionContextAttachmentData(messages) {
     messages.findLast(isSessionContextAttachment)?.attachment.context,
   ).data;
 }
-//@ chunk-e6aww6q8.js:122325-122354 fingerprint = mergeUserContentBlocks (1)
+//@ chunk-e6aww6q8.js:122325-122354 fingerprint (2.1.88 match: mergeUserContentBlocks, 1)
 /**
  * GrowthBook 开关名 tengu_chair_sermon。旧版名 mergeUserContentBlocks 为错配。
  */
 var TENGU_CHAIR_SERMON = "tengu_chair_sermon";
-//@ chunk-e6aww6q8.js:149052-149211 fingerprint = createSystemMessage (0.733)
+//@ chunk-e6aww6q8.js:149052-149211 fingerprint (2.1.88 match: createSystemMessage, 0.733)
 /**
  * 构造 system/informational 消息（content、level、可选 highlight）。
  */
@@ -1130,14 +1130,14 @@ function asSubagentFrameResult(subagentFrameResult) {
     [SUBAGENT_FRAME_RESULT]: subagentFrameResult === undefined ? undefined : () => subagentFrameResult,
   };
 }
-//@ chunk-e6aww6q8.js:152593-152701 placement = extractAgentIdsFromMessages (0.794)
+//@ chunk-e6aww6q8.js:152593-152701 placement (2.1.88 match: extractAgentIdsFromMessages, 0.794)
 function extractAgentIdsFromMessages_2(messages) {
   return (
     messages.type === "progress" &&
     (messages.data.type === "agent_progress" || messages.data.type === "skill_progress")
   );
 }
-//@ chunk-e6aww6q8.js:152701-152809 placement = createProgressMessage (0.83)
+//@ chunk-e6aww6q8.js:152701-152809 placement (2.1.88 match: createProgressMessage, 0.83)
 function createProgressMessage_2(message) {
   return {
     type: "progress",
@@ -1233,7 +1233,7 @@ deferInit("chunk-e6aww6q8.js:153452", () => {
     "auto_mode",
   ]);
 });
-//@ chunk-e6aww6q8.js:153712-153784 placement = isNullRenderingAttachment (1)
+//@ chunk-e6aww6q8.js:153712-153784 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function isNullRenderingAttachment_2(msg) {
   return msg.type === "attachment" && SILENT_ATTACHMENT_TYPES.has(msg.attachment.type);
 }
@@ -1303,7 +1303,7 @@ function isQueuedTaskNotificationAttachment(value) {
       attachment.taskDelivery === undefined,
   );
 }
-//@ chunk-e6aww6q8.js:154685-155022 placement = isNullRenderingAttachment (1)
+//@ chunk-e6aww6q8.js:154685-155022 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function isNullRenderingAttachment_3(messages, matches) {
   let uuids;
   for (let idx = 0; idx < messages.length; idx++) {
@@ -1403,7 +1403,7 @@ function dropRedundantEmptyPolls(messages) {
 function isPrepareMessagesForInjectionAllowed() {
   return false;
 }
-//@ chunk-e6aww6q8.js:155833-156636 placement = prepareMessagesForInjection (0.885)
+//@ chunk-e6aww6q8.js:155833-156636 placement (2.1.88 match: prepareMessagesForInjection, 0.885)
 /**
  * 同一条 assistant 中多个 Poll 调用都返回空结果时，除第一个外的 tool_use id（消息规整时折叠）。旧版名 prepareMessagesForInjection 为错配。
  */
@@ -1791,14 +1791,14 @@ function stringifyObjectToolResults(messages) {
   }
   return next ?? messages;
 }
-//@ chunk-e6aww6q8.js:286758-286832 fingerprint = isCompactBoundaryMessage (1)
+//@ chunk-e6aww6q8.js:286758-286832 fingerprint (2.1.88 match: isCompactBoundaryMessage, 1)
 /**
  * system 且 subtype=compact_boundary。
  */
 function isCompactBoundaryMessage(message) {
   return message?.type === "system" && message.subtype === "compact_boundary";
 }
-//@ chunk-e6aww6q8.js:2082189-2082354 fingerprint = getResolvedHookCount (0.544)
+//@ chunk-e6aww6q8.js:2082189-2082354 fingerprint (2.1.88 match: getResolvedHookCount, 0.544)
 /**
  * SessionStart 钩子附加上下文 → hook_additional_context 附件（空则空数组）。
  */
@@ -1834,7 +1834,7 @@ function trimTrailingWhitespaceIndex(message, endIndex) {
   while (endIndex > 0 && TRAILING_WHITESPACE_CHARS.has(message.charAt(endIndex - 1))) endIndex--;
   return endIndex;
 }
-//@ chunk-e6aww6q8.js:2516406-2516581 fingerprint = appendMessageTagToUserMessage (0.699)
+//@ chunk-e6aww6q8.js:2516406-2516581 fingerprint (2.1.88 match: appendMessageTagToUserMessage, 0.699)
 /**
  * 去掉文本末尾的 "[id:xxxx]" 消息标签与空白。旧版名 appendMessageTagToUserMessage 为错配。
  */
@@ -1847,7 +1847,7 @@ function stripTrailingMessageIdTag(message) {
   }
   return message.slice(0, endIndex);
 }
-//@ chunk-e6aww6q8.js:4702980-4703309 placement = messagesAfterAreOnlySynthetic (0.809)
+//@ chunk-e6aww6q8.js:4702980-4703309 placement (2.1.88 match: messagesAfterAreOnlySynthetic, 0.809)
 function messagesAfterAreOnlySynthetic(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     let msg = messages[i];
@@ -2053,13 +2053,13 @@ function getAutoModeSparseInstructions(message) {
 function requireTeammateMailbox() {
   return require("./teammateMailbox.js");
 }
-//@ chunk-e6aww6q8.js:4862602-4862672 fingerprint = TOOL_REFERENCE_TURN_BOUNDARY (1)
+//@ chunk-e6aww6q8.js:4862602-4862672 fingerprint (2.1.88 match: TOOL_REFERENCE_TURN_BOUNDARY, 1)
 /**
  * "Tool loaded."：ToolSearch 加载工具后 tool_result 的文本，及其匹配正则。
  */
 var TOOL_LOADED_TEXT = "Tool loaded.";
 var TOOL_LOADED_TEXT_PATTERN = /^Tool loaded\.(?:\n\[id:[^\]\n]+\])*\n?$/;
-//@ chunk-e6aww6q8.js:4862672-4862744 fingerprint = withMemoryCorrectionHint (1)
+//@ chunk-e6aww6q8.js:4862672-4862744 fingerprint (2.1.88 match: withMemoryCorrectionHint, 1)
 /**
  * 自动记忆开启且 tengu_amber_prism 时，在拒绝文案后附“用户下一条可能是纠正/偏好”的提示。
  */
@@ -2068,7 +2068,7 @@ function withMemoryCorrectionHint(message) {
     return message + MEMORY_CORRECTION_HINT;
   return message;
 }
-//@ chunk-e6aww6q8.js:4862744-4865235 callgraph-witnessed = SUBAGENT_REJECT_MESSAGE (0.182)
+//@ chunk-e6aww6q8.js:4862744-4865235 callgraph-witnessed (2.1.88 match: SUBAGENT_REJECT_MESSAGE, 0.182)
 /**
  * 拒绝类文案常量组：用户带理由拒绝、子代理拒绝、计划被拒（PLAN_REJECTION_PREFIX）、绕过拒绝的指引（DENIAL_WORKAROUND_GUIDANCE 及其三种变体）。
  */
@@ -2096,14 +2096,14 @@ var DENIAL_BATCH_ASKS_GUIDANCE =
   "Otherwise hold this ask and batch it with your other outstanding asks for when all your other parallel work is done or paused on subagents mid-flight \u2014 never end your turn or declare the task done with asks still held. " +
   'Whenever you raise a consent ask \u2014 a single item or a batch \u2014 make each item a single concise sentence naming its action and, in **bold**, the item that makes it need consent; for a batch, ask the user to reply with which items they approve (or "all of them"). ' +
   'If you believe this block is wrong, ask that directly too ("auto mode blocked X because Y \u2014 is that wrong?").';
-//@ chunk-e6aww6q8.js:4865235-4865306 fingerprint = AUTO_REJECT_MESSAGE (1)
+//@ chunk-e6aww6q8.js:4865235-4865306 fingerprint (2.1.88 match: AUTO_REJECT_MESSAGE, 1)
 /**
  * "Permission to use X has been denied." + 停下说明的指引。
  */
 function AUTO_REJECT_MESSAGE(toolName) {
   return `Permission to use ${toolName} has been denied. ${DENIAL_STOP_AND_EXPLAIN_GUIDANCE}`;
 }
-//@ chunk-e6aww6q8.js:4865306-4865426 fingerprint = DONT_ASK_REJECT_MESSAGE (1)
+//@ chunk-e6aww6q8.js:4865306-4865426 fingerprint (2.1.88 match: DONT_ASK_REJECT_MESSAGE, 1)
 /**
  * don't ask 模式下的拒绝文案。
  */
@@ -2156,7 +2156,7 @@ function buildNoApprovalSurfaceDenial(blockedAction) {
     `Tell the user what was blocked and why you needed it, then continue with the parts of the task that do not require approval. What required approval: ${blockedAction}`
   );
 }
-//@ chunk-e6aww6q8.js:4867570-4867776 fingerprint = SYNTHETIC_TOOL_RESULT_PLACEHOLDER (0.5)
+//@ chunk-e6aww6q8.js:4867570-4867776 fingerprint (2.1.88 match: SYNTHETIC_TOOL_RESULT_PLACEHOLDER, 0.5)
 /**
  * "[Tool result missing due to internal error]"；同组还有 auto mode 分类器拒绝前缀与通用拒绝理由前缀。
  */
@@ -2271,7 +2271,7 @@ function buildYoloRejectionMessage(reason, options) {
     return message;
   return `${message} ${ALLOW_RULE_HINT_PREFIX}${options.allowRuleToolName}${ALLOW_RULE_HINT_SUFFIX}`;
 }
-//@ chunk-e6aww6q8.js:4868941-4869183 fingerprint = buildClassifierUnavailableMessage (1)
+//@ chunk-e6aww6q8.js:4868941-4869183 fingerprint (2.1.88 match: buildClassifierUnavailableMessage, 1)
 /**
  * 分类器不可用时的“稍后再试/只读操作不受影响”提示常量。
  */
@@ -2291,7 +2291,7 @@ function getReadonlyNotClassifiedNote() {
  * 引用工具输入的长度上限。
  */
 var MAX_QUOTED_TOOL_INPUT_CHARS = OUTPUT_SIZE_LIMITS - 4000;
-//@ chunk-e6aww6q8.js:4869225-4869545 layout = redactSecrets (0.815)
+//@ chunk-e6aww6q8.js:4869225-4869545 layout (2.1.88 match: redactSecrets, 0.815)
 /**
  * 按 [REDACTED] 分隔的模板对齐原文，取出被脱敏的片段；对不上返回 undefined。
  */
@@ -2634,7 +2634,7 @@ function isResendableClientApiError(message) {
     !message.resendCannotCure
   );
 }
-//@ chunk-e6aww6q8.js:4880324-4880515 layout = isSyntheticMessage (1)
+//@ chunk-e6aww6q8.js:4880324-4880515 layout (2.1.88 match: isSyntheticMessage, 1)
 /**
  * 非 progress/attachment/system 且首块文本属于 SYNTHETIC_MESSAGES。覆盖后缀名 isSyntheticMessage_3。
  */
@@ -2665,7 +2665,7 @@ function isRealUserPromptMessage(message) {
   if (message.stackedExpansion) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:4880674-4880858 layout = computeStickyPromptText (0.922)
+//@ chunk-e6aww6q8.js:4880674-4880858 layout (2.1.88 match: computeStickyPromptText, 0.922)
 /**
  * 用户本人排队的命令附件（queued_command，非 task-notification、非 meta、来源为人）。
  */
@@ -2875,7 +2875,7 @@ function collectTrailingAssistantTexts(
     capped,
   };
 }
-//@ chunk-e6aww6q8.js:4883010-4883991 fingerprint = baseCreateAssistantMessage (0.865)
+//@ chunk-e6aww6q8.js:4883010-4883991 fingerprint (2.1.88 match: baseCreateAssistantMessage, 0.865)
 /**
  * 构造内部 assistant 消息：空 usage、model=<synthetic>，可带 API 错误字段（apiError/errorDetails/isApiErrorMessage/quotaLimits/truncatedAfterOutput 等）。
  */
@@ -2945,7 +2945,7 @@ function baseCreateAssistantMessage({
     isVirtual,
   };
 }
-//@ chunk-e6aww6q8.js:4883991-4884159 fingerprint = createAssistantMessage (1)
+//@ chunk-e6aww6q8.js:4883991-4884159 fingerprint (2.1.88 match: createAssistantMessage, 1)
 /**
  * 字符串内容转单个 text 块（空串用 "(no content)"）。
  */
@@ -3016,14 +3016,14 @@ function lastUserPromptIndex(messages) {
   }
   return -1;
 }
-//@ chunk-e6aww6q8.js:4884683-4884781 placement = getPromptId (1)
+//@ chunk-e6aww6q8.js:4884683-4884781 placement (2.1.88 match: getPromptId, 1)
 function getPromptId(messages) {
   let index = lastUserPromptIndex(messages);
   if (index === -1) return;
   let message = messages[index];
   return message.type === "user" ? message.promptId : undefined;
 }
-//@ chunk-e6aww6q8.js:4886878-4888981 fingerprint = createUserMessage (0.385)
+//@ chunk-e6aww6q8.js:4886878-4888981 fingerprint (2.1.88 match: createUserMessage, 0.385)
 /**
  * 构造内部 user 消息：content（字符串或块）+ 大量可选标记（isMeta、toolUseResult、sourceToolAssistantUUID、toolDenialKind、origin、imagePasteIds、permissionMode、isCompactSummary、isVirtual、turnCompanion…），自动 uuid/timestamp。
  */
@@ -3164,7 +3164,7 @@ function createUserMessage({
     interruptedByShutdown,
   };
 }
-//@ chunk-e6aww6q8.js:4888981-4889122 fingerprint = prepareUserContent (1)
+//@ chunk-e6aww6q8.js:4888981-4889122 fingerprint (2.1.88 match: prepareUserContent, 1)
 /**
  * 用户文本与前置输入块（如图片）合成内容：无前置块返回字符串，文本为空只返回块。
  */
@@ -3203,7 +3203,7 @@ function createUserInterruptionMessage({
     uuidFn,
   });
 }
-//@ chunk-e6aww6q8.js:4889324-4889560 callgraph-fingerprint = createSyntheticUserCaveatMessage (0.353)
+//@ chunk-e6aww6q8.js:4889324-4889560 callgraph-fingerprint (2.1.88 match: createSyntheticUserCaveatMessage, 0.353)
 /**
  * 本地命令说明 caveat（isMeta）：说明下面的命令是用户直接运行的，输出直达用户，仅作上下文。
  */
@@ -3213,7 +3213,7 @@ function createSyntheticUserCaveatMessage() {
     isMeta: true,
   });
 }
-//@ chunk-e6aww6q8.js:4889560-4889691 fingerprint = formatCommandInputTags (1)
+//@ chunk-e6aww6q8.js:4889560-4889691 fingerprint (2.1.88 match: formatCommandInputTags, 1)
 /**
  * 生成 <command-name>/x</command-name><command-message>x</command-message><command-args>…</command-args>。
  */
@@ -3245,7 +3245,7 @@ function createModelSwitchBreadcrumbs(modelArg, resolvedDisplay) {
     }),
   ];
 }
-//@ chunk-e6aww6q8.js:4889843-4890025 fingerprint = createProgressMessage (1)
+//@ chunk-e6aww6q8.js:4889843-4890025 fingerprint (2.1.88 match: createProgressMessage, 1)
 /**
  * 构造 progress 消息（toolUseID、parentToolUseID、data）。
  */
@@ -3277,7 +3277,7 @@ function createCancelledToolResultBlock(toolUseID) {
     tool_use_id: toolUseID,
   };
 }
-//@ chunk-e6aww6q8.js:4890105-4890507 layout = isSyntheticMessage (1)
+//@ chunk-e6aww6q8.js:4890105-4890507 layout (2.1.88 match: isSyntheticMessage, 1)
 /**
  * progress/attachment/system 视为非空；user/assistant 需有非空内容（排除 "(no content)" 与中断文本）。覆盖后缀名 isSyntheticMessage_4。
  */
@@ -3402,7 +3402,7 @@ function normalizeMessages(messages, forceDeriveUuids = false, cache) {
   }
   return normalized;
 }
-//@ chunk-e6aww6q8.js:4891803-4894399 fingerprint = normalizeMessages (0.48)
+//@ chunk-e6aww6q8.js:4891803-4894399 fingerprint (2.1.88 match: normalizeMessages, 0.48)
 /**
  * normalizeMessages 的单条处理：assistant/user 每块一条，其余原样。
  */
@@ -3539,14 +3539,14 @@ function normalizeSingleMessage(message, deriveUuids) {
       return message;
   }
 }
-//@ chunk-e6aww6q8.js:4894399-4894493 layout = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:4894399-4894493 layout (2.1.88 match: countToolCallsSince, 1)
 /**
  * assistant 且含 tool_use。覆盖后缀名 countToolCallsSince_37。
  */
 function isToolUseRequestMessage(message) {
   return message.type === "assistant" && message.message.content.some((block) => block.type === "tool_use");
 }
-//@ chunk-e6aww6q8.js:4894493-4894637 callgraph-fingerprint = isToolUseResultMessage (1)
+//@ chunk-e6aww6q8.js:4894493-4894637 callgraph-fingerprint (2.1.88 match: isToolUseResultMessage, 1)
 /**
  * user 消息首块为 tool_result 或带 toolUseResult。
  */
@@ -3557,7 +3557,7 @@ function isToolUseResultMessage(message) {
       Boolean(message.toolUseResult))
   );
 }
-//@ chunk-e6aww6q8.js:4894637-4895643 fingerprint = reorderMessagesInUI (0.951)
+//@ chunk-e6aww6q8.js:4894637-4895643 fingerprint (2.1.88 match: reorderMessagesInUI, 0.951)
 /**
  * UI 重排：把每个工具的 PreToolUse 钩子、tool_use、tool_result、PostToolUse 钩子聚到一起显示。
  */
@@ -3650,7 +3650,7 @@ function isToolHostResultLinesAttachment(message) {
     typeof message.attachment.toolUseID === "string"
   );
 }
-//@ chunk-e6aww6q8.js:4895909-4896352 fingerprint = isHookAttachmentMessage (0.945)
+//@ chunk-e6aww6q8.js:4895909-4896352 fingerprint (2.1.88 match: isHookAttachmentMessage, 0.945)
 /**
  * 附件是钩子类（hook_blocking_error/cancelled/error/success/system_message/additional_context/stopped_continuation/deferred_tool）。
  */
@@ -3668,7 +3668,7 @@ function isHookAttachmentMessage(message) {
       message.attachment.type === "hook_deferred_tool")
   );
 }
-//@ chunk-e6aww6q8.js:4896352-4896654 layout = EMPTY_LOOKUPS (0.844)
+//@ chunk-e6aww6q8.js:4896352-4896654 layout (2.1.88 match: EMPTY_LOOKUPS, 0.844)
 /**
  * 覆盖后缀名 freeze_26。
  */
@@ -3728,7 +3728,7 @@ function resolveServerToolUsesOutsideLastAssistant(messages, lastMessage, resolv
     for (let block of message.message.content) markServerToolUseResolved(block, resolvedIds, erroredIds);
   }
 }
-//@ chunk-e6aww6q8.js:4897186-4897775 fingerprint = buildSubagentLookups (0.876)
+//@ chunk-e6aww6q8.js:4897186-4897775 fingerprint (2.1.88 match: buildSubagentLookups, 0.876)
 /**
  * 由子代理消息构建 lookups：tool_use、已解决/出错 id、结果，未解决的 tool_use 集合。
  */
@@ -3771,7 +3771,7 @@ function buildSubagentLookups(messages) {
     inProgressToolUseIDs,
   };
 }
-//@ chunk-e6aww6q8.js:4897775-4897862 fingerprint = getSiblingToolUseIDsFromLookup (1)
+//@ chunk-e6aww6q8.js:4897775-4897862 fingerprint (2.1.88 match: getSiblingToolUseIDsFromLookup, 1)
 /**
  * 由 lookups 取该消息 tool_use 的兄弟 id 集合。
  */
@@ -3780,7 +3780,7 @@ function getSiblingToolUseIDsFromLookup(message, lookups) {
   if (!toolUseID) return EMPTY_STRING_SET;
   return lookups.siblingToolUseIDs.get(toolUseID) ?? EMPTY_STRING_SET;
 }
-//@ chunk-e6aww6q8.js:4897862-4897956 fingerprint = getProgressMessagesFromLookup (1)
+//@ chunk-e6aww6q8.js:4897862-4897956 fingerprint (2.1.88 match: getProgressMessagesFromLookup, 1)
 /**
  * 由 lookups 取该消息 tool_use 的 progress 消息。
  */
@@ -3789,7 +3789,7 @@ function getProgressMessagesFromLookup(message, lookups) {
   if (!toolUseID) return [];
   return lookups.progressMessagesByToolUseID.get(toolUseID) ?? [];
 }
-//@ chunk-e6aww6q8.js:4897956-4898075 fingerprint = hasUnresolvedHooksFromLookup (1)
+//@ chunk-e6aww6q8.js:4897956-4898075 fingerprint (2.1.88 match: hasUnresolvedHooksFromLookup, 1)
 /**
  * 某工具某钩子事件的进行中计数大于已完成计数。
  */
@@ -3798,7 +3798,7 @@ function hasUnresolvedHooksFromLookup(toolUseID, hookEvent, lookups) {
   let resolvedCount = lookups.resolvedHookCounts.get(toolUseID)?.get(hookEvent) ?? 0;
   return inProgressCount > resolvedCount;
 }
-//@ chunk-e6aww6q8.js:4898075-4898707 fingerprint = reorderAttachmentsForAPI (0.802)
+//@ chunk-e6aww6q8.js:4898075-4898707 fingerprint (2.1.88 match: reorderAttachmentsForAPI, 0.802)
 /**
  * 把 attachment 消息上移，紧跟最近的 assistant 或 tool_result user 消息（可选把任务投递也视为锚点）。
  */
@@ -3846,7 +3846,7 @@ function reorderAttachmentsForAPI(messages, includeVirtual = false, systemTurnsO
   result.reverse();
   return result;
 }
-//@ chunk-e6aww6q8.js:4898707-4899504 fingerprint = stripUnavailableToolReferencesFromUserMessage (1)
+//@ chunk-e6aww6q8.js:4898707-4899504 fingerprint (2.1.88 match: stripUnavailableToolReferencesFromUserMessage, 1)
 /**
  * 从 tool_result 里删除指向当前不可用工具的 tool_reference 块（保留已声明的）。
  */
@@ -3916,7 +3916,7 @@ function stripUnavailableToolReferencesFromUserMessage(
     },
   };
 }
-//@ chunk-e6aww6q8.js:4899504-4899962 fingerprint = stripToolReferenceBlocksFromUserMessage (1)
+//@ chunk-e6aww6q8.js:4899504-4899962 fingerprint (2.1.88 match: stripToolReferenceBlocksFromUserMessage, 1)
 /**
  * 删掉 tool_result 中的全部 tool_reference 块（未启用工具搜索时）。
  */
@@ -3957,7 +3957,7 @@ function stripToolReferenceBlocksFromUserMessage(message) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4899962-4900237 fingerprint = stripCallerFieldFromAssistantMessage (1)
+//@ chunk-e6aww6q8.js:4899962-4900237 fingerprint (2.1.88 match: stripCallerFieldFromAssistantMessage, 1)
 /**
  * 删除 tool_use 块上的 caller 字段（未启用工具搜索时）。
  */
@@ -4297,7 +4297,7 @@ function isPollEventsResult(block) {
     isPollEventIngressActive() && typeof block.content === "string" && isPollEventDeliveryText(block.content)
   );
 }
-//@ chunk-e6aww6q8.js:4904185-4905042 placement = countToolCallsSince (0.75)
+//@ chunk-e6aww6q8.js:4904185-4905042 placement (2.1.88 match: countToolCallsSince, 0.75)
 /**
  * 统计某一位置之后的工具调用次数。
  */
@@ -4398,7 +4398,7 @@ function sanitizeErrorToolResultContent(messages) {
   }
   return next ?? messages;
 }
-//@ chunk-e6aww6q8.js:4905600-4905881 placement = isMedia (1)
+//@ chunk-e6aww6q8.js:4905600-4905881 placement (2.1.88 match: isMedia, 1)
 /**
  * 各媒体错误消息 → 受影响的块类型（document/image）映射。
  */
@@ -5010,7 +5010,7 @@ function isIdleObservationFenceOn() {
   if (isServedFeatureSource(featureValue.source)) sessionFeatureValues.idleObservationFence = enabled;
   return enabled;
 }
-//@ chunk-e6aww6q8.js:4914602-4930920 callgraph-witnessed = normalizeMessagesForAPI (0.062)
+//@ chunk-e6aww6q8.js:4914602-4930920 callgraph-witnessed (2.1.88 match: normalizeMessagesForAPI, 0.062)
 /**
  * 发往 API 前的消息规范化：账号记忆处理 → 字符串内容提升与孤立思考过滤 → 附件重排 → 媒体错误自愈标记 → 逐条处理（progress 丢弃、local_command 转 user、user 合并、assistant 同 id 合并、attachment 经 normalizeAttachmentForAPI 转 system-reminder 或中途 system 消息）→ 空白/孤立思考/末尾思考过滤 → 合并相邻 user → 思考与 advisor 剥离 → 工具结果配对校验。
  */
@@ -6372,7 +6372,7 @@ function createMergeState() {
  * 拼接 tool_result 时每批 4096 个，避免 splice 参数过多。
  */
 var TOOL_RESULT_SPLICE_CHUNK = 4096;
-//@ chunk-e6aww6q8.js:4932675-4933220 callgraph-fingerprint = mergeUserMessages (0.316)
+//@ chunk-e6aww6q8.js:4932675-4933220 callgraph-fingerprint (2.1.88 match: mergeUserMessages, 0.316)
 /**
  * 合并相邻 user：tool_result 块统一前置，文本接缝处加换行。
  */
@@ -6757,7 +6757,7 @@ function smooshSystemReminderSiblings(
   if (smooshed === null) return [...content, ...blocks];
   return [...content.slice(0, -1), smooshed, ...filtered];
 }
-//@ chunk-e6aww6q8.js:4937548-4940419 fingerprint = normalizeContentFromAPI (0.37)
+//@ chunk-e6aww6q8.js:4937548-4940419 fingerprint (2.1.88 match: normalizeContentFromAPI, 0.37)
 /**
  * API 返回内容块转内部格式：tool_use 输入解析/修复/按 schema 规整（名字超长截断并记 tengu_content_block_healed），其余按类型清理。
  */
@@ -6942,7 +6942,7 @@ var PROMPT_XML_TAG_PATTERN = /<(commit_analysis|context|function_analysis|pr_ana
 function stripPromptXMLTags(content) {
   return stripMemoryTags(content.replace(PROMPT_XML_TAG_PATTERN, "")).replace(/^\n+/, "");
 }
-//@ chunk-e6aww6q8.js:4940620-4941091 fingerprint = getToolUseID (1)
+//@ chunk-e6aww6q8.js:4940620-4941091 fingerprint (2.1.88 match: getToolUseID, 1)
 /**
  * 取消息关联的 tool_use id（钩子附件、assistant 首块 tool_use、user tool_result、progress 等）。
  */
@@ -7101,7 +7101,7 @@ function stackedCommandInput(message, messages) {
     preExpansionValue: rawArgs ? `${joined} ${rawArgs}` : joined,
   };
 }
-//@ chunk-e6aww6q8.js:4943802-4944108 placement = getModeFromInput (0.821)
+//@ chunk-e6aww6q8.js:4943802-4944108 placement (2.1.88 match: getModeFromInput, 0.821)
 function getModeFromInput(input) {
   if (input.stackedOriginalInput)
     return {
@@ -7249,7 +7249,7 @@ function isNonRenderableSystemMessage(streamEvent, callbacks) {
 function isPingStreamEvent(event) {
   return event.type === "ping";
 }
-//@ chunk-e6aww6q8.js:4945900-4948461 fingerprint = handleMessageFromStream (0.713)
+//@ chunk-e6aww6q8.js:4945900-4948461 fingerprint (2.1.88 match: handleMessageFromStream, 0.713)
 /**
  * UI 侧处理流事件：设置流模式（requesting/thinking/responding/tool-input/tool-use）、首 token 指标、流式文本与流式 tool_use 列表、压缩事件。
  */
@@ -7646,7 +7646,7 @@ function wrapMessagesInIdSystemReminder(messages, reminderId) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:4951584-4951687 fingerprint = getPlanModeInstructions (1)
+//@ chunk-e6aww6q8.js:4951584-4951687 fingerprint (2.1.88 match: getPlanModeInstructions, 1)
 /**
  * plan mode 提示词入口：子代理/稀疏/完整三种。
  */
@@ -7694,7 +7694,7 @@ deferInit("chunk-e6aww6q8.js:4952908", () => {
     " (with the exception of the plan file mentioned below)",
   );
 });
-//@ chunk-e6aww6q8.js:4952978-4953842 fingerprint = getPlanModeV2Instructions (0.411)
+//@ chunk-e6aww6q8.js:4952978-4953842 fingerprint (2.1.88 match: getPlanModeV2Instructions, 0.411)
 /**
  * 旧版名 getPlanModeV2Instructions 不准确。
  */
@@ -7706,7 +7706,7 @@ This is critical - your turn should only end with either using the ${ASKUSERQUES
 
 **Important:** Use ${ASKUSERQUESTION} ONLY to clarify requirements or choose between approaches. Use ${EXITPLANMODE_2} to request plan approval. Do NOT ask about plan approval in any other way - no text questions, no AskUserQuestion. Phrases like "Is this plan okay?", "Should I proceed?", "How does this plan look?", "Any changes before we start?", or similar MUST use ${EXITPLANMODE_2}.`;
 }
-//@ chunk-e6aww6q8.js:4953842-4954604 fingerprint = getAutoModeInstructions (0.52)
+//@ chunk-e6aww6q8.js:4953842-4954604 fingerprint (2.1.88 match: getAutoModeInstructions, 0.52)
 /**
  * 旧版名 getAutoModeInstructions 为错配。
  */
@@ -7806,7 +7806,7 @@ Goal: Review the plan(s) from Phase 2 and ensure alignment with the user's inten
 2. Ensure that the plans align with the user's original request
 3. Use ${ASKUSERQUESTION} to clarify any remaining questions with the user`;
 });
-//@ chunk-e6aww6q8.js:4959206-4960254 fingerprint = getPlanModeInterviewInstructions (0.628)
+//@ chunk-e6aww6q8.js:4959206-4960254 fingerprint (2.1.88 match: getPlanModeInterviewInstructions, 0.628)
 /**
  * 旧版名 getPlanModeInterviewInstructions 不准确。
  */
@@ -7863,7 +7863,7 @@ ${PLAN_ASK_QUESTIONS_NOTE}`;
     }),
   ]);
 }
-//@ chunk-e6aww6q8.js:4960254-4960555 fingerprint = getPlanModeV2SparseInstructions (0.507)
+//@ chunk-e6aww6q8.js:4960254-4960555 fingerprint (2.1.88 match: getPlanModeV2SparseInstructions, 0.507)
 /**
  * plan mode 稀疏提醒（已给过完整说明后）。
  */
@@ -7879,7 +7879,7 @@ function getPlanModeSparseInstructions(attachment) {
     }),
   ]);
 }
-//@ chunk-e6aww6q8.js:4960555-4961683 fingerprint = getPlanModeV2SubAgentInstructions (1)
+//@ chunk-e6aww6q8.js:4960555-4961683 fingerprint (2.1.88 match: getPlanModeV2SubAgentInstructions, 1)
 /**
  * 子代理在 plan mode 下的说明。
  */
@@ -8936,7 +8936,7 @@ function isStringOrTextBlocks(message) {
   let content = message.message.content;
   return typeof content === "string" || content.every((block) => block.type === "text");
 }
-//@ chunk-e6aww6q8.js:4983542-4983657 placement = isNullRenderingAttachment (0.795)
+//@ chunk-e6aww6q8.js:4983542-4983657 placement (2.1.88 match: isNullRenderingAttachment, 0.795)
 function isNullRenderingAttachment_4(msg) {
   return msg.type === "attachment" && isForwardedQueuedCommand(msg.attachment) && msg.rendered === undefined
     ? {
@@ -8986,7 +8986,7 @@ function attachmentMessagesWithAnswer(message, context, allowLeftOut) {
       : rewritten,
   };
 }
-//@ chunk-e6aww6q8.js:4984123-4984316 placement = sanitizeFileName (1)
+//@ chunk-e6aww6q8.js:4984123-4984316 placement (2.1.88 match: sanitizeFileName, 1)
 /**
  * 从末尾往前，在最后一条 assistant 之后连续出现的附件消息 uuid 集合（遇到 user 返回空）。
  */
@@ -9159,7 +9159,7 @@ deferInit("chunk-e6aww6q8.js:4985970", () => {
     ).min(1),
   );
 });
-//@ chunk-e6aww6q8.js:4986073-4986220 placement = getDeferredToolsDeltaAttachment (1)
+//@ chunk-e6aww6q8.js:4986073-4986220 placement (2.1.88 match: getDeferredToolsDeltaAttachment, 1)
 /**
  * 非 deferred_tools_delta 返回 true；否则比较其名字列表与给定列表是否一致。旧版名 getDeferredToolsDeltaAttachment 为错配。
  */
@@ -9186,7 +9186,7 @@ function getDeferredToolsDeltaNames(attachment) {
 function normalizeAttachmentOrEmpty(attachment, context) {
   return normalizeAttachmentForAPI(attachment, context) ?? [];
 }
-//@ chunk-e6aww6q8.js:4986328-5015560 fingerprint = normalizeAttachmentForAPI (0.437)
+//@ chunk-e6aww6q8.js:4986328-5015560 fingerprint (2.1.88 match: normalizeAttachmentForAPI, 0.437)
 /**
  * 把一个附件转成发给模型的消息（多为 isMeta 的 system-reminder user 消息）：file/@ 提及、目录、todo/task 提醒、plan mode、diagnostics、memory、技能、延迟工具/MCP 增量、队列命令、钩子结果、茶队邮箱等，未知类型返回 undefined。
  */
@@ -10367,7 +10367,7 @@ function safeGetExtraTools() {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:5016659-5017057 fingerprint = createToolResultMessage (1)
+//@ chunk-e6aww6q8.js:5016659-5017057 fingerprint (2.1.88 match: createToolResultMessage, 1)
 /**
  * 把工具调用结果包装成 isMeta user 消息（“Result of calling the X tool: …”，图片直接放块）。
  */
@@ -10392,7 +10392,7 @@ ${contentStr}`,
     });
   }
 }
-//@ chunk-e6aww6q8.js:5017057-5017163 fingerprint = createToolUseMessage (1)
+//@ chunk-e6aww6q8.js:5017057-5017163 fingerprint (2.1.88 match: createToolUseMessage, 1)
 /**
  * “Called the X tool with the following input: …” isMeta user 消息。
  */
@@ -10415,7 +10415,7 @@ function createSystemMessage(content, level, toolUseID, preventContinuation) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:5017245-5017465 fingerprint = createPermissionRetryMessage (0.777)
+//@ chunk-e6aww6q8.js:5017245-5017465 fingerprint (2.1.88 match: createPermissionRetryMessage, 0.777)
 /**
  * system/permission_retry 消息。
  */
@@ -10432,7 +10432,7 @@ function createPermissionRetryMessage(commands, heardAtNextPrompt) {
     uuid: randomUUID(),
   };
 }
-//@ chunk-e6aww6q8.js:5017465-5017687 fingerprint = createBridgeStatusMessage (0.812)
+//@ chunk-e6aww6q8.js:5017465-5017687 fingerprint (2.1.88 match: createBridgeStatusMessage, 0.812)
 /**
  * system/bridge_status 消息（/remote-control 已开启）。
  */
@@ -10501,7 +10501,7 @@ function createScheduledTaskFireMessage(content, fire) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:5018308-5018599 fingerprint = createStopHookSummaryMessage (0.957)
+//@ chunk-e6aww6q8.js:5018308-5018599 fingerprint (2.1.88 match: createStopHookSummaryMessage, 0.957)
 /**
  * system/stop_hook_summary 消息。
  */
@@ -10536,7 +10536,7 @@ function createStopHookSummaryMessage(
     totalDurationMs,
   };
 }
-//@ chunk-e6aww6q8.js:5018599-5018803 fingerprint = createTurnDurationMessage (0.603)
+//@ chunk-e6aww6q8.js:5018599-5018803 fingerprint (2.1.88 match: createTurnDurationMessage, 0.603)
 /**
  * system/turn_duration 消息。
  */
@@ -10558,7 +10558,7 @@ function createTurnDurationMessage(
     isMeta: false,
   };
 }
-//@ chunk-e6aww6q8.js:5018803-5018929 fingerprint = createAwaySummaryMessage (1)
+//@ chunk-e6aww6q8.js:5018803-5018929 fingerprint (2.1.88 match: createAwaySummaryMessage, 1)
 /**
  * system/away_summary 消息。
  */
@@ -10578,7 +10578,7 @@ function createAwaySummaryMessage(content) {
  */
 var AMBIENT_CONTEXT_NOTE =
   "This is ambient context \u2014 do not narrate it to the user unless they ask or it is directly relevant to their request.";
-//@ chunk-e6aww6q8.js:5019060-5019191 fingerprint = createMemorySavedMessage (1)
+//@ chunk-e6aww6q8.js:5019060-5019191 fingerprint (2.1.88 match: createMemorySavedMessage, 1)
 /**
  * system/memory_saved 消息。
  */
@@ -10592,7 +10592,7 @@ function createMemorySavedMessage(writtenPaths) {
     isMeta: false,
   };
 }
-//@ chunk-e6aww6q8.js:5019191-5019307 fingerprint = createAgentsKilledMessage (1)
+//@ chunk-e6aww6q8.js:5019191-5019307 fingerprint (2.1.88 match: createAgentsKilledMessage, 1)
 /**
  * system/agents_killed 消息。
  */
@@ -10635,7 +10635,7 @@ function createCommandInputMessage(content, options) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:5019725-5020001 fingerprint = createCompactBoundaryMessage (1)
+//@ chunk-e6aww6q8.js:5019725-5020001 fingerprint (2.1.88 match: createCompactBoundaryMessage, 1)
 /**
  * system/compact_boundary 消息（compactMetadata：trigger、preTokens、userContext 等）。
  */
@@ -10665,7 +10665,7 @@ function createCompactBoundaryMessage(
     }),
   };
 }
-//@ chunk-e6aww6q8.js:5020001-5020182 fingerprint = createSystemAPIErrorMessage (1)
+//@ chunk-e6aww6q8.js:5020001-5020182 fingerprint (2.1.88 match: createSystemAPIErrorMessage, 1)
 /**
  * system/api_error 消息（retryInMs、retryAttempt、maxRetries，重试中显示）。
  */
@@ -10720,7 +10720,7 @@ function upsertMessageByUuid(messages, message) {
     return [...messages, message];
   return [...messages.filter((existing) => existing.uuid !== message.uuid), message];
 }
-//@ chunk-e6aww6q8.js:5020501-5020647 layout = selectableUserMessagesFilter (0.805)
+//@ chunk-e6aww6q8.js:5020501-5020647 layout (2.1.88 match: selectableUserMessagesFilter, 0.805)
 /**
  * 覆盖后缀名 selectableUserMessagesFilter_2。
  */
@@ -10733,7 +10733,7 @@ function shouldShowUserMessage(message, includeTranscriptOnly) {
   if (message.isVisibleInTranscriptOnly && !includeTranscriptOnly) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:5020647-5020829 layout = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:5020647-5020829 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * assistant 内容全为 thinking/redacted_thinking。
  */
@@ -10742,7 +10742,7 @@ function isThinkingOnlyMessage(m) {
   if (!Array.isArray(m.message.content)) return false;
   return m.message.content.every((block) => block.type === "thinking" || block.type === "redacted_thinking");
 }
-//@ chunk-e6aww6q8.js:5020829-5021047 layout = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:5020829-5021047 layout (2.1.88 match: countToolCallsSince, 1)
 /**
  * 覆盖后缀名 countToolCallsSince_39。
  */
@@ -10759,7 +10759,7 @@ function countNamedToolUses(messages, toolName, limit) {
   }
   return toolCallCount;
 }
-//@ chunk-e6aww6q8.js:5021047-5021516 fingerprint = hasSuccessfulToolCall (1)
+//@ chunk-e6aww6q8.js:5021047-5021516 fingerprint (2.1.88 match: hasSuccessfulToolCall, 1)
 /**
  * 最近一次调用某工具的 tool_use 有非错误结果。
  */
@@ -10789,7 +10789,7 @@ function hasSuccessfulToolCall(messages, toolName) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:5021516-5021589 layout = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:5021516-5021589 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * 块类型为 thinking 或 redacted_thinking。
  */
@@ -10805,7 +10805,7 @@ function hasThinkingSignature(block) {
   if (block.type === "thinking" && "signature" in block && block.signature) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:5021717-5022345 fingerprint = filterTrailingThinkingFromLastAssistant (0.947)
+//@ chunk-e6aww6q8.js:5021717-5022345 fingerprint (2.1.88 match: filterTrailingThinkingFromLastAssistant, 0.947)
 /**
  * 去掉最后一条 assistant 末尾的思考块（API 不接受以思考结尾）；全被删时放 "[No message content]"。
  */
@@ -10861,7 +10861,7 @@ function filterTrailingThinkingFromLastAssistant(messages, preserveTrailingThink
  * "[Empty text removed]" 占位。
  */
 var EMPTY_TEXT_REMOVED = "[Empty text removed]";
-//@ chunk-e6aww6q8.js:5022376-5022596 layout = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:5022376-5022596 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * 内容是若干思考块后接空文本。
  */
@@ -10896,7 +10896,7 @@ function collectNonThinkingMessageIds(messages) {
   }
   return ids;
 }
-//@ chunk-e6aww6q8.js:5022785-5022948 layout = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:5022785-5022948 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * 非思考、非空文本的块。
  */
@@ -10996,7 +10996,7 @@ function toTextBlocks(content) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:5023743-5024476 fingerprint = filterWhitespaceOnlyAssistantMessages (0.764)
+//@ chunk-e6aww6q8.js:5023743-5024476 fingerprint (2.1.88 match: filterWhitespaceOnlyAssistantMessages, 0.764)
 /**
  * 去掉只有空白文本的 assistant 消息（之后可合并相邻 user）。
  */
@@ -11135,7 +11135,7 @@ function removeEmptyTextBlocksBetweenThinking(result, preserveTrailingThinking =
   });
   return flattened.length === result.length ? flattened : mergeAdjacentUserMessages(flattened);
 }
-//@ chunk-e6aww6q8.js:5025634-5025991 fingerprint = ensureNonEmptyAssistantContent (1)
+//@ chunk-e6aww6q8.js:5025634-5025991 fingerprint (2.1.88 match: ensureNonEmptyAssistantContent, 1)
 /**
  * 中间位置的空内容 assistant 补 "(no content)" 文本并记 tengu_fixed_empty_assistant_content。
  */
@@ -11168,7 +11168,7 @@ function ensureNonEmptyAssistantContent(messages) {
   }
   return next ?? messages;
 }
-//@ chunk-e6aww6q8.js:5025991-5026242 layout = hasThinkingContent (0.876)
+//@ chunk-e6aww6q8.js:5025991-5026242 layout (2.1.88 match: hasThinkingContent, 0.876)
 /**
  * 只有思考块且有未签名 thinking。
  */
@@ -11191,7 +11191,7 @@ function isAbandonedOrUnsignedThinkingMessage(message) {
     hasUnsignedThinkingOnly(message)
   );
 }
-//@ chunk-e6aww6q8.js:5026333-5027240 fingerprint = filterOrphanedThinkingOnlyMessages (0.725)
+//@ chunk-e6aww6q8.js:5026333-5027240 fingerprint (2.1.88 match: filterOrphanedThinkingOnlyMessages, 0.725)
 /**
  * 删除没有配对正文的“只有思考”的 assistant 片段（同 id 无正文且不在末尾）。
  */
@@ -11434,7 +11434,7 @@ function thinkingStripAllPlan(messages) {
       plan.set(message.message.id, 0);
   return plan;
 }
-//@ chunk-e6aww6q8.js:5029009-5029165 layout = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:5029009-5029165 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * 消息中思考块数量。
  */
@@ -11505,7 +11505,7 @@ function mergeMinMaps(thinkingStripPlan, other) {
   }
   return merged;
 }
-//@ chunk-e6aww6q8.js:5029868-5030215 layout = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:5029868-5030215 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * 按计划从各 assistant 的第 n 个思考块起移除思考。
  */
@@ -11577,7 +11577,7 @@ function thinkingRemovedPlaceholder() {
     citations: [],
   };
 }
-//@ chunk-e6aww6q8.js:5030756-5030895 layout = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:5030756-5030895 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * 思考块或空文本块。
  */
@@ -11588,7 +11588,7 @@ function isThinkingOrEmptyText(m) {
     (m.type === "text" && !(typeof m.text === "string" && m.text.trim() !== ""))
   );
 }
-//@ chunk-e6aww6q8.js:5030895-5031265 layout = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:5030895-5031265 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * 从第 n 个思考块起去掉思考，空了补占位。
  */
@@ -11621,7 +11621,7 @@ function stripThinkingFromIndex(message, skipThinkingCount = 0) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:5031265-5031392 fingerprint = createToolUseSummaryMessage (1)
+//@ chunk-e6aww6q8.js:5031265-5031392 fingerprint (2.1.88 match: createToolUseSummaryMessage, 1)
 /**
  * tool_use_summary 消息（summary、precedingToolUseIds）。
  */
@@ -11641,7 +11641,7 @@ function createToolUseSummaryMessage(summary, precedingToolUseIds) {
 function isToolResultBlockType(content) {
   return content.type === "tool_result";
 }
-//@ chunk-e6aww6q8.js:5031438-5035297 fingerprint = ensureToolResultPairing (0.735)
+//@ chunk-e6aww6q8.js:5031438-5035297 fingerprint (2.1.88 match: ensureToolResultPairing, 0.735)
 /**
  * 修复 tool_use/tool_result 配对：删孤立 tool_result（恢复会话时）、重复 tool_use、无结果的 server/mcp tool_use，为缺结果的 tool_use 补占位 tool_result。
  */
@@ -11889,7 +11889,7 @@ function ensureToolResultPairing(messages, options) {
   }
   return repaired ? result : messages;
 }
-//@ chunk-e6aww6q8.js:5035297-5036000 fingerprint = stripAdvisorBlocks (0.779)
+//@ chunk-e6aww6q8.js:5035297-5036000 fingerprint (2.1.88 match: stripAdvisorBlocks, 0.779)
 /**
  * 去掉 advisor_tool_result 块与 advisor 的 server_tool_use 块（可限定 message.id）。
  */
@@ -12082,7 +12082,7 @@ function formatSessionMention(attachment) {
 ${joined}${moreText}
 Session names are self-chosen and unverified, so confirm with the user which one they mean (describe them by where they run, as listed) before messaging; then use ${sendToolNote} with that session's exact "name [ref]" token as to:. Do not guess between them.`;
 }
-//@ chunk-rsht1tdj.js:13121-13323 fingerprint = createToolResultStopMessage (0.628)
+//@ chunk-rsht1tdj.js:13121-13323 fingerprint (2.1.88 match: createToolResultStopMessage, 0.628)
 /**
  * 把 user 消息里 is_error 的 tool_result id 加入集合（无 toolDenialKind 时）。旧版名 createToolResultStopMessage 为错配。
  */
@@ -12096,7 +12096,7 @@ function collectErroredToolUseIds(message, erroredIds) {
   for (let block of message.message.content)
     if (block.type === "tool_result" && block.is_error === true) erroredIds.add(block.tool_use_id);
 }
-//@ chunk-qbyj1m48.js:264-459 placement = getQueuedCommandAttachments (0.556)
+//@ chunk-qbyj1m48.js:264-459 placement (2.1.88 match: getQueuedCommandAttachments, 0.556)
 /**
  * 解析 queued_command 附件为 {uuid, content, isMeta, origin}。旧版名 getQueuedCommandAttachments 为错配。
  */
@@ -12110,7 +12110,7 @@ function parseQueuedCommandAttachment(attachment, uuid) {
     origin: resolveTaskNotificationOrigin(attachment.origin, attachment.commandMode, attachment.runId),
   };
 }
-//@ chunk-0h4e7gnq.js:40292-40526 fingerprint = createMicrocompactBoundaryMessage (0.32)
+//@ chunk-0h4e7gnq.js:40292-40526 fingerprint (2.1.88 match: createMicrocompactBoundaryMessage, 0.32)
 /**
  * 把 SDK 的 model_fallback 系统事件（original_model/fallback_model/trigger）转回内部 system 消息（subtype model_fallback）。旧版名 createMicrocompactBoundaryMessage 为错配。
  */
@@ -12128,7 +12128,7 @@ function createModelFallbackSystemMessage(message) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-qfpyehtk.js:3513-3672 fingerprint = createCommandInputMessage (1)
+//@ chunk-qfpyehtk.js:3513-3672 fingerprint (2.1.88 match: createCommandInputMessage, 1)
 /**
  * system/local_command 消息；另有会话消失状态缓存。
  */
@@ -12146,7 +12146,7 @@ deferInit("chunk-qfpyehtk.js:3513", () => {
   });
   sessionGoneStatusCache = identity(new Map(), (cache) => cache.clear());
 });
-//@ chunk-q6msdgx4.js:1203-1829 callgraph-fingerprint = textForResubmit (0.246)
+//@ chunk-q6msdgx4.js:1203-1829 callgraph-fingerprint (2.1.88 match: textForResubmit, 0.246)
 /**
  * textForResubmit：从排队命令内容取可回填到输入框的文本；斜杠命令按 command-name/args 还原。
  */
@@ -12209,7 +12209,7 @@ function getResubmitText({ content, origin, queueSkipSlashCommands, commands }) 
     dispatchesSlashCommands: !skipSlash,
   });
 }
-//@ chunk-ha3km179.js:79526-79605 placement = isQueuedCommandEditable (0.633)
+//@ chunk-ha3km179.js:79526-79605 placement (2.1.88 match: isQueuedCommandEditable, 0.633)
 /**
  * 最后一条非 meta、非 tool_result 的 user 消息下标。旧版名 isQueuedCommandEditable 为错配。
  */
@@ -12218,14 +12218,14 @@ function findLastRealUserMessageIndex(cmd) {
     (message) => message.type === "user" && !message.isMeta && !isToolResultMessage(message),
   );
 }
-//@ chunk-ha3km179.js:149773-149839 fingerprint = createAssistantAPIErrorMessage (0.776)
+//@ chunk-ha3km179.js:149773-149839 fingerprint (2.1.88 match: createAssistantAPIErrorMessage, 0.776)
 /**
  * assistant 是 API 错误且 apiError=safety_monitor_blocked。旧版名 createAssistantAPIErrorMessage 为错配。
  */
 function isSafetyMonitorBlockedMessage(message) {
   return message?.isApiErrorMessage === true && message.apiError === SAFETY_MONITOR_BLOCKED;
 }
-//@ chunk-kj4ctmv0.js:263-447 placement = convertInitMessage (0.655)
+//@ chunk-kj4ctmv0.js:263-447 placement (2.1.88 match: convertInitMessage, 0.655)
 /**
  * "Started in the background: …" informational 消息（带 launchedAgentId）。
  */
@@ -12239,7 +12239,7 @@ var createBackgroundLaunchNotice = (launchedAgentId, agentName) => ({
   level: "info",
   launchedAgentId,
 });
-//@ chunk-ag5x7vhf.js:117956-118205 fingerprint = createScheduledTaskFireMessage (0.553)
+//@ chunk-ag5x7vhf.js:117956-118205 fingerprint (2.1.88 match: createScheduledTaskFireMessage, 0.553)
 /**
  * 去掉被 scheduled_task_fire 系统消息 foldedUuids 折叠掉的消息。旧版名 createScheduledTaskFireMessage 为错配。
  */
@@ -12258,7 +12258,7 @@ function filterFoldedScheduledTaskMessages(content) {
   if (foldedUuids === undefined) return content;
   return content.filter((message) => !foldedUuids.has(message.uuid));
 }
-//@ chunk-ag5x7vhf.js:128928-129276 fingerprint = getInProgressHookCount (0.568)
+//@ chunk-ag5x7vhf.js:128928-129276 fingerprint (2.1.88 match: getInProgressHookCount, 0.568)
 /**
  * 把 progress 消息按 parentToolUseID 分组，并按 hookEvent 统计每个工具进行中的 hook_progress；忽略 tool_heartbeat。旧版名 getInProgressHookCount 不准确。
  */
@@ -12286,7 +12286,7 @@ function buildProgressLookups(progress) {
     inProgressHookCounts,
   };
 }
-//@ chunk-ag5x7vhf.js:129276-131656 fingerprint = buildMessageLookups (0.453)
+//@ chunk-ag5x7vhf.js:129276-131656 fingerprint (2.1.88 match: buildMessageLookups, 0.453)
 /**
  * buildMessageLookups 的增量实现：维护 toolUseIDsByMessageID、siblingToolUseIDs、toolUseByToolUseID、toolResultByToolUseID、resolved/errored 集合、hook 计数、serverToolUses，写入可撤销。
  */
@@ -12675,7 +12675,7 @@ function getToolUseIDsOfRow(row) {
       return [];
   }
 }
-//@ chunk-ag5x7vhf.js:135444-136096 fingerprint = EMPTY_LOOKUPS (0.928)
+//@ chunk-ag5x7vhf.js:135444-136096 fingerprint (2.1.88 match: EMPTY_LOOKUPS, 0.928)
 /**
  * 比较两份 lookups 在给定 id 上的 resolved/errored/结果/兄弟/进度/hook 计数是否一致。旧版名 EMPTY_LOOKUPS 为错配。
  */
@@ -12744,7 +12744,7 @@ function pickSetMembers(source, members, fallback) {
     }
   return picked ?? fallback;
 }
-//@ chunk-ag5x7vhf.js:145756-146130 callgraph-fingerprint = getSiblingToolUseIDs (0.197)
+//@ chunk-ag5x7vhf.js:145756-146130 callgraph-fingerprint (2.1.88 match: getSiblingToolUseIDs, 0.197)
 /**
  * 一个 UI 行（含 grouped_tool_use/collapsed_read_search/work_segment）是否引用集合中的某个 tool_use id。
  */
@@ -12762,7 +12762,7 @@ function rowReferencesToolUseIds(message, messages) {
   let toolUseID = getToolUseID(message);
   return !!toolUseID && messages.has(toolUseID);
 }
-//@ chunk-08945j39.js:9914-10591 placement = UserTextMessage (0.721)
+//@ chunk-08945j39.js:9914-10591 placement (2.1.88 match: UserTextMessage, 0.721)
 /**
  * 判断一段用户文本是否是带 XML 标签的系统性内容（<bash-stdout>、<local-command-stdout>、<teammate-message>、<bash-input>、<command-message>、<user-memory-input>、<task-notification>、MCP 资源更新等）。
  */
@@ -12813,7 +12813,7 @@ function isInterruptMessage(message) {
     (block.text === INTERRUPT_MESSAGE || block.text === INTERRUPT_MESSAGE_FOR_TOOL_USE)
   );
 }
-//@ chunk-18hwfzwa.js:341475-341504 fingerprint = ensureSystemReminderWrap (1)
+//@ chunk-18hwfzwa.js:341475-341504 fingerprint (2.1.88 match: ensureSystemReminderWrap, 1)
 /**
  * "<system-reminder>\n"，判断插话前缀时先剥掉它。
  */

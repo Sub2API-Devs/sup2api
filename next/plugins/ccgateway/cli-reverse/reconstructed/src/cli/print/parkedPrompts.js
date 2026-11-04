@@ -2087,7 +2087,7 @@ class ParkedPermissionController {
     this.inheritedAsk?.stop("shutdown");
   }
 }
-//@ chunk-tyg7f3ek.js:378573-378663 placement = getRiskColor (0.785)
+//@ chunk-tyg7f3ek.js:378573-378663 placement (2.1.88 match: getRiskColor, 0.785)
 function getRiskColor(riskLevel) {
   if (riskLevel.response.subtype !== "success") return {};
   return permissionResponseTelemetry(riskLevel.response.response);

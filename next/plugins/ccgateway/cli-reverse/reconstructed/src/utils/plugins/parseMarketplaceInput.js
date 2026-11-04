@@ -32,7 +32,7 @@ deferInit("chunk-dcmhvw5a.js:72144", () => {
   GITHUB_REPO_SLUG_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
   MARKETPLACE_INPUT_ERRNOS = new Set(["ENOTDIR", "ENAMETOOLONG", "ELOOP"]);
 });
-//@ chunk-dcmhvw5a.js:72261-75406 fingerprint = parseMarketplaceInput (0.677)
+//@ chunk-dcmhvw5a.js:72261-75406 fingerprint (2.1.88 match: parseMarketplaceInput, 0.677)
 /**
  * 解析 /plugin marketplace add 的输入：git@ SSH URL（可带 #ref）、https URL（.git 视为 git，.json 视为 url，github.com 转 github）、owner/repo[#ref]、本地路径（目录或 .json 文件）、npm 包等，返回市场来源对象或错误。
  */

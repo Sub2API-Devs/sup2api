@@ -669,7 +669,7 @@ function logManagedSettingsLoaded() {
     logManagedDocumentLinks();
   } catch {}
 }
-//@ chunk-3wek6r2k.js:99424-99642 placement = maybeActivateBrief (0.909)
+//@ chunk-3wek6r2k.js:99424-99642 placement (2.1.88 match: maybeActivateBrief, 0.909)
 /**
  * --brief 或 CLAUDE_CODE_BRIEF：有权限时启用 SendUserMessage（brief 模式），上报 tengu_brief_mode_enabled。
  */
@@ -693,7 +693,7 @@ function startDeferredPrefetches(host, storageV5, credentials, { userContext = t
   });
   startIdleStartupWork(host, storageV5, credentials);
 }
-//@ chunk-3wek6r2k.js:101178-101818 placement = startDeferredPrefetches (0.413)
+//@ chunk-3wek6r2k.js:101178-101818 placement (2.1.88 match: startDeferredPrefetches, 0.413)
 /**
  * 首屏渲染后的延迟预取：用户上下文、系统上下文、Bedrock/Vertex/Mantle 等云凭证、模型能力、文件变更检测器等。
  */
@@ -757,7 +757,7 @@ function startIdleStartupWork(host, storageV5, credentials) {
     );
   if (hasEmbeddedSearchTools_2()) installMemoryExitSummary(getMemoryPeaks);
 }
-//@ chunk-3wek6r2k.js:102267-102733 placement = extractLspServersFromPlugins (0.269)
+//@ chunk-3wek6r2k.js:102267-102733 placement (2.1.88 match: extractLspServersFromPlugins, 0.269)
 /**
  * 会话启动时的插件遥测：cacheOnly 加载插件，预取 MCP/LSP 配置，记录启用插件与错误。名字配错，见 lead 建议。
  */

@@ -459,7 +459,7 @@ If a hook isn't running:
 6. **Use --debug** - Run \`claude --debug\` to see hook execution logs
 `;
 }
-//@ chunk-hantmvxa.js:217472-218912 fingerprint = registerUpdateConfigSkill (0.811)
+//@ chunk-hantmvxa.js:217472-218912 fingerprint (2.1.88 match: registerUpdateConfigSkill, 0.811)
 /**
  * 注册 update-config 内置 skill：注入 settings 文件位置说明、钩子构造与验证说明以及由 zod 生成的 settings JSON Schema；参数以 [hooks-only] 开头时只给钩子部分。
  */
@@ -531,7 +531,7 @@ ${args}`;
     },
   });
 }
-//@ chunk-tyg7f3ek.js:626872-626933 fingerprint = generateSettingsSchema (0.437)
+//@ chunk-tyg7f3ek.js:626872-626933 fingerprint (2.1.88 match: generateSettingsSchema, 0.437)
 async function drainQueuedMessages(io, messageQueue) {
   await settleHeldInboundOnShutdown();
   sweepQueueAtTeardown({

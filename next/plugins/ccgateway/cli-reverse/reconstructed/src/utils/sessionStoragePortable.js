@@ -71,7 +71,7 @@ function unescapeJsonString(raw) {
     return raw;
   }
 }
-//@ chunk-f9pzpnqt.js:1821-2039 placement = extractJsonStringFieldPrefix (1)
+//@ chunk-f9pzpnqt.js:1821-2039 placement (2.1.88 match: extractJsonStringFieldPrefix, 1)
 function extractJsonStringField(text, key) {
   let patterns = [`"${key}":"`, `"${key}": "`];
   for (let pattern of patterns) {
@@ -90,7 +90,7 @@ function extractJsonStringField(text, key) {
   }
   return;
 }
-//@ chunk-f9pzpnqt.js:2039-2301 placement = extractJsonStringFieldPrefix (1)
+//@ chunk-f9pzpnqt.js:2039-2301 placement (2.1.88 match: extractJsonStringFieldPrefix, 1)
 function extractLastJsonStringField(text, key) {
   let patterns = [`"${key}":"`, `"${key}": "`];
   let value;
@@ -248,7 +248,7 @@ async function writeRecordsToBackend(source, entries, flags) {
       cause: result.error,
     });
 }
-//@ chunk-f9pzpnqt.js:3793-4316 placement = extractFirstPromptFromHead (0.914)
+//@ chunk-f9pzpnqt.js:3793-4316 placement (2.1.88 match: extractFirstPromptFromHead, 0.914)
 function extractFirstPromptFromHead(head, mode = "stored") {
   let start = 0;
   let commandFallback = {
@@ -354,7 +354,7 @@ async function readHeadAndTail(path, fileSize, buf, target) {
     };
   }
 }
-//@ chunk-f9pzpnqt.js:5517-5615 placement = readHeadAndTail (0.802)
+//@ chunk-f9pzpnqt.js:5517-5615 placement (2.1.88 match: readHeadAndTail, 0.802)
 async function readHeadAndTail_2(target) {
   let headTailV5 = await readHeadTailV5(target);
   return headTailV5 === null
@@ -542,7 +542,7 @@ async function quarantineJobTranscript(path, target) {
     return false;
   }
 }
-//@ chunk-f9pzpnqt.js:8156-8207 placement = getErrorsPath (1)
+//@ chunk-f9pzpnqt.js:8156-8207 placement (2.1.88 match: getErrorsPath, 1)
 function isTranscriptFileResumeArg(value) {
   return isAbsolute(value) && value.endsWith(".jsonl");
 }
@@ -673,7 +673,7 @@ async function transcriptHasMessages(filePath, sessionId, target) {
   }
   return (await _(filePath)) ? "has" : "none";
 }
-//@ chunk-f9pzpnqt.js:9869-9951 placement = isConnectionError (1)
+//@ chunk-f9pzpnqt.js:9869-9951 placement (2.1.88 match: isConnectionError, 1)
 function isEnoentError(err) {
   return err !== null && typeof err === "object" && "code" in err && err.code === "ENOENT";
 }
@@ -801,7 +801,7 @@ async function findTranscriptInOtherProjects(sessionId, excluded, storage) {
   }
   return found;
 }
-//@ chunk-f9pzpnqt.js:11512-12042 placement = readSessionLite (0.859)
+//@ chunk-f9pzpnqt.js:11512-12042 placement (2.1.88 match: readSessionLite, 0.859)
 async function readSessionLite(filePath, target) {
   if (target !== undefined && target.hoverRestOn) return statWithHeadTail(target.source);
   try {
@@ -919,7 +919,7 @@ function recordedCwdIsWithinOwnWorktrees(recorded, worktrees, foldCase) {
 function slugCollisionGuardFoldsCase() {
   return false;
 }
-//@ chunk-f9pzpnqt.js:13063-13103 placement = getProjectsDir (1)
+//@ chunk-f9pzpnqt.js:13063-13103 placement (2.1.88 match: getProjectsDir, 1)
 /**
  * <配置目录>/projects：所有会话转录的根目录。
  */
@@ -1334,7 +1334,7 @@ async function resolveSessionFilePath(
   }
   return;
 }
-//@ chunk-f9pzpnqt.js:17894-17960 placement = compactBoundaryMarker (1)
+//@ chunk-f9pzpnqt.js:17894-17960 placement (2.1.88 match: compactBoundaryMarker, 1)
 var TRANSCRIPT_READ_CHUNK_SIZE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SKIP_PRECOMPACT_THRESHOLD;
 var COMPACT_BOUNDARY_MARKER;
@@ -1343,7 +1343,7 @@ deferInit("chunk-f9pzpnqt.js:17894", () => {
   SKIP_PRECOMPACT_THRESHOLD = 5242880;
   COMPACT_BOUNDARY_MARKER = Buffer.from('"compact_boundary"');
 });
-//@ chunk-f9pzpnqt.js:17960-18194 fingerprint = parseBoundaryLine (0.909)
+//@ chunk-f9pzpnqt.js:17960-18194 fingerprint (2.1.88 match: parseBoundaryLine, 0.909)
 function parseBoundaryLine(line) {
   try {
     let parsed = JSON.parse(line);
@@ -1357,7 +1357,7 @@ function parseBoundaryLine(line) {
     return null;
   }
 }
-//@ chunk-f9pzpnqt.js:18194-18404 fingerprint = sinkWrite (1)
+//@ chunk-f9pzpnqt.js:18194-18404 fingerprint (2.1.88 match: sinkWrite, 1)
 function sinkWrite(s, src, start, end) {
   let n = end - start;
   if (n <= 0) return;
@@ -1369,11 +1369,11 @@ function sinkWrite(s, src, start, end) {
   src.copy(s.buf, s.len, start, end);
   s.len += n;
 }
-//@ chunk-f9pzpnqt.js:18404-18487 layout = hasPrefix (1)
+//@ chunk-f9pzpnqt.js:18404-18487 layout (2.1.88 match: hasPrefix, 1)
 function hasPrefix_2(src, prefix, at, end) {
   return end - at >= prefix.length && src.compare(prefix, 0, prefix.length, at, at + prefix.length) === 0;
 }
-//@ chunk-f9pzpnqt.js:18487-18606 fingerprint = SYSTEM_PREFIX (0.681)
+//@ chunk-f9pzpnqt.js:18487-18606 fingerprint (2.1.88 match: SYSTEM_PREFIX, 0.681)
 var ATTRIBUTION_SNAPSHOT_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var buffer_3;
 var ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER;
@@ -1386,7 +1386,7 @@ deferInit("chunk-f9pzpnqt.js:18487", () => {
   buffer_4 = Buffer.from([ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER]);
   ATTRIBUTION_SNAPSHOT_MARKER = 256;
 });
-//@ chunk-f9pzpnqt.js:18606-19241 fingerprint = processStraddle (1)
+//@ chunk-f9pzpnqt.js:18606-19241 fingerprint (2.1.88 match: processStraddle, 1)
 function processStraddle(s, chunk, bytesRead) {
   s.straddleSnapCarryLen = 0;
   s.straddleSnapTailEnd = 0;
@@ -1418,7 +1418,7 @@ function processStraddle(s, chunk, bytesRead) {
   s.carryLen = 0;
   return tailEnd;
 }
-//@ chunk-f9pzpnqt.js:19241-19778 fingerprint = scanChunkLines (1)
+//@ chunk-f9pzpnqt.js:19241-19778 fingerprint (2.1.88 match: scanChunkLines, 1)
 function scanChunkLines(s_2, buf, boundaryMarker) {
   let boundaryAt = buf.indexOf(boundaryMarker);
   let runStart = 0;
@@ -1461,7 +1461,7 @@ function scanChunkLines(s_2, buf, boundaryMarker) {
     trailStart: lineStart,
   };
 }
-//@ chunk-f9pzpnqt.js:19778-20354 fingerprint = captureSnap (1)
+//@ chunk-f9pzpnqt.js:19778-20354 fingerprint (2.1.88 match: captureSnap, 1)
 function captureSnap(s, buf, chunk, lastSnapStart, lastSnapEnd) {
   if (lastSnapStart !== -1) {
     s.lastSnapLen = lastSnapEnd - lastSnapStart;
@@ -1478,7 +1478,7 @@ function captureSnap(s, buf, chunk, lastSnapStart, lastSnapEnd) {
     s.lastSnapSrc = s.lastSnapBuf;
   }
 }
-//@ chunk-f9pzpnqt.js:20354-20539 fingerprint = captureCarry (1)
+//@ chunk-f9pzpnqt.js:20354-20539 fingerprint (2.1.88 match: captureCarry, 1)
 function captureCarry(s, buf, trailStart) {
   s.carryLen = buf.length - trailStart;
   if (s.carryLen > 0) {
@@ -1487,7 +1487,7 @@ function captureCarry(s, buf, trailStart) {
     buf.copy(s.carryBuf, 0, trailStart, buf.length);
   }
 }
-//@ chunk-f9pzpnqt.js:20539-20797 fingerprint = finalizeOutput (1)
+//@ chunk-f9pzpnqt.js:20539-20797 fingerprint (2.1.88 match: finalizeOutput, 1)
 function finalizeOutput(s) {
   if (s.carryLen > 0) {
     let cb = s.carryBuf;
@@ -1539,7 +1539,7 @@ async function streamTranscriptRecords(backend, key, maxBytes, onChunk) {
     fromSeq = nextSeq;
   }
 }
-//@ chunk-f9pzpnqt.js:21325-23272 placement = readTranscriptForLoad (0.788)
+//@ chunk-f9pzpnqt.js:21325-23272 placement (2.1.88 match: readTranscriptForLoad, 0.788)
 async function readTranscriptForLoad(filePath, maxBytes, target) {
   let boundaryMarker = COMPACT_BOUNDARY_MARKER;
   let CHUNK_SIZE = TRANSCRIPT_READ_CHUNK_SIZE;
@@ -1661,7 +1661,7 @@ function buildHistorySuppressionEntry(sessionId, cause, vetoed) {
     ts: new Date().toISOString(),
   };
 }
-//@ chunk-g54kbxqw.js:54348-54510 fingerprint = sanitizePath (0.358)
+//@ chunk-g54kbxqw.js:54348-54510 fingerprint (2.1.88 match: sanitizePath, 0.358)
 function sanitizePath_3(name) {
   let type = contentBlockTypeBucket(name);
   let text = stripCacheControl_2(name);
@@ -1673,7 +1673,7 @@ function sanitizePath_3(name) {
     prefixClass: type === "text" && typeof hash === "string" ? classifyUserText(hash) : type,
   };
 }
-//@ chunk-e6aww6q8.js:288436-288553 fingerprint = hasPrefix (1)
+//@ chunk-e6aww6q8.js:288436-288553 fingerprint (2.1.88 match: hasPrefix, 1)
 function hasPrefix(src, start = 0, end = src.length) {
   let offset = skipNuls(src, start, end);
   return (
@@ -1683,7 +1683,7 @@ function hasPrefix(src, start = 0, end = src.length) {
 }
 //@ chunk-dz3q485w.js:15117-15133 affinity
 var MAX_PORTABLE_TRANSCRIPT_BYTES = 67108864;
-//@ chunk-dz3q485w.js:15133-15191 fingerprint = resolveSessionFilePath (0.396)
+//@ chunk-dz3q485w.js:15133-15191 fingerprint (2.1.88 match: resolveSessionFilePath, 0.396)
 function resolveSessionFilePath_2(log) {
   return log.fileSize !== undefined && log.fileSize <= MAX_PORTABLE_TRANSCRIPT_BYTES;
 }

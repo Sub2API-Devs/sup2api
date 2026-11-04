@@ -60,7 +60,7 @@ import { clone, jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { runDeferredInits } from "../../../runtime/deferred-init.js";
 
-//@ chunk-41w44bgm.js:90673-90749 placement = countUnseenAssistantTurns (1)
+//@ chunk-41w44bgm.js:90673-90749 placement (2.1.88 match: countUnseenAssistantTurns, 1)
 function countUnseenAssistantTurns(onProgress) {
   return (event) => {
     onProgress(

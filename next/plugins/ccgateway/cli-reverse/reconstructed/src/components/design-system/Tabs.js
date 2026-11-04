@@ -49,7 +49,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 deferInit("chunk-1dkfja46.js:743", () => {
   init_react_production();
 });
-//@ chunk-1dkfja46.js:747-814 callgraph-fingerprint = _temp (1)
+//@ chunk-1dkfja46.js:747-814 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function tabEntry(child) {
   return [child.props.id ?? child.props.title, child.props.title];
 }
@@ -70,7 +70,7 @@ function increment_4(index) {
 function decrement(index) {
   return index - 1;
 }
-//@ chunk-1dkfja46.js:951-1109 fingerprint = TabsContext (0.9)
+//@ chunk-1dkfja46.js:951-1109 fingerprint (2.1.88 match: TabsContext, 0.9)
 var TabsContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-1dkfja46.js:951", () => {
   TabsContext = createContext({
@@ -83,7 +83,7 @@ deferInit("chunk-1dkfja46.js:951", () => {
     registerNavigationOwner: () => () => {},
   });
 });
-//@ chunk-1dkfja46.js:1109-5871 fingerprint = Tabs (0.674)
+//@ chunk-1dkfja46.js:1109-5871 fingerprint (2.1.88 match: Tabs, 0.674)
 /**
  * 标签页：标题行（可聚焦）+ 当前标签内容，左右/tab 切换，down 把焦点移入内容；Tab 子组件声明标题。
  */
@@ -607,7 +607,7 @@ function TabHeader(props) {
   } else headerElement = $[17];
   return headerElement;
 }
-//@ chunk-1dkfja46.js:6745-7010 fingerprint = Tab (1)
+//@ chunk-1dkfja46.js:6745-7010 fingerprint (2.1.88 match: Tab, 1)
 function Tab(props) {
   let $ = useMemoCache(4);
   let { title, id, children } = props;
@@ -636,7 +636,7 @@ function useTabsWidth() {
   let { width } = useContext(TabsContext);
   return width;
 }
-//@ chunk-1dkfja46.js:7053-7333 fingerprint = useTabHeaderFocus (1)
+//@ chunk-1dkfja46.js:7053-7333 fingerprint (2.1.88 match: useTabHeaderFocus, 1)
 function useTabHeaderFocus() {
   let $ = useMemoCache(6);
   let { headerFocused, focusHeader, blurHeader, registerOptIn } = useContext(TabsContext);

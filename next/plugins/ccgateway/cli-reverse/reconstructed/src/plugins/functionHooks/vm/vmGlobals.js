@@ -1509,7 +1509,7 @@ var STAMP_ENVIRONMENT_SLOT = 0;
  * 心跳戳共享数组的槽位数：2 个固定槽加最多 7 层调用栈。
  */
 var STAMP_SLOT_COUNT = 9;
-//@ chunk-4121qate.js:270449-270537 placement = markScrollActivity (0.64)
+//@ chunk-4121qate.js:270449-270537 placement (2.1.88 match: markScrollActivity, 0.64)
 function markScrollActivity(view) {
   if (view) {
     Atomics.store(view, STAMP_CURRENT_CALL_SLOT, 0);

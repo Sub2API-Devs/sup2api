@@ -612,7 +612,7 @@ async function writeNewFile(path, content, mode) {
     await handle.close();
   }
 }
-//@ chunk-hm0ce8vc.js:182558-182687 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-hm0ce8vc.js:182558-182687 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function rewriteFileWithMode(filePath, content, mode) {
   await rm(filePath, {
     recursive: true,

@@ -130,13 +130,13 @@ import { filterUsableIgnorePatterns } from "./ignorePatterns.js";
 import { isClaudeMdLoadingDisabled } from "./settings/customizationDisabled.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:104278-104481 fingerprint = MEMORY_INSTRUCTION_PROMPT (1)
+//@ chunk-4121qate.js:104278-104481 fingerprint (2.1.88 match: MEMORY_INSTRUCTION_PROMPT, 1)
 /**
  * 注入 CLAUDE.md 内容前的固定前言（These instructions OVERRIDE any default behavior）。
  */
 var MEMORY_INSTRUCTION_PROMPT =
   "Codebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.";
-//@ chunk-4121qate.js:104481-104870 fingerprint = getClaudeMds (0.745)
+//@ chunk-4121qate.js:104481-104870 fingerprint (2.1.88 match: getClaudeMds, 0.745)
 /**
  * 记忆类型 → 系统提示里文件标题后的说明（project instructions / user's private global instructions 等）。
  */
@@ -239,7 +239,7 @@ deferInit("chunk-e6aww6q8.js:1310801", () => {
 function lexMarkdown(text) {
   return new ClaudeMdLexer().lex(text);
 }
-//@ chunk-e6aww6q8.js:1311230-1311318 fingerprint = stripHtmlComments (0.722)
+//@ chunk-e6aww6q8.js:1311230-1311318 fingerprint (2.1.88 match: stripHtmlComments, 0.722)
 /**
  * 去掉 markdown 中的 HTML 注释（不进入代码块）。
  */
@@ -251,7 +251,7 @@ function stripHtmlComments(content) {
     };
   return stripHtmlCommentsFromTokens(lexMarkdown(content));
 }
-//@ chunk-e6aww6q8.js:1311318-1311578 fingerprint = stripHtmlCommentsFromTokens (1)
+//@ chunk-e6aww6q8.js:1311318-1311578 fingerprint (2.1.88 match: stripHtmlCommentsFromTokens, 1)
 function stripHtmlCommentsFromTokens(tokens) {
   let result = "";
   let stripped = false;
@@ -444,7 +444,7 @@ function isInstructionSourceEnabled(source) {
     getAllowedSettingSourcesAsConfigured().includes(source)
   );
 }
-//@ chunk-e6aww6q8.js:1330211-1330311 placement = _temp8 (1)
+//@ chunk-e6aww6q8.js:1330211-1330311 placement (2.1.88 match: _temp8, 1)
 /**
  * 判断本地设置来源是否可读（已启用或工作区限制允许）。
  */
@@ -612,7 +612,7 @@ var ABSOLUTE_MAX_MEMORY_FILE_CHARS = 120000;
 function maxMemoryFileChars(type) {
   return Math.max(ABSOLUTE_MAX_MEMORY_FILE_CHARS, getMaxMemoryFileChars(type));
 }
-//@ chunk-e6aww6q8.js:1331628-1332435 fingerprint = TEXT_FILE_EXTENSIONS (1)
+//@ chunk-e6aww6q8.js:1331628-1332435 fingerprint (2.1.88 match: TEXT_FILE_EXTENSIONS, 1)
 var TEXT_FILE_EXTENSIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-e6aww6q8.js:1331628", () => {
   TEXT_FILE_EXTENSIONS = new Set([
@@ -729,7 +729,7 @@ deferInit("chunk-e6aww6q8.js:1331628", () => {
 function isWithinOriginalCwd(path) {
   return pathInWorkingPath(path, getOriginalCwd());
 }
-//@ chunk-e6aww6q8.js:1332468-1332720 fingerprint = parseFrontmatterPaths (1)
+//@ chunk-e6aww6q8.js:1332468-1332720 fingerprint (2.1.88 match: parseFrontmatterPaths, 1)
 /**
  * 从 frontmatter 读 paths: glob 列表（去掉结尾 /**，全是 ** 视为无条件），返回正文和 paths。
  */
@@ -751,7 +751,7 @@ function parseFrontmatterPaths(rawContent) {
     paths: patterns,
   };
 }
-//@ chunk-e6aww6q8.js:1332720-1333193 fingerprint = parseMemoryFileContent (0.919)
+//@ chunk-e6aww6q8.js:1332720-1333193 fingerprint (2.1.88 match: parseMemoryFileContent, 0.919)
 /**
  * 解析记忆文件内容：非文本扩展名跳过；剥离 frontmatter（paths: 作为条件规则 glob）；去 HTML 注释；提取 @include 路径；AutoMem 类型按 200 行/25000 字节截断。
  */
@@ -788,7 +788,7 @@ function parseMemoryFileContent(rawContent, filePath, type, includeBasePath) {
     includePaths,
   };
 }
-//@ chunk-e6aww6q8.js:1333193-1333275 fingerprint = processMemoryFile (0.418)
+//@ chunk-e6aww6q8.js:1333193-1333275 fingerprint (2.1.88 match: processMemoryFile, 0.418)
 function processMemoryFile(rawContent, name, type) {
   if (!rawContent.includes("@")) return [];
   return parseMemoryFileContent(rawContent, name, type, name).includePaths;
@@ -859,7 +859,7 @@ function getUserRulesDirOrNull() {
 function handleMemoryFileReadErrno(error, filePath) {
   handleMemoryFileReadError(getErrnoCode(error), filePath);
 }
-//@ chunk-e6aww6q8.js:1333991-1334363 fingerprint = handleMemoryFileReadError (0.616)
+//@ chunk-e6aww6q8.js:1333991-1334363 fingerprint (2.1.88 match: handleMemoryFileReadError, 0.616)
 /**
  * 记忆文件读取错误处理：ENOENT/EISDIR/ENOTDIR 静默，EACCES 记录并打标。
  */
@@ -924,7 +924,7 @@ async function readMemoryFileFromStorage({ backend, key }) {
     content: Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf8"),
   };
 }
-//@ chunk-e6aww6q8.js:1334902-1335528 callgraph-witnessed = safelyReadMemoryFileAsync (0.249)
+//@ chunk-e6aww6q8.js:1334902-1335528 callgraph-witnessed (2.1.88 match: safelyReadMemoryFileAsync, 0.249)
 /**
  * 安全读取记忆文件（storage v5 或 fs），区分 absent/error/skipped/content，ENOENT 等静默，EACCES 记录一次。
  */
@@ -988,7 +988,7 @@ async function safelyReadMemoryFileAsync(filePath, type, includeBasePath, storag
     };
   }
 }
-//@ chunk-e6aww6q8.js:1335528-1336300 fingerprint = extractIncludePathsFromTokens (1)
+//@ chunk-e6aww6q8.js:1335528-1336300 fingerprint (2.1.88 match: extractIncludePathsFromTokens, 1)
 /**
  * 在 markdown token 中查找 @path 引用（跳过 code/codespan，HTML 注释外的残留文本仍扫描）；接受 ./、~/、绝对路径和普通相对名，去掉 #片段，按文件所在目录解析为绝对路径。
  */
@@ -1049,7 +1049,7 @@ function isNonCanonicalSymlink(filePath, info) {
   if (!info.isSymlink || info.isCanonical) return false;
   return !(info.resolvedPath === filePath && isUnderNetworkDirCached(filePath));
 }
-//@ chunk-e6aww6q8.js:1336402-1336660 fingerprint = isClaudeMdExcluded (0.933)
+//@ chunk-e6aww6q8.js:1336402-1336660 fingerprint (2.1.88 match: isClaudeMdExcluded, 0.933)
 /**
  * 按设置 claudeMdExcludes（picomatch，dot:true）构建排除匹配器，只作用于 User/Project/Local 类型。
  */
@@ -1120,7 +1120,7 @@ function checkMemoryFileAdmissible(filePath, type, processedPaths, depth, exclud
   if (isSpecialOrUnsafePath(filePath)) return;
   return normalizedPath;
 }
-//@ chunk-e6aww6q8.js:1337589-1338550 callgraph-fingerprint = isInstructionsMemoryType (0.28)
+//@ chunk-e6aww6q8.js:1337589-1338550 callgraph-fingerprint (2.1.88 match: isInstructionsMemoryType, 0.28)
 /**
  * 读取一个指令文件并递归展开其中的 @include：检查排除、深度（最多 5 层）、设备/特殊路径与符号链接；外部（cwd 外）include 需 hasClaudeMdExternalIncludesApproved；User 类型拒绝顶层符号链接与多硬链接文件。返回该文件及其 include 的列表。
  */
@@ -1189,7 +1189,7 @@ async function isInstructionsMemoryType_3(
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1338550-1340876 fingerprint = processMdRules (0.587)
+//@ chunk-e6aww6q8.js:1338550-1340876 fingerprint (2.1.88 match: processMdRules, 0.587)
 /**
  * 遍历 .claude/rules 目录（递归、防环、跟随安全的符号链接）读取 *.md 规则；conditionalRule 控制只取带 paths: 的条件规则还是无条件规则。
  */
@@ -1622,7 +1622,7 @@ function getAllMemoryFilePaths(filePath, type, processedPaths, excludeMatcher) {
   if (normalizedPath !== undefined) processedPaths.add(normalizedPath);
   return [];
 }
-//@ chunk-e6aww6q8.js:1344286-1349223 fingerprint = getMemoryFiles (0.756)
+//@ chunk-e6aww6q8.js:1344286-1349223 fingerprint (2.1.88 match: getMemoryFiles, 0.756)
 /**
  * 发现并读取全部指令记忆文件：托管 CLAUDE.md→托管 claudeMd 设置→托管 .claude/rules→用户 <配置目录>/CLAUDE.md 与 rules→从文件系统根到 cwd 每层的 CLAUDE.md、.claude/CLAUDE.md、.claude/rules/*.md、CLAUDE.local.md→--add-dir 目录（需 CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD）→自动记忆 MEMORY.md。按 claudeMdExcludes 排除，首次加载打 tengu_claudemd__initial_load 并触发 InstructionsLoaded hook。
  */
@@ -1998,7 +1998,7 @@ async function getMemoryFiles(root, host, session, skipRecord, storageV5, creden
     root: userClaudeRulesDir,
   };
 }
-//@ chunk-e6aww6q8.js:1349300-1349439 callgraph-fingerprint = consumeNextEagerLoadReason (0.605)
+//@ chunk-e6aww6q8.js:1349300-1349439 callgraph-fingerprint (2.1.88 match: consumeNextEagerLoadReason, 0.605)
 function consumeNextEagerLoadReason(session) {
   if (!session.shouldFireHook) return;
   session.shouldFireHook = false;
@@ -2021,7 +2021,7 @@ function resetGetMemoryFilesCache(session, nextEagerLoadReason = "session_start"
   sessionState.walkEpoch++;
   clearMemoryFilesCache(session);
 }
-//@ chunk-e6aww6q8.js:1349628-1349671 fingerprint = nextEagerLoadReason (1)
+//@ chunk-e6aww6q8.js:1349628-1349671 fingerprint (2.1.88 match: nextEagerLoadReason, 1)
 function nextEagerLoadReason(nextEagerLoadReason = "session_start") {
   resetGetMemoryFilesCache(getRootSession(), nextEagerLoadReason);
 }
@@ -2165,7 +2165,7 @@ function includedMemoryFiles(memoryFiles, typeFilter) {
     (file) => (!typeFilter || typeFilter(file.type)) && shouldIncludeMemoryFile(file),
   );
 }
-//@ chunk-e6aww6q8.js:1351244-1351476 fingerprint = getManagedAndUserConditionalRules (0.896)
+//@ chunk-e6aww6q8.js:1351244-1351476 fingerprint (2.1.88 match: getManagedAndUserConditionalRules, 0.896)
 /**
  * 取托管与用户 rules 中的条件规则（带 paths: frontmatter）。
  */
@@ -2197,7 +2197,7 @@ async function getManagedAndUserConditionalRules(targetPath, processedPaths, exc
     );
   return result;
 }
-//@ chunk-e6aww6q8.js:1351476-1352178 fingerprint = getMemoryFilesForNestedDirectory (0.919)
+//@ chunk-e6aww6q8.js:1351476-1352178 fingerprint (2.1.88 match: getMemoryFilesForNestedDirectory, 0.919)
 /**
  * 访问嵌套目录（cwd 以下）时补加载该目录的 CLAUDE.md、.claude/CLAUDE.md、CLAUDE.local.md 与 rules；CLAUDE_CODE_DISABLE_CLAUDE_MDS 或 diskless 时为空。
  */
@@ -2285,7 +2285,7 @@ async function getMemoryFilesForNestedDirectory(
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1352178-1352361 fingerprint = getConditionalRulesForCwdLevelDirectory (0.799)
+//@ chunk-e6aww6q8.js:1352178-1352361 fingerprint (2.1.88 match: getConditionalRulesForCwdLevelDirectory, 0.799)
 async function getConditionalRulesForCwdLevelDirectory(dir, targetPath, processedPaths, excludeMatcher) {
   if (env.CLAUDE_CODE_DISABLE_CLAUDE_MDS || !isInstructionSourceEnabled("projectSettings")) return [];
   if (isDiskless()) return [];
@@ -2300,7 +2300,7 @@ async function getConditionalRulesForCwdLevelDirectory(dir, targetPath, processe
     excludeMatcher,
   );
 }
-//@ chunk-e6aww6q8.js:1352361-1352863 fingerprint = processConditionedMdRules (0.808)
+//@ chunk-e6aww6q8.js:1352361-1352863 fingerprint (2.1.88 match: processConditionedMdRules, 0.808)
 /**
  * 按目标文件路径匹配条件规则的 paths glob，命中则加载（claudemd_rule_globs）。
  */
@@ -2340,7 +2340,7 @@ async function processConditionedMdRules(
       .ignores(relPath);
   });
 }
-//@ chunk-e6aww6q8.js:1352863-1353090 fingerprint = getExternalClaudeMdIncludes (0.793)
+//@ chunk-e6aww6q8.js:1352863-1353090 fingerprint (2.1.88 match: getExternalClaudeMdIncludes, 0.793)
 /**
  * 从已加载文件中挑出 cwd 外的 include（parent 存在且非 User 类型），用于提示用户审批。
  */
@@ -2383,7 +2383,7 @@ function setMarkdownLexer(getUserContextInstructionFiles) {
 function lexMarkdownWith(session, text, options) {
   return markdownLexerOverride?.(session, text, options) ?? Promise.resolve(undefined);
 }
-//@ chunk-e6aww6q8.js:3155916-3156204 fingerprint = isMemoryFilePath (0.962)
+//@ chunk-e6aww6q8.js:3155916-3156204 fingerprint (2.1.88 match: isMemoryFilePath, 0.962)
 /**
  * 判断路径是否为指令文件（CLAUDE.md、CLAUDE.local.md 或 .claude/rules/*.md），返回其所属项目目录。
  */
@@ -2398,7 +2398,7 @@ function isMemoryFilePath(filePath) {
   }
   return options !== undefined && options !== parse(options).root ? options : undefined;
 }
-//@ chunk-cjydagjy.js:15359-15659 callgraph-fingerprint = shouldShowClaudeMdExternalIncludesWarning (0.207)
+//@ chunk-cjydagjy.js:15359-15659 callgraph-fingerprint (2.1.88 match: shouldShowClaudeMdExternalIncludesWarning, 0.207)
 /**
  * 列出托管 CLAUDE.md/rules 中引用了外部文件的 include，供外部引用审批对话框使用。
  */

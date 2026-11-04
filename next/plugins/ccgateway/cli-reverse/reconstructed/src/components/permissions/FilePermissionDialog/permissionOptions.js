@@ -35,7 +35,7 @@ import { extractDirectories } from "../PermissionDecisionDebugInfo.js";
 import { handleAcceptSession } from "./usePermissionHandler.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1367026-1367159 fingerprint = isInClaudeFolder (1)
+//@ chunk-18hwfzwa.js:1367026-1367159 fingerprint (2.1.88 match: isInClaudeFolder, 1)
 function isInClaudeFolder(filePath) {
   let absolutePath = expandPath(filePath);
   let claudeFolderPath = expandPath(`${getOriginalCwd()}/.claude`);
@@ -46,7 +46,7 @@ function isInClaudeFolder(filePath) {
     normalizedAbsolutePath.startsWith(normalizedClaudeFolderPath + "/")
   );
 }
-//@ chunk-18hwfzwa.js:1367159-1367291 fingerprint = isInGlobalClaudeFolder (1)
+//@ chunk-18hwfzwa.js:1367159-1367291 fingerprint (2.1.88 match: isInGlobalClaudeFolder, 1)
 function isInGlobalClaudeFolder(filePath) {
   let absolutePath = expandPath(filePath);
   let globalClaudeFolderPath = join(homedir(), ".claude");
@@ -93,7 +93,7 @@ function buildReadRuleConsentLabel(updates) {
     children: ["Yes, allow reading from ", formatPathList(displayLabels), " during this session"],
   });
 }
-//@ chunk-18hwfzwa.js:1369244-1370706 fingerprint = getFilePermissionOptions (0.687)
+//@ chunk-18hwfzwa.js:1369244-1370706 fingerprint (2.1.88 match: getFilePermissionOptions, 0.687)
 /**
  * 文件权限选项：允许一次；本会话允许编辑（项目内 / ~/.claude / 项目 .claude 目录的不同文案，shift+tab 循环模式）；拒绝。
  */

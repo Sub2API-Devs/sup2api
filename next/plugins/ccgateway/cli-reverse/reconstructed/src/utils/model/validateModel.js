@@ -75,7 +75,7 @@ function displayModelName(modelName) {
     ? `${replaced.slice(0, MAX_MODEL_NAME_CHARS)}\u2026`
     : replaced;
 }
-//@ chunk-aepeg2w5.js:408081-408194 placement = ASK_USER_QUESTION_TOOL_PROMPT (0.444)
+//@ chunk-aepeg2w5.js:408081-408194 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_PROMPT, 0.444)
 /**
  * 组织设置限制模型时的提示文案（实际与 AskUserQuestion 无关）。
  */
@@ -97,7 +97,7 @@ deferInit("chunk-ewfzwa2f.js:839", () => {
 function getValidatedModels() {
   return getProviderState().providerCache.validatedModels;
 }
-//@ chunk-ewfzwa2f.js:962-2167 fingerprint = validateModel (0.639)
+//@ chunk-ewfzwa2f.js:962-2167 fingerprint (2.1.88 match: validateModel, 0.639)
 /**
  * 校验模型：空名、白名单拒绝；非强制探测时别名、ANTHROPIC_CUSTOM_MODEL_OPTION、modelPicker 选项、已验证缓存直接通过；含控制字符的名字在非第一方直连时判不存在；否则发 max_tokens=1 探测请求（querySource=model_validation），成功记入缓存，失败交错误分类。
  */
@@ -368,7 +368,7 @@ async function evictModelAccessCacheEntry(model, storageV5) {
         };
   }, storageV5);
 }
-//@ chunk-ewfzwa2f.js:4524-6216 fingerprint = handleValidationError (0.657)
+//@ chunk-ewfzwa2f.js:4524-6216 fingerprint (2.1.88 match: handleValidationError, 0.657)
 /**
  * 探测错误转校验结果：模型不存在（附建议）、认证失败、网络错误、无权限、需要额度、可重试状态码等。
  */

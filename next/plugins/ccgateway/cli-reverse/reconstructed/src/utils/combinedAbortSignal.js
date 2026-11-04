@@ -11,7 +11,7 @@
 import { createAbortController } from "./abortController.js";
 import { MAX_TIMER_DELAY_MS } from "./timerDelayClamp.js";
 
-//@ chunk-sthwtwzm.js:263-731 fingerprint = createCombinedAbortSignal (0.925)
+//@ chunk-sthwtwzm.js:263-731 fingerprint (2.1.88 match: createCombinedAbortSignal, 0.925)
 /**
  * 合并多个 AbortSignal（及可选超时）为一个，任一触发即 abort，返回 signal 与清理函数。
  */

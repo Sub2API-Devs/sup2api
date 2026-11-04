@@ -95,7 +95,7 @@ function checkSkillHooksFit(sessionHooksRegistry, sessionId, source, commandRepo
   }
   return unfitReason;
 }
-//@ chunk-3g0djq3w.js:4926-5357 fingerprint = registerSkillHooks (0.79)
+//@ chunk-3g0djq3w.js:4926-5357 fingerprint (2.1.88 match: registerSkillHooks, 0.79)
 /**
  * 把 skill frontmatter 的 hooks 注册为会话钩子（带 skillRoot）；once 钩子成功后自动移除。
  */

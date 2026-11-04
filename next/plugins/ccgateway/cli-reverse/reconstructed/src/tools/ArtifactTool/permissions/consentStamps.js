@@ -583,7 +583,7 @@ function quoteForDecisionSurface(text, max = 1024) {
 function quotePathForDecisionSurface(path) {
   return `"${spacedFromClosingQuote(withEdgeBlanksMarked(foldForDecisionSurface(markedForBracketFold(path))))}"`;
 }
-//@ chunk-v8nq54bj.js:7973-8137 placement = capitalize (0.796)
+//@ chunk-v8nq54bj.js:7973-8137 placement (2.1.88 match: capitalize, 0.796)
 function withConsentCoverage(reason, coverage) {
   let replaced = reason.trimEnd().replace(/\.$/, "");
   if (replaced === "") {

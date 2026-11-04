@@ -83,7 +83,7 @@ function migrateDeprecatedActions(blocks) {
     ),
   }));
 }
-//@ chunk-6qssfmzs.js:10265-10649 fingerprint = KEYBINDING_CONTEXTS (0.752)
+//@ chunk-6qssfmzs.js:10265-10649 fingerprint (2.1.88 match: KEYBINDING_CONTEXTS, 0.752)
 /**
  * 29 个快捷键上下文：Global、Chat、Autocomplete、Confirmation、Help、ProactivityMenu、Transcript、HistorySearch、Task、ThemePicker、Settings、Tabs、Attachments、Footer、AbovePrompt、AbovePromptInput、AbovePromptSelect、Pane、PaneField、MessageSelector、DiffDialog、DiffPanel、FeedbackSurvey、ModelPicker、EffortSlider、Select、Plugin、Scroll、Agents。
  */
@@ -127,7 +127,7 @@ deferInit("chunk-6qssfmzs.js:10265", () => {
 function isKeybindingContext(keybindingScope) {
   return KEYBINDING_CONTEXT_SET.has(keybindingScope);
 }
-//@ chunk-6qssfmzs.js:10681-15653 fingerprint = KEYBINDING_ACTIONS (0.473)
+//@ chunk-6qssfmzs.js:10681-15653 fingerprint (2.1.88 match: KEYBINDING_ACTIONS, 0.473)
 /**
  * 各上下文的说明文字（给 schema 和文档用）与全部合法动作名列表。
  */
@@ -358,7 +358,7 @@ function isKeybindingAction(action) {
 function isValidBindingAction(action) {
   return KEYBINDING_ACTION_SET.has(action) || action.startsWith("command:");
 }
-//@ chunk-6qssfmzs.js:15785-16682 fingerprint = KeybindingBlockSchema (0.694)
+//@ chunk-6qssfmzs.js:15785-16682 fingerprint (2.1.88 match: KeybindingBlockSchema, 0.694)
 /**
  * keybindings.json 的 zod schema（用于生成 JSON Schema）：块 = {context: 上下文枚举, bindings: 按键串 → 动作枚举 | command:名字 | null}；文件 = {$schema?, $docs?, bindings: 块数组}。
  */

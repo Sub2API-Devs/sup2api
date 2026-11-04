@@ -55,7 +55,7 @@ function getMcpClientModule() {
 function getMcpDirectoryReadModule() {
   return requireMcpModules().mcpDirectoryReadModule();
 }
-//@ chunk-9ycd12hk.js:8792-12553 fingerprint = ReadMcpResourceTool (0.373)
+//@ chunk-9ycd12hk.js:8792-12553 fingerprint (2.1.88 match: ReadMcpResourceTool, 0.373)
 /**
  * ReadMcpResource 工具（别名 ReadMcpResource）。输入 server+uri。权限：SFe() 为假时直接 allow，否则 passthrough。call：插件来源的服务器记一次插件使用；检查 MCP Skill 访问限制；连接后 resources/read，MethodNotFound/ResourceNotFound 转成可读错误（提示重新 list 或改用目录读取工具）；二进制 blob 存成文件并返回路径说明。 ReadMcpResource 输入 schema（server、uri）与输出 schema（contents[{uri,mimeType,text,blobSavedTo}]、error）。
  */

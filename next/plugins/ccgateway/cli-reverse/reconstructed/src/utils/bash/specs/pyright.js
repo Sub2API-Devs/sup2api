@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:3037573-3039519 fingerprint = default (1)
+//@ chunk-e6aww6q8.js:3037573-3039519 fingerprint (2.1.88 match: default, 1)
 /**
  * pyright 的命令规格（选项及哪些带参数），供命令前缀提取使用。
  */

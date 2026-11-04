@@ -17,7 +17,7 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { TEARDROP_ASTERISK } from "../../constants/figures.js";
 
-//@ chunk-aa3cndeh.js:9694-10490 fingerprint = Passes (0.499)
+//@ chunk-aa3cndeh.js:9694-10490 fingerprint (2.1.88 match: Passes, 0.499)
 function Passes(props) {
   let $ = useMemoCache(3);
   let { pass } = props;

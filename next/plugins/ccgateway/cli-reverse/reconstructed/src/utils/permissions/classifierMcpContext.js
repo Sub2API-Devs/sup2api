@@ -40,7 +40,7 @@ deferInit("chunk-gz7b768t.js:1346", () => {
   plainToolName = Object.freeze([]);
   cachedMcpToolPrefixes = plainToolName;
 });
-//@ chunk-gz7b768t.js:1376-1674 placement = getToolNameForPermissionCheck (1)
+//@ chunk-gz7b768t.js:1376-1674 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * （归属疑误：权限/auto 模式）列出可被 auto 模式自动判定的 MCP 服务器前缀（排除与内置工具名前缀冲突者）。
  */

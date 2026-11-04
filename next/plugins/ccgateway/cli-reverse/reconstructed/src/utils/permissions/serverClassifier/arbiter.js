@@ -67,7 +67,7 @@ import { isPlainModeAtRequest, getToolPermissionContext } from "../toolPermissio
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1033954-1034005 placement = countTokensWithAPI (0.658)
+//@ chunk-e6aww6q8.js:1033954-1034005 placement (2.1.88 match: countTokensWithAPI, 0.658)
 /**
  * 自动模式服务端分类器角色（off/arbiter/arbiterWithLocalFallback）。旧版名 countTokensWithAPI 为错配，归错文件。
  */
@@ -405,7 +405,7 @@ function awaitServerVerdict(assistantMessage, toolUseID, requireSent = true) {
 function isNotFlaggedVerdict(status) {
   return status?.type === "evaluated" && status.outcome === "not_flagged";
 }
-//@ chunk-e6aww6q8.js:1038071-1038179 placement = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:1038071-1038179 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_6(messages, sinceUuid) {
   let baseId = stripSuffixNumber(sinceUuid);
   return messages.message.content.some(
@@ -544,7 +544,7 @@ function compareBashCommandInputs(toolUseBlock, rewrittenInput) {
   if (command_2.endsWith(command)) return "prefix";
   return command_2.includes(command) ? "contains" : "other";
 }
-//@ chunk-e6aww6q8.js:1039930-1040058 placement = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:1039930-1040058 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_7(toolUses) {
   return toolUses === undefined
     ? undefined

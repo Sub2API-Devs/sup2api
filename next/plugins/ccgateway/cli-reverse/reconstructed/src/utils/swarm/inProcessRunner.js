@@ -144,7 +144,7 @@ function appendTeammateTranscript(taskId, userMessage, taskRegistry) {
 //@ chunk-8xs34hez.js:1900-1918 affinity
 var PERMISSION_POLL_INTERVAL_MS = 500;
 var MAILBOX_POLL_INTERVAL_MS = 500;
-//@ chunk-8xs34hez.js:1918-5490 fingerprint = createInProcessCanUseTool (0.512)
+//@ chunk-8xs34hez.js:1918-5490 fingerprint (2.1.88 match: createInProcessCanUseTool, 0.512)
 /**
  * 为同进程 teammate 生成 canUseTool：先本地判定；需询问时，有 UI 对话通道就走协调者权限处理并弹本地对话框；
  * 否则构造权限请求经 mailbox 发给 leader，并每 500ms 轮询自己的 inbox 等 permission_response（只接受 team-lead 发的）。
@@ -411,11 +411,11 @@ function createInProcessCanUseTool(identity, abortController, onPermissionWait, 
     });
   };
 }
-//@ chunk-8xs34hez.js:5490-5563 layout = _temp6 (0.826)
+//@ chunk-8xs34hez.js:5490-5563 layout (2.1.88 match: _temp6, 0.826)
 function updateInProcessTeammateTask(taskId, updater, taskRegistry) {
   taskRegistry.update(taskId, (task) => (task.type === "in_process_teammate" ? updater(task) : task));
 }
-//@ chunk-8xs34hez.js:5563-5669 fingerprint = sendMessageToLeader (1)
+//@ chunk-8xs34hez.js:5563-5669 fingerprint (2.1.88 match: sendMessageToLeader, 1)
 /**
  * 以 teammate 身份给 team-lead 的 inbox 写一条消息。
  */
@@ -449,7 +449,7 @@ async function sendIdleNotificationToLeader(agentName, color, teamName, options,
   }
   return sendResult !== undefined;
 }
-//@ chunk-8xs34hez.js:6128-6522 fingerprint = tryClaimNextTask (1)
+//@ chunk-8xs34hez.js:6128-6522 fingerprint (2.1.88 match: tryClaimNextTask, 1)
 /**
  * 从团队任务列表找一个可领取的任务，领取并置 in_progress，返回格式化后的任务提示词。
  */
@@ -693,7 +693,7 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
   }
   return null;
 }
-//@ chunk-8xs34hez.js:10170-12164 fingerprint = waitForNextPromptOrShutdown (0.676)
+//@ chunk-8xs34hez.js:10170-12164 fingerprint (2.1.88 match: waitForNextPromptOrShutdown, 0.676)
 /**
  * 空闲后的等待循环（每 500ms）：优先取 UI 注入的用户消息；检查 abort；读 inbox；尝试领取任务；开启空闲超时时超过阈值返回 idle_timeout。
  */
@@ -847,7 +847,7 @@ async function waitForNextPromptOrShutdown(
     type: "aborted",
   };
 }
-//@ chunk-8xs34hez.js:12164-23605 fingerprint = runInProcessTeammate (0.651)
+//@ chunk-8xs34hez.js:12164-23605 fingerprint (2.1.88 match: runInProcessTeammate, 0.651)
 /**
  * 同进程 teammate 主循环：构造 teammate 代理上下文与系统提示词（默认工具提示 + 自定义代理指令，可 replace/append），强制包含 SendMessage 与任务列表工具；
  * 每轮在 teammate 上下文中 runAgent，必要时先自动压缩历史；回合结束读 inbox 决定继续，否则标空闲并给 leader 发 idle_notification，再进入等待循环；结束或异常时标 completed/failed 并通知。
@@ -1671,7 +1671,7 @@ ${customPrompt}`);
     };
   }
 }
-//@ chunk-8xs34hez.js:23605-23719 facade-exports = startInProcessTeammate (1)
+//@ chunk-8xs34hez.js:23605-23719 facade-exports (2.1.88 match: startInProcessTeammate, 1)
 /**
  * 后台启动 runInProcessTeammate，未捕获异常只记日志。
  */

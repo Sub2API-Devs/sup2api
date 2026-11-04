@@ -26,7 +26,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1021671-1021684 affinity
 var PENDING_OPEN_DELAY_MS = 3000;
-//@ chunk-18hwfzwa.js:1021684-1024512 fingerprint = useSurveyState (0.63)
+//@ chunk-18hwfzwa.js:1021684-1024512 fingerprint (2.1.88 match: useSurveyState, 0.63)
 /**
  * 调查状态机：closed → digit（评分）→ followup（是否分享）→ thanks/submitted/share_failed。
  */

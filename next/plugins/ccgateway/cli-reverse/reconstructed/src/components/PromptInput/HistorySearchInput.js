@@ -20,7 +20,7 @@ import { TextInput } from "../TextInput.js";
 
 //@ chunk-18hwfzwa.js:813854-813870 file-last-pair
 function noop_4() {}
-//@ chunk-18hwfzwa.js:813870-814630 fingerprint = HistorySearchInput (0.91)
+//@ chunk-18hwfzwa.js:813870-814630 fingerprint (2.1.88 match: HistorySearchInput, 0.91)
 function HistorySearchInput(props) {
   let $ = useMemoCache(13);
   let { value, onChange, historyFailedMatch } = props;

@@ -540,7 +540,7 @@ function ShimmerText(props) {
   } else textNode = $[4];
   return textNode;
 }
-//@ chunk-3rwvzn82.js:19271-19676 placement = RARITY_COLORS (0.418)
+//@ chunk-3rwvzn82.js:19271-19676 placement (2.1.88 match: RARITY_COLORS, 0.418)
 /**
  * 文字逐字符"闪光"高亮动画组件。
  */

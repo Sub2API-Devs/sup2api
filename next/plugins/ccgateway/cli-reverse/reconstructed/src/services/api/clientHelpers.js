@@ -155,7 +155,7 @@ function foundryModelKey(model) {
 }
 //@ chunk-hwmsct5x.js:248144-248171 placement
 var TOOL_NAME_TOKEN_REGEX = /^[a-z][a-z0-9_]*$/;
-//@ chunk-hwmsct5x.js:248171-248450 placement = makeToolSchema (0.356)
+//@ chunk-hwmsct5x.js:248171-248450 placement (2.1.88 match: makeToolSchema, 0.356)
 /**
  * 从自然语言文本里解析出工具名列表（两种正则格式，否则命中关键词时返回 ["web_search"]）。与 WebSearch 工具本身无直接关系。
  */

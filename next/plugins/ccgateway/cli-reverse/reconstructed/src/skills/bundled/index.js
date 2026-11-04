@@ -108,7 +108,7 @@ ${args}`);
     },
   });
 }
-//@ chunk-hantmvxa.js:219884-221037 callgraph-witnessed = initBundledSkills (0.216)
+//@ chunk-hantmvxa.js:219884-221037 callgraph-witnessed (2.1.88 match: initBundledSkills, 0.216)
 /**
  * 注册全部内置（bundled）skill，只执行一次。CLAUDE_CODE_ENTRYPOINT=local-agent 时只注册少数几个；否则注册 design、artifact-*、loop、update-config、keybindings-help、debug、memory-types、batch、verify、simplify、commit/pr/code-review、dataviz、cowork-plugin、schedule、send-to-project、claude-code-docs、workflow-authoring、claude-in-chrome、run 等，各自带 isEnabled 门控。
  */

@@ -169,11 +169,11 @@ fi
 `
   );
 }
-//@ chunk-hm0ce8vc.js:54310-54413 fingerprint = SYSTEM_CA_BUNDLE (0.658)
+//@ chunk-hm0ce8vc.js:54310-54413 fingerprint (2.1.88 match: SYSTEM_CA_BUNDLE, 0.658)
 var SYSTEM_CA_BUNDLE = ["/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt"];
 var MAX_SYSTEM_CA_BYTES = 1048576;
 var MAX_CA_TOTAL_BYTES = 8388608;
-//@ chunk-awy329vy.js:2175-2300 fingerprint = NO_PROXY_LIST (0.446)
+//@ chunk-awy329vy.js:2175-2300 fingerprint (2.1.88 match: NO_PROXY_LIST, 0.446)
 var NO_PROXY_LIST = [
   "registry.npmjs.org",
   "jsr.io",
@@ -1019,7 +1019,7 @@ function getRunningRelayForGit() {
     caBundlePath: state.caBundlePath,
   };
 }
-//@ chunk-awy329vy.js:73520-74962 placement = getUpstreamProxyEnv (0.377)
+//@ chunk-awy329vy.js:73520-74962 placement (2.1.88 match: getUpstreamProxyEnv, 0.377)
 /**
  * getAgentProxyEnv：代理启用时给子进程的环境变量（HTTPS_PROXY/NO_PROXY、CA 包相关变量、JAVA_TOOL_OPTIONS、gh shim 的 PATH 等）。
  */
@@ -2100,7 +2100,7 @@ function systemStoreHasCa(systemCa, caText) {
   let match = caText.match(PEM_CERT_BLOCK_RE);
   return match !== null && match.every((certBlock) => systemCa.includes(certBlock));
 }
-//@ chunk-awy329vy.js:95018-95209 fingerprint = downloadCaBundle (0.321)
+//@ chunk-awy329vy.js:95018-95209 fingerprint (2.1.88 match: downloadCaBundle, 0.321)
 function reportCaFailure(result, caSource) {
   if (result.outcome === "retry") return result;
   logForDebugging(`[agent-proxy] ${result.detail}; proxy disabled`, {

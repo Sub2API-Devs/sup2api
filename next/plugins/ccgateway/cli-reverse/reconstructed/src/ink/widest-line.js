@@ -176,7 +176,7 @@ function recordScrollOut(delta, pending, mode) {
 function recordScrollPosition(viewportMetrics) {
   getScrollTrace().recordPosition(viewportMetrics);
 }
-//@ chunk-bzr73sfg.js:292332-292494 callgraph-fingerprint = widestLine (1)
+//@ chunk-bzr73sfg.js:292332-292494 callgraph-fingerprint (2.1.88 match: widestLine, 1)
 /**
  * 多行文本中最宽一行的显示宽度。
  */

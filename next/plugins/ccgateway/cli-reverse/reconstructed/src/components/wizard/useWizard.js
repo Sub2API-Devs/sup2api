@@ -11,7 +11,7 @@
 import { useContext } from "../../../vendor/react/cjs/react.production.js";
 import { wizardSlot } from "./WizardProvider.js";
 
-//@ chunk-095ptjmr.js:2900-3004 fingerprint = useWizard (1)
+//@ chunk-095ptjmr.js:2900-3004 fingerprint (2.1.88 match: useWizard, 1)
 function useWizard() {
   let context = useContext(wizardSlot);
   if (!context) throw Error("useWizard must be used within a WizardProvider");

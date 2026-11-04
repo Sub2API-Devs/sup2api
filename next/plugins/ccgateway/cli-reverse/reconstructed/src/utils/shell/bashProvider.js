@@ -44,7 +44,7 @@ import { buildEnvScrubScript } from "../settings/policyHelper/helperEnv.js";
 import { getCpuacctJoinCommand } from "./cpuReport.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:824194-824358 placement = getGlobBaseDirectory (1)
+//@ chunk-e6aww6q8.js:824194-824358 placement (2.1.88 match: getGlobBaseDirectory, 1)
 /**
  * （旧版名配错）为 shell 的 source 命令拼接单引号转义的参数。
  */
@@ -155,7 +155,7 @@ function buildCommandTextCarrierUnexport() {
 function buildCommandTextCarrierEval() {
   return `{ \\builtin [ -n "\${${COMMAND_TEXT_VAR}:+1}" ] || { \\builtin echo '${COMMAND_TEXT_REF}' >&2; \\builtin exit 126; }; } && 'eval' "\\builtin 'unset' -v '${COMMAND_TEXT_VAR}'; 'eval' $${COMMAND_TEXT_VAR}"`;
 }
-//@ chunk-e6aww6q8.js:3067295-3067615 fingerprint = getDisableExtglobCommand (0.729)
+//@ chunk-e6aww6q8.js:3067295-3067615 fingerprint (2.1.88 match: getDisableExtglobCommand, 0.729)
 /**
  * 返回关闭扩展 glob 的命令：bash `shopt -u extglob`，zsh `setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL`；设了 CLAUDE_CODE_SHELL_PREFIX 时两者都试。
  */
@@ -229,7 +229,7 @@ function resolveWindowsSandboxInnerShell(binShell) {
   );
   return null;
 }
-//@ chunk-e6aww6q8.js:3068351-3072279 fingerprint = createBashShellProvider (0.542)
+//@ chunk-e6aww6q8.js:3068351-3072279 fingerprint (2.1.88 match: createBashShellProvider, 0.542)
 /**
  * 创建 bash 提供者：异步生成 shell 快照（失败则回落到 login shell，-l）；buildExecCommand 依次拼接：source 快照、Windows TEMP/TMP、沙箱 TMPDIR、会话环境脚本、PATH 追加、BUN_OPTIONS 搬运、额外 git config、关闭 extglob、去掉 which/unsetenv 劫持、scrub 凭据环境、cgroup 记账、`eval '<命令>'` 和 `pwd -P >| <cwd 文件>`，再套 CLAUDE_CODE_SHELL_PREFIX；getEnvironmentOverrides 设 CLAUDE_CODE_EXECPATH、沙箱 TMPDIR/TMPPREFIX。
  */

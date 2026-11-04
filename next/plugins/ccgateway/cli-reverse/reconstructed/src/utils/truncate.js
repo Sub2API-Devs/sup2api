@@ -11,14 +11,14 @@
 import { getGraphemeSegmenter } from "./intl.js";
 import { charDisplayWidth, isWhitespaceChar, isPunctuationChar } from "./Cursor.js";
 
-//@ chunk-530hfzwb.js:927-1022 callgraph-fingerprint = truncateToWidth (1)
+//@ chunk-530hfzwb.js:927-1022 callgraph-fingerprint (2.1.88 match: truncateToWidth, 1)
 function truncateToWidth(text, offset, offset_2) {
   let width = 0;
   for (let { segment } of getGraphemeSegmenter().segment(text.slice(offset, offset_2)))
     width += charDisplayWidth(segment, width);
   return width;
 }
-//@ chunk-530hfzwb.js:1555-2385 callgraph-fingerprint = truncateToWidthNoEllipsis (1)
+//@ chunk-530hfzwb.js:1555-2385 callgraph-fingerprint (2.1.88 match: truncateToWidthNoEllipsis, 1)
 /**
  * 按显示宽度截断文本（不加省略号）。
  */

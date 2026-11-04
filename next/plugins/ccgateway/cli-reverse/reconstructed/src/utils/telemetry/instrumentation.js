@@ -170,7 +170,7 @@ import { getUsableProxyUrl, shouldBypassProxy, TlsCheckingProxyAgent } from "../
 import { anthropicHostOf } from "../anthropicHosts.js";
 import { getMTLSConfig, caListBehindProxy } from "../mtls.js";
 
-//@ chunk-jhrww53q.js:3176-5552 fingerprint = bootstrapTelemetry (0.317)
+//@ chunk-jhrww53q.js:3176-5552 fingerprint (2.1.88 match: bootstrapTelemetry, 0.317)
 __export(EMPTY_ENV_DECLARATIONS, {
   ANT_CLAUDE_CODE_METRICS_ENDPOINT: () => ANT_CLAUDE_CODE_METRICS_ENDPOINT,
   ANT_OTEL_EXPORTER_OTLP_ENDPOINT: () => ANT_OTEL_EXPORTER_OTLP_ENDPOINT,
@@ -240,7 +240,7 @@ __export(EMPTY_ENV_DECLARATIONS, {
 });
 //@ chunk-9vvvg0d3.js:24056-24074 sole-consumer
 var otelSemconv_2 = __toESM(require_error_3(), 1);
-//@ chunk-9vvvg0d3.js:24144-24241 fingerprint = isBigQueryMetricsEnabled (1)
+//@ chunk-9vvvg0d3.js:24144-24241 fingerprint (2.1.88 match: isBigQueryMetricsEnabled, 1)
 /**
  * BigQuery 指标是否启用：隐私级别 default 且（Slt() 或 Claude.ai 的 team/enterprise 订阅）。
  */
@@ -437,7 +437,7 @@ var MIN_METRICS_EXPORT_INTERVAL_MS = 300000;
 var MAX_METRICS_EXPORT_INTERVAL_MS = 3600000;
 //@ chunk-9vvvg0d3.js:33443-33467 affinity
 class TelemetryTimeoutError extends Error {}
-//@ chunk-9vvvg0d3.js:33467-33559 callgraph-witnessed = telemetryTimeout (1)
+//@ chunk-9vvvg0d3.js:33467-33559 callgraph-witnessed (2.1.88 match: telemetryTimeout, 1)
 function telemetryTimeout(ms, message) {
   return new Promise((resolve, reject) => {
     setTimeout((rej, msg) => rej(new TelemetryTimeoutError(msg)), ms, reject, message).unref();
@@ -526,7 +526,7 @@ function buildOtelResource() {
   setCachedTelemetryResource(mergedResource);
   return mergedResource;
 }
-//@ chunk-9vvvg0d3.js:35485-36594 fingerprint = initializeBetaTracing (0.51)
+//@ chunk-9vvvg0d3.js:35485-36594 fingerprint (2.1.88 match: initializeBetaTracing, 0.51)
 /**
  * beta 详细追踪：把 trace/log 发到 BETA_TRACING_ENDPOINT。
  */
@@ -685,7 +685,7 @@ function getOtlpHeaders(signal, httpConfig) {
     },
   };
 }
-//@ chunk-9vvvg0d3.js:37796-39309 fingerprint = getOtlpReaders (0.626)
+//@ chunk-9vvvg0d3.js:37796-39309 fingerprint (2.1.88 match: getOtlpReaders, 0.626)
 /**
  * 按 OTEL_METRICS_EXPORTER（otlp/prometheus/console）和 OTEL_EXPORTER_OTLP_PROTOCOL 创建 metric reader，导出间隔 OTEL_METRIC_EXPORT_INTERVAL（默认 60 秒）。
  */
@@ -761,7 +761,7 @@ async function getOtlpReaders(exporterTypes) {
     return exporter;
   });
 }
-//@ chunk-9vvvg0d3.js:39309-40257 fingerprint = getOtlpLogExporters (0.86)
+//@ chunk-9vvvg0d3.js:39309-40257 fingerprint (2.1.88 match: getOtlpLogExporters, 0.86)
 /**
  * 按 OTEL_LOGS_EXPORTER 创建日志导出器（otlp/console）。
  */
@@ -809,7 +809,7 @@ async function getOtlpLogExporters() {
     } else throw Error(`Unknown exporter type set in OTEL_LOGS_EXPORTER env var: ${exporterType}`);
   return exporters.map(wrapExporterWithFirstExportLog("logs", transport));
 }
-//@ chunk-9vvvg0d3.js:40257-41145 fingerprint = getOtlpTraceExporters (0.811)
+//@ chunk-9vvvg0d3.js:40257-41145 fingerprint (2.1.88 match: getOtlpTraceExporters, 0.811)
 /**
  * 按 OTEL_TRACES_EXPORTER 创建 trace 导出器。
  */
@@ -857,7 +857,7 @@ async function getOtlpTraceExporters() {
     } else throw Error(`Unknown exporter type set in OTEL_TRACES_EXPORTER env var: ${exporterType}`);
   return exporters.map(wrapExporterWithFirstExportLog("traces", transport));
 }
-//@ chunk-9vvvg0d3.js:41145-41211 fingerprint = isTelemetryEnabled (1)
+//@ chunk-9vvvg0d3.js:41145-41211 fingerprint (2.1.88 match: isTelemetryEnabled, 1)
 /**
  * CLAUDE_CODE_ENABLE_TELEMETRY 是否为真（第三方 OTel 导出总开关）。
  */
@@ -881,7 +881,7 @@ function getBigQueryExportIntervalMs() {
       )
     : MIN_METRICS_EXPORT_INTERVAL_MS;
 }
-//@ chunk-9vvvg0d3.js:41333-41489 fingerprint = getBigQueryExportingReader (0.665)
+//@ chunk-9vvvg0d3.js:41333-41489 fingerprint (2.1.88 match: getBigQueryExportingReader, 0.665)
 /**
  * BigQuery 指标 reader，导出间隔 tengu_cozy_dusk（默认 5 分钟）。
  */
@@ -895,7 +895,7 @@ function getBigQueryExportingReader(storageV5) {
     exportIntervalMillis: getBigQueryExportIntervalMs(),
   });
 }
-//@ chunk-9vvvg0d3.js:41489-44472 fingerprint = initializeTelemetry (0.806)
+//@ chunk-9vvvg0d3.js:41489-44472 fingerprint (2.1.88 match: initializeTelemetry, 0.806)
 /**
  * 初始化 OTel：设置传播器与诊断 logger；CLAUDE_CODE_ENABLE_TELEMETRY 时按 OTEL_METRICS_EXPORTER 建 metric reader，team/enterprise 另加 BigQuery 指标；按 OTEL_LOGS_EXPORTER 建事件 logger（com.anthropic.claude_code.events）；增强遥测时按 OTEL_TRACES_EXPORTER 建 trace；注册退出 flush。
  */
@@ -1063,7 +1063,7 @@ Current timeout: ${timeoutMs}ms
     metricsExporterKinds: exporterTypes,
   };
 }
-//@ chunk-9vvvg0d3.js:44472-44991 fingerprint = flushTelemetry (0.963)
+//@ chunk-9vvvg0d3.js:44472-44991 fingerprint (2.1.88 match: flushTelemetry, 0.963)
 /**
  * flush 全部 OTel provider，超时记录日志。
  */
@@ -1096,7 +1096,7 @@ async function flushTelemetry() {
       });
   }
 }
-//@ chunk-9vvvg0d3.js:44991-45159 fingerprint = parseOtelHeadersEnvVar (1)
+//@ chunk-9vvvg0d3.js:44991-45159 fingerprint (2.1.88 match: parseOtelHeadersEnvVar, 1)
 function parseOtelHeadersEnvVar() {
   let headers = {};
   let envHeaders = env.OTEL_EXPORTER_OTLP_HEADERS;
@@ -1107,7 +1107,7 @@ function parseOtelHeadersEnvVar() {
     }
   return headers;
 }
-//@ chunk-9vvvg0d3.js:45159-46457 callgraph-witnessed = getOTLPExporterConfig (0.158)
+//@ chunk-9vvvg0d3.js:45159-46457 callgraph-witnessed (2.1.88 match: getOTLPExporterConfig, 0.158)
 /**
  * OTLP 导出器配置：endpoint（OTEL_EXPORTER_OTLP_<SIGNAL>_ENDPOINT/ENDPOINT + /v1/<signal>）、headers（含 otelHeadersHelper）、代理与 mTLS。
  */

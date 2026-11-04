@@ -11,7 +11,7 @@
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-shkzs7rp.js:32801-32870 fingerprint = connectResponseSchema (0.8)
+//@ chunk-shkzs7rp.js:32801-32870 fingerprint (2.1.88 match: connectResponseSchema, 0.8)
 /**
  * connect 响应 {session_id, ws_url, work_dir?}。
  */

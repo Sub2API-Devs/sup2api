@@ -576,7 +576,7 @@ class BundleStreamVerifier extends Transform {
 }
 //@ chunk-gjx0rh1b.js:11321-11345 placement
 var GIT_DIR_NAMES = [".git", "git~1"];
-//@ chunk-gjx0rh1b.js:11345-11419 placement = execTmux (1)
+//@ chunk-gjx0rh1b.js:11345-11419 placement (2.1.88 match: execTmux, 1)
 function isSafeRepoRelativePath(args, opts) {
   return (
     !isUnsafeRepoRelativePath(args) &&
@@ -607,7 +607,7 @@ function hasWindowsUnsafeSegment(path, opts) {
 }
 //@ chunk-gjx0rh1b.js:11638-11683 placement
 var DOS_SHORT_NAME_PATTERN = /^[^~.]{1,6}~[0-9]+(?:\.[^.]{1,3})?$/;
-//@ chunk-gjx0rh1b.js:11683-11827 placement = execTmux (1)
+//@ chunk-gjx0rh1b.js:11683-11827 placement (2.1.88 match: execTmux, 1)
 function hasDosShortNameSegment(path) {
   let platform = getPlatform();
   return (

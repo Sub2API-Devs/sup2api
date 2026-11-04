@@ -323,7 +323,7 @@ function formatExtraArgHints(argNames, typedArgs) {
   if (sliced.length === 0) return;
   return sliced.map((argName) => `[${argName}]`).join(" ");
 }
-//@ chunk-e6aww6q8.js:1668178-1668487 fingerprint = transformSkillFiles (1)
+//@ chunk-e6aww6q8.js:1668178-1668487 fingerprint (2.1.88 match: transformSkillFiles, 1)
 function transformSkillFiles(files) {
   let filesByDir = new Map();
   for (let file of files) {
@@ -378,7 +378,7 @@ function isHiddenFromModelSource(loadedFrom) {
     loadedFrom,
   });
 }
-//@ chunk-e6aww6q8.js:3120762-3120977 fingerprint = getSkillsPath (0.847)
+//@ chunk-e6aww6q8.js:3120762-3120977 fingerprint (2.1.88 match: getSkillsPath, 0.847)
 /**
  * 按设置来源给出 .claude/<dir> 的路径：policySettings → managed 目录，userSettings → ~/.claude/<dir>，projectSettings → 项目根/.claude/<dir>，plugin → 字面 plugin。
  */
@@ -473,7 +473,7 @@ function getSkillNameRootPath(filePath, name) {
   }
   return currentDir;
 }
-//@ chunk-e6aww6q8.js:3122073-3122798 fingerprint = parseHooksFromFrontmatter (0.391)
+//@ chunk-e6aww6q8.js:3122073-3122798 fingerprint (2.1.88 match: parseHooksFromFrontmatter, 0.391)
 /**
  * 解析 skill frontmatter 的 hooks：顶层误写的 PreToolUse/PermissionRequest 视为不可加载的守卫，返回 unloadableGuard=true（此时 skill 不带钩子也不带 allowed-tools）；否则按 HooksSchema 校验。
  */
@@ -525,7 +525,7 @@ function parseSkillHooksFromFrontmatter(frontmatter, skillName) {
     unloadableGuard: false,
   };
 }
-//@ chunk-e6aww6q8.js:3122798-3122976 fingerprint = parseSkillPaths (1)
+//@ chunk-e6aww6q8.js:3122798-3122976 fingerprint (2.1.88 match: parseSkillPaths, 1)
 /**
  * 解析 frontmatter.paths：去掉结尾 /**、丢空串；全为 ** 时视为无条件（返回 undefined）。有 paths 的 skill 是条件 skill。
  */
@@ -537,7 +537,7 @@ function parseSkillPaths(frontmatter) {
   if (patterns.length === 0 || patterns.every((pattern) => pattern === "**")) return;
   return patterns;
 }
-//@ chunk-e6aww6q8.js:3122976-3124230 fingerprint = parseSkillFrontmatterFields (0.837)
+//@ chunk-e6aww6q8.js:3122976-3124230 fingerprint (2.1.88 match: parseSkillFrontmatterFields, 0.837)
 /**
  * 把 skill/命令 frontmatter 解析成统一字段：name、description（缺省取正文首行）、allowed-tools、disallowed-tools、argument-hint、arguments、when_to_use、version、model（inherit 特判）、disable-model-invocation、user-invocable、hooks、context(fork)、agent、background、effort、shell、created_by、fallback、metadata、declaredFields。
  */
@@ -982,7 +982,7 @@ async function listUserSkillDirNamesV5(storage) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:3129738-3132838 callgraph-witnessed = loadSkillsFromSkillsDir (0.254)
+//@ chunk-e6aww6q8.js:3129738-3132838 callgraph-witnessed (2.1.88 match: loadSkillsFromSkillsDir, 0.254)
 /**
  * 通过 storageV5 后端读取用户 skills（userConfigDir/skills/*\/SKILL.md）：跳过被 enabledPlugins 禁用的同名插件 skill，超过大小限制或读失败的跳过并记遥测。
  */
@@ -1387,7 +1387,7 @@ async function loadSkillsFromSkillsDir(dirPath, source, loadedFrom = "skills", s
 function isSkillMarkdownFile(filePath) {
   return /^skill\.md$/i.test(basename(filePath));
 }
-//@ chunk-e6aww6q8.js:3136156-3136465 layout = transformSkillFiles (1)
+//@ chunk-e6aww6q8.js:3136156-3136465 layout (2.1.88 match: transformSkillFiles, 1)
 /**
  * 同一目录里有 SKILL.md 时只保留它，否则保留全部 .md（旧版 commands 目录兼容）。
  */
@@ -1434,13 +1434,13 @@ function getRegularCommandName(filePath, baseDir) {
   let namespace = buildNamespace(fileDirectory, baseDir);
   return namespace ? `${namespace}:${commandBaseName}` : commandBaseName;
 }
-//@ chunk-e6aww6q8.js:3136788-3136879 fingerprint = getCommandName (1)
+//@ chunk-e6aww6q8.js:3136788-3136879 fingerprint (2.1.88 match: getCommandName, 1)
 function getCommandName(file) {
   return isSkillMarkdownFile(file.filePath)
     ? getSkillCommandName(file.filePath, file.baseDir)
     : getRegularCommandName(file.filePath, file.baseDir);
 }
-//@ chunk-e6aww6q8.js:3136879-3138092 fingerprint = loadSkillsFromCommandsDir (0.551)
+//@ chunk-e6aww6q8.js:3136879-3138092 fingerprint (2.1.88 match: loadSkillsFromCommandsDir, 0.551)
 /**
  * 加载旧式 .claude/commands/*.md（含 --add-dir 目录）为 skill 命令，loadedFrom=commands_DEPRECATED，名字按子目录用冒号命名空间。
  */
@@ -1596,7 +1596,7 @@ function getSkillDirCommandsCached(cwd, storageV5) {
     () => getSkillDirCommands(cwd, storageV5, managedWritable),
   );
 }
-//@ chunk-e6aww6q8.js:3139325-3142633 fingerprint = getSkillDirCommands (0.795)
+//@ chunk-e6aww6q8.js:3139325-3142633 fingerprint (2.1.88 match: getSkillDirCommands, 0.795)
 /**
  * 汇总所有目录来源的 skill：managed（CLAUDE_CODE_DISABLE_POLICY_SKILLS 可关）、用户 ~/.claude/skills、同步 skills、host catalog、项目各级 .claude/skills、--add-dir 的 .claude/skills、旧 commands 目录、插件 skill；按文件身份去重，有 paths 的放入条件 skill 表，返回无条件 skill。bare 模式只读 --add-dir。
  */
@@ -2113,7 +2113,7 @@ async function discoverSkillDirsForPaths(host, paths, stopDir, storageV5, worktr
 function getDynamicSkillKey(skill) {
   return `${skill.type === "prompt" ? (skill.skillRoot ?? "") : ""}\x00${skill.name}`;
 }
-//@ chunk-e6aww6q8.js:3147484-3148529 fingerprint = addSkillDirectories (0.94)
+//@ chunk-e6aww6q8.js:3147484-3148529 fingerprint (2.1.88 match: addSkillDirectories, 0.94)
 /**
  * 把新发现的 skill 目录加载进动态 skill 表（replace 时先删该目录下消失的 skill），记 tengu_dynamic_skills_changed 并发出已加载事件；projectSettings 关闭或仅插件策略时跳过。
  */
@@ -2187,7 +2187,7 @@ function getDynamicSkills() {
     )
     .map(([, skill]) => skill);
 }
-//@ chunk-e6aww6q8.js:3148828-3149592 fingerprint = activateConditionalSkillsForPaths (0.838)
+//@ chunk-e6aww6q8.js:3148828-3149592 fingerprint (2.1.88 match: activateConditionalSkillsForPaths, 0.838)
 /**
  * 用 gitignore 语法匹配条件 skill 的 paths；被触及的文件（相对 cwd）命中时把该 skill 激活进动态表，记遥测并发出已加载事件，返回激活的名字。
  */
@@ -2255,7 +2255,7 @@ async function discoverSkillsForPath(host, path, dynamicSkillDirTriggers, storag
   }
   activateConditionalSkillsForPaths([path], baseDir);
 }
-//@ chunk-e6aww6q8.js:3149884-3149981 layout = getThinkbackSkillDir (1)
+//@ chunk-e6aww6q8.js:3149884-3149981 layout (2.1.88 match: getThinkbackSkillDir, 1)
 /**
  * 把当前工作目录向上至家目录之间各级的 `.claude/skills` 设为技能目录（replace），工作目录就是家目录时不做；用于清缓存或目录变化后重建技能目录列表。旧版名 getThinkbackSkillDir 配错。
  */

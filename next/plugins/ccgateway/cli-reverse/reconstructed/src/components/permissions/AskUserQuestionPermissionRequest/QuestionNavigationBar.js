@@ -38,7 +38,7 @@ function tabWidth(header) {
 function addNumbers(left, right) {
   return left + right;
 }
-//@ chunk-18hwfzwa.js:1275820-1278846 fingerprint = QuestionNavigationBar (0.703)
+//@ chunk-18hwfzwa.js:1275820-1278846 fingerprint (2.1.88 match: QuestionNavigationBar, 0.703)
 function QuestionNavigationBar(props) {
   let $ = useMemoCache(55);
   let { questions, currentQuestionIndex, answers, hideSubmitTab } = props;

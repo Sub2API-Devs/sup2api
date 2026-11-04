@@ -48,7 +48,7 @@ var clearKeptClawdPose = () =>
     ...getClawdPoseState(),
     kept: undefined,
   });
-//@ chunk-8jypjjdf.js:11355-14769 callgraph-fingerprint = APPLE_EYES (0.203)
+//@ chunk-8jypjjdf.js:11355-14769 callgraph-fingerprint (2.1.88 match: APPLE_EYES, 0.203)
 /**
  * Clawd 字符画的部件表：姿态 → {eyes, arms, feet}；手臂、眼睛、脚、眼睛单行、转身视角各自的方块字符（转身帧带背景着色区间 from/to）。
  */
@@ -388,11 +388,11 @@ function normalizePose(pose) {
 function isPoseSpec(poseSpec) {
   return typeof poseSpec !== "string" && "facing" in poseSpec;
 }
-//@ chunk-8jypjjdf.js:14877-14929 placement = chalkForChart (1)
+//@ chunk-8jypjjdf.js:14877-14929 placement (2.1.88 match: chalkForChart, 1)
 function chalkForChart() {
   return env.terminal !== "Apple_Terminal";
 }
-//@ chunk-8jypjjdf.js:14929-17028 fingerprint = Clawd (0.367)
+//@ chunk-8jypjjdf.js:14929-17028 fingerprint (2.1.88 match: Clawd, 0.367)
 function Clawd(t0) {
   let $ = useMemoCache(47);
   let props;
@@ -674,7 +674,7 @@ function ClawdTurnFrame(props) {
   } else frame = $[6];
   return frame;
 }
-//@ chunk-8jypjjdf.js:17829-18653 fingerprint = AppleTerminalClawd (0.558)
+//@ chunk-8jypjjdf.js:17829-18653 fingerprint (2.1.88 match: AppleTerminalClawd, 0.558)
 function AppleTerminalClawd(props) {
   let $ = useMemoCache(19);
   let { eyes, color } = props;

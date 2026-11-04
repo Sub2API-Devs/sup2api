@@ -55,7 +55,7 @@ function readResultEnvelope(value) {
         status: "malformed",
       };
 }
-//@ chunk-g54kbxqw.js:29500-29822 placement = isMalformedBase64Image (1)
+//@ chunk-g54kbxqw.js:29500-29822 placement (2.1.88 match: isMalformedBase64Image, 1)
 /**
  * 把远程工具返回的内容块转成 MCP 内容（文本保留、base64 图片保留，其余 JSON 化为文本）。
  */

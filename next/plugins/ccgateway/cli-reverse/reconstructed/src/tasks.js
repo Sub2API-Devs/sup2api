@@ -19,7 +19,7 @@ import { MonitorMcpTaskImpl } from "./tasks/MonitorMcpTask/MonitorMcpTask.js";
 import { MonitorWsTask } from "./tasks/MonitorWsTask/MonitorWsTask.js";
 import { InProcessTeammateTask } from "./tasks/InProcessTeammateTask/InProcessTeammateTask.js";
 
-//@ chunk-kxyd0g16.js:18118-18315 fingerprint = LocalWorkflowTask (0.309)
+//@ chunk-kxyd0g16.js:18118-18315 fingerprint (2.1.88 match: LocalWorkflowTask, 0.309)
 /**
  * 返回 type → 任务实现（含 kill 方法）的 Map；local_workflow 与 MCP 任务实现通过懒加载 chunk 取得。旧版是 getAllTasks()/getTaskByType()。
  */

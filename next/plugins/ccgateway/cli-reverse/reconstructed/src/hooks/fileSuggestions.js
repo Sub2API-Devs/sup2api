@@ -41,14 +41,14 @@ import { expandPath } from "../utils/path.js";
 import { platformPath } from "../utils/posixPaths.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-czffketc.js:960-1080 fingerprint = pathListSignature (0.682)
+//@ chunk-czffketc.js:960-1080 fingerprint (2.1.88 match: pathListSignature, 0.682)
 function pathListSignature(paths) {
   return paths.replace(/[^\0-\x7f]/g, (char) => {
     let upper = char.toUpperCase();
     return upper.length === 1 && upper.charCodeAt(0) > 127 ? upper : char;
   });
 }
-//@ chunk-e6aww6q8.js:3295980-3296114 fingerprint = collectDirectoryNames (0.672)
+//@ chunk-e6aww6q8.js:3295980-3296114 fingerprint (2.1.88 match: collectDirectoryNames, 0.672)
 function collectDirectoryNames(mountRoot, path) {
   let names = [];
   let normalized = posix.normalize(posix.join("/", path));
@@ -127,7 +127,7 @@ function resetFileIndexCache(globalFileIndexCache) {
   globalFileIndexCache.indexBaseDir = null;
   globalFileIndexCache.indexLoadCount++;
 }
-//@ chunk-x3qn5k1g.js:2079-2232 fingerprint = getPathsForSuggestions (0.353)
+//@ chunk-x3qn5k1g.js:2079-2232 fingerprint (2.1.88 match: getPathsForSuggestions, 0.353)
 function getPathsForSuggestions(cache, index, paths, indexBaseDir) {
   let loadCount = ++cache.indexLoadCount;
   let load = index.loadFromFileListAsync(paths);
@@ -159,7 +159,7 @@ function hashPathList(paths) {
 function suggestionCacheKey(baseDir, paths) {
   return `${baseDir}\x00${hashPathList(paths)}`;
 }
-//@ chunk-x3qn5k1g.js:2573-2685 fingerprint = getGitIndexMtime (1)
+//@ chunk-x3qn5k1g.js:2573-2685 fingerprint (2.1.88 match: getGitIndexMtime, 1)
 function getGitIndexMtime() {
   let repoRoot = findGitRoot(getCwd());
   if (!repoRoot) return null;
@@ -184,7 +184,7 @@ async function rebasePaths(paths, fromDir, toDir) {
   }
   return out;
 }
-//@ chunk-x3qn5k1g.js:2921-3419 fingerprint = mergeUntrackedIntoNormalizedCache (0.685)
+//@ chunk-x3qn5k1g.js:2921-3419 fingerprint (2.1.88 match: mergeUntrackedIntoNormalizedCache, 0.685)
 async function mergeUntrackedIntoNormalizedCache(cache, files, cwd) {
   if (files.length === 0) return;
   if (!cache.fileIndex) return;
@@ -209,7 +209,7 @@ async function mergeUntrackedIntoNormalizedCache(cache, files, cwd) {
     );
   }
 }
-//@ chunk-x3qn5k1g.js:3419-4129 fingerprint = loadRipgrepIgnorePatterns (0.602)
+//@ chunk-x3qn5k1g.js:3419-4129 fingerprint (2.1.88 match: loadRipgrepIgnorePatterns, 0.602)
 async function loadRipgrepIgnorePatterns(cache, repoRoot, cwd) {
   let cacheKey = `${repoRoot}:${cwd}`;
   if (cache.ignorePatternsCacheKey === cacheKey) return cache.ignorePatternsCache;
@@ -286,7 +286,7 @@ function parseIgnoreFile(lines, baseDir) {
 function isRelativeName(name) {
   return !name.startsWith("/") && !name.replace(/\/+$/, "").includes("/");
 }
-//@ chunk-x3qn5k1g.js:4586-4664 layout = urlPatternToRegex (1)
+//@ chunk-x3qn5k1g.js:4586-4664 layout (2.1.88 match: urlPatternToRegex, 1)
 function urlPatternToRegex(pattern) {
   return pattern.replace(/[[\]{}*?\\]/g, "\\$&").replace(/^[!#]/, "\\$&");
 }
@@ -310,7 +310,7 @@ async function filterIgnored(ignore, paths) {
   }
   return kept;
 }
-//@ chunk-x3qn5k1g.js:5002-6446 fingerprint = getFilesUsingGit (0.778)
+//@ chunk-x3qn5k1g.js:5002-6446 fingerprint (2.1.88 match: getFilesUsingGit, 0.778)
 /**
  * 用 git ls-files（含子模块，core.quotepath=false）列出已跟踪与未跟踪文件；非 git 仓库返回 null。
  */
@@ -395,7 +395,7 @@ async function getFilesUsingGit(cache, abortSignal, respectGitignore, cwd) {
     return null;
   }
 }
-//@ chunk-x3qn5k1g.js:6446-6644 callgraph-fingerprint = getDirectoryNamesAsync (1)
+//@ chunk-x3qn5k1g.js:6446-6644 callgraph-fingerprint (2.1.88 match: getDirectoryNamesAsync, 1)
 async function getDirectoryNamesAsync(files) {
   let directoryNames = new Set();
   let chunkStart = performance.now();
@@ -426,7 +426,7 @@ async function listClaudeConfigFiles(cwd, storage) {
     await Promise.all(CLAUDE_CONFIG_DIRECTORIES.map((dir) => loadMarkdownFilesCached(dir, cwd, storage)))
   ).flatMap((files) => files.map((file) => file.filePath));
 }
-//@ chunk-x3qn5k1g.js:6893-7015 layout = VCS_DIRECTORIES_TO_EXCLUDE (0.922)
+//@ chunk-x3qn5k1g.js:6893-7015 layout (2.1.88 match: VCS_DIRECTORIES_TO_EXCLUDE, 0.922)
 /**
  * VCS 目录列表及对应的 rg --glob 排除参数（目录形式与名称形式）。
  */
@@ -438,7 +438,7 @@ deferInit("chunk-x3qn5k1g.js:6893", () => {
   VCS_DIR_EXCLUDE_GLOB_ARGS = VCS_DIRECTORIES.flatMap((dir) => ["--glob", `!${dir}/`]);
   VCS_EXCLUDE_GLOB_ARGS = VCS_DIRECTORIES.flatMap((dir) => ["--glob", `!${dir}`]);
 });
-//@ chunk-x3qn5k1g.js:7015-7642 fingerprint = getProjectFiles (0.929)
+//@ chunk-x3qn5k1g.js:7015-7642 fingerprint (2.1.88 match: getProjectFiles, 0.929)
 /**
  * 获取项目文件列表：优先 git ls-files，失败回落 ripgrep --files（可选尊重 .gitignore）。
  */
@@ -516,7 +516,7 @@ function commonPrefixLength(a, b) {
   while (i < minLength && a[i] === b[i]) i++;
   return a.substring(0, i);
 }
-//@ chunk-x3qn5k1g.js:8399-8556 facade-exports = _temp (1)
+//@ chunk-x3qn5k1g.js:8399-8556 facade-exports (2.1.88 match: _temp, 1)
 function findLongestCommonPrefix(item) {
   if (item.length === 0) return "";
   let mapped = item.map((item) => item.displayText);
@@ -528,7 +528,7 @@ function findLongestCommonPrefix(item) {
   }
   return prefix;
 }
-//@ chunk-x3qn5k1g.js:8556-8646 fingerprint = createFileSuggestionItem (1)
+//@ chunk-x3qn5k1g.js:8556-8646 fingerprint (2.1.88 match: createFileSuggestionItem, 1)
 function createFileSuggestionItem(filePath, score) {
   return {
     id: `file-${filePath}`,
@@ -550,7 +550,7 @@ function scoreSuggestions(paths) {
 var SUGGESTION_DEBOUNCE_MS = 5000;
 var SUGGESTION_MIN_GAP_MS = 1000;
 var SUGGESTION_CACHE_TTL_MS = 300000;
-//@ chunk-x3qn5k1g.js:8760-9522 facade-exports = startBackgroundCacheRefresh (0.572)
+//@ chunk-x3qn5k1g.js:8760-9522 facade-exports (2.1.88 match: startBackgroundCacheRefresh, 0.572)
 /**
  * 后台刷新文件索引缓存（git ls-files + untracked 合并），完成或失败写调试日志。
  */
@@ -614,7 +614,7 @@ async function generateFileSuggestions(cwd, partialPath, includeDirectories = fa
   let { items } = await generateFileSuggestionsWithBase(cwd, partialPath, includeDirectories, context);
   return items;
 }
-//@ chunk-x3qn5k1g.js:9834-10861 facade-exports = generateFileSuggestions (0.84)
+//@ chunk-x3qn5k1g.js:9834-10861 facade-exports (2.1.88 match: generateFileSuggestions, 0.84)
 /**
  * 生成 @ 文件建议：用缓存的文件索引做模糊匹配（partial/full），远程会话时走 file_suggestions RPC；记录耗时。
  */
@@ -712,7 +712,7 @@ async function generateFileSuggestionsWithBase(
     };
   }
 }
-//@ chunk-x3qn5k1g.js:10861-11113 callgraph-witnessed = findMatchingFiles (0.19)
+//@ chunk-x3qn5k1g.js:10861-11113 callgraph-witnessed (2.1.88 match: findMatchingFiles, 0.19)
 async function findMatchingFiles(query) {
   let remoteCaps = getRemoteCaps();
   if (!remoteCaps || !isRemoteControlChannelAvailable()) return [];
@@ -728,7 +728,7 @@ async function findMatchingFiles(query) {
     return [];
   }
 }
-//@ chunk-x3qn5k1g.js:11113-11332 facade-exports = applyFileSuggestion (0.385)
+//@ chunk-x3qn5k1g.js:11113-11332 facade-exports (2.1.88 match: applyFileSuggestion, 0.385)
 /**
  * 把选中的文件建议应用到输入：替换 @ token 并移动光标。
  */
@@ -822,7 +822,7 @@ function fetchUntrackedFiles(cache, repoRoot, cwd, respectGitignore) {
       cache.untrackedFetchPromise = null;
     });
 }
-//@ chunk-axmbhcjg.js:9150-9323 fingerprint = normalizeGitPaths (0.68)
+//@ chunk-axmbhcjg.js:9150-9323 fingerprint (2.1.88 match: normalizeGitPaths, 0.68)
 function normalizeGitPaths(files, repoRoot, originalCwd = platformPath) {
   let relativePath = originalCwd.relative(files, repoRoot);
   if (originalCwd.isAbsolute(relativePath)) return null;

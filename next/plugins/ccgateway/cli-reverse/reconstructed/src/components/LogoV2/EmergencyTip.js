@@ -22,9 +22,9 @@ import { WARNING_GLYPH } from "../../constants/figures.js";
 import { getDynamicConfig_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { hasComplianceTaint } from "../../services/policyLimits/complianceTaints.js";
 
-//@ chunk-ag5x7vhf.js:77875-77906 fingerprint = CONFIG_NAME (1)
+//@ chunk-ag5x7vhf.js:77875-77906 fingerprint (2.1.88 match: CONFIG_NAME, 1)
 var CONFIG_NAME = "tengu-top-of-feed-tip";
-//@ chunk-ag5x7vhf.js:77906-78419 fingerprint = EmergencyTip (0.872)
+//@ chunk-ag5x7vhf.js:77906-78419 fingerprint (2.1.88 match: EmergencyTip, 0.872)
 function EmergencyTip() {
   let { storageV5 } = useTheme_2();
   let linkContexts = useContext(SlashLinkContexts);
@@ -75,12 +75,12 @@ function shouldShowEmergencyTip(tip, noticeImpressionEnabled) {
   if (tip.persistent) return true;
   return tip.tip !== getGlobalConfig().lastShownEmergencyTip;
 }
-//@ chunk-ag5x7vhf.js:78522-78550 fingerprint = DEFAULT_TIP (1)
+//@ chunk-ag5x7vhf.js:78522-78550 fingerprint (2.1.88 match: DEFAULT_TIP, 1)
 var DEFAULT_TIP = {
   tip: "",
   color: "dim",
 };
-//@ chunk-ag5x7vhf.js:78550-78581 callgraph-witnessed = getTipOfFeed (0)
+//@ chunk-ag5x7vhf.js:78550-78581 callgraph-witnessed (2.1.88 match: getTipOfFeed, 0)
 function getTipOfFeed() {
   return getDynamicConfig_CACHED_MAY_BE_STALE(CONFIG_NAME, DEFAULT_TIP);
 }

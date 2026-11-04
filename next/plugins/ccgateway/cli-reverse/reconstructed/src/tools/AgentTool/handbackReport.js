@@ -281,7 +281,7 @@ ${HANDBACK_UNAVAILABLE_NOTE}`,
 function handbackContractOf(task) {
   return getSelectableBackgroundTasks(task)?.handbackContract;
 }
-//@ chunk-7jmp8260.js:3364-3420 placement = getSelectableBackgroundTasks (1)
+//@ chunk-7jmp8260.js:3364-3420 placement (2.1.88 match: getSelectableBackgroundTasks, 1)
 function getSelectableBackgroundTasks(task) {
   return task?.type === "local_agent" ? task : undefined;
 }

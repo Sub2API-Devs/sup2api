@@ -101,11 +101,11 @@ function resolveMainThreadCacheTtl() {
   if (lastMainThreadCacheTtlMs !== null) return lastMainThreadCacheTtlMs >= CACHE_TTL_1H_MS ? "1h" : "5m";
   return getMainThreadCacheTtl();
 }
-//@ chunk-e6aww6q8.js:2076968-2077028 placement = isMainThreadSource (1)
+//@ chunk-e6aww6q8.js:2076968-2077028 placement (2.1.88 match: isMainThreadSource, 1)
 function getMainThreadCacheTtl() {
   return applyFiveMinuteOverride(isOneHourCacheTtl("repl_main_thread") ? "1h" : "5m");
 }
-//@ chunk-e6aww6q8.js:2077028-2077127 placement = isMainThreadSource (0.793)
+//@ chunk-e6aww6q8.js:2077028-2077127 placement (2.1.88 match: isMainThreadSource, 0.793)
 function getMainThreadCacheTtlConfig(querySource) {
   if (!getPromptCachingEnabled(querySource)) return;
   let ttl = should1hCacheTTL("repl_main_thread");

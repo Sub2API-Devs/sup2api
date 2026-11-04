@@ -276,7 +276,7 @@
 - **预计算压缩**：`isAtPrecomputeThreshold` 时提前生成并持久化摘要；**反应式压缩**：请求被拒（prompt-too-long）时按组摘要后重试。
 - **microcompact**：服务端 `context_management`（`clear_tool_uses_20250919` 等），空闲回来时追加。
 - 316 没有 session memory 压缩（2.1.88 的 `tengu_sm_compact*` 已消失）。
-- 手动 `/compact` 走同一条 `compactConversation`。详见 `docs/handbook/query.md` 第 12 节。
+- 手动 `/compact` **不走** `compactConversation`：`reconstructed/src/commands/compact/compact.js` · `call` → `compactViaReactive`，先跑 PreCompact 钩子，再试着复用预计算好的摘要（`tryReusePrecomputedCompaction`），没有可复用的就走反应式压缩管线（`tryReactiveCompact`，结果由 `buildReactiveCompactionResult` 组装）。`compactConversation` 只由自动压缩和进程内队友调用。详见 `docs/handbook/query.md` 第 12 节。
 
 ### 4.11 第 10 步：回合结束
 

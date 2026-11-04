@@ -288,7 +288,7 @@ function placedInOwnOrg(shareEntry) {
     (shareEntry.outsideOrgReader === false || shareEntry.role === "owner")
   );
 }
-//@ chunk-4xpk3fhh.js:13782-13875 placement = isAnalyticsToolDetailsLoggingEnabled (0.772)
+//@ chunk-4xpk3fhh.js:13782-13875 placement (2.1.88 match: isAnalyticsToolDetailsLoggingEnabled, 0.772)
 function isAnalyticsToolDetailsLoggingEnabled() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   if (CLAUDE_CODE_ENTRYPOINT === "local-agent" && isCoworkFramePublishSession()) return false;

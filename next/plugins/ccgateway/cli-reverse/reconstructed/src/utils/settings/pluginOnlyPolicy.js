@@ -11,7 +11,7 @@
 import { getSettingsForSource } from "./settings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-2jdf5m4m.js:510-652 facade-exports = isRestrictedToPluginOnly (1)
+//@ chunk-2jdf5m4m.js:510-652 facade-exports (2.1.88 match: isRestrictedToPluginOnly, 1)
 /**
  * 托管设置 strictPluginOnlyCustomization 是否限制某定制面（skills/agents/hooks 等）只能来自插件或托管。
  */
@@ -21,7 +21,7 @@ function isRestrictedToPluginOnly(surface) {
   if (Array.isArray(policy)) return policy.includes(surface);
   return false;
 }
-//@ chunk-2jdf5m4m.js:652-726 fingerprint = ADMIN_TRUSTED_SOURCES (1)
+//@ chunk-2jdf5m4m.js:652-726 fingerprint (2.1.88 match: ADMIN_TRUSTED_SOURCES, 1)
 var ADMIN_TRUSTED_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-2jdf5m4m.js:652", () => {
   ADMIN_TRUSTED_SOURCES = new Set(["plugin", "policySettings", "built-in", "builtin", "bundled"]);

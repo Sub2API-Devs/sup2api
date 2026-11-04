@@ -17,7 +17,7 @@ import { firstLineOf, countCharInString } from "../stringUtils.js";
 
 //@ chunk-18hwfzwa.js:1396518-1396546 affinity
 var TENGU_MISTY_CROWN = "tengu_misty_crown";
-//@ chunk-18hwfzwa.js:1396546-1396672 fingerprint = getCompoundCommandPrefixesStatic (0.631)
+//@ chunk-18hwfzwa.js:1396546-1396672 fingerprint (2.1.88 match: getCompoundCommandPrefixesStatic, 0.631)
 /**
  * 取所有语句里 elementType 为 CommandAst 的命令。
  */
@@ -27,7 +27,7 @@ function getCompoundCommandPrefixesStatic(parsed) {
     for (let command of statement.commands) if (command.elementType === "CommandAst") commands.push(command);
   return commands;
 }
-//@ chunk-18hwfzwa.js:1396672-1397730 fingerprint = extractPrefixFromElement (0.897)
+//@ chunk-18hwfzwa.js:1396672-1397730 fingerprint (2.1.88 match: extractPrefixFromElement, 0.897)
 /**
  * 从单个 PowerShell 命令元素提取规则前缀：application 类、危险名（NEVER_SUGGEST）不建议；cmdlet 直接用名；外部命令要求参数全为常量/参数并经 buildPrefix 对齐；tengu_misty_crown 下拒绝带 isCommand 参数的命令。
  */
@@ -86,7 +86,7 @@ async function extractPrefixFromElement(specCache, cmd) {
     return null;
   return prefix;
 }
-//@ chunk-18hwfzwa.js:1397730-1398289 callgraph-fingerprint = getCommandPrefixStatic (0.236)
+//@ chunk-18hwfzwa.js:1397730-1398289 callgraph-fingerprint (2.1.88 match: getCommandPrefixStatic, 0.236)
 /**
  * 复合 PowerShell 命令的静态前缀：逐命令取前缀，按首词分组求词对齐公共前缀；只剩一个词且该命令有子命令/深度规则时丢弃。
  */

@@ -37,7 +37,7 @@ beginDeferredInits("src/plugins/bundled/agentsMd/agentsMdFiles.js");
 //@ chunk-8jbcmznm.js:5228-5433 placement
 var PLUGIN_DESCRIPTION =
   "AGENTS.md as project instructions: by default loaded where the project has no CLAUDE.md; by its instructionFiles option, loaded beside CLAUDE.md, left out, or with the project instructions dropped";
-//@ chunk-8jbcmznm.js:5433-5523 placement = isEnvTruthy (1)
+//@ chunk-8jbcmznm.js:5433-5523 placement (2.1.88 match: isEnvTruthy, 1)
 /**
  * 1/true/yes/on
  */
@@ -117,7 +117,7 @@ var quietly = (fn) => {
       return;
     });
 };
-//@ chunk-8jbcmznm.js:6298-6404 placement = isFileReadDenied (0.778)
+//@ chunk-8jbcmznm.js:6298-6404 placement (2.1.88 match: isFileReadDenied, 0.778)
 function holdPending(state, loop, files) {
   let byPath = state.pending.get(loop) ?? new Map();
   state.pending.set(loop, byPath);

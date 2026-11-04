@@ -43,7 +43,7 @@ var settingsChangedSignal; // deferred: uses SessionRootSlot (../../bootstrap/se
 deferInit("chunk-pc1rmcr2.js:1032", () => {
   settingsChangedSignal = new SessionRootSlot(() => createSignal());
 });
-//@ chunk-pc1rmcr2.js:1057-1784 fingerprint = applySettingsChange (0.366)
+//@ chunk-pc1rmcr2.js:1057-1784 fingerprint (2.1.88 match: applySettingsChange, 0.366)
 /**
  * 设置变更后刷新 AppState 中依赖设置的部分（权限上下文、模型等），日志 Settings changed from <source>, updating app state。
  */

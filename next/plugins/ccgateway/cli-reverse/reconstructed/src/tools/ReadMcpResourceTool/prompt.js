@@ -8,7 +8,7 @@
  * pieces: chunk-sfy7bm1n.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-sfy7bm1n.js:5989-6520 fingerprint = DESCRIPTION (0.508)
+//@ chunk-sfy7bm1n.js:5989-6520 fingerprint (2.1.88 match: DESCRIPTION, 0.508)
 /**
  * ReadMcpResourceTool 名称常量与 description/prompt 文本。
  */

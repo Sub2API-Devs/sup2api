@@ -30,7 +30,7 @@ import { MAX_TRUNCATED_LINES } from "../protocolSchemas.js";
 import { warmDeviceSandbox } from "../deviceSandboxPosture.js";
 import { createAdmissionGate } from "../../../services/remoteTools/remoteToolAdmission.js";
 
-//@ chunk-5ghnps9r.js:935-1078 placement = isWindowsSandboxPolicyViolation (0.526)
+//@ chunk-5ghnps9r.js:935-1078 placement (2.1.88 match: isWindowsSandboxPolicyViolation, 0.526)
 /**
  * （切分错误，权限 UI）当前设置无错误且沙箱未启用时返回 true，此时可提供常驻权限更新。
  */

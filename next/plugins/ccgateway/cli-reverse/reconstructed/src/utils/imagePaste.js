@@ -40,7 +40,7 @@ var CLIPBOARD_PATH_COMMANDS = {
   linux: "xclip -selection clipboard -t text/plain -o 2>/dev/null || wl-paste 2>/dev/null",
   win32: ["powershell", "-NoProfile", "-Command", "Get-Clipboard"],
 };
-//@ chunk-n770a3wm.js:1027-3646 fingerprint = getClipboardCommands (0.376)
+//@ chunk-n770a3wm.js:1027-3646 fingerprint (2.1.88 match: getClipboardCommands, 0.376)
 /**
  * 官方行为，保留：getClipboardCommands 末行 return {commands: commands.linux || commands.linux, …}，三元退化成同一分支，darwin/win32 两张命令表构造后从不返回；另有一个声明后未使用的空串。
  */
@@ -122,7 +122,7 @@ async function runClipboardCommand(command) {
 async function isClipboardImageUnsupported() {
   return false;
 }
-//@ chunk-n770a3wm.js:3785-4452 fingerprint = getImageFromClipboard (0.549)
+//@ chunk-n770a3wm.js:3785-4452 fingerprint (2.1.88 match: getImageFromClipboard, 0.549)
 /**
  * 从剪贴板读取图片：执行平台命令保存到临时文件，读取并转 base64，返回 {base64, mediaType, dimensions}；失败记录 clipboard_read 错误类型。
  */
@@ -165,7 +165,7 @@ async function getImageFromClipboard(options) {
     return null;
   }
 }
-//@ chunk-n770a3wm.js:4452-4702 callgraph-fingerprint = getImagePathFromClipboard (0.173)
+//@ chunk-n770a3wm.js:4452-4702 callgraph-fingerprint (2.1.88 match: getImagePathFromClipboard, 0.173)
 async function getImagePathFromClipboard() {
   try {
     let linux = CLIPBOARD_PATH_COMMANDS.linux || CLIPBOARD_PATH_COMMANDS.linux;
@@ -195,7 +195,7 @@ function removeOuterQuotes(text) {
 }
 //@ chunk-n770a3wm.js:4855-4885 layout
 var WINDOWS_PATH_RE = /^(?:[A-Za-z]:\\|\\\\)/;
-//@ chunk-n770a3wm.js:4885-5072 fingerprint = stripBackslashEscapes (0.676)
+//@ chunk-n770a3wm.js:4885-5072 fingerprint (2.1.88 match: stripBackslashEscapes, 0.676)
 function stripBackslashEscapes(path) {
   if (getPlatform() === "wsl" && WINDOWS_PATH_RE.test(path)) return path;
   let placeholder = `__DOUBLE_BACKSLASH_${randomBytes(8).toString("hex")}__`;
@@ -217,7 +217,7 @@ function asImageFilePath(text) {
   if (IMAGE_FILE_EXT_RE.test(unescaped)) return unescaped;
   return null;
 }
-//@ chunk-n770a3wm.js:5209-6094 fingerprint = tryReadImageFromPath (0.642)
+//@ chunk-n770a3wm.js:5209-6094 fingerprint (2.1.88 match: tryReadImageFromPath, 0.642)
 /**
  * 从粘贴的文件路径读取图片：去引号/转义、权限检查（可能 refused）、空文件警告，返回图片数据或 null。
  */

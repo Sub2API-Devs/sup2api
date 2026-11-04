@@ -65,7 +65,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 var PLUGIN_DIRECTORY_SOURCE = {
   source: "pluginDirectory",
 };
-//@ chunk-f3qhjfah.js:45090-45192 placement = getManagedPluginNames (1)
+//@ chunk-f3qhjfah.js:45090-45192 placement (2.1.88 match: getManagedPluginNames, 1)
 /**
  * 插件是否被托管策略显式禁用（policySettings.enabledPlugins 中为 false，含别名）。
  */
@@ -75,7 +75,7 @@ function isPluginBlockedByPolicy(pluginId) {
     (candidateId) => lookupByPluginAliases(enabledPlugins, candidateId) === false,
   );
 }
-//@ chunk-f3qhjfah.js:45192-45309 placement = getStrictKnownMarketplaces (1)
+//@ chunk-f3qhjfah.js:45192-45309 placement (2.1.88 match: getStrictKnownMarketplaces, 1)
 /**
  * 读托管策略 policySettings.strictKnownMarketplaces（允许名单），未设返回 null。
  */
@@ -316,7 +316,7 @@ function isMarketplaceRestrictionPolicyActive() {
 function isSourceDisallowedOrUnverifiable(source) {
   return source === undefined ? isMarketplaceRestrictionPolicyActive() : !isSourceAllowedByPolicy(source);
 }
-//@ chunk-f3qhjfah.js:49329-49392 placement = getPluginTrustMessage (1)
+//@ chunk-f3qhjfah.js:49329-49392 placement (2.1.88 match: getPluginTrustMessage, 1)
 /**
  * 读托管策略 pluginTrustMessage（安装插件信任提示里附加的组织说明）。
  */
@@ -420,7 +420,7 @@ function isMarketplaceSourceVouchedByPolicy(marketplaceSource, home, options) {
     }) ?? false
   );
 }
-//@ chunk-f3qhjfah.js:50820-50998 placement = installVersion (0.793)
+//@ chunk-f3qhjfah.js:50820-50998 placement (2.1.88 match: installVersion, 0.793)
 function installVersion(candidate, declared) {
   if (candidate.source !== "npm") return true;
   if (declared.source !== "npm" || candidate.registry === undefined || declared.registry === undefined)
@@ -429,7 +429,7 @@ function installVersion(candidate, declared) {
   let right = normalizeBaseUrl(declared.registry);
   return left !== null && left === right;
 }
-//@ chunk-f3qhjfah.js:50998-51158 placement = isPreapprovedUrl (1)
+//@ chunk-f3qhjfah.js:50998-51158 placement (2.1.88 match: isPreapprovedUrl, 1)
 /**
  * 规范化基础 URL：主机名规范化、路径补尾部 /（安装器使用）。
  */
@@ -515,7 +515,7 @@ function isBracketedIpv6Host(host) {
 function isSuspiciousMarketplaceUrl(url) {
   return isSuspiciousUrl(url);
 }
-//@ chunk-f3qhjfah.js:53710-53795 placement = doesSourceMatchHostPattern (1)
+//@ chunk-f3qhjfah.js:53710-53795 placement (2.1.88 match: doesSourceMatchHostPattern, 1)
 /**
  * strictKnownMarketplaces 中所有 hostPattern 字符串。
  */
@@ -580,7 +580,7 @@ function doesRepoMatchBlocklistEntry(repoPath, candidate) {
     return false;
   return owner.toLowerCase() === githubOwnerWildcard.toLowerCase();
 }
-//@ chunk-f3qhjfah.js:55910-56104 placement = isSourceAllowedByPolicy (0.876)
+//@ chunk-f3qhjfah.js:55910-56104 placement (2.1.88 match: isSourceAllowedByPolicy, 0.876)
 /**
  * 来源是否命中托管策略 blockedMarketplaces（hostPattern、pathPattern 或来源等价比较）。
  */

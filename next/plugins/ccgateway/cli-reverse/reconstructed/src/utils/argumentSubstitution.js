@@ -27,7 +27,7 @@ function parseArgumentNames(args) {
   let result = getCommandArgv(args);
   return result.length > 0 ? result : args.split(/\s+/).filter(Boolean);
 }
-//@ chunk-e6aww6q8.js:984389-985654 fingerprint = substituteArguments (0.523)
+//@ chunk-e6aww6q8.js:984389-985654 fingerprint (2.1.88 match: substituteArguments, 0.523)
 /**
  * 把参数代入技能/命令/hook 模板（$ARGUMENTS、$1…、命名参数），超过字符上限抛错；先把模板中的保留占位符替换为 U+FFFD。
  */

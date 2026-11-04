@@ -41,7 +41,7 @@ function dialogFrameOf(surface) {
 }
 //@ chunk-4121qate.js:9158-9170 placement
 var MAX_TREE_TEXT_CHARS = 1e5;
-//@ chunk-4121qate.js:9170-9196 placement = ASK_USER_QUESTION_TOOL_NAME (1)
+//@ chunk-4121qate.js:9170-9196 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_NAME, 1)
 /**
  * AskUserQuestion 工具名常量。
  */

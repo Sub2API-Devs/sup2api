@@ -11,7 +11,7 @@
 import { useState, useCallback } from "../../../vendor/react/cjs/react.production.js";
 import { useSelectNavigation } from "./use-select-navigation.js";
 
-//@ chunk-ey2qag4x.js:42760-43084 fingerprint = useSelectState (0.744)
+//@ chunk-ey2qag4x.js:42760-43084 fingerprint (2.1.88 match: useSelectState, 0.744)
 function useSelectState_2({
   visibleOptionCount = 5,
   options,

@@ -12,7 +12,7 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { MessageResponse } from "./MessageResponse.js";
 import { Text } from "../ink/components/Text.js";
 
-//@ chunk-14ezrfvp.js:372-465 callgraph-fingerprint = FallbackToolUseRejectedMessage (0.196)
+//@ chunk-14ezrfvp.js:372-465 callgraph-fingerprint (2.1.88 match: FallbackToolUseRejectedMessage, 0.196)
 function FallbackToolUseRejectedMessage() {
   return jsxProd_default(MessageResponse, {
     height: 1,

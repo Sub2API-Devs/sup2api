@@ -23,7 +23,7 @@ import { sandboxSettingsErrorText } from "./WindowsSandboxStatus.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { LearnMoreLink } from "../LearnMoreLink.js";
 
-//@ chunk-55w3ydvj.js:22234-23177 fingerprint = SandboxOverridesTab (0.683)
+//@ chunk-55w3ydvj.js:22234-23177 fingerprint (2.1.88 match: SandboxOverridesTab, 0.683)
 function SandboxOverridesTab(props) {
   let $ = useMemoCache(5);
   let { onComplete } = props;
@@ -91,7 +91,7 @@ function SandboxOverridesTab(props) {
   } else t1 = $[4];
   return t1;
 }
-//@ chunk-55w3ydvj.js:23177-25340 fingerprint = OverridesSelect (0.777)
+//@ chunk-55w3ydvj.js:23177-25340 fingerprint (2.1.88 match: OverridesSelect, 0.777)
 function OverridesSelect(props) {
   let $ = useMemoCache(24);
   let { onComplete, currentMode } = props;

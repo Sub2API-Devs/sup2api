@@ -169,7 +169,7 @@ var getBuiltinPluginNames = () => [...getHostState().builtinPlugins.keys()];
 function getBuiltinPlugin(name) {
   return getHostState().builtinPlugins.get(name);
 }
-//@ chunk-bfnfj4kx.js:76712-77383 fingerprint = getBuiltinPlugins (0.708)
+//@ chunk-bfnfj4kx.js:76712-77383 fingerprint (2.1.88 match: getBuiltinPlugins, 0.708)
 /**
  * 列出内置插件（随 CLI 发布、名字为 <name>@builtin）：按可用性开关过滤，根据 settings.enabledPlugins 与默认启用状态分成 enabled/disabled。
  */
@@ -223,7 +223,7 @@ function getBuiltinPlugins() {
     disabled,
   };
 }
-//@ chunk-e6aww6q8.js:956875-956944 fingerprint = getBuiltinPluginSkillCommands (0.669)
+//@ chunk-e6aww6q8.js:956875-956944 fingerprint (2.1.88 match: getBuiltinPluginSkillCommands, 0.669)
 /**
  * 内置插件清单里 skills 数组的运行期校验边界：至少 1 项、最多 64 项（MAX_SKILLS_PER_PLUGIN）。
  */

@@ -12,7 +12,7 @@ import { isFullscreenEnvEnabled } from "./fullscreen.js";
 import { collapseNotificationRunsIn, notificationKind, weakMap_14 } from "./queuedCommandDisplay.js";
 import { TASK_NOTIFICATION, STATUS, SUMMARY } from "../constants/xml.js";
 
-//@ chunk-e6aww6q8.js:4675449-4675952 fingerprint = collapseBackgroundBashNotifications (0.615)
+//@ chunk-e6aww6q8.js:4675449-4675952 fingerprint (2.1.88 match: collapseBackgroundBashNotifications, 0.615)
 /**
  * 把连续的后台 Bash 完成通知合并成一条显示。
  */

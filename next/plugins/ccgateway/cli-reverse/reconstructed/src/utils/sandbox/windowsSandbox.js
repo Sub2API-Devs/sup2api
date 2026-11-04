@@ -584,7 +584,7 @@ function isFontWriteConsistent({ before, written, after }) {
     ((before.readUInt16LE(2) ^ after.readUInt16LE(2)) & (ACE_ACCESS_ALLOWED_TYPE | ACE_HEADER_SIZE)) === 0
   );
 }
-//@ chunk-fq0cr76a.js:869925-870008 placement = decodeFont (0.816)
+//@ chunk-fq0cr76a.js:869925-870008 placement (2.1.88 match: decodeFont, 0.816)
 function decodeFont(buffer) {
   let cp = buffer.readUInt32LE(16);
   return buffer.subarray(cp, cp + buffer.readUInt16LE(cp + 2));

@@ -17,7 +17,7 @@ import { parseSlashCommandToolsFromFrontmatter } from "../utils/markdownConfigLo
 import { executeShellCommandsInPrompt, withCommandAllowRules } from "../utils/promptShellExecution.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1750738-1762601 fingerprint = default (0.56)
+//@ chunk-e6aww6q8.js:1750738-1762601 fingerprint (2.1.88 match: default, 0.56)
 /**
  * SECURITY_REVIEW_PROMPT：带 frontmatter 的安全审查提示词。
  */

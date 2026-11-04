@@ -54,7 +54,7 @@ import { logError } from "../../log.js";
 import { MODEL_KEY_BY_FIRST_PARTY_ID } from "../configs.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:143350-143420 placement = modelMatchesVersionPrefix (1)
+//@ chunk-aepeg2w5.js:143350-143420 placement (2.1.88 match: modelMatchesVersionPrefix, 1)
 /**
  * 含 claude- 且可解析为版本化模型。
  */

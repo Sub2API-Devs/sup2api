@@ -50,7 +50,7 @@ import { cacheTrustLabel, trustedPrincipal } from "../../utils/settings/policyCe
 import { isRestrictedUnvouchedDocument } from "./unvouchedRestrictions.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:392501-392588 placement = SETTINGS_FILENAME (0.646)
+//@ chunk-dcmhvw5a.js:392501-392588 placement (2.1.88 match: SETTINGS_FILENAME, 0.646)
 /**
  * 远程托管设置与存储视图的字节上限。
  */

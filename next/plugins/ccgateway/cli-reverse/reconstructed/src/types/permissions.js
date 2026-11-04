@@ -11,7 +11,7 @@
 import { canCycleToBypassPermissions, canCycleToAuto } from "../utils/permissions/getNextPermissionMode.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ktpw8eqa.js:1247-1351 placement = EXTERNAL_PERMISSION_MODES (0.805)
+//@ chunk-ktpw8eqa.js:1247-1351 placement (2.1.88 match: EXTERNAL_PERMISSION_MODES, 0.805)
 /**
  * 权限模式枚举：EXTERNAL_PERMISSION_MODES = acceptEdits/auto/bypassPermissions/default/dontAsk/plan（316 把 auto 并入对外集合，旧版要 TRANSCRIPT_CLASSIFIER 才有），INTERNAL/PERMISSION_MODES 是其拷贝；"manual" 作为 default 的别名被接受。
  */
@@ -230,7 +230,7 @@ function isRecordableDenial(decision, allowDecision) {
 function isInvalidInputDeny(decision) {
   return decision.behavior === "deny" && decision.invalidInput === true;
 }
-//@ chunk-ktpw8eqa.js:3898-4051 placement = serializeDecisionReason (1)
+//@ chunk-ktpw8eqa.js:3898-4051 placement (2.1.88 match: serializeDecisionReason, 1)
 /**
  * decisionReason.type 的全部取值表：rule、mode、subcommandResults、permissionPromptTool、hook、asyncAgent、sandboxOverride、workingDir、safetyCheck、classifier、other。
  */
@@ -600,7 +600,7 @@ var CAN_USE_TOOL_ABORTED_DENY_REASON = {
   type: "other",
   reason: CAN_USE_TOOL_ABORTED_REASON,
 };
-//@ chunk-n4pvm0gt.js:603-903 fingerprint = EXTERNAL_PERMISSION_MODES (0.908)
+//@ chunk-n4pvm0gt.js:603-903 fingerprint (2.1.88 match: EXTERNAL_PERMISSION_MODES, 0.908)
 /**
  * Shift+Tab 循环顺序：default→acceptEdits→plan→bypassPermissions（可用时）→auto（可用时）→default；bypassPermissions→auto 或 default；dontAsk、auto 及其他→default。316 已去掉旧版 ant 用户从 default 直接跳 bypass/auto 的分支。
  */

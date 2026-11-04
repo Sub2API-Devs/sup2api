@@ -115,7 +115,7 @@ async function reapAdoptRecord(jobDir, options = {}) {
     await unlink(claimPath).catch(() => {});
   }
 }
-//@ chunk-vrr64ez0.js:27235-27301 placement = readHeadAndTail (0.802)
+//@ chunk-vrr64ez0.js:27235-27301 placement (2.1.88 match: readHeadAndTail, 0.802)
 var HEAD_TAIL_LINES_DEFAULT_2 = 7;
 var HEAD_TAIL_LINES_SEED = {
   head: 40,

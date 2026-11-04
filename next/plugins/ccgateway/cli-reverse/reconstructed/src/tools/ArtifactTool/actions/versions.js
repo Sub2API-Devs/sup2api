@@ -46,7 +46,7 @@ import { authoredByOthersPreamble, EXTERNAL_ORG_ARTIFACT_WARNING } from "../../.
 //@ chunk-8wvtd8sr.js:114698-114838 placement
 var VERSIONS_UNAVAILABLE_MESSAGE = "An artifact's earlier versions are not available in this session.";
 var INVALID_VERSION_ID_MESSAGE = '`version` must be an id from action "list" with this `url`.';
-//@ chunk-8wvtd8sr.js:114838-114951 placement = getServerUrl (1)
+//@ chunk-8wvtd8sr.js:114838-114951 placement (2.1.88 match: getServerUrl, 1)
 function getServerUrl(config) {
   if (typeof config !== "object" || config === null || !("url" in config)) return;
   return typeof config.url === "string" ? config.url : undefined;

@@ -158,7 +158,7 @@ deferInit("chunk-j71j5cv7.js:2621", () => {
     ["working", "review_ready"],
   ]);
 });
-//@ chunk-j71j5cv7.js:2708-3195 placement = SDKPostTurnSummaryMessageSchema (0.414)
+//@ chunk-j71j5cv7.js:2708-3195 placement (2.1.88 match: SDKPostTurnSummaryMessageSchema, 0.414)
 /**
  * 把分类器结果转成回合后摘要；按界面（desktop/mobile/projects 等）决定是否显示。
  */

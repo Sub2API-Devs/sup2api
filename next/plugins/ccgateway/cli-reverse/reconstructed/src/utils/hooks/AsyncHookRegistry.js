@@ -19,7 +19,7 @@ import { withDeadline } from "../sleep.js";
 import { count } from "../collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:941372-942117 fingerprint = registerPendingAsyncHook (0.902)
+//@ chunk-e6aww6q8.js:941372-942117 fingerprint (2.1.88 match: registerPendingAsyncHook, 0.902)
 /**
  * 登记一个后台 async 钩子：超时默认 15s（asyncTimeout 覆盖），启动进度上报，结束时由 checkForAsyncHookResponses 读取答复并持有。
  */
@@ -78,7 +78,7 @@ function registerPendingAsyncHook({
     deferred.resolve(false),
   );
 }
-//@ chunk-e6aww6q8.js:942117-942378 fingerprint = finalizeHook (1)
+//@ chunk-e6aww6q8.js:942117-942378 fingerprint (2.1.88 match: finalizeHook, 1)
 /**
  * 后台钩子结束：停止进度上报、清理进程并发出 SDK hook_response。
  */
@@ -99,7 +99,7 @@ async function finalizeHook(hook, exitCode, outcome) {
     outcome,
   });
 }
-//@ chunk-e6aww6q8.js:943416-944085 callgraph-fingerprint = checkForAsyncHookResponses (0.305)
+//@ chunk-e6aww6q8.js:943416-944085 callgraph-fingerprint (2.1.88 match: checkForAsyncHookResponses, 0.305)
 /**
  * 等后台钩子进程结束后读取答复：被杀视为取消；SessionStart 后台钩子完成会标记会话 env 过期。
  */
@@ -147,7 +147,7 @@ function refreshStaleSessionEnv(state) {
     invalidateSessionEnvCache();
   }
 }
-//@ chunk-e6aww6q8.js:944152-944234 placement = isTerminalTaskStatus (0.851)
+//@ chunk-e6aww6q8.js:944152-944234 placement (2.1.88 match: isTerminalTaskStatus, 0.851)
 /**
  * 判断 shell 命令对象是否已结束（completed 或 killed）。与 isTerminalTaskStatus 只是字符串相似，属于 shell 任务代码。
  */
@@ -232,7 +232,7 @@ async function cancelPendingAsyncHooks() {
   );
   state.removeAll();
 }
-//@ chunk-18hwfzwa.js:1094902-1094959 fingerprint = finalizePendingAsyncHooks (0.568)
+//@ chunk-18hwfzwa.js:1094902-1094959 fingerprint (2.1.88 match: finalizePendingAsyncHooks, 0.568)
 /**
  * 后台任务终止状态集合：failed/cancelled/killed/error。
  */

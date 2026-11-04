@@ -18,7 +18,7 @@ import {
 import { getDefaultSonnetBuiltin } from "./modelOptions.js";
 import { defaultHaikuModel, isOpusFableAdvisorSetting } from "./planModeModel.js";
 
-//@ chunk-aepeg2w5.js:454481-454751 fingerprint = MODEL_ALIASES (0.71)
+//@ chunk-aepeg2w5.js:454481-454751 fingerprint (2.1.88 match: MODEL_ALIASES, 0.71)
 /**
  * 别名的内置默认模型（不看 ANTHROPIC_DEFAULT_*_MODEL）：opus→opus 档默认（catalog aliases.opus，第一方 claude-opus-5-5）、sonnet/opusplan→sonnet 档、haiku→haiku 档、fable→fable 档、best→catalog best 族（fable，可用时）否则 opus；非别名返回 null。旧版名 MODEL_ALIASES（常量）为错配。
  */

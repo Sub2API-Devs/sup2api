@@ -21,7 +21,7 @@ var examplesServer = __cc_resource_1;
 var skillPath = __cc_resource_2;
 //@ chunk-t40rc4mm.js:550-582 sole-consumer
 var skill = readEmbeddedTextSync(skillPath, import.meta.dirname);
-//@ chunk-t40rc4mm.js:582-637 fingerprint = SKILL_FILES (1)
+//@ chunk-t40rc4mm.js:582-637 fingerprint (2.1.88 match: SKILL_FILES, 1)
 /**
  * 内置 skill 资源：SKILL.md 与附带示例文件（examples/cli.md、examples/server.md），zst 压缩资源解码。
  */

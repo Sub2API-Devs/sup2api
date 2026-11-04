@@ -62,7 +62,7 @@ deferInit("chunk-9tgt55am.js:38352", () => {
   LANE_CLASSIFIER_PROMPT =
     'You classify artifact comment threads for dispatch. Output ONLY a JSON object of the shape {"lane":"act"} or {"lane":"pipeline"} \u2014 no prose, no code fences.';
 });
-//@ chunk-9tgt55am.js:38582-40474 placement = applySkillImprovement (0.253)
+//@ chunk-9tgt55am.js:38582-40474 placement (2.1.88 match: applySkillImprovement, 0.253)
 /**
  * artifact 评论自动响应的分流：用小模型判定最新评论是 act（要改内容）还是 pipeline（只需回复）；非交互或已达深度上限直接 pipeline。旧版名 applySkillImprovement 配错，疑似误归 hooks。
  */

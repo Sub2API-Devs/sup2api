@@ -26,7 +26,7 @@ var inkShutdownHooks = {
   cleanupTerminalModes: cleanupTerminalModes_2,
   drainStdin: drainStdinForShutdown,
 };
-//@ chunk-x6v6jz2y.js:3142-3666 fingerprint = renderSync (0.69)
+//@ chunk-x6v6jz2y.js:3142-3666 fingerprint (2.1.88 match: renderSync, 0.69)
 /**
  * renderSync：按 stdout 取或建 Ink 实例并渲染，返回 {rerender, unmount, waitUntilExit, cleanup}。renderAsync：等前一个独立渲染完成后再渲染，并记录首帧距进程启动的毫秒数。
  */
@@ -75,7 +75,7 @@ async function createRootAsync(options = {}) {
     waitUntilExit: () => root.waitUntilExit(),
   };
 }
-//@ chunk-x6v6jz2y.js:3901-4305 fingerprint = createRoot (0.461)
+//@ chunk-x6v6jz2y.js:3901-4305 fingerprint (2.1.88 match: createRoot, 0.461)
 /**
  * 创建 Ink 实例并登记到实例表：kind=react 登记为该 stdout 的主实例，否则登记为命令式 Tree 根；首次调用时注册优雅退出钩子。
  */

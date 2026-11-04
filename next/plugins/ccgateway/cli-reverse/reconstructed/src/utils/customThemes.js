@@ -415,7 +415,7 @@ function slugify(name) {
       .replace(/^-+|-+$/g, "") || "theme"
   );
 }
-//@ chunk-6kfx541v.js:5901-6238 placement = startWatching (0.732)
+//@ chunk-6kfx541v.js:5901-6238 placement (2.1.88 match: startWatching, 0.732)
 /**
  * 监听主题目录（depth 0）的增删改。旧版名 startWatching 来自 fileChangedWatcher，此处实为主题文件监听。
  */

@@ -9,13 +9,13 @@
  * attribution: placement 1, fingerprint 1
  */
 
-//@ chunk-s67vc0kc.js:1066-1196 placement = UNDERLINE_STYLES (0.497)
+//@ chunk-s67vc0kc.js:1066-1196 placement (2.1.88 match: UNDERLINE_STYLES, 0.497)
 function quoteKind(char) {
   if (char === "'" || (char >= "\u2018" && char <= "\u201B")) return "single";
   if (char === '"' || (char >= "\u201C" && char <= "\u201E")) return "double";
   return null;
 }
-//@ chunk-s67vc0kc.js:1196-1510 fingerprint = createSingleEditDiffConfig (0.38)
+//@ chunk-s67vc0kc.js:1196-1510 fingerprint (2.1.88 match: createSingleEditDiffConfig, 0.38)
 function createSingleEditDiffConfig(text) {
   let out = "";
   let openQuote = null;

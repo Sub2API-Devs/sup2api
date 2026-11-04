@@ -15,7 +15,7 @@ import { Output, serializeScreenRow } from "./output.js";
 import { renderNodeToOutputAlias } from "./render-to-screen-reader.js";
 import { createRenderState, dropSubtreeCache } from "./render-node-to-output.js";
 
-//@ chunk-bzr73sfg.js:319573-320032 fingerprint = scanPositions (0.924)
+//@ chunk-bzr73sfg.js:319573-320032 fingerprint (2.1.88 match: scanPositions, 0.924)
 /**
  * 在屏幕上查找查询串（不区分大小写，跳过宽字符占位与 noSelect 格），返回每个匹配的 {row, col, len}（列为屏幕列）。
  */
@@ -56,7 +56,7 @@ function scanPositions(screen, query) {
   }
   return positions;
 }
-//@ chunk-bzr73sfg.js:320032-320291 fingerprint = applyPositionedHighlight (1)
+//@ chunk-bzr73sfg.js:320032-320291 fingerprint (2.1.88 match: applyPositionedHighlight, 1)
 /**
  * 把第 currentIdx 个匹配（行加 rowOffset）高亮为“当前匹配”样式。
  */
@@ -74,7 +74,7 @@ function applyPositionedHighlight(screen, stylePool, positions, rowOffset, curre
   }
   return true;
 }
-//@ chunk-ag5x7vhf.js:21309-21878 callgraph-fingerprint = renderToScreen (0.22)
+//@ chunk-ag5x7vhf.js:21309-21878 callgraph-fingerprint (2.1.88 match: renderToScreen, 0.22)
 /**
  * 把滚动容器里 [fromRow, toRow) 范围的内容离屏渲染成 ANSI 文本行（新建 Screen+Output，从内容节点 renderNodeToOutput，渲染后恢复其 cachedLayout 并标脏），用于把已滚出的对话写入终端回滚区等。
  */

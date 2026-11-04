@@ -24,7 +24,7 @@ import {
 import { HighlightedCode } from "./HighlightedCode.js";
 import { MessageResponse } from "./MessageResponse.js";
 
-//@ chunk-q466qetm.js:7512-8643 fingerprint = NotebookEditToolUseRejectedMessage (0.909)
+//@ chunk-q466qetm.js:7512-8643 fingerprint (2.1.88 match: NotebookEditToolUseRejectedMessage, 0.909)
 function NotebookEditToolUseRejectedMessage(props) {
   let $ = useMemoCache(23);
   let { notebook_path, cell_id, new_source, cell_type, edit_mode: editMode, verbose } = props;

@@ -103,7 +103,7 @@ function ParenHint(props) {
 }
 //@ chunk-18hwfzwa.js:1817595-1817607 layout
 var MAX_DIFF_FILE_BYTES = 1e6;
-//@ chunk-18hwfzwa.js:1817607-1821939 fingerprint = DiffDetailView (0.447)
+//@ chunk-18hwfzwa.js:1817607-1821939 fingerprint (2.1.88 match: DiffDetailView, 0.447)
 function DiffDetailView(props) {
   let $ = useMemoCache(75);
   let { filePath, hunks, isLargeFile, isBinary, isTruncated, isUntracked, isRestricted, width } = props;

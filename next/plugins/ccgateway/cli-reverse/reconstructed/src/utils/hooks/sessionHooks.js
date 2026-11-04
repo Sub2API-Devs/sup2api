@@ -35,7 +35,7 @@ function getSessionFunctionHooks(hooks) {
   let [firstSource] = flattened;
   return flattened.every((source) => source === firstSource) ? firstSource : undefined;
 }
-//@ chunk-gvva3ecm.js:375-499 callgraph-fingerprint = removeSessionHook (0.172)
+//@ chunk-gvva3ecm.js:375-499 callgraph-fingerprint (2.1.88 match: removeSessionHook, 0.172)
 /**
  * 记录每个钩子对象的来源（WeakMap），供后续判定归属。
  */
@@ -45,7 +45,7 @@ function tagHooksWithSource(hooks, source) {
     for (let sessionMatcher of matchers ?? [])
       for (let hook of sessionMatcher.hooks ?? []) weakMap.set(hook, source);
 }
-//@ chunk-f9asxqh1.js:4888-5098 sole-consumer = convertToHookMatchers (0.77)
+//@ chunk-f9asxqh1.js:4888-5098 sole-consumer (2.1.88 match: convertToHookMatchers, 0.77)
 function convertToHookMatchers(sessionMatchers) {
   return sessionMatchers.map((sm) => ({
     matcher: sm.matcher,
@@ -59,7 +59,7 @@ function convertToHookMatchers(sessionMatchers) {
     hooks: sm.hooks.map((hook) => hook.hook).filter((hook) => hook.type !== "function"),
   }));
 }
-//@ chunk-f9asxqh1.js:5098-5248 affinity = convertToHookMatchers (0.839)
+//@ chunk-f9asxqh1.js:5098-5248 affinity (2.1.88 match: convertToHookMatchers, 0.839)
 function convertToHookMatchers_2(sessionMatchers) {
   return sessionMatchers
     .map((sm) => ({
@@ -68,7 +68,7 @@ function convertToHookMatchers_2(sessionMatchers) {
     }))
     .filter((m) => m.hooks.length > 0);
 }
-//@ chunk-f9asxqh1.js:5248-7419 fingerprint = addHookToSession (0.467)
+//@ chunk-f9asxqh1.js:5248-7419 fingerprint (2.1.88 match: addHookToSession, 0.467)
 /**
  * 会话钩子注册表：按会话 id、事件、matcher（+skillRoot/personal/checkout）存放钩子；add/addFunctionHook/remove/clear/get/getFunctionHooks/getEntry/has。旧版名 addHookToSession 配错（那是方法名）。
  */
@@ -264,7 +264,7 @@ function getSessionHookRegistries() {
 function trackSessionHookRegistry(weakChild) {
   propagateAbort(getSessionHookRegistries(), weakChild);
 }
-//@ chunk-f9asxqh1.js:7498-7717 fingerprint = convertToHookMatchers (0.853)
+//@ chunk-f9asxqh1.js:7498-7717 fingerprint (2.1.88 match: convertToHookMatchers, 0.853)
 /**
  * 遍历所有会话注册表，列出全部非 function 会话钩子 {event, hook, skillRoot}。
  */
@@ -305,7 +305,7 @@ deferInit("chunk-s61vbvea.js:306347", () => {
     "WorktreeRemove",
   ]);
 });
-//@ chunk-s61vbvea.js:306638-306943 callgraph-fingerprint = getSessionHooks (0.251)
+//@ chunk-s61vbvea.js:306638-306943 callgraph-fingerprint (2.1.88 match: getSessionHooks, 0.251)
 /**
  * 收集 mcp_tool 钩子引用的 MCP 服务器名（守卫类事件），会话钩子与各 settings 一起统计。
  */

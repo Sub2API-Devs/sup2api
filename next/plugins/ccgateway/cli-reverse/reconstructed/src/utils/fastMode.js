@@ -64,7 +64,7 @@ import { invalidateCommandNames } from "./settings/commandSyncNames.js";
 import { syncRespawnFlag } from "../services/daemon/jobState.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:354620-354705 callgraph-witnessed = isFastModeEnabled (0.649)
+//@ chunk-aepeg2w5.js:354620-354705 callgraph-witnessed (2.1.88 match: isFastModeEnabled, 0.649)
 /**
  * fast mode 总开关：只在第一方 API 且未设置 CLAUDE_CODE_DISABLE_FAST_MODE 时为真。
  */
@@ -144,7 +144,7 @@ function getUsageCreditsRequiredMessage() {
     ? `${"Fast mode requires usage credits"} \xB7 ${getTurnOnUsageCreditsStep()}`
     : "Fast mode requires usage credits";
 }
-//@ chunk-aepeg2w5.js:355319-355741 fingerprint = getDisabledReasonMessage (1)
+//@ chunk-aepeg2w5.js:355319-355741 fingerprint (2.1.88 match: getDisabledReasonMessage, 1)
 /**
  * 组织层面禁用原因 → 提示文案（free/preference/extra_usage_disabled/network_error/unknown）。
  */
@@ -216,7 +216,7 @@ function getFastModeUnavailableMessage(model, fastModeCheckOptions = {}) {
   logForDebugging(`Fast mode unavailable: ${fastModeUnavailableReason}`);
   return fastModeUnavailableReason;
 }
-//@ chunk-aepeg2w5.js:356621-357208 fingerprint = getFastModeUnavailableReason (0.439)
+//@ chunk-aepeg2w5.js:356621-357208 fingerprint (2.1.88 match: getFastModeUnavailableReason, 0.439)
 /**
  * 原因码 → 面向用户文案。
  */
@@ -461,7 +461,7 @@ function onFastModeCooldownTriggered(cooldown) {
 function onFastModeCooldownExpired(cooldown) {
   return fastModeState.cooldownExpired.subscribe(cooldown);
 }
-//@ chunk-aepeg2w5.js:360027-360303 fingerprint = getFastModeRuntimeState (0.617)
+//@ chunk-aepeg2w5.js:360027-360303 fingerprint (2.1.88 match: getFastModeRuntimeState, 0.617)
 /**
  * 读运行期状态；冷却到期时自动清除并发 cooldownExpired。
  */
@@ -477,7 +477,7 @@ function getFastModeRuntimeState() {
   }
   return fastModeState.runtimeState;
 }
-//@ chunk-aepeg2w5.js:360303-360569 fingerprint = triggerFastModeCooldown (0.795)
+//@ chunk-aepeg2w5.js:360303-360569 fingerprint (2.1.88 match: triggerFastModeCooldown, 0.795)
 /**
  * 进入冷却（resetAt、原因），记 tengu_fast_mode_fallback_triggered。
  */
@@ -501,7 +501,7 @@ function triggerFastModeCooldown(resetTimestamp, reason) {
 function clearFastModeCooldown() {
   fastModeState.clearCooldown();
 }
-//@ chunk-aepeg2w5.js:360602-360946 fingerprint = handleFastModeRejectedByAPI (0.739)
+//@ chunk-aepeg2w5.js:360602-360946 fingerprint (2.1.88 match: handleFastModeRejectedByAPI, 0.739)
 /**
  * API 拒绝 fast mode：组织状态置 disabled/preference（server），清用户设置 fastMode 与缓存 penguinModeOrgEnabled，发 orgFastModeChange(false)。
  */
@@ -636,7 +636,7 @@ function onFallbackModelFastRejected(model) {
 function onFastModeOverageRejection(model) {
   return fastModeState.overageRejection.subscribe(model);
 }
-//@ chunk-aepeg2w5.js:362005-362774 fingerprint = getOverageDisabledMessage (0.709)
+//@ chunk-aepeg2w5.js:362005-362774 fingerprint (2.1.88 match: getOverageDisabledMessage, 0.709)
 /**
  * 超额（usage credits）被拒原因 → "Fast mode disabled · …" 文案。
  */
@@ -663,7 +663,7 @@ function getOverageDisabledMessage(reason) {
       return "Fast mode disabled \xB7 Usage credits aren't available";
   }
 }
-//@ chunk-aepeg2w5.js:362774-362879 fingerprint = isOutOfCreditsReason (0.794)
+//@ chunk-aepeg2w5.js:362774-362879 fingerprint (2.1.88 match: isOutOfCreditsReason, 0.794)
 /**
  * 额度耗尽类原因（org_level_disabled_until/org_spend_cap_reached/out_of_credits）。
  */
@@ -679,7 +679,7 @@ function isOutOfCreditsReason(reason) {
 function rearmCreditsExhaustedNotice() {
   fastModeState.rearmCreditsExhaustedNotice();
 }
-//@ chunk-aepeg2w5.js:362927-363624 fingerprint = handleFastModeOverageRejection (0.525)
+//@ chunk-aepeg2w5.js:362927-363624 fingerprint (2.1.88 match: handleFastModeOverageRejection, 0.525)
 /**
  * API 以超额原因拒绝 fast：额度耗尽类只发一次通知；其他原因关闭用户 fast 设置并把组织状态置 extra_usage_disabled。
  */
@@ -730,14 +730,14 @@ function handleFastModeOverageRejection(reason, storageV5) {
   }
   fastModeState.overageRejection.emit(message);
 }
-//@ chunk-aepeg2w5.js:363624-363672 fingerprint = isFastModeCooldown (1)
+//@ chunk-aepeg2w5.js:363624-363672 fingerprint (2.1.88 match: isFastModeCooldown, 1)
 /**
  * 运行期状态是否 cooldown。
  */
 function isFastModeCooldown() {
   return getFastModeRuntimeState().status === "cooldown";
 }
-//@ chunk-aepeg2w5.js:363672-363781 fingerprint = getFastModeState (1)
+//@ chunk-aepeg2w5.js:363672-363781 fingerprint (2.1.88 match: getFastModeState, 1)
 /**
  * fast 状态：on / cooldown / off（总开关、可用、会话开启且模型支持）。
  */
@@ -785,7 +785,7 @@ function isOrgFastModeDisabledByServer() {
 function isTransientFastModeReason(reason) {
   return reason === "network_error" || reason === "unknown";
 }
-//@ chunk-aepeg2w5.js:364143-364430 fingerprint = resolveFastModeStatusFromCache (0.631)
+//@ chunk-aepeg2w5.js:364143-364430 fingerprint (2.1.88 match: resolveFastModeStatusFromCache, 0.631)
 /**
  * 更新组织状态，启用状态或禁用原因变化时发 orgFastModeChange。
  */
@@ -806,7 +806,7 @@ function resolveFastModeStatusFromCache(orgStatus) {
  * 10 秒请求超时。
  */
 var FAST_MODE_STATUS_TIMEOUT_MS = 1e4;
-//@ chunk-aepeg2w5.js:364441-364700 fingerprint = fetchFastModeStatus (0.923)
+//@ chunk-aepeg2w5.js:364441-364700 fingerprint (2.1.88 match: fetchFastModeStatus, 0.923)
 /**
  * GET {BASE_API_URL}/api/claude_code_penguin_mode，OAuth（Bearer + oauth beta）或 x-api-key，返回 {enabled, disabled_reason}。
  */
@@ -872,7 +872,7 @@ function guessOrgFastModeStatus() {
         source: "guess",
       };
 }
-//@ chunk-aepeg2w5.js:365018-367398 fingerprint = prefetchFastModeStatus (0.705)
+//@ chunk-aepeg2w5.js:365018-367398 fingerprint (2.1.88 match: prefetchFastModeStatus, 0.705)
 /**
  * 预取组织 fast 状态：essential-traffic、非第一方、CCR worker 时跳过；无可用认证时用缓存猜测；30 秒节流；401/撤销时刷新 OAuth 再试；结果写入组织状态、缓存 penguinModeOrgEnabled，必要时清除用户设置。
  */
@@ -1053,7 +1053,7 @@ function syncFastModeFlag(globalConfig, storageV5) {
   invalidateCommandNames();
   syncRespawnFlag("--fast-mode", [], globalConfig ? "on" : "off", undefined, storageV5);
 }
-//@ chunk-93kwxas0.js:7781-7961 callgraph-fingerprint = getInitialFastModeSetting (0.251)
+//@ chunk-93kwxas0.js:7781-7961 callgraph-fingerprint (2.1.88 match: getInitialFastModeSetting, 0.251)
 /**
  * 初始 fast 状态：fast mode 总开关开、设置（含 policySettings.fastMode 与 flag）要求、模型支持且无不可用原因时为 "on"。
  */

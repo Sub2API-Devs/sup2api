@@ -56,7 +56,7 @@ async function hasValidMcpOAuthToken(name, config) {
     !!store?.[getServerKey(name, config)]?.accessToken && !hasExpiredAccessTokenOnly(name, config, store)
   );
 }
-//@ chunk-vrb44rx7.js:6381-6898 fingerprint = CapabilitiesSection (0.777)
+//@ chunk-vrb44rx7.js:6381-6898 fingerprint (2.1.88 match: CapabilitiesSection, 0.777)
 function CapabilitiesSection(props) {
   let $ = useMemoCache(9);
   let { serverToolsCount, serverPromptsCount, serverResourcesCount } = props;

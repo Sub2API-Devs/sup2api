@@ -21,7 +21,7 @@ import { MAX_PATH_DISPLAY_CHARS, MAX_REPO_ROOT_PARENTS } from "./validatePluginD
 import { ONE_MIB } from "../schemas.js";
 import { countReadmeWords } from "./readmeAndListing.js";
 
-//@ chunk-5aas12zq.js:20183-20326 placement = getTopLevelPaths (0.8)
+//@ chunk-5aas12zq.js:20183-20326 placement (2.1.88 match: getTopLevelPaths, 0.8)
 async function getTopLevelPaths(directoryPath, repositoryRoot, targetPath) {
   let currentPath = directoryPath;
   for (let segment of pathModule.relative(directoryPath, targetPath).split(pathModule.sep)) {

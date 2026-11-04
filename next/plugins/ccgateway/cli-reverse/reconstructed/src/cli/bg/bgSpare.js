@@ -98,7 +98,7 @@ import { hostManagedEntry } from "../../services/daemon/paths.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bg51yd13.js:77499-77535 placement = addSlowOperation (0.33)
+//@ chunk-bg51yd13.js:77499-77535 placement (2.1.88 match: addSlowOperation, 0.33)
 var addSlowOperation = {
   name: "exec",
   description: "",

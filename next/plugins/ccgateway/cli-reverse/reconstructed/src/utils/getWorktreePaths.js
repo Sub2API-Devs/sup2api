@@ -14,7 +14,7 @@ import { gitExe } from "./git.js";
 import { identity } from "./pathClassification.js";
 import { logEvent } from "../services/analytics/index.js";
 
-//@ chunk-e6aww6q8.js:224033-224638 fingerprint = getWorktreePaths (0.803)
+//@ chunk-e6aww6q8.js:224033-224638 fingerprint (2.1.88 match: getWorktreePaths, 0.803)
 /**
  * getWorktreePaths：git worktree list --porcelain（禁用 hooksPath 与 fsmonitor），当前 worktree 排第一，打 tengu_worktree_detection。
  */

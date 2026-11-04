@@ -2509,7 +2509,7 @@ async function rmHandler(
 `,
   );
 }
-//@ chunk-bg51yd13.js:66128-66271 placement = filterAppsForDescription (0.354)
+//@ chunk-bg51yd13.js:66128-66271 placement (2.1.88 match: filterAppsForDescription, 0.354)
 /**
  * （误归 computerUse）把 -abc 形式拆出已知短选项，返回 {peeled, rest}。
  */

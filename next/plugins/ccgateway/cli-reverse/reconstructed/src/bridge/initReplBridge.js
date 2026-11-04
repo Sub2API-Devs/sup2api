@@ -155,7 +155,7 @@ import { runSideQuestionWithProgress } from "../utils/sideQuestionProgress.js";
 import { wrapTeardownWithPresence } from "../ink/reconciler.js";
 import { unwrapReminderText } from "../utils/systemReminder.js";
 
-//@ chunk-cg2r2hy6.js:27697-48603 callgraph-witnessed = initReplBridge (0.22)
+//@ chunk-cg2r2hy6.js:27697-48603 callgraph-witnessed (2.1.88 match: initReplBridge, 0.22)
 /**
  * 启用 REPL Remote Control：读 CLAUDE_BRIDGE_REATTACH_* 环境交接或恢复指针确定重连目标，校验当前登录是否为记录的属主（不一致则否决并抑制历史回填）；
  * 依次检查桥开关、OAuth、allow_remote_control/allow_remote_sessions 策略、本地另一进程是否持有该会话、OAuth 死令牌退避、trusted device、组织 UUID、最低版本；

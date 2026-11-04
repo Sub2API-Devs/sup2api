@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:3039519-3039711 fingerprint = sleep (1)
+//@ chunk-e6aww6q8.js:3039519-3039711 fingerprint (2.1.88 match: sleep, 1)
 /**
  * sleep 命令的补全 spec。
  */

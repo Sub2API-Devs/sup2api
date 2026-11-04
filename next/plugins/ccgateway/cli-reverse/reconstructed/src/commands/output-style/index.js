@@ -30,7 +30,7 @@ var outputStyleCommand = {
   },
   load: () => import("./CUSTOM_CURRENT_STYLE_PLACEHOLDER.lazy.js"),
 };
-//@ chunk-e6aww6q8.js:2257483-2257565 fingerprint = outputStyle (0.559)
+//@ chunk-e6aww6q8.js:2257483-2257565 fingerprint (2.1.88 match: outputStyle, 0.559)
 function outputStyle(arg) {
   switch (arg) {
     case "output-style":

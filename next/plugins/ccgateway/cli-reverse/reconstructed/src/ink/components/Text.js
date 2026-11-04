@@ -45,7 +45,7 @@ function textWrapStyle(textWrap) {
     textWrap,
   };
 }
-//@ chunk-bzr73sfg.js:224689-224944 fingerprint = memoizedStylesForWrap (0.853)
+//@ chunk-bzr73sfg.js:224689-224944 fingerprint (2.1.88 match: memoizedStylesForWrap, 0.853)
 /**
  * 各 textWrap 取值对应的 ink-text 样式对象（预先建好，避免每次渲染新建）。
  */
@@ -63,7 +63,7 @@ deferInit("chunk-bzr73sfg.js:224689", () => {
     "truncate-start": textWrapStyle("truncate-start"),
   };
 });
-//@ chunk-bzr73sfg.js:224944-227142 placement = Text (0.457)
+//@ chunk-bzr73sfg.js:224944-227142 placement (2.1.88 match: Text, 0.457)
 /**
  * <Text> 组件：把颜色/背景/faintInk/粗体/暗淡/斜体/下划线/删除线/反显组合成 textStyles，wrap 选择折行样式（默认 wrap），dir 设文字方向；支持悬停回调与 aria-* 无障碍属性；渲染为 ink-text 元素。
  */
@@ -309,7 +309,7 @@ var textSignal; // deferred: has load-time effects after a deferred statement of
 deferInit("chunk-x6v6jz2y.js:6257", () => {
   textSignal = createContext(false);
 });
-//@ chunk-x6v6jz2y.js:6272-6428 placement = resolveColor (1)
+//@ chunk-x6v6jz2y.js:6272-6428 placement (2.1.88 match: resolveColor, 1)
 function resolveColor_2(color, theme) {
   if (!color) return;
   if (
@@ -321,7 +321,7 @@ function resolveColor_2(color, theme) {
     return color;
   return isBuiltinTheme(color) ? theme[color] : undefined;
 }
-//@ chunk-x6v6jz2y.js:6428-7543 placement = ThemedText (0.933)
+//@ chunk-x6v6jz2y.js:6428-7543 placement (2.1.88 match: ThemedText, 0.933)
 /**
  * 主题文本：color/backgroundColor 支持主题键或原始颜色，dimColor 用主题 inactive 色，其余属性透传给 Ink Text。
  */
@@ -457,7 +457,7 @@ deferInit("chunk-x6v6jz2y.js:7543", () => {
 deferInit("chunk-x6v6jz2y.js:7547", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:7551-7918 placement = Link (0.487)
+//@ chunk-x6v6jz2y.js:7551-7918 placement (2.1.88 match: Link, 0.487)
 /**
  * <Link>：终端支持超链接时输出 ink-link（OSC 8），否则显示 fallback 或文字本身；assumeSupport 时以显式设置为准。
  */

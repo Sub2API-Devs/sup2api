@@ -47,7 +47,7 @@ var wizardSlot; // deferred: has load-time effects after a deferred statement of
 deferInit("chunk-095ptjmr.js:923", () => {
   wizardSlot = createContext(null);
 });
-//@ chunk-095ptjmr.js:939-2900 fingerprint = WizardProvider (0.652)
+//@ chunk-095ptjmr.js:939-2900 fingerprint (2.1.88 match: WizardProvider, 0.652)
 /**
  * 向导上下文：步骤列表与当前步骤、共享数据、next/back/goTo/cancel，Esc 双击退出。
  */

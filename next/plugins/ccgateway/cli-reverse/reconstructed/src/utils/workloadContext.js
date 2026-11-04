@@ -15,14 +15,14 @@ import { deferInit, beginDeferredInits } from "../../runtime/deferred-init.js";
 // This module is the first evaluated of an import cycle of 3677 modules closed by ./http.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/utils/http.js");
-//@ chunk-aepeg2w5.js:592165-592190 fingerprint = WORKLOAD_CRON (1)
+//@ chunk-aepeg2w5.js:592165-592190 fingerprint (2.1.88 match: WORKLOAD_CRON, 1)
 var WORKLOAD_CRON; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var workloadStorage;
 deferInit("chunk-aepeg2w5.js:592165", () => {
   WORKLOAD_CRON = "cron";
   workloadStorage = new AsyncLocalStorage();
 });
-//@ chunk-aepeg2w5.js:592190-592236 fingerprint = getWorkload (1)
+//@ chunk-aepeg2w5.js:592190-592236 fingerprint (2.1.88 match: getWorkload, 1)
 /**
  * 当前异步上下文的 workload 标签（如 cron），写进 User-Agent。
  */
@@ -44,7 +44,7 @@ function clearScheduledByPlugin() {
   let store = workloadStorage.getStore();
   if (store !== undefined) store.scheduledByPlugin = undefined;
 }
-//@ chunk-aepeg2w5.js:592452-592522 fingerprint = runWithWorkload (0.544)
+//@ chunk-aepeg2w5.js:592452-592522 fingerprint (2.1.88 match: runWithWorkload, 0.544)
 /**
  * 在 AsyncLocalStorage 中以给定 workload 运行函数。
  */

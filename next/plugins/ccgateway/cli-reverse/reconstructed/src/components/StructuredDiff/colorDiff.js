@@ -11,7 +11,7 @@
 import { isEnvDefinedFalsy } from "../../utils/envUtils.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-cwwxybjc.js:15520-15597 fingerprint = getColorModuleUnavailableReason (1)
+//@ chunk-cwwxybjc.js:15520-15597 fingerprint (2.1.88 match: getColorModuleUnavailableReason, 1)
 function getColorModuleUnavailableReason() {
   if (isEnvDefinedFalsy(env.CLAUDE_CODE_SYNTAX_HIGHLIGHT)) return "env";
   return null;

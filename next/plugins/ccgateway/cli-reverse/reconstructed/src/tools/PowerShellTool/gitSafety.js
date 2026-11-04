@@ -29,7 +29,7 @@ import { isUncOrDevicePath } from "../../utils/pathClassification.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v0yfsee9.js:13224-13404 placement = resolveCwdReentry (1)
+//@ chunk-v0yfsee9.js:13224-13404 placement (2.1.88 match: resolveCwdReentry, 1)
 /**
  * 把以 ../<cwd 名>/ 开头的相对路径折回 cwd 内的相对路径（防 ../repo/.git 绕过）。
  */
@@ -94,7 +94,7 @@ function normalizePowerShellPathArg(pathArg, expandArg) {
   if (path.startsWith("./")) path = path.slice(2);
   return path;
 }
-//@ chunk-v0yfsee9.js:14052-14183 layout = setCwdState (1)
+//@ chunk-v0yfsee9.js:14052-14183 layout (2.1.88 match: setCwdState, 1)
 function foldCaseForMatch(cwd) {
   return cwd
     .toLowerCase()
@@ -103,7 +103,7 @@ function foldCaseForMatch(cwd) {
     .normalize("NFC")
     .replaceAll("\u03C2", "\u03C3");
 }
-//@ chunk-v0yfsee9.js:14183-14224 fingerprint = GIT_INTERNAL_PREFIXES (1)
+//@ chunk-v0yfsee9.js:14183-14224 fingerprint (2.1.88 match: GIT_INTERNAL_PREFIXES, 1)
 var GIT_INTERNAL_PREFIXES = ["head", "objects", "refs", "hooks"];
 //@ chunk-v0yfsee9.js:14224-14448 layout
 function resolveCwdRelativePath(pathArg) {
@@ -120,7 +120,7 @@ function resolveCwdRelativePath(pathArg) {
   if (!absLower.startsWith(cwdPrefixLower)) return null;
   return absLower.slice(cwdPrefixLower.length).replaceAll("\\", "/");
 }
-//@ chunk-v0yfsee9.js:14448-14646 fingerprint = matchesGitInternalPrefix (1)
+//@ chunk-v0yfsee9.js:14448-14646 fingerprint (2.1.88 match: matchesGitInternalPrefix, 1)
 /**
  * 规范化路径是否指向 git 内部（.git、HEAD、objects/、refs/、hooks/、git~N 短名）。
  */
@@ -159,7 +159,7 @@ function isDotGitPathPS(target) {
   }
   return false;
 }
-//@ chunk-v0yfsee9.js:14882-14974 fingerprint = matchesDotGitPrefix (1)
+//@ chunk-v0yfsee9.js:14882-14974 fingerprint (2.1.88 match: matchesDotGitPrefix, 1)
 /**
  * 规范化路径是否为 .git、.git/... 或 git~N 短名。
  */

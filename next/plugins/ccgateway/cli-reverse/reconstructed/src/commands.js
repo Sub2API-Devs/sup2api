@@ -233,7 +233,7 @@ import { getBuiltinPlugins } from "./plugins/builtinPlugins.js";
 import { lit as lit_2 } from "./services/analytics/safeMetadata.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:17411-17462 facade-exports = getCommandName (1)
+//@ chunk-s61vbvea.js:17411-17462 facade-exports (2.1.88 match: getCommandName, 1)
 /**
  * getCommandName：命令显示名（userFacingName?.() ?? name）。
  */
@@ -495,7 +495,7 @@ function resolveBarePluginSkillName(name, commands) {
     command: match,
   };
 }
-//@ chunk-s61vbvea.js:20540-20788 facade-exports = getCommand (1)
+//@ chunk-s61vbvea.js:20540-20788 facade-exports (2.1.88 match: getCommand, 1)
 /**
  * getCommand：findCommand，找不到时抛出列出全部可用命令的 ReferenceError。
  */
@@ -528,7 +528,7 @@ function containsSecretPattern(text) {
 function isSkillOff(name) {
   return getSkillOverrideState(name) === "off";
 }
-//@ chunk-e6aww6q8.js:953824-954135 fingerprint = meetsAvailabilityRequirement (0.639)
+//@ chunk-e6aww6q8.js:953824-954135 fingerprint (2.1.88 match: meetsAvailabilityRequirement, 0.639)
 /**
  * meetsAvailabilityRequirement：命令 availability 要求是否满足。宿主可通过 commandsOffHere 关闭；claude-ai 需 claude.ai 订阅登录；console 需一方 API 且非 claude.ai 订阅；console-profile 需 user_oauth 档案登录。
  */
@@ -583,7 +583,7 @@ function getBareCommandNameUnlessSynced(cmd) {
     ? cmd.unqualifiedName
     : cmd.name;
 }
-//@ chunk-e6aww6q8.js:954479-955011 fingerprint = getMcpSkillCommands (0.47)
+//@ chunk-e6aww6q8.js:954479-955011 fingerprint (2.1.88 match: getMcpSkillCommands, 0.47)
 /**
  * dropShadowedFallbackSkills：旧版名 getMcpSkillCommands 不符：316 里按 ":后缀" 收集插件/内置/MCP 技能名，丢弃同名 fallback 技能。
  */
@@ -641,7 +641,7 @@ function hiddenCommandsWhenSlashDisabled(x) {
   if (getDisableSlashCommands()) return [];
   return [];
 }
-//@ chunk-e6aww6q8.js:955350-955649 fingerprint = getSkillToolCommands (0.859)
+//@ chunk-e6aww6q8.js:955350-955649 fingerprint (2.1.88 match: getSkillToolCommands, 0.859)
 /**
  * isSkillToolCommand：SkillTool 列表的单条谓词；门面把 getSkillToolCommands 给了 YI。
  */
@@ -669,7 +669,7 @@ function addSpelling(spellings, name, allowReserved = false) {
   if (!allowReserved && usesReservedSkillNamespace(name)) return;
   spellings.add(foldName_2(name));
 }
-//@ chunk-e6aww6q8.js:959723-959841 callgraph-fingerprint = findCommand (1)
+//@ chunk-e6aww6q8.js:959723-959841 callgraph-fingerprint (2.1.88 match: findCommand, 1)
 /**
  * addCommandSpellings：把 name、显示名、aliases 规范化后加入集合；旧版名 findCommand 配错（门面 findCommand=s61vbvea Zs）。
  */
@@ -680,7 +680,7 @@ function addCommandSpellings(spellings, cmd) {
   if (displayName !== cmd.name) addSpelling(spellings, displayName, allowReserved);
   for (let alias of cmd.aliases ?? []) addSpelling(spellings, alias, allowReserved);
 }
-//@ chunk-e6aww6q8.js:961188-961361 placement = buildTool (0.402)
+//@ chunk-e6aww6q8.js:961188-961361 placement (2.1.88 match: buildTool, 0.402)
 /**
  * （旧版名 buildTool 是错配）过滤命令（Skill）的 aliases：保留谓词为真的别名；syncedSkills 来源的命令若规范名与 userFacingName 不一致，再改写 userFacingName。
  */
@@ -836,13 +836,13 @@ function getAdditionalDirRelativeLabel(path) {
   let rest = relative(additionalDirRoot, resolve_2(path));
   return rest === "" ? label : [label, ...rest.split(sep)].join("/");
 }
-//@ chunk-e6aww6q8.js:1732452-1732503 placement = default (1)
+//@ chunk-e6aww6q8.js:1732452-1732503 placement (2.1.88 match: default, 1)
 var stubCommand_1 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:1733123-1733174 placement = default (1)
+//@ chunk-e6aww6q8.js:1733123-1733174 placement (2.1.88 match: default, 1)
 var stubCommand_2 = {
   isEnabled: () => false,
   isHidden: true,
@@ -872,13 +872,13 @@ function getCommandOriginKind(command) {
       return "user";
   }
 }
-//@ chunk-e6aww6q8.js:2031344-2031395 placement = default (1)
+//@ chunk-e6aww6q8.js:2031344-2031395 placement (2.1.88 match: default, 1)
 var stubCommand_3 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033346-2033397 placement = default (1)
+//@ chunk-e6aww6q8.js:2033346-2033397 placement (2.1.88 match: default, 1)
 var stubCommand_4 = {
   isEnabled: () => false,
   isHidden: true,
@@ -887,7 +887,7 @@ var stubCommand_4 = {
 //@ chunk-e6aww6q8.js:2033397-2033417 placement
 var stubCommand_4a = stubCommand_4;
 var stubCommand_4b = stubCommand_4;
-//@ chunk-e6aww6q8.js:2033417-2033468 placement = default (1)
+//@ chunk-e6aww6q8.js:2033417-2033468 placement (2.1.88 match: default, 1)
 var stubCommand_5 = {
   isEnabled: () => false,
   isHidden: true,
@@ -895,7 +895,7 @@ var stubCommand_5 = {
 };
 //@ chunk-e6aww6q8.js:2033468-2033480 placement
 var stubCommand_5a = stubCommand_5;
-//@ chunk-e6aww6q8.js:2033480-2033531 placement = default (1)
+//@ chunk-e6aww6q8.js:2033480-2033531 placement (2.1.88 match: default, 1)
 var stubCommand_6 = {
   isEnabled: () => false,
   isHidden: true,
@@ -903,43 +903,43 @@ var stubCommand_6 = {
 };
 //@ chunk-e6aww6q8.js:2033531-2033543 placement
 var stubCommand_6a = stubCommand_6;
-//@ chunk-e6aww6q8.js:2033543-2033594 placement = default (1)
+//@ chunk-e6aww6q8.js:2033543-2033594 placement (2.1.88 match: default, 1)
 var stubCommand_7 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033594-2033645 placement = default (1)
+//@ chunk-e6aww6q8.js:2033594-2033645 placement (2.1.88 match: default, 1)
 var stubCommand_8 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033645-2033696 placement = default (1)
+//@ chunk-e6aww6q8.js:2033645-2033696 placement (2.1.88 match: default, 1)
 var stubCommand_9 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033696-2033747 placement = default (1)
+//@ chunk-e6aww6q8.js:2033696-2033747 placement (2.1.88 match: default, 1)
 var stubCommand_10 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2053003-2053054 placement = default (1)
+//@ chunk-e6aww6q8.js:2053003-2053054 placement (2.1.88 match: default, 1)
 var stubCommand_11 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2053054-2053105 placement = default (1)
+//@ chunk-e6aww6q8.js:2053054-2053105 placement (2.1.88 match: default, 1)
 var stubCommand_12 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2053105-2053156 placement = default (1)
+//@ chunk-e6aww6q8.js:2053105-2053156 placement (2.1.88 match: default, 1)
 var stubCommand_13 = {
   isEnabled: () => false,
   isHidden: true,
@@ -968,7 +968,7 @@ var gatedInPlaceWriteCommand = null;
 deferInit("chunk-e6aww6q8.js:2053302", () => {
   if (gatedInPlaceWriteCommand) markInPlaceWriteForced();
 });
-//@ chunk-e6aww6q8.js:2053315-2054702 fingerprint = usageReport (0.431)
+//@ chunk-e6aww6q8.js:2053315-2054702 fingerprint (2.1.88 match: usageReport, 0.431)
 /**
  * promoteMemoryCommands：构建期为 null；注册表里取 .promoteMemory/.promoteMemoryNonInteractive。
  */
@@ -1442,7 +1442,7 @@ deferInit("chunk-e6aww6q8.js:2056322", () => {
     restartCommand,
   ]);
 });
-//@ chunk-e6aww6q8.js:2056969-2057141 facade-exports = isBridgeSafeCommand (0.82)
+//@ chunk-e6aww6q8.js:2056969-2057141 facade-exports (2.1.88 match: isBridgeSafeCommand, 0.82)
 /**
  * isBridgeSafeCommand：prompt 命令一律可桥接；local-jsx 不可；local 命令需在 BRIDGE_SAFE_COMMANDS 里。
  */
@@ -1500,7 +1500,7 @@ function filterCommandsForRemoteMode(commands) {
       REMOTE_SAFE_COMMANDS.has(cmd),
   );
 }
-//@ chunk-e6aww6q8.js:2057577-2057965 facade-exports = command (0.607)
+//@ chunk-e6aww6q8.js:2057577-2057965 facade-exports (2.1.88 match: command, 0.607)
 /**
  * withWorkerOnlyCommands：在命令列表后补上 Worker 环境专有的技能名（不与一方命令重名时）。
  */
@@ -1538,7 +1538,7 @@ function getHumanFacingDescription(cmd) {
   if (cmd.type !== "prompt" || !isBuiltinCommand(cmd)) return cmd.description;
   return cmd.menuDescription || cmd.description;
 }
-//@ chunk-e6aww6q8.js:2058072-2058536 facade-exports = formatDescriptionWithSource (0.774)
+//@ chunk-e6aww6q8.js:2058072-2058536 facade-exports (2.1.88 match: formatDescriptionWithSource, 0.774)
 /**
  * formatDescriptionWithSource：描述后附加来源标注，例如 (plugin X)、(user)、(project)、(MCP)。
  */
@@ -1598,7 +1598,7 @@ function toSlashCommand(cmd, isFolderAlias) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2058962-2059003 facade-exports = BUILTIN_MARKETPLACE_NAME (1)
+//@ chunk-e6aww6q8.js:2058962-2059003 facade-exports (2.1.88 match: BUILTIN_MARKETPLACE_NAME, 1)
 /**
  * 插件 ID 的市场部分是否为 builtin（内置插件）。
  */
@@ -1769,7 +1769,7 @@ function shippedCommandNameForAnalytics(name) {
 function getBuiltinCommands() {
   return getBuiltinCommandTable();
 }
-//@ chunk-e6aww6q8.js:2060507-2061509 fingerprint = getSkills (0.755)
+//@ chunk-e6aww6q8.js:2060507-2061509 fingerprint (2.1.88 match: getSkills, 0.755)
 /**
  * getSkills：并发加载技能目录、插件技能、发行内建技能与内建插件技能；任一来源失败只记日志并返回空。
  */
@@ -1827,7 +1827,7 @@ async function getSkills(cwd, storage) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:2061509-2061615 fingerprint = getWorkflowCommands (0.344)
+//@ chunk-e6aww6q8.js:2061509-2061615 fingerprint (2.1.88 match: getWorkflowCommands, 0.344)
 var getWorkflowCommands; // deferred: loads other modules while loading; runs once its import cycle is complete
 var invalidateWorkflowCache;
 var warmWorkflows;
@@ -2377,7 +2377,7 @@ function clearCommandsCache() {
   clearPluginSkillsCache();
   clearSkillCaches();
 }
-//@ chunk-e6aww6q8.js:2069505-2069542 facade-exports = COMMON_HELP_ARGS (0.53)
+//@ chunk-e6aww6q8.js:2069505-2069542 facade-exports (2.1.88 match: COMMON_HELP_ARGS, 0.53)
 /**
  * HEADLESS_YIELDABLE_NAMES：无头模式下内建命令可以让给插件/技能的名字（help、feedback）。
  */
@@ -2526,7 +2526,7 @@ function getSlashCommandToolSkills(cwd, storage) {
     getSlashCommandToolSkillsUncached(cwd, storage, storageV5),
   );
 }
-//@ chunk-e6aww6q8.js:2071840-2072348 fingerprint = getSlashCommandToolSkills (0.755)
+//@ chunk-e6aww6q8.js:2071840-2072348 fingerprint (2.1.88 match: getSlashCommandToolSkills, 0.755)
 /**
  * getSlashCommandToolSkillsUncached：旧版 getSlashCommandToolSkills 的过滤逻辑；门面名给了缓存层 G0e。
  */

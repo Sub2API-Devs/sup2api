@@ -463,7 +463,7 @@ class DesignSyncPreconditionError extends Error {
     this.name = "DesignSyncPreconditionError";
   }
 }
-//@ chunk-98n6ge4d.js:20955-21004 placement = getAutoAllowedCommands (0.728)
+//@ chunk-98n6ge4d.js:20955-21004 placement (2.1.88 match: getAutoAllowedCommands, 0.728)
 var DESIGN_LOGIN_AUTO_PROMPT_MODES = new Set(["default", "acceptEdits", "auto"]);
 //@ chunk-98n6ge4d.js:21004-21509 placement
 /**

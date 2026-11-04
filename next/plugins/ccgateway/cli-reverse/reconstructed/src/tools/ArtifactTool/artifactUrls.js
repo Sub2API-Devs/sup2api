@@ -770,7 +770,7 @@ function scrubServerLine(text, maxChars) {
 }
 //@ chunk-yxnffbzs.js:36628-36639 placement
 var ARTIFACT_CARD_TITLE_MAX = 80;
-//@ chunk-yxnffbzs.js:36639-36795 placement = ghIsDangerousCallback (1)
+//@ chunk-yxnffbzs.js:36639-36795 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function sweptArtifactTitle(title) {
   return spacedFromClosingQuote(
     characterReferencesAsBrackets(

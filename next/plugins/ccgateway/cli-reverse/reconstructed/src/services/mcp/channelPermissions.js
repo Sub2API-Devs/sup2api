@@ -26,7 +26,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-d3jaf8bt.js:434-489 fingerprint = isChannelPermissionRelayEnabled (1)
+//@ chunk-d3jaf8bt.js:434-489 fingerprint (2.1.88 match: isChannelPermissionRelayEnabled, 1)
 /**
  * isChannelPermissionRelayEnabled：GrowthBook tengu_harbor_permissions，控制是否把权限请求转发给 channel 服务器。
  */
@@ -40,7 +40,7 @@ function isChannelPermissionRelayEnabled() {
 function shouldUseRandomPermissionIds() {
   return getFeatureValue_SESSION_PINNED("tengu_quiet_elephant", true);
 }
-//@ chunk-d3jaf8bt.js:539-740 fingerprint = ID_AVOID_SUBSTRINGS (0.98)
+//@ chunk-d3jaf8bt.js:539-740 fingerprint (2.1.88 match: ID_AVOID_SUBSTRINGS, 0.98)
 var ID_ALPHABET = "abcdefghijkmnopqrstuvwxyz";
 var ID_AVOID_SUBSTRINGS = [
   "fuck",
@@ -68,7 +68,7 @@ var ID_AVOID_SUBSTRINGS = [
   "wank",
   "anus",
 ];
-//@ chunk-d3jaf8bt.js:740-917 fingerprint = hashToId (1)
+//@ chunk-d3jaf8bt.js:740-917 fingerprint (2.1.88 match: hashToId, 1)
 /**
  * hashToId：FNV-1a 32 位哈希后取 5 个字母（25 字母表，无 l）作为短 ID。
  */
@@ -458,7 +458,7 @@ function sanitizePreviewString(text) {
 function hasExperimentalCapability(capabilities, capability) {
   return !!capabilities?.experimental?.[capability];
 }
-//@ chunk-d3jaf8bt.js:5718-5916 fingerprint = filterPermissionRelayClients (0.723)
+//@ chunk-d3jaf8bt.js:5718-5916 fingerprint (2.1.88 match: filterPermissionRelayClients, 0.723)
 /**
  * filterPermissionRelayClients：选出可接收权限中继的客户端：已连接、在 channel 列表、声明 experimental claude/channel 与 claude/channel/permission、允许中继且不是 modern 协议。
  */
@@ -473,7 +473,7 @@ function filterPermissionRelayClients(clients, isChannelServer, isPermissionRela
       client.protocolEra !== "modern",
   );
 }
-//@ chunk-d3jaf8bt.js:5916-6392 fingerprint = createChannelPermissionCallbacks (0.548)
+//@ chunk-d3jaf8bt.js:5916-6392 fingerprint (2.1.88 match: createChannelPermissionCallbacks, 0.548)
 function createChannelPermissionCallbacks(isServerRegistered) {
   let pending = new Map();
   let seenIds = new Set();

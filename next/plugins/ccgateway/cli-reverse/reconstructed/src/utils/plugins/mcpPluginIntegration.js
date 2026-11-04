@@ -71,7 +71,7 @@ import { readMcpServerNames, resolveComponentPath, objectKeysOf } from "./plugin
 import { hasDotDotWithSpaceSegment } from "../pathClassification.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:605143-605292 fingerprint = addPluginScopeToServers (1)
+//@ chunk-e6aww6q8.js:605143-605292 fingerprint (2.1.88 match: addPluginScopeToServers, 1)
 /**
  * 给插件 MCP 服务器加作用域前缀：名字改为 plugin:<插件名>:<服务器名>，scope=dynamic，记录来源插件。
  */
@@ -202,7 +202,7 @@ ${name}`;
     });
   }
 }
-//@ chunk-e6aww6q8.js:3810244-3811399 fingerprint = loadMcpServersFromMcpb (0.907)
+//@ chunk-e6aww6q8.js:3810244-3811399 fingerprint (2.1.88 match: loadMcpServersFromMcpb, 0.907)
 /**
  * 从插件里的 .mcpb/.dxt 包加载 MCP 服务器：loadMcpbFile 解压与生成配置，需要用户配置时返回 needs-config 状态。
  */
@@ -544,7 +544,7 @@ function mcpbNeedsConfigWarning(plugin, serverName) {
     serverName,
   };
 }
-//@ chunk-e6aww6q8.js:3815592-3816522 fingerprint = loadMcpServersFromFile (0.864)
+//@ chunk-e6aww6q8.js:3815592-3816522 fingerprint (2.1.88 match: loadMcpServersFromFile, 0.864)
 /**
  * 读取插件内一个 MCP 配置文件（.mcp.json 形状），可限定不逃出插件目录；存储后端模式下经存储层读。
  */
@@ -612,7 +612,7 @@ async function loadMcpServersFromFile(plugin, relPath, storageV5, { confine = fa
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3816522-3816871 fingerprint = getUnconfiguredChannels (1)
+//@ chunk-e6aww6q8.js:3816522-3816871 fingerprint (2.1.88 match: getUnconfiguredChannels, 1)
 /**
  * 列出插件 manifest.channels 中缺少必填用户配置的频道（供启用时弹出配置对话框）。
  */
@@ -633,7 +633,7 @@ async function getUnconfiguredChannels(plugin, storageV5) {
   }
   return unconfigured;
 }
-//@ chunk-e6aww6q8.js:3816871-3817125 layout = addPluginScopeToServers (0.786)
+//@ chunk-e6aww6q8.js:3816871-3817125 layout (2.1.88 match: addPluginScopeToServers, 0.786)
 /**
  * 给插件 MCP 服务器加 plugin:<插件>:<服务器> 前缀并标 scope=dynamic、pluginSource/pluginPath，官方背书时标 pluginOfficialSourceVouched。
  */
@@ -654,7 +654,7 @@ function addPluginScopeToServers_2(servers, name, pluginSource, pluginPath, offi
   }
   return scopedServers;
 }
-//@ chunk-e6aww6q8.js:3817125-3817371 fingerprint = loadChannelUserConfig (1)
+//@ chunk-e6aww6q8.js:3817125-3817371 fingerprint (2.1.88 match: loadChannelUserConfig, 1)
 /**
  * 合并插件级 userConfig 与频道级 userConfig 的已保存值（含默认值），供替换 ${user_config.X}。
  */
@@ -677,7 +677,7 @@ async function loadChannelUserConfig(plugin, serverName, storageV5) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:3817440-3820347 fingerprint = resolvePluginMcpEnvironment (0.42)
+//@ chunk-e6aww6q8.js:3817440-3820347 fingerprint (2.1.88 match: resolvePluginMcpEnvironment, 0.42)
 /**
  * 解析插件 MCP 服务器配置中的变量：${CLAUDE_PLUGIN_ROOT}/${CLAUDE_PLUGIN_DATA}/${CLAUDE_PROJECT_DIR}/${user_config.X}/${ENV}，并为 stdio 服务器注入 CLAUDE_PLUGIN_ROOT/CLAUDE_PLUGIN_DATA 环境变量；缺失变量记错误。
  */
@@ -884,7 +884,7 @@ function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginN
       }
     : resolvedConfig;
 }
-//@ chunk-e6aww6q8.js:3820347-3820777 fingerprint = getPluginMcpServers (0.644)
+//@ chunk-e6aww6q8.js:3820347-3820777 fingerprint (2.1.88 match: getPluginMcpServers, 0.644)
 /**
  * 已启用插件的最终 MCP 服务器配置（变量已解析）；供 MCP 配置合并（services/mcp/config）使用。
  */
@@ -924,7 +924,7 @@ async function getPluginMcpServers(plugin, errors = [], storageV5, credentials, 
     plugin.officialMarketplaceSourceVouched === true,
   );
 }
-//@ chunk-k9mgeeff.js:3581-3828 fingerprint = loadPluginMcpServers (0.615)
+//@ chunk-k9mgeeff.js:3581-3828 fingerprint (2.1.88 match: loadPluginMcpServers, 0.615)
 /**
  * 列出插件声明的 MCP 服务器配置（.mcp.json 与 manifest.mcpServers 中的文件/内联项，不含 MCPB 包），用于展示。
  */
@@ -941,7 +941,7 @@ async function loadPluginMcpServers(plugin) {
       nameLists.push(await readMcpServerNames(await resolvePluginDirComponentPath(plugin, declaration)));
   return nameLists.flat();
 }
-//@ chunk-d4eg9at2.js:46214-46302 fingerprint = buildMcpUserConfig (1)
+//@ chunk-d4eg9at2.js:46214-46302 fingerprint (2.1.88 match: buildMcpUserConfig, 1)
 /**
  * 插件是否声明了 userConfig（名字配错，见 lead 建议）。
  */

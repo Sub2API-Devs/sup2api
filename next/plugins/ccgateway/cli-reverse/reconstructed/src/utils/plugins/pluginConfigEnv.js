@@ -33,12 +33,12 @@ deferInit("chunk-aqpks6nd.js:277", () => {
  * truthyOrFalsyEnv：三态环境变量解析。
  */
 var truthyOrFalsyEnv = (raw) => (isEnvTruthy(raw) ? true : isEnvDefinedFalsy(raw) ? false : undefined);
-//@ chunk-aqpks6nd.js:429-461 placement = _temp (1)
+//@ chunk-aqpks6nd.js:429-461 placement (2.1.88 match: _temp, 1)
 /**
  * isTrueOrTrueString：值为 true 或字符串 "true"。
  */
 var isTrueOrTrueString = (value) => value === true || value === "true";
-//@ chunk-aqpks6nd.js:461-594 placement = getFormatHint (0.456)
+//@ chunk-aqpks6nd.js:461-594 placement (2.1.88 match: getFormatHint, 0.456)
 /**
  * 生成数字输入的格式提示文案（It takes a number between min and max），供 elicitation/插件配置表单显示。
  */

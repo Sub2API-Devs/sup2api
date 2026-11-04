@@ -179,7 +179,7 @@ class UnseenPanelModInputHold {
     submitMarks.putBack();
   }
 }
-//@ chunk-tyg7f3ek.js:80592-80661 placement = _temp0 (1)
+//@ chunk-tyg7f3ek.js:80592-80661 placement (2.1.88 match: _temp0, 1)
 function isUnseenPluginPrompt(a_5) {
   return isActiveMainAgentCommand(a_5) && a_5.origin?.kind === "plugin" && !isGoalIdleCheckinPaused(a_5.uuid);
 }

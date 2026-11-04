@@ -100,7 +100,7 @@ import { getPluginRegistry } from "../../../utils/plugins/pluginLoadState.js";
 import { setTestPluginStateSlot } from "./uiDriver.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-1tz177x8.js:14394-14407 placement = resetStateForTests (0.751)
+//@ chunk-1tz177x8.js:14394-14407 placement (2.1.88 match: resetStateForTests, 0.751)
 var resetStateForTests = "test";
 //@ chunk-1tz177x8.js:14407-14637 placement
 async function hooksModuleSource(dir, hookEvents) {

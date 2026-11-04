@@ -48,7 +48,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { normalizeFullWidthSpace } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:745825-746041 placement = shouldShowDevBar (0.425)
+//@ chunk-aepeg2w5.js:745825-746041 placement (2.1.88 match: shouldShowDevBar, 0.425)
 var EXPERIMENT_ID_PATTERN; // deferred: uses isBoolean (./metadataSanitizers.js) of its import cycle while loading; runs once the cycle is complete
 var isVariationId;
 var EXPERIMENT_EVENT_FIELDS;

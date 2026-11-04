@@ -30,7 +30,7 @@ var bindingSpecSchema = DoctorLazy(() =>
     }),
   ).length(1),
 );
-//@ chunk-gwvwj681.js:6678-6801 fingerprint = OffscreenFreeze (0.408)
+//@ chunk-gwvwj681.js:6678-6801 fingerprint (2.1.88 match: OffscreenFreeze, 0.408)
 function OffscreenFreeze(meta) {
   let parsed = bindingSpecSchema().safeParse(meta?.[ANTHROPIC_FILEINPUTS]);
   if (!parsed.success) return;

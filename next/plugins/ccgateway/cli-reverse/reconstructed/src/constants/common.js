@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-d0k42hx1.js:1326-1413 fingerprint = getLocalMonthYear (0.92)
+//@ chunk-d0k42hx1.js:1326-1413 fingerprint (2.1.88 match: getLocalMonthYear, 0.92)
 /**
  * 当前本地日期的 "Month YYYY"（en-US）。
  */

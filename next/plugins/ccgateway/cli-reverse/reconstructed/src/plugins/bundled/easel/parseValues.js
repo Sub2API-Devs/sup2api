@@ -66,7 +66,7 @@ import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init
 // This module is the first evaluated of an import cycle of 7 modules closed by ./chartSchema.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/plugins/bundled/easel/chartSchema.js");
-//@ chunk-3s7ydtfd.js:14396-14457 placement = UNDEFINED_VALUE (0.472)
+//@ chunk-3s7ydtfd.js:14396-14457 placement (2.1.88 match: UNDEFINED_VALUE, 0.472)
 function snapToStep(value, step) {
   return step.unit.fieldIndex === DAY_FIELD_INDEX ? value : value - (value % step.count);
 }

@@ -18,7 +18,7 @@ import { ExitFlow } from "../../components/ExitFlow.js";
 import { submittedMessages, isMidTurnStreaming } from "../../utils/promptSubmissionOrigin.js";
 import { sampleAlias } from "../../components/Spinner/spinnerStatus.js";
 
-//@ chunk-fxf1mb10.js:2534-2853 fingerprint = call (0.371)
+//@ chunk-fxf1mb10.js:2534-2853 fingerprint (2.1.88 match: call, 0.371)
 function call() {
   if (!env.TMUX) return "absent";
   let executable = resolveExecutableSafely("tmux");
@@ -62,9 +62,9 @@ async function runExitCommand(args, context) {
 }
 //@ chunk-18hwfzwa.js:1706346-1706362 placement
 function noopExitHandler() {}
-//@ chunk-18hwfzwa.js:1706362-1706419 fingerprint = GOODBYE_MESSAGES (1)
+//@ chunk-18hwfzwa.js:1706362-1706419 fingerprint (2.1.88 match: GOODBYE_MESSAGES, 1)
 var GOODBYE_MESSAGES = ["Goodbye!", "See ya!", "Bye!", "Catch you later!"];
-//@ chunk-18hwfzwa.js:1706419-1706461 fingerprint = getRandomGoodbyeMessage (1)
+//@ chunk-18hwfzwa.js:1706419-1706461 fingerprint (2.1.88 match: getRandomGoodbyeMessage, 1)
 function getRandomGoodbyeMessage() {
   return sampleAlias(GOODBYE_MESSAGES) ?? "Goodbye!";
 }

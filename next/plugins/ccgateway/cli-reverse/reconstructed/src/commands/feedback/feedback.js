@@ -26,7 +26,7 @@ import { createStore } from "../../state/store.js";
 import { runRemotePluginHook } from "../../services/remoteTools/runPluginHook.js";
 import { resyncForMissingEntry } from "../../services/remoteTools/commandRendering.js";
 
-//@ chunk-seqjkch8.js:15835-16264 facade-majority = renderFeedbackComponent (0.262)
+//@ chunk-seqjkch8.js:15835-16264 facade-majority (2.1.88 match: renderFeedbackComponent, 0.262)
 function renderFeedbackComponent(
   context,
   abortController,
@@ -137,7 +137,7 @@ async function call(onDone, context, args) {
     });
   return callLegacyFeedbackDialog(onDone, context, args);
 }
-//@ chunk-bzb0qnrm.js:5187-5293 fingerprint = call (0.643)
+//@ chunk-bzb0qnrm.js:5187-5293 fingerprint (2.1.88 match: call, 0.643)
 async function call_2(onDone, context, args) {
   let toolContext = args.toolUseContext();
   return runRemotePluginHook(onDone, toolContext, (recheck) =>

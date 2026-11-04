@@ -59,7 +59,7 @@ var UNBOUNDED_LIMITS = {
   values: 1 / 0,
   levels: 1 / 0,
 };
-//@ chunk-wy9dbk5f.js:32560-33069 placement = reorderBidi (0.534)
+//@ chunk-wy9dbk5f.js:32560-33069 placement (2.1.88 match: reorderBidi, 0.534)
 function measureJsonSize(value, level = 0, seen = new Map()) {
   if (typeof value !== "object" || value === null)
     return {

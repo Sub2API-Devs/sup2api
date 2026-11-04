@@ -163,7 +163,7 @@ function InputImpl(props) {
 }
 //@ chunk-x6v6jz2y.js:20724-20735 placement
 var Input = InputImpl;
-//@ chunk-x6v6jz2y.js:20735-20928 placement = Newline (0.591)
+//@ chunk-x6v6jz2y.js:20735-20928 placement (2.1.88 match: Newline, 0.591)
 /**
  * <Newline>：输出 count 个换行的 ink-text。
  */
@@ -188,7 +188,7 @@ function Newline(props) {
   } else t3 = $[3];
   return t3;
 }
-//@ chunk-x6v6jz2y.js:20928-21267 placement = NoSelect (0.728)
+//@ chunk-x6v6jz2y.js:20928-21267 placement (2.1.88 match: NoSelect, 0.728)
 /**
  * <NoSelect>：内容不参与鼠标选区复制（如行号栏、装饰符）；fromLeftEdge 时从屏幕最左列起整段不可选。
  */
@@ -226,7 +226,7 @@ function NoSelect(t0) {
   } else t2 = $[8];
   return t2;
 }
-//@ chunk-x6v6jz2y.js:21267-21564 placement = RawAnsi (0.805)
+//@ chunk-x6v6jz2y.js:21267-21564 placement (2.1.88 match: RawAnsi, 0.805)
 /**
  * <RawAnsi>：直接输出已排好的 ANSI 行（ink-raw-ansi），宽高由调用方给出，不再折行或测量。
  */
@@ -298,7 +298,7 @@ function isNodeOnScreen(node, terminalSize) {
   if (nodeHeight === 0) return top >= viewportTop && top < viewportBottom;
   return bottom > viewportTop && top < viewportBottom;
 }
-//@ chunk-x6v6jz2y.js:22038-22467 placement = useAnimationFrame (1)
+//@ chunk-x6v6jz2y.js:22038-22467 placement (2.1.88 match: useAnimationFrame, 1)
 /**
  * 跟踪组件是否在终端可见区域：返回 ref 回调、可见状态对象、读取函数与即时探测函数；每次提交后更新。动画类组件据此在不可见时停止刷新。
  */
@@ -381,7 +381,7 @@ var useApp = useInputClockValue;
 deferInit("chunk-x6v6jz2y.js:22879", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:22883-23169 placement = cleanupTaskOutput (0.67)
+//@ chunk-x6v6jz2y.js:22883-23169 placement (2.1.88 match: cleanupTaskOutput, 0.67)
 function useDebouncedCallback(callback, delayMs) {
   let clock = useContext(clockContext);
   let callbackRef = useRef(callback);
@@ -684,7 +684,7 @@ function usePaintedRows(isEnabled, rows) {
 deferInit("chunk-x6v6jz2y.js:26370", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:26374-27033 placement = useSelection (0.958)
+//@ chunk-x6v6jz2y.js:26374-27033 placement (2.1.88 match: useSelection, 0.958)
 /**
  * 选区操作钩子：复制（并清除）/复制不清除、取选中文本、清除、是否有选区、读状态、订阅变化、键盘移动焦点、设置选区背景色。没有 Ink 实例时返回空实现。
  */

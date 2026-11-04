@@ -13,7 +13,7 @@ import { consoleProfileCanStartCloudSessions } from "../../utils/teleport/api.js
 import { CLOUD_SESSIONS_POLICY } from "../../services/cloudSessions/cloudSessionsPolicy.js";
 import { isCommandEnabled } from "../../commands.js";
 
-//@ chunk-e6aww6q8.js:2041085-2041309 fingerprint = default (0.485)
+//@ chunk-e6aww6q8.js:2041085-2041309 fingerprint (2.1.88 match: default, 0.485)
 /**
  * /remote-env 命令对象（local-jsx）；描述：Choose the default environment for cloud agents；availability ["claude-ai","console-profile"]；isEnabled: ()=>vt()||B8t()；isHidden: {return!Ud(this)}；实现 chunk-zj31az9x.js 的 Vt。
  */

@@ -31,7 +31,7 @@ import { getPlatform } from "../../utils/platform.js";
 import { SandboxDepCheckLine } from "./WindowsSandboxStatus.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-rtnapjwv.js:2100-2164 fingerprint = _temp2 (1)
+//@ chunk-rtnapjwv.js:2100-2164 fingerprint (2.1.88 match: _temp2, 1)
 /**
  * 函数 sandboxBinaryPath（取沙箱二进制路径）；位于「/sandbox 依赖检查：ripgrep、bubblewrap、socat、seatbelt、Windows WFP 等是否就绪与安装提示」模块。
  */
@@ -45,7 +45,7 @@ function sandboxBinaryPath() {
 deferInit("chunk-55w3ydvj.js:16494", () => {
   init_react_production();
 });
-//@ chunk-55w3ydvj.js:16498-16542 fingerprint = _temp (1)
+//@ chunk-55w3ydvj.js:16498-16542 fingerprint (2.1.88 match: _temp, 1)
 function hasRipgrep(e) {
   return e.includes("ripgrep");
 }
@@ -57,7 +57,7 @@ function isBubblewrapMissing(output) {
 function isSocatMissing(output) {
   return output.startsWith(`${SOCAT_LABEL}not `);
 }
-//@ chunk-55w3ydvj.js:16638-16736 callgraph-fingerprint = _temp4 (0.413)
+//@ chunk-55w3ydvj.js:16638-16736 callgraph-fingerprint (2.1.88 match: _temp4, 0.413)
 function isOtherMissingDep(e_2) {
   return (
     !e_2.includes("ripgrep") && !e_2.startsWith(`${BWRAP_LABEL}not `) && !e_2.startsWith(`${SOCAT_LABEL}not `)
@@ -130,7 +130,7 @@ function renderProbeError(err) {
 var BWRAP_LABEL = "bubblewrap (bwrap) ";
 var SOCAT_LABEL = "socat ";
 var NOT_INSTALLED_LABEL = "not installed";
-//@ chunk-55w3ydvj.js:17331-19789 fingerprint = SandboxDependenciesTab (0.369)
+//@ chunk-55w3ydvj.js:17331-19789 fingerprint (2.1.88 match: SandboxDependenciesTab, 0.369)
 function SandboxDependenciesTab(props) {
   let $ = useMemoCache(26);
   let { depCheck } = props;

@@ -642,7 +642,7 @@ function filterSessionHookMatchers(groups, skipSessionHooks) {
     }),
   );
 }
-//@ chunk-7a5rgqvc.js:2745-2802 fingerprint = getHooksConfig (0.848)
+//@ chunk-7a5rgqvc.js:2745-2802 fingerprint (2.1.88 match: getHooksConfig, 0.848)
 function isPluginMatcherAllX(group) {
   return "pluginRoot" in group && group.hooks.every(isPrefilterableHook);
 }
@@ -687,7 +687,7 @@ function isHookSourceAllowed(pluginId) {
 function areHooksEnabled() {
   return !isCustomizationDisabled("hooks") && !shouldDisableAllHooksIncludingManaged() && !isSafeMode();
 }
-//@ chunk-4nwcj4sh.js:6631-6701 fingerprint = isInternalHook (1)
+//@ chunk-4nwcj4sh.js:6631-6701 fingerprint (2.1.88 match: isInternalHook, 1)
 /**
  * 是否为内部 callback 钩子（hook.internal=true），内部钩子不计入用户钩子遥测。
  */
@@ -717,7 +717,7 @@ function dropHooksInHttpServe(hooks, hookEvent) {
   }
   return hooks;
 }
-//@ chunk-rxmpx0xj.js:827-882 fingerprint = getHookTypeCounts (0.698)
+//@ chunk-rxmpx0xj.js:827-882 fingerprint (2.1.88 match: getHookTypeCounts, 0.698)
 function hasNonInternalHook(results) {
   return results.hooks.some(
     (hook) =>
@@ -745,7 +745,7 @@ function keepAskAndContext(pass) {
   if (pass.additionalContext) kept.additionalContext = pass.additionalContext;
   return kept;
 }
-//@ chunk-e6aww6q8.js:744006-744067 fingerprint = getPreToolHookBlockingMessage (1)
+//@ chunk-e6aww6q8.js:744006-744067 fingerprint (2.1.88 match: getPreToolHookBlockingMessage, 1)
 function getPreToolHookBlockingMessage(hookName, blockingError) {
   return `${hookName} hook error: ${blockingError.blockingError}`;
 }
@@ -1357,7 +1357,7 @@ deferInit("chunk-e6aww6q8.js:752904", () => {
     ),
   );
 });
-//@ chunk-e6aww6q8.js:752985-753062 fingerprint = hasHookForEvent (0.459)
+//@ chunk-e6aww6q8.js:752985-753062 fingerprint (2.1.88 match: hasHookForEvent, 0.459)
 /**
  * 按代理的 hooks/plugin 决定权限模式（有钩子时用 mj 调整）。旧版名 hasHookForEvent 存疑。
  */
@@ -1365,7 +1365,7 @@ var hasHookForEvent_2 = (agentDefinition, permissionMode) =>
   shouldLoadPermissionRules(agentDefinition.hooks, agentDefinition.plugin)
     ? narrowerMode(agentDefinition.permissionMode, permissionMode)
     : agentDefinition.permissionMode;
-//@ chunk-e6aww6q8.js:942378-943416 fingerprint = executeInBackground (0.417)
+//@ chunk-e6aww6q8.js:942378-943416 fingerprint (2.1.88 match: executeInBackground, 0.417)
 /**
  * 后台 async 钩子结束后读取 stdout：解析 {async:true} 之后的 JSON 答复，finalize 并返回附件数据；无输出且成功时返回 null。
  */
@@ -1792,7 +1792,7 @@ deferInit("chunk-e6aww6q8.js:3414416", () => {
   HOOK_OUTPUT_INVALID_PREFIX = "Hook JSON output validation failed \u2014 ";
   HOOK_OUTPUT_META_KEYS = new Set(["async", "hookEventName", "behavior"]);
 });
-//@ chunk-e6aww6q8.js:3414519-3414620 sole-consumer = isInvalidValueIssue (1)
+//@ chunk-e6aww6q8.js:3414519-3414620 sole-consumer (2.1.88 match: isInvalidValueIssue, 1)
 function isInvalidValueIssue(issue) {
   let last = issue.path.at(-1);
   return issue.code === "invalid_value" && typeof last === "string" && HOOK_OUTPUT_META_KEYS.has(last);
@@ -1879,7 +1879,7 @@ function formatHookOutputError(parsed, error) {
 
 The hook's output was: ${jsonStringify(parsed, null, 2)}`;
 }
-//@ chunk-e6aww6q8.js:3416415-3417708 fingerprint = parseHookOutput (0.607)
+//@ chunk-e6aww6q8.js:3416415-3417708 fingerprint (2.1.88 match: parseHookOutput, 0.607)
 /**
  * 返回钩子 JSON 输出的期望 schema 说明文本（continue/suppressOutput/stopReason/decision/reason/systemMessage/terminalSequence/hookSpecificOutput…），用于校验失败时提示。
  */
@@ -1952,7 +1952,7 @@ function formatHookFailureLine(hookEvent, detail) {
     return `${hookEvent} hook output invalid: ${firstLine.slice(HOOK_OUTPUT_INVALID_PREFIX.length)}`;
   return firstLine ? `${hookEvent} hook failed: ${firstLine}` : `${hookEvent} hook failed to run`;
 }
-//@ chunk-e6aww6q8.js:3417928-3419240 facade-exports = executePreCompactHooks (0.724)
+//@ chunk-e6aww6q8.js:3417928-3419240 facade-exports (2.1.88 match: executePreCompactHooks, 0.724)
 /**
  * 执行 PreCompact 钩子（matcher = manual/auto）：成功输出（超长截断）合并为 newCustomInstructions，失败与成功信息合成 userDisplayMessage，exit 2/block 的汇成 blockedBy 阻止压缩；子代理只返回 blockedBy。
  */
@@ -2049,7 +2049,7 @@ function executePostCompactHooks(session, session_2, trigger, signal, timeoutMs)
     return {};
   });
 }
-//@ chunk-e6aww6q8.js:3419338-3420130 fingerprint = executePostCompactHooks (0.946)
+//@ chunk-e6aww6q8.js:3419338-3420130 fingerprint (2.1.88 match: executePostCompactHooks, 0.946)
 /**
  * 执行 PostCompact 钩子（输入含 compact_summary），只生成给用户看的成功/失败信息；子代理或关闭钩子时跳过。
  */
@@ -2100,7 +2100,7 @@ async function executePostCompactHooks_2(
         : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:3420130-3420436 fingerprint = executeConfigChangeHooks (1)
+//@ chunk-e6aww6q8.js:3420130-3420436 fingerprint (2.1.88 match: executeConfigChangeHooks, 1)
 /**
  * 执行 ConfigChange 钩子（matcher = source，如 user_settings/skills），policy_settings 来源的结果强制不阻断。
  */
@@ -2161,7 +2161,7 @@ async function executeDirectoryAddedHooks(
     systemMessages,
   };
 }
-//@ chunk-e6aww6q8.js:3420753-3421267 facade-exports = executeElicitationHooks (1)
+//@ chunk-e6aww6q8.js:3420753-3421267 facade-exports (2.1.88 match: executeElicitationHooks, 1)
 /**
  * 执行 Elicitation 钩子（matcher = MCP 服务器名），钩子可直接给出 accept/decline/cancel 及 content，decline 视为阻断。
  */
@@ -2206,7 +2206,7 @@ async function executeElicitationHooks({
     blockingError,
   };
 }
-//@ chunk-e6aww6q8.js:3421267-3421765 facade-exports = executeElicitationResultHooks (1)
+//@ chunk-e6aww6q8.js:3421267-3421765 facade-exports (2.1.88 match: executeElicitationResultHooks, 1)
 /**
  * 执行 ElicitationResult 钩子，可改写用户对 elicitation 的回答；decline 视为阻断。
  */
@@ -2249,7 +2249,7 @@ async function executeElicitationResultHooks({
     blockingError,
   };
 }
-//@ chunk-e6aww6q8.js:3421765-3422063 fingerprint = executeEnvHooks (1)
+//@ chunk-e6aww6q8.js:3421765-3422063 fingerprint (2.1.88 match: executeEnvHooks, 1)
 /**
  * CwdChanged/FileChanged 共用：执行钩子后使会话 env 缓存失效，收集 watchPaths 与 systemMessage。
  */
@@ -2274,7 +2274,7 @@ async function executeEnvHooks(
     systemMessages,
   };
 }
-//@ chunk-e6aww6q8.js:3422063-3422177 facade-exports = executeCwdChangedHooks (1)
+//@ chunk-e6aww6q8.js:3422063-3422177 facade-exports (2.1.88 match: executeCwdChangedHooks, 1)
 /**
  * 执行 CwdChanged 钩子（old_cwd/new_cwd），钩子可写 CLAUDE_ENV_FILE、返回 watchPaths。
  */
@@ -2287,7 +2287,7 @@ function executeCwdChangedHooks(session, oldCwd, newCwd, timeoutMs = {}) {
   };
   return executeEnvHooks(session, hookInput, timeoutMs);
 }
-//@ chunk-e6aww6q8.js:3422177-3422292 facade-exports = executeFileChangedHooks (1)
+//@ chunk-e6aww6q8.js:3422177-3422292 facade-exports (2.1.88 match: executeFileChangedHooks, 1)
 /**
  * 执行 FileChanged 钩子（file_path/event: change|add|unlink）。
  */
@@ -2307,7 +2307,7 @@ function executeFileChangedHooks(session, filePath, event, timeoutMs = {}) {
 function executeInstructionsLoadedHooks(...args) {
   return executeInstructionsLoadedHooks_2(...args).catch(logHookExecutionFailure);
 }
-//@ chunk-e6aww6q8.js:3422338-3422713 fingerprint = executeInstructionsLoadedHooks (0.958)
+//@ chunk-e6aww6q8.js:3422338-3422713 fingerprint (2.1.88 match: executeInstructionsLoadedHooks, 0.958)
 /**
  * 执行 InstructionsLoaded 钩子（CLAUDE.md/规则文件加载时，matcher = load_reason），只观察不阻断。
  */
@@ -2340,7 +2340,7 @@ async function executeInstructionsLoadedHooks_2(session, filePath, memoryType, f
     credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3428473-3428784 facade-exports = executeNotificationHooks (0.946)
+//@ chunk-e6aww6q8.js:3428473-3428784 facade-exports (2.1.88 match: executeNotificationHooks, 0.946)
 /**
  * 执行 Notification 钩子（matcher = notification_type）。
  */
@@ -2395,7 +2395,7 @@ deferInit("chunk-e6aww6q8.js:3428967", () => {
 });
 //@ chunk-e6aww6q8.js:3428999-3429027 layout
 var STARTUP_HOOK_HOLD = "startup-hook-hold";
-//@ chunk-e6aww6q8.js:3429027-3429383 facade-exports = executeSessionStartHooks (0.768)
+//@ chunk-e6aww6q8.js:3429027-3429383 facade-exports (2.1.88 match: executeSessionStartHooks, 0.768)
 /**
  * 执行 SessionStart 钩子（source = startup/resume/clear/compact/fork，输入含 agent_type/model/session_title），期间持有 startup-hook-hold 活动；返回结果流。
  */
@@ -2476,7 +2476,7 @@ async function* runStartupHooksWithHold({
     endActivity("hook_exec", STARTUP_HOOK_HOLD);
   }
 }
-//@ chunk-e6aww6q8.js:3429739-3430016 facade-exports = executeSetupHooks (0.878)
+//@ chunk-e6aww6q8.js:3429739-3430016 facade-exports (2.1.88 match: executeSetupHooks, 0.878)
 /**
  * 执行 Setup 钩子（trigger = init/maintenance），期间持有 startup-hook-hold。
  */
@@ -2511,7 +2511,7 @@ async function* executeSetupHooks(
     endActivity("hook_exec", STARTUP_HOOK_HOLD);
   }
 }
-//@ chunk-e6aww6q8.js:3430016-3430348 facade-exports = executeSubagentStartHooks (0.856)
+//@ chunk-e6aww6q8.js:3430016-3430348 facade-exports (2.1.88 match: executeSubagentStartHooks, 0.856)
 /**
  * 执行 SubagentStart 钩子（agent_id/agent_type，matcher = agent_type）。
  */
@@ -2545,7 +2545,7 @@ async function* executeSubagentStartHooks(
     credentials: toolUseContext.credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3430348-3430847 facade-exports = executeSessionEndHooks (0.895)
+//@ chunk-e6aww6q8.js:3430348-3430847 facade-exports (2.1.88 match: executeSessionEndHooks, 0.895)
 /**
  * 执行 SessionEnd 钩子（matcher = reason），时间预算由 CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS 与钩子 timeout 推出，失败写 stderr，最后清空会话钩子。
  */
@@ -2642,7 +2642,7 @@ function summarizeSessionCronsForHook(crons = getSessionCronTasks()) {
 function executeStopFailureHooks(...args) {
   return executeStopFailureHooks_2(...args).catch(logHookExecutionFailure);
 }
-//@ chunk-e6aww6q8.js:3431685-3432233 fingerprint = executeStopFailureHooks (0.843)
+//@ chunk-e6aww6q8.js:3431685-3432233 fingerprint (2.1.88 match: executeStopFailureHooks, 0.843)
 /**
  * API 错误结束回合时执行 StopFailure 钩子（matcher = error 类型），输出与退出码被忽略。
  */
@@ -2683,7 +2683,7 @@ async function executeStopFailureHooks_2(
     credentials: toolUseContext.credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3432233-3433269 facade-exports = executeStopHooks (0.605)
+//@ chunk-e6aww6q8.js:3432233-3433269 facade-exports (2.1.88 match: executeStopHooks, 0.605)
 /**
  * 执行 Stop/SubagentStop 钩子：输入含 stop_hook_active、last_assistant_message、background_tasks、session_crons，SubagentStop 另含 agent_id/agent_transcript_path/agent_type；turn_end_reactions 只跑会话 function 钩子。
  */
@@ -2763,7 +2763,7 @@ async function* executeStopHooks(
     sessionFunctionHooksOnly: requestPrompt === "turn_end_reactions",
   });
 }
-//@ chunk-e6aww6q8.js:3433307-3433575 facade-exports = executeTeammateIdleHooks (0.913)
+//@ chunk-e6aww6q8.js:3433307-3433575 facade-exports (2.1.88 match: executeTeammateIdleHooks, 0.913)
 /**
  * 执行 TeammateIdle 钩子（teammate_name/team_name），exit 2 让队友继续工作。
  */
@@ -2794,7 +2794,7 @@ async function* executeTeammateIdleHooks(
     toolUseContext: hook,
   });
 }
-//@ chunk-e6aww6q8.js:3433575-3433892 facade-exports = executeTaskCreatedHooks (0.971)
+//@ chunk-e6aww6q8.js:3433575-3433892 facade-exports (2.1.88 match: executeTaskCreatedHooks, 0.971)
 /**
  * 执行 TaskCreated 钩子（task_id/subject/description/teammate/team），exit 2 阻止创建。
  */
@@ -2831,7 +2831,7 @@ async function* executeTaskCreatedHooks(
     toolUseContext,
   });
 }
-//@ chunk-e6aww6q8.js:3433892-3434211 facade-exports = executeTaskCompletedHooks (0.97)
+//@ chunk-e6aww6q8.js:3433892-3434211 facade-exports (2.1.88 match: executeTaskCompletedHooks, 0.97)
 /**
  * 执行 TaskCompleted 钩子，exit 2 阻止标记完成。
  */
@@ -3080,7 +3080,7 @@ async function* executePreToolHooks(
   let reconciled = reconcileHeldHookResults(withHeldPermissionBehavior(managedHooksOnly, flushHeld), results);
   if (reconciled !== undefined) yield reconciled;
 }
-//@ chunk-e6aww6q8.js:3437216-3438478 fingerprint = executePreToolHooks (0.581)
+//@ chunk-e6aww6q8.js:3437216-3438478 fingerprint (2.1.88 match: executePreToolHooks, 0.581)
 /**
  * 执行 PreToolUse 钩子（matcher = 工具名，输入含 tool_name/tool_input/tool_use_id/mcp_server）：复用 managed 预跑结果；有 mods 链时走 runPreToolUseFunctionChain，否则直接 executeHooks。
  */
@@ -3173,7 +3173,7 @@ async function* executePreToolHooks_2(
   }
   yield* runFunctionSite();
 }
-//@ chunk-e6aww6q8.js:3438478-3438969 facade-exports = executePostToolHooks (0.869)
+//@ chunk-e6aww6q8.js:3438478-3438969 facade-exports (2.1.88 match: executePostToolHooks, 0.869)
 /**
  * 执行 PostToolUse 钩子（输入含 tool_response/duration_ms），可返回 additionalContext、updatedToolOutput、classifierContext。
  */
@@ -3214,7 +3214,7 @@ async function* executePostToolHooks(
     managedHooksExcluded: options?.managedHooksExcluded,
   });
 }
-//@ chunk-e6aww6q8.js:3438969-3439376 facade-exports = executePostToolUseFailureHooks (0.888)
+//@ chunk-e6aww6q8.js:3438969-3439376 facade-exports (2.1.88 match: executePostToolUseFailureHooks, 0.888)
 /**
  * 执行 PostToolUseFailure 钩子（error/is_interrupt/duration_ms）。
  */
@@ -3309,7 +3309,7 @@ async function* executePostToolBatchHooks(
         }
       : hookResult;
 }
-//@ chunk-e6aww6q8.js:3439911-3440280 facade-exports = executePermissionDeniedHooks (0.911)
+//@ chunk-e6aww6q8.js:3439911-3440280 facade-exports (2.1.88 match: executePermissionDeniedHooks, 0.911)
 /**
  * 执行 PermissionDenied 钩子（auto 模式拒绝后），钩子可返回 retry:true 让模型重试。
  */
@@ -3350,7 +3350,7 @@ async function* executePermissionDeniedHooks(
     toolUseContext,
   });
 }
-//@ chunk-e6aww6q8.js:3440280-3440613 facade-exports = executePermissionRequestHooks (1)
+//@ chunk-e6aww6q8.js:3440280-3440613 facade-exports (2.1.88 match: executePermissionRequestHooks, 1)
 /**
  * 执行 PermissionRequest 钩子（权限对话框出现时，输入含 permission_suggestions），钩子可返回 allow（可带 updatedInput/updatedPermissions）或 deny。
  */
@@ -3460,7 +3460,7 @@ async function* executeUserPromptSubmitHooksForSession(
     credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3445551-3445934 facade-exports = executeUserPromptSubmitHooks (0.764)
+//@ chunk-e6aww6q8.js:3445551-3445934 facade-exports (2.1.88 match: executeUserPromptSubmitHooks, 0.764)
 /**
  * 执行 UserPromptSubmit 钩子：输入含 prompt 与 session_title，超时 30 秒；exit 2 阻止并抹去原提示词。
  */
@@ -3485,7 +3485,7 @@ async function* executeUserPromptSubmitHooks(prompt, mode, context, requestPromp
     ...tiers,
   });
 }
-//@ chunk-e6aww6q8.js:3445985-3446035 facade-exports = hasWorktreeCreateHook (0.551)
+//@ chunk-e6aww6q8.js:3445985-3446035 facade-exports (2.1.88 match: hasWorktreeCreateHook, 0.551)
 /**
  * 是否配置了 WorktreeCreate 钩子。
  */
@@ -3495,7 +3495,7 @@ function dispatchesWorktreeCreate() {
 //@ chunk-e6aww6q8.js:3446085-3446104 affinity
 var HOOK_ERROR_LINE_HEAD = 60;
 var HOOK_ERROR_LINE_TAIL = 100;
-//@ chunk-e6aww6q8.js:3446104-3447412 facade-exports = executeWorktreeCreateHook (0.659)
+//@ chunk-e6aww6q8.js:3446104-3447412 facade-exports (2.1.88 match: executeWorktreeCreateHook, 0.659)
 /**
  * 执行 WorktreeCreate 钩子：command 钩子 stdout 输出路径，http/callback 返回 hookSpecificOutput.worktreePath；配置了却没跑、无路径或失败都抛错；相对路径按项目根解析。
  */
@@ -3548,7 +3548,7 @@ async function executeWorktreeCreateHook(session, name, { storageV5, credentials
     ),
   };
 }
-//@ chunk-e6aww6q8.js:3447412-3448547 facade-exports = executeWorktreeRemoveHook (0.427)
+//@ chunk-e6aww6q8.js:3447412-3448547 facade-exports (2.1.88 match: executeWorktreeRemoveHook, 0.427)
 /**
  * 执行 WorktreeRemove 钩子：返回 not_configured/removed/failed；失败但目录已不存在时视为已删除。
  */
@@ -3702,7 +3702,7 @@ function getManagedSessionEndTimeoutMs() {
     ? withHostEnvRestored(() => env.CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS)
     : env.CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS;
 }
-//@ chunk-e6aww6q8.js:3449382-3449492 fingerprint = getSessionEndHookTimeoutMs (0.793)
+//@ chunk-e6aww6q8.js:3449382-3449492 fingerprint (2.1.88 match: getSessionEndHookTimeoutMs, 0.793)
 /**
  * 读取 CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS（上限 1 小时），与组织值相同时视为未覆盖。
  */
@@ -3981,7 +3981,7 @@ function getHookRewriterKind(returned, value) {
       return "remote";
   }
 }
-//@ chunk-e6aww6q8.js:3453493-3453685 fingerprint = validateHookJson (0.727)
+//@ chunk-e6aww6q8.js:3453493-3453685 fingerprint (2.1.88 match: validateHookJson, 0.727)
 function validateHookJson(jsonString) {
   let parsed = jsonParse(jsonString);
   let validation = hookJSONOutputSchema().safeParse(parsed);
@@ -4068,7 +4068,7 @@ function isJsonLinesOutput(stdout) {
     }
   });
 }
-//@ chunk-e6aww6q8.js:3454784-3454946 facade-exports = isSyncHookJSONOutput (1)
+//@ chunk-e6aww6q8.js:3454784-3454946 facade-exports (2.1.88 match: isSyncHookJSONOutput, 1)
 /**
  * 判断钩子 stdout 是否声明自己转为异步：去掉前后空白后是 JSON 对象且 `async === true`。
  */
@@ -4103,7 +4103,7 @@ function isWithheldGuardHttpHook(hook, hookEvent) {
 function httpHookUnreachableMessage(hookEvent, error) {
   return `Refused, and a retry will be too: an HTTP hook is set on ${hookEvent} and could not be asked. ${error ?? ""}`.trimEnd();
 }
-//@ chunk-e6aww6q8.js:3455231-3455743 facade-exports = parseHttpHookOutput (1)
+//@ chunk-e6aww6q8.js:3455231-3455743 facade-exports (2.1.88 match: parseHttpHookOutput, 1)
 /**
  * 解析 HTTP 钩子响应体：空体当 {}，必须是 JSON 对象并通过输出 schema。
  */
@@ -4153,7 +4153,7 @@ function logUpdatedMcpToolOutputProbe(supported) {
     with_new_field: fromEnum(label),
   });
 }
-//@ chunk-e6aww6q8.js:3455929-3462176 fingerprint = processHookJSONOutput (0.8)
+//@ chunk-e6aww6q8.js:3455929-3462176 fingerprint (2.1.88 match: processHookJSONOutput, 0.8)
 /**
  * 把钩子 JSON 输出翻译成内部结果：continue:false → preventContinuation/stopReason；decision approve/block；systemMessage；terminalSequence（白名单 OSC）；按 hookSpecificOutput.hookEventName 处理 permissionDecision、updatedInput、additionalContext、sessionTitle、watchPaths、reloadSkills、updatedToolOutput、retry、PermissionRequest decision、elicitation action、displayContent 等；事件名不符抛错。
  */
@@ -4528,7 +4528,7 @@ function logHookMatchingFailure(hookEvent, cause) {
   );
   logFeatureBad(hookFeature(hookEvent), "hook_matching_failed");
 }
-//@ chunk-e6aww6q8.js:3464175-3477576 fingerprint = execCommandHook (0.531)
+//@ chunk-e6aww6q8.js:3464175-3477576 fingerprint (2.1.88 match: execCommandHook, 0.531)
 /**
  * 执行 command 钩子：云端设备转发、exec 形式（args）或 shell（bash/Git Bash/PowerShell）启动；注入 CLAUDE_PROJECT_DIR、CLAUDE_PLUGIN_ROOT/DATA、CLAUDE_PLUGIN_OPTION_*、CLAUDE_ENV_FILE 等环境变量；stdin 写入 JSON 输入；首行 {async:true} 或 async/asyncRewake 配置时转后台；返回 stdout/stderr/status 及 stdio 完整性标志。
  */
@@ -5732,7 +5732,7 @@ function makeHookMatcher(toolName, matcherAssembly, options) {
       "tool_input" in toolName ? toolName.tool_input : undefined,
     );
 }
-//@ chunk-e6aww6q8.js:3482036-3482244 facade-exports = isToolReferenceWithName (1)
+//@ chunk-e6aww6q8.js:3482036-3482244 facade-exports (2.1.88 match: isToolReferenceWithName, 1)
 /**
  * 若 matcher 只在工具名的 MCP 前缀变体上命中，返回把 tool_name 改成命中变体的事件输入副本，否则原样返回；让钩子看到它所匹配的名字。
  */
@@ -5866,7 +5866,7 @@ deferInit("chunk-e6aww6q8.js:3483665", () => {
     "DirectoryAdded",
   ]);
 });
-//@ chunk-e6aww6q8.js:3484024-3484186 layout = getMcpPrefix (1)
+//@ chunk-e6aww6q8.js:3484024-3484186 layout (2.1.88 match: getMcpPrefix, 1)
 function isBareMcpServerMatcher(serverName) {
   if (!/^[a-zA-Z0-9_|, -]+$/.test(serverName)) return false;
   return serverName
@@ -5936,7 +5936,7 @@ function getHookToolInput(hookInput) {
     ? hookInput.tool_input
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3485222-3485384 layout = getMcpPrefix (1)
+//@ chunk-e6aww6q8.js:3485222-3485384 layout (2.1.88 match: getMcpPrefix, 1)
 function getMcpPrefix(toolName, matcher, hookToolInput) {
   let queries = hookMatchQueries(toolName, hookToolInput);
   return matcher === undefined || !/\(\?<?!|\[\^/.test(matcher)
@@ -5945,7 +5945,7 @@ function getMcpPrefix(toolName, matcher, hookToolInput) {
         matcher.includes(query.startsWith("mcp__") ? query.slice(0, query.indexOf("__", 5) + 2) : query),
       );
 }
-//@ chunk-e6aww6q8.js:3485384-3485915 fingerprint = matchesPattern (1)
+//@ chunk-e6aww6q8.js:3485384-3485915 fingerprint (2.1.88 match: matchesPattern, 1)
 /**
  * 判断 matcher 是否匹配：空或 * 全匹配；简单名单（A|B）精确匹配名字及别名；否则当正则匹配工具名、旧名和 MCP 名。
  */
@@ -6002,7 +6002,7 @@ async function createIfConditionMatcher(hookInput, tools, hookInput_2 = false) {
     return patternMatcher !== undefined && patternMatcher(parsed.ruleContent);
   };
 }
-//@ chunk-e6aww6q8.js:3486233-3486825 fingerprint = prepareIfConditionMatcher (0.754)
+//@ chunk-e6aww6q8.js:3486233-3486825 fingerprint (2.1.88 match: prepareIfConditionMatcher, 0.754)
 /**
  * 为 if 条件准备匹配器：只对 PreToolUse/PostToolUse/PostToolUseFailure/PermissionRequest/PermissionDenied 生效，用工具的 preparePermissionMatcher 对输入求值。
  */
@@ -7073,7 +7073,7 @@ ${signal_2.advice}`,
     outcome: "blocking",
   };
 }
-//@ chunk-e6aww6q8.js:3503312-3503396 fingerprint = hookDedupKey (0.791)
+//@ chunk-e6aww6q8.js:3503312-3503396 fingerprint (2.1.88 match: hookDedupKey, 0.791)
 /**
  * 钩子去重键：来源根（pluginRoot/skillRoot/settingsSource）+ 负载。
  */
@@ -7539,7 +7539,7 @@ function checkHookIfConditionSafely(condition) {
     return `A hook's "if" condition names a file path, which can't be checked because this session has no working directory.`;
   }
 }
-//@ chunk-e6aww6q8.js:3509042-3515613 fingerprint = getMatchingHooks (0.58)
+//@ chunk-e6aww6q8.js:3509042-3515613 fingerprint (2.1.88 match: getMatchingHooks, 0.58)
 /**
  * 取某事件匹配的钩子：汇总快照/插件/会话/SDK 来源的 matcher，按 matcher 匹配 matchQuery（工具名、别名、MCP 名），附加来源信息，按类型去重（同命令只跑一次，settings 优先），再按 if 条件（权限规则语法）过滤；SessionStart/Setup 不支持 http 钩子。
  */
@@ -7977,7 +7977,7 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3515613-3515668 facade-exports = getTeammateIdleHookMessage (0.511)
+//@ chunk-e6aww6q8.js:3515613-3515668 facade-exports (2.1.88 match: getTeammateIdleHookMessage, 0.511)
 /**
  * 生成 Stop 钩子阻断后发给模型的反馈消息。旧版名 getTeammateIdleHookMessage 与本函数对调了。
  */
@@ -7991,14 +7991,14 @@ function getStopHookMessage(blockingError) {
 function getTeammateIdleHookMessage(blockingError) {
   return hookFeedbackText("TeammateIdle", scrubHookOutputTags(blockingError.blockingError));
 }
-//@ chunk-e6aww6q8.js:3515731-3515793 facade-exports = getTaskCreatedHookMessage (0.47)
+//@ chunk-e6aww6q8.js:3515731-3515793 facade-exports (2.1.88 match: getTaskCreatedHookMessage, 0.47)
 /**
  * 生成 TaskCreated 钩子阻断消息。
  */
 function getTaskCreatedHookMessage(blockingError) {
   return hookFeedbackText("TaskCreated", scrubHookOutputTags(blockingError.blockingError));
 }
-//@ chunk-e6aww6q8.js:3515793-3515857 facade-exports = getTaskCompletedHookMessage (0.477)
+//@ chunk-e6aww6q8.js:3515793-3515857 facade-exports (2.1.88 match: getTaskCompletedHookMessage, 0.477)
 /**
  * 生成 TaskCompleted 钩子阻断消息。
  */
@@ -8021,7 +8021,7 @@ function getNonBlockableHookErrorMessage(hook, blockingError, hookName = hook) {
     command: blockingError.command,
   });
 }
-//@ chunk-e6aww6q8.js:3516023-3516110 facade-exports = getUserPromptSubmitHookBlockingMessage (1)
+//@ chunk-e6aww6q8.js:3516023-3516110 facade-exports (2.1.88 match: getUserPromptSubmitHookBlockingMessage, 1)
 /**
  * UserPromptSubmit 阻断消息：「UserPromptSubmit operation blocked by hook: …」。
  */
@@ -8322,7 +8322,7 @@ function stripConfinedHookApproval(result, permissionRequest, hookInput, toolUse
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:3521232-3557798 fingerprint = executeHooks (0.484)
+//@ chunk-e6aww6q8.js:3521232-3557798 fingerprint (2.1.88 match: executeHooks, 0.484)
 /**
  * REPL 内钩子执行主体（异步生成器）：信任检查 → getMatchingHooks → 按类型分发（callback/function/prompt/agent/http/mcp_tool/command/script），并行执行（有槽位限制），逐个产出 message、blockingError、permissionBehavior、additionalContexts、updatedInput、updatedToolOutput 等；汇总 deny>defer>ask>allow，记 tengu_run_hook/tengu_repl_hook_finished 与 OTel。
  */
@@ -10845,7 +10845,7 @@ function runOutsideReplFunctionChain(options, input) {
       }),
   });
 }
-//@ chunk-e6aww6q8.js:3558690-3568751 facade-exports = executeHooksOutsideREPL (0.59)
+//@ chunk-e6aww6q8.js:3558690-3568751 facade-exports (2.1.88 match: executeHooksOutsideREPL, 0.59)
 /**
  * REPL 外（无对话上下文）执行钩子，返回 [{command, succeeded, output, blocked, watchPaths, systemMessage}]；prompt/agent 钩子在这里不支持；工作区未信任时跳过（personsHooksRunUntrusted 除外）。SessionEnd/Notification/PreCompact/WorktreeCreate 等用它。
  */
@@ -11499,7 +11499,7 @@ async function executeHooksOutsideREPL(options) {
     if (pluginId) recordPluginUsage(pluginId);
   return outcomes;
 }
-//@ chunk-e6aww6q8.js:3568751-3569073 facade-exports = hasInstructionsLoadedHook (0.849)
+//@ chunk-e6aww6q8.js:3568751-3569073 facade-exports (2.1.88 match: hasInstructionsLoadedHook, 0.849)
 /**
  * 是否存在 InstructionsLoaded 钩子（快照、主线程代理钩子、注册钩子、会话钩子、设备钩子）。
  */
@@ -11535,7 +11535,7 @@ async function awaitWithHookTimeout(promise, hookEvent, signal, timeoutMs) {
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-e6aww6q8.js:3569228-3570004 facade-exports = parseElicitationHookOutput (0.9)
+//@ chunk-e6aww6q8.js:3569228-3570004 facade-exports (2.1.88 match: parseElicitationHookOutput, 0.9)
 /**
  * 把 REPL 外钩子结果解析为 elicitation 响应：blocked 或 decision:block 视为阻断，hookSpecificOutput.action/content 作为回答。
  */
@@ -11599,7 +11599,7 @@ var statusLineLogStateByHost; // deferred: uses StatusLineLogState of its import
 deferInit("chunk-e6aww6q8.js:3570039", () => {
   statusLineLogStateByHost = new HostScoped(() => new StatusLineLogState());
 });
-//@ chunk-e6aww6q8.js:3570066-3571131 facade-exports = executeStatusLineCommand (0.656)
+//@ chunk-e6aww6q8.js:3570066-3571131 facade-exports (2.1.88 match: executeStatusLineCommand, 0.656)
 /**
  * 执行 statusLine 命令（复用 execCommandHook，事件名 StatusLine，stdin 为状态 JSON），返回非空输出行；禁用钩子或工作区未信任时不执行。
  */
@@ -11680,7 +11680,7 @@ async function executeStatusLineCommand(statusLineInput, signal, timeoutMs, logR
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3571131-3571754 facade-exports = executeFileSuggestionCommand (0.843)
+//@ chunk-e6aww6q8.js:3571131-3571754 facade-exports (2.1.88 match: executeFileSuggestionCommand, 0.843)
 /**
  * 执行 fileSuggestion 命令（@ 文件补全），默认 5 秒超时，按行返回候选。
  */
@@ -11728,7 +11728,7 @@ async function executeFileSuggestionCommand(session, input, signal, timeoutMs = 
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3571754-3572702 fingerprint = executeFunctionHook (1)
+//@ chunk-e6aww6q8.js:3571754-3572702 fingerprint (2.1.88 match: executeFunctionHook, 1)
 /**
  * 执行会话 function 钩子（内存回调，参数为消息列表），返回 false 时以 errorMessage 阻断；默认 5 秒超时。
  */
@@ -11796,7 +11796,7 @@ async function executeFunctionHook({ hook, messages, hookName, toolUseID, hookEv
     };
   }
 }
-//@ chunk-e6aww6q8.js:3572702-3573305 fingerprint = executeHookCallback (0.848)
+//@ chunk-e6aww6q8.js:3572702-3573305 fingerprint (2.1.88 match: executeHookCallback, 0.848)
 /**
  * 执行 SDK callback 钩子（hook.callback），结果经 processHookJSONOutput 处理；internal 钩子不产生成功消息。
  */
@@ -11869,7 +11869,7 @@ function getHookNameForTelemetry(hookEvent, matchQuery) {
       return `${hookEvent}:${matchQuery}`;
   }
 }
-//@ chunk-e6aww6q8.js:3573644-3574174 fingerprint = getHookDefinitionsForTelemetry (0.758)
+//@ chunk-e6aww6q8.js:3573644-3574174 fingerprint (2.1.88 match: getHookDefinitionsForTelemetry, 0.758)
 /**
  * 把匹配的钩子定义转成遥测用的 {type, command|prompt|name}。
  */

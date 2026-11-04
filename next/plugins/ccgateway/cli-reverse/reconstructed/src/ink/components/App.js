@@ -69,7 +69,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 //@ chunk-bzr73sfg.js:233477-233493 affinity
 var CLICK_SLOP_CELLS = 1;
 var WINDOW_ACTIVATION_WINDOW_MS = 400;
-//@ chunk-bzr73sfg.js:233493-243685 fingerprint = App (0.507)
+//@ chunk-bzr73sfg.js:233493-243685 fingerprint (2.1.88 match: App, 0.507)
 /**
  * Ink 根组件（类组件 InternalApp）：提供尺寸、AppContext、StdinContext、终端焦点、时钟等上下文；原始模式引用计数（打开时写括号粘贴/主题报告/焦点事件/扩展键模式并启动能力探测，关闭时复位）；stdin readable → 输入读取器（feedInputReader/flushInputReader）→ processKeysInBatch；鼠标点击/多击/悬停/拖动选区；Ctrl+Z 挂起与 SIGCONT 恢复；tmux pane 与单元格尺寸重探测；渲染错误时显示 ErrorOverview。
  */
@@ -527,7 +527,7 @@ function isMouseButtonEvent(item) {
 function isDiscreteInput(item) {
   return isKeyOrPaste(item) || isMouseButtonEvent(item) || item.kind === "focus";
 }
-//@ chunk-bzr73sfg.js:244065-245685 fingerprint = processKeysInBatch (0.506)
+//@ chunk-bzr73sfg.js:244065-245685 fingerprint (2.1.88 match: processKeysInBatch, 0.506)
 /**
  * 在 discreteUpdates 里处理一批输入：JetBrains 终端滚动 bug 修正、方向键连发检测；终端应答交给 querier；鼠标交给 handleMouseEvent（滚动模式下忽略按键）；焦点事件；粘贴 → dispatchPasteEvent；Ctrl+Z 挂起；滚轮 → dispatchWheelEvent；其余 → dispatchKeyboardEvent，若处理器要求按“ESC + 键”重读则拆开重放。同批多个离散输入之间 flushSyncWork，保证逐个生效。
  */
@@ -705,7 +705,7 @@ function handleMiddleOrRightClickPaste(app, button, col, row) {
       if (clipboard) app.props.dispatchPasteEvent(clipboard);
     });
 }
-//@ chunk-bzr73sfg.js:246607-249193 fingerprint = handleMouseEvent (0.731)
+//@ chunk-bzr73sfg.js:246607-249193 fingerprint (2.1.88 match: handleMouseEvent, 0.731)
 /**
  * 处理一个鼠标事件：悬停（onHoverAt/onPointerHover）；按下时左键开始选区或计多击（双击选词、三击选行，窗口激活点击不计）；拖动更新选区；右/中键记下待粘贴；松开时结束选区，没有选区则当点击（onClickAt），点在超链接上且带 Cmd/Ctrl 时延迟 500ms 打开（多击取消）。
  */

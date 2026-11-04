@@ -28,13 +28,13 @@ import { Dialog } from "./design-system/Dialog.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-e6aww6q8.js:3248805-3248901 fingerprint = hasIdeOnboardingDialogBeenShown (1)
+//@ chunk-e6aww6q8.js:3248805-3248901 fingerprint (2.1.88 match: hasIdeOnboardingDialogBeenShown, 1)
 function hasIdeOnboardingDialogBeenShown() {
   let config = getGlobalConfig();
   let terminal = envDynamicProbe.terminal || "unknown";
   return config.hasIdeOnboardingBeenShown?.[terminal] === true;
 }
-//@ chunk-18hwfzwa.js:1192350-1194346 fingerprint = IdeOnboardingDialog (0.623)
+//@ chunk-18hwfzwa.js:1192350-1194346 fingerprint (2.1.88 match: IdeOnboardingDialog, 0.623)
 function IdeOnboardingDialog(props) {
   let $ = useMemoCache(22);
   let { onDone, installationStatus } = props;
@@ -214,7 +214,7 @@ function IdeOnboardingDialog(props) {
   } else t16 = $[21];
   return t16;
 }
-//@ chunk-18hwfzwa.js:1194346-1194526 callgraph-witnessed = markDialogAsShown (0.626)
+//@ chunk-18hwfzwa.js:1194346-1194526 callgraph-witnessed (2.1.88 match: markDialogAsShown, 0.626)
 function markDialogAsShown(storageV5) {
   if (hasIdeOnboardingDialogBeenShown()) return;
   let terminal = envDynamicProbe.terminal || "unknown";

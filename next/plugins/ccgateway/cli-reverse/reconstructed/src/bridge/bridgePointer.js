@@ -83,7 +83,7 @@ var PERSISTED_STAMP_SKEW_TOLERANCE_MS = 120000;
 function isPersistedStampFresh(stampAt, now, windowMs) {
   return now - stampAt <= windowMs && stampAt - now <= PERSISTED_STAMP_SKEW_TOLERANCE_MS;
 }
-//@ chunk-7snpqrde.js:1273-1857 facade-exports = BridgePointerSchema (0.417)
+//@ chunk-7snpqrde.js:1273-1857 facade-exports (2.1.88 match: BridgePointerSchema, 0.417)
 /**
  * pointer schema：sessionId、environmentId、source（standalone/repl）、pid、procStart、activeSessionIds 及项目线程会话相关字段（数组上限 64）。
  */
@@ -109,7 +109,7 @@ deferInit("chunk-7snpqrde.js:1273", () => {
     }),
   );
 });
-//@ chunk-7snpqrde.js:1857-1914 fingerprint = getBridgePointerPath (1)
+//@ chunk-7snpqrde.js:1857-1914 fingerprint (2.1.88 match: getBridgePointerPath, 1)
 function getBridgePointerPath(dir) {
   return join(getProjectsDir(), getProjectKey(dir), "bridge-pointer.json");
 }
@@ -118,7 +118,7 @@ function bridgePointerStoreKey(dir) {
   let projectKey = getProjectKey(dir);
   return isValidKeySegment(projectKey) ? STORAGE_SPACES.bridgePointer(projectKey) : null;
 }
-//@ chunk-7snpqrde.js:1978-2419 facade-exports = writeBridgePointer (0.924)
+//@ chunk-7snpqrde.js:1978-2419 facade-exports (2.1.88 match: writeBridgePointer, 0.924)
 async function writeBridgePointer(dir, pointer, storageV5) {
   let path = getBridgePointerPath(dir);
   let storeKey = isStorageV5Enabled() && storageV5 !== undefined ? bridgePointerStoreKey(dir) : null;
@@ -160,7 +160,7 @@ function createBridgePointerWriteQueue() {
     return resolved;
   };
 }
-//@ chunk-7snpqrde.js:2487-3097 facade-exports = readBridgePointer (0.564)
+//@ chunk-7snpqrde.js:2487-3097 facade-exports (2.1.88 match: readBridgePointer, 0.564)
 /**
  * 读 pointer：schema 不符或 mtime 超过保留期（按 source/项目线程计算）时清除并返回 null；返回值附 ageMs。
  */
@@ -203,7 +203,7 @@ async function readBridgePointer(dir, options, storageV5) {
     ageMs,
   };
 }
-//@ chunk-7snpqrde.js:3097-3639 facade-exports = readBridgePointerAcrossWorktrees (1)
+//@ chunk-7snpqrde.js:3097-3639 facade-exports (2.1.88 match: readBridgePointerAcrossWorktrees, 1)
 async function readBridgePointerAcrossWorktrees(dir, storageV5, options) {
   let here = await readBridgePointer(dir, options, storageV5);
   if (here)
@@ -241,7 +241,7 @@ async function readBridgePointerAcrossWorktrees(dir, storageV5, options) {
     );
   return freshest;
 }
-//@ chunk-7snpqrde.js:3639-3994 facade-exports = clearBridgePointer (0.859)
+//@ chunk-7snpqrde.js:3639-3994 facade-exports (2.1.88 match: clearBridgePointer, 0.859)
 async function clearBridgePointer(dir, storageV5) {
   let path = getBridgePointerPath(dir);
   let storeKey = storageV5 ? bridgePointerStoreKey(dir) : null;

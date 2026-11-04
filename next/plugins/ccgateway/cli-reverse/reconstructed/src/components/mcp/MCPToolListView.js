@@ -45,7 +45,7 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { HintText } from "../design-system/HintText.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:8350-9935 fingerprint = _temp2 (0.345)
+//@ chunk-vrb44rx7.js:8350-9935 fingerprint (2.1.88 match: _temp2, 0.345)
 /**
  * 远程（SSE/HTTP）MCP 服务器菜单的外壳：异步检查 design MCP 凭证与已存 OAuth token，检查期间显示 “Checking credentials…”，完成后渲染 MCPRemoteServerMenu。
  */
@@ -176,7 +176,7 @@ function RemoteServerMenuLoader(exitState) {
 deferInit("chunk-vrb44rx7.js:33767", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:33771-33807 callgraph-fingerprint = _temp (1)
+//@ chunk-vrb44rx7.js:33771-33807 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectMcpTools(s) {
   return s.mcp.tools;
 }
@@ -216,7 +216,7 @@ function renderToolListItem(item) {
     item.tool.name,
   );
 }
-//@ chunk-vrb44rx7.js:34200-36255 fingerprint = MCPToolListView (0.487)
+//@ chunk-vrb44rx7.js:34200-36255 fingerprint (2.1.88 match: MCPToolListView, 0.487)
 function MCPToolListView(props) {
   let $ = useMemoCache(23);
   let { server, onSelectTool, onBack } = props;

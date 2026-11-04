@@ -144,7 +144,7 @@ function fitsWithMeta(title, requestSource, width) {
     bunStringWidth(title) + (sourceText === undefined ? 0 : 1 + bunStringWidth(`\xB7 ${sourceText}`)) <= width
   );
 }
-//@ chunk-3v13eg2e.js:1929-3158 fingerprint = PermissionRequestTitle (0.588)
+//@ chunk-3v13eg2e.js:1929-3158 fingerprint (2.1.88 match: PermissionRequestTitle, 0.588)
 /**
  * 权限对话框标题：工具名、副标题（截断）、队友徽章、读屏 aria-label。
  */

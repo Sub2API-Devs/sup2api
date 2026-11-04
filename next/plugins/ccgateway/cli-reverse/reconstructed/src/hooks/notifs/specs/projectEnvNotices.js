@@ -172,7 +172,7 @@ function projectSignInEnvNotice({ addNotification }) {
     timeoutMs: 15000,
   });
 }
-//@ chunk-18hwfzwa.js:1777754-1778113 placement = getHooksSources (0.871)
+//@ chunk-18hwfzwa.js:1777754-1778113 placement (2.1.88 match: getHooksSources, 0.871)
 function getHooksSources() {
   let filtered = getEnabledSettingSources().filter(
     (pair) =>

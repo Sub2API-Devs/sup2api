@@ -138,7 +138,7 @@ function notePolicyRefusedHost(hostname, responseBytes) {
       break;
     }
 }
-//@ chunk-e6aww6q8.js:189342-189484 placement = shouldBypassProxy (0.851)
+//@ chunk-e6aww6q8.js:189342-189484 placement (2.1.88 match: shouldBypassProxy, 0.851)
 function shouldBypassProxy(url) {
   if (!shouldHonorPolicyRefusal()) return false;
   let parsedUrl = URL.parse(url);
@@ -147,7 +147,7 @@ function shouldBypassProxy(url) {
     getProxyRelayState().policyRefused.has(`${parsedUrl.hostname}:${parsedUrl.port || "443"}`)
   );
 }
-//@ chunk-e6aww6q8.js:4397916-4398208 fingerprint = decodeChunk (0.681)
+//@ chunk-e6aww6q8.js:4397916-4398208 fingerprint (2.1.88 match: decodeChunk, 0.681)
 function decodeChunk(buf) {
   let headers = new Map();
   let offset = 0;
@@ -163,7 +163,7 @@ function decodeChunk(buf) {
   }
   return headers;
 }
-//@ chunk-8wvtd8sr.js:199476-199622 fingerprint = startBunRelay (0.448)
+//@ chunk-8wvtd8sr.js:199476-199622 fingerprint (2.1.88 match: startBunRelay, 0.448)
 async function startBunRelay(hostname, port) {
   try {
     (
@@ -568,7 +568,7 @@ GET /__agentproxy/status on this proxy port shows proxy state and recent failure
 `,
   );
 }
-//@ chunk-awy329vy.js:10649-11058 fingerprint = newConnState (0.331)
+//@ chunk-awy329vy.js:10649-11058 fingerprint (2.1.88 match: newConnState, 0.331)
 function newConnState(limits, pool, ctx) {
   return {
     connectBuf: Buffer.alloc(0),
@@ -998,7 +998,7 @@ function buildStatusPayload(connState, status) {
     bufferedAmountTrusted: connState.ctx.bufferedAmountTrusted ?? null,
   };
 }
-//@ chunk-awy329vy.js:18052-20286 callgraph-fingerprint = handleData (0.163)
+//@ chunk-awy329vy.js:18052-20286 callgraph-fingerprint (2.1.88 match: handleData, 0.163)
 /**
  * 中继收到客户端数据：解析 CONNECT 请求（拒绝 TLS 直连中继端口），选择性中继时直连或隧道，已建立后转发数据。
  */
@@ -1238,7 +1238,7 @@ function pauseWsRead(conn) {
   if (!ws?.pause || ws.readyState !== WebSocket.OPEN || ws.isPaused === true) return;
   ws.pause();
 }
-//@ chunk-awy329vy.js:22572-22678 fingerprint = cleanupConn (0.655)
+//@ chunk-awy329vy.js:22572-22678 fingerprint (2.1.88 match: cleanupConn, 0.655)
 function cleanupConn(st) {
   let ws = st.ws;
   if (!ws?.resume || ws.readyState !== WebSocket.OPEN || ws.isPaused === false) return;
@@ -1777,7 +1777,7 @@ X-Agent-Proxy-Client-Process: ${connState.clientProcess}\r
   resumeClientRead(connState);
   maybePauseUpload(connState);
 }
-//@ chunk-awy329vy.js:30521-30721 fingerprint = openTunnel (0.556)
+//@ chunk-awy329vy.js:30521-30721 fingerprint (2.1.88 match: openTunnel, 0.556)
 /**
  * 打开到 agent-proxy 的 WebSocket（application/proto，Authorization: Bearer）。
  */
@@ -1882,7 +1882,7 @@ function dialTunnel(socket, connState, wsUrl, authHeader) {
   };
   tunnel.onclose = () => onOpenFailure("closed before open");
 }
-//@ chunk-awy329vy.js:32439-32517 fingerprint = sendKeepalive (1)
+//@ chunk-awy329vy.js:32439-32517 fingerprint (2.1.88 match: sendKeepalive, 1)
 function sendKeepalive(ws) {
   if (ws.readyState === WebSocket.OPEN) ws.send(encodeChunk(new Uint8Array(0)));
 }
@@ -1956,7 +1956,7 @@ function onFinGraceElapsed(connState) {
   if (connState.finSeen) return;
   teardownConn(connState);
 }
-//@ chunk-awy329vy.js:33623-33776 fingerprint = forwardToWs (0.85)
+//@ chunk-awy329vy.js:33623-33776 fingerprint (2.1.88 match: forwardToWs, 0.85)
 function forwardToWs(connState, ws, chunk) {
   if (ws.readyState !== WebSocket.OPEN) return;
   connState.uploadBytes += chunk.length;
@@ -2000,7 +2000,7 @@ function teardownConn(connState) {
     } catch {}
   connState.ws = undefined;
 }
-//@ chunk-3tvkk9nn.js:999-1255 fingerprint = startNodeRelay (0.597)
+//@ chunk-3tvkk9nn.js:999-1255 fingerprint (2.1.88 match: startNodeRelay, 0.597)
 async function startNodeRelay(port) {
   try {
     return await new Promise((resolve, reject) => {

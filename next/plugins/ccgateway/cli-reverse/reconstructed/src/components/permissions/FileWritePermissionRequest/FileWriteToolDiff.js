@@ -36,7 +36,7 @@ function sanitizeFileEditLines(diff) {
     lines: diff.lines.map(stripUnsafeChars),
   };
 }
-//@ chunk-18hwfzwa.js:1370764-1370872 fingerprint = _temp (0.797)
+//@ chunk-18hwfzwa.js:1370764-1370872 fingerprint (2.1.88 match: _temp, 0.797)
 function EllipsisRow(i) {
   return jsxProd_default(
     NoSelect,
@@ -50,7 +50,7 @@ function EllipsisRow(i) {
     `ellipsis-${i}`,
   );
 }
-//@ chunk-18hwfzwa.js:1370872-1371962 fingerprint = FileWriteToolDiff (0.761)
+//@ chunk-18hwfzwa.js:1370872-1371962 fingerprint (2.1.88 match: FileWriteToolDiff, 0.761)
 function FileWriteToolDiff(props) {
   let $ = useMemoCache(19);
   let { file_path, content, fileExists, oldContent } = props;

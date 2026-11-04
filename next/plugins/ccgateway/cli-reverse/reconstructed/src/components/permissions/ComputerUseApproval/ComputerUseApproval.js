@@ -127,7 +127,7 @@ function sumValues(a, b) {
 function selectSortValue(accumulator, item) {
   return item;
 }
-//@ chunk-18hwfzwa.js:1238913-1238995 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:1238913-1238995 fingerprint (2.1.88 match: _temp, 1)
 function grantBundleIds(a) {
   return a.resolved && !a.alreadyGranted ? [a.resolved.bundleId] : [];
 }
@@ -146,7 +146,7 @@ function renderRequestedFlag(flag) {
     flag,
   );
 }
-//@ chunk-18hwfzwa.js:1239099-1239149 fingerprint = DENY_ALL_RESPONSE (1)
+//@ chunk-18hwfzwa.js:1239099-1239149 fingerprint (2.1.88 match: DENY_ALL_RESPONSE, 1)
 var DENY_ALL_RESPONSE = {
   granted: [],
   denied: [],
@@ -154,7 +154,7 @@ var DENY_ALL_RESPONSE = {
 };
 var MIN_APP_LIST_ROWS = 8;
 var MAX_APP_LIST_ROWS = 8;
-//@ chunk-18hwfzwa.js:1239902-1240190 fingerprint = ComputerUseApproval (0.846)
+//@ chunk-18hwfzwa.js:1239902-1240190 fingerprint (2.1.88 match: ComputerUseApproval, 0.846)
 function ComputerUseApproval(props) {
   let $ = useMemoCache(4);
   let { request, onDone, wouldTakeAnswer } = props;
@@ -178,7 +178,7 @@ function ComputerUseApproval(props) {
   } else t1 = $[3];
   return t1;
 }
-//@ chunk-18hwfzwa.js:1240190-1243037 fingerprint = ComputerUseTccPanel (0.79)
+//@ chunk-18hwfzwa.js:1240190-1243037 fingerprint (2.1.88 match: ComputerUseTccPanel, 0.79)
 function ComputerUseTccPanel(props) {
   let $ = useMemoCache(39);
   let { tccState, onDone, wouldTakeAnswer } = props;
@@ -388,13 +388,13 @@ function ComputerUseTccPanel(props) {
   } else t10 = $[38];
   return t10;
 }
-//@ chunk-18hwfzwa.js:1243037-1243164 fingerprint = SENTINEL_WARNING (1)
+//@ chunk-18hwfzwa.js:1243037-1243164 fingerprint (2.1.88 match: SENTINEL_WARNING, 1)
 var SENTINEL_WARNING = {
   shell: "equivalent to shell access",
   filesystem: "can read/write any file",
   system_settings: "can change system settings",
 };
-//@ chunk-18hwfzwa.js:1243164-1243429 layout = _temp (0.838)
+//@ chunk-18hwfzwa.js:1243164-1243429 layout (2.1.88 match: _temp, 0.838)
 function dedupeComputerUseApps(a) {
   function score(app) {
     if (!app.resolved) return 0;
@@ -409,11 +409,11 @@ function dedupeComputerUseApps(a) {
   }
   return [...bestByKey.values()];
 }
-//@ chunk-18hwfzwa.js:1243429-1243511 layout = _temp (1)
+//@ chunk-18hwfzwa.js:1243429-1243511 layout (2.1.88 match: _temp, 1)
 function riskSortRank(a) {
   return a.resolved && !a.alreadyGranted && computerUseRiskCategory(a.resolved.bundleId) ? 2 : 1;
 }
-//@ chunk-18hwfzwa.js:1243511-1248685 fingerprint = ComputerUseAppListPanel (0.669)
+//@ chunk-18hwfzwa.js:1243511-1248685 fingerprint (2.1.88 match: ComputerUseAppListPanel, 0.669)
 function ComputerUseAppListPanel(props) {
   let $ = useMemoCache(79);
   let { request, onDone } = props;

@@ -87,7 +87,7 @@ var CREATE_RESPONSE_ERRORS = {
     code: "bridge_session_create_unusable_id",
   },
 };
-//@ chunk-f25sswmp.js:26085-28598 placement = createBridgeSession (0.387)
+//@ chunk-f25sswmp.js:26085-28598 placement (2.1.88 match: createBridgeSession, 0.387)
 /**
  * 在 environment 下创建会话：一方提供商与 OAuth/组织检查，带 git sources/outcomes、模型、cwd、权限模式事件与 tags，按 tengu_ccr_v2_bridge_create_cli 选 v1 或 v1alpha2；返回 session_ 形式 ID 或 null。
  */
@@ -659,7 +659,7 @@ function classifyPeerSendError(message) {
   if (/timeout/i.test(message)) return "timeout";
   return "other";
 }
-//@ chunk-ypjxapg8.js:8520-10969 callgraph-fingerprint = updateBridgeSessionTitle (0.242)
+//@ chunk-ypjxapg8.js:8520-10969 callgraph-fingerprint (2.1.88 match: updateBridgeSessionTitle, 0.242)
 /**
  * 向另一个会话发一条 peer 用户消息（POST events）：带来源 origin、附件、可信设备 token、可选设备签名；403 untrusted_device 时注册设备重试；返回 {ok, msgId|error}。
  */

@@ -104,7 +104,7 @@ function crc32(bytes) {
   for (let byte of bytes) crc = CRC32_TABLE[(crc ^ byte) & 255] ^ (crc >>> 8);
   return (crc ^ 4294967295) >>> 0;
 }
-//@ chunk-bzr73sfg.js:267404-267618 sole-consumer = chunk (0.773)
+//@ chunk-bzr73sfg.js:267404-267618 sole-consumer (2.1.88 match: chunk, 0.773)
 function pngChunk(type, data) {
   let body = Buffer.alloc(8);
   body.writeUInt32BE(data.length, 0);
@@ -114,7 +114,7 @@ function pngChunk(type, data) {
   out.writeUInt32BE(crc32(buffer), 0);
   return Buffer.concat([body.subarray(0, 4), buffer, out]);
 }
-//@ chunk-bzr73sfg.js:267665-268093 placement = encodePng (0.778)
+//@ chunk-bzr73sfg.js:267665-268093 placement (2.1.88 match: encodePng, 0.778)
 function encodeRgbaPng(px, width, height) {
   assertImageInt(width, MAX_PNG_DIMENSION);
   assertImageInt(height, MAX_PNG_DIMENSION);

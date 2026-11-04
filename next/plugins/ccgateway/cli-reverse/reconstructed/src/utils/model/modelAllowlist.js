@@ -58,7 +58,7 @@ import { firstPartyNameToCanonical } from "./modelFallback.js";
 import { displayModelName } from "./validateModel.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:135402-135419 fingerprint = modelMatchesVersionPrefix (1)
+//@ chunk-aepeg2w5.js:135402-135419 fingerprint (2.1.88 match: modelMatchesVersionPrefix, 1)
 /**
  * "claude-"。覆盖错配旧名 modelMatchesVersionPrefix。
  */
@@ -85,7 +85,7 @@ function unentitledModelSet(modelAccessCache) {
   for (let row of modelAccessCache ?? []) if (!row.entitled) denied.add(normalizeForDenyMatch(row.apiName));
   return denied;
 }
-//@ chunk-aepeg2w5.js:410242-410319 placement = applyModelOverrides (1)
+//@ chunk-aepeg2w5.js:410242-410319 placement (2.1.88 match: applyModelOverrides, 1)
 /**
  * [settings.modelOverrides, 托管配对覆盖]。
  */
@@ -186,7 +186,7 @@ function keepsHonoredModelOnCachedDeny(model) {
     describeFallbackModel: getMainLoopModel,
   });
 }
-//@ chunk-aepeg2w5.js:411666-411752 placement = logEventTo1P (1)
+//@ chunk-aepeg2w5.js:411666-411752 placement (2.1.88 match: logEventTo1P, 1)
 function isEntitlementOverlayUnavailable() {
   return (
     getAPIProvider() === "firstParty" &&
@@ -196,7 +196,7 @@ function isEntitlementOverlayUnavailable() {
     getModelAccessCache().length === 0
   );
 }
-//@ chunk-aepeg2w5.js:411752-411973 placement = isMaxSubscriber (0.303)
+//@ chunk-aepeg2w5.js:411752-411973 placement (2.1.88 match: isMaxSubscriber, 0.303)
 /**
  * 某模型是否在订阅内：优先用 modelAccessCache 的 entitled，第一方 API key 用户视为有，订阅用户按 pro/max/team。
  */
@@ -211,7 +211,7 @@ function isModelKnownServedToOrg(model) {
   let subscriptionType = getSubscriptionType();
   return subscriptionType === "pro" || subscriptionType === "max" || subscriptionType === "team";
 }
-//@ chunk-aepeg2w5.js:411973-412057 placement = logEventTo1P (1)
+//@ chunk-aepeg2w5.js:411973-412057 placement (2.1.88 match: logEventTo1P, 1)
 function getOrgModelDefault() {
   if (getAPIProvider() !== "firstParty") return null;
   if (isServedCatalogActive()) return null;
@@ -222,7 +222,7 @@ function getOrgModelDefaultUpdatedAt() {
   if (getAPIProvider() !== "firstParty") return null;
   return getOrgModelDefaultCache()?.updated_at ?? null;
 }
-//@ chunk-aepeg2w5.js:412138-412205 placement = returnValue (1)
+//@ chunk-aepeg2w5.js:412138-412205 placement (2.1.88 match: returnValue, 1)
 function newestAllowedInFamily(as) {
   let e = iterateFirstPartyModelIds(as).next();
   return e.done === true ? null : e.value;
@@ -241,7 +241,7 @@ function* iterateFirstPartyModelIds(family) {
       yield firstParty;
   }
 }
-//@ chunk-aepeg2w5.js:412347-412415 placement = returnValue (1)
+//@ chunk-aepeg2w5.js:412347-412415 placement (2.1.88 match: returnValue, 1)
 function newestAllowedInFamilyForProvider(as) {
   let e = allowedVersionsInFamilyForProvider(as).next();
   return e.done === true ? null : e.value;
@@ -312,7 +312,7 @@ function prefixMatchesModel(modelName, prefix) {
   if (!modelName.startsWith(prefix)) return false;
   return modelName.length === prefix.length || modelName[prefix.length] === "-";
 }
-//@ chunk-aepeg2w5.js:413221-413363 placement = modelMatchesVersionPrefix (1)
+//@ chunk-aepeg2w5.js:413221-413363 placement (2.1.88 match: modelMatchesVersionPrefix, 1)
 /**
  * 模型（别名先解析）是否匹配版本前缀 n（允许省略 claude-）。
  */
@@ -635,7 +635,7 @@ function isModelAllowed(modelName, options) {
       return true;
   return false;
 }
-//@ chunk-hwmsct5x.js:221057-221128 fingerprint = isModelAllowed (1)
+//@ chunk-hwmsct5x.js:221057-221128 fingerprint (2.1.88 match: isModelAllowed, 1)
 /**
  * 未设 availableModels、无服务端白名单、无托管 enforced 条目时为真。旧版名 isModelAllowed 含义相反。
  */

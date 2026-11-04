@@ -281,7 +281,7 @@ function isSessionTransport(host) {
 function hasCapability(server) {
   return server.description?.capabilities?.includes(PLAN_CLASSIFIER) === true;
 }
-//@ chunk-qmsrnapp.js:5600-5676 placement = handleAutoModeTransition (0.799)
+//@ chunk-qmsrnapp.js:5600-5676 placement (2.1.88 match: handleAutoModeTransition, 0.799)
 function isAutoModeCapableHost(host) {
   let accountSetPermissionMode = getAccountSetPermissionMode();
   return (

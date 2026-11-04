@@ -34,7 +34,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:858877-858888 affinity
 var HISTORY_BATCH_SIZE = 10;
-//@ chunk-18hwfzwa.js:858888-859366 fingerprint = loadHistoryEntries (0.663)
+//@ chunk-18hwfzwa.js:858888-859366 fingerprint (2.1.88 match: loadHistoryEntries, 0.663)
 class HistoryLoader {
   #e = null;
   #t = 0;
@@ -98,7 +98,7 @@ function findHistoryOverlapIndex(history, nextHistory) {
   }
   return -1;
 }
-//@ chunk-18hwfzwa.js:859603-864032 fingerprint = useArrowKeyHistory (0.743)
+//@ chunk-18hwfzwa.js:859603-864032 fingerprint (2.1.88 match: useArrowKeyHistory, 0.743)
 /**
  * 上下箭头历史：按批（10 条）从历史文件加载，按 bash/prompt 模式过滤，记住当前草稿以便回到底部；第一次使用时弹出 "ctrl+r to search history" 提示；返回 onHistoryUp/Down/Reset。
  */

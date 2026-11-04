@@ -590,7 +590,7 @@ function isSameFileIdentity_2(filePath, preStats, stats) {
     );
   return same;
 }
-//@ chunk-e6aww6q8.js:4422540-4422637 placement = getFileIdentity (0.794)
+//@ chunk-e6aww6q8.js:4422540-4422637 placement (2.1.88 match: getFileIdentity, 0.794)
 function getFileIdentity_8(seen, current) {
   return (
     seen.ino === 0n ||

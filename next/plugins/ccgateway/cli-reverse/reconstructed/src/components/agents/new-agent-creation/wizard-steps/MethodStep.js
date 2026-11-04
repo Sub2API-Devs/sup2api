@@ -34,7 +34,7 @@ import { ConfigurableShortcutHint } from "../../../ConfigurableShortcutHint.js";
 import { TextInput } from "../../../TextInput.js";
 import { ErrorText } from "../../../ErrorText.js";
 
-//@ chunk-sx9xc5ee.js:16242-19292 callgraph-fingerprint = MethodStep (0.275)
+//@ chunk-sx9xc5ee.js:16242-19292 callgraph-fingerprint (2.1.88 match: MethodStep, 0.275)
 function MethodStep(props) {
   let $ = useMemoCache(52);
   let { profilesPromise } = props;

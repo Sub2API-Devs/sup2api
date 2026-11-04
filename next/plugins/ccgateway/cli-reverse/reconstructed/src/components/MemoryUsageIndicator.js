@@ -20,7 +20,7 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 
-//@ chunk-18hwfzwa.js:783611-784345 fingerprint = MemoryUsageIndicator (0.397)
+//@ chunk-18hwfzwa.js:783611-784345 fingerprint (2.1.88 match: MemoryUsageIndicator, 0.397)
 function MemoryUsageIndicator(props) {
   let $ = useMemoCache(11);
   let { tier, onShowingChange } = props;

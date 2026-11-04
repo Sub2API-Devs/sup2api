@@ -79,7 +79,7 @@ function isProgramDirSafeFor(realCandidate, programDir, expectedEntries, collect
     entries === null || !isPathDirSafe(realCandidate, programDir, [...entries, ...expectedEntries], collector)
   );
 }
-//@ chunk-s61vbvea.js:277799-277998 placement = isRealPathWithinTeamDir (0.762)
+//@ chunk-s61vbvea.js:277799-277998 placement (2.1.88 match: isRealPathWithinTeamDir, 0.762)
 function isRealPathWithinTeamDir(realCandidate) {
   try {
     let mapped = readdirSync(realCandidate, {
@@ -119,7 +119,7 @@ function findXcodeGit(xcodeRoot, reachPredicate, collector) {
     );
   });
 }
-//@ chunk-s61vbvea.js:278413-278534 placement = isRealPathWithinTeamDir (1)
+//@ chunk-s61vbvea.js:278413-278534 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isRealPathWithinTeamDir_2(realCandidate) {
   try {
     let entries = readdirSync(realCandidate);

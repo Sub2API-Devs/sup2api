@@ -239,11 +239,11 @@ import { AuthShortcutHint, InstalledItemRow } from "./UnifiedInstalledCell.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6zvphrsz.js:2539-2575 fingerprint = filterManagedDisabledPlugins (1)
+//@ chunk-6zvphrsz.js:2539-2575 fingerprint (2.1.88 match: filterManagedDisabledPlugins, 1)
 function filterManagedDisabledPlugins() {
   return join(getClaudeConfigDir(), "local");
 }
-//@ chunk-k9mgeeff.js:4312-4636 fingerprint = getBaseFileNames (0.759)
+//@ chunk-k9mgeeff.js:4312-4636 fingerprint (2.1.88 match: getBaseFileNames, 0.759)
 async function getBaseFileNames(dirPath) {
   let entries = [];
   let seen = new Set();
@@ -272,7 +272,7 @@ async function getBaseFileNames(dirPath) {
   }
   return entries;
 }
-//@ chunk-k9mgeeff.js:4636-5291 fingerprint = getSkillDirNames (0.844)
+//@ chunk-k9mgeeff.js:4636-5291 fingerprint (2.1.88 match: getSkillDirNames, 0.844)
 async function getSkillDirNames(skillsDir, name) {
   let skillNames = [];
   let seen = new Set();
@@ -327,7 +327,7 @@ async function getSkillDirNames(skillsDir, name) {
 function isListNavItem(row) {
   return row?.kind === "item" || row?.kind === "disabled-header";
 }
-//@ chunk-vrb44rx7.js:146757-146893 placement = _temp2 (0.306)
+//@ chunk-vrb44rx7.js:146757-146893 placement (2.1.88 match: _temp2, 0.306)
 /**
  * 判断插件操作是否因插件未安装（或未在该作用域安装）而失败，且该插件不在已知列表中。
  */
@@ -770,7 +770,7 @@ function describePluginVersionPin(pluginId, gitCommitSha) {
 function shortCommitSha(sha) {
   return sha !== undefined && /^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : undefined;
 }
-//@ chunk-vrb44rx7.js:153076-153226 placement = isClaudeAISubscriber (0.692)
+//@ chunk-vrb44rx7.js:153076-153226 placement (2.1.88 match: isClaudeAISubscriber, 0.692)
 function getUncoveredPluginScopes(replaced, scope, pluginId) {
   let knownScopes = new Set([
     scope,
@@ -953,7 +953,7 @@ function PluginInstalledComponents(props) {
   if (hintRows !== EARLY_RETURN_SENTINEL) return hintRows;
   return componentRows;
 }
-//@ chunk-vrb44rx7.js:155189-155429 fingerprint = checkIfLocalPlugin (1)
+//@ chunk-vrb44rx7.js:155189-155429 fingerprint (2.1.88 match: checkIfLocalPlugin, 1)
 async function checkIfLocalPlugin(pluginName, marketplaceName, storageV5) {
   if (marketplaceName === pluginManifestPathSchemas) return null;
   let entry = (await getMarketplace(marketplaceName, storageV5))?.plugins.find(
@@ -1042,7 +1042,7 @@ function PluginMessageList(props) {
   } else status = $[14];
   return status;
 }
-//@ chunk-vrb44rx7.js:156237-204832 fingerprint = ManagePlugins (0.484)
+//@ chunk-vrb44rx7.js:156237-204832 fingerprint (2.1.88 match: ManagePlugins, 0.484)
 function ManagePlugins({
   setViewState,
   setResult,

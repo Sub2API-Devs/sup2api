@@ -211,7 +211,7 @@ function reassembleBatchResults(content, batchToolUses, tools) {
   }
   return output;
 }
-//@ chunk-a76knw89.js:13680-14996 placement = countToolCallsSince (1)
+//@ chunk-a76knw89.js:13680-14996 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(messages, sinceUuid) {
   let sawBatch = false;
   for (let message of messages) {

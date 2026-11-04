@@ -640,7 +640,7 @@ function reportMissingFiles({ uuid, sentCount, files, refs, lost, listed }) {
     return 0;
   }
 }
-//@ chunk-tyg7f3ek.js:238422-238556 placement = isRealPathWithinTeamDir (1)
+//@ chunk-tyg7f3ek.js:238422-238556 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function isRegularFileOrUnknown(realCandidate) {
   if (getSessionUploadsDirOverride() !== null) return false;
   try {

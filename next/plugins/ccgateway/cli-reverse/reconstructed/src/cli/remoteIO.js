@@ -498,7 +498,7 @@ function resolveCarriedPolicy(storedEventPolicy, carried, fallback) {
 var PERMISSION_WITHDRAWN_MESSAGE =
   "This permission request was withdrawn because it was not answered in time.";
 var MAX_VOUCHED_MODEL_REQUEST_IDS = 256;
-//@ chunk-z4g2ta8k.js:74637-104943 placement = RemoteIO (0.126)
+//@ chunk-z4g2ta8k.js:74637-104943 placement (2.1.88 match: RemoteIO, 0.126)
 /**
  * RemoteIO（云 worker 的 SDK I/O 类，继承自通用 I/O 基类）：管理与客户端表面的连接状态、会话写入者、表面策略（stands/leaving）、入站消息与回合交接，是云会话 worker 的核心。
  */

@@ -14,7 +14,7 @@ import { buildAccessibility } from "../dom.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-24t3dkzb.js:6874-8555 fingerprint = Box (0.8)
+//@ chunk-24t3dkzb.js:6874-8555 fingerprint (2.1.88 match: Box, 0.8)
 /**
  * <Box>：Ink 的 flex 容器（ink-box）。默认 flexDirection row、flexWrap nowrap、flexGrow 0、flexShrink 1、overflow visible；margin/padding/gap 非整数告警。透传焦点（tabIndex/autoFocus）、键盘/粘贴/滚轮/action 事件（含捕获阶段）、点击、悬停、onPointer、keybindingScope、textEntry、aria-* 无障碍属性。
  */

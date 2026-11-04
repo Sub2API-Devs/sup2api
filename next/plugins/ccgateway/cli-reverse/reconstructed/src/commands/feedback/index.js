@@ -23,7 +23,7 @@ var feedbackCommandDefinition = {
   },
 };
 var feedbackCommand = feedbackCommandDefinition;
-//@ chunk-e6aww6q8.js:1686540-1686713 fingerprint = feedback (0.417)
+//@ chunk-e6aww6q8.js:1686540-1686713 fingerprint (2.1.88 match: feedback, 0.417)
 /**
  * /bug 命令对象（local-jsx）；描述：Report a bug or share your conversation；别名 ["share"]；实现 chunk-myrezy36.js 的 t。
  */

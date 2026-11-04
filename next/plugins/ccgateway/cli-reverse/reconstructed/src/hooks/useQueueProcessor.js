@@ -42,7 +42,7 @@ import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { isSendableQueuedCommand } from "../utils/messageQueueManager.js";
 import { isPendingContinuationUuid } from "../services/quotaAutoResume/quotaAutoResume.js";
 
-//@ chunk-18hwfzwa.js:1663315-1665839 callgraph-fingerprint = useQueueProcessor (0.225)
+//@ chunk-18hwfzwa.js:1663315-1665839 callgraph-fingerprint (2.1.88 match: useQueueProcessor, 0.225)
 function useQueueProcessor({ turn, hasActiveLocalJsxUI, commands, handOverInFlight }) {
   let guard = turn.guard;
   let isQueryActive = useCallback((command) => mayReachModel(command, commands), [commands]);

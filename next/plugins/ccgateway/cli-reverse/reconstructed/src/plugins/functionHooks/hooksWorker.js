@@ -70,7 +70,7 @@ var workerThreadOptions = (name, stamp, marks) => ({
  * Bun 打包前缀
  */
 var BUN_ROOT_PREFIX = "B:/~BUN/root/";
-//@ chunk-e6aww6q8.js:3707070-3707153 placement = formatUri (1)
+//@ chunk-e6aww6q8.js:3707070-3707153 placement (2.1.88 match: formatUri, 1)
 function formatUri(uri) {
   return getPlatform() === "windows" && uri.startsWith(BUN_ROOT_PREFIX) ? uri : new URL(`file://${uri}`);
 }

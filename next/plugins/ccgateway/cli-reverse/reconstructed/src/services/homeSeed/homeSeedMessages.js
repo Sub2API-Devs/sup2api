@@ -15,7 +15,7 @@ import { formatFailureDetails_3, settingsReadFailureText } from "../../utils/tel
 import { plural } from "../../utils/stringUtils.js";
 import { tildify } from "../../utils/path.js";
 
-//@ chunk-mxpjbr4y.js:27091-27164 placement = isResultTruncated (1)
+//@ chunk-mxpjbr4y.js:27091-27164 placement (2.1.88 match: isResultTruncated, 1)
 /**
  * 把一条 home seed 提示拼成 `${触发前缀}: ${正文}${后缀}` 一行（create 与其他触发用不同前缀）。
  */

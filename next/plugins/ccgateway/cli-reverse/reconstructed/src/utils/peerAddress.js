@@ -19,7 +19,7 @@ import { getPlatform } from "./platform.js";
 import { isSystemVolumePath } from "./permissions/protectedDirs.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-qg0af0yq.js:22383-22678 fingerprint = parseAddress (0.812)
+//@ chunk-qg0af0yq.js:22383-22678 fingerprint (2.1.88 match: parseAddress, 0.812)
 /**
  * 解析对等地址：uds:<socket>、bridge:<id>、did: 等前缀。
  */
@@ -100,7 +100,7 @@ function comparePeerDirs(firstPath, secondPath) {
     ? "maybe"
     : "different";
 }
-//@ chunk-qg0af0yq.js:23547-23620 placement = getReservedShortcuts (1)
+//@ chunk-qg0af0yq.js:23547-23620 placement (2.1.88 match: getReservedShortcuts, 1)
 function foldPathCase(cwd) {
   let platform = getPlatform();
   return platform === "macos" || platform === "windows"
@@ -131,11 +131,11 @@ function isSingleCodePoint(text) {
 function fullCaseFold(text) {
   return text.toUpperCase().toLowerCase();
 }
-//@ chunk-qg0af0yq.js:23931-23988 placement = setCwdState (0.757)
+//@ chunk-qg0af0yq.js:23931-23988 placement (2.1.88 match: setCwdState, 0.757)
 function nfcOnMacos(cwd) {
   return getPlatform() === "macos" ? cwd.normalize("NFC") : cwd;
 }
-//@ chunk-qg0af0yq.js:23988-24108 placement = getReservedShortcuts (1)
+//@ chunk-qg0af0yq.js:23988-24108 placement (2.1.88 match: getReservedShortcuts, 1)
 function stripMacPrivatePrefix(inputPath) {
   if (getPlatform() !== "macos") return inputPath;
   let systemPath = isSystemVolumePath(inputPath);

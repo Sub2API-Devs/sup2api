@@ -114,7 +114,7 @@ function nextYankPop(state) {
     length,
   };
 }
-//@ chunk-vqdzctzh.js:1281-1356 placement = getOrBind (0.668)
+//@ chunk-vqdzctzh.js:1281-1356 placement (2.1.88 match: getOrBind, 0.668)
 /**
  * 最小 reducer 容器：{state, dispatch(action)}。
  */

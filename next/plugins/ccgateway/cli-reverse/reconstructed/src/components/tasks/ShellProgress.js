@@ -11,7 +11,7 @@
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
 
-//@ chunk-18hwfzwa.js:698417-698759 callgraph-fingerprint = TaskStatusText (0.375)
+//@ chunk-18hwfzwa.js:698417-698759 callgraph-fingerprint (2.1.88 match: TaskStatusText, 0.375)
 function TaskStatusText(t0) {
   switch (t0) {
     case "running":
@@ -42,7 +42,7 @@ function TaskStatusText(t0) {
       });
   }
 }
-//@ chunk-18hwfzwa.js:698759-698928 fingerprint = ShellProgress (0.736)
+//@ chunk-18hwfzwa.js:698759-698928 fingerprint (2.1.88 match: ShellProgress, 0.736)
 function ShellProgress(t0) {
   switch (t0) {
     case "completed":

@@ -32,7 +32,7 @@ var WORKER_INSTRUCTIONS = `After you finish implementing the change:
 3. **Test end-to-end** \u2014 Follow the e2e test recipe from the coordinator's prompt (below). If the recipe says to skip e2e for this unit, skip it.
 4. **Commit and push** \u2014 Commit all changes with a clear message, push the branch, and create a PR with \`gh pr create\`. Use a descriptive title. If \`gh\` is not available or the push fails, note it in your final message.
 5. **Report** \u2014 End with a single line: \`PR: <url>\` so the coordinator can track it. If no PR was created, end with \`PR: none \u2014 <reason>\`.`;
-//@ chunk-hantmvxa.js:28149-32262 fingerprint = buildPrompt (0.923)
+//@ chunk-hantmvxa.js:28149-32262 fingerprint (2.1.88 match: buildPrompt, 0.923)
 /**
  * /batch 的主提示词：研究、拆分单元、并行派发 worktree 代理、汇总 PR 的流程说明。
  */
@@ -118,14 +118,14 @@ function buildVcsSection() {
 This directory is not a git repository: worker worktrees come from a WorktreeCreate hook, so \`isolation: "worktree"\` works as above, but git and \`gh\` commands do not. ${"Say so in every worker prompt, and when you copy the worker instructions, replace step 4 with: commit and publish the change with this project's own version-control commands, and end with `PR: none \u2014 <what was published instead>` when no pull request can be opened."} In Phase 3, a worker that reports what it published instead of a PR URL counts as done; show that report in the PR column.
 `;
 }
-//@ chunk-hantmvxa.js:33215-33464 fingerprint = MISSING_INSTRUCTION_MESSAGE (1)
+//@ chunk-hantmvxa.js:33215-33464 fingerprint (2.1.88 match: MISSING_INSTRUCTION_MESSAGE, 1)
 var MISSING_INSTRUCTION_MESSAGE = `Provide an instruction describing the batch change you want to make.
 
 Examples:
   /batch migrate from react to vue
   /batch replace all uses of lodash with native equivalents
   /batch add type annotations to all untyped function parameters`;
-//@ chunk-hantmvxa.js:33464-34162 fingerprint = registerBatchSkill (0.889)
+//@ chunk-hantmvxa.js:33464-34162 fingerprint (2.1.88 match: registerBatchSkill, 0.889)
 /**
  * 注册 /batch 内置 skill：把大规模机械改动拆成 5–30 个 worktree 子代理并行执行、各开 PR；不在 git 仓库且没有 WorktreeCreate 钩子时直接返回说明。只能用户调用。
  */

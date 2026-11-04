@@ -24,7 +24,7 @@ import { isAutoReactArmedMonitorTask } from "../../tasks/MonitorWsTask/MonitorWs
 
 //@ chunk-18hwfzwa.js:695523-695559 affinity
 var AUTO_REPLYING_TEXT = "auto-replying to comments";
-//@ chunk-18hwfzwa.js:695559-697663 fingerprint = BackgroundTask (0.614)
+//@ chunk-18hwfzwa.js:695559-697663 fingerprint (2.1.88 match: BackgroundTask, 0.614)
 function BackgroundTask(t0) {
   let unreadSuffix = t0.status === "completed" && !t0.notified ? ", unread" : "";
   switch (t0.type) {

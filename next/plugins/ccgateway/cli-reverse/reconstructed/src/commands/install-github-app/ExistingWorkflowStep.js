@@ -17,7 +17,7 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { ModelSelector } from "../../components/agents/ModelSelector.js";
 
-//@ chunk-4v9zy7gn.js:31502-32810 fingerprint = ExistingWorkflowStep (0.605)
+//@ chunk-4v9zy7gn.js:31502-32810 fingerprint (2.1.88 match: ExistingWorkflowStep, 0.605)
 function ExistingWorkflowStep(props) {
   let $ = useMemoCache(13);
   let { onSelectAction } = props;

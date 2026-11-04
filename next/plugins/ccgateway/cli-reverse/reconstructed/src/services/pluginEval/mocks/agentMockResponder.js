@@ -30,7 +30,7 @@ var MOCK_OUTPUT_MAX_CHARS = 49152;
 var MOCK_HISTORY_MAX_CHARS = 240000;
 var MOCK_ABORT_PREFIX = "ABORT:";
 var MOCK_ERROR_PREFIX = "ERROR:";
-//@ chunk-qchp9vrd.js:16871-17508 placement = getCommandPrefixImpl (0.304)
+//@ chunk-qchp9vrd.js:16871-17508 placement (2.1.88 match: getCommandPrefixImpl, 0.304)
 /**
  * 插件评测的模拟应答：用 Haiku/默认模型按 responder 提示生成文本并计费（切分误归）。
  */

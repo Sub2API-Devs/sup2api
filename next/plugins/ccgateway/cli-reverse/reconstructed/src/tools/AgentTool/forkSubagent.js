@@ -104,7 +104,7 @@ function forkGateForcesBackground() {
   if (!isForkSubagentEnabled()) return false;
   return getForkSubagentEnabledSource() === "env" || !isPlainNonInteractive();
 }
-//@ chunk-e6aww6q8.js:2239524-2239822 facade-exports = FORK_AGENT (0.89)
+//@ chunk-e6aww6q8.js:2239524-2239822 facade-exports (2.1.88 match: FORK_AGENT, 0.89)
 /**
  * FORK_AGENT 内建定义：agentType "fork"、tools ["*"]、maxTurns 200、model inherit、permissionMode bubble、系统提示词为空（沿用父线程）。
  */
@@ -136,7 +136,7 @@ var FORK_SELF_OTHER_TOOL_RESULT =
   "This call started a fork, and that fork is you. The call's other work and its result belong to the parent.";
 var FORK_PARENT_CALL_TOOL_RESULT =
   "This is the parent's call, not yours. It may not have run yet, and its result goes to the parent.";
-//@ chunk-e6aww6q8.js:2240122-2240667 facade-exports = buildForkedMessages (1)
+//@ chunk-e6aww6q8.js:2240122-2240667 facade-exports (2.1.88 match: buildForkedMessages, 1)
 /**
  * 构造 fork 子代理的初始消息：复制父 assistant 消息，对其中每个 tool_use 生成占位 tool_result（自己那次说明"fork 就是你"，其余说明属于父代理），再附上 fork 指令文本。
  */
@@ -202,14 +202,14 @@ function buildForkedMessages(directive, assistantMessage, enclosingToolUseId) {
 function buildChildMessage(directive) {
   return FORK_WORKER_PREAMBLE(directive, "");
 }
-//@ chunk-e6aww6q8.js:2240700-2241227 facade-exports = buildWorktreeNotice (1)
+//@ chunk-e6aww6q8.js:2240700-2241227 facade-exports (2.1.88 match: buildWorktreeNotice, 1)
 /**
  * fork 在 worktree 中运行时追加的说明：继承的路径指向父目录，需要换算到 worktree 根并重新读取文件。
  */
 function buildWorktreeNotice(parentCwd, worktreeCwd) {
   return `You've inherited the conversation context above from a parent agent working in ${parentCwd}. You are operating in an isolated git worktree at ${worktreeCwd} \u2014 same repository, same relative file structure, separate working copy. Paths in the inherited context refer to the parent's working directory; translate them to your worktree root. Re-read files before editing if the parent may have modified them since they appear in the context. Your changes stay in this worktree and will not affect the parent's files.`;
 }
-//@ chunk-7jbxc8kr.js:3796-3960 fingerprint = FORK_SUBAGENT_TYPE (1)
+//@ chunk-7jbxc8kr.js:3796-3960 fingerprint (2.1.88 match: FORK_SUBAGENT_TYPE, 1)
 /**
  * 把文本前三个词转成 kebab-case 名（≤24 字符，默认 "fork"），用作后台 fork 名字提示。
  */

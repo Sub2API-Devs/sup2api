@@ -8,7 +8,7 @@
  * pieces: chunk-szfapcvd.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-szfapcvd.js:191-3290 fingerprint = REMOTE_TRIGGER_TOOL_NAME (0.667)
+//@ chunk-szfapcvd.js:191-3290 fingerprint (2.1.88 match: REMOTE_TRIGGER_TOOL_NAME, 0.667)
 /**
  * RemoteTrigger 工具名、description 与 prompt（各 action 对应的 HTTP 端点与调试建议）。
  */

@@ -64,7 +64,7 @@ function assertMcpReconnected(client) {
   }
   throw new WireSafeControlError(`Server status: ${client.type}`);
 }
-//@ chunk-1qpz7qcd.js:7857-7936 placement = getRiskColor (0.785)
+//@ chunk-1qpz7qcd.js:7857-7936 placement (2.1.88 match: getRiskColor, 0.785)
 function getRiskColor(request, writeFrame, sessionId, responsePromise) {
   sendControlResponseWhenSettled(
     request,

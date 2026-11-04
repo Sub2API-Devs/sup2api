@@ -10,7 +10,7 @@
  */
 import { TerminalEvent } from "./terminal-event.js";
 
-//@ chunk-bzr73sfg.js:190998-191113 fingerprint = FocusEvent (1)
+//@ chunk-bzr73sfg.js:190998-191113 fingerprint (2.1.88 match: FocusEvent, 1)
 /**
  * 焦点事件（focus/blur），冒泡、不可取消，relatedTarget 为另一方元素。
  */

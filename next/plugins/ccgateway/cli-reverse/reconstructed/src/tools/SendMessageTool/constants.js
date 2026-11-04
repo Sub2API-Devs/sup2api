@@ -11,7 +11,7 @@
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { toolMatchesName } from "../../Tool.js";
 
-//@ chunk-rvwp1taf.js:226-353 callgraph-witnessed = SEND_MESSAGE_TOOL_NAME (0.247)
+//@ chunk-rvwp1taf.js:226-353 callgraph-witnessed (2.1.88 match: SEND_MESSAGE_TOOL_NAME, 0.247)
 /**
  * SendMessage 常量：工具名 "SendMessage"、ccd_session_mgmt、summary 上限 200、观测字段列表。
  */

@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:3037238-3037421 fingerprint = alias (1)
+//@ chunk-e6aww6q8.js:3037238-3037421 fingerprint (2.1.88 match: alias, 1)
 /**
  * alias 命令的补全 spec。
  */

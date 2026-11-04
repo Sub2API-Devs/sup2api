@@ -11,7 +11,7 @@
 import { inverseText } from "../ink/screen.js";
 import { sequential } from "../utils/sequential.js";
 
-//@ chunk-81qqq1aq.js:6714-7027 fingerprint = renderPlaceholder (0.952)
+//@ chunk-81qqq1aq.js:6714-7027 fingerprint (2.1.88 match: renderPlaceholder, 0.952)
 function renderPlaceholder({
   placeholder,
   value,

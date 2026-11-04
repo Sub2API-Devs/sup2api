@@ -38,7 +38,7 @@ function validateFlagsAgainstAllowlist(flags, allowedFlags) {
     else if (!allowedFlags.includes(flag)) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:1056585-1057089 fingerprint = isLinePrintingCommand (0.892)
+//@ chunk-e6aww6q8.js:1056585-1057089 fingerprint (2.1.88 match: isLinePrintingCommand, 0.892)
 /**
  * sed -n 只打印行（表达式全是 Np / N,Mp / p）且选项在白名单内时为 true。
  */
@@ -84,7 +84,7 @@ function isPrintCommand(cmd) {
   if (!cmd) return false;
   return /^(?:\d+|\d+,\d+)?p$/.test(cmd);
 }
-//@ chunk-e6aww6q8.js:1057156-1057746 fingerprint = isSubstitutionCommand (0.862)
+//@ chunk-e6aww6q8.js:1057156-1057746 fingerprint (2.1.88 match: isSubstitutionCommand, 0.862)
 /**
  * 简单替换 s/a/b/flags：一个表达式、恰好三个分隔符、标志只含 gpimIM 与数字；allowFileWrites 时允许 -i。
  */
@@ -122,7 +122,7 @@ function isSubstitutionCommand(command, expressions, hasFileArguments, options) 
   if (!/^[gpimIM]*[1-9]?[gpimIM]*$/.test(exprFlags)) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:1057746-1058669 fingerprint = sedCommandIsAllowedByAllowlist (0.753)
+//@ chunk-e6aww6q8.js:1057746-1058669 fingerprint (2.1.88 match: sedCommandIsAllowedByAllowlist, 0.753)
 /**
  * sed 命令是否在白名单内：只读打印或简单替换，表达式无危险操作；对 sed -i 的表达式再做一组更严格的形状检查（禁 w/e/r 命令、地址、;、[、\、..）。readOnlyValidation 与 pathValidation 也用它。
  */
@@ -177,7 +177,7 @@ function sedCommandIsAllowedByAllowlist(command, options) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:1058669-1059013 fingerprint = hasFileArgs (0.709)
+//@ chunk-e6aww6q8.js:1058669-1059013 fingerprint (2.1.88 match: hasFileArgs, 0.709)
 /**
  * sed 是否带有文件参数（有 -e 时任何位置参数、无 -e 时第二个位置参数）。
  */
@@ -214,7 +214,7 @@ function hasFileArgs(command) {
  * 提取 sed 表达式时表示“出现多个 -i 标志”的占位文本，遇到即判为危险。
  */
 var MULTIPLE_INPLACE_MARKER = "__SED_MULTIPLE_I_FLAGS__";
-//@ chunk-e6aww6q8.js:1059563-1060300 fingerprint = extractSedExpressions (0.841)
+//@ chunk-e6aww6q8.js:1059563-1060300 fingerprint (2.1.88 match: extractSedExpressions, 0.841)
 /**
  * 提取 sed 的表达式列表；遇到 -ew/-we 等危险组合抛错。
  */
@@ -323,7 +323,7 @@ function containsDangerousOperations(expression) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1061634-1062305 fingerprint = checkSedConstraints (0.806)
+//@ chunk-e6aww6q8.js:1061634-1062305 fingerprint (2.1.88 match: checkSedConstraints, 0.806)
 /**
  * 逐个子命令检查 sed：先做路径约束（ask 时返回）；不在白名单的 sed 要求确认（bashMissKind=sed-dangerous）；开启读封锁时改为拒绝。acceptEdits 模式允许 sed -i。
  */
@@ -420,7 +420,7 @@ function stripLeadingRedirectsAndWrappers(text) {
   }
   return trimmed;
 }
-//@ chunk-e6aww6q8.js:1063111-1063620 placement = walkHerestringRedirect (0.827)
+//@ chunk-e6aww6q8.js:1063111-1063620 placement (2.1.88 match: walkHerestringRedirect, 0.827)
 /**
  * 反复剥掉命令文本开头的重定向词（<<< word、>file、2>&1 等），返回剩余部分；用于识别以重定向开头的命令。
  */

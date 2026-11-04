@@ -60,7 +60,7 @@ import { PROJECTS_MEMORY_NOTE } from "./prompt.js";
 
 //@ chunk-eg496hkq.js:39443-39454 placement
 var MAX_LINE_CHUNK = 450;
-//@ chunk-eg496hkq.js:39454-39683 placement = needsSegmentation (0.713)
+//@ chunk-eg496hkq.js:39454-39683 placement (2.1.88 match: needsSegmentation, 0.713)
 function splitLongLines(text) {
   let rebuiltLines = [];
   for (let line of text.split(`

@@ -16,7 +16,7 @@ import {
 } from "./settings/settingsReview.js";
 import { detectEncodingFromBom, decodeTextBuffer } from "./fileRead.js";
 
-//@ chunk-6zvepy0r.js:18882-19567 fingerprint = scanForContext (0.932)
+//@ chunk-6zvepy0r.js:18882-19567 fingerprint (2.1.88 match: scanForContext, 0.932)
 async function scanForContext(handle, needle, contextLines) {
   if (needle === "")
     return {
@@ -82,7 +82,7 @@ async function scanForContext(handle, needle, contextLines) {
     truncated: pos >= MAX_SETTINGS_FILE_BYTES,
   };
 }
-//@ chunk-6zvepy0r.js:19567-19838 fingerprint = readCapped (0.874)
+//@ chunk-6zvepy0r.js:19567-19838 fingerprint (2.1.88 match: readCapped, 0.874)
 async function readCapped(handle) {
   let buf = Buffer.allocUnsafe(MAX_DIFF_CONTEXT_BYTES);
   let total = 0;
@@ -132,7 +132,7 @@ function normalizeCRLF(buf, len) {
       )
     : str;
 }
-//@ chunk-6zvepy0r.js:20164-20776 fingerprint = sliceContext (1)
+//@ chunk-6zvepy0r.js:20164-20776 fingerprint (2.1.88 match: sliceContext, 1)
 async function sliceContext(handle, scratch, matchStart, matchLen, contextLines, linesBeforeMatch) {
   let backChunk = Math.min(matchStart, MAX_DIFF_CONTEXT_BYTES);
   let { bytesRead: backRead } = await handle.read(scratch, 0, backChunk, matchStart - backChunk);

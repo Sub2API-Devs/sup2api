@@ -12,7 +12,7 @@ import { init_react_production } from "../../../vendor/react/cjs/react.productio
 
 //@ chunk-7fw14qgv.js:1951-1955 placement
 init_react_production();
-//@ chunk-7fw14qgv.js:2032-2173 fingerprint = TERM_PROGRAM_TO_APP (1)
+//@ chunk-7fw14qgv.js:2032-2173 fingerprint (2.1.88 match: TERM_PROGRAM_TO_APP, 1)
 /**
  * TERM_PROGRAM → 深链接终端应用名映射（iTerm、Ghostty、kitty、Alacritty、WezTerm、Terminal）。
  */

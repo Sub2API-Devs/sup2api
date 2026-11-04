@@ -11,7 +11,7 @@
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Settings } from "../../components/Settings/Settings.js";
 
-//@ chunk-gwbvvmmk.js:17175-17397 fingerprint = call (0.818)
+//@ chunk-gwbvvmmk.js:17175-17397 fingerprint (2.1.88 match: call, 0.818)
 /**
  * /status 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

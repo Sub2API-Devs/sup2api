@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-7s4yj2r0.js:317-484 fingerprint = getStandaloneAgentName (1)
+//@ chunk-7s4yj2r0.js:317-484 fingerprint (2.1.88 match: getStandaloneAgentName, 1)
 /**
  * 合并 standaloneAgentContext 字段（无变化时返回原状态），名字缺省为空串。
  */

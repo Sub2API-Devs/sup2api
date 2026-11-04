@@ -211,7 +211,7 @@ import { unexpectedWatchFailure, describeWatchError } from "./durableWatch.js";
 import { isArtifactsAvailable } from "./artifactAvailability.js";
 import { QUERY } from "../mcp/firstPartyServerIds.js";
 
-//@ chunk-aqdf5t3e.js:7727-7806 placement = listAllCronTasks (0.609)
+//@ chunk-aqdf5t3e.js:7727-7806 placement (2.1.88 match: listAllCronTasks, 0.609)
 function claimArmFailureAnnouncement(announce, reason) {
   return addWithLimit(
     getLiveState().durable.announcedArmFailures,
@@ -219,7 +219,7 @@ function claimArmFailureAnnouncement(announce, reason) {
     MAX_CRON_OWNERSHIP_KEYS,
   );
 }
-//@ chunk-aqdf5t3e.js:38633-38869 placement = splitCommandWithOperators (0.316)
+//@ chunk-aqdf5t3e.js:38633-38869 placement (2.1.88 match: splitCommandWithOperators, 0.316)
 /**
  * 返回逐行处理器：对以 { 开头的行解析 JSON，comment 类型回调 comment()，ver 字段回调 ver(v,'live')，其他忽略。旧版名 splitCommandWithOperators 误配，属 frameLive 相关模块。
  */

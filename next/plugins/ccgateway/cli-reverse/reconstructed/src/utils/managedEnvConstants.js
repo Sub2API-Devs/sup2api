@@ -220,7 +220,7 @@ deferInit("chunk-dcmhvw5a.js:357885", () => {
 function isHelperEnvVar(envName) {
   return MEMORY_API_ENV_VARS.includes(envName);
 }
-//@ chunk-dcmhvw5a.js:358457-362835 fingerprint = PROVIDER_MANAGED_ENV_VARS (0.448)
+//@ chunk-dcmhvw5a.js:358457-362835 fingerprint (2.1.88 match: PROVIDER_MANAGED_ENV_VARS, 0.448)
 /**
  * 宿主/提供方托管相关的环境变量名单（artifact 服务地址、base URL、提供方开关等），宿主托管提供方时从设置 env 中剥离。
  */
@@ -639,7 +639,7 @@ function getHostAuthEnvVar(env) {
     return;
   return CLAUDE_CODE_HOST_AUTH_ENV_VAR;
 }
-//@ chunk-dcmhvw5a.js:366285-374714 fingerprint = SAFE_ENV_VARS (0.459)
+//@ chunk-dcmhvw5a.js:366285-374714 fingerprint (2.1.88 match: SAFE_ENV_VARS, 0.459)
 /**
  * 会执行命令的危险 shell/沙箱设置项清单（apiKeyHelper、statusLine、sandbox 相关项等），以及安全环境变量名单。
  */
@@ -942,7 +942,7 @@ function isProtectedEnvVar(envName, value) {
     (name === "ANTHROPIC_CUSTOM_HEADERS" && !hasUnsafeCustomHeaders(value))
   );
 }
-//@ chunk-dcmhvw5a.js:500702-500782 fingerprint = DANGEROUS_SHELL_SETTINGS (0.787)
+//@ chunk-dcmhvw5a.js:500702-500782 fingerprint (2.1.88 match: DANGEROUS_SHELL_SETTINGS, 0.787)
 var DANGEROUS_SHELL_SETTINGS = ["apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "gcpAuthRefresh"];
 export {
   isProtectedEnvVar,

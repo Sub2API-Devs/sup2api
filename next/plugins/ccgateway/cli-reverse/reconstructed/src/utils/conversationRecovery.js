@@ -99,7 +99,7 @@ async function getLastSessionLog(sessionId, host, storageV5, precedingEntries) {
     );
   return sessionLog;
 }
-//@ chunk-e6aww6q8.js:1630550-1630800 fingerprint = restoreSkillStateFromMessages (0.719)
+//@ chunk-e6aww6q8.js:1630550-1630800 fingerprint (2.1.88 match: restoreSkillStateFromMessages, 0.719)
 /**
  * 判断某技能内容在历史里以正文（body）还是 invoked_skills 附件（attachment）形式出现，都没有返回 null。
  */
@@ -527,7 +527,7 @@ function isServerToolType(name) {
  * 不支持的工具内容被移除时的占位文本。
  */
 var UNSUPPORTED_TOOL_CONTENT_TEXT = "[Unsupported tool content removed]";
-//@ chunk-e6aww6q8.js:1826542-1826882 fingerprint = migrateLegacyAttachmentTypes (0.51)
+//@ chunk-e6aww6q8.js:1826542-1826882 fingerprint (2.1.88 match: migrateLegacyAttachmentTypes, 0.51)
 /**
  * 迁移旧版附件：删除已废弃类型，给缺 displayPath 的附件补相对路径。
  */
@@ -575,7 +575,7 @@ function dropMalformedTextBlocks(message) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1827152-1827196 fingerprint = deserializeMessagesWithInterruptDetection (0.343)
+//@ chunk-e6aww6q8.js:1827152-1827196 fingerprint (2.1.88 match: deserializeMessagesWithInterruptDetection, 0.343)
 /**
  * 恢复被打断轮次时追加的用户提示 "Continue from where you left off."。
  */
@@ -887,7 +887,7 @@ async function findLatestResumableLog({ storageV5, forkSession, onNewestRunningI
     storageV5,
   );
 }
-//@ chunk-e6aww6q8.js:1853464-1858887 callgraph-witnessed = loadConversationForResume (0.21)
+//@ chunk-e6aww6q8.js:1853464-1858887 callgraph-witnessed (2.1.88 match: loadConversationForResume, 0.21)
 /**
  * loadConversationForResume：按参数加载会话（最新一个/会话 id/转录路径/fork），反序列化、修复、检测中断，返回 messages、sessionId 与元数据；通知 onSessionResolved。
  */
@@ -1204,7 +1204,7 @@ async function findLogById(sessionRef, storageV5) {
   if (lastSessionLog) logEvent("tengu_transcript_id_scan_fallback", {});
   return lastSessionLog;
 }
-//@ chunk-e6aww6q8.js:3310099-3310228 fingerprint = LEGACY_BRIEF_TOOL_NAME (0.325)
+//@ chunk-e6aww6q8.js:3310099-3310228 fingerprint (2.1.88 match: LEGACY_BRIEF_TOOL_NAME, 0.325)
 /**
  * require chunk-vswknp5v（BRIEF_TOOL_NAME/LEGACY_BRIEF_TOOL_NAME）与 chunk-cv3kgbt2（isBriefEnabled 等）。
  */
@@ -1293,7 +1293,7 @@ function dropRetractedMessages(messages) {
       message.type === "system" || !retractedUuids.has(message.uuid.slice(0, MAX_PROGRESS_ENTRIES)),
   );
 }
-//@ chunk-tyg7f3ek.js:326687-326938 callgraph-fingerprint = isTerminalToolResult (0.709)
+//@ chunk-tyg7f3ek.js:326687-326938 callgraph-fingerprint (2.1.88 match: isTerminalToolResult, 0.709)
 /**
  * 轮次是否已正常结束：assistant 无 tool_use 且有非空文本，或非关机中断的 user 消息。
  */
@@ -1307,7 +1307,7 @@ function isTerminalToolResult(message) {
   }
   return message.type === "user" && !isHarnessMetaMessage(message) && message.interruptedByShutdown !== true;
 }
-//@ chunk-tyg7f3ek.js:326938-327185 fingerprint = detectTurnInterruption (0.439)
+//@ chunk-tyg7f3ek.js:326938-327185 fingerprint (2.1.88 match: detectTurnInterruption, 0.439)
 /**
  * 检测 interrupted_prompt：被打断的提示之后没有已完成的回答时返回该提示 uuid。
  */

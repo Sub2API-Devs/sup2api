@@ -102,7 +102,7 @@ function enumerateEffort(effortValue) {
   if (effortValue === undefined) return;
   return typeof effortValue === "number" ? fromNumber(effortValue) : fromEnum(effortValue);
 }
-//@ chunk-kxyd0g16.js:82503-82670 placement = countToolCallsSince (1)
+//@ chunk-kxyd0g16.js:82503-82670 placement (2.1.88 match: countToolCallsSince, 1)
 function countAgentToolUses(messages) {
   let toolCallCount = 0;
   for (let message of messages) {

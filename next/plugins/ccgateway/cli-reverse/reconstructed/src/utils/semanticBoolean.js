@@ -9,6 +9,6 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-ca06bv0t.js:5288-5312 fingerprint = semanticBoolean (0.73)
+//@ chunk-ca06bv0t.js:5288-5312 fingerprint (2.1.88 match: semanticBoolean, 0.73)
 var semanticBoolean = ["true", "false"];
 export { semanticBoolean };

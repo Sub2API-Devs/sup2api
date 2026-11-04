@@ -70,7 +70,7 @@ ${listConfigKeys(context)}`,
     onDone,
   });
 };
-//@ chunk-ak1qv1dp.js:17856-18207 placement = ShowHelp (0.383)
+//@ chunk-ak1qv1dp.js:17856-18207 placement (2.1.88 match: ShowHelp, 0.383)
 function ShowHelp(props) {
   let $ = useMemoCache(6);
   let { pairs, caller, onDone } = props;
@@ -111,7 +111,7 @@ function ShowHelp(props) {
   useEffect(commit, deps);
   return null;
 }
-//@ chunk-q8cyy466.js:17324-17644 fingerprint = call (0.717)
+//@ chunk-q8cyy466.js:17324-17644 fingerprint (2.1.88 match: call, 0.717)
 var call_2 = async (onDone, storageV5, context, args) => {
   let isVimMode = isVimModeEnabled(args);
   return jsxProd_default_2(Box, {

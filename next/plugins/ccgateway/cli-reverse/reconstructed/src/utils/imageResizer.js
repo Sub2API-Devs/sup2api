@@ -34,14 +34,14 @@ import { formatFileSize } from "./format.js";
 import { isPlainObject } from "./isPlainObject.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-p8kytbnw.js:1486-1528 callgraph-witnessed = detectImageFormatFromBuffer (0.384)
+//@ chunk-p8kytbnw.js:1486-1528 callgraph-witnessed (2.1.88 match: detectImageFormatFromBuffer, 0.384)
 /**
  * 按魔数识别图片 MIME，默认 image/png。
  */
 function detectImageFormatFromBuffer(buffer) {
   return sniffImageMediaType(buffer) ?? "image/png";
 }
-//@ chunk-p8kytbnw.js:1528-1617 fingerprint = detectImageFormatFromBase64 (1)
+//@ chunk-p8kytbnw.js:1528-1617 fingerprint (2.1.88 match: detectImageFormatFromBase64, 1)
 /**
  * 从 base64 数据识别图片格式。
  */
@@ -245,7 +245,7 @@ async function encodePreviewJpeg(buffer) {
     h: targetHeight,
   };
 }
-//@ chunk-mvvq2nx1.js:7285-7393 affinity = IMAGE_EXTENSIONS (0.776)
+//@ chunk-mvvq2nx1.js:7285-7393 affinity (2.1.88 match: IMAGE_EXTENSIONS, 0.776)
 /**
  * 图片处理错误类型编号（2 未知格式、3 未知、4 像素超限、5 内存、8 权限、9 格式不支持、10 解码失败、11 解码关闭）与 tengu_parsed_eagle 开关名、直通格式集合。
  */
@@ -271,7 +271,7 @@ deferInit("chunk-mvvq2nx1.js:7285", () => {
   TENGU_PARSED_EAGLE = "tengu_parsed_eagle";
   PASSTHROUGH_IMAGE_FORMATS = new Set(["png", "jpeg", "gif", "webp"]);
 });
-//@ chunk-mvvq2nx1.js:7497-7574 fingerprint = ImageResizeError (1)
+//@ chunk-mvvq2nx1.js:7497-7574 fingerprint (2.1.88 match: ImageResizeError, 1)
 /**
  * 图片缩放/处理失败的错误类型。
  */
@@ -356,7 +356,7 @@ function getImageFormatTelemetryFields(buffer) {
     }),
   };
 }
-//@ chunk-mvvq2nx1.js:8690-8785 callgraph-witnessed = hashString (1)
+//@ chunk-mvvq2nx1.js:8690-8785 callgraph-witnessed (2.1.88 match: hashString, 1)
 function hashString(str) {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
@@ -371,7 +371,7 @@ function getRejectDimensions(limits) {
 }
 //@ chunk-mvvq2nx1.js:8898-8909 layout
 var MAX_PROVIDER_IMAGE_DIMENSION = 8000;
-//@ chunk-mvvq2nx1.js:8909-14013 fingerprint = maybeResizeAndDownsampleImageBuffer (0.548)
+//@ chunk-mvvq2nx1.js:8909-14013 fingerprint (2.1.88 match: maybeResizeAndDownsampleImageBuffer, 0.548)
 /**
  * 按模型图片限制缩放/重编码：非直通格式转 PNG 或 WebP；尺寸不明时校验上限；仅超字节时先试 PNG 调色板再试 JPEG 80/60/40/20；需缩放时按 token 上限算目标尺寸后 resize。
  */
@@ -726,7 +726,7 @@ async function compressToJpegUnderBytes(buffer, maxBytes, mediaType) {
   }
   return accepted ?? best;
 }
-//@ chunk-mvvq2nx1.js:14483-15548 fingerprint = maybeResizeAndDownsampleImageBlock (0.402)
+//@ chunk-mvvq2nx1.js:14483-15548 fingerprint (2.1.88 match: maybeResizeAndDownsampleImageBlock, 0.402)
 /**
  * 处理 image block（base64 或 Buffer）：diskless 时只校验尺寸，否则调用缩放并返回新 block 或"无法处理"文本块。
  */
@@ -845,7 +845,7 @@ function degradedImageBlock(reason, cause) {
     },
   };
 }
-//@ chunk-mvvq2nx1.js:19011-20078 fingerprint = compressImageBuffer (0.862)
+//@ chunk-mvvq2nx1.js:19011-20078 fingerprint (2.1.88 match: compressImageBuffer, 0.862)
 /**
  * 把图片压缩到指定字节内（调色板 PNG、渐进缩小、JPEG、超压缩 JPEG 依次尝试）。
  */
@@ -925,7 +925,7 @@ async function compressImageBufferWithTokenLimit(imageBuffer, maxTokens, origina
   let maxBytes = Math.floor(maxBase64Chars * 0.75);
   return compressImageBuffer(imageBuffer, maxBytes, originalMediaType);
 }
-//@ chunk-mvvq2nx1.js:20169-20398 fingerprint = compressImageBlock (1)
+//@ chunk-mvvq2nx1.js:20169-20398 fingerprint (2.1.88 match: compressImageBlock, 1)
 /**
  * image block 超过字节上限时压缩。
  */
@@ -943,7 +943,7 @@ async function compressImageBlock(imageBlock, maxBytes) {
     },
   };
 }
-//@ chunk-mvvq2nx1.js:20398-20515 fingerprint = createCompressedImageResult (1)
+//@ chunk-mvvq2nx1.js:20398-20515 fingerprint (2.1.88 match: createCompressedImageResult, 1)
 function createCompressedImageResult(buffer, mediaType, originalSize) {
   let normalizedMediaType = mediaType === "jpg" ? "jpeg" : mediaType;
   return {
@@ -952,7 +952,7 @@ function createCompressedImageResult(buffer, mediaType, originalSize) {
     originalSize,
   };
 }
-//@ chunk-mvvq2nx1.js:20515-20848 fingerprint = tryProgressiveResizing (1)
+//@ chunk-mvvq2nx1.js:20515-20848 fingerprint (2.1.88 match: tryProgressiveResizing, 1)
 async function tryProgressiveResizing(context, sharp) {
   let scalingFactors = [1, 0.75, 0.5, 0.25];
   for (let scalingFactor of scalingFactors) {
@@ -970,7 +970,7 @@ async function tryProgressiveResizing(context, sharp) {
   }
   return null;
 }
-//@ chunk-mvvq2nx1.js:20848-21010 fingerprint = applyFormatOptimizations (0.926)
+//@ chunk-mvvq2nx1.js:20848-21010 fingerprint (2.1.88 match: applyFormatOptimizations, 0.926)
 function applyFormatOptimizations(image, format) {
   switch (format) {
     case "png":
@@ -988,7 +988,7 @@ function applyFormatOptimizations(image, format) {
       });
   }
 }
-//@ chunk-mvvq2nx1.js:21010-21242 fingerprint = tryPalettePNG (1)
+//@ chunk-mvvq2nx1.js:21010-21242 fingerprint (2.1.88 match: tryPalettePNG, 1)
 async function tryPalettePNG(context, sharp) {
   let palettePng = await sharp(context.imageBuffer)
     .resize(800, 800, {
@@ -1005,7 +1005,7 @@ async function tryPalettePNG(context, sharp) {
     return createCompressedImageResult(palettePng, "png", context.originalSize);
   return null;
 }
-//@ chunk-mvvq2nx1.js:21242-21448 fingerprint = tryJPEGConversion (1)
+//@ chunk-mvvq2nx1.js:21242-21448 fingerprint (2.1.88 match: tryJPEGConversion, 1)
 async function tryJPEGConversion(context, quality, sharp) {
   let jpegBuffer = await sharp(context.imageBuffer)
     .resize(600, 600, {
@@ -1020,7 +1020,7 @@ async function tryJPEGConversion(context, quality, sharp) {
     return createCompressedImageResult(jpegBuffer, "jpeg", context.originalSize);
   return null;
 }
-//@ chunk-mvvq2nx1.js:21448-21617 fingerprint = createUltraCompressedJPEG (1)
+//@ chunk-mvvq2nx1.js:21448-21617 fingerprint (2.1.88 match: createUltraCompressedJPEG, 1)
 async function createUltraCompressedJPEG(context, sharp) {
   let ultraCompressedBuffer = await sharp(context.imageBuffer)
     .resize(400, 400, {
@@ -1033,7 +1033,7 @@ async function createUltraCompressedJPEG(context, sharp) {
     .toBuffer();
   return createCompressedImageResult(ultraCompressedBuffer, "jpeg", context.originalSize);
 }
-//@ chunk-mvvq2nx1.js:21617-22018 fingerprint = createImageMetadataText (1)
+//@ chunk-mvvq2nx1.js:21617-22018 fingerprint (2.1.88 match: createImageMetadataText, 1)
 /**
  * 缩放后生成说明原尺寸/显示尺寸与坐标换算的元信息文本（作为 meta 用户消息附加）。
  */
@@ -1062,7 +1062,7 @@ function createImageMetadataText(dims, sourcePath) {
   }
   return `${IMAGE_MARKER_PREFIX}${parts.join(", ")}]`;
 }
-//@ chunk-qz53w8v8.js:1699-1837 placement = CLAUDE_OPUS_4_6_CONFIG (0.48)
+//@ chunk-qz53w8v8.js:1699-1837 placement (2.1.88 match: CLAUDE_OPUS_4_6_CONFIG, 0.48)
 /**
  * 各提供商图片最大边 2000。
  */

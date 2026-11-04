@@ -32,7 +32,7 @@ function getGroupableToolNames(tools) {
   }
   return names;
 }
-//@ chunk-ag5x7vhf.js:120896-121759 placement = countToolCallsSince (1)
+//@ chunk-ag5x7vhf.js:120896-121759 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_2(messages, tools, skip = false, activeAgents) {
   if (skip)
     return {
@@ -95,7 +95,7 @@ var weakMap_2; // deferred: has load-time effects after a deferred statement of 
 deferInit("chunk-ag5x7vhf.js:121759", () => {
   weakMap_2 = new WeakMap();
 });
-//@ chunk-ag5x7vhf.js:121778-122149 fingerprint = applyGrouping (0.96)
+//@ chunk-ag5x7vhf.js:121778-122149 fingerprint (2.1.88 match: applyGrouping, 0.96)
 /**
  * 把同一 assistant 消息里的同类并行工具调用合并为 grouped_tool_use 以便一起渲染。
  */

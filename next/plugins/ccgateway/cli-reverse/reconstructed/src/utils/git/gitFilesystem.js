@@ -61,7 +61,7 @@ import { MAX_PLACEMENT_DEPTH } from "./builderGit/gitConfigAudit.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:80246-80537 callgraph-fingerprint = getRemoteUrlForDir (0.543)
+//@ chunk-t0gq9gyw.js:80246-80537 callgraph-fingerprint (2.1.88 match: getRemoteUrlForDir, 0.543)
 /**
  * 读某仓库目录的 git config 解析 origin URL；config 含 NUL、路径不安全或读失败时记录并返回标记值。
  */
@@ -429,7 +429,7 @@ function linkChainIsUnsafeToFollow(pointer, cwd) {
 function isValidGitSha(s) {
   return /^[0-9a-f]{40}$/.test(s) || /^[0-9a-f]{64}$/.test(s);
 }
-//@ chunk-t0gq9gyw.js:90560-91195 facade-exports = readGitHead (0.817)
+//@ chunk-t0gq9gyw.js:90560-91195 facade-exports (2.1.88 match: readGitHead, 0.817)
 /**
  * 不 spawn git 直接读 <gitDir>/HEAD：`ref: refs/heads/x` 返回分支，40/64 位 hex 返回 detached sha；reftable 仓库回退 git symbolic-ref。
  */
@@ -482,7 +482,7 @@ async function readGitHead(gitDir) {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:91195-91551 facade-exports = resolveRef (0)
+//@ chunk-t0gq9gyw.js:91195-91551 facade-exports (2.1.88 match: resolveRef, 0)
 /**
  * 把 ref 解析成 sha：先在 gitDir 再在 commondir 查 loose ref 文件与 packed-refs，最多跟随 5 层符号引用；reftable 时用 git show-ref。
  */
@@ -506,7 +506,7 @@ async function resolveRef(gitDir, refName, hopsLeft = 5) {
   if (commonDir && commonDir !== gitDir) return resolveRefInDir(commonDir, refName, hopsLeft);
   return null;
 }
-//@ chunk-t0gq9gyw.js:91551-91831 fingerprint = resolveRefInDir (1)
+//@ chunk-t0gq9gyw.js:91551-91831 fingerprint (2.1.88 match: resolveRefInDir, 1)
 /**
  * 在单个 git 目录中按 loose 文件 → packed-refs 顺序查找 ref。
  */
@@ -585,7 +585,7 @@ var GIT_PROBE_RETRIES = 3;
 function isGitSpawnBlocked() {
   return trustGuardRegistry.of(getRootSession().host).blocked();
 }
-//@ chunk-t0gq9gyw.js:92697-92866 facade-exports = readRawSymref (0.832)
+//@ chunk-t0gq9gyw.js:92697-92866 facade-exports (2.1.88 match: readRawSymref, 0.832)
 /**
  * 读 HEAD 原始内容判断是否为 reftable（refs/heads/.invalid）布局。
  */
@@ -671,7 +671,7 @@ async function statFileIdentity(path) {
     return "absent";
   }
 }
-//@ chunk-t0gq9gyw.js:93846-101450 fingerprint = GitFileWatcher (0.399)
+//@ chunk-t0gq9gyw.js:93846-101450 fingerprint (2.1.88 match: GitFileWatcher, 0.399)
 /**
  * GitFileWatcher：监视 .git/HEAD、config、当前分支 ref 等文件（fs 事件或轮询），缓存 branch/head/remoteUrl/defaultBranch，变化时失效并通知 onStateChange；也可登记额外仓库跟踪其分支变化。
  */
@@ -1061,7 +1061,7 @@ deferInit("chunk-t0gq9gyw.js:101450", () => {
 function getGitFileWatcher() {
   return gitFileWatcherByHost.of(getRootSession().host);
 }
-//@ chunk-t0gq9gyw.js:101512-101678 fingerprint = computeHead (1)
+//@ chunk-t0gq9gyw.js:101512-101678 fingerprint (2.1.88 match: computeHead, 1)
 async function computeHead() {
   let gitDir = await resolveGitDir();
   if (!gitDir) return "";
@@ -1093,7 +1093,7 @@ async function computeRemoteUrl() {
 }
 //@ chunk-t0gq9gyw.js:101962-101988 facade-exports
 var CONVENTIONAL_DEFAULT_BRANCH_NAMES = ["main", "master"];
-//@ chunk-t0gq9gyw.js:101988-102264 fingerprint = computeDefaultBranch (0.831)
+//@ chunk-t0gq9gyw.js:101988-102264 fingerprint (2.1.88 match: computeDefaultBranch, 0.831)
 /**
  * 不 spawn 计算默认分支：读 refs/remotes/origin/HEAD 符号引用，否则看 origin/main、origin/master 是否存在，默认 main。
  */
@@ -1112,28 +1112,28 @@ async function computeDefaultBranch() {
     if (await resolveRef(commonDir, `refs/remotes/origin/${candidate}`)) return candidate;
   return "main";
 }
-//@ chunk-t0gq9gyw.js:102264-102315 facade-exports = getCachedBranch (1)
+//@ chunk-t0gq9gyw.js:102264-102315 facade-exports (2.1.88 match: getCachedBranch, 1)
 /**
  * GitFileWatcher 缓存的当前分支名。
  */
 function getCachedBranch() {
   return getGitFileWatcher().get("branch", () => getBranchForDir());
 }
-//@ chunk-t0gq9gyw.js:102315-102357 facade-exports = getCachedHead (1)
+//@ chunk-t0gq9gyw.js:102315-102357 facade-exports (2.1.88 match: getCachedHead, 1)
 /**
  * GitFileWatcher 缓存的 HEAD sha。
  */
 function getCachedHead() {
   return getGitFileWatcher().get("head", computeHead);
 }
-//@ chunk-t0gq9gyw.js:102357-102404 facade-exports = getCachedRemoteUrl (1)
+//@ chunk-t0gq9gyw.js:102357-102404 facade-exports (2.1.88 match: getCachedRemoteUrl, 1)
 /**
  * GitFileWatcher 缓存的 origin URL（config 中 remote.origin.pushurl 优先于 url）。
  */
 function getCachedRemoteUrl() {
   return getGitFileWatcher().get("remoteUrl", computeRemoteUrl);
 }
-//@ chunk-t0gq9gyw.js:102404-102455 facade-exports = getCachedDefaultBranch (1)
+//@ chunk-t0gq9gyw.js:102404-102455 facade-exports (2.1.88 match: getCachedDefaultBranch, 1)
 /**
  * GitFileWatcher 缓存的默认分支。
  */
@@ -1174,7 +1174,7 @@ function resetGitFileWatcher() {
 function reanchorGitFileWatcher() {
   getGitFileWatcher().reanchor();
 }
-//@ chunk-t0gq9gyw.js:102817-102982 facade-exports = computeHead (1)
+//@ chunk-t0gq9gyw.js:102817-102982 facade-exports (2.1.88 match: computeHead, 1)
 async function getHeadForDir(startPath) {
   let gitDir = await resolveGitDir(startPath);
   if (!gitDir) return null;
@@ -1183,7 +1183,7 @@ async function getHeadForDir(startPath) {
   if (head.type === "branch") return resolveRef(gitDir, `refs/heads/${head.name}`);
   return head.sha;
 }
-//@ chunk-t0gq9gyw.js:102982-103100 facade-exports = computeBranch (1)
+//@ chunk-t0gq9gyw.js:102982-103100 facade-exports (2.1.88 match: computeBranch, 1)
 async function getBranchForDir(startPath) {
   let gitDir = await resolveGitDir(startPath);
   if (!gitDir) return "HEAD";
@@ -1309,7 +1309,7 @@ async function readNewCommitFromReftable(mark, reftableNewest) {
     return;
   return getHeadForDir_2(mark, newest.id);
 }
-//@ chunk-t0gq9gyw.js:104732-104937 callgraph-fingerprint = getHeadForDir (0.683)
+//@ chunk-t0gq9gyw.js:104732-104937 callgraph-fingerprint (2.1.88 match: getHeadForDir, 0.683)
 async function getHeadForDir_2(mark, commitId) {
   let gitDir = await readGitHead(mark.gitDir);
   if (
@@ -1430,7 +1430,7 @@ async function hasNoNestedRepoBetween(dir, limitDir, limitKey) {
     currentDir = parentDir;
   }
 }
-//@ chunk-t0gq9gyw.js:106173-106276 layout = isRealPathWithinTeamDir (1)
+//@ chunk-t0gq9gyw.js:106173-106276 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function isPathAbsentLstat(realCandidate) {
   try {
     await lstat(realCandidate);
@@ -1453,7 +1453,7 @@ async function realpathAsyncOrNull(path) {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:106405-106760 facade-exports = readWorktreeHeadSha (1)
+//@ chunk-t0gq9gyw.js:106405-106760 facade-exports (2.1.88 match: readWorktreeHeadSha, 1)
 /**
  * 读 worktree 目录 .git 文件指向的 gitdir 下的 HEAD，返回 sha（分支则解析 ref），不存在返回 null。
  */
@@ -1571,7 +1571,7 @@ function readBoundedSync(filePath, maxBytes) {
     if (fd !== undefined) closeSync(fd);
   }
 }
-//@ chunk-t0gq9gyw.js:108024-108197 facade-exports = getWorktreeCountFromFs (1)
+//@ chunk-t0gq9gyw.js:108024-108197 facade-exports (2.1.88 match: getWorktreeCountFromFs, 1)
 /**
  * 统计 <commondir>/worktrees 下的条目数（不 spawn）。
  */
@@ -1586,14 +1586,14 @@ async function getWorktreeCountFromFs() {
     return 1;
   }
 }
-//@ chunk-dgqyqzy0.js:3870-3908 fingerprint = getCommonDir (0.737)
+//@ chunk-dgqyqzy0.js:3870-3908 fingerprint (2.1.88 match: getCommonDir, 0.737)
 /**
  * 读 gitDir/commondir 得到共享 git 目录，没有则返回 gitDir 本身。
  */
 function getCommonDir_2(gitDir) {
   return lstatErrnoOrFalse(gitDir, "commondir");
 }
-//@ chunk-s61vbvea.js:254014-254155 fingerprint = isShallowClone (0.431)
+//@ chunk-s61vbvea.js:254014-254155 fingerprint (2.1.88 match: isShallowClone, 0.431)
 /**
  * 根据 .git/shallow 等文件判断是否浅克隆。
  */
@@ -1604,7 +1604,7 @@ function isShallowClone(layout, sharedIndexNames) {
     ...sharedIndexNames.slice(0, MAX_PLACEMENT_DEPTH).map((name) => [layout.gitDir, name, "shared_index"]),
   ];
 }
-//@ chunk-e6aww6q8.js:3599115-3599365 fingerprint = resolveGitDir (1)
+//@ chunk-e6aww6q8.js:3599115-3599365 fingerprint (2.1.88 match: resolveGitDir, 1)
 /**
  * 异步解析 .git：目录直接返回，文件则解析 gitdir: 指向的路径。
  */
@@ -1621,7 +1621,7 @@ async function resolveGitDir_2(startPath) {
     return null;
   }
 }
-//@ chunk-yj65zw1g.js:625-708 fingerprint = resetGitFileWatcher (0.682)
+//@ chunk-yj65zw1g.js:625-708 fingerprint (2.1.88 match: resetGitFileWatcher, 0.682)
 class resetGitFileWatcher_2 {
   #e = 0;
   next(input, factor) {
@@ -1632,7 +1632,7 @@ class resetGitFileWatcher_2 {
     this.#e = 0;
   }
 }
-//@ chunk-ca06bv0t.js:16992-17085 fingerprint = computeRemoteUrl (0.798)
+//@ chunk-ca06bv0t.js:16992-17085 fingerprint (2.1.88 match: computeRemoteUrl, 0.798)
 var computeRemoteUrl_2 = (text) =>
   hasNulByte(text)
     ? ""

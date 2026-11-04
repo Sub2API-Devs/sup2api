@@ -48,7 +48,7 @@ function backfillObservableInput(toolByName, input, toolName) {
 function stripSendMessageArgs(toolName, input) {
   return toolName === SENDMESSAGE ? (stripObservableFields(input) ?? null) : null;
 }
-//@ chunk-ha3km179.js:143460-143553 fingerprint = productionDeps (0.873)
+//@ chunk-ha3km179.js:143460-143553 fingerprint (2.1.88 match: productionDeps, 0.873)
 /**
  * productionDeps：callModel=queryModelWithStreaming、autocompact、uuid=randomUUID、now=ISO 时间串。
  */

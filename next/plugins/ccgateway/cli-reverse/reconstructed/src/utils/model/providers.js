@@ -84,7 +84,7 @@ function allowedProviderLabel(label) {
       return isThirdPartyProviderLabel(label) ? THIRD_PARTY_PROVIDER_LABELS[label] : label;
   }
 }
-//@ chunk-v9tcvh08.js:31591-31914 placement = getAPIProvider (0.652)
+//@ chunk-v9tcvh08.js:31591-31914 placement (2.1.88 match: getAPIProvider, 0.652)
 /**
  * 当前提供商：网关模式为 gateway；否则按 CLAUDE_CODE_USE_BEDROCK/FOUNDRY/ANTHROPIC_AWS/ANTHROPIC_GOOGLE_CLOUD/MANTLE/VERTEX 顺序，都没有为 firstParty。
  */
@@ -104,7 +104,7 @@ function getAPIProvider() {
               ? "vertex"
               : "firstParty";
 }
-//@ chunk-v9tcvh08.js:31914-31956 placement = logEventTo1P (1)
+//@ chunk-v9tcvh08.js:31914-31956 placement (2.1.88 match: logEventTo1P, 1)
 function modelIdsAreOpaque() {
   return getAPIProvider() !== "firstParty";
 }
@@ -112,7 +112,7 @@ function modelIdsAreOpaque() {
 function getAPIProviderForAnalytics() {
   return fromEnum(getAPIProvider());
 }
-//@ chunk-v9tcvh08.js:31985-32026 placement = logEventTo1P (1)
+//@ chunk-v9tcvh08.js:31985-32026 placement (2.1.88 match: logEventTo1P, 1)
 function isFirstPartyProvider() {
   return getAPIProvider() === "firstParty";
 }
@@ -121,7 +121,7 @@ function getSecondaryProvider() {
   if (getAPIProvider() === "bedrock" && env.CLAUDE_CODE_USE_MANTLE) return "mantle";
   return null;
 }
-//@ chunk-v9tcvh08.js:32114-32175 placement = isFoundationModel (1)
+//@ chunk-v9tcvh08.js:32114-32175 placement (2.1.88 match: isFoundationModel, 1)
 /**
  * anthropic. 开头且不以 -v<n>[:<n>] 结尾。旧版名 isFoundationModel_3 不准确。
  */
@@ -147,7 +147,7 @@ function getProviderForModel(modelId) {
   }
   return getAPIProvider();
 }
-//@ chunk-v9tcvh08.js:32317-32383 placement = getOpus46PricingSuffix (0.646)
+//@ chunk-v9tcvh08.js:32317-32383 placement (2.1.88 match: getOpus46PricingSuffix, 0.646)
 /**
  * 是否“第一方类”提供商：firstParty、anthropicAws、anthropicGoogleCloud 或 gateway（很多默认与 1M/effort 判断用它）。
  */
@@ -171,7 +171,7 @@ function hasFirstPartyCapabilities(providerForModel = getAPIProvider()) {
     providerForModel === "mantle"
   );
 }
-//@ chunk-v9tcvh08.js:32564-32611 placement = logEventTo1P (1)
+//@ chunk-v9tcvh08.js:32564-32611 placement (2.1.88 match: logEventTo1P, 1)
 function isFirstPartyApiBackend() {
   return getAPIProvider() === "firstParty" && isFirstPartyAnthropicBaseUrl();
 }
@@ -243,7 +243,7 @@ function configuredApiProxyHost() {
     return;
   }
 }
-//@ chunk-v9tcvh08.js:33492-33589 placement = getApiBaseUrlHost (0.812)
+//@ chunk-v9tcvh08.js:33492-33589 placement (2.1.88 match: getApiBaseUrlHost, 0.812)
 function isFirstPartyAnthropicHost(url) {
   try {
     let host = new URL(url).host;
@@ -348,7 +348,7 @@ deferInit("chunk-v9tcvh08.js:33968", () => {
     },
   };
 });
-//@ chunk-v9tcvh08.js:34959-35002 placement = getVariablesByScope (1)
+//@ chunk-v9tcvh08.js:34959-35002 placement (2.1.88 match: getVariablesByScope, 1)
 /**
  * 返回某个模型提供者对应的 base URL 环境变量列表（切分误归，应属 API 提供者配置）。
  */
@@ -407,7 +407,7 @@ function shouldPropagateTraceContext() {
  * JSON.stringify 的别名。
  */
 var jsonStringify = (value) => JSON.stringify(value);
-//@ chunk-1wpnxx5r.js:799-920 fingerprint = isFirstPartyAnthropicBaseUrl (0.642)
+//@ chunk-1wpnxx5r.js:799-920 fingerprint (2.1.88 match: isFirstPartyAnthropicBaseUrl, 0.642)
 /**
  * api.anthropic.com、api-staging.anthropic.com；同句 ue 再加 OAuth 允许的 base URL 主机。
  */

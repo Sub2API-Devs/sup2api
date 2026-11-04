@@ -14,7 +14,7 @@ import { TASK_GET_TOOL_NAME } from "../../tools/TaskGetTool/constants.js";
 import { TASK_UPDATE_TOOL_NAME } from "../../tools/TaskUpdateTool/constants.js";
 import { TASK_LIST_TOOL_NAME } from "../../tools/TaskListTool/constants.js";
 
-//@ chunk-e6aww6q8.js:3232364-3232683 placement = firstPartyNameToCanonical (0.821)
+//@ chunk-e6aww6q8.js:3232364-3232683 placement (2.1.88 match: firstPartyNameToCanonical, 0.821)
 /**
  * TodoWrite、TaskCreate、TaskGet、TaskUpdate、TaskList（工具名列表，用于折叠显示判断）。
  */

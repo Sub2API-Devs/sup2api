@@ -10,7 +10,7 @@
  */
 import { dirname, basename } from "path";
 
-//@ chunk-e6aww6q8.js:2315571-2315664 fingerprint = AGENT_PATHS (1)
+//@ chunk-e6aww6q8.js:2315571-2315664 fingerprint (2.1.88 match: AGENT_PATHS, 1)
 function AGENT_PATHS(absPath) {
   let parentDir = dirname(absPath);
   if (basename(absPath) === "agents" && basename(parentDir) === ".claude") return dirname(parentDir);

@@ -763,7 +763,7 @@ import {
 } from "../../tasks/LocalAgentTask/agentMetaFiles.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cyj440je.js:715-954 fingerprint = McpAuthError (0.526)
+//@ chunk-cyj440je.js:715-954 fingerprint (2.1.88 match: McpAuthError, 0.526)
 /**
  * McpAuthError：MCP 认证错误（带服务器名）。
  */
@@ -797,7 +797,7 @@ deferInit("chunk-cyj440je.js:954", () => {
     }
   };
 });
-//@ chunk-cyj440je.js:1049-1697 fingerprint = McpSessionExpiredError (0.409)
+//@ chunk-cyj440je.js:1049-1697 fingerprint (2.1.88 match: McpSessionExpiredError, 0.409)
 /**
  * McpSessionExpiredError：HTTP 会话过期（404）或连接关闭时抛出，expiryKind 区分原因。
  */
@@ -857,7 +857,7 @@ deferInit("chunk-cyj440je.js:1697", () => {
     }
   };
 });
-//@ chunk-cyj440je.js:2321-2427 fingerprint = McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (0.82)
+//@ chunk-cyj440je.js:2321-2427 fingerprint (2.1.88 match: McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, 0.82)
 /**
  * MCP 工具调用失败的错误类（name 为 McpToolCallError），在通用错误基础上携带服务器返回的 `_meta`（mcpMeta），供遥测与结果展示。
  */
@@ -874,7 +874,7 @@ deferInit("chunk-cyj440je.js:2321", () => {
     }
   };
 });
-//@ chunk-3pdgd98q.js:226-303 fingerprint = getConnectionTimeoutMs (1)
+//@ chunk-3pdgd98q.js:226-303 fingerprint (2.1.88 match: getConnectionTimeoutMs, 1)
 /**
  * MCP 连接超时：env `MCP_TIMEOUT`（>0，上限 2^31-1）否则默认 30000ms。
  */
@@ -935,7 +935,7 @@ function useSubagentTruncationPrompt() {
     ? MCP_TRUNCATION_PROMPT_OVERRIDE !== "legacy"
     : getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_subagent_prompt", false);
 }
-//@ chunk-e6aww6q8.js:3289283-3289667 fingerprint = ensureConnectedClient (0.344)
+//@ chunk-e6aww6q8.js:3289283-3289667 fingerprint (2.1.88 match: ensureConnectedClient, 0.344)
 /**
  * ensureConnectedClient：按名字找客户端并确认已连接，找不到列出可用服务器名报错。
  */
@@ -1067,7 +1067,7 @@ function getHostedDesktopComputerUseConfig() {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:3808308-3808421 placement = getServerCommandArray (1)
+//@ chunk-e6aww6q8.js:3808308-3808421 placement (2.1.88 match: getServerCommandArray, 1)
 function isDesktopComputerUseCommand(config) {
   return (
     (config.type === undefined || config.type === "stdio") &&
@@ -1363,11 +1363,11 @@ function describeMissingRequiredArgs(input, schema) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4340451-4340529 fingerprint = getMcpAuthCache (1)
+//@ chunk-e6aww6q8.js:4340451-4340529 fingerprint (2.1.88 match: getMcpAuthCache, 1)
 function getMcpAuthCache(value) {
   return typeof value === "string" ? value : Buffer.from(value).toString("utf-8");
 }
-//@ chunk-23fm9f0d.js:17344-17604 fingerprint = getMcpAuthCachePath (0.644)
+//@ chunk-23fm9f0d.js:17344-17604 fingerprint (2.1.88 match: getMcpAuthCachePath, 0.644)
 /**
  * getMcpAuthCachePath：needs-auth 缓存文件路径（<配置目录>/mcp-needs-auth-cache.json）。
  */
@@ -1456,7 +1456,7 @@ async function refreshMcpServerTools(client, setServerTools, storageV5) {
     previousToolsPromise,
   };
 }
-//@ chunk-mdk8a5r0.js:284-480 fingerprint = setupSdkMcpClients (0.425)
+//@ chunk-mdk8a5r0.js:284-480 fingerprint (2.1.88 match: setupSdkMcpClients, 0.425)
 /**
  * 用于吞掉异常的特殊 Symbol。
  */
@@ -1508,7 +1508,7 @@ function isSseOpenFailure(error) {
       error.message.includes("Failed to open SSE stream"))
   );
 }
-//@ chunk-8t8n4kdh.js:46250-46515 placement = isConnectionError (1)
+//@ chunk-8t8n4kdh.js:46250-46515 placement (2.1.88 match: isConnectionError, 1)
 /**
  * MCP Streamable HTTP：错误是否表示会话失效需要重新初始化（McpSessionExpiredError、非 SSE 打开失败的 404、特定 400 消息）。与 bridge 无关。
  */
@@ -1629,7 +1629,7 @@ function isTimeoutError(error) {
 function hasNoTransport(client) {
   return "transport" in client && client.transport === undefined;
 }
-//@ chunk-8t8n4kdh.js:53597-53735 fingerprint = getMcpToolTimeoutMs (1)
+//@ chunk-8t8n4kdh.js:53597-53735 fingerprint (2.1.88 match: getMcpToolTimeoutMs, 1)
 /**
  * getMcpToolTimeoutMs：工具调用总超时：配置 timeout（≥1000）> MCP_TOOL_TIMEOUT > 默认约 27.8 小时，夹在 [1000, 上限]。
  */
@@ -1720,7 +1720,7 @@ async function writeAuthCacheV5(storage, cache) {
     logMCPDebug("auth-cache", `needs-auth cache v5 write failed: ${formatStorageError(writeResult.error)}`);
   return writeResult.ok;
 }
-//@ chunk-8t8n4kdh.js:54943-55253 callgraph-fingerprint = setMcpAuthCacheEntry (0.268)
+//@ chunk-8t8n4kdh.js:54943-55253 callgraph-fingerprint (2.1.88 match: setMcpAuthCacheEntry, 0.268)
 /**
  * setMcpAuthCacheEntry：写 needs-auth 缓存条目 {timestamp, id?, ttlMs?}（v5 存储或 mcp-needs-auth-cache.json），串行写链。
  */
@@ -1789,7 +1789,7 @@ function clearMcpDiscoveryCaches(preservedKeys = new Set(), notifyIdentityChange
   retainKeys(fetchResourcesForClient.cache);
   retainKeys(fetchResourceTemplatesForClient.cache);
 }
-//@ chunk-8t8n4kdh.js:55748-55855 fingerprint = mcpBaseUrlAnalytics (0.65)
+//@ chunk-8t8n4kdh.js:55748-55855 fingerprint (2.1.88 match: mcpBaseUrlAnalytics, 0.65)
 /**
  * mcpBaseUrlAnalytics：遥测字段 mcpServerBaseUrl 与 mcpServerKeyHash。
  */
@@ -1839,7 +1839,7 @@ function logMcpConnectionOtelEvent(serverName, serverRef, result) {
     }),
   });
 }
-//@ chunk-8t8n4kdh.js:56314-56960 fingerprint = handleRemoteAuthFailure (0.726)
+//@ chunk-8t8n4kdh.js:56314-56960 fingerprint (2.1.88 match: handleRemoteAuthFailure, 0.726)
 /**
  * handleRemoteAuthFailure：远程服务器需要认证：记录 tengu_mcp_server_needs_auth，写 needs-auth 缓存，清理发现缓存，返回 needs-auth 连接。
  */
@@ -2287,7 +2287,7 @@ class ClaudeAiProxyBearerRejectedError extends Error {
     this.name = "ClaudeAiProxyBearerRejectedError";
   }
 }
-//@ chunk-8t8n4kdh.js:63822-65001 fingerprint = createClaudeAiProxyFetch (0.634)
+//@ chunk-8t8n4kdh.js:63822-65001 fingerprint (2.1.88 match: createClaudeAiProxyFetch, 0.634)
 /**
  * createClaudeAiProxyFetch：claude.ai 代理 fetch：附加 OAuth 访问令牌，401 时刷新令牌重试一次，仍被拒抛 ClaudeAiProxyBearerRejectedError。
  */
@@ -2687,7 +2687,7 @@ deferInit("chunk-8t8n4kdh.js:69897", () => {
   RETRYABLE_HTTP_STATUSES = new Set([500, 502, 504]);
   MIN_TOOL_TIMEOUT_MS = 60000;
 });
-//@ chunk-8t8n4kdh.js:69936-70082 sole-consumer = getMcpToolTimeoutMs (1)
+//@ chunk-8t8n4kdh.js:69936-70082 sole-consumer (2.1.88 match: getMcpToolTimeoutMs, 1)
 /**
  * MCP 工具调用总超时：配置 timeout（≥1000ms 才算）优先，其次 env `MCP_TOOL_TIMEOUT`，再夹在下限与上限之间；都没有用默认值。（v2）
  */
@@ -2706,7 +2706,7 @@ function getMcpToolTimeoutMs_2(config) {
 function getMcpRequestTimeoutMs(config) {
   return Math.max(getMcpToolTimeoutMs_2(config), getConnectionTimeoutMs());
 }
-//@ chunk-8t8n4kdh.js:70125-70170 fingerprint = MCP_STREAMABLE_HTTP_ACCEPT (1)
+//@ chunk-8t8n4kdh.js:70125-70170 fingerprint (2.1.88 match: MCP_STREAMABLE_HTTP_ACCEPT, 1)
 var MCP_STREAMABLE_HTTP_ACCEPT = "application/json, text/event-stream";
 //@ chunk-8t8n4kdh.js:70170-70248 layout
 function wrapFetchNoop(fetchWithInit) {
@@ -2718,7 +2718,7 @@ function wrapFetchNoop(fetchWithInit) {
     }
   };
 }
-//@ chunk-8t8n4kdh.js:70248-70806 fingerprint = wrapFetchWithTimeout (0.76)
+//@ chunk-8t8n4kdh.js:70248-70806 fingerprint (2.1.88 match: wrapFetchWithTimeout, 0.76)
 /**
  * wrapFetchWithTimeout：非 GET 请求加超时（按服务器配置），补 Accept: application/json, text/event-stream 与 traceparent。
  */
@@ -2754,30 +2754,30 @@ function wrapFetchWithTimeout(fetchFn, config) {
     }
   };
 }
-//@ chunk-8t8n4kdh.js:70806-70865 fingerprint = getMcpServerConnectionBatchSize (1)
+//@ chunk-8t8n4kdh.js:70806-70865 fingerprint (2.1.88 match: getMcpServerConnectionBatchSize, 1)
 /**
  * 本地 MCP 服务器（stdio/sdk）并发连接批大小：env `MCP_SERVER_CONNECTION_BATCH_SIZE`，默认 3。（v2）
  */
 function getMcpServerConnectionBatchSize() {
   return env.MCP_SERVER_CONNECTION_BATCH_SIZE ?? 3;
 }
-//@ chunk-8t8n4kdh.js:70865-70932 fingerprint = getRemoteMcpServerConnectionBatchSize (1)
+//@ chunk-8t8n4kdh.js:70865-70932 fingerprint (2.1.88 match: getRemoteMcpServerConnectionBatchSize, 1)
 /**
  * 远程 MCP 服务器并发连接批大小：env `MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE`，默认 20。（v2）
  */
 function getRemoteMcpServerConnectionBatchSize() {
   return env.MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE ?? 20;
 }
-//@ chunk-8t8n4kdh.js:70932-70995 fingerprint = isLocalMcpServer (1)
+//@ chunk-8t8n4kdh.js:70932-70995 fingerprint (2.1.88 match: isLocalMcpServer, 1)
 /**
  * 判断是否本地服务器：未写 type、stdio 或 sdk。决定连接批次与是否自动重连。（v2）
  */
 function isLocalMcpServer(config) {
   return !config.type || config.type === "stdio" || config.type === "sdk";
 }
-//@ chunk-8t8n4kdh.js:70995-71055 fingerprint = ALLOWED_IDE_TOOLS (1)
+//@ chunk-8t8n4kdh.js:70995-71055 fingerprint (2.1.88 match: ALLOWED_IDE_TOOLS, 1)
 var ALLOWED_IDE_TOOLS = ["mcp__ide__executeCode", "mcp__ide__getDiagnostics"];
-//@ chunk-8t8n4kdh.js:71055-71120 layout = isIncludedMcpTool (1)
+//@ chunk-8t8n4kdh.js:71055-71120 layout (2.1.88 match: isIncludedMcpTool, 1)
 function isIncludedMcpTool_2(tool) {
   return !tool.startsWith("mcp__ide__") || ALLOWED_IDE_TOOLS.includes(tool);
 }
@@ -3292,7 +3292,7 @@ async function getRememberedLegacyPrior(config, storageV5) {
       }
     : undefined;
 }
-//@ chunk-8t8n4kdh.js:78171-78228 placement = initializeAgentMemorySnapshots (0.502)
+//@ chunk-8t8n4kdh.js:78171-78228 placement (2.1.88 match: initializeAgentMemorySnapshots, 0.502)
 /**
  * MCP initialize / tools/list 方法判定（MCP 客户端代码，切分误归）。
  */
@@ -3359,7 +3359,7 @@ function makeConnectTimeoutError_2(message) {
     });
   return error;
 }
-//@ chunk-8t8n4kdh.js:78931-79035 sole-consumer = getServerCommandArray (0.781)
+//@ chunk-8t8n4kdh.js:78931-79035 sole-consumer (2.1.88 match: getServerCommandArray, 0.781)
 /**
  * 插件来源的 stdio 服务器连接失败时，按服务器签名在认证/失败缓存文件里写一条带时间戳的记录（经 authCacheWriteChain 串行化写入），下次可跳过。
  */
@@ -6685,7 +6685,7 @@ function getMaxResultSizeCharsMeta(tool) {
     ? maxResultSizeChars
     : undefined;
 }
-//@ chunk-8t8n4kdh.js:131929-136285 fingerprint = fetchToolsForClient (0.385)
+//@ chunk-8t8n4kdh.js:131929-136285 fingerprint (2.1.88 match: fetchToolsForClient, 0.385)
 /**
  * buildMcpTool：把一个 MCP 工具定义包装成 CLI Tool：名字 mcp__<server>__<tool>（SDK 可去前缀）；描述按 CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH（默认 4096，经 ToolSearch 加载时 16384）截断；注解映射 isReadOnly/isDestructive/isOpenWorld/isConcurrencySafe；_meta 支持 anthropic/maxResultSizeChars、searchHint、alwaysLoad、requiresUserInteraction；checkPermissions 默认 passthrough 并建议写 localSettings allow 规则。
  */
@@ -8310,7 +8310,7 @@ function reportListFailure(client, error, metricName, logMetric, degradedReason,
       ),
     });
 }
-//@ chunk-8t8n4kdh.js:157236-158475 fingerprint = fetchResourcesForClient (0.347)
+//@ chunk-8t8n4kdh.js:157236-158475 fingerprint (2.1.88 match: fetchResourcesForClient, 0.347)
 /**
  * fetchResourcesForClient / fetchResourceTemplatesForClient：记忆化 resources/list 与 resources/templates/list，MethodNotFound 视为空。
  */
@@ -8498,7 +8498,7 @@ deferInit("chunk-8t8n4kdh.js:159096", () => {
     () => getConnectionCache().commandLists,
   );
 });
-//@ chunk-8t8n4kdh.js:159657-161446 fingerprint = fetchCommandsForClient (0.539)
+//@ chunk-8t8n4kdh.js:159657-161446 fingerprint (2.1.88 match: fetchCommandsForClient, 0.539)
 /**
  * buildMcpPromptCommands：MCP 提示词转为 prompt 命令 mcp__<server>__<prompt>（显示为 server:prompt (MCP)），执行时按空格切参数、检查必填、getPrompt 并转换内容。
  */
@@ -8639,7 +8639,7 @@ async function reconnectMcpServer(name, config, storageV5, credentials) {
     return identityChangedReconnectResult(name, config);
   return reconnectMcpServerImpl_2(name, config, storageV5, credentials);
 }
-//@ chunk-8t8n4kdh.js:162003-163934 fingerprint = reconnectMcpServerImpl (0.346)
+//@ chunk-8t8n4kdh.js:162003-163934 fingerprint (2.1.88 match: reconnectMcpServerImpl, 0.346)
 /**
  * reconnectMcpServerImpl：清缓存后重新 connectToServer 并拉取工具/命令/资源；needs-auth 时清缓存再试一次；身份变化返回 IDENTITY_CHANGED。
  */
@@ -8758,7 +8758,7 @@ async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, op
     };
   }
 }
-//@ chunk-8t8n4kdh.js:163934-163989 layout = processBatched (1)
+//@ chunk-8t8n4kdh.js:163934-163989 layout (2.1.88 match: processBatched, 1)
 async function processBatched_2(items, concurrency, processor) {
   await pMap(items, processor, {
     concurrency,
@@ -8791,7 +8791,7 @@ async function countUnsettledByDeadline(promises, timeoutMs) {
     clearTimeout(timer);
   }
 }
-//@ chunk-8t8n4kdh.js:164254-171714 fingerprint = getMcpToolsCommandsAndResources (0.46)
+//@ chunk-8t8n4kdh.js:164254-171714 fingerprint (2.1.88 match: getMcpToolsCommandsAndResources, 0.46)
 /**
  * getMcpToolsCommandsAndResources：批量连接所有服务器（本地按 MCP_SERVER_CONNECTION_BATCH_SIZE 默认 3、远程按 MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE 默认 20 并发），逐个检查禁用、策略、needs-auth 缓存、插件失败缓存与发现缓存（fresh/stale 直接出结果，stale 后台刷新），再连接并拉取工具/命令/资源，结果通过回调逐个上报。
  */
@@ -9372,7 +9372,7 @@ async function getMcpToolsCommandsAndResources_2(
   ]);
   await Promise.all(pendingTasks);
 }
-//@ chunk-8t8n4kdh.js:171714-172380 fingerprint = prefetchAllMcpResources (1)
+//@ chunk-8t8n4kdh.js:171714-172380 fingerprint (2.1.88 match: prefetchAllMcpResources, 1)
 /**
  * prefetchAllMcpResources：非交互模式下一次性连接全部服务器并收集 clients/tools/commands。
  */
@@ -9435,7 +9435,7 @@ function prefetchAllMcpResources(mcpConfigs, storageV5, credentials) {
       });
   });
 }
-//@ chunk-8t8n4kdh.js:172380-173380 fingerprint = transformResultContent (0.81)
+//@ chunk-8t8n4kdh.js:172380-173380 fingerprint (2.1.88 match: transformResultContent, 0.81)
 /**
  * transformResultContent：把 MCP 内容块转成 API 内容：text、image（压缩/尺寸限制）、audio、resource（文本或 blob 落盘）、resource_link。
  */
@@ -9594,7 +9594,7 @@ async function contentContainsImages(data, mimeType, serverName, limits, storage
         },
       ];
 }
-//@ chunk-8t8n4kdh.js:174129-174452 fingerprint = persistBlobToTextBlock (0.744)
+//@ chunk-8t8n4kdh.js:174129-174452 fingerprint (2.1.88 match: persistBlobToTextBlock, 0.744)
 /**
  * persistBlobToTextBlock：二进制资源落盘后返回说明文本块。
  */
@@ -9622,7 +9622,7 @@ async function persistBlobToTextBlock_2(bytes, mimeType, serverName, sourceDescr
     },
   ];
 }
-//@ chunk-8t8n4kdh.js:174452-174771 fingerprint = inferCompactSchema (1)
+//@ chunk-8t8n4kdh.js:174452-174771 fingerprint (2.1.88 match: inferCompactSchema, 1)
 /**
  * inferCompactSchema：从 JSON 值推断紧凑的结构描述（深度 2），用于大结果说明。
  */
@@ -9655,7 +9655,7 @@ async function transformContentArray(content, serverName, imageBuffer, storageV5
     schema: inferCompactSchema(stripTextBlockMeta(blocks)),
   };
 }
-//@ chunk-8t8n4kdh.js:174915-175928 fingerprint = transformMCPResult (0.902)
+//@ chunk-8t8n4kdh.js:174915-175928 fingerprint (2.1.88 match: transformMCPResult, 0.902)
 /**
  * transformMCPResult：把 callTool 结果分为 toolResult / structuredContent / contentArray 三类并转换内容。
  */
@@ -9723,12 +9723,12 @@ async function transformMCPResult(result, tool, name, imageBuffer, storageV5) {
     },
   );
 }
-//@ chunk-8t8n4kdh.js:175928-176037 layout = isMedia (1)
+//@ chunk-8t8n4kdh.js:175928-176037 layout (2.1.88 match: isMedia, 1)
 function isMedia(block) {
   if (!block || typeof block === "string") return false;
   return block.some((block) => block.type === "image" || block.type === "document");
 }
-//@ chunk-8t8n4kdh.js:176037-178083 fingerprint = processMCPResult (0.755)
+//@ chunk-8t8n4kdh.js:176037-178083 fingerprint (2.1.88 match: processMCPResult, 0.755)
 /**
  * processMCPResult：处理工具结果：超过 MCP 输出上限时（ENABLE_MCP_LARGE_OUTPUT_FILES 未关闭且不含图片）把全文写入 tool-results 文件并返回 getLargeOutputInstructions 说明，否则截断；记录 tengu_mcp_large_result_handled。
  */
@@ -11339,7 +11339,7 @@ async function callMCPTool({
     decrementCallsInProgress(transportErrorState);
   }
 }
-//@ chunk-8t8n4kdh.js:202078-202174 layout = countToolCallsSince (1)
+//@ chunk-8t8n4kdh.js:202078-202174 layout (2.1.88 match: countToolCallsSince, 1)
 function getFirstToolUseId(message) {
   if (message.message.content[0]?.type !== "tool_use") return;
   return message.message.content[0].id;
@@ -11557,7 +11557,7 @@ async function setupSdkMcpClients(servers, sendControlRequest, manifests, toolCo
     commands,
   };
 }
-//@ chunk-8t8n4kdh.js:205634-205823 fingerprint = clearServerCache (0.581)
+//@ chunk-8t8n4kdh.js:205634-205823 fingerprint (2.1.88 match: clearServerCache, 0.581)
 /**
  * clearServerCache：断开并清除某服务器的连接与所有记忆化列表缓存。
  */
@@ -11575,7 +11575,7 @@ async function clearServerCache_3(clients) {
     }),
   );
 }
-//@ chunk-z1n5m6nf.js:41559-41859 callgraph-fingerprint = isMcpSessionExpiredError (0.543)
+//@ chunk-z1n5m6nf.js:41559-41859 callgraph-fingerprint (2.1.88 match: isMcpSessionExpiredError, 0.543)
 /**
  * isMcpSessionExpiredError：HTTP 404 + JSON-RPC -32001 一类"会话不存在"错误判定，触发重新建立会话。
  */
@@ -11760,7 +11760,7 @@ function logListPagination(method, pageCount, itemCount, outcome) {
     outcome: fromEnum(outcome),
   });
 }
-//@ chunk-z1n5m6nf.js:44031-44169 layout = getMcpToolTimeoutMs (1)
+//@ chunk-z1n5m6nf.js:44031-44169 layout (2.1.88 match: getMcpToolTimeoutMs, 1)
 /**
  * MCP 工具调用总超时（v1 副本）：配置 timeout ≥1000 优先，其次 MCP_TOOL_TIMEOUT，再默认值，夹在 1000ms 与上限之间。
  */
@@ -11943,7 +11943,7 @@ function normalizeImageMimeType_2(mimeType) {
  * 工具调用超时下限（旧副本）。
  */
 var MIN_TOOL_TIMEOUT_MS_V1 = 60000;
-//@ chunk-z1n5m6nf.js:59800-59946 placement = getMcpToolTimeoutMs (1)
+//@ chunk-z1n5m6nf.js:59800-59946 placement (2.1.88 match: getMcpToolTimeoutMs, 1)
 function getMcpToolTimeoutMs_4(config) {
   let timeoutMs =
     (config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : undefined) ??
@@ -11956,7 +11956,7 @@ function getMcpToolTimeoutMs_4(config) {
 function getMcpRequestTimeoutMs_2(config) {
   return Math.max(getMcpToolTimeoutMs_4(config), getConnectionTimeoutMs());
 }
-//@ chunk-z1n5m6nf.js:59989-60034 placement = MCP_STREAMABLE_HTTP_ACCEPT (1)
+//@ chunk-z1n5m6nf.js:59989-60034 placement (2.1.88 match: MCP_STREAMABLE_HTTP_ACCEPT, 1)
 var MCP_STREAMABLE_HTTP_ACCEPT_2 = "application/json, text/event-stream";
 //@ chunk-z1n5m6nf.js:60034-60112 placement
 /**
@@ -11971,7 +11971,7 @@ function wrapFetchRethrowRedacted(fetchWithDefaults) {
     }
   };
 }
-//@ chunk-z1n5m6nf.js:60112-60670 placement = wrapFetchWithTimeout (0.76)
+//@ chunk-z1n5m6nf.js:60112-60670 placement (2.1.88 match: wrapFetchWithTimeout, 0.76)
 /**
  * wrapFetchWithTimeout（v1 副本）。
  */
@@ -12007,21 +12007,21 @@ function wrapFetchWithTimeout_2(baseFetch, config) {
     }
   };
 }
-//@ chunk-z1n5m6nf.js:60670-60729 placement = getMcpServerConnectionBatchSize (1)
+//@ chunk-z1n5m6nf.js:60670-60729 placement (2.1.88 match: getMcpServerConnectionBatchSize, 1)
 function getMcpServerConnectionBatchSize_2() {
   return env.MCP_SERVER_CONNECTION_BATCH_SIZE ?? 3;
 }
-//@ chunk-z1n5m6nf.js:60729-60796 placement = getRemoteMcpServerConnectionBatchSize (1)
+//@ chunk-z1n5m6nf.js:60729-60796 placement (2.1.88 match: getRemoteMcpServerConnectionBatchSize, 1)
 function getRemoteMcpServerConnectionBatchSize_2() {
   return env.MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE ?? 20;
 }
-//@ chunk-z1n5m6nf.js:60796-60859 placement = isLocalMcpServer (1)
+//@ chunk-z1n5m6nf.js:60796-60859 placement (2.1.88 match: isLocalMcpServer, 1)
 function isLocalMcpServer_2(config) {
   return !config.type || config.type === "stdio" || config.type === "sdk";
 }
-//@ chunk-z1n5m6nf.js:60859-60919 placement = ALLOWED_IDE_TOOLS (1)
+//@ chunk-z1n5m6nf.js:60859-60919 placement (2.1.88 match: ALLOWED_IDE_TOOLS, 1)
 var ALLOWED_IDE_TOOLS_2 = ["mcp__ide__executeCode", "mcp__ide__getDiagnostics"];
-//@ chunk-z1n5m6nf.js:60919-60984 placement = isIncludedMcpTool (1)
+//@ chunk-z1n5m6nf.js:60919-60984 placement (2.1.88 match: isIncludedMcpTool, 1)
 function isIncludedMcpTool_3(tool) {
   return !tool.startsWith("mcp__ide__") || ALLOWED_IDE_TOOLS_2.includes(tool);
 }
@@ -12029,7 +12029,7 @@ function isIncludedMcpTool_3(tool) {
 function isIdeServer_2(serverRef) {
   return isIncludedMcpTool_3(serverRef.name);
 }
-//@ chunk-z1n5m6nf.js:61017-61352 placement = getServerUrl (0.793)
+//@ chunk-z1n5m6nf.js:61017-61352 placement (2.1.88 match: getServerUrl, 0.793)
 function isServerHostInGateList(gateFeature, serverRef) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(gateFeature, []);
   if (!Array.isArray(featureValue_CACHED_MAY_BE_STALE) || featureValue_CACHED_MAY_BE_STALE.length === 0)
@@ -12177,12 +12177,12 @@ function makeConnectTimeoutError(message) {
     });
   return error;
 }
-//@ chunk-z1n5m6nf.js:63339-63443 layout = getServerCommandArray (0.781)
+//@ chunk-z1n5m6nf.js:63339-63443 layout (2.1.88 match: getServerCommandArray, 0.781)
 function getServerCommandArray(serverId, config, storage) {
   if ((config.type === "stdio" || config.type === undefined) && config.pluginSource !== undefined)
     isMcpAuthCached_3(serverId, configHash(config), undefined, storage);
 }
-//@ chunk-z1n5m6nf.js:63443-85309 fingerprint = connectToServer (0.606)
+//@ chunk-z1n5m6nf.js:63443-85309 fingerprint (2.1.88 match: connectToServer, 0.606)
 /**
  * connectToServer（v1）：同 v2 的连接入口，但客户端为旧 SDK（只有 initialize 握手，server/discover 只在 stateless claude.ai 代理本地应答中出现）。
  */
@@ -13512,7 +13512,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
       ),
   );
 });
-//@ chunk-z1n5m6nf.js:123802-123964 callgraph-fingerprint = callIdeRpc (0.394)
+//@ chunk-z1n5m6nf.js:123802-123964 callgraph-fingerprint (2.1.88 match: callIdeRpc, 0.394)
 /**
  * callIdeTool（v1 副本）。
  */
@@ -13684,7 +13684,7 @@ async function reconnectMcpServerImpl(serverName, serverRef, credentials, storag
     };
   }
 }
-//@ chunk-z1n5m6nf.js:126278-126333 layout = processBatched (1)
+//@ chunk-z1n5m6nf.js:126278-126333 layout (2.1.88 match: processBatched, 1)
 async function processBatched_3(items, concurrency, processor) {
   await pMap(items, processor, {
     concurrency,
@@ -14300,7 +14300,7 @@ async function getMcpToolsCommandsAndResources(
   ]);
   await Promise.all(pendingDiscoveryTasks);
 }
-//@ chunk-z1n5m6nf.js:134003-134665 layout = prefetchAllMcpResources (1)
+//@ chunk-z1n5m6nf.js:134003-134665 layout (2.1.88 match: prefetchAllMcpResources, 1)
 /**
  * prefetchAllMcpResources（v1 副本）。
  */
@@ -14363,7 +14363,7 @@ function prefetchAllMcpResources_2(mcpConfigs, storageV5, credentials) {
       });
   });
 }
-//@ chunk-z1n5m6nf.js:134665-135665 layout = transformResultContent (0.81)
+//@ chunk-z1n5m6nf.js:134665-135665 layout (2.1.88 match: transformResultContent, 0.81)
 /**
  * transformResultContent（v1 副本）。
  */
@@ -14519,7 +14519,7 @@ async function imageResultBlocks(base64Data, mediaType, serverName, imageLimits,
         },
       ];
 }
-//@ chunk-z1n5m6nf.js:136353-136414 layout = addToHistory (1)
+//@ chunk-z1n5m6nf.js:136353-136414 layout (2.1.88 match: addToHistory, 1)
 function addToHistory() {
   return isSessionPersistenceDisabled() || env.CLAUDE_CODE_SKIP_PROMPT_HISTORY;
 }
@@ -14554,7 +14554,7 @@ async function persistBlobToTextBlock(data, mimeType, serverName, prefixText, st
     },
   ];
 }
-//@ chunk-z1n5m6nf.js:136737-137056 layout = inferCompactSchema (1)
+//@ chunk-z1n5m6nf.js:136737-137056 layout (2.1.88 match: inferCompactSchema, 1)
 /**
  * inferCompactSchema（v1 副本）。
  */
@@ -14587,7 +14587,7 @@ async function transformContentArray_2(content, serverName, imageBuffer, storage
     schema: inferCompactSchema_2(stripTextBlockMeta(blocks)),
   };
 }
-//@ chunk-z1n5m6nf.js:137200-138213 layout = transformMCPResult (0.902)
+//@ chunk-z1n5m6nf.js:137200-138213 layout (2.1.88 match: transformMCPResult, 0.902)
 /**
  * transformMCPResult（v1 副本）。
  */
@@ -14655,12 +14655,12 @@ async function transformMCPResult_2(result, tool, name, imageBuffer, storageV5) 
     },
   );
 }
-//@ chunk-z1n5m6nf.js:138213-138322 layout = isMedia (1)
+//@ chunk-z1n5m6nf.js:138213-138322 layout (2.1.88 match: isMedia, 1)
 function isMedia_2(block) {
   if (!block || typeof block === "string") return false;
   return block.some((block) => block.type === "image" || block.type === "document");
 }
-//@ chunk-z1n5m6nf.js:138322-140352 layout = processMCPResult (0.755)
+//@ chunk-z1n5m6nf.js:138322-140352 layout (2.1.88 match: processMCPResult, 0.755)
 /**
  * processMCPResult（v1 副本）。
  */
@@ -14829,7 +14829,7 @@ function isNeedsApprovalOrExpiredSessionV1(error) {
   }
   return error.code === -32000 && isApprovalMismatchMessage(error.message);
 }
-//@ chunk-z1n5m6nf.js:141020-145793 fingerprint = callMCPToolWithUrlElicitationRetry (0.408)
+//@ chunk-z1n5m6nf.js:141020-145793 fingerprint (2.1.88 match: callMCPToolWithUrlElicitationRetry, 0.408)
 /**
  * callMCPToolWithUrlElicitationRetry：调用工具，遇 URL elicitation required 错误时逐个处理 elicitation（打开 URL、等待完成）后重试。
  */
@@ -15189,7 +15189,7 @@ function readResourceV1(client, uri, requestOptions) {
 function callToolV1(client, params, requestOptions) {
   return identityId2(client).callTool(params, undefined, requestOptions);
 }
-//@ chunk-z1n5m6nf.js:146657-155462 fingerprint = callMCPTool (0.37)
+//@ chunk-z1n5m6nf.js:146657-155462 fingerprint (2.1.88 match: callMCPTool, 0.37)
 /**
  * callMCPTool：真正发出 tools/call：总超时与空闲超时看门狗、进度上报、401/会话过期时刷新凭证/重连后重试一次、step-up 重新授权、错误分类与遥测，返回处理后的内容。
  */
@@ -15844,7 +15844,7 @@ async function clearServerCache_2(clients) {
     }),
   );
 }
-//@ chunk-18hwfzwa.js:682582-682744 fingerprint = processBatched (1)
+//@ chunk-18hwfzwa.js:682582-682744 fingerprint (2.1.88 match: processBatched, 1)
 async function processBatched(sessionSubagentsDir, timeWindow) {
   let transcripts = await listSubagentTranscripts(sessionSubagentsDir, timeWindow);
   let agentMetas = await pMap(
@@ -15856,7 +15856,7 @@ async function processBatched(sessionSubagentsDir, timeWindow) {
   );
   return buildAgentTree(agentMetas.filter((agentMeta) => agentMeta !== null));
 }
-//@ chunk-5bdzenzx.js:16639-16696 fingerprint = isIncludedMcpTool (1)
+//@ chunk-5bdzenzx.js:16639-16696 fingerprint (2.1.88 match: isIncludedMcpTool, 1)
 function isIncludedMcpTool(tool) {
   return !tool.name?.startsWith("mcp__ide__");
 }

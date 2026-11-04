@@ -545,7 +545,7 @@ async function listStatementSeparators(command, expectedCount) {
   visit(node);
   return statementCount === expectedCount ? separators : null;
 }
-//@ chunk-e6aww6q8.js:1212066-1212508 placement = parseForSecurity (0.837)
+//@ chunk-e6aww6q8.js:1212066-1212508 placement (2.1.88 match: parseForSecurity, 0.837)
 /**
  * shell -c 递归检查辅助：脚本前只有一个 cd 且其余以 && 连接时，解析 cd 目标并调用 Vze 计算新 cwd；远程执行或带 -C/-D/--chdir/su 等时放弃。
  */

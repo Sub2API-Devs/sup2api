@@ -13,7 +13,7 @@ import { isTabReadSeparationEnabled } from "../FileReadTool/limits.js";
 import { leanPromptOf } from "../../utils/model/promptBundles.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 
-//@ chunk-e6aww6q8.js:4645791-4645970 fingerprint = getPreReadInstruction (1)
+//@ chunk-e6aww6q8.js:4645791-4645970 fingerprint (2.1.88 match: getPreReadInstruction, 1)
 /**
  * Edit 提示词里的"必须先用 Read 读过"一行。
  */
@@ -28,7 +28,7 @@ function getPreReadInstruction() {
 function getEditToolDescription(model, leanPrompt) {
   return getDefaultEditDescription(model, leanPrompt);
 }
-//@ chunk-e6aww6q8.js:4646004-4647900 fingerprint = getDefaultEditDescription (0.429)
+//@ chunk-e6aww6q8.js:4646004-4647900 fingerprint (2.1.88 match: getDefaultEditDescription, 0.429)
 /**
  * 生成 Edit 提示词：lean 模式给 3 行短版；完整版含先读要求、行号前缀格式（tengu_tab_read_sep 决定 tab 或冒号）、tengu_edit_minimalanchor_jrn 开启时要求 old_string 尽量短。
  */

@@ -94,7 +94,7 @@ function StorageCredentialsProvider(props) {
 function useTheme_2() {
   return useContext(THEME_CONTEXT);
 }
-//@ chunk-v9w831vx.js:944-1219 fingerprint = ThemeContext (0.572)
+//@ chunk-v9w831vx.js:944-1219 fingerprint (2.1.88 match: ThemeContext, 0.572)
 var DARK; // deferred: uses getTheme (../../utils/theme.js) of its import cycle while loading; runs once the cycle is complete
 var ThemeContext;
 deferInit("chunk-v9w831vx.js:944", () => {
@@ -117,7 +117,7 @@ deferInit("chunk-v9w831vx.js:944", () => {
 function getConfiguredTheme() {
   return resolveSetting("theme", "dark").value;
 }
-//@ chunk-v9w831vx.js:1266-3554 placement = ThemeProvider (0.633)
+//@ chunk-v9w831vx.js:1266-3554 placement (2.1.88 match: ThemeProvider, 0.633)
 /**
  * 主题 Provider：从全局配置读 theme（默认 dark），auto 时跟随系统明暗；支持临时预览（setPreviewTheme/cancelPreview）、自定义主题（用户 + 插件）与覆盖色；保存时写入 theme 设置。
  */
@@ -341,7 +341,7 @@ function ThemeProvider(props) {
   } else providerElement = $[45];
   return providerElement;
 }
-//@ chunk-v9w831vx.js:3554-3694 placement = useTheme (1)
+//@ chunk-v9w831vx.js:3554-3694 placement (2.1.88 match: useTheme, 1)
 /**
  * 返回 [currentTheme, setThemeSetting]（被 44 处使用）。
  */
@@ -357,11 +357,11 @@ function useTheme() {
   } else t0 = $[2];
   return t0;
 }
-//@ chunk-v9w831vx.js:3694-3735 placement = useThemeSetting (1)
+//@ chunk-v9w831vx.js:3694-3735 placement (2.1.88 match: useThemeSetting, 1)
 function useThemeSetting() {
   return useContext(ThemeContext).themeSetting;
 }
-//@ chunk-v9w831vx.js:3735-3907 placement = usePreviewTheme (1)
+//@ chunk-v9w831vx.js:3735-3907 placement (2.1.88 match: usePreviewTheme, 1)
 function usePreviewTheme() {
   let $ = useMemoCache(3);
   let { setPreviewTheme, cancelPreview } = useContext(ThemeContext);

@@ -739,7 +739,7 @@ async function copyTranscriptForRescue(sessionFile, targetFile, storageV5) {
   }
   await copyFile(sessionFile, targetFile);
 }
-//@ chunk-18hwfzwa.js:73543-73685 placement = getPaneBackendExecutor (0.689)
+//@ chunk-18hwfzwa.js:73543-73685 placement (2.1.88 match: getPaneBackendExecutor, 0.689)
 /**
  * 删除一个文件：若路径映射到存储后端则删后端键，否则 rm -f。与 pane 后端无关。
  */

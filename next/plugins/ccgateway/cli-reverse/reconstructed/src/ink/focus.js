@@ -11,7 +11,7 @@
 import { FocusEvent } from "./events/focus-event.js";
 import { collectTabbable } from "./render-node-to-output.js";
 
-//@ chunk-bzr73sfg.js:183635-183734 fingerprint = isInTree (0.603)
+//@ chunk-bzr73sfg.js:183635-183734 fingerprint (2.1.88 match: isInTree, 0.603)
 /**
  * 从 node 沿父链向上标记 hasAbsoluteDescendant（遇到已标记的停止）；绝对定位子孙会影响渲染缓存的失效范围。
  */
@@ -24,7 +24,7 @@ function markHasAbsoluteDescendant(node) {
 }
 //@ chunk-bzr73sfg.js:191113-191123 placement
 var MAX_FOCUS_STACK = 32;
-//@ chunk-bzr73sfg.js:191123-193701 placement = FocusManager (0.759)
+//@ chunk-bzr73sfg.js:191123-193701 placement (2.1.88 match: FocusManager, 0.759)
 /**
  * 焦点管理器（挂在根节点 focusManager）：activeElement、焦点历史栈与 autoFocus 回退栈（各最多 32）；focus 时 tabIndex=-1 的容器会解析到其内上次聚焦的子孙；节点删除时从历史栈恢复焦点；focusNext/Previous 按 Tab 顺序循环；focusDirection 按屏幕几何找某方向最近的可聚焦元素（316 新增）；handleClickFocus 点击聚焦。
  */
@@ -165,7 +165,7 @@ class FocusManager {
     if (next) this.focus(next);
   }
 }
-//@ chunk-bzr73sfg.js:193701-193777 fingerprint = walkTree (0.357)
+//@ chunk-bzr73sfg.js:193701-193777 fingerprint (2.1.88 match: walkTree, 0.357)
 /**
  * tabIndex 是非负数即可 Tab 聚焦。
  */
@@ -173,13 +173,13 @@ function isTabbable(node) {
   let tabIndex = node.attributes.tabIndex;
   return typeof tabIndex === "number" && tabIndex >= 0;
 }
-//@ chunk-bzr73sfg.js:193818-193960 placement = dropSubtreeCache (0.808)
+//@ chunk-bzr73sfg.js:193818-193960 placement (2.1.88 match: dropSubtreeCache, 0.808)
 function walkTabbable(node, result) {
   let tabIndex = node.attributes.tabIndex;
   if (typeof tabIndex === "number" && tabIndex >= 0) result.push(node);
   for (let child of node.childNodes) if (child.nodeName !== "#text") walkTabbable(child, result);
 }
-//@ chunk-bzr73sfg.js:193960-194072 placement = dropSubtreeCache (1)
+//@ chunk-bzr73sfg.js:193960-194072 placement (2.1.88 match: dropSubtreeCache, 1)
 function hasTabbableDescendant(node) {
   for (let child of node.childNodes) {
     if (child.nodeName === "#text") continue;
@@ -259,7 +259,7 @@ function isDescendantOf(node, ancestor) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:194957-195089 fingerprint = getRootNode (1)
+//@ chunk-bzr73sfg.js:194957-195089 fingerprint (2.1.88 match: getRootNode, 1)
 /**
  * 沿父链找挂着 focusManager 的根节点，找不到抛错。
  */
@@ -271,7 +271,7 @@ function getRootNode(node) {
   }
   throw Error("Node is not in a tree with a FocusManager");
 }
-//@ chunk-bzr73sfg.js:195089-195131 fingerprint = getFocusManager (1)
+//@ chunk-bzr73sfg.js:195089-195131 fingerprint (2.1.88 match: getFocusManager, 1)
 /**
  * 取节点所在树的 FocusManager。
  */

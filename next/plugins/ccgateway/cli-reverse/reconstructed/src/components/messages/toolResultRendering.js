@@ -60,7 +60,7 @@ function selectActiveAgents_2(state) {
 function hasNoErrorOrInterrupt(result) {
   return !result.isErrored && !result.isInterrupted;
 }
-//@ chunk-ah34pb7m.js:156737-156955 placement = hasContentAfterIndex (0.833)
+//@ chunk-ah34pb7m.js:156737-156955 placement (2.1.88 match: hasContentAfterIndex, 0.833)
 function hasContentAfterIndex(message) {
   if (message.type === "grouped_tool_use") {
     return true;

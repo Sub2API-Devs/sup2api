@@ -27,7 +27,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
 import { markBrokenSequences, stripUnsafeChars } from "../utils/permissions/approvalPayloadSerialization.js";
 
-//@ chunk-r2w21sc3.js:299-708 fingerprint = DiffFrame (0.74)
+//@ chunk-r2w21sc3.js:299-708 fingerprint (2.1.88 match: DiffFrame, 0.74)
 /**
  * diff 外框（虚线边框、subtle 色），被 Edit/Write/Notebook 等 20 处复用。
  */
@@ -65,7 +65,7 @@ function DiffFrame(props) {
   } else box = $[5];
   return box;
 }
-//@ chunk-18hwfzwa.js:1364313-1364888 fingerprint = FileEditToolDiff (0.468)
+//@ chunk-18hwfzwa.js:1364313-1364888 fingerprint (2.1.88 match: FileEditToolDiff, 0.468)
 function FileEditToolDiff(props) {
   let $ = useMemoCache(9);
   let t0;
@@ -112,7 +112,7 @@ function FileEditToolDiff(props) {
   } else t2 = $[8];
   return t2;
 }
-//@ chunk-18hwfzwa.js:1364888-1365381 fingerprint = DiffBody (0.817)
+//@ chunk-18hwfzwa.js:1364888-1365381 fingerprint (2.1.88 match: DiffBody, 0.817)
 function DiffBody(props) {
   let $ = useMemoCache(6);
   let { promise, file_path } = props;
@@ -153,7 +153,7 @@ function DiffBody(props) {
   } else t1 = $[5];
   return t1;
 }
-//@ chunk-18hwfzwa.js:1365381-1366478 fingerprint = loadDiffData (0.882)
+//@ chunk-18hwfzwa.js:1365381-1366478 fingerprint (2.1.88 match: loadDiffData, 0.882)
 async function loadDiffData(file_path, edits, fileContent, toolUseContext) {
   let valid = edits.filter((e) => e.old_string != null && e.new_string != null);
   let single = valid.length === 1 ? valid[0] : undefined;
@@ -221,7 +221,7 @@ async function loadDiffData(file_path, edits, fileContent, toolUseContext) {
     return diffToolInputsOnly(file_path, valid);
   }
 }
-//@ chunk-18hwfzwa.js:1366478-1366612 fingerprint = diffToolInputsOnly (1)
+//@ chunk-18hwfzwa.js:1366478-1366612 fingerprint (2.1.88 match: diffToolInputsOnly, 1)
 function diffToolInputsOnly(filePath, edits) {
   return {
     patch: edits.flatMap((e) =>
@@ -250,7 +250,7 @@ function mapDiffDataLines(data) {
 function sanitizeDiffLine(firstLine) {
   return markBrokenSequences(stripUnsafeChars(firstLine));
 }
-//@ chunk-18hwfzwa.js:1366802-1366954 fingerprint = normalizeEdit (1)
+//@ chunk-18hwfzwa.js:1366802-1366954 fingerprint (2.1.88 match: normalizeEdit, 1)
 function normalizeEdit(fileContent, edit) {
   let actualOld = findActualString(fileContent, edit.old_string) || edit.old_string;
   let actualNew = preserveEscapeStyle(

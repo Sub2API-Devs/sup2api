@@ -140,7 +140,7 @@ function lexMarkdownWindowed(highlight, text) {
     isWindowed,
   };
 }
-//@ chunk-5aas12zq.js:15043-15267 fingerprint = checkUnreachableRules (0.377)
+//@ chunk-5aas12zq.js:15043-15267 fingerprint (2.1.88 match: checkUnreachableRules, 0.377)
 function checkUnreachableRules(getToolPermissionContext) {
   let joined = [getToolPermissionContext.file, getToolPermissionContext.field]
     .filter((segment) => segment !== "")

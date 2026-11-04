@@ -32,7 +32,7 @@ async function ensureBackendsRegistered(state = backendRegistryState) {
   state.ITermBackendClass = ITermBackend;
   state.backendsRegistered = true;
 }
-//@ chunk-78rbfds1.js:3327-3552 fingerprint = createTmuxBackend (0.664)
+//@ chunk-78rbfds1.js:3327-3552 fingerprint (2.1.88 match: createTmuxBackend, 0.664)
 /**
  * 懒创建 tmux 后端实例（类须先注册）。
  */
@@ -43,7 +43,7 @@ function createTmuxBackend(state) {
   state.tmuxBackend = new state.TmuxBackendClass();
   return state.tmuxBackend;
 }
-//@ chunk-78rbfds1.js:3552-3785 fingerprint = createITermBackend (0.664)
+//@ chunk-78rbfds1.js:3552-3785 fingerprint (2.1.88 match: createITermBackend, 0.664)
 /**
  * 懒创建 iTerm2 后端实例。
  */
@@ -54,7 +54,7 @@ function createITermBackend(state) {
   state.itermBackend = new state.ITermBackendClass();
   return state.itermBackend;
 }
-//@ chunk-78rbfds1.js:3785-6399 facade-exports = detectAndGetBackend (0.743)
+//@ chunk-78rbfds1.js:3785-6399 facade-exports (2.1.88 match: detectAndGetBackend, 0.743)
 /**
  * 检测并返回 pane 后端：teammateMode=iterm2 时强制 iTerm2（不满足即报错）；在 tmux 内用 tmux；在 iTerm2 中优先 it2，否则回退 tmux（提示安装 it2）；都不在时有 tmux 就用外部 claude-swarm 会话；否则报错并给安装说明。结果缓存。
  */
@@ -155,7 +155,7 @@ async function detectAndGetBackend(state = backendRegistryState) {
   logFeatureBad("swarm_backend_detect", "no_backend_available");
   throw Error(getTmuxInstallInstructions());
 }
-//@ chunk-78rbfds1.js:6399-7143 fingerprint = getTmuxInstallInstructions (1)
+//@ chunk-78rbfds1.js:6399-7143 fingerprint (2.1.88 match: getTmuxInstallInstructions, 1)
 /**
  * 按平台给出 tmux 安装说明。
  */
@@ -181,7 +181,7 @@ Then start a tmux session with: tmux new-session -s claude`;
 Then start a tmux session with: tmux new-session -s claude`;
   }
 }
-//@ chunk-78rbfds1.js:7143-7224 facade-exports = getBackendByType (1)
+//@ chunk-78rbfds1.js:7143-7224 facade-exports (2.1.88 match: getBackendByType, 1)
 /**
  * 按类型取 pane 后端实例（tmux / iterm2）。
  */
@@ -200,7 +200,7 @@ function getBackendByType(type, state = backendRegistryState) {
 function getCachedDetectionResult(state = backendRegistryState) {
   return state.cachedDetectionResult;
 }
-//@ chunk-78rbfds1.js:7275-7385 facade-exports = markInProcessFallback (0.806)
+//@ chunk-78rbfds1.js:7275-7385 facade-exports (2.1.88 match: markInProcessFallback, 0.806)
 /**
  * 标记 pane 后端不可用、已回退到同进程 teammate。
  */
@@ -212,7 +212,7 @@ function markInProcessFallback(state = backendRegistryState) {
 function getTeammateMode() {
   return getTeammateModeFromSnapshot();
 }
-//@ chunk-78rbfds1.js:7411-7872 facade-exports = isInProcessEnabled (0.92)
+//@ chunk-78rbfds1.js:7411-7872 facade-exports (2.1.88 match: isInProcessEnabled, 0.92)
 /**
  * 是否使用同进程 teammate：非交互会话总是；teammateMode=in-process 是；tmux/iterm2 否；auto 时已回退或既不在 tmux 也不在 iTerm2 才是。
  */

@@ -572,7 +572,7 @@ Write the reply you would post to this thread: directly useful, brief, no preamb
  * 400
  */
 var FAST_ACK_MAX_CHARS = 400;
-//@ chunk-9tgt55am.js:127851-129501 placement = generateAwaySummary (0.315)
+//@ chunk-9tgt55am.js:127851-129501 placement (2.1.88 match: generateAwaySummary, 0.315)
 /**
  * 为 Artifact 评论线程用小模型生成一句 ≤160 字符的快速确认（maxOutputTokens 96），失败返回空。旧版名 generateAwaySummary 为错配。
  */
@@ -641,7 +641,7 @@ You are about to start working on the newest comment sent to you in this thread;
     return FIXED_ACK_TEXT;
   }
 }
-//@ chunk-9tgt55am.js:129501-132347 placement = createApiQueryHook (0.262)
+//@ chunk-9tgt55am.js:129501-132347 placement (2.1.88 match: createApiQueryHook, 0.262)
 /**
  * artifact 评论自动响应：用小模型从候选确认语中选一句先行回复，超时取默认。旧版名 createApiQueryHook 配错。
  */

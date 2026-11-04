@@ -11,7 +11,7 @@
 import { ASKUSERQUESTION } from "../AskUserQuestionTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fnhsh6ng.js:3021-5426 fingerprint = EXIT_PLAN_MODE_V2_TOOL_PROMPT (1)
+//@ chunk-fnhsh6ng.js:3021-5426 fingerprint (2.1.88 match: EXIT_PLAN_MODE_V2_TOOL_PROMPT, 1)
 /**
  * ExitPlanMode 的两版 prompt：读计划文件版与 diskless 直接传 plan 版。
  */

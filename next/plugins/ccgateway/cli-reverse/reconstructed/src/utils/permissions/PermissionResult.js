@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:920605-920729 fingerprint = getRuleBehaviorDescription (1)
+//@ chunk-e6aww6q8.js:920605-920729 fingerprint (2.1.88 match: getRuleBehaviorDescription, 1)
 /**
  * 规则行为的描述词：allow→"allowed"，deny→"denied"，其他→"asked for confirmation for"。
  */

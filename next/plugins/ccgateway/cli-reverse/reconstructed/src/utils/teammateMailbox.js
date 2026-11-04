@@ -61,7 +61,7 @@ import { externalPermissionModeSchema } from "./permissions/browserToolNames.js"
 import { TEAM_LEAD } from "./swarm/constants.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-nw7jbebs.js:20333-20574 callgraph-witnessed = LOCK_OPTIONS (0.648)
+//@ chunk-nw7jbebs.js:20333-20574 callgraph-witnessed (2.1.88 match: LOCK_OPTIONS, 0.648)
 /**
  * inbox 文件锁参数，以及 inbox 消息 schema（from、text、timestamp 必填；type、read、color、summary、from_plugin 可选）。
  */
@@ -302,7 +302,7 @@ async function pruneInvalidMailboxEntries(inboxPath, store, storeKey) {
     await releaseLockQuietly(result, "[TeammateMailbox] pruneInvalidMailboxEntries");
   }
 }
-//@ chunk-nw7jbebs.js:23596-23781 facade-exports = getInboxPath (1)
+//@ chunk-nw7jbebs.js:23596-23781 facade-exports (2.1.88 match: getInboxPath, 1)
 /**
  * inbox 路径：<teams 目录>/<团队>/inboxes/<代理名>.json（团队缺省为当前团队或 default）。
  */
@@ -315,7 +315,7 @@ function getInboxPath(agentName, teamName) {
   logForDebugging(`[TeammateMailbox] getInboxPath: agent=${agentName}, team=${team}, fullPath=${fullPath}`);
   return fullPath;
 }
-//@ chunk-nw7jbebs.js:23781-23932 fingerprint = ensureInboxDir (0.868)
+//@ chunk-nw7jbebs.js:23781-23932 fingerprint (2.1.88 match: ensureInboxDir, 0.868)
 async function ensureInboxDir(teamName) {
   let team = teamName || getTeamName() || "default";
   let safeTeam = sanitizePathComponent(team);
@@ -426,7 +426,7 @@ function reconcileMessageLedger(inboxPath, before, after) {
       afterMsgIds.add(message_2.msg_id);
   mailboxLedger().retain(inboxPath, afterMsgIds);
 }
-//@ chunk-nw7jbebs.js:25087-26110 facade-exports = readMailbox (0.528)
+//@ chunk-nw7jbebs.js:25087-26110 facade-exports (2.1.88 match: readMailbox, 0.528)
 /**
  * 读 inbox（存储 v5 或文件），校验并补 type=message；文件不存在/不可解析返回空数组；有无效条目时安排修剪。
  */
@@ -475,7 +475,7 @@ async function readMailbox(agentName, teamName, store, options) {
     return [];
   }
 }
-//@ chunk-nw7jbebs.js:26110-26282 facade-exports = readUnreadMessages (1)
+//@ chunk-nw7jbebs.js:26110-26282 facade-exports (2.1.88 match: readUnreadMessages, 1)
 /**
  * 读 inbox 中未读的消息。
  */
@@ -488,7 +488,7 @@ async function readUnreadMessages(agentName, teamName, store) {
   scanRepairs(unread);
   return unread;
 }
-//@ chunk-nw7jbebs.js:26282-28319 facade-exports = writeToMailbox (0.608)
+//@ chunk-nw7jbebs.js:26282-28319 facade-exports (2.1.88 match: writeToMailbox, 0.608)
 /**
  * 写一条消息到收件人 inbox：先做 schema 校验；补 msg_id、type=message、read=false；文件型 inbox 先确保目录和文件存在，再加锁追加并原子写入。返回 msg_id。
  */
@@ -627,7 +627,7 @@ function removeMatchingMessage(messages, target) {
     found: index !== -1,
   };
 }
-//@ chunk-nw7jbebs.js:28508-29877 facade-exports = markMessageAsReadByIndex (0.275)
+//@ chunk-nw7jbebs.js:28508-29877 facade-exports (2.1.88 match: markMessageAsReadByIndex, 0.275)
 /**
  * 把一条消息标为已处理：从 inbox 中删除该条（以及已读的），加锁执行。
  */
@@ -711,7 +711,7 @@ var MARK_READ_FAILURE_CAP = 5;
 function messageIdentityKey(message) {
   return `${message.from}|${message.timestamp}|${message.text}`;
 }
-//@ chunk-nw7jbebs.js:29945-31782 facade-exports = markMessagesAsRead (0.756)
+//@ chunk-nw7jbebs.js:29945-31782 facade-exports (2.1.88 match: markMessagesAsRead, 0.756)
 /**
  * 把已投递的消息从 inbox 删除：给定消息列表时删除这些和所有已读消息，未给定时清空全部；加锁执行（存储 v5 走原子更新）。
  */
@@ -798,7 +798,7 @@ async function markMessagesAsRead(agentName, teamName, deliveredMessages, store)
     await releaseLockQuietly(release, "[TeammateMailbox] markMessagesAsRead");
   }
 }
-//@ chunk-nw7jbebs.js:31782-32416 facade-exports = clearMailbox (0.42)
+//@ chunk-nw7jbebs.js:31782-32416 facade-exports (2.1.88 match: clearMailbox, 0.42)
 /**
  * 清空 inbox（写入 []）。
  */
@@ -850,7 +850,7 @@ async function clearMailbox(agentName, teamName, store) {
     await releaseLockQuietly(cleared, "[TeammateMailbox] clearMailbox");
   }
 }
-//@ chunk-nw7jbebs.js:32416-32748 facade-exports = formatTeammateMessages (0.755)
+//@ chunk-nw7jbebs.js:32416-32748 facade-exports (2.1.88 match: formatTeammateMessages, 0.755)
 /**
  * 把一条 teammate 消息格式化为 <teammate-message teammate_id=… color=… summary=…> XML，伪造来源标 verified="false"，并清洗控制字符。
  */
@@ -1352,7 +1352,7 @@ deferInit("chunk-nw7jbebs.js:36489", () => {
     ],
   ]);
 });
-//@ chunk-nw7jbebs.js:37964-38475 facade-exports = extractErrorTypeFromData (0.779)
+//@ chunk-nw7jbebs.js:37964-38475 facade-exports (2.1.88 match: extractErrorTypeFromData, 0.779)
 /**
  * 规范化一条 teammate 协议帧 JSON：按字段规范截断/清洗已知字段、限制未知字段总量；无变化返回 null。
  */
@@ -1550,7 +1550,7 @@ deferInit("chunk-nw7jbebs.js:40557", () => {
   weakSet = new WeakSet();
   weakSet_2 = new WeakSet();
 });
-//@ chunk-nw7jbebs.js:40591-40973 facade-exports = createIdleNotification (0.929)
+//@ chunk-nw7jbebs.js:40591-40973 facade-exports (2.1.88 match: createIdleNotification, 0.929)
 /**
  * 构造 idle_notification：idleReason（available/interrupted/failed）、摘要、完成的任务 ID 与状态、失败原因、结果（截断清洗）。
  */
@@ -1714,7 +1714,7 @@ deferInit("chunk-nw7jbebs.js:42164", () => {
     ]),
   );
 });
-//@ chunk-nw7jbebs.js:42645-42879 facade-exports = createPermissionRequestMessage (1)
+//@ chunk-nw7jbebs.js:42645-42879 facade-exports (2.1.88 match: createPermissionRequestMessage, 1)
 /**
  * 构造 permission_request 帧（request_id、agent_id、tool_name、tool_use_id、description、input、permission_suggestions）。
  */
@@ -1730,7 +1730,7 @@ function createPermissionRequestMessage(params) {
     permission_suggestions: params.permission_suggestions || [],
   };
 }
-//@ chunk-nw7jbebs.js:42879-43310 facade-exports = createPermissionResponseMessage (0.939)
+//@ chunk-nw7jbebs.js:42879-43310 facade-exports (2.1.88 match: createPermissionResponseMessage, 0.939)
 /**
  * 构造 permission_response 帧：error（缺省 "Permission denied"）或 success（updated_input、permission_updates），可带 approved_request。
  */
@@ -1756,7 +1756,7 @@ function createPermissionResponseMessage(params) {
     },
   };
 }
-//@ chunk-nw7jbebs.js:43310-43406 facade-exports = isPermissionRequest (1)
+//@ chunk-nw7jbebs.js:43310-43406 facade-exports (2.1.88 match: isPermissionRequest, 1)
 /**
  * 解析 permission_request 帧（不做 schema 校验）。
  */
@@ -1767,7 +1767,7 @@ function isPermissionRequest(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:43406-43773 facade-exports = isPermissionResponse (0.485)
+//@ chunk-nw7jbebs.js:43406-43773 facade-exports (2.1.88 match: isPermissionResponse, 0.485)
 /**
  * 解析并校验 permission_response 帧，格式不对时记日志返回 null。
  */
@@ -1795,7 +1795,7 @@ function isPermissionResponse(messageText) {
   );
   return null;
 }
-//@ chunk-nw7jbebs.js:43773-43970 facade-exports = createSandboxPermissionRequestMessage (1)
+//@ chunk-nw7jbebs.js:43773-43970 facade-exports (2.1.88 match: createSandboxPermissionRequestMessage, 1)
 /**
  * 构造 sandbox_permission_request 帧（requestId、worker 身份、hostPattern.host、createdAt）。
  */
@@ -1812,7 +1812,7 @@ function createSandboxPermissionRequestMessage(params) {
     createdAt: Date.now(),
   };
 }
-//@ chunk-nw7jbebs.js:43970-44112 facade-exports = createSandboxPermissionResponseMessage (1)
+//@ chunk-nw7jbebs.js:43970-44112 facade-exports (2.1.88 match: createSandboxPermissionResponseMessage, 1)
 /**
  * 构造 sandbox_permission_response 帧（requestId、host、allow、timestamp）。
  */
@@ -1825,7 +1825,7 @@ function createSandboxPermissionResponseMessage(params) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-nw7jbebs.js:44112-44216 facade-exports = isSandboxPermissionRequest (1)
+//@ chunk-nw7jbebs.js:44112-44216 facade-exports (2.1.88 match: isSandboxPermissionRequest, 1)
 /**
  * 解析 sandbox_permission_request 帧。
  */
@@ -1836,7 +1836,7 @@ function isSandboxPermissionRequest(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:44216-44321 facade-exports = isSandboxPermissionResponse (1)
+//@ chunk-nw7jbebs.js:44216-44321 facade-exports (2.1.88 match: isSandboxPermissionResponse, 1)
 /**
  * 解析 sandbox_permission_response 帧。
  */
@@ -1906,7 +1906,7 @@ deferInit("chunk-nw7jbebs.js:44321", () => {
     }),
   );
 });
-//@ chunk-nw7jbebs.js:44913-45046 facade-exports = createShutdownRequestMessage (1)
+//@ chunk-nw7jbebs.js:44913-45046 facade-exports (2.1.88 match: createShutdownRequestMessage, 1)
 /**
  * 构造 shutdown_request 帧（requestId、from、reason、timestamp）。
  */
@@ -1919,7 +1919,7 @@ function createShutdownRequestMessage(params) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-nw7jbebs.js:45046-45206 facade-exports = createShutdownApprovedMessage (1)
+//@ chunk-nw7jbebs.js:45046-45206 facade-exports (2.1.88 match: createShutdownApprovedMessage, 1)
 /**
  * 构造 shutdown_approved 帧（可带 paneId、backendType 供 leader 清理 pane）。
  */
@@ -1933,7 +1933,7 @@ function createShutdownApprovedMessage(params) {
     backendType: params.backendType,
   };
 }
-//@ chunk-nw7jbebs.js:45206-45340 facade-exports = createShutdownRejectedMessage (1)
+//@ chunk-nw7jbebs.js:45206-45340 facade-exports (2.1.88 match: createShutdownRejectedMessage, 1)
 /**
  * 构造 shutdown_rejected 帧（附拒绝原因）。
  */
@@ -1990,7 +1990,7 @@ function planVerdictBinding(pendingApproval, response) {
   if (pendingApproval.answered) return "already_answered";
   return pendingApproval.requestId === response.requestId ? "bound" : "mismatch";
 }
-//@ chunk-nw7jbebs.js:45783-46025 facade-exports = PlanApprovalResponseMessageSchema (0.611)
+//@ chunk-nw7jbebs.js:45783-46025 facade-exports (2.1.88 match: PlanApprovalResponseMessageSchema, 0.611)
 /**
  * 回复与等待中的请求不匹配时，构造一个"拒绝并要求重新提交"的 plan_approval_response。
  */
@@ -2015,7 +2015,7 @@ function isPlanApprovalResponse(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:46120-46233 fingerprint = isTaskAssignment (0.558)
+//@ chunk-nw7jbebs.js:46120-46233 fingerprint (2.1.88 match: isTaskAssignment, 0.558)
 /**
  * task_assignment 帧 schema（taskId、subject、description、assignedBy、timestamp）。
  */
@@ -2036,7 +2036,7 @@ deferInit("chunk-nw7jbebs.js:46120", () => {
 function isTaskAssignment(content) {
   return parseFrameForDisplay(taskAssignmentSchema(), content);
 }
-//@ chunk-nw7jbebs.js:46267-46453 facade-exports = UserTeammateMessage (0.485)
+//@ chunk-nw7jbebs.js:46267-46453 facade-exports (2.1.88 match: UserTeammateMessage, 0.485)
 var TaskCompletedMessageSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var TeammateTerminatedMessageSchema;
 deferInit("chunk-nw7jbebs.js:46267", () => {
@@ -2076,7 +2076,7 @@ function visibleTeammateMailboxMessages(messages) {
     return !parseFrameForDisplay(ShutdownApprovedMessageSchema(), msg.text);
   });
 }
-//@ chunk-nw7jbebs.js:46804-46897 facade-exports = isTeamPermissionUpdate (1)
+//@ chunk-nw7jbebs.js:46804-46897 facade-exports (2.1.88 match: isTeamPermissionUpdate, 1)
 /**
  * 正文是否为 team_permission_update 帧。
  */
@@ -2088,7 +2088,7 @@ function isTeamPermissionUpdate(messageText) {
     return false;
   }
 }
-//@ chunk-nw7jbebs.js:46897-46984 facade-exports = createModeSetRequestMessage (1)
+//@ chunk-nw7jbebs.js:46897-46984 facade-exports (2.1.88 match: createModeSetRequestMessage, 1)
 /**
  * 正文是否是 mode_set_request 帧。
  */
@@ -2106,7 +2106,7 @@ function isModeSetRequest(messageText) {
  */
 var PROTOCOL_FRAME_PROMPT_ERROR =
   "Teammate prompt must not be a mailbox protocol frame (permission/mode/plan/shutdown JSON) \u2014 pass plain-text instructions";
-//@ chunk-nw7jbebs.js:47120-47546 facade-exports = isStructuredProtocolMessage (0.956)
+//@ chunk-nw7jbebs.js:47120-47546 facade-exports (2.1.88 match: isStructuredProtocolMessage, 0.956)
 /**
  * 正文是否是任一结构化协议帧（权限/沙箱/关机/团队权限/模式/计划审批）。
  */
@@ -2132,7 +2132,7 @@ function isStructuredProtocolMessage(messageText) {
     return false;
   }
 }
-//@ chunk-nw7jbebs.js:47546-47760 facade-exports = getPlanApprovalSummary (0.882)
+//@ chunk-nw7jbebs.js:47546-47760 facade-exports (2.1.88 match: getPlanApprovalSummary, 0.882)
 function planApprovalResumeText(content) {
   let feedback = content.feedback ? capDisplayText(content.feedback, IDLE_RESULT_MAX_LENGTH) : "";
   if (content.approved)
@@ -2248,7 +2248,7 @@ function isTeammateWakeupPrompt(message) {
       !message.message.content.some((block) => block.type === "tool_result"))
   );
 }
-//@ chunk-nw7jbebs.js:49459-50127 facade-exports = getLastPeerDmSummary (1)
+//@ chunk-nw7jbebs.js:49459-50127 facade-exports (2.1.88 match: getLastPeerDmSummary, 1)
 /**
  * 自最近一次用户输入以来，最后一条发给具体 peer（非广播、非 team-lead、非 main）的 SendMessage 摘要："[to 名字] 摘要"。
  */

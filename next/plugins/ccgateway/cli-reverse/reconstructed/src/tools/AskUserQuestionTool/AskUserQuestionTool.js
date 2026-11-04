@@ -60,7 +60,7 @@ import { shortHash } from "../../utils/shortHash.js";
 import { getOwn } from "../../utils/objectSafety.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1729603-1729837 fingerprint = UNIQUENESS_REFINE (0.523)
+//@ chunk-e6aww6q8.js:1729603-1729837 fingerprint (2.1.88 match: UNIQUENESS_REFINE, 0.523)
 /**
  * 把任意输入清洗成 {questions:[{question, options:[{label}]}]}，只保留第一题、每题最多 4 个选项，丢弃空文本。
  */
@@ -97,7 +97,7 @@ function takeFirstFourObjects(value) {
     ? value.slice(0, 4).filter((entry) => typeof entry === "object" && entry !== null)
     : [];
 }
-//@ chunk-a91k35xs.js:4785-5526 fingerprint = questionOptionSchema (0.784)
+//@ chunk-a91k35xs.js:4785-5526 fingerprint (2.1.88 match: questionOptionSchema, 0.784)
 var questionOptionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var questionOptionSchemaOptionalDescription;
 deferInit("chunk-a91k35xs.js:4785", () => {
@@ -126,7 +126,7 @@ deferInit("chunk-a91k35xs.js:4785", () => {
     }),
   );
 });
-//@ chunk-a91k35xs.js:5526-6700 fingerprint = questionSchema (0.844)
+//@ chunk-a91k35xs.js:5526-6700 fingerprint (2.1.88 match: questionSchema, 0.844)
 /**
  * 按给定选项 schema 构造单个问题 schema：question、header（短标签）、options 2–4 项、multiSelect（默认 false）。
  */
@@ -153,7 +153,7 @@ function questionSchema(optionSchema) {
       ),
   });
 }
-//@ chunk-a91k35xs.js:6700-11203 callgraph-fingerprint = commonFields (0.195)
+//@ chunk-a91k35xs.js:6700-11203 callgraph-fingerprint (2.1.88 match: commonFields, 0.195)
 /**
  * 扩展问题 schema 的组合校验：placeholder 只给 text，min/max/step/defaultValue/unit 只给 number；choice 至少 2 个选项；text/number 不能有选项或 multiSelect；number 需 min<max 且默认值在区间内。
  */
@@ -342,7 +342,7 @@ deferInit("chunk-a91k35xs.js:6700", () => {
       .describe("Optional metadata for tracking and analytics purposes. Not displayed to user."),
   }));
 });
-//@ chunk-a91k35xs.js:11203-11571 fingerprint = inputSchema (0.713)
+//@ chunk-a91k35xs.js:11203-11571 fingerprint (2.1.88 match: inputSchema, 0.713)
 /**
  * 构造 AskUserQuestion 输入 schema：questions 1–4 项 + answers/annotations/metadata，并附加唯一性 refine。
  */
@@ -361,7 +361,7 @@ function inputSchema(questionSchema) {
     message: UNIQUENESS_REFINE.message,
   });
 }
-//@ chunk-a91k35xs.js:11571-12802 fingerprint = outputSchema (0.43)
+//@ chunk-a91k35xs.js:11571-12802 fingerprint (2.1.88 match: outputSchema, 0.43)
 var askUserQuestionInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var askUserQuestionInputSchemaOptionalDescription;
 var extendedAskUserQuestionInputSchema;
@@ -451,7 +451,7 @@ function toShownCardInput(input) {
     }),
   };
 }
-//@ chunk-a91k35xs.js:13251-20068 fingerprint = AskUserQuestionTool (0.356)
+//@ chunk-a91k35xs.js:13251-20068 fingerprint (2.1.88 match: AskUserQuestionTool, 0.356)
 /**
  * AskUserQuestion 工具（只读、可并发、requiresUserInteraction；isEnabled 为 ebe()：非交互会话且没有可用的提问通道时关闭）。输入 1–4 个问题，每题 2–4 个选项（扩展模式下支持 kind text/number 与 title），问题文本与选项 label 必须唯一；HTML 预览格式下校验预览为不含 script/style 的 HTML 片段。checkPermissions 恒为 ask（由权限组件收集答案写回 answers/annotations）。结果文本区分：AFK 超时、要求追问（followUp）、自由回复、答案全部合规、答案需细读、未作答。prompt 由多段拼成（计划模式说明、GrowthBook tengu_cinder_plover/tengu_cinder_wren 追加文本、扩展问题说明、preview 说明）。
  */
@@ -808,7 +808,7 @@ Before going idle the user had selected: ${joined}.`
     },
   });
 });
-//@ chunk-a91k35xs.js:20068-20545 fingerprint = validateHtmlPreview (1)
+//@ chunk-a91k35xs.js:20068-20545 fingerprint (2.1.88 match: validateHtmlPreview, 1)
 /**
  * 校验 HTML 预览：不能是完整文档、不能含 script/style、必须含 HTML 标签；返回错误文本或 null。
  */

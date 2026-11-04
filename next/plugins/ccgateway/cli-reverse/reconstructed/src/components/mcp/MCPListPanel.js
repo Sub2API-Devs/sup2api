@@ -46,7 +46,7 @@ import { Byline } from "../design-system/Byline.js";
 import { formatToolConnectionState } from "./CapabilitiesSection.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:71740-71850 callgraph-fingerprint = _temp2 (0.448)
+//@ chunk-dcmhvw5a.js:71740-71850 callgraph-fingerprint (2.1.88 match: _temp2, 0.448)
 /**
  * isClaudeAiConnectorConfig：claudeai 作用域的 claudeai-proxy，或非插件 dynamic 作用域的 claudeai-proxy。
  */
@@ -54,7 +54,7 @@ function isClaudeAiProxyServer(s_0) {
   if (s_0.type !== "claudeai-proxy") return false;
   return s_0.scope === "claudeai" || (s_0.scope === "dynamic" && !isPluginServerConfig(s_0));
 }
-//@ chunk-9qfjhaj4.js:235-420 fingerprint = _temp5 (0.677)
+//@ chunk-9qfjhaj4.js:235-420 fingerprint (2.1.88 match: _temp5, 0.677)
 function applyMcpServerConfig(config, server) {
   let toolServer = {
     name: server.client.name,
@@ -84,15 +84,15 @@ function isAgentScopeServer(server) {
 function serverName(server) {
   return server.name;
 }
-//@ chunk-cpqpnzp4.js:21138-21182 callgraph-fingerprint = _temp (0.493)
+//@ chunk-cpqpnzp4.js:21138-21182 callgraph-fingerprint (2.1.88 match: _temp, 0.493)
 function isConfiguredServer(s) {
   return !isClaudeAiProxyServer(s.client.config);
 }
-//@ chunk-cpqpnzp4.js:21182-21239 callgraph-fingerprint = _temp3 (1)
+//@ chunk-cpqpnzp4.js:21182-21239 callgraph-fingerprint (2.1.88 match: _temp3, 1)
 function compareByName(a, b) {
   return a.name.localeCompare(b.name);
 }
-//@ chunk-cpqpnzp4.js:21239-21296 callgraph-fingerprint = _temp4 (1)
+//@ chunk-cpqpnzp4.js:21239-21296 callgraph-fingerprint (2.1.88 match: _temp4, 1)
 function compareByName_2(a_0, b_0) {
   return a_0.name.localeCompare(b_0.name);
 }
@@ -104,7 +104,7 @@ function compareByName_3(serverA, serverB) {
 function entryServerName(server) {
   return server.name;
 }
-//@ chunk-cpqpnzp4.js:21384-21423 fingerprint = _temp6 (1)
+//@ chunk-cpqpnzp4.js:21384-21423 fingerprint (2.1.88 match: _temp6, 1)
 function sourceAgentsOf(s_2) {
   return s_2.sourceAgents;
 }
@@ -151,7 +151,7 @@ var MCP_LIST_ROW_HEIGHT = 12;
 var MCP_LIST_VISIBLE_ROWS = 5;
 var MCP_LIST_INDENT = 3;
 var MCP_SCOPE_ORDER = ["project", "local", "user", "enterprise", "managed", "agent"];
-//@ chunk-cpqpnzp4.js:21762-22266 fingerprint = getScopeHeading (0.736)
+//@ chunk-cpqpnzp4.js:21762-22266 fingerprint (2.1.88 match: getScopeHeading, 0.736)
 function getScopeHeading(scope) {
   switch (scope) {
     case "project":
@@ -290,7 +290,7 @@ function DuplicateServerHint(props) {
     }
   }
 }
-//@ chunk-cpqpnzp4.js:23546-23716 callgraph-fingerprint = groupServersByScope (1)
+//@ chunk-cpqpnzp4.js:23546-23716 callgraph-fingerprint (2.1.88 match: groupServersByScope, 1)
 function groupServersByScope(serverList) {
   let groups = new Map();
   for (let server of serverList) {
@@ -440,7 +440,7 @@ function ServerNameRow(props) {
   } else row = $[22];
   return row;
 }
-//@ chunk-cpqpnzp4.js:24834-31433 fingerprint = MCPListPanel (0.47)
+//@ chunk-cpqpnzp4.js:24834-31433 fingerprint (2.1.88 match: MCPListPanel, 0.47)
 /**
  * MCP 列表面板：按作用域（项目/本地/用户/企业/claude.ai/动态）分组列出服务器及状态图标。
  */

@@ -109,7 +109,7 @@ function parseActionRuleContent(ruleContent) {
   let trimmed_2 = ruleContent.slice(index + 1).trim();
   return trimmed === "action" && trimmed_2 !== "" ? trimmed_2 : null;
 }
-//@ chunk-9tgt55am.js:12691-12809 placement = getDenyRuleForAgent (1)
+//@ chunk-9tgt55am.js:12691-12809 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function isArtifactActionRule(rule) {
   return (
     rule.ruleValue.toolName === ARTIFACT_TOOL_NAME &&
@@ -117,7 +117,7 @@ function isArtifactActionRule(rule) {
     parseActionRuleContent(rule.ruleValue.ruleContent) !== null
   );
 }
-//@ chunk-9tgt55am.js:12809-12920 placement = buildSuggestions (0.854)
+//@ chunk-9tgt55am.js:12809-12920 placement (2.1.88 match: buildSuggestions, 0.854)
 /**
  * Artifact 工具"回复"动作的 allow 规则建议，destination 由 ODr() 决定。
  */

@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-cpqpnzp4.js:21474-21510 fingerprint = renderToolResultMessage (0.489)
+//@ chunk-cpqpnzp4.js:21474-21510 fingerprint (2.1.88 match: renderToolResultMessage, 0.489)
 /**
  * 结果对象是否带 target 字段（MCP 面板用，切分误归 SendMessage UI）。
  */

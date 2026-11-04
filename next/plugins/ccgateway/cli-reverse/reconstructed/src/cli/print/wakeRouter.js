@@ -1062,7 +1062,7 @@ function interruptedPromptUuid(state) {
   if (state?.kind !== "interrupted_prompt") return;
   return state.interruptedTurnUserMessageUuid ?? (state.message.isMeta ? undefined : state.message.uuid);
 }
-//@ chunk-tyg7f3ek.js:326552-326687 placement = countUserPromptsFromEntries (1)
+//@ chunk-tyg7f3ek.js:326552-326687 placement (2.1.88 match: countUserPromptsFromEntries, 1)
 function countUserPromptsFromEntries_5(entries) {
   if ("isSidechain" in entries && entries.isSidechain === true) return false;
   return entries.type === "assistant"

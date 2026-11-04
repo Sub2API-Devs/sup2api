@@ -74,7 +74,7 @@ function fileNotSharedMessage(path, context, nothingDone) {
       : `Files the user attached to this chat are usually in ${isRemoteMode}; give the full path of one of those. If the file is not there, ask the user to attach it to the chat.`;
   return `Cannot attach "${path}": only files this session is allowed to read can be attached. ${advice} ${nothingDone}`;
 }
-//@ chunk-5rtc26v0.js:1761-1837 placement = getIsRemoteMode (1)
+//@ chunk-5rtc26v0.js:1761-1837 placement (2.1.88 match: getIsRemoteMode, 1)
 function getIsRemoteMode(context) {
   if (context.isRemoteMode !== true) return;
   try {

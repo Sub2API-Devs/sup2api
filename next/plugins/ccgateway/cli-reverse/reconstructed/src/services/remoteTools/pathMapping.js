@@ -224,7 +224,7 @@ function normalizeFileInput(key, value, platform) {
 function definedEntries(object) {
   return Object.entries(object).filter(([, value]) => value !== undefined);
 }
-//@ chunk-gqez588q.js:3301-3338 placement = getUnameSR (0.793)
+//@ chunk-gqez588q.js:3301-3338 placement (2.1.88 match: getUnameSR, 0.793)
 function getUnameSR(platform) {
   return platform === "win32" ? win32 : posix;
 }

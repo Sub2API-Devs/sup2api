@@ -19,12 +19,12 @@ import { hasWildcard } from "../../../utils/permissions/permissionRuleParser.js"
 import { parseArtifactUrlInput } from "../constants.js";
 import { getShareEntry, entryContentByOthers } from "../../../services/artifacts/shareEntries.js";
 
-//@ chunk-8wvtd8sr.js:94022-94119 placement = extractErrorTypeFromData (1)
+//@ chunk-8wvtd8sr.js:94022-94119 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function parseTypePrefixedValue(data) {
   let index = data.indexOf(":");
   return index > 0 && data.slice(0, index).trim() === "type" ? data.slice(index + 1) : undefined;
 }
-//@ chunk-8wvtd8sr.js:94119-94302 placement = urlPatternToRegex (1)
+//@ chunk-8wvtd8sr.js:94119-94302 placement (2.1.88 match: urlPatternToRegex, 1)
 function matchesWildcardPattern(ruleContent, agentType) {
   let keys = typeRuleMatchKeys(ruleContent);
   if (keys === undefined) return false;
@@ -50,7 +50,7 @@ function findTypeRule(toolPermissionContext, tool, input, behavior) {
     ? null
     : (filterRulesMatchingUrls(toolPermissionContext, tool, [matchKey], behavior)[0] ?? null);
 }
-//@ chunk-8wvtd8sr.js:94740-94912 placement = getDenyRuleForAgent (1)
+//@ chunk-8wvtd8sr.js:94740-94912 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function getUrlRulesForTool(context, agentToolName, agentType) {
   return (agentType === "deny" ? getDenyRules(context) : getAskRules(context)).filter(
     (rule) =>

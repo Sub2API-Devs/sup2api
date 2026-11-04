@@ -31,7 +31,7 @@ import { logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { emitSummonArmsForActivity } from "./summonArms.js";
 import { isArtifactFamilyTool } from "./rosterWait.js";
 
-//@ chunk-kmc5hpaz.js:622-808 placement = getToolNameForPermissionCheck (1)
+//@ chunk-kmc5hpaz.js:622-808 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * （归属疑误：工具集组装）远程设备工具在特定条件下隐藏重复的工具。
  */
@@ -74,7 +74,7 @@ function _() {
 function mcpRowToolNames() {
   return require("./artifactMcpWire.js").MCP_ROW_TOOL_NAMES;
 }
-//@ chunk-kmc5hpaz.js:1289-1429 placement = getToolNameForPermissionCheck (1)
+//@ chunk-kmc5hpaz.js:1289-1429 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck_2(tool) {
   let flattened = tool.flatMap((tool) =>
     tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS ? [tool.mcpInfo.toolName] : [],
@@ -86,7 +86,7 @@ function getToolNameForPermissionCheck_2(tool) {
       flattened.includes(ARTIFACTS_MCP_REPLY_SHARED_COMMENT_TOOL))
   );
 }
-//@ chunk-kmc5hpaz.js:1429-1539 placement = getToolNameForPermissionCheck (1)
+//@ chunk-kmc5hpaz.js:1429-1539 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck_3(tool) {
   let names = mcpRowToolNames();
   return (
@@ -95,7 +95,7 @@ function getToolNameForPermissionCheck_3(tool) {
     ) && getToolNameForPermissionCheck_2(tool)
   );
 }
-//@ chunk-kmc5hpaz.js:1539-1800 placement = getToolNameForPermissionCheck (1)
+//@ chunk-kmc5hpaz.js:1539-1800 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * （归属疑误：工具集组装/Artifacts）Artifacts 内置工具与 MCP 版本的切换过滤。
  */

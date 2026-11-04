@@ -12,7 +12,7 @@ import { oauthExpiryWarning } from "./components/LogoV2/Notices.js";
 import { jsxProd_default } from "../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OAuthExpiryStatusRow } from "./utils/statusNoticeDefinitions.js";
 
-//@ chunk-ag5x7vhf.js:105590-105693 fingerprint = createRoot (0.306)
+//@ chunk-ag5x7vhf.js:105590-105693 fingerprint (2.1.88 match: createRoot, 0.306)
 var createRoot = {
   id: "oauth-expiry",
   tier: "warning",

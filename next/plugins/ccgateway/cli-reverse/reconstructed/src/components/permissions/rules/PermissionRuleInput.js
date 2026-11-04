@@ -31,7 +31,7 @@ import { Dialog } from "../../design-system/Dialog.js";
 
 //@ chunk-p2qwpk2k.js:24428-24432 placement
 init_react_production();
-//@ chunk-p2qwpk2k.js:24432-25922 fingerprint = PermissionRuleInput (0.585)
+//@ chunk-p2qwpk2k.js:24432-25922 fingerprint (2.1.88 match: PermissionRuleInput, 0.585)
 function PermissionRuleInput(props) {
   let $ = useMemoCache(18);
   let { onCancel, onSubmit, ruleBehavior } = props;

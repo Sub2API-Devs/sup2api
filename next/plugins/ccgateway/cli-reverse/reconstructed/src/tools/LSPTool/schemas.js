@@ -18,7 +18,7 @@ import {
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:100287-103223 fingerprint = lspToolInputSchema (0.895)
+//@ chunk-kxyd0g16.js:100287-103223 fingerprint (2.1.88 match: lspToolInputSchema, 0.895)
 /**
  * LSP 工具严格输入 schema：按 operation 的判别联合，validateInput 用它校验。
  */

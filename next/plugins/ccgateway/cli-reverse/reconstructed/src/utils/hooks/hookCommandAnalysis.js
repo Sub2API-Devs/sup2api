@@ -507,7 +507,7 @@ function uncAdminShareToDrive(path) {
 }
 //@ chunk-qmzcskz6.js:7762-7821 placement
 var WIN32_ADMIN_SHARE_RE = /^[\\/]{2,}([^\\/]+)[\\/]+([A-Za-z])\$(?:[\\/]+|$)/;
-//@ chunk-qmzcskz6.js:8678-9310 placement = extractBaseCommand (0.679)
+//@ chunk-qmzcskz6.js:8678-9310 placement (2.1.88 match: extractBaseCommand, 0.679)
 /**
  * （旧版名配错）Windows 路径规范化：处理盘符、UNC 前缀、.. 折叠、去掉尾随点空格，用于路径比较。
  */
@@ -541,7 +541,7 @@ function foldWindowsPathComponent(component) {
   let lower = component.toLowerCase().toUpperCase().toLowerCase();
   return component.includes(":") ? lower.replace(/[. ]+$/, "") : foldName(lower);
 }
-//@ chunk-qmzcskz6.js:9456-9555 placement = setCwdState (0.867)
+//@ chunk-qmzcskz6.js:9456-9555 placement (2.1.88 match: setCwdState, 0.867)
 function caseFoldKey(cwd) {
   return cwd.normalize("NFC").toLowerCase().toUpperCase().toLowerCase().normalize("NFC");
 }

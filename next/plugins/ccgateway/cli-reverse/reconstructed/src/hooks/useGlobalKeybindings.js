@@ -23,7 +23,7 @@ import { lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 
-//@ chunk-18hwfzwa.js:133882-133967 placement = useTasksV2WithCollapseEffect (1)
+//@ chunk-18hwfzwa.js:133882-133967 placement (2.1.88 match: useTasksV2WithCollapseEffect, 1)
 function useTasksV2WithCollapseEffect(appState) {
   return {
     ...appState,
@@ -60,7 +60,7 @@ function noop() {}
 function forceRedraw() {
   getSecondRootError().get(process.stdout)?.forceRedraw();
 }
-//@ chunk-18hwfzwa.js:134229-136066 fingerprint = GlobalKeybindingHandlers (0.687)
+//@ chunk-18hwfzwa.js:134229-136066 fingerprint (2.1.88 match: GlobalKeybindingHandlers, 0.687)
 /**
  * 全局快捷键处理：ctrl+o 切换 transcript（tengu_toggle_transcript）、ctrl+t 任务/todo 面板（tengu_toggle_todos）、brief 视图切换等；只在 prompt 屏挂载。
  */

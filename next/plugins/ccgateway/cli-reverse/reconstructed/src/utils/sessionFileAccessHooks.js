@@ -49,7 +49,7 @@ import { getMemoryDirNfc } from "../memdir/teamMemPaths.js";
 import { buildPostToolUseContextOutput } from "../entrypoints/sdk/coreSchemas.js";
 import { isDiskless, registerHookCallbacks } from "../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:1465221-1465635 fingerprint = getFilePathFromInput (0.802)
+//@ chunk-e6aww6q8.js:1465221-1465635 fingerprint (2.1.88 match: getFilePathFromInput, 0.802)
 function getFilePathFromInput(toolName, toolInput) {
   switch (toolName) {
     case FILE_READ_TOOL_NAME: {
@@ -77,7 +77,7 @@ function getFilePathFromInput(toolName, toolInput) {
       return null;
   }
 }
-//@ chunk-e6aww6q8.js:1465635-1466140 fingerprint = getSessionFileTypeFromInput (1)
+//@ chunk-e6aww6q8.js:1465635-1466140 fingerprint (2.1.88 match: getSessionFileTypeFromInput, 1)
 function getSessionFileTypeFromInput(toolName, toolInput) {
   switch (toolName) {
     case FILE_READ_TOOL_NAME: {
@@ -120,7 +120,7 @@ function isMemoryFileAccess(toolName, toolInput) {
     return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:1466213-1466275 layout = isSessionPlanFile (1)
+//@ chunk-e6aww6q8.js:1466213-1466275 layout (2.1.88 match: isSessionPlanFile, 1)
 function isMemoryTopicFile(absolutePath) {
   return (
     absolutePath.endsWith(".md") &&
@@ -149,7 +149,7 @@ function queuedSessionFileAccessHook(toolName, absolutePath, extra) {
     ...extra,
   });
 }
-//@ chunk-e6aww6q8.js:1466555-1468907 fingerprint = handleSessionFileAccess (0.59)
+//@ chunk-e6aww6q8.js:1466555-1468907 fingerprint (2.1.88 match: handleSessionFileAccess, 0.59)
 /**
  * PostToolUse 回调：模型读写会话转录或记忆目录时打 tengu_transcript_accessed / tengu_memdir_accessed。
  */
@@ -317,7 +317,7 @@ async function handleSessionFileAccess(hookInput, toolUseId, toolName, toolInput
   }
   return {};
 }
-//@ chunk-e6aww6q8.js:1469041-1469310 facade-exports = registerSessionFileAccessHooks (1)
+//@ chunk-e6aww6q8.js:1469041-1469310 facade-exports (2.1.88 match: registerSessionFileAccessHooks, 1)
 function registerSessionFileAccessHooks() {
   if (isDiskless()) return;
   let hook = {

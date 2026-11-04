@@ -88,20 +88,20 @@ import {
 } from "../../utils/permissions/permissionContextSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:173545-173634 fingerprint = computeChecksum (1)
+//@ chunk-dcmhvw5a.js:173545-173634 fingerprint (2.1.88 match: computeChecksum, 1)
 function computeChecksum(restrictions) {
   let sorted = sortKeysDeep(restrictions);
   let normalized = jsonStringify(sorted);
   return `sha256:${createHash("sha256").update(normalized).digest("hex")}`;
 }
-//@ chunk-1wpnxx5r.js:3119-3164 fingerprint = isPolicyAllowed (0.71)
+//@ chunk-1wpnxx5r.js:3119-3164 fingerprint (2.1.88 match: isPolicyAllowed, 0.71)
 /**
  * 按策略限制判断某项功能是否允许（缓存命中或失败开放）。
  */
 function isPolicyAllowed() {
   return isRemoteBrowserEnabled() || remoteBrowserEnabledState.on || remoteBrowserAllowedState.allowed;
 }
-//@ chunk-yxnffbzs.js:2475-2672 fingerprint = getPolicyLimitsEndpoint (0.467)
+//@ chunk-yxnffbzs.js:2475-2672 fingerprint (2.1.88 match: getPolicyLimitsEndpoint, 0.467)
 /**
  * 策略禁用与会话禁用两种原因文案（供各功能共用）。
  */
@@ -149,7 +149,7 @@ deferInit("chunk-aepeg2w5.js:626442", () => {
   );
   orgConfigGateReaders = new ReaderRegistry();
 });
-//@ chunk-aepeg2w5.js:626524-626587 placement = AgentsJsonSchema (0.484)
+//@ chunk-aepeg2w5.js:626524-626587 placement (2.1.88 match: AgentsJsonSchema, 0.484)
 /**
  * 注册 org-config 开关读取器与问题报告器（与代理无关，切分误归）。
  */
@@ -200,7 +200,7 @@ function resolveOrgConfigPlan(plan, verifiedAtMs, nowMs = Date.now()) {
 }
 //@ chunk-aepeg2w5.js:627035-627052 placement
 var REVALIDATE_IN_FULL_AFTER_MS = 21600000;
-//@ chunk-aepeg2w5.js:893333-893603 fingerprint = getAuthHeaders (0.587)
+//@ chunk-aepeg2w5.js:893333-893603 fingerprint (2.1.88 match: getAuthHeaders, 0.587)
 function getAuthHeaders_2(endpoint) {
   if (isFirstPartyManagedOAuthContext() || isBareMode()) return;
   if (
@@ -227,7 +227,7 @@ function getAuthHeaders_2(endpoint) {
     };
   return;
 }
-//@ chunk-7t4fmt2f.js:16761-17340 fingerprint = fetchWithRetry (0.431)
+//@ chunk-7t4fmt2f.js:16761-17340 fingerprint (2.1.88 match: fetchWithRetry, 0.431)
 async function fetchWithRetry(
   etag,
   cachePath,
@@ -271,7 +271,7 @@ async function fetchWithRetry(
   }
   return lastResult;
 }
-//@ chunk-7t4fmt2f.js:17340-21874 fingerprint = fetchPolicyLimits (0.351)
+//@ chunk-7t4fmt2f.js:17340-21874 fingerprint (2.1.88 match: fetchPolicyLimits, 0.351)
 /**
  * 请求 /api/claude_code/policy_limits（Bearer），支持 ETag/304，失败分类为 auth_failed/network_error/timeout 等，结果写入会话缓存与 policy-limits.json。
  */
@@ -590,7 +590,7 @@ async function fetchPolicyLimits(
     }
   }
 }
-//@ chunk-18hwfzwa.js:1046691-1046806 fingerprint = ESSENTIAL_TRAFFIC_DENY_ON_MISS (0.772)
+//@ chunk-18hwfzwa.js:1046691-1046806 fingerprint (2.1.88 match: ESSENTIAL_TRAFFIC_DENY_ON_MISS, 0.772)
 function isFeedbackSurveyAllowed() {
   return (
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DUNWICH_BELL, false) &&
@@ -600,7 +600,7 @@ function isFeedbackSurveyAllowed() {
     !env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY
   );
 }
-//@ chunk-2xp8150w.js:2601-2725 fingerprint = loadCachedRestrictions (0.611)
+//@ chunk-2xp8150w.js:2601-2725 fingerprint (2.1.88 match: loadCachedRestrictions, 0.611)
 function loadCachedRestrictions(permissionContext) {
   let restrictions = isPlainObject(permissionContext) ? permissionContext.restrictions : undefined;
   return (

@@ -83,7 +83,7 @@ function schedulePermissionNotify(toolName, storageV5, credentials) {
   timer.unref();
   return () => clearTimeout(timer);
 }
-//@ chunk-6j594vm1.js:2658-3309 fingerprint = inputSchema (0.504)
+//@ chunk-6j594vm1.js:2658-3309 fingerprint (2.1.88 match: inputSchema, 0.504)
 /**
  * --permission-prompt-tool（SDK 宿主）协议：输入 {tool_name, input, tool_use_id?}；输出 allow {updatedInput?, updatedPermissions?, toolUseID?, decisionClassification?} 或 deny {message, interrupt?}；decisionClassification 为 user_temporary/user_permanent/user_reject。
  */
@@ -213,7 +213,7 @@ function wrapSessionContextSetter(context, tool) {
       }),
   };
 }
-//@ chunk-6j594vm1.js:4431-5574 fingerprint = permissionPromptToolResultToPermissionDecision (0.587)
+//@ chunk-6j594vm1.js:4431-5574 fingerprint (2.1.88 match: permissionPromptToolResultToPermissionDecision, 0.587)
 /**
  * 把权限提示工具的回复转成权限决定：allow 时应用 updatedPermissions（launcher 宿主直接应用；strict 宿主校验改写后的输入不命中 deny 规则、不丢失收紧项，否则拒绝）；deny+interrupt 中止当前回合。decisionReason 为 permissionPromptTool。
  */

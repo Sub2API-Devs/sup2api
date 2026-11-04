@@ -26,7 +26,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { isSessionsToken } from "./sessionsBearerHooks.js";
 
-//@ chunk-aepeg2w5.js:292428-292931 placement = getOauthProfileFromApiKey (0.622)
+//@ chunk-aepeg2w5.js:292428-292931 placement (2.1.88 match: getOauthProfileFromApiKey, 0.622)
 /**
  * GET <BASE_API_URL>/api/claude_cli_profile（x-api-key + oauth beta），API key 用户取账户信息。
  */
@@ -80,7 +80,7 @@ async function getOauthProfileFromOauthToken(accessToken) {
   let oauthProfileFromOauthToken = await getOauthProfileFromOauthToken_2(accessToken);
   return oauthProfileFromOauthToken.ok ? oauthProfileFromOauthToken.profile : undefined;
 }
-//@ chunk-aepeg2w5.js:293097-293799 fingerprint = getOauthProfileFromOauthToken (0.434)
+//@ chunk-aepeg2w5.js:293097-293799 fingerprint (2.1.88 match: getOauthProfileFromOauthToken, 0.434)
 async function getOauthProfileFromOauthToken_2(accessToken) {
   let endpoint = `${getOauthConfig().BASE_API_URL}/api/oauth/profile`;
   try {

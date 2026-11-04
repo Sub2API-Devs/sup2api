@@ -223,7 +223,7 @@ function recordMaskedFromCatalog(registry) {
 function masksEveryId() {
   return getProviderState().servedCatalogMasksEveryId;
 }
-//@ chunk-aepeg2w5.js:141138-141214 placement = modelMatchesVersionPrefix (1)
+//@ chunk-aepeg2w5.js:141138-141214 placement (2.1.88 match: modelMatchesVersionPrefix, 1)
 /**
  * 规范化后补 claude- 前缀再解析（Gd）。旧版名 modelMatchesVersionPrefix_3 为错配。
  */
@@ -396,7 +396,7 @@ deferInit("chunk-aepeg2w5.js:142880", () => {
   NON_MODEL_FIELD_NAMES = new Set(["repository_model"]);
   MODEL_PLACEHOLDER_VALUES = new Set(["inherit", "default", "none", "unknown", "nonconforming"]);
 });
-//@ chunk-aepeg2w5.js:143039-143350 placement = createModelSwitchBreadcrumbs (1)
+//@ chunk-aepeg2w5.js:143039-143350 placement (2.1.88 match: createModelSwitchBreadcrumbs, 1)
 /**
  * 对设置/参数对象里看起来是模型字段（model、*_model(s)）的值做模型 id 掩码/改写（服务端目录屏蔽的 id 换成占位），先处理确定是模型键的再处理其他。旧版名 createModelSwitchBreadcrumbs 为错配。
  */

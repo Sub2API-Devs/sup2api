@@ -193,7 +193,7 @@ async function closeStdioServer(childProcess) {
 function isEventualNoodleEnabled() {
   return isClaudeAiChatCowork() && getFeatureValue_SESSION_PINNED("tengu_eventual_noodle", false) === true;
 }
-//@ chunk-29pqxdaf.js:5938-6019 placement = extractErrorTypeFromData (1)
+//@ chunk-29pqxdaf.js:5938-6019 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function isTextBlock(data) {
   return typeof data === "object" && data !== null && "type" in data && data.type === "text";
 }

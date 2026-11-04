@@ -34,7 +34,7 @@ import { ShellError } from "../errors.js";
 import { shutdownInterruptStamp } from "../abortController.js";
 import { wrapUserTurnContent } from "../userTurnTags.js";
 
-//@ chunk-w235911v.js:12039-14517 fingerprint = processBashCommand (0.652)
+//@ chunk-w235911v.js:12039-14517 fingerprint (2.1.88 match: processBashCommand, 0.652)
 /**
  * processBashCommand：! 前缀的 bash 输入直接执行并把输出作为 <bash-stdout> 消息。
  */

@@ -313,13 +313,13 @@ function isGitSshUrl(url) {
   let index_2 = replaced.lastIndexOf("@");
   return index_2 !== -1 && replaced.slice(0, index_2).includes(":");
 }
-//@ chunk-cgr0tezp.js:72027-72126 placement = ghIsDangerousCallback (1)
+//@ chunk-cgr0tezp.js:72027-72126 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function isScpLikeRemote(text) {
   let index = text.indexOf(":");
   let index_2 = text.indexOf("/");
   return index > 0 && !text.includes("://") && (index_2 === -1 || index < index_2);
 }
-//@ chunk-cgr0tezp.js:72126-72410 placement = ghIsDangerousCallback (1)
+//@ chunk-cgr0tezp.js:72126-72410 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function ghIsDangerousCallback(_rawCommand, args) {
   let isDangerous = (raw, replaced) => {
     let stripped = stripLeadingSpaceAndNewlines(raw);
@@ -364,7 +364,7 @@ function hasUrlHost(text) {
     return false;
   }
 }
-//@ chunk-cgr0tezp.js:73019-73389 placement = ghIsDangerousCallback (0.825)
+//@ chunk-cgr0tezp.js:73019-73389 placement (2.1.88 match: ghIsDangerousCallback, 0.825)
 /**
  * 是否为 scp 风格地址（user@host:path）。
  */
@@ -393,7 +393,7 @@ function isScpStyleUrl(_rawCommand, args) {
 function hasSensitiveUrlOrGitHubCallback(text) {
   return hasSensitiveUrlParts(text) || ghIsDangerousCallback_2(text);
 }
-//@ chunk-cgr0tezp.js:73424-73650 placement = ghIsDangerousCallback (0.825)
+//@ chunk-cgr0tezp.js:73424-73650 placement (2.1.88 match: ghIsDangerousCallback, 0.825)
 function ghIsDangerousCallback_2(text) {
   let replaced = text.replace(/^[\u0000-\u0020]+/, "");
   let index = replaced.indexOf("://");
@@ -497,7 +497,7 @@ function isRestrictedDestination(text, parsedUrl) {
     (parsedUrl.protocol === "file:" && hasConfusableAuthority(text))
   );
 }
-//@ chunk-cgr0tezp.js:75142-75296 placement = normalizeUrl (0.695)
+//@ chunk-cgr0tezp.js:75142-75296 placement (2.1.88 match: normalizeUrl, 0.695)
 /**
  * 检测 URL 的反斜杠与 @ 混淆：反斜杠之后、@ 之前出现：或 %3a 视为可疑（浏览器与 URL 解析器会把它当成不同主机）。
  */
@@ -516,7 +516,7 @@ function isPlainPathLike(text) {
     !/(?:^|[^\\])@|@[^\\/ ]*(?:[/ ]|$)/.test(text)
   );
 }
-//@ chunk-cgr0tezp.js:75461-75562 placement = ghIsDangerousCallback (1)
+//@ chunk-cgr0tezp.js:75461-75562 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function getUrlAuthorityStart(text) {
   let index = text.indexOf("://");
   return index !== -1 && /^[a-z][a-z0-9+.-]*$/i.test(text.slice(0, index)) ? index + 3 : 0;

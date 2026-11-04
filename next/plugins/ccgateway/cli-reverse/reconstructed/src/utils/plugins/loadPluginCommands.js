@@ -414,7 +414,7 @@ function getCommandNameFromFile(filePath, baseDir, pluginName) {
     return namespace ? `${pluginName}:${namespace}:${commandBaseName}` : `${pluginName}:${commandBaseName}`;
   }
 }
-//@ chunk-e6aww6q8.js:1667561-1668178 fingerprint = collectMarkdownFiles (0.408)
+//@ chunk-e6aww6q8.js:1667561-1668178 fingerprint (2.1.88 match: collectMarkdownFiles, 0.408)
 async function collectMarkdownFiles(dirPath, baseDir, loadedPaths) {
   let files = [];
   let fs = getFsImplementation();
@@ -464,7 +464,7 @@ async function collectMarkdownFiles(dirPath, baseDir, loadedPaths) {
   );
   return files.sort((left, right) => left.filePath.localeCompare(right.filePath));
 }
-//@ chunk-e6aww6q8.js:1668487-1668700 fingerprint = loadCommandsFromDirectory (1)
+//@ chunk-e6aww6q8.js:1668487-1668700 fingerprint (2.1.88 match: loadCommandsFromDirectory, 1)
 async function loadCommandsFromDirectory(
   commandsPath,
   pluginName,
@@ -496,7 +496,7 @@ async function loadCommandsFromDirectory(
   }
   return commands;
 }
-//@ chunk-e6aww6q8.js:1668700-1674044 fingerprint = createPluginCommand (0.643)
+//@ chunk-e6aww6q8.js:1668700-1674044 fingerprint (2.1.88 match: createPluginCommand, 0.643)
 /**
  * 由插件的 markdown 文件构造斜杠命令：命令名 <插件>:<相对路径>（技能目录用目录名），解析 frontmatter（description、allowed-tools、argument-hint、model、disable-model-invocation…），正文在调用时替换 $ARGUMENTS、${CLAUDE_PLUGIN_ROOT}、${user_config.X}。
  */
@@ -842,7 +842,7 @@ function copySyncedSkillFlags(pluginInfo, plugin) {
   if (plugin.hostNamedSkillsFolder) pluginInfo.hostNamedSkillsFolder = true;
   if (plugin.followsSyncedSkillState) pluginInfo.followsSyncedSkillState = true;
 }
-//@ chunk-e6aww6q8.js:1674355-1677759 fingerprint = getPluginCommands (0.756)
+//@ chunk-e6aww6q8.js:1674355-1677759 fingerprint (2.1.88 match: getPluginCommands, 0.756)
 /**
  * 加载所有启用插件的命令（commands/ 目录与 manifest.commands），结果缓存在全局 commands。
  */
@@ -1092,7 +1092,7 @@ async function realpathForDedupe(targetPath) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:1677969-1680227 fingerprint = loadSkillsFromDirectory (0.479)
+//@ chunk-e6aww6q8.js:1677969-1680227 fingerprint (2.1.88 match: loadSkillsFromDirectory, 0.479)
 /**
  * 扫描插件的技能目录：根 SKILL.md 或子目录 <name>/SKILL.md，每个技能生成一个命令（技能模式）。
  */
@@ -1269,7 +1269,7 @@ async function loadSkillsFromDirectory(
   );
   return skills.sort((left, right) => left.skill.name.localeCompare(right.skill.name));
 }
-//@ chunk-e6aww6q8.js:1680227-1682147 fingerprint = getPluginSkills (0.792)
+//@ chunk-e6aww6q8.js:1680227-1682147 fingerprint (2.1.88 match: getPluginSkills, 0.792)
 /**
  * 加载所有启用插件的技能（skills/ 与 manifest.skills），按真实路径跨插件去重。
  */

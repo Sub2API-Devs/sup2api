@@ -30,7 +30,7 @@ import { Box, Text } from "../ink/components/Text.js";
 import { HighlightedInput } from "./PromptInput/ShimmeredInput.js";
 import { Ansi } from "../ink/components/AnsiText.js";
 
-//@ chunk-e6aww6q8.js:66424-66686 placement = writeCacheBreakDiff (0.806)
+//@ chunk-e6aww6q8.js:66424-66686 placement (2.1.88 match: writeCacheBreakDiff, 0.806)
 /**
  * 文本编辑用的区间切分（BaseTextInput 使用），与缓存检测无关，归错文件。旧版名 writeCacheBreakDiff 为错配。
  */
@@ -58,7 +58,7 @@ var splitSpansAroundOverlays = (prevContent, newContent) =>
         : [];
     });
   });
-//@ chunk-81qqq1aq.js:4298-6714 fingerprint = BaseTextInput (0.631)
+//@ chunk-81qqq1aq.js:4298-6714 fingerprint (2.1.88 match: BaseTextInput, 0.631)
 function BaseTextInput(props) {
   let $ = useMemoCache(7);
   let { inputState, children, terminalFocus, invert, hidePlaceholderText, cursorCellPainted, ...props_2 } =

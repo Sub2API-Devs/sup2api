@@ -29,7 +29,7 @@ var MCP_TOOL_PROMPT_PLACEHOLDER = "";
 var MCP_TOOL_DESCRIPTION_PLACEHOLDER = "";
 var MCP_UI_TABLE_KEY = "mcp";
 var MCP_DISPLAY_ONLY = "mcp-display-only";
-//@ chunk-79gnqwq0.js:432-560 fingerprint = outputSchema (0.793)
+//@ chunk-79gnqwq0.js:432-560 fingerprint (2.1.88 match: outputSchema, 0.793)
 /**
  * MCP 工具输入 schema（passthrough 空对象）与输出 schema（字符串、内容块数组或结构化内容）。
  */
@@ -84,7 +84,7 @@ function isBlankBase64Document(block) {
 function hasBase64DocumentData(block) {
   return block?.type === "document" && block.source?.type === "base64" && block.source.data !== "";
 }
-//@ chunk-79gnqwq0.js:928-1528 fingerprint = MCPTool (0.731)
+//@ chunk-79gnqwq0.js:928-1528 fingerprint (2.1.88 match: MCPTool, 0.731)
 /**
  * MCP 工具模板（name "mcp"，isMcp，backgrounding "self"，maxResultSizeChars 100000）。本身 call 返回空、checkPermissions 为 passthrough；services/mcp/client 用 `...MCPTool` 展开后为每个服务器工具覆盖 name（mcp__服务器__工具）、mcpInfo、prompt/description、isReadOnly/isConcurrencySafe（看 readOnlyHint）、alwaysLoad（anthropic/alwaysLoad）、call 等。stripForCreation 清空 base64 文档数据，回传模型前再丢掉这些空文档。
  */

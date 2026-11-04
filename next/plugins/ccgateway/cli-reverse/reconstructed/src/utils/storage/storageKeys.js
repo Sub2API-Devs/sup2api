@@ -211,7 +211,7 @@ function validateBackupFileName(key) {
       )
     : undefined;
 }
-//@ chunk-t0gq9gyw.js:29769-29830 placement = isMcpServerFromProjectOrLocalSettings (1)
+//@ chunk-t0gq9gyw.js:29769-29830 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 function isMcpServerFromProjectOrLocalSettings(config) {
   return config === "user" || config === "project" || config === "local";
 }
@@ -381,7 +381,7 @@ function namesJsonlStream(segments) {
     segments.some((segment) => typeof segment === "string" && hasJsonlFiles(segment))
   );
 }
-//@ chunk-t0gq9gyw.js:32622-32683 placement = isMcpServerFromProjectOrLocalSettings (1)
+//@ chunk-t0gq9gyw.js:32622-32683 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 function isMcpServerFromProjectOrLocalSettings_2(config) {
   return config === "user" || config === "project" || config === "local";
 }
@@ -898,7 +898,7 @@ function scopePathSegments(scope) {
 }
 //@ chunk-t0gq9gyw.js:44363-44373 placement
 var MAX_SIDE_PATH_DEPTH = 6;
-//@ chunk-t0gq9gyw.js:44373-44434 placement = getAgentMetadataPath (1)
+//@ chunk-t0gq9gyw.js:44373-44434 placement (2.1.88 match: getAgentMetadataPath, 1)
 /**
  * 从 .meta.json 路径反推存储键。
  */

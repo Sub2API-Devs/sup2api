@@ -33,7 +33,7 @@ import { logForDebugging } from "../debug.js";
 import { errorMessage, isSyscallError, toError } from "../errors.js";
 import { logError } from "../log.js";
 
-//@ chunk-k9mgeeff.js:726-1795 placement = PluginComponentsDisplay (0.822)
+//@ chunk-k9mgeeff.js:726-1795 placement (2.1.88 match: PluginComponentsDisplay, 0.822)
 async function getPluginInventory(plugin, name) {
   if (name === "builtin") {
     let builtinDef = getBuiltinPlugin(plugin.name);

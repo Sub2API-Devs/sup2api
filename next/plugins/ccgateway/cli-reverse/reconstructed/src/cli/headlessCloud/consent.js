@@ -142,7 +142,7 @@ function mcpScopeLabel(client) {
       return;
   }
 }
-//@ chunk-fe6rs39h.js:42825-43003 placement = expandEnvVars (0.913)
+//@ chunk-fe6rs39h.js:42825-43003 placement (2.1.88 match: expandEnvVars, 0.913)
 function getTransportLabel(config) {
   switch (config.type) {
     case undefined:

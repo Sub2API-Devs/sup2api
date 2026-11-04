@@ -379,7 +379,7 @@ async function dropRegistrationDir(repoLayout, relDir, identity) {
     },
   );
 }
-//@ chunk-2xm1rxms.js:21068-21162 placement = getFileIdentity (0.794)
+//@ chunk-2xm1rxms.js:21068-21162 placement (2.1.88 match: getFileIdentity, 0.794)
 function getFileIdentity(stats, identity) {
   return (
     stats.isDirectory() &&

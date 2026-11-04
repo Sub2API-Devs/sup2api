@@ -248,7 +248,7 @@ function remoteForwardedSettings() {
 function effectiveSettingSourceValue(key) {
   return getSecuritySensitiveSettingWithSources(key).find((source) => isSettingSourceEnabled(source.source));
 }
-//@ chunk-snd3g4y1.js:3723-3796 placement = _temp5 (1)
+//@ chunk-snd3g4y1.js:3723-3796 placement (2.1.88 match: _temp5, 1)
 function isSettingSetOutsideUserSettings(a_0) {
   let source = effectiveSettingSourceValue(a_0)?.source;
   return source !== undefined && source !== "userSettings";
@@ -336,7 +336,7 @@ deferInit("chunk-snd3g4y1.js:5270", () => {
     ["tw", "zh-Hant"],
   ]);
 });
-//@ chunk-snd3g4y1.js:5341-5623 placement = capitalize (1)
+//@ chunk-snd3g4y1.js:5341-5623 placement (2.1.88 match: capitalize, 1)
 function capitalize(str) {
   let trimmed = sanitizeTelemetryString(str).trim();
   if (!trimmed || trimmed.toLowerCase() === "default") return "default";

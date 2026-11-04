@@ -1206,7 +1206,7 @@ function providerRankOf(loadedModule) {
       )
     : pluginProviderRank(loadedModule.pluginStorageId);
 }
-//@ chunk-e6aww6q8.js:4063758-4063869 placement = findReverseDependents (0.826)
+//@ chunk-e6aww6q8.js:4063758-4063869 placement (2.1.88 match: findReverseDependents, 0.826)
 /**
  * 插件 n 的 manifest.dependencies 是否引用插件 e。
  */

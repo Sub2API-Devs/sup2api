@@ -13,7 +13,7 @@ import { classifierDenyKind } from "../types/permissions.js";
 import { sanitizeRuleCategory } from "./permissions/permissions.js";
 import { isToolDetailsLoggingEnabled } from "../services/analytics/metadata.js";
 
-//@ chunk-e6aww6q8.js:780189-780227 fingerprint = setClassifierChecking (0.643)
+//@ chunk-e6aww6q8.js:780189-780227 fingerprint (2.1.88 match: setClassifierChecking, 0.643)
 /**
  * 标记某个 tool_use 正在被分类器检查（写入 $0 集合并通知 vWe 订阅者刷新 UI）。
  */
@@ -21,7 +21,7 @@ function setClassifierChecking(toolUseID) {
   currentTurnSlot.bind(toolUseID);
   turnFinishedSignal.emit();
 }
-//@ chunk-e6aww6q8.js:3761383-3761704 fingerprint = setYoloClassifierApproval (0.39)
+//@ chunk-e6aww6q8.js:3761383-3761704 fingerprint (2.1.88 match: setYoloClassifierApproval, 0.39)
 /**
  * 由 auto-mode 分类器的 decisionReason 生成遥测字段 {classifier_verdict, classifier_category?}；用户接受时只在分类器本已放行时报 allow；类别仅在允许记录工具细节时附带。
  */

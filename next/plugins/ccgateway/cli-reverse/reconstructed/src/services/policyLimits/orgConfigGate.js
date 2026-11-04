@@ -397,7 +397,7 @@ function storedCopyFields(armedInput, readFacts) {
     return {};
   }
 }
-//@ chunk-c18v4hz4.js:10285-10355 placement = orgStatus (1)
+//@ chunk-c18v4hz4.js:10285-10355 placement (2.1.88 match: orgStatus, 1)
 /**
  * 分别按“信任缓存/不信任缓存”两种假设求 verdict，相同则返回，否则 pending。旧版名 orgStatus 为错配，与 fast mode 无关（远程桥接门控）。
  */
@@ -452,7 +452,7 @@ function registerOrgConfigGate(options) {
 }
 //@ chunk-c18v4hz4.js:10766-10779 placement
 var GATE_SETTLE_TIMEOUT_MS = 35000;
-//@ chunk-c18v4hz4.js:10779-10863 placement = withTimeout (0.805)
+//@ chunk-c18v4hz4.js:10779-10863 placement (2.1.88 match: withTimeout, 0.805)
 function withTimeout(settle, timeoutMs) {
   return () =>
     Promise.race([

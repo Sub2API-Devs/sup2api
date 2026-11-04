@@ -146,7 +146,7 @@ import { limitConcurrency, preloadThenLimit } from "../../utils/concurrencyLimit
 import { isProcessRunning } from "../../utils/genericProcessUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hme9amad.js:13495-14841 placement = createSkillCommand (0.55)
+//@ chunk-hme9amad.js:13495-14841 placement (2.1.88 match: createSkillCommand, 0.55)
 /**
  * 为尚未下载正文的同步 skill 创建占位命令；调用时等待下载完成再转交真正的命令，失败时返回「Skill X could not be downloaded … Proceed without it.」。
  */

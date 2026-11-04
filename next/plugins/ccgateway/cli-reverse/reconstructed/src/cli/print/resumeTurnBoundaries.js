@@ -241,7 +241,7 @@ function isHumanOrAutoContinuation(entry) {
     entry.origin === undefined || entry.origin.kind === "human" || entry.origin.kind === "auto-continuation"
   );
 }
-//@ chunk-0sfjpx19.js:9087-9332 placement = extractErrorTypeFromData (1)
+//@ chunk-0sfjpx19.js:9087-9332 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 用户消息是否就是"[Request interrupted by user]"（或 for tool use）中断标记。
  */
@@ -306,7 +306,7 @@ deferInit("chunk-0sfjpx19.js:9627", () => {
     REJECT_MESSAGE_AFTER_RUN + MEMORY_CORRECTION_HINT,
   ]);
 });
-//@ chunk-0sfjpx19.js:9727-9940 placement = extractErrorTypeFromData (1)
+//@ chunk-0sfjpx19.js:9727-9940 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 是否是合成（<synthetic> 模型）的 "No response requested." assistant 消息。
  */
@@ -324,7 +324,7 @@ function isNoResponseRequestedMessage(message) {
     content[0].text === NO_RESPONSE_REQUESTED
   );
 }
-//@ chunk-0sfjpx19.js:9940-10096 placement = countToolCallsSince (1)
+//@ chunk-0sfjpx19.js:9940-10096 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(entry) {
   return (
     entry.type === "assistant" &&

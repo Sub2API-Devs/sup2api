@@ -24,7 +24,7 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 
-//@ chunk-tzghj6zv.js:49806-51767 fingerprint = SearchBox (0.529)
+//@ chunk-tzghj6zv.js:49806-51767 fingerprint (2.1.88 match: SearchBox, 0.529)
 function SearchBox({
   query,
   placeholder,
@@ -193,7 +193,7 @@ function SearchBox({
     children,
   });
 }
-//@ chunk-tzghj6zv.js:51767-52276 placement = EffortIndicatorSymbol (0.752)
+//@ chunk-tzghj6zv.js:51767-52276 placement (2.1.88 match: EffortIndicatorSymbol, 0.752)
 function EffortIndicatorSymbol(query, highlights, dimRange, cursorIndex, cursorChar) {
   let isHighlighted = (index) =>
     highlights.some(([rangeStart, rangeEnd]) => index >= rangeStart && index < rangeEnd);

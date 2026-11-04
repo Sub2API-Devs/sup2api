@@ -53,7 +53,7 @@ import { MAX_FAILURE_DETAIL_CHARS } from "../services/compact/reactiveCompact.js
 import { hasToolResultError } from "../services/tools/mcpResultMeta.js";
 import { uniq } from "../utils/collections.js";
 
-//@ chunk-ha3km179.js:99181-99315 placement = isPanelAgentTask (0.77)
+//@ chunk-ha3km179.js:99181-99315 placement (2.1.88 match: isPanelAgentTask, 0.77)
 /**
  * 列出需要在后台面板显示的任务：活动代理类任务或运行中的 shell，排除观察者与 main-session。
  */

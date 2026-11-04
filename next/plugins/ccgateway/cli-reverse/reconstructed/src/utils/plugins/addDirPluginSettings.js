@@ -18,9 +18,9 @@ import { logForDebugging } from "../debug.js";
 import { printablePluginName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 import { dropMalformedHeader } from "./headersHelper.js";
 
-//@ chunk-pd0t5xas.js:1113-1161 affinity = SETTINGS_FILES (1)
+//@ chunk-pd0t5xas.js:1113-1161 affinity (2.1.88 match: SETTINGS_FILES, 1)
 var SETTINGS_FILES = ["settings.json", "settings.local.json"];
-//@ chunk-pd0t5xas.js:1161-1349 fingerprint = getAddDirEnabledPlugins (1)
+//@ chunk-pd0t5xas.js:1161-1349 fingerprint (2.1.88 match: getAddDirEnabledPlugins, 1)
 /**
  * 读取 --add-dir 目录下 .claude/settings(.local).json 中的 enabledPlugins（工作区不受信时为空）。
  */
@@ -35,7 +35,7 @@ function getAddDirEnabledPlugins() {
     }
   return result;
 }
-//@ chunk-pd0t5xas.js:1349-1749 fingerprint = getAddDirExtraMarketplaces (0.746)
+//@ chunk-pd0t5xas.js:1349-1749 fingerprint (2.1.88 match: getAddDirExtraMarketplaces, 0.746)
 /**
  * 读取 --add-dir 目录设置里的 extraKnownMarketplaces（按目录列表与设置 epoch 缓存）。
  */

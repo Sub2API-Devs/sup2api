@@ -17,7 +17,7 @@ import { isFsInaccessible } from "./errors.js";
 import { logForDebugging } from "./debug.js";
 import { logError } from "./log.js";
 
-//@ chunk-c63bw38c.js:464-570 fingerprint = markTerminalSetupInProgress (1)
+//@ chunk-c63bw38c.js:464-570 fingerprint (2.1.88 match: markTerminalSetupInProgress, 1)
 async function markTerminalSetupInProgress(backupPath, options) {
   await saveGlobalConfig(
     (current) => ({
@@ -28,7 +28,7 @@ async function markTerminalSetupInProgress(backupPath, options) {
     options,
   );
 }
-//@ chunk-c63bw38c.js:570-650 fingerprint = markTerminalSetupComplete (1)
+//@ chunk-c63bw38c.js:570-650 fingerprint (2.1.88 match: markTerminalSetupComplete, 1)
 async function markTerminalSetupComplete(options) {
   await saveGlobalConfig(
     (current) => ({
@@ -38,7 +38,7 @@ async function markTerminalSetupComplete(options) {
     options,
   );
 }
-//@ chunk-c63bw38c.js:650-771 fingerprint = getTerminalRecoveryInfo (1)
+//@ chunk-c63bw38c.js:650-771 fingerprint (2.1.88 match: getTerminalRecoveryInfo, 1)
 function getTerminalRecoveryInfo() {
   let config = getGlobalConfig();
   return {
@@ -46,11 +46,11 @@ function getTerminalRecoveryInfo() {
     backupPath: config.appleTerminalBackupPath || null,
   };
 }
-//@ chunk-c63bw38c.js:771-851 fingerprint = getTerminalPlistPath (1)
+//@ chunk-c63bw38c.js:771-851 fingerprint (2.1.88 match: getTerminalPlistPath, 1)
 function getTerminalPlistPath() {
   return join(homedir(), "Library", "Preferences", "com.apple.Terminal.plist");
 }
-//@ chunk-c63bw38c.js:851-1202 fingerprint = backupTerminalPreferences (0.859)
+//@ chunk-c63bw38c.js:851-1202 fingerprint (2.1.88 match: backupTerminalPreferences, 0.859)
 async function backupTerminalPreferences(options) {
   let terminalPlistPath = getTerminalPlistPath();
   let backupPath = `${terminalPlistPath}.bak`;
@@ -74,7 +74,7 @@ async function backupTerminalPreferences(options) {
     return null;
   }
 }
-//@ chunk-c63bw38c.js:1202-1765 fingerprint = checkAndRestoreTerminalBackup (0.93)
+//@ chunk-c63bw38c.js:1202-1765 fingerprint (2.1.88 match: checkAndRestoreTerminalBackup, 0.93)
 /**
  * 若上次修改 Apple Terminal 配置时中断，则从 .bak 备份用 defaults import 恢复 com.apple.Terminal 偏好。
  */

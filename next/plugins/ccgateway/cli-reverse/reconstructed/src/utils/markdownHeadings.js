@@ -33,7 +33,7 @@ import { _Lexer } from "../../vendor/marked/lib/marked.esm.js";
 import { findLastStringToken } from "./bash/shellCompletion.js";
 import { joinRawSegments } from "../ink/render-border.js";
 
-//@ chunk-wj577vf9.js:2258-2391 placement = checkAgentDescriptions (0.305)
+//@ chunk-wj577vf9.js:2258-2391 placement (2.1.88 match: checkAgentDescriptions, 0.305)
 /**
  * 提取表格/列表 token（doctor 的上下文警告用，切分可疑）。
  */
@@ -297,7 +297,7 @@ function measureTableRow(headerLine, remaining) {
   let replaced = sliced.replace(TRAILING_NEWLINES_RE, "");
   return replaced !== "" && sliced.length > replaced.length ? replaced.length + 1 : replaced.length;
 }
-//@ chunk-wj577vf9.js:5422-5511 placement = applyMarkdown (0.759)
+//@ chunk-wj577vf9.js:5422-5511 placement (2.1.88 match: applyMarkdown, 0.759)
 function applyMarkdown(lexer, markdown) {
   let [token] = hasOverlongLine(markdown) ? [] : lexer.lexer(markdown);
   return MarkdownBody(token) && token.raw.length === markdown.length ? token : undefined;
@@ -321,7 +321,7 @@ function lexResult(taken, rest, lines) {
 function lexAsSingleParagraph(content) {
   return lexResult([makeParagraphToken(content)], "", MARKDOWN_LIMITS);
 }
-//@ chunk-wj577vf9.js:6759-6823 placement = cachedLexer (0.795)
+//@ chunk-wj577vf9.js:6759-6823 placement (2.1.88 match: cachedLexer, 0.795)
 function cachedLexer() {
   return {
     type: "paragraph",
@@ -330,7 +330,7 @@ function cachedLexer() {
     tokens: [],
   };
 }
-//@ chunk-wj577vf9.js:6823-6891 layout = cachedLexer (0.795)
+//@ chunk-wj577vf9.js:6823-6891 layout (2.1.88 match: cachedLexer, 0.795)
 function makeParagraphToken(content) {
   return {
     type: "paragraph",
@@ -364,11 +364,11 @@ function withRawItems(token, raw, items) {
     items,
   };
 }
-//@ chunk-wj577vf9.js:7041-7080 placement = parseChord (1)
+//@ chunk-wj577vf9.js:7041-7080 placement (2.1.88 match: parseChord, 1)
 function isNotSpaceToken(input) {
   return input.type !== "space";
 }
-//@ chunk-wj577vf9.js:7080-7141 placement = parseChord (0.829)
+//@ chunk-wj577vf9.js:7080-7141 placement (2.1.88 match: parseChord, 0.829)
 function isBlankToken_2(input) {
   return (
     input.type === "space" ||
@@ -381,7 +381,7 @@ function isBlankToken_2(input) {
 function isParagraphToken(token) {
   return token?.type === "paragraph";
 }
-//@ chunk-wj577vf9.js:7185-7224 placement = hasActualOperatorNodes (1)
+//@ chunk-wj577vf9.js:7185-7224 placement (2.1.88 match: hasActualOperatorNodes, 1)
 function hasActualOperatorNodes(rootNode) {
   return rootNode?.type === "list";
 }

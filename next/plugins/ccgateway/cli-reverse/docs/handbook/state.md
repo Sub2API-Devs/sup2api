@@ -24,7 +24,7 @@ state 领域是 CLI 的"持久状态与环境"层，几乎被所有其他子系�
 
 ## 1. 模块地图
 
-分组（与 `artifacts/tmp/state/groups.json` 一致）：
+分组（与 `docs/handbook/data/state/groups.json` 一致）：
 
 | 组 | 模块（重组路径） |
 |---|---|
@@ -122,7 +122,7 @@ getSettingsForSource (chunk-q8cqcff6.js#be)         // 单来源（带 perSource
 
 ### 2.6 设置 schema 与 env 应用
 
-- `SettingsSchema`（`utils/settings/types.ts`）共约 **187 个顶层键**（2.1.88 为 75 个）。316 新增的部分：`policyHelper(s)`、`managedSourcesBehavior`、`parentSettingsBehavior`、`proxyAuthHelper`、`processWrapper`、`deniedModels`、`availableModelsMatch`、`enforceAvailableModels`、`modelPicker`、`modelPricing`、`modelOverrides`、`skillOverrides`、`claudeMd`（托管注入 CLAUDE.md）、`wslInheritsWindowsSettings`、`remoteTools`、`remoteControl`、`isolatePeerMachines`、`syncClaudeAiSkills/Plugins`、`disableWorkflows`、`disableArtifact`、`theme`、`verbose`、`editorMode` 等原先只在全局配置里的界面偏好。新旧差集用 `artifacts/tmp/state/oldkeys.txt`、`artifacts/tmp/state/newkeys.txt` 可复现。
+- `SettingsSchema`（`utils/settings/types.ts`）共约 **187 个顶层键**（2.1.88 为 75 个）。316 新增的部分：`policyHelper(s)`、`managedSourcesBehavior`、`parentSettingsBehavior`、`proxyAuthHelper`、`processWrapper`、`deniedModels`、`availableModelsMatch`、`enforceAvailableModels`、`modelPicker`、`modelPricing`、`modelOverrides`、`skillOverrides`、`claudeMd`（托管注入 CLAUDE.md）、`wslInheritsWindowsSettings`、`remoteTools`、`remoteControl`、`isolatePeerMachines`、`syncClaudeAiSkills/Plugins`、`disableWorkflows`、`disableArtifact`、`theme`、`verbose`、`editorMode` 等原先只在全局配置里的界面偏好。新旧差集用 `docs/handbook/data/state/oldkeys.txt`、`docs/handbook/data/state/newkeys.txt` 可复现。
 - 设置里的 `env`：`applySafeConfigEnvironmentVariables`（chunk-q4qb1h08.js）在工作区信任前只应用安全来源（user/flag/policy）与安全变量名单（`utils/managedEnvConstants.ts` 的 SAFE_ENV_VARS 等），托管设置的值优先并在覆盖时警告；信任后应用全部。
 
 ---

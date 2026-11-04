@@ -561,7 +561,7 @@ function findAutoUpdateOverrideSource(name) {
     return "an --add-dir directory's settings";
   return null;
 }
-//@ chunk-e6aww6q8.js:4242123-4242257 placement = supportsPersistence (1)
+//@ chunk-e6aww6q8.js:4242123-4242257 placement (2.1.88 match: supportsPersistence, 1)
 function supportsPersistence(destination) {
   let sources = ["localSettings", "projectSettings", "userSettings"];
   for (let source of sources) {

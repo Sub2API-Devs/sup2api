@@ -54,11 +54,11 @@ import {
 import { getFileReader } from "../fileStore.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:901197-901268 fingerprint = _clearOutputsForTest (0.46)
+//@ chunk-aepeg2w5.js:901197-901268 fingerprint (2.1.88 match: _clearOutputsForTest, 0.46)
 async function _clearOutputsForTest(state, timeoutMs) {
   await withDeadline(Promise.allSettled(state.emitsInFlight), timeoutMs);
 }
-//@ chunk-1dp9p908.js:1692-1762 facade-majority = MAX_TASK_OUTPUT_BYTES_DISPLAY (0.861)
+//@ chunk-1dp9p908.js:1692-1762 facade-majority (2.1.88 match: MAX_TASK_OUTPUT_BYTES_DISPLAY, 0.861)
 var O_NOFOLLOW_FLAG = constants.O_NOFOLLOW ?? 0;
 var DEFAULT_DELTA_BYTES = 8388608;
 var MAX_TASK_OUTPUT_BYTES = 5368709120;
@@ -80,7 +80,7 @@ function getTaskOutputDir() {
     taskRunState.outputDir = join(sessionTempDirRealpath(), getSessionId(), "tasks");
   return taskRunState.outputDir;
 }
-//@ chunk-1dp9p908.js:1966-2007 facade-majority = getTaskOutputDir (1)
+//@ chunk-1dp9p908.js:1966-2007 facade-majority (2.1.88 match: getTaskOutputDir, 1)
 function taskOutputDirForSession(taskId) {
   return join(sessionTempDirRealpath(), taskId, "tasks");
 }
@@ -91,7 +91,7 @@ function peekTaskOutputDir() {
     : ((isDiskless() ? undefined : getTaskRunState().outputDir) ??
         join(sessionTempDirRealpath(), getSessionId(), "tasks"));
 }
-//@ chunk-1dp9p908.js:2120-2263 layout = getTaskOutputDir (0.761)
+//@ chunk-1dp9p908.js:2120-2263 layout (2.1.88 match: getTaskOutputDir, 0.761)
 function getTaskOutputDir_2() {
   let taskRunState = getTaskRunState();
   if (taskRunState.outputDir === undefined) {
@@ -112,7 +112,7 @@ function bindTaskOutputPath(taskId) {
   getTaskRunState().outputPathBindings.set(taskId, defaultPath);
   return defaultPath;
 }
-//@ chunk-1dp9p908.js:2489-2661 facade-majority = getTaskOutputPath (0.529)
+//@ chunk-1dp9p908.js:2489-2661 facade-majority (2.1.88 match: getTaskOutputPath, 0.529)
 /**
  * 后台任务输出文件路径：<项目临时目录>/<sessionId>/tasks/<taskId>.output（可被绑定覆盖）；diskless 会话抛错。
  */
@@ -122,7 +122,7 @@ function getTaskOutputPath(taskId) {
   if (boundPath !== undefined) return boundPath;
   return join(getTaskOutputDir_2(), `${taskId}.output`);
 }
-//@ chunk-1dp9p908.js:2661-2762 callgraph-fingerprint = track (0.508)
+//@ chunk-1dp9p908.js:2661-2762 callgraph-fingerprint (2.1.88 match: track, 0.508)
 function track(p) {
   let pendingOutputOps = getTaskRunState().pendingOutputOps;
   pendingOutputOps.add(p);
@@ -142,7 +142,7 @@ deferInit("chunk-1dp9p908.js:2762", () => {
   GLUE_LINE_LENGTHS = [50, 100, 200, 400, 800, 1600];
   reduced = GLUE_LINE_LENGTHS.reduce((acc, lineLength) => acc + lineLength, 0);
 });
-//@ chunk-1dp9p908.js:2889-5609 facade-majority = DiskTaskOutput (0.323)
+//@ chunk-1dp9p908.js:2889-5609 facade-majority (2.1.88 match: DiskTaskOutput, 0.323)
 class DiskTaskOutput {
   #h;
   #n = null;
@@ -385,7 +385,7 @@ function appendTaskOutputTrailer(taskId, outcome) {
       "exited",
     );
 }
-//@ chunk-1dp9p908.js:5906-6185 facade-majority = evictTaskOutput (0.156)
+//@ chunk-1dp9p908.js:5906-6185 facade-majority (2.1.88 match: evictTaskOutput, 0.156)
 /**
  * 刷新并移除某任务的磁盘输出写入器，释放内存；写失败时记录丢失的字符数。
  */
@@ -409,7 +409,7 @@ function evictTaskOutput(taskId) {
     })(),
   );
 }
-//@ chunk-1dp9p908.js:6185-6327 facade-majority = getAgentOutputTaskId (0.778)
+//@ chunk-1dp9p908.js:6185-6327 facade-majority (2.1.88 match: getAgentOutputTaskId, 0.778)
 /**
  * 若任务输出路径绑定仍指向默认 <dir>/<id>.output，则删除该绑定（归属疑似错误）。
  */
@@ -422,7 +422,7 @@ function releaseConvergentTaskOutputBinding(filePath) {
   )
     getTaskRunState().outputPathBindings.delete(filePath);
 }
-//@ chunk-1dp9p908.js:6327-6754 facade-majority = getTaskOutputDelta (0.623)
+//@ chunk-1dp9p908.js:6327-6754 facade-majority (2.1.88 match: getTaskOutputDelta, 0.623)
 async function getTaskOutputDelta(taskId, fromOffset, maxBytes = DEFAULT_DELTA_BYTES) {
   try {
     let taskOutputForRead = await openTaskOutputForRead(getTaskOutputPath(taskId));
@@ -953,7 +953,7 @@ function canonicalizeTaskOutputPath(path) {
 function getTaskOutputBaseDir() {
   return dirname(dirname(dirname(resolve(getTaskOutputDir()))));
 }
-//@ chunk-1dp9p908.js:13467-13655 facade-majority = getTaskOutputDir (0.807)
+//@ chunk-1dp9p908.js:13467-13655 facade-majority (2.1.88 match: getTaskOutputDir, 0.807)
 function isTaskOutputFilePath(path) {
   let taskOutputBaseDir = getTaskOutputBaseDir();
   let fsImplementation = getFsImplementation();
@@ -1066,7 +1066,7 @@ var TASK_OUTPUT_TAIL_BYTES = 8192;
 async function tailOutputOfTask(taskId) {
   return tailTaskOutput(getTaskOutputPath(taskId), TASK_OUTPUT_TAIL_BYTES);
 }
-//@ chunk-1dp9p908.js:15062-15211 facade-majority = getTaskOutput (1)
+//@ chunk-1dp9p908.js:15062-15211 facade-majority (2.1.88 match: getTaskOutput, 1)
 async function tailTaskOutput(taskId, maxBytes) {
   let taskOutputForRead = await openTaskOutputForRead(taskId);
   if (taskOutputForRead === null)
@@ -1584,14 +1584,14 @@ function initTaskOutputAsSymlink(taskId, targetPath, onMode) {
 function isPlainAbsolutePath(path) {
   return path.length <= 1024 && /^(?:\/(?!\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+)+$/.test(path);
 }
-//@ chunk-c0cahhqh.js:1523-1583 placement = getAgentOutputTaskId (1)
+//@ chunk-c0cahhqh.js:1523-1583 placement (2.1.88 match: getAgentOutputTaskId, 1)
 /**
  * 路径是否为某任务的输出文件（以 /<taskId>.output 结尾）。
  */
 function isTaskOutputPathFor(taskId, path) {
   return isPlainAbsolutePath(path) && path.endsWith(`/${taskId}.output`);
 }
-//@ chunk-y805ph4h.js:5231-5498 fingerprint = appendTaskOutput (0.465)
+//@ chunk-y805ph4h.js:5231-5498 fingerprint (2.1.88 match: appendTaskOutput, 0.465)
 function appendTaskOutput_2(taskId, content) {
   let state = getDebugState();
   if (state.debugFilePath === null) return;

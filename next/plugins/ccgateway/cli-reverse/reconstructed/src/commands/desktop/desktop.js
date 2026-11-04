@@ -12,7 +12,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { DesktopHandoff, nullRef } from "../../components/DesktopHandoff.js";
 import { submittedMessages } from "../../utils/promptSubmissionOrigin.js";
 
-//@ chunk-ds2d8kad.js:18318-18400 callgraph-fingerprint = call (0.394)
+//@ chunk-ds2d8kad.js:18318-18400 callgraph-fingerprint (2.1.88 match: call, 0.394)
 /**
  * /desktop 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

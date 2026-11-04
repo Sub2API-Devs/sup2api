@@ -122,7 +122,7 @@ import {
 } from "../../utils/fsOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3654790-3654875 placement = isDangerousFilePathToAutoEdit (1)
+//@ chunk-e6aww6q8.js:3654790-3654875 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
 function isDirectlyUnderClaudeWorktreesDir(path) {
   let absolutePath = dirname(path);
   return (

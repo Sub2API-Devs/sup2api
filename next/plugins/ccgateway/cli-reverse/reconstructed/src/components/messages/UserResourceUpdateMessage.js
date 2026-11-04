@@ -27,7 +27,7 @@ function UserResourceUpdateMessage(t0) {
   if (homeDir && resourceUri.startsWith(homeDir + sep)) resourceUri = "~" + resourceUri.slice(homeDir.length);
   return resourceUri;
 }
-//@ chunk-ah34pb7m.js:117725-118030 fingerprint = _temp (0.644)
+//@ chunk-ah34pb7m.js:117725-118030 fingerprint (2.1.88 match: _temp, 0.644)
 /**
  * MCP 资源/轮询更新的一行：服务器名、格式化后的 URI（或目标）与原因。
  */
@@ -63,7 +63,7 @@ function renderResourceUpdateRow(update, i) {
     i,
   );
 }
-//@ chunk-ah34pb7m.js:118030-118489 fingerprint = parseUpdates (1)
+//@ chunk-ah34pb7m.js:118030-118489 fingerprint (2.1.88 match: parseUpdates, 1)
 function parseUpdates(text) {
   let updates = [];
   let resourceRegex =
@@ -87,7 +87,7 @@ function parseUpdates(text) {
     });
   return updates;
 }
-//@ chunk-ah34pb7m.js:118489-118642 fingerprint = formatUri (1)
+//@ chunk-ah34pb7m.js:118489-118642 fingerprint (2.1.88 match: formatUri, 1)
 function formatUri(uri) {
   if (uri.startsWith("file://")) {
     let path = uri.slice(7);

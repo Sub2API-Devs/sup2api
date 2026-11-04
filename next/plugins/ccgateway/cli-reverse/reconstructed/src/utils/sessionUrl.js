@@ -31,7 +31,7 @@ function remoteSessionUrlId() {
   let trimmed = process.env.CLAUDE_CODE_REMOTE_SESSION_ID?.trim();
   return trimmed ? hashAgentId(trimmed, SESSION_URL_HASH_SALT) : null;
 }
-//@ chunk-ndmse9kj.js:864-1213 fingerprint = parseSessionIdentifier (1)
+//@ chunk-ndmse9kj.js:864-1213 fingerprint (2.1.88 match: parseSessionIdentifier, 1)
 /**
  * 解析 --resume 参数：.jsonl 路径、会话 UUID 或会话 URL（远程 ingress）。
  */

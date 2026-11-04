@@ -346,7 +346,7 @@ async function gatherHostProfile({
     aborted,
   };
 }
-//@ chunk-3dq9c61y.js:4581-4677 placement = detectTerminal (0.92)
+//@ chunk-3dq9c61y.js:4581-4677 placement (2.1.88 match: detectTerminal, 0.92)
 /**
  * （误归 deepLink）平台名常量折叠函数，linux 构建恒返回 "linux"。
  */

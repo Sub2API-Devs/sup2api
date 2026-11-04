@@ -58,7 +58,7 @@ function isCancelAbort(signal) {
   let reasonKind = classifyAbortReasonForTelemetry(signal.reason);
   return reasonKind === "user_cancel" || reasonKind === "remote_cancel" || AbortError(signal);
 }
-//@ chunk-e6aww6q8.js:3783284-3783493 placement = AbortError (1)
+//@ chunk-e6aww6q8.js:3783284-3783493 placement (2.1.88 match: AbortError, 1)
 function AbortError(signal) {
   let reason = signal.reason;
   if (!(reason instanceof DOMException) || reason.name !== "AbortError") return false;

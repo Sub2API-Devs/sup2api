@@ -30,7 +30,7 @@ import { generateContextSuggestions } from "../utils/contextSuggestions.js";
 import { ContextSuggestions } from "./ContextSuggestions.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3505549-3505608 fingerprint = groupBySource (0.692)
+//@ chunk-e6aww6q8.js:3505549-3505608 fingerprint (2.1.88 match: groupBySource, 0.692)
 var groupBySource; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-e6aww6q8.js:3505549", () => {
   groupBySource = new HostScoped(() => ({
@@ -39,13 +39,13 @@ deferInit("chunk-e6aww6q8.js:3505549", () => {
     host: randomUUID(),
   }));
 });
-//@ chunk-10q8r8ck.js:17306-17394 fingerprint = _temp (1)
+//@ chunk-10q8r8ck.js:17306-17394 fingerprint (2.1.88 match: _temp, 1)
 function isTokenCategory(cat) {
   return (
     cat.tokens > 0 && cat.name !== "Free space" && cat.name !== AUTOCOMPACT_BUFFER_CATEGORY && !cat.isDeferred
   );
 }
-//@ chunk-10q8r8ck.js:17394-17456 fingerprint = _temp2 (1)
+//@ chunk-10q8r8ck.js:17394-17456 fingerprint (2.1.88 match: _temp2, 1)
 function isDeferredMcpCategory(cat) {
   return cat.isDeferred && cat.name.includes("MCP");
 }
@@ -53,7 +53,7 @@ function isDeferredMcpCategory(cat) {
 function isMessagesCategory(cat) {
   return cat.name === AUTOCOMPACT_BUFFER_CATEGORY;
 }
-//@ chunk-10q8r8ck.js:17491-17752 fingerprint = _temp4 (1)
+//@ chunk-10q8r8ck.js:17491-17752 fingerprint (2.1.88 match: _temp4, 1)
 function renderGridSquare(square, colIndex) {
   if (square.categoryName === "Free space") {
     return jsxProd_default(
@@ -84,7 +84,7 @@ function renderGridSquare(square, colIndex) {
     colIndex,
   );
 }
-//@ chunk-10q8r8ck.js:17752-17842 fingerprint = _temp5 (1)
+//@ chunk-10q8r8ck.js:17752-17842 fingerprint (2.1.88 match: _temp5, 1)
 function renderGridRow(row, rowIndex) {
   return jsxProd_default(
     Box,
@@ -96,31 +96,31 @@ function renderGridRow(row, rowIndex) {
     rowIndex,
   );
 }
-//@ chunk-10q8r8ck.js:17842-17888 fingerprint = _temp8 (1)
+//@ chunk-10q8r8ck.js:17842-17888 fingerprint (2.1.88 match: _temp8, 1)
 function isFreeSpaceCategory(c_0) {
   return c_0.name === "Free space";
 }
-//@ chunk-10q8r8ck.js:17888-17934 layout = _temp8 (1)
+//@ chunk-10q8r8ck.js:17888-17934 layout (2.1.88 match: _temp8, 1)
 function isFreeSpaceCategory_2(c_0) {
   return c_0.name === "Free space";
 }
-//@ chunk-10q8r8ck.js:17934-17980 layout = _temp8 (1)
+//@ chunk-10q8r8ck.js:17934-17980 layout (2.1.88 match: _temp8, 1)
 function isFreeSpaceCategory_3(c_0) {
   return c_0.name === "Free space";
 }
-//@ chunk-10q8r8ck.js:17980-18019 callgraph-fingerprint = _temp1 (1)
+//@ chunk-10q8r8ck.js:17980-18019 callgraph-fingerprint (2.1.88 match: _temp1, 1)
 function addTokens(tool, i) {
   return tool + i.tokens;
 }
-//@ chunk-10q8r8ck.js:18019-18054 fingerprint = _temp18 (1)
+//@ chunk-10q8r8ck.js:18019-18054 fingerprint (2.1.88 match: _temp18, 1)
 function isLoadedTool(t_4) {
   return t_4.isLoaded;
 }
-//@ chunk-10q8r8ck.js:18054-18089 layout = _temp18 (1)
+//@ chunk-10q8r8ck.js:18054-18089 layout (2.1.88 match: _temp18, 1)
 function isLoadedTool_2(t_4) {
   return t_4.isLoaded;
 }
-//@ chunk-10q8r8ck.js:18089-18228 callgraph-fingerprint = _temp20 (0.333)
+//@ chunk-10q8r8ck.js:18089-18228 callgraph-fingerprint (2.1.88 match: _temp20, 0.333)
 function renderMcpToolRow(section, i_5) {
   return jsxProd_default(
     TreeConnectors.Node,
@@ -140,15 +140,15 @@ function renderMcpToolRow(section, i_5) {
     i_5,
   );
 }
-//@ chunk-10q8r8ck.js:18228-18263 layout = _temp18 (1)
+//@ chunk-10q8r8ck.js:18228-18263 layout (2.1.88 match: _temp18, 1)
 function isUnloadedTool(t_4) {
   return !t_4.isLoaded;
 }
-//@ chunk-10q8r8ck.js:18263-18298 layout = _temp18 (1)
+//@ chunk-10q8r8ck.js:18263-18298 layout (2.1.88 match: _temp18, 1)
 function isUnloadedTool_2(t_4) {
   return !t_4.isLoaded;
 }
-//@ chunk-10q8r8ck.js:18298-18369 placement = createYogaLayoutNode (1)
+//@ chunk-10q8r8ck.js:18298-18369 placement (2.1.88 match: createYogaLayoutNode, 1)
 function renderNamedNode(node, key) {
   return jsxProd_default(
     TreeConnectors.Node,
@@ -159,7 +159,7 @@ function renderNamedNode(node, key) {
     key,
   );
 }
-//@ chunk-10q8r8ck.js:18369-18508 callgraph-fingerprint = _temp27 (0.279)
+//@ chunk-10q8r8ck.js:18369-18508 callgraph-fingerprint (2.1.88 match: _temp27, 0.279)
 function renderMcpToolDetailRow(attachment, i_10) {
   return jsxProd_default(
     TreeConnectors.Node,
@@ -179,11 +179,11 @@ function renderMcpToolDetailRow(attachment, i_10) {
     i_10,
   );
 }
-//@ chunk-10q8r8ck.js:18508-18547 callgraph-fingerprint = _temp13 (1)
+//@ chunk-10q8r8ck.js:18508-18547 callgraph-fingerprint (2.1.88 match: _temp13, 1)
 function addTokens_2(tool_1, i_1) {
   return tool_1 + i_1.tokens;
 }
-//@ chunk-10q8r8ck.js:18547-18691 fingerprint = _temp21 (0.492)
+//@ chunk-10q8r8ck.js:18547-18691 fingerprint (2.1.88 match: _temp21, 0.492)
 function renderAgentRow(agent, i_6) {
   return jsxProd_default(
     TreeConnectors.Node,
@@ -203,7 +203,7 @@ function renderAgentRow(agent, i_6) {
     i_6,
   );
 }
-//@ chunk-10q8r8ck.js:18691-18856 callgraph-fingerprint = _temp22 (0.346)
+//@ chunk-10q8r8ck.js:18691-18856 callgraph-fingerprint (2.1.88 match: _temp22, 0.346)
 function renderAgentSourceGroup(t0) {
   let [sourceDisplay, sourceAgents] = t0;
   return jsxProd_default_2(
@@ -225,11 +225,11 @@ function renderAgentSourceGroup(t0) {
     sourceDisplay,
   );
 }
-//@ chunk-10q8r8ck.js:18856-18895 callgraph-fingerprint = _temp14 (1)
+//@ chunk-10q8r8ck.js:18856-18895 callgraph-fingerprint (2.1.88 match: _temp14, 1)
 function addTokens_3(tool_2, i_2) {
   return tool_2 + i_2.tokens;
 }
-//@ chunk-10q8r8ck.js:18895-19038 callgraph-fingerprint = _temp23 (0.333)
+//@ chunk-10q8r8ck.js:18895-19038 callgraph-fingerprint (2.1.88 match: _temp23, 0.333)
 function renderMemoryFileRow(file, i_7) {
   return jsxProd_default(
     TreeConnectors.Node,
@@ -291,7 +291,7 @@ function renderSkillSourceGroup(entry) {
     sourceName,
   );
 }
-//@ chunk-10q8r8ck.js:19342-19430 fingerprint = SOURCE_DISPLAY_ORDER (0.815)
+//@ chunk-10q8r8ck.js:19342-19430 fingerprint (2.1.88 match: SOURCE_DISPLAY_ORDER, 0.815)
 var AUTOCOMPACT_BUFFER_CATEGORY = "Autocompact buffer";
 var CATEGORY_DISPLAY_ORDER = [
   "Project",
@@ -302,7 +302,7 @@ var CATEGORY_DISPLAY_ORDER = [
   "MCP",
   "Built-in",
 ];
-//@ chunk-10q8r8ck.js:19430-19872 callgraph-fingerprint = _temp16 (0.386)
+//@ chunk-10q8r8ck.js:19430-19872 callgraph-fingerprint (2.1.88 match: _temp16, 0.386)
 /**
  * 按来源显示名（插件来源附插件名）分组并按 token 降序排序，组顺序按预设来源顺序，插件子组按名称排序，其余追加在后。
  */
@@ -367,7 +367,7 @@ function CollapsedCountSummary(props) {
   } else node = $[8];
   return node;
 }
-//@ chunk-10q8r8ck.js:20229-27146 fingerprint = ContextVisualization (0.419)
+//@ chunk-10q8r8ck.js:20229-27146 fingerprint (2.1.88 match: ContextVisualization, 0.419)
 /**
  * /context：按类别统计估算 token（系统提示、系统工具、MCP 工具、自定义 agent、记忆文件、技能、消息、自动压缩缓冲、空闲），用彩色格子图与明细树显示。
  */

@@ -18,7 +18,7 @@ import { execFileNoThrowWithCwd } from "./execFileNoThrow.js";
 import { quotePowerShellSingleQuoted } from "./powershell/quoting.js";
 import { moveKeeperPid } from "./toolCgroup.js";
 
-//@ chunk-9h8dr0qb.js:70640-71227 fingerprint = copyAnsiToClipboard (0.559)
+//@ chunk-9h8dr0qb.js:70640-71227 fingerprint (2.1.88 match: copyAnsiToClipboard, 0.559)
 /**
  * 把 ANSI 文本渲染成 PNG 截图并复制到剪贴板（临时文件放 screenshots 目录）。
  */
@@ -52,7 +52,7 @@ async function copyAnsiToClipboard(ansiText, options) {
     };
   }
 }
-//@ chunk-9h8dr0qb.js:71227-72357 fingerprint = copyPngToClipboard (0.791)
+//@ chunk-9h8dr0qb.js:71227-72357 fingerprint (2.1.88 match: copyPngToClipboard, 0.791)
 /**
  * 按平台把 PNG 写入剪贴板：macOS osascript、Linux xclip/wl-copy、Windows PowerShell。
  */

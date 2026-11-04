@@ -18,7 +18,7 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { StatusIcon } from "../../components/design-system/StatusIcon.js";
 
-//@ chunk-4v9zy7gn.js:40689-42521 callgraph-fingerprint = SuccessStep (0.235)
+//@ chunk-4v9zy7gn.js:40689-42521 callgraph-fingerprint (2.1.88 match: SuccessStep, 0.235)
 function SuccessStep(props) {
   let $ = useMemoCache(19);
   let { secretExists, useExistingSecret, secretName, skipWorkflow, appOnlyInstall } = props;

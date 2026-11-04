@@ -44,7 +44,7 @@ import { todoToolsEnabled } from "./sessionKind.js";
 import { count } from "./collections.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-nw7jbebs.js:5306-5360 callgraph-fingerprint = notifyTasksUpdated (0.391)
+//@ chunk-nw7jbebs.js:5306-5360 callgraph-fingerprint (2.1.88 match: notifyTasksUpdated, 0.391)
 /**
  * 发出任务列表已更新事件（UI 刷新）。
  */
@@ -62,7 +62,7 @@ function isClaimedIdConflict(error) {
       ID_CONFLICT_ERRNO_CODES.has(error.telemetryCode))
   );
 }
-//@ chunk-nw7jbebs.js:5773-5855 fingerprint = LOCK_OPTIONS (0.866)
+//@ chunk-nw7jbebs.js:5773-5855 fingerprint (2.1.88 match: LOCK_OPTIONS, 0.866)
 /**
  * 任务文件锁选项（30 次重试，5–100ms）。
  */
@@ -149,7 +149,7 @@ async function recordSkippedTaskId(taskListId, taskId, store) {
     logForDebugging(`[Tasks] could not record skipped task id ${taskId}: ${errorMessage(error)}`);
   }
 }
-//@ chunk-nw7jbebs.js:6795-6862 fingerprint = isTodoV2Enabled (1)
+//@ chunk-nw7jbebs.js:6795-6862 fingerprint (2.1.88 match: isTodoV2Enabled, 1)
 /**
  * 任务工具（TaskCreate/Get/Update/List）是否启用：CLAUDE_CODE_ENABLE_TASKS !== false。
  */
@@ -157,7 +157,7 @@ function isTaskToolsEnabled() {
   if (env.CLAUDE_CODE_ENABLE_TASKS === false) return false;
   return true;
 }
-//@ chunk-nw7jbebs.js:6862-7765 callgraph-fingerprint = resetTaskList (0.191)
+//@ chunk-nw7jbebs.js:6862-7765 callgraph-fingerprint (2.1.88 match: resetTaskList, 0.191)
 /**
  * 重置任务列表：全部任务已完成时才删除，并先把最大 id 记入 high-water mark，避免 id 复用。
  */
@@ -217,7 +217,7 @@ async function resetTaskList(taskListId, store) {
     await releaseLockQuietly(lock, "[Tasks] resetTaskList");
   }
 }
-//@ chunk-nw7jbebs.js:7765-7951 fingerprint = getTaskListId (0.56)
+//@ chunk-nw7jbebs.js:7765-7951 fingerprint (2.1.88 match: getTaskListId, 0.56)
 /**
  * 当前任务列表 id：CLAUDE_CODE_TASK_LIST_ID > 队友所属团队 > 团队名/会话列表/lead 团队 > 会话 id。
  */
@@ -235,11 +235,11 @@ function getTaskListId() {
 function sanitizePathComponent(input) {
   return input.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
-//@ chunk-nw7jbebs.js:8006-8051 layout = getTaskOutputDir (1)
+//@ chunk-nw7jbebs.js:8006-8051 layout (2.1.88 match: getTaskOutputDir, 1)
 function getTaskOutputDir(taskId) {
   return join(getClaudeConfigDir(), "tasks", sanitizePathComponent(taskId));
 }
-//@ chunk-nw7jbebs.js:8051-8100 callgraph-fingerprint = getTaskPath (1)
+//@ chunk-nw7jbebs.js:8051-8100 callgraph-fingerprint (2.1.88 match: getTaskPath, 1)
 /**
  * 任务文件路径 <配置目录>/tasks/<listId>/<taskId>.json。
  */
@@ -360,7 +360,7 @@ function maxNumericId(ids) {
   }
   return highest;
 }
-//@ chunk-nw7jbebs.js:9649-9984 callgraph-fingerprint = findHighestTaskIdFromFiles (0.53)
+//@ chunk-nw7jbebs.js:9649-9984 callgraph-fingerprint (2.1.88 match: findHighestTaskIdFromFiles, 0.53)
 /**
  * 从文件名（或 v5 存储键）找最大任务 id。
  */
@@ -458,7 +458,7 @@ async function createTask(taskListId, taskData, store) {
     await releaseLockQuietly(lock, "[Tasks] createTask");
   }
 }
-//@ chunk-nw7jbebs.js:11057-11323 fingerprint = getTask (0.498)
+//@ chunk-nw7jbebs.js:11057-11323 fingerprint (2.1.88 match: getTask, 0.498)
 /**
  * 把 JSON 文本按 Task schema 解析。
  */
@@ -775,7 +775,7 @@ async function updateTask(taskListId, taskId, updates, store) {
     await releaseLockQuietly(release, "[Tasks] updateTask");
   }
 }
-//@ chunk-nw7jbebs.js:15016-15578 callgraph-fingerprint = blockTask (0.499)
+//@ chunk-nw7jbebs.js:15016-15578 callgraph-fingerprint (2.1.88 match: blockTask, 0.499)
 /**
  * 删除任务：抬高 high-water mark、删除文件/条目，并从其他任务的 blocks/blockedBy 中移除该 id。
  */
@@ -822,7 +822,7 @@ async function deleteTask(taskListId, taskId, store) {
     return false;
   }
 }
-//@ chunk-nw7jbebs.js:15578-15859 callgraph-witnessed = listTasks (1)
+//@ chunk-nw7jbebs.js:15578-15859 callgraph-witnessed (2.1.88 match: listTasks, 1)
 /**
  * 列出任务列表中全部任务（按数字 id 排序）。
  */
@@ -886,7 +886,7 @@ function mergeTaskMetadata(metadata, patch) {
     else merged[key] = value;
   return merged;
 }
-//@ chunk-nw7jbebs.js:16456-16705 fingerprint = deleteTask (1)
+//@ chunk-nw7jbebs.js:16456-16705 fingerprint (2.1.88 match: deleteTask, 1)
 /**
  * 建立依赖：from.blocks 加 to、to.blockedBy 加 from。
  */
@@ -940,7 +940,7 @@ async function lockTaskList(taskListId, store) {
   let taskListLockFile = await ensureTaskListLockFile(taskListId, store);
   return lock(taskListLockFile, LOCK_OPTIONS_2);
 }
-//@ chunk-nw7jbebs.js:16919-17065 placement = markMessagesAsReadByPredicate (0.489)
+//@ chunk-nw7jbebs.js:16919-17065 placement (2.1.88 match: markMessagesAsReadByPredicate, 0.489)
 /**
  * 获取任务列表文件的锁（无盘会话用内存锁）。
  */
@@ -963,7 +963,7 @@ function acquireInMemoryLock(key) {
     );
   });
 }
-//@ chunk-nw7jbebs.js:17172-18309 fingerprint = claimTask (0.852)
+//@ chunk-nw7jbebs.js:17172-18309 fingerprint (2.1.88 match: claimTask, 0.852)
 /**
  * 认领任务：检查存在、owner、是否完成、未完成的阻塞者，可选检查认领者是否已有进行中任务。
  */
@@ -1053,7 +1053,7 @@ async function claimTask(taskListId, taskId, claimantAgentId, options = {}, stor
     await releaseLockQuietly(release, "[Tasks] claimTask");
   }
 }
-//@ chunk-nw7jbebs.js:18309-18817 layout = claimTask (0.787)
+//@ chunk-nw7jbebs.js:18309-18817 layout (2.1.88 match: claimTask, 0.787)
 function tryClaimTaskRecord(task, taskId, claimantAgentId, openTaskIds) {
   if (!task)
     return {
@@ -1109,7 +1109,7 @@ function tryClaimTaskRecord(task, taskId, claimantAgentId, openTaskIds) {
     },
   };
 }
-//@ chunk-nw7jbebs.js:18817-19678 fingerprint = claimTaskWithBusyCheck (0.926)
+//@ chunk-nw7jbebs.js:18817-19678 fingerprint (2.1.88 match: claimTaskWithBusyCheck, 0.926)
 /**
  * 带"代理忙碌"检查的认领（在列表锁内）。
  */
@@ -1177,7 +1177,7 @@ async function claimTaskWithBusyCheck(taskListId, taskId, claimantAgentId, store
     await releaseLockQuietly(release, "[Tasks] claimTaskWithBusyCheck");
   }
 }
-//@ chunk-nw7jbebs.js:19678-20333 fingerprint = unassignTeammateTasks (0.956)
+//@ chunk-nw7jbebs.js:19678-20333 fingerprint (2.1.88 match: unassignTeammateTasks, 0.956)
 /**
  * 队友退出/被终止时把其未完成任务改回 pending 无 owner，并生成通知文本。
  */
@@ -1236,7 +1236,7 @@ function textFromTaskCreateInput(input) {
   let text = input.input?.text;
   return typeof text === "string" && text.trim().length > 0 ? text : null;
 }
-//@ chunk-ha3km179.js:76143-76331 fingerprint = TASK_STATUSES (1)
+//@ chunk-ha3km179.js:76143-76331 fingerprint (2.1.88 match: TASK_STATUSES, 1)
 var CHECKLIST_MARKER_STATUS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_CHECKLIST_LINE_CHARS;
 var MAX_CHECKLIST_LINES;
@@ -1260,7 +1260,7 @@ deferInit("chunk-ha3km179.js:76143", () => {
 function countNonAmbientTasks(tasks) {
   return count(tasks, (task) => !task.ambient && task.taskType !== "in_process_teammate");
 }
-//@ chunk-p7xejzdb.js:14282-14352 fingerprint = getAgentStatuses (0.532)
+//@ chunk-p7xejzdb.js:14282-14352 fingerprint (2.1.88 match: getAgentStatuses, 0.532)
 /**
  * 把代理状态规范为 idle/waiting/busy。
  */

@@ -16,7 +16,7 @@ import { detectFileEncoding } from "./file.js";
 //@ chunk-9br8f9tm.js:834-856 affinity
 var DEFAULT_MAX_CACHE_ENTRIES = 1000;
 var DEFAULT_MAX_CACHE_BYTES = 16777216;
-//@ chunk-9br8f9tm.js:856-1515 fingerprint = FileReadCache (0.758)
+//@ chunk-9br8f9tm.js:856-1515 fingerprint (2.1.88 match: FileReadCache, 0.758)
 /**
  * 按 mtime 校验的文件内容 LRU 缓存（默认 1000 条、16MB）。
  */

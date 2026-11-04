@@ -9,14 +9,14 @@
  * attribution: fingerprint 2, file-last-pair 1
  */
 
-//@ chunk-aepeg2w5.js:660137-660177 fingerprint = createBaseTimestamp (1)
+//@ chunk-aepeg2w5.js:660137-660177 fingerprint (2.1.88 match: createBaseTimestamp, 1)
 function createBaseTimestamp() {
   return {
     seconds: 0,
     nanos: 0,
   };
 }
-//@ chunk-aepeg2w5.js:660177-660556 fingerprint = Timestamp (1)
+//@ chunk-aepeg2w5.js:660177-660556 fingerprint (2.1.88 match: Timestamp, 1)
 var Timestamp = {
   fromJSON(object) {
     return {

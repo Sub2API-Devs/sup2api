@@ -20,7 +20,7 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getAttacherCaps } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3244216-3244299 fingerprint = VSCODE_FAMILY (0.724)
+//@ chunk-e6aww6q8.js:3244216-3244299 fingerprint (2.1.88 match: VSCODE_FAMILY, 0.724)
 var VSCODE_FAMILY = {
   vscode: ["code", "codium"],
   cursor: ["cursor"],
@@ -53,7 +53,7 @@ function getEditorBaseName(editorCommand) {
   }
   return basename(parts[0] ?? editorCommand);
 }
-//@ chunk-0dfh72mg.js:968-1158 fingerprint = GUI_EDITORS (1)
+//@ chunk-0dfh72mg.js:968-1158 fingerprint (2.1.88 match: GUI_EDITORS, 1)
 var GUI_EDITORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TERMINAL_EDITOR_RE;
 var VSCODE_FAMILY_EDITORS;
@@ -67,7 +67,7 @@ function classifyGuiEditor(editor) {
   let base = getEditorBaseName(editor);
   return GUI_EDITORS.find((guiEditor) => base.includes(guiEditor));
 }
-//@ chunk-0dfh72mg.js:1217-1332 fingerprint = guiGotoArgv (1)
+//@ chunk-0dfh72mg.js:1217-1332 fingerprint (2.1.88 match: guiGotoArgv, 1)
 function guiGotoArgv(guiFamily, filePath, line) {
   if (!line) return [filePath];
   if (VSCODE_FAMILY_EDITORS.has(guiFamily)) return ["-g", `${filePath}:${line}`];
@@ -85,7 +85,7 @@ function editorOpenArgv(editor, filePath, line) {
     ? [`+${line}`, filePath]
     : [filePath];
 }
-//@ chunk-0dfh72mg.js:1429-2052 fingerprint = openFileInExternalEditor (0.796)
+//@ chunk-0dfh72mg.js:1429-2052 fingerprint (2.1.88 match: openFileInExternalEditor, 0.796)
 function openFileInExternalEditor(filePath, line) {
   let editor = resolveEditorCommand();
   if (!editor) return false;
@@ -141,7 +141,7 @@ function openFileInExternalEditor(filePath, line) {
     inkInstance.exitAlternateScreen();
   }
 }
-//@ chunk-0dfh72mg.js:2052-2354 fingerprint = getExternalEditor (0.622)
+//@ chunk-0dfh72mg.js:2052-2354 fingerprint (2.1.88 match: getExternalEditor, 0.622)
 class getExternalEditor {
   isResolved = false;
   editor = undefined;

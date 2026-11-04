@@ -243,7 +243,7 @@ function recordDegradedCause(cause) {
 function getUdsInboxUnavailableReason() {
   return messagingSocketUnavailableReason(udsMessagingState());
 }
-//@ chunk-0kp6eg01.js:3807-3922 placement = extractErrorTypeFromData (1)
+//@ chunk-0kp6eg01.js:3807-3922 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function hasStringType_2(data) {
   if (typeof data !== "object" || data === null) return false;
   if (!("type" in data)) return false;
@@ -2033,7 +2033,7 @@ function isSelfSentMessage(verifiedPeerPid, selfSentAncestry, senderClass) {
     platform: getPlatform(),
   });
 }
-//@ chunk-0kp6eg01.js:35326-35407 placement = useCostSummary (0.695)
+//@ chunk-0kp6eg01.js:35326-35407 placement (2.1.88 match: useCostSummary, 0.695)
 /**
  * 只注册一次 process exit 监听，退出时删除 activeKeyFile。旧版名 useCostSummary 为错配。
  */

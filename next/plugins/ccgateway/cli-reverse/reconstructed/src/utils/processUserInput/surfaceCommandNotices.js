@@ -103,7 +103,7 @@ var CCS_COMMAND_NOTICES = {
   usage: ({ remoteSessionId }) =>
     `Usage isn't shown in this chat. To see it, open Settings \u2192 Usage on claude.ai: ${getClaudeAiBaseUrl(remoteSessionId, env.SESSION_INGRESS_URL)}/settings/usage`,
 };
-//@ chunk-3g0djq3w.js:8275-8325 placement = getRemoteTaskSessionUrl (1)
+//@ chunk-3g0djq3w.js:8275-8325 placement (2.1.88 match: getRemoteTaskSessionUrl, 1)
 /**
  * 远程会话的网页 URL（基于 SESSION_INGRESS_URL）。
  */

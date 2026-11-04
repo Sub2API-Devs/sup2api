@@ -93,7 +93,7 @@ function useSkillHealthData() {
   }, [credentials]);
   return health;
 }
-//@ chunk-vrb44rx7.js:126132-126345 placement = readMarketplaceJsonContent (0.844)
+//@ chunk-vrb44rx7.js:126132-126345 placement (2.1.88 match: readMarketplaceJsonContent, 0.844)
 /**
  * 读取工作区 .claude-plugin/marketplace.json 内容（存储后端模式经存储层）。
  */

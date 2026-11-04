@@ -71,7 +71,7 @@ import { truncateToWidth } from "../../utils/format.js";
 
 //@ chunk-vrb44rx7.js:74454-74469 placement
 function noopBrowseMarketplaceHandler() {}
-//@ chunk-vrb44rx7.js:74469-83483 fingerprint = BrowseMarketplace (0.468)
+//@ chunk-vrb44rx7.js:74469-83483 fingerprint (2.1.88 match: BrowseMarketplace, 0.468)
 function BrowseMarketplace({
   screen,
   onInstallComplete,

@@ -55,7 +55,7 @@ import { isArtifactsAvailable } from "./artifactAvailability.js";
 import { denyPolicyBody } from "./publishErrors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-r3568h5y.js:264-472 placement = getServerUrl (1)
+//@ chunk-r3568h5y.js:264-472 placement (2.1.88 match: getServerUrl, 1)
 /**
  * 在已连接的 claude.ai 连接器中找唯一一个 URL 满足条件的连接器。
  */
@@ -552,7 +552,7 @@ function clearSubscribeUnrelayed() {
 }
 //@ chunk-jeazk6wn.js:4694-4713 placement
 var WATCH_URL = "watch_url";
-//@ chunk-jeazk6wn.js:4713-4851 placement = getToolNameForPermissionCheck (1)
+//@ chunk-jeazk6wn.js:4713-4851 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tools, name) {
   let found = false;
   for (let tool of tools) {
@@ -710,7 +710,7 @@ function sanitizeServerMessage(message) {
     ? `${truncateToLength(joined, MAX_SERVER_MESSAGE - 3)}...`
     : joined;
 }
-//@ chunk-jeazk6wn.js:7233-7473 placement = isToolResultBlockWithContent (1)
+//@ chunk-jeazk6wn.js:7233-7473 placement (2.1.88 match: isToolResultBlockWithContent, 1)
 function extractMcpTextContent(obj) {
   let content = "content" in obj ? obj.content : undefined;
   if (!Array.isArray(content)) return "";

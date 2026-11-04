@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-18hwfzwa.js:1209724-1209978 fingerprint = parseKey (0.636)
+//@ chunk-18hwfzwa.js:1209724-1209978 fingerprint (2.1.88 match: parseKey, 0.636)
 /**
  * 按键是否产生文字输入：带 Ctrl/Meta/Super 或是回车、Esc、方向、Tab、翻页、Home/End、滚轮时为否。
  */

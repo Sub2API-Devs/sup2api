@@ -76,7 +76,7 @@ function getModelSwitchTarget(mainLoopModelForSession, model) {
   let baseModel = setting === null ? getDefaultMainLoopModel() : parseUserSpecifiedModel(setting);
   return parseUserSpecifiedModel(sessionPick).toLowerCase() === baseModel.toLowerCase() ? null : sessionPick;
 }
-//@ chunk-e6aww6q8.js:3423628-3423715 placement = useMainLoopModel (1)
+//@ chunk-e6aww6q8.js:3423628-3423715 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModel(state) {
   return getModelSwitchTarget(state.mainLoopModelForSession, state.mainLoopModel) ?? state.mainLoopModel;
 }
@@ -92,7 +92,7 @@ function resolveEffectiveModel(modelSetting, mode) {
   }
   return parseUserSpecifiedModel(setting);
 }
-//@ chunk-e6aww6q8.js:3423815-3423897 placement = useMainLoopModel (1)
+//@ chunk-e6aww6q8.js:3423815-3423897 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModel_2(state) {
   return allowedPickModel(state.mainLoopModelForSession) ?? allowedPickModel(state.mainLoopModel) ?? null;
 }

@@ -740,7 +740,7 @@ function cautiousPathDeps(onUnexpectedError) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:896296-896358 placement = isRealPathWithinTeamDir (1)
+//@ chunk-e6aww6q8.js:896296-896358 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isRealPathWithinTeamDir(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";

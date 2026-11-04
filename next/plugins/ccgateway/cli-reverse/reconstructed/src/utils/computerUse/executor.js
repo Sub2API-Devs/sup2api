@@ -13,7 +13,7 @@ import { sleep } from "../sleep.js";
 import { logForDebugging } from "../debug.js";
 import { requireComputerUseSwift } from "./swiftLoader.js";
 
-//@ chunk-hrs3dad1.js:7102-7240 fingerprint = readClipboardViaPbpaste (1)
+//@ chunk-hrs3dad1.js:7102-7240 fingerprint (2.1.88 match: readClipboardViaPbpaste, 1)
 /**
  * 用 pbpaste 读剪贴板。
  */
@@ -24,7 +24,7 @@ async function readClipboardViaPbpaste() {
   if (code !== 0) throw Error(`pbpaste exited with code ${code}`);
   return stdout;
 }
-//@ chunk-hrs3dad1.js:7240-7367 fingerprint = writeClipboardViaPbcopy (1)
+//@ chunk-hrs3dad1.js:7240-7367 fingerprint (2.1.88 match: writeClipboardViaPbcopy, 1)
 /**
  * 用 pbcopy 写剪贴板。
  */
@@ -35,7 +35,7 @@ async function writeClipboardViaPbcopy(text) {
   });
   if (code !== 0) throw Error(`pbcopy exited with code ${code}`);
 }
-//@ chunk-hrs3dad1.js:7367-7462 fingerprint = isBareEscape (1)
+//@ chunk-hrs3dad1.js:7367-7462 fingerprint (2.1.88 match: isBareEscape, 1)
 /**
  * 按键序列是否只是单个 Escape。
  */
@@ -44,13 +44,13 @@ function isBareEscape(parts) {
   let lower = parts[0].toLowerCase();
   return lower === "escape" || lower === "esc";
 }
-//@ chunk-hrs3dad1.js:7462-7476 callgraph-witnessed = MOVE_SETTLE_MS (0)
+//@ chunk-hrs3dad1.js:7462-7476 callgraph-witnessed (2.1.88 match: MOVE_SETTLE_MS, 0)
 /**
  * 鼠标移动/点击后的稳定等待（各 50ms）。
  */
 var MOVE_SETTLE_MS = 50;
 var CLICK_SETTLE_MS = 50;
-//@ chunk-hrs3dad1.js:7476-7537 fingerprint = moveAndSettle (1)
+//@ chunk-hrs3dad1.js:7476-7537 fingerprint (2.1.88 match: moveAndSettle, 1)
 /**
  * 移动鼠标后等待 50ms 让系统稳定。
  */
@@ -58,7 +58,7 @@ async function moveAndSettle(input, x, y) {
   await input.moveMouse(x, y, false);
   await sleep(MOVE_SETTLE_MS);
 }
-//@ chunk-hrs3dad1.js:7537-7629 fingerprint = releasePressed (1)
+//@ chunk-hrs3dad1.js:7537-7629 fingerprint (2.1.88 match: releasePressed, 1)
 /**
  * 逆序释放已按下的键。
  */
@@ -69,7 +69,7 @@ async function releasePressed(input, pressed) {
       await input.key(key, "release");
     } catch {}
 }
-//@ chunk-hrs3dad1.js:7629-7753 layout = withModifiers (1)
+//@ chunk-hrs3dad1.js:7629-7753 layout (2.1.88 match: withModifiers, 1)
 /**
  * 按下一组修饰键执行回调，结束后逆序释放。
  */
@@ -85,7 +85,7 @@ async function withModifiers(input, mods, fn) {
     await releasePressed(input, pressed);
   }
 }
-//@ chunk-hrs3dad1.js:7753-8116 fingerprint = typeViaClipboard (1)
+//@ chunk-hrs3dad1.js:7753-8116 fingerprint (2.1.88 match: typeViaClipboard, 1)
 /**
  * 经剪贴板输入文本：保存原剪贴板 → 写入并校验回读 → Cmd+V → 恢复原剪贴板。
  */
@@ -110,7 +110,7 @@ async function typeViaClipboard(input, text) {
       }
   }
 }
-//@ chunk-hrs3dad1.js:8116-8488 fingerprint = animatedMove (1)
+//@ chunk-hrs3dad1.js:8116-8488 fingerprint (2.1.88 match: animatedMove, 1)
 /**
  * 带缓动（ease-out cubic、60fps、最长 0.5s）的鼠标移动；关闭动画或距离很短时直接移动。
  */
@@ -147,7 +147,7 @@ async function animatedMove(input, targetX, targetY, mouseAnimationEnabled) {
 function createCliExecutor(options) {
   throw Error("createCliExecutor called on linux. Computer control is macOS-only.");
 }
-//@ chunk-hrs3dad1.js:8585-8661 fingerprint = unhideComputerUseApps (1)
+//@ chunk-hrs3dad1.js:8585-8661 fingerprint (2.1.88 match: unhideComputerUseApps, 1)
 /**
  * 通过 Swift 模块恢复（unhide）一组应用。
  */

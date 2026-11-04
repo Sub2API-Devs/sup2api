@@ -119,7 +119,7 @@ function detectAsdf() {
 function getPackageManager() {
   return osReleaseProbe().getPackageManager();
 }
-//@ chunk-hntsfzas.js:5426-5595 fingerprint = getNormalizedPaths (1)
+//@ chunk-hntsfzas.js:5426-5595 fingerprint (2.1.88 match: getNormalizedPaths, 1)
 function getNormalizedPaths() {
   let invokedPath = process.argv[1] || "";
   let execPath = process.execPath || process.argv[0] || "";
@@ -129,7 +129,7 @@ function getNormalizedPaths() {
   }
   return [invokedPath, execPath];
 }
-//@ chunk-hntsfzas.js:5595-6352 fingerprint = getCurrentInstallationType (0.877)
+//@ chunk-hntsfzas.js:5595-6352 fingerprint (2.1.88 match: getCurrentInstallationType, 0.877)
 /**
  * 判断当前安装类型：npm-local/npm-global/native/package-manager/development/unknown。
  */
@@ -197,7 +197,7 @@ async function getCurrentInstallationTypeProbed() {
   installTypeProbeSlot.of(getRootSession().host).attempted = true;
   return await getCurrentInstallationType();
 }
-//@ chunk-hntsfzas.js:6510-6798 fingerprint = getInstallationPath (0.831)
+//@ chunk-hntsfzas.js:6510-6798 fingerprint (2.1.88 match: getInstallationPath, 0.831)
 async function getInstallationPath() {
   if (isStandaloneExecutable()) {
     try {
@@ -219,7 +219,7 @@ async function getInstallationPath() {
     return "unknown";
   }
 }
-//@ chunk-hntsfzas.js:6916-9456 fingerprint = detectMultipleInstallations (0.812)
+//@ chunk-hntsfzas.js:6916-9456 fingerprint (2.1.88 match: detectMultipleInstallations, 0.812)
 async function detectMultipleInstallations() {
   let fs = getFsImplementation();
   let installations = [];
@@ -353,7 +353,7 @@ function isPathInList(pathDirectories, localBinPath) {
     );
   });
 }
-//@ chunk-hntsfzas.js:9735-12337 fingerprint = detectConfigurationIssues (0.792)
+//@ chunk-hntsfzas.js:9735-12337 fingerprint (2.1.88 match: detectConfigurationIssues, 0.792)
 /**
  * 检测配置问题：otelHeadersHelper 失败、PATH 缺 ~/.local/bin、沙箱设置等，返回 {issue,fix}。
  */
@@ -460,7 +460,7 @@ function getMaskCredentialWarnings() {
     };
   });
 }
-//@ chunk-hntsfzas.js:13789-14105 fingerprint = detectLinuxGlobPatternWarnings (0.937)
+//@ chunk-hntsfzas.js:13789-14105 fingerprint (2.1.88 match: detectLinuxGlobPatternWarnings, 0.937)
 function detectLinuxGlobPatternWarnings() {
   if (getPlatform() !== "linux") return [];
   let warnings = [];
@@ -541,7 +541,7 @@ async function getWindowsSandboxStartupIssue() {
         },
       ];
 }
-//@ chunk-hntsfzas.js:16491-21476 fingerprint = getDoctorDiagnostic (0.78)
+//@ chunk-hntsfzas.js:16491-21476 fingerprint (2.1.88 match: getDoctorDiagnostic, 0.78)
 /**
  * getDoctorDiagnostic：安装类型、版本、路径、多重安装、自动更新状态、包管理器、ripgrep 状态与各类配置警告（claude doctor 的数据源）。
  */

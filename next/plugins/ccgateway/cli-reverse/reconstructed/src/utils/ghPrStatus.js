@@ -321,7 +321,7 @@ function prStatusHint(hint) {
 }
 //@ chunk-s61vbvea.js:553977-553989 layout
 var GH_REQUEST_TIMEOUT_MS = 5000;
-//@ chunk-s61vbvea.js:553989-554142 fingerprint = deriveReviewState (1)
+//@ chunk-s61vbvea.js:553989-554142 fingerprint (2.1.88 match: deriveReviewState, 1)
 function deriveReviewState(isDraft, reviewDecision) {
   if (isDraft) return "draft";
   switch (reviewDecision) {
@@ -700,7 +700,7 @@ function summarizeCheckRuns(statusCheckRollup) {
     pending: pendingCount,
   };
 }
-//@ chunk-s61vbvea.js:559611-560217 fingerprint = fetchPrStatus (0.483)
+//@ chunk-s61vbvea.js:559611-560217 fingerprint (2.1.88 match: fetchPrStatus, 0.483)
 async function fetchPrStatus_2(prUrl) {
   let { stdout, code } = await execFileNoThrow(
     "gh",
@@ -907,7 +907,7 @@ function prStateLabel(node) {
     deletions: node.deletions,
   };
 }
-//@ chunk-s61vbvea.js:562119-562186 placement = cost (0.391)
+//@ chunk-s61vbvea.js:562119-562186 placement (2.1.88 match: cost, 0.391)
 function cost(repositoryNode) {
   return repositoryNode !== null && typeof repositoryNode === "object" && !("cost" in repositoryNode);
 }

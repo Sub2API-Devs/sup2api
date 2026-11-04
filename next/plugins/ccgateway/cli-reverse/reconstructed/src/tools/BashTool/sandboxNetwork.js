@@ -116,7 +116,7 @@ function isPlainHostPattern(entry) {
     parsedUrl.password === ""
   );
 }
-//@ chunk-e6aww6q8.js:1043545-1043781 placement = doesSourceMatchHostPattern (1)
+//@ chunk-e6aww6q8.js:1043545-1043781 placement (2.1.88 match: doesSourceMatchHostPattern, 1)
 /**
  * 域名模式是否合法（含 *. 通配）。与插件无关。
  */
@@ -132,7 +132,7 @@ function doesSourceMatchHostPattern(entry) {
     (bracketedHost !== undefined && isIpv4MappedOrTranslatedIpv6(bracketedHost))
   );
 }
-//@ chunk-e6aww6q8.js:1043781-1043871 placement = doesSourceMatchHostPattern (1)
+//@ chunk-e6aww6q8.js:1043781-1043871 placement (2.1.88 match: doesSourceMatchHostPattern, 1)
 function doesSourceMatchHostPattern_2(entry) {
   let { hostPattern } = splitDomainPatternPort(entry);
   let hostPart = hostPattern.startsWith("*.") ? hostPattern.slice(2) : hostPattern;

@@ -385,7 +385,7 @@ function recordBearerPlan(response, fingerprint, skipTier) {
         },
   );
 }
-//@ chunk-mz6f608r.js:5545-8151 fingerprint = fetchBootstrapAPI (0.628)
+//@ chunk-mz6f608r.js:5545-8151 fingerprint (2.1.88 match: fetchBootstrapAPI, 0.628)
 /**
  * 请求 bootstrap 接口（网关模式需 CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY 才查 /v1/models）。
  */
@@ -562,7 +562,7 @@ function bootstrapFetchCanConvergeSlot() {
 async function fetchBootstrapData(configWriteSource, credentials) {
   await refreshBootstrapData(configWriteSource, credentials);
 }
-//@ chunk-mz6f608r.js:8300-11179 placement = fetchBootstrapData (0.296)
+//@ chunk-mz6f608r.js:8300-11179 placement (2.1.88 match: fetchBootstrapData, 0.296)
 /**
  * 拉取并保存 bootstrap 数据（客户端数据、附加模型选项、渲染缓存），失败不抛出。
  */

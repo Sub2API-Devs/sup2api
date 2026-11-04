@@ -10,7 +10,7 @@
  */
 import { lineWidth } from "./line-width-cache.js";
 
-//@ chunk-bzr73sfg.js:175595-175892 fingerprint = measureText (1)
+//@ chunk-bzr73sfg.js:175595-175892 fingerprint (2.1.88 match: measureText, 1)
 /**
  * 测量文本：宽度为最宽行，高度为按 maxWidth 折行后的行数（maxWidth 非正或无穷时不折行）。
  */

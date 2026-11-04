@@ -44,7 +44,7 @@ import {
 } from "../utils/permissions/approvalPayloadSerialization.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1101734-1101913 placement = formatPrice (1)
+//@ chunk-18hwfzwa.js:1101734-1101913 placement (2.1.88 match: formatPrice, 1)
 /**
  * 把倍率格式化成 "~Nx"（<0.1 时两位小数）。旧版名 formatPrice 不准确。
  */

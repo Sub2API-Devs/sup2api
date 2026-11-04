@@ -37,7 +37,7 @@ import { intersectClip, isClipRedundant } from "./output.js";
 import { applyBackgroundColor } from "../utils/theme.js";
 import { ELLIPSIS } from "./styles.js";
 
-//@ chunk-bzr73sfg.js:182062-182131 fingerprint = wrapWithSoftWrap (0.607)
+//@ chunk-bzr73sfg.js:182062-182131 fingerprint (2.1.88 match: wrapWithSoftWrap, 0.607)
 /**
  * textWrap 是否是折行类（wrap、wrap-trim、wrap-stream），而不是截断类。
  */
@@ -142,7 +142,7 @@ var ADAPTIVE_SLOW_MAX = 12;
 var ADAPTIVE_STEP_MEDIUM = 2;
 var ADAPTIVE_STEP_LARGE = 3;
 var ADAPTIVE_BACKLOG_MAX = 30;
-//@ chunk-bzr73sfg.js:293652-293906 fingerprint = drainAdaptive (1)
+//@ chunk-bzr73sfg.js:293652-293906 fingerprint (2.1.88 match: drainAdaptive, 1)
 /**
  * 自适应滚动排水：待滚量 ≤5 一次滚完，<12 每帧 2 行，否则每帧 3 行；超过 30 的积压直接跳过；单帧不超过视口高-1，剩余写回 pendingScrollDelta。
  */
@@ -168,7 +168,7 @@ function drainAdaptive(node, pending, innerHeight) {
   node.pendingScrollDelta = rem > 0 ? sign * rem : undefined;
   return applied;
 }
-//@ chunk-bzr73sfg.js:293906-294089 layout = drainAdaptive (1)
+//@ chunk-bzr73sfg.js:293906-294089 layout (2.1.88 match: drainAdaptive, 1)
 /**
  * 比例滚动排水：每帧滚动待滚量的 3/4（至少 4 行，不超过视口高-1），剩余写回 pendingScrollDelta。由设置 useAdaptiveDrain 选择用哪种。
  */
@@ -187,7 +187,7 @@ function drainProportional(node, pending, innerHeight) {
 //@ chunk-bzr73sfg.js:294089-294114 layout
 var OSC = "\x1B]";
 var BEL = "\x07";
-//@ chunk-bzr73sfg.js:294114-294174 fingerprint = wrapWithOsc8Link (1)
+//@ chunk-bzr73sfg.js:294114-294174 fingerprint (2.1.88 match: wrapWithOsc8Link, 1)
 /**
  * 用 OSC 8 把文本包成超链接。
  */
@@ -212,7 +212,7 @@ function buildCharToSegmentIndex(state, segments) {
   }
   return map;
 }
-//@ chunk-bzr73sfg.js:294480-295548 fingerprint = applyStylesToWrappedText (0.78)
+//@ chunk-bzr73sfg.js:294480-295548 fingerprint (2.1.88 match: applyStylesToWrappedText, 0.78)
 /**
  * 把折行后的纯文本重新套上样式与超链接：按“字符→段号”表在原文本中同步推进（跳过折行吞掉的空白与 \r\n），段号变化时切出一段套 applyTextStyles，文本内自带的 ANSI 序列原样保留。
  */
@@ -391,7 +391,7 @@ function joinSegmentTexts(segments) {
   for (let [index, segment] of segments.entries()) segment.text = normalized[index] ?? "";
   return normalized.join("");
 }
-//@ chunk-bzr73sfg.js:296572-296761 fingerprint = applyPaddingToText (0.915)
+//@ chunk-bzr73sfg.js:296572-296761 fingerprint (2.1.88 match: applyPaddingToText, 0.915)
 /**
  * 按 ink-text 首个子节点的 yoga 偏移给文本加上顶部空行与左缩进（同时在软换行表前补 HardBreak）。
  */
@@ -454,7 +454,7 @@ function paintsPastHeight(text, y, height) {
     lineCount++;
   return Math.floor(y) + lineCount > Math.ceil(y + height);
 }
-//@ chunk-bzr73sfg.js:297298-304543 fingerprint = renderNodeToOutput (0.712)
+//@ chunk-bzr73sfg.js:297298-304543 fingerprint (2.1.88 match: renderNodeToOutput, 0.712)
 /**
  * 渲染一个 DOM 节点到 Output（每帧从根递归）：display:none 时清掉旧区域；未脏且位置尺寸背景都不变时直接从上一帧 blit（再补拷越界的绝对定位子孙）；否则清旧区域、处理 pendingClears，按类型绘制——ink-raw-ansi 原样写；ink-text 压平→按 textWrap 折行/截断→套样式与 OSC 8→写入；ink-box 处理 noSelect、overflow 裁剪、overflow:scroll（滚动锚点、粘底、排水、DECSTBM 滚动提示 + 只重画新露出的行）、背景/opaque、子节点、边框。最后记 cachedLayout 供下一帧比较与命中测试。
  */
@@ -1227,7 +1227,7 @@ function addOverlappingSiblings(siblings, beforeIndex, rect, result) {
   }
   return result;
 }
-//@ chunk-bzr73sfg.js:308233-309501 fingerprint = renderChildren (0.724)
+//@ chunk-bzr73sfg.js:308233-309501 fingerprint (2.1.88 match: renderChildren, 0.724)
 /**
  * 渲染子节点：决定每个子节点能否用上一帧 blit（前面有脏的非裁剪兄弟、绝对定位子节点移动、被越界兄弟覆盖等情况不能），统计子节点是否越出父框、互相重叠、画出自身矩形，返回是否有越界子孙。
  */
@@ -1455,7 +1455,7 @@ function overlapsBounds(childElem, offsetX, offsetY, minX, minY, maxX, maxY) {
     minY < childY + yogaNode.getComputedHeight()
   );
 }
-//@ chunk-bzr73sfg.js:311290-311387 sole-consumer = unionRect (1)
+//@ chunk-bzr73sfg.js:311290-311387 sole-consumer (2.1.88 match: unionRect, 1)
 function rectContains(inner, outer) {
   return (
     inner.x >= outer.x &&
@@ -1473,7 +1473,7 @@ function overlapsAbsoluteRects(node, state) {
     anyRectOverlaps(state.absoluteRectsCur, cachedLayout)
   );
 }
-//@ chunk-bzr73sfg.js:311507-311681 sole-consumer = unionRect (0.777)
+//@ chunk-bzr73sfg.js:311507-311681 sole-consumer (2.1.88 match: unionRect, 0.777)
 function anyRectOverlaps(rects, rect) {
   for (let rect_2 of rects) {
     let slack = rect_2.width > 0 && rect_2.height > 0 ? 0 : 1;
@@ -1505,7 +1505,7 @@ function getOverflowClip(node, yogaNode, x, y) {
     y2: clipsY ? y + yogaNode.getComputedHeight() - yogaNode.getComputedBorder(3) : undefined,
   };
 }
-//@ chunk-bzr73sfg.js:312056-312306 sole-consumer = intersectClip (0.813)
+//@ chunk-bzr73sfg.js:312056-312306 sole-consumer (2.1.88 match: intersectClip, 0.813)
 /**
  * 维护 {now, before, grew}：本帧与上一帧各自的累积裁剪区，grew 表示裁剪区比上一帧大（之前被裁掉的部分需要重画，不能 blit）。
  */
@@ -1555,7 +1555,7 @@ function clipsAllowScrollBlit(clips, cached, rect) {
       (isClipRedundant(undefined, clips.before, cached) && isClipRedundant(undefined, clips.now, rect)))
   );
 }
-//@ chunk-bzr73sfg.js:312644-312804 fingerprint = clipsBothAxes (1)
+//@ chunk-bzr73sfg.js:312644-312804 fingerprint (2.1.88 match: clipsBothAxes, 1)
 /**
  * 节点在 X、Y 两个方向都裁剪（overflow hidden/scroll）。
  */
@@ -1566,7 +1566,7 @@ function clipsBothAxes(node) {
     (overflowX === "hidden" || overflowX === "scroll") && (overflowY === "hidden" || overflowY === "scroll")
   );
 }
-//@ chunk-bzr73sfg.js:312804-313103 fingerprint = siblingSharesY (1)
+//@ chunk-bzr73sfg.js:312804-313103 fingerprint (2.1.88 match: siblingSharesY, 1)
 /**
  * 零高度节点是否与相邻兄弟同一行（这种节点只更新缓存位置，不绘制）。
  */
@@ -1588,7 +1588,7 @@ function siblingSharesY(node, yogaNode) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:313103-313827 fingerprint = blitEscapingAbsoluteDescendants (0.684)
+//@ chunk-bzr73sfg.js:313103-313827 fingerprint (2.1.88 match: blitEscapingAbsoluteDescendants, 0.684)
 /**
  * 节点整体 blit 后，再把越出它矩形的绝对定位子孙（及越界子孙）也从上一帧拷过来，并登记绝对定位矩形。
  */
@@ -1635,7 +1635,7 @@ function blitEscapingAbsoluteDescendants(parentNode, output, state, prevScreen, 
     if (descendantNode.hasAbsoluteDescendant || childEscapes) pushChildren(descendantNode, childEscapes);
   }
 }
-//@ chunk-bzr73sfg.js:313827-314142 fingerprint = renderScrolledChildren (0.842)
+//@ chunk-bzr73sfg.js:313827-314142 fingerprint (2.1.88 match: renderScrolledChildren, 0.842)
 /**
  * 渲染滚动容器的内容子节点：完全在 [top,bottom) 可见范围外的跳过（并丢弃其缓存）；有子节点变脏后，后续子节点不再 blit。
  */
@@ -1677,7 +1677,7 @@ function renderScrolledChildren(
     if (wasDirty) seenDirtyChild = true;
   }
 }
-//@ chunk-bzr73sfg.js:314142-314361 shared-adjacent = dropSubtreeCache (0.809)
+//@ chunk-bzr73sfg.js:314142-314361 shared-adjacent (2.1.88 match: dropSubtreeCache, 0.809)
 /**
  * 清掉子树所有节点的 cachedLayout（下一帧不能 blit、命中测试也找不到）。
  */

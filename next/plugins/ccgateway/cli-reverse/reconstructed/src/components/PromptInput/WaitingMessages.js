@@ -312,7 +312,7 @@ function framePreviewText(
 ${FRAME_SANITIZED_FOR_DISPLAY_MARKER}`
     : body;
 }
-//@ chunk-18hwfzwa.js:128002-128353 placement = extractErrorTypeFromData (1)
+//@ chunk-18hwfzwa.js:128002-128353 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 把内容块截取为不超过 maxChars 的文本预览。
  */
@@ -470,7 +470,7 @@ function hasDeliveryId(message) {
 function messageDeliveryIds(message) {
   return getDeliveryId(message) ?? [];
 }
-//@ chunk-18hwfzwa.js:130306-130555 placement = VerboseAgentTranscript (0.912)
+//@ chunk-18hwfzwa.js:130306-130555 placement (2.1.88 match: VerboseAgentTranscript, 0.912)
 /**
  * 静态（转录模式）渲染单条子代理消息。
  */

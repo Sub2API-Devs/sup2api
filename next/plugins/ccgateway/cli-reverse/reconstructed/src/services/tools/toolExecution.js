@@ -995,7 +995,7 @@ deferInit("chunk-e6aww6q8.js:3789753", () => {
 function runWithTimingContext(timing, fn) {
   return timingContext.run(timing, fn);
 }
-//@ chunk-e6aww6q8.js:3789807-3789844 placement = getAgentContext (1)
+//@ chunk-e6aww6q8.js:3789807-3789844 placement (2.1.88 match: getAgentContext, 1)
 /**
  * 当前请求的计时器存储（ALS）。
  */
@@ -1048,7 +1048,7 @@ function getCancelMessage(signal) {
     return TOOL_CALL_SKIPPED_FOR_DELIVERY;
   return CANCEL_MESSAGE;
 }
-//@ chunk-e6aww6q8.js:3790776-3791098 fingerprint = classifyToolError (0.849)
+//@ chunk-e6aww6q8.js:3790776-3791098 fingerprint (2.1.88 match: classifyToolError, 0.849)
 /**
  * 把工具抛出的错误归类为可上报的字符串：TelemetrySafeError 的 errorClass、errno 码、合法的 error.name，否则 Error/UnknownError。
  */
@@ -1121,7 +1121,7 @@ function buildUnavailableOptionNote(name, schema, schemaInput, error, messages) 
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3792219-3792424 fingerprint = ruleSourceToOTelSource (1)
+//@ chunk-e6aww6q8.js:3792219-3792424 fingerprint (2.1.88 match: ruleSourceToOTelSource, 1)
 /**
  * 权限规则来源映射到 OTel 决策来源：session→user_temporary/user_reject，用户/本地设置→user_permanent/user_reject，其余→config。
  */
@@ -1136,7 +1136,7 @@ function ruleSourceToOTelSource(ruleSource, behavior) {
       return "config";
   }
 }
-//@ chunk-e6aww6q8.js:3792424-3792965 fingerprint = decisionReasonToOTelSource (0.965)
+//@ chunk-e6aww6q8.js:3792424-3792965 fingerprint (2.1.88 match: decisionReasonToOTelSource, 0.965)
 /**
  * 权限决策原因映射到 OTel 来源：permissionPromptTool 用其分类、rule 看来源、hook→hook、用户中断→user_abort，其它→config。
  */
@@ -2663,7 +2663,7 @@ function classifyToolErrorCode(error) {
     isSad: false,
   };
 }
-//@ chunk-e6aww6q8.js:3911894-3912026 placement = getToolNameForPermissionCheck (1)
+//@ chunk-e6aww6q8.js:3911894-3912026 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck_3(tool) {
   let hasArtifactTool = (toolName) =>
     tool.some(
@@ -3030,7 +3030,7 @@ function makeImagePlaceholders(imageCount) {
     () => mintPasteId(),
   );
 }
-//@ chunk-e6aww6q8.js:3921625-3921657 placement = extractErrorTypeFromData (1)
+//@ chunk-e6aww6q8.js:3921625-3921657 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 对象是否带 type 字段。
  */
@@ -3471,7 +3471,7 @@ async function* runToolUse(
     };
   }
 }
-//@ chunk-e6aww6q8.js:3927718-3930188 fingerprint = streamedCheckPermissionsAndCallTool (0.414)
+//@ chunk-e6aww6q8.js:3927718-3930188 fingerprint (2.1.88 match: streamedCheckPermissionsAndCallTool, 0.414)
 /**
  * streamedCheckPermissionsAndCallTool：把 checkPermissionsAndCallTool 包成异步流。进度消息即时转成 progress 消息（记 tengu_tool_use_progress），按需修复输入（coerceInput），运行 tool.call 模块级 hook（W$n），记录权限决策与沙箱违规，最后把结果逐条入流。
  */
@@ -3703,7 +3703,7 @@ function isDeferredSchemaNotSent(tool, messages, pool, conversation, surfaced) {
     }).has(tool.name)
   );
 }
-//@ chunk-e6aww6q8.js:3930305-3930472 layout = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:3930305-3930472 layout (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_9(name, messages, sinceUuid) {
   return messages.some(
     (message) =>
@@ -3794,7 +3794,7 @@ function getNotLoadedToolVerdict(tool, toolUseContext, messageId) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3931383-3931895 fingerprint = buildSchemaNotSentHint (0.723)
+//@ chunk-e6aww6q8.js:3931383-3931895 fingerprint (2.1.88 match: buildSchemaNotSentHint, 0.723)
 /**
  * 调用了 schema 未发送的延迟工具时生成提示：说明 schema 不在已发现集合里、类型化参数会被当成字符串，要求先 ToolSearch select:<name> 再重试，并附上该工具的 JSON schema。
  */
@@ -3811,7 +3811,7 @@ This tool's schema was not sent to the API \u2014 it was not in the discovered-t
     `Without the schema in your prompt, typed parameters (arrays, numbers, booleans) get emitted as strings and the client-side parser rejects them. Load the tool first: call ${TOOL_SEARCH_TOOL_NAME} with query "select:${tool.name}", then retry this call.${schemaNote}`
   );
 }
-//@ chunk-e6aww6q8.js:3931895-3932586 fingerprint = runToolUse (0.478)
+//@ chunk-e6aww6q8.js:3931895-3932586 fingerprint (2.1.88 match: runToolUse, 0.478)
 /**
  * 生成"已取消"的工具结果：记 tengu_tool_use_cancelled（阶段 validate_input/permission/... 与中断原因），返回 toolDenialKind=cancelled 的 tool_result。
  */
@@ -3864,7 +3864,7 @@ function buildCancelledToolResult(options) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3932586-3932738 layout = isUnrecognizedKeysIssue (0.804)
+//@ chunk-e6aww6q8.js:3932586-3932738 layout (2.1.88 match: isUnrecognizedKeysIssue, 0.804)
 function isUnrecognizedKeysIssue_2(inputSchema, updatedInput) {
   let parsed = inputSchema.safeParse(updatedInput);
   if (parsed.success) return null;
@@ -3904,7 +3904,7 @@ function getOutsideResultReaderBlocker(toolUseContext) {
     ? undefined
     : "post_tool_use_hook";
 }
-//@ chunk-e6aww6q8.js:3933145-3968539 fingerprint = checkPermissionsAndCallTool (0.393)
+//@ chunk-e6aww6q8.js:3933145-3968539 fingerprint (2.1.88 match: checkPermissionsAndCallTool, 0.393)
 /**
  * checkPermissionsAndCallTool：一次工具调用的完整生命周期。1) JSON 解析失败/schema 校验失败 → InputValidationError（可附"选项本会话不可用"或"schema 未发送"提示）；2) validateInput（带拒绝规则时记录）；3) PreToolUse hooks（可改输入、给权限结论、阻止继续、追加上下文）；4) 权限决策（hook 结论 → 规则/模式/分类器 → canUseTool 询问），拒绝时返回错误；5) 调用 tool.call（进度、中断监听、工作目录变化检查、协调者 Bash 限制）；6) mapToolResultToToolResultBlockParam、结果持久化与大小预算；7) PostToolUse / PostToolUseFailure hooks；8) OTel 与 tengu_tool_use_* 统计。
  */
@@ -6144,7 +6144,7 @@ ${resultNote}`,
     if (decisionRecord) toolUseContext.toolDecisions.delete(toolUseID);
   }
 }
-//@ chunk-bk5ntezz.js:3179-3346 fingerprint = findMcpServerConnection (1)
+//@ chunk-bk5ntezz.js:3179-3346 fingerprint (2.1.88 match: findMcpServerConnection, 1)
 /**
  * 规范化工具名用于记录：Task→Agent，MCP 工具缩成 mcp__<server>，非法字符换成 _，与保留词（instructions/person/claude/summary/other）冲突时加 _。
  */

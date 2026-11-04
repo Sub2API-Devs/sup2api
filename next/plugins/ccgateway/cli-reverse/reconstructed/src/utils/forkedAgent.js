@@ -272,7 +272,7 @@ function differsOnlyInCall(toolA, toolB) {
     if (key !== "call" && Reflect.get(toolA, key) !== Reflect.get(toolB, key)) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:2211923-2212169 facade-exports = createCacheSafeParams (0.755)
+//@ chunk-e6aww6q8.js:2211923-2212169 facade-exports (2.1.88 match: createCacheSafeParams, 0.755)
 /**
  * 从当前查询上下文提取"缓存安全参数"：系统提示词、user/system context、toolUseContext、父消息（forkContextMessages）、advisor 模型、sticky betas。fork 复用这些以命中父请求的提示缓存。
  */
@@ -287,7 +287,7 @@ function createCacheSafeParams(context) {
     stickyBetas: context.stickyBetas,
   };
 }
-//@ chunk-e6aww6q8.js:2212169-2215228 facade-exports = prepareForkedCommandContext (0.287)
+//@ chunk-e6aww6q8.js:2212169-2215228 facade-exports (2.1.88 match: prepareForkedCommandContext, 0.287)
 /**
  * 为 context: fork 的 skill 准备运行上下文：校验 skill 可用（同步否决、组织策略、同步插件），选基础代理（skill.agent 或 general-purpose），展开 skill 提示词，
  * 按 allowed/disallowed tools 生成权限层与 getAppState，克隆 readFileState、按需提取附件，返回 promptMessages、baseAgent、availableTools 等。
@@ -504,7 +504,7 @@ function agentDisallowsWebFetch(toolUseContext) {
     (parseWildcardAgentTypes(tools) === null && !hasToolRuleFor(tools, WEBFETCH))
   );
 }
-//@ chunk-e6aww6q8.js:2215555-2215658 facade-exports = extractResultText (1)
+//@ chunk-e6aww6q8.js:2215555-2215658 facade-exports (2.1.88 match: extractResultText, 1)
 /**
  * 取代理最后一条 assistant 消息的文本，没有则返回默认文本。
  */
@@ -524,7 +524,7 @@ function extractResultText(agentMessages, defaultText = "Execution completed") {
  * 子代理 setAppState 可以回写父状态的字段白名单（只有 frameUrls）。
  */
 var SUBAGENT_WRITABLE_APP_STATE_KEYS = ["frameUrls"];
-//@ chunk-e6aww6q8.js:2215680-2220261 facade-exports = createSubagentContext (0.344)
+//@ chunk-e6aww6q8.js:2215680-2220261 facade-exports (2.1.88 match: createSubagentContext, 0.344)
 /**
  * 创建隔离的子代理 ToolUseContext：abortController 默认为父的子控制器；getAppState 默认强制 shouldAvoidPermissionPrompts（加 avoid_prompts 权限层）；
  * readFileState 克隆、文件历史/denial tracking/setAppState 默认隔离（setAppState 只回写 frameUrls）；messageQueue、taskRegistry、凭证等共享；生成新 agentId 与 queryTracking 深度。
@@ -744,7 +744,7 @@ async function runForkedAgent(params) {
     activeForkCount--;
   }
 }
-//@ chunk-e6aww6q8.js:2220518-2224904 fingerprint = runForkedAgent (0.62)
+//@ chunk-e6aww6q8.js:2220518-2224904 fingerprint (2.1.88 match: runForkedAgent, 0.62)
 /**
  * 运行一个 fork 代理：用 createSubagentContext 建隔离上下文（默认后台、memoryCaller=worker、requireCanUseTool），继承父消息前缀与 sticky betas 以复用缓存；
  * 不声明 ownPrefix 时不许改工具集；循环 runQuery 收集消息与 usage、写 sidechain transcript；结束时清理该代理的 shell 任务与排队消息，并记 tengu_fork_agent_query。
@@ -994,7 +994,7 @@ async function runForkedAgentImpl({
     totalUsage,
   };
 }
-//@ chunk-e6aww6q8.js:2224904-2225644 fingerprint = logForkAgentQueryEvent (0.977)
+//@ chunk-e6aww6q8.js:2224904-2225644 fingerprint (2.1.88 match: logForkAgentQueryEvent, 0.977)
 /**
  * 记 tengu_fork_agent_query：耗时、消息数、token 与缓存命中率、查询链深度。
  */

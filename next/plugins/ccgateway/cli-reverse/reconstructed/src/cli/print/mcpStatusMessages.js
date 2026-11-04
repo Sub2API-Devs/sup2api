@@ -59,7 +59,7 @@ function withKeyReplaced(key, map, value) {
   if (value !== undefined) result[key] = value;
   return result;
 }
-//@ chunk-tyg7f3ek.js:566687-566862 placement = toScopedConfig (0.78)
+//@ chunk-tyg7f3ek.js:566687-566862 placement (2.1.88 match: toScopedConfig, 0.78)
 function toScopedConfig(rows, known) {
   let configs = Object.create(null);
   for (let row of rows)

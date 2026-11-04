@@ -12,7 +12,7 @@ import { withTelemetryMessage, toError } from "./errors.js";
 
 //@ chunk-aepeg2w5.js:220767-220803 affinity
 var INVALID_SEMVER_MESSAGE = "Invalid SemVer: <redacted>";
-//@ chunk-aepeg2w5.js:220803-220881 fingerprint = order (0.532)
+//@ chunk-aepeg2w5.js:220803-220881 fingerprint (2.1.88 match: order, 0.532)
 function order(a, b) {
   try {
     return Bun.semver.order(a, b);
@@ -48,7 +48,7 @@ function lt_2(left, right) {
 function semverLt(left, right) {
   return order(left, right) <= 0;
 }
-//@ chunk-aepeg2w5.js:221025-221076 fingerprint = satisfies (0.639)
+//@ chunk-aepeg2w5.js:221025-221076 fingerprint (2.1.88 match: satisfies, 0.639)
 function satisfies(version, range) {
   return Bun.semver.satisfies(version, range);
 }

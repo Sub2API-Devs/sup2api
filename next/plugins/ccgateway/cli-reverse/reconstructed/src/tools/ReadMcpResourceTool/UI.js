@@ -14,7 +14,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-ah34pb7m.js:32725-33057 fingerprint = renderToolResultMessage (0.897)
+//@ chunk-ah34pb7m.js:32725-33057 fingerprint (2.1.88 match: renderToolResultMessage, 0.897)
 /**
  * ReadMcpResource 结果渲染：error 显示错误，无内容显示 (No content)，否则格式化 JSON。
  */

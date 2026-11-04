@@ -124,7 +124,7 @@ function deferredToolNameOf(params) {
     return params;
   }
 }
-//@ chunk-a76knw89.js:20716-20814 placement = countToolCallsSince (1)
+//@ chunk-a76knw89.js:20716-20814 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_2(message) {
   for (let block of message.content)
     if (block.type === "tool_use" && block.name !== undefined) block.name = internalName(block.name);

@@ -10,7 +10,7 @@
  */
 import { isVoiceModeAvailable } from "../../voice/voiceModeEnabled.js";
 
-//@ chunk-e6aww6q8.js:1733174-1733401 fingerprint = voice (0.775)
+//@ chunk-e6aww6q8.js:1733174-1733401 fingerprint (2.1.88 match: voice, 0.775)
 /**
  * /voice 命令对象（local）；描述：Toggle voice mode；availability ["claude-ai"]；isHidden: {return!Vvt()}；实现 chunk-vrdyygyr.js 的 D。
  */

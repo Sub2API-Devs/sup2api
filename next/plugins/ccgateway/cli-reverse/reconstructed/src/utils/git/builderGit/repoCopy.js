@@ -864,7 +864,7 @@ async function checkCopyBudget(sourcePath, destPath, budget, label, copyKind) {
 }
 //@ chunk-s61vbvea.js:255205-255231 placement
 var PRIVATE_GIT_DIR_ENTRIES = ["info", "objects"];
-//@ chunk-s61vbvea.js:255231-255378 placement = scanDirectory (0.766)
+//@ chunk-s61vbvea.js:255231-255378 placement (2.1.88 match: scanDirectory, 0.766)
 async function scanDirectory(dirPath) {
   try {
     return await removePathEntry(dirPath);

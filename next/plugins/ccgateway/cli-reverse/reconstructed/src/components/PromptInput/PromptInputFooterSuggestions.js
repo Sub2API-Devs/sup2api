@@ -86,7 +86,7 @@ function suggestionWindow(rowHeights, budgetRows, selectedIndex, columnWidth) {
 }
 //@ chunk-8jypjjdf.js:2112-2121 layout
 var MAX_VISIBLE_SUGGESTIONS = 5;
-//@ chunk-8jypjjdf.js:2121-2302 fingerprint = getIcon (0.839)
+//@ chunk-8jypjjdf.js:2121-2302 fingerprint (2.1.88 match: getIcon, 0.839)
 function getIcon(itemId) {
   if (itemId.startsWith("file-")) return "+";
   if (itemId.startsWith("mcp-resource-")) return DIAMOND_GLYPH;
@@ -194,7 +194,7 @@ function HighlightedSuggestionText(props) {
   if (highlighted !== EARLY_RETURN_SENTINEL) return highlighted;
   return earlyResult;
 }
-//@ chunk-8jypjjdf.js:3288-3417 layout = getIcon (0.839)
+//@ chunk-8jypjjdf.js:3288-3417 layout (2.1.88 match: getIcon, 0.839)
 function getIcon_2(itemId) {
   return (
     itemId.startsWith("file-") ||
@@ -203,7 +203,7 @@ function getIcon_2(itemId) {
     itemId.startsWith("agent-")
   );
 }
-//@ chunk-8jypjjdf.js:3417-8103 fingerprint = SuggestionItemRow (0.575)
+//@ chunk-8jypjjdf.js:3417-8103 fingerprint (2.1.88 match: SuggestionItemRow, 0.575)
 var SuggestionItemRow; // deferred: uses useTerminalSize (../../hooks/useTerminalSize.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-8jypjjdf.js:3417", () => {
   SuggestionItemRow = memo(function (props) {
@@ -610,7 +610,7 @@ deferInit("chunk-8jypjjdf.js:3417", () => {
     return content;
   });
 });
-//@ chunk-8jypjjdf.js:8103-9644 fingerprint = PromptInputFooterSuggestions (0.494)
+//@ chunk-8jypjjdf.js:8103-9644 fingerprint (2.1.88 match: PromptInputFooterSuggestions, 0.494)
 /**
  * 建议列表：根据终端宽高计算可见窗口，按类型（命令/文件/MCP/agent/emoji）渲染 SuggestionItemRow，选中项高亮。
  */
@@ -869,7 +869,7 @@ function splitAtWordWidth(text, descriptionWidth) {
 }
 //@ chunk-8jypjjdf.js:10900-10926 placement
 var NON_LATIN_PATTERN = /[^\u0020-\u02ff]/;
-//@ chunk-8jypjjdf.js:10926-11218 placement = findWordObject (1)
+//@ chunk-8jypjjdf.js:10926-11218 placement (2.1.88 match: findWordObject, 1)
 function snapRangesToGraphemes(text, ranges) {
   if (ranges.length === 0 || !NON_LATIN_PATTERN.test(text)) return ranges;
   let boundaries = new Set();

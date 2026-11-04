@@ -615,7 +615,7 @@ deferInit("chunk-ha3km179.js:153444", () => {
     logSkippedStages: logSkippedChainStages,
   };
 });
-//@ chunk-ha3km179.js:153652-153944 fingerprint = yieldMissingToolResultBlocks (0.871)
+//@ chunk-ha3km179.js:153652-153944 fingerprint (2.1.88 match: yieldMissingToolResultBlocks, 0.871)
 /**
  * 为每个尚无结果的 tool_use 生成 is_error 的 tool_result 用户消息（中止、出错时保证 tool_use/tool_result 配对）。已回答的 id 通过第 4 参跳过。
  */
@@ -788,7 +788,7 @@ function markClassifierApiFailure(toolUseContext, querySource, failureReason) {
     )
     .catch(() => {});
 }
-//@ chunk-ha3km179.js:155930-156008 fingerprint = isWithheldMaxOutputTokens (1)
+//@ chunk-ha3km179.js:155930-156008 fingerprint (2.1.88 match: isWithheldMaxOutputTokens, 1)
 /**
  * assistant 消息 apiError 为 max_output_tokens（被扣住、等待恢复）时为真。
  */
@@ -1032,7 +1032,7 @@ function logPollEventsLeftQueued(turnPhase, eventCount) {
  * 循环迭代返回此哨兵表示进入下一轮（替代旧版的递归调用）。
  */
 var NEXT_ROUND = "next_round";
-//@ chunk-ha3km179.js:159198-234645 callgraph-witnessed = queryLoop (0.294)
+//@ chunk-ha3km179.js:159198-234645 callgraph-witnessed (2.1.88 match: queryLoop, 0.294)
 /**
  * 查询主循环（旧版 queryLoop）。每轮：轮首记忆召回/队列命令折叠 → 消息预处理（工具结果预算、snip）→ 模型选择与实时切换 → 自动压缩 → 阻断上限检查 → 各类请求前公告（附件、advisor、延迟工具） → 渲染 system 提示词 → while 调用 deps.callModel 流式消费（服务器拒答回退、流式回退、模型 fallback、工具边流边执行）→ 错误恢复（反应式压缩、max_output_tokens 续写、截断续写、畸形 tool_use 重试、仅思考回答提示）→ Stop 钩子 → 执行剩余工具、附件 → 返回 NEXT_ROUND 进入下一轮或返回终止原因。
  */
@@ -6035,7 +6035,7 @@ async function applyFoldedPromptSubmit(promptSubmitted, updatedToolUseContext) {
     ? [...filtered, createHookContextAttachment(contextItems, "prompt.submit")]
     : filtered;
 }
-//@ chunk-ha3km179.js:235573-235717 sole-consumer = isHumanTurn (0.779)
+//@ chunk-ha3km179.js:235573-235717 sole-consumer (2.1.88 match: isHumanTurn, 0.779)
 /**
  * 返回最后一条真实人类消息（非 meta、非工具结果、非压缩摘要）的下标，没有时返回 0；queryLoop 用它设置 turnStartIndex。旧版名 isHumanTurn 名不符实（返回下标）。
  */
@@ -6060,7 +6060,7 @@ function clearActiveMcpContext(options, isMainOrSubagent) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:235814-235920 sole-consumer = getValueFromInput (1)
+//@ chunk-ha3km179.js:235814-235920 sole-consumer (2.1.88 match: getValueFromInput, 1)
 /**
  * 生成队列命令过滤器：可折叠命令放行；遇到第一条不可折叠的 prompt 命令后，其后的 prompt 命令都不再折叠进本轮。
  */

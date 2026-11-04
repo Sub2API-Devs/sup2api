@@ -111,7 +111,7 @@ function isMarkdownTooComplex(text) {
   }
   return openBrackets > 256 || setextRules > 64 || quoteDepth > 512;
 }
-//@ chunk-ksvdmrg0.js:24104-24255 placement = DIM (0.387)
+//@ chunk-ksvdmrg0.js:24104-24255 placement (2.1.88 match: DIM, 0.387)
 /**
  * 暗色文本的 ANSI 前缀 ESC[2m。
  */

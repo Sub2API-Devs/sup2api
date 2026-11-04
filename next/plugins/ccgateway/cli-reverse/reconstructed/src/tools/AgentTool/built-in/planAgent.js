@@ -24,7 +24,7 @@ import { NOTEBOOK_EDIT_TOOL_NAME } from "../../NotebookEditTool/constants.js";
 import { EXPLORE_AGENT } from "./exploreAgent.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:183463-186045 fingerprint = getPlanV2SystemPrompt (0.49)
+//@ chunk-e6aww6q8.js:183463-186045 fingerprint (2.1.88 match: getPlanV2SystemPrompt, 0.49)
 function getPlanV2SystemPrompt() {
   let bashAvailable = isBashAvailable();
   let searchToolsHint = bashAvailable ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
@@ -80,7 +80,7 @@ List 3-5 files most critical for implementing this plan:
 
 REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write, edit, or modify any files. You do NOT have access to file editing tools.`;
 }
-//@ chunk-e6aww6q8.js:186045-186460 fingerprint = PLAN_AGENT (1)
+//@ chunk-e6aww6q8.js:186045-186460 fingerprint (2.1.88 match: PLAN_AGENT, 1)
 /**
  * Plan 内建代理：只读规划，禁用 Agent/ExitPlanMode/Edit/Write/NotebookEdit 等写工具，model inherit，omitClaudeMd。
  */

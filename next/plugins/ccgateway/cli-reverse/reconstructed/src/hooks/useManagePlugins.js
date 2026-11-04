@@ -76,7 +76,7 @@ async function refreshPluginThemes(plugins) {
   );
   return pluginThemes;
 }
-//@ chunk-18hwfzwa.js:209253-213242 fingerprint = useManagePlugins (0.853)
+//@ chunk-18hwfzwa.js:209253-213242 fingerprint (2.1.88 match: useManagePlugins, 0.853)
 /**
  * 加载已启用插件的命令、agents、hooks、输出样式、主题、技能并注入 AppState；失败时发 generic-error 通知。
  */

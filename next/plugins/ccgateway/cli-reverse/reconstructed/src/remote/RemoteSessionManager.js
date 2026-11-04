@@ -78,7 +78,7 @@ import { isTrustedDeviceGateEnabled } from "../bridge/trustedDevice.js";
 import { classifyElevatedAuthError } from "../bridge/codeSessionApi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fp6aqx1j.js:16781-16916 fingerprint = isSDKMessage (0.72)
+//@ chunk-fp6aqx1j.js:16781-16916 fingerprint (2.1.88 match: isSDKMessage, 0.72)
 /**
  * 是否是可中继的控制帧：control_request（subtype 在允许集合内）或 control_response。
  */

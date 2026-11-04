@@ -95,7 +95,7 @@ function isPromptBearingUserLine(line) {
     return false;
   }
 }
-//@ chunk-y43msawm.js:1369-1607 placement = returnValue (0.8)
+//@ chunk-y43msawm.js:1369-1607 placement (2.1.88 match: returnValue, 0.8)
 async function returnValue(stream, timeoutMs) {
   let pending = (async () => {
     let buffer = "";

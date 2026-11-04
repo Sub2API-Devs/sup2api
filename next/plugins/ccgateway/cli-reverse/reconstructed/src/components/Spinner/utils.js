@@ -26,7 +26,7 @@ deferInit("chunk-mww2ey7m.js:226", () => {
   DEFAULT_SPINNER_CYCLE_ALT = [...DEFAULT_SPINNER_FRAMES_ALT, ...DEFAULT_SPINNER_FRAMES_ALT.toReversed()];
   DEFAULT_SPINNER_CYCLE = [...DEFAULT_SPINNER_FRAMES, ...DEFAULT_SPINNER_FRAMES.toReversed()];
 });
-//@ chunk-mww2ey7m.js:474-535 fingerprint = getDefaultCharacters (0.719)
+//@ chunk-mww2ey7m.js:474-535 fingerprint (2.1.88 match: getDefaultCharacters, 0.719)
 function getDefaultCharacters() {
   if (env.TERM === "xterm-ghostty") return GHOSTTY_SPINNER_FRAMES;
   return DEFAULT_SPINNER_FRAMES;
@@ -59,7 +59,7 @@ function snapTo360(value) {
 function cosineEase(progress, total) {
   return (1 - Math.cos((2 * Math.PI * progress) / total)) / 2;
 }
-//@ chunk-mww2ey7m.js:735-852 callgraph-witnessed = parseRGB (1)
+//@ chunk-mww2ey7m.js:735-852 callgraph-witnessed (2.1.88 match: parseRGB, 1)
 function parseRGB(color1, color2, t) {
   return {
     r: Math.round(color1.r + (color2.r - color1.r) * t),
@@ -67,11 +67,11 @@ function parseRGB(color1, color2, t) {
     b: Math.round(color1.b + (color2.b - color1.b) * t),
   };
 }
-//@ chunk-mww2ey7m.js:852-901 fingerprint = toRGBColor (1)
+//@ chunk-mww2ey7m.js:852-901 fingerprint (2.1.88 match: toRGBColor, 1)
 function toRGBColor(color) {
   return `rgb(${color.r},${color.g},${color.b})`;
 }
-//@ chunk-mww2ey7m.js:901-1237 fingerprint = hueToRgb (1)
+//@ chunk-mww2ey7m.js:901-1237 fingerprint (2.1.88 match: hueToRgb, 1)
 function hueToRgb(hue) {
   let hueDegrees = ((hue % 360) + 360) % 360;
   let saturation = 0.7;
@@ -107,7 +107,7 @@ function hueToRgb(hue) {
     b: Math.round((blue + m) * 255),
   };
 }
-//@ chunk-mww2ey7m.js:1237-1388 callgraph-witnessed = interpolateColor (1)
+//@ chunk-mww2ey7m.js:1237-1388 callgraph-witnessed (2.1.88 match: interpolateColor, 1)
 function interpolateColor(colorStr) {
   let match = colorStr.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
   return match

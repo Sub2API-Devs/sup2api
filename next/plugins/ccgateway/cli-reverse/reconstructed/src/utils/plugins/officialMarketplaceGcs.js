@@ -24,11 +24,11 @@ import { sanitizeMarkName } from "../startupMarks.js";
 import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4204213-4204348 fingerprint = GCS_BASE (0.667)
+//@ chunk-e6aww6q8.js:4204213-4204348 fingerprint (2.1.88 match: GCS_BASE, 0.667)
 var OFFICIAL_MARKETPLACE_GCS_URL =
   "https://downloads.claude.ai/claude-code-releases/plugins/claude-plugins-official";
 var MARKETPLACES_CLAUDE_PLUGINS_OFFICIAL = "marketplaces/claude-plugins-official/";
-//@ chunk-e6aww6q8.js:4204348-4206218 fingerprint = fetchOfficialMarketplaceFromGcs (0.882)
+//@ chunk-e6aww6q8.js:4204348-4206218 fingerprint (2.1.88 match: fetchOfficialMarketplaceFromGcs, 0.882)
 /**
  * 从 GCS 镜像（downloads.claude.ai/.../claude-plugins-official）下载官方市场：读 latest 指针，sha 未变则跳过，否则下载 zip 解压到市场缓存目录并写 .gcs-sha；失败返回 null 由调用方回退 git。
  */
@@ -161,7 +161,7 @@ async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCach
     });
   }
 }
-//@ chunk-e6aww6q8.js:4206218-4206330 fingerprint = KNOWN_FS_CODES (1)
+//@ chunk-e6aww6q8.js:4206218-4206330 fingerprint (2.1.88 match: KNOWN_FS_CODES, 1)
 var KNOWN_FS_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-e6aww6q8.js:4206218", () => {
   KNOWN_FS_CODES = new Set([
@@ -177,7 +177,7 @@ deferInit("chunk-e6aww6q8.js:4206218", () => {
     "ENAMETOOLONG",
   ]);
 });
-//@ chunk-e6aww6q8.js:4206330-4206760 fingerprint = classifyGcsError (0.978)
+//@ chunk-e6aww6q8.js:4206330-4206760 fingerprint (2.1.88 match: classifyGcsError, 0.978)
 function classifyGcsError(error) {
   if (isAxiosError(error)) {
     if (error.code === "ECONNABORTED") return lit_2("timeout");

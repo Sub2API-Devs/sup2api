@@ -32,7 +32,7 @@ function formatModelFamilyList() {
   let last = names.pop();
   return names.length === 0 ? (last ?? "") : `${names.join(", ")} or ${last}`;
 }
-//@ chunk-dcmhvw5a.js:417504-417563 placement = capitalize (1)
+//@ chunk-dcmhvw5a.js:417504-417563 placement (2.1.88 match: capitalize, 1)
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
@@ -216,7 +216,7 @@ function anyEntryHasModelPrefix(base, entries) {
   }
   return false;
 }
-//@ chunk-dcmhvw5a.js:420864-420923 placement = capitalize (1)
+//@ chunk-dcmhvw5a.js:420864-420923 placement (2.1.88 match: capitalize, 1)
 function capitalize_2(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }

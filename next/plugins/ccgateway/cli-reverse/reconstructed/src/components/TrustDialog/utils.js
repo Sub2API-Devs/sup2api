@@ -60,7 +60,7 @@ import { resolveLocalSettingsStoreRoot } from "../../utils/settings/settingsFile
 import { uncachedStorageRootFor } from "../../utils/settings/settingsStorage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-q4qb1h08.js:11179-11334 fingerprint = hasDangerousEnvVars (0.589)
+//@ chunk-q4qb1h08.js:11179-11334 fingerprint (2.1.88 match: hasDangerousEnvVars, 0.589)
 function hasDangerousEnvVars(settings) {
   if (!settings || !process.env.ANTHROPIC_UNIX_SOCKET) return settings || {};
   let filteredSettings = {};
@@ -168,7 +168,7 @@ function hasHeadersHelper(scope) {
       isMcpServerAllowedByPolicy(key, value),
   );
 }
-//@ chunk-t659krks.js:1773-1954 callgraph-fingerprint = getBashPermissionSources (0.479)
+//@ chunk-t659krks.js:1773-1954 callgraph-fingerprint (2.1.88 match: getBashPermissionSources, 0.479)
 function getBashPermissionSources() {
   if (isHomeDirectorySession()) return [];
   let sources = [];
@@ -198,7 +198,7 @@ function trustHelpers() {
     rules: describeRuleChanges,
   };
 }
-//@ chunk-9awzs2m4.js:764-955 sole-consumer = getHooksSources (0.752)
+//@ chunk-9awzs2m4.js:764-955 sole-consumer (2.1.88 match: getHooksSources, 0.752)
 var getHooksSources_2 = () => {
   let { gateProject } = getProjectGrantGates();
   let localTracked = isLocalSettingsGitTracked({
@@ -209,7 +209,7 @@ var getHooksSources_2 = () => {
     ...(localTracked ? [["localSettings", ".claude/settings.local.json"]] : []),
   ];
 };
-//@ chunk-9awzs2m4.js:955-1168 fingerprint = hasHooks (0.725)
+//@ chunk-9awzs2m4.js:955-1168 fingerprint (2.1.88 match: hasHooks, 0.725)
 function hasHooks(settings) {
   if (settings === null) return false;
   if (settings.statusLine) return true;
@@ -219,7 +219,7 @@ function hasHooks(settings) {
   for (let hookConfig of Object.values(settings.hooks)) if (hookConfig.length > 0) return true;
   return false;
 }
-//@ chunk-9awzs2m4.js:1168-1422 layout = getHooksSources (0.889)
+//@ chunk-9awzs2m4.js:1168-1422 layout (2.1.88 match: getHooksSources, 0.889)
 function getHooksSources_3(
   sourceView = {
     sources: [
@@ -238,7 +238,7 @@ function getHooksSources_3(
   if (policyStatusLine !== null) sources.push(truncatePathForDisplay_2(policyStatusLine));
   return sources;
 }
-//@ chunk-9awzs2m4.js:1422-1551 fingerprint = hasBashPermission (1)
+//@ chunk-9awzs2m4.js:1422-1551 fingerprint (2.1.88 match: hasBashPermission, 1)
 function hasBashPermission(rules) {
   return rules.some(
     (rule) =>
@@ -348,7 +348,7 @@ function collectAdditionalDirectorySources(helpers = trustHelpers()) {
     rawCount,
   };
 }
-//@ chunk-9awzs2m4.js:2668-2835 fingerprint = getHooksSources (1)
+//@ chunk-9awzs2m4.js:2668-2835 fingerprint (2.1.88 match: getHooksSources, 1)
 function getHooksSources() {
   let sources = [];
   let projectSettings = describeRuleChanges("projectSettings");
@@ -357,7 +357,7 @@ function getHooksSources() {
   if (hasBashPermission(localSettings)) sources.push(".claude/settings.local.json");
   return sources;
 }
-//@ chunk-9awzs2m4.js:2835-3168 layout = formatListWithAnd (1)
+//@ chunk-9awzs2m4.js:2835-3168 layout (2.1.88 match: formatListWithAnd, 1)
 function formatListWithAnd_2(items, limit) {
   if (items.length === 0) return "";
   let effectiveLimit = limit === 0 ? undefined : limit;
@@ -372,11 +372,11 @@ function formatListWithAnd_2(items, limit) {
   if (shown.length === 1) return `${shown[0]} and ${remaining} more`;
   return `${shown.join(", ")}, and ${remaining} more`;
 }
-//@ chunk-9awzs2m4.js:3168-3213 fingerprint = hasOtelHeadersHelper (1)
+//@ chunk-9awzs2m4.js:3168-3213 fingerprint (2.1.88 match: hasOtelHeadersHelper, 1)
 function hasOtelHeadersHelper(settings) {
   return !!settings?.otelHeadersHelper;
 }
-//@ chunk-9awzs2m4.js:3213-3386 layout = getHooksSources (1)
+//@ chunk-9awzs2m4.js:3213-3386 layout (2.1.88 match: getHooksSources, 1)
 function getHooksSources_4() {
   let sources = [];
   let projectSettings = getSettingsForSourceTightenOnly("projectSettings");
@@ -385,7 +385,7 @@ function getHooksSources_4() {
   if (hasOtelHeadersHelper(localSettings)) sources.push(".claude/settings.local.json");
   return sources;
 }
-//@ chunk-9awzs2m4.js:3386-3597 layout = getHooksSources (0.911)
+//@ chunk-9awzs2m4.js:3386-3597 layout (2.1.88 match: getHooksSources, 0.911)
 function getHooksSources_5() {
   let sources = [];
   if (getSettingsForSourceTightenOnly("projectSettings")?.autoMemoryDirectory !== undefined)
@@ -394,11 +394,11 @@ function getHooksSources_5() {
     sources.push(".claude/settings.local.json");
   return sources;
 }
-//@ chunk-9awzs2m4.js:3597-3637 fingerprint = hasApiKeyHelper (1)
+//@ chunk-9awzs2m4.js:3597-3637 fingerprint (2.1.88 match: hasApiKeyHelper, 1)
 function hasApiKeyHelper(settings) {
   return !!settings?.apiKeyHelper;
 }
-//@ chunk-9awzs2m4.js:3637-3810 layout = getHooksSources (1)
+//@ chunk-9awzs2m4.js:3637-3810 layout (2.1.88 match: getHooksSources, 1)
 function getHooksSources_6() {
   let sources = [];
   let projectSettings = getSettingsForSourceTightenOnly("projectSettings");
@@ -407,11 +407,11 @@ function getHooksSources_6() {
   if (hasApiKeyHelper(localSettings)) sources.push(".claude/settings.local.json");
   return sources;
 }
-//@ chunk-9awzs2m4.js:3810-3878 fingerprint = hasAwsCommands (1)
+//@ chunk-9awzs2m4.js:3810-3878 fingerprint (2.1.88 match: hasAwsCommands, 1)
 function hasAwsCommands(settings) {
   return !!(settings?.awsAuthRefresh || settings?.awsCredentialExport);
 }
-//@ chunk-9awzs2m4.js:3878-4051 layout = getHooksSources (1)
+//@ chunk-9awzs2m4.js:3878-4051 layout (2.1.88 match: getHooksSources, 1)
 function getHooksSources_7() {
   let sources = [];
   let projectSettings = getSettingsForSourceTightenOnly("projectSettings");
@@ -420,11 +420,11 @@ function getHooksSources_7() {
   if (hasAwsCommands(localSettings)) sources.push(".claude/settings.local.json");
   return sources;
 }
-//@ chunk-9awzs2m4.js:4051-4093 fingerprint = hasGcpCommands (1)
+//@ chunk-9awzs2m4.js:4051-4093 fingerprint (2.1.88 match: hasGcpCommands, 1)
 function hasGcpCommands(settings) {
   return !!settings?.gcpAuthRefresh;
 }
-//@ chunk-9awzs2m4.js:4093-4266 layout = getHooksSources (1)
+//@ chunk-9awzs2m4.js:4093-4266 layout (2.1.88 match: getHooksSources, 1)
 function getHooksSources_8() {
   let sources = [];
   let projectSettings = getSettingsForSourceTightenOnly("projectSettings");
@@ -440,7 +440,7 @@ function getHooksSources_8() {
 function hasProxyAuthHelper(settings) {
   return !!settings?.proxyAuthHelper;
 }
-//@ chunk-9awzs2m4.js:4309-4482 placement = getHooksSources (1)
+//@ chunk-9awzs2m4.js:4309-4482 placement (2.1.88 match: getHooksSources, 1)
 function getHooksSources_9() {
   let sources = [];
   let projectSettings = getSettingsForSourceTightenOnly("projectSettings");
@@ -454,7 +454,7 @@ function hasUnsafeEnv(settings) {
   if (!settings?.env) return false;
   return Object.entries(settings.env).some(([key, value]) => !isProtectedEnvVar(key, value));
 }
-//@ chunk-9awzs2m4.js:4570-4739 placement = getHooksSources (1)
+//@ chunk-9awzs2m4.js:4570-4739 placement (2.1.88 match: getHooksSources, 1)
 function getHooksSources_10() {
   let sources = [];
   let projectSettings = getSettingsForSourceTightenOnly("projectSettings");
@@ -505,7 +505,7 @@ var COMPUTER_ACTION_DESCRIPTIONS = {
   wait: "wait",
 };
 var MAX_LISTED_BROWSER_ACTIONS = 4;
-//@ chunk-11065byw.js:1318-1527 fingerprint = formatListWithAnd (1)
+//@ chunk-11065byw.js:1318-1527 fingerprint (2.1.88 match: formatListWithAnd, 1)
 function formatListWithAnd(items) {
   let allButLast = items.slice(0, MAX_LISTED_BROWSER_ACTIONS);
   let remaining = items.length - allButLast.length;
@@ -571,7 +571,7 @@ function collectPermissionTrustSources() {
     commandHelperSources: [],
   };
 }
-//@ chunk-7mh76y4v.js:766-1724 callgraph-fingerprint = getOtelHeadersHelperSources (0.467)
+//@ chunk-7mh76y4v.js:766-1724 callgraph-fingerprint (2.1.88 match: getOtelHeadersHelperSources, 0.467)
 function getOtelHeadersHelperSources(cwd) {
   let resolvedCwd = resolve(cwd);
   let localSettingsStoreRoot = resolveLocalSettingsStoreRoot(resolvedCwd, uncachedStorageRootFor);

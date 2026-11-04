@@ -97,7 +97,7 @@ function resolveTierDefaultKey(tier, defaultKey) {
 function stripTrailingDigits(modelKey) {
   return modelKey.replace(/\d+$/, "");
 }
-//@ chunk-s61vbvea.js:517725-517806 placement = aliasMatchesParentTier (1)
+//@ chunk-s61vbvea.js:517725-517806 placement (2.1.88 match: aliasMatchesParentTier, 1)
 /**
  * 模型键对应的档位 sonnet/opus/haiku。
  */
@@ -323,7 +323,7 @@ async function refuteUnavailableDocumentDefaults(probe, modelOverrides) {
     )
   ).filter((result) => result !== null);
 }
-//@ chunk-s61vbvea.js:520415-520484 placement = aliasMatchesParentTier (1)
+//@ chunk-s61vbvea.js:520415-520484 placement (2.1.88 match: aliasMatchesParentTier, 1)
 /**
  * sonnet/opus/haiku 之一时原样返回，否则 undefined。
  */

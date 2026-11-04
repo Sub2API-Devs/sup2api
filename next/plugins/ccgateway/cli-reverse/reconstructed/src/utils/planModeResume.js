@@ -50,7 +50,7 @@ function parsePermissionModeOrState(modeState) {
   if (modeState === undefined || modeState === null) return "absent";
   return (typeof modeState === "string" && parsePermissionMode(modeState)) || "invalid";
 }
-//@ chunk-0089hrfm.js:1016-1073 placement = handlePlanModeTransition (0.674)
+//@ chunk-0089hrfm.js:1016-1073 placement (2.1.88 match: handlePlanModeTransition, 0.674)
 function handlePlanModeTransition(permissionContext) {
   return {
     ...transitionPermissionMode(permissionContext.mode, "plan", permissionContext),
@@ -191,7 +191,7 @@ function planSegmentState(messages) {
   }
   return "none";
 }
-//@ chunk-0089hrfm.js:3414-3654 placement = countToolCallsSince (1)
+//@ chunk-0089hrfm.js:3414-3654 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(messages) {
   let seenToolUseIds = new Set();
   let repeatedToolUseIds = new Set();

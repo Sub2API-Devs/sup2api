@@ -19,7 +19,7 @@ import {
   useEffect,
 } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-ey2qag4x.js:37574-41082 fingerprint = reducer (0.885)
+//@ chunk-ey2qag4x.js:37574-41082 fingerprint (2.1.88 match: reducer, 0.885)
 /**
  * Select 导航 reducer：下一个/上一个（首尾循环）、翻页、reset、视口滚动、设焦点，保持聚焦项在 [visibleFromIndex, visibleToIndex) 内。同一声明的 cl 构造初始状态（尽量保留当前视口）。
  */
@@ -221,7 +221,7 @@ var createSelectNavigationState = ({
     visibleToIndex,
   };
 };
-//@ chunk-ey2qag4x.js:41082-42666 fingerprint = useSelectNavigation (0.855)
+//@ chunk-ey2qag4x.js:41082-42666 fingerprint (2.1.88 match: useSelectNavigation, 0.855)
 /**
  * Select 导航：reducer 处理 focus-next/previous-option、翻页、视口滚动与重置，保证聚焦项在可见窗口内。
  */

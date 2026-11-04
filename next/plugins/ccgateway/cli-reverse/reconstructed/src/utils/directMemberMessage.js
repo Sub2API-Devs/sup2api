@@ -13,7 +13,7 @@ import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTeleme
 import { replaceInlineCodeInModelResult } from "./messages.js";
 import { sequential } from "./sequential.js";
 
-//@ chunk-18hwfzwa.js:642027-642202 fingerprint = parseDirectMemberMessage (1)
+//@ chunk-18hwfzwa.js:642027-642202 fingerprint (2.1.88 match: parseDirectMemberMessage, 1)
 function parseDirectMemberMessage(input) {
   let match = input.match(/^@([\w-]+)\s+(.+)$/s);
   if (!match) return null;
@@ -26,7 +26,7 @@ function parseDirectMemberMessage(input) {
     message: trimmedMessage,
   };
 }
-//@ chunk-18hwfzwa.js:642202-642587 fingerprint = sendDirectMemberMessage (0.917)
+//@ chunk-18hwfzwa.js:642202-642587 fingerprint (2.1.88 match: sendDirectMemberMessage, 0.917)
 async function sendDirectMemberMessage(recipientName, message, teamContext, writeToMailbox, storageV5) {
   if (!teamContext || !writeToMailbox)
     return {

@@ -84,7 +84,7 @@ import {
 } from "./NoteCard.js";
 import { getUserType_2 } from "../../../utils/sessionStorage.js";
 
-//@ chunk-bss4k1z9.js:17961-18000 placement = getTokenUsage (1)
+//@ chunk-bss4k1z9.js:17961-18000 placement (2.1.88 match: getTokenUsage, 1)
 /**
  * 对象有 usage 字段时返回它。错归（会话钩子插件代码）。
  */

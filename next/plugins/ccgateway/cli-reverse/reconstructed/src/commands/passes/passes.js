@@ -14,7 +14,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { GuestPassesDialog } from "./GuestPassesContent.js";
 
-//@ chunk-aa3cndeh.js:11146-11400 fingerprint = call (1)
+//@ chunk-aa3cndeh.js:11146-11400 fingerprint (2.1.88 match: call, 1)
 /**
  * /passes 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

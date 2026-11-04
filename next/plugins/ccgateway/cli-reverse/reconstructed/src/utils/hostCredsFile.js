@@ -68,7 +68,7 @@ deferInit("chunk-8p2yt59w.js:723", () => {
 function hostAuthEnvVarName() {
   return env.CLAUDE_CODE_HOST_AUTH_ENV_VAR || "ANTHROPIC_AUTH_TOKEN";
 }
-//@ chunk-8p2yt59w.js:1175-1261 placement = withoutHostManagedProviderVars (1)
+//@ chunk-8p2yt59w.js:1175-1261 placement (2.1.88 match: withoutHostManagedProviderVars, 1)
 function withoutHostManagedProviderVars() {
   return (
     !!getHostAuthTokenRefreshCallback() &&

@@ -13,7 +13,7 @@ import { DirectConnectSessionManager } from "../server/directConnectManager.js";
 import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 import { useRemoteTransportCore } from "../remote/useRemoteTransportCore.js";
 
-//@ chunk-18hwfzwa.js:262843-263226 callgraph-fingerprint = useDirectConnect (0.173)
+//@ chunk-18hwfzwa.js:262843-263226 callgraph-fingerprint (2.1.88 match: useDirectConnect, 0.173)
 function useDirectConnect({ config, sink, requestDialog, toolPermissionContext, tools }) {
   let converted = useMemo(() => {
     if (!config) return;

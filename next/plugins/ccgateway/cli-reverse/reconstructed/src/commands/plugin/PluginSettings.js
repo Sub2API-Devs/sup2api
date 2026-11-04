@@ -128,7 +128,7 @@ import { ManageMarketplaces } from "./ManageMarketplaces.js";
 import { Pane } from "../../components/design-system/Pane.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f3qhjfah.js:13962-14141 fingerprint = getPluginNameFromError (0.923)
+//@ chunk-f3qhjfah.js:13962-14141 fingerprint (2.1.88 match: getPluginNameFromError, 0.923)
 function getPluginNameFromError(error) {
   if ("pluginId" in error && error.pluginId) return error.pluginId;
   if ("plugin" in error && error.plugin) return error.plugin;
@@ -143,14 +143,14 @@ function getPluginNameFromError(error) {
 function isAutoupdateInfoError(info) {
   return info.type === "autoupdate-deferred-entry-helper" || info.type === "autoupdate-disabled-by-policy";
 }
-//@ chunk-e6aww6q8.js:4236630-4236730 fingerprint = removeExtraMarketplace (0.702)
+//@ chunk-e6aww6q8.js:4236630-4236730 fingerprint (2.1.88 match: removeExtraMarketplace, 0.702)
 function removeExtraMarketplace(name, sources) {
   let extraKnownMarketplaces = name?.extraKnownMarketplaces;
   return extraKnownMarketplaces !== undefined && Object.hasOwn(extraKnownMarketplaces, sources)
     ? extraKnownMarketplaces[sources]
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:624262-624353 fingerprint = _temp1 (0.765)
+//@ chunk-tyg7f3ek.js:624262-624353 fingerprint (2.1.88 match: _temp1, 0.765)
 function initialPluginRefreshState(prev) {
   let snapshot = {
     needsRefresh: false,
@@ -172,7 +172,7 @@ deferInit("chunk-9h8dr0qb.js:42590", () => {
 deferInit("chunk-9h8dr0qb.js:42594", () => {
   init_react_production();
 });
-//@ chunk-9h8dr0qb.js:42598-42639 fingerprint = _temp2 (0.665)
+//@ chunk-9h8dr0qb.js:42598-42639 fingerprint (2.1.88 match: _temp2, 0.665)
 function selectPluginCommands(s) {
   return s.plugins.commands;
 }
@@ -413,7 +413,7 @@ function selectEnabledPlugins_2(state) {
 function selectDisabledPlugins_2(state) {
   return state.plugins.disabled;
 }
-//@ chunk-vrb44rx7.js:218774-218827 fingerprint = _temp3 (1)
+//@ chunk-vrb44rx7.js:218774-218827 fingerprint (2.1.88 match: _temp3, 1)
 function selectInstallationStatus(s_0) {
   return s_0.plugins.installationStatus;
 }
@@ -445,7 +445,7 @@ function emptySet() {
 function isRealPluginError(error) {
   return !isAutoupdateInfoError(error);
 }
-//@ chunk-vrb44rx7.js:219077-219223 fingerprint = _temp0 (1)
+//@ chunk-vrb44rx7.js:219077-219223 fingerprint (2.1.88 match: _temp0, 1)
 function countPluginErrors(s) {
   let count_2 = count(s.plugins.errors, isRealPluginError);
   for (const m of s.plugins.installationStatus.marketplaces) {
@@ -453,7 +453,7 @@ function countPluginErrors(s) {
   }
   return count_2;
 }
-//@ chunk-vrb44rx7.js:219223-220291 fingerprint = MarketplaceList (0.411)
+//@ chunk-vrb44rx7.js:219223-220291 fingerprint (2.1.88 match: MarketplaceList, 0.411)
 function MarketplaceList(props) {
   let $ = useMemoCache(5);
   let { onComplete } = props;
@@ -696,7 +696,7 @@ function SkillDoctorMovedNotice() {
   } else content = $[0];
   return content;
 }
-//@ chunk-vrb44rx7.js:222734-223036 fingerprint = getExtraMarketplaceSourceInfo (0.954)
+//@ chunk-vrb44rx7.js:222734-223036 fingerprint (2.1.88 match: getExtraMarketplaceSourceInfo, 0.954)
 function getExtraMarketplaceSourceInfo(name) {
   let editableSources = [];
   let sourcesToCheck = [
@@ -809,7 +809,7 @@ function describeMarketplaceRemoval(action, marketplaceNames) {
     );
   return sentences.join(" ");
 }
-//@ chunk-vrb44rx7.js:224942-225083 fingerprint = buildMarketplaceAction (0.604)
+//@ chunk-vrb44rx7.js:224942-225083 fingerprint (2.1.88 match: buildMarketplaceAction, 0.604)
 function buildMarketplaceAction(name) {
   return {
     kind: "navigate",
@@ -842,7 +842,7 @@ function navigateToOfficialMarketplace(entry) {
     },
   };
 }
-//@ chunk-vrb44rx7.js:225338-225624 fingerprint = buildPluginAction (0.87)
+//@ chunk-vrb44rx7.js:225338-225624 fingerprint (2.1.88 match: buildPluginAction, 0.87)
 function buildPluginAction(installedEntry, { resolveByUninstall }) {
   return {
     kind: "navigate",
@@ -862,12 +862,12 @@ function buildPluginAction(installedEntry, { resolveByUninstall }) {
     },
   };
 }
-//@ chunk-vrb44rx7.js:225624-225690 fingerprint = TRANSIENT_ERROR_TYPES (1)
+//@ chunk-vrb44rx7.js:225624-225690 fingerprint (2.1.88 match: TRANSIENT_ERROR_TYPES, 1)
 var TRANSIENT_ERROR_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-vrb44rx7.js:225624", () => {
   TRANSIENT_ERROR_TYPES = new Set(["git-auth-failed", "git-timeout", "network-error"]);
 });
-//@ chunk-vrb44rx7.js:225690-225823 fingerprint = _temp7 (1)
+//@ chunk-vrb44rx7.js:225690-225823 fingerprint (2.1.88 match: _temp7, 1)
 function isMarketplaceError(e_1) {
   return (
     e_1.type === "marketplace-not-found" ||
@@ -875,7 +875,7 @@ function isMarketplaceError(e_1) {
     e_1.type === "marketplace-blocked-by-policy"
   );
 }
-//@ chunk-vrb44rx7.js:225823-225991 callgraph-fingerprint = _temp6 (0.65)
+//@ chunk-vrb44rx7.js:225823-225991 callgraph-fingerprint (2.1.88 match: _temp6, 0.65)
 function isTransientPluginError(e_0) {
   if (TRANSIENT_ERROR_TYPES.has(e_0.type)) return true;
   if (e_0.type === "marketplace-load-failed" && e_0.reason === "cache-miss") return true;
@@ -911,7 +911,7 @@ function describePluginErrorTarget(error, marketplace, pluginName) {
     named: resolvedName !== undefined,
   };
 }
-//@ chunk-vrb44rx7.js:226328-228408 fingerprint = buildErrorRows (0.788)
+//@ chunk-vrb44rx7.js:226328-228408 fingerprint (2.1.88 match: buildErrorRows, 0.788)
 function buildErrorRows(
   failedMarketplaces,
   extraMarketplaceErrors,
@@ -1061,7 +1061,7 @@ function buildErrorRows(
   }
   return rows;
 }
-//@ chunk-vrb44rx7.js:228408-228803 layout = saveMarketplaceToSettings (0.841)
+//@ chunk-vrb44rx7.js:228408-228803 layout (2.1.88 match: saveMarketplaceToSettings, 0.841)
 /**
  * 界面里把多个市场批量写回各自设置源的 extraKnownMarketplaces（可删除）。
  */
@@ -1101,7 +1101,7 @@ function saveMarketplaceToSettings(name, sources, storageV5, force = false) {
       storageV5,
     );
 }
-//@ chunk-vrb44rx7.js:228803-235684 fingerprint = ErrorsTabContent (0.612)
+//@ chunk-vrb44rx7.js:228803-235684 fingerprint (2.1.88 match: ErrorsTabContent, 0.612)
 function ErrorsTabContent(props) {
   let $ = useMemoCache(59);
   let { setViewState, setActiveTab, markPluginsChanged } = props;
@@ -1642,7 +1642,7 @@ function ErrorsTabContent(props) {
   } else panel = $[58];
   return panel;
 }
-//@ chunk-vrb44rx7.js:235684-237549 fingerprint = getInitialViewState (0.746)
+//@ chunk-vrb44rx7.js:235684-237549 fingerprint (2.1.88 match: getInitialViewState, 0.746)
 function getInitialViewState(parsedCommand, fromLinkPrefill) {
   switch (parsedCommand.type) {
     case "help":
@@ -1788,7 +1788,7 @@ function getInitialViewState(parsedCommand, fromLinkPrefill) {
       };
   }
 }
-//@ chunk-vrb44rx7.js:237549-237717 fingerprint = getInitialTab (0.909)
+//@ chunk-vrb44rx7.js:237549-237717 fingerprint (2.1.88 match: getInitialTab, 0.909)
 function getInitialTab(viewState) {
   if (viewState.type === "manage-plugins") return "installed";
   if (viewState.type === "stats") return "stats";
@@ -1913,7 +1913,7 @@ function PluginCommand(props) {
   } else statusLine = $[20];
   return statusLine;
 }
-//@ chunk-vrb44rx7.js:239211-250512 fingerprint = PluginSettings (0.63)
+//@ chunk-vrb44rx7.js:239211-250512 fingerprint (2.1.88 match: PluginSettings, 0.63)
 function PluginSettings(props) {
   let $ = useMemoCache(147);
   let { props: props_2, fromLinkPrefill } = props;

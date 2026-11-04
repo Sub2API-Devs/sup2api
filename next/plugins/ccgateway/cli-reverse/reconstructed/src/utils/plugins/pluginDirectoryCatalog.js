@@ -89,7 +89,7 @@ function stripTrailingSlashes(text) {
 }
 //@ chunk-s67w32sp.js:4569-4580 placement
 var MAX_NAME_LENGTH = 255;
-//@ chunk-s67w32sp.js:4580-4679 placement = setCwdState (1)
+//@ chunk-s67w32sp.js:4580-4679 placement (2.1.88 match: setCwdState, 1)
 function isSafeNfcName(cwd) {
   return (
     cwd !== "" &&

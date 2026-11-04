@@ -18,7 +18,7 @@ import {
   getMarketingNameForModel,
 } from "./model.js";
 
-//@ chunk-aepeg2w5.js:404666-406067 fingerprint = DEPRECATED_MODELS (0.677)
+//@ chunk-aepeg2w5.js:404666-406067 fingerprint (2.1.88 match: DEPRECATED_MODELS, 0.677)
 /**
  * 弃用模型：opus-4-1、opus-4-0（重映射到最新 Opus）、sonnet-4-0、3-opus、3-7-sonnet、3-5-haiku，各提供商退役日期。
  */
@@ -104,7 +104,7 @@ var DEPRECATED_MODELS = {
     },
   },
 };
-//@ chunk-aepeg2w5.js:406067-406526 fingerprint = getDeprecatedModelInfo (0.495)
+//@ chunk-aepeg2w5.js:406067-406526 fingerprint (2.1.88 match: getDeprecatedModelInfo, 0.495)
 /**
  * 查模型弃用信息：命中表且当前提供商有退役日期或属于旧 Opus 重映射时返回 {isDeprecated, modelName, copy:{kind: remap/retirement/none}}。
  */
@@ -216,7 +216,7 @@ function getDeprecationStatusLine(modelId) {
   let targetName = getMarketingNameForModel(defaultOpusModel) ?? defaultOpusModel;
   return `\u26A0 ${deprecatedModelInfo.modelName.replace(/^Claude /, "")} remaps to ${targetName}. CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP=1 opts out`;
 }
-//@ chunk-aepeg2w5.js:407383-407872 fingerprint = getModelDeprecationWarning (0.531)
+//@ chunk-aepeg2w5.js:407383-407872 fingerprint (2.1.88 match: getModelDeprecationWarning, 0.531)
 /**
  * 完整弃用警告文案（remap 指明目标模型与关闭变量；退役给出日期）。
  */

@@ -441,7 +441,7 @@ function extractRestrictionSettings(doc) {
       }
     : {};
 }
-//@ chunk-dcmhvw5a.js:195099-195295 placement = GIT_MERGE_RE (0.429)
+//@ chunk-dcmhvw5a.js:195099-195295 placement (2.1.88 match: GIT_MERGE_RE, 0.429)
 /**
  * （旧版名配错，切分错误）把来源设置中特定路径的值合并进目标设置，并标记 managedSourcesBehavior=merge。
  */

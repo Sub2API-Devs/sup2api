@@ -11,7 +11,7 @@
 import { EventEmitter as EventEmitter_2 } from "events";
 import { InkEvent } from "./event.js";
 
-//@ chunk-24t3dkzb.js:5133-5424 placement = EventEmitter (1)
+//@ chunk-24t3dkzb.js:5133-5424 placement (2.1.88 match: EventEmitter, 1)
 /**
  * Ink 内部事件发射器：不限监听数；某个监听者对事件调用 stopImmediatePropagation 后后续监听者不再执行。
  */

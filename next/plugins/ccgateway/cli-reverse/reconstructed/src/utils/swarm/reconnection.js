@@ -14,7 +14,7 @@ import { readTeamFileAsync, getTeamFilePath } from "./teamHelpers.js";
 import { logError } from "../log.js";
 import { withTelemetryMessage } from "../errors.js";
 
-//@ chunk-47mye09a.js:2287-2880 fingerprint = computeInitialTeamContext (0.946)
+//@ chunk-47mye09a.js:2287-2880 fingerprint (2.1.88 match: computeInitialTeamContext, 0.946)
 /**
  * 启动时根据动态团队上下文与团队文件计算初始 teamContext（无 agentId 视为 leader）。
  */
@@ -50,7 +50,7 @@ async function computeInitialTeamContext(storage) {
     teammates: {},
   };
 }
-//@ chunk-47mye09a.js:2880-3454 fingerprint = initializeTeammateContextFromSession (0.955)
+//@ chunk-47mye09a.js:2880-3454 fingerprint (2.1.88 match: initializeTeammateContextFromSession, 0.955)
 /**
  * 恢复会话时从团队文件找回成员 agentId，写入 AppState.teamContext（isLeader=false）。
  */

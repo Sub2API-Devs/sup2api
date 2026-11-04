@@ -126,7 +126,7 @@ function doorOf(message) {
       return message.subtype === "local_command" ? "command" : "notice";
   }
 }
-//@ chunk-1nk4j4sn.js:17221-17447 placement = countToolCallsSince (1)
+//@ chunk-1nk4j4sn.js:17221-17447 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(messages, sinceUuid) {
   for (let message of sinceUuid)
     for (let idx = message.length - 1; idx >= 0; idx--) {

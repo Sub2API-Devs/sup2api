@@ -787,7 +787,7 @@ function toPassthroughError(error, serverName) {
 }
 //@ chunk-weh04swb.js:12367-12381 placement
 var URL_ELICITATION_REQUIRED_CODE = -32042;
-//@ chunk-weh04swb.js:12381-12458 placement = isConnectionError (1)
+//@ chunk-weh04swb.js:12381-12458 placement (2.1.88 match: isConnectionError, 1)
 function isJsonRpcErrorCode32042(err) {
   return (
     err !== null && typeof err === "object" && "code" in err && err.code === URL_ELICITATION_REQUIRED_CODE

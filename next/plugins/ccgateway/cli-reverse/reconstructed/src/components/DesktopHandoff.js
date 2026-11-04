@@ -48,9 +48,9 @@ async function resumeCurrentSessionInDesktop() {
 }
 //@ chunk-ds2d8kad.js:15178-15182 placement
 init_react_production();
-//@ chunk-ds2d8kad.js:15182-15214 fingerprint = DESKTOP_DOCS_URL (1)
+//@ chunk-ds2d8kad.js:15182-15214 fingerprint (2.1.88 match: DESKTOP_DOCS_URL, 1)
 var DESKTOP_DOCS_URL = "https://clau.de/desktop";
-//@ chunk-ds2d8kad.js:15214-15407 fingerprint = getDownloadUrl (0.863)
+//@ chunk-ds2d8kad.js:15214-15407 fingerprint (2.1.88 match: getDownloadUrl, 0.863)
 function getDownloadUrl() {
   switch ("linux") {
     case "win32":
@@ -65,7 +65,7 @@ function nullRef() {
     current: null,
   };
 }
-//@ chunk-ds2d8kad.js:15441-18318 fingerprint = DesktopHandoff (0.632)
+//@ chunk-ds2d8kad.js:15441-18318 fingerprint (2.1.88 match: DesktopHandoff, 0.632)
 /**
  * 交给桌面版：检测是否安装 Claude Desktop，未安装则提示下载（按平台下载链接），已安装则打开并传递会话。
  */

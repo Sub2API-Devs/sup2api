@@ -793,7 +793,7 @@ var listPluginServersInputSchema = DoctorLazy(() =>
     registeredHooks: record(stringSchema(), registeredHooksListSchema()).optional().catch(undefined),
   }),
 );
-//@ chunk-wy9dbk5f.js:45235-45319 placement = getServerCommandArray (1)
+//@ chunk-wy9dbk5f.js:45235-45319 placement (2.1.88 match: getServerCommandArray, 1)
 function getServerCommandArray({ type, command }) {
   return type === "stdio" || (type === undefined && typeof command === "string");
 }

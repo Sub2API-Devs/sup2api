@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-82kqcve8.js:82369-82409 fingerprint = parseYaml (0.408)
+//@ chunk-82kqcve8.js:82369-82409 fingerprint (2.1.88 match: parseYaml, 0.408)
 function parseYaml(input) {
   return Bun.YAML.parse(input);
 }

@@ -23,7 +23,7 @@ import { execFileNoThrow } from "../utils/execFileNoThrow.js";
 import { parsePlistXml, isPlainObjectPlist } from "../utils/plistParser.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-q6rfp6n3.js:1867-2350 fingerprint = sendNotification (0.49)
+//@ chunk-q6rfp6n3.js:1867-2350 fingerprint (2.1.88 match: sendNotification, 0.49)
 /**
  * 发送桌面通知：先执行 Notification hooks，再按 preferredNotifChannel（默认 auto）选择通道发送，打 tengu_notification_method_used（通道、类型、终端）。
  */
@@ -48,9 +48,9 @@ async function sendNotification(notification, terminal, { storageV5, credentials
   });
   return methodUsed;
 }
-//@ chunk-q6rfp6n3.js:2350-2370 affinity = DEFAULT_TITLE (1)
+//@ chunk-q6rfp6n3.js:2350-2370 affinity (2.1.88 match: DEFAULT_TITLE, 1)
 var DEFAULT_TITLE_2 = "Claude Code";
-//@ chunk-q6rfp6n3.js:2659-2913 fingerprint = sendAuto (0.848)
+//@ chunk-q6rfp6n3.js:2659-2913 fingerprint (2.1.88 match: sendAuto, 0.848)
 /**
  * auto 通道解析：Apple Terminal（铃声被关时用 terminal_bell）、iTerm2、kitty、ghostty 各用专有转义序列，其他终端无可用方式。
  */
@@ -68,7 +68,7 @@ async function resolveAutoNotificationChannel() {
       return "no_method_available";
   }
 }
-//@ chunk-q6rfp6n3.js:2913-3271 fingerprint = sendToChannel (0.849)
+//@ chunk-q6rfp6n3.js:2913-3271 fingerprint (2.1.88 match: sendToChannel, 0.849)
 /**
  * 按通道发送通知：iterm2（OSC 9）、iterm2_with_bell、kitty（OSC 99，带随机 id）、ghostty、terminal_bell；disabled/none 不发。
  */
@@ -103,11 +103,11 @@ function sendToChannel(channel, opts, terminal) {
       return;
   }
 }
-//@ chunk-q6rfp6n3.js:3271-3321 callgraph-fingerprint = generateKittyId (1)
+//@ chunk-q6rfp6n3.js:3271-3321 callgraph-fingerprint (2.1.88 match: generateKittyId, 1)
 function generateKittyId() {
   return Math.floor(Math.random() * 1e4);
 }
-//@ chunk-q6rfp6n3.js:3321-4001 fingerprint = isAppleTerminalBellDisabled (0.718)
+//@ chunk-q6rfp6n3.js:3321-4001 fingerprint (2.1.88 match: isAppleTerminalBellDisabled, 0.718)
 /**
  * 用 osascript/defaults 读 Apple Terminal 当前配置文件，判断是否关闭了响铃。
  */
@@ -144,6 +144,6 @@ async function isAppleTerminalBellDisabled() {
     return false;
   }
 }
-//@ chunk-18hwfzwa.js:173849-173871 fingerprint = DEFAULT_TITLE (1)
+//@ chunk-18hwfzwa.js:173849-173871 fingerprint (2.1.88 match: DEFAULT_TITLE, 1)
 var DEFAULT_TITLE = "Claude Code";
 export { DEFAULT_TITLE, sendNotification, resolveAutoNotificationChannel, sendToChannel };

@@ -103,7 +103,7 @@ function renderQuotedLines(text, width, kind, dimColor) {
 function wrapCardText(text, width) {
   return renderQuotedLines(text.trim(), width, "msg", false);
 }
-//@ chunk-a6f4nz0a.js:1348-1575 placement = _temp2 (0.87)
+//@ chunk-a6f4nz0a.js:1348-1575 placement (2.1.88 match: _temp2, 0.87)
 function renderProposalHeaderRow(index, title, suffix, meta, color) {
   return jsxProd_default_2(
     Text,

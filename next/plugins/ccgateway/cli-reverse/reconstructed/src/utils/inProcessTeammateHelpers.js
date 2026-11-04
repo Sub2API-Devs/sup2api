@@ -22,14 +22,14 @@ function interruptTeammateWork(teammate) {
   teammate.currentWorkAbortController?.abort();
   return true;
 }
-//@ chunk-6vnxsn99.js:23032-23110 fingerprint = setAwaitingPlanApproval (0.664)
+//@ chunk-6vnxsn99.js:23032-23110 fingerprint (2.1.88 match: setAwaitingPlanApproval, 0.664)
 /**
  * teammate 是否正在等待（计划审批中或有待处理的用户消息）。
  */
 function isTeammateAwaitingInput(task) {
   return task.awaitingPlanApproval || task.pendingUserMessages.length > 0;
 }
-//@ chunk-e6aww6q8.js:3309765-3310099 fingerprint = findInProcessTeammateTaskId (0.623)
+//@ chunk-e6aww6q8.js:3309765-3310099 fingerprint (2.1.88 match: findInProcessTeammateTaskId, 0.623)
 /**
  * leader 看到一批消息里有 shutdown 类请求时，清掉对应 teammate 的 idleNotificationOwedToLead 标记。
  */

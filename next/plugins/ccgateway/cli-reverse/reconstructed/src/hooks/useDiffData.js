@@ -10,7 +10,7 @@
  */
 import { DIFF_DEBOUNCE_MS } from "./useWorkspaceDiff.js";
 
-//@ chunk-qwh6zcf0.js:3841-4330 fingerprint = useDiffData (0.786)
+//@ chunk-qwh6zcf0.js:3841-4330 fingerprint (2.1.88 match: useDiffData, 0.786)
 function useDiffData(diff) {
   let skippedLargeSet = new Set(diff.skippedLarge);
   let restrictedSet = new Set(diff.restricted);

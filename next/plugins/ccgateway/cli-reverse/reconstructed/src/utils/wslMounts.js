@@ -714,7 +714,7 @@ function trimTrailingSlash(value) {
 function normalizedVolumePaths(path, otherPath) {
   return overlappingVolumePaths(windowsVolumesForPath(posix.normalize(path)), otherPath);
 }
-//@ chunk-82kqcve8.js:174408-174530 placement = execTmux (0.805)
+//@ chunk-82kqcve8.js:174408-174530 placement (2.1.88 match: execTmux, 0.805)
 function isOnSameWslMount(args, opts) {
   if (getPlatform() !== "wsl") return false;
   let volumes = windowsVolumesForPath(posix.normalize(args));

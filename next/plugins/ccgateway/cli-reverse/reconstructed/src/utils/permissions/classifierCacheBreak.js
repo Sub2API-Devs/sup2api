@@ -280,7 +280,7 @@ function buildPromptCacheRegions(requestOptions, leadingMessageCount) {
   }));
   return outline;
 }
-//@ chunk-e6aww6q8.js:2822942-2823120 placement = isBase64ImageBlock (0.848)
+//@ chunk-e6aww6q8.js:2822942-2823120 placement (2.1.88 match: isBase64ImageBlock, 0.848)
 function isBase64ImageBlock_2(block) {
   if (block.type === "text") return block.text;
   let hashSource =

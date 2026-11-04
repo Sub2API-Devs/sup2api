@@ -21,7 +21,7 @@ var semver; // deferred: has load-time effects after a deferred statement of its
 deferInit("chunk-29ccbp5f.js:409", () => {
   semver = __toESM(require_semver_3(), 1);
 });
-//@ chunk-29ccbp5f.js:426-471 placement = doctor (0.368)
+//@ chunk-29ccbp5f.js:426-471 placement (2.1.88 match: doctor, 0.368)
 var doctor; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-29ccbp5f.js:426", () => {
   doctor = new Set(["update", "install", "doctor"]);

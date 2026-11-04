@@ -17,7 +17,7 @@ import { generateTaskId, createTaskStateBase } from "../Task.js";
 function isAutoModeScanTask(task) {
   return typeof task === "object" && task !== null && "type" in task && task.type === "auto_mode_scan";
 }
-//@ chunk-m8444q1d.js:15075-15172 placement = requestTeammateShutdown (1)
+//@ chunk-m8444q1d.js:15075-15172 placement (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 找到正在运行的 auto_mode_scan 任务。
  */

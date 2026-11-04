@@ -45,7 +45,7 @@ var MODEL_KEYS; // deferred: uses catalogEntriesByFirstPartyId (./modelCatalog.j
 deferInit("chunk-aepeg2w5.js:229259", () => {
   MODEL_KEYS = Object.keys(catalogEntriesByFirstPartyId);
 });
-//@ chunk-aepeg2w5.js:229282-229471 fingerprint = getBedrockModelStrings (1)
+//@ chunk-aepeg2w5.js:229282-229471 fingerprint (2.1.88 match: getBedrockModelStrings, 1)
 /**
  * 某提供商的模型字符串表（旧版名 getBedrockModelStrings 只覆盖 Bedrock，316 对所有提供商通用）：该提供商没有该模型时借用最先有值模型的同提供商 id 或第一方 id；Bedrock 加区域前缀（ANTHROPIC_BEDROCK_REGION_PREFIX 或按 AWS 区域推断）。
  */
@@ -115,7 +115,7 @@ async function getBedrockModelStringsFromProfiles() {
     );
   return out;
 }
-//@ chunk-aepeg2w5.js:230421-230564 fingerprint = applyModelOverrides (1)
+//@ chunk-aepeg2w5.js:230421-230564 fingerprint (2.1.88 match: applyModelOverrides, 1)
 /**
  * 把 settings.modelOverrides（第一方 id 到自定义 id）应用到模型字符串表。
  */
@@ -131,7 +131,7 @@ function applyModelOverrides(ms) {
   }
   return out;
 }
-//@ chunk-aepeg2w5.js:230564-230704 layout = applyModelOverrides (1)
+//@ chunk-aepeg2w5.js:230564-230704 layout (2.1.88 match: applyModelOverrides, 1)
 /**
  * 自定义 id 反查回 modelOverrides 的第一方键。
  */
@@ -147,7 +147,7 @@ function reverseModelOverride(modelId) {
     if (sameModelSpelling(override, modelId)) return canonicalId;
   return modelId;
 }
-//@ chunk-aepeg2w5.js:230704-230819 layout = getModelBetas (1)
+//@ chunk-aepeg2w5.js:230704-230819 layout (2.1.88 match: getModelBetas, 1)
 /**
  * 惰性执行一次：模型字符串缓存为空时取 Bedrock 推理配置文件并写回缓存（仅 bedrock）。
  */
@@ -164,7 +164,7 @@ deferInit("chunk-aepeg2w5.js:230704", () => {
     }
   });
 });
-//@ chunk-aepeg2w5.js:230819-230903 callgraph-fingerprint = initModelStrings (1)
+//@ chunk-aepeg2w5.js:230819-230903 callgraph-fingerprint (2.1.88 match: initModelStrings, 1)
 /**
  * 初始化模型字符串：非 Bedrock 同步计算并写入状态；Bedrock 异步走推理配置文件发现。
  */
@@ -200,7 +200,7 @@ function getRawModelStrings() {
   }
   return ms;
 }
-//@ chunk-aepeg2w5.js:231048-231241 callgraph-fingerprint = ensureModelStringsInitialized (0.576)
+//@ chunk-aepeg2w5.js:231048-231241 callgraph-fingerprint (2.1.88 match: ensureModelStringsInitialized, 0.576)
 /**
  * 确保模型字符串已初始化（Bedrock 等待 profile 发现；宿主托管提供商时只取区域）。
  */
@@ -226,7 +226,7 @@ function isModelAvailableOnProvider(key, apiProvider = getAPIProvider()) {
   if (entry[apiProvider] !== null) return true;
   return Boolean(getInitialSettings_2().modelOverrides?.[entry.firstParty]);
 }
-//@ chunk-aepeg2w5.js:231351-231570 layout = applyModelOverrides (1)
+//@ chunk-aepeg2w5.js:231351-231570 layout (2.1.88 match: applyModelOverrides, 1)
 /**
  * 把目录条目解析成当前提供商的模型 id：第一方/网关用 id；已知键看可用性；否则 modelOverrides 或目录提供商 id。旧版名 applyModelOverrides_3 为错配。
  */

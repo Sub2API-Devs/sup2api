@@ -10,7 +10,7 @@
  */
 import { segmentGraphemesWithWidth, linkCells, textDisplayWidth } from "../../../ink/graphemeCells.js";
 
-//@ chunk-yb0ajcmt.js:8392-8549 placement = styledCharsWithGraphemeClustering (0.365)
+//@ chunk-yb0ajcmt.js:8392-8549 placement (2.1.88 match: styledCharsWithGraphemeClustering, 0.365)
 function createBoxCanvas(chars, stylePool) {
   let size = chars * stylePool;
   return {
@@ -24,7 +24,7 @@ function createBoxCanvas(chars, stylePool) {
     }),
   };
 }
-//@ chunk-yb0ajcmt.js:9141-9443 placement = unionRect (0.809)
+//@ chunk-yb0ajcmt.js:9141-9443 placement (2.1.88 match: unionRect, 0.809)
 function drawCanvasText(canvas, at, text) {
   if (at.y < 0 || at.y >= canvas.height) return;
   let x = at.x;
@@ -40,7 +40,7 @@ function drawCanvasText(canvas, at, text) {
     x += grapheme.width;
   }
 }
-//@ chunk-yb0ajcmt.js:9443-9934 placement = clearRegion (0.37)
+//@ chunk-yb0ajcmt.js:9443-9934 placement (2.1.88 match: clearRegion, 0.37)
 function drawCanvasBox(boxCanvas, box, lines, isRounded) {
   let right = box.x + box.width - 1;
   let bottom = box.y + box.height - 1;

@@ -61,7 +61,7 @@ import { env } from "./env.js";
 import { platformNoFollowFlags } from "./platformTargets.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7r5y3c3p.js:2166-2264 fingerprint = detectLineEndings (0.78)
+//@ chunk-7r5y3c3p.js:2166-2264 fingerprint (2.1.88 match: detectLineEndings, 0.78)
 /**
  * 读文件开头若干字节检测编码（utf8/utf16le 等）。
  */
@@ -71,7 +71,7 @@ function detectLineEndings(fd) {
   });
   return detectEncodingFromBom(buffer.subarray(0, bytesRead));
 }
-//@ chunk-847rdpmn.js:6208-6276 fingerprint = getFileModificationTime (1)
+//@ chunk-847rdpmn.js:6208-6276 fingerprint (2.1.88 match: getFileModificationTime, 1)
 /**
  * 同步取文件 mtime（毫秒取整）。
  */
@@ -79,7 +79,7 @@ function getFileModificationTime(filePath) {
   let fs = getFsImplementation();
   return Math.floor(fs.statSync(filePath).mtimeMs);
 }
-//@ chunk-847rdpmn.js:6276-6351 fingerprint = getFileModificationTimeAsync (1)
+//@ chunk-847rdpmn.js:6276-6351 fingerprint (2.1.88 match: getFileModificationTimeAsync, 1)
 /**
  * 异步取文件 mtime（毫秒取整），Read 去重与 Edit/Write 修改检测用。
  */
@@ -96,7 +96,7 @@ deferInit("chunk-847rdpmn.js:6642", () => {
 function runWithFileWriteContext(context, fn) {
   return fileWriteContextStorage.run(context, fn);
 }
-//@ chunk-847rdpmn.js:6690-6785 placement = detectLineEndingsForString (1)
+//@ chunk-847rdpmn.js:6690-6785 placement (2.1.88 match: detectLineEndingsForString, 1)
 /**
  * 行尾为 CRLF 时把内容统一转换为 CRLF。
  */
@@ -129,7 +129,7 @@ async function writeTextContentVerified(ioPath, content, encoding, lineEndings) 
     );
   return Math.floor(stats.mtimeMs);
 }
-//@ chunk-847rdpmn.js:7175-7377 fingerprint = detectFileEncoding (1)
+//@ chunk-847rdpmn.js:7175-7377 fingerprint (2.1.88 match: detectFileEncoding, 1)
 /**
  * 检测文件编码（读开头字节）；预期内的错误只记 debug，返回默认 utf8。
  */
@@ -147,7 +147,7 @@ function detectFileEncoding(filePath) {
     return "utf8";
   }
 }
-//@ chunk-847rdpmn.js:7377-7477 callgraph-fingerprint = convertLeadingTabsToSpaces (1)
+//@ chunk-847rdpmn.js:7377-7477 callgraph-fingerprint (2.1.88 match: convertLeadingTabsToSpaces, 1)
 /**
  * 把每行行首制表符替换为两个空格。
  */
@@ -155,7 +155,7 @@ function convertLeadingTabsToSpaces(content) {
   if (!content.includes("\t")) return content;
   return content.replace(/^\t+/gm, (tabRun) => "  ".repeat(tabRun.length));
 }
-//@ chunk-847rdpmn.js:7477-7616 fingerprint = getAbsoluteAndRelativePaths (1)
+//@ chunk-847rdpmn.js:7477-7616 fingerprint (2.1.88 match: getAbsoluteAndRelativePaths, 1)
 function getAbsoluteAndRelativePaths(path) {
   let cwd = path ? (getCwdOrNullSafe() ?? undefined) : undefined;
   let absolutePath = path ? (expandPathOrNull(path, cwd) ?? undefined) : undefined;
@@ -170,7 +170,7 @@ function getAbsoluteAndRelativePaths(path) {
  * 路径含 NUL 时显示的占位文本。
  */
 var HIDDEN_PATH_PLACEHOLDER = "Path hidden (unsupported characters)";
-//@ chunk-847rdpmn.js:7663-7858 fingerprint = getDisplayPath (1)
+//@ chunk-847rdpmn.js:7663-7858 fingerprint (2.1.88 match: getDisplayPath, 1)
 /**
  * 显示用路径：cwd 内显示相对路径，家目录下显示 ~/…，含 NUL 显示占位。
  */
@@ -219,7 +219,7 @@ async function findSimilarFile(filePath) {
     return;
   }
 }
-//@ chunk-847rdpmn.js:8291-8340 fingerprint = FILE_NOT_FOUND_CWD_NOTE (1)
+//@ chunk-847rdpmn.js:8291-8340 fingerprint (2.1.88 match: FILE_NOT_FOUND_CWD_NOTE, 1)
 /**
  * "Note: your current working directory is" 提示前缀。
  */
@@ -254,7 +254,7 @@ async function normalizePathForComparison(requestedPath) {
     return;
   }
 }
-//@ chunk-847rdpmn.js:8621-8901 fingerprint = addLineNumbers (0.487)
+//@ chunk-847rdpmn.js:8621-8901 fingerprint (2.1.88 match: addLineNumbers, 0.487)
 /**
  * 给内容加行号（cat -n 风格）；tabAwareSeparator 且内容含行首制表符时分隔符用冒号。
  */
@@ -320,7 +320,7 @@ function rethrowWithAtomicWriteCause(error, error_2) {
 function preserveFileModeBits(mode) {
   return mode === undefined ? undefined : (mode & 511) | 128;
 }
-//@ chunk-847rdpmn.js:9337-12292 fingerprint = writeFileSyncAndFlush_DEPRECATED (0.593)
+//@ chunk-847rdpmn.js:9337-12292 fingerprint (2.1.88 match: writeFileSyncAndFlush_DEPRECATED, 0.593)
 /**
  * 同步原子写（已弃用）：默认拒绝写穿符号链接，临时文件 + fsync + rename，保留原权限。
  */
@@ -721,7 +721,7 @@ var WINDOWS_NON_USER_PROFILES; // deferred: has load-time effects after a deferr
 deferInit("chunk-847rdpmn.js:15406", () => {
   WINDOWS_NON_USER_PROFILES = new Set(["Public", "Default", "Default User", "All Users"]);
 });
-//@ chunk-847rdpmn.js:15470-16009 fingerprint = getDesktopPath (0.627)
+//@ chunk-847rdpmn.js:15470-16009 fingerprint (2.1.88 match: getDesktopPath, 0.627)
 /**
  * 取桌面目录（macOS ~/Desktop；Windows/WSL 按 USERPROFILE 推断；Linux 等回退）。
  */
@@ -783,7 +783,7 @@ function normalizePathForCompare(path) {
 function samePath(leftPath, rightPath) {
   return normalizePathForCompare(leftPath) === normalizePathForCompare(rightPath);
 }
-//@ chunk-awy329vy.js:43887-44083 fingerprint = readFileSyncCached (0.529)
+//@ chunk-awy329vy.js:43887-44083 fingerprint (2.1.88 match: readFileSyncCached, 0.529)
 /**
  * 以只读打开文件，是普通文件且不超过 e 字节时返回内容，否则 undefined。
  */

@@ -182,7 +182,7 @@ function forwardStreamEventToBridge(notification) {
     logError(error);
   }
 }
-//@ chunk-tbfde207.js:2181-2588 placement = countUnseenAssistantTurns (1)
+//@ chunk-tbfde207.js:2181-2588 placement (2.1.88 match: countUnseenAssistantTurns, 1)
 /**
  * 按键顺序浅比较两个对象。
  */
@@ -228,7 +228,7 @@ deferInit("chunk-tbfde207.js:2687", () => {
     standing: stringSchema().optional(),
   });
 });
-//@ chunk-tbfde207.js:2854-3646 fingerprint = externalMetadataToAppState (0.435)
+//@ chunk-tbfde207.js:2854-3646 fingerprint (2.1.88 match: externalMetadataToAppState, 0.435)
 /**
  * 把外部（远程会话）元数据转换为 AppState 片段，拒绝恢复 bypassPermissions 等不安全模式。
  */
@@ -766,7 +766,7 @@ function emitBackgroundTasksChanged(state) {
 function syncUltracodeActive(sessionState, ultracode, restoredWorkerState) {
   sessionState.settleUltracodeActive(isUltracodeActive(ultracode, getMainLoopModel()), restoredWorkerState);
 }
-//@ chunk-5hmnvmag.js:264-500 callgraph-fingerprint = onChangeAppState (0.452)
+//@ chunk-5hmnvmag.js:264-500 callgraph-fingerprint (2.1.88 match: onChangeAppState, 0.452)
 /**
  * AppState 变化回调：把 tasks 等变化同步到外部（会话元数据、SDK 事件）。
  */

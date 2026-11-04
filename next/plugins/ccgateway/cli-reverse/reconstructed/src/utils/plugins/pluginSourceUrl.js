@@ -129,7 +129,7 @@ function normalizePluginRepoUrl(url, path, options) {
   }
   return `${WIDE}${hostPort}${replaced_2}#${keys.join("/")}`;
 }
-//@ chunk-dcmhvw5a.js:22470-22731 placement = setCwdState (0.867)
+//@ chunk-dcmhvw5a.js:22470-22731 placement (2.1.88 match: setCwdState, 0.867)
 function toWindowsShortNameKey(cwd) {
   let end = cwd.length;
   while (end > 0 && (cwd[end - 1] === "." || cwd[end - 1] === " ")) end--;
@@ -139,7 +139,7 @@ function toWindowsShortNameKey(cwd) {
   if (/~\d/.test(folded) || folded.includes(":") || INVISIBLE_FORMAT_CHAR_RE.test(folded)) return;
   return folded.toUpperCase().toLowerCase().normalize("NFC");
 }
-//@ chunk-dcmhvw5a.js:22731-22841 placement = getCurrentRepoHttpsUrl (0.803)
+//@ chunk-dcmhvw5a.js:22731-22841 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
 /**
  * 解析 repo#ref 写法。
  */

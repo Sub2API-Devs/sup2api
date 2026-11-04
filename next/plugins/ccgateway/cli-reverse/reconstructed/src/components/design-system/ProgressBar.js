@@ -60,7 +60,7 @@ var renderBlockBar = (ratio, width) => {
   }
   return segments.join("");
 };
-//@ chunk-7tjtztz1.js:841-1732 fingerprint = ProgressBar (0.457)
+//@ chunk-7tjtztz1.js:841-1732 fingerprint (2.1.88 match: ProgressBar, 0.457)
 function ProgressBar(props) {
   let $ = useMemoCache(17);
   let { ratio: inputRatio, width, fillColor, emptyColor, variant } = props;

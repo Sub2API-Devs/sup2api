@@ -60,13 +60,13 @@ import { getMainLoopModel } from "../../utils/model/model.js";
 import { env } from "../../utils/env.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 
-//@ chunk-pzv0vqyf.js:1697-1755 fingerprint = DEFAULT_TRANSCRIPT_ASK_CONFIG (0.481)
+//@ chunk-pzv0vqyf.js:1697-1755 fingerprint (2.1.88 match: DEFAULT_TRANSCRIPT_ASK_CONFIG, 0.481)
 var DEFAULT_TRANSCRIPT_ASK_CONFIG = {
   afterPromptCount: 5,
   probability: 0,
   maxImpressions: 3,
 };
-//@ chunk-0sfjpx19.js:134556-134912 fingerprint = DEFAULT_FEEDBACK_SURVEY_CONFIG (0.728)
+//@ chunk-0sfjpx19.js:134556-134912 fingerprint (2.1.88 match: DEFAULT_FEEDBACK_SURVEY_CONFIG, 0.728)
 var DEFAULT_FEEDBACK_SURVEY_CONFIG = "tengu_juniper_vale";
 var TENGU_RUSSET_WHIMBREL = "tengu_russet_whimbrel";
 var DEFAULT_SURVEY_TIMING = {
@@ -107,7 +107,7 @@ function feedbackSurveyKindFor(response) {
       ? "fine_feedback_survey"
       : "bad_feedback_survey";
 }
-//@ chunk-18hwfzwa.js:1024724-1034274 fingerprint = useFeedbackSurvey (0.589)
+//@ chunk-18hwfzwa.js:1024724-1034274 fingerprint (2.1.88 match: useFeedbackSurvey, 0.589)
 /**
  * 会话调查调度：读取 tengu_feedback_survey_config（概率、最少时长/消息数、冷却），按 good/fine/bad 评分读取对应的分享记录询问配置，管理显示与提交。
  */

@@ -222,7 +222,7 @@ function buildServeDenyContext(permissions) {
     ),
   };
 }
-//@ chunk-hjesqqfw.js:3042-3211 placement = createComputerUseMcpServerForCli (0.323)
+//@ chunk-hjesqqfw.js:3042-3211 placement (2.1.88 match: createComputerUseMcpServerForCli, 0.323)
 /**
  * （误归 computerUse/mcpServer）包装 MCP 请求处理器：请求 _meta 带 repo hooks stamp 标记时，在结果 _meta 中附加 stamp。
  */
@@ -245,7 +245,7 @@ function hasCloseSseStream(transport) {
 }
 //@ chunk-hjesqqfw.js:3253-3274 placement
 var CALLER_GONE_SIGNAL = "callerGone";
-//@ chunk-hjesqqfw.js:3274-3392 placement = getServerCommandArray (0.769)
+//@ chunk-hjesqqfw.js:3274-3392 placement (2.1.88 match: getServerCommandArray, 0.769)
 async function startMCPServer(serverName, debug, verbose, host, context, options) {
   setCwd(serverName);
   let mcpServer = createMCPServer(debug, verbose, getRootSession(), "stdio", host, context, options);
@@ -267,7 +267,7 @@ deferInit("chunk-hjesqqfw.js:3392", () => {
     }
   };
 });
-//@ chunk-hjesqqfw.js:3478-13829 placement = startMCPServer (0.2)
+//@ chunk-hjesqqfw.js:3478-13829 placement (2.1.88 match: startMCPServer, 0.2)
 /**
  * claude mcp serve：把 Claude Code 自身的工具作为 MCP 服务器暴露（stdio 或 http），禁用后台代理等不适用功能。
  */

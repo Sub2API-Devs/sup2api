@@ -114,7 +114,7 @@ import {
 } from "./useSwarmPermissionPoller.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1670156-1670399 fingerprint = getAgentNameToPoll (0.644)
+//@ chunk-18hwfzwa.js:1670156-1670399 fingerprint (2.1.88 match: getAgentNameToPoll, 0.644)
 function getAgentNameToPoll(identity, store) {
   switch (identity.kind) {
     case "in-process":
@@ -156,7 +156,7 @@ function createUnknownToolStub(toolName) {
     isMcp,
   };
 }
-//@ chunk-18hwfzwa.js:1670708-1686214 fingerprint = useInboxPoller (0.503)
+//@ chunk-18hwfzwa.js:1670708-1686214 fingerprint (2.1.88 match: useInboxPoller, 0.503)
 /**
  * 队友 inbox 轮询器：定期读取未读消息，区分队友消息、权限请求与回复、计划审批（只接受 team-lead）、关停请求，投递到会话或对应回调并标记已读。
  */

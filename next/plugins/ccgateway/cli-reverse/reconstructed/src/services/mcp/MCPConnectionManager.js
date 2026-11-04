@@ -142,7 +142,7 @@ var MCPConnectionContext; // deferred: has load-time effects after a deferred st
 deferInit("chunk-18hwfzwa.js:1738827", () => {
   MCPConnectionContext = createContext(null);
 });
-//@ chunk-18hwfzwa.js:1738843-1738978 fingerprint = useMcpReconnect (1)
+//@ chunk-18hwfzwa.js:1738843-1738978 fingerprint (2.1.88 match: useMcpReconnect, 1)
 /**
  * useMcpReconnect：从 MCPConnectionContext 取 reconnectMcpServer，不在 Provider 内抛错。
  */
@@ -153,7 +153,7 @@ function useMcpReconnect() {
   }
   return context.reconnectMcpServer;
 }
-//@ chunk-18hwfzwa.js:1738978-1739114 fingerprint = useMcpToggleEnabled (1)
+//@ chunk-18hwfzwa.js:1738978-1739114 fingerprint (2.1.88 match: useMcpToggleEnabled, 1)
 /**
  * useMcpToggleEnabled：从 MCPConnectionContext 取 toggleMcpServer，不在 Provider 内抛错。
  */
@@ -164,7 +164,7 @@ function useMcpToggleEnabled() {
   }
   return context.toggleMcpServer;
 }
-//@ chunk-18hwfzwa.js:1739114-1739793 fingerprint = MCPConnectionManager (0.7)
+//@ chunk-18hwfzwa.js:1739114-1739793 fingerprint (2.1.88 match: MCPConnectionManager, 0.7)
 /**
  * MCPConnectionManager React 组件：调用 useManageMCPConnections 管理全部连接，通过 MCPConnectionContext 向子树提供 reconnectMcpServer/toggleMcpServer，并注册全局 searchRedial。
  */

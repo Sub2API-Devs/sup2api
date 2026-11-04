@@ -33,7 +33,7 @@ function loadCoworkPluginSkillFiles() {
 //@ chunk-hantmvxa.js:99495-99892 affinity
 var COWORK_PLUGIN_DESCRIPTION =
   "Create a new Cowork plugin from scratch, or customize an installed plugin for a specific organization. Use when: customize plugin, set up plugin, configure plugin, tailor plugin, adjust plugin settings, customize plugin connectors, customize plugin skill, tweak plugin, modify plugin configuration, create a plugin, build a plugin, make a new plugin, develop a plugin, scaffold a plugin.";
-//@ chunk-hantmvxa.js:99892-100182 fingerprint = registerVerifySkill (0.543)
+//@ chunk-hantmvxa.js:99892-100182 fingerprint (2.1.88 match: registerVerifySkill, 0.543)
 /**
  * 注册 cowork-plugin 内置 skill（创建/定制 Cowork 插件），Cowork 环境门控；旧版匹配为 registerVerifySkill。
  */

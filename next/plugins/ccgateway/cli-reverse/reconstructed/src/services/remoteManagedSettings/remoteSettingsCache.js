@@ -233,7 +233,7 @@ function refuseStoredCopy(settings, reason, mayForceRefresh) {
     `Remote settings: the stored copy is not trusted at rest (${reason}); treating it as absent`,
   );
 }
-//@ chunk-dcmhvw5a.js:404093-404268 placement = hasApiKeyHelper (1)
+//@ chunk-dcmhvw5a.js:404093-404268 placement (2.1.88 match: hasApiKeyHelper, 1)
 function helperTierOf(settings) {
   if (settings === null) return null;
   let { apiKeyHelper, env } = settings;

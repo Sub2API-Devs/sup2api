@@ -43,14 +43,14 @@ import {
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/auth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cyj440je.js:6350-6396 fingerprint = isXaaEnabled (1)
+//@ chunk-cyj440je.js:6350-6396 fingerprint (2.1.88 match: isXaaEnabled, 1)
 /**
  * isXaaEnabled：环境变量 CLAUDE_CODE_ENABLE_XAA。
  */
 function isXaaEnabled() {
   return env.CLAUDE_CODE_ENABLE_XAA;
 }
-//@ chunk-cyj440je.js:6396-6430 fingerprint = getXaaIdpSettings (1)
+//@ chunk-cyj440je.js:6396-6430 fingerprint (2.1.88 match: getXaaIdpSettings, 1)
 /**
  * getXaaIdpSettings：设置项 xaaIdp（IdP 连接配置）。
  */
@@ -62,7 +62,7 @@ var regExp_2; // deferred: uses toolportPathFor (./ccrMcpUrls.js) of its import 
 deferInit("chunk-1wpnxx5r.js:11278", () => {
   regExp_2 = new RegExp(`^${toolportPathFor("[^/]+")}`);
 });
-//@ chunk-1wpnxx5r.js:11315-11448 fingerprint = issuerKey (0.684)
+//@ chunk-1wpnxx5r.js:11315-11448 fingerprint (2.1.88 match: issuerKey, 0.684)
 /**
  * issuerKey（实为 URL 路径是否为首段即结束的判定），名字疑似配错。
  */
@@ -94,7 +94,7 @@ function issuerKey_2(idpIssuer) {
     return idpIssuer.replace(/\/+$/, "");
   }
 }
-//@ chunk-qy28ss7z.js:930-1075 facade-exports = getCachedIdpIdToken (0.871)
+//@ chunk-qy28ss7z.js:930-1075 facade-exports (2.1.88 match: getCachedIdpIdToken, 0.871)
 /**
  * getCachedIdpIdToken（v2 副本）。
  */
@@ -104,7 +104,7 @@ async function getCachedIdpIdToken_2(idpIssuer) {
   if (entry.expiresAt - Date.now() <= ID_TOKEN_EXPIRY_SKEW_SECONDS_2 * 1000) return;
   return entry.idToken;
 }
-//@ chunk-qy28ss7z.js:1075-1192 layout = getCachedIdpIdToken (0.874)
+//@ chunk-qy28ss7z.js:1075-1192 layout (2.1.88 match: getCachedIdpIdToken, 0.874)
 async function saveIdpIdToken_2(idpIssuer, idToken, expiresAt) {
   await getSecureStorage().mutate((existing) => ({
     ...existing,
@@ -127,7 +127,7 @@ async function saveIdpIdTokenFromJwt_2(idpIssuer, idToken) {
   await saveIdpIdToken_2(idpIssuer, idToken, expiresAt);
   return expiresAt;
 }
-//@ chunk-qy28ss7z.js:1281-1501 facade-exports = saveIdpIdToken (0.195)
+//@ chunk-qy28ss7z.js:1281-1501 facade-exports (2.1.88 match: saveIdpIdToken, 0.195)
 /**
  * clearIdpIdToken（v2 副本）。
  */
@@ -149,7 +149,7 @@ async function clearIdpIdToken_2(issuer) {
     logMCPDebug("xaa", `clearIdpIdToken(${redactUrlSecrets(key)}) failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-qy28ss7z.js:1501-1676 facade-exports = clearIdpClientSecret (0.421)
+//@ chunk-qy28ss7z.js:1501-1676 facade-exports (2.1.88 match: clearIdpClientSecret, 0.421)
 /**
  * saveIdpClientSecret（v2 副本）。
  */
@@ -171,7 +171,7 @@ async function saveIdpClientSecret_2(idpIssuer, clientSecret) {
     };
   }
 }
-//@ chunk-qy28ss7z.js:1676-1770 facade-exports = getIdpClientSecret (0.822)
+//@ chunk-qy28ss7z.js:1676-1770 facade-exports (2.1.88 match: getIdpClientSecret, 0.822)
 /**
  * 读取 IdP issuer 的 client secret。（v2 副本）
  */
@@ -210,7 +210,7 @@ function idpFetch_2(url, init) {
     signal: AbortSignal.timeout(IDP_REQUEST_TIMEOUT_MS_2),
   }).catch((error) => rethrowRedactedFetchError(error, url));
 }
-//@ chunk-qy28ss7z.js:2125-2999 facade-exports = discoverOidc (0.864)
+//@ chunk-qy28ss7z.js:2125-2999 facade-exports (2.1.88 match: discoverOidc, 0.864)
 /**
  * discoverOidc（v2 副本）。
  */
@@ -245,7 +245,7 @@ async function discoverOidc_2(idpIssuer) {
     );
   return parsed.data;
 }
-//@ chunk-qy28ss7z.js:2999-3175 layout = jwtExp (1)
+//@ chunk-qy28ss7z.js:2999-3175 layout (2.1.88 match: jwtExp, 1)
 function jwtExp_2(jwt) {
   let parts = jwt.split(".");
   if (parts.length !== 3) return;
@@ -256,7 +256,7 @@ function jwtExp_2(jwt) {
     return;
   }
 }
-//@ chunk-qy28ss7z.js:3175-5049 layout = waitForCallback (0.857)
+//@ chunk-qy28ss7z.js:3175-5049 layout (2.1.88 match: waitForCallback, 0.857)
 /**
  * waitForCallback（v2 副本）：回调额外返回 iss 参数（RFC 9207）。
  */
@@ -397,7 +397,7 @@ function waitForCallback_2(port, expectedState, abortSignal, onListening) {
     timeoutId.unref();
   });
 }
-//@ chunk-qy28ss7z.js:5049-6225 facade-exports = acquireIdpIdToken (0.896)
+//@ chunk-qy28ss7z.js:5049-6225 facade-exports (2.1.88 match: acquireIdpIdToken, 0.896)
 /**
  * acquireIdpIdToken（v2 副本）：换令牌时带上回调的 iss。
  */
@@ -476,7 +476,7 @@ function issuerKey(idpIssuer) {
     return idpIssuer.replace(/\/+$/, "");
   }
 }
-//@ chunk-8y02x996.js:926-1071 facade-exports = getCachedIdpIdToken (0.871)
+//@ chunk-8y02x996.js:926-1071 facade-exports (2.1.88 match: getCachedIdpIdToken, 0.871)
 /**
  * getCachedIdpIdToken：从安全存储读 IdP id_token，剩余有效期 ≤60 秒视为过期。
  */
@@ -486,7 +486,7 @@ async function getCachedIdpIdToken(idpIssuer) {
   if (entry.expiresAt - Date.now() <= ID_TOKEN_EXPIRY_SKEW_SECONDS * 1000) return;
   return entry.idToken;
 }
-//@ chunk-8y02x996.js:1071-1188 fingerprint = getCachedIdpIdToken (0.874)
+//@ chunk-8y02x996.js:1071-1188 fingerprint (2.1.88 match: getCachedIdpIdToken, 0.874)
 /**
  * saveIdpIdToken：把 id_token 与过期时间写入安全存储 mcpXaaIdp[issuer]。
  */
@@ -512,7 +512,7 @@ async function saveIdpIdTokenFromJwt(idpIssuer, idToken) {
   await saveIdpIdToken(idpIssuer, idToken, expiresAt);
   return expiresAt;
 }
-//@ chunk-8y02x996.js:1277-1497 facade-exports = clearIdpIdToken (0.231)
+//@ chunk-8y02x996.js:1277-1497 facade-exports (2.1.88 match: clearIdpIdToken, 0.231)
 /**
  * clearIdpIdToken：删除缓存的 IdP id_token。
  */
@@ -534,7 +534,7 @@ async function clearIdpIdToken(idpIssuer) {
     logMCPDebug("xaa", `clearIdpIdToken(${redactUrlSecrets(key)}) failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-8y02x996.js:1497-1672 facade-exports = saveIdpClientSecret (0.642)
+//@ chunk-8y02x996.js:1497-1672 facade-exports (2.1.88 match: saveIdpClientSecret, 0.642)
 /**
  * saveIdpClientSecret：把 IdP client secret 写入安全存储 mcpXaaIdpConfig[issuer]。
  */
@@ -556,7 +556,7 @@ async function saveIdpClientSecret(idpIssuer, clientSecret) {
     };
   }
 }
-//@ chunk-8y02x996.js:1672-1766 facade-exports = getIdpClientSecret (0.822)
+//@ chunk-8y02x996.js:1672-1766 facade-exports (2.1.88 match: getIdpClientSecret, 0.822)
 /**
  * 从安全存储读取某 IdP issuer 配置的 client secret（XAA 用）。（v1）
  */
@@ -595,7 +595,7 @@ function idpFetch(url, init) {
     signal: AbortSignal.timeout(IDP_REQUEST_TIMEOUT_MS),
   }).catch((error) => rethrowRedactedFetchError(error, url));
 }
-//@ chunk-8y02x996.js:2121-2995 facade-exports = discoverOidc (0.864)
+//@ chunk-8y02x996.js:2121-2995 facade-exports (2.1.88 match: discoverOidc, 0.864)
 /**
  * discoverOidc：拉取 <issuer>/.well-known/openid-configuration 并校验，token_endpoint 必须 https。
  */
@@ -630,7 +630,7 @@ async function discoverOidc(idpIssuer) {
     );
   return parsed.data;
 }
-//@ chunk-8y02x996.js:2995-3171 fingerprint = jwtExp (1)
+//@ chunk-8y02x996.js:2995-3171 fingerprint (2.1.88 match: jwtExp, 1)
 function jwtExp(jwt) {
   let parts = jwt.split(".");
   if (parts.length !== 3) return;
@@ -641,7 +641,7 @@ function jwtExp(jwt) {
     return;
   }
 }
-//@ chunk-8y02x996.js:3171-5009 fingerprint = waitForCallback (0.865)
+//@ chunk-8y02x996.js:3171-5009 fingerprint (2.1.88 match: waitForCallback, 0.865)
 /**
  * waitForCallback：在 127.0.0.1:<port> 起一次性 HTTP 服务器等待 /callback，校验 state，返回授权码；5 分钟超时、可中止、端口占用时给出排查命令。
  */
@@ -774,7 +774,7 @@ function waitForCallback(port, expectedState, abortSignal, onListening) {
     timeoutId.unref();
   });
 }
-//@ chunk-8y02x996.js:5009-6170 facade-exports = acquireIdpIdToken (0.906)
+//@ chunk-8y02x996.js:5009-6170 facade-exports (2.1.88 match: acquireIdpIdToken, 0.906)
 /**
  * acquireIdpIdToken：XAA 的 IdP 登录：有缓存 id_token 直接用，否则 OIDC 发现 + PKCE 授权码流程（scope=openid，打开浏览器）换 id_token 并缓存。
  */

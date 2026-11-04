@@ -69,7 +69,7 @@ function isInMarketplace(availablePlugin, marketplaceFilter) {
     (availablePlugin.alsoListedIn?.includes(marketplaceFilter) ?? false)
   );
 }
-//@ chunk-ca06bv0t.js:9483-9601 placement = _temp0 (1)
+//@ chunk-ca06bv0t.js:9483-9601 placement (2.1.88 match: _temp0, 1)
 function isSameSourcePlugin(plugin, source, name) {
   if (isOrphanPlugin(plugin)) return false;
   if (plugin.source === source) return true;
@@ -89,7 +89,7 @@ function sameSourceAndName(error, plugin) {
 function sameSourceAndNameAlt(warning, plugin) {
   return isSameSourcePlugin(warning, plugin.source, plugin.name);
 }
-//@ chunk-ca06bv0t.js:9745-9891 placement = _temp0 (1)
+//@ chunk-ca06bv0t.js:9745-9891 placement (2.1.88 match: _temp0, 1)
 function isSameSourceIgnoringAlias(plugin, source, name) {
   if (hasMarketplaceAlias(plugin.source)) return false;
   if (plugin.source === source) return true;
@@ -106,7 +106,7 @@ function matchesPluginSource(plugin, source, name) {
     ? isSameSourcePlugin(plugin, source, name)
     : isSameSourceIgnoringAlias(plugin, source, name) && !isOrphanPlugin(plugin);
 }
-//@ chunk-ca06bv0t.js:9957-10360 placement = _temp0 (0.778)
+//@ chunk-ca06bv0t.js:9957-10360 placement (2.1.88 match: _temp0, 0.778)
 function findInstalledEntry(plugin, installed) {
   let filtered = installed.filter((installedPlugin) =>
     matchesPluginSource(plugin, installedPlugin.source, installedPlugin.name),

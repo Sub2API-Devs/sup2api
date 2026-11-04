@@ -1021,7 +1021,7 @@ async function writeLoginShellCaEnv(proxyState, profilePath, failures) {
 function exportEnvIfUnset(name, value) {
   return `if [ -z "\${${name}:-}" ]; then ${name}=${shellQuote(value)}; fi; export ${name}`;
 }
-//@ chunk-awy329vy.js:59569-59621 placement = shellQuote (1)
+//@ chunk-awy329vy.js:59569-59621 placement (2.1.88 match: shellQuote, 1)
 function shellQuote(s) {
   return `'${s.replace(/'/g, "'\\''")}'`;
 }
@@ -1033,7 +1033,7 @@ function firstPemCertAfterDifferent(caText) {
   let certs = caText.match(PEM_CERT_BLOCK_RE) ?? [];
   return certs.length === 2 && certs[1] !== certs[0] ? certs[1] : undefined;
 }
-//@ chunk-awy329vy.js:59703-59800 placement = base64URLEncode (1)
+//@ chunk-awy329vy.js:59703-59800 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   return Buffer.from(buffer.replace(/-----(?:BEGIN|END) CERTIFICATE-----/g, ""), "base64");
 }

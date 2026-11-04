@@ -245,7 +245,7 @@ deferInit("chunk-e6aww6q8.js:3108353", () => {
     "convertfrom",
   ];
 });
-//@ chunk-e6aww6q8.js:3108707-3108892 placement = DIRECTORY_CHANGE_CMDLETS (0.655)
+//@ chunk-e6aww6q8.js:3108707-3108892 placement (2.1.88 match: DIRECTORY_CHANGE_CMDLETS, 0.655)
 /**
  * PowerShell 命令遥测分类用的三张表：已知外部/网络命令小写→原名、cmdlet 动词→cmdlet_<动词> 标签、只作后备标签的 location/write 类 cmdlet。属于命令分析遥测，不是 parser 本身（旧版名 DIRECTORY_CHANGE_CMDLETS 错配）。
  */

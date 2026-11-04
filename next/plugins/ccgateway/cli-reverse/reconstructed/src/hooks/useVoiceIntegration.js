@@ -49,7 +49,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 function voiceSetState() {
   return useVoiceStateStore().setState;
 }
-//@ chunk-v6kts6xw.js:2603-2710 fingerprint = DEFAULT_VOICE_KEYSTROKE (1)
+//@ chunk-v6kts6xw.js:2603-2710 fingerprint (2.1.88 match: DEFAULT_VOICE_KEYSTROKE, 1)
 function DEFAULT_VOICE_KEYSTROKE(event) {
   return (
     event.shift &&
@@ -198,7 +198,7 @@ deferInit("chunk-tzghj6zv.js:13070", () => {
   VOICE_MIN_CHARS = 2;
   VOICE_DEBOUNCE_MS = 300;
 });
-//@ chunk-tzghj6zv.js:13140-13361 fingerprint = matchesKeyboardEvent (0.906)
+//@ chunk-tzghj6zv.js:13140-13361 fingerprint (2.1.88 match: matchesKeyboardEvent, 0.906)
 function matchesKeyboardEvent(e, target) {
   if ((e.key === "return" ? "enter" : e.key.toLowerCase()) !== target.key) return false;
   if (e.ctrl !== target.ctrl) return false;
@@ -215,7 +215,7 @@ function subscribeVoiceChanged(listener) {
 function voiceSnapshot() {
   return getKeybindings(keybindingsState);
 }
-//@ chunk-tzghj6zv.js:13436-16010 fingerprint = useVoiceIntegration (0.686)
+//@ chunk-tzghj6zv.js:13436-16010 fingerprint (2.1.88 match: useVoiceIntegration, 0.686)
 /**
  * 语音集成：录音状态变化时在光标处插入/替换临时转写文本（interimRange），最终转写落地；输入在录音期间被改动则放弃插入（input_diverged）。
  */
@@ -370,7 +370,7 @@ function useVoiceIntegration({ composer, isActive = true }) {
     interimRange,
   };
 }
-//@ chunk-tzghj6zv.js:16010-20376 fingerprint = useVoiceKeybindingHandler (0.721)
+//@ chunk-tzghj6zv.js:16010-20376 fingerprint (2.1.88 match: useVoiceKeybindingHandler, 0.721)
 /**
  * 语音快捷键：voice:pushToTalk 按住开始/松开结束，Esc 取消，处理 hold 与 toggle 两种模式。
  */

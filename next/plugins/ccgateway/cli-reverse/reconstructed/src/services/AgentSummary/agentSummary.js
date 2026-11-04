@@ -373,7 +373,7 @@ var AGENT_SUMMARY_SYSTEM_PROMPT =
 var SUMMARY_TOKEN_BUDGET = 2000;
 var SUMMARY_TOKEN_RESERVE = 500;
 var SUMMARY_MAX_OUTPUT_TOKENS = 2108;
-//@ chunk-0h4e7gnq.js:125818-126534 callgraph-fingerprint = buildSummaryPrompt (0.203)
+//@ chunk-0h4e7gnq.js:125818-126534 callgraph-fingerprint (2.1.88 match: buildSummaryPrompt, 0.203)
 /**
  * 进度摘要提示词：用 3–5 个词的现在进行时描述最近动作（附好/坏例子），可带上一条摘要要求说新内容。
  */
@@ -422,7 +422,7 @@ function getSummaryModelFamilies(model, sdkAgentProgressSummariesEnabled) {
     };
   }
 }
-//@ chunk-0h4e7gnq.js:126780-127241 fingerprint = startAgentSummarization (0.544)
+//@ chunk-0h4e7gnq.js:126780-127241 fingerprint (2.1.88 match: startAgentSummarization, 0.544)
 /**
  * fork 一个单轮、拒绝工具的代理生成进度摘要（agent_summary，跳过转录与缓存写）。
  */

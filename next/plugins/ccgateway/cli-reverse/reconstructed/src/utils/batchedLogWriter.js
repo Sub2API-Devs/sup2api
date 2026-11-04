@@ -16,7 +16,7 @@ import { appendToFile } from "../services/api/dumpPrompts.js";
 import { logForDebugging } from "./debug.js";
 import { registerCleanup, registerPreExitFlush } from "./cleanupRegistry.js";
 
-//@ chunk-k7fgdyw5.js:796-891 sole-consumer = createJsonlWriter (1)
+//@ chunk-k7fgdyw5.js:796-891 sole-consumer (2.1.88 match: createJsonlWriter, 1)
 function createJsonlWriter(options) {
   let writer = createBufferedWriter_2(options);
   return {

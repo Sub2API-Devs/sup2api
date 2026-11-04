@@ -9,7 +9,7 @@
  * attribution: placement 7
  */
 
-//@ chunk-c0cahhqh.js:299-365 placement = isTerminalTaskStatus (1)
+//@ chunk-c0cahhqh.js:299-365 placement (2.1.88 match: isTerminalTaskStatus, 1)
 /**
  * 任务状态是否为终态（completed / failed / killed）。chunk-c0cahhqh 内的副本。
  */

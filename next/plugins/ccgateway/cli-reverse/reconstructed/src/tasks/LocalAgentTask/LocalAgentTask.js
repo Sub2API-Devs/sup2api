@@ -137,7 +137,7 @@ import { sanitizeSessionName } from "../../ink/terminal.js";
 import { completeLabelOrUndefined } from "../../screens/repl/sessionPresence.js";
 import { MAX_WAITERS } from "../../screens/repl/peerIdleNotices.js";
 
-//@ chunk-6vnxsn99.js:23715-23797 callgraph-witnessed = isLocalAgentTask (0.405)
+//@ chunk-6vnxsn99.js:23715-23797 callgraph-witnessed (2.1.88 match: isLocalAgentTask, 0.405)
 /**
  * 是否是"观察者"子代理任务（local_agent 且 isObserver===true）。
  */
@@ -157,7 +157,7 @@ function initAgentOutputSymlink(taskId) {
  * 进度里保留的最近工具活动条数（5）。
  */
 var MAX_RECENT_ACTIVITIES = 5;
-//@ chunk-e6aww6q8.js:4713550-4713768 fingerprint = createProgressTracker (0.643)
+//@ chunk-e6aww6q8.js:4713550-4713768 fingerprint (2.1.88 match: createProgressTracker, 0.643)
 /**
  * 新建子代理进度跟踪器：工具调用数、最近输入 token、累计输出 token、流式估算 token、最近活动列表。
  */
@@ -173,14 +173,14 @@ function createProgressTracker() {
     seenToolUseIds: new Set(),
   };
 }
-//@ chunk-e6aww6q8.js:4713768-4713860 fingerprint = getTokenCountFromTracker (0.801)
+//@ chunk-e6aww6q8.js:4713768-4713860 fingerprint (2.1.88 match: getTokenCountFromTracker, 0.801)
 /**
  * 进度跟踪器的总 token 数（最近输入 + 累计输出 + 流式估算）。
  */
 function getTokenCountFromTracker(tracker) {
   return tracker.latestInputTokens + tracker.cumulativeOutputTokens + tracker.streamedTokenEstimate;
 }
-//@ chunk-e6aww6q8.js:4713860-4714758 fingerprint = updateProgressFromMessage (0.777)
+//@ chunk-e6aww6q8.js:4713860-4714758 fingerprint (2.1.88 match: updateProgressFromMessage, 0.777)
 /**
  * 用一条 assistant 消息更新进度：按 usage 更新输入/输出 token（换响应时扣掉流式估算），记录新的 tool_use 活动（跳过结构化输出和内部工具），只保留最近 5 条。
  */
@@ -233,7 +233,7 @@ function applyStreamTokenEvent(tracker, event) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:4714951-4715101 fingerprint = getProgressUpdate (1)
+//@ chunk-e6aww6q8.js:4714951-4715101 fingerprint (2.1.88 match: getProgressUpdate, 1)
 /**
  * 把跟踪器转成对外的进度快照 {toolUseCount, tokenCount, lastActivity, recentActivities}。
  */
@@ -245,7 +245,7 @@ function getProgressUpdate(tracker) {
     recentActivities: [...tracker.recentActivities],
   };
 }
-//@ chunk-e6aww6q8.js:4715101-4715344 fingerprint = createActivityDescriptionResolver (0.45)
+//@ chunk-e6aww6q8.js:4715101-4715344 fingerprint (2.1.88 match: createActivityDescriptionResolver, 0.45)
 /**
  * 生成"工具活动描述"解析器：找到工具并校验输入后调用 tool.getActivityDescription，出错只记调试日志。
  */
@@ -282,7 +282,7 @@ function endAgentIdleWindow(agentId, taskRegistry) {
       removeKeepaliveReason(task.ownerAgentId, `agent:${agentId}`, taskRegistry);
   }
 }
-//@ chunk-e6aww6q8.js:4715626-4715685 layout = _temp (1)
+//@ chunk-e6aww6q8.js:4715626-4715685 layout (2.1.88 match: _temp, 1)
 function hasCompletedWithFindings(task) {
   return task.status === "completed" && keepaliveReasons(task).size > 0;
 }
@@ -308,7 +308,7 @@ function computeEvictAfter(task, options) {
   }
   return Date.now() + MCP_TASK_KEEPALIVE_MS;
 }
-//@ chunk-e6aww6q8.js:4715873-4715985 layout = isPanelAgentTask (0.819)
+//@ chunk-e6aww6q8.js:4715873-4715985 layout (2.1.88 match: isPanelAgentTask, 0.819)
 /**
  * 若 agentId 指向一个可见子代理（非 main-session、非 fork worker）则原样返回，否则 undefined。
  */
@@ -334,14 +334,14 @@ function getOwnToolSurface({ agentId, options: { tools }, taskRegistry }, ownerA
   let hasTool = hasSendMessageTool(tools);
   return !hasTool || isCurrentAgentId(agentId, ownerAgentId, taskRegistry) ? hasTool : undefined;
 }
-//@ chunk-e6aww6q8.js:4716154-4716201 fingerprint = backgroundAgentTask (0.713)
+//@ chunk-e6aww6q8.js:4716154-4716201 fingerprint (2.1.88 match: backgroundAgentTask, 0.713)
 /**
  * 子代理任务是否已转到后台（面板代理且 isBackgrounded）。
  */
 function isBackgroundedSubagent(task) {
   return isPanelAgentTask(task) && task.isBackgrounded;
 }
-//@ chunk-e6aww6q8.js:4718810-4718913 fingerprint = queuePendingMessage (0.752)
+//@ chunk-e6aww6q8.js:4718810-4718913 fingerprint (2.1.88 match: queuePendingMessage, 0.752)
 /**
  * 把消息追加到子代理的待投递队列 pendingMessages（SendMessage 给运行中子代理时用）。
  */
@@ -355,7 +355,7 @@ function queuePendingMessage(taskId, msg, taskRegistry) {
         },
   );
 }
-//@ chunk-e6aww6q8.js:4719839-4723391 callgraph-fingerprint = enqueueAgentNotification (0.266)
+//@ chunk-e6aww6q8.js:4719839-4723391 callgraph-fingerprint (2.1.88 match: enqueueAgentNotification, 0.266)
 /**
  * 生成并投递子代理结束的 task-notification：先认领 notified 标记（已通知或已不在注册表则跳过），决定投递对象（属主代理或主线程），
  * 拼出状态短语（完成/失败/被停/达到回合上限/仍在等自己的后台工作）、<note>、<result>、<usage>、<worktree> 等 XML，按优先级 next 入队；属主忙时延后投递。
@@ -657,7 +657,7 @@ function rerouteQueuedNotificationsToMain(ownerAgentId, taskRegistry) {
         }),
     });
 }
-//@ chunk-e6aww6q8.js:4725007-4726652 callgraph-witnessed = killAsyncAgent (0.216)
+//@ chunk-e6aww6q8.js:4725007-4726652 callgraph-witnessed (2.1.88 match: killAsyncAgent, 0.216)
 /**
  * 杀掉子代理：必要时补发 killed 通知（附已有部分结果和 usage），中止 abortController、标 killed、清保活原因；
  * 若它之前已停但有子工作，连带杀掉它名下的 shell 任务和 monitor，取消发给它的排队命令，回收输出并发 agentSettled。
@@ -809,7 +809,7 @@ function interruptBackgroundSubagent(taskId, taskRegistry) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4727029-4727206 fingerprint = killAllRunningAgentTasks (1)
+//@ chunk-e6aww6q8.js:4727029-4727206 fingerprint (2.1.88 match: killAllRunningAgentTasks, 1)
 /**
  * 杀掉所有运行中（或有存活子工作）的 local_agent 任务。
  */
@@ -926,7 +926,7 @@ function sameActivities(recentActivities, recentActivities_2) {
     if (recentActivities[idx] !== recentActivities_2[idx]) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:4728329-4728876 fingerprint = updateAgentSummary (0.879)
+//@ chunk-e6aww6q8.js:4728329-4728876 fingerprint (2.1.88 match: updateAgentSummary, 0.879)
 /**
  * 更新子代理进度里的 summary（后台摘要），开启 SDK 进度摘要时发 task_progress 事件。
  */
@@ -965,7 +965,7 @@ function updateAgentSummary(taskId, summary, taskRegistry) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:4728876-4729862 fingerprint = completeAgentTask (0.364)
+//@ chunk-e6aww6q8.js:4728876-4729862 fingerprint (2.1.88 match: completeAgentTask, 0.364)
 /**
  * 子代理一次运行完成：写入 result/terminal、计算 evictAfter；仍有子工作时保持 park；后台且交互式时开"空闲窗口"保活和定时器；
  * 有未投递消息时发 agentStrandedMessages；最后发 agentSettled。
@@ -1422,7 +1422,7 @@ function unregisterAgentForeground(taskId, taskRegistry) {
   if (!isLocalAgent(task) || task.isBackgrounded || hasChildAgents(taskId, taskRegistry)) return;
   taskRegistry.remove(taskId);
 }
-//@ chunk-e6aww6q8.js:4734716-4735394 fingerprint = registerAsyncAgent (0.704)
+//@ chunk-e6aww6q8.js:4734716-4735394 fingerprint (2.1.88 match: registerAsyncAgent, 0.704)
 /**
  * 构造 local_agent 任务状态对象（默认前台 isBackgrounded=false；forkWorker 时 skipTranscript）。只构造不注册。
  */
@@ -1475,7 +1475,7 @@ function createAgentTaskState({
     keepaliveReasons: new Set(),
   };
 }
-//@ chunk-1h8hk15j.js:3637-4214 fingerprint = failAgentTask (0.487)
+//@ chunk-1h8hk15j.js:3637-4214 fingerprint (2.1.88 match: failAgentTask, 0.487)
 /**
  * 把运行中的任务置为给定终态并合并补充字段（error/terminal 摘要截断），中止 abortController；终态时安排回收时间。返回原任务或 null。
  */
@@ -1526,7 +1526,7 @@ function failAgentTask(taskId, taskRegistry, status, patch) {
     });
   return previousTask;
 }
-//@ chunk-kxyd0g16.js:16982-17064 fingerprint = LocalAgentTask (1)
+//@ chunk-kxyd0g16.js:16982-17064 fingerprint (2.1.88 match: LocalAgentTask, 1)
 /**
  * LocalAgentTask 任务实现：kill → killAsyncAgent。
  */
@@ -1551,7 +1551,7 @@ function createNotifiedState() {
     notified: new Map(),
   };
 }
-//@ chunk-93kwxas0.js:5932-6143 fingerprint = markAgentsNotified (0.726)
+//@ chunk-93kwxas0.js:5932-6143 fingerprint (2.1.88 match: markAgentsNotified, 0.726)
 function markAgentsNotified(state, sessionId, kind, at) {
   let existing = state.notified.get(sessionId);
   if (existing?.kind === kind) return false;
@@ -1565,7 +1565,7 @@ function markAgentsNotified(state, sessionId, kind, at) {
   });
   return true;
 }
-//@ chunk-18hwfzwa.js:684372-686020 fingerprint = registerAgentForeground (0.364)
+//@ chunk-18hwfzwa.js:684372-686020 fingerprint (2.1.88 match: registerAgentForeground, 0.364)
 /**
  * 从会话 transcript 恢复一个已结束的子代理任务记录：沿父代理链确认每一层的启动记录存在，读子代理元数据确认 fork 的 skill 名，然后插入 completed/killed 的任务（已通知）。
  */
@@ -1694,7 +1694,7 @@ function findAgentLaunchRecord(messages, agentId) {
       }
     : undefined;
 }
-//@ chunk-18hwfzwa.js:810309-810409 fingerprint = updateAgentProgress (0.513)
+//@ chunk-18hwfzwa.js:810309-810409 fingerprint (2.1.88 match: updateAgentProgress, 0.513)
 /**
  * 取代理进度标签：优先 label 字段，否则 progress.summary。
  */
@@ -1702,7 +1702,7 @@ function getAgentProgressLabel(update) {
   if ("label" in update && typeof update.label === "string") return update.label;
   return update.progress?.summary;
 }
-//@ chunk-18hwfzwa.js:1429302-1429562 fingerprint = isPanelAgentTask (0.841)
+//@ chunk-18hwfzwa.js:1429302-1429562 fingerprint (2.1.88 match: isPanelAgentTask, 0.841)
 /**
  * 列出活动的代理类任务条目（id、标题、阻塞状态），按 id 排序并截断，供状态/远程展示。
  */

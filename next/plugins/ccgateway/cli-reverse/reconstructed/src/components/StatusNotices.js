@@ -206,7 +206,7 @@ var WINDOWS_SANDBOX_NOTICE_OPTIONS = {
   color: "inactive",
   wrap: true,
 };
-//@ chunk-18hwfzwa.js:775053-775171 placement = getDefaultEffortLevelForOption (1)
+//@ chunk-18hwfzwa.js:775053-775171 placement (2.1.88 match: getDefaultEffortLevelForOption, 1)
 function getDefaultEffortLevelForOption_2() {
   let $ = useMemoCache(1);
   let startStore;

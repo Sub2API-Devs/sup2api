@@ -173,7 +173,7 @@ var fileReaderStorage; // deferred: has load-time effects after a deferred state
 deferInit("chunk-7kr2r08r.js:2178", () => {
   fileReaderStorage = new AsyncLocalStorage();
 });
-//@ chunk-7kr2r08r.js:2190-2233 placement = getAgentContext (1)
+//@ chunk-7kr2r08r.js:2190-2233 placement (2.1.88 match: getAgentContext, 1)
 /**
  * 取当前文件读取器（ALS 覆盖或默认 read/readBytes 实现）。
  */

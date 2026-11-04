@@ -11,7 +11,7 @@
 import { buildLaunchMessage } from "../../commands/ultraplan.js";
 import { LIGHTNING } from "../../constants/figures.js";
 
-//@ chunk-s61vbvea.js:32765-32830 fingerprint = OPEN_TO_CLOSE (1)
+//@ chunk-s61vbvea.js:32765-32830 fingerprint (2.1.88 match: OPEN_TO_CLOSE, 1)
 var OPEN_TO_CLOSE = {
   "`": "`",
   '"': '"',
@@ -21,7 +21,7 @@ var OPEN_TO_CLOSE = {
   "(": ")",
   "'": "'",
 };
-//@ chunk-s61vbvea.js:32830-33608 affinity = findBtwTriggerPositions (1)
+//@ chunk-s61vbvea.js:32830-33608 affinity (2.1.88 match: findBtwTriggerPositions, 1)
 function findBtwTriggerPositions(text, keyword) {
   if (!new RegExp(keyword, "i").test(text)) return [];
   if (text.startsWith("/")) return [];
@@ -73,7 +73,7 @@ function findBtwTriggerPositions(text, keyword) {
   }
   return hits;
 }
-//@ chunk-s61vbvea.js:33648-33691 fingerprint = findUltrareviewTriggerPositions (1)
+//@ chunk-s61vbvea.js:33648-33691 fingerprint (2.1.88 match: findUltrareviewTriggerPositions, 1)
 /**
  * 查找文本中 ultrareview 关键词的触发位置。
  */
@@ -109,7 +109,7 @@ function findKeywordTriggerPositions(text) {
   before = before.replace(/\b(a)n(\s+)$/i, "$1$2");
   return before + trigger.word.slice(5) + after;
 }
-//@ chunk-18hwfzwa.js:1442557-1442667 fingerprint = replaceUltraplanKeyword (0.557)
+//@ chunk-18hwfzwa.js:1442557-1442667 fingerprint (2.1.88 match: replaceUltraplanKeyword, 0.557)
 /**
  * 拼出模型/effort/ultra/fast 标签列表。
  */

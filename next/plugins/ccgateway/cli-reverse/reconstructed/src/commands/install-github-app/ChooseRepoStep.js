@@ -19,7 +19,7 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { TextInput } from "../../components/TextInput.js";
 
-//@ chunk-4v9zy7gn.js:27559-29707 fingerprint = ChooseRepoStep (0.84)
+//@ chunk-4v9zy7gn.js:27559-29707 fingerprint (2.1.88 match: ChooseRepoStep, 0.84)
 function ChooseRepoStep(props) {
   let $ = useMemoCache(44);
   let { currentRepo, useCurrentRepo, repoUrl, onRepoUrlChange, onSubmit, onToggleUseCurrentRepo } = props;

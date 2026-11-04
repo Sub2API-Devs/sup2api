@@ -15,7 +15,7 @@ import { Text } from "../ink/components/Text.js";
 import { formatMessageLines } from "../cli/handlers/plugins.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
-//@ chunk-d4eg9at2.js:30961-31326 fingerprint = withResolvers (0.517)
+//@ chunk-d4eg9at2.js:30961-31326 fingerprint (2.1.88 match: withResolvers, 0.517)
 function ResultMessages(props) {
   let $ = useMemoCache(11);
   let { promise } = props;

@@ -11,7 +11,7 @@
 import { applySingleMotion } from "./motions.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-530hfzwb.js:2992-3032 fingerprint = OPERATORS (1)
+//@ chunk-530hfzwb.js:2992-3032 fingerprint (2.1.88 match: OPERATORS, 1)
 /**
  * 操作符键到操作名：d→delete、c→change、y→yank。
  */
@@ -24,7 +24,7 @@ var OPERATORS = {
 function isOperatorKey(key) {
   return key in OPERATORS;
 }
-//@ chunk-530hfzwb.js:3062-3233 fingerprint = TEXT_OBJ_SCOPES (1)
+//@ chunk-530hfzwb.js:3062-3233 fingerprint (2.1.88 match: TEXT_OBJ_SCOPES, 1)
 /**
  * vim 键集合：BACKSPACE_KEY（\b，作左移）；SIMPLE_MOTIONS（h l 空格 退格 j k w b e W B E 0 ^ $ %）；CHAR_MOTIONS（h l 空格 退格，按字符移动）；FIND_KEYS（f F t T）；TEXT_OBJ_SCOPES（i→inner、a→around）。
  */
@@ -74,7 +74,7 @@ deferInit("chunk-530hfzwb.js:3263", () => {
   TEXT_OBJ_TYPES = new Set(["w", "W", '"', "'", "`", "(", ")", "b", "[", "]", "{", "}", "B", "<", ">"]);
   MAX_VIM_COUNT = 1e4;
 });
-//@ chunk-530hfzwb.js:3348-3400 fingerprint = createInitialVimState (1)
+//@ chunk-530hfzwb.js:3348-3400 fingerprint (2.1.88 match: createInitialVimState, 1)
 /**
  * vim 初始状态：INSERT 模式、已插入文本为空。
  */
@@ -84,7 +84,7 @@ function createInitialVimState() {
     insertedText: "",
   };
 }
-//@ chunk-530hfzwb.js:3400-3470 fingerprint = createInitialPersistentState (0.829)
+//@ chunk-530hfzwb.js:3400-3470 fingerprint (2.1.88 match: createInitialPersistentState, 0.829)
 /**
  * 跨命令持久状态：上次 f/F/t/T 查找、寄存器内容、寄存器是否整行。
  */

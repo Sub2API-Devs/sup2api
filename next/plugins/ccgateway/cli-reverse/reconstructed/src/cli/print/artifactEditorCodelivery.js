@@ -38,7 +38,7 @@ import { contextAfterTurn } from "../../utils/permissions/toolPermissionContext.
 import { logForDebugging } from "../../utils/debug.js";
 import { discardPollEvent, isPollEventMode } from "../../utils/pollEvents.js";
 
-//@ chunk-tyg7f3ek.js:282613-282667 placement = getAgentPendingMessageAttachments (0.482)
+//@ chunk-tyg7f3ek.js:282613-282667 placement (2.1.88 match: getAgentPendingMessageAttachments, 0.482)
 /**
  * 1200000/600/2048/{kind:"coordinator"}：协调器常量。旧版名 getAgentPendingMessageAttachments 为错配；归错文件。
  */

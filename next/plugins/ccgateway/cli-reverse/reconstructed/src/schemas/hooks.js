@@ -36,7 +36,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
  * hook 配置错误类与 shell 类型列表。
  */
 class HookConfigError extends Error {}
-//@ chunk-dcmhvw5a.js:50650-50679 placement = FRONTMATTER_SHELLS (1)
+//@ chunk-dcmhvw5a.js:50650-50679 placement (2.1.88 match: FRONTMATTER_SHELLS, 1)
 var FRONTMATTER_SHELLS = ["bash", "powershell"];
 //@ chunk-dcmhvw5a.js:50679-51434 placement
 /**
@@ -60,7 +60,7 @@ deferInit("chunk-dcmhvw5a.js:50679", () => {
       ),
   );
 });
-//@ chunk-dcmhvw5a.js:51434-57516 fingerprint = buildHookSchemas (0.69)
+//@ chunk-dcmhvw5a.js:51434-57516 fingerprint (2.1.88 match: buildHookSchemas, 0.69)
 /**
  * 构造 5 种钩子的 zod schema：command（command/args 执行形式/shell/timeout/onFailure/async/asyncRewake/rewakeMessage/rewakeSummary/cloud）、prompt（prompt/model/continueOnBlock）、mcp_tool（server/tool/input）、http（url/headers/allowedEnvVars/onFailure/cloud）、agent（prompt/model）。所有类型都有 if/timeout/statusMessage/once。
  */
@@ -206,7 +206,7 @@ function buildHookSchemas() {
     McpToolHookSchema,
   };
 }
-//@ chunk-dcmhvw5a.js:57516-57897 fingerprint = HookMatcherSchema (0.589)
+//@ chunk-dcmhvw5a.js:57516-57897 fingerprint (2.1.88 match: HookMatcherSchema, 0.589)
 /**
  * hook 定义 schema：命令长度上限、各类型 hook 联合（command/prompt/agent/http/mcp_tool）、matcher 与按事件分组的 hooks 配置。
  */
@@ -231,7 +231,7 @@ deferInit("chunk-dcmhvw5a.js:57516", () => {
   );
   HooksSchema = DoctorLazy(() => partialRecord(_enum(HOOK_EVENTS), array(HookMatcherSchema())));
 });
-//@ chunk-b91jfdd4.js:9523-9609 fingerprint = IfConditionSchema (0.457)
+//@ chunk-b91jfdd4.js:9523-9609 fingerprint (2.1.88 match: IfConditionSchema, 0.457)
 /**
  * if 条件字段的附属 schema 片段（command 子字段与 ws 选项），供 if 条件解析器使用。
  */

@@ -11,7 +11,7 @@
 import { getPlatform } from "../utils/platform.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:202811-203165 placement = getReservedShortcuts (1)
+//@ chunk-dcmhvw5a.js:202811-203165 placement (2.1.88 match: getReservedShortcuts, 1)
 /**
  * 界面符号常量（圆点、星号等）。
  */
@@ -105,7 +105,7 @@ var HORIZONTAL_LINE_GLYPH = "\u2500";
  */
 var HEAVY_VERTICAL_BAR_GLYPH = "\u2503";
 var NO_BREAK_SPACE = "\xA0";
-//@ chunk-dcmhvw5a.js:203409-203657 fingerprint = BRIDGE_SPINNER_FRAMES (0.889)
+//@ chunk-dcmhvw5a.js:203409-203657 fingerprint (2.1.88 match: BRIDGE_SPINNER_FRAMES, 0.889)
 /**
  * Remote Control 桥接状态转圈帧与符号：就绪 ·✔·、失败 ×、✕、▸、⎿、⠿、盲文转圈帧。
  */

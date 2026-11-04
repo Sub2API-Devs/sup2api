@@ -1430,7 +1430,7 @@ function buildClearedAuthEnv() {
     CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR: String(CODE_REVIEW_TOKEN_FD),
   };
 }
-//@ chunk-hm0ce8vc.js:35012-35228 placement = runComputerUseMcpServer (0.426)
+//@ chunk-hm0ce8vc.js:35012-35228 placement (2.1.88 match: runComputerUseMcpServer, 0.426)
 /**
  * （误归 computerUse/mcpServer）把 sessionToken / inferenceToken 写入子进程额外的 stdio 管道并关闭。
  */

@@ -630,7 +630,7 @@ function isUpgradeOption(value) {
       return false;
   }
 }
-//@ chunk-dg94x42s.js:24869-37678 fingerprint = RateLimitOptionsMenu (0.363)
+//@ chunk-dg94x42s.js:24869-37678 fingerprint (2.1.88 match: RateLimitOptionsMenu, 0.363)
 function RateLimitOptionsMenu_2(props) {
   let $ = useMemoCache(177);
   let { onDone, context } = props;
@@ -1713,7 +1713,7 @@ function currentLimitsOrLatest(claudeAiLimits, latestLimits) {
   if (canAutoResumeThisLimit(claudeAiLimits)) return claudeAiLimits;
   return latestLimits !== null && canAutoResumeThisLimit(latestLimits) ? latestLimits : null;
 }
-//@ chunk-dg94x42s.js:38095-38152 callgraph-fingerprint = call (1)
+//@ chunk-dg94x42s.js:38095-38152 callgraph-fingerprint (2.1.88 match: call, 1)
 /**
  * /rate-limit-options 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

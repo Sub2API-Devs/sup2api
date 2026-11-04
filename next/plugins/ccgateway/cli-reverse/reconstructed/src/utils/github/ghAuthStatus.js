@@ -11,7 +11,7 @@
 import { whichAsync } from "../which.js";
 import { safeExecFile } from "../safeSpawn.js";
 
-//@ chunk-1jrvb43n.js:263-1481 fingerprint = getGhAuthStatus (0.561)
+//@ chunk-1jrvb43n.js:263-1481 fingerprint (2.1.88 match: getGhAuthStatus, 0.561)
 /**
  * 检测 gh CLI 登录状态：not_installed / 未登录 / 已登录（读 token），老版本 gh 可选网络回退。
  */

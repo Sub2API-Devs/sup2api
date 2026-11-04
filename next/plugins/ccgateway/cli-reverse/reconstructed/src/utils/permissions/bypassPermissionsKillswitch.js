@@ -59,7 +59,7 @@ var AUTO_MODE_GATE_CHECK_STATE; // deferred: uses AutoModeGateCheckState of its 
 deferInit("chunk-pc1rmcr2.js:4253", () => {
   AUTO_MODE_GATE_CHECK_STATE = new HostScoped(() => new AutoModeGateCheckState());
 });
-//@ chunk-pc1rmcr2.js:4276-4388 fingerprint = checkAndDisableAutoModeIfNeeded (0.673)
+//@ chunk-pc1rmcr2.js:4276-4388 fingerprint (2.1.88 match: checkAndDisableAutoModeIfNeeded, 0.673)
 /**
  * 构造 auto 模式闸门通知对象（key auto-mode-gate-notification，警告色、高优先级）。
  */
@@ -108,7 +108,7 @@ async function checkAndDisableAutoModeIfNeeded(host, context, setAppState, fastM
 function rearmAutoModeGateCheck(host) {
   AUTO_MODE_GATE_CHECK_STATE.of(host).rearmAutoModeCheck();
 }
-//@ chunk-18hwfzwa.js:213494-213861 fingerprint = useKickOffCheckAndDisableAutoModeIfNeeded (0.776)
+//@ chunk-18hwfzwa.js:213494-213861 fingerprint (2.1.88 match: useKickOffCheckAndDisableAutoModeIfNeeded, 0.776)
 /**
  * React hook：主模型、会话模型或 fast 模式变化时重新运行 auto 闸门检查；settings 变化时推送 "auto mode disabled by settings" 通知。
  */
@@ -144,7 +144,7 @@ function useKickOffCheckAndDisableAutoModeIfNeeded() {
     [addNotification, appStateSession],
   );
 }
-//@ chunk-18hwfzwa.js:1687162-1687535 fingerprint = checkAndDisableBypassPermissionsIfNeeded (0.691)
+//@ chunk-18hwfzwa.js:1687162-1687535 fingerprint (2.1.88 match: checkAndDisableBypassPermissionsIfNeeded, 0.691)
 /**
  * 把模式（规范化为对外模式）写入 AppState，并同步 isBypassPermissionsModeAvailable（目标为 bypass 时置 true）；返回 {ok, mode} 或失败结果。
  */

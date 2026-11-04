@@ -20,7 +20,7 @@ import { createHyperlink } from "../../utils/hyperlink.js";
 function mcpXaaIdpModule() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpXaaIdpLoginModule();
 }
-//@ chunk-4vq0yytw.js:16516-20902 fingerprint = registerMcpXaaIdpCommand (0.928)
+//@ chunk-4vq0yytw.js:16516-20902 fingerprint (2.1.88 match: registerMcpXaaIdpCommand, 0.928)
 function registerMcpXaaIdpCommand(mcp, command) {
   let xaaIdp = mcp.command("xaa").description("Manage the XAA (SEP-990) IdP connection");
   xaaIdp

@@ -26,7 +26,7 @@ import { StructuredDiffFallback } from "./StructuredDiff/Fallback.js";
 import { NoSelect, RawAnsi } from "../ink/components/Input.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0vxm8afm.js:191-279 fingerprint = computeGutterWidth (1)
+//@ chunk-0vxm8afm.js:191-279 fingerprint (2.1.88 match: computeGutterWidth, 1)
 var computeGutterWidth = (patch) =>
   `+ ${Math.max(patch.oldStart + patch.oldLines - 1, patch.newStart + patch.newLines - 1, 1)} `.length;
 //@ chunk-887tgx6t.js:733-737 placement
@@ -61,7 +61,7 @@ function pickDiffThemeColors(activeThemeOverrides) {
   }
   return overrides;
 }
-//@ chunk-887tgx6t.js:5519-6020 fingerprint = renderColorDiff (0.894)
+//@ chunk-887tgx6t.js:5519-6020 fingerprint (2.1.88 match: renderColorDiff, 0.894)
 function renderColorDiff(
   structuredDiff,
   patch,
@@ -120,7 +120,7 @@ function expandTabsInPatch(patch) {
     lines,
   };
 }
-//@ chunk-887tgx6t.js:6158-7247 fingerprint = StructuredDiff (0.928)
+//@ chunk-887tgx6t.js:6158-7247 fingerprint (2.1.88 match: StructuredDiff, 0.928)
 /**
  * 结构化 diff：{patch, dim, filePath, width, …}；原生 color-diff 可用时调用 renderColorDiff 得到带词级高亮的行，否则用 StructuredDiffFallback。tab 先展开。
  */

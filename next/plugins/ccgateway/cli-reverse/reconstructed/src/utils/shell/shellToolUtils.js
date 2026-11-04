@@ -22,7 +22,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-g54kbxqw.js:145685-145700 placement
 var SHELL_TOOL_NAMES = [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME];
-//@ chunk-g54kbxqw.js:145700-145869 fingerprint = isPowerShellToolEnabled (0.301)
+//@ chunk-g54kbxqw.js:145700-145869 fingerprint (2.1.88 match: isPowerShellToolEnabled, 0.301)
 /**
  * PowerShell 工具是否启用：非 Windows 只在 CLAUDE_CODE_USE_POWERSHELL_TOOL 为真时开；Windows 上 env 显式设置优先，否则没有 Git Bash 时默认开，再否则看 GrowthBook tengu_cobalt_ridge。
  */

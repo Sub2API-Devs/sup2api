@@ -18,7 +18,7 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { HintText } from "../design-system/HintText.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-bajxb7bf.js:41839-42023 sole-consumer = _temp2 (0.774)
+//@ chunk-bajxb7bf.js:41839-42023 sole-consumer (2.1.88 match: _temp2, 0.774)
 function renderHookItem(hook, index) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -33,7 +33,7 @@ function renderHookItem(hook, index) {
     index,
   );
 }
-//@ chunk-bajxb7bf.js:42023-43222 fingerprint = SelectHookMode (0.67)
+//@ chunk-bajxb7bf.js:42023-43222 fingerprint (2.1.88 match: SelectHookMode, 0.67)
 function SelectHookMode(props) {
   let $ = useMemoCache(23);
   let { selectedEvent, selectedMatcher, hooksForSelectedMatcher, hookEventMetadata, onSelect, onCancel } =
@@ -132,7 +132,7 @@ function SelectHookMode(props) {
   } else t5 = $[22];
   return t5;
 }
-//@ chunk-bajxb7bf.js:48480-48528 fingerprint = _temp2 (0.844)
+//@ chunk-bajxb7bf.js:48480-48528 fingerprint (2.1.88 match: _temp2, 0.844)
 function isPluginHook(hook) {
   return hook.source === "pluginHook";
 }

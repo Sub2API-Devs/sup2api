@@ -66,7 +66,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:47364-47375 placement
 var FOOTER_WIDE_COLUMNS = 60;
-//@ chunk-ag5x7vhf.js:47375-47788 fingerprint = BridgeStatusIndicator (0.609)
+//@ chunk-ag5x7vhf.js:47375-47788 fingerprint (2.1.88 match: BridgeStatusIndicator, 0.609)
 /**
  * Remote Control（bridge）状态指示：连接/断开/重连中。
  */
@@ -159,7 +159,7 @@ function selectIsExternalLoading(state) {
 function selectCoordinatorTaskIndex_2(state) {
   return state.coordinatorTaskIndex;
 }
-//@ chunk-18hwfzwa.js:852544-857891 fingerprint = PromptInputFooter (0.503)
+//@ chunk-18hwfzwa.js:852544-857891 fingerprint (2.1.88 match: PromptInputFooter, 0.503)
 /**
  * 页脚组件：上方建议列表（有建议时），否则左侧 PromptInputFooterLeftSide + 右侧 Notifications；全屏与帮助菜单打开时布局不同。
  */
@@ -665,7 +665,7 @@ function PromptFooter(props) {
 //@ chunk-18hwfzwa.js:858714-858729 placement
 var FOOTER_HORIZONTAL_PADDING = 2;
 var FOOTER_MESSAGES_GAP = 1;
-//@ chunk-18hwfzwa.js:858729-858865 placement = setCwdState (1)
+//@ chunk-18hwfzwa.js:858729-858865 placement (2.1.88 match: setCwdState, 1)
 function setCwdState(nextValue, cursorOffset) {
   if (nextValue !== nextValue.normalize("NFC")) return cursorOffset;
   let clampedOffset = clampCursorOffset(nextValue, cursorOffset);

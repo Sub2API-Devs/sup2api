@@ -22,7 +22,7 @@ import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
-//@ chunk-mjyddqh1.js:425-485 placement = SETTLED_GREY (1)
+//@ chunk-mjyddqh1.js:425-485 placement (2.1.88 match: SETTLED_GREY, 1)
 /**
  * 导出值：同一声明里的多个绑定：GLYPH_ANIM_MS（2000）；GLYPH_ACCENT_RGB（强调色）；GLYPH_BASE_RGB（基础色）；位于「Spinner 旋转字形（按帧/停滞状态变色）」模块。
  */
@@ -38,7 +38,7 @@ var GLYPH_BASE_RGB = {
   g: 0,
   b: 0,
 };
-//@ chunk-mjyddqh1.js:485-2774 fingerprint = SpinnerGlyph (0.763)
+//@ chunk-mjyddqh1.js:485-2774 fingerprint (2.1.88 match: SpinnerGlyph, 0.763)
 function SpinnerGlyph(props) {
   let $ = useMemoCache(35);
   let { frame, messageColor, stalledIntensity, thinkingIntensity, reducedMotion, time } = props;

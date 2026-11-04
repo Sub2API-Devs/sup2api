@@ -17,7 +17,7 @@ import { stripControlChars, drainRegisteredWriteQueues } from "../utils/settings
 import { waitForOAuthRefreshBeforeExit } from "../utils/auth/oauthRefreshExitWait.js";
 import { withDeadline } from "../utils/sleep.js";
 
-//@ chunk-fnk5kvbf.js:2273-2338 fingerprint = cliError (0.708)
+//@ chunk-fnk5kvbf.js:2273-2338 fingerprint (2.1.88 match: cliError, 0.708)
 /**
  * 在异步上下文外运行回调（AsyncLocalStorage.exit/run），旧版名 cliError 配错。
  */
@@ -31,7 +31,7 @@ function cliError_2(msg) {
 function printCliError(message) {
   console.error(sequential.red(message));
 }
-//@ chunk-437rqrst.js:451-529 placement = cliOk (0.415)
+//@ chunk-437rqrst.js:451-529 placement (2.1.88 match: cliOk, 0.415)
 /**
  * cliError：输出红色错误（可选）并以 1 退出；非 diskless 进程先记录退出原因。（旧版名 cliOk 配错，门面导出名为 cliError）
  */

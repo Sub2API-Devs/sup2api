@@ -21,7 +21,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 function isColorCommandForceHidden() {
   return false;
 }
-//@ chunk-e6aww6q8.js:1687135-1687693 fingerprint = color (0.589)
+//@ chunk-e6aww6q8.js:1687135-1687693 fingerprint (2.1.88 match: color, 0.589)
 /**
  * /color 命令对象（local-jsx）；描述：Set the prompt bar color for this session；isHidden: {return Vd()&&Zee()&&wd()&&!ym()}；实现 chunk-b5scw0qq.js 的 Xzi。
  */

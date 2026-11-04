@@ -31,7 +31,7 @@ import { logMCPError } from "../../utils/log.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9ycd12hk.js:1114-1475 fingerprint = outputSchema (0.862)
+//@ chunk-9ycd12hk.js:1114-1475 fingerprint (2.1.88 match: outputSchema, 0.862)
 /**
  * ListMcpResources 输入 schema（server 可选）与输出 schema（uri/name/mimeType/description/server 数组）。
  */
@@ -75,7 +75,7 @@ function sanitizeResourceListForCreation(resources) {
 function stringOr(fallback, value) {
   return typeof value === "string" ? value : fallback;
 }
-//@ chunk-9ycd12hk.js:1825-3769 fingerprint = ListMcpResourcesTool (0.516)
+//@ chunk-9ycd12hk.js:1825-3769 fingerprint (2.1.88 match: ListMcpResourcesTool, 0.516)
 /**
  * ListMcpResources 工具（别名 ListMcpResources，shouldDefer，只读可并发，backgrounding never）。可选 server 过滤；对每个有 resources 能力的已连接服务器 ensureConnectedClient 后拉 resources/list（claude.ai 代理/特定 HTTP 服务器出现发现错误时重连重试一次），过滤掉 MCP Apps UI 资源（ui://、text/html;profile=mcp-app）；结果为空时提示"服务器可能仍提供工具"。
  */

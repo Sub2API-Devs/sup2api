@@ -35,12 +35,12 @@ import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { renderSlashSkillItem } from "../ui/OrderedList.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-e6aww6q8.js:1476088-1476207 fingerprint = getSourceSubtitle (0.733)
+//@ chunk-e6aww6q8.js:1476088-1476207 fingerprint (2.1.88 match: getSourceSubtitle, 0.733)
 function getSourceSubtitle(source, skills) {
   let found = source.find((source) => source.name === skills);
   return found?.loadedFrom === "skills" || found?.loadedFrom === "commands_DEPRECATED";
 }
-//@ chunk-ae5g0zb5.js:106214-106307 fingerprint = _temp3 (0.607)
+//@ chunk-ae5g0zb5.js:106214-106307 fingerprint (2.1.88 match: _temp3, 0.607)
 /**
  * 函数 hasPluginSkill（有来自该插件的技能命令）；位于「/skills 菜单：按来源（用户/项目/插件/命令）列出技能及描述」模块。
  */
@@ -49,7 +49,7 @@ function hasPluginSkill(skill_0) {
     (state) => state.type === "prompt" && state.pluginInfo?.pluginManifest.name === CLAUDE_TEST_3,
   );
 }
-//@ chunk-ygke3hz8.js:583-796 fingerprint = _temp (0.858)
+//@ chunk-ygke3hz8.js:583-796 fingerprint (2.1.88 match: _temp, 0.858)
 function isSkillCommand(cmd) {
   return (
     cmd.type === "prompt" &&
@@ -61,7 +61,7 @@ function isSkillCommand(cmd) {
       cmd.loadedFrom === "mcp")
   );
 }
-//@ chunk-vrb44rx7.js:141988-142243 fingerprint = getSourceTitle (0.506)
+//@ chunk-vrb44rx7.js:141988-142243 fingerprint (2.1.88 match: getSourceTitle, 0.506)
 function getSourceTitle({ items, healthByPluginName, columns }) {
   let maxWidth = 0;
   for (let item of items) {
@@ -90,7 +90,7 @@ function renderSlashSkill(skillName) {
     skillName,
   );
 }
-//@ chunk-00qhwn8e.js:17596-19170 callgraph-fingerprint = SkillsMenu (0.279)
+//@ chunk-00qhwn8e.js:17596-19170 callgraph-fingerprint (2.1.88 match: SkillsMenu, 0.279)
 /**
  * /skills：按来源分组列出技能（用户、项目、插件、旧 commands），显示描述与云会话中是否加载。
  */

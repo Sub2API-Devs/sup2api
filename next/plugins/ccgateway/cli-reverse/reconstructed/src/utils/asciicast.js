@@ -62,7 +62,7 @@ var recordingStateByRoot; // deferred: uses SessionRootSlot (../bootstrap/sessio
 deferInit("chunk-08s5p3av.js:3424", () => {
   recordingStateByRoot = new SessionRootSlot(() => new _resetRecordingStateForTesting());
 });
-//@ chunk-08s5p3av.js:3449-4215 facade-exports = renameRecordingForSession (0.754)
+//@ chunk-08s5p3av.js:3449-4215 facade-exports (2.1.88 match: renameRecordingForSession, 0.754)
 async function renameRecordingForSession(session, storage) {
   let recordingState = recordingStateByRoot.of(session);
   let oldPath = recordingState.filePath;

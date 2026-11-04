@@ -144,7 +144,7 @@ deferInit("chunk-7dqf31r1.js:6232", () => {
   ]);
   NON_TERMINAL_ENTRYPOINTS = new Set([...NON_TERMINAL_ENTRYPOINTS_2].filter(startsWithRemote));
 });
-//@ chunk-7dqf31r1.js:6550-6770 placement = envSessionKind (0.758)
+//@ chunk-7dqf31r1.js:6550-6770 placement (2.1.88 match: envSessionKind, 0.758)
 function envSessionKind() {
   let k = env.CLAUDE_CODE_SESSION_KIND;
   if (k === "bg" || k === "daemon" || k === "daemon-worker" || getTeammateAgentId() !== undefined)

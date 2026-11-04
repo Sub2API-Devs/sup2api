@@ -19,7 +19,7 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { MessageResponse } from "../MessageResponse.js";
 
-//@ chunk-ah34pb7m.js:112131-112874 fingerprint = UserMemoryInputMessage (0.684)
+//@ chunk-ah34pb7m.js:112131-112874 fingerprint (2.1.88 match: UserMemoryInputMessage, 0.684)
 function UserMemoryInputMessage(props) {
   let $ = useMemoCache(10);
   let { text, addMargin } = props;

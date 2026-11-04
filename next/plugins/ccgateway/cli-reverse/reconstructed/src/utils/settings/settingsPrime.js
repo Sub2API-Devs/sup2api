@@ -45,7 +45,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 //@ chunk-5x106wnr.js:598-610 placement
 var MAX_SETTINGS_PRIME_ATTEMPTS = 3;
 var SETTINGS_PRIME_BACKOFF_FACTOR = 8;
-//@ chunk-5x106wnr.js:610-694 placement = _temp5 (1)
+//@ chunk-5x106wnr.js:610-694 placement (2.1.88 match: _temp5, 1)
 function userSettingsFilePath() {
   let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
   return settingsFilePathForSource !== undefined &&
@@ -794,7 +794,7 @@ function primeRootOwnership(store, ownership) {
   )
     logForDebugging("settingsPrime: ownership of the local settings root read ahead through the backend");
 }
-//@ chunk-5x106wnr.js:13263-13332 placement = extractQuotaStatusFromError (1)
+//@ chunk-5x106wnr.js:13263-13332 placement (2.1.88 match: extractQuotaStatusFromError, 1)
 /**
  * Promise.allSettled 结果：rejected 抛出原因，否则返回值。旧版名错配；疑似归错文件。
  */

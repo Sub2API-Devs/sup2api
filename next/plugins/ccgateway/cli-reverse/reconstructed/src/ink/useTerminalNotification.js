@@ -26,14 +26,14 @@ function sanitizeNotificationText(text) {
   }
   return clean;
 }
-//@ chunk-24t3dkzb.js:11549-11581 fingerprint = TerminalWriteProvider (1)
+//@ chunk-24t3dkzb.js:11549-11581 fingerprint (2.1.88 match: TerminalWriteProvider, 1)
 var TerminalWriteContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TerminalWriteProvider;
 deferInit("chunk-24t3dkzb.js:11549", () => {
   TerminalWriteContext = createContext(null);
   TerminalWriteProvider = TerminalWriteContext.Provider;
 });
-//@ chunk-24t3dkzb.js:11581-12602 fingerprint = useTerminalNotification (1)
+//@ chunk-24t3dkzb.js:11581-12602 fingerprint (2.1.88 match: useTerminalNotification, 1)
 /**
  * 终端通知钩子：iTerm2（OSC 9）、kitty（OSC 99 标题+正文+聚焦）、Ghostty（OSC 777 notify）、响铃（BEL）、进度条（OSC 9;4：running/error/indeterminate/completed，终端不支持时不写）；全部经 tmux/screen 透传包装。
  */

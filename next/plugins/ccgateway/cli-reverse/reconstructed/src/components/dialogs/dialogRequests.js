@@ -9,7 +9,7 @@
  * attribution: placement 7
  */
 
-//@ chunk-tc95s49z.js:191-207 placement = TMUX_SESSION (1)
+//@ chunk-tc95s49z.js:191-207 placement (2.1.88 match: TMUX_SESSION, 1)
 var TMUX_SESSION = ["panel"];
 //@ chunk-tc95s49z.js:207-266 placement
 function withHideWhile({ hideWhile = TMUX_SESSION, ...rest }) {

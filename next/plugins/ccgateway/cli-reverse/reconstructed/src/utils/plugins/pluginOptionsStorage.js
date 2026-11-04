@@ -93,7 +93,7 @@ async function readPluginOptions(pluginId, credentials) {
 function clearPluginOptionsCache() {
   getPluginRegistry().optionValues.clear();
 }
-//@ chunk-vr8smdd9.js:20674-22061 fingerprint = savePluginOptions (0.827)
+//@ chunk-vr8smdd9.js:20674-22061 fingerprint (2.1.88 match: savePluginOptions, 0.827)
 /**
  * 保存插件选项：sensitive 字段写安全存储（keychain/凭据文件的 pluginSecrets），其余写 userSettings 的 pluginConfigs[插件].options；同时清掉另一侧的同名旧值。
  */
@@ -243,7 +243,7 @@ async function readUserSettingsForOptions(pluginId) {
   );
   return "unreadable";
 }
-//@ chunk-vr8smdd9.js:22935-24670 fingerprint = deletePluginOptions (0.431)
+//@ chunk-vr8smdd9.js:22935-24670 fingerprint (2.1.88 match: deletePluginOptions, 0.431)
 /**
  * 删除插件的全部选项（settings.pluginConfigs 与安全存储里的 pluginSecrets），卸载时调用。
  */
@@ -598,7 +598,7 @@ async function wouldTargetKeepOwnPluginOptions(fromId, toId) {
   }
   return false;
 }
-//@ chunk-vr8smdd9.js:28052-28308 fingerprint = getUnconfiguredOptions (0.829)
+//@ chunk-vr8smdd9.js:28052-28308 fingerprint (2.1.88 match: getUnconfiguredOptions, 0.829)
 /**
  * 返回 manifest.userConfig 中尚未配置（或非敏感值不合法）的选项，启用插件时据此弹出配置对话框。
  */
@@ -769,7 +769,7 @@ function hasUserConfigVariables(value, userConfig) {
     return true;
   }
 }
-//@ chunk-vr8smdd9.js:30136-30373 fingerprint = substituteUserConfigInContent (1)
+//@ chunk-vr8smdd9.js:30136-30373 fingerprint (2.1.88 match: substituteUserConfigInContent, 1)
 /**
  * 在技能/代理正文中替换 ${user_config.KEY}：sensitive 值不替换，改为占位说明。
  */
@@ -830,9 +830,9 @@ function mergeRenamedPluginSettings(pluginConfigs, pluginId, updates) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:762563-762603 placement = TRUSTED_SETTING_SOURCES (0.808)
+//@ chunk-e6aww6q8.js:762563-762603 placement (2.1.88 match: TRUSTED_SETTING_SOURCES, 0.808)
 var TRUSTED_SETTING_SOURCES = ["userSettings", "flagSettings"];
-//@ chunk-e6aww6q8.js:762603-762691 fingerprint = loadPluginOptions (0.646)
+//@ chunk-e6aww6q8.js:762603-762691 fingerprint (2.1.88 match: loadPluginOptions, 0.646)
 /**
  * 序列化插件在各受信设置源中的 pluginConfigs options，作为插件选项的变化指纹（名字配错，见 lead 建议）。
  */

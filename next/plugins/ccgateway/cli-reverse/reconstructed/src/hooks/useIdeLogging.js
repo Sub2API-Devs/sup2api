@@ -16,7 +16,7 @@ import { onMcpNotification } from "../services/mcp/mcpWireUtils.js";
 import { logEvent } from "../services/analytics/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:207786-207884 fingerprint = LogEventSchema (0.849)
+//@ chunk-18hwfzwa.js:207786-207884 fingerprint (2.1.88 match: LogEventSchema, 0.849)
 var LogEventSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-18hwfzwa.js:207786", () => {
   LogEventSchema = DoctorLazy(() =>
@@ -29,7 +29,7 @@ deferInit("chunk-18hwfzwa.js:207786", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:207884-208031 fingerprint = useIdeLogging (0.863)
+//@ chunk-18hwfzwa.js:207884-208031 fingerprint (2.1.88 match: useIdeLogging, 0.863)
 function useIdeLogging(mcpClients) {
   useEffect(() => {
     if (!mcpClients.length) return;

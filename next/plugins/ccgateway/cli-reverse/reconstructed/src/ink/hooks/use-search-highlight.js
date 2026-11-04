@@ -12,7 +12,7 @@ import { useContext, useMemo } from "../../../vendor/react/cjs/react.production.
 import { StdinContextAlias } from "../terminalModes.js";
 import { getSecondRootError } from "../terminal.js";
 
-//@ chunk-18hwfzwa.js:136070-136342 fingerprint = useSearchHighlight (1)
+//@ chunk-18hwfzwa.js:136070-136342 fingerprint (2.1.88 match: useSearchHighlight, 1)
 /**
  * 搜索高亮钩子：setQuery（全屏高亮所有匹配）、scanElement（在某元素子树里扫描匹配位置）、setPositions（设置位置式高亮与当前匹配）。
  */

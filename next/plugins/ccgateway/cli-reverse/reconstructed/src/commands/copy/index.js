@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1687693-1687845 fingerprint = copy (0.819)
+//@ chunk-e6aww6q8.js:1687693-1687845 fingerprint (2.1.88 match: copy, 0.819)
 /**
  * /copy 命令对象（local-jsx）；描述：Copy Claude's last response to clipboard (or /copy N for the Nth-latest)；实现 chunk-0knprqgt.js 的 xn。
  */

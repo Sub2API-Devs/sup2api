@@ -15,7 +15,7 @@ import { isOAuthEffective } from "./orgConfigEligibility.js";
 import { getOauthAccountInfo } from "../../utils/auth.js";
 import { stripControlChars } from "../../utils/settings/writeQueues.js";
 
-//@ chunk-c18v4hz4.js:10863-10961 placement = hasOpusAccess (1)
+//@ chunk-c18v4hz4.js:10863-10961 placement (2.1.88 match: hasOpusAccess, 1)
 function hasOpusAccess(tier) {
   switch (tier) {
     case "max":

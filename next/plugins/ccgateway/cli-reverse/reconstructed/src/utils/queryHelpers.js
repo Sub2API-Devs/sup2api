@@ -289,7 +289,7 @@ deferInit("chunk-e6aww6q8.js:4736600", () => {
  * 10：提取已读文件状态的默认缓存大小。
  */
 var READ_FILE_STATE_CACHE_SIZE = 10;
-//@ chunk-0h4e7gnq.js:49721-49930 fingerprint = isResultSuccessful (0.89)
+//@ chunk-0h4e7gnq.js:49721-49930 fingerprint (2.1.88 match: isResultSuccessful, 0.89)
 /**
  * 结果是否成功：最后块是 text/thinking，或是 tool_result 用户消息，或 stop_reason=end_turn。
  */
@@ -361,7 +361,7 @@ function formatResultDiagnostic(message, stopReason) {
     message?.type === "assistant" ? (lastAlias(message.message.content)?.type ?? "none") : "n/a";
   return `[ede_diagnostic] result_type=${resultType} last_content_type=${contentType} stop_reason=${stopReason}`;
 }
-//@ chunk-0h4e7gnq.js:50617-50800 layout = countToolCallsSince (1)
+//@ chunk-0h4e7gnq.js:50617-50800 layout (2.1.88 match: countToolCallsSince, 1)
 /**
  * 首块是 tool_use 或 tool_result 的 user/assistant。覆盖后缀名 countToolCallsSince_3。
  */
@@ -507,7 +507,7 @@ function takeToolResultTiming(message) {
     ? takeCutResult(toolResultBlock.tool_use_id, message.uuid)
     : undefined;
 }
-//@ chunk-0h4e7gnq.js:52533-54292 fingerprint = normalizeMessage (0.374)
+//@ chunk-0h4e7gnq.js:52533-54292 fingerprint (2.1.88 match: normalizeMessage, 0.374)
 /**
  * 内部消息转 SDK 流消息（-p/SDK 输出）：assistant 拆块并过滤空块、progress（子代理/心跳）、user、附件、系统消息。
  */
@@ -1693,7 +1693,7 @@ async function* handleHandedOffTurn(
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:70122-70218 layout = isHumanTurn (0.779)
+//@ chunk-0h4e7gnq.js:70122-70218 layout (2.1.88 match: isHumanTurn, 0.779)
 /**
  * 覆盖后缀名 isHumanTurn_2。
  */
@@ -2059,7 +2059,7 @@ async function* runToolUsesOnResume({
   }
   return permissionLayers;
 }
-//@ chunk-0h4e7gnq.js:75821-78840 fingerprint = extractReadFilesFromMessages (0.37)
+//@ chunk-0h4e7gnq.js:75821-78840 fingerprint (2.1.88 match: extractReadFilesFromMessages, 0.37)
 /**
  * 官方行为，保留：extractReadFilesFromMessages 的 replaceEntry 先写新值又写回旧值，等于没有替换，只有 ee.delete 生效；疑为打包把“替换后清哈希”写坏。
  */
@@ -2361,7 +2361,7 @@ function partitionSiblingRuns(permission, tools, toolAliases) {
     missingBlocks,
   };
 }
-//@ chunk-0h4e7gnq.js:80630-80820 fingerprint = handleOrphanedPermission (0.365)
+//@ chunk-0h4e7gnq.js:80630-80820 fingerprint (2.1.88 match: handleOrphanedPermission, 0.365)
 /**
  * 孤立权限的决定：被调用方强制询问时保留 ask（重启前挂起的除外），否则视为允许。
  */
@@ -2393,7 +2393,7 @@ function hasToolResultAfter(mutableMessages, fromIndex, toolUseID) {
         ),
     );
 }
-//@ chunk-0eyv3mzk.js:227-501 fingerprint = extractBashToolsFromMessages (1)
+//@ chunk-0eyv3mzk.js:227-501 fingerprint (2.1.88 match: extractBashToolsFromMessages, 1)
 /**
  * 遍历 assistant 里 Bash 类 tool_use 的 command 字符串。
  */
@@ -2435,7 +2435,7 @@ function referencedBashToolNames(messages) {
     for (let ref of parseReferences(toolRef)) names.add(ref);
   return names;
 }
-//@ chunk-0eyv3mzk.js:923-1104 placement = countToolCallsSince (1)
+//@ chunk-0eyv3mzk.js:923-1104 placement (2.1.88 match: countToolCallsSince, 1)
 function collectUsedToolNames(messages) {
   let names = new Set();
   for (let message of messages)
@@ -2444,7 +2444,7 @@ function collectUsedToolNames(messages) {
     }
   return names;
 }
-//@ chunk-0eyv3mzk.js:1104-1128 fingerprint = STRIPPED_COMMANDS (1)
+//@ chunk-0eyv3mzk.js:1104-1128 fingerprint (2.1.88 match: STRIPPED_COMMANDS, 1)
 /**
  * 取 CLI 名时跳过的前缀命令（sudo）。
  */

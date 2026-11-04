@@ -380,7 +380,7 @@ function lineColumnAt(text, offset) {
     index++;
   return `line ${line}, column ${column}${index > 0 ? ` (+${index} more)` : ""}`;
 }
-//@ chunk-06y4szbn.js:30821-31119 placement = getMcpAuthCache (0.756)
+//@ chunk-06y4szbn.js:30821-31119 placement (2.1.88 match: getMcpAuthCache, 0.756)
 function findUndecodableChar(text, bytes, encoding) {
   let isUtf8 = encoding === "utf-8";
   let byteIndex = isUtf8 ? (bytes[0] === 239 && bytes[1] === 187 && bytes[2] === 191 ? 3 : 0) : 2;

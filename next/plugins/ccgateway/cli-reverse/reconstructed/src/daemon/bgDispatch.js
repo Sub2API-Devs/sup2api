@@ -366,7 +366,7 @@ function parseDispatchRecord(text) {
     },
   };
 }
-//@ chunk-ss669z1x.js:17710-17791 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-ss669z1x.js:17710-17791 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function convertDirectoryToZipInPlace(dirPath) {
   await rm(join(daemonDispatchDir(), dirPath), {
     recursive: true,
@@ -516,7 +516,7 @@ async function drainDispatchQueue(storage, dir) {
 function isTempFileName(fileName) {
   return fileName.endsWith(".tmp") || fileName.includes(".tmp.");
 }
-//@ chunk-ss669z1x.js:19896-19959 placement = extractQuotaStatusFromError (1)
+//@ chunk-ss669z1x.js:19896-19959 placement (2.1.88 match: extractQuotaStatusFromError, 1)
 /**
  * 以 . 开头、临时文件或名为 rejected。旧版名错配；疑似归错文件。
  */
@@ -1876,7 +1876,7 @@ async function deletePtyPidRecords(storageV5, short, ptySock) {
   ])
     await storageV5.delete(STORAGE_SPACES.daemon(["pty-pids", fileName])).catch(() => {});
 }
-//@ chunk-ss669z1x.js:40290-40429 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-ss669z1x.js:40290-40429 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function removeIfNotDirectory(dirPath) {
   let zipData = await lstat(dirPath).catch(() => null);
   if (zipData === null || zipData.isDirectory()) return false;

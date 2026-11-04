@@ -800,7 +800,7 @@ function classifyDirEntryForCompletion(stats, root, options, ctx) {
     return isUnreadableRealpathError(error) ? "other" : "unexamined";
   }
 }
-//@ chunk-e6aww6q8.js:1892302-1892338 placement = scanDirectory (0.766)
+//@ chunk-e6aww6q8.js:1892302-1892338 placement (2.1.88 match: scanDirectory, 0.766)
 function scanDirectory_3(root, options) {
   return "directory";
 }
@@ -821,7 +821,7 @@ function hasNetworkAncestor(path) {
 function isUnsafeSyncRootSpelling(path) {
   return isNetworkMountPath(path) || isNetworkMountRoot_2(path) || neverOtherHostMount(path);
 }
-//@ chunk-e6aww6q8.js:1892564-1892626 placement = isRealPathWithinTeamDir (1)
+//@ chunk-e6aww6q8.js:1892564-1892626 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundErrno(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";

@@ -425,7 +425,7 @@ function formatListConjunction(items) {
     type: "conjunction",
   }).format(items);
 }
-//@ chunk-v21qppnj.js:15629-15728 placement = formatFailureDetails (0.777)
+//@ chunk-v21qppnj.js:15629-15728 placement (2.1.88 match: formatFailureDetails, 0.777)
 function formatFailureDetails(items) {
   let remaining = items.length - MAX_LISTED_REMAINING;
   return remaining > 0

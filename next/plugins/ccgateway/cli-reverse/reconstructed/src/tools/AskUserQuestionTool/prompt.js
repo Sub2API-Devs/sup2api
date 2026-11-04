@@ -12,7 +12,7 @@ import { ENTER_PLAN_MODE_TOOL_NAME } from "../EnterPlanModeTool/constants.js";
 import { EXITPLANMODE } from "../ExitPlanModeTool/constants.js";
 import { fetchAnchorPageSource } from "../../services/artifacts/comments/pageAnchors.js";
 
-//@ chunk-ft22tw4r.js:230-385 placement = ASK_USER_QUESTION_TOOL_NAME (0.449)
+//@ chunk-ft22tw4r.js:230-385 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_NAME, 0.449)
 /**
  * AskUserQuestion 名称常量、header 最长 12 字符、追问请求文本。
  */
@@ -40,7 +40,7 @@ function stringifyPromptScalar(value) {
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return escapeDoubleQuoted(value);
 }
-//@ chunk-ft22tw4r.js:612-4471 callgraph-fingerprint = DESCRIPTION (0.26)
+//@ chunk-ft22tw4r.js:612-4471 callgraph-fingerprint (2.1.88 match: DESCRIPTION, 0.26)
 /**
  * AskUserQuestion 的 description 与各段 prompt 文本（基础用法、计划模式说明、扩展问题说明、只在必要时提问、问题需自足、preview 说明）。
  */
@@ -91,7 +91,7 @@ Reserve this for decisions where the user's answer changes what you do next \u20
 var STANDALONE_QUESTION_PROMPT = `
 The user may see only the question dialog: tool results and text you wrote earlier in this turn may not be on their screen while it is open. Make each question stand on its own: if it depends on something you found, say so briefly, and name the items you are asking about in the question itself.
 `;
-//@ chunk-9tgt55am.js:35231-35345 fingerprint = PREVIEW_FEATURE_PROMPT (0.335)
+//@ chunk-9tgt55am.js:35231-35345 fingerprint (2.1.88 match: PREVIEW_FEATURE_PROMPT, 0.335)
 async function PREVIEW_FEATURE_PROMPT(request) {
   let anchorPageSource = await fetchAnchorPageSource(request);
   return anchorPageSource === undefined ||

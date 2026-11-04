@@ -21,7 +21,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 var AWS_AUTH_STATUS_TIMEOUTS = 15000;
 var MAX_AWS_STATUS_LINE_CHARS = 4000;
 var MAX_AWS_STATUS_LINES = 200;
-//@ chunk-aepeg2w5.js:320425-321468 fingerprint = AwsAuthStatusManager (0.766)
+//@ chunk-aepeg2w5.js:320425-321468 fingerprint (2.1.88 match: AwsAuthStatusManager, 0.766)
 /**
  * 云认证刷新状态单例：记录是否在认证中、输出行、错误，供 UI 显示 AWS/GCP 刷新进度。
  */

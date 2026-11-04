@@ -152,7 +152,7 @@ deferInit("chunk-f22e0a61.js:3146", () => {
 function getHostState() {
   return providerManagedHostRegistry.of(getRootSession().host);
 }
-//@ chunk-f22e0a61.js:3205-3296 placement = withoutHostManagedProviderVars (1)
+//@ chunk-f22e0a61.js:3205-3296 placement (2.1.88 match: withoutHostManagedProviderVars, 1)
 function withoutHostManagedProviderVars() {
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return false;
   if (!isFirstPartyProvider()) return true;

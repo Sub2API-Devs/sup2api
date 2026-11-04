@@ -14,7 +14,7 @@ import { logForDebugging } from "../../debug.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../config.js";
 
-//@ chunk-78rbfds1.js:537-1012 fingerprint = detectPythonPackageManager (1)
+//@ chunk-78rbfds1.js:537-1012 fingerprint (2.1.88 match: detectPythonPackageManager, 1)
 /**
  * 依次探测 uv、pipx、pip、pip3，返回可用的 Python 包管理器。
  */
@@ -38,11 +38,11 @@ async function detectPythonPackageManager() {
   logForDebugging("[it2Setup] No Python package manager found");
   return null;
 }
-//@ chunk-78rbfds1.js:1012-1074 fingerprint = isIt2CliAvailable (1)
+//@ chunk-78rbfds1.js:1012-1074 fingerprint (2.1.88 match: isIt2CliAvailable, 1)
 async function isIt2CliAvailable() {
   return (await execFileNoThrow("which", ["it2"])).code === 0;
 }
-//@ chunk-78rbfds1.js:1074-1754 fingerprint = installIt2 (0.915)
+//@ chunk-78rbfds1.js:1074-1754 fingerprint (2.1.88 match: installIt2, 0.915)
 /**
  * 用选定的包管理器在 home 目录下安装 it2，记 swarm_iterm2_it2_install。
  */
@@ -89,7 +89,7 @@ async function installIt2(packageManager) {
     packageManager,
   };
 }
-//@ chunk-78rbfds1.js:1754-2552 fingerprint = verifyIt2Setup (0.862)
+//@ chunk-78rbfds1.js:1754-2552 fingerprint (2.1.88 match: verifyIt2Setup, 0.862)
 /**
  * 验证 it2：未安装、Python API 未开启（stderr 关键字判断）、通信失败或成功。
  */
@@ -131,7 +131,7 @@ async function verifyIt2Setup() {
     success: true,
   };
 }
-//@ chunk-78rbfds1.js:2552-2759 fingerprint = getPythonApiInstructions (1)
+//@ chunk-78rbfds1.js:2552-2759 fingerprint (2.1.88 match: getPythonApiInstructions, 1)
 /**
  * 开启 iTerm2 Python API 的操作说明文字。
  */
@@ -144,7 +144,7 @@ function getPythonApiInstructions() {
     "After enabling, you may need to restart iTerm2.",
   ];
 }
-//@ chunk-78rbfds1.js:2759-2902 fingerprint = markIt2SetupComplete (1)
+//@ chunk-78rbfds1.js:2759-2902 fingerprint (2.1.88 match: markIt2SetupComplete, 1)
 /**
  * 在全局配置写 iterm2It2SetupComplete=true。
  */
@@ -160,7 +160,7 @@ function markIt2SetupComplete(storageV5) {
     logForDebugging("[it2Setup] Marked it2 setup as complete");
   }
 }
-//@ chunk-78rbfds1.js:2902-3044 fingerprint = setPreferTmuxOverIterm2 (1)
+//@ chunk-78rbfds1.js:2902-3044 fingerprint (2.1.88 match: setPreferTmuxOverIterm2, 1)
 /**
  * 在全局配置写 preferTmuxOverIterm2。
  */
@@ -176,7 +176,7 @@ function setPreferTmuxOverIterm2(prefer, storageV5) {
     logForDebugging(`[it2Setup] Set preferTmuxOverIterm2 = ${prefer}`);
   }
 }
-//@ chunk-78rbfds1.js:3044-3095 fingerprint = getPreferTmuxOverIterm2 (1)
+//@ chunk-78rbfds1.js:3044-3095 fingerprint (2.1.88 match: getPreferTmuxOverIterm2, 1)
 function getPreferTmuxOverIterm2() {
   return getGlobalConfig().preferTmuxOverIterm2 === true;
 }

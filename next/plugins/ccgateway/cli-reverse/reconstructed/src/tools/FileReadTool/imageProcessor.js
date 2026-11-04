@@ -12,7 +12,7 @@ import { createUiMessagePort } from "../../plugins/functionHooks/surfaceClients.
 import { dispatchUiMessage } from "../../plugins/functionHooks/ui/desktopSurface.js";
 import { matcherLog } from "../../utils/hooks/functionHookMatchers.js";
 
-//@ chunk-1tz177x8.js:26473-26606 fingerprint = getImageProcessor (0.396)
+//@ chunk-1tz177x8.js:26473-26606 fingerprint (2.1.88 match: getImageProcessor, 0.396)
 /**
  * 创建图片处理调度器（setImmediate 调度，警告写日志）。
  */

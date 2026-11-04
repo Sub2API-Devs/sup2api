@@ -78,7 +78,7 @@ import { useTheme } from "../design-system/ThemeProvider.js";
 import { useSession } from "../../context/session.js";
 import { useCwdDerived } from "../../utils/cwd.js";
 
-//@ chunk-6p6y0k3t.js:2135-2384 placement = isRow (0.477)
+//@ chunk-6p6y0k3t.js:2135-2384 placement (2.1.88 match: isRow, 0.477)
 function renderPropertyRows(rows, gap) {
   return [
     gap > 0 &&
@@ -115,7 +115,7 @@ function renderPropertyRows(rows, gap) {
     }),
   ];
 }
-//@ chunk-6p6y0k3t.js:2384-2542 fingerprint = _temp5 (0.929)
+//@ chunk-6p6y0k3t.js:2384-2542 fingerprint (2.1.88 match: _temp5, 0.929)
 function renderDiagnosticRow(diagnostic, i) {
   return jsxProd_default_2(
     Box,
@@ -143,7 +143,7 @@ function renderDiagnosticRow(diagnostic, i) {
  * 导出值：DEBUG_DETAILS_SUFFIX（" (details in the --debug log)"）；位于「/status 标签页：版本、会话名、cwd、账号/组织、认证方式、模型、MCP/插件/IDE 状态、设置来源」模块。
  */
 var DEBUG_DETAILS_SUFFIX = " (details in the --debug log)";
-//@ chunk-6p6y0k3t.js:2582-4511 callgraph-witnessed = buildPrimarySection (0.197)
+//@ chunk-6p6y0k3t.js:2582-4511 callgraph-witnessed (2.1.88 match: buildPrimarySection, 0.197)
 function buildPrimarySection({
   sessionId,
   remoteSessionName,
@@ -305,7 +305,7 @@ function getComplianceRows() {
       : []),
   ];
 }
-//@ chunk-6p6y0k3t.js:4713-4947 fingerprint = buildSecondarySection (0.947)
+//@ chunk-6p6y0k3t.js:4713-4947 fingerprint (2.1.88 match: buildSecondarySection, 0.947)
 function buildSecondarySection({ mainLoopModel, mcp, theme, ideInstallationStatus, permissionMode }) {
   return [
     {
@@ -340,7 +340,7 @@ async function collectStatusDiagnostics(mcpClients, storageV5, context) {
     ])
   ).flat();
 }
-//@ chunk-6p6y0k3t.js:5048-5492 fingerprint = PropertyValue (1)
+//@ chunk-6p6y0k3t.js:5048-5492 fingerprint (2.1.88 match: PropertyValue, 1)
 function PropertyValue(props) {
   let $ = useMemoCache(8);
   let { value } = props;
@@ -390,7 +390,7 @@ function PropertyValue(props) {
   }
   return value;
 }
-//@ chunk-6p6y0k3t.js:5492-6838 fingerprint = Status (0.588)
+//@ chunk-6p6y0k3t.js:5492-6838 fingerprint (2.1.88 match: Status, 0.588)
 /**
  * /status：构造主区（版本、会话名、cwd、账号、认证、API 提供商）与次区（模型、MCP、插件、IDE、内存文件、设置来源），以属性列表显示。
  */
@@ -636,7 +636,7 @@ function StatusProperties(props) {
   } else boxElement = $[17];
   return boxElement;
 }
-//@ chunk-6p6y0k3t.js:7975-8307 fingerprint = Diagnostics (0.464)
+//@ chunk-6p6y0k3t.js:7975-8307 fingerprint (2.1.88 match: Diagnostics, 0.464)
 function Diagnostics(props) {
   let $ = useMemoCache(5);
   let { promise } = props;
@@ -670,7 +670,7 @@ function Diagnostics(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-ja34p3ys.js:340-785 fingerprint = _temp3 (0.656)
+//@ chunk-ja34p3ys.js:340-785 fingerprint (2.1.88 match: _temp3, 0.656)
 function StatusRow(props) {
   let $ = useMemoCache(9);
   let { status, children } = props;
@@ -716,7 +716,7 @@ function StatusRow(props) {
   } else rowBox = $[8];
   return rowBox;
 }
-//@ chunk-9h8dr0qb.js:42639-42676 fingerprint = _temp2 (0.693)
+//@ chunk-9h8dr0qb.js:42639-42676 fingerprint (2.1.88 match: _temp2, 0.693)
 function selectMcpCommands(s_0) {
   return s_0.mcp.commands;
 }

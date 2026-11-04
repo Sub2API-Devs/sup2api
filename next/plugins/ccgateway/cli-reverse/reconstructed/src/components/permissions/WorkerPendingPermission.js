@@ -22,7 +22,7 @@ import { getTeamName, getAgentName, getTeammateColor } from "../../utils/teammat
 import { Spinner } from "../Spinner.js";
 import { ShutdownRequestDisplay } from "../messages/ShutdownMessage.js";
 
-//@ chunk-cckztz9w.js:4446-4688 fingerprint = WorkerPendingPermission (0.586)
+//@ chunk-cckztz9w.js:4446-4688 fingerprint (2.1.88 match: WorkerPendingPermission, 0.586)
 function WorkerPendingPermission_2(t0) {
   if (!t0.ended) return null;
   let taskSuffix = taskDescriptionSuffix();

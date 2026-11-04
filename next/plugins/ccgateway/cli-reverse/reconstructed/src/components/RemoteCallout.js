@@ -39,7 +39,7 @@ deferInit("chunk-drvxna8v.js:299", () => {
     hideWhile: ["panel", "draft"],
   });
 });
-//@ chunk-18hwfzwa.js:1195547-1196852 fingerprint = RemoteCallout (0.769)
+//@ chunk-18hwfzwa.js:1195547-1196852 fingerprint (2.1.88 match: RemoteCallout, 0.769)
 function RemoteCallout(props) {
   let $ = useMemoCache(12);
   let { onDone, defaultFocusValue } = props;
@@ -132,7 +132,7 @@ function RemoteCallout(props) {
   } else dialogElement = $[11];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1196852-1196896 fingerprint = shouldShowRemoteCallout (0.779)
+//@ chunk-18hwfzwa.js:1196852-1196896 fingerprint (2.1.88 match: shouldShowRemoteCallout, 0.779)
 function shouldShowRemoteCallout() {
   return !getGlobalConfig().remoteDialogSeen;
 }

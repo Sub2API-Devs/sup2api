@@ -36,7 +36,7 @@ var FIG_SPEC_REGISTRY = [
   timeSpec_2,
   srunSpec_2,
 ];
-//@ chunk-e6aww6q8.js:3040516-3040849 fingerprint = loadFigSpec (0.774)
+//@ chunk-e6aww6q8.js:3040516-3040849 fingerprint (2.1.88 match: loadFigSpec, 0.774)
 /**
  * 按命令名动态导入 @withfig/autocomplete/build/<cmd>.js 作为 spec；拒绝含路径分隔符、..、以 - 开头的名字；GrowthBook tengu_keen_anchor 决定使用哪个可用性判断。
  */

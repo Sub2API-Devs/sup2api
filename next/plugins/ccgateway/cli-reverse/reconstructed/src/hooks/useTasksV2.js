@@ -40,7 +40,7 @@ import { isTeamLead } from "../utils/teammate.js";
 import { useStoreSelector } from "./useStoreSelector.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-55ht3bcx.js:5347-5413 fingerprint = useTasksV2 (0.488)
+//@ chunk-55ht3bcx.js:5347-5413 fingerprint (2.1.88 match: useTasksV2, 0.488)
 var useTasksV2 = {
   subscribe: (listener) => currentPolicyNoticeHolder().changed.subscribe(listener),
   getSnapshot: getPolicyNotice,
@@ -54,7 +54,7 @@ deferInit("chunk-0n43rj0b.js:691", () => {
 var TASK_LIST_POLL_MS = 5000;
 var MAX_RENDERED_TASKS = 50;
 var TASK_REFRESH_MS = 5000;
-//@ chunk-0n43rj0b.js:745-4964 callgraph-fingerprint = TasksV2Store (0.214)
+//@ chunk-0n43rj0b.js:745-4964 callgraph-fingerprint (2.1.88 match: TasksV2Store, 0.214)
 class TasksV2Store {
   #c = undefined;
   #d = false;
@@ -416,7 +416,7 @@ function useTaskListSubscription() {
 function useHasTaskSelection() {
   return useStoreSelector(useTasksV2StoreIfEnabled(), isNonEmptyString) ?? false;
 }
-//@ chunk-0n43rj0b.js:5367-5681 placement = TaskSchema (0.644)
+//@ chunk-0n43rj0b.js:5367-5681 placement (2.1.88 match: TaskSchema, 0.644)
 /**
  * 两个任务数组逐字段相等（useTasksV2 避免无谓重渲染）。
  */

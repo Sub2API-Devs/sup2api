@@ -17,12 +17,12 @@ import { stripSystemReminders } from "./systemReminder.js";
 import { isUntrustedObject } from "./untrustedValues.js";
 import { CLONE_DEPTH_THRESHOLD } from "./structuredCloneLimits.js";
 
-//@ chunk-wd9kxbpn.js:15515-15608 fingerprint = SYSTEM_REMINDER_CLOSE (0.863)
+//@ chunk-wd9kxbpn.js:15515-15608 fingerprint (2.1.88 match: SYSTEM_REMINDER_CLOSE, 0.863)
 function SYSTEM_REMINDER_CLOSE(text) {
   let index = text.lastIndexOf("</system-reminder>");
   return (index >= 0 ? text.slice(index + 18) : text).trim();
 }
-//@ chunk-ag5x7vhf.js:136561-137699 fingerprint = computeSearchText (0.768)
+//@ chunk-ag5x7vhf.js:136561-137699 fingerprint (2.1.88 match: computeSearchText, 0.768)
 /**
  * 计算消息的可搜索文本（转录搜索用），覆盖文本、工具输入与结果。
  */
@@ -94,7 +94,7 @@ function computeSearchText(msg) {
   }
   return stripSystemReminders(raw);
 }
-//@ chunk-ag5x7vhf.js:137699-138433 fingerprint = toolUseSearchText (0.916)
+//@ chunk-ag5x7vhf.js:137699-138433 fingerprint (2.1.88 match: toolUseSearchText, 0.916)
 function toolUseSearchText(input) {
   if (!input || typeof input !== "object" || isUntrustedObject(input)) return "";
   let toolInput = input;
@@ -147,7 +147,7 @@ function toolUseSearchText(input) {
   return parts.join(`
 `);
 }
-//@ chunk-ag5x7vhf.js:138433-138975 fingerprint = toolResultSearchText (1)
+//@ chunk-ag5x7vhf.js:138433-138975 fingerprint (2.1.88 match: toolResultSearchText, 1)
 function toolResultSearchText(r) {
   if (!r || typeof r !== "object") return typeof r === "string" ? r : "";
   let result = r;

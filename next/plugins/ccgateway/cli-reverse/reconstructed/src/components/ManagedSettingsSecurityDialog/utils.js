@@ -517,7 +517,7 @@ function isCredentialsSettingShape(value) {
     return key === "allowPlaintextInject" && value === false;
   });
 }
-//@ chunk-dcmhvw5a.js:383237-383297 fingerprint = hasDangerousSettingsChanged (0.574)
+//@ chunk-dcmhvw5a.js:383237-383297 fingerprint (2.1.88 match: hasDangerousSettingsChanged, 0.574)
 function hasDangerousSettingsChanged(summary) {
   return Object.keys(summary.shellSettings).some(isPolicyHelperName);
 }
@@ -747,7 +747,7 @@ function managedSettingsNeedReconsent(record, settings) {
     }
   }
 }
-//@ chunk-dcmhvw5a.js:386089-387329 fingerprint = extractDangerousSettings (0.426)
+//@ chunk-dcmhvw5a.js:386089-387329 fingerprint (2.1.88 match: extractDangerousSettings, 0.426)
 function extractDangerousSettings(baseline, dangerous) {
   let baselineSummary = summarizeManagedSettingsRisk(baseline);
   let changedShell = {};
@@ -878,7 +878,7 @@ function isTelemetryOnlyChange(summary, settings) {
     )
   );
 }
-//@ chunk-dcmhvw5a.js:388090-388361 fingerprint = hasDangerousSettings (0.736)
+//@ chunk-dcmhvw5a.js:388090-388361 fingerprint (2.1.88 match: hasDangerousSettings, 0.736)
 function hasDangerousSettings(summary, settings) {
   let current = settings ? summarizeManagedSettingsRisk(settings) : summary;
   let all = [current, ...riskyPayloadSlots(current).map(([, slot]) => slot)];

@@ -157,7 +157,7 @@ async function listMemoryFilesForSurvey(options) {
     truncated: isTruncated,
   };
 }
-//@ chunk-18hwfzwa.js:1040940-1041350 placement = replaceFromSnapshot (0.683)
+//@ chunk-18hwfzwa.js:1040940-1041350 placement (2.1.88 match: replaceFromSnapshot, 0.683)
 /**
  * 递归列出目录中的 .md 文件（跳过符号链接与忽略路径，超过上限标记 truncated）。
  */
@@ -194,7 +194,7 @@ async function listMarkdownFilesRecursive(rootDir) {
     truncated: false,
   };
 }
-//@ chunk-18hwfzwa.js:1041350-1041736 sole-consumer = isSessionPlanFile (0.801)
+//@ chunk-18hwfzwa.js:1041350-1041736 sole-consumer (2.1.88 match: isSessionPlanFile, 0.801)
 async function resolveMemoryFileReference(fileRef, baseDir, listFiles) {
   if (!fileRef.endsWith(".md")) return null;
   let isAllowedPath = (candidatePath) =>
@@ -301,7 +301,7 @@ function writeSurveyRatingIntoFrontmatter(content, frontmatterBlock, rating) {
 `) + content.slice(frontmatterLength)
   );
 }
-//@ chunk-18hwfzwa.js:1043331-1043439 placement = isSessionPlanFile (1)
+//@ chunk-18hwfzwa.js:1043331-1043439 placement (2.1.88 match: isSessionPlanFile, 1)
 /**
  * 判断路径是否是记忆目录下的 .md 文件（排除指定子目录和若干特殊文件）。旧版名 isSessionPlanFile 误配，应归 memdir。
  */
@@ -535,7 +535,7 @@ function isMemoryCitationEligible(ref) {
 function isMemoryCitationTooLong(ref) {
   return ref.sentence.length > MAX_CITATION_LENGTH;
 }
-//@ chunk-18hwfzwa.js:1046479-1046634 fingerprint = MEMORY_SURVEY_GATE (0.312)
+//@ chunk-18hwfzwa.js:1046479-1046634 fingerprint (2.1.88 match: MEMORY_SURVEY_GATE, 0.312)
 var MEMORY_SURVEY_DELAY_MS = 5000;
 var MEMORY_SURVEY_TIMEOUT_MS = 60000;
 var TENGU_DUNWICH_BELL = "tengu_dunwich_bell";
@@ -564,7 +564,7 @@ function extractCitedMemoryRefs(message) {
     .filter((block) => typeof block === "object" && block !== null && block.type === "text")
     .flatMap((block) => extractMemoryCitations(block.text));
 }
-//@ chunk-18hwfzwa.js:1046971-1050360 fingerprint = useMemorySurvey (0.602)
+//@ chunk-18hwfzwa.js:1046971-1050360 fingerprint (2.1.88 match: useMemorySurvey, 0.602)
 function useMemorySurvey(messages, isLoading, hasActivePrompt, options) {
   let $ = useMemoCache(43);
   let hasActivePromptFlag = hasActivePrompt === undefined ? false : hasActivePrompt;

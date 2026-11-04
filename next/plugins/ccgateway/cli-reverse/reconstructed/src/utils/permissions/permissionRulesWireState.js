@@ -16,7 +16,7 @@ import { shouldAllowManagedPermissionRulesOnly } from "./permissionsLoader.js";
 
 //@ chunk-eecdvv5g.js:4829-4858 placement
 var RULE_BEHAVIORS = ["allow", "deny", "ask"];
-//@ chunk-eecdvv5g.js:4858-5031 placement = isPermissionUpdateDestination (0.776)
+//@ chunk-eecdvv5g.js:4858-5031 placement (2.1.88 match: isPermissionUpdateDestination, 0.776)
 function getRuleEditability(source) {
   switch (source) {
     case "userSettings":

@@ -36,7 +36,7 @@ import { pathInAllowedWorkingPath } from "../../utils/permissions/filesystem.js"
 import { setCwd } from "../../utils/Shell.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-qz53w8v8.js:4223-4368 fingerprint = buildImageToolResult (1)
+//@ chunk-qz53w8v8.js:4223-4368 fingerprint (2.1.88 match: buildImageToolResult, 1)
 function describeImageAttachment({ source }) {
   let sourceBlock = isObjectBlock(source) ? source : undefined;
   let mediaType = sourceBlock?.type === "base64" ? sourceBlock.media_type : undefined;
@@ -47,7 +47,7 @@ function describeImageAttachment({ source }) {
 }
 //@ chunk-e6aww6q8.js:3100560-3100577 affinity
 var MAX_SHELL_IMAGE_OUTPUT_BYTES = 20971520;
-//@ chunk-e6aww6q8.js:3100577-3101182 fingerprint = resizeShellImageOutput (0.84)
+//@ chunk-e6aww6q8.js:3100577-3101182 fingerprint (2.1.88 match: resizeShellImageOutput, 0.84)
 /**
  * 把 shell 输出的 data:image base64（或输出文件，≤20MB）解析、按模型限制缩放后重新编码为 data URI；失败返回 null。
  */
@@ -81,7 +81,7 @@ async function resizeShellImageOutput(stdout, outputFilePath, knownSize, imageLi
   let resized = await maybeResizeAndDownsampleImageBuffer(buf, buf.length, format, imageLimits);
   return `data:image/${resized.mediaType};base64,${resized.buffer.toString("base64")}`;
 }
-//@ chunk-e6aww6q8.js:3101182-3101488 fingerprint = formatOutput (1)
+//@ chunk-e6aww6q8.js:3101182-3101488 fingerprint (2.1.88 match: formatOutput, 1)
 /**
  * 按最大输出长度截断 shell 输出并附 "[N lines truncated]"；图片输出原样返回。
  */
@@ -228,14 +228,14 @@ function formatBackgroundTaskMessage({
     .filter(Boolean)
     .join(" ");
 }
-//@ chunk-e6aww6q8.js:3104320-3104421 fingerprint = stdErrAppendShellResetMessage (1)
+//@ chunk-e6aww6q8.js:3104320-3104421 fingerprint (2.1.88 match: stdErrAppendShellResetMessage, 1)
 /**
  * 在 stderr 末尾附加 "Shell cwd was reset to <cwd>"；Lpn 是匹配该行的正则。
  */
 var stdErrAppendShellResetMessage = (stderr) => `${stderr.trim()}
 Shell cwd was reset to ${getCwd()}`;
 var CWD_RESET_WARNING_RE = /(?:^|\n)(Shell cwd was reset to .+)$/;
-//@ chunk-e6aww6q8.js:3104421-3104591 fingerprint = resetCwdIfOutsideProject (1)
+//@ chunk-e6aww6q8.js:3104421-3104591 fingerprint (2.1.88 match: resetCwdIfOutsideProject, 1)
 /**
  * 命令执行后若 cwd 跑出项目允许目录（或设置要求保持项目目录），把 cwd 重置回原始目录；返回是否重置。
  */

@@ -12,7 +12,7 @@ import { isDesktopNonClaudecode, alwaysFalseEntry } from "../../utils/entrypoint
 import { env } from "../../utils/env.js";
 import { getPlatform } from "../../utils/platform.js";
 
-//@ chunk-3a38dj81.js:301-383 placement = execTmux (0.762)
+//@ chunk-3a38dj81.js:301-383 placement (2.1.88 match: execTmux, 0.762)
 function isNativeTerminalNotifySupported() {
   return (
     isDesktopNonClaudecode() &&

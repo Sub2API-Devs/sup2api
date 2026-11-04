@@ -235,7 +235,7 @@ var isAllowedRemote = (urlOrSpec) => urlOrSpec !== null && isAllowedGitRemote(ur
 async function noopAsync_2(value) {
   return;
 }
-//@ chunk-e6aww6q8.js:770879-770979 placement = isOfficialRepo (1)
+//@ chunk-e6aww6q8.js:770879-770979 placement (2.1.88 match: isOfficialRepo, 1)
 async function isOfficialRepo_2(cwd, urlOrSpec) {
   let repo =
     cwd !== null

@@ -23,7 +23,7 @@ init_react_production();
 init_react_production();
 //@ chunk-cg10fy59.js:398-402 placement
 init_react_production();
-//@ chunk-cg10fy59.js:402-464 fingerprint = TerminalFocusContext (1)
+//@ chunk-cg10fy59.js:402-464 fingerprint (2.1.88 match: TerminalFocusContext, 1)
 /**
  * 终端焦点上下文：isTerminalFocused 与 terminalFocusState。
  */
@@ -33,7 +33,7 @@ var TerminalFocusContext_2 = createContext({
 });
 //@ chunk-cg10fy59.js:464-501 fingerprint
 TerminalFocusContext_2.displayName = "TerminalFocusContext";
-//@ chunk-cg10fy59.js:501-784 callgraph-witnessed = TerminalFocusProvider (0.835)
+//@ chunk-cg10fy59.js:501-784 callgraph-witnessed (2.1.88 match: TerminalFocusProvider, 0.835)
 /**
  * 提供终端焦点上下文：订阅 DEC 1004 焦点事件得到的状态（focused/blurred/unknown）。
  */

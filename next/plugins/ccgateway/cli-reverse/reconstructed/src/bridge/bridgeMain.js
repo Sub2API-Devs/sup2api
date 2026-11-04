@@ -131,7 +131,7 @@ import { REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE } from "./remoteControlPolicy
 import { stripInvisibleChars } from "../utils/invisibleChars.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3nztfxrw.js:44430-44564 fingerprint = formatDelay (0.486)
+//@ chunk-3nztfxrw.js:44430-44564 fingerprint (2.1.88 match: formatDelay, 0.486)
 function formatDelay(ms) {
   if (ms < 1000) return `${ms}ms`;
   if (ms % 60000 === 0) return `${ms / 60000}min`;
@@ -156,7 +156,7 @@ function classifyApiError(error) {
   }
   return "request_failed";
 }
-//@ chunk-b30925fy.js:10996-11165 placement = extractErrorTypeFromData (1)
+//@ chunk-b30925fy.js:10996-11165 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 取响应体里的 error.type。
  */
@@ -185,7 +185,7 @@ var MIN_RENEW_BEFORE_MS = 900000;
 var MAX_RENEW_BEFORE_MS = 86400000;
 var RENEW_JITTER_FRACTION = 0.25;
 var MIN_RENEWABLE_LIFETIME_MS = 3600000;
-//@ chunk-b30925fy.js:11237-11408 fingerprint = addJitter (0.694)
+//@ chunk-b30925fy.js:11237-11408 fingerprint (2.1.88 match: addJitter, 0.694)
 /**
  * 根据 expires_in 计算带抖动的续期时间点；剩余不足 1 小时返回 undefined。
  */
@@ -1366,7 +1366,7 @@ async function requeueProjectThreadSessions(api, environmentId, sessionIds, sign
     unattempted,
   };
 }
-//@ chunk-wbbfk060.js:30893-31061 fingerprint = DEFAULT_BACKOFF (1)
+//@ chunk-wbbfk060.js:30893-31061 fingerprint (2.1.88 match: DEFAULT_BACKOFF, 1)
 /**
  * 轮询退避默认值（连接错误 2s 起、上限 120s、10 分钟放弃；一般错误 0.5s 起、上限 30s、10 分钟放弃）及若干常量（registerWorker 重试 5 次等）。
  */
@@ -1383,7 +1383,7 @@ var REGISTER_WORKER_MAX_ATTEMPTS = 5;
 var WORKER_RETRY_BASE_MS = 1000;
 var STATUS_UPDATE_INTERVAL_MS = 120000;
 var POLL_RETRY_FLOOR_MS = 3000;
-//@ chunk-wbbfk060.js:31061-31097 fingerprint = pollSleepDetectionThresholdMs (1)
+//@ chunk-wbbfk060.js:31061-31097 fingerprint (2.1.88 match: pollSleepDetectionThresholdMs, 1)
 /**
  * 判定"系统睡眠"的阈值：两次轮询错误间隔超过 connCapMs 的两倍即重置错误预算。
  */
@@ -1405,7 +1405,7 @@ function isEnvironmentGoneError(error) {
   if (error instanceof BridgeFatalError) return error.status === 404 || error.status === 410;
   return /environment .* not found/i.test(errorMessage(error));
 }
-//@ chunk-wbbfk060.js:31315-31454 fingerprint = safeSpawn (0.733)
+//@ chunk-wbbfk060.js:31315-31454 fingerprint (2.1.88 match: safeSpawn, 0.733)
 /**
  * 调 sessionSpawner.spawn 派生子会话；抛错时记录日志并返回错误字符串。
  */
@@ -1427,7 +1427,7 @@ function expiresInToDeadline(expiresInSeconds) {
     ? Date.now() + expiresInSeconds * 1000
     : undefined;
 }
-//@ chunk-wbbfk060.js:31546-67919 fingerprint = runBridgeLoop (0.603)
+//@ chunk-wbbfk060.js:31546-67919 fingerprint (2.1.88 match: runBridgeLoop, 0.603)
 /**
  * 主轮询循环：按容量选轮询间隔（满载/部分/空闲，或由 sessions watch 调度器决定）调用 pollForWork；对每个 work 解码 work secret、ack、registerWorker 取 epoch、
  * safeSpawn 子 CLI（--sdk-url 指向 /v1/code/sessions/{id}）；维护活动会话、心跳（heartbeatWork）、超时、工作树清理与 stopWork；连接/一般错误分别指数退避，检测系统睡眠重置预算，
@@ -3499,7 +3499,7 @@ async function runBridgeLoop(
   logger.logVerbose("Environment offline.");
   return policyRefusal;
 }
-//@ chunk-wbbfk060.js:67919-68060 fingerprint = CONNECTION_ERROR_CODES (0.751)
+//@ chunk-wbbfk060.js:67919-68060 fingerprint (2.1.88 match: CONNECTION_ERROR_CODES, 0.751)
 /**
  * 视为"连不上服务器"的 Node 错误码集合（ECONNREFUSED、ECONNRESET、ETIMEDOUT…ERR_PROXY_TUNNEL）。
  */
@@ -3516,7 +3516,7 @@ deferInit("chunk-wbbfk060.js:67919", () => {
     "ERR_PROXY_TUNNEL",
   ]);
 });
-//@ chunk-wbbfk060.js:68060-68173 layout = isConnectionError (1)
+//@ chunk-wbbfk060.js:68060-68173 layout (2.1.88 match: isConnectionError, 1)
 /**
  * 错误码是否属于 CONNECTION_ERROR_CODES。
  */
@@ -3563,7 +3563,7 @@ function isNetworkUnreachableError(error) {
       error.code === "EPIPE")
   );
 }
-//@ chunk-wbbfk060.js:68500-68613 fingerprint = isServerError (1)
+//@ chunk-wbbfk060.js:68500-68613 fingerprint (2.1.88 match: isServerError, 1)
 /**
  * 是否是 axios ERR_BAD_RESPONSE（5xx）。
  */
@@ -3622,7 +3622,7 @@ async function tryRegisterEnvironment({ register, interactive, onFailure }) {
     return;
   }
 }
-//@ chunk-wbbfk060.js:69183-70242 fingerprint = stopWorkWithRetry (0.552)
+//@ chunk-wbbfk060.js:69183-70242 fingerprint (2.1.88 match: stopWorkWithRetry, 0.552)
 /**
  * 停止 work：最多 3 次，指数退避；BridgeFatalError 时按 403 可忽略 / environment 已失效 / 其他致命分别记录并立即放弃。
  */
@@ -3757,16 +3757,16 @@ async function cleanupSessionWorktree(worktree, logger, options) {
       break;
   }
 }
-//@ chunk-wbbfk060.js:71424-71465 fingerprint = SPAWN_FLAG_VALUES (1)
+//@ chunk-wbbfk060.js:71424-71465 fingerprint (2.1.88 match: SPAWN_FLAG_VALUES, 1)
 var SPAWN_FLAG_VALUES = ["session", "same-dir", "worktree"];
-//@ chunk-wbbfk060.js:71465-71665 fingerprint = parseSpawnValue (1)
+//@ chunk-wbbfk060.js:71465-71665 fingerprint (2.1.88 match: parseSpawnValue, 1)
 function parseSpawnValue(raw) {
   if (raw === "session") return "single-session";
   if (raw === "same-dir") return "same-dir";
   if (raw === "worktree") return "worktree";
   return `--spawn requires one of: ${SPAWN_FLAG_VALUES.join(", ")} (got: ${raw ?? "<missing>"})`;
 }
-//@ chunk-wbbfk060.js:71665-71805 fingerprint = parseCapacityValue (1)
+//@ chunk-wbbfk060.js:71665-71805 fingerprint (2.1.88 match: parseCapacityValue, 1)
 function parseCapacityValue(raw) {
   let n = raw === undefined ? NaN : parseIntLoose(raw);
   if (isNaN(n) || n < 1) return `--capacity requires a positive integer (got: ${raw ?? "<missing>"})`;
@@ -3782,7 +3782,7 @@ function parsePreviewPortValue(raw) {
     return `--preview-port requires an integer in [1024, 65535] (got: ${raw ?? "<missing>"})`;
   return n;
 }
-//@ chunk-wbbfk060.js:71986-75709 fingerprint = parseArgs (0.734)
+//@ chunk-wbbfk060.js:71986-75709 fingerprint (2.1.88 match: parseArgs, 0.734)
 /**
  * 解析 claude remote-control 参数：--name、--remote-control-session-name-prefix、-c/--continue、--session-id、--permission-mode、--[no-]chrome、--spawn、--capacity、
  * --[no-]create-session-in-dir、--allow-unattended-tool-calls、--debug-file、-v；拒绝 --sandbox，并校验互斥组合；--enable-live-preview/--preview-port 在此构建不可用。
@@ -4029,7 +4029,7 @@ async function unarchiveBridgeSessionIfNeeded(sessionId, baseUrl, credentials) {
     return false;
   }
 }
-//@ chunk-wbbfk060.js:77203-77332 fingerprint = fetchSessionTitle (0.67)
+//@ chunk-wbbfk060.js:77203-77332 fingerprint (2.1.88 match: fetchSessionTitle, 0.67)
 async function fetchSessionTitle(compatSessionId, baseUrl) {
   let { getBridgeSession } = await import("./createSession.js");
   return (
@@ -4105,7 +4105,7 @@ function startPointerRefreshTimer(
   interval.unref?.();
   return interval;
 }
-//@ chunk-wbbfk060.js:77761-99405 fingerprint = bridgeMain (0.576)
+//@ chunk-wbbfk060.js:77761-99405 fingerprint (2.1.88 match: bridgeMain, 0.576)
 /**
  * claude remote-control 入口：解析参数→launcher/工作区信任/Chrome 策略/登录检查→读取 bridge pointer（--continue / --session-id / 崩溃恢复）→询问 spawn 模式→
  * 创建 API 客户端并注册 environment→（可选）预创建会话、写 bridge pointer→注册信号与键盘（空格 QR、w 切换 spawn 模式）→runBridgeLoop→退出清理。
@@ -5181,7 +5181,7 @@ The session may still be resumable \u2014 try running the same command again.`,
     process.kill(process.pid, "SIGKILL");
   }
 }
-//@ chunk-wbbfk060.js:99405-99494 fingerprint = BridgeHeadlessPermanentError (1)
+//@ chunk-wbbfk060.js:99405-99494 fingerprint (2.1.88 match: BridgeHeadlessPermanentError, 1)
 class BridgeHeadlessPermanentError extends Error {
   constructor(message) {
     super(message);
@@ -5211,7 +5211,7 @@ function policyDenialError(kind, detail) {
     "Remote Control denied: policy cache miss (transient)",
   );
 }
-//@ chunk-wbbfk060.js:99936-107907 fingerprint = runBridgeHeadless (0.405)
+//@ chunk-wbbfk060.js:99936-107907 fingerprint (2.1.88 match: runBridgeHeadless, 0.405)
 /**
  * 宿主（桌面/守护进程）托管的无头 Remote Control：与 bridgeMain 相同的检查与注册流程，但不交互、用回调日志，失败抛 BridgeHeadlessPermanentError 或可重试错误，最后调用 runBridgeLoop。
  */
@@ -5585,7 +5585,7 @@ async function runBridgeHeadless(opts, signal) {
   let headlessPolicyError = loopResult && policyDenialError(loopResult.kind, loopResult.detail);
   if (headlessPolicyError) throw headlessPolicyError;
 }
-//@ chunk-wbbfk060.js:107907-108740 fingerprint = createHeadlessBridgeLogger (0.953)
+//@ chunk-wbbfk060.js:107907-108740 fingerprint (2.1.88 match: createHeadlessBridgeLogger, 0.953)
 function createHeadlessBridgeLogger(log) {
   let noop = () => {};
   return {
@@ -5620,7 +5620,7 @@ function createHeadlessBridgeLogger(log) {
     detachTerminal: noop,
   };
 }
-//@ chunk-0knprqgt.js:13682-13722 fingerprint = isConnectionError (1)
+//@ chunk-0knprqgt.js:13682-13722 fingerprint (2.1.88 match: isConnectionError, 1)
 function isCodeSegment(err) {
   return err.kind === "code";
 }

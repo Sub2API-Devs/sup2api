@@ -74,7 +74,7 @@ function classifyExecResult(error) {
     signal: null,
   };
 }
-//@ chunk-qrhwndg8.js:870-1244 callgraph-fingerprint = execFilePromise (0.388)
+//@ chunk-qrhwndg8.js:870-1244 callgraph-fingerprint (2.1.88 match: execFilePromise, 0.388)
 function execFilePromise(cmd, args, maxBuffer) {
   let now = Date.now();
   return new Promise((resolve) => {
@@ -132,7 +132,7 @@ function summarizeRegQueryOutcome(outcome) {
 function isStdioMaxBufferError(outcome) {
   return outcome.status === "spawn_error" && outcome.errno === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
 }
-//@ chunk-qrhwndg8.js:1535-1683 facade-exports = consumeRawReadResult (0.602)
+//@ chunk-qrhwndg8.js:1535-1683 facade-exports (2.1.88 match: consumeRawReadResult, 0.602)
 /**
  * Windows：并行 reg query HKLM 与 HKCU 的 Settings 值，返回原始输出与每次调用的结果分类。
  */
@@ -150,7 +150,7 @@ function fireRawRead() {
     };
   })();
 }
-//@ chunk-qrhwndg8.js:1683-1991 fingerprint = fireRawRead (0.419)
+//@ chunk-qrhwndg8.js:1683-1991 fingerprint (2.1.88 match: fireRawRead, 0.419)
 async function fireRawRead_2(cmd) {
   let run = (key) => execFilePromise(cmd, ["query", key, "/v", SETTINGS], REG_QUERY_MAX_BUFFER);
   let [hklm, hkcu] = await Promise.all([

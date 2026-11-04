@@ -29,7 +29,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
  * 回显文本的最大字符数（200）。
  */
 var MAX_ECHOED_TEXT_CHARS = 200;
-//@ chunk-b8krr1px.js:671-4544 fingerprint = AuthCodeListener (0.723)
+//@ chunk-b8krr1px.js:671-4544 fingerprint (2.1.88 match: AuthCodeListener, 0.723)
 /**
  * 本地 OAuth 回调服务器：http.createServer 监听 127.0.0.1 随机端口的 /callback，校验 state 后取 code，并重定向到成功页。
  */
@@ -239,7 +239,7 @@ class AuthCodeRefusedError extends Error {
     this.name = "AuthCodeRefusedError";
   }
 }
-//@ chunk-b8krr1px.js:4897-4998 placement = base64URLEncode (1)
+//@ chunk-b8krr1px.js:4897-4998 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   return buffer.toString("base64").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }

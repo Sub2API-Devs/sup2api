@@ -25,7 +25,7 @@ import { TextInput } from "../../components/TextInput.js";
 
 //@ chunk-4v9zy7gn.js:25463-25467 placement
 init_react_production();
-//@ chunk-4v9zy7gn.js:25467-27429 fingerprint = CheckExistingSecretStep (0.705)
+//@ chunk-4v9zy7gn.js:25467-27429 fingerprint (2.1.88 match: CheckExistingSecretStep, 0.705)
 function CheckExistingSecretStep(props) {
   let $ = useMemoCache(38);
   let { useExistingSecret, secretName, onToggleUseExistingSecret, onSecretNameChange, onSubmit } = props;

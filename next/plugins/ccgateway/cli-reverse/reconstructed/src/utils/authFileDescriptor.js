@@ -60,7 +60,7 @@ function readInheritedFdSync(fd, { maxBytes }) {
  * 凭据读取的字节上限（64 KiB）。
  */
 var MAX_CREDENTIAL_READ_BYTES = 65536;
-//@ chunk-hvpfdswb.js:695-833 fingerprint = CCR_TOKEN_DIR (0.4)
+//@ chunk-hvpfdswb.js:695-833 fingerprint (2.1.88 match: CCR_TOKEN_DIR, 0.4)
 /**
  * CCR（Claude Code Remote）令牌目录 /home/claude/.claude/remote 及 .oauth_token / .api_key / .session_ingress_token 文件路径。
  */
@@ -70,7 +70,7 @@ var CCR_API_KEY_PATH = `${CCR_TOKEN_DIR}/.api_key`;
 var CCR_SESSION_INGRESS_TOKEN_PATH = `${CCR_TOKEN_DIR}/.session_ingress_token`;
 var CCR_CREDENTIAL_PATHS = [CCR_OAUTH_TOKEN_PATH, CCR_API_KEY_PATH, CCR_SESSION_INGRESS_TOKEN_PATH];
 var MAX_CREDENTIAL_BYTES = MAX_CREDENTIAL_READ_BYTES;
-//@ chunk-hvpfdswb.js:833-1347 fingerprint = maybePersistTokenForSubprocesses (0.694)
+//@ chunk-hvpfdswb.js:833-1347 fingerprint (2.1.88 match: maybePersistTokenForSubprocesses, 0.694)
 /**
  * CCR 环境下把从 fd 读到的令牌写到 /home/claude/.claude/remote 下的已知文件，供子进程读取。
  */
@@ -210,7 +210,7 @@ async function persistCredentialForSubprocess(
     },
   );
 }
-//@ chunk-hvpfdswb.js:2712-3095 fingerprint = readTokenFromWellKnownFile (0.599)
+//@ chunk-hvpfdswb.js:2712-3095 fingerprint (2.1.88 match: readTokenFromWellKnownFile, 0.599)
 async function readTokenFromWellKnownFile(path, tokenName, credentials) {
   if (isHttpMcpServeInvocation() || usesSessionAccessToken() || isDiskless() || isMuslEnvironment_2(path))
     return null;
@@ -236,7 +236,7 @@ async function readTokenFromWellKnownFile(path, tokenName, credentials) {
       return null;
   }
 }
-//@ chunk-hvpfdswb.js:3095-4265 fingerprint = getCredentialFromFd (0.578)
+//@ chunk-hvpfdswb.js:3095-4265 fingerprint (2.1.88 match: getCredentialFromFd, 0.578)
 /**
  * 从文件描述符读凭证（OAuth 令牌/API key/会话令牌）：env 指定 fd 号，CCR 模式下直接读 fd 并删 env，否则读已知文件路径；结果缓存，必要时落盘给子进程。
  */
@@ -331,7 +331,7 @@ function getCredentialFromFd({
     return null;
   }
 }
-//@ chunk-hvpfdswb.js:4265-4348 placement = isCCRMode (0.656)
+//@ chunk-hvpfdswb.js:4265-4348 placement (2.1.88 match: isCCRMode, 0.656)
 /**
  * 非远程（或远程允许）且不是 IPC 子进程。旧版名 isCCRMode 错配；疑似归 utils/authFileDescriptor.ts。
  */
@@ -605,7 +605,7 @@ async function openCredentialPathPolicy(credentials) {
 function hasPossibleCredentialFromDescriptor(envVarName) {
   return (process.env[envVarName]?.trim() ?? "") !== "" || wasDescriptorAnnouncementConsumed(envVarName);
 }
-//@ chunk-hvpfdswb.js:8706-8874 fingerprint = getOAuthTokenFromFileDescriptor (0.937)
+//@ chunk-hvpfdswb.js:8706-8874 fingerprint (2.1.88 match: getOAuthTokenFromFileDescriptor, 0.937)
 /**
  * CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR（或 CCR 的 /home/claude/.claude/remote/.oauth_token）读 OAuth 令牌。
  */
@@ -625,7 +625,7 @@ async function getOAuthTokenFromFileDescriptorAsync(credentials) {
   await openCredentialPathPolicy(credentials);
   return getOAuthTokenFromFileDescriptor_2(credentials);
 }
-//@ chunk-hvpfdswb.js:8923-9107 layout = getOAuthTokenFromFileDescriptor (0.937)
+//@ chunk-hvpfdswb.js:8923-9107 layout (2.1.88 match: getOAuthTokenFromFileDescriptor, 0.937)
 async function getOAuthTokenFromFileDescriptor_2(credentials) {
   return readCredentialFromDescriptor({
     envVar: "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
@@ -659,7 +659,7 @@ function getGatewayTokenFromFileDescriptor() {
   if (fdValue?.trim()) markDescriptorAnnouncementConsumed("CLAUDE_CODE_GATEWAY_TOKEN_FILE_DESCRIPTOR");
   return token;
 }
-//@ chunk-hvpfdswb.js:9584-9754 fingerprint = getApiKeyFromFileDescriptor (1)
+//@ chunk-hvpfdswb.js:9584-9754 fingerprint (2.1.88 match: getApiKeyFromFileDescriptor, 1)
 /**
  * CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR（或 CCR .api_key）读 API key。
  */
@@ -674,7 +674,7 @@ function getApiKeyFromFileDescriptor() {
     setCached: setApiKeyFromFd,
   });
 }
-//@ chunk-hvpfdswb.js:9754-9911 layout = getApiKeyFromFileDescriptor (1)
+//@ chunk-hvpfdswb.js:9754-9911 layout (2.1.88 match: getApiKeyFromFileDescriptor, 1)
 async function getApiKeyFromFileDescriptor_2(credentials) {
   return readCredentialFromDescriptor({
     envVar: "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",

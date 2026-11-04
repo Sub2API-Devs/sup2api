@@ -502,7 +502,7 @@ var POLICY_FALSY_ALLOWED_ENV_VARS; // deferred: has load-time effects after a de
 deferInit("chunk-q4qb1h08.js:18788", () => {
   POLICY_FALSY_ALLOWED_ENV_VARS = new Set(["CLAUDE_CODE_TRANSCRIPT_LOCAL_GC"]);
 });
-//@ chunk-q4qb1h08.js:18840-18919 placement = _temp7 (0.791)
+//@ chunk-q4qb1h08.js:18840-18919 placement (2.1.88 match: _temp7, 0.791)
 function isPolicyFalsyAllowedEnv(key, value, source) {
   return (
     source === "policySettings" &&
@@ -515,7 +515,7 @@ var ATTRIBUTION_HEADER_ENV; // deferred: has load-time effects after a deferred 
 deferInit("chunk-q4qb1h08.js:18919", () => {
   ATTRIBUTION_HEADER_ENV = new Set(["CLAUDE_CODE_ATTRIBUTION_HEADER"]);
 });
-//@ chunk-q4qb1h08.js:18970-19086 placement = _temp7 (0.791)
+//@ chunk-q4qb1h08.js:18970-19086 placement (2.1.88 match: _temp7, 0.791)
 function isGatewayBackedPolicyDisable(envName, value, source) {
   return (
     source === "policySettings" &&

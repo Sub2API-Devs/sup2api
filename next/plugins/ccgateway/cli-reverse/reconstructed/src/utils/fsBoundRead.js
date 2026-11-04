@@ -228,7 +228,7 @@ function isLocalNonUncPath(filePath) {
     }) === undefined
   );
 }
-//@ chunk-9mf2agcn.js:3309-3337 placement = chordToDisplayString (1)
+//@ chunk-9mf2agcn.js:3309-3337 placement (2.1.88 match: chordToDisplayString, 1)
 function getPlatform() {
   return "linux";
 }
@@ -395,7 +395,7 @@ function refuseLinkOnRoute(filePath, isCanonical) {
   if (!isCanonical && isLocalNonUncPath(filePath)) isRealPathWithinTeamDir(filePath);
   return logBoundReadRefusal(filePath, "a link appeared on the route");
 }
-//@ chunk-9mf2agcn.js:5490-5713 placement = isRealPathWithinTeamDir (0.785)
+//@ chunk-9mf2agcn.js:5490-5713 placement (2.1.88 match: isRealPathWithinTeamDir, 0.785)
 function isRealPathWithinTeamDir(realCandidate) {
   if (!lstatSync(realCandidate).isSymbolicLink()) return;
   let resolvedTarget = resolve(dirname(realCandidate), readlinkSync(realCandidate));

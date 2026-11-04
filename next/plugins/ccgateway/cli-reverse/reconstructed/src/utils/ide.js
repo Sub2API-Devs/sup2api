@@ -45,7 +45,7 @@ import { safeExecShell } from "./safeSpawn.js";
 import { hasIdeOnboardingDialogBeenShown } from "../components/IdeOnboardingDialog.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:852557-853227 fingerprint = getIdeLockfilesPaths (0.756)
+//@ chunk-fq0cr76a.js:852557-853227 fingerprint (2.1.88 match: getIdeLockfilesPaths, 0.756)
 /**
  * IDE lockfile 目录列表：<配置目录>/ide（设置了 CLAUDE_CONFIG_DIR 时再加 ~/.claude/ide）；WSL 下还加 %USERPROFILE%/.claude/ide 与 /mnt/c/Users/*\/.claude/ide。
  */
@@ -81,7 +81,7 @@ function getIdeLockfilesPaths() {
   }
   return paths;
 }
-//@ chunk-s61vbvea.js:585389-588520 fingerprint = supportedIdeConfigs (0.878)
+//@ chunk-s61vbvea.js:585389-588520 fingerprint (2.1.88 match: supportedIdeConfigs, 0.878)
 /**
  * 支持的 IDE 配置表：每种 IDE 的类型（vscode/jetbrains）、显示名及 macOS/Windows/Linux 进程关键字，用于进程检测。
  */
@@ -227,7 +227,7 @@ var SUPPORTED_IDE_CONFIGS = {
   subl: "Sublime Text",
   atom: "Atom",
 };
-//@ chunk-s61vbvea.js:588520-588744 fingerprint = toIDEDisplayName (1)
+//@ chunk-s61vbvea.js:588520-588744 fingerprint (2.1.88 match: toIDEDisplayName, 1)
 /**
  * IDE 标识 → 显示名。
  */
@@ -306,7 +306,7 @@ async function isJetBrainsPluginInstalledCached(ideType, refresh = false) {
   jetbrainsPluginInstalled.set(ideType, installed);
   return installed;
 }
-//@ chunk-e6aww6q8.js:3235657-3235721 callgraph-witnessed = isProcessRunning (1)
+//@ chunk-e6aww6q8.js:3235657-3235721 callgraph-witnessed (2.1.88 match: isProcessRunning, 1)
 function isProcessRunning(pid) {
   try {
     process.kill(pid, 0);
@@ -315,7 +315,7 @@ function isProcessRunning(pid) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3235721-3235819 fingerprint = makeAncestorPidLookup (1)
+//@ chunk-e6aww6q8.js:3235721-3235819 fingerprint (2.1.88 match: makeAncestorPidLookup, 1)
 function makeAncestorPidLookup() {
   let promise = null;
   return () => {
@@ -323,13 +323,13 @@ function makeAncestorPidLookup() {
     return promise;
   };
 }
-//@ chunk-e6aww6q8.js:3235819-3235894 fingerprint = isVSCodeIde (1)
+//@ chunk-e6aww6q8.js:3235819-3235894 fingerprint (2.1.88 match: isVSCodeIde, 1)
 function isVSCodeIde(ide) {
   if (!ide) return false;
   let config = SUPPORTED_IDE_CONFIGS_2[ide];
   return config && config.ideKind === "vscode";
 }
-//@ chunk-e6aww6q8.js:3235894-3235972 fingerprint = isJetBrainsIde (1)
+//@ chunk-e6aww6q8.js:3235894-3235972 fingerprint (2.1.88 match: isJetBrainsIde, 1)
 function isJetBrainsIde(ide) {
   if (!ide) return false;
   let config = SUPPORTED_IDE_CONFIGS_2[ide];
@@ -345,7 +345,7 @@ function isJetBrainsTerminal() {
     state.supportedJetBrainsTerminal = isJetBrainsIde(envDynamicProbe.terminal);
   return state.supportedJetBrainsTerminal;
 }
-//@ chunk-e6aww6q8.js:3236252-3236407 fingerprint = isSupportedTerminal (0.667)
+//@ chunk-e6aww6q8.js:3236252-3236407 fingerprint (2.1.88 match: isSupportedTerminal, 0.667)
 /**
  * 当前终端是否为受支持的 IDE 集成终端（VS Code 系或 JetBrains）。
  */
@@ -358,12 +358,12 @@ function isSupportedTerminal() {
       Boolean(process.env.FORCE_CODE_TERMINAL);
   return state.supportedTerminal;
 }
-//@ chunk-e6aww6q8.js:3236407-3236461 callgraph-witnessed = getTerminalIdeType (1)
+//@ chunk-e6aww6q8.js:3236407-3236461 callgraph-witnessed (2.1.88 match: getTerminalIdeType, 1)
 function getTerminalIdeType() {
   if (!isSupportedTerminal()) return null;
   return env.terminal;
 }
-//@ chunk-e6aww6q8.js:3236660-3237118 fingerprint = getSortedIdeLockfiles (1)
+//@ chunk-e6aww6q8.js:3236660-3237118 fingerprint (2.1.88 match: getSortedIdeLockfiles, 1)
 /**
  * 收集所有 IDE lockfile 目录下的 <port>.lock 文件并按 mtime 从新到旧排序。
  */
@@ -408,7 +408,7 @@ async function getSortedIdeLockfiles() {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3237118-3237658 fingerprint = readIdeLockfile (0.912)
+//@ chunk-e6aww6q8.js:3237118-3237658 fingerprint (2.1.88 match: readIdeLockfile, 0.912)
 /**
  * 解析 IDE lockfile：JSON（workspaceFolders、pid、ideName、transport=ws、runningInWindows、authToken）或旧格式逐行工作区；端口取自文件名。
  */
@@ -458,7 +458,7 @@ async function readIdeLockfile(path) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3237658-3237881 fingerprint = checkIdeConnection (1)
+//@ chunk-e6aww6q8.js:3237658-3237881 fingerprint (2.1.88 match: checkIdeConnection, 1)
 /**
  * 尝试连接 IDE 的 MCP 端点确认可用。
  */
@@ -486,7 +486,7 @@ async function checkIdeConnection(host, port, timeout = 500) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3237881-3238143 fingerprint = getWindowsUserProfile (0.959)
+//@ chunk-e6aww6q8.js:3237881-3238143 fingerprint (2.1.88 match: getWindowsUserProfile, 0.959)
 async function getWindowsUserProfile() {
   let { stdout, code } = await execFileNoThrow("powershell.exe", [
     "-NoProfile",
@@ -518,7 +518,7 @@ async function getConnectedIdeName() {
   }
   return uniqueDirs;
 }
-//@ chunk-e6aww6q8.js:3238454-3238945 fingerprint = cleanupStaleIdeLockfiles (0.664)
+//@ chunk-e6aww6q8.js:3238454-3238945 fingerprint (2.1.88 match: cleanupStaleIdeLockfiles, 0.664)
 /**
  * 删除持有进程已退出或端口不可连的 IDE lockfile。
  */
@@ -558,7 +558,7 @@ async function cleanupStaleIdeLockfiles() {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:3238945-3239575 fingerprint = maybeInstallIDEExtension (0.632)
+//@ chunk-e6aww6q8.js:3238945-3239575 fingerprint (2.1.88 match: maybeInstallIDEExtension, 0.632)
 /**
  * 在 VS Code 系终端中自动安装 Claude Code 扩展（受 CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL 与 autoInstallIdeExtension 控制）。
  */
@@ -603,7 +603,7 @@ async function maybeInstallIDEExtension(ideType, options) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:3239575-3240015 callgraph-witnessed = findAvailableIDE (0)
+//@ chunk-e6aww6q8.js:3239575-3240015 callgraph-witnessed (2.1.88 match: findAvailableIDE, 0)
 /**
  * 轮询（最多 30 秒、每秒一次）查找工作区包含 cwd 的唯一 IDE，先清理陈旧 lockfile；打 ide_detect。
  */
@@ -654,7 +654,7 @@ function classifyWorkspaceRelation(cwd, workspacePath) {
 function uppercaseDriveLetter(filePath) {
   return filePath.replace(/^[a-zA-Z]:/, (drive) => drive.toUpperCase());
 }
-//@ chunk-e6aww6q8.js:3240277-3241680 fingerprint = detectIDEs (0.801)
+//@ chunk-e6aww6q8.js:3240277-3241680 fingerprint (2.1.88 match: detectIDEs, 0.801)
 /**
  * 读取全部 lockfile，过滤进程仍存活、工作区与 cwd 相关的 IDE，返回连接信息（url、名称、authToken、是否包含 cwd）。
  */
@@ -733,7 +733,7 @@ async function detectIDEs(includeInvalid) {
   }
   return detectedIDEs;
 }
-//@ chunk-e6aww6q8.js:3241680-3241774 fingerprint = maybeNotifyIDEConnected (1)
+//@ chunk-e6aww6q8.js:3241680-3241774 fingerprint (2.1.88 match: maybeNotifyIDEConnected, 1)
 async function maybeNotifyIDEConnected(client) {
   await client.notification({
     method: "ide_connected",
@@ -742,13 +742,13 @@ async function maybeNotifyIDEConnected(client) {
     },
   });
 }
-//@ chunk-e6aww6q8.js:3241774-3241847 fingerprint = hasAccessToIDEExtensionDiffFeature (1)
+//@ chunk-e6aww6q8.js:3241774-3241847 fingerprint (2.1.88 match: hasAccessToIDEExtensionDiffFeature, 1)
 function hasAccessToIDEExtensionDiffFeature(mcpClients) {
   return mcpClients.some((client) => client.type === "connected" && client.name === "ide");
 }
-//@ chunk-e6aww6q8.js:3241847-3241879 fingerprint = EXTENSION_ID (0.602)
+//@ chunk-e6aww6q8.js:3241847-3241879 fingerprint (2.1.88 match: EXTENSION_ID, 0.602)
 var EXTENSION_ID = "anthropic.claude-code";
-//@ chunk-e6aww6q8.js:3241879-3242074 fingerprint = isIDEExtensionInstalled (1)
+//@ chunk-e6aww6q8.js:3241879-3242074 fingerprint (2.1.88 match: isIDEExtensionInstalled, 1)
 async function isIDEExtensionInstalled(ideType) {
   if (isVSCodeIde(ideType)) {
     let command = await getVSCodeIDECommand(ideType);
@@ -766,7 +766,7 @@ async function isIDEExtensionInstalled(ideType) {
   } else if (isJetBrainsIde(ideType)) return await isJetBrainsPluginInstalledCached(ideType);
   return false;
 }
-//@ chunk-e6aww6q8.js:3242074-3242469 fingerprint = installIDEExtension (0.63)
+//@ chunk-e6aww6q8.js:3242074-3242469 fingerprint (2.1.88 match: installIDEExtension, 0.63)
 /**
  * 调用 IDE 命令行（code/cursor/windsurf --install-extension）安装扩展。
  */
@@ -819,7 +819,7 @@ ${trimmed}`
 }
 //@ chunk-e6aww6q8.js:3242735-3242747 layout
 var MAX_EXTENSION_STDERR_CHARS = 500;
-//@ chunk-e6aww6q8.js:3242747-3242839 fingerprint = getInstallationEnv (0.809)
+//@ chunk-e6aww6q8.js:3242747-3242839 fingerprint (2.1.88 match: getInstallationEnv, 0.809)
 function getInstallationEnv() {
   if (getPlatform() === "linux")
     return {
@@ -843,7 +843,7 @@ function getBuildInfo() {
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION;
 }
-//@ chunk-e6aww6q8.js:3243347-3243540 fingerprint = getInstalledVSCodeExtensionVersion (0.805)
+//@ chunk-e6aww6q8.js:3243347-3243540 fingerprint (2.1.88 match: getInstalledVSCodeExtensionVersion, 0.805)
 async function getInstalledVSCodeExtensionVersion(command) {
   let { stdout } = await execFileNoThrow(command, ["--list-extensions", "--show-versions"], {
     env: getInstallationEnv(),
@@ -857,7 +857,7 @@ async function getInstalledVSCodeExtensionVersion(command) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3243540-3244216 fingerprint = getVSCodeIDECommandByParentProcess (0.802)
+//@ chunk-e6aww6q8.js:3243540-3244216 fingerprint (2.1.88 match: getVSCodeIDECommandByParentProcess, 0.802)
 async function getVSCodeIDECommandByParentProcess() {
   try {
     if (getPlatform() !== "macos") return null;
@@ -896,7 +896,7 @@ async function getVSCodeIDECommandByParentProcess() {
 function renameWindsurfToDevin(ideName) {
   return ideName.replace(/windsurf/gi, "Devin Desktop");
 }
-//@ chunk-e6aww6q8.js:3244688-3245024 fingerprint = getVSCodeIDECommand (0.564)
+//@ chunk-e6aww6q8.js:3244688-3245024 fingerprint (2.1.88 match: getVSCodeIDECommand, 0.564)
 async function getVSCodeIDECommand(ideType, name) {
   let commands = VSCODE_FAMILY[ideType];
   if (!commands) return null;
@@ -913,21 +913,21 @@ async function getVSCodeIDECommand(ideType, name) {
   let ext = getPlatform() === "windows" ? ".cmd" : "";
   return commands[0] + ext;
 }
-//@ chunk-e6aww6q8.js:3245024-3245095 fingerprint = isCursorInstalled (1)
+//@ chunk-e6aww6q8.js:3245024-3245095 fingerprint (2.1.88 match: isCursorInstalled, 1)
 async function isCursorInstalled() {
   return (await execFileNoThrow("cursor", ["--version"])).code === 0;
 }
-//@ chunk-e6aww6q8.js:3245095-3245231 fingerprint = isWindsurfInstalled (0.764)
+//@ chunk-e6aww6q8.js:3245095-3245231 fingerprint (2.1.88 match: isWindsurfInstalled, 0.764)
 async function isWindsurfInstalled() {
   if ((await execFileNoThrow("windsurf", ["--version"])).code === 0) return true;
   return (await execFileNoThrow("devin-desktop", ["--version"])).code === 0;
 }
-//@ chunk-e6aww6q8.js:3245231-3245355 fingerprint = isVSCodeInstalled (1)
+//@ chunk-e6aww6q8.js:3245231-3245355 fingerprint (2.1.88 match: isVSCodeInstalled, 1)
 async function isVSCodeInstalled() {
   let result = await execFileNoThrow("code", ["--help"]);
   return result.code === 0 && Boolean(result.stdout?.includes("Visual Studio Code"));
 }
-//@ chunk-e6aww6q8.js:3245355-3246809 fingerprint = detectRunningIDEsImpl (0.702)
+//@ chunk-e6aww6q8.js:3245355-3246809 fingerprint (2.1.88 match: detectRunningIDEsImpl, 0.702)
 async function detectRunningIDEsImpl() {
   let runningIDEs = [];
   try {
@@ -1007,12 +1007,12 @@ async function getRunningIDEsCached() {
   if (runningIDEs === null) return refreshRunningIDEs();
   return runningIDEs;
 }
-//@ chunk-e6aww6q8.js:3246954-3247040 placement = hasAccessToIDEExtensionDiffFeature (1)
+//@ chunk-e6aww6q8.js:3246954-3247040 placement (2.1.88 match: hasAccessToIDEExtensionDiffFeature, 1)
 function hasAccessToIDEExtensionDiffFeature_2(mcpClients) {
   let ideClient = mcpClients.find((client) => client.type === "connected" && client.name === "ide");
   return getIdeClientName(ideClient);
 }
-//@ chunk-e6aww6q8.js:3247357-3247477 fingerprint = getIdeClientName (1)
+//@ chunk-e6aww6q8.js:3247357-3247477 fingerprint (2.1.88 match: getIdeClientName, 1)
 function getIdeClientName(ideClient) {
   let config = ideClient?.config;
   return config?.type === "sse-ide" || config?.type === "ws-ide"
@@ -1027,7 +1027,7 @@ async function callIdeRpc(request, options, ideClient) {
     .mcpClientModule()
     .callIdeRpc(request, options, ideClient);
 }
-//@ chunk-e6aww6q8.js:3247577-3247649 fingerprint = closeOpenDiffs (1)
+//@ chunk-e6aww6q8.js:3247577-3247649 fingerprint (2.1.88 match: closeOpenDiffs, 1)
 /**
  * 通知 IDE 关闭由 Claude 打开的 diff 视图。
  */
@@ -1048,7 +1048,7 @@ function getIdeAutoInstallSkipReason() {
     return "the autoInstallIdeExtension setting is off";
   return null;
 }
-//@ chunk-e6aww6q8.js:3247926-3248338 fingerprint = initializeIdeIntegration (0.743)
+//@ chunk-e6aww6q8.js:3247926-3248338 fingerprint (2.1.88 match: initializeIdeIntegration, 0.743)
 /**
  * 启动时初始化 IDE 集成：检测运行中的 IDE、按 autoConnectIde 自动连接、必要时安装扩展。
  */
@@ -1102,7 +1102,7 @@ function getHostIPForIdeCached(isIdeRunningInWindows, port) {
   }
   return hostIP;
 }
-//@ chunk-e6aww6q8.js:3248444-3248805 fingerprint = detectHostIP (0.952)
+//@ chunk-e6aww6q8.js:3248444-3248805 fingerprint (2.1.88 match: detectHostIP, 0.952)
 /**
  * WSL 中连接 Windows 侧 IDE 时探测宿主 IP（默认网关等）。
  */

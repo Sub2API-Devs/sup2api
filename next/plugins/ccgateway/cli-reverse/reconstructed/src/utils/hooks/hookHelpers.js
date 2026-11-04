@@ -49,7 +49,7 @@ function nonBlockingHookErrorResult(hook, fields) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3382476-3383208 fingerprint = hookResponseSchema (0.634)
+//@ chunk-e6aww6q8.js:3382476-3383208 fingerprint (2.1.88 match: hookResponseSchema, 0.634)
 /**
  * hookResponseSchema 的语义说明文本（ok 决定放行或阻断）。
  */
@@ -67,7 +67,7 @@ deferInit("chunk-e6aww6q8.js:3382476", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:3383208-3383633 fingerprint = createStructuredOutputTool (0.959)
+//@ chunk-e6aww6q8.js:3383208-3383633 fingerprint (2.1.88 match: createStructuredOutputTool, 0.959)
 /**
  * agent 钩子使用的 StructuredOutput 工具：输入 schema {ok, reason}，提示必须恰好调用一次。
  */

@@ -10,7 +10,7 @@
  */
 import { basename } from "path";
 
-//@ chunk-a658aeqp.js:18589-18730 fingerprint = GLOBAL_KEYTERMS (1)
+//@ chunk-a658aeqp.js:18589-18730 fingerprint (2.1.88 match: GLOBAL_KEYTERMS, 1)
 var GLOBAL_KEYTERMS = [
   "MCP",
   "symlink",
@@ -27,7 +27,7 @@ var GLOBAL_KEYTERMS = [
   "subagent",
   "worktree",
 ];
-//@ chunk-a658aeqp.js:18730-18864 fingerprint = splitIdentifier (1)
+//@ chunk-a658aeqp.js:18730-18864 fingerprint (2.1.88 match: splitIdentifier, 1)
 function splitIdentifier(name) {
   return name
     .replace(/([a-z])([A-Z])/g, "$1 $2")

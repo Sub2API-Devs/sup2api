@@ -13,7 +13,7 @@ import { join } from "path";
 import { getPlatform } from "./platform.js";
 import { logForDebugging } from "./debug.js";
 
-//@ chunk-vr8smdd9.js:10174-10741 fingerprint = getSystemDirectories (1)
+//@ chunk-vr8smdd9.js:10174-10741 fingerprint (2.1.88 match: getSystemDirectories, 1)
 function getSystemDirectories(options) {
   let platform = options?.platform ?? getPlatform();
   let homeDir = options?.homedir ?? homedir();

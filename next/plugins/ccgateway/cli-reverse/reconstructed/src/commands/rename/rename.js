@@ -31,7 +31,7 @@ function renameSystemReminder(newName, requestedName = newName) {
 function sessionNameYieldedNotice(heldName, actualName) {
   return `Another live session on this machine goes by "${sanitizeSessionTitle(heldName)}", so this session is now "${sanitizeSessionTitle(actualName)}". Use /rename to pick a different name.`;
 }
-//@ chunk-zmqmnh19.js:3122-4366 placement = call (0.291)
+//@ chunk-zmqmnh19.js:3122-4366 placement (2.1.88 match: call, 0.291)
 /**
  * 执行会话改名，名字冲突时让出。
  */

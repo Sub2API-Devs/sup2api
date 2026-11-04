@@ -30,7 +30,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 deferInit("chunk-18hwfzwa.js:218085", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:218089-219727 fingerprint = initializeTeammateHooks (0.826)
+//@ chunk-18hwfzwa.js:218089-219727 fingerprint (2.1.88 match: initializeTeammateHooks, 0.826)
 /**
  * 初始化 teammate：读团队文件，把 teamAllowedPaths 转成会话级 allow 规则（仅允许受管规则时跳过）；非 leader 注册 Stop 函数钩子：标成员不活跃并写 idle_notification 到 team-lead 的 inbox。
  */

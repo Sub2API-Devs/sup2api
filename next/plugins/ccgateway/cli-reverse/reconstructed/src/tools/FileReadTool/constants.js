@@ -10,7 +10,7 @@
  */
 import path from "path";
 
-//@ chunk-r2j5awry.js:211-290 placement = IMAGE_EXTENSIONS (0.825)
+//@ chunk-r2j5awry.js:211-290 placement (2.1.88 match: IMAGE_EXTENSIONS, 0.825)
 /**
  * Read 工具名 "Read"、参数名 "allow_large"、图片扩展名集合（png/jpg/jpeg/gif/webp）。
  */

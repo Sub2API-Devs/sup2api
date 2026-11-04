@@ -285,7 +285,7 @@ class ElicitationController {
     if (flows.size === 0) this.urlFlows.delete(elicitationId);
   }
 }
-//@ chunk-bgxm64nj.js:4289-4338 fingerprint = getElicitationMode (1)
+//@ chunk-bgxm64nj.js:4289-4338 fingerprint (2.1.88 match: getElicitationMode, 1)
 function getElicitationMode(params) {
   return params.mode === "url" ? "url" : "form";
 }
@@ -381,7 +381,7 @@ function handleElicitationRequest_2({ connected, params, signal, requestDialog, 
     },
   );
 }
-//@ chunk-n8fn2df7.js:1555-2072 facade-exports = runElicitationHooks (0.977)
+//@ chunk-n8fn2df7.js:1555-2072 facade-exports (2.1.88 match: runElicitationHooks, 0.977)
 /**
  * runElicitationHooks（v2 副本）。
  */
@@ -417,7 +417,7 @@ async function runElicitationHooks_2(serverName, params, signal) {
     return;
   }
 }
-//@ chunk-n8fn2df7.js:2072-2822 facade-exports = runElicitationResultHooks (0.976)
+//@ chunk-n8fn2df7.js:2072-2822 facade-exports (2.1.88 match: runElicitationResultHooks, 0.976)
 /**
  * runElicitationResultHooks（v2 副本）。
  */
@@ -475,7 +475,7 @@ function parseRelatedTaskMetadata(meta) {
       }
     : null;
 }
-//@ chunk-bma111ke.js:567-1178 facade-exports = registerElicitationHandler (0.477)
+//@ chunk-bma111ke.js:567-1178 facade-exports (2.1.88 match: registerElicitationHandler, 0.477)
 /**
  * registerElicitationHandler：为客户端注册 elicitation/create 请求处理与 elicitation complete 通知处理；请求交给 elicitation 控制器（先跑 Elicitation hooks，再弹对话框，最后跑 ElicitationResult hooks）。
  */
@@ -536,7 +536,7 @@ function handleElicitationRequest({ connected, params, signal, requestDialog, tr
     },
   );
 }
-//@ chunk-bma111ke.js:1506-2023 facade-exports = runElicitationHooks (0.977)
+//@ chunk-bma111ke.js:1506-2023 facade-exports (2.1.88 match: runElicitationHooks, 0.977)
 /**
  * runElicitationHooks：执行 Elicitation hooks；hook 阻断时返回 decline，hook 给出响应时直接作为结果，否则返回 undefined 交给 UI。
  */
@@ -572,7 +572,7 @@ async function runElicitationHooks(serverName, params, signal) {
     return;
   }
 }
-//@ chunk-bma111ke.js:2023-2773 facade-exports = runElicitationResultHooks (0.976)
+//@ chunk-bma111ke.js:2023-2773 facade-exports (2.1.88 match: runElicitationResultHooks, 0.976)
 /**
  * runElicitationResultHooks：执行 ElicitationResult hooks，可改写 action/content 或阻断为 decline，并发出 elicitation_response 通知 hook。
  */

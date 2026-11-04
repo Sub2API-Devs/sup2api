@@ -628,7 +628,7 @@ async function runCheckoutHook(options) {
 }
 //@ chunk-3nztfxrw.js:51492-51504 placement
 var IN_FLIGHT_COUNT_MAX = 2000;
-//@ chunk-3nztfxrw.js:51504-51581 placement = useCounter (0.533)
+//@ chunk-3nztfxrw.js:51504-51581 placement (2.1.88 match: useCounter, 0.533)
 /**
  * 在途计数（increment/decrement）。旧版名 useCounter 为错配。
  */

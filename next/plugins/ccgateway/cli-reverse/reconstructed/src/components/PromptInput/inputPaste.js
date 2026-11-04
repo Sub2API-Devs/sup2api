@@ -64,7 +64,7 @@ ${trimmed}`
 //@ chunk-18hwfzwa.js:875921-875941 affinity
 var TRUNCATE_THRESHOLD_CHARS = 1e4;
 var TRUNCATE_KEEP_CHARS = 1000;
-//@ chunk-18hwfzwa.js:875941-876248 fingerprint = formatTruncatedTextRef (0.784)
+//@ chunk-18hwfzwa.js:875941-876248 fingerprint (2.1.88 match: formatTruncatedTextRef, 0.784)
 /**
  * 超过阈值时保留首尾各 500 字符，中段替换为 "[...Truncated text #id +N lines...]"，返回 {truncatedText, placeholderContent}。
  */
@@ -86,7 +86,7 @@ function formatTruncatedTextRef(text, nextPasteId, force = false) {
     placeholderContent,
   };
 }
-//@ chunk-18hwfzwa.js:876248-877127 fingerprint = maybeTruncateInput (0.926)
+//@ chunk-18hwfzwa.js:876248-877127 fingerprint (2.1.88 match: maybeTruncateInput, 0.926)
 /**
  * 对整段输入做截断：先把中段内已有的文本粘贴引用展开、图片引用移出，再调用 formatTruncatedTextRef；把被折叠的中段作为新的 text 粘贴内容存入 pastedContents。
  */

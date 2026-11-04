@@ -20,11 +20,11 @@ import { isPolicySlotAdminOrParentComposed } from "./settings/settings.js";
 import { logForDebugging } from "./debug.js";
 import { escapeForDisplay } from "./envValidation.js";
 
-//@ chunk-30p0tvt0.js:918-991 fingerprint = withoutHostManagedProviderVars (1)
+//@ chunk-30p0tvt0.js:918-991 fingerprint (2.1.88 match: withoutHostManagedProviderVars, 1)
 function withoutHostManagedProviderVars() {
   return !env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST && !hasProviderEnvFlag() && isGatewayLoginForced();
 }
-//@ chunk-aepeg2w5.js:314368-314663 fingerprint = withoutSSHTunnelVars (0.802)
+//@ chunk-aepeg2w5.js:314368-314663 fingerprint (2.1.88 match: withoutSSHTunnelVars, 0.802)
 function withoutSSHTunnelVars() {
   let socketSlot = lockHolderSocketSlot.of(getRootSession().host);
   if (socketSlot.socket === undefined) {
@@ -42,7 +42,7 @@ function withoutSSHTunnelVars() {
   }
   return socketSlot.socket ?? undefined;
 }
-//@ chunk-q4qb1h08.js:20486-20921 fingerprint = applySafeConfigEnvironmentVariables (0.34)
+//@ chunk-q4qb1h08.js:20486-20921 fingerprint (2.1.88 match: applySafeConfigEnvironmentVariables, 0.34)
 /**
  * 把设置中的 env 写入 process.env：信任前只应用安全来源（user/flag/policy）与安全变量，托管设置的值优先并在覆盖时警告。
  */
@@ -84,7 +84,7 @@ function applySafeConfigEnvironmentVariables_2(
     warnHostSuppliedEnv(overriddenKeys, source, warnOnOverride);
   return result;
 }
-//@ chunk-2jdf5m4m.js:1741-1796 fingerprint = TRUSTED_SETTING_SOURCES (1)
+//@ chunk-2jdf5m4m.js:1741-1796 fingerprint (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
 var TRUSTED_SETTING_SOURCES = ["userSettings", "flagSettings", "policySettings"];
 export {
   withoutSSHTunnelVars,

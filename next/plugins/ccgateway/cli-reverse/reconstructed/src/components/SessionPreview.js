@@ -44,7 +44,7 @@ deferInit("chunk-b79vwm1h.js:1859", () => {
 deferInit("chunk-b79vwm1h.js:1863", () => {
   init_react_production();
 });
-//@ chunk-b79vwm1h.js:1867-4216 fingerprint = SessionPreview (0.704)
+//@ chunk-b79vwm1h.js:1867-4216 fingerprint (2.1.88 match: SessionPreview, 0.704)
 function SessionPreview(props) {
   let $ = useMemoCache(36);
   let { log, onExit, onSelect } = props;

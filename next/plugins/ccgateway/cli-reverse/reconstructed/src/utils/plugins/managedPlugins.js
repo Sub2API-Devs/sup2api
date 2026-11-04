@@ -123,7 +123,7 @@ function getPolicyOnlyBuiltinPluginNames() {
       .map((id) => [id, getManagedPluginNames_2(id)]),
   );
 }
-//@ chunk-bfnfj4kx.js:78110-78223 fingerprint = getManagedPluginNames (1)
+//@ chunk-bfnfj4kx.js:78110-78223 fingerprint (2.1.88 match: getManagedPluginNames, 1)
 /**
  * 插件在托管/合并设置中的启用值（托管为 false 时以托管为准）。
  */
@@ -258,7 +258,7 @@ function isReadInPlaceSourceVouched(pluginModule, policySettings) {
 //@ chunk-czx62zen.js:17280-17457 placement
 var UNVOUCHED_MANAGED_SETTINGS_DESCRIPTION =
   "managed settings this session does not vouch for (such as remote managed settings the server has not confirmed this session, or a document your user account can write)";
-//@ chunk-czx62zen.js:17457-17521 placement = _temp7 (1)
+//@ chunk-czx62zen.js:17457-17521 placement (2.1.88 match: _temp7, 1)
 /**
  * assuredPolicySettings：受信管理策略层或策略设置。
  */
@@ -456,7 +456,7 @@ function hasAnyPluginDeclarations(tier) {
       Object.values(tier.enabledPlugins ?? {}).some((value) => value !== false),
   );
 }
-//@ chunk-czx62zen.js:19920-20117 placement = getManagedPluginNames (0.774)
+//@ chunk-czx62zen.js:19920-20117 placement (2.1.88 match: getManagedPluginNames, 0.774)
 /**
  * 托管插件 ID 列表：来自 policySettings 与远程托管设置的 enabledPlugins。
  */

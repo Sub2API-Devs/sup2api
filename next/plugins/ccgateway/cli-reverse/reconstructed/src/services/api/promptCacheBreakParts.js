@@ -213,7 +213,7 @@ function withBackgroundTaskPrefix(text) {
     return text;
   return `${BACKGROUND_TASK_EVENT_PREFIX}${text}`;
 }
-//@ chunk-g54kbxqw.js:50641-50700 placement = memoryFreshnessNote (1)
+//@ chunk-g54kbxqw.js:50641-50700 placement (2.1.88 match: memoryFreshnessNote, 1)
 var BACKGROUND_EVENT_REMINDER_OPEN = `<system-reminder>
 ${BACKGROUND_TASK_EVENT_NOTICE}`;
 var SYSTEM_REMINDER_CLOSE = `
@@ -230,7 +230,7 @@ function escapeSystemReminderTags(text) {
 function escapeSystemReminderCloseTag(text) {
   return text.replaceAll(/<(?=\s*\/\s*system-reminder\b)/gi, "&lt;");
 }
-//@ chunk-g54kbxqw.js:50960-51067 placement = ensureSystemReminderWrap (1)
+//@ chunk-g54kbxqw.js:50960-51067 placement (2.1.88 match: ensureSystemReminderWrap, 1)
 function ensureSystemReminderWrap(msg) {
   if (msg.startsWith(BACKGROUND_EVENT_REMINDER_OPEN) && msg.endsWith(SYSTEM_REMINDER_CLOSE)) return msg;
   return `<system-reminder>
@@ -317,7 +317,7 @@ deferInit("chunk-g54kbxqw.js:52350", () => {
 function isKnownContentBlockType(type) {
   return contentBlockTypeSet.has(type);
 }
-//@ chunk-g54kbxqw.js:52853-52943 placement = extractErrorTypeFromData (1)
+//@ chunk-g54kbxqw.js:52853-52943 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function contentBlockTypeBucket(block) {
   let contentBlock = "type" in block ? block.type : undefined;
   return typeof contentBlock === "string" && isKnownContentBlockType(contentBlock) ? contentBlock : "other";
@@ -407,7 +407,7 @@ ${text}`);
 //@ chunk-g54kbxqw.js:53888-53909 placement
 var MAX_INLINE_TEXT_BYTES = 65536;
 var HASH_EDGE_CHARS = 4096;
-//@ chunk-g54kbxqw.js:53909-54060 placement = extractErrorTypeFromData (1)
+//@ chunk-g54kbxqw.js:53909-54060 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 超长文本替换为 "类型:长度:首段哈希:末段哈希" 摘要。
  */
@@ -420,7 +420,7 @@ function summarizeLongText(text, name) {
     shortHash(text.slice(-HASH_EDGE_CHARS)),
   ].join(":");
 }
-//@ chunk-g54kbxqw.js:54060-54151 placement = stripCacheControl (1)
+//@ chunk-g54kbxqw.js:54060-54151 placement (2.1.88 match: stripCacheControl, 1)
 function stripCacheControl_2(items) {
   if ("cache_control" in items) {
     let { cache_control: cacheControl, ...rest } = items;

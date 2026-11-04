@@ -85,7 +85,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { identityModelId } from "./bedrock.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:429417-429528 placement = resolveAgentModelDisplay (1)
+//@ chunk-aepeg2w5.js:429417-429528 placement (2.1.88 match: resolveAgentModelDisplay, 1)
 /**
  * 判断字符串是否为客户端可用的模型写法（别名、模型 ID、default、inherit 等）；供 utils/model 的 isClientSpelling 使用（共享指纹误归 agentDisplay）。
  */
@@ -153,7 +153,7 @@ function getModelPricingSuffix(fastMode, model) {
   if (price === undefined) return "";
   return ` \xB7${fastMode ? ` (${LIGHTNING})` : ""} ${price}`;
 }
-//@ chunk-aepeg2w5.js:460634-460789 placement = hasOpusAccess (1)
+//@ chunk-aepeg2w5.js:460634-460789 placement (2.1.88 match: hasOpusAccess, 1)
 /**
  * 是否可用 Opus：max 恒可；team 需 premium 或特性未限制；enterprise 需按量计费或未限制；pro 视特性。
  */
@@ -171,7 +171,7 @@ function isOpusDefaultSubscriber() {
       return false;
   }
 }
-//@ chunk-aepeg2w5.js:460789-461009 placement = isOpus1mMergeEnabled (0.408)
+//@ chunk-aepeg2w5.js:460789-461009 placement (2.1.88 match: isOpus1mMergeEnabled, 0.408)
 /**
  * Opus 1M 合并是否启用：未禁 1M、非 Pro、第一方；订阅用户需有订阅类型；默认 Opus 不能是 never 支持 1M 的模型。
  */
@@ -212,7 +212,7 @@ function applyOpus1mOptIn(defaultOpusModel) {
     ? append1mSuffixIfMissing(defaultOpusModel)
     : defaultOpusModel;
 }
-//@ chunk-aepeg2w5.js:461140-461230 placement = renderModelSetting (1)
+//@ chunk-aepeg2w5.js:461140-461230 placement (2.1.88 match: renderModelSetting, 1)
 /**
  * 设置值的显示：opusplan 显示 "Opus Plan"，别名显示解析后模型名，否则直接显示名。
  */
@@ -237,7 +237,7 @@ function getModelSourceAnnotation() {
       return "";
   }
 }
-//@ chunk-aepeg2w5.js:461456-461525 placement = resolveSkillModelOverride (0.834)
+//@ chunk-aepeg2w5.js:461456-461525 placement (2.1.88 match: resolveSkillModelOverride, 0.834)
 /**
  * 规范名在 catalog 的 display_name（[1m] 且支持时加 " (1M context)"）。旧版名 resolveSkillModelOverride_5 为错配。
  */
@@ -455,7 +455,7 @@ function renderUsageCreditsOnlyModelName(model) {
     ? publicModelDisplayName
     : family;
 }
-//@ chunk-aepeg2w5.js:463941-464016 placement = getPublicModelName (1)
+//@ chunk-aepeg2w5.js:463941-464016 placement (2.1.88 match: getPublicModelName, 1)
 /**
  * 公开模型名 "Claude <显示名>"，未知时 "Claude (<id>)"。
  */

@@ -39,7 +39,7 @@ function call(onDone) {
   if (homePath && cwdPath) return homePath.length <= cwdPath.length ? homePath : cwdPath;
   return homePath || cwdPath || onDone;
 }
-//@ chunk-c55mbvfz.js:42077-43674 fingerprint = MemoryCommand (0.697)
+//@ chunk-c55mbvfz.js:42077-43674 fingerprint (2.1.88 match: MemoryCommand, 0.697)
 function MemoryCommand({ session, commandContext, addedInstructionFiles, onDone }) {
   let handleSelectMemoryFile = async (memoryPath) => {
     try {

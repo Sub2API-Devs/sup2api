@@ -18,7 +18,7 @@ import { clampPositive } from "../../plugins/functionHooks/coreHandlers.js";
 import { reduceAnsiCodes } from "../../../vendor/@alcalzone/ansi-tokenize/build/reduce.js";
 import { reduceCodes } from "../../utils/textHighlighting.js";
 
-//@ chunk-e6aww6q8.js:60352-60668 placement = setCwdState (0.84)
+//@ chunk-e6aww6q8.js:60352-60668 placement (2.1.88 match: setCwdState, 0.84)
 function mapRangesToNfcOffsets(ranges, text, mode) {
   if (ranges.length === 0) return EMPTY_SPANS;
   let boundaries = uniq(ranges.flatMap((range) => [range.start, range.end])).toSorted((a, b) => a - b);
@@ -141,7 +141,7 @@ function mergeSpanStyle(base, override, span) {
 var sameTextStyle = (a, b) => TEXT_STYLE_PROPS.every((prop) => a[prop] === b[prop]);
 //@ chunk-e6aww6q8.js:61686-61727 placement
 var isAsciiOnly = (text) => !/[^\t\n\x20-\x7e]/.test(text);
-//@ chunk-e6aww6q8.js:61727-62095 placement = hasAnyTextProps (0.833)
+//@ chunk-e6aww6q8.js:61727-62095 placement (2.1.88 match: hasAnyTextProps, 0.833)
 var mergeTextStyleOverrides = (baseStyle, overrides) => ({
   ...baseStyle,
   ...(overrides.color !== undefined && {
@@ -369,7 +369,7 @@ function textToRenderedOffset(text, offset, isEnd) {
   let row = text[rendered - 1];
   return row ? row.renderedStart + Math.min(offset - row.textStart, row.length) : 0;
 }
-//@ chunk-e6aww6q8.js:65856-65918 placement = hasVisibleSpaceEffect (1)
+//@ chunk-e6aww6q8.js:65856-65918 placement (2.1.88 match: hasVisibleSpaceEffect, 1)
 function activeAnsiCodes(styles) {
   return reduceAnsiCodes(styles).filter((style) => style.code !== style.endCode);
 }

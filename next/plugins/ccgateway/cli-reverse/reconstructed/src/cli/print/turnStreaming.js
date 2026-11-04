@@ -88,7 +88,7 @@ async function* executeMessageDisplayHooks(
     credentials,
   });
 }
-//@ chunk-0sfjpx19.js:79975-80163 placement = countToolCallsSince (1)
+//@ chunk-0sfjpx19.js:79975-80163 placement (2.1.88 match: countToolCallsSince, 1)
 function collectReadNotificationsToolUseIds(messages, sinceUuid) {
   if (!isRealAssistantReply(messages)) return false;
   let { content } = messages.message;

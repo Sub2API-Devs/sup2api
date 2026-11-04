@@ -32,14 +32,14 @@ import { findPluginRootInExtracted } from "./commandSource.js";
 import { containsGitDirectory } from "./fileIdentity.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:608388-608444 fingerprint = isPluginZipCacheEnabled (1)
+//@ chunk-e6aww6q8.js:608388-608444 fingerprint (2.1.88 match: isPluginZipCacheEnabled, 1)
 /**
  * 是否启用插件 zip 缓存（CLAUDE_CODE_PLUGIN_USE_ZIP_CACHE）：插件以 .zip 存于 CLAUDE_CODE_PLUGIN_CACHE_DIR，会话启动时解压到临时目录。
  */
 function isPluginZipCacheEnabled() {
   return env.CLAUDE_CODE_PLUGIN_USE_ZIP_CACHE;
 }
-//@ chunk-e6aww6q8.js:608534-608653 fingerprint = getZipCacheKnownMarketplacesPath (1)
+//@ chunk-e6aww6q8.js:608534-608653 fingerprint (2.1.88 match: getZipCacheKnownMarketplacesPath, 1)
 /**
  * zip 缓存模式下的 known_marketplaces.json 路径（未启用时抛错）。
  */
@@ -48,7 +48,7 @@ function getZipCacheKnownMarketplacesPath() {
   if (!cachePath) throw Error("Plugin zip cache is not enabled");
   return join(cachePath, "known_marketplaces.json");
 }
-//@ chunk-e6aww6q8.js:608653-608761 fingerprint = getZipCacheMarketplacesDir (1)
+//@ chunk-e6aww6q8.js:608653-608761 fingerprint (2.1.88 match: getZipCacheMarketplacesDir, 1)
 /**
  * zip 缓存模式下的 marketplaces 目录。
  */
@@ -57,7 +57,7 @@ function getZipCacheMarketplacesDir() {
   if (!cachePath) throw Error("Plugin zip cache is not enabled");
   return join(cachePath, "marketplaces");
 }
-//@ chunk-e6aww6q8.js:608761-608864 fingerprint = getZipCachePluginsDir (1)
+//@ chunk-e6aww6q8.js:608761-608864 fingerprint (2.1.88 match: getZipCachePluginsDir, 1)
 /**
  * zip 缓存模式下的 plugins 目录。
  */
@@ -68,7 +68,7 @@ function getZipCachePluginsDir() {
 }
 //@ chunk-e6aww6q8.js:608864-608878 layout
 var CLI_TEMP_SUBDIR = "cli";
-//@ chunk-e6aww6q8.js:608878-609642 fingerprint = cleanupSessionPluginCache (0.455)
+//@ chunk-e6aww6q8.js:608878-609642 fingerprint (2.1.88 match: cleanupSessionPluginCache, 0.455)
 /**
  * 会话结束时删除本会话的插件解压临时目录。
  */
@@ -142,7 +142,7 @@ function getSessionPluginCacheEntry() {
 function getZipExtractionState() {
   return getSessionPluginCacheEntry().current().extractions;
 }
-//@ chunk-e6aww6q8.js:609758-610040 fingerprint = getSessionPluginCachePath (0.949)
+//@ chunk-e6aww6q8.js:609758-610040 fingerprint (2.1.88 match: getSessionPluginCachePath, 0.949)
 /**
  * 取（必要时创建）本会话的插件解压临时目录 claude-plugin-session-<随机>，每个宿主一个。
  */
@@ -178,7 +178,7 @@ async function writeFileEnsuringDir(filePath, data) {
   await getFsImplementation().mkdir(dirname(filePath));
   await writeFileAtomic_2(filePath, data);
 }
-//@ chunk-e6aww6q8.js:610169-610381 fingerprint = createZipFromDirectory (0.867)
+//@ chunk-e6aww6q8.js:610169-610381 fingerprint (2.1.88 match: createZipFromDirectory, 0.867)
 /**
  * 把目录打成 zip（跳过 .git 与符号链接环，保留文件权限位）。
  */
@@ -194,7 +194,7 @@ async function createZipFromDirectory(sourceDir) {
   );
   return zipData;
 }
-//@ chunk-e6aww6q8.js:610381-610959 fingerprint = collectFilesForZip (1)
+//@ chunk-e6aww6q8.js:610381-610959 fingerprint (2.1.88 match: collectFilesForZip, 1)
 async function collectFilesForZip(baseDir, relativePath, files, visited) {
   let currentDir = relativePath ? join(baseDir, relativePath) : baseDir;
   let entries;
@@ -245,7 +245,7 @@ async function collectFilesForZip(baseDir, relativePath, files, visited) {
       }
   }
 }
-//@ chunk-e6aww6q8.js:611035-611425 fingerprint = extractZipToDirectory (0.814)
+//@ chunk-e6aww6q8.js:611035-611425 fingerprint (2.1.88 match: extractZipToDirectory, 0.814)
 /**
  * 解压 zip 到目录（含路径安全校验与权限位恢复）。
  */
@@ -283,7 +283,7 @@ async function publishDirectoryAsZip(sourceDir, zipPath) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:611687-611762 fingerprint = isMarketplaceSourceSupportedByZipCache (1)
+//@ chunk-e6aww6q8.js:611687-611762 fingerprint (2.1.88 match: isMarketplaceSourceSupportedByZipCache, 1)
 /**
  * zip 缓存模式支持的市场来源：github、git、url、settings。
  */

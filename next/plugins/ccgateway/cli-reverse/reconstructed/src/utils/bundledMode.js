@@ -10,7 +10,7 @@
  */
 import { findStaleReads } from "../services/accountMemory/memoryUpdates.js";
 
-//@ chunk-s61vbvea.js:79753-79892 fingerprint = isRunningWithBun (0.611)
+//@ chunk-s61vbvea.js:79753-79892 fingerprint (2.1.88 match: isRunningWithBun, 0.611)
 function isRunningWithBun(held, lastMemoryContextAttachment, root) {
   if (!held?.versions || held.content === null || lastMemoryContextAttachment?.version === held.version)
     return false;
@@ -20,7 +20,7 @@ function isRunningWithBun(held, lastMemoryContextAttachment, root) {
     return false;
   }
 }
-//@ chunk-18hwfzwa.js:1041736-1041965 fingerprint = isInBundledMode (0.828)
+//@ chunk-18hwfzwa.js:1041736-1041965 fingerprint (2.1.88 match: isInBundledMode, 0.828)
 function isInBundledMode(value) {
   if (Array.isArray(value)) return `[${value.map(isInBundledMode).join(",")}]`;
   if (typeof value === "object" && value !== null)

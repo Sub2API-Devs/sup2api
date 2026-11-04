@@ -60,7 +60,7 @@ function sanitizeResultText(text) {
 function remoteWorkflowErrorLine(layer, message) {
   return `remote-workflow: error[${layer}]: ${sanitizeResultText(message)}`;
 }
-//@ chunk-74vrtgsp.js:1105-1248 placement = escapeJsLineTerminators (0.785)
+//@ chunk-74vrtgsp.js:1105-1248 placement (2.1.88 match: escapeJsLineTerminators, 0.785)
 /**
  * 同上，另外转义 U+0085（NEL），用于 stream-json 输出。
  */

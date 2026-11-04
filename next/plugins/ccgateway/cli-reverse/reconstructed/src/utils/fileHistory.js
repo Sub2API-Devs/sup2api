@@ -60,7 +60,7 @@ import { lintMemoryWrite } from "../memdir/memoryWriteLint.js";
 import { cleanupOldFilesInDirectory } from "./cleanup.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1372980-1374895 facade-exports = fileHistoryMakeSnapshot (0.556)
+//@ chunk-e6aww6q8.js:1372980-1374895 facade-exports (2.1.88 match: fileHistoryMakeSnapshot, 0.556)
 /**
  * fileHistory 状态归约：track（把首个备份记入最近快照并记 delta）、snapshot（追加快照，超过上限淘汰旧快照并删除不再引用的备份、记录到会话日志、通知 VS Code）、touch（只增序号）。
  */
@@ -223,7 +223,7 @@ async function deleteEvictedBackups(firstList, secondList, storageV5) {
         });
     }
 }
-//@ chunk-e6aww6q8.js:1375526-1375684 facade-exports = fileHistoryEnabled (0.415)
+//@ chunk-e6aww6q8.js:1375526-1375684 facade-exports (2.1.88 match: fileHistoryEnabled, 0.415)
 /**
  * 是否启用文件检查点：非云端/非 diskless；非交互会话需 CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING；交互会话看设置 fileCheckpointingEnabled（默认 true）且未设 CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING。
  */
@@ -235,14 +235,14 @@ function fileHistoryEnabled() {
     resolveSetting("fileCheckpointingEnabled", true).value && !env.CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING
   );
 }
-//@ chunk-e6aww6q8.js:1375684-1375793 fingerprint = fileHistoryEnabledSdk (1)
+//@ chunk-e6aww6q8.js:1375684-1375793 fingerprint (2.1.88 match: fileHistoryEnabledSdk, 1)
 /**
  * SDK 模式是否启用文件检查点（ENABLE_SDK_FILE_CHECKPOINTING 且未 DISABLE）。
  */
 function fileHistoryEnabledSdk() {
   return env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING && !env.CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING;
 }
-//@ chunk-e6aww6q8.js:1375793-1376525 facade-exports = fileHistoryTrackEdit (0.43)
+//@ chunk-e6aww6q8.js:1375793-1376525 facade-exports (2.1.88 match: fileHistoryTrackEdit, 0.43)
 /**
  * 编辑前跟踪文件：未启用或已跟踪时只 touch；否则为文件创建 v1 备份（新文件 backupFileName 为 null）并派发 track 操作。Edit/Write/NotebookEdit 在写入前调用。
  */
@@ -421,7 +421,7 @@ deferInit("chunk-e6aww6q8.js:1377957", () => {
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {};
 });
-//@ chunk-e6aww6q8.js:1377978-1379208 facade-exports = fileHistoryRewind (0.674)
+//@ chunk-e6aww6q8.js:1377978-1379208 facade-exports (2.1.88 match: fileHistoryRewind, 0.674)
 /**
  * 回退到某消息的快照：applySnapshot 恢复所有已跟踪文件；全部失败时抛 NoFilesRestoredError；返回跳过的链接数。
  */
@@ -479,7 +479,7 @@ async function fileHistoryRewind(updateFileHistoryState, messageId) {
     skippedLinks: counts,
   };
 }
-//@ chunk-e6aww6q8.js:1379208-1379290 facade-exports = fileHistoryCanRestore (1)
+//@ chunk-e6aww6q8.js:1379208-1379290 facade-exports (2.1.88 match: fileHistoryCanRestore, 1)
 /**
  * 是否存在该消息的快照（可回退）。
  */
@@ -487,7 +487,7 @@ function fileHistoryCanRestore(state, messageId) {
   if (!fileHistoryEnabled()) return false;
   return state.snapshots.some((snapshot) => snapshot.messageId === messageId);
 }
-//@ chunk-e6aww6q8.js:1379290-1380120 facade-exports = fileHistoryGetDiffStats (1)
+//@ chunk-e6aww6q8.js:1379290-1380120 facade-exports (2.1.88 match: fileHistoryGetDiffStats, 1)
 /**
  * 计算回退到某快照会改动哪些文件及增删行数（dry run）。
  */
@@ -559,7 +559,7 @@ var TURN_DIFF_MAX_BYTES = 1048576;
 var DIFF_MAX_EDIT_LENGTH = 500;
 var TURN_DIFF_COUNTING_MS = 1000;
 var RECENT_MTIME_WINDOW_MS = 2000;
-//@ chunk-e6aww6q8.js:1380162-1381968 facade-exports = fileHistoryHasAnyChanges (0.345)
+//@ chunk-e6aww6q8.js:1380162-1381968 facade-exports (2.1.88 match: fileHistoryHasAnyChanges, 0.345)
 /**
  * 统计两个快照之间（或快照到当前磁盘）每个文件的增删行，用于消息选择器显示每轮改动。
  */
@@ -746,7 +746,7 @@ function splitLinesDroppingTrailing(text) {
   if (lines.at(-1) === "") lines.pop();
   return lines;
 }
-//@ chunk-e6aww6q8.js:1382706-1384588 fingerprint = applySnapshot (0.515)
+//@ chunk-e6aww6q8.js:1382706-1384588 fingerprint (2.1.88 match: applySnapshot, 0.515)
 /**
  * 把所有已跟踪文件恢复到目标快照的版本：备份为 null 则删除文件，否则校验目标安全后从备份恢复；返回改动/失败列表与跳过的链接数。
  */
@@ -905,7 +905,7 @@ function compareStatsAndContent(originalStats, backupStats, compareContent) {
   if (originalStats.mtimeMs < backupStats.mtimeMs) return false;
   return compareContent();
 }
-//@ chunk-e6aww6q8.js:1385080-1385486 fingerprint = computeDiffStatsForFile (0.941)
+//@ chunk-e6aww6q8.js:1385080-1385486 fingerprint (2.1.88 match: computeDiffStatsForFile, 0.941)
 async function computeDiffStatsForFile(originalFile, backupFileName) {
   let filesChanged = [];
   let insertions = 0;
@@ -940,7 +940,7 @@ async function computeDiffStatsForFile(originalFile, backupFileName) {
     deletions,
   };
 }
-//@ chunk-e6aww6q8.js:1385486-1385571 callgraph-fingerprint = getBackupFileName (1)
+//@ chunk-e6aww6q8.js:1385486-1385571 callgraph-fingerprint (2.1.88 match: getBackupFileName, 1)
 /**
  * 备份文件名：路径哈希前 16 位 + "@v" + 版本。
  */
@@ -970,7 +970,7 @@ function assertValidBackupFileNameAndSession(backupFileName, sessionId) {
     throw Error("FileHistory: invalid backup file name");
   if (sessionId && !isSafeIdSegment_2(sessionId)) throw Error("FileHistory: invalid session id");
 }
-//@ chunk-e6aww6q8.js:1386014-1386088 sole-consumer = resolveBackupPath (1)
+//@ chunk-e6aww6q8.js:1386014-1386088 sole-consumer (2.1.88 match: resolveBackupPath, 1)
 /**
  * 备份文件的绝对路径（配置目录/file-history/<sessionId>/<name>），先校验名字与会话 id。
  */
@@ -984,7 +984,7 @@ function resolveBackupStorageKey(backupName, sessionId) {
   assertValidBackupFileNameAndSession(backupName, sessionId);
   return STORAGE_SPACES.fileHistory(sessionId || getSessionId(), backupName);
 }
-//@ chunk-e6aww6q8.js:1386405-1386976 fingerprint = createBackup (0.778)
+//@ chunk-e6aww6q8.js:1386405-1386976 fingerprint (2.1.88 match: createBackup, 0.778)
 /**
  * 为文件创建指定版本的备份（file-history/<session>/<hash>@v<n>）；文件不存在时返回 backupFileName null。
  */
@@ -1164,7 +1164,7 @@ function parentDirOpenErrorVerdict(error) {
     };
   throw error;
 }
-//@ chunk-e6aww6q8.js:1388901-1391864 callgraph-witnessed = restoreBackup (0.14)
+//@ chunk-e6aww6q8.js:1388901-1391864 callgraph-witnessed (2.1.88 match: restoreBackup, 0.14)
 /**
  * 从备份文件恢复单个文件（检查目标不是符号链接/硬链接、父目录未被替换，写临时文件后 rename）。
  */
@@ -1327,7 +1327,7 @@ async function restoreBackup(filePath, backupFileName, realParentDir) {
   }
   return "restored";
 }
-//@ chunk-e6aww6q8.js:1391864-1391986 fingerprint = getBackupFileNameFirstVersion (0.799)
+//@ chunk-e6aww6q8.js:1391864-1391986 fingerprint (2.1.88 match: getBackupFileNameFirstVersion, 0.799)
 /**
  * 取某文件在所有快照中的第一个备份。
  */
@@ -1353,7 +1353,7 @@ function expandTrackingPath(trackingPath) {
   if (isAbsolute(trackingPath)) return trackingPath;
   return join(getOriginalCwd(), trackingPath);
 }
-//@ chunk-e6aww6q8.js:1392129-1392391 facade-exports = fileHistoryRestoreStateFromLog (1)
+//@ chunk-e6aww6q8.js:1392129-1392391 facade-exports (2.1.88 match: fileHistoryRestoreStateFromLog, 1)
 /**
  * 从会话日志里的 fileHistorySnapshots 重建 fileHistory 状态（resume 用）。
  */
@@ -1616,7 +1616,7 @@ function countOccurrencesSorted(items) {
     .map(([value, group]) => [value, group.length])
     .sort(([valueA, countA], [valueB, countB]) => countB - countA || (valueA < valueB ? -1 : 1));
 }
-//@ chunk-e6aww6q8.js:1396146-1398175 facade-exports = copyFileHistoryForResume (0.453)
+//@ chunk-e6aww6q8.js:1396146-1398175 facade-exports (2.1.88 match: copyFileHistoryForResume, 0.453)
 /**
  * resume 时把旧会话的备份迁移到新会话目录（硬链接，失败则复制再 rename，并发 16），汇总失败原因记日志。
  */
@@ -1737,7 +1737,7 @@ async function copyFileHistoryForResume(log, newSessionId, storageV5) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:1398175-1398816 fingerprint = notifyVscodeSnapshotFilesUpdated (0.586)
+//@ chunk-e6aww6q8.js:1398175-1398816 fingerprint (2.1.88 match: notifyVscodeSnapshotFilesUpdated, 0.586)
 /**
  * 快照文件集合变化时通知 VS Code 扩展。
  */
@@ -1782,7 +1782,7 @@ async function notifyVscodeSnapshotFilesUpdated(oldState, newState) {
 async function readFileTextNoFollow(filePath, options) {
   return (await checkOriginFileChanged(filePath, options)).text ?? null;
 }
-//@ chunk-e6aww6q8.js:1398873-1399423 callgraph-fingerprint = checkOriginFileChanged (0.222)
+//@ chunk-e6aww6q8.js:1398873-1399423 callgraph-fingerprint (2.1.88 match: checkOriginFileChanged, 0.222)
 /**
  * 以 O_NONBLOCK（可选 O_NOFOLLOW）打开并读取文件文本与 stats，可限制最大字节；用于比较备份与当前文件。
  */
@@ -1834,7 +1834,7 @@ var DEBUG_STATE_DUMP = false;
 function maybeDumpStateForDebug(state) {
   if (DEBUG_STATE_DUMP) console.error(inspect(state, false, 5));
 }
-//@ chunk-23fm9f0d.js:22892-22931 fingerprint = resolveBackupPath (1)
+//@ chunk-23fm9f0d.js:22892-22931 fingerprint (2.1.88 match: resolveBackupPath, 1)
 /**
  * 取会话的 file-history 目录（误配名 resolveBackupPath）。
  */

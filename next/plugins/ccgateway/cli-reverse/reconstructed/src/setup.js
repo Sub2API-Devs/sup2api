@@ -270,7 +270,7 @@ async function isLockHolderProcess(cwd, storageV5) {
     return false;
   }
 }
-//@ chunk-fhdzwff4.js:16059-24868 fingerprint = setup (0.523)
+//@ chunk-fhdzwff4.js:16059-24868 fingerprint (2.1.88 match: setup, 0.523)
 /**
  * setup(cwd, permissionMode, …)：检查 Node≥22、后台 worker 抢控制终端、--session-id 切换会话、跨会话消息 UDS、恢复 iTerm2/Terminal.app 备份、chdir、捕获钩子快照、文件监视、--worktree（含 tmux）创建与切换、锁定当前版本、插件钩子预加载、上报 tengu_started 等。
  */

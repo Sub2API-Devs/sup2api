@@ -510,7 +510,7 @@ function maskDisallowedNames(names, withdrawn) {
 function filterArrayByMask(values, mask) {
   return Array.isArray(values) ? values.filter((value, index) => mask[index] ?? true) : undefined;
 }
-//@ chunk-tyg7f3ek.js:418336-418415 placement = _temp (1)
+//@ chunk-tyg7f3ek.js:418336-418415 placement (2.1.88 match: _temp, 1)
 /**
  * 只按 image 块的顺序套用掩码过滤
  */
@@ -946,7 +946,7 @@ function toSdkUserMessage(message, options) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:424301-424555 placement = _temp7 (0.809)
+//@ chunk-tyg7f3ek.js:424301-424555 placement (2.1.88 match: _temp7, 0.809)
 function userRowsWithoutInput(opt) {
   let rows = [];
   for (let message of opt) {
@@ -4600,7 +4600,7 @@ function postTimingFields(enabled, startMs, timing) {
     return {};
   }
 }
-//@ chunk-tyg7f3ek.js:483926-485753 fingerprint = ask (0.405)
+//@ chunk-tyg7f3ek.js:483926-485753 fingerprint (2.1.88 match: ask, 0.405)
 /**
  * ask()：解析惰性配置（工具/MCP/命令/JSON schema 等可为函数），按 userSpecifiedModel 与权限模式决定主循环模型与 thinking，构建 headless 的 ToolUseContext（isNonInteractiveSession、runQuery=query 等）。
  */
@@ -4685,7 +4685,7 @@ function resolveLazy(value) {
 function isFunction(value) {
   return typeof value === "function";
 }
-//@ chunk-18hwfzwa.js:1510660-1510734 fingerprint = getCoordinatorUserContext (0.572)
+//@ chunk-18hwfzwa.js:1510660-1510734 fingerprint (2.1.88 match: getCoordinatorUserContext, 0.572)
 /**
  * coordinator 用户上下文缓存（初始 null）。
  */

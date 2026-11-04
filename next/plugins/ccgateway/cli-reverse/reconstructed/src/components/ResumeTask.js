@@ -35,7 +35,7 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-sx9xc5ee.js:9790-9902 fingerprint = renderErrorSpecificGuidance (0.564)
+//@ chunk-sx9xc5ee.js:9790-9902 fingerprint (2.1.88 match: renderErrorSpecificGuidance, 0.564)
 async function renderErrorSpecificGuidance(wizardData, modelId) {
   return probeModelAccess(
     () => testBedrockRequest(wizardData),
@@ -46,7 +46,7 @@ async function renderErrorSpecificGuidance(wizardData, modelId) {
         : "auth",
   );
 }
-//@ chunk-0bntfk7p.js:1975-2064 fingerprint = UPDATED_STRING (0.486)
+//@ chunk-0bntfk7p.js:1975-2064 fingerprint (2.1.88 match: UPDATED_STRING, 0.486)
 var UPDATED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ORIGIN;
 var REMOTE_CONTROL_LABEL;
@@ -59,7 +59,7 @@ deferInit("chunk-0bntfk7p.js:1975", () => {
   max = Math.max(ORIGIN.length, REMOTE_CONTROL_LABEL.length);
   SPACE = "  ";
 });
-//@ chunk-0bntfk7p.js:2064-5609 fingerprint = ResumeTask (0.71)
+//@ chunk-0bntfk7p.js:2064-5609 fingerprint (2.1.88 match: ResumeTask, 0.71)
 function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }) {
   let { rows, columns } = useScrollViewportSize(useTerminalSize());
   let [sessions, setSessions] = useState([]);
@@ -348,7 +348,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
     ],
   });
 }
-//@ chunk-0bntfk7p.js:5609-6050 fingerprint = determineErrorType (1)
+//@ chunk-0bntfk7p.js:5609-6050 fingerprint (2.1.88 match: determineErrorType, 1)
 function determineErrorType(errorMessage) {
   let message = errorMessage.toLowerCase();
   if (message.includes("fetch") || message.includes("network") || message.includes("timeout"))

@@ -9,7 +9,7 @@
  * attribution: placement 1
  */
 
-//@ chunk-24t3dkzb.js:4916-5094 placement = Event (1)
+//@ chunk-24t3dkzb.js:4916-5094 placement (2.1.88 match: Event, 1)
 /**
  * Ink 事件基类：记录是否已调用 stopImmediatePropagation。
  */

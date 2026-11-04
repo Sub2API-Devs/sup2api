@@ -40,7 +40,7 @@ import { parseUserSpecifiedModel } from "../utils/model/modelDisplay.js";
 import { validateModel } from "../utils/model/validateModel.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2035084-2035684 fingerprint = advisor (0.505)
+//@ chunk-e6aww6q8.js:2035084-2035684 fingerprint (2.1.88 match: advisor, 0.505)
 /**
  * /advisor 命令对象（local-jsx）；描述：Let Claude consult a stronger model at key moments；isEnabled: ()=>MA()；isHidden: {return!MA()}；实现 chunk-tx2s9zpa.js 的 Ne。
  */
@@ -80,7 +80,7 @@ var advisorNonInteractiveCommand = {
 deferInit("chunk-tx2s9zpa.js:14076", () => {
   init_react_production();
 });
-//@ chunk-tx2s9zpa.js:14080-14119 sole-consumer = getExperimentAdvisorModels (1)
+//@ chunk-tx2s9zpa.js:14080-14119 sole-consumer (2.1.88 match: getExperimentAdvisorModels, 1)
 function getExperimentAdvisorModels(model) {
   return model.advisorModel;
 }
@@ -97,7 +97,7 @@ function logAdvisorDialogShown() {
 }
 //@ chunk-tx2s9zpa.js:14211-14264 placement
 var ADVISOR_BLOG_URL = "https://claude.com/blog/the-advisor-strategy";
-//@ chunk-tx2s9zpa.js:14264-16453 placement = ThinkbackMenu (0.215)
+//@ chunk-tx2s9zpa.js:14264-16453 placement (2.1.88 match: ThinkbackMenu, 0.215)
 /**
  * AdvisorPicker：旧版名 ThinkbackMenu 配错：内容是 advisor 模型选择。
  */
@@ -350,7 +350,7 @@ function AdvisorChoiceApplier(props) {
   useEffect(choiceState, selected);
   return null;
 }
-//@ chunk-tx2s9zpa.js:16878-17428 fingerprint = call (0.417)
+//@ chunk-tx2s9zpa.js:16878-17428 fingerprint (2.1.88 match: call, 0.417)
 /**
  * /advisor 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

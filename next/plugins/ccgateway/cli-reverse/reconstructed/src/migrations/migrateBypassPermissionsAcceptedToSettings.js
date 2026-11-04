@@ -14,7 +14,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-cjydagjy.js:8258-8852 fingerprint = migrateBypassPermissionsAcceptedToSettings (0.816)
+//@ chunk-cjydagjy.js:8258-8852 fingerprint (2.1.88 match: migrateBypassPermissionsAcceptedToSettings, 0.816)
 /**
  * 迁移：全局配置 bypassPermissionsModeAccepted → userSettings.skipDangerousModePermissionPrompt=true。
  */

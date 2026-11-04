@@ -16,7 +16,7 @@ import { filterEditableRules } from "../../components/permissions/hooks.js";
 import { externalMetadataToAppState } from "../../state/onChangeAppState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:207975-208707 fingerprint = PERMISSION_MODE_CONFIG (0.746)
+//@ chunk-dcmhvw5a.js:207975-208707 fingerprint (2.1.88 match: PERMISSION_MODE_CONFIG, 0.746)
 /**
  * 六种对外权限模式的显示配置表：title/shortTitle/indicator/symbol/color/external。default 显示为 "Manual"；bubble 不在表内（getModeConfig 回落 default）。
  */
@@ -73,14 +73,14 @@ deferInit("chunk-dcmhvw5a.js:207975", () => {
     },
   };
 });
-//@ chunk-dcmhvw5a.js:208707-208743 fingerprint = isExternalPermissionMode (0.47)
+//@ chunk-dcmhvw5a.js:208707-208743 fingerprint (2.1.88 match: isExternalPermissionMode, 0.47)
 /**
  * 是否对外可见模式：只有内部模式 "bubble"（子代理把权限请求冒泡给父级）返回 false。
  */
 function isExternalPermissionMode(mode) {
   return mode !== "bubble";
 }
-//@ chunk-dcmhvw5a.js:208743-208783 callgraph-witnessed = getModeConfig (0)
+//@ chunk-dcmhvw5a.js:208743-208783 callgraph-witnessed (2.1.88 match: getModeConfig, 0)
 function getModeConfig(mode) {
   return PERMISSION_MODE_CONFIG[mode] ?? PERMISSION_MODE_CONFIG.default;
 }
@@ -145,7 +145,7 @@ function getModeBaseBehavior(mode, isBypassAvailable) {
 function permissionModeIndicator(mode) {
   return getModeConfig(mode).indicator;
 }
-//@ chunk-dcmhvw5a.js:209323-209359 fingerprint = permissionModeSymbol (1)
+//@ chunk-dcmhvw5a.js:209323-209359 fingerprint (2.1.88 match: permissionModeSymbol, 1)
 /**
  * 模式图标（config.symbol）。
  */
@@ -177,7 +177,7 @@ function applySessionAllowRules(request) {
     },
   });
 }
-//@ chunk-tbfde207.js:3986-4053 fingerprint = toExternalPermissionMode (0.654)
+//@ chunk-tbfde207.js:3986-4053 fingerprint (2.1.88 match: toExternalPermissionMode, 0.654)
 /**
  * 返回 AppState 更新函数：先应用 internal 元数据，再应用 external 元数据（externalMetadataToAppState）。与权限模式无关，属切分误归。
  */

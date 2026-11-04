@@ -87,7 +87,7 @@ var KILL_GRACE_POLL_MS = 500;
  * 2000
  */
 var DEFAULT_KILL_GRACE_MS = 2000;
-//@ chunk-e6aww6q8.js:3986998-3987046 placement = killCaffeinate (0.805)
+//@ chunk-e6aww6q8.js:3986998-3987046 placement (2.1.88 match: killCaffeinate, 0.805)
 function killCaffeinate(processTokens, streams, done) {
   killIfUnchanged(processTokens, "SIGKILL");
   destroyStreams(streams);

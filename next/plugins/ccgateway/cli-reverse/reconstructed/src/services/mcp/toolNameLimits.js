@@ -99,7 +99,7 @@ function uiVisibilityOf(meta) {
   if (declared === undefined || declared === null) return;
   return Array.isArray(declared) ? UI_VISIBILITY_VALUES.filter((value) => declared.includes(value)) : [];
 }
-//@ chunk-s61vbvea.js:472637-472689 placement = createModelSwitchBreadcrumbs (1)
+//@ chunk-s61vbvea.js:472637-472689 placement (2.1.88 match: createModelSwitchBreadcrumbs, 1)
 function createModelSwitchBreadcrumbs(meta) {
   return uiVisibilityOf(meta)?.includes("model") === false;
 }

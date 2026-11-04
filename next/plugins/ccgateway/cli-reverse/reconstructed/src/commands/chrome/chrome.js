@@ -56,12 +56,12 @@ import { LearnMoreLink } from "../../components/LearnMoreLink.js";
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:505261-505333 fingerprint = CHROME_EXTENSION_URL (0.667)
+//@ chunk-s61vbvea.js:505261-505333 fingerprint (2.1.88 match: CHROME_EXTENSION_URL, 0.667)
 var HTTPS_CLAUDE_AI_CHROME = "https://claude.ai/chrome";
 var FCOEOABGFENEJGLBFFODGKKBKCDHCGFN = "fcoeoabgfenejglbffodgkkbkcdhcgfn";
-//@ chunk-hthm3h8y.js:5518-5561 fingerprint = CHROME_PERMISSIONS_URL (1)
+//@ chunk-hthm3h8y.js:5518-5561 fingerprint (2.1.88 match: CHROME_PERMISSIONS_URL, 1)
 var CHROME_PERMISSIONS_URL = "https://clau.de/chrome/permissions";
-//@ chunk-18hwfzwa.js:121042-121093 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:121042-121093 fingerprint (2.1.88 match: _temp, 1)
 function useIdeConnectionStatusValue(s) {
   return useIdeConnectionStatus(s.mcp.clients).status;
 }
@@ -380,7 +380,7 @@ var CHROME_DISABLED_IN_MCP_NOTICE = {
   text: "Claude in Chrome is turned off in /mcp. Open /mcp, select claude-in-chrome, and enable it.",
   color: "warning",
 };
-//@ chunk-1ztfztfw.js:18155-22310 fingerprint = ClaudeInChromeMenu (0.467)
+//@ chunk-1ztfztfw.js:18155-22310 fingerprint (2.1.88 match: ClaudeInChromeMenu, 0.467)
 function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isClaudeAISubscriber, isWSL }) {
   let clients = useAppState((state) => state.mcp.clients);
   let { storageV5 } = useTheme_2();
@@ -709,7 +709,7 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
     }),
   });
 }
-//@ chunk-1ztfztfw.js:22310-22640 fingerprint = call (0.872)
+//@ chunk-1ztfztfw.js:22310-22640 fingerprint (2.1.88 match: call, 0.872)
 /**
  * /chrome 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

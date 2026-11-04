@@ -51,7 +51,7 @@ import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { extractTextContent_2 } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1wpnxx5r.js:15809-15931 fingerprint = isPreapprovedUrl (1)
+//@ chunk-1wpnxx5r.js:15809-15931 fingerprint (2.1.88 match: isPreapprovedUrl, 1)
 /**
  * 解包 CCR 代理 URL 后判断是否为某个已知端点（主机在集合内且路径相符）；被 MCP 配置使用。
  */
@@ -65,7 +65,7 @@ function isKnownProxyEndpointUrl(url) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:251114-251301 fingerprint = isPermittedRedirect (0.842)
+//@ chunk-aepeg2w5.js:251114-251301 fingerprint (2.1.88 match: isPermittedRedirect, 0.842)
 /**
  * 只有 https、无凭证、无端口的 URL 才返回主机名（去掉末尾点），否则 undefined。
  */
@@ -160,14 +160,14 @@ function isPreapprovedHostPath(hostname, pathname) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:2168190-2168311 fingerprint = DomainBlockedError (1)
+//@ chunk-e6aww6q8.js:2168190-2168311 fingerprint (2.1.88 match: DomainBlockedError, 1)
 class DomainBlockedError extends Error {
   constructor(domain) {
     super(`Claude Code is unable to fetch from ${domain}`);
     this.name = "DomainBlockedError";
   }
 }
-//@ chunk-e6aww6q8.js:2168311-2168933 fingerprint = DomainCheckFailedError (0.599)
+//@ chunk-e6aww6q8.js:2168311-2168933 fingerprint (2.1.88 match: DomainCheckFailedError, 0.599)
 class DomainCheckFailedError extends Error {
   code;
   constructor(domain, code) {
@@ -180,7 +180,7 @@ class DomainCheckFailedError extends Error {
     this.code = code;
   }
 }
-//@ chunk-e6aww6q8.js:2168933-2169139 fingerprint = EgressBlockedError (0.973)
+//@ chunk-e6aww6q8.js:2168933-2169139 fingerprint (2.1.88 match: EgressBlockedError, 0.973)
 class EgressBlockedError extends Error {
   domain;
   constructor(hostname) {
@@ -289,7 +289,7 @@ async function convertHtmlToMarkdown(htmlContent) {
     return htmlContent;
   }
 }
-//@ chunk-e6aww6q8.js:2170242-2170329 facade-majority = isPreapprovedUrl (1)
+//@ chunk-e6aww6q8.js:2170242-2170329 facade-majority (2.1.88 match: isPreapprovedUrl, 1)
 /**
  * URL 是否在预批准文档站列表内（主机名完全匹配或主机+路径前缀匹配）；解析失败为 false。
  */
@@ -301,7 +301,7 @@ function isPreapprovedUrl(url) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2170329-2170495 layout = validateURL (1)
+//@ chunk-e6aww6q8.js:2170329-2170495 layout (2.1.88 match: validateURL, 1)
 /**
  * URL 基本校验：长度 ≤2000、可解析、无用户名密码、主机名至少两段。
  */
@@ -317,7 +317,7 @@ function validateURL(url) {
   if (parsed.hostname.split(".").length < 2) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:2170495-2171248 fingerprint = checkDomainBlocklist (0.672)
+//@ chunk-e6aww6q8.js:2170495-2171248 fingerprint (2.1.88 match: checkDomainBlocklist, 0.672)
 /**
  * 域名预检：GET api.anthropic.com/api/web/domain_info?domain=…（10 秒超时，总 30 秒），can_fetch=true 记入 domainChecks 缓存；返回 allowed/blocked/check_failed（含 HTTP 状态，429 会被翻译成限流错误）。
  */
@@ -438,7 +438,7 @@ async function getWithDeadline(upgradedUrl, signal, isPermittedRedirect, depth =
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-e6aww6q8.js:2171900-2173370 fingerprint = getWithPermittedRedirects (0.534)
+//@ chunk-e6aww6q8.js:2171900-2173370 fingerprint (2.1.88 match: getWithPermittedRedirects, 0.534)
 /**
  * axios GET（不自动跟随重定向、arraybuffer、10MB 上限、60 秒超时、Accept 优先 markdown）。2xx 返回响应；3xx 若 redirectChecker 允许则递归（最多 10 次），否则返回 {type:"redirect"}；出口代理拦截抛 EgressBlockedError；其余返回 {type:"http_error", retryAfter?}。云会话中 ENOTFOUND 给出"需在网络设置放行"的专用提示。
  */
@@ -508,7 +508,7 @@ async function getWithPermittedRedirects(url, signal, redirectChecker, depth, de
       }),
   };
 }
-//@ chunk-e6aww6q8.js:2173370-2173424 fingerprint = isRedirectInfo (1)
+//@ chunk-e6aww6q8.js:2173370-2173424 fingerprint (2.1.88 match: isRedirectInfo, 1)
 function isRedirectInfo(response) {
   return "type" in response && response.type === "redirect";
 }
@@ -572,7 +572,7 @@ function siteAnswerAsValue(error) {
   if (error instanceof SiteAnswerError) return error;
   throw error;
 }
-//@ chunk-e6aww6q8.js:2174614-2174673 facade-majority = getCurrentRepoHttpsUrl (0.803)
+//@ chunk-e6aww6q8.js:2174614-2174673 facade-majority (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
 /**
  * 把 http:// 改写为 https://。
  */
@@ -596,7 +596,7 @@ function proxyErrorEventCode(proxyResult) {
     ? PROXY_ERROR_EVENT_CODES.unavailable
     : PROXY_ERROR_EVENT_CODES.rejected;
 }
-//@ chunk-e6aww6q8.js:2175050-2178353 facade-majority = getURLMarkdownContent (0.463)
+//@ chunk-e6aww6q8.js:2175050-2178353 facade-majority (2.1.88 match: getURLMarkdownContent, 0.463)
 /**
  * 抓取并转 markdown：URL 校验（无点主机名提示改用 curl）→ urls 缓存命中直接返回 → 有 CCR web-fetch 代理时走代理（处理 provenance_denied、目标站失败记忆、代理报告的最终 URL 是否允许）→ claude-code-server 无代理时报错 → 直连：http 升级 https、域名预检（settings.skipWebFetchPreflight 可跳过）、带 deadline 抓取、二进制内容另存文件、HTML 转 markdown，写入缓存。
  */
@@ -819,7 +819,7 @@ async function getURLMarkdownContent(
 function secondaryModelHead(text) {
   return truncateToLength(text, MAX_REJECT_KEY_CHARS);
 }
-//@ chunk-e6aww6q8.js:2178386-2179237 facade-majority = applyPromptToMarkdown (0.616)
+//@ chunk-e6aww6q8.js:2178386-2179237 facade-majority (2.1.88 match: applyPromptToMarkdown, 0.616)
 /**
  * 用次级模型（querySource "web_fetch_apply"，空 system prompt）按用户 prompt 处理页面 markdown；超长截断；可选用随机 fence 包裹不可信内容；返回首个文本块，API 错误抛 TelemetrySafeError。
  */
@@ -885,7 +885,7 @@ async function applyPromptToMarkdown(prompt, markdown, options) {
 //@ chunk-e6aww6q8.js:2313429-2313452 affinity
 var DOMAIN_CACHE_MAX = 500;
 var DOMAIN_CACHE_TTL_MS = 300000;
-//@ chunk-e6aww6q8.js:2313452-2313500 fingerprint = DOMAIN_CHECK_CACHE (1)
+//@ chunk-e6aww6q8.js:2313452-2313500 fingerprint (2.1.88 match: DOMAIN_CHECK_CACHE, 1)
 /**
  * 创建 500 项、5 分钟 TTL 的 LRU（域名类检查缓存）。
  */
@@ -895,14 +895,14 @@ function createDomainCache() {
     ttl: DOMAIN_CACHE_TTL_MS,
   });
 }
-//@ chunk-4j20twbf.js:1240-1330 fingerprint = URL_CACHE (0.376)
+//@ chunk-4j20twbf.js:1240-1330 fingerprint (2.1.88 match: URL_CACHE, 0.376)
 /**
  * 大小与待清理量是否都在上限内。
  */
 function isWithinSanitizeBudget(budget) {
   return budget.size <= budget.maxSize && budget.sixteenthsToSanitize <= budget.maxSixteenthsToSanitize;
 }
-//@ chunk-2a8yx6fc.js:24186-24598 fingerprint = validateURL (1)
+//@ chunk-2a8yx6fc.js:24186-24598 fingerprint (2.1.88 match: validateURL, 1)
 /**
  * 从 URL 安全地提取主机名：防止 user@host 形式伪装，非法时返回 null。
  */

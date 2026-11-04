@@ -432,7 +432,7 @@ async function runPermissionCheckWithReentry(
       toolUseContext.toolDecisions.delete(toolUseId);
   }
 }
-//@ chunk-g54kbxqw.js:165268-165458 fingerprint = getEmptyToolPermissionContext (0.888)
+//@ chunk-g54kbxqw.js:165268-165458 fingerprint (2.1.88 match: getEmptyToolPermissionContext, 0.888)
 /**
  * 返回空的 ToolPermissionContext：mode=default，工作目录、allow/deny/ask 规则、MCP 模式覆盖全为空，bypass 不可用。用于测试、ToolSearch 生成描述等不需要真实权限的场合。
  */
@@ -466,7 +466,7 @@ function resolveContextPrimaryModel(options) {
     ? primaryModelForFallback
     : options.mainLoopModel;
 }
-//@ chunk-g54kbxqw.js:165669-165737 fingerprint = filterToolProgressMessages (1)
+//@ chunk-g54kbxqw.js:165669-165737 fingerprint (2.1.88 match: filterToolProgressMessages, 1)
 /**
  * 过滤掉工具进度消息中的 hook_progress 类型，只保留工具自身进度。
  */
@@ -575,7 +575,7 @@ function buildToolNameIndex(tools) {
   }
   return index;
 }
-//@ chunk-g54kbxqw.js:166430-166654 callgraph-witnessed = findToolByName (0)
+//@ chunk-g54kbxqw.js:166430-166654 callgraph-witnessed (2.1.88 match: findToolByName, 0)
 /**
  * 按名字（含别名）在工具数组中找工具。toolAliases 映射先把模型发来的名字换成规范名（递归一次）；同一数组第一次线性查找，第二次起建 WeakMap 索引缓存。
  */
@@ -621,7 +621,7 @@ function getToolRemoteExecution(tool) {
 function getToolBackgrounding(tool) {
   return tool.backgrounding ?? "never";
 }
-//@ chunk-g54kbxqw.js:166884-167050 fingerprint = TOOL_DEFAULTS (0.792)
+//@ chunk-g54kbxqw.js:166884-167050 fingerprint (2.1.88 match: TOOL_DEFAULTS, 0.792)
 /**
  * 工具默认属性：isEnabled=true、isConcurrencySafe=false、isReadOnly=false、isDestructive=false、remoteExecution 不支持、toAutoClassifierInput=""、userFacingName=""。buildTool 先铺这一层再叠加工具定义。
  */

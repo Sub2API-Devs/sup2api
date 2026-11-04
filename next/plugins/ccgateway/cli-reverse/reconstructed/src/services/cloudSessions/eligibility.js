@@ -239,7 +239,7 @@ function getUrlHost(url) {
     return;
   }
 }
-//@ chunk-mdb2vxrz.js:4912-5026 placement = getBridgeBaseUrl (1)
+//@ chunk-mdb2vxrz.js:4912-5026 placement (2.1.88 match: getBridgeBaseUrl, 1)
 /**
  * 判断 API 基址是否为官方（未设置或与 OAuth BASE_API_URL 同 host）。
  */

@@ -28,7 +28,7 @@ import { Dialog } from "../../../design-system/Dialog.js";
 init_react_production();
 //@ chunk-n30mmv2p.js:13832-13841 layout
 var MAX_CONSENT_PATH_WIDTH = 72;
-//@ chunk-n30mmv2p.js:13841-16519 callgraph-witnessed = ModelStep (0.158)
+//@ chunk-n30mmv2p.js:13841-16519 callgraph-witnessed (2.1.88 match: ModelStep, 0.158)
 function ModelStep(props) {
   let $ = useMemoCache(34);
   let { forwarded, stayed, consentLocation, onDone } = props;

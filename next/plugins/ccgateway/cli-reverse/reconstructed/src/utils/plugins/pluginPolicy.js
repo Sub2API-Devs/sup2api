@@ -23,7 +23,7 @@ import {
   policyEnabledPluginIds,
 } from "./managedPlugins.js";
 
-//@ chunk-czx62zen.js:10157-10267 callgraph-witnessed = isPluginBlockedByPolicy (0.576)
+//@ chunk-czx62zen.js:10157-10267 callgraph-witnessed (2.1.88 match: isPluginBlockedByPolicy, 0.576)
 /**
  * 返回指定设置源（如 policySettings）enabledPlugins 中处于启用状态的插件 ID 集合。
  */
@@ -118,7 +118,7 @@ function policyEnabledPluginNameSet() {
     ? new Set(policyEnabledPluginEntries.map((policyEnabledPluginEntry) => policyEnabledPluginEntry.name))
     : null;
 }
-//@ chunk-czx62zen.js:13352-13462 placement = _temp7 (1)
+//@ chunk-czx62zen.js:13352-13462 placement (2.1.88 match: _temp7, 1)
 /**
  * 取组织策略设置中允许的插件集合：合并 policySettings 与当前生效设置两处的允许列表（都没有则 undefined）。
  */

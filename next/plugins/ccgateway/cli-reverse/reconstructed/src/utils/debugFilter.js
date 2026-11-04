@@ -9,7 +9,7 @@
  * attribution: fingerprint 2
  */
 
-//@ chunk-cgr0tezp.js:16966-17290 fingerprint = parseDebugFilter (1)
+//@ chunk-cgr0tezp.js:16966-17290 fingerprint (2.1.88 match: parseDebugFilter, 1)
 /**
  * 解析 --debug=<过滤串>：逗号分隔分类，! 前缀为排除；包含与排除混用返回 null。
  */
@@ -30,7 +30,7 @@ function parseDebugFilter(filterString) {
     isExclusive: hasExclusive,
   };
 }
-//@ chunk-cgr0tezp.js:17290-17797 fingerprint = extractDebugCategories (1)
+//@ chunk-cgr0tezp.js:17290-17797 fingerprint (2.1.88 match: extractDebugCategories, 1)
 /**
  * 从调试消息中提取分类（如 [MCP]、1p event: 前缀）用于过滤。
  */

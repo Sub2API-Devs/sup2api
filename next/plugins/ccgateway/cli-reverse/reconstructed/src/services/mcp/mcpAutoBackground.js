@@ -38,7 +38,7 @@ import { emitTaskProgress } from "../../utils/task/sdkProgress.js";
 function _() {
   return require("./emitTripwireEvent.lazy.js").mcpTaskWatcherModule();
 }
-//@ chunk-tn4j580p.js:12065-12119 placement = findCurrentIDE (0.867)
+//@ chunk-tn4j580p.js:12065-12119 placement (2.1.88 match: findCurrentIDE, 0.867)
 /**
  * 不参与自动转后台的 IDE 传输类型。
  */

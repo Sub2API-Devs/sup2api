@@ -631,7 +631,7 @@ async function runGitQuiet(
   if ((await runGit(["branch", "-D", "--end-of-options", branch], `branch -D '${branch}'`)) === 0)
     onDebug(`[runner:session] deleted outcome branch '${branch}' from ${canonicalPath}`);
 }
-//@ chunk-hm0ce8vc.js:213081-213272 placement = ghIsDangerousCallback (0.82)
+//@ chunk-hm0ce8vc.js:213081-213272 placement (2.1.88 match: ghIsDangerousCallback, 0.82)
 function getRemoteHostname(url) {
   if (!url.includes("://")) {
     let match = url.match(/^[^@]+@([^:/]+):.+$/);
@@ -644,7 +644,7 @@ function getRemoteHostname(url) {
     return;
   }
 }
-//@ chunk-hm0ce8vc.js:213272-213454 placement = ghIsDangerousCallback (0.808)
+//@ chunk-hm0ce8vc.js:213272-213454 placement (2.1.88 match: ghIsDangerousCallback, 0.808)
 function getRemoteRepoPath(url) {
   if (!url.includes("://")) {
     let match = url.match(/^[^@]+@[^:]+:(.+)$/);

@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-c55mbvfz.js:16984-17111 fingerprint = SYNC_KEYS (0.365)
+//@ chunk-c55mbvfz.js:16984-17111 fingerprint (2.1.88 match: SYNC_KEYS, 0.365)
 function SYNC_KEYS(filePath) {
   let match = /[\\/]\.claude[\\/]rules[\\/]([^\\/]+)$/.exec(filePath);
   return match ? `~/.claude/rules/${match[1]}` : "~/.claude/CLAUDE.md";

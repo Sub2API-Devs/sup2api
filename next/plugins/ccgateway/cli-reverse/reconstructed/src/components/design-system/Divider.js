@@ -20,7 +20,7 @@ import { Ansi } from "../../ink/components/AnsiText.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { Decorative } from "../../ink/components/ErrorBoundary.js";
 
-//@ chunk-paas88x7.js:412-1609 callgraph-witnessed = Divider (0.56)
+//@ chunk-paas88x7.js:412-1609 callgraph-witnessed (2.1.88 match: Divider, 0.56)
 function Divider(props) {
   let $ = useMemoCache(27);
   let { width, color, char, padding, title, titleAlign } = props;

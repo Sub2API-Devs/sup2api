@@ -21,7 +21,7 @@ import { getProjectDir } from "../../utils/sessionStorage.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { listCandidates } from "../../utils/listSessionsImpl.js";
 
-//@ chunk-ss669z1x.js:50836-50966 fingerprint = readLastConsolidatedAt (0.682)
+//@ chunk-ss669z1x.js:50836-50966 fingerprint (2.1.88 match: readLastConsolidatedAt, 0.682)
 async function statRealPath(filePath) {
   try {
     let resolvedPath = await realpath(filePath);
@@ -35,7 +35,7 @@ async function statRealPath(filePath) {
     throw error;
   }
 }
-//@ chunk-bnqjt88v.js:676-712 fingerprint = LOCK_FILE (1)
+//@ chunk-bnqjt88v.js:676-712 fingerprint (2.1.88 match: LOCK_FILE, 1)
 /**
  * 整理锁文件名 .consolidate-lock，锁有效期 1 小时。
  */
@@ -92,7 +92,7 @@ async function readLastConsolidatedAt(memoryDir = getAutoMemPath(), storageV5) {
 async function tryAcquireConsolidationLockDefault(storageV5) {
   return tryAcquireConsolidationLock(getAutoMemPath(), storageV5);
 }
-//@ chunk-bnqjt88v.js:1344-1889 fingerprint = tryAcquireConsolidationLock (1)
+//@ chunk-bnqjt88v.js:1344-1889 fingerprint (2.1.88 match: tryAcquireConsolidationLock, 1)
 /**
  * 获取整理锁：<记忆目录>/.consolidate-lock 内容为 PID，mtime 即上次整理时间；1 小时内且持有进程仍存活则放弃，否则写入自己的 PID 并回读确认。
  */
@@ -134,7 +134,7 @@ async function tryAcquireConsolidationLock(memoryDir, storageV5) {
 async function rollbackConsolidationLockDefault(priorMtime, storageV5) {
   return rollbackConsolidationLock(getAutoMemPath(), priorMtime, storageV5);
 }
-//@ chunk-bnqjt88v.js:1932-2191 fingerprint = rollbackConsolidationLock (1)
+//@ chunk-bnqjt88v.js:1932-2191 fingerprint (2.1.88 match: rollbackConsolidationLock, 1)
 /**
  * 整理失败时把锁文件 mtime 回滚到之前的时间（为 0 则删除锁），下次触发仍受 minHours 约束。
  */
@@ -211,7 +211,7 @@ async function rollbackConsolidationLockStorage(storage, storageKey, priorMtime)
       `[autoDream] rollback failed: ${result.error.code} \u2014 next trigger delayed to minHours`,
     );
 }
-//@ chunk-bnqjt88v.js:3039-3156 callgraph-witnessed = listSessionsTouchedSince (1)
+//@ chunk-bnqjt88v.js:3039-3156 callgraph-witnessed (2.1.88 match: listSessionsTouchedSince, 1)
 /**
  * 列出当前项目转录目录中 mtime 晚于给定时间的会话 id。
  */

@@ -83,7 +83,7 @@ function toolNameAliasPairs(canonicalNames, aliases) {
 function aliasCanonicalNames(names, aliases = HEARTH_TOOL_ALIASES) {
   return toolNameAliasPairs(names, aliases).map(([alias]) => alias);
 }
-//@ chunk-ptag3qm7.js:1312-1351 placement = getMcpPrefix (1)
+//@ chunk-ptag3qm7.js:1312-1351 placement (2.1.88 match: getMcpPrefix, 1)
 function getMcpPrefix(serverName) {
   return `mcp__${HEARTHBOT}__${serverName}`;
 }

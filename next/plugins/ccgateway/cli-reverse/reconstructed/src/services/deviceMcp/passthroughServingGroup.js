@@ -83,7 +83,7 @@ function subscribeMcpConfigChanges(onChange, servedSettingsChanged) {
   ];
   return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
 }
-//@ chunk-xqfbbyzk.js:15777-15929 placement = isMcpServerDisabled (0.857)
+//@ chunk-xqfbbyzk.js:15777-15929 placement (2.1.88 match: isMcpServerDisabled, 0.857)
 /**
  * getMcpConfigFingerprint：全局与项目 mcpServers 及启用/禁用表的序列化指纹，用于检测配置变化。
  */

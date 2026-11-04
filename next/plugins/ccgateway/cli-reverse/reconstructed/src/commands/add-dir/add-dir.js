@@ -87,7 +87,7 @@ function AddDirResultMessage(props) {
   } else combined = $[6];
   return combined;
 }
-//@ chunk-x4gf1bcz.js:14285-14960 fingerprint = call (0.614)
+//@ chunk-x4gf1bcz.js:14285-14960 fingerprint (2.1.88 match: call, 0.614)
 /**
  * /add-dir 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -133,7 +133,7 @@ async function call(onDone, context, args) {
     },
   });
 }
-//@ chunk-74n7apcd.js:18826-19188 fingerprint = AddDirError (0.553)
+//@ chunk-74n7apcd.js:18826-19188 fingerprint (2.1.88 match: AddDirError, 0.553)
 function AddDirError(props) {
   let $ = useMemoCache(7);
   let { message, args, onDone } = props;

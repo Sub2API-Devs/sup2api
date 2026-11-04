@@ -20,7 +20,7 @@ import { shouldUseWIFAuth, isWIFDispatchAuth } from "../auth.js";
 import { getResolvedWIFBaseUrlSnapshot } from "../../services/oauth/wifCredentials.js";
 import { getWIFProfileBaseUrl } from "../wifProfile.js";
 
-//@ chunk-w7m8zp6e.js:387-472 placement = logEventTo1P (1)
+//@ chunk-w7m8zp6e.js:387-472 placement (2.1.88 match: logEventTo1P, 1)
 function isOfficialFirstPartyEndpoint(apiProvider = getAPIProvider()) {
   if (apiProvider !== "firstParty" || !isFirstPartyAnthropicBaseUrl_2()) return false;
   if (assumesFirstPartyBaseUrl()) return true;
@@ -47,7 +47,7 @@ function isFirstPartyAnthropicBaseUrl() {
     (resolvedWIFBaseUrlSnapshot !== undefined && isFirstPartyAnthropicHost(resolvedWIFBaseUrlSnapshot))
   );
 }
-//@ chunk-w7m8zp6e.js:756-931 placement = getDefaultApiBaseUrl (0.82)
+//@ chunk-w7m8zp6e.js:756-931 placement (2.1.88 match: getDefaultApiBaseUrl, 0.82)
 /**
  * ANTHROPIC_BASE_URL，或第一方自定义端点，否则 api.anthropic.com。
  */

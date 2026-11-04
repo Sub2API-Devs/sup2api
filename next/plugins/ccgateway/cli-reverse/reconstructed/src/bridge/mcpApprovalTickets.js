@@ -109,7 +109,7 @@ function consumeTicketIntoInput(meta, session, toolUseId, name, config) {
   delete meta[ANTHROPIC_APPROVALTICKET];
   Object.assign(meta, consumeMcpApprovalTicket(session, toolUseId, name, config));
 }
-//@ chunk-gv8haye8.js:2087-2283 placement = getRiskColor (0.785)
+//@ chunk-gv8haye8.js:2087-2283 placement (2.1.88 match: getRiskColor, 0.785)
 function getRiskColor(riskLevel) {
   let { response } = riskLevel;
   if (response.subtype !== "success") return riskLevel;

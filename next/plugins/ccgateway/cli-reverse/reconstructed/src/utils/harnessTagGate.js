@@ -182,7 +182,7 @@ function shouldRecordHarnessText(agentId, agentContext) {
   if (!agentId) return true;
   return isSubagentContext(agentContext) && agentContext.isMainSession === true;
 }
-//@ chunk-e6aww6q8.js:2497659-2497868 placement = extractErrorTypeFromData (1)
+//@ chunk-e6aww6q8.js:2497659-2497868 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 收集内容块中的文本并上报（出错只记录）。
  */

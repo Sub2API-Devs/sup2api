@@ -65,7 +65,7 @@ import { deferInit, beginDeferredInits, runDeferredInits } from "../../runtime/d
 // This module is the first evaluated of an import cycle of 5 modules closed by ../cli/handlers/pluginTest/runner.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/cli/handlers/pluginTest/runner.js");
-//@ chunk-1tz177x8.js:22768-22923 fingerprint = SkippableStep (0.48)
+//@ chunk-1tz177x8.js:22768-22923 fingerprint (2.1.88 match: SkippableStep, 0.48)
 function SkippableStep(t0) {
   let { plugin, event, reason, skip } = t0;
   let isResetState = plugin === resetStateForTests && skip?.kind === "shape";
@@ -131,7 +131,7 @@ deferInit("chunk-p8fze0jh.js:20134", () => {
 var OnboardingInner = OrderedListComponent;
 //@ chunk-p8fze0jh.js:20151-20166 affinity
 function noop() {}
-//@ chunk-p8fze0jh.js:20166-23783 fingerprint = Onboarding (0.631)
+//@ chunk-p8fze0jh.js:20166-23783 fingerprint (2.1.88 match: Onboarding, 0.631)
 /**
  * 首次引导：依次展示主题选择、登录（OAuth/网关）、安全须知、终端设置（shift+enter 等）等步骤，记录 tengu_began_setup/tengu_onboarding_step。
  */

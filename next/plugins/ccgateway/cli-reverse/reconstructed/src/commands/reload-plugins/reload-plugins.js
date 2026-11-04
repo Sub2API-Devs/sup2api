@@ -181,7 +181,7 @@ function recordFolderReadAt(enabled) {
   for (let plugin of enabled)
     if (plugin.readFromFolderAt !== undefined) folderReadAt.set(plugin.source, plugin.readFromFolderAt);
 }
-//@ chunk-8vqp1nqq.js:14293-16985 fingerprint = call (0.457)
+//@ chunk-8vqp1nqq.js:14293-16985 fingerprint (2.1.88 match: call, 0.457)
 /**
  * /reload-plugins：we 为远程 reload_plugins 结果 schema；call 在远程会话转发控制请求，本地则计算 MCP/LSP 变更是否会使缓存失效（未 --force 时先警告），再刷新插件、补装缺失依赖并汇报。
  */

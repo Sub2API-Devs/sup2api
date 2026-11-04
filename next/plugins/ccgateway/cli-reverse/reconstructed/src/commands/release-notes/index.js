@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1733539-1733646 fingerprint = releaseNotes (0.608)
+//@ chunk-e6aww6q8.js:1733539-1733646 fingerprint (2.1.88 match: releaseNotes, 0.608)
 /**
  * /release-notes 命令对象（local-jsx）；描述：View release notes；实现 chunk-8k62p17d.js 的 te。
  */

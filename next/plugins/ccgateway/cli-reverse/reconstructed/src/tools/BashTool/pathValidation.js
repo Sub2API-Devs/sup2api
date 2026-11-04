@@ -88,7 +88,7 @@ import { getOriginalCwd } from "../../bootstrap/state.js";
 import { NON_CREATING_WRITE_COMMANDS } from "./readOnlyValidation.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1070212-1074425 fingerprint = checkDangerousRemovalPaths (0.381)
+//@ chunk-e6aww6q8.js:1070212-1074425 fingerprint (2.1.88 match: checkDangerousRemovalPaths, 0.381)
 /**
  * rm/rmdir 危险目标检查：可能为空的变量 + 顶层目录名、反斜杠根、cd 后的相对通配、无法静态解析的通配目标、关键系统目录、工作目录及其祖先、挂载盘根（CLAUDE_CODE_DISABLE_MOUNTED_DRIVE_RM_PROMPT 可关）、跨多层的通配；命中返回不可被规则自动允许的 ask。
  */
@@ -330,7 +330,7 @@ deferInit("chunk-e6aww6q8.js:1090994", () => {
 function filterDevicePaths(paths) {
   return paths.filter((path) => !DEVICE_PATHS.has(path));
 }
-//@ chunk-e6aww6q8.js:1091114-1091981 fingerprint = parsePatternCommand (0.526)
+//@ chunk-e6aww6q8.js:1091114-1091981 fingerprint (2.1.88 match: parsePatternCommand, 0.526)
 /**
  * grep 类命令的路径提取：第一个位置参数是模式（有 -e/-f 时不是），-f/--file/--exclude-from 等的值也算路径；无路径时返回默认值。
  */
@@ -491,7 +491,7 @@ var extractAwkPaths = (args) => {
 function joinPathSegment(base, segment) {
   return base === "" ? segment : `${base.replace(/\/+$/, "")}/${segment}`;
 }
-//@ chunk-e6aww6q8.js:1093201-1099428 fingerprint = PATH_EXTRACTORS (0.427)
+//@ chunk-e6aww6q8.js:1093201-1099428 fingerprint (2.1.88 match: PATH_EXTRACTORS, 0.427)
 /**
  * 每个路径受限命令的路径提取器表 PATH_EXTRACTORS（cd/ls/find/rm/cp/cat/grep/rg/sed/jq/git…），以及 git 全局带值选项、rg 带值选项表。
  */
@@ -940,7 +940,7 @@ deferInit("chunk-e6aww6q8.js:1093201", () => {
     },
   };
 });
-//@ chunk-e6aww6q8.js:1099428-1102123 fingerprint = ACTION_VERBS (0.822)
+//@ chunk-e6aww6q8.js:1099428-1102123 fingerprint (2.1.88 match: ACTION_VERBS, 0.822)
 /**
  * 路径受限命令列表、每个命令的动作描述（用于提示文字）和操作类型（read/write/create），以及 mv/cp/cd 的参数安全检查。
  */
@@ -1184,7 +1184,7 @@ function findBracketExpressionEnd(pattern) {
   }
   return pattern.length - 1;
 }
-//@ chunk-e6aww6q8.js:1104143-1104811 layout = urlPatternToRegex (1)
+//@ chunk-e6aww6q8.js:1104143-1104811 layout (2.1.88 match: urlPatternToRegex, 1)
 function urlPatternToRegex(pattern) {
   if (firstGlobCharIndex(pattern) === -1) return false;
   if (pattern.startsWith("[")) {
@@ -1407,7 +1407,7 @@ function getTargetDirectoryOption(commandName, args) {
     attachedDestinations,
   };
 }
-//@ chunk-e6aww6q8.js:1107218-1112301 fingerprint = validateCommandPaths (0.571)
+//@ chunk-e6aww6q8.js:1107218-1112301 fingerprint (2.1.88 match: validateCommandPaths, 0.571)
 /**
  * 对一个路径受限命令的全部路径做权限校验：读封锁下的通配/占位符/~user 路径要询问；写操作的路径先按读校验；按操作类型 validatePath，deny 规则直接拒绝，不在工作目录内则 ask（带 blockedPath）。
  */
@@ -1665,7 +1665,7 @@ function validateCommandPaths(
     message: `Path validation passed for ${commandName} command`,
   };
 }
-//@ chunk-e6aww6q8.js:1112301-1112882 fingerprint = createPathChecker (1)
+//@ chunk-e6aww6q8.js:1112301-1112882 fingerprint (2.1.88 match: createPathChecker, 1)
 /**
  * 为某命令生成路径检查器：validateCommandPaths + rm/rmdir 危险删除检查；ask 时附建议（读：会话读规则；写：加会话目录，必要时切 acceptEdits）。
  */
@@ -1716,7 +1716,7 @@ function createPathChecker(command, operationTypeOverride) {
 function parseCommandArgs(command) {
   return getCommandArgv(command);
 }
-//@ chunk-e6aww6q8.js:1112911-1113249 fingerprint = validateSinglePathCommand (1)
+//@ chunk-e6aww6q8.js:1112911-1113249 fingerprint (2.1.88 match: validateSinglePathCommand, 1)
 /**
  * 文本版：剥离包装后解析命令，若是路径受限命令则做路径检查（白名单内的 sed 视为读）。
  */
@@ -1745,7 +1745,7 @@ function validateSinglePathCommand(cmd, cwd, toolPermissionContext, compoundComm
     astCommand,
   );
 }
-//@ chunk-e6aww6q8.js:1113249-1113594 fingerprint = validateSinglePathCommandArgv (1)
+//@ chunk-e6aww6q8.js:1113249-1113594 fingerprint (2.1.88 match: validateSinglePathCommandArgv, 1)
 /**
  * AST 版：对 tree-sitter 解析出的简单命令做路径检查。
  */
@@ -1914,7 +1914,7 @@ function normalizeCommandName(commandName) {
   if (CASE_SENSITIVE_PATH_COMMANDS.has(replaced)) return replaced;
   return replaced.toLowerCase().replace(/\.exe$/, "") === "tee" ? "tee" : commandName;
 }
-//@ chunk-e6aww6q8.js:1115564-1117098 fingerprint = validateOutputRedirections (0.822)
+//@ chunk-e6aww6q8.js:1115564-1117098 fingerprint (2.1.88 match: validateOutputRedirections, 0.822)
 /**
  * 输出重定向检查：目标命中 deny 规则拒绝；复合命令含 cd 时任何重定向都要询问；目标不在可写范围则 ask 并建议添加会话目录。
  */
@@ -1996,7 +1996,7 @@ function isHardSafetyAsk(result) {
     !isClassifierRoutedCircuitBreaker(result.decisionReason)
   );
 }
-//@ chunk-e6aww6q8.js:1117528-1123341 fingerprint = checkPathConstraints (0.338)
+//@ chunk-e6aww6q8.js:1117528-1123341 fingerprint (2.1.88 match: checkPathConstraints, 0.338)
 /**
  * Bash 路径约束总检查：进程替换 >( <( 要询问；输入重定向检查；每个子命令的路径检查（deny 优先）；危险重定向目标检查（含 edit deny 规则）；输出重定向检查；汇总返回 deny/ask/passthrough。
  */
@@ -2477,7 +2477,7 @@ function getRedirectTargetCandidates(target, cwd) {
     });
   return result;
 }
-//@ chunk-e6aww6q8.js:1124946-1125928 fingerprint = astRedirectsToOutputRedirections (0.617)
+//@ chunk-e6aww6q8.js:1124946-1125928 fingerprint (2.1.88 match: astRedirectsToOutputRedirections, 0.617)
 /**
  * 把 AST 重定向列表拆成输出重定向、输入重定向、需做 deny 检查的重定向，并标记危险重定向。
  */
@@ -2584,7 +2584,7 @@ function skipEnvFlags(a) {
   }
   return i < a.length ? i : -1;
 }
-//@ chunk-e6aww6q8.js:1126404-1127358 fingerprint = stripWrappersFromArgv (0.809)
+//@ chunk-e6aww6q8.js:1126404-1127358 fingerprint (2.1.88 match: stripWrappersFromArgv, 0.809)
 /**
  * 剥离 time/nohup/timeout/nice/stdbuf/env/command 包装（含它们的选项），返回实际命令 argv。被 readOnlyValidation、沙箱读封锁等多处使用。
  */
@@ -2662,7 +2662,7 @@ function isPathOrAncestorMatched(path, dir) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1153309-1153579 placement = setCwdState (1)
+//@ chunk-e6aww6q8.js:1153309-1153579 placement (2.1.88 match: setCwdState, 1)
 function isCaseVariantInsideCwd(path, dir) {
   let lower = path.toLowerCase();
   if (lower === dir.toLowerCase()) return true;

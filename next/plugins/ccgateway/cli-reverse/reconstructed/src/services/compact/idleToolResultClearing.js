@@ -191,7 +191,7 @@ function hasClearedMarker(content) {
     )
   );
 }
-//@ chunk-g54kbxqw.js:158040-158328 placement = isMedia (1)
+//@ chunk-g54kbxqw.js:158040-158328 placement (2.1.88 match: isMedia, 1)
 /**
  * 字符串或文本块总长超过阈值（或含媒体）时返回估算 token，否则 undefined。
  */
@@ -213,7 +213,7 @@ function estimateLargeContentTokens(block) {
 function currentMcpClients(context) {
   return context.options.refreshMcpClients?.() ?? context.getMcp?.().clients ?? context.options.mcpClients;
 }
-//@ chunk-g54kbxqw.js:158426-158548 placement = hasAccessToIDEExtensionDiffFeature (1)
+//@ chunk-g54kbxqw.js:158426-158548 placement (2.1.88 match: hasAccessToIDEExtensionDiffFeature, 1)
 function hasAccessToIDEExtensionDiffFeature(mcpClients) {
   if (!mcpClients) return;
   let ideClient = mcpClients.find((client) => client.type === "connected" && client.name === "ide");

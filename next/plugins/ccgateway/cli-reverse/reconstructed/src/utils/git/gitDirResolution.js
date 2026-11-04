@@ -135,7 +135,7 @@ function resolveGitDirs(cwd) {
   let adminDir = realpathCacheEntry(resolve(cwd, gitdirPointer));
   return adminDir === null ? null : resolveLinkedWorktreeLayout(adminDir, realCwd);
 }
-//@ chunk-dgqyqzy0.js:1804-2100 placement = resolveGitDir (0.775)
+//@ chunk-dgqyqzy0.js:1804-2100 placement (2.1.88 match: resolveGitDir, 0.775)
 function resolveGitDir(startPath) {
   let dotGitPath = join(startPath, ".git");
   let dotGitStats;
@@ -349,7 +349,7 @@ function isCommondirConsistent(gitDir, commonDir, cwd) {
     return false;
   return getFileIdentity(resolve(gitDir, trimmed), commonDir);
 }
-//@ chunk-dgqyqzy0.js:4126-4334 placement = getFileIdentity (0.817)
+//@ chunk-dgqyqzy0.js:4126-4334 placement (2.1.88 match: getFileIdentity, 0.817)
 function getFileIdentity(path, otherPath) {
   try {
     let pathStats = statSync(path, {
@@ -368,7 +368,7 @@ function getFileIdentity(path, otherPath) {
     return false;
   }
 }
-//@ chunk-dgqyqzy0.js:4334-4447 placement = setCwdState (0.757)
+//@ chunk-dgqyqzy0.js:4334-4447 placement (2.1.88 match: setCwdState, 0.757)
 function normalizePathForPlatform(cwd) {
   switch (getPlatform()) {
     case "macos":

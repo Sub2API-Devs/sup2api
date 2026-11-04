@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-1ny7cxrt.js:1347778-1347874 fingerprint = extractConversationContext (0.675)
+//@ chunk-1ny7cxrt.js:1347778-1347874 fingerprint (2.1.88 match: extractConversationContext, 0.675)
 /**
  * 去掉非可打印 ASCII 字符并截断到 128 字符，用于错误提示里回显模型名。
  */

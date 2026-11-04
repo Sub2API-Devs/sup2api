@@ -108,7 +108,7 @@ function collectStrings(value) {
  */
 var stringsCharCount = (value, pattern) =>
   collectStrings(value).reduce((acc, text) => acc + characterCount(text, pattern), 0);
-//@ chunk-4121qate.js:133892-133933 placement = matchesKeystroke (0.73)
+//@ chunk-4121qate.js:133892-133933 placement (2.1.88 match: matchesKeystroke, 0.73)
 var ESCAPE_CHARACTER; // deferred: uses CHARACTER_CLASSES of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-4121qate.js:133892", () => {
   ESCAPE_CHARACTER = new RegExp(`[${CHARACTER_CLASSES.escape}]`, "u");

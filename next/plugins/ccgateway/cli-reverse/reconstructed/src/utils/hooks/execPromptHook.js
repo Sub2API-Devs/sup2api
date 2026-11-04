@@ -52,7 +52,7 @@ function transcriptMentions(messages, needle) {
       message.type === "user" && indexOfKmp(getContentText(message.message.content) ?? "", needle, 0) !== -1,
   );
 }
-//@ chunk-e6aww6q8.js:3385340-3390612 fingerprint = execPromptHook (0.669)
+//@ chunk-e6aww6q8.js:3385340-3390612 fingerprint (2.1.88 match: execPromptHook, 0.669)
 /**
  * 执行 prompt 钩子：把提示词（Stop 系事件包装成停止条件判断）连同对话历史发给小模型，要求 JSON {ok, reason, impossible}；ok=false 阻断（非 Stop 事件默认结束回合，continueOnBlock 可改），impossible 只对 Stop 有效；默认 30s 超时，提示过长时减半历史重试。
  */
@@ -298,7 +298,7 @@ Always include a "reason" field.`;
 }
 //@ chunk-e6aww6q8.js:3390612-3390624 layout
 var PROMPT_TOO_LONG_RETRY_RATIO = 0.5;
-//@ chunk-e6aww6q8.js:3390624-3390805 placement = getTokenUsage (0.835)
+//@ chunk-e6aww6q8.js:3390624-3390805 placement (2.1.88 match: getTokenUsage, 0.835)
 function getTokenUsage_2(message) {
   for (let idx = message.length - 1; idx >= 0; idx--) {
     let message_2 = message[idx];

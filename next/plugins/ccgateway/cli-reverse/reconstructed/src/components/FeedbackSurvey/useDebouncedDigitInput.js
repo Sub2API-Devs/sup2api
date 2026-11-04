@@ -19,7 +19,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Box } from "../../ink/components/Text.js";
 import { SurveyOption } from "./FeedbackSurveyView.js";
 
-//@ chunk-18hwfzwa.js:995118-995644 fingerprint = useDebouncedDigitInput (0.727)
+//@ chunk-18hwfzwa.js:995118-995644 fingerprint (2.1.88 match: useDebouncedDigitInput, 0.727)
 function useDebouncedDigitInput(props) {
   let $ = useMemoCache(10);
   let { onSelect, inputValue, setInputValue } = props;

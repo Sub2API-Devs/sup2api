@@ -10,7 +10,7 @@
  */
 import { bindAsyncResource } from "../utils/asyncResourceBind.js";
 
-//@ chunk-2mbp91tg.js:706-962 fingerprint = createStore (0.922)
+//@ chunk-2mbp91tg.js:706-962 fingerprint (2.1.88 match: createStore, 0.922)
 /**
  * 极简状态容器：getState/setState(updater)/subscribe；状态引用不变时不通知，变化时先调用 onChange({newState, oldState}) 再通知订阅者。
  */

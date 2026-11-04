@@ -133,7 +133,7 @@ import { isTaggedPeerText } from "../utils/crossSessionMessages.js";
 import { crossSessionPreviewHidesBody } from "./messages/UserCrossSessionMessage.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:33717-34121 fingerprint = dropTextInBriefTurns (1)
+//@ chunk-0sfjpx19.js:33717-34121 fingerprint (2.1.88 match: dropTextInBriefTurns, 1)
 function dropTextInBriefTurns(snapshot) {
   let briefByTurn = new Map();
   let turnsWithBrief = new Set();
@@ -156,7 +156,7 @@ function dropTextInBriefTurns(snapshot) {
   for (let toolUseId of turnsWithBrief) briefByTurn.delete(toolUseId);
   return briefByTurn;
 }
-//@ chunk-ag5x7vhf.js:117168-117911 callgraph-fingerprint = LogoHeader (0.199)
+//@ chunk-ag5x7vhf.js:117168-117911 callgraph-fingerprint (2.1.88 match: LogoHeader, 0.199)
 var LogoHeader; // deferred: uses useSessionOrUndefined (../context/session.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-ag5x7vhf.js:117168", () => {
   LogoHeader = memo(function (props) {
@@ -384,7 +384,7 @@ function getMessageSearchText(msg) {
 deferInit("chunk-ag5x7vhf.js:138975", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:147372-148064 fingerprint = shouldRenderStatically (0.736)
+//@ chunk-ag5x7vhf.js:147372-148064 fingerprint (2.1.88 match: shouldRenderStatically, 0.736)
 function shouldRenderStatically(
   message,
   streamingToolUseIDs,
@@ -820,7 +820,7 @@ deferInit("chunk-ag5x7vhf.js:177880", () => {
   transcriptPlugin = null;
   replyPlugin = null;
 });
-//@ chunk-ag5x7vhf.js:178116-179178 fingerprint = filterForBriefTool (0.892)
+//@ chunk-ag5x7vhf.js:178116-179178 fingerprint (2.1.88 match: filterForBriefTool, 0.892)
 function filterForBriefTool(messages, briefToolNames, briefOnlyToolNames) {
   let nameSet = new Set(briefToolNames);
   let briefOnlyNames = new Set(briefOnlyToolNames);
@@ -886,7 +886,7 @@ function filterForBriefTool(messages, briefToolNames, briefOnlyToolNames) {
     return false;
   });
 }
-//@ chunk-ag5x7vhf.js:179178-179721 layout = hasSuccessfulToolCall (0.85)
+//@ chunk-ag5x7vhf.js:179178-179721 layout (2.1.88 match: hasSuccessfulToolCall, 0.85)
 function hasSuccessfulToolCall(messages, toolName) {
   let toolNameSet = new Set(toolName);
   let successfulTurns = new Set();
@@ -982,7 +982,7 @@ class MessagesSliceCache {
     }
   }
 }
-//@ chunk-ag5x7vhf.js:180371-180761 fingerprint = computeSliceStart (0.738)
+//@ chunk-ag5x7vhf.js:180371-180761 fingerprint (2.1.88 match: computeSliceStart, 0.738)
 function computeSliceStart(collapsed, anchorRef, cap, step = SLICE_STEP) {
   let anchor = anchorRef.current;
   let anchorIdx = anchor
@@ -1021,7 +1021,7 @@ function adjustSliceStartForReplies(messages, start, step = SLICE_STEP) {
   } else index = start;
   return index > 0 && messages[index - 1]?.type === "speaker_label" ? index - 1 : Math.min(index, start);
 }
-//@ chunk-ag5x7vhf.js:181053-199016 fingerprint = MessagesImpl (0.526)
+//@ chunk-ag5x7vhf.js:181053-199016 fingerprint (2.1.88 match: MessagesImpl, 0.526)
 function MessagesImpl(props) {
   let $ = useMemoCache(284);
   let {
@@ -2548,7 +2548,7 @@ function dedupeStreamingToolUses(previous, previousList, inProgressIds, resolved
 function keepPreviousIfSame(previous, messages, canReuse) {
   return canReuse && previous[0] === messages[0] ? previous : messages;
 }
-//@ chunk-ag5x7vhf.js:200295-200980 fingerprint = Messages (0.801)
+//@ chunk-ag5x7vhf.js:200295-200980 fingerprint (2.1.88 match: Messages, 0.801)
 /**
  * 消息列表组件：MessagesImpl 的 memo 版本，自定义比较忽略 scrollViewport/search/reveal，并对 streamingToolUses、inProgressToolUseIDs、unseenDivider、tools 做浅比较。
  */

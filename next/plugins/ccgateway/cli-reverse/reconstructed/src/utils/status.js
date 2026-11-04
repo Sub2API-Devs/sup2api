@@ -116,7 +116,7 @@ import {
 } from "../components/Settings/Status.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:65501-65613 fingerprint = buildInstallationHealthDiagnostics (0.329)
+//@ chunk-06y4szbn.js:65501-65613 fingerprint (2.1.88 match: buildInstallationHealthDiagnostics, 0.329)
 async function buildInstallationHealthDiagnostics(backAfterPublish, extraWarnings) {
   let result = await backAfterPublish;
   return result.err === null && extraWarnings.length > 0
@@ -184,7 +184,7 @@ function toolSearchStatusRows() {
 function modelStatusRows() {
   return [];
 }
-//@ chunk-j8bb1zkh.js:2252-3173 fingerprint = buildIDEProperties (0.875)
+//@ chunk-j8bb1zkh.js:2252-3173 fingerprint (2.1.88 match: buildIDEProperties, 0.875)
 function buildIDEProperties(mcpClients, ideInstallationStatus = null, theme) {
   let ideClient = mcpClients?.find((client) => client.name === "ide");
   let ideErrored = Boolean(ideInstallationStatus?.error) && ideClient?.type === "connected";
@@ -256,7 +256,7 @@ function buildIDEProperties(mcpClients, ideInstallationStatus = null, theme) {
   }
   return [];
 }
-//@ chunk-j8bb1zkh.js:3173-4041 fingerprint = buildMcpProperties (0.892)
+//@ chunk-j8bb1zkh.js:3173-4041 fingerprint (2.1.88 match: buildMcpProperties, 0.892)
 function buildMcpProperties(clients = [], theme) {
   let servers = clients.filter((client) => client.name !== "ide" && !isArtifacts404Failure(client));
   if (!servers.length) return [];
@@ -304,7 +304,7 @@ function buildMcpProperties(clients = [], theme) {
     },
   ];
 }
-//@ chunk-j8bb1zkh.js:4041-4783 fingerprint = buildMemoryDiagnostics (0.402)
+//@ chunk-j8bb1zkh.js:4041-4783 fingerprint (2.1.88 match: buildMemoryDiagnostics, 0.402)
 /**
  * /status 与 doctor 的记忆诊断：CLAUDE.md 过大等警告。
  */
@@ -451,7 +451,7 @@ function buildSettingSourcesStatusProperties() {
     });
   return properties;
 }
-//@ chunk-j8bb1zkh.js:6036-6121 fingerprint = buildSandboxProperties (0.534)
+//@ chunk-j8bb1zkh.js:6036-6121 fingerprint (2.1.88 match: buildSandboxProperties, 0.534)
 function buildSandboxProperties(isSandboxed) {
   return [
     {
@@ -467,7 +467,7 @@ function buildSandboxProperties(isSandboxed) {
 function extraStatusRows() {
   return [];
 }
-//@ chunk-j8bb1zkh.js:6145-6406 fingerprint = buildSettingSourcesProperties (0.539)
+//@ chunk-j8bb1zkh.js:6145-6406 fingerprint (2.1.88 match: buildSettingSourcesProperties, 0.539)
 /**
  * /status 的设置来源行：列出启用的来源与托管设置来源（helper/remote/plist/HKLM/file/HKCU）。
  */
@@ -585,7 +585,7 @@ function probeRefreshTokenDead(storageV5) {
     refreshKnownDead: false,
   }));
 }
-//@ chunk-j8bb1zkh.js:8816-10182 fingerprint = buildAccountProperties (0.552)
+//@ chunk-j8bb1zkh.js:8816-10182 fingerprint (2.1.88 match: buildAccountProperties, 0.552)
 /**
  * /status 的账号信息：登录方式、组织、邮箱、令牌是否过期。
  */
@@ -702,7 +702,7 @@ function redactUrlCredentials(url) {
   if (index < 0) return url;
   return `${/^[a-z][a-z0-9+.-]*:\/\//i.exec(url)?.[0] ?? ""}***${url.slice(index)}`;
 }
-//@ chunk-j8bb1zkh.js:10462-13570 fingerprint = buildAPIProviderProperties (0.615)
+//@ chunk-j8bb1zkh.js:10462-13570 fingerprint (2.1.88 match: buildAPIProviderProperties, 0.615)
 /**
  * /status 的 API 提供方信息：提供方、base URL、区域、代理、允许的提供方等。
  */

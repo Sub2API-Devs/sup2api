@@ -54,7 +54,7 @@ async function readSmallFileText(path) {
   let mcpAuthCache = await getMcpAuthCache(path);
   return mcpAuthCache.kind === "ok" ? mcpAuthCache.content : undefined;
 }
-//@ chunk-s61vbvea.js:460086-460202 placement = getMcpAuthCache (0.79)
+//@ chunk-s61vbvea.js:460086-460202 placement (2.1.88 match: getMcpAuthCache, 0.79)
 async function getMcpAuthCache(path, maxBytes = ONE_MIB) {
   let regularFileUpTo = await readRegularFileUpTo(path, maxBytes);
   return regularFileUpTo.kind === "ok"

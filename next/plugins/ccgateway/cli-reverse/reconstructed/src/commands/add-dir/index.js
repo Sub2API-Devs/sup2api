@@ -11,7 +11,7 @@
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { isDesktopTopNonClaudecode } from "../../utils/sessionShape.js";
 
-//@ chunk-e6aww6q8.js:1683961-1684398 fingerprint = addDir (0.589)
+//@ chunk-e6aww6q8.js:1683961-1684398 fingerprint (2.1.88 match: addDir, 0.589)
 /**
  * /add-dir 命令对象（local）；描述：Add a new working directory；isEnabled: ()=>_e()&&WMi()；isHidden: {return!_e()}；实现 chunk-efagea6a.js 的 d。
  */

@@ -43,7 +43,7 @@ import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE } from "../../tools/MemoryTool/memoryToolNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:113708-114321 fingerprint = buildExtractAutoOnlyPrompt (0.47)
+//@ chunk-82kqcve8.js:113708-114321 fingerprint (2.1.88 match: buildExtractAutoOnlyPrompt, 0.47)
 /**
  * 团队记忆的附加规则（当前为空）。
  */
@@ -62,7 +62,7 @@ deferInit("chunk-82kqcve8.js:113708", () => {
   ];
   TEAM_MEMORY_RULES = [];
 });
-//@ chunk-82kqcve8.js:135953-141711 callgraph-witnessed = buildExtractCombinedPrompt (0.132)
+//@ chunk-82kqcve8.js:135953-141711 callgraph-witnessed (2.1.88 match: buildExtractCombinedPrompt, 0.132)
 /**
  * 提取代理的组合提示（个人 + 团队记忆目录）。
  */
@@ -202,7 +202,7 @@ These directories already exist \u2014 write to them directly with the Write too
   ].join(`
 `);
 }
-//@ chunk-xr4xc2mq.js:11072-13452 fingerprint = opener (0.643)
+//@ chunk-xr4xc2mq.js:11072-13452 fingerprint (2.1.88 match: opener, 0.643)
 /**
  * 生成记忆提取代理的提示：现有记忆文件清单、可用的只读命令、如何新建/更新/删除记忆。
  */

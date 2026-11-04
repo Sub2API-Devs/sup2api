@@ -93,7 +93,7 @@ import { formatDuration } from "../../utils/format.js";
 import { LearnMoreLink } from "../../components/LearnMoreLink.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 
-//@ chunk-aepeg2w5.js:357680-357806 fingerprint = _temp3 (0.717)
+//@ chunk-aepeg2w5.js:357680-357806 fingerprint (2.1.88 match: _temp3, 0.717)
 /**
  * 按设置重算 fastMode 写回应用状态，开启时预取快速模式状态。
  */
@@ -109,7 +109,7 @@ function refreshFastModeFromSettings(session, setState, options) {
   });
   if (isFastModeOrgPending(session().fastMode === true)) prefetchFastModeStatus(options);
 }
-//@ chunk-jbv0t0w5.js:37202-37589 fingerprint = applyFastMode (0.495)
+//@ chunk-jbv0t0w5.js:37202-37589 fingerprint (2.1.88 match: applyFastMode, 0.495)
 function applyFastMode(enable, setAppState) {
   let enabled;
   let reason;
@@ -145,7 +145,7 @@ function formatFastModeSuffix(previousModel, isFastMode, model, options) {
     (announceOff ? " \xB7 Fast mode OFF" : "")
   );
 }
-//@ chunk-d1cgs5na.js:1699-1834 fingerprint = handleFastModeShortcut (0.484)
+//@ chunk-d1cgs5na.js:1699-1834 fingerprint (2.1.88 match: handleFastModeShortcut, 0.484)
 function handleFastModeShortcut(enable, getAppState, setAppState) {
   if (!!enable === getAppState) return null;
   return getAppState
@@ -465,11 +465,11 @@ ${outcome.hookMessages.map(sanitizeHookText).join(`
     return `${fastIconString} ${FAST_MODE_ON_TEXT}${promoteText} \xB7 ${pricing}${sessionSuffix}${content}`;
   } else return `Fast mode OFF${persist ? "" : " (this session only)"}`;
 }
-//@ chunk-ag5x7vhf.js:112894-112980 fingerprint = _temp (0.398)
+//@ chunk-ag5x7vhf.js:112894-112980 fingerprint (2.1.88 match: _temp, 0.398)
 function unknownModelWindowModel(s) {
   return s.setupIssues.unknownModelWindowWarning ? s.mainLoopModel : null;
 }
-//@ chunk-18hwfzwa.js:514768-514804 callgraph-fingerprint = _temp2 (1)
+//@ chunk-18hwfzwa.js:514768-514804 callgraph-fingerprint (2.1.88 match: _temp2, 1)
 function selectFastMode(s_0) {
   return s_0.fastMode;
 }
@@ -500,7 +500,7 @@ function negate_3(value) {
 function newAbortController() {
   return new AbortController();
 }
-//@ chunk-18hwfzwa.js:515039-519401 facade-exports = FastModePicker (0.729)
+//@ chunk-18hwfzwa.js:515039-519401 facade-exports (2.1.88 match: FastModePicker, 0.729)
 function FastModePicker(props) {
   let $ = useMemoCache(23);
   let { onDone, unavailableReason, storageV5 } = props;
@@ -1032,7 +1032,7 @@ function FastModeToggleProgress(props) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:520970-521487 facade-exports = call (0.791)
+//@ chunk-18hwfzwa.js:520970-521487 facade-exports (2.1.88 match: call, 0.791)
 async function call_3(onDone, context, args) {
   if (!isFastModeEnabled()) {
     onDone(getFastModeUnavailableMessage() ?? "Fast mode is not available");

@@ -71,7 +71,7 @@ var TRANSCRIPT_SHARE_OPTIONS = [
   },
 ];
 var isTranscriptShareKey = (lowerCase) => TRANSCRIPT_SHARE_KEYS.includes(lowerCase);
-//@ chunk-18hwfzwa.js:1084597-1084763 fingerprint = inputToResponse (0.505)
+//@ chunk-18hwfzwa.js:1084597-1084763 fingerprint (2.1.88 match: inputToResponse, 0.505)
 var WEB_SETUP_RESPONSES = {
   1: "accepted",
   2: "dismissed",
@@ -274,7 +274,7 @@ function WebSetupPrompt(props) {
   } else promptElement = $[33];
   return promptElement;
 }
-//@ chunk-18hwfzwa.js:1086769-1087735 callgraph-fingerprint = TranscriptSharePrompt (0.411)
+//@ chunk-18hwfzwa.js:1086769-1087735 callgraph-fingerprint (2.1.88 match: TranscriptSharePrompt, 0.411)
 function TranscriptSharePrompt(props) {
   let $ = useMemoCache(10);
   let { inputValue, onAnswer, onDismiss } = props;

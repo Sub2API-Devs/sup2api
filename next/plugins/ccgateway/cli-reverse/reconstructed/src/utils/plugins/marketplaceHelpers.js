@@ -51,7 +51,7 @@ import { getDisplayPath } from "../file.js";
 import { isGitUsable } from "./pluginManifestRead.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f3qhjfah.js:49053-49161 fingerprint = getBlockedMarketplaces (1)
+//@ chunk-f3qhjfah.js:49053-49161 fingerprint (2.1.88 match: getBlockedMarketplaces, 1)
 /**
  * 读托管策略 policySettings.blockedMarketplaces（阻止名单），未设返回 null。
  */
@@ -60,7 +60,7 @@ function getBlockedMarketplaces() {
   if (!policySettings?.blockedMarketplaces) return null;
   return policySettings.blockedMarketplaces;
 }
-//@ chunk-f3qhjfah.js:51759-52373 fingerprint = areSourcesEqual (0.935)
+//@ chunk-f3qhjfah.js:51759-52373 fingerprint (2.1.88 match: areSourcesEqual, 0.935)
 /**
  * 比较两个市场来源是否相同（github 按 repo/ref/path，git 按 url/ref/path，url 按 url，npm/file/directory 各自字段）。
  */
@@ -99,7 +99,7 @@ function areSourcesEqual(a, b) {
       return false;
   }
 }
-//@ chunk-f3qhjfah.js:52590-52829 fingerprint = extractHostFromSource (0.644)
+//@ chunk-f3qhjfah.js:52590-52829 fingerprint (2.1.88 match: extractHostFromSource, 0.644)
 /**
  * 从市场来源取主机：github → github.com，git → URL/scp 形式里的主机，url → URL 主机，其他 null。
  */
@@ -173,7 +173,7 @@ function fullMatchesRegex(host, pattern) {
     return false;
   }
 }
-//@ chunk-f3qhjfah.js:53464-53710 fingerprint = doesSourceMatchPathPattern (0.752)
+//@ chunk-f3qhjfah.js:53464-53710 fingerprint (2.1.88 match: doesSourceMatchPathPattern, 0.752)
 /**
  * file/directory 来源的 path 是否匹配策略条目的 pathPattern 正则。
  */
@@ -191,7 +191,7 @@ function doesSourceMatchPathPattern(source, pattern) {
     return false;
   }
 }
-//@ chunk-f3qhjfah.js:53795-53842 fingerprint = getHostPatternsFromAllowlist (0.801)
+//@ chunk-f3qhjfah.js:53795-53842 fingerprint (2.1.88 match: getHostPatternsFromAllowlist, 0.801)
 function isHostPatternEntry(entry) {
   return entry.source === "hostPattern";
 }
@@ -222,7 +222,7 @@ function optionalFieldMatches(required, actual) {
   if (!required) return true;
   return required === (actual || undefined);
 }
-//@ chunk-f3qhjfah.js:54971-55910 fingerprint = areSourcesEquivalentForBlocklist (0.843)
+//@ chunk-f3qhjfah.js:54971-55910 fingerprint (2.1.88 match: areSourcesEquivalentForBlocklist, 0.843)
 function areSourcesEquivalentForBlocklist(source, blocked) {
   if (source.source === blocked.source)
     switch (source.source) {
@@ -279,7 +279,7 @@ function areSourcesEquivalentForBlocklist(source, blocked) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:675486-675527 fingerprint = loadMarketplacesWithGracefulDegradation (0.679)
+//@ chunk-e6aww6q8.js:675486-675527 fingerprint (2.1.88 match: loadMarketplacesWithGracefulDegradation, 0.679)
 var MarketplacesListSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-e6aww6q8.js:675486", () => {
   MarketplacesListSchema = DoctorLazy(() =>
@@ -288,7 +288,7 @@ deferInit("chunk-e6aww6q8.js:675486", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:4197793-4198256 fingerprint = formatFailureDetails (0.806)
+//@ chunk-e6aww6q8.js:4197793-4198256 fingerprint (2.1.88 match: formatFailureDetails, 0.806)
 /**
  * 把插件安装失败列表格式化为“名字 (原因)…等 N 个”一行，最多列 2 个。
  */
@@ -368,7 +368,7 @@ function redactUrlForDisplay(url) {
     .join("&");
   return `${base}?${joined}`;
 }
-//@ chunk-e6aww6q8.js:4198954-4199271 fingerprint = getMarketplaceSourceDisplay (0.784)
+//@ chunk-e6aww6q8.js:4198954-4199271 fingerprint (2.1.88 match: getMarketplaceSourceDisplay, 0.784)
 /**
  * 市场来源的简短展示：github → owner/repo，git/url → URL，npm → 包名，file/directory → 路径。
  */
@@ -465,7 +465,7 @@ function onlyPluginDirectoryFailed(failures) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4199936-4200421 fingerprint = formatMarketplaceLoadingErrors (0.911)
+//@ chunk-e6aww6q8.js:4199936-4200421 fingerprint (2.1.88 match: formatMarketplaceLoadingErrors, 0.911)
 /**
  * 把市场加载失败列表格式化为界面提示（全部失败/部分失败，插件目录不可用单独处理）。
  */
@@ -492,7 +492,7 @@ function formatMarketplaceLoadingErrors(failures, successCount) {
     message: `Failed to load all marketplaces. Errors: ${real.map((failure) => `${oneLineClipped(failure.name)}: ${failure.error}`).join("; ")}`,
   };
 }
-//@ chunk-e6aww6q8.js:4200421-4201047 fingerprint = formatSourceForDisplay (0.922)
+//@ chunk-e6aww6q8.js:4200421-4201047 fingerprint (2.1.88 match: formatSourceForDisplay, 0.922)
 /**
  * 把市场来源格式化成一行展示文本（github: owner/repo、git/url: 脱敏 URL、npm: 包名、file/directory: 路径、settings: 内联）。
  */
@@ -563,7 +563,7 @@ function describeMarketplaceSourceReplaced({ name, replacedSource, resolvedSourc
     `${installedNote}${undoHint}`,
   ];
 }
-//@ chunk-e6aww6q8.js:4201793-4202143 fingerprint = detectEmptyMarketplaceReason (1)
+//@ chunk-e6aww6q8.js:4201793-4202143 fingerprint (2.1.88 match: detectEmptyMarketplaceReason, 1)
 /**
  * 判断 /plugin 浏览界面为空的原因：未安装 git、全部被策略阻止、策略限制、未配置市场、全部加载失败等。
  */

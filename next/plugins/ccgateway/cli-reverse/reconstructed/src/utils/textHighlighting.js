@@ -13,7 +13,7 @@ import { activeAnsiCodes } from "../components/PromptInput/inputDecorations.js";
 import { ansiCodesToString } from "../../vendor/@alcalzone/ansi-tokenize/build/ansiCodes.js";
 import { undoAnsiCodes } from "../../vendor/@alcalzone/ansi-tokenize/build/undo.js";
 
-//@ chunk-e6aww6q8.js:64385-64477 callgraph-witnessed = segmentTextByHighlights (0.706)
+//@ chunk-e6aww6q8.js:64385-64477 callgraph-witnessed (2.1.88 match: segmentTextByHighlights, 0.706)
 function segmentTextByHighlights(text, highlights) {
   if (highlights.length === 0)
     return [
@@ -41,7 +41,7 @@ function reduceCodes(codes) {
   }
   return kept;
 }
-//@ chunk-e6aww6q8.js:64702-65856 fingerprint = HighlightSegmenter (1)
+//@ chunk-e6aww6q8.js:64702-65856 fingerprint (2.1.88 match: HighlightSegmenter, 1)
 class HighlightSegmenter {
   text;
   tokens;

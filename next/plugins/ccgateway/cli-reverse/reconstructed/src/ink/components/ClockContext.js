@@ -97,7 +97,7 @@ deferInit("chunk-cg10fy59.js:1614", () => {
   clockContext = createContext(null);
   CLOCK_INTERVAL_MS = SCROLL_JUMP_LINES * 2;
 });
-//@ chunk-cg10fy59.js:1637-1925 fingerprint = createClock (0.744)
+//@ chunk-cg10fy59.js:1637-1925 fingerprint (2.1.88 match: createClock, 0.744)
 /**
  * 动画时钟 Provider：终端有焦点时按正常帧间隔滴答，失焦时放慢，供 useAnimationFrame 等订阅。
  */
@@ -134,7 +134,7 @@ function ClockProvider(props) {
   } else t3 = $[6];
   return t3;
 }
-//@ chunk-x6v6jz2y.js:16990-17463 placement = StyledText (1)
+//@ chunk-x6v6jz2y.js:16990-17463 placement (2.1.88 match: StyledText, 1)
 /**
  * <Ansi> 渲染每个样式段用的小组件：粗体与暗不能同时生效时优先暗，否则粗体，再否则普通 <Text>。
  */

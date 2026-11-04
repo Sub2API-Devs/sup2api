@@ -84,7 +84,7 @@ import { usageCreditsCommand } from "../../commands/extra-usage/index.js";
 import { require_asciichart } from "../../../vendor/asciichart/asciichart.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9689amr8.js:12028-12675 fingerprint = Usage (0.427)
+//@ chunk-9689amr8.js:12028-12675 fingerprint (2.1.88 match: Usage, 0.427)
 /**
  * /usage：当前会话与本周用量条（全部模型/Sonnet/Opus）、重置时间，团队/企业的额外用量区。
  */
@@ -1267,7 +1267,7 @@ function toLimitBarSpec(limit) {
     alwaysShowDateInReset: true,
   };
 }
-//@ chunk-9h8dr0qb.js:54177-56348 fingerprint = LimitBar (0.788)
+//@ chunk-9h8dr0qb.js:54177-56348 fingerprint (2.1.88 match: LimitBar, 0.788)
 function LimitBar(props) {
   let $ = useMemoCache(41);
   let {
@@ -1555,7 +1555,7 @@ function renderGatewayUsageNotice() {
   } else boxElement = $[6];
   return boxElement;
 }
-//@ chunk-9h8dr0qb.js:57121-57890 placement = _temp2 (0.477)
+//@ chunk-9h8dr0qb.js:57121-57890 placement (2.1.88 match: _temp2, 0.477)
 /**
  * 用量设置里的额度面板：读取凭据对应的额度，失败时回退显示消费上限，底部 Esc 取消提示。
  */
@@ -2315,7 +2315,7 @@ function loadUsageData(props) {
 }
 //@ chunk-9h8dr0qb.js:65969-65992 layout
 var USAGE_CREDITS_LABEL = "Usage credits";
-//@ chunk-9h8dr0qb.js:65992-67685 fingerprint = ExtraUsageSection (0.698)
+//@ chunk-9h8dr0qb.js:65992-67685 fingerprint (2.1.88 match: ExtraUsageSection, 0.698)
 function ExtraUsageSection(props) {
   let $ = useMemoCache(27);
   let { extraUsage, maxWidth } = props;
@@ -2455,7 +2455,7 @@ function ExtraUsageSection(props) {
   } else t10 = $[26];
   return t10;
 }
-//@ chunk-9h8dr0qb.js:67685-67776 placement = formatPeakDay (0.789)
+//@ chunk-9h8dr0qb.js:67685-67776 placement (2.1.88 match: formatPeakDay, 0.789)
 function formatPeakDay(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "long",

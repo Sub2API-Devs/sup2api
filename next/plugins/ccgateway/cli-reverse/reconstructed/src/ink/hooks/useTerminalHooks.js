@@ -39,7 +39,7 @@ import { wrappedRender, createRootAsync } from "../root.js";
 import { getSecondRootError } from "../terminal.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-x6v6jz2y.js:27473-27709 placement = IDLE_SPECULATION_STATE (1)
+//@ chunk-x6v6jz2y.js:27473-27709 placement (2.1.88 match: IDLE_SPECULATION_STATE, 1)
 /**
  * 把会话状态写到终端标签页（OSC 21337 标签状态，经 tmux/screen 透传）；kind 为 null 时清除；终端不支持时不写。
  */
@@ -71,7 +71,7 @@ function useTabStatus(kind, idleText) {
 deferInit("chunk-x6v6jz2y.js:27709", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:27713-27823 placement = CLEAR_TERMINAL_TITLE (1)
+//@ chunk-x6v6jz2y.js:27713-27823 placement (2.1.88 match: CLEAR_TERMINAL_TITLE, 1)
 /**
  * 标题变化时用 OSC 0 设置终端窗口/标签标题（先去掉转义字符）；title 为 null 不写。
  */
@@ -123,7 +123,7 @@ function useTimeout(first, second, extraDeps) {
   );
   if (!isCallback) return isPending;
 }
-//@ chunk-x6v6jz2y.js:28173-28277 placement = measureElement (1)
+//@ chunk-x6v6jz2y.js:28173-28277 placement (2.1.88 match: measureElement, 1)
 /**
  * 读元素 yoga 计算后的宽高。
  */
@@ -132,7 +132,7 @@ var measureElement_2 = (node) => ({
   height: node.yogaNode?.getComputedHeight() ?? 0,
 });
 var measureElement = measureElement_2;
-//@ chunk-x6v6jz2y.js:28277-28398 placement = siblingSharesY (0.858)
+//@ chunk-x6v6jz2y.js:28277-28398 placement (2.1.88 match: siblingSharesY, 0.858)
 function topWithin(node, ancestor) {
   let top = 0;
   let cur = node;

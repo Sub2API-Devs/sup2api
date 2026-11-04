@@ -59,7 +59,7 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 
 //@ chunk-5je9hz27.js:1146-1150 placement
 init_react_production();
-//@ chunk-5je9hz27.js:1150-1212 fingerprint = _temp (1)
+//@ chunk-5je9hz27.js:1150-1212 fingerprint (2.1.88 match: _temp, 1)
 function selectSettingsSyntaxHighlightingDisabled(s) {
   return s.settings.syntaxHighlightingDisabled;
 }
@@ -73,7 +73,7 @@ function toCustomThemeOption(theme) {
 }
 //@ chunk-5je9hz27.js:1331-1361 layout
 var NEW_CUSTOM_THEME = "__new_custom_theme__";
-//@ chunk-5je9hz27.js:1361-8399 fingerprint = ThemePicker (0.724)
+//@ chunk-5je9hz27.js:1361-8399 fingerprint (2.1.88 match: ThemePicker, 0.724)
 /**
  * 主题选择器：列出 dark/light/daltonized/ansi 等主题，选中即预览（含 diff 示例），ctrl+t 切换语法高亮，确定后写入 userSettings。
  */

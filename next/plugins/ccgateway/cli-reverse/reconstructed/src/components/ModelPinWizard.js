@@ -366,7 +366,7 @@ function TierModelPicker({
     }),
   });
 }
-//@ chunk-095ptjmr.js:7500-8456 placement = waitForInitialization (0.633)
+//@ chunk-095ptjmr.js:7500-8456 placement (2.1.88 match: waitForInitialization, 0.633)
 /**
  * （误归此处）模型档位候选的状态行组件：pending/ok/error 三态图标 + id + 后缀 + 失败原因。
  */

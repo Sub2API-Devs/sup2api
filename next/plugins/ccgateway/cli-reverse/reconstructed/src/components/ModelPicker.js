@@ -194,11 +194,11 @@ function getFilledCircleGlyph() {
 function getLeadingWhiteCircleGlyph() {
   return ` ${WHITE_CIRCLE}`;
 }
-//@ chunk-18hwfzwa.js:668074-668101 fingerprint = NO_PREFERENCE (1)
+//@ chunk-18hwfzwa.js:668074-668101 fingerprint (2.1.88 match: NO_PREFERENCE, 1)
 var NO_PREFERENCE = "__NO_PREFERENCE__";
 //@ chunk-18hwfzwa.js:668101-668112 layout
 var MODEL_PICKER_CHROME_ROWS = 14;
-//@ chunk-18hwfzwa.js:668112-674941 fingerprint = ModelPicker (0.441)
+//@ chunk-18hwfzwa.js:668112-674941 fingerprint (2.1.88 match: ModelPicker, 0.441)
 /**
  * /model 选择器：列出可用模型选项（默认/Opus/Sonnet/Haiku 及 1M、Fast 变体），左右键调节 effort（low/medium/high/xhigh/max），显示当前模型与基础模型，支持搜索。
  */
@@ -765,7 +765,7 @@ function resolveModelOptionValue(value) {
     ? getDefaultMainLoopModel()
     : parseUserSpecifiedModel(noopModelOption(value)?.lead ?? value);
 }
-//@ chunk-18hwfzwa.js:675008-675259 fingerprint = EffortLevelIndicator (1)
+//@ chunk-18hwfzwa.js:675008-675259 fingerprint (2.1.88 match: EffortLevelIndicator, 1)
 function EffortLevelIndicator(props) {
   let $ = useMemoCache(5);
   let { effort } = props;
@@ -795,7 +795,7 @@ function filterSupportedEffortLevels(includeMax, supportsMax, supportsXHigh) {
     (level) => (level !== "max" || supportsMax) && (level !== "xhigh" || supportsXHigh),
   );
 }
-//@ chunk-18hwfzwa.js:675334-675552 callgraph-fingerprint = cycleEffortLevel (0.647)
+//@ chunk-18hwfzwa.js:675334-675552 callgraph-fingerprint (2.1.88 match: cycleEffortLevel, 0.647)
 function cycleEffortLevel(currentLevel, direction, includeMax, supportsMax, supportsXHigh) {
   let levels = filterSupportedEffortLevels(includeMax, supportsMax, supportsXHigh);
   let effectiveLevel =
@@ -838,7 +838,7 @@ var LIVE_PREVIEW = "live-preview";
 var LIVE_PREVIEW_WRAP_OPTIONS = {
   wrap: true,
 };
-//@ chunk-18hwfzwa.js:773287-773347 fingerprint = getDefaultEffortLevelForOption (1)
+//@ chunk-18hwfzwa.js:773287-773347 fingerprint (2.1.88 match: getDefaultEffortLevelForOption, 1)
 function getDefaultEffortLevelForOption() {
   let defaultValue = useAppState(selectFalseAppState);
   usePluginInstallationStatus(
@@ -849,7 +849,7 @@ function getDefaultEffortLevelForOption() {
     LIVE_PREVIEW_WRAP_OPTIONS,
   );
 }
-//@ chunk-18hwfzwa.js:929532-929578 callgraph-fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:929532-929578 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectIsFastModeOn(s) {
   return isFastModeEnabled() ? s.fastMode : false;
 }

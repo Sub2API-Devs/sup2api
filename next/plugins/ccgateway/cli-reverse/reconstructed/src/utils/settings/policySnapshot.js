@@ -11,7 +11,7 @@
 import { setStartupPolicySnapshot, getStartupPolicySnapshot } from "../../bootstrap/state.js";
 import { getSettingsForSource } from "./settings.js";
 
-//@ chunk-8nbkhts5.js:268-326 placement = _temp7 (1)
+//@ chunk-8nbkhts5.js:268-326 placement (2.1.88 match: _temp7, 1)
 function capturePolicySnapshot() {
   setStartupPolicySnapshot(structuredClone(getSettingsForSource("policySettings")));
 }

@@ -478,7 +478,7 @@ function getMarketplaceStorageLocation(marketplaceName, source, installLocation)
         key: storageKey,
       };
 }
-//@ chunk-e6aww6q8.js:4225828-4225874 placement = getMarketplacesCacheDir (1)
+//@ chunk-e6aww6q8.js:4225828-4225874 placement (2.1.88 match: getMarketplacesCacheDir, 1)
 function getMarketplacesCacheDir() {
   return join(getPluginsDirectory(), "marketplaces");
 }
@@ -512,7 +512,7 @@ function comparePathContainment(rootPath, targetPath, basePath) {
     ? "inside"
     : "outside";
 }
-//@ chunk-e6aww6q8.js:4226114-4226638 placement = setCwdState (0.793)
+//@ chunk-e6aww6q8.js:4226114-4226638 placement (2.1.88 match: setCwdState, 0.793)
 async function checkMarketplaceDirCollision(rootPath, installPath, name, storageV5, known) {
   let relativePath = relative(rootPath, installPath);
   let plainSegment = isSubpathOf(rootPath, installPath, false) ? relativePath.split(/[\\/]/)[0] : undefined;
@@ -691,7 +691,7 @@ function findMarketplaceDirOwner(dirName, cacheDirPath, known, storageV5, isSelf
 function isOtherSameMarketplaceName(name, otherName) {
   return name !== otherName && sameMarketplaceName(name, otherName);
 }
-//@ chunk-e6aww6q8.js:4228942-4229024 placement = setCwdState (1)
+//@ chunk-e6aww6q8.js:4228942-4229024 placement (2.1.88 match: setCwdState, 1)
 function sameNfcAs(name, selfKey) {
   let normalized = (selfKey ?? name).normalize("NFC");
   return (candidate) => candidate.normalize("NFC") === normalized;
@@ -799,7 +799,7 @@ function findByMarketplaceName(name, names, candidatesFor) {
     candidatesFor(candidateName).some((candidate) => sameMarketplaceName(candidate, name)),
   );
 }
-//@ chunk-e6aww6q8.js:4230377-4230469 placement = setCwdState (1)
+//@ chunk-e6aww6q8.js:4230377-4230469 placement (2.1.88 match: setCwdState, 1)
 function sameMarketplaceName(left, right) {
   let normalized = left.normalize("NFC");
   let normalized_2 = right.normalize("NFC");
@@ -881,7 +881,7 @@ async function findSameDirAmong(cacheDir, name, candidates) {
   let dangling = await hasDanglingSymlinkAncestor(cacheDir, name);
   return dangling === undefined ? undefined : getFileIdentity_7(cacheDir, name, dangling, candidates);
 }
-//@ chunk-e6aww6q8.js:4232012-4232145 placement = isRealPathWithinTeamDir (0.77)
+//@ chunk-e6aww6q8.js:4232012-4232145 placement (2.1.88 match: isRealPathWithinTeamDir, 0.77)
 async function hasDanglingSymlinkAncestor(cacheDir, name) {
   try {
     return await lstat(join(cacheDir, name), {
@@ -893,7 +893,7 @@ async function hasDanglingSymlinkAncestor(cacheDir, name) {
     throw e;
   }
 }
-//@ chunk-e6aww6q8.js:4232145-4232442 placement = getFileIdentity (0.778)
+//@ chunk-e6aww6q8.js:4232145-4232442 placement (2.1.88 match: getFileIdentity, 0.778)
 async function getFileIdentity_7(
   cacheDir,
   name,

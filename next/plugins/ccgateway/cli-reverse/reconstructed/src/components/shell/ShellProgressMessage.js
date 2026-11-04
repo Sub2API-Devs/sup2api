@@ -24,7 +24,7 @@ import { ShellTimeDisplay } from "./ShellTimeDisplay.js";
 import { countCharInString } from "../../utils/stringUtils.js";
 import { formatFileSize } from "../../utils/format.js";
 
-//@ chunk-cqn8yadz.js:606-1961 fingerprint = ShellProgressMessage (0.658)
+//@ chunk-cqn8yadz.js:606-1961 fingerprint (2.1.88 match: ShellProgressMessage, 0.658)
 function ShellProgressMessage(props) {
   let $ = useMemoCache(27);
   let { output, fullOutput, elapsedTimeSeconds, totalLines, totalBytes, timeoutMs, verbose } = props;

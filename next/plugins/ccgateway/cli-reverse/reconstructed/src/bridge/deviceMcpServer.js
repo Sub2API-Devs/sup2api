@@ -27,7 +27,7 @@ import { getPlatform } from "../utils/platform.js";
 //@ chunk-zethn0a3.js:3750-3797 placement
 var CLAUDE_CODE_DEVICE = "claude-code-device";
 var GET_DEVICE_INFO = "get_device_info";
-//@ chunk-zethn0a3.js:3797-4007 placement = renderToolUseMessage (0.513)
+//@ chunk-zethn0a3.js:3797-4007 placement (2.1.88 match: renderToolUseMessage, 0.513)
 /**
  * 从工具输入拆出 session_id，其余字段作为 toolArgs。
  */

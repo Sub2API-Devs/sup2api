@@ -22,7 +22,7 @@ import {
 } from "../../services/oauth/gatewayLogin/GatewayLogin.js";
 import { Spinner } from "../Spinner.js";
 
-//@ chunk-s5p7fp0c.js:10633-11644 callgraph-fingerprint = AgentEditor (0.184)
+//@ chunk-s5p7fp0c.js:10633-11644 callgraph-fingerprint (2.1.88 match: AgentEditor, 0.184)
 function AgentEditor(props) {
   let $ = useMemoCache(13);
   let { userCode, verificationUri, onCancel } = props;

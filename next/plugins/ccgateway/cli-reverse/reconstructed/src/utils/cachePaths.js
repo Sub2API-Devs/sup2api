@@ -15,7 +15,7 @@ import { getFsImplementation } from "./fsOperations.js";
 import { getOriginalCwd } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bbtre4r8.js:11586-11614 affinity = paths (1)
+//@ chunk-bbtre4r8.js:11586-11614 affinity (2.1.88 match: paths, 1)
 /**
  * 缓存目录名的最大长度（200）。
  */
@@ -46,7 +46,7 @@ function getCwdSafe() {
 function cacheBaseDir() {
   return join(CLAUDE_CLI_ENV_PATHS.cache, sanitizePathSegment(getCwdSafe()));
 }
-//@ chunk-bbtre4r8.js:11842-11935 fingerprint = CACHE_PATHS (0.845)
+//@ chunk-bbtre4r8.js:11842-11935 fingerprint (2.1.88 match: CACHE_PATHS, 0.845)
 /**
  * 缓存目录（env-paths claude-cli）：errors、messages、mcp-logs-<server> 等子目录。
  */
@@ -55,6 +55,6 @@ var CACHE_PATHS = {
   errors: () => join(cacheBaseDir(), "errors"),
   mcpLogs: (serverName) => join(cacheBaseDir(), `mcp-logs-${sanitizePathSegment(serverName)}`),
 };
-//@ chunk-8gzm4s8j.js:389-410 fingerprint = paths (1)
+//@ chunk-8gzm4s8j.js:389-410 fingerprint (2.1.88 match: paths, 1)
 var paths = "claude-cli";
 export { CACHE_PATHS, getCwdSafe, paths };

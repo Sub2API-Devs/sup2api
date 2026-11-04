@@ -29,7 +29,7 @@ import { executeFileChangedHooks, executeCwdChangedHooks } from "../hooks.js";
 import { clearCwdEnvFiles } from "../sessionEnvironment.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2072396-2075384 callgraph-witnessed = onCwdChangedForHooks (0.263)
+//@ chunk-e6aww6q8.js:2072396-2075384 callgraph-witnessed (2.1.88 match: onCwdChangedForHooks, 0.263)
 /**
  * CwdChanged/FileChanged 钩子的监听器：按 FileChanged 的 matcher（| 分隔文件名）和钩子返回的 watchPaths 用 chokidar 监听，变化时执行 FileChanged 钩子；cwd 变化时清 env 文件并执行 CwdChanged 钩子；HTTP MCP serve 模式不监听。
  */

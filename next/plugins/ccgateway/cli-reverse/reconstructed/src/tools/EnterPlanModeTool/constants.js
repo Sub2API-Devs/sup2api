@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-gdnkn2q4.js:191-214 fingerprint = ENTER_PLAN_MODE_TOOL_NAME (1)
+//@ chunk-gdnkn2q4.js:191-214 fingerprint (2.1.88 match: ENTER_PLAN_MODE_TOOL_NAME, 1)
 /**
  * EnterPlanMode 工具名常量。
  */

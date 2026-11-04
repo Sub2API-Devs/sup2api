@@ -40,7 +40,7 @@ function syncChromePermissionMode(error) {
     level: "error",
   });
 }
-//@ chunk-18hwfzwa.js:217102-217314 fingerprint = ClaudeInChromePromptNotificationSchema (0.878)
+//@ chunk-18hwfzwa.js:217102-217314 fingerprint (2.1.88 match: ClaudeInChromePromptNotificationSchema, 0.878)
 var ClaudeInChromePromptNotificationSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-18hwfzwa.js:217102", () => {
   ClaudeInChromePromptNotificationSchema = DoctorLazy(() =>
@@ -58,7 +58,7 @@ deferInit("chunk-18hwfzwa.js:217102", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:217314-217953 fingerprint = usePromptsFromClaudeInChrome (0.707)
+//@ chunk-18hwfzwa.js:217314-217953 fingerprint (2.1.88 match: usePromptsFromClaudeInChrome, 0.707)
 /**
  * 订阅 Claude in Chrome 的 notifications/message：把带图片的提示提交到会话，必要时切换权限模式（set_permission_mode）。
  */
@@ -121,14 +121,14 @@ function usePromptsFromClaudeInChrome(mcpClients, toolPermissionMode) {
   }
   useEffect(syncPermissionMode, syncDeps);
 }
-//@ chunk-18hwfzwa.js:217953-218015 placement = PERMISSION_MODES (0.642)
+//@ chunk-18hwfzwa.js:217953-218015 placement (2.1.88 match: PERMISSION_MODES, 0.642)
 /**
  * （误归此处）当前会话的 Chrome 权限模式：会话处于 bypass 时为 skip_all_permission_checks，否则 ask。
  */
 function getChromePermissionMode() {
   return getSessionBypassPermissionsMode() ? "skip_all_permission_checks" : "ask";
 }
-//@ chunk-18hwfzwa.js:218015-218085 fingerprint = findChromeClient (1)
+//@ chunk-18hwfzwa.js:218015-218085 fingerprint (2.1.88 match: findChromeClient, 1)
 function findChromeClient(clients) {
   return clients.find(
     (client) => client.type === "connected" && client.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME,

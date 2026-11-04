@@ -137,7 +137,7 @@ function mapParentNotDirectory(error) {
 var SAME_IDENTITY = {
   found: "same",
 };
-//@ chunk-p5msxby3.js:2887-2952 placement = getFileIdentity (0.794)
+//@ chunk-p5msxby3.js:2887-2952 placement (2.1.88 match: getFileIdentity, 0.794)
 function getFileIdentity(leftStats, rightStats) {
   return leftStats.ino !== 0n && leftStats.dev === rightStats.dev && leftStats.ino === rightStats.ino;
 }

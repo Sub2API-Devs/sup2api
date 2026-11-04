@@ -12,7 +12,7 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { onProcessRootHost } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8kte1b36.js:262-374 facade-exports = stripProtoFields (1)
+//@ chunk-8kte1b36.js:262-374 facade-exports (2.1.88 match: stripProtoFields, 1)
 /**
  * 去掉 _PROTO_ 前缀的字段（这些只进 1P protobuf 的特权列，不发往 Datadog）。
  */
@@ -81,7 +81,7 @@ function attachAnalyticsSink(newSink) {
   }
   return true;
 }
-//@ chunk-8kte1b36.js:888-1005 facade-exports = logEvent (0.878)
+//@ chunk-8kte1b36.js:888-1005 facade-exports (2.1.88 match: logEvent, 0.878)
 /**
  * 记录分析事件：sink 未挂上前进入内存队列（上限 1000，满了丢最旧并计数），挂上后直接交给 sink.logEvent。
  */
@@ -97,7 +97,7 @@ function logEvent(eventName, metadata) {
   }
   state.sink.logEvent(eventName, metadata);
 }
-//@ chunk-8kte1b36.js:1005-1140 facade-exports = logEventAsync (0.883)
+//@ chunk-8kte1b36.js:1005-1140 facade-exports (2.1.88 match: logEventAsync, 0.883)
 /**
  * logEvent 的异步版本，等待 sink 发送完成；sink 未挂上时同样入队。
  */

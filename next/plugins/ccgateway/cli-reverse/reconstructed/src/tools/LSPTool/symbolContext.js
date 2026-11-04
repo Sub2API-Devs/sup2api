@@ -16,7 +16,7 @@ import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-kxyd0g16.js:103289-103302 affinity
 var MAX_SYMBOL_READ_BYTES = 65536;
-//@ chunk-kxyd0g16.js:103302-103920 fingerprint = getSymbolAtPosition (1)
+//@ chunk-kxyd0g16.js:103302-103920 fingerprint (2.1.88 match: getSymbolAtPosition, 1)
 /**
  * 读取文件前 64KB，取指定 0 基行列处的符号（标识符）文本，用于渲染工具调用；失败返回 null。
  */

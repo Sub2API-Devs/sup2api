@@ -534,7 +534,7 @@ async function describeWritableChain(
 }
 //@ chunk-qcqdqsn4.js:9928-9947 placement
 var FORMAT_CHAR_RE = /^\p{Cf}$/u;
-//@ chunk-qcqdqsn4.js:9947-10170 placement = needsWidthCompensation (0.79)
+//@ chunk-qcqdqsn4.js:9947-10170 placement (2.1.88 match: needsWidthCompensation, 0.79)
 function quoteConfigValueForLog(char) {
   let jsonText = jsonStringify(char);
   let safeText = "";
@@ -700,7 +700,7 @@ if [ -n "$email" ]; then
 fi
 exit 0
 `;
-//@ chunk-qcqdqsn4.js:15823-15868 placement = shellQuote (1)
+//@ chunk-qcqdqsn4.js:15823-15868 placement (2.1.88 match: shellQuote, 1)
 function shellQuote(s) {
   return s.replace(/'/g, "'\\''");
 }

@@ -205,7 +205,7 @@ import { toolMatchesName } from "../Tool.js";
 import { BRIEF_TOOL_NAME, briefEnablementModule } from "../utils/conversationRecovery.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:95319-95409 callgraph-witnessed = prependBullets (0)
+//@ chunk-e6aww6q8.js:95319-95409 callgraph-witnessed (2.1.88 match: prependBullets, 0)
 /**
  * 把字符串或字符串数组转成 " - " 前缀的项目符号行（嵌套数组展开为同级）。
  */
@@ -301,7 +301,7 @@ function getShellDescription() {
   sessionFeatureValues.shellDescription ??= getShellInfoLine();
   return sessionFeatureValues.shellDescription;
 }
-//@ chunk-e6aww6q8.js:97318-97651 fingerprint = getShellInfoLine (0.576)
+//@ chunk-e6aww6q8.js:97318-97651 fingerprint (2.1.88 match: getShellInfoLine, 0.576)
 /**
  * 环境块 Shell 行：Windows 下 PowerShell（可附 Bash 说明）；否则 zsh/bash，若登录 shell 与 SHELL 不同注明 login shell。
  */
@@ -336,7 +336,7 @@ function getAgentProxyNote() {
 function formatAgentProxyNote(envInfo) {
   return envInfo.agentProxy ? buildAgentProxyCliSection(envInfo.agentProxy) : null;
 }
-//@ chunk-e6aww6q8.js:97818-97909 placement = getUnameSR (1)
+//@ chunk-e6aww6q8.js:97818-97909 placement (2.1.88 match: getUnameSR, 1)
 /**
  * OS Version 行：Windows 为 os.version()+release()，其余为 os.type()+release()（类似 uname -sr）。
  */
@@ -344,7 +344,7 @@ function getUnameSR() {
   if (env.platform === "win32") return `${version()} ${release_3()}`;
   return `${eio()} ${release_3()}`;
 }
-//@ chunk-e6aww6q8.js:100128-100804 fingerprint = computeSimpleEnvInfo (0.43)
+//@ chunk-e6aww6q8.js:100128-100804 fingerprint (2.1.88 match: computeSimpleEnvInfo, 0.43)
 /**
  * 生成环境块要点：主工作目录、worktree 说明、是否 git 仓库、附加目录、Platform、Shell、OS Version、scratchpad、代理与 gh 说明，逐条加 " - " 前缀。
  */
@@ -385,7 +385,7 @@ function getEnvironmentSection(envInfo) {
   return [ENVIRONMENT_HEADER, ENVIRONMENT_INTRO, computeSimpleEnvInfo(envInfo)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:105481-105658 fingerprint = computeEnvInfo (0.45)
+//@ chunk-e6aww6q8.js:105481-105658 fingerprint (2.1.88 match: computeEnvInfo, 0.45)
 /**
  * "You are powered by the model named X. The exact model ID is Y."（无营销名时只给 ID）。旧版名 computeEnvInfo 为错配。
  */
@@ -501,7 +501,7 @@ deferInit("chunk-e6aww6q8.js:106580", () => {
   );
   languagePreferenceSchema = DoctorLazy(() => stringSchema().max(MAX_CLEAN_IDENTIFIER_LENGTH).nullable());
 });
-//@ chunk-e6aww6q8.js:106671-106723 fingerprint = getOutputStyleSection (1)
+//@ chunk-e6aww6q8.js:106671-106723 fingerprint (2.1.88 match: getOutputStyleSection, 1)
 /**
  * "# Output Style: <名字>" 换行 + 提示词。
  */
@@ -526,7 +526,7 @@ function getLanguageChangeText(languagePreference) {
   if (languagePreference === null) return "The language preference was cleared. Match the user's language.";
   return getLanguageSection(escapeXmlText(languagePreference));
 }
-//@ chunk-e6aww6q8.js:106981-107472 fingerprint = getLanguageSection (0.667)
+//@ chunk-e6aww6q8.js:106981-107472 fingerprint (2.1.88 match: getLanguageSection, 0.667)
 /**
  * "# Language" 段：始终用指定语言回复，技术术语保留原文，注意变音符号。
  */
@@ -535,7 +535,7 @@ function getLanguageSection(languagePreference) {
 Always respond in ${languagePreference}. Use ${languagePreference} for all explanations, comments, and communications with the user. Technical terms and code identifiers should remain in their original form.
 Maintain full orthographic correctness for ${languagePreference}, including all required diacritical marks, accents, and special characters. Never substitute accented characters with their ASCII equivalents (e.g., never write "nao" for "n\xE3o", "fur" for "f\xFCr", or "loeschen" for "l\xF6schen").`;
 }
-//@ chunk-e6aww6q8.js:2241227-2241325 fingerprint = BRIEF_PROACTIVE_SECTION (0.398)
+//@ chunk-e6aww6q8.js:2241227-2241325 fingerprint (2.1.88 match: BRIEF_PROACTIVE_SECTION, 0.398)
 /**
  * require chunk-cv3kgbt2（isBriefEnabled）；同语句的 Blr 为 BRIEF_PROACTIVE_SECTION。
  */
@@ -707,7 +707,7 @@ var TOOL_PARAM_JSON_RULE =
   "Object and array parameter values must be a single JSON value \u2014 never write parameter-tag markup inside a JSON value.";
 var PRONOUNS_GUIDANCE =
   "When you use a pronoun for someone \u2014 the user or anyone else you mention \u2014 and their pronouns haven't been stated, use they/them. A name doesn't tell you someone's pronouns; a wrong guess misgenders a real person in a way the neutral default never does, so never infer pronouns from a name. This applies to all user-visible text, including visible thinking.";
-//@ chunk-e6aww6q8.js:2249596-2249981 fingerprint = getHooksSection (1)
+//@ chunk-e6aww6q8.js:2249596-2249981 fingerprint (2.1.88 match: getHooksSection, 1)
 /**
  * Hooks 说明段（把 hook 反馈视为用户、被拦截时调整或请用户检查配置）。
  */
@@ -836,7 +836,7 @@ var DEFAULT_AGENT_IDENTITY_LINE =
   "You are an agent working with the user toward their goals, using your own judgment along the way.";
 var OUTPUT_STYLE_IDENTITY_LINE =
   'You are an interactive agent that helps users according to your "Output Style", which describes how you should respond to user queries.';
-//@ chunk-e6aww6q8.js:2257565-2257902 fingerprint = getSimpleIntroSection (1)
+//@ chunk-e6aww6q8.js:2257565-2257902 fingerprint (2.1.88 match: getSimpleIntroSection, 1)
 /**
  * intro 段：身份开场（默认或输出风格）+ 安全测试说明 + 不要臆造 URL。
  */
@@ -874,7 +874,7 @@ function getSystemReminderExplainer(midConversationTurns, hasSkills) {
     ? "Tool results and user messages may include <system-reminder> or other tags. Tags contain information from the system. They bear no direct relation to the specific tool results or user messages in which they appear."
     : "`<system-reminder>` tags in messages and tool results are injected by the harness, not the user.";
 }
-//@ chunk-e6aww6q8.js:2258491-2259623 fingerprint = getSimpleSystemSection (0.823)
+//@ chunk-e6aww6q8.js:2258491-2259623 fingerprint (2.1.88 match: getSimpleSystemSection, 0.823)
 /**
  * system 段（"# System"）：输出显示方式、权限模式、system-reminder、提示注入、hooks、自动压缩等要点。
  */
@@ -891,7 +891,7 @@ function getSimpleSystemSection(midConversationTurns, namesPastedContentTag) {
   return ["# System", ...prependBullets(items)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2259623-2263176 fingerprint = getSimpleDoingTasksSection (0.753)
+//@ chunk-e6aww6q8.js:2259623-2263176 fingerprint (2.1.88 match: getSimpleDoingTasksSection, 0.753)
 /**
  * doing_tasks 段（"# Doing tasks"）：不加多余功能/错误处理、先读后改、验证与反馈渠道等。
  */
@@ -959,7 +959,7 @@ function shouldCloseOnWhoPays(isReplMode) {
  */
 var USER_PAYS_NOTE =
   "The user pays per token for your turns, and wants the job done for what it needs and no more.";
-//@ chunk-e6aww6q8.js:2266969-2268283 fingerprint = getUsingYourToolsSection (0.51)
+//@ chunk-e6aww6q8.js:2266969-2268283 fingerprint (2.1.88 match: getUsingYourToolsSection, 0.51)
 /**
  * tools 段 "# Using your tools"：任务工具、专用工具优先于 Bash、并行调用等；REPL 模式另一版。
  */
@@ -1003,7 +1003,7 @@ function getAgentGuidanceMode(hasSkills) {
   if (isForkSubagentEnabled()) return forkGateForcesBackground() ? "fork-background" : "fork";
   return getSubagentSteer() === "default" ? "with-nudge" : "plain";
 }
-//@ chunk-e6aww6q8.js:2268409-2269823 fingerprint = getAgentToolSection (0.327)
+//@ chunk-e6aww6q8.js:2268409-2269823 fingerprint (2.1.88 match: getAgentToolSection, 0.327)
 /**
  * 按模式生成 Agent 工具使用段（fork 说明、子代理委派提示）。
  */
@@ -1052,7 +1052,7 @@ function getSessionGuidanceFacts(enabledToolNames, skillToolCommands, isLean, is
     explainsUltrareview,
   };
 }
-//@ chunk-e6aww6q8.js:2270186-2272002 fingerprint = getSessionSpecificGuidanceSection (0.517)
+//@ chunk-e6aww6q8.js:2270186-2272002 fingerprint (2.1.88 match: getSessionSpecificGuidanceSection, 0.517)
 /**
  * session_guidance 段（"# Session-specific guidance"）文本。
  */
@@ -1088,7 +1088,7 @@ function getSessionSpecificGuidanceSection(enabledTools, skillToolCommands) {
   return ["# Session-specific guidance", ...prependBullets(items)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2272002-2272628 fingerprint = getSimpleToneAndStyleSection (0.889)
+//@ chunk-e6aww6q8.js:2272002-2272628 fingerprint (2.1.88 match: getSimpleToneAndStyleSection, 0.889)
 /**
  * tone 段 "# Tone and style"：不用 emoji、简洁、file:line 引用、工具调用前不加冒号。
  */
@@ -1296,7 +1296,7 @@ async function getSystemPrompt(tools, requestModel, options) {
     shouldUseGlobalCacheScope() ? SYSTEM_PROMPT_DYNAMIC_BOUNDARY : null,
   ).map((section) => applyPromptAblation(section));
 }
-//@ chunk-e6aww6q8.js:2279004-2279263 callgraph-fingerprint = getProactiveSection (0.216)
+//@ chunk-e6aww6q8.js:2279004-2279263 callgraph-fingerprint (2.1.88 match: getProactiveSection, 0.216)
 /**
  * 计算系统提示词"事实"（模型、工具、输出风格、bare/lean/sdk-preset 等特征）。旧版名 getProactiveSection 为错配。
  */
@@ -1870,7 +1870,7 @@ async function decideSystemPromptSections(tools, requestModel, options) {
     record,
   };
 }
-//@ chunk-e6aww6q8.js:2286356-2288941 callgraph-witnessed = getSystemPrompt (0.118)
+//@ chunk-e6aww6q8.js:2286356-2288941 callgraph-witnessed (2.1.88 match: getSystemPrompt, 0.118)
 /**
  * 把决策渲染成 [{id,scope,text}]：shared 段（intro/system/doing_tasks/actions/tools/tone 或 lean_body）、session 段、total_tokens 等。旧版名 getSystemPrompt 实际对应 #KI。
  */
@@ -2259,7 +2259,7 @@ function isFocusModeOn() {
   } else if (!isFocusModeEnabled()) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:2324273-2324498 fingerprint = CLAUDE_CODE_DOCS_MAP_URL (0.333)
+//@ chunk-e6aww6q8.js:2324273-2324498 fingerprint (2.1.88 match: CLAUDE_CODE_DOCS_MAP_URL, 0.333)
 /**
  * 文档地址常量（claude-code-guide 代理用）。
  */
@@ -2275,7 +2275,7 @@ var CLAUDE_CODE_GUIDE = "claude-code-guide";
 function isBriefGateEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_humble_zephyr", false);
 }
-//@ chunk-e6aww6q8.js:3374509-3374608 fingerprint = getBriefSection (1)
+//@ chunk-e6aww6q8.js:3374509-3374608 fingerprint (2.1.88 match: getBriefSection, 1)
 /**
  * 工具中有 Brief 工具且（无开关或）Brief 已开启。旧版名 getBriefSection 不准确。
  */
@@ -2284,7 +2284,7 @@ function isBriefToolActive(tools) {
   if (!isBriefGateEnabled()) return true;
   return briefEnablementModule.isBriefEnabled();
 }
-//@ build-report-lite-jwtbvm49.mjs:2153-2194 fingerprint = getUnameSR (1)
+//@ build-report-lite-jwtbvm49.mjs:2153-2194 fingerprint (2.1.88 match: getUnameSR, 1)
 /**
  * 是否 Windows（process.platform==='win32'）。属于独立脚本 build-report-lite，旧版名 getUnameSR 为错配，保留原名。
  */

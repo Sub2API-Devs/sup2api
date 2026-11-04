@@ -38,7 +38,7 @@ function contextOverflowKind(usage) {
   if (usage.totalTokens <= usage.rawMaxTokens) return null;
   return usage.autocompactSource === "auto" ? "hard_limit" : "compaction_window";
 }
-//@ chunk-6a3xjg89.js:993-3125 fingerprint = formatContextAsMarkdownTable (0.861)
+//@ chunk-6a3xjg89.js:993-3125 fingerprint (2.1.88 match: formatContextAsMarkdownTable, 0.861)
 function formatContextAsMarkdownTable(data) {
   let {
     categories,
@@ -316,7 +316,7 @@ function buildContextUsage(usage) {
       }),
   };
 }
-//@ chunk-7jbxc8kr.js:3444-3796 fingerprint = collectContextData (0.588)
+//@ chunk-7jbxc8kr.js:3444-3796 fingerprint (2.1.88 match: collectContextData, 0.588)
 async function collectContextData_2(context) {
   let appState = context.getAppState();
   let mainThreadAgentDefinition = appState.agent

@@ -142,7 +142,7 @@ import { subscribe_2 as subscribe_2_2 } from "../../components/permissions/AskUs
 import { NOT_RECORDED, pluginErrorSummary } from "./marketplaceNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-czx62zen.js:13462-14027 fingerprint = getPluginAffectingSettingsSnapshot (0.609)
+//@ chunk-czx62zen.js:13462-14027 fingerprint (2.1.88 match: getPluginAffectingSettingsSnapshot, 0.609)
 /**
  * 计算影响插件加载的设置指纹（enabledPlugins、extraKnownMarketplaces、策略等），用于判断缓存的插件加载结果是否过期。
  */
@@ -318,7 +318,7 @@ function queueHookedMergeOnSettingsChange() {
   if (!hookedMerge.isAnnouncing) hookedMerge.unsettled = new Set();
   return queueHookedSettingsMerge("the settings changed");
 }
-//@ chunk-e6aww6q8.js:4162487-4163338 facade-majority = convertPluginHooksToMatchers (0.9)
+//@ chunk-e6aww6q8.js:4162487-4163338 facade-majority (2.1.88 match: convertPluginHooksToMatchers, 0.9)
 /**
  * 把一个插件的 hooksConfig 转成 按事件名分组的 matcher 列表（每个 matcher 附带 pluginRoot、pluginId 等来源信息）。
  */
@@ -723,7 +723,7 @@ function filterPluginsForSafeMode(enabled) {
   );
   return enabled.filter((plugin) => isBuiltinPluginId(plugin.source));
 }
-//@ chunk-e6aww6q8.js:4168694-4169945 fingerprint = loadPluginHooks (0.708)
+//@ chunk-e6aww6q8.js:4168694-4169945 fingerprint (2.1.88 match: loadPluginHooks, 0.708)
 /**
  * 汇总所有启用插件的 hooks：按事件把 matcher 合并（托管插件 prependPlugins/appendPlugins 排序），同一插件重复注册跳过，返回 {matchers, hooksLeftOut, loadedWithHooks}。
  */
@@ -1264,7 +1264,7 @@ function loadHooksModulesHeldForTrust(storageV5, credentials) {
       logForDebugging(`plugin hooks after workspace trust: ${errorMessage(error)}`);
     });
 }
-//@ chunk-e6aww6q8.js:4177901-4178267 facade-majority = pruneRemovedPluginHooks (0.868)
+//@ chunk-e6aww6q8.js:4177901-4178267 facade-majority (2.1.88 match: pruneRemovedPluginHooks, 0.868)
 /**
  * 插件被移除/禁用后，从已注册 hooks 与已加载 hooks 模块中删掉它们的条目。
  */
@@ -1300,7 +1300,7 @@ async function standDownInstalledHooksModules() {
     ]),
   );
 }
-//@ chunk-e6aww6q8.js:4178430-4179640 facade-majority = setupPluginHookHotReload (0.537)
+//@ chunk-e6aww6q8.js:4178430-4179640 facade-majority (2.1.88 match: setupPluginHookHotReload, 0.537)
 /**
  * 订阅设置变化：插件相关设置或 hooks 模块开关变化时重置并重新 registerPluginHooks（热加载），仅注册一次。
  */
@@ -1387,7 +1387,7 @@ function describePluginLoadFailure(error) {
 function formatManagedPluginMissingMessage(pluginId) {
   return `managed plugin ${pluginId} registered hooks earlier this session and is missing from the latest plugin load`;
 }
-//@ chunk-e6aww6q8.js:4179959-4180181 placement = getPluginNameFromError (0.841)
+//@ chunk-e6aww6q8.js:4179959-4180181 placement (2.1.88 match: getPluginNameFromError, 0.841)
 function getPluginNameFromError(error) {
   let names = [];
   if ("pluginId" in error && error.pluginId) names.push(nfcLower(error.pluginId));

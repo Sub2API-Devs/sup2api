@@ -22,7 +22,7 @@ import { render } from "../ink/hooks/useTerminalHooks.js";
 import { AppRoot } from "./AppRoot.js";
 import { writeFileSync_DEPRECATED, jsonStringify } from "../utils/slowOperations.js";
 
-//@ chunk-zenpc8qn.js:15109-16165 fingerprint = InvalidConfigDialog (0.687)
+//@ chunk-zenpc8qn.js:15109-16165 fingerprint (2.1.88 match: InvalidConfigDialog, 0.687)
 function InvalidConfigDialog(props) {
   let $ = useMemoCache(19);
   let { filePath, errorDescription, onExit, onReset } = props;
@@ -125,9 +125,9 @@ function InvalidConfigDialog(props) {
   } else t8 = $[18];
   return t8;
 }
-//@ chunk-zenpc8qn.js:16165-16178 fingerprint = SAFE_ERROR_THEME_NAME (1)
+//@ chunk-zenpc8qn.js:16165-16178 fingerprint (2.1.88 match: SAFE_ERROR_THEME_NAME, 1)
 var SAFE_ERROR_THEME_NAME = "dark";
-//@ chunk-zenpc8qn.js:16178-16505 fingerprint = showInvalidConfigDialog (1)
+//@ chunk-zenpc8qn.js:16178-16505 fingerprint (2.1.88 match: showInvalidConfigDialog, 1)
 async function showInvalidConfigDialog({ error }) {
   let renderOptions = {
     ...getBaseRenderOptions(false),

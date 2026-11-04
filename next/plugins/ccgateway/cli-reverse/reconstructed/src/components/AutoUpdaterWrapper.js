@@ -519,7 +519,7 @@ function PackageManagerAutoUpdater(props) {
   } else rowElement = $[53];
   return rowElement;
 }
-//@ chunk-tzghj6zv.js:46626-47769 fingerprint = AutoUpdaterWrapper (0.58)
+//@ chunk-tzghj6zv.js:46626-47769 fingerprint (2.1.88 match: AutoUpdaterWrapper, 0.58)
 /**
  * 检测安装类型后渲染 NativeAutoUpdater / PackageManagerAutoUpdater / AutoUpdater。
  */

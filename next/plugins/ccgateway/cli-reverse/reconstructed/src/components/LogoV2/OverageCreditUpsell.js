@@ -11,7 +11,7 @@
 import { isWorkflowsPolicyAllowed, workflowAvailability } from "../../utils/workflows/workflowGates.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-hgfr0vx8.js:2388-2465 fingerprint = isEligibleForOverageCreditGrant (0.44)
+//@ chunk-hgfr0vx8.js:2388-2465 fingerprint (2.1.88 match: isEligibleForOverageCreditGrant, 0.44)
 function isEligibleForOverageCreditGrant() {
   return isWorkflowsPolicyAllowed() && !env.CLAUDE_CODE_DISABLE_WORKFLOWS && workflowAvailability().available;
 }

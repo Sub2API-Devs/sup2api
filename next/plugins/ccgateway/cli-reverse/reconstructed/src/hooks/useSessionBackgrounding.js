@@ -10,7 +10,7 @@
  */
 import { useCallback } from "../../vendor/react/cjs/react.production.js";
 
-//@ chunk-18hwfzwa.js:1709261-1709347 fingerprint = useSessionBackgrounding (0.344)
+//@ chunk-18hwfzwa.js:1709261-1709347 fingerprint (2.1.88 match: useSessionBackgrounding, 0.344)
 function useSessionBackgrounding({ onBackgroundQuery }) {
   return {
     handleBackgroundSession: useCallback(() => {

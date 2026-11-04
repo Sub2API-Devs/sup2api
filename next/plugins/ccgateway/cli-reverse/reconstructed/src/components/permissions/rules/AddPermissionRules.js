@@ -31,7 +31,7 @@ import { plural } from "../../../utils/stringUtils.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { Dialog } from "../../design-system/Dialog.js";
 
-//@ chunk-p2qwpk2k.js:22240-22363 fingerprint = _temp (1)
+//@ chunk-p2qwpk2k.js:22240-22363 fingerprint (2.1.88 match: _temp, 1)
 function renderRuleListItem(ruleValue) {
   return jsxProd_default_2(
     Box,
@@ -50,7 +50,7 @@ function renderRuleListItem(ruleValue) {
     formatPermissionRule(ruleValue),
   );
 }
-//@ chunk-p2qwpk2k.js:22363-22727 fingerprint = optionForPermissionSaveDestination (1)
+//@ chunk-p2qwpk2k.js:22363-22727 fingerprint (2.1.88 match: optionForPermissionSaveDestination, 1)
 function optionForPermissionSaveDestination(saveDestination) {
   switch (saveDestination) {
     case "localSettings":
@@ -73,7 +73,7 @@ function optionForPermissionSaveDestination(saveDestination) {
       };
   }
 }
-//@ chunk-p2qwpk2k.js:22727-24428 fingerprint = AddPermissionRules (0.948)
+//@ chunk-p2qwpk2k.js:22727-24428 fingerprint (2.1.88 match: AddPermissionRules, 0.948)
 function AddPermissionRules(props) {
   let $ = useMemoCache(27);
   let { onAddRules, onCancel, ruleValues, ruleBehavior, initialContext, setToolPermissionContext } = props;

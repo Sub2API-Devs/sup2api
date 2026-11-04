@@ -22,7 +22,7 @@ var MEMORY_LEVEL_RANK = {
   high: 1,
   critical: 2,
 };
-//@ chunk-18hwfzwa.js:783029-783611 fingerprint = useMemoryUsage (0.634)
+//@ chunk-18hwfzwa.js:783029-783611 fingerprint (2.1.88 match: useMemoryUsage, 0.634)
 function useMemoryUsage(level = "high", active = true) {
   let [memoryUsage, setMemoryUsage] = useState(null);
   let statusRef = useRef("normal");

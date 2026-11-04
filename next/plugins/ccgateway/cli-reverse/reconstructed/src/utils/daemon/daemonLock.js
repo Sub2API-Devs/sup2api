@@ -421,7 +421,7 @@ function hasProcIdentity(lock) {
 function stopDaemonHint() {
   return `Stop it with \`claude daemon stop --any\` (a graceful, socket-based stop); if nothing is running at that pid, delete ${daemonLockPath()}`;
 }
-//@ chunk-6erhssc0.js:6736-6924 placement = isProcessRunning (0.698)
+//@ chunk-6erhssc0.js:6736-6924 placement (2.1.88 match: isProcessRunning, 0.698)
 /**
  * （误归 computerUse）读服务器锁文件并确认持有进程仍存活且身份匹配，否则返回 null。
  */
@@ -506,7 +506,7 @@ async function isServerVersionMismatch(version, storageV5) {
   let lock = await readLiveServerLock(1, storageV5).catch(() => null);
   return !!lock && lock.version !== version;
 }
-//@ chunk-7904g3ks.js:5826-5914 placement = tryAcquireComputerUseLock (0.172)
+//@ chunk-7904g3ks.js:5826-5914 placement (2.1.88 match: tryAcquireComputerUseLock, 0.172)
 /**
  * （误归 computerUse）读活锁后对持有进程 pid 执行后续查询；无锁返回 []。
  */

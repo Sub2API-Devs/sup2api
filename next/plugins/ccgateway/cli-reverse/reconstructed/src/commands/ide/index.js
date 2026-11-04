@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1696406-1696528 fingerprint = ide (0.958)
+//@ chunk-e6aww6q8.js:1696406-1696528 fingerprint (2.1.88 match: ide, 0.958)
 /**
  * /ide 命令对象（local-jsx）；描述：Manage IDE integrations and show status；实现 chunk-5bdzenzx.js 的 _t。
  */

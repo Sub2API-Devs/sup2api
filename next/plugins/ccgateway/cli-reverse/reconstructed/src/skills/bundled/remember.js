@@ -28,7 +28,7 @@ function MEMORY_TYPES_SKILL_CONTENT() {
     ? MEMORY_TYPES_SECTION_TEAM
     : MEMORY_TYPES_SECTION_PRIVATE;
 }
-//@ chunk-hantmvxa.js:183176-183579 callgraph-fingerprint = registerRememberSkill (0.398)
+//@ chunk-hantmvxa.js:183176-183579 callgraph-fingerprint (2.1.88 match: registerRememberSkill, 0.398)
 /**
  * 注册 memory-types 内置 skill（记忆类型分类参考，供写记忆前查阅），记忆功能门控；旧版匹配为 registerRememberSkill。
  */

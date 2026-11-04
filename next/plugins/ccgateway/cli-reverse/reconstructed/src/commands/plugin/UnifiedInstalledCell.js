@@ -179,7 +179,7 @@ function AuthShortcutHint() {
   } else content = $[0];
   return content;
 }
-//@ chunk-vrb44rx7.js:143808-146689 fingerprint = UnifiedInstalledCell (0.475)
+//@ chunk-vrb44rx7.js:143808-146689 fingerprint (2.1.88 match: UnifiedInstalledCell, 0.475)
 function UnifiedInstalledCell(t0) {
   switch (t0.type) {
     case "plugin": {

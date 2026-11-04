@@ -10,9 +10,9 @@
  */
 import { isAgentColorName, AGENT_COLOR_TO_THEME_COLOR } from "../tools/AgentTool/agentColorManager.js";
 
-//@ chunk-32akb2g2.js:559-591 callgraph-fingerprint = DEFAULT_AGENT_THEME_COLOR (1)
+//@ chunk-32akb2g2.js:559-591 callgraph-fingerprint (2.1.88 match: DEFAULT_AGENT_THEME_COLOR, 1)
 var DEFAULT_AGENT_THEME_COLOR = "cyan_FOR_SUBAGENTS_ONLY";
-//@ chunk-32akb2g2.js:591-661 fingerprint = toInkColor (1)
+//@ chunk-32akb2g2.js:591-661 fingerprint (2.1.88 match: toInkColor, 1)
 function toInkColor(color) {
   if (!color) return DEFAULT_AGENT_THEME_COLOR;
   if (isAgentColorName(color)) return AGENT_COLOR_TO_THEME_COLOR[color];

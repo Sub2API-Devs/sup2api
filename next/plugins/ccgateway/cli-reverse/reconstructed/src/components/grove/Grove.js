@@ -52,11 +52,11 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 deferInit("chunk-fggt3ccb.js:722", () => {
   init_react_production();
 });
-//@ chunk-fggt3ccb.js:726-784 fingerprint = _temp2 (1)
+//@ chunk-fggt3ccb.js:726-784 fingerprint (2.1.88 match: _temp2, 1)
 function logGrovePrivacyViewed() {
   logEvent("tengu_grove_privacy_settings_viewed", {});
 }
-//@ chunk-fggt3ccb.js:784-1076 fingerprint = NEW_TERMS_ASCII (0.508)
+//@ chunk-fggt3ccb.js:784-1076 fingerprint (2.1.88 match: NEW_TERMS_ASCII, 0.508)
 var NEW_TERMS_ASCII_ART = ` _____________
  |          \\  \\
  | NEW TERMS \\__\\
@@ -72,7 +72,7 @@ var ACCEPT_OPT_OUT_OPTION = {
   label: "Accept terms \xB7 Help improve our AI models: OFF",
   value: "accept_opt_out",
 };
-//@ chunk-fggt3ccb.js:1076-2606 fingerprint = GracePeriodContentBody (0.417)
+//@ chunk-fggt3ccb.js:1076-2606 fingerprint (2.1.88 match: GracePeriodContentBody, 0.417)
 function GracePeriodContentBody() {
   let $ = useMemoCache(9);
   let t0;
@@ -203,7 +203,7 @@ function GracePeriodContentBody() {
   } else t8 = $[8];
   return t8;
 }
-//@ chunk-fggt3ccb.js:2606-3961 fingerprint = PostGracePeriodContentBody (0.462)
+//@ chunk-fggt3ccb.js:2606-3961 fingerprint (2.1.88 match: PostGracePeriodContentBody, 0.462)
 function PostGracePeriodContentBody() {
   let $ = useMemoCache(7);
   let t0;
@@ -304,7 +304,7 @@ function PostGracePeriodContentBody() {
   } else t6 = $[6];
   return t6;
 }
-//@ chunk-fggt3ccb.js:3961-8183 facade-exports = GroveDialog (0.687)
+//@ chunk-fggt3ccb.js:3961-8183 facade-exports (2.1.88 match: GroveDialog, 0.687)
 /**
  * 条款更新对话框：宽限期内可接受新条款、选择是否允许用于训练（accept_opt_in/opt_out），宽限期后必须选择；记录 tengu_grove_policy_*。
  */
@@ -656,7 +656,7 @@ function GroveDialog(props) {
   } else t14 = $[51];
   return t14;
 }
-//@ chunk-fggt3ccb.js:8183-10093 facade-exports = PrivacySettingsDialog (0.431)
+//@ chunk-fggt3ccb.js:8183-10093 facade-exports (2.1.88 match: PrivacySettingsDialog, 0.431)
 function PrivacySettingsDialog(props) {
   let $ = useMemoCache(27);
   let { settings, domainExcluded, lockedByClaudeScience, onDone } = props;
@@ -839,7 +839,7 @@ function PrivacySettingsDialog(props) {
 function getNudgeOpenedAtMs() {
   return Date.now();
 }
-//@ chunk-18hwfzwa.js:1098382-1100666 callgraph-witnessed = _temp (0.203)
+//@ chunk-18hwfzwa.js:1098382-1100666 callgraph-witnessed (2.1.88 match: _temp, 0.203)
 /**
  * 询问是否把 auto 模式设为默认权限模式的对话框；上报 tengu_auto_default_nudge_shown，带输入防抖拒绝。
  */

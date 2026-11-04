@@ -26,7 +26,7 @@ import { permissionUpdateSchema } from "../utils/hooks/hookSpecificOutput.js";
 import { getIsNonInteractiveSession, getHasStreamingInput } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:318000-324224 fingerprint = syncHookResponseSchema (0.714)
+//@ chunk-s61vbvea.js:318000-324224 fingerprint (2.1.88 match: syncHookResponseSchema, 0.714)
 /**
  * Hook 输出 JSON 的 schema：权限决定、同步输出（continue、decision、systemMessage、各事件的 hookSpecificOutput 等）与包含异步形式的整体输出。
  */
@@ -211,15 +211,15 @@ deferInit("chunk-s61vbvea.js:318000", () => {
     return union([asyncHookResponseSchema, syncHookJSONOutputSchema()]);
   });
 });
-//@ chunk-s61vbvea.js:324224-324276 shared-adjacent = isSyncHookJSONOutput (1)
+//@ chunk-s61vbvea.js:324224-324276 shared-adjacent (2.1.88 match: isSyncHookJSONOutput, 1)
 function isSyncHookJSONOutput(json) {
   return !("async" in json && json.async === true);
 }
-//@ chunk-s61vbvea.js:324276-324324 shared-adjacent = isSyncHookJSONOutput (1)
+//@ chunk-s61vbvea.js:324276-324324 shared-adjacent (2.1.88 match: isSyncHookJSONOutput, 1)
 function isSyncHookJSONOutput_2(json) {
   return "async" in json && json.async === true;
 }
-//@ chunk-e6aww6q8.js:3464093-3464175 callgraph-fingerprint = isAsyncHookJSONOutput (0.389)
+//@ chunk-e6aww6q8.js:3464093-3464175 callgraph-fingerprint (2.1.88 match: isAsyncHookJSONOutput, 0.389)
 function isAsyncHookJSONOutput(hook, alreadyAsync) {
   return (
     (hook.async === true ||

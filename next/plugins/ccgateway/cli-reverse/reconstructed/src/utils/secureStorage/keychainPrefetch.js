@@ -30,7 +30,7 @@ function getLastKnown() {
 function setLastKnown(lastKnown) {
   getKeychainCacheState().lastKnown = lastKnown;
 }
-//@ chunk-9np9x1zv.js:488-746 fingerprint = spawnSecurity (0.914)
+//@ chunk-9np9x1zv.js:488-746 fingerprint (2.1.88 match: spawnSecurity, 0.914)
 /**
  * 用 `security find-generic-password -a <用户> -w -s <服务名>` 预取钥匙串项；超时返回 null。
  */

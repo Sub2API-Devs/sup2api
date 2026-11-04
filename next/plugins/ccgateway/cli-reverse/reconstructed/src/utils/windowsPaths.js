@@ -17,7 +17,7 @@ import { env } from "./env.js";
 import { findExecutableWindows } from "./findExecutableWindows.js";
 import { APPLY_SECCOMP_FD } from "./sandbox/linuxSandboxExec.js";
 
-//@ chunk-648vry02.js:1139-1300 fingerprint = setShellIfWindows (0.74)
+//@ chunk-648vry02.js:1139-1300 fingerprint (2.1.88 match: setShellIfWindows, 0.74)
 /**
  * Windows 下把 SHELL 设为 Git Bash 路径。
  */
@@ -36,7 +36,7 @@ function getGitBashPathCached() {
   if (paths.gitBashPath === undefined) paths.gitBashPath = findGitBashPath();
   return paths.gitBashPath;
 }
-//@ chunk-648vry02.js:1392-2015 fingerprint = findGitBashPath (0.392)
+//@ chunk-648vry02.js:1392-2015 fingerprint (2.1.88 match: findGitBashPath, 0.392)
 /**
  * Windows 上定位 Git Bash（CLAUDE_CODE_GIT_BASH_PATH，否则由 git.exe 位置推导），Bash 工具依赖它。
  */
@@ -65,7 +65,7 @@ function findGitBashPath() {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3096725-3096813 fingerprint = checkPathExists (0.784)
+//@ chunk-e6aww6q8.js:3096725-3096813 fingerprint (2.1.88 match: checkPathExists, 0.784)
 function checkPathExists(stdin, usePipeMode, outputMode, stdinFd) {
   let stdioConfig = usePipeMode ? [stdin, "pipe", "pipe"] : [stdin, outputMode, outputMode];
   if (stdinFd !== undefined) stdioConfig[APPLY_SECCOMP_FD] = stdinFd;

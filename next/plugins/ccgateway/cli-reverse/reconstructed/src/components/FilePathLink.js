@@ -21,7 +21,7 @@ import { truncatePathMiddle } from "../utils/format.js";
 import { toSafeFileUrl } from "../services/mcp/xaa.js";
 import { hasControlChars } from "../services/policyLimits/complianceTaints.js";
 
-//@ chunk-qwh6zcf0.js:8508-8990 callgraph-witnessed = FilePathLink (0.654)
+//@ chunk-qwh6zcf0.js:8508-8990 callgraph-witnessed (2.1.88 match: FilePathLink, 0.654)
 function FilePathLink(props) {
   let $ = useMemoCache(9);
   let { filePath, children } = props;

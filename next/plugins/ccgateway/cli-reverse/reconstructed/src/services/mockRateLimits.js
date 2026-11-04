@@ -15,7 +15,7 @@ import {
 } from "./claudeAiLimits.js";
 import { MOCK_UTILIZATION_STEPS, roundUtilization } from "./claudeGateway/mockRateLimits.js";
 
-//@ chunk-aepeg2w5.js:279587-288283 fingerprint = setMockRateLimitScenario (0.609)
+//@ chunk-aepeg2w5.js:279587-288283 fingerprint (2.1.88 match: setMockRateLimitScenario, 0.609)
 /**
  * 限额模拟状态类：enabled、伪造头、超限列表、无头 429 文案、订阅类型/档位、快速模式限额、overage、试用、宽限、计费权限等，含 reset 与场景设置方法。旧版名 setMockRateLimitScenario 指方法而非类。
  */
@@ -356,7 +356,7 @@ class MockRateLimitState {
     return headersToSend;
   }
 }
-//@ chunk-w5ndchqs.js:48835-48918 fingerprint = applyMockHeaders (1)
+//@ chunk-w5ndchqs.js:48835-48918 fingerprint (2.1.88 match: applyMockHeaders, 1)
 /**
  * 从（模拟或真实）响应头计算额度并构造被拒状态。
  */
@@ -364,7 +364,7 @@ function applyMockHeaders(headers) {
   let mockHeaders = maybeMockRateLimitHeaders(headers.headers ?? new globalThis.Headers());
   return buildRejectedLimits(refreshLimitsFromHeaders(mockHeaders, false), headers);
 }
-//@ chunk-zv6whf9m.js:16736-16932 fingerprint = setMockHeader (0.357)
+//@ chunk-zv6whf9m.js:16736-16932 fingerprint (2.1.88 match: setMockHeader, 0.357)
 /**
  * 限额类型归类：five_hour→session、seven_day→weekly、模型类周限额→model。旧版名 setMockHeader 为错配。
  */
@@ -382,7 +382,7 @@ function getLimitScopeKind(rateLimitType) {
       return;
   }
 }
-//@ chunk-1ny7cxrt.js:1451847-1452744 fingerprint = updateRepresentativeClaim (0.494)
+//@ chunk-1ny7cxrt.js:1451847-1452744 fingerprint (2.1.88 match: updateRepresentativeClaim, 0.494)
 /**
  * 按模拟的 overage 用量生成 unified-status/reset/overage 利用率与阈值头。旧版名 updateRepresentativeClaim 不准确。
  */

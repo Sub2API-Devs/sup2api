@@ -1056,7 +1056,7 @@ function checkPathSegmentWhitespace(path, label) {
 //@ chunk-qchp9vrd.js:170327-170415 placement
 var UNIX_TEMP_DIRS = ["/tmp", "/var/tmp", "/dev/shm", "/run/shm"];
 var MACOS_PRIVATE_TEMP_DIRS = ["/private/tmp", "/private/var/tmp"];
-//@ chunk-qchp9vrd.js:170415-170515 placement = getReservedShortcuts (1)
+//@ chunk-qchp9vrd.js:170415-170515 placement (2.1.88 match: getReservedShortcuts, 1)
 function getTempDirs() {
   switch (getPlatform()) {
     case "windows":

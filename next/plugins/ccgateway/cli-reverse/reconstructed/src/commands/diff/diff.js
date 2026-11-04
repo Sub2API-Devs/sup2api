@@ -22,7 +22,7 @@ var toggleDiffPanel = async (onDone, context) => {
   });
   return null;
 };
-//@ chunk-19av2vh6.js:4091-4208 fingerprint = call (0.615)
+//@ chunk-19av2vh6.js:4091-4208 fingerprint (2.1.88 match: call, 0.615)
 var openDiffDialog = async (onDone, context) => {
   let { DiffDialog } = await import("../../components/diff/DiffDialog.js");
   return jsxProd_default(DiffDialog, {

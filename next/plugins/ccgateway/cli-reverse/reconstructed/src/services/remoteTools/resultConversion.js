@@ -156,7 +156,7 @@ function capRemoteContent(content) {
 function isPlaceholderTextBlock(block) {
   return block?.type === "text" && block.text.startsWith(PDF_READ_MARKER_PREFIX);
 }
-//@ chunk-qmsrnapp.js:42111-42173 placement = base64URLEncode (1)
+//@ chunk-qmsrnapp.js:42111-42173 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   return hasBufferPrefix(Buffer.from(buffer.slice(0, 8), "base64"));
 }
@@ -704,7 +704,7 @@ function isRenderablePatchList(structuredPatch) {
     flattened.reduce((acc, line) => acc + line.length, 0) <= REMOTE_RESULT_TEXT_CAP
   );
 }
-//@ chunk-qmsrnapp.js:49814-50221 placement = computeGutterWidth (0.842)
+//@ chunk-qmsrnapp.js:49814-50221 placement (2.1.88 match: computeGutterWidth, 0.842)
 function isValidPatchHunk(patch) {
   if (typeof patch !== "object" || patch === null) return false;
   let { oldStart, oldLines, newStart, newLines, lines } = patch;

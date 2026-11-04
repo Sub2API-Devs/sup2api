@@ -51,7 +51,7 @@ deferInit("chunk-e6aww6q8.js:2035804", () => {
     isC4EUpsellCommandEnabled: isEnterpriseUpsellEnabled,
   });
 });
-//@ chunk-e6aww6q8.js:2035841-2035964 placement = hasAnthropicApiKeyAuth (1)
+//@ chunk-e6aww6q8.js:2035841-2035964 placement (2.1.88 match: hasAnthropicApiKeyAuth, 1)
 /**
  * isSignedOut：无 OAuth 也无 API key。
  */
@@ -163,7 +163,7 @@ deferInit("chunk-e6aww6q8.js:2036753", () => {
     }),
   ];
 });
-//@ chunk-e6aww6q8.js:2037425-2037476 placement = default (1)
+//@ chunk-e6aww6q8.js:2037425-2037476 placement (2.1.88 match: default, 1)
 var stubC4EUpsellCommand = {
   isEnabled: () => false,
   isHidden: true,

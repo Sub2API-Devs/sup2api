@@ -61,7 +61,7 @@ import { MCPSettings } from "../../components/mcp/MCPSettings.js";
 import { MCPReconnect } from "../../components/mcp/MCPReconnect.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5bdzenzx.js:16499-16538 fingerprint = _temp2 (1)
+//@ chunk-5bdzenzx.js:16499-16538 fingerprint (2.1.88 match: _temp2, 1)
 function isIdeClient(c) {
   return c.name === "ide";
 }
@@ -90,7 +90,7 @@ deferInit("chunk-cpqpnzp4.js:37993", () => {
 deferInit("chunk-cpqpnzp4.js:40831", () => {
   init_react_production();
 });
-//@ chunk-cpqpnzp4.js:40835-40874 sole-consumer = _temp2 (1)
+//@ chunk-cpqpnzp4.js:40835-40874 sole-consumer (2.1.88 match: _temp2, 1)
 function isNonIdeClient(c) {
   return c.name !== "ide";
 }
@@ -282,11 +282,11 @@ function toToolOption(server, tool) {
     dimDescription: true,
   };
 }
-//@ chunk-cpqpnzp4.js:43482-43520 sole-consumer = _temp (1)
+//@ chunk-cpqpnzp4.js:43482-43520 sole-consumer (2.1.88 match: _temp, 1)
 function selectMcpClients(s) {
   return s.mcp.clients;
 }
-//@ chunk-cpqpnzp4.js:43520-43557 sole-consumer = _temp2 (1)
+//@ chunk-cpqpnzp4.js:43520-43557 sole-consumer (2.1.88 match: _temp2, 1)
 function isNonIdeClient_2(c) {
   return c.name !== "ide";
 }
@@ -298,7 +298,7 @@ function needsApproval(tool) {
 function isFulfilled(result) {
   return result.status === "fulfilled";
 }
-//@ chunk-cpqpnzp4.js:43652-45152 fingerprint = MCPToggle (0.724)
+//@ chunk-cpqpnzp4.js:43652-45152 fingerprint (2.1.88 match: MCPToggle, 0.724)
 function MCPToggle(props) {
   let $ = useMemoCache(8);
   let { action, target, onComplete } = props;
@@ -438,7 +438,7 @@ async function requestMcpSettingsFromHost(onDone, context) {
 function sanitizeOnComplete(onDone) {
   return (name, value) => onDone(typeof name === "string" ? sanitizeTelemetryString(name) : name, value);
 }
-//@ chunk-cpqpnzp4.js:45845-46284 fingerprint = call (0.769)
+//@ chunk-cpqpnzp4.js:45845-46284 fingerprint (2.1.88 match: call, 0.769)
 /**
  * /mcp 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

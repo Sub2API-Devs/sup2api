@@ -16,7 +16,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { collectAncestorTaskIds } from "../components/CoordinatorAgentStatus.js";
 import { isIdleCompletedSubagent } from "../tasks/LocalMainSessionTask.js";
 
-//@ chunk-6vnxsn99.js:70338-70426 fingerprint = isLocalAgent (1)
+//@ chunk-6vnxsn99.js:70338-70426 fingerprint (2.1.88 match: isLocalAgent, 1)
 /**
  * 任务对象是否为本地子代理任务（type === 'local_agent'）。
  */
@@ -60,11 +60,11 @@ function getViewedTranscriptState({ viewedTask, transcript, mainIsBusy, mainConv
 }
 //@ chunk-e6aww6q8.js:4005336-4005350 sole-consumer
 var TEAMMATE_EVICT_DELAY_MS = 30000;
-//@ chunk-e6aww6q8.js:4005350-4005439 sole-consumer = isLocalAgent (1)
+//@ chunk-e6aww6q8.js:4005350-4005439 sole-consumer (2.1.88 match: isLocalAgent, 1)
 function isLocalAgent_2(task) {
   return typeof task === "object" && task !== null && "type" in task && task.type === "local_agent";
 }
-//@ chunk-e6aww6q8.js:4005439-4005562 sole-consumer = isInProcessTeammateTask (0.785)
+//@ chunk-e6aww6q8.js:4005439-4005562 sole-consumer (2.1.88 match: isInProcessTeammateTask, 0.785)
 /**
  * 是否是代理类任务（local_agent 或 in_process_teammate）。
  */
@@ -93,7 +93,7 @@ function markTaskForEviction(task) {
         : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4005758-4006270 fingerprint = enterTeammateView (1)
+//@ chunk-e6aww6q8.js:4005758-4006270 fingerprint (2.1.88 match: enterTeammateView, 1)
 /**
  * 切换到查看某个队友/子代理的转录视图，打 tengu_transcript_view_enter。
  */
@@ -135,7 +135,7 @@ function enterTeammateView(taskId, setAppState) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:4006270-4006551 fingerprint = exitTeammateView (0.91)
+//@ chunk-e6aww6q8.js:4006270-4006551 fingerprint (2.1.88 match: exitTeammateView, 0.91)
 /**
  * 退出队友视图回到主线程，打 tengu_transcript_view_exit。
  */
@@ -164,7 +164,7 @@ function exitTeammateView(setAppState) {
 function isTaskFailedOrStopped({ status, error }) {
   return Boolean(error) || (status !== "running" && status !== "completed" && status !== "pending");
 }
-//@ chunk-e6aww6q8.js:4006649-4006927 fingerprint = stopOrDismissAgent (0.937)
+//@ chunk-e6aww6q8.js:4006649-4006927 fingerprint (2.1.88 match: stopOrDismissAgent, 0.937)
 /**
  * 运行中则停止该代理任务，否则从列表中移除。
  */
@@ -191,7 +191,7 @@ function stopOrDismissAgent(taskId, setAppState) {
     };
   });
 }
-//@ chunk-18hwfzwa.js:812256-812465 fingerprint = release (0.781)
+//@ chunk-18hwfzwa.js:812256-812465 fingerprint (2.1.88 match: release, 0.781)
 function release(tasks, viewingAgentTaskId) {
   let ancestorIds;
   return Object.values(tasks).filter((task) => {

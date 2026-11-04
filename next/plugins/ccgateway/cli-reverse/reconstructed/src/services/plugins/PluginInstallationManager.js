@@ -46,7 +46,7 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { refreshActivePlugins } from "../../utils/plugins/refresh.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 
-//@ chunk-e6aww6q8.js:4233013-4233217 callgraph-fingerprint = updateMarketplaceStatus (0.212)
+//@ chunk-e6aww6q8.js:4233013-4233217 callgraph-fingerprint (2.1.88 match: updateMarketplaceStatus, 0.212)
 /**
  * 重置全局市场安装状态（marketplaces 状态表与进行中的刷新）。
  */
@@ -196,7 +196,7 @@ async function marketplaceLoadErrors(storageV5, retryDelays = BRIDGE_RETRY_DELAY
   }
   return recovered;
 }
-//@ chunk-18hwfzwa.js:204622-206503 fingerprint = performBackgroundPluginInstallations (0.672)
+//@ chunk-18hwfzwa.js:204622-206503 fingerprint (2.1.88 match: performBackgroundPluginInstallations, 0.672)
 /**
  * 后台插件安装：对比 settings 声明的市场与 known_marketplaces，reconcileMarketplaces 安装缺失/变化的市场，更新全局市场安装状态，必要时刷新插件；记 tengu_marketplace_background_install。
  */

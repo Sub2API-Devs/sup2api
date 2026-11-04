@@ -206,7 +206,7 @@ function getLoadedMTLSPaths() {
 function getMTLSConfig() {
   return currentMtlsState().config();
 }
-//@ chunk-hq88884p.js:57439-57991 fingerprint = getMTLSConfig (0.652)
+//@ chunk-hq88884p.js:57439-57991 fingerprint (2.1.88 match: getMTLSConfig, 0.652)
 /**
  * mTLS 配置：CLAUDE_CODE_CLIENT_CERT / CLAUDE_CODE_CLIENT_KEY 指定 PEM 文件路径（按路径缓存内容），CLAUDE_CODE_CLIENT_KEY_PASSPHRASE 为私钥口令。
  */
@@ -235,7 +235,7 @@ function getMTLSConfig_2(state) {
   if (Object.keys(config).length === 0) return;
   return config;
 }
-//@ chunk-hq88884p.js:57991-58153 facade-exports = getProxyUrl (0.786)
+//@ chunk-hq88884p.js:57991-58153 facade-exports (2.1.88 match: getProxyUrl, 0.786)
 /**
  * 从 env 取代理 URL（https_proxy/HTTPS_PROXY/http_proxy/HTTP_PROXY）。
  */
@@ -306,7 +306,7 @@ class TrackedHttpsAgent extends Agent {
     return fingerprint === undefined ? baseName : `${baseName}:${fingerprint}`;
   }
 }
-//@ chunk-hq88884p.js:58952-59363 facade-exports = getMTLSAgent (0.459)
+//@ chunk-hq88884p.js:58952-59363 facade-exports (2.1.88 match: getMTLSAgent, 0.459)
 /**
  * 按目标（customer/strict）创建带客户端证书和额外 CA 的 https.Agent，缓存复用。
  */
@@ -360,7 +360,7 @@ function createOneOffHttpsAgent() {
     keepAlive: false,
   });
 }
-//@ chunk-hq88884p.js:59444-59527 facade-exports = getWebSocketTLSOptions (1)
+//@ chunk-hq88884p.js:59444-59527 facade-exports (2.1.88 match: getWebSocketTLSOptions, 1)
 function getWebSocketTLSOptions(url) {
   let mtlsConfig = getMTLSConfig();
   let caCerts = caListBehindProxy(anthropicHostOf(url));
@@ -372,7 +372,7 @@ function getWebSocketTLSOptions(url) {
     }),
   };
 }
-//@ chunk-hq88884p.js:59527-59618 facade-exports = getTLSFetchOptions (0.32)
+//@ chunk-hq88884p.js:59527-59618 facade-exports (2.1.88 match: getTLSFetchOptions, 0.32)
 /**
  * fetch 用 TLS 选项（cert/key/ca），给 Bun fetch 的 tls 参数。
  */
@@ -416,7 +416,7 @@ function getTLSFetchSession(origin, requestOptions) {
 function clearMTLSCache() {
   clearMTLSCache_2(currentMtlsState());
 }
-//@ chunk-hq88884p.js:59914-60095 fingerprint = clearMTLSCache (0.638)
+//@ chunk-hq88884p.js:59914-60095 fingerprint (2.1.88 match: clearMTLSCache, 0.638)
 function clearMTLSCache_2(state) {
   state.config.cache.clear?.();
   for (let [cachedKey, { config, agent }] of state.agents)
@@ -426,7 +426,7 @@ function clearMTLSCache_2(state) {
     }
   logForDebugging("Cleared mTLS configuration cache");
 }
-//@ chunk-hq88884p.js:60095-60237 facade-exports = configureGlobalMTLS (1)
+//@ chunk-hq88884p.js:60095-60237 facade-exports (2.1.88 match: configureGlobalMTLS, 1)
 /**
  * 启动时配置全局 mTLS；检测到 NODE_EXTRA_CA_CERTS 时记日志（运行时自动追加到内置 CA）。
  */
@@ -475,7 +475,7 @@ deferInit("chunk-1ny7cxrt.js:1325162", () => {
     }
   };
 });
-//@ chunk-1ny7cxrt.js:1325530-1325607 fingerprint = getWebSocketTLSOptions (1)
+//@ chunk-1ny7cxrt.js:1325530-1325607 fingerprint (2.1.88 match: getWebSocketTLSOptions, 1)
 function getWebSocketTLSOptions_2(agentOptions, caCertPem) {
   let connector = new SsrfGuardedConnector(agentOptions);
   if (caCertPem)

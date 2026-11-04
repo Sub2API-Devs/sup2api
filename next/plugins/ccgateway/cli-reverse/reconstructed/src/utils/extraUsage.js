@@ -15,7 +15,7 @@ import { supportsFastMode } from "./fastMode.js";
 import { usageCreditsBillingState } from "./planTiers.js";
 import { has1mSuffix_2 } from "./model/contextWindow1m.js";
 
-//@ chunk-d1cgs5na.js:1188-1502 fingerprint = isBilledAsExtraUsage (0.61)
+//@ chunk-d1cgs5na.js:1188-1502 fingerprint (2.1.88 match: isBilledAsExtraUsage, 0.61)
 /**
  * 订阅用户某次请求是否按额外用量（extra usage）计费：fast 模式、模型不在计划内，或 Opus/Sonnet 4.6 长上下文等情况。
  */

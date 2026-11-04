@@ -38,7 +38,7 @@ import { truncateToLength } from "../utils/stringUtils.js";
 import { OPENED } from "../tools/ArtifactTool/artifactResumeCarry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3xdfvx0n.js:13943-13984 placement = _temp (1)
+//@ chunk-3xdfvx0n.js:13943-13984 placement (2.1.88 match: _temp, 1)
 /**
  * 导出函数 `isResultEvent`：参数 r，返回 r.type === "result"。
  */

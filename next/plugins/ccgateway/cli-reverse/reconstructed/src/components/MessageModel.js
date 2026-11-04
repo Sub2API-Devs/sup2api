@@ -14,7 +14,7 @@ import { bunStringWidth } from "../ink/stringWidth.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 
-//@ chunk-ag5x7vhf.js:139092-139447 fingerprint = MessageModel (1)
+//@ chunk-ag5x7vhf.js:139092-139447 fingerprint (2.1.88 match: MessageModel, 1)
 function MessageModel(props) {
   let $ = useMemoCache(5);
   let { message, isTranscriptMode } = props;

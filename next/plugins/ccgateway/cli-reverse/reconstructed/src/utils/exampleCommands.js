@@ -33,7 +33,7 @@ var NON_CORE_FILE_PATTERNS = [
 function isCoreFile(path) {
   return !NON_CORE_FILE_PATTERNS.some((pattern) => pattern.test(path));
 }
-//@ chunk-3wek6r2k.js:69830-70192 callgraph-fingerprint = pickDiverseCoreFiles (1)
+//@ chunk-3wek6r2k.js:69830-70192 callgraph-fingerprint (2.1.88 match: pickDiverseCoreFiles, 1)
 function pickDiverseCoreFiles(sortedPaths, want) {
   let picked = [];
   let seenBasenames = new Set();
@@ -53,7 +53,7 @@ function pickDiverseCoreFiles(sortedPaths, want) {
     }
   return picked.length >= want ? picked : [];
 }
-//@ chunk-3wek6r2k.js:70192-70782 fingerprint = getFrequentlyModifiedFiles (0.864)
+//@ chunk-3wek6r2k.js:70192-70782 fingerprint (2.1.88 match: getFrequentlyModifiedFiles, 0.864)
 /**
  * 用 git log 找近期经常修改的文件，供欢迎屏生成示例命令。
  */
@@ -96,7 +96,7 @@ async function getFrequentlyModifiedFiles() {
 }
 //@ chunk-3wek6r2k.js:70782-70799 layout
 var ONE_WEEK_MS = 604800000;
-//@ chunk-3wek6r2k.js:70799-71114 fingerprint = getExampleCommandFromCache (0.987)
+//@ chunk-3wek6r2k.js:70799-71114 fingerprint (2.1.88 match: getExampleCommandFromCache, 0.987)
 /**
  * 从缓存的常改文件中挑一个，生成示例命令文本（如“fix lint errors in <file>”）。
  */
@@ -116,7 +116,7 @@ function getExampleCommandFromCache(sessionId) {
   ];
   return `Try "${commands[(hash >>> 8) % commands.length]}"`;
 }
-//@ chunk-3wek6r2k.js:71114-71354 fingerprint = refreshExampleCommands (1)
+//@ chunk-3wek6r2k.js:71114-71354 fingerprint (2.1.88 match: refreshExampleCommands, 1)
 async function refreshExampleCommands(frequentFiles) {
   let projectConfig = getCurrentProjectConfig();
   let lastGenerated = projectConfig.exampleFilesGeneratedAt ?? 0;
@@ -133,7 +133,7 @@ async function refreshExampleCommands(frequentFiles) {
       );
     });
 }
-//@ chunk-awy329vy.js:4723-4790 fingerprint = countAndSortItems (0.712)
+//@ chunk-awy329vy.js:4723-4790 fingerprint (2.1.88 match: countAndSortItems, 0.712)
 function countAndSortItems(items) {
   return items.toString(16).toUpperCase().padStart(4, "0");
 }

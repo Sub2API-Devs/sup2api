@@ -37,7 +37,7 @@ function isEnabled() {
     return false;
   }
 }
-//@ chunk-53mky9yr.js:3799-4082 fingerprint = bridge (0.769)
+//@ chunk-53mky9yr.js:3799-4082 fingerprint (2.1.88 match: bridge, 0.769)
 /**
  * /remote-control 命令对象（local-jsx）；描述：{return Wc()?"Disconnect Remote Control":"Control this session from your phone or claude.ai/code"}；别名 ["rc"]；isEnabled: e；isHidden: {return!wH()}；实现 chunk-k7ve8htw.js 的 Br。
  */

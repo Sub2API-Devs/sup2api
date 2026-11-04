@@ -38,7 +38,7 @@ var makeRows = (rows) => ({
 var ensureTrailingNewline = (text) => (text === "" || text.endsWith(NEWLINE_STR) ? text : text + NEWLINE_STR);
 var rowsOf = (rows) => (rows === "" ? [] : [makeRows(rows)]);
 var isNonBlankLine = (line) => stripAnsi(line).trim() !== "";
-//@ chunk-wj577vf9.js:7772-7876 placement = styleBorderLine (0.66)
+//@ chunk-wj577vf9.js:7772-7876 placement (2.1.88 match: styleBorderLine, 0.66)
 function styleQuotedPreview(text) {
   let bar = sequential.dim(VERTICAL_LEFT_BAR_GLYPH);
   return makeRows(

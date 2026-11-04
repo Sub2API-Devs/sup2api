@@ -22,7 +22,7 @@ import { onProcessRootHost } from "../../bootstrap/state.js";
 import { logForDebugging } from "../debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:64835-64934 placement = pluginDataDirPath (1)
+//@ chunk-aepeg2w5.js:64835-64934 placement (2.1.88 match: pluginDataDirPath, 1)
 /**
  * 是否为 {data, at:number} 形状的值（名字配错，见 lead 建议）。
  */

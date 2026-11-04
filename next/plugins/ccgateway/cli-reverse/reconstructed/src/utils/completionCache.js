@@ -29,7 +29,7 @@ import { env } from "./env.js";
 import { getLaunchCommand } from "./deepLink/registerProtocol.js";
 import { execFileNoThrow } from "./execFileNoThrow.js";
 
-//@ chunk-7p2hc4jn.js:7657-8767 callgraph-witnessed = setupShellCompletion (0.201)
+//@ chunk-7p2hc4jn.js:7657-8767 callgraph-witnessed (2.1.88 match: setupShellCompletion, 0.201)
 async function setupShellCompletion(editor, productName, label) {
   let scrollHint = sequential.dim(
     `For smoother scrolling, set "${VSCODE_SCROLL_SENSITIVITY_KEY}": ${VSCODE_RECOMMENDED_SCROLL_SENSITIVITY} in ${productName} settings.`,
@@ -81,7 +81,7 @@ async function setupShellCompletion(editor, productName, label) {
     return `${color("warning", label)(`Couldn't update ${productName} settings.json.`)}${NEWLINE}${scrollHint}${NEWLINE}`;
   }
 }
-//@ chunk-d0x4qj4e.js:416-1116 fingerprint = detectShell (1)
+//@ chunk-d0x4qj4e.js:416-1116 fingerprint (2.1.88 match: detectShell, 1)
 /**
  * 检测用户 shell（zsh/bash/fish/PowerShell）及对应补全脚本的缓存路径。
  */
@@ -129,7 +129,7 @@ function detectShell() {
 async function regenerateCompletionCache() {
   return;
 }
-//@ chunk-d0x4qj4e.js:1144-1255 fingerprint = regenerateCompletionCache (0.766)
+//@ chunk-d0x4qj4e.js:1144-1255 fingerprint (2.1.88 match: regenerateCompletionCache, 0.766)
 /**
  * 后台运行 claude completion --output 重新生成 shell 补全缓存。
  */

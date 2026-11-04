@@ -24,7 +24,7 @@ import { isHtmlCommentOnly } from "./capabilityRoster.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:67830-68237 placement = sanitizeMessageHTML (0.385)
+//@ chunk-06y4szbn.js:67830-68237 placement (2.1.88 match: sanitizeMessageHTML, 0.385)
 /**
  * HTML 文档前缀与 meta 常量。旧版名 sanitizeMessageHTML 为错配；疑似归错文件（HTML 预览/发布）。
  */

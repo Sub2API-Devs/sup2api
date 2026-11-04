@@ -17,7 +17,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:104523-105017 fingerprint = UserBashInputMessage (0.791)
+//@ chunk-ah34pb7m.js:104523-105017 fingerprint (2.1.88 match: UserBashInputMessage, 0.791)
 function UserBashInputMessage(props) {
   let $ = useMemoCache(8);
   let { param, addMargin } = props;

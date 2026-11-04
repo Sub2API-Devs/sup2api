@@ -11,7 +11,7 @@
 import { getAgentColorMap } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-g86zfxfd.js:228-516 fingerprint = AGENT_COLOR_TO_THEME_COLOR (1)
+//@ chunk-g86zfxfd.js:228-516 fingerprint (2.1.88 match: AGENT_COLOR_TO_THEME_COLOR, 1)
 /**
  * 代理颜色名到 *_FOR_SUBAGENTS_ONLY 主题色的映射及颜色名列表。
  */
@@ -44,7 +44,7 @@ function isAgentColorName(color) {
 function getEffectiveAgentColor(colorInfo) {
   return colorInfo.userOverride ?? colorInfo.agentDefinitionColor;
 }
-//@ chunk-g86zfxfd.js:627-735 fingerprint = getAgentColor (1)
+//@ chunk-g86zfxfd.js:627-735 fingerprint (2.1.88 match: getAgentColor, 1)
 /**
  * 从全局颜色表取代理类型的主题色（general-purpose 无色）。
  */

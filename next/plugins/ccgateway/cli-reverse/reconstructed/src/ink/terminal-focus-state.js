@@ -10,7 +10,7 @@
  */
 import { uiSignals } from "../state/uiSignals.js";
 
-//@ chunk-fpjsca9n.js:441-492 fingerprint = getTerminalFocused (0.788)
+//@ chunk-fpjsca9n.js:441-492 fingerprint (2.1.88 match: getTerminalFocused, 0.788)
 /**
  * 终端当前是否有焦点（未收到 blurred 就视为有焦点）。
  */

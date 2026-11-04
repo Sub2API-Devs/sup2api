@@ -11,7 +11,7 @@
 import { mcpInfoFromString, getMcpPrefix } from "../../services/mcp/mcpStringUtils.js";
 import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 
-//@ chunk-6mwt0myy.js:18470-18527 callgraph-fingerprint = getMcpServerBuckets (0.619)
+//@ chunk-6mwt0myy.js:18470-18527 callgraph-fingerprint (2.1.88 match: getMcpServerBuckets, 0.619)
 function getPrefixServerKey(tools) {
   return mcpInfoFromString(`${getMcpPrefix(tools)}x`)?.serverName ?? normalizeNameForMCP(tools);
 }

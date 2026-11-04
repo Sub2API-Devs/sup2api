@@ -64,7 +64,7 @@ import { refreshSkillsSyncVeto } from "../claudeAiSync/skillsSync.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1rckdhfn.js:1589-1626 fingerprint = skillChangeDetector (0.599)
+//@ chunk-1rckdhfn.js:1589-1626 fingerprint (2.1.88 match: skillChangeDetector, 0.599)
 /**
  * 测试用：重置 skill 变更检测器。
  */
@@ -455,7 +455,7 @@ var sharedSkillChangeDetector; // deferred: uses createSkillChangeDetector of it
 deferInit("chunk-2njac0sx.js:5402", () => {
   sharedSkillChangeDetector = createSkillChangeDetector();
 });
-//@ chunk-2njac0sx.js:5415-6543 fingerprint = getWatchablePaths (0.908)
+//@ chunk-2njac0sx.js:5415-6543 fingerprint (2.1.88 match: getWatchablePaths, 0.908)
 /**
  * 列出 skill 热加载要监听的目录：用户 skills（含 synced）、用户/项目 commands、项目 skills（git worktree 时回退主仓库）、用户/项目 agents、--add-dir 的 .claude/skills；只返回存在的。
  */

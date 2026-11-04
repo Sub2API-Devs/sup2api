@@ -22,7 +22,7 @@ import { logFeatureOk } from "../analytics/featureTelemetry.js";
 import { getTipTelemetryId } from "./orgTips.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s8af6efx.js:1293-1540 fingerprint = selectTipWithLongestTimeSinceShown (0.848)
+//@ chunk-s8af6efx.js:1293-1540 fingerprint (2.1.88 match: selectTipWithLongestTimeSinceShown, 0.848)
 /**
  * 在候选提示中选“距上次显示经过会话数最多”的那条，平局按 priority 高者。
  */
@@ -39,7 +39,7 @@ function selectTipWithLongestTimeSinceShown(availableTips) {
   });
   return tipsWithSessions[0]?.tip;
 }
-//@ chunk-s8af6efx.js:1540-1708 fingerprint = getTipToShowOnSpinner (0.399)
+//@ chunk-s8af6efx.js:1540-1708 fingerprint (2.1.88 match: getTipToShowOnSpinner, 0.399)
 /**
  * spinner 上要显示的提示：spinnerTipsEnabled 为 false 时不显示；否则取 getRelevantTips 的结果按最久未显示挑一条。
  */
@@ -116,7 +116,7 @@ async function getMarketplacePluginTipToShow(ctx) {
   }
   return selectTipWithLongestTimeSinceShown(availableTips);
 }
-//@ chunk-s8af6efx.js:2727-2935 fingerprint = recordShownTip (0.479)
+//@ chunk-s8af6efx.js:2727-2935 fingerprint (2.1.88 match: recordShownTip, 0.479)
 /**
  * 记录某提示已显示（写 tipsHistory[id]=numStartups），并打 tengu_tip_shown（surface：spinner/startup）。
  */

@@ -23,7 +23,7 @@ import {
 } from "./marketplaceManager.js";
 import { omitPluginDirectoryEntries } from "./officialMarketplaceNames.js";
 
-//@ chunk-qna1q0cq.js:661-878 fingerprint = readZipCacheKnownMarketplaces (1)
+//@ chunk-qna1q0cq.js:661-878 fingerprint (2.1.88 match: readZipCacheKnownMarketplaces, 1)
 async function readZipCacheKnownMarketplaces() {
   try {
     let content = await readFile(getZipCacheKnownMarketplacesPath(), "utf-8");
@@ -53,7 +53,7 @@ async function syncMarketplaceJsonToZipCache(marketplaceName, installLocation) {
     await writeFileEnsuringDir(join(zipCachePath, relPath), content);
   }
 }
-//@ chunk-qna1q0cq.js:1038-1197 fingerprint = readMarketplaceJsonContent (1)
+//@ chunk-qna1q0cq.js:1038-1197 fingerprint (2.1.88 match: readMarketplaceJsonContent, 1)
 async function readMarketplaceJsonContent(dir) {
   let candidates = [join(dir, ".claude-plugin", "marketplace.json"), join(dir, "marketplace.json"), dir];
   for (let candidate of candidates)
@@ -62,7 +62,7 @@ async function readMarketplaceJsonContent(dir) {
     } catch {}
   return null;
 }
-//@ chunk-qna1q0cq.js:1197-1505 fingerprint = syncMarketplacesToZipCache (0.908)
+//@ chunk-qna1q0cq.js:1197-1505 fingerprint (2.1.88 match: syncMarketplacesToZipCache, 0.908)
 /**
  * zip 缓存模式下把已知市场的 marketplace.json 同步到 zip 缓存目录。
  */

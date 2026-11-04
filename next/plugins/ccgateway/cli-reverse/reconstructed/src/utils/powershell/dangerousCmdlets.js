@@ -13,7 +13,7 @@ import { CROSS_PLATFORM_CODE_EXEC } from "../permissions/dangerousPatterns.js";
 import { SHELL_PROGRAM_NAMES } from "../bash/ast.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fws4w04f.js:265-773 callgraph-fingerprint = DANGEROUS_SCRIPT_BLOCK_CMDLETS (0.58)
+//@ chunk-fws4w04f.js:265-773 callgraph-fingerprint (2.1.88 match: DANGEROUS_SCRIPT_BLOCK_CMDLETS, 0.58)
 /**
  * 危险 cmdlet 集合：按文件路径执行脚本（invoke-command/start-job…）、脚本块执行代码（含 invoke-expression、register-*event、new/enter-pssession）、加载模块（import-module/install-module…）、shell 与进程生成器（pwsh/cmd/bash/wsl/start-process/add-type/new-object）。
  */
@@ -71,7 +71,7 @@ function aliasesOf(targets) {
     .filter(([, target]) => targets.has(target.toLowerCase()))
     .map(([alias]) => alias);
 }
-//@ chunk-fws4w04f.js:867-1509 fingerprint = ARG_GATED_CMDLETS (0.671)
+//@ chunk-fws4w04f.js:867-1509 fingerprint (2.1.88 match: ARG_GATED_CMDLETS, 0.671)
 /**
  * 永不作为通配前缀建议的命令名集合：上述各类危险 cmdlet + foreach-object + 跨平台代码执行器（python/node/ruby/npx…单词项）及它们的别名。
  */
@@ -129,7 +129,7 @@ deferInit("chunk-fws4w04f.js:867", () => {
     return new Set([...core, ...aliasesOf(core)]);
   })();
 });
-//@ chunk-tr0s0d0k.js:22771-22978 fingerprint = SHELLS_AND_SPAWNERS (0.386)
+//@ chunk-tr0s0d0k.js:22771-22978 fingerprint (2.1.88 match: SHELLS_AND_SPAWNERS, 0.386)
 /**
  * 在命令文本里查找 shell 可执行名或 git `alias.*=!` 的正则（切分归属待查）。
  */

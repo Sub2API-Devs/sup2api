@@ -27,7 +27,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 function selectViewedTeammateTask(s) {
   return getViewedTeammateTask_2_2(s);
 }
-//@ chunk-18hwfzwa.js:1444303-1445186 fingerprint = TeammateViewHeader (0.454)
+//@ chunk-18hwfzwa.js:1444303-1445186 fingerprint (2.1.88 match: TeammateViewHeader, 0.454)
 function TeammateViewHeader() {
   let $ = useMemoCache(14);
   let viewedTeammate = useAppState(selectViewedTeammateTask);

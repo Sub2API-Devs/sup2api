@@ -32,7 +32,7 @@ import { collapseWhitespace } from "../../utils/stringUtils.js";
 import { describeTeammateActivity } from "./taskStatusUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fm6h4dv7.js:10887-10953 fingerprint = RainbowText (0.607)
+//@ chunk-fm6h4dv7.js:10887-10953 fingerprint (2.1.88 match: RainbowText, 0.607)
 function RainbowText(t0) {
   let wall = currentUsageCreditState();
   return wall.phase === "failed" && isSameWallReset(wall.wall, t0);
@@ -44,7 +44,7 @@ deferInit("chunk-18hwfzwa.js:692158", () => {
 });
 //@ chunk-18hwfzwa.js:692162-692172 layout
 var PROGRESS_TICK_MS = 80;
-//@ chunk-18hwfzwa.js:692172-692509 fingerprint = formatReviewStageCounts (1)
+//@ chunk-18hwfzwa.js:692172-692509 fingerprint (2.1.88 match: formatReviewStageCounts, 1)
 function formatReviewStageCounts(stage, found, verified, refuted) {
   if (!stage) return `${found} found \xB7 ${verified} verified`;
   if (stage === "synthesizing") {
@@ -91,7 +91,7 @@ function RainbowChars(props) {
   } else element = $[4];
   return element;
 }
-//@ chunk-18hwfzwa.js:692784-693241 placement = _temp2 (0.728)
+//@ chunk-18hwfzwa.js:692784-693241 placement (2.1.88 match: _temp2, 0.728)
 /**
  * 让显示计数每个 tick 最多增加 1（追赶目标值），减少或强制时直接跳到目标。
  */
@@ -140,7 +140,7 @@ function useSteppedCount(target, tick, immediate) {
   if (nextState !== steppedState) setSteppedState(nextState);
   return nextState.count;
 }
-//@ chunk-18hwfzwa.js:693241-694845 fingerprint = ReviewRainbowLine (0.769)
+//@ chunk-18hwfzwa.js:693241-694845 fingerprint (2.1.88 match: ReviewRainbowLine, 0.769)
 function ReviewRainbowLine(props) {
   let $ = useMemoCache(20);
   let { session } = props;
@@ -279,7 +279,7 @@ function ReviewRainbowLine(props) {
   } else t6 = $[19];
   return t6;
 }
-//@ chunk-18hwfzwa.js:694845-695386 fingerprint = RemoteSessionProgress (0.595)
+//@ chunk-18hwfzwa.js:694845-695386 fingerprint (2.1.88 match: RemoteSessionProgress, 0.595)
 function RemoteSessionProgress(props) {
   let $ = useMemoCache(8);
   let { session } = props;
@@ -408,7 +408,7 @@ function RemoteAgentTaskLabel(props) {
   } else labelElement = $[15];
   return labelElement;
 }
-//@ chunk-18hwfzwa.js:1429198-1429302 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:1429198-1429302 fingerprint (2.1.88 match: _temp, 1)
 /**
  * 已完成项占比（百分比），空列表返回 undefined。
  */

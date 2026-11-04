@@ -24,7 +24,7 @@ function getOauthEnvironment() {
  * OAuth 配置文件名后缀列表。
  */
 var OAUTH_GLOBAL_FILE_SUFFIXES = ["", "-staging-oauth", "-local-oauth", "-custom-oauth"];
-//@ chunk-6ysndsgz.js:313-496 facade-majority = fileSuffixForOauthConfig (1)
+//@ chunk-6ysndsgz.js:313-496 facade-majority (2.1.88 match: fileSuffixForOauthConfig, 1)
 /**
  * 按环境（或 CLAUDE_CODE_CUSTOM_OAUTH_URL）返回凭证文件名后缀。
  */
@@ -51,7 +51,7 @@ function isStagingOauthConfig() {
  * 长期 OAuth token 有效期 31536000 秒（一年）。
  */
 var LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS = 31536000;
-//@ chunk-6ysndsgz.js:559-742 facade-majority = CLAUDE_AI_PROFILE_SCOPE (0.29)
+//@ chunk-6ysndsgz.js:559-742 facade-majority (2.1.88 match: CLAUDE_AI_PROFILE_SCOPE, 0.29)
 /**
  * setup-token 默认有效天数与各 scope 常量：user:inference、user:profile、user:sessions:claude_code、user:plugins、user:projects:read/write。
  */
@@ -80,7 +80,7 @@ deferInit("chunk-6ysndsgz.js:559", () => {
 function isClaudeAiScopeSet(scopes) {
   return Array.isArray(scopes) && scopes.includes(CLAUDE_AI_INFERENCE_SCOPE);
 }
-//@ chunk-6ysndsgz.js:798-908 facade-majority = CLAUDE_AI_OAUTH_SCOPES (0.556)
+//@ chunk-6ysndsgz.js:798-908 facade-majority (2.1.88 match: CLAUDE_AI_OAUTH_SCOPES, 0.556)
 /**
  * Console 登录 scope：org:create_api_key + user:profile。同语句 r 为 claude.ai 登录基础 scope。
  */
@@ -143,7 +143,7 @@ function preservableScopesFrom(scopes) {
 function firstPartyRefreshScopes(scopes) {
   return uniq([...claudeAiLoginScopes(), ...preservableScopesFrom(scopes)]);
 }
-//@ chunk-6ysndsgz.js:1233-2288 facade-majority = PROD_OAUTH_CONFIG (0.905)
+//@ chunk-6ysndsgz.js:1233-2288 facade-majority (2.1.88 match: PROD_OAUTH_CONFIG, 0.905)
 /**
  * 生产 OAuth 端点配置（api.anthropic.com、platform.claude.com、claude.com/cai/oauth/authorize、token/create_api_key/roles 等）；c9e 为 MCP 客户端元数据 URL；u 为 staging 配置（构建中为 undefined）。
  */
@@ -170,7 +170,7 @@ var PROD_OAUTH_CONFIG = {
 };
 var MCP_CLIENT_METADATA_URL = "https://claude.ai/oauth/claude-code-client-metadata";
 var STAGING_OAUTH_CONFIG = undefined;
-//@ chunk-6ysndsgz.js:2288-3353 fingerprint = getLocalOauthConfig (0.936)
+//@ chunk-6ysndsgz.js:2288-3353 fingerprint (2.1.88 match: getLocalOauthConfig, 0.936)
 /**
  * 本地开发 OAuth 配置（CLAUDE_LOCAL_OAUTH_API_BASE/APPS_BASE/CONSOLE_BASE）。
  */
@@ -200,7 +200,7 @@ function getLocalOauthConfig() {
     MCP_PROXY_PATH: "/v1/toolbox/shttp/mcp/{server_id}",
   };
 }
-//@ chunk-6ysndsgz.js:3353-3474 facade-majority = ALLOWED_OAUTH_BASE_URLS (1)
+//@ chunk-6ysndsgz.js:3353-3474 facade-majority (2.1.88 match: ALLOWED_OAUTH_BASE_URLS, 1)
 /**
  * CLAUDE_CODE_CUSTOM_OAUTH_URL 允许的基址白名单（staging 与 fedstart）。
  */
@@ -209,7 +209,7 @@ var ALLOWED_OAUTH_BASE_URLS = [
   "https://claude.fedstart.com",
   "https://claude-staging.fedstart.com",
 ];
-//@ chunk-6ysndsgz.js:3474-3571 facade-majority = getOauthConfigType (0.645)
+//@ chunk-6ysndsgz.js:3474-3571 facade-majority (2.1.88 match: getOauthConfigType, 0.645)
 /**
  * 按环境选内置 OAuth 配置。
  */
@@ -223,7 +223,7 @@ function builtInOauthConfig() {
       return PROD_OAUTH_CONFIG;
   }
 }
-//@ chunk-6ysndsgz.js:3571-4506 facade-majority = getOauthConfig (0.888)
+//@ chunk-6ysndsgz.js:3571-4506 facade-majority (2.1.88 match: getOauthConfig, 0.888)
 /**
  * 当前 OAuth 配置：内置配置，CLAUDE_CODE_CUSTOM_OAUTH_URL 在白名单内时整体替换基址，另可覆盖 client id 等。
  */

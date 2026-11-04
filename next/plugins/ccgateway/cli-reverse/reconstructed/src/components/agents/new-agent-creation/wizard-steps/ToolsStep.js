@@ -20,7 +20,7 @@ import { Text, Box } from "../../../../ink/components/Text.js";
 import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 import { ModelSelector } from "../../ModelSelector.js";
 
-//@ chunk-y6fv30yg.js:1525-2554 callgraph-fingerprint = ToolsStep (0.161)
+//@ chunk-y6fv30yg.js:1525-2554 callgraph-fingerprint (2.1.88 match: ToolsStep, 0.161)
 function ToolsStep() {
   let $ = useMemoCache(10);
   let { goBack, goToStep, updateWizardData, wizardData } = useWizard();

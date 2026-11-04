@@ -18,7 +18,7 @@ function clampScrollTop(element) {
   if (element.scrollHeight === undefined) return scrollTop;
   return Math.min(scrollTop, Math.max(0, element.scrollHeight - (element.scrollViewportHeight ?? 0)));
 }
-//@ chunk-bzr73sfg.js:187644-188315 fingerprint = HANDLER_FOR_EVENT (0.754)
+//@ chunk-bzr73sfg.js:187644-188315 fingerprint (2.1.88 match: HANDLER_FOR_EVENT, 0.754)
 /**
  * 事件类型 → 冒泡/捕获处理器属性名；RAW_MODE_HANDLER_PROPS 是需要 stdin 原始模式的处理器（键盘、粘贴、滚轮），EVENT_HANDLER_PROPS 是 reconciler 当作事件处理器存进 _eventHandlers 的全部属性。
  */

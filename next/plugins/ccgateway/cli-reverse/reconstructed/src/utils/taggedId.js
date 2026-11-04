@@ -38,7 +38,7 @@ function clippedToolName(name) {
     ? truncateCodePoints(name, MAX_WIRE_TOOL_NAME_CHARS)
     : undefined;
 }
-//@ chunk-6mwt0myy.js:819-1022 placement = countToolCallsSince (1)
+//@ chunk-6mwt0myy.js:819-1022 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(content) {
   if (!Array.isArray(content)) return content;
   let copy;
@@ -77,7 +77,7 @@ function base58Encode(n_2) {
   }
   return result.join("");
 }
-//@ chunk-6mwt0myy.js:1299-1431 fingerprint = uuidToBigInt (1)
+//@ chunk-6mwt0myy.js:1299-1431 fingerprint (2.1.88 match: uuidToBigInt, 1)
 function uuidToBigInt(uuid) {
   let hex = uuid.replaceAll("-", "");
   if (hex.length !== 32) throw Error(`Invalid UUID hex length: ${hex.length}`);

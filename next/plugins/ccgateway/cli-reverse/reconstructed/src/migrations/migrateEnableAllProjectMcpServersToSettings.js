@@ -17,7 +17,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logError } from "../utils/log.js";
 
-//@ chunk-cjydagjy.js:5288-7110 fingerprint = migrateEnableAllProjectMcpServersToSettings (0.662)
+//@ chunk-cjydagjy.js:5288-7110 fingerprint (2.1.88 match: migrateEnableAllProjectMcpServersToSettings, 0.662)
 /**
  * 迁移：项目配置里的 enableAllProjectMcpServers/enabledMcpjsonServers/disabledMcpjsonServers → .claude/settings.local.json；local 设置无效时推迟。
  */

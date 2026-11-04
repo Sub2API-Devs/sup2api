@@ -9,7 +9,7 @@
  * attribution: shared-adjacent 1, fingerprint 1, layout 1, placement 2
  */
 
-//@ chunk-74a0twcp.js:191-262 shared-adjacent = prependModeCharacterToInput (1)
+//@ chunk-74a0twcp.js:191-262 shared-adjacent (2.1.88 match: prependModeCharacterToInput, 1)
 function prependModeCharacterToInput(input, mode) {
   switch (mode) {
     case "bash":
@@ -18,12 +18,12 @@ function prependModeCharacterToInput(input, mode) {
       return input;
   }
 }
-//@ chunk-74a0twcp.js:262-326 fingerprint = getModeFromInput (1)
+//@ chunk-74a0twcp.js:262-326 fingerprint (2.1.88 match: getModeFromInput, 1)
 function getModeFromInput(input) {
   if (input.startsWith("!")) return "bash";
   return "prompt";
 }
-//@ chunk-74a0twcp.js:326-388 layout = getValueFromInput (1)
+//@ chunk-74a0twcp.js:326-388 layout (2.1.88 match: getValueFromInput, 1)
 function stripModePrefix(input) {
   if (getModeFromInput(input) === "prompt") return input;
   return input.slice(1);

@@ -13,7 +13,7 @@ import { logForDebugging } from "./debug.js";
 import { LRUCache } from "../../vendor/lru-cache/dist/esm/index.min.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-02nm3ce0.js:17038-17853 fingerprint = memoizeWithTTL (0.683)
+//@ chunk-02nm3ce0.js:17038-17853 fingerprint (2.1.88 match: memoizeWithTTL, 0.683)
 /**
  * 带 TTL 的 memoize：过期后返回旧值并后台刷新。
  */
@@ -82,7 +82,7 @@ function memoizeWithTTL(fn, ttl = 300000, shouldRefresh) {
   };
   return memoized;
 }
-//@ chunk-02nm3ce0.js:17853-18135 fingerprint = memoizeWithLRU (1)
+//@ chunk-02nm3ce0.js:17853-18135 fingerprint (2.1.88 match: memoizeWithLRU, 1)
 /**
  * 带 LRU 容量上限的 memoize。
  */

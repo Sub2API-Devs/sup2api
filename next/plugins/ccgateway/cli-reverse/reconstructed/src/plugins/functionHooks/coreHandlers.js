@@ -50,7 +50,7 @@ var makeCoreEvent = (site, run) => ({
  * 文本原样透传事件
  */
 var textPassthroughEvent = (site) => makeCoreEvent(site, TEXT_PASSTHROUGH_CORES_2[site]);
-//@ chunk-e6aww6q8.js:59263-59353 placement = toggleTeammateVisibility (0.659)
+//@ chunk-e6aww6q8.js:59263-59353 placement (2.1.88 match: toggleTeammateVisibility, 0.659)
 var defaultDescribe = (command) => ({
   description: command.description,
   argumentHint: command.argumentHint,

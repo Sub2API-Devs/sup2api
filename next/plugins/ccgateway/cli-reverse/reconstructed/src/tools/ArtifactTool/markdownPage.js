@@ -73,7 +73,7 @@ function renderMarkdownToHtml(markdown) {
     async: false,
   });
 }
-//@ chunk-8wvtd8sr.js:13248-13284 placement = applyMarkdown (1)
+//@ chunk-8wvtd8sr.js:13248-13284 placement (2.1.88 match: applyMarkdown, 1)
 function applyMarkdown(markdown) {
   return getPlainMarkedRenderer().lexer(markdown);
 }

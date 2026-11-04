@@ -366,7 +366,7 @@ function slugFromToolResultText(content) {
   let urlMatch = regExp_11.exec(cleaned)?.[1];
   return urlMatch !== undefined ? uuidSlugFromUrl(urlMatch) : null;
 }
-//@ chunk-e6aww6q8.js:1864878-1865367 placement = hasSuccessfulToolCall (0.854)
+//@ chunk-e6aww6q8.js:1864878-1865367 placement (2.1.88 match: hasSuccessfulToolCall, 0.854)
 function hasSuccessfulToolCall_3(messages) {
   let serverByToolUseId = new Map();
   for (let message of messages) {

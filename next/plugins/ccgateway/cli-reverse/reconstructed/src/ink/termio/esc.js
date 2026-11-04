@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-x6v6jz2y.js:7918-8409 fingerprint = parseEsc (0.683)
+//@ chunk-x6v6jz2y.js:7918-8409 fingerprint (2.1.88 match: parseEsc, 0.683)
 /**
  * 解析 ESC 单字符序列（RIS、DECSC/DECRC、IND、RI、NEL）为语义动作；其余返回 unknown。
  */

@@ -30,13 +30,13 @@ import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { __toESM } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-jhrww53q.js:73703-73797 fingerprint = BEDROCK_REGION_PREFIXES (0.782)
+//@ chunk-jhrww53q.js:73703-73797 fingerprint (2.1.88 match: BEDROCK_REGION_PREFIXES, 0.782)
 /**
  * ANTHROPIC_BEDROCK_REGION_PREFIX 的可选值。
  */
 var BEDROCK_REGION_PREFIXES = ["us", "eu", "apac", "jp", "au", "us-gov", "global"];
 var BEDROCK_REGION_PREFIX_ENV_VALUES = ["us", "eu", "apac", "jp", "au", "global"];
-//@ chunk-aepeg2w5.js:130738-131314 fingerprint = getBedrockInferenceProfiles (0.734)
+//@ chunk-aepeg2w5.js:130738-131314 fingerprint (2.1.88 match: getBedrockInferenceProfiles, 0.734)
 /**
  * 分页列出 SYSTEM_DEFINED 推理配置文件（ListInferenceProfilesCommand，8 秒超时）。
  */
@@ -101,7 +101,7 @@ function findFirstMatch(profiles, modelId, regionPrefix) {
   }
   return profiles.find((profile) => containsModelIdAtBoundary(profile, modelId)) ?? null;
 }
-//@ chunk-aepeg2w5.js:131582-132484 fingerprint = createBedrockClient (0.612)
+//@ chunk-aepeg2w5.js:131582-132484 fingerprint (2.1.88 match: createBedrockClient, 0.612)
 /**
  * 创建 Bedrock 控制面客户端（区域、ANTHROPIC_BEDROCK_BASE_URL 端点、代理配置；CLAUDE_CODE_SKIP_BEDROCK_AUTH 时跳过签名）。
  */
@@ -155,7 +155,7 @@ async function createBedrockClient() {
   }
   return new BedrockClient(clientConfig);
 }
-//@ chunk-aepeg2w5.js:132484-133402 fingerprint = createBedrockRuntimeClient (0.614)
+//@ chunk-aepeg2w5.js:132484-133402 fingerprint (2.1.88 match: createBedrockRuntimeClient, 0.614)
 /**
  * 创建 Bedrock Runtime 客户端（同上，bedrock-runtime 端点）。
  */
@@ -242,7 +242,7 @@ function isUnresolvedInferenceProfile(modelId) {
     typeof getInferenceProfileBackingModelCached(stripAnyVersatileSuffix(modelId)) !== "string"
   );
 }
-//@ chunk-aepeg2w5.js:133950-134434 fingerprint = getInferenceProfileBackingModel (0.641)
+//@ chunk-aepeg2w5.js:133950-134434 fingerprint (2.1.88 match: getInferenceProfileBackingModel, 0.641)
 /**
  * 查询推理配置文件背后的模型 id（GetInferenceProfileCommand，取第一个 modelArn 的最后一段）。
  */
@@ -279,14 +279,14 @@ async function getInferenceProfileBackingModel_2(profileId) {
   clearModelBetas((modelId) => stripAnyVersatileSuffix(modelId) === profileId);
   return backingModel;
 }
-//@ chunk-aepeg2w5.js:134434-134484 fingerprint = isFoundationModel (1)
+//@ chunk-aepeg2w5.js:134434-134484 fingerprint (2.1.88 match: isFoundationModel, 1)
 /**
  * 模型 id 是否 Bedrock 基础模型（anthropic. 开头）。
  */
 function isFoundationModel(modelId) {
   return modelId.startsWith("anthropic.");
 }
-//@ chunk-aepeg2w5.js:134484-134602 fingerprint = extractModelIdFromArn (1)
+//@ chunk-aepeg2w5.js:134484-134602 fingerprint (2.1.88 match: extractModelIdFromArn, 1)
 /**
  * ARN 取最后一段为模型 id，非 ARN 原样返回。
  */
@@ -296,7 +296,7 @@ function extractModelIdFromArn(modelId) {
   if (lastSlashIndex === -1) return modelId;
   return modelId.substring(lastSlashIndex + 1);
 }
-//@ chunk-aepeg2w5.js:134602-134698 fingerprint = getBedrockRegionPrefix (1)
+//@ chunk-aepeg2w5.js:134602-134698 fingerprint (2.1.88 match: getBedrockRegionPrefix, 1)
 /**
  * 模型 id 的 Bedrock 区域前缀（us/eu/… 中匹配 "<前缀>.anthropic." 的那个）。
  */

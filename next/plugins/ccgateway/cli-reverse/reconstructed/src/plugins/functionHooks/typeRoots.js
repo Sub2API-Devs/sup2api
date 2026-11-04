@@ -148,7 +148,7 @@ async function readToolTypes(replacesMcp) {
  * 类型根的入口相对路径 ./types/index.d.ts，缺少类型目录时用它拼路径。
  */
 var TYPES_ENTRY = "./types/index.d.ts";
-//@ chunk-e6aww6q8.js:4147259-4147334 placement = isRealPathWithinTeamDir (1)
+//@ chunk-e6aww6q8.js:4147259-4147334 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 var isRealPathWithinTeamDir_2 = (realCandidate) =>
   realCandidate instanceof Error && (realCandidate.cause === "ENOENT" || realCandidate.cause === "ENOTDIR");
 //@ chunk-e6aww6q8.js:4147334-4147630 placement
@@ -330,7 +330,7 @@ var createFsOps = (root, typeRoot, under) => ({
   },
   close: () => Promise.resolve(),
 });
-//@ chunk-e6aww6q8.js:4150208-4150251 placement = tryCreateExclusive (0.782)
+//@ chunk-e6aww6q8.js:4150208-4150251 placement (2.1.88 match: tryCreateExclusive, 0.782)
 function tryCreateExclusive_2(lock) {
   if (getErrnoCode(lock) !== "EEXIST") throw lock;
 }

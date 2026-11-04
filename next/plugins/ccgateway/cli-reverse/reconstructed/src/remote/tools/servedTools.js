@@ -84,7 +84,7 @@ function isViolinFinetunerEnabled() {
     return false;
   }
 }
-//@ chunk-012rhzq5.js:15767-15840 placement = _temp7 (1)
+//@ chunk-012rhzq5.js:15767-15840 placement (2.1.88 match: _temp7, 1)
 function backgroundSwitchedOffStub(
   readSettings = (path, options) => parseSettingsFileUncached(path, undefined, options),
   readPolicy = () => getSettingsForSource("policySettings"),
@@ -155,7 +155,7 @@ async function reencodeServedImage(result, limitBytes) {
 function base64ByteLength(base64) {
   return Math.floor((base64.length * 3) / 4);
 }
-//@ chunk-012rhzq5.js:16714-17006 placement = buildImageToolResult (0.905)
+//@ chunk-012rhzq5.js:16714-17006 placement (2.1.88 match: buildImageToolResult, 0.905)
 /**
  * （切分错误）从 image 块（MCP 的 data/mimeType 或 Anthropic 的 base64 source）取 {data, mediaType}。
  */
@@ -229,7 +229,7 @@ function resolveMcpResultImages(result, imagesByRef) {
 function resolveImagesDeep(value, imagesByRef) {
   return import_mapValues(value, (item) => resolveImageBlockDeep(item, imagesByRef));
 }
-//@ chunk-012rhzq5.js:17578-17873 placement = normalizeImageBlocks (0.869)
+//@ chunk-012rhzq5.js:17578-17873 placement (2.1.88 match: normalizeImageBlocks, 0.869)
 function resolveImageBlockDeep(value, imagesByRef) {
   if (Array.isArray(value)) return value.map((block) => resolveImageBlockDeep(block, imagesByRef));
   if (!isObjectLike(value)) return value;

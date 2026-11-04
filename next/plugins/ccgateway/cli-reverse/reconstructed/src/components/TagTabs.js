@@ -14,7 +14,7 @@ import { Text } from "../ink/components/Text.js";
 import { isFromPluginDirectory, displayTextOrRaw } from "../utils/plugins/pluginDisplayMetadata.js";
 import { OFFICIAL_MARKETPLACE_DISPLAY } from "../utils/plugins/officialMarketplaceNames.js";
 
-//@ chunk-gda5w2fs.js:4096-4556 fingerprint = truncateTag (0.699)
+//@ chunk-gda5w2fs.js:4096-4556 fingerprint (2.1.88 match: truncateTag, 0.699)
 function truncateTag(pattern) {
   if (!pattern.includes(pattern.charAt(0), 1))
     return (text, startIndex, endIndex) => {
@@ -38,7 +38,7 @@ function truncateTag(pattern) {
     return -1;
   };
 }
-//@ chunk-8ayegty4.js:296-631 fingerprint = TagTabs (0.381)
+//@ chunk-8ayegty4.js:296-631 fingerprint (2.1.88 match: TagTabs, 0.381)
 function TagTabs(props) {
   let $ = useMemoCache(7);
   let { children, color, textColor, padded, bold, wrap } = props;
@@ -70,7 +70,7 @@ function TagTabs(props) {
   } else element = $[6];
   return element;
 }
-//@ chunk-ca06bv0t.js:8675-9094 fingerprint = ALL_TAB_LABEL (0.497)
+//@ chunk-ca06bv0t.js:8675-9094 fingerprint (2.1.88 match: ALL_TAB_LABEL, 0.497)
 function ALL_TAB_LABEL(plugins) {
   let marketplaceCounts = new Map();
   let officialMarketplaceName;

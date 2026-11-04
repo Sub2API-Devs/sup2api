@@ -114,7 +114,7 @@ function quoteForDisplay(text) {
   }
   return `${quoted}"`;
 }
-//@ chunk-5aas12zq.js:16165-16454 placement = extractToolInputForTelemetry (0.833)
+//@ chunk-5aas12zq.js:16165-16454 placement (2.1.88 match: extractToolInputForTelemetry, 0.833)
 function extractToolInputForTelemetry(text, maxChars) {
   let truncated = stripCombiningRepeated(toWellFormedString(stripAnsiPerLine(toWellFormedString(text))));
   let out = "";
@@ -236,7 +236,7 @@ async function readPluginFileSafe(rootDir, relPath, maxBytes) {
     }),
   };
 }
-//@ chunk-5aas12zq.js:17481-17542 placement = isRealPathWithinTeamDir (1)
+//@ chunk-5aas12zq.js:17481-17542 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundErrno_4(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";

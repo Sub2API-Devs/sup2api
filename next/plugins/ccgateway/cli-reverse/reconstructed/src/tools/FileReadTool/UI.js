@@ -24,7 +24,7 @@ import { Text } from "../../ink/components/Text.js";
 import { formatFileSize } from "../../utils/format.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 
-//@ chunk-cjvab7rz.js:362-576 affinity = getAgentOutputTaskId (1)
+//@ chunk-cjvab7rz.js:362-576 affinity (2.1.88 match: getAgentOutputTaskId, 1)
 /**
  * 若路径是任务输出目录下的 <taskId>.output（id 1–20 位字母数字），返回 taskId；diskless 会话返回 null。
  */
@@ -38,7 +38,7 @@ function getAgentOutputTaskId(filePath) {
   }
   return null;
 }
-//@ chunk-cjvab7rz.js:576-720 fingerprint = userFacingName (1)
+//@ chunk-cjvab7rz.js:576-720 fingerprint (2.1.88 match: userFacingName, 1)
 /**
  * Read 的用户可见名："Reading Plan"（计划文件）、"Read agent output"（任务输出）或 "Read"。
  */
@@ -47,7 +47,7 @@ function userFacingName(input) {
   if (input?.file_path && getAgentOutputTaskId(input.file_path)) return "Read agent output";
   return "Read";
 }
-//@ chunk-cjvab7rz.js:720-825 callgraph-witnessed = getToolUseSummary (1)
+//@ chunk-cjvab7rz.js:720-825 callgraph-witnessed (2.1.88 match: getToolUseSummary, 1)
 /**
  * Read 的工具使用摘要：任务输出返回 taskId，否则显示路径。
  */
@@ -57,7 +57,7 @@ function getToolUseSummary(input) {
   if (agentTaskId) return agentTaskId;
   return getDisplayPath(input.file_path);
 }
-//@ chunk-nc07tp5s.js:7424-7805 fingerprint = renderToolUseMessage (1)
+//@ chunk-nc07tp5s.js:7424-7805 fingerprint (2.1.88 match: renderToolUseMessage, 1)
 function renderToolUseMessage({ file_path, offset, limit, pages }, { verbose }) {
   if (!file_path) return null;
   if (getAgentOutputTaskId(file_path)) return "";
@@ -90,7 +90,7 @@ function renderToolUseMessage({ file_path, offset, limit, pages }, { verbose }) 
     children,
   });
 }
-//@ chunk-nc07tp5s.js:7805-7912 callgraph-fingerprint = renderToolUseTag (1)
+//@ chunk-nc07tp5s.js:7805-7912 callgraph-fingerprint (2.1.88 match: renderToolUseTag, 1)
 function renderToolUseTag({ file_path }) {
   let agentTaskId = file_path ? getAgentOutputTaskId(file_path) : null;
   if (!agentTaskId) return null;
@@ -99,7 +99,7 @@ function renderToolUseTag({ file_path }) {
     children: [" ", agentTaskId],
   });
 }
-//@ chunk-nc07tp5s.js:7912-8904 fingerprint = renderToolResultMessage (0.679)
+//@ chunk-nc07tp5s.js:7912-8904 fingerprint (2.1.88 match: renderToolResultMessage, 0.679)
 function renderToolResultMessage(output) {
   switch (output.type) {
     case "image": {

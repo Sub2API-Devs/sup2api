@@ -14,7 +14,7 @@ import { getPlatform } from "../utils/platform.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 
-//@ chunk-g3mpnrhd.js:2183-2629 placement = initialize (0.744)
+//@ chunk-g3mpnrhd.js:2183-2629 placement (2.1.88 match: initialize, 0.744)
 /**
  * 监听单个配置文件（daemon-config）的增删改。旧版名 initialize 不准确。
  */

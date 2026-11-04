@@ -41,7 +41,7 @@ function getActionChords(action, context, bindings) {
   });
   return chords;
 }
-//@ chunk-x1mwqya5.js:18705-18873 fingerprint = getBindingDisplayText (1)
+//@ chunk-x1mwqya5.js:18705-18873 fingerprint (2.1.88 match: getBindingDisplayText, 1)
 /**
  * 该上下文里该动作的所有和弦最终都被解绑（最后一条同和弦绑定的 action 为 null）。
  */
@@ -112,7 +112,7 @@ function isOverriddenLater(bindings, index) {
   }
   return false;
 }
-//@ chunk-x1mwqya5.js:19444-19589 callgraph-fingerprint = chordExactlyMatches (1)
+//@ chunk-x1mwqya5.js:19444-19589 callgraph-fingerprint (2.1.88 match: chordExactlyMatches, 1)
 function getSingleKeyAction(keystroke, context, bindings) {
   let action = null;
   for (let binding of bindings) {
@@ -132,7 +132,7 @@ function getSingleKeyActionInContexts(keyName, contexts, bindings) {
   }
   return action;
 }
-//@ chunk-x1mwqya5.js:20573-20702 callgraph-fingerprint = keystrokesEqual (1)
+//@ chunk-x1mwqya5.js:20573-20702 callgraph-fingerprint (2.1.88 match: keystrokesEqual, 1)
 /**
  * 两个 Keystroke 是否相同（alt 与 meta 视为同一修饰键，终端无法区分）。
  */
@@ -145,7 +145,7 @@ function keystrokesEqual(a, b) {
     a.super === b.super
   );
 }
-//@ chunk-x1mwqya5.js:20702-20858 callgraph-witnessed = chordPrefixMatches (1)
+//@ chunk-x1mwqya5.js:20702-20858 callgraph-witnessed (2.1.88 match: chordPrefixMatches, 1)
 function chordPrefixMatches(prefix, binding) {
   if (prefix.length >= binding.chord.length) return false;
   for (let i = 0; i < prefix.length; i++) {
@@ -156,7 +156,7 @@ function chordPrefixMatches(prefix, binding) {
   }
   return true;
 }
-//@ chunk-x1mwqya5.js:20858-21446 fingerprint = resolveKeyWithChordState (0.887)
+//@ chunk-x1mwqya5.js:20858-21446 fingerprint (2.1.88 match: resolveKeyWithChordState, 0.887)
 /**
  * 按键解析核心：Esc 在和弦进行中取消和弦；把当前按键追加到待定和弦，在给定上下文集合里找：有更长绑定以它为前缀且其中有非 null 动作 → chord_started；精确匹配 → match（action 为 null 则 unbound）；和弦进行中却没匹配 → chord_cancelled；否则 none。同和弦多条以列表中最后一条为准。
  */
@@ -213,7 +213,7 @@ function resolveKeyWithChordState(input, key, activeContexts, pendingChord) {
     type: "none",
   };
 }
-//@ chunk-x1mwqya5.js:21446-22075 layout = resolveKeyWithChordState (0.887)
+//@ chunk-x1mwqya5.js:21446-22075 layout (2.1.88 match: resolveKeyWithChordState, 0.887)
 /**
  * 按作用域链解析：同上，但精确匹配按传入上下文顺序（焦点节点到根的 keybindingScope 链）取第一个上下文的胜者，而不是全局最后一条。
  */

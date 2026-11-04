@@ -40,7 +40,7 @@ import { tickTextAt, tickStepsFor } from "./timeFormat.js";
 import { parseNumberCell } from "./parseValues.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-3s7ydtfd.js:54522-54592 placement = AGENT_COLORS (0.646)
+//@ chunk-3s7ydtfd.js:54522-54592 placement (2.1.88 match: AGENT_COLORS, 0.646)
 /**
  * 队友颜色轮换表。
  */
@@ -770,7 +770,7 @@ function markLabel(mark) {
  * 汇总注释
  */
 var allNotes = (layout) => ("plots" in layout ? [...layout.notes, ...layout.modelOnlyNotes] : layout.notes);
-//@ chunk-3s7ydtfd.js:63137-63153 placement = SEP_WIDTH (1)
+//@ chunk-3s7ydtfd.js:63137-63153 placement (2.1.88 match: SEP_WIDTH, 1)
 var SEP = " \xB7 ";
 //@ chunk-3s7ydtfd.js:63153-63217 placement
 /**
@@ -1011,7 +1011,7 @@ var minNameWidth = (rowLayout, columns) =>
 var COLUMN_INDEXES = [0, 1, 2];
 //@ chunk-3s7ydtfd.js:64987-65041 placement
 var maxStatsLength = (rows) => Math.max(0, ...rows.map((row) => row.stats.length));
-//@ chunk-3s7ydtfd.js:65041-65247 placement = rollFrom (0.363)
+//@ chunk-3s7ydtfd.js:65041-65247 placement (2.1.88 match: rollFrom, 0.363)
 function layoutStatColumns(rows) {
   let columns = [];
   let end = -MIN_LANE_GAP;
@@ -1414,13 +1414,13 @@ var lineShape = (points, ink) => ({
   ink,
   points,
 });
-//@ chunk-3s7ydtfd.js:68999-69098 placement = diff (0.798)
+//@ chunk-3s7ydtfd.js:68999-69098 placement (2.1.88 match: diff, 0.798)
 var pointSegment = (prev, next) =>
   [prev.x - HALF, prev.x + HALF].map((x) => ({
     x: Math.max(next.left, Math.min(x, next.left + next.width - BAR_FRACTION)),
     y: prev.y,
   }));
-//@ chunk-3s7ydtfd.js:69098-69270 placement = diff (0.794)
+//@ chunk-3s7ydtfd.js:69098-69270 placement (2.1.88 match: diff, 0.794)
 var decimateLinePoints = (points) =>
   [...groupIndexBy(points, (point) => Math.floor(point.x / HALF)).values()].flatMap((points) => {
     let sorted = points.toSorted((a, b) => a.y - b.y);
@@ -1692,7 +1692,7 @@ function drawShareBar(frame, rows) {
 var fartherFrom = (target, a, b) => (Math.abs(a - target) >= Math.abs(b - target) ? a : b);
 //@ chunk-3s7ydtfd.js:72264-72311 placement
 var bucketIndex = (bucketCount) => (x) => Math.min(bucketCount - 1, Math.floor(x * bucketCount));
-//@ chunk-3s7ydtfd.js:72311-72571 placement = diff (0.806)
+//@ chunk-3s7ydtfd.js:72311-72571 placement (2.1.88 match: diff, 0.806)
 function resampleSparkline(prev, next) {
   let list = Array.from(Array(next), () => null);
   let mapped = prev.flat().map((point) => point.y);
@@ -2302,7 +2302,7 @@ var svgPoint = (x, y) => `${svgX(x)},${svgY(y)}`;
 //@ chunk-3s7ydtfd.js:78891-79008 placement
 var svgLine = (from, to, extraAttrs = "") =>
   `<line${extraAttrs} x1="${svgX(from.x)}" y1="${svgY(from.y)}" x2="${svgX(to.x)}" y2="${svgY(to.y)}" stroke="var(--quiet)"/>`;
-//@ chunk-3s7ydtfd.js:79008-79082 placement = diff (1)
+//@ chunk-3s7ydtfd.js:79008-79082 placement (2.1.88 match: diff, 1)
 function svgTickLine(line) {
   let x = line.at.x + SVG_HALF_CELL;
   return svgLine(
@@ -2324,7 +2324,7 @@ var bandPartRect = (cell, entry) => ({
   height: cell.rows - SVG_HALF * SVG_BAND_PAD,
   ink: entry.part.ink,
 });
-//@ chunk-3s7ydtfd.js:79187-79265 placement = unionRect (0.845)
+//@ chunk-3s7ydtfd.js:79187-79265 placement (2.1.88 match: unionRect, 0.845)
 var thinBarRect = (bar) => ({
   x: bar.at.x,
   y: bar.at.y + (1 - SVG_THIN_BAR) / SVG_HALF,

@@ -66,14 +66,14 @@ import { AgentProgressLine } from "../../components/AgentProgressLine.js";
 import { findToolByName, safeParseToolInput } from "../../Tool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0tkmvwy0.js:11509-11666 placement = updateAgentFile (1)
+//@ chunk-0tkmvwy0.js:11509-11666 placement (2.1.88 match: updateAgentFile, 1)
 function updateAgentFile(subagentType, activeAgents) {
   if (!subagentType || subagentType === GENERAL_PURPOSE_AGENT.agentType) return;
   if (subagentType !== COORDINATOR_WORKER_AGENT_TYPE) return subagentType;
   let found = activeAgents?.find((agent) => agent.agentType === COORDINATOR_WORKER_AGENT_TYPE);
   return found !== undefined && found.source !== "built-in" ? subagentType : undefined;
 }
-//@ chunk-0tkmvwy0.js:11666-11808 fingerprint = userFacingName (0.557)
+//@ chunk-0tkmvwy0.js:11666-11808 fingerprint (2.1.88 match: userFacingName, 0.557)
 /**
  * Agent 工具的 userFacingName：web-fetch 代理显示为 Fetch，否则显示代理显示名或 "Agent"。
  */
@@ -81,7 +81,7 @@ function userFacingName(input, { activeAgents, webFetchByAgentType = false } = {
   if (!webFetchByAgentType && resolveAgentOverrides(input?.subagent_type, activeAgents)) return FETCH;
   return updateAgentFile(input?.subagent_type, activeAgents) ?? "Agent";
 }
-//@ chunk-0tkmvwy0.js:11808-11923 fingerprint = userFacingNameBackgroundColor (0.7)
+//@ chunk-0tkmvwy0.js:11808-11923 fingerprint (2.1.88 match: userFacingNameBackgroundColor, 0.7)
 /**
  * Agent 工具名徽标背景色：按 subagent_type 取代理颜色（web-fetch 代理无色）。
  */
@@ -89,13 +89,13 @@ function userFacingNameBackgroundColor(input, { activeAgents } = {}) {
   if (!input?.subagent_type || resolveAgentOverrides(input.subagent_type, activeAgents)) return;
   return getAgentColor(input.subagent_type);
 }
-//@ chunk-8ndmcarc.js:16602-16633 fingerprint = INITIALIZING_TEXT (1)
+//@ chunk-8ndmcarc.js:16602-16633 fingerprint (2.1.88 match: INITIALIZING_TEXT, 1)
 /**
  * 另一个块中的 "Initializing…" 文本与常量 3。
  */
 var MAX_TAIL_ITEMS = 3;
 var INITIALIZING_TEXT = "Initializing\u2026";
-//@ chunk-ah34pb7m.js:14627-14788 fingerprint = renderToolUseTag (0.843)
+//@ chunk-ah34pb7m.js:14627-14788 fingerprint (2.1.88 match: renderToolUseTag, 0.843)
 /**
  * Agent 工具调用行后的标签（如模型/链接），支持超链接。
  */
@@ -121,7 +121,7 @@ var agentProgressSelector; // deferred: uses MessageImpl (../../components/Messa
 deferInit("chunk-ah34pb7m.js:241692", () => {
   agentProgressSelector = memo(MessageImpl, areMessagePropsEqual);
 });
-//@ chunk-ah34pb7m.js:241709-241817 fingerprint = hasProgressMessage (1)
+//@ chunk-ah34pb7m.js:241709-241817 fingerprint (2.1.88 match: hasProgressMessage, 1)
 /**
  * 进度 data 是否带 message 对象。
  */
@@ -137,7 +137,7 @@ function hasProgressMessage(data) {
 function isProgressWithMessage(pm_0) {
   return hasProgressMessage(pm_0.data);
 }
-//@ chunk-ah34pb7m.js:241850-241958 layout = countToolCallsSince (1)
+//@ chunk-ah34pb7m.js:241850-241958 layout (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(msg) {
   let firstBlock = msg.data.message.message.content[0];
   return firstBlock?.type === "tool_use" || firstBlock?.type === "tool_result";
@@ -220,7 +220,7 @@ function isCountableProgressRow(row) {
   if (row.type === "summary") return true;
   return row.message.data.message.message.content.some((block) => block.type === "tool_use");
 }
-//@ chunk-ah34pb7m.js:243164-243293 fingerprint = processProgressMessages (0.624)
+//@ chunk-ah34pb7m.js:243164-243293 fingerprint (2.1.88 match: processProgressMessages, 0.624)
 function processProgressMessages(openGroup, isActive) {
   return {
     type: "summary",
@@ -339,7 +339,7 @@ function buildSubagentLookups(state) {
     inProgressToolUseIDs: state.inProgressToolUseIDs,
   };
 }
-//@ chunk-ah34pb7m.js:245220-245320 fingerprint = _temp (1)
+//@ chunk-ah34pb7m.js:245220-245320 fingerprint (2.1.88 match: _temp, 1)
 function renderResponseTextBlock(block, index) {
   return jsxProd_default(
     Box,
@@ -382,7 +382,7 @@ function isRenderableProgressMessage(pm_1) {
 var MAX_COLLAPSED_PROGRESS_ROWS = 3;
 var ROWS_PER_AGENT = 9;
 var AGENT_ROWS_OVERHEAD = 7;
-//@ chunk-ah34pb7m.js:245526-245824 facade-exports = AgentPromptDisplay (0.55)
+//@ chunk-ah34pb7m.js:245526-245824 facade-exports (2.1.88 match: AgentPromptDisplay, 0.55)
 /**
  * "Prompt:" 区块。
  */
@@ -419,7 +419,7 @@ function AgentPromptDisplay(props) {
   } else t3 = $[2];
   return t3;
 }
-//@ chunk-ah34pb7m.js:245824-246108 facade-exports = AgentResponseDisplay (0.399)
+//@ chunk-ah34pb7m.js:245824-246108 facade-exports (2.1.88 match: AgentResponseDisplay, 0.399)
 /**
  * "Response:" 区块。
  */
@@ -452,7 +452,7 @@ function AgentResponseDisplay(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-ah34pb7m.js:246108-246871 fingerprint = VerboseAgentTranscript (1)
+//@ chunk-ah34pb7m.js:246108-246871 fingerprint (2.1.88 match: VerboseAgentTranscript, 1)
 /**
  * verbose 下的子代理完整转录。
  */
@@ -523,7 +523,7 @@ function VerboseAgentTranscript(props) {
   } else t3 = $[14];
   return t3;
 }
-//@ chunk-ah34pb7m.js:246871-248983 facade-exports = renderToolResultMessage (0.769)
+//@ chunk-ah34pb7m.js:246871-248983 facade-exports (2.1.88 match: renderToolResultMessage, 0.769)
 /**
  * Agent 工具结果渲染：remote_launched/async_launched/teammate_spawned 显示启动行，completed 显示统计（工具次数、token、耗时）、可选 Prompt/Response 与 verbose 转录。
  */
@@ -812,9 +812,9 @@ function renderToolUseTag(input, toolUse) {
     children: tags,
   });
 }
-//@ chunk-ah34pb7m.js:250146-250174 layout = INITIALIZING_TEXT (1)
+//@ chunk-ah34pb7m.js:250146-250174 layout (2.1.88 match: INITIALIZING_TEXT, 1)
 var INITIALIZING_TEXT_2 = "Initializing\u2026";
-//@ chunk-ah34pb7m.js:250174-250429 facade-exports = renderToolUseRejectedMessage (0.27)
+//@ chunk-ah34pb7m.js:250174-250429 facade-exports (2.1.88 match: renderToolUseRejectedMessage, 0.27)
 /**
  * 用户拒绝 Agent 调用时，显示已产生的子代理进度。
  */
@@ -832,7 +832,7 @@ function renderToolUseProgressMessage(
     isTranscriptMode,
   });
 }
-//@ chunk-ah34pb7m.js:250429-251922 fingerprint = renderToolUseProgressMessage (0.815)
+//@ chunk-ah34pb7m.js:250429-251922 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.815)
 /**
  * Agent 工具进行中的渲染：增量汇总子代理进度（搜索/读取分组摘要、最近工具调用、Initializing…）。
  */
@@ -1006,7 +1006,7 @@ function renderToolUseRejectedMessage(
     ],
   });
 }
-//@ chunk-ah34pb7m.js:252163-252442 facade-exports = renderToolUseErrorMessage (0.863)
+//@ chunk-ah34pb7m.js:252163-252442 facade-exports (2.1.88 match: renderToolUseErrorMessage, 0.863)
 /**
  * Agent 调用出错时的渲染（附子代理进度）。
  */
@@ -1037,7 +1037,7 @@ function renderToolUseErrorMessage(
     ],
   });
 }
-//@ chunk-ah34pb7m.js:252442-252818 fingerprint = calculateAgentStats (0.594)
+//@ chunk-ah34pb7m.js:252442-252818 fingerprint (2.1.88 match: calculateAgentStats, 0.594)
 /**
  * 从进度消息统计子代理工具结果次数与最新上下文 token 数。
  */
@@ -1065,7 +1065,7 @@ function calculateAgentStats(progressMessages) {
     tokens,
   };
 }
-//@ chunk-ah34pb7m.js:252818-254921 facade-exports = renderGroupedAgentToolUse (0.849)
+//@ chunk-ah34pb7m.js:252818-254921 facade-exports (2.1.88 match: renderGroupedAgentToolUse, 0.849)
 /**
  * 同一条消息里多个 Agent 调用合并渲染为一组（每个子代理一行状态）。
  */
@@ -1227,7 +1227,7 @@ function renderGroupedAgentToolUse(toolUses, options) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:254921-256016 facade-exports = extractLastToolInfo (0.804)
+//@ chunk-ah34pb7m.js:254921-256016 facade-exports (2.1.88 match: extractLastToolInfo, 0.804)
 /**
  * 从进度消息中取最后一次工具调用的信息与计数。
  */

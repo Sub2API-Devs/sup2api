@@ -37,7 +37,7 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/feature
 import { logEvent } from "../analytics/index.js";
 import { lit } from "../analytics/safeMetadata.js";
 
-//@ chunk-s61vbvea.js:486519-486638 fingerprint = getDefaultApiBaseUrl (1)
+//@ chunk-s61vbvea.js:486519-486638 fingerprint (2.1.88 match: getDefaultApiBaseUrl, 1)
 /**
  * Files API 基址：ANTHROPIC_BASE_URL、CLAUDE_CODE_API_BASE_URL 或 api.anthropic.com。
  */
@@ -67,7 +67,7 @@ function assertFilesApiAvailable(baseUrl, config) {
     throw new StoredLoginHeldBackError(storedLoginRefusalReason());
   if (hasComplianceTaint("hipaa")) throw Error("File upload is disabled by your organization's policy.");
 }
-//@ chunk-s61vbvea.js:487018-487071 fingerprint = logDebugError (1)
+//@ chunk-s61vbvea.js:487018-487071 fingerprint (2.1.88 match: logDebugError, 1)
 /**
  * [files-api] 错误日志。
  */
@@ -76,14 +76,14 @@ function logDebugError(message) {
     level: "error",
   });
 }
-//@ chunk-s61vbvea.js:487071-487108 layout = logDebugError (1)
+//@ chunk-s61vbvea.js:487071-487108 layout (2.1.88 match: logDebugError, 1)
 /**
  * [files-api] 调试日志。
  */
 function logFilesApiDebug(message) {
   logForDebugging(`[files-api] ${message}`);
 }
-//@ chunk-s61vbvea.js:487108-487233 placement = getAuthHeaders (0.76)
+//@ chunk-s61vbvea.js:487108-487233 placement (2.1.88 match: getAuthHeaders, 0.76)
 function getOAuthApiHeaders(config) {
   return {
     "User-Agent": claudeCodeUserAgent(),
@@ -100,7 +100,7 @@ var FILES_API_MAX_ATTEMPTS = 3;
 var FILES_API_BASE_BACKOFF_MS = 500;
 var FILES_API_TIMEOUT_MS = 120000;
 var FILES_API_MAX_FILE_BYTES = 524288000;
-//@ chunk-s61vbvea.js:487273-487558 fingerprint = retryWithBackoff (1)
+//@ chunk-s61vbvea.js:487273-487558 fingerprint (2.1.88 match: retryWithBackoff, 1)
 /**
  * 最多 3 次，失败后 500ms×2^(n-1) 退避。
  */
@@ -119,7 +119,7 @@ async function retryWithBackoff(operation, attemptFn) {
   }
   throw Error(`${lastError} after ${FILES_API_MAX_ATTEMPTS} attempts`);
 }
-//@ chunk-s61vbvea.js:487558-488276 fingerprint = downloadFile (0.875)
+//@ chunk-s61vbvea.js:487558-488276 fingerprint (2.1.88 match: downloadFile, 0.875)
 /**
  * 下载 /v1/files/<id>/content。
  */
@@ -160,7 +160,7 @@ async function downloadFile(fileId, config) {
     }
   });
 }
-//@ chunk-s61vbvea.js:488276-488579 fingerprint = buildDownloadPath (1)
+//@ chunk-s61vbvea.js:488276-488579 fingerprint (2.1.88 match: buildDownloadPath, 1)
 /**
  * 计算下载保存路径（会话 uploads 目录内，禁止 .. 越界）。
  */
@@ -178,7 +178,7 @@ function buildDownloadPath(basePath, sessionId, relativePath) {
   let cleanPath = matchedPrefix ? normalized.slice(matchedPrefix.length) : normalized;
   return pathModule_2.join(uploadsBase, cleanPath);
 }
-//@ chunk-s61vbvea.js:488579-489038 fingerprint = downloadAndSaveFile (1)
+//@ chunk-s61vbvea.js:488579-489038 fingerprint (2.1.88 match: downloadAndSaveFile, 1)
 /**
  * 下载单个文件并写盘。
  */
@@ -221,7 +221,7 @@ async function downloadAndSaveFile(attachment, config) {
  * 默认下载并发 5。
  */
 var FILE_DOWNLOAD_CONCURRENCY = 5;
-//@ chunk-s61vbvea.js:489047-489463 fingerprint = downloadSessionFiles (0.739)
+//@ chunk-s61vbvea.js:489047-489463 fingerprint (2.1.88 match: downloadSessionFiles, 0.739)
 /**
  * 并发（默认 5）下载会话文件。
  */
@@ -263,7 +263,7 @@ async function uploadFileFromPath(path, relativePath, config, opts) {
   }
   return uploadFile(filePath, relativePath, config, opts);
 }
-//@ chunk-s61vbvea.js:489731-492338 fingerprint = uploadFile (0.755)
+//@ chunk-s61vbvea.js:489731-492338 fingerprint (2.1.88 match: uploadFile, 0.755)
 /**
  * 上传到 /v1/files（multipart，大小上限 500MB），带重试与错误分类。
  */
@@ -432,7 +432,7 @@ ${opts.expiresInSeconds}\r
 function escapeMultipartFilename(filename) {
   return filename.replace(/["\r\n]/g, (ch) => (ch === '"' ? "%22" : ch === "\r" ? "%0D" : "%0A"));
 }
-//@ chunk-s61vbvea.js:492422-492529 fingerprint = UploadNonRetriableError (1)
+//@ chunk-s61vbvea.js:492422-492529 fingerprint (2.1.88 match: UploadNonRetriableError, 1)
 /**
  * 不可重试的上传错误（带原因）。
  */
@@ -444,7 +444,7 @@ class UploadNonRetriableError extends Error {
     this.name = "UploadNonRetriableError";
   }
 }
-//@ chunk-s61vbvea.js:492529-493170 callgraph-fingerprint = listFilesCreatedAfter (0.271)
+//@ chunk-s61vbvea.js:492529-493170 callgraph-fingerprint (2.1.88 match: listFilesCreatedAfter, 0.271)
 /**
  * DELETE /v1/files/<id>，返回 success 或 auth/forbidden/not_found 等原因。旧版名 listFilesCreatedAfter 为错配。
  */
@@ -495,7 +495,7 @@ async function deleteFile(fileId, config, opts) {
     };
   }
 }
-//@ chunk-s61vbvea.js:493170-493469 fingerprint = parseFileSpecs (1)
+//@ chunk-s61vbvea.js:493170-493469 fingerprint (2.1.88 match: parseFileSpecs, 1)
 /**
  * 解析 "file_id:relative_path" 文件规格列表。
  */

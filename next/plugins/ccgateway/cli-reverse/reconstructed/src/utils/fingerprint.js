@@ -10,7 +10,7 @@
  */
 import { createHash } from "crypto";
 
-//@ chunk-s61vbvea.js:455304-455326 fingerprint = FINGERPRINT_SALT (1)
+//@ chunk-s61vbvea.js:455304-455326 fingerprint (2.1.88 match: FINGERPRINT_SALT, 1)
 var FINGERPRINT_SALT = "59cf53e54c78";
 //@ chunk-s61vbvea.js:455326-455559 file-local
 function extractFirstMessageText(messages) {
@@ -24,7 +24,7 @@ function extractFirstMessageText(messages) {
   }
   return "";
 }
-//@ chunk-s61vbvea.js:455559-455693 callgraph-fingerprint = computeFingerprint (1)
+//@ chunk-s61vbvea.js:455559-455693 callgraph-fingerprint (2.1.88 match: computeFingerprint, 1)
 /**
  * 计费头 cc_version 的 3 位指纹：sha256(盐 59cf53e54c78 + 首条用户消息第 4/7/20 个字符 + 版本号) 取前 3 个 hex。
  */

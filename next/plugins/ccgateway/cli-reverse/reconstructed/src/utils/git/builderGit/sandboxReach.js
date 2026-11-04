@@ -568,7 +568,7 @@ var PROC_SUPER_MAGIC = 391;
 function isGitRepoDir(dirPath) {
   return pathMayExist(join(dirPath, ".git")) || isCurrentDirectoryBareGitRepo(dirPath);
 }
-//@ chunk-s61vbvea.js:266786-266953 placement = isCurrentDirectoryBareGitRepo (0.757)
+//@ chunk-s61vbvea.js:266786-266953 placement (2.1.88 match: isCurrentDirectoryBareGitRepo, 0.757)
 function isCurrentDirectoryBareGitRepo(dirPath) {
   return (
     basename(dirPath).toLowerCase() !== ".git" &&
@@ -639,7 +639,7 @@ function resolveRealPathLoose(path, cwd) {
   let realHead = realpathWithMissingTail(head, cwd);
   return realHead === null ? null : join(realHead, tail);
 }
-//@ chunk-s61vbvea.js:274177-274436 placement = getReservedShortcuts (0.806)
+//@ chunk-s61vbvea.js:274177-274436 placement (2.1.88 match: getReservedShortcuts, 0.806)
 function splitAtPathMax(path) {
   let pathMax = getPlatform_2() === "windows" ? null : getPlatform_2() === "macos" ? 1024 : 4096;
   if (pathMax === null || Buffer.byteLength(path) < pathMax) return [path, ""];

@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-m1vyn8g1.js:314-510 fingerprint = defaultStyle (1)
+//@ chunk-m1vyn8g1.js:314-510 fingerprint (2.1.88 match: defaultStyle, 1)
 /**
  * termio 文本样式的默认值（无粗体/斜体/下划线…，前景/背景/下划线色为 default）。
  */

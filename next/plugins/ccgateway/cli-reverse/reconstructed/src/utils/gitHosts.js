@@ -61,7 +61,7 @@ function getGitHostKind(host) {
   if (host_2 === BITBUCKET_ORG) return "bitbucket";
   return "other";
 }
-//@ chunk-f2w6209x.js:669-862 placement = ghIsDangerousCallback (0.82)
+//@ chunk-f2w6209x.js:669-862 placement (2.1.88 match: ghIsDangerousCallback, 0.82)
 function ghIsDangerousCallback(remoteUrl) {
   let trimmed = remoteUrl.trim();
   if (hasBackslashInUrlAuthority(trimmed) || describeUrlScheme(trimmed) || isSuspiciousUrl(trimmed))

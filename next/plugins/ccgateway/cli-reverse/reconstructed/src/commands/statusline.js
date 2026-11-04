@@ -12,7 +12,7 @@ import { AGENT } from "../tools/AgentTool/constants.js";
 import { isSafeMode, getSafeModeExitHint } from "../utils/envUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2049127-2050093 fingerprint = statusline (0.865)
+//@ chunk-e6aww6q8.js:2049127-2050093 fingerprint (2.1.88 match: statusline, 0.865)
 /**
  * /statusline 命令对象（prompt）；描述：Set up Claude Code's status line UI。
  */

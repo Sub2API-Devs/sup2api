@@ -11,7 +11,7 @@
 
 //@ chunk-fq0cr76a.js:901792-901811 affinity
 var weakSet = new WeakSet();
-//@ chunk-fq0cr76a.js:901811-901980 fingerprint = SandboxFilesystemConfigSchema (0.466)
+//@ chunk-fq0cr76a.js:901811-901980 fingerprint (2.1.88 match: SandboxFilesystemConfigSchema, 0.466)
 function SandboxFilesystemConfigSchema(config) {
   if (weakSet.has(config)) return true;
   let { denyRead, allowRead, allowWrite, denyWrite } = config.filesystem;

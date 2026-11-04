@@ -23,7 +23,7 @@ import { getSessionId } from "../../bootstrap/state.js";
 import { uniq } from "../collections.js";
 import { getDisplayPath } from "../file.js";
 
-//@ chunk-f9asxqh1.js:4192-4888 fingerprint = isHookEqual (0.737)
+//@ chunk-f9asxqh1.js:4192-4888 fingerprint (2.1.88 match: isHookEqual, 0.737)
 /**
  * 判断两个钩子配置是否相同（按类型比较 command/args/shell/prompt/url/server/tool/input/script/file 与 if）；function 钩子永不相等。
  */
@@ -99,7 +99,7 @@ function isHookPluginSatisfied(hook) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:200387-200618 placement = getAutoUpdatedPluginNames (0.672)
+//@ chunk-s61vbvea.js:200387-200618 placement (2.1.88 match: getAutoUpdatedPluginNames, 0.672)
 /**
  * 按“钩子是否来自托管/可更新插件”过滤一组钩子：整组都满足时返回该组或空数组，混合时返回只含满足条目的新组。被 filterHooksByManagedHold 使用。
  */
@@ -116,7 +116,7 @@ function filterHooksByPluginHold(matcher, holdState, wanted) {
     },
   ];
 }
-//@ chunk-s61vbvea.js:374768-375124 fingerprint = getHookDisplayText (0.633)
+//@ chunk-s61vbvea.js:374768-375124 fingerprint (2.1.88 match: getHookDisplayText, 0.633)
 /**
  * 钩子的显示文本：command（含 args）、prompt、url、server/tool、script 文件、callback、function。
  */
@@ -164,7 +164,7 @@ function getHookStatusText(hook) {
     "statusMessage" in hook && hook.statusMessage ? hook.statusMessage : getHookDisplayText(hook),
   );
 }
-//@ chunk-s61vbvea.js:375329-375832 fingerprint = getAllHooks (0.755)
+//@ chunk-s61vbvea.js:375329-375832 fingerprint (2.1.88 match: getAllHooks, 0.755)
 /**
  * 列出全部已配置钩子（各 settings 来源按文件去重 + 当前会话钩子），allowManagedHooksOnly 时跳过 settings。
  */
@@ -205,7 +205,7 @@ function getAllHooks(appState) {
         });
   return hooks;
 }
-//@ chunk-s61vbvea.js:375832-376617 fingerprint = hookSourceDescriptionDisplayString (0.389)
+//@ chunk-s61vbvea.js:375832-376617 fingerprint (2.1.88 match: hookSourceDescriptionDisplayString, 0.389)
 /**
  * 钩子来源 → 描述/标题/行内文案表（userSettings、projectSettings、localSettings、policySettings、pluginHook、sessionHook、builtinHook）。
  */
@@ -267,7 +267,7 @@ function hookSourceHeaderDisplayString(source) {
 function hookSourceInlineDisplayString(source) {
   return HOOK_SOURCE_LABELS[source]?.inline ?? source;
 }
-//@ chunk-s61vbvea.js:376742-377065 fingerprint = sortMatchersByPriority (1)
+//@ chunk-s61vbvea.js:376742-377065 fingerprint (2.1.88 match: sortMatchersByPriority, 1)
 /**
  * /hooks 界面里按来源优先级（插件/内置最后）再按名字排序 matcher。
  */
@@ -289,7 +289,7 @@ function sortMatchersByPriority(matchers, hooksByEventAndMatcher, selectedEvent)
     return a.localeCompare(b);
   });
 }
-//@ chunk-bajxb7bf.js:47171-47988 fingerprint = hookSourceInlineDisplayString (0.375)
+//@ chunk-bajxb7bf.js:47171-47988 fingerprint (2.1.88 match: hookSourceInlineDisplayString, 0.375)
 /**
  * 告诉用户该钩子在哪里修改或删除（settings 文件路径、插件、内置、会话、组织策略）。
  */

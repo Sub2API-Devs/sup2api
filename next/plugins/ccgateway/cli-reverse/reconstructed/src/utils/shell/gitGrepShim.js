@@ -79,7 +79,7 @@ async function buildGitGrepShim(command) {
     return null;
   return `{ ${wrapEvalOrTrue(joined)}; }`;
 }
-//@ chunk-e6aww6q8.js:3051739-3051794 placement = shellQuote (1)
+//@ chunk-e6aww6q8.js:3051739-3051794 placement (2.1.88 match: shellQuote, 1)
 function shellQuote(s) {
   return `'${s.replaceAll("'", "'\\''")}'`;
 }

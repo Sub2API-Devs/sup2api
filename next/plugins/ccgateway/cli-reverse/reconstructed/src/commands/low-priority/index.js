@@ -12,7 +12,7 @@ import { LOW_PRIORITY, isLowPriorityEnabled } from "../../services/lowPriority/h
 import { isClaudeAISubscriber } from "../../utils/auth.js";
 import { isLowPriorityActive } from "../../services/lowPriority/lowPriorityMode.js";
 
-//@ chunk-e6aww6q8.js:2043113-2043361 placement = thinkbackPlay (0.64)
+//@ chunk-e6aww6q8.js:2043113-2043361 placement (2.1.88 match: thinkbackPlay, 0.64)
 /**
  * /low-priority 命令对象（local）；描述：Continue now at lower priority after reaching your 5-hour limit; run again to stop；isEnabled: ()=>vt()&&(dD()||iAt())；isHidden: true；实现 chunk-khcb6nvd.js 的 r。
  */

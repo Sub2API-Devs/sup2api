@@ -12,7 +12,7 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { UsageAttributionView } from "../Settings/Usage.js";
 
-//@ chunk-9h8dr0qb.js:46092-46203 fingerprint = FeedColumn (0.552)
+//@ chunk-9h8dr0qb.js:46092-46203 fingerprint (2.1.88 match: FeedColumn, 0.552)
 function FeedColumn(props) {
   let $ = useMemoCache(2);
   let { maxWidth } = props;

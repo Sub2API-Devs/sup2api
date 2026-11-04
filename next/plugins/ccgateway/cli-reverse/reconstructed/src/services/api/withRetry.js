@@ -203,7 +203,7 @@ import { getAutoModeConfigOrDefault } from "../../utils/permissions/permissionSe
 import { CLASSIFIER_MAX_RETRIES } from "../../utils/permissions/classifierHostContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-sycgf9xs.js:17346-17402 fingerprint = isStaleConnectionError (0.632)
+//@ chunk-sycgf9xs.js:17346-17402 fingerprint (2.1.88 match: isStaleConnectionError, 0.632)
 /**
  * EPIPE/ECONNRESET/ENOTCONN/EOF：视为连接已失效、可换新连接重试的错误码。旧版名 isStaleConnectionError 是函数名，这里是集合。
  */
@@ -217,7 +217,7 @@ deferInit("chunk-sycgf9xs.js:17346", () => {
  */
 var BASE_RETRY_DELAY_MS = 500;
 var RETRY_JITTER_RATIO = 0.25;
-//@ chunk-gr2vfhah.js:440-657 callgraph-witnessed = getRetryDelay (0.161)
+//@ chunk-gr2vfhah.js:440-657 callgraph-witnessed (2.1.88 match: getRetryDelay, 0.161)
 /**
  * 重试等待时间：以 500ms 为基数、上限 32s、25% 抖动的指数退避；有 retry-after（秒）时取两者较大值。
  */
@@ -246,7 +246,7 @@ function getRetryDelay(
   }
   return rounded;
 }
-//@ chunk-gr2vfhah.js:1242-1441 fingerprint = isOAuthTokenRevokedError (0.637)
+//@ chunk-gr2vfhah.js:1242-1441 fingerprint (2.1.88 match: isOAuthTokenRevokedError, 0.637)
 /**
  * 403 "OAuth token has been revoked" 或 401 "OAuth access token has been revoked"。
  */
@@ -293,7 +293,7 @@ function isAzureDeploymentNotFound(error) {
   if (!(error instanceof APIError) || error.status !== 404 || !hasNestedError(error)) return false;
   return error.error?.error?.code === "DeploymentNotFound";
 }
-//@ chunk-gr2vfhah.js:1962-2086 fingerprint = is529Error (1)
+//@ chunk-gr2vfhah.js:1962-2086 fingerprint (2.1.88 match: is529Error, 1)
 /**
  * 529 或消息含 overloaded_error。
  */
@@ -433,7 +433,7 @@ deferInit("chunk-aepeg2w5.js:376032", () => {
     "tengu_plaid_kettle",
   ]);
 });
-//@ chunk-aepeg2w5.js:377792-378332 fingerprint = FOREGROUND_529_RETRY_SOURCES (0.585)
+//@ chunk-aepeg2w5.js:377792-378332 fingerprint (2.1.88 match: FOREGROUND_529_RETRY_SOURCES, 0.585)
 /**
  * 529 时允许重试的查询来源集合：前台来源 + agent:*、compact、hook_agent、side_question、web_search_tool、auto_mode 等；isForegroundQuerySource(IIe) 用它判断。
  */
@@ -468,7 +468,7 @@ deferInit("chunk-aepeg2w5.js:377792", () => {
     "artifact_comment_reply",
   ]);
 });
-//@ chunk-e6aww6q8.js:1570337-1570600 fingerprint = isGoogleAuthLibraryCredentialError (0.547)
+//@ chunk-e6aww6q8.js:1570337-1570600 fingerprint (2.1.88 match: isGoogleAuthLibraryCredentialError, 0.547)
 /**
  * google-auth-library 凭证加载失败的典型消息片段；f5o 为令牌刷新失败片段。
  */
@@ -520,7 +520,7 @@ function isGoogleCredentialLoadError(error) {
       ) !== undefined)
   );
 }
-//@ chunk-e6aww6q8.js:1570922-1571014 fingerprint = isVertexAuthError (0.661)
+//@ chunk-e6aww6q8.js:1570922-1571014 fingerprint (2.1.88 match: isVertexAuthError, 0.661)
 /**
  * 使用 Vertex 或 anthropicGoogleCloud。旧版名 isVertexAuthError 不准确。
  */
@@ -539,7 +539,7 @@ function isGoogleCloudAuthError(error) {
     (error instanceof APIError && error.status === 401)
   );
 }
-//@ chunk-e6aww6q8.js:2397728-2398030 fingerprint = FallbackTriggeredError (0.62)
+//@ chunk-e6aww6q8.js:2397728-2398030 fingerprint (2.1.88 match: FallbackTriggeredError, 0.62)
 /**
  * 触发模型回退：携带 originalModel、fallbackModel、reason（overloaded/permission_denied/model_not_found/server_error/last_resort/model_blocked）、原始错误、封锁提示。queryLoop 接到后换模型重发。
  */
@@ -729,7 +729,7 @@ async function reloadMtlsMaterial(reason) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:2618174-2618376 fingerprint = CannotRetryError (0.725)
+//@ chunk-e6aww6q8.js:2618174-2618376 fingerprint (2.1.88 match: CannotRetryError, 0.725)
 /**
  * 不可再重试：包装原始错误与 retryContext（model/fastMode/maxTokensOverride），name="RetryError"。
  */
@@ -781,7 +781,7 @@ deferInit("chunk-e6aww6q8.js:2618376", () => {
 function isNonFallbackError(error) {
   return NON_FALLBACK_ERROR_PREDICATES.some((predicate) => predicate(error));
 }
-//@ chunk-e6aww6q8.js:2618547-2633235 callgraph-witnessed = withRetry (0.268)
+//@ chunk-e6aww6q8.js:2618547-2633235 callgraph-witnessed (2.1.88 match: withRetry, 0.268)
 /**
  * withRetry(getClient, operation, options)：异步生成器，循环最多 maxRetries+1 次。每次：必要时（首次、401/吊销、凭证轮换、陈旧连接、mTLS 重载）刷新 OAuth/主机凭证并重建客户端 → 调 operation(client, attempt, retryContext)。出错：DLP/安全/内容过滤/验证/区域拒绝等直接 CannotRetryError；模型无权/不存在/5xx 且有 fallback → 抛 FallbackTriggeredError；onError 返回新的 "retry:<原因>" 标签则不计次立即重发（每个标签每次调用只用一次）；快速模式 429/529 进入冷却并关 fastMode；529 连续 3 次换 fallback 或报 repeated 529；上下文溢出把 maxTokensOverride 调到 contextLimit-input-1000；可重试错误按指数退避/retry-after 等待并 yield 重试状态系统消息；持久模式（CLAUDE_CODE_RETRY_WATCHDOG）对 429/529 无限等待并可在额度恢复时提前醒。
  */
@@ -1816,14 +1816,14 @@ async function sleepOrWake(delayMs, options) {
     options.signal?.removeEventListener("abort", abort);
   }
 }
-//@ chunk-e6aww6q8.js:2633660-2633750 fingerprint = getRetryAfter (1)
+//@ chunk-e6aww6q8.js:2633660-2633750 fingerprint (2.1.88 match: getRetryAfter, 1)
 /**
  * 取 API 错误响应头 retry-after 原始值。
  */
 function getRetryAfter(error) {
   return (error.headers?.["retry-after"] || error.headers?.get?.("retry-after")) ?? null;
 }
-//@ chunk-e6aww6q8.js:2633750-2634224 fingerprint = parseMaxTokensContextOverflowError (0.818)
+//@ chunk-e6aww6q8.js:2633750-2634224 fingerprint (2.1.88 match: parseMaxTokensContextOverflowError, 0.818)
 /**
  * 解析 400 "input length and `max_tokens` exceed context limit: a + b > c"，返回 {inputTokens,maxTokens,contextLimit}。
  */
@@ -1847,7 +1847,7 @@ function parseMaxTokensContextOverflowError(error) {
     contextLimit,
   };
 }
-//@ chunk-e6aww6q8.js:2634224-2634348 fingerprint = isFastModeNotEnabledError (1)
+//@ chunk-e6aww6q8.js:2634224-2634348 fingerprint (2.1.88 match: isFastModeNotEnabledError, 1)
 /**
  * 400 "Fast mode is not enabled"。
  */
@@ -1923,7 +1923,7 @@ function getAccessFallbackModel({ accessFallbackModel, toolFreeHelper }) {
     ? accessFallbackModel
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2635124-2635299 fingerprint = isBedrockAuthError (0.49)
+//@ chunk-e6aww6q8.js:2635124-2635299 fingerprint (2.1.88 match: isBedrockAuthError, 0.49)
 /**
  * Bedrock/anthropicAws/mantle 下的 AWS 凭证错误或 403，或 isAwsProvider401。旧版名 isBedrockAuthError 近似。
  */
@@ -2038,7 +2038,7 @@ async function invalidateWifTokenOnError(error) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:2636312-2636431 fingerprint = shouldRetry (0.474)
+//@ chunk-e6aww6q8.js:2636312-2636431 fingerprint (2.1.88 match: shouldRetry, 0.474)
 /**
  * 响应头 x-should-retry: false。旧版名 shouldRetry 语义相反。
  */
@@ -2217,7 +2217,7 @@ function getRetryAfterMs(error) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:2638854-2639052 fingerprint = getRateLimitResetDelayMs (1)
+//@ chunk-e6aww6q8.js:2638854-2639052 fingerprint (2.1.88 match: getRateLimitResetDelayMs, 1)
 /**
  * 429 时按 anthropic-ratelimit-unified-reset 计算距重置的毫秒数（持久重试等额度窗口用）。
  */
@@ -2534,7 +2534,7 @@ function getMaxSleptThrough(maxRetriesFromEnv) {
     ? Math.min(maxRetriesFromEnv, MAX_SLEPT_THROUGH)
     : 0;
 }
-//@ chunk-e6aww6q8.js:2642346-2642526 fingerprint = getDefaultMaxRetries (0.344)
+//@ chunk-e6aww6q8.js:2642346-2642526 fingerprint (2.1.88 match: getDefaultMaxRetries, 0.344)
 /**
  * 主线程、订阅用户、未设 CLAUDE_CODE_MAX_RETRIES 时按 tengu_patient_tide 允许的断网重连次数（上限 300）。旧版名 getDefaultMaxRetries 不准确。
  */
@@ -2551,7 +2551,7 @@ function getMaxReconnects(querySource) {
     ? Math.min(featureValue_CACHED_MAY_BE_STALE, MAX_PATIENT_RETRIES)
     : 0;
 }
-//@ chunk-e6aww6q8.js:2945716-2945853 fingerprint = getMaxRetries (0.526)
+//@ chunk-e6aww6q8.js:2945716-2945853 fingerprint (2.1.88 match: getMaxRetries, 0.526)
 /**
  * 分类器请求的最大重试次数：GrowthBook 配置的 maxRetries（非负整数）或默认值，并返回来源 gb/default。
  */

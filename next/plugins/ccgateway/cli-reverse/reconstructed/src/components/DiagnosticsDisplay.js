@@ -21,11 +21,11 @@ import { firstLineOf } from "../utils/stringUtils.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
 
-//@ chunk-ah34pb7m.js:80593-80640 fingerprint = _temp (1)
+//@ chunk-ah34pb7m.js:80593-80640 fingerprint (2.1.88 match: _temp, 1)
 function sumDiagnostics(sum, file) {
   return sum + file.diagnostics.length;
 }
-//@ chunk-ah34pb7m.js:80640-80876 fingerprint = _temp2 (1)
+//@ chunk-ah34pb7m.js:80640-80876 fingerprint (2.1.88 match: _temp2, 1)
 function renderDiagnosticLine(diagnostic, diagIndex) {
   return jsxProd_default(
     MessageResponse,
@@ -50,7 +50,7 @@ function renderDiagnosticLine(diagnostic, diagIndex) {
     diagIndex,
   );
 }
-//@ chunk-ah34pb7m.js:80876-81246 fingerprint = _temp3 (1)
+//@ chunk-ah34pb7m.js:80876-81246 fingerprint (2.1.88 match: _temp3, 1)
 /**
  * 渲染单个文件的诊断列表：文件名及其下各条诊断。
  */
@@ -89,7 +89,7 @@ function renderDiagnosticFile(file, fileIndex) {
     fileIndex,
   );
 }
-//@ chunk-ah34pb7m.js:81246-81968 fingerprint = DiagnosticsDisplay (0.627)
+//@ chunk-ah34pb7m.js:81246-81968 fingerprint (2.1.88 match: DiagnosticsDisplay, 0.627)
 function DiagnosticsDisplay(props) {
   let $ = useMemoCache(11);
   let { attachment, verbose, isTranscriptMode } = props;

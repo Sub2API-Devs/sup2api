@@ -69,7 +69,7 @@ function canonicalJson(value) {
   }
   return out.join("");
 }
-//@ chunk-869v6e0e.js:1276-1485 placement = generateCodeChallenge (0.89)
+//@ chunk-869v6e0e.js:1276-1485 placement (2.1.88 match: generateCodeChallenge, 0.89)
 function generateCodeChallenge(rowPk, event) {
   let { uuid, type: eventType, ...payload } = event;
   let payloadHash = createHash("sha256").update(canonicalJson(payload), "utf8").digest();

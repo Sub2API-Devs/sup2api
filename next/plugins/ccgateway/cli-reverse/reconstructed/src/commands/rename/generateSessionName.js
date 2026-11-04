@@ -22,7 +22,7 @@ import { mainAgentContext } from "../../utils/agentContext.js";
 //@ chunk-zmqmnh19.js:618-890 sole-consumer
 var SESSION_NAME_PROMPT =
   'Generate a short kebab-case name (2-4 words) that captures the main topic of this conversation. Use lowercase words separated by hyphens. Examples: "fix-login-bug", "add-auth-feature", "refactor-api-client", "debug-test-failures". Return JSON with a "name" field.';
-//@ chunk-zmqmnh19.js:890-1013 sole-consumer = mergeClients (1)
+//@ chunk-zmqmnh19.js:890-1013 sole-consumer (2.1.88 match: mergeClients, 1)
 function mergeClients(responseText) {
   let parsed = safeParseJSON(stripJsonCodeFence(responseText), false);
   if (parsed && typeof parsed === "object" && "name" in parsed && typeof parsed.name === "string")
@@ -83,7 +83,7 @@ async function generateNameViaFork(signal) {
     return null;
   }
 }
-//@ chunk-zmqmnh19.js:1790-2624 fingerprint = generateSessionName (0.701)
+//@ chunk-zmqmnh19.js:1790-2624 fingerprint (2.1.88 match: generateSessionName, 0.701)
 async function generateSessionName(messages, signal, options) {
   if (
     options.preferFork &&

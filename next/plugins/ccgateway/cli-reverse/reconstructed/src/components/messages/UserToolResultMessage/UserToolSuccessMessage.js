@@ -47,7 +47,7 @@ function selectIsBriefOnly(state) {
 function selectActiveAgents_5(state) {
   return state.agentDefinitions.activeAgents;
 }
-//@ chunk-ah34pb7m.js:218389-220401 fingerprint = UserToolSuccessMessage (0.657)
+//@ chunk-ah34pb7m.js:218389-220401 fingerprint (2.1.88 match: UserToolSuccessMessage, 0.657)
 /**
  * 工具成功结果：调用 tool.renderToolResultMessage(output, progress, {verbose, theme, …})，auto 模式放行时附 "Allowed by auto mode"，并显示 PostToolUse hook 进度。
  */

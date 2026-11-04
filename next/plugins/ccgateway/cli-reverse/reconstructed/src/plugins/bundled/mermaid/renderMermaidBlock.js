@@ -22,7 +22,7 @@ import {
 import { logFeatureOk, logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 
-//@ chunk-yb0ajcmt.js:3857-3942 placement = timing (0.363)
+//@ chunk-yb0ajcmt.js:3857-3942 placement (2.1.88 match: timing, 0.363)
 var timingManifest = __commonJS(function (requireFn, moduleObject) {
   moduleObject.exports = {
     scan: {

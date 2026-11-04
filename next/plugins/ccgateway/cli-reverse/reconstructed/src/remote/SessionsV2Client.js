@@ -164,7 +164,7 @@ deferInit("chunk-08945j39.js:12763", () => {
   );
   TOOL_HOST_ENDED = "tool_host_ended";
 });
-//@ chunk-08945j39.js:12905-12995 placement = extractErrorTypeFromData (1)
+//@ chunk-08945j39.js:12905-12995 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function hasStringType(data) {
   return typeof data === "object" && data !== null && "type" in data && typeof data.type === "string";
 }

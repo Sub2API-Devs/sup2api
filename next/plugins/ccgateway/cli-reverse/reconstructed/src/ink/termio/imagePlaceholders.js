@@ -21,7 +21,7 @@ import {
 function diacritic(index) {
   return String.fromCodePoint(COMBINING_MARK_CODES[index]);
 }
-//@ chunk-bzr73sfg.js:266288-266411 placement = GUTTER_MAP (0.563)
+//@ chunk-bzr73sfg.js:266288-266411 placement (2.1.88 match: GUTTER_MAP, 0.563)
 /**
  * 把 {id,row,column} 编码成一个占位字素：U+2800 + 行、列、id 高中低三位的附加符号。
  */

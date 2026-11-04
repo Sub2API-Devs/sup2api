@@ -12,7 +12,7 @@ import { useMemo } from "../../vendor/react/cjs/react.production.js";
 import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 import { useRemoteTransportCore } from "../remote/useRemoteTransportCore.js";
 
-//@ chunk-18hwfzwa.js:309217-309809 fingerprint = useSSHSession (0.434)
+//@ chunk-18hwfzwa.js:309217-309809 fingerprint (2.1.88 match: useSSHSession, 0.434)
 function useSSHSession({ session, sink, requestDialog, toolPermissionContext, tools }) {
   let converted = useMemo(() => {
     if (!session) return;

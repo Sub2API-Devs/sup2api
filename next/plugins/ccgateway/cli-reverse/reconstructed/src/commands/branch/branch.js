@@ -57,7 +57,7 @@ import { syncJobName, getOwnJobShortId } from "../../services/daemon/jobState.js
  */
 var MAX_FORK_TRANSCRIPT_BYTES = 4194304;
 var MAX_BRANCH_MESSAGES = 1e5;
-//@ chunk-khj4kcw5.js:12248-12452 fingerprint = deriveFirstPrompt (0.567)
+//@ chunk-khj4kcw5.js:12248-12452 fingerprint (2.1.88 match: deriveFirstPrompt, 0.567)
 function deriveFirstPrompt(firstUserMessage) {
   let firstMessageSeed = {
     commandFallback: "",
@@ -70,7 +70,7 @@ function deriveFirstPrompt(firstUserMessage) {
   text ??= firstMessageSeed.commandFallback;
   return text.replace(/\s+/g, " ").trim().slice(0, 100).trimEnd() || "Branched conversation";
 }
-//@ chunk-khj4kcw5.js:12452-15231 fingerprint = createFork (0.46)
+//@ chunk-khj4kcw5.js:12452-15231 fingerprint (2.1.88 match: createFork, 0.46)
 async function createFork(messages, customTitle, extraMessages, storageV5) {
   let forkSessionId = randomUUID();
   let originalSessionId = getSessionId();
@@ -547,7 +547,7 @@ async function createForkFromStorage(entry) {
     sessionHistorySuppressed: sourceTaintAtEntry,
   };
 }
-//@ chunk-khj4kcw5.js:18005-18361 fingerprint = getUniqueForkName (1)
+//@ chunk-khj4kcw5.js:18005-18361 fingerprint (2.1.88 match: getUniqueForkName, 1)
 async function getUniqueForkName(baseName, storageV5) {
   let candidateName = `${baseName} (Branch)`;
   if (
@@ -575,7 +575,7 @@ async function getUniqueForkName(baseName, storageV5) {
   while (usedNumbers.has(nextNumber)) nextNumber++;
   return `${baseName} (Branch ${nextNumber})`;
 }
-//@ chunk-khj4kcw5.js:18361-19802 fingerprint = call (0.745)
+//@ chunk-khj4kcw5.js:18361-19802 fingerprint (2.1.88 match: call, 0.745)
 async function call(onDone, context, args = {}) {
   let sessionId = getSessionId();
   let currentSessionTitle = getCurrentSessionTitle(sessionId);

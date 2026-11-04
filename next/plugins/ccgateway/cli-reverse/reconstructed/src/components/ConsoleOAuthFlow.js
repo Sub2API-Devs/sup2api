@@ -179,7 +179,7 @@ function providerOption(option) {
 function isFoundryAuthMethod(option) {
   return option.value === "foundry";
 }
-//@ chunk-s5p7fp0c.js:13113-13214 callgraph-fingerprint = PASTE_HERE_MSG (0.632)
+//@ chunk-s5p7fp0c.js:13113-13214 callgraph-fingerprint (2.1.88 match: PASTE_HERE_MSG, 0.632)
 var PASTE_CODE_PROMPT = "Paste code here if prompted > ";
 var RECOMMENDED_SIGNIN_UNAVAILABLE_TEXT = "The recommended sign-in isn't available on this machine";
 //@ chunk-s5p7fp0c.js:13214-13339 layout
@@ -189,7 +189,7 @@ function formatTokenLifetimeDays(seconds) {
   if (rounded === 365) return "1 year";
   return `${rounded} ${plural(rounded, "day")}`;
 }
-//@ chunk-s5p7fp0c.js:13339-24518 facade-exports = ConsoleOAuthFlow (0.507)
+//@ chunk-s5p7fp0c.js:13339-24518 facade-exports (2.1.88 match: ConsoleOAuthFlow, 0.507)
 /**
  * 登录流程：选择登录方式（Claude 订阅 / Console API 计费 / 网关，可由参数预选），启动本地 OAuth 回调并打开浏览器，显示等待/粘贴代码提示，换取并保存凭证，完成后回调 onDone。
  */
@@ -2367,7 +2367,7 @@ function secureStorageLabel(backendName) {
       return "secure storage";
   }
 }
-//@ chunk-zkzpd9ky.js:20079-21845 fingerprint = OAuthStatusMessage (0.372)
+//@ chunk-zkzpd9ky.js:20079-21845 fingerprint (2.1.88 match: OAuthStatusMessage, 0.372)
 /**
  * 登录状态文案（starting/waiting_for_login/保存凭证等）。
  */

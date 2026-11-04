@@ -205,7 +205,7 @@ function isIgnoredEntry(root, folder, entry) {
         )))
   );
 }
-//@ chunk-9cjx5pnm.js:4133-4181 placement = VCS_DIRECTORIES_TO_EXCLUDE (0.937)
+//@ chunk-9cjx5pnm.js:4133-4181 placement (2.1.88 match: VCS_DIRECTORIES_TO_EXCLUDE, 0.937)
 var VCS_DIRECTORIES_TO_EXCLUDE = [...WATCH_IGNORED_DIRS, ".hg", ".svn", ".jj", ".sl", ".bzr"];
 //@ chunk-9cjx5pnm.js:4181-4321 placement
 function isNeverBundledPath(entry) {

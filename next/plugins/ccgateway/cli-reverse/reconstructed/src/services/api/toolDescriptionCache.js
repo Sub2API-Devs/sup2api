@@ -182,7 +182,7 @@ deferInit("chunk-aepeg2w5.js:502189", () => {
 var MAX_IDS_KEPT = 2;
 var MAX_KEY_OVERHEAD_BYTES = 256;
 var MAX_MCP_KEYS_WEIGHT = 128000000;
-//@ chunk-aepeg2w5.js:502253-502413 placement = getMcpPrefix (0.822)
+//@ chunk-aepeg2w5.js:502253-502413 placement (2.1.88 match: getMcpPrefix, 0.822)
 function getMcpPrefix(serverName) {
   let index = serverName.indexOf(":{");
   if (index === -1 || !serverName.startsWith("mcp__", serverName.lastIndexOf(":", index - 1) + 1)) return;

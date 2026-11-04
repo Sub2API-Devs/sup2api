@@ -16,7 +16,7 @@ import { usePrefersReducedMotion, SPINNER_FLAG_PRIORITY } from "../Spinner/spinn
 import { useAnimationFrame } from "../../ink/components/Input.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
 
-//@ chunk-81qqq1aq.js:2338-2572 placement = ShimmerChar (1)
+//@ chunk-81qqq1aq.js:2338-2572 placement (2.1.88 match: ShimmerChar, 1)
 function ShimmerChar(props) {
   let $ = useMemoCache(3);
   let { char, index, glimmerIndex, messageColor, shimmerColor } = props;
@@ -35,11 +35,11 @@ function ShimmerChar(props) {
   } else t2 = $[2];
   return t2;
 }
-//@ chunk-81qqq1aq.js:2572-2609 fingerprint = _temp (1)
+//@ chunk-81qqq1aq.js:2572-2609 fingerprint (2.1.88 match: _temp, 1)
 function selectShimmerColor(h) {
   return h.shimmerColor;
 }
-//@ chunk-81qqq1aq.js:2609-4298 fingerprint = HighlightedInput (0.819)
+//@ chunk-81qqq1aq.js:2609-4298 fingerprint (2.1.88 match: HighlightedInput, 0.819)
 function HighlightedInput(props) {
   let $ = useMemoCache(21);
   let { text, highlights } = props;

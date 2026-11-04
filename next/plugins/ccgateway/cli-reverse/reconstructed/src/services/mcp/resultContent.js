@@ -124,7 +124,7 @@ function frameSlugOf(value) {
   let parseResult = frameSlugSchema().safeParse(value);
   return parseResult.success ? parseResult.data.frame.slug : null;
 }
-//@ chunk-kszbqxwr.js:1298-1509 placement = extractErrorTypeFromData (1)
+//@ chunk-kszbqxwr.js:1298-1509 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 逐个产出内容中的文本（字符串或文本块）。
  */

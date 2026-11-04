@@ -507,7 +507,7 @@ function findPersistAnchor(messages, index) {
     precedingAssistantUuid,
   };
 }
-//@ chunk-tyg7f3ek.js:575226-575757 placement = buildTranscriptEntries (0.77)
+//@ chunk-tyg7f3ek.js:575226-575757 placement (2.1.88 match: buildTranscriptEntries, 0.77)
 function isAwaitingToolResultAnchor(messages, index) {
   for (let j = index - 1; j >= 0; j--) {
     let message = messages[j];

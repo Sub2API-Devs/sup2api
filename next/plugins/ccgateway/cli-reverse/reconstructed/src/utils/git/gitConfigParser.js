@@ -91,7 +91,7 @@ function firstGitConfigValue(text, section, subsection, key) {
 function allGitConfigValues(config, section, subsection, key) {
   return [...iterGitConfigValues(config, section, subsection, key)];
 }
-//@ chunk-t0gq9gyw.js:67191-67243 placement = _temp (1)
+//@ chunk-t0gq9gyw.js:67191-67243 placement (2.1.88 match: _temp, 1)
 /**
  * 同上，但把无值项的默认值按 "true" 处理。
  */
@@ -301,7 +301,7 @@ function isConfigNameChar(char) {
     char === "-"
   );
 }
-//@ chunk-t0gq9gyw.js:80083-80246 fingerprint = parseGitConfigValue (0.794)
+//@ chunk-t0gq9gyw.js:80083-80246 fingerprint (2.1.88 match: parseGitConfigValue, 0.794)
 /**
  * 轻量解析 git config 文本，按 section/subsection/key 取值（处理引号与转义）。
  */

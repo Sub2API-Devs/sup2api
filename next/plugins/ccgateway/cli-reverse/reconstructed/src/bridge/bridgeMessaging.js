@@ -28,7 +28,7 @@ import { objectSchema, stringSchema, literal } from "../../vendor/zod/v4/classic
 import { RELAY_SOURCE_KINDS_2 } from "../services/projectsRelay/relayConfig.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-1qpz7qcd.js:3281-3408 fingerprint = isSDKControlResponse (0.932)
+//@ chunk-1qpz7qcd.js:3281-3408 fingerprint (2.1.88 match: isSDKControlResponse, 0.932)
 function isSDKControlResponse(value) {
   return (
     value !== null &&
@@ -39,7 +39,7 @@ function isSDKControlResponse(value) {
     value.response != null
   );
 }
-//@ chunk-1qpz7qcd.js:3408-3550 fingerprint = isSDKControlRequest (0.949)
+//@ chunk-1qpz7qcd.js:3408-3550 fingerprint (2.1.88 match: isSDKControlRequest, 0.949)
 function isSDKControlRequest(value) {
   return (
     value !== null &&
@@ -58,7 +58,7 @@ function isSDKControlRequest(value) {
 function setBridgeStateFramesGate(gate) {
   bridgeHostState().bridgeStateFramesGate = gate;
 }
-//@ chunk-1qpz7qcd.js:3595-4144 callgraph-fingerprint = isEligibleBridgeMessage (0.273)
+//@ chunk-1qpz7qcd.js:3595-4144 callgraph-fingerprint (2.1.88 match: isEligibleBridgeMessage, 0.273)
 /**
  * 出站过滤：哪些本地消息要镜像到 Remote Control（user/assistant、非虚拟；hook_system_message、tool_host_result_lines、来自用户的 prompt 型 queued_command 附件；local_command、model_consent_fallback、受闸门控制的 compact_boundary）。
  */
@@ -138,7 +138,7 @@ function deriveTitleFromHumanTurn(message) {
   if (!raw) return;
   return unwrapReminderText(raw) || undefined;
 }
-//@ chunk-1qpz7qcd.js:4910-6723 fingerprint = handleIngressMessage (0.59)
+//@ chunk-1qpz7qcd.js:4910-6723 fingerprint (2.1.88 match: handleIngressMessage, 0.59)
 /**
  * 解析一条入站帧并分派：control_response → onPermissionResponse；control_request → onControlRequest；control_cancel_request → onControlCancel；
  * queued_notification（MCP send_message 形状的转成合成 user 帧，否则交给通知缓冲）；user 帧去掉回显（recentPosted）、重复投递、replay、带 parent_tool_use_id、fork 显示帧后交给 onInboundMessage。其余类型忽略。
@@ -230,7 +230,7 @@ function handleIngressMessage(
     logFeatureBad("bridge_message_receive", "bridge_message_receive_parse_failed");
   }
 }
-//@ chunk-1qpz7qcd.js:6723-7139 fingerprint = OUTBOUND_ONLY_ERROR (0.304)
+//@ chunk-1qpz7qcd.js:6723-7139 fingerprint (2.1.88 match: OUTBOUND_ONLY_ERROR, 0.304)
 /**
  * 服务端控制请求处理用的常量：可接受的 flag 设置键、超时与提示文本（outbound-only 拒绝、get_workspace_diff 超时、side_question 超时/无答案）。
  */
@@ -257,7 +257,7 @@ deferInit("chunk-1qpz7qcd.js:6723", () => {
   SIDE_QUESTION_NO_ANSWER =
     "(No answer available for this side question. Try again, or ask in the main conversation.)";
 });
-//@ chunk-1qpz7qcd.js:8103-8506 fingerprint = handleServerControlRequest (0.312)
+//@ chunk-1qpz7qcd.js:8103-8506 fingerprint (2.1.88 match: handleServerControlRequest, 0.312)
 /**
  * （旧版 handleServerControlRequest 的 316 对应物在 _unattributed 的 chunk-1qpz7qcd.js#__i；本函数只负责回写）等待控制请求的处理结果后写回 control_response（错误映射为 error/error_code，实时回复用专门帧），附 session_id。
  */
@@ -286,7 +286,7 @@ function sendControlResponseWhenSettled(request, writeFrame, sessionId, response
       );
     });
 }
-//@ chunk-1qpz7qcd.js:25657-26034 fingerprint = BoundedUUIDSet (1)
+//@ chunk-1qpz7qcd.js:25657-26034 fingerprint (2.1.88 match: BoundedUUIDSet, 1)
 /**
  * 固定容量的环形 UUID 去重集合（满了淘汰最旧）。
  */
@@ -346,7 +346,7 @@ function notificationToUserFrame(notification) {
     inbound_origin: RELAY_SOURCE_KINDS_2,
   };
 }
-//@ chunk-1qpz7qcd.js:26317-26413 callgraph-fingerprint = isSDKMessage (0.548)
+//@ chunk-1qpz7qcd.js:26317-26413 callgraph-fingerprint (2.1.88 match: isSDKMessage, 0.548)
 function isQueuedNotificationFrame(value) {
   return (
     typeof value === "object" && value !== null && "type" in value && value.type === "queued_notification"

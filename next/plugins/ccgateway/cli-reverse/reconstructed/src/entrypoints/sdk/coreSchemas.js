@@ -181,7 +181,7 @@ import { isPluginsSyncVetoed, isSyncPaused } from "../../services/plugins/accoun
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:11101-11729 fingerprint = HOOK_EVENTS (0.829)
+//@ chunk-dcmhvw5a.js:11101-11729 fingerprint (2.1.88 match: HOOK_EVENTS, 0.829)
 /**
  * 全部钩子事件名（33 个，含 316 新增的 PostToolBatch、UserPromptExpansion、StopFailure、PreModelSwitch/PostModelSwitch、DirectoryAdded、MessageDisplay 等）、SessionEnd 原因、系统提示词动态边界标记。
  */
@@ -441,7 +441,7 @@ function isAbnormalTerminalReason(reason) {
  * 某状态 kind 枚举（unavailable_headless/unknown/failed/restart_required）（归属疑似错误）。
  */
 var UNAVAILABLE_KINDS = ["unavailable_headless", "unknown", "failed", "restart_required"];
-//@ chunk-bwbq4xvm.js:179406-179497 placement = extractMarkupText (1)
+//@ chunk-bwbq4xvm.js:179406-179497 placement (2.1.88 match: extractMarkupText, 1)
 /**
  * 对象的 kind 是否属于上述枚举（误配名 extractMarkupText）。
  */
@@ -6649,7 +6649,7 @@ function currentAccessTokenHash() {
   let accessToken = getClaudeAIOAuthTokens()?.accessToken;
   return accessToken ? tokenDigest(accessToken) : null;
 }
-//@ chunk-55ht3bcx.js:22687-22780 fingerprint = ApiKeySourceSchema (0.32)
+//@ chunk-55ht3bcx.js:22687-22780 fingerprint (2.1.88 match: ApiKeySourceSchema, 0.32)
 function ApiKeySourceSchema_2() {
   let policyLimitsState = getPolicyLimitsState();
   try {
@@ -6659,7 +6659,7 @@ function ApiKeySourceSchema_2() {
   }
   return policyLimitsState.principalRung === "oauth" ? currentAccessTokenHash() : null;
 }
-//@ chunk-hwmsct5x.js:221838-222410 fingerprint = ModelInfoSchema (0.311)
+//@ chunk-hwmsct5x.js:221838-222410 fingerprint (2.1.88 match: ModelInfoSchema, 0.311)
 /**
  * 把模型选项列表转成 SDK 的模型信息（value、resolvedModel、displayName、支持的 effort 等级、adaptive thinking、fast mode、auto mode 等）。
  */
@@ -6703,13 +6703,13 @@ function toSdkModelInfos(options) {
     };
   });
 }
-//@ chunk-bfnfj4kx.js:51583-51666 fingerprint = BaseOutputFormatSchema (0.369)
+//@ chunk-bfnfj4kx.js:51583-51666 fingerprint (2.1.88 match: BaseOutputFormatSchema, 0.369)
 var BaseOutputFormatSchema = (outputFormat, options) =>
   outputFormat?.type === "MemberExpression" &&
   outputFormat.object === options &&
   !outputFormat.computed &&
   !outputFormat.optional;
-//@ chunk-w5ndchqs.js:21455-24419 fingerprint = SDKRateLimitInfoSchema (0.358)
+//@ chunk-w5ndchqs.js:21455-24419 fingerprint (2.1.88 match: SDKRateLimitInfoSchema, 0.358)
 /**
  * 生成额度/速率限制提示文本（5 小时/7 天/超额/组织限额等分支）。
  */
@@ -6853,7 +6853,7 @@ function formatRateLimitMessage(limits, model) {
     progressSavedSuffix: resetSuffix !== "" && isVellumAnchorEnabled(),
   });
 }
-//@ chunk-spwda8nt.js:2561-4008 fingerprint = SDKAssistantMessageErrorSchema (0.314)
+//@ chunk-spwda8nt.js:2561-4008 fingerprint (2.1.88 match: SDKAssistantMessageErrorSchema, 0.314)
 /**
  * API 错误类型 → 轮后摘要的 {state: blocked/failed, needs: 提示}（登录、组织禁用 OAuth、限额、过载、请求过大等）。
  */
@@ -6960,7 +6960,7 @@ function mergePermissionDecisions(left, right) {
       winner.permissionDecisionReason ?? (isSameDecision ? loser.permissionDecisionReason : undefined),
   };
 }
-//@ chunk-e6aww6q8.js:38502-38761 fingerprint = SessionStartHookSpecificOutputSchema (0.343)
+//@ chunk-e6aww6q8.js:38502-38761 fingerprint (2.1.88 match: SessionStartHookSpecificOutputSchema, 0.343)
 /**
  * 合并两个钩子聚合结果（additionalContext、watchPaths 拼接，权限决定取更严格者）。
  */
@@ -6983,7 +6983,7 @@ function shouldEmitHookLifecycle(hookEvent) {
     (hookEvent === "UserPromptSubmit" && getHookEventEmitState().userPromptSubmitStartAndEndEnabled)
   );
 }
-//@ chunk-e6aww6q8.js:936020-936136 fingerprint = SDKHookStartedMessageSchema (0.775)
+//@ chunk-e6aww6q8.js:936020-936136 fingerprint (2.1.88 match: SDKHookStartedMessageSchema, 0.775)
 /**
  * 发出 system/hook_started SDK 消息（受开关控制）。
  */
@@ -6997,7 +6997,7 @@ function emitHookStarted(hookId, hookName, hookEvent) {
     hook_event: hookEvent,
   });
 }
-//@ chunk-e6aww6q8.js:936136-936333 fingerprint = SDKHookProgressMessageSchema (0.665)
+//@ chunk-e6aww6q8.js:936136-936333 fingerprint (2.1.88 match: SDKHookProgressMessageSchema, 0.665)
 /**
  * 发出 system/hook_progress SDK 消息。
  */
@@ -7014,7 +7014,7 @@ function emitHookProgress(progress) {
     output: progress.output,
   });
 }
-//@ chunk-e6aww6q8.js:936636-937271 fingerprint = SDKHookResponseMessageSchema (0.436)
+//@ chunk-e6aww6q8.js:936636-937271 fingerprint (2.1.88 match: SDKHookResponseMessageSchema, 0.436)
 /**
  * 记录钩子结果日志，并发出 system/hook_response SDK 消息（含 exit_code、outcome）。
  */
@@ -7064,11 +7064,11 @@ ${displayOutput}`
     outcome: result.outcome,
   });
 }
-//@ chunk-e6aww6q8.js:1349223-1349300 fingerprint = INSTRUCTIONS_MEMORY_TYPES (1)
+//@ chunk-e6aww6q8.js:1349223-1349300 fingerprint (2.1.88 match: INSTRUCTIONS_MEMORY_TYPES, 1)
 function isInstructionsMemoryType(type) {
   return type === "User" || type === "Project" || type === "Local" || type === "Managed";
 }
-//@ chunk-e6aww6q8.js:1468907-1469041 fingerprint = PostToolUseHookSpecificOutputSchema (0.486)
+//@ chunk-e6aww6q8.js:1468907-1469041 fingerprint (2.1.88 match: PostToolUseHookSpecificOutputSchema, 0.486)
 function buildPostToolUseContextOutput(eventName, contextOutput, extraFields) {
   logEvent(eventName, {
     over_cap: contextOutput.overCap,
@@ -7081,7 +7081,7 @@ function buildPostToolUseContextOutput(eventName, contextOutput, extraFields) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1551908-1551987 fingerprint = ModelUsageSchema (0.357)
+//@ chunk-e6aww6q8.js:1551908-1551987 fingerprint (2.1.88 match: ModelUsageSchema, 0.357)
 /**
  * 有效上下文窗口：contextWindow 减去（maxOutputTokens 与上限的较小值）。
  */
@@ -7089,7 +7089,7 @@ function getEffectiveContextWindow(limits) {
   let min = Math.min(limits.maxOutputTokens, MAX_OUTPUT_TOKENS_CAP);
   return limits.contextWindow - min;
 }
-//@ chunk-e6aww6q8.js:2085394-2085461 fingerprint = SDKStatusSchema (0.44)
+//@ chunk-e6aww6q8.js:2085394-2085461 fingerprint (2.1.88 match: SDKStatusSchema, 0.44)
 function emitCompactingStatus(onStatus) {
   sendKeepaliveNow();
   onStatus?.({
@@ -7097,15 +7097,15 @@ function emitCompactingStatus(onStatus) {
     status: "compacting",
   });
 }
-//@ chunk-e6aww6q8.js:3446035-3446085 fingerprint = WorktreeRemoveHookInputSchema (0.419)
+//@ chunk-e6aww6q8.js:3446035-3446085 fingerprint (2.1.88 match: WorktreeRemoveHookInputSchema, 0.419)
 function hasWorktreeRemoveHook() {
   return hasWorktreeRemoveHook_2() || hasClassicHookSite("WorktreeRemove");
 }
-//@ chunk-e6aww6q8.js:3516372-3516433 fingerprint = SessionEndHookInputSchema (0.513)
+//@ chunk-e6aww6q8.js:3516372-3516433 fingerprint (2.1.88 match: SessionEndHookInputSchema, 0.513)
 function shouldRunSessionEndHook(hookEvent, signal) {
   return hookEvent !== "SessionEnd" && isTerminalShutdown() && !signal?.aborted;
 }
-//@ chunk-e6aww6q8.js:4648972-4649110 fingerprint = SDKUserMessageSchema (0.313)
+//@ chunk-e6aww6q8.js:4648972-4649110 fingerprint (2.1.88 match: SDKUserMessageSchema, 0.313)
 var SDKUserMessageSchema_3; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-e6aww6q8.js:4648972", () => {
   SDKUserMessageSchema_3 = DoctorLazy(() =>
@@ -7116,7 +7116,7 @@ deferInit("chunk-e6aww6q8.js:4648972", () => {
     }),
   );
 });
-//@ chunk-0h4e7gnq.js:46946-47070 fingerprint = SDKRateLimitEventSchema (0.573)
+//@ chunk-0h4e7gnq.js:46946-47070 fingerprint (2.1.88 match: SDKRateLimitEventSchema, 0.573)
 /**
  * 构造 rate_limit_event SDK 消息（无可报告信息时返回 undefined）。
  */
@@ -7130,7 +7130,7 @@ function createRateLimitEvent(limits, sessionId, options = {}) {
     session_id: sessionId,
   };
 }
-//@ chunk-0sfjpx19.js:15811-15971 fingerprint = SDKUserMessageContentSchema (0.377)
+//@ chunk-0sfjpx19.js:15811-15971 fingerprint (2.1.88 match: SDKUserMessageContentSchema, 0.377)
 /**
  * 决定新输入的投递优先级：now / next / later（tengu_pencil_farmer 控制默认 next）。
  */
@@ -7141,13 +7141,13 @@ function resolveQueuePriority(priority, content, forceLater) {
   if (priority !== undefined) return priority;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_pencil_farmer", false) ? "next" : "later";
 }
-//@ chunk-0sfjpx19.js:126752-126790 fingerprint = EXIT_REASONS (0.599)
+//@ chunk-0sfjpx19.js:126752-126790 fingerprint (2.1.88 match: EXIT_REASONS, 0.599)
 var isNonResetExitReason = (reason) => reason !== "clear" && reason !== "resume";
-//@ chunk-ah34pb7m.js:51889-51952 fingerprint = PreCompactHookInputSchema (0.315)
+//@ chunk-ah34pb7m.js:51889-51952 fingerprint (2.1.88 match: PreCompactHookInputSchema, 0.315)
 function PreCompactHookInputSchema_2(compactMetadata, compactMetadata_2) {
   return compactMetadata !== undefined && !(compactMetadata_2 && compactMetadata.trigger === "manual");
 }
-//@ chunk-tyg7f3ek.js:89024-89213 fingerprint = SDKStatusMessageSchema (0.454)
+//@ chunk-tyg7f3ek.js:89024-89213 fingerprint (2.1.88 match: SDKStatusMessageSchema, 0.454)
 /**
  * 往出站队列推一条 system/status 消息（status=null，带 permissionMode），返回其 uuid。
  */
@@ -7165,7 +7165,7 @@ function emitStatusMessage({ io, getAppState }, permissionMode) {
   notifyProactivityChanged(io.sessionState, getAppState());
   return messageUuid;
 }
-//@ chunk-tyg7f3ek.js:244160-244305 fingerprint = SDKPartialAssistantMessageSchema (0.558)
+//@ chunk-tyg7f3ek.js:244160-244305 fingerprint (2.1.88 match: SDKPartialAssistantMessageSchema, 0.558)
 /**
  * 构造一个 content_block_stop 的 stream_event SDK 消息。
  */
@@ -7182,7 +7182,7 @@ function createContentBlockStopEvent(apiMessageId, index) {
     ...apiMessageIdField(apiMessageId),
   };
 }
-//@ chunk-jy3v56kg.js:33118-33238 fingerprint = PreToolUseHookInputSchema (0.566)
+//@ chunk-jy3v56kg.js:33118-33238 fingerprint (2.1.88 match: PreToolUseHookInputSchema, 0.566)
 var PreToolUseHookInputSchema_2 = {
   session_id: "",
   transcript_path: "",
@@ -7192,7 +7192,7 @@ var PreToolUseHookInputSchema_2 = {
   tool_input: {},
   tool_use_id: "",
 };
-//@ chunk-e5gvqyfh.js:10272-10395 fingerprint = PreToolUseHookSpecificOutputSchema (0.569)
+//@ chunk-e5gvqyfh.js:10272-10395 fingerprint (2.1.88 match: PreToolUseHookSpecificOutputSchema, 0.569)
 function PreToolUseHookSpecificOutputSchema_2(permissionDecisionReason) {
   return {
     hookSpecificOutput: {
@@ -7292,7 +7292,7 @@ function createRemoteHookPauseNotifier() {
     },
   };
 }
-//@ chunk-hyjyj8hj.js:8381-8472 fingerprint = UserPromptSubmitHookSpecificOutputSchema (0.481)
+//@ chunk-hyjyj8hj.js:8381-8472 fingerprint (2.1.88 match: UserPromptSubmitHookSpecificOutputSchema, 0.481)
 function buildHookContextOutput(event, additionalContext) {
   let found = CONTEXT_HOOK_EVENTS.find((name) => name === event);
   return (
@@ -7309,7 +7309,7 @@ function joinLines(existing, added) {
     : `${existing}
 ${added}`;
 }
-//@ chunk-18hwfzwa.js:1069699-1070020 fingerprint = PromptResponseSchema (0.356)
+//@ chunk-18hwfzwa.js:1069699-1070020 fingerprint (2.1.88 match: PromptResponseSchema, 0.356)
 function collectQuestionAnswers(questions, answers) {
   let collected = [];
   for (let question of questions) {
@@ -7332,7 +7332,7 @@ function collectQuestionAnswers(questions, answers) {
   }
   return collected;
 }
-//@ chunk-61a1pjwa.js:31942-32072 fingerprint = CONFIG_CHANGE_SOURCES (0.599)
+//@ chunk-61a1pjwa.js:31942-32072 fingerprint (2.1.88 match: CONFIG_CHANGE_SOURCES, 0.599)
 var CONFIG_CHANGE_SOURCES_2 = {
   own: "user_settings",
   own_cowork: "user_settings",
@@ -7340,7 +7340,7 @@ var CONFIG_CHANGE_SOURCES_2 = {
   local: "local_settings",
   legacy: "local_settings",
 };
-//@ chunk-583vs41k.js:23544-23844 fingerprint = SDKAPIRetryMessageSchema (0.503)
+//@ chunk-583vs41k.js:23544-23844 fingerprint (2.1.88 match: SDKAPIRetryMessageSchema, 0.503)
 /**
  * 从 api_retry 状态帧提取 {retryAttempt, maxRetries, retryInMs, status, retryAt}。
  */
@@ -7360,7 +7360,7 @@ function parseApiRetryStatus(message) {
     retryAt: Date.now() + message.retry_delay_ms,
   };
 }
-//@ chunk-54xbtc53.js:27985-28637 fingerprint = SDKResultErrorSchema (0.34)
+//@ chunk-54xbtc53.js:27985-28637 fingerprint (2.1.88 match: SDKResultErrorSchema, 0.34)
 /**
  * -p 模式输出最终结果：json 格式直接写 JSON，否则 success 写结果文本，各类错误写对应提示。
  */
@@ -7422,7 +7422,7 @@ function stripControlChars(text) {
 function escapeC1Chars(text) {
   return text.replace(/[\u007F-\u009F]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
-//@ chunk-bzb0qnrm.js:6622-6980 fingerprint = SDKPermissionDenialSchema (0.352)
+//@ chunk-bzb0qnrm.js:6622-6980 fingerprint (2.1.88 match: SDKPermissionDenialSchema, 0.352)
 /**
  * 解析远程发来的钩子 stdin JSON：补本地 cwd、清理敏感路径字段、修复工具输入，返回 {envContext, cwd, stdin, repairedInput}。
  */
@@ -7718,7 +7718,7 @@ function truncateHookOutput(output) {
       : value;
   });
 }
-//@ chunk-bzb0qnrm.js:10173-10468 fingerprint = SyncHookJSONOutputSchema (0.405)
+//@ chunk-bzb0qnrm.js:10173-10468 fingerprint (2.1.88 match: SyncHookJSONOutputSchema, 0.405)
 function SyncHookJSONOutputSchema(output) {
   let hookSpecificOutput = output.hookSpecificOutput;
   if (!isPlainObject(hookSpecificOutput)) return output;

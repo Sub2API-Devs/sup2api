@@ -17,7 +17,7 @@ import { logForDebugging } from "../debug.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { extractZipToDirectory } from "../plugins/zipCache.js";
 
-//@ chunk-vr8smdd9.js:6319-6421 fingerprint = LIMITS (1)
+//@ chunk-vr8smdd9.js:6319-6421 fingerprint (2.1.88 match: LIMITS, 1)
 var LIMITS = {
   MAX_FILE_SIZE: 536870912,
   MAX_TOTAL_SIZE: 1073741824,
@@ -35,7 +35,7 @@ function isSafeZipPath(filePath) {
   if (isAbsolute(normalized)) return false;
   return true;
 }
-//@ chunk-vr8smdd9.js:6559-7438 fingerprint = validateZipFile (1)
+//@ chunk-vr8smdd9.js:6559-7438 fingerprint (2.1.88 match: validateZipFile, 1)
 /**
  * 逐条校验 zip 条目：文件数、单文件与总解压大小、压缩比上限（LIMITS），路径必须安全。
  */
@@ -65,7 +65,7 @@ function validateZipFile(file, state) {
         isValid: true,
       };
 }
-//@ chunk-vr8smdd9.js:7438-7807 fingerprint = unzipFile (0.849)
+//@ chunk-vr8smdd9.js:7438-7807 fingerprint (2.1.88 match: unzipFile, 0.849)
 /**
  * 解压 zip 字节为 {路径: 内容}，解压过程中逐条做安全校验（防 zip 炸弹与路径穿越）。
  */
@@ -141,7 +141,7 @@ function readUInt32LE(bytes, offset) {
 function readUInt64LE(bytes, offset) {
   return readUInt32LE(bytes, offset) + readUInt32LE(bytes, offset + 4) * 4294967296;
 }
-//@ chunk-vr8smdd9.js:8204-8318 placement = c (0.707)
+//@ chunk-vr8smdd9.js:8204-8318 placement (2.1.88 match: c, 0.707)
 function uint8ArrayToBinaryString(bytes) {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 16384)
@@ -244,7 +244,7 @@ function readZipCentralDirectory(bytes, limit) {
  * 解压文件默认权限。
  */
 var DEFAULT_FILE_MODE = 493;
-//@ chunk-vr8smdd9.js:9573-10116 fingerprint = parseZipModes (1)
+//@ chunk-vr8smdd9.js:9573-10116 fingerprint (2.1.88 match: parseZipModes, 1)
 /**
  * 从 zip 中央目录读取每个条目的 Unix 权限位（用于恢复可执行位）。
  */
@@ -277,7 +277,7 @@ function parseZipModes(data) {
   }
   return modes;
 }
-//@ chunk-e6aww6q8.js:610959-611035 fingerprint = readAndUnzipFile (1)
+//@ chunk-e6aww6q8.js:610959-611035 fingerprint (2.1.88 match: readAndUnzipFile, 1)
 /**
  * 读文件并解压到目录。
  */

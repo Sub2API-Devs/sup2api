@@ -95,7 +95,7 @@ function summarizeReleaseNotes({ entries }) {
   if (parts.length === 0) return "Updated to latest.";
   return `Updated to latest. Got ${formatListWithAnd(parts)}.`;
 }
-//@ chunk-ag5x7vhf.js:66386-66531 placement = formatListWithAnd (0.812)
+//@ chunk-ag5x7vhf.js:66386-66531 placement (2.1.88 match: formatListWithAnd, 0.812)
 function formatListWithAnd(parts) {
   if (parts.length <= 1) return parts.join("");
   if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;

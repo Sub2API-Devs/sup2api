@@ -88,7 +88,7 @@ async function fetchPinnedArtifactTitle(artifactUrlOrThrow, context) {
   });
   return artifactCardTitleFor(artifactUrlOrThrow, context).title;
 }
-//@ chunk-8wvtd8sr.js:132800-132958 placement = validateSafeCommandSubstitution (0.388)
+//@ chunk-8wvtd8sr.js:132800-132958 placement (2.1.88 match: validateSafeCommandSubstitution, 0.388)
 function allowPinAction(input, reason, target) {
   return {
     behavior: "allow",

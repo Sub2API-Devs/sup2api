@@ -176,7 +176,7 @@ import { firstLineOf } from "../../utils/stringUtils.js";
 import { APIUserAbortError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vv0zxx69.js:1191-1249 fingerprint = configureApiKeyHeaders (0.627)
+//@ chunk-vv0zxx69.js:1191-1249 fingerprint (2.1.88 match: configureApiKeyHeaders, 0.627)
 /**
  * API key 转 Authorization: Bearer 头（空时返回空对象）。
  */
@@ -187,7 +187,7 @@ function configureApiKeyHeaders(apiKey) {
       }
     : {};
 }
-//@ chunk-bwbq4xvm.js:156422-156608 fingerprint = getCustomHeaders (1)
+//@ chunk-bwbq4xvm.js:156422-156608 fingerprint (2.1.88 match: getCustomHeaders, 1)
 /**
  * 解析 ANTHROPIC_CUSTOM_HEADERS（每行 "名: 值"）为 [名, 值] 数组；无冒号或名为空的行忽略。
  */
@@ -200,12 +200,12 @@ function getCustomHeaders(headerText = env.ANTHROPIC_CUSTOM_HEADERS ?? "") {
   }
   return pairs;
 }
-//@ chunk-hwmsct5x.js:241005-241035 fingerprint = CLIENT_REQUEST_ID_HEADER (1)
+//@ chunk-hwmsct5x.js:241005-241035 fingerprint (2.1.88 match: CLIENT_REQUEST_ID_HEADER, 1)
 /**
  * 请求头名 x-client-request-id（第一方请求时由 buildFetch 生成 UUID）。
  */
 var CLIENT_REQUEST_ID_HEADER = "x-client-request-id";
-//@ chunk-hwmsct5x.js:270380-270646 fingerprint = createStderrLogger (1)
+//@ chunk-hwmsct5x.js:270380-270646 fingerprint (2.1.88 match: createStderrLogger, 1)
 /**
  * SDK 日志器：error/warn/info/debug 都写 stderr 并加 [Anthropic SDK …] 前缀（调试模式 f7() 时传给 SDK）。
  */
@@ -217,14 +217,14 @@ function createStderrLogger() {
     debug: (msg, ...args) => console.error("[Anthropic SDK DEBUG]", msg, ...args),
   };
 }
-//@ chunk-hwmsct5x.js:270646-270723 layout = isSessionContainerCompatible (0.828)
+//@ chunk-hwmsct5x.js:270646-270723 layout (2.1.88 match: isSessionContainerCompatible, 0.828)
 /**
  * 工具列表转名字：有 name 用 name，否则 mcp__<type>。旧版名 isSessionContainerCompatible 为错配。
  */
 function getToolNameList(tools, messages = []) {
   return tools.map((tool) => ("name" in tool ? tool.name : `mcp__${tool.type}`));
 }
-//@ chunk-hwmsct5x.js:270723-280488 fingerprint = getAnthropicClient (0.44)
+//@ chunk-hwmsct5x.js:270723-280488 fingerprint (2.1.88 match: getAnthropicClient, 0.44)
 /**
  * 创建 API 客户端（旧版 getAnthropicClient）。默认头：x-app(cli/cli-bg)、User-Agent、X-Claude-Code-Session-Id、ANTHROPIC_CUSTOM_HEADERS、自定义 anthropic-beta、远程容器/会话 id、x-client-app、子代理 agent-id/parent-agent-id；网关提示头开启时加 x-claude-code-request-class、x-claude-code-agent-type、x-claude-code-prompt-id。随后按提供商分支：gateway（JWT）、bedrock、foundry、anthropicAws、anthropicGoogleCloud、mantle、vertex，最后是第一方（API key 或 OAuth；令牌变化时递归重建）。maxRetries 由调用方传 0，重试全部交给 withRetry；超时取 API_TIMEOUT_MS 或 600s。
  */
@@ -1560,7 +1560,7 @@ function shouldUseBodyIdleWatchdog(provider) {
   if (!isByteWatchdogEnabled()) return false;
   return supportsByteWatchdog(provider) && supportsByteWatchdog(getAPIProvider());
 }
-//@ chunk-hwmsct5x.js:288644-288739 layout = getServerUrl (1)
+//@ chunk-hwmsct5x.js:288644-288739 layout (2.1.88 match: getServerUrl, 1)
 /**
  * 用新 body 重建 Response 并保留 url。旧版名 getServerUrl 为错配。
  */
@@ -1571,7 +1571,7 @@ function cloneResponseWithBody(response, body) {
   });
   return response_2;
 }
-//@ chunk-hwmsct5x.js:288739-291521 callgraph-fingerprint = buildFetch (0.183)
+//@ chunk-hwmsct5x.js:288739-291521 callgraph-fingerprint (2.1.88 match: buildFetch, 0.183)
 /**
  * 包装 fetch（旧版 buildFetch）：第一方直连时补 x-client-request-id、拒答回退相关头、anthropic-usage-limit、tools-used 头；打 [API REQUEST] 日志；大请求体 gzip 压缩；按需加首字节看门狗；Bedrock 流缺 content-type 时补默认值、类型不对抛 BedrockUnexpectedContentTypeError；SSE/eventstream 响应体加字节空闲看门狗。
  */

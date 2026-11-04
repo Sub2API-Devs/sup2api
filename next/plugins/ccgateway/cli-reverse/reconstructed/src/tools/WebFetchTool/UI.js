@@ -51,7 +51,7 @@ function renderToolUseProgressMessage(props) {
   } else element = $[6];
   return element;
 }
-//@ chunk-14ezrfvp.js:795-1023 fingerprint = renderToolResultMessage (0.787)
+//@ chunk-14ezrfvp.js:795-1023 fingerprint (2.1.88 match: renderToolResultMessage, 0.787)
 /**
  * WebFetch 结果渲染：显示字节数与状态码；verbose 时附结果文本。
  */

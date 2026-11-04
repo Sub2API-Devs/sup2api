@@ -33,7 +33,7 @@ import { SYNCED } from "../../utils/telemetry/pluginTelemetry.js";
 import { formatDisableOrUninstall } from "./pluginUsageStats.js";
 import { claudeCommand } from "../../utils/worktreeResumeHint.js";
 
-//@ chunk-vrb44rx7.js:126794-131623 fingerprint = formatErrorMessage (0.762)
+//@ chunk-vrb44rx7.js:126794-131623 fingerprint (2.1.88 match: formatErrorMessage, 0.762)
 function formatErrorMessage(error) {
   switch (error.type) {
     case "path-not-found":
@@ -147,7 +147,7 @@ function getErrorGuidanceText(error) {
   let errorGuidance = getErrorGuidance(error);
   return errorGuidance === null ? null : stripInvisibleKeepEmoji(errorGuidance);
 }
-//@ chunk-vrb44rx7.js:131677-138059 fingerprint = getErrorGuidance (0.632)
+//@ chunk-vrb44rx7.js:131677-138059 fingerprint (2.1.88 match: getErrorGuidance, 0.632)
 function getErrorGuidance(error) {
   switch (error.type) {
     case "path-not-found":

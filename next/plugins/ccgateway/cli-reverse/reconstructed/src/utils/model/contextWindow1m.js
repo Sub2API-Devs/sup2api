@@ -28,7 +28,7 @@ import { matchesCatalogList, servedMaxInputTokens } from "./modelCatalog/servedC
 import { isEnvTruthy } from "../envUtils.js";
 import { parseUserSpecifiedModel } from "./modelDisplay.js";
 
-//@ chunk-aepeg2w5.js:470799-470853 placement = is1mContextDisabled (1)
+//@ chunk-aepeg2w5.js:470799-470853 placement (2.1.88 match: is1mContextDisabled, 1)
 function is1mContextDisabled() {
   return env.CLAUDE_CODE_DISABLE_1M_CONTEXT;
 }
@@ -111,7 +111,7 @@ function isCompactDisabledOrCustom(model) {
   if (isEnvTruthy(process.env.DISABLE_COMPACT)) return true;
   return isUnknownCustomModelSpelling(model);
 }
-//@ chunk-aepeg2w5.js:471484-471628 placement = modelMatchesVersionPrefix (1)
+//@ chunk-aepeg2w5.js:471484-471628 placement (2.1.88 match: modelMatchesVersionPrefix, 1)
 /**
  * 解析后不是已知模型、且规范化与原拼写不一致或非 claude- 前缀（自定义拼写）。
  */

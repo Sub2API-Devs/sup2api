@@ -30,7 +30,7 @@ function formatPaneCreateError(stderr) {
     ? `${message} \u2014 no room for another tmux split. Spawn fewer concurrent teammates, enlarge your terminal if running inside tmux, or switch to in-process teammates via /config.`
     : message;
 }
-//@ chunk-27ewfych.js:890-1032 fingerprint = getTmuxColorName (1)
+//@ chunk-27ewfych.js:890-1032 fingerprint (2.1.88 match: getTmuxColorName, 1)
 function getTmuxColorName(color) {
   return {
     red: "red",
@@ -77,7 +77,7 @@ async function respawnPaneWithCommand(socketArgs, paneId, command, options) {
   if (result.code !== 0)
     throw new SwarmPaneError(`Failed to send command to pane ${paneId}: ${result.stderr}`);
 }
-//@ chunk-27ewfych.js:1403-7315 facade-exports = TmuxBackend (0.901)
+//@ chunk-27ewfych.js:1403-7315 facade-exports (2.1.88 match: TmuxBackend, 0.901)
 /**
  * tmux 后端：在 tmux 内时在 leader 窗口分屏（首个 teammate 横向 70%，之后交替纵横分割并 main-vertical 布局）；不在 tmux 时在外部 claude-swarm:swarm-view 窗口平铺；分屏有锁串行化。
  */

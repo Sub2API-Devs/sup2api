@@ -39,7 +39,7 @@ var TOOL_RESULT_MESSAGE_BY_KIND = {
   Reject: UserToolRejectMessage,
   Error: UserToolErrorMessage,
 };
-//@ chunk-ah34pb7m.js:221816-225018 fingerprint = UserToolResultMessage (0.567)
+//@ chunk-ah34pb7m.js:221816-225018 fingerprint (2.1.88 match: UserToolResultMessage, 0.567)
 /**
  * tool_result 分派：is_error 时 UserToolErrorMessage（非 verbose 时可能按工具格式化错误），拒绝内容时 UserToolRejectMessage，否则 UserToolSuccessMessage；找不到对应 tool_use 时不渲染。
  */

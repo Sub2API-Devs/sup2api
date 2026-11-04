@@ -28,7 +28,7 @@ import { claimOnceStore } from "../../services/api/verificationRequired.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { MessageResponse } from "../MessageResponse.js";
 
-//@ chunk-ah34pb7m.js:40534-43247 fingerprint = AdvisorMessage (0.614)
+//@ chunk-ah34pb7m.js:40534-43247 fingerprint (2.1.88 match: AdvisorMessage, 0.614)
 function AdvisorMessage(props) {
   let $ = useMemoCache(42);
   let { block, addMargin, resolvedToolUseIDs, erroredToolUseIDs, shouldAnimate, verbose, advisorModel } =

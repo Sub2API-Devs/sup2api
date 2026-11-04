@@ -17,7 +17,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-m8z86bna.js:406-553 fingerprint = SECRET_FIELD_NAMES (0.892)
+//@ chunk-m8z86bna.js:406-553 fingerprint (2.1.88 match: SECRET_FIELD_NAMES, 0.892)
 /**
  * 调试日志截断长度与需脱敏的字段名（session_ingress_token、environment_secret、access_token、secret、token）。
  */
@@ -33,7 +33,7 @@ deferInit("chunk-m8z86bna.js:406", () => {
 function redactSecrets(text) {
   return text.replace(SECRET_PATTERN, '"$1":"[REDACTED]"');
 }
-//@ chunk-m8z86bna.js:607-723 fingerprint = debugTruncate (1)
+//@ chunk-m8z86bna.js:607-723 fingerprint (2.1.88 match: debugTruncate, 1)
 /**
  * 调试日志截断：换行转义，超长时截断并注明总长度。
  */
@@ -46,7 +46,7 @@ function debugTruncate(s) {
   if (flat.length <= DEBUG_MSG_LIMIT) return flat;
   return flat.slice(0, DEBUG_MSG_LIMIT) + `... (${flat.length} chars)`;
 }
-//@ chunk-m8z86bna.js:723-849 layout = debugTruncate (1)
+//@ chunk-m8z86bna.js:723-849 layout (2.1.88 match: debugTruncate, 1)
 /**
  * 对象/字符串转日志文本：先脱敏再截断到 2000 字符。
  */
@@ -70,7 +70,7 @@ function hashIdForLog(value) {
 function safeLogToken(value) {
   return typeof value === "string" && /^[\w.-]{1,64}$/.test(value) ? value : `<${typeof value}>`;
 }
-//@ chunk-m8z86bna.js:1005-1139 fingerprint = extractHttpStatus (1)
+//@ chunk-m8z86bna.js:1005-1139 fingerprint (2.1.88 match: extractHttpStatus, 1)
 /**
  * 错误消息附带响应体的 error message（若是单行纯文本）。
  */
@@ -98,7 +98,7 @@ function parseRetryAfterMs(header, now = Date.now()) {
   }
   return;
 }
-//@ chunk-m8z86bna.js:1318-1574 layout = extractErrorDetail (1)
+//@ chunk-m8z86bna.js:1318-1574 layout (2.1.88 match: extractErrorDetail, 1)
 /**
  * 从错误响应体取 message（顶层或 error.message）。
  */
@@ -156,7 +156,7 @@ function extractErrorCode(body) {
     return details.error_code;
   return;
 }
-//@ chunk-m8z86bna.js:2168-2271 fingerprint = logBridgeSkip (1)
+//@ chunk-m8z86bna.js:2168-2271 fingerprint (2.1.88 match: logBridgeSkip, 1)
 /**
  * 记 tengu_bridge_repl_skipped（REPL 桥未启动的原因）。
  */

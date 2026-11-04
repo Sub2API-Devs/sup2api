@@ -88,7 +88,7 @@ function samePathCaseAware(left, right) {
 function normalizeDriveLetter(path) {
   return path.replace(/^[a-z](?=:)/, (letter) => letter.toUpperCase());
 }
-//@ chunk-cc8an1p1.js:1603-1647 placement = setCwdState (1)
+//@ chunk-cc8an1p1.js:1603-1647 placement (2.1.88 match: setCwdState, 1)
 function nfcKey(cwd) {
   return normalizeCaseForComparison(cwd.normalize("NFC"));
 }

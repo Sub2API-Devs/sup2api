@@ -24,35 +24,35 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-372tanf4.js:346", () => {
   init_react_production();
 });
-//@ chunk-372tanf4.js:350-418 fingerprint = _temp (1)
+//@ chunk-372tanf4.js:350-418 fingerprint (2.1.88 match: _temp, 1)
 /**
  * 覆盖层卸载时让 stdout 的 Ink 实例重绘整帧。
  */
 function invalidatePrevFrame() {
   return getSecondRootError().get(process.stdout)?.invalidatePrevFrame();
 }
-//@ chunk-372tanf4.js:418-463 layout = _temp2 (1)
+//@ chunk-372tanf4.js:418-463 layout (2.1.88 match: _temp2, 1)
 /**
  * 选择器：是否有任何覆盖层。
  */
 function selectHasAnyOverlay(s) {
   return s.activeOverlays.size > 0;
 }
-//@ chunk-372tanf4.js:463-504 layout = _temp2 (1)
+//@ chunk-372tanf4.js:463-504 layout (2.1.88 match: _temp2, 1)
 /**
  * 选择器：是否有提示框上方以外的覆盖层。
  */
 function selectHasNonAbovePromptOverlay(s) {
   return hasUnknownKey(s.activeOverlays);
 }
-//@ chunk-372tanf4.js:504-547 layout = _temp2 (1)
+//@ chunk-372tanf4.js:504-547 layout (2.1.88 match: _temp2, 1)
 /**
  * 选择器：是否有模态（非 autocomplete）覆盖层。
  */
 function selectHasModalOverlay_2(s) {
   return hasUnknownOtherKey(s.activeOverlays);
 }
-//@ chunk-372tanf4.js:547-626 layout = _temp2 (1)
+//@ chunk-372tanf4.js:547-626 layout (2.1.88 match: _temp2, 1)
 /**
  * 选择器：history-search 是否打开。
  */
@@ -64,7 +64,7 @@ function selectHasHistorySearchOverlay(s) {
   }
   return false;
 }
-//@ chunk-372tanf4.js:626-705 layout = _temp2 (1)
+//@ chunk-372tanf4.js:626-705 layout (2.1.88 match: _temp2, 1)
 /**
  * 选择器：elicitation 对话框是否打开。
  */
@@ -76,7 +76,7 @@ function selectHasElicitationOverlay(s) {
   }
   return false;
 }
-//@ chunk-372tanf4.js:705-823 fingerprint = NON_MODAL_OVERLAYS (0.406)
+//@ chunk-372tanf4.js:705-823 fingerprint (2.1.88 match: NON_MODAL_OVERLAYS, 0.406)
 /**
  * 非模态覆盖层（autocomplete）；m 为提示框上方覆盖层；v 为 history-search。
  */
@@ -98,7 +98,7 @@ deferInit("chunk-372tanf4.js:823", () => {
   ELICITATION_OVERLAYS = new Set(["elicitation", "elicitation-url", ...[], ...[]]);
   OVERLAY_BATCH_SIZE = 2;
 });
-//@ chunk-372tanf4.js:890-1448 fingerprint = useRegisterOverlay (1)
+//@ chunk-372tanf4.js:890-1448 fingerprint (2.1.88 match: useRegisterOverlay, 1)
 /**
  * 登记一个覆盖层 id 到 activeOverlays（启用时），卸载时移除并重绘。
  */
@@ -216,7 +216,7 @@ function useOverlayFlagA() {
 function useOverlayFlagB() {
   return useAppStateSlice(selectHasElicitationOverlay) ?? false;
 }
-//@ chunk-18hwfzwa.js:1004326-1004373 fingerprint = _temp2 (1)
+//@ chunk-18hwfzwa.js:1004326-1004373 fingerprint (2.1.88 match: _temp2, 1)
 /**
  * 选择器：activeOverlays 中是否有模态覆盖层。
  */

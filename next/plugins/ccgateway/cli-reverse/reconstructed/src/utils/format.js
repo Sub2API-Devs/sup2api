@@ -22,7 +22,7 @@ import { plural } from "./stringUtils.js";
 import { effectiveSessionTimeZone } from "./sessionTimeZone.js";
 import { SHELL_HISTORY_SOURCES, getPathModuleForPlatform } from "../services/autoModeSetup/pregather.js";
 
-//@ chunk-xkeryp4t.js:191-420 facade-exports = formatFileSize (1)
+//@ chunk-xkeryp4t.js:191-420 facade-exports (2.1.88 match: formatFileSize, 1)
 /**
  * 格式化文件大小：bytes/KB/MB/GB。被 70+ 处使用。
  */
@@ -174,7 +174,7 @@ function wrapToMaxLines(text, width, maxLines) {
 function formatSecondsShort(ms) {
   return `${(ms / 1000).toFixed(1)}s`;
 }
-//@ chunk-tw8fk0yz.js:14228-14928 facade-exports = formatDuration (1)
+//@ chunk-tw8fk0yz.js:14228-14928 facade-exports (2.1.88 match: formatDuration, 1)
 /**
  * 格式化时长（ms）：如 "1h 2m 3s"、"45s"，可选隐藏 0 单位或最大单位数。被 60+ 处使用。
  */
@@ -240,7 +240,7 @@ function formatBarElapsed(elapsedMs) {
   if (floored_2 < 24) return `${floored_2}h${String(floored % 60).padStart(2, "0")}m`;
   return `${Math.floor(floored_2 / 24)}d${String(floored_2 % 24).padStart(2, "0")}h`;
 }
-//@ chunk-tw8fk0yz.js:15312-15460 fingerprint = getNumberFormatter (0.786)
+//@ chunk-tw8fk0yz.js:15312-15460 fingerprint (2.1.88 match: getNumberFormatter, 0.786)
 var COMPACT_ONE_DECIMAL = {
   notation: "compact",
   maximumFractionDigits: 1,
@@ -251,7 +251,7 @@ var COMPACT_MAX_ONE_DECIMAL = {
   maximumFractionDigits: 1,
   minimumFractionDigits: 0,
 };
-//@ chunk-tw8fk0yz.js:15460-15576 facade-exports = getBudgetContinuationMessage (0.676)
+//@ chunk-tw8fk0yz.js:15460-15576 facade-exports (2.1.88 match: getBudgetContinuationMessage, 0.676)
 function formatNumber(value) {
   let number = typeof value === "number" ? value : Number.NaN;
   let useOneDecimal = number >= 1000;
@@ -263,14 +263,14 @@ function formatNumber(value) {
 function formatTokens(count) {
   return formatNumber(count).replace(".0", "");
 }
-//@ chunk-tw8fk0yz.js:15621-15693 facade-exports = formatCost (1)
+//@ chunk-tw8fk0yz.js:15621-15693 facade-exports (2.1.88 match: formatCost, 1)
 function formatCost(cost, maxDecimalPlaces = 4) {
   return `$${cost > 0.5 ? round(cost, 100).toFixed(2) : cost.toFixed(maxDecimalPlaces)}`;
 }
 //@ chunk-tw8fk0yz.js:15735-15846 facade-exports
 var UNKNOWN_MODEL_COST_NOTE = "costs may be inaccurate due to usage of unknown models";
 var ORG_MODEL_PRICING_NOTE = "at your organization's configured rates";
-//@ chunk-tw8fk0yz.js:15846-16085 facade-exports = formatModelUsage (0.794)
+//@ chunk-tw8fk0yz.js:15846-16085 facade-exports (2.1.88 match: formatModelUsage, 0.794)
 function formatModelTokenCounts(usage) {
   return (
     `${formatNumber(usage.inputTokens)} input, ${formatNumber(usage.outputTokens)} output, ${formatNumber(usage.cacheReadInputTokens)} cache read, ${formatNumber(usage.cacheCreationInputTokens)} cache write` +
@@ -282,7 +282,7 @@ function formatTokenEstimate(tokens) {
   if (tokens < 20) return "< 20";
   return `~${formatTokens(Math.round(tokens / 10) * 10)}`;
 }
-//@ chunk-tw8fk0yz.js:16157-16898 facade-exports = formatRelativeTime (0.965)
+//@ chunk-tw8fk0yz.js:16157-16898 facade-exports (2.1.88 match: formatRelativeTime, 0.965)
 /**
  * 相对时间（Intl.RelativeTimeFormat，narrow/long），如 "3h ago"/"in 2d"。
  */
@@ -338,7 +338,7 @@ function formatRelativeTime(date, options = {}) {
   if (style === "narrow") return diffInSeconds <= 0 ? "0s ago" : "in 0s";
   return getRelativeTimeFormat(style, "auto").format(0, "second");
 }
-//@ chunk-tw8fk0yz.js:16898-17021 facade-exports = formatRelativeTimeAgo (1)
+//@ chunk-tw8fk0yz.js:16898-17021 facade-exports (2.1.88 match: formatRelativeTimeAgo, 1)
 function formatRelativeTimeAgo(date, options = {}) {
   let { now = new Date(), ...restOptions } = options;
   if (date > now)
@@ -352,7 +352,7 @@ function formatRelativeTimeAgo(date, options = {}) {
     now,
   });
 }
-//@ chunk-tw8fk0yz.js:17021-17398 facade-exports = formatLogMetadata (0.962)
+//@ chunk-tw8fk0yz.js:17021-17398 facade-exports (2.1.88 match: formatLogMetadata, 0.962)
 function formatLogMetadata(log) {
   let sizeOrCount =
     log.fileSize !== undefined ? formatFileSize(log.fileSize) : `${log.messageCount} messages`;
@@ -390,7 +390,7 @@ function getMinutesAndYear(date, timeZone) {
     year: Number(partsByName.get("year")),
   };
 }
-//@ chunk-tw8fk0yz.js:17664-18263 facade-exports = formatResetTime (0.882)
+//@ chunk-tw8fk0yz.js:17664-18263 facade-exports (2.1.88 match: formatResetTime, 0.882)
 /**
  * 重置时间显示：今天只显示时刻，否则带月日，可附时区。
  */
@@ -434,7 +434,7 @@ function formatResetTime(
       .replace(/[ \u202f]([AP]M)/i, (_match, ampm) => ampm.toLowerCase()) + zoneSuffix
   );
 }
-//@ chunk-tw8fk0yz.js:18263-18362 facade-exports = formatResetText (1)
+//@ chunk-tw8fk0yz.js:18263-18362 facade-exports (2.1.88 match: formatResetText, 1)
 function formatResetText(resetsAt, includeTimeZone = false, showTime = true, forceDate = false) {
   let dt = new Date(resetsAt);
   return `${formatResetTime(Math.floor(dt.getTime() / 1000), includeTimeZone, showTime, forceDate)}`;
@@ -463,7 +463,7 @@ function formatKb(hiddenChars) {
 function formatResetTimeWithLocale(resetsAt, includeTimeZone = false, showTime = true, forceDate = false) {
   return formatResetTime(resetsAt, includeTimeZone, showTime, forceDate, effectiveSessionTimeZone());
 }
-//@ chunk-2a8yx6fc.js:19013-19287 fingerprint = formatNumber (0.645)
+//@ chunk-2a8yx6fc.js:19013-19287 fingerprint (2.1.88 match: formatNumber, 0.645)
 function formatNumber_2(number) {
   let seenPaths = new Set();
   let results = [];

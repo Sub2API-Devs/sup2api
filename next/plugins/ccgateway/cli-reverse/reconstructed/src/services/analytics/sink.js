@@ -44,7 +44,7 @@ function maskModelFields(metadata, currentModel) {
   } catch {}
   return maskModelIdsInRecord(metadata);
 }
-//@ chunk-ryc3zkv1.js:455-864 callgraph-fingerprint = DATADOG_GATE_NAME (0.155)
+//@ chunk-ryc3zkv1.js:455-864 callgraph-fingerprint (2.1.88 match: DATADOG_GATE_NAME, 0.155)
 /**
  * Datadog 门名 tengu_log_datadog_events，以及需要附 tengu_quizzical_giraffe 标记的事件（tengu_started、OAuth 刷新、tengu_api_error 等）。
  */
@@ -68,7 +68,7 @@ deferInit("chunk-ryc3zkv1.js:455", () => {
     "tengu_feature_sad",
   ]);
 });
-//@ chunk-ryc3zkv1.js:864-939 fingerprint = shouldTrackDatadog (1)
+//@ chunk-ryc3zkv1.js:864-939 fingerprint (2.1.88 match: shouldTrackDatadog, 1)
 /**
  * Datadog 是否启用：killswitch tengu_frond_boric.datadog 未开且 GrowthBook 门 tengu_log_datadog_events 为真。
  */
@@ -125,7 +125,7 @@ function getCurrentModelSafe() {
     return;
   }
 }
-//@ chunk-ryc3zkv1.js:1393-1547 layout = logEventImpl (1)
+//@ chunk-ryc3zkv1.js:1393-1547 layout (2.1.88 match: logEventImpl, 1)
 function logEventImpl(eventName, metadata, eventSampleRate, readSinks) {
   let sinks = readSinks();
   if (!isAnySinkEnabled(sinks)) return;
@@ -181,7 +181,7 @@ function logEventToSinks(eventName, metadata, shouldTrackDatadog) {
     isCollectingMetadata = false;
   }
 }
-//@ chunk-ryc3zkv1.js:1959-2209 layout = logEventImpl (1)
+//@ chunk-ryc3zkv1.js:1959-2209 layout (2.1.88 match: logEventImpl, 1)
 /**
  * 异步分发：采样、等待 GrowthBook，然后并行发 Datadog 与 1P（logEventTo1PQueued），等待全部完成。
  */
@@ -215,7 +215,7 @@ async function dispatchEventToSinksAsync(eventName, metadata, readSinks) {
 function initializeAnalyticsSink() {
   attachAnalyticsSink(initializeAnalyticsSink_2(shouldTrackDatadog));
 }
-//@ chunk-ryc3zkv1.js:2234-2311 fingerprint = initializeAnalyticsSink (1)
+//@ chunk-ryc3zkv1.js:2234-2311 fingerprint (2.1.88 match: initializeAnalyticsSink, 1)
 function initializeAnalyticsSink_2(shouldTrackDatadog) {
   return {
     logEvent: (eventName, metadata) => logEventToSinks(eventName, metadata, shouldTrackDatadog),

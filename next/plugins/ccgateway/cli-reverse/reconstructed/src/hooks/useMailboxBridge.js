@@ -20,7 +20,7 @@ import { useStoreSelector } from "./useStoreSelector.js";
 
 //@ chunk-18hwfzwa.js:1665839-1665843 placement
 init_react_production();
-//@ chunk-18hwfzwa.js:1665843-1666058 fingerprint = useMailboxBridge (0.742)
+//@ chunk-18hwfzwa.js:1665843-1666058 fingerprint (2.1.88 match: useMailboxBridge, 0.742)
 function useMailboxBridge(onSubmitMessage) {
   let mailbox = useMailbox();
   let isLoading = useStoreSelector(onSubmitMessage, (state) => state.isLoading);

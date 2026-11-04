@@ -110,7 +110,7 @@ function renderStdioServerStatus(client, serverToolsCount, theme) {
     ],
   });
 }
-//@ chunk-vrb44rx7.js:27437-30172 fingerprint = MCPStdioServerMenu (0.58)
+//@ chunk-vrb44rx7.js:27437-30172 fingerprint (2.1.88 match: MCPStdioServerMenu, 0.58)
 function MCPStdioServerMenu({
   server,
   serverToolsCount,

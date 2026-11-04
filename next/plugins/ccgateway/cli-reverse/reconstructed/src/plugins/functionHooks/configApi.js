@@ -19,7 +19,7 @@ import { errorMessage } from "../../utils/errors.js";
 import { HooksError } from "./hooksErrors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3718367-3718466 placement = getShellConfigImpl (0.668)
+//@ chunk-e6aww6q8.js:3718367-3718466 placement (2.1.88 match: getShellConfigImpl, 0.668)
 /**
  * 把配置项转成 config.describe 用的描述对象（与 Shell 无关，切分误归）。
  */

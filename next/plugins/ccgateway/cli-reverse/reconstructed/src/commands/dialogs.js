@@ -10,7 +10,7 @@
  */
 import { COMMAND_DIALOG_LOADERS } from "../screens/repl/commandDialogLoaders.js";
 
-//@ chunk-18hwfzwa.js:40620-40744 placement = thinkback (0.685)
+//@ chunk-18hwfzwa.js:40620-40744 placement (2.1.88 match: thinkback, 0.685)
 /**
  * resolveCommandDialog：local-jsx 命令未提供 load 时，按 dialogKey ?? name 从 COMMAND_DIALOG_LOADERS 懒加载实现 chunk。
  */

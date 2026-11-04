@@ -47,7 +47,7 @@ function buildAccessibility(hidden, label, role, state, preserveWhitespace) {
     preserveWhitespace,
   };
 }
-//@ chunk-bzr73sfg.js:182451-183635 fingerprint = createNode (0.457)
+//@ chunk-bzr73sfg.js:182451-183635 fingerprint (2.1.88 match: createNode, 0.457)
 /**
  * 创建 DOM 元素节点：除 ink-virtual-text/ink-link/ink-progress 外都建 yoga 节点；ink-text 和 ink-raw-ansi 挂测量函数。316 的节点比 2.1.88 多了大量滚动（scrollTop/pendingScrollDelta/stickyScroll/scrollAnchor…）、渲染缓存（cachedLayout/paintsPastRect/childrenOverlap/pendingClears）、原始模式引用与无障碍字段。
  */
@@ -105,7 +105,7 @@ var createNode = (nodeName, yogaConfig) => {
   else if (nodeName === "ink-raw-ansi") node.yogaNode?.setMeasureFunc(measureRawAnsiNode.bind(null, node));
   return node;
 };
-//@ chunk-bzr73sfg.js:183734-184657 callgraph-witnessed = removeChildNode (0.48)
+//@ chunk-bzr73sfg.js:183734-184657 callgraph-witnessed (2.1.88 match: removeChildNode, 0.48)
 /**
  * DOM 子节点增删：appendChildNode / insertBeforeNode 同步插入 yoga 子节点（yoga 下标只数有 yoga 节点的兄弟），绝对定位时标记祖先；removeChildNode 移除 yoga 子节点、收集被删节点上次绘制的区域作为待清除矩形。三者最后都 markDirty。
  */
@@ -146,7 +146,7 @@ var removeChildNode = (parent, child) => {
   if (index >= 0) parent.childNodes.splice(index, 1);
   markDirty(parent);
 };
-//@ chunk-bzr73sfg.js:184657-184907 fingerprint = collectRemovedRects (0.864)
+//@ chunk-bzr73sfg.js:184657-184907 fingerprint (2.1.88 match: collectRemovedRects, 0.864)
 /**
  * 递归收集被删除子树里各节点上次绘制的矩形（cachedLayout 与 pendingClears），记到父节点的待清除列表；返回子树里是否有绝对定位节点（需要更大范围重绘）。
  */
@@ -166,7 +166,7 @@ function collectRemovedRects(parent, removed, underAbsolute) {
     if (collectRemovedRects(parent, child, isAbsolute)) hadAbsolute = true;
   return hadAbsolute;
 }
-//@ chunk-bzr73sfg.js:184907-185533 callgraph-witnessed = appendChildNode (0.225)
+//@ chunk-bzr73sfg.js:184907-185533 callgraph-witnessed (2.1.88 match: appendChildNode, 0.225)
 /**
  * 节点属性写入：setAttribute（children 除外，值变了才 markDirty）、setAccessibility、setStyle（浅比较不变则跳过，新变成 absolute 时标记祖先）、setStyleAndApplyLayout（只把变化的样式键写进 yoga）、diffProps（返回变化键，删掉的键值为 undefined）、setTextStyles。
  */
@@ -232,7 +232,7 @@ function shallowEqual(a, b) {
   for (let key of aKeys) if (!Object.hasOwn(b, key) || a[key] !== b[key]) return false;
   return true;
 }
-//@ chunk-bzr73sfg.js:185774-186235 fingerprint = measureTextNode (0.761)
+//@ chunk-bzr73sfg.js:185774-186235 fingerprint (2.1.88 match: measureTextNode, 0.761)
 /**
  * createTextNode 建 #text 节点；measureTextNode 是 ink-text 的 yoga 测量函数：取压平文本（含 ANSI 时按段），wrap-stream 少算末尾一行；放得下直接返回自然尺寸，否则按 textWrap 折行后再量。
  */
@@ -287,7 +287,7 @@ function measureWrappedText(text, maxWidth, widthMode, textWrap) {
     };
   return size;
 }
-//@ chunk-bzr73sfg.js:186428-186908 fingerprint = markDirty (0.771)
+//@ chunk-bzr73sfg.js:186428-186908 fingerprint (2.1.88 match: markDirty, 0.771)
 /**
  * measureRawAnsiNode：ink-raw-ansi 的测量函数，直接用 rawWidth/rawHeight 属性。markDirty：沿父链置 dirty，并把最近的 ink-text/ink-raw-ansi 的 yoga 节点标脏。scheduleRenderFrom：找到根并调 onRender。scheduleLayoutFrom：同上但先置 layoutStale。
  */
@@ -333,7 +333,7 @@ function markScrollCommitStart(node) {
   while (root.parentNode) root = root.parentNode;
   root.scrollCommitStartedAt = performance.now();
 }
-//@ chunk-bzr73sfg.js:187008-187105 fingerprint = setTextNodeValue (1)
+//@ chunk-bzr73sfg.js:187008-187105 fingerprint (2.1.88 match: setTextNodeValue, 1)
 /**
  * 设置文本节点内容，变了才 markDirty。
  */
@@ -343,11 +343,11 @@ var setTextNodeValue = (node, text) => {
   node.nodeValue = text;
   markDirty(node);
 };
-//@ chunk-bzr73sfg.js:187105-187148 fingerprint = isDOMElement (1)
+//@ chunk-bzr73sfg.js:187105-187148 fingerprint (2.1.88 match: isDOMElement, 1)
 function isDOMElement(node) {
   return node.nodeName !== "#text";
 }
-//@ chunk-bzr73sfg.js:187148-187232 fingerprint = clearYogaNodeReferences (1)
+//@ chunk-bzr73sfg.js:187148-187232 fingerprint (2.1.88 match: clearYogaNodeReferences, 1)
 /**
  * 递归清掉子树上的 yogaNode 引用（释放 yoga 节点前调用）。
  */
@@ -355,7 +355,7 @@ var clearYogaNodeReferences = (node) => {
   if ("childNodes" in node) for (let child of node.childNodes) clearYogaNodeReferences(child);
   node.yogaNode = undefined;
 };
-//@ chunk-bzr73sfg.js:187232-187497 fingerprint = findOwnerChainAtRow (0.916)
+//@ chunk-bzr73sfg.js:187232-187497 fingerprint (2.1.88 match: findOwnerChainAtRow, 0.916)
 /**
  * 调试重绘用：找出覆盖屏幕第 y 行的最深节点的 React 组件所有者链（debugOwnerChain）。
  */
@@ -373,7 +373,7 @@ function findOwnerChainAtRow(root, y) {
     for (let child of node.childNodes) if (isDOMElement(child)) walk(child, top);
   }
 }
-//@ chunk-bzr73sfg.js:195730-195906 fingerprint = scheduleRenderFrom (0.662)
+//@ chunk-bzr73sfg.js:195730-195906 fingerprint (2.1.88 match: scheduleRenderFrom, 0.662)
 /**
  * reconciler 的 removeChild：从 DOM 和 yoga 中移除并释放 yoga 节点；通知焦点管理器节点已删除；归还子树持有的原始模式引用。
  */
@@ -396,7 +396,7 @@ var DEFAULT_TREE_BOX_STYLE = {
   overflowX: "visible",
   overflowY: "visible",
 };
-//@ chunk-bzr73sfg.js:249859-251690 callgraph-fingerprint = createTextNode (0.198)
+//@ chunk-bzr73sfg.js:249859-251690 callgraph-fingerprint (2.1.88 match: createTextNode, 0.198)
 /**
  * 命令式 DOM 子树：在某个挂载节点下直接创建/插入/删除 ink-box、ink-text、ink-virtual-text（span），改样式和文字，改动后只触发重新布局与重绘（不经 React）；校验节点归属与嵌套规则（文字里只能放 span）。rect() 读上一帧的位置。2.1.88 没有。
  */
@@ -596,7 +596,7 @@ function underlineHyperlinkAt(screen, col, row, url, stylePool) {
     }
   return spans;
 }
-//@ chunk-bzr73sfg.js:257613-257728 placement = countUniqueFilesFromOutgoingCalls (0.482)
+//@ chunk-bzr73sfg.js:257613-257728 placement (2.1.88 match: countUniqueFilesFromOutgoingCalls, 0.482)
 /**
  * 在终端网格某行内向左右扩展同值单元格，返回 {row, from, to}（Ink 选择相关，归属错误）。
  */
@@ -631,7 +631,7 @@ function countFibers(root) {
   stack.length = 0;
   return count;
 }
-//@ chunk-bzr73sfg.js:258754-258955 placement = clearYogaNodeReferences (0.804)
+//@ chunk-bzr73sfg.js:258754-258955 placement (2.1.88 match: clearYogaNodeReferences, 0.804)
 function countDomNodes(root) {
   if (!root) return 0;
   let count = 0;
@@ -649,7 +649,7 @@ function countDomNodes(root) {
   stack.length = 0;
   return count;
 }
-//@ chunk-bzr73sfg.js:310990-311083 fingerprint = setStyle (0.644)
+//@ chunk-bzr73sfg.js:310990-311083 fingerprint (2.1.88 match: setStyle, 0.644)
 function isDegenerateBorderBox(node, width, height) {
   return node.style.borderStyle !== undefined && (Math.floor(width) < 2 || Math.floor(height) === 0);
 }

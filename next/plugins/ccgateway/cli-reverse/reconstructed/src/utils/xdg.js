@@ -12,14 +12,14 @@ import { homedir } from "os";
 import { join } from "path";
 import { env } from "./env.js";
 
-//@ chunk-rk4wpr9g.js:283-358 fingerprint = resolveOptions (1)
+//@ chunk-rk4wpr9g.js:283-358 fingerprint (2.1.88 match: resolveOptions, 1)
 function resolveOptions(options) {
   return {
     env: options?.env ?? process.env,
     home: options?.homedir ?? env.HOME ?? homedir(),
   };
 }
-//@ chunk-rk4wpr9g.js:358-444 fingerprint = getXDGStateHome (1)
+//@ chunk-rk4wpr9g.js:358-444 fingerprint (2.1.88 match: getXDGStateHome, 1)
 /**
  * $XDG_STATE_HOME 或 ~/.local/state。
  */
@@ -27,12 +27,12 @@ function getXDGStateHome(options) {
   let { env, home } = resolveOptions(options);
   return env.XDG_STATE_HOME ?? join(home, ".local", "state");
 }
-//@ chunk-rk4wpr9g.js:444-522 fingerprint = getXDGCacheHome (1)
+//@ chunk-rk4wpr9g.js:444-522 fingerprint (2.1.88 match: getXDGCacheHome, 1)
 function getXDGCacheHome(options) {
   let { env, home } = resolveOptions(options);
   return env.XDG_CACHE_HOME ?? join(home, ".cache");
 }
-//@ chunk-rk4wpr9g.js:522-607 fingerprint = getXDGDataHome (1)
+//@ chunk-rk4wpr9g.js:522-607 fingerprint (2.1.88 match: getXDGDataHome, 1)
 function getXDGDataHome(options) {
   let { env, home } = resolveOptions(options);
   return env.XDG_DATA_HOME ?? join(home, ".local", "share");
@@ -41,7 +41,7 @@ function getXDGDataHome(options) {
 function getNativeVersionsDir(options) {
   return join(getXDGDataHome(options), "claude", "versions");
 }
-//@ chunk-rk4wpr9g.js:660-719 fingerprint = getUserBinDir (1)
+//@ chunk-rk4wpr9g.js:660-719 fingerprint (2.1.88 match: getUserBinDir, 1)
 function getUserBinDir(options) {
   let { home } = resolveOptions(options);
   return join(home, ".local", "bin");

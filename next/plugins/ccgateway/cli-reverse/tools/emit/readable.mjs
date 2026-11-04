@@ -54,6 +54,7 @@ import { chunkInitFacts } from './init-deps.mjs';
 import { chunkEvalOrder } from './load-order.mjs';
 import { planEvaluation } from './eval-order.mjs';
 import { deferStatement } from './defer.mjs';
+import { renameWorker } from './worker-names.mjs';
 
 const D = readJsonl('analysis/scan/decls.jsonl');
 const scanMods = JSON.parse(fs.readFileSync('analysis/scan/modules.json', 'utf8'));
@@ -525,7 +526,7 @@ for (const [file, o] of outputs) {
     }
     const dp = declPath.get(id);
     const mm = match.get(id);
-    body.push('//@ ' + d.file + ':' + d.start + '-' + d.end + ' ' + (dp?.method ?? '') + (mm ? ' = ' + mm.refName + (mm.score !== undefined ? ' (' + mm.score + ')' : '') : ''));
+    body.push('//@ ' + d.file + ':' + d.start + '-' + d.end + ' ' + (dp?.method ?? '') + (mm ? ' (2.1.88 match: ' + mm.refName + (mm.score !== undefined ? ', ' + mm.score : '') + ')' : ''));
     // the JSDoc sits directly above its declaration, under the provenance line
     if (declDocs.has(id)) body.push(jsdoc(declDocs.get(id)));
     // rendered after the evaluation plan (some statements' initialisation is deferred); the
@@ -548,23 +549,36 @@ for (const [file, info] of Object.entries(manifest)) {
 // ---------- the function-hooks worker: a second program (a worker thread's entry) ----------
 // original/src/plugins/functionHooks/hooks-worker/hooks-worker.js is started as a Worker by
 // plugins/functionHooks/hooksWorker (HOOKS_WORKER_URL = import.meta.dir + "/./src/plugins/…"). It
-// is not one of the scanned chunks; it is emitted as is, with its imports of chunk exports pointed at
+// is not one of the scanned chunks; it is emitted with its own naming table (naming/worker-hooks-worker.json,
+// applied and checked by tools/emit/worker-names.mjs) and its imports of chunk exports pointed at
 // the modules that declare them. Its bare `import "./chunk-…"` lines are dropped: in the reading tree
 // every module imports what it uses. (docs/process/buildable.md, "programs")
 const WORKER = 'src/plugins/functionHooks/hooks-worker/hooks-worker.js';
 const workerSrcPath = path.join('original', 'src/plugins/functionHooks/hooks-worker/hooks-worker.js');
+const WORKER_NAMES = 'naming/worker-hooks-worker.json';
 const workerStats = { imports: 0, dropped: 0, unresolved: [] };
 if (fs.existsSync(workerSrcPath) && !manifest[WORKER]) {
   const src = fs.readFileSync(workerSrcPath, 'utf8');
   const ast = parseModule(src);
   const imports = new Map(), externalImports = new Map();
-  const cut = [];
+  // the worker's own names: naming/worker-hooks-worker.json (tools/naming/worker-bindings.mjs);
+  // imports take the name the reading tree exports them under (tools/emit/worker-names.mjs)
+  const workerTable = fs.existsSync(WORKER_NAMES) ? JSON.parse(fs.readFileSync(WORKER_NAMES, 'utf8')) : [];
+  const tableAt = new Map(workerTable.filter((e) => e.name).map((e) => [e.at, e.name]));
+  const importNames = new Map();
+  const localOf = (s, readable) => {
+    const name = tableAt.get(s.local.start) ?? readable ?? s.local.name;
+    importNames.set(s.local.name, name);
+    return name;
+  };
   for (const n of ast.program.body) {
     if (n.type !== 'ImportDeclaration') continue;
-    cut.push([n.start, n.end]);
     const from = n.source.value;
     if (!from.startsWith('.')) {
-      for (const s of n.specifiers) addImport(externalImports, from, s.type === 'ImportSpecifier' ? (s.imported.name ?? s.imported.value) : s.type === 'ImportDefaultSpecifier' ? 'default' : '*', s.local.name);
+      for (const s of n.specifiers) {
+        const imported = s.type === 'ImportSpecifier' ? (s.imported.name ?? s.imported.value) : s.type === 'ImportDefaultSpecifier' ? 'default' : '*';
+        addImport(externalImports, from, imported, localOf(s, s.type === 'ImportSpecifier' ? imported : undefined));
+      }
       if (!n.specifiers.length) workerStats.unresolved.push('bare import of ' + from);
       continue;
     }
@@ -574,22 +588,22 @@ if (fs.existsSync(workerSrcPath) && !manifest[WORKER]) {
       const imported = s.imported.name ?? s.imported.value;
       const t = resolveExport(chunk, imported);
       if (!t) { workerStats.unresolved.push(chunk + '|' + imported); continue; }
-      if (t.ext) { addImport(externalImports, t.ext, t.imported, s.local.name); continue; }
+      if (t.ext) { addImport(externalImports, t.ext, t.imported, localOf(s, t.imported)); continue; }
       const tp = pathOfDecl(idOf(t.decl));
       if (!tp || !manifest[tp]) { workerStats.unresolved.push(chunk + '|' + imported); continue; }
-      addImport(imports, rel(WORKER, tp), t.name, s.local.name);
+      addImport(imports, rel(WORKER, tp), t.name, localOf(s, t.name));
       manifest[tp].exportsPending.add(t.name);
       workerStats.imports++;
     }
   }
-  let text = '', pos = 0;
-  for (const [a, b] of cut) { text += src.slice(pos, a); pos = b; }
-  text += src.slice(pos);
-  text = text.replace(/^\s*\/\/ @bun @bytecode\n/, '').replace(/^\s*\/\/ \(c\) Anthropic PBC[^\n]*\n/m, '').replace(/^\s*\/\/ Version: [^\n]*\n/m, '');
+  const named = renameWorker(src, workerTable, importNames);
+  workerStats.renamed = named.renamed;
+  workerStats.unnamed = named.unnamed;
+  const text = named.code;
   manifest[WORKER] = {
     from: 'plugins/functionHooks/hooks-worker/hooks-worker.js', kind: 'worker', decls: [], chunks: {}, methods: {}, imports: [],
     exportsPending: new Set(),
-    lines: { imports, externalImports, body: ['//@ src/plugins/functionHooks/hooks-worker/hooks-worker.js (original, imports rewritten)', text.trim()] },
+    lines: { imports, externalImports, body: ['//@ src/plugins/functionHooks/hooks-worker/hooks-worker.js (original; names from naming/worker-hooks-worker.json)', text.trim()] },
   };
   manifest[WORKER].imports = [...imports.keys()];
 }
@@ -739,8 +753,8 @@ for (const [file, info] of Object.entries(manifest)) {
     '/**',
     ` * ${info.from}: the function-hooks worker (a worker thread's entry; a second program)`,
     ' * Reconstructed from the official Claude Code 2.1.316 build (linux-x64): the file of the same path in the',
-    ' * build, unchanged except that its imports of chunk exports name the reading tree\'s modules (its own',
-    ' * names are still the minified ones; it was not part of the scanned chunks). Started by',
+    ' * build. It is not one of the scanned chunks: its names come from naming/worker-hooks-worker.json',
+    ' * (renamed and checked by tools/emit/worker-names.mjs) and its imports name the reading tree\'s modules. Started by',
     ' * plugins/functionHooks/hooksWorker.js; built as its own entry (build.mjs).',
     ' */',
   ] : info.kind === 'lazy' ? [

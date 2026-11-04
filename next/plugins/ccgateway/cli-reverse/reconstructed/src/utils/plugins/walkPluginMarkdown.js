@@ -18,7 +18,7 @@ import { identity } from "../pathClassification.js";
 var SKILL_MD_RE = /^skill\.md$/i;
 var MAX_PLUGIN_MARKDOWN_DEPTH = 32;
 var MAX_PLUGIN_MARKDOWN_LENGTH = 4096;
-//@ chunk-e6aww6q8.js:806395-807316 fingerprint = walkPluginMarkdown (0.577)
+//@ chunk-e6aww6q8.js:806395-807316 fingerprint (2.1.88 match: walkPluginMarkdown, 0.577)
 /**
  * 递归遍历插件目录中的 .md 文件（限制数量与深度、跳过符号链接），对每个文件回调。
  */
@@ -83,7 +83,7 @@ async function walkPluginMarkdown(rootDir, onFile, opts = {}) {
   }
   await scan_2(rootDir, []);
 }
-//@ chunk-e6aww6q8.js:807316-807506 placement = validateGlobPattern (0.6)
+//@ chunk-e6aww6q8.js:807316-807506 placement (2.1.88 match: validateGlobPattern, 0.6)
 /**
  * 按规范化真实路径去重，判断文件是否已加载（未加载则登记）。旧版名 validateGlobPattern 误配，属插件 markdown 遍历。
  */

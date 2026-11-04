@@ -4369,7 +4369,7 @@ deferInit("chunk-bwbq4xvm.js:760384", () => {
     ),
   );
 });
-//@ chunk-1qpz7qcd.js:34066-34151 fingerprint = SDKUpdateEnvironmentVariablesMessageSchema (0.312)
+//@ chunk-1qpz7qcd.js:34066-34151 fingerprint (2.1.88 match: SDKUpdateEnvironmentVariablesMessageSchema, 0.312)
 /**
  * 允许经桥转发的 SDK 消息类型集合（bash_command、update_environment_variables、assistant、system）。
  */
@@ -4382,13 +4382,13 @@ deferInit("chunk-1qpz7qcd.js:34066", () => {
     "system",
   ]);
 });
-//@ chunk-e6aww6q8.js:84068-84127 fingerprint = SDKControlInterruptRequestSchema (0.392)
+//@ chunk-e6aww6q8.js:84068-84127 fingerprint (2.1.88 match: SDKControlInterruptRequestSchema, 0.392)
 /**
  * 信号是否被中止且不是因 interrupt 中止（按参数）。
  */
 var isAbortedNotByInterrupt = (signal, isInterrupt) =>
   signal.aborted && !(isInterrupt && unwrapAbortReason(signal.reason) === "interrupt");
-//@ chunk-3wek6r2k.js:29040-29172 fingerprint = SDKControlInitializeResponseSchema (0.544)
+//@ chunk-3wek6r2k.js:29040-29172 fingerprint (2.1.88 match: SDKControlInitializeResponseSchema, 0.544)
 /**
  * 构造空的 initialize 响应（无命令/代理/模型，带 account 与 pid）。
  */
@@ -4410,11 +4410,11 @@ class HostConfigCancelledError extends Error {
     this.name = "HostConfigCancelledError";
   }
 }
-//@ chunk-hm0ce8vc.js:23565-23608 fingerprint = SDKControlCancelAsyncMessageResponseSchema (0.419)
+//@ chunk-hm0ce8vc.js:23565-23608 fingerprint (2.1.88 match: SDKControlCancelAsyncMessageResponseSchema, 0.419)
 function throwIfHostConfigCancelled(cancel) {
   if (cancel.cancelled) throw new HostConfigCancelledError();
 }
-//@ chunk-kcvmr83c.js:1538-1781 fingerprint = SDKControlApplyFlagSettingsRequestSchema (0.305)
+//@ chunk-kcvmr83c.js:1538-1781 fingerprint (2.1.88 match: SDKControlApplyFlagSettingsRequestSchema, 0.305)
 /**
  * 远程传输下把 apply_flag_settings 转发给远端会话；不能转发时返回"仅本地生效"的提示。
  */
@@ -4430,7 +4430,7 @@ function forwardApplyFlagSettings(settings) {
     .catch(logError);
   return null;
 }
-//@ chunk-z4g2ta8k.js:33069-33187 fingerprint = SDKControlResponseSchema (0.635)
+//@ chunk-z4g2ta8k.js:33069-33187 fingerprint (2.1.88 match: SDKControlResponseSchema, 0.635)
 /**
  * 从 control_response 消息里取出并解析 response 部分。
  */
@@ -4438,7 +4438,7 @@ function extractControlResponse(message) {
   let response = message.type === "control_response" ? message.response : undefined;
   return typeof response === "object" && response !== null ? getControlRequestSubtype_2(response) : undefined;
 }
-//@ chunk-tyg7f3ek.js:104419-104475 fingerprint = SDKKeepAliveMessageSchema (0.554)
+//@ chunk-tyg7f3ek.js:104419-104475 fingerprint (2.1.88 match: SDKKeepAliveMessageSchema, 0.554)
 /**
  * 生成一个往出站队列推 keep_alive 消息的函数。
  */
@@ -4448,7 +4448,7 @@ function createKeepAliveSender(outbound) {
       type: "keep_alive",
     });
 }
-//@ chunk-tyg7f3ek.js:266540-266801 fingerprint = JSONRPCMessagePlaceholder (0.346)
+//@ chunk-tyg7f3ek.js:266540-266801 fingerprint (2.1.88 match: JSONRPCMessagePlaceholder, 0.346)
 function parseHintFrames(restartStarts) {
   if (restartStarts === undefined || restartStarts === null)
     return {
@@ -4465,7 +4465,7 @@ function parseHintFrames(restartStarts) {
     unknown,
   };
 }
-//@ chunk-08945j39.js:35581-35735 fingerprint = SDKControlRequestSchema (0.712)
+//@ chunk-08945j39.js:35581-35735 fingerprint (2.1.88 match: SDKControlRequestSchema, 0.712)
 /**
  * 用指定的 schema 校验一条 control_request，返回 {type, request_id, request} 或 null。
  */
@@ -4478,7 +4478,7 @@ function parseControlRequest(message, schemaKey) {
     request: parsed.data.request,
   };
 }
-//@ chunk-18hwfzwa.js:178305-178485 fingerprint = SDKControlGetContextUsageRequestSchema (0.404)
+//@ chunk-18hwfzwa.js:178305-178485 fingerprint (2.1.88 match: SDKControlGetContextUsageRequestSchema, 0.404)
 /**
  * 通过控制通道向对端发 get_context_usage 请求（可带 detail），并用响应 schema 解析结果。
  */
@@ -4499,7 +4499,7 @@ async function requestContextUsage(controlChannel, options = {}) {
     ),
   );
 }
-//@ chunk-18hwfzwa.js:178485-180359 fingerprint = SDKControlGetContextUsageResponseSchema (0.805)
+//@ chunk-18hwfzwa.js:178485-180359 fingerprint (2.1.88 match: SDKControlGetContextUsageResponseSchema, 0.805)
 /**
  * get_context_usage 响应 schema：categories、totalTokens/maxTokens/rawMaxTokens、gridRows、memoryFiles、mcpTools、deferredBuiltinTools、systemTools、systemPromptSections、agents、slashCommands、skills、messageBreakdown、apiUsage 等，多数字段带 catch 容错。
  */
@@ -4633,14 +4633,14 @@ deferInit("chunk-18hwfzwa.js:178485", () => {
     }));
   });
 });
-//@ chunk-18hwfzwa.js:1204824-1204899 fingerprint = SDKControlElicitationResponseSchema (0.415)
+//@ chunk-18hwfzwa.js:1204824-1204899 fingerprint (2.1.88 match: SDKControlElicitationResponseSchema, 0.415)
 /**
  * 交换 accept/decline（其余原样）。
  */
 function flipElicitationAction(action) {
   return action === "accept" ? "decline" : action === "decline" ? "accept" : action;
 }
-//@ chunk-18hwfzwa.js:1573966-1574143 fingerprint = SDKControlSetMaxThinkingTokensRequestSchema (0.301)
+//@ chunk-18hwfzwa.js:1573966-1574143 fingerprint (2.1.88 match: SDKControlSetMaxThinkingTokensRequestSchema, 0.301)
 /**
  * 分派控制请求：set_max_thinking_tokens 本地处理，属于懒加载处理集合的 subtype 交给 dispatchControlRequest。
  */
@@ -4659,7 +4659,7 @@ function isLazyDispatchedSubtype(request) {
 //@ chunk-54xbtc53.js:17978-18065 affinity
 var UNATTENDED_CLOUD_SESSION_MESSAGE =
   "this cloud session runs unattended (claude -p --cloud): there is no one to ask";
-//@ chunk-54xbtc53.js:18065-18487 fingerprint = ControlResponseSchema (0.345)
+//@ chunk-54xbtc53.js:18065-18487 fingerprint (2.1.88 match: ControlResponseSchema, 0.345)
 /**
  * 无人值守云会话（claude -p --cloud）里对控制请求的自动回复：can_use_tool 一律 deny（带原因），其他 subtype 回 error。
  */

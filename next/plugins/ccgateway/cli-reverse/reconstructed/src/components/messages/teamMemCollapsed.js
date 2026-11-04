@@ -299,7 +299,7 @@ function DenialReasonQuote(props) {
   } else quoteElement = $[2];
   return quoteElement;
 }
-//@ chunk-ah34pb7m.js:151298-151411 fingerprint = checkHasTeamMemOps (1)
+//@ chunk-ah34pb7m.js:151298-151411 fingerprint (2.1.88 match: checkHasTeamMemOps, 1)
 function checkHasTeamMemOps(message) {
   return (
     (message.teamMemorySearchCount ?? 0) > 0 ||
@@ -307,7 +307,7 @@ function checkHasTeamMemOps(message) {
     (message.teamMemoryWriteCount ?? 0) > 0
   );
 }
-//@ chunk-ah34pb7m.js:151411-152699 fingerprint = TeamMemCountParts (0.95)
+//@ chunk-ah34pb7m.js:151411-152699 fingerprint (2.1.88 match: TeamMemCountParts, 0.95)
 function TeamMemCountParts(props) {
   let $ = useMemoCache(15);
   let { message, isActiveGroup, hasPrecedingParts } = props;

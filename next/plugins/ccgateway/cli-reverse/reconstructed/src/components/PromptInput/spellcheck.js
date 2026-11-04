@@ -59,7 +59,7 @@ deferInit("chunk-18hwfzwa.js:871872", () => {
   CJK_SCRIPT_RE =
     /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 });
-//@ chunk-18hwfzwa.js:872399-873043 placement = findBtwTriggerPositions (1)
+//@ chunk-18hwfzwa.js:872399-873043 placement (2.1.88 match: findBtwTriggerPositions, 1)
 /**
  * 拼写检查：找出输入文本中可检查的单词位置（跳过代码段、CJK、类代码 token、大小写混合词）。错归（PromptInput 拼写检查），旧版名 findBtwTriggerPositions 为错配。
  */

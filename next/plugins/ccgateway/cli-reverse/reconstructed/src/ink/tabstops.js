@@ -11,7 +11,7 @@
 import { createTokenizer } from "./termio/tokenize.js";
 import { ANSI_OR_C1_RE, WORD_JOINER } from "../utils/textWrap.js";
 
-//@ chunk-7p2hc4jn.js:19521-19779 fingerprint = expandTabs (0.923)
+//@ chunk-7p2hc4jn.js:19521-19779 fingerprint (2.1.88 match: expandTabs, 0.923)
 /**
  * 把文本里的制表符展开成空格（逐行、逐 \r 段，用分词器保留转义序列不展开）。
  */

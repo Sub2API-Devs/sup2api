@@ -37,7 +37,7 @@ function isForwardableDeviceMcp(name, config) {
 function isFirstPartyDesignConfig(config) {
   return require("./emitTripwireEvent.lazy.js").mcpClientModule().isFirstPartyDesignServerConfig(config);
 }
-//@ chunk-p0p8bkgp.js:763-925 placement = expandEnvVars (0.913)
+//@ chunk-p0p8bkgp.js:763-925 placement (2.1.88 match: expandEnvVars, 0.913)
 /**
  * isDeviceBridgeTransport：设备桥接只转发 stdio/http/sse/ws 服务器。
  */

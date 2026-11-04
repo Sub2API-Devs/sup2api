@@ -140,7 +140,7 @@ var SESSION_SCOPE_DEFAULTS = [
   "mainThreadAgentDefinition",
   "combinedInitialTools",
 ];
-//@ chunk-18hwfzwa.js:186742-186808 placement = useMainLoopModel (1)
+//@ chunk-18hwfzwa.js:186742-186808 placement (2.1.88 match: useMainLoopModel, 1)
 function selectMainLoopModels(state) {
   return [state.mainLoopModel, state.mainLoopModelForSession];
 }

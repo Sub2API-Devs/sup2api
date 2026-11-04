@@ -19,7 +19,7 @@ import { CLOUD_PLUGINS_FORWARDED_KEY } from "../utils/plugins/cloudPluginForward
 function useSettingsState() {
   return useAppState((state) => state.settings);
 }
-//@ chunk-z4g2ta8k.js:36537-36667 fingerprint = useSettings (0.657)
+//@ chunk-z4g2ta8k.js:36537-36667 fingerprint (2.1.88 match: useSettings, 0.657)
 function useSettings(payload) {
   let settings = asPlainObject(asPlainObject(payload.request)?.settings);
   if (settings === undefined) return;

@@ -122,7 +122,7 @@ var EMPTY_LOG_CONTEXT = {
   sessionId: "",
   fromBackend: false,
 };
-//@ chunk-cgr0tezp.js:77568-77873 fingerprint = getDebugLogPath (0.414)
+//@ chunk-cgr0tezp.js:77568-77873 fingerprint (2.1.88 match: getDebugLogPath, 0.414)
 /**
  * 计算调试日志目标：默认 <配置目录>/debug/<sessionId>.txt（storage v5 时写存储），--debug-file 为原始文件并可轮换、更新 latest 链接。
  */
@@ -973,7 +973,7 @@ function setHasFormattedOutput(hasFormattedOutput) {
 function getHasFormattedOutput() {
   return getDebugLogger().hasFormattedOutput;
 }
-//@ chunk-cgr0tezp.js:91599-91649 facade-exports = flushAsciicastRecorder (0.627)
+//@ chunk-cgr0tezp.js:91599-91649 facade-exports (2.1.88 match: flushAsciicastRecorder, 0.627)
 async function flushDebugLogs() {
   await getDebugLoggerConfig().instance?.flush();
 }
@@ -986,7 +986,7 @@ function droppedDebugOutputTotals() {
         debug_file_dropped_total: getDebugLoggerConfig().instance?.droppedLineTotal() ?? 0,
       };
 }
-//@ chunk-cgr0tezp.js:91775-91820 facade-exports = fetchTeamMemory (0.597)
+//@ chunk-cgr0tezp.js:91775-91820 facade-exports (2.1.88 match: fetchTeamMemory, 0.597)
 /**
  * 写一行调试日志（默认 debug 级）到 DebugLogger：只有调试模式或 ant 构建才落盘，目标为 --debug-file 或 <配置目录>/debug/<sessionId>.txt，--debug-to-stderr 时写 stderr；按 --debug=过滤串筛分类。全局 3800+ 处调用。
  */
@@ -1010,7 +1010,7 @@ function isDefaultDebugLogPath(debugLogPath, sessionId) {
 function logAntError(message, options) {
   return;
 }
-//@ chunk-e6aww6q8.js:3373785-3374007 callgraph-witnessed = logForDebugging (0.147)
+//@ chunk-e6aww6q8.js:3373785-3374007 callgraph-witnessed (2.1.88 match: logForDebugging, 0.147)
 /**
  * 把附件对象包成 type:'attachment' 消息（uuid、时间戳；queued_command/poll_events 沿用原时间戳）。旧版名 logForDebugging 为错配。
  */
@@ -1032,14 +1032,14 @@ function createAttachmentMessage_2(
     ...rendered,
   };
 }
-//@ chunk-2f906bwf.js:292-330 fingerprint = LEVEL_ORDER (0.871)
+//@ chunk-2f906bwf.js:292-330 fingerprint (2.1.88 match: LEVEL_ORDER, 0.871)
 var LEVEL_ORDER = {
   debug: 0,
   info: 1,
   warn: 2,
   error: 3,
 };
-//@ chunk-qchp9vrd.js:196768-196814 fingerprint = updateLatestDebugLogSymlink (1)
+//@ chunk-qchp9vrd.js:196768-196814 fingerprint (2.1.88 match: updateLatestDebugLogSymlink, 1)
 /**
  * 更新 latest 符号链接时的最大尝试次数（256）。
  */

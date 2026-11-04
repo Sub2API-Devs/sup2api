@@ -198,7 +198,7 @@ function cancelScopeFor(origin) {
         scope: "turn-cancel",
       };
 }
-//@ chunk-xx1vmpsq.js:62205-62244 placement = getSettingsWithSources (0.85)
+//@ chunk-xx1vmpsq.js:62205-62244 placement (2.1.88 match: getSettingsWithSources, 0.85)
 var emptySettingsWithSources = () => ({
   effective: {},
   sources: [],

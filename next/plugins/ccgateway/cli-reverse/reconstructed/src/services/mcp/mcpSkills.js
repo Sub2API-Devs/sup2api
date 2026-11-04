@@ -228,7 +228,7 @@ function* invokedMcpSkills(messages) {
 function uniqueValues(ignored) {
   return [...new Map().values()];
 }
-//@ chunk-e6aww6q8.js:1633990-1634149 placement = countUniqueFiles (0.712)
+//@ chunk-e6aww6q8.js:1633990-1634149 placement (2.1.88 match: countUniqueFiles, 0.712)
 /**
  * 按服务器名合并两组位置并去重（归属疑似错误，不属于 LSPTool；被 ReadMcpResourceTool、attachments 使用）。
  */
@@ -351,7 +351,7 @@ function classifySkillResourceUri(uri, skills) {
 function isUrlUnderPrefix(url, root) {
   return normalizeUrlForCompare(url).startsWith(normalizeUrlForCompare(`${root}/`));
 }
-//@ chunk-e6aww6q8.js:1635386-1635557 placement = isPermittedRedirect (0.808)
+//@ chunk-e6aww6q8.js:1635386-1635557 placement (2.1.88 match: isPermittedRedirect, 0.808)
 function normalizeUrlForCompare(url) {
   let originalHostWithoutWww = originPrefix(url);
   if (originalHostWithoutWww === undefined) return url;

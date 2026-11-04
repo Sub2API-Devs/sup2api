@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-s61vbvea.js:460861-460923 fingerprint = useVoiceEnabled (0.591)
+//@ chunk-s61vbvea.js:460861-460923 fingerprint (2.1.88 match: useVoiceEnabled, 0.591)
 function useVoiceEnabled(settings) {
   return (settings.voice?.enabled ?? settings.voiceEnabled) === true;
 }

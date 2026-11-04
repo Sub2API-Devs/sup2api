@@ -673,7 +673,7 @@ async function buildRequestContextHeaders(
 //@ chunk-hwmsct5x.js:259918-259965 placement
 var SAFE_HEADER_NAME_RE = /^[a-z][a-z0-9_]*$/;
 var PRINTABLE_ASCII_RE = /^[\x20-\x7E]*$/;
-//@ chunk-hwmsct5x.js:259965-260152 placement = getCustomHeaders (1)
+//@ chunk-hwmsct5x.js:259965-260152 placement (2.1.88 match: getCustomHeaders, 1)
 function getCustomHeaders() {
   let customHeadersEnv = env.ANTHROPIC_CUSTOM_HEADERS;
   if (
@@ -979,7 +979,7 @@ function noteHeaderMemberDropped(name, value) {
     level: "warn",
   });
 }
-//@ chunk-hwmsct5x.js:263451-263632 placement = getCustomHeaders (1)
+//@ chunk-hwmsct5x.js:263451-263632 placement (2.1.88 match: getCustomHeaders, 1)
 function getCustomHeaders_2() {
   let customHeaders = {};
   let headerName = wigglyDoveHeaderName();

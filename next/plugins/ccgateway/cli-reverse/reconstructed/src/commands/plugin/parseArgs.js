@@ -10,7 +10,7 @@
  */
 import { lanternPrismEnabled, isPluginDirectoryModeOn } from "../../utils/plugins/pluginGates.js";
 
-//@ chunk-bppzggd7.js:230-2263 fingerprint = parsePluginArgs (0.683)
+//@ chunk-bppzggd7.js:230-2263 fingerprint (2.1.88 match: parsePluginArgs, 0.683)
 function parsePluginArgs(args) {
   if (!args)
     return {

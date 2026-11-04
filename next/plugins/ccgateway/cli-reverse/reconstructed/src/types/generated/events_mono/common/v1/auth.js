@@ -9,7 +9,7 @@
  * attribution: fingerprint 2, layout 2, callgraph-witnessed 1
  */
 
-//@ chunk-aepeg2w5.js:660599-660671 fingerprint = createBasePublicApiAuth (1)
+//@ chunk-aepeg2w5.js:660599-660671 fingerprint (2.1.88 match: createBasePublicApiAuth, 1)
 function createBasePublicApiAuth() {
   return {
     account_id: 0,
@@ -17,7 +17,7 @@ function createBasePublicApiAuth() {
     account_uuid: "",
   };
 }
-//@ chunk-aepeg2w5.js:660671-661320 fingerprint = PublicApiAuth (1)
+//@ chunk-aepeg2w5.js:660671-661320 fingerprint (2.1.88 match: PublicApiAuth, 1)
 var PublicApiAuth = {
   fromJSON(object) {
     return {
@@ -44,14 +44,14 @@ var PublicApiAuth = {
     return message;
   },
 };
-//@ chunk-aepeg2w5.js:661320-661387 layout = createBasePublicApiAuth (0.771)
+//@ chunk-aepeg2w5.js:661320-661387 layout (2.1.88 match: createBasePublicApiAuth, 0.771)
 function createBasePublicApiAuth_2() {
   return {
     account_uuid: undefined,
     organization_uuid: undefined,
   };
 }
-//@ chunk-aepeg2w5.js:661387-661898 layout = PublicApiAuth (0.837)
+//@ chunk-aepeg2w5.js:661387-661898 layout (2.1.88 match: PublicApiAuth, 0.837)
 var PublicApiAuth_2 = {
   fromJSON(object) {
     return {
@@ -77,7 +77,7 @@ var PublicApiAuth_2 = {
     return message;
   },
 };
-//@ chunk-aepeg2w5.js:661898-661941 callgraph-witnessed = isSet (0)
+//@ chunk-aepeg2w5.js:661898-661941 callgraph-witnessed (2.1.88 match: isSet, 0)
 function isSet(value) {
   return value !== null && value !== undefined;
 }

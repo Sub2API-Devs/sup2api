@@ -26,7 +26,7 @@ var ARTIFACTS_MCP_READ_COMMENTS_TOOL = "read_comments";
 var ARTIFACTS_MCP_REPLY_COMMENT_TOOL = "reply_comment";
 var ARTIFACTS_MCP_RESOLVE_COMMENT_TOOL = "resolve_comment";
 var ARTIFACTS_MCP_REPLY_SHARED_COMMENT_TOOL = "reply_shared_comment";
-//@ chunk-3sqbw5c7.js:620-721 placement = runFilePersistence (0.184)
+//@ chunk-3sqbw5c7.js:620-721 placement (2.1.88 match: runFilePersistence, 0.184)
 function artifactsMcpInCloudSession() {
   return (
     !isByocEnvironment() &&
@@ -37,7 +37,7 @@ function artifactsMcpInCloudSession() {
 function artifactsMcpToolName(server) {
   return buildMcpToolName(CLAUDE_ARTIFACTS, server);
 }
-//@ chunk-3sqbw5c7.js:753-824 placement = getToolNameForPermissionCheck (1)
+//@ chunk-3sqbw5c7.js:753-824 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function artifactsMcpToolRef(tool) {
   return {
     name: artifactsMcpToolName(tool),
@@ -61,13 +61,13 @@ function isBuiltInArtifactReplacedByMcp(name) {
     )
   );
 }
-//@ chunk-3sqbw5c7.js:1014-1083 placement = getToolNameForPermissionCheck (1)
+//@ chunk-3sqbw5c7.js:1014-1083 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function artifactMcpToolsReplaceBuiltIn(tool) {
   return (
     isBuiltInArtifactHiddenForMcp() && tool.some((tool) => tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS)
   );
 }
-//@ chunk-3sqbw5c7.js:1083-1139 placement = getToolNameForPermissionCheck (1)
+//@ chunk-3sqbw5c7.js:1083-1139 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function standsInForBuiltInArtifact(tool) {
   return isBuiltInArtifactHiddenForMcp() && tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS;
 }

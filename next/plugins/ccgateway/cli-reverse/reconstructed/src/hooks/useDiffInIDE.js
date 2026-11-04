@@ -39,7 +39,7 @@ import { sanitizeToolNameForAnalytics } from "../services/analytics/metadata.js"
 import { logEvent } from "../services/analytics/index.js";
 import { resetDenialStreakAfterUserApproval } from "../utils/permissions/permissions.js";
 
-//@ chunk-s4bxxzsw.js:27106-27331 fingerprint = computeEditsFromContents (1)
+//@ chunk-s4bxxzsw.js:27106-27331 fingerprint (2.1.88 match: computeEditsFromContents, 1)
 function computeEditsFromContents(filePath, oldContent, newContent, editMode) {
   let singleHunk = editMode === "single";
   let patch = getPatchFromContents({
@@ -53,7 +53,7 @@ function computeEditsFromContents(filePath, oldContent, newContent, editMode) {
     logError(Error(`Unexpected number of hunks: ${patch.length}. Expected 1 hunk.`));
   return getEditsForPatch(patch);
 }
-//@ chunk-s4bxxzsw.js:27331-28595 fingerprint = showDiffInIDE (0.919)
+//@ chunk-s4bxxzsw.js:27331-28595 fingerprint (2.1.88 match: showDiffInIDE, 0.919)
 async function showDiffInIDE(file_path, edits, toolUseContext, tabName, isCleanedUp) {
   let isCleanedUp_2 = false;
   let oldFilePath = expandPath(file_path);
@@ -142,7 +142,7 @@ async function showDiffInIDE(file_path, edits, toolUseContext, tabName, isCleane
     throw error;
   }
 }
-//@ chunk-s4bxxzsw.js:28595-28910 fingerprint = closeTabInIDE (0.67)
+//@ chunk-s4bxxzsw.js:28595-28910 fingerprint (2.1.88 match: closeTabInIDE, 0.67)
 async function closeTabInIDE(tabName, ideClient) {
   try {
     if (!ideClient || ideClient.type !== "connected") throw Error("IDE client not available");
@@ -164,7 +164,7 @@ async function closeTabInIDE(tabName, ideClient) {
     logFeatureSad("ide_close_diff_tab", "ide_close_diff_tab_failed");
   }
 }
-//@ chunk-s4bxxzsw.js:28910-29062 fingerprint = isClosedMessage (1)
+//@ chunk-s4bxxzsw.js:28910-29062 fingerprint (2.1.88 match: isClosedMessage, 1)
 function isClosedMessage(data) {
   return (
     Array.isArray(data) &&
@@ -176,7 +176,7 @@ function isClosedMessage(data) {
     data[0].text === "TAB_CLOSED"
   );
 }
-//@ chunk-s4bxxzsw.js:29062-29217 fingerprint = isRejectedMessage (1)
+//@ chunk-s4bxxzsw.js:29062-29217 fingerprint (2.1.88 match: isRejectedMessage, 1)
 function isRejectedMessage(data) {
   return (
     Array.isArray(data) &&
@@ -188,7 +188,7 @@ function isRejectedMessage(data) {
     data[0].text === "DIFF_REJECTED"
   );
 }
-//@ chunk-s4bxxzsw.js:29217-29332 fingerprint = isSaveMessage (1)
+//@ chunk-s4bxxzsw.js:29217-29332 fingerprint (2.1.88 match: isSaveMessage, 1)
 function isSaveMessage(data) {
   return (
     Array.isArray(data) &&
@@ -204,7 +204,7 @@ function markIdeSafe(ideName) {
   if (IDE_NAME_RE.test(ideName)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(ideName);
   return lit("nonconforming");
 }
-//@ chunk-s4bxxzsw.js:29447-29961 layout = areFileEditsInputsEquivalent (0.861)
+//@ chunk-s4bxxzsw.js:29447-29961 layout (2.1.88 match: areFileEditsInputsEquivalent, 0.861)
 /**
  * 把 Edit 或 Write 的工具输入转换为 {filePath, edits}；Write 读取旧文件作为 old_string。
  */
@@ -252,7 +252,7 @@ async function toolInputToFileEdits(input1, input2) {
   }
   return null;
 }
-//@ chunk-s4bxxzsw.js:29961-30160 layout = getEditsForPatch (0.884)
+//@ chunk-s4bxxzsw.js:29961-30160 layout (2.1.88 match: getEditsForPatch, 0.884)
 /**
  * 把编辑结果写回 Edit/Write 工具输入（Edit 改 old/new/replace_all，Write 改 content）。
  */
@@ -304,7 +304,7 @@ async function getIdeDiffTarget(tool, input, context) {
     edits: fileEdits.edits,
   };
 }
-//@ chunk-s4bxxzsw.js:30661-32505 fingerprint = useDiffInIDE (0.36)
+//@ chunk-s4bxxzsw.js:30661-32505 fingerprint (2.1.88 match: useDiffInIDE, 0.36)
 function useDiffInIDE(params) {
   if (params.permissionResult.localDisplayOnly === true)
     return {

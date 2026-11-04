@@ -25,7 +25,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { SandboxSettings } from "../../components/sandbox/SandboxSettings.js";
 import { getCwdState } from "../../bootstrap/state.js";
 
-//@ chunk-55w3ydvj.js:30440-32799 fingerprint = call (0.739)
+//@ chunk-55w3ydvj.js:30440-32799 fingerprint (2.1.88 match: call, 0.739)
 /**
  * /sandbox 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

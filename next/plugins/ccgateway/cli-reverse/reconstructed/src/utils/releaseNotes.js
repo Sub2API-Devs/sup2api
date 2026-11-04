@@ -33,7 +33,7 @@ var semverRelease; // deferred: has load-time effects after a deferred statement
 deferInit("chunk-v5a4j103.js:683", () => {
   semverRelease = __toESM(require_semver_3(), 1);
 });
-//@ chunk-v5a4j103.js:741-977 fingerprint = CHANGELOG_URL (0.435)
+//@ chunk-v5a4j103.js:741-977 fingerprint (2.1.88 match: CHANGELOG_URL, 0.435)
 /**
  * CHANGELOG_URL：变更日志地址；HTTPS_CODE_CLAUDE_COM：文档站点地址（同一声明共 2 个绑定）。
  */
@@ -48,7 +48,7 @@ deferInit("chunk-v5a4j103.js:741", () => {
   HTTPS_CODE_CLAUDE_COM =
     "https://raw.githubusercontent.com/anthropics/claude-code/refs/heads/main/CHANGELOG.md";
 });
-//@ chunk-v5a4j103.js:977-1028 fingerprint = getChangelogCachePath (1)
+//@ chunk-v5a4j103.js:977-1028 fingerprint (2.1.88 match: getChangelogCachePath, 1)
 /**
  * changelog 缓存路径：<配置目录>/cache/changelog.md。
  */
@@ -71,7 +71,7 @@ var changelogMemoByHost; // deferred: uses ChangelogMemo of its import cycle whi
 deferInit("chunk-v5a4j103.js:1134", () => {
   changelogMemoByHost = new HostScoped(() => new ChangelogMemo());
 });
-//@ chunk-v5a4j103.js:1157-1570 callgraph-fingerprint = migrateChangelogFromConfig (0.17)
+//@ chunk-v5a4j103.js:1157-1570 callgraph-fingerprint (2.1.88 match: migrateChangelogFromConfig, 0.17)
 /**
  * 把旧版存在全局配置里的 changelog 迁移到缓存文件。
  */
@@ -96,7 +96,7 @@ async function migrateChangelogFromConfig(storageV5) {
   }
   await saveGlobalConfig(({ cachedChangelog, ...rest }) => rest, storageV5);
 }
-//@ chunk-v5a4j103.js:1570-2042 callgraph-witnessed = fetchAndStoreChangelog (0.187)
+//@ chunk-v5a4j103.js:1570-2042 callgraph-witnessed (2.1.88 match: fetchAndStoreChangelog, 0.187)
 /**
  * 后台拉取 raw.githubusercontent 上的 CHANGELOG.md 写入缓存（storage v5 或 <配置目录>/cache/changelog.md）；非交互、diskless、仅必要流量时跳过。
  */
@@ -157,7 +157,7 @@ async function readChangelog(storageV5) {
 function releaseNotesContent() {
   return releaseNotesState().content ?? "";
 }
-//@ chunk-v5a4j103.js:2378-2751 placement = extractMcpToolDisplayName (1)
+//@ chunk-v5a4j103.js:2378-2751 placement (2.1.88 match: extractMcpToolDisplayName, 1)
 function parseChangelog(userFacingName) {
   try {
     if (!userFacingName) return {};

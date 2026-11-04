@@ -43,7 +43,7 @@ function renderVersionItem(entry) {
     version,
   );
 }
-//@ chunk-8k62p17d.js:13575-13667 fingerprint = formatReleaseNotes (1)
+//@ chunk-8k62p17d.js:13575-13667 fingerprint (2.1.88 match: formatReleaseNotes, 1)
 function formatReleaseNotes(version, notes) {
   let header = `Version ${version}:`;
   let bulletPoints = notes.map((note) => `\xB7 ${note}`).join(`
@@ -70,7 +70,7 @@ function showReleaseNotesNotice(notesText, applyMessageOp, onDone) {
     display: "skip",
   });
 }
-//@ chunk-8k62p17d.js:13850-14148 fingerprint = call (0.741)
+//@ chunk-8k62p17d.js:13850-14148 fingerprint (2.1.88 match: call, 0.741)
 /**
  * /release-notes 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

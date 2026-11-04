@@ -29,7 +29,7 @@ import { Text, Box } from "../../../ink/components/Text.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 import { PermissionDialog_2 } from "../PermissionDialog.js";
 
-//@ chunk-18hwfzwa.js:1344087-1344141 callgraph-fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:1344087-1344141 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectToolPermissionContextMode_3(s) {
   return s.toolPermissionContext.mode;
 }
@@ -53,7 +53,7 @@ function enterPlanChoiceToResult(choice, selectedRow) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:1344327-1346542 fingerprint = EnterPlanModePermissionRequest (0.487)
+//@ chunk-18hwfzwa.js:1344327-1346542 fingerprint (2.1.88 match: EnterPlanModePermissionRequest, 0.487)
 /**
  * 进入计划模式确认：说明计划模式会做什么，允许/拒绝并记录 tengu_plan_enter。
  */

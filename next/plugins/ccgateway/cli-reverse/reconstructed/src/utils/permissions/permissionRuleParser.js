@@ -230,7 +230,7 @@ function classifyRuleParens(input) {
     rawContent: input.substring(openIndex + 1, closeIndex),
   };
 }
-//@ chunk-gda5w2fs.js:2585-2810 callgraph-witnessed = permissionRuleValueFromString (0.305)
+//@ chunk-gda5w2fs.js:2585-2810 callgraph-witnessed (2.1.88 match: permissionRuleValueFromString, 0.305)
 /**
  * 解析规则串：WQ 识别 "Tool(content)" 形态（括号须配对且在末尾，否则视为裸工具名/畸形）；内容为空或 "*" 等价整工具规则；内容反转义 \( \) \\；工具名经 td 做旧名→新名映射。
  */
@@ -250,7 +250,7 @@ function permissionRuleValueFromString(ruleString) {
     ruleContent,
   };
 }
-//@ chunk-dtv8x2hx.js:24527-24606 fingerprint = permissionRuleValueToString (0.691)
+//@ chunk-dtv8x2hx.js:24527-24606 fingerprint (2.1.88 match: permissionRuleValueToString, 0.691)
 /**
  * 规则的唯一键：JSON.stringify([来源, 行为, toolName, ruleContent|null])。
  */

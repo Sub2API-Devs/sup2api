@@ -36,7 +36,7 @@ import { ParenHint } from "./diff/DiffDetailView.js";
 import { FuzzyPicker } from "./design-system/FuzzyPicker.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-axmbhcjg.js:28422-28530 fingerprint = matchKey (0.685)
+//@ chunk-axmbhcjg.js:28422-28530 fingerprint (2.1.88 match: matchKey, 0.685)
 function matchKey(text, startLine) {
   let lines = text.split(`
 `);
@@ -92,7 +92,7 @@ function ColorSwatch(props) {
   } else swatch = $[1];
   return swatch;
 }
-//@ chunk-3s4dbk22.js:15270-23369 callgraph-fingerprint = GlobalSearchDialog (0.218)
+//@ chunk-3s4dbk22.js:15270-23369 callgraph-fingerprint (2.1.88 match: GlobalSearchDialog, 0.218)
 function GlobalSearchDialog(props) {
   let $ = useMemoCache(165);
   let { initial, defaultBase, onDone, onPick, onCancel } = props;

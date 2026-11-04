@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:1686326-1686377 fingerprint = default (1)
+//@ chunk-e6aww6q8.js:1686326-1686377 fingerprint (2.1.88 match: default, 1)
 var stubAntTraceCommand = {
   isEnabled: () => false,
   isHidden: true,

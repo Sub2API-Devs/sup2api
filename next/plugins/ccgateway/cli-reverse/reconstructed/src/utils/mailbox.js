@@ -10,7 +10,7 @@
  */
 import { createSignal } from "./signal.js";
 
-//@ chunk-xe7zq1p4.js:11488-12161 fingerprint = Mailbox (1)
+//@ chunk-xe7zq1p4.js:11488-12161 fingerprint (2.1.88 match: Mailbox, 1)
 /**
  * 进程内消息邮箱：按条件等待/取出消息，供队友与后台代理通信。
  */

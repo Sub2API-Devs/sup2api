@@ -25,7 +25,7 @@ function isNetworkPath(value) {
 }
 //@ chunk-t0gq9gyw.js:5961-5971 placement
 var MAX_SYMLINK_HOPS = 40;
-//@ chunk-t0gq9gyw.js:5971-6020 placement = getUnameSR (0.793)
+//@ chunk-t0gq9gyw.js:5971-6020 placement (2.1.88 match: getUnameSR, 0.793)
 function getUnameSR(platform) {
   return platform === "win32" ? /[\\/]+/ : /\/+/;
 }
@@ -40,7 +40,7 @@ var NETWORK_LINK_MESSAGE =
 var DRIVE_RELATIVE_PATTERN = /^[a-zA-Z]:(?![\\/])/;
 var UNVETTABLE_LINK_MESSAGE =
   "has a link chain that could not be fully checked for network targets; pass the real path of a local file";
-//@ chunk-t0gq9gyw.js:6360-6409 placement = chordToDisplayString (1)
+//@ chunk-t0gq9gyw.js:6360-6409 placement (2.1.88 match: chordToDisplayString, 1)
 function isNetworkPath_2(chord, platform = "linux") {
   return isUncOrNetworkSpelling(chord) || classifyHomeMount(chord, platform);
 }

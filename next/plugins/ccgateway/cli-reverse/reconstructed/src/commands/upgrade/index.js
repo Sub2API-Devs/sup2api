@@ -10,7 +10,7 @@
  */
 import { canShowUpgradeCommand } from "../../utils/planTiers.js";
 
-//@ chunk-e6aww6q8.js:2041887-2042062 fingerprint = upgrade (0.778)
+//@ chunk-e6aww6q8.js:2041887-2042062 fingerprint (2.1.88 match: upgrade, 0.778)
 /**
  * /upgrade 命令对象（local-jsx）；描述：Upgrade to Max for higher rate limits and more Opus；availability ["claude-ai"]；isEnabled: Gpe；实现 chunk-txp87wj5.js 的 Jji。
  */

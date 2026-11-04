@@ -228,7 +228,7 @@ import {
 import { commandReachesSettings } from "../../remote/tools/serve/servedPathJudgement.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7kt7c7a3.js:1223-1304 fingerprint = AUTO_MODE_ENABLED_DEFAULT (1)
+//@ chunk-7kt7c7a3.js:1223-1304 fingerprint (2.1.88 match: AUTO_MODE_ENABLED_DEFAULT, 1)
 /**
  * auto 模式 enabled 状态的来源是否为 disabled（读取失败记错误并返回 false）。
  */
@@ -269,13 +269,13 @@ function proactivityModeFloor(proactivityLevel, mode) {
 function parseEffortOrKeyword(value) {
   return parseEffortValue(value) ?? resolveEffortKeyword(value);
 }
-//@ chunk-kswt4qha.js:3066-3207 callgraph-fingerprint = getAutoModeEnabledStateIfCached (0.462)
+//@ chunk-kswt4qha.js:3066-3207 callgraph-fingerprint (2.1.88 match: getAutoModeEnabledStateIfCached, 0.462)
 function isAutoModeKillswitchServed() {
   let { value: config, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_auto_mode_config", {});
   if (config?.enabled !== "disabled") return false;
   return source === "override" || source === "payload";
 }
-//@ chunk-kswt4qha.js:3207-9146 fingerprint = initialPermissionModeFromCLI (0.311)
+//@ chunk-kswt4qha.js:3207-9146 fingerprint (2.1.88 match: initialPermissionModeFromCLI, 0.311)
 /**
  * 纯函数决定启动模式：按 --dangerously-skip-permissions、--permission-mode、agent frontmatter、settings defaultMode（project/local 不能授予 bypass/auto，CCR 只允许 acceptEdits/plan/default/auto）、继承模式的顺序取第一个可用模式；都没有时满足条件可默认 auto；再按主动性档位覆盖。返回模式、通知、各种“等待策略结论”标志。
  */
@@ -654,7 +654,7 @@ function parseToolListFromCLI(baseTools, isModelAllowed) {
 }
 //@ chunk-kswt4qha.js:10130-10139 layout
 var MAX_BODY_PARAM_STRINGS = 3;
-//@ chunk-kswt4qha.js:10139-10409 layout = settingSourceToConfigChangeSource (0.89)
+//@ chunk-kswt4qha.js:10139-10409 layout (2.1.88 match: settingSourceToConfigChangeSource, 0.89)
 function settingSourceToConfigChangeSource(source) {
   switch (source) {
     case "userSettings":
@@ -891,7 +891,7 @@ function isDefaultModeSetByTrustedSource(parsedMode) {
     (source) => getSettingsForSource(source)?.permissions?.defaultMode === parsedMode,
   );
 }
-//@ chunk-kswt4qha.js:13029-13124 layout = isAutoModeDisabledBySettings (1)
+//@ chunk-kswt4qha.js:13029-13124 layout (2.1.88 match: isAutoModeDisabledBySettings, 1)
 function isAutoModeDisabledBySettings_2(settings) {
   return settings.permissions?.disableAutoMode === "disable" || settings.disableAutoMode === "disable";
 }
@@ -950,7 +950,7 @@ function getAutoSeedFactors({ settings, scrubbed, typedLevel, carriedMode }) {
     trustedPlanDisplaced: isTrustedPlanDisplaced(settings),
   };
 }
-//@ chunk-kswt4qha.js:13993-14132 fingerprint = isDefaultPermissionModeAuto (1)
+//@ chunk-kswt4qha.js:13993-14132 fingerprint (2.1.88 match: isDefaultPermissionModeAuto, 1)
 function getSettingsDefaultMode(settings) {
   let mode = normalizePermissionModeAlias(settings.permissions?.defaultMode);
   if (mode == null || !isRemoteSupportedMode(mode)) return;
@@ -1210,7 +1210,7 @@ function isMaxEffortReminderEnabled() {
 function isReservedEffortKeyword(keyword) {
   return false;
 }
-//@ chunk-9rkt9tdt.js:227-374 fingerprint = isBypassPermissionsModeDisabled (0.752)
+//@ chunk-9rkt9tdt.js:227-374 fingerprint (2.1.88 match: isBypassPermissionsModeDisabled, 0.752)
 /**
  * settings.permissions.disableBypassPermissionsMode="disable" 时返回原因文字。
  */
@@ -1263,7 +1263,7 @@ deferInit("chunk-sfy7bm1n.js:7035", () => {
 function addMcpToolAlias(serverName, toolNames) {
   for (let toolName of toolNames) mcpToolAliasSet().add(buildMcpToolName(serverName, toolName));
 }
-//@ chunk-sfy7bm1n.js:7111-7221 placement = getMcpPrefix (1)
+//@ chunk-sfy7bm1n.js:7111-7221 placement (2.1.88 match: getMcpPrefix, 1)
 function getMcpPrefix(serverName) {
   if (!serverName.startsWith("mcp__")) return false;
   for (let alias of mcpToolAliasSet())
@@ -1347,7 +1347,7 @@ function matchesDangerousCommandPrefix(ruleContent, prefixes) {
   }
   return false;
 }
-//@ chunk-sfy7bm1n.js:8705-9626 facade-exports = isDangerousPowerShellPermission (0.906)
+//@ chunk-sfy7bm1n.js:8705-9626 facade-exports (2.1.88 match: isDangerousPowerShellPermission, 0.906)
 /**
  * PowerShell 规则是否危险：空/通配，或匹配 pwsh/cmd/iex/Invoke-Command/Start-Process/Add-Type/New-Object 等（含 .exe 形式）的前缀/通配形式。
  */
@@ -1481,7 +1481,7 @@ function isDangerousClassifierPermission(toolName, ruleContent) {
   if (getMcpPrefix(toolName)) return true;
   return isDangerousPermissionRule(toolName, ruleContent);
 }
-//@ chunk-gz7b768t.js:1257-1346 fingerprint = getAutoModeEnabledState (1)
+//@ chunk-gz7b768t.js:1257-1346 fingerprint (2.1.88 match: getAutoModeEnabledState, 1)
 /**
  * 读取 GrowthBook tengu_auto_mode_config，缺省返回冻结的空配置。
  */
@@ -1539,7 +1539,7 @@ function formatPermissionSource(source) {
   }
   return source;
 }
-//@ chunk-zfbhezv9.js:2469-3011 facade-exports = findDangerousClassifierPermissions (1)
+//@ chunk-zfbhezv9.js:2469-3011 facade-exports (2.1.88 match: findDangerousClassifierPermissions, 1)
 /**
  * 找出会绕过 auto 分类器的危险 allow 规则（sme：Bash/PowerShell 整工具或解释器/网络前缀、MCP 等），含 --allowed-tools 的规则。
  */
@@ -1624,7 +1624,7 @@ function isOverlyBroadBashAllowRule(ruleValue, matchDangerousPrefix = false) {
 function isBareBashRule(ruleValue) {
   return ruleValue.toolName === BASH_TOOL_NAME && ruleValue.ruleContent === undefined;
 }
-//@ chunk-zfbhezv9.js:3646-3703 facade-exports = isOverlyBroadBashAllowRule (1)
+//@ chunk-zfbhezv9.js:3646-3703 facade-exports (2.1.88 match: isOverlyBroadBashAllowRule, 1)
 function isOverlyBroadPowerShellAllowRule(ruleValue) {
   return ruleValue.toolName === POWERSHELL_TOOL_NAME && isBareOrStarContent(ruleValue.ruleContent);
 }
@@ -1640,7 +1640,7 @@ function isYoloEquivStripEnabledForEntrypoint() {
     return featureValue_CACHED_MAY_BE_STALE.includeEntrypoints.includes(CLAUDE_CODE_ENTRYPOINT);
   return !(featureValue_CACHED_MAY_BE_STALE.excludeEntrypoints ?? []).includes(CLAUDE_CODE_ENTRYPOINT);
 }
-//@ chunk-zfbhezv9.js:3937-4423 facade-exports = findDangerousClassifierPermissions (1)
+//@ chunk-zfbhezv9.js:3937-4423 facade-exports (2.1.88 match: findDangerousClassifierPermissions, 1)
 function findOverlyBroadBashPermissions(rules, cliAllowedTools, matchDangerousPrefix = false) {
   let dangerous = [];
   for (let rule of rules)
@@ -1667,7 +1667,7 @@ function findOverlyBroadBashPermissions(rules, cliAllowedTools, matchDangerousPr
   }
   return dangerous;
 }
-//@ chunk-zfbhezv9.js:4423-4748 facade-exports = findOverlyBroadBashPermissions (1)
+//@ chunk-zfbhezv9.js:4423-4748 facade-exports (2.1.88 match: findOverlyBroadBashPermissions, 1)
 function findOverlyBroadPowerShellPermissions(rules, cliAllowedTools) {
   let overlyBroad = [];
   for (let rule of rules)
@@ -1698,7 +1698,7 @@ function overlyBroadShellAllowsStrippedByEverySession(context) {
 function isRemovableRuleSource(source) {
   return EDITABLE_SETTING_SOURCES.includes(source) || source === "session" || source === "cliArg";
 }
-//@ chunk-zfbhezv9.js:4839-5085 facade-exports = removeDangerousPermissions (1)
+//@ chunk-zfbhezv9.js:4839-5085 facade-exports (2.1.88 match: removeDangerousPermissions, 1)
 /**
  * 按来源分组，用 removeRules 从上下文删掉给定的危险 allow 规则（默认只删可编辑层、session、cliArg）。
  */
@@ -1721,7 +1721,7 @@ function removeDangerousPermissions(context, permissions, includeReadOnlySources
     });
   return updatedContext;
 }
-//@ chunk-zfbhezv9.js:5085-5574 facade-exports = stripDangerousPermissionsForAutoMode (0.965)
+//@ chunk-zfbhezv9.js:5085-5574 facade-exports (2.1.88 match: stripDangerousPermissionsForAutoMode, 0.965)
 /**
  * 进入 auto（或 plan+auto）时剥离危险 allow 规则，并把它们按来源存入 strippedDangerousRules 以便退出时恢复。
  */
@@ -1820,7 +1820,7 @@ function declareSdkHostCodeRunningMcpTools(codeRunningMcpTools) {
   }
   return Object.fromEntries(toolsByServer);
 }
-//@ chunk-zfbhezv9.js:7160-7225 facade-exports = _temp3 (0.739)
+//@ chunk-zfbhezv9.js:7160-7225 facade-exports (2.1.88 match: _temp3, 0.739)
 /**
  * 上下文已处于“剥离过危险规则”状态时，重新执行剥离（新规则加入后保持剥离）。
  */
@@ -1829,7 +1829,7 @@ function withRulesSetAsideAgain(state_1) {
     ? state_1
     : stripDangerousPermissionsForAutoMode(state_1);
 }
-//@ chunk-zfbhezv9.js:7225-7549 facade-exports = restoreDangerousPermissions (0.868)
+//@ chunk-zfbhezv9.js:7225-7549 facade-exports (2.1.88 match: restoreDangerousPermissions, 0.868)
 /**
  * 退出 auto 时把 strippedDangerousRules 里的规则加回（command 来源过滤掉 cBo 命中的项），并清空暂存。
  */
@@ -1893,7 +1893,7 @@ function intersectWithCurrentRules(stripped, toolPermissionContext) {
   );
   return reduced.dropped ? reduced.rules : stripped;
 }
-//@ chunk-zfbhezv9.js:8135-8678 facade-exports = transitionPermissionMode (0.699)
+//@ chunk-zfbhezv9.js:8135-8678 facade-exports (2.1.88 match: transitionPermissionMode, 0.699)
 /**
  * 模式切换的统一入口：记录切换事件；进入 plan 走 prepareContextForPlanMode；进入使用分类器的模式（auto）要求闸门开启并剥离危险规则，离开时恢复；离开 plan 时清掉 prePlanMode。
  */
@@ -1943,7 +1943,7 @@ var AUTO_MODE_UNAVAILABLE_FEATURE_KEYS = {
   "fast-mode": "auto_mode_fast_mode",
   model: "auto_mode_model",
 };
-//@ chunk-zfbhezv9.js:8851-9453 facade-exports = handleSetPermissionMode (0.455)
+//@ chunk-zfbhezv9.js:8851-9453 facade-exports (2.1.88 match: handleSetPermissionMode, 0.455)
 /**
  * 设置权限模式前的守卫：模式名非法、bypass 在 --restricted 下、被设置禁用或会话未以 --dangerously-skip-permissions 启动、auto 不可用时返回 {ok:false, error, code}。
  */
@@ -2190,7 +2190,7 @@ function literalToolsNarrowing({ baseToolsCli, baseToolsIsPreset, parsedBaseTool
     securityWarnings: securityWarningLines,
   };
 }
-//@ chunk-zfbhezv9.js:12504-12611 fingerprint = isSymlinkTo (1)
+//@ chunk-zfbhezv9.js:12504-12611 fingerprint (2.1.88 match: isSymlinkTo, 1)
 function isSymlinkTo({ processPwd, originalCwd }) {
   let { resolvedPath: resolvedProcessPwd, isSymlink: isProcessPwdSymlink } = safeResolvePath(
     getFsImplementation(),
@@ -2337,7 +2337,7 @@ function withWriteBlockOn(context) {
     },
   };
 }
-//@ chunk-zfbhezv9.js:14683-19645 facade-exports = initializeToolPermissionContext (0.485)
+//@ chunk-zfbhezv9.js:14683-19645 facade-exports (2.1.88 match: initializeToolPermissionContext, 0.485)
 /**
  * 构建初始 ToolPermissionContext：解析 --allowedTools/--disallowedTools/--tools，加载 settings 规则（工作区信任门控），计算 bypass 可用性（disableBypassPermissionsMode、restricted），Windows 上禁 Bash 时联动 PowerShell，检测危险/宽泛规则，设置 auto 可用性与 Chrome 分类器开关，校验并加入 additionalDirectories（settings、会话、--add-dir）。
  */
@@ -2656,7 +2656,7 @@ async function initializeToolPermissionContext({
     inheritedSessionDirectories,
   };
 }
-//@ chunk-zfbhezv9.js:19645-21746 facade-exports = findOverlyBroadPowerShellPermissions (0.148)
+//@ chunk-zfbhezv9.js:19645-21746 facade-exports (2.1.88 match: findOverlyBroadPowerShellPermissions, 0.148)
 /**
  * 规则自检告警：deny/ask 规则指向已移除或未知的工具、用 "field:" 原样匹配 command/path 字段（不会生效）；validatePermissionRule 报告的警告。
  */
@@ -2893,7 +2893,7 @@ function abandonPendingPolicyVerdictResolution() {
       : undefined,
   );
 }
-//@ chunk-zfbhezv9.js:23390-25368 facade-exports = verifyAutoModeGateAccess (0.8)
+//@ chunk-zfbhezv9.js:23390-25368 facade-exports (2.1.88 match: verifyAutoModeGateAccess, 0.8)
 /**
  * 校验 auto 模式能否进入：读 tengu_auto_mode_config（enabled: enabled/disabled/opt-in、disableFastMode）、settings disableAutoMode、模型是否支持；可进入时返回刷新可用性的 updateContext，否则返回踢出 auto 的 updateContext 与原因通知（settings/circuit-breaker/fast-mode/model）。
  */
@@ -3042,7 +3042,7 @@ function getAutoModeAvailabilityForAnalytics() {
     autoModeFromFallback: isAutoModeFromFallback(),
   };
 }
-//@ chunk-zfbhezv9.js:25940-26009 facade-exports = _temp7 (1)
+//@ chunk-zfbhezv9.js:25940-26009 facade-exports (2.1.88 match: _temp7, 1)
 /**
  * auto 模式是否被托管策略设置禁用（policySettings 与可信策略层均禁用）。
  */
@@ -3054,7 +3054,7 @@ function isAutoModeDisabledByPolicySettings() {
 }
 //@ chunk-zfbhezv9.js:26009-26026 layout
 var AUTO_MODE_ENABLED_FALLBACK = "enabled";
-//@ chunk-zfbhezv9.js:26026-26107 fingerprint = parseAutoModeEnabledState (1)
+//@ chunk-zfbhezv9.js:26026-26107 fingerprint (2.1.88 match: parseAutoModeEnabledState, 1)
 function parseAutoModeEnabledState(value) {
   if (value === "enabled" || value === "disabled" || value === "opt-in") return value;
   return AUTO_MODE_ENABLED_FALLBACK;
@@ -3063,7 +3063,7 @@ function parseAutoModeEnabledState(value) {
 function getAutoModeEnabledState() {
   return getAutoModeEnabledStateWithSource().value;
 }
-//@ chunk-zfbhezv9.js:26141-26251 facade-exports = getAutoModeEnabledState (0.825)
+//@ chunk-zfbhezv9.js:26141-26251 facade-exports (2.1.88 match: getAutoModeEnabledState, 0.825)
 function getAutoModeEnabledStateWithSource() {
   let enabled = getFeatureValue_CACHED_MAY_BE_STALE("tengu_auto_mode_config", {})?.enabled;
   let autoModeEnabledState = parseAutoModeEnabledState(enabled);
@@ -3072,7 +3072,7 @@ function getAutoModeEnabledStateWithSource() {
     src: enabled === autoModeEnabledState ? "gb" : "default",
   };
 }
-//@ chunk-zfbhezv9.js:26251-26418 facade-exports = createDisabledBypassPermissionsContext (1)
+//@ chunk-zfbhezv9.js:26251-26418 facade-exports (2.1.88 match: createDisabledBypassPermissionsContext, 1)
 /**
  * 禁用 bypass：当前为 bypass 时切回 default，并把 isBypassPermissionsModeAvailable 置为 false。
  */
@@ -3162,7 +3162,7 @@ function createDisabledAutoModeContext(context) {
     canAutoClassifierRun: false,
   };
 }
-//@ chunk-zfbhezv9.js:27225-27291 facade-exports = isDefaultPermissionModeAuto (1)
+//@ chunk-zfbhezv9.js:27225-27291 facade-exports (2.1.88 match: isDefaultPermissionModeAuto, 1)
 /**
  * settings 的 permissions.defaultMode 是否为 auto。
  */
@@ -3173,7 +3173,7 @@ function isDefaultPermissionModeAuto() {
 function shouldPlanUseAutoMode() {
   return isAutoModeGateEnabled() && getUseAutoModeDuringPlan();
 }
-//@ chunk-zfbhezv9.js:27325-27396 layout = _temp9 (1)
+//@ chunk-zfbhezv9.js:27325-27396 layout (2.1.88 match: _temp9, 1)
 function isAutoModeAvailableNow() {
   return (
     isAutoModeActive() &&
@@ -3213,7 +3213,7 @@ function activatePlanAutoMode(context) {
   setAutoModeActive(true);
   return stripDangerousPermissionsForAutoMode(context);
 }
-//@ chunk-zfbhezv9.js:27673-28016 facade-exports = prepareContextForPlanMode (0.927)
+//@ chunk-zfbhezv9.js:27673-28016 facade-exports (2.1.88 match: prepareContextForPlanMode, 0.927)
 /**
  * 进入 plan：记录 prePlanMode；从 auto 进入时视 plan 是否沿用分类器决定是否恢复危险规则；从其他模式进入时若 plan 使用 auto 分类器则剥离危险规则。
  */
@@ -3249,7 +3249,7 @@ function prepareContextForPlanMode(context) {
     prePlanMode: currentMode,
   };
 }
-//@ chunk-zfbhezv9.js:28016-28413 facade-exports = transitionPlanAutoMode (0.56)
+//@ chunk-zfbhezv9.js:28016-28413 facade-exports (2.1.88 match: transitionPlanAutoMode, 0.56)
 /**
  * 把上下文规整为“已认领的启动模式”：清除主动性档位标记；未经 flag 允许时关闭 bypass 可用；plan 带 prePlanMode 时按 auto 是否激活处理 plan 的 auto 状态。
  */
@@ -3309,7 +3309,7 @@ function reconcilePlanAutoMode(context, shouldPlanUseAuto) {
 function antBuiltinDenyRules() {
   return [];
 }
-//@ chunk-e6aww6q8.js:3261661-3261758 fingerprint = isAutoModeDisabledBySettings (1)
+//@ chunk-e6aww6q8.js:3261661-3261758 fingerprint (2.1.88 match: isAutoModeDisabledBySettings, 1)
 function isAutoModeDisabledBySettings(settings) {
   return settings.disableAutoMode === "disable" || settings.permissions?.disableAutoMode === "disable";
 }
@@ -3328,7 +3328,7 @@ function isAutoModeSupportedNow() {
 function isAutoModeGateEnabled() {
   return isAutoModeSupportedNow() && !isAutoModeDisabledBySettingsNow();
 }
-//@ chunk-e6aww6q8.js:3261867-3262027 facade-exports = getAutoModeUnavailableReason (1)
+//@ chunk-e6aww6q8.js:3261867-3262027 facade-exports (2.1.88 match: getAutoModeUnavailableReason, 1)
 /**
  * auto 不可用的原因：settings / circuit-breaker / model，或 Els() 给出的其他原因。
  */
@@ -3340,7 +3340,7 @@ function getAutoModeUnavailableReason(model = getMainLoopModel()) {
   if (autoModeFastModeBreakerReason === "model" && !isAntInternalFastModelId(model)) return null;
   return autoModeFastModeBreakerReason;
 }
-//@ chunk-e6aww6q8.js:3262027-3262342 facade-exports = getAutoModeUnavailableNotification (0.763)
+//@ chunk-e6aww6q8.js:3262027-3262342 facade-exports (2.1.88 match: getAutoModeUnavailableNotification, 0.763)
 /**
  * auto 不可用原因到提示文字：settings、circuit-breaker、fast-mode、model 四种。
  */
@@ -3372,7 +3372,7 @@ function getAutoModeUnavailableText() {
     ? getAutoModeUnavailableNotification(autoModeUnavailableReason)
     : "auto mode is unavailable right now";
 }
-//@ chunk-4p0ppc72.js:377-468 fingerprint = isPermissionUpdateDestination (0.909)
+//@ chunk-4p0ppc72.js:377-468 fingerprint (2.1.88 match: isPermissionUpdateDestination, 0.909)
 /**
  * PermissionUpdate 可用的目的地列表：userSettings、projectSettings、localSettings、flagSettings、cliArg、session。
  */
@@ -3386,7 +3386,7 @@ var PERMISSION_UPDATE_DESTINATIONS = [
 ];
 //@ chunk-tr0s0d0k.js:23784-23793 affinity
 var HOST_CREDENTIAL_SCAN_DEPTH = 4;
-//@ chunk-tr0s0d0k.js:23793-24209 callgraph-fingerprint = isOverlyBroadPowerShellAllowRule (0.244)
+//@ chunk-tr0s0d0k.js:23793-24209 callgraph-fingerprint (2.1.88 match: isOverlyBroadPowerShellAllowRule, 0.244)
 /**
  * 若 Shell 命令会读取宿主凭证（Windows 按 token 检查，其他平台按 wt 扫描），返回 hostCredential 来源的 deny 规则。
  */

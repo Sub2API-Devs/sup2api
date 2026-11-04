@@ -249,7 +249,7 @@ deferInit("chunk-ag5x7vhf.js:78698", () => {
 function mainLoopBusyWithNotice() {
   return isModelSuccessorNoticeActive() && isMainLoopBusy();
 }
-//@ chunk-ag5x7vhf.js:91289-91368 placement = useMainLoopModel (1)
+//@ chunk-ag5x7vhf.js:91289-91368 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModel(state) {
   return isModelSuccessorNoticeActive() && `${state.mainLoopModel} ${state.mainLoopModelForSession}`;
 }

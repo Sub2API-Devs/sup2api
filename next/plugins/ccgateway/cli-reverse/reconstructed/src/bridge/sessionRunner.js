@@ -56,7 +56,7 @@ var BOUND_RESUMED_TURN_EPOCH_TAG = 3600000;
 function safeFilenameId(id) {
   return id.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
-//@ chunk-pjm08t7p.js:1846-2209 fingerprint = TOOL_VERBS (1)
+//@ chunk-pjm08t7p.js:1846-2209 fingerprint (2.1.88 match: TOOL_VERBS, 1)
 var TOOL_VERBS = {
   Read: "Reading",
   Write: "Writing",
@@ -77,7 +77,7 @@ var TOOL_VERBS = {
   NotebookEditTool: "Editing notebook",
   LSP: "LSP",
 };
-//@ chunk-pjm08t7p.js:2209-2360 fingerprint = toolSummary (1)
+//@ chunk-pjm08t7p.js:2209-2360 fingerprint (2.1.88 match: toolSummary, 1)
 function toolSummary(toolName, input, unused, activities, unusedOther) {
   let verb = TOOL_VERBS[toolName] ?? toolName;
   let target =
@@ -91,7 +91,7 @@ function toolSummary(toolName, input, unused, activities, unusedOther) {
   if (target) return `${verb} ${target}`;
   return verb;
 }
-//@ chunk-pjm08t7p.js:2360-3459 fingerprint = extractActivities (1)
+//@ chunk-pjm08t7p.js:2360-3459 fingerprint (2.1.88 match: extractActivities, 1)
 /**
  * 解析子进程一行 stream-json：assistant 中的 tool_use/text 生成活动，result 生成完成或错误活动。
  */
@@ -165,7 +165,7 @@ function extractActivities(line, sessionId, debug, unused, unused_2) {
   }
   return activities;
 }
-//@ chunk-pjm08t7p.js:3459-3723 fingerprint = extractUserMessageText (1)
+//@ chunk-pjm08t7p.js:3459-3723 fingerprint (2.1.88 match: extractUserMessageText, 1)
 function extractUserMessageText(msg) {
   if (msg.parent_tool_use_id != null || msg.isSynthetic || msg.isReplay) return;
   let content = msg.message?.content;
@@ -190,7 +190,7 @@ function inputPreview(input) {
   }
   return parts.join(" ");
 }
-//@ chunk-pjm08t7p.js:3879-10276 fingerprint = createSessionSpawner (0.696)
+//@ chunk-pjm08t7p.js:3879-10276 fingerprint (2.1.88 match: createSessionSpawner, 0.696)
 /**
  * 返回 {spawn}：为会话拼子进程参数（--print --sdk-url --session-id --input/output-format stream-json --replay-user-messages --resume、权限模式、chrome、settings、mcp-config、追加系统提示词、模型参数），
  * 设置环境（CLAUDE_CODE_SESSION_ACCESS_TOKEN、CLAUDE_CODE_ENVIRONMENT_KIND=bridge、CLAUDE_CODE_WORKER_EPOCH、属主账号/组织等，清除宿主凭证变量），

@@ -45,7 +45,7 @@ function peekNextProcessableCommand(queue) {
   if (queue.getCommandQueue().find(isSendableQueuedCommand)?.screeningPending === true) return;
   return peekNextQueued(queue, isSendableQueuedCommand);
 }
-//@ chunk-18hwfzwa.js:1661334-1662561 fingerprint = processQueueIfReady (0.335)
+//@ chunk-18hwfzwa.js:1661334-1662561 fingerprint (2.1.88 match: processQueueIfReady, 0.335)
 /**
  * 主循环空闲时从命令队列取出下一批（同类 prompt 可合并、bash 单独）并执行。
  */
@@ -193,7 +193,7 @@ function isBridgeSlashCommandUnavailable(command, commands) {
     isCommandEnabled(command_2)
   );
 }
-//@ chunk-18hwfzwa.js:1663151-1663315 placement = prependModeCharacterToInput (1)
+//@ chunk-18hwfzwa.js:1663151-1663315 placement (2.1.88 match: prependModeCharacterToInput, 1)
 function prependModeCharacterToInput_2(input, mode) {
   let textBlock = input.mode === "bash" ? null : lastTextBlockText(input.value);
   let slashCommand = textBlock === null || !textBlock.startsWith("/") ? null : parseSlashCommand(textBlock);

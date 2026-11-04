@@ -844,7 +844,7 @@ function OAuthExpiryStatusRow() {
   if (early !== EARLY_RETURN_SENTINEL) return early;
   return row;
 }
-//@ chunk-ag5x7vhf.js:106018-106161 fingerprint = jetbrainsPluginNotice (0.336)
+//@ chunk-ag5x7vhf.js:106018-106161 fingerprint (2.1.88 match: jetbrainsPluginNotice, 0.336)
 var jetbrainsPluginNotice = {
   id: REMOTE_CONTROL_AUTO_ON,
   tier: "info",
@@ -1446,7 +1446,7 @@ deferInit("chunk-ag5x7vhf.js:117948", () => {
 deferInit("chunk-ag5x7vhf.js:117952", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:312870-312946 fingerprint = getActiveNotices (0.424)
+//@ chunk-18hwfzwa.js:312870-312946 fingerprint (2.1.88 match: getActiveNotices, 0.424)
 function getActiveNotices(toolUseContext, guard) {
   return {
     ...toolUseContext,

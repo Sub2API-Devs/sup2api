@@ -278,7 +278,7 @@ function cloudRefusalMessage(group, names) {
       return `${UNSUPPORTED_OPTION_REFUSAL_MESSAGE}${names.join(", ")}.`;
   }
 }
-//@ chunk-3wek6r2k.js:38084-38206 placement = isMcpServerFromProjectOrLocalSettings (1)
+//@ chunk-3wek6r2k.js:38084-38206 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 function isMcpServerFromProjectOrLocalSettings(config) {
   let sources = new Set((config ?? "").split(",").map((source) => source.trim()));
   return ["user", "project", "local"].every((source) => sources.has(source));
@@ -805,7 +805,7 @@ function cloudPermissionModeFrom(mode) {
 function describeBindingOutcome(outcome) {
   return outcome ? deviceBindingRefusalText(outcome) : "the binding outcome was never reported";
 }
-//@ chunk-3wek6r2k.js:47760-47841 placement = toCompatSessionId (1)
+//@ chunk-3wek6r2k.js:47760-47841 placement (2.1.88 match: toCompatSessionId, 1)
 /**
  * 会话 ID 的展示形式（cse_ 转成 session_，截断到 128）。
  */

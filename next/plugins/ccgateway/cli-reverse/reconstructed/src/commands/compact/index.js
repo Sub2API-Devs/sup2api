@@ -10,7 +10,7 @@
  */
 import { isEnvTruthy } from "../../utils/envUtils.js";
 
-//@ chunk-e6aww6q8.js:779274-779592 fingerprint = compact (0.71)
+//@ chunk-e6aww6q8.js:779274-779592 fingerprint (2.1.88 match: compact, 0.71)
 /**
  * /compact 命令对象（local）；描述：Free up context by summarizing the conversation so far；isEnabled: ()=>!Oe(process.env.DISABLE_COMPACT)；实现 chunk-vrrvwm85.js 的 se。
  */

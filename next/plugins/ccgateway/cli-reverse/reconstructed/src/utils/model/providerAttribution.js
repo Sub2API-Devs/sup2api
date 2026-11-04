@@ -164,7 +164,7 @@ function modelDefinitionSource(mainLoopModel) {
     return "gateway_discovery";
   return "unrecognized";
 }
-//@ chunk-3wek6r2k.js:74062-74172 placement = getClientSurface (0.78)
+//@ chunk-3wek6r2k.js:74062-74172 placement (2.1.88 match: getClientSurface, 0.78)
 function getClientSurface() {
   let initialModelSettingLayer = getInitialModelSettingLayer();
   switch (initialModelSettingLayer) {

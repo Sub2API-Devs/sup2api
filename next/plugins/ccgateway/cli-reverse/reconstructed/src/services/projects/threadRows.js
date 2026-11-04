@@ -77,7 +77,7 @@ function hasUniqueAttributes(line) {
 }
 //@ chunk-s1zey0a9.js:1731-1762 placement
 var CONTROL_OR_LINEBREAK_REGEX = /[\p{Cc}\u2028\u2029]/u;
-//@ chunk-s1zey0a9.js:1762-1881 placement = escapeXml (0.793)
+//@ chunk-s1zey0a9.js:1762-1881 placement (2.1.88 match: escapeXml, 0.793)
 function escapeXml(s) {
   let escaped = "";
   for (let char of s) {
@@ -167,7 +167,7 @@ function formatCoordinatorRelayMessages(textBlocks) {
     },
   );
 }
-//@ chunk-s1zey0a9.js:2753-2826 placement = isCompactBoundaryMessage (1)
+//@ chunk-s1zey0a9.js:2753-2826 placement (2.1.88 match: isCompactBoundaryMessage, 1)
 function isCompactBoundaryMessage(message) {
   return message?.type === "system" && message.subtype === "compact_boundary";
 }

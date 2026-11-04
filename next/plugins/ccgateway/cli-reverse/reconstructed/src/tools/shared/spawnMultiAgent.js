@@ -80,7 +80,7 @@ import { isRegisteredAgent } from "../../utils/plugins/pluginLoadState.js";
 import { AGENT } from "../AgentTool/constants.js";
 import { getTeammateModeFromSnapshot } from "../../utils/swarm/backends/teammateModeSnapshot.js";
 
-//@ chunk-hntsfzas.js:6798-6916 fingerprint = getTeammateCommand (1)
+//@ chunk-hntsfzas.js:6798-6916 fingerprint (2.1.88 match: getTeammateCommand, 1)
 /**
  * 队友启动命令：编译版用 execPath，否则 argv[1]。
  */
@@ -121,7 +121,7 @@ function teammateLaunchCommand() {
       });
   return [cmd, ...prefixArgs];
 }
-//@ chunk-cne5hsvz.js:14457-14913 fingerprint = buildInheritedCliFlags (0.584)
+//@ chunk-cne5hsvz.js:14457-14913 fingerprint (2.1.88 match: buildInheritedCliFlags, 0.584)
 /**
  * 把父会话的权限模式转成队友进程的 CLI 参数（--dangerously-skip-permissions / --permission-mode …），plan_mode_required 时用 plan。
  */
@@ -152,11 +152,11 @@ function buildInheritedCliFlags_2({
         : [];
   }
 }
-//@ chunk-cne5hsvz.js:19108-19187 fingerprint = hasSession (1)
+//@ chunk-cne5hsvz.js:19108-19187 fingerprint (2.1.88 match: hasSession, 1)
 async function hasSession(sessionName) {
   return (await execFileNoThrow(TMUX, ["has-session", "-t", sessionName], getPDFPageCount())).code === 0;
 }
-//@ chunk-cne5hsvz.js:19187-19463 fingerprint = ensureSession (0.71)
+//@ chunk-cne5hsvz.js:19187-19463 fingerprint (2.1.88 match: ensureSession, 0.71)
 async function ensureSession(sessionName) {
   if (!(await hasSession(sessionName))) {
     let result = await execFileNoThrow(TMUX, ["new-session", "-d", "-s", sessionName], {
@@ -264,7 +264,7 @@ function uniqueTeammateName(rawName, teamFile) {
   while (takenNames.has(`${sanitizedName}-${suffix}`.toLowerCase())) suffix++;
   return `${sanitizedName}-${suffix}`;
 }
-//@ chunk-cne5hsvz.js:23023-26086 fingerprint = handleSpawnSplitPane (0.76)
+//@ chunk-cne5hsvz.js:23023-26086 fingerprint (2.1.88 match: handleSpawnSplitPane, 0.76)
 /**
  * 在 tmux/iTerm2 分屏中启动队友进程。
  */
@@ -440,7 +440,7 @@ async function handleSpawnSplitPane(input, context) {
     context.storageV5,
   );
 }
-//@ chunk-cne5hsvz.js:26086-29036 fingerprint = handleSpawnSeparateWindow (0.743)
+//@ chunk-cne5hsvz.js:26086-29036 fingerprint (2.1.88 match: handleSpawnSeparateWindow, 0.743)
 /**
  * 在新 tmux 窗口中启动队友进程。
  */
@@ -615,7 +615,7 @@ async function handleSpawnSeparateWindow(input, context) {
     context.storageV5,
   );
 }
-//@ chunk-cne5hsvz.js:29036-29789 fingerprint = registerOutOfProcessTeammateTask (0.909)
+//@ chunk-cne5hsvz.js:29036-29789 fingerprint (2.1.88 match: registerOutOfProcessTeammateTask, 0.909)
 /**
  * 为 pane 队友在任务表登记 in_process_teammate 任务（可杀死 pane）。
  */
@@ -680,7 +680,7 @@ function registerOutOfProcessTeammateTask(
       },
     );
 }
-//@ chunk-cne5hsvz.js:29789-32223 fingerprint = handleSpawnInProcess (0.744)
+//@ chunk-cne5hsvz.js:29789-32223 fingerprint (2.1.88 match: handleSpawnInProcess, 0.744)
 /**
  * 进程内队友：准备团队成员记录、清空邮箱、spawnInProcessTeammate 并启动其循环。
  */
@@ -826,7 +826,7 @@ async function handleSpawnInProcess(input, context) {
     context.storageV5,
   );
 }
-//@ chunk-cne5hsvz.js:32223-33045 fingerprint = handleSpawn (0.326)
+//@ chunk-cne5hsvz.js:32223-33045 fingerprint (2.1.88 match: handleSpawn, 0.326)
 /**
  * 派生队友：拒绝协议帧 prompt；启用进程内队友时直接进程内运行；否则探测 pane 后端（tmux/iTerm2），不可用且模式为 auto 时回退进程内，否则按 use_splitpane 开分屏或新窗口。
  */

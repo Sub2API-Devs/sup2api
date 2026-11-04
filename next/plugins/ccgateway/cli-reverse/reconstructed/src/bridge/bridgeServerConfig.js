@@ -424,7 +424,7 @@ async function writePrivateConfigDir(sessionId) {
       if (j > 0 || getErrnoCode(error) !== "ENOENT") throw error;
     }
 }
-//@ chunk-pjm08t7p.js:16151-16221 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-pjm08t7p.js:16151-16221 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function removeRecursiveQuietly(dirPath) {
   await rm(dirPath, {
     recursive: true,

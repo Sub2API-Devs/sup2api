@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-bc20zedk.js:19099-19133 fingerprint = sliceAnsi (0.566)
+//@ chunk-bc20zedk.js:19099-19133 fingerprint (2.1.88 match: sliceAnsi, 0.566)
 function sliceAnsi(node) {
   return node.fullWidth;
 }

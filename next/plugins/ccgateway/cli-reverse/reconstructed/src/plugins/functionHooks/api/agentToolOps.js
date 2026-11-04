@@ -270,7 +270,7 @@ var DEFAULT_YES_NO = ["Yes", "No"];
  * 120
  */
 var MAX_WAIT_SECONDS = 120;
-//@ chunk-4121qate.js:292674-292699 placement = ASK_USER_QUESTION_TOOL_NAME (1)
+//@ chunk-4121qate.js:292674-292699 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_NAME, 1)
 /**
  * AskUserQuestion 工具名常量（另一 chunk 中的同值副本）。
  */

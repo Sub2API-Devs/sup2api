@@ -35,7 +35,7 @@ function renderRepoItem(path) {
     path,
   );
 }
-//@ chunk-s1ks86z4.js:14500-15718 fingerprint = TeleportRepoMismatchDialog (0.688)
+//@ chunk-s1ks86z4.js:14500-15718 fingerprint (2.1.88 match: TeleportRepoMismatchDialog, 0.688)
 function TeleportRepoMismatchDialog(props) {
   let $ = useMemoCache(15);
   let { targetRepo, initialPaths, onSelectPath, onCancel, storageV5 } = props;

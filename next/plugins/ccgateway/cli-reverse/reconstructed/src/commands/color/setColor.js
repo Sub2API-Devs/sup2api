@@ -25,7 +25,7 @@ async function call(onDone, context, args) {
   });
   return null;
 }
-//@ chunk-p7w1d1hp.js:682-1404 placement = call (0.7)
+//@ chunk-p7w1d1hp.js:682-1404 placement (2.1.88 match: call, 0.7)
 /**
  * 设置会话颜色并同步到桥接会话。
  */

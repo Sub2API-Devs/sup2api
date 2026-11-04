@@ -34,7 +34,7 @@ import { isPlainObject } from "../../utils/objectUtils.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:534738-534947 fingerprint = readAutoModeEnabledState (0.807)
+//@ chunk-tyg7f3ek.js:534738-534947 fingerprint (2.1.88 match: readAutoModeEnabledState, 0.807)
 /**
  * readAutoModeEnabledState：GrowthBook tengu_auto_mode_config.enabled（enabled/disabled/opt-in），非覆盖来源的 disabled 视为 enabled。
  */
@@ -218,7 +218,7 @@ function buildVscodeExperimentGates(session) {
       : false,
   };
 }
-//@ chunk-tyg7f3ek.js:538680-538953 fingerprint = setupVscodeSdkMcp (0.343)
+//@ chunk-tyg7f3ek.js:538680-538953 fingerprint (2.1.88 match: setupVscodeSdkMcp, 0.343)
 /**
  * sendVscodeExperimentGates：向 VS Code 客户端发送 experiment_gates 通知，失败只记日志。
  */

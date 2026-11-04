@@ -26,7 +26,7 @@ import { getPluginHookRunner } from "../../bootstrap/state.js";
 import { logForDebugging } from "../debug.js";
 import { promptEndingFields } from "../../entrypoints/sdk/coreSchemas.js";
 
-//@ chunk-e6aww6q8.js:874823-874901 placement = _temp7 (1)
+//@ chunk-e6aww6q8.js:874823-874901 placement (2.1.88 match: _temp7, 1)
 /**
  * 判断托管策略中是否存在某设置项（读取失败按存在处理）。
  */

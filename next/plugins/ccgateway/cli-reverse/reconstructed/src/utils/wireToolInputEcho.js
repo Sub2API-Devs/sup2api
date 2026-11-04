@@ -138,7 +138,7 @@ function captureWireToolInputs(content) {
 function logWireToolInputParseFailure() {
   logFeatureSad("tether_wire_tool_input", "parse_failed");
 }
-//@ chunk-e6aww6q8.js:319488-319857 placement = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:319488-319857 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_2(wireToolInputs, content, batchToolUses) {
   if (!isPlainObject_4(wireToolInputs) || !Array.isArray(content)) return;
   let inputs;
@@ -176,7 +176,7 @@ function collectIdPrefixesWithNumericSuffix(ids) {
   }
   return prefixes;
 }
-//@ chunk-e6aww6q8.js:320007-320311 placement = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:320007-320311 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_3(wireToolInputs, content, batchToolUses) {
   if (!isPlainObject_4(wireToolInputs)) return;
   let inputs;
@@ -373,7 +373,7 @@ function extractCdPrefixDir(fullCommand, command) {
 function createNullProtoObject() {
   return Object.create(null);
 }
-//@ chunk-e6aww6q8.js:322394-322660 placement = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:322394-322660 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_4(messages, sinceUuid) {
   if (!messages || sinceUuid === undefined) return;
   try {

@@ -412,7 +412,7 @@ async function dirtyPathsOf(run) {
  * refs/ 路径正则。
  */
 var SAFE_REF_PATTERN = /^refs(?:\/[A-Za-z0-9_@+-][A-Za-z0-9._@+-]*)+$/;
-//@ chunk-wyqg6m3h.js:17760-17848 placement = getTaskListLockPath (1)
+//@ chunk-wyqg6m3h.js:17760-17848 placement (2.1.88 match: getTaskListLockPath, 1)
 /**
  * refs/ 路径安全检查（切分误归）。
  */

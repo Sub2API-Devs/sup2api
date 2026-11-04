@@ -203,7 +203,7 @@ deferInit("chunk-e6aww6q8.js:1069453", () => {
 function runWithoutTelemetry(fn) {
   return suppressedTelemetryStorage.run(true, fn);
 }
-//@ chunk-e6aww6q8.js:1069506-1069559 placement = getAgentContext (1)
+//@ chunk-e6aww6q8.js:1069506-1069559 placement (2.1.88 match: getAgentContext, 1)
 /**
  * 不在静默作用域内时才记遥测事件（Bash 危险命令形状等）。
  */

@@ -90,7 +90,7 @@ function round(number, precision) {
 function getSessionCostUSD() {
   return getTotalCostUSD() - getRootSession().costLedger.restoredCostUSD();
 }
-//@ chunk-e6aww6q8.js:964849-965083 placement = combineUsage (0.766)
+//@ chunk-e6aww6q8.js:964849-965083 placement (2.1.88 match: combineUsage, 0.766)
 /**
  * 返回本进程累计的 input/output/cache 读/cache 写 token，扣除恢复会话时 costLedger 记入的 restoredTokens（只统计本次运行实际消耗）。
  */
@@ -135,7 +135,7 @@ deferInit("chunk-e6aww6q8.js:965379", () => {
 function saveSessionCostBeforeExit(session) {
   flushAndSaveCosts(undefined, session);
 }
-//@ chunk-e6aww6q8.js:965418-966114 placement = resetCostState (0.598)
+//@ chunk-e6aww6q8.js:965418-966114 placement (2.1.88 match: resetCostState, 0.598)
 /**
  * 生成要保存的 cost-state 记录（当前会话的费用、时长、token、行数等）；账本不属于本会话时不生成。
  */
@@ -166,7 +166,7 @@ function resetCostState() {
     hasUnknownModelCost: hasUnknownModelCost(),
   };
 }
-//@ chunk-e6aww6q8.js:966114-966618 placement = setCostStateForRestore (0.784)
+//@ chunk-e6aww6q8.js:966114-966618 placement (2.1.88 match: setCostStateForRestore, 0.784)
 /**
  * 从会话记录的 cost-state 恢复费用账本；没有记录时只限定账本范围。
  */
@@ -217,7 +217,7 @@ async function saveCostsAsync(fpsMetrics, storageV5) {
 function saveCostsOnExit(fpsMetrics) {
   saveCurrentProjectConfigSyncForExit(saveCurrentSessionCosts(fpsMetrics));
 }
-//@ chunk-e6aww6q8.js:966746-967530 fingerprint = saveCurrentSessionCosts (0.912)
+//@ chunk-e6aww6q8.js:966746-967530 fingerprint (2.1.88 match: saveCurrentSessionCosts, 0.912)
 /**
  * 生成保存会话成本的更新函数：总成本、API/工具/墙钟时长、增删行数、各类 token、web search 次数、FPS、各模型用量、会话 id。
  */
@@ -299,7 +299,7 @@ function formatModelUsageSummary() {
   }
   return header;
 }
-//@ chunk-e6aww6q8.js:968243-968416 layout = aliasMatchesParentTier (0.852)
+//@ chunk-e6aww6q8.js:968243-968416 layout (2.1.88 match: aliasMatchesParentTier, 0.852)
 /**
  * 模型名包含 fable/opus/sonnet/haiku 时返回族名，否则原样。
  */
@@ -339,7 +339,7 @@ function formatCostBreakdown() {
   if (totalTokens > 0) lines.push(`cache hit: ${Math.round((cacheReadTokens / totalTokens) * 100)}%`);
   return lines.length > 0 ? `breakdown \xB7 ${lines.join(" \xB7 ")}` : null;
 }
-//@ chunk-e6aww6q8.js:968900-969274 fingerprint = formatTotalCost (1)
+//@ chunk-e6aww6q8.js:968900-969274 fingerprint (2.1.88 match: formatTotalCost, 1)
 /**
  * /cost 与退出时的汇总：总成本（未知模型/组织计价提示）、API 与墙钟时长、代码增删行、按模型用量、提示词缓存状态。
  */
@@ -419,7 +419,7 @@ function formatCacheMissCauses(lastMissAttribution) {
     })
     .join(", ")}`;
 }
-//@ chunk-e6aww6q8.js:970635-971479 fingerprint = addToTotalModelUsage (0.697)
+//@ chunk-e6aww6q8.js:970635-971479 fingerprint (2.1.88 match: addToTotalModelUsage, 0.697)
 /**
  * 把一次响应的 usage 与成本累加到某模型的用量记录（含 thinking、5m/1h 缓存写入、web search、上下文窗口、最大输出、计价依据）。
  */
@@ -454,7 +454,7 @@ function addToTotalModelUsage(previousUsage, costUSD, usage, model) {
   modelUsage.costBasis = getCostBasis(model, usage);
   return modelUsage;
 }
-//@ chunk-e6aww6q8.js:971479-972881 fingerprint = addToTotalSessionCost (0.752)
+//@ chunk-e6aww6q8.js:971479-972881 fingerprint (2.1.88 match: addToTotalSessionCost, 0.752)
 /**
  * 每次 API 响应后累加会话成本（旧版 addToTotalSessionCost）：更新按模型用量、总成本、token 统计、OTel 成本/token 计数器（带 model/speed/query_source/effort/归因属性），并对 advisor 子调用单独计价、记 tengu_advisor_tool_token_usage 后递归累加。返回含 advisor 的总成本。
  */

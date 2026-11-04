@@ -50,7 +50,7 @@ import { logMCPDebug, logMCPError } from "../../utils/log.js";
 import { redactMcpErrorDetail } from "../../services/mcp/mcpServerOrigin.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-rbwn7je9.js:9435-13531 fingerprint = createMcpAuthTool (0.485)
+//@ chunk-rbwn7je9.js:9435-13531 fingerprint (2.1.88 match: createMcpAuthTool, 0.485)
 /**
  * 为需要 OAuth 但未认证的 MCP 服务器生成占位工具 mcp__<服务器>__authenticate：调用时检查托管策略/禁用/项目审批/claude.ai 连接器/不支持的传输，启动（或复用 10 分钟内的）OAuth 流程并返回授权 URL；授权完成后在身份未变、服务器仍启用时重连并让连接接管真实工具。权限直接 allow。
  */

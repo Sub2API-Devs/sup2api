@@ -25,7 +25,7 @@ import { parseAccessFallbackModels, ACCESSFALLBACKMODELS } from "../../services/
 import { isModelKeyAliasOrResolved, strip1mSuffix } from "./modelIds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:467817-467981 fingerprint = ModelCapabilitySchema (0.613)
+//@ chunk-aepeg2w5.js:467817-467981 fingerprint (2.1.88 match: ModelCapabilitySchema, 0.613)
 /**
  * 见同句首个绑定的说明。
  */
@@ -60,14 +60,14 @@ function parseModelCapability(raw) {
   let parsed = ModelCapabilitySchema().safeParse(raw);
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-aepeg2w5.js:468052-468090 layout = getCacheDir (1)
+//@ chunk-aepeg2w5.js:468052-468090 layout (2.1.88 match: getCacheDir, 1)
 /**
  * ~/.claude/cache。覆盖后缀名 getCacheDir_4。
  */
 function getModelCapabilitiesCacheDir() {
   return join(getClaudeConfigDir(), "cache");
 }
-//@ chunk-aepeg2w5.js:468090-468146 fingerprint = getCachePath (1)
+//@ chunk-aepeg2w5.js:468090-468146 fingerprint (2.1.88 match: getCachePath, 1)
 /**
  * model-capabilities.json 的完整路径。
  */
@@ -103,7 +103,7 @@ function parseCapabilitiesCache(raw) {
 function isModelCapabilitiesCacheEnabled() {
   return false;
 }
-//@ chunk-aepeg2w5.js:468365-468456 callgraph-fingerprint = sortForMatching (1)
+//@ chunk-aepeg2w5.js:468365-468456 callgraph-fingerprint (2.1.88 match: sortForMatching, 1)
 /**
  * 按 id 长度降序、再字典序排序（长 id 优先匹配）。
  */
@@ -214,7 +214,7 @@ async function loadFreshCapabilities(model, storage, now = Date.now()) {
   getCapabilitiesMemo().set(cachePath, capabilitiesFile.models);
   return true;
 }
-//@ chunk-aepeg2w5.js:469880-470748 fingerprint = refreshModelCapabilities (0.502)
+//@ chunk-aepeg2w5.js:469880-470748 fingerprint (2.1.88 match: refreshModelCapabilities, 0.502)
 /**
  * 刷新能力缓存：排序后写入文件或存储 v5（非交互/禁止写入时跳过）。
  */
@@ -273,7 +273,7 @@ async function refreshModelCapabilities(models, storage) {
   getCapabilitiesMemo().set(cachePath, sortedModels);
   logForDebugging(`[modelCapabilities] cached ${sortedModels.length} models`);
 }
-//@ chunk-e6aww6q8.js:2404750-2404913 fingerprint = loadCache (0.453)
+//@ chunk-e6aww6q8.js:2404750-2404913 fingerprint (2.1.88 match: loadCache, 0.453)
 /**
  * 读客户端数据里的 accessFallbackModels，去掉别名与 default。旧版名 loadCache 不准确。
  */

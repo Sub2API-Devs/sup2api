@@ -24,7 +24,7 @@ function hasFrontmatterHooks(hooks) {
   }
   return false;
 }
-//@ chunk-ahpsetyz.js:545-1033 fingerprint = registerFrontmatterHooks (0.946)
+//@ chunk-ahpsetyz.js:545-1033 fingerprint (2.1.88 match: registerFrontmatterHooks, 0.946)
 /**
  * 把代理（agent）frontmatter 的 hooks 注册为会话钩子；isSubagent 时 Stop 改为 SubagentStop。
  */

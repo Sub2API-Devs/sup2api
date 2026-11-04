@@ -69,7 +69,7 @@ async function fetchMetricsEnabled() {
     throw Error("metrics_enabled response missing metrics_logging_enabled");
   return metricsResponse.data;
 }
-//@ chunk-3n6ygrtf.js:1238-1718 fingerprint = _checkMetricsEnabledAPI (0.713)
+//@ chunk-3n6ygrtf.js:1238-1718 fingerprint (2.1.88 match: _checkMetricsEnabledAPI, 0.713)
 /**
  * 调用指标开关接口，返回 {enabled, hasError}。
  */
@@ -242,7 +242,7 @@ function checkMetricsEnabled(principal, enabled, enabled_2) {
     }),
   };
 }
-//@ chunk-3n6ygrtf.js:3774-3880 placement = _temp (0.672)
+//@ chunk-3n6ygrtf.js:3774-3880 placement (2.1.88 match: _temp, 0.672)
 /**
  * 判断缓存行是否有效：enabled 是布尔值且 timestamp 是不晚于现在的有限数。
  */
@@ -256,7 +256,7 @@ function cachedMetricsStatus(principal) {
   let line = getGlobalConfig().metricsStatusCacheByPrincipal?.[principal];
   return line !== undefined && isValidStatusCacheLine(line) ? line : undefined;
 }
-//@ chunk-3n6ygrtf.js:3973-4181 fingerprint = refreshMetricsStatus (0.736)
+//@ chunk-3n6ygrtf.js:3973-4181 fingerprint (2.1.88 match: refreshMetricsStatus, 0.736)
 /**
  * 优先读缓存（过期则后台刷新），否则请求。
  */

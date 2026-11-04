@@ -475,7 +475,7 @@ var HIGHLIGHT_LANGUAGE_ALIASES = {
   xquery: ["xml"],
   yaml: ["ruby"],
 };
-//@ chunk-85hd307w.js:345-361 placement = RESET (1)
+//@ chunk-85hd307w.js:345-361 placement (2.1.88 match: RESET, 1)
 var RESET = "\x1B[0m";
 //@ chunk-85hd307w.js:361-457 placement
 function plainWithReset(text) {
@@ -552,7 +552,7 @@ function highlightCode(code, options) {
 function isSupportedHighlightLanguage(language) {
   return ensureHighlightLanguage(language) !== null;
 }
-//@ chunk-85hd307w.js:1885-1924 fingerprint = loadCliHighlight (0.783)
+//@ chunk-85hd307w.js:1885-1924 fingerprint (2.1.88 match: loadCliHighlight, 0.783)
 var loadCliHighlight = {
   highlight: highlightCode,
   supportsLanguage: isSupportedHighlightLanguage,

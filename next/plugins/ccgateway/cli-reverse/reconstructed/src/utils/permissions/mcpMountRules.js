@@ -14,7 +14,7 @@ import { formatPermissionRule } from "./disallowedToolsFlag.js";
 import { logForDebugging } from "../debug.js";
 import { jsonStringify } from "../slowOperations.js";
 
-//@ chunk-yckdkb4w.js:308-438 placement = buildPermissionUpdates (0.774)
+//@ chunk-yckdkb4w.js:308-438 placement (2.1.88 match: buildPermissionUpdates, 0.774)
 function buildSessionAllowRuleUpdates(rules) {
   return rules.flatMap((rule) =>
     extractRules(

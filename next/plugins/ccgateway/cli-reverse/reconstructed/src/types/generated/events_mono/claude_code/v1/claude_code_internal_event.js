@@ -11,7 +11,7 @@
 import { PublicApiAuth, PublicApiAuth_2 } from "../../common/v1/auth.js";
 import { Timestamp } from "../../../google/protobuf/timestamp.js";
 
-//@ chunk-aepeg2w5.js:661941-662015 fingerprint = createBaseGitHubActionsMetadata (1)
+//@ chunk-aepeg2w5.js:661941-662015 fingerprint (2.1.88 match: createBaseGitHubActionsMetadata, 1)
 function createBaseGitHubActionsMetadata() {
   return {
     actor_id: "",
@@ -19,7 +19,7 @@ function createBaseGitHubActionsMetadata() {
     repository_owner_id: "",
   };
 }
-//@ chunk-aepeg2w5.js:662015-662662 fingerprint = GitHubActionsMetadata (1)
+//@ chunk-aepeg2w5.js:662015-662662 fingerprint (2.1.88 match: GitHubActionsMetadata, 1)
 var GitHubActionsMetadata = {
   fromJSON(object) {
     return {
@@ -48,7 +48,7 @@ var GitHubActionsMetadata = {
     return message;
   },
 };
-//@ chunk-aepeg2w5.js:662662-663365 fingerprint = createBaseEnvironmentMetadata (0.99)
+//@ chunk-aepeg2w5.js:662662-663365 fingerprint (2.1.88 match: createBaseEnvironmentMetadata, 0.99)
 function createBaseEnvironmentMetadata() {
   return {
     platform: "",
@@ -89,7 +89,7 @@ function createBaseEnvironmentMetadata() {
     shell: "",
   };
 }
-//@ chunk-aepeg2w5.js:663365-670221 fingerprint = EnvironmentMetadata (0.991)
+//@ chunk-aepeg2w5.js:663365-670221 fingerprint (2.1.88 match: EnvironmentMetadata, 0.991)
 var EnvironmentMetadata = {
   fromJSON(object) {
     return {
@@ -255,7 +255,7 @@ var EnvironmentMetadata = {
     return message;
   },
 };
-//@ chunk-aepeg2w5.js:670221-670315 fingerprint = createBaseSlackContext (1)
+//@ chunk-aepeg2w5.js:670221-670315 fingerprint (2.1.88 match: createBaseSlackContext, 1)
 function createBaseSlackContext() {
   return {
     slack_team_id: "",
@@ -264,7 +264,7 @@ function createBaseSlackContext() {
     creation_method: "",
   };
 }
-//@ chunk-aepeg2w5.js:670315-671155 fingerprint = SlackContext (1)
+//@ chunk-aepeg2w5.js:670315-671155 fingerprint (2.1.88 match: SlackContext, 1)
 var SlackContext = {
   fromJSON(object) {
     return {
@@ -297,7 +297,7 @@ var SlackContext = {
     return message;
   },
 };
-//@ chunk-aepeg2w5.js:671155-671872 fingerprint = createBaseClaudeCodeInternalEvent (0.83)
+//@ chunk-aepeg2w5.js:671155-671872 fingerprint (2.1.88 match: createBaseClaudeCodeInternalEvent, 0.83)
 function createBaseClaudeCodeInternalEvent() {
   return {
     event_name: "",
@@ -341,7 +341,7 @@ function createBaseClaudeCodeInternalEvent() {
     rh: undefined,
   };
 }
-//@ chunk-aepeg2w5.js:671872-678763 fingerprint = ClaudeCodeInternalEvent (0.843)
+//@ chunk-aepeg2w5.js:671872-678763 fingerprint (2.1.88 match: ClaudeCodeInternalEvent, 0.843)
 var ClaudeCodeInternalEvent = {
   fromJSON(object) {
     return {
@@ -509,19 +509,19 @@ var ClaudeCodeInternalEvent = {
     return message;
   },
 };
-//@ chunk-aepeg2w5.js:678763-678854 fingerprint = fromTimestamp (1)
+//@ chunk-aepeg2w5.js:678763-678854 fingerprint (2.1.88 match: fromTimestamp, 1)
 function fromTimestamp(t) {
   let millis = (t.seconds || 0) * 1000;
   millis += (t.nanos || 0) / 1e6;
   return new globalThis.Date(millis);
 }
-//@ chunk-aepeg2w5.js:678854-678999 fingerprint = fromJsonTimestamp (1)
+//@ chunk-aepeg2w5.js:678854-678999 fingerprint (2.1.88 match: fromJsonTimestamp, 1)
 function fromJsonTimestamp(o) {
   if (o instanceof globalThis.Date) return o;
   else if (typeof o === "string") return new globalThis.Date(o);
   else return fromTimestamp(Timestamp.fromJSON(o));
 }
-//@ chunk-aepeg2w5.js:678999-679042 callgraph-witnessed = isSet (0)
+//@ chunk-aepeg2w5.js:678999-679042 callgraph-witnessed (2.1.88 match: isSet, 0)
 function isSet_2(value) {
   return value !== null && value !== undefined;
 }

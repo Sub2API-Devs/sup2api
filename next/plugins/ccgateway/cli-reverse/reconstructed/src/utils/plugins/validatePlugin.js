@@ -112,7 +112,7 @@ import { unaddableTransportReason } from "../../services/mcp/config.js";
 import { PLATFORM_TARGETS, binaryBaseNameForTarget } from "../platformTargets.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6j594vm1.js:3309-3356 fingerprint = MARKETPLACE_ONLY_MANIFEST_FIELDS (0.369)
+//@ chunk-6j594vm1.js:3309-3356 fingerprint (2.1.88 match: MARKETPLACE_ONLY_MANIFEST_FIELDS, 0.369)
 /**
  * 按模式返回 schema（strict 或宽松）。名字配错，见 lead 建议。
  */
@@ -388,7 +388,7 @@ function matchesDirEntry(entry, root, dirEntry) {
     ? isRelativeToRoot(entry, root, dirEntry.root)
     : entry.name === dirEntry.name;
 }
-//@ chunk-85kmkm1x.js:14101-14234 placement = readJsonFile (1)
+//@ chunk-85kmkm1x.js:14101-14234 placement (2.1.88 match: readJsonFile, 1)
 /**
  * 读取 JSON 文件并按 schema 校验，失败返回 undefined（插件校验用）。
  */
@@ -477,11 +477,11 @@ function summarizeValidationResults(results, options) {
     allSuccess: options.strict ? all && !any : all,
   };
 }
-//@ chunk-85kmkm1x.js:15998-16069 layout = getReceivedType (0.776)
+//@ chunk-85kmkm1x.js:15998-16069 layout (2.1.88 match: getReceivedType, 0.776)
 function getReceivedType(value) {
   return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 }
-//@ chunk-85kmkm1x.js:16069-16268 fingerprint = detectManifestType (1)
+//@ chunk-85kmkm1x.js:16069-16268 fingerprint (2.1.88 match: detectManifestType, 1)
 function detectManifestType(filePath) {
   let fileName = pathModule.basename(filePath);
   let dirName = pathModule.basename(pathModule.dirname(filePath));
@@ -490,7 +490,7 @@ function detectManifestType(filePath) {
   if (dirName === ".claude-plugin") return "plugin";
   return "unknown";
 }
-//@ chunk-85kmkm1x.js:16268-16373 fingerprint = formatZodErrors (1)
+//@ chunk-85kmkm1x.js:16268-16373 fingerprint (2.1.88 match: formatZodErrors, 1)
 /**
  * zod 错误转 [{path, message}]（空路径记 root）。
  */
@@ -560,7 +560,7 @@ function isAbsoluteOrUnsafePath(path) {
   let replaced = path.replace(/^[a-zA-Z]:/, "");
   return hasDotDotSegment(replaced) || hasDotDotWithSpaceSegment(replaced);
 }
-//@ chunk-85kmkm1x.js:17658-17815 fingerprint = checkPathTraversal (1)
+//@ chunk-85kmkm1x.js:17658-17815 fingerprint (2.1.88 match: checkPathTraversal, 1)
 function checkPathTraversal(p, field, errors, hint) {
   if (isAbsoluteOrUnsafePath(p))
     errors.push({
@@ -570,7 +570,7 @@ function checkPathTraversal(p, field, errors, hint) {
         : `Path contains ".." which could be a path traversal attempt: ${p}`,
     });
 }
-//@ chunk-85kmkm1x.js:17815-18080 fingerprint = marketplaceSourceHint (0.667)
+//@ chunk-85kmkm1x.js:17815-18080 fingerprint (2.1.88 match: marketplaceSourceHint, 0.667)
 function marketplaceSourceHint(p) {
   let stripped = p.replace(/^(\.\.\/)+/, "");
   return `Plugin source paths are resolved relative to the marketplace root (the directory containing .claude-plugin/), not relative to marketplace.json. Use "${stripped !== p ? `./${stripped}` : "./plugins/my-plugin"}" instead of "${p}".`;
@@ -587,7 +587,7 @@ async function validateHooksJsonForDisplay(
 ) {
   return sanitizeValidationResult(await validateHooksJson(filePath, options));
 }
-//@ chunk-85kmkm1x.js:18144-18493 fingerprint = validateHooksJson (0.561)
+//@ chunk-85kmkm1x.js:18144-18493 fingerprint (2.1.88 match: validateHooksJson, 0.561)
 async function validateHooksJson(filePath, options) {
   let filePath_2 = pathModule.resolve(filePath);
   let content;
@@ -617,7 +617,7 @@ async function validateHooksJson(filePath, options) {
   }
   return validatePluginManifest(filePath_2, content, options);
 }
-//@ chunk-85kmkm1x.js:18493-23893 callgraph-fingerprint = validatePluginManifest (0.251)
+//@ chunk-85kmkm1x.js:18493-23893 callgraph-fingerprint (2.1.88 match: validatePluginManifest, 0.251)
 /**
  * claude plugin validate：校验 plugin.json（JSON 语法、schema、名字、marketplace-only 字段警告、组件路径存在性），返回 errors/warnings。
  */
@@ -908,7 +908,7 @@ function hiddenCharacterNote(name) {
 async function validateMarketplaceForDisplay(filePath) {
   return sanitizeValidationResult(await validateMarketplaceManifest(filePath));
 }
-//@ chunk-85kmkm1x.js:24305-34228 fingerprint = validateMarketplaceManifest (0.392)
+//@ chunk-85kmkm1x.js:24305-34228 fingerprint (2.1.88 match: validateMarketplaceManifest, 0.392)
 /**
  * 校验 marketplace.json：schema、保留名、每个插件条目来源与路径、重复名字等。
  */
@@ -1377,7 +1377,7 @@ function sanitizeValidationResult(result) {
     }),
   };
 }
-//@ chunk-85kmkm1x.js:34677-37397 fingerprint = validateComponentFile (0.696)
+//@ chunk-85kmkm1x.js:34677-37397 fingerprint (2.1.88 match: validateComponentFile, 0.696)
 /**
  * 校验命令/代理/技能 markdown 文件的 frontmatter（必需字段、未知键、YAML 错误）。
  */
@@ -2010,7 +2010,7 @@ async function validateAllHooksFiles(pluginDir) {
   }
   return results;
 }
-//@ chunk-85kmkm1x.js:45366-45974 layout = expandEnvVars (0.841)
+//@ chunk-85kmkm1x.js:45366-45974 layout (2.1.88 match: expandEnvVars, 0.841)
 /**
  * MCP 服务器文件的校验常量组：Xn 是已知服务器类型集合（stdio/http/streamable-http/sse/ws/sdk/sse-ide/ws-ide/claudeai-proxy）；Qn 是 ${user_config.X} 占位符正则（全局）；xt 是任意 ${…} 模板占位正则，URL 里出现即判模板；Me 是最多检查的 MCP server 文件数 16；es 是 URL 长度上限 8192；ts/ns/ss 是机密值、键名与占位值的识别正则。
  */
@@ -2386,7 +2386,7 @@ async function validateMcpJsonFile(filePath, displayPath, keysForServer) {
     fileType: "mcp",
   };
 }
-//@ chunk-85kmkm1x.js:53245-53586 layout = loadChannelUserConfig (0.777)
+//@ chunk-85kmkm1x.js:53245-53586 layout (2.1.88 match: loadChannelUserConfig, 0.777)
 /**
  * 由 manifest 构造“某 MCP 服务器可用的 userConfig 键集合”查询函数（插件级 + 频道级）。
  */
@@ -2482,7 +2482,7 @@ async function validatePluginMcpFiles(pluginDir, entries) {
     );
   return results.filter((result) => result.errors.length > 0 || result.warnings.length > 0);
 }
-//@ chunk-85kmkm1x.js:54876-55407 fingerprint = collectMarkdown (0.84)
+//@ chunk-85kmkm1x.js:54876-55407 fingerprint (2.1.88 match: collectMarkdown, 0.84)
 async function collectMarkdown(dir, isSkillsDir) {
   let entries;
   try {
@@ -2518,7 +2518,7 @@ async function collectMarkdown(dir, isSkillsDir) {
     skippedSymlinks,
   };
 }
-//@ chunk-85kmkm1x.js:55407-55504 fingerprint = validatePluginContents (0.558)
+//@ chunk-85kmkm1x.js:55407-55504 fingerprint (2.1.88 match: validatePluginContents, 0.558)
 var NO_MANIFEST; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var COMPONENT_DIR_KINDS;
 deferInit("chunk-85kmkm1x.js:55407", () => {
@@ -2805,7 +2805,7 @@ async function validateManifestForDisplay(filePath, options) {
     warnings: [...mapped, ...result.warnings],
   };
 }
-//@ chunk-85kmkm1x.js:59820-60756 fingerprint = validateManifest (0.971)
+//@ chunk-85kmkm1x.js:59820-60756 fingerprint (2.1.88 match: validateManifest, 0.971)
 /**
  * 按路径判断是 plugin.json 还是 marketplace.json（或目录）并调用对应校验。
  */

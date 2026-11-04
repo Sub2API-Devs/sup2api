@@ -6,7 +6,7 @@
  * attribution: placement 1
  */
 
-//@ chunk-mrx6y2r5.js:55897-55968 placement = AbortError (1)
+//@ chunk-mrx6y2r5.js:55897-55968 placement (2.1.88 match: AbortError, 1)
 class AbortError extends Error {
   constructor(message) {
     super(message);

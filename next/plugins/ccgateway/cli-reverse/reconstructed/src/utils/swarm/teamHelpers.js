@@ -60,7 +60,7 @@ function assertNoControlChars(text) {
     );
   }
 }
-//@ chunk-fw249fsw.js:1045-1093 layout = getBackendByType (1)
+//@ chunk-fw249fsw.js:1045-1093 layout (2.1.88 match: getBackendByType, 1)
 /**
  * 类型是否是 pane 后端（tmux 或 iterm2）。
  */
@@ -82,7 +82,7 @@ function sanitizeAgentName(name) {
 function getTeamDir(teamName) {
   return join(getTeamsDir(), sanitizeName(teamName));
 }
-//@ chunk-fw249fsw.js:1245-1292 facade-exports = getTeamFilePath (1)
+//@ chunk-fw249fsw.js:1245-1292 facade-exports (2.1.88 match: getTeamFilePath, 1)
 /**
  * 团队文件路径：<团队目录>/config.json。
  */
@@ -167,7 +167,7 @@ function isValidMember(member) {
     typeof member.name === "string"
   );
 }
-//@ chunk-fw249fsw.js:2526-3028 facade-exports = readTeamFile (0.837)
+//@ chunk-fw249fsw.js:2526-3028 facade-exports (2.1.88 match: readTeamFile, 0.837)
 /**
  * 读团队文件：有存储 v5 时从存储读，否则读 config.json；不存在返回 null。
  */
@@ -218,7 +218,7 @@ function isBenignStoreErrorCause(error) {
   if (typeof cause !== "object" || typeof cause.code !== "string") return false;
   return isBenignStoreError(cause);
 }
-//@ chunk-fw249fsw.js:3414-3504 layout = LOCK_OPTIONS (0.776)
+//@ chunk-fw249fsw.js:3414-3504 layout (2.1.88 match: LOCK_OPTIONS, 0.776)
 /**
  * 团队文件锁选项（10 次重试）。
  */
@@ -238,7 +238,7 @@ function teamFileMissingError(teamName) {
     "Team file missing (session team not initialized)",
   );
 }
-//@ chunk-fw249fsw.js:3691-4156 facade-exports = writeTeamFile (0)
+//@ chunk-fw249fsw.js:3691-4156 facade-exports (2.1.88 match: writeTeamFile, 0)
 /**
  * 加锁读-改-写团队文件：回调返回 false 时不写；bestEffortWrite 时写失败只记录。存储 v5 走 updateTeamFileInStore。
  */
@@ -275,7 +275,7 @@ async function updateTeamFile(teamName, mutate, options, storage) {
     }
   }
 }
-//@ chunk-fw249fsw.js:4156-4371 facade-exports = removeMemberFromTeam (0.359)
+//@ chunk-fw249fsw.js:4156-4371 facade-exports (2.1.88 match: removeMemberFromTeam, 0.359)
 /**
  * 按 agentId 从团队文件删除成员（失败只记日志）。
  */
@@ -421,7 +421,7 @@ async function updateTeamFileInStore(teamName, mutate, options, storage) {
   }
   return lastResult;
 }
-//@ chunk-fw249fsw.js:5944-6252 facade-exports = writeTeamFileAsync (0.14)
+//@ chunk-fw249fsw.js:5944-6252 facade-exports (2.1.88 match: writeTeamFileAsync, 0.14)
 /**
  * 写团队文件（存储 v5 或 config.json）。
  */
@@ -448,7 +448,7 @@ async function writeTeamFileAsync(teamName, teamFile, storage) {
   });
   await writeFile(getTeamFilePath(teamName), jsonStringify(teamFile, null, 2));
 }
-//@ chunk-fw249fsw.js:6252-6890 facade-exports = removeTeammateFromTeamFile (0.879)
+//@ chunk-fw249fsw.js:6252-6890 facade-exports (2.1.88 match: removeTeammateFromTeamFile, 0.879)
 /**
  * 按 agentId 或名字从团队文件删除成员（尽力写入）。
  */
@@ -491,7 +491,7 @@ async function removeTeammateFromTeamFile(teamName, identifier, storageV5) {
     return false;
   }
 }
-//@ chunk-fw249fsw.js:6890-7467 facade-exports = removeMemberByAgentId (0.516)
+//@ chunk-fw249fsw.js:6890-7467 facade-exports (2.1.88 match: removeMemberByAgentId, 0.516)
 /**
  * 按 agentId 删除成员；onlyIfJoinedBefore 防止删掉删除发起后又重新加入的同 ID 成员。
  */
@@ -534,7 +534,7 @@ async function removeMemberByAgentId(teamName, agentId, options, storageV5) {
     return false;
   }
 }
-//@ chunk-fw249fsw.js:7467-7904 facade-exports = setMemberMode (0.819)
+//@ chunk-fw249fsw.js:7467-7904 facade-exports (2.1.88 match: setMemberMode, 0.819)
 /**
  * 设置成员的权限模式（mode），返回状态 absent/unchanged/set 只用于日志。
  */
@@ -579,7 +579,7 @@ async function syncTeammateMode(mode, teamName, storage) {
   let agentName = getAgentName();
   if (teamName_2 && agentName) await setMemberMode(teamName_2, agentName, mode, storage);
 }
-//@ chunk-fw249fsw.js:7994-8453 facade-exports = setMemberActive (0.789)
+//@ chunk-fw249fsw.js:7994-8453 facade-exports (2.1.88 match: setMemberActive, 0.789)
 /**
  * 设置成员 isActive（空闲/活动）。
  */
@@ -623,7 +623,7 @@ async function setMemberActive(teamName, memberName, isActive, storage) {
 function registerTeamForSessionCleanup(teamName) {
   getSessionCreatedTeams().add(teamName);
 }
-//@ chunk-fw249fsw.js:8482-8861 facade-exports = cleanupSessionTeams (0.749)
+//@ chunk-fw249fsw.js:8482-8861 facade-exports (2.1.88 match: cleanupSessionTeams, 0.749)
 /**
  * 会话结束时清理本会话创建的团队：先杀孤儿 pane，再删团队目录。
  */
@@ -651,7 +651,7 @@ function recordSpawnedTeammatePane(backendType, paneId) {
   if (isPaneBackendType(backendType) && paneId)
     getSessionSpawnedTeammatePanes().add(paneKey(backendType, paneId));
 }
-//@ chunk-fw249fsw.js:8944-9588 fingerprint = killOrphanedTeammatePanes (0.847)
+//@ chunk-fw249fsw.js:8944-9588 fingerprint (2.1.88 match: killOrphanedTeammatePanes, 0.847)
 /**
  * 杀掉团队文件中、由本会话创建的 tmux/iTerm2 pane。
  */
@@ -684,7 +684,7 @@ async function killOrphanedTeammatePanes(teamName, storageV5) {
     }),
   );
 }
-//@ chunk-fw249fsw.js:9588-9863 facade-exports = cleanupTeamDirectories (0.753)
+//@ chunk-fw249fsw.js:9588-9863 facade-exports (2.1.88 match: cleanupTeamDirectories, 0.753)
 /**
  * 删除团队目录（记 swarm_team_cleanup）。
  */
@@ -709,7 +709,7 @@ async function cleanupTeamDirectories(teamName) {
     (error) => sanitizeErrnoForTelemetry(error) ?? "error",
   );
 }
-//@ chunk-cne5hsvz.js:22255-22452 callgraph-fingerprint = setMultipleMemberModes (0.329)
+//@ chunk-cne5hsvz.js:22255-22452 callgraph-fingerprint (2.1.88 match: setMultipleMemberModes, 0.329)
 /**
  * 把成员的 pane 信息（tmuxPaneId、backendType）写入团队文件，并记录为本会话创建的 pane。
  */

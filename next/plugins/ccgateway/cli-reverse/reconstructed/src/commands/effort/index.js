@@ -21,7 +21,7 @@ function formatEffortArgumentHint(state, args) {
   let ultracodeHint = isUltracodeAvailable(mainLoopModel) ? "|ultracode [on|off]" : "";
   return `${state}${getAllowedEffortLevels(mainLoopModel).join("|")}|auto${ultracodeHint}${args}`;
 }
-//@ chunk-e6aww6q8.js:2050200-2050636 fingerprint = default (0.602)
+//@ chunk-e6aww6q8.js:2050200-2050636 fingerprint (2.1.88 match: default, 0.602)
 /**
  * /effort 命令对象（local-jsx）；描述：Set effort level for model usage；实现 chunk-3rwvzn82.js 的 ls。
  */

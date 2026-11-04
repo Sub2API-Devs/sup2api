@@ -25,7 +25,7 @@ import { TextInput } from "../../components/TextInput.js";
 init_react_production();
 //@ chunk-4v9zy7gn.js:22851-22885 layout
 var API_KEY_OPTIONS = ["existing", "oauth", "new"];
-//@ chunk-4v9zy7gn.js:22885-25463 fingerprint = ApiKeyStep (0.787)
+//@ chunk-4v9zy7gn.js:22885-25463 fingerprint (2.1.88 match: ApiKeyStep, 0.787)
 function ApiKeyStep(props) {
   let $ = useMemoCache(52);
   let {

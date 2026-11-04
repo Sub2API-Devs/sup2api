@@ -109,7 +109,7 @@ If called outside an EnterWorktree session, the tool is a **no-op**: it reports 
 - Once exited, EnterWorktree can be called again to create a fresh worktree
 `;
 }
-//@ chunk-kxyd0g16.js:128969-129915 fingerprint = inputSchema (0.514)
+//@ chunk-kxyd0g16.js:128969-129915 fingerprint (2.1.88 match: inputSchema, 0.514)
 var exitWorktreeInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var exitWorktreeOutputSchema;
 var DISCARD_CONFIRM_HINT;
@@ -149,7 +149,7 @@ deferInit("chunk-kxyd0g16.js:128969", () => {
   DISCARD_CONFIRM_HINT =
     'Confirm with the user, then re-invoke with discard_changes: true \u2014 or use action: "keep" to preserve the worktree.';
 });
-//@ chunk-kxyd0g16.js:129915-130455 callgraph-fingerprint = countWorktreeChanges (0.157)
+//@ chunk-kxyd0g16.js:129915-130455 callgraph-fingerprint (2.1.88 match: countWorktreeChanges, 0.157)
 /**
  * 统计 worktree 中未提交文件数（含子模块变化）与相对起始提交新增的提交数；无法判断时返回 null。
  */
@@ -324,7 +324,7 @@ function formatCwdRestoredMessage(originalCwd, restoreResult) {
     ? missingDirMessage
     : `${missingDirMessage} Consider restarting Claude from an existing directory.`;
 }
-//@ chunk-kxyd0g16.js:132109-137578 fingerprint = ExitWorktreeTool (0.67)
+//@ chunk-kxyd0g16.js:132109-137578 fingerprint (2.1.88 match: ExitWorktreeTool, 0.67)
 /**
  * ExitWorktree 工具（shouldDefer，isDestructive 当 action=remove）。只处理本会话 EnterWorktree 创建/进入的 worktree；不在 worktree 会话时 validateInput 报 no-op；子代理禁用；进入的是别人的 worktree 时不允许 remove；remove 且未 discard_changes 时统计未提交文件与未合并提交，有则拒绝并要求确认。call：keep 保留目录与分支；remove 先杀 tmux 会话再清理 worktree；两者都调用 restoreSessionAfterWorktreeExit 恢复 cwd。
  */

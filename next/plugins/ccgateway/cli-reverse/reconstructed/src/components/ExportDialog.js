@@ -39,7 +39,7 @@ function selectOriginalCwd(state) {
 function selectCwd(state) {
   return state.cwd;
 }
-//@ chunk-am3vy82s.js:18900-21471 fingerprint = ExportDialog (0.776)
+//@ chunk-am3vy82s.js:18900-21471 fingerprint (2.1.88 match: ExportDialog, 0.776)
 /**
  * /export：选择复制到剪贴板或导出到文件（默认文件名带时间），完成后显示结果。
  */

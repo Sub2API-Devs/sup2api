@@ -699,7 +699,7 @@ async function runEvalJudgeTrials(description, signal) {
   }
   return votes;
 }
-//@ chunk-qchp9vrd.js:238944-239610 placement = generateTitleAndBranch (0.267)
+//@ chunk-qchp9vrd.js:238944-239610 placement (2.1.88 match: generateTitleAndBranch, 0.267)
 async function runEvalJudge(description, signal) {
   let systemPrompt = asSystemPrompt(["You are a strict, terse evaluation judge for coding-agent traces."]);
   let reason;

@@ -33,7 +33,7 @@ import { LearnMoreLink } from "../LearnMoreLink.js";
 function isAutoAllowSetting(option) {
   return option.value === "auto-allow";
 }
-//@ chunk-55w3ydvj.js:25385-28869 fingerprint = SandboxSettings (0.678)
+//@ chunk-55w3ydvj.js:25385-28869 fingerprint (2.1.88 match: SandboxSettings, 0.678)
 function SandboxSettings(props) {
   let $ = useMemoCache(36);
   let { onComplete, depCheck } = props;
@@ -350,7 +350,7 @@ function SandboxSettings(props) {
   } else pane = $[35];
   return pane;
 }
-//@ chunk-55w3ydvj.js:28869-30440 fingerprint = SandboxModeTab (0.633)
+//@ chunk-55w3ydvj.js:28869-30440 fingerprint (2.1.88 match: SandboxModeTab, 0.633)
 function SandboxModeTab(props) {
   let $ = useMemoCache(24);
   let { showSocketWarning, options, currentMode, noSandboxHint, onSelect, onComplete } = props;

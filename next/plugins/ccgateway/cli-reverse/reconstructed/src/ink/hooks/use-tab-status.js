@@ -12,7 +12,7 @@ import { init_react_production } from "../../../vendor/react/cjs/react.productio
 
 //@ chunk-x6v6jz2y.js:27197-27201 placement
 init_react_production();
-//@ chunk-x6v6jz2y.js:27201-27473 fingerprint = TAB_STATUS_PRESETS (0.846)
+//@ chunk-x6v6jz2y.js:27201-27473 fingerprint (2.1.88 match: TAB_STATUS_PRESETS, 0.846)
 /**
  * 标签页状态预设：idle（绿点，“Idle”）、busy（橙点，“Working…”）、waiting（蓝点，“Waiting”）。
  */

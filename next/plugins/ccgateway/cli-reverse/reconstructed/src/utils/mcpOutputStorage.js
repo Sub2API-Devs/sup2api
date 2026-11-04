@@ -118,7 +118,7 @@ function normalizeMimeType(rawMimeType) {
   let trimmed = firstLineOf(rawMimeType, ";").trim();
   return trimmed.length <= 100 && /^[\w.+-]+\/[\w.+-]+$/.test(trimmed) ? trimmed : undefined;
 }
-//@ chunk-bhxaz9j0.js:2035-3447 fingerprint = extensionForMimeType (0.77)
+//@ chunk-bhxaz9j0.js:2035-3447 fingerprint (2.1.88 match: extensionForMimeType, 0.77)
 /**
  * extensionForMimeType：MIME 类型到文件扩展名（pdf/json/csv/docx/png/…），未知为 bin。
  */
@@ -271,7 +271,7 @@ async function persistBinaryContent(bytes, mimeType, persistId, savedFiles, stor
     ext,
   };
 }
-//@ chunk-bhxaz9j0.js:4450-4856 fingerprint = persistBinaryContent (0.608)
+//@ chunk-bhxaz9j0.js:4450-4856 fingerprint (2.1.88 match: persistBinaryContent, 0.608)
 /**
  * persistBinaryContentViaStorage：经存储抽象（v5 storage）写二进制文件的分支。
  */
@@ -304,7 +304,7 @@ async function persistBinaryContentViaStorage(storage, resultsDir, bytes, mimeTy
     ext,
   };
 }
-//@ chunk-bhxaz9j0.js:4856-4952 fingerprint = getBinaryBlobSavedMessage (1)
+//@ chunk-bhxaz9j0.js:4856-4952 fingerprint (2.1.88 match: getBinaryBlobSavedMessage, 1)
 /**
  * getBinaryBlobSavedMessage：生成"Binary content (类型, 大小) saved to 路径"说明文本。
  */
@@ -378,7 +378,7 @@ var TRUNCATED_UNSAVED_TEXT = "[The portion truncated above was not kept: it coul
  * 行提示文本的最大字符数。
  */
 var MAX_LINE_HINT_CHARS = 64;
-//@ chunk-e6aww6q8.js:2145923-2146125 fingerprint = getFormatDescription (1)
+//@ chunk-e6aww6q8.js:2145923-2146125 fingerprint (2.1.88 match: getFormatDescription, 1)
 /**
  * getFormatDescription：toolResult → Plain text；structuredContent/contentArray → JSON（可带 schema 描述）。
  */
@@ -475,7 +475,7 @@ Note: the output exceeded the persist byte limit; the saved file contains only t
     truncationNote
   );
 }
-//@ chunk-e6aww6q8.js:2149462-2150478 fingerprint = getLargeOutputInstructions (0.787)
+//@ chunk-e6aww6q8.js:2149462-2150478 fingerprint (2.1.88 match: getLargeOutputInstructions, 0.787)
 /**
  * getReadEntireFileRequirements：要求模型分块读完整个文件、遇截断缩小块、说明读了多少、读不了就停止重试。
  */
@@ -495,7 +495,7 @@ function getReadEntireFileRequirements(rawOutputPath, maxBashOutputChars, noShel
 `
   );
 }
-//@ chunk-e6aww6q8.js:2150478-2150802 fingerprint = isBinaryContentType (1)
+//@ chunk-e6aww6q8.js:2150478-2150802 fingerprint (2.1.88 match: isBinaryContentType, 1)
 /**
  * isBinaryContentType：text/*、JSON、XML、JS、表单编码之外的 content-type 视为二进制。
  */

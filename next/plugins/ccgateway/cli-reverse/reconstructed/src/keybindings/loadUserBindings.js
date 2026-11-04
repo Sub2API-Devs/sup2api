@@ -35,7 +35,7 @@ import { registerCleanup } from "../utils/cleanupRegistry.js";
 import { getActionDisplayText } from "./match.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-x1mwqya5.js:2941-3004 fingerprint = isKeybindingBlock (0.69)
+//@ chunk-x1mwqya5.js:2941-3004 fingerprint (2.1.88 match: isKeybindingBlock, 0.69)
 /**
  * 宽松的 zod 结构：{context: string, bindings: Record<string, string|null>}，加载用户配置时只用它判断块形状（上下文与动作是否合法由 validate 另报）。
  */
@@ -59,7 +59,7 @@ function isKeybindingBlock(block) {
 function isKeybindingBlockArray(arr) {
   return Array.isArray(arr) && arr.every(isKeybindingBlock);
 }
-//@ chunk-x1mwqya5.js:9325-9394 fingerprint = isKeybindingCustomizationEnabled (1)
+//@ chunk-x1mwqya5.js:9325-9394 fingerprint (2.1.88 match: isKeybindingCustomizationEnabled, 1)
 /**
  * 用户自定义快捷键总开关：GrowthBook tengu_keybinding_customization_release，默认 true。
  */
@@ -102,7 +102,7 @@ var keybindingsState; // deferred: uses createKeybindingsState of its import cyc
 deferInit("chunk-x1mwqya5.js:9749", () => {
   keybindingsState = createKeybindingsState();
 });
-//@ chunk-x1mwqya5.js:9761-9952 fingerprint = logCustomBindingsLoadedOncePerDay (0.876)
+//@ chunk-x1mwqya5.js:9761-9952 fingerprint (2.1.88 match: logCustomBindingsLoadedOncePerDay, 0.876)
 /**
  * 每天最多发一次 tengu_custom_keybindings_loaded（带用户绑定条数）。
  */
@@ -114,7 +114,7 @@ function logCustomBindingsLoadedOncePerDay(state, userBindingCount) {
     user_binding_count: userBindingCount,
   });
 }
-//@ chunk-x1mwqya5.js:9952-10002 fingerprint = getKeybindingsPath (1)
+//@ chunk-x1mwqya5.js:9952-10002 fingerprint (2.1.88 match: getKeybindingsPath, 1)
 /**
  * 用户快捷键文件路径：<配置目录>/keybindings.json。
  */
@@ -155,7 +155,7 @@ function reportUserConfigLoad(options, outcome) {
 function isKeybindingCustomizationBlocked() {
   return !isKeybindingCustomizationEnabled() || isCustomizationDisabled("keybindings");
 }
-//@ chunk-x1mwqya5.js:10456-10673 callgraph-fingerprint = loadKeybindingsSyncWithWarnings (0.257)
+//@ chunk-x1mwqya5.js:10456-10673 callgraph-fingerprint (2.1.88 match: loadKeybindingsSyncWithWarnings, 0.257)
 /**
  * 同步取绑定（不记日志、不报警告）：默认绑定 + 合法的用户绑定；自定义被禁或特定模式下只返回默认绑定。
  */
@@ -175,7 +175,7 @@ function loadKeybindingsSyncWithWarnings(options) {
     return defaultBindings;
   }
 }
-//@ chunk-x1mwqya5.js:10673-12678 layout = loadKeybindings (0.774)
+//@ chunk-x1mwqya5.js:10673-12678 layout (2.1.88 match: loadKeybindings, 0.774)
 /**
  * 异步加载：有后端存储时从后端读 keybindings 条目（读失败回退默认并报错）；否则读本地 keybindings.json。格式要求 {bindings:[...]}，结构不对时回退默认绑定并给出 parse_error；成功时默认绑定在前、用户绑定在后合并，附带重复键与校验警告。
  */
@@ -302,7 +302,7 @@ async function loadKeybindingsAsync(state, backend, options) {
     };
   }
 }
-//@ chunk-x1mwqya5.js:12678-14031 fingerprint = loadKeybindings (0.845)
+//@ chunk-x1mwqya5.js:12678-14031 fingerprint (2.1.88 match: loadKeybindings, 0.845)
 /**
  * 从 JSON 文本解析用户绑定并与默认绑定合并（后端预热路径用），规则同 loadKeybindingsAsync。
  */
@@ -420,7 +420,7 @@ function getKeybindings(state) {
   if (state.bindings && !invalidateWarmedBindings(state)) return state.bindings;
   return loadKeybindingsSync(state).bindings;
 }
-//@ chunk-x1mwqya5.js:14604-16473 layout = loadKeybindings (0.798)
+//@ chunk-x1mwqya5.js:14604-16473 layout (2.1.88 match: loadKeybindings, 0.798)
 /**
  * 同步加载本地 keybindings.json 并写入状态（KeybindingSetup 首次渲染用）；规则同异步版，文件不存在视为成功（只有默认绑定）。
  */
@@ -525,7 +525,7 @@ function loadKeybindingsSync(state) {
     };
   }
 }
-//@ chunk-x1mwqya5.js:16473-17400 fingerprint = initializeKeybindingWatcher (0.794)
+//@ chunk-x1mwqya5.js:16473-17400 fingerprint (2.1.88 match: initializeKeybindingWatcher, 0.794)
 /**
  * 启动 keybindings.json 的 chokidar 监视（轮询 2 秒、写入稳定 500ms）：add/change 时异步重载并发 changed 信号，unlink 时回到默认绑定；目录不存在或自定义被禁时不监视。
  */
@@ -573,7 +573,7 @@ async function initializeKeybindingWatcher(state) {
   registerCleanup(state);
   logFeatureOk("keybinding_watcher_init");
 }
-//@ chunk-x1mwqya5.js:17400-17708 fingerprint = handleChange (0.678)
+//@ chunk-x1mwqya5.js:17400-17708 fingerprint (2.1.88 match: handleChange, 0.678)
 /**
  * 文件变化：重新加载，写入状态并通知订阅者（热重载）。
  */
@@ -591,7 +591,7 @@ async function handleChange(state, path) {
     logFeatureSad("keybinding_hot_reload", "keybinding_reload_failed");
   }
 }
-//@ chunk-x1mwqya5.js:17708-17871 fingerprint = handleDelete (0.833)
+//@ chunk-x1mwqya5.js:17708-17871 fingerprint (2.1.88 match: handleDelete, 0.833)
 /**
  * 文件被删除：回到默认绑定并通知订阅者。
  */
@@ -606,7 +606,7 @@ function handleDelete(state, path) {
     warnings: [],
   });
 }
-//@ chunk-4t8fx0s8.js:21206-21260 callgraph-fingerprint = loadKeybindingsSync (0.512)
+//@ chunk-4t8fx0s8.js:21206-21260 callgraph-fingerprint (2.1.88 match: loadKeybindingsSync, 0.512)
 function getChatActionDisplayText(action) {
   return getActionDisplayText(action, "Chat", keybindingsState.bindings ?? loadKeybindingsSyncWithWarnings());
 }

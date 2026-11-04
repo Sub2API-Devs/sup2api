@@ -945,7 +945,7 @@ async function readScanFileSafely(rootPath, rootIdentity) {
     capped,
   };
 }
-//@ chunk-jy3v56kg.js:26716-26891 placement = getFileIdentity (1)
+//@ chunk-jy3v56kg.js:26716-26891 placement (2.1.88 match: getFileIdentity, 1)
 async function getFileIdentity(rootPath, relPath, folderIds) {
   let folderId = folderIds.get(relPath);
   if (folderId === undefined) return true;
@@ -1015,7 +1015,7 @@ async function isWindowsReservedPath(filePath, stats) {
  * 扫描期间文件夹发生变化的错误文案。
  */
 var FOLDER_CHANGED_ERROR = "the folder changed while it was being scanned";
-//@ chunk-jy3v56kg.js:27634-27763 placement = getFileIdentity (1)
+//@ chunk-jy3v56kg.js:27634-27763 placement (2.1.88 match: getFileIdentity, 1)
 async function getFileIdentity_2(filePath) {
   let stats = await stat(filePath, {
     bigint: true,
@@ -1029,12 +1029,12 @@ async function getFileIdentity_2(filePath) {
         ino: stats.ino,
       };
 }
-//@ chunk-jy3v56kg.js:27763-27841 placement = getFileIdentity (0.794)
+//@ chunk-jy3v56kg.js:27763-27841 placement (2.1.88 match: getFileIdentity, 0.794)
 async function getFileIdentity_3(filePath, name) {
   let stats = await getFileIdentity_2(filePath);
   return stats?.dev === name.dev && stats.ino === name.ino;
 }
-//@ chunk-jy3v56kg.js:27841-27929 placement = scanDirectory (0.766)
+//@ chunk-jy3v56kg.js:27841-27929 placement (2.1.88 match: scanDirectory, 0.766)
 async function scanDirectory(dirPath) {
   if (getPlatform() !== "windows") return false;
   return (await readJunction(dirPath)).kind !== "directory";

@@ -11,7 +11,7 @@
 import { colorize } from "../../../vendor/es-toolkit/dist/server/colors/index.mjs";
 import { getTheme } from "../../utils/theme.js";
 
-//@ chunk-agvt6ygy.js:231-456 placement = color (1)
+//@ chunk-agvt6ygy.js:231-456 placement (2.1.88 match: color, 1)
 /**
  * 颜色解析为 chalk：rgb()/#hex/ansi256()/ansi: 直接用，主题键查当前调色板，foreground 表示默认前景。
  */

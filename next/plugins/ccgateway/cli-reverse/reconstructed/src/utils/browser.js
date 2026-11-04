@@ -74,7 +74,7 @@ deferInit("chunk-xh6k20xb.js:907", () => {
     "figma:",
   ]);
 });
-//@ chunk-xh6k20xb.js:1097-1315 fingerprint = validateUrl (1)
+//@ chunk-xh6k20xb.js:1097-1315 fingerprint (2.1.88 match: validateUrl, 1)
 /**
  * 校验 URL 格式与协议（http/https）。
  */
@@ -97,7 +97,7 @@ function isValidBrowserUrl(url) {
     return false;
   }
 }
-//@ chunk-xh6k20xb.js:1366-1468 fingerprint = openPath (0.359)
+//@ chunk-xh6k20xb.js:1366-1468 fingerprint (2.1.88 match: openPath, 0.359)
 async function openPath(path) {
   try {
     let opener = "xdg-open";
@@ -171,7 +171,7 @@ function isBrowserUnavailable() {
   if (env.SSH_CONNECTION) return true;
   return getInstallationEnv();
 }
-//@ chunk-xh6k20xb.js:2247-2313 layout = getInstallationEnv (0.809)
+//@ chunk-xh6k20xb.js:2247-2313 layout (2.1.88 match: getInstallationEnv, 0.809)
 function getInstallationEnv() {
   return getPlatform() === "linux" && !env.DISPLAY && !env.WAYLAND_DISPLAY;
 }
@@ -198,7 +198,7 @@ async function openValidatedUrl(url) {
 async function openValidatedUrlSucceeded(url) {
   return (await openValidatedUrl(url)).ok;
 }
-//@ chunk-xh6k20xb.js:2491-2750 fingerprint = openBrowser (0.304)
+//@ chunk-xh6k20xb.js:2491-2750 fingerprint (2.1.88 match: openBrowser, 0.304)
 /**
  * 用系统浏览器打开 URL（只允许 http/https），Linux 无显示环境时返回 no_display。
  */
@@ -223,7 +223,7 @@ async function openBrowser(url) {
     };
   }
 }
-//@ chunk-xh6k20xb.js:2750-3205 placement = classifyImageError (0.454)
+//@ chunk-xh6k20xb.js:2750-3205 placement (2.1.88 match: classifyImageError, 0.454)
 /**
  * 把外部打开器的执行结果分类（opener_missing/timeout/spawn_error/nonzero_exit/unknown）；误配名，归属疑似错误。
  */

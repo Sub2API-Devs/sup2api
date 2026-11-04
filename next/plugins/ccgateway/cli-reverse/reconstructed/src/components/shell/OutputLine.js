@@ -94,7 +94,7 @@ function tryJsonFormatContent(content) {
     .map(linkifyUrlsInText).join(`
 `);
 }
-//@ chunk-s3fw2t2g.js:1296-1893 fingerprint = OutputLine (0.829)
+//@ chunk-s3fw2t2g.js:1296-1893 fingerprint (2.1.88 match: OutputLine, 0.829)
 function OutputLine(props) {
   let $ = useMemoCache(14);
   let { content, verbose, isError, isWarning } = props;

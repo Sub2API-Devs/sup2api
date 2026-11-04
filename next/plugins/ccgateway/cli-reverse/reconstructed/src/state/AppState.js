@@ -110,7 +110,7 @@ function useAppStateSession() {
   if (!value) throw ReferenceError("useAppStateSession cannot be called outside of an <AppStateProvider />");
   return value;
 }
-//@ chunk-gq18jh8s.js:782-926 fingerprint = useAppStore (1)
+//@ chunk-gq18jh8s.js:782-926 fingerprint (2.1.88 match: useAppStore, 1)
 /**
  * 取 AppStateProvider 提供的 store，不在 Provider 内时抛错。
  */
@@ -128,7 +128,7 @@ function useAppState(selector) {
   let appStore = useAppStore();
   return useStoreSelector(appStore, selector);
 }
-//@ chunk-gq18jh8s.js:965-999 callgraph-witnessed = useSetAppState (1)
+//@ chunk-gq18jh8s.js:965-999 callgraph-witnessed (2.1.88 match: useSetAppState, 1)
 /**
  * 返回 store.setState，供组件更新 AppState。
  */
@@ -157,7 +157,7 @@ function useAppStoreDirect() {
 function useAppStateSlice(selector) {
   return useStoreSelector(useContext(appStoreContext), selector);
 }
-//@ chunk-yj65zw1g.js:1055-1203 callgraph-witnessed = useAppState (1)
+//@ chunk-yj65zw1g.js:1055-1203 callgraph-witnessed (2.1.88 match: useAppState, 1)
 function useAppState_2(selector) {
   let $ = useMemoCache(3);
   let store = useVoiceStateStore();
@@ -214,7 +214,7 @@ function useSessionHooksRegistry() {
     throw ReferenceError("useSessionHooksRegistry cannot be called outside of an <AppStateProvider />");
   return value;
 }
-//@ chunk-xe7zq1p4.js:12713-12793 placement = useTasksV2WithCollapseEffect (1)
+//@ chunk-xe7zq1p4.js:12713-12793 placement (2.1.88 match: useTasksV2WithCollapseEffect, 1)
 function useTasksV2WithCollapseEffect(state) {
   return state.expandedView === "tasks"
     ? {
@@ -233,7 +233,7 @@ deferInit("chunk-xe7zq1p4.js:12793", () => {
   providerNestedFlag = createContext(false);
   sessionRosterStoreClass = null;
 });
-//@ chunk-xe7zq1p4.js:12814-16717 fingerprint = AppStateProvider (0.4)
+//@ chunk-xe7zq1p4.js:12814-16717 fingerprint (2.1.88 match: AppStateProvider, 0.4)
 /**
  * 创建 AppState store（不可嵌套），监听设置变更并把设置同步进 AppState。
  */

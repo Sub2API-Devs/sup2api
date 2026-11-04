@@ -8,7 +8,7 @@
  * pieces: chunk-s67vc0kc.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-s67vc0kc.js:2055-2386 fingerprint = COMMON_VALUE_PARAMS (0.647)
+//@ chunk-s67vc0kc.js:2055-2386 fingerprint (2.1.88 match: COMMON_VALUE_PARAMS, 0.647)
 /**
  * PowerShell 通用参数表：开关 -Verbose/-Debug，带值参数 -ErrorAction/-WarningAction/…/-OutVariable/-PipelineVariable/-OutBuffer 及别名；O 为全集。被只读校验、路径校验等使用。
  */

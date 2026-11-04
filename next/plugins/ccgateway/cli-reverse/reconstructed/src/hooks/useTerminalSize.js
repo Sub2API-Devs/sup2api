@@ -17,7 +17,7 @@ import { deferInit } from "../../runtime/deferred-init.js";
 deferInit("chunk-9ks6yv81.js:265", () => {
   init_react_production();
 });
-//@ chunk-9ks6yv81.js:269-383 fingerprint = useTerminalSize (1)
+//@ chunk-9ks6yv81.js:269-383 fingerprint (2.1.88 match: useTerminalSize, 1)
 function useTerminalSize() {
   let size = useContext(TerminalSizeContext);
   if (!size) throw Error("useTerminalSize must be used within an Ink App component");

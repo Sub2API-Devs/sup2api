@@ -11,7 +11,7 @@
 import { getMainLoopModelOverride } from "../../bootstrap/state.js";
 import { getGlobalConfig } from "../../utils/config.js";
 
-//@ chunk-ag5x7vhf.js:70176-70439 fingerprint = MIGRATIONS (0.54)
+//@ chunk-ag5x7vhf.js:70176-70439 fingerprint (2.1.88 match: MIGRATIONS, 0.54)
 function MIGRATIONS() {
   if (getMainLoopModelOverride() !== undefined) return false;
   let globalConfig = getGlobalConfig();

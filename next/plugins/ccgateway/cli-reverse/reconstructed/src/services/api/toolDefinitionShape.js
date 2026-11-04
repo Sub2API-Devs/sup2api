@@ -95,7 +95,7 @@ function TOOL_DEFINITION_FLAG_KEYS(toolSchema, { strict, eager, citations }) {
   }
   return copy;
 }
-//@ chunk-a76knw89.js:9236-9332 placement = extractErrorTypeFromData (1)
+//@ chunk-a76knw89.js:9236-9332 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function hasObjectType(data) {
   return (
     typeof data === "object" &&

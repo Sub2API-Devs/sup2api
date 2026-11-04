@@ -79,7 +79,7 @@ function mergeHookEnv_2({ attached, beforeSettings, ownEnv, childrenSee }) {
     ]),
   );
 }
-//@ chunk-e6aww6q8.js:829917-829999 placement = resolveOptions (0.831)
+//@ chunk-e6aww6q8.js:829917-829999 placement (2.1.88 match: resolveOptions, 0.831)
 function resolveOptions(options) {
   if (options.HOME) return options.HOME;
   try {

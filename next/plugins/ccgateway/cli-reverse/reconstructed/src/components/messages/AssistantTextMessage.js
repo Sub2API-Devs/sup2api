@@ -226,7 +226,7 @@ function AssistantTextBlock(props) {
   } else renderHook = $[7];
   return actionKeysNamespace.useRenderHook(renderInputHandle, renderHook);
 }
-//@ chunk-ah34pb7m.js:56282-60026 fingerprint = AssistantTextMessage (0.412)
+//@ chunk-ah34pb7m.js:56282-60026 fingerprint (2.1.88 match: AssistantTextMessage, 0.412)
 /**
  * 助手文本：空文本/占位不渲染；识别 API 错误文本（余额不足、API_TIMEOUT_MS 超时、Opus 高需求、prompt too long、未登录等）显示为错误提示；否则 Markdown 渲染，前面加 ● 圆点（shouldShowDot）。
  */

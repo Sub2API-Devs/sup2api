@@ -191,7 +191,7 @@ deferInit("chunk-s7k22nbx.js:3863", () => {
 function bridgeHostState() {
   return BRIDGE_HOST_STATE_SLOT.of(getRootSession().host);
 }
-//@ chunk-s7k22nbx.js:3926-4004 placement = toCompatSessionId (1)
+//@ chunk-s7k22nbx.js:3926-4004 placement (2.1.88 match: toCompatSessionId, 1)
 /**
  * cse_xxx → session_xxx（其它原样）。
  */

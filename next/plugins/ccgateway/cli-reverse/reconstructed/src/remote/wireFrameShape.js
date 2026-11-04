@@ -167,7 +167,7 @@ function capNestedDepth(value) {
 function getTypeField(value) {
   return isPlainObject(value) && typeof value.type === "string" ? value.type : null;
 }
-//@ chunk-c8ynteey.js:2074-2177 placement = getReceivedType (0.776)
+//@ chunk-c8ynteey.js:2074-2177 placement (2.1.88 match: getReceivedType, 0.776)
 function getReceivedType(value) {
   let typeField = getTypeField(value);
   if (typeField !== null) return typeField;

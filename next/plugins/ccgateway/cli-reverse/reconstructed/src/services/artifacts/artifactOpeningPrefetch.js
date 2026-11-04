@@ -82,7 +82,7 @@ function sumWithinBudget(entries) {
     0,
   );
 }
-//@ chunk-5323y1gy.js:1453-1525 placement = setCwdState (0.867)
+//@ chunk-5323y1gy.js:1453-1525 placement (2.1.88 match: setCwdState, 0.867)
 function normalizeCaseFoldKey(cwd) {
   return normalizeCaseForComparison(cwd.normalize("NFC").toUpperCase().toLowerCase());
 }

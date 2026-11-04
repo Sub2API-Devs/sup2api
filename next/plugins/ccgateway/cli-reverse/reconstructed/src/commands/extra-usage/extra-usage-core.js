@@ -20,7 +20,7 @@ import { getAdminRequestEligibility, listMyAdminRequests } from "../../services/
 import { HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE, USAGE_SETTINGS_URL } from "../../services/claudeAiLimits.js";
 import { openValidatedUrlSucceeded } from "../../utils/browser.js";
 
-//@ chunk-vbks4x4e.js:4758-4901 placement = hasRequiredSubscription (0.53)
+//@ chunk-vbks4x4e.js:4758-4901 placement (2.1.88 match: hasRequiredSubscription, 0.53)
 /**
  * （误归 computerUse/gates）是否可购买额外用量：GrowthBook tengu_ember_latch 或已有覆盖，并且允许额外用量且是 pro/max 订阅。
  */
@@ -34,7 +34,7 @@ function canPurchaseExtraUsage() {
     (hasOverride || ((tier === "pro" || tier === "max") && !isEssentialTrafficOnly()));
   return gateOn && allowed;
 }
-//@ chunk-vbks4x4e.js:4901-6713 fingerprint = runExtraUsage (0.345)
+//@ chunk-vbks4x4e.js:4901-6713 fingerprint (2.1.88 match: runExtraUsage, 0.345)
 async function runExtraUsage(context, credentials) {
   let subscriptionType = getSubscriptionType();
   let isTeamOrEnterprise = subscriptionType === "team" || subscriptionType === "enterprise";

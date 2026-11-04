@@ -28,7 +28,7 @@ import { COMMIT } from "../skills/bundled/bundledSkillNames.js";
 import { isCommitSkillRolloutOn } from "../services/projectsRelay/relayGates.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:422424-422494 fingerprint = getPromptContent (0.303)
+//@ chunk-dcmhvw5a.js:422424-422494 fingerprint (2.1.88 match: getPromptContent, 0.303)
 function getPromptContent(args) {
   return args !== undefined && (args.commit !== undefined || args.pr !== undefined);
 }
@@ -138,7 +138,7 @@ The closing \`'@\` MUST be at column 0 with no leading whitespace.`
 
 You have the capability to call multiple tools in a single response. Stage and create the commit using a single message. Do not run additional commands to read or explore code beyond the git context above, and do not use any non-git tools for this task.`;
 }
-//@ chunk-hantmvxa.js:98758-99414 fingerprint = command (0.439)
+//@ chunk-hantmvxa.js:98758-99414 fingerprint (2.1.88 match: command, 0.439)
 function command() {
   registerBundledSkill({
     name: COMMIT,

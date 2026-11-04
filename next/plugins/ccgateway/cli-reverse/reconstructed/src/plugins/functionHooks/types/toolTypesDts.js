@@ -15,7 +15,7 @@ import { logForDebugging } from "../../../utils/debug.js";
 
 //@ chunk-s61vbvea.js:624308-624372 placement
 var sanitizeJsDocText = (description) => description.replace(/\s+/g, " ").trim().replace(/\*\//g, "* /");
-//@ chunk-s61vbvea.js:624372-624477 placement = parseSkillPaths (0.822)
+//@ chunk-s61vbvea.js:624372-624477 placement (2.1.88 match: parseSkillPaths, 0.822)
 function formatJsDocLine(schema, indent) {
   let { description } = schema;
   let docText = typeof description === "string" ? sanitizeJsDocText(description) : "";

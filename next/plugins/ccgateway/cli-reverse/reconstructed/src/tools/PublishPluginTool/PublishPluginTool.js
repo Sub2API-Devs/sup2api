@@ -21,7 +21,7 @@ import { isPluginPublishAllowed } from "../../services/plugins/publish/publishGa
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hcckvqyb.js:11744-11853 placement = getErrnoPath (1)
+//@ chunk-hcckvqyb.js:11744-11853 placement (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath(error) {
   let path = typeof error === "object" && error !== null && "path" in error ? error.path : undefined;
   return typeof path === "string" ? path : "";

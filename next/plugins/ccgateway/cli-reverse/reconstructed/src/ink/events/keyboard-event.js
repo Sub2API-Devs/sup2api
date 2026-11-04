@@ -14,7 +14,7 @@ import { isEscPrefixedChunk } from "../stdinReader.js";
 import { getCsiUPrintableChar } from "../parse-keypress.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:251690-252209 fingerprint = KeyboardEvent (0.775)
+//@ chunk-bzr73sfg.js:251690-252209 fingerprint (2.1.88 match: KeyboardEvent, 0.775)
 /**
  * 键盘事件（keydown，冒泡、可取消）：key（按键产生的字符或键名）、name、sequence、ctrl/shift/meta/superKey/fn、soloKeypress（本批只有这一个用户输入）、readLate（事件循环阻塞后读到）；readAsEscapeThenKey() 让处理器要求把 ESC+X 拆成两次按键重放。
  */
@@ -57,7 +57,7 @@ deferInit("chunk-bzr73sfg.js:251690", () => {
     }
   };
 });
-//@ chunk-bzr73sfg.js:252209-252585 fingerprint = keyFromParsed (0.615)
+//@ chunk-bzr73sfg.js:252209-252585 fingerprint (2.1.88 match: keyFromParsed, 0.615)
 /**
  * 由 ParsedKey 推出 event.key：空格、Ctrl 组合给键名，可打印单字符给字符本身，Shift+字母给大写（CSI u 里带的 shifted 码点优先），其它给键名；裸转义与鼠标序列给空串。
  */

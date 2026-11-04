@@ -80,7 +80,7 @@ function isGatewayModelDiscoveryEnabled() {
   if (!env.ANTHROPIC_BASE_URL) return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:400308-400346 placement = getCacheDir (1)
+//@ chunk-aepeg2w5.js:400308-400346 placement (2.1.88 match: getCacheDir, 1)
 /**
  * ~/.claude/cache。覆盖后缀名 getCacheDir_3。
  */

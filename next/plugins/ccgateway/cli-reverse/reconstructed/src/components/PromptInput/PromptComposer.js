@@ -297,7 +297,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 function shouldShowIdeStatus(props, rowsDrawn) {
   return rowsDrawn && IdeStatusIndicator(props) !== null;
 }
-//@ chunk-18hwfzwa.js:770563-770990 placement = ConfirmRemoveTag (0.165)
+//@ chunk-18hwfzwa.js:770563-770990 placement (2.1.88 match: ConfirmRemoveTag, 0.165)
 function ConfirmRemoveTag(props) {
   let $ = useMemoCache(8);
   let { title, confirmLabel, onConfirm, onCancel } = props;
@@ -331,7 +331,7 @@ function ConfirmRemoveTag(props) {
   } else dialogElement = $[7];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:920094-920856 placement = CompanionSprite (0.359)
+//@ chunk-18hwfzwa.js:920094-920856 placement (2.1.88 match: CompanionSprite, 0.359)
 /**
  * "Save and close editor to continue..." 等待提示（外部编辑器打开期间显示），可上下加分隔线。
  */
@@ -506,7 +506,7 @@ function shouldShowBridgeStatus(state) {
 function selectNever(state) {
   return false;
 }
-//@ chunk-18hwfzwa.js:929215-929256 placement = _temp (1)
+//@ chunk-18hwfzwa.js:929215-929256 placement (2.1.88 match: _temp, 1)
 function selectTeamContext_2(s) {
   return s.teamContext;
 }
@@ -514,7 +514,7 @@ function selectTeamContext_2(s) {
 function selectPromptSuggestion(state) {
   return state.promptSuggestion;
 }
-//@ chunk-18hwfzwa.js:929302-929350 placement = _temp2 (1)
+//@ chunk-18hwfzwa.js:929302-929350 placement (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId_4(s_0) {
   return s_0.viewingAgentTaskId;
 }
@@ -601,7 +601,7 @@ function markTasksHintSeen(state) {
 function bumpCounter(count) {
   return count + 1;
 }
-//@ chunk-18hwfzwa.js:930296-930340 placement = _temp (1)
+//@ chunk-18hwfzwa.js:930296-930340 placement (2.1.88 match: _temp, 1)
 function isPastedImageBlock(c) {
   return c.type === "image";
 }
@@ -667,7 +667,7 @@ function withAutoModeSetupMessage(state) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:930854-930898 placement = _temp (1)
+//@ chunk-18hwfzwa.js:930854-930898 placement (2.1.88 match: _temp, 1)
 function isImagePasteBlock(c) {
   return c.type === "image";
 }

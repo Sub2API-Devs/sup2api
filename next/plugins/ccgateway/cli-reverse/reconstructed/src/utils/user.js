@@ -24,7 +24,7 @@ import { isEnvTruthy } from "./envUtils.js";
 import { readGitConfigValue } from "./git.js";
 import { getWIFAccountInfo } from "./wifProfile.js";
 
-//@ chunk-aepeg2w5.js:627885-629737 fingerprint = getCoreUserData (0.614)
+//@ chunk-aepeg2w5.js:627885-629737 fingerprint (2.1.88 match: getCoreUserData, 0.614)
 /**
  * 组装遥测/GrowthBook 用的核心用户数据：deviceId、sessionId、email、appVersion、platform、组织/账户 UUID、订阅类型、GitHub Actions 元数据等。
  */
@@ -117,14 +117,14 @@ class getCoreUserData {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:98782-98843 fingerprint = getGitEmail (0.394)
+//@ chunk-e6aww6q8.js:98782-98843 fingerprint (2.1.88 match: getGitEmail, 0.394)
 /**
  * git config user.email。
  */
 function getGitEmail(args) {
   return args.shell === undefined && args.osVersion === undefined;
 }
-//@ chunk-4pc1m5n9.js:12383-12619 callgraph-fingerprint = getEmail (0.255)
+//@ chunk-4pc1m5n9.js:12383-12619 callgraph-fingerprint (2.1.88 match: getEmail, 0.255)
 /**
  * 当前用户邮箱：oauthAccount.emailAddress，或 env 提供的值。
  */

@@ -176,7 +176,7 @@ function envBearerFallbackMarker(host) {
  * GrowthBook 的默认 host（https://api.anthropic.com/）；FRn 返回它，使用非默认 host 时会把会话标记为 usedNonDefaultHost。
  */
 var DEFAULT_GROWTHBOOK_HOST = "https://api.anthropic.com/";
-//@ chunk-aepeg2w5.js:902197-903375 fingerprint = getUserAttributes (0.623)
+//@ chunk-aepeg2w5.js:902197-903375 fingerprint (2.1.88 match: getUserAttributes, 0.623)
 /**
  * 按 GrowthBook 用户属性形状组装对象（只放有值的字段）。
  */
@@ -585,7 +585,7 @@ function isDiskCacheReadableWhileDisabled() {
     isFirstPartyProvider()
   );
 }
-//@ chunk-aepeg2w5.js:907201-907342 placement = getApiBaseUrlHost (1)
+//@ chunk-aepeg2w5.js:907201-907342 placement (2.1.88 match: getApiBaseUrlHost, 1)
 function getApiBaseUrlHost() {
   let baseUrl = env.ANTHROPIC_BASE_URL;
   if (!baseUrl || isCcsTenant()) return;
@@ -914,7 +914,7 @@ function stopPeriodicGrowthBookRefresh() {
 async function getDynamicConfig_BLOCKS_ON_INIT(key, fallback) {
   return getFeatureValue_DEPRECATED(key, fallback);
 }
-//@ chunk-aepeg2w5.js:911946-911977 placement = getDynamicConfig_CACHED_MAY_BE_STALE (0)
+//@ chunk-aepeg2w5.js:911946-911977 placement (2.1.88 match: getDynamicConfig_CACHED_MAY_BE_STALE, 0)
 /**
  * 读取 GrowthBook 动态配置（对象值特性），可能来自磁盘缓存。
  */

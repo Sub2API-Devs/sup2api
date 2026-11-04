@@ -17,7 +17,7 @@ import {
 import { consumeReadPermission } from "../../../utils/fsSafety/atomicWriteStaging.js";
 import { resolveRipgrepTarget } from "../../../utils/ripgrep.js";
 
-//@ chunk-e6aww6q8.js:1452836-1453023 fingerprint = pathFromToolUse (0.43)
+//@ chunk-e6aww6q8.js:1452836-1453023 fingerprint (2.1.88 match: pathFromToolUse, 0.43)
 async function pathFromToolUse(toolUse, context) {
   let toolPermissionContext = GrepTool.getPath(toolUse);
   let consumed = consumeReadPermission(context, toolPermissionContext);

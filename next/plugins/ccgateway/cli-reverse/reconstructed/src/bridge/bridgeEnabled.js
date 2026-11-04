@@ -165,7 +165,7 @@ function isBridgeFirstParty() {
   if (env.ANTHROPIC_UNIX_SOCKET) return false;
   return isActualFirstPartyAnthropicBaseUrl();
 }
-//@ chunk-71c4j971.js:2479-2544 placement = isBridgeEnabled (1)
+//@ chunk-71c4j971.js:2479-2544 placement (2.1.88 match: isBridgeEnabled, 1)
 /**
  * Remote Control 是否可用：订阅用户、一方提供商，且 tengu_ccr_bridge 或另一条件成立。
  */
@@ -246,7 +246,7 @@ function kickBearerPlanFetch({ storageV5, credentials }) {
     };
   return hostState.bearerPlanFetch.answered;
 }
-//@ chunk-0jk9tmkx.js:8226-8418 fingerprint = isClaudeAISubscriber (0.321)
+//@ chunk-0jk9tmkx.js:8226-8418 fingerprint (2.1.88 match: isClaudeAISubscriber, 0.321)
 /**
  * 是否应主动注册可信设备：非云容器、非 DISABLE_LOGIN_COMMAND、一方提供商、claude.ai 订阅、未设 CLAUDE_TRUSTED_DEVICE_TOKEN、非仅必要流量。
  */
@@ -377,7 +377,7 @@ function getBridgeMinVersionConfig() {
     unknown: null,
   };
 }
-//@ chunk-tpjqzh89.js:1901-2631 facade-majority = checkBridgeMinVersion (0.452)
+//@ chunk-tpjqzh89.js:1901-2631 facade-majority (2.1.88 match: checkBridgeMinVersion, 0.452)
 /**
  * 版本低于 tengu_bridge_min_version 配置时返回"请 claude update"提示。
  */

@@ -394,7 +394,7 @@ function containsSegmentSequence(segments, sequence) {
     sequence.every((name, offset) => segments[index + offset]?.includes(name) === true),
   );
 }
-//@ chunk-yf82ynbr.js:5718-5845 placement = isInGlobalClaudeFolder (1)
+//@ chunk-yf82ynbr.js:5718-5845 placement (2.1.88 match: isInGlobalClaudeFolder, 1)
 function isInGlobalClaudeFolder(filePath) {
   return filePath.some(
     (segment, index) =>
@@ -848,7 +848,7 @@ async function isInClaudeConfigDir(cwdPath, realDirectory = safeRealpath) {
 function isClaudeOwnStateName(inputPath) {
   return isClaudeStatePath(inputPath) || isClaudeConfigFileName(basename(inputPath));
 }
-//@ chunk-yf82ynbr.js:11078-11151 placement = setCwdState (1)
+//@ chunk-yf82ynbr.js:11078-11151 placement (2.1.88 match: setCwdState, 1)
 function normalizeRelativePath(cwd) {
   return cwd.normalize("NFC").split(/[\\/]/).map(foldName).join("/");
 }

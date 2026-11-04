@@ -86,12 +86,12 @@ async function listSessionEnvFilesViaStorage(storage, sessionId) {
   } while (cursor !== undefined);
   return names;
 }
-//@ chunk-e6aww6q8.js:825540-825633 fingerprint = getHookEnvFilePath (1)
+//@ chunk-e6aww6q8.js:825540-825633 fingerprint (2.1.88 match: getHookEnvFilePath, 1)
 async function getHookEnvFilePath(hookEvent, hookIndex, sessionId) {
   let prefix = hookEvent.toLowerCase();
   return join(await sessionEnvDir(sessionId), `${prefix}-hook-${hookIndex}.sh`);
 }
-//@ chunk-e6aww6q8.js:825633-826304 fingerprint = clearCwdEnvFiles (0.852)
+//@ chunk-e6aww6q8.js:825633-826304 fingerprint (2.1.88 match: clearCwdEnvFiles, 0.852)
 async function clearCwdEnvFiles(storage) {
   if (isStorageV5Enabled() && storage !== undefined) {
     let sessionId = getSessionId();
@@ -132,12 +132,12 @@ async function clearCwdEnvFiles(storage) {
     if (getErrnoCode(e) !== "ENOENT") logForDebugging(`Failed to clear cwd env files: ${errorMessage(e)}`);
   }
 }
-//@ chunk-e6aww6q8.js:826304-826376 fingerprint = invalidateSessionEnvCache (0.876)
+//@ chunk-e6aww6q8.js:826304-826376 fingerprint (2.1.88 match: invalidateSessionEnvCache, 0.876)
 function invalidateSessionEnvCache() {
   logForDebugging("Invalidating session environment cache");
   sessionEnvScript().reset();
 }
-//@ chunk-e6aww6q8.js:826376-828021 fingerprint = getSessionEnvironmentScript (0.911)
+//@ chunk-e6aww6q8.js:826376-828021 fingerprint (2.1.88 match: getSessionEnvironmentScript, 0.911)
 /**
  * 组装 Bash 工具的会话环境脚本：CLAUDE_ENV_FILE 与 session-env 目录下各 hook 写入的 env 文件（按 setup/sessionstart/cwdchanged/filechanged 顺序）。
  */
@@ -256,7 +256,7 @@ async function parseSessionEnvironment(storage) {
   }
   return env;
 }
-//@ chunk-e6aww6q8.js:828573-828699 fingerprint = HOOK_ENV_PRIORITY (1)
+//@ chunk-e6aww6q8.js:828573-828699 fingerprint (2.1.88 match: HOOK_ENV_PRIORITY, 1)
 var HOOK_ENV_PRIORITY = {
   setup: 0,
   sessionstart: 1,
@@ -275,7 +275,7 @@ function sortHookEnvFiles(a, b) {
   let bIndex = parseInt(bMatch?.[2] || "0", 10);
   return aIndex - bIndex;
 }
-//@ chunk-23fm9f0d.js:22931-22969 fingerprint = getSessionEnvDirPath (0.858)
+//@ chunk-23fm9f0d.js:22931-22969 fingerprint (2.1.88 match: getSessionEnvDirPath, 0.858)
 function getSessionEnvDirPath() {
   return cleanupOldFilesInDirectory("session-env");
 }

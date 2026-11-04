@@ -256,7 +256,7 @@ function maybeMockRateLimitHeaders(headers) {
 function isLimitsDisplayEnabled(flag) {
   return flag || getAPIProvider() === "gateway" || isRateLimitMockingEnabled();
 }
-//@ chunk-w5ndchqs.js:20162-20352 fingerprint = RATE_LIMIT_DISPLAY_NAMES (0.705)
+//@ chunk-w5ndchqs.js:20162-20352 fingerprint (2.1.88 match: RATE_LIMIT_DISPLAY_NAMES, 0.705)
 /**
  * 限额类型显示名：five_hour→"5-hour limit"、seven_day→"weekly limit"、seven_day_opus/sonnet、seven_day_overage_included→"Fable limit"、overage→"usage credit limit"。
  */
@@ -268,7 +268,7 @@ var RATE_LIMIT_DISPLAY_NAMES = {
   seven_day_overage_included: "Fable limit",
   overage: "usage credit limit",
 };
-//@ chunk-w5ndchqs.js:27877-28134 fingerprint = EARLY_WARNING_CONFIGS (1)
+//@ chunk-w5ndchqs.js:27877-28134 fingerprint (2.1.88 match: EARLY_WARNING_CONFIGS, 1)
 /**
  * 时间相对早期预警配置：5 小时窗口利用率 ≥90% 且时间进度 ≤72%；7 天窗口 75%/60%、50%/35%…
  */
@@ -364,7 +364,7 @@ function parseLowPriorityOffer(headers) {
     }),
   };
 }
-//@ chunk-w5ndchqs.js:29006-29124 fingerprint = EARLY_WARNING_CLAIM_MAP (0.608)
+//@ chunk-w5ndchqs.js:29006-29124 fingerprint (2.1.88 match: EARLY_WARNING_CLAIM_MAP, 0.608)
 /**
  * 窗口类型 → 头名缩写（5h/7d/7d_oi/overage）；Qt=30 分钟。
  */
@@ -398,7 +398,7 @@ function parseHeaderNumber(raw) {
   let value = Number(raw);
   return Number.isFinite(value) ? value : undefined;
 }
-//@ chunk-w5ndchqs.js:29318-29851 fingerprint = getHeaderBasedEarlyWarning (0.678)
+//@ chunk-w5ndchqs.js:29318-29851 fingerprint (2.1.88 match: getHeaderBasedEarlyWarning, 0.678)
 /**
  * 解析各窗口 anthropic-ratelimit-unified-{5h,7d,7d_oi,overage}-{utilization,reset,surpassed-threshold,status} 头为读数表。
  */
@@ -484,7 +484,7 @@ function hasReadingSignal(reading) {
     (reading.utilization !== undefined && reading.resets_at !== undefined)
   );
 }
-//@ chunk-w5ndchqs.js:30367-30645 fingerprint = makeTestQuery (0.93)
+//@ chunk-w5ndchqs.js:30367-30645 fingerprint (2.1.88 match: makeTestQuery, 0.93)
 /**
  * 配额探测：发一次 max_tokens=1 的 "quota" 请求以获取限额响应头。
  */
@@ -546,7 +546,7 @@ function extractRawUtilization(headers, unifiedRateLimitFallbackAvailable, skipF
   }
   return null;
 }
-//@ chunk-w5ndchqs.js:31000-31370 fingerprint = getTimeRelativeEarlyWarning (0.722)
+//@ chunk-w5ndchqs.js:31000-31370 fingerprint (2.1.88 match: getTimeRelativeEarlyWarning, 0.722)
 /**
  * 按配置判断某窗口利用率是否超过对应时间进度的阈值。
  */
@@ -566,7 +566,7 @@ function getTimeRelativeEarlyWarning(headers, config, unifiedRateLimitFallbackAv
     isUsingOverage: false,
   };
 }
-//@ chunk-w5ndchqs.js:31370-31528 callgraph-witnessed = getEarlyWarningFromHeaders (0)
+//@ chunk-w5ndchqs.js:31370-31528 callgraph-witnessed (2.1.88 match: getEarlyWarningFromHeaders, 0)
 /**
  * 早期预警：先看服务器阈值头，再按时间相对配置（Fable 场景跳过 5 小时窗口）。
  */
@@ -581,7 +581,7 @@ function getEarlyWarningFromHeaders(headers, unifiedRateLimitFallbackAvailable) 
   }
   return null;
 }
-//@ chunk-w5ndchqs.js:31528-32905 fingerprint = computeNewLimitsFromHeaders (0.744)
+//@ chunk-w5ndchqs.js:31528-32905 fingerprint (2.1.88 match: computeNewLimitsFromHeaders, 0.744)
 /**
  * 从 anthropic-ratelimit-unified-* 头计算额度：status、reset、fallback、representative-claim、overage-status/reset/disabled-reason/scope、upgrade-paths、月度/频道利用率、宽限；附带早期预警与各窗口读数。
  */
@@ -752,7 +752,7 @@ function cacheExtraUsageDisabledReason(reason, storageV5) {
       storageV5,
     );
 }
-//@ chunk-w5ndchqs.js:34371-34489 fingerprint = cacheExtraUsageDisabledReason (0.61)
+//@ chunk-w5ndchqs.js:34371-34489 fingerprint (2.1.88 match: cacheExtraUsageDisabledReason, 0.61)
 /**
  * 缓存 overage-disabled-reason（网关模式除外）。
  */
@@ -1403,7 +1403,7 @@ function extractQuotaStatusFromError(
 ) {
   claudeAiLimits.extractQuotaStatusFromError(error, requestRouteKind, nowMs, limitsAccountEpoch, storageV5);
 }
-//@ chunk-w5ndchqs.js:48918-48976 affinity = extractQuotaStatusFromError (1)
+//@ chunk-w5ndchqs.js:48918-48976 affinity (2.1.88 match: extractQuotaStatusFromError, 1)
 /**
  * 构造 rejected 额度状态（合并错误里的字段）。旧版名错配。
  */
@@ -1476,7 +1476,7 @@ function overageScopeHeader(headers) {
     return scope;
   return;
 }
-//@ chunk-0h4e7gnq.js:48384-48429 fingerprint = currentLimits (0.823)
+//@ chunk-0h4e7gnq.js:48384-48429 fingerprint (2.1.88 match: currentLimits, 0.823)
 /**
  * 默认额度状态 {status:"allowed", isUsingOverage:false}。
  */
@@ -1484,7 +1484,7 @@ var currentLimits = {
   status: "allowed",
   isUsingOverage: false,
 };
-//@ chunk-0h4e7gnq.js:48429-48567 fingerprint = extractQuotaStatusFromHeaders (0.677)
+//@ chunk-0h4e7gnq.js:48429-48567 fingerprint (2.1.88 match: extractQuotaStatusFromHeaders, 0.677)
 /**
  * 额度状态是否为"完全正常"（allowed、无重置时间、未用 overage、无宽限）。
  */

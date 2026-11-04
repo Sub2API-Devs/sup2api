@@ -19,7 +19,7 @@ import {
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2042957-2043113 fingerprint = rateLimitOptions (0.602)
+//@ chunk-e6aww6q8.js:2042957-2043113 fingerprint (2.1.88 match: rateLimitOptions, 0.602)
 /**
  * /rate-limit-options 命令对象（local-jsx）；描述：Manage usage limits and upgrade options；isEnabled: ()=>vt()||!1；实现 chunk-dg94x42s.js 的 Ha。
  */

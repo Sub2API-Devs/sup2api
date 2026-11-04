@@ -35,7 +35,7 @@ import { plural } from "../utils/stringUtils.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1353129-1353286 fingerprint = _temp3 (1)
+//@ chunk-e6aww6q8.js:1353129-1353286 fingerprint (2.1.88 match: _temp3, 1)
 /**
  * 尚未批准或提示过、且 CLAUDE.md 引用了外部文件时返回 true。
  */
@@ -53,7 +53,7 @@ async function shouldShowExternalIncludesDialog(session, storageV5) {
 deferInit("chunk-jz0q3n7b.js:746", () => {
   init_react_production();
 });
-//@ chunk-jz0q3n7b.js:750-810 fingerprint = _temp (1)
+//@ chunk-jz0q3n7b.js:750-810 fingerprint (2.1.88 match: _temp, 1)
 function logClaudeMdIncludesShown() {
   logEvent("tengu_claude_md_includes_dialog_shown", {});
 }
@@ -69,7 +69,7 @@ function renderIncludePath(include, i) {
     i,
   );
 }
-//@ chunk-jz0q3n7b.js:909-1153 facade-exports = _temp2 (0.486)
+//@ chunk-jz0q3n7b.js:909-1153 facade-exports (2.1.88 match: _temp2, 0.486)
 function recordExternalIncludesDecision(approved, source, storageV5) {
   saveCurrentProjectConfig(
     (config) => ({
@@ -88,7 +88,7 @@ function recordExternalIncludesDecision(approved, source, storageV5) {
     },
   );
 }
-//@ chunk-jz0q3n7b.js:1153-3617 facade-exports = ClaudeMdExternalIncludesDialog (0.44)
+//@ chunk-jz0q3n7b.js:1153-3617 facade-exports (2.1.88 match: ClaudeMdExternalIncludesDialog, 0.44)
 /**
  * 外部 CLAUDE.md 引用确认：列出工作目录外被 @ 引用的文件，允许或拒绝（记录 tengu_claude_md_external_includes_dialog_*）。
  */

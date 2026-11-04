@@ -124,7 +124,7 @@ import { getInitialMainLoopModel } from "../../bootstrap/state.js";
 import { eligible1mSuffixTarget } from "./defaultModel.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:438212-438266 fingerprint = getSonnet46Option (0.561)
+//@ chunk-aepeg2w5.js:438212-438266 fingerprint (2.1.88 match: getSonnet46Option, 0.561)
 /**
  * 当前提供商 catalog sonnet 档的模型字符串，缺失时 sonnet46。旧版名 getSonnet46Option 为错配（不是选项）。
  */
@@ -140,7 +140,7 @@ function getDefaultAttributionSuffix(attribution) {
     attribution !== "env" && isDefaultModelEnforced() ? "enforced" : attribution,
   );
 }
-//@ chunk-hwmsct5x.js:199672-200008 fingerprint = getDefaultOptionForUser (0.434)
+//@ chunk-hwmsct5x.js:199672-200008 fingerprint (2.1.88 match: getDefaultOptionForUser, 0.434)
 /**
  * Default 选项：订阅用户 "Default (recommended)" 描述当前默认；否则 "Default"/"(recommended)" 加 "Use the default model (currently …)" 与来源后缀。
  */
@@ -224,7 +224,7 @@ function buildCustomTierLabel(model, tierLabel, label, description) {
         : `Custom ${tierLabel} model${is1m ? " (1M context)" : ""}`),
   };
 }
-//@ chunk-hwmsct5x.js:200753-201081 fingerprint = getCustomSonnetOption (0.796)
+//@ chunk-hwmsct5x.js:200753-201081 fingerprint (2.1.88 match: getCustomSonnetOption, 0.796)
 /**
  * ANTHROPIC_DEFAULT_SONNET_MODEL 设置且允许自定义行时的 Sonnet 选项（value "sonnet"）。
  */
@@ -275,7 +275,7 @@ var FAMILY_PRESENTATION = {
     suffix: usageCreditsSuffix,
   },
 };
-//@ chunk-hwmsct5x.js:201495-201735 placement = generateModelSection (0.417)
+//@ chunk-hwmsct5x.js:201495-201735 placement (2.1.88 match: generateModelSection, 0.417)
 /**
  * 生成模型选择器中某个模型选项：value、label、显示描述与给模型看的描述。旧版名 generateModelSection 来自 ConfigTool/prompt，实际属于模型选项。
  */
@@ -390,7 +390,7 @@ function fableDisplayName(model) {
   );
   return catalogEntry?.family === "fable" ? catalogEntry.display_name : undefined;
 }
-//@ chunk-hwmsct5x.js:203346-203660 fingerprint = getCustomOpusOption (0.793)
+//@ chunk-hwmsct5x.js:203346-203660 fingerprint (2.1.88 match: getCustomOpusOption, 0.793)
 /**
  * ANTHROPIC_DEFAULT_OPUS_MODEL 对应的自定义 Opus 选项。
  */
@@ -410,7 +410,7 @@ function getCustomOpusOption() {
     };
   }
 }
-//@ chunk-hwmsct5x.js:203660-203800 fingerprint = getOpus41Option (0.855)
+//@ chunk-hwmsct5x.js:203660-203800 fingerprint (2.1.88 match: getOpus41Option, 0.855)
 /**
  * "Opus 4.1 · Legacy" 选项。
  */
@@ -422,7 +422,7 @@ function getOpus41Option() {
     descriptionForModel: "Opus 4.1 - legacy version",
   };
 }
-//@ chunk-hwmsct5x.js:203800-203971 placement = FAST_MODE_MODEL_DISPLAY (0.334)
+//@ chunk-hwmsct5x.js:203800-203971 placement (2.1.88 match: FAST_MODE_MODEL_DISPLAY, 0.334)
 /**
  * /model 选项 "Opus 4.6 · Legacy"。旧版名 FAST_MODE_MODEL_DISPLAY 为错配，应归 utils/model/modelOptions.ts。
  */
@@ -470,7 +470,7 @@ function getOpus5Option() {
     descriptionForModel: "Opus 5 - previous Opus version",
   };
 }
-//@ chunk-hwmsct5x.js:204490-204770 fingerprint = getSonnet46_1MOption (0.643)
+//@ chunk-hwmsct5x.js:204490-204770 fingerprint (2.1.88 match: getSonnet46_1MOption, 0.643)
 /**
  * "Sonnet 4.6 (1M context)" 选项。
  */
@@ -503,7 +503,7 @@ function getSonnet1mOption() {
     description: `${displayName} for long sessions${getModelPriceSuffix(id, false)}`,
   };
 }
-//@ chunk-hwmsct5x.js:205080-205361 fingerprint = getOpus46_1MOption (0.594)
+//@ chunk-hwmsct5x.js:205080-205361 fingerprint (2.1.88 match: getOpus46_1MOption, 0.594)
 /**
  * "Opus 4.6 (1M context)" 选项。
  */
@@ -515,7 +515,7 @@ function getOpus46_1MOption(fastMode = false, withPricing = true) {
     descriptionForModel: "Opus 4.6 with 1M context window - for long sessions with large codebases",
   };
 }
-//@ chunk-hwmsct5x.js:205361-205635 fingerprint = getMergedOpus1MOption (0.597)
+//@ chunk-hwmsct5x.js:205361-205635 fingerprint (2.1.88 match: getMergedOpus1MOption, 0.597)
 /**
  * 合并后的 "Opus (1M context)" 选项（opus[1m] 或当前提供商的 Opus 字符串 + [1m]）。
  */
@@ -529,7 +529,7 @@ function getMergedOpus1MOption(fastMode = false) {
     descriptionForModel: `${displayName} with 1M context window - for long sessions with large codebases`,
   };
 }
-//@ chunk-hwmsct5x.js:205635-205916 fingerprint = getCustomHaikuOption (0.837)
+//@ chunk-hwmsct5x.js:205635-205916 fingerprint (2.1.88 match: getCustomHaikuOption, 0.837)
 /**
  * ANTHROPIC_DEFAULT_HAIKU_MODEL 对应的自定义 Haiku 选项。
  */
@@ -547,7 +547,7 @@ function getCustomHaikuOption() {
       descriptionForModel: `${env.ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION ?? "Custom Haiku model"} (${customHaikuModel})`,
     };
 }
-//@ chunk-hwmsct5x.js:205916-206132 fingerprint = getHaiku45Option (0.707)
+//@ chunk-hwmsct5x.js:205916-206132 fingerprint (2.1.88 match: getHaiku45Option, 0.707)
 /**
  * Haiku 选项（"<Haiku 显示名> · Fastest for quick answers"）。
  */
@@ -570,7 +570,7 @@ function getProUsageMultiplierNote() {
     return " \xB7 ~2\xD7 usage vs Sonnet";
   return "";
 }
-//@ chunk-hwmsct5x.js:206235-206379 fingerprint = getMaxOpusOption (0.899)
+//@ chunk-hwmsct5x.js:206235-206379 fingerprint (2.1.88 match: getMaxOpusOption, 0.899)
 /**
  * 订阅用户的 Opus 选项（可附 Pro 用量提示）。
  */
@@ -583,7 +583,7 @@ function getMaxOpusOption(fastMode = false) {
     description: `${displayName} \xB7 ${OPUS_SLOGAN}${getProUsageMultiplierNote()}${pricing}`,
   };
 }
-//@ chunk-hwmsct5x.js:206379-206629 callgraph-fingerprint = getMaxSonnet46_1MOption (0.248)
+//@ chunk-hwmsct5x.js:206379-206629 callgraph-fingerprint (2.1.88 match: getMaxSonnet46_1MOption, 0.248)
 /**
  * 订阅用户的 "Sonnet 4.6 (1M context)"（可能注明耗用 usage credits）。
  */
@@ -597,7 +597,7 @@ function getMaxSonnet46_1MOption() {
     description: `Sonnet 4.6 with 1M context${creditNote}${pricing}`,
   };
 }
-//@ chunk-hwmsct5x.js:206629-206844 fingerprint = getMaxOpus46_1MOption (0.551)
+//@ chunk-hwmsct5x.js:206629-206844 fingerprint (2.1.88 match: getMaxOpus46_1MOption, 0.551)
 /**
  * 订阅用户的 "Opus (1M context)"。
  */
@@ -611,7 +611,7 @@ function getMaxOpus46_1MOption() {
     description: `${displayName} with 1M context${getProUsageMultiplierNote()}${creditNote}${pricing}`,
   };
 }
-//@ chunk-hwmsct5x.js:206844-207137 callgraph-witnessed = getOpus46Option (0.392)
+//@ chunk-hwmsct5x.js:206844-207137 callgraph-witnessed (2.1.88 match: getOpus46Option, 0.392)
 /**
  * 默认 Opus 走 1M 时的 "Opus (1M context)" 选项。旧版名 getOpus46Option 不准确。
  */
@@ -627,7 +627,7 @@ function getOpus1mDefaultOption(withPricing = false, fastMode = false) {
     descriptionForModel: `${displayName} with 1M context - best for everyday, complex tasks`,
   };
 }
-//@ chunk-hwmsct5x.js:207137-207240 fingerprint = MaxSonnet46Option (1)
+//@ chunk-hwmsct5x.js:207137-207240 fingerprint (2.1.88 match: MaxSonnet46Option, 1)
 /**
  * 订阅用户的 Sonnet 选项。
  */
@@ -638,7 +638,7 @@ function MaxSonnet46Option() {
     description: `${getMarketingNameForModel(stripAnyVersatileSuffix(getDefaultSonnetModel())) ?? "Sonnet"} \xB7 ${SONNET_SLOGAN}`,
   };
 }
-//@ chunk-hwmsct5x.js:207240-207336 fingerprint = MaxHaiku45Option (1)
+//@ chunk-hwmsct5x.js:207240-207336 fingerprint (2.1.88 match: MaxHaiku45Option, 1)
 /**
  * 订阅用户的 Haiku 选项。
  */
@@ -649,7 +649,7 @@ function MaxHaiku45Option() {
     description: `${getPublicModelDisplayName(getDefaultHaikuModel()) ?? "Haiku"} \xB7 ${HAIKU_SLOGAN}`,
   };
 }
-//@ chunk-hwmsct5x.js:207336-207452 fingerprint = getOpusPlanOption (0.779)
+//@ chunk-hwmsct5x.js:207336-207452 fingerprint (2.1.88 match: getOpusPlanOption, 0.779)
 /**
  * "Opus Plan Mode"：plan 模式用 Opus，其余用 Sonnet（opusplan）。
  */
@@ -667,7 +667,7 @@ function getOpusPlanOption() {
 function noopModelOption(option) {
   return;
 }
-//@ chunk-hwmsct5x.js:207475-207589 layout = aliasMatchesParentTier (0.792)
+//@ chunk-hwmsct5x.js:207475-207589 layout (2.1.88 match: aliasMatchesParentTier, 0.792)
 /**
  * 在选项列表里补上默认模型所在族与指定族的行。
  */
@@ -726,7 +726,7 @@ function getOpusOption(fastMode) {
     descriptionForModel: `${displayName} - best for everyday, complex tasks`,
   };
 }
-//@ chunk-hwmsct5x.js:208291-209773 callgraph-witnessed = getModelOptionsBase (0)
+//@ chunk-hwmsct5x.js:208291-209773 callgraph-witnessed (2.1.88 match: getModelOptionsBase, 0)
 /**
  * 内置选项列表：订阅用户（有 Opus 权限/无）、第一方类提供商、第三方提供商三套组合，按可用性加入各族及 1M 变体与自定义档位行。
  */
@@ -830,7 +830,7 @@ function getModelOptionsBase(fastMode = false) {
     filterModelOptionsByAllowlist(payg3pOptions, customFableOption ?? generateModelSection("fable"));
   return payg3pOptions;
 }
-//@ chunk-hwmsct5x.js:209773-210483 placement = getAgentModelOptions (0.574)
+//@ chunk-hwmsct5x.js:209773-210483 placement (2.1.88 match: getAgentModelOptions, 0.574)
 /**
  * 给任意模型 id 构造 /model 选项：有已知族时用族口号，若有更新版本提示 "Newer version available · select <族>"；未知族为 "Custom model (id)"。旧版名 getAgentModelOptions 不准确。
  */
@@ -1150,7 +1150,7 @@ function getCatalogDrivenModelOptions(baseContext, stats) {
   for (let option of fableTail) filterModelOptionsByAllowlist(main, option);
   return main;
 }
-//@ chunk-hwmsct5x.js:213848-213970 placement = aliasMatchesParentTier (0.852)
+//@ chunk-hwmsct5x.js:213848-213970 placement (2.1.88 match: aliasMatchesParentTier, 0.852)
 /**
  * ANTHROPIC_DEFAULT_{SONNET,OPUS,HAIKU,FABLE}_MODEL 对应的自定义选项。
  */
@@ -1321,7 +1321,7 @@ function buildCatalogModelOption(entry) {
 function passthroughDescription(description, row) {
   return description;
 }
-//@ chunk-hwmsct5x.js:216265-216375 placement = isExcludedModel (0.817)
+//@ chunk-hwmsct5x.js:216265-216375 placement (2.1.88 match: isExcludedModel, 0.817)
 function isExcludedModel(entry, aliasFamily) {
   let userSpecifiedModel = parseUserSpecifiedModel(aliasFamily);
   if (usesFirstPartyModelIds()) return normalizeModelId(userSpecifiedModel) === entry.key;
@@ -1334,7 +1334,7 @@ function isExcludedModel(entry, aliasFamily) {
     ) === entry.key
   );
 }
-//@ chunk-hwmsct5x.js:216375-216506 layout = aliasMatchesParentTier (0.852)
+//@ chunk-hwmsct5x.js:216375-216506 layout (2.1.88 match: aliasMatchesParentTier, 0.852)
 /**
  * 族口号（Opus：Best for everyday, complex tasks 等）。
  */
@@ -1352,7 +1352,7 @@ function getFamilySlogan(alias) {
       return "";
   }
 }
-//@ chunk-hwmsct5x.js:216506-219700 fingerprint = getModelOptions (0.541)
+//@ chunk-hwmsct5x.js:216506-219700 fingerprint (2.1.88 match: getModelOptions, 0.541)
 /**
  * /model 选项总装：服务端目录或内置列表 → ANTHROPIC_CUSTOM_MODEL_OPTION → 网关发现模型 → 附加模型选项 → Fable 行 → availableModels 里的显式模型 → 服务端目录补行 → 白名单过滤 → 确保当前设置的模型（含 opusplan/opus/opus[1m]/自定义）在列表里。
  */
@@ -1603,7 +1603,7 @@ function getModelOptions(fastMode, stats) {
     return expandGatewayAliasOptions(options, stats);
   }
 }
-//@ chunk-hwmsct5x.js:219700-219894 placement = aliasMatchesParentTier (0.792)
+//@ chunk-hwmsct5x.js:219700-219894 placement (2.1.88 match: aliasMatchesParentTier, 0.792)
 /**
  * 未弃用、被允许、未缺席，别名形式需 1M 可用且不是旧模型。
  */
@@ -1871,7 +1871,7 @@ function markFableCreditRequired(options, stats) {
     };
   });
 }
-//@ chunk-hwmsct5x.js:223942-224874 callgraph-witnessed = filterModelOptionsByAllowlist (0.39)
+//@ chunk-hwmsct5x.js:223942-224874 callgraph-witnessed (2.1.88 match: filterModelOptionsByAllowlist, 0.39)
 /**
  * 插入 Fable 等“置顶族”行：放在 Default 之后、与默认模型同族的行后面。
  */
@@ -1934,7 +1934,7 @@ function filterModelOptionsByAllowlist(options, option) {
   }
   options.splice(insertAt, 0, option);
 }
-//@ chunk-hwmsct5x.js:224874-225071 affinity = aliasMatchesParentTier (0.852)
+//@ chunk-hwmsct5x.js:224874-225071 affinity (2.1.88 match: aliasMatchesParentTier, 0.852)
 /**
  * 字符串里的族名（fable/opus/sonnet/haiku），没有为 null。
  */
@@ -1946,7 +1946,7 @@ function getModelFamilyFromString(value) {
   if (canonical.includes("haiku")) return "haiku";
   return null;
 }
-//@ chunk-d1cgs5na.js:12554-12651 fingerprint = getModelFamilyInfo (0.437)
+//@ chunk-d1cgs5na.js:12554-12651 fingerprint (2.1.88 match: getModelFamilyInfo, 0.437)
 /**
  * sonnet-4-5、sonnet-4-0、3-7、3-5 的规范名集合。旧版名 getModelFamilyInfo 为错配。
  */

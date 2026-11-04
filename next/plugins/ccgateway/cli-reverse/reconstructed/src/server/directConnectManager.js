@@ -15,7 +15,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { isControlFrame } from "../remote/sdkMessageAdapter.js";
 import { buildControlResponse } from "../utils/teleport/api.js";
 
-//@ chunk-18hwfzwa.js:223749-226114 fingerprint = DirectConnectSessionManager (0.762)
+//@ chunk-18hwfzwa.js:223749-226114 fingerprint (2.1.88 match: DirectConnectSessionManager, 0.762)
 /**
  * WebSocket 直连：connect 时带 Bearer 头；逐行解析 NDJSON，control_request 只支持 can_use_tool（其余回 error），其余 SDK 消息交给 onMessage；提供 sendMessage、respondToPermissionRequest、sendInterrupt、disconnect。
  */

@@ -274,7 +274,7 @@ function isChatPinForfeited(task) {
 function isChildOrForfeited(task, tasks) {
   return isChildOfAgent(task, tasks) || isChatPinForfeited(task);
 }
-//@ chunk-6vnxsn99.js:66534-68435 fingerprint = registerTask (0.473)
+//@ chunk-6vnxsn99.js:66534-68435 fingerprint (2.1.88 match: registerTask, 0.473)
 /**
  * 把后台任务注册进 AppState.tasks，并发出 SDK 任务开始事件。
  */
@@ -415,12 +415,12 @@ function evictTerminalTaskIfReady(taskId, setAppState) {
     getTaskRunState().taskEvicted.emit(taskId);
   }
 }
-//@ chunk-6vnxsn99.js:68990-69082 fingerprint = getRunningTasks (1)
+//@ chunk-6vnxsn99.js:68990-69082 fingerprint (2.1.88 match: getRunningTasks, 1)
 function getRunningTasks(state) {
   let tasks = state.tasks ?? {};
   return Object.values(tasks).filter((task) => task.status === "running");
 }
-//@ chunk-6vnxsn99.js:69082-69528 fingerprint = generateTaskAttachments (0.847)
+//@ chunk-6vnxsn99.js:69082-69528 fingerprint (2.1.88 match: generateTaskAttachments, 0.847)
 /**
  * 为已完成/失败/被杀的后台任务生成 task 通知附件，注入下一轮对话。
  */
@@ -457,7 +457,7 @@ async function generateTaskAttachments(state) {
     evictedTaskIds,
   };
 }
-//@ chunk-6vnxsn99.js:69528-70338 fingerprint = applyTaskOffsetsAndEvictions (0.569)
+//@ chunk-6vnxsn99.js:69528-70338 fingerprint (2.1.88 match: applyTaskOffsetsAndEvictions, 0.569)
 function applyTaskOffsetsAndEvictions(setAppState, updatedTaskOffsets, evictedTaskIds) {
   let offsetIds = Object.keys(updatedTaskOffsets);
   if (offsetIds.length === 0 && evictedTaskIds.length === 0) return;
@@ -575,7 +575,7 @@ deferInit("chunk-e6aww6q8.js:1779529", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:1779561-1779826 placement = getLastToolUseName (0.817)
+//@ chunk-e6aww6q8.js:1779561-1779826 placement (2.1.88 match: getLastToolUseName, 0.817)
 /**
  * 从消息中取最后一次（非子代理）TodoWrite 调用的 todos。
  */
@@ -680,7 +680,7 @@ function resolvePendingTaskCreate(state, result) {
 function getAllTrackedTasks(state) {
   return [...state.tasks.values(), ...state.pendingCreates.values()];
 }
-//@ chunk-e6aww6q8.js:1781152-1781696 callgraph-fingerprint = updateTaskState (0.217)
+//@ chunk-e6aww6q8.js:1781152-1781696 callgraph-fingerprint (2.1.88 match: updateTaskState, 0.217)
 function updateTaskState_2() {
   let state = {
     pendingCreates: new Map(),
@@ -723,7 +723,7 @@ function updateTaskState_2() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1784439-1785040 fingerprint = getStatusText (0.36)
+//@ chunk-e6aww6q8.js:1784439-1785040 fingerprint (2.1.88 match: getStatusText, 0.36)
 function getStatusText(taskId, title, status, taskRegistry, toolUseId, extra) {
   if (!claimTaskNotification(taskId, taskRegistry).claimed) return;
   switch (status) {
@@ -768,7 +768,7 @@ function getStatusText(taskId, title, status, taskRegistry, toolUseId, extra) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4719155-4719236 fingerprint = evictTerminalTask (0.521)
+//@ chunk-e6aww6q8.js:4719155-4719236 fingerprint (2.1.88 match: evictTerminalTask, 0.521)
 function evictTerminalTask(taskId, setAppState) {
   setAppState.update(taskId, (prev) => ({
     ...prev,
@@ -776,7 +776,7 @@ function evictTerminalTask(taskId, setAppState) {
     evictAfter: Date.now() + MCP_TASK_KEEPALIVE_MS,
   }));
 }
-//@ chunk-e6aww6q8.js:4745856-4746226 callgraph-fingerprint = enqueueTaskNotification (0.275)
+//@ chunk-e6aww6q8.js:4745856-4746226 callgraph-fingerprint (2.1.88 match: enqueueTaskNotification, 0.275)
 /**
  * 把任务完成通知加入命令队列（task-notification）。
  */

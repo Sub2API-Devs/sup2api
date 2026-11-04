@@ -50,7 +50,7 @@ function factLabel(text, maxChars = 100) {
     .join("");
   return joined !== "" ? joined : "-";
 }
-//@ chunk-3v3wzg2e.js:7294-7413 placement = getLocalISODate (0.851)
+//@ chunk-3v3wzg2e.js:7294-7413 placement (2.1.88 match: getLocalISODate, 0.851)
 function localIsoDate(modified) {
   let pad2 = (date) => String(date).padStart(2, "0");
   return `${modified.getFullYear()}-${pad2(modified.getMonth() + 1)}-${pad2(modified.getDate())}`;

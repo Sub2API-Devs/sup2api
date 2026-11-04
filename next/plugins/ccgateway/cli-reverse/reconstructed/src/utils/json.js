@@ -83,7 +83,7 @@ function parseJsonResult(json, shouldLogError) {
     };
   }
 }
-//@ chunk-kndsyy4v.js:18415-18508 placement = clearTrustedDeviceTokenCache (0.629)
+//@ chunk-kndsyy4v.js:18415-18508 placement (2.1.88 match: clearTrustedDeviceTokenCache, 0.629)
 /**
  * 带 LRU 缓存的解析器包装（与可信设备无关）。
  */
@@ -110,7 +110,7 @@ function stripJsonCodeFence(text) {
     .replace(/\s*```$/, "")
     .trim();
 }
-//@ chunk-kndsyy4v.js:18613-18753 callgraph-witnessed = safeParseJSON (1)
+//@ chunk-kndsyy4v.js:18613-18753 callgraph-witnessed (2.1.88 match: safeParseJSON, 1)
 /**
  * 安全解析 JSON：空串返回 null；大文本走不缓存路径，小文本带 LRU 缓存；失败返回 null（可选记录错误）。
  */
@@ -142,11 +142,11 @@ function parseJsonc_2(text) {
     return null;
   }
 }
-//@ chunk-kndsyy4v.js:18917-18961 fingerprint = bunJSONLParse (0.774)
+//@ chunk-kndsyy4v.js:18917-18961 fingerprint (2.1.88 match: bunJSONLParse, 0.774)
 function bunJSONLParse() {
   return Bun.JSONL?.parseChunk;
 }
-//@ chunk-kndsyy4v.js:18961-19349 fingerprint = parseJSONLBun (0.691)
+//@ chunk-kndsyy4v.js:18961-19349 fingerprint (2.1.88 match: parseJSONLBun, 0.691)
 function parseJSONLBun(data, parseChunk) {
   if (typeof data !== "string" && !bufferModule.isAscii(data)) {
     let jsonlBuffer = parseJsonlBuffer(data, parseChunk);
@@ -249,7 +249,7 @@ function parseJSONL(data) {
  * JSONL 文件整读的上限（100 MB）。
  */
 var MAX_JSONL_READ_BYTES = 104857600;
-//@ chunk-kndsyy4v.js:20141-20466 layout = readJSONLFile (1)
+//@ chunk-kndsyy4v.js:20141-20466 layout (2.1.88 match: readJSONLFile, 1)
 async function readJSONLFile_2(filePath) {
   let { size } = await stat(filePath);
   if (size <= MAX_JSONL_READ_BYTES) return parseJSONL(await readFile(filePath));
@@ -309,7 +309,7 @@ function setJsoncProperty(content, key, value) {
     return content;
   }
 }
-//@ chunk-kndsyy4v.js:20871-21348 fingerprint = addItemToJSONCArray (0.795)
+//@ chunk-kndsyy4v.js:20871-21348 fingerprint (2.1.88 match: addItemToJSONCArray, 0.795)
 function addItemToJSONCArray(content, newItem) {
   try {
     if (!content || content.trim() === "") return jsonStringify([newItem], null, 4);
@@ -340,7 +340,7 @@ function addItemToJSONCArray(content, newItem) {
     return jsonStringify([newItem], null, 4);
   }
 }
-//@ chunk-axmbhcjg.js:2182-2332 fingerprint = readJSONLFile (1)
+//@ chunk-axmbhcjg.js:2182-2332 fingerprint (2.1.88 match: readJSONLFile, 1)
 async function readJSONLFile(fileHandle, size) {
   let buf = Buffer.allocUnsafe(size);
   let totalRead = 0;

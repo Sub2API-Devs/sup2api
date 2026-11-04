@@ -51,14 +51,14 @@ function renderDimMessage(message, index) {
     index,
   );
 }
-//@ chunk-na8jp6ng.js:13228-13368 fingerprint = getInstallationPath (1)
+//@ chunk-na8jp6ng.js:13228-13368 fingerprint (2.1.88 match: getInstallationPath, 1)
 function getInstallationPath() {
   let isWindows = env.platform === "win32";
   let homeDir = homedir();
   if (isWindows) return join(homeDir, ".local", "bin", "claude.exe").replaceAll("/", "\\");
   return "~/.local/bin/claude";
 }
-//@ chunk-na8jp6ng.js:13368-13807 fingerprint = SetupNotes (0.431)
+//@ chunk-na8jp6ng.js:13368-13807 fingerprint (2.1.88 match: SetupNotes, 0.431)
 function SetupNotes(props) {
   let $ = useMemoCache(5);
   let { messages } = props;
@@ -107,7 +107,7 @@ function SetupNotes(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-na8jp6ng.js:13807-18584 fingerprint = Install (0.73)
+//@ chunk-na8jp6ng.js:13807-18584 fingerprint (2.1.88 match: Install, 0.73)
 function Install({ onDone, force, target, storageV5 }) {
   let [state, setState] = useState({
     type: "checking",
@@ -387,7 +387,7 @@ function Install({ onDone, force, target, storageV5 }) {
     ],
   });
 }
-//@ chunk-na8jp6ng.js:18584-18880 fingerprint = install (1)
+//@ chunk-na8jp6ng.js:18584-18880 fingerprint (2.1.88 match: install, 1)
 /**
  * /install 命令对象（local-jsx）；描述：Install Claude Code native build。
  */

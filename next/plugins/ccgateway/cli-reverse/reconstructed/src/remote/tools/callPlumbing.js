@@ -473,7 +473,7 @@ function isArgsTooLargeError(error, toolUseId) {
     record.tool_use_id === toolUseId
   );
 }
-//@ chunk-25sm7c4g.js:6962-7066 placement = isConnectionError (1)
+//@ chunk-25sm7c4g.js:6962-7066 placement (2.1.88 match: isConnectionError, 1)
 function getNumericErrorCode(err) {
   return err !== null && typeof err === "object" && "code" in err && typeof err.code === "number"
     ? err.code
@@ -698,7 +698,7 @@ async function callPlumbingOverSession(sender, target, name, args, options) {
     clearTimeout(timer);
   }
 }
-//@ chunk-25sm7c4g.js:9997-10159 placement = _temp (1)
+//@ chunk-25sm7c4g.js:9997-10159 placement (2.1.88 match: _temp, 1)
 /**
  * 从对象里取出 result 字段，只有它是带 content 数组的对象时才返回。
  */

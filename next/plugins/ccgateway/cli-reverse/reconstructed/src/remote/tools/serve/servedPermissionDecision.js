@@ -1417,7 +1417,7 @@ function offersAlwaysAllowRule(decision) {
     findSafetyCheckReason(decision.decisionReason, (reason) => !reason.classifierApprovable) === undefined
   );
 }
-//@ chunk-tr0s0d0k.js:71598-71762 placement = extractRules (0.851)
+//@ chunk-tr0s0d0k.js:71598-71762 placement (2.1.88 match: extractRules, 0.851)
 function getSuggestedRuleStrings(result) {
   if (result.behavior !== "ask" || result.suggestions === undefined) return [];
   return result.suggestions

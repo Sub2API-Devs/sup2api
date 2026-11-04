@@ -85,7 +85,7 @@ import { mainAgentId, getParentSessionId } from "../bootstrap/state.js";
 import { isEnvTruthy } from "../utils/envUtils.js";
 import { getLastSessionLog } from "../utils/conversationRecovery.js";
 
-//@ chunk-wyqg6m3h.js:36692-36855 fingerprint = DiffStatsText (0.64)
+//@ chunk-wyqg6m3h.js:36692-36855 fingerprint (2.1.88 match: DiffStatsText, 0.64)
 function diffStat(theme, added, removed) {
   let { Text } = theme.ui;
   let hasBoth = added > 0 && removed > 0;
@@ -115,14 +115,14 @@ function diffStat(theme, added, removed) {
 }
 //@ chunk-18hwfzwa.js:415610-415635 affinity
 class ConversationRestoreError extends Error {}
-//@ chunk-18hwfzwa.js:415635-415696 fingerprint = isSummarizeOption (1)
+//@ chunk-18hwfzwa.js:415635-415696 fingerprint (2.1.88 match: isSummarizeOption, 1)
 function isSummarizeOption(option) {
   return option === "summarize" || option === "summarize_up_to";
 }
 //@ chunk-18hwfzwa.js:415696-415729 layout
 var REWIND = "Rewind";
 var CURRENT_ITEM_LABEL = "(current)";
-//@ chunk-18hwfzwa.js:415729-422268 fingerprint = MessageSelector (0.642)
+//@ chunk-18hwfzwa.js:415729-422268 fingerprint (2.1.88 match: MessageSelector, 0.642)
 function MessageSelector({
   messages,
   onPreRestore,
@@ -671,7 +671,7 @@ function logConversationRestoreError(error) {
   }
   logError(error);
 }
-//@ chunk-18hwfzwa.js:422399-422832 fingerprint = getRestoreOptionConversationText (0.939)
+//@ chunk-18hwfzwa.js:422399-422832 fingerprint (2.1.88 match: getRestoreOptionConversationText, 0.939)
 function getRestoreOptionConversationText(option) {
   switch (option) {
     case "summarize":
@@ -686,7 +686,7 @@ function getRestoreOptionConversationText(option) {
       return "The conversation will be unchanged.";
   }
 }
-//@ chunk-18hwfzwa.js:422832-423703 fingerprint = RestoreOptionDescription (0.785)
+//@ chunk-18hwfzwa.js:422832-423703 fingerprint (2.1.88 match: RestoreOptionDescription, 0.785)
 function RestoreOptionDescription(props) {
   let $ = useMemoCache(17);
   let { selectedRestoreOption, canRestoreCode, diffStatsForRestore, isOneParagraph } = props;
@@ -761,7 +761,7 @@ function RestoreOptionDescription(props) {
   } else stackedSummary = $[16];
   return stackedSummary;
 }
-//@ chunk-18hwfzwa.js:423703-424837 fingerprint = RestoreCodeConfirmation (0.498)
+//@ chunk-18hwfzwa.js:423703-424837 fingerprint (2.1.88 match: RestoreCodeConfirmation, 0.498)
 function RestoreCodeConfirmation(props) {
   let $ = useMemoCache(15);
   let { diffStatsForRestore } = props;
@@ -943,7 +943,7 @@ function computeDiffStatsBetweenMessages(props) {
   } else rowElement = $[15];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:426117-429323 fingerprint = UserMessageOption (0.462)
+//@ chunk-18hwfzwa.js:426117-429323 fingerprint (2.1.88 match: UserMessageOption, 0.462)
 function UserMessageOption(props) {
   let $ = useMemoCache(62);
   let { userMessage, color, dimColor, isCurrent, isRedesign, paddingRight, age } = props;
@@ -1242,7 +1242,7 @@ function MessageAgeSuffix(props) {
   } else ageSuffix = $[1];
   return ageSuffix;
 }
-//@ chunk-18hwfzwa.js:429467-429960 fingerprint = messagesAfterAreOnlySynthetic (0.891)
+//@ chunk-18hwfzwa.js:429467-429960 fingerprint (2.1.88 match: messagesAfterAreOnlySynthetic, 0.891)
 function messagesAfterAreOnlySynthetic(messages, fromIndex) {
   for (let i = fromIndex + 1; i < messages.length; i++) {
     let msg = messages[i];

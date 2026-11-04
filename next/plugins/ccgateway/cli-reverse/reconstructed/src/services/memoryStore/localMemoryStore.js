@@ -296,7 +296,7 @@ async function resolveMemoryKeyPath(rootDir, key) {
   }
   return targetPath;
 }
-//@ chunk-a477qqne.js:21007-21170 placement = normalizeSource (0.883)
+//@ chunk-a477qqne.js:21007-21170 placement (2.1.88 match: normalizeSource, 0.883)
 /**
  * 对目录项做 stat 分类（名字配错）。
  */
@@ -356,14 +356,14 @@ function assertDocumentSize(content) {
   if (Buffer.byteLength(content, "utf8") > MAX_CONTENT_BYTES)
     throw new MemoryPermanentError("http_413", "document exceeds the size cap");
 }
-//@ chunk-a477qqne.js:21632-21695 placement = generatePlaceholders (1)
+//@ chunk-a477qqne.js:21632-21695 placement (2.1.88 match: generatePlaceholders, 1)
 /**
  * 把名字编码为固定前缀加 UTF-8 十六进制串。旧版名 generatePlaceholders 误配，与 Bash 无关。
  */
 function encodeHexName(key) {
   return MEMORY_KEY_PREFIX + Buffer.from(key, "utf8").toString("hex");
 }
-//@ chunk-a477qqne.js:21695-21857 placement = generatePlaceholders (1)
+//@ chunk-a477qqne.js:21695-21857 placement (2.1.88 match: generatePlaceholders, 1)
 /**
  * 解码固定前缀加十六进制的名字，校验能往返编码且名字合法，否则返回 null。与 Bash 无关。
  */

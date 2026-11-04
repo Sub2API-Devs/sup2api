@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1686839-1687135 fingerprint = clear (0.601)
+//@ chunk-e6aww6q8.js:1686839-1687135 fingerprint (2.1.88 match: clear, 0.601)
 /**
  * /clear 命令对象（local）；描述：Start a new session with empty context; previous session stays on disk (resumable with /resume)；别名 ["reset","new"]；实现 chunk-4mtxrwhe.js 的 D。
  */

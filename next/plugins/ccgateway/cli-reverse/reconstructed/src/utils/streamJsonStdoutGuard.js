@@ -12,7 +12,7 @@ import { jsonParse } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
 import { registerCleanup } from "./cleanupRegistry.js";
 
-//@ chunk-tyg7f3ek.js:394375-394399 fingerprint = STDOUT_GUARD_MARKER (1)
+//@ chunk-tyg7f3ek.js:394375-394399 fingerprint (2.1.88 match: STDOUT_GUARD_MARKER, 1)
 /**
  * 被拦截行在 stderr 上的前缀 "[stdout-guard]"。
  */
@@ -30,7 +30,7 @@ function isJsonLine(line) {
     return false;
   }
 }
-//@ chunk-tyg7f3ek.js:394475-395444 fingerprint = installStreamJsonStdoutGuard (0.619)
+//@ chunk-tyg7f3ek.js:394475-395444 fingerprint (2.1.88 match: installStreamJsonStdoutGuard, 0.619)
 /**
  * StdoutGuard：按行缓冲 stdout 写入，JSON 行原样输出，其余转 stderr；可卸载并冲刷缓冲。
  */

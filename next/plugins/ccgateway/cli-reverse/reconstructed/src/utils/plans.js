@@ -56,7 +56,7 @@ import { recordTranscript } from "./sessionStorage.js";
 import { getInstalledPluginsFilePath, parseInstalledPluginsJson } from "./plugins/installedPluginsManager.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:21468-21656 fingerprint = getPlanSlug (0.574)
+//@ chunk-q8cqcff6.js:21468-21656 fingerprint (2.1.88 match: getPlanSlug, 0.574)
 function getPlanSlug_2() {
   if (getPlatform() !== "windows") return null;
   for (let candidate of POWERSHELL_EXE_CANDIDATES) {
@@ -603,7 +603,7 @@ function globalPlansDirectory() {
 function planStorageSpace(planName) {
   return STORAGE_SPACES.plan(planName);
 }
-//@ chunk-82kqcve8.js:188525-188581 layout = isSessionPlanFile (1)
+//@ chunk-82kqcve8.js:188525-188581 layout (2.1.88 match: isSessionPlanFile, 1)
 /**
  * 去掉文件名末尾的 .md（plans 用）。
  */
@@ -614,7 +614,7 @@ function stripMdExtension(fileName) {
 var DEFAULT_PLAN_FILE_STATE = {
   publishDiscipline: "inPlace",
 };
-//@ chunk-82kqcve8.js:188618-188742 layout = isSessionPlanFile (1)
+//@ chunk-82kqcve8.js:188618-188742 layout (2.1.88 match: isSessionPlanFile, 1)
 /**
  * lstat 计划目录下 <name>.md，返回 {publishDiscipline:"inPlace", mode}（低 9 位权限）；文件不存在或远程模式返回默认状态。
  */
@@ -704,7 +704,7 @@ class PlansDirectoryResolver {
     this.#e = undefined;
   }
 }
-//@ chunk-82kqcve8.js:189579-189704 facade-exports = reset (0.777)
+//@ chunk-82kqcve8.js:189579-189704 facade-exports (2.1.88 match: reset, 0.777)
 var PLANS_DIRECTORY_PER_HOST; // deferred: uses PlansDirectoryResolver of its import cycle while loading; runs once the cycle is complete
 var getPlansDirectory;
 deferInit("chunk-82kqcve8.js:189579", () => {
@@ -811,7 +811,7 @@ function reportPlanPersistFailure(filePath, reason) {
     level: "error",
   });
 }
-//@ chunk-82kqcve8.js:190969-191099 facade-exports = getPlanFilePath (0.856)
+//@ chunk-82kqcve8.js:190969-191099 facade-exports (2.1.88 match: getPlanFilePath, 0.856)
 function getPlanFilePath(agentId) {
   let sessionId = getSessionId();
   let planSlug = getPlanSlug(sessionId);
@@ -913,7 +913,7 @@ function getSlugFromLog(log) {
   if (validSlug === undefined && invalidSlug !== undefined) logInvalidPlanSlug("getSlugFromLog", invalidSlug);
   return validSlug;
 }
-//@ chunk-82kqcve8.js:192620-193494 facade-exports = copyPlanForResume (0.822)
+//@ chunk-82kqcve8.js:192620-193494 facade-exports (2.1.88 match: copyPlanForResume, 0.822)
 /**
  * resume 时把原会话的计划文件复制到新会话 slug 下，缺失时从消息中恢复。
  */
@@ -976,7 +976,7 @@ async function copyPlanForResume(log, targetSessionId, storageV5) {
     return false;
   }
 }
-//@ chunk-82kqcve8.js:193494-194413 layout = copyPlanForResume (0.785)
+//@ chunk-82kqcve8.js:193494-194413 layout (2.1.88 match: copyPlanForResume, 0.785)
 async function copyPlanForResume_2(storageV5, log, slug) {
   let fileName = `${slug}.md`;
   let observation = planFiles().observePlanFile(fileName);
@@ -1088,7 +1088,7 @@ async function copyPlanForForkViaStorage(storageV5, planName, planSlug) {
     else notePlanFileForgotten(targetPath);
   }
 }
-//@ chunk-82kqcve8.js:195246-195811 fingerprint = recoverPlanFromMessages (1)
+//@ chunk-82kqcve8.js:195246-195811 fingerprint (2.1.88 match: recoverPlanFromMessages, 1)
 /**
  * 从 ExitPlanMode 工具调用或计划附件中恢复计划内容。
  */
@@ -1126,7 +1126,7 @@ function recoverPlanFromMessages(log) {
   }
   return null;
 }
-//@ chunk-82kqcve8.js:195811-196201 fingerprint = findFileSnapshotEntry (0.924)
+//@ chunk-82kqcve8.js:195811-196201 fingerprint (2.1.88 match: findFileSnapshotEntry, 0.924)
 function findFileSnapshotEntry(messages, key) {
   let entries = [...messages.messages, ...(messages.fileSnapshots ?? [])];
   for (let i = entries.length - 1; i >= 0; i--) {
@@ -1158,7 +1158,7 @@ var PLAN_SNAPSHOT_MAX_CHARS = 2000000;
 function isValidPlanContent(content) {
   return typeof content === "string" && content.length > 0 && content.length <= PLAN_SNAPSHOT_MAX_CHARS;
 }
-//@ chunk-82kqcve8.js:237342-237506 fingerprint = getPlanFilePath (1)
+//@ chunk-82kqcve8.js:237342-237506 fingerprint (2.1.88 match: getPlanFilePath, 1)
 /**
  * 计划文件路径：<计划目录>/<slug>.md，子代理为 <slug>-agent-<id>.md。
  */
@@ -1186,7 +1186,7 @@ function hostOwnedInputFieldSet(toolName, input) {
     ? undefined
     : API_STRIPPED_INPUT_FIELDS.get(toolName);
 }
-//@ chunk-e6aww6q8.js:1501827-1502265 fingerprint = persistFileSnapshotIfRemote (0.807)
+//@ chunk-e6aww6q8.js:1501827-1502265 fingerprint (2.1.88 match: persistFileSnapshotIfRemote, 0.807)
 async function persistFileSnapshotIfRemote(storageV5) {
   if (getEnvironmentKind() === null) return;
   try {
@@ -1229,7 +1229,7 @@ function getPlanWithPath(agentId) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:4329866-4330013 fingerprint = getPlan (1)
+//@ chunk-e6aww6q8.js:4329866-4330013 fingerprint (2.1.88 match: getPlan, 1)
 function getPlan_2() {
   if (isDiskless()) return null;
   let fsImplementation = getFsImplementation();

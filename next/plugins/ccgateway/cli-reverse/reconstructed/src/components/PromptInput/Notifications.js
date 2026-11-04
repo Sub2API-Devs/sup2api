@@ -99,7 +99,7 @@ import { FooterSlot } from "../FullscreenLayout.js";
 import { mergeClients } from "../../hooks/useMergedClients.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8jypjjdf.js:20372-20520 placement = _temp2 (0.843)
+//@ chunk-8jypjjdf.js:20372-20520 placement (2.1.88 match: _temp2, 0.843)
 function ToastText(props) {
   let $ = useMemoCache(2);
   let { text } = props;
@@ -116,7 +116,7 @@ function ToastText(props) {
   } else textElement = $[1];
   return textElement;
 }
-//@ chunk-8jypjjdf.js:20520-20697 placement = StyledText (0.767)
+//@ chunk-8jypjjdf.js:20520-20697 placement (2.1.88 match: StyledText, 0.767)
 /**
  * 渲染通知的分段文本（颜色、加粗、可点链接）。
  */
@@ -144,7 +144,7 @@ function SegmentedText({ segments }) {
         );
   });
 }
-//@ chunk-8jypjjdf.js:20697-20743 fingerprint = _temp (1)
+//@ chunk-8jypjjdf.js:20697-20743 fingerprint (2.1.88 match: _temp, 1)
 function selectNotificationsCurrent(s) {
   return s.notifications.current;
 }
@@ -533,7 +533,7 @@ function selectVoiceState(state) {
 function selectVoiceError(state) {
   return state.voiceError;
 }
-//@ chunk-18hwfzwa.js:788022-791970 fingerprint = Notifications (0.62)
+//@ chunk-18hwfzwa.js:788022-791970 fingerprint (2.1.88 match: Notifications, 0.62)
 var NOTIFICATION_TIMEOUT_MS; // deferred: uses getContextTokenCount (../../utils/tokens.js) of its import cycle while loading; runs once the cycle is complete
 var Notifications;
 deferInit("chunk-18hwfzwa.js:788022", () => {
@@ -886,7 +886,7 @@ deferInit("chunk-18hwfzwa.js:788022", () => {
     return footer;
   });
 });
-//@ chunk-18hwfzwa.js:791970-794488 fingerprint = NotificationContent (0.431)
+//@ chunk-18hwfzwa.js:791970-794488 fingerprint (2.1.88 match: NotificationContent, 0.431)
 /**
  * 通知内容：语音 recording/processing、apiKeyHelper 慢、"Now using usage credits"、IDE 状态等按类型渲染；无通知时显示其他状态。
  */

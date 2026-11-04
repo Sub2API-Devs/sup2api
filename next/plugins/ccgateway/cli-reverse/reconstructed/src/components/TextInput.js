@@ -25,7 +25,7 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { BaseTextInput } from "./BaseTextInput.js";
 import { Box } from "../ink/components/Text.js";
 
-//@ chunk-7p2hc4jn.js:50977-51058 fingerprint = BARS (1)
+//@ chunk-7p2hc4jn.js:50977-51058 fingerprint (2.1.88 match: BARS, 1)
 var VOICE_LEVEL_BARS = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
 var CURSOR_BLINK_ON_RATIO = 0.7;
 var CURSOR_BLINK_PERIOD = 1.8;
@@ -42,7 +42,7 @@ function identity(value) {
 function identity_2(value) {
   return value;
 }
-//@ chunk-81qqq1aq.js:7116-10954 fingerprint = TextInput (0.667)
+//@ chunk-81qqq1aq.js:7116-10954 fingerprint (2.1.88 match: TextInput, 0.667)
 /**
  * 普通输入框：调用 useTextInput，渲染 BaseTextInput；语音录音时显示电平条。
  */

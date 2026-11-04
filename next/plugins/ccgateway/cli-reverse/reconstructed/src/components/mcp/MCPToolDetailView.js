@@ -27,7 +27,7 @@ import { ParenHint } from "../diff/DiffDetailView.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:26449-26810 callgraph-fingerprint = _temp (0.594)
+//@ chunk-vrb44rx7.js:26449-26810 callgraph-fingerprint (2.1.88 match: _temp, 0.594)
 /**
  * 返回提示：等待二次按键时“再按一次返回”，否则显示 Esc 返回快捷键。
  */
@@ -68,7 +68,7 @@ deferInit("chunk-vrb44rx7.js:30172", () => {
 //@ chunk-vrb44rx7.js:30176-30195 layout
 var TOOL_DETAIL_REFRESH_MS = 1000;
 var TOOL_DETAIL_MIN_MS = 200;
-//@ chunk-vrb44rx7.js:30195-33767 fingerprint = MCPToolDetailView (0.553)
+//@ chunk-vrb44rx7.js:30195-33767 fingerprint (2.1.88 match: MCPToolDetailView, 0.553)
 function MCPToolDetailView(props) {
   let $ = useMemoCache(50);
   let { tool, server, onBack } = props;

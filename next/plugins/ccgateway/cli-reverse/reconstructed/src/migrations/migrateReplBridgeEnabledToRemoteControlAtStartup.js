@@ -11,7 +11,7 @@
 import { saveGlobalConfig } from "../utils/config.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-cjydagjy.js:10767-11037 fingerprint = migrateReplBridgeEnabledToRemoteControlAtStartup (0.628)
+//@ chunk-cjydagjy.js:10767-11037 fingerprint (2.1.88 match: migrateReplBridgeEnabledToRemoteControlAtStartup, 0.628)
 /**
  * 迁移：全局配置 replBridgeEnabled → remoteControlAtStartup。
  */

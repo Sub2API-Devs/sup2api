@@ -26,7 +26,7 @@ import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTel
 
 //@ chunk-e6aww6q8.js:807506-807522 affinity
 var MAX_OUTPUT_STYLE_FILE_BYTES = 1048576;
-//@ chunk-e6aww6q8.js:807522-807667 fingerprint = loadOutputStylesFromDirectory (0.836)
+//@ chunk-e6aww6q8.js:807522-807667 fingerprint (2.1.88 match: loadOutputStylesFromDirectory, 0.836)
 async function loadOutputStylesFromDirectory(outputStylesPath, pluginName, loadedPaths) {
   let styles = [];
   await walkPluginMarkdown(
@@ -42,7 +42,7 @@ async function loadOutputStylesFromDirectory(outputStylesPath, pluginName, loade
   );
   return styles;
 }
-//@ chunk-e6aww6q8.js:807667-808295 fingerprint = loadOutputStyleFromFile (0.603)
+//@ chunk-e6aww6q8.js:807667-808295 fingerprint (2.1.88 match: loadOutputStyleFromFile, 0.603)
 async function loadOutputStyleFromFile(filePath, pluginName) {
   let fs = getFsImplementation();
   try {
@@ -80,7 +80,7 @@ async function loadOutputStyleFromFile(filePath, pluginName) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:808295-809547 fingerprint = loadPluginOutputStyles (0.873)
+//@ chunk-e6aww6q8.js:808295-809547 fingerprint (2.1.88 match: loadPluginOutputStyles, 0.873)
 /**
  * 加载所有启用插件的输出样式（output-styles/ 或 manifest.outputStyles 下的 markdown），缓存在全局 outputStyles。
  */

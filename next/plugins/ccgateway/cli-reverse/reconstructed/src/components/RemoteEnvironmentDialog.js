@@ -40,7 +40,7 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:589975-590211 fingerprint = _temp (0.491)
+//@ chunk-s61vbvea.js:589975-590211 fingerprint (2.1.88 match: _temp, 0.491)
 /**
  * 本地会话的计算机与目录是否一致。
  */
@@ -68,7 +68,7 @@ function renderParagraph(children, key) {
     key,
   );
 }
-//@ chunk-18hwfzwa.js:1100715-1101521 fingerprint = SingleEnvironmentContent (0.394)
+//@ chunk-18hwfzwa.js:1100715-1101521 fingerprint (2.1.88 match: SingleEnvironmentContent, 0.394)
 function SingleEnvironmentContent(props) {
   let $ = useMemoCache(17);
   let { title, paragraphs, onDone } = props;
@@ -152,10 +152,10 @@ deferInit("chunk-zj31az9x.js:14567", () => {
 function isKnownEnvironment(environment) {
   return !isSelfHostedPoolEnv(environment);
 }
-//@ chunk-zj31az9x.js:14600-14688 fingerprint = SETUP_HINT (0.667)
+//@ chunk-zj31az9x.js:14600-14688 fingerprint (2.1.88 match: SETUP_HINT, 0.667)
 var SELECT_ENV_TITLE = "Select remote environment";
 var CONFIGURE_ENV_HINT = "Configure environments at: https://claude.ai/code";
-//@ chunk-zj31az9x.js:14688-17534 fingerprint = RemoteEnvironmentDialog (0.465)
+//@ chunk-zj31az9x.js:14688-17534 fingerprint (2.1.88 match: RemoteEnvironmentDialog, 0.465)
 /**
  * 远程环境选择：拉取环境列表，单个时确认、多个时选择并可设为默认（userSettings）。
  */
@@ -431,7 +431,7 @@ function renderEnvironmentItem(environment, key) {
     isPool,
   );
 }
-//@ chunk-zj31az9x.js:17749-19855 fingerprint = MultipleEnvironmentsContent (0.508)
+//@ chunk-zj31az9x.js:17749-19855 fingerprint (2.1.88 match: MultipleEnvironmentsContent, 0.508)
 function MultipleEnvironmentsContent(props) {
   let $ = useMemoCache(38);
   let {

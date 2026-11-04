@@ -410,7 +410,7 @@ function unrefStream(stream) {
 function isWritablePipe(pipeOut) {
   return pipeOut !== null && typeof pipeOut === "object" && "write" in pipeOut;
 }
-//@ chunk-8wvtd8sr.js:170073-170147 placement = isFileReadDenied (1)
+//@ chunk-8wvtd8sr.js:170073-170147 placement (2.1.88 match: isFileReadDenied, 1)
 function isFileReadDenied(pipeIn) {
   return pipeIn !== null && typeof pipeIn === "object" && "on" in pipeIn && "read" in pipeIn;
 }

@@ -47,7 +47,7 @@ function isSetFlagWithA(flag) {
 function hasAnyLowerShortFlag(flag, letters) {
   return /^-[a-z]+$/.test(flag) && [...letters].some((letter) => flag.includes(letter));
 }
-//@ chunk-r01896cg.js:824-1074 callgraph-fingerprint = COMMAND_TYPES (0.252)
+//@ chunk-r01896cg.js:824-1074 callgraph-fingerprint (2.1.88 match: COMMAND_TYPES, 0.252)
 var MAX_COMMAND_LENGTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DECLARATION_COMMANDS;
 var ARGUMENT_TYPES;
@@ -60,7 +60,7 @@ deferInit("chunk-r01896cg.js:824", () => {
   SUBSTITUTION_TYPES = new Set(["command_substitution", "process_substitution"]);
   COMMAND_TYPES = new Set(["command", "declaration_command"]);
 });
-//@ chunk-r01896cg.js:1074-1275 facade-exports = parseCommand (1)
+//@ chunk-r01896cg.js:1074-1275 facade-exports (2.1.88 match: parseCommand, 1)
 /**
  * 解析命令得到 {rootNode, envVars, commandNode, originalCommand}：空串或超过 MAX_COMMAND_LENGTH(10000) 返回 null；用 S_().parse（内置 TS 解析器，带缓存）解析，找第一个 command 节点并提取前导 VAR=val。异常吞掉返回 null。
  */
@@ -81,7 +81,7 @@ async function parseCommand(command) {
     return null;
   }
 }
-//@ chunk-r01896cg.js:1275-1306 facade-exports = PARSE_ABORTED (1)
+//@ chunk-r01896cg.js:1275-1306 facade-exports (2.1.88 match: PARSE_ABORTED, 1)
 /**
  * PARSE_ABORTED 哨兵 Symbol：解析器超时/超预算/超长时由 parseCommandRaw 返回，parseForSecurityFromAst 见到它即返回 too-complex（nodeType PARSE_ABORT）。
  */
@@ -89,7 +89,7 @@ var PARSE_ABORTED; // deferred: has load-time effects after a deferred statement
 deferInit("chunk-r01896cg.js:1275", () => {
   PARSE_ABORTED = Symbol("parse-aborted");
 });
-//@ chunk-r01896cg.js:1306-1637 facade-exports = parseCommandRaw (1)
+//@ chunk-r01896cg.js:1306-1637 facade-exports (2.1.88 match: parseCommandRaw, 1)
 /**
  * 安全分析用的原始解析：空串返回 null；超长、解析返回 null 或抛异常时上报 tengu_tree_sitter_parse_abort（cmdLength、panic）并返回 PARSE_ABORTED 哨兵。
  */
@@ -120,7 +120,7 @@ async function parseCommandRaw(command) {
     return PARSE_ABORTED;
   }
 }
-//@ chunk-r01896cg.js:1637-2015 facade-exports = findCommandNode (1)
+//@ chunk-r01896cg.js:1637-2015 facade-exports (2.1.88 match: findCommandNode, 1)
 /**
  * 在 AST 中找第一个 command/declaration_command 节点：穿过 pipeline、redirected_statement；variable_assignment 时取父节点中其后的命令节点。
  */
@@ -146,7 +146,7 @@ function findCommandNode(node, parent) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:2015-2211 fingerprint = extractEnvVars (1)
+//@ chunk-r01896cg.js:2015-2211 fingerprint (2.1.88 match: extractEnvVars, 1)
 /**
  * 取 command 节点开头的 VAR=val 文本（遇到 command_name/word 停止）。
  */
@@ -158,7 +158,7 @@ function extractEnvVars(commandNode) {
     else if (child.type === "command_name" || child.type === "word") break;
   return envVars;
 }
-//@ chunk-r01896cg.js:2211-2800 facade-exports = extractCommandArguments (0.89)
+//@ chunk-r01896cg.js:2211-2800 facade-exports (2.1.88 match: extractCommandArguments, 0.89)
 /**
  * 从命令节点提取去引号的参数列表：declaration_command 只返回关键字；遇到命令/进程替换即截断（concatenation 中含替换的命令名保留原文）。供前缀提取与 shell-quote 回退使用。
  */
@@ -203,7 +203,7 @@ function stripQuotes(text) {
     ? text.slice(1, -1)
     : text;
 }
-//@ chunk-38axkkfw.js:4641-4738 fingerprint = SUBSTITUTION_TYPES (0.663)
+//@ chunk-38axkkfw.js:4641-4738 fingerprint (2.1.88 match: SUBSTITUTION_TYPES, 0.663)
 /**
  * 替换类节点类型集合：command_substitution、process_substitution、arithmetic_expansion、subshell。
  */
@@ -237,7 +237,7 @@ function nodeContainsSubstitution(node) {
   if (SUBSTITUTION_STRING_TYPES.has(node.type)) return true;
   return node.children.some(nodeContainsSubstitution);
 }
-//@ chunk-38axkkfw.js:6680-6795 fingerprint = ARGUMENT_TYPES (1)
+//@ chunk-38axkkfw.js:6680-6795 fingerprint (2.1.88 match: ARGUMENT_TYPES, 1)
 /**
  * 参数类节点类型集合（word、string、raw_string、number），以及“含未转义 shell 操作符”和“以未转义反斜杠结尾”两个正则。
  */

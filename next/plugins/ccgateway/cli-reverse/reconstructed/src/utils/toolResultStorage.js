@@ -49,12 +49,12 @@ import { storageErrorCode } from "./storage/storageErrors.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:44789-44812 fingerprint = TOOL_RESULTS_SUBDIR (1)
+//@ chunk-t0gq9gyw.js:44789-44812 fingerprint (2.1.88 match: TOOL_RESULTS_SUBDIR, 1)
 /**
  * 落盘子目录名 "tool-results"。
  */
 var TOOL_RESULTS_SUBDIR = "tool-results";
-//@ chunk-t0gq9gyw.js:44812-44875 placement = getOriginalCwd (0.722)
+//@ chunk-t0gq9gyw.js:44812-44875 placement (2.1.88 match: getOriginalCwd, 0.722)
 function getOriginalCwd(session) {
   return toolResultsDirFor(session.root.id, () => getSessionProject(session.root).originalCwd);
 }
@@ -212,7 +212,7 @@ async function unlinkQuietly(a, b) {
 function isObjectBlock(block) {
   return isPlainObject(block);
 }
-//@ chunk-f25sswmp.js:2019-2135 fingerprint = hasImageBlock (1)
+//@ chunk-f25sswmp.js:2019-2135 fingerprint (2.1.88 match: hasImageBlock, 1)
 /**
  * 是否为合法 base64 image 块。
  */
@@ -221,7 +221,7 @@ function hasImageBlock(content) {
   if (!("type" in content) || content.type !== "image") return false;
   return isBase64ImageBlock(content);
 }
-//@ chunk-f25sswmp.js:2135-2288 placement = isToolResultBlockWithContent (1)
+//@ chunk-f25sswmp.js:2135-2288 placement (2.1.88 match: isToolResultBlockWithContent, 1)
 function isToolResultWithArrayContent(obj) {
   if (typeof obj !== "object" || obj === null) return false;
   if (!("type" in obj) || obj.type !== "tool_result") return false;
@@ -280,7 +280,7 @@ var TRUNCATED_OUTPUT_TAG = "<truncated-output>";
 var TRUNCATED_OUTPUT_CLOSING_TAG = "</truncated-output>";
 var TOOL_RESULT_CLEARED_MESSAGE = "[Old tool result content cleared]";
 var TENGU_VELVET_IBIS = "tengu_velvet_ibis";
-//@ chunk-jcnpfn31.js:1034-1217 callgraph-fingerprint = getPersistenceThreshold (1)
+//@ chunk-jcnpfn31.js:1034-1217 callgraph-fingerprint (2.1.88 match: getPersistenceThreshold, 1)
 /**
  * 单工具落盘阈值：工具声明 maxResultSizeChars 与默认 50000 取小；tengu_velvet_ibis 可按工具名覆盖；跳过聚合预算的工具只受上限。
  */
@@ -326,7 +326,7 @@ function sanitizeToolResultFileStem(id) {
   if (stem === "") return "%";
   return isReservedDeviceName(stem) ? percentEncodeChar(stem.charAt(0)) + stem.slice(1) : stem;
 }
-//@ chunk-jcnpfn31.js:1641-1691 fingerprint = getToolResultPath (1)
+//@ chunk-jcnpfn31.js:1641-1691 fingerprint (2.1.88 match: getToolResultPath, 1)
 /**
  * 落盘文件名 <id>.json（数组内容）或 <id>.txt。
  */
@@ -340,7 +340,7 @@ function getToolResultPath(id, isJson) {
 function getToolResultFilePath(originalCwd, id, isJson) {
   return join(originalCwd, getToolResultPath(id, isJson));
 }
-//@ chunk-jcnpfn31.js:1730-3561 fingerprint = persistToolResult (0.454)
+//@ chunk-jcnpfn31.js:1730-3561 fingerprint (2.1.88 match: persistToolResult, 0.454)
 /**
  * 写出工具结果：宿主存储可用时存入宿主（截断到上限），否则写会话目录 tool-results/<id>.txt|json（排他创建，超 1GB 截断）；返回 {filepath, originalSize, isJson, preview, hasMore, truncatedAtBytes}。
  */
@@ -487,7 +487,7 @@ function buildPersistedOutputMessage(result) {
   return `${PERSISTED_OUTPUT_TAG}
 ${buildLargeToolResultMessage(result)}${PERSISTED_OUTPUT_CLOSING_TAG}`;
 }
-//@ chunk-jcnpfn31.js:3608-4175 fingerprint = buildLargeToolResultMessage (0.576)
+//@ chunk-jcnpfn31.js:3608-4175 fingerprint (2.1.88 match: buildLargeToolResultMessage, 0.576)
 /**
  * 落盘后替换文本："Output too large (X). Full output saved to: <路径>" + 预览（开头或首尾）。
  */
@@ -576,7 +576,7 @@ async function mapAndMaybePersistToolResult(tool, toolUseResult, toolUseID, stor
     storageV5_2,
   );
 }
-//@ chunk-jcnpfn31.js:4899-5050 fingerprint = processToolResultBlock (0.358)
+//@ chunk-jcnpfn31.js:4899-5050 fingerprint (2.1.88 match: processToolResultBlock, 0.358)
 /**
  * 按工具阈值调用 maybePersistLargeToolResult。
  */
@@ -611,7 +611,7 @@ function isToolResultContentEmpty(content) {
       (typeof block.text !== "string" || block.text.trim() === ""),
   );
 }
-//@ chunk-jcnpfn31.js:5286-6260 fingerprint = maybePersistLargeToolResult (0.872)
+//@ chunk-jcnpfn31.js:5286-6260 fingerprint (2.1.88 match: maybePersistLargeToolResult, 0.872)
 /**
  * 单个工具结果处理：空结果替换为 "(<工具> completed with no output)"；超阈值时落盘并换成 <persisted-output> 预览，宿主存储落盘失败则就地截断；记 tengu_tool_result_persisted。
  */
@@ -677,7 +677,7 @@ async function maybePersistLargeToolResult(
     content: message,
   };
 }
-//@ chunk-jcnpfn31.js:6260-6407 fingerprint = generatePreview (1)
+//@ chunk-jcnpfn31.js:6260-6407 fingerprint (2.1.88 match: generatePreview, 1)
 /**
  * 预览：超长时在最后一个换行处截断（换行位置要超过一半），返回 {preview, hasMore}。
  */
@@ -702,7 +702,7 @@ function generatePreview(content, maxBytes) {
 function isPersistError(result) {
   return "error" in result;
 }
-//@ chunk-jcnpfn31.js:6440-6500 fingerprint = createContentReplacementState (1)
+//@ chunk-jcnpfn31.js:6440-6500 fingerprint (2.1.88 match: createContentReplacementState, 1)
 /**
  * 新建 contentReplacementState {seenIds:Set, replacements:Map}。
  */
@@ -712,7 +712,7 @@ function createContentReplacementState() {
     replacements: new Map(),
   };
 }
-//@ chunk-jcnpfn31.js:6500-6588 layout = createContentReplacementState (1)
+//@ chunk-jcnpfn31.js:6500-6588 layout (2.1.88 match: createContentReplacementState, 1)
 /**
  * 复制替换状态（分叉/子代理用）。
  */
@@ -722,7 +722,7 @@ function cloneContentReplacementState(source) {
     replacements: new Map(source.replacements),
   };
 }
-//@ chunk-jcnpfn31.js:6588-6686 fingerprint = provisionContentReplacementState (1)
+//@ chunk-jcnpfn31.js:6588-6686 fingerprint (2.1.88 match: provisionContentReplacementState, 1)
 /**
  * tengu_hawthorn_steeple 开启时为会话准备替换状态：有历史则重建，否则新建。
  */
@@ -775,7 +775,7 @@ function wasToolResultKeptInFull(messages, toolUseId) {
 function exceedsPersistThreshold(block, threshold) {
   return !hasMediaContent(block) && getToolResultTextLength(block) > threshold;
 }
-//@ chunk-jcnpfn31.js:7183-7282 layout = isMedia (1)
+//@ chunk-jcnpfn31.js:7183-7282 layout (2.1.88 match: isMedia, 1)
 /**
  * 内容数组含 image/document 块。
  */
@@ -834,7 +834,7 @@ function getToolResultTextLength(content) {
     0,
   );
 }
-//@ chunk-jcnpfn31.js:7761-7966 layout = countToolCallsSince (1)
+//@ chunk-jcnpfn31.js:7761-7966 layout (2.1.88 match: countToolCallsSince, 1)
 /**
  * 所有 assistant tool_use 的 id → 工具名。
  */
@@ -891,7 +891,7 @@ function collectCandidatesByMessage(messages) {
   flush();
   return groups;
 }
-//@ chunk-jcnpfn31.js:8479-8733 fingerprint = partitionByPriorDecision (1)
+//@ chunk-jcnpfn31.js:8479-8733 fingerprint (2.1.88 match: partitionByPriorDecision, 1)
 /**
  * 按替换状态把候选分为 mustReapply（已替换，需重放）、frozen（已见过、不再动）、fresh（新的）。
  */
@@ -962,7 +962,7 @@ function replaceToolResultContents(messages, replacementMap) {
     };
   });
 }
-//@ chunk-jcnpfn31.js:9256-9438 fingerprint = buildReplacement (0.591)
+//@ chunk-jcnpfn31.js:9256-9438 fingerprint (2.1.88 match: buildReplacement, 0.591)
 /**
  * 落盘一个候选并生成替换文本。
  */
@@ -988,7 +988,7 @@ function getBudgetExemptToolNames(tools) {
     }
   return names;
 }
-//@ chunk-jcnpfn31.js:9623-11298 fingerprint = enforceToolResultBudget (0.888)
+//@ chunk-jcnpfn31.js:9623-11298 fingerprint (2.1.88 match: enforceToolResultBudget, 0.888)
 /**
  * 每组工具结果的聚合预算（200,000 字符）：重放已有替换；新结果超预算时落盘最大的若干个；所有见过的 id 记入 seenIds，保证同一结果的决定不再改变（缓存前缀稳定）；记 tengu_message_level_tool_result_budget_enforced。
  */
@@ -1080,7 +1080,7 @@ async function enforceToolResultBudget(messages, state, storagePath, storageV5, 
     newlyReplaced,
   };
 }
-//@ chunk-jcnpfn31.js:11298-11438 fingerprint = applyToolResultBudget (1)
+//@ chunk-jcnpfn31.js:11298-11438 fingerprint (2.1.88 match: applyToolResultBudget, 1)
 /**
  * applyToolResultBudget：queryLoop 每轮调用；有替换状态时执行 enforceToolResultBudget，新替换通过回调记录到会话存储。
  */
@@ -1090,7 +1090,7 @@ async function applyToolResultBudget(messages, state, storagePath, onPersisted, 
   if (result.newlyReplaced.length > 0) onPersisted?.(result.newlyReplaced);
   return result.messages;
 }
-//@ chunk-jcnpfn31.js:11438-11746 fingerprint = reconstructContentReplacementState (1)
+//@ chunk-jcnpfn31.js:11438-11746 fingerprint (2.1.88 match: reconstructContentReplacementState, 1)
 /**
  * 从对话与存储的替换记录重建替换状态（恢复会话用）。
  */
@@ -1111,7 +1111,7 @@ function reconstructContentReplacementState(messages, records, inheritedReplacem
   }
   return state;
 }
-//@ chunk-jcnpfn31.js:11746-11810 fingerprint = reconstructForSubagentResume (1)
+//@ chunk-jcnpfn31.js:11746-11810 fingerprint (2.1.88 match: reconstructForSubagentResume, 1)
 /**
  * 子代理恢复时以父替换为补充重建状态。
  */
@@ -1131,7 +1131,7 @@ function formatStorageWriteError(error, path) {
   syntheticError.path = path;
   return getFileSystemErrorMessage(syntheticError);
 }
-//@ chunk-jcnpfn31.js:11959-12393 fingerprint = getFileSystemErrorMessage (1)
+//@ chunk-jcnpfn31.js:11959-12393 fingerprint (2.1.88 match: getFileSystemErrorMessage, 1)
 /**
  * 文件系统错误码 → 可读文本（ENOENT/EACCES/ENOSPC/EROFS/EMFILE/EEXIST）。
  */

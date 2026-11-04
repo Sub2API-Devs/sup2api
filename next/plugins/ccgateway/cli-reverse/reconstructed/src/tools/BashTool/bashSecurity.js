@@ -32,7 +32,7 @@ import { BashTool } from "./BashTool.js";
 import { isAbortError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-82kqcve8.js:282090-282356 fingerprint = validateShellMetacharacters (1)
+//@ chunk-82kqcve8.js:282090-282356 fingerprint (2.1.88 match: validateShellMetacharacters, 1)
 /**
  * 对一组路径/项逐个调用检查函数（passthrough 时再试替代形式）：任一 deny 返回 deny，有非 allow 返回 passthrough，全部 allow 返回第一个 allow。
  */
@@ -59,7 +59,7 @@ function requireAllAllowed(pathsToCheck, checkPath, context) {
     }
   );
 }
-//@ chunk-e6aww6q8.js:1046433-1047016 callgraph-fingerprint = validateEmpty (0.171)
+//@ chunk-e6aww6q8.js:1046433-1047016 callgraph-fingerprint (2.1.88 match: validateEmpty, 0.171)
 /**
  * 命令携带 allowed_domains（沙箱网络放行列表）且 auto 模式分类器可用时，要求分类器复核：返回 safetyCheck 类型的 ask（allow 规则/hook 只批准命令，不批准域名）。
  */
@@ -86,7 +86,7 @@ function askClassifierForAllowedDomains(tool, input, toolUseContext, result) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1117225-1117528 fingerprint = bashCommandIsSafe_DEPRECATED (0.324)
+//@ chunk-e6aww6q8.js:1117225-1117528 fingerprint (2.1.88 match: bashCommandIsSafe_DEPRECATED, 0.324)
 /**
  * 把第二个 safetyCheck 结果的 circuitBreaker/also 合并进第一个的 also 列表（去重、去掉自身）。
  */
@@ -109,7 +109,7 @@ function mergeSafetyCheckAlso(result, otherResult) {
         },
       };
 }
-//@ chunk-e6aww6q8.js:1155016-1155366 fingerprint = validateZshDangerousCommands (0.667)
+//@ chunk-e6aww6q8.js:1155016-1155366 fingerprint (2.1.88 match: validateZshDangerousCommands, 0.667)
 /**
  * 剥离 argv 前缀的 command [-p] / builtin / noglob，返回实际命令 argv。
  */
@@ -131,7 +131,7 @@ function stripCommandBuiltinPrefixes(context) {
       sliced = sliced.slice(1);
     } else return sliced;
 }
-//@ chunk-e6aww6q8.js:1203541-1203787 callgraph-fingerprint = validateNewlines (0.475)
+//@ chunk-e6aww6q8.js:1203541-1203787 callgraph-fingerprint (2.1.88 match: validateNewlines, 0.475)
 /**
  * 判断是否为"普通 ask"（理由为 other 或缺省；子结果都不是硬性 ask），这类 ask 可以被更宽松的读法覆盖。
  */
@@ -146,7 +146,7 @@ function isPlainAsk(context) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:1203787-1203993 layout = validateShellMetacharacters (0.818)
+//@ chunk-e6aww6q8.js:1203787-1203993 layout (2.1.88 match: validateShellMetacharacters, 0.818)
 /**
  * 权限结果严重度：allow(规则)0 / allow 1 / passthrough 2 / 普通 ask 3 / 安全 ask 4 / 硬安全 ask 5 / deny 6；用于两种读法的结果择严。
  */
@@ -166,7 +166,7 @@ function getDecisionSeverity(context) {
       return 6;
   }
 }
-//@ chunk-e6aww6q8.js:1203993-1204114 callgraph-fingerprint = validateGitCommit (0.215)
+//@ chunk-e6aww6q8.js:1203993-1204114 callgraph-fingerprint (2.1.88 match: validateGitCommit, 0.215)
 /**
  * safetyCheck 理由的等级：存在不可降级的安全检查为 2，存在安全检查为 1，否则 0。
  */
@@ -180,7 +180,7 @@ function getSafetyCheckRank(context) {
     return 2;
   return findSafetyCheckReason(context.decisionReason, isBypassImmuneCircuitBreaker) !== undefined ? 1 : 0;
 }
-//@ chunk-e6aww6q8.js:1226675-1227686 callgraph-witnessed = bashCommandIsSafeAsync_DEPRECATED (0.153)
+//@ chunk-e6aww6q8.js:1226675-1227686 callgraph-witnessed (2.1.88 match: bashCommandIsSafeAsync_DEPRECATED, 0.153)
 /**
  * Bash 安全检查入口：先按正常读法跑（XVt），若有 refused 读法差异，再在 refused 模式下跑一遍，按严重度、安全等级择严合并；必要时附加 allowed_domains 分类器复核；检查异常时返回"检查未完成"的 ask。
  */

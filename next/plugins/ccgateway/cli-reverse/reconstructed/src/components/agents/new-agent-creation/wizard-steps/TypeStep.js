@@ -31,7 +31,7 @@ import { deferInit } from "../../../../../runtime/deferred-init.js";
 deferInit("chunk-y6fv30yg.js:14249", () => {
   init_react_production();
 });
-//@ chunk-y6fv30yg.js:14253-15626 fingerprint = TypeStep (0.652)
+//@ chunk-y6fv30yg.js:14253-15626 fingerprint (2.1.88 match: TypeStep, 0.652)
 function TypeStep() {
   let $ = useMemoCache(17);
   let { goBack, goNext, updateWizardData, wizardData } = useWizard();

@@ -17,7 +17,7 @@ import { isInputHoldOn } from "../../plugins/functionHooks/inputHold.js";
 import { buildShellTaskResult } from "./backgroundNotices.js";
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 
-//@ chunk-e6aww6q8.js:2141025-2141937 fingerprint = killTask (0.607)
+//@ chunk-e6aww6q8.js:2141025-2141937 fingerprint (2.1.88 match: killTask, 0.607)
 /**
  * 杀掉运行中的 shell 任务：kill 并清理 shellCommand、标 killed/notified；之前未通知则发 stopped 通知，并（开启时）记录 bash 任务快照；最后回收输出。
  */
@@ -79,7 +79,7 @@ function killTask(taskId, taskRegistry, killOptions) {
     );
   evictTaskOutput(taskId);
 }
-//@ chunk-e6aww6q8.js:2141937-2142159 fingerprint = killShellTasksForAgent (0.685)
+//@ chunk-e6aww6q8.js:2141937-2142159 fingerprint (2.1.88 match: killShellTasksForAgent, 0.685)
 /**
  * 代理退出时杀掉它名下仍在运行的 shell 任务（cause=owner_ended）。
  */

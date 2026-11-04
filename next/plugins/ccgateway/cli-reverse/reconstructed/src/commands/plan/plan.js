@@ -49,7 +49,7 @@ async function renderPlanAnsi(element, options) {
 var PLAN_SAVE_TIMEOUT_MS = 15000;
 var PLAN_EDIT_TIMEOUT_MS = 1e4;
 var MAX_PLAN_CONTENT_CHARS = 1e6;
-//@ chunk-ve85yyeb.js:12861-13455 fingerprint = PlanDisplay (0.464)
+//@ chunk-ve85yyeb.js:12861-13455 fingerprint (2.1.88 match: PlanDisplay, 0.464)
 function PlanDisplay(props) {
   let $ = useMemoCache(10);
   let { planContent, planPath, editorName } = props;
@@ -111,7 +111,7 @@ function PlanDisplay(props) {
   } else t5 = $[9];
   return t5;
 }
-//@ chunk-ve85yyeb.js:13455-16570 fingerprint = call (0.414)
+//@ chunk-ve85yyeb.js:13455-16570 fingerprint (2.1.88 match: call, 0.414)
 /**
  * /plan 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

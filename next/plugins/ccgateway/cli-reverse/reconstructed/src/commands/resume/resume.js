@@ -65,7 +65,7 @@ import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-74n7apcd.js:18584-18588 placement
 init_react_production();
-//@ chunk-74n7apcd.js:18588-18826 fingerprint = resumeHelpMessage (1)
+//@ chunk-74n7apcd.js:18588-18826 fingerprint (2.1.88 match: resumeHelpMessage, 1)
 function resumeHelpMessage(result) {
   switch (result.resultType) {
     case "sessionNotFound":
@@ -74,7 +74,7 @@ function resumeHelpMessage(result) {
       return `Found ${result.count} sessions matching ${sequential.bold(result.arg)}. Please use /resume to pick a specific session.`;
   }
 }
-//@ chunk-74n7apcd.js:19188-21375 fingerprint = ResumeCommand (0.67)
+//@ chunk-74n7apcd.js:19188-21375 fingerprint (2.1.88 match: ResumeCommand, 0.67)
 function ResumeCommand({ onDone, onResume }) {
   let [logs, setLogs] = useState([]);
   let [worktreePaths, setWorktreePaths] = useState([]);
@@ -243,11 +243,11 @@ function ResumeCommand({ onDone, onResume }) {
     onToggleAllProjects,
   });
 }
-//@ chunk-74n7apcd.js:21375-21439 fingerprint = filterResumableSessions (1)
+//@ chunk-74n7apcd.js:21375-21439 fingerprint (2.1.88 match: filterResumableSessions, 1)
 function filterResumableSessions(logs, currentSessionId) {
   return logs.filter((log) => !log.isSidechain && getSessionIdFromLog(log) !== currentSessionId);
 }
-//@ chunk-74n7apcd.js:21439-23794 fingerprint = call (0.595)
+//@ chunk-74n7apcd.js:21439-23794 fingerprint (2.1.88 match: call, 0.595)
 /**
  * /resume 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

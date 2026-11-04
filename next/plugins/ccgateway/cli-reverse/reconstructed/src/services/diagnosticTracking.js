@@ -21,7 +21,7 @@ import { hasAccessToIDEExtensionDiffFeature as hasAccessToIDEExtensionDiffFeatur
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:650328-650353 fingerprint = diagnosticTracker (1)
+//@ chunk-aepeg2w5.js:650328-650353 fingerprint (2.1.88 match: diagnosticTracker, 1)
 var diagnosticTracker; // deferred: uses LogsAPI (../../vendor/@opentelemetry/api-logs/build/esm/api/logs.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-aepeg2w5.js:650328", () => {
   diagnosticTracker = LogsAPI.getInstance();
@@ -70,7 +70,7 @@ function classifyDiagnosticUri(uri) {
     driveLetter === undefined ? "none" : driveLetter === driveLetter.toUpperCase() ? "upper" : "lower";
   return `scheme=${scheme} sep=${separators} enc=${encoding} drive=${driveCase}`;
 }
-//@ chunk-e6aww6q8.js:585941-589557 fingerprint = DiagnosticTrackingService (0.559)
+//@ chunk-e6aww6q8.js:585941-589557 fingerprint (2.1.88 match: DiagnosticTrackingService, 0.559)
 class DiagnosticTrackingService {
   baseline = new Map();
   initialized = false;
@@ -262,7 +262,7 @@ var diagnosticTrackingSlot; // deferred: uses SessionRootSlot (../bootstrap/sess
 deferInit("chunk-e6aww6q8.js:589557", () => {
   diagnosticTrackingSlot = new SessionRootSlot(() => new DiagnosticTrackingService());
 });
-//@ chunk-e6aww6q8.js:589585-589731 placement = formatLocation (0.772)
+//@ chunk-e6aww6q8.js:589585-589731 placement (2.1.88 match: formatLocation, 0.772)
 /**
  * 把诊断（message/severity/source/code/range）拼成去重键（误配名 formatLocation，属 LSP 诊断）。
  */

@@ -1178,6 +1178,8 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 
 **反应式压缩**（prompt too long 之后）：queryLoop 收到被扣住的 `prompt_too_long`/`image_error` 错误时，经 `canReactiveCompact`（`#lJn`，未尝试过、非 compact 来源、自动压缩开、远程会话 bridge 打开）后调 `triggerReactiveCompact` → `tryReactiveCompact` → `runReactiveCompact`（`services/compact/reactiveCompact.ts`，按 API 轮次分组保留尾部、只摘要头部，可回退整段），成功由 `buildReactiveCompactionResult`（`#szr`）组装，迁移 `transition: reactive_compact_retry`（或 `precomputed_compact_swap`）进入下一轮；可有一次“更深一层”压缩（`reactiveCompactDeeperPass`）。失败则把错误交给用户（`tengu_ptl_surfaced_to_user`）。
 
+**手动 `/compact`**（2026-11-04 核对后补充）：命令实现 `commands/compact/compact.js` · `call` 调 `compactViaReactive`，**不走**上面第 3 节的 `compactConversation`。它先跑 PreCompact 钩子（被钩子阻断时返回 `COMPACTION_BLOCKED_BY_HOOK` 开头的原因），再用 `tryReusePrecomputedCompaction` 试着复用预计算好的摘要，没有可复用的就调 `tryReactiveCompact`，结果同样由 `buildReactiveCompactionResult` 组装。`compactConversation` 的调用方只有自动压缩（`services/compact/autoCompact.js`）和进程内队友（`utils/swarm/inProcessRunner.js`）。
+
 ### 4. 压缩提示词（`services/compact/prompt.ts`）
 
 - 结构：`getNoToolsPreamble`（只回文本）+ 正文 + 可选 "Additional Instructions:" + `getNoToolsTrailer`。

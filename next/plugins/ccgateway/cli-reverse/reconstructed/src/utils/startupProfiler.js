@@ -23,7 +23,7 @@ import { getClaudeConfigDir } from "./envUtils.js";
 import { logEvent } from "../services/analytics/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-eweqvj83.js:5658-5729 sole-consumer = DETAILED_PROFILING (0.771)
+//@ chunk-eweqvj83.js:5658-5729 sole-consumer (2.1.88 match: DETAILED_PROFILING, 0.771)
 var PROFILE_STARTUP_ENV; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
 var PROFILE_STARTUP_SAMPLE_RATE;
 var profileStartupSampled;
@@ -53,7 +53,7 @@ deferInit("chunk-eweqvj83.js:5866", () => {
 function getProfilerState() {
   return onProcessRootHost(startupProfilerSlot);
 }
-//@ chunk-eweqvj83.js:5917-8171 callgraph-fingerprint = PHASE_DEFINITIONS (0.213)
+//@ chunk-eweqvj83.js:5917-8171 callgraph-fingerprint (2.1.88 match: PHASE_DEFINITIONS, 0.213)
 /**
  * 启动阶段定义：每个阶段由两个打点名界定（import_time、init_time、settings、mcp…），用于 tengu_startup_perf。
  */
@@ -155,7 +155,7 @@ function profileCheckpoint(mark, { once = false } = {}) {
   if (PROFILE_STARTUP_ENV) memorySnapshots.push(process.memoryUsage());
   return true;
 }
-//@ chunk-eweqvj83.js:8565-9065 fingerprint = getReport (0.962)
+//@ chunk-eweqvj83.js:8565-9065 fingerprint (2.1.88 match: getReport, 0.962)
 function getReport({ memorySnapshots }) {
   if (!PROFILE_STARTUP_ENV) return "Startup profiling not enabled";
   let marks = getPerformance().getEntriesByType("mark");
@@ -201,7 +201,7 @@ function profileReport() {
   });
   profileReport_2(profilerState);
 }
-//@ chunk-eweqvj83.js:9199-9585 fingerprint = profileReport (0.458)
+//@ chunk-eweqvj83.js:9199-9585 fingerprint (2.1.88 match: profileReport, 0.458)
 /**
  * profileReport：CLAUDE_CODE_PROFILE_STARTUP 时把报告写到 ~/.claude/startup-perf/<session>.txt/.json。
  */
@@ -242,7 +242,7 @@ function profileReport_2(profilerState) {
   logForDebugging("Startup profiling report:");
   logForDebugging(getReport(profilerState));
 }
-//@ chunk-eweqvj83.js:9585-9642 fingerprint = getStartupPerfLogPath (1)
+//@ chunk-eweqvj83.js:9585-9642 fingerprint (2.1.88 match: getStartupPerfLogPath, 1)
 function getStartupPerfLogPath() {
   return join(getClaudeConfigDir(), "startup-perf", `${getSessionId()}.txt`);
 }
@@ -250,7 +250,7 @@ function getStartupPerfLogPath() {
 function getStartupPerfJsonPath() {
   return join(getClaudeConfigDir(), "startup-perf", `${getSessionId()}.json`);
 }
-//@ chunk-eweqvj83.js:9700-10605 fingerprint = logStartupPerf (0.415)
+//@ chunk-eweqvj83.js:9700-10605 fingerprint (2.1.88 match: logStartupPerf, 0.415)
 /**
  * logStartupPerf：按阶段计算耗时并上报。
  */
@@ -311,7 +311,7 @@ function reportStartupPerf(
   if (fields === null) return;
   logEvent("tengu_startup_perf", fields);
 }
-//@ chunk-e6aww6q8.js:3788261-3788305 fingerprint = profileCheckpoint (0.723)
+//@ chunk-e6aww6q8.js:3788261-3788305 fingerprint (2.1.88 match: profileCheckpoint, 0.723)
 function profileCheckpoint_2() {
   return process.memoryUsage();
 }

@@ -72,7 +72,7 @@ function noteRefusal() {
   tracker.refused = true;
   return !tracker.accepted;
 }
-//@ chunk-r01896cg.js:3255-3655 facade-majority = VAR_PLACEHOLDER (0.159)
+//@ chunk-r01896cg.js:3255-3655 facade-majority (2.1.88 match: VAR_PLACEHOLDER, 0.159)
 var STRUCTURAL_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SEPARATOR_TYPES;
 var REDIRECTABLE_COMMAND_TYPES;
@@ -167,7 +167,7 @@ function startsWithAnyPlaceholder(argValue) {
     argValue.startsWith(UNCERTAIN_VAR_PLACEHOLDER)
   );
 }
-//@ chunk-r01896cg.js:4153-4961 fingerprint = SAFE_ENV_VARS (0.606)
+//@ chunk-r01896cg.js:4153-4961 fingerprint (2.1.88 match: SAFE_ENV_VARS, 0.606)
 var BARE_VAR_UNSAFE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var STDBUF_SHORT_SEP_RE;
 var STDBUF_SHORT_FUSED_RE;
@@ -242,7 +242,7 @@ deferInit("chunk-r01896cg.js:4153", () => {
   ]);
   DANGEROUS_TYPE_IDS = [...DANGEROUS_NODE_TYPES];
 });
-//@ chunk-r01896cg.js:4961-5054 facade-majority = nodeTypeId (1)
+//@ chunk-r01896cg.js:4961-5054 facade-majority (2.1.88 match: nodeTypeId, 1)
 /**
  * 把节点类型映射为数字 id（未定义 -2、ERROR -1、DANGEROUS_TYPE_IDS 下标+1、其他 0），用于 tengu_bash_ast_too_complex 遥测。
  */
@@ -252,7 +252,7 @@ function nodeTypeId(nodeType) {
   let i = DANGEROUS_TYPE_IDS.indexOf(nodeType);
   return i >= 0 ? i + 1 : 0;
 }
-//@ chunk-r01896cg.js:5054-5653 facade-majority = REDIRECT_OPS (1)
+//@ chunk-r01896cg.js:5054-5653 facade-majority (2.1.88 match: REDIRECT_OPS, 1)
 var REDIRECT_OPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BRACE_EXPANSION_RE;
 var BRACE_ESCAPED_CLOSE_RE;
@@ -489,7 +489,7 @@ function maskBracesInQuotedContexts(cmd) {
   }
   return out.join("");
 }
-//@ chunk-r01896cg.js:7494-7525 callgraph-fingerprint = DOLLAR (1)
+//@ chunk-r01896cg.js:7494-7525 callgraph-fingerprint (2.1.88 match: DOLLAR, 1)
 var DOLLAR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-r01896cg.js:7494", () => {
   DOLLAR = String.fromCharCode(36);
@@ -578,7 +578,7 @@ function parseForSecurityFromAst(command, root, options = {}) {
       }
     : firstPass;
 }
-//@ chunk-r01896cg.js:8451-11790 fingerprint = parseForSecurityFromAst (0.455)
+//@ chunk-r01896cg.js:8451-11790 fingerprint (2.1.88 match: parseForSecurityFromAst, 0.455)
 /**
  * Bash 安全分析核心：先做字节级预检（孤立代理项、控制字符、Unicode 空白、反斜杠空白、zsh ~[ / =cmd / <N-M>、花括号内引号），再查解析中止、反引号扫描异常、顶层语句之间/末尾是否有解析器跳过的字节、fd 变量重定向、重定向形状、结构性解析错误；然后保存/重置模块级分析状态，调用 walkProgram 收集 SimpleCommand。返回 {kind:'simple', commands, bareAssignmentNames, hasLoop, …} 或 {kind:'too-complex', reason, nodeType?, differential?, divergentShape?, keepsRemovalVerdict?}；可附 usesAssignedValue、uncertainWrite、declarationPrefixes。
  */
@@ -829,7 +829,7 @@ function findStructuralParseError(node) {
     ? "[ glued to the next word names another command"
     : null;
 }
-//@ chunk-r01896cg.js:12124-12261 layout = nodeTypeId (1)
+//@ chunk-r01896cg.js:12124-12261 layout (2.1.88 match: nodeTypeId, 1)
 function hasDollarNonAsciiError(nodeType) {
   if (nodeType.type === "ERROR" && (nodeType.text.startsWith("${") || isDollarNonAsciiName(nodeType.text)))
     return true;
@@ -1171,7 +1171,7 @@ function checkDeclarationOperands(node) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:19184-19657 placement = DECL_KEYWORDS (0.884)
+//@ chunk-r01896cg.js:19184-19657 placement (2.1.88 match: DECL_KEYWORDS, 0.884)
 /**
  * 声明类命令的正则与选项规则：前缀包装（builtin/command/exec/time/coproc/noglob/nocorrect/-）、声明命令名、declare/export 会改变语义的标志字母，以及 declare/typeset/local/export/readonly 的赋值型与列出型选项。
  */
@@ -1307,7 +1307,7 @@ deferInit("chunk-r01896cg.js:21563", () => {
   ]);
   EXPANSION_MASK = "$_";
 });
-//@ chunk-r01896cg.js:21689-22087 placement = mk (0.834)
+//@ chunk-r01896cg.js:21689-22087 placement (2.1.88 match: mk, 0.834)
 function maskExpansions(node) {
   let ranges = [];
   let walk = (current) => {
@@ -1431,7 +1431,7 @@ deferInit("chunk-r01896cg.js:23870", () => {
 function isLoopBlockedByEnvScrub(node) {
   return LOOP_STATEMENT_TYPES.has(node.type) && isScrubEnabled();
 }
-//@ chunk-r01896cg.js:23970-24387 callgraph-witnessed = walkProgram (0.331)
+//@ chunk-r01896cg.js:23970-24387 callgraph-witnessed (2.1.88 match: walkProgram, 0.331)
 /**
  * 遍历 program：先跑 Tar 预检，再 collectCommands 收集命令与裸赋值名；对每条命令检查 zsh stat -A/-H 与声明上下文（local 在函数外等）。返回 {kind:'simple', commands, bareAssignmentNames, hasLoop}。
  */
@@ -1467,7 +1467,7 @@ function walkProgram(root) {
     hasLoop,
   };
 }
-//@ chunk-r01896cg.js:24387-24554 layout = mk (0.834)
+//@ chunk-r01896cg.js:24387-24554 layout (2.1.88 match: mk, 0.834)
 function isSameLine(parent, left, right) {
   return !Buffer.from(parent.text, "utf8")
     .subarray(left.endIndex - parent.startIndex, right.startIndex - parent.startIndex)
@@ -1475,7 +1475,7 @@ function isSameLine(parent, left, right) {
     .replace(/\\\r?\n/g, "").includes(`
 `);
 }
-//@ chunk-r01896cg.js:24554-24959 layout = extractCompoundStructure (0.753)
+//@ chunk-r01896cg.js:24554-24959 layout (2.1.88 match: extractCompoundStructure, 0.753)
 var STATEMENT_NODE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SCOPED_STATEMENT_TYPES;
 deferInit("chunk-r01896cg.js:24554", () => {
@@ -1540,7 +1540,7 @@ function scanSameLineStatementSplits(node) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:25668-38155 fingerprint = collectCommands (0.636)
+//@ chunk-r01896cg.js:25668-38155 fingerprint (2.1.88 match: collectCommands, 0.636)
 /**
  * 递归收集简单命令（2.1.88 collectCommands 的大幅扩展版）：处理 command、redirected_statement、program/list/pipeline（|| 与 & 分支复制作用域，pipeline 末段外的赋值不外泄）、negated_command、declaration_command（declare/typeset/local/export/readonly 的大量 zsh/bash 分歧检查与变量跟踪）、variable_assignment（执行影响变量、整数属性变量拒绝）、for/while/if（作用域合并与循环变量限制）、subshell、test_command、unset_command；不认识的节点交给 tooComplex。返回 null 表示继续，返回结果对象表示终止。
  */
@@ -2190,7 +2190,7 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
   }
   return tooComplex(node);
 }
-//@ chunk-r01896cg.js:38155-38260 fingerprint = walkTestExpr (0.752)
+//@ chunk-r01896cg.js:38155-38260 fingerprint (2.1.88 match: walkTestExpr, 0.752)
 var TEST_EXPRESSION_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-r01896cg.js:38155", () => {
   TEST_EXPRESSION_TYPES = new Set([
@@ -2600,7 +2600,7 @@ function mergeScopeAfterConditional(varScope, snapshot) {
     }
   for (let key of snapshot.keys()) if (!varScope.has(key)) varScope.set(key, UNCERTAIN_VAR_PLACEHOLDER);
 }
-//@ chunk-r01896cg.js:44179-45723 fingerprint = walkRedirectedStatement (0.821)
+//@ chunk-r01896cg.js:44179-45723 fingerprint (2.1.88 match: walkRedirectedStatement, 0.821)
 /**
  * 处理 redirected_statement：分离 file/heredoc 重定向与内层命令；内层是 a && b 的 list 时分两段收集；随后解析每个文件重定向、检查重定向读前缀变量、校验 heredoc，并把重定向挂到最后一条命令上（无命令时推入空 argv 命令）。
  */
@@ -2829,7 +2829,7 @@ function describeFdVariable(text) {
   let safeName = /^\w{1,64}$/.test(name) ? name : "\u2026";
   return text[name.length + 1] === "[" ? `{${safeName}[\u2026]}` : `{${safeName}}`;
 }
-//@ chunk-r01896cg.js:47557-47918 layout = mk (1)
+//@ chunk-r01896cg.js:47557-47918 layout (2.1.88 match: mk, 1)
 /**
  * 在子树中找 {name}> / {name}< 形式的 fd 变量重定向，返回其文本（会给 shell 变量赋值，属副作用）。
  */
@@ -2893,7 +2893,7 @@ function findRedirectShapeError(node) {
     }
   return null;
 }
-//@ chunk-r01896cg.js:48514-51279 fingerprint = walkFileRedirect (0.464)
+//@ chunk-r01896cg.js:48514-51279 fingerprint (2.1.88 match: walkFileRedirect, 0.464)
 /**
  * 解析单个 file_redirect 为 {op, target, fd, targetSourceLiteral}：拒绝 fd 变量、关闭 fd 后跟词、多目标、>& 后以 - 开头、含花括号/替换的目标、含命令替换输出/换行/以 ! 或 = 开头的目标，以及 >& 后非简单路径。
  */
@@ -3839,7 +3839,7 @@ function consumeReExpansionBudget(node) {
   reExpansionBudget -= node.text.length;
   return true;
 }
-//@ chunk-r01896cg.js:64080-66702 fingerprint = walkCommand (0.699)
+//@ chunk-r01896cg.js:64080-66702 fingerprint (2.1.88 match: walkCommand, 0.699)
 /**
  * 把一个 command 节点变成 SimpleCommand：逐子节点处理前缀赋值（同命令内前缀互相引用即拒绝）、command_name（环境清洗开启时命令名不能是变量）、参数（以 - 开头且含运行期内容拒绝）、$var、file/herestring 重定向；之后检查重定向读前缀变量、按命令更新变量作用域（applyCommandVariableWrites）。text 字段在含 $ 或换行时用重新加引号的 argv 重建。
  */
@@ -4106,7 +4106,7 @@ function walkCommandSubstitution(node, innerCommands, varScope, bareAssignmentNa
   if (sawContent && innerCommands.length === innerCommandCount) pushTrueCommand(innerCommands, node);
   return null;
 }
-//@ chunk-r01896cg.js:67903-70413 fingerprint = walkArgument (0.634)
+//@ chunk-r01896cg.js:67903-70413 fingerprint (2.1.88 match: walkArgument, 0.634)
 /**
  * 把参数节点解析成字符串：word（拒绝花括号展开、转义花括号、漏解析的 $ 或反引号、被吞的引号）、number、raw_string、string、concatenation（拒绝子节点间遗漏字节、zsh $name[expr]）、算术展开（返回 VAR_PLACEHOLDER）、$var；其余 too-complex。
  */
@@ -4238,7 +4238,7 @@ function walkArgument(node, innerCommands, varScope, bareAssignmentNames) {
       return tooComplex(node);
   }
 }
-//@ chunk-r01896cg.js:70413-73069 fingerprint = walkString (0.51)
+//@ chunk-r01896cg.js:70413-73069 fingerprint (2.1.88 match: walkString, 0.51)
 /**
  * 解析双引号字符串：拼接 string_content，处理 $（拒绝 $[...]、zsh $+ 等前缀标志）、$(cat <<EOF) 安全内联、其他命令替换（递归收集并以 CMDSUB_PLACEHOLDER 代替）、$var（按作用域取值）、算术展开；子节点间间隙含反引号时拒绝。
  */
@@ -4404,7 +4404,7 @@ function walkString(node, innerCommands, varScope, bareAssignmentNames) {
 //@ chunk-r01896cg.js:73069-73190 layout
 var ARITH_LITERAL_TOKEN_RE =
   /^(?:[0-9]+|0[xX][0-9a-fA-F]+|[0-9]+#[0-9a-zA-Z]+|[-+*/%^&|~!<>=?:(),]+|<<|>>|\*\*|&&|\|\||[<>=!]=|\$\(\(|\)\))$/;
-//@ chunk-r01896cg.js:73190-73619 fingerprint = walkArithmetic (1)
+//@ chunk-r01896cg.js:73190-73619 fingerprint (2.1.88 match: walkArithmetic, 1)
 /**
  * 校验算术展开：叶子只能是数字字面量或运算符，引用变量即 too-complex。
  */
@@ -4451,7 +4451,7 @@ function containsArithmeticExpansion(child) {
   for (let child_2 of child.children) if (child_2 && containsArithmeticExpansion(child_2)) return true;
   return false;
 }
-//@ chunk-r01896cg.js:73834-74513 fingerprint = extractSafeCatHeredoc (0.925)
+//@ chunk-r01896cg.js:73834-74513 fingerprint (2.1.88 match: extractSafeCatHeredoc, 0.925)
 /**
  * 识别 $(cat <<'EOF' … EOF) 这种安全的字面量替换：只含一个 cat 命令和一个合法 heredoc 时返回正文；正文含 /proc/*\/environ 或危险 awk 程序时返回 'DANGEROUS'；否则 null。
  */
@@ -4487,7 +4487,7 @@ function extractSafeCatHeredoc(subNode) {
   if (awkProgramHasExecBridge(body) !== false) return "DANGEROUS";
   return body;
 }
-//@ chunk-r01896cg.js:74513-76097 fingerprint = walkVariableAssignment (0.966)
+//@ chunk-r01896cg.js:74513-76097 fingerprint (2.1.88 match: walkVariableAssignment, 0.966)
 /**
  * 解析 NAME=value / NAME+=value：命令替换值记为 CMDSUB_PLACEHOLDER，$var 按作用域解析，其余经 walkArgument；返回 {name, value, isAppend} 或 too-complex。
  */
@@ -4631,7 +4631,7 @@ deferInit("chunk-r01896cg.js:76097", () => {
     "RPROMPT2",
   ]);
 });
-//@ chunk-r01896cg.js:76691-77367 fingerprint = resolveSimpleExpansion (0.525)
+//@ chunk-r01896cg.js:76691-77367 fingerprint (2.1.88 match: resolveSimpleExpansion, 0.525)
 /**
  * 解析 $var：作用域里有值时返回值（不确定值→too-complex+divergentShape；动态变量只在引号内且是安全环境变量时返回占位符；裸用时空值或含空白/通配的值拒绝）；HOME 取本机 homedir；引号内的安全环境变量与特殊变量返回 VAR_PLACEHOLDER；其余 too-complex。
  */
@@ -4995,7 +4995,7 @@ function mergeScopeInto(target, branchScope) {
   }
   for (let key of target.keys()) if (!branchScope.has(key)) markVarUnknown(target, key);
 }
-//@ chunk-r01896cg.js:81650-81885 fingerprint = applyVarToScope (1)
+//@ chunk-r01896cg.js:81650-81885 fingerprint (2.1.88 match: applyVarToScope, 1)
 /**
  * 把赋值写入变量作用域：分支内或值冲突时标为未知（VAR_PLACEHOLDER），+= 累加，否则覆盖。
  */
@@ -5056,7 +5056,7 @@ function findReferencedVar(child, names) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:82512-82897 fingerprint = tooComplex (0.518)
+//@ chunk-r01896cg.js:82512-82897 fingerprint (2.1.88 match: tooComplex, 0.518)
 /**
  * 把无法分析的节点转成 too-complex：ERROR 节点按是否为 $+非 ASCII 给不同理由，其他类型用 DANGEROUS_TYPES 中的中文化描述（如“A nested command”）。
  */
@@ -5077,7 +5077,7 @@ function tooComplex(node) {
     nodeType: node.type,
   };
 }
-//@ chunk-r01896cg.js:82897-83970 fingerprint = DANGEROUS_TYPES (0.478)
+//@ chunk-r01896cg.js:82897-83970 fingerprint (2.1.88 match: DANGEROUS_TYPES, 0.478)
 /**
  * 节点类型 → 用户可读描述（A variable、A nested command、A here-document…），tooComplex 生成理由时使用。
  */
@@ -5268,7 +5268,7 @@ function zshStatWritesVarReason(commandName, args) {
     ? "'stat' with -A or -H \u2014 zsh's stat builtin stores its result in the variable that option names, so a tracked value cannot be statically verified"
     : null;
 }
-//@ chunk-r01896cg.js:85388-85787 facade-majority = ZSH_DANGEROUS_BUILTINS (0.649)
+//@ chunk-r01896cg.js:85388-85787 facade-majority (2.1.88 match: ZSH_DANGEROUS_BUILTINS, 0.649)
 /**
  * zsh 危险内建集合（zmodload、emulate、sysopen、zpty、ztcp、zf_rm……、setopt、autoload，以及会写变量的内建），checkSemantics 遇到即拒绝；同一语句定义 find 的执行/写类动作集合 FIND_EXEC_ACTIONS（-exec、-delete、-fprint 等）。
  */
@@ -5395,7 +5395,7 @@ function findWordTakesFlagValue(word) {
 function isAmbiguousFindWord(word) {
   return FIND_ACTION_FLAG_RE.test(word);
 }
-//@ chunk-r01896cg.js:86499-86734 facade-majority = EVAL_LIKE_BUILTINS (0.812)
+//@ chunk-r01896cg.js:86499-86734 facade-majority (2.1.88 match: EVAL_LIKE_BUILTINS, 0.812)
 /**
  * eval 类内建集合（eval、source、.、exec、trap、alias、let、mapfile、bind、complete……），这类命令的参数会被当成代码执行；同时定义 awk 程序名集合，以及 awk 读取程序文件的选项正则。
  */
@@ -5738,7 +5738,7 @@ deferInit("chunk-r01896cg.js:90297", () => {
   PROC_ENVIRON_RE = /\/proc\/.*\/environ/;
   NEWLINE_HASH_RE = /\n\s*#/;
 });
-//@ chunk-r01896cg.js:90558-103152 facade-majority = checkSemantics (0.488)
+//@ chunk-r01896cg.js:90558-103152 facade-majority (2.1.88 match: checkSemantics, 0.488)
 /**
  * 对 simple 结果做语义检查（2.1.88 checkSemantics 的扩展）：先剥去 time/nohup/timeout/nice/env/stdbuf/command/builtin/noglob/xargs 包装（参数不规范即拒绝），再检查命令名为空/占位符/片段、test -v 等下标求值、eval 类内建、zsh 危险内建、awk 危险程序、find -exec 类、shell 关键字作命令名、/proc/*\/environ、换行后 #（kind:'newline-hash'）等。返回 {ok:true} 或 {ok:false, reason, kind?}。
  */
@@ -6334,7 +6334,7 @@ function checkSemantics(commands, options) {
     ok: true,
   };
 }
-//@ chunk-38axkkfw.js:4923-5089 fingerprint = walkHeredocRedirect (0.627)
+//@ chunk-38axkkfw.js:4923-5089 fingerprint (2.1.88 match: walkHeredocRedirect, 0.627)
 /**
  * 重定向相关的操作符与节点类型集合（< > >> << <<- <<< <& >& &> &>> >| 以及 file_descriptor、heredoc_*），判断重定向子节点是否只含这些记号。
  */
@@ -6361,7 +6361,7 @@ deferInit("chunk-38axkkfw.js:4923", () => {
     "heredoc_end",
   ]);
 });
-//@ chunk-e6aww6q8.js:1144304-1144468 fingerprint = parseForSecurity (0.861)
+//@ chunk-e6aww6q8.js:1144304-1144468 fingerprint (2.1.88 match: parseForSecurity, 0.861)
 /**
  * 快速判断命令是否含 zsh 危险命令：能安全解析时用 AST argv，否则用 splitCommand + tryParseShellCommand 回退，逐条交给 validateZshDangerousCommands。
  */
@@ -6374,7 +6374,7 @@ function hasZshDangerousCommand(cmd) {
       : splitCommand(cmd).map(getCommandArgv)
   ).some((argv) => isXargsToSafeFilter(stripCommandBuiltinPrefixes(argv)));
 }
-//@ chunk-e6aww6q8.js:1151910-1151949 fingerprint = walkHerestringRedirect (1)
+//@ chunk-e6aww6q8.js:1151910-1151949 fingerprint (2.1.88 match: walkHerestringRedirect, 1)
 var INPUT_REDIRECT_OPS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-e6aww6q8.js:1151910", () => {
   INPUT_REDIRECT_OPS_2 = new Set(["<", "<<", "<<<", "<&"]);
@@ -6402,7 +6402,7 @@ function hasSubshellNode(node) {
   for (let child of node.children) if (child && hasSubshellNode(child)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:1155651-1155721 fingerprint = STRUCTURAL_TYPES (1)
+//@ chunk-e6aww6q8.js:1155651-1155721 fingerprint (2.1.88 match: STRUCTURAL_TYPES, 1)
 /**
  * 结构性节点类型集合：program、list、pipeline、redirected_statement，遍历时只下钻不当作命令。
  */
@@ -6410,7 +6410,7 @@ var STRUCTURAL_TYPES_2; // deferred: has load-time effects after a deferred stat
 deferInit("chunk-e6aww6q8.js:1155651", () => {
   STRUCTURAL_TYPES_2 = new Set(["program", "list", "pipeline", "redirected_statement"]);
 });
-//@ chunk-jxcqr1hv.js:657-705 fingerprint = BARE_SUBSCRIPT_NAME_BUILTINS (0.702)
+//@ chunk-jxcqr1hv.js:657-705 fingerprint (2.1.88 match: BARE_SUBSCRIPT_NAME_BUILTINS, 0.702)
 function BARE_SUBSCRIPT_NAME_BUILTINS_2(fallback) {
   return unattendedServingConsentView() !== "unset" || unattendedServingConsentMayHoldYes() || fallback;
 }

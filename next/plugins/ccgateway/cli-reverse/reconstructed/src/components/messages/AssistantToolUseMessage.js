@@ -76,11 +76,11 @@ function useClassifierChecking(host) {
 function isClassifierChecking(id) {
   return useAppStateSlice((state) => state.classifierApprovals.checking.has(id)) ?? false;
 }
-//@ chunk-ah34pb7m.js:66292-66339 affinity = _temp (1)
+//@ chunk-ah34pb7m.js:66292-66339 affinity (2.1.88 match: _temp, 1)
 function selectPendingWorkerRequest_2(state) {
   return state.pendingWorkerRequest;
 }
-//@ chunk-ah34pb7m.js:66339-66392 callgraph-fingerprint = _temp2 (1)
+//@ chunk-ah34pb7m.js:66339-66392 callgraph-fingerprint (2.1.88 match: _temp2, 1)
 function selectPermissionMode(state) {
   return state.toolPermissionContext.mode;
 }
@@ -197,7 +197,7 @@ function ToolUseStatusDot(props) {
   } else containerElement = $[28];
   return actionKeysNamespace.useRenderHook(rowElement, containerElement);
 }
-//@ chunk-ah34pb7m.js:67780-76484 fingerprint = AssistantToolUseMessage (0.537)
+//@ chunk-ah34pb7m.js:67780-76484 fingerprint (2.1.88 match: AssistantToolUseMessage, 0.537)
 /**
  * 工具调用消息：根据 lookups 判定状态（排队/运行/等待权限/已完成/失败/已停止），显示 ToolUseLoader 圆点 + userFacingName + renderToolUseMessage(input)；运行中显示进度消息，排队时显示 renderToolUseQueuedMessage；MCP 工具名 mcp__server__tool 拆开显示。
  */
@@ -1181,7 +1181,7 @@ function ToolResultInline(props) {
   } else resultElementElement = $[45];
   return resultElementElement;
 }
-//@ chunk-ah34pb7m.js:78187-78421 fingerprint = renderToolUseMessage (0.389)
+//@ chunk-ah34pb7m.js:78187-78421 fingerprint (2.1.88 match: renderToolUseMessage, 0.389)
 /**
  * 安全调用 tool.renderToolUseMessage，异常时记录 "Error rendering tool use message for <tool>"（MCP 名脱敏）。
  */
@@ -1200,7 +1200,7 @@ function renderToolUseMessage_2(tool, input, theme) {
     return "";
   }
 }
-//@ chunk-ah34pb7m.js:78421-79021 fingerprint = renderToolUseProgressMessage (0.741)
+//@ chunk-ah34pb7m.js:78421-79021 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.741)
 function renderToolUseProgressMessage_3(
   tool,
   tools,
@@ -1244,7 +1244,7 @@ function renderToolUseProgressMessage_3(
     return null;
   }
 }
-//@ chunk-ah34pb7m.js:79021-79262 fingerprint = renderToolUseQueuedMessage (0.388)
+//@ chunk-ah34pb7m.js:79021-79262 fingerprint (2.1.88 match: renderToolUseQueuedMessage, 0.388)
 function renderToolUseQueuedMessage(tool) {
   try {
     return mcpRenderOverrideFor(tool, "renderToolUseQueuedMessage")?.();
@@ -1258,7 +1258,7 @@ function renderToolUseQueuedMessage(tool) {
     return null;
   }
 }
-//@ chunk-18hwfzwa.js:433138-433186 fingerprint = _temp (1)
+//@ chunk-18hwfzwa.js:433138-433186 fingerprint (2.1.88 match: _temp, 1)
 function selectPendingWorkerRequest(state) {
   return state.pendingWorkerRequest;
 }

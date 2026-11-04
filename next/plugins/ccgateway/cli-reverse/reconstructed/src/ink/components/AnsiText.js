@@ -17,7 +17,7 @@ import { parseToSpans, hasAnyTextProps } from "../Ansi.js";
 import { StyledText } from "./ClockContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-x6v6jz2y.js:14043-15379 placement = Ansi (0.713)
+//@ chunk-x6v6jz2y.js:14043-15379 placement (2.1.88 match: Ansi, 0.713)
 /**
  * <Ansi>：把带 ANSI 转义的字符串解析成样式片段，渲染为嵌套 <Text>（OSC 8 片段包 <Link>）；支持 dimColor/italic 统一叠加、monochrome 去色。
  */

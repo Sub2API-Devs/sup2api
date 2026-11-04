@@ -11,7 +11,7 @@
 import { GITHUB_HOST } from "../../utils/git/githubUrl.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2165704-2167829 fingerprint = PREAPPROVED_HOSTS (0.912)
+//@ chunk-e6aww6q8.js:2165704-2167829 fingerprint (2.1.88 match: PREAPPROVED_HOSTS, 0.912)
 /**
  * 预批准文档站列表（Claude/Anthropic 官方站、主流语言与框架文档等约 100 项），派生 HOSTNAME_ONLY / PATH_PREFIXES；oar 为需要额外路径限制的主机。
  */

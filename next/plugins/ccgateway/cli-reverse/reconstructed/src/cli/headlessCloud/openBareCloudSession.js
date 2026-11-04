@@ -313,7 +313,7 @@ async function checkLocalBindIdentity() {
 function currentAccountUuid() {
   return getStoredOauthAccountInfo()?.accountUuid;
 }
-//@ chunk-fe6rs39h.js:131246-131467 placement = PermissionModeSchema (0.42)
+//@ chunk-fe6rs39h.js:131246-131467 placement (2.1.88 match: PermissionModeSchema, 0.42)
 /**
  * 由 --permission-mode 生成启动时需发送的 set_permission_mode 控制请求。
  */
@@ -2215,7 +2215,7 @@ function toDeviceBindingStatus(binding) {
       return unboundStatus("device_tools_off");
   }
 }
-//@ chunk-fe6rs39h.js:160345-160409 placement = resolveKey (0.584)
+//@ chunk-fe6rs39h.js:160345-160409 placement (2.1.88 match: resolveKey, 0.584)
 function unboundStatus(reason) {
   return {
     status: "unbound",

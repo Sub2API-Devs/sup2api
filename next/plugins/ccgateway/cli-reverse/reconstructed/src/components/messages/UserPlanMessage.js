@@ -14,7 +14,7 @@ import { ShutdownRequestDisplay } from "./ShutdownMessage.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 import { Box } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:112874-113172 fingerprint = UserPlanMessage (0.444)
+//@ chunk-ah34pb7m.js:112874-113172 fingerprint (2.1.88 match: UserPlanMessage, 0.444)
 function UserPlanMessage(props) {
   let $ = useMemoCache(5);
   let { addMargin, planContent } = props;

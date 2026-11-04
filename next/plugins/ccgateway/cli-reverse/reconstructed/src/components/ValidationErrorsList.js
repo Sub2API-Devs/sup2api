@@ -23,7 +23,7 @@ import { cleanForDisplay } from "../utils/stringUtils.js";
 //@ chunk-s3fw2t2g.js:1056-1104 affinity
 var URL_RE = /https?:\/\/[^\s"'<>\\\x00-\x1f]+/g;
 var MAX_VALIDATION_TEXT = 1e5;
-//@ chunk-s3fw2t2g.js:1104-1296 fingerprint = ValidationErrorsList (0.308)
+//@ chunk-s3fw2t2g.js:1104-1296 fingerprint (2.1.88 match: ValidationErrorsList, 0.308)
 function ValidationErrorsList_2(text, themeName) {
   if (text.length > MAX_VALIDATION_TEXT) return text;
   let linkify = (segment) =>
@@ -41,7 +41,7 @@ function ValidationErrorsList_2(text, themeName) {
     .map((error_0) => (error_0.includes(OSC8_PREFIX) ? error_0 : linkify(error_0))).join(`
 `);
 }
-//@ chunk-td6byj4s.js:13677-13770 fingerprint = _temp (1)
+//@ chunk-td6byj4s.js:13677-13770 fingerprint (2.1.88 match: _temp, 1)
 function groupErrorsByFile(acc, error) {
   let file = error.file || "(file not specified)";
   if (!acc[file]) acc[file] = [];
@@ -58,7 +58,7 @@ function compareByPath(a, b) {
   }
   return (a.path || "").localeCompare(b.path || "");
 }
-//@ chunk-td6byj4s.js:13890-14052 layout = createYogaLayoutNode (1)
+//@ chunk-td6byj4s.js:13890-14052 layout (2.1.88 match: createYogaLayoutNode, 1)
 function renderErrorNode(errors, key) {
   let nestedTree = buildNestedTree(errors);
   return jsxProd_default(
@@ -83,7 +83,7 @@ function renderErrorNode(errors, key) {
     key,
   );
 }
-//@ chunk-td6byj4s.js:14052-14255 fingerprint = _temp3 (1)
+//@ chunk-td6byj4s.js:14052-14255 fingerprint (2.1.88 match: _temp3, 1)
 function renderSuggestionPair(pair, index) {
   return jsxProd_default_2(
     Box,
@@ -183,7 +183,7 @@ function ValidationErrorsList(props) {
   } else content = $[7];
   return content;
 }
-//@ chunk-td6byj4s.js:15007-15306 fingerprint = buildNestedTree (0.35)
+//@ chunk-td6byj4s.js:15007-15306 fingerprint (2.1.88 match: buildNestedTree, 0.35)
 function buildNestedTree(errors) {
   if (!errors.path) return null;
   let pathParts = errors.path.split(".");

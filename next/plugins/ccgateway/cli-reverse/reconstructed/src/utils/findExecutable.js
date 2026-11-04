@@ -31,7 +31,7 @@ function isSameArray(leftArray, configHome) {
  * path 模块（Node 内置 path）的引用。
  */
 var pathModule = __toESM(require_ignore(), 1);
-//@ chunk-fq0cr76a.js:877818-877863 fingerprint = findExecutable (1)
+//@ chunk-fq0cr76a.js:877818-877863 fingerprint (2.1.88 match: findExecutable, 1)
 function findExecutable(exe, args) {
   return {
     cmd: bunWhichSync(exe) ?? exe,

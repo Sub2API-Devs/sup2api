@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-ha3km179.js:14540-14651 fingerprint = matchesKeepGoingKeyword (1)
+//@ chunk-ha3km179.js:14540-14651 fingerprint (2.1.88 match: matchesKeepGoingKeyword, 1)
 /**
  * 输入（小写去空白）为 continue，或含 keep going / go on 时为真。
  */

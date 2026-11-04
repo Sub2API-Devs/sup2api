@@ -356,7 +356,7 @@ function getArgPathCandidates(arg) {
   }
   return [...candidates];
 }
-//@ chunk-e6aww6q8.js:1195872-1195961 placement = resolveCwdReentry (1)
+//@ chunk-e6aww6q8.js:1195872-1195961 placement (2.1.88 match: resolveCwdReentry, 1)
 /**
  * （旧版名配错）路径是否是绝对路径或以 ./ ../ . .. 开头的显式路径。
  */
@@ -440,7 +440,7 @@ function staysWithinRelativeRoot(target, root) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:1196939-1197312 placement = getFileIdentity (1)
+//@ chunk-e6aww6q8.js:1196939-1197312 placement (2.1.88 match: getFileIdentity, 1)
 async function getFileIdentity_4(filePath) {
   if (getPlatform() === "windows") {
     let parts = filePath.split(/[\\/]/);

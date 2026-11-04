@@ -914,7 +914,7 @@ import { getToolNameKinds } from "../../tools/SkillTool/SkillTool.js";
 import { sessionHasOwnFallback, buildAvailabilityFallbackChain } from "../../utils/model/modelFallback.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:474942-475090 fingerprint = getMaxOutputTokensForModel (1)
+//@ chunk-aepeg2w5.js:474942-475090 fingerprint (2.1.88 match: getMaxOutputTokensForModel, 1)
 /**
  * 主循环模型的 max_tokens：模型默认值，可用 CLAUDE_CODE_MAX_OUTPUT_TOKENS 在模型上限内调整。
  */
@@ -927,7 +927,7 @@ function getMaxOutputTokensForModel(model) {
     maxOutputTokens.upperLimit,
   ).effective;
 }
-//@ chunk-1qpz7qcd.js:30432-30552 fingerprint = getPreviousRequestIdFromMessages (0.653)
+//@ chunk-1qpz7qcd.js:30432-30552 fingerprint (2.1.88 match: getPreviousRequestIdFromMessages, 0.653)
 /**
  * 控制请求子类型在白名单内时返回 {subtype, requestId}。旧版名 getPreviousRequestIdFromMessages 为错配。
  */
@@ -984,7 +984,7 @@ function buildSystemWithAttribution(systemPrompt, prefix, options) {
   logAPIPrefix(systemPrompt_2);
   return systemPrompt_2;
 }
-//@ chunk-w5ndchqs.js:5496-6185 fingerprint = getAPIMetadata (0.694)
+//@ chunk-w5ndchqs.js:5496-6185 fingerprint (2.1.88 match: getAPIMetadata, 0.694)
 /**
  * 请求体 metadata：user_id 为 JSON 字符串 {device_id, account_uuid, session_id, parent_session_id?, tk?}，可合并 CLAUDE_CODE_EXTRA_METADATA（超长时丢弃附加字段）。
  */
@@ -1044,7 +1044,7 @@ function getAPIMetadata({ agentContext, servedSessionMode } = {}) {
     user_id: jsonStringify(metadata),
   };
 }
-//@ chunk-e6aww6q8.js:445621-445714 fingerprint = isToolResultBlock (0.745)
+//@ chunk-e6aww6q8.js:445621-445714 fingerprint (2.1.88 match: isToolResultBlock, 0.745)
 /**
  * user 消息里所有 tool_result 的 tool_use_id。旧版名 isToolResultBlock 不准确。
  */
@@ -1226,7 +1226,7 @@ function isExtractMemoriesSkipCacheWrite(querySource, skipCacheWrite) {
 function isBasaltScarpEnabled() {
   return canSendFirstPartyBetas() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_basalt_scarp", false);
 }
-//@ chunk-e6aww6q8.js:2533792-2533974 placement = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:2533792-2533974 placement (2.1.88 match: hasThinkingContent, 1)
 function isRenderableContentBlock(block, whitespaceTextUnstampable) {
   if (block.type === "text") {
     if (typeof block.text !== "string" || block.text === "") return false;
@@ -1799,7 +1799,7 @@ function isRemovableWebSearchBlock(block) {
 function isWebSearchServerToolUse(block) {
   return block?.type === "server_tool_use" && block.name === WEB_SEARCH;
 }
-//@ chunk-e6aww6q8.js:2565569-2565644 placement = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:2565569-2565644 placement (2.1.88 match: hasThinkingContent, 1)
 function isThinkingBlockOptional(m) {
   return m?.type === "thinking" || m?.type === "redacted_thinking";
 }
@@ -2002,7 +2002,7 @@ function stepGuardrailHold(state, event) {
   state.hold = undefined;
   return moved;
 }
-//@ chunk-e6aww6q8.js:2568242-2568443 placement = extractErrorTypeFromData (1)
+//@ chunk-e6aww6q8.js:2568242-2568443 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * user 消息是否只包含 tool_result 块。
  */
@@ -2693,7 +2693,7 @@ function disableSearchResultCitations(messages) {
     return messages;
   }
 }
-//@ chunk-e6aww6q8.js:2582303-2582458 placement = applyDisplayStyles (0.545)
+//@ chunk-e6aww6q8.js:2582303-2582458 placement (2.1.88 match: applyDisplayStyles, 0.545)
 function readDisplayField(thinking) {
   try {
     if (typeof thinking !== "object" || thinking === null || !("display" in thinking)) return;
@@ -2912,7 +2912,7 @@ function traceValueOrUnknown(value) {
  * 2：思考签名错误时按错误定位剥离单个 thinking 块的最多尝试次数，超过后整体剥离。
  */
 var MAX_SIGNATURE_STRIP_ATTEMPTS = 2;
-//@ chunk-e6aww6q8.js:2647800-2648004 layout = hasThinkingContent (0.876)
+//@ chunk-e6aww6q8.js:2647800-2648004 layout (2.1.88 match: hasThinkingContent, 0.876)
 /**
  * thinking/redacted_thinking 块的稳定键（type:signature 或 type:data）。
  */
@@ -2923,7 +2923,7 @@ function getThinkingBlockKey(m) {
     block.type === "thinking" ? block.signature : block.type === "redacted_thinking" ? block.data : undefined;
   return typeof key === "string" && key.length > 0 ? `${block.type}:${key}` : undefined;
 }
-//@ chunk-e6aww6q8.js:2648004-2648185 layout = hasThinkingContent (1)
+//@ chunk-e6aww6q8.js:2648004-2648185 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * assistant 消息里 thinking/redacted_thinking 块数。
  */
@@ -2956,7 +2956,7 @@ function summarizeThinkingStrip(before, after) {
   }
   return summary;
 }
-//@ chunk-e6aww6q8.js:2648418-2649540 fingerprint = getExtraBodyParams (0.442)
+//@ chunk-e6aww6q8.js:2648418-2649540 fingerprint (2.1.88 match: getExtraBodyParams, 0.442)
 /**
  * 解析 CLAUDE_CODE_EXTRA_BODY（JSON 对象）作为请求体附加字段：组织禁用实验 beta 时忽略；去掉 afk-mode beta；metadata.user_id 里的 tk 去掉；合并 Bedrock 要放进 body 的 anthropic_beta。
  */
@@ -3037,7 +3037,7 @@ function addBetaToBodyAnthropicBeta(extraBodyParams, beta, enabled) {
   if (Array.isArray(anthropicBeta) && !anthropicBeta.includes(beta.header))
     extraBodyParams.anthropic_beta = [...anthropicBeta, beta.header];
 }
-//@ chunk-e6aww6q8.js:2649672-2650149 fingerprint = getPromptCachingEnabled (0.756)
+//@ chunk-e6aww6q8.js:2649672-2650149 fingerprint (2.1.88 match: getPromptCachingEnabled, 0.756)
 /**
  * 是否启用提示词缓存：DISABLE_PROMPT_CACHING 全关；DISABLE_PROMPT_CACHING_HAIKU/SONNET/OPUS/FABLE/MYTHOS 按模型族关闭。
  */
@@ -3073,7 +3073,7 @@ function getPromptCachingEnabled(model) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:2650149-2650247 fingerprint = getCacheControl (0.925)
+//@ chunk-e6aww6q8.js:2650149-2650247 fingerprint (2.1.88 match: getCacheControl, 0.925)
 /**
  * 生成 cache_control：{type:"ephemeral"}，可带 ttl（1h）与 scope:"global"。
  */
@@ -3088,7 +3088,7 @@ function getCacheControl({ scope, ttl } = {}) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2650247-2650730 fingerprint = should1hCacheTTL (0.34)
+//@ chunk-e6aww6q8.js:2650247-2650730 fingerprint (2.1.88 match: should1hCacheTTL, 0.34)
 /**
  * 决定提示词缓存 TTL：代理覆盖优先；订阅用户且不在超额、模型在 tengu_prompt_cache_1h_config 白名单内用 1h，否则 5m；tengu_tidy_frost 时活跃 5m 缓存保持 5m。
  */
@@ -3181,7 +3181,7 @@ function applyEffortToOutputConfig(effortValue, outputConfig, extraBodyParams, b
     betas.push(BETA_EFFORT);
   }
 }
-//@ chunk-e6aww6q8.js:2651408-2651592 fingerprint = configureTaskBudgetParams (1)
+//@ chunk-e6aww6q8.js:2651408-2651592 fingerprint (2.1.88 match: configureTaskBudgetParams, 1)
 /**
  * 有 taskBudget 且开关允许时写 output_config.task_budget={type:"tokens",total,remaining} 并加 task-budget beta。
  */
@@ -3196,7 +3196,7 @@ function configureTaskBudgetParams(taskBudget, outputConfig, betas) {
   };
   if (!betas.includes(BETA_TASK_BUDGETS)) betas.push(BETA_TASK_BUDGETS);
 }
-//@ chunk-e6aww6q8.js:2651710-2652755 fingerprint = verifyApiKey (0.617)
+//@ chunk-e6aww6q8.js:2651710-2652755 fingerprint (2.1.88 match: verifyApiKey, 0.617)
 /**
  * 用一次 max_tokens=1 的 "test" 请求验证 API key（带 withRetry 重试 2 次）；跳过标志为真时直接返回 true；认证错误返回 false。
  */
@@ -3277,7 +3277,7 @@ async function verifyApiKey(apiKey, isNonInteractiveSession, credentials, storag
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:2652755-2653166 fingerprint = userMessageToMessageParam (0.665)
+//@ chunk-e6aww6q8.js:2652755-2653166 fingerprint (2.1.88 match: userMessageToMessageParam, 0.665)
 /**
  * 内部 user 消息转 API MessageParam；需要缓存断点时给最后一个块加 cache_control。
  */
@@ -3358,7 +3358,7 @@ function applyApiBlockOrderEcho(messages, echoApiBlockOrder, preserveTrailingThi
     return messages;
   }
 }
-//@ chunk-e6aww6q8.js:2653480-2653865 callgraph-fingerprint = assistantMessageToMessageParam (0.411)
+//@ chunk-e6aww6q8.js:2653480-2653865 callgraph-fingerprint (2.1.88 match: assistantMessageToMessageParam, 0.411)
 /**
  * 内部 assistant 消息转 API MessageParam；需要缓存断点时给最后一个非 thinking 块加 cache_control。
  */
@@ -3433,7 +3433,7 @@ function getRequestRouteKind(options) {
     ? "main_thread"
     : "other";
 }
-//@ chunk-e6aww6q8.js:2654137-2654648 fingerprint = queryModelWithoutStreaming (0.789)
+//@ chunk-e6aww6q8.js:2654137-2654648 fingerprint (2.1.88 match: queryModelWithoutStreaming, 0.789)
 /**
  * 非流式查询（queryHaiku/queryWithModel 等辅助查询用）：消费 queryModel 流取最后一条 assistant；网关上小模型失败时改用主模型重试。
  */
@@ -3489,7 +3489,7 @@ async function queryModelWithoutStreaming({
     });
   return assistantMessage;
 }
-//@ chunk-e6aww6q8.js:2654648-2654938 fingerprint = queryModelWithStreaming (0.532)
+//@ chunk-e6aww6q8.js:2654648-2654938 fingerprint (2.1.88 match: queryModelWithStreaming, 0.532)
 /**
  * 主循环的 deps.callModel：流式产出 queryModel 的事件；FallbackTriggeredError 转成 {type:"model_fallback_triggered"} 事件交给 queryLoop 换模型。
  */
@@ -3511,7 +3511,7 @@ async function* queryModelWithStreaming({ messages, systemPrompt, thinkingConfig
     };
   }
 }
-//@ chunk-e6aww6q8.js:2654938-2655075 fingerprint = shouldDeferLspTool (1)
+//@ chunk-e6aww6q8.js:2654938-2655075 fingerprint (2.1.88 match: shouldDeferLspTool, 1)
 /**
  * LSP 工具在 LSP 尚未连接（pending/not-started）时延迟加载。
  */
@@ -3644,7 +3644,7 @@ function tryParseJsonString(value) {
     return value;
   }
 }
-//@ chunk-e6aww6q8.js:2656398-2659669 callgraph-witnessed = executeNonStreamingRequest (0.295)
+//@ chunk-e6aww6q8.js:2656398-2659669 callgraph-witnessed (2.1.88 match: executeNonStreamingRequest, 0.295)
 /**
  * 非流式请求执行（流式失败回退或显式非流式）：调整 max_tokens/thinking 后 create(stream:false)，带超时；返回消息与响应头。
  */
@@ -3916,7 +3916,7 @@ function isSubagentCacheEvictEnabled() {
   if (env.CLAUDE_CODE_SUBAGENT_CACHE_EVICT) return true;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_subagent_cache_evict", false);
 }
-//@ chunk-e6aww6q8.js:2660708-2660777 layout = isMedia (1)
+//@ chunk-e6aww6q8.js:2660708-2660777 layout (2.1.88 match: isMedia, 1)
 /**
  * 对象块且类型为 image/document。
  */
@@ -4755,7 +4755,7 @@ async function* queryModelWithToolSearchRecovery(...args) {
     await model.return(undefined);
   }
 }
-//@ chunk-e6aww6q8.js:2670743-2799701 callgraph-witnessed = queryModel (0.184)
+//@ chunk-e6aww6q8.js:2670743-2799701 callgraph-witnessed (2.1.88 match: queryModel, 0.184)
 /**
  * queryModel：一次 Messages API 调用的全部逻辑（约 129KB）。依次：off-switch 与模型封锁检查 → beta 列表与模型事实 → 工具 schema 构建、工具搜索/延迟工具决策 → normalizeMessagesForRequest 规整消息 → buildSystemPromptBlocks → buildRequestParams（paramsFromContext 过滤被拒 beta、thinking/effort/output_config/context_management/speed/diagnostics、addCacheBreakpoints）→ withRetry 内 anthropic.beta.messages.create(stream:true) → 解析 SSE（message_start/content_block_*\/message_delta/message_stop）产出 stream_event 与 assistant 消息、累计 usage 与成本 → 流停顿/空闲超时/无事件时回退非流式 → onError 里按错误类型返回 "retry:<原因>"（去 beta、去 thinking.display、去媒体、降 effort 等）自愈重发。
  */
@@ -12611,7 +12611,7 @@ async function* queryModel(
     .catch((error) => logError(withTelemetryMessage(toError(error), "api success logging failed")));
   releaseStreamResources();
 }
-//@ chunk-e6aww6q8.js:2799701-2799795 fingerprint = cleanupStream (1)
+//@ chunk-e6aww6q8.js:2799701-2799795 fingerprint (2.1.88 match: cleanupStream, 1)
 /**
  * 中止尚未结束的 SDK 流（释放连接）。
  */
@@ -12626,7 +12626,7 @@ function cleanupStream(stream) {
  * 1024：中途 system 消息缓存代理判定阈值（cache read 小于此值）。
  */
 var MIDCONV_CACHE_PROXY_READ_THRESHOLD = 1024;
-//@ chunk-e6aww6q8.js:2802871-2804890 callgraph-fingerprint = addCacheBreakpoints (0.234)
+//@ chunk-e6aww6q8.js:2802871-2804890 callgraph-fingerprint (2.1.88 match: addCacheBreakpoints, 0.234)
 /**
  * 给 API 消息加 cache_control 断点：kun() 选出标记位置（最后一条消息、fork 点、api_system 等），记 tengu_api_cache_breakpoints，再把内部消息转成 MessageParam（user/assistant/api_system）。
  */
@@ -12789,7 +12789,7 @@ function addCacheBreakpoints(
   wireIndexOf?.push(...messages_2.keys(), messages_2.length);
   return messages_2;
 }
-//@ chunk-e6aww6q8.js:2805133-2805379 fingerprint = buildSystemPromptBlocks (0.617)
+//@ chunk-e6aww6q8.js:2805133-2805379 fingerprint (2.1.88 match: buildSystemPromptBlocks, 0.617)
 /**
  * 把 system 提示词数组切成带缓存范围的块（s2o），每块转成 {type:"text",text,cache_control?}；cacheScope=global 时带 scope:"global"。
  */
@@ -12841,7 +12841,7 @@ async function queryHaikuWithFallback(options) {
         throw error;
     }
 }
-//@ chunk-e6aww6q8.js:2805821-2806412 callgraph-witnessed = queryWithModel (0.749)
+//@ chunk-e6aww6q8.js:2805821-2806412 callgraph-witnessed (2.1.88 match: queryWithModel, 0.749)
 /**
  * 单轮无工具辅助查询（指定模型、可带 fallback）：用 VCR 包装，thinking 机械关闭，默认不开缓存。
  */
@@ -12904,7 +12904,7 @@ async function queryWithModel(
     )
   )[0];
 }
-//@ chunk-e6aww6q8.js:2806412-2806944 fingerprint = queryHaiku (0.838)
+//@ chunk-e6aww6q8.js:2806412-2806944 fingerprint (2.1.88 match: queryHaiku, 0.838)
 /**
  * 小模型（Haiku）辅助查询：单条用户消息、无工具、thinking 默认机械关闭，走 queryModelWithoutStreaming，VCR 可录放。
  */
@@ -12991,7 +12991,7 @@ function getMaxTokensStopMessage(stopReason, maxTokens, outputTokens, withoutStr
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2807696-2807918 fingerprint = adjustParamsForNonStreaming (1)
+//@ chunk-e6aww6q8.js:2807696-2807918 fingerprint (2.1.88 match: adjustParamsForNonStreaming, 1)
 /**
  * 非流式回退时把 max_tokens 限到上限，并把 thinking.budget_tokens 限到 max_tokens-1。
  */
@@ -13065,7 +13065,7 @@ function elapsedSinceMs(weakMap, block, clock) {
 deferInit("chunk-e6aww6q8.js:2808545", () => {
   setAdvisorBaseUrlGetter(getApiBaseUrl);
 });
-//@ chunk-3xb70ww4.js:2887-2932 fingerprint = isMedia (1)
+//@ chunk-3xb70ww4.js:2887-2932 fingerprint (2.1.88 match: isMedia, 1)
 /**
  * text/image/document：contentBlockStableKeys 不为这几类生成键。旧版名 isMedia 为错配。
  */
@@ -13083,7 +13083,7 @@ var UPGRADE_RELAY_INHERITED_TOOLS = "upgrade_relay_inherited_tools";
  */
 var NON_STREAMING_FALLBACK_LONG_TIMEOUT_MS = 60000;
 var NON_STREAMING_FALLBACK_TIMEOUT_MS = 15000;
-//@ chunk-r1wk8q25.js:12389-12479 fingerprint = getNonstreamingFallbackTimeoutMs (0.768)
+//@ chunk-r1wk8q25.js:12389-12479 fingerprint (2.1.88 match: getNonstreamingFallbackTimeoutMs, 0.768)
 /**
  * 非流式回退请求超时：15s，设置 API_TIMEOUT_MS 时取其一半与 15s 的较小值。
  */
@@ -13093,7 +13093,7 @@ function getNonstreamingFallbackTimeoutMs() {
     ? Math.min(NON_STREAMING_FALLBACK_TIMEOUT_MS, Math.floor(API_TIMEOUT_MS / 2))
     : NON_STREAMING_FALLBACK_TIMEOUT_MS;
 }
-//@ chunk-1ny7cxrt.js:1377013-1377628 fingerprint = updateUsage (0.876)
+//@ chunk-1ny7cxrt.js:1377013-1377628 fingerprint (2.1.88 match: updateUsage, 0.876)
 /**
  * 把内部 usage 规整成 SDK/外部格式：缓存细分、server_tool_use 只保留 web_search、speed 只认 fast，其余置 null。旧版名 updateUsage 为错配。
  */

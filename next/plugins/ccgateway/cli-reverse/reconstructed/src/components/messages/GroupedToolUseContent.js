@@ -353,7 +353,7 @@ function GroupedToolUseContent(props) {
   } else renderHook = $[33];
   return actionKeysNamespace.useRenderHook(renderKey, renderHook);
 }
-//@ chunk-ah34pb7m.js:165874-166083 placement = toolCallOf (1)
+//@ chunk-ah34pb7m.js:165874-166083 placement (2.1.88 match: toolCallOf, 1)
 function toolCallOf(msg) {
   let content = [];
   for (let message of msg.messages) {
@@ -593,7 +593,7 @@ function selectActiveAgents_4(state) {
 function isToolUseInProgress(toolUse) {
   return toolUse.isInProgress;
 }
-//@ chunk-ah34pb7m.js:189248-190237 fingerprint = GroupedToolUseContent (0.834)
+//@ chunk-ah34pb7m.js:189248-190237 fingerprint (2.1.88 match: GroupedToolUseContent, 0.834)
 function GroupedToolUseContent_2(props) {
   let $ = useMemoCache(11);
   let { message, tools, lookups, inProgressToolUseIDs, shouldAnimate, addMargin } = props;

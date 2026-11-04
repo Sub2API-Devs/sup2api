@@ -28,7 +28,7 @@ import { Pane } from "./design-system/Pane.js";
 //@ chunk-18hwfzwa.js:676084-676166 affinity
 var THINKING_TOGGLE_TITLE = "Toggle thinking mode";
 var THINKING_TOGGLE_DESCRIPTION = "Enable or disable thinking for this session.";
-//@ chunk-18hwfzwa.js:676166-678371 fingerprint = ThinkingToggle (0.819)
+//@ chunk-18hwfzwa.js:676166-678371 fingerprint (2.1.88 match: ThinkingToggle, 0.819)
 function ThinkingToggle(props) {
   let $ = useMemoCache(24);
   let { currentValue, onSelect, onCancel, isMidConversation } = props;

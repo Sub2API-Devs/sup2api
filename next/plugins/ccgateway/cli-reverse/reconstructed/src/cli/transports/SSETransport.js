@@ -34,7 +34,7 @@ import { backoffDelayMs, sleep } from "../../utils/sleep.js";
 import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-wn385gmf.js:25653-25747 fingerprint = STREAM_DECODE_OPTS (0.518)
+//@ chunk-wn385gmf.js:25653-25747 fingerprint (2.1.88 match: STREAM_DECODE_OPTS, 0.518)
 function STREAM_DECODE_OPTS_2(message) {
   return function (...args) {
     try {
@@ -81,7 +81,7 @@ function findFrameDelimiter(text, from) {
   }
   return null;
 }
-//@ chunk-jbbd2121.js:577-937 fingerprint = parseSSEFrames (0.756)
+//@ chunk-jbbd2121.js:577-937 fingerprint (2.1.88 match: parseSSEFrames, 0.756)
 /**
  * 解析一段 SSE 帧文本为 {event,data,id}；全是注释时返回 null。
  */
@@ -624,7 +624,7 @@ deferInit("chunk-fp6aqx1j.js:147834", () => {
   EVENT_ID_FIELDS = new Set(["event_id"]);
   QUOTED_EVENT_ID_RE = /^"([\w-]{1,128})"$/;
 });
-//@ chunk-fp6aqx1j.js:148053-172030 fingerprint = SSETransport (0.512)
+//@ chunk-fp6aqx1j.js:148053-172030 fingerprint (2.1.88 match: SSETransport, 0.512)
 /**
  * SSETransport：从 CCR 会话流读取 SSE 帧（自动重连、Last-Event-ID），写入走 POST 到同一路径（去掉 /stream）。
  */
@@ -1814,7 +1814,7 @@ function dedupeAuthHeaders(headers, authHeaders) {
 function clampReconnectDelay(value) {
   return Math.min(Math.max(value, DEFAULT_KEEPALIVE_INTERVAL_SECONDS), MAX_KEEPALIVE_INTERVAL_SECONDS);
 }
-//@ chunk-fp6aqx1j.js:172199-172309 fingerprint = convertSSEUrlToPostUrl (1)
+//@ chunk-fp6aqx1j.js:172199-172309 fingerprint (2.1.88 match: convertSSEUrlToPostUrl, 1)
 function convertSSEUrlToPostUrl(sseUrl) {
   let pathname = sseUrl.pathname;
   if (pathname.endsWith("/stream")) pathname = pathname.slice(0, -7);

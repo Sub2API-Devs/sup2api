@@ -18,7 +18,7 @@ import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { pathToSessionSideKey } from "../../utils/storage/storageKeys.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 
-//@ chunk-jhrww53q.js:48857-49040 fingerprint = writeFileAndFlush (0.4)
+//@ chunk-jhrww53q.js:48857-49040 fingerprint (2.1.88 match: writeFileAndFlush, 0.4)
 async function writeFileAndFlush(filePath, content) {
   let flag = getPlatform() === "windows" ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK;
   let handle = await open(filePath, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | flag, 438);
@@ -28,7 +28,7 @@ async function writeFileAndFlush(filePath, content) {
     await handle.close();
   }
 }
-//@ chunk-0h4e7gnq.js:81060-81304 fingerprint = ensureAgentDirectoryExists (0.584)
+//@ chunk-0h4e7gnq.js:81060-81304 fingerprint (2.1.88 match: ensureAgentDirectoryExists, 0.584)
 async function ensureAgentDirectoryExists(agentId, enabled, storageV5) {
   let dirPath = parkAgentBaseline(agentId);
   if (dirPath === undefined || !enabled) return;

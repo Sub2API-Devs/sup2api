@@ -225,7 +225,7 @@ function isManagedFolderWritable(path = join(getManagedFilePath(), ".claude")) {
   let ownership = record === "none" ? undefined : record;
   return accountCouldChangeDocument(commandState, resolvedPath, ownership, ownership);
 }
-//@ chunk-4121qate.js:103258-103346 placement = isInstallationRelevantToCurrentProject (0.769)
+//@ chunk-4121qate.js:103258-103346 placement (2.1.88 match: isInstallationRelevantToCurrentProject, 0.769)
 /**
  * 托管路径是否受限（kind=managed 且有限制或命中受保护路径）。名字配错，见 lead 建议。
  */

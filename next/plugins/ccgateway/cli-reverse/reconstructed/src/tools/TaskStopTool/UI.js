@@ -16,7 +16,7 @@ import {
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:29236-29385 fingerprint = renderToolResultMessage (0.756)
+//@ chunk-ah34pb7m.js:29236-29385 fingerprint (2.1.88 match: renderToolResultMessage, 0.756)
 /**
  * TaskStop 结果渲染："<命令> · stopped"。
  */

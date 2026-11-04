@@ -31,7 +31,7 @@ function parseVoiceArg(arg) {
   if (lower === "hold" || lower === "tap" || lower === "off") return lower;
   return "invalid";
 }
-//@ chunk-vrdyygyr.js:3814-6440 fingerprint = call (0.705)
+//@ chunk-vrdyygyr.js:3814-6440 fingerprint (2.1.88 match: call, 0.705)
 /**
  * /voice 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

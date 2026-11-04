@@ -462,7 +462,7 @@ function handBackTakenSlugs(slug, stopped, postWake) {
     [stopped ? "takeover_stop_notified" : "takeover_released"]: taken.length,
   });
 }
-//@ chunk-grx66nns.js:6683-6786 placement = formatFailureDetails (0.777)
+//@ chunk-grx66nns.js:6683-6786 placement (2.1.88 match: formatFailureDetails, 0.777)
 function formatFailureDetails(failures) {
   let sliced = failures.slice(0, 2);
   let remaining = failures.length - sliced.length;

@@ -35,7 +35,7 @@ function swarmBannerName(props) {
   if (getTeamName()) return;
   return props.remoteSessionName ?? props.standaloneAgentContext?.name;
 }
-//@ chunk-0e8j1zzj.js:13825-14564 fingerprint = useSwarmBanner (0.733)
+//@ chunk-0e8j1zzj.js:13825-14564 fingerprint (2.1.88 match: useSwarmBanner, 0.733)
 function useSwarmBanner({ state, teamContext, insideTmux }) {
   if (isTeammate() && !isInProcessTeammate()) {
     let agentName = getAgentName();
@@ -157,7 +157,7 @@ function useStableBanner(banner) {
     [text, bgColor],
   );
 }
-//@ chunk-0e8j1zzj.js:15326-15402 fingerprint = toThemeColor (1)
+//@ chunk-0e8j1zzj.js:15326-15402 fingerprint (2.1.88 match: toThemeColor, 1)
 function toThemeColor(colorName, fallback = "cyan_FOR_SUBAGENTS_ONLY") {
   return colorName && AGENT_COLOR_NAMES.includes(colorName)
     ? AGENT_COLOR_TO_THEME_COLOR[colorName]

@@ -419,7 +419,7 @@ function isAwaitedBackgroundTask(task) {
     !((task.type === "monitor_ws" || task.type === "monitor_mcp") && task.timeoutId === undefined)
   );
 }
-//@ chunk-tyg7f3ek.js:100588-100711 placement = hasWorkingInProcessTeammates (0.79)
+//@ chunk-tyg7f3ek.js:100588-100711 placement (2.1.88 match: hasWorkingInProcessTeammates, 0.79)
 /**
  * 同进程 teammate 是否仍算"工作中"：运行中且非空闲，或还欠 leader 一条空闲通知。
  */
@@ -438,14 +438,14 @@ function isAmbientBackgroundTask(task) {
 function hasAwaitedRunningTaskIn(tasks) {
   return Object.values(tasks ?? {}).some(isAwaitedRunningTask);
 }
-//@ chunk-tyg7f3ek.js:100799-100856 placement = requestTeammateShutdown (1)
+//@ chunk-tyg7f3ek.js:100799-100856 placement (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 运行中且属于需要等待完成的任务。
  */
 function isAwaitedRunningTask(task) {
   return task.status === "running" && waitForTaskCompletion(task) && isWaitableAgentOrWorkflow(task);
 }
-//@ chunk-tyg7f3ek.js:100856-100938 placement = requestTeammateShutdown (1)
+//@ chunk-tyg7f3ek.js:100856-100938 placement (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 任务表里是否有运行中且需要等待完成的任务。
  */
@@ -660,7 +660,7 @@ function killBackgroundTasksForWindDown(tasks, taskFramework, setState, featureV
     }
   if (tasks.length > 0) logFeatureOk("print_wind_down");
 }
-//@ chunk-tyg7f3ek.js:103681-103815 placement = getSelectableBackgroundTasks (0.799)
+//@ chunk-tyg7f3ek.js:103681-103815 placement (2.1.88 match: getSelectableBackgroundTasks, 0.799)
 async function getSelectableBackgroundTasks(task, taskFramework, setState) {
   try {
     if (task.type === "local_agent") {

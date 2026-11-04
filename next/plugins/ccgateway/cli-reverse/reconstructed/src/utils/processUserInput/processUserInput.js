@@ -134,7 +134,7 @@ import { hasActiveAgentTasks } from "../../tasks/taskStatus.js";
 import { withTimeout } from "../sleep.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-jv307fw4.js:22476-22613 fingerprint = applyTruncation (0.586)
+//@ chunk-jv307fw4.js:22476-22613 fingerprint (2.1.88 match: applyTruncation, 0.586)
 function applyTruncation(text, maxLength, label) {
   let trimmed = text.trim();
   let list = Array.from(trimmed);
@@ -1013,7 +1013,7 @@ async function processUserInputBase({
   await appendWorkflowAuthoringMessages(result, messages, context.options.tools);
   return result;
 }
-//@ chunk-xx1vmpsq.js:47765-47885 placement = isNullRenderingAttachment (1)
+//@ chunk-xx1vmpsq.js:47765-47885 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function isNullRenderingAttachment(msg) {
   return (
     msg.type === "attachment" &&
@@ -1030,7 +1030,7 @@ function isPromptSubmitHookAttachment(attachment) {
     attachment.type !== "async_hook_response"
   );
 }
-//@ chunk-xx1vmpsq.js:47988-48102 placement = isNullRenderingAttachment (0.815)
+//@ chunk-xx1vmpsq.js:47988-48102 placement (2.1.88 match: isNullRenderingAttachment, 0.815)
 function isNullRenderingAttachment_2(messages, { readFileState }) {
   for (let message of messages)
     if (message.type === "attachment") forgetReadState(message.attachment, readFileState);
@@ -1268,7 +1268,7 @@ async function recollectMentionAttachments({
   kept.splice(kept.indexOf(prompt) + 1, 0, ...array);
   return kept;
 }
-//@ chunk-xx1vmpsq.js:51483-59588 fingerprint = processUserInputBase (0.493)
+//@ chunk-xx1vmpsq.js:51483-59588 fingerprint (2.1.88 match: processUserInputBase, 0.493)
 /**
  * processUserInputBase：处理一次用户输入：图片、粘贴、! bash 模式、/ 斜杠命令、普通提示，产出要加入会话的消息与 shouldQuery。
  */
@@ -1979,7 +1979,7 @@ function createClassifierTurnHooks({ querySource, context }) {
   }
   return;
 }
-//@ chunk-xx1vmpsq.js:60550-60683 callgraph-fingerprint = addImageMetadataMessage (0.573)
+//@ chunk-xx1vmpsq.js:60550-60683 callgraph-fingerprint (2.1.88 match: addImageMetadataMessage, 0.573)
 function addImageMetadataMessage(result, imageMetadataTexts) {
   if (imageMetadataTexts.length > 0)
     result.messages.push(
@@ -1994,7 +1994,7 @@ function addImageMetadataMessage(result, imageMetadataTexts) {
     );
   return result;
 }
-//@ chunk-3g0djq3w.js:44243-45446 fingerprint = processUserInput (0.41)
+//@ chunk-3g0djq3w.js:44243-45446 fingerprint (2.1.88 match: processUserInput, 0.41)
 async function processUserInput_2(command, commandArgs, context) {
   let hookMessages = [];
   let prompt = commandArgs ? `/${command.name} ${commandArgs}` : `/${command.name}`;

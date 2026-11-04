@@ -338,7 +338,7 @@ function homeRelativePath(path, { cwd, home }) {
   let expanded = expandPathOrNull(path, cwd);
   return expanded?.startsWith(home + posix.sep) ? expanded.slice(home.length + 1) : undefined;
 }
-//@ chunk-z4g2ta8k.js:15302-15499 placement = extractErrorTypeFromData (1)
+//@ chunk-z4g2ta8k.js:15302-15499 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function getSoleTextContent(data) {
   if (typeof data === "string") return data;
   let block = data?.length === 1 ? data[0] : undefined;
@@ -1330,7 +1330,7 @@ function requiredRewindError(code, text) {
 function remoteMcpToolName(name) {
   return buildMcpToolName(CLAUDE_CODE_REMOTE, name);
 }
-//@ chunk-z4g2ta8k.js:31662-31861 placement = countToolCallsSince (1)
+//@ chunk-z4g2ta8k.js:31662-31861 placement (2.1.88 match: countToolCallsSince, 1)
 function getToolUseAndResultIds(row) {
   return (row.type === "user" || row.type === "assistant") && Array.isArray(row.message.content)
     ? row.message.content.flatMap((block) =>

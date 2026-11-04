@@ -353,7 +353,7 @@ deferInit("chunk-7dqf31r1.js:4170", () => {
     "remote_trigger",
   ]);
 });
-//@ chunk-7dqf31r1.js:4264-4369 fingerprint = getEntrypoint (0.699)
+//@ chunk-7dqf31r1.js:4264-4369 fingerprint (2.1.88 match: getEntrypoint, 0.699)
 function getEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   return (
@@ -362,7 +362,7 @@ function getEntrypoint() {
     REMOTE_ENTRYPOINTS_3.has(CLAUDE_CODE_ENTRYPOINT)
   );
 }
-//@ chunk-qzv7ezvq.js:590-630 facade-exports = getProjectsDir (1)
+//@ chunk-qzv7ezvq.js:590-630 facade-exports (2.1.88 match: getProjectsDir, 1)
 /**
  * <配置目录>/projects：所有项目转录目录的父目录。
  */
@@ -423,7 +423,7 @@ function resolveProjectDir() {
 function resolveSessionProjectDir() {
   return getSessionProjectDir() ?? resolveProjectDir();
 }
-//@ chunk-qzv7ezvq.js:1390-1434 facade-exports = getErrorsPath (1)
+//@ chunk-qzv7ezvq.js:1390-1434 facade-exports (2.1.88 match: getErrorsPath, 1)
 /**
  * 当前会话主转录路径：<项目目录>/<sessionId>.jsonl。
  */
@@ -463,7 +463,7 @@ function getAgentTranscriptPath(agentId) {
 function agentTranscriptPathOfEntry(agentId) {
   return isSafeIdSegment(agentId) ? getAgentTranscriptPath(identityAgentId2(agentId)) : undefined;
 }
-//@ chunk-qzv7ezvq.js:1824-2105 facade-exports = loadAllSubagentTranscriptsFromDisk (0.818)
+//@ chunk-qzv7ezvq.js:1824-2105 facade-exports (2.1.88 match: loadAllSubagentTranscriptsFromDisk, 0.818)
 async function listSubagentIdsFromDisk(storageV5) {
   let projectKey = getProjectKeyIfRepresentable(resolveSessionProjectDir());
   if (isStorageV5Enabled() && storageV5 !== undefined && projectKey !== undefined)
@@ -524,7 +524,7 @@ async function listTranscriptEntries(storage, projectKey, sessionId) {
     return [];
   }
 }
-//@ chunk-qzv7ezvq.js:2495-2680 facade-exports = extractTeammateTranscriptsFromTasks (1)
+//@ chunk-qzv7ezvq.js:2495-2680 facade-exports (2.1.88 match: extractTeammateTranscriptsFromTasks, 1)
 function extractTeammateTranscriptsFromTasks(tasks, transcripts) {
   let transcripts_2 = {};
   for (let task of Object.values(tasks)) {
@@ -564,7 +564,7 @@ function getAgentIdFromTranscriptKey(key) {
     ? undefined
     : (key.agentId ?? null);
 }
-//@ chunk-x753sk9t.js:865-1185 callgraph-witnessed = getTranscriptPath (0.658)
+//@ chunk-x753sk9t.js:865-1185 callgraph-witnessed (2.1.88 match: getTranscriptPath, 0.658)
 /**
  * storage v5 后端下把 <配置目录>/projects/<项目>/<session>.jsonl 形式的路径映射为转录存储 key；不在 projects 目录下或无后端时返回 undefined。
  */
@@ -591,7 +591,7 @@ function getTranscriptStorageKey(pathOrKey, backend) {
       }
     : undefined;
 }
-//@ chunk-x753sk9t.js:1185-1734 layout = getAgentTranscriptPath (0.867)
+//@ chunk-x753sk9t.js:1185-1734 layout (2.1.88 match: getAgentTranscriptPath, 0.867)
 function getAgentTranscriptStorageKey(agentTranscriptPath, backend) {
   if (!isStorageV5Enabled() || backend === undefined) return;
   if (typeof agentTranscriptPath !== "string")
@@ -654,7 +654,7 @@ function wrapStorageSource(source) {
         hoverRestOn: isStorageV5Enabled(),
       };
 }
-//@ chunk-63641kq7.js:4535-4668 callgraph-fingerprint = getTranscriptPathForSession (0.661)
+//@ chunk-63641kq7.js:4535-4668 callgraph-fingerprint (2.1.88 match: getTranscriptPathForSession, 0.661)
 async function getTranscriptPathForSession_2(fullPath, continuedInSessionId, storageV5) {
   let continuedPath = join(dirname(fullPath), `${continuedInSessionId}.jsonl`);
   let sessionLite = await readSessionLite(
@@ -1018,7 +1018,7 @@ function isProjectsThreadAskAttachment(message) {
 function isSessionCronCarryAttachment(message) {
   return message.type === "attachment" && message.attachment?.type === "session_cron_carry";
 }
-//@ chunk-e6aww6q8.js:340290-340400 facade-majority = isLegacyProgressEntry (0.8)
+//@ chunk-e6aww6q8.js:340290-340400 facade-majority (2.1.88 match: isLegacyProgressEntry, 0.8)
 function isSyncedTranscriptEntry(entry) {
   return (
     typeof entry === "object" &&
@@ -1112,7 +1112,7 @@ function getSessionRowsOffDisk() {
 function setKeepSessionMessagesCache(keep) {
   currentTranscriptStore().setKeepSessionMessagesCache(keep);
 }
-//@ chunk-e6aww6q8.js:341882-341924 facade-majority = countUnseenAssistantTurns (1)
+//@ chunk-e6aww6q8.js:341882-341924 facade-majority (2.1.88 match: countUnseenAssistantTurns, 1)
 function isChainParticipant(message) {
   return message.type !== "progress";
 }
@@ -1132,7 +1132,7 @@ function logLegacyProgressProbe(signal) {
     signal: fromEnum(signal),
   });
 }
-//@ chunk-e6aww6q8.js:342203-342327 fingerprint = isLegacyProgressEntry (1)
+//@ chunk-e6aww6q8.js:342203-342327 fingerprint (2.1.88 match: isLegacyProgressEntry, 1)
 function isLegacyProgressEntry(entry) {
   return (
     typeof entry === "object" &&
@@ -1143,7 +1143,7 @@ function isLegacyProgressEntry(entry) {
     typeof entry.uuid === "string"
   );
 }
-//@ chunk-e6aww6q8.js:342327-342471 fingerprint = EPHEMERAL_PROGRESS_TYPES (0.656)
+//@ chunk-e6aww6q8.js:342327-342471 fingerprint (2.1.88 match: EPHEMERAL_PROGRESS_TYPES, 0.656)
 var EPHEMERAL_PROGRESS_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-e6aww6q8.js:342327", () => {
   EPHEMERAL_PROGRESS_TYPES = new Set([
@@ -1177,7 +1177,7 @@ function hasMaterializedSessionFile() {
 function hasRecordedUserPrompt() {
   return currentTranscriptStore().project?.currentSessionLastPrompt !== undefined;
 }
-//@ chunk-e6aww6q8.js:342720-342802 facade-majority = getErrorsPath (1)
+//@ chunk-e6aww6q8.js:342720-342802 facade-majority (2.1.88 match: getErrorsPath, 1)
 /**
  * 某会话的转录路径：当前会话返回已绑定的会话文件，否则 <当前项目目录>/<sessionId>.jsonl。
  */
@@ -1196,7 +1196,7 @@ var INDEX_HEAD_SCAN_BYTES = 256;
 var INDEX_BOUNDARY_SCAN_BYTES = 4096;
 var INDEX_LAST_PROMPT_SCAN_BYTES = 1024;
 var LAST_PROMPT_PREFIX_SCAN_BYTES = 64;
-//@ chunk-e6aww6q8.js:342881-342943 facade-majority = getAgentMetadataPath (1)
+//@ chunk-e6aww6q8.js:342881-342943 facade-majority (2.1.88 match: getAgentMetadataPath, 1)
 function getAgentMetadataPath(agentId) {
   return getAgentTranscriptPath(agentId).replace(/\.jsonl$/, ".meta.json");
 }
@@ -1209,7 +1209,7 @@ var RESERVED_AGENT_METADATA_FIELDS = [
   "revivedAt",
 ];
 var AGENT_METADATA_FIELDS = [...RESERVED_AGENT_METADATA_FIELDS, "restartResumes", "model"];
-//@ chunk-e6aww6q8.js:343074-343475 facade-majority = readAgentMetadata (0.393)
+//@ chunk-e6aww6q8.js:343074-343475 facade-majority (2.1.88 match: readAgentMetadata, 0.393)
 async function readAgentMetadataAtPath(path, storage, isAbsent = isFsInaccessible) {
   if (isStorageV5Enabled() && storage !== undefined) {
     let path_2 = keyFromMetaPath(path);
@@ -1531,16 +1531,16 @@ deferInit("chunk-e6aww6q8.js:346791", () => {
     }).passthrough(),
   );
 });
-//@ chunk-e6aww6q8.js:347245-347304 fingerprint = getRemoteAgentsDir (1)
+//@ chunk-e6aww6q8.js:347245-347304 fingerprint (2.1.88 match: getRemoteAgentsDir, 1)
 function getRemoteAgentsDir() {
   let projectDir = resolveSessionProjectDir();
   return join(projectDir, getSessionId(), "remote-agents");
 }
-//@ chunk-e6aww6q8.js:347304-347367 fingerprint = getRemoteAgentMetadataPath (1)
+//@ chunk-e6aww6q8.js:347304-347367 fingerprint (2.1.88 match: getRemoteAgentMetadataPath, 1)
 function getRemoteAgentMetadataPath(taskId) {
   return join(getRemoteAgentsDir(), `remote-agent-${taskId}.meta.json`);
 }
-//@ chunk-e6aww6q8.js:347367-347694 facade-majority = writeRemoteAgentMetadata (0.137)
+//@ chunk-e6aww6q8.js:347367-347694 facade-majority (2.1.88 match: writeRemoteAgentMetadata, 0.137)
 async function writeRemoteAgentMetadata(taskId, metadata, storageV5) {
   let path = getRemoteAgentMetadataPath(taskId);
   if (!isDiskless())
@@ -1586,7 +1586,7 @@ async function deleteRemoteAgentMetadata(taskId, storageV5) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:347984-348089 facade-majority = removeRemoteAgentMetadata (1)
+//@ chunk-e6aww6q8.js:347984-348089 facade-majority (2.1.88 match: removeRemoteAgentMetadata, 1)
 /**
  * 删除远程代理任务的本地元数据（失败只记日志）。
  */
@@ -1597,7 +1597,7 @@ async function removeRemoteAgentMetadata(taskId, storageV5) {
     logForDebugging(`removeRemoteAgentMetadata failed: ${String(e)}`);
   }
 }
-//@ chunk-e6aww6q8.js:348089-348779 facade-majority = listRemoteAgentMetadata (0.645)
+//@ chunk-e6aww6q8.js:348089-348779 facade-majority (2.1.88 match: listRemoteAgentMetadata, 0.645)
 async function listRemoteAgentMetadata(storage) {
   let dir = getRemoteAgentsDir();
   if (isStorageV5Enabled() && storage !== undefined) {
@@ -1693,7 +1693,7 @@ async function listRemoteAgentMetadataViaStorage(storage, scope) {
   });
   return results;
 }
-//@ chunk-e6aww6q8.js:349705-349820 facade-majority = sessionIdExists (1)
+//@ chunk-e6aww6q8.js:349705-349820 facade-majority (2.1.88 match: sessionIdExists, 1)
 /**
  * 当前项目目录下是否存在 <sessionId>.jsonl。
  */
@@ -1709,7 +1709,7 @@ function sessionIdExists(sessionId) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:349820-349854 facade-majority = getEnvironmentForGrowthBook (1)
+//@ chunk-e6aww6q8.js:349820-349854 facade-majority (2.1.88 match: getEnvironmentForGrowthBook, 1)
 function getNodeEnv() {
   return "production";
 }
@@ -2245,7 +2245,7 @@ async function flushSessionStorageAtExit() {
       );
   }
 }
-//@ chunk-e6aww6q8.js:357248-357431 callgraph-witnessed = getProject (0)
+//@ chunk-e6aww6q8.js:357248-357431 callgraph-witnessed (2.1.88 match: getProject, 0)
 /**
  * 取当前宿主的会话存储单例 Project；首次创建时注册退出钩子，进程退出前把写队列刷到磁盘。
  */
@@ -2261,7 +2261,7 @@ function getProject() {
   }
   return store.project;
 }
-//@ chunk-e6aww6q8.js:357431-357479 facade-majority = resetProjectFlushStateForTesting (0.771)
+//@ chunk-e6aww6q8.js:357431-357479 facade-majority (2.1.88 match: resetProjectFlushStateForTesting, 0.771)
 function resetProjectFlushStateForTesting() {
   currentTranscriptStore().project?._resetFlushState();
 }
@@ -2293,7 +2293,7 @@ function readSessionAliasesForTesting(projectPath, storage) {
 async function reAppendSessionMetadataAsyncForTesting(maybe = true, options) {
   await getProject().reAppendSessionMetadataAsync(false, maybe, options);
 }
-//@ chunk-e6aww6q8.js:357838-357901 facade-majority = recordContextCollapseCommit (1)
+//@ chunk-e6aww6q8.js:357838-357901 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
 async function appendEntryToSessionForTesting(entry, cwd, options) {
   await getProject().appendEntry(entry, cwd, undefined, options);
 }
@@ -2317,7 +2317,7 @@ function onSessionFileMaterialized(listener) {
 function emitSessionFileMaterializedForTesting() {
   currentTranscriptStore().sessionFileMaterialized.emit();
 }
-//@ chunk-e6aww6q8.js:358139-358196 facade-majority = setInternalEventWriter (1)
+//@ chunk-e6aww6q8.js:358139-358196 facade-majority (2.1.88 match: setInternalEventWriter, 1)
 function setInternalEventWriter(writer, mirrorWriter) {
   getProject().setInternalEventWriter(writer, mirrorWriter);
   registerWorkerEventMirror();
@@ -2353,7 +2353,7 @@ function hasSessionMirror() {
 function fireSessionMirror(path, records) {
   getProject().fireMirror(path, records);
 }
-//@ chunk-e6aww6q8.js:358511-358689 facade-majority = setInternalEventReader (0.674)
+//@ chunk-e6aww6q8.js:358511-358689 facade-majority (2.1.88 match: setInternalEventReader, 0.674)
 function setInternalEventReader(reader, subagentReader, agentEventReader) {
   getProject().setInternalEventReader(reader);
   getProject().setInternalSubagentEventReader(subagentReader);
@@ -2390,7 +2390,7 @@ function hasWrittenAgentTranscript(agentId) {
 function isAgentTranscriptOverBound(agentId) {
   return getProject().isAgentOverBound(agentId);
 }
-//@ chunk-e6aww6q8.js:359258-359302 facade-majority = setRemoteIngressUrlForTesting (1)
+//@ chunk-e6aww6q8.js:359258-359302 facade-majority (2.1.88 match: setRemoteIngressUrlForTesting, 1)
 function setRemoteIngressUrlForTesting(url) {
   getProject().setRemoteIngressUrl(url);
 }
@@ -2463,7 +2463,7 @@ async function seedReplayIndex(path, resume) {
 function hasToolResultMessage(content) {
   return Array.isArray(content) && content.some((block) => block?.type === "tool_result");
 }
-//@ chunk-e6aww6q8.js:360284-407532 fingerprint = Project (0.319)
+//@ chunk-e6aww6q8.js:360284-407532 fingerprint (2.1.88 match: Project, 0.319)
 /**
  * 会话转录写入器：按目标文件维护写队列，每 100ms（FLUSH_INTERVAL_MS）批量 flush，单块不超过 100MB；会话文件在第一条 user/assistant/system 消息时才创建；同时管理标题、tag、agent 名等会话元数据并在尾部重写（reAppendSessionMetadata），支持远程镜像、storage v5 后端与转录迁移。
  */
@@ -5058,7 +5058,7 @@ function readAtTranscriptEntry(messages, allMessages) {
     promptIdAtEntry: getPromptId_2(),
   };
 }
-//@ chunk-e6aww6q8.js:407706-408232 facade-majority = recordTranscript (0.261)
+//@ chunk-e6aww6q8.js:407706-408232 facade-majority (2.1.88 match: recordTranscript, 0.261)
 /**
  * 记录一组消息到当前会话转录：清理消息后交给 Project.insertMessageChain，建立 parentUuid 链（压缩边界的 parentUuid 置空并记 logicalParentUuid），检测幻影父节点（tengu_phantom_parent_hint）。
  */
@@ -5172,7 +5172,7 @@ function hasRemoteWorkerEventLog() {
 function mirrorWorkerEventToRemote(eventType, payload, meta) {
   return getProject().mirrorWorkerEvent(eventType, payload, meta);
 }
-//@ chunk-e6aww6q8.js:409041-409221 facade-majority = recordSidechainTranscript (0.678)
+//@ chunk-e6aww6q8.js:409041-409221 facade-majority (2.1.88 match: recordSidechainTranscript, 0.678)
 /**
  * 记录子代理（sidechain）消息：isSidechain=true、带 agentId，写入 subagents/agent-<id>.jsonl。
  */
@@ -5200,7 +5200,7 @@ async function recordSidechainTranscript(messages, agentId, sessionIdOverride, s
     ),
   );
 }
-//@ chunk-e6aww6q8.js:409221-409316 facade-majority = recordContextCollapseSnapshot (0.517)
+//@ chunk-e6aww6q8.js:409221-409316 facade-majority (2.1.88 match: recordContextCollapseSnapshot, 0.517)
 async function recordForkContextRef(snapshot, storageV5) {
   await getProject().appendEntry(
     {
@@ -5212,11 +5212,11 @@ async function recordForkContextRef(snapshot, storageV5) {
     storageV5,
   );
 }
-//@ chunk-e6aww6q8.js:409316-409387 facade-majority = recordContextCollapseCommit (1)
+//@ chunk-e6aww6q8.js:409316-409387 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
 async function recordArtifactAutoReactLedger(ledgerEntry, storageV5) {
   await getProject().appendEntry(ledgerEntry, ledgerEntry.sessionId, undefined, storageV5);
 }
-//@ chunk-e6aww6q8.js:409387-409455 facade-majority = recordContextCollapseCommit (1)
+//@ chunk-e6aww6q8.js:409387-409455 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
 function recordCostState(costEntry, storageV5) {
   getProject().appendEntry(costEntry, costEntry.sessionId, undefined, storageV5).catch(logError);
 }
@@ -5800,14 +5800,14 @@ async function loadForkContextPrefix(forkRef, maxBytes, storageV5) {
   }
   return mapped;
 }
-//@ chunk-e6aww6q8.js:417329-417390 facade-majority = recordQueueOperation (1)
+//@ chunk-e6aww6q8.js:417329-417390 facade-majority (2.1.88 match: recordQueueOperation, 1)
 /**
  * 追加 queue-operation 记录（排队命令的入队/出队），可写入其他会话的文件。
  */
 async function recordQueueOperation(operation, storageV5) {
   await getProject().insertQueueOperation(operation, storageV5);
 }
-//@ chunk-e6aww6q8.js:417390-417547 facade-majority = removeTranscriptMessage (0.515)
+//@ chunk-e6aww6q8.js:417390-417547 facade-majority (2.1.88 match: removeTranscriptMessage, 0.515)
 /**
  * 从转录中删除指定 uuid 的消息（排入写队列，执行时重写文件）。
  */
@@ -5834,7 +5834,7 @@ async function removeTranscriptMessageIfPersisted(continuationReplacesUuid, stor
   );
   await drained;
 }
-//@ chunk-e6aww6q8.js:417773-417847 facade-majority = recordFileHistorySnapshot (1)
+//@ chunk-e6aww6q8.js:417773-417847 facade-majority (2.1.88 match: recordFileHistorySnapshot, 1)
 /**
  * 追加 file-history-snapshot 记录（文件检查点，供 /rewind 回滚文件）。
  */
@@ -5855,14 +5855,14 @@ async function recordFileHistoryDelta(messageId, snapshotMessageId, trackingPath
     storageV5,
   );
 }
-//@ chunk-e6aww6q8.js:418033-418099 facade-majority = recordAttributionSnapshot (1)
+//@ chunk-e6aww6q8.js:418033-418099 facade-majority (2.1.88 match: recordAttributionSnapshot, 1)
 /**
  * 追加 attribution-snapshot 记录（提交署名统计快照）。
  */
 async function recordAttributionSnapshot(snapshot, storageV5) {
   await getProject().insertAttributionSnapshot(snapshot, storageV5);
 }
-//@ chunk-e6aww6q8.js:418099-418168 facade-majority = recordContentReplacement (1)
+//@ chunk-e6aww6q8.js:418099-418168 facade-majority (2.1.88 match: recordContentReplacement, 1)
 /**
  * 追加 content-replacement 记录（大工具结果替换为引用），有 agentId 时写入子代理转录。
  */
@@ -5878,14 +5878,14 @@ deferInit("chunk-e6aww6q8.js:418168", () => {
     storedToolResultDigest: (entry, toolUseId) => getProject().queuedToolResultDigest(entry, toolUseId),
   });
 });
-//@ chunk-e6aww6q8.js:418333-418378 facade-majority = resetSessionFilePointer (1)
+//@ chunk-e6aww6q8.js:418333-418378 facade-majority (2.1.88 match: resetSessionFilePointer, 1)
 /**
  * 重置会话文件指针（新 sessionId 时下次写入重新创建文件）。
  */
 async function resetSessionFilePointer() {
   getProject().resetSessionFile();
 }
-//@ chunk-e6aww6q8.js:418378-418687 facade-majority = adoptResumedSessionFile (0.214)
+//@ chunk-e6aww6q8.js:418378-418687 facade-majority (2.1.88 match: adoptResumedSessionFile, 0.214)
 /**
  * resume 同一会话时把会话文件指针指向被恢复的转录文件，并重写元数据。
  */
@@ -6305,7 +6305,7 @@ async function moveTranscript(sourcePath, targetPath, storageV5, storageMove) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:424251-424290 facade-majority = flushSessionStorage (1)
+//@ chunk-e6aww6q8.js:424251-424290 facade-majority (2.1.88 match: flushSessionStorage, 1)
 /**
  * 等待会话存储所有排队写入落盘。
  */
@@ -6450,7 +6450,7 @@ async function storedTranscriptHasContent(transcriptPath, backend) {
   } catch {}
   return transcriptFileHasContentEntry(transcriptPath);
 }
-//@ chunk-e6aww6q8.js:426134-426509 layout = readJSONLFile (0.869)
+//@ chunk-e6aww6q8.js:426134-426509 layout (2.1.88 match: readJSONLFile, 0.869)
 async function readJSONLFile(path, bytesRead) {
   let fileHandle = null;
   try {
@@ -6498,7 +6498,7 @@ function isConversationLine(line) {
 function withoutFetchedCodeModeRecords(messages) {
   return messages;
 }
-//@ chunk-e6aww6q8.js:426729-427354 facade-majority = hydrateRemoteSession (0.588)
+//@ chunk-e6aww6q8.js:426729-427354 facade-majority (2.1.88 match: hydrateRemoteSession, 0.588)
 /**
  * 远程会话（CCR）恢复：从服务器拉取会话条目写回本地转录。
  */
@@ -6954,7 +6954,7 @@ function slimToolResultsIfConfigured(entries, storage) {
     ? entries.map(createToolResultSlimmer_2())
     : entries;
 }
-//@ chunk-e6aww6q8.js:433331-438546 facade-majority = hydrateFromCCRv2InternalEvents (0.34)
+//@ chunk-e6aww6q8.js:433331-438546 facade-majority (2.1.88 match: hydrateFromCCRv2InternalEvents, 0.34)
 /**
  * 从 CCR v2 内部事件流重建本地转录（主会话与子代理）。
  */
@@ -7275,7 +7275,7 @@ function getFirstPromptInfo(transcript) {
         firstPromptShown: shownPreview,
       };
 }
-//@ chunk-e6aww6q8.js:438675-438695 fingerprint = extractFirstPrompt (1)
+//@ chunk-e6aww6q8.js:438675-438695 fingerprint (2.1.88 match: extractFirstPrompt, 1)
 var extractFirstPrompt = "No prompt";
 //@ chunk-e6aww6q8.js:438695-438833 layout
 function getFirstPromptPreview(transcript, mode) {
@@ -7293,7 +7293,7 @@ function getFirstPromptPreview(transcript, mode) {
   }
   return extractFirstPrompt;
 }
-//@ chunk-e6aww6q8.js:438833-439536 facade-majority = getFirstMeaningfulUserMessageTextContent (0.673)
+//@ chunk-e6aww6q8.js:438833-439536 facade-majority (2.1.88 match: getFirstMeaningfulUserMessageTextContent, 0.673)
 /**
  * 取第一条有意义的用户文本（跳过 meta、压缩摘要、命令输出），用于会话列表首条提示。
  */
@@ -7334,7 +7334,7 @@ function getFirstMeaningfulUserMessageTextContent(transcript, mode = "stored") {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:439536-439637 facade-majority = removeExtraFields (0.786)
+//@ chunk-e6aww6q8.js:439536-439637 facade-majority (2.1.88 match: removeExtraFields, 0.786)
 function removeExtraFields(transcript) {
   return transcript.map((m) => {
     let { isSidechain, parentUuid, promptId, ...serializedMessage } = m;
@@ -7370,7 +7370,7 @@ function withoutTaskProducerMark(message) {
         }),
       };
 }
-//@ chunk-e6aww6q8.js:440004-440256 facade-majority = buildTranscriptEntries (0.777)
+//@ chunk-e6aww6q8.js:440004-440256 facade-majority (2.1.88 match: buildTranscriptEntries, 0.777)
 /**
  * 对带内部标记（B6e）的 user 消息或 queued_command 附件，复制一份并把 task-notification 类 origin 的 producer 改成 "session-task"；其他消息原样返回。
  */
@@ -7505,7 +7505,7 @@ function applyPreservedSegmentOnLoad(messages) {
   }
   return preservedUuids.at(-1);
 }
-//@ chunk-e6aww6q8.js:441757-442329 fingerprint = applyPreservedSegmentRelinks (0.702)
+//@ chunk-e6aww6q8.js:441757-442329 fingerprint (2.1.88 match: applyPreservedSegmentRelinks, 0.702)
 function applyPreservedSegmentRelinks(preservedMeta, messages) {
   if (preservedMeta.preservedMessages)
     return {
@@ -7542,7 +7542,7 @@ function applyPreservedSegmentRelinks(preservedMeta, messages) {
   });
   return;
 }
-//@ chunk-e6aww6q8.js:442329-442447 callgraph-witnessed = findLatestMessage (1)
+//@ chunk-e6aww6q8.js:442329-442447 callgraph-witnessed (2.1.88 match: findLatestMessage, 1)
 function findLatestMessage(messages, predicate) {
   let latest;
   let maxTime = -1 / 0;
@@ -7556,7 +7556,7 @@ function findLatestMessage(messages, predicate) {
   }
   return latest;
 }
-//@ chunk-e6aww6q8.js:442447-442965 facade-majority = buildConversationChain (0.785)
+//@ chunk-e6aww6q8.js:442447-442965 facade-majority (2.1.88 match: buildConversationChain, 0.785)
 /**
  * 从叶子消息沿 parentUuid 回溯到根，反转得到对话链；检测环（tengu_chain_parent_cycle），断链时按时间戳回退，最后补回孤立的并行工具结果。
  */
@@ -7679,7 +7679,7 @@ function attachSideMessages(leafMessage, transcript, seen, children) {
 //@ chunk-e6aww6q8.js:444704-444757 layout
 var TENGU_CCR_STORED_GAP_BRIDGE_ENABLED = "tengu_ccr_stored_gap_bridge_enabled";
 var CCR_STORED_GAP_BRIDGE_FLAG = 16;
-//@ chunk-e6aww6q8.js:444757-445149 callgraph-fingerprint = applySnipRemovals (0.189)
+//@ chunk-e6aww6q8.js:444757-445149 callgraph-fingerprint (2.1.88 match: applySnipRemovals, 0.189)
 function applySnipRemovals(messages, leafUuid) {
   if (
     !isRemoteEnvironmentAny() ||
@@ -7714,7 +7714,7 @@ function applySnipRemovals(messages, leafUuid) {
       message_count: messages.size,
     });
 }
-//@ chunk-e6aww6q8.js:445149-445455 fingerprint = removeExtraFields (0.847)
+//@ chunk-e6aww6q8.js:445149-445455 fingerprint (2.1.88 match: removeExtraFields, 0.847)
 function removeExtraFields_2(messages, current, toDelete) {
   let candidates = [];
   for (let message of messages.values()) {
@@ -7733,11 +7733,11 @@ function removeExtraFields_2(messages, current, toDelete) {
       best = message;
   return best;
 }
-//@ chunk-e6aww6q8.js:445455-445534 placement = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:445455-445534 placement (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince_5(message) {
   return message.type === "assistant" && contentHasBlockType(message.message?.content, "tool_use");
 }
-//@ chunk-e6aww6q8.js:445534-445621 placement = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:445534-445621 placement (2.1.88 match: countToolCallsSince, 1)
 function hasToolUseBlock(message) {
   return message.type === "assistant"
     ? collectBlockFieldsByType(message.message?.content, "tool_use", "id")
@@ -7784,7 +7784,7 @@ function hasMalformedMessage(entry) {
     !isPlainObject_5(entry.message)
   );
 }
-//@ chunk-e6aww6q8.js:446394-450439 fingerprint = recoverOrphanedParallelToolResults (0.451)
+//@ chunk-e6aww6q8.js:446394-450439 fingerprint (2.1.88 match: recoverOrphanedParallelToolResults, 0.451)
 /**
  * 并行工具调用时多个 tool_result 只有一个在主链上，把同一 assistant 消息的其余 tool_result 找回插入链中。
  */
@@ -8016,7 +8016,7 @@ function recoverOrphanedParallelToolResults(messages, chain, seen) {
   result.push(...chain.slice(previousEnd));
   return result;
 }
-//@ chunk-e6aww6q8.js:450439-450740 facade-majority = checkResumeConsistency (1)
+//@ chunk-e6aww6q8.js:450439-450740 facade-majority (2.1.88 match: checkResumeConsistency, 1)
 /**
  * 检查恢复的消息链与记录的轮次统计是否一致，偏差时打 tengu_resume_consistency_delta。
  */
@@ -8095,7 +8095,7 @@ function buildLiteLogFromMessages(transcriptFile, lite, fallbackSessionId) {
     rewindAnchorUuid: transcriptFile.rewindAnchorUuid,
   };
 }
-//@ chunk-e6aww6q8.js:452382-455102 facade-majority = loadTranscriptFromFile (0.439)
+//@ chunk-e6aww6q8.js:452382-455102 facade-majority (2.1.88 match: loadTranscriptFromFile, 0.439)
 /**
  * 读取指定 jsonl 文件并构造日志对象（No messages found in JSONL file 时报错），用于 --resume <path>.jsonl。
  */
@@ -8251,7 +8251,7 @@ function makeEnoentError(path) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:455270-455527 fingerprint = hasVisibleUserContent (1)
+//@ chunk-e6aww6q8.js:455270-455527 fingerprint (2.1.88 match: hasVisibleUserContent, 1)
 function hasVisibleUserContent(message) {
   if (message.type !== "user") return false;
   if (message.isMeta) return false;
@@ -8276,7 +8276,7 @@ function hasNonEmptyAssistantText(message) {
     (block) => block.type === "text" && typeof block.text === "string" && block.text.trim().length > 0,
   );
 }
-//@ chunk-e6aww6q8.js:455721-455902 placement = isSyntheticMessage (1)
+//@ chunk-e6aww6q8.js:455721-455902 placement (2.1.88 match: isSyntheticMessage, 1)
 /**
  * 统计含可见内容的 user/assistant 消息数（会话列表用）。旧版名 isSyntheticMessage 为错配。
  */
@@ -8297,7 +8297,7 @@ function countVisibleMessages(message) {
     }
   return visible;
 }
-//@ chunk-e6aww6q8.js:455902-456426 fingerprint = convertToLogOption (0.925)
+//@ chunk-e6aww6q8.js:455902-456426 fingerprint (2.1.88 match: convertToLogOption, 0.925)
 function convertToLogOption(
   transcript,
   value = 0,
@@ -8340,7 +8340,7 @@ function convertToLogOption(
     projectPath: firstMessage.cwd,
   };
 }
-//@ chunk-e6aww6q8.js:456426-456852 fingerprint = trackSessionBranchingAnalytics (1)
+//@ chunk-e6aww6q8.js:456426-456852 fingerprint (2.1.88 match: trackSessionBranchingAnalytics, 1)
 /**
  * 统计会话分叉（同一会话多叶子），打 tengu_session_forked_branches_fetched。
  */
@@ -8367,7 +8367,7 @@ async function trackSessionBranchingAnalytics(logs) {
     total_transcript_count: logs.length,
   });
 }
-//@ chunk-e6aww6q8.js:456852-457422 facade-majority = fetchLogs (0)
+//@ chunk-e6aww6q8.js:456852-457422 facade-majority (2.1.88 match: fetchLogs, 0)
 /**
  * 列出当前项目（及 worktree）的会话日志（lite），供 /resume 与 --continue 使用。
  */
@@ -8580,7 +8580,7 @@ function isLastPromptLine(line) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:459401-459819 layout = readFileRange (0.819)
+//@ chunk-e6aww6q8.js:459401-459819 layout (2.1.88 match: readFileRange, 0.819)
 async function readFileRange(path, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined && transcriptKeyFor(path) !== undefined)
     return (
@@ -8638,7 +8638,7 @@ function applyEndedByModelOnResume(endedByModel, setAppState) {
         },
   );
 }
-//@ chunk-e6aww6q8.js:460111-460503 facade-majority = saveCustomTitle (0.756)
+//@ chunk-e6aww6q8.js:460111-460503 facade-majority (2.1.88 match: saveCustomTitle, 0.756)
 /**
  * 追加 custom-title 记录（/rename 等），更新内存中的会话标题并发出标题变更事件。
  */
@@ -8676,7 +8676,7 @@ async function saveCustomTitle(sessionId, customTitle, fullPath, source = "user"
     source: fromEnum(source),
   });
 }
-//@ chunk-e6aww6q8.js:460503-460722 facade-majority = saveAiGeneratedTitle (0.539)
+//@ chunk-e6aww6q8.js:460503-460722 facade-majority (2.1.88 match: saveAiGeneratedTitle, 0.539)
 /**
  * 追加 ai-title 记录（自动生成的会话标题）。
  */
@@ -8697,7 +8697,7 @@ function saveAiGeneratedTitle(sessionId, aiTitle, storageV5) {
     currentTranscriptStore().sessionTitleChanged.emit();
   }
 }
-//@ chunk-e6aww6q8.js:460722-461204 facade-majority = linkSessionToPR (0.804)
+//@ chunk-e6aww6q8.js:460722-461204 facade-majority (2.1.88 match: linkSessionToPR, 0.804)
 /**
  * 追加 pr-link 记录（PR 编号、URL、仓库），打 tengu_session_linked_to_pr。
  */
@@ -8966,11 +8966,11 @@ async function scanAppendedForSuppression(path, snapshot, options, budget) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:464057-464124 facade-majority = getErrorsPath (1)
+//@ chunk-e6aww6q8.js:464057-464124 facade-majority (2.1.88 match: getErrorsPath, 1)
 function isOwnTranscriptFile(sessionId, path) {
   return sessionId !== undefined && path != null && basename(path) === `${sessionId}.jsonl`;
 }
-//@ chunk-e6aww6q8.js:464124-464178 facade-majority = getErrorsPath (1)
+//@ chunk-e6aww6q8.js:464124-464178 facade-majority (2.1.88 match: getErrorsPath, 1)
 function getDerivedTranscriptPathForSession(sessionId) {
   let projectDir = resolveProjectDir();
   return join(projectDir, `${sessionId}.jsonl`);
@@ -9142,7 +9142,7 @@ function registerLiveSuppressionProbe(probe) {
 function isLiveBridgeSuppressed() {
   return currentTranscriptStore().liveSuppressionProbe?.() === true;
 }
-//@ chunk-e6aww6q8.js:467048-467069 facade-majority = orgStatus (1)
+//@ chunk-e6aww6q8.js:467048-467069 facade-majority (2.1.88 match: orgStatus, 1)
 var PENDING_BRIDGE_SESSION = "pending";
 var PENDING_BRIDGE_SESSION_2;
 //@ chunk-e6aww6q8.js:467069-467090 facade-majority
@@ -9267,7 +9267,7 @@ function getCurrentSessionBridge() {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:468846-468911 facade-majority = getCurrentSessionTitle (1)
+//@ chunk-e6aww6q8.js:468846-468911 facade-majority (2.1.88 match: getCurrentSessionTitle, 1)
 /**
  * 当前（或指定）会话的自定义标题。
  */
@@ -9304,7 +9304,7 @@ function getCurrentSessionOffBoxPeerName() {
 function getCurrentSessionPeerNameFor(kind) {
   return kind === "bridge" ? getCurrentSessionOffBoxPeerName() : getCurrentSessionPeerName();
 }
-//@ chunk-e6aww6q8.js:469195-469247 facade-majority = getCurrentSessionAgentColor (1)
+//@ chunk-e6aww6q8.js:469195-469247 facade-majority (2.1.88 match: getCurrentSessionAgentColor, 1)
 function getCurrentSessionAgentColor() {
   return getProject().currentSessionAgentColor;
 }
@@ -9318,7 +9318,7 @@ function restoreConversationToolsUsed(toolsUsed, messages) {
   conversationToolsUsed.record(toolsUsed ?? []);
   conversationToolsUsed.record(tagUntrustedArtifactContent(messages ?? [], undefined, false));
 }
-//@ chunk-e6aww6q8.js:469373-469456 facade-majority = setSessionFileForTesting (0.526)
+//@ chunk-e6aww6q8.js:469373-469456 facade-majority (2.1.88 match: setSessionFileForTesting, 0.526)
 function markToolsUsedWritten() {
   let project = getProject();
   project.toolsUsedStamp = `${project.sessionFile}
@@ -9408,7 +9408,7 @@ function restoreSessionMetadata(meta, options) {
   if (meta.leafUuid !== undefined) project.currentSessionLeafUuid = meta.leafUuid;
   if (meta.leafTs !== undefined) project.currentSessionLeafTs = meta.leafTs;
 }
-//@ chunk-e6aww6q8.js:472098-473538 facade-majority = restoreSessionMetadata (0.453)
+//@ chunk-e6aww6q8.js:472098-473538 facade-majority (2.1.88 match: restoreSessionMetadata, 0.453)
 function snapshotSessionMetadata() {
   let project = getProject();
   return {
@@ -9447,7 +9447,7 @@ function snapshotSessionMetadata() {
     leafTs: project.currentSessionLeafTs,
   };
 }
-//@ chunk-e6aww6q8.js:473538-474497 facade-majority = clearSessionMetadata (0.62)
+//@ chunk-e6aww6q8.js:473538-474497 facade-majority (2.1.88 match: clearSessionMetadata, 0.62)
 /**
  * 清空 Project 中当前会话的全部元数据字段（/clear、新会话时）。
  */
@@ -9484,7 +9484,7 @@ function clearSessionMetadata() {
   project.currentSessionHistorySuppressed = undefined;
   if (titleChanged) currentTranscriptStore().sessionTitleChanged.emit();
 }
-//@ chunk-e6aww6q8.js:474497-474548 facade-majority = reAppendSessionMetadata (1)
+//@ chunk-e6aww6q8.js:474497-474548 facade-majority (2.1.88 match: reAppendSessionMetadata, 1)
 /**
  * 把当前会话元数据（标题、tag、last-prompt 等）重新追加到转录尾部，使 lite 读取（只读头尾）也能拿到最新元数据。
  */
@@ -9509,7 +9509,7 @@ async function reAppendSessionMetadataAfterCompaction(storageV5) {
 function subscribeSessionAgentNameChanged(listener) {
   return currentTranscriptStore().sessionAgentNameChanged.subscribe(listener);
 }
-//@ chunk-e6aww6q8.js:474768-475111 facade-majority = saveAgentName (0.752)
+//@ chunk-e6aww6q8.js:474768-475111 facade-majority (2.1.88 match: saveAgentName, 0.752)
 /**
  * 追加 agent-name 记录并更新当前会话代理名。
  */
@@ -9543,7 +9543,7 @@ async function saveAgentName(sessionId, agentName, fullPath, source = "user", st
     source: fromEnum(source),
   });
 }
-//@ chunk-e6aww6q8.js:475111-475403 facade-majority = saveAgentColor (0.845)
+//@ chunk-e6aww6q8.js:475111-475403 facade-majority (2.1.88 match: saveAgentColor, 0.845)
 /**
  * 追加 agent-color 记录，打 tengu_agent_color_set。
  */
@@ -9572,7 +9572,7 @@ async function saveAgentColor(sessionId, agentColor, fullPath, storageV5) {
   if (sessionId === getSessionId()) getProject().currentSessionAgentColor = agentColor;
   logEvent("tengu_agent_color_set", {});
 }
-//@ chunk-e6aww6q8.js:475403-475453 facade-majority = saveAgentSetting (1)
+//@ chunk-e6aww6q8.js:475403-475453 facade-majority (2.1.88 match: saveAgentSetting, 1)
 function saveAgentSetting(agentSetting) {
   getProject().currentSessionAgentSetting = agentSetting;
 }
@@ -9580,7 +9580,7 @@ function saveAgentSetting(agentSetting) {
 function subscribeSessionTitleChanged(listener) {
   return currentTranscriptStore().sessionTitleChanged.subscribe(listener);
 }
-//@ chunk-e6aww6q8.js:475514-475588 facade-majority = cacheSessionTitle (0.562)
+//@ chunk-e6aww6q8.js:475514-475588 facade-majority (2.1.88 match: cacheSessionTitle, 0.562)
 function cacheSessionTitle(customTitle) {
   getProject().currentSessionTitle = customTitle;
   currentTranscriptStore().sessionTitleChanged.emit();
@@ -9649,7 +9649,7 @@ async function applyResumeHookSessionTitle(title, sessionFile, storageV5) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:476358-476399 facade-majority = saveMode (1)
+//@ chunk-e6aww6q8.js:476358-476399 facade-majority (2.1.88 match: saveMode, 1)
 /**
  * 记录会话模式（mode 记录）。
  */
@@ -9823,7 +9823,7 @@ function resetAtisLatches() {
 function memoryPauseToggledByPerson() {
   setRestoredMemoryPause(false);
 }
-//@ chunk-e6aww6q8.js:478336-478402 facade-majority = recordContextCollapseCommit (1)
+//@ chunk-e6aww6q8.js:478336-478402 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
 async function recordArtifactCommentMonitor(entry, storageV5) {
   await getProject().appendEntry(entry, undefined, undefined, storageV5);
 }
@@ -9856,7 +9856,7 @@ var worktreeStateSignals; // deferred: has load-time effects after a deferred st
 deferInit("chunk-e6aww6q8.js:478728", () => {
   worktreeStateSignals = new HostScoped(() => createSignal());
 });
-//@ chunk-e6aww6q8.js:478752-479396 facade-majority = saveWorktreeState (0.741)
+//@ chunk-e6aww6q8.js:478752-479396 facade-majority (2.1.88 match: saveWorktreeState, 0.741)
 /**
  * 追加 worktree-state 记录（会话所在 worktree），resume 时据此恢复或退出 worktree。
  */
@@ -9895,7 +9895,7 @@ function saveWorktreeState(worktreeSession, storageV5) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:479396-479477 facade-majority = getSessionIdFromLog (0)
+//@ chunk-e6aww6q8.js:479396-479477 facade-majority (2.1.88 match: getSessionIdFromLog, 0)
 /**
  * 从日志对象取 sessionId（最后一条消息的 sessionId 或日志自身）。
  */
@@ -9907,7 +9907,7 @@ function getSessionIdFromLog(log) {
 function isLiteLog(log) {
   return log.messages.length === 0 && log.sessionId !== undefined;
 }
-//@ chunk-e6aww6q8.js:479544-482685 facade-majority = loadFullLog (0.543)
+//@ chunk-e6aww6q8.js:479544-482685 facade-majority (2.1.88 match: loadFullLog, 0.543)
 /**
  * 把 lite 日志（只读了头尾元数据）补全为完整日志：读取整份转录并建对话链。
  */
@@ -10045,7 +10045,7 @@ async function loadFullLog(log, options) {
     return log;
   }
 }
-//@ chunk-e6aww6q8.js:482685-483199 facade-majority = searchSessionsByCustomTitle (0.913)
+//@ chunk-e6aww6q8.js:482685-483199 facade-majority (2.1.88 match: searchSessionsByCustomTitle, 0.913)
 /**
  * 按自定义标题搜索会话（--resume <标题>）。
  */
@@ -10073,7 +10073,7 @@ async function searchSessionsByCustomTitle(query, options, storageV5) {
   if (limit) return deduplicated.slice(0, limit);
   return deduplicated;
 }
-//@ chunk-e6aww6q8.js:483199-483503 layout = hasPrefix (1)
+//@ chunk-e6aww6q8.js:483199-483503 layout (2.1.88 match: hasPrefix, 1)
 function hasPrefix_2(src, prefix, at, end) {
   let firstByte = end[0];
   let endLength = end.length;
@@ -10126,7 +10126,7 @@ function pickDepthOneUuidCandidate(buf, lineStart, candidates) {
   }
   return candidates.at(-1);
 }
-//@ chunk-e6aww6q8.js:483764-485959 fingerprint = walkChainBeforeParse (0.912)
+//@ chunk-e6aww6q8.js:483764-485959 fingerprint (2.1.88 match: walkChainBeforeParse, 0.912)
 /**
  * 不解析 JSON，直接在字节缓冲中按 "parentUuid"/"uuid" 前缀走链，快速定位主链所需行。
  */
@@ -11201,7 +11201,7 @@ function readJsonAtOffset_2(buffer, lastAttributionOffset, lastAttributionLength
     buffer.subarray(lastAttributionOffset, lastAttributionOffset + lastAttributionLength),
   );
 }
-//@ chunk-e6aww6q8.js:498269-498511 fingerprint = readFileTailSync (0.701)
+//@ chunk-e6aww6q8.js:498269-498511 fingerprint (2.1.88 match: readFileTailSync, 0.701)
 function readFileTailSync(path, ranges) {
   if (ranges.length === 0) return [];
   let fd = openSync(path, "r");
@@ -11402,7 +11402,7 @@ function mergeArtifactCommentMonitorEntries(existing, incoming) {
     artifacts: Object.fromEntries(merged),
   };
 }
-//@ chunk-e6aww6q8.js:501228-502443 placement = shouldExtractMemory (0)
+//@ chunk-e6aww6q8.js:501228-502443 placement (2.1.88 match: shouldExtractMemory, 0)
 function findToolUseSiblings(messages, leafUuid, targetUuid, { direct, throughBatch }) {
   let holder;
   let toolIds = [];
@@ -11493,7 +11493,7 @@ function collectSameMessageSiblings(messages, start, id) {
   }
   return siblings;
 }
-//@ chunk-e6aww6q8.js:502643-511663 fingerprint = loadTranscriptFile (0.424)
+//@ chunk-e6aww6q8.js:502643-511663 fingerprint (2.1.88 match: loadTranscriptFile, 0.424)
 /**
  * 构造转录加载器：逐条处理 jsonl 记录，按 uuid 收集消息，按类型收集 summary、custom-title、tag、ai-title、file-history、attribution、content-replacement、worktree-state 等元数据，并找出叶子节点。
  */
@@ -12224,7 +12224,7 @@ async function loadSessionTranscript(sessionId, path, storage, precedingEntries)
     sessionFile: transcriptPath,
   });
 }
-//@ chunk-e6aww6q8.js:515696-516929 callgraph-fingerprint = loadSessionFile (0.183)
+//@ chunk-e6aww6q8.js:515696-516929 callgraph-fingerprint (2.1.88 match: loadSessionFile, 0.183)
 /**
  * 按 sessionId 定位会话文件：先看会话记录的 projectDir，再看当前项目目录与清洗名截断冲突的兄弟目录。
  */
@@ -12318,7 +12318,7 @@ async function loadSessionFile(sessionId, storage) {
         path: join(getProjectsDir(), projectKey, `${sessionId}.jsonl`),
       };
 }
-//@ chunk-e6aww6q8.js:516929-517106 layout = getErrorsPath (1)
+//@ chunk-e6aww6q8.js:516929-517106 layout (2.1.88 match: getErrorsPath, 1)
 async function getErrorsPath(sessionId) {
   let sessionProjectDir = getSessionProjectDir();
   let originalCwd = getOriginalCwd();
@@ -12398,7 +12398,7 @@ function isTurnUnanswered(messages, startUuid) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:518335-520628 facade-majority = getLastSessionLog (0.235)
+//@ chunk-e6aww6q8.js:518335-520628 facade-majority (2.1.88 match: getLastSessionLog, 0.235)
 async function sessionLogFromTranscriptLoad(sessionId, sessionTranscript, sessionFile) {
   let {
     messages,
@@ -12542,7 +12542,7 @@ async function sessionLogFromTranscriptLoad(sessionId, sessionTranscript, sessio
   }
   return log;
 }
-//@ chunk-e6aww6q8.js:520628-520756 facade-majority = loadMessageLogs (1)
+//@ chunk-e6aww6q8.js:520628-520756 facade-majority (2.1.88 match: loadMessageLogs, 1)
 /**
  * 加载当前项目的会话日志列表并富化。
  */
@@ -12567,7 +12567,7 @@ async function findFirstMessageLog(logs, onLog, storage) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:520922-521054 facade-majority = loadAllProjectsMessageLogs (1)
+//@ chunk-e6aww6q8.js:520922-521054 facade-majority (2.1.88 match: loadAllProjectsMessageLogs, 1)
 /**
  * 加载所有项目的会话日志（/resume 全部项目视图）。
  */
@@ -12614,7 +12614,7 @@ async function listTranscriptProjectKeys(storage) {
   }
   return [...keys];
 }
-//@ chunk-e6aww6q8.js:521368-522159 fingerprint = loadAllProjectsMessageLogsFull (0.838)
+//@ chunk-e6aww6q8.js:521368-522159 fingerprint (2.1.88 match: loadAllProjectsMessageLogsFull, 0.838)
 async function loadAllProjectsMessageLogsFull(limit, storage) {
   let projectsDir = getProjectsDir();
   let keys = isStorageV5Enabled() && storage ? await listTranscriptProjectKeys(storage) : undefined;
@@ -12666,7 +12666,7 @@ async function loadAllProjectsMessageLogsFull(limit, storage) {
   });
   return sorted;
 }
-//@ chunk-e6aww6q8.js:522159-522662 facade-majority = loadAllProjectsMessageLogsProgressive (0.915)
+//@ chunk-e6aww6q8.js:522159-522662 facade-majority (2.1.88 match: loadAllProjectsMessageLogsProgressive, 0.915)
 /**
  * 分批渐进加载所有项目的会话日志，默认每批 50。
  */
@@ -12714,7 +12714,7 @@ async function loadAllProjectsMessageLogsProgressive(
     nextIndex,
   };
 }
-//@ chunk-e6aww6q8.js:522662-522726 facade-majority = loadMessageLogs (1)
+//@ chunk-e6aww6q8.js:522662-522726 facade-majority (2.1.88 match: loadMessageLogs, 1)
 async function loadSameRepoMessageLogs(
   worktreePaths,
   limit,
@@ -12723,7 +12723,7 @@ async function loadSameRepoMessageLogs(
 ) {
   return (await loadSameRepoMessageLogsProgressive(worktreePaths, limit, initialEnrichCount, storage)).logs;
 }
-//@ chunk-e6aww6q8.js:522726-523031 facade-majority = loadSameRepoMessageLogsProgressive (1)
+//@ chunk-e6aww6q8.js:522726-523031 facade-majority (2.1.88 match: loadSameRepoMessageLogsProgressive, 1)
 /**
  * 渐进加载同一仓库（含其 worktree）的会话日志。
  */
@@ -12748,7 +12748,7 @@ async function loadSameRepoMessageLogsProgressive(
     nextIndex,
   };
 }
-//@ chunk-e6aww6q8.js:523031-525836 fingerprint = getStatOnlyLogsForWorktrees (0.327)
+//@ chunk-e6aww6q8.js:523031-525836 fingerprint (2.1.88 match: getStatOnlyLogsForWorktrees, 0.327)
 /**
  * 为各 worktree 对应的项目目录列出会话文件（只 stat 不读内容）。
  */
@@ -13001,7 +13001,7 @@ async function listProjectDirs(storage, listKeys) {
   });
   return (await Promise.all(names.map((name) => scanOne(name)))).filter((result) => result !== null);
 }
-//@ chunk-e6aww6q8.js:526820-527428 layout = getSessionFilesLite (0.917)
+//@ chunk-e6aww6q8.js:526820-527428 layout (2.1.88 match: getSessionFilesLite, 0.917)
 /**
  * 读取会话文件头尾得到 lite 日志（首条提示、标题、分支、cwd 等），不解析整份文件。
  */
@@ -13127,7 +13127,7 @@ async function getAgentTranscript(agentId, storage, options) {
   });
   return null;
 }
-//@ chunk-e6aww6q8.js:528776-530489 callgraph-fingerprint = getAgentTranscript (0.182)
+//@ chunk-e6aww6q8.js:528776-530489 callgraph-fingerprint (2.1.88 match: getAgentTranscript, 0.182)
 async function getAgentTranscript_2(agentId, storage) {
   let hasContent = false;
   let miss = (miss) => ({
@@ -13209,7 +13209,7 @@ async function getAgentTranscript_2(agentId, storage) {
     return miss("load_threw");
   }
 }
-//@ chunk-e6aww6q8.js:530489-530758 facade-majority = extractAgentIdsFromMessages (1)
+//@ chunk-e6aww6q8.js:530489-530758 facade-majority (2.1.88 match: extractAgentIdsFromMessages, 1)
 function extractAgentIdsFromMessages(messages) {
   let agentIds = [];
   for (let message of messages)
@@ -13264,11 +13264,11 @@ var EMPTY_SET; // deferred: has load-time effects after a deferred statement of 
 deferInit("chunk-e6aww6q8.js:531201", () => {
   EMPTY_SET = new Set([]);
 });
-//@ chunk-e6aww6q8.js:531221-531304 callgraph-fingerprint = isTranscriptMessage (0.461)
+//@ chunk-e6aww6q8.js:531221-531304 callgraph-fingerprint (2.1.88 match: isTranscriptMessage, 0.461)
 function isTranscriptMessage_2(entry) {
   return entry.type === "attachment" && entry.attachment?.type === "fork_briefing";
 }
-//@ chunk-e6aww6q8.js:531304-531699 facade-majority = isLoggableMessage (0.611)
+//@ chunk-e6aww6q8.js:531304-531699 facade-majority (2.1.88 match: isLoggableMessage, 0.611)
 /**
  * 该消息是否应写入转录（过滤 progress、部分 attachment 与 hook 系统消息）。
  */
@@ -13287,7 +13287,7 @@ function isLoggableMessage(m) {
   if (m.type === "system" && "persist" in m && m.persist === false) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:531699-531886 facade-majority = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:531699-531886 facade-majority (2.1.88 match: countToolCallsSince, 1)
 function collectReplIds(messages, sinceUuid = new Set()) {
   for (let message of messages)
     if (message.type === "assistant" && Array.isArray(message.message.content)) {
@@ -13296,7 +13296,7 @@ function collectReplIds(messages, sinceUuid = new Set()) {
     }
   return sinceUuid;
 }
-//@ chunk-e6aww6q8.js:531886-533052 fingerprint = transformMessagesForExternalTranscript (0.544)
+//@ chunk-e6aww6q8.js:531886-533052 fingerprint (2.1.88 match: transformMessagesForExternalTranscript, 0.544)
 function transformMessagesForExternalTranscript(messages, replIds) {
   let resumedIdx = new Set();
   if (
@@ -13379,7 +13379,7 @@ function transformMessagesForExternalTranscript(messages, replIds) {
     return [m];
   });
 }
-//@ chunk-e6aww6q8.js:533052-533264 facade-majority = loadMessagesFromJsonlPath (0.447)
+//@ chunk-e6aww6q8.js:533052-533264 facade-majority (2.1.88 match: loadMessagesFromJsonlPath, 0.447)
 function toTranscriptEntries(rows, sessionId) {
   let tip = null;
   return cleanMessagesForLogging(rows.slice()).map((message) => {
@@ -13397,7 +13397,7 @@ function toTranscriptEntries(rows, sessionId) {
     return entry;
   });
 }
-//@ chunk-e6aww6q8.js:533264-533420 facade-majority = cleanMessagesForLogging (1)
+//@ chunk-e6aww6q8.js:533264-533420 facade-majority (2.1.88 match: cleanMessagesForLogging, 1)
 function cleanMessagesForLogging(messages, allMessages = messages) {
   let messages_2 = messages.filter(isLoggableMessage).map((message) => resolveMessageAlias(message));
   if (getUserType() === "ant") return messages_2;
@@ -13417,7 +13417,7 @@ async function getLogByIndex(index, storage) {
 function findUnresolvedToolUseInTranscript(toolUseId, message) {
   return findUnresolvedToolUsesInTranscript(toolUseId, [message]).get(message) ?? null;
 }
-//@ chunk-e6aww6q8.js:533530-533936 facade-majority = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:533530-533936 facade-majority (2.1.88 match: countToolCallsSince, 1)
 function findUnresolvedToolUsesInTranscript(messages, sinceUuid) {
   let pending = new Set(sinceUuid);
   let holders = new Map();
@@ -13515,7 +13515,7 @@ function assistantMessageRowsInTranscript(messages, holder) {
       rows.push(message);
   return rows;
 }
-//@ chunk-e6aww6q8.js:535060-535166 layout = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:535060-535166 layout (2.1.88 match: countToolCallsSince, 1)
 function getAssistantToolUseIds(message) {
   return (
     Array.isArray(message.message.content) &&
@@ -13680,7 +13680,7 @@ async function getSessionFilesViaStorage(projectDir, storage) {
     });
   return result;
 }
-//@ chunk-e6aww6q8.js:537303-537861 facade-majority = getSessionFilesWithMtime (1)
+//@ chunk-e6aww6q8.js:537303-537861 facade-majority (2.1.88 match: getSessionFilesWithMtime, 1)
 /**
  * 列出项目目录中的 .jsonl 会话文件及 mtime。
  */
@@ -13727,7 +13727,7 @@ async function getSessionFilesWithMtime(projectDir, storage) {
 }
 //@ chunk-e6aww6q8.js:537861-537872 layout
 var DEFAULT_LOG_PAGE_SIZE = 50;
-//@ chunk-e6aww6q8.js:537872-539365 facade-majority = loadAllLogsFromSessionFile (0.77)
+//@ chunk-e6aww6q8.js:537872-539365 facade-majority (2.1.88 match: loadAllLogsFromSessionFile, 0.77)
 async function loadAllLogsFromSessionFile(sessionFile, projectPathOverride, storage) {
   let {
     messages,
@@ -13827,7 +13827,7 @@ async function getSessionFileEntriesViaStorage(projectDir, storage, projectKey) 
         key: info.key,
       }));
 }
-//@ chunk-e6aww6q8.js:539514-540131 fingerprint = getLogsWithoutIndex (0.804)
+//@ chunk-e6aww6q8.js:539514-540131 fingerprint (2.1.88 match: getLogsWithoutIndex, 0.804)
 async function getLogsWithoutIndex(projectDir, limit, storageOptions) {
   if (isStorageV5Enabled() && storageOptions) {
     let { backend, projectKey } = storageOptions;
@@ -13868,7 +13868,7 @@ async function getLogsWithoutIndex(projectDir, limit, storageOptions) {
     }
   return logs;
 }
-//@ chunk-e6aww6q8.js:540131-541827 fingerprint = readLiteMetadata (0.723)
+//@ chunk-e6aww6q8.js:540131-541827 fingerprint (2.1.88 match: readLiteMetadata, 0.723)
 /**
  * 从文件头尾字节中抽取 lite 元数据：isSidechain、teamName、cwd、首条提示、custom-title、tag 等。
  */
@@ -14057,7 +14057,7 @@ function isLoopCommandSession(chunk) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:543149-544523 fingerprint = extractFirstPromptFromChunk (0.719)
+//@ chunk-e6aww6q8.js:543149-544523 fingerprint (2.1.88 match: extractFirstPromptFromChunk, 0.719)
 function extractFirstPromptFromChunk(chunk, mode) {
   let start = 0;
   let hasTickMessages = false;
@@ -14158,7 +14158,7 @@ function findLastFieldInType(tail, type, key) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:544740-545032 fingerprint = extractJsonStringFieldPrefix (1)
+//@ chunk-e6aww6q8.js:544740-545032 fingerprint (2.1.88 match: extractJsonStringFieldPrefix, 1)
 function extractJsonStringFieldPrefix(text, key, maxLen) {
   let patterns = [`"${key}":"`, `"${key}": "`];
   for (let pattern of patterns) {
@@ -14181,7 +14181,7 @@ function extractJsonStringFieldPrefix(text, key, maxLen) {
   }
   return "";
 }
-//@ chunk-e6aww6q8.js:545032-545254 layout = groupLogsBySessionId (1)
+//@ chunk-e6aww6q8.js:545032-545254 layout (2.1.88 match: groupLogsBySessionId, 1)
 function latestLogPerSession(filteredLogs) {
   let groups = new Map();
   for (let log of filteredLogs) {
@@ -14194,7 +14194,7 @@ function latestLogPerSession(filteredLogs) {
     value,
   }));
 }
-//@ chunk-e6aww6q8.js:545254-545715 facade-majority = getSessionFilesLite (0.952)
+//@ chunk-e6aww6q8.js:545254-545715 facade-majority (2.1.88 match: getSessionFilesLite, 0.952)
 async function getSessionFilesLite(projectDir, limit, projectPath, storage, ownWorktrees) {
   let entries = [...(await getSessionFilesWithMtime(projectDir, storage)).entries()].sort(
     (a, b) => b[1].mtime - a[1].mtime,
@@ -14224,7 +14224,7 @@ async function getSessionFilesLite(projectDir, limit, projectPath, storage, ownW
   });
   return sorted;
 }
-//@ chunk-e6aww6q8.js:545715-547898 fingerprint = enrichLog (0.575)
+//@ chunk-e6aww6q8.js:545715-547898 fingerprint (2.1.88 match: enrichLog, 0.575)
 /**
  * 富化单个 lite 日志并过滤：cwd 不同、sidechain、无内容等不显示在 /resume。
  */
@@ -14328,7 +14328,7 @@ async function enrichLog(log, buf, storage) {
   }
   return enriched;
 }
-//@ chunk-e6aww6q8.js:547898-548224 facade-majority = enrichLogs (0.969)
+//@ chunk-e6aww6q8.js:547898-548224 facade-majority (2.1.88 match: enrichLogs, 0.969)
 /**
  * 批量富化 lite 日志，记录过滤计数（/resume: enriched … filtered out … visible）。
  */
@@ -14353,7 +14353,7 @@ async function enrichLogs(allLogs, startIndex, count, storage) {
     nextIndex: i,
   };
 }
-//@ chunk-89ebz077.js:16227-16458 fingerprint = writeAgentMetadata (0.515)
+//@ chunk-89ebz077.js:16227-16458 fingerprint (2.1.88 match: writeAgentMetadata, 0.515)
 async function writeAgentMetadata_2(agentId, metadata) {
   if (getPlatform() === "windows") return;
   let path = daemonTokensFile(agentId);
@@ -14373,7 +14373,7 @@ async function writeAgentMetadata_2(agentId, metadata) {
     return;
   }
 }
-//@ chunk-cgs3vg0v.js:1502-1585 fingerprint = buildFileHistorySnapshotChain (0.456)
+//@ chunk-cgs3vg0v.js:1502-1585 fingerprint (2.1.88 match: buildFileHistorySnapshotChain, 0.456)
 function buildFileHistorySnapshotChain(session) {
   if (!session) return;
   try {
@@ -14383,7 +14383,7 @@ function buildFileHistorySnapshotChain(session) {
     return;
   }
 }
-//@ chunk-dz3q485w.js:15191-15469 callgraph-fingerprint = loadSameRepoMessageLogs (0.229)
+//@ chunk-dz3q485w.js:15191-15469 callgraph-fingerprint (2.1.88 match: loadSameRepoMessageLogs, 0.229)
 async function loadSameRepoMessageLogs_2(cwd, credentials) {
   let worktrees = await sameRepoWorktrees(cwd);
   let sameRepoMessageLogsProgressive = await loadSameRepoMessageLogsProgressive(
@@ -14408,7 +14408,7 @@ async function loadSameRepoMessageLogs_2(cwd, credentials) {
     totalCount: count(filtered, resolveSessionFilePath_2) + unreadCount,
   };
 }
-//@ chunk-wd9kxbpn.js:18162-18427 placement = renderToolResultMessage (0.52)
+//@ chunk-wd9kxbpn.js:18162-18427 placement (2.1.88 match: renderToolResultMessage, 0.52)
 /**
  * 根据进度消息里的 worktree 信息更新已保存的会话元数据（路径/分支/hook 标记变化时写回）。
  */
@@ -14434,22 +14434,22 @@ async function renderToolResultMessage(output, _progressMessagesForMessage, _opt
     _options,
   );
 }
-//@ chunk-0j11jfmy.js:6045-6057 fingerprint = cleanMessagesForLogging (1)
+//@ chunk-0j11jfmy.js:6045-6057 fingerprint (2.1.88 match: cleanMessagesForLogging, 1)
 var cleanMessagesForLogging_2 = "ant";
-//@ chunk-bss4k1z9.js:33929-33956 fingerprint = getUserType (0.74)
+//@ chunk-bss4k1z9.js:33929-33956 fingerprint (2.1.88 match: getUserType, 0.74)
 var getUserType_2 = (userType) => userType === "external";
-//@ chunk-18hwfzwa.js:441822-441905 fingerprint = extractTeammateTranscriptsFromTasks (1)
+//@ chunk-18hwfzwa.js:441822-441905 fingerprint (2.1.88 match: extractTeammateTranscriptsFromTasks, 1)
 function extractTeammateTranscriptsFromTasks_2(tasks) {
   return tasks.type === "in_process_teammate" ? tasks.identity.agentId : tasks.agentId;
 }
-//@ chunk-18hwfzwa.js:1084489-1084597 fingerprint = loadSubagentTranscripts (0.658)
+//@ chunk-18hwfzwa.js:1084489-1084597 fingerprint (2.1.88 match: loadSubagentTranscripts, 0.658)
 function loadSubagentTranscripts_2({ isLoading, transcript }) {
   let ready = useCallback((agentId) => !isLoading && endsWithNumberedList(agentId), [isLoading]);
   let storeSelector = useStoreSelector(transcript, ready);
   let unattended = !isUnattendedInteractiveSession();
   return !isLoading && !storeSelector && unattended;
 }
-//@ chunk-ad2e1aj6.js:22307-22511 fingerprint = scanPreBoundaryMetadata (0.481)
+//@ chunk-ad2e1aj6.js:22307-22511 fingerprint (2.1.88 match: scanPreBoundaryMetadata, 0.481)
 function scanPreBoundaryMetadata(text, maxBytes, suffix) {
   if (Buffer.byteLength(text) <= maxBytes)
     return {
@@ -14465,7 +14465,7 @@ function scanPreBoundaryMetadata(text, maxBytes, suffix) {
     truncated: true,
   };
 }
-//@ chunk-cg2r2hy6.js:24194-24674 fingerprint = getAgentTranscriptPath (0.928)
+//@ chunk-cg2r2hy6.js:24194-24674 fingerprint (2.1.88 match: getAgentTranscriptPath, 0.928)
 function getAgentTranscriptPath_2(agentId) {
   let projectsPrefix = getProjectsDir_3() + sep;
   if (!agentId.startsWith(projectsPrefix)) return null;

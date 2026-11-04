@@ -935,7 +935,7 @@ var IGNORED_ALLOW_ENTRIES_HEADING =
   "#### permissions.allow entries auto mode ignores (classifier-bypassing, in your user settings)";
 var DESTRUCTIVE_ALLOW_ENTRIES_HEADING =
   "#### Destructive permissions.allow entries (honored at runtime \u2014 auto-approved with no prompt, in your user settings)";
-//@ chunk-2a8yx6fc.js:25786-25856 placement = ghIsDangerousCallback (1)
+//@ chunk-2a8yx6fc.js:25786-25856 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function ghIsDangerousCallback(rule) {
   return (
     displaySafeName(rule) === rule && rule.trim() === rule && rule.replace(URL_USERINFO_RE, "://") === rule

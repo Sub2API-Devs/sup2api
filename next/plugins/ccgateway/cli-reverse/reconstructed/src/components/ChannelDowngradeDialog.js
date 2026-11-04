@@ -23,7 +23,7 @@ import { Dialog } from "./design-system/Dialog.js";
 init_react_production();
 //@ chunk-9h8dr0qb.js:6538-6542 placement
 init_react_production();
-//@ chunk-9h8dr0qb.js:6542-7565 fingerprint = ChannelDowngradeDialog (0.849)
+//@ chunk-9h8dr0qb.js:6542-7565 fingerprint (2.1.88 match: ChannelDowngradeDialog, 0.849)
 function ChannelDowngradeDialog(props) {
   let $ = useMemoCache(17);
   let { currentVersion, onChoice } = props;

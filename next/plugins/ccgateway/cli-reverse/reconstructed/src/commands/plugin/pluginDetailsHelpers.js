@@ -160,7 +160,7 @@ function formatPluginSource(props) {
   } else fragment = $[8];
   return fragment;
 }
-//@ chunk-vrb44rx7.js:53454-53680 fingerprint = extractGitHubRepo (1)
+//@ chunk-vrb44rx7.js:53454-53680 fingerprint (2.1.88 match: extractGitHubRepo, 1)
 function extractGitHubRepo(plugin) {
   if (
     plugin.entry.source &&
@@ -190,7 +190,7 @@ function getPluginSourceRepoUrl(plugin) {
   }
   return;
 }
-//@ chunk-vrb44rx7.js:53908-54407 fingerprint = buildPluginDetailsMenuOptions (0.927)
+//@ chunk-vrb44rx7.js:53908-54407 fingerprint (2.1.88 match: buildPluginDetailsMenuOptions, 0.927)
 function buildPluginDetailsMenuOptions(hasHomepage, githubRepo, repositoryUrl) {
   let options = [
     {
@@ -266,7 +266,7 @@ function PluginActionSelect(props) {
 }
 //@ chunk-vrb44rx7.js:54826-54841 layout
 function noop_4() {}
-//@ chunk-vrb44rx7.js:54841-59155 callgraph-witnessed = PluginSelectionKeyHint (0.231)
+//@ chunk-vrb44rx7.js:54841-59155 callgraph-witnessed (2.1.88 match: PluginSelectionKeyHint, 0.231)
 function PluginSelectionKeyHint(props) {
   let $ = useMemoCache(88);
   let {

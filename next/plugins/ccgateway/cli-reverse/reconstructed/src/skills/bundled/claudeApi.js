@@ -20,7 +20,7 @@ import { registerBundledSkill } from "../bundledSkills.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-v8425tx0.js:2570-2852 fingerprint = LANGUAGE_INDICATORS (1)
+//@ chunk-v8425tx0.js:2570-2852 fingerprint (2.1.88 match: LANGUAGE_INDICATORS, 1)
 var LANGUAGE_INDICATORS = {
   python: [".py", "requirements.txt", "pyproject.toml", "setup.py", "Pipfile"],
   typescript: [".ts", ".tsx", "tsconfig.json", "package.json"],
@@ -38,12 +38,12 @@ var LANGUAGE_INDICATORS = {
 function loadSkillFilesModule() {
   return import("./SKILL_FILES_4.lazy.js");
 }
-//@ chunk-hantmvxa.js:111868-111927 fingerprint = getFilesForLanguage (1)
+//@ chunk-hantmvxa.js:111868-111927 fingerprint (2.1.88 match: getFilesForLanguage, 1)
 async function getFilesForLanguage() {
   let { SKILL_FILES } = await loadSkillFilesModule();
   return SKILL_FILES;
 }
-//@ chunk-jy3v56kg.js:41132-41250 fingerprint = buildPrompt (0.561)
+//@ chunk-jy3v56kg.js:41132-41250 fingerprint (2.1.88 match: buildPrompt, 0.561)
 /**
  * 去掉 SKILL.md 的 frontmatter 后拼接用户参数，生成内置 skill 提示词（claude-api 类 skill 使用）。
  */
@@ -220,7 +220,7 @@ ${userRequest}`);
 
 `);
 }
-//@ chunk-ym2xht5h.js:10147-10723 fingerprint = registerClaudeApiSkill (0.401)
+//@ chunk-ym2xht5h.js:10147-10723 fingerprint (2.1.88 match: registerClaudeApiSkill, 0.401)
 /**
  * 注册 claude-code-docs 内置 skill（回答 Claude Code 功能与设置问题，允许 Read/Grep/Glob 和 code.claude.com/platform.claude.com 的 WebFetch）；受 GrowthBook tengu_birch_kettle 门控，CLAUDE_CODE_DISABLE_CLAUDE_CODE_SKILL 可关闭。
  */

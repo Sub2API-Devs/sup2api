@@ -1044,7 +1044,7 @@ function isBackfillScopeAllowedForOrigin(scope, remoteControlOrigin) {
       return true;
   }
 }
-//@ chunk-4cm44bmp.js:18544-18699 placement = countToolCallsSince (1)
+//@ chunk-4cm44bmp.js:18544-18699 placement (2.1.88 match: countToolCallsSince, 1)
 function hasUserMessagingToolUse(message) {
   return (
     message.type === "assistant" &&

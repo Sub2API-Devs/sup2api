@@ -8,7 +8,7 @@
  * pieces: chunk-4v9zy7gn.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-4v9zy7gn.js:17501-22847 fingerprint = PR_TITLE (0.5)
+//@ chunk-4v9zy7gn.js:17501-22847 fingerprint (2.1.88 match: PR_TITLE, 0.5)
 /**
  * "Add Claude Code GitHub Workflow" 等 GitHub App 安装常量。
  */

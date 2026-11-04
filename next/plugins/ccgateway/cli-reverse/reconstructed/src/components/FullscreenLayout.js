@@ -474,7 +474,7 @@ function FullscreenLayoutView(props) {
   } else root = $[27];
   return root;
 }
-//@ chunk-ag5x7vhf.js:21173-21309 placement = siblingSharesY (0.858)
+//@ chunk-ag5x7vhf.js:21173-21309 placement (2.1.88 match: siblingSharesY, 0.858)
 function offsetWithinParent(node, yogaNode) {
   if (!node) return;
   let offset = 0;
@@ -583,7 +583,7 @@ function incrementByOne(value) {
 function isInKind(part) {
   return part.kind === "in";
 }
-//@ chunk-ag5x7vhf.js:24828-24927 placement = _temp2 (0.818)
+//@ chunk-ag5x7vhf.js:24828-24927 placement (2.1.88 match: _temp2, 0.818)
 function renderDebugLine(line, i_1) {
   return jsxProd_default(
     Text,
@@ -647,7 +647,7 @@ function ScrollTraceRuler() {
   } else ruler = $[1];
   return ruler;
 }
-//@ chunk-ag5x7vhf.js:25247-25541 placement = _temp25 (0.357)
+//@ chunk-ag5x7vhf.js:25247-25541 placement (2.1.88 match: _temp25, 0.357)
 /**
  * 全屏布局里的"scroll test"占位区块：生成固定行数的拉丁文编号行，用于测试滚动，关闭对话框后消失。
  */
@@ -784,7 +784,7 @@ function noop_2() {}
 function openHyperlink(url) {
   openClickedLink(url);
 }
-//@ chunk-ag5x7vhf.js:27839-28016 fingerprint = _temp3 (0.652)
+//@ chunk-ag5x7vhf.js:27839-28016 fingerprint (2.1.88 match: _temp3, 0.652)
 function repaintFullscreenInk() {
   if (!isFullscreenEnvEnabled()) {
     return;
@@ -818,7 +818,7 @@ function useScrollChrome() {
   }
   return chrome;
 }
-//@ chunk-ag5x7vhf.js:28271-28367 fingerprint = ScrollChromeContext (0.478)
+//@ chunk-ag5x7vhf.js:28271-28367 fingerprint (2.1.88 match: ScrollChromeContext, 0.478)
 function ScrollChromeContext() {
   let store = createStore(null);
   return {
@@ -830,7 +830,7 @@ function ScrollChromeContext() {
     },
   };
 }
-//@ chunk-ag5x7vhf.js:28367-28562 layout = countUnseenAssistantTurns (1)
+//@ chunk-ag5x7vhf.js:28367-28562 layout (2.1.88 match: countUnseenAssistantTurns, 1)
 /**
  * 统计未读分隔线之后的助手回合数（跳过 progress 与无可见文本的助手消息）。
  */
@@ -853,7 +853,7 @@ function assistantHasVisibleText(message) {
   for (let block of message.message.content) if (block.type === "text" && block.text?.trim()) return true;
   return false;
 }
-//@ chunk-ag5x7vhf.js:28694-28881 layout = countToolCallsSince (1)
+//@ chunk-ag5x7vhf.js:28694-28881 layout (2.1.88 match: countToolCallsSince, 1)
 function countToolCallsSince(message) {
   if (message.type !== "assistant" || message.message.content.length === 0) return false;
   for (let block of message.message.content) {
@@ -862,7 +862,7 @@ function countToolCallsSince(message) {
   }
   return true;
 }
-//@ chunk-ag5x7vhf.js:28881-29232 fingerprint = computeUnseenDivider (0.78)
+//@ chunk-ag5x7vhf.js:28881-29232 fingerprint (2.1.88 match: computeUnseenDivider, 0.78)
 /**
  * 根据最后一次已读位置计算未读分隔线（位置与计数），跳过 progress/attachment。
  */
@@ -900,7 +900,7 @@ function computeUnseenDivider(messages, dividerIndex, skipReinjected) {
     count: Math.max(1, count),
   };
 }
-//@ chunk-ag5x7vhf.js:29232-39089 fingerprint = FullscreenLayout (0.489)
+//@ chunk-ag5x7vhf.js:29232-39089 fingerprint (2.1.88 match: FullscreenLayout, 0.489)
 /**
  * 全屏布局组件：scrollable 槽（消息列表）放在 ScrollBox 中并提供 ScrollChromeContext；底部 bottom/abovePrompt 槽、可选 sidebar/dock；未读分隔线、"新消息"药丸、置顶提示头、modal/对话框浮层与建议浮层。
  */
@@ -2052,7 +2052,7 @@ deferInit("chunk-ag5x7vhf.js:43160", () => {
   JUMP_TO_BOTTOM_CHORD = parseChord("ctrl+end");
   PAGE_DOWN_CHORD = parseChord("pagedown");
 });
-//@ chunk-ag5x7vhf.js:43202-44640 fingerprint = NewMessagesPill (0.615)
+//@ chunk-ag5x7vhf.js:43202-44640 fingerprint (2.1.88 match: NewMessagesPill, 0.615)
 /**
  * "新消息"药丸：不在底部且有未读时显示 "Jump to bottom"，点击或 scroll:bottom 快捷键跳到底部。
  */
@@ -2165,7 +2165,7 @@ function NewMessagesPill(props) {
   } else pill = $[19];
   return pill;
 }
-//@ chunk-ag5x7vhf.js:44640-45388 fingerprint = StickyPromptHeader (0.796)
+//@ chunk-ag5x7vhf.js:44640-45388 fingerprint (2.1.88 match: StickyPromptHeader, 0.796)
 /**
  * 全屏滚动时置顶显示当前可见区域对应的用户提示（StickyPromptHeader）。
  */
@@ -2237,7 +2237,7 @@ function StickyPromptHeader(props) {
   } else header = $[12];
   return header;
 }
-//@ chunk-ag5x7vhf.js:45388-45658 fingerprint = DialogOverlay (0.554)
+//@ chunk-ag5x7vhf.js:45388-45658 fingerprint (2.1.88 match: DialogOverlay, 0.554)
 function DialogOverlay(props) {
   let $ = useMemoCache(4);
   let { width, children } = props;
@@ -2265,7 +2265,7 @@ function DialogOverlay(props) {
   } else t0 = $[3];
   return t0;
 }
-//@ chunk-ag5x7vhf.js:45658-46504 fingerprint = SuggestionsOverlay (0.783)
+//@ chunk-ag5x7vhf.js:45658-46504 fingerprint (2.1.88 match: SuggestionsOverlay, 0.783)
 function SuggestionsOverlay(props) {
   let $ = useMemoCache(10);
   let { rowsAbove } = props;

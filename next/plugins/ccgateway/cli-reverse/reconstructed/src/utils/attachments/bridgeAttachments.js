@@ -12,7 +12,7 @@ import { count } from "../collections.js";
 import { logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { logError } from "../log.js";
 
-//@ chunk-e6aww6q8.js:3291241-3291314 placement = _temp (1)
+//@ chunk-e6aww6q8.js:3291241-3291314 placement (2.1.88 match: _temp, 1)
 /**
  * 统计内容里的图片块数量（字符串视为 0）。
  */

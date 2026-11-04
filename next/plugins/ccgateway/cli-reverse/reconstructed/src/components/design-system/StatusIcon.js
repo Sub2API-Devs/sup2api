@@ -29,7 +29,7 @@ import { SCROLL_JUMP_LINES } from "../../ink/scrollConstants.js";
 import { getTaskIcon } from "../TaskListV2.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-mkatyybr.js:651-1441 fingerprint = STATUS_CONFIG (0.341)
+//@ chunk-mkatyybr.js:651-1441 fingerprint (2.1.88 match: STATUS_CONFIG, 0.341)
 /**
  * 状态图标闪光动画的调色板长度与每步时间。
  */
@@ -327,7 +327,7 @@ function ShimmerDim(props) {
   } else textNode = $[7];
   return textNode;
 }
-//@ chunk-axsvbsqv.js:14472-14537 fingerprint = StatusIcon (0.661)
+//@ chunk-axsvbsqv.js:14472-14537 fingerprint (2.1.88 match: StatusIcon, 0.661)
 function StatusIcon_2(t0) {
   let { icon, color } = getTaskIcon(t0);
   return {

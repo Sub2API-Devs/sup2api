@@ -18,7 +18,7 @@ import {
 } from "../../services/plugins/PluginInstallationManager.js";
 import { clearPluginCache } from "./pluginLoader.js";
 
-//@ chunk-18hwfzwa.js:206503-207065 fingerprint = performStartupChecks (0.714)
+//@ chunk-18hwfzwa.js:206503-207065 fingerprint (2.1.88 match: performStartupChecks, 0.714)
 /**
  * 交互启动时的插件检查：工作区受信后执行后台市场/插件安装与官方市场自动安装。
  */

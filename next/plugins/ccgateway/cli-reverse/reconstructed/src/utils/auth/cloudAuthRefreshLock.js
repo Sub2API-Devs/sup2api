@@ -1254,7 +1254,7 @@ async function readHolderRecord(holderPath) {
         kind: "absent",
       };
 }
-//@ chunk-aepeg2w5.js:338279-338401 placement = isFileReadDenied (1)
+//@ chunk-aepeg2w5.js:338279-338401 placement (2.1.88 match: isFileReadDenied, 1)
 async function isFileReadDenied(path) {
   let boundedJson = await readBoundedJson(path, MAX_TAKEOVER_RECORD_BYTES);
   let parseResult = refreshTakeoverSchema().safeParse(

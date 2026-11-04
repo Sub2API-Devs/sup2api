@@ -30,7 +30,7 @@ import { isKeybindingCustomizationEnabled } from "../../keybindings/loadUserBind
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:846384-846430 fingerprint = formatShortcut (1)
+//@ chunk-18hwfzwa.js:846384-846430 fingerprint (2.1.88 match: formatShortcut, 1)
 function formatShortcut(shortcut) {
   return shortcut.replaceAll("+", " + ");
 }
@@ -39,7 +39,7 @@ var SHORTCUT_FORMAT = {
   keyCase: "lower",
   modSep: " + ",
 };
-//@ chunk-18hwfzwa.js:846468-851347 fingerprint = PromptInputHelpMenu (0.665)
+//@ chunk-18hwfzwa.js:846468-851347 fingerprint (2.1.88 match: PromptInputHelpMenu, 0.665)
 /**
  * "?" 帮助菜单：三列列出 ! bash 模式、/ 命令、@ 文件、& 后台、双击 esc 回退、shift+tab 模式切换、ctrl+o transcript、ctrl+t 任务、ctrl+_ 撤销等，按当前 keybinding 显示。
  */

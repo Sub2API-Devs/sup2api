@@ -21,7 +21,7 @@ async function getKubernetesNamespace() {
 async function getContainerIdStub() {
   return null;
 }
-//@ chunk-e6aww6q8.js:2085019-2085167 fingerprint = logPermissionContextForAnts (0.339)
+//@ chunk-e6aww6q8.js:2085019-2085167 fingerprint (2.1.88 match: logPermissionContextForAnts, 0.339)
 class PermissionContextLogState {
   namespace = undefined;
   containerId = undefined;
@@ -34,14 +34,14 @@ class PermissionContextLogState {
 }
 //@ chunk-gjx0rh1b.js:13308-13323 affinity
 var MAX_MOUNTINFO_BYTES = 4194304;
-//@ chunk-gjx0rh1b.js:13323-13538 fingerprint = getContainerId (0.524)
+//@ chunk-gjx0rh1b.js:13323-13538 fingerprint (2.1.88 match: getContainerId, 0.524)
 async function getContainerId() {
   let [, major, minor] = /^(\d+)\.(\d+)/.exec(release()) ?? [];
   if (!(Number(major) > 5 || (Number(major) === 5 && Number(minor) >= 8))) return null;
   let text = await readJSONLFile("/proc/self/mountinfo", MAX_MOUNTINFO_BYTES).catch(() => null);
   return text === null || text.length >= MAX_MOUNTINFO_BYTES ? null : text;
 }
-//@ chunk-gjx0rh1b.js:13538-13793 sole-consumer = readJSONLFile (0.763)
+//@ chunk-gjx0rh1b.js:13538-13793 sole-consumer (2.1.88 match: readJSONLFile, 0.763)
 async function readJSONLFile(filePath, maxBytes) {
   let handle = await open(filePath, constants.O_RDONLY | READ_LIMITS);
   try {

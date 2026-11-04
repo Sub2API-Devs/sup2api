@@ -10,7 +10,7 @@
  */
 import { getInitialSettings_2 } from "../utils/settings/settings.js";
 
-//@ chunk-hbc3mvx0.js:2172-2306 fingerprint = getSpinnerVerbs (1)
+//@ chunk-hbc3mvx0.js:2172-2306 fingerprint (2.1.88 match: getSpinnerVerbs, 1)
 /**
  * 转圈动词：settings.spinnerVerbs 为 replace 模式时替换默认表，否则追加。
  */
@@ -20,7 +20,7 @@ function getSpinnerVerbs() {
   if (config.mode === "replace") return config.verbs.length > 0 ? config.verbs : SPINNER_VERBS;
   return [...SPINNER_VERBS, ...config.verbs];
 }
-//@ chunk-hbc3mvx0.js:2306-4751 fingerprint = SPINNER_VERBS (0.984)
+//@ chunk-hbc3mvx0.js:2306-4751 fingerprint (2.1.88 match: SPINNER_VERBS, 0.984)
 /**
  * 默认转圈动词表（Accomplishing、Clauding、Cogitating…）。
  */

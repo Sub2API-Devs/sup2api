@@ -36,7 +36,7 @@ var ReactReconcilerModule; // deferred: has load-time effects after a deferred s
 deferInit("chunk-bzr73sfg.js:175309", () => {
   ReactReconcilerModule = __toESM(require_react_reconciler_production(), 1);
 });
-//@ chunk-bzr73sfg.js:195131-195212 fingerprint = cleanupYogaNode (1)
+//@ chunk-bzr73sfg.js:195131-195212 fingerprint (2.1.88 match: cleanupYogaNode, 1)
 /**
  * 释放节点的 yoga 子树：解除测量函数、清 yogaNode 引用、freeRecursive。
  */
@@ -48,7 +48,7 @@ var cleanupYogaNode = (node) => {
     yogaNode.freeRecursive();
   }
 };
-//@ chunk-bzr73sfg.js:195212-195294 fingerprint = setEventHandler (1)
+//@ chunk-bzr73sfg.js:195212-195294 fingerprint (2.1.88 match: setEventHandler, 1)
 /**
  * 把事件处理器存进节点的 _eventHandlers（不放 attributes，避免改处理器触发重绘）。
  */
@@ -56,7 +56,7 @@ function setEventHandler(node, key, value) {
   if (!node._eventHandlers) node._eventHandlers = {};
   node._eventHandlers[key] = value;
 }
-//@ chunk-bzr73sfg.js:195294-195395 layout = setEventHandler (1)
+//@ chunk-bzr73sfg.js:195294-195395 layout (2.1.88 match: setEventHandler, 1)
 /**
  * 节点是否挂了键盘/粘贴/滚轮处理器（需要 stdin 原始模式）。
  */
@@ -84,7 +84,7 @@ function syncRawModeRef(node, root) {
   node._holdsRawModeRef = needsRaw;
   adjustRawModeRef(root, needsRaw ? 1 : -1);
 }
-//@ chunk-bzr73sfg.js:195602-195730 placement = dropSubtreeCache (0.851)
+//@ chunk-bzr73sfg.js:195602-195730 placement (2.1.88 match: dropSubtreeCache, 0.851)
 /**
  * 删除子树时归还其中持有的原始模式引用。
  */
@@ -95,7 +95,7 @@ function releaseRawModeRefs(node, root) {
   }
   for (let child of node.childNodes) if (child.nodeName !== "#text") releaseRawModeRefs(child, root);
 }
-//@ chunk-bzr73sfg.js:195906-196104 fingerprint = applyProp (0.823)
+//@ chunk-bzr73sfg.js:195906-196104 fingerprint (2.1.88 match: applyProp, 0.823)
 /**
  * 把一个 React 属性写到 DOM 节点：style→setStyleAndApplyLayout，textStyles 直接赋值，accessibility，事件处理器进 _eventHandlers，其余进 attributes。
  */
@@ -119,7 +119,7 @@ function applyProp(node, key, value) {
   }
   setAttribute(node, key, value);
 }
-//@ chunk-bzr73sfg.js:196104-196375 fingerprint = getOwnerChain (1)
+//@ chunk-bzr73sfg.js:196104-196375 fingerprint (2.1.88 match: getOwnerChain, 1)
 /**
  * 沿 fiber 的 _debugOwner/return 链收集组件名（最多 50 层，去重相邻），用于错误信息和调试重绘。
  */
@@ -154,7 +154,7 @@ function formatOwnerChain(fiber) {
     return "";
   }
 }
-//@ chunk-bzr73sfg.js:196478-199445 fingerprint = reconciler (0.867)
+//@ chunk-bzr73sfg.js:196478-199445 fingerprint (2.1.88 match: reconciler, 0.867)
 /**
  * Ink 的 React reconciler（react-reconciler 宿主配置，mutation 模式、主渲染器）与事件分发器。要点：createInstance 时 <Box> 不能嵌在 <Text> 里、ink-text 嵌套变 ink-virtual-text；文字必须在 <Text> 内（报错信息带组件所有者链）；commitUpdate 只把变化的属性写回 DOM（样式差量写进 yoga）；hide/unhideInstance 用 display:none；resetAfterCommit 记录提交耗时并触发 onComputeLayout + onRender；更新优先级由 dispatcher 按当前事件类型决定；autoFocus 在 commitMount 时聚焦；挂上键盘/粘贴/滚轮处理器时同步 stdin 原始模式引用。
  */

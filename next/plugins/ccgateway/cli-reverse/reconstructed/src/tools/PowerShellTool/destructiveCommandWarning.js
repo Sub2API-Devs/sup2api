@@ -9,7 +9,7 @@
  * attribution: fingerprint 1, layout 1, callgraph-fingerprint 1, placement 1
  */
 
-//@ chunk-e6aww6q8.js:1268611-1270651 fingerprint = DESTRUCTIVE_PATTERNS (0.676)
+//@ chunk-e6aww6q8.js:1268611-1270651 fingerprint (2.1.88 match: DESTRUCTIVE_PATTERNS, 0.676)
 /**
  * PowerShell 破坏性命令模式：Remove-Item -Recurse/-Force（含别名 rm/del/rd/ri）、Clear-Content *、Format-Volume、Clear-Disk、git reset --hard/push -f/clean -f/stash drop、SQL DROP/TRUNCATE、Stop/Restart-Computer、Clear-RecycleBin。
  */
@@ -99,7 +99,7 @@ function matchDestructivePattern_2(command) {
   for (let entry of DESTRUCTIVE_PATTERNS) if (entry.pattern.test(truncatedCommand)) return entry;
   return null;
 }
-//@ chunk-e6aww6q8.js:1270762-1270807 callgraph-fingerprint = getDestructiveCommandWarning (0.68)
+//@ chunk-e6aww6q8.js:1270762-1270807 callgraph-fingerprint (2.1.88 match: getDestructiveCommandWarning, 0.68)
 /**
  * PowerShell 破坏性命令警告文字（用于权限对话框），没有命中返回 null。
  */

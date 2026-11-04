@@ -27,7 +27,7 @@ import { hasTrailingOrReservedName } from "./windowsProfileFolders.js";
 function sessionUploadsDir() {
   return getSessionUploadsDirOverride() ?? join(getLocalUploadsRoot() ?? getUploadsDir(), getSessionId());
 }
-//@ chunk-f87fzzk4.js:458-498 placement = uploadsDir (1)
+//@ chunk-f87fzzk4.js:458-498 placement (2.1.88 match: uploadsDir, 1)
 /**
  * uploads 目录路径。
  */

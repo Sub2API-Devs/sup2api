@@ -15,7 +15,7 @@ import { getSecondRootError } from "../terminal.js";
 //@ chunk-x6v6jz2y.js:27033-27061 affinity
 var noopSubscribe = () => () => {};
 var alwaysFalse = () => false;
-//@ chunk-x6v6jz2y.js:27061-27197 fingerprint = useHasSelection (1)
+//@ chunk-x6v6jz2y.js:27061-27197 fingerprint (2.1.88 match: useHasSelection, 1)
 /**
  * 订阅式读取“是否有选区”（useSyncExternalStore）。
  */

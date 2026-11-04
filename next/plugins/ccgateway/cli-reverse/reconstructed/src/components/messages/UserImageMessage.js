@@ -19,7 +19,7 @@ import {
 import { Link, Text, Box } from "../../ink/components/Text.js";
 import { MessageResponse } from "../MessageResponse.js";
 
-//@ chunk-ah34pb7m.js:87716-88531 fingerprint = UserImageMessage (0.769)
+//@ chunk-ah34pb7m.js:87716-88531 fingerprint (2.1.88 match: UserImageMessage, 0.769)
 function UserImageMessage(props) {
   let $ = useMemoCache(15);
   let { imageId, addMargin, startsUserTurn } = props;

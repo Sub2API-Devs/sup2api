@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-bwbq4xvm.js:775255-775269 fingerprint = BASH_TOOL_NAME (1)
+//@ chunk-bwbq4xvm.js:775255-775269 fingerprint (2.1.88 match: BASH_TOOL_NAME, 1)
 /**
  * Bash 工具名常量 "Bash"。
  */

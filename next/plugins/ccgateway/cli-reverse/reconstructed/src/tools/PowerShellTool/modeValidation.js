@@ -29,7 +29,7 @@ import {
 } from "./powershellParsing.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v0yfsee9.js:17169-17245 fingerprint = ACCEPT_EDITS_ALLOWED_CMDLETS (1)
+//@ chunk-v0yfsee9.js:17169-17245 fingerprint (2.1.88 match: ACCEPT_EDITS_ALLOWED_CMDLETS, 1)
 /**
  * acceptEdits 模式自动允许的 cmdlet：Set-Content、Add-Content、Remove-Item、Clear-Content。
  */
@@ -42,16 +42,16 @@ function isAcceptEditsAllowedCmdlet(name) {
   let canonical = resolveToCanonical(name);
   return ACCEPT_EDITS_ALLOWED_CMDLETS.has(canonical);
 }
-//@ chunk-v0yfsee9.js:17289-17344 fingerprint = LINK_ITEM_TYPES (1)
+//@ chunk-v0yfsee9.js:17289-17344 fingerprint (2.1.88 match: LINK_ITEM_TYPES, 1)
 var LINK_ITEM_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-v0yfsee9.js:17289", () => {
   LINK_ITEM_TYPES = new Set(["symboliclink", "junction", "hardlink"]);
 });
-//@ chunk-v0yfsee9.js:17344-17441 fingerprint = isItemTypeParamAbbrev (1)
+//@ chunk-v0yfsee9.js:17344-17441 fingerprint (2.1.88 match: isItemTypeParamAbbrev, 1)
 function isItemTypeParamAbbrev(p) {
   return (p.length >= 3 && "-itemtype".startsWith(p)) || (p.length >= 3 && "-type".startsWith(p));
 }
-//@ chunk-v0yfsee9.js:17441-17950 fingerprint = isSymlinkCreatingCommand (1)
+//@ chunk-v0yfsee9.js:17441-17950 fingerprint (2.1.88 match: isSymlinkCreatingCommand, 1)
 /**
  * New-Item 是否在创建符号链接/联接/硬链接（-ItemType/-Type 缩写、值含通配或变量也算）。
  */
@@ -76,7 +76,7 @@ function isSymlinkCreatingCommand(cmd) {
   }
   return false;
 }
-//@ chunk-v0yfsee9.js:17950-21707 fingerprint = checkPermissionMode (0.943)
+//@ chunk-v0yfsee9.js:17950-21707 fingerprint (2.1.88 match: checkPermissionMode, 0.943)
 /**
  * PowerShell acceptEdits 模式检查：命令解析成功、无子表达式/脚本块/成员调用/splatting/赋值/停止解析/可展开字符串、不创建链接、无 cd+写组合，所有命令都是 acceptEdits 允许的 cmdlet 或安全输出命令且参数可静态验证时 allow，否则 passthrough。
  */

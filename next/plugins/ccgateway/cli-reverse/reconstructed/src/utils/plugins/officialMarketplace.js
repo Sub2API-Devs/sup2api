@@ -8,7 +8,7 @@
  * pieces: chunk-a42q40ze.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-a42q40ze.js:191-288 fingerprint = OFFICIAL_MARKETPLACE_SOURCE (0.804)
+//@ chunk-a42q40ze.js:191-288 fingerprint (2.1.88 match: OFFICIAL_MARKETPLACE_SOURCE, 0.804)
 /**
  * OFFICIAL_MARKETPLACE_SOURCE：官方市场的 GitHub 来源。
  */

@@ -40,7 +40,7 @@ import { commandSyncNameState } from "./commandSyncNames.js";
 import { uniq } from "../collections.js";
 import { env } from "../env.js";
 
-//@ chunk-dcmhvw5a.js:470784-471242 placement = parseSettingsFileUncached (0.417)
+//@ chunk-dcmhvw5a.js:470784-471242 placement (2.1.88 match: parseSettingsFileUncached, 0.417)
 function parseSettingsFileIfChanged(path, cache, pinned = false) {
   let text;
   try {
@@ -205,7 +205,7 @@ function getPhysicalPathCached(path) {
   }
   return settingsParseFailure.physical;
 }
-//@ chunk-dcmhvw5a.js:472955-473055 placement = handleFileSystemError (0.788)
+//@ chunk-dcmhvw5a.js:472955-473055 placement (2.1.88 match: handleFileSystemError, 0.788)
 function logMissingSettingsFile(path) {
   logForDebugging(
     cleanForDisplay(`Broken symlink or missing file encountered for settings.json at path: ${path}`),
@@ -407,17 +407,17 @@ function normalizedRealHome() {
   if (realHome === null) throw Error("home directory realpath unavailable");
   return identity(realHome);
 }
-//@ chunk-dcmhvw5a.js:476753-476841 placement = isApiKeyHelperFromProjectOrLocalSettings (0.831)
+//@ chunk-dcmhvw5a.js:476753-476841 placement (2.1.88 match: isApiKeyHelperFromProjectOrLocalSettings, 0.831)
 function getRuleAnchorRootForSource(source, settingsContext) {
   return source === "localSettings" || source === "projectSettings"
     ? resolve(requireCwd(settingsContext))
     : getSettingsRootPathForSource(source, settingsContext);
 }
-//@ chunk-dcmhvw5a.js:476841-476892 placement = isInGlobalClaudeFolder (1)
+//@ chunk-dcmhvw5a.js:476841-476892 placement (2.1.88 match: isInGlobalClaudeFolder, 1)
 function userSettingsHomes() {
   return uniq([getClaudeConfigDir(), join(homedir(), ".claude")]);
 }
-//@ chunk-dcmhvw5a.js:476892-476955 placement = getUserSettingsFilePath (0.786)
+//@ chunk-dcmhvw5a.js:476892-476955 placement (2.1.88 match: getUserSettingsFilePath, 0.786)
 var USER_SETTINGS_FILE_NAMES = {
   default: "settings.json",
   cowork: "cowork_settings.json",
@@ -428,7 +428,7 @@ function getUserSettingsFileName(settingsContext) {
     return USER_SETTINGS_FILE_NAMES.cowork;
   return USER_SETTINGS_FILE_NAMES.default;
 }
-//@ chunk-dcmhvw5a.js:477058-477334 placement = getSettingsFilePathForSource (0.792)
+//@ chunk-dcmhvw5a.js:477058-477334 placement (2.1.88 match: getSettingsFilePathForSource, 0.792)
 /**
  * 来源 → 设置文件路径：user=<配置目录>/settings.json（cowork 模式 cowork_settings.json）；project=<项目>/.claude/settings.json；local=<项目>/.claude/settings.local.json；policy=<托管目录>/managed-settings.json；flag=--settings 指定的路径。diskless 或无项目时 project/local 返回 undefined。
  */

@@ -313,7 +313,7 @@ function isLocalBashTask(task) {
 function isRemoteAgentTask(task) {
   return task.type === "remote_agent";
 }
-//@ chunk-18hwfzwa.js:728469-728517 fingerprint = getSelectableBackgroundTasks (1)
+//@ chunk-18hwfzwa.js:728469-728517 fingerprint (2.1.88 match: getSelectableBackgroundTasks, 1)
 function getSelectableBackgroundTasks(i_0) {
   return i_0.type === "local_agent";
 }
@@ -398,15 +398,15 @@ function logErrorWrapper5(error) {
 function logErrorWrapper6(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729400-729446 placement = requestTeammateShutdown (1)
+//@ chunk-18hwfzwa.js:729400-729446 placement (2.1.88 match: requestTeammateShutdown, 1)
 function isTaskRunning_2(task) {
   return task.status === "running";
 }
-//@ chunk-18hwfzwa.js:729515-729561 sole-consumer = requestTeammateShutdown (1)
+//@ chunk-18hwfzwa.js:729515-729561 sole-consumer (2.1.88 match: requestTeammateShutdown, 1)
 function isTaskRunning_3(task) {
   return task.status === "running";
 }
-//@ chunk-18hwfzwa.js:729561-729645 sole-consumer = getDisplayName (0.757)
+//@ chunk-18hwfzwa.js:729561-729645 sole-consumer (2.1.88 match: getDisplayName, 0.757)
 function getDisplayName_2(teammateId) {
   return teammateId.status === "running" && !(teammateId.type === "leader" && teammateId.label === MAIN);
 }
@@ -420,11 +420,11 @@ function renderSeparator(separatorIndex) {
     `separator-${separatorIndex}`,
   );
 }
-//@ chunk-18hwfzwa.js:729712-729755 placement = getDisplayName (1)
+//@ chunk-18hwfzwa.js:729712-729755 placement (2.1.88 match: getDisplayName, 1)
 function getDisplayName(teammateId) {
   return teammateId.type !== "leader";
 }
-//@ chunk-18hwfzwa.js:729755-729798 layout = getDisplayName (1)
+//@ chunk-18hwfzwa.js:729755-729798 layout (2.1.88 match: getDisplayName, 1)
 function getDisplayName_3(teammateId) {
   return teammateId.type === "leader";
 }
@@ -576,7 +576,7 @@ function isTaskShownInDialog(task, backgroundListV3Fallback) {
   if (isFallbackFinished) return !TaskOutputResultDisplay(task);
   return waitForTaskCompletion(task);
 }
-//@ chunk-18hwfzwa.js:731600-762915 fingerprint = BackgroundTasksDialog (0.512)
+//@ chunk-18hwfzwa.js:731600-762915 fingerprint (2.1.88 match: BackgroundTasksDialog, 0.512)
 /**
  * 后台任务对话框：把各类任务（local_bash、local_agent、in_process_teammate、local_workflow、remote_agent、monitor_mcp、dream）转成列表项，list/detail 两级视图，支持停止所有 agent（chat:killAgents）、进入队友视图、查看输出。
  */
@@ -3227,7 +3227,7 @@ var MAIN = "main";
 function viewingLabel(item) {
   return item.label === MAIN ? "Viewing main" : "Viewing leader";
 }
-//@ chunk-18hwfzwa.js:763818-763999 callgraph-fingerprint = Item (0.252)
+//@ chunk-18hwfzwa.js:763818-763999 callgraph-fingerprint (2.1.88 match: Item, 0.252)
 function Item(t0) {
   if (
     t0.type === "leader" ||
@@ -3247,11 +3247,11 @@ function isParkedCompletedAgent(status) {
     !(isCoordinatorPanelActive() && isTerminalStatus(status))
   );
 }
-//@ chunk-18hwfzwa.js:764108-764166 layout = getSelectableBackgroundTasks (0.788)
+//@ chunk-18hwfzwa.js:764108-764166 layout (2.1.88 match: getSelectableBackgroundTasks, 0.788)
 function getSelectableBackgroundTasks_2(item) {
   return item.type === "local_agent" && isParkedCompletedAgent(item.task);
 }
-//@ chunk-18hwfzwa.js:764166-765510 fingerprint = toListItem (0.784)
+//@ chunk-18hwfzwa.js:764166-765510 fingerprint (2.1.88 match: toListItem, 0.784)
 function toListItem(task) {
   switch (task.type) {
     case "local_bash":

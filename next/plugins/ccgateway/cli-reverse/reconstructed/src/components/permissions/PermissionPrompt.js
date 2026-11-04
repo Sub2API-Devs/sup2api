@@ -34,7 +34,7 @@ import { deferInit } from "../../../runtime/deferred-init.js";
 deferInit("chunk-0e8j1zzj.js:25579", () => {
   init_react_production();
 });
-//@ chunk-0e8j1zzj.js:25583-25686 fingerprint = _temp (1)
+//@ chunk-0e8j1zzj.js:25583-25686 fingerprint (2.1.88 match: _temp, 1)
 /**
  * 把权限提示归因状态中的 Esc 次数加一。
  */
@@ -47,12 +47,12 @@ function incrementEscapeCount(prev) {
     },
   };
 }
-//@ chunk-0e8j1zzj.js:28285-28375 fingerprint = DEFAULT_PLACEHOLDERS (1)
+//@ chunk-0e8j1zzj.js:28285-28375 fingerprint (2.1.88 match: DEFAULT_PLACEHOLDERS, 1)
 var DEFAULT_PLACEHOLDERS = {
   accept: "tell Claude what to do next",
   reject: "tell Claude what to do differently",
 };
-//@ chunk-0e8j1zzj.js:28375-30168 fingerprint = PermissionPrompt (0.469)
+//@ chunk-0e8j1zzj.js:28375-30168 fingerprint (2.1.88 match: PermissionPrompt, 0.469)
 /**
  * 权限选择提示：Select 列出选项，选中带 input 的选项时展开反馈输入框（默认占位 "tell Claude what to do differently"）；Esc 视为拒绝。
  */

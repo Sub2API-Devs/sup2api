@@ -34,7 +34,7 @@ import { isSessionsToken } from "../oauth/sessionsBearerHooks.js";
 import { SERVER_ERROR_TYPES, POLICY_AUTH_DENIAL_CODES } from "../policyLimits/complianceTaints.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gr2vfhah.js:3506-3601 placement = TeamMemoryTooManyEntriesSchema (0.459)
+//@ chunk-gr2vfhah.js:3506-3601 placement (2.1.88 match: TeamMemoryTooManyEntriesSchema, 0.459)
 function getApiErrorCode(error) {
   if (!(error instanceof APIError) || !hasNestedError(error)) return;
   return error.error?.error?.details?.error_code;
@@ -155,7 +155,7 @@ function formatApiErrorType(type, status) {
  */
 var CREDENTIAL_PROVIDER_ERRORS = "Failed to resolve AWS credentials from the credential provider chain.";
 var GOOGLE_CREDENTIAL_ERROR_TEXT = "Failed to acquire Google OAuth credentials.";
-//@ chunk-gr2vfhah.js:5237-5633 fingerprint = extractConnectionErrorDetails (0.813)
+//@ chunk-gr2vfhah.js:5237-5633 fingerprint (2.1.88 match: extractConnectionErrorDetails, 0.813)
 /**
  * 沿 cause 链（最多 5 层）提取 {code, message, isSSLError}；socket 意外关闭视为 ConnectionClosed。
  */
@@ -255,7 +255,7 @@ function isConnectionError(error) {
       TRANSIENT_SOCKET_CODES.has(connectionErrorDetails.code))
   );
 }
-//@ chunk-gr2vfhah.js:6260-6550 fingerprint = getSSLErrorHint (0.743)
+//@ chunk-gr2vfhah.js:6260-6550 fingerprint (2.1.88 match: getSSLErrorHint, 0.743)
 /**
  * SSL 错误时给出 NODE_EXTRA_CA_CERTS/代理建议。
  */
@@ -329,7 +329,7 @@ function extractNestedErrorMessage(error) {
  * "Connection dropped"。
  */
 var CONNECTION_DROPPED_MESSAGE = "Connection dropped";
-//@ chunk-gr2vfhah.js:7159-11245 fingerprint = formatAPIError (0.518)
+//@ chunk-gr2vfhah.js:7159-11245 fingerprint (2.1.88 match: formatAPIError, 0.518)
 /**
  * 面向用户的 API 错误文案：连接类（休眠断流、提前关闭、无响应、超时、SSL 证书逐码说明与 NODE_EXTRA_CA_CERTS 建议）、HTML 错误页、嵌套消息等。
  */

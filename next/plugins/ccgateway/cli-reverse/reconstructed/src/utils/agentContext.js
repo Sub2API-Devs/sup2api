@@ -171,7 +171,7 @@ function turnAttributionKeyFor(agentContext) {
       : getContextKey(),
   );
 }
-//@ chunk-aepeg2w5.js:853962-854039 placement = isSubagentContext (0.783)
+//@ chunk-aepeg2w5.js:853962-854039 placement (2.1.88 match: isSubagentContext, 0.783)
 /**
  * 是否为委托观察的子代理。
  */
@@ -215,7 +215,7 @@ function reapsShellsOnExit(agentContext) {
     (agentContext.isAsync === false || agentContext.reapsShellsUnlessMoved === true)
   );
 }
-//@ chunk-aepeg2w5.js:854454-854501 fingerprint = isSubagentContext (1)
+//@ chunk-aepeg2w5.js:854454-854501 fingerprint (2.1.88 match: isSubagentContext, 1)
 /**
  * agentType === "subagent"。
  */
@@ -271,7 +271,7 @@ function isMainConversationContext(agentContext) {
         (agentContext.isMainSession === true || agentContext.forkOfMainConversation === true)))
   );
 }
-//@ chunk-aepeg2w5.js:854898-855008 fingerprint = getSubagentLogName (1)
+//@ chunk-aepeg2w5.js:854898-855008 fingerprint (2.1.88 match: getSubagentLogName, 1)
 /**
  * 子代理类型的遥测名：内置代理用真实名，自定义代理统一为 user-defined。
  */
@@ -322,7 +322,7 @@ function getWorkflowRunFields(agentContext) {
     workflowName: agentContext.workflowName,
   };
 }
-//@ chunk-aepeg2w5.js:855430-855622 fingerprint = consumeInvokingRequestId (0.757)
+//@ chunk-aepeg2w5.js:855430-855622 fingerprint (2.1.88 match: consumeInvokingRequestId, 0.757)
 /**
  * 一次性取出发起该子代理的请求 ID（之后标 invocationEmitted），用于把首个请求关联到父调用。
  */
@@ -385,7 +385,7 @@ function getTeamContextTarget(agentContext) {
       )
     : undefined;
 }
-//@ chunk-ha3km179.js:75987-76055 fingerprint = isTeammateAgentContext (1)
+//@ chunk-ha3km179.js:75987-76055 fingerprint (2.1.88 match: isTeammateAgentContext, 1)
 /**
  * 按代理语境分派：teammate 走一个实现，其余走另一个。
  */

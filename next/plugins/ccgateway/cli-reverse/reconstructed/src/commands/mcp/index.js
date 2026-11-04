@@ -10,7 +10,7 @@
  */
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:1732503-1732969 fingerprint = mcp (0.488)
+//@ chunk-e6aww6q8.js:1732503-1732969 fingerprint (2.1.88 match: mcp, 0.488)
 /**
  * /mcp 命令对象（local）；描述：Manage MCP servers；isEnabled: ()=>_e()；isHidden: {return!_e()}；实现 chunk-3re05e6m.js 的 Le。
  */

@@ -63,7 +63,7 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isHiddenReplyServer, appToolServerUnavailableText } from "../../services/mcp/appToolServerErrors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:456337-456926 facade-majority = getToolDescriptionMemoized (0.686)
+//@ chunk-s61vbvea.js:456337-456926 facade-majority (2.1.88 match: getToolDescriptionMemoized, 0.686)
 /**
  * 按工具名缓存工具 prompt 文本（描述）；延迟工具集合变化时整体失效。
  */
@@ -108,7 +108,7 @@ class ToolSearchDescriptionCache {
     }
   }
 }
-//@ chunk-s61vbvea.js:456926-457348 fingerprint = parseToolName (0.71)
+//@ chunk-s61vbvea.js:456926-457348 fingerprint (2.1.88 match: parseToolName, 0.71)
 /**
  * 把工具名拆成搜索用的词：MCP 工具按服务器名与工具名切分，内建工具按驼峰和下划线切分。
  */
@@ -180,7 +180,7 @@ function compileTermPatterns(terms) {
     if (!patterns.has(term)) patterns.set(term, new RegExp(`\\b${urlPatternToRegex(term)}\\b`));
   return patterns;
 }
-//@ chunk-s61vbvea.js:457890-459408 facade-majority = searchToolsWithKeywords (0.786)
+//@ chunk-s61vbvea.js:457890-459408 facade-majority (2.1.88 match: searchToolsWithKeywords, 0.786)
 /**
  * 关键词搜索延迟工具：完全同名直接返回；mcp__ 前缀按前缀匹配；"+词"为必选词；按工具名分词（驼峰/下划线，MCP 按 server/tool）、searchHint、描述文本打分（MCP 名命中略高），取前 max_results。
  */
@@ -264,7 +264,7 @@ async function searchToolsWithKeywords(
     .slice(0, maxResults)
     .map((item) => item.name);
 }
-//@ chunk-e6aww6q8.js:1641577-1642024 fingerprint = inputSchema (0.662)
+//@ chunk-e6aww6q8.js:1641577-1642024 fingerprint (2.1.88 match: inputSchema, 0.662)
 var toolSearchInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var toolSearchOutputSchema;
 var MCP_PENDING_WAIT_MS;
@@ -297,7 +297,7 @@ deferInit("chunk-e6aww6q8.js:1641577", () => {
   );
   MCP_PENDING_WAIT_MS = 5000;
 });
-//@ chunk-e6aww6q8.js:1642024-1642696 fingerprint = buildSearchResult (0.333)
+//@ chunk-e6aww6q8.js:1642024-1642696 fingerprint (2.1.88 match: buildSearchResult, 0.333)
 /**
  * 组装 ToolSearch 结果：matches、query、total_deferred_tools、pending/failed MCP 服务器；会自动重试的失败服务器改成一条 isMeta 提示消息。
  */
@@ -361,7 +361,7 @@ function findToolsByNameOrMcpToolName(deferredTools, allTools, name) {
       : mcpInfoFromString(tool.name)?.toolName === name,
   );
 }
-//@ chunk-e6aww6q8.js:1642958-1652913 fingerprint = ToolSearchTool (0.438)
+//@ chunk-e6aww6q8.js:1642958-1652913 fingerprint (2.1.88 match: ToolSearchTool, 0.438)
 /**
  * ToolSearch 工具。输入 {query, max_results=5}；select:a,b 按名字精确取（支持 MCP 原始工具名），否则关键词打分搜索；查不到时可重拨失败的 MCP 服务器、等待连接中的服务器（最多 5 秒）后再查；已内联的工具会提示"直接调用"。结果是 tool_reference 块，下一次请求才把对应工具定义放进 tools。
  */

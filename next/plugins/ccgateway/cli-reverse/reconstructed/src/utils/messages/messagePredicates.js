@@ -16,7 +16,7 @@
 function queuePriorityOrUndefined(priority) {
   return priority === "now" || priority === "next" || priority === "later" ? priority : undefined;
 }
-//@ chunk-qz53w8v8.js:567-627 placement = _temp (1)
+//@ chunk-qz53w8v8.js:567-627 placement (2.1.88 match: _temp, 1)
 function isNonEmptyImageAttachment(c) {
   return c.type === "image" && c.content.length > 0;
 }
@@ -47,7 +47,7 @@ function isRealAssistantMessage(message) {
 function lastConversationMessage(messages) {
   return messages.findLast((message) => message.type === "user" || message.type === "assistant");
 }
-//@ chunk-qz53w8v8.js:948-1544 placement = countToolCallsSince (1)
+//@ chunk-qz53w8v8.js:948-1544 placement (2.1.88 match: countToolCallsSince, 1)
 function isToolResultForToolUse(messages) {
   let isToolResultMessage = (message) =>
     message.type === "user" &&
@@ -76,7 +76,7 @@ function isToolResultForToolUse(messages) {
   }
   return false;
 }
-//@ chunk-qz53w8v8.js:1544-1699 placement = getLastToolUseName (1)
+//@ chunk-qz53w8v8.js:1544-1699 placement (2.1.88 match: getLastToolUseName, 1)
 /**
  * 找最后一条包含 tool_use 的 assistant 消息，找不到时取最后一条消息。
  */

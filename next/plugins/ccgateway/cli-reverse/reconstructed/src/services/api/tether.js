@@ -618,7 +618,7 @@ function threadIdleState(threadKey, closedTurn, clock) {
 function clearThreadRequestEnd(agentId) {
   threadRequestEnds().delete(formatZodErrors(agentId));
 }
-//@ chunk-e6aww6q8.js:2595772-2595824 placement = isSubagentContext (0.815)
+//@ chunk-e6aww6q8.js:2595772-2595824 placement (2.1.88 match: isSubagentContext, 0.815)
 /**
  * 代理类型为 subagent 或未给出上下文。
  */

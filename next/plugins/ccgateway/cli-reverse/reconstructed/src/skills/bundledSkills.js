@@ -177,7 +177,7 @@ function wireSkillFilesExtraction(definition) {
     getPromptForCommand: getPromptForCommand_2,
   };
 }
-//@ chunk-yjaa68dq.js:2514-4342 placement = registerBundledSkill (0.515)
+//@ chunk-yjaa68dq.js:2514-4342 placement (2.1.88 match: registerBundledSkill, 0.515)
 /**
  * 把一个内置 skill 定义转成 type:prompt 的命令对象并压入全局 bundledSkills 列表：source/loadedFrom 都是 bundled，isHidden = !userInvocable；description/argumentHint/whenToUse 可为函数（惰性求值）；survivesBundledKillSwitch 的 skill 在总开关关闭时仍保留。
  */
@@ -262,7 +262,7 @@ function isShippedSkillExecutionBlocked(command) {
       return false;
   return isSkillOutsideCorePolicy(command.name);
 }
-//@ chunk-yjaa68dq.js:4750-4795 placement = loadAllCommands (0.375)
+//@ chunk-yjaa68dq.js:4750-4795 placement (2.1.88 match: loadAllCommands, 0.375)
 /**
  * getRegisteredBundledSkillsIgnoringKillSwitch：返回已注册的全部发行内建技能命令，不看技能开关（用于名字保留）。
  */
@@ -279,7 +279,7 @@ function getBundledSkillExtractDir(skillName) {
     ? posix.join(bundledSkillFilesElsewhere.root, skillName)
     : join(getBundledSkillsRoot(), skillName);
 }
-//@ chunk-yjaa68dq.js:4886-5213 fingerprint = extractBundledSkillFiles (0.558)
+//@ chunk-yjaa68dq.js:4886-5213 fingerprint (2.1.88 match: extractBundledSkillFiles, 0.558)
 /**
  * 把内置 skill 的附带文件写入解压目录（verify-content 模式，内容不同才写）；失败返回 null 并记 skill_bundled_extract 失败。
  */
@@ -321,7 +321,7 @@ function writeBundledSkillFiles(dir, files, tolerateExisting) {
         tolerateExisting,
       });
 }
-//@ chunk-e6aww6q8.js:3124728-3124790 fingerprint = prependBaseDir (1)
+//@ chunk-e6aww6q8.js:3124728-3124790 fingerprint (2.1.88 match: prependBaseDir, 1)
 /**
  * 返回「Base directory for this skill: <dir>」前缀行，skill 提示词前置使用。
  */
@@ -330,7 +330,7 @@ function prependBaseDir(baseDir) {
 
 `;
 }
-//@ chunk-hddjmtjj.js:7191-7333 fingerprint = safeWriteFile (0.722)
+//@ chunk-hddjmtjj.js:7191-7333 fingerprint (2.1.88 match: safeWriteFile, 0.722)
 async function safeWriteFile(filePath, directory, content) {
   let pinnedForWrite = await openPinnedForWrite(filePath, directory);
   if (pinnedForWrite === null) return false;
@@ -343,7 +343,7 @@ async function safeWriteFile(filePath, directory, content) {
   }
   return true;
 }
-//@ chunk-wy9dbk5f.js:65065-65138 fingerprint = SAFE_WRITE_FLAGS (0.719)
+//@ chunk-wy9dbk5f.js:65065-65138 fingerprint (2.1.88 match: SAFE_WRITE_FLAGS, 0.719)
 function SAFE_WRITE_FLAGS(filePath, isExclusive) {
   return open(
     filePath,

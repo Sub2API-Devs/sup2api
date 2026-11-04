@@ -678,7 +678,7 @@ function initializeLaunchOptionsFromEnv(isNonInteractive) {
   sessionShape_2.setDesktopConnectorNames(isHostEntrypoint && env.CLAUDE_CODE_DESKTOP_CONNECTOR_NAMES);
   if (isHostEntrypoint) env.unset("CLAUDE_CODE_DESKTOP_CONNECTOR_NAMES");
 }
-//@ chunk-7dqf31r1.js:9704-10192 fingerprint = initializeEntrypoint (0.814)
+//@ chunk-7dqf31r1.js:9704-10192 fingerprint (2.1.88 match: initializeEntrypoint, 0.814)
 /**
  * 推断 CLAUDE_CODE_ENTRYPOINT：已设置时规范化（local_agent→local-agent，非交互的 cli→sdk-cli）；mcp serve → mcp；CLAUDE_CODE_ACTION → claude-code-github-action；否则 cli 或 sdk-cli。
  */
@@ -726,7 +726,7 @@ function compactJsonForTypedTransport(value) {
     (char) => "\\u" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0"),
   );
 }
-//@ chunk-qg4qg94n.js:1044-1909 facade-majority = loadSettingsFromFlag (0.517)
+//@ chunk-qg4qg94n.js:1044-1909 facade-majority (2.1.88 match: loadSettingsFromFlag, 0.517)
 /**
  * 处理 --settings：JSON 字符串写入按内容哈希命名的临时文件，否则解析路径；记录为 flagSettings 来源。
  */
@@ -800,7 +800,7 @@ function loadManagedSettingsFromFlag(settingSourcesArg) {
   setParentManagedSettings(tier, organization);
   invalidateCommandNames();
 }
-//@ chunk-qg4qg94n.js:2114-2307 fingerprint = loadSettingSourcesFromFlag (0.541)
+//@ chunk-qg4qg94n.js:2114-2307 fingerprint (2.1.88 match: loadSettingSourcesFromFlag, 0.541)
 /**
  * 处理 --setting-sources（user,project,local）并重置设置缓存；非法值退出。
  */
@@ -817,7 +817,7 @@ function loadSettingSourcesFromFlag(settingSourcesArg) {
     return cliError(`Error processing --setting-sources: ${errorMessage(error)}`);
   }
 }
-//@ chunk-qg4qg94n.js:2307-2537 facade-majority = eagerLoadSettings (0.675)
+//@ chunk-qg4qg94n.js:2307-2537 facade-majority (2.1.88 match: eagerLoadSettings, 0.675)
 /**
  * 在 commander 解析前预读 --settings、--managed-settings 与 --setting-sources，记录 settings_load_ms。
  */
@@ -869,11 +869,11 @@ function canonicalizePathCase(path) {
     return path;
   }
 }
-//@ chunk-e6aww6q8.js:2039698-2039771 fingerprint = resetCursor (0.689)
+//@ chunk-e6aww6q8.js:2039698-2039771 fingerprint (2.1.88 match: resetCursor, 0.689)
 function resetCursor() {
   return Boolean(process.stdout.isTTY && process.stdin.isTTY);
 }
-//@ chunk-151tygw9.js:5908-7043 fingerprint = getInputPrompt (0.453)
+//@ chunk-151tygw9.js:5908-7043 fingerprint (2.1.88 match: getInputPrompt, 0.453)
 /**
  * 读取初始提示：stdin 非 TTY 时读完 stdin（stream-json 输入返回流；超过上限报错退出），与位置参数拼接。
  */
@@ -924,7 +924,7 @@ async function getInputPrompt(prompt, inputFormat) {
   }
   return prompt;
 }
-//@ chunk-3wek6r2k.js:49686-49945 fingerprint = _pendingSSH (0.347)
+//@ chunk-3wek6r2k.js:49686-49945 fingerprint (2.1.88 match: _pendingSSH, 0.347)
 function _pendingSSH(config) {
   let { model, effort, permissionMode } = config;
   return {
@@ -942,7 +942,7 @@ function _pendingSSH(config) {
         : permissionMode,
   };
 }
-//@ chunk-3wek6r2k.js:95030-95105 fingerprint = logManagedSettings (0.424)
+//@ chunk-3wek6r2k.js:95030-95105 fingerprint (2.1.88 match: logManagedSettings, 0.424)
 function logManagedSettings(policySettings) {
   let allKeys = getManagedSettingsKeysForLogging(policySettings);
   return {
@@ -950,7 +950,7 @@ function logManagedSettings(policySettings) {
     keys: fromSanitizer_SANITIZER_OUTPUT_ONLY(allKeys.join(",")),
   };
 }
-//@ chunk-3wek6r2k.js:96816-99424 fingerprint = logTenguInit (0.611)
+//@ chunk-3wek6r2k.js:96816-99424 fingerprint (2.1.88 match: logTenguInit, 0.611)
 /**
  * 发送 tengu_init 事件：入口、启动方式、-p/格式、工具白黑名单数、MCP 数、权限模式、思考配置、模型来源，以及仓库特征（Dockerfile、lockfile、CI 配置等）。
  */
@@ -1098,7 +1098,7 @@ async function logTenguInit({
     logError(error);
   }
 }
-//@ chunk-3wek6r2k.js:99642-100256 fingerprint = extractTeammateOptions (0.922)
+//@ chunk-3wek6r2k.js:99642-100256 fingerprint (2.1.88 match: extractTeammateOptions, 0.922)
 /**
  * 从 commander 选项中取出 teammate 相关隐藏参数（--agent-id/--agent-name/--team-name/--agent-color/--plan-mode-required/--parent-session-id/--teammate-mode/--agent-type）。
  */
@@ -1162,7 +1162,7 @@ async function suggestUnknownSubcommand(typedName, program) {
   );
   await exitAfterAnalyticsFlush(1);
 }
-//@ chunk-3wek6r2k.js:100816-101033 fingerprint = prefetchSystemContextIfSafe (1)
+//@ chunk-3wek6r2k.js:100816-101033 fingerprint (2.1.88 match: prefetchSystemContextIfSafe, 1)
 /**
  * 非交互或已信任时预取系统上下文（git 状态等）；未信任时跳过（git 可能执行仓库里的钩子）。
  */
@@ -1180,7 +1180,7 @@ function prefetchSystemContextIfSafe(session, options) {
 }
 //@ chunk-cjydagjy.js:14073-14083 placement
 var CURRENT_MIGRATION_VERSION = 14;
-//@ chunk-cjydagjy.js:14083-14381 placement = _temp (0.315)
+//@ chunk-cjydagjy.js:14083-14381 placement (2.1.88 match: _temp, 0.315)
 function isPristineUserConfig() {
   let globalConfig = getGlobalConfig();
   if (
@@ -1203,7 +1203,7 @@ function isPristineUserConfig() {
 function shouldSkipFreshMigrations() {
   return env.CLAUDE_CODE_CCR_SKIP_FRESH_MIGRATIONS && isHostManagedProviderAuth() && isPristineUserConfig();
 }
-//@ chunk-cjydagjy.js:14454-15137 callgraph-witnessed = runMigrations (0.216)
+//@ chunk-cjydagjy.js:14454-15137 callgraph-witnessed (2.1.88 match: runMigrations, 0.216)
 /**
  * 运行同步配置迁移：migrationVersion 已等于 14 时跳过；CCR 新安装直接打标记；否则依次执行各迁移，任一写设置失败则不提升版本（下次启动重跑）。
  */
@@ -1989,7 +1989,7 @@ function shouldPrefetchForCommand(command, program) {
 function alwaysFalse(flag, program) {
   return false;
 }
-//@ chunk-cjydagjy.js:37330-69366 fingerprint = run (0.359)
+//@ chunk-cjydagjy.js:37330-69366 fingerprint (2.1.88 match: run, 0.359)
 /**
  * commander 构建器（旧版 run() 的前半）：new Command 并挂 preAction 钩子（MDM/钥匙串等待、--project-config-root、init()、客户端数据 URL、启动钩子、插件目录、迁移、远程托管设置/安全对话框、版本下限检查），定义根命令全部选项与 action（→ prepareSession → runHeadless 或 runInteractiveSession）。
  */
@@ -3197,7 +3197,7 @@ function installProcessWarningHandlers() {
   installTimerDelayClamp();
   registerClientDataGetters();
 }
-//@ chunk-shkzs7rp.js:27980-30942 fingerprint = main (0.47)
+//@ chunk-shkzs7rp.js:27980-30942 fingerprint (2.1.88 match: main, 0.47)
 /**
  * main() 的前半（旧版 main 的同名部分）：判定是否非交互（-p/--print、非 TTY 等）并 setIsInteractive、从环境写入 launchOptions、读取 fd 传入的 OAuth/API key/WebSocket 令牌（code review 环境下强制要求 fd 4/5）、推断 clientType（github-action/sdk-*\/claude-vscode/remote/cli…）、预读 --settings。
  */
@@ -3515,7 +3515,7 @@ var loadStandaloneSecurityDialog = () =>
           return;
         },
       );
-//@ chunk-shkzs7rp.js:34079-34371 fingerprint = isBeingDebugged (1)
+//@ chunk-shkzs7rp.js:34079-34371 fingerprint (2.1.88 match: isBeingDebugged, 1)
 /**
  * 检测是否处于调试器下（--inspect/--debug 参数、NODE_OPTIONS 或 inspector.url()）；模块顶层若为真则直接 process.exit(1)。
  */
@@ -3568,7 +3568,7 @@ function getAutoModeRuleCounts() {
     auto_mode_rule_word_count: autoModeRuleWordCount,
   };
 }
-//@ chunk-shkzs7rp.js:34856-35158 fingerprint = getCertEnvVarTelemetry (0.905)
+//@ chunk-shkzs7rp.js:34856-35158 fingerprint (2.1.88 match: getCertEnvVarTelemetry, 0.905)
 /**
  * 证书相关环境的遥测字段：NODE_EXTRA_CA_CERTS、CLAUDE_CODE_CLIENT_CERT、--use-system-ca/--use-openssl-ca、CLAUDE_CODE_CERT_STORE。
  */
@@ -3581,7 +3581,7 @@ function getCertEnvVarTelemetry() {
   if (env.CLAUDE_CODE_CERT_STORE) result.cert_store = env.CLAUDE_CODE_CERT_STORE;
   return result;
 }
-//@ chunk-shkzs7rp.js:35158-36092 fingerprint = logStartupTelemetry (0.616)
+//@ chunk-shkzs7rp.js:35158-36092 fingerprint (2.1.88 match: logStartupTelemetry, 0.616)
 /**
  * 发送 tengu_startup_telemetry：git/worktree 数、gh 登录状态、沙箱开关、自动更新是否禁用、主题、设置过的环境变量名与非默认设置等。
  */

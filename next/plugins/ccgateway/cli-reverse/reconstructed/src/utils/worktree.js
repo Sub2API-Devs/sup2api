@@ -240,7 +240,7 @@ function suffixWorktreeSlug(slug, suffix) {
   let match = `-${suffix}`;
   return `${slug.slice(0, MAX_WORKTREE_SLUG_CHARS - match.length)}${match}`;
 }
-//@ chunk-dcmhvw5a.js:14312-14849 fingerprint = validateWorktreeSlug (0.807)
+//@ chunk-dcmhvw5a.js:14312-14849 fingerprint (2.1.88 match: validateWorktreeSlug, 0.807)
 /**
  * 校验 worktree slug：每段只允许字母数字 ._-，总长 ≤64，不能含 . 或 .. 段。
  */
@@ -340,7 +340,7 @@ var WORKTREE_CONFIG_SUFFIXES = [`${sep}config.worktree`, `${sep}config.worktree.
 function isWorktreeConfigPath(path) {
   return path.includes(WORKTREES_SEGMENT) && WORKTREE_CONFIG_SUFFIXES.some((suffix) => path.endsWith(suffix));
 }
-//@ chunk-e6aww6q8.js:3594932-3595112 placement = isClaudeSettingsPath (0.871)
+//@ chunk-e6aww6q8.js:3594932-3595112 placement (2.1.88 match: isClaudeSettingsPath, 0.871)
 function hasSandboxEnabledInProjectSettings(dir) {
   return ["settings.json", "settings.local.json"].some((name) => {
     let expandedPath = parseSettingsFileUncached(join(dir, ".claude", name));
@@ -441,7 +441,7 @@ async function hasUnsafeAncestor(targetPath, rootDir) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:3596601-3597450 fingerprint = symlinkDirectories (0.642)
+//@ chunk-e6aww6q8.js:3596601-3597450 fingerprint (2.1.88 match: symlinkDirectories, 0.642)
 /**
  * 把仓库中的指定目录（如 node_modules）以符号链接方式挂到 worktree，避免重复安装。
  */
@@ -518,7 +518,7 @@ function isAgentWorktreeOf(path, hostFiles) {
 function flattenSlug(slug) {
   return slug.replaceAll("/", "+");
 }
-//@ chunk-e6aww6q8.js:3597705-3597748 facade-exports = worktreeBranchName (1)
+//@ chunk-e6aww6q8.js:3597705-3597748 facade-exports (2.1.88 match: worktreeBranchName, 1)
 function worktreeBranchName(slug) {
   return `worktree-${flattenSlug(slug)}`;
 }
@@ -707,7 +707,7 @@ async function writeWorktreeBaseline(worktreePath, baselineSha) {
     logForDebugging(`[worktree] failed to write baseline to ${gitDir}: ${error}`);
   }
 }
-//@ chunk-e6aww6q8.js:3600295-3600472 sole-consumer = tryCreateExclusive (0.782)
+//@ chunk-e6aww6q8.js:3600295-3600472 sole-consumer (2.1.88 match: tryCreateExclusive, 0.782)
 async function tryCreateExclusive(a, b) {
   try {
     try {
@@ -810,7 +810,7 @@ async function checkoutWorkersArgs(worktreePath) {
     return [];
   return ["-c", `checkout.workers=${Math.min(MAX_CHECKOUT_WORKERS, Math.max(1, availableParallelism()))}`];
 }
-//@ chunk-e6aww6q8.js:3601507-3601783 layout = isRealPathWithinTeamDir (0.762)
+//@ chunk-e6aww6q8.js:3601507-3601783 layout (2.1.88 match: isRealPathWithinTeamDir, 0.762)
 async function isNotFoundErrno_2(error, originalCwd, repoRoot) {
   if (
     isStrictSandboxFilesystem() ||
@@ -1156,7 +1156,7 @@ async function comparePathIdentity(pathA, pathB, above, kind = "directory") {
     return "untrusted";
   return statsA.dev === statsB.dev && statsA.ino === statsB.ino ? "same" : "different";
 }
-//@ chunk-e6aww6q8.js:3607352-3607411 layout = getReservedShortcuts (1)
+//@ chunk-e6aww6q8.js:3607352-3607411 layout (2.1.88 match: getReservedShortcuts, 1)
 function isCaseInsensitivePlatform() {
   let platform = getPlatform();
   return platform === "windows" || platform === "macos";
@@ -1558,7 +1558,7 @@ async function readFetchHeadForRef(gitDir, refspec, remoteUrl) {
     };
   return sawRelatedNotation ? "absent" : null;
 }
-//@ chunk-e6aww6q8.js:3615195-3625933 callgraph-witnessed = getOrCreateWorktree (0.265)
+//@ chunk-e6aww6q8.js:3615195-3625933 callgraph-witnessed (2.1.88 match: getOrCreateWorktree, 0.265)
 /**
  * 创建或复用 <repo>/.claude/worktrees/<slug>（分支 worktree-<slug>）：已存在则校验属于本仓库、未被符号链接重定向并按需刷新到基准；否则清理陈旧锁、按 worktree.baseRef（head 或默认远程分支）git worktree add。
  */
@@ -2071,7 +2071,7 @@ ${failure}`
     existed: false,
   };
 }
-//@ chunk-e6aww6q8.js:3625933-3627962 fingerprint = copyWorktreeIncludeFiles (0.781)
+//@ chunk-e6aww6q8.js:3625933-3627962 fingerprint (2.1.88 match: copyWorktreeIncludeFiles, 0.781)
 /**
  * 按仓库根 .worktreeinclude（gitignore 语法）把被忽略但需要的文件（如 .env）复制到新 worktree。
  */
@@ -2261,7 +2261,7 @@ async function copyLocalSettingsIntoWorktree(repoRoot, worktreePath, rootDir) {
       });
   }
 }
-//@ chunk-e6aww6q8.js:3628683-3629223 fingerprint = performPostCreationSetup (0.787)
+//@ chunk-e6aww6q8.js:3628683-3629223 fingerprint (2.1.88 match: performPostCreationSetup, 0.787)
 /**
  * worktree 创建后的设置：复制 settings.local.json、.worktreeinclude 文件、配置的符号链接目录等。
  */
@@ -2329,7 +2329,7 @@ function getIsolatedGitExecOptions() {
     extendEnv: false,
   };
 }
-//@ chunk-e6aww6q8.js:3629656-3629732 facade-exports = TMUX_COMMAND (1)
+//@ chunk-e6aww6q8.js:3629656-3629732 facade-exports (2.1.88 match: TMUX_COMMAND, 1)
 /**
  * 检查 tmux 是否可用（tmux -V 退出码 0）。
  */
@@ -2337,7 +2337,7 @@ async function isTmuxAvailable() {
   let { code } = await execFileNoThrowWithCwd("tmux", ["-V"], getIsolatedGitExecOptions());
   return code === 0;
 }
-//@ chunk-e6aww6q8.js:3629732-3630102 facade-exports = getTmuxInstallInstructions (1)
+//@ chunk-e6aww6q8.js:3629732-3630102 facade-exports (2.1.88 match: getTmuxInstallInstructions, 1)
 function getTmuxInstallInstructions() {
   switch (getPlatform()) {
     case "macos":
@@ -2351,7 +2351,7 @@ function getTmuxInstallInstructions() {
       return "Install tmux using your system package manager.";
   }
 }
-//@ chunk-e6aww6q8.js:3630102-3630288 facade-exports = createTmuxSessionForWorktree (0.91)
+//@ chunk-e6aww6q8.js:3630102-3630288 facade-exports (2.1.88 match: createTmuxSessionForWorktree, 0.91)
 async function createTmuxSessionForWorktree(sessionName, worktreePath) {
   let { code, stderr } = await execFileNoThrowWithCwd(
     "tmux",
@@ -2370,7 +2370,7 @@ async function createTmuxSessionForWorktree(sessionName, worktreePath) {
     created: true,
   };
 }
-//@ chunk-e6aww6q8.js:3630288-3630382 facade-exports = killTmuxSession (1)
+//@ chunk-e6aww6q8.js:3630288-3630382 facade-exports (2.1.88 match: killTmuxSession, 1)
 async function killTmuxSession(sessionName) {
   let { code } = await execFileNoThrowWithCwd(
     "tmux",
@@ -2542,7 +2542,7 @@ async function lockClaudeWorktree(a, b, worktreePath, ownerKind) {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:3633066-3636445 facade-exports = createWorktreeForSession (0.402)
+//@ chunk-e6aww6q8.js:3633066-3636445 facade-exports (2.1.88 match: createWorktreeForSession, 0.402)
 /**
  * --worktree 启动：要求已信任工作区，校验 slug；配置了 WorktreeCreate hook 时用 hook 返回的目录（拒绝点段路径与符号链接祖先），否则 getOrCreateWorktree，随后复制 .worktreeinclude 文件、settings.local.json 并可创建 tmux 会话。
  */
@@ -3114,7 +3114,7 @@ function resolveWorktreeCwdForRemoval(originalCwd, worktreePath) {
   if (!hasUntouchableRecordSpelling(originalCwd)) return originalCwd;
   return worktreeLocationOf(worktreePath)?.checkout ?? homedir();
 }
-//@ chunk-e6aww6q8.js:3643640-3644074 facade-exports = keepWorktree (0.829)
+//@ chunk-e6aww6q8.js:3643640-3644074 facade-exports (2.1.88 match: keepWorktree, 0.829)
 /**
  * 保留 worktree（退出时选择保留），解除本进程的锁。
  */
@@ -3142,7 +3142,7 @@ async function keepWorktree(storageV5) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:3644074-3647459 facade-exports = cleanupWorktree (0.347)
+//@ chunk-e6aww6q8.js:3644074-3647459 facade-exports (2.1.88 match: cleanupWorktree, 0.347)
 /**
  * 退出时清理会话 worktree：无改动则 git worktree remove 并删除分支，有改动保留并提示；hook 创建的走 WorktreeRemove hook。
  */
@@ -3418,7 +3418,7 @@ async function assertWorktreeDirExists(worktreePath, fromHook) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:3647914-3650083 facade-exports = createAgentWorktree (0.429)
+//@ chunk-e6aww6q8.js:3647914-3650083 facade-exports (2.1.88 match: createAgentWorktree, 0.429)
 /**
  * 为子代理创建隔离 worktree（slug 形如 agent-a<hex>），优先 WorktreeCreate hook，否则在 .claude/worktrees 下创建并加锁。
  */
@@ -3548,7 +3548,7 @@ async function isNestedInOtherRepo(path) {
   if (resolvedTopLevel === resolvedPath) return false;
   return getPlatform() === "windows" ? foldCaseBasic(resolvedTopLevel) !== foldCaseBasic(resolvedPath) : true;
 }
-//@ chunk-e6aww6q8.js:3650375-3651154 facade-exports = hasWorktreeChanges (0.49)
+//@ chunk-e6aww6q8.js:3650375-3651154 facade-exports (2.1.88 match: hasWorktreeChanges, 0.49)
 /**
  * worktree 是否 dirty 以及相对创建提交领先的提交数。
  */
@@ -4882,7 +4882,7 @@ async function isUpstreamGoneAndMerged(a, b) {
   );
   return aheadResult.code === 0 && aheadResult.stdout.trim().length === 0;
 }
-//@ chunk-e6aww6q8.js:3672191-3672521 facade-exports = findRemoteBase (0.434)
+//@ chunk-e6aww6q8.js:3672191-3672521 facade-exports (2.1.88 match: findRemoteBase, 0.434)
 /**
  * 找远程基准分支：origin/HEAD 指向，否则 origin/main、origin/master。
  */
@@ -4912,7 +4912,7 @@ async function getDefaultRemoteRef(a) {
       return candidateRef;
   return null;
 }
-//@ chunk-e6aww6q8.js:3672521-3673044 facade-exports = cleanupStaleAgentWorktrees (0.477)
+//@ chunk-e6aww6q8.js:3672521-3673044 facade-exports (2.1.88 match: cleanupStaleAgentWorktrees, 0.477)
 /**
  * 清理超过截止时间、无改动、锁持有进程已退出的代理 worktree。
  */
@@ -5311,7 +5311,7 @@ function rewriteCliPathArgsForWorktree(a, rewritePath = (path) => resolve_2(path
   }
   return rewrittenArgs;
 }
-//@ chunk-e6aww6q8.js:3678494-3683997 facade-exports = execIntoTmuxWorktree (0.795)
+//@ chunk-e6aww6q8.js:3678494-3683997 facade-exports (2.1.88 match: execIntoTmuxWorktree, 0.795)
 /**
  * --tmux 模式：创建/附着 tmux 会话并在 worktree 中重新执行 claude。
  */

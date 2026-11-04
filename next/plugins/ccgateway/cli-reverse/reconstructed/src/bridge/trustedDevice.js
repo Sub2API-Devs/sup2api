@@ -50,7 +50,7 @@ import { jsonStringify } from "../utils/slowOperations.js";
 import { logError } from "../utils/log.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0jk9tmkx.js:1055-1214 fingerprint = TRUSTED_DEVICE_GATE (0.508)
+//@ chunk-0jk9tmkx.js:1055-1214 fingerprint (2.1.88 match: TRUSTED_DEVICE_GATE, 0.508)
 /**
  * 开关名与常量：tengu_sessions_elevated_auth_enforcement、策略 require_trusted_devices、禁用主动注册开关、注册节流 5 分钟、拒绝后注册冷却 1 天。
  */
@@ -277,7 +277,7 @@ function readStoredTrustedDeviceToken() {
   state.storedTokenRead = storedToken;
   return storedToken;
 }
-//@ chunk-0jk9tmkx.js:3964-4094 fingerprint = readStoredToken (0.831)
+//@ chunk-0jk9tmkx.js:3964-4094 fingerprint (2.1.88 match: readStoredToken, 0.831)
 /**
  * 读设备 token：优先 CLAUDE_TRUSTED_DEVICE_TOKEN，否则安全存储中的 trustedDeviceToken。
  */
@@ -452,7 +452,7 @@ async function trustedDeviceTokenForBind(credentials) {
   });
   return (await getTrustedDeviceToken()) ? ok(undefined) : err("not_given");
 }
-//@ chunk-0jk9tmkx.js:7072-7386 facade-majority = clearTrustedDeviceToken (0.238)
+//@ chunk-0jk9tmkx.js:7072-7386 facade-majority (2.1.88 match: clearTrustedDeviceToken, 0.238)
 /**
  * 登出/换号时清除安全存储里的设备 token（非一方或非订阅时走另一清理）。
  */
@@ -543,7 +543,7 @@ function loginEnrollmentAction(gate) {
     return "no";
   return isProactiveEnrollmentDisabled() ? "paused" : "enrolls";
 }
-//@ chunk-0jk9tmkx.js:8418-11364 facade-majority = enrollTrustedDevice (0.618)
+//@ chunk-0jk9tmkx.js:8418-11364 facade-majority (2.1.88 match: enrollTrustedDevice, 0.618)
 /**
  * 注册可信设备：开关、主动注册禁用、env token、组织策略、仅必要流量等检查通过后 POST /api/auth/trusted_devices（display_name="Claude Code on 主机名 · 平台"），保存 device_token，按需提示用户。
  */

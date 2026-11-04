@@ -62,7 +62,7 @@ import { isSafeMode } from "../envUtils.js";
 import { getTelemetryMessage, sanitizeErrnoTokenForTelemetry } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:137274-137350 callgraph-fingerprint = BUILTIN_MARKETPLACE_NAME (0.364)
+//@ chunk-dcmhvw5a.js:137274-137350 callgraph-fingerprint (2.1.88 match: BUILTIN_MARKETPLACE_NAME, 0.364)
 /**
  * 插件来源标记常量：inline、skills-dir、synced、builtin，以及 anthropic-skills@inline 组合名，用于插件/技能遥测。
  */
@@ -71,9 +71,9 @@ var ANTHROPIC_SKILLS_PLUGIN_ID = `${ANTHROPIC_SKILLS}@${INLINE_PLUGIN_MARKETPLAC
 var SKILLS_DIR = "skills-dir";
 var SYNCED = "synced";
 var BUILTIN = "builtin";
-//@ chunk-aepeg2w5.js:758887-758923 fingerprint = PLUGIN_ID_HASH_SALT (1)
+//@ chunk-aepeg2w5.js:758887-758923 fingerprint (2.1.88 match: PLUGIN_ID_HASH_SALT, 1)
 var PLUGIN_ID_HASH_SALT = "claude-plugin-telemetry-v1";
-//@ chunk-aepeg2w5.js:758923-758998 callgraph-fingerprint = hashPluginId (1)
+//@ chunk-aepeg2w5.js:758923-758998 callgraph-fingerprint (2.1.88 match: hashPluginId, 1)
 function hashPluginId(pluginId) {
   return createHash("sha256")
     .update(pluginId + PLUGIN_ID_HASH_SALT)
@@ -507,7 +507,7 @@ function marketplaceForTelemetry(marketplace) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(marketplace.toLowerCase())
     : lit("third-party");
 }
-//@ chunk-csq9ftr9.js:8587-8767 fingerprint = getTelemetryPluginScope (0.882)
+//@ chunk-csq9ftr9.js:8587-8767 fingerprint (2.1.88 match: getTelemetryPluginScope, 0.882)
 function getTelemetryPluginScope(name, marketplace, managedNames) {
   if (marketplace === BUILTIN) return "default-bundle";
   if (isOfficialMarketplaceName_3(marketplace)) return "official";
@@ -544,7 +544,7 @@ function getSkillPluginTelemetryFields(command) {
     plugin_repository: fromSanitizer_SANITIZER_OUTPUT_ONLY(pluginInfo.repository),
   };
 }
-//@ chunk-csq9ftr9.js:10157-10455 fingerprint = getEnabledVia (0.748)
+//@ chunk-csq9ftr9.js:10157-10455 fingerprint (2.1.88 match: getEnabledVia, 0.748)
 function getEnabledVia(plugin, managedNames, seedDirs) {
   if (plugin.isBuiltin) return "default-enable";
   if (managedNames?.has(plugin.name)) return "org-policy";
@@ -554,7 +554,7 @@ function getEnabledVia(plugin, managedNames, seedDirs) {
     return "seed-mount";
   return "user-install";
 }
-//@ chunk-csq9ftr9.js:10455-10797 fingerprint = buildPluginTelemetryFields (0.53)
+//@ chunk-csq9ftr9.js:10455-10797 fingerprint (2.1.88 match: buildPluginTelemetryFields, 0.53)
 function buildPluginTelemetryFields(name, marketplace, managedNames = null) {
   let scope = getTelemetryPluginScope(name, marketplace, managedNames);
   let isAnthropicControlled =
@@ -695,7 +695,7 @@ function buildServerAttributionFields(part, managedNames) {
     }),
   };
 }
-//@ chunk-csq9ftr9.js:12351-12476 fingerprint = buildPluginCommandTelemetryFields (0.754)
+//@ chunk-csq9ftr9.js:12351-12476 fingerprint (2.1.88 match: buildPluginCommandTelemetryFields, 0.754)
 function buildPluginCommandTelemetryFields(pluginInfo, managedNames) {
   for (let pluginInfo_2 of pluginInfo)
     try {
@@ -715,7 +715,7 @@ function isOfficialPluginRepo(repository) {
 function isBuiltinOrOfficialPlugin(plugin) {
   return plugin.isBuiltin === true || isOfficialPluginRepo(plugin.repository);
 }
-//@ chunk-csq9ftr9.js:12585-12704 layout = getCommandId (0.912)
+//@ chunk-csq9ftr9.js:12585-12704 layout (2.1.88 match: getCommandId, 0.912)
 function getCommandId(cmd) {
   return (
     cmd.type === "prompt" &&
@@ -754,7 +754,7 @@ function buildPluginErrorFields(commandsByRepository, repository) {
     }),
   };
 }
-//@ chunk-csq9ftr9.js:13052-14747 fingerprint = logPluginsEnabledForSession (0.483)
+//@ chunk-csq9ftr9.js:13052-14747 fingerprint (2.1.88 match: logPluginsEnabledForSession, 0.483)
 function logPluginsEnabledForSession(enabled, managedNames, seedDirs, storageV5, managedNameSet) {
   let numStartups = getGlobalConfig().numStartups;
   let now = Date.now();
@@ -830,7 +830,7 @@ function logPluginsEnabledForSession(enabled, managedNames, seedDirs, storageV5,
   }
   if (unusedIds.length > 0) seedPluginUsage(unusedIds, managedNameSet);
 }
-//@ chunk-csq9ftr9.js:14747-14847 fingerprint = classifyPluginCommandError (0.783)
+//@ chunk-csq9ftr9.js:14747-14847 fingerprint (2.1.88 match: classifyPluginCommandError, 0.783)
 var PLUGIN_COMMAND_ERROR_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PLUGIN_COMMAND_ERROR_KIND_SET;
 deferInit("chunk-csq9ftr9.js:14747", () => {
@@ -926,7 +926,7 @@ function logPluginLoadFailed(errors, managedNames, options) {
     });
   }
 }
-//@ chunk-d4eg9at2.js:34003-34142 fingerprint = logPluginLoadErrors (0.546)
+//@ chunk-d4eg9at2.js:34003-34142 fingerprint (2.1.88 match: logPluginLoadErrors, 0.546)
 function logPluginLoadErrors(eventName, pluginId, scope) {
   let { name, marketplace } = parsePluginId(pluginId);
   logEvent(eventName, {

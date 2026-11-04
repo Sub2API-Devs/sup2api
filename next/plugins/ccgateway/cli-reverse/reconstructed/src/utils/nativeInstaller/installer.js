@@ -91,7 +91,7 @@ import { registerCleanup } from "../cleanupRegistry.js";
 import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ch0vxh4c.js:1552-1657 fingerprint = isPossibleClaudeBinary (1)
+//@ chunk-ch0vxh4c.js:1552-1657 fingerprint (2.1.88 match: isPossibleClaudeBinary, 1)
 /**
  * 路径是否是可执行的普通文件。
  */
@@ -145,7 +145,7 @@ async function isSymlinkIntoInstallDir(linkPath, stats) {
   let target = await readlink(linkPath);
   return resolve(dirname(linkPath), target).includes(VERSIONS_DIR_SEGMENT);
 }
-//@ chunk-s61vbvea.js:504888-504981 fingerprint = isNpmSymlink (0.912)
+//@ chunk-s61vbvea.js:504888-504981 fingerprint (2.1.88 match: isNpmSymlink, 0.912)
 /**
  * 启动器是否是 npm 生成的符号链接（指向 .js 或 node_modules）。
  */
@@ -153,7 +153,7 @@ async function isNpmSymlink(executablePath) {
   let targetPath = await realpath(executablePath);
   return targetPath.endsWith(".js") || targetPath.includes("node_modules");
 }
-//@ chunk-e6aww6q8.js:617698-617740 fingerprint = atomicMoveToInstallPath (0.508)
+//@ chunk-e6aww6q8.js:617698-617740 fingerprint (2.1.88 match: atomicMoveToInstallPath, 0.508)
 function atomicMoveToInstallPath_2(path) {
   return path.includes(".tmp.");
 }
@@ -164,7 +164,7 @@ deferInit("chunk-zw17mz74.js:1332", () => {
 });
 //@ chunk-zw17mz74.js:2073-2083 affinity
 var FORCE_ARM64 = false;
-//@ chunk-zw17mz74.js:2083-2410 fingerprint = getPlatform (0.712)
+//@ chunk-zw17mz74.js:2083-2410 fingerprint (2.1.88 match: getPlatform, 0.712)
 /**
  * 原生安装器的平台标识（linux-x64、darwin-arm64、win32-x64…，含 musl/Android 判断）；316 linux 构建架构固定 x64。
  */
@@ -188,14 +188,14 @@ function getPlatform() {
 //@ chunk-zw17mz74.js:20027-20049 affinity
 var VERSION_RETENTION_COUNT = 2;
 var VERSION_RETENTION_MS = 604800000;
-//@ chunk-zw17mz74.js:20049-20116 facade-exports = getBinaryName (1)
+//@ chunk-zw17mz74.js:20049-20116 facade-exports (2.1.88 match: getBinaryName, 1)
 /**
  * 原生二进制文件名：Windows 为 claude.exe，否则 claude。
  */
 function getBinaryName(platform) {
   return platform.startsWith("win32") ? "claude.exe" : "claude";
 }
-//@ chunk-zw17mz74.js:20116-20260 fingerprint = getBaseDirectories (0.9)
+//@ chunk-zw17mz74.js:20116-20260 fingerprint (2.1.88 match: getBaseDirectories, 0.9)
 /**
  * 原生安装目录：versions、staging、locks 与启动器可执行文件路径（~/.local/bin/claude）。
  */
@@ -254,7 +254,7 @@ async function isExecutableFile(filePath) {
     return false;
   }
 }
-//@ chunk-zw17mz74.js:20934-21462 fingerprint = getVersionPaths (0.681)
+//@ chunk-zw17mz74.js:20934-21462 fingerprint (2.1.88 match: getVersionPaths, 0.681)
 async function getVersionPaths(version) {
   let dirs = getBaseDirectories();
   let dirsToCreate = [dirs.versions, dirs.staging, dirs.locks];
@@ -291,7 +291,7 @@ async function getVersionPaths(version) {
     installPath,
   };
 }
-//@ chunk-zw17mz74.js:21462-22584 fingerprint = tryWithVersionLock (0.885)
+//@ chunk-zw17mz74.js:21462-22584 fingerprint (2.1.88 match: tryWithVersionLock, 0.885)
 async function tryWithVersionLock(versionFilePath, callback, retries = 0) {
   let dirs = getBaseDirectories();
   let lockfilePath = getLockFilePathFromVersionPath(dirs, versionFilePath);
@@ -433,7 +433,7 @@ async function atomicMoveToInstallPath(stagedBinaryPath, installPath, expectedCh
   }
   throw lastError;
 }
-//@ chunk-zw17mz74.js:23309-24418 fingerprint = installVersionFromPackage (0.811)
+//@ chunk-zw17mz74.js:23309-24418 fingerprint (2.1.88 match: installVersionFromPackage, 0.811)
 async function installVersionFromPackage(stagingPath, installPath, expectedChecksum) {
   try {
     let nodeModulesDir = join(stagingPath, "node_modules", "@anthropic-ai");
@@ -490,7 +490,7 @@ async function installVersionFromPackage(stagingPath, installPath, expectedCheck
     throw error;
   }
 }
-//@ chunk-zw17mz74.js:24418-25351 fingerprint = installVersionFromBinary (0.618)
+//@ chunk-zw17mz74.js:24418-25351 fingerprint (2.1.88 match: installVersionFromBinary, 0.618)
 async function installVersionFromBinary(stagingPath, installPath, expectedChecksum) {
   try {
     let platform = getPlatform();
@@ -540,7 +540,7 @@ async function installVersionFromBinary(stagingPath, installPath, expectedChecks
     throw error;
   }
 }
-//@ chunk-zw17mz74.js:25351-25425 fingerprint = installVersion (1)
+//@ chunk-zw17mz74.js:25351-25425 fingerprint (2.1.88 match: installVersion, 1)
 async function installVersion(stagingPath, installPath, downloadType, expectedChecksum) {
   if (downloadType === "npm") return installVersionFromPackage(stagingPath, installPath, expectedChecksum);
   return installVersionFromBinary(stagingPath, installPath, expectedChecksum);
@@ -550,7 +550,7 @@ var versionLockSlots; // deferred: has load-time effects after a deferred statem
 deferInit("chunk-zw17mz74.js:25425", () => {
   versionLockSlots = new HostScoped(() => new Map());
 });
-//@ chunk-zw17mz74.js:25451-27799 fingerprint = performVersionUpdate (0.385)
+//@ chunk-zw17mz74.js:25451-27799 fingerprint (2.1.88 match: performVersionUpdate, 0.385)
 /**
  * performVersionUpdate：下载到 staging、校验、原子移动到安装路径（可复用保留的已下载版本）。
  */
@@ -686,7 +686,7 @@ async function performVersionUpdate(
     skippedUnverifiedRelease: false,
   };
 }
-//@ chunk-zw17mz74.js:27799-27864 fingerprint = versionIsAvailable (1)
+//@ chunk-zw17mz74.js:27799-27864 fingerprint (2.1.88 match: versionIsAvailable, 1)
 async function versionIsAvailable(version) {
   let { installPath } = await getVersionPaths(version);
   return isExecutableFile(installPath);
@@ -745,7 +745,7 @@ function getCanaryVersion() {
     return null;
   }
 }
-//@ chunk-zw17mz74.js:28632-34601 fingerprint = updateLatest (0.53)
+//@ chunk-zw17mz74.js:28632-34601 fingerprint (2.1.88 match: updateLatest, 0.53)
 /**
  * updateLatest：取最新版本（受上限/金丝雀/跳过规则约束）、下载并校验签名、原子安装到 versions 目录、更新启动器链接；持版本锁防并发。
  */
@@ -997,7 +997,7 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
     latestVersion: version,
   };
 }
-//@ chunk-zw17mz74.js:34601-34790 fingerprint = removeDirectoryIfEmpty (1)
+//@ chunk-zw17mz74.js:34601-34790 fingerprint (2.1.88 match: removeDirectoryIfEmpty, 1)
 async function removeDirectoryIfEmpty(path) {
   try {
     await rmdir(path);
@@ -1008,7 +1008,7 @@ async function removeDirectoryIfEmpty(path) {
       logForDebugging(`Could not remove directory at ${path}: ${error}`);
   }
 }
-//@ chunk-zw17mz74.js:34790-36884 fingerprint = updateSymlink (0.619)
+//@ chunk-zw17mz74.js:34790-36884 fingerprint (2.1.88 match: updateSymlink, 0.619)
 async function updateSymlink(executablePath, installPath, { expectedChecksum } = {}) {
   if (getPlatform().startsWith("win32"))
     try {
@@ -1145,7 +1145,7 @@ async function updateSymlink(executablePath, installPath, { expectedChecksum } =
     return "failed";
   }
 }
-//@ chunk-zw17mz74.js:36884-38900 facade-exports = checkInstall (0.623)
+//@ chunk-zw17mz74.js:36884-38900 facade-exports (2.1.88 match: checkInstall, 0.623)
 /**
  * checkInstall：原生安装的健康检查（启动器存在、PATH、多重安装等），返回问题列表供 doctor/提示。
  */
@@ -1260,7 +1260,7 @@ var installLatestInFlight; // deferred: uses InFlightInstall of its import cycle
 deferInit("chunk-zw17mz74.js:38976", () => {
   installLatestInFlight = new HostScoped(() => new InFlightInstall());
 });
-//@ chunk-zw17mz74.js:39001-39213 facade-exports = installLatest (0.696)
+//@ chunk-zw17mz74.js:39001-39213 facade-exports (2.1.88 match: installLatest, 0.696)
 /**
  * installLatest：合并同进程内并发调用（in-flight）后调用 installLatestImpl。
  */
@@ -1279,7 +1279,7 @@ function installLatest(channelOrVersion, forceReinstall = false, storageBackend)
   promise.then(clear, clear);
   return promise;
 }
-//@ chunk-zw17mz74.js:39213-39858 fingerprint = installLatestImpl (0.91)
+//@ chunk-zw17mz74.js:39213-39858 fingerprint (2.1.88 match: installLatestImpl, 0.91)
 /**
  * installLatestImpl：updateLatest 成功后把 installMethod 设为 native 并关闭旧的自动更新方式。
  */
@@ -1331,12 +1331,12 @@ async function getVersionFromSymlink(executable) {
   } catch {}
   return null;
 }
-//@ chunk-zw17mz74.js:39958-40017 fingerprint = getLockFilePathFromVersionPath (1)
+//@ chunk-zw17mz74.js:39958-40017 fingerprint (2.1.88 match: getLockFilePathFromVersionPath, 1)
 function getLockFilePathFromVersionPath(dirs, versionPath) {
   let versionName = basename(versionPath);
   return join(dirs.locks, `${versionName}.lock`);
 }
-//@ chunk-zw17mz74.js:40017-41163 facade-exports = lockCurrentVersion (0.985)
+//@ chunk-zw17mz74.js:40017-41163 facade-exports (2.1.88 match: lockCurrentVersion, 0.985)
 /**
  * 为正在运行的版本加 PID 锁，防止被清理。
  */
@@ -1413,7 +1413,7 @@ async function lockCurrentVersion() {
     });
   }
 }
-//@ chunk-zw17mz74.js:41163-41292 fingerprint = logLockAcquisitionError (0.667)
+//@ chunk-zw17mz74.js:41163-41292 fingerprint (2.1.88 match: logLockAcquisitionError, 0.667)
 function logLockAcquisitionError(versionPath, lockError) {
   logForDebugging(
     `NON-FATAL: Lock acquisition failed for ${versionPath} (expected in multi-process scenarios): ${errorMessage(lockError)}`,
@@ -1422,7 +1422,7 @@ function logLockAcquisitionError(versionPath, lockError) {
     },
   );
 }
-//@ chunk-zw17mz74.js:41292-41443 fingerprint = forceRemoveLock (1)
+//@ chunk-zw17mz74.js:41292-41443 fingerprint (2.1.88 match: forceRemoveLock, 1)
 async function forceRemoveLock(versionFilePath) {
   let dirs = getBaseDirectories();
   let lockfilePath = getLockFilePathFromVersionPath(dirs, versionFilePath);
@@ -1464,7 +1464,7 @@ async function cleanupOldStagingDirs(stagingDir) {
     if (!isENOENT(error)) logForDebugging(`Failed to clean up staging directories: ${error}`);
   }
 }
-//@ chunk-zw17mz74.js:41862-45559 facade-exports = cleanupOldVersions (0.763)
+//@ chunk-zw17mz74.js:41862-45559 facade-exports (2.1.88 match: cleanupOldVersions, 0.763)
 /**
  * 清理旧版本：保留最近版本、删除过期 staging/备份与陈旧锁（Windows 处理 .old 可执行文件）。
  */
@@ -1692,7 +1692,7 @@ async function cleanupOldVersions() {
     } else logFeatureOk("native_cleanup_versions");
   }
 }
-//@ chunk-zw17mz74.js:45559-46158 facade-exports = removeInstalledSymlink (0.746)
+//@ chunk-zw17mz74.js:45559-46158 facade-exports (2.1.88 match: removeInstalledSymlink, 0.746)
 /**
  * 删除原生安装器创建的 claude 启动器（npm 管理的不动）。
  */
@@ -1728,7 +1728,7 @@ async function removeInstalledSymlink() {
     logFeatureBad("native_remove_symlink", "unlink_failed");
   }
 }
-//@ chunk-zw17mz74.js:46158-46744 facade-exports = cleanupShellAliases (0.822)
+//@ chunk-zw17mz74.js:46158-46744 facade-exports (2.1.88 match: cleanupShellAliases, 0.822)
 /**
  * 从 shell 配置文件删除旧的 claude alias。
  */
@@ -1765,7 +1765,7 @@ async function cleanupShellAliases() {
   else logFeatureOk("native_cleanup_aliases");
   return messages;
 }
-//@ chunk-zw17mz74.js:46744-47726 fingerprint = manualRemoveNpmPackage (0.99)
+//@ chunk-zw17mz74.js:46744-47726 fingerprint (2.1.88 match: manualRemoveNpmPackage, 0.99)
 async function manualRemoveNpmPackage(packageName) {
   try {
     let prefixResult = await execFileNoThrowWithCwd("npm", ["config", "get", "prefix"], {
@@ -1821,7 +1821,7 @@ async function manualRemoveNpmPackage(packageName) {
     };
   }
 }
-//@ chunk-zw17mz74.js:47726-48515 fingerprint = attemptNpmUninstall (0.979)
+//@ chunk-zw17mz74.js:47726-48515 fingerprint (2.1.88 match: attemptNpmUninstall, 0.979)
 async function attemptNpmUninstall(packageName) {
   let { code, stderr } = await execFileNoThrowWithCwd("npm", ["uninstall", "-g", packageName], {
     cwd: process.cwd(),
@@ -1862,7 +1862,7 @@ async function attemptNpmUninstall(packageName) {
     success: false,
   };
 }
-//@ chunk-zw17mz74.js:48515-50843 facade-exports = cleanupNpmInstallations (0.538)
+//@ chunk-zw17mz74.js:48515-50843 facade-exports (2.1.88 match: cleanupNpmInstallations, 0.538)
 /**
  * 迁移到原生安装后卸载全局 npm 包（@anthropic-ai/claude-code 等）。
  */

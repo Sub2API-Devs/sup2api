@@ -32,7 +32,7 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { Box, Text } from "../ink/components/Text.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 
-//@ chunk-18hwfzwa.js:978630-978680 sole-consumer = _temp5 (1)
+//@ chunk-18hwfzwa.js:978630-978680 sole-consumer (2.1.88 match: _temp5, 1)
 function selectRemoteConnectionStatus_2(s) {
   return s.remoteConnectionStatus;
 }
@@ -42,7 +42,7 @@ function selectRemoteWorkerReportedGone(state) {
 }
 //@ chunk-18hwfzwa.js:978732-978748 affinity
 function noop_5() {}
-//@ chunk-18hwfzwa.js:978748-978833 fingerprint = _temp2 (1)
+//@ chunk-18hwfzwa.js:978748-978833 fingerprint (2.1.88 match: _temp2, 1)
 function markBackgroundTaskHintSeen(c) {
   return c.hasUsedBackgroundTask
     ? c
@@ -57,7 +57,7 @@ function selectRemoteForegroundTask(state) {
 }
 //@ chunk-18hwfzwa.js:978881-978895 layout
 var BACKGROUND_TASKS_TIMEOUT_MS = 15000;
-//@ chunk-18hwfzwa.js:978895-981168 fingerprint = SessionBackgroundHint (0.451)
+//@ chunk-18hwfzwa.js:978895-981168 fingerprint (2.1.88 match: SessionBackgroundHint, 0.451)
 function SessionBackgroundHint(props) {
   let $ = useMemoCache(23);
   let { onBackgroundSession, isLoading } = props;

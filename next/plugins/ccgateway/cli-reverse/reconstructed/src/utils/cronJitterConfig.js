@@ -14,7 +14,7 @@ import { DEFAULT_CRON_JITTER_CONFIG } from "./cronTasks.js";
 import { getFeatureValue_CACHED_WITH_REFRESH } from "../services/analytics/growthbook.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-castqjps.js:335-755 fingerprint = cronJitterConfigSchema (0.86)
+//@ chunk-castqjps.js:335-755 fingerprint (2.1.88 match: cronJitterConfigSchema, 0.86)
 /**
  * 抖动配置 schema：recurringFrac、recurringCapMs、oneShotMaxMs、oneShotFloorMs、oneShotMinuteMod、recurringMaxAgeMs、cacheLeadMs；refresh 间隔 60s。
  */
@@ -42,7 +42,7 @@ deferInit("chunk-castqjps.js:335", () => {
     }).refine((config) => config.oneShotFloorMs <= config.oneShotMaxMs),
   );
 });
-//@ chunk-castqjps.js:755-857 facade-exports = getCronJitterConfig (1)
+//@ chunk-castqjps.js:755-857 facade-exports (2.1.88 match: getCronJitterConfig, 1)
 /**
  * 读 tengu_kairos_cron_config，校验失败用默认值。
  */

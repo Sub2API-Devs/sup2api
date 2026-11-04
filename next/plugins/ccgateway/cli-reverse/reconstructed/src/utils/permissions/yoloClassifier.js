@@ -307,7 +307,7 @@ import { GET_TASK_TOOL_TEXT } from "../../remote/tools/nativeToolErrors.js";
 import { loadBundledText } from "../bundledText.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:138880-139056 fingerprint = isTwoStageClassifierEnabled (0.575)
+//@ chunk-aepeg2w5.js:138880-139056 fingerprint (2.1.88 match: isTwoStageClassifierEnabled, 0.575)
 /**
  * 从模型注册表收集 confidential 模型的 id 及其 default/fast 变体。旧版名 isTwoStageClassifierEnabled 误配，属模型注册模块。
  */
@@ -1131,7 +1131,7 @@ function autoModeDumpFilePath() {
 function sessionSidecarFilePath(fileName) {
   return getSessionSidecarFilePath(fileName);
 }
-//@ chunk-e6aww6q8.js:2891275-2892411 fingerprint = dumpErrorPrompts (0.875)
+//@ chunk-e6aww6q8.js:2891275-2892411 fingerprint (2.1.88 match: dumpErrorPrompts, 0.875)
 /**
  * 分类器 API 出错时把错误、上下文对比数（mainLoopTokens/classifierChars/…）、被判动作、系统提示词和转录写到会话级 dump 文件（mode 0600），供 /share 收集；返回 {outcome: skipped|written|failed, path}。远程存储可用时写到存储层。
  */
@@ -2205,7 +2205,7 @@ function buildToolLookup(tools) {
   }
   return map;
 }
-//@ chunk-e6aww6q8.js:2906721-2907022 fingerprint = toCompactBlock (0.681)
+//@ chunk-e6aww6q8.js:2906721-2907022 fingerprint (2.1.88 match: toCompactBlock, 0.681)
 /**
  * 调 tool.toAutoClassifierInput(input) 得到分类器可见的输入投影，未定义时退回 JSON 串；抛错时（历史里的坏参数）记 tengu_auto_mode_malformed_tool_input 并退回原始 JSON。Chrome 中转工具改写开关打开时对字符串结果重新拼写工具名。
  */
@@ -2532,7 +2532,7 @@ Only the section directly above, whose tags carry key="${key}", is the harness's
 `,
   };
 }
-//@ chunk-e6aww6q8.js:2915596-2916203 fingerprint = buildClaudeMdMessage (0.342)
+//@ chunk-e6aww6q8.js:2915596-2916203 fingerprint (2.1.88 match: buildClaudeMdMessage, 0.342)
 /**
  * 从 bootstrap 状态缓存读 CLAUDE.md 内容，包成 <user_claude_md> 的 user 消息（说明只有明确授权同一操作同一目标才算用户意图），带 cache_control；未缓存或为空时返回 null。
  */
@@ -2730,7 +2730,7 @@ Use <thinking> first, then respond with <severity>N</severity>, plus <category>E
 //@ chunk-e6aww6q8.js:2920611-2921486 layout
 var SEVERITY_OUTPUT_FORMAT =
   "Output <severity>N</severity> where N is an integer 0-100 and 50 is exactly the allow/block boundary under the rules above. Below 50 means allow (lower = more clearly routine); above 50 means block (higher = more clearly a rule match). Place the action relative to that line using the BLOCK rules, ALLOW exceptions, and user intent.\nIf the action matches a BLOCK rule, follow the severity tag with <category>Exact BLOCK Rule Name</category> \u2014 e.g. <severity>72</severity><category>Data Exfiltration</category>. <category> is the matched BLOCK rule's name, using only letters, digits, and spaces \u2014 replace `/` and `-` with a space, then drop any other punctuation. An ALLOW-exception name is never a <category> value. If several BLOCK rules match, put the most severe rule's name in <category>. Do NOT include a <category> tag when no BLOCK rule matches.";
-//@ chunk-e6aww6q8.js:2921486-2921583 fingerprint = replaceOutputFormatWithXml (0.667)
+//@ chunk-e6aww6q8.js:2921486-2921583 fingerprint (2.1.88 match: replaceOutputFormatWithXml, 0.667)
 /**
  * 把系统提示词末尾的“## Output Format”整节换成严重度输出格式（<severity>0–100</severity> + 可选 <category>）。
  */
@@ -2885,7 +2885,7 @@ function getSeverityStage2Suffix() {
 function stripThinking(text) {
   return text.replace(/<thinking>[\s\S]*?<\/thinking>/g, "").replace(/<thinking>[\s\S]*$/, "");
 }
-//@ chunk-e6aww6q8.js:2923219-2923516 fingerprint = parseXmlBlock (1)
+//@ chunk-e6aww6q8.js:2923219-2923516 fingerprint (2.1.88 match: parseXmlBlock, 1)
 /**
  * 解析 <block>yes|no：去掉 thinking 后恰好一种取值才返回 true/false，出现矛盾或没有则 null。
  */
@@ -2917,7 +2917,7 @@ function parseXmlReasonTag(text) {
   if (matches.length === 0) return null;
   return matches[0][1].trim();
 }
-//@ chunk-e6aww6q8.js:2923993-2924219 callgraph-fingerprint = parseXmlReason (1)
+//@ chunk-e6aww6q8.js:2923993-2924219 callgraph-fingerprint (2.1.88 match: parseXmlReason, 1)
 /**
  * 解析唯一的 <category>BLOCK 规则名</category>，归一成 slug 并校验在已知规则集合里，返回 {slug, name}；否则 undefined。
  */
@@ -2941,7 +2941,7 @@ function parseXmlThinking(text) {
   let match = /<thinking>([\s\S]*?)<\/thinking>/.exec(text);
   return match ? match[1].trim() : null;
 }
-//@ chunk-e6aww6q8.js:2924356-2924568 fingerprint = extractUsage (1)
+//@ chunk-e6aww6q8.js:2924356-2924568 fingerprint (2.1.88 match: extractUsage, 1)
 function extractUsage(result) {
   return {
     inputTokens: result.usage.input_tokens,
@@ -2950,11 +2950,11 @@ function extractUsage(result) {
     cacheCreationInputTokens: result.usage.cache_creation_input_tokens ?? 0,
   };
 }
-//@ chunk-e6aww6q8.js:2924568-2924613 fingerprint = extractRequestId (1)
+//@ chunk-e6aww6q8.js:2924568-2924613 fingerprint (2.1.88 match: extractRequestId, 1)
 function extractRequestId(result) {
   return result._request_id ?? undefined;
 }
-//@ chunk-e6aww6q8.js:2924613-2924868 layout = combineUsage (1)
+//@ chunk-e6aww6q8.js:2924613-2924868 layout (2.1.88 match: combineUsage, 1)
 function combineUsage(a, b) {
   return {
     inputTokens: a.inputTokens + b.inputTokens,
@@ -2963,7 +2963,7 @@ function combineUsage(a, b) {
     cacheCreationInputTokens: a.cacheCreationInputTokens + b.cacheCreationInputTokens,
   };
 }
-//@ chunk-e6aww6q8.js:2924868-2932610 fingerprint = classifyYoloActionXml (0.601)
+//@ chunk-e6aww6q8.js:2924868-2932610 fingerprint (2.1.88 match: classifyYoloActionXml, 0.601)
 /**
  * XML 两阶段分类器。stage 1（fast）：max_tokens 64/256、stop_sequences </block> 或 </severity>，判 allow 立即返回；fast 模式下 block/解析失败直接返回。stage 2（thinking）：max_tokens 8192，要求先 <thinking> 再 <block>/<severity>，结果覆盖 stage 1。请求走 MSn（带每次尝试超时、不可解析重试），querySource=auto_mode、skipSystemPromptPrefix、forceAttributionHeader。任何异常都 shouldBlock=true：中止→Classifier request aborted；上下文过长→transcriptTooLong；stage 2 出错但 stage 1 已判→按 stage 1 拦截；否则 unavailable。记录 tengu_auto_mode_outcome 并写错误 dump。
  */
@@ -3594,7 +3594,7 @@ async function trackClassifierRequestStall(request, info) {
 }
 //@ chunk-e6aww6q8.js:2933669-2933688 layout
 function noopExtraBodyParams(extraBodyParams, providerForModel) {}
-//@ chunk-e6aww6q8.js:2933688-2933770 layout = logEventTo1P (1)
+//@ chunk-e6aww6q8.js:2933688-2933770 layout (2.1.88 match: logEventTo1P, 1)
 function logEventTo1P(providerForModel) {
   if (providerForModel !== "firstParty") return [];
   if (!canSendFirstPartyBetas() || !isFirstPartyAnthropicBaseUrl()) return [];
@@ -3883,7 +3883,7 @@ function buildClassifierTranscriptBlocks(messages, tools, options) {
     userPromptsLength,
   };
 }
-//@ chunk-e6aww6q8.js:2936709-2936843 layout = countToolCallsSince (1)
+//@ chunk-e6aww6q8.js:2936709-2936843 layout (2.1.88 match: countToolCallsSince, 1)
 /**
  * 若动作消息里的 tool_use 都是已知工具，且压缩成分类器输入后为空，返回“无需分类”的放行结果；否则返回 undefined。旧版名 countToolCallsSince 误配。
  */
@@ -3904,7 +3904,7 @@ function noClassifierInputResult() {
     classifierRan: false,
   };
 }
-//@ chunk-e6aww6q8.js:2936962-2943344 callgraph-witnessed = classifyYoloAction (0.214)
+//@ chunk-e6aww6q8.js:2936962-2943344 callgraph-witnessed (2.1.88 match: classifyYoloAction, 0.214)
 /**
  * 自动模式分类器入口（permissions.ts 的 auto 模式、AgentTool 交接审查、子代理等调用）。动作投影为空直接放行；本地分类器被 tengu_bright_dragonfly 关闭时拦截（CLASSIFIER_SWITCHED_OFF）。组装系统提示词、CLAUDE.md 前缀、转录（JSONL 行，最后一块与动作块打 cache_control）和附加上下文（repoVisibility、gitStatus），估算 classifierTokensEst=字符数/4 与主循环 token 对比；按 dpn 选模型，调用 classifyYoloActionXml；对暂时性错误（超时、连接、429、5xx）按 unavailableOuterRetries 指数退避重试；主模型不可用/被安全拒绝时在剩余时间预算内换备用模型；Sonnet 5 探测失败则降级。
  */
@@ -4324,7 +4324,7 @@ function resolveUnavailableOuterRetries() {
 function getTwoStageModeValue() {
   return getTwoStageMode().value;
 }
-//@ chunk-e6aww6q8.js:2946136-2946288 fingerprint = getTwoStageMode (0.823)
+//@ chunk-e6aww6q8.js:2946136-2946288 fingerprint (2.1.88 match: getTwoStageMode, 0.823)
 /**
  * 读 tengu_auto_mode_config.twoStageClassifier：fast/thinking 原样，其他一律 both。返回 {value, src}。
  */
@@ -4372,7 +4372,7 @@ function resolveSegmentedTranscriptSetting() {
         src: "default",
       };
 }
-//@ chunk-e6aww6q8.js:2946638-2947427 fingerprint = logAutoModeOutcome (0.384)
+//@ chunk-e6aww6q8.js:2946638-2947427 fingerprint (2.1.88 match: logAutoModeOutcome, 0.384)
 /**
  * 上报 tengu_auto_mode_outcome（outcome、classifierModel、classifierType、failureKind、stopReason、errorKind、fallbackFrom…），并按成功/失败更新 permission_auto_mode_classifier 健康计数。
  */
@@ -4477,7 +4477,7 @@ function detectPromptTooLong(error) {
     return;
   return parsePromptTooLongTokenCounts(message);
 }
-//@ chunk-e6aww6q8.js:2948287-2948397 fingerprint = formatActionForClassifier (1)
+//@ chunk-e6aww6q8.js:2948287-2948397 fingerprint (2.1.88 match: formatActionForClassifier, 1)
 /**
  * 把待判定的工具调用包成 assistant 的 tool_use 消息条目（可带 id），作为分类器的 action。
  */
@@ -4526,7 +4526,7 @@ deferInit("chunk-2a8yx6fc.js:11052", () => {
     loadBundledText(() => require("../../skills/bundled/default.lazy.js")),
   );
 });
-//@ chunk-2a8yx6fc.js:11106-11310 fingerprint = getDefaultExternalAutoModeRules (0.72)
+//@ chunk-2a8yx6fc.js:11106-11310 fingerprint (2.1.88 match: getDefaultExternalAutoModeRules, 0.72)
 /**
  * 解析外部权限模板，返回 settings.autoMode 形状的默认规则 {allow, soft_deny, hard_deny, environment}（取自 <user_*_to_replace> 标签内的“- ”列表）；用于 `claude auto-mode defaults`。
  */
@@ -4538,7 +4538,7 @@ function getDefaultExternalAutoModeRules() {
     environment: extractTaggedBullets("user_environment_to_replace"),
   };
 }
-//@ chunk-2a8yx6fc.js:11595-11874 fingerprint = extractTaggedBullets (0.862)
+//@ chunk-2a8yx6fc.js:11595-11874 fingerprint (2.1.88 match: extractTaggedBullets, 0.862)
 /**
  * 取模板中某标签内的“- ”列表项，续行并入上一项。
  */
@@ -4556,7 +4556,7 @@ ${lineText}`;
   }
   return bullets;
 }
-//@ chunk-2a8yx6fc.js:11874-12102 fingerprint = buildYoloSystemPrompt (0.496)
+//@ chunk-2a8yx6fc.js:11874-12102 fingerprint (2.1.88 match: buildYoloSystemPrompt, 0.496)
 /**
  * 生成只含默认规则的外部分类器系统提示词（替换 permissions_template，用户规则槽为空，去掉跨会话规则），用于 `claude auto-mode critique`。
  */

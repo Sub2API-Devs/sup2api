@@ -10,7 +10,7 @@
  */
 import { env } from "../../utils/env.js";
 
-//@ chunk-e6aww6q8.js:1762601-1762652 placement = default (1)
+//@ chunk-e6aww6q8.js:1762601-1762652 placement (2.1.88 match: default, 1)
 var stubTerminalSetupCommand = {
   isEnabled: () => false,
   isHidden: true,

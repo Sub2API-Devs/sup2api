@@ -60,7 +60,7 @@ function passThroughPath(inputPath) {
 }
 //@ chunk-aat7wt0p.js:14598-14630 placement
 var WSL_MOUNT_PATTERN = /^\/mnt\/[a-z](?:\/|$)/i;
-//@ chunk-aat7wt0p.js:14630-14841 placement = chordToDisplayString (1)
+//@ chunk-aat7wt0p.js:14630-14841 placement (2.1.88 match: chordToDisplayString, 1)
 function toWindowsPathFromWsl(inputPath, windowsRoot, distroDir = "") {
   if (!inputPath.startsWith("/") || WSL_MOUNT_PATTERN.test(inputPath) || hasDotSegment_2(inputPath, "linux"))
     return;

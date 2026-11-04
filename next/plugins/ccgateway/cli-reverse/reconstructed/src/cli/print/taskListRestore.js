@@ -852,7 +852,7 @@ deferInit("chunk-tyg7f3ek.js:229166", () => {
   snapshotStoreStorage = new AsyncLocalStorage();
   NOOP_SNAPSHOT_STORE = new NoopSnapshotStore();
 });
-//@ chunk-tyg7f3ek.js:229190-229229 placement = getAgentContext (1)
+//@ chunk-tyg7f3ek.js:229190-229229 placement (2.1.88 match: getAgentContext, 1)
 function getSnapshotStore() {
   return snapshotStoreStorage.getStore() ?? NOOP_SNAPSHOT_STORE;
 }

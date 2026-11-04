@@ -29,9 +29,9 @@ import { postSessionAction } from "./remoteBridgeCore.js";
 function isSnakeCaseReasonCode(value) {
   return typeof value === "string" && /^[a-z0-9_]{1,64}$/.test(value);
 }
-//@ chunk-kgtpkbhq.js:605-624 fingerprint = ANTHROPIC_VERSION (1)
+//@ chunk-kgtpkbhq.js:605-624 fingerprint (2.1.88 match: ANTHROPIC_VERSION, 1)
 var ANTHROPIC_VERSION = "2023-06-01";
-//@ chunk-kgtpkbhq.js:624-783 facade-majority = oauthHeaders (0.762)
+//@ chunk-kgtpkbhq.js:624-783 facade-majority (2.1.88 match: oauthHeaders, 0.762)
 /**
  * code sessions API 请求头：Bearer、JSON、anthropic-version、client-platform、User-Agent。
  */
@@ -85,7 +85,7 @@ function classifyHttpStatus(status) {
   if (status === 408 || status === 429 || status >= 500) return "transient";
   return "rejected";
 }
-//@ chunk-kgtpkbhq.js:1324-3006 facade-majority = createCodeSession (0.441)
+//@ chunk-kgtpkbhq.js:1324-3006 facade-majority (2.1.88 match: createCodeSession, 0.441)
 /**
  * 创建 Code Session：POST {base}/v1/code/sessions，body {title, bridge:{}, tags?, session_grouping_id?, config:{cwd, model?, sources?, outcomes?}}；成功返回 cse_* 会话 ID，失败返回 {terminal, reason}，瞬时失败返回 null。
  */
@@ -347,7 +347,7 @@ function getErrorObject(body) {
     ? body.error
     : undefined;
 }
-//@ chunk-kgtpkbhq.js:4703-6643 facade-majority = fetchRemoteCredentials (0.686)
+//@ chunk-kgtpkbhq.js:4703-6643 facade-majority (2.1.88 match: fetchRemoteCredentials, 0.686)
 /**
  * 取桥凭证：POST {base}/v1/code/sessions/{id}/bridge（可带 X-Trusted-Device-Token、expected_epoch）；200 返回 {worker_jwt, api_base_url, expires_in, worker_epoch, mcp_config}；409 报告 epoch 冲突；403 区分 untrusted_device/session_stale_relogin/非源站拒绝。
  */

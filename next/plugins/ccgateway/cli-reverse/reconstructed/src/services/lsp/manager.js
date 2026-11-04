@@ -43,7 +43,7 @@ function shouldDeferLspForRemoteSession() {
   );
   return remoteFlag.value === true;
 }
-//@ chunk-e6aww6q8.js:4641986-4644165 fingerprint = initializeLspServerManager (0.49)
+//@ chunk-e6aww6q8.js:4641986-4644165 fingerprint (2.1.88 match: initializeLspServerManager, 0.49)
 /**
  * LSP 管理器单例工厂：持有 manager、initState(not-started/pending/success/failed)、代次号。initialize() 在 --bare 等禁用 lspServers 时跳过、远程会话按 tengu_moonlit_panda 延后，否则创建 LSPServerManager 并异步 initialize，成功后注册诊断处理器；reinitialize() 关掉旧实例按上次参数重建（插件刷新后）；另有 getStatus/isConnected/hasEverConnected/waitForInitialization/shutdown。
  */

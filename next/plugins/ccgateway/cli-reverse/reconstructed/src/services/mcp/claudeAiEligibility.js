@@ -21,7 +21,7 @@ function isEligibilityGateEnabled() {
 function isClaudeAiEligibilityCheckEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_delightful_hamster", false) === true;
 }
-//@ chunk-65zhns9p.js:350-421 placement = _temp2 (0.774)
+//@ chunk-65zhns9p.js:350-421 placement (2.1.88 match: _temp2, 0.774)
 function isIneligibleClaudeAiProxy(client) {
   return client.type === "claudeai-proxy" && client.eligible === false && isEligibilityGateEnabled();
 }

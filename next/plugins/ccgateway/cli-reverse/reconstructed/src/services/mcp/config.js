@@ -222,7 +222,7 @@ var MCP_POLICY_SETTING_KEYS = [
   "disableClaudeAiConnectors",
   "managedMcpServers",
 ];
-//@ chunk-dcmhvw5a.js:422935-423061 fingerprint = shouldAllowManagedMcpServersOnly (0.416)
+//@ chunk-dcmhvw5a.js:422935-423061 fingerprint (2.1.88 match: shouldAllowManagedMcpServersOnly, 0.416)
 /**
  * shouldAllowManagedMcpServersOnly：策略槽或管理员层设置 allowManagedMcpServersOnly。
  */
@@ -232,7 +232,7 @@ function shouldAllowManagedMcpServersOnly({ slot, adminTiers }) {
     adminTiers.some((adminTier) => adminTier.allowManagedMcpServersOnly === true)
   );
 }
-//@ chunk-1wpnxx5r.js:3164-3514 fingerprint = CCR_PROXY_PATH_MARKERS (0.563)
+//@ chunk-1wpnxx5r.js:3164-3514 fingerprint (2.1.88 match: CCR_PROXY_PATH_MARKERS, 0.563)
 /**
  * CCR 代理路径常量：/v2/ccr-sessions/、/v1/code/、session_ingress shttp/ws 路径与 MCP 路由正则。
  */
@@ -248,7 +248,7 @@ var CCR_MCP_PATH_PATTERNS = [
   /^\/v1\/code\/mcp\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)?$/,
 ];
 var SPENT = "spent";
-//@ chunk-1wpnxx5r.js:15428-15515 fingerprint = getServerUrl (1)
+//@ chunk-1wpnxx5r.js:15428-15515 fingerprint (2.1.88 match: getServerUrl, 1)
 /**
  * 判断是否 CCR 托管的 MCP 配置：url 指向 CCR MCP 代理，或配置本身带 CCR 托管标记。
  */
@@ -256,14 +256,14 @@ function isCcrHostedConfig(config) {
   if ("url" in config && typeof config.url === "string" && isSameOriginAsCcr(config.url)) return true;
   return isCliOwnedConfig(config);
 }
-//@ chunk-1wpnxx5r.js:16374-16417 shared-adjacent = getServerUrl (1)
+//@ chunk-1wpnxx5r.js:16374-16417 shared-adjacent (2.1.88 match: getServerUrl, 1)
 /**
  * 取服务器配置的 url（没有 url 字段的类型返回 null）。
  */
 function getServerUrl(config) {
   return "url" in config ? config.url : null;
 }
-//@ chunk-1wpnxx5r.js:16417-16522 affinity = getServerCommandArray (1)
+//@ chunk-1wpnxx5r.js:16417-16522 affinity (2.1.88 match: getServerCommandArray, 1)
 /**
  * 取 stdio 服务器的命令数组 [command, ...args]；非 stdio 返回 null。用于签名去重与策略匹配。
  */
@@ -272,7 +272,7 @@ function getServerCommandArray(config) {
   let stdioConfig = config;
   return [stdioConfig.command, ...(stdioConfig.args ?? [])];
 }
-//@ chunk-1wpnxx5r.js:16522-16647 fingerprint = unwrapCcrProxyUrl (1)
+//@ chunk-1wpnxx5r.js:16522-16647 fingerprint (2.1.88 match: unwrapCcrProxyUrl, 1)
 /**
  * 若 URL 是 CCR MCP 代理地址（含代理路径标记），取出查询参数 `mcp_url` 指向的原始服务器地址；否则或解析失败原样返回。用于签名去重。
  */
@@ -324,7 +324,7 @@ function isMemoryServerName(serverKey) {
 function isBridgeCarrierDynamicConfig(configs) {
   return isCliOwnedConfig(configs?.[MEMORY_SERVER_NAME]);
 }
-//@ chunk-e6aww6q8.js:3820898-3821175 fingerprint = getAllMcpConfigs (0.507)
+//@ chunk-e6aww6q8.js:3820898-3821175 fingerprint (2.1.88 match: getAllMcpConfigs, 0.507)
 /**
  * refuseReservedNamesForCarrier：Remote Control carrier 会话中，保留名的非 carrier 服务器被拒绝加载，返回 {servers, refused}。
  */
@@ -646,7 +646,7 @@ function verifyBridgeCarrierEntry(name, config, sessionId) {
     sessionId,
   };
 }
-//@ chunk-e6aww6q8.js:3826018-3830489 callgraph-witnessed = parseMcpConfig (0.222)
+//@ chunk-e6aww6q8.js:3826018-3830489 callgraph-witnessed (2.1.88 match: parseMcpConfig, 0.222)
 /**
  * parseMcpConfig：校验 {mcpServers} 对象并逐项处理：保留名、未知 type、sdk/claudeai-proxy 只能出现在 dynamic、zod 校验（url 缺 type 给专门提示）、bridge carrier 条目验证、${VAR} 展开（缺失变量、url 展开为空）、首尾空白警告、企业配置是否引用环境变量。返回 {config, errors, asWrittenEntries}。
  */
@@ -943,7 +943,7 @@ function logProjectServersApprovedOnce(
       workspacePersistedTrusted: isWorkspacePersistedTrusted(),
     });
 }
-//@ chunk-e6aww6q8.js:3831255-3831306 facade-majority = getEnterpriseMcpFilePath (1)
+//@ chunk-e6aww6q8.js:3831255-3831306 facade-majority (2.1.88 match: getEnterpriseMcpFilePath, 1)
 /**
  * 企业 MCP 配置文件路径：`<managed 设置目录>/managed-mcp.json`。
  */
@@ -986,7 +986,7 @@ function assertProjectScopeWritable() {
       "Project-scope MCP server changes are unavailable in a session started with --project-config-root. Use the local or user scope instead.",
     );
 }
-//@ chunk-e6aww6q8.js:3831865-3832001 callgraph-witnessed = writeMcpjsonFile (0.367)
+//@ chunk-e6aww6q8.js:3831865-3832001 callgraph-witnessed (2.1.88 match: writeMcpjsonFile, 0.367)
 async function writeMcpjsonFile(config) {
   let mcpJsonPath = join(getCwd(), ".mcp.json");
   await writeFileAtomic_2_2(mcpJsonPath, jsonStringify(config, null, 2), {
@@ -1274,7 +1274,7 @@ var SIGNATURE_IGNORED_ENV; // deferred: uses PLUGIN_ENV_VAR_NAMES (../../utils/p
 deferInit("chunk-e6aww6q8.js:3837046", () => {
   SIGNATURE_IGNORED_ENV = new Set(PLUGIN_ENV_VAR_NAMES);
 });
-//@ chunk-e6aww6q8.js:3837067-3837449 facade-majority = getMcpServerSignature (0.578)
+//@ chunk-e6aww6q8.js:3837067-3837449 facade-majority (2.1.88 match: getMcpServerSignature, 0.578)
 /**
  * getMcpServerSignature：服务器去重签名：stdio 为 stdio:JSON(命令数组)[:JSON(排序后 env)]，远程为 url:规范化 URL（CCR 代理取 mcp_url）。
  */
@@ -1296,7 +1296,7 @@ function getMcpServerSignature(config, options) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3837449-3838062 fingerprint = dedupPluginMcpServers (0.942)
+//@ chunk-e6aww6q8.js:3837449-3838062 fingerprint (2.1.88 match: dedupPluginMcpServers, 0.942)
 /**
  * dedupPluginMcpServers：插件服务器与手工配置签名相同（不含 env）或与更早插件服务器重复时压制，返回 {servers, suppressed}。
  */
@@ -1422,7 +1422,7 @@ function suppressedConnectorsEqual(a, b) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:3839280-3839853 facade-majority = dedupClaudeAiMcpServers (0.747)
+//@ chunk-e6aww6q8.js:3839280-3839853 facade-majority (2.1.88 match: dedupClaudeAiMcpServers, 0.747)
 /**
  * dedupClaudeAiMcpServers：claude.ai 连接器与已启用的手工配置签名相同时压制。
  */
@@ -1474,7 +1474,7 @@ async function dedupClaudeAiMcpServers(claudeAiServers, manualServers) {
     suppressed,
   };
 }
-//@ chunk-e6aww6q8.js:3839853-3839926 fingerprint = isMcpServerAllowedByPolicy (0.426)
+//@ chunk-e6aww6q8.js:3839853-3839926 fingerprint (2.1.88 match: isMcpServerAllowedByPolicy, 0.426)
 function getMcpAllowlistPolicy() {
   if (isManagedMcpServersOnly())
     return {
@@ -1694,7 +1694,7 @@ function isMcpServerDenied(serverName, serverConfig) {
       ))
   );
 }
-//@ chunk-e6aww6q8.js:3842619-3843520 fingerprint = isMcpServerDenied (0.562)
+//@ chunk-e6aww6q8.js:3842619-3843520 fingerprint (2.1.88 match: isMcpServerDenied, 0.562)
 /**
  * isMcpServerDenied：deniedMcpServers 中 name、command（逐段展开后比较）或 url 模式（含 claude.ai 代理 URL 与兄弟 ID）任一命中即拒绝。
  */
@@ -1901,7 +1901,7 @@ function isMcpServerAllowedByPolicy(serverName, config) {
 function isBuiltinInProcessMcpServer(name) {
   return isClaudeInChromeMCPServer(name) || isComputerUseServer(name);
 }
-//@ chunk-e6aww6q8.js:3845212-3845377 facade-majority = filterMcpServersByPolicy (1)
+//@ chunk-e6aww6q8.js:3845212-3845377 facade-majority (2.1.88 match: filterMcpServersByPolicy, 1)
 /**
  * filterMcpServersByPolicy：sdk 类型或通过 isMcpServerAllowedByPolicy 的留下，其余列为 blocked。
  */
@@ -2172,7 +2172,7 @@ function ccrRepoToolsOnlyNote(servers) {
 var INVALID_SERVER_NAME_MESSAGE =
   "Invalid name <redacted>. Names can only contain letters, numbers, hyphens, and underscores.";
 var RESERVED_SERVER_NAME_MESSAGE = "Cannot add MCP server <redacted>: this name is reserved.";
-//@ chunk-e6aww6q8.js:3848808-3851867 facade-majority = addMcpConfig (0.683)
+//@ chunk-e6aww6q8.js:3848808-3851867 facade-majority (2.1.88 match: addMcpConfig, 0.683)
 /**
  * addMcpConfig：claude mcp add 的实现：校验名字/保留名/企业独占/仅插件策略/schema/宿主专用类型/策略，再按作用域写入 .mcp.json、全局配置或项目配置，写后重读确认。
  */
@@ -2360,7 +2360,7 @@ function isObjectLike_4(value) {
 function getProp(object, key) {
   return isObjectLike_4(object) ? object[key] : undefined;
 }
-//@ chunk-e6aww6q8.js:3852549-3853366 facade-majority = removeMcpConfig (0.501)
+//@ chunk-e6aww6q8.js:3852549-3853366 facade-majority (2.1.88 match: removeMcpConfig, 0.501)
 /**
  * removeMcpConfig：claude mcp remove 的实现，按作用域删除并确认落盘。
  */
@@ -2423,7 +2423,7 @@ async function removeMcpConfig(name, scope, storageV5) {
 function userScopeMcpServerExists(serverName) {
   return getGlobalConfig().mcpServers?.[serverName] !== undefined;
 }
-//@ chunk-e6aww6q8.js:3853419-3853984 facade-majority = getProjectMcpConfigsFromCwd (0.205)
+//@ chunk-e6aww6q8.js:3853419-3853984 facade-majority (2.1.88 match: getProjectMcpConfigsFromCwd, 0.205)
 /**
  * getProjectMcpConfigsFromCwd：读取 cwd/.mcp.json 的 mcpServers（普通文件、≤2 MiB），不存在返回空对象。
  */
@@ -2454,7 +2454,7 @@ async function readRawMcpJsonServersFromCwd() {
     throw Error(".mcp.json is malformed (not valid JSON, or mcpServers is not an object)");
   return parseResult.data.mcpServers;
 }
-//@ chunk-e6aww6q8.js:3853984-3854094 facade-majority = SCOPE_ORDER (0.845)
+//@ chunk-e6aww6q8.js:3853984-3854094 facade-majority (2.1.88 match: SCOPE_ORDER, 0.845)
 /**
  * 实际读取配置的作用域顺序（含 local/project/user）。
  */
@@ -2480,7 +2480,7 @@ function getMcpConfigsByScope(scope, { expandVars = true } = {}) {
     expandVars,
   });
 }
-//@ chunk-e6aww6q8.js:3854198-3856139 fingerprint = getMcpConfigsByScope (0.904)
+//@ chunk-e6aww6q8.js:3854198-3856139 fingerprint (2.1.88 match: getMcpConfigsByScope, 0.904)
 /**
  * getMcpConfigsByScope：按作用域读取服务器：project 从项目根到 cwd 逐级读 .mcp.json；user 读全局配置 mcpServers；local 读项目配置 mcpServers；managed 读 policySettings.managedMcpServers；enterprise 读 managed-mcp.json。每项补 scope（与 declaredIn）。
  */
@@ -2652,7 +2652,7 @@ function getMcpConfigsByScope_2(scope, { expandVars = true } = {}) {
 function isMcpServerUngated(serverName, config) {
   return getMcpServerScopeGate(serverName, config) === null;
 }
-//@ chunk-e6aww6q8.js:3856180-3856426 fingerprint = getMcpConfigByName (0.33)
+//@ chunk-e6aww6q8.js:3856180-3856426 fingerprint (2.1.88 match: getMcpConfigByName, 0.33)
 /**
  * getMcpServerScopeGate：作用域门控原因：安全模式或企业/插件独占时 managed-policy，未批准的 project 为 project-approval，否则 null。
  */
@@ -2691,7 +2691,7 @@ function getMcpConfigByName(serverName) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3856728-3860255 facade-majority = getClaudeCodeMcpConfigs (0.733)
+//@ chunk-e6aww6q8.js:3856728-3860255 facade-majority (2.1.88 match: getClaudeCodeMcpConfigs, 0.733)
 /**
  * getClaudeCodeMcpConfigs：合并 Claude Code 自身的配置：企业 managed-mcp.json 存在时独占；否则合并 user、已批准的 project、local、managed、插件与 dynamic 服务器，经禁用列表、审批状态与策略过滤；插件服务器与手工配置按签名去重（被压制的记为警告），保留名冲突的 carrier 条目单独报告。
  */
@@ -3025,7 +3025,7 @@ function verifyBridgeCarrierPrompt(file) {
 }
 //@ chunk-e6aww6q8.js:3861577-3861593 layout
 var MAX_MCP_CONFIG_FILE_BYTES = 2097152;
-//@ chunk-e6aww6q8.js:3861593-3863797 facade-majority = parseMcpConfigFromFilePath (0.584)
+//@ chunk-e6aww6q8.js:3861593-3863797 facade-majority (2.1.88 match: parseMcpConfigFromFilePath, 0.584)
 /**
  * parseMcpConfigFromFilePath：读取并解析 MCP 配置文件（project/enterprise 限普通文件且 ≤2 MiB；dynamic 直接读），区分不存在、读失败、非 JSON、schema 错误，返回 {config, errors, present}。
  */
@@ -3171,7 +3171,7 @@ function parseMcpConfigFromFilePath(params) {
     present: true,
   };
 }
-//@ chunk-e6aww6q8.js:3863797-3863913 fingerprint = doesEnterpriseMcpConfigExist (0.88)
+//@ chunk-e6aww6q8.js:3863797-3863913 fingerprint (2.1.88 match: doesEnterpriseMcpConfigExist, 0.88)
 function doesEnterpriseMcpConfigExist_2(expandVars) {
   return isDiskless()
     ? {
@@ -3363,7 +3363,7 @@ function areMcpConfigsAllowedWithEnterpriseMcpConfig(configs) {
     areMcpConfigsAllowedWithEnterpriseMcpConfig_2(key, value),
   );
 }
-//@ chunk-e6aww6q8.js:3865913-3866005 fingerprint = areMcpConfigsAllowedWithEnterpriseMcpConfig (1)
+//@ chunk-e6aww6q8.js:3865913-3866005 fingerprint (2.1.88 match: areMcpConfigsAllowedWithEnterpriseMcpConfig, 1)
 function areMcpConfigsAllowedWithEnterpriseMcpConfig_2(serverName, config) {
   return (
     (config.type === "sdk" && config.name === "claude-vscode") ||
@@ -3430,7 +3430,7 @@ function isOptInBuiltinServer(name) {
 function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
-//@ chunk-e6aww6q8.js:3866751-3866874 facade-majority = isMcpServerDisabled (1)
+//@ chunk-e6aww6q8.js:3866751-3866874 facade-majority (2.1.88 match: isMcpServerDisabled, 1)
 /**
  * isMcpServerDisabled：项目配置 disabledMcpServers 包含该名字；默认关闭的内置服务器（computer-use）看 enabledMcpServers。
  */
@@ -3492,7 +3492,7 @@ function setMcpServerEnabledDurably(name, enabled, storageV5) {
     return false;
   });
 }
-//@ chunk-e6aww6q8.js:3867423-3867840 fingerprint = setMcpServerEnabled (1)
+//@ chunk-e6aww6q8.js:3867423-3867840 fingerprint (2.1.88 match: setMcpServerEnabled, 1)
 /**
  * setMcpServerEnabled：切换项目配置中的 enabledMcpServers/disabledMcpServers；内置服务器切换记录 tengu_builtin_mcp_toggle。
  */
@@ -3527,7 +3527,7 @@ function setMcpServerEnabled_2(saveConfig, name, enabled, storageV5) {
     });
   return saved;
 }
-//@ chunk-e6aww6q8.js:3867840-3867900 shared-adjacent = doesEnterpriseMcpConfigExist (0.88)
+//@ chunk-e6aww6q8.js:3867840-3867900 shared-adjacent (2.1.88 match: doesEnterpriseMcpConfigExist, 0.88)
 // deferred: uses deliveredReaderSlot (../../plugins/functionHooks/api/settingsRead.js) of its import cycle while loading; runs once the cycle is complete
 deferInit("chunk-e6aww6q8.js:3867840", () => {
   deliveredReaderSlot.set(() =>
@@ -3540,7 +3540,7 @@ deferInit("chunk-e6aww6q8.js:3867840", () => {
       : [],
   );
 });
-//@ chunk-e6aww6q8.js:3873177-3873356 fingerprint = expandEnvVars (0.913)
+//@ chunk-e6aww6q8.js:3873177-3873356 fingerprint (2.1.88 match: expandEnvVars, 0.913)
 /**
  * supportsEnvExpansion：按 type 判断（stdio/sse/http/sdk 为 true）。
  */
@@ -3561,7 +3561,7 @@ function supportsEnvExpansion(config) {
       return false;
   }
 }
-//@ chunk-0h4e7gnq.js:29912-30007 fingerprint = getServerCommandArray (1)
+//@ chunk-0h4e7gnq.js:29912-30007 fingerprint (2.1.88 match: getServerCommandArray, 1)
 function getMcpTransportTelemetryLabel(config) {
   let transportType = config.type ?? "stdio";
   return typeof transportType === "string" && Object.hasOwn(MCP_TRANSPORTS_SUPPORTING_TOOLS, transportType)
@@ -3588,7 +3588,7 @@ function isPrivateNetworkHost(host) {
  * 托管设置值的占位文案。
  */
 var ORG_VALUE_PLACEHOLDER = "(value set by your organization)";
-//@ chunk-2yv46yc2.js:381-500 placement = isInstallationRelevantToCurrentProject (0.769)
+//@ chunk-2yv46yc2.js:381-500 placement (2.1.88 match: isInstallationRelevantToCurrentProject, 0.769)
 /**
  * managed 作用域的 MCP 服务器配置脱敏（URL 与 headers 打码）。名字配错且应归 MCP，见 lead 建议。
  */
@@ -3649,7 +3649,7 @@ function mcpServerStatusSnapshots(clients) {
     };
   });
 }
-//@ chunk-18hwfzwa.js:1738045-1738247 placement = hasBlockingResult (0.495)
+//@ chunk-18hwfzwa.js:1738045-1738247 placement (2.1.88 match: hasBlockingResult, 0.495)
 /**
  * 在已扣住的 MCP 配置之外，再把需要审批的项目 MCP 服务器移入 blocked。旧版名 hasBlockingResult 存疑，疑似 MCP 配置代码误归 hooks.ts。
  */

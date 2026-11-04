@@ -27,7 +27,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Box, Text } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:97309-97386 placement = getToolUseSummary (0.537)
+//@ chunk-vrb44rx7.js:97309-97386 placement (2.1.88 match: getToolUseSummary, 0.537)
 /**
  * 触发判定 schema（{query, should_trigger}）与上限常量；与 WebSearch UI 关系不明。
  */

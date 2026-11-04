@@ -43,7 +43,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ca06bv0t.js:17085-17211 placement = getCurrentRepoHttpsUrl (0.765)
+//@ chunk-ca06bv0t.js:17085-17211 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.765)
 function getCurrentRepoHttpsUrl({ host, owner, name: repoName }) {
   let parsed = isGithubDotCom(host);
   let included = host.includes(":");

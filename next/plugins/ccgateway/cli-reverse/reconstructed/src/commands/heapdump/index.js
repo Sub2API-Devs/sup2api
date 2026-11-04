@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:2030830-2031344 fingerprint = heapDump (0.331)
+//@ chunk-e6aww6q8.js:2030830-2031344 fingerprint (2.1.88 match: heapDump, 0.331)
 /**
  * /heapdump 命令对象（local）；描述：Dump the JS heap to the Desktop; on Linux with no Desktop folder, the home directory；isHidden: true；实现 chunk-dhgx9s0b.js 的 x。
  */

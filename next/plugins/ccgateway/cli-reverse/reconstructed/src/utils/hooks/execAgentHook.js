@@ -50,7 +50,7 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { promptEndingFields } from "../../entrypoints/sdk/coreSchemas.js";
 import { errorMessage } from "../errors.js";
 
-//@ chunk-e6aww6q8.js:3396429-3401496 fingerprint = execAgentHook (0.656)
+//@ chunk-e6aww6q8.js:3396429-3401496 fingerprint (2.1.88 match: execAgentHook, 0.656)
 /**
  * 执行 agent 钩子：用 $ARGUMENTS 替换后的提示词启动一个最多 50 轮的验证子代理（工具集去掉危险工具并加 StructuredOutput，dontAsk 权限，可读 transcript），超时默认 60s；返回 ok 成功、not ok 阻断、未给结构化输出视为取消；模型被拒时回退主模型。
  */

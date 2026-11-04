@@ -312,7 +312,7 @@ function withCommandAllowRules(context, commandRules) {
     };
   };
 }
-//@ chunk-e6aww6q8.js:3116579-3116678 callgraph-fingerprint = getPowerShellTool (0.524)
+//@ chunk-e6aww6q8.js:3116579-3116678 callgraph-fingerprint (2.1.88 match: getPowerShellTool, 0.524)
 var getPowerShellTool; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 deferInit("chunk-e6aww6q8.js:3116579", () => {
   getPowerShellTool = (() => {
@@ -323,7 +323,7 @@ deferInit("chunk-e6aww6q8.js:3116579", () => {
     };
   })();
 });
-//@ chunk-e6aww6q8.js:3116678-3119119 fingerprint = executeShellCommandsInPrompt (0.36)
+//@ chunk-e6aww6q8.js:3116678-3119119 fingerprint (2.1.88 match: executeShellCommandsInPrompt, 0.36)
 /**
  * 执行 Skill/命令文件里的 !`cmd` 与 ```! 块：按 frontmatter shell 选 Bash/PowerShell 工具，逐条做权限检查（GE），auto 模式下需要询问的可移交模型（promptShellHandOff），不允许则抛错；允许则执行并把输出替换进文本。readOnlySkillLoad 时不执行。
  */
@@ -517,7 +517,7 @@ function extractPromptShellCommands(text, tool, sourceName) {
 function promptShellHandOffPlaceholder(index) {
   return `\x00promptShellHandOff:${index}\x00`;
 }
-//@ chunk-e6aww6q8.js:3119862-3120033 fingerprint = formatBashOutput (1)
+//@ chunk-e6aww6q8.js:3119862-3120033 fingerprint (2.1.88 match: formatBashOutput, 1)
 function formatBashOutput(stdout, stderr, inline = false) {
   let parts = [];
   if (stdout.trim()) parts.push(stdout.trim());
@@ -533,7 +533,7 @@ ${stderr.trim()}`);
 `,
   );
 }
-//@ chunk-e6aww6q8.js:3120033-3120512 fingerprint = formatBashError (0.783)
+//@ chunk-e6aww6q8.js:3120033-3120512 fingerprint (2.1.88 match: formatBashError, 0.783)
 function formatBashError(error, pattern, session, inline = false) {
   if (error instanceof ShellError) {
     if (error.interrupted)

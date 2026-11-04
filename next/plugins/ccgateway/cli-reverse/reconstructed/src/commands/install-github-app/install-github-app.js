@@ -53,7 +53,7 @@ import { getCwd } from "../../utils/cwd.js";
 import { ghIsDangerousCallback, getGitHostKind } from "../../utils/gitHosts.js";
 import { createStore } from "../../state/store.js";
 
-//@ chunk-4v9zy7gn.js:48997-49567 fingerprint = INITIAL_STATE (0.885)
+//@ chunk-4v9zy7gn.js:48997-49567 fingerprint (2.1.88 match: INITIAL_STATE, 0.885)
 /**
  * INITIAL_STATE：同旧版。
  */
@@ -82,7 +82,7 @@ var NO_TERMINAL_ERROR_STATE = {
   errorReason: "No terminal attached",
   errorInstructions: [],
 };
-//@ chunk-4v9zy7gn.js:49567-63101 fingerprint = InstallGitHubApp (0.848)
+//@ chunk-4v9zy7gn.js:49567-63101 fingerprint (2.1.88 match: InstallGitHubApp, 0.848)
 function InstallGitHubApp({ onDone, wizard }) {
   let { storageV5 } = useTheme_2();
   let { cancellation, existingApiKey } = wizard;

@@ -18,7 +18,7 @@ import {
 import { Spinner } from "../components/Spinner.js";
 import { Box, Text } from "../ink/components/Text.js";
 
-//@ chunk-s5p7fp0c.js:11644-12107 callgraph-fingerprint = AutoRunIssueNotification (0.382)
+//@ chunk-s5p7fp0c.js:11644-12107 callgraph-fingerprint (2.1.88 match: AutoRunIssueNotification, 0.382)
 function AutoRunIssueNotification(props) {
   let $ = useMemoCache(7);
   let { label, onCancel } = props;

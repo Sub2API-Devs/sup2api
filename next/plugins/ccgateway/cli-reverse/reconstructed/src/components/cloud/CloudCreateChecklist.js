@@ -37,7 +37,7 @@ init_react_production();
 //@ chunk-fr4xjkmb.js:14276-14288 placement
 var CHECKLIST_WIDTH_RESERVE = 2;
 var MAX_CHECKLIST_VISIBLE_LINES = 6;
-//@ chunk-fr4xjkmb.js:14288-14391 placement = _temp18 (1)
+//@ chunk-fr4xjkmb.js:14288-14391 placement (2.1.88 match: _temp18, 1)
 function sanitizePromptLine(line) {
   return stripAnsi(line)
     .replace(

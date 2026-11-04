@@ -71,7 +71,7 @@ function hasFreshBearerPlan() {
 function isBridgeEntitlementHintAvailable() {
   return isGrowthBookUnavailableOnNoTelemetry() && getBearerSubscriptionType() !== null;
 }
-//@ chunk-71c4j971.js:3259-3364 fingerprint = getBridgeAccessToken (0.638)
+//@ chunk-71c4j971.js:3259-3364 fingerprint (2.1.88 match: getBridgeAccessToken, 0.638)
 function getBridgeAccessToken_2() {
   try {
     let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
@@ -131,7 +131,7 @@ async function bridgeSessionsAccessTokenAfter401(credentials, credentials_2, wit
     return;
   return getBridgeSessionsAccessTokenAsync(credentials_2);
 }
-//@ chunk-wp3fcgm5.js:1195-1240 facade-exports = getTeamMemorySyncEndpoint (1)
+//@ chunk-wp3fcgm5.js:1195-1240 facade-exports (2.1.88 match: getTeamMemorySyncEndpoint, 1)
 function getBridgeBaseUrl() {
   return getBridgeBaseUrlOverride() ?? getOauthConfig().BASE_API_URL;
 }

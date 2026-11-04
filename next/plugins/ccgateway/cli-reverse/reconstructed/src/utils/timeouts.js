@@ -13,7 +13,7 @@ import { parseIntLoose } from "./envUtils.js";
 //@ chunk-4khf94hy.js:227-249 affinity
 var DEFAULT_TIMEOUT_MS = 120000;
 var MAX_BASH_TIMEOUT_MS = 600000;
-//@ chunk-4khf94hy.js:249-363 fingerprint = getDefaultBashTimeoutMs (1)
+//@ chunk-4khf94hy.js:249-363 fingerprint (2.1.88 match: getDefaultBashTimeoutMs, 1)
 function getDefaultBashTimeoutMs(env = process.env) {
   let envValue = env.BASH_DEFAULT_TIMEOUT_MS;
   if (envValue) {
@@ -22,7 +22,7 @@ function getDefaultBashTimeoutMs(env = process.env) {
   }
   return DEFAULT_TIMEOUT_MS;
 }
-//@ chunk-4khf94hy.js:363-507 fingerprint = getMaxBashTimeoutMs (1)
+//@ chunk-4khf94hy.js:363-507 fingerprint (2.1.88 match: getMaxBashTimeoutMs, 1)
 function getMaxBashTimeoutMs(env = process.env) {
   let envValue = env.BASH_MAX_TIMEOUT_MS;
   if (envValue) {

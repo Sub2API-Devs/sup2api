@@ -157,7 +157,7 @@ function getWorkflowsUnavailableReason() {
 function workflowsDefaultOn() {
   return workflowAvailability().defaultOn;
 }
-//@ chunk-hgfr0vx8.js:2349-2388 placement = isProSubscriber (1)
+//@ chunk-hgfr0vx8.js:2349-2388 placement (2.1.88 match: isProSubscriber, 1)
 function isProSubscriber() {
   return getSubscriptionType() === "pro" ? SMALL : MEDIUM;
 }

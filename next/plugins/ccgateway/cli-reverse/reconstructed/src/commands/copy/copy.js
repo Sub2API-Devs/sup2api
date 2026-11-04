@@ -40,7 +40,7 @@ import { KeyboardShortcutHint } from "../../components/design-system/KeyboardSho
 import { Pane } from "../../components/design-system/Pane.js";
 import { stripMemoryTags } from "../../services/orgMemory/promptIndex.js";
 
-//@ chunk-e6aww6q8.js:2659669-2659812 fingerprint = collectRecentAssistantTexts (0.709)
+//@ chunk-e6aww6q8.js:2659669-2659812 fingerprint (2.1.88 match: collectRecentAssistantTexts, 0.709)
 function collectRecentAssistantTexts(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     let msg = messages[i];
@@ -48,7 +48,7 @@ function collectRecentAssistantTexts(messages) {
   }
   return;
 }
-//@ chunk-5nte8cwj.js:1546-1584 fingerprint = COPY_DIR (1)
+//@ chunk-5nte8cwj.js:1546-1584 fingerprint (2.1.88 match: COPY_DIR, 1)
 async function COPY_DIR() {
   return isDesktopInstalled("claude");
 }
@@ -56,18 +56,18 @@ async function COPY_DIR() {
 function returnSecond(first, second) {
   return second;
 }
-//@ chunk-0knprqgt.js:13751-13791 affinity = isConnectionError (1)
+//@ chunk-0knprqgt.js:13751-13791 affinity (2.1.88 match: isConnectionError, 1)
 function isCodeSegment_2(err) {
   return err.kind === "code";
 }
-//@ chunk-0knprqgt.js:13791-13841 fingerprint = _temp2 (1)
+//@ chunk-0knprqgt.js:13791-13841 fingerprint (2.1.88 match: _temp2, 1)
 function withCopyFullResponse(c) {
   return {
     ...c,
     copyFullResponse: true,
   };
 }
-//@ chunk-0knprqgt.js:13841-14028 fingerprint = _temp (0.615)
+//@ chunk-0knprqgt.js:13841-14028 fingerprint (2.1.88 match: _temp, 0.615)
 function renderCopyBlockItem(block, index) {
   let blockLines =
     countCharInString(
@@ -85,7 +85,7 @@ function renderCopyBlockItem(block, index) {
     index,
   );
 }
-//@ chunk-0knprqgt.js:14028-14096 fingerprint = RESPONSE_FILENAME (0.5)
+//@ chunk-0knprqgt.js:14028-14096 fingerprint (2.1.88 match: RESPONSE_FILENAME, 0.5)
 /**
  * RESPONSE_FILENAME：同旧版。
  */
@@ -93,7 +93,7 @@ var RESPONSE_FILENAME = "response.md";
 var COPY_FILENAME = "copy.md";
 var MAX_LOOKBACK = 20;
 var COPY_PICKER_TITLE = "Select content to copy";
-//@ chunk-0knprqgt.js:14096-14450 fingerprint = extractCodeBlocks (0.374)
+//@ chunk-0knprqgt.js:14096-14450 fingerprint (2.1.88 match: extractCodeBlocks, 0.374)
 function extractCodeBlocks(markdown) {
   let { tokens } = lexMarkdownWindowed(marked, stripPromptXMLTags(markdown));
   let blocks = [];
@@ -198,7 +198,7 @@ function recentAssistantTexts(messages) {
   }
   return texts;
 }
-//@ chunk-0knprqgt.js:15558-15664 fingerprint = fileExtension (1)
+//@ chunk-0knprqgt.js:15558-15664 fingerprint (2.1.88 match: fileExtension, 1)
 function fileExtension(lang) {
   if (lang) {
     let sanitized = lang.replace(/[^a-zA-Z0-9]/g, "");
@@ -206,7 +206,7 @@ function fileExtension(lang) {
   }
   return ".txt";
 }
-//@ chunk-0knprqgt.js:15664-15786 placement = copySnapshotToLocal (0.871)
+//@ chunk-0knprqgt.js:15664-15786 placement (2.1.88 match: copySnapshotToLocal, 0.871)
 /**
  * /copy 命令：把文本写入临时目录下的文件并返回路径。
  */
@@ -222,7 +222,7 @@ async function writeTempCopyFile(agentType, scope) {
   });
   return localMemDir;
 }
-//@ chunk-0knprqgt.js:15786-16107 fingerprint = copyOrWriteToFile (0.744)
+//@ chunk-0knprqgt.js:15786-16107 fingerprint (2.1.88 match: copyOrWriteToFile, 0.744)
 async function copyOrWriteToFile(text, filename) {
   let raw = await setClipboard(text);
   if (raw) process.stdout.write(raw);
@@ -250,7 +250,7 @@ Also written to ${filePath}`;
     return `${charCount}${fallbackNotice}`;
   }
 }
-//@ chunk-0knprqgt.js:16107-19748 fingerprint = CopyPicker (0.705)
+//@ chunk-0knprqgt.js:16107-19748 fingerprint (2.1.88 match: CopyPicker, 0.705)
 function CopyPicker(props) {
   let $ = useMemoCache(54);
   let { fullText, blocks, messageAge, onDone } = props;
@@ -582,7 +582,7 @@ function blockLabel(text) {
   let label = truncateToLength(found, MAX_BLOCK_LABEL_WIDTH);
   return label === found ? found : `${label}\u2026`;
 }
-//@ chunk-0knprqgt.js:19885-20560 fingerprint = call (0.933)
+//@ chunk-0knprqgt.js:19885-20560 fingerprint (2.1.88 match: call, 0.933)
 /**
  * MAX_BLOCK_LABEL_WIDTH：120。
  */

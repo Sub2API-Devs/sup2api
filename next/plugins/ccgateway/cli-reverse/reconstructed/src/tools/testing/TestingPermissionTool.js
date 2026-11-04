@@ -12,7 +12,7 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { zodStrictObject } from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 
-//@ chunk-kxyd0g16.js:62488-63209 fingerprint = TestingPermissionTool (0.756)
+//@ chunk-kxyd0g16.js:62488-63209 fingerprint (2.1.88 match: TestingPermissionTool, 0.756)
 /**
  * TestingPermission 测试工具：总是询问权限，isEnabled 恒 false（旧版只在 NODE_ENV=test 注册）。
  */

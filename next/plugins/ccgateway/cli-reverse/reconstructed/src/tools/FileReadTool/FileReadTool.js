@@ -232,7 +232,7 @@ function getDevicePathRefusal(filePath, spellingsInfo) {
     ? `${unresolvablePathMessage(filePath)}, so it cannot be told apart from a device or process file that this tool does not read.`
     : undefined;
 }
-//@ chunk-qg0af0yq.js:8629-9202 fingerprint = BLOCKED_DEVICE_PATHS (0.808)
+//@ chunk-qg0af0yq.js:8629-9202 fingerprint (2.1.88 match: BLOCKED_DEVICE_PATHS, 0.808)
 /**
  * 被拒读的设备路径集合（/dev/zero、/dev/random、/dev/stdin、/dev/tty、/proc/kmsg、/dev/fd/0-2 等）及相关正则。
  */
@@ -269,7 +269,7 @@ deferInit("chunk-qg0af0yq.js:8629", () => {
   TTY_DEVICE_RE = /^\/dev\/(?:pts\/(?:\d+|ptmx)|ptmx|tty[^/]*)$/;
   MAX_PROC_PREFIX_STRIP_ROUNDS = 8;
 });
-//@ chunk-qg0af0yq.js:9202-9673 fingerprint = isBlockedDevicePath (0.964)
+//@ chunk-qg0af0yq.js:9202-9673 fingerprint (2.1.88 match: isBlockedDevicePath, 0.964)
 /**
  * 路径是否为会阻塞或泄露的设备/进程文件：规范化后匹配黑名单、tty、fd 穿越、其他进程 fd、/proc/<pid>/(environ|cmdline|mem|...)，并剥离 /proc/<pid>/root、task 前缀循环判断（最多 8 轮）。
  */
@@ -296,7 +296,7 @@ function isBlockedDevicePath(filePath) {
     normalized = replaced;
   }
 }
-//@ chunk-q7gky7a4.js:813-1174 facade-exports = MaxFileReadTokenExceededError (0.91)
+//@ chunk-q7gky7a4.js:813-1174 facade-exports (2.1.88 match: MaxFileReadTokenExceededError, 0.91)
 /**
  * 文件内容 token 数超过上限的错误（带 tokenCount/maxTokens，消息建议用 offset/limit 或搜索）。
  */
@@ -312,7 +312,7 @@ class MaxFileReadTokenExceededError extends Error {
     this.name = "MaxFileReadTokenExceededError";
   }
 }
-//@ chunk-mvvq2nx1.js:7393-7497 fingerprint = IMAGE_EXTENSIONS (0.878)
+//@ chunk-mvvq2nx1.js:7393-7497 fingerprint (2.1.88 match: IMAGE_EXTENSIONS, 0.878)
 /**
  * 把图片格式映射为编码输出格式：jpg/jpeg 为 jpeg、webp 为 webp、其余为 png。
  */
@@ -499,7 +499,7 @@ async function getScreenshotPathIdentities(filePath, spellings) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3160092-3160175 fingerprint = getAlternateScreenshotPath (0.702)
+//@ chunk-e6aww6q8.js:3160092-3160175 fingerprint (2.1.88 match: getAlternateScreenshotPath, 0.702)
 /**
  * 把每个已批准的路径拼写换成备用截图文件名（同目录）。
  */
@@ -525,7 +525,7 @@ function getAlternateScreenshotPath(filePath) {
   let alternateSpace = currentSpace === " " ? THIN_SPACE : " ";
   return filePath.replace(`${currentSpace}${match[3]}${match[4]}`, `${alternateSpace}${match[3]}${match[4]}`);
 }
-//@ chunk-e6aww6q8.js:3160397-3160592 fingerprint = detectSessionFileType (0.899)
+//@ chunk-e6aww6q8.js:3160397-3160592 fingerprint (2.1.88 match: detectSessionFileType, 0.899)
 /**
  * 配置目录下 projects/**.jsonl 判为 "session_transcript"（读会话记录的统计）。
  */
@@ -536,7 +536,7 @@ function detectSessionFileType(filePath) {
   if (normalizedPath.includes("/projects/") && normalizedPath.endsWith(".jsonl")) return "session_transcript";
   return null;
 }
-//@ chunk-e6aww6q8.js:3161562-3164693 fingerprint = outputSchema (0.761)
+//@ chunk-e6aww6q8.js:3161562-3164693 fingerprint (2.1.88 match: outputSchema, 0.761)
 function makeFileReadOutputSchema(cells) {
   let imageMediaTypes = imageMediaTypeSchema();
   return discriminatedUnion("type", [
@@ -890,7 +890,7 @@ function getPdfPageBudget(context) {
     ? getPdfPageLimits(context.session, context.sameTurnToolUses)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3168772-3174590 facade-exports = FileReadTool (0.519)
+//@ chunk-e6aww6q8.js:3168772-3174590 facade-exports (2.1.88 match: FileReadTool, 0.519)
 /**
  * Read 工具定义（name "Read"）。读文本/图片/PDF/notebook；validateInput 查空字节、不稳定路径、pages 合法性与预算、Read deny、二进制扩展名、设备文件、远程 PDF 预算；checkPermissions 走 checkReadPermissionForTool 并在 macOS 暂存截图备用路径身份；maxResultSizeChars 为 Infinity。
  */
@@ -1654,7 +1654,7 @@ async function validateContentTokens(
   if (exactTokens > maxTokens_2) throw new MaxFileReadTokenExceededError(exactTokens, maxTokens_2);
   return exactTokens;
 }
-//@ chunk-e6aww6q8.js:3179557-3179681 fingerprint = createImageResponse (1)
+//@ chunk-e6aww6q8.js:3179557-3179681 fingerprint (2.1.88 match: createImageResponse, 1)
 /**
  * 构造 image 类型的 Read 结果（base64、image/<type>、原始大小、尺寸）。
  */
@@ -1762,7 +1762,7 @@ async function callInnerWithFileHandle(readArgs) {
     else await closePromise;
   }
 }
-//@ chunk-e6aww6q8.js:3180791-3190604 fingerprint = callInner (0.38)
+//@ chunk-e6aww6q8.js:3180791-3190604 fingerprint (2.1.88 match: callInner, 0.38)
 /**
  * 按类型读取：.ipynb 读 notebook 单元；图片扩展名或无扩展名但魔数是图片走 readImageWithTokenBudget；PDF 做页提取或整份读取；其他用 readFileInRange 读文本，token 超限时整文件读取自动分页并附 [Truncated: PARTIAL view] 说明，最后写 readFileState。
  */
@@ -2381,7 +2381,7 @@ async function readImageBytesFromHandle(handle, ioPath, signal) {
     );
   return Buffer.concat(chunks, totalBytes);
 }
-//@ chunk-e6aww6q8.js:3191756-3193372 facade-exports = readImageWithTokenBudget (0.561)
+//@ chunk-e6aww6q8.js:3191756-3193372 facade-exports (2.1.88 match: readImageWithTokenBudget, 0.561)
 /**
  * 按 token 预算读取图片：校验非空与魔数，按模型限制缩放/重编码，超出字节上限再压缩；估算 token 超出上限时压缩到 token 限制，失败则降为 400x400 JPEG。
  */

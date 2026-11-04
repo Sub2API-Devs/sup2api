@@ -208,7 +208,7 @@ function currentRestoreSource() {
   let { recorded } = restoreSourceState;
   return recorded !== null && recorded.liveSessionId === getSessionId() ? recorded.source : null;
 }
-//@ chunk-08s5p3av.js:6605-6923 fingerprint = extractTodosFromTranscript (1)
+//@ chunk-08s5p3av.js:6605-6923 fingerprint (2.1.88 match: extractTodosFromTranscript, 1)
 /**
  * 从转录中最后一次 TodoWrite 工具调用恢复 todo 列表。
  */
@@ -235,7 +235,7 @@ function maybeSwitchSessionForResume(options) {
   switchSession(identityAgentId(resumeId), "resume");
   return true;
 }
-//@ chunk-08s5p3av.js:7076-7492 placement = restoreSessionStateFromLog (0.519)
+//@ chunk-08s5p3av.js:7076-7492 placement (2.1.88 match: restoreSessionStateFromLog, 0.519)
 /**
  * 从日志恢复文件历史、署名快照、todos 等运行时状态。
  */
@@ -284,7 +284,7 @@ function computeStandaloneAgentContext(agentName, agentColor) {
     color: agentColor === "default" ? undefined : agentColor,
   };
 }
-//@ chunk-08s5p3av.js:7597-8894 placement = restoreAgentFromSession (0.393)
+//@ chunk-08s5p3av.js:7597-8894 placement (2.1.88 match: restoreAgentFromSession, 0.393)
 /**
  * 按会话记录的 agent-setting 恢复主线程代理定义，找不到时警告。
  */
@@ -530,7 +530,7 @@ function lastTranscriptModel(messages, mainLoopModel) {
   let decision = describeSessionModelRestore(messages, mainLoopModel);
   return decision.kind === "ok" ? decision.model : undefined;
 }
-//@ chunk-08s5p3av.js:11595-11751 placement = aliasMatchesParentTier (0.83)
+//@ chunk-08s5p3av.js:11595-11751 placement (2.1.88 match: aliasMatchesParentTier, 0.83)
 /**
  * opusplan 覆盖 opus/sonnet，haiku 覆盖 haiku/sonnet（判断别名是否与父模型同档）。
  */
@@ -1075,7 +1075,7 @@ function resolveWorktreeForResume(record, projectPath, options) {
   getReplBridgeHandle()?.refreshGitBranch?.();
   return null;
 }
-//@ chunk-08s5p3av.js:21117-21728 placement = exitRestoredWorktree (0.202)
+//@ chunk-08s5p3av.js:21117-21728 placement (2.1.88 match: exitRestoredWorktree, 0.202)
 /**
  * 恢复的会话记录了 worktree 但不再适用时，切回原始 cwd。
  */
@@ -1119,7 +1119,7 @@ function exitRestoredWorktree(previousWorktreePath, storageV5) {
   reanchorGitFileWatcher();
   getReplBridgeHandle()?.refreshGitBranch?.();
 }
-//@ chunk-08s5p3av.js:21728-26335 placement = processResumedConversation (0.411)
+//@ chunk-08s5p3av.js:21728-26335 placement (2.1.88 match: processResumedConversation, 0.411)
 /**
  * 恢复会话的后处理：采用或分叉 sessionId（--fork-session 时复制内容替换记录），恢复元数据、费用、worktree、代理定义与权限模式，返回启动 REPL 所需的消息与状态。
  */

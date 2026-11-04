@@ -38,13 +38,13 @@ deferInit("chunk-3mec1atf.js:1875", () => {
 deferInit("chunk-3mec1atf.js:1879", () => {
   init_react_production();
 });
-//@ chunk-3mec1atf.js:1883-1908 layout = SETTLED_GREY (1)
+//@ chunk-3mec1atf.js:1883-1908 layout (2.1.88 match: SETTLED_GREY, 1)
 var SETTLED_GREY = {
   r: 171,
   g: 43,
   b: 63,
 };
-//@ chunk-3mec1atf.js:1908-5903 fingerprint = GlimmerMessage (0.805)
+//@ chunk-3mec1atf.js:1908-5903 fingerprint (2.1.88 match: GlimmerMessage, 0.805)
 function GlimmerMessage(props) {
   let $ = useMemoCache(97);
   let {

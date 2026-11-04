@@ -241,7 +241,7 @@ function gitDirEntryPlan(name) {
     GIT_DIR_ENTRY_PLANS.get(name) ?? (VOLATILE_GIT_DIR_ENTRY_PATTERN.test(name) ? SKIP_GIT_ENTRY : undefined)
   );
 }
-//@ chunk-gfa3ceg6.js:2832-3642 placement = GIT_REBASE_RE (0.528)
+//@ chunk-gfa3ceg6.js:2832-3642 placement (2.1.88 match: GIT_REBASE_RE, 0.528)
 /**
  * （旧版名配错，切分错误）git 配置键白名单/敏感键模式与子模块更新模式，用于判断哪些 git config 可安全传递。
  */
@@ -341,7 +341,7 @@ async function getDiffCopyRoot() {
   });
   return CLAUDE_CODE_DIFF_COPY_ROOT;
 }
-//@ chunk-gfa3ceg6.js:4763-4839 placement = convertDirectoryToZipInPlace (1)
+//@ chunk-gfa3ceg6.js:4763-4839 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function removeRecursiveQuietly(dirPath) {
   await rm(dirPath, {
     recursive: true,

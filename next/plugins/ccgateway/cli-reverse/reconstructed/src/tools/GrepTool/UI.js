@@ -24,7 +24,7 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 
-//@ chunk-e6aww6q8.js:1439687-1439832 fingerprint = renderToolUseMessage (1)
+//@ chunk-e6aww6q8.js:1439687-1439832 fingerprint (2.1.88 match: renderToolUseMessage, 1)
 /**
  * Glob/Grep 调用渲染：pattern 与 path（非 verbose 时显示相对路径）。
  */
@@ -34,7 +34,7 @@ function renderToolUseMessage({ pattern, path }, { verbose }) {
   if (path) parts.push(`path: "${verbose ? path : getDisplayPath(path)}"`);
   return parts.join(", ");
 }
-//@ chunk-nc07tp5s.js:8904-9222 callgraph-witnessed = renderToolUseErrorMessage (0.42)
+//@ chunk-nc07tp5s.js:8904-9222 callgraph-witnessed (2.1.88 match: renderToolUseErrorMessage, 0.42)
 function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
   if (!verbose && toolDenialKind !== "permission-rule" && typeof result === "string") {
     if (result.includes(FILE_NOT_FOUND_CWD_NOTE))
@@ -57,7 +57,7 @@ function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
     verbose,
   });
 }
-//@ chunk-ah34pb7m.js:16266-16347 placement = renderToolUseErrorMessage (0.767)
+//@ chunk-ah34pb7m.js:16266-16347 placement (2.1.88 match: renderToolUseErrorMessage, 0.767)
 /**
  * 特定错误结果在非 verbose 非转录模式下的简化渲染。
  */
@@ -99,7 +99,7 @@ function renderTaskOutputResult(result, progressMessages, { verbose, isTranscrip
     }),
   });
 }
-//@ chunk-ah34pb7m.js:16813-18026 fingerprint = SearchResultSummary (0.639)
+//@ chunk-ah34pb7m.js:16813-18026 fingerprint (2.1.88 match: SearchResultSummary, 0.639)
 function SearchResultSummary(props) {
   let $ = useMemoCache(26);
   let { count, countLabel, secondaryCount, secondaryLabel, content, verbose } = props;
@@ -215,7 +215,7 @@ function SearchResultSummary(props) {
   } else t6 = $[25];
   return t6;
 }
-//@ chunk-ah34pb7m.js:18368-18778 fingerprint = renderToolResultMessage (1)
+//@ chunk-ah34pb7m.js:18368-18778 fingerprint (2.1.88 match: renderToolResultMessage, 1)
 /**
  * Grep 结果渲染：content 模式显示行数，count 模式显示匹配数与文件数，否则显示文件数。
  */

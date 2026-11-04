@@ -207,7 +207,7 @@ Retry-After: ${fetched.retryAfter}`
 
 The response body was not retrieved. If this URL requires authentication, use an authenticated tool (e.g. \`gh\` for GitHub, or an MCP-provided fetch tool) instead of WebFetch.`;
 }
-//@ chunk-e6aww6q8.js:2182169-2182965 fingerprint = outputSchema (0.707)
+//@ chunk-e6aww6q8.js:2182169-2182965 fingerprint (2.1.88 match: outputSchema, 0.707)
 var webFetchInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var webFetchOutputSchema;
 deferInit("chunk-e6aww6q8.js:2182169", () => {
@@ -327,7 +327,7 @@ function makeWebFetchCallContext(toolContext, callContext) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:2184188-2201287 facade-exports = WebFetchTool (0.246)
+//@ chunk-e6aww6q8.js:2184188-2201287 facade-exports (2.1.88 match: WebFetchTool, 0.246)
 /**
  * WebFetch 工具定义（name "WebFetch"，ruleContentField "url"，shouldDefer，只读、可并发，backgrounding "detach"）。create(ctx) 返回 checkPermissions/validateInput/call：权限先处理 claude.ai artifact URL 的专用读规则与跨组织/他人 artifact 确认，再按 deny→ask→allow 规则、预批准主机（CLAUDE_CODE_EVAL_CONFINED 时不预批准）决定。call 依次处理：同 URL+prompt 去重提示、近期失败提示、抓取（缓存/CCR 代理/直连）、重定向与 HTTP 错误文本、子代理原文模式、预批准 markdown 直出、否则用次级模型按 prompt 摘要。
  */
@@ -1281,7 +1281,7 @@ ${copyNote}`;
     },
   });
 });
-//@ chunk-e6aww6q8.js:2201287-2201482 layout = getDenyRuleForAgent (1)
+//@ chunk-e6aww6q8.js:2201287-2201482 layout (2.1.88 match: getDenyRuleForAgent, 1)
 function findRuleForAnyToolName(context, toolNames, behavior) {
   for (let toolName of toolNames) {
     let rule =
@@ -1296,7 +1296,7 @@ function findRuleForAnyToolName(context, toolNames, behavior) {
     ) ?? null
   );
 }
-//@ chunk-e6aww6q8.js:2201482-2201659 layout = getToolNameForPermissionCheck (1)
+//@ chunk-e6aww6q8.js:2201482-2201659 layout (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck_2(permissionState, mcpToolNames, includeAskRules) {
   if (permissionState === null) return false;
   let mapped = mcpToolNames.map((mcpToolName) => ({
@@ -1315,7 +1315,7 @@ function throwIfAskLetGo(toolUseId, session, errorMessage) {
   if (toolUseId !== undefined && detachedCallSlots.of(session).wasLetGo(toolUseId))
     throw provenanceRequiredError("no_prompt", errorMessage);
 }
-//@ chunk-e6aww6q8.js:2201739-2201862 layout = buildSuggestions (1)
+//@ chunk-e6aww6q8.js:2201739-2201862 layout (2.1.88 match: buildSuggestions, 1)
 /**
  * WebFetch 权限对话框的"总是允许"建议：写到 localSettings 的 WebFetch(<ruleContent>) allow 规则。
  */

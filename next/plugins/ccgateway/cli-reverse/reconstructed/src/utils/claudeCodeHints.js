@@ -18,7 +18,7 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { pluginIdHash } from "./telemetry/pluginTelemetry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fym4r1th.js:7769-8004 callgraph-fingerprint = SUPPORTED_TYPES (0.501)
+//@ chunk-fym4r1th.js:7769-8004 callgraph-fingerprint (2.1.88 match: SUPPORTED_TYPES, 0.501)
 /**
  * 支持的 hint 载荷类型（目前只有 plugin）。
  */
@@ -38,7 +38,7 @@ deferInit("chunk-fym4r1th.js:7769", () => {
   HTML_ATTRIBUTE_RE = /(\w+)=(?:"([^"]*)"|([^\s/>]+))/g;
   CLAUDE_CODE_HINT_TAG = "<claude-code-hint";
 });
-//@ chunk-fym4r1th.js:8004-8697 fingerprint = extractClaudeCodeHints (0.722)
+//@ chunk-fym4r1th.js:8004-8697 fingerprint (2.1.88 match: extractClaudeCodeHints, 0.722)
 function extractClaudeCodeHints_2(output, command) {
   if (!output.includes(CLAUDE_CODE_HINT_TAG))
     return {
@@ -212,13 +212,13 @@ function extractClaudeCodeHints(text, onMatch) {
   }
   return output + text.slice(lastEnd);
 }
-//@ chunk-fym4r1th.js:9876-9960 callgraph-fingerprint = parseAttrs (1)
+//@ chunk-fym4r1th.js:9876-9960 callgraph-fingerprint (2.1.88 match: parseAttrs, 1)
 function parseAttrs(tagBody) {
   let attrs = {};
   for (let m of tagBody.matchAll(HTML_ATTRIBUTE_RE)) attrs[m[1]] = m[2] ?? m[3] ?? "";
   return attrs;
 }
-//@ chunk-fym4r1th.js:9960-10036 callgraph-fingerprint = firstCommandToken (1)
+//@ chunk-fym4r1th.js:9960-10036 callgraph-fingerprint (2.1.88 match: firstCommandToken, 1)
 function firstCommandToken(command) {
   let trimmed = command.trim();
   let spaceIdx = trimmed.search(/\s/);

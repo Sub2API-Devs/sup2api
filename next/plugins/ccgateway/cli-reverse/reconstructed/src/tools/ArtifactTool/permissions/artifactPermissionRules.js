@@ -275,7 +275,7 @@ function findStrReplaceRule(tool, context, input, behavior) {
     ) ?? undefined
   );
 }
-//@ chunk-qxvqcab6.js:18041-18154 placement = getDenyRuleForAgent (1)
+//@ chunk-qxvqcab6.js:18041-18154 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function formatRuleForDisplay(rule) {
   return rule.ruleValue.ruleContent === undefined
     ? rule.ruleValue.toolName

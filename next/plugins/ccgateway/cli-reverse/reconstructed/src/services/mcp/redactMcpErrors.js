@@ -100,7 +100,7 @@ var MAX_DECODED_TEXT_CHARS = 8192;
 var MAX_CONFIG_REPEATS = 65536;
 var INVISIBLE_CHAR_REGEX =
   /^(?:[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?!\u0020)\p{Zs})$/u;
-//@ chunk-a76knw89.js:30620-30733 placement = quoteProblematicValues (0.844)
+//@ chunk-a76knw89.js:30620-30733 placement (2.1.88 match: quoteProblematicValues, 0.844)
 /**
  * 格式化 name (errorCode): "error" 形式的错误描述。旧版名 quoteProblematicValues 配错。
  */

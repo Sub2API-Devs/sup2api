@@ -11,7 +11,7 @@
 import { getBuildRefSuffix } from "../cli/earlyArgs.js";
 import { getIsNonInteractiveSession } from "../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:2031395-2033346 fingerprint = version (0.334)
+//@ chunk-e6aww6q8.js:2031395-2033346 fingerprint (2.1.88 match: version, 0.334)
 /**
  * callVersion：/version 非交互实现。
  */

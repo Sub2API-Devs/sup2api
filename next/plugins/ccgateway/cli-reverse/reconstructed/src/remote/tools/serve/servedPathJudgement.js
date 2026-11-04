@@ -763,7 +763,7 @@ function servedToolPath(tool, input, permissionContext, cwd) {
     }
   return;
 }
-//@ chunk-tr0s0d0k.js:35157-35246 placement = getDenyRuleForAgent (1)
+//@ chunk-tr0s0d0k.js:35157-35246 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function stripDoubleSlashPrefix(rule) {
   let ruleContent = rule.ruleValue.ruleContent ?? "";
   return ruleContent.startsWith("//") ? ruleContent.slice(1) : ruleContent;

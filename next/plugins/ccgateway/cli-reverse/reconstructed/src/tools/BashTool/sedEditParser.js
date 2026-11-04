@@ -11,7 +11,7 @@
 import { getCommandArgv } from "../../utils/bash/commands.js";
 import { MULTIPLE_INPLACE_MARKER } from "./sedValidation.js";
 
-//@ chunk-e6aww6q8.js:1059048-1059563 callgraph-fingerprint = parseSedEditCommand (0.304)
+//@ chunk-e6aww6q8.js:1059048-1059563 callgraph-fingerprint (2.1.88 match: parseSedEditCommand, 0.304)
 /**
  * 从 sed -i 命令中取出编辑表达式（-e/--expression 或第一个非选项参数）；没有 -i 返回 null，多个 -i 返回 __SED_MULTIPLE_I_FLAGS__。
  */

@@ -12,7 +12,7 @@ import { BACKSPACE_KEY } from "./types.js";
 import { replaceWithSpaces, Cursor } from "../utils/Cursor.js";
 import { findTextObject } from "./textObjects.js";
 
-//@ chunk-530hfzwb.js:3592-4356 fingerprint = applySingleMotion (0.926)
+//@ chunk-530hfzwb.js:3592-4356 fingerprint (2.1.88 match: applySingleMotion, 0.926)
 /**
  * 执行一次基础移动：h/l 不跨行；空格/退格可跨行；j/k 按逻辑行、gj/gk 按折行后的屏幕行；w b e / W B E 单词移动；0 ^ $ 行首/首个非空/行尾；G 到最后一行；% 跳到行内下一个括号的配对括号。
  */
@@ -84,7 +84,7 @@ function findMatchingBracketOffset(text, offset) {
 function isInclusiveMotion(key) {
   return "eE$%".includes(key);
 }
-//@ chunk-530hfzwb.js:4594-4643 fingerprint = isLinewiseMotion (1)
+//@ chunk-530hfzwb.js:4594-4643 fingerprint (2.1.88 match: isLinewiseMotion, 1)
 function isLinewiseMotion(key) {
   return "jkG".includes(key) || key === "gg";
 }

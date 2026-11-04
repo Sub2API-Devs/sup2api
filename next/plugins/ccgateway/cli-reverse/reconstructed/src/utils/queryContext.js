@@ -25,7 +25,7 @@ import { createTaskFramework } from "./task/framework.js";
 import { createColorAssigner } from "../tools/AgentTool/agentColorManager.js";
 import { fieldAccessor } from "../state/sliceHelpers.js";
 
-//@ chunk-dmpxe2vf.js:583-1110 facade-exports = fetchSystemPromptParts (0.661)
+//@ chunk-dmpxe2vf.js:583-1110 facade-exports (2.1.88 match: fetchSystemPromptParts, 0.661)
 /**
  * 获取系统提示的各部分（默认提示、用户上下文、系统上下文），供旁路问题等复用。
  */
@@ -73,7 +73,7 @@ async function fetchSystemPromptParts({
     systemContext,
   };
 }
-//@ chunk-dmpxe2vf.js:1110-2919 facade-exports = buildSideQuestionFallbackParams (0.628)
+//@ chunk-dmpxe2vf.js:1110-2919 facade-exports (2.1.88 match: buildSideQuestionFallbackParams, 0.628)
 async function buildSideQuestionFallbackParams({
   session,
   messageQueue,

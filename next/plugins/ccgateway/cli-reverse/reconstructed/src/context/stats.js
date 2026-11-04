@@ -49,7 +49,7 @@ function interpolatedPercentile(sorted, percentile) {
  * 1024：观测值蓄水池采样容量。
  */
 var STATS_RESERVOIR_SIZE = 1024;
-//@ chunk-xe7zq1p4.js:2140-2903 fingerprint = createStatsStore (1)
+//@ chunk-xe7zq1p4.js:2140-2903 fingerprint (2.1.88 match: createStatsStore, 1)
 /**
  * 会话统计存储：increment/set 计数、observe 数值（蓄水池采样，输出 count/min/max/avg/p50/p95/p99）、add 集合；getAll 汇总。
  */
@@ -120,7 +120,7 @@ var StatsContext; // deferred: has load-time effects after a deferred statement 
 deferInit("chunk-xe7zq1p4.js:2903", () => {
   StatsContext = createContext(null);
 });
-//@ chunk-xe7zq1p4.js:2919-3563 fingerprint = StatsProvider (0.745)
+//@ chunk-xe7zq1p4.js:2919-3563 fingerprint (2.1.88 match: StatsProvider, 0.745)
 /**
  * 统计 Provider：退出时把 getAll() 写入配置 lastSessionMetrics（V5 存储可用时异步写）。
  */

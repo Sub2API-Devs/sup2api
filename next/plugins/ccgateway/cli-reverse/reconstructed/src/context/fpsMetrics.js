@@ -12,7 +12,7 @@ import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { statsContext } from "./stats.js";
 
-//@ chunk-xe7zq1p4.js:1810-1971 fingerprint = FpsMetricsProvider (0.716)
+//@ chunk-xe7zq1p4.js:1810-1971 fingerprint (2.1.88 match: FpsMetricsProvider, 0.716)
 /**
  * 向子树提供 getFpsMetrics。
  */

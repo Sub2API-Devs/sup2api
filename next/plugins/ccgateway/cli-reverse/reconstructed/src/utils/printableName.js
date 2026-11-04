@@ -53,7 +53,7 @@ function stripAnsiSequences(wellFormedString) {
   }
   return stripped;
 }
-//@ chunk-cbe70hjy.js:1021-1141 placement = setCwdState (1)
+//@ chunk-cbe70hjy.js:1021-1141 placement (2.1.88 match: setCwdState, 1)
 /**
  * 生成可打印的名字（去控制字符、反引号替换、截断）。
  */
@@ -155,7 +155,7 @@ function printableNameOrPlaceholder(value) {
       ? replaced
       : `${replaced} (not its exact spelling)`;
 }
-//@ chunk-cbe70hjy.js:2139-2230 placement = readHeadAndTail (0.802)
+//@ chunk-cbe70hjy.js:2139-2230 placement (2.1.88 match: readHeadAndTail, 0.802)
 function readHeadAndTail(value, maxLength) {
   let label = printableLabel(value) || "\u201C\u201D";
   return label.length <= maxLength

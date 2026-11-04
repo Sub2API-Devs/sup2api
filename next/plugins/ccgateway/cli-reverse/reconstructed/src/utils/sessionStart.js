@@ -178,7 +178,7 @@ function takePendingHookSessionTitle() {
   state.pendingHookSessionTitle = undefined;
   return pendingHookSessionTitle;
 }
-//@ chunk-e6aww6q8.js:2078657-2081951 fingerprint = processSessionStartHooks (0.552)
+//@ chunk-e6aww6q8.js:2078657-2081951 fingerprint (2.1.88 match: processSessionStartHooks, 0.552)
 /**
  * 运行 SessionStart hooks（startup/resume/clear/compact），收集附加上下文与初始消息。
  */
@@ -367,7 +367,7 @@ function sessionStartWaitReason() {
   if (managed !== "none") return managed === "some" ? "managed_hooks" : "managed_hooks_unknown";
   return getPolicyAllowedSet() === null ? undefined : "managed_plugins";
 }
-//@ chunk-e6aww6q8.js:2082354-2083443 fingerprint = processSetupHooks (0.573)
+//@ chunk-e6aww6q8.js:2082354-2083443 fingerprint (2.1.88 match: processSetupHooks, 0.573)
 /**
  * 运行 Setup hooks（safe mode 下跳过插件 hooks）。
  */

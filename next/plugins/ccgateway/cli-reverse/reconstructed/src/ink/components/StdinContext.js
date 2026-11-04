@@ -13,7 +13,7 @@ import { EventEmitter } from "../events/emitter.js";
 import { createJediTermInputState } from "../wheelScroll.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-24t3dkzb.js:8569-8719 fingerprint = StdinContext (0.897)
+//@ chunk-24t3dkzb.js:8569-8719 fingerprint (2.1.88 match: StdinContext, 0.897)
 /**
  * Ink 内部 stdin 上下文：stdin 流、setRawMode、是否支持原始模式、内部事件发射器、终端查询器、JediTerm 输入状态。
  */

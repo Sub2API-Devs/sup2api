@@ -46,7 +46,7 @@ function classifyControlRequestError(error) {
     return "not_connected";
   return "server_error";
 }
-//@ chunk-6vnxsn99.js:22265-22391 placement = abortSpeculation (0.378)
+//@ chunk-6vnxsn99.js:22265-22391 placement (2.1.88 match: abortSpeculation, 0.378)
 /**
  * 执行异步函数并记成功/中止/失败遥测。旧版名 abortSpeculation 为错配。
  */

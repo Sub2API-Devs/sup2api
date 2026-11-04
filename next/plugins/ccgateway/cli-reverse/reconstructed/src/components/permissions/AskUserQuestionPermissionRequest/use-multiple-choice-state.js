@@ -10,7 +10,7 @@
  */
 import { useReducer, useCallback } from "../../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-18hwfzwa.js:1274152-1274957 fingerprint = reducer (0.952)
+//@ chunk-18hwfzwa.js:1274152-1274957 fingerprint (2.1.88 match: reducer, 0.952)
 function reducer(state, action) {
   switch (action.type) {
     case "next-question":
@@ -64,14 +64,14 @@ function reducer(state, action) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:1274957-1275036 fingerprint = INITIAL_STATE (1)
+//@ chunk-18hwfzwa.js:1274957-1275036 fingerprint (2.1.88 match: INITIAL_STATE, 1)
 var INITIAL_STATE = {
   currentQuestionIndex: 0,
   answers: {},
   questionStates: {},
   isInTextInput: false,
 };
-//@ chunk-18hwfzwa.js:1275036-1275630 fingerprint = useMultipleChoiceState (1)
+//@ chunk-18hwfzwa.js:1275036-1275630 fingerprint (2.1.88 match: useMultipleChoiceState, 1)
 function useMultipleChoiceState() {
   let [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   let nextQuestion = useCallback(() => {

@@ -118,7 +118,7 @@ function restoreLongLines(text, markers) {
     }).join(`
 `);
 }
-//@ chunk-yqj79cx2.js:1660-2341 fingerprint = HighlightedCodeFallback (0.837)
+//@ chunk-yqj79cx2.js:1660-2341 fingerprint (2.1.88 match: HighlightedCodeFallback, 0.837)
 function HighlightedCodeFallback(props) {
   let $ = useMemoCache(16);
   let { code, filePath, dim, skipColoring } = props;
@@ -188,7 +188,7 @@ function HighlightedCodeFallback(props) {
   } else t8 = $[15];
   return t8;
 }
-//@ chunk-yqj79cx2.js:2341-3066 fingerprint = Highlighted (0.749)
+//@ chunk-yqj79cx2.js:2341-3066 fingerprint (2.1.88 match: Highlighted, 0.749)
 function Highlighted(props) {
   let $ = useMemoCache(7);
   let { codeWithSpaces, language } = props;
@@ -263,7 +263,7 @@ function fallbackLineCount() {
 function visibleLineIndexes(line, lineIndex) {
   return lineIndex === 0 || stripAnsi(line).trim() !== "" ? [lineIndex] : [];
 }
-//@ chunk-18hwfzwa.js:483909-483958 fingerprint = cachedHighlight (0.549)
+//@ chunk-18hwfzwa.js:483909-483958 fingerprint (2.1.88 match: cachedHighlight, 0.549)
 var cachedHighlight = (open, limit) => (open === null ? 0 : listWindow(limit, open.highlight).rows);
 export {
   cachedHighlight,

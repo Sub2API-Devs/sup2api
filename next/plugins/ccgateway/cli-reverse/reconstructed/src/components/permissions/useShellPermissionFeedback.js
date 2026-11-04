@@ -17,7 +17,7 @@ import { incrementEscapeCount } from "./PermissionPrompt.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 
-//@ chunk-0e8j1zzj.js:25753-27685 fingerprint = useShellPermissionFeedback (0.556)
+//@ chunk-0e8j1zzj.js:25753-27685 fingerprint (2.1.88 match: useShellPermissionFeedback, 0.556)
 /**
  * 反馈模式状态：在 accept/reject 选项上按 Tab 进入附加说明输入，记录 tengu_accept/reject_feedback_mode_entered/collapsed。
  */

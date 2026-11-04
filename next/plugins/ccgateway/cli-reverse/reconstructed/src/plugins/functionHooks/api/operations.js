@@ -498,7 +498,7 @@ Which label fits best?`,
     labels.find((label) => label.toLowerCase() === text_2.toLowerCase()) ?? findMatchingLabel(text_2, labels)
   );
 }
-//@ chunk-4121qate.js:280739-280961 placement = getCacheDir (1)
+//@ chunk-4121qate.js:280739-280961 placement (2.1.88 match: getCacheDir, 1)
 /**
  * 是否 [{text, cache?}] 形式的块数组。旧版名 getCacheDir 为错配（与缓存目录无关）。
  */
@@ -569,7 +569,7 @@ var MODEL_OPS = (host) =>
         options,
       }),
   });
-//@ chunk-4121qate.js:281645-281834 placement = getTokenCountFromUsage (1)
+//@ chunk-4121qate.js:281645-281834 placement (2.1.88 match: getTokenCountFromUsage, 1)
 var getTokenCountFromUsage_3 = (usage) => ({
   input_tokens: usage.input_tokens,
   output_tokens: usage.output_tokens,

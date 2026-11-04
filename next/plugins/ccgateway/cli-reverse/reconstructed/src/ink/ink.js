@@ -260,7 +260,7 @@ function createSelectionTakeDownSignal() {
     announce: signal.emit,
   };
 }
-//@ chunk-bzr73sfg.js:322930-323156 fingerprint = ALT_SCREEN_ANCHOR_CURSOR (0.605)
+//@ chunk-bzr73sfg.js:322930-323156 fingerprint (2.1.88 match: ALT_SCREEN_ANCHOR_CURSOR, 0.605)
 var MAX_COLUMNS; // deferred: uses cursorPosition (./terminal-querier.js) of its import cycle while loading; runs once the cycle is complete
 var FRAME_INTERVAL_MS;
 var MAX_FRAME_SKIP;
@@ -310,7 +310,7 @@ function isGraphemeBoundary(text, index) {
   }
   return index >= text.length;
 }
-//@ chunk-bzr73sfg.js:323285-323354 fingerprint = CURSOR_HOME_PATCH (1)
+//@ chunk-bzr73sfg.js:323285-323354 fingerprint (2.1.88 match: CURSOR_HOME_PATCH, 1)
 function cursorToRow(row) {
   return Object.freeze({
     type: "stdout",
@@ -347,7 +347,7 @@ function sanitizeWinsize(value, fallback, max, overflowPolicy, log) {
   }
   return floored;
 }
-//@ chunk-bzr73sfg.js:323775-323868 placement = getTerminalSize (0.629)
+//@ chunk-bzr73sfg.js:323775-323868 placement (2.1.88 match: getTerminalSize, 0.629)
 /**
  * 读终端尺寸，缺省 80×24，列上限 8192、行上限 2048。
  */
@@ -357,7 +357,7 @@ function getTerminalSize(stream, log) {
     rows: sanitizeWinsize(stream.rows, 24, MAX_TERMINAL_ROWS, "clamp", log),
   };
 }
-//@ chunk-bzr73sfg.js:323868-377361 fingerprint = Ink (0.459)
+//@ chunk-bzr73sfg.js:323868-377361 fingerprint (2.1.88 match: Ink, 0.459)
 /**
  * Ink 渲染器主类：持有终端与布局、帧调度与节流、鼠标/点击/悬停订阅、图像管理、备用屏与暂停交接、布局失败恢复与调试上报，负责把 React 树渲染成终端帧。
  */
@@ -2985,7 +2985,7 @@ ${joined}`
     };
   }
 }
-//@ chunk-bzr73sfg.js:377361-377981 fingerprint = drainStdin (0.771)
+//@ chunk-bzr73sfg.js:377361-377981 fingerprint (2.1.88 match: drainStdin, 0.771)
 /**
  * 退出或交接前把 stdin 里残留的终端应答读干净：临时进原始模式，以非阻塞方式打开 /dev/tty 读取（最多 64 块），直到读到预期数量的 DA1 应答或超时（250ms），避免应答字节泄漏到 shell。
  */
@@ -3043,7 +3043,7 @@ function readNonBlocking(fd, buffer) {
 function countDa1Replies(buffer) {
   return buffer.toString("latin1").match(/\x1b\[\?[\d;]*c/g)?.length ?? 0;
 }
-//@ chunk-bzr73sfg.js:378151-378316 fingerprint = CONSOLE_STDOUT_METHODS (0.966)
+//@ chunk-bzr73sfg.js:378151-378316 fingerprint (2.1.88 match: CONSOLE_STDOUT_METHODS, 0.966)
 var CONSOLE_STDOUT_METHODS = [
   "log",
   "info",
@@ -3070,7 +3070,7 @@ function hasWheelHandler(node) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:378410-378479 affinity = diff (1)
+//@ chunk-bzr73sfg.js:378410-378479 affinity (2.1.88 match: diff, 1)
 function eraseMainScreenFrame(frameCursor, displayCursor) {
   return (
     (displayCursor === null

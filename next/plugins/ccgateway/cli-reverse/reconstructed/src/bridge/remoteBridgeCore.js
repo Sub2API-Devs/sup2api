@@ -190,7 +190,7 @@ import { truncate } from "../utils/format.js";
 import { dialogPermissionRequest } from "../utils/teleport/sessionCreate.js";
 import { subscribeGithubPullRequest, buildJsonHeaders } from "./githubPrSubscription.js";
 
-//@ chunk-kgtpkbhq.js:8680-9302 fingerprint = archiveSession (0.358)
+//@ chunk-kgtpkbhq.js:8680-9302 fingerprint (2.1.88 match: archiveSession, 0.358)
 /**
  * 对会话执行生命周期动作（archive / unarchive）：POST {session}/{action}，返回 HTTP 状态或 invalid/timeout/error/untrusted_device 等。
  */
@@ -237,7 +237,7 @@ async function postSessionAction(
     return axios_default.isAxiosError(err) && err.code === "ECONNABORTED" ? "timeout" : "error";
   }
 }
-//@ chunk-4cm44bmp.js:29785-95205 callgraph-witnessed = initEnvLessBridgeCore (0.223)
+//@ chunk-4cm44bmp.js:29785-95205 callgraph-witnessed (2.1.88 match: initEnvLessBridgeCore, 0.223)
 /**
  * REPL Remote Control 的总装函数（约 65KB 单函数）：先按 work secret / 重连指针 / 新建三条路径确定 sessionId（cse_*），调 /bridge 取 worker_jwt 与 worker_epoch，再用 createV2ReplTransport 建 SSE+CCRClient 传输；
  * 之后挂接 onConnect（回放历史、处理延迟上传）、onData（handleIngressMessage 分派到入站消息/权限响应/服务端控制请求/取消）、onClose（按关闭码 401/4091/4093/4094 走 rebuildTransport 恢复）；
@@ -4468,7 +4468,7 @@ async function initEnvLessBridgeCore(params) {
   let unregisterCleanup = registerCleanup(bridgeHandle);
   return bridgeHandle;
 }
-//@ chunk-4cm44bmp.js:95205-95591 fingerprint = withRetry (0.782)
+//@ chunk-4cm44bmp.js:95205-95591 fingerprint (2.1.88 match: withRetry, 0.782)
 /**
  * 通用重试：fn 返回非 null 即成功，否则按 init_retry_* 配置做带对称抖动的指数退避，最多 init_retry_max_attempts 次。
  */
@@ -4619,7 +4619,7 @@ function describeCredentialFailure(failure) {
       return BRIDGE_MALFORMED_RESPONSE_HINT;
   }
 }
-//@ chunk-4cm44bmp.js:97520-98051 callgraph-fingerprint = fetchRemoteCredentials (0.201)
+//@ chunk-4cm44bmp.js:97520-98051 callgraph-fingerprint (2.1.88 match: fetchRemoteCredentials, 0.201)
 /**
  * 带 trusted device 的 /bridge 凭证获取：先带已存的设备令牌请求，遇 untrusted_device 且可注册时自动注册设备后重试（标 justEnrolled）；不支持 trusted device 时把 untrusted_device 降级为 request_rejected；可选覆盖 api_base_url。
  */

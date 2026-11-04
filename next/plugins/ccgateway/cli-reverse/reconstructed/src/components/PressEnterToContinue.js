@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 
-//@ chunk-bss4k1z9.js:13042-13092 fingerprint = PressEnterToContinue (0.571)
+//@ chunk-bss4k1z9.js:13042-13092 fingerprint (2.1.88 match: PressEnterToContinue, 0.571)
 var PressEnterToContinue = {
   bold: {
     bold: true,

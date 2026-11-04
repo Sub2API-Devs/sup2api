@@ -263,14 +263,14 @@ import { getPendingHandbackReport, forgetHandback } from "./handbackReport.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-apw2zhyn.js:1372-1439 fingerprint = isBackgroundTasksDisabled (1)
+//@ chunk-apw2zhyn.js:1372-1439 fingerprint (2.1.88 match: isBackgroundTasksDisabled, 1)
 /**
  * 后台任务是否被禁用：CLAUDE_CODE_DISABLE_BACKGROUND_TASKS 或 --bare 模式。
  */
 function isBackgroundTasksDisabled() {
   return env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS || isBareMode();
 }
-//@ chunk-e6aww6q8.js:4709491-4709738 fingerprint = getAutoBackgroundMs (0.638)
+//@ chunk-e6aww6q8.js:4709491-4709738 fingerprint (2.1.88 match: getAutoBackgroundMs, 0.638)
 /**
  * coordinator 模式或 CLAUDE_AUTO_BACKGROUND_TASKS 下解析 CLAUDE_CODE_WORKER_CHECKIN_SCHEDULE（逗号分隔秒数，1–86400）为毫秒数组。
  */
@@ -289,7 +289,7 @@ async function tryAutoApproveWebFetchDispatch({ input, toolUseContext }) {
   markWebFetchDispatchApproved(toolUseContext);
   return true;
 }
-//@ chunk-0tkmvwy0.js:7872-7955 placement = collectCandidatesFromMessage (0.621)
+//@ chunk-0tkmvwy0.js:7872-7955 placement (2.1.88 match: collectCandidatesFromMessage, 0.621)
 /**
  * 在 toolState 的 WebFetchDispatchApprovals 中登记当前 toolUseId。
  */
@@ -297,7 +297,7 @@ function markWebFetchDispatchApproved({ toolUseId, toolState }) {
   if (toolUseId === undefined) return;
   toolState.get(WebFetchDispatchApprovals).set(toolUseId, [], true);
 }
-//@ chunk-0tkmvwy0.js:16698-18155 fingerprint = outputSchema (0.581)
+//@ chunk-0tkmvwy0.js:16698-18155 fingerprint (2.1.88 match: outputSchema, 0.581)
 /**
  * Agent 工具输出 schema：completed（agentToolResultSchema + prompt/worktree）、async_launched（agentId/outputFile/resolvedModel/modelsUsed/sharesCwd…）、remote_launched（taskId/sessionUrl/outputFile）三者联合。
  */
@@ -349,7 +349,7 @@ deferInit("chunk-0tkmvwy0.js:16698", () => {
     return union([completedSchema, asyncSchema, remoteSchema]);
   });
 });
-//@ chunk-0tkmvwy0.js:18155-48361 fingerprint = AgentTool (0.354)
+//@ chunk-0tkmvwy0.js:18155-48361 fingerprint (2.1.88 match: AgentTool, 0.354)
 /**
  * Agent 工具的执行体：校验嵌套深度、预算、并发上限与 deny 规则，解析 subagent_type（fork / 规范化匹配 / general-purpose 缺省），处理 name 队友派生、agent.spawn 插件钩子改写、requiredMcpServers 等待，然后按 decideAgentLaunchMode 走远程（teleportToRemote）、后台（runAsyncAgentLifecycle）或同步（runAgent 流 + 进度回调）三条路径；isolation=worktree 时创建并在结束后清理 worktree。
  */

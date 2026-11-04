@@ -17,7 +17,7 @@ import https from "https";
  */
 var SOCKET_FREED_AT = Symbol("uploadWire.freedAt");
 var AGENT_STAMPING = Symbol("uploadWire.stamping");
-//@ chunk-aepeg2w5.js:802001-802128 placement = checkComputerUseLock (0.351)
+//@ chunk-aepeg2w5.js:802001-802128 placement (2.1.88 match: checkComputerUseLock, 0.351)
 /**
  * （误归 computerUse）给 http.Agent 的 free 事件记录 socket 空闲起点。
  */

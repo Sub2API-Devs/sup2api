@@ -10,7 +10,7 @@
  */
 import { ripgrepStatus } from "../../../utils/ripgrep.js";
 
-//@ chunk-fq0cr76a.js:878544-878582 fingerprint = ideDiffSupport (0.531)
+//@ chunk-fq0cr76a.js:878544-878582 fingerprint (2.1.88 match: ideDiffSupport, 0.531)
 function ideDiffSupport() {
   return ripgrepStatus().getConfig();
 }

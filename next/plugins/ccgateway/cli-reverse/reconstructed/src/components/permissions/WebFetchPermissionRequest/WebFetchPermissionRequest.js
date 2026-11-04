@@ -33,7 +33,7 @@ import { NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
 import { PermissionDialog_2 } from "../PermissionDialog.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2182965-2183156 fingerprint = inputToPermissionRuleContent (1)
+//@ chunk-e6aww6q8.js:2182965-2183156 fingerprint (2.1.88 match: inputToPermissionRuleContent, 1)
 function inputToPermissionRuleContent(input) {
   try {
     let parsedInput = WebFetchTool.inputSchema.safeParse(input);
@@ -132,7 +132,7 @@ function shouldOfferWebFetchDomainAllow(payload) {
     !payload.hostname.includes("*")
   );
 }
-//@ chunk-18hwfzwa.js:1414011-1417159 fingerprint = WebFetchPermissionRequest (0.355)
+//@ chunk-18hwfzwa.js:1414011-1417159 fingerprint (2.1.88 match: WebFetchPermissionRequest, 0.355)
 /**
  * WebFetch 权限：显示 URL 与安全检查结果，选项允许一次 / 不再询问该域名（domain: 规则）/ 拒绝并反馈。
  */

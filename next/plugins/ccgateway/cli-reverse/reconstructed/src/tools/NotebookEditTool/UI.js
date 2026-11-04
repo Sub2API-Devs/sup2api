@@ -26,7 +26,7 @@ import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { HighlightedCode } from "../../components/HighlightedCode.js";
 
-//@ chunk-e6aww6q8.js:4664942-4665018 fingerprint = getToolUseSummary (1)
+//@ chunk-e6aww6q8.js:4664942-4665018 fingerprint (2.1.88 match: getToolUseSummary, 1)
 /**
  * NotebookEdit 工具使用摘要：显示 notebook 路径。
  */
@@ -34,7 +34,7 @@ function getToolUseSummary(input) {
   if (!input?.notebook_path) return null;
   return getDisplayPath(input.notebook_path);
 }
-//@ chunk-q466qetm.js:8643-9017 fingerprint = renderToolUseMessage (1)
+//@ chunk-q466qetm.js:8643-9017 fingerprint (2.1.88 match: renderToolUseMessage, 1)
 function renderToolUseMessage(
   { notebook_path, cell_id: cellId, new_source, cell_type, edit_mode },
   { verbose },
@@ -64,7 +64,7 @@ function renderToolUseMessage(
     ],
   });
 }
-//@ chunk-q466qetm.js:9017-9184 fingerprint = renderToolUseRejectedMessage (1)
+//@ chunk-q466qetm.js:9017-9184 fingerprint (2.1.88 match: renderToolUseRejectedMessage, 1)
 function renderToolUseRejectedMessage(input, { verbose }) {
   return jsxProd_default(NotebookEditToolUseRejectedMessage, {
     notebook_path: input.notebook_path,
@@ -75,7 +75,7 @@ function renderToolUseRejectedMessage(input, { verbose }) {
     verbose,
   });
 }
-//@ chunk-q466qetm.js:9415-9746 fingerprint = renderToolResultMessage (0.854)
+//@ chunk-q466qetm.js:9415-9746 fingerprint (2.1.88 match: renderToolResultMessage, 0.854)
 function renderToolResultMessage({ cell_id, new_source: newSource, error }) {
   if (error)
     return jsxProd_default(MessageResponse, {

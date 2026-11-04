@@ -157,7 +157,7 @@ function isSkillInputWithheld(payload) {
 function displayTextOf(text) {
   return text.kind === "full" ? text.text : text.marker;
 }
-//@ chunk-18hwfzwa.js:1391890-1395417 fingerprint = SkillPermissionRequest (0.304)
+//@ chunk-18hwfzwa.js:1391890-1395417 fingerprint (2.1.88 match: SkillPermissionRequest, 0.304)
 /**
  * Skill 权限：显示技能名、来源与安全检查，选项允许 / 应用建议规则 / 拒绝。
  */
@@ -456,7 +456,7 @@ function shouldOfferAlwaysAllow(payload) {
   let isUnapprovableCheck = decisionReason?.type === "safetyCheck" && !decisionReason.classifierApprovable;
   return payload.showAlwaysAllow && !isUnapprovableCheck && !payload.isAskCappedByOrg;
 }
-//@ chunk-18hwfzwa.js:1409162-1409256 fingerprint = _temp (0.709)
+//@ chunk-18hwfzwa.js:1409162-1409256 fingerprint (2.1.88 match: _temp, 0.709)
 function shouldOfferExactSkillRule(input) {
   return (
     shouldOfferAlwaysAllow(input) &&

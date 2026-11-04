@@ -21,7 +21,7 @@ var AUTO_MODE_RISK_NOTE =
   "Claude can make mistakes that allow harmful commands to run, it's recommended to only use in isolated environments. Shift+Tab to change mode.";
 var AUTO_MODE_DESCRIPTION_FULL = `${AUTO_MODE_DESCRIPTION} ${EXPENSIVE_SESSIONS_NOTE} ${AUTO_MODE_RISK_NOTE}`;
 var AUTO_MODE_DESCRIPTION_SHORT = `${AUTO_MODE_DESCRIPTION} ${AUTO_MODE_RISK_NOTE}`;
-//@ chunk-w1graenk.js:3863-3931 placement = hasOpusAccess (0.86)
+//@ chunk-w1graenk.js:3863-3931 placement (2.1.88 match: hasOpusAccess, 0.86)
 function hasOpusAccess() {
   let subscriptionType = getSubscriptionType();
   return subscriptionType === "pro" || subscriptionType === "max" || subscriptionType === "team"

@@ -12,7 +12,7 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { _enum, objectSchema, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1779327-1779529 fingerprint = TodoItemSchema (0.674)
+//@ chunk-e6aww6q8.js:1779327-1779529 fingerprint (2.1.88 match: TodoItemSchema, 0.674)
 /**
  * TodoWrite 数据：TodoItem{content, status: pending|in_progress|completed, activeForm} 与列表 schema。
  */

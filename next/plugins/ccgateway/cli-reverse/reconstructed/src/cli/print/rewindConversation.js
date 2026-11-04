@@ -591,7 +591,7 @@ function runningMcpTasksAfter(taskRegistry, messages, cutIndex) {
   }
   return taskIds;
 }
-//@ chunk-tyg7f3ek.js:584359-584517 placement = countToolCallsSince (0.778)
+//@ chunk-tyg7f3ek.js:584359-584517 placement (2.1.88 match: countToolCallsSince, 0.778)
 function findMessageIndexByToolUseId(messages, sinceUuid) {
   return messages.findIndex(
     (message) =>

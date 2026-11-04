@@ -11,7 +11,7 @@
 import { getPlatform } from "./platform.js";
 import { env } from "./env.js";
 
-//@ chunk-x1mwqya5.js:17933-17974 fingerprint = MACOS_OPTION_SPECIAL_CHARS (0.79)
+//@ chunk-x1mwqya5.js:17933-17974 fingerprint (2.1.88 match: MACOS_OPTION_SPECIAL_CHARS, 0.79)
 var MACOS_OPTION_SPECIAL_CHARS = {
   π: "alt+p",
   ø: "alt+o",

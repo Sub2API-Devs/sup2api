@@ -31,7 +31,7 @@ function getTeammateThemeColor() {
   if (AGENT_COLOR_NAMES.includes(colorName)) return AGENT_COLOR_TO_THEME_COLOR[colorName];
   return;
 }
-//@ chunk-h93cnm7e.js:888-1201 fingerprint = PromptChar (0.67)
+//@ chunk-h93cnm7e.js:888-1201 fingerprint (2.1.88 match: PromptChar, 0.67)
 function PromptChar(props) {
   let $ = useMemoCache(6);
   let { isLoading, isScreenReader, themeColor } = props;
@@ -62,7 +62,7 @@ function PromptChar(props) {
   } else promptProps = $[5];
   return promptProps;
 }
-//@ chunk-h93cnm7e.js:1201-1888 fingerprint = PromptInputModeIndicator (0.824)
+//@ chunk-h93cnm7e.js:1201-1888 fingerprint (2.1.88 match: PromptInputModeIndicator, 0.824)
 /**
  * 输入提示符：prompt 模式 ❯（读屏器下为 $），bash 模式 ! 并用 bashBorder 色；查看队友时用队友颜色并显示名字。
  */

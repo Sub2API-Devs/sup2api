@@ -213,7 +213,7 @@ deferInit("chunk-bfnfj4kx.js:3979", () => {
  */
 var isPluginDefinedEvent = (event) =>
   regExp.test(event) && !EVENT_NAMESPACES.has(event.slice(0, event.indexOf(".")));
-//@ chunk-bfnfj4kx.js:4089-4143 placement = VALID_UPDATE_SCOPES (0.841)
+//@ chunk-bfnfj4kx.js:4089-4143 placement (2.1.88 match: VALID_UPDATE_SCOPES, 0.841)
 var VALID_UPDATE_SCOPES = ["managed", "user", "project", "local", "memory"];
 //@ chunk-bfnfj4kx.js:4143-4181 placement
 /**

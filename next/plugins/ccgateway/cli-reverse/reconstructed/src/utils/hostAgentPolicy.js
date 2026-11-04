@@ -131,7 +131,7 @@ var hostAgentPolicies; // deferred: uses HostAgentPolicy of its import cycle whi
 deferInit("chunk-5xbkq5z7.js:2187", () => {
   hostAgentPolicies = new HostScoped(() => new HostAgentPolicy());
 });
-//@ chunk-5xbkq5z7.js:2212-2262 placement = getAgentContext (1)
+//@ chunk-5xbkq5z7.js:2212-2262 placement (2.1.88 match: getAgentContext, 1)
 /**
  * 取当前（ALS 覆盖的或宿主默认的）HostAgentPolicy。
  */

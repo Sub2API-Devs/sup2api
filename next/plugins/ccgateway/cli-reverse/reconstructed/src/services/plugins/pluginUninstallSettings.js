@@ -236,7 +236,7 @@ function hasSuspectSettingsLink(source) {
     settingsPathsForSource(source).some((path) => isSuspectLink(path))
   );
 }
-//@ chunk-e6aww6q8.js:4208670-4208757 placement = _temp8 (1)
+//@ chunk-e6aww6q8.js:4208670-4208757 placement (2.1.88 match: _temp8, 1)
 /**
  * 某设置来源对应的设置文件路径列表。
  */
@@ -246,7 +246,7 @@ function settingsPathsForSource(a_3) {
     ...(a_3 === "localSettings" ? [getLegacyLocalSettingsFilePath()] : []),
   ].filter((path) => path !== undefined);
 }
-//@ chunk-e6aww6q8.js:4208757-4208961 placement = isRealPathWithinTeamDir (0.785)
+//@ chunk-e6aww6q8.js:4208757-4208961 placement (2.1.88 match: isRealPathWithinTeamDir, 0.785)
 async function isRealPathWithinTeamDir_3(realCandidate) {
   for (let dir = dirname(realCandidate); ; dir = dirname(dir))
     try {

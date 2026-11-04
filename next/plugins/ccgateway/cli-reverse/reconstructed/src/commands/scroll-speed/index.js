@@ -13,13 +13,13 @@ import { getAttacherCaps } from "../../bootstrap/state.js";
 import { JETBRAINS_IDES } from "../../utils/env.js";
 import { terminalDetector } from "../../ink/terminalColorSupport.js";
 
-//@ chunk-e6aww6q8.js:1735556-1735607 placement = default (1)
+//@ chunk-e6aww6q8.js:1735556-1735607 placement (2.1.88 match: default, 1)
 var stubScrollSpeedCommand = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:1735607-1735658 placement = default (1)
+//@ chunk-e6aww6q8.js:1735607-1735658 placement (2.1.88 match: default, 1)
 var stubScrollSpeedCommand_2 = {
   isEnabled: () => false,
   isHidden: true,

@@ -61,7 +61,7 @@ import { isStorageV5Enabled } from "../hoverRest.js";
 import { shutdown1PEventLogging } from "../../services/analytics/firstPartyEventLogger.js";
 import { shutdownDatadog } from "../../services/analytics/datadog.js";
 
-//@ chunk-ztt2k9pv.js:12830-13177 fingerprint = SAFE_BRIDGE_STRING_KEYS (0.455)
+//@ chunk-ztt2k9pv.js:12830-13177 fingerprint (2.1.88 match: SAFE_BRIDGE_STRING_KEYS, 0.455)
 /**
  * Chrome 桥遥测字段白名单：bridge_status/error_type/tool_name/tool_use_id/transport 只允许已知取值，其余归为 other 或丢弃。
  */
@@ -83,7 +83,7 @@ function SAFE_BRIDGE_STRING_KEYS(safeKey, value) {
       return;
   }
 }
-//@ chunk-ztt2k9pv.js:13177-13972 callgraph-fingerprint = BUG_REPORT_URL (0.418)
+//@ chunk-ztt2k9pv.js:13177-13972 callgraph-fingerprint (2.1.88 match: BUG_REPORT_URL, 0.418)
 /**
  * Chrome MCP 服务器常量：bug 反馈链接、权限模式 ask/skip_all_permission_checks/follow_a_plan、配对设备 ID 格式、browser_batch 90s 超时、断连提示文案片段。
  */
@@ -102,7 +102,7 @@ var MULTI_ORG_HINT =
 function isPermissionMode(raw) {
   return PERMISSION_MODES.some((m) => m === raw);
 }
-//@ chunk-ztt2k9pv.js:14012-14207 fingerprint = getChromeBridgeUrl (0.875)
+//@ chunk-ztt2k9pv.js:14012-14207 fingerprint (2.1.88 match: getChromeBridgeUrl, 0.875)
 /**
  * 浏览器桥 WebSocket 地址：USE_LOCAL_OAUTH/LOCAL_BRIDGE → ws://localhost:8765，USE_STAGING_OAUTH → staging，否则 wss://bridge.claudeusercontent.com。
  */
@@ -111,14 +111,14 @@ function getChromeBridgeUrl() {
   if (env.USE_STAGING_OAUTH) return "wss://bridge-staging.claudeusercontent.com";
   return "wss://bridge.claudeusercontent.com";
 }
-//@ chunk-ztt2k9pv.js:14207-14261 fingerprint = isLocalBridge (1)
+//@ chunk-ztt2k9pv.js:14207-14261 fingerprint (2.1.88 match: isLocalBridge, 1)
 /**
  * 是否连本地浏览器桥（USE_LOCAL_OAUTH 或 LOCAL_BRIDGE）。
  */
 function isLocalBridge() {
   return env.USE_LOCAL_OAUTH || env.LOCAL_BRIDGE;
 }
-//@ chunk-ztt2k9pv.js:14261-19744 fingerprint = createChromeContext (0.606)
+//@ chunk-ztt2k9pv.js:14261-19744 fingerprint (2.1.88 match: createChromeContext, 0.606)
 /**
  * 构造 Chrome MCP 服务器上下文：日志器、socket 路径（本地原生宿主）、bridgeConfig（云端桥 URL、按 OAuth 令牌解析账户 UUID 并检测与持久化登录不一致、取 OAuth 令牌前经 bearerGate 校验组织策略、代理/TLS 选项）、CLAUDE_CHROME_PERMISSION_MODE/CLAUDE_CHROME_PAIRED_DEVICE_ID/CLAUDE_CHROME_TAB_GROUP_KEY 解析、断连时给模型的详细提示、配对成功写入全局配置 chromeExtension、遥测事件过滤。
  */
@@ -433,7 +433,7 @@ function describeUnverifiedPolicy(unverified) {
       return "Couldn't read your organization's Claude in Chrome policy (network or server error). Continuing; the extension enforces the org setting.";
   }
 }
-//@ chunk-ztt2k9pv.js:21450-22678 fingerprint = runClaudeInChromeMcpServer (0.46)
+//@ chunk-ztt2k9pv.js:21450-22678 fingerprint (2.1.88 match: runClaudeInChromeMcpServer, 0.46)
 /**
  * `claude --claude-in-chrome-mcp` 入口：加载存储与凭证、配置全局代理，检查组织策略（拒绝则退出 1），用 createChromeContext 构造上下文，经 @ant/claude-for-chrome-mcp 的 createClaudeForChromeMcpServer 创建服务器并接到 StdioServerTransport；stdin 结束时清理退出。
  */
@@ -505,7 +505,7 @@ async function runClaudeInChromeMcpServer(options) {
     logForDebugging("[Claude in Chrome] MCP server started");
   });
 }
-//@ chunk-ztt2k9pv.js:22678-22898 fingerprint = DebugLogger (1)
+//@ chunk-ztt2k9pv.js:22678-22898 fingerprint (2.1.88 match: DebugLogger, 1)
 /**
  * 把 Chrome MCP 库的日志接到 Claude Code 调试日志（silly/debug→debug）。
  */

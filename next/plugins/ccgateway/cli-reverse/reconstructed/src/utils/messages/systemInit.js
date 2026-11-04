@@ -258,7 +258,7 @@ function buildRemoteSystemInitFields() {
     footerIndicator: undefined,
   };
 }
-//@ chunk-gr407tas.js:3839-6391 fingerprint = buildSystemInitMessage (0.368)
+//@ chunk-gr407tas.js:3839-6391 fingerprint (2.1.88 match: buildSystemInitMessage, 0.368)
 /**
  * buildSystemInitMessage：SDK 首条 system/init 消息，列出工具、MCP 服务器状态（含失败的）、可调用的终端命令、模型、权限模式、代理/技能/插件、fast mode 与能力等。
  */

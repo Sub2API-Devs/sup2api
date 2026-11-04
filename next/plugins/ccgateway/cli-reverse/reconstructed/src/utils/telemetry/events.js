@@ -39,18 +39,18 @@ var otelEventStateByHost; // deferred: uses OTelEventState of its import cycle w
 deferInit("chunk-p52gp8zk.js:14702", () => {
   otelEventStateByHost = new HostScoped(() => new OTelEventState());
 });
-//@ chunk-p52gp8zk.js:14727-14772 layout = isUserPromptLoggingEnabled (1)
+//@ chunk-p52gp8zk.js:14727-14772 layout (2.1.88 match: isUserPromptLoggingEnabled, 1)
 function isUserPromptLoggingEnabled_2() {
   return env.OTEL_LOG_USER_PROMPTS;
 }
-//@ chunk-p52gp8zk.js:14772-14814 fingerprint = redactIfDisabled (1)
+//@ chunk-p52gp8zk.js:14772-14814 fingerprint (2.1.88 match: redactIfDisabled, 1)
 /**
  * OTEL_LOG_USER_PROMPTS 未开启时返回 <REDACTED>。
  */
 function redactIfDisabled(content) {
   return isUserPromptLoggingEnabled_2() ? content : "<REDACTED>";
 }
-//@ chunk-p52gp8zk.js:14814-14977 layout = redactIfDisabled (0.762)
+//@ chunk-p52gp8zk.js:14814-14977 layout (2.1.88 match: redactIfDisabled, 0.762)
 function redactIfDisabled_2(content) {
   if (content === undefined)
     return {
@@ -90,7 +90,7 @@ function getEventContext() {
     );
   return;
 }
-//@ chunk-p52gp8zk.js:15314-16085 fingerprint = logOTelEvent (0.668)
+//@ chunk-p52gp8zk.js:15314-16085 fingerprint (2.1.88 match: logOTelEvent, 0.668)
 /**
  * 发 OTel 事件（claude_code.<name>）：属性含 getTelemetryAttributes、event.name/timestamp/sequence、prompt.id、workspace.host_paths、agent id；无事件 logger 时可跳过。
  */
@@ -140,7 +140,7 @@ async function logOTelEvent(event, metadata = {}, agentContext, hookOrigin) {
     hookOrigin,
   );
 }
-//@ chunk-a9ek44g8.js:2113-2157 fingerprint = isUserPromptLoggingEnabled (1)
+//@ chunk-a9ek44g8.js:2113-2157 fingerprint (2.1.88 match: isUserPromptLoggingEnabled, 1)
 function isUserPromptLoggingEnabled() {
   return env.OTEL_LOG_USER_PROMPTS;
 }

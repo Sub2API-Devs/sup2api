@@ -11,7 +11,7 @@
 import { chalkLevel, colorSupport } from "../ink/colorize.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4ymxyb4g.js:8705-8939 fingerprint = sequential (0.367)
+//@ chunk-4ymxyb4g.js:8705-8939 fingerprint (2.1.88 match: sequential, 0.367)
 /**
  * 把异步函数包装成串行执行：上一调用完成后才开始下一调用（Proxy 惰性初始化）。
  */

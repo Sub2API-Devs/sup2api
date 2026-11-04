@@ -353,7 +353,7 @@ function rankNodesTopologically(count, edges) {
 function averageOf(values) {
   return values.length === 0 ? undefined : values.reduce((acc, value) => acc + value, 0) / values.length;
 }
-//@ chunk-yb0ajcmt.js:14344-14401 placement = percentile (0.62)
+//@ chunk-yb0ajcmt.js:14344-14401 placement (2.1.88 match: percentile, 0.62)
 /**
  * 图布局：两个相邻节点中心的最小间距。旧版名 percentile 为错配，归错文件。
  */

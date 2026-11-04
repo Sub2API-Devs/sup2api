@@ -18,11 +18,11 @@ import { rollbackConsolidationLockDefault } from "../../services/autoDream/conso
  * DreamTask 最多保留的回合数（30）。
  */
 var MAX_DREAM_TURNS = 30;
-//@ chunk-rsht1tdj.js:6623-6704 fingerprint = isDreamTask (1)
+//@ chunk-rsht1tdj.js:6623-6704 fingerprint (2.1.88 match: isDreamTask, 1)
 function isDreamTask(task) {
   return typeof task === "object" && task !== null && "type" in task && task.type === "dream";
 }
-//@ chunk-rsht1tdj.js:6704-7029 fingerprint = registerDreamTask (0.939)
+//@ chunk-rsht1tdj.js:6704-7029 fingerprint (2.1.88 match: registerDreamTask, 0.939)
 /**
  * 注册一个 dream 任务（status=running、phase=starting、skipTranscript），记录正在回顾的会话数、abortController 和整理锁的原 mtime。
  */
@@ -46,7 +46,7 @@ function registerDreamTask(taskRegistry, options) {
   taskRegistry.register(taskState);
   return id;
 }
-//@ chunk-rsht1tdj.js:7029-7346 fingerprint = addDreamTurn (0.953)
+//@ chunk-rsht1tdj.js:7029-7346 fingerprint (2.1.88 match: addDreamTurn, 0.953)
 /**
  * 追加一个 dream 回合并去重记录新触及的文件；有新文件时 phase 变 updating；空回合忽略；只保留最近 MAX_DREAM_TURNS 个回合。
  */
@@ -63,7 +63,7 @@ function addDreamTurn(taskId, turn, touchedPaths, taskRegistry) {
     };
   });
 }
-//@ chunk-rsht1tdj.js:7346-7527 fingerprint = completeDreamTask (0.597)
+//@ chunk-rsht1tdj.js:7346-7527 fingerprint (2.1.88 match: completeDreamTask, 0.597)
 /**
  * 把 dream 任务标为 completed（notified=true），记 task_dream 计数，并发一个 ambient 的完成通知（不进 transcript）。
  */
@@ -81,7 +81,7 @@ function completeDreamTask(taskId, taskRegistry) {
     ambient: true,
   });
 }
-//@ chunk-kxyd0g16.js:16649-16982 fingerprint = DreamTask (0.854)
+//@ chunk-kxyd0g16.js:16649-16982 fingerprint (2.1.88 match: DreamTask, 0.854)
 /**
  * DreamTask 任务实现：kill 时中止运行中的整理、标 killed，并用原 mtime 回滚整理锁（XNt）。
  */
@@ -113,7 +113,7 @@ var DreamTask = {
     }
   },
 };
-//@ chunk-m8444q1d.js:15399-15604 fingerprint = failDreamTask (0.559)
+//@ chunk-m8444q1d.js:15399-15604 fingerprint (2.1.88 match: failDreamTask, 0.559)
 /**
  * 把运行中的 dream 任务置为给定终态（failed 等）并发 ambient 通知。
  */
