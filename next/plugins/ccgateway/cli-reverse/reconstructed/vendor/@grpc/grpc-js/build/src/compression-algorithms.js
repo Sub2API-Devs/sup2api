@@ -1,0 +1,23 @@
+/**
+ * @grpc/grpc-js/build/src/compression-algorithms.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: @grpc/grpc-js@1.14.4
+ * pieces: chunk-pwh5dx3n.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+
+//@ chunk-pwh5dx3n.js:185569-185806 cjs-fingerprint
+var _o = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.CompressionAlgorithms = undefined;
+  var CompressionAlgorithms;
+  (function (CompressionAlgorithms) {
+    CompressionAlgorithms[(CompressionAlgorithms.identity = 0)] = "identity";
+    CompressionAlgorithms[(CompressionAlgorithms.deflate = 1)] = "deflate";
+    CompressionAlgorithms[(CompressionAlgorithms.gzip = 2)] = "gzip";
+  })(CompressionAlgorithms || (cjsExports.CompressionAlgorithms = CompressionAlgorithms = {}));
+});
+export { _o };

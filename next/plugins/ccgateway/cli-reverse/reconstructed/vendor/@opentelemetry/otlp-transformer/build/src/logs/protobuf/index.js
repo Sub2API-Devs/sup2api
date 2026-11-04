@@ -1,0 +1,25 @@
+/**
+ * @opentelemetry/otlp-transformer/build/src/logs/protobuf/index.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: @opentelemetry/otlp-transformer@0.208.0..0.209.0
+ * pieces: chunk-798ashq9.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
+import { require_logs } from "./logs.js";
+
+//@ chunk-798ashq9.js:246353-246588 cjs-fingerprint
+var require_protobuf = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ProtobufLogsSerializer = undefined;
+  var logs_1 = require_logs();
+  Object.defineProperty(cjsExports, "ProtobufLogsSerializer", {
+    enumerable: true,
+    get: function () {
+      return logs_1.ProtobufLogsSerializer;
+    },
+  });
+});
+export { require_protobuf };

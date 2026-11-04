@@ -1,0 +1,22 @@
+# chunk-0ct929fp.js:JLe -> chunk-jcnpfn31.js:_$e
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-0ct929fp.js_JLe.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-0ct929fp.js_JLe.new.js"
+index d653e26..7208bfe 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-0ct929fp.js_JLe.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-0ct929fp.js_JLe.new.js"
+@@ -1,14 +1,5 @@
+ function SELF($l0) {
+-  let $l1 = `${$m_W7}
+-`;
+-  return $l1 += $l0.truncatedAtBytes === void 0 ? `Output too large (${$m_Qt($l0.originalSize)}). Full output saved to: ${$l0.filepath}
+-
+-` : `Output exceeded the ${$m_Qt($l0.truncatedAtBytes)} persist limit; only the first ${$m_Qt($l0.truncatedAtBytes)} were saved to: ${$l0.filepath}
+-
+-`, $l1 += `Preview (first ${$m_Qt($m_M_e)}):
+-`, $l1 += $l0.preview, $l1 += $l0.hasMore ? `
+-...
+-` : `
+-`, $l1 += $m_uWt, $l1;
++  return `${$m_W7}
++${$NEW_chunk_jcnpfn31_js_F5o($l0)}${$m_uWt}`;
+ }
+ ;

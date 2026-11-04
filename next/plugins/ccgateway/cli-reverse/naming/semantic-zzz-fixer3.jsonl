@@ -1,0 +1,10 @@
+{"file":"chunk-s61vbvea.js","key":"@200396","name":"filterHooksByPluginHold","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 getAutoUpdatedPluginNames）"}
+{"file":"chunk-hnwnzznd.js","key":"@755","name":"urlMatchesHost","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 isUrl）"}
+{"file":"chunk-v9tcvh08.js","key":"@27285","name":"MODEL_CONFIGS","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 CLAUDE_3_5_HAIKU_CONFIG）"}
+{"file":"chunk-mxpjbr4y.js","key":"@27100","name":"formatHomeSeedNoticeLine","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 isResultTruncated）"}
+{"file":"chunk-cgr0tezp.js","key":"@75151","name":"hasConfusableAuthority","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 normalizeUrl）"}
+{"file":"chunk-ddkccdnb.js","key":"@235","name":"hasSimilarMarketplaceRef","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 copsSimilar）"}
+{"file":"chunk-e6aww6q8.js","key":"@4338637","name":"ensurePluginsDirectoryExists","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 appendEntryToFile）"}
+{"file":"chunk-e6aww6q8.js","key":"@3042425","name":"INJECTABLE_ENV_VARS","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 WINDOWS_PROFILE_ENV_VARS）"}
+{"file":"chunk-gjx0rh1b.js","key":"@1976","name":"createBundleOutput","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 BUNDLE_OUTPUT_NAME）"}
+{"file":"chunk-j0y6ypnr.js","key":"@855","name":"checkWSLDistroMatch","source":"semantic","confidence":0.97,"note":"fixer3 改名（原名 isSameWslDistro）"}

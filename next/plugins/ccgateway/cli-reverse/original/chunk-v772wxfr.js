@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.316
+import{f}from"./chunk-8nhse09v.js";import{i}from"./chunk-jhrww53q.js";import{t}from"./chunk-cgr0tezp.js";import{bd}from"./chunk-7dqf31r1.js";import{Ip,yct}from"./chunk-dcmhvw5a.js";import{ue}from"./chunk-aepeg2w5.js";import{Kt}from"./chunk-5hsd6qen.js";import{GO,be}from"./chunk-q8cqcff6.js";import{nur}from"./chunk-q4qb1h08.js";import{Dl}from"./chunk-xvx41pwz.js";function Lht(){if(i.NODE_EXTRA_CA_CERTS)return;let o=g();if(o)process.env.NODE_EXTRA_CA_CERTS=o,t(`CA certs: Applied NODE_EXTRA_CA_CERTS from config to process.env: ${o}`)}function g(){try{if(i.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST&&!bd()&&yct("NODE_EXTRA_CA_CERTS")){t("CA certs: skipping settings-sourced NODE_EXTRA_CA_CERTS under host-managed provider");return}if(Ip())return;if(GO()||Dl())return;let o=ue(),e=nur(o?.env,"globalConfig"),s=Kt("userSettings")?be("userSettings"):void 0,n=nur(s?.env,"userSettings");t(`CA certs: Config fallback - globalEnv keys: ${e?Object.keys(e).join(","):"none"}, settingsEnv keys: ${n?Object.keys(n).join(","):"none"}`);let r=n?.NODE_EXTRA_CA_CERTS||e?.NODE_EXTRA_CA_CERTS;if(r)t(`CA certs: Found NODE_EXTRA_CA_CERTS in config/settings: ${r}`);return r}catch(o){t(`CA certs: Config fallback failed: ${o}`,{level:"error"}),f("ca_certs_load","config_read_failed");return}}
+export{Lht};

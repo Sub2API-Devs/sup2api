@@ -1,0 +1,36 @@
+/**
+ * @opentelemetry/otlp-grpc-exporter-base/build/src/create-service-client-constructor.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: @opentelemetry/otlp-grpc-exporter-base@0.208.0
+ * pieces: chunk-pwh5dx3n.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
+import { Ki } from "../../../../@grpc/grpc-js/build/src/index.js";
+
+//@ chunk-pwh5dx3n.js:385561-385939 cjs-fingerprint
+var Kv = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.createServiceClientConstructor = undefined;
+  var grpc = Ki();
+  function createServiceClientConstructor(path, name) {
+    return grpc.makeGenericClientConstructor(
+      {
+        export: {
+          path,
+          requestStream: false,
+          responseStream: false,
+          requestSerialize: (arg) => arg,
+          requestDeserialize: (arg) => arg,
+          responseSerialize: (arg) => arg,
+          responseDeserialize: (arg) => arg,
+        },
+      },
+      name,
+    );
+  }
+  cjsExports.createServiceClientConstructor = createServiceClientConstructor;
+});
+export { Kv };

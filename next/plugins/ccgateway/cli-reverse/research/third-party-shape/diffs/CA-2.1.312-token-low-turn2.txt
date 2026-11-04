@@ -1,0 +1,95 @@
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/settings host=api.anthropic.com
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/policy_limits host=api.anthropic.com
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/settings host=api.anthropic.com
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/policy_limits host=api.anthropic.com
+Messages 请求 A=2 B=2
+
+-- 主线程 第1轮 (A req-3 / B req-1): 21 处差异
+  头 authorization（每次随机）A=Bearer sk-ant-oat01-client-fake B=Bearer sk-ant-oat01-ccgaudit-fake
+  头 x-claude-code-session-id（每次随机）A=80e7f25d-6b3f-4fce-baf3-3cd338f3a8fc B=99699a6d-9aa8-4b8a-9a84-77971adc876e
+  头 anthropic-beta A=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","mid-conversation-system-clear-at-2026-08-21","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+                  B=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+  头 x-claude-code-prompt-id 只有 A: ddc1a367-46d2-4316-a6b7-54e0e9eb64c3
+  头 x-client-request-id（每次随机）A=dafebe23-fd84-4431-bf44-d8a27c447fc7 B=e85e0f98-2c96-4871-a773-1c24cd2a456e
+  头顺序 A=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-prompt-id","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+         B=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+  body 键 A(11)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","diagnostics","stream"]
+  body 键 B(10)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","stream"]
+  body.diagnostics 只有 A: {"previous_message_id":null}
+  messages[1].content[0] (text).text:
+      A: # Environment
+You have been invoked in the following environment: 
+ - Primary working directory: /t/run
+ - Is a git repository: false
+ - Platform: linux
+ - Shell: bash
+ - OS Version: Linux 6.12.95+deb13-amd64
+ - Downloaded files and extracted archives are untrusted data: put each in its own new, empty directory, keep scripts you write in a different directory, and pass paths as arguments instead o…(9456)
+      B: # Environment
+You have been invoked in the following environment: 
+ - Primary working directory: /t/run
+ - Is a git repository: false
+ - Platform: linux
+ - Shell: bash
+ - OS Version: Linux 6.12.95+deb13-amd64
+ - Downloaded files and extracted archives are untrusted data: put each in its own new, empty directory, keep scripts you write in a different directory, and pass paths as arguments instead o…(9069)
+  messages[1].content[0] (text).cache_control:
+      A: {"type":"ephemeral","ttl":"1h"}
+      B: {"type":"ephemeral"}
+  system 块数 A=4 B=3
+  system[0] 文字不同（A 192B / B 74B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=69e1a; cc_prompt_id=ddc1a367-46d2-4316-a6b7-54e0e9eb64c3; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      B: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=69e1a; cc_prompt_id=ddc1a367-46d2-4316-a6b7-54e0e9eb64c3; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli;
+  system[1] 键序/键集 A=["type","text"] B=["type","text","cache_control"]
+  system[1] cache_control A=undefined B={"type":"ephemeral"}
+  system[2] 文字不同（A 1171B / B 5566B），首个不同行 #12:
+      A: (无)
+      B: 
+  system[2] cache_control A={"type":"ephemeral","ttl":"1h","scope":"global"} B={"type":"ephemeral"}
+  system[3] 只有 A: Write code that reads like the surrounding code: match its comment density, naming, and idiom.
+  tools[ScheduleWakeup].description A=Schedule when to resume work in /loop dynamic mode — the user invoked /loop without an interval, asking you to self-pace iterations of a specific task.
+
+Do NOT schedule a short-interval wakeup to poll for background work you started — when harness-tracked work finishes, you are re-invoked automatically, so polling is wasted. Instead schedule a long fallback (1200s+) so the loop survives if the wor…(3148) B=Schedule when to resume work in /loop dynamic mode — the user invoked /loop without an interval, asking you to self-pace iterations of a specific task.
+
+Do NOT schedule a short-interval wakeup to poll for background work you started — when harness-tracked work finishes, you are re-invoked automatically, so polling is wasted. Instead schedule a long fallback (1200s+) so the loop survives if the wor…(3396)
+  metadata A={"user_id":"{\"device_id\":\"54dde203bb1631056c19d7969f66952dd618c6d9ac836cfadf6734589772af44\",\"account_uuid\":\"\",\"session_id\":\"80e7f25d-6b3f-4fce-baf3-3cd338f3a8fc\"}"}
+           B={"user_id":"{\"device_id\":\"f4a66a5349f73ee0b9c647db060291d9314053c206a70b14c8cf54cf76b38b9f\",\"account_uuid\":\"00000000-0000-4000-8000-000000000001\",\"session_id\":\"99699a6d-9aa8-4b8a-9a84-77971adc876e\"}"}
+
+-- 主线程 第1轮 (A req-6 / B req-2): 21 处差异
+  头 authorization（每次随机）A=Bearer sk-ant-oat01-client-fake B=Bearer sk-ant-oat01-ccgaudit-fake
+  头 x-claude-code-session-id（每次随机）A=80e7f25d-6b3f-4fce-baf3-3cd338f3a8fc B=99699a6d-9aa8-4b8a-9a84-77971adc876e
+  头 anthropic-beta A=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","mid-conversation-system-clear-at-2026-08-21","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+                  B=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+  头 x-claude-code-prompt-id 只有 A: 203777f9-b43e-4e47-b843-eccc5be20596
+  头 x-client-request-id（每次随机）A=215219f4-ddbe-4de7-b35d-603c0d1d1bf4 B=ef334772-78cd-4ebc-b12c-fe19c20d550f
+  头顺序 A=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-prompt-id","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+         B=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+  body 键 A(11)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","diagnostics","stream"]
+  body 键 B(10)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","stream"]
+  body.diagnostics 只有 A: {"previous_message_id":"msg_ccg_audit_3"}
+  messages[1] (system) 形状 A=string B=string
+  messages[4].content[0] (text).cache_control:
+      A: {"type":"ephemeral","ttl":"1h"}
+      B: {"type":"ephemeral"}
+  system 块数 A=4 B=3
+  system[0] 文字不同（A 219B / B 74B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=78d90; cc_prev_req=req_ccgaudit3; cc_prompt_id=203777f9-b43e-4e47-b843-eccc5be20596; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=2;
+      B: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=78d90; cc_prev_req=req_ccgaudit3; cc_prompt_id=203777f9-b43e-4e47-b843-eccc5be20596; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=2;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli;
+  system[1] 键序/键集 A=["type","text"] B=["type","text","cache_control"]
+  system[1] cache_control A=undefined B={"type":"ephemeral"}
+  system[2] 文字不同（A 1171B / B 5566B），首个不同行 #12:
+      A: (无)
+      B: 
+  system[2] cache_control A={"type":"ephemeral","ttl":"1h","scope":"global"} B={"type":"ephemeral"}
+  system[3] 只有 A: Write code that reads like the surrounding code: match its comment density, naming, and idiom.
+  tools[ScheduleWakeup].description A=Schedule when to resume work in /loop dynamic mode — the user invoked /loop without an interval, asking you to self-pace iterations of a specific task.
+
+Do NOT schedule a short-interval wakeup to poll for background work you started — when harness-tracked work finishes, you are re-invoked automatically, so polling is wasted. Instead schedule a long fallback (1200s+) so the loop survives if the wor…(3148) B=Schedule when to resume work in /loop dynamic mode — the user invoked /loop without an interval, asking you to self-pace iterations of a specific task.
+
+Do NOT schedule a short-interval wakeup to poll for background work you started — when harness-tracked work finishes, you are re-invoked automatically, so polling is wasted. Instead schedule a long fallback (1200s+) so the loop survives if the wor…(3396)
+  metadata A={"user_id":"{\"device_id\":\"54dde203bb1631056c19d7969f66952dd618c6d9ac836cfadf6734589772af44\",\"account_uuid\":\"\",\"session_id\":\"80e7f25d-6b3f-4fce-baf3-3cd338f3a8fc\"}"}
+           B={"user_id":"{\"device_id\":\"f4a66a5349f73ee0b9c647db060291d9314053c206a70b14c8cf54cf76b38b9f\",\"account_uuid\":\"00000000-0000-4000-8000-000000000001\",\"session_id\":\"99699a6d-9aa8-4b8a-9a84-77971adc876e\"}"}

@@ -1,0 +1,37 @@
+# chunk-yagw4eem.js:Pl -> chunk-hwmsct5x.js:ih
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_Pl.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_Pl.new.js"
+index a65d0bd..2524668 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_Pl.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_Pl.new.js"
+@@ -1,27 +1,9 @@
+ async function SELF($l0, $l1) {
+   try {
+-    let { asking: $l2, held: $l3 } = $m_ni().ccsSenderAddr, $l4 = `${$l1.event}|${$l1.run}`, $l5 = $l3.get($l4), $l6;
+-    if ($l5 !== void 0 && Date.now() - $l5.at < $m_Xp) $l6 = $l5.pair;
+-    else {
+-      let $l7 = $l2.get($l4);
+-      if ($l7 === void 0) {
+-        let $l8 = new URLSearchParams({ event: $l1.event, run: $l1.run }), $l9 = AbortSignal.timeout($m_Vp);
+-        $l7 = $m_Gt.get(`${$m_Gy}?${$l8}`, { host: "ccr-session", auth: "session-jwt", signal: $l9 }).then(($l10) => {
+-          let $l11 = $l10.ok && $l10.status === 200 ? $l10.data : void 0, $l12 = $l11?.[$m_xl], $l13 = $l11?.[$m_Tl];
+-          return typeof $l12 === "string" && $l12.length <= 45 && $m_zy($l12) !== 0 && typeof $l13 === "string" && /^[\x21-\x7e]{1,256}$/.test($l13) ? { ip: $l12, sig: $l13 } : void 0;
+-        }).catch(($l14) => {
+-          $m_t(`No sender address from CCR: ${$l9.aborted ? `no answer in ${$m_Vp} ms` : $m_d($l14)}`);
+-          return;
+-        }).finally(() => $l2.delete($l4)), $l2.set($l4, $l7);
+-      }
+-      $l6 = await $l7;
+-      let $l15 = Date.now();
+-      for (let [$l16, $l17] of $l3) if ($l15 - $l17.at >= $m_Xp) $l3.delete($l16);
+-      $l3.set($l4, { pair: $l6, at: $l15 });
+-    }
+-    if ($l6) $l0.set($m_xl, $l6.ip), $l0.set($m_Tl, $l6.sig);
+-  } catch ($l18) {
+-    $l0.delete($m_xl), $l0.delete($m_Tl), $m_l($l18);
++    let $l2 = performance.now(), $l3 = await $NEW_chunk_hwmsct5x_js_Il($l1, false), { waits: $l4 } = $m_ni().ccsSenderAddr;
++    if ($l4.firstMs ??= performance.now() - $l2, $l4.unsignedCalls += $l3 ? 0 : 1, $l3) $l0.set($m_xl, $l3.ip), $l0.set($m_Tl, $l3.sig);
++  } catch ($l5) {
++    $l0.delete($m_xl), $l0.delete($m_Tl), $m_l($l5);
+   }
+ }
+ ;

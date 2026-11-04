@@ -1,0 +1,180 @@
+{
+  "date": "2026-10-18",
+  "binarySha256": "d39e92fad26d9957844b937802187f2d926c10c33fb050812aab09d8ec9886f5",
+  "environment": "ovh Docker --network none, loopback mock, fake key; no production access",
+  "rawRequest": {
+    "originalSuite": "11 scenarios independently rerun; original definitions in request-command-verification.json",
+    "extraSourceResultSha256": "ff09098cfd5cd0afc67529e326cb4e3fe6852df0b020c1e7249a497aac96577b",
+    "extraScenarios": [
+      {
+        "mode": "complex",
+        "code": 0,
+        "signal": null,
+        "rawEqual": true,
+        "responseEqual": true,
+        "err": ""
+      },
+      {
+        "mode": "slowerror",
+        "code": 2,
+        "signal": null,
+        "rawEqual": true,
+        "incremental": false,
+        "err": ""
+      },
+      {
+        "mode": "bytes",
+        "code": 2,
+        "signal": null,
+        "rawEqual": true,
+        "stdoutHex": "efbfbdefbfbd41",
+        "err": ""
+      },
+      {
+        "mode": "blocked",
+        "alivePastDeadline": true,
+        "aliveAfterSigint": true,
+        "code": null,
+        "signal": "SIGKILL",
+        "err": ""
+      }
+    ],
+    "blockedScenario": {
+      "timeoutMs": 500,
+      "payloadApproxMiB": 8,
+      "aliveCheckedAfterMs": 1400,
+      "sigintWaitMs": 700,
+      "finalTermination": "SIGKILL"
+    }
+  },
+  "gatewayTools": [
+    {
+      "scenario": "context",
+      "sourceResultSha256": "5d3ab1b03e7cc10431c5220af89667fca27fe23feb02e91a26d54cc62387db52",
+      "exitCode": 0,
+      "signal": null,
+      "requestCount": 2,
+      "observation": {
+        "requests": 2,
+        "contextPresent": false,
+        "hookEvents": [
+          "SessionStart",
+          "PreToolUse",
+          "PostToolUse"
+        ],
+        "results": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "tool_probe_0",
+            "content": "CONTEXT_RESULT_OK\n\n<system-reminder>\n<total_tokens>14999890 tokens left</total_tokens>\n</system-reminder>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      },
+      "terminalFrames": [
+        {
+          "subtype": "success",
+          "terminal_reason": "completed",
+          "is_error": false
+        }
+      ],
+      "note": "Probe passed means the reported behavior was observed; context/ask are defects, not acceptance success."
+    },
+    {
+      "scenario": "ask",
+      "sourceResultSha256": "07a1adb12c225fefe501b313ae6adf417a9f93b59bb6f43d835bdb4d1e06651d",
+      "exitCode": 0,
+      "signal": null,
+      "requestCount": 2,
+      "observation": {
+        "requests": 2,
+        "contextPresent": false,
+        "hookEvents": [
+          "SessionStart",
+          "PreToolUse"
+        ],
+        "results": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "tool_probe_0",
+            "content": "PreToolUse hook requires approval: HOOK_ASK_SENTINEL\n\n<system-reminder>\n<total_tokens>14999890 tokens left</total_tokens>\n</system-reminder>",
+            "is_error": true,
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      },
+      "terminalFrames": [
+        {
+          "subtype": "success",
+          "terminal_reason": "completed",
+          "is_error": false
+        }
+      ],
+      "note": "Probe passed means the reported behavior was observed; context/ask are defects, not acceptance success."
+    },
+    {
+      "scenario": "pre-stop",
+      "sourceResultSha256": "475e8a0bce1749be5f63a25af44f2226df780425ff557908c2007601be95b849",
+      "exitCode": 0,
+      "signal": null,
+      "requestCount": 1,
+      "observation": {
+        "requests": 1,
+        "contextPresent": false,
+        "hookEvents": [
+          "SessionStart",
+          "PreToolUse"
+        ],
+        "results": []
+      },
+      "terminalFrames": [
+        {
+          "subtype": "success",
+          "terminal_reason": "hook_stopped",
+          "is_error": false
+        }
+      ],
+      "note": "Probe passed means the reported behavior was observed; context/ask are defects, not acceptance success."
+    },
+    {
+      "scenario": "post-stop",
+      "sourceResultSha256": "2240c49faeb8273fd83051c339bd7750baa27032d2e7638f07a32793fd7cbd25",
+      "exitCode": 0,
+      "signal": null,
+      "requestCount": 1,
+      "observation": {
+        "requests": 1,
+        "contextPresent": false,
+        "hookEvents": [
+          "SessionStart",
+          "PreToolUse",
+          "PostToolUse"
+        ],
+        "results": []
+      },
+      "terminalFrames": [
+        {
+          "subtype": "success",
+          "terminal_reason": "hook_stopped",
+          "is_error": false
+        }
+      ],
+      "note": "Probe passed means the reported behavior was observed; context/ask are defects, not acceptance success."
+    }
+  ],
+  "validationBoundary": "These are saved summaries of earlier independent audits, not new executions during documentation. Full requests, auth headers, and stdout/stderr were omitted.",
+  "integration": {
+    "implementedModes": [
+      "legacy native only"
+    ],
+    "rawRequestRunnerIntegrated": false,
+    "nativeRegistrationIntegrated": false,
+    "workerBuildDefaultCLI": "2.1.292 official",
+    "productionVersionInspected": false,
+    "customBinaryMayBeOverwrittenByControllerUpdate": true
+  }
+}

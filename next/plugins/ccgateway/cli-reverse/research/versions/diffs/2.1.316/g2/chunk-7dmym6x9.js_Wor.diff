@@ -1,0 +1,23 @@
+# chunk-7dmym6x9.js:Wor -> chunk-e6aww6q8.js:o7e
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_Wor.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_Wor.new.js"
+index 31e9408..71e9ee1 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_Wor.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_Wor.new.js"
+@@ -1,12 +1,7 @@
+-function SELF() {
+-  let $l0 = $m_i.CLAUDE_CODE_TOTAL_TOKENS_REMINDER_BUDGET;
+-  if ($l0 !== void 0 && $l0 > 0) return $l0;
+-  let $l1 = $m_ft().totalTokensReminderBudget;
+-  if (Number.isFinite($l1) && $l1 > 0) return $l1;
+-  let $l2 = $m_Sd()?.[$m_iXe];
+-  if (typeof $l2 === "number" && Number.isInteger($l2) && $l2 > 0) return $m_a($m_dXe, { budget: $l2 }), $l2;
+-  $m_uXe($m_iXe, $l2);
+-  let $l3 = $m_k($m_iXe, $m_eon);
+-  return Number.isFinite($l3) && $l3 > 0 ? $l3 : $m_eon;
++function SELF($l0, $l1, $l2) {
++  let $l3 = $m_Vr().totalTokensReminderClientDataReported ??= /* @__PURE__ */ new Map();
++  if ($l3.get($l0) === $l1) return;
++  if ($l3.set($l0, $l1), $l2 !== void 0) $m_a($NEW_chunk_e6aww6q8_js_vlr, $l2);
++  else if ($l1 !== void 0) $m_t(`[total_tokens reminder] ignoring clientData ${$l0} of type ${typeof $l1}`, { level: "warn" });
+ }
+ ;

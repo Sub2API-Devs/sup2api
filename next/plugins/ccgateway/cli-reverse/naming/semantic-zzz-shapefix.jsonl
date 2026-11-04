@@ -1,0 +1,245 @@
+{"file":"chunk-06y4szbn.js","key":"@6995","name":"DATA_ID_LENGTH","source":"semantic","confidence":0.97,"note":"原名 DATA_ID_PATTERN，初值 16；16 是 data-id 属性值的长度，同语句 rr 由 En.length+Ei+1 算出整段长度，真正的正则来源是 xi 与 io"}
+{"file":"chunk-06y4szbn.js","key":"@7073","name":"DATA_ID_VALUE_RE","source":"semantic","confidence":0.97,"note":"原名 regExp，初值 new RegExp(`^${xi}$`)；把 data-id 值模式 xi 编成全局正则，xFr 用它 test 值"}
+{"file":"chunk-06y4szbn.js","key":"@27679","name":"RATE_LIMIT_MIN_WAIT_SECONDS","source":"semantic","confidence":0.97,"note":"原名 RATE_LIMIT_TEXT，初值 10；rs() 里 Math.min(Math.max(秒数, Co), $o) 的下限"}
+{"file":"chunk-06y4szbn.js","key":"@27685","name":"RATE_LIMIT_MAX_WAIT_SECONDS","source":"semantic","confidence":0.97,"note":"原名 RATE_LIMIT_WAIT_SECONDS，初值 120；同一处 Math.min 的上限，与 Co=10 成对"}
+{"file":"chunk-06y4szbn.js","key":"@27971","name":"RATE_LIMIT_WAIT_SUFFIX_BUILDER","source":"semantic","confidence":0.97,"note":"原名 CONTENT_TYPE_FAMILIES_BUILDER，初值 (e)=>` seconds — …${e?\" else\":\"\"} …`；拼等待秒数后面的说明尾句"}
+{"file":"chunk-0ba63vr9.js","key":"@515","name":"FOTW_EXPERIMENT_FLAG","source":"semantic","confidence":0.97,"note":"原名 FOTW_CAMPAIGN_SCHEMA，初值 \"tengu_lilac_loom\"；lI(A,null) 读的 GrowthBook 实验开关名，schema 是后面的 v"}
+{"file":"chunk-0wdgqhcf.js","key":"@13418","name":"handlersSchemas","source":"semantic","confidence":0.97,"note":"原名 HANDLERS_SCHEMA，初值 null；外部构建置 null，内部构建赋模块，用 at.handlersDocOutputSchema() 等取子 schema，是模块不是单个 schema"}
+{"file":"chunk-16jhn3ak.js","key":"@445","name":"MCP_SETTINGS_SCOPE_KINDS","source":"semantic","confidence":0.97,"note":"原名 isMcpServerFromProjectOrLocalSettings，初值 [\"project\",\"local\",\"user\"]；v$s=(kind)=>!bMr.includes(kind) 判 kind 是否属于这几层设置"}
+{"file":"chunk-18hwfzwa.js","key":"@155532","name":"MAX_NUDGE_BODY_CHARS","source":"semantic","confidence":0.97,"note":"原名 EFFORT_NUDGE_COPY_SCHEMA，初值 500；iie 里 body: o().min(1).max(cNt) 的字符上限"}
+{"file":"chunk-18hwfzwa.js","key":"@778320","name":"MAX_EFFORT_NOTICE_KEY","source":"semantic","confidence":0.97,"note":"原名 MAX_EFFORT，初值 \"max-effort\"；Mp(Z2e, \"medium\", x, …) 的第一参数是通知 key，不是等级名"}
+{"file":"chunk-18hwfzwa.js","key":"@1034798","name":"SURVEY_HIDE_THANKS_AFTER_MS","source":"semantic","confidence":0.97,"note":"原名 LONG_CONTEXT_SURVEY_FLAGS，初值 5000；传给 hideThanksAfterMs"}
+{"file":"chunk-3g8vhh6f.js","key":"@813","name":"TEAM_MEMORY_SCOPE","source":"semantic","confidence":0.97,"note":"原名 isTeamSubscriber_2，初值 \"team\"；memory 命名空间路径里的一段（…/memory/team/…），Dw() 也用它拼目录"}
+{"file":"chunk-3s7ydtfd.js","key":"@63141","name":"SEP","source":"semantic","confidence":0.97,"note":"原名 SEP_WIDTH，初值 \" · \"；是拼接用的分隔串本身，不是宽度数字"}
+{"file":"chunk-4121qate.js","key":"@155032","name":"MAX_RGBA_DIMENSION","source":"semantic","confidence":0.97,"note":"原名 MAX_SHM_NAME，初值 2048；Zt(宽,高,vm) 允许的 rgba 边长上限（PNG 走 qr=4096）"}
+{"file":"chunk-4121qate.js","key":"@274604","name":"FLAG_SCOPE","source":"semantic","confidence":0.97,"note":"原名 isPersistableScope，初值 \"flag\"；wC=(e)=>e!==hC||cSi() 与 '$.'+e 拼插件 API 名，是 scope 字面量"}
+{"file":"chunk-4m46mxx9.js","key":"@6576","name":"MOD_FOLDER","source":"semantic","confidence":0.97,"note":"原名 getStorageDir，初值 \"telemetry\"；插件目录名，导出为 MOD_FOLDER，Zfr(B) 在该目录下解析文件"}
+{"file":"chunk-4nwcj4sh.js","key":"@728","name":"CHAR_CLASS_ESCAPES","source":"semantic","confidence":0.97,"note":"原名 CHAR_CLASS_ESCAPES_2，初值 {d:U,D:E(U),w:T,W:E(T),s:N,S:E(N)}；d/w/s 与其补集的转义展开表，k() 里 Object.hasOwn(P,u) 命中即返回"}
+{"file":"chunk-4nwcj4sh.js","key":"@925","name":"NFA_STATE_MULTIPLIER","source":"semantic","confidence":0.97,"note":"原名 CHAR_CLASS_ESCAPES，初值 6；Q 里用 V*(长度+1) 作为状态预算，是倍数不是转义表"}
+{"file":"chunk-55ht3bcx.js","key":"@1916","name":"MAX_HIPAA_STAMP_IDS","source":"semantic","confidence":0.97,"note":"原名 POLICY_STAMP_SCHEMA，初值 8；hipaa_seen / hipaa_ruled_out 数组的 max(P) 与 slice(-P) 上限"}
+{"file":"chunk-5aas12zq.js","key":"@1528","name":"PLUGIN_VALIDATION_ISSUES","source":"semantic","confidence":0.97,"note":"原名 PLUGIN_VALIDATION_ISSUES_2，初值 问题码表对象；g() 以 Pe[code] 取 title/severity"}
+{"file":"chunk-5aas12zq.js","key":"@4270","name":"PLUGIN_MANIFEST_PATH","source":"semantic","confidence":0.97,"note":"原名 PLUGIN_VALIDATION_ISSUES，初值 \".claude-plugin/plugin.json\"；清单文件的相对路径，作为 finding 的 file 字段"}
+{"file":"chunk-5aas12zq.js","key":"@4833","name":"ICON_INVALID_MESSAGE","source":"semantic","confidence":0.97,"note":"原名 MIN_README_WORDS，初值 一段图标不可用的说明；g(\"ICON_INVALID\", …, ge) 的第四个参数是 message"}
+{"file":"chunk-5aas12zq.js","key":"@4994","name":"MAX_README_BYTES","source":"semantic","confidence":0.97,"note":"原名 PLUGIN_NAME_SPACE_MESSAGE，初值 262144；zn() 里 README 字节数超 ne 即判太大"}
+{"file":"chunk-5aas12zq.js","key":"@5004","name":"MAX_ICON_BYTES","source":"semantic","confidence":0.97,"note":"原名 ICON_INVALID_MESSAGE，初值 2097152；G(路径,d,me) 读图标时的字节上限"}
+{"file":"chunk-5aas12zq.js","key":"@5015","name":"MAX_LIST_NESTING","source":"semantic","confidence":0.97,"note":"原名 MAX_ICON_BYTES，初值 32；et(s)>ye 时判“嵌套太深”"}
+{"file":"chunk-5aas12zq.js","key":"@5021","name":"MAX_INDENT_COLUMNS","source":"semantic","confidence":0.97,"note":"原名 MAX_SCREENSHOT_BYTES，初值 128；Qn(行)>Se 时判缩进超列"}
+{"file":"chunk-5aas12zq.js","key":"@5028","name":"MAX_DELIMITER_RUNS","source":"semantic","confidence":0.97,"note":"原名 MAX_NAME_SUGGESTION_COUNT，初值 20000；强调/代码分隔符段数上限"}
+{"file":"chunk-5aas12zq.js","key":"@5037","name":"MAX_DELIMITER_CHARS","source":"semantic","confidence":0.97,"note":"原名 MAX_DESCRIPTION_LENGTH，初值 1e5；强调/代码分隔符字符数上限（段数由 Ee 限）"}
+{"file":"chunk-5aas12zq.js","key":"@5044","name":"MAX_BRACKET_CELLS","source":"semantic","confidence":0.97,"note":"原名 MAX_README_CHARS，初值 40000；方括号个数上限"}
+{"file":"chunk-5aas12zq.js","key":"@5053","name":"MAX_SCREENSHOTS","source":"semantic","confidence":0.97,"note":"原名 MAX_LISTING_CHARS，初值 20；r.length>=on 时截断截图列表"}
+{"file":"chunk-5aas12zq.js","key":"@5059","name":"MAX_LISTED_SYSTEM_FILES","source":"semantic","confidence":0.97,"note":"原名 MAX_URL_LENGTH，初值 20；t.slice(0,ie) 与 `${t.length-ie} more` 里的系统文件展示上限"}
+{"file":"chunk-5aas12zq.js","key":"@5065","name":"SYSTEM_FILE_NAMES","source":"semantic","confidence":0.97,"note":"原名 MAX_SCREENSHOT_COUNT，初值 new Set([\".DS_Store\",\"Thumbs.db\",\"desktop.ini\"])；an.has(p.name) 命中即系统文件"}
+{"file":"chunk-5aas12zq.js","key":"@5117","name":"MACOSX_METADATA_DIR","source":"semantic","confidence":0.97,"note":"原名 MAX_LINK_CHECK_COUNT，初值 \"__MACOSX\"；路径里是否含该段目录"}
+{"file":"chunk-5aas12zq.js","key":"@5131","name":"SYSTEM_FILES_FOUND_NOTE","source":"semantic","confidence":0.97,"note":"原名 MAX_ISSUE_ROWS，初值 一段解释系统文件的说明；发现系统文件时 push 进 notes"}
+{"file":"chunk-5aas12zq.js","key":"@5611","name":"MAX_SCAN_ENTRIES","source":"semantic","confidence":0.97,"note":"原名 ARCHIVE_OS_METADATA_NAMES，初值 20000；遍历目录项与 skills 子目录的条数上限"}
+{"file":"chunk-5aas12zq.js","key":"@5619","name":"MAX_SCAN_DEPTH","source":"semantic","confidence":0.97,"note":"原名 MACOS_METADATA_DIR，初值 32；d.depth+1>ke 即停止下探"}
+{"file":"chunk-5aas12zq.js","key":"@5625","name":"MAX_REPO_ROOT_PARENTS","source":"semantic","confidence":0.97,"note":"原名 SYSTEM_FILE_GIT_NOTE，初值 32；向上找 .git 时最多 $e 层父目录"}
+{"file":"chunk-5aas12zq.js","key":"@5631","name":"MAX_PATH_DISPLAY_CHARS","source":"semantic","confidence":0.97,"note":"原名 MAX_FIELD_CHARS，初值 4096；A(路径, j) 的截断长度"}
+{"file":"chunk-5aas12zq.js","key":"@5638","name":"MAX_LISTED_MODULE_FILES","source":"semantic","confidence":0.97,"note":"原名 MAX_HOOK_SUGGESTIONS，初值 16；最多读取列出的 MCP/hooks 文件个数（提示语里的 ${K}）"}
+{"file":"chunk-5aas12zq.js","key":"@5643","name":"MAX_LISTED_TRAVERSALS","src":"semantic","name2":"","source":"semantic","confidence":0.97,"note":"原名 MAX_COMMAND_LENGTH，初值 20；traversalsNotListed 即 d.mcp-Y，逐条列出的上限"}
+{"file":"chunk-5aas12zq.js","key":"@5648","name":"HOOK_EVENT_NAMES","source":"semantic","confidence":0.97,"note":"原名 HOOK_EVENT_NAME_SET，初值 new Set(yc)；un.has(键) 判 hooks 的事件名是否合法"}
+{"file":"chunk-5aas12zq.js","key":"@5663","name":"MAX_LISTED_NAMES","source":"semantic","confidence":0.97,"note":"原名 MAX_NAME_SUGGESTION_DISTANCE，初值 3；Ce() 里 slice(0,cn) 只列前几条文件名"}
+{"file":"chunk-63f0f3kd.js","key":"@103184","name":"SUBSHELL_MARKER_CHARS","source":"semantic","confidence":0.97,"note":"保留名：初值 \"$`{,}\\}\" 确为可跨过的字符集，误报"}
+{"file":"chunk-6vnxsn99.js","key":"@32125","name":"RELEVANT_CONFIG_PATTERN","source":"semantic","confidence":0.97,"note":"原名 RELEVANT_CONFIG_RE，初值 正则源码字符串；new RegExp 前只做拼接，不是 RegExp 对象"}
+{"file":"chunk-6zvphrsz.js","key":"@2058","name":"FAILED_VERSION_EXIT_CODE","source":"semantic","confidence":0.97,"note":"原名 INSTALL_LOCK_KEY，初值 1；作为 er(ve)/hi(ve) 的退出码传给 shutdown"}
+{"file":"chunk-70qr4vka.js","key":"@929","name":"TIP_ID_RE","source":"semantic","confidence":0.97,"note":"原名 MAX_TIP_LABEL_CHARS，初值 /^[A-Za-z0-9._-]{1,64}$/；H.test(e.id) 校验提示 id"}
+{"file":"chunk-70qr4vka.js","key":"@956","name":"MAX_LABEL_CHARS","source":"semantic","confidence":0.97,"note":"原名 TRUSTED_OVERRIDE_SOURCES，初值 40；ne(P(e),X) 截断来自设置的 label"}
+{"file":"chunk-70qr4vka.js","key":"@1022","name":"DEFAULT_TIP_LABEL","source":"semantic","confidence":0.97,"note":"原名 ORG_TIP_FILE，初值 \"Tip\"；q() 在 id 缺失时返回它作为 label"}
+{"file":"chunk-70qr4vka.js","key":"@1040","name":"RETRYABLE_ERRNOS","source":"semantic","confidence":0.97,"note":"原名 INVISIBLE_CHARS_REGEX，初值 new Set([\"EAGAIN\",…])；J.has(errno) 决定可重试"}
+{"file":"chunk-70qr4vka.js","key":"@1102","name":"NOTE_INVISIBLE_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 TIP_MAX_NOTE_CHARS，初值 /[\\p{Cc}…]/gu；replace(Z,\"\") 去掉不可见字符"}
+{"file":"chunk-71rdrfpa.js","key":"@1762","name":"SAFE_WAKE_FIELD_RE","source":"semantic","confidence":0.97,"note":"原名 externalEventWakeSchema，初值 /^[^\"'<>&\\s]{0,256}$/；current_time/from/trust 的取值校验，schema 是 K"}
+{"file":"chunk-85kmkm1x.js","key":"@23897","name":"RECORDABLE_NAME_RE","source":"semantic","confidence":0.97,"note":"原名 RECORDABLE_NAME_RE_2，初值 名称格式正则；ht.test(name) 校验市场与插件名"}
+{"file":"chunk-85kmkm1x.js","key":"@23937","name":"RESERVED_MARKETPLACE_NAMES","source":"semantic","confidence":0.97,"note":"原名 RECORDABLE_NAME_RE，初值 new Set([\"org\",\"org-provisioned\",\"unknown\"])；Un.has(小写名) 判保留名"}
+{"file":"chunk-85kmkm1x.js","key":"@23985","name":"UNRECORDABLE_NAME_CODE","source":"semantic","confidence":0.97,"note":"原名 UNRECORDABLE_NAME，初值 \"UNRECORDABLE_NAME\"；作为 finding 的 code 值"}
+{"file":"chunk-85kmkm1x.js","key":"@24008","name":"PLUGIN_ID_PART_RULE_TEXT","source":"semantic","confidence":0.97,"note":"原名 PLUGIN_ID_PART_RULE，初值 一段规则说明文案，拼进 message"}
+{"file":"chunk-85kmkm1x.js","key":"@45504","name":"URL_TEMPLATE_RE","source":"semantic","confidence":0.97,"note":"原名 KNOWN_MCP_SERVER_TYPES，初值 /\\$\\{[^}$]+\\}/；xt.test(url) 判模板占位"}
+{"file":"chunk-85kmkm1x.js","key":"@45522","name":"MAX_MCP_SERVER_FILES","source":"semantic","confidence":0.97,"note":"原名 USER_CONFIG_PLACEHOLDER_PATTERN_2，初值 16；最多检查的 MCP server 文件数（Me-- 与提示语）"}
+{"file":"chunk-85kmkm1x.js","key":"@45528","name":"MAX_URL_LENGTH","source":"semantic","confidence":0.97,"note":"原名 MCP_URL_TEMPLATE_RE，初值 8192；n.length>es 即判 URL 过长"}
+{"file":"chunk-8wvtd8sr.js","key":"@188188","name":"PAGE_PROBE_SETTLE_SCRIPT","source":"semantic","confidence":0.97,"note":"原名 PAGE_PROBE_ERROR_FRAME_LEFT，初值 双 rAF 的 settle 脚本；拼在 script 的 settle 分支"}
+{"file":"chunk-8wvtd8sr.js","key":"@188306","name":"PAGE_PROBE_USES_SCRIPT","source":"semantic","confidence":0.97,"note":"原名 PAGE_PROBE_ERROR_NO_ANSWER，初值 USES 采集与 window['use'] 包装脚本"}
+{"file":"chunk-8wvtd8sr.js","key":"@190045","name":"PAGE_PROBE_ERROR_FRAME_LEFT","source":"semantic","confidence":0.97,"note":"原名 PAGE_PROBE_MAX_VALUE_CHARS，初值 \"the preview frame left the page\"；错误文案"}
+{"file":"chunk-8wvtd8sr.js","key":"@190082","name":"PAGE_PROBE_ERROR_NO_ANSWER","source":"semantic","confidence":0.97,"note":"原名 pageProbeRequestScript，初值 \"the preview frame is not answering\"；错误文案，调用方用 includes 匹配"}
+{"file":"chunk-9fcadreh.js","key":"@398","name":"MAX_REASONS_SHOWN_TEXT","source":"semantic","confidence":0.97,"note":"原名 MAX_CHANGE_REASONS_SHOWN，初值 一整句 “…Further reasons are not shown…”；是文案不是数字"}
+{"file":"chunk-9qwbw2qr.js","key":"@9548","name":"PLUGIN_DIRECTORY_BINDINGS_VERSION","source":"semantic","confidence":0.97,"note":"原名 PLUGIN_DIRECTORY_BINDINGS_FILE，初值 1；schemaVersion:T(A)"}
+{"file":"chunk-9qwbw2qr.js","key":"@9552","name":"MAX_BINDINGS_FILE_BYTES","source":"semantic","confidence":0.97,"note":"原名 PLUGIN_DIRECTORY_BINDINGS_VERSION，初值 1048576；Crt(F,M,…) 与 byteLength(R)>M 的上限"}
+{"file":"chunk-9qwbw2qr.js","key":"@9562","name":"MAX_REPOSITORY_KEY_CHARS","source":"semantic","confidence":0.97,"note":"原名 MAX_BINDINGS_FILE_BYTES，初值 4096；repositoryKey: o().min(1).max(Y_n) 的字符上限"}
+{"file":"chunk-a477qqne.js","key":"@4135","name":"MAX_PROMOTED_ENTRIES","source":"semantic","confidence":0.97,"note":"原名 MEMORY_STAMP_SCHEMA，初值 16；promoted: A(Yt()).max(Wt) 的条数上限"}
+{"file":"chunk-a477qqne.js","key":"@16891","name":"MEMORY_KEY_PREFIX","source":"semantic","confidence":0.97,"note":"原名 LocalDirMemoryStore，初值 \"mem_\"；fe() 拼文件名前缀，vn() 用 startsWith/slice 还原"}
+{"file":"chunk-ae5g0zb5.js","key":"@113243","name":"notedRunsByHost","source":"semantic","confidence":0.97,"note":"原名 runFolderMapSlot，初值 new W(()=>new Map)；按 host 记录已提示的 run"}
+{"file":"chunk-aepeg2w5.js","key":"@54272","name":"MEMORY_BACKGROUND_ALLOWED_TOOLS","source":"semantic","confidence":0.97,"note":"原名 MEMORY_READONLY_TOOLS，初值 read/write/str_replace/append；后台记忆轮次允许调用的工具（含写），删除/列表/检索不在内"}
+{"file":"chunk-aepeg2w5.js","key":"@54789","name":"MAX_INSTRUCTION_CHARS","source":"semantic","confidence":0.97,"note":"原名 memoryListArgsSchema，初值 49152；ah() 里 instruction: o().min(1).max(Pas)"}
+{"file":"chunk-aepeg2w5.js","key":"@54799","name":"MAX_STR_REPLACE_INPUT_CHARS","source":"semantic","confidence":0.97,"note":"原名 memorySearchArgsSchema，初值 8192；qM() 里 [...e].length<=VM 的校验上限"}
+{"file":"chunk-aepeg2w5.js","key":"@54807","name":"DEFAULT_STR_REPLACE_INPUT_CHARS","source":"semantic","confidence":0.97,"note":"原名 memoryAppendArgsSchema，初值 12000；qM() 里 max_input_chars 的 .default(YM)"}
+{"file":"chunk-aepeg2w5.js","key":"@64501","name":"BI_KEY_PREFIX","source":"semantic","confidence":0.97,"note":"原名 BI_KEY_UNAVAILABLE，初值 \"bi1-\"；r=ac+sha256.slice(0,16) 与 entries 过滤的 startsWith(ac)"}
+{"file":"chunk-aepeg2w5.js","key":"@64511","name":"BI_KEY_UNAVAILABLE","source":"semantic","confidence":0.97,"note":"原名 bi1KeyCache，初值 `${ac}key-unavailable`；用作“不可用”标记比较 s===eoo"}
+{"file":"chunk-aepeg2w5.js","key":"@64538","name":"biKeyCache","source":"semantic","confidence":0.97,"note":"原名 BI_KEY_LENGTH，初值 new Map；na.get/na.set 缓存，na.size>=wI 时清空"}
+{"file":"chunk-aepeg2w5.js","key":"@64549","name":"MAX_BI_KEY_CACHE_ENTRIES","source":"semantic","confidence":0.97,"note":"原名 BI_KEY_TTL_MS，初值 32；缓存条数上限"}
+{"file":"chunk-aepeg2w5.js","key":"@211479","name":"MAX_CATALOG_RESPONSE_BYTES","source":"semantic","confidence":0.97,"note":"原名 ETAG_RE，初值 2097152；作为 maxContentLength 传给请求（AIe=M3t 亦如此）"}
+{"file":"chunk-aepeg2w5.js","key":"@211491","name":"ETAG_PATTERN","source":"semantic","confidence":0.97,"note":"原名 MAX_ETAG_CHARS，初值 ETag 形如 /^(?:W\\/)?\"…\"$/ 的正则"}
+{"file":"chunk-aepeg2w5.js","key":"@211525","name":"MAX_ETAG_CHARS","source":"semantic","confidence":0.97,"note":"原名 catalogRowSchema，初值 256；L3 里 e.length<=uN 的上限"}
+{"file":"chunk-aepeg2w5.js","key":"@213691","name":"MAX_CATALOG_ROWS","source":"semantic","confidence":0.97,"note":"原名 parseCatalogRows，初值 64；y.length>=hb 即停止收行，slice(0,hb)"}
+{"file":"chunk-aepeg2w5.js","key":"@223221","name":"MAX_LOOKUP_CACHE_MODELS","source":"semantic","confidence":0.97,"note":"原名 createCatalogLookupBucket，初值 256；h.byModel.size>=FN 时清缓存"}
+{"file":"chunk-aepeg2w5.js","key":"@239338","name":"MIN_CIDR_PREFIX","source":"semantic","confidence":0.97,"note":"原名 MIN_INTERNAL_PREFIX，初值 8；R<of 即判前缀太短，与 ES 的块数上限无关"}
+{"file":"chunk-aepeg2w5.js","key":"@630283","name":"DEFAULT_GROWTHBOOK_HOST","source":"semantic","confidence":0.97,"note":"原名 getGrowthBookClient_2，初值 \"https://api.anthropic.com/\"；y!==qi 判是否非默认 host，FRn 返回它"}
+{"file":"chunk-aepeg2w5.js","key":"@753515","name":"bubblewrapSandboxPerHost","source":"semantic","confidence":0.97,"note":"原名 getIsBubblewrapSandbox_2，初值 new W(()=>new sandbox)；gs() 返回 cj.of(host)"}
+{"file":"chunk-av47g0rj.js","key":"@1134","name":"EMPTY_TOKEN_SET","source":"semantic","confidence":0.97,"note":"原名 EMPTY_PRINCIPAL_TOKENS，初值 new Set；作为“无 token”的共享空集合返回"}
+{"file":"chunk-axmbhcjg.js","key":"@7927","name":"INCLUDE_EXTERNAL","source":"semantic","confidence":0.97,"note":"原名 MAX_INCLUDE_DEPTH，初值 !0；作为 includeExternal 布尔参数透传，深度是 Jzr"}
+{"file":"chunk-b0a246e7.js","key":"@12354","name":"MAX_ANCHOR_QUOTE_BYTES","source":"semantic","confidence":0.97,"note":"原名 ANCHOR_LIMITS，初值 512；TextEncoder 后长度>at 判 quote 过长"}
+{"file":"chunk-bfnfj4kx.js","key":"@75177","name":"AGENTS_DIR_NAME","source":"semantic","confidence":0.97,"note":"原名 loadAgentsFromDirectory，初值 \"agents\"；agents 目录名常量"}
+{"file":"chunk-bss4k1z9.js","key":"@36321","name":"FIRST_EXPLANATION_GUIDE","source":"semantic","confidence":0.97,"note":"原名 FIRST_EXPLANATION_LENGTH，初值 \"At most 100 words; …\"；是提示文案不是长度数字"}
+{"file":"chunk-bwyr6h72.js","key":"@1102","name":"MAX_AWS_PROFILES","source":"semantic","confidence":0.97,"note":"原名 gcpAdcFileSchema，初值 5；遍历 AWS profile 时 h<=Q 的层数上限"}
+{"file":"chunk-cgr0tezp.js","key":"@45875","name":"WHITESPACE_RE","source":"semantic","confidence":0.97,"note":"原名 URL_SCAN_PATTERNS，初值 /\\s/g；整组正则整体错位一格，自此处起逐项前移"}
+{"file":"chunk-cgr0tezp.js","key":"@45884","name":"LINE_BREAK_RE","source":"semantic","confidence":0.97,"note":"原名 URL_WHITESPACE_RE，初值 /[\\n\\r\\u2028\\u2029]/g"}
+{"file":"chunk-cgr0tezp.js","key":"@45909","name":"ENCODED_AT_BRACKET_RE","source":"semantic","confidence":0.97,"note":"原名 URL_LINEBREAK_RE，初值 /(?:@|%40)(?:\\[|%5B)/gi"}
+{"file":"chunk-cgr0tezp.js","key":"@45936","name":"ENCODED_BRACKET_START_RE","source":"semantic","confidence":0.97,"note":"原名 ENCODED_AT_BRACKET_RE，初值 /^(?:\\[|%5B)/i"}
+{"file":"chunk-cgr0tezp.js","key":"@45954","name":"ENCODED_BRACKET_END_RE","source":"semantic","confidence":0.97,"note":"原名 ENCODED_BRACKET_START_RE，初值 /\\]|%5D/gi"}
+{"file":"chunk-cgr0tezp.js","key":"@45968","name":"WEB_SCHEME_TAIL_RE","source":"semantic","confidence":0.97,"note":"原名 ENCODED_BRACKET_END_RE，初值 https?/wss?/ftps? 结尾判定"}
+{"file":"chunk-cgr0tezp.js","key":"@46019","name":"SSH_SCHEME_TAIL_RE","source":"semantic","confidence":0.97,"note":"原名 URL_SCHEME_TAIL_RE，初值 ssh/git/git+ssh/ssh+git 结尾判定"}
+{"file":"chunk-cgr0tezp.js","key":"@46077","name":"URL_DELIMITER_RE","source":"semantic","confidence":0.97,"note":"原名 SSH_SCHEME_TAIL_RE，初值 /[,;|&]/g"}
+{"file":"chunk-cgr0tezp.js","key":"@46090","name":"SCHEME_TOKEN_RE","source":"semantic","confidence":0.97,"note":"原名 URL_DELIMITER_RE，初值 前置非 scheme 字符 + scheme 形态"}
+{"file":"chunk-cgr0tezp.js","key":"@46146","name":"USERINFO_STOP_RE","source":"semantic","confidence":0.97,"note":"原名 SCHEME_TOKEN_RE，初值 userinfo 里的终止字符集"}
+{"file":"chunk-cgr0tezp.js","key":"@46183","name":"QUOTE_RE","source":"semantic","confidence":0.97,"note":"原名 USERINFO_STOP_RE，初值 /[\"'`]/"}
+{"file":"chunk-cgr0tezp.js","key":"@46194","name":"TERMINATOR_RE","source":"semantic","confidence":0.97,"note":"原名 QUOTE_SINGLE_RE，初值 /[;|&\\n]/g"}
+{"file":"chunk-cgr0tezp.js","key":"@46208","name":"LINE_SPAN_COST","source":"semantic","confidence":0.97,"note":"原名 URL_TERMINATORS_RE，初值 64；r.span=ji*(行差) 的每行代价"}
+{"file":"chunk-cgr0tezp.js","key":"@46222","name":"URL_SCAN_STOP_RE","source":"semantic","confidence":0.97,"note":"原名 MAX_URL_SCAN_LENGTH，初值 /[\\s\"'`]/g；D(e,Zi) 求扫描停止位置"}
+{"file":"chunk-ch0vxh4c.js","key":"@581","name":"PROCESS_WRAPPER_TIMEOUT_MS","source":"semantic","confidence":0.97,"note":"原名 PROCESS_WRAPPER_ENV，初值 12000；包装器超时毫秒数"}
+{"file":"chunk-ch0vxh4c.js","key":"@591","name":"IDLE_WRAPPER_STATE","source":"semantic","confidence":0.97,"note":"原名 PROCESS_WRAPPER_TIMEOUT_MS，初值 {argv:[],error:null,…}；memoState 的初值对象"}
+{"file":"chunk-cjydagjy.js","key":"@36920","name":"POLICY_HELPER_HOST","source":"semantic","confidence":0.97,"note":"原名 POLICY_HELPER_HOST_2，初值 {readBase,baseSettled,isUnwatchedRepl,refuse}；YRi(cr) 注入宿主回调"}
+{"file":"chunk-cjydagjy.js","key":"@37174","name":"POLICY_HELPER_SUBCOMMANDS","source":"semantic","confidence":0.97,"note":"原名 POLICY_HELPER_HOST，初值 new Set([\"install\",\"update\",…])；gr.has(e.name()) 判子命令"}
+{"file":"chunk-czx62zen.js","key":"@11263","name":"MAX_SAFE_DISPLAY_NAME_CHARS","source":"semantic","confidence":0.97,"note":"原名 SAFE_DISPLAY_NAME_RE，初值 64；HYe 的默认长度上限 n=Pe，正则仍是 ye"}
+{"file":"chunk-dcmhvw5a.js","key":"@162100","name":"AWS_CREDENTIAL_ENV_NAMES","source":"semantic","confidence":0.97,"note":"原名 credentialRuleExtractSchema，初值 [\"AWS_ACCESS_KEY_ID\",…]；de.includes 与 flatMap 用它枚举三者"}
+{"file":"chunk-dcmhvw5a.js","key":"@162170","name":"SLOT_COLLISION_SENTINEL","source":"semantic","confidence":0.97,"note":"原名 credentialRuleOnNoMatchSchema，初值 \"_SLOT_COLLISION_\"；拼进占位变量名的哨兵"}
+{"file":"chunk-dcmhvw5a.js","key":"@162193","name":"INVALID_PAIR_SENTINEL","source":"semantic","confidence":0.97,"note":"原名 credentialRuleDecodeSchema，初值 \"_INVALID_PAIR_\"；占位名前缀与 startsWith 判定"}
+{"file":"chunk-dcmhvw5a.js","key":"@162214","name":"PARENT_PAIR_SUPPRESSOR_SENTINEL","source":"semantic","confidence":0.97,"note":"原名 credentialRuleMaskClaimsSchema，初值 \"_PARENT_PAIR_SUPPRESSOR_\"；拼 secretAccessKeyVar"}
+{"file":"chunk-dcmhvw5a.js","key":"@162244","name":"MERGE_PAIR_SUPPRESSOR_SENTINEL","source":"semantic","confidence":0.97,"note":"原名 credentialRuleExtraSchema，初值 \"_MERGE_PAIR_SUPPRESSOR_\"；uS 的成员"}
+{"file":"chunk-dcmhvw5a.js","key":"@162274","name":"CREDENTIAL_CHILD_SENTINELS","source":"semantic","confidence":0.97,"note":"原名 credentialRuleChildSchema，初值 [Sio,$In,sn,Wfs]；wio 用 uS.some(startsWith)"}
+{"file":"chunk-dcmhvw5a.js","key":"@230121","name":"CONTROL_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 permissionsSettingsSchema，初值 /[\\x00-…]|\\p{DI}/u；!iE.test(path) 校验路径"}
+{"file":"chunk-dcmhvw5a.js","key":"@240824","name":"SKILL_OVERRIDE_COMPONENTS","source":"semantic","confidence":0.97,"note":"原名 skillOverridesSchema，初值 [\"skills\",\"agents\",\"hooks\",\"mcp\"]；oJt.includes 过滤，schema 是 _E"}
+{"file":"chunk-dsy6gyxv.js","key":"@962","name":"IOS_ARTIFACT_EXTENSION_RE","source":"semantic","confidence":0.97,"note":"原名 IOS_ARTIFACT_EXTENSIONS，初值 正则 /simctl|devicectl|…/i"}
+{"file":"chunk-dsy6gyxv.js","key":"@1638","name":"IOS_BUILD_COMMAND_NAMES","source":"semantic","confidence":0.97,"note":"原名 IOS_BUILD_COMMAND_RE，初值 new Set([at,Xt])；W.has(o.name)"}
+{"file":"chunk-dsy6gyxv.js","key":"@933","name":"UIKIT_SOURCE_EXTENSIONS","source":"semantic","confidence":0.97,"note":"原名 UIKIT_IMPORT_RE，初值 [\".swift\",\".m\",\".mm\",\".h\"]；扩展名数组"}
+{"file":"chunk-e6aww6q8.js","key":"@133191","name":"DEFAULT_MAX_SAVED_RULES","source":"semantic","confidence":0.97,"note":"原名 SERVER_CLASSIFIER_DECISION_SCHEMA，初值 64；v(dg,J1t) 读设置时的默认值，上限是 _Vs"}
+{"file":"chunk-e6aww6q8.js","key":"@133198","name":"MAX_SAVED_RULES_SETTING","source":"semantic","confidence":0.97,"note":"原名 MAX_RULE_CANONICAL_LENGTH，初值 1024；Math.min(D, _Vs) 的硬上限"}
+{"file":"chunk-e6aww6q8.js","key":"@215540","name":"MAX_METADATA_CHARS","source":"semantic","confidence":0.97,"note":"原名 MAX_METADATA_TEXT，初值 1024；YR(e, n=Hdo) 的默认截断长度"}
+{"file":"chunk-e6aww6q8.js","key":"@767088","name":"MAX_SESSION_TEXT_CHARS","source":"semantic","confidence":0.97,"note":"原名 MAX_SESSION_TEXT，初值 200；ne(e,Hme) 打日志时的截断"}
+{"file":"chunk-e6aww6q8.js","key":"@854277","name":"powershellParserPerHost","source":"semantic","confidence":0.97,"note":"原名 POWERSHELL_PARSER_PER_HOST，初值 new W(()=>new parser)；a0e 用 HRo.of(host)"}
+{"file":"chunk-e6aww6q8.js","key":"@897182","name":"MAX_INHERITED_FD","source":"semantic","confidence":0.97,"note":"原名 CLOSE_INHERITED_FDS_PREFIX，初值 9；SBt-Tie+1 生成关闭重定向，ZCo=SBt-_Bt 为根数"}
+{"file":"chunk-e6aww6q8.js","key":"@897257","name":"CLOSE_INHERITED_FDS_COMMAND","source":"semantic","confidence":0.97,"note":"原名 CLOSE_INHERITED_FDS_PREFIX_2，初值 一段 command exec … N<&- 的 shell 片段"}
+{"file":"chunk-e6aww6q8.js","key":"@990401","name":"ACTION_SUMMARY_FIELD","source":"semantic","confidence":0.97,"note":"原名 ACTION_SUMMARY_SCHEMA，初值 \"action_summary\"；Hb in h / y?.[Hb] 取字段"}
+{"file":"chunk-e6aww6q8.js","key":"@1029408","name":"DANGEROUS_TOOL_USE_UNSUPPORTED_REASONS","source":"semantic","confidence":0.97,"note":"原名 dangerousToolUseUnsupportedSchema，初值 [\"disabled\",\"error\"]；Hqt(RMo, reason) 归类"}
+{"file":"chunk-e6aww6q8.js","key":"@1029433","name":"DANGEROUS_TOOL_USE_COMBINED_REASONS","source":"semantic","confidence":0.97,"note":"原名 dangerousToolUseCombinedSchema，初值 [\"timeout\",\"error\",…]；Hqt(CMo, reason) 归类"}
+{"file":"chunk-e6aww6q8.js","key":"@2046528","name":"SEP","source":"semantic","confidence":0.97,"note":"原名 SEP_WIDTH，初值 \" · \"；split/join 的分隔串"}
+{"file":"chunk-e6aww6q8.js","key":"@2158805","name":"URL_PERMISSION_TIMEOUT_FLAG","source":"semantic","confidence":0.97,"note":"原名 describeUrlPermissionTimeout，初值 \"tengu_orderly_lantern\"；v(Dir,!1) 读特性开关"}
+{"file":"chunk-e6aww6q8.js","key":"@4220856","name":"PLUGIN_CATALOG_CACHE_VERSION","source":"semantic","confidence":0.97,"note":"原名 readPluginCatalogCache，初值 1；h.version!==_ut 判缓存版本"}
+{"file":"chunk-e6aww6q8.js","key":"@4221443","name":"pluginCatalogFileSchema","source":"semantic","confidence":0.97,"note":"原名 MAX_PLUGIN_CATALOG_ENTRIES，初值 p(()=>u({generated_at,…}))"}
+{"file":"chunk-e6aww6q8.js","key":"@4221577","name":"pluginCatalogCacheSchema","source":"semantic","confidence":0.97,"note":"原名 MAX_PLUGIN_CATALOG_NAME_LENGTH，初值 p(()=>u({version:,,fetchedAt:,,catalog:w1n()}))"}
+{"file":"chunk-e6aww6q8.js","key":"@4387012","name":"NPM_VIEW_TIMEOUT_MS","source":"semantic","confidence":0.97,"note":"原名 parseNpmPackument，初值 60000；npm view 调用的超时"}
+{"file":"chunk-e6aww6q8.js","key":"@4387032","name":"NPM_PACK_TIMEOUT_MS","source":"semantic","confidence":0.97,"note":"原名 UNSAFE_STORE_PREFIX，初值 300000；npm pack 调用的超时"}
+{"file":"chunk-e6aww6q8.js","key":"@4387043","name":"NPM_EXEC_MAX_BUFFER","source":"semantic","confidence":0.97,"note":"原名 NPM_PACK_TIMEOUT_MS，初值 8388608；$Ss 的 maxBuffer"}
+{"file":"chunk-e6aww6q8.js","key":"@4387055","name":"TAR_CHUNK_BYTES","source":"semantic","confidence":0.97,"note":"原名 NPM_EXEC_MAX_BUFFER，初值 1048576；Qct/Ozn/Izn 都以它与块数相乘"}
+{"file":"chunk-e6aww6q8.js","key":"@4387157","name":"TAR_HEADER_BYTES","source":"semantic","confidence":0.97,"note":"原名 MIN_PRINTABLE_CODE，初值 512；tar 头长度，S+e5 递增"}
+{"file":"chunk-e6aww6q8.js","key":"@4387164","name":"FILE_MODE_PERMISSION_BITS","source":"semantic","confidence":0.97,"note":"原名 MAX_PRINTABLE_CODE，初值 493；y.mode&fSs 取权限位"}
+{"file":"chunk-e6aww6q8.js","key":"@4387172","name":"FILE_MODE_TYPE_BITS","source":"semantic","confidence":0.97,"note":"原名 FILE_MODE_MASK，初值 73；y.mode&SSs 判是否有权限位"}
+{"file":"chunk-e6aww6q8.js","key":"@4387179","name":"PRINTABLE_CHAR_MIN","source":"semantic","confidence":0.97,"note":"原名 TAR_HEADER_OFFSETS，初值 32；FSs 里 charCodeAt<rft 判不可打印，又是 indexOf 起点"}
+{"file":"chunk-e6aww6q8.js","key":"@4387186","name":"NON_PRINTABLE_CHAR_CODE","source":"semantic","confidence":0.97,"note":"原名 NPM_VIEW_FIELDS，初值 127；r===bSs 判不可打印"}
+{"file":"chunk-e6aww6q8.js","key":"@4387194","name":"BINARY_MODE_FLAG","source":"semantic","confidence":0.97,"note":"原名 INTEGRITY_ALGORITHMS，初值 128；readUInt8&wSs 判 base-256 编码"}
+{"file":"chunk-e6aww6q8.js","key":"@4387202","name":"BINARY_BASE","source":"semantic","confidence":0.97,"note":"原名 NPM_PACKAGE_NAME_RE，初值 256；base-256 reduce 的底"}
+{"file":"chunk-e6aww6q8.js","key":"@4387210","name":"OCTAL_RADIX","source":"semantic","confidence":0.97,"note":"原名 ARCHIVE_SUFFIX_RE，初值 8；parseInt(y, vSs)"}
+{"file":"chunk-e6aww6q8.js","key":"@4387216","name":"DECIMAL_RADIX","source":"semantic","confidence":0.97,"note":"原名 GIT_HOSTING_PROVIDERS，初值 10；sks 里 parseInt(…, RSs) 的十进制基数（真正的托管站集合是 @4387527）","note2":""}
+{"file":"chunk-e6aww6q8.js","key":"@4387223","name":"TAR_HEADER_FIELDS","source":"semantic","confidence":0.97,"note":"原名 TAR_CHECKSUM_OFFSET，初值 {name:[0,100],mode:[100,8],…}；各字段的偏移与宽度"}
+{"file":"chunk-e6aww6q8.js","key":"@4387333","name":"NPM_VIEW_FIELDS","source":"semantic","confidence":0.97,"note":"原名 gunzipAsync，初值 npm view 的字段名数组"}
+{"file":"chunk-e6aww6q8.js","key":"@4387421","name":"INTEGRITY_ALGORITHMS","source":"semantic","confidence":0.97,"note":"原名 zipEntryDisplay，初值 [\"sha512\",…]；Wzn 里 find"}
+{"file":"chunk-e6aww6q8.js","key":"@4387461","name":"NPM_PACKAGE_NAME_RE","source":"semantic","confidence":0.97,"note":"原名 itemDisplay，初值 包名正则 /^[a-z0-9]…$/i；iie 里 PSs.test"}
+{"file":"chunk-e6aww6q8.js","key":"@4387497","name":"ARCHIVE_SUFFIX_RE","source":"semantic","confidence":0.97,"note":"原名 tarEntryTypeDisplay，初值 /\\.(?:tgz|tar.gz|tar)$/i；MSs.test"}
+{"file":"chunk-e6aww6q8.js","key":"@4387527","name":"GIT_HOSTING_PROVIDERS","source":"semantic","confidence":0.97,"note":"原名 archiveSuffixAllowed，初值 new Set([github, gist…])；OSs.has(host)"}
+{"file":"chunk-e6aww6q8.js","key":"@4387599","name":"CHECKSUM_OFFSET","source":"semantic","confidence":0.97,"note":"原名 entryPathSafe，初值 Ox.checksum[0]（148）；rks 里起始下标"}
+{"file":"chunk-e6aww6q8.js","key":"@4387618","name":"CHECKSUM_END","source":"semantic","confidence":0.97,"note":"原名 entryPathLengthOk，初值 148+8=156；切和范围上界"}
+{"file":"chunk-e6aww6q8.js","key":"@4407743","name":"MAX_DEPENDENCY_INSTALL_TIMEOUT_MS","source":"semantic","confidence":0.97,"note":"原名 installPluginDependencies_2，初值 60000；安装命令的 timeout"}
+{"file":"chunk-e6aww6q8.js","key":"@4407753","name":"MAX_DEPENDENCY_INSTALL_BYTES","source":"semantic","confidence":0.97,"note":"原名 MAX_DEPENDENCY_INSTALL_TIMEOUT_MS，初值 33554432；安装输出的字节上限"}
+{"file":"chunk-e6aww6q8.js","key":"@4407766","name":"NPM_CI_ARGS","source":"semantic","confidence":0.97,"note":"原名 MAX_DEPENDENCY_INSTALL_BYTES，初值 [\"ci\",\"--ignore-scripts\",…]；npm 安装参数"}
+{"file":"chunk-e6aww6q8.js","key":"@4407842","name":"LOCKFILE_INSTALL_PLANS","source":"semantic","confidence":0.97,"note":"原名 NPM_CI_ARGS，初值 每个 lockfile 对应的安装计划数组"}
+{"file":"chunk-e6aww6q8.js","key":"@4408245","name":"BINARY_LOCKFILE_UNSUPPORTED_TEXT","source":"semantic","confidence":0.97,"note":"原名 LOCKFILE_INSTALL_PLANS，初值 bun.lockb 的说明文案"}
+{"file":"chunk-e6aww6q8.js","key":"@4408368","name":"BINARY_LOCKFILE_MESSAGES","source":"semantic","confidence":0.97,"note":"原名 BINARY_LOCKFILE_UNSUPPORTED_TEXT，初值 new Map(lockfile→提示)；fqn.get(n)"}
+{"file":"chunk-e7z1g8a9.js","key":"@3812","name":"PEER_KEY_FILE_RE","source":"semantic","confidence":0.97,"note":"原名 AUTH_MESSAGE_TYPE，初值 /^(\\d+)\\.[0-9a-f]{64}\\.key$/；正式密钥文件名"}
+{"file":"chunk-e7z1g8a9.js","key":"@3845","name":"PEER_KEY_TMP_FILE_RE","source":"semantic","confidence":0.97,"note":"原名 PEER_KEY_FILE_RE，初值 带 .tmp.<hex> 的临时文件名正则"}
+{"file":"chunk-e7z1g8a9.js","key":"@3893","name":"PEER_TOKEN_BYTES","source":"semantic","confidence":0.97,"note":"原名 PEER_KEY_TMP_FILE_RE，初值 16；X(v) 生成 16 字节令牌"}
+{"file":"chunk-e7z1g8a9.js","key":"@3898","name":"PEER_TOKEN_HEX_RE","source":"semantic","confidence":0.97,"note":"原名 PEER_TOKEN_LENGTH，初值 /^[0-9a-f]{32}$/；令牌格式正则"}
+{"file":"chunk-e7z1g8a9.js","key":"@3918","name":"MAX_PEER_KEY_FILE_BYTES","source":"semantic","confidence":0.97,"note":"原名 PEER_TOKEN_HEX_RE，初值 4096；Bl(path, x) 的读取上限"}
+{"file":"chunk-e7z1g8a9.js","key":"@3925","name":"peerKeyFileSchema","source":"semantic","confidence":0.97,"note":"原名 MAX_PEER_KEY_FILE_BYTES，初值 p(()=>u({peerToken,…}))"}
+{"file":"chunk-eavynfj6.js","key":"@21929","name":"EFFORT_TYPOS","source":"semantic","confidence":0.97,"note":"原名 MEDIUM_EFFORT，初值 [\"file\",\"fiie\",\"flle\"]；n0(K,…) 的标签组"}
+{"file":"chunk-eavynfj6.js","key":"@21995","name":"ESCAPE_TARGETS_RE","source":"semantic","confidence":0.97,"note":"原名 ESCAPE_MAX_CHARS，初值 需要转义的字符集正则；bp(r).replace(Be,\"\")"}
+{"file":"chunk-eavynfj6.js","key":"@22093","name":"MEDIUM_EFFORT","source":"semantic","confidence":0.97,"note":"原名 MEDIUM，初值 \"medium\"；与 EFFORT_TYPOS 配套的等级名"}
+{"file":"chunk-f25sswmp.js","key":"@14480","name":"EFFORT_MEDIUM_NUDGE","source":"semantic","confidence":0.97,"note":"原名 NUDGE_IDS，初值 \"effort_medium_nudge\"；单个 id，不是 id 列表"}
+{"file":"chunk-f3qhjfah.js","key":"@1744","name":"PLUGIN_LINK_FILE","source":"semantic","confidence":0.97,"note":"原名 PLUGIN_LINK_FILE_2，初值 \".claude-plugin-link\"；链接标记文件名"}
+{"file":"chunk-f3qhjfah.js","key":"@1770","name":"pluginLinkSchema","source":"semantic","confidence":0.97,"note":"原名 PLUGIN_LINK_FILE，初值 p(()=>u({target:…}))"}
+{"file":"chunk-f3qhjfah.js","key":"@1981","name":"PLUGIN_LINK_HEADER","source":"semantic","confidence":0.97,"note":"原名 pluginLinkSchema，初值 `\\n[mode: link]`；写进链接文件的首行"}
+{"file":"chunk-f3qhjfah.js","key":"@38777","name":"MAX_ATTRIBUTION_FILE_BYTES","source":"semantic","confidence":0.97,"note":"原名 pluginAttributionSchema，初值 4096；Bl(n,dZo,…) 的读取上限"}
+{"file":"chunk-fm6h4dv7.js","key":"@35983","name":"JUNIPER_TIDE_PROGRAM","source":"semantic","confidence":0.97,"note":"原名 JUNIPER_TIDE_SCHEMA，初值 \"juniper_tide\"；POST body 里的 program 值"}
+{"file":"chunk-fq0cr76a.js","key":"@902063","name":"APPARMOR_USERNS_PROBE_PATH","source":"semantic","confidence":0.97,"note":"原名 APPARMOR_USERNS_PROBE，初值 /proc/sys/kernel/apparmor_restrict_unprivileged_userns"}
+{"file":"chunk-fq0cr76a.js","key":"@902124","name":"APPARMOR_USERNS_ERROR_RE","source":"semantic","confidence":0.97,"note":"原名 APPARMOR_USERNS_PROBE_PATH，初值 /setting up uid map: Permission denied|Failed RTM_NEWADDR/"}
+{"file":"chunk-fq0cr76a.js","key":"@902186","name":"APPARMOR_USERNS_PROBE_ARGS","source":"semantic","confidence":0.97,"note":"原名 APPARMOR_USERNS_ERROR_RE，初值 bwrap 试跑参数数组"}
+{"file":"chunk-fq0cr76a.js","key":"@902257","name":"APPARMOR_PROBE_TIMEOUT_MS","source":"semantic","confidence":0.97,"note":"原名 uidMapDeniedReason，初值 2000；试跑 timeout"}
+{"file":"chunk-fq0cr76a.js","key":"@1068628","name":"WINDOWS_DRIVE_TOP_DIR_RE","source":"semantic","confidence":0.97,"note":"原名 WINDOWS_DRIVE_TOP_DIR，初值 盘符顶层目录正则"}
+{"file":"chunk-fq0cr76a.js","key":"@1068653","name":"WINDOWS_DRIVE_PREFIX_RE","source":"semantic","confidence":0.97,"note":"原名 WINDOWS_DRIVE_PREFIX，初值 盘符前缀正则"}
+{"file":"chunk-fq0cr76a.js","key":"@1068710","name":"MACOS_VOL_FILE_PATH_RE","source":"semantic","confidence":0.97,"note":"原名 MACOS_VOL_FILE_PATH，初值 /\\.vol|file 路径正则"}
+{"file":"chunk-fq0cr76a.js","key":"@1068743","name":"WINDOWS_ABSOLUTE_PREFIX_RE","source":"semantic","confidence":0.97,"note":"原名 WINDOWS_ABSOLUTE_PREFIX，初值 绝对路径前缀正则（含 \\\\?\\ 设备前缀）"}
+{"file":"chunk-fq0cr76a.js","key":"@1068793","name":"WINDOWS_DEVICE_OR_ADMIN_PATH_RE","source":"semantic","confidence":0.97,"note":"原名 WINDOWS_DEVICE_OR_ADMIN_PATH，初值 设备/admin$ 路径正则"}
+{"file":"chunk-frha7zp8.js","key":"@633","name":"SESSION_ACTIVITY_KEY","source":"semantic","confidence":0.97,"note":"原名 SESSION_ACTIVITY_TICK_MS，初值 \"cli\"；activityKey 返回的键"}
+{"file":"chunk-frha7zp8.js","key":"@641","name":"SESSION_ACTIVITY_TICK_MS","source":"semantic","confidence":0.97,"note":"原名 sessionActivityRegistrySlot，初值 1000；tick 毫秒"}
+{"file":"chunk-g54kbxqw.js","key":"@24668","name":"MAX_PREFIXED_TOOL_NAME_CHARS","source":"semantic","confidence":0.97,"note":"原名 MAX_PREFIXED_TOOL_NAME，初值 107；e.length<=i7o"}
+{"file":"chunk-g54kbxqw.js","key":"@60089","name":"cacheBreakStatePrefix","source":"semantic","confidence":0.97,"note":"原名 getCacheBreakDiffPath，初值 \"cache-break-\"；拼 `${KXr}state-…json`"}
+{"file":"chunk-g54kbxqw.js","key":"@166070","name":"baseToolsProvider","source":"semantic","confidence":0.97,"note":"原名 getAllBaseToolsProvider，初值 未初始化的变量；umi 赋值、QW() 调用"}
+{"file":"chunk-hm0ce8vc.js","key":"@215215","name":"MAX_WORK_ORDER_MESSAGE_CHARS","source":"semantic","confidence":0.97,"note":"原名 WORK_ORDER_USED_MESSAGE，初值 1024；pMt(o,Qf) 的长度上限"}
+{"file":"chunk-hq88884p.js","key":"@58165","name":"MTLS_SOCKET_TIMEOUT_MS","source":"semantic","confidence":0.97,"note":"原名 MtlsClient，初值 35000；setTimeout(Jn)"}
+{"file":"chunk-kxyd0g16.js","key":"@63213","name":"MAX_LIST_ENTRIES","source":"semantic","confidence":0.97,"note":"原名 MemoryListInputSchema，初值 50；I.slice(0,xs)"}
+{"file":"chunk-n2x174m4.js","key":"@2797","name":"MAX_LAUNCH_ATTEMPTS","source":"semantic","confidence":0.97,"note":"原名 launchRecordSchema，初值 2；attempts>=H 即放弃"}
+{"file":"chunk-n2x174m4.js","key":"@2801","name":"launchRecordSchema","source":"semantic","confidence":0.97,"note":"原名 launchRecordSchema_2，初值 p(()=>kt({event_uuid,…}))"}
+{"file":"chunk-n5fvvrgq.js","key":"@6332","name":"CPP_TEMPLATE_MAX_PARTS","source":"semantic","confidence":0.97,"note":"原名 CPP_TEMPLATE_RE，初值 16；正则里的 {1,${Wr}} 量词上限"}
+{"file":"chunk-p7xf186d.js","key":"@5236","name":"PAIRING_ERROR_CODE_SET","source":"semantic","confidence":0.97,"note":"原名 normalizePairingErrorCode，初值 new Set(ut)；lt.has(t) 判已知码"}
+{"file":"chunk-qcc88jq1.js","key":"@2327","name":"SHA256_RE","source":"semantic","confidence":0.97,"note":"原名 fileAttachmentSchema，初值 /^[0-9a-f]{64}$/；sha256: o().regex(K)"}
+{"file":"chunk-qv1jytq6.js","key":"@5979","name":"RUN_STOP_KEYS","source":"semantic","confidence":0.97,"note":"原名 runStopSchema，初值 [\"config\"]；new Set(j) 与 CONFIG_ONLY_KEYS 的输入"}
+{"file":"chunk-s61vbvea.js","key":"@461146","name":"ULTRA_REVIEW_CONFIG_FLAG","source":"semantic","confidence":0.97,"note":"原名 isUltrareviewEnabled，初值 \"tengu_review_bughunter_config\"；v(Zb,null) 读配置"}
+{"file":"chunk-s67w32sp.js","key":"@5004","name":"LISTING_MAX_AGE_MS","source":"semantic","confidence":0.97,"note":"原名 pluginDirectoryCacheSchemaWithSchema，初值 7776000000；U>Ve 判 listing 过期"}
+{"file":"chunk-s67w32sp.js","key":"@10719","name":"DEFAULT_FIRST_ANSWER_MS","source":"semantic","confidence":0.97,"note":"原名 DIRECTORY_NO_ANSWER_TEXT，初值 15000；firstAnswerMs 的默认值"}
+{"file":"chunk-s67w32sp.js","key":"@10728","name":"DIRECTORY_NO_ANSWER_TEXT","source":"semantic","confidence":0.97,"note":"原名 DIRECTORY_REFRESH_TTL_MS，初值 \"it did not answer in time\"；作 message 与 lastFailedWalk.reason"}
+{"file":"chunk-s67w32sp.js","key":"@11985","name":"CLOCK_SKEW_TOLERANCE_MS","source":"semantic","confidence":0.97,"note":"原名 isRecentTimestamp，初值 3600000；e.at-n>dt 判时间戳超前"}
+{"file":"chunk-s67w32sp.js","key":"@16551","name":"DELISTING_GRACE_MS","source":"semantic","confidence":0.97,"note":"原名 hasListingSource，初值 7200000；y-E<he 才列为将下架"}
+{"file":"chunk-w5ndchqs.js","key":"@12961","name":"SEP","source":"semantic","confidence":0.97,"note":"原名 SEP_WIDTH，初值 \" · \"；split/join 分隔串"}
+{"file":"chunk-x58vpmpd.js","key":"@1512","name":"KEYCHAIN_TIMEOUT_MS","source":"semantic","confidence":0.97,"note":"原名 DEVICE_KEY_SERVICE_NAME，初值 2000；security 命令的 timeout"}
+{"file":"chunk-x58vpmpd.js","key":"@1519","name":"KEYCHAIN_PASSWORD_ARG_LIMIT","source":"semantic","confidence":0.97,"note":"原名 DEVICE_KEY_CACHE_TTL_MS，初值 4032；命令行长度 <=U 才走 -i"}
+{"file":"chunk-x58vpmpd.js","key":"@1526","name":"KEYCHAIN_ITEM_NOT_FOUND_EXIT","source":"semantic","confidence":0.97,"note":"原名 MAX_DEVICE_KEY_CHUNK_BYTES，初值 44；n===ee 视为没有钥匙串项"}
+{"file":"chunk-x58vpmpd.js","key":"@1532","name":"KEYCHAIN_NO_CERT_EXIT_CODES","source":"semantic","confidence":0.97,"note":"原名 DEVICE_KEY_CHUNK_OVERHEAD，初值 new Set([37,50])；re.has(n) 视为无钥匙串"}
+{"file":"chunk-yb0ajcmt.js","key":"@24562","name":"SEQUENCE_PARTICIPANT_RE","source":"semantic","confidence":0.97,"note":"原名 SEQUENCE_ARROW_MAP，初值 participant/actor 行正则；Dt.exec(t)"}
+{"file":"chunk-yb0ajcmt.js","key":"@24801","name":"MAX_SEQUENCE_TITLE_CHARS","source":"semantic","confidence":0.97,"note":"原名 SEQUENCE_TITLE_RE，初值 50；t.ids.length<=Nt"}
+{"file":"chunk-yb0ajcmt.js","key":"@24807","name":"MAX_SEQUENCE_STEPS","source":"semantic","confidence":0.97,"note":"原名 SEQUENCE_AUTONUMBER_RE，初值 400；t.steps.length<=It"}
+{"file":"chunk-yf82ynbr.js","key":"@3217","name":"MAX_NAME_VARIANTS","source":"semantic","confidence":0.97,"note":"原名 BACKUP_OR_COPY_SUFFIX_REGEX，初值 64；s.size>f 即停止扩展变体"}
+{"file":"chunk-yf82ynbr.js","key":"@3296","name":"EDITOR_BACKUP_SUFFIX_SOURCE","source":"semantic","confidence":0.97,"note":"原名 EDITOR_BACKUP_SUFFIX_REGEX，初值 \"(?:BACKUP|BASE|LOCAL|REMOTE)\"；拼进 E3o"}
+{"file":"chunk-yf82ynbr.js","key":"@3230","name":"PATH_SEGMENT_SPLIT_RES","source":"semantic","confidence":0.97,"note":"原名 MAX_PATH_SEGMENT_LENGTH，初值 一组用于按分隔符切分的正则"}
+{"file":"chunk-yf82ynbr.js","key":"@3276","name":"REMOTE_PREFIX_RE","source":"semantic","confidence":0.97,"note":"原名 REMOTE_PREFIX_STRIP_FNS，初值 /~[^/~.][^/~]*$/；单条正则"}
+{"file":"chunk-yf82ynbr.js","key":"@3368","name":"BACKUP_OR_COPY_SUFFIX_REGEX","source":"semantic","confidence":0.97,"note":"原名 regExp_4，初值 拼 E3o 的备份/副本后缀正则；ae.test"}
+{"file":"chunk-63f0f3kd.js","key":"@8966","name":"GREP_BUNDLED_FLAG_RE","source":"semantic","confidence":0.97,"note":"原名 GREP_BUNDLED_FLAG_CHARS，初值 /[ABCEMTdefgjmrt]/；Gs 把它传给 Bn 做 test，是正则不是字符集字符串"}
+{"file":"chunk-c6bzd0wx.js","key":"@1026","name":"STATUS_DOT_RE","source":"semantic","confidence":0.97,"note":"原名 STATUS_DOT_CHARS，初值 一条字符类正则（U+20DD…U+1F7E4 的 emoji 圆点与圈形）；replace(F, 空格) 用作正则"}
+{"file":"chunk-cgr0tezp.js","key":"@12121","name":"MARKDOWN_BREAK_RE","source":"semantic","confidence":0.97,"note":"原名 MARKDOWN_BREAK_CHARS，初值 反引号、方括号与尖括号的字符类正则（全局）"}
+{"file":"chunk-cgr0tezp.js","key":"@66817","name":"SHELL_PUNCT_RE","source":"semantic","confidence":0.97,"note":"原名 SHELL_META_CHARS，初值 /[/.@:~*?\\]/；与同句 xs（SHELL_META_RE，含空白与 ;&<>）是两个不同的正则"}
+{"file":"chunk-cgr0tezp.js","key":"@75952","name":"URL_BREAK_RE","source":"semantic","confidence":0.97,"note":"原名 URL_BREAK_CHARS，初值 空白、引号、反引号与尖括号的字符类正则；dr.test(e) 判 URL 边界"}
+{"file":"chunk-r01896cg.js","key":"@19354","name":"DECLARE_FLAG_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 DECLARE_SEMANTIC_FLAG_CHARS，初值 只含标志字母的字符类正则；An.test(标志串)。同句 Ye 才是 EXIT 前缀敏感的 DECLARE_SEMANTIC_FLAG_RE"}
+{"file":"chunk-r01896cg.js","key":"@19398","name":"EXPORT_FLAG_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 EXPORT_SEMANTIC_FLAG_CHARS，初值 只含标志字母的字符类正则；$n.test(标志串)。同句 Sn 是带前缀的 EXPORT_SEMANTIC_FLAG_RE"}
+{"file":"chunk-yxnffbzs.js","key":"@14515","name":"QUOTE_LIKE_RE","source":"semantic","confidence":0.97,"note":"原名 QUOTE_LIKE_CHARS，初值 一条字符类正则；与同句 QUOTE_LIKE_MIRRORED_RE 一起拼进 regExp_2"}
+{"file":"chunk-ar2zwb92.js","key":"@2354","name":"VARIATION_SELECTOR_RE","source":"semantic","confidence":0.97,"note":"原名 VARIATION_SELECTOR_CHARS，初值 /^[‌‍︎️]$/；R.test(r) 判断单字符"}
+{"file":"chunk-hq88884p.js","key":"@51082","name":"FORBIDDEN_HOST_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 FORBIDDEN_HOST_CHARS，初值 主机名禁用字符正则；kt.test(e) 返回空串表示非法"}
+{"file":"chunk-hq88884p.js","key":"@51182","name":"IGNORABLE_HOST_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 IGNORABLE_HOST_CHARS，初值 可忽略字符正则；r.replace(Mn,\"\") 在规范化时删掉"}
+{"file":"chunk-e6aww6q8.js","key":"@2818166","name":"USER_TAG_UNSAFE_RE","source":"semantic","confidence":0.97,"note":"原名 USER_TAG_UNSAFE_CHARS，初值 /[^a-zA-Z0-9._-]/g；replace(akr,\"\") 清洗用户标签"}
+{"file":"chunk-82kqcve8.js","key":"@82469","name":"YAML_SPECIAL_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 YAML_SPECIAL_CHARS，初值 YAML 需加引号的特殊字符正则（含 “: ”）；Lm.test(w) 决定是否给值加引号"}
+{"file":"chunk-f25sswmp.js","key":"@14110","name":"SHA256_DIGEST_SUFFIX_RE","source":"semantic","confidence":0.97,"note":"原名 SHA256_DIGEST_SUFFIX，初值 /@sha256:[0-9a-f]{64}$/；dt() 用 ve.test"}
+{"file":"chunk-wyqg6m3h.js","key":"@15161","name":"HUNK_HEADER_RE","source":"semantic","confidence":0.97,"note":"原名 HUNK_HEADER，初值 unified diff 的 @@ -a,b +c,d @@ 头正则；Dt.test 与 Dt.exec 都用到"}
+{"file":"chunk-x1mwqya5.js","key":"@22215","name":"SAFE_FALLBACK_TEXT_RE","source":"semantic","confidence":0.97,"note":"原名 SAFE_FALLBACK_TEXT，初值 1 到 32 个安全字符的整串正则；Un() 里 zn.test(n)"}
+{"file":"chunk-dsy6gyxv.js","key":"@1565","name":"XCODE_COMMAND_PREFIX_RE","source":"semantic","confidence":0.97,"note":"原名 XCODE_COMMAND_PREFIX，初值 /\bsimctl\b|-sdk iphonesimulator|…/ 正则"}
+{"file":"chunk-bc20zedk.js","key":"@30852","name":"KEY_NAME_PAIRS","source":"semantic","confidence":0.97,"note":"原名 KEY_NAME_MAP，初值 成对的 [按键名, 简单名] 数组；vo.find(([f])=>p[f]) 按数组查，不是 Map"}
+{"file":"chunk-mvhmq2z8.js","key":"@17763","name":"CLOUD_MODEL_LIST_TIMEOUT_MESSAGE","source":"semantic","confidence":0.97,"note":"原名 CLOUD_MODEL_LIST_TIMEOUT，初值 \"Stopped waiting for the cloud session’s model list …\"；超时时展示的文案，超时数值是 No"}
+{"file":"chunk-xndtzje6.js","key":"@224","name":"COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE","source":"semantic","confidence":0.97,"note":"原名 COMPACT_FAILED_CONTEXT_LIMIT，初值 \"Compaction failed · conversation could not be reduced below the context limit\""}
+{"file":"chunk-xndtzje6.js","key":"@311","name":"COMPACT_FAILED_MEDIA_LIMIT_MESSAGE","source":"semantic","confidence":0.97,"note":"原名 COMPACT_FAILED_MEDIA_LIMIT，初值 \"Compaction failed · attached media exceeds size limits\""}
+{"file":"chunk-tkqbtg0j.js","key":"@15594","name":"ENABLE_TOOL_OUTPUT_INSTRUCTIONS","source":"semantic","confidence":0.97,"note":"原名 ENABLE_TOOL_OUTPUT_SCHEMA，初值 一段告诉模型“名字不在列表就别调用/加载”的说明；真正的 schema 是 E 与 q"}
+{"file":"chunk-tkqbtg0j.js","key":"@18358","name":"ENABLE_COMPUTER_TOOL_NAME_PREFIX","source":"semantic","confidence":0.97,"note":"原名 ENABLE_COMPUTER_OUTPUT_SCHEMA，初值 `mcp__${ls}__computer_`；电脑工具名前缀"}
+{"file":"chunk-tmx5d02z.js","key":"@34740","name":"INPUT_TAB_REFUSAL_MESSAGE","source":"semantic","confidence":0.97,"note":"原名 APPIFACT_REPL_INPUT_SCHEMA，初值 \"input contains a raw tab …\"；schema 是 kn"}
+{"file":"chunk-hntsfzas.js","key":"@4843","name":"osReleaseClientPerHost","source":"semantic","confidence":0.97,"note":"原名 getOsRelease，初值 new W(()=>new L({platform,readOsRelease,…}))；是按 host 缓存的操作系统探测客户端槽，y() 返回 ee.of(host)，不是函数"}

@@ -1,0 +1,14 @@
+# chunk-f7avdr1b.js:ku -> chunk-aepeg2w5.js:Gu
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-f7avdr1b.js_ku.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-f7avdr1b.js_ku.new.js"
+index babb55c..31df17c 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-f7avdr1b.js_ku.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-f7avdr1b.js_ku.new.js"
+@@ -3,7 +3,7 @@ function SELF($l0, $l1) {
+   for (let [$l2, $l3] of Object.entries($l0)) {
+     if (!$m_Uv($l3, $l1)) continue;
+     let $l4 = $m_Qy($l2);
+-    if ($m_ESe($l4, $l4)) return $l4;
++    if ($m_ESe($l4, $l4) || $NEW_chunk_aepeg2w5_js_fn($l4)) return $l4;
+   }
+   return;
+ }

@@ -1,0 +1,14 @@
+# chunk-yagw4eem.js:Kc -> chunk-hwmsct5x.js:tf
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_Kc.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_Kc.new.js"
+index 77eb1f2..5f7569d 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_Kc.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_Kc.new.js"
+@@ -9,7 +9,7 @@ async function SELF($l0, $l1) {
+   try {
+     return $l5 = await $l1(), $l5;
+   } finally {
+-    $m_f("api_gzip_request_body_blocks", "rejected", { status: $l0.status, rejection: $m_c($l4), ...$l5 !== void 0 && { resendStatus: $l5.status }, ...$l3 });
++    $m_f("api_gzip_request_body_blocks", "rejected", { status: $l0.status, rejection: $m_c($l4), ...$l5 !== void 0 && { resendStatus: $l5.status }, ...$l3 }), $m_Y("warn", "api_gzip_request_body_blocks_rejected", { status: $l0.status, rejection: $l4, ...$l5 !== void 0 && { resend_status: $l5.status }, ...$NEW_chunk_hwmsct5x_js_bl($l3) });
+   }
+ }
+ ;

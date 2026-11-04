@@ -1,0 +1,14 @@
+{
+ "method": "GET",
+ "url": "/api/oauth/profile",
+ "headers": {
+  "accept": "application/json, text/plain, */*",
+  "content-type": "application/json",
+  "user-agent": "claude-code/2.1.316",
+  "authorization": "Bearer sk-ant-oat01-client-login",
+  "cache-control": "no-cache",
+  "accept-encoding": "gzip, compress, deflate, br",
+  "host": "api.anthropic.com",
+  "connection": "keep-alive"
+ }
+}

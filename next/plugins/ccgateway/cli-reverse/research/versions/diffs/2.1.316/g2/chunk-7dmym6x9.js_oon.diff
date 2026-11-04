@@ -1,0 +1,17 @@
+# chunk-7dmym6x9.js:oon -> chunk-e6aww6q8.js:Elr
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_oon.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_oon.new.js"
+index bccaa78..320494e 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_oon.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_oon.new.js"
+@@ -1,10 +1,4 @@
+ function SELF() {
+-  let $l0 = $m_ron();
+-  if ($l0.explicit !== void 0) return $l0.explicit;
+-  if ($l0.rollout === void 0) {
+-    let $l1 = $m_k($m_lXe, "padded-countdown");
+-    $l0.rollout = $m_Vwe($l1) ? $l1 : "padded-countdown";
+-  }
+-  return $l0.rollout;
++  return $m_ron() ?? $NEW_chunk_e6aww6q8_js_Qin();
+ }
+ ;

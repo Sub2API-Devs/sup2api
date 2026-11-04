@@ -1,0 +1,12 @@
+# chunk-ksa0mq1y.js:tn -> chunk-g54kbxqw.js:on
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-ksa0mq1y.js_tn.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-ksa0mq1y.js_tn.new.js"
+index 6d7b2ee..49b8758 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-ksa0mq1y.js_tn.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-ksa0mq1y.js_tn.new.js"
+@@ -1,5 +1,5 @@
+ function SELF($l0) {
+-  let $l1 = $l0.create, $l2 = ($l3, $l4) => ($m_as($l0.name, $l4), $l1.call($l0, $l3)), $l5 = ($l6, $l7, $l8, $l9, $l10) => ({ tool: $l2($m_cKt($l6), $l6?.session), call: { parentMessage: $l8, userModified: $l10?.userModified, globLimits: $l10?.globLimits, userTypedShellDispatch: $l10?.userTypedShellDispatch, pdfRenderSignal: $l10?.pdfRenderSignal, gitDiffRead: $l10?.gitDiffRead, ...false, smallResultAsked: $l10?.smallResultAsked, callerLogsSharedEvents: $l10?.callerLogsSharedEvents, timing: $l10?.timing, runEngine: ($l11, $l12) => $l11({ ...$l12, toolUseContext: $l6.permissionRound === void 0 ? $l6 : { ...$l6, permissionRound: void 0 }, canUseTool: $l9 }), ask: $l9 && $l8 ? ($l13, $l14) => {
++  let $l1 = $l0.create, $l2 = ($l3, $l4) => ($m_as($l0.name, $l4), $l1.call($l0, $l3)), $l5 = ($l6, $l7, $l8, $l9, $l10) => ({ tool: $l2($m_cKt($l6), $l6?.session), call: { parentMessage: $l8, userModified: $l10?.userModified, globLimits: $l10?.globLimits, userTypedShellDispatch: $l10?.userTypedShellDispatch, pdfRenderSignal: $l10?.pdfRenderSignal, gitDiffRead: $l10?.gitDiffRead, outsideResultReader: $l10?.outsideResultReader, ...false, smallResultAsked: $l10?.smallResultAsked, callerLogsSharedEvents: $l10?.callerLogsSharedEvents, timing: $l10?.timing, runEngine: ($l11, $l12) => $l11({ ...$l12, toolUseContext: $l6.permissionRound === void 0 ? $l6 : { ...$l6, permissionRound: void 0 }, canUseTool: $l9 }), ask: $l9 && $l8 ? ($l13, $l14) => {
+     let $l15 = $m_Br($l9, $l16, $l14.withdraw === void 0 ? $l6 : { ...$l6, abortController: $m_A7o($l6.abortController, $l14.withdraw) }, $l8, $l13, $l14);
+     return $l14.toolUseId === $l6.toolUseId ? $l15 : $l15.finally(() => $m_Obe($l6.session, $l14.toolUseId));
+   } : void 0, get toolUseId() {

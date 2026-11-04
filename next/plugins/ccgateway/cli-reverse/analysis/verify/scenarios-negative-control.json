@@ -1,0 +1,4244 @@
+{
+  "name": "scenarios-negative-control",
+  "baseline": "original",
+  "candidate": "artifacts/tmp/scenarios/neg",
+  "date": "2026-11-03T19:48:47.221Z",
+  "wallMs": 68917,
+  "bun": "1.4.4+38afee6c8",
+  "node": "v24.20.0",
+  "platform": "win32-x64",
+  "rules": [
+    {
+      "rule": "path:cwd",
+      "desc": "沙箱工作目录（含 / 、\\\\ 转义和 ~/.claude/projects 的 \"-\" 编码形式）→ <CWD>"
+    },
+    {
+      "rule": "path:home",
+      "desc": "沙箱 HOME → <HOME>"
+    },
+    {
+      "rule": "path:tmp",
+      "desc": "沙箱 TMP → <TMP>"
+    },
+    {
+      "rule": "path:sandbox",
+      "desc": "沙箱根目录 → <SANDBOX>，单独出现的 run-XXXXXX → <RUNID>"
+    },
+    {
+      "rule": "path:tree",
+      "desc": "被测树目录（original / runnable 的绝对路径）→ <TREE>"
+    },
+    {
+      "rule": "path:bun",
+      "desc": "bun.exe 所在目录 → <BUNDIR>"
+    },
+    {
+      "rule": "path:project",
+      "desc": "项目根目录 → <PROJECT>"
+    },
+    {
+      "rule": "port",
+      "desc": "假上游端口 127.0.0.1:<port> → 127.0.0.1:<PORT>"
+    },
+    {
+      "rule": "uuid",
+      "desc": "UUID（session_id、prompt id、x-client-request-id、uuid 字段…）→ <UUID-n>，按首次出现编号，保留\"同值\"关系"
+    },
+    {
+      "rule": "iso-ts",
+      "desc": "ISO 时间戳 → <ISO-TS>"
+    },
+    {
+      "rule": "hex64",
+      "desc": "64 位十六进制（metadata.user_id 里的 device_id 等）→ <HEX64-n>"
+    },
+    {
+      "rule": "epoch-ms",
+      "desc": "13 位毫秒时间戳（快照文件名等）→ <EPOCH-MS>"
+    },
+    {
+      "rule": "cch",
+      "desc": "计费头 cch=xxxxx → cch=<CCH>"
+    },
+    {
+      "rule": "cwd-file",
+      "desc": "Bash 工具的 cwd 记录文件 claude-<4hex>-cwd → claude-<HEX4>-cwd"
+    },
+    {
+      "rule": "tmp-file",
+      "desc": "原子写临时文件 .tmp.<pid>.<12hex> → .tmp.<PID>.<HEX>"
+    },
+    {
+      "rule": "date",
+      "desc": "\"Today's date is YYYY-MM-DD\" 与 currentDate 之类的日期 → <DATE>"
+    },
+    {
+      "rule": "duration",
+      "desc": "JSON 里名字含 duration / _ms / Ms / ttft 的数值字段 → \"<N>\"；纯文本 \"duration_ms: <n>\"（子代理 hand-back 的 <usage>）→ <N>"
+    },
+    {
+      "rule": "cost",
+      "desc": "total_cost_usd / costUSD 数值不归一（假上游 usage 固定，成本应稳定）"
+    },
+    {
+      "rule": "header:content-length",
+      "desc": "请求头 Content-Length → <LEN>（body 本身逐字段比较）"
+    },
+    {
+      "rule": "request:t",
+      "desc": "请求到达时间 t、seq 不参与比较"
+    },
+    {
+      "rule": "path:?",
+      "desc": "路径分隔符显示成 ? 的形式（交互界面里的跨会话消息警告）也按沙箱路径归一"
+    },
+    {
+      "rule": "tty-turn-line",
+      "desc": "交互界面回合结束行 \"✻ <随机动词> for <耗时> · done <钟点>\" → \"✻ <VERB> for <DUR> · done <CLOCK>\""
+    },
+    {
+      "rule": "tty-stream",
+      "desc": "伪终端场景不比较原始字节流（Ink 增量重绘的帧切分随时间变），改为比较 vt-screen.mjs 还原的最终屏幕和各步快照；sequence 里的伪终端步骤同样处理（scenarios 成员加）"
+    },
+    {
+      "rule": "agent-id",
+      "desc": "子代理 id a<16hex>（Agent 工具 hand-back 里的 agentId、子代理请求头）→ <AGENT-ID-n>，按首次出现编号（scenarios 成员加）"
+    },
+    {
+      "rule": "plan-slug",
+      "desc": "计划文件名 ~/.claude/plans/<前缀>-<随机词>-<随机词>.md 的两个随机词 → <WORD>-<WORD>（scenarios 成员加）"
+    },
+    {
+      "rule": "parallel-tool-results",
+      "desc": "同一条 user 消息里连续的 tool_result 块（以及 stream-json 里连续的 tool_result user 事件行）按 tool_use_id 排序：并行工具按完成先后回传，顺序不确定"
+    }
+  ],
+  "totals": {
+    "scenarios": 4,
+    "equal": 1,
+    "flaky": [],
+    "baselinePass": 4,
+    "candidatePass": 1,
+    "ruleHits": {
+      "uuid": 47,
+      "port": 23,
+      "header:content-length": 23,
+      "path:cwd": 110,
+      "date": 23,
+      "path:home": 23,
+      "duration": 27,
+      "hex64": 23,
+      "path:tmp": 1,
+      "tty-turn-line": 1
+    },
+    "scenariosNeedingNormalization": [
+      "tool-read-errors",
+      "tool-edit-errors",
+      "mcp-resources",
+      "tty-permission-reject"
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "tool-read-errors",
+      "desc": "Read 的成功与错误路径：不存在的文件 → \"File does not exist. Note: your current working directory is <CWD>.\"（is_error）；目录 → EISDIR（is_error）；缺 file_path → InputValidationError（is_error）；offset=2/limit=1 → \"2\\ttwo\"（只回第 2 行，带行号）；完整读取 → 带行号的全文。",
+      "equal": true,
+      "flaky": false,
+      "baseline": {
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 4635,
+        "apiRequests": 6,
+        "externalRequests": [],
+        "leaks": [],
+        "hostWarnings": [],
+        "problems": []
+      },
+      "candidate": {
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 5171,
+        "apiRequests": 6,
+        "externalRequests": [],
+        "leaks": [],
+        "hostWarnings": [],
+        "problems": []
+      },
+      "diffs": [],
+      "rawDiffCount": 51,
+      "normalizationHits": {
+        "uuid": 12,
+        "port": 6,
+        "header:content-length": 6,
+        "path:cwd": 33,
+        "date": 6,
+        "path:home": 6,
+        "duration": 6,
+        "hex64": 6
+      },
+      "shape": [
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": [
+                "text"
+              ]
+            }
+          ],
+          "bodySha": "c2a9b887d1450fe0"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "edb59ae9569fd4bb"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "4396f547d6d4e74c"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "3a3bdf221fa5be5f"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "91835b60a37e703d"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": [
+                "text"
+              ]
+            }
+          ],
+          "bodySha": "35a20ee647b832b6"
+        }
+      ],
+      "stdoutHead": "Read checks done.\n",
+      "stderrHead": ""
+    },
+    {
+      "name": "tool-edit-errors",
+      "desc": "Edit/Write 的前置条件与错误路径：没 Read 就 Edit、没 Read 就覆盖已有文件 → \"File has not been read yet. Read it first before writing to it.\"；Read 后 old_string 不存在 → \"String to replace not found in file.\"；多处匹配且 replace_all=false → \"Found 2 matches …\"；replace_all=true → 全部替换；Write 新建嵌套目录 deep/a/b.txt 再 Edit 它。检查每个 tool_result 和最终文件内容。",
+      "equal": false,
+      "flaky": false,
+      "attempts": [
+        {
+          "equal": false,
+          "diffs": [
+            {
+              "path": "$.requests[4].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            },
+            {
+              "path": "$.requests[5].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            },
+            {
+              "path": "$.requests[6].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            },
+            {
+              "path": "$.requests[7].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            },
+            {
+              "path": "$.requests[8].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            }
+          ],
+          "baselineProblems": [],
+          "candidateProblems": [
+            "old_string missing: lacks \"String to replace not found in file.\" in <tool_use_error>String to replace was not found in file.\nString: nope</tool_use_error>"
+          ]
+        },
+        {
+          "equal": false,
+          "diffs": [
+            {
+              "path": "$.requests[4].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            },
+            {
+              "path": "$.requests[5].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            },
+            {
+              "path": "$.requests[6].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            },
+            {
+              "path": "$.requests[7].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            },
+            {
+              "path": "$.requests[8].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "<tool_use_error>String to replace not found in file.",
+              "b": "<tool_use_error>String to replace was not found in file.",
+              "lenA": 82,
+              "lenB": 86
+            }
+          ],
+          "baselineProblems": [],
+          "candidateProblems": [
+            "old_string missing: lacks \"String to replace not found in file.\" in <tool_use_error>String to replace was not found in file.\nString: nope</tool_use_error>"
+          ]
+        }
+      ],
+      "baseline": {
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 2966,
+        "apiRequests": 9,
+        "externalRequests": [],
+        "leaks": [],
+        "hostWarnings": [],
+        "problems": []
+      },
+      "candidate": {
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3423,
+        "apiRequests": 9,
+        "externalRequests": [],
+        "leaks": [],
+        "hostWarnings": [],
+        "problems": [
+          "old_string missing: lacks \"String to replace not found in file.\" in <tool_use_error>String to replace was not found in file.\nString: nope</tool_use_error>"
+        ]
+      },
+      "diffs": [
+        {
+          "path": "$.requests[4].body.messages[9].content[0].content",
+          "line": 1,
+          "a": "<tool_use_error>String to replace not found in file.",
+          "b": "<tool_use_error>String to replace was not found in file.",
+          "lenA": 82,
+          "lenB": 86
+        },
+        {
+          "path": "$.requests[5].body.messages[9].content[0].content",
+          "line": 1,
+          "a": "<tool_use_error>String to replace not found in file.",
+          "b": "<tool_use_error>String to replace was not found in file.",
+          "lenA": 82,
+          "lenB": 86
+        },
+        {
+          "path": "$.requests[6].body.messages[9].content[0].content",
+          "line": 1,
+          "a": "<tool_use_error>String to replace not found in file.",
+          "b": "<tool_use_error>String to replace was not found in file.",
+          "lenA": 82,
+          "lenB": 86
+        },
+        {
+          "path": "$.requests[7].body.messages[9].content[0].content",
+          "line": 1,
+          "a": "<tool_use_error>String to replace not found in file.",
+          "b": "<tool_use_error>String to replace was not found in file.",
+          "lenA": 82,
+          "lenB": 86
+        },
+        {
+          "path": "$.requests[8].body.messages[9].content[0].content",
+          "line": 1,
+          "a": "<tool_use_error>String to replace not found in file.",
+          "b": "<tool_use_error>String to replace was not found in file.",
+          "lenA": 82,
+          "lenB": 86
+        }
+      ],
+      "rawDiffCount": 97,
+      "normalizationHits": {
+        "uuid": 18,
+        "port": 9,
+        "header:content-length": 9,
+        "path:cwd": 60,
+        "date": 9,
+        "path:home": 9,
+        "duration": 9,
+        "hex64": 9
+      },
+      "shape": [
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": [
+                "text"
+              ]
+            }
+          ],
+          "bodySha": "510482eaca62fe93"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "e2b6320a0b76a641"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "8ee236e2f8974549"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "8f57dc03dfff89c3"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "b8baa73646fdbc91"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": [
+                "text"
+              ]
+            }
+          ],
+          "bodySha": "13418ebf4b118390"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "f55b96341334af45"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "9a86f8080eccdc84"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.408; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "93e016996cf5bbd7"
+        }
+      ],
+      "stdoutHead": "Edit checks done.\n",
+      "stderrHead": ""
+    },
+    {
+      "name": "mcp-resources",
+      "desc": "MCP 资源与工具错误（fake-mcp-server --full）：ToolSearch select 三个延迟工具 → ListMcpResourcesTool 列出两个资源（带 server 字段）→ ReadMcpResourceTool 读 verify://notes/readme（contents 原样）→ 读不存在的 uri → \"Resource not found: … Re-run ListMcpResourcesTool to refresh.\"（非 is_error）→ mcp__verify__fail（isError=true）→ tool_result is_error。服务器日志里有 resources/list、resources/read、tools/call。",
+      "equal": false,
+      "flaky": false,
+      "attempts": [
+        {
+          "equal": false,
+          "diffs": [
+            {
+              "path": "$.requests[4].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "Resource not found: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "b": "Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "lenA": 121,
+              "lenB": 119
+            },
+            {
+              "path": "$.requests[5].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "Resource not found: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "b": "Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "lenA": 121,
+              "lenB": 119
+            },
+            {
+              "path": "$.requests[6].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "Resource not found: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "b": "Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "lenA": 121,
+              "lenB": 119
+            }
+          ],
+          "baselineProblems": [],
+          "candidateProblems": [
+            "read missing: lacks \"Resource not found: verify://nope\" in Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh."
+          ]
+        },
+        {
+          "equal": false,
+          "diffs": [
+            {
+              "path": "$.requests[4].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "Resource not found: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "b": "Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "lenA": 121,
+              "lenB": 119
+            },
+            {
+              "path": "$.requests[5].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "Resource not found: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "b": "Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "lenA": 121,
+              "lenB": 119
+            },
+            {
+              "path": "$.requests[6].body.messages[9].content[0].content",
+              "line": 1,
+              "a": "Resource not found: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "b": "Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+              "lenA": 121,
+              "lenB": 119
+            }
+          ],
+          "baselineProblems": [],
+          "candidateProblems": [
+            "read missing: lacks \"Resource not found: verify://nope\" in Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh."
+          ]
+        }
+      ],
+      "baseline": {
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3263,
+        "apiRequests": 7,
+        "externalRequests": [],
+        "leaks": [],
+        "hostWarnings": [],
+        "problems": []
+      },
+      "candidate": {
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 3755,
+        "apiRequests": 7,
+        "externalRequests": [],
+        "leaks": [],
+        "hostWarnings": [],
+        "problems": [
+          "read missing: lacks \"Resource not found: verify://nope\" in Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh."
+        ]
+      },
+      "diffs": [
+        {
+          "path": "$.requests[4].body.messages[9].content[0].content",
+          "line": 1,
+          "a": "Resource not found: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+          "b": "Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+          "lenA": 121,
+          "lenB": 119
+        },
+        {
+          "path": "$.requests[5].body.messages[9].content[0].content",
+          "line": 1,
+          "a": "Resource not found: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+          "b": "Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+          "lenA": 121,
+          "lenB": 119
+        },
+        {
+          "path": "$.requests[6].body.messages[9].content[0].content",
+          "line": 1,
+          "a": "Resource not found: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+          "b": "Resource missing: verify://nope — it may have been deleted or the URI is stale. Re-run ListMcpResourcesTool to refresh.",
+          "lenA": 121,
+          "lenB": 119
+        }
+      ],
+      "rawDiffCount": 41,
+      "normalizationHits": {
+        "uuid": 14,
+        "port": 7,
+        "header:content-length": 7,
+        "path:cwd": 14,
+        "date": 7,
+        "path:home": 7,
+        "duration": 7,
+        "hex64": 7
+      },
+      "shape": [
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.496; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": [
+                "text"
+              ]
+            }
+          ],
+          "bodySha": "fb73e63f37b4255d"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.496; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "ListMcpResourcesTool",
+            "Read",
+            "ReadMcpResourceTool",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "Write",
+            "mcp__verify__add",
+            "DeferredToolPlaceholder",
+            "mcp__verify__fail"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result",
+                "text"
+              ]
+            }
+          ],
+          "bodySha": "4696c5a29a1b97df"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.496; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "ListMcpResourcesTool",
+            "Read",
+            "ReadMcpResourceTool",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "Write",
+            "mcp__verify__add",
+            "DeferredToolPlaceholder",
+            "mcp__verify__fail"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result",
+                "text"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "b1cf4e139f9dd4c2"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.496; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "ListMcpResourcesTool",
+            "Read",
+            "ReadMcpResourceTool",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "Write",
+            "mcp__verify__add",
+            "DeferredToolPlaceholder",
+            "mcp__verify__fail"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result",
+                "text"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "c5b539dc41431c1d"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.496; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "ListMcpResourcesTool",
+            "Read",
+            "ReadMcpResourceTool",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "Write",
+            "mcp__verify__add",
+            "DeferredToolPlaceholder",
+            "mcp__verify__fail"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result",
+                "text"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "12c55c3efc73cf8b"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.496; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "ListMcpResourcesTool",
+            "Read",
+            "ReadMcpResourceTool",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "Write",
+            "mcp__verify__add",
+            "DeferredToolPlaceholder",
+            "mcp__verify__fail"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result",
+                "text"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": [
+                "text"
+              ]
+            }
+          ],
+          "bodySha": "9efa206fa38aba14"
+        },
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, sdk-cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "omitted"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 74,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.496; cc_entrypoint=sdk-cli;"
+            },
+            {
+              "len": 62,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+            },
+            {
+              "len": 5663,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "ListMcpResourcesTool",
+            "Read",
+            "ReadMcpResourceTool",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "Write",
+            "mcp__verify__add",
+            "DeferredToolPlaceholder",
+            "mcp__verify__fail"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result",
+                "text"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": "string"
+            },
+            {
+              "role": "assistant",
+              "blocks": [
+                "tool_use"
+              ]
+            },
+            {
+              "role": "user",
+              "blocks": [
+                "tool_result"
+              ]
+            }
+          ],
+          "bodySha": "645c59611ea2025f"
+        }
+      ],
+      "stdoutHead": "Resources done.\n",
+      "stderrHead": "",
+      "collected": [
+        {
+          "jsonrpc": "2.0",
+          "id": "server-discover-probe-1",
+          "method": "server/discover",
+          "params": {
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientInfo": {
+                "name": "claude-code",
+                "title": "Claude Code",
+                "version": "2.1.316",
+                "description": "Anthropic's agentic coding tool",
+                "websiteUrl": "https://claude.com/claude-code"
+              },
+              "io.modelcontextprotocol/clientCapabilities": {
+                "roots": {
+                  "listChanged": true
+                },
+                "elicitation": {
+                  "form": {},
+                  "url": {}
+                }
+              }
+            }
+          }
+        },
+        {
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {
+              "roots": {
+                "listChanged": true
+              },
+              "elicitation": {
+                "form": {},
+                "url": {}
+              }
+            },
+            "clientInfo": {
+              "name": "claude-code",
+              "title": "Claude Code",
+              "version": "2.1.316",
+              "description": "Anthropic's agentic coding tool",
+              "websiteUrl": "https://claude.com/claude-code"
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 0
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "method": "tools/list",
+          "jsonrpc": "2.0",
+          "id": 1
+        },
+        {
+          "method": "prompts/list",
+          "jsonrpc": "2.0",
+          "id": 2
+        },
+        {
+          "method": "resources/list",
+          "jsonrpc": "2.0",
+          "id": 3
+        },
+        {
+          "method": "resources/read",
+          "params": {
+            "uri": "verify://notes/readme"
+          },
+          "jsonrpc": "2.0",
+          "id": 4
+        },
+        {
+          "method": "resources/read",
+          "params": {
+            "uri": "verify://nope"
+          },
+          "jsonrpc": "2.0",
+          "id": 5
+        },
+        {
+          "method": "tools/call",
+          "params": {
+            "name": "fail",
+            "arguments": {},
+            "_meta": {
+              "claudecode/toolUseId": "toolu_fake_4_0",
+              "progressToken": 6
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 6
+        },
+        {
+          "method": "tools/call",
+          "params": {
+            "name": "add",
+            "arguments": {
+              "a": 2,
+              "b": 3
+            },
+            "_meta": {
+              "claudecode/toolUseId": "toolu_fake_5_0",
+              "progressToken": 7
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 7
+        }
+      ]
+    },
+    {
+      "name": "tty-permission-reject",
+      "desc": "[垫片+伪终端] 权限确认框拒绝：同上，确认框出现后按 Esc → 屏幕显示 \"User rejected write to note.txt\"，文件不存在，不再发后续请求（共 1 个请求）。",
+      "equal": false,
+      "flaky": false,
+      "attempts": [
+        {
+          "equal": false,
+          "diffs": [
+            {
+              "path": "$.snapshots[0][13]",
+              "line": 1,
+              "a": "  ⎿  User rejected write to note.txt",
+              "b": "  ⎿  User denied write to note.txt",
+              "lenA": 36,
+              "lenB": 34
+            },
+            {
+              "path": "$.snapshots[0][25]",
+              "line": 1,
+              "a": "                                                                                ◐ medium · /effort",
+              "b": "",
+              "lenA": 98,
+              "lenB": 0
+            },
+            {
+              "path": "$.snapshots[0][29]",
+              "line": 1,
+              "a": "  ⏸ manual mode on · ? for shortcuts · ← for agents",
+              "b": "  ⏸ manual mode on · ? for shortcuts",
+              "lenA": 51,
+              "lenB": 36
+            },
+            {
+              "path": "$.pty.matched[3]",
+              "a": "true",
+              "b": "false"
+            }
+          ],
+          "baselineProblems": [],
+          "candidateProblems": [
+            "pty step 3 waitFor \"User rejected write to note.txt\" not matched"
+          ]
+        },
+        {
+          "equal": false,
+          "diffs": [
+            {
+              "path": "$.snapshots[0][13]",
+              "line": 1,
+              "a": "  ⎿  User rejected write to note.txt",
+              "b": "  ⎿  User denied write to note.txt",
+              "lenA": 36,
+              "lenB": 34
+            },
+            {
+              "path": "$.snapshots[0][25]",
+              "line": 1,
+              "a": "                                                                                ◐ medium · /effort",
+              "b": "",
+              "lenA": 98,
+              "lenB": 0
+            },
+            {
+              "path": "$.snapshots[0][29]",
+              "line": 1,
+              "a": "  ⏸ manual mode on · ? for shortcuts · ← for agents",
+              "b": "  ⏸ manual mode on · ? for shortcuts",
+              "lenA": 51,
+              "lenB": 36
+            },
+            {
+              "path": "$.pty.matched[3]",
+              "a": "true",
+              "b": "false"
+            }
+          ],
+          "baselineProblems": [],
+          "candidateProblems": [
+            "pty step 3 waitFor \"User rejected write to note.txt\" not matched"
+          ]
+        }
+      ],
+      "baseline": {
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 12748,
+        "apiRequests": 1,
+        "externalRequests": [],
+        "leaks": [],
+        "hostWarnings": [],
+        "problems": []
+      },
+      "candidate": {
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 34235,
+        "apiRequests": 1,
+        "externalRequests": [],
+        "leaks": [],
+        "hostWarnings": [],
+        "problems": [
+          "pty step 3 waitFor \"User rejected write to note.txt\" not matched"
+        ]
+      },
+      "diffs": [
+        {
+          "path": "$.snapshots[0][13]",
+          "line": 1,
+          "a": "  ⎿  User rejected write to note.txt",
+          "b": "  ⎿  User denied write to note.txt",
+          "lenA": 36,
+          "lenB": 34
+        },
+        {
+          "path": "$.snapshots[0][25]",
+          "line": 1,
+          "a": "                                                                                ◐ medium · /effort",
+          "b": "",
+          "lenA": 98,
+          "lenB": 0
+        },
+        {
+          "path": "$.snapshots[0][29]",
+          "line": 1,
+          "a": "  ⏸ manual mode on · ? for shortcuts · ← for agents",
+          "b": "  ⏸ manual mode on · ? for shortcuts",
+          "lenA": 51,
+          "lenB": 36
+        },
+        {
+          "path": "$.pty.matched[3]",
+          "a": "true",
+          "b": "false"
+        }
+      ],
+      "rawDiffCount": 12,
+      "normalizationHits": {
+        "uuid": 3,
+        "path:cwd": 3,
+        "path:tmp": 1,
+        "tty-turn-line": 1,
+        "port": 1,
+        "header:content-length": 1,
+        "date": 1,
+        "path:home": 1,
+        "duration": 5,
+        "hex64": 1
+      },
+      "shape": [
+        {
+          "kind": "api",
+          "method": "POST",
+          "url": "/v1/messages?beta=true",
+          "status": 200,
+          "headers": [
+            "Accept: application/json",
+            "Content-Type: application/json",
+            "User-Agent: claude-cli/2.1.316 (external, cli)",
+            "X-Claude-Code-Session-Id: <UUID-1>",
+            "X-Stainless-Arch: x64",
+            "X-Stainless-Lang: js",
+            "X-Stainless-OS: Windows",
+            "X-Stainless-Package-Version: 0.128.0",
+            "X-Stainless-Retry-Count: 0",
+            "X-Stainless-Runtime: node",
+            "X-Stainless-Runtime-Version: v26.3.0",
+            "X-Stainless-Timeout: 600",
+            "anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,thinking…",
+            "anthropic-dangerous-direct-browser-access: true",
+            "anthropic-version: 2023-06-01",
+            "x-api-key: sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA",
+            "x-app: cli",
+            "Connection: keep-alive",
+            "Host: 127.0.0.1:<PORT>",
+            "Accept-Encoding: gzip, deflate, br, zstd",
+            "Content-Length: <LEN>"
+          ],
+          "bodyKeys": [
+            "model",
+            "messages",
+            "system",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "thinking",
+            "context_management",
+            "output_config",
+            "stream"
+          ],
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "stream": true,
+          "thinking": {
+            "type": "adaptive",
+            "display": "updates"
+          },
+          "output_config": {
+            "effort": "medium"
+          },
+          "context_management": {
+            "edits": [
+              {
+                "type": "clear_thinking_20251015",
+                "keep": "all"
+              }
+            ]
+          },
+          "metadata": {
+            "user_id": "{\"device_id\":\"<HEX64-1>\",\"account_uuid\":\"\",\"session_id\":\"<UUID-1>\"}"
+          },
+          "system": [
+            {
+              "len": 70,
+              "head": "x-anthropic-billing-header: cc_version=2.1.316.b0e; cc_entrypoint=cli;"
+            },
+            {
+              "len": 57,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "You are Claude Code, Anthropic's official CLI for Claude."
+            },
+            {
+              "len": 5922,
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "head": "\nYou are an agent working with the user toward their goals, using your own judgment along the way.\n\nIMPORTANT: Assist wi"
+            }
+          ],
+          "tools": [
+            "Agent",
+            "AskUserQuestion",
+            "Bash",
+            "Edit",
+            "ListAgents",
+            "Read",
+            "ReportFindings",
+            "ScheduleWakeup",
+            "Skill",
+            "ToolSearch",
+            "Workflow",
+            "DeferredToolPlaceholder",
+            "Write"
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "blocks": [
+                "text",
+                "text"
+              ]
+            },
+            {
+              "role": "system",
+              "blocks": [
+                "text"
+              ]
+            }
+          ],
+          "bodySha": "b91d3109cc8d4ff2"
+        }
+      ],
+      "stdoutHead": "<tty stream, not compared>",
+      "stderrHead": ""
+    }
+  ]
+}

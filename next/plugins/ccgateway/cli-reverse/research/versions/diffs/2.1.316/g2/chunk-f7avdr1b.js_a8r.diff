@@ -1,0 +1,27 @@
+# chunk-f7avdr1b.js:a8r -> chunk-aepeg2w5.js:ono
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-f7avdr1b.js_a8r.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-f7avdr1b.js_a8r.new.js"
+index c092f01..f6e741b 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-f7avdr1b.js_a8r.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-f7avdr1b.js_a8r.new.js"
+@@ -1,14 +1,14 @@
+ function SELF($l0) {
+   let $l1 = $m_Jse($l0);
+   if ($l1 === null || $l0 === void 0 || $l0 === null) return null;
+-  let $l2 = $l0 === "opusplan[1m]", $l3 = $l1 === "opus" && !$l2 && $m_w6(), $l4;
++  let $l2 = $l0 === "opusplan[1m]", $l3;
+   if ($l1 === "opus") {
+-    let $l5 = $m_Eh();
+-    $l4 = $l2 || $m_Lxe($l5) ? $m_m2($m_g2($l5)) : $l5;
+-  } else $l4 = $m_wg();
+-  if (($m_mP($l4) ?? $m_no($l4)) && !$m_d2($l4, $m_c2())) return { model: $l4, clamp: "none" };
+-  let $l6 = $m_lk($l1 === "opus" ? $l2 || $l3 ? "opus[1m]" : "opus" : "sonnet");
+-  if ($l6 !== null) return { model: $l3 && $m_Ru($l6) === "native" ? $m_GH($l6) : $l6, clamp: "stepDown" };
++    let $l4 = $m_Eh();
++    $l3 = $l2 || $m_Lxe($l4) ? $m_m2($m_g2($l4)) : $l4;
++  } else $l3 = $m_wg();
++  if (($m_mP($l3) ?? $m_no($l3)) && !$m_d2($l3, $m_c2())) return { model: $l3, clamp: "none" };
++  let $l5 = $m_lk($l1 === "opus" ? $l2 || $m_w6() ? "opus[1m]" : "opus" : "sonnet");
++  if ($l5 !== null) return { model: $l5, clamp: "stepDown" };
+   return { model: $m_Bt($l0), clamp: "resting" };
+ }
+ ;

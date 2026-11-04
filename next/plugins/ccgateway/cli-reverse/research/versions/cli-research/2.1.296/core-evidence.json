@@ -1,0 +1,132 @@
+{
+  "version": "2.1.296",
+  "platform": "windows-x64",
+  "binarySha256": "76de74f7694a5bdc03378a5f837c9e132827bf004c98c276bc4e9094ff06769a",
+  "offsetKind": "absolute file byte offset, not virtual address",
+  "codeKind": "exact excerpt of embedded bundled JavaScript; minified names are version/build specific",
+  "excerpts": [
+    {
+      "symbol": "Kt",
+      "module": "B:/~BUN/root/chunk-3qrxzjv5.js",
+      "originalFileOffset": 216530928,
+      "code": "function Kt(e){let n=e.create,s=(S,A)=>(Yo(e.name,A),n.call(e,S)),r=(S,A,P,R,v)=>({tool:s(Myr(S),S?.session),call:{parentMessage:P,userModified:v?.userModified,globLimits:v?.globLimits,userTypedShellDispatch:v?.userTypedShellDispatch,pdfRenderSignal:v?.pdfRenderSignal,gitDiffRead:v?.gitDiffRead,...!1,smallResultAsked:v?.smallResultAsked,runEngine:(x,F)=>x({...F,toolUseContext:S.permissionRound===void 0?S:{...S,permissionRound:void 0},canUseTool:R}),ask:R&&P?(x,F)=>{let G=fr(R,y,F.withdraw===void 0?S:{...S,abortController:Nbo(S.abortController,F.withdraw)},P,x,F);return F.toolUseId===S.toolUseId?G:G.finally(()=>ide(S.session,F.toolUseId))}:void 0,get toolUseId(){return S.toolUseId},get signal(){return S.abortController.signal},get permissionPhase(){return S.permissionPhase},get permissionRound(){return S.permissionRound},abort:(x)=>S.abortController.abort(x),abortTurn:(x)=>wA(S.abortController).abort(x),onProgress:A,get innerCall(){return S.innerCall},get shellWallCapMs(){return S.shellWallCapMs},get fileReadingLimits(){return S.fileReadingLimits},get sameTurnToolUses(){return S.sameTurnToolUses},get remoteCall(){return S.remoteCall},get inputFromAnotherMachine(){return S.inputFromAnotherMachine},get permissionSurface(){return S.toolUseId===void 0?void 0:S.toolDecisions.get(S.toolUseId)?.surface}}}),h={create:(S)=>s(S,S.session),call:(S,A,P,R,v,x)=>{let F=FQ(A?.session,e.name);if(x?.permissionCheckedFor!==void 0&&x.permissionCheckedFor!==F)return Promise.reject(new He(`${e.name} was not run: where it runs changed after its permission was checked. Send the call again.`));if(F)return Zo(e,F,S,A.abortController.signal,A,x,R?.message.model);let{tool:G,call:W}=r(A,v,R,P,x);return G.call(S,W)},validateInput:async(S,A)=>{let P=FQ(A?.session,e.name);if(P){let x=P.refusedUnasked?.(S,A);return x===void 0?Xo:{result:!1,message:x,errorCode:1}}let{tool:R,call:v}=r(A);return R.validateInput?R.validateInput(S,v):{result:!0}},checkPermissions:(S,A)=>{if(FQ(A?.session,e.name))return Promise.resolve({behavior:\"passthrough\",message:`${e.name} requires permission.`});let{tool:P,call:R}=r(A);return P.checkPermissions?P.checkPermissions(S,R):Promise.resolve({behavior:\"allow\",updatedInput:S})},permissionCheckFailureDecision:(S,A)=>{if(FQ(A?.session,e.name))return{behavior:\"deny\",message:`${e.name} was not run: its permission check could not be completed.`,decisionReason:{type:\"other\",reason:\"permission check failed\"}};if(!hl(n,\"permissionCheckFailureDecision\"))return;let{tool:P,call:R}=r(A);return P.permissionCheckFailureDecision?.(S,R)}},y=Object.assign(Object.defineProperties({...fl,userFacingName:()=>e.name},Object.getOwnPropertyDescriptors(e)),h);return y}"
+    },
+    {
+      "symbol": "pn",
+      "module": "B:/~BUN/root/chunk-3qrxzjv5.js",
+      "originalFileOffset": 216530235,
+      "code": "function pn(e,n,s){let r=s&&Object.hasOwn(s,n)?s[n]:void 0;if(r!==void 0&&r!==n)return pn(e,r);let h=hr.get(e);if(h)return h.get(n);if(yr.has(e)){let y=gl(e);return hr.set(e,y),y.get(n)}return yr.add(e),e.find((y)=>It(y,n))}"
+    },
+    {
+      "symbol": "HPt",
+      "module": "B:/~BUN/root/chunk-phacttch.js",
+      "originalFileOffset": 221104118,
+      "code": "function HPt(e,{remoteToolForwarding:n}){let s=\"inputJSONSchema\"in e&&e.inputJSONSchema?e.inputJSONSchema:EM(e.inputSchema);if(!Jo())s=hro(e.name,s);if(Tb(e).supported&&!n){if(s=JNe(s,[Or]),YI(e))s=gro(s,e.entryFieldName,[Or])}return s}"
+    },
+    {
+      "symbol": "Kye",
+      "module": "B:/~BUN/root/chunk-phacttch.js",
+      "originalFileOffset": 222654750,
+      "code": "function Kye(){gHs(),yFo()}"
+    },
+    {
+      "symbol": "mre",
+      "module": "B:/~BUN/root/chunk-phacttch.js",
+      "originalFileOffset": 220740323,
+      "code": "mre=(e,n)=>`mcp__${In(e)}__${n}`"
+    },
+    {
+      "symbol": "N4n",
+      "module": "B:/~BUN/root/chunk-phacttch.js",
+      "originalFileOffset": 220742004,
+      "code": "N4n=(e,n,r)=>Yl(\"tool.describe\",{tool:e.name})?O4n(e).then(async(s)=>({isCounted:Rht(e.name),result:await ga(\"tool.describe\",{})({tool:e.name,description:n,provider:s,...r&&{isDeferred:r}})})).then(({isCounted:s,result:h})=>{let y=h.isDeferred===!0;if(y!==r)t(`tool.describe ${e.name}: a hook set isDeferred ${String(r)} -> ${String(y)}`);if((y!==r||h.description!==pLe(n))&&!s){if(t(`tool.describe ${e.name}: the built-in sec-default plugin changed this tool, though its hook should only pass the event on`,{level:\"error\"}),!Eht.isSent)Eht.isSent=!0,f(\"plugin_function_hooks_tool_describe\",\"sec_default_changed_tool\")}return{description:h.description,isDeferred:y}}):Promise.resolve({description:n,isDeferred:r})"
+    },
+    {
+      "symbol": "tN",
+      "module": "B:/~BUN/root/chunk-phacttch.js",
+      "originalFileOffset": 221108820,
+      "code": "async function tN(e,n){let h=Ie(),y=zPt(),S=(ko)=>cF(n.querySource)?MV(ko):ko(),w=n.model,D=w!==void 0?S(()=>y.modelConfig(w)):void 0,G=S(()=>HQ(w)),V=S(()=>V4(G)),Y=w!==void 0&&S(()=>CBn(w)),he=e===ki&&!RFe()?S(()=>Rae()):void 0,_e=cF(n.querySource)?\"K:\":\"\",be=V?\"L:\":\"\",Te=h===\"vertex\"&&D?.eagerInputStreaming?.vertex||h===\"bedrock\"&&D?.eagerInputStreaming?.bedrock?\"F:\":\"\",Ee=n.tools.some((ko)=>It(ko,Ao))?\"S:\":\"\",Ae=Y?\"X:\":\"\",Pe=It(e,Gn)?Ai()?\"C1:\":Bte()?\"CL:\":\"C0:\":\"\",De=It(e,xc)?gv(n.tools)?\"A1:\":\"A0:\":\"\",$e=It(e,Qo)&&Ynr(n.tools)?\"DP:\":\"\",Ve=It(e,yt)?Er()===\"pro\"?\"P1:\":\"P0:\":\"\",Xe=It(e,yt)?gv(n.tools):void 0,nt=Xe===void 0?\"\":Xe?\"AC1:\":\"AC0:\",dt=V&&Ve!==\"\"?S(()=>Uyr(G)):void 0,Ze=dt===!0?\"D:\":\"\",ct=It(e,Pl)?ire()?\"M1:\":\"M0:\":\"\",At=It(e,yt)?R0e()?\"E1:\":\"E0:\":\"\",vt=It(e,wa)?wt()?\"W1:\":\"W0:\":\"\",$t=\"\",Pt=It(e,gn)?import.meta.require(\"B:/~BUN/root/chunk-n0x68qsr.js\").artifactCorePromptCacheKeyBit(n.tools):\"\",Wt=It(e,pr)?n.tools.some((ko)=>It(ko,gn))?\"WA1:\":\"WA0:\":\"\",Vt=It(e,DKe)?n.tools.some((ko)=>It(ko,_Ne))?\"PS1:\":\"PS0:\":\"\",qt=import.meta.require(\"B:/~BUN/root/chunk-a0t8p0e2.js\").inboxSurfaceCacheKeyBit(e,n.tools),on=n.withoutToolDescribeHooks?\"H:\":\"\",Rn=n.loadedThroughToolSearch===!0&&e.isMcp===!0?\"LT:\":\"\",Sn=(n.byValueListing!==void 0?`V${n.byValueListing}:`:\"\")+on+Rn+_e+be+Te+Ee+Ae+Pe+De+$e+Ve+nt+Ze+ct+At+vt+Pt+Wt+Vt+qt+(\"inputJSONSchema\"in e&&e.inputJSONSchema?`${e.name}:${y.schemaKey(e.inputJSONSchema)}`:e.name),an=wro(e,n,{cacheKey:Sn,structuredOutputs:Y,provider:h,cfg:D,serializer:y}),nn=an??EAe.get(Sn);if(!nn){let ko=EAe.stamp(),so=dt===!0?S(hae):void 0,mo=HPt(e,{remoteToolForwarding:await QNe([e])});if(Xe===!1&&!((\"inputJSONSchema\"in e)&&e.inputJSONSchema)){let Eo=mo.properties;if(typeof Eo===\"object\"&&Eo!==null&&\"name\"in Eo&&typeof Eo.name===\"object\"&&Eo.name!==null)mo={...mo,properties:{...Eo,name:{...Eo.name,description:Duo}}}}let Xn=await kro(e,{...n,model:G,leanPrompt:V,bashFirstTrimmed:he,delegationCostsFirst:dt,delegationCostsFirstText:so}),no=e.isMcp?Xn:vEe(Xn,n.querySource),tn=n.enginePlacement===\"deferred\",Hn=n.withoutToolDescribeHooks?{description:no,isDeferred:tn}:await _Hs(e,no,tn);if(!n.withoutToolDescribeHooks&&n.byValueListing===void 0){let Fo=Hn.isDeferred!==tn?Hn.isDeferred:void 0;$ks(e.name,Fo)}if(nn={name:e.name,description:Hn.description,input_schema:mo},Y){if(e.strict===!0){let Eo=Tfr(mo);if(Eo.ok)nn.strict=!0,nn.input_schema=Eo.schema;else t(`Tool ${e.name} has strict: true but its schema is not strict-compatible (${Eo.reason}); sending non-strict`,{level:\"warn\"})}else if(e.strictInputJSONSchema&&E(\"tengu_structured_output_strict\",!1))nn.strict=!0,nn.input_schema=e.strictInputJSONSchema}let io=EAe.getSentFromRecord(Sn);if(io?io.eager_input_streaming:qPt(h,D))nn.eager_input_streaming=!0;EAe.register(Sn,nn,ko)}let Wn=n.recordedEntry,Kn=Wn!==void 0&&Wn.strict===!0===(nn.strict===!0);if(Wn!==void 0&&an===void 0)bro(y,nn,Wn,Kn,{mcpTool:e.isMcp===!0,artifactFamily:WL(e)});let ro={name:nn.name,description:Wn?.description??n.recordedDescription??nn.description,input_schema:Kn?Wn.input_schema:nn.input_schema,...nn.strict&&{strict:!0},...nn.eager_input_streaming&&{eager_input_streaming:!0}};if(n.deferLoading)ro.defer_loading=!0;if(n.cacheControl)ro.cache_control=n.cacheControl;if(e.name===Tf&&$pr())ro.citations={enabled:!0};if(E$()){let ko=!tXt(),so=new Set([\"name\",\"description\",\"input_schema\",\"cache_control\",...ko?[\"defer_loading\"]:[]]),mo=Object.keys(ro).filter((Xn)=>!so.has(Xn));if(mo.length>0)return y.logStripOnce(mo),{name:ro.name,description:ro.description,input_schema:ro.input_schema,...ro.cache_control&&{cache_control:ro.cache_control},...ko&&ro.defer_loading&&{defer_loading:!0}}}return ro}"
+    },
+    {
+      "symbol": "VWo",
+      "module": "B:/~BUN/root/chunk-phacttch.js",
+      "originalFileOffset": 222598548,
+      "code": "async function VWo(e,n){jWo(n);let r=sp(n,\"$.tool.register\"),s=r.toolContext(new AbortController);if(de(s).builtInToolsDisabled===!0)throw new Me(`${n}: $.tool.register: \"${e.name}\" refused: this session has no built-in tools (--tools \"\"), so it takes none from plugins`);if(mr()&&K$n(RE(n)))throw new Me(`${n}: $.tool.register: \"${e.name}\" refused: this session runs with --bare, which takes tools from the plugins its command line names and from no built-in one`);let h=vht();if(!h)throw m(\"plugin_function_hooks_register_tool\",\"no_registrar\"),new Me(`${n}: $.tool.register: this host cannot add tools at run time (no in-process MCP server registrar installed)`);let y=Tht(r,e,n);if(y!==void 0)return t(`$.tool.register (${n}): ${y} unchanged and listed; not re-registered`),{tool:y};let S=Bg.own(n),{key:w,config:D}=h(n,[...new Map(S).set(e.name,e).values()]);WWo(r,n,w),S.set(e.name,e),Bg.keyed(n,w);let G=mre(w,e.name);t(`$.tool.register (${n}): ${G} (${S.size} tool(s) on server ${_(w)}); connecting`);let V=Date.now(),Y=new AbortController;try{await Promise.race([r.addMcpServer(w,D),J(vqe,Y.signal)])}finally{Y.abort()}if(Jqe(de(s),{name:G,mcpInfo:{serverName:w,toolName:e.name}}))return g(\"plugin_function_hooks_register_tool\",{withheld:!0}),t(`$.tool.register (${n}): ${G} registered; a deny rule withholds it from this session's tools, so not waiting for it to list`),{tool:G};while(Date.now()-V<vqe){if(r.tools().some((be)=>be.name===G))return g(\"plugin_function_hooks_register_tool\"),t(`$.tool.register (${n}): ${G} visible after ${Date.now()-V}ms`),{tool:G};await J(GWo)}return f(\"plugin_function_hooks_register_tool\",\"not_yet_visible\"),t(`$.tool.register (${n}): ${G} not yet in the session's tools after ${vqe}ms; resolving anyway`,{level:\"warn\"}),{tool:G}}"
+    },
+    {
+      "symbol": "W9t",
+      "module": "B:/~BUN/root/chunk-phacttch.js",
+      "originalFileOffset": 222429240,
+      "code": "function W9t(e,n,r){if(zxe(n)){let{raw:w,len:D}=n[C0t];return{ok:!1,phase:\"parse\",cause:\"json\",raw:w,len:D}}let s=r===void 0?e.coerceInput?.(n)??null:r.repair,h=r!==void 0||s===null?n:s.input,y=e.inputSchema.safeParse(h),S=s===null?void 0:{shapeClass:s.shapeClass,valid:y.success,resultNote:s.resultNote};if(!y.success)return{ok:!1,phase:\"parse\",cause:\"schema\",error:y.error,schemaInput:h,coerced:S};return{ok:!0,input:y.data,coerced:S}}"
+    },
+    {
+      "symbol": "Ytn",
+      "module": "B:/~BUN/root/chunk-phacttch.js",
+      "originalFileOffset": 222746365,
+      "code": "async function Ytn(e,n){let[{Server:r},{CallToolRequestSchema:s,ListToolsRequestSchema:h}]=await Promise.all([import(\"B:/~BUN/root/chunk-ercm6v1t.js\"),import(\"B:/~BUN/root/chunk-fm1ft829.js\")]),y=ZM(e,RE(e)),S=new r({name:e,version:`plugin-tools-${n}`},{capabilities:{tools:{}},instructions:`Tools registered by the ${e} plugin through $.tool.register.`});return S.setRequestHandler(h,()=>({tools:bht(e).map((w)=>({name:w.name,description:w.description,inputSchema:{...w.inputSchema,type:\"object\"},...Vtn(w)}))})),S.setRequestHandler(s,(w)=>({isError:!0,content:[{type:\"text\",text:`${e} registered the tool ${w.params.name} but no tool.call hook answered this call: add on(\"tool.call\", { tool: \"mcp__${y}__${w.params.name}\" }, ($, e) => ({ result: ... })) to the plugin.`}]})),S}"
+    },
+    {
+      "symbol": "Ztn",
+      "module": "B:/~BUN/root/chunk-phacttch.js",
+      "originalFileOffset": 222747859,
+      "code": "function Ztn(){let e=new Map,n;function r(){if(!n){let s={port:0,secret:Qlr()},h=Bun.serve({hostname:\"127.0.0.1\",port:0,fetch:(y)=>Qtn(y,s,e)});h.unref(),St(()=>h.stop(!0)),s.port=h.port??0,n=s,t(`$.tool.register: loopback MCP server listening on 127.0.0.1:${n.port}`)}return n}return(s,h)=>{let y=(e.get(s)??0)+1;e.set(s,y);let{port:S,secret:w}=r();return t(`$.tool.register (${s}): ${h.length} tool(s) served at 127.0.0.1:${S}/<secret>/${s} v${y}`),Jtn({pluginName:s,port:S,secret:w,version:y})}}"
+    },
+    {
+      "symbol": "rv",
+      "module": "B:/~BUN/root/chunk-rpwh4z9c.js",
+      "originalFileOffset": 228552026,
+      "code": "function rv(){let e=Vi(),r=un();return[aUt,...xl()?[ki]:[],...[_I,bI].filter((n)=>!Nte().has(n.name)),gK,$S,FS,av,...(Ji?.()??[]).filter((n)=>!Nte().has(n.underlyingV1ToolName)),She,...zo,M_,Ao,Eo,vo,qe,sX,qo,nQe,emn,...[],Gi,...e?[e]:[],Ki,...nn?[nn]:[],...Fx()?[xr,Dr,Nr,jr]:[],...en?[en]:[],...Zi(),...tn?[tn]:[],...rn?[rn]:[],...YLe()?[Rt]:[],...Ggt()?[_r,Er]:[],Pt(),Yi(),...cn?[cn]:[],oo,...r?[r]:[],...on?[on]:[],...he?[he]:[],zt,...Fi,...qr()?$i:[],yo,...Gr?[Gr]:[],...Vr?[Vr]:[],...Kr?[Kr]:[],so,uo,Zt,...Xi,...Yr?[Yr]:[],...Bi,...Xr?[Xr]:[],go,ji,Ui,Hi,qi,...Qr?[Qr]:[],...Ae?[Ae]:[],...Zr?[Zr]:[],...Dt()?[Dt()]:[],...an?[an]:[],...ln?[ln()]:[],...[],Z0,eD,LG,...a.CLAUDE_CODE_ENABLE_REFRESH_MCP_TOOLS?[At]:[],...Gh()?[Rrr]:[],n9r,Zo]}"
+    },
+    {
+      "symbol": "ZL",
+      "module": "B:/~BUN/root/chunk-rpwh4z9c.js",
+      "originalFileOffset": 228552988,
+      "code": "ZL=(e,r)=>{if(a.CLAUDE_CODE_SIMPLE&&!r?.skipSimpleModeFilter){let v=un();if(v!==null&&UH()&&!r?.skipReplFilter){let A=ER()||e.restricted===!0&&Vo(e,v)!==null?[$S,FS,av]:[v,FS,av];if(he!==null&&bB())A.push(he);if(Ze.isCoordinatorMode())A.push(aUt,qe,Pt(),...ug()?[zt]:[]);return a5(A,e)}let R=Dt(),O=[...xl()?[ki]:[],...R?[R]:[],$S,FS];if(Ze.isCoordinatorMode())O.push(aUt,qe,Pt(),...ug()?[zt]:[]);return a5(O,e)}let n=new Set([Z0.name,eD.name,LG.name,va]),s=rv().filter((v)=>!n.has(v.name)),f=a5(s,e),y=f.some((v)=>It(v,Be))&&ki.isEnabled(),h=!1;if(UH()&&!r?.skipReplFilter){if(f.some((R)=>It(R,td)))f=f.filter((R)=>!Ew(R,O5t)),h=!0}if(!r?.skipReplFilter&&gvt(f,e,{activeAgents:r?.activeAgents}))f=f.filter((v)=>!It(v,pr));let S=f.map((v)=>v.isEnabled()),w=f.filter((v,R)=>S[R]);if(uE()&&!y&&!h){let v=a5([_I,bI,...POn([bI.name,_I.name])].filter((R)=>!w.includes(R)),e);w=[...w,...v]}if((BQo()||E2e())&&!R4(w)&&!w.some((v)=>It(v,wl))&&!w.some((v)=>It(v,xM)))w=[...w,...a5([n9r],e)];return w}"
+    },
+    {
+      "symbol": "Wa",
+      "module": "B:/~BUN/root/chunk-hk5re3tv.js",
+      "originalFileOffset": 215418321,
+      "code": "Wa={event:\"tool.describe\",restoreArgument:(e,t)=>d$([\"provider\"],e,t),checkArgument:(e,t)=>{if(typeof e.tool!==\"string\")return\"no { tool }\";if(e.tool!==t.tool)return\"a changed tool (the engine caches the description by it)\";if(er(e.provider)!==er(t.provider))return\"a changed provider (pinned: who provides the tool is a fact)\";if(!(e.isDeferred===void 0||typeof e.isDeferred===\"boolean\"))return\"an isDeferred that is not a boolean\";return typeof e.description===\"string\"?void 0:\"no { description }\"},measureArgument:(e,t)=>fe(e.description,t.description),restoreResult:(e,t,o)=>{if(e.isDeferred!==void 0)return e;let n=t.at(-1)?.isDeferred??o.isDeferred;return n===void 0?e:{...e,isDeferred:n}},check:C((e)=>{if(typeof e.description!==\"string\")return\"no { description } (a string)\";return e.isDeferred===void 0||typeof e.isDeferred===\"boolean\"?void 0:\"an isDeferred that is not a boolean\"}),measure:mt(\"description\")}"
+    },
+    {
+      "symbol": "TK",
+      "module": "B:/~BUN/root/chunk-cvvnq4he.js",
+      "originalFileOffset": 214967541,
+      "code": "function TK(){let e=My(),n=My(),r=My(),s=My(),h=new Map,y=new Map;return{setToolDescribeResolver:e.set,resolveToolDescription:(S,w,A)=>e.get()?.(S,w,A)??Promise.resolve({description:w,isDeferred:A}),setToolDescribePresence:n.set,isToolDescribeHooked:(S)=>n.get()?.(S)??!1,setToolDescribeBuildPresence:r.set,isToolDescribeHookedForBuild:(S)=>(r.get()??n.get())?.(S)??!1,setToolDescribeInvalidator:s.set,invalidateToolDescriptions:()=>{h.clear(),y.clear(),s.get()?.()},recordDeferral:(S,w)=>w===void 0?void h.delete(S):void h.set(S,w),deferralOf:(S)=>h.get(S),forgetDeferrals:()=>{h.clear(),y.clear()},describedOnce:(S,w)=>{let A=y.get(S)??w();return y.set(S,A),A}}}"
+    },
+    {
+      "symbol": "EAe",
+      "module": "B:/~BUN/root/chunk-cvvnq4he.js",
+      "originalFileOffset": 214970650,
+      "code": "EAe={get(e){return nr().get(e)},stamp(){return nr().stamp()},register(e,n,r){nr().register(e,n,r)},getSentFromRecord(e){return nr().getSentFromRecord(e)},setSentFromRecord(e,n){nr().setSentFromRecord(e,n)},get size(){return nr().size}}"
+    }
+  ],
+  "extension": {
+    "platform": "linux-x64",
+    "source": "Anthropic.claude-code-2.1.296@linux-x64.vsix/extension/extension.js",
+    "sha256": "1ce72af34e8df9d4545a645d5d0d7f225dfad54b88f93fe9b7942416a3f32353",
+    "excerpts": [
+      {
+        "name": "F7",
+        "offset": 2656027,
+        "code": "function F7($,J=[]){let{pathToClaudeCodeExecutable:Q,executableArgs:X,nodePath:Y}=$;if(X.length>0)return{command:Q,args:[...X,...J]};if(Y)return{command:Y,args:[Q,...J]};return{command:Q,args:J}}"
+      },
+      {
+        "name": "_$",
+        "offset": 3317570,
+        "code": "function _$($){let J=HS(D4(\"environmentVariables\")),Q={...process.env};if($)Q.PATH=$;Q.MCP_CONNECTION_NONBLOCKING=\"true\",Q.CLAUDE_CODE_ENABLE_TASKS=\"0\",Q.CLAUDE_CODE_EMIT_STARTUP_TIMING=\"1\";for(let Y of J){if(H61(Y.name))continue;if(Y.name)Q[Y.name]=Y.value||\"\"}let X=Z61(J,Boolean(D4(\"claudeProcessWrapper\")));if(X!==void 0)Q.CLAUDE_CONFIG_DIR=X;return Q.CLAUDE_CODE_ENTRYPOINT=\"claude-vscode\",delete Q.CLAUDECODE,delete Q.CLAUDE_CODE_CHILD_SESSION,delete Q.TRACEPARENT,delete Q.TRACESTATE,Q}"
+      },
+      {
+        "name": "mS",
+        "offset": 3316520,
+        "code": "function mS($,J){let Q=D4(\"claudeProcessWrapper\"),X=k95($);if(Q)return{pathToClaudeCodeExecutable:Q,executableArgs:X?[X]:[],env:J,viaProcessWrapper:!0};if(!X){let Y=f95($);throw Object.assign(y95(Fe(Y),\"unsupported_platform\"),{bundledSystem:Y})}return{pathToClaudeCodeExecutable:X,executableArgs:[],env:J,viaProcessWrapper:!1}}"
+      },
+      {
+        "name": "k95",
+        "offset": 3316847,
+        "code": "function k95($){let J=process.platform===\"win32\"?\"claude.exe\":\"claude\",Q=Ne()?`${process.arch}-musl`:process.arch,X=$.asAbsolutePath(z5.join(\"resources\",\"native-binaries\",`${process.platform}-${Q}`,J));if(j$.existsSync(X))return X;if(process.platform===\"win32\"&&process.arch===\"arm64\"){let W=$.asAbsolutePath(z5.join(\"resources\",\"native-binaries\",\"win32-x64\",J));if(j$.existsSync(W))return W}let Y=$.asAbsolutePath(z5.join(\"resources\",\"native-binary\",J));if(j$.existsSync(Y))return Y;return}"
+      }
+    ]
+  }
+}

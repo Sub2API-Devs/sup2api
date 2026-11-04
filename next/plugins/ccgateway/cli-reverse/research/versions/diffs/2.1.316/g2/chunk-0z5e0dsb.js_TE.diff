@@ -1,0 +1,11 @@
+# chunk-0z5e0dsb.js:TE -> chunk-p5akk6be.js:bv
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-0z5e0dsb.js_TE.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-0z5e0dsb.js_TE.new.js"
+index cb042a2..85f215c 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-0z5e0dsb.js_TE.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-0z5e0dsb.js_TE.new.js"
+@@ -1,4 +1,4 @@
+ function SELF($l0) {
+-  return $l0.replace($m_s.lookalikePattern, ($l1) => $m_L[$l1] ?? $l1);
++  return $l0.replace($m_s.lookalikePattern, ($l1) => $m_L.get($l1) ?? $l1);
+ }
+ ;

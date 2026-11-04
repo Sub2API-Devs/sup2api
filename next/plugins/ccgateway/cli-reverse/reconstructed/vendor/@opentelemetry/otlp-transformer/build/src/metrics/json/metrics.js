@@ -1,0 +1,31 @@
+/**
+ * @opentelemetry/otlp-transformer/build/src/metrics/json/metrics.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: @opentelemetry/otlp-transformer@0.208.0..0.209.0
+ * pieces: chunk-798ashq9.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
+import { require_internal_3 } from "../internal.js";
+
+//@ chunk-798ashq9.js:253895-254279 cjs-fingerprint
+var require_metrics_2 = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.JsonMetricsSerializer = undefined;
+  var internal_1 = require_internal_3();
+  cjsExports.JsonMetricsSerializer = {
+    serializeRequest: (arg) => {
+      let request = internal_1.createExportMetricsServiceRequest([arg], {
+        useLongBits: false,
+      });
+      return new TextEncoder().encode(JSON.stringify(request));
+    },
+    deserializeResponse: (arg) => {
+      if (arg.length === 0) return {};
+      return JSON.parse(new TextDecoder().decode(arg));
+    },
+  };
+});
+export { require_metrics_2 };

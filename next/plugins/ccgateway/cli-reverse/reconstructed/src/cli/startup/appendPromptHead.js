@@ -1,0 +1,181 @@
+/**
+ * cli/startup/appendPromptHead.ts
+ *
+ * 2.1.316 新增：追加系统提示词头部的解析、读取与插入
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-3wek6r2k.js (4)
+ * attribution: placement 4
+ */
+import { createHash } from "crypto";
+import { env } from "../../utils/env.js";
+import {
+  MODEL_PIN_PATTERNS,
+  BLANK_NOTICE_RE,
+  MAX_OVERRIDE_NOTICE_CHARS,
+} from "../../utils/model/modelOverrideNotices.js";
+import { logEvent } from "../../services/analytics/index.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { logError } from "../../utils/log.js";
+import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../../entrypoints/sdk/coreSchemas.js";
+import { joinCacheablePrompt, isUncachedPromptBoundary } from "../../utils/configDirPathShape.js";
+import { withAddedSections } from "../../utils/systemPromptBoundary.js";
+
+//@ chunk-3wek6r2k.js:66663-67121 placement
+function parseAppendPromptHead(designator, append) {
+  if (!env.CLAUDE_CODE_REMOTE)
+    return {
+      outcome: "not_remote",
+    };
+  if (!append)
+    return {
+      outcome: "no_append",
+    };
+  let match = MODEL_PIN_PATTERNS.exec(designator);
+  if (!match)
+    return {
+      outcome: "bad_designator",
+    };
+  let length = Number(match[1]);
+  let buffer = Buffer.from(append, "utf8");
+  let chunk = buffer.subarray(0, length);
+  if (
+    buffer.length < length + 2 ||
+    buffer[length] !== 10 ||
+    buffer[length + 1] !== 10 ||
+    createHash("sha256").update(chunk).digest("hex") !== match[2]
+  )
+    return {
+      outcome: "no_match",
+    };
+  let str = chunk.toString("utf8");
+  if (
+    !append.startsWith(`${str}
+
+`)
+  )
+    return {
+      outcome: "no_match",
+    };
+  return {
+    outcome: "verified_at_startup",
+    head: str,
+  };
+}
+//@ chunk-3wek6r2k.js:67121-67409 placement
+/**
+ * 读取 CLAUDE_CODE_APPEND_PROMPT_HEAD（仅远程会话），解析追加系统提示的"头"标识并上报。
+ */
+function readAppendPromptHead(append) {
+  try {
+    let CLAUDE_CODE_APPEND_PROMPT_HEAD = env.CLAUDE_CODE_APPEND_PROMPT_HEAD;
+    if (!CLAUDE_CODE_APPEND_PROMPT_HEAD) return;
+    let { outcome, head } = parseAppendPromptHead(CLAUDE_CODE_APPEND_PROMPT_HEAD, append);
+    logEvent("tengu_append_head_designator", {
+      outcome: fromEnum(outcome),
+      appendHeadBytes: head === undefined ? 0 : Buffer.byteLength(head, "utf8"),
+    });
+    return head;
+  } catch (error) {
+    logError(error);
+    return;
+  } finally {
+    env.unset("CLAUDE_CODE_APPEND_PROMPT_HEAD");
+  }
+}
+//@ chunk-3wek6r2k.js:67409-67649 placement
+function renderAppendPromptHead(base, append, head, scope) {
+  if (!head) return;
+  try {
+    let result = insertAppendPromptHead(base, append, head, scope);
+    logEvent("tengu_append_head_render", {
+      outcome: fromEnum(result.outcome),
+      appendHeadBytes: Buffer.byteLength(head, "utf8"),
+    });
+    return result.outcome === "moved"
+      ? {
+          base: result.base,
+          append: result.append,
+        }
+      : undefined;
+  } catch (error) {
+    logError(error);
+    return;
+  }
+}
+//@ chunk-3wek6r2k.js:67649-68365 placement
+function insertAppendPromptHead(base, append, head, scope) {
+  if (!scope)
+    return {
+      outcome: "no_cache_scope",
+    };
+  if (!append)
+    return {
+      outcome: "no_append",
+    };
+  let index = base.indexOf(SYSTEM_PROMPT_DYNAMIC_BOUNDARY);
+  if (index === -1)
+    return {
+      outcome: "no_boundary",
+    };
+  let index_2 = append.indexOf(head);
+  let end = index_2 + head.length;
+  if (
+    index_2 === -1 ||
+    append.indexOf(head, index_2 + 1) !== -1 ||
+    !append.startsWith(
+      `
+
+`,
+      end,
+    ) ||
+    (index_2 !== 0 &&
+      (index_2 < 2 ||
+        append.slice(index_2 - 2, index_2) !==
+          `
+
+`))
+  )
+    return {
+      outcome: "head_not_found",
+    };
+  let stripped = append.slice(0, index_2) + append.slice(end + 2);
+  let promptParts = base.slice(0, index);
+  let sliced = base.slice(index + 1);
+  let baseBlock = joinCacheablePrompt([...promptParts, head]);
+  let appendBlock = joinCacheablePrompt([...sliced, stripped]);
+  if (
+    [
+      head,
+      stripped,
+      append,
+      baseBlock,
+      appendBlock,
+      joinCacheablePrompt([...promptParts, head, ...sliced, stripped]),
+      joinCacheablePrompt(promptParts),
+      joinCacheablePrompt([...sliced, append]),
+      joinCacheablePrompt([...promptParts, ...sliced, append]),
+    ].some(isUncachedPromptBoundary)
+  )
+    return {
+      outcome: "own_block_text",
+    };
+  if ([stripped, baseBlock, appendBlock].some((block) => BLANK_NOTICE_RE.test(block)))
+    return {
+      outcome: "blank_text",
+    };
+  if (
+    baseBlock.length <= 2 * MAX_OVERRIDE_NOTICE_CHARS &&
+    Array.from(baseBlock).length <= MAX_OVERRIDE_NOTICE_CHARS
+  )
+    return {
+      outcome: "short_block",
+    };
+  return {
+    outcome: "moved",
+    base: withAddedSections(base, [["shared", head]], scope),
+    append: stripped,
+  };
+}
+export { renderAppendPromptHead, readAppendPromptHead };

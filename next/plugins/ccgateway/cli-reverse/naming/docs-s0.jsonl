@@ -1,0 +1,382 @@
+{"id":"chunk-vqdc30xc.js#K9t","doc":"按根会话缓存 SessionFeatureValues 的 SessionRootSlot；of() 首次访问时建实例，peek() 只读窥视。"}
+{"id":"chunk-vqdc30xc.js#Ao","doc":"取当前根会话的特性取值缓存（getSessionFeatureValues），GrowthBook/环境开关按会话固定下来的入口；全项目 70 多处调用。"}
+{"id":"chunk-vqdc30xc.js#kAi","doc":"只读窥视会话特性取值缓存：会话尚未建立该槽时返回 undefined，不会创建。"}
+{"id":"chunk-ndmse9kj.js#jb","doc":"判断是否为压缩时插入的虚拟会话消息：type 为 user/assistant 且 isVirtual 为 true。"}
+{"id":"chunk-ndmse9kj.js#Pre","doc":"判断是否为合成模型的 API 错误消息：assistant 且 isApiErrorMessage 为真、message.model 为 SYNTHETIC_MODEL。"}
+{"id":"chunk-ndmse9kj.js#Oje","doc":"agentId 为空时归到 \"main\"，用于侧车状态与否决记录的分键。"}
+{"id":"chunk-ndmse9kj.js#BMe","doc":"权限暂存通道 consume() 的哨兵值：该条目已被淘汰时返回此 Symbol，调用方据此当作未命中处理。"}
+{"id":"chunk-ndmse9kj.js#cke","doc":"判断一个错误是否为 NoProjectDirectoryError（按 name 比较，异常时返回 false）。"}
+{"id":"chunk-ndmse9kj.js#xo","doc":"取会话的 project；project 为 null 时抛 NoProjectDirectoryError。同文件另有 forkRootSessionWithProject 等派生辅助。"}
+{"id":"chunk-ndmse9kj.js#sLi","doc":"诊断切片里错误日志最多保留 100 条，超出丢最旧。"}
+{"id":"chunk-xdkvf45x.js#XYo","doc":"替换当前会话宿主的 OTel MeterProvider（遥测类访问器的写入口）。"}
+{"id":"chunk-ndmse9kj.js#dco","doc":"typeof 为 object 且非 null，用于结构比较前的快速判断。"}
+{"id":"chunk-ndmse9kj.js#eP","doc":"结构相等判断（忽略值为 undefined 的键，不允许多次配对同一节点）：设置/文档比较用。"}
+{"id":"chunk-ndmse9kj.js#m7t","doc":"空对象归一为 null：设置读取时把 {} 视为\"没有值\"。"}
+{"id":"chunk-ndmse9kj.js#lEr","doc":"按会话宿主缓存的 SettingsCacheStore（设置缓存与派生缓存的容器）。"}
+{"id":"chunk-ndmse9kj.js#cco","doc":"清空 declaredTools/noChannelTools 并把 declaredToolsDecided 置 false（粘性 beta 状态重置的一步）。"}
+{"id":"chunk-ndmse9kj.js#Obs","doc":"把上一份粘性 beta 状态的 sent/rejected 集合并回新状态，并挂上 wireShapeSeed，供后续撤销。"}
+{"id":"chunk-ndmse9kj.js#xDt","doc":"清掉 advisorHeld 标记（撤销此前暂扣的 advisor 头）。"}
+{"id":"chunk-ndmse9kj.js#eLi","doc":"清掉 advisorHeld 后返回同一对象，便于链式构造解锁状态。"}
+{"id":"chunk-ndmse9kj.js#PDt","doc":"把 declaredToolsDecided 置 true：声明的工具集已经确定，不再追加。"}
+{"id":"chunk-ndmse9kj.js#Mbs","doc":"把某个头记入拒绝集合并写入 inlineToolsRefusal.rejectedHeader（内联工具被拒）。"}
+{"id":"chunk-ndmse9kj.js#dLn","doc":"首次设置 declaredTools 并标记为已决定。"}
+{"id":"chunk-ndmse9kj.js#eB","doc":"标记某个 beta 头已发送（未被拒绝时才记入 sent）。"}
+{"id":"chunk-ndmse9kj.js#lT","doc":"判断某个 beta 头已发送且未被拒绝。"}
+{"id":"chunk-ndmse9kj.js#Xg","doc":"标记某个 beta 头被拒：从 sent 删除并加入 rejected。另附同名 inlineToolsRefusal 记录。"}
+{"id":"chunk-ndmse9kj.js#Lp","doc":"判断某个 beta 头是否被拒绝。"}
+{"id":"chunk-ndmse9kj.js#IDt","doc":"忘记某个 beta 头：sent 与 rejected 两边都删除。"}
+{"id":"chunk-ndmse9kj.js#tLi","doc":"标记 web search 历史相关 beta 已被拒绝，后续不再发送。"}
+{"id":"chunk-ndmse9kj.js#fEr","doc":"清除 web search 历史被拒标记。"}
+{"id":"chunk-ndmse9kj.js#uco","doc":"按模型取媒体条目上限缓存：模型不匹配时返回 undefined。"}
+{"id":"chunk-ndmse9kj.js#fco","doc":"记录某模型下的媒体条目上限。"}
+{"id":"chunk-ndmse9kj.js#ODt","doc":"清除媒体条目上限缓存。"}
+{"id":"chunk-ndmse9kj.js#pEr","doc":"清空被拒绝的工具 schema 缓存。"}
+{"id":"chunk-ndmse9kj.js#cLn","doc":"可安全出现在工具名单里的名字字符集（1–256 个 [A-Za-z0-9_.:-]）；不合规的名字在摘要中替换为固定占位。"}
+{"id":"chunk-ndmse9kj.js#xre","doc":"把工具名规范成可出现在 <tools-used-before-summary> 的文本：不合规时返回固定占位 UNREADABLE_TOOLS_USED_BEFORE_SUMMARY。"}
+{"id":"chunk-ndmse9kj.js#pco","doc":"生成 <tools-used-before-summary>…</tools-used-before-summary> 标签文本，逐个名字先按 xre 规范化。"}
+{"id":"chunk-ndmse9kj.js#uLn","doc":"判断工具名是否为 Gmail 附件下载工具（以 download_gmail_attachment 结尾）。"}
+{"id":"chunk-ndmse9kj.js#MDt","doc":"四类 token 用量（输入/输出/缓存读/缓存写）全零的初值对象，用作费用账本的初始值。"}
+{"id":"chunk-7rha57gt.js#M_e","doc":"把远程控制下发的 effort 取值解析成字符串，非字符串时返回 null（apply_flag_settings 用）。"}
+{"id":"chunk-7rha57gt.js#w6n","doc":"按 requestId 上报一次桥接 effort 元数据（先做有界标签化）。"}
+{"id":"chunk-s61vbvea.js#o4o","doc":"等待会话附件文件到达的超时（默认 10 分钟）与结果码表（cleared=1、timed_out=2、aborted=3，用于埋点）。"}
+{"id":"chunk-s61vbvea.js#Etr","doc":"是否有附件文件仍在到达：串行队列或旁路队列任一还有待到达项（且对应队列未放弃等待）。"}
+{"id":"chunk-s61vbvea.js#oni","doc":"旁路队列（beside 行）是否仍有未到达的附件文件。"}
+{"id":"chunk-s61vbvea.js#sni","doc":"串行队列中最后一个仍在到达的消息 id；没有时返回 undefined。"}
+{"id":"chunk-71c4j971.js#Qsr","doc":"refreshBootstrapDataTracked 的薄包装（同名导出已被占用，加后缀）；在清模型/应用状态变化时刷新启动数据。"}
+{"id":"chunk-71c4j971.js#Tdi","doc":"设置 providerState.fetchesClientData 开关（是否拉取 clientData）。"}
+{"id":"chunk-71c4j971.js#C9o","doc":"判断是否应拉取 clientData：已开启该开关且当前 API 提供商为 firstParty。"}
+{"id":"chunk-s7k22nbx.js#t_s","doc":"按会话宿主缓存的 BridgeHostState（桥接宿主侧状态机，包含 attestation、已读回执等）。"}
+{"id":"chunk-s7k22nbx.js#ao","doc":"取当前根会话宿主的 BridgeHostState；桥接层 90 多处调用它读写 attestation/回执/占位记录等状态。"}
+{"id":"chunk-b30925fy.js#Mbo","doc":"判断 API 错误是否带致命客户端状态（fatalClientStatus 有值即为致命，决定是否停止重试）。"}
+{"id":"chunk-gv8haye8.js#mYn","doc":"CCR 会话级服务器保留 host 元数据，其余情况剥掉 host 工具元数据（桥接权限回调的前置处理）。"}
+{"id":"chunk-gv8haye8.js#gYn","doc":"CCR 会话级服务器上把 anthropic/sources 改写为中继来源标记，其他情况原样返回。"}
+{"id":"chunk-pjm08t7p.js#ae","doc":"桥接服务器下发配置的处理常量：可随会话携带的参数名（model/fallback-model/effort/工具过滤）、长度上限（额外参数 64、追加系统提示 1024、mcp_config_json 16384）、服务端说明前缀与默认空配置。"}
+{"id":"chunk-p55d7smm.js#BIs","doc":"桥接状态行常量：重复失败被禁用后的footer 文案、\"Remote Control 未在此启动\"文案与状态宽度等。"}
+{"id":"chunk-jt8zq468.js#xme","doc":"判断字符串是否为安全的 reason code（小写字母数字下划线、1–64 字符）；不合法时不回填到错误对象。"}
+{"id":"chunk-1qpz7qcd.js#wRt","doc":"background_tasks 控制请求里 tool_use_id 类型错误的提示文本。"}
+{"id":"chunk-1qpz7qcd.js#Ne","doc":"set_max_thinking_tokens 控制请求的 thinking 设置校验 schema，以及校验失败时的完整错误文案。"}
+{"id":"chunk-f25sswmp.js#Xli","doc":"安全地调用当前会话的桥接事件监听器（peek，不存在时忽略，异常只记日志）。"}
+{"id":"chunk-f25sswmp.js#Jli","doc":"给当前根会话注册桥接事件监听器，返回注销函数（仅当仍是同一监听器时清除）。"}
+{"id":"chunk-s61vbvea.js#bti","doc":"判断某个字符串是否属于已知的设备绑定拒绝原因（用于决定是否按远端未绑定提示）。"}
+{"id":"chunk-s61vbvea.js#GNe","doc":"取设备绑定拒绝原因对应的用户可见文案（合并两组合文本）；未知原因返回 undefined。"}
+{"id":"chunk-s61vbvea.js#Tti","doc":"本构建里恒返回 false：--project 会话不能绑定设备。"}
+{"id":"chunk-s61vbvea.js#otr","doc":"返回空对象，作为设备绑定判定的占位事实集合。"}
+{"id":"chunk-es7kd72c.js#hCe","doc":"设备绑定是否允许：getDeviceBindingRefusal() 为 undefined 即为允许（仅必要流量/非第一方为 egress，组织策略为 policy_org）。"}
+{"id":"chunk-efc34qfz.js#FCt","doc":"把用户给的机器名规范成 slug（截断到 48），空时回退为 \"device\"。"}
+{"id":"chunk-efc34qfz.js#Z2","doc":"是否开启跨机器工具转发（CLAUDE_CODE_REMOTE_TOOLS_FORWARD 为真）。"}
+{"id":"chunk-efc34qfz.js#yO","doc":"本会话能否在本机执行工具调用：与 Z2 同义的包装，供 runsOnMachine 判断。"}
+{"id":"chunk-efc34qfz.js#$r","doc":"工具输入里的机器字段名 \"_host\" 与随行元数据键 \"_host_context\"。"}
+{"id":"chunk-efc34qfz.js#vgi","doc":"把 host 上下文记到 WeakMap 并原样返回输入对象，供后续 $Fe 取回。"}
+{"id":"chunk-efc34qfz.js#$Fe","doc":"取随工具调用携带的 host 上下文元数据（{_host_context: …}，没有时返回空对象）。"}
+{"id":"chunk-efc34qfz.js#FFe","doc":"机器名相关常量：保留名 container/this-machine、机器 slug 正则（1–40，小写字母数字与连字符）与名字截断长度 40。"}
+{"id":"chunk-efc34qfz.js#_4","doc":"判断是否合法的非保留机器 slug。"}
+{"id":"chunk-efc34qfz.js#UFe","doc":"判断给定机器名（或其规范化形式）是否落在保留名里。"}
+{"id":"chunk-efc34qfz.js#b4","doc":"当前机器在工具输入里应写的标签：容器内为 \"container\"，否则为 \"this-machine\"。"}
+{"id":"chunk-efc34qfz.js#xH","doc":"精确判断机器名是否为保留名（container/this-machine）。"}
+{"id":"chunk-efc34qfz.js#HT","doc":"把机器名取首行并截断到 40 列，用于提示文案。"}
+{"id":"chunk-efc34qfz.js#Cf","doc":"判断工具输入里是否带了 _host 字段。"}
+{"id":"chunk-efc34qfz.js#$kn","doc":"取工具输入里请求的目标机器名并做有界截断；未指定时返回 undefined。"}
+{"id":"chunk-sdydyf7y.js#y","doc":"GitHub 相关常量：API 版本 \"2023-06-01\" 与 GitHub App 安装地址 https://github.com/apps/claude/installations/new。"}
+{"id":"chunk-sdydyf7y.js#tXo","doc":"把订阅动作映射成埋点事件名：subscribe → bridge_pr_subscribe，其余 → bridge_pr_unsubscribe。"}
+{"id":"chunk-sdydyf7y.js#nXo","doc":"云会话回报\"已创建 PR\"的 worker 接口路径 /worker/record-created-pr。"}
+{"id":"chunk-n4bsg1hp.js#JWs","doc":"判断附件文件是否可被查询读取：有扩展名、不是二进制/notebook、不是特例扩展。"}
+{"id":"chunk-n4bsg1hp.js#_Mo","doc":"用空目录 + 净化后的原始文件名生成入站附件的内部名字。"}
+{"id":"chunk-mketzrwm.js#Die","doc":"判断 client_platform 是否为已知的人类客户端平台（ios/android/web_claude_ai/desktop_app）。"}
+{"id":"chunk-mketzrwm.js#Ksr","doc":"判断 client_platform 是否为 Claude Code CLI 或 VS Code 扩展。"}
+{"id":"chunk-mketzrwm.js#S9o","doc":"非合成消息且平台属于 Claude Code CLI/VS Code 时视为人类来源，否则 undefined。"}
+{"id":"chunk-mketzrwm.js#Zwn","doc":"判断 inbound_origin 是否为触发器来源（scheduled/force_run/fire_routine 等）。"}
+{"id":"chunk-mketzrwm.js#ydi","doc":"判断 inbound_origin 是否为通知类来源：github_webhook / pr_steward / signal_subscription / session_inbox。"}
+{"id":"chunk-mketzrwm.js#w9o","doc":"判断入站消息是否不是人类发起：有 relayMessageIds、不是合成消息，或带协调者提示。"}
+{"id":"chunk-mketzrwm.js#Zqt","doc":"读取入站帧里的 trigger_fire_reason 字符串。"}
+{"id":"chunk-mketzrwm.js#tEn","doc":"邮件来源消息的发送者模式：取 EMAIL_TURN_TEXT 并限定在已知模式集合内。"}
+{"id":"chunk-mketzrwm.js#Vsr","doc":"判断 inbound_origin 是否为 hearth 的人类来源。"}
+{"id":"chunk-mketzrwm.js#nEn","doc":"判断 inbound_origin 是否为 hearth 的人类或代理来源。"}
+{"id":"chunk-mketzrwm.js#E9o","doc":"读取入站帧里的 receiver_grouping_id 字符串。"}
+{"id":"chunk-mketzrwm.js#v9o","doc":"读取入站帧里的活动观测字段（activity_observation）。"}
+{"id":"chunk-mketzrwm.js#awe","doc":"聊天平台 + 对应人类来源（Slack 需 chat 宿主入口、Teams 需 Teams 宿主）即为人类消息。"}
+{"id":"chunk-mketzrwm.js#qsr","doc":"已有来源判定时直接用其 kind；否则按平台/inbound_origin 再判一次。"}
+{"id":"chunk-mketzrwm.js#bdi","doc":"判断入站消息应否当作人类消息：已有来源看 kind，无平台视为是，再按平台或来源判定。"}
+{"id":"chunk-mketzrwm.js#ost","doc":"判断 inbound_origin 是否属于已知人类来源（Slack/Teams/OWNER_RELAY，按需含 hearth 与邮件）。"}
+{"id":"chunk-mketzrwm.js#Sdi","doc":"宽松人类来源判断：ost 全开或额外人类来源集合命中。"}
+{"id":"chunk-mketzrwm.js#ist","doc":"判断是否为已核验的 Slack 人类回合且优先级不是 now。"}
+{"id":"chunk-mketzrwm.js#wdi","doc":"优先级下调：不是 now 时，忙碌场景降为 later。"}
+{"id":"chunk-mketzrwm.js#A9o","doc":"去掉空的 text 块（变化时才复制数组，未变化返回原数组）。"}
+{"id":"chunk-mketzrwm.js#rPe","doc":"包装 onCommandLifecycle：保留原回调，再追加一个（读回执、斜杠命令等共用）。"}
+{"id":"chunk-mketzrwm.js#zsr","doc":"把回合的终态标签化：异常终止或取消为 cancelled，否则 completed。"}
+{"id":"chunk-ah34pb7m.js#ZXe","doc":"桥接消息列表的 React context（qt(null)），与 PlacedSite 同文件导出，供占位动作键使用。"}
+{"id":"chunk-gv8haye8.js#yYn","doc":"桥接权限输入处理：删掉输入里的 anthropic/approvalTicket 字段，并把消费审批票据的结果合并进输入。"}
+{"id":"chunk-zq2w8cvy.js#V","doc":"owner pin 刷新节奏常量：最小刷新间隔 1s、未变化 5 分钟、有变化 15 秒、无法判定 10 秒重试、最多 4 次、归属查询超时 3s。"}
+{"id":"chunk-zq2w8cvy.js#VNo","doc":"判断是否为存储支撑的第一方登录：未覆盖桥接令牌、第一方提供商，且 OAuth 令牌来源为 store。"}
+{"id":"chunk-zq2w8cvy.js#OKs","doc":"只解析并取回桥接会话所有者绑定的 pin（不返回原因）。"}
+{"id":"chunk-ggn294th.js#jWi","doc":"Projects 回复闸门的常量与参数 schema：no_reply_needed 工具名、每类追问上限 4、以及 terminal_tools/ask_text/status_nudge 等字段的 zod 校验。"}
+{"id":"chunk-f25sswmp.js#e9o","doc":"释放已读回执的所有权：reporter 仍是该 owner 时清空。"}
+{"id":"chunk-f25sswmp.js#Oli","doc":"把某条已读回执标记为 withheld（暂不发送），不存在时返回 false。"}
+{"id":"chunk-f25sswmp.js#Dli","doc":"按消息 uuid 结算回执：对每条带 uuid 的消息触发 settleUnlessRead。"}
+{"id":"chunk-f25sswmp.js#Lli","doc":"重发保留中且仍处于 read 阶段的回执。"}
+{"id":"chunk-f25sswmp.js#Nli","doc":"回合结束时的回执结算：cancelled/refused 时结算未读回执。"}
+{"id":"chunk-4cm44bmp.js#HNo","doc":"决定未签名事件的处理方式：tengu_encapsulated_dusk 开则 \"drop\"，否则 \"redact\"。"}
+{"id":"chunk-4cm44bmp.js#hKs","doc":"空的 async 函数，作为远程桥接 settle 流程的占位钩子。"}
+{"id":"chunk-4cm44bmp.js#y6n","doc":"空函数占位（远程桥接 settle 流程的回调默认值）。"}
+{"id":"chunk-4cm44bmp.js#_6n","doc":"接收两个参数的空函数，作为远程桥接 settle 流程的占位回调。"}
+{"id":"chunk-18hwfzwa.js#aAs","doc":"REPL 侧桥接控制上下文的占位：恒返回 null（本构建不提供对话框）。"}
+{"id":"chunk-18hwfzwa.js#lAs","doc":"同上但为 async 版本，恒返回 null。"}
+{"id":"chunk-18hwfzwa.js#dAs","doc":"REPL 侧拒绝弹对话框：返回 {token: Symbol, handle: null}，表示不在本地开对话框。"}
+{"id":"chunk-18hwfzwa.js#cAs","doc":"空的桥接对话框回调占位（两参数，无操作）。"}
+{"id":"chunk-18hwfzwa.js#uAs","doc":"返回固定的拒绝分享结果：{outcome: {is:'refused', why:'threw'}, line: 说明文字}。"}
+{"id":"chunk-pg55apw2.js#$Je","doc":"读取桥接会话的 tags（v2 接口，可选 access token）；失败只记 debug 日志并返回 null。"}
+{"id":"chunk-bg51yd13.js#WXe","doc":"当前构建里函数体为空（恒返回 undefined）：按查询词给后台会话打匹配分的占位。"}
+{"id":"chunk-bg51yd13.js#wn","doc":"后台 PTY 输出的终端转义清洗常量：擦除参数集合、可重放的 ESC 序列、备用屏模式 1049/1047/47 与逐字节 ESC 解析正则。"}
+{"id":"chunk-bg51yd13.js#nmt","doc":"恒返回 true 的开关：Fleet 视图派发功能在本构建里视为开启。"}
+{"id":"chunk-bg51yd13.js#hAr","doc":"从备用进程池取一个空闲 spare 句柄。"}
+{"id":"chunk-bg51yd13.js#gxs","doc":"把某个 spare 标记为已就绪（可被认领）。"}
+{"id":"chunk-bg51yd13.js#Y$n","doc":"从 spare 池认领一个进程来启动会话，未命中时返回未命中结果。"}
+{"id":"chunk-bg51yd13.js#yAr","doc":"丢弃某个 spare（不可用或已退出）。"}
+{"id":"chunk-bg51yd13.js#yxs","doc":"退役某个 spare（不再复用）。"}
+{"id":"chunk-bg51yd13.js#ace","doc":"后台会话的默认 agent 模板（由 CLAUDE_AGENT 转成后台用的形状）。"}
+{"id":"chunk-bg51yd13.js#pxs","doc":"设置 spare 池的额外启动参数。"}
+{"id":"chunk-bg51yd13.js#gAr","doc":"读取 spare 池当前的额外启动参数。"}
+{"id":"chunk-3wek6r2k.js#Ac","doc":"云会话文本单行截断长度（200）与短列表保留条数（8）。"}
+{"id":"chunk-3wek6r2k.js#$Ms","doc":"--max-turns 无法确认时的失败条目 {kind:'lost', name:'--max-turns', why:…}。"}
+{"id":"chunk-3wek6r2k.js#mc","doc":"云托管会话的限制文案与集合：bypassPermissions/文件回滚/MCP 变更不可用的说明，本地处理的控制请求子类型列表，以及允许透传的 settings 键。"}
+{"id":"chunk-3wek6r2k.js#qc","doc":"判断设置项是否有实际作用的两组键：非空才算的拒绝类（deniedMcpServers 等），以及必须为 true 或非空数组的布尔类（disableAllHooks 等）。"}
+{"id":"chunk-c5gdqf78.js#IMi","doc":"e 为真返回 null，否则返回 n；语义不确定的占位辅助。"}
+{"id":"chunk-spfbd54s.js#ors","doc":"判断路径是否为 ~ 或 ~/ 开头（早期参数里保留原样、不做绝对化）。"}
+{"id":"chunk-nwzhqrkg.js#c","doc":"转发参数解析用的标志集合：-r/--resume 为带值标志，-c/-p/-h/-v 为单字母标志。"}
+{"id":"chunk-4yx88wyy.js#sTn","doc":"claude apply-project-settings 子命令名与说明：\"Review and accept settings changes for cloud sessions that use this computer\"。"}
+{"id":"chunk-4yx88wyy.js#kcr","doc":"判断 argv[2] 是否为 apply-project-settings 子命令。"}
+{"id":"chunk-vzw8h259.js#Rm","doc":"把守卫值转成可展示文本：先按 120 字符截断，再 JSON 序列化并转义不可打印字符。"}
+{"id":"chunk-vzw8h259.js#Brn","doc":"插件评测的两条固定文案：\"eval aborted by mock\" 与 \"mock agent responder failed\"（后者附 harness_unreachable 提示）。"}
+{"id":"chunk-2m7289t6.js#Vwo","doc":"plugin test 结束模块的导出容器（挂 default 与 endPluginTest）。"}
+{"id":"chunk-16wxtfnh.js#Fwo","doc":"plugin test 拒绝原因模块的导出容器（pluginTestRefusal、SAVE_FAILURE、SIGN_IN_MARGIN_MS 等）。"}
+{"id":"chunk-bkss02w7.js#qwo","doc":"plugin test 报告标记模块的导出容器（REPORT_MARK）。"}
+{"id":"chunk-z2kk8ttr.js#k","doc":"plugin install --marketplace 相关的帮助文本与辅助：添加市场/从市场安装的提示、市场源非法与需要裸插件名的说明、\"市场已添加\"注记、保留名判定与错误构造、日志与 error_ 前缀剥离。"}
+{"id":"chunk-aqpr1420.js#m","doc":"self-hosted runner doctor 命令：受限工具集列表与该向导的系统提示词（逐项询问症状、按 8 类诊断推进）。"}
+{"id":"chunk-w14wefpp.js#g","doc":"claude self-hosted-runner setup 向导：允许的工具集与系统提示词（受限制工具集的初始化配置流程）。"}
+{"id":"chunk-kpa9nk58.js#tlo","doc":"DoctorLazy/React.lazy 用的单例 LazyRegistry，提供 .lazy() 包装。"}
+{"id":"chunk-q8cqcff6.js#zso","doc":"attach serve 模式下判断某设置来源是否为仓库目录级（非 globalConfig 且在 REPO_DIR_SETTING_SOURCES 内）。"}
+{"id":"chunk-q8cqcff6.js#Kso","doc":"在宿主环境守卫内读取 CLAUDE_CODE_IGNORE_PERSISTED_TRUST（是否忽略持久化的信任）。"}
+{"id":"chunk-q8cqcff6.js#Vso","doc":"仓库目录级设置来源在 attach serve 模式、或非交互且忽略持久信任时视为生效。"}
+{"id":"chunk-q8cqcff6.js#_us","doc":"恒返回 true 的占位判断（attach serve 相关构建期开关）。"}
+{"id":"chunk-q8cqcff6.js#lIn","doc":"内部写入记录的有效窗口 5000ms：窗口内同路径写入事件视为自身写入而忽略。"}
+{"id":"chunk-q8cqcff6.js#eOt","doc":"按宿主记录一次内部写入时间戳，供 consumeInternalWrite 在窗口内消费。"}
+{"id":"chunk-q8cqcff6.js#IRi","doc":"清空全部内部写入记录（重新开始监听外部变更时用）。"}
+{"id":"chunk-z7wtv7tg.js#wWe","doc":"云插件同意文件的路径：<claude 配置目录>/state/cloud-plugins-consent.json。"}
+{"id":"chunk-z7wtv7tg.js#Hxs","doc":"云插件同意的空状态 {value:null, persisted:false, given:false}。"}
+{"id":"chunk-z7wtv7tg.js#Hho","doc":"云插件转发本地读取的超时 5000ms，以及提示里最多列出的原因条数 6。"}
+{"id":"chunk-z7wtv7tg.js#Nho","doc":"插件转发用的真实时钟（now / setTimeout 返回取消函数）。"}
+{"id":"chunk-z7wtv7tg.js#Et","doc":"两条通知文案：Anthropic 恢复远程工具服务后插件重新发送；云会话重启后不再接收插件（保存的 Yes 被撤回）。"}
+{"id":"chunk-fe6rs39h.js#xt","doc":"设备 MCP 同意的上限常量：最多 64 台服务器、名字 128 字符、机器名 256 字符，以及 device_mcp_consent 对话框 spec。"}
+{"id":"chunk-v38s9gp2.js#dpt","doc":"判断是否启用会话记录位置查询（violinWood 特性开或某开关为真）。"}
+{"id":"chunk-v38s9gp2.js#c0n","doc":"记录 tengu_remote_attach_record_lookup 事件：查询结果与入口点。"}
+{"id":"chunk-fe6rs39h.js#Do","doc":"云会话下行流过滤的限额常量：限流余量、持有/保留的对端消息条数、worker 就绪窗口、UUID 去重容量，以及各帧类型是否转发的表。"}
+{"id":"chunk-fe6rs39h.js#rpo","doc":"原样返回输入（只为解构 tag 字段做类型检查）的恒等函数。"}
+{"id":"chunk-z7wtv7tg.js#WAr","doc":"仓库信任说明：当前构建恒返回 undefined，不做标记。"}
+{"id":"chunk-z7wtv7tg.js#Bxs","doc":"目录同步状态：state 为 absent 且 reason 为 not_offered 时返回 undefined，否则取目录同步状态。"}
+{"id":"chunk-z7wtv7tg.js#Uho","doc":"空函数占位（syncStatus 的回调默认值）。"}
+{"id":"chunk-z7wtv7tg.js#jxs","doc":"空函数占位（syncStatus 的另一个默认回调）。"}
+{"id":"chunk-z7wtv7tg.js#uFn","doc":"调用参数函数，出错时返回 null（syncStatus 的安全取值）。"}
+{"id":"chunk-j387qrdq.js#Sat","doc":"判断中断请求是否为立即中断：send_now 为真且未 cancel_queued。"}
+{"id":"chunk-j387qrdq.js#ers","doc":"判断 request_id 是否为 late-bind-interrupt- 前缀（延迟绑定的中断请求）。"}
+{"id":"chunk-tyg7f3ek.js#xk","doc":"rewind 请求的年龄上限（沿用 turnHandoff 的 30 分钟）：超龄即拒绝，避免执行过期的 rewind 请求。"}
+{"id":"chunk-tyg7f3ek.js#RR","doc":"`!` 命令相关常量：输出截断 200 字符、控制字符正则、机器时钟未知与应用元数据缺失两条拒绝文案，以及被打断时的固定 stdout/stderr/exit-130 结果帧。"}
+{"id":"chunk-tyg7f3ek.js#TG","doc":"工具 CPU 采样常量：分钟刻度、时钟 tick、采样超时、各类条数上限、/proc 读取上限与噪声阈值，以及带 fd/environ/cgroup 读取的 proc 读取器实现。"}
+{"id":"chunk-tyg7f3ek.js#R0","doc":"无头堆内存普查常量：默认 2GiB 阈值、[4,2,1] 倍阈值、会话忙时重试间隔、V8 对象类型到埋点字段的映射，以及 async resource 包装后的调用器。"}
+{"id":"chunk-tyg7f3ek.js#gO","doc":"备用进程（spare）在未被 claim_session 前收到请求的拒绝文本：等待认领 / 认领失败需冷启动。"}
+{"id":"chunk-tyg7f3ek.js#X$","doc":"SDK 宿主在 PreModelSwitch 与 prompt 钩子期间重连时给用户的两条说明：模型未切换、提示未提交，可重试。"}
+{"id":"chunk-tyg7f3ek.js#pz","doc":"按需 require 的打印侧模块句柄：会话导出、分类器摘要、协调者模式、收件箱指针、cron 调度/抖动/工具、自治循环；另有 MCP 调用结果过大文案与打印阶段计时参数。"}
+{"id":"chunk-0sfjpx19.js#_pt","doc":"判断错误是否属于可重试的代理恢复错误（恢复进行中 / 暂时性 / 仍在停止三类）。"}
+{"id":"chunk-0sfjpx19.js#bpt","doc":"代理恢复退避参数：最多 5 次瞬时失败重试、基数 2s、上限 60s。"}
+{"id":"chunk-0sfjpx19.js#MLt","doc":"判断消息是否为\"只含结果\"的任务通知（排除纯工具调用的用户消息）。"}
+{"id":"chunk-nkdv7dw8.js#uCs","doc":"mcp_set_servers 的 servers 参数必须为对象映射时的错误文本。"}
+{"id":"chunk-nkdv7dw8.js#mCs","doc":"从服务器配置表里挑出非内置市场来源的服务器（未知上下文下会整体保留）。"}
+{"id":"chunk-nkdv7dw8.js#lt","doc":"mcp_reconnect / mcp_toggle 的开关处理：解析 lane 上下文、处理待定手工交换，再按目标状态启用或禁用服务器并回复。"}
+{"id":"chunk-nkdv7dw8.js#yt","doc":"控制请求的三个小处理器：get_session_cost 返回总费用文本、reload_output_styles 清缓存并返回可用样式名、get_usage 校验 skip_behaviors 参数后返回用量。"}
+{"id":"chunk-nkdv7dw8.js#VNn","doc":"mcp_read_resource 结果 JSON 的长度上限 10MB，超过即拒绝。"}
+{"id":"chunk-nkdv7dw8.js#vn","doc":"prefetch_attachments 请求的形状错误文案，以及对应的合法性校验函数。"}
+{"id":"chunk-nkdv7dw8.js#yCs","doc":"创建一次写尝试状态 {latched, attempted, pending, fallback, owed}（MCP 控制请求的写重试用）。"}
+{"id":"chunk-nkdv7dw8.js#_Cs","doc":"把写尝试状态锁存到给定值（latched 与 attempted 同时更新）。"}
+{"id":"chunk-tyg7f3ek.js#kK","doc":"宿主 OTel 调查问卷的事件类型与各字段合法取值集合，以及按集合净化的 enum 构造函数。"}
+{"id":"chunk-0sfjpx19.js#Ikr","doc":"把 rate_limit_event 转发给桥并镜像到会话元数据；桥接事件开关关闭时直接返回。"}
+{"id":"chunk-0sfjpx19.js#gNn","doc":"从 Map 取出并删除某键，同时判断其时间戳是否在 120 秒内。"}
+{"id":"chunk-0sfjpx19.js#_s","doc":"恢复会话时通知的最大年龄 2 小时，以及仅含 BRIEF_TOOL_NAME 的集合（恢复时特别处理该工具）。"}
+{"id":"chunk-0sfjpx19.js#ien","doc":"回合边界模块的导出容器（挂 createTurnEventTail 与 default）。"}
+{"id":"chunk-0sfjpx19.js#$Lt","doc":"队列里是否有 Slack later 通知（头部或在途排空命令命中）。"}
+{"id":"chunk-0sfjpx19.js#den","doc":"队列里是否有已核验的 Slack 人类回合（头部或在途命令命中）。"}
+{"id":"chunk-0sfjpx19.js#UAs","doc":"从队列取出下一条可处理的排队消息（按 peekNextQueued 结果精确 dequeue）。"}
+{"id":"chunk-0sfjpx19.js#rNn","doc":"构造用量限额越限后的替代消息：不查询、重复提醒、清掉线程标记。"}
+{"id":"chunk-0sfjpx19.js#NAs","doc":"判断名字是否在分析事件名集合（V_e）里。"}
+{"id":"chunk-nkdv7dw8.js#Nt","doc":"补充的控制请求处理器：stop_task（按用户停任务，校验 task_id）、send_task_message、会话标题类请求（sessionTitles 为空即报错）。"}
+{"id":"chunk-nkdv7dw8.js#Ye","doc":"核心控制请求处理器表：mcp_status、get_context_usage、get_usage、get_session_cost、list_models、get_binary_version、reload_output_styles 等。"}
+{"id":"chunk-nkdv7dw8.js#kCs","doc":"判断控制请求 subtype 是否在已知处理器表里。"}
+{"id":"chunk-tyg7f3ek.js#Tb","doc":"session_notices 特性：默认关闭（false）、消息类型常量 session_notices，以及通知载荷的 zod schema。"}
+{"id":"chunk-0sfjpx19.js#Okr","doc":"把切换请求里的模型解析成实际模型名：默认解析豁免或模型被允许才返回，否则 undefined。"}
+{"id":"chunk-0sfjpx19.js#tmo","doc":"模型切换状态的清理器（HostScoped 包装的函数槽，用于撤销待发切换）。"}
+{"id":"chunk-0sfjpx19.js#nmo","doc":"取消排队中的自动输入：命中时清定时项、移除插件/协调器来源的排队消息，并取消其他可取消项。"}
+{"id":"chunk-0sfjpx19.js#rmo","doc":"被取消命令的状态槽（收集需要从队列移除的 uuid）。"}
+{"id":"chunk-tyg7f3ek.js#GN","doc":"压缩时携带的任务清单 schema：uuids（及可选 allUuids）与任务数组（id/标题/描述等）。"}
+{"id":"chunk-tyg7f3ek.js#_j","doc":"触发载荷解析常量与 schema：<webhook-payload> 标签、缩进、4096 字符上限、HTML 实体解码表，以及 comment/pointer 两种唤醒载荷的校验 schema。"}
+{"id":"chunk-tyg7f3ek.js#pp","doc":"回合派发常量：最大年龄 24 小时、批量提示 id 长度 64、UUID 正则、续跑载荷 schema（starts/new_frames）与空对象 schema。"}
+{"id":"chunk-tyg7f3ek.js#gH","doc":"宿主返回唤醒相关文案与阈值：机器重新可达/命令结果更正的提示文本、唤醒 origin、保留时长、安静下限、驻留时间，以及\"过旧\"阈值与自唤醒次数上限（24 小时内 10 次、总 2 次）。"}
+{"id":"chunk-tyg7f3ek.js#ON","doc":"账号插件启动检查：特性默认值、检查间隔与退避（60s 起、2 倍、30 分钟上限）、超时与连续拒绝上限，以及两项未检查/未重载提示文本。"}
+{"id":"chunk-tyg7f3ek.js#sp","doc":"任务工具记录提取辅助：从 tool_use/tool_result 输入里取字段、拼出任务创建/更新参数与结果文本。"}
+{"id":"chunk-0sfjpx19.js#GLi","doc":"创建回合流桥接：包装 describeDroppedNotes 提供 begin/enqueue/settled/sever。"}
+{"id":"chunk-0sfjpx19.js#sNn","doc":"安装远程出站抑制器：按当前会话 id 判断是否抑制远程出站。"}
+{"id":"chunk-0sfjpx19.js#vAs","doc":"取会话轻量 transcript 的文件大小（文件不存在返回 undefined）。"}
+{"id":"chunk-tyg7f3ek.js#sz","doc":"登录被阻止的三条提示（托管策略无法满足/无法确认恢复/旧令牌仍可能有效）与各阶段超时，以及设置来源限制（localSettings 只许 outputStyle、userSettings 只许 effortLevel）。"}
+{"id":"chunk-tyg7f3ek.js#xf","doc":"输入等待阶段名列表与其索引映射，供 InputWaitStopwatch 按阶段累计耗时。"}
+{"id":"chunk-e6aww6q8.js#y3s","doc":"判断单个工具名是否算作\"本回合被禁用\"：空/网页等特例排除，其余按名字判断。"}
+{"id":"chunk-e6aww6q8.js#WXn","doc":"判断某工具是否被本回合禁用（turnDisallowedTools 里任一规则命中）。"}
+{"id":"chunk-z4g2ta8k.js#uo","doc":"云 worker 控制请求子类型到能力的映射，以及声明/必需的三个能力集合。"}
+{"id":"chunk-6qtszw6g.js#qyt","doc":"按宿主懒创建的 rowStaged 信号。"}
+{"id":"chunk-6qtszw6g.js#CWs","doc":"判断当前 attestation 强制级别是否为 not_enforced。"}
+{"id":"chunk-6qtszw6g.js#RWs","doc":"发布文件存储裁决（verdict）到宿主状态，供订阅方读取。"}
+{"id":"chunk-z4g2ta8k.js#UDs","doc":"是否开启 transcript 本地 GC：读 CLAUDE_CODE_TRANSCRIPT_LOCAL_GC 或特性开关 tengu_transcript_local_gc。"}
+{"id":"chunk-z4g2ta8k.js#HPr","doc":"tengu_wondrous_island 特性开且存在某模型参数时为真（远程 ingress 的一个附加开关）。"}
+{"id":"chunk-z4g2ta8k.js#zPr","doc":"入站提示内容转义：未开启或已转义时原样返回，否则按来源转义插件标签。"}
+{"id":"chunk-z4g2ta8k.js#ZDs","doc":"先取入站提示内容再做插件标签转义的组合入口。"}
+{"id":"chunk-z4g2ta8k.js#VPr","doc":"把入站附件与文件解析后前置到用户帧（isHumanIngressFrame 决定是否需要人工提示）。"}
+{"id":"chunk-z4g2ta8k.js#sLs","doc":"判断是否为合成请求帧且 origin 属于触发器来源（且 GrowthBook 可用、未强制关）。"}
+{"id":"chunk-z4g2ta8k.js#gEo","doc":"一次性取 promise：第一次调用时执行并缓存，之后返回同一 promise（失败归一为 undefined）。"}
+{"id":"chunk-z4g2ta8k.js#Un","doc":"触发器 origin 到任务通知类型的映射表。"}
+{"id":"chunk-z4g2ta8k.js#iLs","doc":"取入站帧的 initiator（非空字符串时返回，否则 undefined）。"}
+{"id":"chunk-z4g2ta8k.js#aLs","doc":"判断入站帧是否由人类撰写：已标记、client_composed 或非键入文本、邮件人类来源。"}
+{"id":"chunk-z4g2ta8k.js#Cs","doc":"worker 事件流常量：hello 超时与重拨上限、续期/批处理/心跳节奏、心跳被拒状态、socket 超时、消息体上限与预留、事件路径种类，以及 hello/ack/event 帧的 zod schema。"}
+{"id":"chunk-z4g2ta8k.js#$Ds","doc":"判断子代理是否可被恢复：以默认参数启动且属于可恢复的孤儿代理。"}
+{"id":"chunk-z4g2ta8k.js#z1n","doc":"已服务调用（served call）的最大持有时间 6 小时，超时即丢弃。"}
+{"id":"chunk-z4g2ta8k.js#BNt","doc":"是否允许回合交接恢复：非无盘且特性 tengu_steady_puppy 开启。"}
+{"id":"chunk-z4g2ta8k.js#aQe","doc":"是否开启携带写（carried writes）：读 tengu_fizzy_petal 并应用开关覆盖。"}
+{"id":"chunk-z4g2ta8k.js#jDs","doc":"本轮是否已提示过\"携带写\"（避免重复提示）。"}
+{"id":"chunk-z4g2ta8k.js#Ut","doc":"携带写（carried writes）相关常量与 schema：单文件 8MiB、路径 1024 字节上限、权限拒绝文案表、handoff 与 tool_use 校验 schema、可携带写的工具名集合。"}
+{"id":"chunk-z4g2ta8k.js#$Pr","doc":"在工具表里找非 MCP 的 Write 工具（携带写的落盘目标）。"}
+{"id":"chunk-z4g2ta8k.js#W1n","doc":"根据权限模式判断携带写被拒的原因：auto 模式为 auto_mode，会询问时为 would_ask。"}
+{"id":"chunk-z4g2ta8k.js#WDs","doc":"构造回合交接应答 {requestId, tipUuid}。"}
+{"id":"chunk-z4g2ta8k.js#BPr","doc":"回合交接/rewind 的限制常量：rewind 请求最大年龄 30 分钟、内容 4096 字节、消息 200 条、工具调用与结果各 16 个。"}
+{"id":"chunk-z4g2ta8k.js#WNt","doc":"允许启动 git 凭据引擎的入口点集合（remote / remote_projects / remote_desktop / sdk-cli / 空）。"}
+{"id":"chunk-z4g2ta8k.js#GPr","doc":"恒返回 false 的构建期开关：设置同步到云没有被强制关闭。"}
+{"id":"chunk-z4g2ta8k.js#K1n","doc":"设置同步到云是否可用（GPr 或 isSettingsToCloudEnabled）。"}
+{"id":"chunk-z4g2ta8k.js#YDs","doc":"设置同步到云的能力：完全可用、仅公告、不可用三态。"}
+{"id":"chunk-z4g2ta8k.js#XDs","doc":"可用时打开设置同步闸门并返回是否可用（读取时顺手放行）。"}
+{"id":"chunk-ep26dgsk.js#JPr","doc":"VS Code 顶层会话且 tengu_melodic_ember 关闭时抑制 hooks 模块（Er 的取反来源）。"}
+{"id":"chunk-ep26dgsk.js#uLs","doc":"VS Code 顶层会话下监听 GrowthBook 刷新，从开启变为关闭时触发回调。"}
+{"id":"chunk-ep26dgsk.js#X1n","doc":"tengu_sdk_mcp_manifests 会话级固定特性（默认开）。"}
+{"id":"chunk-ep26dgsk.js#pLs","doc":"把请求里的 sdkMcpServerManifests 内容替换为 {}（遥测脱敏）。"}
+{"id":"chunk-ep26dgsk.js#s","doc":"帧与声明（statement）的最大年龄 300000ms。"}
+{"id":"chunk-ep26dgsk.js#Fce","doc":"能否服务 manifests：hooks 可用、持久化可信，且非远程传输或写者为仅所有者。"}
+{"id":"chunk-ep26dgsk.js#gLs","doc":"远程传输且非连接型时要能满足 manifests 服务条件。"}
+{"id":"chunk-ep26dgsk.js#EEo","doc":"tengu_calm_osprey 特性（默认开）的当前值。"}
+{"id":"chunk-ep26dgsk.js#jgt","doc":"判断名字是否为 ui_ 前缀的 UI surface。"}
+{"id":"chunk-ep26dgsk.js#yLs","doc":"远程传输、已连接、hooks 可用且写者不是仅所有者时是否可服务 manifests。"}
+{"id":"chunk-ep26dgsk.js#vEo","doc":"是否需要 prompt 提交 hooks（有 prompt 钩子、观测到 prompt 钩子或需要转义 NDJSON 时）。"}
+{"id":"chunk-ep26dgsk.js#kEo","doc":"是否可以断言 prompts 已被筛查：vEo 或 hooks 尚未稳定。"}
+{"id":"chunk-ep26dgsk.js#TEo","doc":"某组件在某 surface 上是否注册了 render 钩子站点。"}
+{"id":"chunk-ep26dgsk.js#_Ls","doc":"VS Code 表面注册中的插件注册 promise（其他表面返回 undefined）。"}
+{"id":"chunk-3wek6r2k.js#Er","doc":"无 TTY 时按平台给出提示行与备选输入读取器（Windows 说明无法回退到控制台）。"}
+{"id":"chunk-1ptrwbb7.js#_Ds","doc":"判断当前是否为交互会话（非后台会话）。"}
+{"id":"chunk-3wek6r2k.js#$r","doc":"从父会话带入的子代理 transcript 的三段 harness 说明：被裁剪的回合、被带入回合的开头与结束标记。"}
+{"id":"chunk-na0b3c5q.js#se","doc":"已知的 control_request 子类型名单（interrupt、can_use_tool、initialize、set_model、get_usage 等），用于校验与分类。"}
+{"id":"chunk-na0b3c5q.js#ae","doc":"stream-json 协议常量：默认/长控制请求超时、需要刷新令牌的子类型、OAuth 令牌环境变量名、SDK 停滞超时、MCP 消息超时、SDK schema 抽样率与长度上限、设置 JSON schema 及最大行字符数。"}
+{"id":"chunk-63641kq7.js#unt","doc":"权限流的失败文案：\"Tool permission request failed: AbortError: …\" 的几种变体，用于识别流提前关闭。"}
+{"id":"chunk-fp6aqx1j.js#hUr","doc":"SSE 连接的建连超时 30000ms。"}
+{"id":"chunk-fp6aqx1j.js#v6n","doc":"worker 能力与 attestation 版本常量，以及签名等级与状态由弱到强的排序表（用于比较 meetsLevel）。"}
+{"id":"chunk-fp6aqx1j.js#WNo","doc":"SSE 长轮询超时 180000ms 与短轮询超时 90000ms。"}
+{"id":"chunk-fp6aqx1j.js#L1t","doc":"压缩边界 preservedMessages.uuids 最多保留 1536 个，超出截尾并同步裁剪 allUuids 与 headUuid。"}
+{"id":"chunk-fp6aqx1j.js#wKs","doc":"持久上传账本限额：重试次数小于 10 优先重发、未应答超过 1 万条清空停写、行龄与行字节上限。"}
+{"id":"chunk-fp6aqx1j.js#kKs","doc":"判断是否为 worker_register_failed 且非 4xx 的初始化失败（可重试）。"}
+{"id":"chunk-fp6aqx1j.js#ys","doc":"CCR 客户端默认批量策略常量：事件数/年龄/字节上限、跨模型调用持有、事件脉冲与拾取等待、入站 UUID 容量、查看器检查点、可等待事件集合等。"}
+{"id":"chunk-fp6aqx1j.js#Fs","doc":"CCR 客户端的实时/元数据事件集合与刷写策略常量：live-only 与 may-wait 事件类型、可上报元数据键、响应字节上限、flush 前后工具等待、订阅者标志等。"}
+{"id":"chunk-fp6aqx1j.js#NNo","doc":"从 CLAUDE_CODE_WORKER_EPOCH 读取 worker epoch（缺失时为 NaN）。"}
+{"id":"chunk-f25sswmp.js#qwn","doc":"把工具结果里的图片数据映射成标准形状，保留已有文本、替换图片。"}
+{"id":"chunk-bdmhadbm.js#wEo","doc":"读取 session ingress 令牌文件的退避重试间隔 [250,500,500,750,1000] ms。"}
+{"id":"chunk-w1p9g89k.js#Oun","doc":"单帧字节上限 61440 与可用预算 61440-4096（为头留余量）。"}
+{"id":"chunk-w1p9g89k.js#C6n","doc":"判断控制请求能否合并转发：是交互类子类型且不是会话设置类。"}
+{"id":"chunk-w1p9g89k.js#RKs","doc":"把最后交互时间标记为刚刚（收到交互式控制请求时）。"}
+{"id":"chunk-w1p9g89k.js#JZe","doc":"判断控制请求子类型是否属于权限提示（决定是否即时回执）。"}
+{"id":"chunk-w1p9g89k.js#Mun","doc":"x-ccr-session-writers 头的 schema：writers（仅所有者/非仅所有者）与声明时间。"}
+{"id":"chunk-w1p9g89k.js#QZe","doc":"判断写者声明是否为 \"owner_account_only\"（会话仅所有者可写）。"}
+{"id":"chunk-e6aww6q8.js#LUo","doc":"判断某插件目录是否尚未出现在最近一次完整同步的插件列表里（用于触发补充加载）。"}
+{"id":"chunk-e6aww6q8.js#ezr","doc":"把名字匹配到仅 worker 可用的技能名（autopilot/bugfix/dashboard/deep-research/docs/investigate）。"}
+{"id":"chunk-m8444q1d.js#Y","doc":"auto-mode-setup 的确认对话框：姿态选择 + 可选读取项开关 + 页脚，确认后继续。"}
+{"id":"chunk-e6aww6q8.js#l5s","doc":"取给定模型的分类器回退模型名。"}
+{"id":"chunk-8k8yqdkq.js#wYo","doc":"C4E upsell 命令的注册表单例。"}
+{"id":"chunk-8k8yqdkq.js#Pri","doc":"把某个命令的 isC4EUpsellCommandEnabled 判定注册到注册表。"}
+{"id":"chunk-pghq0ca2.js#Zee","doc":"恒返回 false：/color 命令在本构建里不额外隐藏。"}
+{"id":"chunk-snd3g4y1.js#sjs","doc":"恒返回 false 的占位判断（config 设置页的一个构建期开关）。"}
+{"id":"chunk-e6aww6q8.js#LXn","doc":"取网关用量缓存：缓存里的登录标识与当前网关认证一致时返回，否则 undefined。"}
+{"id":"chunk-e6aww6q8.js#iGt","doc":"主动刷新网关用量（读接口并写入按宿主缓存）。"}
+{"id":"chunk-kcvmr83c.js#O","doc":"ultracode 功能的说明文本集合（开关帮助行与会话内开启提示）。"}
+{"id":"chunk-kcvmr83c.js#$Co","doc":"ultracode 开关是否可用（远程控制会话且某条件下）。"}
+{"id":"chunk-1n1kvmcz.js#DIo","doc":"快速模式预取超时 8000ms，以及\"Fast mode unchanged (cancelled)\"的取消文案。"}
+{"id":"chunk-1n1kvmcz.js#Zan","doc":"未经校验的快速模式结果 {unvetted:true}，作为工作区切换的默认值。"}
+{"id":"chunk-bnwcqde4.js#G","doc":"/goal 无法运行的两条说明：组织设置未读取（hooks 是否允许未知）与 hooks 被限制（disableAllHooks/allowManagedHooksOnly）。"}
+{"id":"chunk-e6aww6q8.js#Stt","doc":"读取 cedarEmber 配置里的 version（非法时按 0）。"}
+{"id":"chunk-e6aww6q8.js#X3s","doc":"cedarEmber 的 autoContinue 开关（缺省视为 true）。"}
+{"id":"chunk-e6aww6q8.js#xrr","doc":"限额重置功能的默认界面文案（按钮、通知、成功/不可用等）。"}
+{"id":"chunk-e6aww6q8.js#oJn","doc":"读取 limitReset 配置里的 version（非法时按 0）。"}
+{"id":"chunk-e6aww6q8.js#J3s","doc":"limitReset 的 autoContinue 开关（缺省视为 true）。"}
+{"id":"chunk-tx768c80.js#OXe","doc":"自动记忆开关的显示状态（由 J4e 计算当前模型/安全模式/组织策略）。"}
+{"id":"chunk-tx768c80.js#GRs","doc":"恒返回 false 的占位判断（记忆文件选项的一个构建期开关）。"}
+{"id":"chunk-tx768c80.js#$$n","doc":"\"can't be turned on here; use a session started outside Claude Code\"：自动记忆在此会话无法开启的说明。"}
+{"id":"chunk-3q7pey4p.js#Wvn","doc":"判断持久化的平台是否为移动端（ios/android）。"}
+{"id":"chunk-3q7pey4p.js#EXr","doc":"按宿主缓存的 ClaudeInChromeSessionState。"}
+{"id":"chunk-3q7pey4p.js#Yi","doc":"取当前会话的 ClaudeInChrome 会话状态（按 tool_use_id 记录已解析 host 等），50 多处调用。"}
+{"id":"chunk-3q7pey4p.js#vfi","doc":"把某 tool_use_id 已解析的 host 标记为 keepHostPin（保持宿主固定）。"}
+{"id":"chunk-d1cgs5na.js#aue","doc":"把用户指定的模型（或默认主循环模型）解析成实际模型名。"}
+{"id":"chunk-d1cgs5na.js#Nf","doc":"净化来自钩子的文本：去不安全字符、换行替换、去尾部空白。"}
+{"id":"chunk-d1cgs5na.js#W","doc":"设置默认模型的等待 3000ms 与模型列表刷新超时 15000ms。"}
+{"id":"chunk-h6f3feta.js#QFn","doc":"把 React 元素渲染成 ANSI 字符串（plan 预览用）。"}
+{"id":"chunk-vrb44rx7.js#sa","doc":"插件管理页读取已加载模块的 store：ca 给出活动 mod 名列表，ua 为快照。"}
+{"id":"chunk-vrb44rx7.js#Rd","doc":"技能状态图标与列宽常量：on/name-only/user-only/off 的图标与色调、安装列 6 列、标题列上下限 44/12、左右预留 20/16。"}
+{"id":"chunk-ntgvwzh2.js#uOo","doc":"rate-limit-options 命令的别名集合（rate-limit-options、pro-trial-expired）。"}
+{"id":"chunk-0wa2vg6f.js#ZV","doc":"按宿主缓存的 GitHub 连接状态缓存（remote-setup/promo/auth 共用）。"}
+{"id":"chunk-p8zkbd8d.js#p","doc":"Web setup 推送优惠相关常量：模式 off/survey、最多展示 3 次、间隔 1 天，以及按宿主的 offer 状态槽与推送槽。"}
+{"id":"chunk-ajkmgejw.js#se","doc":"remote-setup 的 Web 连接向导组件（Web，4.6KB）：选择/生成 Remote Control 会话名并展示连接信息。"}
+{"id":"chunk-e6aww6q8.js#Y3s","doc":"/restart 命令的可用性：可原地重启、GrowthBook 新鲜或被覆盖、且满足其他前置条件。"}
+{"id":"chunk-e6aww6q8.js#pjo","doc":"清空已安装版本缓存（until 置 0，下次读取重新探测）。"}
+{"id":"chunk-hantmvxa.js#oo","doc":"代码评审的清理类角度（Reuse、removed-behavior、cross-file 等）与最小化评审提示词。"}
+{"id":"chunk-hantmvxa.js#Je","doc":"代码评审的最小提示词：单次 diff 审阅 + 指定阶段数，用于小改动快速评审。"}
+{"id":"chunk-hantmvxa.js#Y","doc":"代码评审的五个清理类角度文本（别重复实现、简化、约定、效率、测试），提示词里逐个引用。"}
+{"id":"chunk-hantmvxa.js#ms","doc":"代码评审的 bug 类角度文本：逐行扫描、删除行为审计、跨文件追踪、语言陷阱、包装/代理正确性，以及 verify 阶段与 gap sweep 的提示词。"}
+{"id":"chunk-hantmvxa.js#Ps","doc":"按模型与 effort 档位查评审单元与 modelEffort 的映射表（default/sonnet5/opus4-8/opus5），含冻结。"}
+{"id":"chunk-hantmvxa.js#Yt","doc":"低 effort 评审提示词：输出段落、低 effort 单次 diff、报告工具不可用时的说明与单次扫描提示。"}
+{"id":"chunk-hantmvxa.js#Xt","doc":"高/xhigh/max effort 评审提示词构造器与报告工具不可用时的说明。"}
+{"id":"chunk-hantmvxa.js#mo","doc":"\"若之后修复了发现\"的提示段与逐行结果说明（报告工具再次调用带 outcome）。"}
+{"id":"chunk-e6aww6q8.js#i9n","doc":"ultrareview 投递结果轮询间隔 1000ms。"}
+{"id":"chunk-s61vbvea.js#cxe","doc":"读取 ultrareview 的 GrowthBook 配置（model、cost_note、duration_note、client_wait_minutes 等）。"}
+{"id":"chunk-s61vbvea.js#Xei","doc":"取 ultrareview 配置里指定的模型（非空字符串才算）。"}
+{"id":"chunk-s61vbvea.js#Fqo","doc":"空树回退是否启用（缺省启用）。"}
+{"id":"chunk-s61vbvea.js#Jei","doc":"GitHub 访问预检是否启用（缺省启用）。"}
+{"id":"chunk-s61vbvea.js#Qei","doc":"分支预检是否必需（缺省启用）。"}
+{"id":"chunk-s61vbvea.js#UF","doc":"ultrareview 与 Remote Control 同时可用（要求桥接资格）。"}
+{"id":"chunk-s61vbvea.js#Uvt","doc":"ultrareview 是否可用：配置 enabled、第一方提供商、非远程环境。"}
+{"id":"chunk-s61vbvea.js#Bvt","doc":"ultrareview 结果投递开关 tengu_ultrareview_post_enabled（默认开）。"}
+{"id":"chunk-s61vbvea.js#jvt","doc":"评测运行中云会话不可用的提示文本。"}
+{"id":"chunk-v21qppnj.js#u","doc":"Windows 沙箱卸载的用户提示集合：关闭程序的指引、未检查的沙箱进程说明、残留账户名、无需管理员批准的说明、最多列出 5 项、40 分钟超时与勿中断提醒。"}
+{"id":"chunk-2ygwbyvf.js#FTo","doc":"/send-to-project 参数里项目名开头的双引号（含中文引号）匹配正则。"}
+{"id":"chunk-9a33p5tx.js#Y","doc":"\"Send a message to a Claude Project\" 的提示词（告诉模型会话身份与如何读取）。"}
+{"id":"chunk-ygke3hz8.js#q0t","doc":"技能状态的四个取值（on/name-only/user-invocable-only/off），/skills 与插件页循环切换用。"}
+{"id":"chunk-kczn6qx7.js#Ie","doc":"teleport 预检常量：未推送内容的说明、进行中的 git 操作列表（rebase/merge/cherry-pick/revert/bisect）与响应 schema。"}
+{"id":"chunk-e6aww6q8.js#lmn","doc":"等待 store 值变为 false。"}
+{"id":"chunk-e6aww6q8.js#o3s","doc":"等待 store 值变为 true。"}
+{"id":"chunk-e6aww6q8.js#KJ","doc":"ultraplan-choice 对话框 spec：kind 为 ULTRAPLAN_CHOICE，载荷为 {plan}。"}
+{"id":"chunk-r68xwcze.js#knn","doc":"恒为 false 的焦点 context（没有真实焦点时的默认值）。"}
+{"id":"chunk-r68xwcze.js#c9","doc":"把 isDisabled 属性定为布尔：函数则调用，true 即视为禁用。"}
+{"id":"chunk-r68xwcze.js#pM","doc":"当前菜单是否处于展开态（读 Eo context）。"}
+{"id":"chunk-ey2qag4x.js#Gl","doc":"菜单垂直装饰预留 8 行与最大宽度比例 0.6。"}
+{"id":"chunk-nz9pbsr3.js#OPs","doc":"计算无障碍值区域宽度：文本宽度 + 空格数 + 1（无文本时为 2）。"}
+{"id":"chunk-ey2qag4x.js#jnn","doc":"typeahead 的 epoch 追踪器：返回 {epoch, noteAttempt}，值变化时用它重置内部状态。"}
+{"id":"chunk-ey2qag4x.js#WDe","doc":"用户消息背景色模式：无色（level 0）时用 inverse，否则用传入值。"}
+{"id":"chunk-18hwfzwa.js#Zse","doc":"ultracode 的闪光动画常量：高亮色 #d0b4ff、扫过步数（名字长度+2）与每帧 120ms。"}
+{"id":"chunk-5nte8cwj.js#vFs","doc":"以 resume 方式把当前会话交到 Claude Desktop 打开。"}
+{"id":"chunk-qr2y97px.js#Vr","doc":"/artifacts 列表响应的 schema（frames + starsEnabled）、ISO 时间戳校验正则与响应体上限（4MiB）。"}
+{"id":"chunk-18hwfzwa.js#Dpo","doc":"按 slug 从 frameUrls 里找出对应条目（比较 URL 里的 uuid slug）。"}
+{"id":"chunk-1kwgxcw6.js#c","doc":"ScrollColumn 的 context（当前滚动值）与最小行数 1。"}
+{"id":"chunk-1kwgxcw6.js#$V","doc":"读 ScrollColumn context 的 hook。"}
+{"id":"chunk-mkatyybr.js#mTe","doc":"状态图标闪光动画的调色板长度与每步时间。"}
+{"id":"chunk-mkatyybr.js#Qmt","doc":"所有状态图标里最宽的显示宽度（按显示宽度计算）。"}
+{"id":"chunk-mkatyybr.js#PUn","doc":"状态图标占位宽度：最宽图标 + 1 列。"}
+{"id":"chunk-2nmyajw8.js#k","doc":"表格列间距 2 与 fill 列的最小宽度 12。"}
+{"id":"chunk-v9w831vx.js#Me","doc":"读主题 context 的 hook（useTheme），全站 160 多处使用。"}
+{"id":"chunk-18hwfzwa.js#LZt","doc":"auto-mode-setup flagged 对话框 spec：kind 为 auto_mode_setup_review 的变体，带通知文案。"}
+{"id":"chunk-tc95s49z.js#fAi","doc":"把对话框请求函数包一层：输入是异步可迭代时走流式请求，否则交给默认实现。"}
+{"id":"chunk-tc95s49z.js#$9t","doc":"判断是否为异步可迭代对象（Symbol.asyncIterator 存在）。"}
+{"id":"chunk-18hwfzwa.js#z0o","doc":"四个对话框视图：UltraplanChoiceDialog、McpElicitationDialog、McpElicitationWaitingDialog、McpUrlElicitationDialog。"}

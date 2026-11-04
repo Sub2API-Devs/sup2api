@@ -1,0 +1,14 @@
+# chunk-f7avdr1b.js:w6 -> chunk-aepeg2w5.js:ige
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-f7avdr1b.js_w6.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-f7avdr1b.js_w6.new.js"
+index a172bb4..9d83936 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-f7avdr1b.js_w6.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-f7avdr1b.js_w6.new.js"
+@@ -3,7 +3,7 @@ function SELF() {
+   if ($m_kt() && $m_fr() === null) return false;
+   if ($m_i.ANTHROPIC_DEFAULT_OPUS_MODEL === void 0) {
+     let $l0 = $m_Ii("opus");
+-    if ($l0 !== void 0 && $m_Ru($l0) === "never") return false;
++    if ($l0 !== void 0 && $m_Ru($l0) === "never" && !($NEW_chunk_aepeg2w5_js_qte() && $l0 === $m_wn())) return false;
+   }
+   return true;
+ }

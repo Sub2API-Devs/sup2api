@@ -1,0 +1,12 @@
+{
+  "cli/print/hostOtelEvents.ts": "2.1.316 新增：宿主（桌面/VS Code）OTel 事件转发的信封校验、限流与丢弃上报，以及反馈问卷的事件枚举与显示配置。",
+  "components/pluginUi/renderSiteExports.ts": "2.1.316 新增：插件 UI 渲染站点的导出壳（PlacedSite、CommandOutputSite 及其 frameOf/printedTextOf），供消息渲染按站点取组件。",
+  "screens/repl/bridgeChannelSlot.ts": "2.1.316 新增：REPL 的可替换桥/频道槽位（当前桥接与频道实现可热插拔）与空槽位常量。",
+  "utils/settings/mdm/mdmLoader.ts": "2.1.316 新增：MDM 托管设置加载器的宿主级状态、按需启动、读取结果与“是否已回答/加载中”判定。",
+  "utils/settings/hostEnvWrites.ts": "2.1.316 新增：宿主进程写过的环境变量快照与恢复（含托管值回填、withHostEnvRestored 作用域与缺失变量提示）。",
+  "utils/mediaLimits.ts": "2.1.316 新增：媒体与请求体积上限（base64/原始字节、图片边长、PDF 页数与整篇上限、按通道取限值）。",
+  "utils/telemetry/clientEventUploader.ts": "2.1.316 新增：CCR 客户端事件上传队列（批量、重试、关闭前交接、签名与载荷归一化）。",
+  "utils/sandbox/sandboxRuntimeStubs.ts": "2.1.316 新增：sandbox-runtime 在本构建里的配置桩（是否启用/强制、容器 leg、诊断占位与名字清洗）。",
+  "vendor/lodash-es/_mergeWithFamily.js": "第三方：lodash-es 的 mergeWith 家族内联片段（baseAssignValue/baseIsEqualWith/baseMergeDeep/cloneDeepWith/toKey/mergeWith）。",
+  "vendor/zod/v4/classic/deferredOptional.js": "第三方：zod v4 的延迟可选类型（ZodDeferredOptional 与 deferredOptional 包装）。"
+}

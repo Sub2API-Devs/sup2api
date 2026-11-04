@@ -1,0 +1,79 @@
+{"file":"chunk-x1hcas72.js","key":"@1162","name":"PLACEMENT_TIME_BUDGET_MS","source":"semantic","confidence":0.97,"note":"fixer4 改名（l12）：PLACEABLE_FILE_TYPES=3000 实为 placeFilesByName 的默认时间预算（performance.now()+d 作 deadline，超出记 over_time_budget），不是文件数"}
+{"file":"chunk-93kwxas0.js","key":"@59673","name":"MIN_SPAWN_INTENT_LENGTH","source":"semantic","confidence":0.97,"note":"fixer4 改名（l2）：MAX_SPAWN_RETRIES=4 被 fleetDispatch 用作 intent.trim().length < 4 的“太短”阈值，不是重试次数"}
+{"file":"chunk-sx9xc5ee.js","key":"@15858","name":"isBedrockProfileName","source":"semantic","confidence":0.97,"note":"fixer4 改名（l2）：函数体是 name.toLowerCase().includes(\"bedrock\")，用来从 AWS profile 名里挑默认值，与“区域”无关"}
+{"file":"chunk-jy3v56kg.js","key":"@22352","name":"registerScanHooksWithoutScanning","source":"semantic","confidence":0.97,"note":"fixer4 改名（l10）：不是“格式化没跑的原因”：它把一组绝对路径透传的 host 桩塞给 registerSecretScanSkillHook，让 skill 提示词在构建不带扫描时仍能生成说明"}
+{"file":"chunk-9cjx5pnm.js","key":"@21369","name":"requestPublishOutcome","source":"semantic","confidence":0.97,"note":"fixer4 改名（l9）：请求发布 API 并按错误码/状态表得出结果（body 直接调 publishRequestWithRetry → manualMarketplaceId / publishApiOutcome），与 markup 文本无关；同名其它 3 个声明各按函数体改名"}
+{"file":"chunk-vp5gef34.js","key":"@12696","name":"bm25Idf","source":"semantic","confidence":0.97,"note":"fixer4 改名（l5）：函数体是 Math.log((N-df+0.5)/(df+0.5))，即 BM25 的 IDF，不是“字段加权系数”（加权在 fieldWeights / fieldLengthBoost）"}
+{"file":"chunk-vp5gef34.js","key":"@11601","name":"SMALL_DELETION_THRESHOLD","source":"semantic","confidence":0.97,"note":"fixer4 改名（l5）：MAX_TERM_KEY_CHARS=16 只用于 dropDocuments 判断“少量文档→逐个标未验证 / 大量→重建词表”的阈值，与词键长度无关"}
+{"file":"chunk-vp5gef34.js","key":"@3429","name":"trimTrailingDoubleL","source":"semantic","confidence":0.97,"note":"fixer4 改名（l5）：stemWord 实际是波特第 5 步之后的“双辅音+结尾 l 去重”（G(e)>1 && We(e) && endsWith(\"l\")）"}
+{"file":"chunk-vp5gef34.js","key":"@3484","name":"porterStemWord","source":"semantic","confidence":0.97,"note":"fixer4 改名（l5）：measureWord 才是波特词干化主流程（1a→1b→1c→2→3→5→t→双 l 去重），原名与实义颠倒"}
+{"file":"chunk-vp5gef34.js","key":"@3601","name":"memoizedStemWord","source":"semantic","confidence":0.97,"note":"fixer4 改名（l5）：isConsonantRun 实为 porterStemWord 的 memoizeWithLRU 包装（供 stemWithOptions 调用），与“辅音串”无关"}
+{"file":"chunk-e6aww6q8.js","key":"@3704258","name":"loadAndRegisterHooksModule","source":"semantic","confidence":0.97,"note":"fixer4 改名（l5）：不是“描述状态”：加载 hooks 模块、登记 environment、返回带 enter/leave/dispatch/retire 的模块记录"}
+{"file":"chunk-e6aww6q8.js","key":"@3701627","name":"assembleHooksModuleRuntime","source":"semantic","confidence":0.97,"note":"fixer4 改名（l5）：不是“校验导出”：组装运行期（invoke/iterate/stream/host 代理），返回 activation 对象"}
+{"file":"chunk-e6aww6q8.js","key":"@957927","name":"cachedReservedSkillNamespace","source":"semantic","confidence":0.97,"note":"fixer4 改名（l10）：与文件状态缓存无关：按名字查保留技能命名空间（带 LRU 缓存），是 getReservedSkillNamespace 的回退实现"}
+{"file":"chunk-pp50kewz.js","key":"@121844","name":"pickUpdateScope","source":"semantic","confidence":0.97,"note":"fixer4 改名（l9）：函数（不是常量表）：按插件各条的 scope 选出 local/project/user 中最靠前的一个，否则 managed；原名沿用常量式"}
+{"file":"chunk-z1n5m6nf.js","key":"@86562","name":"settleDialOrUndefined","source":"semantic","confidence":0.97,"note":"fixer4 改名（l8x）：实现是 withDeadline(dial.catch(()=>undefined), 0)，超时固定 0：立即返回已结算值或 undefined，名字里的 deadline 读起来像可配置"}
+{"file":"chunk-3y22eg7d.js","key":"@5614","name":"limitHitAtMs","source":"semantic","confidence":0.97,"note":"fixer4 改名（l9x）：第 3 个参数不是“limits 表”而是毫秒时间戳（默认 Date.now()，下传 autoArmQuotaAutoResume 的 nowMs）"}
+{"file":"chunk-gbtb0mjv.js","key":"@10042","name":"cadenceWord","source":"semantic","confidence":0.97,"note":"fixer4 改名（l10）：参数不是布尔：调用点传 \"iterations\" / \"ticks\" 字面量，函数内用 e === \"iterations\" 选文案"}
+{"file":"chunk-e6aww6q8.js","key":"@1974586","name":"unusedNull","source":"semantic","confidence":0.97,"note":"fixer4 改名（l17）：前任把压缩名占位符本身写成了名字（no_K1974586），声明后从不读取（let no=null）"}
+{"file":"chunk-7vp249v4.js","key":"@52977","name":"_cidrv4","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：函数体 format:\"cidrv4\"；构建把 mac 整段裁掉后按 cjs 顺序贴名，整体错一格"}
+{"file":"chunk-7vp249v4.js","key":"@53493","name":"_jwt","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：函数体 format:\"jwt\"（_creditCard 是 credit_card，已被裁掉）"}
+{"file":"chunk-7vp249v4.js","key":"@54333","name":"_int32","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：函数体 format:\"int32\"（_float32 是 float32，已被裁掉）"}
+{"file":"chunk-7vp249v4.js","key":"@54435","name":"_boolean","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：函数体 type:\"boolean\"（_uint32 是 number/uint32，已被裁掉）"}
+{"file":"chunk-7vp249v4.js","key":"@54560","name":"_undefinedFactory","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：函数体 type:\"undefined\"（_bigint 是 bigint，已被裁掉）；同 chunk 已有正则 `_undefined`，名字加 Factory 后缀避免同作用域撞名"}
+{"file":"chunk-7vp249v4.js","key":"@54673","name":"_any","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：函数体 type:\"any\"，与 cjs _any 一致，此前仍是压缩名"}
+{"file":"chunk-7vp249v4.js","key":"@54816","name":"_lt","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：body check:\"less_than\", inclusive:false（cjs _lt）"}
+{"file":"chunk-7vp249v4.js","key":"@55148","name":"_multipleOf","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：body check:\"multiple_of\"（cjs _multipleOf）"}
+{"file":"chunk-7vp249v4.js","key":"@56072","name":"_trim","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：body _overwrite(input=>input.trim())（cjs _trim）"}
+{"file":"chunk-7vp249v4.js","key":"@56200","name":"_slugify","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：body _overwrite(input=>slugify(input))（cjs _slugify）"}
+{"file":"chunk-7vp249v4.js","key":"@56303","name":"_custom","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：body 默认 abort:true 的 custom 构造器（cjs _custom）"}
+{"file":"chunk-7vp249v4.js","key":"@56812","name":"_check","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：body new $ZodCheck({check:\"custom\"…}) 并挂 _zod.check（cjs _check）"}
+{"file":"chunk-7vp249v4.js","key":"@86719","name":"numberSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：Zod classic 的 number(params)=_number(ZodNumber, params)；`number` 已被同 chunk 的 regexes.number 占用"}
+{"file":"chunk-7vp249v4.js","key":"@86846","name":"int32Schema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _int32(ZodNumberFormat, params)（原先按错位叫 float32）"}
+{"file":"chunk-7vp249v4.js","key":"@86984","name":"booleanSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _boolean(ZodBoolean, params)（原先按错位叫 uint32）"}
+{"file":"chunk-7vp249v4.js","key":"@87122","name":"undefinedSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _undefined(ZodUndefined, params)（原先按错位叫 bigint）"}
+{"file":"chunk-7vp249v4.js","key":"@87255","name":"nullSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _null(ZodNull, params)"}
+{"file":"chunk-7vp249v4.js","key":"@87387","name":"anySchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _any(ZodAny)"}
+{"file":"chunk-7vp249v4.js","key":"@88854","name":"objectSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：body new ZodObject({type:\"object\",shape…})（cjs classic object）"}
+{"file":"chunk-7vp249v4.js","key":"@52064","name":"_emojiFactory","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：body new Class({format:\"emoji\",…})（cjs api._emoji；同 chunk 里 regexes 的 emoji 源已占用 _emoji 这个名字）"}
+{"file":"chunk-7vp249v4.js","key":"@84504","name":"emailSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _email(ZodEmail, params)"}
+{"file":"chunk-7vp249v4.js","key":"@84591","name":"guidSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _guid(ZodGUID, params)"}
+{"file":"chunk-7vp249v4.js","key":"@84678","name":"uuidSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _uuid(ZodUUID, params)"}
+{"file":"chunk-7vp249v4.js","key":"@84764","name":"urlSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _url(ZodURL, params)"}
+{"file":"chunk-7vp249v4.js","key":"@85466","name":"base64Schema","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body _base64(ZodBase64, params)"}
+{"file":"chunk-7vp249v4.js","key":"@84133","name":"stringSchema","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：body _string(ZodString, params)（cjs classic string）"}
+{"file":"chunk-7vp249v4.js","key":"@84791","name":"ZodEmoji","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：ctor Fr(\"ZodEmoji\")"}
+{"file":"chunk-7vp249v4.js","key":"@85235","name":"ZodIPv6","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：ctor Fr(\"ZodIPv6\")"}
+{"file":"chunk-7vp249v4.js","key":"@85608","name":"ZodJWT","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：ctor Fr(\"ZodJWT\")"}
+{"file":"chunk-7vp249v4.js","key":"@82257","name":"ZodStringBase","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：ctor Fr(\"_ZodString\")（cjs 里是 core.$ZodString 的内部类 _ZodString）"}
+{"file":"chunk-7vp249v4.js","key":"@83073","name":"ZodString","source":"semantic","confidence":0.97,"note":"fixer4 改名（fixqueue）：ctor Fr(\"ZodString\")"}
+{"file":"chunk-7vp249v4.js","key":"@88028","name":"ZodObject","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：ctor Fr(\"ZodObject\")"}
+{"file":"chunk-vrb44rx7.js","key":"@8660","name":"designConsentResult","source":"semantic","confidence":0.97,"note":"fixer4 改名（l2x）：checkConsent() 的结果（needsDesignCredential ? 查询 : null），不是凭证对象本身；实际用法只做布尔代理"}
+{"file":"chunk-vrb44rx7.js","key":"@10066","name":"designConsentResult","source":"semantic","confidence":0.97,"note":"fixer4 改名（l2x）：同上（MCPRemoteServerMenu 的同名 prop），两处一起改以保持一致"}
+{"file":"chunk-18hwfzwa.js","key":"@1221684","name":"urlPrefix","source":"semantic","confidence":0.97,"note":"fixer4 改名（l2x）：ao = Et.slice(0, domainStart)，是 hostname 之前的前缀，原名 domain 名不副实"}
+{"file":"chunk-18hwfzwa.js","key":"@1221690","name":"urlSuffix","source":"semantic","confidence":0.97,"note":"fixer4 改名（l2x）：co = Et.slice(domainStart + hostname.length)，是 hostname 之后的尾部；原名 urlBeforeDomain 方向相反"}
+{"file":"chunk-mvvq2nx1.js","key":"@5354","name":"imageDecodingForcedOff","source":"semantic","confidence":0.97,"note":"fixer4 改名（l13）：死开关：只初始化为 false、从未置 true；isImageDecodingDisabled 实际由 !isDisklessMode() 决定，名字要反映“强制关闭”这一层"}
+{"file":"chunk-e6aww6q8.js","key":"@892472","name":"ensureStagingDirWithRetry","source":"semantic","confidence":0.97,"note":"fixer4 改名（l13）：是自愈重试的 async 函数（循环重试创建/校验目录），不是同步变量"}
+{"file":"chunk-x1hcas72.js","key":"@3306","name":"timeBudgetMs","source":"semantic","confidence":0.97,"note":"fixer4 改名（l12）：placeFilesByName 的第 3 参数实际是时间预算（传递给 performance.now() + d 的 deadline），原名 allowedTypes 与语义无关"}
+{"file":"chunk-x1hcas72.js","key":"@3304","name":"runContext","source":"semantic","confidence":0.97,"note":"fixer4 改名（l12）：整个函数里只读 context.aborted，名字 context 偏宽"}
+{"file":"chunk-x1hcas72.js","key":"@4701","name":"runContext","source":"semantic","confidence":0.97,"note":"fixer4 改名（l12）：同上（placeFilesUnchecked）"}
+{"file":"chunk-e6aww6q8.js","key":"@640563","name":"listedName","source":"semantic","confidence":0.97,"note":"fixer4 改名（l12）：是单个名字字符串（SAFE_LISTED_NAME_RE 的检查对象），与 listedFor 数组不是同一类型"}
+{"file":"chunk-e6aww6q8.js","key":"@641177","name":"listedName","source":"semantic","confidence":0.97,"note":"fixer4 改名（l12）：同上"}
+{"file":"chunk-s61vbvea.js","key":"@460024","name":"readSmallFileText","source":"semantic","confidence":0.97,"note":"fixer4 改名（l9）：实现是“读普通文件到上限 1 MiB 并转 utf-8”，与 MCP auth cache 无关"}
+{"file":"chunk-8jypjjdf.js","key":"@9012","name":"suggestWindow","source":"semantic","confidence":0.97,"note":"fixer4 改名（l3）：是 suggestionWindow(...) 的返回值，原名 window 与本文件里真正的 window 全局重名"}
+{"file":"chunk-t3sg9e26.js","key":"@14324","name":"checkProxyDenial","source":"semantic","confidence":0.97,"note":"fixer4 改名（l6）：布尔开关：为真时额外匹配 \"remote: access denied by the git proxy\"，不是退出码"}
+{"file":"chunk-j2t139r9.js","key":"@57974","name":"compatTypeKindPlaceholder","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：body 是 var {object: lazycreate} 的兼容占位，与首方类型枚举无关"}
+{"file":"chunk-j2t139r9.js","key":"@57986","name":"typeKindEnum","source":"semantic","confidence":0.97,"note":"fixer4 改名（v6）：兼容枚举壳（e.ZodString=… 一串），原名借用了首方类型枚举名"}
+{"file":"chunk-h87x8cg3.js","key":"@6812","name":"tryParseJson","source":"semantic","confidence":0.97,"note":"fixer4 改名（v0）：try{JSON.parse}catch{} 的 JSON 解析助手；v0 报告里与已有 parseBody 撞名"}
+{"file":"chunk-fq0cr76a.js","key":"@643260","name":"bunVersionString","source":"semantic","confidence":0.97,"note":"fixer4 改名（v0）：返回 \"Bun 1.4.4\" 的运行环境版本字符串桩；v0 报告里与已有 runsOnBun 撞名"}
+{"file":"chunk-fq0cr76a.js","key":"@645018","name":"cachedRootCertificates","source":"semantic","confidence":0.97,"note":"fixer4 改名（v0）：惰性缓存的自签根证书材料（_C ?? (_C = EC())）；v0 报告里与已有 rootCertificates 撞名"}
+{"file":"chunk-hwmsct5x.js","key":"@49983","name":"stainlessHelperHeaders","source":"semantic","confidence":0.97,"note":"fixer4 改名（v0）：返回 {\"x-stainless-helper\": …} 的请求头构造；v0 报告里与已有 collectStainlessHelpers 撞名"}
+{"file":"chunk-3wydcdvj.js","key":"@21075","name":"readEnvVar","source":"semantic","confidence":0.97,"note":"fixer4 改名（v0）：process.env[key]?.trim() || undefined；v0 报告里与已有 readEnv 撞名"}
+{"file":"chunk-3wydcdvj.js","key":"@21128","name":"loadEnvQuadConfig","source":"semantic","confidence":0.97,"note":"fixer4 改名（v0）：读 env-quad 模式下的联邦/OIDC 配置；v0 报告里与已有 loadConfigWithSource 撞名"}
+{"file":"chunk-bwbq4xvm.js","key":"@179415","name":"isKnownMessageKind","source":"semantic","confidence":0.97,"note":"fixer4 改名（l0）：判断对象且 kind 属于已知消息 kind 集合（原误配名 extractMarkupText）"}
+{"file":"chunk-kxyd0g16.js","key":"@95987","name":"flattenTextBlocks","source":"semantic","confidence":0.97,"note":"fixer4 改名（l0）：把字符串或 {value} 块数组拼成一段文本（LSP hover 格式化用），与 markup 提取无关"}
+{"file":"chunk-astf3mhy.js","key":"@32409","name":"isRecordWithKind","source":"semantic","confidence":0.97,"note":"fixer4 改名（l0）：判断对象且带 kind 字段（SendMessageTool 用），与 markup 提取无关"}
+{"file":"chunk-e6aww6q8.js","key":"@4590890","name":"requestedEntryEnabled","source":"semantic","confidence":0.97,"note":"fixer4 改名（l15）：形参 r（入口是否启用）与解构默认值 entryEnabled: G = r 同名，改名区分\"请求值\""}
+{"file":"chunk-e6aww6q8.js","key":"@2419265","name":"compactionErrorMessage","source":"semantic","confidence":0.97,"note":"fixer4 改名（l8）：与 import 的 errorMessage 工具函数同名遮蔽，局部承载压缩失败原因"}
+{"file":"chunk-a91k35xs.js","key":"@15375","name":"stringifyForDisplay","source":"semantic","confidence":0.97,"note":"fixer4 改名（l11）：let t=_9o 的局部是 import 的 escapeDoubleQuoted 的别名，实际用途是把任意值/条目转成展示字符串（t(m) → \"[malformed question entry] …\"），与“转义引号”无关；因与 import 名撞车故不叫 escape*"}
+{"file":"chunk-82kqcve8.js","key":"@152131","name":"configuredExtraGuidelines","source":"semantic","confidence":0.97,"note":"fixer4 改名（l5）：局部与同名全局常量 CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES 遮蔽（i.CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES 的副本），按“配置里的额外指引文本”命名"}

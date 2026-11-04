@@ -1,0 +1,874 @@
+{"id":"chunk-t2bgh7t8.js#re","doc":"claude auto-mode config：输出生效的 autoMode 配置（用户设置覆盖默认值）为 JSON。"}
+{"id":"chunk-3nztfxrw.js#hn","doc":"CCR 云端会话里 autoMode 规则应用预设：all / no-allow / none。"}
+{"id":"chunk-3nztfxrw.js#juo","doc":"CCR 会话环境变量里 CCR_AUTO_MODE_APPLY=1 时才应用宿主下发的 autoMode 规则。"}
+{"id":"chunk-3nztfxrw.js#kks","doc":"读取 CCR 会话下发的 autoMode allow/environment/soft_deny 配置状态（absent/present/invalid）。"}
+{"id":"chunk-2a8yx6fc.js#L0r","doc":"取规则标签：冒号或方括号之前的部分（去尾部空白），用于 --label 过滤。"}
+{"id":"chunk-2a8yx6fc.js#BWs","doc":"合并用户 autoMode 设置与内置默认规则（allow/soft_deny/hard_deny/environment 四段）。"}
+{"id":"chunk-dcmhvw5a.js#EOt","doc":"MCP 连接缓存是否需要重新检查（cached 且非 connected/disabled/needs-auth）。"}
+{"id":"chunk-d4eg9at2.js#oDe","doc":"插件/市场命令出错的统一处理：策略拒绝打印 refused，其他错误记日志并以错误退出。"}
+{"id":"chunk-d4eg9at2.js#VHn","doc":"市场来源格式错误提示文本。"}
+{"id":"chunk-d4eg9at2.js#lZt","doc":"校验 --scope（默认 user；--cowork 只能 user），非法时退出。"}
+{"id":"chunk-d4eg9at2.js#eji","doc":"claude plugin uninstall：卸载插件（--keep-data、--prune、--json）。"}
+{"id":"chunk-d4eg9at2.js#rji","doc":"claude plugin disable：禁用单个或 --all 全部插件。"}
+{"id":"chunk-d4eg9at2.js#oji","doc":"claude plugin update：按作用域更新插件。"}
+{"id":"chunk-g54kbxqw.js#Rfi","doc":"Doctor 屏幕用的插件信息适配（显示名转换）。"}
+{"id":"chunk-kpa9nk58.js#p","doc":"React.lazy 包装（懒加载组件）。"}
+{"id":"chunk-2kh2r6st.js#OEo","doc":"JSON 序列化后把 U+2028/U+2029 转义，保证 NDJSON 一行一条。"}
+{"id":"chunk-74vrtgsp.js#d","doc":"同上，另外转义 U+0085（NEL），用于 stream-json 输出。"}
+{"id":"chunk-tyg7f3ek.js#xz","doc":"是否可作为 result 前最后一条输出消息（排除 control_*、部分 system 子类型、流事件等）。"}
+{"id":"chunk-tyg7f3ek.js#Uz","doc":"把启动阶段缓存的 SDK 事件转发到输出流，并订阅后续事件。"}
+{"id":"chunk-tyg7f3ek.js#jz","doc":"已有的 OAuth 流程是否可复用（同一登录方式、同一组织、尚未收到授权码、10 分钟内）。"}
+{"id":"chunk-tyg7f3ek.js#t8e","doc":"-p 是否需要等待显式 --mcp-config 服务器连接完成（有非 sdk 服务器时）。"}
+{"id":"chunk-tyg7f3ek.js#Kz","doc":"中继模式下 MCP 等待剩余时间（不少于下限）。"}
+{"id":"chunk-tyg7f3ek.js#Gz","doc":"--permission-prompt-tool 找不到或不是 MCP 工具时的遥测消息模板（工具名脱敏）。"}
+{"id":"chunk-tyg7f3ek.js#dU","doc":"按 --agent 选定主线程代理：设置代理类型、采用其系统提示词与模型、可前置其 initialPrompt。"}
+{"id":"chunk-tyg7f3ek.js#e1","doc":"每轮开始前等待文件存储 worker 拉取同步（turn hold 参与者）。"}
+{"id":"chunk-tyg7f3ek.js#n1","doc":"每轮开始前等待云端 home 设置种子写入完成（turn hold 参与者）。"}
+{"id":"chunk-tyg7f3ek.js#s1","doc":"headless 输出写入失败时结束会话：记录致命错误、尽量写最后一条错误、退出。"}
+{"id":"chunk-tyg7f3ek.js#n8e","doc":"runHeadless 抛出未捕获错误时结束会话：停止保留流事件、写错误结果、退出 1。"}
+{"id":"chunk-tyg7f3ek.js#i1","doc":"声明本进程拥有费用账本并在退出时保存费用状态（diskless 时不做）。"}
+{"id":"chunk-nkdv7dw8.js#gCs","doc":"把 SDK 动态 MCP 服务器集合应用到状态（是否权威、是否延迟连接）。"}
+{"id":"chunk-e6aww6q8.js#uNe","doc":"排队的命令能否与前一条合并发送（同为普通 prompt 且来源允许）。"}
+{"id":"chunk-e6aww6q8.js#g9n","doc":"从消息数组里删除被中断的消息及其后一条。"}
+{"id":"chunk-e6aww6q8.js#k5s","doc":"把被中断的提示重新放回消息队列（interrupted_prompt）。"}
+{"id":"chunk-aepeg2w5.js#exn","doc":"是否为托管的 Claude in Chrome 动态 MCP 服务器（切分可疑：与 print.ts 关系弱）。"}
+{"id":"chunk-aepeg2w5.js#ras","doc":"MCP 配置的 url 有效且作用域合法（动态作用域须来自插件）。"}
+{"id":"chunk-s61vbvea.js#rqo","doc":"MCP 配置中是否包含托管的 Claude in Chrome 服务器。"}
+{"id":"chunk-zfbhezv9.js#voe","doc":"校验 set_permission_mode 请求：非法模式、受限会话、策略禁用、未带 --allow-dangerously-skip-permissions 时拒绝 bypassPermissions。"}
+{"id":"chunk-e6aww6q8.js#j2e","doc":"权限决定原因转换为给宿主显示的文本（rule/mode 等不显示，safetyCheck/classifier/hook 显示原因）。"}
+{"id":"chunk-e6aww6q8.js#zBr","doc":"安全检查是否由熔断原因触发（outsideReadsBlocked/unfinishedCheck）。"}
+{"id":"chunk-e6aww6q8.js#HZ","doc":"沙箱网络访问权限请求的工具名 SandboxNetworkAccess。"}
+{"id":"chunk-ktpw8eqa.js#eMt","doc":"权限决定原因类型全集（rule、mode、subcommandResults、permissionPromptTool、hook、asyncAgent、sandboxOverride、workingDir、safetyCheck、classifier、other）。"}
+{"id":"chunk-jbbd2121.js#ZZe","doc":"SSE 增量解析缓冲：累积文本块，按空行切帧并逐帧派发。"}
+{"id":"chunk-fp6aqx1j.js#p2e","doc":"CCRClient 初始化失败错误（reason + httpStatus）。"}
+{"id":"chunk-3wek6r2k.js#kNt","doc":"构造一条 replay 用户消息（isReplay）。"}
+{"id":"chunk-kgh2tnx9.js#X","doc":"launchInvalidSettingsDialog：设置文件校验失败时的对话框（继续/修复/退出）。"}
+{"id":"chunk-kgh2tnx9.js#Z","doc":"launchTeleportResumeWrapper：teleport 恢复会话的包装界面（含组织配置同意与设置重载）。"}
+{"id":"chunk-kgh2tnx9.js#ee","doc":"launchTeleportRepoMismatchDialog：teleport 目标仓库与当前目录不一致时选择路径。"}
+{"id":"chunk-kgh2tnx9.js#ne","doc":"launchDeviceReenrollDialog：受信设备重新注册。"}
+{"id":"chunk-kgh2tnx9.js#re","doc":"launchRemoteHomeSettingsDialog：首次把本机设置带入云会话的确认。"}
+{"id":"chunk-kgh2tnx9.js#ie","doc":"launchDeviceMcpConsentDialog：设备级 MCP 服务器同意。"}
+{"id":"chunk-kgh2tnx9.js#se","doc":"launchDeviceMcpReconsentDialog：被扣留的设备 MCP 服务器重新同意。"}
+{"id":"chunk-kgh2tnx9.js#ae","doc":"launchUnattendedServingConsentDialog：无人值守服务模式的同意。"}
+{"id":"chunk-kgh2tnx9.js#ce","doc":"launchProviderSetupWizard：外部构建为空实现。"}
+{"id":"chunk-7fw14qgv.js#zji","doc":"endInkWithError：在 Ink 里显示红色错误后卸载并退出。"}
+{"id":"chunk-7fw14qgv.js#Kji","doc":"显示“Loading your organization's managed settings…”等待提示。"}
+{"id":"chunk-7fw14qgv.js#Vji","doc":"exitWithError：exitWithMessage 的错误色版本（可带未发送的提示）。"}
+{"id":"chunk-7fw14qgv.js#ZLi","doc":"启动未完成就退出时也导出一次 3P 遥测。"}
+{"id":"chunk-h6f3feta.js#DL","doc":"在 Ink 根上渲染元素并等待退出（子命令用的简化版 renderAndRun）。"}
+{"id":"chunk-3wek6r2k.js#VMs","doc":"表示“云会话启动”的根选项键（cloud、remote、teleport、attachServe、project、environment、pool、monorepo、noMonorepo）。"}
+{"id":"chunk-3wek6r2k.js#o1n","doc":"main.tsx 的懒加载模块句柄：teammate 工具、teammate 提示补充、teammate 模式快照、协调者模式、制品启动等。"}
+{"id":"chunk-82kqcve8.js#hJo","doc":"发现组织级记忆存储（切分可疑）。"}
+{"id":"chunk-awy329vy.js#SGi","doc":"代理启用且使用 gh 替身时返回 gh shim 目录。"}
+{"id":"chunk-awy329vy.js#JLs","doc":"在常见路径中找系统 CA 包（/etc/ssl/certs/ca-certificates.crt 等），返回其内容。"}
+{"id":"chunk-awy329vy.js#jEo","doc":"系统信任库是否已包含给定 PEM 里的全部证书。"}
+{"id":"chunk-6zvphrsz.js#s$o","doc":"距启动 10 秒宽限期还剩多少毫秒。"}
+{"id":"chunk-6zvphrsz.js#Lbt","doc":"自动更新检查节流：5 分钟内已检查过则跳过。"}
+{"id":"chunk-6zvphrsz.js#B6n","doc":"getMaxVersion：GrowthBook 下发的版本上限（外部用户 external 字段）。"}
+{"id":"chunk-6zvphrsz.js#set","doc":"强制降级是否生效：当前版本高于上限时才降。"}
+{"id":"chunk-6zvphrsz.js#KKs","doc":"版本上限的提示文案（external_message）。"}
+{"id":"chunk-6zvphrsz.js#iet","doc":"shouldSkipVersion：目标版本应跳过时记日志并返回 true。"}
+{"id":"chunk-6zvphrsz.js#VKs","doc":"检查 npm 全局前缀是否可写。"}
+{"id":"chunk-23fm9f0d.js#r_e","doc":"清理时可静默忽略的文件系统错误（不存在/已删除等）。"}
+{"id":"chunk-23fm9f0d.js#XOo","doc":".last-cleanup 标记不是普通文件时尝试修复并上报 tengu_cleanup_throttle_marker。"}
+{"id":"chunk-23fm9f0d.js#JOo","doc":"删除配置目录下过期（1 天）的 staging 标记文件（.npm-cache-cleanup、.version-cleanup 等），每进程一次。"}
+{"id":"chunk-wj577vf9.js#zyo","doc":"提取表格/列表 token（doctor 的上下文警告用，切分可疑）。"}
+{"id":"chunk-hntsfzas.js#n$o","doc":"本进程是否已探测过安装类型。"}
+{"id":"chunk-hntsfzas.js#b2e","doc":"探测并记住安装类型（getCurrentInstallationType 的记录版）。"}
+{"id":"chunk-wphjdnre.js#iTn","doc":"早期输入缓冲是否非空。"}
+{"id":"chunk-wphjdnre.js#aTn","doc":"预置早期输入（例如 --prefill）。"}
+{"id":"chunk-6zvphrsz.js#WKs","doc":"是否从 ~/.claude/local 的本地安装运行。"}
+{"id":"chunk-6zvphrsz.js#S2e","doc":"本地安装（~/.claude/local/node_modules/.bin/claude）是否存在。"}
+{"id":"chunk-6zvphrsz.js#Mbt","doc":"从 SHELL 推断 shell 类型（zsh/bash/fish/unknown）。"}
+{"id":"chunk-k176arn3.js#Jx","doc":"原子方式只在文件不存在时写入（wx 标志，失败清理临时文件）。"}
+{"id":"chunk-zw17mz74.js#L6n","doc":"把 stable/latest/具体版本解析为要安装的版本号（拒绝 99.99.* 测试版本）。"}
+{"id":"chunk-zw17mz74.js#$un","doc":"下载 120 秒无数据时抛出的错误。"}
+{"id":"chunk-21ppfwx8.js#Eii","doc":"下载插件归档（URL 策略检查、User-Agent、arraybuffer）并校验（切分可疑：属于插件下载）。"}
+{"id":"chunk-zw17mz74.js#H6n","doc":"原生二进制文件名：Windows 为 claude.exe，否则 claude。"}
+{"id":"chunk-zw17mz74.js#Fun","doc":"staging 中的二进制与校验和不再一致时拒绝安装。"}
+{"id":"chunk-zw17mz74.js#U1t","doc":"删除原生安装器创建的 claude 启动器（npm 管理的不动）。"}
+{"id":"chunk-zw17mz74.js#e$o","doc":"从 shell 配置文件删除旧的 claude alias。"}
+{"id":"chunk-zw17mz74.js#t$o","doc":"迁移到原生安装后卸载全局 npm 包（@anthropic-ai/claude-code 等）。"}
+{"id":"chunk-ch0vxh4c.js#cts","doc":"路径是否是可执行的普通文件。"}
+{"id":"chunk-s61vbvea.js#Pnt","doc":"启动器是否是 npm 生成的符号链接（指向 .js 或 node_modules）。"}
+{"id":"chunk-x4gcvpxy.js#dOs","doc":"macOS 上为后台进程准备稳定路径/TCC 相关处理（切分可疑：旧版名 detectHomebrew 不符）。"}
+{"id":"chunk-j3nx1xyn.js#dke","doc":"stdout/stderr 管道断开（EPIPE 等）时销毁流并回调，不让进程崩溃。"}
+{"id":"chunk-j3nx1xyn.js#Abs","doc":"为 stdin/stdout/stderr 注册断流处理。"}
+{"id":"chunk-j3nx1xyn.js#aEr","doc":"写流并返回 accepted/backed-up/dropped。"}
+{"id":"chunk-j3nx1xyn.js#Ode","doc":"声明 stdout 排空由外部时钟驱动（信号退出时）。"}
+{"id":"chunk-j3nx1xyn.js#Cbs","doc":"退出是否由外部时钟驱动。"}
+{"id":"chunk-j3nx1xyn.js#aco","doc":"stdout 尚未刷出的字节数。"}
+{"id":"chunk-j3nx1xyn.js#lco","doc":"按积压字节估算 stdout 排空预算（2 s 起，最多 30 s）。"}
+{"id":"chunk-j3nx1xyn.js#Rbs","doc":"累计丢弃的 stderr 消息数。"}
+{"id":"chunk-24t3dkzb.js#KUn","doc":"写 stdout，容忍死管道（EIO/EPIPE）时标记 stdoutDead。"}
+{"id":"chunk-3g0djq3w.js#Fin","doc":"字符串是否像命令名（字母数字开头，可含 : _ -）。"}
+{"id":"chunk-3g0djq3w.js#JQe","doc":"命令执行抛错时写入会话记录的文本（中断/命令错误/其他）。"}
+{"id":"chunk-3g0djq3w.js#FUs","doc":"技能加载中的元数据标签文本（command-name/message 标签）。"}
+{"id":"chunk-3g0djq3w.js#vzi","doc":"消息是否是技能加载中的元数据。"}
+{"id":"chunk-3g0djq3w.js#kzi","doc":"processPromptSlashCommand：只处理 prompt 型命令，展开为消息。"}
+{"id":"chunk-eweqvj83.js#D$","doc":"附加启动上下文字段（随 tengu_startup_perf 上报）。"}
+{"id":"chunk-eweqvj83.js#u_s","doc":"启动入口标识（默认 cli）。"}
+{"id":"chunk-eweqvj83.js#zQt","doc":"输出启动性能报告（首次与延迟各一次）。"}
+{"id":"chunk-ndmse9kj.js#B","doc":"getRootSession：返回当前会话（currentSession 的导出别名）。"}
+{"id":"chunk-ndmse9kj.js#ds","doc":"在进程默认 root 会话的 host 上取 HostScoped 槽位的值（进程级单例状态）。"}
+{"id":"chunk-ndmse9kj.js#mYi","doc":"注入“会话覆盖对象”读取器（AsyncLocalStorage 取值函数），子代理/teammate 借此让 getSessionId 等返回自己的值。"}
+{"id":"chunk-ndmse9kj.js#Qu","doc":"订阅会话切换（regenerateSessionId/switchSession 时触发，参数含原因与恢复的模型）。"}
+{"id":"chunk-ndmse9kj.js#g7","doc":"权限界面锚点目录（委托 oLt）。"}
+{"id":"chunk-ndmse9kj.js#FR","doc":"当前会话是否在 home 目录启动（originalCwd 等于主目录）。"}
+{"id":"chunk-ndmse9kj.js#pLn","doc":"更新会话的 project（originalCwd/projectRoot/cwd 三者合并），originalCwd 变化时发事件。"}
+{"id":"chunk-ndmse9kj.js#nM","doc":"setOriginalCwd：只改 originalCwd。"}
+{"id":"chunk-ndmse9kj.js#Ubs","doc":"订阅 originalCwd 变化。"}
+{"id":"chunk-ndmse9kj.js#jMe","doc":"setProjectRoot：只改 projectRoot。"}
+{"id":"chunk-ndmse9kj.js#dT","doc":"getCwdState：当前会话 project.cwd（无 project 时抛 NoProjectDirectoryError）。"}
+{"id":"chunk-ndmse9kj.js#Tft","doc":"setCwdState：只改 cwd。"}
+{"id":"chunk-ndmse9kj.js#gLn","doc":"压缩前记下最后一次主请求的响应（若 id 匹配），供压缩后的 context_compacted 附件使用。"}
+{"id":"chunk-ndmse9kj.js#Aft","doc":"交接（hand-off）时清掉最后主请求 id 与压缩前响应。"}
+{"id":"chunk-ndmse9kj.js#ySs","doc":"resume 种子：会话 id 已一致时立即应用到请求日志，否则暂存待切换后应用。"}
+{"id":"chunk-ndmse9kj.js#_Ss","doc":"读取并清除“刚压缩过”标记。"}
+{"id":"chunk-ndmse9kj.js#R9e","doc":"用户“活跃”的判定窗口：60 秒（通知用）。"}
+{"id":"chunk-ndmse9kj.js#wSs","doc":"用户是否活跃：终端焦点已知时用焦点，否则看 60 秒内是否有交互。"}
+{"id":"chunk-ndmse9kj.js#_7t","doc":"锁存拒答回退模型：已锁存且当前覆盖即回退模型时只更新回退模型与 effort，否则写入新锁存。"}
+{"id":"chunk-ndmse9kj.js#vLn","doc":"清掉拒答回退锁存里携带的 effort。"}
+{"id":"chunk-ndmse9kj.js#PSs","doc":"改写拒答回退锁存里记录的“之前的模型覆盖”。"}
+{"id":"chunk-ndmse9kj.js#MSs","doc":"SDK 宿主声明的对话类型来源（未声明为 none）。"}
+{"id":"chunk-ndmse9kj.js#YSs","doc":"注册费用状态保存器（在默认 root 会话的账本上）。"}
+{"id":"chunk-ndmse9kj.js#JSs","doc":"注册费用状态的会话记录写入器。"}
+{"id":"chunk-ndmse9kj.js#ZSs","doc":"费用账本是否属于当前会话。"}
+{"id":"chunk-ndmse9kj.js#S7t","doc":"把费用账本归属到当前会话。"}
+{"id":"chunk-ndmse9kj.js#ews","doc":"把费用账本范围限定为当前会话。"}
+{"id":"chunk-ndmse9kj.js#Pft","doc":"resetCostState：清空当前会话费用账本并清 promptId。"}
+{"id":"chunk-ndmse9kj.js#tws","doc":"setCostStateForRestore：resume 时恢复费用状态。"}
+{"id":"chunk-ndmse9kj.js#Tws","doc":"是否为单次 -p（无流式输入、无 --sdk-url）。"}
+{"id":"chunk-ndmse9kj.js#PI","doc":"是否处于受限工作区。"}
+{"id":"chunk-ndmse9kj.js#Pws","doc":"路径是否在受限工作区根之下。"}
+{"id":"chunk-ndmse9kj.js#Hde","doc":"设置“记忆已暂停”（/memory 开关），变化时通知订阅者。"}
+{"id":"chunk-ndmse9kj.js#DLn","doc":"订阅记忆暂停变化。"}
+{"id":"chunk-ndmse9kj.js#Dft","doc":"设置本会话关闭自动记忆；账户记忆模式非 off 时同时清除命令导致的暂停。"}
+{"id":"chunk-ndmse9kj.js#LLn","doc":"订阅本会话自动记忆开关变化。"}
+{"id":"chunk-ndmse9kj.js#hYi","doc":"runner 声明“嵌套仓库差异”（单向锁存，false 只用于测试）。"}
+{"id":"chunk-ndmse9kj.js#yYi","doc":"runner 声明“未检出仓库”（单向锁存）。"}
+{"id":"chunk-ndmse9kj.js#_Yi","doc":"runner 声明“每会话全新机器”（单向锁存）。"}
+{"id":"chunk-ndmse9kj.js#$ws","doc":"poll_event 入口是否已接线。"}
+{"id":"chunk-ndmse9kj.js#Fws","doc":"按本次运行的入口/输入方式决定自有事件的去向（terminal/evals/host）并记录。"}
+{"id":"chunk-ndmse9kj.js#sM","doc":"网关认证是否已固定（非 unpinned）。"}
+{"id":"chunk-ndmse9kj.js#xEr","doc":"网关认证是否经宿主验证。"}
+{"id":"chunk-ndmse9kj.js#FLn","doc":"网关是否提供托管设置（固定或经验证）。"}
+{"id":"chunk-ndmse9kj.js#CEs","doc":"清除同步插件目录与插件同步状态。"}
+{"id":"chunk-ndmse9kj.js#zY","doc":"设置是否使用 cowork 插件目录，并使 HostScoped 缓存失效。"}
+{"id":"chunk-ndmse9kj.js#X","doc":"isDiskless：当前会话是否无盘（不写本地文件）。"}
+{"id":"chunk-ndmse9kj.js#tm","doc":"isDisklessProcess：进程默认会话是否无盘。"}
+{"id":"chunk-ndmse9kj.js#Zco","doc":"工具使用的项目目录：会话目录绑定优先，否则 --project-config-root，否则项目根。"}
+{"id":"chunk-ndmse9kj.js#jR","doc":"getRegisteredHooks：当前钩子持有者里注册的 SDK/插件钩子。"}
+{"id":"chunk-ndmse9kj.js#QEs","doc":"默认 root 会话里注册的钩子。"}
+{"id":"chunk-ndmse9kj.js#dHn","doc":"clearRegisteredHooks：清空注册的钩子并发出变化信号。"}
+{"id":"chunk-ndmse9kj.js#ZEs","doc":"SDK 宿主不可达的提示只记一次：首次返回 true。"}
+{"id":"chunk-ndmse9kj.js#auo","doc":"宿主答复了钩子后清除“不可达已提示”标记。"}
+{"id":"chunk-ndmse9kj.js#Gb","doc":"当前插件钩子运行器。"}
+{"id":"chunk-ndmse9kj.js#D7t","doc":"当前回复闸策略。"}
+{"id":"chunk-ndmse9kj.js#LEr","doc":"替换插件来源的注册钩子（保留运行器持有的插件的钩子）。"}
+{"id":"chunk-ndmse9kj.js#$re","doc":"发出“钩子存储已变化”信号。"}
+{"id":"chunk-ndmse9kj.js#evs","doc":"订阅钩子存储变化。"}
+{"id":"chunk-ndmse9kj.js#huo","doc":"更新已调用技能记录的内容。"}
+{"id":"chunk-ndmse9kj.js#ivs","doc":"clearInvokedSkills：清除已调用技能，保留给定 agentId 集合的记录。"}
+{"id":"chunk-ndmse9kj.js#Uft","doc":"clearInvokedSkillsForAgent：清除某代理的已调用技能。"}
+{"id":"chunk-ndmse9kj.js#avs","doc":"默认 root 会话的主线程代理钩子。"}
+{"id":"chunk-ndmse9kj.js#fHn","doc":"当前会话在云端的工作目录。"}
+{"id":"chunk-xdkvf45x.js#Voi","doc":"getSessionCounter：OTel 计数器 claude_code.session.count。"}
+{"id":"chunk-xdkvf45x.js#qYo","doc":"getLocCounter：claude_code.lines_of_code.count。"}
+{"id":"chunk-xdkvf45x.js#Brt","doc":"getPrCounter：claude_code.pull_request.count。"}
+{"id":"chunk-xdkvf45x.js#YYo","doc":"getCommitCounter：claude_code.commit.count。"}
+{"id":"chunk-xdkvf45x.js#qoi","doc":"getCostCounter：claude_code.cost.usage。"}
+{"id":"chunk-xdkvf45x.js#Onr","doc":"getTokenCounter：claude_code.token.usage。"}
+{"id":"chunk-xdkvf45x.js#l5r","doc":"getCodeEditToolDecisionCounter：claude_code.code_edit_tool.decision。"}
+{"id":"chunk-xdkvf45x.js#Yoi","doc":"getActiveTimeCounter：claude_code.active_time.total。"}
+{"id":"chunk-xdkvf45x.js#Mnr","doc":"getMeterProvider：OTel MeterProvider。"}
+{"id":"chunk-e6aww6q8.js#EEt","doc":"生成要保存的 cost-state 记录（当前会话的费用、时长、token、行数等）；账本不属于本会话时不生成。"}
+{"id":"chunk-e6aww6q8.js#Pfe","doc":"从会话记录的 cost-state 恢复费用账本；没有记录时只限定账本范围。"}
+{"id":"chunk-tyg7f3ek.js#Yc","doc":"把远程 bash 输入作为 replay 用户消息（<bash-input> 标签）发出。"}
+{"id":"cli.js#me","doc":"检查当前目录是否可读：process.cwd() 抛错时返回给用户的错误文本（ENOENT 说明目录已被删除或移动），可读时返回 undefined。"}
+{"id":"cli.js#fe","doc":"参数里是否只有调试类标志（--debug[=…]/-d/--debug-to-stderr/-d2e/--debug-file <path>）；用于判断“claude agents”或裸 claude 是否可以直接进入 agents 视图。"}
+{"id":"cli.js#he","doc":"-- 之前是否出现 --desktop；后台/worktree 快速路径据此拒绝与 --desktop 组合。"}
+{"id":"cli.js#Je","doc":"从 agents 视图的剩余参数中拆出派发默认值：--permission-mode/--inherit-permission-mode/--dangerously-skip-permissions/--allow-dangerously-skip-permissions/--model/--effort/--agent，其余参数原样返回。"}
+{"id":"cli.js#qe","doc":"CLI 进程入口（模块顶层直接调用）。按顺序处理：fd 令牌保护 → --gh-standin → --runner-declares → --handle-uri 校验 → --version 快速返回 → cwd 检查 → 各种专用子进程模式（--eval-mock-server、--claude-in-chrome-mcp、--chrome-native-host、--daemon-worker、--bg-pty-host、--bg-spare、--preload、remote-control、daemon、self-hosted-runner、plugin test）→ 后台会话动词与 --bg → agents 视图 → --tmux --worktree → 最后预读 MDM/钥匙串并动态导入主模块调用 main()。"}
+{"id":"cli.js#@870","doc":"入口副作用：设置 NoDefaultCurrentDirectoryInExePath=1（Windows 不在当前目录找可执行文件）与 COREPACK_ENABLE_AUTO_PIN=0。"}
+{"id":"cli.js#@917","doc":"CLAUDE_CODE_REMOTE=true（云端容器）时给 NODE_OPTIONS 追加 --max-old-space-size=8192。"}
+{"id":"chunk-shkzs7rp.js#Gu","doc":"主入口（cli.js 动态导入后调用）：初始化警告处理与定时器夹紧、注册退出时恢复光标；处理 --handle-uri 深链；必要时改写 argv（导入命令别名）；调用 applyClientTypeAndEarlySettings 后进入 run()。"}
+{"id":"chunk-shkzs7rp.js#fi","doc":"调用 commander 构建器（runCommander/Lks）得到 program，注册全部子命令（gateway、mcp、plugin、auth、setup-token、agents、ultrareview、auto-mode、remote-control、doctor、sandbox、update、install、import…），然后 parseAsync(process.argv)。-p 或非 help 时跳过子命令注册以加快启动。"}
+{"id":"chunk-shkzs7rp.js#Ln","doc":"main() 的前半（旧版 main 的同名部分）：判定是否非交互（-p/--print、非 TTY 等）并 setIsInteractive、从环境写入 launchOptions、读取 fd 传入的 OAuth/API key/WebSocket 令牌（code review 环境下强制要求 fd 4/5）、推断 clientType（github-action/sdk-*/claude-vscode/remote/cli…）、预读 --settings。"}
+{"id":"chunk-shkzs7rp.js#Si","doc":"交互模式的引导段：createRoot 建 Ink 根，执行 showSetupScreens（信任、onboarding、Chrome 提议等），信任后重新加载 MCP 配置、处理 --rc、刷新远程托管设置、启动受信遥测，最后校验 forceLoginOrg。"}
+{"id":"chunk-shkzs7rp.js#_i","doc":"交互会话主体：根据 --continue/--resume/--teleport/--cloud/--from-pr 等分支恢复或创建会话，最后调用 launchRepl（chunk-19arrzdw 的 aLt）渲染 App+REPL。"}
+{"id":"chunk-shkzs7rp.js#ci","doc":"检测是否处于调试器下（--inspect/--debug 参数、NODE_OPTIONS 或 inspector.url()）；模块顶层若为真则直接 process.exit(1)。"}
+{"id":"chunk-shkzs7rp.js#mi","doc":"证书相关环境的遥测字段：NODE_EXTRA_CA_CERTS、CLAUDE_CODE_CLIENT_CERT、--use-system-ca/--use-openssl-ca、CLAUDE_CODE_CERT_STORE。"}
+{"id":"chunk-shkzs7rp.js#pi","doc":"发送 tengu_startup_telemetry：git/worktree 数、gh 登录状态、沙箱开关、自动更新是否禁用、主题、设置过的环境变量名与非默认设置等。"}
+{"id":"chunk-shkzs7rp.js#ui","doc":"统计 autoMode 规则（allow/soft_deny/hard_deny/environment）条数与总词数，供启动遥测。"}
+{"id":"chunk-shkzs7rp.js#Ml","doc":"main.tsx 用到的懒加载函数表：每个都是 lazyCall(() => require(对话框/交互帮助模块).X)，避免启动时加载 Ink 组件。"}
+{"id":"chunk-shkzs7rp.js#Pr","doc":"后台会话动词（attach/logs/stop|kill/respawn/rm）的 commander 定义；只用于根帮助显示，真正执行在 cli.js 快速路径。"}
+{"id":"chunk-shkzs7rp.js#vn","doc":"注册隐藏子命令 edit-hook：从 stdin 读一条 JSON 钩子编辑（VS Code 扩展使用），TTY 或会话内调用时拒绝。"}
+{"id":"chunk-shkzs7rp.js#Dn","doc":"注册 purge [path] 与其旧名 project purge（隐藏，打印改名提示）。"}
+{"id":"chunk-shkzs7rp.js#Pn","doc":"替换 globalThis.setTimeout/setInterval：延迟超过 32 位上限时夹紧并上报 tengu_timer_delay_clamped；返回还原函数。"}
+{"id":"chunk-shkzs7rp.js#Fn","doc":"进程级警告处理：initializeWarningHandler + 定时器夹紧 + 另一个进程钩子。"}
+{"id":"chunk-shkzs7rp.js#Lr","doc":"是否从开发构建目录运行（argv[1]/execPath 含 /build-ant/、/build-external/ 等）。"}
+{"id":"chunk-shkzs7rp.js#xn","doc":"接管 process 'warning' 事件：非开发构建时移除默认监听并禁止默认输出，按名称去重上报 tengu_node_warning，忽略 MaxListenersExceededWarning（AbortSignal/EventTarget）。"}
+{"id":"chunk-3wek6r2k.js#Pp","doc":"发送 tengu_init 事件：入口、启动方式、-p/格式、工具白黑名单数、MCP 数、权限模式、思考配置、模型来源，以及仓库特征（Dockerfile、lockfile、CI 配置等）。"}
+{"id":"chunk-3wek6r2k.js#Tp","doc":"托管设置（policySettings）存在时上报 tengu_managed_settings_loaded，并对未生效的 MCP 策略键、被忽略的 policyHelper 打警告。"}
+{"id":"chunk-3wek6r2k.js#Grn","doc":"--brief 或 CLAUDE_CODE_BRIEF：有权限时启用 SendUserMessage（brief 模式），上报 tengu_brief_mode_enabled。"}
+{"id":"chunk-3wek6r2k.js#Rp","doc":"从 commander 选项中取出 teammate 相关隐藏参数（--agent-id/--agent-name/--team-name/--agent-color/--plan-mode-required/--parent-session-id/--teammate-mode/--agent-type）。"}
+{"id":"chunk-3wek6r2k.js#Dp","doc":"首个位置参数像子命令名时（单词、无空格），按编辑距离提示“Did you mean claude X?”并退出 1。"}
+{"id":"chunk-3wek6r2k.js#xp","doc":"非交互或已信任时预取系统上下文（git 状态等）；未信任时跳过（git 可能执行仓库里的钩子）。"}
+{"id":"chunk-3wek6r2k.js#fPr","doc":"首屏渲染后的延迟预取：用户上下文、系统上下文、Bedrock/Vertex/Mantle 等云凭证、模型能力、文件变更检测器等。"}
+{"id":"chunk-3wek6r2k.js#ia","doc":"校验并组合云会话相关参数（--cloud/--remote/--attach-serve/--environment/--pool/--ref/--on-branch/--correlation-id/--forward-home-settings），返回 {ok,value|error}；value 描述 remote/pool/attach/headlessCloud 等启动形态。"}
+{"id":"chunk-3wek6r2k.js#KSo","doc":"根命令的 action 主体（prepareSession）：处理深链、--bare/--safe-mode、单词提示、权限与工具参数、读 stdin 提示（getInputPrompt），调用 setup()，加载命令/工具/MCP/插件与 SessionStart 钩子，返回 prepared-headless（-p）或 prepared-interactive。"}
+{"id":"chunk-cjydagjy.js#Lks","doc":"commander 构建器（旧版 run() 的前半）：new Command 并挂 preAction 钩子（MDM/钥匙串等待、--project-config-root、init()、客户端数据 URL、启动钩子、插件目录、迁移、远程托管设置/安全对话框、版本下限检查），定义根命令全部选项与 action（→ prepareSession → runHeadless 或 runInteractiveSession）。"}
+{"id":"chunk-cjydagjy.js#$t","doc":"运行同步配置迁移：migrationVersion 已等于 14 时跳过；CCR 新安装直接打标记；否则依次执行各迁移，任一写设置失败则不提升版本（下次启动重跑）。"}
+{"id":"chunk-cjydagjy.js#ao","doc":"preAction 中调用的迁移入口：先 migrateEnableAllProjectMcpServersToSettings，再 runMigrations，再异步迁移（不等待）。"}
+{"id":"chunk-cjydagjy.js#wvr","doc":"列出 commander 中来源为命令行（getOptionValueSource===\"cli\"）的选项，含 --no-* 取反形式；remote-control/desktop 据此拒绝不兼容的根选项。"}
+{"id":"chunk-cjydagjy.js#ro","doc":"prepared-headless 的执行：云会话 attach/create/print 三种远端分支；本地则连接 MCP、动态导入 print 模块并调用 runHeadless。"}
+{"id":"chunk-cjydagjy.js#Evr","doc":"commander 动作是否为会修改插件状态的 plugin 子命令（list、marketplace list、validate、tag、test、eval init 除外）。"}
+{"id":"chunk-qg4qg94n.js#eUi","doc":"处理 --settings：JSON 字符串写入按内容哈希命名的临时文件，否则解析路径；记录为 flagSettings 来源。"}
+{"id":"chunk-qg4qg94n.js#tUi","doc":"处理 --managed-settings（SDK 父进程传入的策略层 JSON）：解析 tier/organization，非法时只告警。"}
+{"id":"chunk-qg4qg94n.js#g","doc":"处理 --setting-sources（user,project,local）并重置设置缓存；非法值退出。"}
+{"id":"chunk-qg4qg94n.js#fes","doc":"在 commander 解析前预读 --settings、--managed-settings 与 --setting-sources，记录 settings_load_ms。"}
+{"id":"chunk-7dqf31r1.js#m","doc":"推断 CLAUDE_CODE_ENTRYPOINT：已设置时规范化（local_agent→local-agent，非交互的 cli→sdk-cli）；mcp serve → mcp；CLAUDE_CODE_ACTION → claude-code-github-action；否则 cli 或 sdk-cli。"}
+{"id":"chunk-7dqf31r1.js#VMi","doc":"initializeEntrypoint 之后把一批进程环境写入 launchOptions（交互性、entrypoint、子会话、远端会话/容器 ID、桌面技能/连接器、Chrome 标签组等），并从 process.env 删除只该被读一次的变量。"}
+{"id":"chunk-151tygw9.js#rHs","doc":"读取初始提示：stdin 非 TTY 时读完 stdin（stream-json 输入返回流；超过上限报错退出），与位置参数拼接。"}
+{"id":"chunk-vbtpanx5.js#GEo","doc":"init() 的记忆化包装：同一 host 只执行一次 initImpl，返回同一个 Promise（导出名 init）。"}
+{"id":"chunk-vbtpanx5.js#Q","doc":"init 本体：启用配置（v5 存储后端/远程设置预热/fd 凭证）、standalone 代理中继、应用安全环境变量与 CA、OAuth 账户信息、优雅退出注册、1P 事件日志、mTLS 与全局代理、预连 Anthropic API、CCR 代理（CLAUDE_CODE_REMOTE）、Windows shell 检查、scratchpad 目录；配置错误时弹 InvalidConfig 对话框或退出。"}
+{"id":"chunk-vbtpanx5.js#Dye","doc":"信任建立后初始化 OpenTelemetry：需要等待远程托管设置时延后到其完成，否则立即初始化（只做一次）。"}
+{"id":"chunk-vbtpanx5.js#D","doc":"初始化 OTel meter 并安装 claude_code.* 计数器到 telemetryHandles。"}
+{"id":"chunk-vbtpanx5.js#von","doc":"退出前确保遥测已初始化（供 flush 用）。"}
+{"id":"chunk-fhdzwff4.js#Nt","doc":"setup(cwd, permissionMode, …)：检查 Node≥22、后台 worker 抢控制终端、--session-id 切换会话、跨会话消息 UDS、恢复 iTerm2/Terminal.app 备份、chdir、捕获钩子快照、文件监视、--worktree（含 tmux）创建与切换、锁定当前版本、插件钩子预加载、上报 tengu_started 等。"}
+{"id":"chunk-7fw14qgv.js#qji","doc":"显示启动前的设置屏（showSetupScreens）：工作区信任、onboarding、MCP 项目审批、Chrome 提议等，返回 onboarding 结果。"}
+{"id":"chunk-7fw14qgv.js#QLi","doc":"构造 setup 步骤序列（setupSteps）：每步是一个可能显示的对话框（信任、bypass 确认、开发通道、云默认等）。"}
+{"id":"chunk-7fw14qgv.js#Cgo","doc":"renderAndRun：把元素挂到 Ink 根，等待退出；渲染期未处理异常写入错误并退出。"}
+{"id":"chunk-7fw14qgv.js#Yji","doc":"getRenderContext：构造 Ink 渲染选项、FPS 统计、帧耗时日志（CLAUDE_CODE_FRAME_TIMING_LOG）。"}
+{"id":"chunk-7fw14qgv.js#MTr","doc":"exitWithMessage：渲染一段（可带颜色的）文本后卸载 Ink、执行 beforeExit、优雅退出。"}
+{"id":"chunk-7fw14qgv.js#Vke","doc":"showSetupDialog：在已有 Ink 根上显示一个对话框，返回其 done 回调的值。"}
+{"id":"chunk-kgh2tnx9.js#pe","doc":"launchResumeChooser：动态导入 ResumeConversation 组件并渲染会话选择器。"}
+{"id":"chunk-kgh2tnx9.js#le","doc":"launchCloudCreateChecklist：云会话创建清单（加载失败/取消各自上报）。"}
+{"id":"chunk-437rqrst.js#hn","doc":"cliError：输出红色错误（可选）并以 1 退出；非 diskless 进程先记录退出原因。（旧版名 cliOk 配错，门面导出名为 cliError）"}
+{"id":"chunk-fnk5kvbf.js#Jut","doc":"在异步上下文外运行回调（AsyncLocalStorage.exit/run），旧版名 cliError 配错。"}
+{"id":"chunk-84jf153s.js#ei","doc":"claude auth login：--console/--claudeai/--sso/--email/--gateway-json 互斥检查，执行 OAuth 登录（或云网关登录），安装令牌、校验组织策略。"}
+{"id":"chunk-84jf153s.js#ii","doc":"claude auth status：汇总令牌来源、API key 来源、提供方与账户信息，--json（默认）或 --text 输出。"}
+{"id":"chunk-th8w37yz.js#Nzi","doc":"登出（fleet 宿主侧）：清除凭证与 onboarding 后退出。"}
+{"id":"chunk-zbtr7f5k.js#Lyo","doc":"installOAuthTokens：保存 OAuth 令牌并更新账户/组织信息，区分同账号刷新与切换账号。"}
+{"id":"chunk-t2bgh7t8.js#ie","doc":"claude auto-mode critique：把用户的 autoMode 规则发给模型点评（CRITIQUE_SYSTEM_PROMPT）。"}
+{"id":"chunk-t2bgh7t8.js#se","doc":"claude auto-mode reset：从用户设置文件删除 autoMode 段。"}
+{"id":"chunk-h2rjy0z4.js#ns","doc":"claude mcp list：列出全部 MCP 服务器并逐个做健康检查。"}
+{"id":"chunk-h2rjy0z4.js#is","doc":"claude mcp get <name>：单个服务器的配置、作用域与连接状态（密钥脱敏）。"}
+{"id":"chunk-h2rjy0z4.js#ss","doc":"claude mcp remove：按作用域删除服务器并清理其安全存储里的认证缓存。"}
+{"id":"chunk-h2rjy0z4.js#cs","doc":"claude mcp add-json：从 JSON 添加服务器（可带 client secret）。"}
+{"id":"chunk-h2rjy0z4.js#ls","doc":"claude mcp add-from-claude-desktop：从 Claude Desktop 配置导入服务器。"}
+{"id":"chunk-h2rjy0z4.js#ps","doc":"claude mcp reset-project-choices：重置 .mcp.json 项目服务器的批准/拒绝记录。"}
+{"id":"chunk-d4eg9at2.js#K1i","doc":"claude plugin validate：校验插件/市场目录结构与清单。"}
+{"id":"chunk-d4eg9at2.js#X1i","doc":"claude plugin marketplace add：添加市场（owner/repo、URL 或路径），支持 --claudeai、--from-link、--resolve-only。"}
+{"id":"chunk-d4eg9at2.js#J1i","doc":"claude plugin marketplace list。"}
+{"id":"chunk-d4eg9at2.js#Q1i","doc":"claude plugin marketplace remove。"}
+{"id":"chunk-d4eg9at2.js#Z1i","doc":"claude plugin marketplace update。"}
+{"id":"chunk-d4eg9at2.js#sji","doc":"claude plugin details <name>：插件清单、组件与 token 开销估算。"}
+{"id":"chunk-2f5p3gsj.js#PWi","doc":"claude setup-token：登录并生成长期有效的订阅令牌。"}
+{"id":"chunk-2f5p3gsj.js#OWi","doc":"claude install [target]：安装原生构建（stable/latest/版本号）；DISABLE_UPDATES 时直接退出。"}
+{"id":"chunk-tyg7f3ek.js#e8e","doc":"runHeadless（-p 模式主函数）：建立输入输出（StructuredIO 或 RemoteIO）、沙箱初始化、加载初始消息（--continue/--resume）、驱动 runHeadlessStreaming，最后按 --output-format 输出：text 打印最终结果，json 输出 result 对象（--verbose 输出全部消息数组），stream-json 逐行已输出。退出码：结果 is_error 为 1。"}
+{"id":"chunk-tyg7f3ek.js#$z","doc":"runHeadlessStreaming：headless 主循环。读取输入消息与 control_request（initialize、interrupt、set_model、set_permission_mode、mcp_set_servers、rewind_files 等约 90 种子类型），排队执行查询轮次并产出 SDK 消息。"}
+{"id":"chunk-tyg7f3ek.js#Xz","doc":"处理 initialize 控制请求：注册 SDK 钩子回调、提示建议、代理、MCP 服务器、输出样式等，回复 initialize 响应（命令、代理、模型、账户、pid、版本…）。"}
+{"id":"chunk-tyg7f3ek.js#ew","doc":"构造 initialize 响应负载：commands、agents、output_style、models、account、pid、claude_code_version 等。"}
+{"id":"chunk-tyg7f3ek.js#eU","doc":"包装 canUseTool：规则判定为 ask 时转给 --permission-prompt-tool 指定的 MCP 工具；工具不可用时拒绝并说明。"}
+{"id":"chunk-tyg7f3ek.js#Jz","doc":"根据输入格式与 --permission-prompts 选择 canUseTool：stdio 走 StructuredIO 请求宿主，none 自动拒绝，否则走权限提示工具。"}
+{"id":"chunk-tyg7f3ek.js#a1","doc":"加载 -p 模式的初始消息：--continue 取最近会话，--resume 按 ID/名称/文件恢复（含 --resume-session-at 截断、--fork-session），失败写启动失败结果。"}
+{"id":"chunk-tyg7f3ek.js#Cs","doc":"写启动失败：stderr 输出；stream-json 时再输出一行 result 错误（带 startupFailureReason）。"}
+{"id":"chunk-tyg7f3ek.js#lU","doc":"处理 rewind_files：检查文件历史检查点，dry-run 或回滚文件。"}
+{"id":"chunk-tyg7f3ek.js#Zz","doc":"处理 channel_enable：为已连接的插件 MCP 服务器注册频道通知。"}
+{"id":"chunk-nkdv7dw8.js#dn","doc":"处理 mcp_set_servers：按 SDK 给出的服务器集合增删改动态 MCP 服务器并重连。"}
+{"id":"chunk-nkdv7dw8.js#hCs","doc":"reconcileMcpServers：比较期望与现有 MCP 配置，替换变化的连接。"}
+{"id":"chunk-j387qrdq.js#XN","doc":"构造加载失败时的 result 消息（subtype error_during_execution）。"}
+{"id":"chunk-na0b3c5q.js#NTe","doc":"StructuredIO：stream-json 协议的本地实现。read() 按行（\\n）读 stdin，processLine 解析每行：keep_alive 丢弃、update_environment_variables 按白名单应用、control_response 匹配挂起请求、control_request 交给调用方、user/assistant/system 消息透传；sendRequest 发出 control_request（can_use_tool、hook_callback、elicitation、mcp_message…）并等待回复；write 输出 NDJSON。"}
+{"id":"chunk-z4g2ta8k.js#Q$","doc":"RemoteIO：--sdk-url 时的远端实现，继承 StructuredIO，输入输出走 CCR 传输（SSE/WebSocket + HTTP POST），带会话写入者、策略携带与心跳。"}
+{"id":"chunk-6j594vm1.js#KNt","doc":"SDK 模式下先执行 PermissionRequest 钩子，钩子给出 allow/deny 时直接返回。"}
+{"id":"chunk-dz36xfxg.js#ie","doc":"把权限决定原因序列化成 SDK 线格式（rule/mode/classifier/hook/workingDir…）。"}
+{"id":"chunk-fp6aqx1j.js#T6n","doc":"SSETransport：从 CCR 会话流读取 SSE 帧（自动重连、Last-Event-ID），写入走 POST 到同一路径（去掉 /stream）。"}
+{"id":"chunk-fp6aqx1j.js#bF","doc":"CCRClient：云端 worker 与 CCR 会话服务的客户端：注册 worker（epoch）、心跳、上传事件/状态、接收 served call 与冲突处理（superseded_by_worker、epoch_stale）。"}
+{"id":"chunk-fp6aqx1j.js#Ue","doc":"WorkerStateUploader：合并 worker 状态补丁（external/internal_metadata 深合并）并节流上传。"}
+{"id":"chunk-jbbd2121.js#f","doc":"解析一段 SSE 帧文本为 {event,data,id}；全是注释时返回 null。"}
+{"id":"chunk-fq0cr76a.js#w5","doc":"把 WebSocket URL（或相对路径）换成对应的 HTTP POST URL。"}
+{"id":"chunk-1wpnxx5r.js#zBe","doc":"把 ws:/wss: 协议改成 http:/https:。"}
+{"id":"chunk-rkjj4sjx.js#ae","doc":"claude update：检查安装方式（native/npm-local/npm-global/package-manager/development），包管理器安装只提示命令（Homebrew/winget/apk…），原生安装走 installLatest，npm 安装走全局/本地 npm；处理多重安装与配置的 installMethod 不一致。"}
+{"id":"chunk-hjesqqfw.js#kvr","doc":"claude mcp serve：把 Claude Code 自身的工具作为 MCP 服务器暴露（stdio 或 http），禁用后台代理等不适用功能。"}
+{"id":"chunk-cjydagjy.js#Mt","doc":"迁移：全局配置 autoUpdates=false（且非原生安装保护）→ userSettings.env.DISABLE_AUTOUPDATER=1，并清除旧字段。"}
+{"id":"chunk-cjydagjy.js#It","doc":"迁移：全局配置 bypassPermissionsModeAccepted → userSettings.skipDangerousModePermissionPrompt=true。"}
+{"id":"chunk-cjydagjy.js#At","doc":"迁移：项目配置里的 enableAllProjectMcpServers/enabledMcpjsonServers/disabledMcpjsonServers → .claude/settings.local.json；local 设置无效时推迟。"}
+{"id":"chunk-cjydagjy.js#Ht","doc":"迁移（仅 firstParty）：userSettings.model 为 Opus 4/4.1 的全名时改成当前 opus 别名。"}
+{"id":"chunk-cjydagjy.js#Bt","doc":"迁移：userSettings.model 为 opus 且允许 1M 时改成 opus[1m]。"}
+{"id":"chunk-cjydagjy.js#jt","doc":"迁移：全局配置 replBridgeEnabled → remoteControlAtStartup。"}
+{"id":"chunk-cjydagjy.js#Nt","doc":"迁移：sonnet[1m] → sonnet-4-5-20250929[1m]（只做一次，sonnet1m45MigrationComplete）。"}
+{"id":"chunk-cjydagjy.js#Ut","doc":"迁移（仅 firstParty）：Sonnet 4.5 全名 → sonnet 别名（Sonnet 4.6 起）。"}
+{"id":"chunk-cjydagjy.js#Gt","doc":"迁移：自动模式默认提供时，重置旧的 skipAutoPermissionPrompt（只做一次）。"}
+{"id":"chunk-cjydagjy.js#Wt","doc":"迁移：Pro 用户未显式选模型时记录切到 Opus 默认（只做一次，opusProMigrationComplete）。"}
+{"id":"chunk-cjydagjy.js#Rt","doc":"316 新增迁移：按别名表改写 userSettings.model（外部构建表为空，等于空操作），上报 tengu_alias_migration。"}
+{"id":"chunk-cjydagjy.js#Dt","doc":"316 新增迁移：claude-fable-5[1m] → fable[1m]。"}
+{"id":"chunk-cjydagjy.js#Vt","doc":"316 新增迁移：全局配置里与默认值不同、而用户设置未设置的偏好项搬进 userSettings（tengu_migrate_user_intent_to_settings）。"}
+{"id":"chunk-cjydagjy.js#xt","doc":"316 新增迁移：subscriptionNoticeCount 等通知计数 → seenNotifications。"}
+{"id":"chunk-awy329vy.js#cn","doc":"startUpstreamProxyRelay：在 127.0.0.1 随机端口起 HTTP CONNECT 中继，把每个 CONNECT 隧道经 WebSocket（Bearer 会话令牌）转发到 CCR agent-proxy；带启动可达性探测、连接池、上下行背压与 /__agentproxy/status 状态页。"}
+{"id":"chunk-awy329vy.js#go","doc":"中继收到客户端数据：解析 CONNECT 请求（拒绝 TLS 直连中继端口），选择性中继时直连或隧道，已建立后转发数据。"}
+{"id":"chunk-awy329vy.js#gn","doc":"打开到 agent-proxy 的 WebSocket（application/proto，Authorization: Bearer）。"}
+{"id":"chunk-awy329vy.js#Qe","doc":"为一个连接拨号新隧道，失败按指数退避重试（openMaxAttempts），耗尽后回 502。"}
+{"id":"chunk-awy329vy.js#bo","doc":"选择性中继：对允许直连的目标直接 Bun.connect，策略拒绝回 403，超时回 504。"}
+{"id":"chunk-awy329vy.js#bGi","doc":"getAgentProxyEnv：代理启用时给子进程的环境变量（HTTPS_PROXY/NO_PROXY、CA 包相关变量、JAVA_TOOL_OPTIONS、gh shim 的 PATH 等）。"}
+{"id":"chunk-awy329vy.js#jHi","doc":"把代理 CA 安装进系统信任库（update-ca-certificates/update-ca-trust），记录安装状态。"}
+{"id":"chunk-awy329vy.js#WHi","doc":"校验 CA 响应：大小上限、至少一张可解析证书、无多余 PEM 标记。"}
+{"id":"chunk-awy329vy.js#Ar","doc":"为会话安装 gh PATH shim（受治理的 git 工具）。"}
+{"id":"chunk-awy329vy.js#Ui","doc":"写入受治理 git 的全局配置块（代理、CA、凭证助手）。"}
+{"id":"chunk-6zvphrsz.js#Nbt","doc":"installGlobalPackage：持锁后用 npm（或 bun）全局安装指定版本，校验安装结果，失败分类上报。"}
+{"id":"chunk-6zvphrsz.js#Hbt","doc":"getLatestVersion：npm view @anthropic-ai/claude-code@stable|latest version。"}
+{"id":"chunk-6zvphrsz.js#St","doc":"acquireLock：~/.claude/.update.lock（或 v5 存储），5 分钟内的锁视为有效。"}
+{"id":"chunk-6zvphrsz.js#w2e","doc":"读取 GrowthBook tengu_max_version_config：版本上限与强制降级开关。"}
+{"id":"chunk-6zvphrsz.js#TUr","doc":"返回跳过某目标版本的原因（低于 minimumVersion、高于上限等），无则 null。"}
+{"id":"chunk-6zvphrsz.js#Obt","doc":"installOrUpdateClaudePackage：在 ~/.claude/local 下用 npm 安装（本地安装方式）。"}
+{"id":"chunk-zw17mz74.js#Fn","doc":"updateLatest：取最新版本（受上限/金丝雀/跳过规则约束）、下载并校验签名、原子安装到 versions 目录、更新启动器链接；持版本锁防并发。"}
+{"id":"chunk-zw17mz74.js#net","doc":"installLatest：合并同进程内并发调用（in-flight）后调用 installLatestImpl。"}
+{"id":"chunk-zw17mz74.js#ht","doc":"installLatestImpl：updateLatest 成功后把 installMethod 设为 native 并关闭旧的自动更新方式。"}
+{"id":"chunk-zw17mz74.js#_t","doc":"performVersionUpdate：下载到 staging、校验、原子移动到安装路径（可复用保留的已下载版本）。"}
+{"id":"chunk-zw17mz74.js#en","doc":"从 downloads.claude.ai/claude-code-releases 下载指定版本：读 manifest.zst.json、按平台取二进制并校验 sha256 与签名。"}
+{"id":"chunk-zw17mz74.js#qt","doc":"从二进制仓库读 stable/latest 通道的版本号（带重试）。"}
+{"id":"chunk-zw17mz74.js#X","doc":"原生安装器的平台标识（linux-x64、darwin-arm64、win32-x64…，含 musl/Android 判断）；316 linux 构建架构固定 x64。"}
+{"id":"chunk-zw17mz74.js#Z","doc":"原生安装目录：versions、staging、locks 与启动器可执行文件路径（~/.local/bin/claude）。"}
+{"id":"chunk-zw17mz74.js#tet","doc":"checkInstall：原生安装的健康检查（启动器存在、PATH、多重安装等），返回问题列表供 doctor/提示。"}
+{"id":"chunk-zw17mz74.js#bCe","doc":"为正在运行的版本加 PID 锁，防止被清理。"}
+{"id":"chunk-zw17mz74.js#bUr","doc":"清理旧版本：保留最近版本、删除过期 staging/备份与陈旧锁（Windows 处理 .old 可执行文件）。"}
+{"id":"chunk-zw17mz74.js#ct","doc":"tryAcquireLock：写 {pid,version,execPath,acquiredAt} 的 PID 锁文件，持有者存活且是 Claude 进程时失败。"}
+{"id":"chunk-hntsfzas.js#Ibt","doc":"getDoctorDiagnostic：安装类型、版本、路径、多重安装、自动更新状态、包管理器、ripgrep 状态与各类配置警告（claude doctor 的数据源）。"}
+{"id":"chunk-hntsfzas.js#se","doc":"判断当前安装类型：npm-local/npm-global/native/package-manager/development/unknown。"}
+{"id":"chunk-hntsfzas.js#pe","doc":"检测配置问题：otelHeadersHelper 失败、PATH 缺 ~/.local/bin、沙箱设置等，返回 {issue,fix}。"}
+{"id":"chunk-23fm9f0d.js#QOo","doc":"后台保留期清理（cleanupPeriodDays，默认 30 天）：错误日志、会话、计划、文件历史、调试日志、反馈包、MCP 缓存、worktree 等数十类数据，结果上报 tengu_retention_sweep。"}
+{"id":"chunk-23fm9f0d.js#Aw","doc":"计算清理截止日期；cleanupPeriodDays=0 时返回 null（不清理）。"}
+{"id":"chunk-e6aww6q8.js#X9s","doc":"ShutdownCoordinator：进程唯一的退出协调者。install 注册 SIGINT/SIGTERM/SIGHUP、uncaughtException、unhandledRejection；shutdown 依次：恢复终端、打印 resume 提示、运行清理回调（有超时）、SessionEnd 钩子、flush 分析与遥测、等 OAuth 刷新、排空 stdout，最后强制退出（带 failsafe 定时器）。"}
+{"id":"chunk-e6aww6q8.js#er","doc":"gracefulShutdown(exitCode, reason, opts)：异步优雅退出（委托 ShutdownCoordinator.shutdown）。旧版匹配名 shutdown1PEventLogging 是错配。"}
+{"id":"chunk-e6aww6q8.js#hi","doc":"gracefulShutdownSync：同步退出路径。"}
+{"id":"chunk-e6aww6q8.js#dzo","doc":"setupGracefulShutdown：安装信号与异常处理（init 时调用）。"}
+{"id":"chunk-x6v6jz2y.js#gt","doc":"退出时恢复终端模式：关闭鼠标/焦点报告、离开备用屏幕、卸载 Ink、排空 stdin。"}
+{"id":"chunk-j3nx1xyn.js#vft","doc":"exitWithError：console.error 后以 1 退出。"}
+{"id":"chunk-j3nx1xyn.js#Vr","doc":"writeToStdout：写 stdout 并记录排队/已刷字节（退出前排空用）。"}
+{"id":"chunk-j3nx1xyn.js#f7t","doc":"drainStdoutBeforeExit：结束 stdout 并等待刷完，超时按积压字节放宽（上限 30 s）。"}
+{"id":"chunk-j3nx1xyn.js#SV","doc":"writeToStderr：积压超过 10 s 且 1 MiB 时可丢弃消息并在下一行注明。"}
+{"id":"chunk-j3nx1xyn.js#aLn","doc":"peekForStdinData：在超时内探测 stdin 是否有数据或已结束。"}
+{"id":"chunk-wphjdnre.js#AVi","doc":"startCapturingEarlyInput：TTY 且非 -p 时把 stdin 设为 raw，在 REPL 挂载前缓存用户已键入的字符。"}
+{"id":"chunk-wphjdnre.js#d","doc":"处理早期输入字节：Ctrl+C 退出 130、Ctrl+D 停止、退格、回车与普通字符。"}
+{"id":"chunk-wphjdnre.js#GN","doc":"stopCapturingEarlyInput：移除 readable 监听。"}
+{"id":"chunk-wphjdnre.js#N5t","doc":"consumeEarlyInput：取出并清空早期输入缓冲（REPL 作为初始输入）。"}
+{"id":"chunk-eweqvj83.js#bo","doc":"profileCheckpoint(name)：启动性能打点（performance.mark），启用详细分析时记录内存。"}
+{"id":"chunk-eweqvj83.js#fe","doc":"启动阶段定义：每个阶段由两个打点名界定（import_time、init_time、settings、mcp…），用于 tengu_startup_perf。"}
+{"id":"chunk-eweqvj83.js#Z","doc":"logStartupPerf：按阶段计算耗时并上报。"}
+{"id":"chunk-eweqvj83.js#G","doc":"profileReport：CLAUDE_CODE_PROFILE_STARTUP 时把报告写到 ~/.claude/startup-perf/<session>.txt/.json。"}
+{"id":"chunk-c5gdqf78.js#Ub","doc":"eagerParseCliFlag：commander 解析前直接从 argv 取某个标志的最后一个值。"}
+{"id":"chunk-xx1vmpsq.js#Vr","doc":"processUserInputBase：处理一次用户输入：图片、粘贴、! bash 模式、/ 斜杠命令、普通提示，产出要加入会话的消息与 shouldQuery。"}
+{"id":"chunk-xx1vmpsq.js#Sn","doc":"processTextPrompt：普通文本提示转为用户消息并上报 tengu_input_prompt。"}
+{"id":"chunk-3g0djq3w.js#Ezi","doc":"processSlashCommand：解析 /命令 参数、查找命令、策略检查，分派到本地命令、prompt 命令（技能）或 fork 子代理执行。"}
+{"id":"chunk-3g0djq3w.js#co","doc":"getMessagesForSlashCommand：执行具体斜杠命令并生成消息（local-jsx、local、prompt 三类）。"}
+{"id":"chunk-3g0djq3w.js#it","doc":"getMessagesForPromptSlashCommand：prompt 型命令/技能展开为消息（含 MCP prompt、禁止模型调用检查）。"}
+{"id":"chunk-3g0djq3w.js#io","doc":"executeForkedSlashCommand：context: fork 的技能在子代理里运行。"}
+{"id":"chunk-w235911v.js#se","doc":"processBashCommand：! 前缀的 bash 输入直接执行并把输出作为 <bash-stdout> 消息。"}
+{"id":"chunk-ndmse9kj.js#Oe","doc":"进程级 host 状态容器：clock、backgroundHousekeeping、launchOptions、settingsSource、extensionsConfig、modelStringsCache、diagnostics、telemetryHandles、credentialSlots、mcpProcessWiring、requestLatches、accountCreditLatches、proactivity。"}
+{"id":"chunk-ndmse9kj.js#Rt","doc":"创建 root 会话：host=新 HostState，id=CLAUDE_CODE_SESSION_ID 等给定值或新 UUID，originalCwd/projectRoot/cwd 都是启动目录。"}
+{"id":"chunk-ndmse9kj.js#y","doc":"进程默认 root 会话（模块加载时创建）。"}
+{"id":"chunk-ndmse9kj.js#t","doc":"当前会话：异步上下文（子代理/teammate 等）里有 session 用它，否则用默认 root 会话。几乎所有状态访问器都经它取值。"}
+{"id":"chunk-ndmse9kj.js#c","doc":"异步上下文里的会话覆盖对象（无 session 字段的旧式覆盖：sessionId、originalCwd、cachedClaudeMdContent…）。"}
+{"id":"chunk-ndmse9kj.js#K","doc":"getSessionId：覆盖对象的 sessionId，否则当前会话 id。"}
+{"id":"chunk-ndmse9kj.js#$bs","doc":"regenerateSessionId：/clear 等场景换新会话 id；清除每会话缓存（plan slug、最后请求、拒答回退等），可把旧 id 设为 parent，发出 clear 会话切换事件。"}
+{"id":"chunk-ndmse9kj.js#yw","doc":"switchSession：切到给定会话 id（resume/fork），重置每会话缓存（fork 时保留最后主请求 id），可同时更新 project 目录。"}
+{"id":"chunk-ndmse9kj.js#M9e","doc":"setIsInteractive：写 launchOptions.isInteractive；变化时让所有 HostScoped 缓存失效。"}
+{"id":"chunk-ndmse9kj.js#_e","doc":"getIsNonInteractiveSession：!launchOptions.isInteractive()。"}
+{"id":"chunk-ndmse9kj.js#oB","doc":"registerHookCallbacks：把 SDK/插件注册的钩子按事件追加到 registeredHooks，并发出钩子变化信号。"}
+{"id":"chunk-ndmse9kj.js#Fde","doc":"addInvokedSkill：记录本会话调用过的技能（压缩后重新注入用），键为 agentId:skillName。"}
+{"id":"chunk-ndmse9kj.js#Ake","doc":"plan 模式进出时设置 needsPlanModeExitAttachment。"}
+{"id":"chunk-ndmse9kj.js#qEs","doc":"auto 模式进出时设置 needsAutoModeExitAttachment（plan↔auto 互转除外）。"}
+{"id":"chunk-ndmse9kj.js#_7","doc":"removeSessionCronTasks：按 id 删除会话级定时任务，返回删除数；删掉 loop 任务时触发唤醒。"}
+{"id":"chunk-ndmse9kj.js#L9e","doc":"getAllowedSettingSources：受限工作区时去掉仓库目录下的设置来源。"}
+{"id":"chunk-ndmse9kj.js#h7t","doc":"markPostCompaction：标记刚压缩并记录上下文 token；不保留缓存前缀时清掉最后主线程请求。"}
+{"id":"chunk-ndmse9kj.js#hco","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 humanAttachmentDigests()。"}
+{"id":"chunk-ndmse9kj.js#Fbs","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 inboundAttachmentFiles()。"}
+{"id":"chunk-ndmse9kj.js#Dje","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 filesPlacedByName()。"}
+{"id":"chunk-ndmse9kj.js#hEr","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 filesPlacedByNameRead()。"}
+{"id":"chunk-ndmse9kj.js#yco","doc":"状态访问器：调用当前会话的 会话暂存（sessionScratch） 上的 setFilesPlacedByNameRead()。"}
+{"id":"chunk-ndmse9kj.js#DDt","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 inboundAttachmentDownloads()。"}
+{"id":"chunk-ndmse9kj.js#kft","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 arrivingInboundFiles()。"}
+{"id":"chunk-ndmse9kj.js#mLn","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 restartClock()。"}
+{"id":"chunk-ndmse9kj.js#T9e","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 sessionStartTime()。"}
+{"id":"chunk-ndmse9kj.js#Bbs","doc":"状态访问器：读取当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 directConnectServerUrl()。"}
+{"id":"chunk-ndmse9kj.js#Yhe","doc":"状态访问器：读取当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 connectNonBlocking()。"}
+{"id":"chunk-ndmse9kj.js#jbs","doc":"状态访问器：写入当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 replaceConnectNonBlocking()。"}
+{"id":"chunk-ndmse9kj.js#Wbs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 teardownUnwindRequested()。"}
+{"id":"chunk-ndmse9kj.js#_co","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceTeardownUnwindRequested()。"}
+{"id":"chunk-ndmse9kj.js#Gbs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 backgroundAutoModeSetupInFlight()。"}
+{"id":"chunk-ndmse9kj.js#bco","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceBackgroundAutoModeSetupInFlight()。"}
+{"id":"chunk-ndmse9kj.js#zbs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 deferredToolStubGateLatch()。"}
+{"id":"chunk-ndmse9kj.js#Kbs","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceDeferredToolStubGateLatch()。"}
+{"id":"chunk-ndmse9kj.js#Vbs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 verifySkillRolloutGateLatch()。"}
+{"id":"chunk-ndmse9kj.js#qbs","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceVerifySkillRolloutGateLatch()。"}
+{"id":"chunk-ndmse9kj.js#Ybs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 commitSkillRolloutGateLatch()。"}
+{"id":"chunk-ndmse9kj.js#Xbs","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceCommitSkillRolloutGateLatch()。"}
+{"id":"chunk-ndmse9kj.js#Jbs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 memoryToolsShapeLatch()。"}
+{"id":"chunk-ndmse9kj.js#yEr","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceMemoryToolsShapeLatch()。"}
+{"id":"chunk-ndmse9kj.js#Qbs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 consumePendingContextCompacted()。"}
+{"id":"chunk-ndmse9kj.js#Zbs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 responseBeforeCompaction()。"}
+{"id":"chunk-ndmse9kj.js#Sco","doc":"状态访问器：调用当前会话的 会话标志（sessionFlags） 上的 forgetResponseBeforeCompaction()。"}
+{"id":"chunk-ndmse9kj.js#eSs","doc":"状态访问器：调用当前会话的 会话标志（sessionFlags） 上的 forgetPendingContextCompacted()。"}
+{"id":"chunk-ndmse9kj.js#_w","doc":"状态访问器：读取当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 strictConfig()。"}
+{"id":"chunk-ndmse9kj.js#hLn","doc":"状态访问器：写入当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 replaceStrictConfig()。"}
+{"id":"chunk-ndmse9kj.js#yLn","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 cliSessionConfigCarried()。"}
+{"id":"chunk-ndmse9kj.js#_Ln","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceCliSessionConfigCarried()。"}
+{"id":"chunk-ndmse9kj.js#tB","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 forkRestrictedLaunchConfig()。"}
+{"id":"chunk-ndmse9kj.js#tSs","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceForkRestrictedLaunchConfig()。"}
+{"id":"chunk-ndmse9kj.js#Ire","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 forkReplayLaunchConfig()。"}
+{"id":"chunk-ndmse9kj.js#nSs","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceForkReplayLaunchConfig()。"}
+{"id":"chunk-ndmse9kj.js#bLn","doc":"状态访问器：读取当前会话的 MCP 会话接线（mcpSessionWiring） 上的 approvedServers()。"}
+{"id":"chunk-ndmse9kj.js#_Er","doc":"状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 approveServers()。"}
+{"id":"chunk-ndmse9kj.js#rSs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordApiDuration()。"}
+{"id":"chunk-ndmse9kj.js#oSs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordCost()。"}
+{"id":"chunk-ndmse9kj.js#sSs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordSpentTokens()。"}
+{"id":"chunk-ndmse9kj.js#xy","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalCostUSD()。"}
+{"id":"chunk-ndmse9kj.js#iSs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordSideQueryCost()。"}
+{"id":"chunk-ndmse9kj.js#aSs","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 sideQueryCostUSD()。"}
+{"id":"chunk-ndmse9kj.js#nB","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalAPIDuration()。"}
+{"id":"chunk-ndmse9kj.js#fke","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalDuration()。"}
+{"id":"chunk-ndmse9kj.js#wco","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalAPIDurationWithoutRetries()。"}
+{"id":"chunk-ndmse9kj.js#Eco","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalToolDuration()。"}
+{"id":"chunk-ndmse9kj.js#vco","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordToolDuration()。"}
+{"id":"chunk-ndmse9kj.js#LDt","doc":"状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 statsStore()。"}
+{"id":"chunk-ndmse9kj.js#lSs","doc":"状态访问器：写入当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 replaceStatsStore()。"}
+{"id":"chunk-ndmse9kj.js#UY","doc":"状态访问器：调用当前会话的 用户在场（userPresence） 上的 recordInteraction()。"}
+{"id":"chunk-ndmse9kj.js#Ore","doc":"状态访问器：调用当前会话的 用户在场（userPresence） 上的 flushIfDirty()。"}
+{"id":"chunk-ndmse9kj.js#dz","doc":"状态访问器：调用当前会话的 用户在场（userPresence） → interactionFired 上的 subscribe()。"}
+{"id":"chunk-ndmse9kj.js#dSs","doc":"状态访问器：调用当前会话的 用户在场（userPresence） 上的 resetBaseline()。"}
+{"id":"chunk-ndmse9kj.js#cSs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordLinesChanged()。"}
+{"id":"chunk-ndmse9kj.js#Xhe","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalLinesAdded()。"}
+{"id":"chunk-ndmse9kj.js#Jhe","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalLinesRemoved()。"}
+{"id":"chunk-ndmse9kj.js#A9e","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalInputTokens()。"}
+{"id":"chunk-ndmse9kj.js#Qy","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalOutputTokens()。"}
+{"id":"chunk-ndmse9kj.js#g7t","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalCacheReadInputTokens()。"}
+{"id":"chunk-ndmse9kj.js#C9e","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalCacheCreationInputTokens()。"}
+{"id":"chunk-ndmse9kj.js#uSs","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 totalWebSearchRequests()。"}
+{"id":"chunk-ndmse9kj.js#fSs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 markUnknownModelCost()。"}
+{"id":"chunk-ndmse9kj.js#kco","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 hasUnknownModelCost()。"}
+{"id":"chunk-ndmse9kj.js#Tco","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordSafetyStop()。"}
+{"id":"chunk-ndmse9kj.js#Mre","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 safetyStops()。"}
+{"id":"chunk-ndmse9kj.js#BY","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastMainRequestId()。"}
+{"id":"chunk-ndmse9kj.js#pSs","doc":"状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastMainRequestId()。"}
+{"id":"chunk-ndmse9kj.js#bEr","doc":"状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastMainRequestId()。"}
+{"id":"chunk-ndmse9kj.js#Cft","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 mainChainReleaseCount()。"}
+{"id":"chunk-ndmse9kj.js#q8","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastMainThreadCacheTtlMs()。"}
+{"id":"chunk-ndmse9kj.js#mSs","doc":"状态访问器：调用当前会话的 请求日志（requestJournal） 上的 isLastMainThreadAskLive()。"}
+{"id":"chunk-ndmse9kj.js#Dj","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastMainThreadRequestAt()。"}
+{"id":"chunk-ndmse9kj.js#SLn","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastLiveMainThreadRequestAt()。"}
+{"id":"chunk-ndmse9kj.js#gSs","doc":"状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastMainThreadCacheTtlMs()。"}
+{"id":"chunk-ndmse9kj.js#SEr","doc":"状态访问器：调用当前会话的 请求日志（requestJournal） 上的 adjustLastMainThreadCacheTtlMs()。"}
+{"id":"chunk-ndmse9kj.js#hSs","doc":"状态访问器：调用当前会话的 请求日志（requestJournal） 上的 recordLastMainThreadCacheRenewal()。"}
+{"id":"chunk-ndmse9kj.js#HDt","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastMainThreadCacheRenewedAt()。"}
+{"id":"chunk-ndmse9kj.js#Lje","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastMainThreadContextTokens()。"}
+{"id":"chunk-ndmse9kj.js#Hje","doc":"状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastMainThreadContextTokens()。"}
+{"id":"chunk-ndmse9kj.js#h7","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastApiCompletionTimestamp()。"}
+{"id":"chunk-ndmse9kj.js#wEr","doc":"状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastApiCompletionTimestamp()。"}
+{"id":"chunk-ndmse9kj.js#Sp","doc":"状态访问器：读取当前会话的 用户在场（userPresence） 上的 lastInteractionTime()。"}
+{"id":"chunk-ndmse9kj.js#Aco","doc":"状态访问器：读取当前会话的 用户在场（userPresence） 上的 lastSubmitTime()。"}
+{"id":"chunk-ndmse9kj.js#Rft","doc":"状态访问器：调用当前会话的 用户在场（userPresence） 上的 recordSubmit()。"}
+{"id":"chunk-ndmse9kj.js#bSs","doc":"状态访问器：调用当前会话的 用户在场（userPresence） 上的 updateTerminalFocus()。"}
+{"id":"chunk-ndmse9kj.js#Nje","doc":"状态访问器：读取当前会话的 用户在场（userPresence） 上的 terminalFocus()。"}
+{"id":"chunk-ndmse9kj.js#SSs","doc":"状态访问器：调用当前会话的 用户在场（userPresence） → terminalFocusFired 上的 subscribe()。"}
+{"id":"chunk-ndmse9kj.js#Cco","doc":"状态访问器：调用当前会话的 用户在场（userPresence） 上的 markScrollActivity()。"}
+{"id":"chunk-ndmse9kj.js#NDt","doc":"状态访问器：读取当前会话的 用户在场（userPresence） 上的 scrollDraining()。"}
+{"id":"chunk-ndmse9kj.js#v0","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 modelUsage()。"}
+{"id":"chunk-ndmse9kj.js#ESs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 usageForModel()。"}
+{"id":"chunk-ndmse9kj.js#vSs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 trackUsageSinceLastResult()。"}
+{"id":"chunk-ndmse9kj.js#kSs","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 usageSinceLastResult()。"}
+{"id":"chunk-ndmse9kj.js#TSs","doc":"状态访问器：读取当前会话的 费用账本（costLedger） 上的 takeUsageSinceLastResult()。"}
+{"id":"chunk-ndmse9kj.js#cu","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 mainLoopModelOverride()。"}
+{"id":"chunk-ndmse9kj.js#j$","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 initialMainLoopModel()。"}
+{"id":"chunk-ndmse9kj.js#em","doc":"状态访问器：调用当前会话的 模型选择（modelSelection） 上的 overrideMainLoopModel()。"}
+{"id":"chunk-ndmse9kj.js#xft","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 mainLoopEffortState()。"}
+{"id":"chunk-ndmse9kj.js#ELn","doc":"状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceMainLoopEffortState()。"}
+{"id":"chunk-ndmse9kj.js#ASs","doc":"状态访问器：调用当前会话的 模型选择（modelSelection） 上的 markRefusalFallbackOccurred()。"}
+{"id":"chunk-ndmse9kj.js#jY","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 refusalFallbackOccurred()。"}
+{"id":"chunk-ndmse9kj.js#y7t","doc":"状态访问器：调用当前会话的 模型选择（modelSelection） 上的 armRefusalFallbackHeader()。"}
+{"id":"chunk-ndmse9kj.js#x9e","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 refusalFallbackHeaderArmed()。"}
+{"id":"chunk-ndmse9kj.js#CSs","doc":"状态访问器：调用当前会话的 模型选择（modelSelection） 上的 armSilentLaneFromServer()。"}
+{"id":"chunk-ndmse9kj.js#Rco","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 silentLaneServerArmed()。"}
+{"id":"chunk-ndmse9kj.js#RSs","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 refusalFallbackLatchOriginRequestId()。"}
+{"id":"chunk-ndmse9kj.js#pke","doc":"状态访问器：调用当前会话的 模型选择（modelSelection） 上的 unlatchRefusalFallbackModel()。"}
+{"id":"chunk-ndmse9kj.js#wV","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 refusalFallbackModelLatch()。"}
+{"id":"chunk-ndmse9kj.js#xSs","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 takeCarriedEffortEnd()。"}
+{"id":"chunk-ndmse9kj.js#ISs","doc":"状态访问器：调用当前会话的 模型选择（modelSelection） 上的 forgetRefusalFallbackOccurred()。"}
+{"id":"chunk-ndmse9kj.js#OSs","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 markSdkDialogHostActive()。"}
+{"id":"chunk-ndmse9kj.js#EV","doc":"状态访问器：读取当前会话的 宿主能力（surfaceCapabilities） 上的 sdkDialogHostActive()。"}
+{"id":"chunk-ndmse9kj.js#xco","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declareDialogKinds()。"}
+{"id":"chunk-ndmse9kj.js#Qhe","doc":"状态访问器：读取当前会话的 宿主能力（surfaceCapabilities） 上的 sdkSupportedDialogKinds()。"}
+{"id":"chunk-ndmse9kj.js#DSs","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declarePerTaskStopAffordance()。"}
+{"id":"chunk-ndmse9kj.js#LSs","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declareRapidFollowupPreempt()。"}
+{"id":"chunk-ndmse9kj.js#NSs","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declareForwardNestedSubagentToolCalls()。"}
+{"id":"chunk-ndmse9kj.js#EEr","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declareHostRendersChromeSetupOffer()。"}
+{"id":"chunk-ndmse9kj.js#Lj","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 replConfigArgv()。"}
+{"id":"chunk-ndmse9kj.js#P9e","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceReplConfigArgv()。"}
+{"id":"chunk-ndmse9kj.js#$Ss","doc":"状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceInitialMainLoopModel()。"}
+{"id":"chunk-ndmse9kj.js#FSs","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 availabilityFallbackChain()。"}
+{"id":"chunk-ndmse9kj.js#USs","doc":"状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceAvailabilityFallbackChain()。"}
+{"id":"chunk-ndmse9kj.js#TLn","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 initialModelSettingLayer()。"}
+{"id":"chunk-ndmse9kj.js#BSs","doc":"状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceInitialModelSettingLayer()。"}
+{"id":"chunk-ndmse9kj.js#jSs","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 resolvedOrgDefault()。"}
+{"id":"chunk-ndmse9kj.js#I9e","doc":"状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceResolvedOrgDefault()。"}
+{"id":"chunk-ndmse9kj.js#WSs","doc":"状态访问器：读取当前会话的 模型选择（modelSelection） 上的 initialEnvDefaultModel()。"}
+{"id":"chunk-ndmse9kj.js#GSs","doc":"状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceInitialEnvDefaultModel()。"}
+{"id":"chunk-ndmse9kj.js#zSs","doc":"状态访问器：写入当前会话的 宿主能力（surfaceCapabilities） 上的 replaceSdkBetas()。"}
+{"id":"chunk-ndmse9kj.js#$je","doc":"状态访问器：读取当前会话的 host（host） → 账户额度锁存（accountCreditLatches） 上的 longContext1mCreditsBlocked()。"}
+{"id":"chunk-ndmse9kj.js#KSs","doc":"状态访问器：写入当前会话的 host（host） → 账户额度锁存（accountCreditLatches） 上的 replaceLongContext1mCreditsBlocked()。"}
+{"id":"chunk-ndmse9kj.js#VSs","doc":"状态访问器：读取当前会话的 host（host） → 账户额度锁存（accountCreditLatches） 上的 usageCreditsRequired()。"}
+{"id":"chunk-ndmse9kj.js#ALn","doc":"状态访问器：写入当前会话的 host（host） → 账户额度锁存（accountCreditLatches） 上的 replaceUsageCreditsRequired()。"}
+{"id":"chunk-ndmse9kj.js#Pco","doc":"状态访问器：调用当前会话的 仅额度模型同意（usageCreditsOnlyModelConsentSlots） 上的 consentSessionFallback()。"}
+{"id":"chunk-ndmse9kj.js#Ico","doc":"状态访问器：写入当前会话的 仅额度模型同意（usageCreditsOnlyModelConsentSlots） 上的 replaceConsentSessionFallback()。"}
+{"id":"chunk-ndmse9kj.js#qSs","doc":"状态访问器：调用当前会话的 仅额度模型同意（usageCreditsOnlyModelConsentSlots） 上的 sessionConsentKey()。"}
+{"id":"chunk-ndmse9kj.js#Oco","doc":"状态访问器：写入当前会话的 仅额度模型同意（usageCreditsOnlyModelConsentSlots） 上的 replaceSessionConsentKey()。"}
+{"id":"chunk-ndmse9kj.js#Lde","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 sdkOAuthTokenRefreshCallback()。"}
+{"id":"chunk-ndmse9kj.js#b7t","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceSdkOAuthTokenRefreshCallback()。"}
+{"id":"chunk-ndmse9kj.js#O9e","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 hostAuthTokenRefreshCallback()。"}
+{"id":"chunk-ndmse9kj.js#CLn","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceHostAuthTokenRefreshCallback()。"}
+{"id":"chunk-ndmse9kj.js#XSs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 runSaver()。"}
+{"id":"chunk-ndmse9kj.js#QSs","doc":"状态访问器：调用当前会话的 费用账本（costLedger） 上的 runTranscriptRecorder()。"}
+{"id":"chunk-ndmse9kj.js#lo","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 projectConfigRoot()。"}
+{"id":"chunk-ndmse9kj.js#nws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceProjectConfigRoot()。"}
+{"id":"chunk-ndmse9kj.js#w7t","doc":"状态访问器：读取当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 modelStrings()。"}
+{"id":"chunk-ndmse9kj.js#vEr","doc":"状态访问器：写入当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 replaceModelStrings()。"}
+{"id":"chunk-ndmse9kj.js#rws","doc":"状态访问器：调用当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 invalidate()。"}
+{"id":"chunk-ndmse9kj.js#ows","doc":"状态访问器：调用当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 recordAdmin3PSteeringSnapshot()。"}
+{"id":"chunk-ndmse9kj.js#sws","doc":"状态访问器：读取当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 admin3PSteeringSnapshot()。"}
+{"id":"chunk-ndmse9kj.js#iws","doc":"状态访问器：调用当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 recordProbeRefutedDocumentDefault()。"}
+{"id":"chunk-ndmse9kj.js#aws","doc":"状态访问器：读取当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 probeRefutedDocumentDefaults()。"}
+{"id":"chunk-ndmse9kj.js#FDt","doc":"状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 loggerProvider()。"}
+{"id":"chunk-ndmse9kj.js#Mco","doc":"状态访问器：写入当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 replaceLoggerProvider()。"}
+{"id":"chunk-ndmse9kj.js#Fje","doc":"状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 eventLogger()。"}
+{"id":"chunk-ndmse9kj.js#Dco","doc":"状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 eventLoggerOwner()。"}
+{"id":"chunk-ndmse9kj.js#Lco","doc":"状态访问器：调用当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 attachEventLogger()。"}
+{"id":"chunk-ndmse9kj.js#lws","doc":"状态访问器：调用当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 bufferPendingEvent()。"}
+{"id":"chunk-ndmse9kj.js#Hco","doc":"状态访问器：调用当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 closeWindow()。"}
+{"id":"chunk-ndmse9kj.js#dws","doc":"状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 windowCloseCause()。"}
+{"id":"chunk-ndmse9kj.js#WMe","doc":"状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 isWindowOpen()。"}
+{"id":"chunk-ndmse9kj.js#E7t","doc":"状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 hostOtel()。"}
+{"id":"chunk-ndmse9kj.js#Ift","doc":"状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 tracerProvider()。"}
+{"id":"chunk-ndmse9kj.js#Nco","doc":"状态访问器：写入当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 replaceTracerProvider()。"}
+{"id":"chunk-ndmse9kj.js#kEr","doc":"状态访问器：读取当前会话的 host（host） → 请求锁存（requestLatches） 上的 foundryDeploymentCapabilities()。"}
+{"id":"chunk-ndmse9kj.js#cws","doc":"状态访问器：读取当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 cachedTelemetryResource()。"}
+{"id":"chunk-ndmse9kj.js#uws","doc":"状态访问器：写入当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 replaceCachedTelemetryResource()。"}
+{"id":"chunk-ndmse9kj.js#TEr","doc":"状态访问器：调用当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 cachedOtlpHttpAgentFactory()。"}
+{"id":"chunk-ndmse9kj.js#fws","doc":"状态访问器：写入当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 replaceCachedOtlpHttpAgentFactory()。"}
+{"id":"chunk-ndmse9kj.js#v7t","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 spareClaimState()。"}
+{"id":"chunk-ndmse9kj.js#gws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSpareClaimState()。"}
+{"id":"chunk-ndmse9kj.js#hws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSpareClaimState()。"}
+{"id":"chunk-ndmse9kj.js#Vd","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 isInteractive()。"}
+{"id":"chunk-ndmse9kj.js#yws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 isInteractivityDecided()。"}
+{"id":"chunk-ndmse9kj.js#_ws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 isNoDialogLaunch()。"}
+{"id":"chunk-ndmse9kj.js#gYi","doc":"状态访问器：调用当前会话的 host（host） → 启动选项（launchOptions） 上的 markNoDialogLaunch()。"}
+{"id":"chunk-ndmse9kj.js#Dre","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 printOutputFormat()。"}
+{"id":"chunk-ndmse9kj.js#bws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replacePrintOutputFormat()。"}
+{"id":"chunk-ndmse9kj.js#Oft","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 thinkingDisplayExplicit()。"}
+{"id":"chunk-ndmse9kj.js#Mft","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceThinkingDisplayExplicit()。"}
+{"id":"chunk-ndmse9kj.js#cT","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 permissionPromptToolName()。"}
+{"id":"chunk-ndmse9kj.js#Sws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replacePermissionPromptToolName()。"}
+{"id":"chunk-ndmse9kj.js#_u","doc":"状态访问器：读取当前会话的 宿主能力（surfaceCapabilities） 上的 attacherCaps()。"}
+{"id":"chunk-ndmse9kj.js#wws","doc":"状态访问器：写入当前会话的 宿主能力（surfaceCapabilities） 上的 replaceAttacherCaps()。"}
+{"id":"chunk-ndmse9kj.js#wC","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） → attacherCapsChanged 上的 subscribe()。"}
+{"id":"chunk-ndmse9kj.js#Ews","doc":"状态访问器：读取当前会话的 宿主能力（surfaceCapabilities） 上的 rvSupervisorLinkLive()。"}
+{"id":"chunk-ndmse9kj.js#RLn","doc":"状态访问器：写入当前会话的 宿主能力（surfaceCapabilities） 上的 replaceRvSupervisorLinkLive()。"}
+{"id":"chunk-ndmse9kj.js#vws","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） → rvSupervisorLinkChanged 上的 subscribe()。"}
+{"id":"chunk-ndmse9kj.js#UDt","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 hasStreamingInput()。"}
+{"id":"chunk-ndmse9kj.js#kws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceHasStreamingInput()。"}
+{"id":"chunk-ndmse9kj.js#Aws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSingleShotPrintSession()。"}
+{"id":"chunk-ndmse9kj.js#Y8","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 singleShotPrintSession()。"}
+{"id":"chunk-ndmse9kj.js#Cws","doc":"状态访问器：调用当前会话的 host（host） → 启动选项（launchOptions） 上的 markPrintInputClosed()。"}
+{"id":"chunk-ndmse9kj.js#GMe","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 printInputClosed()。"}
+{"id":"chunk-ndmse9kj.js#xLn","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 clientType()。"}
+{"id":"chunk-ndmse9kj.js#Rws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceClientType()。"}
+{"id":"chunk-ndmse9kj.js#mke","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 sdkAgentProgressSummariesEnabled()。"}
+{"id":"chunk-ndmse9kj.js#PLn","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSdkAgentProgressSummariesEnabled()。"}
+{"id":"chunk-ndmse9kj.js#ILn","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 rendererMode()。"}
+{"id":"chunk-ndmse9kj.js#xws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceRendererMode()。"}
+{"id":"chunk-ndmse9kj.js#AEr","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 strictToolResultPairing()。"}
+{"id":"chunk-ndmse9kj.js#lk","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 restrictedSession()。"}
+{"id":"chunk-ndmse9kj.js#OLn","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceRestrictedSession()。"}
+{"id":"chunk-ndmse9kj.js#Ows","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 accountMemoryLaunchMode()。"}
+{"id":"chunk-ndmse9kj.js#oM","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 memoryToggledOff()。"}
+{"id":"chunk-ndmse9kj.js#gke","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 autoMemoryOffThisSession()。"}
+{"id":"chunk-ndmse9kj.js#$co","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 restoredMemoryPause()。"}
+{"id":"chunk-ndmse9kj.js#T7t","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceRestoredMemoryPause()。"}
+{"id":"chunk-ndmse9kj.js#Mws","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 restoredAutoMemoryOff()。"}
+{"id":"chunk-ndmse9kj.js#Lft","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceRestoredAutoMemoryOff()。"}
+{"id":"chunk-ndmse9kj.js#Lws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 wizardOperatorToolsEnabled()。"}
+{"id":"chunk-ndmse9kj.js#Hws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 runnerDeclaredNestedRepositoryDiff()。"}
+{"id":"chunk-ndmse9kj.js#Nws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 runnerDeclaredNoRepositoryCheckedOut()。"}
+{"id":"chunk-ndmse9kj.js#BDt","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 pollEventIngress()。"}
+{"id":"chunk-ndmse9kj.js#Mt","doc":"状态访问器：调用当前会话的 host（host） → 启动选项（launchOptions） 上的 markPollEventIngress()。"}
+{"id":"chunk-ndmse9kj.js#Tt","doc":"状态访问器：调用当前会话的 host（host） → 启动选项（launchOptions） 上的 markOwnEventDeliveryRequested()。"}
+{"id":"chunk-ndmse9kj.js#vV","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 userMsgOptIn()。"}
+{"id":"chunk-ndmse9kj.js#Uje","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceUserMsgOptIn()。"}
+{"id":"chunk-ndmse9kj.js#Uws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 searchToolsOptIn()。"}
+{"id":"chunk-ndmse9kj.js#Bws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSearchToolsOptIn()。"}
+{"id":"chunk-ndmse9kj.js#jws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 todoToolsOptIn()。"}
+{"id":"chunk-ndmse9kj.js#Wws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceTodoToolsOptIn()。"}
+{"id":"chunk-ndmse9kj.js#Gws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 toolsOmittedByLaunchList()。"}
+{"id":"chunk-ndmse9kj.js#Kws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 sessionStartType()。"}
+{"id":"chunk-ndmse9kj.js#HLn","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSessionStartType()。"}
+{"id":"chunk-ndmse9kj.js#Fco","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 questionPreviewFormat()。"}
+{"id":"chunk-ndmse9kj.js#Uco","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceQuestionPreviewFormat()。"}
+{"id":"chunk-ndmse9kj.js#zMe","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 extendedQuestionsEnabled()。"}
+{"id":"chunk-ndmse9kj.js#Vws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceExtendedQuestionsEnabled()。"}
+{"id":"chunk-ndmse9kj.js#qws","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 questionOptionDescriptionsOptional()。"}
+{"id":"chunk-ndmse9kj.js#Yws","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceQuestionOptionDescriptionsOptional()。"}
+{"id":"chunk-ndmse9kj.js#Bco","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 agentColorMap()。"}
+{"id":"chunk-ndmse9kj.js#k0","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 flagSettingsPath()。"}
+{"id":"chunk-ndmse9kj.js#Xws","doc":"状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagSettingsPath()。"}
+{"id":"chunk-ndmse9kj.js#hke","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 flagAgentsFilePaths()。"}
+{"id":"chunk-ndmse9kj.js#Jws","doc":"状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagAgentsFilePaths()。"}
+{"id":"chunk-ndmse9kj.js#yke","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 flagMcpConfigFilePaths()。"}
+{"id":"chunk-ndmse9kj.js#Qws","doc":"状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagMcpConfigFilePaths()。"}
+{"id":"chunk-ndmse9kj.js#dk","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 flagSettingsExpectedContent()。"}
+{"id":"chunk-ndmse9kj.js#Zws","doc":"状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagSettingsExpectedContent()。"}
+{"id":"chunk-ndmse9kj.js#y7","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 flagSettingsFilePinnedContent()。"}
+{"id":"chunk-ndmse9kj.js#eEs","doc":"状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagSettingsFilePinnedContent()。"}
+{"id":"chunk-ndmse9kj.js#Df","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 flagSettingsInline()。"}
+{"id":"chunk-ndmse9kj.js#UR","doc":"状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagSettingsInline()。"}
+{"id":"chunk-ndmse9kj.js#jDt","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 parentManagedSettings()。"}
+{"id":"chunk-ndmse9kj.js#tEs","doc":"状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceParentManagedSettings()。"}
+{"id":"chunk-ndmse9kj.js#Nde","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 parentManagedSettingsInvalid()。"}
+{"id":"chunk-ndmse9kj.js#jco","doc":"状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceParentManagedSettingsInvalid()。"}
+{"id":"chunk-ndmse9kj.js#nEs","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 parentOrganizationSettings()。"}
+{"id":"chunk-ndmse9kj.js#WY","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 oauthTokenFromFd()。"}
+{"id":"chunk-ndmse9kj.js#SL","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceOauthTokenFromFd()。"}
+{"id":"chunk-ndmse9kj.js#EC","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 oauthTokenFromBgSnapshot()。"}
+{"id":"chunk-ndmse9kj.js#A7t","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceOauthTokenFromBgSnapshot()。"}
+{"id":"chunk-ndmse9kj.js#rEs","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 loginStashedInTokenSlot()。"}
+{"id":"chunk-ndmse9kj.js#NLn","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceLoginStashedInTokenSlot()。"}
+{"id":"chunk-ndmse9kj.js#oEs","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 oauthOrgFromBgSnapshot()。"}
+{"id":"chunk-ndmse9kj.js#Wco","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceOauthOrgFromBgSnapshot()。"}
+{"id":"chunk-ndmse9kj.js#sEs","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 oauthScopesFromFd()。"}
+{"id":"chunk-ndmse9kj.js#C7t","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceOauthScopesFromFd()。"}
+{"id":"chunk-ndmse9kj.js#CEr","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 apiKeyFromFd()。"}
+{"id":"chunk-ndmse9kj.js#Gco","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceApiKeyFromFd()。"}
+{"id":"chunk-ndmse9kj.js#$Ln","doc":"状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 descriptorAnnouncementConsumed()。"}
+{"id":"chunk-ndmse9kj.js#bke","doc":"状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 markDescriptorAnnouncementConsumed()。"}
+{"id":"chunk-ndmse9kj.js#R7t","doc":"状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 credentialRoad()。"}
+{"id":"chunk-ndmse9kj.js#Ske","doc":"状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 noteCredentialRoad()。"}
+{"id":"chunk-ndmse9kj.js#zco","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 gatewayTokenFromDescriptor()。"}
+{"id":"chunk-ndmse9kj.js#REr","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceGatewayTokenFromDescriptor()。"}
+{"id":"chunk-ndmse9kj.js#iEs","doc":"状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 resetFdCredentialState()。"}
+{"id":"chunk-ndmse9kj.js#Lr","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 gatewayAuth()。"}
+{"id":"chunk-ndmse9kj.js#lEs","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceGatewayServerProcess()。"}
+{"id":"chunk-ndmse9kj.js#Hft","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 gatewayServerProcess()。"}
+{"id":"chunk-ndmse9kj.js#Nft","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceGatewayRequiredByHostPolicyReader()。"}
+{"id":"chunk-ndmse9kj.js#$ft","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 gatewayRequiredByHostPolicy()。"}
+{"id":"chunk-ndmse9kj.js#Lre","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceGatewayAuth()。"}
+{"id":"chunk-ndmse9kj.js#dEs","doc":"状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 isGatewayHostHeldStrict()。"}
+{"id":"chunk-ndmse9kj.js#uEs","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 authenticatedAccount()。"}
+{"id":"chunk-ndmse9kj.js#Hre","doc":"状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 stampAuthenticatedAccount()。"}
+{"id":"chunk-ndmse9kj.js#wke","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 authenticatedAccountEpoch()。"}
+{"id":"chunk-ndmse9kj.js#Kco","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 bearerPlan()。"}
+{"id":"chunk-ndmse9kj.js#fEs","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceBearerPlan()。"}
+{"id":"chunk-ndmse9kj.js#pEs","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 startupPolicySnapshot()。"}
+{"id":"chunk-ndmse9kj.js#mEs","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceStartupPolicySnapshot()。"}
+{"id":"chunk-ndmse9kj.js#Bje","doc":"状态访问器：读取当前会话的 host（host） → 凭证槽（credentialSlots） 上的 gatewayRefreshInFlight()。"}
+{"id":"chunk-ndmse9kj.js#Vco","doc":"状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceGatewayRefreshInFlight()。"}
+{"id":"chunk-ndmse9kj.js#gEs","doc":"状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastAPIRequest()。"}
+{"id":"chunk-ndmse9kj.js#ULn","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastAPIRequest()。"}
+{"id":"chunk-ndmse9kj.js#PEr","doc":"状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastCancelledAPIMessageId()。"}
+{"id":"chunk-ndmse9kj.js#jje","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastCancelledAPIMessageId()。"}
+{"id":"chunk-ndmse9kj.js#hEs","doc":"状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastAPIRequestMessages()。"}
+{"id":"chunk-ndmse9kj.js#IEr","doc":"状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastClassifierRequests()。"}
+{"id":"chunk-ndmse9kj.js#qco","doc":"状态访问器：读取当前会话的 请求日志（requestJournal） 上的 lastClassifierRequests()。"}
+{"id":"chunk-ndmse9kj.js#Eke","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 allowedSettingSources()。"}
+{"id":"chunk-ndmse9kj.js#Yco","doc":"状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceAllowedSettingSources()。"}
+{"id":"chunk-ndmse9kj.js#Hj","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceInlinePlugins()。"}
+{"id":"chunk-ndmse9kj.js#bw","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 inlinePlugins()。"}
+{"id":"chunk-ndmse9kj.js#vke","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceInlinePluginsNoMcp()。"}
+{"id":"chunk-ndmse9kj.js#mA","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 inlinePluginsNoMcp()。"}
+{"id":"chunk-ndmse9kj.js#_Es","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceInlinePluginUrls()。"}
+{"id":"chunk-ndmse9kj.js#kke","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 inlinePluginUrls()。"}
+{"id":"chunk-ndmse9kj.js#WDt","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceSyncedPluginDirs()。"}
+{"id":"chunk-ndmse9kj.js#bEs","doc":"状态访问器：调用当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 syncedPluginRowId()。"}
+{"id":"chunk-ndmse9kj.js#WLn","doc":"状态访问器：调用当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 syncedPluginAttestation()。"}
+{"id":"chunk-ndmse9kj.js#SEs","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceAttestedOfficialPluginIds()。"}
+{"id":"chunk-ndmse9kj.js#wEs","doc":"状态访问器：调用当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 attestedOfficialPluginMarketplace()。"}
+{"id":"chunk-ndmse9kj.js#GDt","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 syncedPluginDirsRegistered()。"}
+{"id":"chunk-ndmse9kj.js#GY","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 syncedPluginDirs()。"}
+{"id":"chunk-ndmse9kj.js#zLn","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceAccountSkillsSyncEnabled()。"}
+{"id":"chunk-ndmse9kj.js#KLn","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 accountSkillsSyncEnabled()。"}
+{"id":"chunk-ndmse9kj.js#VLn","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceSkillsSyncVetoed()。"}
+{"id":"chunk-ndmse9kj.js#BR","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 skillsSyncVetoed()。"}
+{"id":"chunk-ndmse9kj.js#REs","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceAccountPluginsSyncEnabled()。"}
+{"id":"chunk-ndmse9kj.js#Wje","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 accountPluginsSyncEnabled()。"}
+{"id":"chunk-ndmse9kj.js#xEs","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replacePluginsSyncVetoed()。"}
+{"id":"chunk-ndmse9kj.js#cz","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 pluginsSyncVetoed()。"}
+{"id":"chunk-ndmse9kj.js#PEs","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceChromeFlagOverride()。"}
+{"id":"chunk-ndmse9kj.js#Zhe","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 chromeFlagOverride()。"}
+{"id":"chunk-ndmse9kj.js#IEs","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceTeammateAgentId()。"}
+{"id":"chunk-ndmse9kj.js#Zy","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 teammateAgentId()。"}
+{"id":"chunk-ndmse9kj.js#OEs","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceOnboardingShownThisSession()。"}
+{"id":"chunk-ndmse9kj.js#MEs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 onboardingShownThisSession()。"}
+{"id":"chunk-ndmse9kj.js#qLn","doc":"状态访问器：读取当前会话的 host（host） → 设置来源（settingsSource） 上的 useCoworkPlugins()。"}
+{"id":"chunk-ndmse9kj.js#DEs","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceDisableSlashCommands()。"}
+{"id":"chunk-ndmse9kj.js#Wb","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 disableSlashCommands()。"}
+{"id":"chunk-ndmse9kj.js#YLn","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 disableFileMentions()。"}
+{"id":"chunk-ndmse9kj.js#kV","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 sessionUploadsDir()。"}
+{"id":"chunk-ndmse9kj.js#LEs","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceLocalUploadsRoot()。"}
+{"id":"chunk-ndmse9kj.js#eye","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 localUploadsRoot()。"}
+{"id":"chunk-ndmse9kj.js#XLn","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSessionBypassPermissionsMode()。"}
+{"id":"chunk-ndmse9kj.js#Nre","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 sessionBypassPermissionsMode()。"}
+{"id":"chunk-ndmse9kj.js#uz","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceScheduledTasksEnabled()。"}
+{"id":"chunk-ndmse9kj.js#MEr","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 scheduledTasksEnabled()。"}
+{"id":"chunk-ndmse9kj.js#HEs","doc":"状态访问器：调用当前会话的 host（host） → 启动选项（launchOptions） 上的 onScheduledTasksEnabled()。"}
+{"id":"chunk-ndmse9kj.js#NEs","doc":"状态访问器：调用当前会话的 会话定时任务（sessionCron） 上的 chainStartedAt()。"}
+{"id":"chunk-ndmse9kj.js#Jco","doc":"状态访问器：调用当前会话的 会话定时任务（sessionCron） 上的 recordChainStart()。"}
+{"id":"chunk-ndmse9kj.js#JLn","doc":"状态访问器：调用当前会话的 会话定时任务（sessionCron） 上的 forgetChainStart()。"}
+{"id":"chunk-ndmse9kj.js#Tke","doc":"状态访问器：读取当前会话的 会话定时任务（sessionCron） 上的 tickInFlightPrompt()。"}
+{"id":"chunk-ndmse9kj.js#$Es","doc":"状态访问器：读取当前会话的 会话定时任务（sessionCron） 上的 tickInFlightPlugin()。"}
+{"id":"chunk-ndmse9kj.js#zDt","doc":"状态访问器：写入当前会话的 会话定时任务（sessionCron） 上的 replaceTickInFlightPrompt()。"}
+{"id":"chunk-ndmse9kj.js#Qco","doc":"状态访问器：读取当前会话的 会话定时任务（sessionCron） 上的 consecutiveKeepalives()。"}
+{"id":"chunk-ndmse9kj.js#QLn","doc":"状态访问器：写入当前会话的 会话定时任务（sessionCron） 上的 replaceConsecutiveKeepalives()。"}
+{"id":"chunk-ndmse9kj.js#ZLn","doc":"状态访问器：读取当前会话的 会话定时任务（sessionCron） 上的 ended()。"}
+{"id":"chunk-ndmse9kj.js#P7t","doc":"状态访问器：读取当前会话的 会话定时任务（sessionCron） 上的 wakeFires()。"}
+{"id":"chunk-ndmse9kj.js#eHn","doc":"状态访问器：调用当前会话的 会话定时任务（sessionCron） 上的 recordWakeFire()。"}
+{"id":"chunk-ndmse9kj.js#I7t","doc":"状态访问器：调用当前会话的 会话定时任务（sessionCron） 上的 resetWakeFires()。"}
+{"id":"chunk-ndmse9kj.js#tHn","doc":"状态访问器：调用当前会话的 会话定时任务（sessionCron） → changed 上的 subscribe()。"}
+{"id":"chunk-ndmse9kj.js#FEs","doc":"状态访问器：调用当前会话的 会话定时任务（sessionCron） → pendingLoopWakeup 上的 subscribe()。"}
+{"id":"chunk-ndmse9kj.js#O7t","doc":"状态访问器：调用当前会话的 会话定时任务（sessionCron） → pendingLoopWakeup 上的 emit()。"}
+{"id":"chunk-ndmse9kj.js#wL","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceSessionTrustAccepted()。"}
+{"id":"chunk-ndmse9kj.js#VMe","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 sessionTrustAccepted()。"}
+{"id":"chunk-ndmse9kj.js#N9e","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceHomeTrustDialogAccepted()。"}
+{"id":"chunk-ndmse9kj.js#qMe","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 homeTrustDialogAccepted()。"}
+{"id":"chunk-ndmse9kj.js#nHn","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSessionPersistenceDisabled()。"}
+{"id":"chunk-ndmse9kj.js#T0","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 sessionPersistenceDisabled()。"}
+{"id":"chunk-ndmse9kj.js#Bo","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 diskless()。"}
+{"id":"chunk-ndmse9kj.js#rHn","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 ccrSessionUrl()。"}
+{"id":"chunk-ndmse9kj.js#$de","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 ccrDerivedSurface()。"}
+{"id":"chunk-ndmse9kj.js#oHn","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceEntrypointOnRequests()。"}
+{"id":"chunk-ndmse9kj.js#b7","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 entrypointOnRequests()。"}
+{"id":"chunk-ndmse9kj.js#UEs","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 autoCompactWindowSurface()。"}
+{"id":"chunk-ndmse9kj.js#BEs","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 coworkEnrollment()。"}
+{"id":"chunk-ndmse9kj.js#KY","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 toolsMachine()。"}
+{"id":"chunk-ndmse9kj.js#sHn","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 hasExitedPlanMode()。"}
+{"id":"chunk-ndmse9kj.js#Nj","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceHasExitedPlanMode()。"}
+{"id":"chunk-ndmse9kj.js#euo","doc":"状态访问器：读取当前会话的 host（host） → 主动性（proactivity） 上的 selectorGate()。"}
+{"id":"chunk-ndmse9kj.js#jEs","doc":"状态访问器：读取当前会话的 host（host） → 主动性（proactivity） 上的 selectorGateEverOn()。"}
+{"id":"chunk-ndmse9kj.js#WEs","doc":"状态访问器：调用当前会话的 host（host） → 主动性（proactivity） 上的 inheritSelectorGateEverOn()。"}
+{"id":"chunk-ndmse9kj.js#tuo","doc":"状态访问器：写入当前会话的 host（host） → 主动性（proactivity） 上的 replaceSelectorGate()。"}
+{"id":"chunk-ndmse9kj.js#GEs","doc":"状态访问器：调用当前会话的 host（host） → 主动性（proactivity） 上的 resampleSelectorGate()。"}
+{"id":"chunk-ndmse9kj.js#M7t","doc":"状态访问器：调用当前会话的 host（host） → 主动性（proactivity） 上的 subscribeSelectorGateChanged()。"}
+{"id":"chunk-ndmse9kj.js#zEs","doc":"状态访问器：写入当前会话的 host（host） → 主动性（proactivity） 上的 replaceHostGateSubscription()。"}
+{"id":"chunk-ndmse9kj.js#KEs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 needsPlanModeExitAttachment()。"}
+{"id":"chunk-ndmse9kj.js#X8","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceNeedsPlanModeExitAttachment()。"}
+{"id":"chunk-ndmse9kj.js#VEs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 needsAutoModeExitAttachment()。"}
+{"id":"chunk-ndmse9kj.js#rB","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceNeedsAutoModeExitAttachment()。"}
+{"id":"chunk-ndmse9kj.js#nuo","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 lspRecommendationShownThisSession()。"}
+{"id":"chunk-ndmse9kj.js#ruo","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceLspRecommendationShownThisSession()。"}
+{"id":"chunk-ndmse9kj.js#YEs","doc":"状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceInitJsonSchema()。"}
+{"id":"chunk-ndmse9kj.js#ouo","doc":"状态访问器：读取当前会话的 host（host） → 启动选项（launchOptions） 上的 initJsonSchema()。"}
+{"id":"chunk-ndmse9kj.js#XEs","doc":"状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 registerClientsAccessor()。"}
+{"id":"chunk-ndmse9kj.js#suo","doc":"状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 acquireClientsAccessor()。"}
+{"id":"chunk-ndmse9kj.js#km","doc":"状态访问器：读取当前会话的 MCP 会话接线（mcpSessionWiring） 上的 clientsFromAccessor()。"}
+{"id":"chunk-ndmse9kj.js#iHn","doc":"状态访问器：调用当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 registerEnsureConnectedClient()。"}
+{"id":"chunk-ndmse9kj.js#S7","doc":"状态访问器：读取当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 ensureConnectedClient()。"}
+{"id":"chunk-ndmse9kj.js#KDt","doc":"状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 registerConnectedClientWiring()。"}
+{"id":"chunk-ndmse9kj.js#aHn","doc":"状态访问器：读取当前会话的 MCP 会话接线（mcpSessionWiring） 上的 connectedClientWiring()。"}
+{"id":"chunk-ndmse9kj.js#JEs","doc":"状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 registerToolsSwapper()。"}
+{"id":"chunk-ndmse9kj.js#iuo","doc":"状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 acquireToolsSwapper()。"}
+{"id":"chunk-ndmse9kj.js#lHn","doc":"状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 swapServerTools()。"}
+{"id":"chunk-ndmse9kj.js#YMe","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 planSlugCache()。"}
+{"id":"chunk-ndmse9kj.js#puo","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 pendingPrLinks()。"}
+{"id":"chunk-ndmse9kj.js#nvs","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 policyPredicateTelemetryEmitted()。"}
+{"id":"chunk-ndmse9kj.js#rvs","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 chromeAvailabilityAnchorMs()。"}
+{"id":"chunk-ndmse9kj.js#ovs","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 proposeGoalAvailabilityLogged()。"}
+{"id":"chunk-ndmse9kj.js#svs","doc":"状态访问器：调用当前会话的 会话标志（sessionFlags） 上的 markProposeGoalAvailabilityLogged()。"}
+{"id":"chunk-ndmse9kj.js#$Er","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 inheritedTeamName()。"}
+{"id":"chunk-ndmse9kj.js#muo","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceInheritedTeamName()。"}
+{"id":"chunk-ndmse9kj.js#H7t","doc":"状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceTeleportedSessionInfo()。"}
+{"id":"chunk-ndmse9kj.js#N7t","doc":"状态访问器：读取当前会话的 会话标志（sessionFlags） 上的 teleportedSessionInfo()。"}
+{"id":"chunk-ndmse9kj.js#guo","doc":"状态访问器：调用当前会话的 会话标志（sessionFlags） 上的 markFirstTeleportMessageLogged()。"}
+{"id":"chunk-ndmse9kj.js#Fre","doc":"状态访问器：读取当前会话的 已调用技能（invokedSkills） 上的 skills()。"}
+{"id":"chunk-ndmse9kj.js#bYi","doc":"状态访问器：调用当前会话的 host（host） → 诊断（diagnostics） 上的 recordSlowOperation()。"}
+{"id":"chunk-ndmse9kj.js#SYi","doc":"状态访问器：读取当前会话的 host（host） → 诊断（diagnostics） 上的 slowOperations()。"}
+{"id":"chunk-ndmse9kj.js#wYi","doc":"状态访问器：读取当前会话的 host（host） → 诊断（diagnostics） 上的 devBarAlert()。"}
+{"id":"chunk-ndmse9kj.js#VY","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 sessionSkillAllowlist()。"}
+{"id":"chunk-ndmse9kj.js#lvs","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceSessionSkillAllowlist()。"}
+{"id":"chunk-ndmse9kj.js#EL","doc":"状态访问器：读取当前会话的 宿主能力（surfaceCapabilities） 上的 caps()。"}
+{"id":"chunk-ndmse9kj.js#uHn","doc":"状态访问器：写入当前会话的 宿主能力（surfaceCapabilities） 上的 replaceCaps()。"}
+{"id":"chunk-ndmse9kj.js#Ure","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 markRemote()。"}
+{"id":"chunk-ndmse9kj.js#cvs","doc":"状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） → cloudCwdChanged 上的 subscribe()。"}
+{"id":"chunk-ndmse9kj.js#$9e","doc":"状态访问器：读取当前会话的 提示词组装（promptAssembly） 上的 sections()。"}
+{"id":"chunk-ndmse9kj.js#uvs","doc":"状态访问器：调用当前会话的 提示词组装（promptAssembly） 上的 recordSection()。"}
+{"id":"chunk-ndmse9kj.js#vL","doc":"状态访问器：调用当前会话的 提示词组装（promptAssembly） 上的 noteInvalidation()。"}
+{"id":"chunk-ndmse9kj.js#J8","doc":"状态访问器：读取当前会话的 提示词组装（promptAssembly） 上的 epoch()。"}
+{"id":"chunk-ndmse9kj.js#EYi","doc":"状态访问器：读取当前会话的 提示词组装（promptAssembly） 上的 lastInvalidationReason()。"}
+{"id":"chunk-ndmse9kj.js#fvs","doc":"状态访问器：读取当前会话的 会话暂存（sessionScratch） 上的 vimSharedState()。"}
+{"id":"chunk-ndmse9kj.js#pvs","doc":"状态访问器：写入当前会话的 会话暂存（sessionScratch） 上的 replaceVimSharedState()。"}
+{"id":"chunk-ndmse9kj.js#fz","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceAdditionalDirectoriesForClaudeMd()。"}
+{"id":"chunk-ndmse9kj.js#mvs","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 claudeMdAdditionalDirectoriesAsked()。"}
+{"id":"chunk-ndmse9kj.js#yuo","doc":"状态访问器：调用当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 askClaudeMdAdditionalDirectories()。"}
+{"id":"chunk-ndmse9kj.js#zb","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 allowedChannels()。"}
+{"id":"chunk-ndmse9kj.js#F9e","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceAllowedChannels()。"}
+{"id":"chunk-ndmse9kj.js#mHn","doc":"状态访问器：读取当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 hasDevChannels()。"}
+{"id":"chunk-ndmse9kj.js#gvs","doc":"状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceHasDevChannels()。"}
+{"id":"chunk-ndmse9kj.js#hvs","doc":"状态访问器：读取当前会话的 host（host） → 请求锁存（requestLatches） 上的 promptCache1hAllowlist()。"}
+{"id":"chunk-ndmse9kj.js#et","doc":"会话状态函数 mainAgentId：优先取异步上下文覆盖对象的 sessionId；"}
+{"id":"chunk-ndmse9kj.js#Mje","doc":"会话状态函数 getParentSessionId：涉及当前会话的 parentId。"}
+{"id":"chunk-ndmse9kj.js#uke","doc":"会话状态函数 getSessionProjectDir：涉及当前会话的 identity.projectDir。"}
+{"id":"chunk-ndmse9kj.js#ve","doc":"会话状态函数 getOriginalCwd：优先取异步上下文覆盖对象的 originalCwd；"}
+{"id":"chunk-ndmse9kj.js#yi","doc":"会话状态函数 getOriginalCwdOrNull：优先取异步上下文覆盖对象的 originalCwd；涉及当前会话的 project。"}
+{"id":"chunk-ndmse9kj.js#go","doc":"会话状态函数 getProjectRoot：优先取异步上下文覆盖对象的 projectRoot；"}
+{"id":"chunk-ndmse9kj.js#bf","doc":"会话状态函数 getProjectRootOrNull：优先取异步上下文覆盖对象的 projectRoot；涉及当前会话的 project。"}
+{"id":"chunk-ndmse9kj.js#wLn","doc":"会话状态函数 waitForScrollIdle：涉及当前会话的 userPresence.waitForScrollIdle。"}
+{"id":"chunk-ndmse9kj.js#kLn","doc":"会话状态函数 getSdkPerTaskStopAffordance：涉及当前会话的 surfaceCapabilities.sdkPerTaskStopAffordance。"}
+{"id":"chunk-ndmse9kj.js#HSs","doc":"会话状态函数 getSdkRapidFollowupPreempt：涉及当前会话的 surfaceCapabilities.sdkRapidFollowupPreempt。"}
+{"id":"chunk-ndmse9kj.js#$Dt","doc":"会话状态函数 getHostRendersChromeSetupOffer：涉及当前会话的 surfaceCapabilities.hostRendersChromeSetupOffer。"}
+{"id":"chunk-ndmse9kj.js#ip","doc":"会话状态函数 getSdkBetas：优先取异步上下文覆盖对象的 sdkBetas；涉及当前会话的 surfaceCapabilities.sdkBetas。"}
+{"id":"chunk-ndmse9kj.js#rM","doc":"会话状态函数 isParkedSpare：涉及当前会话的 host.launchOptions.spareClaimState。"}
+{"id":"chunk-ndmse9kj.js#pws","doc":"会话状态函数 markSpareParked：涉及当前会话的 host.launchOptions。"}
+{"id":"chunk-ndmse9kj.js#mws","doc":"会话状态函数 markSpareClaiming：涉及当前会话的 host.launchOptions。"}
+{"id":"chunk-ndmse9kj.js#k7t","doc":"会话状态函数 isUnclaimedSpare：涉及当前会话的 host.launchOptions.spareClaimState。"}
+{"id":"chunk-ndmse9kj.js#MLn","doc":"会话状态函数 getWorkspaceRestriction：涉及当前会话的 host.launchOptions.workspaceRestrictionState。"}
+{"id":"chunk-ndmse9kj.js#Pt","doc":"会话状态函数 findRestrictedWorkspaceRoot：涉及当前会话的 host.launchOptions.restrictedWorkspaceRoots。"}
+{"id":"chunk-ndmse9kj.js#Iws","doc":"会话状态函数 isRestrictedWorkspaceTrustKey：涉及当前会话的 host.launchOptions.restrictedWorkspaceRoots。"}
+{"id":"chunk-ndmse9kj.js#Dws","doc":"会话状态函数 setWizardOperatorToolsEnabled：涉及当前会话的 host.launchOptions.replaceWizardOperatorToolsEnabled。"}
+{"id":"chunk-ndmse9kj.js#zws","doc":"会话状态函数 setToolsOmittedByLaunchList：涉及当前会话的 host.launchOptions.replaceToolsOmittedByLaunchList。"}
+{"id":"chunk-ndmse9kj.js#D9e","doc":"会话状态函数 getSessionIngressToken：涉及当前会话的 host.credentialSlots.sessionIngressToken。"}
+{"id":"chunk-ndmse9kj.js#_ke","doc":"会话状态函数 setSessionIngressToken：涉及当前会话的 host.credentialSlots.replaceSessionIngressToken。"}
+{"id":"chunk-ndmse9kj.js#aEs","doc":"会话状态函数 isGatewayAuthExpired：涉及当前会话的 host.credentialSlots.gatewayAuth。"}
+{"id":"chunk-ndmse9kj.js#x7t","doc":"会话状态函数 holdGatewayHostStrict：涉及当前会话的 host.credentialSlots.holdGatewayHostStrict。"}
+{"id":"chunk-ndmse9kj.js#cEs","doc":"会话状态函数 releaseGatewayHost：涉及当前会话的 host.credentialSlots.releaseGatewayHost。"}
+{"id":"chunk-ndmse9kj.js#BLn","doc":"会话状态函数 setCachedClaudeMdContent：涉及当前会话的 sessionFlags.replaceCachedClaudeMdContent。"}
+{"id":"chunk-ndmse9kj.js#yEs","doc":"会话状态函数 getCachedClaudeMdContent：涉及当前会话的 sessionFlags.cachedClaudeMdContent。"}
+{"id":"chunk-ndmse9kj.js#jLn","doc":"会话状态函数 preferThirdPartyAuthentication：涉及当前会话的 host.launchOptions.clientType。"}
+{"id":"chunk-ndmse9kj.js#H9e","doc":"会话状态函数 hasSyncedPluginLaneOpened：涉及当前会话的 pluginsSync.syncedLaneOpened。"}
+{"id":"chunk-ndmse9kj.js#EEs","doc":"会话状态函数 markSyncedPluginLaneOpened：涉及当前会话的 pluginsSync.syncedLaneOpened。"}
+{"id":"chunk-ndmse9kj.js#Xco","doc":"会话状态函数 markSyncedPluginDirsLoadedHere：涉及当前会话的 pluginsSync.syncedDirsLoadedHere.add。"}
+{"id":"chunk-ndmse9kj.js#vEs","doc":"会话状态函数 isSyncedPluginDirLoadedHere：涉及当前会话的 pluginsSync.syncedDirsLoadedHere.has。"}
+{"id":"chunk-ndmse9kj.js#kEs","doc":"会话状态函数 markSyncedPluginDirNewHere：涉及当前会话的 pluginsSync.dirsNewHere.add。"}
+{"id":"chunk-ndmse9kj.js#OEr","doc":"会话状态函数 setAwaitsFirstRun：涉及当前会话的 pluginsSync.awaitsFirstRun。"}
+{"id":"chunk-ndmse9kj.js#TEs","doc":"会话状态函数 isSyncedPluginDirUnused：涉及当前会话的 pluginsSync。"}
+{"id":"chunk-ndmse9kj.js#W$","doc":"会话状态函数 getSyncedPluginReloadDebt：涉及当前会话的 pluginsSync。"}
+{"id":"chunk-ndmse9kj.js#GLn","doc":"会话状态函数 getLastCompleteSyncedPluginList：涉及当前会话的 pluginsSync.lastCompleteList。"}
+{"id":"chunk-ndmse9kj.js#Fft","doc":"会话状态函数 getLastSyncedLaneLoad：涉及当前会话的 pluginsSync.lastSyncedLaneLoad。"}
+{"id":"chunk-ndmse9kj.js#AEs","doc":"会话状态函数 setLastSyncedLaneLoad：涉及当前会话的 pluginsSync.lastSyncedLaneLoad。"}
+{"id":"chunk-ndmse9kj.js#Fm","doc":"会话状态函数 getSessionCronTasks：优先取异步上下文覆盖对象的 sessionCronTasks；涉及当前会话的 sessionCron.tasks。"}
+{"id":"chunk-ndmse9kj.js#KMe","doc":"会话状态函数 addSessionCronTask：涉及当前会话的 sessionCron.schedule、sessionCron.changed.emit。"}
+{"id":"chunk-ndmse9kj.js#DEr","doc":"会话状态函数 setLoopEnded：涉及当前会话的 sessionCron.replaceEnded、sessionCron.changed.emit。"}
+{"id":"chunk-ndmse9kj.js#b","doc":"会话状态函数 getHookHolder：涉及当前会话的 hookRegistry.holder。"}
+{"id":"chunk-ndmse9kj.js#L7t","doc":"会话状态函数 getSessionCreatedTeams：优先取异步上下文覆盖对象的 sessionCreatedTeams；涉及当前会话的 sessionScratch.sessionCreatedTeams。"}
+{"id":"chunk-ndmse9kj.js#luo","doc":"会话状态函数 getSessionSpawnedTeammatePanes：优先取异步上下文覆盖对象的 sessionSpawnedTeammatePanes；涉及当前会话的 sessionScratch.sessionSpawnedTeammatePanes。"}
+{"id":"chunk-ndmse9kj.js#HEr","doc":"会话状态函数 getSurfacedHookSpawnFailures：优先取异步上下文覆盖对象的 surfacedHookSpawnFailures；涉及当前会话的 sessionScratch.surfacedHookSpawnFailures。"}
+{"id":"chunk-ndmse9kj.js#duo","doc":"会话状态函数 getPendingConversationEditKinds：优先取异步上下文覆盖对象的 pendingConversationEditKinds；"}
+{"id":"chunk-ndmse9kj.js#cuo","doc":"会话状态函数 getClientTruncatedAssistantIds：优先取异步上下文覆盖对象的 clientTruncatedAssistantIds；"}
+{"id":"chunk-ndmse9kj.js#uuo","doc":"会话状态函数 getHeldStatelessReplyIds：优先取异步上下文覆盖对象的 heldStatelessReplyIds；"}
+{"id":"chunk-ndmse9kj.js#fuo","doc":"会话状态函数 getUnsupportedThreadKeys：优先取异步上下文覆盖对象的 unsupportedThreadKeys；"}
+{"id":"chunk-ndmse9kj.js#tvs","doc":"会话状态函数 getBareMcpServerMatchersWarned：优先取异步上下文覆盖对象的 bareMcpServerMatchersWarned；涉及当前会话的 sessionScratch.bareMcpServerMatchersWarned。"}
+{"id":"chunk-ndmse9kj.js#NEr","doc":"会话状态函数 getPendingBranchLinks：优先取异步上下文覆盖对象的 pendingBranchLinks；涉及当前会话的 sessionScratch.pendingBranchLinks。"}
+{"id":"chunk-ndmse9kj.js#VDt","doc":"会话状态函数 getChromeAvailabilityStagesLogged：优先取异步上下文覆盖对象的 chromeAvailabilityStagesLogged；涉及当前会话的 sessionScratch.chromeAvailabilityStagesLogged。"}
+{"id":"chunk-ndmse9kj.js#cHn","doc":"会话状态函数 getInvokedSkillsForAgent：涉及当前会话的 invokedSkills.skills。"}
+{"id":"chunk-ndmse9kj.js#gA","doc":"会话状态函数 getMainThreadAgentType：涉及当前会话的 hookRegistry.mainThreadAgentType。"}
+{"id":"chunk-ndmse9kj.js#tye","doc":"会话状态函数 setMainThreadAgentType：涉及当前会话的 hookRegistry.replaceMainThreadAgentType。"}
+{"id":"chunk-ndmse9kj.js#w7","doc":"会话状态函数 getMainThreadAgentHooks：涉及当前会话的 hookRegistry.mainThreadAgentHooks。"}
+{"id":"chunk-ndmse9kj.js#FEr","doc":"会话状态函数 setMainThreadAgentHooks：涉及当前会话的 hookRegistry.replaceMainThreadAgentHooks。"}
+{"id":"chunk-ndmse9kj.js#On","doc":"会话状态函数 getIsRemoteMode：涉及当前会话的 surfaceCapabilities.caps。"}
+{"id":"chunk-ndmse9kj.js#dvs","doc":"会话状态函数 setCloudCwd：涉及当前会话的 surfaceCapabilities.replaceCloudCwd。"}
+{"id":"chunk-ndmse9kj.js#pHn","doc":"会话状态函数 clearSystemPromptSectionState：涉及当前会话的 promptAssembly.forgetAllSections。"}
+{"id":"chunk-ndmse9kj.js#Cl","doc":"会话状态函数 getAdditionalDirectoriesForClaudeMd：涉及当前会话的 host.extensionsConfig.additionalDirectoriesForClaudeMd。"}

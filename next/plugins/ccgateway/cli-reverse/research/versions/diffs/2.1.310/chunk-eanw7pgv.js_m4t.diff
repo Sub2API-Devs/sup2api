@@ -1,0 +1,11 @@
+# chunk-eanw7pgv.js:m4t -> chunk-pp7zwndm.js:F9t
+diff --git "a/diffs\\chunk-eanw7pgv.js_m4t.old.js" "b/diffs\\chunk-eanw7pgv.js_m4t.new.js"
+index c789c95..e6c408e 100644
+--- "a/diffs\\chunk-eanw7pgv.js_m4t.old.js"
++++ "b/diffs\\chunk-eanw7pgv.js_m4t.new.js"
+@@ -1,4 +1,5 @@
+ function SELF($l0, $l1, $l2) {
++  $NEW_chunk_d02rasrq_js_dys();
+   let $l3 = $m_e$($l0, $l2), $l4 = $m_Pi($m_$ut([...$l2?.machineMcpTools ?? [], ...$l1]), "name"), $l5 = $m_DAn($m_HAn($m_AX($l4, $l0), $l4), $l4), $l6 = $m_crs($l3, $l5);
+   return $m_Pi($l6.toSorted($m_Zme).concat($l5.sort($m_Zme)), "name");
+ }

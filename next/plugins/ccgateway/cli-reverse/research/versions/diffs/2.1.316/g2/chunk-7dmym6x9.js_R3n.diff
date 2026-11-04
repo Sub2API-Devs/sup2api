@@ -1,0 +1,12 @@
+# chunk-7dmym6x9.js:R3n -> chunk-e6aww6q8.js:p6n
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_R3n.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_R3n.new.js"
+index 112c1d0..030cd64 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_R3n.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_R3n.new.js"
+@@ -1,4 +1,4 @@
+-function SELF($l0, $l1) {
+-  return $l0.type === "nested_memory" || $m_ZLe($l0, $l1) || $m_C3n($l0);
++function SELF($l0) {
++  return $l0.type === "nested_memory" || $m_C3n($l0);
+ }
+ ;

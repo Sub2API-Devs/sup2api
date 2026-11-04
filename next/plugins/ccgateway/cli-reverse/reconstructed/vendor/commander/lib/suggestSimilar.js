@@ -1,0 +1,62 @@
+/**
+ * commander/lib/suggestSimilar.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: commander@12.0.0
+ * pieces: chunk-b7dyevzy.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+
+//@ chunk-b7dyevzy.js:8871-9832 cjs-fingerprint
+var require_suggestSimilar = __commonJS(function (cjsExports) {
+  function editDistance(a, b) {
+    if (Math.abs(a.length - b.length) > 3) return Math.max(a.length, b.length);
+    let d = [];
+    for (let i = 0; i <= a.length; i++) d[i] = [i];
+    for (let j = 0; j <= b.length; j++) d[0][j] = j;
+    for (let j = 1; j <= b.length; j++)
+      for (let i = 1; i <= a.length; i++) {
+        let cost = 1;
+        if (a[i - 1] === b[j - 1]) cost = 0;
+        else cost = 1;
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+          d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    return d[a.length][b.length];
+  }
+  function suggestSimilar(word, candidates) {
+    if (!candidates || candidates.length === 0) return "";
+    candidates = Array.from(new Set(candidates));
+    let searchingOptions = word.startsWith("--");
+    if (searchingOptions) {
+      word = word.slice(2);
+      candidates = candidates.map((candidate) => candidate.slice(2));
+    }
+    let similar = [];
+    let bestDistance = 3;
+    let minSimilarity = 0.4;
+    candidates.forEach((candidate) => {
+      if (candidate.length <= 1) return;
+      let distance = editDistance(word, candidate);
+      let length = Math.max(word.length, candidate.length);
+      if ((length - distance) / length > minSimilarity) {
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          similar = [candidate];
+        } else if (distance === bestDistance) similar.push(candidate);
+      }
+    });
+    similar.sort((candidateName, b) => candidateName.localeCompare(b));
+    if (searchingOptions) similar = similar.map((candidate) => `--${candidate}`);
+    if (similar.length > 1)
+      return `
+(Did you mean one of ${similar.join(", ")}?)`;
+    if (similar.length === 1)
+      return `
+(Did you mean ${similar[0]}?)`;
+    return "";
+  }
+  cjsExports.suggestSimilar = suggestSimilar;
+});
+export { require_suggestSimilar };

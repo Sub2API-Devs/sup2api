@@ -1,0 +1,12 @@
+# chunk-k36r832h.js:JTn -> chunk-v9tcvh08.js:x
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\natives\\chunk-k36r832h.js_JTn.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\natives\\chunk-k36r832h.js_JTn.new.js"
+index 8b232fa..c5889b5 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\natives\\chunk-k36r832h.js_JTn.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\natives\\chunk-k36r832h.js_JTn.new.js"
+@@ -1,5 +1,4 @@
+ function SELF($l0, $l1, $l2) {
+-  if ($m_aN().servedCapabilityLookup?.($l1, [$l2, $m_g($l0)]) === true) return true;
+-  return $m_tns($l0, $l1) ? true : void 0;
++  return $m_aN().servedCapabilityLookup?.($l1, [$l2, $m_g($l0)]) ?? ($m_tns($l0, $l1) ? true : void 0);
+ }
+ ;

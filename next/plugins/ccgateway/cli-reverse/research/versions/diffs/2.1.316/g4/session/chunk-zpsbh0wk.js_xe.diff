@@ -1,0 +1,215 @@
+# chunk-zpsbh0wk.js:xe -> chunk-ndmse9kj.js:xe
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_xe.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_xe.new.js"
+index bdde38f..3502323 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_xe.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_xe.new.js"
+@@ -4,22 +4,23 @@ class $l0 {
+   #n = void 0;
+   #o = false;
+   #r = null;
+-  #s = void 0;
++  #s = null;
+   #i = void 0;
+-  #d = /* @__PURE__ */ new Set();
+-  #u = /* @__PURE__ */ new Map();
++  #d = void 0;
++  #u = /* @__PURE__ */ new Set();
++  #c = /* @__PURE__ */ new Map();
+   #l = void 0;
+-  #c = null;
+-  #p = /* @__PURE__ */ new Set();
++  #p = null;
++  #h = /* @__PURE__ */ new Set();
+   #a = null;
+-  #h = 0;
+-  #g = null;
+-  #m = false;
+-  #y = () => false;
++  #g = 0;
+   #S = null;
+-  #f = void 0;
+-  #v = null;
++  #y = false;
++  #v = () => false;
++  #f = null;
++  #m = void 0;
+   #b = null;
++  #k = null;
+   sessionIngressToken() {
+     return this.#e;
+   }
+@@ -44,115 +45,121 @@ class $l0 {
+   replaceOauthTokenFromBgSnapshot($l4) {
+     this.#o = $l4;
+   }
+-  oauthOrgFromBgSnapshot() {
++  loginStashedInTokenSlot() {
+     return this.#r;
+   }
+-  replaceOauthOrgFromBgSnapshot($l5) {
++  replaceLoginStashedInTokenSlot($l5) {
+     this.#r = $l5;
+   }
+-  oauthScopesFromFd() {
++  oauthOrgFromBgSnapshot() {
+     return this.#s;
+   }
+-  replaceOauthScopesFromFd($l6) {
++  replaceOauthOrgFromBgSnapshot($l6) {
+     this.#s = $l6;
+   }
+-  apiKeyFromFd() {
++  oauthScopesFromFd() {
+     return this.#i;
+   }
+-  replaceApiKeyFromFd($l7) {
++  replaceOauthScopesFromFd($l7) {
+     this.#i = $l7;
+   }
+-  descriptorAnnouncementConsumed($l8) {
+-    return this.#d.has($l8);
++  apiKeyFromFd() {
++    return this.#d;
+   }
+-  markDescriptorAnnouncementConsumed($l9) {
+-    this.#d.add($l9);
++  replaceApiKeyFromFd($l8) {
++    this.#d = $l8;
+   }
+-  credentialRoad($l10) {
+-    return this.#u.get($l10);
++  descriptorAnnouncementConsumed($l9) {
++    return this.#u.has($l9);
+   }
+-  noteCredentialRoad($l11, $l12, $l13) {
+-    if ($l13 !== null && !this.#u.has($l11)) this.#u.set($l11, $l12);
++  markDescriptorAnnouncementConsumed($l10) {
++    this.#u.add($l10);
++  }
++  credentialRoad($l11) {
++    return this.#c.get($l11);
++  }
++  noteCredentialRoad($l12, $l13, $l14) {
++    if ($l14 !== null && !this.#c.has($l12)) this.#c.set($l12, $l13);
+   }
+   gatewayTokenFromDescriptor() {
+     return this.#l;
+   }
+-  replaceGatewayTokenFromDescriptor($l14) {
+-    this.#l = $l14;
++  replaceGatewayTokenFromDescriptor($l15) {
++    this.#l = $l15;
+   }
+   resetFdCredentialState() {
+-    this.#e = void 0, this.#n = void 0, this.#o = false, this.#r = null, this.#s = void 0, this.#i = void 0;
++    this.#e = void 0, this.#n = void 0, this.#o = false, this.#r = null, this.#s = null, this.#i = void 0, this.#d = void 0;
+   }
+   gatewayAuth() {
+-    return this.#c;
++    return this.#p;
+   }
+-  replaceGatewayAuth($l15) {
+-    this.#c = $l15;
++  replaceGatewayAuth($l16) {
++    this.#p = $l16;
+   }
+-  isGatewayHostHeldStrict($l16) {
+-    return this.#p.has($l16);
++  isGatewayHostHeldStrict($l17) {
++    return this.#h.has($l17);
+   }
+-  holdGatewayHostStrict($l17) {
+-    this.#p.add($l17);
++  holdGatewayHostStrict($l18) {
++    this.#h.add($l18);
+   }
+-  releaseGatewayHost($l18) {
+-    this.#p.delete($l18);
++  releaseGatewayHost($l19) {
++    this.#h.delete($l19);
+   }
+   gatewayServerProcess() {
+-    return this.#m;
++    return this.#y;
+   }
+-  replaceGatewayServerProcess($l19) {
+-    this.#m = $l19;
++  replaceGatewayServerProcess($l20) {
++    this.#y = $l20;
+   }
+   gatewayRequiredByHostPolicy() {
+-    return this.#y();
++    return this.#v();
+   }
+-  replaceGatewayRequiredByHostPolicyReader($l20) {
+-    this.#y = $l20;
++  replaceGatewayRequiredByHostPolicyReader($l21) {
++    this.#v = $l21;
+   }
+   authenticatedAccount() {
+     return this.#a;
+   }
+   authenticatedAccountEpoch() {
+-    return this.#h;
++    return this.#g;
+   }
+-  stampAuthenticatedAccount($l21) {
+-    let $l22 = this.#a;
+-    if ($l21 !== null && $l22 !== null && $l21.accountUuid === $l22.accountUuid && $l21.emailAddress === $l22.emailAddress && $l21.organizationUuid === $l22.organizationUuid) return;
+-    this.#h += 1, this.#a = $l21, this.#g = null;
++  stampAuthenticatedAccount($l22) {
++    let $l23 = this.#a;
++    if ($l22 !== null && $l23 !== null && $l22.accountUuid === $l23.accountUuid && $l22.emailAddress === $l23.emailAddress && $l22.organizationUuid === $l23.organizationUuid) return;
++    this.#g += 1, this.#a = $l22, this.#S = null;
+   }
+   bearerPlan() {
+-    return this.#g;
++    return this.#S;
+   }
+-  replaceBearerPlan($l23) {
+-    this.#g = $l23;
++  replaceBearerPlan($l24) {
++    this.#S = $l24;
+   }
+   startupPolicySnapshot() {
+-    return this.#f;
++    return this.#m;
+   }
+-  replaceStartupPolicySnapshot($l24) {
+-    this.#f = $l24;
++  replaceStartupPolicySnapshot($l25) {
++    this.#m = $l25;
+   }
+   gatewayRefreshInFlight() {
+-    return this.#S;
++    return this.#f;
+   }
+-  replaceGatewayRefreshInFlight($l25) {
+-    this.#S = $l25;
++  replaceGatewayRefreshInFlight($l26) {
++    this.#f = $l26;
+   }
+   sdkOAuthTokenRefreshCallback() {
+-    return this.#v;
++    return this.#b;
+   }
+-  replaceSdkOAuthTokenRefreshCallback($l26) {
+-    this.#v = $l26;
++  replaceSdkOAuthTokenRefreshCallback($l27) {
++    this.#b = $l27;
+   }
+   hostAuthTokenRefreshCallback() {
+-    return this.#b;
++    return this.#k;
+   }
+-  replaceHostAuthTokenRefreshCallback($l27) {
+-    this.#b = $l27;
++  replaceHostAuthTokenRefreshCallback($l28) {
++    this.#k = $l28;
+   }
+   resetForTests() {
+-    this.#e = null, this.#t = null, this.#n = null, this.#o = false, this.#s = void 0, this.#i = null, this.#d.clear(), this.#u.clear(), this.#l = void 0, this.#c = null, this.#p.clear(), this.#a = null, this.#h = 0, this.#g = null, this.#m = false, this.#y = () => false, this.#S = null, this.#f = void 0, this.#v = null, this.#b = null;
++    this.#e = null, this.#t = null, this.#n = null, this.#o = false, this.#r = null, this.#i = void 0, this.#d = null, this.#u.clear(), this.#c.clear(), this.#l = void 0, this.#p = null, this.#h.clear(), this.#a = null, this.#g = 0, this.#S = null, this.#y = false, this.#v = () => false, this.#f = null, this.#m = void 0, this.#b = null, this.#k = null;
+   }
+ }
+ ;

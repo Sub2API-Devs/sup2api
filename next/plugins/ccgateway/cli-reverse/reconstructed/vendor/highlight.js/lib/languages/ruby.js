@@ -1,0 +1,373 @@
+/**
+ * highlight.js/lib/languages/ruby.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: highlight.js@11.11.1
+ * pieces: chunk-egr0twnb.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
+
+//@ chunk-egr0twnb.js:398652-402801 cjs-fingerprint
+var require_ruby = __commonJS(function (cjsExports, cjsModule) {
+  function ruby(hljs) {
+    let regex = hljs.regex;
+    let METHOD_RE = "([a-zA-Z_]\\w*[!?=]?|[-+~]@|<<|>>|=~|===?|<=>|[<>]=?|\\*\\*|[-/+%^&*~`|]|\\[\\]=?)";
+    let CLASS_NAME_RE = regex.either(/\b([A-Z]+[a-z0-9]+)+/, /\b([A-Z]+[a-z0-9]+)+[A-Z]+/);
+    let CLASS_NAME_WITH_NAMESPACE_RE = regex.concat(CLASS_NAME_RE, /(::\w+)*/);
+    let RUBY_KEYWORDS = {
+      "variable.constant": ["__FILE__", "__LINE__", "__ENCODING__"],
+      "variable.language": ["self", "super"],
+      keyword: [
+        "alias",
+        "and",
+        "begin",
+        "BEGIN",
+        "break",
+        "case",
+        "class",
+        "defined",
+        "do",
+        "else",
+        "elsif",
+        "end",
+        "END",
+        "ensure",
+        "for",
+        "if",
+        "in",
+        "module",
+        "next",
+        "not",
+        "or",
+        "redo",
+        "require",
+        "rescue",
+        "retry",
+        "return",
+        "then",
+        "undef",
+        "unless",
+        "until",
+        "when",
+        "while",
+        "yield",
+        ...["include", "extend", "prepend", "public", "private", "protected", "raise", "throw"],
+      ],
+      built_in: [
+        "proc",
+        "lambda",
+        "attr_accessor",
+        "attr_reader",
+        "attr_writer",
+        "define_method",
+        "private_constant",
+        "module_function",
+      ],
+      literal: ["true", "false", "nil"],
+    };
+    let YARDOCTAG = {
+      className: "doctag",
+      begin: "@[A-Za-z]+",
+    };
+    let IRB_OBJECT = {
+      begin: "#<",
+      end: ">",
+    };
+    let COMMENT_MODES = [
+      hljs.COMMENT("#", "$", {
+        contains: [YARDOCTAG],
+      }),
+      hljs.COMMENT("^=begin", "^=end", {
+        contains: [YARDOCTAG],
+        relevance: 10,
+      }),
+      hljs.COMMENT("^__END__", hljs.MATCH_NOTHING_RE),
+    ];
+    let SUBST = {
+      className: "subst",
+      begin: /#\{/,
+      end: /\}/,
+      keywords: RUBY_KEYWORDS,
+    };
+    let STRING = {
+      className: "string",
+      contains: [hljs.BACKSLASH_ESCAPE, SUBST],
+      variants: [
+        {
+          begin: /'/,
+          end: /'/,
+        },
+        {
+          begin: /"/,
+          end: /"/,
+        },
+        {
+          begin: /`/,
+          end: /`/,
+        },
+        {
+          begin: /%[qQwWx]?\(/,
+          end: /\)/,
+        },
+        {
+          begin: /%[qQwWx]?\[/,
+          end: /\]/,
+        },
+        {
+          begin: /%[qQwWx]?\{/,
+          end: /\}/,
+        },
+        {
+          begin: /%[qQwWx]?</,
+          end: />/,
+        },
+        {
+          begin: /%[qQwWx]?\//,
+          end: /\//,
+        },
+        {
+          begin: /%[qQwWx]?%/,
+          end: /%/,
+        },
+        {
+          begin: /%[qQwWx]?-/,
+          end: /-/,
+        },
+        {
+          begin: /%[qQwWx]?\|/,
+          end: /\|/,
+        },
+        {
+          begin: /\B\?(\\\d{1,3})/,
+        },
+        {
+          begin: /\B\?(\\x[A-Fa-f0-9]{1,2})/,
+        },
+        {
+          begin: /\B\?(\\u\{?[A-Fa-f0-9]{1,6}\}?)/,
+        },
+        {
+          begin: /\B\?(\\M-\\C-|\\M-\\c|\\c\\M-|\\M-|\\C-\\M-)[\x20-\x7e]/,
+        },
+        {
+          begin: /\B\?\\(c|C-)[\x20-\x7e]/,
+        },
+        {
+          begin: /\B\?\\?\S/,
+        },
+        {
+          begin: regex.concat(/<<[-~]?'?/, regex.lookahead(/(\w+)(?=\W)[^\n]*\n(?:[^\n]*\n)*?\s*\1\b/)),
+          contains: [
+            hljs.END_SAME_AS_BEGIN({
+              begin: /(\w+)/,
+              end: /(\w+)/,
+              contains: [hljs.BACKSLASH_ESCAPE, SUBST],
+            }),
+          ],
+        },
+      ],
+    };
+    let decimal = "[1-9](_?[0-9])*|0";
+    let digits = "[0-9](_?[0-9])*";
+    let NUMBER = {
+      className: "number",
+      relevance: 0,
+      variants: [
+        {
+          begin: "\\b([1-9](_?[0-9])*|0)(\\.([0-9](_?[0-9])*))?([eE][+-]?([0-9](_?[0-9])*)|r)?i?\\b",
+        },
+        {
+          begin: "\\b0[dD][0-9](_?[0-9])*r?i?\\b",
+        },
+        {
+          begin: "\\b0[bB][0-1](_?[0-1])*r?i?\\b",
+        },
+        {
+          begin: "\\b0[oO][0-7](_?[0-7])*r?i?\\b",
+        },
+        {
+          begin: "\\b0[xX][0-9a-fA-F](_?[0-9a-fA-F])*r?i?\\b",
+        },
+        {
+          begin: "\\b0(_?[0-7])+r?i?\\b",
+        },
+      ],
+    };
+    let PARAMS = {
+      variants: [
+        {
+          match: /\(\)/,
+        },
+        {
+          className: "params",
+          begin: /\(/,
+          end: /(?=\))/,
+          excludeBegin: true,
+          endsParent: true,
+          keywords: RUBY_KEYWORDS,
+        },
+      ],
+    };
+    let RUBY_DEFAULT_CONTAINS = [
+      STRING,
+      {
+        variants: [
+          {
+            match: [/class\s+/, CLASS_NAME_WITH_NAMESPACE_RE, /\s+<\s+/, CLASS_NAME_WITH_NAMESPACE_RE],
+          },
+          {
+            match: [/\b(class|module)\s+/, CLASS_NAME_WITH_NAMESPACE_RE],
+          },
+        ],
+        scope: {
+          2: "title.class",
+          4: "title.class.inherited",
+        },
+        keywords: RUBY_KEYWORDS,
+      },
+      {
+        match: [/(include|extend)\s+/, CLASS_NAME_WITH_NAMESPACE_RE],
+        scope: {
+          2: "title.class",
+        },
+        keywords: RUBY_KEYWORDS,
+      },
+      {
+        relevance: 0,
+        match: [CLASS_NAME_WITH_NAMESPACE_RE, /\.new[. (]/],
+        scope: {
+          1: "title.class",
+        },
+      },
+      {
+        relevance: 0,
+        match: /\b[A-Z][A-Z_0-9]+\b/,
+        className: "variable.constant",
+      },
+      {
+        relevance: 0,
+        match: CLASS_NAME_RE,
+        scope: "title.class",
+      },
+      {
+        match: [
+          /def/,
+          /\s+/,
+          "([a-zA-Z_]\\w*[!?=]?|[-+~]@|<<|>>|=~|===?|<=>|[<>]=?|\\*\\*|[-/+%^&*~`|]|\\[\\]=?)",
+        ],
+        scope: {
+          1: "keyword",
+          3: "title.function",
+        },
+        contains: [PARAMS],
+      },
+      {
+        begin: hljs.IDENT_RE + "::",
+      },
+      {
+        className: "symbol",
+        begin: hljs.UNDERSCORE_IDENT_RE + "(!|\\?)?:",
+        relevance: 0,
+      },
+      {
+        className: "symbol",
+        begin: ":(?!\\s)",
+        contains: [
+          STRING,
+          {
+            begin: "([a-zA-Z_]\\w*[!?=]?|[-+~]@|<<|>>|=~|===?|<=>|[<>]=?|\\*\\*|[-/+%^&*~`|]|\\[\\]=?)",
+          },
+        ],
+        relevance: 0,
+      },
+      NUMBER,
+      {
+        className: "variable",
+        begin: "(\\$\\W)|((\\$|@@?)(\\w+))(?=[^@$?])(?![A-Za-z])(?![@$?'])",
+      },
+      {
+        className: "params",
+        begin: /\|(?!=)/,
+        end: /\|/,
+        excludeBegin: true,
+        excludeEnd: true,
+        relevance: 0,
+        keywords: RUBY_KEYWORDS,
+      },
+      {
+        begin: "(" + hljs.RE_STARTERS_RE + "|unless)\\s*",
+        keywords: "unless",
+        contains: [
+          {
+            className: "regexp",
+            contains: [hljs.BACKSLASH_ESCAPE, SUBST],
+            illegal: /\n/,
+            variants: [
+              {
+                begin: "/",
+                end: "/[a-z]*",
+              },
+              {
+                begin: /%r\{/,
+                end: /\}[a-z]*/,
+              },
+              {
+                begin: "%r\\(",
+                end: "\\)[a-z]*",
+              },
+              {
+                begin: "%r!",
+                end: "![a-z]*",
+              },
+              {
+                begin: "%r\\[",
+                end: "\\][a-z]*",
+              },
+            ],
+          },
+        ].concat(IRB_OBJECT, COMMENT_MODES),
+        relevance: 0,
+      },
+    ].concat(IRB_OBJECT, COMMENT_MODES);
+    SUBST.contains = RUBY_DEFAULT_CONTAINS;
+    PARAMS.contains = RUBY_DEFAULT_CONTAINS;
+    let SIMPLE_PROMPT = "[>?]>";
+    let DEFAULT_PROMPT = "[\\w#]+\\(\\w+\\):\\d+:\\d+[>*]";
+    let RVM_PROMPT = "(\\w+-)?\\d+\\.\\d+\\.\\d+(p\\d+)?[^\\d][^>]+>";
+    let IRB_DEFAULT = [
+      {
+        begin: /^\s*=>/,
+        starts: {
+          end: "$",
+          contains: RUBY_DEFAULT_CONTAINS,
+        },
+      },
+      {
+        className: "meta.prompt",
+        begin: "^(" + SIMPLE_PROMPT + "|" + DEFAULT_PROMPT + "|" + RVM_PROMPT + ")(?=[ ])",
+        starts: {
+          end: "$",
+          keywords: RUBY_KEYWORDS,
+          contains: RUBY_DEFAULT_CONTAINS,
+        },
+      },
+    ];
+    COMMENT_MODES.unshift(IRB_OBJECT);
+    return {
+      name: "Ruby",
+      aliases: ["rb", "gemspec", "podspec", "thor", "irb"],
+      keywords: RUBY_KEYWORDS,
+      illegal: /\/\*/,
+      contains: [
+        hljs.SHEBANG({
+          binary: "ruby",
+        }),
+      ]
+        .concat(IRB_DEFAULT)
+        .concat(COMMENT_MODES)
+        .concat(RUBY_DEFAULT_CONTAINS),
+    };
+  }
+  cjsModule.exports = ruby;
+});
+export { require_ruby };

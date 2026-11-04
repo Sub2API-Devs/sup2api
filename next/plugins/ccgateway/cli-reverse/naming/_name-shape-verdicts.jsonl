@@ -1,0 +1,279 @@
+{"file":"chunk-06y4szbn.js","stmt":6203,"verdict":"误报","why":"TAG_BOUNDARY_CHARS（初值 new Set([\" \",\"\\t\",` `,\"\\f\",\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-06y4szbn.js","stmt":6991,"verdict":"改名","why":"DATA_ID_PATTERN→DATA_ID_LENGTH","by":"shapefix"}
+{"file":"chunk-06y4szbn.js","stmt":27675,"verdict":"改名","why":"RATE_LIMIT_TEXT→RATE_LIMIT_MIN_WAIT_SECONDS","by":"shapefix"}
+{"file":"chunk-0ba63vr9.js","stmt":511,"verdict":"改名","why":"FOTW_CAMPAIGN_SCHEMA→FOTW_EXPERIMENT_FLAG","by":"shapefix"}
+{"file":"chunk-0sfjpx19.js","stmt":76273,"verdict":"误报","why":"OLD_VERSION_THRESHOLD（初值 \"2.1.285\"…），NEW_VERSION_THRESHOLD（初值 \"2.1.300\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-0sfjpx19.js","stmt":124668,"verdict":"误报","why":"NEGLIGIBLE_COST（初值 0.000000001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-0wdgqhcf.js","stmt":13399,"verdict":"改名","why":"HANDLERS_SCHEMA→handlersSchemas","by":"shapefix"}
+{"file":"chunk-0zqb2m0b.js","stmt":14859,"verdict":"误报","why":"CONTESTED_ME_KEY（初值 Symbol(\"contested-me-key\")…） 与名字相符","by":"shapefix"}
+{"file":"chunk-16jhn3ak.js","stmt":441,"verdict":"改名","why":"isMcpServerFromProjectOrLocalSettings→MCP_SETTINGS_SCOPE_KINDS","by":"shapefix"}
+{"file":"chunk-18hwfzwa.js","stmt":149387,"verdict":"误报","why":"MIN_STARTUPS_TO_PROMPT（初值 5…），MIN_DENIALS_TO_PROMPT（初值 5…） 与名字相符","by":"shapefix"}
+{"file":"chunk-18hwfzwa.js","stmt":155528,"verdict":"改名","why":"EFFORT_NUDGE_COPY_SCHEMA→MAX_NUDGE_BODY_CHARS","by":"shapefix"}
+{"file":"chunk-18hwfzwa.js","stmt":521534,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-18hwfzwa.js","stmt":679076,"verdict":"误报","why":"ALLOWED_CONTROL_CHARS（初值 new Set([` `,\"\\r\",\"\\t\"])…） 与名字相符","by":"shapefix"}
+{"file":"chunk-18hwfzwa.js","stmt":778316,"verdict":"改名","why":"MAX_EFFORT→MAX_EFFORT_NOTICE_KEY","by":"shapefix"}
+{"file":"chunk-18hwfzwa.js","stmt":1034794,"verdict":"误报","why":"TENGU_LONG_CONTEXT_SURVEY_THRESHOLD（初值 \"tengu_long_context_survey_t…） 与名字相符","by":"shapefix"}
+{"file":"chunk-18hwfzwa.js","stmt":1206341,"verdict":"误报","why":"RESOLVING_SPINNER_CHARS（初值 \"\\u280B\\u2819\\u2839\\u2838\\u2…） 与名字相符","by":"shapefix"}
+{"file":"chunk-1k64h7rw.js","stmt":226,"verdict":"误报","why":"CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE（初值 \"CLAUDE_CODE_RELAUNCH_TERMIN…） 与名字相符","by":"shapefix"}
+{"file":"chunk-1wpnxx5r.js","stmt":5737,"verdict":"误报","why":"CCR_MEMORY_MCP_PATH（初值 /^\\/v2\\/ccr-sessions\\/[A-Za-…） 与名字相符","by":"shapefix"}
+{"file":"chunk-1wpnxx5r.js","stmt":10695,"verdict":"误报","why":"CCR_SESSION_MCP_PATH（初值 /^\\/v2\\/ccr-sessions\\/([A-Za…），CODE_SESSION_MCP_PATH（初值 /^\\/v1\\/code\\/sessions\\/([A-…） 与名字相符","by":"shapefix"}
+{"file":"chunk-29pqxdaf.js","stmt":6351,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-2a8yx6fc.js","stmt":50332,"verdict":"误报","why":"MAX_SCAN_FILE_SIZE（初值 \"4M\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-2rkp9ne9.js","stmt":15002,"verdict":"误报","why":"UNICODE_SPACE_CHARS（初值 \"\\t\\v\\f \\x85\\xA0\\u1680\\u2000…） 与名字相符","by":"shapefix"}
+{"file":"chunk-38axkkfw.js","stmt":4923,"verdict":"误报","why":"REDIRECT_OPERATOR_TOKENS（初值 new Set([\"<\",\">\",\">>\",\"<<\",\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3g8vhh6f.js","stmt":809,"verdict":"改名","why":"isTeamSubscriber_2→TEAM_MEMORY_SCOPE","by":"shapefix"}
+{"file":"chunk-3mec1atf.js","stmt":23768,"verdict":"误报","why":"SPINNER_MAX_TEXT（初值 12…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":9694,"verdict":"误报","why":"MIN_ABS_NUMBER（初值 0.000000000000000000000001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":9797,"verdict":"误报","why":"MS_PER_NANOSECOND（初值 0.000001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":9889,"verdict":"误报","why":"SI_MICRO（初值 0.000001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":9905,"verdict":"误报","why":"SI_MILLI（初值 0.001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":9918,"verdict":"误报","why":"SI_NANO（初值 0.000000001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":41464,"verdict":"误报","why":"MAX_LABEL_TEXT（初值 120…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":51396,"verdict":"误报","why":"NEGLIGIBLE（初值 0.000000001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":51549,"verdict":"误报","why":"SI_MICRO_ALT（初值 0.000001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":51565,"verdict":"误报","why":"SI_MILLI_ALT（初值 0.001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":51588,"verdict":"误报","why":"SI_NANO_ALT（初值 0.000000001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":54656,"verdict":"误报","why":"NEGLIGIBLE_VALUE（初值 0.000000001…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3s7ydtfd.js","stmt":63137,"verdict":"改名","why":"SEP_WIDTH→SEP","by":"shapefix"}
+{"file":"chunk-3y22eg7d.js","stmt":1385,"verdict":"误报","why":"MAX_CONTINUATIONS_PER_HUMAN_PROMPT（初值 3…） 与名字相符","by":"shapefix"}
+{"file":"chunk-3zy56vtn.js","stmt":8660,"verdict":"误报","why":"MAX_REFUSALS_PER_ENV（初值 3…） 与名字相符","by":"shapefix"}
+{"file":"chunk-4121qate.js","stmt":155028,"verdict":"改名","why":"MAX_SHM_NAME→MAX_RGBA_DIMENSION","by":"shapefix"}
+{"file":"chunk-4121qate.js","stmt":270439,"verdict":"误报","why":"STAMP_SLOT_COUNT（初值 9…） 与名字相符","by":"shapefix"}
+{"file":"chunk-4121qate.js","stmt":274600,"verdict":"改名","why":"isPersistableScope→FLAG_SCOPE","by":"shapefix"}
+{"file":"chunk-4m46mxx9.js","stmt":6572,"verdict":"改名","why":"getStorageDir→MOD_FOLDER","by":"shapefix"}
+{"file":"chunk-4nwcj4sh.js","stmt":558,"verdict":"误报","why":"REGEX_META_CHARS（初值 \"^$\\\\.*+?()[]{}|\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-55ht3bcx.js","stmt":1912,"verdict":"改名","why":"POLICY_STAMP_SCHEMA→MAX_HIPAA_STAMP_IDS","by":"shapefix"}
+{"file":"chunk-5aas12zq.js","stmt":1524,"verdict":"错位重排","why":"MIN_README_WORDS→ICON_INVALID_MESSAGE，PLUGIN_NAME_SPACE_MESSAGE→MAX_README_BYTES，ICON_INVALID_MESSAGE→MAX_ICON_BYTES，MAX_SCREENSHOT_COUNT→SYSTEM_FILE_NAMES，MAX_LINK_CHECK_COUNT→MACOSX_METADATA_DIR，MAX_ISSUE_ROWS→SYSTEM_FILES_FOUND_NOTE，MACOS_METADATA_DIR→MAX_SCAN_DEPTH","by":"shapefix"}
+{"file":"chunk-5aas12zq.js","stmt":25298,"verdict":"误报","why":"README_LINE_BREAK_CHARS（初值 `) \\f\\r`…） 与名字相符","by":"shapefix"}
+{"file":"chunk-5nte8cwj.js","stmt":640,"verdict":"误报","why":"MIN_DESKTOP_VERSION（初值 \"1.1.9669\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-63f0f3kd.js","stmt":8644,"verdict":"改名","why":"GREP_BUNDLED_FLAG_CHARS→GREP_BUNDLED_FLAG_RE","by":"shapefix"}
+{"file":"chunk-63f0f3kd.js","stmt":103128,"verdict":"改名","why":"SUBSHELL_MARKER_CHARS→SUBSHELL_MARKER_CHARS","by":"shapefix"}
+{"file":"chunk-6j594vm1.js","stmt":18451,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-6qssfmzs.js","stmt":9545,"verdict":"误报","why":"nonRebindableKeySet（初值 null…） 与名字相符","by":"shapefix"}
+{"file":"chunk-6vnxsn99.js","stmt":31896,"verdict":"误报","why":"MODE_FILE（初值 33188…） 与名字相符","by":"shapefix"}
+{"file":"chunk-6zvphrsz.js","stmt":2054,"verdict":"改名","why":"INSTALL_LOCK_KEY→FAILED_VERSION_EXIT_CODE","by":"shapefix"}
+{"file":"chunk-70qr4vka.js","stmt":863,"verdict":"错位重排","why":"MAX_TIP_LABEL_CHARS→TIP_ID_RE，INVISIBLE_CHARS_REGEX→RETRYABLE_ERRNOS，TIP_MAX_NOTE_CHARS→NOTE_INVISIBLE_CHARS_RE","by":"shapefix"}
+{"file":"chunk-71rdrfpa.js","stmt":1758,"verdict":"改名","why":"externalEventWakeSchema→SAFE_WAKE_FIELD_RE","by":"shapefix"}
+{"file":"chunk-75swpmx0.js","stmt":191,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-7kpfrhzn.js","stmt":4586,"verdict":"误报","why":"MAX_IMAGE_PIXELS（初值 40000000…） 与名字相符","by":"shapefix"}
+{"file":"chunk-82kqcve8.js","stmt":75272,"verdict":"误报","why":"TAG_ATTR_CHARS（初值 \"[^>]{0,1024}\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-82kqcve8.js","stmt":82465,"verdict":"改名","why":"YAML_SPECIAL_CHARS→YAML_SPECIAL_CHARS_RE","by":"shapefix"}
+{"file":"chunk-82kqcve8.js","stmt":178775,"verdict":"误报","why":"MAX_PLAN_WATCHES_PER_SLUG（初值 8…） 与名字相符","by":"shapefix"}
+{"file":"chunk-82kqcve8.js","stmt":189579,"verdict":"误报","why":"PLANS_DIRECTORY_PER_HOST（初值 new W(()=>new oc)…） 与名字相符","by":"shapefix"}
+{"file":"chunk-82kqcve8.js","stmt":208696,"verdict":"误报","why":"DOCKER_DANGEROUS_SHORT_FLAG_CHARS（初值 new Set(far.filter((e)=>e.le…） 与名字相符","by":"shapefix"}
+{"file":"chunk-82kqcve8.js","stmt":222545,"verdict":"误报","why":"PERMISSION_UPDATE_DESTINATION_SET（初值 {userSettings:!0,projectSett…） 与名字相符","by":"shapefix"}
+{"file":"chunk-85kmkm1x.js","stmt":23893,"verdict":"改名","why":"RECORDABLE_NAME_RE→RESERVED_MARKETPLACE_NAMES","by":"shapefix"}
+{"file":"chunk-85kmkm1x.js","stmt":45366,"verdict":"改名","why":"MCP_URL_TEMPLATE_RE→MAX_URL_LENGTH","by":"shapefix"}
+{"file":"chunk-8fqgaf3a.js","stmt":1287,"verdict":"误报","why":"IS_META_MESSAGE（初值 !0…） 与名字相符","by":"shapefix"}
+{"file":"chunk-8wvtd8sr.js","stmt":184530,"verdict":"改名","why":"PAGE_PROBE_MAX_VALUE_CHARS→PAGE_PROBE_ERROR_FRAME_LEFT","by":"shapefix"}
+{"file":"chunk-8wvtd8sr.js","stmt":311311,"verdict":"误报","why":"ACTION_HANDLER_BY_NAME（初值 new Map(Cb.flatMap((e)=>e.ac…） 与名字相符","by":"shapefix"}
+{"file":"chunk-8wvtd8sr.js","stmt":311503,"verdict":"误报","why":"RESULT_RENDERER_BY_KEY（初值 new Map(vd.map(([e,n])=>[e,n…） 与名字相符","by":"shapefix"}
+{"file":"chunk-8wvtd8sr.js","stmt":362488,"verdict":"误报","why":"CONTENT_TYPES_BY_EXT（初值 new Map([[\".html\",\"text/html…） 与名字相符","by":"shapefix"}
+{"file":"chunk-99h01h55.js","stmt":1886,"verdict":"误报","why":"MAX_SANITIZED_TEXT（初值 128…），ELLIPSIS_CHARS（初值 \"\\u2026\\u22EF\\uFE19\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-9cjx5pnm.js","stmt":6070,"verdict":"误报","why":"DIR_MODE（初值 448…） 与名字相符","by":"shapefix"}
+{"file":"chunk-9cjx5pnm.js","stmt":6081,"verdict":"误报","why":"FILE_MODE（初值 384…） 与名字相符","by":"shapefix"}
+{"file":"chunk-9fcadreh.js","stmt":227,"verdict":"改名","why":"MAX_CHANGE_REASONS_SHOWN→MAX_REASONS_SHOWN_TEXT","by":"shapefix"}
+{"file":"chunk-9qwbw2qr.js","stmt":9509,"verdict":"错位重排","why":"PLUGIN_DIRECTORY_BINDINGS_FILE→PLUGIN_DIRECTORY_BINDINGS_VERSION","by":"shapefix"}
+{"file":"chunk-9qwbw2qr.js","stmt":9885,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-9rmf152v.js","stmt":366,"verdict":"误报","why":"SPINNER_FLAG_PRIORITY（初值 -100…） 与名字相符","by":"shapefix"}
+{"file":"chunk-9tgt55am.js","stmt":31729,"verdict":"误报","why":"MAX_ANCHOR_TEXT（初值 160…），MAX_ANCHORS_PER_FILE（初值 64…） 与名字相符","by":"shapefix"}
+{"file":"chunk-9tgt55am.js","stmt":157310,"verdict":"误报","why":"QUOTE_CHARS（初值 '\"\\u201C\\u201D\\u201E\\u201F\\u…） 与名字相符","by":"shapefix"}
+{"file":"chunk-a477qqne.js","stmt":4131,"verdict":"改名","why":"MEMORY_STAMP_SCHEMA→MAX_PROMOTED_ENTRIES","by":"shapefix"}
+{"file":"chunk-a477qqne.js","stmt":16887,"verdict":"改名","why":"LocalDirMemoryStore→MEMORY_KEY_PREFIX","by":"shapefix"}
+{"file":"chunk-ae5g0zb5.js","stmt":55035,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-ae5g0zb5.js","stmt":113239,"verdict":"改名","why":"runFolderMapSlot→notedRunsByHost","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":54193,"verdict":"错位重排","why":"memoryListArgsSchema→MAX_INSTRUCTION_CHARS，memorySearchArgsSchema→MAX_STR_REPLACE_INPUT_CHARS，memoryAppendArgsSchema→DEFAULT_STR_REPLACE_INPUT_CHARS","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":64497,"verdict":"改名","why":"BI_KEY_LENGTH→biKeyCache","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":211452,"verdict":"错位重排","why":"ETAG_RE→MAX_CATALOG_RESPONSE_BYTES，MAX_ETAG_CHARS→ETAG_PATTERN，catalogRowSchema→MAX_ETAG_CHARS","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":211612,"verdict":"错位重排","why":"parseCatalogRows→MAX_CATALOG_ROWS","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":223217,"verdict":"改名","why":"createCatalogLookupBucket→MAX_LOOKUP_CACHE_MODELS","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":239334,"verdict":"改名","why":"MIN_INTERNAL_PREFIX→MIN_CIDR_PREFIX","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":407872,"verdict":"误报","why":"MODEL_NAME_ALLOWED_CHARS（初值 \"A-Za-z0-9._:/@[\\\\]-\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":465304,"verdict":"误报","why":"MODELS_WITH_1M_DISPLAY_SUFFIX（初值 new Set([\"claude-opus-4-6\",\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":598121,"verdict":"误报","why":"ANTHROPIC_HEARTH_ROWS（初值 \"anthropic/hearth.rows\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":630279,"verdict":"改名","why":"getGrowthBookClient_2→DEFAULT_GROWTHBOOK_HOST","by":"shapefix"}
+{"file":"chunk-aepeg2w5.js","stmt":753511,"verdict":"改名","why":"getIsBubblewrapSandbox_2→bubblewrapSandboxPerHost","by":"shapefix"}
+{"file":"chunk-ar2zwb92.js","stmt":1133,"verdict":"改名","why":"VARIATION_SELECTOR_CHARS→VARIATION_SELECTOR_RE","by":"shapefix"}
+{"file":"chunk-astf3mhy.js","stmt":14508,"verdict":"误报","why":"MAX_FORWARDS_PER_PROMPT（初值 1000…） 与名字相符","by":"shapefix"}
+{"file":"chunk-av47g0rj.js","stmt":1130,"verdict":"改名","why":"EMPTY_PRINCIPAL_TOKENS→EMPTY_TOKEN_SET","by":"shapefix"}
+{"file":"chunk-axmbhcjg.js","stmt":7915,"verdict":"改名","why":"MAX_INCLUDE_DEPTH→INCLUDE_EXTERNAL","by":"shapefix"}
+{"file":"chunk-b0a246e7.js","stmt":12350,"verdict":"误报","why":"DEGRADED_ANCHOR_FILE（初值 Symbol(\"degraded-wire-anchor…） 与名字相符","by":"shapefix"}
+{"file":"chunk-b29hdd5e.js","stmt":4482,"verdict":"误报","why":"STORE_COPY_PER_HOST（初值 new W(()=>new E)…） 与名字相符","by":"shapefix"}
+{"file":"chunk-b91jfdd4.js","stmt":2557,"verdict":"误报","why":"HANDSHAKE_TIMEOUT（初值 \"handshake_timeout\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-bc20zedk.js","stmt":30848,"verdict":"改名","why":"KEY_NAME_MAP→KEY_NAME_PAIRS","by":"shapefix"}
+{"file":"chunk-bfnfj4kx.js","stmt":75173,"verdict":"改名","why":"loadAgentsFromDirectory→AGENTS_DIR_NAME","by":"shapefix"}
+{"file":"chunk-bg51yd13.js","stmt":26359,"verdict":"误报","why":"TERMINAL_RESPONSE_CHARS（初值 new Set(\"ABCDEFGHJKLMPSTXZ@`…） 与名字相符","by":"shapefix"}
+{"file":"chunk-bhxaz9j0.js","stmt":9458,"verdict":"误报","why":"SCHEMA（初值 \"schema\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-bss4k1z9.js","stmt":21577,"verdict":"误报","why":"LEARN_LABEL（初值 /^learn\\s*:\\s*/i…） 与名字相符","by":"shapefix"}
+{"file":"chunk-bss4k1z9.js","stmt":22044,"verdict":"误报","why":"EXPLAIN_LABEL（初值 /^explain:\\s*/i…） 与名字相符","by":"shapefix"}
+{"file":"chunk-bss4k1z9.js","stmt":22784,"verdict":"误报","why":"TAG_LABEL（初值 new RegExp(String.raw`^[\\s>*…） 与名字相符","by":"shapefix"}
+{"file":"chunk-bss4k1z9.js","stmt":36317,"verdict":"改名","why":"FIRST_EXPLANATION_LENGTH→FIRST_EXPLANATION_GUIDE","by":"shapefix"}
+{"file":"chunk-bwyr6h72.js","stmt":1088,"verdict":"改名","why":"gcpAdcFileSchema→MAX_AWS_PROFILES","by":"shapefix"}
+{"file":"chunk-c6bzd0wx.js","stmt":1022,"verdict":"改名","why":"STATUS_DOT_CHARS→STATUS_DOT_RE","by":"shapefix"}
+{"file":"chunk-cgr0tezp.js","stmt":929,"verdict":"误报","why":"MAX_SHORT_TEXT（初值 1024…） 与名字相符","by":"shapefix"}
+{"file":"chunk-cgr0tezp.js","stmt":7254,"verdict":"误报","why":"ZWJ_VS_KEEP_CHARS（初值 \"\\\\u200D\\\\uFE0E\\\\uFE0F\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-cgr0tezp.js","stmt":7977,"verdict":"误报","why":"RGI_EMOJI_RE（初值 null…） 与名字相符","by":"shapefix"}
+{"file":"chunk-cgr0tezp.js","stmt":12108,"verdict":"改名","why":"MARKDOWN_BREAK_CHARS→MARKDOWN_BREAK_RE","by":"shapefix"}
+{"file":"chunk-cgr0tezp.js","stmt":45871,"verdict":"错位重排","why":"URL_TERMINATORS_RE→LINE_SPAN_COST，MAX_URL_SCAN_LENGTH→URL_SCAN_STOP_RE","by":"shapefix"}
+{"file":"chunk-cgr0tezp.js","stmt":51715,"verdict":"误报","why":"UNQUOTED_TOKEN_CHARS（初值 \"[^\\\\s\\\\u0085,;&}\\\\])]+\"…），LINE_BREAK_CHARS（初值 \"\\\\n\\\\r\\\\x0b\\\\x0c\\\\u0085\\\\u2…），SIMPLE_VALUE_CHARS（初值 `[^\\\\s\\\\u0085,;&})\"'\\\\\\\\]+`…），KEY_TAIL_CHARS（初值 \"[\\\\w.-]{0,256}(?![\\\\w.-])\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-cgr0tezp.js","stmt":66791,"verdict":"改名","why":"SHELL_META_CHARS→SHELL_PUNCT_RE","by":"shapefix"}
+{"file":"chunk-cgr0tezp.js","stmt":75902,"verdict":"改名","why":"URL_BREAK_CHARS→URL_BREAK_RE","by":"shapefix"}
+{"file":"chunk-cgr0tezp.js","stmt":77194,"verdict":"误报","why":"UNSAFE_LOG_CHARS（初值 new RegExp(`(?!\\\\t)[${RS}]`,…） 与名字相符","by":"shapefix"}
+{"file":"chunk-ch0vxh4c.js","stmt":544,"verdict":"改名","why":"PROCESS_WRAPPER_ENV→PROCESS_WRAPPER_TIMEOUT_MS","by":"shapefix"}
+{"file":"chunk-cjydagjy.js","stmt":36916,"verdict":"改名","why":"POLICY_HELPER_HOST→POLICY_HELPER_SUBCOMMANDS","by":"shapefix"}
+{"file":"chunk-cwwxybjc.js","stmt":8272,"verdict":"误报","why":"CHANGE_THRESHOLD（初值 0.4…） 与名字相符","by":"shapefix"}
+{"file":"chunk-czx62zen.js","stmt":11225,"verdict":"改名","why":"SAFE_DISPLAY_NAME_RE→MAX_SAFE_DISPLAY_NAME_CHARS","by":"shapefix"}
+{"file":"chunk-dcmhvw5a.js","stmt":20639,"verdict":"误报","why":"PLUGIN_NAME_CHARS（初值 \"[A-Za-z0-9._-]+\"…），PATH_SAFE_CHARS（初值 \"[A-Za-z0-9._~-]\"…），USER_SEGMENT_CHARS（初值 `${Zo}+(?::${Zo}*)?@`…），HOST_SEGMENT_CHARS（初值 \":[1-9][0-9]{0,4}\"…），HOST_CHARS（初值 `(?:${Oh})?(${ma})(?:${Rh})?…），REPO_PATH_CHARS（初值 `ssh.${Ur}`…） 与名字相符","by":"shapefix"}
+{"file":"chunk-dcmhvw5a.js","stmt":153478,"verdict":"错位重排","why":"credentialRuleExtractSchema→AWS_CREDENTIAL_ENV_NAMES，credentialRuleOnNoMatchSchema→SLOT_COLLISION_SENTINEL，credentialRuleDecodeSchema→INVALID_PAIR_SENTINEL，credentialRuleMaskClaimsSchema→PARENT_PAIR_SUPPRESSOR_SENTINEL，credentialRuleExtraSchema→MERGE_PAIR_SUPPRESSOR_SENTINEL，credentialRuleChildSchema→CREDENTIAL_CHILD_SENTINELS","by":"shapefix"}
+{"file":"chunk-dcmhvw5a.js","stmt":189681,"verdict":"误报","why":"MAX_EFFORT_DESCRIPTION（初值 \"May use excessive tokens re…） 与名字相符","by":"shapefix"}
+{"file":"chunk-dcmhvw5a.js","stmt":225428,"verdict":"改名","why":"permissionsSettingsSchema→CONTROL_CHARS_RE","by":"shapefix"}
+{"file":"chunk-dcmhvw5a.js","stmt":240672,"verdict":"改名","why":"skillOverridesSchema→SKILL_OVERRIDE_COMPONENTS","by":"shapefix"}
+{"file":"chunk-dcmhvw5a.js","stmt":364020,"verdict":"误报","why":"AWS_PROFILE_ENV（初值 new Set([\"AWS_PROFILE\"])…） 与名字相符","by":"shapefix"}
+{"file":"chunk-dsy6gyxv.js","stmt":509,"verdict":"错位重排","why":"XCODE_COMMAND_PREFIX→XCODE_COMMAND_PREFIX_RE，IOS_BUILD_COMMAND_RE→IOS_BUILD_COMMAND_NAMES","by":"shapefix"}
+{"file":"chunk-e1dn1jmn.js","stmt":191,"verdict":"误报","why":"MAX_TIMER_DELAY_MS（初值 2147483647…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e67761vs.js","stmt":14213,"verdict":"误报","why":"MAX_INBOUND_TEXT（初值 60…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":66859,"verdict":"误报","why":"NEWLINE_LIKE_CHARS（初值 \"\\r\\v\\f\\x85\\u2028\\u2029\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":133187,"verdict":"改名","why":"SERVER_CLASSIFIER_DECISION_SCHEMA→DEFAULT_MAX_SAVED_RULES","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":215536,"verdict":"改名","why":"MAX_METADATA_TEXT→MAX_METADATA_CHARS","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":304352,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":487075,"verdict":"误报","why":"WHITESPACE_BYTES（初值 new Set([32,9,13])…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":589869,"verdict":"误报","why":"MAX_DIAGNOSTICS_PER_FILE（初值 10…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":767084,"verdict":"改名","why":"MAX_SESSION_TEXT→MAX_SESSION_TEXT_CHARS","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":854273,"verdict":"改名","why":"POWERSHELL_PARSER_PER_HOST→powershellParserPerHost","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":856917,"verdict":"误报","why":"PS_TOKENIZER_DASH_CHARS（初值 new Set([\"-\",\"\\u2013\",\"\\u201…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":896517,"verdict":"误报","why":"MIN_BWRAP_VERSION（初值 \"0.10.0\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":897131,"verdict":"改名","why":"CLOSE_INHERITED_FDS_PREFIX→MAX_INHERITED_FD","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":990397,"verdict":"改名","why":"ACTION_SUMMARY_SCHEMA→ACTION_SUMMARY_FIELD","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":1028996,"verdict":"错位重排","why":"dangerousToolUseUnsupportedSchema→DANGEROUS_TOOL_USE_UNSUPPORTED_REASONS，dangerousToolUseCombinedSchema→DANGEROUS_TOOL_USE_COMBINED_REASONS","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":1327982,"verdict":"误报","why":"MAX_SCANNED_ENTRIES（初值 1e4…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":2046524,"verdict":"改名","why":"SEP_WIDTH→SEP","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":2158801,"verdict":"改名","why":"describeUrlPermissionTimeout→URL_PERMISSION_TIMEOUT_FLAG","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":2231731,"verdict":"误报","why":"TENGU_LAPIS_ANCHOR_THRESHOLD（初值 \"tengu_lapis_anchor_threshol…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":2406920,"verdict":"误报","why":"POST_COMPACT_MAX_TOKENS_PER_FILE（初值 5000…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":2516165,"verdict":"误报","why":"TRAILING_WHITESPACE_CHARS（初值 new Set(` \\v\\f\\r\\x1C\\x1D\\x1E…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":2574793,"verdict":"误报","why":"TAKES_REQUEST_BODY_BYTES（初值 Symbol(\"takes a request body…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":2818162,"verdict":"改名","why":"USER_TAG_UNSAFE_CHARS→USER_TAG_UNSAFE_RE","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":3291976,"verdict":"误报","why":"SILENT_TURN_REMINDER_SECONDS（初值 \"silent_turn_reminder_second…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":3401980,"verdict":"误报","why":"URL_PROTOCOLS_WITH_HOST（初值 new Set([\"http:\",\"https:\",\"w…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":3837046,"verdict":"误报","why":"SIGNATURE_IGNORED_ENV（初值 new Set(Rit)…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":3981064,"verdict":"误报","why":"MAX_ERROR_TEXT（初值 1024…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":4018401,"verdict":"误报","why":"MAX_CATALOG_TEXT（初值 65536…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":4095166,"verdict":"误报","why":"MAX_TAGS_PER_KEY（初值 5…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":4220852,"verdict":"改名","why":"readPluginCatalogCache→PLUGIN_CATALOG_CACHE_VERSION","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":4387008,"verdict":"错位重排","why":"parseNpmPackument→NPM_VIEW_TIMEOUT_MS，UNSAFE_STORE_PREFIX→NPM_PACK_TIMEOUT_MS，NPM_PACKAGE_NAME_RE→BINARY_BASE，ARCHIVE_SUFFIX_RE→OCTAL_RADIX","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":4407739,"verdict":"错位重排","why":"BINARY_LOCKFILE_UNSUPPORTED_TEXT→BINARY_LOCKFILE_MESSAGES","by":"shapefix"}
+{"file":"chunk-e6aww6q8.js","stmt":4648901,"verdict":"误报","why":"MAX_EDITABLE_FILE_BYTES（初值 1073741824…） 与名字相符","by":"shapefix"}
+{"file":"chunk-e7z1g8a9.js","stmt":3799,"verdict":"错位重排","why":"PEER_KEY_TMP_FILE_RE→PEER_TOKEN_BYTES，PEER_TOKEN_LENGTH→PEER_TOKEN_HEX_RE，PEER_TOKEN_HEX_RE→MAX_PEER_KEY_FILE_BYTES","by":"shapefix"}
+{"file":"chunk-eavynfj6.js","stmt":20115,"verdict":"改名","why":"ESCAPE_MAX_CHARS→ESCAPE_TARGETS_RE","by":"shapefix"}
+{"file":"chunk-f25sswmp.js","stmt":14106,"verdict":"改名","why":"SHA256_DIGEST_SUFFIX→SHA256_DIGEST_SUFFIX_RE","by":"shapefix"}
+{"file":"chunk-f25sswmp.js","stmt":14476,"verdict":"误报","why":"COST_THRESHOLD（初值 \"cost_threshold\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-f3qhjfah.js","stmt":1740,"verdict":"错位重排","why":"pluginLinkSchema→PLUGIN_LINK_HEADER","by":"shapefix"}
+{"file":"chunk-f3qhjfah.js","stmt":38593,"verdict":"改名","why":"pluginAttributionSchema→MAX_ATTRIBUTION_FILE_BYTES","by":"shapefix"}
+{"file":"chunk-f640a6hn.js","stmt":251,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-f9asxqh1.js","stmt":1604,"verdict":"误报","why":"MAX_SCOPE_RESPONSE_BYTES（初值 1e6…） 与名字相符","by":"shapefix"}
+{"file":"chunk-fm6h4dv7.js","stmt":35979,"verdict":"改名","why":"JUNIPER_TIDE_SCHEMA→JUNIPER_TIDE_PROGRAM","by":"shapefix"}
+{"file":"chunk-fp6aqx1j.js","stmt":22463,"verdict":"误报","why":"SYSTEM_FOREGROUND_SHELL_TASK_ROWS（初值 \"system/foreground_shell_tas…） 与名字相符","by":"shapefix"}
+{"file":"chunk-fp6aqx1j.js","stmt":147368,"verdict":"误报","why":"KEEPALIVE_TOLERANCE_SECONDS（初值 \"keepalive_tolerance_seconds…），X_CCR_SSE_KEEPALIVE_INTERVAL_SECONDS（初值 \"x-ccr-sse-keepalive-interva…），LONG_POLL_TIMEOUT_SECONDS（初值 \"long_poll_timeout_seconds\"…），X_CCR_SSE_LONG_POLL_SECONDS（初值 \"x-ccr-sse-long-poll-seconds…） 与名字相符","by":"shapefix"}
+{"file":"chunk-fq0cr76a.js","stmt":734347,"verdict":"误报","why":"MIN_COMMAND_VERSION（初值 \"0.5.0\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-fq0cr76a.js","stmt":901792,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-fq0cr76a.js","stmt":902059,"verdict":"错位重排","why":"APPARMOR_USERNS_PROBE_PATH→APPARMOR_USERNS_ERROR_RE","by":"shapefix"}
+{"file":"chunk-fq0cr76a.js","stmt":1068603,"verdict":"错位重排","why":"WINDOWS_DRIVE_TOP_DIR→WINDOWS_DRIVE_TOP_DIR_RE，WINDOWS_DRIVE_PREFIX→WINDOWS_DRIVE_PREFIX_RE，MACOS_VOL_FILE_PATH→MACOS_VOL_FILE_PATH_RE，WINDOWS_ABSOLUTE_PREFIX→WINDOWS_ABSOLUTE_PREFIX_RE，WINDOWS_DEVICE_OR_ADMIN_PATH→WINDOWS_DEVICE_OR_ADMIN_PATH_RE","by":"shapefix"}
+{"file":"chunk-frha7zp8.js","stmt":629,"verdict":"改名","why":"SESSION_ACTIVITY_TICK_MS→SESSION_ACTIVITY_KEY","by":"shapefix"}
+{"file":"chunk-g4k0hvs5.js","stmt":1671,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-g54kbxqw.js","stmt":24641,"verdict":"改名","why":"MAX_PREFIXED_TOOL_NAME→MAX_PREFIXED_TOOL_NAME_CHARS","by":"shapefix"}
+{"file":"chunk-g54kbxqw.js","stmt":60085,"verdict":"改名","why":"getCacheBreakDiffPath→cacheBreakStatePrefix","by":"shapefix"}
+{"file":"chunk-g54kbxqw.js","stmt":143352,"verdict":"误报","why":"untrustedFenceRegex（初值 null…） 与名字相符","by":"shapefix"}
+{"file":"chunk-g54kbxqw.js","stmt":166066,"verdict":"改名","why":"getAllBaseToolsProvider→baseToolsProvider","by":"shapefix"}
+{"file":"chunk-ga3g4pve.js","stmt":1446,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-ga5txjrx.js","stmt":1769,"verdict":"误报","why":"SILENCE_DURATION_SECS（初值 \"2.0\"…），SILENCE_THRESHOLD（初值 \"3%\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-gbtb0mjv.js","stmt":5877,"verdict":"误报","why":"DEFAULT_LOOP_INTERVAL（初值 \"10m\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-gwwacf44.js","stmt":1229,"verdict":"误报","why":"KEYCHAIN_CACHE_PER_HOST（初值 new W(()=>new i)…） 与名字相符","by":"shapefix"}
+{"file":"chunk-hantmvxa.js","stmt":83410,"verdict":"误报","why":"MAX_FINDINGS_RE（初值 /(^|\\s)--max-findings(?:(?:\\…） 与名字相符","by":"shapefix"}
+{"file":"chunk-hm0ce8vc.js","stmt":44923,"verdict":"误报","why":"MIN_GIT_VERSION_FOR_CAINFO（初值 \"2.31\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-hm0ce8vc.js","stmt":214886,"verdict":"改名","why":"WORK_ORDER_USED_MESSAGE→MAX_WORK_ORDER_MESSAGE_CHARS","by":"shapefix"}
+{"file":"chunk-hntsfzas.js","stmt":4839,"verdict":"误报","why":"getOsRelease（初值 new W(()=>new L({platform:I,…） 与名字相符","by":"shapefix"}
+{"file":"chunk-hq88884p.js","stmt":51006,"verdict":"错位重排","why":"FORBIDDEN_HOST_CHARS→FORBIDDEN_HOST_CHARS_RE，IGNORABLE_HOST_CHARS→IGNORABLE_HOST_CHARS_RE","by":"shapefix"}
+{"file":"chunk-hq88884p.js","stmt":58153,"verdict":"改名","why":"MtlsClient→MTLS_SOCKET_TIMEOUT_MS","by":"shapefix"}
+{"file":"chunk-hwmsct5x.js","stmt":183031,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-hwmsct5x.js","stmt":185012,"verdict":"误报","why":"ANTHROPIC_USAGE_LIMIT（初值 \"anthropic-usage-limit\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-hwmsct5x.js","stmt":193360,"verdict":"误报","why":"MAX_BUDGET_SPEND_S（初值 691200…） 与名字相符","by":"shapefix"}
+{"file":"chunk-j64mp9kq.js","stmt":2598,"verdict":"误报","why":"MAX_SITE_TEXT（初值 4000…） 与名字相符","by":"shapefix"}
+{"file":"chunk-jbv0t0w5.js","stmt":30958,"verdict":"误报","why":"NOTICE_SAFE_CHARS（初值 \"!#$%&(*+,\\\\-./:;<=>?@[\\\\\\\\\\…） 与名字相符","by":"shapefix"}
+{"file":"chunk-jeazk6wn.js","stmt":6097,"verdict":"误报","why":"MAX_SERVER_MESSAGE（初值 160…），MAX_RAW_MESSAGE（初值 2048…） 与名字相符","by":"shapefix"}
+{"file":"chunk-k5vy5m8c.js","stmt":406,"verdict":"误报","why":"ZSH_PARAM_FLAG_CHARS（初值 new Set([\"#\",\"^\",\"=\",\"~\",\"+\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-kxyd0g16.js","stmt":63209,"verdict":"改名","why":"MemoryListInputSchema→MAX_LIST_ENTRIES","by":"shapefix"}
+{"file":"chunk-kxyd0g16.js","stmt":68951,"verdict":"误报","why":"MAX_TOKEN_COUNT（初值 1e6…） 与名字相符","by":"shapefix"}
+{"file":"chunk-kxyd0g16.js","stmt":155210,"verdict":"误报","why":"WebBrowserTool（初值 null…），SnipTool（初值 null…） 与名字相符","by":"shapefix"}
+{"file":"chunk-mthxbav8.js","stmt":50952,"verdict":"误报","why":"WHITESPACE_CHARS（初值 \" \\t\"…），SHELL_META_CHARS（初值 ` ;&|()<>`…） 与名字相符","by":"shapefix"}
+{"file":"chunk-mvhmq2z8.js","stmt":17551,"verdict":"改名","why":"CLOUD_MODEL_LIST_TIMEOUT→CLOUD_MODEL_LIST_TIMEOUT_MESSAGE","by":"shapefix"}
+{"file":"chunk-mvvq2nx1.js","stmt":18060,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-n2x174m4.js","stmt":2793,"verdict":"改名","why":"launchRecordSchema→MAX_LAUNCH_ATTEMPTS","by":"shapefix"}
+{"file":"chunk-n4bsg1hp.js","stmt":2835,"verdict":"误报","why":"X_SERVED_FILE_PAGE_COUNT（初值 \"x-served-file-page-count\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-n5fvvrgq.js","stmt":1545,"verdict":"误报","why":"LANGUAGE_MAX_BYTES（初值 new Map([[\"asciidoc\",G],[\"gc…） 与名字相符","by":"shapefix"}
+{"file":"chunk-n5fvvrgq.js","stmt":3367,"verdict":"误报","why":"MARKDOWN_FENCE_CHARS（初值 \"[`~<\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-n5fvvrgq.js","stmt":6328,"verdict":"改名","why":"CPP_TEMPLATE_RE→CPP_TEMPLATE_MAX_PARTS","by":"shapefix"}
+{"file":"chunk-nw7jbebs.js","stmt":40557,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-p2qwpk2k.js","stmt":25926,"verdict":"误报","why":"MAX_DENIAL_TEXT（初值 200…） 与名字相符","by":"shapefix"}
+{"file":"chunk-p2qwpk2k.js","stmt":68151,"verdict":"误报","why":"MAX_COMMAND_TEXT（初值 200…） 与名字相符","by":"shapefix"}
+{"file":"chunk-p5akk6be.js","stmt":24168,"verdict":"误报","why":"SPACE_LIKE_CHARS（初值 \"\\u2E40\\u30A0\\u1400\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-p5akk6be.js","stmt":32951,"verdict":"误报","why":"OPEN_BRACKET_CHARS（初值 \"\\\\[\\\\uff3b\\\\ufe47\\\\u27e6\\\\u…），CLOSE_BRACKET_CHARS（初值 \"\\\\]\\\\uff3d\\\\ufe48\\\\u27e7\\\\u…），EXTRA_SPACE_CHARS（初值 `\\\\t\\\\v\\\\f \\\\u00a0\\\\u1680\\\\u…），LONG_VOWEL_AND_BLANK_CHARS（初值 \"\\\\u30fc\\\\uff70\\\\u115f\\\\u116…） 与名字相符","by":"shapefix"}
+{"file":"chunk-p7xf186d.js","stmt":4870,"verdict":"改名","why":"normalizePairingErrorCode→PAIRING_ERROR_CODE_SET","by":"shapefix"}
+{"file":"chunk-q4qb1h08.js","stmt":18919,"verdict":"误报","why":"ATTRIBUTION_HEADER_ENV（初值 new Set([\"CLAUDE_CODE_ATTRIB…） 与名字相符","by":"shapefix"}
+{"file":"chunk-q8cqcff6.js","stmt":22465,"verdict":"误报","why":"PWSH_STRIPPED_ENV（初值 new Set([\"DEVPATH\",\"__PSLOCK…），SH_STRIPPED_ENV（初值 new Set([\"ENV\",\"BASH_ENV\",\"S…） 与名字相符","by":"shapefix"}
+{"file":"chunk-qcc88jq1.js","stmt":2323,"verdict":"改名","why":"fileAttachmentSchema→SHA256_RE","by":"shapefix"}
+{"file":"chunk-qchp9vrd.js","stmt":173185,"verdict":"误报","why":"KUBECONFIG_ENV（初值 new Set([\"KUBECONFIG\"])…） 与名字相符","by":"shapefix"}
+{"file":"chunk-qchp9vrd.js","stmt":183776,"verdict":"误报","why":"EXPLICIT_STRIP_ENV（初值 new Set([...wTe,\"CLAUDE_CODE…） 与名字相符","by":"shapefix"}
+{"file":"chunk-qchp9vrd.js","stmt":233771,"verdict":"误报","why":"REGEX_META_CHARS（初值 new Set(\".+^${}()|[]\\\\\")…） 与名字相符","by":"shapefix"}
+{"file":"chunk-qg0af0yq.js","stmt":19758,"verdict":"误报","why":"HEADER_VALUE_CHARS（初值 \"A-Za-z0-9%:_/.\\\\\\\\-\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-qv1jytq6.js","stmt":5070,"verdict":"改名","why":"runStopSchema→RUN_STOP_KEYS","by":"shapefix"}
+{"file":"chunk-r01896cg.js","stmt":19184,"verdict":"错位重排","why":"DECLARE_SEMANTIC_FLAG_CHARS→DECLARE_FLAG_CHARS_RE，EXPORT_SEMANTIC_FLAG_CHARS→EXPORT_FLAG_CHARS_RE","by":"shapefix"}
+{"file":"chunk-r01896cg.js","stmt":66702,"verdict":"误报","why":"GLOB_CHARS（初值 \"*?[\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-r1wk8q25.js","stmt":12135,"verdict":"误报","why":"UPGRADE_RELAY_USAGE_LIMIT（初值 \"upgrade_relay_usage_limit\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-s3fw2t2g.js","stmt":1056,"verdict":"误报","why":"MAX_VALIDATION_TEXT（初值 1e5…） 与名字相符","by":"shapefix"}
+{"file":"chunk-s61vbvea.js","stmt":461142,"verdict":"改名","why":"isUltrareviewEnabled→ULTRA_REVIEW_CONFIG_FLAG","by":"shapefix"}
+{"file":"chunk-s61vbvea.js","stmt":597201,"verdict":"误报","why":"TRASH_SUFFIX_RANGE_EXCLUSIVE（初值 1073741824…） 与名字相符","by":"shapefix"}
+{"file":"chunk-s61vbvea.js","stmt":601806,"verdict":"误报","why":"MAX_BACKGROUND_LEDGER_PER_HOST（初值 64…） 与名字相符","by":"shapefix"}
+{"file":"chunk-s61vbvea.js","stmt":645264,"verdict":"误报","why":"MAX_FAULT_TEXT（初值 500…） 与名字相符","by":"shapefix"}
+{"file":"chunk-s61vbvea.js","stmt":645636,"verdict":"误报","why":"MAX_VISIBLE_TEXT（初值 200…） 与名字相符","by":"shapefix"}
+{"file":"chunk-s67w32sp.js","stmt":4679,"verdict":"错位重排","why":"pluginDirectoryCacheSchemaWithSchema→LISTING_MAX_AGE_MS","by":"shapefix"}
+{"file":"chunk-s67w32sp.js","stmt":10708,"verdict":"错位重排","why":"DIRECTORY_NO_ANSWER_TEXT→DEFAULT_FIRST_ANSWER_MS，DIRECTORY_REFRESH_TTL_MS→DIRECTORY_NO_ANSWER_TEXT","by":"shapefix"}
+{"file":"chunk-s67w32sp.js","stmt":11981,"verdict":"改名","why":"isRecentTimestamp→CLOCK_SKEW_TOLERANCE_MS","by":"shapefix"}
+{"file":"chunk-s67w32sp.js","stmt":16547,"verdict":"改名","why":"hasListingSource→DELISTING_GRACE_MS","by":"shapefix"}
+{"file":"chunk-sdzpqjn8.js","stmt":30157,"verdict":"误报","why":"MAX_EXPORT_BYTES（初值 1073741824…） 与名字相符","by":"shapefix"}
+{"file":"chunk-sh3bk7pt.js","stmt":6074,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-t0gq9gyw.js","stmt":49022,"verdict":"误报","why":"WINDOWS_MAX_PATH（初值 259…） 与名字相符","by":"shapefix"}
+{"file":"chunk-tkqbtg0j.js","stmt":12104,"verdict":"错位重排","why":"ENABLE_TOOL_OUTPUT_SCHEMA→ENABLE_TOOL_OUTPUT_INSTRUCTIONS，ENABLE_COMPUTER_OUTPUT_SCHEMA→ENABLE_COMPUTER_TOOL_NAME_PREFIX","by":"shapefix"}
+{"file":"chunk-tmx5d02z.js","stmt":34736,"verdict":"改名","why":"APPIFACT_REPL_INPUT_SCHEMA→INPUT_TAB_REFUSAL_MESSAGE","by":"shapefix"}
+{"file":"chunk-tr0s0d0k.js","stmt":14130,"verdict":"误报","why":"MAX_PATH_DEPTH_PREFIX（初值 32…） 与名字相符","by":"shapefix"}
+{"file":"chunk-tr0s0d0k.js","stmt":24209,"verdict":"误报","why":"TRAILING_TRIM_CHARS（初值 \".,;:!?\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-tr0s0d0k.js","stmt":42043,"verdict":"误报","why":"NON_ASSIGNMENT_NEXT_CHARS（初值 new Set([\"\",\" \",\"\\t\",` `,'\"'…） 与名字相符","by":"shapefix"}
+{"file":"chunk-v0yfsee9.js","stmt":61854,"verdict":"误报","why":"PS_PARAM_PREFIX_CHARS（初值 new Set([\"/\",\"\\u2013\",\"\\u201…） 与名字相符","by":"shapefix"}
+{"file":"chunk-w08rdxhd.js","stmt":34983,"verdict":"误报","why":"typeUrlLabelRegex（初值 null…） 与名字相符","by":"shapefix"}
+{"file":"chunk-w5ndchqs.js","stmt":12957,"verdict":"改名","why":"SEP_WIDTH→SEP","by":"shapefix"}
+{"file":"chunk-wa9xapqs.js","stmt":516,"verdict":"误报","why":"MIN_ERROR_REPORTING_VERSION（初值 \"2.1.193\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-wm1cd8qt.js","stmt":13620,"verdict":"误报","why":"FILE_MODE_READONLY（初值 420…） 与名字相符","by":"shapefix"}
+{"file":"chunk-wy9dbk5f.js","stmt":46366,"verdict":"误报","why":"MAX_SKILL_OVERRIDE_KEY（初值 256…） 与名字相符","by":"shapefix"}
+{"file":"chunk-wy9dbk5f.js","stmt":49304,"verdict":"误报","why":"MAX_OUTPUT_STYLE_PROMPT（初值 65536…） 与名字相符","by":"shapefix"}
+{"file":"chunk-wyqg6m3h.js","stmt":11307,"verdict":"误报","why":"MAX_LINES_PER_FILE（初值 400…） 与名字相符","by":"shapefix"}
+{"file":"chunk-wyqg6m3h.js","stmt":15157,"verdict":"改名","why":"HUNK_HEADER→HUNK_HEADER_RE","by":"shapefix"}
+{"file":"chunk-x1mwqya5.js","stmt":22211,"verdict":"改名","why":"SAFE_FALLBACK_TEXT→SAFE_FALLBACK_TEXT_RE","by":"shapefix"}
+{"file":"chunk-x58vpmpd.js","stmt":1480,"verdict":"改名","why":"DEVICE_KEY_SERVICE_NAME→KEYCHAIN_TIMEOUT_MS","by":"shapefix"}
+{"file":"chunk-xndtzje6.js","stmt":191,"verdict":"错位重排","why":"COMPACT_FAILED_CONTEXT_LIMIT→COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE，COMPACT_FAILED_MEDIA_LIMIT→COMPACT_FAILED_MEDIA_LIMIT_MESSAGE","by":"shapefix"}
+{"file":"chunk-xr4xc2mq.js","stmt":2740,"verdict":"误报","why":"weakSet（初值 new WeakSet…） 与名字相符","by":"shapefix"}
+{"file":"chunk-yb0ajcmt.js","stmt":17482,"verdict":"误报","why":"ARROW_HEAD_CHARS（初值 \"xo<\"…） 与名字相符","by":"shapefix"}
+{"file":"chunk-yb0ajcmt.js","stmt":24361,"verdict":"错位重排","why":"SEQUENCE_ARROW_MAP→SEQUENCE_PARTICIPANT_RE，SEQUENCE_TITLE_RE→MAX_SEQUENCE_TITLE_CHARS，SEQUENCE_AUTONUMBER_RE→MAX_SEQUENCE_STEPS","by":"shapefix"}
+{"file":"chunk-yf82ynbr.js","stmt":1096,"verdict":"错位重排","why":"BACKUP_OR_COPY_SUFFIX_REGEX→MAX_NAME_VARIANTS","by":"shapefix"}
+{"file":"chunk-yf82ynbr.js","stmt":7123,"verdict":"误报","why":"DECORATION_LEAD_CHARS（初值 `${O}#${U}`…） 与名字相符","by":"shapefix"}
+{"file":"chunk-yf82ynbr.js","stmt":8399,"verdict":"误报","why":"WINDOWS_FORBIDDEN_CHARS（初值 '\\\\:*?\"<>|'…） 与名字相符","by":"shapefix"}
+{"file":"chunk-yxnffbzs.js","stmt":14511,"verdict":"改名","why":"QUOTE_LIKE_CHARS→QUOTE_LIKE_RE","by":"shapefix"}
+{"file":"chunk-z4g2ta8k.js","stmt":69476,"verdict":"误报","why":"SESSION_STREAM_RECEIVED_AT_MS（初值 \"session_stream_received_at_…） 与名字相符","by":"shapefix"}
+{"file":"chunk-20ppca50.js","stmt":572,"verdict":"误报","why":"isDockerCache 是缓存布尔结果的变量（无初值，之后赋值）","by":"lead"}
+{"file":"chunk-20ppca50.js","stmt":796,"verdict":"误报","why":"isContainerCache 同上","by":"lead"}
+{"file":"chunk-2tyrgda4.js","stmt":38881,"verdict":"误报","why":"timePeriodRegex 先声明后赋值正则","by":"lead"}
+{"file":"chunk-3cddmtk7.js","stmt":35386,"verdict":"误报","why":"smithy schema 元组，名字等于元组里的 schema 名 SystemTool","by":"lead"}
+{"file":"chunk-3cddmtk7.js","stmt":38682,"verdict":"误报","why":"smithy schema 元组，名字等于元组里的 schema 名","by":"lead"}
+{"file":"chunk-heg39xxp.js","stmt":5419,"verdict":"误报","why":"AWS endpoint ruleset 条件对象，名字描述条件（isSet/booleanEquals）而非谓词函数","by":"lead"}
+{"file":"chunk-kejz1rpb.js","stmt":5071,"verdict":"误报","why":"同上","by":"lead"}
+{"file":"chunk-vp5gef34.js","stmt":15549,"verdict":"改名","why":"isRegularFileWithinCap 实为“缺失/非普通文件/超 cap”判定，改名 isMissingNonFileOrOversized；existsAsRegularFile 依赖它的反义，名字存疑但无法从局部确认语义，保留；NOT_A_REGULAR_FILE 等为 Symbol，误报","by":"lead"}
+{"file":"chunk-y805ph4h.js","stmt":8011,"verdict":"误报","why":"INVALID_SKILL_NAME_CHARS 是字符集正则，_CHARS 规则针对计数","by":"lead"}
+{"file":"chunk-z0q4jgnc.js","stmt":977,"verdict":"改名","why":"getTagMapTag 等以 get 开头却是字符串常量（lodash _getTag.js 的 mapTag/promiseTag/setTag/dataViewTag），改为 mapTagOfGetTag 等；getTagImpl = baseGetTag 是函数，名字相符","by":"lead"}

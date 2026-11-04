@@ -1,0 +1,75 @@
+# chunk-zpsbh0wk.js:te -> chunk-ndmse9kj.js:te
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_te.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_te.new.js"
+index c3337b8..7016094 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_te.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_te.new.js"
+@@ -8,11 +8,11 @@ class $l0 {
+   #i = void 0;
+   #d = null;
+   #u = false;
+-  #l = void 0;
+-  #c = $m_Ne;
++  #c = void 0;
++  #l = $m_Ne;
+   #p = false;
+-  #a = "idle";
+-  #h = null;
++  #h = "idle";
++  #a = null;
+   attacherCapsChanged = $m_Me();
+   rvSupervisorLinkChanged = $m_Me();
+   cloudCwdChanged = $m_Me();
+@@ -69,25 +69,25 @@ class $l0 {
+     this.#u = $l9, this.rvSupervisorLinkChanged.emit();
+   }
+   sdkBetas() {
+-    return this.#l;
++    return this.#c;
+   }
+   replaceSdkBetas($l10) {
+-    this.#l = $l10;
++    this.#c = $l10;
+   }
+   caps() {
+-    return this.#c;
++    return this.#l;
+   }
+   replaceCaps($l11) {
+-    this.#c = $l11;
++    this.#l = $l11;
+   }
+   markRemote($l12) {
+-    this.#c = { ...this.#c, workspace: $l12 ? "remote" : "local" };
++    this.#l = { ...this.#l, workspace: $l12 ? "remote" : "local" };
+   }
+   cloudCwdOfSession($l13) {
+-    return this.#c.workspace === "remote" && this.#h?.sessionId === $l13 ? this.#h.cwd : null;
++    return this.#l.workspace === "remote" && this.#a?.sessionId === $l13 ? this.#a.cwd : null;
+   }
+   replaceCloudCwd($l14) {
+-    this.#h = $l14, this.cloudCwdChanged.emit();
++    this.#a = $l14, this.cloudCwdChanged.emit();
+   }
+   replBridgeActive() {
+     return this.#p;
+@@ -97,16 +97,16 @@ class $l0 {
+     this.#p = $l15;
+   }
+   mainLoopBusy() {
+-    return this.#a !== "idle";
++    return this.#h !== "idle";
+   }
+   mainQueryRunning() {
+-    return this.#a === "running";
++    return this.#h === "running";
+   }
+   replaceMainLoopStatus($l16) {
+-    this.#a = $l16;
++    this.#h = $l16;
+   }
+   reset() {
+-    this.#e = false, this.#t = void 0, this.#n = void 0, this.#o = void 0, this.#r = void 0, this.#s = void 0, this.#i = void 0, this.#d = null, this.#l = void 0, this.#c = $m_Ne, this.#p = false, this.#a = "idle", this.#u = false, this.#h = null, this.attacherCapsChanged.clear(), this.rvSupervisorLinkChanged.clear(), this.cloudCwdChanged.clear();
++    this.#e = false, this.#t = void 0, this.#n = void 0, this.#o = void 0, this.#r = void 0, this.#s = void 0, this.#i = void 0, this.#d = null, this.#c = void 0, this.#l = $m_Ne, this.#p = false, this.#h = "idle", this.#u = false, this.#a = null, this.attacherCapsChanged.clear(), this.rvSupervisorLinkChanged.clear(), this.cloudCwdChanged.clear();
+   }
+ }
+ ;

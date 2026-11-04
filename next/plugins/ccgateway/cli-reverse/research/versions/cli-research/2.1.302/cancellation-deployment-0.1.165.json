@@ -1,0 +1,238 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "0cf7e18aa905a72679a607f80786a73f4d0f3b50",
+  "coreVersion": "0.1.165",
+  "pluginVersion": "0.1.65",
+  "release": "v0.1.165",
+  "manifest": "b568165670f9853fefc2e2872dafa38499c3fbefbf952697926d753ec04c44e0",
+  "upgradePlan": "cd2f180e3b3dd65c0c09a7d6cf40f7a5",
+  "upgradeStatus": "completed",
+  "nodes": [
+    {
+      "node": "sup2api-1",
+      "version": "0.1.165",
+      "sha256": "543073e61985d661c3536521c4caf6a092823812e3f78e8eb4ea688b6ba77905",
+      "ready": true,
+      "plugin": "0.1.65",
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-2",
+      "version": "0.1.165",
+      "sha256": "543073e61985d661c3536521c4caf6a092823812e3f78e8eb4ea688b6ba77905",
+      "ready": true,
+      "plugin": "0.1.65",
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-3",
+      "version": "0.1.165",
+      "sha256": "543073e61985d661c3536521c4caf6a092823812e3f78e8eb4ea688b6ba77905",
+      "ready": true,
+      "plugin": "0.1.65",
+      "mode": "build"
+    },
+    {
+      "node": "sup2api-4",
+      "version": "0.1.165",
+      "sha256": "543073e61985d661c3536521c4caf6a092823812e3f78e8eb4ea688b6ba77905",
+      "ready": true,
+      "plugin": "0.1.65",
+      "mode": "build"
+    }
+  ],
+  "workers": [
+    {
+      "account": 21,
+      "build": {
+        "version": "0.1.65",
+        "revision": "0cf7e18aa905a72679a607f80786a73f4d0f3b50",
+        "modified": false
+      },
+      "containerImage": "ccgateway-app:0.1.64",
+      "containerAndConfigurationPreserved": true,
+      "volumePreserved": true,
+      "workerSHA256": "e33ec9e6cbce45a94fca03e9d9e23effaa058324877f4b71e45725dff60c1011",
+      "cliSHA256": "e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4",
+      "autoUpdateDisabled": true,
+      "test": {
+        "status": 200,
+        "model": "claude-opus-5-5",
+        "content": [
+          {
+            "type": "text",
+            "text": "The capital of France is **Paris**."
+          }
+        ]
+      }
+    },
+    {
+      "account": 30,
+      "build": {
+        "version": "0.1.65",
+        "revision": "0cf7e18aa905a72679a607f80786a73f4d0f3b50",
+        "modified": false
+      },
+      "containerImage": "ccgateway-app:0.1.64",
+      "containerAndConfigurationPreserved": true,
+      "volumePreserved": true,
+      "workerSHA256": "e33ec9e6cbce45a94fca03e9d9e23effaa058324877f4b71e45725dff60c1011",
+      "cliSHA256": "e7f4c17a942fc9d54368053a6fb84169cdfc41b88ad2e8c4b3ae52b370a145f4",
+      "autoUpdateDisabled": true,
+      "test": {
+        "status": 200,
+        "model": "claude-opus-5-5",
+        "content": [
+          {
+            "type": "text",
+            "text": "The capital of France is **Paris**."
+          }
+        ]
+      }
+    }
+  ],
+  "sharedEgressAndStoppedAccountsUnchanged": true,
+  "runtimeUpToDate": true,
+  "ui": {
+    "file": "AccountsView-CYMup-Wp.js",
+    "allNodesMatch": true
+  },
+  "publicCancellation": {
+    "status": 200,
+    "requestId": "f55a6661599e88fb15523ed6",
+    "marker": "CCG_CANCEL_165_5b525152d4e745b3be67e2aebf35fcdb",
+    "firstLine": "event: message_start\n",
+    "closedAfterFirstEvent": true
+  },
+  "workerCancellation": {
+    "status": 200,
+    "http_status": 200,
+    "canceled": true,
+    "error_type": "client_canceled",
+    "error_code": "client_canceled",
+    "error_source": "client",
+    "response_interrupted": true,
+    "duration_ms": 2240,
+    "events": [
+      {
+        "detail": {
+          "cli_version": "2.1.302",
+          "configured_mode": "build",
+          "mode": "build",
+          "probe": false
+        },
+        "event": "request_command",
+        "time": "2026-10-19T05:17:19.92388952Z"
+      },
+      {
+        "detail": {
+          "cancelled": true,
+          "response_started": true,
+          "timed_out": false
+        },
+        "event": "request_command_failed",
+        "time": "2026-10-19T05:17:22.161275115Z"
+      },
+      {
+        "detail": {
+          "response_started": true
+        },
+        "event": "request_canceled",
+        "time": "2026-10-19T05:17:22.161367832Z"
+      },
+      {
+        "detail": {
+          "stage": "request_command",
+          "status": 200
+        },
+        "event": "request_finished",
+        "time": "2026-10-19T05:17:22.161473159Z"
+      }
+    ]
+  },
+  "coreRecords": [
+    {
+      "request_id": "f55a6661599e88fb15523ed6",
+      "account_id": 21,
+      "plugin_version": "0.1.65",
+      "status_code": 499,
+      "error_type": "client_canceled",
+      "attempts": 1,
+      "input_tokens": 71,
+      "output_tokens": 0
+    },
+    {
+      "request_id": "dfd29855507f76b7a38a80d7",
+      "account_id": 30,
+      "plugin_version": "0.1.65",
+      "status_code": 400,
+      "error_type": "upstream_error",
+      "attempts": 1,
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  ],
+  "publicError": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json",
+      "Request-Id": "req_011CgB2hnPMqLpfbHMTBLaia",
+      "X-Request-Id": "dfd29855507f76b7a38a80d7",
+      "X-Should-Retry": "false"
+    },
+    "body": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"top_p: range: 0..1\"},\"request_id\":\"req_011CgB2hnPMqLpfbHMTBLaia\"}",
+    "sha256": "1a587ea8338a532c5fa06854ae751a77180026c58323ca9b22306e6438bf8777",
+    "seconds": 1.984
+  },
+  "workerErrorLog": {
+    "status": 400,
+    "httpStatus": 400,
+    "code": "invalid_request_error",
+    "source": "http",
+    "sha256": "1a587ea8338a532c5fa06854ae751a77180026c58323ca9b22306e6438bf8777",
+    "account": 30
+  },
+  "publicStream": {
+    "status": 200,
+    "messageStop": true,
+    "text": "CANCEL_165_PUBLIC_STREAM_OK",
+    "events": 9
+  },
+  "nativeWorkerProbe": {
+    "passed": true,
+    "reports": [
+      {
+        "mode": "build",
+        "passed": true,
+        "modelRequests": 15,
+        "bodyBytesEqual": false,
+        "systemAndRolesPreserved": true,
+        "headerPolicyPassed": true,
+        "cancellation": {
+          "beforeHeaders": true,
+          "afterHeaders": true,
+          "upstreamSocketClosed": true
+        }
+      },
+      {
+        "mode": "direct",
+        "passed": true,
+        "modelRequests": 15,
+        "bodyBytesEqual": true,
+        "systemAndRolesPreserved": true,
+        "headerPolicyPassed": true,
+        "cancellation": {
+          "beforeHeaders": true,
+          "afterHeaders": true,
+          "upstreamSocketClosed": true
+        }
+      }
+    ]
+  },
+  "tests": {
+    "cancellationScenarios": 16,
+    "windowsEngine": "passed",
+    "linuxEngineAndWorker": "passed",
+    "nativeCLI": "existing 2.1.302/v9 ELF unchanged; tested with the new Worker"
+  }
+}

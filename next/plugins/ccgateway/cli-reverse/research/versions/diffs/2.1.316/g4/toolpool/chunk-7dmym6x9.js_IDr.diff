@@ -1,0 +1,14 @@
+# chunk-7dmym6x9.js:IDr -> chunk-e6aww6q8.js:a1r
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_IDr.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_IDr.new.js"
+index 8411ebd..d1f5566 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_IDr.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_IDr.new.js"
+@@ -5,7 +5,7 @@ function SELF($l0, $l1) {
+     let $l5 = $l4.resources.find(($l6) => $l6.uri === $l0);
+     if ($l5 !== void 0) $l2.push($l5), $l3.push($l4);
+   }
+-  if ($l2.length > 0) return { case: "listed", rows: $l2, skills: $l3 };
++  if ($l2.length > 0) return $m_Hpn() ? { case: "listed", rows: $l2, skills: $l3 } : { case: "unlisted", skills: $l3, reason: "unlisted" };
+   let $l7 = $l1.filter(($l8) => $l0.startsWith(`${$l8.root}/`));
+   if ($l7.length > 0) return { case: "unlisted", skills: $l7, reason: "unlisted" };
+   let $l9 = $l1.filter(($l10) => $m_LPo($l0, $l10.root));

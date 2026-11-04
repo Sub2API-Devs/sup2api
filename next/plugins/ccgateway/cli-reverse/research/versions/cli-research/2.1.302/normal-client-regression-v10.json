@@ -1,0 +1,121 @@
+{
+  "date": "2026-10-19",
+  "purpose": "Audit v9 to v10 incremental effects and official-client build/direct tool loops",
+  "nativeComparison": {
+    "nativeModulesChanged": {
+      "cli.js": true,
+      "chunk-ctwws12s.js": false,
+      "chunk-8242685m.js": false,
+      "chunk-sdr1wqge.js": false,
+      "chunk-82nm2axm.js": false,
+      "chunk-9c5hpqbb.js": false,
+      "chunk-pmgddf3s.js": false,
+      "chunk-2rs9vjmc.js": false
+    },
+    "entryDifference": "patch name and advertised capability only",
+    "supportModulesChanged": [
+      "ccgateway-model-request.js",
+      "ccgateway-request-command.js",
+      "ccgateway-request-error.js"
+    ],
+    "nativeAgentComparison": [
+      {
+        "version": "v9",
+        "scenario": "text",
+        "exitCode": 0,
+        "requests": 1,
+        "result": "NORMAL_CLI_COMPLETE",
+        "toolResults": []
+      },
+      {
+        "version": "v9",
+        "scenario": "tool",
+        "exitCode": 0,
+        "requests": 2,
+        "result": "NORMAL_CLI_COMPLETE",
+        "toolResults": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "read_probe",
+            "is_error": true,
+            "content": "No tool.call mod handler answered Read\n\n<system-reminder>\n<total_tokens>14999985 tokens left</total_tokens>\n</system-reminder>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      },
+      {
+        "version": "v10",
+        "scenario": "text",
+        "exitCode": 0,
+        "requests": 1,
+        "result": "NORMAL_CLI_COMPLETE",
+        "toolResults": []
+      },
+      {
+        "version": "v10",
+        "scenario": "tool",
+        "exitCode": 0,
+        "requests": 2,
+        "result": "NORMAL_CLI_COMPLETE",
+        "toolResults": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "read_probe",
+            "is_error": true,
+            "content": "No tool.call mod handler answered Read\n\n<system-reminder>\n<total_tokens>14999985 tokens left</total_tokens>\n</system-reminder>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ],
+    "v9V10AgentBehaviorMatched": true
+  },
+  "officialClientThroughWorker": {
+    "passed": true,
+    "reports": [
+      {
+        "mode": "build",
+        "clientVersion": "2.1.302",
+        "workerCLIPatch": "ccgateway-v10-raw-http-errors",
+        "exitCode": 0,
+        "upstreamRequests": 2,
+        "result": "OFFICIAL_CLIENT_TOOL_LOOP_OK",
+        "readExecuted": true,
+        "fixtureUnchanged": true
+      },
+      {
+        "mode": "direct",
+        "clientVersion": "2.1.302",
+        "workerCLIPatch": "ccgateway-v10-raw-http-errors",
+        "exitCode": 0,
+        "upstreamRequests": 2,
+        "result": "OFFICIAL_CLIENT_TOOL_LOOP_OK",
+        "readExecuted": true,
+        "fixtureUnchanged": true
+      }
+    ]
+  },
+  "modsRegression": [
+    {
+      "scenario": "original",
+      "passed": true,
+      "requests": 2,
+      "scope": "Bash/Read/TaskCreate/WebFetch intercepted by mods"
+    },
+    {
+      "scenario": "hooks-update",
+      "passed": true,
+      "requests": 2,
+      "scope": "PreToolUse input and PostToolUse output rewriting"
+    }
+  ],
+  "limits": [
+    "Tests use local simulated upstreams and temporary read-only fixtures, not real OAuth model calls.",
+    "The custom native CLI retains the earlier all-tools-to-mods dispatch; without a tool.call handler its Read tool returns an error in both v9 and v10.",
+    "This does not constitute exhaustive interactive TUI, resume, MCP, or all-hook compatibility certification."
+  ]
+}

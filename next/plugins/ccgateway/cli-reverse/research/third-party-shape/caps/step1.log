@@ -1,0 +1,122 @@
+== s1-2.1.316-oauth-A-p1
+  [s1-2.1.316-oauth-A-p1-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"fff5fe9b-4a08-4d64-bc3c-282d487097db","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-oauth-A-turn2
+  [s1-2.1.316-oauth-A-turn2-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"deb8c00c-03e5-462f-9f28-a58b97bdb3de","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.316-oauth-A-turn2-t2] exit=0 {"duration_api_ms":31,"stop_reason":"end_turn","session_id":"deb8c00c-03e5-462f-9f28-a58b97bdb3de","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.316-oauth-A-sub
+  [s1-2.1.316-oauth-A-sub-t1] exit=0 {"duration_api_ms":52,"stop_reason":"end_turn","session_id":"f6fdbcf8-0a23-4d04-bbdf-6706adae9653","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.316-oauth-B-p1
+  [s1-2.1.316-oauth-B-p1-t1] exit=0 {"duration_api_ms":16,"stop_reason":"end_turn","session_id":"a5c1b122-6f61-4a09-aca2-805e2af8654d","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-oauth-B-turn2
+  [s1-2.1.316-oauth-B-turn2-t1] exit=0 {"duration_api_ms":14,"stop_reason":"end_turn","session_id":"841a52d8-17bb-4ba4-9f97-05dd78dafb31","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.316-oauth-B-turn2-t2] exit=0 {"duration_api_ms":25,"stop_reason":"end_turn","session_id":"841a52d8-17bb-4ba4-9f97-05dd78dafb31","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.316-oauth-B-sub
+  [s1-2.1.316-oauth-B-sub-t1] exit=0 {"duration_api_ms":53,"stop_reason":"end_turn","session_id":"df74e754-6894-4f10-af7a-b1a34f8518ee","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.316-oauth-A1-p1
+  [s1-2.1.316-oauth-A1-p1-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"90433477-d70e-4204-af09-67a6e6ed639c","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-token-A-p1
+  [s1-2.1.316-token-A-p1-t1] exit=0 {"duration_api_ms":19,"stop_reason":"end_turn","session_id":"4883ac16-20de-4905-af11-c54157212eac","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-token-A-turn2
+  [s1-2.1.316-token-A-turn2-t1] exit=0 {"duration_api_ms":19,"stop_reason":"end_turn","session_id":"eeb94018-3e37-4b3d-bcf5-1174f790a47f","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.316-token-A-turn2-t2] exit=0 {"duration_api_ms":34,"stop_reason":"end_turn","session_id":"eeb94018-3e37-4b3d-bcf5-1174f790a47f","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.316-token-A-sub
+  [s1-2.1.316-token-A-sub-t1] exit=0 {"duration_api_ms":58,"stop_reason":"end_turn","session_id":"05bbb96c-7b0a-40b6-a7ee-13fcca0d49db","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.316-token-B-p1
+  [s1-2.1.316-token-B-p1-t1] exit=0 {"duration_api_ms":14,"stop_reason":"end_turn","session_id":"316bf3fd-9f0f-4384-ac59-acabdc971b12","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-token-B-turn2
+  [s1-2.1.316-token-B-turn2-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"2c9bcbf4-4a3a-4925-b0bd-0660146f4248","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.316-token-B-turn2-t2] exit=0 {"duration_api_ms":25,"stop_reason":"end_turn","session_id":"2c9bcbf4-4a3a-4925-b0bd-0660146f4248","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.316-token-B-sub
+  [s1-2.1.316-token-B-sub-t1] exit=0 {"duration_api_ms":51,"stop_reason":"end_turn","session_id":"8508e060-cba4-4698-92c7-809237bb9c40","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.316-token-A1-p1
+  [s1-2.1.316-token-A1-p1-t1] exit=0 {"duration_api_ms":18,"stop_reason":"end_turn","session_id":"77c2115e-ad55-4b9f-8e8e-1a0a4e4dd85f","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-apikey-A-p1
+  [s1-2.1.316-apikey-A-p1-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"ce8703f4-f7e5-4111-82ae-0c96e06db2d0","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-apikey-A-turn2
+  [s1-2.1.316-apikey-A-turn2-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"f3c40777-e91c-4a75-ab47-3c2fc348fa77","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.316-apikey-A-turn2-t2] exit=0 {"duration_api_ms":30,"stop_reason":"end_turn","session_id":"f3c40777-e91c-4a75-ab47-3c2fc348fa77","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.316-apikey-A-sub
+  [s1-2.1.316-apikey-A-sub-t1] exit=0 {"duration_api_ms":52,"stop_reason":"end_turn","session_id":"98b95c94-a94e-45b2-9f0c-cf44a7495ac2","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.316-apikey-B-p1
+  [s1-2.1.316-apikey-B-p1-t1] exit=0 {"duration_api_ms":14,"stop_reason":"end_turn","session_id":"3ca33f24-9187-4b8f-b8af-cea7407f1144","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-apikey-B-turn2
+  [s1-2.1.316-apikey-B-turn2-t1] exit=0 {"duration_api_ms":14,"stop_reason":"end_turn","session_id":"56f23362-e3d8-445d-b15a-199cfe9d5e30","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.316-apikey-B-turn2-t2] exit=0 {"duration_api_ms":24,"stop_reason":"end_turn","session_id":"56f23362-e3d8-445d-b15a-199cfe9d5e30","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.316-apikey-B-sub
+  [s1-2.1.316-apikey-B-sub-t1] exit=0 {"duration_api_ms":52,"stop_reason":"end_turn","session_id":"589dfbdc-28ad-4e58-93ca-591d8f704474","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.316-apikey-A1-p1
+  [s1-2.1.316-apikey-A1-p1-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"467d1f2b-3f06-48c8-a46d-92219e5e3538","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-oauth-A-entrycli
+  [s1-2.1.316-oauth-A-entrycli-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"434e7f24-405b-4915-a402-0b5947c1f9cf","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-token-A-nonessential
+  [s1-2.1.316-token-A-nonessential-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"10d34f17-42a9-4b81-a17c-4a89480702aa","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-oauth-A-tui (tui)
+  [s1-2.1.316-oauth-A-tui] exit=124 reqs=3
+== s1-2.1.316-oauth-B-entrycli
+  [s1-2.1.316-oauth-B-entrycli-t1] exit=0 {"duration_api_ms":14,"stop_reason":"end_turn","session_id":"441ef361-2c46-48e5-b12c-badb6ba9e173","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-token-B-nonessential
+  [s1-2.1.316-token-B-nonessential-t1] exit=0 {"duration_api_ms":12,"stop_reason":"end_turn","session_id":"a69dd39b-14b4-4e29-80bf-f6ecc90a3116","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.316-oauth-B-tui (tui)
+  [s1-2.1.316-oauth-B-tui] exit=124 reqs=1
+== s1-2.1.312-oauth-A-p1
+  [s1-2.1.312-oauth-A-p1-t1] exit=0 {"duration_api_ms":16,"stop_reason":"end_turn","session_id":"503c608c-bc3f-44f8-a3a6-bf2af1d06444","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-oauth-A-turn2
+  [s1-2.1.312-oauth-A-turn2-t1] exit=0 {"duration_api_ms":16,"stop_reason":"end_turn","session_id":"80e7f25d-6b3f-4fce-baf3-3cd338f3a8fc","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.312-oauth-A-turn2-t2] exit=0 {"duration_api_ms":31,"stop_reason":"end_turn","session_id":"80e7f25d-6b3f-4fce-baf3-3cd338f3a8fc","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.312-oauth-A-sub
+  [s1-2.1.312-oauth-A-sub-t1] exit=0 {"duration_api_ms":55,"stop_reason":"end_turn","session_id":"16e90a45-7109-4ad5-a294-b76baf82dc4d","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.312-oauth-B-p1
+  [s1-2.1.312-oauth-B-p1-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"c759bd49-26b4-4f98-b71f-839ab2b71a70","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-oauth-B-turn2
+  [s1-2.1.312-oauth-B-turn2-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"7ebfff7e-a2de-4549-b157-cc5f86f1bce7","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.312-oauth-B-turn2-t2] exit=0 {"duration_api_ms":26,"stop_reason":"end_turn","session_id":"7ebfff7e-a2de-4549-b157-cc5f86f1bce7","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.312-oauth-B-sub
+  [s1-2.1.312-oauth-B-sub-t1] exit=0 {"duration_api_ms":54,"stop_reason":"end_turn","session_id":"a594e0f4-45a8-4608-905e-cd2aebc959cc","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.312-oauth-A1-p1
+  [s1-2.1.312-oauth-A1-p1-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"7e5af7bd-56c0-4909-8f78-1b4da458ff3d","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-token-A-p1
+  [s1-2.1.312-token-A-p1-t1] exit=0 {"duration_api_ms":20,"stop_reason":"end_turn","session_id":"525bbd25-ec87-48db-97af-3f75f1acfd6d","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-token-A-turn2
+  [s1-2.1.312-token-A-turn2-t1] exit=0 {"duration_api_ms":20,"stop_reason":"end_turn","session_id":"33552b05-6fa5-4390-ac7b-943562f53acf","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.312-token-A-turn2-t2] exit=0 {"duration_api_ms":35,"stop_reason":"end_turn","session_id":"33552b05-6fa5-4390-ac7b-943562f53acf","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.312-token-A-sub
+  [s1-2.1.312-token-A-sub-t1] exit=0 {"duration_api_ms":55,"stop_reason":"end_turn","session_id":"3b264e52-ebb8-4807-9164-e2b6c8fc0f6a","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.312-token-B-p1
+  [s1-2.1.312-token-B-p1-t1] exit=0 {"duration_api_ms":16,"stop_reason":"end_turn","session_id":"d88368dd-c34d-45ae-8617-6bcf6a23ff2b","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-token-B-turn2
+  [s1-2.1.312-token-B-turn2-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"637202dd-7c52-4b7b-93d2-b0323f8a5083","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.312-token-B-turn2-t2] exit=0 {"duration_api_ms":25,"stop_reason":"end_turn","session_id":"637202dd-7c52-4b7b-93d2-b0323f8a5083","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.312-token-B-sub
+  [s1-2.1.312-token-B-sub-t1] exit=0 {"duration_api_ms":55,"stop_reason":"end_turn","session_id":"5854bbf6-ca16-494b-8fc3-6fa0825e4c60","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.312-token-A1-p1
+  [s1-2.1.312-token-A1-p1-t1] exit=0 {"duration_api_ms":19,"stop_reason":"end_turn","session_id":"afadbb46-8f9c-4f88-bebb-5cb6e6fcfc77","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-apikey-A-p1
+  [s1-2.1.312-apikey-A-p1-t1] exit=0 {"duration_api_ms":16,"stop_reason":"end_turn","session_id":"f9a2d6c4-cf93-4ffe-b5bf-10e64548f3f6","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-apikey-A-turn2
+  [s1-2.1.312-apikey-A-turn2-t1] exit=0 {"duration_api_ms":17,"stop_reason":"end_turn","session_id":"fc41434d-82c4-48a3-8bdf-0cc4eb843593","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.312-apikey-A-turn2-t2] exit=0 {"duration_api_ms":33,"stop_reason":"end_turn","session_id":"fc41434d-82c4-48a3-8bdf-0cc4eb843593","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.312-apikey-A-sub
+  [s1-2.1.312-apikey-A-sub-t1] exit=0 {"duration_api_ms":57,"stop_reason":"end_turn","session_id":"c7ea5ac0-2378-4c99-9960-c034ddb7db4d","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.312-apikey-B-p1
+  [s1-2.1.312-apikey-B-p1-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"988b0841-5b53-45d8-921a-c7958cd42ad6","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-apikey-B-turn2
+  [s1-2.1.312-apikey-B-turn2-t1] exit=0 {"duration_api_ms":16,"stop_reason":"end_turn","session_id":"47f32507-592d-48ae-84ad-b89e8c154c90","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+  [s1-2.1.312-apikey-B-turn2-t2] exit=0 {"duration_api_ms":26,"stop_reason":"end_turn","session_id":"47f32507-592d-48ae-84ad-b89e8c154c90","total_cost_usd":0.000059999999999999995,"usage":{"input_toke 
+== s1-2.1.312-apikey-B-sub
+  [s1-2.1.312-apikey-B-sub-t1] exit=0 {"duration_api_ms":52,"stop_reason":"end_turn","session_id":"0a36a4c3-846c-40e5-ac96-df1f5bfe5063","total_cost_usd":0.00015,"usage":{"input_tokens":2,"cache_cre 
+== s1-2.1.312-apikey-A1-p1
+  [s1-2.1.312-apikey-A1-p1-t1] exit=0 {"duration_api_ms":16,"stop_reason":"end_turn","session_id":"9a43647a-cb86-4ee0-8509-a96e699d3bca","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-oauth-A-entrycli
+  [s1-2.1.312-oauth-A-entrycli-t1] exit=0 {"duration_api_ms":16,"stop_reason":"end_turn","session_id":"f47a0424-bfce-424a-97cf-75947dd3b39b","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-token-A-nonessential
+  [s1-2.1.312-token-A-nonessential-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"6a58ead9-168b-46df-b006-4470ca6d0d20","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-oauth-A-tui (tui)
+  [s1-2.1.312-oauth-A-tui] exit=124 reqs=4
+== s1-2.1.312-oauth-B-entrycli
+  [s1-2.1.312-oauth-B-entrycli-t1] exit=0 {"duration_api_ms":15,"stop_reason":"end_turn","session_id":"92792a53-9f74-44a5-b72f-c50d82159e28","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-token-B-nonessential
+  [s1-2.1.312-token-B-nonessential-t1] exit=0 {"duration_api_ms":12,"stop_reason":"end_turn","session_id":"7df977af-56bc-49f5-a594-9ae2b15c66d2","total_cost_usd":0.000029999999999999997,"usage":{"input_toke 
+== s1-2.1.312-oauth-B-tui (tui)
+  [s1-2.1.312-oauth-B-tui] exit=124 reqs=2
+phase step1 done
+step1 exit=0

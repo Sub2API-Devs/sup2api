@@ -1,0 +1,13 @@
+# chunk-5typc6kc.js:Ke -> chunk-fq0cr76a.js:Ke
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-5typc6kc.js_Ke.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-5typc6kc.js_Ke.new.js"
+index c6f7f11..ec78d6d 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-5typc6kc.js_Ke.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-5typc6kc.js_Ke.new.js"
+@@ -34,5 +34,5 @@ SELF = { initialize: $m_Pw, isSandboxingEnabled: $m_Gc, isSandboxEnabledInSettin
+   $m_tn.cleanupAfterCommand(), $m_yw(void 0, void 0, { skipsScrubs: true });
+ }, snapshotBareGitRepoScrubPaths: () => {
+   let $l18 = $m_Ge();
+-  return { paths: [...$l18.bareGitRepoScrubPaths.keys()], pathsVouchedLocally: $l18.bareGitRepoScrubPathsVouchedLocally };
+-}, snapshotSymlinkedDenyScrubPaths: () => $m_Ge().symlinkedDenyScrubPaths.map(($l19) => ({ literal: $l19.literal, resolved: $l19.resolved, hopDirectories: $l19.hopDirectories === null ? null : [...$l19.hopDirectories], danglingBaseline: $l19.danglingBaseline })) };
++  return { paths: [...$l18.bareGitRepoScrubPaths.values()].map(($l19) => ({ path: $l19.path, parent: $NEW_chunk_fq0cr76a_js_U4($l19.parent), unlinkable: $l19.unlinkable })), pathsVouchedLocally: $l18.bareGitRepoScrubPathsVouchedLocally };
++}, snapshotSymlinkedDenyScrubPaths: () => $m_Ge().symlinkedDenyScrubPaths.map(($l20) => ({ literal: $l20.literal, resolved: $l20.resolved, parent: $NEW_chunk_fq0cr76a_js_U4($l20.parent), hopDirectories: $l20.hopDirectories === null ? null : [...$l20.hopDirectories], danglingBaseline: $l20.danglingBaseline })) };

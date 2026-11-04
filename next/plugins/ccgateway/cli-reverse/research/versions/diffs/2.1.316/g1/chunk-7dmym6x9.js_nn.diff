@@ -1,0 +1,14 @@
+# chunk-7dmym6x9.js:nn -> chunk-e6aww6q8.js:sn
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_nn.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_nn.new.js"
+index cd52381..6e20d8b 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_nn.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_nn.new.js"
+@@ -1,5 +1,5 @@
+-function SELF($l0, $l1 = { now: () => (/* @__PURE__ */ new Date()).toISOString(), uuid: () => $m_GEe() }, $l2) {
+-  let $l3 = $m_ite($l0, $l2);
+-  return { attachment: $l0, type: "attachment", uuid: $l1.uuid(), timestamp: ($l0.type === "queued_command" || $l0.type === "poll_events") && $l0.timestamp || $l1.now(), ...$l3 };
++function SELF($l0, $l1 = { now: () => (/* @__PURE__ */ new Date()).toISOString(), uuid: () => $NEW_chunk_e6aww6q8_js_mAe() }) {
++  let $l2 = $m_ite($l0);
++  return { attachment: $l0, type: "attachment", uuid: $l1.uuid(), timestamp: ($l0.type === "queued_command" || $l0.type === "poll_events") && $l0.timestamp || $l1.now(), ...$l2 };
+ }
+ ;

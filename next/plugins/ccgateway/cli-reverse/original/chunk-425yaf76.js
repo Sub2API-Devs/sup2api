@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.316
+import{FEs}from"./chunk-ndmse9kj.js";import{z}from"./chunk-2g090z7k.js";import{bt,_,te}from"./chunk-cgr0tezp.js";import{l}from"./chunk-bbtre4r8.js";import{p}from"./chunk-kpa9nk58.js";import{Bl}from"./chunk-qg0af0yq.js";import{Cc,qH}from"./chunk-aepeg2w5.js";import{Ql}from"./chunk-y162pn60.js";import{uGe}from"./chunk-nfave34y.js";import{ks}from"./chunk-e6aww6q8.js";import{o,E,Ne}from"./chunk-7vp249v4.js";import{rm as a}from"fs/promises";import{join as t}from"path";var s=".pending-wakeup",m=1024,u=p(()=>Ne({toolUseId:o().min(1).max(256),scheduledFor:E().int().positive(),chainStartedAt:E().int().nonnegative()}));async function ytn(i,r){let e=t(i,s);try{if(r===void 0){if(await a(e,{force:!0}).then(()=>!0,(d)=>(Ql(d),!1)))return}await uGe(e,r===void 0?"":_(r))}catch(n){if(!z(n))Ql(n)}}async function _xs(i){let r=await Bl(t(i,s),m);if(!r)return null;try{let e=u().safeParse(te(r));return e.success?e.data:null}catch{return null}}class yho{#o=Promise.resolve();#r=0;#e;#i;constructor(){this.#i=FEs(this.#n)}#n=(i)=>{try{if(!Cc())return;let r=qH();if(r===void 0)return;if(i!==void 0&&ks())return;this.#e??=bt(()=>this.#o);let e=++this.#r;this.#o=this.#o.then(()=>e===this.#r?ytn(r,i):void 0)}catch(r){l(r)}};flush(){return this.#o}dispose(){this.#i(),this.#o.then(()=>this.#e?.())}}
+export{ytn,_xs,yho};

@@ -1,0 +1,10 @@
+# chunk-c2txqh1z.js:setEntrypointOnRequests -> undefined
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-c2txqh1z.js_setEntrypointOnRequests.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-c2txqh1z.js_setEntrypointOnRequests.new.js"
+index 920557c..ac9c11a 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-c2txqh1z.js_setEntrypointOnRequests.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-c2txqh1z.js_setEntrypointOnRequests.new.js"
+@@ -1 +1 @@
+-/* chunk-c2txqh1z.js:setEntrypointOnRequests not found */
+\ No newline at end of file
++/* unmapped */
+\ No newline at end of file

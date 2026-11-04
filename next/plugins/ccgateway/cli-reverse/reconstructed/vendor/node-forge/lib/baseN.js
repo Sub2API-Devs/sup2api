@@ -1,0 +1,97 @@
+/**
+ * node-forge/lib/baseN.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: node-forge@1.4.0
+ * pieces: chunk-fq0cr76a.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+
+//@ chunk-fq0cr76a.js:3501-4980 cjs-fingerprint
+var require_baseN = __commonJS(function (cjsExports, cjsModule) {
+  var api = {};
+  cjsModule.exports = api;
+  var _reverseAlphabets = {};
+  api.encode = function (input, alphabet, maxline) {
+    if (typeof alphabet !== "string") throw TypeError('"alphabet" must be a string.');
+    if (maxline !== undefined && typeof maxline !== "number") throw TypeError('"maxline" must be a number.');
+    var output = "";
+    if (!(input instanceof Uint8Array)) output = _encodeWithByteBuffer(input, alphabet);
+    else {
+      var i = 0;
+      var base = alphabet.length;
+      var first = alphabet.charAt(0);
+      var digits = [0];
+      for (i = 0; i < input.length; ++i) {
+        for (var j = 0, carry = input[i]; j < digits.length; ++j) {
+          carry += digits[j] << 8;
+          digits[j] = carry % base;
+          carry = (carry / base) | 0;
+        }
+        while (carry > 0) {
+          digits.push(carry % base);
+          carry = (carry / base) | 0;
+        }
+      }
+      for (i = 0; input[i] === 0 && i < input.length - 1; ++i) output += first;
+      for (i = digits.length - 1; i >= 0; --i) output += alphabet[digits[i]];
+    }
+    if (maxline) {
+      var regex = new RegExp(".{1," + maxline + "}", "g");
+      output = output.match(regex).join(`\r
+`);
+    }
+    return output;
+  };
+  api.decode = function (input, alphabet) {
+    if (typeof input !== "string") throw TypeError('"input" must be a string.');
+    if (typeof alphabet !== "string") throw TypeError('"alphabet" must be a string.');
+    var table = _reverseAlphabets[alphabet];
+    if (!table) {
+      table = _reverseAlphabets[alphabet] = [];
+      for (var i = 0; i < alphabet.length; ++i) table[alphabet.charCodeAt(i)] = i;
+    }
+    input = input.replace(/\s/g, "");
+    var base = alphabet.length;
+    var first = alphabet.charAt(0);
+    var bytes = [0];
+    for (var i = 0; i < input.length; i++) {
+      var value = table[input.charCodeAt(i)];
+      if (value === undefined) return;
+      for (var j = 0, carry = value; j < bytes.length; ++j) {
+        carry += bytes[j] * base;
+        bytes[j] = carry & 255;
+        carry >>= 8;
+      }
+      while (carry > 0) {
+        bytes.push(carry & 255);
+        carry >>= 8;
+      }
+    }
+    for (var k = 0; input[k] === first && k < input.length - 1; ++k) bytes.push(0);
+    if (typeof Buffer !== "undefined") return Buffer.from(bytes.reverse());
+    return new Uint8Array(bytes.reverse());
+  };
+  function _encodeWithByteBuffer(input, alphabet) {
+    var i = 0;
+    var base = alphabet.length;
+    var first = alphabet.charAt(0);
+    var digits = [0];
+    for (i = 0; i < input.length(); ++i) {
+      for (var j = 0, carry = input.at(i); j < digits.length; ++j) {
+        carry += digits[j] << 8;
+        digits[j] = carry % base;
+        carry = (carry / base) | 0;
+      }
+      while (carry > 0) {
+        digits.push(carry % base);
+        carry = (carry / base) | 0;
+      }
+    }
+    var output = "";
+    for (i = 0; input.at(i) === 0 && i < input.length() - 1; ++i) output += first;
+    for (i = digits.length - 1; i >= 0; --i) output += alphabet[digits[i]];
+    return output;
+  }
+});
+export { require_baseN };

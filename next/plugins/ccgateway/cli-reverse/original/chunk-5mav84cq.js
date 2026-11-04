@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.316
+import{N}from"./chunk-2g090z7k.js";import{Ce}from"./chunk-eabawhjj.js";import{g,m,f}from"./chunk-8nhse09v.js";import{_}from"./chunk-cgr0tezp.js";import{l}from"./chunk-bbtre4r8.js";import{xXr,PXr,IXr}from"./chunk-g54kbxqw.js";import{zBn,bSo}from"./chunk-3dq9c61y.js";import{kgt}from"./chunk-cpq5ppb2.js";import{statfs as u}from"fs/promises";import{availableParallelism as d,totalmem as p}from"os";var c=["gcloud","aws","az","gh","brew","apt","sqlite3","ffmpeg","rg","jq"],s=2000,a=2n**30n;function Pxr(){try{return kgt()&&zBn("basic")!=="off"}catch(t){return l(N(t)),!1}}async function BWi(t){try{if(!Pxr())return;let[e,r]=await Promise.all([bSo({includeMcpServers:!1,signal:AbortSignal.timeout(s),alsoLookFor:c,maxTools:xXr}),Ce(u(t,{bigint:!0}),s).catch(()=>{return})]);if(e===void 0){m("remote_tools_host_inventory","unsupported_platform");return}let n=r===void 0?-1n:r.bavail*r.bsize;if(!e.complete)f("remote_tools_host_inventory","deadline");else if(n<0n)f("remote_tools_host_inventory","disk_unread");else g("remote_tools_host_inventory");let i={...!e.complete&&{incomplete:!0},cpus:d(),memory_gb:Math.round(p()/Number(a)),...n>=0n&&{disk_free_gb:Math.min(Number(n/a),PXr)}},o=e.profile.tools;while(o.length>0&&_({tools:o,...i}).length>IXr)o=o.slice(0,-1);return{tools:o,...i}}catch(e){l(N(e)),m("remote_tools_host_inventory","error");return}}
+export{Pxr,BWi};

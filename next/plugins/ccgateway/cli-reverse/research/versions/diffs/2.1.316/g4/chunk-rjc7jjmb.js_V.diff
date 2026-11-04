@@ -1,0 +1,14 @@
+# chunk-rjc7jjmb.js:V -> chunk-eweqvj83.js:Z
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\chunk-rjc7jjmb.js_V.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\chunk-rjc7jjmb.js_V.new.js"
+index 202acd3..605d92d 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\chunk-rjc7jjmb.js_V.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\chunk-rjc7jjmb.js_V.new.js"
+@@ -19,7 +19,7 @@ function SELF({ firstEmitPhases: $l0, startupContext: $l1 }, { late: $l2 }) {
+   } else $l7.late = false;
+   let $l16 = $l7.total_time_ms;
+   if (typeof $l16 === "number") $l7.gap_unaccounted_ms = Math.max(0, $l16 - $l9);
+-  $l7.free_mem_mb = Math.round($m_F.freemem() / 1048576), $l7.load_avg_1m = Math.round(($m_F.loadavg()[0] ?? 0) * 100) / 100, $l7.checkpoint_count = $l3.length;
++  $l7.free_mem_mb = Math.round($NEW_chunk_eweqvj83_js_F.freemem() / 1048576), $l7.load_avg_1m = Math.round(($NEW_chunk_eweqvj83_js_F.loadavg()[0] ?? 0) * 100) / 100, $l7.checkpoint_count = $l3.length;
+   let $l17 = $m_i.CLAUDE_CODE_REMOTE_SESSION_ID;
+   if ($l17) $l7.ccr_session_id = $m_ye($l17);
+   if ($m_O !== void 0) $l7.node_boot_ms = $m_O;

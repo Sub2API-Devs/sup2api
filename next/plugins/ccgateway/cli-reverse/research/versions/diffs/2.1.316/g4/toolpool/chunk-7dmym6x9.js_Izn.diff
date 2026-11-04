@@ -1,0 +1,16 @@
+# chunk-7dmym6x9.js:Izn -> chunk-e6aww6q8.js:NVn
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_Izn.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_Izn.new.js"
+index eacb9e9..e824e86 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_Izn.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_Izn.new.js"
+@@ -1,9 +1,5 @@
+ async function SELF($l0) {
+   if (!$l0.some(($l1) => $m_xt($l1, $m_oo))) return [];
+-  let $l2 = $m_Vr();
+-  if ($l2.bashPromptSkillCommands !== void 0) return $l2.bashPromptSkillCommands;
+-  let $l3 = $m_H$e.stamp(), $l4 = await $m_Tln($m_rf());
+-  if ($m_H$e.stamp() === $l3) $l2.bashPromptSkillCommands ??= $l4;
+-  return $l2.bashPromptSkillCommands ?? $l4;
++  return $m_Tln($m_rf());
+ }
+ ;

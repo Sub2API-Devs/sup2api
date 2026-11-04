@@ -1,0 +1,85 @@
+# chunk-yagw4eem.js:K$ -> chunk-hwmsct5x.js:MN
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_K$.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_K$.new.js"
+index 7398bbb..6171514 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_K$.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_K$.new.js"
+@@ -20,16 +20,16 @@ async function SELF($l0) {
+     return new $m_fRe({ ...$l41, defaultHeaders: { ...$l43, ...$m_dw(), Authorization: `Bearer ${$l42.jwt}` }, apiKey: null, baseURL: $l42.url, authToken: $l42.jwt, ...$m_IJ() && { logger: $m_Lt() } });
+   }
+   if ($l37 === "bedrock") {
+-    let { AnthropicBedrock: $l44 } = await import("./chunk-qbcgheqf.js"), $l45 = $m_ki($l3, $l38), $l46 = $m_i.CLAUDE_CODE_SKIP_BEDROCK_AUTH, $l47 = $m_At($l41.defaultHeaders), $l48 = Object.keys($l47.rest).some(($l49) => $l49.toLowerCase() === "x-api-key"), $l50 = { ...$l47.rest, ...$m_dw(), Authorization: null, ...!$l46 && !$l48 && { "X-Api-Key": null }, ...process.env.ANTHROPIC_BEDROCK_SERVICE_TIER && { "X-Amzn-Bedrock-Service-Tier": process.env.ANTHROPIC_BEDROCK_SERVICE_TIER } }, $l51 = process.env.AWS_BEARER_TOKEN_BEDROCK?.trim(), $l52 = $l51 ? `Bearer ${$l51}` : $l46 ? $l47.value : void 0, $l53 = $m_bd(), $l54 = !$l52 && !$l46 && !$l53 ? await $m_Lo($m_MX($l16, $l28), $l16) : null, $l55 = { ...$l41, defaultHeaders: $l50, awsRegion: $l45, apiKey: null, ...$l46 && !$l52 && { skipAuth: true }, ...$l52 && { apiKey: $l52.match(/^Bearer (.+)$/i)?.[1] ?? $l52, defaultHeaders: { ...$l50, Authorization: $l52, ...$l46 && $m_fYt($l47.rest) } }, ...$l53 && !$l52 && !$l46 && { providerChainResolver: $m_ope("Bedrock").providerChainResolver }, ...!$l53 && !$l52 && !$l46 && { providerChainResolver: $m_bee($l45) }, ...$m_IJ() && { logger: $m_Lt() } };
++    let { AnthropicBedrock: $l44 } = await import("./chunk-h87x8cg3.js"), $l45 = $m_ki($l3, $l38), $l46 = $m_i.CLAUDE_CODE_SKIP_BEDROCK_AUTH, $l47 = $m_At($l41.defaultHeaders), $l48 = Object.keys($l47.rest).some(($l49) => $l49.toLowerCase() === "x-api-key"), $l50 = { ...$l47.rest, ...$m_dw(), Authorization: null, ...!$l46 && !$l48 && { "X-Api-Key": null }, ...process.env.ANTHROPIC_BEDROCK_SERVICE_TIER && { "X-Amzn-Bedrock-Service-Tier": process.env.ANTHROPIC_BEDROCK_SERVICE_TIER } }, $l51 = process.env.AWS_BEARER_TOKEN_BEDROCK?.trim(), $l52 = $l51 ? `Bearer ${$l51}` : $l46 ? $l47.value : void 0, $l53 = $m_bd(), $l54 = !$l52 && !$l46 && !$l53 ? await $m_Lo($m_MX($l16, $l28), $l16) : null, $l55 = { ...$l41, defaultHeaders: $l50, awsRegion: $l45, apiKey: null, ...$l46 && !$l52 && { skipAuth: true }, ...$l52 && { apiKey: $l52.match(/^Bearer (.+)$/i)?.[1] ?? $l52, defaultHeaders: { ...$l50, Authorization: $l52, ...$l46 && $m_fYt($l47.rest) } }, ...$l53 && !$l52 && !$l46 && { providerChainResolver: $m_ope("Bedrock").providerChainResolver }, ...!$l53 && !$l52 && !$l46 && { providerChainResolver: $m_bee($l45) }, ...$m_IJ() && { logger: $m_Lt() } };
+     return $l54 ? new $l44({ ...$l55, awsAccessKey: $l54.accessKeyId, awsSecretKey: $l54.secretAccessKey, awsSessionToken: $l54.sessionToken }) : new $l44($l55);
+   }
+   if ($l37 === "foundry") {
+-    let { AnthropicFoundry: $l56 } = await import("./chunk-4vtnh20w.js"), $l57, $l58 = false;
++    let { AnthropicFoundry: $l56 } = await import("./chunk-q01xm7xp.js"), $l57, $l58 = false;
+     if ($m_i.ANTHROPIC_FOUNDRY_AUTH_TOKEN) $l57 = async () => $m_i.ANTHROPIC_FOUNDRY_AUTH_TOKEN ?? "";
+     else if (!process.env.ANTHROPIC_FOUNDRY_API_KEY) if ($m_i.CLAUDE_CODE_SKIP_FOUNDRY_AUTH) $l58 = true, $l57 = () => Promise.resolve("skip-foundry-auth");
+     else if ($m_bd()) throw $m_Ovn("Foundry");
+     else {
+-      let { DefaultAzureCredential: $l59, getBearerTokenProvider: $l60 } = await import("./chunk-9hhmbrdr.js");
++      let { DefaultAzureCredential: $l59, getBearerTokenProvider: $l60 } = await import("./chunk-mrx6y2r5.js");
+       $l57 = $l60(new $l59(), "https://cognitiveservices.azure.com/.default");
+     }
+     let $l61 = $m_i.ANTHROPIC_FOUNDRY_RESOURCE;
+@@ -38,7 +38,7 @@ async function SELF($l0) {
+     return new $l56($l63);
+   }
+   if ($l37 === "anthropicAws") {
+-    let { AnthropicAws: $l64 } = await import("./chunk-4gy7kam1.js"), $l65 = $m_i.CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH, $l66 = await $m_YI(), $l67 = $m_At($l41.defaultHeaders), $l68 = $l65 ? $l67.value : void 0, $l69 = Object.entries($l67.rest).findLast(([$l70]) => $l70.toLowerCase() === "anthropic-workspace-id")?.[1], $l71 = { ...$l41, awsRegion: $l66, ...$l69 && $m_i.ANTHROPIC_AWS_WORKSPACE_ID && { workspaceId: $l69 }, defaultHeaders: { ...$l67.rest, ...$m_dw(), Authorization: null }, ...!$l65 && { authToken: null }, ...$l65 && !$l68 && { skipAuth: true }, ...$l68 && { apiKey: $l68.match(/^Bearer (.+)$/i)?.[1] ?? $l68, defaultHeaders: { ...$l67.rest, ...$m_dw(), Authorization: $l68 } }, ...$m_IJ() && { logger: $m_Lt() } };
++    let { AnthropicAws: $l64 } = await import("./chunk-qhhcfyds.js"), $l65 = $m_i.CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH, $l66 = await $m_YI(), $l67 = $m_At($l41.defaultHeaders), $l68 = $l65 ? $l67.value : void 0, $l69 = Object.entries($l67.rest).findLast(([$l70]) => $l70.toLowerCase() === "anthropic-workspace-id")?.[1], $l71 = { ...$l41, awsRegion: $l66, ...$l69 && $m_i.ANTHROPIC_AWS_WORKSPACE_ID && { workspaceId: $l69 }, defaultHeaders: { ...$l67.rest, ...$m_dw(), Authorization: null }, ...!$l65 && { authToken: null }, ...$l65 && !$l68 && { skipAuth: true }, ...$l68 && { apiKey: $l68.match(/^Bearer (.+)$/i)?.[1] ?? $l68, defaultHeaders: { ...$l67.rest, ...$m_dw(), Authorization: $l68 } }, ...$m_IJ() && { logger: $m_Lt() } };
+     if (!process.env.ANTHROPIC_AWS_API_KEY && !$l65) if ($m_bd()) $l71.providerChainResolver = $m_ope("Anthropic-on-AWS").providerChainResolver;
+     else {
+       let $l72 = await $m_Lo($m_MX($l16, $l28), $l16);
+@@ -51,17 +51,17 @@ async function SELF($l0) {
+     $m_Zt("ANTHROPIC_GOOGLE_CLOUD_PROJECT", $m_i.ANTHROPIC_GOOGLE_CLOUD_PROJECT), $m_Zt("ANTHROPIC_GOOGLE_CLOUD_LOCATION", $m_i.ANTHROPIC_GOOGLE_CLOUD_LOCATION), $m_Zt("ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID", $m_i.ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID), $m_Zt("GCLOUD_PROJECT", $m_i.GCLOUD_PROJECT), $m_Zt("GOOGLE_CLOUD_PROJECT", $m_i.GOOGLE_CLOUD_PROJECT), $m_Zt("gcloud_project", $m_i.gcloud_project), $m_Zt("google_cloud_project", $m_i.google_cloud_project);
+     let $l73 = $m_i.CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH, $l74 = $m_bd();
+     if (!$l73 && !$l74) await $m_Lo($m_b4t($l16, $l28), $l16);
+-    let [{ AnthropicGoogleCloud: $l75 }, { buildVertexGoogleAuth: $l76 }] = await Promise.all([import("./chunk-qvvkjcy9.js"), import("./chunk-43bx92gq.js")]), $l77 = $m_At($l41.defaultHeaders), $l78 = $l73 ? $l77.value : void 0, $l79 = { ...$l41, defaultHeaders: { ...$l77.rest, ...$m_dw() }, ...$l73 ? { skipAuth: true } : { googleAuth: await $l76({ kind: "default" }, void 0) }, ...$l78 && { defaultHeaders: { ...$l77.rest, Authorization: $l78 } }, ...$m_IJ() && { logger: $m_Lt() } };
++    let [{ AnthropicGoogleCloud: $l75 }, { buildVertexGoogleAuth: $l76 }] = await Promise.all([import("./chunk-e7naa6k8.js"), import("./chunk-hdpbq2vw.js")]), $l77 = $m_At($l41.defaultHeaders), $l78 = $l73 ? $l77.value : void 0, $l79 = { ...$l41, defaultHeaders: { ...$l77.rest, ...$m_dw() }, ...$l73 ? { skipAuth: true } : { googleAuth: await $l76({ kind: "default" }, void 0) }, ...$l78 && { defaultHeaders: { ...$l77.rest, Authorization: $l78 } }, ...$m_IJ() && { logger: $m_Lt() } };
+     return new $l75($l79);
+   }
+   if ($l37 === "mantle") {
+-    let { AnthropicBedrockMantle: $l80 } = await import("./chunk-qbcgheqf.js"), $l81 = $m_i.CLAUDE_CODE_SKIP_MANTLE_AUTH, $l82 = $m_At($l41.defaultHeaders), $l83 = $l81 ? $l82.value : void 0, $l84 = process.env.AWS_BEARER_TOKEN_BEDROCK?.trim(), $l85 = $m_bd(), $l86 = !$l84 && !$l81 && !$l85 ? await $m_Lo($m_MX($l16, $l28), $l16) : null, $l87 = $m_ki($l3, $l38), $l88 = Object.keys($l82.rest).some(($l89) => $l89.toLowerCase() === "x-api-key");
++    let { AnthropicBedrockMantle: $l80 } = await import("./chunk-h87x8cg3.js"), $l81 = $m_i.CLAUDE_CODE_SKIP_MANTLE_AUTH, $l82 = $m_At($l41.defaultHeaders), $l83 = $l81 ? $l82.value : void 0, $l84 = process.env.AWS_BEARER_TOKEN_BEDROCK?.trim(), $l85 = $m_bd(), $l86 = !$l84 && !$l81 && !$l85 ? await $m_Lo($m_MX($l16, $l28), $l16) : null, $l87 = $m_ki($l3, $l38), $l88 = Object.keys($l82.rest).some(($l89) => $l89.toLowerCase() === "x-api-key");
+     return new $l80({ ...$l41, defaultHeaders: $l84 ? { ...$l82.rest, ...$m_dw(), Authorization: `Bearer ${$l84}`, ...!$l88 && { "X-Api-Key": null } } : { ...$l82.rest, ...$m_dw(), Authorization: null, ...!$l81 && !$l88 && { "X-Api-Key": null } }, awsRegion: $l87, ...!$l84 && !$l81 && { authToken: null }, ...$l81 && !$l83 && { skipAuth: true }, ...$l83 && { apiKey: $l83.match(/^Bearer (.+)$/i)?.[1] ?? $l83, defaultHeaders: { ...$l82.rest, ...$m_dw(), Authorization: $l83 } }, ...$l86 && { awsAccessKey: $l86.accessKeyId, awsSecretAccessKey: $l86.secretAccessKey, awsSessionToken: $l86.sessionToken }, ...$l85 && !$l84 && !$l81 && { providerChainResolver: $m_ope("Mantle").providerChainResolver }, ...!$l85 && !$l84 && !$l81 && { providerChainResolver: $m_bee($l87) }, ...$m_IJ() && { logger: $m_Lt() } });
+   }
+   if ($l37 === "vertex") {
+     let $l90 = $m_i.CLAUDE_CODE_SKIP_VERTEX_AUTH, $l91 = $m_bd();
+     if (!$l90 && !$l91) await $m_Lo($m_b4t($l16, $l28), $l16);
+-    let [{ AnthropicVertex: $l92 }, { buildVertexGoogleAuth: $l93 }] = await Promise.all([import("./chunk-kydx1mjr.js"), import("./chunk-43bx92gq.js")]), $l94 = await $l93($l90 ? { kind: "skip" } : { kind: "default" }, $m_oAt()), $l95 = $m_At($l41.defaultHeaders), $l96 = $l90 ? $l95.value : void 0, $l97 = { ...$l41, defaultHeaders: { ...$l95.rest, ...$m_fPe($l90 ? { wireAuthorization: $l96, headers: $l95.rest } : false) }, region: $m_Cve($l3), googleAuth: $l94, ...$m_IJ() && { logger: $m_Lt() } };
++    let [{ AnthropicVertex: $l92 }, { buildVertexGoogleAuth: $l93 }] = await Promise.all([import("./chunk-xa96axyz.js"), import("./chunk-hdpbq2vw.js")]), $l94 = await $l93($l90 ? { kind: "skip" } : { kind: "default" }, $m_oAt()), $l95 = $m_At($l41.defaultHeaders), $l96 = $l90 ? $l95.value : void 0, $l97 = { ...$l41, defaultHeaders: { ...$l95.rest, ...$m_fPe($l90 ? { wireAuthorization: $l96, headers: $l95.rest } : false) }, region: $m_Cve($l3), googleAuth: $l94, ...$m_IJ() && { logger: $m_Lt() } };
+     return $m_uPe(new $l92($l97));
+   }
+   let $l98 = $l1 || $m_spe();
+@@ -80,15 +80,19 @@ async function SELF($l0) {
+     if ($l104) throw new $m_Owe($l104.url);
+     if ($l32 === "lock_timeout" && $l33?.expiresAt != null && Date.now() >= $l33.expiresAt && $m_k("tengu_sharded_beacon", true)) throw new $m_pvt();
+   }
+-  let $l105 = $m_oai({ isSubscriber: $l34, apiKey: $l98, oauthAccessToken: $l33?.accessToken }), $l106 = { ...$l31, ...$m_kl($l30, $l31) };
+-  if ($m_Y3r({ apiKey: $l105.apiKey, getApiKeySource: () => {
+-    let { source: $l107 } = $m_Mp({ skipRetrievingKeyFromApiKeyHelper: true });
+-    return $l107 === "none" ? "unknown" : $l107;
+-  }, authToken: $l105.authToken, getAuthTokenSource: () => {
+-    let { source: $l108 } = $m_ha();
+-    return $l108 === "CLAUDE_CODE_OAUTH_TOKEN" || $l108 === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR" || $l108 === "CCR_OAUTH_TOKEN_FILE" ? $l108 : "claude.ai";
+-  }, defaultHeaders: $l106, authorizationSource: $l35, customHeaderNames: Object.keys($l29), envSuppliedHeaderNames: new Set([$l19 && "x-claude-remote-container-id", $l20 && "x-claude-remote-session-id", $l21 && "x-client-app"].filter(($l109) => Boolean($l109))) }), $l105.authToken && $m_kTn($l105.authToken)) return SELF($l0);
+-  let $l110 = { apiKey: $l105.apiKey, authToken: $l105.authToken, ...$m_i.ANTHROPIC_BASE_URL ? { baseURL: $m_i.ANTHROPIC_BASE_URL } : false, ...$l41, defaultHeaders: $l106, ...$m_IJ() && { logger: $m_Lt() } };
+-  return new $m_fRe($l110);
++  if ($l34 && $m_At($l31).value === void 0) await $NEW_chunk_gkzv6xmy_js_qW();
++  let $l105 = $m_$n();
++  if ($l33 && $l105?.accessToken !== $l33.accessToken || $l34 !== $m_tot({ anthropicAuthEnabled: $m_sl(), oauthScopes: $l105?.scopes }) || $m_At($l31).value === void 0 && $m_wVe()) return SELF($l0);
++  if ($l34 && $m_At($l31).value === void 0 && $NEW_chunk_gkzv6xmy_js_jie()) throw new $NEW_chunk_7c9mpntp_js_nU($NEW_chunk_gkzv6xmy_js_uwe());
++  let $l106 = $m_oai({ isSubscriber: $l34, apiKey: $l98, oauthAccessToken: $l33?.accessToken }), $l107 = { ...$l31, ...$m_kl($l30, $l31) };
++  if ($m_Y3r({ apiKey: $l106.apiKey, getApiKeySource: () => {
++    let { source: $l108 } = $m_Mp({ skipRetrievingKeyFromApiKeyHelper: true });
++    return $l108 === "none" ? "unknown" : $l108;
++  }, authToken: $l106.authToken, getAuthTokenSource: () => {
++    let { source: $l109 } = $m_ha();
++    return $l109 === "CLAUDE_CODE_OAUTH_TOKEN" || $l109 === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR" || $l109 === "CCR_OAUTH_TOKEN_FILE" ? $l109 : "claude.ai";
++  }, defaultHeaders: $l107, authorizationSource: $l35, customHeaderNames: Object.keys($l29), envSuppliedHeaderNames: new Set([$l19 && "x-claude-remote-container-id", $l20 && "x-claude-remote-session-id", $l21 && "x-client-app"].filter(($l110) => Boolean($l110))) }), $l106.authToken && $m_kTn($l106.authToken)) return SELF($l0);
++  let $l111 = { apiKey: $l106.apiKey, authToken: $l106.authToken, ...$m_i.ANTHROPIC_BASE_URL ? { baseURL: $m_i.ANTHROPIC_BASE_URL } : false, ...$l41, defaultHeaders: $l107, ...$m_IJ() && { logger: $m_Lt() } };
++  return new $m_fRe($l111);
+ }
+ ;

@@ -1,0 +1,23 @@
+# chunk-xw68pzq6.js:dA -> chunk-82kqcve8.js:WA
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-xw68pzq6.js_dA.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-xw68pzq6.js_dA.new.js"
+index c8fb5a4..8aaa925 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-xw68pzq6.js_dA.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-xw68pzq6.js_dA.new.js"
+@@ -17,7 +17,7 @@ function SELF($l0, $l1, $l2, $l3) {
+     if ($m_Wc($l13 === null ? $l6 : [...$l6, $l13])) return $m_ki;
+   }
+   if ($l2.restricted || $l2.blockReadsOutsideWorkingDirectories) {
+-    let $l14 = $m_Rc($l4, $l5, $l2, () => $m_wbe($l8(), $l1, $l6, { restricted: $l2.restricted, blockOutsideReads: $l2.blockReadsOutsideWorkingDirectories, readBlockFence: $l2.blockReadsOutsideWorkingDirectories }), $l2.restricted ? $m_Pc : $m_ag, $l2.blockReadsOutsideWorkingDirectories ? $m_ser($l2) : $m_Pv($l2));
++    let $l14 = $m_Rc($l4, $l5, $l2, () => $m_wbe($l8(), $l1, $l6, { restricted: $l2.restricted, blockOutsideReads: $l2.blockReadsOutsideWorkingDirectories, readBlockFence: $l2.blockReadsOutsideWorkingDirectories, searchRootFence: $l2.blockReadsOutsideWorkingDirectories }), $l2.restricted ? $m_Pc : $m_ag, $l2.blockReadsOutsideWorkingDirectories ? $m_ser($l2) : $m_Pv($l2), $NEW_chunk_82kqcve8_js_Kc($l2));
+     if ($l14) {
+       if ($l2.servedCall === true && !$l2.restricted && $l14.behavior === "deny" && !$m_KKr()) return { behavior: "ask", message: $l14.message, decisionReason: { type: "safetyCheck", reason: $m_fL, classifierApprovable: false, circuitBreaker: "outsideReadsBlocked" } };
+       return $l14;
+@@ -29,7 +29,7 @@ function SELF($l0, $l1, $l2, $l3) {
+     let $l17 = $m_Pa($l16, $l2, "read", "ask");
+     if ($l17) return { behavior: "ask", message: `Claude requested permissions to read from ${$m_lc($l4)}, but you haven't granted it yet.`, decisionReason: { type: "rule", rule: $l17 } };
+   }
+-  let $l18 = $l2.mode === "plan" ? { ...$l2, mode: "default" } : $l2, $l19 = $m___($l0, $l1, $l18, $l5);
++  let $l18 = $l2.mode === "plan" || $l2.blockWritesOutsideWorkingDirectories ? { ...$l2, ...$l2.mode === "plan" && { mode: "default" }, blockWritesOutsideWorkingDirectories: false } : $l2, $l19 = $m___($l0, $l1, $l18, $l5);
+   if ($l19.behavior === "allow") {
+     if ($l19.decisionReason?.type === "mode" && $l10()) $m_tc($l8(), "editImpliesRead", $l2.mode);
+     return $l19;

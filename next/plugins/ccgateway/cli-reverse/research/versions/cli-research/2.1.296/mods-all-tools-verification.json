@@ -1,0 +1,513 @@
+{
+  "date": "2026-10-17",
+  "baseline": "linux-x64-glibc/2.1.296",
+  "extension": "ccgateway-mods-all-tools-v3-hooks",
+  "supersedes": "ccgateway-mods-all-tools-v2 (incorrectly skipped tool lifecycle hooks)",
+  "runtime": "Bun 1.4.3",
+  "environment": "ovh Docker, Linux x64/glibc, loopback mock API, --network none",
+  "unitTests": {
+    "passed": 8,
+    "total": 8
+  },
+  "runtimeChecks": [
+    {
+      "scenario": "control",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PostToolUseFailure",
+          "tool": "Bash"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": true
+        }
+      ]
+    },
+    {
+      "scenario": "denied",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "NativeEcho"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "NativeEcho"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_1",
+          "isError": false
+        }
+      ]
+    },
+    {
+      "scenario": "disabled",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "NativeEcho"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "NativeEcho"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_1",
+          "isError": false
+        }
+      ]
+    },
+    {
+      "scenario": "hooks-deny",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "NativeEcho"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": true
+        },
+        {
+          "id": "tool_probe_1",
+          "isError": true
+        }
+      ]
+    },
+    {
+      "scenario": "mcp",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "NativeEcho"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "NativeEcho"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "mcp__ccgateway-native-probe__LegacyEcho"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "mcp__ccgateway-native-probe__LegacyEcho"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_1",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_2",
+          "isError": false
+        }
+      ]
+    },
+    {
+      "scenario": "original-denied",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Read"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Read"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "TaskCreate"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "TaskCreate"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "WebFetch"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "WebFetch"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_1",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_2",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_3",
+          "isError": false
+        }
+      ]
+    },
+    {
+      "scenario": "original",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Read"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Read"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "TaskCreate"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "TaskCreate"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "WebFetch"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "WebFetch"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_1",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_2",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_3",
+          "isError": false
+        }
+      ]
+    },
+    {
+      "scenario": "reregister",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "NativeEcho"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "NativeEcho"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_1",
+          "isError": false
+        }
+      ]
+    },
+    {
+      "scenario": "unknown",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "UndeclaredTool"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "UndeclaredTool"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": false
+        }
+      ]
+    },
+    {
+      "scenario": "normal",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "NativeEcho"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "NativeEcho"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_1",
+          "isError": false
+        }
+      ]
+    },
+    {
+      "scenario": "unhandled",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "NativeUnhandled"
+        },
+        {
+          "event": "PostToolUseFailure",
+          "tool": "NativeUnhandled"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": true
+        }
+      ]
+    },
+    {
+      "scenario": "hooks-update",
+      "passed": true,
+      "exitCode": 0,
+      "modelRequests": 2,
+      "hooks": [
+        {
+          "event": "SessionStart"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "Bash"
+        },
+        {
+          "event": "PreToolUse",
+          "tool": "NativeEcho"
+        },
+        {
+          "event": "PostToolUse",
+          "tool": "NativeEcho"
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "tool_probe_0",
+          "isError": false
+        },
+        {
+          "id": "tool_probe_1",
+          "isError": false
+        }
+      ]
+    }
+  ],
+  "patchFiles": {
+    "chunk-kasbfbhj.js": {
+      "before": "4db1e890fb4b277063ca17984811e7cf08b8bf1d2bb45c0da9c22a5e39b3deca",
+      "after": "3ec51ee1b7f42b0f944f453630ab7a9ce7cad96c02efc861bc7e9b81f07e6b81"
+    },
+    "chunk-30jbnw20.js": {
+      "before": "5d498fe6b9e227c6aa6b09ac7438e1adf36a9739fbce96f2177251b022b91b9e",
+      "after": "1220a94fbdf54b9194f4bdf8f6306af40a4066f54a8e71b1a272f8795df5c142"
+    },
+    "chunk-gtj0ecsn.js": {
+      "before": "4533db8fb0e2ca0da3a2491c56695c4349370bebaaebd9ad8887634207212c88",
+      "after": "7f87ddabc0a0cd34676cb8997a5c87d483c79e4bdffefbd8b5bc7ab11b6acd0d"
+    },
+    "chunk-tmrtnnjz.js": {
+      "before": "3680248156229ce33e4a1e0a39c89b742b750b1c66287613fe9d338c47d14cf1",
+      "after": "e7ce2d4338104b1c4a62a7b342f83bbc84a6c8d8c67d30a6659754301cb61136"
+    },
+    "chunk-716kq0mx.js": {
+      "before": "1c4bf55e63548242b60fd677cb145de11efab375c2110607f8edace5c09f66fd",
+      "after": "87023964d32d93841eebefdd102cae714ac448ede120c1de3e2f1dd1c217d21d"
+    },
+    "chunk-daj64yn4.js": {
+      "before": "a8496d811e81e9994d92cdbf82c5015a21f028df27af4c52ff9f1ddd7b1a7b88",
+      "after": "5073cad85c56acc57ef0df82a7d53a082ee5bb1aa01992b0e46303bfc691d094"
+    }
+  },
+  "binary": {
+    "sha256": "1d6c12e546e1b368837a507b1c5ca7a20432d23fa10ae87e9f9949f36704e885",
+    "image": "ccgateway-cli:mods-hooks-2.1.296",
+    "debianWithoutBunVersionCheck": true
+  },
+  "limitations": [
+    "Headless end-to-end only; terminal tool pool patched but TUI unverified",
+    "Windows/macOS not ported",
+    "Production Worker and Go engine not switched",
+    "Module capability restrictions and session cancellation remain",
+    "PreToolUse ask returns an approval-required error in headless; it is not silently allowed",
+    "Unmodified built-in tool visibility remains configuration-dependent; invocation does not enforce that list"
+  ]
+}

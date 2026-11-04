@@ -1,0 +1,11 @@
+# chunk-zpsbh0wk.js:Rt -> chunk-ndmse9kj.js:Rt
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\chunk-zpsbh0wk.js_Rt.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\chunk-zpsbh0wk.js_Rt.new.js"
+index f8d7b2c..9c128da 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\chunk-zpsbh0wk.js_Rt.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\chunk-zpsbh0wk.js_Rt.new.js"
+@@ -1,4 +1,4 @@
+ function SELF($l0 = $m_Tps()) {
+-  return $m_gto({ host: $m_tt(), id: $m_t8t() ?? $m_jae(), project: { originalCwd: $l0, projectRoot: $l0, cwd: $l0 } });
++  return $m_gto({ host: $m_tt(), id: $m_t8t() ?? $NEW_chunk_kcjh5jnz_js_Ude(), project: { originalCwd: $l0, projectRoot: $l0, cwd: $l0 } });
+ }
+ ;

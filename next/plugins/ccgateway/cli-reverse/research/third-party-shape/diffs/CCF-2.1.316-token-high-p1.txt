@@ -1,0 +1,26 @@
+Messages 请求 A=1 B=1
+
+-- 主线程 第1轮 (A req-1 / B req-1): 16 处差异
+  头 x-claude-code-session-id（每次随机）A=de8b8c6c-7cad-4ae1-a57d-9b2f91e8f88a B=e10d74df-9720-4408-b771-68344851cf27
+  头 x-claude-code-prompt-id 只有 A: 356bd58d-c94c-466a-bed5-6ec016519c72
+  头 x-client-request-id（每次随机）A=a52f69e0-5d26-41b7-be9e-896877c908ae B=fbffb401-0d35-4722-bdcf-d10e24f203ef
+  头顺序 A=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-prompt-id","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+         B=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+  body 键 A(11)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","diagnostics","stream"]
+  body 键 B(10)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","stream"]
+  body.diagnostics 只有 A: {"previous_message_id":null}
+  system 块数 A=4 B=3
+  system[0] 文字不同（A 192B / B 74B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=9c949; cc_prompt_id=356bd58d-c94c-466a-bed5-6ec016519c72; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=9c949; cc_prompt_id=356bd58d-c94c-466a-bed5-6ec016519c72; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli;
+  system[1] 键序/键集 A=["type","text"] B=["type","text","cache_control"]
+  system[1] cache_control A=undefined B={"type":"ephemeral"}
+  system[2] 文字不同（A 1171B / B 5470B），首个不同行 #12:
+      A: (无)
+      B: 
+  system[2] cache_control A={"type":"ephemeral","scope":"global"} B={"type":"ephemeral"}
+  system[3] 只有 A: When you use a pronoun for someone — the user or anyone else you mention — and their pronouns haven't been stated, use they/them. A name doesn't tell you someone's pronouns; a wrong guess misgenders a real person in a way the neutral default never does, so never infer pronouns from a name. This applies to all user-visible text, including visible thinking.
+  metadata A={"user_id":"{\"device_id\":\"2358db998ad36a7ee2f2fb0e7cfbf905be257a265bd98bcf0b23bd1fabf460c2\",\"account_uuid\":\"00000000-0000-4000-8000-000000000001\",\"session_id\":\"de8b8c6c-7cad-4ae1-a57d-9b2f91e8f88a\"}"}
+           B={"user_id":"{\"device_id\":\"5a40661068a675296ad5fe08427992016e51814e482e86f6675d117e6b8f0d6d\",\"account_uuid\":\"00000000-0000-4000-8000-000000000001\",\"session_id\":\"e10d74df-9720-4408-b771-68344851cf27\"}"}

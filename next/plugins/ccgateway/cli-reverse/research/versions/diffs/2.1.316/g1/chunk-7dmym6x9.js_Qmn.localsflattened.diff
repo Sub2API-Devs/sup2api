@@ -1,0 +1,617 @@
+diff --git a/C:/Users/16790/AppData/Local/Temp/qmn.old.js b/C:/Users/16790/AppData/Local/Temp/qmn.new.js
+index b2c73b2..2a269fe 100644
+--- a/C:/Users/16790/AppData/Local/Temp/qmn.old.js
++++ b/C:/Users/16790/AppData/Local/Temp/qmn.new.js
+@@ -19,4 +19,4 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   let $L = $m_mmr($L), $L = $m_mze($L, $L.agentContext), $L = $m_F7s($L.agentContext, $L);
+-  if ($L && $m_ps()) $m_U7s($L);
+-  let $L = $m_hmr($L), $L = $m__mr($L), $L = $m_QFr($L), $L = $m_n8e($L), $L = $m_Te() === "bedrock" && $L.model.includes("application-inference-profile") ? await $m_m$e($m_Wn($L.model)) ?? $L.model : $L.model;
++  if ($L && $m_ps()) await $NEW_chunk_hwmsct5x_js_qXo($L);
++  let $L = $NEW_chunk_e6aww6q8_js_gSr($L), $L = $NEW_chunk_e6aww6q8_js_hSr($L), $L = $m_QFr($L), $L = $m_n8e($L), $L = $m_Te() === "bedrock" && $L.model.includes("application-inference-profile") ? await $m_m$e($m_Wn($L.model)) ?? $L.model : $L.model;
+   if ($m_Gve($L.model, $L.querySource), $m_gTe()) await $m_Lsn($L.model, $L.credentials, $L.storageV5);
+@@ -62,3 +62,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       let $L = $L?.toolInputCopies;
+-      if ($L !== void 0 && $L.size > 0 && $m_F1o($L.querySource) && $m_wCt($L, $L)) $m_tke($L, $L);
++      if ($L !== void 0 && $L.size > 0 && $m_F1o($L.querySource) && $NEW_chunk_e6aww6q8_js_rPt($L, $L)) $m_tke($L, $L);
+     } catch ($L) {
+@@ -74,3 +74,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   try {
+-    if ($L.includes($m_xS) && $L(() => $m_O3s($L, $L))) $L = $m_r3s($L, $L.nameOnlyAnnouncements), $L = $m_o3s($L, $L.nameOnlyAnnouncements);
++    if ($L.includes($m_xS) && $L(() => $NEW_chunk_a76knw89_js_poi($L, $L))) $L = $m_r3s($L, $L.nameOnlyAnnouncements), $L = $m_o3s($L, $L.nameOnlyAnnouncements);
+   } catch ($L) {
+@@ -78,6 +78,6 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   }
+-  let $L;
++  let $L, $L = 0;
+   if ($L) try {
+-    let $L = $m_oP();
+-    $L = $m_idn($L, $L, ($L) => $L($L, $L), $L);
++    let $L = $m_oP(), $L = $m_idn($L, $L, ($L) => $L($L, $L), $L, !$L.some(($L) => $L.type === "assistant"));
++    if ($L = $L, $L !== void 0) $L = $m_U($m_bWr($L, $L), ($L) => $L.has($L.name) && $L($L, $L));
+   } catch ($L) {
+@@ -85,3 +85,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   }
+-  let $L, $L = !$L.declaredToolsDecided, $L = $m_x3s(), $L = 0;
++  let $L, $L = !$L.declaredToolsDecided, $L = $NEW_chunk_a76knw89_js_coi(), $L = 0;
+   if ($L || $L) {
+@@ -115,3 +115,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   let $L = $m_Cj().generation, $L = $L || $L ? $m_$1o($L, $L, $L.querySource, { keepMcp: !$m_nq($L), surfacedOnWire: $L.surfacedOnWire, ...$L && { declaredInline: $L } }) : void 0;
+-  if ($L && $L.size === 0 && (!$L.hasPendingMcpServers || $m_nq($L)) && !$L?.kept.size && !$L?.has($m_Ys)) {
++  if ($L && $L.size === 0 && !($L !== void 0 && $L === $L && $L > 0) && (!$L.hasPendingMcpServers || $m_nq($L)) && !$L?.kept.size && !$L?.has($m_Ys)) {
+     if ($m_t("Tool search disabled: no deferred tools available to search"), $L = false, $L && $L !== void 0 && $L !== void 0) try {
+@@ -177,4 +177,5 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     let $L = $m_Z9($L).filter(($L) => !$L($L));
+-    if ($L !== void 0) $m_vxn($L, new $m_K7($L));
+-    else $m_k3s($L, $L);
++    if ($L !== void 0) {
++      if ($m_vxn($L, new $m_K7($L)), $L > 0) $m_g("host_upfront_tools", { named: $m_i.CLAUDE_CODE_UPFRONT_TOOLS?.length ?? 0, sent: $L });
++    } else $m_k3s($L, $L);
+   } catch ($L) {
+@@ -195,4 +196,13 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   if ($L && !$L.includes($m_vYe)) $L.push($m_vYe);
+-  let $L = $L ? $L ? "none" : "system_prompt" : "none", $L = $m_oP(), $L = $L.withoutToolDescribeHooks ? void 0 : $L.redescribedTools, $L = await Promise.all($L.map(($L) => $m_YH($L, { getToolPermissionContext: $L.getToolPermissionContext, tools: $L, agents: $L.agents, allowedAgentTypes: $L.allowedAgentTypes, model: $L, enginePlacement: $m_yKe($L, $L) ? "deferred" : "listed", querySource: $L.querySource, withoutToolDescribeHooks: $L.withoutToolDescribeHooks, recordedDescription: $L($L) ? void 0 : $L.recordedToolDescriptions?.get($L.name), recordedEntry: $L($L) || $m_xt($L, $m_Qa) ? void 0 : $L.recordedToolEntries?.get($L.name), isRedescribed: $L?.has($L.name) || void 0, deferLoading: $L($L), loadedThroughToolSearch: $L && $L($L) && $L($L, $L) })));
+-  $m_l9t($L, $L, { redescribed: $L, recorded: $L.recordedToolDescriptions, isMainChain: $m_Af($L.agentContext) && $m_ss($L.querySource) === "main" });
++  let $L = $L ? $L ? "none" : "system_prompt" : "none", $L = $m_oP(), $L = $L.withoutToolDescribeHooks ? void 0 : $L.redescribedTools, $L = await Promise.all($L.map(($L) => $m_YH($L, { getToolPermissionContext: $L.getToolPermissionContext, tools: $L, agents: $L.agents, allowedAgentTypes: $L.allowedAgentTypes, model: $L, enginePlacement: $m_yKe($L, $L) ? "deferred" : "listed", querySource: $L.querySource, withoutToolDescribeHooks: $L.withoutToolDescribeHooks, recordedDescription: $L($L) ? void 0 : $L.recordedToolDescriptions?.get($L.name), recordedEntry: $L($L) || $m_xt($L, $m_Qa) ? void 0 : $L.recordedToolEntries?.get($L.name), isRedescribed: $L?.has($L.name) || void 0, deferLoading: $L($L), loadedThroughToolSearch: $L && $L($L) && $L($L, $L) }))), $L = $m_Af($L.agentContext) && $m_ss($L.querySource) === "main";
++  if ($m_l9t($L, $L, { redescribed: $L, recorded: $L.recordedToolDescriptions, isMainChain: $L }), $L) try {
++    let $L;
++    for (let $L of $L) if ("name" in $L && "description" in $L && $m_xt($L, $m_Fe)) {
++      $L = $L.description;
++      break;
++    }
++    $NEW_chunk_apw2zhyn_js_Mts($L);
++  } catch ($L) {
++    $m_l($m_N($L)), $NEW_chunk_apw2zhyn_js_Mts("");
++  }
+   let $L = [];
+@@ -204,5 +214,5 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   }
+-  let $L = new Map($L.map(($L, $L) => [$L.name, { schema: $L[$L], isMcp: $L.isMcp === true }])), $L = $L !== void 0 ? $L : $L, $L = [];
++  let $L = new Map($L.map(($L, $L) => [$L.name, { schema: $L[$L], isMcp: $L.isMcp === true }])), $L = $L !== void 0 ? $L : $L, $L = $L(() => $m_sWr($L)), $L = [];
+   if ($L !== void 0 && $L.recordedOnly.size > 0) try {
+-    $L = $m_R3s($L, $L, { pool: $L, recordedEntries: $L.recordedToolEntries, keptDeferred: $L ? $L?.kept.keys() ?? [] : [], keepMcp: !$m_nq($L), requestCarriesStructuredOutputs: $L(() => $m_Pvn($L)) });
++    $L = $NEW_chunk_a76knw89_js_doi($L, $L, { pool: $L, recordedEntries: $L.recordedToolEntries, keptDeferred: $L ? $L?.kept.keys() ?? [] : [], keepMcp: !$m_nq($L), requestCarriesStructuredOutputs: $L(() => $m_Pvn($L)), requestDeclaresSearchCitations: $L });
+   } catch ($L) {
+@@ -224,3 +234,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   if ($L !== void 0) {
+-    if ($L) $m_g3s($L, $L, $L, { requestCarriesStructuredOutputs: $L(() => $m_Pvn($L)) });
++    if ($L) $NEW_chunk_a76knw89_js_Xri($L, $L, $L, { requestCarriesStructuredOutputs: $L(() => $m_Pvn($L)), requestDeclaresSearchCitations: $L });
+     let $L = $m_dun();
+@@ -234,3 +244,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     $L = $L.thread?.type === "continue";
+-    let $L = $m_i9t($L, { ...$m_jmn($L, $L()), messages: $L }, { querySource: $L.querySource, isMainThread: $m_Af($L.agentContext), history: $L, retryCause: $L, retryKeepsHeal: $L === true, promptEpoch: $L.promptRenderEpoch, accountMemoryEpoch: $L });
++    let $L = $NEW_chunk_e6aww6q8_js_p7t($L, { ...$m_jmn($L, $L()), messages: $L }, { querySource: $L.querySource, isMainThread: $m_Af($L.agentContext), history: $L, retryCause: $L, retryKeepsHeal: $L === true, promptEpoch: $L.promptRenderEpoch, accountMemoryEpoch: $L });
+     if ($m_Tx($L.querySource) !== null && $m_Rv()) try {
+@@ -275,3 +285,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   if ($L && !$L.includes($m_Gq)) $L.push($m_Gq);
+-  let $L = $L(() => $m_Bnr({ loopEffort: $L.refusalFallbackEffort, continuesMainConversation: $m_cW($L.agentContext) }, $L)), $L = $L(() => $m_kS($L, $L.effortValue, { turnEffort: $L.turnEffort, hookEffortValue: $L.hookEffortValue, carriedEffort: $L })), $L = $L === null ? void 0 : { level: $L, outcome: $m_foi({ carried: $L, withIt: $L, withoutIt: $L(() => $m_kS($L, $L.effortValue ?? $L.effortSetAsideByHold, { turnEffort: $L.turnEffort, hookEffortValue: $L.hookEffortValue, carriedEffort: null })), isSavedSetAside: $L.effortSetAsideByHold !== void 0 }) }, $L = $L(() => $m_ES($L) && $L !== void 0 ? $m_U0($L) : void 0), $L = $m_Af($L.agentContext) && ($L.querySource.startsWith("repl_main_thread") || $L.querySource === "sdk"), $L = $L.querySource.startsWith("repl_main_thread") || $L.querySource === "sdk", $L = $L ? "foreground" : $L.agentContext.agentId;
++  let $L = $L(() => $m_Bnr({ loopEffort: $L.refusalFallbackEffort, continuesMainConversation: $m_cW($L.agentContext) }, $L)), $L = $L(() => $m_kS($L, $L.effortValue, { turnEffort: $L.turnEffort, hookEffortValue: $L.hookEffortValue, carriedEffort: $L })), $L = () => $NEW_chunk_e6aww6q8_js_uEe($L, $L.querySource), $L = $NEW_chunk_e6aww6q8_js_yV($L, $L()), $L = $L === null ? void 0 : { level: $L, outcome: $m_foi({ carried: $L, withIt: $L, withoutIt: $L(() => $m_kS($L, $L.effortValue ?? $L.effortSetAsideByHold, { turnEffort: $L.turnEffort, hookEffortValue: $L.hookEffortValue, carriedEffort: null })), isSavedSetAside: $L.effortSetAsideByHold !== void 0 }) }, $L = $L(() => $m_ES($L) && $L !== void 0 ? $m_U0($L) : void 0), $L = $m_Af($L.agentContext) && ($L.querySource.startsWith("repl_main_thread") || $L.querySource === "sdk"), $L = $L.querySource.startsWith("repl_main_thread") || $L.querySource === "sdk", $L = $L ? "foreground" : $L.agentContext.agentId;
+   if ($L) $m_Xmn($L, $L);
+@@ -310,7 +320,7 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   let $L = $m_iee(() => {
+-    let $L = $L.resumeIncompleteThinking ? "keep" : $m_ree?.relayThinkingDisposition({ mainLoop: $m_ss($L.querySource) === "main" && !$L.agentId, fetch: $L.fetchOverride }) ?? "keep";
+-    return { relayThinking: $L, relayThinkingPlan: $L === "keep" ? void 0 : $m_lQe($L), builtForRelay: !$L.resumeIncompleteThinking && ($m_ree?.isRelayedRequest($L.fetchOverride) ?? false) };
+-  }, { relayThinking: "keep", relayThinkingPlan: void 0, builtForRelay: false }), { relayThinking: $L, relayThinkingPlan: $L, builtForRelay: $L } = $L, $L = { model: $L.model, bodyModel: $L, pollEventsAsText: false, accountMemoryWithheld: $m_i7n(), tools: $m_Z9($L), ingestPool: { tools: $L, ...$m_F1o($L.querySource) && { ownRequest: { mcpServersPending: $L.hasPendingMcpServers === true } } }, ...$L && { declaredToolNames: $m_P3s($L) }, betas: $L, midConvLatchedOff: $L, keptReminders: $L, useToolSearch: $L, advisorModel: $L, advisorDeferred: $L, stripWebSearch: $L.webSearchHistoryRejected, mediaItemLimit: $m_uto($L, $L)?.limit, resumeIncompleteThinking: $L, perTurnEffort: $L, perTurnNow: $L, deferredToolReferencePlan: $L, keepForeignThinking: $m_kfn(), deferredWireToolNames: $L, nameOnlyAnnouncements: $L.nameOnlyAnnouncements, byValueNames: $L, byValueAnnouncements: $L, withoutAttachmentHooks: $L.withoutToolDescribeHooks, reminderFold: $L.reminderFold, echoWireToolInputs: $L, thinkingStripPlan: $L === void 0 ? $L.thinkingStripPlan : $m_aJe($L.thinkingStripPlan, $L), advisorStripPlan: $L.advisorStripPlan };
++    let $L = $L.resumeIncompleteThinking ? "keep" : $NEW_chunk_e6aww6q8_js_Wte?.relayThinkingDisposition({ mainLoop: $m_ss($L.querySource) === "main" && !$L.agentId, fetch: $L.fetchOverride }) ?? "keep";
++    return { relayThinking: $L, relayThinkingPlan: $L === "keep" ? void 0 : $m_lQe($L), builtForRelay: !$L.resumeIncompleteThinking && ($NEW_chunk_e6aww6q8_js_Wte?.isRelayedRequest($L.fetchOverride) ?? false) };
++  }, { relayThinking: "keep", relayThinkingPlan: void 0, builtForRelay: false }), { relayThinking: $L, relayThinkingPlan: $L, builtForRelay: $L } = $L, $L = { model: $L.model, bodyModel: $L, pollEventsAsText: false, accountMemoryWithheld: $m_i7n(), tools: $m_Z9($L), ingestPool: { tools: $L, ...$m_F1o($L.querySource) && { ownRequest: { mcpServersPending: $L.hasPendingMcpServers === true } } }, ...$L && { declaredToolNames: $NEW_chunk_a76knw89_js_uoi($L) }, betas: $L, midConvLatchedOff: $L, keptReminders: $L, useToolSearch: $L, advisorModel: $L, advisorDeferred: $L, stripWebSearch: $L.webSearchHistoryRejected, mediaItemLimit: $m_uto($L, $L)?.limit, resumeIncompleteThinking: $L, perTurnEffort: $L, perTurnEffortCap: $L, perTurnNow: $L, deferredToolReferencePlan: $L, keepForeignThinking: $m_kfn(), deferredWireToolNames: $L, nameOnlyAnnouncements: $L.nameOnlyAnnouncements, byValueNames: $L, byValueAnnouncements: $L, withoutAttachmentHooks: $L.withoutToolDescribeHooks, reminderFold: $L.reminderFold, echoWireToolInputs: $L, thinkingStripPlan: $L === void 0 ? $L.thinkingStripPlan : $m_aJe($L.thinkingStripPlan, $L), advisorStripPlan: $L.advisorStripPlan };
+   if ($L) $m_Mx("message_normalization");
+-  let { messagesPreNormalize: $L, messagesForAPI: $L, accountMemoryEpoch: $L, midConvFallback: $L, toolChangeFallback: $L, inlineToolsFallback: $L, keptForeignSignatures: $L, blocksEligible: $L } = $L(() => $m_Kmn($L, $L));
++  let { messagesPreNormalize: $L, messagesForAPI: $L, accountMemoryEpoch: $L, midConvFallback: $L, toolChangeFallback: $L, inlineToolsFallback: $L, keptForeignSignatures: $L, blocksEligible: $L } = $L(() => $NEW_chunk_e6aww6q8_js_Qyn($L, $L));
+   if ($L) $m_Dx("message_normalization"), $m_Mx("request_build");
+@@ -332,3 +342,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     if ($L !== void 0 && $L.input === $L && $L.fallbackBeta === $L && $L.marksBeta === $L) return $L.output;
+-    let $L = $m_Tgn($L, $L), $L = false, $L = $m_cfn($m_Yve($L, $L, $L), $L);
++    let $L = $m_Tgn($L, $L), $L = false, $L = $m_Yve($L, $L, $L), $L = $m_cfn($L(() => $NEW_chunk_e6aww6q8_js_k4e($L)) ? $L : $NEW_chunk_e6aww6q8_js_Ecn($L), $L);
+     return $L = { input: $L, fallbackBeta: $L, marksBeta: $L, output: $L, markable: $L }, $L;
+@@ -340,3 +350,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   if ($m_fee($L)) {
+-    let $L = $m_ps() ? $m_wrn({ fromModel: $m_Sgn($L), sticky: $L, serverDefaultFallbacksEnabled: () => $m_k($m_HNr, false), selfTargetDefaultFallbacksEnabled: () => $m_k($m_LNr, false) }) : null, $L = $L !== null && !$m_sm($L, $L);
++    let $L = $m_ps() ? $m_wrn({ fromModel: $m_Sgn($L), sticky: $L, serverDefaultFallbacksEnabled: () => $m_k($NEW_chunk_e6aww6q8_js_czr, false), selfTargetDefaultFallbacksEnabled: () => $m_k($NEW_chunk_e6aww6q8_js_uzr, false) }) : null, $L = $L !== null && !$m_sm($L, $L);
+     if ($L) $m_UF($L, $L);
+@@ -352,3 +362,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   };
+-  $L(), $L = $m_d2s($L, $L, { fingerprint: $L, agentContext: $L.agentContext, previousRequestId: $L, promptId: $L, turnOrigin: $L, turnPosition: $L });
++  $L(), $L = $NEW_chunk_w5ndchqs_js_JXs($L, $L, { fingerprint: $L, agentContext: $L.agentContext, previousRequestId: $L, promptId: $L, turnOrigin: $L, turnPosition: $L, responseBeforeCompaction: $L ? $NEW_chunk_ndmse9kj_js_Zbs() : void 0 });
+   let $L = $L.enablePromptCaching ?? $m_fce($L), $L = $L.forkPointUuid !== void 0 && $m_Af($L.agentContext), $L = $m_Qbe($L.querySource, { agentCacheTtlOverride: $L.agentCacheTtlOverride, mainThreadModel: $L || $L ? $L : void 0 }), $L = $L.ttl === "1h" ? "1h" : void 0, $L = $m_Gmr($L.ttl) === "1h" ? "1h" : void 0, $L = $L !== $L;
+@@ -363,4 +373,4 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     else if ($L && $L.cache_read_input_tokens > 0) $m_zqr($m_jj, $L);
+-  }, $L = $m_Jmr($L, $L, { skipGlobalCacheForSystemPrompt: $L, cacheTtl: $L }), $L = $L.length > 0, $L = [...$L.extraToolSchemas ?? []];
+-  if ($L) $L.push({ type: $m_tXt, name: $m_TLe, model: $L, ...$L && { defer_loading: true } });
++  }, $L = () => $NEW_chunk_e6aww6q8_js_ZSr($L, $L, { skipGlobalCacheForSystemPrompt: $L, cacheTtl: $L, scopeRefused: $m_sm($L, $m_vYe) }), $L = $L(), $L = $L.length > 0, $L = [...$L.extraToolSchemas ?? []];
++  if ($L) $L.push({ type: $NEW_chunk_e6aww6q8_js_bQt, name: $m_TLe, model: $L, ...$L && { defer_loading: true } });
+   let $L = [...$L, ...$L], $L = $m_s9t($L, { model: $m_hA($L.model), tools: $L, system: $L, messages: $L.map(($L) => ({ role: $L.message.role, content: $L.message.content })) }, { querySource: $L.querySource, retryCause: void 0, promptEpoch: $L.promptRenderEpoch });
+@@ -369,13 +379,13 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     yield $L;
+-    let $L = $L(() => $m_Kmn([...$L, $L], $L));
++    let $L = $L(() => $NEW_chunk_e6aww6q8_js_Qyn([...$L, $L], $L));
+     $L = $L.messagesForAPI, $L = $L.accountMemoryEpoch, $m_z1o($L, $L, $L, { useToolSearch: $L, toolSearchAbsent: $L === "tool_addition", blocksEligible: $L.blocksEligible, byValueNames: $L, byValueStaysOut: $L }), $L = $L.midConvFallback, $L = $L.toolChangeFallback, $L = $L.inlineToolsFallback;
+   }
+-  let $L = $L(() => $m_Gcn($L, $L, ($L) => $m_bbn($L, $L))), $L = $L(() => $m_ES($L) && $L !== void 0 ? $m_U0($L) : void 0), $L = $m_os() && $L(() => $m_BI()) && $L(() => $m_Zh($L)) && !!$L.fastMode && !$m_svn($L.model), $L = $L && !$m_x4e(), $L = false;
+-  if ($L && $m_y8r()) {
+-    if ($m_k($m_Bmr, false)) {
+-      if ($m_pu()) $m_UF($L, $m_hW);
+-      $L = $m_xk($L, $m_hW);
++  let $L = $L(() => $m_Gcn($L, $L, ($L) => $m_bbn($L, $L))), $L = $L, $L = $L(() => $m_ES($L) && $L !== void 0 ? $m_U0($L) : void 0), $L = $m_os() && $L(() => $m_BI()) && $L(() => $m_Zh($L)) && !!$L.fastMode && !$m_svn($L.model), $L = $L && !$m_x4e(), $L = () => $NEW_chunk_aepeg2w5_js_Vss() || $NEW_chunk_e6aww6q8_js_SL() && $m_HG() === "firstParty" && !$m_nne(), $L = false;
++  if ($L) {
++    if ($m_k($NEW_chunk_e6aww6q8_js_FSr, false)) {
++      if ($m_pu() && $L()) $m_UF($L, $m_hW);
++      $L = $m_xk($L, $m_hW) && $L();
+     } else if (!$m_Cpe() && !$m_sm($L, $m_hW)) try {
+       let $L = await $L.getToolPermissionContext();
+-      $L = $L !== void 0 && $m_es($L.mode);
++      $L = $L !== void 0 && $m_es($L.mode) && $L();
+     } catch ($L) {
+@@ -385,3 +395,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   let $L;
+-  if ($m_$7s()) try {
++  if ($NEW_chunk_hwmsct5x_js_Nci()) try {
+     $L = await $L.getToolPermissionContext();
+@@ -416,12 +426,14 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   if ($L.evictCacheOnComplete && $L.stickyBetas !== void 0 && $m_bmr()) $m_UF($L, $m_xst);
+-  let $L = require("./chunk-r1af14hy.js").createContextHintController({ querySource: $L.querySource, agentId: $L.agentId, includeFirstPartyBetas: $m_k_(), is529Error: $m_O2, storageV5: $L.storageV5 }), $L = void 0, $L = null, $L = void 0, $L = () => $m_uoi({ sent: $L !== void 0 && $L !== $L ? $L : $L, turnEffort: $L.turnEffort, hookEffortValue: $L.hookEffortValue }), $L, $L, $L, $L = () => $L ??= $m_Qni($L), $L = () => {
++  let $L = require("./chunk-gzv3xh26.js").createContextHintController({ querySource: $L.querySource, agentId: $L.agentId, includeFirstPartyBetas: $m_k_(), is529Error: $m_O2, storageV5: $L.storageV5 }), $L = void 0, $L = null, $L = void 0, $L = () => $m_uoi({ sent: $L !== void 0 && $L !== $L ? $L : $L, turnEffort: $L.turnEffort, hookEffortValue: $L.hookEffortValue }), $L, $L, $L, $L = () => $L ??= $m_Qni($L), $L = () => {
+     let $L = $m_jK();
+-    return $m_ZYe($L, $L.model, $m_Ud($L.model)), $L;
++    return $NEW_chunk_e6aww6q8_js_f6e($L, $L.model, $m_Ud($L.model)), $L;
+   }, $L = $L ??= $L.filter(($L) => !("defer_loading" in $L && $L.defer_loading));
+-  $L ??= $m_fF($L), $m_uni({ system: $L, toolSchemas: $L, anyDeferLoading: $L.length !== $L.length, querySource: $L.querySource, model: $L.model, agentId: $L.agentId, fastMode: $L, globalCacheStrategy: $L, betas: $L ? [...$L, $m_WM.header] : $L, autoModeActive: $L, isUsingOverage: $m_hi().isUsingOverage ?? false, is1hCacheTTL: $L === "1h", queryDepth: $L.queryTracking?.depth, cacheDiagnosis: $L(), effortValue: $L, thinkingConfig: $L, extraBodyParams: $L(), getMessageHashes: $L, messages: $L, baselineAgentId: $L.querySource === "agent_summary" && $m_ck($L.agentContext) ? $L.agentContext.agentId : void 0 });
++  $L ??= $m_fF($L), $NEW_chunk_g54kbxqw_js_Upi({ system: $L, toolSchemas: $L, anyDeferLoading: $L.length !== $L.length, querySource: $L.querySource, model: $L.model, agentId: $L.agentId, fastMode: $L, globalCacheStrategy: $L, betas: $L ? [...$L, $m_WM.header] : $L, autoModeActive: $L, isUsingOverage: $m_hi().isUsingOverage ?? false, is1hCacheTTL: $L === "1h", queryDepth: $L.queryTracking?.depth, cacheDiagnosis: $L(), effortValue: $L, thinkingConfig: $L, extraBodyParams: $L(), getMessageHashes: $L, messages: $L, baselineAgentId: $L.querySource === "agent_summary" && $m_ck($L.agentContext) ? $L.agentContext.agentId : void 0 });
+   let $L = $L, $L = null, $L = () => $m_HG() === "thirdParty" && $L.includes($m_xC.header), $L = () => $L && !$m_Ape() && $L.includes($m_T2.header), $L = [], $L = false, $L = ($L) => {
+     if (!$m_xk($L, $m_xC)) return;
+-    let $L = $L(), $L = $L && $L instanceof $m_Mt && $L.status === 400 && $L.message.includes($m_xC.header), $L = $L && !$L() && $m_eB($L), $L = $L ? $m_yZn($L) ?? [] : [], $L = $L.some(($L) => $L.includes("dangerous_tool_use") || $L.includes("safeguard"));
++    let $L = $L(), $L = !$L && $L.includes($m_xC.header) && $m_i.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, $L = $L || $L, $L = $L && $L instanceof $m_Mt && $L.status === 400 && $L.message.includes($m_xC.header), $L = $L && !$L() && $m_eB($L), $L = $L ? $m_yZn($L) ?? [] : [], $L = $L.some(($L) => $L.includes("dangerous_tool_use") || $L.includes("safeguard"));
+     if (!$L && !$L && !$L && !$m_m4e($L)) return;
+-    if ($m_Mg($L, $m_xC), $L && !$L && !$L && !$m_m4e($L)) $L.push($m_xC), $L = !$m_nne();
++    $m_Mg($L, $m_xC);
++    let $L = $L || $L && $NEW_chunk_e6aww6q8_js_SL();
++    if ($L && !$L && !$L && !$m_m4e($L)) $L.push($m_xC), $L = $L && !$m_nne();
+     if ($L) {
+@@ -429,3 +441,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     }
+-    return $m_t($L ? "[server-classifier] the platform rejected a beta on this request (HTTP 400), most likely dangerous-tool-use, which this deployment does not know yet; it is not sent again this session and auto mode decides with the local classifier" : "[server-classifier] the server rejected the dangerous-tool-use beta header or the safeguards field (HTTP 400); neither is sent again this conversation, so every auto-mode tool use is denied as classifier-unavailable until the conversation's betas reset (/clear or /compact)", { level: "warn" }), $m_a("tengu_server_classifier_beta_rejected_retry", { provider: $m_kT(), unnamed: $L, foundryFeature: $L, unclaimed: false }), "retry:safeguards";
++    return $m_t($L ? "[server-classifier] the platform rejected a beta on this request (HTTP 400), most likely dangerous-tool-use, which this deployment does not know yet; it is not sent again this session and auto mode decides with the local classifier" : $L ? "[server-classifier] a request was refused (HTTP 400), most likely because of the dangerous-tool-use beta header or the safeguards field. Claude Code sends these on a direct connection to api.anthropic.com even with CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS set. The API, or something between this machine and it, refused them. Until Claude Code restarts, it sends none of them again, nor the afk-mode beta header, and auto mode no longer asks the server to check actions. To stop sending them on this machine at all, set CLAUDE_CODE_AUTO_MODE_SERVER=0." : $L ? "[server-classifier] a request was refused (HTTP 400), most likely because of the dangerous-tool-use beta header, which this conversation had kept sending since an earlier request. It is not sent again in this conversation. This session had already stopped asking the server to check actions, so auto mode goes on deciding as it did." : "[server-classifier] the server rejected the dangerous-tool-use beta header or the safeguards field (HTTP 400); neither is sent again this conversation, so every auto-mode tool use is denied as classifier-unavailable until the conversation's betas reset (/clear or /compact)", { level: "warn" }), $m_a("tengu_server_classifier_beta_rejected_retry", { provider: $m_kT(), unnamed: $L, foundryFeature: $L, unclaimed: false, betasSwitchSetAside: $L, stopsAsking: $L }), "retry:safeguards";
+   }, $L = ($L) => $m_V8e($L, $L.model) && (!!$L.modelIsRefusalFallbackTarget || $m_j3r($L.model)), $L = ($L) => $m_K8e($L) || $L($L), $L = ($L) => $L !== void 0 && $L === void 0 && $L instanceof $m_Mt && !$L.resumeIncompleteThinking, $L = ($L) => {
+@@ -439,3 +451,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   }, $L = ($L) => {
+-    if ($L !== null && $L($L) && $m_Cke($L, $L)) $L($L, $L, "refusing the tool search beta");
++    if ($L !== null && $L($L) && $NEW_chunk_e6aww6q8_js_N6e($L, $L)) $L($L, $L, "refusing the tool search beta");
+     return;
+@@ -449,3 +461,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     try {
+-      let $L = $m_Wot(), $L = $m_Cke($L, $L);
++      let $L = $m_Wot(), $L = $NEW_chunk_e6aww6q8_js_N6e($L, $L);
+       if ($L) $L($L, $m_qq($L, $L));
+@@ -494,3 +506,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     try {
+-      if ($L) $m_Mg($L, $m_$Qo);
++      if ($L) $m_Mg($L, $NEW_chunk_bwbq4xvm_js_als);
+       $m_Mg($L, $m_Tpe), $m_t(`[thinking] a request was refused (HTTP 400 or 422) and went through when sent again ${$L ? "without thinking.display" : "with the session's own display in place of 'updates'"}; this conversation no longer sends ${$L ? "thinking.display" : "'updates'"}.`, { level: "warn" }), $m_a("tengu_beta_400_healed", { beta: $m_oie([$m_Tpe.header]), model: $m_wt($L.model), provider: $m_kT(), unclaimed: true });
+@@ -566,3 +578,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     return;
+-  }, $L = void 0, $L = void 0, $L = false, $L = false, $L = () => ({ messages: $L, system: $L, tools: $L });
++  }, $L = void 0, $L = void 0, $L = false, $L = false, $L = 0, $L = "none", $L = () => ({ messages: $L, system: $L, tools: $L });
+   {
+@@ -584,3 +596,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     let $L = $L.flatMap(($L) => $L.type === "tool_use" && typeof $L.id === "string" ? [$L.id] : []);
+-    $L($m_IGt($L, $L, $L));
++    $L($NEW_chunk_e6aww6q8_js_Vqt($L, $L, $L));
+   }, $L = false, $L = false, $L = false, $L = "idle", $L, $L = "idle", $L, $L = false, $L = "idle", $L = "idle", $L = "idle", $L = "idle", $L = () => $L !== "idle" && $L !== "spent", $L = false, $L = void 0, $L = void 0, $L, $L = ($L, $L) => {
+@@ -600,3 +612,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   }
+-  let $L = [], $L = void 0, $L = void 0, $L = false, $L, $L = "disabled", $L = false, $L = false, $L = false, $L = false, $L = "none", $L = false, $L = false;
++  let $L = [], $L = [], $L = void 0, $L = void 0, $L = false, $L, $L = "disabled", $L = false, $L = false, $L, $L = false, $L = false, $L = "none", $L = false, $L = false;
+   if ($L.fallbackCreditCode !== void 0 && (!$L || $L !== void 0)) $m_a("tengu_fallback_credit_skipped", { reason: $L ? $m_b("tool_changes_dropped") : $m_b("backend_unknown_or_mismatch"), ...$L && { ...$L, late_tools_inlined: $L }, mint_request_id: $m_ye($L.fallbackCreditMintRequestId), mint_model: $m_wt($L.fallbackCreditMintModel), model: $m_wt($L.model), query_source: $m_Es($L.querySource) });
+@@ -609,3 +621,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     if ($L !== $L) $L = $L, $L = void 0, $m_fni({ querySource: $L.querySource, agentId: $L.agentId, getMessageHashes: $L, messages: $L });
+-    let $L = $L.filter(($L) => $L !== $m_wE || !$L());
++    let $L = ($L) => !$NEW_chunk_bwbq4xvm_js_uoo.has($L) && $m_sm($L, $L), $L = $L.filter(($L) => $L !== $m_wE || !$L());
+     if (!$L.includes($m_wE) && !$L() && $m_YTt($L.model) !== null) $L.push($m_wE);
+@@ -613,9 +625,11 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     if ($L) $m_t(`auto-mode 3P: sending afk-mode beta '${$m_hW?.header}' to bedrock via body.anthropic_beta`);
+-    let $L = $L === "bedrock" ? [...$m_kXo($L.model).filter(($L) => $L !== $m_wE || !$L()), ...$L ? [$L] : [], ...$L && $m_hW ? [$m_hW] : []] : [], $L = $m_jK($L);
++    let $L = $L === "bedrock" ? [...$m_kXo($L.model).filter(($L) => $L !== $m_wE || !$L()), ...$L ? [$L] : [], ...$L && $m_hW ? [$m_hW] : []].filter(($L) => !$L($L)) : [], $L = $m_jK($L);
+     $m_qve($L, $m_uF, $L === "bedrock" && $L.includes($m_uF));
+     let $L = { ...$L.output_config ?? {} };
+-    delete $L.output_config, $m_dQe($L, $L, $L, $L, $L), $L = $m_ZYe($L, $L.model, $L), $m_Xpr($L.taskBudget, $L, $L), $L = $m_tmr($L.outputFormat, $L, $L, $L.model);
++    if (delete $L.output_config, $m_dQe($L, $L, $L, $L, $L), $L = $NEW_chunk_e6aww6q8_js_f6e($L, $L.model, $L), $m_Xpr($L.taskBudget, $L, $L), $L($m_FSe)) delete $L.effort;
++    if ($L($m_uXr) && "task_budget" in $L) delete $L.task_budget;
++    $L = $m_tmr($L.outputFormat, $L, $L, $L.model);
+     let $L = $L.refusalFallbackSilentArmActive === true, $L = $m_grn($L.serverRefusalFallback, $L.model, $L, $L, $L, $L);
+     $m_yrn($L.fallbackCreditLaneArmed === true || $L.fallbackCreditCode !== void 0, $L, $L, $L, $L === "bedrock" ? $L : void 0), $L = $L.includes($m_k2);
+-    let $L = $m_EXo($L, $L), $L = $L.serverClassifier === true && $L.autoModeServerContext !== void 0 ? $m_sin($m_iun($m_xbt($L, $L), $L, $L, $L.agentId), $L, $L) : [], $L = $L.serverClassifier === true && $L.autoModeServerContext !== void 0 ? $m_Qsn({ autoModeServerContext: $L.autoModeServerContext, priorTurnContext: $m_Cbt($L), systemReminders: $L }) : void 0, $L = $L.serverClassifier === true && $L !== void 0 && $L && $m_fge() && !$m_sm($L, $m_xC) && !$m_nne();
++    let $L = $m_EXo($L, $L), $L = $L.serverClassifier === true && $L.autoModeServerContext !== void 0 ? $NEW_chunk_e6aww6q8_js_nun($m_iun($m_xbt($L, $L), $L, $L, $L.agentId), $L, $L) : [], $L = $L.serverClassifier === true && $L.autoModeServerContext !== void 0 ? $NEW_chunk_e6aww6q8_js_Ydn({ autoModeServerContext: $L.autoModeServerContext, priorTurnContext: $m_Cbt($L), systemReminders: $L, textProvenance: $NEW_chunk_e6aww6q8_js_aun($L, $L, $m_nLe) }) : void 0, $L = $L.serverClassifier === true && $L !== void 0 && $L && $m_fge() && !$m_sm($L, $m_xC) && !$m_nne();
+     if ($L) $m_UF($L, $m_xC), $m_nin($L, $L?.system_reminders ?? []);
+@@ -623,3 +637,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     $m_qve($L, $m_xC, $L === "bedrock" && $L.includes($m_xC));
+-    let $L = Math.min($L?.maxTokensOverride || $L.maxOutputTokensOverride || $L.maxOutputTokens, $L.maxOutputTokens), $L = $m_i.CLAUDE_CODE_DISABLE_THINKING, $L = $L.type !== "disabled" && !$L, $L = () => $L.thinking.rejectsDisabled || $L !== void 0 && $m_D$e($L), $L = $L && $m_CYn($L) && !$m_sm($L, $m_$Qo) && ($L === "idle" || $L === "withoutUpdates"), $L = !$L ? void 0 : $L.display === "highlights" && $m_CPn() ? "omitted" : $L.display, $L = void 0;
++    let $L = Math.min($L?.maxTokensOverride || $L.maxOutputTokensOverride || $L.maxOutputTokens, $L.maxOutputTokens), $L = $m_i.CLAUDE_CODE_DISABLE_THINKING, $L = $L.type !== "disabled" && !$L, $L = () => $L.thinking.rejectsDisabled || $L !== void 0 && $m_D$e($L), $L = $L && $m_CYn($L) && !$m_sm($L, $NEW_chunk_bwbq4xvm_js_als) && ($L === "idle" || $L === "withoutUpdates"), $L = !$L ? void 0 : $L.display === "highlights" && $m_CPn() ? "omitted" : $L.display, $L = void 0;
+     if ($L && $L.thinking.supported) if ($m_Bot({ runtimeOverride: $m_J6e($L.model), resolvedModel: $L, canonicalModel: $L }) === "adaptive") $L = { type: "adaptive", display: $L };
+@@ -668,6 +682,6 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     }
+-    let $L = $m_E9t({ hasThinking: $L, toolClearing: $L?.edit }), $L = $L.enablePromptCaching ?? $m_fce($L ?? $L.model), $L;
+-    if ($m_os() && $L(() => $m_BI()) && !$m_x4e() && $L(() => $m_Zh($L)) && !!$L.fastMode && !$m_svn($L.model)) $L = "fast";
+-    if ($L && !$L.includes($m_UEn)) $L.push($m_UEn);
+-    if ($m_hW && $L && $m_y8r() && $L && !$L.includes($m_hW)) {
++    let $L = $m_E9t({ hasThinking: $L, toolClearing: $L?.edit }), $L = $L.enablePromptCaching ?? $m_fce($L ?? $L.model), $L, $L = $m_os() && $L(() => $m_BI()) && !$m_x4e() && $L(() => $m_Zh($L)) && !!$L.fastMode && !$L($m_UEn) && !$m_svn($L.model);
++    if ($L) $L = "fast";
++    if ($L = $L ? $L.model : void 0, $L && !$L.includes($m_UEn)) $L.push($m_UEn);
++    if ($m_hW && $L && $L() && $L && !$L.includes($m_hW)) {
+       if ($L.push($m_hW), $m_Cvn()) $m_t(`auto-mode 3P: sending afk-mode beta '${$m_hW.header}' to ${$L} via betas header`);
+@@ -691,6 +705,6 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     }
+-    let $L = $L ? $L.filter(($L) => $L === $m_dPe) : $L;
++    let $L = $L.filter(($L) => !$L($L) && (!$L || $L === $m_dPe));
+     if ($L) $m_t(`[API:client] SIMULATE_PROXY_USAGE: stripping ${$L.length - $L.length} beta headers from request (keeping ${$m_fF($L).join(", ") || "none"}): ${$m_fF($L).join(", ")}`);
+     let $L = !$L && $L.acceptsTemperature ? $L.temperatureOverride ?? 1 : void 0;
+-    $L = $m_fF($L), $L = $L.includes($m_wE) || $L.includes($m_wE), $L = $L !== void 0 && "display" in $L && !("thinking" in $L) ? $L.display ?? void 0 : void 0, $L = $L !== void 0 && "block_binding" in $L, $L = $L;
++    $L = $m_fF($L), $L = $m_fF($L), $L = $L.includes($m_wE) || $L.includes($m_wE), $L = $L !== void 0 && "display" in $L && !("thinking" in $L) ? $L.display ?? void 0 : void 0, $L = $L !== void 0 && "block_binding" in $L, $L = $L;
+     let $L = $m_car($L), $L = $L && (!$L || $L.length > 0) && $m_fF($L).length > 0;
+@@ -705,3 +719,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     $L = void 0;
+-    let $L = $L && !$L.skipMessageCacheMarkers, $L = !$L && $L !== null || $L.cache_control != null, $L = $L($L, $L, $L), $L = $L && $L === "idle" ? $m_hun({ querySource: $L.querySource, model: $L ?? $L.model, isKeepaliveHeaderOnWire: $L && $L.includes($m_WM), hasSecondMarkerSlot: $L && !$L && $L.divergesAtMessageId === void 0, messages: $L }) : void 0, $L = $L = $m_Xmr($L, $L, $L, $L.skipCacheWrite, $L.forkPointUuid, $m_sm($L, $m_Alr) || $m_xfs(), $L, $L !== null, $L, $L, $L, $L.divergesAtMessageId, { skipMessageCacheMarkers: $L.skipMessageCacheMarkers === true, report: ($L) => {
++    let $L = $L && !$L.skipMessageCacheMarkers, $L = !$L && $L !== null || $L.cache_control != null, $L = $L($L, $L, $L), $L = $L && $L === "idle" ? $m_hun({ querySource: $L.querySource, model: $L ?? $L.model, isKeepaliveHeaderOnWire: $L && $L.includes($m_WM), hasSecondMarkerSlot: $L && !$L && $L.divergesAtMessageId === void 0, messages: $L }) : void 0, $L = $L = $m_Xmr($L, $L, $L, $L.skipCacheWrite, $L.forkPointUuid, $m_sm($L, $NEW_chunk_bwbq4xvm_js_Ggr) || $m_xfs(), $L, $L !== null, $L, $L, $L, $L.divergesAtMessageId, { skipMessageCacheMarkers: $L.skipMessageCacheMarkers === true, report: ($L) => {
+       $L = $L;
+@@ -717,3 +731,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       if ($L !== void 0) $m_T1e($L);
+-      if ($L = $L ? $m_xGt($m_dee(), { artifacts: $L?.artifacts, thread: $L !== null, exactMcpAllowRules: $L && $m_PGt($L), judgeOnlyTools: $L.autoModeServerContext?.judgeOnlyTools, agentId: $L.agentId }) : void 0, $L !== void 0 && $L !== void 0) $m_wbt($L.key, $m_Xsn($L));
++      if ($L = $L ? $NEW_chunk_e6aww6q8_js_Bqt($NEW_chunk_e6aww6q8_js_Vte(), { artifacts: $L?.artifacts, thread: $L !== null, exactMcpAllowRules: $L && $m_PGt($L), judgeOnlyTools: $L.autoModeServerContext?.judgeOnlyTools, agentId: $L.agentId }) : void 0, $L !== void 0 && $L !== void 0) $m_wbt($L.key, $m_Xsn($L));
+     }
+@@ -722,3 +736,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     let $L = $L !== null ? $L.shapeInheritedFields($L, { system: $L, tools: $L }) : { system: $L, tools: $L };
+-    $L = $L, $L = $L, $L = $L.system !== $L, $L = $L !== null;
++    $L = $L, $L = $L, $L = $L.system !== $L, $L = $L !== null, $L = $L?.sliceFrom ?? 0, $L = $L?.thread.type ?? "none";
+     let $L = { model: $m_hA($L.model), messages: $L !== null && $L.sliceFrom > 0 ? $L.slice($L[$L.sliceFrom]) : $L, system: $L.system, ...$L.tools !== void 0 && { tools: $L.tools }, tool_choice: $L, ...$L && $m_iFe($L), metadata: $m_Qze({ agentContext: $L.agentContext }), max_tokens: $L, thinking: $L, ...$L !== void 0 && { temperature: $L }, ...$L && $L && $L.includes($m_Epe) && { context_management: $L }, ...$L && $L !== void 0 && { safeguards: [{ type: $m_k1e, classifier_context: $L }] }, ...!$L && $L ? $L : {}, ...!$L && $L ? $L : {}, ...$L, ...$L, ...{}, ...Object.keys($L).length > 0 && { output_config: $L }, ...$L !== void 0 && { speed: $L }, ...$L !== null && { thread: $L.thread }, ...$L() && ($L || $L.forkPointUuid !== void 0) && $L && !$L && { diagnostics: { previous_message_id: $L ?? null } } };
+@@ -742,5 +756,6 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     return $L = $L.effort ?? null, $L = $L.now, $L;
+-  };
+-  {
+-    let $L = $L({ model: $L.model }, false), $L = $L.length, $L = $L ? $L.betas ?? [] : [], $L = $L.thinking?.type ?? "disabled", $L = $L, $L = $L;
++  }, $L = false, $L = ($L) => {
++    if ($L) return;
++    $L = true;
++    let $L = $L ? $L.betas ?? [] : [], $L = $L.thinking?.type ?? "disabled", $L = $L.length, $L = $L, $L = $L;
+     $L.getToolPermissionContext().then(($L) => {
+@@ -748,4 +763,11 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     });
+-  }
+-  let $L = [], $L = 0, $L, $L = 0, $L = 0, $L = 0, $L = false, $L, $L = 0, $L = void 0, $L = [], $L = $m_Pm, $L = null, $L = 0, $L = null, $L = false, $L = "none";
++  }, $L = false, $L = () => {
++    if ($L || $L) return;
++    $L = true;
++    try {
++      $L($L({ model: $L.model }, false));
++    } catch ($L) {
++      $m_l($m_N($L));
++    }
++  }, $L = [], $L = 0, $L, $L = 0, $L = 0, $L = 0, $L = false, $L, $L = 0, $L = void 0, $L = [], $L = $m_Pm, $L = null, $L = 0, $L = null, $L = false, $L = "none";
+   function $L() {
+@@ -754,3 +776,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   }
+-  let $L = false, $L = false, $L, $L = 0, $L = void 0, $L = void 0, $L, $L = $L, $L = false, $L = $m_Af($L.agentContext) && $L.querySource.startsWith("repl_main_thread"), $L = void 0, $L = /* @__PURE__ */ new Map(), $L = 3, $L = { value: 0 }, $L = $L, $L = /* @__PURE__ */ new Map(), $L = false, $L = false, $L, $L = { count: 0 }, $L = $m_Z8e(), $L = $m_Emn({ maxRetries: $L, maxSleptThrough: $m_bmn($L), maxReconnects: $m_wmn($L.querySource), maxOverloaded: $m_nee, maxOutputFiltered: $m_vmn(), hasFallbackModel: Boolean($L.fallbackModel), persistent: $m_pAe(), persistentCapacityOnly: $m_pAe() && !$m_Db(), background: !$m_Rxe($L.querySource) }, $L.apiAttemptsLeft), $L = false, $L = null, $L = false, $L = ($L, $L) => {
++  let $L = false, $L = false, $L, $L = false, $L = 0, $L = void 0, $L = void 0, $L, $L = $L, $L = false, $L = $m_Af($L.agentContext) && $L.querySource.startsWith("repl_main_thread"), $L = void 0, $L = /* @__PURE__ */ new Map(), $L = 3, $L = { value: 0 }, $L = $L, $L = /* @__PURE__ */ new Map(), $L = false, $L = false, $L, $L, $L = { count: 0 }, $L = $m_Z8e(), $L = $m_Emn({ maxRetries: $L, maxSleptThrough: $m_bmn($L), maxReconnects: $m_wmn($L.querySource), maxOverloaded: $m_nee, maxOutputFiltered: $m_vmn(), hasFallbackModel: Boolean($L.fallbackModel), persistent: $m_pAe(), persistentCapacityOnly: $m_pAe() && !$m_Db(), background: !$m_Rxe($L.querySource) }, $L.apiAttemptsLeft), $L = false, $L = null, $L = false, $L = ($L, $L) => {
+     if ($L = null, $L = $m_ps(), $L) {
+@@ -803,3 +825,4 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     if ($m_Dq($L)) return;
+-    if ($m_pke($L)) return;
++    if ($NEW_chunk_e6aww6q8_js_Tke($L)) return;
++    if ($NEW_chunk_e6aww6q8_js_$te($L) && $L !== "explicit") return;
+     if ($m_Uve($L) || $m_Bve($L) !== void 0) return;
+@@ -826,3 +849,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     return;
+-  }, $L = ($L) => $m_Ujt($L.model, $L) === "refused" || $m_bke($L) || $m_g4e($L) || $m_h4e($L) || $m_JH($L) || $m_Uq($L) || $m_yke($L) !== void 0 || $m_C4e($L, $m_fF($m_R4e)).length > 0 || $m_y4e($L) || $m_k4e($L) || $m_E4e($L) || $m_Dke($L) !== null || $m_MM($L) || $m__x($L) || $m_qXt($L) || $m_KXt($L) || $m_A4e($L) || $m_Ike($L) || $m_P4e($L) || $m_Yq($L) || $m_Qq($L), $L = () => {
++  }, $L = ($L) => $m_Ujt($L.model, $L) === "refused" || $m_bke($L) || $m_g4e($L) || $m_h4e($L) || $m_JH($L) || $m_Uq($L) || $m_yke($L) !== void 0 || $NEW_chunk_e6aww6q8_js_L6e($L, $m_fF($NEW_chunk_e6aww6q8_js_OJt)).length > 0 || $NEW_chunk_e6aww6q8_js_C6e($L) || $NEW_chunk_e6aww6q8_js_x6e($L) || $m_E4e($L) || $m_Dke($L) !== null || $m_MM($L) || $m__x($L) || $NEW_chunk_e6aww6q8_js_BJt($L) || $NEW_chunk_e6aww6q8_js_UJt($L) || $m_A4e($L) || $m_Ike($L) || $m_P4e($L) || $m_Yq($L) || $m_Qq($L), $L = () => {
+     if ($L === "tool_search") return;
+@@ -887,3 +910,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       let $L = $m_UXt($L);
+-      if ($L === "process") $m_dqs();
++      if ($L === "process") $NEW_chunk_s61vbvea_js_V7s();
+       else if ($L === "host") $m_uqs();
+@@ -939,3 +962,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     try {
+-      let $L = $m_wmr($L), $L = Math.min($L, $L?.limit ?? 1 / 0), $L = $m_Dbi.find(($L) => $L < $L);
++      let $L = $m_wmr($L), $L = Math.min($L, $L?.limit ?? 1 / 0), $L = $NEW_chunk_t0gq9gyw_js_aOi.find(($L) => $L < $L);
+       if ($L === void 0) {
+@@ -947,3 +970,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       }
+-      let $L = ($L) => $m_ign($L, $L, $m_sis);
++      let $L = ($L) => $m_ign($L, $L, $NEW_chunk_t0gq9gyw_js_Bhs);
+       $L = $L($L($L), "error_recovery");
+@@ -992,3 +1015,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   }, $L = ($L, $L = false) => {
+-    let $L = $L.includes($m_xS) && !$m__x($L) && $m_Oke($L) !== "header_rejected" ? $m_Mke($L) : void 0;
++    let $L = $L.includes($m_xS) && !$m__x($L) && $NEW_chunk_e6aww6q8_js_Gke($L) !== "header_rejected" ? $NEW_chunk_e6aww6q8_js_Wke($L) : void 0;
+     if ($L !== void 0) {
+@@ -1000,3 +1023,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     }
+-    let $L = $L.includes($m_lw) && !$m__x($L) ? $m_Oke($L) : void 0;
++    let $L = $L.includes($m_lw) && !$m__x($L) ? $NEW_chunk_e6aww6q8_js_Gke($L) : void 0;
+     if ($L !== void 0) {
+@@ -1007,3 +1030,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       $L = null;
+-      let $L = $L.includes($m_xS) && $m_Mke($L) === "header_rejected";
++      let $L = $L.includes($m_xS) && $NEW_chunk_e6aww6q8_js_Wke($L) === "header_rejected";
+       return $L = $L.filter(($L) => $L !== $m_lw && $L !== $m_xS), $m_N3s($L, $L, $L.model, $L), $L(), $L(), $L(), "retry:tool-change-strip";
+@@ -1025,9 +1048,9 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     }
+-    if ($L && !$m_sm($L, $m_Alr) && $m_A4e($L)) return $m_Mg($L, $m_Alr), $m_Pfs(), $m_t("[mid-conv-system] proxy rejected cache_control on the api_system tail \u2014 demoting the breakpoint to the trailing message for this conversation", { level: "warn" }), $m_f("api_midconv_cache_proxy", "proxy_rejected"), "retry:api-system-cache-demote";
++    if ($L && !$m_sm($L, $NEW_chunk_bwbq4xvm_js_Ggr) && $m_A4e($L)) return $m_Mg($L, $NEW_chunk_bwbq4xvm_js_Ggr), $m_Pfs(), $m_t("[mid-conv-system] proxy rejected cache_control on the api_system tail \u2014 demoting the breakpoint to the trailing message for this conversation", { level: "warn" }), $m_f("api_midconv_cache_proxy", "proxy_rejected"), "retry:api-system-cache-demote";
+     return;
+   }, $L = ($L) => {
+-    if ($L && !$L && !$m_sm($L, $m_Alr) && !$m_sm($L, $m_LQo)) {
+-      let $L = $L?.input_tokens ?? 0, $L = $L?.cache_read_input_tokens ?? 0, $L = ($L?.cache_creation_input_tokens ?? 0) + ($L?.cache_creation?.ephemeral_5m_input_tokens ?? 0) + ($L?.cache_creation?.ephemeral_1h_input_tokens ?? 0), $L = $L + $L + $L > 0, $L = $L > 0 && $L < $m_Ymr;
++    if ($L && !$L && !$m_sm($L, $NEW_chunk_bwbq4xvm_js_Ggr) && !$m_sm($L, $NEW_chunk_bwbq4xvm_js_sls)) {
++      let $L = $L?.input_tokens ?? 0, $L = $L?.cache_read_input_tokens ?? 0, $L = ($L?.cache_creation_input_tokens ?? 0) + ($L?.cache_creation?.ephemeral_5m_input_tokens ?? 0) + ($L?.cache_creation?.ephemeral_1h_input_tokens ?? 0), $L = $L + $L + $L > 0, $L = $L > 0 && $L < $NEW_chunk_e6aww6q8_js_KSr;
+       if ($L && !$L) return;
+-      $m_Mg($L, $m_LQo), $m_g("api_midconv_cache_proxy");
++      $m_Mg($L, $NEW_chunk_bwbq4xvm_js_sls), $m_g("api_midconv_cache_proxy");
+     }
+@@ -1063,3 +1086,25 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   }, $L = ($L) => {
+-    if (!$m_Yq($L)) return null;
++    if (!$NEW_chunk_e6aww6q8_js_$te($L) || $L === "explicit" || $m_BH($L.querySource)) return null;
++    try {
++      let $L = $NEW_chunk_e6aww6q8_js_acn($L, $L), $L = $L === void 0 ? void 0 : $NEW_chunk_e6aww6q8_js_lcn($L, $L);
++      if ($L === void 0) return $m_m("api_org_effort_cap_retry", "no_lower_level"), null;
++      if ($L = $NEW_chunk_e6aww6q8_js_yV($L, $L()), $L !== null) $L = $L($m_jcn($m_Rve($L), { effort: $L, effortCap: $L(), now: $L }), "error_recovery");
++      return $m_t(`[effort] the API refused effort '${$L}' as above the organization's cap for model ${$L.model}. Sending the request again at no more than '${$L}', as later requests to this model will be.`, { level: "warn" }), `retry:org-effort-cap:${$L}`;
++    } catch ($L) {
++      return $m_l($m_N($L)), null;
++    }
++  };
++  function* $L() {
++    if (!$L) return;
++    let $L;
++    try {
++      let $L = $NEW_chunk_e6aww6q8_js_yV($L, $L());
++      if ($L !== $L && $NEW_chunk_e6aww6q8_js_dcn($L)) $m_g("api_org_effort_cap_retry"), $L = $m_Bk(`Your organization limits effort for ${$m_is($L)}, so Claude Code is using '${$L}' instead of '${$L}'. Your effort setting is unchanged.`, "warning");
++    } catch ($L) {
++      $m_l($m_N($L));
++    }
++    if ($L) yield $L;
++  }
++  let $L = ($L) => {
++    if (!$m_Yq($L)) return $L($L);
+     if ($m_TPn($L.model), $L !== $L.model) $m_TPn($L);
+@@ -1087,3 +1132,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     try {
+-      let $L = $m_C4e($L, $L);
++      let $L = $NEW_chunk_e6aww6q8_js_L6e($L, [...$L, ...$L]);
+       if ($L.length === 0) return;
+@@ -1091,3 +1136,8 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       $L = $L.filter(($L) => !$L.has($L));
+-      for (let $L of $L) $L($L, $m_qq($L, $L)), $m_a("tengu_beta_400_healed", { beta: $m_oie([$L.header]), model: $m_wt($L.model), provider: $m_kT(), status: $L instanceof $m_Mt ? $L.status : void 0 });
++      for (let $L of $L) {
++        let $L = $m_qq($L, $L);
++        $L($L, $L), $m_a("tengu_beta_400_healed", { beta: $m_oie([$L.header]), model: $m_wt($L.model), provider: $m_kT(), status: $L instanceof $m_Mt ? $L.status : void 0, only_mentioned: !$L && !$NEW_chunk_e6aww6q8_js_Hke($L, $L) });
++      }
++      if ($L.has($m_vYe)) $L = $L();
++      if ($L.has($m_UEn) && $L !== void 0) $m_Hdi($L);
+       return `retry:beta-rejected:${$L.map(($L) => $L.name).join(",")}`;
+@@ -1118,3 +1168,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   }, $L = ($L) => {
+-    if (!$L.includes($m_Pst.header) || !$m_k4e($L)) return null;
++    if (!$L.includes($m_Pst.header) || !$NEW_chunk_e6aww6q8_js_x6e($L)) return null;
+     return $m_eps(), $m_OPt($m_Pst), $L = $L.filter(($L) => $L !== $m_Pst), $m_t("[thinking-resumption] server rejected the thinking-resumption beta header; disabled for this process", { level: "warn" }), $m_f("query_thinking_block_resumption", "header_rejected"), $L ? "surface:resume-prefill" : "retry:thinking-resumption-beta";
+@@ -1154,3 +1204,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         if ($L.resumeIncompleteThinking) return;
+-        let $L = $L?.block !== void 0 && $L <= $m_Vpr ? $L($L.block) : void 0;
++        let $L = $L?.block !== void 0 && $L <= $NEW_chunk_e6aww6q8_js_oSr ? $L($L.block) : void 0;
+         if ($L !== void 0) {
+@@ -1191,3 +1241,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   function $L() {
+-    let $L = $m_iee(() => $L && !$L && ($m_ree?.relayStoppedInLastDispatch() ?? false), false);
++    let $L = $m_iee(() => $L && !$L && ($NEW_chunk_e6aww6q8_js_Wte?.relayStoppedInLastDispatch() ?? false), false);
+     if ($L) {
+@@ -1197,5 +1247,5 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     }
+-    if ($L && !$L && !$L) return $L = true, $m_iee(() => $m_ree?.markRelayThinkingStripRecorded("no_thinking"), void 0), $m_nn({ type: "thinking_stripped", scope: "all" });
++    if ($L && !$L && !$L) return $L = true, $m_iee(() => $NEW_chunk_e6aww6q8_js_Wte?.markRelayThinkingStripRecorded("no_thinking"), void 0), $m_nn({ type: "thinking_stripped", scope: "all" });
+     if (!$L || $L) return;
+-    if ($L = true, $L) $m_iee(() => $m_ree?.markRelayThinkingStripRecorded($L ? "marker_same_request" : "marker"), void 0);
++    if ($L = true, $L) $m_iee(() => $NEW_chunk_e6aww6q8_js_Wte?.markRelayThinkingStripRecorded($L ? "marker_same_request" : "marker"), void 0);
+     return $m_nn($L === "all" ? { type: "thinking_stripped", scope: "all" } : { type: "thinking_stripped", scope: "partial", from: { messageId: $L.messageId, thinkingIndex: $L.thinkingIndex } });
+@@ -1261,5 +1311,5 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     if (!$L && $L !== void 0) $L = true, yield { type: "server_fallback", fromModel: $L.lastHop?.fromModel ?? $L.model, toModel: $L, reason: $L.lastHop !== void 0 ? "refusal" : "sticky", apiRefusalCategory: $L.lastHop?.category ?? null, midStream: false, requestId: $L ?? null, refusedEffort: $L(), discardedMessages: [], retainedMessages: [], retainedText: "", finalStopReason: $L.stop_reason };
+-    let $L = $L.refusalFallbackModelLane === "silent", $L = !$L ? $L.refusalFallbackModel ?? ($L.serverRefusalFallback !== void 0 && !$L ? $L.serverRefusalFallback.model : void 0) : void 0, $L = $L.refusalFallbackCascadeHop, $L = $L.stop_reason === "refusal" && $L !== void 0 && $L === void 0 ? $m_gKo({ originalModelCanonical: $m_Je($L.model), armedFallbackModel: $L, apiRefusalCategory: $L.stop_details?.category ?? null, armedTargetIsRefusingModel: $m_uvt($L.model, $L), resolveTarget: ($L) => $m__zt({ mappedTarget: $L, armedFallbackModel: $L, refusingModel: $L.model, triedModels: [$m_fvt($L.model)] }), routesOverride: $m_lKr() }) : void 0, $L = $L !== void 0 ? $L.model : $L;
++    let $L = $L.refusalFallbackModelLane === "silent", $L = !$L ? $L.refusalFallbackModel ?? ($L.serverRefusalFallback !== void 0 && !$L ? $L.serverRefusalFallback.model : void 0) : void 0, $L = $L.refusalFallbackCascadeHop, $L = $L.stop_reason === "refusal" && $L !== void 0 && $L === void 0 ? $m_gKo({ originalModelCanonical: $m_Je($L.model), armedFallbackModel: $L, apiRefusalCategory: $L.stop_details?.category ?? null, armedTargetIsRefusingModel: $m_uvt($L.model, $L), resolveTarget: ($L) => $m__zt({ mappedTarget: $L, armedFallbackModel: $L, refusingModel: $L.model, triedModels: [$m_fvt($L.model)] }), routesOverride: $NEW_chunk_hwmsct5x_js_Y8r() }) : void 0, $L = $L !== void 0 ? $L.model : $L;
+     if ($L !== void 0) $m_aKr({ route: $L, model: $L.model, armedFallbackModel: $L, apiRefusalCategory: $L.stop_details?.category, requestId: $L });
+-    if ($L.stop_reason === "refusal" && $L !== void 0) return $L(), yield { type: "fallback_request", trigger: "refusal", originalModel: $L.model, fallbackModel: $L, requestId: $L ?? null, refusedEffort: $L(), apiRefusalCategory: $L.stop_details?.category ?? null, apiRefusalExplanation: $L.stop_details?.explanation ?? null, creditCode: $L ?? null, mintedStateless: !$L, ...$m_pKo($L, $L) }, true;
++    if ($L.stop_reason === "refusal" && $L !== void 0) return $L(), $L = true, yield { type: "fallback_request", trigger: "refusal", originalModel: $L.model, fallbackModel: $L, requestId: $L ?? null, refusedEffort: $L(), apiRefusalCategory: $L.stop_details?.category ?? null, apiRefusalExplanation: $L.stop_details?.explanation ?? null, creditCode: $L ?? null, mintedStateless: !$L, ...$m_pKo($L, $L) }, true;
+     let $L = $m_lFt($L.stop_reason, $L.stop_details, $L, $L ?? $L.model, $L.id);
+@@ -1291,3 +1341,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   async function* $L($L, $L) {
+-    let { message: $L, requestId: $L, headers: $L, creditCode: $L } = yield* $m_pmr({ model: $L.model, fetchOverride: $L.fetchOverride, source: $L.querySource, requestClass: $L.requestClass, agentContext: $L.agentContext, promptId: $L, ccsSender: $L, permissionContext: $L, toolNames: $L, credentials: $L.credentials, storageV5: $L.storageV5, clock: $L, queryTracking: $L.queryTracking, llmSpan: $L, contextCompactedKindForWire: $L, compactionRequestKindForWire: $L, prevToolDurationsForWire: $L }, { model: $L.model, fallbackModel: $L.fallbackModel, accessFallbackModel: $L, toolFreeHelper: $L.toolFreeHelper, ...$m_os() && { fastMode: $L }, modelIsRefusalFallbackTarget: $L.modelIsRefusalFallbackTarget, signal: $L, initialConsecutive529Errors: $L.counts().overloaded, querySource: $L.querySource, maxRetries: $L.retriesLeft(), modelCallRetries: $L, clock: $L, random: $L.random, isResumePrefillRequest: $L, failedStreamOutlastedTimeout: $L, onRetryStatus: $L.onRetryStatus, subscribeRetryWake: $L.subscribeRetryWake, onQuotaWindowWait: $L, isUsageLimitLifted: $L, lowPriorityWait: $L, stampDispatchHeader: $L, onApiError: async ($L) => {
++    let { message: $L, requestId: $L, headers: $L, creditCode: $L } = yield* $NEW_chunk_e6aww6q8_js_fSr({ model: $L.model, fetchOverride: $L.fetchOverride, source: $L.querySource, requestClass: $L.requestClass, agentContext: $L.agentContext, promptId: $L, ccsSender: $L, permissionContext: $L, toolNames: $L, credentials: $L.credentials, storageV5: $L.storageV5, clock: $L, queryTracking: $L.queryTracking, llmSpan: $L, contextCompactedKindForWire: $L, compactionRequestKindForWire: $L, prevToolDurationsForWire: $L }, { model: $L.model, fallbackModel: $L.fallbackModel, accessFallbackModel: $L, toolFreeHelper: $L.toolFreeHelper, ...$m_os() && { fastMode: $L }, modelIsRefusalFallbackTarget: $L.modelIsRefusalFallbackTarget, signal: $L, initialConsecutive529Errors: $L.counts().overloaded, querySource: $L.querySource, maxRetries: $L.retriesLeft(), modelCallRetries: $L, clock: $L, random: $L.random, isResumePrefillRequest: $L, failedStreamOutlastedTimeout: $L, onRetryStatus: $L.onRetryStatus, subscribeRetryWake: $L.subscribeRetryWake, onQuotaWindowWait: $L, isUsageLimitLifted: $L, lowPriorityWait: $L, stampDispatchHeader: $L, onApiError: async ($L) => {
+       let $L = $L($L);
+@@ -1342,3 +1392,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     }
+-    $L(), $L(), $L(), $L(), $L(), $L(), $L(), $L(), $L(), $L(), $L(), $m_a("tengu_nonstreaming_fallback_success", { model: $m_wt($L.model), request_id: $m_Yg($L), originating_request_id: $m_Yg($L), fallback_cause: $m_c($L.cause), attempt: $L }), yield* $L(), yield* $L(), $L = $L.diagnostics?.cache_miss_reason ?? void 0;
++    $L(), $L(), $L(), $L(), $L(), $L(), $L(), $L(), $L(), $L(), $L(), $m_a("tengu_nonstreaming_fallback_success", { model: $m_wt($L.model), request_id: $m_Yg($L), originating_request_id: $m_Yg($L), fallback_cause: $m_c($L.cause), attempt: $L }), yield* $L(), yield* $L(), yield* $L(), $L = $L.diagnostics?.cache_miss_reason ?? void 0;
+     let $L = $L($L), $L = $L ? $m_o$e($L.content) : void 0;
+@@ -1353,4 +1403,4 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     if ($L) yield $L;
+-    let $L = { message: { ...$L, content: $L, usage: $m_mAe($m_Pm, $L.usage) }, ...$L.length > 0 && { batchToolUses: $L }, ...$L !== void 0 && { wireToolInputs: $L }, ...$L !== void 0 && { wireIngestContext: $L }, ...$L !== void 0 && $m_w1e($L), apiBlockIndex: 0, requestId: $L ?? void 0, requestRef: $L, requestedModel: $L.model, ...$m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), type: "assistant", uuid: $m_dee(), timestamp: (/* @__PURE__ */ new Date()).toISOString(), ...false, ...$L && { advisorModel: $L }, ...$L !== void 0 && { effort: $L }, perTurnEffort: $L, perTurnTiming: $L, ...{} };
+-    return $m_kYe($L, $L), $L.push($L), $L = $L, $L = false, yield $L, yield* $L($L, $L, $L);
++    let $L = { message: { ...$L, content: $L, usage: $m_mAe($m_Pm, $L.usage), ...$L && $L.context_management && { context_management: $NEW_chunk_g54kbxqw_js_A7o($L.context_management, $L?.edit, $L) } }, ...$L.length > 0 && { batchToolUses: $L }, ...$L !== void 0 && { wireToolInputs: $L }, ...$L !== void 0 && { wireIngestContext: $L }, ...$L !== void 0 && $m_w1e($L), apiBlockIndex: 0, requestId: $L ?? void 0, requestRef: $L, requestedModel: $L.model, ...$m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), type: "assistant", uuid: $NEW_chunk_e6aww6q8_js_Vte(), timestamp: (/* @__PURE__ */ new Date()).toISOString(), ...false, ...$L && { advisorModel: $L }, ...$L !== void 0 && { effort: $L }, perTurnEffort: $L, perTurnTiming: $L, ...{} };
++    return $NEW_chunk_e6aww6q8_js_R4e($L, $L), $L.push($L), $L = $L, $L = false, yield $L, yield* $L($L, $L, $L);
+   }
+@@ -1401,2 +1451,7 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         let $L = $L($L);
++        try {
++          $L($L);
++        } catch ($L) {
++          $m_l($m_N($L));
++        }
+         if ($m_tgn($L), $L($L, true), $L = $L.max_tokens, $m_gg("query_api_request_sent"), $m_t(`[API:timing] dispatching to ${$m_Ud($L.model)} model=${$L.model}`), $L = $L.now(), $L === void 0 && $L.queryTracking?.roundStartedAtMs !== void 0) $L.queryTracking.firstDispatchedAtMs ??= performance.now(), $L = Math.round($L.queryTracking.firstDispatchedAtMs - $L.queryTracking.roundStartedAtMs);
+@@ -1410,3 +1465,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+           if ($L) try {
+-            $m_l5t();
++            $NEW_chunk_e6aww6q8_js_n9t();
+           } catch ($L) {
+@@ -1427,3 +1482,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         if ($m_Hmr($L, $L, $L)) $L[$m_ivt] = "extended";
+-        if ($L($L, $L), $L.fallbackStampFromModel !== void 0 && $m_Te() === "firstParty" && $m_Pi()) for (let [$L, $L] of [[$m_AKo, $L.fallbackStampFromModel], [$m_CKo, $L.fallbackStampCategory], [$m_RKo, $L.fallbackStampTrigger], [$m_xKo, $L.fallbackStampOriginalRequestId]]) {
++        if ($L($L, $L), $L.fallbackStampFromModel !== void 0 && $m_Te() === "firstParty" && $m_Pi()) for (let [$L, $L] of [[$NEW_chunk_hwmsct5x_js_HXo, $L.fallbackStampFromModel], [$NEW_chunk_hwmsct5x_js_NXo, $L.fallbackStampCategory], [$NEW_chunk_hwmsct5x_js_$Xo, $L.fallbackStampTrigger], [$NEW_chunk_hwmsct5x_js_FXo, $L.fallbackStampOriginalRequestId]]) {
+           let $L = $m_pZn($L);
+@@ -1437,8 +1492,9 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         setTimeout($m_C4o, 0, $L.querySource, $L.agentId);
+-        let $L = { ...$m_zpn($L), ...$L !== void 0 && { fallback_credit_token: $L }, stream: true }, $L = $m_x0r($L.fetchOverride) ? $m_nfn($L, $m_ss($L.querySource) === "main" && $L.agentId === void 0) : void 0, $L = await $m_lfn($L, $L, () => $L.beta.messages.create($L, { signal: $L, ...$L === void 0 ? Object.keys($L).length > 0 && { headers: $L } : { body: $L, headers: { ...$L, "content-type": "application/json" } } }).withResponse()).catch(($L) => {
++        let $L = { ...$m_zpn($L), ...$L !== void 0 && { fallback_credit_token: $L }, stream: true }, $L = $m_x0r($L.fetchOverride) ? $NEW_chunk_e6aww6q8_js_kcn($L, $m_ss($L.querySource) === "main" && $L.agentId === void 0) : void 0, $L = await $NEW_chunk_e6aww6q8_js_wcn($L, $L, () => $L.beta.messages.create($L, { signal: $L, ...$L === void 0 ? Object.keys($L).length > 0 && { headers: $L } : { body: $L, headers: { ...$L, "content-type": "application/json" } } }).withResponse()).catch(($L) => {
+           throw $L(), $L;
+         });
+-        if ($m_gg("query_response_headers_received"), $L = $m_M2e($L.request_id, $L.response?.headers), $L = $L.response, $L = $L.now(), $L($L, $L.response?.headers, false), $L = $L.response && { status: $L.response.status, headers: $L.response.headers, latencyMs: Math.round($L.monotonicNow() - $L) }, $m_sgn($L), $L !== void 0) $m_a("tengu_rotunda_pennant_credit_echoed", { mint_request_id: $m_ye($L.fallbackCreditMintRequestId), mint_model: $m_wt($L.fallbackCreditMintModel), request_id: $m_ye($L), client_request_id: $m_ye($L), model: $m_wt($L.model), token_length: $L.length, query_source: $m_Es($L.querySource) });
++        if ($m_gg("query_response_headers_received"), $L = $m_M2e($L.request_id, $L.response?.headers), $L = $L.response, $L = $L.now(), $L($L, $L.response?.headers, false), $L = $L.response && { status: $L.response.status, headers: $L.response.headers, latencyMs: Math.round($L.monotonicNow() - $L) }, $NEW_chunk_e6aww6q8_js_d_n($L, $L !== void 0), $L !== void 0) $m_a("tengu_rotunda_pennant_credit_echoed", { mint_request_id: $m_ye($L.fallbackCreditMintRequestId), mint_model: $m_wt($L.fallbackCreditMintModel), request_id: $m_ye($L), client_request_id: $m_ye($L), model: $m_wt($L.model), token_length: $L.length, query_source: $m_Es($L.querySource) });
+         return $L.data;
+       }, { model: $L.model, credentials: $L.credentials, storageV5: $L.storageV5, fallbackModel: $L.fallbackModel, accessFallbackModel: $L, toolFreeHelper: $L.toolFreeHelper, ...$m_os() ? { fastMode: $L } : false, modelIsRefusalFallbackTarget: $L.modelIsRefusalFallbackTarget, signal: $L, initialConsecutive529Errors: $L.counts().overloaded, maxRetries: $L.retriesLeft(), noResponseRetryLedger: $L, modelCallRetries: $L, clock: $L, random: $L.random, isResumePrefillRequest: $L, querySource: $L.querySource, onRetryStatus: $L.onRetryStatus, subscribeRetryWake: $L.subscribeRetryWake, onQuotaWindowWait: $L, isUsageLimitLifted: $L, lowPriorityWait: $L, onError: async ($L) => {
++        $L();
+         let $L = $L($L);
+@@ -1458,3 +1514,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         if ($m_g4e($L)) {
+-          let $L = $L, $L = $m_xw($L), $L = $L.findIndex(($L, $L) => $L[$L] !== $L), $L = $L.reduce(($L, $L, $L) => $L[$L] !== $L ? $L + 1 : $L, 0), $L = $m_p9t() && $L !== -1, $L;
++          let $L = $L, $L = $m_xw($L), $L = $L.findIndex(($L, $L) => $L[$L] !== $L), $L = $L.reduce(($L, $L, $L) => $L[$L] !== $L ? $L + 1 : $L, 0), $L = $NEW_chunk_e6aww6q8_js_v7t() && $L !== -1, $L;
+           if ($L && !$L.resumeIncompleteThinking && $L !== "enabled") try {
+@@ -1511,3 +1567,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         }
+-        if ($L && $m_y4e($L)) return $L = false, $m_AEt($L, $L, $L), "retry:cache-keepalive-beta";
++        if ($L && $NEW_chunk_e6aww6q8_js_C6e($L)) return $L = false, $m_AEt($L, $L, $L), "retry:cache-keepalive-beta";
+         let $L = $L($L);
+@@ -1580,3 +1636,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       for (let [$L, $L] of $L) yield $m_Gs({ ...$m__le($L, $L), error: "invalid_request", errorDetails: $L });
+-      $L.clear(), yield* $L(), yield* $L();
++      $L.clear(), yield* $L(), yield* $L(), yield* $L();
+       let $L = $L ? $L._chunkTimes ?? void 0 : void 0;
+@@ -1596,3 +1652,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       }
+-      let $L = null, $L = 0, $L = 0, $L = null, $L = null, $L = null, $L = 0, $L = false, $L = $m_i.CLAUDE_ENABLE_STREAM_WATCHDOG ?? true, $L = $m_Zhn(), $L = $L / 2, $L = $m_Cmr(), $L = Math.min($m_bKr($m_Te()), $L ? $L : 1 / 0), $L = Math.min($m_xmr, $L - $L), $L = false, $L, $L = null, $L = null, $L = null, $L = null, $L = false;
++      let $L = null, $L = 0, $L = 0, $L = null, $L = null, $L = null, $L = 0, $L = false, $L = $m_i.CLAUDE_ENABLE_STREAM_WATCHDOG ?? true, $L = $m_Zhn(), $L = $L / 2, $L = $m_Cmr(), $L = Math.min($m_bKr($m_Te()), $L ? $L : 1 / 0), $L = Math.min($NEW_chunk_e6aww6q8_js_ASr, $L - $L), $L = false, $L, $L = null, $L = null, $L = null, $L = null, $L = false;
+       $L();
+@@ -1603,3 +1659,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         if ($L?.type !== "text" || $L.has($L) || !$L.text.trim() || !$L) return;
+-        return { message: { ...$L, content: $m_Acn([$L], $L, $L.agentId, { requestId: $L ?? void 0, messageId: $L.id }, $L.storageV5) }, apiBlockIndex: $L.length, requestId: $L ?? void 0, requestRef: $L, requestedModel: $L.model, ...$m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), type: "assistant", uuid: $m_dee(), timestamp: (/* @__PURE__ */ new Date()).toISOString(), isAbortedMidStream: true, ...void 0, ...$L !== void 0 && { effort: $L }, perTurnEffort: $L, perTurnTiming: $L };
++        return { message: { ...$L, content: $m_Acn([$L], $L, $L.agentId, { requestId: $L ?? void 0, messageId: $L.id }, $L.storageV5) }, apiBlockIndex: $L.length, requestId: $L ?? void 0, requestRef: $L, requestedModel: $L.model, ...$m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), type: "assistant", uuid: $NEW_chunk_e6aww6q8_js_Vte(), timestamp: (/* @__PURE__ */ new Date()).toISOString(), isAbortedMidStream: true, ...void 0, ...$L !== void 0 && { effort: $L }, perTurnEffort: $L, perTurnTiming: $L };
+       }, $L = () => {
+@@ -1622,3 +1678,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+           if ($m_zye($L)) {
+-            if ($L++, $L <= $m_Amr) $L();
++            if ($L++, $L <= $NEW_chunk_e6aww6q8_js_xSr) $L();
+             else if (!$L || $L || $L !== void 0) continue;
+@@ -1631,3 +1687,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+             let $L = $L - $L;
+-            if ($L > $L) $L++, $L += $L, $m_t(`Streaming stall detected: ${($L / 1e3).toFixed(1)}s gap between events (stall #${$L})`, { level: "warn" }), $m_a("tengu_streaming_stall", { stall_duration_ms: $L, stall_count: $L, total_stall_time_ms: $L, event_type: $m_c($m_cke($L.type)), model: $m_wt($L.model), request_id: $m_Yg($L) });
++            if ($L > $L) $L++, $L += $L, $m_t(`Streaming stall detected: ${($L / 1e3).toFixed(1)}s gap between events (stall #${$L})`, { level: "warn" }), $m_a("tengu_streaming_stall", { stall_duration_ms: $L, stall_count: $L, total_stall_time_ms: $L, event_type: $m_c($NEW_chunk_e6aww6q8_js_bke($L.type)), model: $m_wt($L.model), request_id: $m_Yg($L) });
+           }
+@@ -1753,4 +1809,4 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+               $L ||= $L?.degraded === true;
+-              let $L = $L?.inputs, $L = $m_p$e([$L], $L), $L = $m_agr($L, $L, $L), $L = $m_pfn($L, $L), $L = { message: { ...$L, content: $L }, ...$L !== void 0 && { thinkingDurationMs: $L }, ...$L !== void 0 && { thinkingDisplay: $L }, ...$L.length > 0 && { batchToolUses: $L }, ...$L !== void 0 && { wireToolInputs: $L }, ...$L !== void 0 && { wireIngestContext: $L }, ...$L !== void 0 && { wireIngestContext: $L }, ...$L !== void 0 && $m_w1e($L), apiBlockIndex: $L.index, requestId: $L ?? void 0, requestRef: $L, requestedModel: $L.model, ...$m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), type: "assistant", uuid: $m_dee(), timestamp: (/* @__PURE__ */ new Date()).toISOString(), ...false, ...$L && { advisorModel: $L }, ...$L !== void 0 && { effort: $L }, perTurnEffort: $L, perTurnTiming: $L, ...{} };
+-              if ($m_kYe($L, $L), $L.push($L), $L++, $L.set($L.index, $L), $L = Math.max($L, Number.isSafeInteger($L.index) && $L.index >= 0 ? $L.index + 1 : Number.NaN), $L.add($L), $L.message.content.some(($L) => !$m_PY($L))) {
++              let $L = $L?.inputs, $L = $m_p$e([$L], $L), $L = $m_agr($L, $L, $L), $L = $m_pfn($L, $L), $L = { message: { ...$L, content: $L }, ...$L !== void 0 && { thinkingDurationMs: $L }, ...$L !== void 0 && { thinkingDisplay: $L }, ...$L.length > 0 && { batchToolUses: $L }, ...$L !== void 0 && { wireToolInputs: $L }, ...$L !== void 0 && { wireIngestContext: $L }, ...$L !== void 0 && { wireIngestContext: $L }, ...$L !== void 0 && $m_w1e($L), apiBlockIndex: $L.index, requestId: $L ?? void 0, requestRef: $L, requestedModel: $L.model, ...$m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), type: "assistant", uuid: $NEW_chunk_e6aww6q8_js_Vte(), timestamp: (/* @__PURE__ */ new Date()).toISOString(), ...false, ...$L && { advisorModel: $L }, ...$L !== void 0 && { effort: $L }, perTurnEffort: $L, perTurnTiming: $L, ...{} };
++              if ($NEW_chunk_e6aww6q8_js_R4e($L, $L), $L.push($L), $L++, $L.set($L.index, $L), $L = Math.max($L, Number.isSafeInteger($L.index) && $L.index >= 0 ? $L.index + 1 : Number.NaN), $L.add($L), $L.message.content.some(($L) => !$m_PY($L))) {
+                 if ($L = true, $L.message.content.some(($L) => $L.type !== "thinking" && $L.type !== "redacted_thinking" && !$m_PY($L))) $L = true;
+@@ -1774,6 +1830,6 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+               if ($L.diagnostics?.cache_miss_reason) $L = $L.diagnostics.cache_miss_reason;
+-              let $L = $m_Zmn($L.delta) ?? $m_Zmn($L);
++              let $L = $m_Zmn($L.delta) ?? $m_Zmn($L), $L = $L && $L ? $NEW_chunk_g54kbxqw_js_A7o($L, $L?.edit, $L) : null;
+               for (let $L of $L) {
+                 if ($L.message.usage = $L, $L.message.stop_reason = $L, $L !== null || $L === null) $L.message.stop_details = $L.delta.stop_details ?? null;
+-                if ($L && $L) $L.message.context_management = $L;
++                if ($L) $L.message.context_management = $L;
+                 if ($L !== void 0) $L.message.resumable = $L;
+@@ -1792,3 +1848,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+               }
+-              let $L = $L.refusalFallbackModel ?? ($L.serverRefusalFallback !== void 0 && !$L ? $L.serverRefusalFallback.model : void 0), $L = $L.refusalFallbackModelLane === "silent", $L = $L.refusalFallbackCascadeHop, $L = $L === "refusal" && $L !== void 0 && !$L && $L === void 0 ? $m_gKo({ originalModelCanonical: $m_Je($L.model), armedFallbackModel: $L, apiRefusalCategory: $L.delta.stop_details?.category ?? null, armedTargetIsRefusingModel: $m_uvt($L.model, $L), resolveTarget: ($L) => $m__zt({ mappedTarget: $L, armedFallbackModel: $L, refusingModel: $L.model, triedModels: [$m_fvt($L.model)] }), routesOverride: $m_lKr() }) : void 0, $L = $L !== void 0 ? $L.model : $L;
++              let $L = $L.refusalFallbackModel ?? ($L.serverRefusalFallback !== void 0 && !$L ? $L.serverRefusalFallback.model : void 0), $L = $L.refusalFallbackModelLane === "silent", $L = $L.refusalFallbackCascadeHop, $L = $L === "refusal" && $L !== void 0 && !$L && $L === void 0 ? $m_gKo({ originalModelCanonical: $m_Je($L.model), armedFallbackModel: $L, apiRefusalCategory: $L.delta.stop_details?.category ?? null, armedTargetIsRefusingModel: $m_uvt($L.model, $L), resolveTarget: ($L) => $m__zt({ mappedTarget: $L, armedFallbackModel: $L, refusingModel: $L.model, triedModels: [$m_fvt($L.model)] }), routesOverride: $NEW_chunk_hwmsct5x_js_Y8r() }) : void 0, $L = $L !== void 0 ? $L.model : $L;
+               if ($L !== void 0) $m_aKr({ route: $L, model: $L.model, armedFallbackModel: $L, apiRefusalCategory: $L.delta.stop_details?.category, requestId: $L });
+@@ -1796,3 +1852,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+               if ($L === "refusal" && $L !== void 0) {
+-                $L(), yield { type: "fallback_request", trigger: "refusal", originalModel: $L.model, fallbackModel: $L, requestId: $L ?? null, refusedEffort: $L(), apiRefusalCategory: $L.delta.stop_details?.category ?? null, apiRefusalExplanation: $L.delta.stop_details?.explanation ?? null, creditCode: $L ?? null, mintedStateless: !$L, ...$L !== void 0 && { silentArmAtTrigger: true }, ...$m_pKo($L, $L) };
++                $L(), $L = true, yield { type: "fallback_request", trigger: "refusal", originalModel: $L.model, fallbackModel: $L, requestId: $L ?? null, refusedEffort: $L(), apiRefusalCategory: $L.delta.stop_details?.category ?? null, apiRefusalExplanation: $L.delta.stop_details?.explanation ?? null, creditCode: $L ?? null, mintedStateless: !$L, ...$L !== void 0 && { silentArmAtTrigger: true }, ...$m_pKo($L, $L) };
+                 return;
+@@ -1810,3 +1866,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+             case "message_stop":
+-              if ($L = false, $L !== void 0 && $m_DGt($L)) $L({ kind: "none", why: "server_no_result" });
++              if ($L = false, $L !== void 0) $L($NEW_chunk_e6aww6q8_js_Xqt($L));
+               if ($L) $m_r$e();
+@@ -1820,3 +1876,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+           if ($L.type === "message_start") $L = true, $L = null, $L = false, $L = typeof $L.message.id === "string" && $L.message.id !== "" ? $L.message.id : null;
+-          else if ($L.type === "content_block_start") $L = $L.index, $L = $m_Pmr.has($L.content_block.type);
++          else if ($L.type === "content_block_start") $L = $L.index, $L = $NEW_chunk_e6aww6q8_js_PSr.has($L.content_block.type);
+           else if ($L.type === "content_block_stop") $L = null, $L = false;
+@@ -1877,3 +1933,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         }
+-        let $L = { events_received: $L, ms_to_first_event: $L, ms_since_last_event: $L === null ? null : $L.now() - $L }, $L = ($L, $L) => $m_Y("warn", "cli_stream_failed", () => ({ ...$m_dL($L, $m_Jde($L), $L), fallback_cause: $L, watchdog_fired: $L, slept_ms: $L instanceof $m_bZn || $L instanceof $m_vzt ? $L.sleptMs : null, client_request_id: $m_ye($L) ?? null, model: $m_wt($L.model) ?? null, stream: { ...$L, first_event_type: $L === null ? null : $m_cke($L), last_event_type: $L === null ? null : $m_cke($L), message_envelope_open: $L, stop_reason_received: $L !== null, content_blocks_completed: $L, any_event_yielded: $L, ms_since_request: Math.round($L.monotonicNow() - $L), ms_to_headers: $L?.latencyMs ?? null, stalls_over_30s: $L, stall_ms_total: $L }, route: $m_xht() }));
++        let $L = { events_received: $L, ms_to_first_event: $L, ms_since_last_event: $L === null ? null : $L.now() - $L }, $L = ($L, $L) => $m_Y("warn", "cli_stream_failed", () => ({ ...$m_dL($L, $m_Jde($L), $L), fallback_cause: $L, watchdog_fired: $L, slept_ms: $L instanceof $m_bZn || $L instanceof $m_vzt ? $L.sleptMs : null, client_request_id: $m_ye($L) ?? null, model: $m_wt($L.model) ?? null, stream: { ...$L, first_event_type: $L === null ? null : $NEW_chunk_e6aww6q8_js_bke($L), last_event_type: $L === null ? null : $NEW_chunk_e6aww6q8_js_bke($L), message_envelope_open: $L, stop_reason_received: $L !== null, content_blocks_completed: $L, any_event_yielded: $L, ms_since_request: Math.round($L.monotonicNow() - $L), ms_to_headers: $L?.latencyMs ?? null, stalls_over_30s: $L, stall_ms_total: $L }, route: $m_xht() }));
+         if ($L instanceof $m_sf) {
+@@ -1886,3 +1942,5 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         }
+-        let $L = $m_lg($L), $L = $L !== null && $m_Jq.has($L.code), $L = $L !== null && ($L || $m_YB.has($L.code)), $L = $L?.classifyStreamError($L) ?? false, $L = $L instanceof $m_Iie || $L instanceof SyntaxError, $L = $L instanceof $m_Iie && $L.blockState === "unstarted", $L = $L ? "event referenced an unstarted content block" : $L instanceof $m_Iie && $L.blockState === "closed" ? "event referenced an already-closed content block" : "event could not be read", $L = $m_Vgi({ connDetails: $L, isStaleConnection: $L, isContextHintSse: $L, streamIdleAborted: $L, noEvents: $L instanceof $m_vTn, malformedStream: $L instanceof $m_Iie }), $L = $m_w1($L) ?? null, $L = $m_Kae($L?.code) ?? null, $L = $L instanceof Error ? $L ?? $m_b("none") : $m_c(typeof $L), $L = $L instanceof Error ? $m__ps($L.constructor?.name) ?? $m_b("none") : $m_b("none"), $L = $L ?? $m_b("none"), $L = ($m_k("tengu_watchdog_skip_nonstreaming_fallback", false) || $m_i.CLAUDE_CODE_REMOTE) && $L || $m_i.CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK || $m_k("tengu_disable_streaming_to_non_streaming_fallback", false), $L = $L ? Error($L.length > 0 ? "Stream idle timeout - partial response received" : "Stream idle timeout - no chunks received") : $L, $L = $L instanceof Error ? $m_w1($L) ?? $m_b("Error") : $m_c(typeof $L);
++        let $L = $m_lg($L), $L = $L !== null && $m_Jq.has($L.code), $L = $L !== null && ($L || $m_YB.has($L.code)), $L = $L?.classifyStreamError($L) ?? false, $L = $L instanceof $m_Iie || $L instanceof SyntaxError, $L = $L instanceof $m_Iie && $L.blockState === "unstarted", $L = $L ? "event referenced an unstarted content block" : $L instanceof $m_Iie && $L.blockState === "closed" ? "event referenced an already-closed content block" : "event could not be read", $L = $m_Vgi({ connDetails: $L, isStaleConnection: $L, isContextHintSse: $L, streamIdleAborted: $L, noEvents: $L instanceof $m_vTn, malformedStream: $L instanceof $m_Iie }), $L = $m_w1($L) ?? null, $L = $m_Kae($L?.code) ?? null, $L = $L instanceof Error ? $L ?? $m_b("none") : $m_c(typeof $L), $L = $L instanceof Error ? $NEW_chunk_2g090z7k_js_mks($L.constructor?.name) ?? $m_b("none") : $m_b("none"), $L = $L ?? $m_b("none"), $L = ($m_k("tengu_watchdog_skip_nonstreaming_fallback", false) || $m_i.CLAUDE_CODE_REMOTE) && $L || $m_i.CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK || $m_k("tengu_disable_streaming_to_non_streaming_fallback", false);
++        if ($L) $L = Error($L.length > 0 ? "Stream idle timeout - partial response received" : "Stream idle timeout - no chunks received");
++        let $L = $L ? $L : $L, $L = $L instanceof Error ? $m_w1($L) ?? $m_b("Error") : $m_c(typeof $L);
+         $L($L, $L instanceof $m_sf ? $L : $L);
+@@ -1904,4 +1962,4 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+               if (!$L) $m_$K($L, $L);
+-              if ($L) $m_t(`Stream idle timeout after thinking-only yield \u2014 retrying streaming (${$L.stalls}/${$m_Z7e})`, { level: "warn" }), $m_a("tengu_streaming_watchdog_retry", { model: $m_wt($L.model), retry_attempt: $L.stalls, request_id: $m_ye($L), after_thinking_only: true });
+-              else $m_t(`Stream ${$L ? $L : $L ? "server error" : `connection closed (${$L?.code})`} after thinking-only yield \u2014 retrying streaming (${$L.afterThinkingOnly}/${$L?.cause === "timedOut" ? $m_hmn : $m_eQe})`, { level: "warn" }), $m_a("tengu_streaming_stale_connection_retry", { model: $m_wt($L.model), error_code: $L ? $m_b("malformed_stream") : $L ? $L?.cause === "timedOut" ? $m_b("timed_out") : $m_b("server_error") : $m_rcr($L?.code ?? ""), retry_attempt: $L.afterThinkingOnly, request_id: $m_ye($L), after_thinking_only: true });
++              if ($L) $m_t(`Stream idle timeout after thinking-only yield \u2014 retrying streaming (${$L.stalls}/${$NEW_chunk_e6aww6q8_js_eJe})`, { level: "warn" }), $m_a("tengu_streaming_watchdog_retry", { model: $m_wt($L.model), retry_attempt: $L.stalls, request_id: $m_ye($L), after_thinking_only: true });
++              else $m_t(`Stream ${$L ? $L : $L ? "server error" : `connection closed (${$L?.code})`} after thinking-only yield \u2014 retrying streaming (${$L.afterThinkingOnly}/${$L?.cause === "timedOut" ? $NEW_chunk_e6aww6q8_js_hyn : $NEW_chunk_e6aww6q8_js_tJe})`, { level: "warn" }), $m_a("tengu_streaming_stale_connection_retry", { model: $m_wt($L.model), error_code: $L ? $m_b("malformed_stream") : $L ? $L?.cause === "timedOut" ? $m_b("timed_out") : $m_b("server_error") : $m_rcr($L?.code ?? ""), retry_attempt: $L.afterThinkingOnly, request_id: $m_ye($L), after_thinking_only: true });
+               if ($L("attempt_errored", $L ?? null, null), $L(), $L(), yield* $L({ responseUnfinished: true }), $L = null, $L) await $m_J($m_hF($L.afterThinkingOnly, void 0, void 0, $L.random), $L, { clock: $L });
+@@ -1919,3 +1977,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+             $L?.noteClientTruncated($L[0]?.message.id), $m_t($L ? `Stream idle timeout after ${$L.length} block(s) yielded \u2014 finalizing partial response` : $L ? `Mid-stream server error after ${$L.length} block(s) yielded \u2014 finalizing partial response` : $L ? `Stream ${$L} after ${$L.length} block(s) yielded \u2014 finalizing partial response` : `Stream connection closed (${$L?.code}) after ${$L.length} block(s) yielded \u2014 finalizing partial response`, { level: "warn" }), $m_a("tengu_streaming_partial_finalized", { model: $m_wt($L.model), blocks_yielded: $L.length, has_output: $L, synthesized_stop_reason: $m_c($L), cause: $L, request_id: $m_ye($L) }), $L(), yield* $L({ responseUnfinished: true });
+-            let $L = $m_Gs({ content: $L ? $L ? `${$m_td}: The response stopped arriving. The response above may be incomplete.` : $L ? `${$m_td}: Server error mid-response. The response above may be incomplete.` : $L ? $L ? `${$m_td}: Part of the response never arrived. The response above may be incomplete.` : `${$m_td}: The response stream was malformed. The response above may be incomplete.` : $L ? `${$m_td}: Your computer went to sleep mid-response. The response above may be incomplete.` : `${$m_td}: Connection lost mid-response. The response above may be incomplete.` : $L ? `${$m_td}: The response stalled before a response was produced. Try again.` : $L ? $L ? `${$m_td}: Part of the response never arrived and no response was produced. Try again.` : `${$m_td}: The response stream was malformed and no response was produced. Try again.` : $L ? `${$m_td}: Your computer went to sleep before a response was produced. Try again.` : `${$m_td}: Connection lost before a response was produced. Try again.`, error: "server_error", truncatedAfterOutput: $L && !$L ? true : void 0 });
++            let $L = $m_Gs({ content: $L ? $L ? `${$m_td}: The response stopped arriving. The response above may be incomplete.` : $L ? `${$m_td}: Server error mid-response. The response above may be incomplete.` : $L ? $L ? `${$m_td}: Part of the response never arrived. The response above may be incomplete.` : `${$m_td}: The response stream was malformed. The response above may be incomplete.` : $L ? `${$m_td}: Your computer went to sleep mid-response. The response above may be incomplete.` : `${$m_td}: Connection lost mid-response. The response above may be incomplete.` : $L ? `${$m_td}: The response stalled before a response was produced. Try again.` : $L ? $L ? `${$m_td}: Part of the response never arrived and no response was produced. Try again.` : `${$m_td}: The response stream was malformed and no response was produced. Try again.` : $L ? `${$m_td}: Your computer went to sleep before a response was produced. Try again.` : `${$m_td}: Connection lost before a response was produced. Try again.`, error: "server_error", apiError: $L.aborted ? void 0 : $L ? "stream_idle_timeout" : $L ? "computer_slept" : $NEW_chunk_gr2vfhah_js_Rhr($L) ? "connection_failed" : void 0, truncatedAfterOutput: $L && !$L ? true : void 0 });
+             if ($L.streamCutCause = $L, $L && !$L) $L.streamWatchdogGaveUp = true;
+@@ -1941,3 +1999,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         }
+-        let $L = $L && $L !== null ? { label: `connection error (${$L.code})`, errorCode: $m_rcr($L.code), error: new $m_Uu({ cause: $L instanceof Error ? $L : void 0 }), attempt: Math.max(1, $L.retries), limit: $L } : $L?.cause === "serverError" && $L instanceof $m_Mt ? { label: "server error", errorCode: $m_b("server_error"), error: $L, attempt: $L.afterThinkingOnly, limit: $m_eQe } : void 0;
++        let $L = $L && $L !== null ? { label: `connection error (${$L.code})`, errorCode: $m_rcr($L.code), error: new $m_Uu({ cause: $L instanceof Error ? $L : void 0 }), attempt: Math.max(1, $L.retries), limit: $L } : $L?.cause === "serverError" && $L instanceof $m_Mt ? { label: "server error", errorCode: $m_b("server_error"), error: $L, attempt: $L.afterThinkingOnly, limit: $NEW_chunk_e6aww6q8_js_tJe } : void 0;
+         if ($L === "retry" && $L !== void 0) {
+@@ -1953,3 +2011,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+         if ($L && $L === "retry") {
+-          $m_t(`Stream idle timeout before first event \u2014 retrying streaming (${$L.stalls}/${$m_Z7e})`, { level: "warn" }), $m_a("tengu_streaming_watchdog_retry", { model: $m_wt($L.model), retry_attempt: $L.stalls, request_id: $m_Yg($L) }), $L(), $L("attempt_errored", $L ?? null, null), $L = null;
++          $m_t(`Stream idle timeout before first event \u2014 retrying streaming (${$L.stalls}/${$NEW_chunk_e6aww6q8_js_eJe})`, { level: "warn" }), $m_a("tengu_streaming_watchdog_retry", { model: $m_wt($L.model), retry_attempt: $L.stalls, request_id: $m_Yg($L) }), $L(), $L("attempt_errored", $L ?? null, null), $L = null;
+           continue e;
+@@ -1996,3 +2054,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   } catch ($L) {
+-    if (yield* $L(), $L($L.aborted ? "aborted" : "attempt_errored", $L ?? null, null), $L instanceof $m_YO) throw $L.reportHttpFailure($L.originalError, "useFallbackModel", { fallbackModelCouldHelp: $L.reason !== "overloaded" }), $L?.settle({ kind: "error", error: $L }, $L), $L;
++    if ($L(), yield* $L(), $L($L.aborted ? "aborted" : "attempt_errored", $L ?? null, null), $L instanceof $m_YO) throw $L.reportHttpFailure($L.originalError, "useFallbackModel", { fallbackModelCouldHelp: $L.reason !== "overloaded" }), $L?.settle({ kind: "error", error: $L }, $L), $L = true, $L;
+     let $L = $L instanceof $m_$c ? $L.originalError : void 0, $L = ($L === void 0 ? "fail" : $L.onWithRetryGaveUp($L)) === "retryWithoutStreaming", $L = $L, $L = false;
+@@ -2006,3 +2064,3 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       } catch ($L) {
+-        if ($L instanceof $m_YO) throw $L?.settle({ kind: "error", error: $L }, $L), $L;
++        if ($L instanceof $m_YO) throw $L?.settle({ kind: "error", error: $L }, $L), $L = true, $L;
+         $L = $L;
+@@ -2023,4 +2081,4 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+       let $L = $L || ($L instanceof $m_Mt ? $m_M2e($L.requestID || $L.error?.request_id, $L.headers) : void 0);
+-      $L?.settle({ kind: "error", error: $L }, $L), $m_Iun({ isLowPriority: $L, dispatch: $L, error: $L, model: $L, messageCount: $L.length, messageTokens: $m_wre($L), durationMs: Math.max(0, Math.round($L.monotonicNow() - $L)), durationMsIncludingRetries: Math.max(0, Math.round($L.monotonicNow() - $L)), attempt: $L, requestId: $L, clientRequestId: $L, didFallBackToNonStreaming: $L, nonStreamingFallbackSkipped: $L, observedResponse: $L ? void 0 : $L, queryTracking: $L.queryTracking, querySource: $L.querySource, accountMemoryKeys: $L, messageClientPlatform: $L.messageClientPlatform, llmSpan: $L, fastMode: $L, previousRequestId: $L, effort: $L, agentContext: $L.agentContext, attribution: $m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), modelCallNames: $L.modelCallNames, promptTooLongIsHandled: $L.promptTooLongIsHandled });
+-      let $L = { ...$m_oJ($L, $L, { messages: $L, messagesForAPI: $L, requestId: $L }), perTurnEffort: $L, perTurnTiming: $L, ...$L && { streamWatchdogGaveUp: true }, ...($m_K8e($L) || $m_YYe($L) || $m_Jwn($L) || $L instanceof $m_Mt && $L.type === "billing_error") && { resendCannotCure: true } };
++      $L?.settle({ kind: "error", error: $L }, $L), $NEW_chunk_e6aww6q8_js_Oun({ isLowPriority: $L, dispatch: $L, error: $L, model: $L, messageCount: $L.length, messageTokens: $m_wre($L), durationMs: Math.max(0, Math.round($L.monotonicNow() - $L)), durationMsIncludingRetries: Math.max(0, Math.round($L.monotonicNow() - $L)), attempt: $L, requestId: $L, clientRequestId: $L, didFallBackToNonStreaming: $L, nonStreamingFallbackSkipped: $L, observedResponse: $L ? void 0 : $L, queryTracking: $L.queryTracking, querySource: $L.querySource, accountMemoryKeys: $L, messageClientPlatform: $L.messageClientPlatform, llmSpan: $L, fastMode: $L, previousRequestId: $L, effort: $L, agentContext: $L.agentContext, attribution: $m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), modelCallNames: $L.modelCallNames, promptTooLongIsHandled: $L.promptTooLongIsHandled });
++      let $L = $m_oJ($L, $L, { messages: $L, messagesForAPI: $L, requestId: $L }), $L = { ...$L, ...$L.aborted && ($L.apiError === "connection_failed" || $L.apiError === "computer_slept") && { apiError: void 0 }, ...$L !== void 0 && $L === $L && !$L.aborted && { apiError: "stream_idle_timeout" }, perTurnEffort: $L, perTurnTiming: $L, ...$L && { streamWatchdogGaveUp: true }, ...($m_K8e($L) || $m_YYe($L) || $m_Jwn($L) || $L instanceof $m_Mt && $L.type === "billing_error") && { resendCannotCure: true } };
+       if ($m_E8($L) && !$L.outOfApiAttempts()) return $L;
+@@ -2031,2 +2089,7 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     if ($L) $m_OEt($L, $L, Date.now());
++    try {
++      if ($L !== void 0) $m_T1e($L);
++    } catch ($L) {
++      $m_l($m_N($L));
++    }
+     if ($m_$I("api_call", $L), $L(), $m_C4o($L.querySource, $L.agentId), $L) $L.onRetryStatus?.(null);
+@@ -2041,5 +2104,7 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+     }
+-    if ($L !== void 0 || $L !== void 0) $L();
++    if ($L !== void 0 || $L !== void 0) {
++      if ($L(), $L && !$L) $NEW_chunk_ndmse9kj_js_Sco();
++    }
+   }
+-  if ($L && $L) $m_wds($L);
++  if ($L && $L) $NEW_chunk_ndmse9kj_js_pSs($L, { messageId: $L.at(-1)?.message.id ?? $L?.id, turnPosition: $L });
+   if ($L) $m_SBe($m_AM($L));
+@@ -2049,6 +2114,6 @@ async function* SELF($L, $L, $L, $L, $L, { modelFacts: $L, ...$L }) {
+   });
+-  if ($m_a9t($L, { isMainConversation: $L }), $L(), $L.served(), $L() && $L) $m_mni($L, { requestId: $L, previousMessageId: $L, model: $L.model, is1hCacheTTL: $L === "1h", querySource: $L.querySource, queryDepth: $L.queryTracking?.depth });
+-  let $L = $L.length, $L = $m_wre($L), $L = $m_C_() ? void 0 : $m_Dun($L, $L.model), $L = $m_C_() ? void 0 : $m_adn($L, $L, $m_Qmr($L, $L)), $L = $L ? $m_Nds() : void 0;
++  if ($NEW_chunk_e6aww6q8_js_m7t($L, { isMainConversation: $L }), $L(), $L.served(), $L() && $L) $m_mni($L, { requestId: $L, previousMessageId: $L, model: $L.model, is1hCacheTTL: $L === "1h", querySource: $L.querySource, queryDepth: $L.queryTracking?.depth });
++  let $L = $L.length, $L = $m_wre($L), $L = $m_C_() ? void 0 : $m_Dun($L, $L.model), $L = $m_C_() ? void 0 : $NEW_chunk_e6aww6q8_js_Dun($L, $L), $L = $m_C_() ? void 0 : $m_adn($L, $L, $m_Qmr($L, $L)), $L = $L ? $m_Nds() : void 0;
+   $L.getToolPermissionContext().then(($L) => {
+-    $m_Lun({ isLowPriority: $L, dispatch: $L, uncoveredTail: $L, model: $L[0]?.message.model ?? $L?.model ?? $L.model, preNormalizedModel: $L.model, usage: $L, start: $L, startIncludingRetries: $L, attempt: $L, messageCount: $L, messageTokens: $L, requestId: $L ?? null, rawRequestBodyId: $L, accountMemoryKeys: $L, clientRequestId: $L ? void 0 : $L, firstAttemptRequestId: $L ?? null, stopReason: $L, ttftMs: $L, firstContentMs: $L ? null : $L ?? null, streamEventCount: $L ? void 0 : $L, queryOverheadMs: $L, didFallBackToNonStreaming: $L, querySource: $L.querySource, promptCacheTtl: $L ? $L : void 0, promptCacheMessagesTtl: $L && !$L.skipMessageCacheMarkers && $L ? "5m" : void 0, messageClientPlatform: $L.messageClientPlatform, headers: $L, extraEventFields: { ...{}, ...$m_d9t($L) }, costUSD: $L, isDefaultModel: $L ? $L.isDefaultModel : void 0, defaultModel: $L ? $L.defaultModel : void 0, ...$L($L), carriedEffort: $L, carriedEffortEnded: $L, queryTracking: $L.queryTracking, permissionMode: $L.mode, proactivityLevel: $L.proactivityLevel, newMessages: $L, requestContentTelemetry: $L, requestPrefixTelemetry: $L && { ...$L, systemPromptSource: $m_le($L.systemPromptSource), snapshotHash: $L.systemPromptSnapshotHash }, llmSpan: $L, globalCacheStrategy: $L, requestSetupMs: $L - $L, attemptStartTimes: $L, fastMode: $L, previousRequestId: $L, betas: $L, thinkingPrefixMismatchBehavior: $L, echoWireToolInputs: $L, effort: $L, turnOrigin: $L, agentContext: $L.agentContext, attribution: $m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), modelCallNames: $L.modelCallNames });
++    $NEW_chunk_e6aww6q8_js_Lun({ isLowPriority: $L, dispatch: $L, uncoveredTail: $L, model: $L[0]?.message.model ?? $L?.model ?? $L.model, preNormalizedModel: $L.model, usage: $L, start: $L, startIncludingRetries: $L, attempt: $L, messageCount: $L, messageTokens: $L, requestId: $L ?? null, rawRequestBodyId: $L, accountMemoryKeys: $L, clientRequestId: $L ? void 0 : $L, firstAttemptRequestId: $L ?? null, stopReason: $L, ttftMs: $L, firstContentMs: $L ? null : $L ?? null, streamEventCount: $L ? void 0 : $L, queryOverheadMs: $L, didFallBackToNonStreaming: $L, querySource: $L.querySource, promptCacheTtl: $L ? $L : void 0, promptCacheMessagesTtl: $L && !$L.skipMessageCacheMarkers && $L ? "5m" : void 0, messageClientPlatform: $L.messageClientPlatform, headers: $L, extraEventFields: { ...{}, ...$NEW_chunk_e6aww6q8_js__7t($L) }, costUSD: $L, isDefaultModel: $L ? $L.isDefaultModel : void 0, defaultModel: $L ? $L.defaultModel : void 0, ...$L($L), carriedEffort: $L, carriedEffortEnded: $L, queryTracking: $L.queryTracking, permissionMode: $L.mode, proactivityLevel: $L.proactivityLevel, newMessages: $L, requestContentTelemetry: $L, sentBody: $L && { ...$L, threadType: $L }, requestPrefixTelemetry: $L && { ...$L, systemPromptSource: $m_le($L.systemPromptSource), snapshotHash: $L.systemPromptSnapshotHash }, llmSpan: $L, globalCacheStrategy: $L, requestSetupMs: $L - $L, attemptStartTimes: $L, fastMode: $L, previousRequestId: $L, betas: $L, thinkingPrefixMismatchBehavior: $L, echoWireToolInputs: $L, effort: $L, turnOrigin: $L, agentContext: $L.agentContext, attribution: $m_hpe($L.querySource, $L.spawnedBySkill, $L.activeSkill, $L.activeMcpServer, $L.activeMcpTool), modelCallNames: $L.modelCallNames });
+   }).catch(($L) => $m_l($m_Xe($m_N($L), "api success logging failed"))), $L();

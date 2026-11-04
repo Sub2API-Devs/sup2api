@@ -1,0 +1,23 @@
+# chunk-c6dz8eqs.js:nki -> chunk-7cks3gqr.js:YOi
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-c6dz8eqs.js_nki.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-c6dz8eqs.js_nki.new.js"
+index 5cca4e1f5..20a67cadb 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-c6dz8eqs.js_nki.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-c6dz8eqs.js_nki.new.js"
+@@ -1,7 +1,7 @@
+ async function SELF($l0) {
+   try {
+     if (!$m_ahr()) return;
+-    let [$l1, $l2] = await Promise.all([$m_Aoo({ includeMcpServers: false, signal: AbortSignal.timeout($m_s), alsoLookFor: $m_c, maxTools: $m_yWr }), $m_Pe($m_u($l0, { bigint: true }), $m_s).catch(() => {
++    let [$l1, $l2] = await Promise.all([$m_Aoo({ includeMcpServers: false, signal: AbortSignal.timeout($m_s), alsoLookFor: $m_c, maxTools: $m_yWr }), $m_Pe($NEW_chunk_7cks3gqr_js_u($l0, { bigint: true }), $m_s).catch(() => {
+       return;
+     })]);
+     if ($l1 === void 0) {
+@@ -12,7 +12,7 @@ async function SELF($l0) {
+     if (!$l1.complete) $m_f("remote_tools_host_inventory", "deadline");
+     else if ($l3 < 0n) $m_f("remote_tools_host_inventory", "disk_unread");
+     else $m_g("remote_tools_host_inventory");
+-    let $l4 = { ...!$l1.complete && { incomplete: true }, cpus: $m_d(), memory_gb: Math.round($m_p() / Number($m_a)), ...$l3 >= 0n && { disk_free_gb: Math.min(Number($l3 / $m_a), $m__Wr) } }, $l5 = $l1.profile.tools;
++    let $l4 = { ...!$l1.complete && { incomplete: true }, cpus: $NEW_chunk_7cks3gqr_js_d(), memory_gb: Math.round($NEW_chunk_7cks3gqr_js_p() / Number($m_a)), ...$l3 >= 0n && { disk_free_gb: Math.min(Number($l3 / $m_a), $m__Wr) } }, $l5 = $l1.profile.tools;
+     while ($l5.length > 0 && $m__({ tools: $l5, ...$l4 }).length > $m_bWr) $l5 = $l5.slice(0, -1);
+     return { tools: $l5, ...$l4 };
+   } catch ($l6) {

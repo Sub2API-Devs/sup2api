@@ -1,0 +1,201 @@
+/**
+ * semver/classes/semver.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: semver@7.7.3..7.7.4
+ * pieces: chunk-bwbq4xvm.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_debug } from "../internal/debug.js";
+import { require_constants } from "../internal/constants.js";
+import { require_re } from "../internal/re.js";
+import { require_parse_options } from "../internal/parse-options.js";
+import { require_identifiers } from "../internal/identifiers.js";
+
+//@ chunk-bwbq4xvm.js:5826-10148 cjs-fingerprint
+var require_semver = __commonJS(function (cjsExports, cjsModule) {
+  var debug = require_debug();
+  var { MAX_LENGTH, MAX_SAFE_INTEGER } = require_constants();
+  var { safeRe: re, t } = require_re();
+  var parseOptions = require_parse_options();
+  var { compareIdentifiers } = require_identifiers();
+  class SemVer {
+    constructor(version, options) {
+      options = parseOptions(options);
+      if (version instanceof SemVer) {
+        if (version.loose === !!options.loose && version.includePrerelease === !!options.includePrerelease)
+          return version;
+        else version = version.version;
+      } else if (typeof version !== "string")
+        throw TypeError(`Invalid version. Must be a string. Got type "${typeof version}".`);
+      if (version.length > MAX_LENGTH) throw TypeError(`version is longer than ${MAX_LENGTH} characters`);
+      debug("SemVer", version, options);
+      this.options = options;
+      this.loose = !!options.loose;
+      this.includePrerelease = !!options.includePrerelease;
+      let m = version.trim().match(options.loose ? re[t.LOOSE] : re[t.FULL]);
+      if (!m) throw TypeError(`Invalid Version: ${version}`);
+      this.raw = version;
+      this.major = +m[1];
+      this.minor = +m[2];
+      this.patch = +m[3];
+      if (this.major > MAX_SAFE_INTEGER || this.major < 0) throw TypeError("Invalid major version");
+      if (this.minor > MAX_SAFE_INTEGER || this.minor < 0) throw TypeError("Invalid minor version");
+      if (this.patch > MAX_SAFE_INTEGER || this.patch < 0) throw TypeError("Invalid patch version");
+      if (!m[4]) this.prerelease = [];
+      else
+        this.prerelease = m[4].split(".").map((id) => {
+          if (/^[0-9]+$/.test(id)) {
+            let num = +id;
+            if (num >= 0 && num < MAX_SAFE_INTEGER) return num;
+          }
+          return id;
+        });
+      this.build = m[5] ? m[5].split(".") : [];
+      this.format();
+    }
+    format() {
+      this.version = `${this.major}.${this.minor}.${this.patch}`;
+      if (this.prerelease.length) this.version += `-${this.prerelease.join(".")}`;
+      return this.version;
+    }
+    toString() {
+      return this.version;
+    }
+    compare(other) {
+      debug("SemVer.compare", this.version, this.options, other);
+      if (!(other instanceof SemVer)) {
+        if (typeof other === "string" && other === this.version) return 0;
+        other = new SemVer(other, this.options);
+      }
+      if (other.version === this.version) return 0;
+      return this.compareMain(other) || this.comparePre(other);
+    }
+    compareMain(other) {
+      if (!(other instanceof SemVer)) other = new SemVer(other, this.options);
+      if (this.major < other.major) return -1;
+      if (this.major > other.major) return 1;
+      if (this.minor < other.minor) return -1;
+      if (this.minor > other.minor) return 1;
+      if (this.patch < other.patch) return -1;
+      if (this.patch > other.patch) return 1;
+      return 0;
+    }
+    comparePre(other) {
+      if (!(other instanceof SemVer)) other = new SemVer(other, this.options);
+      if (this.prerelease.length && !other.prerelease.length) return -1;
+      else if (!this.prerelease.length && other.prerelease.length) return 1;
+      else if (!this.prerelease.length && !other.prerelease.length) return 0;
+      let i = 0;
+      do {
+        let a = this.prerelease[i];
+        let b = other.prerelease[i];
+        debug("prerelease compare", i, a, b);
+        if (a === undefined && b === undefined) return 0;
+        else if (b === undefined) return 1;
+        else if (a === undefined) return -1;
+        else if (a === b) continue;
+        else return compareIdentifiers(a, b);
+      } while (++i);
+    }
+    compareBuild(other) {
+      if (!(other instanceof SemVer)) other = new SemVer(other, this.options);
+      let i = 0;
+      do {
+        let a = this.build[i];
+        let b = other.build[i];
+        debug("build compare", i, a, b);
+        if (a === undefined && b === undefined) return 0;
+        else if (b === undefined) return 1;
+        else if (a === undefined) return -1;
+        else if (a === b) continue;
+        else return compareIdentifiers(a, b);
+      } while (++i);
+    }
+    inc(release, identifier, identifierBase) {
+      if (release.startsWith("pre")) {
+        if (!identifier && identifierBase === false)
+          throw Error("invalid increment argument: identifier is empty");
+        if (identifier) {
+          let match = `-${identifier}`.match(this.options.loose ? re[t.PRERELEASELOOSE] : re[t.PRERELEASE]);
+          if (!match || match[1] !== identifier) throw Error(`invalid identifier: ${identifier}`);
+        }
+      }
+      switch (release) {
+        case "premajor":
+          this.prerelease.length = 0;
+          this.patch = 0;
+          this.minor = 0;
+          this.major++;
+          this.inc("pre", identifier, identifierBase);
+          break;
+        case "preminor":
+          this.prerelease.length = 0;
+          this.patch = 0;
+          this.minor++;
+          this.inc("pre", identifier, identifierBase);
+          break;
+        case "prepatch":
+          this.prerelease.length = 0;
+          this.inc("patch", identifier, identifierBase);
+          this.inc("pre", identifier, identifierBase);
+          break;
+        case "prerelease":
+          if (this.prerelease.length === 0) this.inc("patch", identifier, identifierBase);
+          this.inc("pre", identifier, identifierBase);
+          break;
+        case "release":
+          if (this.prerelease.length === 0) throw Error(`version ${this.raw} is not a prerelease`);
+          this.prerelease.length = 0;
+          break;
+        case "major":
+          if (this.minor !== 0 || this.patch !== 0 || this.prerelease.length === 0) this.major++;
+          this.minor = 0;
+          this.patch = 0;
+          this.prerelease = [];
+          break;
+        case "minor":
+          if (this.patch !== 0 || this.prerelease.length === 0) this.minor++;
+          this.patch = 0;
+          this.prerelease = [];
+          break;
+        case "patch":
+          if (this.prerelease.length === 0) this.patch++;
+          this.prerelease = [];
+          break;
+        case "pre": {
+          let base = Number(identifierBase) ? 1 : 0;
+          if (this.prerelease.length === 0) this.prerelease = [base];
+          else {
+            let i = this.prerelease.length;
+            while (--i >= 0)
+              if (typeof this.prerelease[i] === "number") {
+                this.prerelease[i]++;
+                i = -2;
+              }
+            if (i === -1) {
+              if (identifier === this.prerelease.join(".") && identifierBase === false)
+                throw Error("invalid increment argument: identifier already exists");
+              this.prerelease.push(base);
+            }
+          }
+          if (identifier) {
+            let prerelease = [identifier, base];
+            if (identifierBase === false) prerelease = [identifier];
+            if (compareIdentifiers(this.prerelease[0], identifier) === 0) {
+              if (isNaN(this.prerelease[1])) this.prerelease = prerelease;
+            } else this.prerelease = prerelease;
+          }
+          break;
+        }
+        default:
+          throw Error(`invalid increment argument: ${release}`);
+      }
+      this.raw = this.format();
+      if (this.build.length) this.raw += `+${this.build.join(".")}`;
+      return this;
+    }
+  }
+  cjsModule.exports = SemVer;
+});
+export { require_semver };

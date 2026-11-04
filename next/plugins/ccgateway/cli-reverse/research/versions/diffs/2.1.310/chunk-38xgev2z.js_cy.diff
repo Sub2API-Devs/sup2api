@@ -1,0 +1,105 @@
+# chunk-38xgev2z.js:cy -> chunk-bbw420pv.js:My
+diff --git "a/diffs\\chunk-38xgev2z.js_cy.old.js" "b/diffs\\chunk-38xgev2z.js_cy.new.js"
+index d0ba170..05ab841 100644
+--- "a/diffs\\chunk-38xgev2z.js_cy.old.js"
++++ "b/diffs\\chunk-38xgev2z.js_cy.new.js"
+@@ -1,55 +1,56 @@
+-function SELF($l0, $l1, $l2, $l3, $l4) {
+-  let $l5 = $l0 ?? $m_mle, $l6 = $m_Pe(), $l7 = $m_il($l6);
+-  return async ($l8, $l9) => {
+-    let $l10 = new Headers($l9?.headers), $l11 = $l8 instanceof Request ? $l8.url : String($l8), { method: $l12 } = $m_x9n($l8, $l9);
+-    $m_KUo($l5, $l12, $l11);
+-    let $l13 = $l10.get($m_wke) ?? void 0;
+-    if ($l7 && !$l10.has($m_wke)) $l10.set($m_wke, $m_ey());
+-    if ($l7 && ($m_DK() && $m_mc() || $m_bKe())) {
+-      $l10.set($m_fc, "true");
+-      let $l14 = $m_k6n($m_q4o());
+-      if ($l14 !== void 0) $l10.set($m_pc, $l14);
++function SELF($l0, $l1, $l2, $l3, $l4, $l5, $l6) {
++  let $l7 = $l0 ?? $m_mle, $l8 = $m_J$r(), $l9 = $m_il($l8);
++  return async ($l10, $l11) => {
++    let $l12 = new Headers($l11?.headers), $l13 = $l10 instanceof Request ? $l10.url : String($l10), { method: $l14 } = $m_x9n($l10, $l11);
++    $m_KUo($l7, $l14, $l13);
++    let $l15 = $l12.get($m_wke) ?? void 0;
++    if ($l9 && !$l12.has($m_wke)) $l12.set($m_wke, $NEW_chunk_bbw420pv_js_by());
++    if ($l9 && ($m_DK() && $m_mc() || $m_bKe())) {
++      $l12.set($m_fc, "true");
++      let $l16 = $m_k6n($m_q4o());
++      if ($l16 !== void 0) $l12.set($m_pc, $l16);
+     }
+-    if ($m_wo($l11) && $m_sa() && $m_EJe()) $l10.set($m_hht, $m_RLr);
+-    if ($l7) {
+-      let $l15 = $m_hUo();
+-      if ($l15 !== void 0) $l10.set($m_mUo, $l15);
++    if ($m_wo($l13) && $m_sa() && $m_EJe()) $l12.set($m_hht, $m_RLr);
++    if ($l9) {
++      let $l17 = $m_hUo();
++      if ($l17 !== void 0) $l12.set($m_mUo, $l17);
+     }
+     try {
+-      let $l16 = $l10.get($m_wke);
+-      if ($m_t(`[API REQUEST] ${new URL($l11).pathname}${$l16 ? ` ${$m_wke}=${$l16}` : ""} source=${$l1 ?? "unknown"}`), $m_Wyn() === "verbose") $m_t(`[API REQUEST AUTH] ${$m__($m_fy($l10))}`, { level: "verbose" });
++      let $l18 = $l12.get($m_wke);
++      if ($m_t(`[API REQUEST] ${new URL($l13).pathname}${$l18 ? ` ${$m_wke}=${$l18}` : ""} source=${$l1 ?? "unknown"}`), $m_Wyn() === "verbose") $m_t(`[API REQUEST AUTH] ${$m__($m_fy($l12))}`, { level: "verbose" });
+     } catch {
+     }
+-    let $l17 = { ...$l9, headers: $l10 }, $l18 = $l9?.body, $l19 = $m_iFs($l13), $l20 = $m_nNt($l11, $l18, $l3), $l21 = $l20?.gzip && typeof $l18 === "string", $l22 = $l21 ? $m_rFs() : void 0;
+-    if ($l21) $l17.compress = $l22 === void 0 ? "gzip" : { encoding: "gzip", level: $l22 }, $m_vin(), $l17.body = $m_HBt($l18);
+-    if ($l13 !== void 0 && $l20 !== void 0) {
+-      let $l23 = $l19 === void 0 ? {} : { requestPrepareMs: Math.round(performance.now() - $l19) };
+-      $m_BPo($l13, $l20.gzip ? { requestBodyEncoding: "gzip", requestBodyChars: $l20.bodyChars, requestBodyGzipLevel: $l22, ...$l23 } : { requestBodyEncoding: "identity", requestBodyChars: $l20.bodyChars, gzipSkipReason: $l20.reason, ...$l23 });
++    if ($l6 && $l9 && $m_wo($l13)) await $NEW_chunk_bbw420pv_js_pl($l12, $l6);
++    let $l19 = { ...$l11, headers: $l12 }, $l20 = $l11?.body, $l21 = $m_iFs($l15), $l22 = $m_nNt($l13, $l20, $l3), $l23 = $l22?.gzip && typeof $l20 === "string", $l24 = $l23 ? $m_rFs() : void 0;
++    if ($l23) $l19.compress = $l24 === void 0 ? "gzip" : { encoding: "gzip", level: $l24 }, $m_vin(), $l19.body = $m_HBt($l20);
++    if ($l15 !== void 0 && $l22 !== void 0) {
++      let $l25 = $l21 === void 0 ? {} : { requestPrepareMs: Math.round(performance.now() - $l21) };
++      $m_BPo($l15, $l22.gzip ? { requestBodyEncoding: "gzip", requestBodyChars: $l22.bodyChars, requestBodyGzipLevel: $l24, ...$l25 } : { requestBodyEncoding: "identity", requestBodyChars: $l22.bodyChars, gzipSkipReason: $l22.reason, ...$l25 });
+     }
+-    let $l24 = $m_ly({ clientRequestId: $l13, provider: $l6, routedProvider: $l2, method: $l12, url: $l11, body: $l18 }), $l25 = ($l26) => {
++    let $l26 = $m_ly({ clientRequestId: $l15, provider: $l8, routedProvider: $l2, method: $l14, url: $l13, body: $l20, noResponseRetryLedger: $l5 }), $l27 = ($l28) => {
+       try {
+-        return $m_id({ provider: $l6, routedProvider: $l2, url: $l11, init: $l26 });
+-      } catch ($l27) {
+-        return $m_l($m_U($l27)), false;
++        return $m_id({ provider: $l8, routedProvider: $l2, url: $l13, init: $l28 });
++      } catch ($l29) {
++        return $m_l($m_U($l29)), false;
+       }
+-    }, $l28 = { init: $l17, firstParty: false }, $l29 = ($l30) => ($l28.init = $l30, $l28.firstParty = $l25($l30), $l24 === void 0 ? $l5($l8, $l30) : $m_uy($l5, $l8, $l30, $l24, $l4)), $l31 = $l7 && $m_wo($l11);
+-    if ($l31) $m_Pc($l4.now());
+-    let $l32 = await $l29($l17);
+-    if ($m_VUo($l5, $l12, $l32), $l21) $l32 = await $m_Ec($l32, () => $l29($l17)), $l32 = await $m_UPo({ res: $l32, dispatch: $l29, finalInit: $l17, identityBody: $l18, clientRequestId: $l13, storageV5: $l3 });
+-    let $l33 = $l28.firstParty && $m_ad($l32, $l11);
+-    if ($l31) $m_cc($l32.headers, () => $l6 !== "firstParty" || $m_C6n($l6));
+-    let $l34 = $l6 === "bedrock" && $l32.ok && $l11.includes($m_xp);
+-    if ($l34 && $l32.body && !$l32.headers.get("content-type") && !$m_a.CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_DEFAULT) $l32 = $m_vp($l32, $l32.body), $l32.headers.set("content-type", "application/vnd.amazon.eventstream");
+-    let $l35 = $l32.headers.get("content-type"), $l36 = $l35?.toLowerCase();
+-    if ($l34 && $l35 && !$l36?.includes("vnd.amazon.eventstream") && !$m_a.CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_GUARD) throw $l32.body?.cancel().catch(() => {
+-    }), new $m_Mp($l35);
+-    let $l37 = ($m_Tp($l6) || $l7) && $l36?.includes("text/event-stream"), $l38 = $l6 === "bedrock" && $l36?.includes("vnd.amazon.eventstream") && $m_Cp();
+-    if (($l37 || $l38) && $l32.body && $m_sl()) {
+-      let $l39 = $m_YLr($l6), $l40 = $l32.headers.get("cf-ray") ?? ($l38 ? $l32.headers.get("x-amzn-requestid") ?? void 0 : void 0), $l41 = { lastAt: 0 }, $l42 = $m_vp($l32, $m_dy($l32.body, $l39, $l40, $l41, $l4));
+-      Object.defineProperty($l42, "_chunkTimes", { value: $l41 }), $l32 = $l42;
++    }, $l30 = { init: $l19, firstParty: false }, $l31 = ($l32) => ($l30.init = $l32, $l30.firstParty = $l27($l32), $l26 === void 0 ? $l7($l10, $l32) : $m_uy($l7, $l10, $l32, $l26, $l4)), $l33 = $l9 && $m_wo($l13);
++    if ($l33) $m_Pc($l4.now());
++    let $l34 = await $l31($l19);
++    if ($m_VUo($l7, $l14, $l34), $l23) $l34 = await $m_Ec($l34, () => $l31($l19)), $l34 = await $m_UPo({ res: $l34, dispatch: $l31, finalInit: $l19, identityBody: $l20, clientRequestId: $l15, storageV5: $l3 });
++    let $l35 = $l30.firstParty && $m_ad($l34, $l13);
++    if ($l33) $m_cc($l34.headers, () => $l8 !== "firstParty" || $m_C6n($l8));
++    let $l36 = $l8 === "bedrock" && $l34.ok && $l13.includes($m_xp);
++    if ($l36 && $l34.body && !$l34.headers.get("content-type") && !$m_a.CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_DEFAULT) $l34 = $m_vp($l34, $l34.body), $l34.headers.set("content-type", "application/vnd.amazon.eventstream");
++    let $l37 = $l34.headers.get("content-type"), $l38 = $l37?.toLowerCase();
++    if ($l36 && $l37 && !$l38?.includes("vnd.amazon.eventstream") && !$m_a.CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_GUARD) throw $l34.body?.cancel().catch(() => {
++    }), new $m_Mp($l37);
++    let $l39 = ($m_Tp($l8) || $l9) && $l38?.includes("text/event-stream"), $l40 = $l8 === "bedrock" && $l38?.includes("vnd.amazon.eventstream") && $m_Cp();
++    if (($l39 || $l40) && $l34.body && $m_sl()) {
++      let $l41 = $m_YLr($l8), $l42 = $l34.headers.get("cf-ray") ?? ($l40 ? $l34.headers.get("x-amzn-requestid") ?? void 0 : void 0), $l43 = { lastAt: 0 }, $l44 = $m_vp($l34, $m_dy($l34.body, $l41, $l42, $l43, $l4));
++      Object.defineProperty($l44, "_chunkTimes", { value: $l43 }), $l34 = $l44;
+     }
+-    if ($l33 && $l25($l28.init)) $m_ld($l32.headers);
+-    return $l32;
++    if ($l35 && $l27($l30.init)) $m_ld($l34.headers);
++    return $l34;
+   };
+ }
+ ;

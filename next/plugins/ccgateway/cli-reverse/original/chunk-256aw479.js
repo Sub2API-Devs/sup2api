@@ -1,0 +1,6 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.316
+import{t}from"./chunk-cgr0tezp.js";import{Hp,Bde}from"./chunk-cgcrer2m.js";import{i}from"./chunk-jhrww53q.js";import{Y,ALi}from"./chunk-byeye1yp.js";function Qns(e=cZr){let o=i.CLAUDE_CODE_HOVER_REST;if(o===void 0)return;if(dZr(o)!=="pinned")return;return{backend:Y()?e():void 0,configHome:Hp()}}function Zns(e){let o=Y()?e.backend:void 0;if(o===void 0)return;if(!Bde(e.configHome)){let r=Hp();t(r!==null&&e.configHome!==null?`CLAUDE_CONFIG_DIR now names ${r}, not ${e.configHome} where the v5 storage backend was built at start-up; not handing it on, so this process keeps today's direct file access`:`The v5 storage backend is not used: the config home was ${e.configHome??"absent"} when it was built at start-up and is ${r??"absent"} now`,{level:"warn"});return}return o}function dZr(e){if(typeof e!=="boolean")t(`tengu_hover_rest served a ${typeof e}, not a boolean; treating it as off`,{level:"warn"});let o=ALi(e);if(o==="conflict")t(`tengu_hover_rest read ${String(e)} at a second pin in this process; keeping the first decision`,{level:"warn"});return o}function cZr(){if(!Y())return;return}export{Qns,Zns,dZr,cZr};

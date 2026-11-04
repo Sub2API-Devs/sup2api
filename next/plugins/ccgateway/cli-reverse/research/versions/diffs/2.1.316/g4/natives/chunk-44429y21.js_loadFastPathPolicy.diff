@@ -1,0 +1,10 @@
+# chunk-44429y21.js:loadFastPathPolicy -> undefined
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\natives\\chunk-44429y21.js_loadFastPathPolicy.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\natives\\chunk-44429y21.js_loadFastPathPolicy.new.js"
+index a2967aa..ac9c11a 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\natives\\chunk-44429y21.js_loadFastPathPolicy.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\natives\\chunk-44429y21.js_loadFastPathPolicy.new.js"
+@@ -1 +1 @@
+-/* chunk-44429y21.js:loadFastPathPolicy not found */
+\ No newline at end of file
++/* unmapped */
+\ No newline at end of file

@@ -1,0 +1,120 @@
+# chunk-zpsbh0wk.js:ee -> chunk-ndmse9kj.js:ee
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_ee.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_ee.new.js"
+index 8171f8a..c4c1db5 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_ee.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_ee.new.js"
+@@ -8,23 +8,23 @@ class $l0 {
+   #i = /* @__PURE__ */ new Set();
+   #d = /* @__PURE__ */ new Set();
+   #u = /* @__PURE__ */ new Set();
+-  #l = /* @__PURE__ */ new Set();
+   #c = /* @__PURE__ */ new Set();
++  #l = /* @__PURE__ */ new Set();
+   #p = /* @__PURE__ */ new Set();
+-  #a = /* @__PURE__ */ new Set();
+   #h = /* @__PURE__ */ new Set();
++  #a = /* @__PURE__ */ new Set();
+   #g = /* @__PURE__ */ new Map();
+-  #m = /* @__PURE__ */ new Map();
++  #S = /* @__PURE__ */ new Map();
+   #y = /* @__PURE__ */ new Map();
+-  #S;
++  #v;
+   #f = { byFileUuid: /* @__PURE__ */ new Map(), recentPrefetchStarts: [] };
+-  #v = $m_qe();
++  #m = $m_qe();
+   #b = /* @__PURE__ */ new Set();
+   #k = void 0;
+   #R = void 0;
++  #x = void 0;
+   #C = void 0;
+   #P = void 0;
+-  #x = void 0;
+   planSlugCache() {
+     return this.#e;
+   }
+@@ -62,40 +62,40 @@ class $l0 {
+     return this.#u;
+   }
+   clientTruncatedAssistantIds() {
+-    return this.#l;
++    return this.#c;
+   }
+   heldStatelessReplyIds() {
+-    return this.#c;
++    return this.#l;
+   }
+   unsupportedThreadKeys() {
+     return this.#p;
+   }
+   pendingPrLinks() {
+-    return this.#a;
++    return this.#h;
+   }
+   policyPredicateTelemetryEmitted() {
+-    return this.#h;
++    return this.#a;
+   }
+   humanAttachmentDigests() {
+     return this.#g;
+   }
+   inboundAttachmentFiles() {
+-    return this.#m;
++    return this.#S;
+   }
+   filesPlacedByName() {
+     return this.#y;
+   }
+   filesPlacedByNameRead() {
+-    return this.#S;
++    return this.#v;
+   }
+   setFilesPlacedByNameRead($l3) {
+-    this.#S = $l3;
++    this.#v = $l3;
+   }
+   inboundAttachmentDownloads() {
+     return this.#f;
+   }
+   arrivingInboundFiles() {
+-    return this.#v;
++    return this.#m;
+   }
+   chromeAvailabilityStagesLogged() {
+     return this.#b;
+@@ -113,27 +113,27 @@ class $l0 {
+     this.#R = $l5;
+   }
+   pendingGoalReprompt() {
+-    return this.#C;
++    return this.#x;
+   }
+   replacePendingGoalReprompt($l6) {
+-    this.#C = $l6;
++    this.#x = $l6;
+   }
+   goalInterruptionStreak() {
+-    return this.#P;
++    return this.#C;
+   }
+   replaceGoalInterruptionStreak($l7) {
+-    this.#P = $l7;
++    this.#C = $l7;
+   }
+   workerCheckin() {
+-    return this.#x;
++    return this.#P;
+   }
+   replaceWorkerCheckin($l8) {
+-    this.#x = $l8;
++    this.#P = $l8;
+   }
+   reset() {
+-    this.#e = /* @__PURE__ */ new Map(), this.#t = /* @__PURE__ */ new Map(), this.#n = null, this.#o = /* @__PURE__ */ new Map(), this.#r = /* @__PURE__ */ new Set(), this.#s = /* @__PURE__ */ new Set(), this.#i = /* @__PURE__ */ new Set(), this.#d = /* @__PURE__ */ new Set(), this.#u = /* @__PURE__ */ new Set(), this.#l = /* @__PURE__ */ new Set(), this.#c = /* @__PURE__ */ new Set(), this.#p = /* @__PURE__ */ new Set(), this.#a = /* @__PURE__ */ new Set(), this.#h = /* @__PURE__ */ new Set(), this.#g = /* @__PURE__ */ new Map(), this.#m = /* @__PURE__ */ new Map(), this.#y = /* @__PURE__ */ new Map(), this.#S = void 0;
++    this.#e = /* @__PURE__ */ new Map(), this.#t = /* @__PURE__ */ new Map(), this.#n = null, this.#o = /* @__PURE__ */ new Map(), this.#r = /* @__PURE__ */ new Set(), this.#s = /* @__PURE__ */ new Set(), this.#i = /* @__PURE__ */ new Set(), this.#d = /* @__PURE__ */ new Set(), this.#u = /* @__PURE__ */ new Set(), this.#c = /* @__PURE__ */ new Set(), this.#l = /* @__PURE__ */ new Set(), this.#p = /* @__PURE__ */ new Set(), this.#h = /* @__PURE__ */ new Set(), this.#a = /* @__PURE__ */ new Set(), this.#g = /* @__PURE__ */ new Map(), this.#S = /* @__PURE__ */ new Map(), this.#y = /* @__PURE__ */ new Map(), this.#v = void 0;
+     for (let $l9 of this.#f.byFileUuid.values()) clearTimeout($l9.expiry), $l9.abort.abort();
+-    this.#f = { byFileUuid: /* @__PURE__ */ new Map(), recentPrefetchStarts: [] }, this.#v = $m_qe(), this.#b = /* @__PURE__ */ new Set(), this.#k = void 0, clearTimeout(this.#R), this.#R = void 0, clearTimeout(this.#C), this.#C = void 0, this.#P = void 0, clearInterval(this.#x?.timer), this.#x = void 0;
++    this.#f = { byFileUuid: /* @__PURE__ */ new Map(), recentPrefetchStarts: [] }, this.#m = $m_qe(), this.#b = /* @__PURE__ */ new Set(), this.#k = void 0, clearTimeout(this.#R), this.#R = void 0, clearTimeout(this.#x), this.#x = void 0, this.#C = void 0, clearInterval(this.#P?.timer), this.#P = void 0;
+   }
+ }
+ ;

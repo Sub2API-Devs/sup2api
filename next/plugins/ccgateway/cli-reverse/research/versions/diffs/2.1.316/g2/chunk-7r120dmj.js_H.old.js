@@ -1,0 +1,1 @@
+SELF = { str: () => $m_o, rawStr: () => $m_f, bool: () => $m_l, triBool: () => $m_s, int: ($l0) => $l0 ? $m_d($l0) : $m_a, enum: ($l1) => $m_i(($l2) => $l2 !== void 0 && $l1.includes($l2.trim()) ? $l2.trim() : void 0) };

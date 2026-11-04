@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/log-hook.cjs\"" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Write", "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/log-hook.cjs\"" } ] }
+    ]
+  }
+}

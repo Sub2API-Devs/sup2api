@@ -1,0 +1,3 @@
+listening /t/up.sock scenario text
+http on 8790
+tls on 443

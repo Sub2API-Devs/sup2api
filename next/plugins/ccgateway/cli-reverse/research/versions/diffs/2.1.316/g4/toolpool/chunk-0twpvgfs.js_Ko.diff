@@ -1,0 +1,255 @@
+# chunk-0twpvgfs.js:Ko -> chunk-0tkmvwy0.js:Xo
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-0twpvgfs.js_Ko.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-0twpvgfs.js_Ko.new.js"
+index 1c8a7ca..f7ec9a7 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-0twpvgfs.js_Ko.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-0twpvgfs.js_Ko.new.js"
+@@ -47,7 +47,7 @@ async function SELF({ agentInput: $l0, toolUseContext: $l1, canUseTool: $l2, ass
+     }
+     let $l52 = $l50 ?? ($l7 ? $m_Kn($l33, $l33, $l7) : void 0);
+     if (!($l52 === void 0 || (await $m_rHr([$l52], $l1)).length === 1)) throw $m_m("subagent_launch", "subagent_teammate_not_offered"), new $m_se(`Agent type '${$l7}' is not offered in this session.`);
+-    let $l53 = $l50 ? await $m_ece($l50) : void 0;
++    let $l53 = $l50 ? await $m_ece($l50, $l1.abortController.signal) : void 0;
+     if ($l50 && !$l53) throw $m_m("subagent_launch", "subagent_plugin_load_failed"), new $m_se(`Agent type '${$l50.agentType}' could not be loaded from its plugin.`);
+     $l42($m_To);
+     let $l54 = $m_nc($l1), $l55 = $l53 ?? $m_xEr($l7), $l56 = await $m_eSo({ tool_use_id: $l1.toolUseId ?? "", prompt: $l20, description: $l21, agent: $l55, agents: $l49, model: $l15, parentModel: $l54, parentAgentId: $l1.agentId, permissionMode: $l29, background: true, fork: false, isTeammate: true, name: $l9, cwd: void 0, signal: $l1.abortController.signal, origin: $l1.hookOrigin });
+@@ -59,14 +59,14 @@ async function SELF({ agentInput: $l0, toolUseContext: $l1, canUseTool: $l2, ass
+     let $l60 = $l49.find(($l61) => $l61 === $l56.agent && $l61 !== $l55);
+     if ($m_K8($l60?.agentType, $l33)) throw $m_m("subagent_launch", "subagent_spawn_hook_teammate_rewrite"), new $m_j(`A plugin's agent.spawn hook retyped a teammate into '${$l60?.agentType}', which does not run as a teammate.`);
+     if ($l60) {
+-      if ($l53 = await $m_ece($l60), !$l53) throw $m_m("subagent_launch", "subagent_plugin_load_failed"), new $m_se(`Agent type '${$l60.agentType}' could not be loaded from its plugin.`);
++      if ($l53 = await $m_ece($l60, $l1.abortController.signal), !$l53) throw $m_m("subagent_launch", "subagent_plugin_load_failed"), new $m_se(`Agent type '${$l60.agentType}' could not be loaded from its plugin.`);
+       let $l62 = $m_Nn($l53, [...$l1.getAppState().mcp.tools, ...$l1.options.tools.filter($m_mh)]);
+       if ($l62.length > 0) throw $m_m("subagent_launch", "subagent_mcp_required_missing"), $m_rN(new $m_j($m_Ln($l53.agentType, $l62)), { kind: "mcp_required_missing", servers: $l62 });
+     }
+     $l20 = $l58.prompt, $l21 = $l58.description.replace(/\s+/g, " ").trim();
+     let $l63 = $l58.model, $l64 = $l53?.agentType ?? $l7;
+     if ($l42($m__o), $l53?.color) $m_jSt($l60 ? $l53.agentType : $l7 ?? $l53.agentType, $l53.color);
+-    let { spawnTeammate: $l65 } = require("./chunk-2vspw5x8.js"), $l66 = await $l65({ name: $l9, prompt: $l20, description: $l21, use_splitpane: true, plan_mode_required: $l29 === "plan", model: $l63 ?? $m_Qo($l53, $m_nc($l1)), modelSource: $l63 ? "tool" : "frontmatter", agent_type: $l64, agentDefinition: $l53, invokingRequestId: $l3?.requestId }, $l1, $l4), $l67 = { status: "teammate_spawned", prompt: $l20, agentId: $l66.data.agent_id, resolvedModel: $m_Bt($l66.data.model ?? $l54), ...$l66.data }, $l68 = $l66.loopAgentId ?? $l66.data.teammate_id;
++    let { spawnTeammate: $l65 } = require("./chunk-cne5hsvz.js"), $l66 = await $l65({ name: $l9, prompt: $l20, description: $l21, use_splitpane: true, plan_mode_required: $l29 === "plan", model: $l63 ?? $m_Qo($l53, $m_nc($l1)), modelSource: $l63 ? "tool" : "frontmatter", agent_type: $l64, agentDefinition: $l53, invokingRequestId: $l3?.requestId }, $l1, $l4), $l67 = { status: "teammate_spawned", prompt: $l20, agentId: $l66.data.agent_id, resolvedModel: $m_Bt($l66.data.model ?? $l54), ...$l66.data }, $l68 = $l66.loopAgentId ?? $l66.data.teammate_id;
+     return $m_KMo($l68, $l1), $l57?.started({ agentId: $l68, model: $m_Bt($l66.data.model ?? $l54), teammateId: $l66.data.teammate_id }), $m_g("subagent_launch"), { data: $l67 };
+   }
+   let $l69 = { isolation: $l10, querySource: $l1.options.querySource, messages: $l1.messages }, $l70, $l71 = [];
+@@ -104,7 +104,7 @@ async function SELF({ agentInput: $l0, toolUseContext: $l1, canUseTool: $l2, ass
+       }
+       if (!$l78) throw $m_a("tengu_subagent_type_miss", { requestedNormalized: $l84, requestedLength: $l85, availableCount: $l73.length }), $m_m("subagent_launch", "subagent_type_not_found"), new $m_se(`Agent type '${$l77}' not found. Available agents: ${$m_ht($l74)}`);
+     }
+-    let $l93 = await $m_ece($l78);
++    let $l93 = await $m_ece($l78, $l1.abortController.signal);
+     if ($l93 === void 0) throw $m_m("subagent_launch", "subagent_plugin_load_failed"), new $m_se(`Agent type '${$l77}' could not be loaded from its plugin.`);
+     $l70 = $l93;
+   }
+@@ -219,7 +219,7 @@ ${$l155}`);
+     let $l190 = $l5?.mark("external");
+     if ($l189 = await $m_i7e($m_Nyi($l184), { storageV5: $l1.storageV5, credentials: $l1.credentials }), $l190?.(), $l189.hookBased) {
+       let $l191 = $l189.worktreePath;
+-      $l189.vettedRealPath = await $m_zo($l191).catch(($l192) => {
++      $l189.vettedRealPath = await $NEW_chunk_0tkmvwy0_js_Wo($l191).catch(($l192) => {
+         $m_t(`Agent worktree ${$l191} could not be resolved after creation (${$m_d($l192)}); it will be kept at cleanup`, { level: "warn" });
+         return;
+       });
+@@ -273,122 +273,122 @@ ${$l155}`);
+   if ($l9 && $l9 !== $m_Ty) $l1.agentLifecycle.registerName($l9, $m_Rr($l184));
+   let $l233 = $l9 && $l9 !== $m_Ty ? $l9 : void 0;
+   $m_Vn().agentSpawned.emit({ agentId: $l184, agentType: $l70.agentType, parentAgentId: $l185, taskRegistry: $l30 });
+-  let $l234 = $l142 === void 0 && !$m_qw($l1);
++  let $l234 = $l142 === void 0 && !$m_qw($l1), $l235 = $l38 || $m_qw($l1) ? void 0 : $l142;
+   if ($l110) {
+-    let $l235 = $l184, $l236 = $m_ice({ outputFileReadable: $m_qO($l1.options.tools), ownerCanContinueAgents: $l179.callerCanContinueAgents, agentId: $l235, ownerAgentId: $l178, parentAgentId: $l185, spawnDepth: $l152, launchedWithDefaults: $l234, description: $l21, prompt: $l20, model: $l143, selectedAgent: $l70, taskRegistry: $l30, toolUseId: $l1.toolUseId, cwd: $l204, spawnedSubagent: $l227, sessionScratch: $l1.session.sessionScratch });
+-    if ($l102 !== void 0 && !$l102.handOver({ agentId: $l236.agentId, abortController: $l236.abortController })) {
+-      if ($m_rC($l236.agentId, $l30, "system", void 0, { lifecycleNotStarted: true }), $l225(), $m_KO($l236.agentId, $l30), $l9 && $l232 !== void 0) $l1.agentLifecycle.registerName($l9, $l232);
++    let $l236 = $l184, $l237 = $m_ice({ outputFileReadable: $m_qO($l1.options.tools), ownerCanContinueAgents: $l179.callerCanContinueAgents, agentId: $l236, ownerAgentId: $l178, parentAgentId: $l185, spawnDepth: $l152, launchedWithDefaults: $l234, launchModel: $l235, description: $l21, prompt: $l20, model: $l143, selectedAgent: $l70, taskRegistry: $l30, toolUseId: $l1.toolUseId, cwd: $l204, spawnedSubagent: $l227, sessionScratch: $l1.session.sessionScratch });
++    if ($l102 !== void 0 && !$l102.handOver({ agentId: $l237.agentId, abortController: $l237.abortController })) {
++      if ($m_rC($l237.agentId, $l30, "system", void 0, { lifecycleNotStarted: true }), $l225(), $m_KO($l237.agentId, $l30), $l9 && $l232 !== void 0) $l1.agentLifecycle.registerName($l9, $l232);
+       throw await $l48(), $m_m("subagent_launch", "subagent_background_launch_not_taken"), new $m_j($m_WLr($l100));
+     }
+-    if (!$m_be()) $m_rH($l178, `agent:${$l235}`, $l30);
++    if (!$m_be()) $m_rH($l178, `agent:${$l236}`, $l30);
+     if ($m_tH() && !$m_be() && (!$l9 || $l9 === $m_Ty) && !$m_TKt.has($l70.agentType)) {
+-      let $l237 = $l1.agentLifecycle.allocateName($l70.agentType);
+-      $l1.agentLifecycle.registerName($l237, $m_Rr($l235)), $l233 = $l237;
++      let $l238 = $l1.agentLifecycle.allocateName($l70.agentType);
++      $l1.agentLifecycle.registerName($l238, $m_Rr($l236)), $l233 = $l238;
+     }
+-    if ($l182) await $l229($m_W1n({ observedKey: $l235, observedTaskId: $l235, observedName: $l233 ?? $l9 ?? $l70.agentType, observedAgentType: $l70.agentType, config: $l182, ...$l183 }));
+-    let $l238 = { agentId: $l235, parentAgentId: $l185, depth: $l152, ...$m_lst($l1) && { spawnedByMainThread: true }, parentSessionId: $m_wP(), agentType: "subagent", subagentName: $l70.agentType, displayName: $l233, isAsync: true, isBackgroundAgent: true, ...$l187 && { delegatedObservation: true }, isBuiltIn: $m_Hl($l70), ...$l38 && $m_cW($l1.agentContext) && { forkOfMainConversation: true }, invokingRequestId: $l3?.requestId, invocationKind: "spawn", invocationEmitted: false, parentPromptId: $l188, ...$m_uW($l1.agentContext) };
+-    $l179.agentContext = $l238, $m_GI($l238, () => $m_YRn($l206, () => $m_Pne({ taskId: $l236.agentId, abortController: $l236.abortController, makeStream: ($l239, $l240, $l241) => $m_Tx({ ...$l197, launchedWithDefaults: $l234, session: $l205, override: { ...$l197.override, agentId: $m_Rr($l236.agentId), agentContext: $l238, abortController: $l236.abortController }, onCacheSafeParams: $l239, onQueryProgress: $l240, onStreamTokenEstimate: $l241 }), metadata: $l179, description: $l21, toolUseContext: $l1, taskRegistry: $l30, agentIdForCleanup: $l235, reviewTools: $l196, enableSummarization: $m_mve() || ($l94 || $l97) && !$m_be(), getWorktreeResult: $l48, onRunSettled: $l225 }))), $l228(), $l133?.started({ agentId: $l236.agentId, model: $l143 });
+-    let $l242 = !$m_dE($l70) && $m_qO($l1.options.tools);
+-    return $m_g("subagent_launch"), { data: { isAsync: true, status: "async_launched", agentId: $l236.agentId, description: $l21, resolvedModel: $l143, prompt: $l20, outputFile: $l236.outputFile ?? "", canReadOutputFile: $l242, canContinueAgent: $m_Ev($l1.options.tools), ...$l194 && { sharesCwd: true } } };
++    if ($l182) await $l229($m_W1n({ observedKey: $l236, observedTaskId: $l236, observedName: $l233 ?? $l9 ?? $l70.agentType, observedAgentType: $l70.agentType, config: $l182, ...$l183 }));
++    let $l239 = { agentId: $l236, parentAgentId: $l185, depth: $l152, ...$m_lst($l1) && { spawnedByMainThread: true }, parentSessionId: $m_wP(), agentType: "subagent", subagentName: $l70.agentType, displayName: $l233, isAsync: true, isBackgroundAgent: true, ...$l187 && { delegatedObservation: true }, isBuiltIn: $m_Hl($l70), ...$l38 && $m_cW($l1.agentContext) && { forkOfMainConversation: true }, invokingRequestId: $l3?.requestId, invocationKind: "spawn", invocationEmitted: false, parentPromptId: $l188, ...$m_uW($l1.agentContext) };
++    $l179.agentContext = $l239, $m_GI($l239, () => $m_YRn($l206, () => $m_Pne({ taskId: $l237.agentId, abortController: $l237.abortController, makeStream: ($l240, $l241, $l242) => $m_Tx({ ...$l197, launchedWithDefaults: $l234, session: $l205, override: { ...$l197.override, agentId: $m_Rr($l237.agentId), agentContext: $l239, abortController: $l237.abortController }, onCacheSafeParams: $l240, onQueryProgress: $l241, onStreamTokenEstimate: $l242 }), metadata: $l179, description: $l21, toolUseContext: $l1, taskRegistry: $l30, agentIdForCleanup: $l236, reviewTools: $l196, enableSummarization: $m_mve() || ($l94 || $l97) && !$m_be(), getWorktreeResult: $l48, onRunSettled: $l225 }))), $l228(), $l133?.started({ agentId: $l237.agentId, model: $l143 });
++    let $l243 = !$m_dE($l70) && $m_qO($l1.options.tools);
++    return $m_g("subagent_launch"), { data: { isAsync: true, status: "async_launched", agentId: $l237.agentId, description: $l21, resolvedModel: $l143, prompt: $l20, outputFile: $l237.outputFile ?? "", canReadOutputFile: $l243, canContinueAgent: $m_Ev($l1.options.tools), ...$l194 && { sharesCwd: true } } };
+   } else {
+-    let $l243 = $m_Rr($l184), $l244 = $m_LEe() || $m_uyt() !== void 0, $l245 = { agentId: $l243, parentAgentId: $l185, depth: $l152, ...$m_lst($l1) && { spawnedByMainThread: true }, parentSessionId: $m_wP(), agentType: "subagent", subagentName: $l70.agentType, displayName: $l233, isAsync: false, isBackgroundAgent: $l186, ...$l187 && { delegatedObservation: true }, isBuiltIn: $m_Hl($l70), ...$l38 && $m_cW($l1.agentContext) && { forkOfMainConversation: true }, invokingRequestId: $l3?.requestId, invocationKind: "spawn", invocationEmitted: false, parentPromptId: $l188, ...$m_uW($l1.agentContext) };
+-    $l179.agentContext = $l245;
+-    let $l246 = $m_GI($l245, () => $m_YRn($l206, async () => {
+-      let $l247 = Date.now(), $l248 = $l143, $l249 = $m_eBn([], $l143);
++    let $l244 = $m_Rr($l184), $l245 = $m_LEe() || $m_uyt() !== void 0, $l246 = { agentId: $l244, parentAgentId: $l185, depth: $l152, ...$m_lst($l1) && { spawnedByMainThread: true }, parentSessionId: $m_wP(), agentType: "subagent", subagentName: $l70.agentType, displayName: $l233, isAsync: false, isBackgroundAgent: $l186, ...$l187 && { delegatedObservation: true }, isBuiltIn: $m_Hl($l70), ...$l38 && $m_cW($l1.agentContext) && { forkOfMainConversation: true }, invokingRequestId: $l3?.requestId, invocationKind: "spawn", invocationEmitted: false, parentPromptId: $l188, ...$m_uW($l1.agentContext) };
++    $l179.agentContext = $l246;
++    let $l247 = $m_GI($l246, () => $m_YRn($l206, async () => {
++      let $l248 = Date.now(), $l249 = $l143, $l250 = $m_eBn([], $l143);
+       if ($l172.length > 0) {
+-        let $l250 = $m_km($l172).find(($l251) => $l251.type === "user");
+-        if ($l250 && $l250.type === "user" && $l4) $l4({ type: "progress", toolUseID: `agent_${$l3.message.id}`, data: { message: $l250, type: "agent_progress", prompt: $l20, agentId: $l243, agentType: $l70.agentType, isBuiltIn: $m_Hl($l70), description: $l21, resolvedModel: $l248, modelsUsed: $l249 } });
++        let $l251 = $m_km($l172).find(($l252) => $l252.type === "user");
++        if ($l251 && $l251.type === "user" && $l4) $l4({ type: "progress", toolUseID: `agent_${$l3.message.id}`, data: { message: $l251, type: "agent_progress", prompt: $l20, agentId: $l244, agentType: $l70.agentType, isBuiltIn: $m_Hl($l70), description: $l21, resolvedModel: $l249, modelsUsed: $l250 } });
+       }
+-      let $l252 = $m_w4n({ outputFileReadable: $m_qO($l1.options.tools), ownerCanContinueAgents: $l179.callerCanContinueAgents, agentId: $l243, ownerAgentId: $l178, parentAgentId: $l185, spawnDepth: $l152, description: $l21, prompt: $l20, model: $l143, selectedAgent: $l70, taskRegistry: $l30, parentAbortController: $l1.abortController, toolUseId: $l1.toolUseId, ...$m_BAr($l99, $l104), isDirectCall: !$l1.innerCall && $l1.hookCaller === void 0, cwd: $l204, spawnedSubagent: $l227, ...$l244 && { launchedWithDefaults: $l234 } }), { taskId: $l253, cancelAutoBackground: $l254, abortController: $l255, detachParentAbortRelay: $l256 } = $l252;
+-      if ($l182) await $l229($m_W1n({ observedKey: $l243, observedTaskId: $l243, observedName: $l9 ?? $l70.agentType, observedAgentType: $l70.agentType, config: $l182, ...$l183 }));
+-      let $l257 = { moved: false };
++      let $l253 = $m_w4n({ outputFileReadable: $m_qO($l1.options.tools), ownerCanContinueAgents: $l179.callerCanContinueAgents, agentId: $l244, ownerAgentId: $l178, parentAgentId: $l185, spawnDepth: $l152, description: $l21, prompt: $l20, model: $l143, selectedAgent: $l70, taskRegistry: $l30, parentAbortController: $l1.abortController, toolUseId: $l1.toolUseId, ...$m_BAr($l99, $l104), isDirectCall: !$l1.innerCall && $l1.hookCaller === void 0, cwd: $l204, spawnedSubagent: $l227, ...$l245 && { launchedWithDefaults: $l234, launchModel: $l235 } }), { taskId: $l254, cancelAutoBackground: $l255, abortController: $l256, detachParentAbortRelay: $l257 } = $l253;
++      if ($l182) await $l229($m_W1n({ observedKey: $l244, observedTaskId: $l244, observedName: $l9 ?? $l70.agentType, observedAgentType: $l70.agentType, config: $l182, ...$l183 }));
++      let $l258 = { moved: false };
+       $m_g("subagent_launch");
+-      let $l258 = [], $l259 = $l1.options.forwardSubagentText, $l260, $l261 = false, $l262 = ($l263) => {
+-        if ($l257.moved) return;
+-        if ($l263.type === "query_model_change") {
+-          $l248 = $l263.toModel, $l249 = $m_eBn($l249, $l263.toModel);
++      let $l259 = [], $l260 = $l1.options.forwardSubagentText, $l261, $l262 = false, $l263 = ($l264) => {
++        if ($l258.moved) return;
++        if ($l264.type === "query_model_change") {
++          $l249 = $l264.toModel, $l250 = $m_eBn($l250, $l264.toModel);
+           return;
+         }
+-        if ($l263.type === "spinner_mode") return;
+-        if ($l263.type !== "api_metrics" && $l263.type !== "set_in_progress_tool_use_ids") $l258.push($l263);
++        if ($l264.type === "spinner_mode") return;
++        if ($l264.type !== "api_metrics" && $l264.type !== "set_in_progress_tool_use_ids") $l259.push($l264);
+         if (!$l4) return;
+-        if ($l260 !== void 0 && !($l263.type === "system" && $l263.subtype === "api_error")) $l260 = void 0, $l4({ type: "progress", toolUseID: `agent_${$l3.message.id}`, data: { type: "agent_api_retry", resolved: true, agentId: $l243, agentType: $l70.agentType } });
+-        if ($l263.type === "api_metrics") {
+-          $l4($l263);
++        if ($l261 !== void 0 && !($l264.type === "system" && $l264.subtype === "api_error")) $l261 = void 0, $l4({ type: "progress", toolUseID: `agent_${$l3.message.id}`, data: { type: "agent_api_retry", resolved: true, agentId: $l244, agentType: $l70.agentType } });
++        if ($l264.type === "api_metrics") {
++          $l4($l264);
+           return;
+         }
+-        if ($l263.type === "set_in_progress_tool_use_ids") return;
+-        if ($l263.type === "progress" && ($l263.data.type === "bash_progress" || $l263.data.type === "powershell_progress")) $l4({ type: "progress", toolUseID: $l263.toolUseID, data: $l263.data });
+-        if ($l263.type === "system" && $l263.subtype === "api_error") {
+-          let $l264 = $m_sqn($l263.error), $l265 = `${$l263.source ?? "request_retry"}:${$l263.retryAttempt}:${$l263.maxRetries}:${$l264}`;
+-          if ($l265 !== $l260) $l260 = $l265, $l4({ type: "progress", toolUseID: `agent_${$l3.message.id}`, data: { type: "agent_api_retry", agentId: $l243, agentType: $l70.agentType, attempt: $l263.retryAttempt, maxRetries: $l263.maxRetries, retryDelayMs: $l263.retryInMs, errorStatus: $l263.error.status, errorCategory: $l264 } });
++        if ($l264.type === "set_in_progress_tool_use_ids") return;
++        if ($l264.type === "progress" && ($l264.data.type === "bash_progress" || $l264.data.type === "powershell_progress")) $l4({ type: "progress", toolUseID: $l264.toolUseID, data: $l264.data });
++        if ($l264.type === "system" && $l264.subtype === "api_error") {
++          let $l265 = $m_sqn($l264.error), $l266 = `${$l264.source ?? "request_retry"}:${$l264.retryAttempt}:${$l264.maxRetries}:${$l265}`;
++          if ($l266 !== $l261) $l261 = $l266, $l4({ type: "progress", toolUseID: `agent_${$l3.message.id}`, data: { type: "agent_api_retry", agentId: $l244, agentType: $l70.agentType, attempt: $l264.retryAttempt, maxRetries: $l264.maxRetries, retryDelayMs: $l264.retryInMs, errorStatus: $l264.error.status, errorCategory: $l265 } });
+           return;
+         }
+-        if ($m_xne($l263)) {
+-          if ($m__je($l1, $l263)) $l4($m_YUn($l263));
++        if ($m_xne($l264)) {
++          if ($m__je($l1, $l264)) $l4($m_YUn($l264));
+           return;
+         }
+-        if ($l263.type !== "assistant" && $l263.type !== "user") return;
+-        if ($l263.type === "user" && $l263.isMeta && !$l261) return;
+-        if ($l263.type === "assistant") $l261 = true;
+-        if ($l263.type === "assistant") {
+-          let $l266 = $m_YVn($l263);
+-          if ($l266 > 0) $l4({ type: "response_length", op: "add", delta: $l266 });
++        if ($l264.type !== "assistant" && $l264.type !== "user") return;
++        if ($l264.type === "user" && $l264.isMeta && !$l262) return;
++        if ($l264.type === "assistant") $l262 = true;
++        if ($l264.type === "assistant") {
++          let $l267 = $m_YVn($l264);
++          if ($l267 > 0) $l4({ type: "response_length", op: "add", delta: $l267 });
+         }
+-        for (let $l267 of $m_km([$l263])) {
+-          let $l268 = $l267.message.content[0];
+-          if (!$l259 && $l268.type !== "tool_use" && $l268.type !== "tool_result") continue;
+-          $l4({ type: "progress", toolUseID: `agent_${$l3.message.id}`, data: { message: $l267, type: "agent_progress", prompt: "", agentId: $l243, agentType: $l70.agentType, isBuiltIn: $m_Hl($l70), description: $l21, resolvedModel: $l248, modelsUsed: $l249 } });
++        for (let $l268 of $m_km([$l264])) {
++          let $l269 = $l268.message.content[0];
++          if (!$l260 && $l269.type !== "tool_use" && $l269.type !== "tool_result") continue;
++          $l4({ type: "progress", toolUseID: `agent_${$l3.message.id}`, data: { message: $l268, type: "agent_progress", prompt: "", agentId: $l244, agentType: $l70.agentType, isBuiltIn: $m_Hl($l70), description: $l21, resolvedModel: $l249, modelsUsed: $l250 } });
+         }
+-      }, $l269 = $l98 ? void 0 : setTimeout(($l270) => {
+-        if ($l270.toolUseId) $l270.emitToolProgress?.({ kind: "background_hint", toolUseId: $l270.toolUseId });
+-      }, $m_xo, $l1), $l271 = {}, $l272 = async () => ($l271 = await $l48(), $l271);
+-      $l133?.started({ agentId: $l243, model: $l143 }), $l5?.mark("model");
+-      let $l273 = $m_Pne({ taskId: $l253, abortController: $l255, makeStream: ($l274, $l275, $l276) => $m_Tx({ ...$l197, ...$l244 && { launchedWithDefaults: $l234 }, session: $l205, override: { ...$l197.override, agentId: $l243, agentContext: $l245, abortController: $l255 }, onCacheSafeParams: $l274, onQueryProgress: $l275, onStreamTokenEstimate: $l276 }), metadata: $l179, description: $l21, toolUseContext: $l1, taskRegistry: $l30, agentIdForCleanup: $l243, reviewTools: $l196, enableSummarization: $m_mve(), getWorktreeResult: $l272, onMessage: $l262, shouldNotifyOwner: () => $l257.moved, onRunSettled: $l225 });
++      }, $l270 = $l98 ? void 0 : setTimeout(($l271) => {
++        if ($l271.toolUseId) $l271.emitToolProgress?.({ kind: "background_hint", toolUseId: $l271.toolUseId });
++      }, $m_xo, $l1), $l272 = {}, $l273 = async () => ($l272 = await $l48(), $l272);
++      $l133?.started({ agentId: $l244, model: $l143 }), $l5?.mark("model");
++      let $l274 = $m_Pne({ taskId: $l254, abortController: $l256, makeStream: ($l275, $l276, $l277) => $m_Tx({ ...$l197, ...$l245 && { launchedWithDefaults: $l234 }, session: $l205, override: { ...$l197.override, agentId: $l244, agentContext: $l246, abortController: $l256 }, onCacheSafeParams: $l275, onQueryProgress: $l276, onStreamTokenEstimate: $l277 }), metadata: $l179, description: $l21, toolUseContext: $l1, taskRegistry: $l30, agentIdForCleanup: $l244, reviewTools: $l196, enableSummarization: $m_mve(), getWorktreeResult: $l273, onMessage: $l263, shouldNotifyOwner: () => $l258.moved, onRunSettled: $l225 });
+       $l228();
+-      let $l277, $l278;
++      let $l278, $l279;
+       try {
+-        let $l279;
++        let $l280;
+         try {
+-          $l279 = await $m_jAr($l273, $l252.backgroundSignal, $l104);
+-        } catch ($l280) {
+-          if ($l279 = "done", $l280 instanceof $m_qe) {
+-            let $l281 = $m_xi($l255.signal.reason) === "permission-stop";
+-            if ($l281) $l278 = $m_d($l280);
+-            if ($m_a("tengu_agent_tool_terminated", { agent_type: $l148, model: $m_wt($l179.resolvedAgentModel), final_model: $m_wt($l249.at(-1) ?? $l179.resolvedAgentModel), model_swapped: $l249.length > 1, duration_ms: Date.now() - $l179.startTime, is_async: false, is_built_in_agent: $l179.isBuiltInAgent, agent_depth: $l179.agentDepth, reason: $l281 ? $m_b("permission_stop_sync") : $m_b("user_cancel_sync") }), !$l281) $l227.killed("user");
+-            if (!($l255.signal.aborted && !$l1.abortController.signal.aborted)) throw $l280;
+-            $l277 = $m_N($l280);
+-          } else $m_t(`Sync agent error: ${$m_d($l280)}`, { level: "error" }), $l277 = $m_N($l280);
++          $l280 = await $m_jAr($l274, $l253.backgroundSignal, $l104);
++        } catch ($l281) {
++          if ($l280 = "done", $l281 instanceof $m_qe) {
++            let $l282 = $m_xi($l256.signal.reason) === "permission-stop";
++            if ($l282) $l279 = $m_d($l281);
++            if ($m_a("tengu_agent_tool_terminated", { agent_type: $l148, model: $m_wt($l179.resolvedAgentModel), final_model: $m_wt($l250.at(-1) ?? $l179.resolvedAgentModel), model_swapped: $l250.length > 1, duration_ms: Date.now() - $l179.startTime, is_async: false, is_built_in_agent: $l179.isBuiltInAgent, agent_depth: $l179.agentDepth, reason: $l282 ? $m_b("permission_stop_sync") : $m_b("user_cancel_sync") }), !$l282) $l227.killed("user");
++            if (!($l256.signal.aborted && !$l1.abortController.signal.aborted)) throw $l281;
++            $l278 = $m_N($l281);
++          } else $m_t(`Sync agent error: ${$m_d($l281)}`, { level: "error" }), $l278 = $m_N($l281);
+         }
+-        if (!$l277 && $m_WAr({ outcome: $l279, registration: $l252, wait: $l257, ownerAgentId: $l178, taskRegistry: $l30, sessionScratch: $l1.session.sessionScratch, agentTask: { armWorkerCheckinForBackgroundedAgent: $m_v4n, backgroundAgentTask: $m_sAe, hasAgentChildKeepalive: $m_sce } })) {
+-          let $l282 = !$m_dE($l70) && $m_qO($l1.options.tools);
+-          return { data: { isAsync: true, status: "async_launched", agentId: $l253, description: $l21, resolvedModel: $l248, ...$l249.length > 1 && { modelsUsed: [...$l249] }, prompt: $l20, outputFile: $l252.outputFile ?? "", canReadOutputFile: $l282, canContinueAgent: $m_Ev($l1.options.tools), ...$l194 && { sharesCwd: true } } };
++        if (!$l278 && $m_WAr({ outcome: $l280, registration: $l253, wait: $l258, ownerAgentId: $l178, taskRegistry: $l30, sessionScratch: $l1.session.sessionScratch, agentTask: { armWorkerCheckinForBackgroundedAgent: $m_v4n, backgroundAgentTask: $m_sAe, hasAgentChildKeepalive: $m_sce } })) {
++          let $l283 = !$m_dE($l70) && $m_qO($l1.options.tools);
++          return { data: { isAsync: true, status: "async_launched", agentId: $l254, description: $l21, resolvedModel: $l249, ...$l250.length > 1 && { modelsUsed: [...$l250] }, prompt: $l20, outputFile: $l253.outputFile ?? "", canReadOutputFile: $l283, canContinueAgent: $m_Ev($l1.options.tools), ...$l194 && { sharesCwd: true } } };
+         }
+-        let $l283 = $l258.findLast(($l284) => $l284.type !== "system" && $l284.type !== "progress");
+-        if ($l283 && $m_nH($l283)) throw $m_a("tengu_agent_tool_terminated", { agent_type: $l148, model: $m_wt($l179.resolvedAgentModel), final_model: $m_wt($l249.at(-1) ?? $l179.resolvedAgentModel), model_swapped: $l249.length > 1, duration_ms: Date.now() - $l179.startTime, is_async: false, is_built_in_agent: $l179.isBuiltInAgent, agent_depth: $l179.agentDepth, reason: $m_b("user_cancel_sync") }), $l227.cancelledAfterCompletion(), new $m_qe();
+-        let $l285, $l286 = $l258;
+-        if ($l277) {
+-          let $l287;
++        let $l284 = $l259.findLast(($l285) => $l285.type !== "system" && $l285.type !== "progress");
++        if ($l284 && $m_nH($l284)) throw $m_a("tengu_agent_tool_terminated", { agent_type: $l148, model: $m_wt($l179.resolvedAgentModel), final_model: $m_wt($l250.at(-1) ?? $l179.resolvedAgentModel), model_swapped: $l250.length > 1, duration_ms: Date.now() - $l179.startTime, is_async: false, is_built_in_agent: $l179.isBuiltInAgent, agent_depth: $l179.agentDepth, reason: $m_b("user_cancel_sync") }), $l227.cancelledAfterCompletion(), new $m_qe();
++        let $l286, $l287 = $l259;
++        if ($l278) {
++          let $l288;
+           try {
+-            $l287 = $m_pCr($l277, $l258);
+-          } catch ($l288) {
+-            throw $l227.failed(), $l288;
++            $l288 = $m_pCr($l278, $l259);
++          } catch ($l289) {
++            throw $l227.failed(), $l289;
+           }
+-          $l285 = $l287.cutoffNote ?? $l278, $l286 = $l287.history, $m_t(`Sync agent recovering from error with ${$l286.length} messages`);
++          $l286 = $l288.cutoffNote ?? $l279, $l287 = $l288.history, $m_t(`Sync agent recovering from error with ${$l287.length} messages`);
+         }
+-        let $l289 = await $m_mCr($m_ktn($l286, $l243, { ...$l179, modelsUsed: $l249 }, { suppressTelemetry: !$l277, handback: $m_$be($l30.get($l243), $l243) }), { agentId: $l243, agentMessages: $l258, agentType: $l148, child: $l38 ? "fork" : "agent", cutoffNote: $l285, tools: $l196(), toolUseContext: $l1 });
+-        return { data: { status: "completed", prompt: $l20, ...$l289, ...$l271, canContinueAgent: $m_Ev($l1.options.tools) } };
++        let $l290 = await $m_mCr($m_ktn($l287, $l244, { ...$l179, modelsUsed: $l250 }, { suppressTelemetry: !$l278, handback: $m_$be($l30.get($l244), $l244) }), { agentId: $l244, agentMessages: $l259, agentType: $l148, child: $l38 ? "fork" : "agent", cutoffNote: $l286, tools: $l196(), toolUseContext: $l1 });
++        return { data: { status: "completed", prompt: $l20, ...$l290, ...$l272, canContinueAgent: $m_Ev($l1.options.tools) } };
+       } finally {
+-        if ($l269) clearTimeout($l269);
++        if ($l270) clearTimeout($l270);
+         if ($l1.toolUseId) $l1.emitToolProgress?.({ kind: "clear", toolUseId: $l1.toolUseId });
+-        if ($l254?.(), $l256(), !$l257.moved) {
+-          $m_Nbe($l253);
+-          let $l290 = $l30.get($l253), $l291 = $m_wn($l290) ? $l290.progress : void 0;
+-          $m_z1s($l253, $l30), $m_ca($l253, $l290?.status === "failed" ? "failed" : $l290?.status === "killed" ? "stopped" : "completed", { toolUseId: $l1.toolUseId, summary: $l21, usage: { total_tokens: $l291?.tokenCount ?? 0, tool_uses: $l291?.toolUseCount ?? 0, duration_ms: Date.now() - $l247 } });
++        if ($l255?.(), $l257(), !$l258.moved) {
++          $m_Nbe($l254);
++          let $l291 = $l30.get($l254), $l292 = $m_wn($l291) ? $l291.progress : void 0;
++          $m_z1s($l254, $l30), $m_ca($l254, $l291?.status === "failed" ? "failed" : $l291?.status === "killed" ? "stopped" : "completed", { toolUseId: $l1.toolUseId, summary: $l21, usage: { total_tokens: $l292?.tokenCount ?? 0, tool_uses: $l292?.toolUseCount ?? 0, duration_ms: Date.now() - $l248 } });
+         }
+       }
+     }));
+-    return $l229($l246);
++    return $l229($l247);
+   }
+ }
+ ;

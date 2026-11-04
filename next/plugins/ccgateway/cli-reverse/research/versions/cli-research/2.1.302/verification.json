@@ -1,0 +1,414 @@
+{
+  "version": "2.1.302",
+  "patch": "ccgateway-v7-request-modes",
+  "date": "2026-10-18",
+  "platform": "linux-x64-glibc",
+  "binarySHA256": "b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8",
+  "archive": {
+    "file": "claude-linux-x64-2.1.302-ccgateway-v7.tar.gz",
+    "bytes": 61956125,
+    "sha256": "7790b0598d2fa3f1ba458f16eb001f152eb6fd4971a29044a66b5f38f5c8ac03",
+    "contentsVerified": true
+  },
+  "sourceModulesVerified": 15,
+  "tests": {
+    "supportUnit": {
+      "passed": 24
+    },
+    "nativeRequestScenarios": {
+      "passed": 11,
+      "sourceSHA256": "bc3787a21db2c25bb3549da6298de509171f8d22f3f218cb13c9f26c3c24999f"
+    },
+    "nativeModsScenarios": {
+      "passed": 12,
+      "records": [
+        {
+          "scenario": "normal",
+          "sourceSHA256": "0cd80f76577581de47ad7da3f8bfb95c9e731ccce8df47f115b192c4b9537baf",
+          "sourceBytes": 158604
+        },
+        {
+          "scenario": "denied",
+          "sourceSHA256": "01a148e161f226e66604099168e03ba82264169f97e7e328d571013a2adf7c5c",
+          "sourceBytes": 171016
+        },
+        {
+          "scenario": "disabled",
+          "sourceSHA256": "9c7e1bb6a03f32716294aecf5b685ee456408774e0cdf489b0fb654e6da5c827",
+          "sourceBytes": 7052
+        },
+        {
+          "scenario": "unhandled",
+          "sourceSHA256": "e241ca53f72c9a94f84e9ccefb25b38fb95bf17e6b81827e8f5a74851f0f93a5",
+          "sourceBytes": 157249
+        },
+        {
+          "scenario": "reregister",
+          "sourceSHA256": "ef9d2dcc7726e26cd31c3d9c186075d122a6b71a63ba633f55f5645fe141b236",
+          "sourceBytes": 158564
+        },
+        {
+          "scenario": "mcp",
+          "sourceSHA256": "69cd117675b745945829dca112e5d367d8375dd4d4f74878431c96ddca6e435c",
+          "sourceBytes": 160185
+        },
+        {
+          "scenario": "control",
+          "sourceSHA256": "bd56a256f73c4d7042cd0c3a70d4e14512cf66b946f8d21f3cbebacadd59f8a5",
+          "sourceBytes": 179736
+        },
+        {
+          "scenario": "original",
+          "sourceSHA256": "2f1fdc6e0a18bc6e9ce62afe30fefa5473b3f4c3af9286e1eef286c00d3d8d0b",
+          "sourceBytes": 183446
+        },
+        {
+          "scenario": "original-denied",
+          "sourceSHA256": "912c8f89c57eb54594229d55e9eb857ad3c60f8130adcdbb6f359c782deac72c",
+          "sourceBytes": 151775
+        },
+        {
+          "scenario": "unknown",
+          "sourceSHA256": "f858fbc9c82628b497c2987246a2050886a3c73b0b24ca725a166a867cfc3d21",
+          "sourceBytes": 180184
+        },
+        {
+          "scenario": "hooks-update",
+          "sourceSHA256": "1ed616ac8f2e04aa74e0ef98c83a40404c47e0a343e1cc2df0c967cf43dcb975",
+          "sourceBytes": 158770
+        },
+        {
+          "scenario": "hooks-deny",
+          "sourceSHA256": "64bd2cfa3826985310203937ab8925c70437c8421880591b1ca2034df1ef0b70",
+          "sourceBytes": 157954
+        }
+      ]
+    },
+    "controllerUnit": {
+      "passed": 46
+    },
+    "webUnit": {
+      "passed": 53
+    },
+    "webTypecheck": "passed",
+    "workerConfigServerRuntimeTests": "passed",
+    "engineTargetedTestsAndBuild": "passed",
+    "featureContractTests": "passed",
+    "coreCCGatewayPackageLinux": {
+      "status": "passed",
+      "topLevelPasses": 121,
+      "sourceSHA256": "309f3ccceeda15038fcdc937dd0964bf47b5ea6d466872dd72f7ccb0596d2404"
+    },
+    "nativeRequestRegressions": {
+      "request-modes-result.json": {
+        "passed": 9,
+        "scenarios": [
+          "direct",
+          "conflict",
+          "build-reject-http-body",
+          "build-basic",
+          "build-mixed",
+          "build-stream",
+          "build-error",
+          "direct-blocked-output",
+          "build-blocked-output"
+        ],
+        "sourceSHA256": "4196985c2d964b78a6505c06c7cb7fc6ff4e7902e2c085212d419622afb09257"
+      },
+      "request-regression-result.json": {
+        "passed": 11,
+        "scenarios": [
+          "json",
+          "file",
+          "sse",
+          "error",
+          "websearch",
+          "timeout",
+          "invalid-json",
+          "auth-header",
+          "help",
+          "interrupt",
+          "exact-body"
+        ],
+        "sourceSHA256": "b1e3f1bcb16413563064271421df1b52f0f57a668322fe41ee70638fc9da1883"
+      }
+    }
+  },
+  "realAPI": [
+    {
+      "container": "ccg-302-build-test",
+      "mode": "build",
+      "port": "32777",
+      "status": 200,
+      "answer": "法国的首都是**巴黎**。",
+      "correct": true,
+      "modelRequests": 1,
+      "cliVersion": "2.1.302",
+      "cliSHA256": "b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8",
+      "patch": "ccgateway-v7-request-modes",
+      "authProfile": "api-key",
+      "production21Unchanged": true,
+      "bodyByteIdentical": false,
+      "bodyJSONIdentical": false,
+      "authCheck": {
+        "api_key_matches_expected": true,
+        "authorization_present": false
+      },
+      "betas": "context-management-2025-06-27",
+      "captureFile": "outgoing-226.body"
+    },
+    {
+      "container": "ccg-302-direct-test",
+      "mode": "direct",
+      "port": "32778",
+      "status": 200,
+      "answer": "法国的首都是**巴黎**。",
+      "correct": true,
+      "modelRequests": 1,
+      "cliVersion": "2.1.302",
+      "cliSHA256": "b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8",
+      "patch": "ccgateway-v7-request-modes",
+      "authProfile": "api-key",
+      "production21Unchanged": true,
+      "bodyByteIdentical": true,
+      "bodyJSONIdentical": true,
+      "authCheck": {
+        "api_key_matches_expected": true,
+        "authorization_present": false
+      },
+      "betas": "context-management-2025-06-27",
+      "captureFile": "outgoing-227.body"
+    }
+  ],
+  "officialWindowsClient": [
+    {
+      "mode": "build",
+      "cliVersion": "2.1.302",
+      "model": "claude-haiku-4-5-20251001",
+      "result": "success",
+      "seconds": 18,
+      "tools": {
+        "Read": 1
+      },
+      "toolErrors": 0,
+      "workspaceChangedFiles": [],
+      "transport": {
+        "modelRequests": 2,
+        "toolResultRequests": 1,
+        "allInputsMatched": true,
+        "allBodiesJSONIdentical": false,
+        "allBodiesByteIdentical": false,
+        "onlyEquivalentToolResultTextWrapping": true,
+        "allBetasPreserved": true,
+        "allAuthCorrect": true,
+        "allIdentityHeadersAbsent": true,
+        "rows": [
+          {
+            "index": 1,
+            "status": 200,
+            "workerInputMatchesLocal": true,
+            "matchingUpstreamBodies": 1,
+            "hasToolResult": false,
+            "tools": [
+              "Read"
+            ],
+            "bodyJSONIdentical": true,
+            "bodyByteIdentical": false,
+            "authCheck": {
+              "api_key_matches_expected": true,
+              "authorization_present": false
+            },
+            "betasPreserved": true,
+            "identityHeadersAbsent": true,
+            "upstreamStatus": 200,
+            "differences": [],
+            "captureFile": "outgoing-228.body",
+            "attachments": 6
+          },
+          {
+            "index": 2,
+            "status": 200,
+            "workerInputMatchesLocal": true,
+            "matchingUpstreamBodies": 1,
+            "hasToolResult": true,
+            "tools": [
+              "Read"
+            ],
+            "bodyJSONIdentical": false,
+            "bodyByteIdentical": false,
+            "authCheck": {
+              "api_key_matches_expected": true,
+              "authorization_present": false
+            },
+            "betasPreserved": true,
+            "identityHeadersAbsent": true,
+            "upstreamStatus": 200,
+            "differences": [
+              {
+                "path": "/messages/2/content/0/content",
+                "change": "type",
+                "before": "str",
+                "after": "list",
+                "textIdentical": true,
+                "textBlocks": 1
+              }
+            ],
+            "captureFile": "outgoing-229.body",
+            "attachments": 8
+          }
+        ]
+      },
+      "sourceSHA256": "316e6f2751cf4618a8ced1971dc6abf2636c19e052cda76b9e056cd38e0dff80"
+    },
+    {
+      "mode": "direct",
+      "cliVersion": "2.1.302",
+      "model": "claude-haiku-4-5-20251001",
+      "result": "success",
+      "seconds": 18,
+      "tools": {
+        "Read": 1
+      },
+      "toolErrors": 0,
+      "workspaceChangedFiles": [],
+      "transport": {
+        "modelRequests": 2,
+        "toolResultRequests": 1,
+        "allInputsMatched": true,
+        "allBodiesJSONIdentical": true,
+        "allBodiesByteIdentical": true,
+        "onlyEquivalentToolResultTextWrapping": true,
+        "allBetasPreserved": true,
+        "allAuthCorrect": true,
+        "allIdentityHeadersAbsent": true,
+        "rows": [
+          {
+            "index": 1,
+            "status": 200,
+            "workerInputMatchesLocal": true,
+            "matchingUpstreamBodies": 1,
+            "hasToolResult": false,
+            "tools": [
+              "Read"
+            ],
+            "bodyJSONIdentical": true,
+            "bodyByteIdentical": true,
+            "authCheck": {
+              "api_key_matches_expected": true,
+              "authorization_present": false
+            },
+            "betasPreserved": true,
+            "identityHeadersAbsent": true,
+            "upstreamStatus": 200,
+            "differences": [],
+            "captureFile": "outgoing-230.body"
+          },
+          {
+            "index": 2,
+            "status": 200,
+            "workerInputMatchesLocal": true,
+            "matchingUpstreamBodies": 1,
+            "hasToolResult": true,
+            "tools": [
+              "Read"
+            ],
+            "bodyJSONIdentical": true,
+            "bodyByteIdentical": true,
+            "authCheck": {
+              "api_key_matches_expected": true,
+              "authorization_present": false
+            },
+            "betasPreserved": true,
+            "identityHeadersAbsent": true,
+            "upstreamStatus": 200,
+            "differences": [],
+            "captureFile": "outgoing-231.body"
+          }
+        ]
+      },
+      "sourceSHA256": "38ba69f1c4b33a46237efbd773cff3e4e60b10e976206c6497a94b97bd48f455"
+    }
+  ],
+  "management": [
+    {
+      "mode": "build",
+      "port": "32777",
+      "autoUpdate": false,
+      "pinnedVersion": "2.1.302",
+      "enableAutoUpdateStatus": 409,
+      "beginInstallStatus": 409,
+      "mismatchedVersionStatus": 409,
+      "mismatchModelRequests": 0,
+      "executionModes": [
+        "request_build"
+      ]
+    },
+    {
+      "mode": "direct",
+      "port": "32778",
+      "autoUpdate": false,
+      "pinnedVersion": "2.1.302",
+      "enableAutoUpdateStatus": 409,
+      "beginInstallStatus": 409,
+      "mismatchedVersionStatus": 409,
+      "mismatchModelRequests": 0,
+      "executionModes": [
+        "request_direct"
+      ]
+    }
+  ],
+  "deployment": {
+    "workers": [
+      {
+        "container": "ccg-302-build-test",
+        "image": "ccgateway-worker:302-v7-final",
+        "imageID": "sha256:94be7e2af4f66816464756fb9e93d4c78ae3492adb05cfa89fef45f1a7cdd63e",
+        "port": "32777",
+        "version": "2.1.302",
+        "cliSHA256": "b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8",
+        "workerSHA256": "3f5ee8e9b6abcf358e95ec579b515c5687bc180e31adedc343d59b667756fe8d",
+        "healthy": true
+      },
+      {
+        "container": "ccg-302-direct-test",
+        "image": "ccgateway-worker:302-v7-final",
+        "imageID": "sha256:94be7e2af4f66816464756fb9e93d4c78ae3492adb05cfa89fef45f1a7cdd63e",
+        "port": "32778",
+        "version": "2.1.302",
+        "cliSHA256": "b14a537bbaa1218f23ba7347151f52fb29654af1101ed4b935507b6beb2dc9d8",
+        "workerSHA256": "3f5ee8e9b6abcf358e95ec579b515c5687bc180e31adedc343d59b667756fe8d",
+        "healthy": true
+      }
+    ],
+    "controller": "ccgateway-controller:302-v7-final",
+    "stoppedFailedNetworkTestContainers": [
+      "ccg302-d8063aa2ecfd6090a-egress",
+      "ccg302-d8063aa2ecfd6090a-app",
+      "ccg302dbg-d3020000000000001-egress",
+      "ccg302dbg-d3020000000000001-app",
+      "ccg302-de8c5b8cb60b7bae5-egress",
+      "ccg302-de8c5b8cb60b7bae5-app"
+    ],
+    "original21StartedAt": "2026-10-15T21:02:57.675869152Z",
+    "original21Unchanged": true,
+    "productionControllerUnchanged": true,
+    "networkActivationPassed": false
+  },
+  "productionDeploymentCompleted": false,
+  "blockers": [
+    {
+      "scope": "Controller-created account transparent egress on OVH",
+      "status": "not_accepted",
+      "evidence": "Account containers start with correct CLI profile, but _activate network probe fails. DOCKER-INTERNAL DROP counters increase for external destinations on test internal bridges; domain and IP HTTPS probes time out. No host firewall bypass or fake-ready state was used.",
+      "workaroundUsedForSeparateAPITests": "Existing isolated capture network; not evidence of transparent-egress success."
+    }
+  ],
+  "limitations": [
+    "API-key Anthropic-compatible request transport only; OAuth/subscription request mode is not implemented.",
+    "Build may add native defaults and wrap text in blocks; direct is the zero-injection path.",
+    "Known mods context/ask/structured-output/resume/TUI/ToolSearch gaps are not automatically resolved by the version migration.",
+    "Windows embedded PostgreSQL failed; remote-over-SSH full test run timed out. Only the subsequent native Linux complete suite is counted as passed.",
+    "Raw model request logs and credentials are not included in this evidence.",
+    "Controller and Worker images are local test/release images; production image references and account 21 were not replaced."
+  ]
+}

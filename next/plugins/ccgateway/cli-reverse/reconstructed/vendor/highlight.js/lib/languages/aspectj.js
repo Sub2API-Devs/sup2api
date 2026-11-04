@@ -1,0 +1,223 @@
+/**
+ * highlight.js/lib/languages/aspectj.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: highlight.js@11.11.1
+ * pieces: chunk-egr0twnb.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
+
+//@ chunk-egr0twnb.js:31857-34494 cjs-fingerprint
+var require_aspectj = __commonJS(function (cjsExports, cjsModule) {
+  function aspectj(hljs) {
+    let regex = hljs.regex;
+    let KEYWORDS = [
+      "false",
+      "synchronized",
+      "int",
+      "abstract",
+      "float",
+      "private",
+      "char",
+      "boolean",
+      "static",
+      "null",
+      "if",
+      "const",
+      "for",
+      "true",
+      "while",
+      "long",
+      "throw",
+      "strictfp",
+      "finally",
+      "protected",
+      "import",
+      "native",
+      "final",
+      "return",
+      "void",
+      "enum",
+      "else",
+      "extends",
+      "implements",
+      "break",
+      "transient",
+      "new",
+      "catch",
+      "instanceof",
+      "byte",
+      "super",
+      "volatile",
+      "case",
+      "assert",
+      "short",
+      "package",
+      "default",
+      "double",
+      "public",
+      "try",
+      "this",
+      "switch",
+      "continue",
+      "throws",
+      "privileged",
+      "aspectOf",
+      "adviceexecution",
+      "proceed",
+      "cflowbelow",
+      "cflow",
+      "initialization",
+      "preinitialization",
+      "staticinitialization",
+      "withincode",
+      "target",
+      "within",
+      "execution",
+      "getWithinTypeName",
+      "handler",
+      "thisJoinPoint",
+      "thisJoinPointStaticPart",
+      "thisEnclosingJoinPointStaticPart",
+      "declare",
+      "parents",
+      "warning",
+      "error",
+      "soft",
+      "precedence",
+      "thisAspectInstance",
+    ];
+    let SHORTKEYS = ["get", "set", "args", "call"];
+    return {
+      name: "AspectJ",
+      keywords: KEYWORDS,
+      illegal: /<\/|#/,
+      contains: [
+        hljs.COMMENT(/\/\*\*/, /\*\//, {
+          relevance: 0,
+          contains: [
+            {
+              begin: /\w+@/,
+              relevance: 0,
+            },
+            {
+              className: "doctag",
+              begin: /@[A-Za-z]+/,
+            },
+          ],
+        }),
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        hljs.APOS_STRING_MODE,
+        hljs.QUOTE_STRING_MODE,
+        {
+          className: "class",
+          beginKeywords: "aspect",
+          end: /[{;=]/,
+          excludeEnd: true,
+          illegal: /[:;"\[\]]/,
+          contains: [
+            {
+              beginKeywords:
+                "extends implements pertypewithin perthis pertarget percflowbelow percflow issingleton",
+            },
+            hljs.UNDERSCORE_TITLE_MODE,
+            {
+              begin: /\([^\)]*/,
+              end: /[)]+/,
+              keywords: KEYWORDS.concat(SHORTKEYS),
+              excludeEnd: false,
+            },
+          ],
+        },
+        {
+          className: "class",
+          beginKeywords: "class interface",
+          end: /[{;=]/,
+          excludeEnd: true,
+          relevance: 0,
+          keywords: "class interface",
+          illegal: /[:"\[\]]/,
+          contains: [
+            {
+              beginKeywords: "extends implements",
+            },
+            hljs.UNDERSCORE_TITLE_MODE,
+          ],
+        },
+        {
+          beginKeywords: "pointcut after before around throwing returning",
+          end: /[)]/,
+          excludeEnd: false,
+          illegal: /["\[\]]/,
+          contains: [
+            {
+              begin: regex.concat(hljs.UNDERSCORE_IDENT_RE, /\s*\(/),
+              returnBegin: true,
+              contains: [hljs.UNDERSCORE_TITLE_MODE],
+            },
+          ],
+        },
+        {
+          begin: /[:]/,
+          returnBegin: true,
+          end: /[{;]/,
+          relevance: 0,
+          excludeEnd: false,
+          keywords: KEYWORDS,
+          illegal: /["\[\]]/,
+          contains: [
+            {
+              begin: regex.concat(hljs.UNDERSCORE_IDENT_RE, /\s*\(/),
+              keywords: KEYWORDS.concat(SHORTKEYS),
+              relevance: 0,
+            },
+            hljs.QUOTE_STRING_MODE,
+          ],
+        },
+        {
+          beginKeywords: "new throw",
+          relevance: 0,
+        },
+        {
+          className: "function",
+          begin: /\w+ +\w+(\.\w+)?\s*\([^\)]*\)\s*((throws)[\w\s,]+)?[\{;]/,
+          returnBegin: true,
+          end: /[{;=]/,
+          keywords: KEYWORDS,
+          excludeEnd: true,
+          contains: [
+            {
+              begin: regex.concat(hljs.UNDERSCORE_IDENT_RE, /\s*\(/),
+              returnBegin: true,
+              relevance: 0,
+              contains: [hljs.UNDERSCORE_TITLE_MODE],
+            },
+            {
+              className: "params",
+              begin: /\(/,
+              end: /\)/,
+              relevance: 0,
+              keywords: KEYWORDS,
+              contains: [
+                hljs.APOS_STRING_MODE,
+                hljs.QUOTE_STRING_MODE,
+                hljs.C_NUMBER_MODE,
+                hljs.C_BLOCK_COMMENT_MODE,
+              ],
+            },
+            hljs.C_LINE_COMMENT_MODE,
+            hljs.C_BLOCK_COMMENT_MODE,
+          ],
+        },
+        hljs.C_NUMBER_MODE,
+        {
+          className: "meta",
+          begin: /@[A-Za-z]+/,
+        },
+      ],
+    };
+  }
+  cjsModule.exports = aspectj;
+});
+export { require_aspectj };

@@ -1,0 +1,49 @@
+/**
+ * @bufbuild/cel/dist/cjs/error.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: @bufbuild/cel@0.4.0
+ * pieces: chunk-fq0cr76a.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+
+//@ chunk-fq0cr76a.js:320419-321068 cjs-fingerprint
+var require_error = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.celError = celError;
+  cjsExports.celErrorMerge = celErrorMerge;
+  cjsExports.isCelError = isCelError;
+  var privateSymbol = Symbol.for("@bufbuild/cel/error");
+  function celError(value, exprId) {
+    if (isCelError(value)) return value;
+    if (typeof exprId === "number") exprId = BigInt(exprId);
+    if (value instanceof Error) return new _CelError(value.message, value, exprId);
+    if (typeof value === "string") return new _CelError(value, undefined, exprId);
+    return new _CelError(`${value}`, value, exprId);
+  }
+  function celErrorMerge(first, ...rest) {
+    return new _CelError(first.message, rest, first.exprId);
+  }
+  function isCelError(v) {
+    return typeof v === "object" && v !== null && privateSymbol in v;
+  }
+  class _CelError extends Error {
+    _cause;
+    _exprId;
+    [privateSymbol] = {};
+    constructor(message, _cause, _exprId) {
+      super(message);
+      this._cause = _cause;
+      this._exprId = _exprId;
+    }
+    get exprId() {
+      return this._exprId;
+    }
+    get cause() {
+      return this._cause;
+    }
+  }
+});
+export { require_error };

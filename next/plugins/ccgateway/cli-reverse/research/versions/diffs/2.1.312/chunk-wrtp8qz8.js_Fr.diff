@@ -1,0 +1,11 @@
+# chunk-wrtp8qz8.js:Fr -> chunk-zpsbh0wk.js:Rt
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-wrtp8qz8.js_Fr.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-wrtp8qz8.js_Fr.new.js"
+index a7ce1c658..74d262878 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-wrtp8qz8.js_Fr.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-wrtp8qz8.js_Fr.new.js"
+@@ -1,4 +1,4 @@
+ function SELF($l0 = $m_Fss()) {
+-  return $m_W9r({ host: $m_Xt(), id: $m__Yt() ?? $m_uie(), project: { originalCwd: $l0, projectRoot: $l0, cwd: $l0 } });
++  return $m_W9r({ host: $m_Xt(), id: $m__Yt() ?? $NEW_chunk_qq3krhsk_js_jae(), project: { originalCwd: $l0, projectRoot: $l0, cwd: $l0 } });
+ }
+ ;

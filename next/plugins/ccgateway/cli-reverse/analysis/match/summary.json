@@ -1,0 +1,12 @@
+{
+ "decls316": 81667,
+ "refDecls": 12938,
+ "stage1Fingerprint": 8031,
+ "afterCallgraph": 8778,
+ "withFile": 16331,
+ "refDeclsMatched": 7011,
+ "refFilesTouched": 1711,
+ "chunksTouched": 946,
+ "bytesAttributed": 9890685,
+ "bytesTotal": 38921647
+}

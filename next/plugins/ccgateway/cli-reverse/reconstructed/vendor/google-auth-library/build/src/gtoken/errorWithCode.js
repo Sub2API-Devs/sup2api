@@ -1,0 +1,25 @@
+/**
+ * google-auth-library/build/src/gtoken/errorWithCode.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: google-auth-library@10.6.2
+ * pieces: chunk-na3pph4p.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+
+//@ chunk-na3pph4p.js:86744-86929 cjs-fingerprint
+var require_errorWithCode = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ErrorWithCode = undefined;
+  class ErrorWithCode extends Error {
+    code;
+    constructor(message, code) {
+      super(message);
+      this.code = code;
+    }
+  }
+  cjsExports.ErrorWithCode = ErrorWithCode;
+});
+export { require_errorWithCode };

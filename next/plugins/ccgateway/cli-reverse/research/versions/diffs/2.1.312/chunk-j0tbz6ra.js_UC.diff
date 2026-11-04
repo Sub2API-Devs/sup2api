@@ -1,0 +1,290 @@
+# chunk-j0tbz6ra.js:UC -> chunk-7dmym6x9.js:Kk
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-j0tbz6ra.js_UC.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-j0tbz6ra.js_UC.new.js"
+index d4429c68c..d2e9a01eb 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-j0tbz6ra.js_UC.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-j0tbz6ra.js_UC.new.js"
+@@ -117,7 +117,7 @@ function SELF($l0, $l1 = [], $l2, $l3) {
+       if ($l122 === 0 && !$l129 && !$l132) $l130();
+       $l97 = $l127;
+       let $l139 = `${$m_iLe}${$l124}`, $l140 = $m_Lht({ type: "tool_use", id: $l139, name: $m_dg, input: {} }, $l124);
+-      $l96.set($l140.uuid, $l127), $l73.push($l140, $m_Oe({ content: [{ type: "tool_result", tool_use_id: $l139, content: $m_TSt($m_p7($l123.envelopes, $l123.remainingWakeCount), $l123.media) }], isMeta: true, uuid: $l124 })), $l89.clear(), $l90 = $l73.length;
++      $l96.set($l140.uuid, $l127), $l73.push($l140, $m_Oe({ content: [{ type: "tool_result", tool_use_id: $l139, content: $m_TSt($m_p7($l123.envelopes, $l123.remainingWakeCount, $l123.toolsUsed), $l123.media) }], isMeta: true, uuid: $l124 })), $l89.clear(), $l90 = $l73.length;
+     }
+   }
+   let $l141 = [];
+@@ -221,72 +221,78 @@ function SELF($l0, $l1 = [], $l2, $l3) {
+           }
+           $l188 = { ...$l188, origin: void 0, message: { ...$l188.message, content: $l190 } };
+         }
++        if ($l185.origin?.kind === "peer" && $l185.origin.activityObservation !== void 0) {
++          let $l202 = $NEW_chunk_7dmym6x9_js_vft(), $l203 = $l188.message.content, $l204 = typeof $l203 === "string" ? $l203 : $l203[0]?.type === "text" ? $l203[0].text : void 0, $l205 = $l204 !== void 0 && $NEW_chunk_znp0af6f_js_B4o.some(($l206) => $l204.startsWith(`${$l206}
++`));
++          if ($l202 && $l205) $l188 = { ...$l188, origin: void 0, message: { ...$l188.message, content: typeof $l203 === "string" ? $m_Bl($m_Bmn($l203)) : $l203.map(($l207) => $l207.type === "text" ? { ...$l207, text: $m_Bl($m_Bmn($l207.text)) } : $l207) } };
++          else if ($m_Lo().idleObservationFence === void 0) $l188 = { ...$l188, origin: void 0 };
++        }
+         if (!$l17()) $l188 = $m_ftt($l188);
+         else $l188 = $m_GCs($l188, $l1, $l10, $l3?.strippedToolReferenceKeys);
+-        let $l202 = $l36.get($l188.uuid);
+-        if ($l202) {
+-          let $l203 = $m_fZn($l188, $l202);
+-          if ($l203 === null) continue;
+-          $l188 = $l203;
++        let $l208 = $l36.get($l188.uuid);
++        if ($l208) {
++          let $l209 = $m_fZn($l188, $l208);
++          if ($l209 === null) continue;
++          $l188 = $l209;
+         }
+         $l188 = $m_Q5([$l188], $l43.get($l188.uuid)?.reason ?? "")[0];
+-        let $l204 = $l188.message.content;
+-        if (Array.isArray($l204) && !$l204.some(($l205) => $l205.type === "text" && $l205.text.startsWith($m_dZn)) && $m_zCs($l204)) $l188 = { ...$l188, message: { ...$l188.message, content: [...$l204, { type: "text", text: $m_dZn }] } };
++        let $l210 = $l188.message.content;
++        if (Array.isArray($l210) && !$l210.some(($l211) => $l211.type === "text" && $l211.text.startsWith($m_dZn)) && $m_zCs($l210)) $l188 = { ...$l188, message: { ...$l188.message, content: [...$l210, { type: "text", text: $m_dZn }] } };
+         if ($l9) {
+-          let $l206 = $m_Sxs($l188, $l9);
+-          if ($l206) {
+-            $l188 = $l206.cleaned;
+-            let $l207 = $l8 ? $l206.reminders.map($m_Bl) : $l206.reminders;
+-            $l75.push(...$l207), $l82.push(...$l207);
++          let $l212 = $m_Sxs($l188, $l9);
++          if ($l212) {
++            $l188 = $l212.cleaned;
++            let $l213 = $l8 ? $l212.reminders.map($m_Bl) : $l212.reminders;
++            $l75.push(...$l213), $l82.push(...$l213);
+           }
+         }
+-        let $l208 = $m_bxs($l185, $l29, $l32);
++        let $l214 = $m_bxs($l185, $l29, $l32);
+         $l188 = $m_cZn($l188);
+-        let $l209 = $m_lB($l73);
+-        if ($l209?.type === "user") $l73[$l73.length - 1] = $m_OF($l209, $l188, $l74);
++        let $l215 = $m_lB($l73);
++        if ($l215?.type === "user") $l73[$l73.length - 1] = $m_OF($l215, $l188, $l74);
+         else $l73.push($l188);
+-        if ($l208 !== void 0) {
+-          let $l210 = $m_NM($l208);
+-          if ($l7) $l75.push($l210), $l82.push($l210);
++        if ($l214 !== void 0) {
++          let $l216 = $m_NM($l214);
++          if ($l7) $l75.push($l216), $l82.push($l216);
+           else {
+-            let $l211 = $m_lB($l73), $l212 = $m_Oe({ content: $m_Bl($l210), isMeta: true });
+-            if ($l211?.type === "user") $l73[$l73.length - 1] = $m_Pht($l211, $l212, $l19(), false, $l20);
+-            else $l73.push($l212);
++            let $l217 = $m_lB($l73), $l218 = $m_Oe({ content: $m_Bl($l216), isMeta: true });
++            if ($l217?.type === "user") $l73[$l73.length - 1] = $m_Pht($l217, $l218, $l19(), false, $l20);
++            else $l73.push($l218);
+           }
+         }
+         continue;
+       }
+       case "assistant": {
+         $l116(), $l131();
+-        let $l213 = $l17(), $l214 = $m_x2s($l185.message.content, $l185.batchToolUses, $l1), $l215;
+-        for (let $l216 = 0; $l216 < $l214.length; $l216++) {
+-          let $l217 = $l214[$l216];
+-          if ($l217.type === "text" && Array.isArray($l217.citations) && $l217.citations.some(($l218) => $l218?.type !== "web_search_result_location")) $l215 ??= $l214.slice(), $l215[$l216] = { ...$l217, citations: $l217.citations.filter(($l219) => $l219?.type === "web_search_result_location") };
+-          if ($l217.type !== "tool_use") continue;
+-          $l9?.set($l217.id, $l217.name);
+-          let $l220 = $m_Rn($l1, $l217.name), $l221 = $l220?.name ?? $l217.name, $l222 = $l14 && $m_mn($l185.wireToolInputs) ? $l185.wireToolInputs : void 0, $l223 = $l222 !== void 0 && Object.hasOwn($l222, $l217.id) ? $l222[$l217.id] : void 0, $l224 = $l222 !== void 0 && $m_mn($l223) && $m_K9t($l222, $l217.id, $l223, $l217.input, $l221, $l220, $l185.wireIngestContext?.[$l217.id], $l15) ? $l221 === $m_Mn ? $m_$Vt($l223) ?? $l223 : $l223 : $m_v9t($l221, $l217.input, $l220 !== void 0 || $l12?.has($m_gc($l217.name)) === true);
+-          if ($l213 && $l224 === $l217.input && $l221 === $l217.name) continue;
+-          $l215 ??= $l214.slice(), $l215[$l216] = $l213 ? { ...$l217, name: $l221, input: $l224 } : { type: "tool_use", id: $l217.id, name: $l221, input: $l224 };
++        let $l219 = $l17(), $l220 = $m_x2s($l185.message.content, $l185.batchToolUses, $l1), $l221;
++        for (let $l222 = 0; $l222 < $l220.length; $l222++) {
++          let $l223 = $l220[$l222];
++          if ($l223.type === "text" && Array.isArray($l223.citations) && $l223.citations.some(($l224) => $l224?.type !== "web_search_result_location")) $l221 ??= $l220.slice(), $l221[$l222] = { ...$l223, citations: $l223.citations.filter(($l225) => $l225?.type === "web_search_result_location") };
++          if ($l223.type !== "tool_use") continue;
++          $l9?.set($l223.id, $l223.name);
++          let $l226 = $m_Rn($l1, $l223.name), $l227 = $l226?.name ?? $l223.name, $l228 = $l14 && $m_mn($l185.wireToolInputs) ? $l185.wireToolInputs : void 0, $l229 = $l228 !== void 0 && Object.hasOwn($l228, $l223.id) ? $l228[$l223.id] : void 0, $l230 = $l228 !== void 0 && $m_mn($l229) && $m_K9t($l228, $l223.id, $l229, $l223.input, $l227, $l226, $l185.wireIngestContext?.[$l223.id], $l15) ? $l227 === $m_Mn ? $m_$Vt($l229) ?? $l229 : $l229 : $m_v9t($l227, $l223.input, $l226 !== void 0 || $l12?.has($m_gc($l223.name)) === true);
++          if ($l219 && $l230 === $l223.input && $l227 === $l223.name) continue;
++          $l221 ??= $l220.slice(), $l221[$l222] = $l219 ? { ...$l223, name: $l227, input: $l230 } : { type: "tool_use", id: $l223.id, name: $l227, input: $l230 };
+         }
+-        let $l225 = $l215 ?? ($l214 !== $l185.message.content ? $l214 : void 0), $l226 = $l185;
+-        if ($l185.wireToolInputs !== void 0 || $l185.wireIngestContext !== void 0 || $l225 !== void 0) {
+-          let { wireToolInputs: $l227, wireIngestContext: $l228, ...$l229 } = $l185;
+-          $l226 = $l225 !== void 0 ? { ...$l229, message: { ...$l185.message, content: $l225 } } : $l229;
++        let $l231 = $l221 ?? ($l220 !== $l185.message.content ? $l220 : void 0), $l232 = $l185;
++        if ($l185.wireToolInputs !== void 0 || $l185.wireIngestContext !== void 0 || $l231 !== void 0) {
++          let { wireToolInputs: $l233, wireIngestContext: $l234, ...$l235 } = $l185;
++          $l232 = $l231 !== void 0 ? { ...$l235, message: { ...$l185.message, content: $l231 } } : $l235;
+         }
+         for (; $l90 < $l73.length; $l90++) {
+-          let $l230 = $l73[$l90];
+-          if ($l230.type === "assistant") $l89.set($l230.message.id, $l90);
+-          else if ($l230.type !== "api_system" && !$m_Yh($l230)) $l89.clear();
++          let $l236 = $l73[$l90];
++          if ($l236.type === "assistant") $l89.set($l236.message.id, $l90);
++          else if ($l236.type !== "api_system" && !$m_Yh($l236)) $l89.clear();
+         }
+-        let $l231 = $l89.get($l226.message.id), $l232 = $l231 === void 0 ? void 0 : $l73[$l231];
+-        if ($l231 !== void 0 && $l232?.type === "assistant") $l73[$l231] = $m_cxs($l232, $l226, { echoApiBlockOrder: $l3?.echoApiBlockOrder === true });
++        let $l237 = $l89.get($l232.message.id), $l238 = $l237 === void 0 ? void 0 : $l73[$l237];
++        if ($l237 !== void 0 && $l238?.type === "assistant") $l73[$l237] = $m_cxs($l238, $l232, { echoApiBlockOrder: $l3?.echoApiBlockOrder === true });
+         else {
+           $l130();
+-          let $l233 = $l226.message.content, $l234 = $l3?.echoApiBlockOrder === true && typeof $l226.apiBlockIndex === "number" ? $l233 : $m_VZn($l233);
+-          if ($l234 === $l233) $l73.push($l226);
++          let $l239 = $l232.message.content, $l240 = $l3?.echoApiBlockOrder === true && typeof $l232.apiBlockIndex === "number" ? $l239 : $m_VZn($l239);
++          if ($l240 === $l239) $l73.push($l232);
+           else {
+-            let { apiBlockIndex: $l235, apiBlockIndices: $l236, ...$l237 } = $l226;
+-            $l73.push({ ...$l237, message: { ...$l226.message, content: $l234 } });
++            let { apiBlockIndex: $l241, apiBlockIndices: $l242, ...$l243 } = $l232;
++            $l73.push({ ...$l243, message: { ...$l232.message, content: $l240 } });
+           }
+         }
+         continue;
+@@ -299,91 +305,91 @@ function SELF($l0, $l1 = [], $l2, $l3) {
+           $l179($l185.attachment, $l185.uuid);
+           continue;
+         }
+-        let $l238 = $l185.attachment.type === "batching_reminder" || $l185.attachment.type === "secondary_reminder";
+-        if ($l238 && !$l7) continue;
++        let $l244 = $l185.attachment.type === "batching_reminder" || $l185.attachment.type === "secondary_reminder";
++        if ($l244 && !$l7) continue;
+         if ($l185.attachment.type === "output_limit_note" && !($l7 && typeof $l185.attachment.model === "string" && $m_XY($l185.attachment.model, $l2))) continue;
+         if ($l84 && ($l185.attachment.type === "batching_reminder_sent" || $l185.attachment.type === "secondary_reminder_sent") && $l185.attachment.clearAt === "next_user_message") {
+-          let $l239 = $m_Mht([$m_Oe({ content: $m_Bl($l185.attachment.text), isMeta: true })]) ?? "";
+-          $l85.set($l185.attachment.type, $l239 && $l8 ? $m_Bl($l239) : $l239);
++          let $l245 = $m_Mht([$m_Oe({ content: $m_Bl($l185.attachment.text), isMeta: true })]) ?? "";
++          $l85.set($l185.attachment.type, $l245 && $l8 ? $m_Bl($l245) : $l245);
+           continue;
+         }
+-        let $l240 = $l7 && $l3?.surfaceLateToolAdditions === true && $l3.inlineToolDefinitions !== void 0 && $l185.attachment.type === "deferred_tools_delta" ? $m_aAs($l79?.get($l185.uuid), $l3.inlineToolDefinitions) : void 0, $l241 = $l7 && $l3?.surfaceLateToolAdditions === true && $l185.attachment.type === "deferred_tools_delta" && $l3.nameOnlyAnnouncements?.has($l185.uuid) !== true ? [...$m_Bi($l185.attachment.surfacedNames), ...$l240 !== void 0 ? $m_Bi($l185.attachment.replacedNames) : []].filter(($l242) => $l240?.definitions.get($l242) !== void 0 || $l3.deferredWireToolNames?.has($l242) === true) : [], $l243 = $l240 !== void 0 && $l185.attachment.type === "deferred_tools_delta" && $l3?.nameOnlyAnnouncements?.has($l185.uuid) !== true ? $m_Bi($l185.attachment.removedByBlock) : [], $l244 = $l7 && $l3?.advisorToolChanges === true && $l185.attachment.type === "advisor_tool" ? $l185.attachment.toolChange : void 0, $l245 = $m_Vht($l185.attachment), $l246 = $m_Yht($l185.attachment), $l247 = $l7 && $l185.attachment.type === "queued_command" && $l185.attachment.humanTurn === true && $l185.attachment.commandMode === "prompt" && $l185.attachment.isMeta !== true && $m_YE($l185) && !$m_joe($l185.attachment) && $l22(), $l248 = $l26.has($l185.uuid) || $l241.length > 0 || $l243.length > 0 || $l244 !== void 0, $l249 = { inHumanTurn: $l25.has($l185.uuid), surfacedToolNames: $l241 }, $l250 = $l3?.withoutAttachmentHooks ? $m_NWe($l185, $l249) : $m_reo($l185, $l249, $l248), $l251 = $l250.messages, { isKnownType: $l252, recordedRole: $l253 } = $l250, $l254 = $m_FZn($l185.attachment) ? "user" : "system", $l255 = $l253 === void 0 ? $l252 && !$m_$Zn($l185.attachment) : $l253 === "system";
+-        if ($l2 !== void 0 && $l251.length > 0 && (!$l252 || $l253 !== void 0 && $l253 !== $l254) && typeof $l185.attachment === "object" && !$m_mZn.has($l185.attachment)) $m_mZn.add($l185.attachment), $m_a("tengu_attachment_role_unknown_or_differs", { is_known_type: $l252, recorded_role: $m_c($l253 ?? "none"), should_promote: $l255, system_turns_on: $l7 });
+-        let $l256 = $l36.get($l185.uuid);
+-        if ($l256) $l251 = $l251.flatMap(($l257) => {
+-          let $l258 = $m_fZn($l257, $l256);
+-          return $l258 === null ? [] : [$l258];
++        let $l246 = $l7 && $l3?.surfaceLateToolAdditions === true && $l3.inlineToolDefinitions !== void 0 && $l185.attachment.type === "deferred_tools_delta" ? $m_aAs($l79?.get($l185.uuid), $l3.inlineToolDefinitions) : void 0, $l247 = $l7 && $l3?.surfaceLateToolAdditions === true && $l185.attachment.type === "deferred_tools_delta" && $l3.nameOnlyAnnouncements?.has($l185.uuid) !== true ? [...$m_Bi($l185.attachment.surfacedNames), ...$l246 !== void 0 ? $m_Bi($l185.attachment.replacedNames) : []].filter(($l248) => $l246?.definitions.get($l248) !== void 0 || $l3.deferredWireToolNames?.has($l248) === true) : [], $l249 = $l246 !== void 0 && $l185.attachment.type === "deferred_tools_delta" && $l3?.nameOnlyAnnouncements?.has($l185.uuid) !== true ? $m_Bi($l185.attachment.removedByBlock) : [], $l250 = $l7 && $l3?.advisorToolChanges === true && $l185.attachment.type === "advisor_tool" ? $l185.attachment.toolChange : void 0, $l251 = $m_Vht($l185.attachment), $l252 = $m_Yht($l185.attachment), $l253 = $l7 && $l185.attachment.type === "queued_command" && $l185.attachment.humanTurn === true && $l185.attachment.commandMode === "prompt" && $l185.attachment.isMeta !== true && $m_YE($l185) && !$m_joe($l185.attachment) && $l22(), $l254 = $l26.has($l185.uuid) || $l247.length > 0 || $l249.length > 0 || $l250 !== void 0, $l255 = { inHumanTurn: $l25.has($l185.uuid), surfacedToolNames: $l247 }, $l256 = $l3?.withoutAttachmentHooks ? $m_NWe($l185, $l255) : $m_reo($l185, $l255, $l254), $l257 = $l256.messages, { isKnownType: $l258, recordedRole: $l259 } = $l256, $l260 = $m_FZn($l185.attachment, $l259 === "user" ? $l2 : void 0) ? "user" : "system", $l261 = $l259 === void 0 ? $l258 && !$m_$Zn($l185.attachment) : $l259 === "system";
++        if ($l2 !== void 0 && $l257.length > 0 && (!$l258 || $l259 !== void 0 && $l259 !== $l260) && typeof $l185.attachment === "object" && !$m_mZn.has($l185.attachment)) $m_mZn.add($l185.attachment), $m_a("tengu_attachment_role_unknown_or_differs", { is_known_type: $l258, recorded_role: $m_c($l259 ?? "none"), should_promote: $l261, system_turns_on: $l7 });
++        let $l262 = $l36.get($l185.uuid);
++        if ($l262) $l257 = $l257.flatMap(($l263) => {
++          let $l264 = $m_fZn($l263, $l262);
++          return $l264 === null ? [] : [$l264];
+         });
+-        let $l259 = $l185.attachment.type === "queued_command" && $m_QAt($l185.attachment.reminderId) ? $l185.attachment.reminderId : void 0, $l260 = $l43.get($l185.uuid)?.reason ?? "";
+-        if ($l251 = $l251.map(($l261) => {
+-          let $l262 = $m_Q5([$l261], $l260)[0];
+-          if ($l259 === void 0 || !$m_uZn($l261, $l259)) return $m_cZn($l262);
+-          let $l263 = $l262.message.content;
+-          if ($l262 === $l261 || typeof $l263 === "string") return $l261;
+-          let $l264 = $l263.filter(($l265) => $l265.type !== "text" || $m_Y$e($l265.text) === $l259);
+-          return { ...$l262, message: { ...$l262.message, content: $l264 } };
+-        }), $l247) {
+-          let $l266 = [];
+-          for (let $l267 of $l251) {
+-            if ($l267.isMeta) {
+-              $l266.push($l267);
++        let $l265 = $l185.attachment.type === "queued_command" && $m_QAt($l185.attachment.reminderId) ? $l185.attachment.reminderId : void 0, $l266 = $l43.get($l185.uuid)?.reason ?? "";
++        if ($l257 = $l257.map(($l267) => {
++          let $l268 = $m_Q5([$l267], $l266)[0];
++          if ($l265 === void 0 || !$m_uZn($l267, $l265)) return $m_cZn($l268);
++          let $l269 = $l268.message.content;
++          if ($l268 === $l267 || typeof $l269 === "string") return $l267;
++          let $l270 = $l269.filter(($l271) => $l271.type !== "text" || $m_Y$e($l271.text) === $l265);
++          return { ...$l268, message: { ...$l268.message, content: $l270 } };
++        }), $l253) {
++          let $l272 = [];
++          for (let $l273 of $l257) {
++            if ($l273.isMeta) {
++              $l272.push($l273);
+               continue;
+             }
+-            let $l268 = $l267.message.content;
+-            $l141.push({ ...$l267, message: { ...$l267.message, content: typeof $l268 === "string" ? $m_qle($l268) : $l268.map(($l269) => $l269.type === "text" ? { ...$l269, text: $m_qle($l269.text) } : $l269) } });
++            let $l274 = $l273.message.content;
++            $l141.push({ ...$l273, message: { ...$l273.message, content: typeof $l274 === "string" ? $m_qle($l274) : $l274.map(($l275) => $l275.type === "text" ? { ...$l275, text: $m_qle($l275.text) } : $l275) } });
+           }
+-          if ($l266.length === 0) continue;
+-          $l251 = $l266;
++          if ($l272.length === 0) continue;
++          $l257 = $l272;
+         }
+-        if ($l7 && $l259 !== void 0) {
+-          let $l270 = [], $l271 = [];
+-          for (let $l272 of $l251) if ($m_uZn($l272, $l259)) $l270.push($l272);
+-          else $l271.push($l272);
+-          if ($l270.length > 0) {
+-            let $l273 = $m_lB($l73);
+-            if ($l273?.type === "user") $l73[$l73.length - 1] = $l270.reduce(($l274, $l275) => $m_OF($l274, $l275, $l74), $l273);
+-            else $l73.push(...$l270);
+-            if ($l271.length === 0) continue;
+-            $l251 = $l271;
++        if ($l7 && $l265 !== void 0) {
++          let $l276 = [], $l277 = [];
++          for (let $l278 of $l257) if ($m_uZn($l278, $l265) || $NEW_chunk_7dmym6x9_js_fTs($l278)) $l276.push($l278);
++          else $l277.push($l278);
++          if ($l276.length > 0) {
++            let $l279 = $m_lB($l73);
++            if ($l279?.type === "user") $l73[$l73.length - 1] = $l276.reduce(($l280, $l281) => $m_OF($l280, $l281, $l74), $l279);
++            else $l73.push(...$l276);
++            if ($l277.length === 0) continue;
++            $l257 = $l277;
+           }
+         }
+-        if ($l7 && $l255) {
+-          let $l276 = $m_Mht($l251);
+-          if ($l276 !== null) {
+-            let $l277 = $l8 ? $m_Bl($l276) : $l276;
+-            if ($l238) {
+-              $l83.push($l277), $l86.add(`${$l185.attachment.type}_sent`);
++        if ($l7 && $l261) {
++          let $l282 = $m_Mht($l257);
++          if ($l282 !== null) {
++            let $l283 = $l8 ? $m_Bl($l282) : $l282;
++            if ($l244) {
++              $l83.push($l283), $l86.add(`${$l185.attachment.type}_sent`);
+               continue;
+             }
+-            $l75.push($l277), $l87.push({ type: $l185.attachment.type, entry: $l75.length - 1 });
+-            let $l278 = { ...$l249, surfacedToolNames: [] }, $l279 = $l241.length > 0 ? $m_Mht($l3?.withoutAttachmentHooks ? $m_NWe($l185, $l278).messages : $m_Gze($l185, $l278)) ?? $l276 : $l276;
+-            $l82.push($l8 ? $m_Bl($l279) : $l279);
+-            for (let $l280 of $l243) $l77.push({ op: "remove", name: $l280, byValue: true });
+-            for (let $l281 of $l241) {
+-              let $l282 = $l240?.definitions.get($l281);
+-              if ($l282 === void 0) $l76.push($l281);
+-              else $l78.set($l281, $l282), $l77.push({ op: "add", name: $l281 });
++            $l75.push($l283), $l87.push({ type: $l185.attachment.type, entry: $l75.length - 1 });
++            let $l284 = { ...$l255, surfacedToolNames: [] }, $l285 = $l247.length > 0 ? $m_Mht($l3?.withoutAttachmentHooks ? $m_NWe($l185, $l284).messages : $m_Gze($l185, $l284)) ?? $l282 : $l282;
++            $l82.push($l8 ? $m_Bl($l285) : $l285);
++            for (let $l286 of $l249) $l77.push({ op: "remove", name: $l286, byValue: true });
++            for (let $l287 of $l247) {
++              let $l288 = $l246?.definitions.get($l287);
++              if ($l288 === void 0) $l76.push($l287);
++              else $l78.set($l287, $l288), $l77.push({ op: "add", name: $l287 });
+             }
+-            if ($l244 !== void 0) $l77.push({ op: $l244, name: $m_wDe });
++            if ($l250 !== void 0) $l77.push({ op: $l250, name: $m_wDe });
+             continue;
+           }
+         }
+-        let $l283 = $l19() && !$l245 && !$l246 ? $l251.map($m_NZn) : $l251, $l284 = $l245 || $l246 || $l7 && ($l185.attachment.type === "account_memory_recall" || $l185.attachment.type === "nested_memory" || $m_LZn($l185.attachment)), $l285 = $m_lB($l73);
+-        if ($l285?.type === "user") {
+-          $l73[$l73.length - 1] = $l283.reduce(($l286, $l287) => $l284 ? $m_OF($l286, $l287, $l74) : $m_Pht($l286, $l287, $l19(), $l7, $l20), $l285);
++        let $l289 = $l19() && !$l251 && !$l252 ? $l257.map($m_NZn) : $l257, $l290 = $l251 || $l252 || $l7 && ($l185.attachment.type === "account_memory_recall" || $l185.attachment.type === "nested_memory" || $m_LZn($l185.attachment)), $l291 = $m_lB($l73);
++        if ($l291?.type === "user") {
++          $l73[$l73.length - 1] = $l289.reduce(($l292, $l293) => $l290 ? $m_OF($l292, $l293, $l74) : $m_Pht($l292, $l293, $l19(), $l7, $l20), $l291);
+           continue;
+         }
+-        $l73.push(...$l283);
++        $l73.push(...$l289);
+         continue;
+       }
+     }
+   }
+   $l116(), $l130();
+-  let $l288 = $m_Jxs($l73, $l3?.preserveTrailingThinking), $l289 = $m_ueo($l288, $l3?.preserveTrailingThinking), $l290 = $l289.length === $l288.length ? $l289 : $m_dLe($l289), $l291 = $m_ieo($l290, $l3?.preserveTrailingThinking), $l292 = $m_leo($l291), $l293 = $m_Zxs($l292), $l294;
+-  if ($l7) $l294 = $l88 ? $m_fxs($l293, $l8) : $l293;
+-  else if ($l19()) $l294 = $m_GZn($m_dLe($l293), $l7, $l20);
+-  else $l294 = $l293;
+-  let $l295 = $l3?.echoApiBlockOrder === true ? $m_mtt($l294, $l3?.preserveTrailingThinking) : $l294, $l296 = $l5.size > 0 ? $m_nAs($l295, $l5) : $l295, $l297 = $m_qCs($l6.size > 0 ? $m_tT($l296, $l6) : $l296);
+-  return $m_P2s($m_zEt($l297), $l1);
++  let $l294 = $m_Jxs($l73, $l3?.preserveTrailingThinking), $l295 = $m_ueo($l294, $l3?.preserveTrailingThinking), $l296 = $l295.length === $l294.length ? $l295 : $m_dLe($l295), $l297 = $m_ieo($l296, $l3?.preserveTrailingThinking), $l298 = $m_leo($l297), $l299 = $m_Zxs($l298), $l300;
++  if ($l7) $l300 = $l88 ? $m_fxs($l299, $l8) : $l299;
++  else if ($l19()) $l300 = $m_GZn($m_dLe($l299), $l7, $l20);
++  else $l300 = $l299;
++  let $l301 = $l3?.echoApiBlockOrder === true ? $m_mtt($l300, $l3?.preserveTrailingThinking) : $l300, $l302 = $l5.size > 0 ? $m_nAs($l301, $l5) : $l301, $l303 = $m_qCs($l6.size > 0 ? $m_tT($l302, $l6) : $l302);
++  return $m_P2s($m_zEt($l303), $l1);
+ }
+ ;

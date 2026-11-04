@@ -1,0 +1,26 @@
+/**
+ * google-auth-library/build/src/gtoken/revokeToken.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: google-auth-library@10.6.2
+ * pieces: chunk-na3pph4p.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+
+//@ chunk-na3pph4p.js:89694-89921 cjs-fingerprint
+var require_revokeToken = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.revokeToken = revokeToken;
+  var GOOGLE_REVOKE_TOKEN_URL = "https://oauth2.googleapis.com/revoke?token=";
+  var DEFAULT_RETRY_VALUE = true;
+  async function revokeToken(accessToken, transporter) {
+    let url = GOOGLE_REVOKE_TOKEN_URL + accessToken;
+    return await transporter.request({
+      url,
+      retry: DEFAULT_RETRY_VALUE,
+    });
+  }
+});
+export { require_revokeToken };

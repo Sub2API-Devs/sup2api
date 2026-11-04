@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.316
+import{Sr}from"./chunk-f22e0a61.js";import{i}from"./chunk-jhrww53q.js";import{oke,wm}from"./chunk-7dqf31r1.js";import{Xme}from"./chunk-bfnfj4kx.js";function $ye(){let n=Sr();if(n.builtinPluginsInitialized)return;if(n.builtinPluginsInitialized=!0,Xme("cc-plugin-sec-default",()=>require("./chunk-ykab7xp3.js")),Xme("cc-plugin-agents-md",()=>require("./chunk-8jbcmznm.js")),Xme("cc-plugin-telemetry",()=>require("./chunk-4m46mxx9.js")),i.CLAUDE_CODE_ENTRYPOINT!=="local-agent"){if(Xme("cc-plugin-plugin-authoring",()=>require("./chunk-jy3v56kg.js")),Xme("cc-plugin-mods-guide",()=>require("./chunk-sc72x544.js")),!oke())Xme("cc-plugin-tips",()=>require("./chunk-0j11jfmy.js")),Xme("cc-plugin-mermaid",()=>require("./chunk-yb0ajcmt.js"))}let e=i.CLAUDE_CODE_ENTRYPOINT!=="local-agent"&&!oke();if(e||wm()==="remote")Xme("cc-plugin-responsive-mode",()=>require("./chunk-jr1te1aj.js"));if(e)Xme("cc-plugin-diff",()=>require("./chunk-wyqg6m3h.js"));if(i.CLAUDE_CODE_ENTRYPOINT!=="local-agent")Xme("cc-plugin-you-should-know",()=>require("./chunk-bss4k1z9.js"));if(e||wm()==="remote_cowork")Xme("cc-plugin-easel",()=>require("./chunk-shznzb37.js"));if(e)Xme("cc-plugin-claude-platform",()=>require("./chunk-ad0qz7kc.js")),Xme("cc-plugin-claude-test",()=>require("./chunk-ae5g0zb5.js"))}
+export{$ye};

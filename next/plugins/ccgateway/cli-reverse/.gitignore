@@ -1,0 +1,21 @@
+node_modules/
+artifacts/official/claude-linux-x64
+artifacts/tmp/
+vendor-ref/node_modules/
+analysis/scan/
+analysis/reference/
+analysis/vendor/index/
+*.log
+.rn-tmp/
+runnable/
+/build/
+nul
+reconstructed/dist/
+# official binaries of other versions (manifests are tracked); tools/extract/acquire.mjs fetches them
+artifacts/official/*/claude-linux-x64
+# restored trees and equiv pairings of other versions (regenerable, tools/versions/README.md)
+artifacts/versions/
+# capture logs migrated from sup2api are evidence, not build logs
+!research/**/*.log
+# 2.1.88 reference source, fetched by tools/fetch-references.sh (was a submodule)
+/references/claude-code-analysis/

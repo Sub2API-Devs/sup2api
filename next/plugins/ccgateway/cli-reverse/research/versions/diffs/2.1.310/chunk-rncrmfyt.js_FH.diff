@@ -1,0 +1,68 @@
+# chunk-rncrmfyt.js:FH -> chunk-j0tbz6ra.js:rH
+diff --git "a/diffs\\chunk-rncrmfyt.js_FH.old.js" "b/diffs\\chunk-rncrmfyt.js_FH.new.js"
+index 8685cae..66af46d 100644
+--- "a/diffs\\chunk-rncrmfyt.js_FH.old.js"
++++ "b/diffs\\chunk-rncrmfyt.js_FH.new.js"
+@@ -1,37 +1,37 @@
+ async function SELF($l0, $l1) {
+-  let $l2 = $m_Pe(), $l3 = $m_OYt(), $l4 = ($l5) => $m_gF($l1.querySource) ? $m__4($l5) : $l5(), $l6 = $l1.model, $l7 = $l6 !== void 0 ? $l4(() => $l3.modelConfig($l6)) : void 0, $l8 = $l4(() => $m_wte($l6)), $l9 = $l4(() => $m_lW($l8)), $l10 = $l6 !== void 0 && $l4(() => $m_w8n($l6)), $l11 = $l0 === $m_Wi && !$m_nMe() ? $l4(() => $m_I_e()) : void 0, $l12 = $m_gF($l1.querySource) ? "K:" : "", $l13 = $l9 ? "L:" : "", $l14 = $l2 === "vertex" && $l7?.eagerInputStreaming?.vertex || $l2 === "bedrock" && $l7?.eagerInputStreaming?.bedrock ? "F:" : "", $l15 = $l1.tools.some(($l16) => $m_Ct($l16, $m_Eo)) ? "S:" : "", $l17 = $l10 ? "X:" : "", $l18 = $m_Ct($l0, $m_Cn) ? $m_aa() ? "C1:" : $m_$V() ? "CL:" : "C0:" : "", $l19 = $m_Ct($l0, $m_Wd) ? $m_Bv($l1.tools) ? "A1:" : "A0:" : "", $l20 = $m_Ct($l0, $m_Xo) && $m_Ebr($l1.tools) ? "DP:" : "", $l21 = $m_Ct($l0, $m_ht) ? $m_hr() === "pro" ? "P1:" : "P0:" : "", $l22 = $m_Ct($l0, $m_ht) ? $m_Bv($l1.tools) : void 0, $l23 = $l22 === void 0 ? "" : $l22 ? "AC1:" : "AC0:", $l24 = $l9 && $l21 !== "" ? $l4(() => $m_$Dr($l8)) : void 0, $l25 = $l24 === true ? "D:" : "", $l26 = !$m_nMe() && ($m_Ct($l0, $m_ht) || $m_Ct($l0, $m_Xo) || $m_Ct($l0, $m_Qe) || $m_Ct($l0, $m_We) || $m_Ct($l0, $m_Or) || $m_Ct($l0, $m_Eo) || $m_Ct($l0, $m_Ai) || $m_Ct($l0, $m_hu)) ? $l4(() => $m_nle($l8)) : void 0, $l27 = $l26 === true ? "R:" : "", $l28 = $m_Ct($l0, $m_ri) ? $m_mae() ? "M1:" : "M0:" : "", $l29 = $m_Ct($l0, $m_ht) ? $m_GFe() ? "E1:" : "E0:" : "", $l30 = $m_Ct($l0, $m_ht) ? $m_Hbr($l1.querySource)?.whenToUse : void 0, $l31 = $l30 === void 0 ? "" : $l30 === "" ? "X0:" : "X1:", $l32 = $m_Ct($l0, $m_Va) ? $m_kt() ? "W1:" : "W0:" : "", $l33 = "", $l34 = $m_Ct($l0, $m_dn) ? require("./chunk-sxns6pgf.js").artifactCorePromptCacheKeyBit($l1.tools) : "", $l35 = $m_Ct($l0, $m_fr) ? $l1.tools.some(($l36) => $m_Ct($l36, $m_dn)) || require("./chunk-hf44x6ag.js").artifactMcpToolsReplaceBuiltIn($l1.tools) ? "WA1:" : "WA0:" : "", $l37 = $m_Ct($l0, $m_H9e) ? $l1.tools.some(($l38) => $m_Ct($l38, $m_Z1e)) ? "PS1:" : "PS0:" : "", $l39 = require("./chunk-qs6qy13x.js").inboxSurfaceCacheKeyBit($l0, $l1.tools), $l40 = $l1.withoutToolDescribeHooks ? "H:" : "", $l41 = $l1.loadedThroughToolSearch === true && $l0.isMcp === true ? "LT:" : "", $l42 = ($l1.byValueListing !== void 0 ? `V${$l1.byValueListing}:` : "") + $l40 + $l41 + $l12 + $l13 + $l14 + $l15 + $l17 + $l18 + $l19 + $l20 + $l21 + $l23 + $l25 + $l27 + $l28 + $l29 + $l31 + $l32 + $l34 + $l35 + $l37 + $l39 + ("inputJSONSchema" in $l0 && $l0.inputJSONSchema ? `${$l0.name}:${$l3.schemaKey($l0.inputJSONSchema)}` : $l0.name), $l43 = $m_PVo($l0, $l1, { cacheKey: $l42, structuredOutputs: $l10, provider: $l2, cfg: $l7, serializer: $l3 }), $l44 = $l43 ?? $m_nHe.get($l42);
+-  if (!$l44) {
+-    let $l45 = $m_nHe.stamp(), $l46 = $l24 === true ? $l4($m_v_e) : void 0, $l47 = $m_CYt($l0, { remoteToolForwarding: await $m_tVe([$l0]) });
++  let $l2 = $m_J$r(), $l3 = $m_OYt(), $l4 = ($l5) => $m_gF($l1.querySource) ? $m__4($l5) : $l5(), $l6 = $l1.model, $l7 = $l6 !== void 0 ? $l4(() => $l3.modelConfig($l6)) : void 0, $l8 = $l4(() => $m_wte($l6)), $l9 = $l4(() => $m_lW($l8)), $l10 = $l6 !== void 0 && $l4(() => $m_w8n($l6)), $l11 = $l0 === $m_Wi && !$m_nMe() ? $l4(() => $m_I_e()) : void 0, $l12 = $m_gF($l1.querySource) ? "K:" : "", $l13 = $l9 ? "L:" : "", $l14 = $l2 === "vertex" && $l7?.eagerInputStreaming?.vertex || $l2 === "bedrock" && $l7?.eagerInputStreaming?.bedrock ? "F:" : "", $l15 = $l1.tools.some(($l16) => $m_Ct($l16, $m_Eo)) ? "S:" : "", $l17 = $l10 ? "X:" : "", $l18 = $m_Ct($l0, $m_Cn) ? $m_aa() ? "C1:" : $m_$V() ? "CL:" : "C0:" : "", $l19 = $m_Ct($l0, $m_Wd) ? $m_Bv($l1.tools) ? "A1:" : "A0:" : "", $l20 = $m_Ct($l0, $m_Xo) && $m_Ebr($l1.tools) ? "DP:" : "", $l21 = $m_Ct($l0, $m_ht) ? $m_hr() === "pro" ? "P1:" : "P0:" : "", $l22 = $m_Ct($l0, $m_ht) ? $m_Bv($l1.tools) : void 0, $l23 = $l22 === void 0 ? "" : $l22 ? "AC1:" : "AC0:", $l24 = !$m_nMe() && ($m_Ct($l0, $m_ht) || $m_Ct($l0, $m_Xo) || $m_Ct($l0, $m_mo) || $m_Ct($l0, $m_We) || $m_Ct($l0, $m_Or) || $m_Ct($l0, $m_Eo) || $m_Ct($l0, $m_Ai) || $m_Ct($l0, $m_hu)) ? $l4(() => $m_nle($l8)) : void 0, $l25 = $l24 === true ? "R:" : "", $l26 = $m_Ct($l0, $m_ri) ? $m_mae() ? "M1:" : "M0:" : "", $l27 = $m_Ct($l0, $m_ht) ? $m_GFe() ? "E1:" : "E0:" : "", $l28 = $m_Ct($l0, $m_ht) ? $m_Hbr($l1.querySource)?.whenToUse : void 0, $l29 = $l28 === void 0 ? "" : $l28 === "" ? "X0:" : "X1:", $l30 = $m_Ct($l0, $m_Va) ? $m_kt() ? "W1:" : "W0:" : "", $l31 = "", $l32 = $m_Ct($l0, $m_dn) ? require("./chunk-8b8f1sas.js").artifactCorePromptCacheKeyBit($l1.tools) : "", $l33 = $m_Ct($l0, $m_fr) ? $l1.tools.some(($l34) => $m_Ct($l34, $m_dn)) ? "WA1:" : require("./chunk-9kdcegxj.js").artifactMcpToolsReplaceBuiltIn($l1.tools) ? "WA2:" : "WA0:" : "", $l35 = $m_Ct($l0, $m_H9e) ? $l1.tools.some(($l36) => $m_Ct($l36, $m_Z1e)) ? "PS1:" : "PS0:" : "", $l37 = require("./chunk-whdvwma2.js").inboxSurfaceCacheKeyBit($l0, $l1.tools), $l38 = $l0.mcpInfo?.fileReference === true ? require("./chunk-rjgzz068.js").fileReferenceHintKeyBit($l0) : "", $l39 = $l1.withoutToolDescribeHooks ? "H:" : "", $l40 = $l1.loadedThroughToolSearch === true && $l0.isMcp === true ? "LT:" : "", $l41 = ($l1.byValueListing !== void 0 ? `V${$l1.byValueListing}:` : "") + $l39 + $l40 + $l12 + $l13 + $l14 + $l15 + $l17 + $l18 + $l19 + $l20 + $l21 + $l23 + $l25 + $l26 + $l27 + $l29 + $l30 + $l32 + $l33 + $l35 + $l37 + $l38 + ("inputJSONSchema" in $l0 && $l0.inputJSONSchema ? `${$l0.name}:${$l3.schemaKey($l0.inputJSONSchema)}` : $l0.name), $l42 = $m_PVo($l0, $l1, { cacheKey: $l41, structuredOutputs: $l10, provider: $l2, cfg: $l7, serializer: $l3 }), $l43 = $l42 ?? $m_nHe.get($l41);
++  if (!$l43) {
++    let $l44 = $m_nHe.stamp(), $l45 = $m_v_e($l0, { remoteToolForwarding: await $m_tVe([$l0]) });
+     if ($l22 === false && !("inputJSONSchema" in $l0 && $l0.inputJSONSchema)) {
+-      let $l48 = $l47.properties;
+-      if (typeof $l48 === "object" && $l48 !== null && "name" in $l48 && typeof $l48.name === "object" && $l48.name !== null) $l47 = { ...$l47, properties: { ...$l48, name: { ...$l48.name, description: $m_WMo } } };
++      let $l46 = $l45.properties;
++      if (typeof $l46 === "object" && $l46 !== null && "name" in $l46 && typeof $l46.name === "object" && $l46.name !== null) $l45 = { ...$l45, properties: { ...$l46, name: { ...$l46.name, description: $m_WMo } } };
+     }
+-    let $l49 = await $m_CVo($l0, { ...$l1, model: $l8, leanPrompt: $l9, bashFirstTrimmed: $l11, delegationCostsFirst: $l24, delegationCostsFirstText: $l46, leanRewrite: $l26 }), $l50 = $l0.isMcp ? $l49 : $m_Jxe($l49, $l1.querySource), $l51 = $l1.enginePlacement === "deferred", $l52 = $l1.withoutToolDescribeHooks ? { description: $l50, isDeferred: $l51 } : await $m_dsi($l0, $l50, $l51);
++    let $l47 = await $m_CVo($l0, { ...$l1, model: $l8, leanPrompt: $l9, bashFirstTrimmed: $l11, leanRewrite: $l24 }), $l48 = $l0.isMcp ? $l47 : $m_Jxe($l47, $l1.querySource), $l49 = $l1.enginePlacement === "deferred", $l50 = $l1.withoutToolDescribeHooks ? { description: $l48, isDeferred: $l49 } : await $m_dsi($l0, $l48, $l49);
+     if (!$l1.withoutToolDescribeHooks && $l1.byValueListing === void 0) {
+-      let $l53 = $l52.isDeferred !== $l51 ? $l52.isDeferred : void 0;
+-      $m_Lqs($l0.name, $l53);
++      let $l51 = $l50.isDeferred !== $l49 ? $l50.isDeferred : void 0;
++      $m_Lqs($l0.name, $l51);
+     }
+-    if ($l44 = { name: $l0.name, description: $l52.description, input_schema: $l47 }, $l10) {
++    if ($l43 = { name: $l0.name, description: $l50.description, input_schema: $l45 }, $l10) {
+       if ($l0.strict === true) {
+-        let $l54 = $m_CPr($l47);
+-        if ($l54.ok) $l44.strict = true, $l44.input_schema = $l54.schema;
+-        else $m_t(`Tool ${$l0.name} has strict: true but its schema is not strict-compatible (${$l54.reason}); sending non-strict`, { level: "warn" });
+-      } else if ($l0.strictInputJSONSchema && $m_k("tengu_structured_output_strict", false)) $l44.strict = true, $l44.input_schema = $l0.strictInputJSONSchema;
++        let $l52 = $m_CPr($l45);
++        if ($l52.ok) $l43.strict = true, $l43.input_schema = $l52.schema;
++        else $m_t(`Tool ${$l0.name} has strict: true but its schema is not strict-compatible (${$l52.reason}); sending non-strict`, { level: "warn" });
++      } else if ($l0.strictInputJSONSchema && $m_k("tengu_structured_output_strict", false)) $l43.strict = true, $l43.input_schema = $l0.strictInputJSONSchema;
+     }
+-    let $l55 = $m_nHe.getSentFromRecord($l42);
+-    if ($l55 ? $l55.eager_input_streaming : $m_IYt($l2, $l7)) $l44.eager_input_streaming = true;
+-    $m_nHe.register($l42, $l44, $l45);
++    let $l53 = $m_nHe.getSentFromRecord($l41);
++    if ($l53 ? $l53.eager_input_streaming : $m_IYt($l2, $l7)) $l43.eager_input_streaming = true;
++    $m_nHe.register($l41, $l43, $l44);
+   }
+-  let $l56 = $l1.recordedEntry, $l57 = $l56 !== void 0 && $l56.strict === true === ($l44.strict === true);
+-  if ($l56 !== void 0 && $l43 === void 0) $m_AVo($l3, $l44, $l56, $l57, { mcpTool: $l0.isMcp === true, artifactFamily: $m__Ie($l0) });
+-  let $l58 = $l1.isRedescribed === true && $m_isi($l0.name), $l59 = { name: $l44.name, description: $l58 ? $l44.description : $l56?.description ?? $l1.recordedDescription ?? $l44.description, input_schema: $l57 ? $l56.input_schema : $l44.input_schema, ...$l44.strict && { strict: true }, ...$l44.eager_input_streaming && { eager_input_streaming: true } };
+-  if ($l1.deferLoading) $l59.defer_loading = true;
+-  if ($l1.cacheControl) $l59.cache_control = $l1.cacheControl;
+-  if ($l0.name === $m_ip && $m_Wxr()) $l59.citations = { enabled: true };
++  let $l54 = $l1.recordedEntry, $l55 = $l54 !== void 0 && $l54.strict === true === ($l43.strict === true);
++  if ($l54 !== void 0 && $l42 === void 0) $m_AVo($l3, $l43, $l54, $l55, { mcpTool: $l0.isMcp === true, artifactFamily: $m__Ie($l0) });
++  let $l56 = $l1.isRedescribed === true && $m_isi($l0.name), $l57 = { name: $l43.name, description: $l56 ? $l43.description : $l54?.description ?? $l1.recordedDescription ?? $l43.description, input_schema: $l55 ? $l54.input_schema : $l43.input_schema, ...$l43.strict && { strict: true }, ...$l43.eager_input_streaming && { eager_input_streaming: true } };
++  if ($l1.deferLoading) $l57.defer_loading = true;
++  if ($l1.cacheControl) $l57.cache_control = $l1.cacheControl;
++  if ($l0.name === $m_ip && $m_Wxr()) $l57.citations = { enabled: true };
+   if ($m_VB()) {
+-    let $l60 = !$m_jan(), $l61 = /* @__PURE__ */ new Set(["name", "description", "input_schema", "cache_control", ...$l60 ? ["defer_loading"] : []]), $l62 = Object.keys($l59).filter(($l63) => !$l61.has($l63));
+-    if ($l62.length > 0) return $l3.logStripOnce($l62), { name: $l59.name, description: $l59.description, input_schema: $l59.input_schema, ...$l59.cache_control && { cache_control: $l59.cache_control }, ...$l60 && $l59.defer_loading && { defer_loading: true } };
++    let $l58 = !$m_jan(), $l59 = /* @__PURE__ */ new Set(["name", "description", "input_schema", "cache_control", ...$l58 ? ["defer_loading"] : []]), $l60 = Object.keys($l57).filter(($l61) => !$l59.has($l61));
++    if ($l60.length > 0) return $l3.logStripOnce($l60), { name: $l57.name, description: $l57.description, input_schema: $l57.input_schema, ...$l57.cache_control && { cache_control: $l57.cache_control }, ...$l58 && $l57.defer_loading && { defer_loading: true } };
+   }
+-  return $l59;
++  return $l57;
+ }
+ ;

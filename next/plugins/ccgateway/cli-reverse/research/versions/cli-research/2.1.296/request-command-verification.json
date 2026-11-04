@@ -1,0 +1,151 @@
+{
+  "date": "2026-10-18",
+  "baseline": "linux-x64-glibc/2.1.296",
+  "extension": "ccgateway-v4-request-command",
+  "binarySha256": "d39e92fad26d9957844b937802187f2d926c10c33fb050812aab09d8ec9886f5",
+  "environment": "ovh Docker --network none, loopback mock, fake API key",
+  "requestTests": [
+    {
+      "scenario": "json",
+      "exitCode": 0,
+      "httpRequests": 1,
+      "incremental": false
+    },
+    {
+      "scenario": "file",
+      "exitCode": 0,
+      "httpRequests": 1,
+      "incremental": false
+    },
+    {
+      "scenario": "sse",
+      "exitCode": 0,
+      "httpRequests": 1,
+      "incremental": true
+    },
+    {
+      "scenario": "error",
+      "exitCode": 2,
+      "httpRequests": 1,
+      "incremental": false
+    },
+    {
+      "scenario": "websearch",
+      "exitCode": 0,
+      "httpRequests": 1,
+      "incremental": false
+    },
+    {
+      "scenario": "timeout",
+      "exitCode": 1,
+      "httpRequests": 1,
+      "incremental": false
+    },
+    {
+      "scenario": "invalid-json",
+      "exitCode": 1,
+      "httpRequests": 0,
+      "incremental": false
+    },
+    {
+      "scenario": "auth-header",
+      "exitCode": 1,
+      "httpRequests": 0,
+      "incremental": false
+    },
+    {
+      "scenario": "help",
+      "exitCode": 0,
+      "httpRequests": 0,
+      "incremental": false
+    },
+    {
+      "scenario": "interrupt",
+      "exitCode": 130,
+      "httpRequests": 1,
+      "incremental": true
+    },
+    {
+      "scenario": "exact-body",
+      "exitCode": 0,
+      "httpRequests": 1,
+      "incremental": false
+    }
+  ],
+  "unitTests": {
+    "newTransport": 5,
+    "existingModRegression": 8,
+    "passed": 13
+  },
+  "nativeWebSearch": {
+    "requests": 3,
+    "serverTool": {
+      "type": "web_search_20250305",
+      "name": "web_search",
+      "allowed_domains": [
+        "example.test"
+      ],
+      "max_uses": 8
+    },
+    "toolChoice": {
+      "type": "tool",
+      "name": "web_search"
+    },
+    "returnsLinksAndSummary": true
+  },
+  "patch": {
+    "baseline": "linux-x64-glibc/2.1.296",
+    "extension": "ccgateway-v4-request-command",
+    "files": {
+      "chunk-kasbfbhj.js": {
+        "before": "4db1e890fb4b277063ca17984811e7cf08b8bf1d2bb45c0da9c22a5e39b3deca",
+        "after": "3ec51ee1b7f42b0f944f453630ab7a9ce7cad96c02efc861bc7e9b81f07e6b81"
+      },
+      "chunk-30jbnw20.js": {
+        "before": "5d498fe6b9e227c6aa6b09ac7438e1adf36a9739fbce96f2177251b022b91b9e",
+        "after": "1220a94fbdf54b9194f4bdf8f6306af40a4066f54a8e71b1a272f8795df5c142"
+      },
+      "chunk-gtj0ecsn.js": {
+        "before": "4533db8fb0e2ca0da3a2491c56695c4349370bebaaebd9ad8887634207212c88",
+        "after": "7f87ddabc0a0cd34676cb8997a5c87d483c79e4bdffefbd8b5bc7ab11b6acd0d"
+      },
+      "chunk-tmrtnnjz.js": {
+        "before": "3680248156229ce33e4a1e0a39c89b742b750b1c66287613fe9d338c47d14cf1",
+        "after": "e7ce2d4338104b1c4a62a7b342f83bbc84a6c8d8c67d30a6659754301cb61136"
+      },
+      "chunk-716kq0mx.js": {
+        "before": "1c4bf55e63548242b60fd677cb145de11efab375c2110607f8edace5c09f66fd",
+        "after": "87023964d32d93841eebefdd102cae714ac448ede120c1de3e2f1dd1c217d21d"
+      },
+      "chunk-daj64yn4.js": {
+        "before": "a8496d811e81e9994d92cdbf82c5015a21f028df27af4c52ff9f1ddd7b1a7b88",
+        "after": "5073cad85c56acc57ef0df82a7d53a082ee5bb1aa01992b0e46303bfc691d094"
+      },
+      "cli.js": {
+        "before": "3b2811253260369e6e046d6d100443c11252b69e821ebe3f6b6c8714455a4e0b",
+        "after": "ff64165a4f40fb88c71ae28b8d913cc7241504a73b788bb8f4ceb72c1897f1ef"
+      }
+    },
+    "supportFiles": {
+      "ccgateway-native-tools.js": {
+        "source": "native-tools.js",
+        "sha256": "570b9225361416fb95b855a4ec80d79a2caeac5947b9cb95a7c5f5c0a993febf"
+      },
+      "ccgateway-model-request.js": {
+        "source": "model-request.js",
+        "sha256": "72c50db9aa4a8943020acfa297e922476b780a38268eb833102487319be1a58e"
+      },
+      "ccgateway-request-command.js": {
+        "source": "request-command.js",
+        "sha256": "be55216dcd4f9640e38ef825adf3371ce306fe3ce9aa1f0c8feafa64640b9fa7"
+      }
+    }
+  },
+  "limitations": [
+    "No real API/search request or OAuth refresh verified",
+    "Linux x64/glibc 2.1.296 only",
+    "Provider-specific Bedrock/Vertex/Foundry protocols not exposed",
+    "Production Worker and Go engine not changed",
+    "Known v3 mods compatibility findings remain unresolved"
+  ]
+}

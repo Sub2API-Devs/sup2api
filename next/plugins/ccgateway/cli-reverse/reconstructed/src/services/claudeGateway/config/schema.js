@@ -1,0 +1,999 @@
+/**
+ * services/claudeGateway/config/schema.ts
+ *
+ * 2.1.316 新增：网关配置 schema
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-1ny7cxrt.js (1)
+ * attribution: placement 1
+ */
+import { createPrivateKey, X509Certificate } from "crypto";
+import { DoctorLazy } from "../../../cli/handlers/util.js";
+import {
+  create_2,
+  create_15,
+  create_20,
+  create_17,
+  strictCreate,
+  create_25,
+  create_16,
+  create,
+  create_6,
+  create_26,
+  zodCoerce,
+  create_3,
+  create_12,
+} from "../../../../vendor/zod/lib/index.mjs";
+import { isReservedHeaderName, HTTPS_API_ANTHROPIC_COM } from "../headerPolicy.js";
+import { ZodIssueCode } from "../../../../vendor/zod/v3/ZodError.js";
+import { isAllowedOutboundUrl, parseCidr, isLoopbackUrl } from "../ssrfGuard.js";
+import { GUARDRAIL_INPUT_TAGGING_MODES } from "../bedrockGuardrails.js";
+import { REQUEST_ID_REGEX } from "../../requestUserDialog.js";
+import {
+  isLoopbackHost,
+  isHttpsOrLoopbackUrl,
+  isAllowedNonTlsTarget,
+} from "../../../../vendor/@modelcontextprotocol/client/dist/src-CeKsbNLO.mjs";
+import { validateResourceLabel } from "../telemetry/resourceAttributes.js";
+import { hasManagedPolicies } from "./managedPolicies.js";
+import { validateGoogleAuthTarget } from "../telemetry/googleAuth.js";
+import { isSameModel } from "../models.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
+
+//@ chunk-1ny7cxrt.js:1388260-1413048 placement
+/**
+ * 网关配置的完整 Zod schema（upstream、access_control、listen、admin、store 等），loadGatewayConfig 用它的 parse 校验配置文件。
+ */
+var GATEWAY_HEADER_NAME_REGEX; // deferred: uses hasManagedPolicies (./managedPolicies.js) of its import cycle while loading; runs once the cycle is complete
+var HEADER_VALUE_PRINTABLE_ASCII_RE;
+var UPSTREAM_MODELS_REQUIRED_MESSAGE;
+var UPSTREAM_GROUPS_MESSAGE;
+var MANTLE_MODELS_REQUIRED_MESSAGE;
+var GatewayConfigSchema;
+deferInit("chunk-1ny7cxrt.js:1388260", () => {
+  GATEWAY_HEADER_NAME_REGEX = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+  HEADER_VALUE_PRINTABLE_ASCII_RE = /^[\x20-\x7e]+$/;
+  UPSTREAM_MODELS_REQUIRED_MESSAGE =
+    "models on an upstream needs at least one entry: the only models to send to this upstream, named as clients send them, for example models: [claude-opus-4-8]. Remove the key to send it every model.";
+  UPSTREAM_GROUPS_MESSAGE =
+    "groups on an upstream must be a list of IdP group names, none empty, for example groups: [team-a]. Only developers in one of them are sent to this upstream. Remove the key to serve everyone.";
+  MANTLE_MODELS_REQUIRED_MESSAGE =
+    "a mantle upstream needs a models list: the models your AWS account has on Mantle, named as clients send them, for example models: [claude-opus-4-7, claude-haiku-4-5]. Only these go to this upstream.";
+  GatewayConfigSchema = DoctorLazy(() => {
+    let name = create_2().optional();
+    let models = create_15(create_2().min(1), {
+      invalid_type_error: UPSTREAM_MODELS_REQUIRED_MESSAGE,
+    })
+      .min(1, {
+        message: UPSTREAM_MODELS_REQUIRED_MESSAGE,
+      })
+      .optional();
+    let groups = create_15(create_2().min(1, UPSTREAM_GROUPS_MESSAGE), {
+      invalid_type_error: UPSTREAM_GROUPS_MESSAGE,
+    })
+      .min(1, UPSTREAM_GROUPS_MESSAGE)
+      .optional();
+    let headerValueSchema = create_2()
+      .min(1)
+      .regex(/^[\x21-\x7e]+$/, "must be a valid header value");
+    let headers = create_20(create_2())
+      .superRefine((headers, ctx) => {
+        let seenLower = new Set();
+        for (let [key, value] of Object.entries(headers)) {
+          let name = key.toLowerCase();
+          let problem = !GATEWAY_HEADER_NAME_REGEX.test(key)
+            ? "is not a valid HTTP header name"
+            : seenLower.has(name)
+              ? "is listed twice (header names ignore case)"
+              : isReservedHeaderName(name)
+                ? "is reserved (the gateway or the provider's SDK sets or signs it). Remove it from this upstream's headers."
+                : !HEADER_VALUE_PRINTABLE_ASCII_RE.test(value) || value !== value.trim()
+                  ? "has an empty or invalid value: use printable ASCII with no space at either end (if it comes from a ${VAR}, check that variable's value)"
+                  : undefined;
+          seenLower.add(name);
+          if (problem)
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: [key],
+              message: `header '${key}' ${problem}`,
+            });
+        }
+      })
+      .optional();
+    let upstreamSchema = create_17("provider", [
+      strictCreate({
+        name,
+        headers,
+        groups,
+        models,
+        provider: create_25("anthropic"),
+        base_url: create_2().default(HTTPS_API_ANTHROPIC_COM).refine(isAllowedOutboundUrl, {
+          message: "base_url targets a metadata endpoint",
+        }),
+        auth: create_16([
+          create({
+            api_key: create_2().min(1),
+          }).strict(),
+          create({
+            oauth_token: create_2().min(1),
+          }).strict(),
+          create({
+            federation_rule_id: create_2().min(1),
+            organization_id: create_2().min(1),
+            identity_token_file: create_2().min(1),
+            service_account_id: create_2().optional(),
+            workspace_id: create_2().optional(),
+          }).strict(),
+        ]),
+        forward_user_identity: create_6().optional(),
+      }),
+      strictCreate({
+        name,
+        headers,
+        groups,
+        models,
+        provider: create_25("bedrock"),
+        region: create_2().min(1),
+        guardrail: strictCreate({
+          id: headerValueSchema,
+          version: headerValueSchema,
+          input_tagging: create_26(GUARDRAIL_INPUT_TAGGING_MODES).optional(),
+        }).optional(),
+        guardrail_trace: create_6().optional(),
+        base_url: create_2()
+          .optional()
+          .refine((baseUrl) => baseUrl === undefined || isAllowedOutboundUrl(baseUrl), {
+            message: "base_url targets a metadata endpoint",
+          }),
+        auth: strictCreate({
+          aws_access_key_id: create_2().min(1).optional(),
+          aws_secret_access_key: create_2().min(1).optional(),
+          aws_session_token: create_2().min(1).optional(),
+          aws_bearer_token: create_2().min(1).optional(),
+        })
+          .default({})
+          .refine((auth) => !auth.aws_access_key_id === !auth.aws_secret_access_key, {
+            message: "aws_access_key_id and aws_secret_access_key must be set together",
+          })
+          .refine((auth) => !auth.aws_session_token || !!auth.aws_access_key_id, {
+            message: "aws_session_token requires aws_access_key_id and aws_secret_access_key",
+          }),
+        assume_role: strictCreate({
+          role_arn: create_2().regex(
+            /^arn:aws(-us-gov)?:iam::\d{12}:role\/[\w+=,.@\/-]+$/,
+            "must be an IAM role ARN (arn:aws:iam::<account>:role/<name>)",
+          ),
+          external_id: create_2()
+            .regex(/^[\w+=,.@:\/-]{2,1224}$/, "must be 2 to 1224 characters of letters, digits and _+=,.@:/-")
+            .optional(),
+          session_name: create_26(["email", "sub"]).optional(),
+        }).optional(),
+      }),
+      strictCreate({
+        name,
+        headers,
+        groups,
+        provider: create_25("mantle"),
+        region: create_2().regex(/^[a-z0-9-]+$/, "must be an AWS region (lowercase alnum + hyphens)"),
+        base_url: create_2()
+          .optional()
+          .refine((baseUrl) => baseUrl === undefined || isAllowedOutboundUrl(baseUrl), {
+            message: "base_url targets a metadata endpoint",
+          }),
+        models: create_15(create_2().min(1), {
+          required_error: MANTLE_MODELS_REQUIRED_MESSAGE,
+          invalid_type_error: MANTLE_MODELS_REQUIRED_MESSAGE,
+        }).min(1, {
+          message:
+            "a mantle upstream needs at least one entry in models: list the models your AWS account has on Mantle, named as clients send them.",
+        }),
+        auth: strictCreate({
+          aws_access_key_id: create_2().min(1).optional(),
+          aws_secret_access_key: create_2().min(1).optional(),
+          aws_session_token: create_2().min(1).optional(),
+          aws_bearer_token: create_2().min(1).optional(),
+        })
+          .default({})
+          .refine((auth) => !auth.aws_access_key_id === !auth.aws_secret_access_key, {
+            message: "aws_access_key_id and aws_secret_access_key must be set together",
+          })
+          .refine((auth) => !auth.aws_session_token || !!auth.aws_access_key_id, {
+            message: "aws_session_token requires aws_access_key_id and aws_secret_access_key",
+          }),
+      }),
+      strictCreate({
+        name,
+        headers,
+        groups,
+        models,
+        provider: create_25("anthropicAws"),
+        region: create_2().regex(/^[a-z0-9-]+$/, "must be an AWS region (lowercase alnum + hyphens)"),
+        workspace_id: headerValueSchema,
+        base_url: create_2()
+          .optional()
+          .refine((baseUrl) => baseUrl === undefined || isAllowedOutboundUrl(baseUrl), {
+            message: "base_url targets a metadata endpoint",
+          }),
+        auth: strictCreate({
+          api_key: create_2().min(1).optional(),
+          aws_access_key_id: create_2().min(1).optional(),
+          aws_secret_access_key: create_2().min(1).optional(),
+          aws_session_token: create_2().min(1).optional(),
+        })
+          .default({})
+          .refine((auth) => !auth.aws_access_key_id === !auth.aws_secret_access_key, {
+            message: "aws_access_key_id and aws_secret_access_key must be set together",
+          })
+          .refine((auth) => !auth.aws_session_token || !!auth.aws_access_key_id, {
+            message: "aws_session_token requires aws_access_key_id and aws_secret_access_key",
+          }),
+      }),
+      strictCreate({
+        name,
+        headers,
+        groups,
+        models,
+        provider: create_25("anthropicGoogleCloud"),
+        project_id: create_2().regex(/^[A-Za-z0-9_-]+$/, "must be a GCP project id"),
+        workspace_id: create_2().regex(/^[A-Za-z0-9_-]+$/, "must be a workspace id"),
+        location: create_2()
+          .regex(/^[A-Za-z0-9_-]+$/, "must be a GCP location")
+          .default("global"),
+        base_url: create_2()
+          .optional()
+          .refine((baseUrl) => baseUrl === undefined || isAllowedOutboundUrl(baseUrl), {
+            message: "base_url targets a metadata endpoint",
+          }),
+        auth: strictCreate({
+          service_account_json: create_2().min(1).optional(),
+          access_token: create_2().min(1).optional(),
+        }).default({}),
+      }),
+      strictCreate({
+        name,
+        headers,
+        groups,
+        models,
+        provider: create_25("vertex"),
+        region: create_2().min(1),
+        project_id: create_2().min(1),
+        base_url: create_2()
+          .optional()
+          .refine((baseUrl) => baseUrl === undefined || isAllowedOutboundUrl(baseUrl), {
+            message: "base_url targets a metadata endpoint",
+          }),
+        auth: strictCreate({
+          service_account_json: create_2().optional(),
+          access_token: create_2().optional(),
+        }).default({}),
+      }),
+      strictCreate({
+        name,
+        headers,
+        groups,
+        models,
+        provider: create_25("foundry"),
+        resource: create_2().regex(
+          REQUEST_ID_REGEX,
+          "must be 2-64 letters, digits or hyphens, not starting or ending with a hyphen",
+        ),
+        base_url: create_2()
+          .optional()
+          .refine((baseUrl) => baseUrl === undefined || isAllowedOutboundUrl(baseUrl), {
+            message: "base_url targets a metadata endpoint",
+          }),
+        auth: create_16([
+          strictCreate({
+            api_key: create_2().min(1),
+          }),
+          strictCreate({
+            use_azure_ad: create_25(true),
+          }),
+        ]),
+      }),
+    ]);
+    let cidrSchema = create_2().refine(
+      (value) => {
+        try {
+          parseCidr(value);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      {
+        message: "must be a valid IP or CIDR",
+      },
+    );
+    return strictCreate({
+      $schema: create_2().optional(),
+      listen: strictCreate({
+        host: create_2().default("0.0.0.0"),
+        port: zodCoerce.number().default(8080),
+        tls: strictCreate({
+          cert: create_2(),
+          key: create_2(),
+        }).optional(),
+        public_url: create_2()
+          .url()
+          .transform((url) => url.replace(/\/$/, ""))
+          .optional(),
+        trusted_proxies: create_15(cidrSchema).default([]),
+      }).refine((listen) => listen.public_url !== undefined || isLoopbackHost(listen.host), {
+        path: ["public_url"],
+        message:
+          "listen.public_url is required when listen.host is not a " +
+          "loopback address \u2014 set it to the externally-visible origin " +
+          "(e.g. https://claude-gateway.corp.example.com). Without it the IdP redirect_uri and token issuer would be derived from the client-controlled Host header.",
+      }),
+      access_control: strictCreate({
+        allow_cidrs: create_15(cidrSchema).default([]),
+        deny_cidrs: create_15(cidrSchema).default([]),
+      }).default({}),
+      limits: strictCreate({
+        max_request_bytes: zodCoerce.number().int().positive().default(33554432),
+        max_request_header_bytes: zodCoerce.number().int().positive().optional(),
+        max_url_length: zodCoerce.number().int().positive().optional(),
+      }).default({}),
+      rate_limits: strictCreate({
+        device_authorization: strictCreate({
+          max: zodCoerce.number().int().positive().default(30),
+          window_seconds: zodCoerce.number().int().positive().default(600),
+        }).default({}),
+        device_verify: strictCreate({
+          max: zodCoerce.number().int().positive().default(10),
+          window_seconds: zodCoerce.number().int().positive().default(600),
+        }).default({}),
+      }).default({}),
+      timeouts: strictCreate({
+        upstream_ttfb_ms: zodCoerce.number().int().positive().optional(),
+      })
+        .default({})
+        .transform((timeouts) =>
+          timeouts.upstream_ttfb_ms === undefined
+            ? {
+                upstream_ttfb_ms: 120000,
+              }
+            : {
+                upstream_ttfb_ms: timeouts.upstream_ttfb_ms,
+                operator_set: true,
+              },
+        ),
+      upstreams: create_15(upstreamSchema)
+        .min(1)
+        .transform((upstreams) =>
+          upstreams.map((upstream) => ({
+            ...upstream,
+            name: upstream.name ?? upstream.provider,
+          })),
+        )
+        .superRefine((upstreams, ctx) => {
+          let names = new Set();
+          for (let upstream of upstreams) {
+            if (names.has(upstream.name))
+              ctx.addIssue({
+                code: ZodIssueCode.custom,
+                message: `duplicate upstream name '${upstream.name}' \u2014 set distinct 'name:' on each`,
+              });
+            names.add(upstream.name);
+            if (upstream.provider === "bedrock" && upstream.assume_role && upstream.auth.aws_bearer_token)
+              ctx.addIssue({
+                code: ZodIssueCode.custom,
+                message: `upstream '${upstream.name}': assume_role needs SigV4 source credentials (access keys or the ambient AWS chain, auth: {}); aws_bearer_token cannot call sts:AssumeRole`,
+              });
+            let hostname =
+              upstream.provider === "anthropic" &&
+              upstream.forward_user_identity &&
+              URL.canParse(upstream.base_url)
+                ? new URL(upstream.base_url).hostname.replace(/\.$/, "")
+                : "";
+            if (
+              hostname === "anthropic.com" ||
+              hostname.endsWith(".anthropic.com") ||
+              /^aws-external-anthropic\.[^.]+\.api\.aws$/.test(hostname) ||
+              hostname === "claude.googleapis.com"
+            )
+              ctx.addIssue({
+                code: ZodIssueCode.custom,
+                message: `upstream '${upstream.name}': forward_user_identity is for identifying users to a proxy you run at base_url; it is refused for ${hostname} so user emails are never sent to Anthropic`,
+              });
+          }
+          let filtered = upstreams.filter((upstream) => upstream.provider === "bedrock");
+          if (
+            filtered.some((upstream) => upstream.guardrail) &&
+            !filtered.every((upstream) => upstream.guardrail)
+          )
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              message:
+                "set guardrail: on all bedrock upstreams or none \u2014 failover could otherwise send requests to a bedrock upstream without the guardrail",
+            });
+          if (new Set(filtered.map((upstream) => upstream.guardrail?.input_tagging)).size > 1)
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              message:
+                "set the same guardrail.input_tagging on all bedrock upstreams \u2014 failover could otherwise send requests to a bedrock upstream that tags them differently",
+            });
+          if (
+            filtered.some((upstream) => upstream.guardrail) &&
+            upstreams.some((upstream) => upstream.provider === "mantle")
+          )
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              message:
+                "a mantle upstream cannot be used beside a bedrock upstream that has a guardrail, because the gateway applies no guardrail to requests it sends to Mantle. Remove every mantle upstream, or remove the guardrail from every bedrock upstream.",
+            });
+        }),
+      auto_include_builtin_models: create_6().default(true),
+      models: create_15(
+        strictCreate({
+          id: create_2().min(1),
+          label: create_2().optional(),
+          description: create_2().optional(),
+          upstream_model: create_20(create_2()).refine((map) => Object.keys(map).length > 0, {
+            message: "upstream_model must set at least one upstream",
+          }),
+        }),
+      ).default([]),
+      oidc: strictCreate({
+        issuer: create_2().refine(isAllowedOutboundUrl, {
+          message: "oidc.issuer must be an http(s) URL and not target a cloud metadata endpoint",
+        }),
+        client_id: create_2().min(1),
+        client_secret: create_2().min(1).optional(),
+        client_assertion: strictCreate({
+          private_key_pem: create_2().min(1),
+          certificate_pem: create_2().min(1),
+        }).optional(),
+        ca_cert_pem: create_2().optional(),
+        groups_claim: create_2().min(1).default("groups"),
+        email_claim: create_16([create_2().min(1), create_15(create_2().min(1)).min(1)]).default("email"),
+        user_id_claim: create_2().min(1).optional(),
+        userinfo_fallback: create_6().default(false),
+        use_pkce: create_6().default(true),
+        clock_skew_seconds: zodCoerce.number().int().nonnegative().optional(),
+        token_endpoint_auth_method: create_26([
+          "client_secret_basic",
+          "client_secret_post",
+          "private_key_jwt",
+        ]).optional(),
+        id_token_signed_response_alg: create_26([
+          "RS256",
+          "RS384",
+          "RS512",
+          "PS256",
+          "PS384",
+          "PS512",
+          "ES256",
+          "ES384",
+          "ES512",
+          "EdDSA",
+        ]).optional(),
+        additional_authorized_parties: create_15(create_2()).optional(),
+        discovery_url: create_2()
+          .url()
+          .refine(isAllowedOutboundUrl, {
+            message: "oidc.discovery_url must be an http(s) URL and not target a cloud metadata endpoint",
+          })
+          .refine(
+            (url) => {
+              try {
+                return new URL(url).pathname.includes("/.well-known/");
+              } catch {
+                return false;
+              }
+            },
+            {
+              message:
+                "oidc.discovery_url must point at the discovery document itself (path containing /.well-known/) \u2014 openid-client appends /.well-known/openid-configuration to any other path",
+            },
+          )
+          .optional(),
+        use_proxy: create_6().optional(),
+        scopes: create_15(
+          create_2()
+            .trim()
+            .min(1)
+            .refine((scope) => !/\s/.test(scope), {
+              message: "must be a single OAuth scope token (no whitespace)",
+            }),
+        )
+          .optional()
+          .refine((scopes) => scopes === undefined || scopes.includes("openid"), {
+            message:
+              "oidc.scopes must include 'openid' \u2014 without it the IdP will not return an id_token",
+          }),
+        scope_on_refresh: create_6().default(false),
+        extra_auth_params: create_20(create_2().min(1), create_2())
+          .default({})
+          .refine(
+            (params) =>
+              !Object.keys(params).some((key) =>
+                [
+                  "redirect_uri",
+                  "state",
+                  "nonce",
+                  "code_challenge",
+                  "code_challenge_method",
+                  "scope",
+                  "response_type",
+                  "response_mode",
+                  "client_id",
+                ].includes(key),
+              ),
+            {
+              message:
+                "oidc.extra_auth_params must not override protocol parameters the gateway manages (redirect_uri, state, nonce, code_challenge*, scope, response_type, response_mode, client_id) \u2014 use oidc.scopes for scope; the gateway callback only reads query-mode responses",
+            },
+          ),
+        allowed_email_domains: create_15(create_2())
+          .transform((domains, ctx) => {
+            let filtered = domains
+              .map((domain) => domain.trim().replace(/^@/, "").toLowerCase())
+              .filter(Boolean);
+            if (domains.length > 0 && filtered.length === 0)
+              ctx.addIssue({
+                code: ZodIssueCode.custom,
+                message: "allowed_email_domains contains only empty entries after normalization",
+              });
+            return filtered;
+          })
+          .optional(),
+        form_action_origins: create_15(
+          create_2().refine(isAllowedOutboundUrl, {
+            message:
+              "each form_action_origin must be an http(s) URL and not target a cloud metadata endpoint",
+          }),
+        )
+          .transform((origins) => origins.map((origin) => new URL(origin).origin))
+          .refine((origins) => origins.every((origin) => !/[;,'"\s]/.test(origin)), {
+            message:
+              "oidc.form_action_origins entries must not contain CSP delimiters (; , quotes or whitespace)",
+          })
+          .default([]),
+        allowed_groups: create_15(create_2())
+          .refine((groups) => !groups.length || groups.some((group) => group.trim()), {
+            message: "oidc.allowed_groups contains only empty entries",
+          })
+          .transform((groups) => groups.map((group) => group.trim()).filter(Boolean))
+          .optional(),
+        google_groups: strictCreate({
+          service_account_json_path: create_2().min(1),
+          admin_email: create_2().email(),
+        }).optional(),
+      })
+        .superRefine((oidc, ctx) => {
+          if (oidc.token_endpoint_auth_method !== "private_key_jwt") {
+            if (oidc.client_secret === undefined)
+              ctx.addIssue({
+                code: ZodIssueCode.custom,
+                path: ["client_secret"],
+                message:
+                  "oidc.client_secret is required \u2014 or, if your IdP issues certificates instead of secrets (for example Microsoft Entra certificate credentials), set token_endpoint_auth_method: private_key_jwt with a client_assertion block",
+              });
+            if (oidc.client_assertion !== undefined)
+              ctx.addIssue({
+                code: ZodIssueCode.custom,
+                path: ["client_assertion"],
+                message:
+                  "oidc.client_assertion is only used with token_endpoint_auth_method: private_key_jwt \u2014 set that and remove client_secret, or remove this block",
+              });
+            return;
+          }
+          if (oidc.client_secret !== undefined)
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["client_secret"],
+              message:
+                "oidc.client_secret must be removed when token_endpoint_auth_method is private_key_jwt \u2014 the gateway authenticates to the IdP with the client_assertion certificate instead",
+            });
+          if (oidc.client_assertion === undefined) {
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["client_assertion"],
+              message:
+                "oidc.client_assertion is required when token_endpoint_auth_method is private_key_jwt: private_key_pem (the key the gateway signs with) and certificate_pem (the certificate you uploaded to the IdP)",
+            });
+            return;
+          }
+          let { private_key_pem: privateKeyPem, certificate_pem: certificatePem } = oidc.client_assertion;
+          if (privateKeyPem.includes("ENCRYPTED")) {
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["client_assertion", "private_key_pem"],
+              message:
+                "oidc.client_assertion.private_key_pem is encrypted with a passphrase; the gateway needs the key as an unencrypted PEM file",
+            });
+            return;
+          }
+          let privateKey;
+          try {
+            privateKey = createPrivateKey(privateKeyPem);
+          } catch {
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["client_assertion", "private_key_pem"],
+              message:
+                'oidc.client_assertion.private_key_pem is not a PEM private key the gateway can read \u2014 expected a key beginning with "-----BEGIN PRIVATE KEY-----" (PKCS#8) or "-----BEGIN RSA PRIVATE KEY-----" (PKCS#1)',
+            });
+            return;
+          }
+          if (privateKey.asymmetricKeyType !== "rsa") {
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["client_assertion", "private_key_pem"],
+              message: `oidc.client_assertion.private_key_pem must be an RSA key (the client assertion is signed with RS256); got ${privateKey.asymmetricKeyType}`,
+            });
+            return;
+          }
+          let modulusLength = privateKey.asymmetricKeyDetails?.modulusLength ?? 0;
+          if (modulusLength < 2048) {
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["client_assertion", "private_key_pem"],
+              message: `oidc.client_assertion.private_key_pem must be an RSA key of at least 2048 bits; got ${modulusLength}`,
+            });
+            return;
+          }
+          if (certificatePem.split("-----BEGIN CERTIFICATE-----").length > 2) {
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["client_assertion", "certificate_pem"],
+              message:
+                "oidc.client_assertion.certificate_pem must contain only the client certificate, not a chain \u2014 keep the one certificate issued for private_key_pem (with openssl pkcs12, add -clcerts)",
+            });
+            return;
+          }
+          let certificate;
+          try {
+            certificate = new X509Certificate(certificatePem);
+          } catch {
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["client_assertion", "certificate_pem"],
+              message:
+                'oidc.client_assertion.certificate_pem is not a PEM certificate the gateway can read \u2014 expected one beginning with "-----BEGIN CERTIFICATE-----"',
+            });
+            return;
+          }
+          if (!certificate.checkPrivateKey(privateKey))
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["client_assertion", "certificate_pem"],
+              message:
+                "oidc.client_assertion.certificate_pem does not match private_key_pem \u2014 use the certificate that was issued for this key",
+            });
+        })
+        .optional(),
+      session: strictCreate({
+        jwt_secret: create_16([create_2().min(32), create_15(create_2().min(32)).min(1)]).transform(
+          (secret) => (Array.isArray(secret) ? secret : [secret]),
+        ),
+        ttl_hours: zodCoerce.number().default(1),
+      }),
+      store: strictCreate({
+        postgres_url: create_2().regex(/^postgres(ql)?:\/\//, "must be postgres:// or postgresql://"),
+        username: create_2().optional(),
+        password: create_2().optional(),
+        max_connections: zodCoerce.number().int().positive().default(5),
+        connect_timeout_seconds: zodCoerce.number().int().min(1).max(60).default(5),
+        readiness_grace_seconds: create_16([
+          create_3(),
+          create_2().regex(/^\d+$/, "must be a whole number of seconds").transform(Number),
+        ])
+          .pipe(create_3().int().min(0).max(3600))
+          .default(0),
+      }),
+      telemetry: strictCreate({
+        forward_to: create_15(
+          strictCreate({
+            url: create_2()
+              .refine(isHttpsOrLoopbackUrl, {
+                message: "forward_to.url must be https:// (http:// allowed for loopback only)",
+              })
+              .refine((url) => isLoopbackUrl(url) || isAllowedOutboundUrl(url), {
+                message: "forward_to.url must not target a cloud metadata endpoint",
+              })
+              .refine((url) => !isLoopbackUrl(url) || isAllowedOutboundUrl(url), {
+                message:
+                  "forward_to.url is a loopback address, which the gateway blocks by default; set CLAUDE_GATEWAY_ALLOW_LOOPBACK=1 in the gateway environment to allow a sidecar collector",
+              }),
+            headers: create_20(create_2()).default({}),
+            auth: strictCreate({
+              google: strictCreate({
+                service_account_json: create_2().min(1).optional(),
+              }),
+            }).optional(),
+            metrics: create_6().default(true),
+            logs: create_6().default(false),
+            traces: create_6().default(false),
+          }),
+        ).default([]),
+        resource_attributes: create_20(create_2())
+          .superRefine((attributes, ctx) => {
+            for (let [key, value] of Object.entries(attributes)) {
+              let problem = validateResourceLabel(key, value);
+              if (problem)
+                ctx.addIssue({
+                  code: ZodIssueCode.custom,
+                  path: [key],
+                  message: problem,
+                });
+            }
+          })
+          .optional(),
+      }).default({
+        forward_to: [],
+      }),
+      managed: strictCreate({
+        settings: create_2().optional(),
+        policy_mode: create_26(["first_match", "layered"]).optional(),
+        policies: create_15(
+          create({
+            match: strictCreate({
+              groups: create_15(
+                create_2().min(
+                  1,
+                  "match.groups contains an empty entry \u2014 set a group name or remove the entry",
+                ),
+              )
+                .min(
+                  1,
+                  "match.groups is empty \u2014 the policy would match no one (and is not a catch-all); list groups or remove the key",
+                )
+                .optional(),
+              email_domain: create_2()
+                .min(
+                  1,
+                  "match.email_domain is empty \u2014 an empty domain disables the match and the policy would apply to every authenticated user; set a domain or remove the key",
+                )
+                .transform((domain) => domain.trim().replace(/^@/, "").toLowerCase())
+                .refine((domain) => domain.length > 0, {
+                  message:
+                    "match.email_domain is blank after normalization \u2014 set a domain or remove the key",
+                })
+                .refine((domain) => !/[@\s,]/.test(domain), {
+                  message:
+                    'match.email_domain contains "@", whitespace, or "," \u2014 write one bare domain (e.g. acme.com, not a full email address or a list); the matcher compares a single domain exactly',
+                })
+                .optional(),
+            }).default({}),
+            code: create_20(create_12()).optional(),
+            cli: create_20(create_12()).optional(),
+            settings: create_20(create_12()).optional(),
+            desktop: create_20(create_12()).optional(),
+            serve_to_desktop: create_6().optional(),
+          }).strict(),
+        )
+          .superRefine((policies, ctx) => {
+            if (!policies.some((policy) => policy.code)) return;
+            for (let [index, policy] of policies.entries())
+              for (let blockName of ["cli", "settings"])
+                if (policy[blockName])
+                  ctx.addIssue({
+                    code: ZodIssueCode.custom,
+                    path: [index, blockName],
+                    message: policy.code
+                      ? `this policy has a \`code\` block and a \`${blockName}\` block. Put all its settings into the one \`code\` block`
+                      : `this file has a \`code\` block, so this \`${blockName}\` block's rules would not reach Claude Desktop's Code tab. Write every block under \`code\`, or every block under \`cli\` (terminal Claude Code only). See "Choose cli or code" in the gateway configuration docs`,
+                  });
+          })
+          .transform((policies) =>
+            policies.map(({ match, code, cli, settings, desktop, serve_to_desktop: serveToDesktop }) => ({
+              match,
+              cli: code ?? cli ?? settings ?? {},
+              desktop,
+              serve_to_desktop: serveToDesktop,
+              ...(policies.some((policy) => policy.code) && {
+                underCode: true,
+              }),
+            })),
+          )
+          .optional(),
+      }).optional(),
+      admin: strictCreate({
+        read_keys: create_15(
+          strictCreate({
+            id: create_2(),
+            key: create_2().min(32),
+          }),
+        ).default([]),
+        write_keys: create_15(
+          strictCreate({
+            id: create_2(),
+            key: create_2().min(32),
+          }),
+        ).default([]),
+        admin_groups: create_15(
+          create_2().min(
+            1,
+            "admin.admin_groups contains an empty entry \u2014 an empty entry can pair with an empty IdP group claim and grant admin access; set a group name or remove the entry",
+          ),
+        ).default([]),
+        blocked_message: create_2().optional(),
+        audit_retention_days: zodCoerce.number().int().positive().default(365),
+        spend_retention_months: zodCoerce.number().int().positive().default(13),
+        identity_retention_days: zodCoerce.number().int().positive().default(90),
+        group_limit_mode: create_26(["min", "max"]).default("min"),
+      })
+        .superRefine((admin, ctx) => {
+          let mapped = [...admin.read_keys, ...admin.write_keys].map((key) => key.id);
+          let found = mapped.find((keyId, index) => mapped.indexOf(keyId) !== index);
+          if (found)
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              message: `admin key id '${found}' is repeated; key ids must be unique for audit attribution`,
+            });
+        })
+        .optional(),
+      enforcement: strictCreate({
+        fail_closed_on_error: create_6().default(false),
+      }).default({
+        fail_closed_on_error: false,
+      }),
+      load_test_mode: strictCreate({
+        enabled: create_6(),
+        reply_tokens: create_3().int().min(1).max(1e5).default(750),
+        reply_seconds: create_3().min(0).max(600).default(9.5),
+      }).optional(),
+      cri: strictCreate({
+        enabled: create_6().default(false),
+        audience: create_15(create_2().trim().min(1)).default([]),
+        jwks_url: create_2()
+          .optional()
+          .refine((url) => url === undefined || isLoopbackUrl(url), {
+            message:
+              "cri.jwks_url must be a loopback URL \u2014 it exists for tests against local mocks, and honoring an external URL here would let it substitute the admission authority (its keys would mint CRI principals); remove it to use the pinned Anthropic JWKS",
+          })
+          .refine(isAllowedNonTlsTarget, {
+            message:
+              "cri.jwks_url targets loopback but CLAUDE_GATEWAY_ALLOW_LOOPBACK is not set \u2014 safeFetch would block every JWKS fetch at runtime, so as configured the CRI wall could never admit anyone",
+          }),
+        issuer: create_2()
+          .refine(isHttpsOrLoopbackUrl, {
+            message:
+              "cri.issuer must be https:// (http:// allowed for loopback only) \u2014 the verification JWKS derives from it",
+          })
+          .refine((issuer) => isLoopbackUrl(issuer) || isAllowedOutboundUrl(issuer), {
+            message: "cri.issuer must not target a cloud metadata endpoint",
+          })
+          .refine(isAllowedNonTlsTarget, {
+            message:
+              "cri.issuer targets loopback but CLAUDE_GATEWAY_ALLOW_LOOPBACK is not set \u2014 safeFetch would block every derived-JWKS fetch at runtime, so as configured the CRI wall could never admit anyone",
+          })
+          .refine(
+            (issuer) => {
+              try {
+                return new URL(issuer).href === issuer && !issuer.includes("?") && !issuer.includes("#");
+              } catch {
+                return false;
+              }
+            },
+            {
+              message:
+                "cri.issuer must be a canonical URL with no query or fragment \u2014 the iss pin and the {issuer}/jwks.json derivation both use the exact configured string",
+            },
+          )
+          .refine((issuer) => !issuer.endsWith("/"), {
+            message:
+              "cri.issuer must not end with '/' \u2014 the gateway pins the token's iss claim to this exact string and derives the verification JWKS URL as {issuer}/jwks.json",
+          })
+          .optional(),
+        org_allowlist: create_15(
+          create_2()
+            .trim()
+            .min(1)
+            .transform((org) => org.toLowerCase()),
+        ).default([]),
+        policy: strictCreate({
+          webhook: strictCreate({
+            url: create_2()
+              .refine(isHttpsOrLoopbackUrl, {
+                message: "cri.policy.webhook.url must be https:// (http:// allowed for loopback only)",
+              })
+              .refine((url) => isLoopbackUrl(url) || isAllowedOutboundUrl(url), {
+                message: "cri.policy.webhook.url must not target a cloud metadata endpoint",
+              })
+              .refine(isAllowedNonTlsTarget, {
+                message:
+                  "cri.policy.webhook.url targets loopback, which the gateway blocks at runtime unless CLAUDE_GATEWAY_ALLOW_LOOPBACK=1 is set \u2014 as configured, the policy webhook could never run",
+              }),
+            timeout_ms: zodCoerce.number().int().positive().max(30000).default(2000),
+            fail_closed: create_6().default(true),
+          }),
+        }).optional(),
+      }).optional(),
+      pricing: strictCreate({
+        multiplier: zodCoerce.number().gt(0).lte(10).default(1),
+        overrides: create_15(
+          strictCreate({
+            upstream: create_2().min(1),
+            model: create_2().min(1),
+            input: zodCoerce.number().positive().max(1e4),
+            output: zodCoerce.number().positive().max(1e4),
+            cache_read: zodCoerce.number().positive().max(1e4),
+            cache_write: zodCoerce.number().positive().max(1e4),
+          }),
+        ).default([]),
+      }).optional(),
+    }).superRefine((config, ctx) => {
+      if (config.enforcement.fail_closed_on_error && config.admin === undefined)
+        ctx.addIssue({
+          code: ZodIssueCode.custom,
+          path: ["enforcement", "fail_closed_on_error"],
+          message:
+            "has no effect without an `admin:` block \u2014 spend enforcement only runs when admin is configured",
+        });
+      let upstreamNames = new Set(config.upstreams.map((upstream) => upstream.name));
+      for (let [index, model] of config.models.entries())
+        for (let key of Object.keys(model.upstream_model))
+          if (!upstreamNames.has(key))
+            ctx.addIssue({
+              code: ZodIssueCode.custom,
+              path: ["models", index, "upstream_model", key],
+              message: `references unknown upstream '${key}'`,
+            });
+      let criEnabled = config.cri?.enabled === true;
+      if (criEnabled && (config.cri?.audience.length ?? 0) === 0)
+        ctx.addIssue({
+          code: ZodIssueCode.custom,
+          path: ["cri", "audience"],
+          message:
+            "cri.audience must list at least one registered audience value when cri.enabled is true \u2014 the audience binding is what stops a CRI JWT minted for another org's gateway from replaying here, so a wall with no expected audience would admit no one",
+        });
+      if (criEnabled && (config.cri?.org_allowlist.length ?? 0) === 0)
+        ctx.addIssue({
+          code: ZodIssueCode.custom,
+          path: ["cri", "org_allowlist"],
+          message:
+            "cri.org_allowlist must list at least one Claude Enterprise organization UUID when cri.enabled is true \u2014 an empty allowlist would admit no one",
+        });
+      if (config.oidc === undefined && !criEnabled)
+        ctx.addIssue({
+          code: ZodIssueCode.custom,
+          path: ["oidc"],
+          message:
+            "oidc is required \u2014 it may be omitted only for a customer-routed-inference-only deployment (cri.enabled: true)",
+        });
+      if (config.pricing !== undefined && config.admin === undefined && !hasManagedPolicies(config.managed))
+        ctx.addIssue({
+          code: ZodIssueCode.custom,
+          path: ["pricing"],
+          message:
+            "has no effect without an `admin:` block or a `managed:` block with at least one policy \u2014 the spend meter (admin) and the modelPricing pushed to clients (managed) are the only readers",
+        });
+      for (let [index, target] of config.telemetry.forward_to.entries()) {
+        if (!target.auth) continue;
+        for (let message of validateGoogleAuthTarget(target.url, target.headers))
+          ctx.addIssue({
+            code: ZodIssueCode.custom,
+            path: ["telemetry", "forward_to", index, "auth", "google"],
+            message,
+          });
+      }
+      let overrides = config.pricing?.overrides ?? [];
+      for (let [index, override] of overrides.entries()) {
+        if (!upstreamNames.has(override.upstream))
+          ctx.addIssue({
+            code: ZodIssueCode.custom,
+            path: ["pricing", "overrides", index, "upstream"],
+            message: `references unknown upstream '${override.upstream}'`,
+          });
+        let found = overrides
+          .slice(0, index)
+          .find(
+            (override_2) =>
+              override_2.upstream === override.upstream && isSameModel(override_2.model, override.model),
+          );
+        if (found)
+          ctx.addIssue({
+            code: ZodIssueCode.custom,
+            path: ["pricing", "overrides", index],
+            message: `duplicates the pricing override for '${found.model}' on upstream '${override.upstream}'`,
+          });
+      }
+    });
+  });
+});
+export { GatewayConfigSchema };

@@ -1,0 +1,31 @@
+/**
+ * mime-types/index.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: mime-types@2.1.35
+ * pieces: chunk-h6b7mazd.js (1)
+ * attribution: cjs-require-graph 1
+ */
+import { __commonJS } from "../../runtime/bun-runtime.js";
+
+//@ chunk-h6b7mazd.js:4742-5269 cjs-require-graph
+var require_mime_types = __commonJS(function (cjsExports, cjsModule) {
+  var makeStub = (methodName) => () => {
+    throw Error(
+      "mime-types." +
+        methodName +
+        "() is stubbed in this build. Do not rely on axios auto-multipart serialization (plain object + Content-Type: multipart/form-data). Use native FormData or hand-roll the multipart body instead. See scripts/build-plugins.ts stubMimeTypes plugin.",
+    );
+  };
+  cjsModule.exports = {
+    lookup: makeStub("lookup"),
+    contentType: makeStub("contentType"),
+    extension: makeStub("extension"),
+    charset: makeStub("charset"),
+    extensions: Object.create(null),
+    types: Object.create(null),
+    charsets: {
+      lookup: makeStub("charsets.lookup"),
+    },
+  };
+});
+export { require_mime_types };

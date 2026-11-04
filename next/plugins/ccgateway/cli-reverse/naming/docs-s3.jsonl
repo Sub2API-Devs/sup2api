@@ -1,0 +1,2470 @@
+{"id":"chunk-tyg7f3ek.js#zu","doc":"数组按布尔掩码过滤（掩码缺省为保留）"}
+{"id":"chunk-tyg7f3ek.js#mE","doc":"只按 image 块的顺序套用掩码过滤"}
+{"id":"chunk-tyg7f3ek.js#Xq","doc":"262144：延迟结果的序列化上限"}
+{"id":"chunk-tyg7f3ek.js#PS","doc":"判断一个值序列化后的字节数是否在上限内（用于延迟结果）。"}
+{"id":"chunk-tyg7f3ek.js#_E","doc":"等待内置插件就绪的时限（15 秒）与已就绪宿主集合。"}
+{"id":"chunk-tyg7f3ek.js#DS","doc":"两条消息 uuid 相同"}
+{"id":"chunk-tyg7f3ek.js#vE","doc":"清理 shell 输出用于显示（保留颜色）"}
+{"id":"chunk-tyg7f3ek.js#OE","doc":"0.03125：计时遥测采样率"}
+{"id":"chunk-tyg7f3ek.js#nj","doc":"7000"}
+{"id":"chunk-tyg7f3ek.js#lj","doc":"声明为绝对路径的额外目录"}
+{"id":"chunk-tyg7f3ek.js#ua","doc":"非负取整的时间差"}
+{"id":"chunk-yb0ajcmt.js#et","doc":"字素宽度判定用的字符类：双宽字符、零宽/组合字符、亚太多数传统终端按窄算的字符，以及区域指示符（国旗）。"}
+{"id":"chunk-yb0ajcmt.js#rt","doc":"ZWJ 与肤色修饰符"}
+{"id":"chunk-yb0ajcmt.js#ne","doc":"单个字素允许的最大显示宽度（超过按 128 处理）。"}
+{"id":"chunk-yb0ajcmt.js#Ae","doc":"每段都有确定宽度"}
+{"id":"chunk-yb0ajcmt.js#A","doc":"字符串显示宽度合计"}
+{"id":"chunk-yb0ajcmt.js#U","doc":"字符画布用的框线方向位（上/左/右与本位）、16 种直线组合的字符表、圆角变体、实线/点线/粗线三套样式，以及画布单元格上限。"}
+{"id":"chunk-cg10fy59.js#d","doc":"终端焦点上下文"}
+{"id":"chunk-cg10fy59.js#vye","doc":"从终端焦点上下文取出焦点状态（是否聚焦、最近一次变化）。"}
+{"id":"chunk-x6v6jz2y.js#Ko","doc":"恒 false 的选择器"}
+{"id":"chunk-bzr73sfg.js#MJe","doc":"Ink 渲染器主类：持有终端与布局、帧调度与节流、鼠标/点击/悬停订阅、图像管理、备用屏与暂停交接、布局失败恢复与调试上报，负责把 React 树渲染成终端帧。"}
+{"id":"chunk-xe7zq1p4.js#Gt","doc":"带 attributes 的节点"}
+{"id":"chunk-xe7zq1p4.js#ue","doc":"节点或 undefined"}
+{"id":"chunk-xe7zq1p4.js#de","doc":"输入选择桥接上下文"}
+{"id":"chunk-bzr73sfg.js#Gy","doc":"squashTextNodes 的别名"}
+{"id":"chunk-bzr73sfg.js#hd","doc":"非法 UTF-16 代理项替换为替换字符"}
+{"id":"chunk-bzr73sfg.js#QWe","doc":"把单个文本节点压平成显示字符串（含制表符展开与代理对修复）。"}
+{"id":"chunk-bzr73sfg.js#nrn","doc":"用 squashTextNodesToSegments 把节点压平并用空串拼接成文本。"}
+{"id":"chunk-bzr73sfg.js#md","doc":"判断文本节点是否需要归一化（含可展开控制字符或非法代理项）。"}
+{"id":"chunk-7t3j7ybe.js#Y","doc":"取流对应的 tty 名称"}
+{"id":"chunk-7t3j7ybe.js#W","doc":"同步写；EAGAIN 时按 0 处理"}
+{"id":"chunk-ag5x7vhf.js#$g","doc":"空函数，用作“没有输出回放句柄”时的占位。"}
+{"id":"chunk-ag5x7vhf.js#zs","doc":"全屏输出回放用的 ANSI 常量：复位、擦到行尾、每批回放行数 100、原生历史行上限 1 万，以及顶部/底部装饰占用行数 4。"}
+{"id":"chunk-wj577vf9.js#Rt","doc":"行首引用标记"}
+{"id":"chunk-wj577vf9.js#F","doc":"渲染嵌套深度守卫"}
+{"id":"chunk-x6v6jz2y.js#ft","doc":"新建渲染模式锁存"}
+{"id":"chunk-x6v6jz2y.js#Re","doc":"全屏环境变量开启则 fullscreen，否则 inline"}
+{"id":"chunk-x6v6jz2y.js#Te","doc":"渲染缓存上下文"}
+{"id":"chunk-x6v6jz2y.js#ht","doc":"schema 引用相等"}
+{"id":"chunk-d4eg9at2.js#yn","doc":"plugin configure --values-stdin 读取上限 256 KB"}
+{"id":"chunk-w6s5y86e.js#Xh","doc":"滚动相关常量：一次跳 16 行、每 tick 最多 50 行、最少 4 行、历史上限 16384 行、tick 间隔 250ms。"}
+{"id":"chunk-ngsa3jxs.js#s","doc":"EIO/ENOTTY/EBADF"}
+{"id":"chunk-bzr73sfg.js#F0t","doc":"measureText 的门面导出别名。"}
+{"id":"chunk-bzr73sfg.js#dd","doc":"追加待清理项"}
+{"id":"chunk-bzr73sfg.js#Uy","doc":"标记根节点被移出"}
+{"id":"chunk-bzr73sfg.js#Iy","doc":"读取节点是否被整体移出，并复位标记。"}
+{"id":"chunk-bzr73sfg.js#Yx","doc":"把 ink 样式映射到 yoga 节点：overflow、margin、padding、flex、宽高与 min/max、display、边框与 gap；$x 汇总全部。"}
+{"id":"chunk-dxdtyerk.js#R","doc":"终端钩子与 UI 挂载状态"}
+{"id":"chunk-dxdtyerk.js#g","doc":"单例"}
+{"id":"chunk-dxdtyerk.js#tKo","doc":"登记供终端模块使用的钩子集合。"}
+{"id":"chunk-dxdtyerk.js#nKo","doc":"取已登记的终端钩子集合。"}
+{"id":"chunk-dxdtyerk.js#h","doc":"标记 UI 已挂载"}
+{"id":"chunk-dxdtyerk.js#oZn","doc":"终端侧判断 UI 是否已经挂载。"}
+{"id":"chunk-dxdtyerk.js#H","doc":"HostScoped 的“第二个根”错误"}
+{"id":"chunk-dxdtyerk.js#di","doc":"取“同一宿主只允许一个 Ink 根”错误的实例。"}
+{"id":"chunk-dxdtyerk.js#m","doc":"惰性加载的节点属性模块"}
+{"id":"chunk-dxdtyerk.js#HX","doc":"判断该终端是否有“未知转义序列被原样打印”的已知缺陷（决定是否关闭 kitty 键协议等）。"}
+{"id":"chunk-dxdtyerk.js#b","doc":"通过 SSH 连接"}
+{"id":"chunk-dxdtyerk.js#oe","doc":"2048"}
+{"id":"chunk-dxdtyerk.js#SQs","doc":"把会话名净化成只含字母数字和 _.+_，截到 32 字符，空则 undefined。"}
+{"id":"chunk-dxdtyerk.js#rZn","doc":"生成 OSC 7501 “state=clear” 序列（清掉程序状态）。"}
+{"id":"chunk-dxdtyerk.js#wQs","doc":"生成带 id 的 OSC 7501 状态清除序列。"}
+{"id":"chunk-dxdtyerk.js#y","doc":"semver 模块命名空间"}
+{"id":"chunk-24t3dkzb.js#S","doc":"HostScoped 的“光标上移视口”缺陷状态"}
+{"id":"chunk-24t3dkzb.js#b9","doc":"判断当前宿主终端是否有“光标上移导致视口错位”的缺陷。"}
+{"id":"chunk-24t3dkzb.js#crn","doc":"让“光标上移缺陷”的探测结果失效，下次重新判定。"}
+{"id":"chunk-24t3dkzb.js#b","doc":"semver 模块命名空间"}
+{"id":"chunk-brd2890s.js#u","doc":"HostScoped 的终端探测状态"}
+{"id":"chunk-brd2890s.js#gk","doc":"取当前宿主的终端能力探测状态（能力表、图像文件支持、XTVERSION 名称）。"}
+{"id":"chunk-brd2890s.js#EA","doc":"取终端能力表（kittyGraphics、now 等取值接口）。"}
+{"id":"chunk-brd2890s.js#u$s","doc":"取当前 kittyGraphics 能力（未支持时为 undefined）。"}
+{"id":"chunk-brd2890s.js#Csn","doc":"取终端是否支持以文件方式显示图像。"}
+{"id":"chunk-brd2890s.js#p$s","doc":"记录终端通过 XTVERSION 报出的名称。"}
+{"id":"chunk-brd2890s.js#Rsn","doc":"取终端 XTVERSION 报出的名称。"}
+{"id":"chunk-brd2890s.js#g$s","doc":"判断 XTVERSION 名称是否以 ghostty 开头。"}
+{"id":"chunk-g3xfp0ds.js#k","doc":"SGR 30"}
+{"id":"chunk-g3xfp0ds.js#mYr","doc":"判断 SGR 序列是否为前景色 30 或 37（用作“默认色”近似）。"}
+{"id":"chunk-g3xfp0ds.js#a","doc":"去空白后非空"}
+{"id":"chunk-g3xfp0ds.js#y","doc":"24 位颜色 SGR 正则"}
+{"id":"chunk-g3xfp0ds.js#f","doc":"ESC[23m"}
+{"id":"chunk-m4dvt8pp.js#a2t","doc":"tmux 查询输出的读取上限（16 KiB）。"}
+{"id":"chunk-m4dvt8pp.js#B7n","doc":"tmux 内显示图像的失败说明组：tmux 版本/allow-passthrough/focus-events 未开、外层终端不支持图像、无法探知外层终端、查询无应答、TMUX_PANE 缺失等，每种情况一段可直接展示给用户的提示。"}
+{"id":"chunk-m4dvt8pp.js#G2o","doc":"tmux 窗格繁询的冷却：最近一次询问在 1.5 秒内失败或无应答时，重绘路径不再重复执行 tmux display-message。"}
+{"id":"chunk-m4dvt8pp.js#nQs","doc":"判断 tmux 探测结果是否仍新鲜（未探测或超过 1.5 秒则过期）。"}
+{"id":"chunk-wz6vk74d.js#Ays","doc":"判断码点是否在可打印 ASCII 区间（48–126）。"}
+{"id":"chunk-wz6vk74d.js#vl","doc":"按参数拼接 CSI 控制序列（空参数返回前缀、单参数直接拼、多参数用分号连接）。"}
+{"id":"chunk-ebxn0psw.js#W_","doc":"DEC 私有模式编号常量表（光标显示、备用屏、鼠标模式、焦点事件、括号粘贴、同步更新等）。"}
+{"id":"chunk-ebxn0psw.js#ZUn","doc":"按 full/scroll/off 返回开启完整鼠标跟踪、仅点击或空的序列。"}
+{"id":"chunk-m1vyn8g1.js#R","doc":"按行生成组合标记字符"}
+{"id":"chunk-m1vyn8g1.js#c","doc":"拼接 kitty 图形协议的 APC 序列（payload 与可选的 base64 元数据）。"}
+{"id":"chunk-m1vyn8g1.js#O","doc":"格式码映射"}
+{"id":"chunk-m1vyn8g1.js#RIs","doc":"生成按 id 删除 kitty 图像的序列。"}
+{"id":"chunk-m1vyn8g1.js#v","doc":"生成传输并立即显示的 kitty 图像序列（1×1 占位）。"}
+{"id":"chunk-m1vyn8g1.js#xIs","doc":"以 32 位 RGBA（f=32）传输给定数据并放置图像。"}
+{"id":"chunk-dxdtyerk.js#V_","doc":"按当前终端（kitty 用 ST，其余用 BEL）拼接 OSC 序列。"}
+{"id":"chunk-dxdtyerk.js#zm","doc":"OSC 编号常量表（标题、颜色、超链接、剪贴板 OSC 52、kitty、标签状态等）。"}
+{"id":"chunk-tw8fk0yz.js#Che","doc":"若文本含制表符或可展开控制字符，按列位置展开为空格（跳过转义序列）。"}
+{"id":"chunk-tw8fk0yz.js#nje","doc":"判断文本是否含需要中和的 ESC/C1 控制序列。"}
+{"id":"chunk-tw8fk0yz.js#ae","doc":"把 C1 字符串起始符替换为替换字符"}
+{"id":"chunk-tw8fk0yz.js#W8e","doc":"按给定的附加参数字符生成 `\\x1b[...m` 的 SGR 正则片段。"}
+{"id":"chunk-tw8fk0yz.js#X","doc":"换行特性读取器与锁存登记表"}
+{"id":"chunk-tw8fk0yz.js#SOi","doc":"登记换行用的特性读取器（供 wrapAnsi 判断是否可换行）。"}
+{"id":"chunk-tw8fk0yz.js#wOi","doc":"登记换行用的锁存读取（一次性取值后缓存）。"}
+{"id":"chunk-tw8fk0yz.js#J","doc":"换行实现用的一批正则与常量：SGR、超链接 OSC、复位码、颜色码、前景/背景槽位，以及 SGR 编号到槽位的映射。"}
+{"id":"chunk-tw8fk0yz.js#xe","doc":"空格或 9–13"}
+{"id":"chunk-tw8fk0yz.js#bys","doc":"生成一张空的 SGR 状态槽位数组（前景/背景/下划线等）。"}
+{"id":"chunk-tw8fk0yz.js#Le","doc":"换行时的宽字符处理：两个私有区占位符、匹配占位符的正则、完整转义序列判定，以及“窄字符”判定的字符类。"}
+{"id":"chunk-tw8fk0yz.js#he","doc":"10 或 13"}
+{"id":"chunk-tw8fk0yz.js#Te","doc":"\\r\\n?|\\n"}
+{"id":"chunk-tw8fk0yz.js#re","doc":"登记一次字素替换"}
+{"id":"chunk-tw8fk0yz.js#me","doc":"收集一段文本并登记其中的宽字符"}
+{"id":"chunk-7fw14qgv.js#Ze","doc":"把回调以 false 调用"}
+{"id":"chunk-7fw14qgv.js#tt","doc":"执行重新启动"}
+{"id":"chunk-7fw14qgv.js#Ve","doc":"先清理再重新启动"}
+{"id":"chunk-7fw14qgv.js#et","doc":"状态置为 save-failed"}
+{"id":"chunk-xe7zq1p4.js#m0t","doc":"记录各和弦按键使用次数的全局 store（重置时清空）。"}
+{"id":"chunk-xe7zq1p4.js#sUn","doc":"是否统计过该和弦"}
+{"id":"chunk-xe7zq1p4.js#Je","doc":"和弦按键等待下一键的超时（3 秒），超时后取消和弦并提示。"}
+{"id":"chunk-krdjvqaq.js#tGn","doc":"快捷键相关模块的空实现桩。"}
+{"id":"chunk-krdjvqaq.js#c$s","doc":"带参数的空实现桩。"}
+{"id":"chunk-krdjvqaq.js#d$s","doc":"返回模式切换快捷键的动作名 chat:cycleMode。"}
+{"id":"chunk-thjvqmbc.js#Oe","doc":"取对话框动作的提示"}
+{"id":"chunk-thjvqmbc.js#J","doc":"对话框作用域上下文"}
+{"id":"chunk-thjvqmbc.js#Te","doc":"计数 +1"}
+{"id":"chunk-thjvqmbc.js#Pe","doc":"计数 −1，归零时删除"}
+{"id":"chunk-8pssrarc.js#ne","doc":"按键名到 Ink 键字段名的映射，以及反向的 Ink 键名到显示别名表。"}
+{"id":"chunk-8pssrarc.js#he","doc":"空函数"}
+{"id":"chunk-8pssrarc.js#fe","doc":"处理器是否消费了按键"}
+{"id":"chunk-6qssfmzs.js#l","doc":"惰性缓存的按键集合，用于判断某个键是否不可重新绑定。"}
+{"id":"chunk-6qssfmzs.js#Sos","doc":"判断快捷键动作名是否在已弃用列表里。"}
+{"id":"chunk-v6kts6xw.js#y","doc":"按 modCase 取出修饰键的显示文本（可能是按平台区分的函数）。"}
+{"id":"chunk-yzt83vwd.js#a","doc":"800"}
+{"id":"chunk-y7y3wdde.js#r","doc":"需要走快速路径的顶层子命令集合。"}
+{"id":"chunk-y7y3wdde.js#i","doc":"插件相关快速路径的占位判定，当前恒返回 false。"}
+{"id":"chunk-y7y3wdde.js#s","doc":"参数里是否有 mcp serve"}
+{"id":"chunk-y7y3wdde.js#a","doc":"agents 后跟 --json"}
+{"id":"chunk-y7y3wdde.js#c","doc":"plugin/plugins 后跟 eval"}
+{"id":"chunk-y7y3wdde.js#l","doc":"remote-control 或 rc"}
+{"id":"chunk-7sekx49c.js#T","doc":"惰性挂载的账号记忆对话框模块"}
+{"id":"chunk-7sekx49c.js#O","doc":"路径存在即 true"}
+{"id":"chunk-7sekx49c.js#h","doc":"追加 “, set by …”"}
+{"id":"chunk-e6aww6q8.js#efe","doc":"记忆选择器对话的初始状态（按目录分表与最近使用）。"}
+{"id":"chunk-e6aww6q8.js#i6","doc":"清空记忆选择器对话的状态。"}
+{"id":"chunk-e6aww6q8.js#XJt","doc":"取指定记忆目录的选择器对话状态。"}
+{"id":"chunk-7sekx49c.js#w","doc":"记忆索引文件名 \"MEMORY.md\"、索引标题与扫描记忆文件的超时（5 秒）。"}
+{"id":"chunk-82kqcve8.js#Sf","doc":"首次存储拉取的等待上限"}
+{"id":"chunk-82kqcve8.js#hui","doc":"生成自动记忆段的提示文本（不可写时返回 null）。"}
+{"id":"chunk-xfwvhp77.js#gp","doc":"MEMORY.md 入口的限制：最多 200 行或 25000 字节、读取上限 4 倍字节数、召回时保留末尾 200 行、单文件召回 4096 字节。"}
+{"id":"chunk-xfwvhp77.js#LUe","doc":"对 MEMORY.md 内容去空白后统计行数与字节数。"}
+{"id":"chunk-xfwvhp77.js#Fae","doc":"清除记忆文本里不允许出现的字符（控制字符、不可见字符）。"}
+{"id":"chunk-xfwvhp77.js#mpr","doc":"判断单个字符是否属于记忆里不允许的字符。"}
+{"id":"chunk-xfwvhp77.js#pCn","doc":"把记忆文本里的换行与制表符删掉并净化，用于单行展示。"}
+{"id":"chunk-xfwvhp77.js#xos","doc":"记忆键里要拒绝的不可见码点集合与字符类别正则（格式符、私用区、未分配、代理项、默认忽略）。"}
+{"id":"chunk-vp5gef34.js#re","doc":"Porter 词干化算法：判断辅音/元音序列、CVC 结尾、双辅音，按 1a–5 各步替换后缀，最终给出词干（记忆索引分词用）。"}
+{"id":"chunk-vp5gef34.js#Qt","doc":"记忆索引的分词流程：按 Unicode 字母/数字切分、拆驼峰与数字、技术词改写（c++→cpp 等）、CJK 边界、去所有格与停用词，再按选项做词干化与复合词拆分。"}
+{"id":"chunk-vp5gef34.js#b","doc":"把记忆文件拆成索引字段：文件名、frontmatter、各级标题、正文（含代码块跳过），并给出各字段文本。"}
+{"id":"chunk-vp5gef34.js#x","doc":"记忆 BM25 倒排索引的内存结构操作：术语 → 文档 id 与位置、按字段统计长度、增删改文档、未验证文档标记与按路径查文档。"}
+{"id":"chunk-vp5gef34.js#Re","doc":"BM25 打分：按字段权重（文件名/frontmatter 3、标题 2.5、正文 1）与文档长度归一化打分，叠加短语命中与邻近性加成，返回排序后的结果。"}
+{"id":"chunk-vp5gef34.js#bt","doc":"BM25 索引文件（.bm25-index.json）的读写：序列化成紧凑数组、解析回内存结构，超过 64 MiB 视为超大并重建。"}
+{"id":"chunk-vp5gef34.js#_n","doc":"记忆索引的打开/建立入口：读取已有索引并同步目录，扫描未完成时退回空索引。"}
+{"id":"chunk-vp5gef34.js#he","doc":"目录到索引的增量同步：比对大小/mtime 找新增与改动、删除已消失文件、抽取短语与加权短语、统计各项计数。"}
+{"id":"chunk-vp5gef34.js#zt","doc":"按会话根缓存记忆索引：打开、按路径取、释放过期实例；扫描不完整时释放并重建。"}
+{"id":"chunk-82kqcve8.js#Kn","doc":"tengu_salt_marsh 开关（记忆提示词段落）"}
+{"id":"chunk-e6aww6q8.js#YKo","doc":"从记忆条目里找出作用域为 user、文件名是 MEMORY.md 的那一条。"}
+{"id":"chunk-e6aww6q8.js#XKo","doc":"32"}
+{"id":"chunk-e6aww6q8.js#e2o","doc":"用严格 frontmatter 正则去掉记忆文件开头的元数据块，返回正文。"}
+{"id":"chunk-e6aww6q8.js#u2o","doc":"带序号后缀的记忆文件名"}
+{"id":"chunk-e6aww6q8.js#uCn","doc":"记忆选择器按会话保存的两张表（已展示条目与已用会话）。"}
+{"id":"chunk-e6aww6q8.js#xxr","doc":"没有本地记忆时给模型看的占位文字，以及“记忆类型前缀”的匹配正则。"}
+{"id":"chunk-e6aww6q8.js#Oxr","doc":"2"}
+{"id":"chunk-e6aww6q8.js#hCn","doc":"模型不存在或无权限"}
+{"id":"chunk-s61vbvea.js#KL","doc":"200"}
+{"id":"chunk-s61vbvea.js#qL","doc":"按是否只要普通文件决定用归一化读取还是递归 readdir 列出记忆目录。"}
+{"id":"chunk-s61vbvea.js#QL","doc":"4 倍 frontmatter 上限 + 256"}
+{"id":"chunk-s61vbvea.js#Mf","doc":"记忆扫描失败时抛出的错误类型（区分存储列表失败与 readdir 失败）。"}
+{"id":"chunk-82kqcve8.js#mwe","doc":"标记共享记忆走工具"}
+{"id":"chunk-82kqcve8.js#rar","doc":"共享记忆是否走工具"}
+{"id":"chunk-82kqcve8.js#af","doc":"第一方 + 订阅 + 令牌 + scope 齐全"}
+{"id":"chunk-aepeg2w5.js#KM","doc":"栈帧行正则"}
+{"id":"chunk-aepeg2w5.js#$M","doc":"记忆/召回相关判断用的否定词表（no、not、never、stop、avoid、forbid、exclude 等及其屈折形式）。"}
+{"id":"chunk-aepeg2w5.js#nh","doc":"cited_turn/contiguous/off"}
+{"id":"chunk-aepeg2w5.js#c4","doc":"指示代词表"}
+{"id":"chunk-aepeg2w5.js#Zs","doc":"记忆工具所属服务器名（memory）与工具名前缀。"}
+{"id":"chunk-aepeg2w5.js#Yro","doc":"记忆 MCP 工具名集合（memory_read/write/append/str_replace/delete 与只读的 read/list/search）及各自的参数、结果 schema。"}
+{"id":"chunk-aepeg2w5.js#ATi","doc":"解析 CLAUDE_CODE_POST_TURN_MEMORY_CONFIG 得到 hosted 记忆提取配置，非法时返回 null。"}
+{"id":"chunk-aepeg2w5.js#Xro","doc":"本地 agent 会话里的动态记忆服务器"}
+{"id":"chunk-aepeg2w5.js#$Pt","doc":"该服务器是否提供记忆工具"}
+{"id":"chunk-aepeg2w5.js#Ias","doc":"从服务器列表里找 memory 服务器"}
+{"id":"chunk-aepeg2w5.js#Jro","doc":"从调用参数里移除 caller、pass_id、cites_event 三个记忆 _meta 键。"}
+{"id":"chunk-aepeg2w5.js#CTi","doc":"构造记忆工具调用的 _meta：caller 固定为 memextract，可带 pass id 与引用事件。"}
+{"id":"chunk-82kqcve8.js#zm","doc":"256"}
+{"id":"chunk-82kqcve8.js#Vm","doc":"256"}
+{"id":"chunk-82kqcve8.js#nf","doc":"内置记忆系统提示里的“记忆类型”大段：user/feedback/project/reference 四类的描述、何时保存、如何使用、示例，以及团队/个人两个变体。"}
+{"id":"chunk-82kqcve8.js#jt","doc":"记忆提示词里的三段规则：不该保存什么（代码模式、git 历史、调试结论…）、何时访问记忆、引用记忆前先核对现状。"}
+{"id":"chunk-e6aww6q8.js#wSt","doc":"记忆写入检查的入口；当前实现在取 vscodeClient 后直接返回（未启用检查）。"}
+{"id":"chunk-e6aww6q8.js#hqo","doc":"记忆写入检查开关名"}
+{"id":"chunk-e6aww6q8.js#rXt","doc":"收集不可见/控制字符"}
+{"id":"chunk-e6aww6q8.js#IL","doc":"判断这次记忆写入来自交互会话还是后台会话。"}
+{"id":"chunk-e6aww6q8.js#iXt","doc":"判断记忆文本里是否有不可见字符以及是否含 HTML 标签。"}
+{"id":"chunk-e6aww6q8.js#eSe","doc":"若启用写入检查，去掉不可见字符并归一化，否则原样返回。"}
+{"id":"chunk-e6aww6q8.js#aXt","doc":"按宿主记录已检查过的记忆写入 id（最多 256 个，超出淘汰最早）。"}
+{"id":"chunk-e6aww6q8.js#rSe","doc":"移除写入 id 记录"}
+{"id":"chunk-e6aww6q8.js#dXt","doc":"去掉不可见字符后归一化"}
+{"id":"chunk-e6aww6q8.js#Sqo","doc":"取最后一段路径"}
+{"id":"chunk-aepeg2w5.js#_I","doc":"设置里的自动记忆开关"}
+{"id":"chunk-aepeg2w5.js#ch","doc":"判断 autoMemoryEnabled 策略设置是否不可读（不可读时记忆功能按未决处理）。"}
+{"id":"chunk-aepeg2w5.js#vI","doc":"8"}
+{"id":"chunk-82kqcve8.js#a4","doc":"自动记忆开启且团队存储可用"}
+{"id":"chunk-82kqcve8.js#AJo","doc":"当前宿主有团队记忆存储"}
+{"id":"chunk-82kqcve8.js#pf","doc":"HostScoped 的团队存储探测"}
+{"id":"chunk-82kqcve8.js#SPe","doc":"判断某路径是否属于团队记忆 store（且团队记忆可用）。"}
+{"id":"chunk-cjydagjy.js#ot","doc":"迁移脚本可接受的目标权限模式列表（default/acceptEdits/plan/bypassPermissions 加 manual 别名）。"}
+{"id":"chunk-cwwxybjc.js#$Ps","doc":"颜色差异能力不可用时返回 null，否则返回 ColorDiff。"}
+{"id":"chunk-cwwxybjc.js#JFn","doc":"颜色模块不可用时返回 null，否则返回 ColorFile。"}
+{"id":"chunk-cwwxybjc.js#Gyo","doc":"颜色模块可用时返回指定语法主题，否则 null。"}
+{"id":"chunk-e6aww6q8.js#H6s","doc":"返回 <配置目录>/output-styles 的解析后路径（managed 层）。"}
+{"id":"chunk-e6aww6q8.js#H0t","doc":"按主机与会话键缓存地加载某一层（managed/user/project）的 *.md 输出风格，解析 frontmatter 的 name/description/keep-coding-instructions。"}
+{"id":"chunk-e6aww6q8.js#Awt","doc":"清空输出风格的目录缓存、markdown 缓存与上层缓存。"}
+{"id":"chunk-bfnfj4kx.js#RSi","doc":"列出已注册内置插件的名字。"}
+{"id":"chunk-e6aww6q8.js#SFo","doc":"内置插件清单里 skills 数组的运行期校验边界：至少 1 项、最多 64 项（MAX_SKILLS_PER_PLUGIN）。"}
+{"id":"chunk-8jbcmznm.js#ce","doc":"1/true/yes/on"}
+{"id":"chunk-8jbcmznm.js#v","doc":"agentsMd 插件里使用的空数组与空对象占位。"}
+{"id":"chunk-16jhn3ak.js#c","doc":"反斜杠或斜杠"}
+{"id":"chunk-16jhn3ak.js#VTe","doc":"把路径统一成 posix 形式并去掉多余的尾部斜杠。"}
+{"id":"chunk-16jhn3ak.js#iGn","doc":"判断第一个路径是否位于第二个目录之下（都先归一化成 posix）。"}
+{"id":"chunk-16jhn3ak.js#mAo","doc":"归一化后比较两个路径是否相同。"}
+{"id":"chunk-16jhn3ak.js#gAo","doc":"生成 “Contents of <path>:” 加正文的指令文件文本。"}
+{"id":"chunk-16jhn3ak.js#hAo","doc":"把若干指令文件按格式追加到已有段落之后。"}
+{"id":"chunk-16jhn3ak.js#E$s","doc":"会让 CLAUDE.md 重新加载的三个事件名。"}
+{"id":"chunk-16jhn3ak.js#v$s","doc":"判断 MCP 服务器来源是否不属于项目/本地设置。"}
+{"id":"chunk-16jhn3ak.js#k$s","doc":"把 AGENTS.md 读取模式映射成显示标签，未知默认 claude-md。"}
+{"id":"chunk-16jhn3ak.js#T$s","doc":"返回合法的 AGENTS.md 读取模式，非法时用默认值。"}
+{"id":"chunk-16jhn3ak.js#fAo","doc":"默认开启"}
+{"id":"chunk-16jhn3ak.js#pAo","doc":"读取 tengu_agents_md_mod 决定 agentsMd 插件是否可用，默认开启。"}
+{"id":"chunk-te2wpq39.js#d","doc":"内嵌的图表打包资源"}
+{"id":"chunk-te2wpq39.js#H","doc":"读取内嵌的图表运行时打包文本（chart 插件用）。"}
+{"id":"chunk-ad0qz7kc.js#f","doc":"空对象默认导出"}
+{"id":"chunk-ad0qz7kc.js#o","doc":"返回 Claude 平台插件的特性开关名 tengu_peppy_crescent。"}
+{"id":"chunk-ad0qz7kc.js#n","doc":"平台可用、开关为 true 且来源是服务端时才允许使用平台 MCP 服务器。"}
+{"id":"chunk-ad0qz7kc.js#s","doc":"平台 docs MCP 配置"}
+{"id":"chunk-ad0qz7kc.js#a","doc":"内置 claude-platform 插件的版本号 0.1.0，随插件清单一起声明。"}
+{"id":"chunk-ae5g0zb5.js#G","doc":"普通对象"}
+{"id":"chunk-ae5g0zb5.js#ks","doc":"Claude Test 规格文件名与安全参数的正则、不可见字符正则，以及同意答案的三种取值。"}
+{"id":"chunk-ae5g0zb5.js#Ns","doc":"解析同意答案"}
+{"id":"chunk-ae5g0zb5.js#Is","doc":"去掉被隔离的条目"}
+{"id":"chunk-ae5g0zb5.js#ul","doc":"被测应用事实的显示文本：登录方式、支付、数据存放的几种说法，以及“测试没能开始”的阻塞原因与可用包管理器。"}
+{"id":"chunk-ae5g0zb5.js#ha","doc":"重新加载 Claude Test 模块的超时时间（5 秒）。"}
+{"id":"chunk-ae5g0zb5.js#wa","doc":"判断 Claude Test 模块是否已发起重载。"}
+{"id":"chunk-ae5g0zb5.js#Ea","doc":"判断重载已发起但还没有结果。"}
+{"id":"chunk-ae5g0zb5.js#To","doc":"返回一个检查函数：信号未中止且 Claude Test 插件仍启用。"}
+{"id":"chunk-ae5g0zb5.js#Sa","doc":"判断 Claude Test 是否在内置插件的启用列表中。"}
+{"id":"chunk-ae5g0zb5.js#bo","doc":"若消息由 composer 直接提交且非冻结标记、非子代理，返回其标记。"}
+{"id":"chunk-ae5g0zb5.js#Ta","doc":"把本次工具调用的参数与 composer 提交标记记到助手状态里。"}
+{"id":"chunk-ae5g0zb5.js#zt","doc":"浏览器助手被关闭时的两段用户提示：登录/计划变化导致关闭，以及插件当前不可用导致关闭。"}
+{"id":"chunk-ae5g0zb5.js#xa","doc":"空串（无登录）"}
+{"id":"chunk-ae5g0zb5.js#zn","doc":"登录等价比较"}
+{"id":"chunk-ae5g0zb5.js#ft","doc":"把“重新核对浏览器助手登录状态”排到微任务里，避免重复排队。"}
+{"id":"chunk-ae5g0zb5.js#Pa","doc":"停掉当前登录监视并清空监视对象。"}
+{"id":"chunk-ae5g0zb5.js#Oa","doc":"按宿主保存浏览器助手的监视与重试状态。"}
+{"id":"chunk-ae5g0zb5.js#rc","doc":"1000"}
+{"id":"chunk-ae5g0zb5.js#ka","doc":"Claude Test 需要的三个代理类型（explorer/author/runner），以及代理定义重读结果的缓存时长。"}
+{"id":"chunk-ae5g0zb5.js#qt","doc":"判断给定代理定义里 explorer/author/runner 是否都在。"}
+{"id":"chunk-ae5g0zb5.js#Ia","doc":"HostScoped 的运行目录表"}
+{"id":"chunk-ae5g0zb5.js#Jt","doc":"取当前宿主的运行目录表"}
+{"id":"chunk-ae5g0zb5.js#cc","doc":"64"}
+{"id":"chunk-ae5g0zb5.js#Ho","doc":"以 claude_test_helper_start 打点记录助手启动成功或失败原因。"}
+{"id":"chunk-ae5g0zb5.js#Go","doc":"后台任务名占位"}
+{"id":"chunk-ae5g0zb5.js#Uo","doc":"判断当前会话是否允许后台 shell（禁用或 plan 模式为 none，否则 kept）。"}
+{"id":"chunk-ae5g0zb5.js#oa","doc":"isRemote 标记对象"}
+{"id":"chunk-ae5g0zb5.js#Ki","doc":"记录窗格打开时间"}
+{"id":"chunk-ae5g0zb5.js#_u","doc":"取出窗格打开时间并清零，判断是否在有效窗口内。"}
+{"id":"chunk-ae5g0zb5.js#Ut","doc":"内联图片能力与是否在此打开"}
+{"id":"chunk-ae5g0zb5.js#ia","doc":"探测图键名"}
+{"id":"chunk-ae5g0zb5.js#Su","doc":"claude-test 询问「能否在这里画图」的最小间隔 1 秒，避免同一轮里反复弹问；同一声明还带着询问状态对象。"}
+{"id":"chunk-ae5g0zb5.js#pt","doc":"把“能否画图”的询问标记为结束并叫醒所有等待者。"}
+{"id":"chunk-ae5g0zb5.js#Zr","doc":"2"}
+{"id":"chunk-ae5g0zb5.js#Ru","doc":"画图能力未知时 500ms 后重试绘制结论截图。"}
+{"id":"chunk-ae5g0zb5.js#xu","doc":"5000"}
+{"id":"chunk-ae5g0zb5.js#Cu","doc":"3600000"}
+{"id":"chunk-ae5g0zb5.js#lo","doc":"带 fix 参数、非重跑且尚未开始运行时，标记为“正在修复”。"}
+{"id":"chunk-ae5g0zb5.js#$t","doc":"判断命令参数里是否带 --ci。"}
+{"id":"chunk-ae5g0zb5.js#pa","doc":"匹配 Claude Test 运行代理的 task 名，以及“仍在进行”的 task 状态集合。"}
+{"id":"chunk-ae5g0zb5.js#to","doc":"记录哪些项目的运行处于“已停止”。"}
+{"id":"chunk-ae5g0zb5.js#fa","doc":"参数里是否有 fix"}
+{"id":"chunk-ae5g0zb5.js#Du","doc":"反问提示正则"}
+{"id":"chunk-ae5g0zb5.js#Mu","doc":"10000"}
+{"id":"chunk-ae5g0zb5.js#wo","doc":"检查当前工具列表里是否存在浏览器助手提供的工具前缀。"}
+{"id":"chunk-ae5g0zb5.js#Le","doc":"吞掉异常地执行"}
+{"id":"chunk-ae5g0zb5.js#ga","doc":"非 root 的 uid"}
+{"id":"chunk-ae5g0zb5.js#_a","doc":"HostScoped 的助手标记状态"}
+{"id":"chunk-ae5g0zb5.js#Oe","doc":"取当前宿主的助手标记状态"}
+{"id":"chunk-ae5g0zb5.js#Gr","doc":"读取浏览器助手的文件与服务状态，顺便把 server 记到共享状态里。"}
+{"id":"chunk-ae5g0zb5.js#Ur","doc":"Claude Test 的“开关开着但标记关闭”状态占位值（当前恒 false）。"}
+{"id":"chunk-ae5g0zb5.js#Dt","doc":"没有存储登录时使用的占位文本。"}
+{"id":"chunk-ae5g0zb5.js#$r","doc":"新建 Claude Test 开关的说明状态（按登录保留的 Map 与上次提示）。"}
+{"id":"chunk-ae5g0zb5.js#Wi","doc":"按宿主保存 Claude Test 开关的评估状态。"}
+{"id":"chunk-ae5g0zb5.js#An","doc":"把开关状态包装成 {note, isOn} 两个取值函数。"}
+{"id":"chunk-ae5g0zb5.js#Mt","doc":"打开计数与代次"}
+{"id":"chunk-ae5g0zb5.js#Bi","doc":"打开计数 +1 并返回代次"}
+{"id":"chunk-ae5g0zb5.js#$i","doc":"代次一致时减少打开计数"}
+{"id":"chunk-ae5g0zb5.js#Vi","doc":"清零计数并递代次"}
+{"id":"chunk-ae5g0zb5.js#Xi","doc":"是否有打开的同意"}
+{"id":"chunk-ae5g0zb5.js#cu","doc":"4000"}
+{"id":"chunk-e6aww6q8.js#IZ","doc":"浏览器助手 MCP 服务器的名字 plugin:claude-test:browser，由助手名与 scope 拼成；另一种写法的工具名前缀见 HELPER_TOOL_PREFIX。"}
+{"id":"chunk-e6aww6q8.js#u0e","doc":"浏览器助手工具名的统一前缀。"}
+{"id":"chunk-e6aww6q8.js#g1r","doc":"claude_test_write 草稿文件名的正则片段（小写字母数字与连字符，最长 80 字符），拼成 ^…\\.md$ 后用于校验草稿名。"}
+{"id":"chunk-e6aww6q8.js#u8n","doc":"判断某次工具调用是否来自 claude-test 插件对 claude_test_write 的调用。"}
+{"id":"chunk-ae5g0zb5.js#Qo","doc":"空对象默认导出"}
+{"id":"chunk-ae5g0zb5.js#je","doc":"空对象默认导出"}
+{"id":"chunk-ae5g0zb5.js#Be","doc":"助手服务器状态（server/toldIgnored）"}
+{"id":"chunk-ae5g0zb5.js#ht","doc":"把文本里的 claude-test:run/execute/draft 替换为已冻结的命令名。"}
+{"id":"chunk-ae5g0zb5.js#yt","doc":"对以 .md/.mjs 结尾的文件值做命令名替换（其他原样）。"}
+{"id":"chunk-ae5g0zb5.js#dt","doc":"Claude Test 只在终端 CLI 里可用的说明，以及「会话里已有同名浏览器工具」时的处置步骤（检查 /plugin 的 Installed 页与 /mcp 里的 plugin_claude-test_browser）。"}
+{"id":"chunk-ae5g0zb5.js#Fe","doc":"Claude Test 的失败文案组：浏览器助手未就绪、无法启动测试代理、代理未加载（提示跑 /reload-plugins 再用 /claude-test）、未运行请求等，每段都告诉模型原样转述并停止。"}
+{"id":"chunk-ae5g0zb5.js#Ze","doc":"加载标记前缀"}
+{"id":"chunk-ae5g0zb5.js#Pe","doc":"让模型只转述并停止"}
+{"id":"chunk-ae5g0zb5.js#Hn","doc":"Claude Test 面板的界面文案：标题 \"Claude Test\"、空标题常量，以及面板已打开（能画图 / 不能画图）时追加到 skill 文本里的两段说明和「查看报告」链接文字。"}
+{"id":"chunk-ae5g0zb5.js#na","doc":"60000"}
+{"id":"chunk-ae5g0zb5.js#ts","doc":"启动被测应用前要拒绝的 node 选项（--import/--loader/--env-file 等），以及其中接受文件参数的子集。"}
+{"id":"chunk-ae5g0zb5.js#Xa","doc":"是否为规范化的绝对路径"}
+{"id":"chunk-ae5g0zb5.js#za","doc":"允许带文件的选项"}
+{"id":"chunk-ae5g0zb5.js#rr","doc":"从 NODE_OPTIONS 里挑出属于“可注入代码”选项的文件参数。"}
+{"id":"chunk-ae5g0zb5.js#Za","doc":"LD_PRELOAD 等"}
+{"id":"chunk-ae5g0zb5.js#rs","doc":"取真实路径，失败原样返回"}
+{"id":"chunk-ae5g0zb5.js#os","doc":"收集原始 cwd、当前 cwd 与文件系统 cwd，作为“项目内”判定的根。"}
+{"id":"chunk-ae5g0zb5.js#ls","doc":"绝对路径且不含 .. 与 shell 符号"}
+{"id":"chunk-ae5g0zb5.js#Tt","doc":"判断路径是否不属于干净绝对路径，或位于项目目录之外。"}
+{"id":"chunk-ae5g0zb5.js#Qa","doc":"5000"}
+{"id":"chunk-ae5g0zb5.js#si","doc":"登录/支付/数据三句概述"}
+{"id":"chunk-ae5g0zb5.js#yr","doc":"安装步骤行"}
+{"id":"chunk-ae5g0zb5.js#At","doc":"停止原因，修复中则显示“Fixing…”"}
+{"id":"chunk-ae5g0zb5.js#Yl","doc":"\"Waiting for you in the chat\""}
+{"id":"chunk-ae5g0zb5.js#_s","doc":"\"App isn't running\""}
+{"id":"chunk-ae5g0zb5.js#hs","doc":"端口被占用的失败行"}
+{"id":"chunk-ae5g0zb5.js#ws","doc":"当前进行或成功完成的步骤"}
+{"id":"chunk-ae5g0zb5.js#hn","doc":"取分组键，缺省为 OTHER"}
+{"id":"chunk-ae5g0zb5.js#Ql","doc":"是否有多个分组"}
+{"id":"chunk-ae5g0zb5.js#di","doc":"\"adds data\" 警告标记"}
+{"id":"chunk-ae5g0zb5.js#ci","doc":"按 area 分组排序"}
+{"id":"chunk-ae5g0zb5.js#Ts","doc":"取行的 area"}
+{"id":"chunk-ae5g0zb5.js#un","doc":"FAIL<BLOCKED<PASS<未重跑 的排序权重"}
+{"id":"chunk-ae5g0zb5.js#od","doc":"停止全部代理的按键提示"}
+{"id":"chunk-ae5g0zb5.js#tt","doc":"生成暗色文本块"}
+{"id":"chunk-ae5g0zb5.js#bs","doc":"生成“标签 + 值”的行"}
+{"id":"chunk-ae5g0zb5.js#ad","doc":"6"}
+{"id":"chunk-ae5g0zb5.js#pn","doc":"生成计数行"}
+{"id":"chunk-ae5g0zb5.js#Ee","doc":"统计某结论的行数"}
+{"id":"chunk-ae5g0zb5.js#Nr","doc":"由文件名 stem 得到显示名"}
+{"id":"chunk-ae5g0zb5.js#cd","doc":"统计文本行数"}
+{"id":"chunk-ae5g0zb5.js#Se","doc":"所有行合计行数"}
+{"id":"chunk-ae5g0zb5.js#xs","doc":"0.5"}
+{"id":"chunk-ae5g0zb5.js#Xo","doc":"从命令文本取运行目录"}
+{"id":"chunk-ae5g0zb5.js#zo","doc":"在 skill 与钩子文本里替换成运行期值的三个占位标记：沙箱目录、用户设置文件、监听端口。"}
+{"id":"chunk-ae5g0zb5.js#xc","doc":"60000"}
+{"id":"chunk-ae5g0zb5.js#mn","doc":"取出规格文件名 stem"}
+{"id":"chunk-ae5g0zb5.js#ms","doc":"解析 names/areas 映射（最多 500）"}
+{"id":"chunk-ae5g0zb5.js#gs","doc":"限定范围的整数秒"}
+{"id":"chunk-ae5g0zb5.js#Zs","doc":"内联图片能力"}
+{"id":"chunk-ae5g0zb5.js#Il","doc":"按时间取 spinner 帧"}
+{"id":"chunk-ae5g0zb5.js#vl","doc":"PASS/FAIL/BLOCKED 的符号"}
+{"id":"chunk-ae5g0zb5.js#ot","doc":"拼接 spans 文本"}
+{"id":"chunk-ae5g0zb5.js#fn","doc":"超长截断加省略号"}
+{"id":"chunk-ae5g0zb5.js#Ve","doc":"空文本 span"}
+{"id":"chunk-ae5g0zb5.js#Te","doc":"生成带前导空格的条目"}
+{"id":"chunk-ae5g0zb5.js#kt","doc":"该规格是否在并行通道中运行"}
+{"id":"chunk-ae5g0zb5.js#Ul","doc":"10000"}
+{"id":"chunk-ae5g0zb5.js#hi","doc":"Claude Test 运行目录的各类文件上限（运行文件 2 MiB、截图 256 KiB、live.html 2 MiB 等）与助手运行时的可变状态。"}
+{"id":"chunk-ae5g0zb5.js#mi","doc":"原样返回"}
+{"id":"chunk-ae5g0zb5.js#xe","doc":"控制台文本缓存"}
+{"id":"chunk-ae5g0zb5.js#wi","doc":"50"}
+{"id":"chunk-ae5g0zb5.js#Ed","doc":"正在准备/读代码/写测试"}
+{"id":"chunk-ae5g0zb5.js#at","doc":"最近运行目录缓存（5 秒）"}
+{"id":"chunk-ae5g0zb5.js#Sn","doc":"子文件存在性缓存"}
+{"id":"chunk-ae5g0zb5.js#Si","doc":"清空运行目录相关缓存"}
+{"id":"chunk-ae5g0zb5.js#_i","doc":"4096"}
+{"id":"chunk-ae5g0zb5.js#Fd","doc":"1024"}
+{"id":"chunk-ae5g0zb5.js#Oi","doc":"写入 install-progress.json"}
+{"id":"chunk-ae5g0zb5.js#Md","doc":"256"}
+{"id":"chunk-ae5g0zb5.js#vs","doc":"「 · see the chat」后缀，以及常见应用框架名表与对应状态标签——claude-test 用它判断打开的应用是否是自己认识的那一类。"}
+{"id":"chunk-ae5g0zb5.js#Tl","doc":"30000"}
+{"id":"chunk-ae5g0zb5.js#Ot","doc":".claude-test/runs"}
+{"id":"chunk-ae5g0zb5.js#bl","doc":"1000"}
+{"id":"chunk-ae5g0zb5.js#Pl","doc":"对象自有字符串键"}
+{"id":"chunk-ae5g0zb5.js#Ne","doc":"白名单内的值"}
+{"id":"chunk-ae5g0zb5.js#cs","doc":"0..9999 的整数"}
+{"id":"chunk-ae5g0zb5.js#hr","doc":"1..65535 的端口"}
+{"id":"chunk-ae5g0zb5.js#nt","doc":"合法的规格名"}
+{"id":"chunk-ae5g0zb5.js#Gs","doc":"最近的运行 id"}
+{"id":"chunk-ae5g0zb5.js#Ll","doc":"8"}
+{"id":"chunk-ae5g0zb5.js#Us","doc":"比给定运行更早的运行 id"}
+{"id":"chunk-ae5g0zb5.js#Ol","doc":"50"}
+{"id":"chunk-ae5g0zb5.js#Nl","doc":"16"}
+{"id":"chunk-ae5g0zb5.js#It","doc":".claude-test/specs"}
+{"id":"chunk-ae5g0zb5.js#qs","doc":"取较长的那个"}
+{"id":"chunk-zjdsh43n.js#sLo","doc":"插件用户配置项的标题"}
+{"id":"chunk-zjdsh43n.js#iYn","doc":"只允许本人填写的插件服务器"}
+{"id":"chunk-wnbbggnd.js#lie","doc":"diff 侧栏的宽度阈值：达到 110 列才会自动显示；用户在设置里明确开启时也用这个阈值，144 列是未设置时的默认开启线。"}
+{"id":"chunk-3s7ydtfd.js#ms","doc":"单位说明"}
+{"id":"chunk-3s7ydtfd.js#N","doc":"普通对象"}
+{"id":"chunk-3s7ydtfd.js#Pl","doc":"24"}
+{"id":"chunk-3s7ydtfd.js#Be","doc":"3"}
+{"id":"chunk-3s7ydtfd.js#fs","doc":"10"}
+{"id":"chunk-3s7ydtfd.js#jo","doc":"“N 单位(复数)”"}
+{"id":"chunk-3s7ydtfd.js#$l","doc":"40"}
+{"id":"chunk-3s7ydtfd.js#ls","doc":"12"}
+{"id":"chunk-3s7ydtfd.js#xs","doc":"字符串数组 schema"}
+{"id":"chunk-3s7ydtfd.js#K","doc":"N 单数/复数"}
+{"id":"chunk-3s7ydtfd.js#Et","doc":"列表截断加 “and N more”"}
+{"id":"chunk-3s7ydtfd.js#Jl","doc":"各类宽空白"}
+{"id":"chunk-3s7ydtfd.js#Vl","doc":"结尾孤立代理项"}
+{"id":"chunk-3s7ydtfd.js#Zl","doc":"从首个换行到结尾"}
+{"id":"chunk-3s7ydtfd.js#ql","doc":"连续空格"}
+{"id":"chunk-3s7ydtfd.js#Wo","doc":"纯 ASCII 可打印"}
+{"id":"chunk-3s7ydtfd.js#ex","doc":"字母或数字"}
+{"id":"chunk-3s7ydtfd.js#ox","doc":"控制字符与变体选择符"}
+{"id":"chunk-3s7ydtfd.js#rx","doc":"控制字符、标签字符与双向控制符"}
+{"id":"chunk-3s7ydtfd.js#sx","doc":"emoji 判断"}
+{"id":"chunk-3s7ydtfd.js#mx","doc":"默认 emoji 呈现"}
+{"id":"chunk-3s7ydtfd.js#At","doc":"\"…\""}
+{"id":"chunk-3s7ydtfd.js#ds","doc":"按码元截断且不切断代理对"}
+{"id":"chunk-3s7ydtfd.js#xx","doc":"英文字素分段器"}
+{"id":"chunk-3s7ydtfd.js#Ce","doc":"拆成字素（ASCII 直接按字符）"}
+{"id":"chunk-3s7ydtfd.js#cx","doc":"1.5"}
+{"id":"chunk-3s7ydtfd.js#yx","doc":"120"}
+{"id":"chunk-3s7ydtfd.js#Ho","doc":"1"}
+{"id":"chunk-3s7ydtfd.js#ys","doc":"统计满足谓词的个数"}
+{"id":"chunk-3s7ydtfd.js#U","doc":"去重"}
+{"id":"chunk-3s7ydtfd.js#ne","doc":"0..n-1 的数组"}
+{"id":"chunk-3s7ydtfd.js#$o","doc":"前缀和（带部分与结尾）"}
+{"id":"chunk-3s7ydtfd.js#Go","doc":"按预算取前缀"}
+{"id":"chunk-3s7ydtfd.js#hs","doc":"去掉控制字符的字素"}
+{"id":"chunk-3s7ydtfd.js#Ts","doc":"前缀省略号截断"}
+{"id":"chunk-3s7ydtfd.js#Ss","doc":"自有属性值或 undefined"}
+{"id":"chunk-3s7ydtfd.js#Os","doc":"null 或 typeof"}
+{"id":"chunk-3s7ydtfd.js#Cs","doc":"array 或文本类型"}
+{"id":"chunk-3s7ydtfd.js#Xo","doc":"校验图表输入"}
+{"id":"chunk-3s7ydtfd.js#jx","doc":"图表输入是否合法"}
+{"id":"chunk-3s7ydtfd.js#Fi","doc":"转义 &<>"}
+{"id":"chunk-3s7ydtfd.js#ji","doc":"斜线填充属性"}
+{"id":"chunk-3s7ydtfd.js#vi","doc":"折线点串"}
+{"id":"chunk-3s7ydtfd.js#Wi","doc":"迷你条带矩形"}
+{"id":"chunk-3s7ydtfd.js#Gi","doc":"描边与 data-series 属性"}
+{"id":"chunk-3s7ydtfd.js#Xi","doc":"textLength 属性"}
+{"id":"chunk-3s7ydtfd.js#Ki","doc":"fill 与标题加粗"}
+{"id":"chunk-3s7ydtfd.js#zi","doc":"文字的 y 坐标"}
+{"id":"chunk-3s7ydtfd.js#Yi","doc":"文字的 x/y 属性"}
+{"id":"chunk-3s7ydtfd.js#Vr","doc":"生成主题 CSS 变量"}
+{"id":"chunk-3s7ydtfd.js#xb","doc":"深色模式媒体查询"}
+{"id":"chunk-3s7ydtfd.js#vx","doc":"自动图表的提示句"}
+{"id":"chunk-3s7ydtfd.js#$x","doc":"组织策略禁用 easel 的说明"}
+{"id":"chunk-3s7ydtfd.js#Xx","doc":"1e24：数值上限"}
+{"id":"chunk-3s7ydtfd.js#Kx","doc":"1e-24：数值下限"}
+{"id":"chunk-3s7ydtfd.js#Ko","doc":"7"}
+{"id":"chunk-3s7ydtfd.js#zo","doc":"1000"}
+{"id":"chunk-3s7ydtfd.js#Es","doc":"86400"}
+{"id":"chunk-3s7ydtfd.js#As","doc":"3600"}
+{"id":"chunk-3s7ydtfd.js#bs","doc":"60"}
+{"id":"chunk-3s7ydtfd.js#Rs","doc":"0.001"}
+{"id":"chunk-3s7ydtfd.js#Is","doc":"1e-6"}
+{"id":"chunk-3s7ydtfd.js#Vx","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#Yo","doc":"1e9"}
+{"id":"chunk-3s7ydtfd.js#je","doc":"1024"}
+{"id":"chunk-3s7ydtfd.js#Jo","doc":"1e6"}
+{"id":"chunk-3s7ydtfd.js#ve","doc":"1000"}
+{"id":"chunk-3s7ydtfd.js#Vo","doc":"1e12"}
+{"id":"chunk-3s7ydtfd.js#Ns","doc":"1e-6"}
+{"id":"chunk-3s7ydtfd.js#Qx","doc":"1e-3"}
+{"id":"chunk-3s7ydtfd.js#eu","doc":"1e-9"}
+{"id":"chunk-3s7ydtfd.js#tu","doc":"100"}
+{"id":"chunk-3s7ydtfd.js#ou","doc":"1e15"}
+{"id":"chunk-3s7ydtfd.js#Ms","doc":"4"}
+{"id":"chunk-3s7ydtfd.js#su","doc":"4"}
+{"id":"chunk-3s7ydtfd.js#mu","doc":"60"}
+{"id":"chunk-3s7ydtfd.js#nu","doc":"60000"}
+{"id":"chunk-3s7ydtfd.js#W","doc":"返回 {kind:\"unread\", why} 表示该单元格不是可识别的数值。"}
+{"id":"chunk-3s7ydtfd.js#ws","doc":"把数值与单位包装成 {kind:\"number\", value, unit}（0 视为无单位）。"}
+{"id":"chunk-3s7ydtfd.js#xu","doc":"时区已知占位 true"}
+{"id":"chunk-3s7ydtfd.js#du","doc":"时区未知占位 false"}
+{"id":"chunk-3s7ydtfd.js#rt","doc":"1024²"}
+{"id":"chunk-3s7ydtfd.js#st","doc":"1024³"}
+{"id":"chunk-3s7ydtfd.js#Tu","doc":"6"}
+{"id":"chunk-3s7ydtfd.js#gu","doc":"30.44"}
+{"id":"chunk-3s7ydtfd.js#Ou","doc":"365.25"}
+{"id":"chunk-3s7ydtfd.js#_u","doc":"3600000"}
+{"id":"chunk-3s7ydtfd.js#Cu","doc":"60000"}
+{"id":"chunk-3s7ydtfd.js#He","doc":"86400000"}
+{"id":"chunk-3s7ydtfd.js#qo","doc":"1000"}
+{"id":"chunk-3s7ydtfd.js#zu","doc":"true"}
+{"id":"chunk-3s7ydtfd.js#Ju","doc":"true"}
+{"id":"chunk-3s7ydtfd.js#Us","doc":"返回一个按入参缓存的函数（Map 记忆化）。"}
+{"id":"chunk-3s7ydtfd.js#Fs","doc":"按小时区缓存 sv-SE 的短日期+时间格式化器。"}
+{"id":"chunk-3s7ydtfd.js#Zr","doc":"100"}
+{"id":"chunk-3s7ydtfd.js#Sb","doc":"1000"}
+{"id":"chunk-3s7ydtfd.js#Ob","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#Qi","doc":"40"}
+{"id":"chunk-3s7ydtfd.js#Cb","doc":"5"}
+{"id":"chunk-3s7ydtfd.js#Eb","doc":"66"}
+{"id":"chunk-3s7ydtfd.js#el","doc":"统计非空点数"}
+{"id":"chunk-3s7ydtfd.js#qr","doc":"NaN 用默认值，否则向下取整并封顶"}
+{"id":"chunk-3s7ydtfd.js#ol","doc":"未绘制摘要的行数"}
+{"id":"chunk-3s7ydtfd.js#Ub","doc":"含换行或以 [ { 开头"}
+{"id":"chunk-3s7ydtfd.js#ml","doc":"取输入里的 JSON 数据文本"}
+{"id":"chunk-3s7ydtfd.js#nl","doc":"补上推导出的格式"}
+{"id":"chunk-3s7ydtfd.js#fl","doc":"share 图默认 combine=sum"}
+{"id":"chunk-3s7ydtfd.js#qb","doc":"10/20/40/80/160"}
+{"id":"chunk-3s7ydtfd.js#eR","doc":"256"}
+{"id":"chunk-3s7ydtfd.js#oR","doc":"80"}
+{"id":"chunk-3s7ydtfd.js#ll","doc":"合并普通对象"}
+{"id":"chunk-3s7ydtfd.js#xl","doc":"带 easel _meta 的文本结果"}
+{"id":"chunk-3s7ydtfd.js#ul","doc":"不是终端渲染"}
+{"id":"chunk-3s7ydtfd.js#rs","doc":"非空"}
+{"id":"chunk-3s7ydtfd.js#aR","doc":"0/false/no/off"}
+{"id":"chunk-3s7ydtfd.js#fR","doc":"1/true/yes/on"}
+{"id":"chunk-3s7ydtfd.js#dl","doc":"非 easel 的 MCP 工具名"}
+{"id":"chunk-3s7ydtfd.js#cl","doc":"追加自动图表提示"}
+{"id":"chunk-3s7ydtfd.js#Tl","doc":"非空"}
+{"id":"chunk-3s7ydtfd.js#Ot","doc":"无图表的固定结果"}
+{"id":"chunk-3s7ydtfd.js#gl","doc":"渲染宿主的纵向布局"}
+{"id":"chunk-3s7ydtfd.js#gR","doc":"6"}
+{"id":"chunk-3s7ydtfd.js#_l","doc":"“最新 N 次调用”的提示片段"}
+{"id":"chunk-3s7ydtfd.js#Cl","doc":"自动图表脚注"}
+{"id":"chunk-3s7ydtfd.js#Ll","doc":"脚注行"}
+{"id":"chunk-3s7ydtfd.js#ER","doc":"\"  ⏿  \""}
+{"id":"chunk-shznzb37.js#i","doc":"空对象默认导出"}
+{"id":"chunk-shznzb37.js#t","doc":"返回 easel 插件的特性开关名 tengu_joyful_otter。"}
+{"id":"chunk-shznzb37.js#o","doc":"默认关闭"}
+{"id":"chunk-shznzb37.js#c","doc":"linux/macos"}
+{"id":"chunk-3s7ydtfd.js#pp","doc":"时间刻度起点对象"}
+{"id":"chunk-3s7ydtfd.js#rr","doc":"月份名+日期模式"}
+{"id":"chunk-3s7ydtfd.js#sr","doc":"是否为时间格式的单元格"}
+{"id":"chunk-3s7ydtfd.js#Hd","doc":"时区后缀模式"}
+{"id":"chunk-3s7ydtfd.js#ip","doc":"空/NaN/None 等空值模式"}
+{"id":"chunk-3s7ydtfd.js#Kd","doc":"只含数字与 .E+"}
+{"id":"chunk-3s7ydtfd.js#zd","doc":"年-W周-日"}
+{"id":"chunk-3s7ydtfd.js#Jd","doc":"±HH:MM 偏移"}
+{"id":"chunk-3s7ydtfd.js#lp","doc":"天/时/分/秒 的秒数"}
+{"id":"chunk-3s7ydtfd.js#xp","doc":"k/K/M/B/T 的倍数"}
+{"id":"chunk-3s7ydtfd.js#pr","doc":"1024⁴"}
+{"id":"chunk-3s7ydtfd.js#Pt","doc":"单位 → {unit, size}"}
+{"id":"chunk-3s7ydtfd.js#dp","doc":"乘单位大小后校验量级"}
+{"id":"chunk-3s7ydtfd.js#mr","doc":"货币优先按 SI 倍数，否则按单位表"}
+{"id":"chunk-3s7ydtfd.js#pc","doc":"数字正则的整数/小数部分"}
+{"id":"chunk-3s7ydtfd.js#mc","doc":"指数部分"}
+{"id":"chunk-3s7ydtfd.js#nc","doc":"符号与货币前缀"}
+{"id":"chunk-3s7ydtfd.js#ac","doc":"空格、后缀与收尾"}
+{"id":"chunk-3s7ydtfd.js#Tp","doc":"位数 → 毫秒倍数"}
+{"id":"chunk-3s7ydtfd.js#Ge","doc":"时间读数值"}
+{"id":"chunk-3s7ydtfd.js#Sp","doc":"ISO 周里第几天"}
+{"id":"chunk-3s7ydtfd.js#gp","doc":"ISO 周对应年份"}
+{"id":"chunk-3s7ydtfd.js#_p","doc":"某字段是否不同"}
+{"id":"chunk-3s7ydtfd.js#Dt","doc":"带时区的时刻模式"}
+{"id":"chunk-3s7ydtfd.js#Rc","doc":"easel chart 工具定义"}
+{"id":"chunk-3s7ydtfd.js#Ut","doc":"改成 bars 且去 log"}
+{"id":"chunk-3s7ydtfd.js#Ft","doc":"按索引表取列值"}
+{"id":"chunk-3s7ydtfd.js#jt","doc":"数值与时间都解析不了"}
+{"id":"chunk-3s7ydtfd.js#vt","doc":"\"*\""}
+{"id":"chunk-3s7ydtfd.js#Ip","doc":"12"}
+{"id":"chunk-3s7ydtfd.js#qc","doc":"指标格式名（含 grafana）"}
+{"id":"chunk-3s7ydtfd.js#Np","doc":"各系列点数一致"}
+{"id":"chunk-3s7ydtfd.js#ty","doc":"key:value 形式的指标名"}
+{"id":"chunk-3s7ydtfd.js#ry","doc":"Prometheus 选择器语法"}
+{"id":"chunk-3s7ydtfd.js#OS","doc":"true"}
+{"id":"chunk-3s7ydtfd.js#LS","doc":"5"}
+{"id":"chunk-3s7ydtfd.js#En","doc":"120"}
+{"id":"chunk-3s7ydtfd.js#An","doc":"3"}
+{"id":"chunk-3s7ydtfd.js#bn","doc":"3"}
+{"id":"chunk-3s7ydtfd.js#AS","doc":"65536"}
+{"id":"chunk-3s7ydtfd.js#RS","doc":"240"}
+{"id":"chunk-3s7ydtfd.js#IS","doc":"8"}
+{"id":"chunk-3s7ydtfd.js#MS","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#kS","doc":"以 ] 或 } 结尾"}
+{"id":"chunk-3s7ydtfd.js#PS","doc":"以 [ 或 { 开头"}
+{"id":"chunk-3s7ydtfd.js#DS","doc":"以数字开头"}
+{"id":"chunk-3s7ydtfd.js#Rn","doc":"列名都能匹配"}
+{"id":"chunk-3s7ydtfd.js#In","doc":"能读出数据且非 bars"}
+{"id":"chunk-3s7ydtfd.js#Nn","doc":"请求里点名的列"}
+{"id":"chunk-3s7ydtfd.js#po","doc":"去重后取前 N 个拼接"}
+{"id":"chunk-3s7ydtfd.js#Pn","doc":"sum/mean/max/min"}
+{"id":"chunk-3s7ydtfd.js#XS","doc":"最后一点可能仍在累积"}
+{"id":"chunk-3s7ydtfd.js#Rr","doc":"建议减少行数"}
+{"id":"chunk-3s7ydtfd.js#Un","doc":"bars 且名字是编的则不用 y"}
+{"id":"chunk-3s7ydtfd.js#Bn","doc":"取单元值"}
+{"id":"chunk-3s7ydtfd.js#vn","doc":"按列单位换算"}
+{"id":"chunk-3s7ydtfd.js#Wn","doc":"对数刻度无法表示的读数"}
+{"id":"chunk-3s7ydtfd.js#tg","doc":"零点时间值"}
+{"id":"chunk-3s7ydtfd.js#Nr","doc":"至少一个非空值"}
+{"id":"chunk-3s7ydtfd.js#Gn","doc":"条件或拆分判断"}
+{"id":"chunk-3s7ydtfd.js#mo","doc":"系列标题"}
+{"id":"chunk-3s7ydtfd.js#no","doc":"去重排序的时间戳"}
+{"id":"chunk-3s7ydtfd.js#Me","doc":"生成拒绝结果"}
+{"id":"chunk-3s7ydtfd.js#Mr","doc":"带表名的拒绝结果"}
+{"id":"chunk-3s7ydtfd.js#Jn","doc":"求时间范围"}
+{"id":"chunk-3s7ydtfd.js#Vn","doc":"刻度起点（不走字段）"}
+{"id":"chunk-3s7ydtfd.js#ye","doc":"取第一个值"}
+{"id":"chunk-3s7ydtfd.js#kr","doc":"1e9"}
+{"id":"chunk-3s7ydtfd.js#ta","doc":"小数位只求到 1 位时至少补到 2 位"}
+{"id":"chunk-3s7ydtfd.js#Pr","doc":"10"}
+{"id":"chunk-3s7ydtfd.js#jg","doc":"100"}
+{"id":"chunk-3s7ydtfd.js#we","doc":"1e-9"}
+{"id":"chunk-3s7ydtfd.js#Wg","doc":"5"}
+{"id":"chunk-3s7ydtfd.js#$g","doc":"10"}
+{"id":"chunk-3s7ydtfd.js#Gg","doc":"10"}
+{"id":"chunk-3s7ydtfd.js#Dr","doc":"1e6"}
+{"id":"chunk-3s7ydtfd.js#Kg","doc":"1e4"}
+{"id":"chunk-3s7ydtfd.js#zg","doc":"单位换算倍率的展开上限"}
+{"id":"chunk-3s7ydtfd.js#Yg","doc":"数值跨度的展开上限"}
+{"id":"chunk-3s7ydtfd.js#Jg","doc":"挑单位后缀时小数位的上限"}
+{"id":"chunk-3s7ydtfd.js#Vg","doc":"12"}
+{"id":"chunk-3s7ydtfd.js#Ur","doc":"1e12"}
+{"id":"chunk-3s7ydtfd.js#qg","doc":"86400"}
+{"id":"chunk-3s7ydtfd.js#Qg","doc":"3600"}
+{"id":"chunk-3s7ydtfd.js#eO","doc":"1e-6"}
+{"id":"chunk-3s7ydtfd.js#tO","doc":"1e-3"}
+{"id":"chunk-3s7ydtfd.js#oO","doc":"60"}
+{"id":"chunk-3s7ydtfd.js#rO","doc":"1e-9"}
+{"id":"chunk-3s7ydtfd.js#pO","doc":"1e15"}
+{"id":"chunk-3s7ydtfd.js#mO","doc":"1000"}
+{"id":"chunk-3s7ydtfd.js#xt","doc":"按数量级算小数位"}
+{"id":"chunk-3s7ydtfd.js#oa","doc":"千分位格式化绝对值"}
+{"id":"chunk-3s7ydtfd.js#ra","doc":"负数前缀"}
+{"id":"chunk-3s7ydtfd.js#Fr","doc":"\"\"/M/G/T"}
+{"id":"chunk-3s7ydtfd.js#sa","doc":"按单位与大值修正小数位"}
+{"id":"chunk-3s7ydtfd.js#pa","doc":"\"\"/M/B/T"}
+{"id":"chunk-3s7ydtfd.js#cO","doc":"1/2/5"}
+{"id":"chunk-3s7ydtfd.js#hO","doc":"四种货币符号"}
+{"id":"chunk-3s7ydtfd.js#ma","doc":"时间/字节/百分比单位组"}
+{"id":"chunk-3s7ydtfd.js#fo","doc":"按单位生成系列标签"}
+{"id":"chunk-3s7ydtfd.js#na","doc":"精度基数"}
+{"id":"chunk-3s7ydtfd.js#aa","doc":"差值可忽略即相等"}
+{"id":"chunk-3s7ydtfd.js#fa","doc":"提高精度"}
+{"id":"chunk-3s7ydtfd.js#wp","doc":"Datadog 指标对象（expression/scope/pointlist）"}
+{"id":"chunk-3s7ydtfd.js#kp","doc":"起始时间 + 间隔算第 n 个点的时刻"}
+{"id":"chunk-3s7ydtfd.js#Dp","doc":"合并定间隔数值与分箱点"}
+{"id":"chunk-3s7ydtfd.js#Up","doc":"把 Datadog 指标数组展开成 series"}
+{"id":"chunk-3s7ydtfd.js#nt","doc":"text/number/time 三选一"}
+{"id":"chunk-3s7ydtfd.js#at","doc":"按列推断角色"}
+{"id":"chunk-3s7ydtfd.js#Ke","doc":"全是时间且可解析"}
+{"id":"chunk-3s7ydtfd.js#yy","doc":"262144"}
+{"id":"chunk-3s7ydtfd.js#xr","doc":"200"}
+{"id":"chunk-3s7ydtfd.js#Ht","doc":"3"}
+{"id":"chunk-3s7ydtfd.js#Re","doc":"行数或总格数超限"}
+{"id":"chunk-3s7ydtfd.js#Sy","doc":"图形式到渲染种类"}
+{"id":"chunk-3s7ydtfd.js#vp","doc":"列名匹配器"}
+{"id":"chunk-3s7ydtfd.js#Wp","doc":"拼出 {form,x,y,...}"}
+{"id":"chunk-3s7ydtfd.js#Hp","doc":"含数字"}
+{"id":"chunk-3s7ydtfd.js#ur","doc":"不等于给定值"}
+{"id":"chunk-3s7ydtfd.js#Ey","doc":"按指标格式读入的说明"}
+{"id":"chunk-3s7ydtfd.js#Gp","doc":"缺列错误"}
+{"id":"chunk-3s7ydtfd.js#Xp","doc":"单列且值有重复"}
+{"id":"chunk-3s7ydtfd.js#Kp","doc":"bars 要单列，其他至少一列"}
+{"id":"chunk-3s7ydtfd.js#dr","doc":"单元格时间戳"}
+{"id":"chunk-3s7ydtfd.js#zp","doc":"任一格时间不同"}
+{"id":"chunk-3s7ydtfd.js#cr","doc":"列名"}
+{"id":"chunk-3s7ydtfd.js#Jp","doc":"文本列且非全时间"}
+{"id":"chunk-3s7ydtfd.js#Vp","doc":"文本列用 bars，否则 line"}
+{"id":"chunk-3s7ydtfd.js#yr","doc":"表来源（path 或 source）"}
+{"id":"chunk-3s7ydtfd.js#Xt","doc":"数值加单位后缀"}
+{"id":"chunk-3s7ydtfd.js#pm","doc":"按字段单位换算"}
+{"id":"chunk-3s7ydtfd.js#mm","doc":"取字段单位标签"}
+{"id":"chunk-3s7ydtfd.js#am","doc":"指标字段转表"}
+{"id":"chunk-3s7ydtfd.js#fm","doc":"\"aligned columns\""}
+{"id":"chunk-3s7ydtfd.js#im","doc":"\"JSON lines\""}
+{"id":"chunk-3s7ydtfd.js#zt","doc":"\"JSON\""}
+{"id":"chunk-3s7ydtfd.js#lm","doc":"\"columns and rows\""}
+{"id":"chunk-3s7ydtfd.js#xm","doc":"\" with no header\""}
+{"id":"chunk-3s7ydtfd.js#nh","doc":"<field name=\""}
+{"id":"chunk-3s7ydtfd.js#um","doc":"</row>"}
+{"id":"chunk-3s7ydtfd.js#Tr","doc":"<row>"}
+{"id":"chunk-3s7ydtfd.js#dm","doc":"\"XML rows\""}
+{"id":"chunk-3s7ydtfd.js#ah","doc":"全部可识别的表来源名"}
+{"id":"chunk-3s7ydtfd.js#it","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#ih","doc":"32"}
+{"id":"chunk-3s7ydtfd.js#cm","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#de","doc":"构造表对象"}
+{"id":"chunk-3s7ydtfd.js#dh","doc":"连续空行"}
+{"id":"chunk-3s7ydtfd.js#yh","doc":"只有收尾括号"}
+{"id":"chunk-3s7ydtfd.js#hh","doc":"开头括号后还有内容"}
+{"id":"chunk-3s7ydtfd.js#Th","doc":"只有开头括号"}
+{"id":"chunk-3s7ydtfd.js#Sh","doc":"以 { \" 开头的行"}
+{"id":"chunk-3s7ydtfd.js#Yt","doc":"表格分隔线字符"}
+{"id":"chunk-3s7ydtfd.js#Oh","doc":"首尾的 * 或 `"}
+{"id":"chunk-3s7ydtfd.js#_h","doc":"[文本](链接)"}
+{"id":"chunk-3s7ydtfd.js#Lh","doc":"BOM 与 ANSI 颜色"}
+{"id":"chunk-3s7ydtfd.js#Ah","doc":"<results truncated=\"true\">"}
+{"id":"chunk-3s7ydtfd.js#bh","doc":"<field name=\"…\">…</field>"}
+{"id":"chunk-3s7ydtfd.js#Rh","doc":"null=\"true\""}
+{"id":"chunk-3s7ydtfd.js#Ih","doc":"数字实体"}
+{"id":"chunk-3s7ydtfd.js#Mh","doc":"“[…truncated…]” 提示"}
+{"id":"chunk-3s7ydtfd.js#wh","doc":"“N rows (M shown)”"}
+{"id":"chunk-3s7ydtfd.js#Jt","doc":"有表头则用，否则造 column N"}
+{"id":"chunk-3s7ydtfd.js#Vt","doc":"被截断文本的空表"}
+{"id":"chunk-3s7ydtfd.js#hm","doc":"同键的普通对象数组"}
+{"id":"chunk-3s7ydtfd.js#Zt","doc":"解析 JSON，嵌套过深则放弃"}
+{"id":"chunk-3s7ydtfd.js#Om","doc":"定长且无对象的数组"}
+{"id":"chunk-3s7ydtfd.js#_m","doc":"构造 JSON 来源的表"}
+{"id":"chunk-3s7ydtfd.js#Cm","doc":"按列名取单元格"}
+{"id":"chunk-3s7ydtfd.js#Lm","doc":"单格描述"}
+{"id":"chunk-3s7ydtfd.js#Em","doc":"空的列表格"}
+{"id":"chunk-3s7ydtfd.js#Am","doc":"对象按列展开"}
+{"id":"chunk-3s7ydtfd.js#bm","doc":"无对象的数组"}
+{"id":"chunk-3s7ydtfd.js#Im","doc":"补上 time 形式的请求"}
+{"id":"chunk-3s7ydtfd.js#Mm","doc":"按区间截取每行"}
+{"id":"chunk-3s7ydtfd.js#Ne","doc":"按列宽补齐"}
+{"id":"chunk-3s7ydtfd.js#Pm","doc":"表头各段都可读"}
+{"id":"chunk-3s7ydtfd.js#Dm","doc":"正文里有读不出的格"}
+{"id":"chunk-3s7ydtfd.js#vm","doc":"非空且不是纯分隔线"}
+{"id":"chunk-3s7ydtfd.js#Gm","doc":"附上未解析行"}
+{"id":"chunk-3s7ydtfd.js#Km","doc":"覆盖了全部行"}
+{"id":"chunk-3s7ydtfd.js#Ym","doc":"是 XML 行片段"}
+{"id":"chunk-3s7ydtfd.js#Vm","doc":"读 XML 片段里的行"}
+{"id":"chunk-3s7ydtfd.js#en","doc":"未解析行放前面"}
+{"id":"chunk-3s7ydtfd.js#eo","doc":"小写并把空格换成下划线"}
+{"id":"chunk-3s7ydtfd.js#rn","doc":"表来源的展示键"}
+{"id":"chunk-3s7ydtfd.js#sn","doc":"可接受的来源键集合"}
+{"id":"chunk-3s7ydtfd.js#oo","doc":"向下取 2 的幂"}
+{"id":"chunk-3s7ydtfd.js#jT","doc":"off/skips_servers"}
+{"id":"chunk-3s7ydtfd.js#vT","doc":"last_result/result_id/text/rows/none"}
+{"id":"chunk-3s7ydtfd.js#nn","doc":"失败的用量事件"}
+{"id":"chunk-3s7ydtfd.js#XT","doc":"按 chart/auto 与结果生成用量事件"}
+{"id":"chunk-3s7ydtfd.js#YT","doc":"设置项事件"}
+{"id":"chunk-3s7ydtfd.js#an","doc":"失败用量带形式与来源"}
+{"id":"chunk-3s7ydtfd.js#ln","doc":"12"}
+{"id":"chunk-3s7ydtfd.js#rS","doc":"32"}
+{"id":"chunk-3s7ydtfd.js#sS","doc":"3"}
+{"id":"chunk-3s7ydtfd.js#nS","doc":"true"}
+{"id":"chunk-3s7ydtfd.js#On","doc":"单表列结构描述"}
+{"id":"chunk-3s7ydtfd.js#gS","doc":"多表列结构描述"}
+{"id":"chunk-3s7ydtfd.js#zO","doc":"100"}
+{"id":"chunk-3s7ydtfd.js#JO","doc":"10"}
+{"id":"chunk-3s7ydtfd.js#VO","doc":"3"}
+{"id":"chunk-3s7ydtfd.js#qO","doc":"0.1"}
+{"id":"chunk-3s7ydtfd.js#e_","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#t_","doc":"1e-9"}
+{"id":"chunk-3s7ydtfd.js#o_","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#s_","doc":"8000"}
+{"id":"chunk-3s7ydtfd.js#m_","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#a_","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#i_","doc":"1"}
+{"id":"chunk-3s7ydtfd.js#x_","doc":"16"}
+{"id":"chunk-3s7ydtfd.js#u_","doc":"24"}
+{"id":"chunk-3s7ydtfd.js#V","doc":"取首个系列的单位"}
+{"id":"chunk-3s7ydtfd.js#vr","doc":"红色"}
+{"id":"chunk-3s7ydtfd.js#Ve","doc":"柱状图合计行"}
+{"id":"chunk-3s7ydtfd.js#uo","doc":"名字用逗号拼接"}
+{"id":"chunk-3s7ydtfd.js#ua","doc":"“这是最大值”/“这 N 个最大”"}
+{"id":"chunk-3s7ydtfd.js#ya","doc":"图的标题/事实/来源"}
+{"id":"chunk-3s7ydtfd.js#Ze","doc":"同一时刻求和的系列"}
+{"id":"chunk-3s7ydtfd.js#ga","doc":"按名字比较"}
+{"id":"chunk-3s7ydtfd.js#Oa","doc":"合并出的 “N others”"}
+{"id":"chunk-3s7ydtfd.js#yo","doc":"弱化样式行"}
+{"id":"chunk-3s7ydtfd.js#La","doc":"迷你图结果对象"}
+{"id":"chunk-3s7ydtfd.js#Aa","doc":"折线的坐标函数"}
+{"id":"chunk-3s7ydtfd.js#Ia","doc":"单图 5 个系列、多图 2 个"}
+{"id":"chunk-3s7ydtfd.js#ka","doc":"时间刻度标签"}
+{"id":"chunk-3s7ydtfd.js#Da","doc":"标记点文本"}
+{"id":"chunk-3s7ydtfd.js#Ua","doc":"汇总注释"}
+{"id":"chunk-3s7ydtfd.js#Ba","doc":"带引号的标题"}
+{"id":"chunk-3s7ydtfd.js#va","doc":"展示名数量相符"}
+{"id":"chunk-3s7ydtfd.js#Wa","doc":"是否还有空间"}
+{"id":"chunk-3s7ydtfd.js#yt","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#bC","doc":"4"}
+{"id":"chunk-3s7ydtfd.js#RC","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#Ha","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#$a","doc":"0.125"}
+{"id":"chunk-3s7ydtfd.js#ke","doc":"0.5"}
+{"id":"chunk-3s7ydtfd.js#Oo","doc":"0.125"}
+{"id":"chunk-3s7ydtfd.js#Ga","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#MC","doc":"0.4"}
+{"id":"chunk-3s7ydtfd.js#Hr","doc":"8"}
+{"id":"chunk-3s7ydtfd.js#wC","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#PC","doc":"1"}
+{"id":"chunk-3s7ydtfd.js#Xa","doc":"40"}
+{"id":"chunk-3s7ydtfd.js#UC","doc":"16"}
+{"id":"chunk-3s7ydtfd.js#BC","doc":"8"}
+{"id":"chunk-3s7ydtfd.js#Ka","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#vC","doc":"1"}
+{"id":"chunk-3s7ydtfd.js#za","doc":"1048576"}
+{"id":"chunk-3s7ydtfd.js#$C","doc":"0.5"}
+{"id":"chunk-3s7ydtfd.js#Ya","doc":"2"}
+{"id":"chunk-3s7ydtfd.js#XC","doc":"1"}
+{"id":"chunk-3s7ydtfd.js#pe","doc":"1"}
+{"id":"chunk-3s7ydtfd.js#me","doc":"最长显示宽度"}
+{"id":"chunk-3s7ydtfd.js#Va","doc":"计算列位置"}
+{"id":"chunk-3s7ydtfd.js#tf","doc":"带色道的行布局"}
+{"id":"chunk-3s7ydtfd.js#of","doc":"文字图形"}
+{"id":"chunk-3s7ydtfd.js#I","doc":"空白文本返回空数组"}
+{"id":"chunk-3s7ydtfd.js#rf","doc":"名字前留白"}
+{"id":"chunk-3s7ydtfd.js#sf","doc":"名称的颜色"}
+{"id":"chunk-3s7ydtfd.js#pf","doc":"统计列的颜色"}
+{"id":"chunk-3s7ydtfd.js#_o","doc":"默认列布局"}
+{"id":"chunk-3s7ydtfd.js#mf","doc":"最窄列布局"}
+{"id":"chunk-3s7ydtfd.js#Co","doc":"按精度取整"}
+{"id":"chunk-3s7ydtfd.js#ff","doc":"键标记"}
+{"id":"chunk-3s7ydtfd.js#lf","doc":"最后一个伸展段的标记"}
+{"id":"chunk-3s7ydtfd.js#xf","doc":"按行分组标记"}
+{"id":"chunk-3s7ydtfd.js#$e","doc":"周末或周首日"}
+{"id":"chunk-3s7ydtfd.js#tr","doc":"周序号"}
+{"id":"chunk-3s7ydtfd.js#Bs","doc":"跨周但无周末点"}
+{"id":"chunk-3s7ydtfd.js#js","doc":"时间在区间的相对位置"}
+{"id":"chunk-3s7ydtfd.js#Ws","doc":"日期字段全零模板"}
+{"id":"chunk-3s7ydtfd.js#Hs","doc":"字段序号过滤器"}
+{"id":"chunk-3s7ydtfd.js#wt","doc":"时区偏移量"}
+{"id":"chunk-3s7ydtfd.js#or","doc":"把 UTC 时间换算到当地"}
+{"id":"chunk-3s7ydtfd.js#Gs","doc":"集合包含判断"}
+{"id":"chunk-3s7ydtfd.js#ae","doc":"步长覆盖的毫秒数"}
+{"id":"chunk-3s7ydtfd.js#Xs","doc":"刻度起点与终点"}
+{"id":"chunk-3s7ydtfd.js#zs","doc":"跨度小于一天只用 UTC"}
+{"id":"chunk-3s7ydtfd.js#Ys","doc":"该字段不同"}
+{"id":"chunk-3s7ydtfd.js#Js","doc":"构造时间范围"}
+{"id":"chunk-3s7ydtfd.js#Vs","doc":"中位数"}
+{"id":"chunk-3s7ydtfd.js#Qs","doc":"某字段变化"}
+{"id":"chunk-3s7ydtfd.js#tp","doc":"某时刻的刻度文本"}
+{"id":"chunk-3s7ydtfd.js#op","doc":"构造步长对象"}
+{"id":"chunk-yb0ajcmt.js#dt","doc":"1000"}
+{"id":"chunk-yb0ajcmt.js#Ce","doc":"求平均"}
+{"id":"chunk-yb0ajcmt.js#se","doc":"连续重复字符数"}
+{"id":"chunk-yb0ajcmt.js#Q","doc":"跳过空格与制表符"}
+{"id":"chunk-yb0ajcmt.js#he","doc":"4"}
+{"id":"chunk-yb0ajcmt.js#Z","doc":"空对象"}
+{"id":"chunk-yb0ajcmt.js#$e","doc":"20000"}
+{"id":"chunk-yb0ajcmt.js#Pt","doc":"代码围栏开始"}
+{"id":"chunk-yb0ajcmt.js#je","doc":"行字符总数"}
+{"id":"chunk-yb0ajcmt.js#Gt","doc":"```mermaid 围栏"}
+{"id":"chunk-yb0ajcmt.js#Xt","doc":"注册 mermaid 渲染钩子"}
+{"id":"chunk-yb0ajcmt.js#ue","doc":"最宽的字符串"}
+{"id":"chunk-yb0ajcmt.js#Ct","doc":"mermaid 时序图的消息箭头写法表（-->>、->>、--x、--)、-->、-x、-) ），每项给出线型（dotted/solid）与箭头形状（arrow/cross/async/open）；同组还有参与方、注记、分组等行正则。"}
+{"id":"chunk-7008vnkm.js#rGn","doc":"去空白后非空且不以 / 开头"}
+{"id":"chunk-7008vnkm.js#sAo","doc":"默认关闭"}
+{"id":"chunk-7008vnkm.js#iAo","doc":"tengu_quiet_ember 开关"}
+{"id":"chunk-ykab7xp3.js#ne","doc":"空对象"}
+{"id":"chunk-ykab7xp3.js#R","doc":"空对象"}
+{"id":"chunk-ykab7xp3.js#b","doc":"sec-default 是否在最外层"}
+{"id":"chunk-ykab7xp3.js#w","doc":"钩子判定失败的错误文本"}
+{"id":"chunk-ykab7xp3.js#l","doc":"取条目的 plugin"}
+{"id":"chunk-ykab7xp3.js#pe","doc":"找第一个有 returned 的钩子结果"}
+{"id":"chunk-ykab7xp3.js#h","doc":"决定强度比较"}
+{"id":"chunk-ykab7xp3.js#ce","doc":"有决定且未被插件改变则用，否则冻结"}
+{"id":"chunk-ykab7xp3.js#c","doc":"非受信层级只能 append"}
+{"id":"chunk-ykab7xp3.js#v","doc":"托管环境变量不可改的提示"}
+{"id":"chunk-ykab7xp3.js#k","doc":"出错也当成功"}
+{"id":"chunk-ykab7xp3.js#F","doc":"策略允许本人修改"}
+{"id":"chunk-ykab7xp3.js#B","doc":"对象取值（Map 化）"}
+{"id":"chunk-ykab7xp3.js#j","doc":"插件配置的 options 路径"}
+{"id":"chunk-ykab7xp3.js#g","doc":"取 sec-default 配置项"}
+{"id":"chunk-ykab7xp3.js#G","doc":"deny 规则是否受保护"}
+{"id":"chunk-ykab7xp3.js#xe","doc":"是否声明了 allowedMcpServers"}
+{"id":"chunk-ykab7xp3.js#Ee","doc":"只允许托管插件"}
+{"id":"chunk-ykab7xp3.js#Oe","doc":"是否为受保护环境变量"}
+{"id":"chunk-ykab7xp3.js#E","doc":"托管 MCP 列表不可读"}
+{"id":"chunk-ykab7xp3.js#K","doc":"NFC/NFD 两种归一化"}
+{"id":"chunk-ykab7xp3.js#Z","doc":"true 或数组"}
+{"id":"chunk-ykab7xp3.js#q","doc":"去掉 @版本"}
+{"id":"chunk-ykab7xp3.js#Q","doc":"组织保留的工具名前缀"}
+{"id":"chunk-ykab7xp3.js#ye","doc":"500"}
+{"id":"chunk-ykab7xp3.js#f","doc":"只有 policy 来源"}
+{"id":"chunk-ykab7xp3.js#y","doc":"托管 allowedMcpServers 的提示"}
+{"id":"chunk-ykab7xp3.js#te","doc":"工具名冲突原因"}
+{"id":"chunk-4m46mxx9.js#tt","doc":"5000"}
+{"id":"chunk-4m46mxx9.js#Te","doc":"16"}
+{"id":"chunk-4m46mxx9.js#he","doc":"字节数组转十六进制"}
+{"id":"chunk-4m46mxx9.js#Re","doc":"16"}
+{"id":"chunk-4m46mxx9.js#G","doc":"把属性编码成 base64 JSON"}
+{"id":"chunk-4m46mxx9.js#K","doc":"事件名格式"}
+{"id":"chunk-4m46mxx9.js#v","doc":"32"}
+{"id":"chunk-4m46mxx9.js#d","doc":"遥测校验错误"}
+{"id":"chunk-4m46mxx9.js#A","doc":"16"}
+{"id":"chunk-4m46mxx9.js#O","doc":"snake_case 键名"}
+{"id":"chunk-4m46mxx9.js#X","doc":"事件名加 tengu 前缀"}
+{"id":"chunk-4m46mxx9.js#J","doc":"ok/sad/bad"}
+{"id":"chunk-4m46mxx9.js#Q","doc":"是否合法决定"}
+{"id":"chunk-4m46mxx9.js#We","doc":"事件日志批量上报地址"}
+{"id":"chunk-4m46mxx9.js#Ke","doc":"是否遥测拒绝错误"}
+{"id":"chunk-4m46mxx9.js#N","doc":"捕获拒绝错误转成 deny"}
+{"id":"chunk-4m46mxx9.js#Ye","doc":"100"}
+{"id":"chunk-4m46mxx9.js#$e","doc":"5000"}
+{"id":"chunk-4m46mxx9.js#q","doc":"408"}
+{"id":"chunk-4m46mxx9.js#ee","doc":"500"}
+{"id":"chunk-4m46mxx9.js#te","doc":"429"}
+{"id":"chunk-4m46mxx9.js#je","doc":"5xx/408/429 可重试"}
+{"id":"chunk-4m46mxx9.js#U","doc":"错误转字符串"}
+{"id":"chunk-4m46mxx9.js#ze","doc":"500"}
+{"id":"chunk-4m46mxx9.js#se","doc":"从 claude-code-action/ 后取版本"}
+{"id":"chunk-4m46mxx9.js#Xe","doc":"已知云开发环境名或 unknown-N"}
+{"id":"chunk-4m46mxx9.js#be","doc":"空对象"}
+{"id":"chunk-4m46mxx9.js#R","doc":"空对象"}
+{"id":"chunk-4m46mxx9.js#F","doc":"第一方遥测未被拦"}
+{"id":"chunk-4m46mxx9.js#Ne","doc":"SDK 名不合规记为 other"}
+{"id":"chunk-4m46mxx9.js#I","doc":"只有内置插件能调遥测"}
+{"id":"chunk-4m46mxx9.js#nt","doc":"未注册时返回固定拒绝"}
+{"id":"chunk-4m46mxx9.js#ke","doc":"builtin/core"}
+{"id":"chunk-4m46mxx9.js#tr","doc":"注册遥测内置插件"}
+{"id":"chunk-0j11jfmy.js#v","doc":"空对象"}
+{"id":"chunk-0j11jfmy.js#c","doc":"钩子模块占位"}
+{"id":"chunk-0j11jfmy.js#T","doc":"旋转提示的宿主接口"}
+{"id":"chunk-0j11jfmy.js#P","doc":"包一层 register"}
+{"id":"chunk-0j11jfmy.js#y","doc":"默认关闭"}
+{"id":"chunk-0j11jfmy.js#g","doc":"tengu_tips_mod 开关"}
+{"id":"chunk-0j11jfmy.js#R","doc":"广告命令检查抛错"}
+{"id":"chunk-0j11jfmy.js#A","doc":"提示内容抛错"}
+{"id":"chunk-0j11jfmy.js#L","doc":"旋转提示失败"}
+{"id":"chunk-0j11jfmy.js#D","doc":"isRelevant 抛错"}
+{"id":"chunk-0j11jfmy.js#C","doc":"选本回合提示"}
+{"id":"chunk-0j11jfmy.js#z","doc":"注册提示钩子"}
+{"id":"chunk-0j11jfmy.js#se","doc":"注册 tips 内置插件"}
+{"id":"chunk-e6aww6q8.js#YPe","doc":"取最后一条助手文本"}
+{"id":"chunk-e6aww6q8.js#Y$n","doc":"150"}
+{"id":"chunk-e6aww6q8.js#iat","doc":"10"}
+{"id":"chunk-e6aww6q8.js#X$n","doc":"60"}
+{"id":"chunk-e6aww6q8.js#Q$n","doc":"慢钩子上报间隔"}
+{"id":"chunk-e6aww6q8.js#Z$n","doc":"轮询等待代理结束"}
+{"id":"chunk-e6aww6q8.js#$yt","doc":"是否来自钩子调用"}
+{"id":"chunk-e6aww6q8.js#Tso","doc":"agent.spawn 的 UI 规则"}
+{"id":"chunk-e6aww6q8.js#N_t","doc":"钩子未放行的说明"}
+{"id":"chunk-e6aww6q8.js#jNi","doc":"子代理未启动的说明"}
+{"id":"chunk-e6aww6q8.js#B1o","doc":"记入无名引导集合"}
+{"id":"chunk-4121qate.js#Md","doc":"5"}
+{"id":"chunk-4121qate.js#Peo","doc":"取 resolvedModel 字符串"}
+{"id":"chunk-4121qate.js#$d","doc":"取 teammate_id"}
+{"id":"chunk-4121qate.js#jH","doc":"12"}
+{"id":"chunk-4121qate.js#Ud","doc":"4"}
+{"id":"chunk-4121qate.js#Wd","doc":"2"}
+{"id":"chunk-4121qate.js#$H","doc":"[\"Yes\",\"No\"]"}
+{"id":"chunk-4121qate.js#DH","doc":"120"}
+{"id":"chunk-4121qate.js#Xd","doc":"不足则补 Yes/No"}
+{"id":"chunk-4121qate.js#zd","doc":"带 cells 字符串的表格"}
+{"id":"chunk-4121qate.js#Jd","doc":"ui.log/notice/invalidate/toast/status"}
+{"id":"chunk-4121qate.js#y3t","doc":"是否 ui.* 事件"}
+{"id":"chunk-4121qate.js#el","doc":"核心方法表"}
+{"id":"chunk-4121qate.js#vn","doc":"合法方法名"}
+{"id":"chunk-4121qate.js#aC","doc":"缺失接口的代理"}
+{"id":"chunk-4121qate.js#Mt","doc":"抛“不是操作”"}
+{"id":"chunk-4121qate.js#xC","doc":"flag.value 接口"}
+{"id":"chunk-4121qate.js#cSi","doc":"恒 false"}
+{"id":"chunk-4121qate.js#wC","doc":"是否在可持久化范围之外"}
+{"id":"chunk-4121qate.js#td","doc":"严格等于 true"}
+{"id":"chunk-4121qate.js#Teo","doc":"转成 HooksError"}
+{"id":"chunk-4121qate.js#rd","doc":"1"}
+{"id":"chunk-4121qate.js#Aeo","doc":"有限非负数"}
+{"id":"chunk-4121qate.js#nd","doc":"取消息文本"}
+{"id":"chunk-4121qate.js#xUe","doc":"clock.* 方法名"}
+{"id":"chunk-4121qate.js#lxt","doc":"服务器名格式"}
+{"id":"chunk-4121qate.js#DC","doc":"$.mcp 的 call/connect"}
+{"id":"chunk-4121qate.js#dd","doc":"$.model.classify 的 maxTokens 上限 20"}
+{"id":"chunk-4121qate.js#Ip","doc":"中止时的模型结果"}
+{"id":"chunk-4121qate.js#il","doc":"原样返回"}
+{"id":"chunk-4121qate.js#al","doc":"取答案或抛错误"}
+{"id":"chunk-3xb70ww4.js#NNt","doc":"text 块 schema"}
+{"id":"chunk-3xb70ww4.js#Two","doc":"插件块的名字"}
+{"id":"chunk-3xb70ww4.js#Pwo","doc":"带 type 的块 schema"}
+{"id":"chunk-3xb70ww4.js#rQe","doc":"按索引取块"}
+{"id":"chunk-3xb70ww4.js#A1n","doc":"会话块排序表里表示「列表开头」的键 \"^\"，用于把已应答的工具结果块插到第一个不可改写块之前或消息末尾。"}
+{"id":"chunk-3xb70ww4.js#Mwo","doc":"构造 tool-result 块"}
+{"id":"chunk-e6aww6q8.js#ZV","doc":"插件 worker 槽位表"}
+{"id":"chunk-e6aww6q8.js#XAe","doc":"登记已加载的 worker 并通知"}
+{"id":"chunk-e6aww6q8.js#QAe","doc":"拒绝某个挂起调用"}
+{"id":"chunk-e6aww6q8.js#srt","doc":"删除挂起调用并拒绝"}
+{"id":"chunk-e6aww6q8.js#gNr","doc":"定时让调用超时"}
+{"id":"chunk-e6aww6q8.js#yNr","doc":"取消引用定时器"}
+{"id":"chunk-e6aww6q8.js#irt","doc":"递增插件代次"}
+{"id":"chunk-e6aww6q8.js#iY","doc":"该调用仍是当前挂起项"}
+{"id":"chunk-e6aww6q8.js#txe","doc":"按压归属是否一致"}
+{"id":"chunk-e6aww6q8.js#oxe","doc":"ui.render/ui.focus"}
+{"id":"chunk-e6aww6q8.js#dxe","doc":"标记 spawn 已被处理一次"}
+{"id":"chunk-e6aww6q8.js#mxe","doc":"追加调用者帧（去重）"}
+{"id":"chunk-e6aww6q8.js#aY","doc":"有 cwd 用之，否则调用"}
+{"id":"chunk-e6aww6q8.js#wxe","doc":"调用者链"}
+{"id":"chunk-e6aww6q8.js#koe","doc":"取命名空间前缀"}
+{"id":"chunk-e6aww6q8.js#oIn","doc":"找持有该帧的崩溃者"}
+{"id":"chunk-e6aww6q8.js#GN","doc":"取已接纳的参数"}
+{"id":"chunk-e6aww6q8.js#lFr","doc":"异步当前时间"}
+{"id":"chunk-e6aww6q8.js#uFr","doc":"带信号的可中止睡眠"}
+{"id":"chunk-e6aww6q8.js#xxe","doc":"clock 方法的 check/run"}
+{"id":"chunk-e6aww6q8.js#bMe","doc":"绑定插件调用上下文"}
+{"id":"chunk-e6aww6q8.js#aHn","doc":"是否官方市场插件"}
+{"id":"chunk-e6aww6q8.js#lHn","doc":"是否有其他 prompt.read 插件"}
+{"id":"chunk-e6aww6q8.js#Rat","doc":"插件名或兜底"}
+{"id":"chunk-e6aww6q8.js#Cat","doc":"遥测调用参数"}
+{"id":"chunk-e6aww6q8.js#Aat","doc":"是否在分发中列出该附件"}
+{"id":"chunk-e6aww6q8.js#TMe","doc":"读提示框的接口实现"}
+{"id":"chunk-e6aww6q8.js#vMe","doc":"在后续事件提交的说明"}
+{"id":"chunk-e6aww6q8.js#EMe","doc":"会等待本轮结束的说明"}
+{"id":"chunk-e6aww6q8.js#d2r","doc":"取插件的提示框"}
+{"id":"chunk-e6aww6q8.js#SHn","doc":"附上提问链与是否重复"}
+{"id":"chunk-e6aww6q8.js#vHn","doc":"深比较（RangeError 当不等）"}
+{"id":"chunk-e6aww6q8.js#Pat","doc":"可枚举自有键"}
+{"id":"chunk-e6aww6q8.js#MHn","doc":"会话授权接口"}
+{"id":"chunk-e6aww6q8.js#DHn","doc":"是否可读会话身份"}
+{"id":"chunk-e6aww6q8.js#LHn","doc":"$.session.identity 实现"}
+{"id":"chunk-e6aww6q8.js#l4","doc":"取插件存储 id"}
+{"id":"chunk-e6aww6q8.js#c2r","doc":"有 deny 即抛 HooksError"}
+{"id":"chunk-e6aww6q8.js#Fat","doc":"60000"}
+{"id":"chunk-e6aww6q8.js#Cle","doc":"attribution.text 事件定义"}
+{"id":"chunk-e6aww6q8.js#uY","doc":"26214400"}
+{"id":"chunk-e6aww6q8.js#q$r","doc":"30000"}
+{"id":"chunk-e6aww6q8.js#cY","doc":"4194304"}
+{"id":"chunk-e6aww6q8.js#XDn","doc":"80"}
+{"id":"chunk-e6aww6q8.js#QDn","doc":"loop/gain 描述"}
+{"id":"chunk-e6aww6q8.js#ZDn","doc":"中止即 reject 的 Promise"}
+{"id":"chunk-e6aww6q8.js#G0r","doc":"默认音频宿主"}
+{"id":"chunk-e6aww6q8.js#eLn","doc":"4"}
+{"id":"chunk-e6aww6q8.js#Krt","doc":"globalThis"}
+{"id":"chunk-e6aww6q8.js#nLn","doc":"2500"}
+{"id":"chunk-e6aww6q8.js#rPe","doc":"音频覆盖配置"}
+{"id":"chunk-e6aww6q8.js#lLn","doc":"\"--\""}
+{"id":"chunk-e6aww6q8.js#yHr","doc":"截断朗读文本"}
+{"id":"chunk-e6aww6q8.js#mLn","doc":"600000"}
+{"id":"chunk-e6aww6q8.js#Vrt","doc":"4"}
+{"id":"chunk-e6aww6q8.js#hLn","doc":"合并中止信号与超时"}
+{"id":"chunk-bfnfj4kx.js#hos","doc":"钩子的层级顺序 prepend → user → append → builtin → core；合并与裁决都按这个次序。"}
+{"id":"chunk-bfnfj4kx.js#CSi","doc":"钩子裁决的强弱顺序 allow → ask → deny，多处取「更严格者」时按此排序。"}
+{"id":"chunk-bfnfj4kx.js#Jfr","doc":"是否 prepend 之下"}
+{"id":"chunk-bfnfj4kx.js#lt","doc":"builtin:<name>/register"}
+{"id":"chunk-bfnfj4kx.js#Ee","doc":"仓库根目录"}
+{"id":"chunk-e6aww6q8.js#Ght","doc":"合并托管与核心的钩子结果"}
+{"id":"chunk-e6aww6q8.js#Kht","doc":"被阻断的结果"}
+{"id":"chunk-e6aww6q8.js#b7n","doc":"输出按行拆分"}
+{"id":"chunk-e6aww6q8.js#Yht","doc":"成功结果"}
+{"id":"chunk-bfnfj4kx.js#vr","doc":"\"h\""}
+{"id":"chunk-bfnfj4kx.js#Or","doc":"大写开头的组件名"}
+{"id":"chunk-bfnfj4kx.js#Ir","doc":"解析模块 AST"}
+{"id":"chunk-e6aww6q8.js#WDr","doc":"builtin/plugin/user/MCP"}
+{"id":"chunk-e6aww6q8.js#zDr","doc":"列出插件可见命令"}
+{"id":"chunk-e6aww6q8.js#JV","doc":"刷新命令列表"}
+{"id":"chunk-e6aww6q8.js#GAe","doc":"清掉缓存的描述"}
+{"id":"chunk-e6aww6q8.js#cOn","doc":"新建描述缓存"}
+{"id":"chunk-e6aww6q8.js#fOn","doc":"命令描述缓存"}
+{"id":"chunk-e6aww6q8.js#SOn","doc":"插件命令列表"}
+{"id":"chunk-e6aww6q8.js#sLr","doc":"安装命令集合钩子器"}
+{"id":"chunk-e6aww6q8.js#bOn","doc":"钩子释放时清缓存"}
+{"id":"chunk-e6aww6q8.js#I1r","doc":"来自插件的本地命令"}
+{"id":"chunk-e6aww6q8.js#rbe","doc":"插件命令登记表"}
+{"id":"chunk-e6aww6q8.js#VK","doc":"命令集合钩子槽"}
+{"id":"chunk-e6aww6q8.js#ewe","doc":"空 Map"}
+{"id":"chunk-e6aww6q8.js#VPs","doc":"command.run 的站点规则"}
+{"id":"chunk-e6aww6q8.js#iUo","doc":"构造 command.run 事件"}
+{"id":"chunk-e6aww6q8.js#s5n","doc":"命令运行前被打断"}
+{"id":"chunk-e6aww6q8.js#a5n","doc":"命令监视状态"}
+{"id":"chunk-e6aww6q8.js#dLe","doc":"排队命令的等待者"}
+{"id":"chunk-e6aww6q8.js#Yjt","doc":"同参命令分发表"}
+{"id":"chunk-e6aww6q8.js#aUo","doc":"取出进行中的同参分发"}
+{"id":"chunk-e6aww6q8.js#VDr","doc":"等待命令结算"}
+{"id":"chunk-e6aww6q8.js#MZ","doc":"命令集合信号 A"}
+{"id":"chunk-e6aww6q8.js#B1r","doc":"命令集合信号 B"}
+{"id":"chunk-e6aww6q8.js#oMs","doc":"命令运行信号槽"}
+{"id":"chunk-e6aww6q8.js#rMs","doc":"取命令运行信号"}
+{"id":"chunk-e6aww6q8.js#h0e","doc":"惰性信号"}
+{"id":"chunk-e6aww6q8.js#$xe","doc":"配置行描述缓存"}
+{"id":"chunk-e6aww6q8.js#_In","doc":"合并 label/description"}
+{"id":"chunk-e6aww6q8.js#pGr","doc":"有钩子时改写配置行"}
+{"id":"chunk-e6aww6q8.js#bIn","doc":"配置钩子释放时递增版本"}
+{"id":"chunk-e6aww6q8.js#vFr","doc":"描述配置行列表"}
+{"id":"chunk-e6aww6q8.js#EFr","doc":"config.set 站点规则"}
+{"id":"chunk-e6aww6q8.js#Qfn","doc":"config.set 是否有钩子"}
+{"id":"chunk-e6aww6q8.js#AIn","doc":"先等待再 yield*"}
+{"id":"chunk-e6aww6q8.js#D0t","doc":"读插件上下文数据"}
+{"id":"chunk-e6aww6q8.js#xEo","doc":"detail 键名格式"}
+{"id":"chunk-e6aww6q8.js#gh","doc":"生成带核心处理器的事件定义"}
+{"id":"chunk-e6aww6q8.js#eA","doc":"文本原样透传事件"}
+{"id":"chunk-e6aww6q8.js#Ale","doc":"command.describe 事件定义"}
+{"id":"chunk-e6aww6q8.js#xle","doc":"取配置行的展示字段"}
+{"id":"chunk-e6aww6q8.js#B1","doc":"config.describe 事件定义"}
+{"id":"chunk-e6aww6q8.js#Ple","doc":"prompt.attachment 事件"}
+{"id":"chunk-e6aww6q8.js#Ole","doc":"prompt.autocomplete 事件"}
+{"id":"chunk-e6aww6q8.js#RS","doc":"按站点名生成会话事件"}
+{"id":"chunk-e6aww6q8.js#Lle","doc":"prompt.change 事件"}
+{"id":"chunk-e6aww6q8.js#LX","doc":"prompt.compose 事件"}
+{"id":"chunk-e6aww6q8.js#$le","doc":"prompt.edit 事件"}
+{"id":"chunk-e6aww6q8.js#V$","doc":"夹在 0 与上界之间"}
+{"id":"chunk-e6aww6q8.js#qle","doc":"prompt.section 事件"}
+{"id":"chunk-e6aww6q8.js#nSt","doc":"文本透传的核心处理器表"}
+{"id":"chunk-2m7wmh13.js#gte","doc":"<配置目录>/dev-mods"}
+{"id":"chunk-e6aww6q8.js#aF","doc":"去空白与结尾标点"}
+{"id":"chunk-e6aww6q8.js#Cus","doc":"改动未加载，旧版仍在跑"}
+{"id":"chunk-e6aww6q8.js#Cdt","doc":"等待 /reload-plugins"}
+{"id":"chunk-e6aww6q8.js#Pus","doc":"已加载"}
+{"id":"chunk-e6aww6q8.js#Ous","doc":"下次启动加载"}
+{"id":"chunk-e6aww6q8.js#Hus","doc":"已无可运行代码"}
+{"id":"chunk-e6aww6q8.js#Uus","doc":"未加载"}
+{"id":"chunk-e6aww6q8.js#zus","doc":"加载失败"}
+{"id":"chunk-e6aww6q8.js#Kus","doc":"加载失败且旧版已停"}
+{"id":"chunk-e6aww6q8.js#Yus","doc":"文件变化后已重载"}
+{"id":"chunk-e6aww6q8.js#Qus","doc":"已删除但仍加载"}
+{"id":"chunk-e6aww6q8.js#Zus","doc":"等待重载的别名"}
+{"id":"chunk-e6aww6q8.js#ocs","doc":"已移除"}
+{"id":"chunk-e6aww6q8.js#dcs","doc":"在 mods 目录内才给存在性说明"}
+{"id":"chunk-e6aww6q8.js#Xjn","doc":"2"}
+{"id":"chunk-e6aww6q8.js#h2r","doc":"带清理的 HostScoped 槽"}
+{"id":"chunk-e6aww6q8.js#odt","doc":"开发 mod 的宿主状态"}
+{"id":"chunk-e6aww6q8.js#ire","doc":"\"options changed — \""}
+{"id":"chunk-e6aww6q8.js#fre","doc":"相对路径或 none"}
+{"id":"chunk-e6aww6q8.js#dls","doc":"清单变化需重启"}
+{"id":"chunk-e6aww6q8.js#pls","doc":"重载被 ConfigChange 钩子拦下"}
+{"id":"chunk-e6aww6q8.js#udt","doc":"已重载（钩子数）"}
+{"id":"chunk-e6aww6q8.js#ajn","doc":"3"}
+{"id":"chunk-e6aww6q8.js#HOe","doc":"去抖上限"}
+{"id":"chunk-e6aww6q8.js#ljn","doc":"1.5"}
+{"id":"chunk-e6aww6q8.js#Tls","doc":"1000"}
+{"id":"chunk-e6aww6q8.js#Ols","doc":"重载失败提示"}
+{"id":"chunk-e6aww6q8.js#pjn","doc":"频繁重载提示"}
+{"id":"chunk-e6aww6q8.js#BOe","doc":"once/again"}
+{"id":"chunk-e6aww6q8.js#mjn","doc":"重载成功提示"}
+{"id":"chunk-e6aww6q8.js#Lls","doc":"需重启提示"}
+{"id":"chunk-e6aww6q8.js#Nls","doc":"无名字提示"}
+{"id":"chunk-e6aww6q8.js#Fls","doc":"被否决提示"}
+{"id":"chunk-4121qate.js#oa","doc":"surface:component"}
+{"id":"chunk-4121qate.js#QJ","doc":"尝试执行，抛错返回 undefined"}
+{"id":"chunk-4121qate.js#_Ue","doc":"是否因给定信号中止而抛错"}
+{"id":"chunk-4121qate.js#Se","doc":"核心或托管步骤"}
+{"id":"chunk-4121qate.js#frs","doc":"把层级名格式化成 next.to:<tier> 标签，作为分发链里「下一层」的键。"}
+{"id":"chunk-4121qate.js#ur","doc":"毫秒或秒"}
+{"id":"chunk-4121qate.js#Vn","doc":"调用被替代拒绝"}
+{"id":"chunk-4121qate.js#prs","doc":".catch 兜底后的失败"}
+{"id":"chunk-4121qate.js#cr","doc":"无文本的值"}
+{"id":"chunk-4121qate.js#Re","doc":"错误文本"}
+{"id":"chunk-4121qate.js#xt","doc":"错误种类与长度摘要"}
+{"id":"chunk-4121qate.js#ha","doc":"钩子以 .catch 兜底的失败说明"}
+{"id":"chunk-4121qate.js#ka","doc":"钩子失败说明"}
+{"id":"chunk-4121qate.js#Kt","doc":"加钩子名前缀"}
+{"id":"chunk-4121qate.js#dr","doc":"中断导致未执行"}
+{"id":"chunk-4121qate.js#Vg","doc":"中途离开流"}
+{"id":"chunk-4121qate.js#zn","doc":"结果被扣留"}
+{"id":"chunk-4121qate.js#lr","doc":"清洗后的错误文本"}
+{"id":"chunk-4121qate.js#ba","doc":"其答案仍生效"}
+{"id":"chunk-4121qate.js#Sa","doc":"跳过，下层代替"}
+{"id":"chunk-4121qate.js#Ea","doc":"跳过，用最后一次 next 结果"}
+{"id":"chunk-4121qate.js#ko","doc":"空的链节点状态"}
+{"id":"chunk-4121qate.js#Wt","doc":"冻结链节点"}
+{"id":"chunk-4121qate.js#nfr","doc":"取错误与是否调用过"}
+{"id":"chunk-4121qate.js#NH","doc":"原型为 null 的函数"}
+{"id":"chunk-4121qate.js#Zn","doc":"生成事件匹配器"}
+{"id":"chunk-4121qate.js#mrs","doc":"转发 next"}
+{"id":"chunk-4121qate.js#CAn","doc":"带参数调用 next"}
+{"id":"chunk-4121qate.js#grs","doc":"无实现的拒绝"}
+{"id":"chunk-4121qate.js#Ra","doc":"转发中止"}
+{"id":"chunk-4121qate.js#gr","doc":"10000"}
+{"id":"chunk-4121qate.js#Gt","doc":"慢钩子上报表"}
+{"id":"chunk-4121qate.js#rfr","doc":"钩子作用域存储"}
+{"id":"chunk-4121qate.js#hrs","doc":"跳过提示（skipped）跟踪表最多保留 256 个键，超过后不再新增条目，避免长会话里无限增长。"}
+{"id":"chunk-4121qate.js#yrs","doc":"跳过钩子的上报器"}
+{"id":"chunk-4121qate.js#Dx","doc":"取跳过报告"}
+{"id":"chunk-4121qate.js#os","doc":"未冻结则冻结"}
+{"id":"chunk-4121qate.js#Na","doc":".catch 返回值说明"}
+{"id":"chunk-4121qate.js#gZr","doc":"当前分发槽"}
+{"id":"chunk-4121qate.js#hZr","doc":"取当前分发"}
+{"id":"chunk-4121qate.js#jme","doc":"是否有当前分发"}
+{"id":"chunk-s61vbvea.js#Km","doc":"执行并忽略中止错误"}
+{"id":"chunk-s61vbvea.js#zZn","doc":"结束作用域"}
+{"id":"chunk-s61vbvea.js#Ho","doc":"分发作用域 ALS"}
+{"id":"chunk-s61vbvea.js#KZn","doc":"取未结束的作用域"}
+{"id":"chunk-s61vbvea.js#Qu","doc":"新建作用域"}
+{"id":"chunk-s61vbvea.js#SA","doc":"取或建作用域"}
+{"id":"chunk-s61vbvea.js#Ayn","doc":"在作用域里执行"}
+{"id":"chunk-s61vbvea.js#EE","doc":"界面/登记类输入集合"}
+{"id":"chunk-s61vbvea.js#RE","doc":"raise/among/drawn 结果"}
+{"id":"chunk-4121qate.js#Sp","doc":"吞掉 rejection"}
+{"id":"chunk-4121qate.js#cEe","doc":"钩子调用与分发的默认超时 10 秒：单次调用等待应答、分发预算、环境存活期都取这个默认值。"}
+{"id":"chunk-4121qate.js#Oa","doc":"流式链槽"}
+{"id":"chunk-4121qate.js#Tc","doc":"流式链的初始状态"}
+{"id":"chunk-4121qate.js#H5e","doc":"预算用尽后的宽限 5 秒：超时后仍给它这段时间结算；宽限内不结束就记 lingeredMs 并按策略处理。"}
+{"id":"chunk-4121qate.js#TAn","doc":"暂停计时的 ALS"}
+{"id":"chunk-4121qate.js#Dt","doc":"1000"}
+{"id":"chunk-4121qate.js#pr","doc":"1000"}
+{"id":"chunk-4121qate.js#sa","doc":"toJSON 循环说明"}
+{"id":"chunk-4121qate.js#ia","doc":"4294967295"}
+{"id":"chunk-4121qate.js#fa","doc":"惰性抛/返回值"}
+{"id":"chunk-4121qate.js#ar","doc":"安全的 toJSON 结果"}
+{"id":"chunk-4121qate.js#da","doc":"原样返回"}
+{"id":"chunk-4121qate.js#ya","doc":"答案状态"}
+{"id":"chunk-4121qate.js#ga","doc":"其余改写仍生效"}
+{"id":"chunk-4121qate.js#mr","doc":"32000"}
+{"id":"chunk-4121qate.js#zRt","doc":"层级序号"}
+{"id":"chunk-e6aww6q8.js#vBn","doc":"原样返回"}
+{"id":"chunk-e6aww6q8.js#rOe","doc":"原样返回"}
+{"id":"chunk-e6aww6q8.js#Tlt","doc":"数组逐项相等"}
+{"id":"chunk-e6aww6q8.js#Pts","doc":"接口签名相同"}
+{"id":"chunk-e6aww6q8.js#Lts","doc":"去掉已卸载者的扣留"}
+{"id":"chunk-e6aww6q8.js#CBn","doc":"engine.create / plugin.register"}
+{"id":"chunk-e6aww6q8.js#ABn","doc":"部分重折叠的提示"}
+{"id":"chunk-e6aww6q8.js#Bxe","doc":"取 $.env 参数里的名字"}
+{"id":"chunk-e6aww6q8.js#OIn","doc":"链里有非官方插件"}
+{"id":"chunk-e6aww6q8.js#mrt","doc":"拒绝并记录"}
+{"id":"chunk-e6aww6q8.js#$In","doc":"记录并应用环境变量"}
+{"id":"chunk-e6aww6q8.js#WIn","doc":"冻结对象"}
+{"id":"chunk-e6aww6q8.js#I_t","doc":"描述类事件"}
+{"id":"chunk-e6aww6q8.js#D_t","doc":"不走钩子的事件"}
+{"id":"chunk-e6aww6q8.js#L_t","doc":"可由模块监听的事件"}
+{"id":"chunk-e6aww6q8.js#d5n","doc":"prompt.mention 站点规则"}
+{"id":"chunk-e6aww6q8.js#u5n","doc":"session.send 站点规则"}
+{"id":"chunk-e6aww6q8.js#G1r","doc":"turn.step 站点规则"}
+{"id":"chunk-e6aww6q8.js#K1r","doc":"各事件调用器"}
+{"id":"chunk-e6aww6q8.js#ASt","doc":"createEventCallers 引用"}
+{"id":"chunk-e6aww6q8.js#Xue","doc":"包装的调用器"}
+{"id":"chunk-e6aww6q8.js#W$n","doc":"各事件调用器"}
+{"id":"chunk-e6aww6q8.js#Jue","doc":"包装的调用器"}
+{"id":"chunk-bfnfj4kx.js#ro","doc":"telemetry.* 事件"}
+{"id":"chunk-bfnfj4kx.js#so","doc":"校验并返回模式"}
+{"id":"chunk-bfnfj4kx.js#vSi","doc":"精确名前缀"}
+{"id":"chunk-bfnfj4kx.js#jeo","doc":"校验失败文本"}
+{"id":"chunk-bfnfj4kx.js#mos","doc":"是否路由给用户"}
+{"id":"chunk-bfnfj4kx.js#po","doc":"Spread/computed/非 init"}
+{"id":"chunk-bfnfj4kx.js#Dg","doc":"atom/derive/memberOf/read/update"}
+{"id":"chunk-bfnfj4kx.js#_r","doc":"内嵌的 state-library.js 源码文本"}
+{"id":"chunk-bfnfj4kx.js#Weo","doc":"内嵌资源别名"}
+{"id":"chunk-bfnfj4kx.js#ao","doc":"envReads / envWrites"}
+{"id":"chunk-bfnfj4kx.js#Wo","doc":"500000"}
+{"id":"chunk-bfnfj4kx.js#co","doc":"Map<k, Set> 追加"}
+{"id":"chunk-bfnfj4kx.js#xo","doc":"记录具名命令"}
+{"id":"chunk-bfnfj4kx.js#Kr","doc":"env.get/env.set"}
+{"id":"chunk-bfnfj4kx.js#kSi","doc":"是否 env 调用"}
+{"id":"chunk-bfnfj4kx.js#qr","doc":"state.get/state.set"}
+{"id":"chunk-bfnfj4kx.js#qo","doc":"标识符或 JSON 引号"}
+{"id":"chunk-bfnfj4kx.js#ke","doc":"anthropic/collector"}
+{"id":"chunk-bfnfj4kx.js#Wh","doc":"是否核心来源"}
+{"id":"chunk-bfnfj4kx.js#KUi","doc":"最后一个扣留者"}
+{"id":"chunk-bfnfj4kx.js#gos","doc":"被插件移除的说明"}
+{"id":"chunk-e6aww6q8.js#rle","doc":"to 默认 anthropic"}
+{"id":"chunk-e6aww6q8.js#_rt","doc":"file/dir/other"}
+{"id":"chunk-e6aww6q8.js#YIn","doc":"65536"}
+{"id":"chunk-e6aww6q8.js#Irt","doc":"网络位置不可达"}
+{"id":"chunk-e6aww6q8.js#eDn","doc":"取根会话"}
+{"id":"chunk-e6aww6q8.js#nDn","doc":"$.fs.list 实现"}
+{"id":"chunk-e6aww6q8.js#rDn","doc":"$.fs.read 实现"}
+{"id":"chunk-bfnfj4kx.js#Ueo","doc":"钩子事件清单"}
+{"id":"chunk-bfnfj4kx.js#pos","doc":"是否为 $ API 调用"}
+{"id":"chunk-bfnfj4kx.js#Beo","doc":"流式事件"}
+{"id":"chunk-bfnfj4kx.js#pt","doc":"事件命名空间集合"}
+{"id":"chunk-bfnfj4kx.js#se","doc":"Symbol.for 状态原子"}
+{"id":"chunk-vr8smdd9.js#qni","doc":"某插件在 N 毫秒内未回答"}
+{"id":"chunk-vr8smdd9.js#Yni","doc":"插件已卸载"}
+{"id":"chunk-vr8smdd9.js#uo","doc":"链接或包装成钩子成员"}
+{"id":"chunk-vr8smdd9.js#K_n","doc":"分发帧 ALS"}
+{"id":"chunk-vr8smdd9.js#TYr","doc":"分发帧执行"}
+{"id":"chunk-vr8smdd9.js#HFi","doc":"在分发帧里执行"}
+{"id":"chunk-vr8smdd9.js#X4o","doc":"分发帧是否未结束"}
+{"id":"chunk-vr8smdd9.js#po","doc":"原样返回"}
+{"id":"chunk-vr8smdd9.js#Yt","doc":"原样返回"}
+{"id":"chunk-vr8smdd9.js#ko","doc":"拷贝成数组"}
+{"id":"chunk-vr8smdd9.js#NFi","doc":"无法归因到具体插件的崩溃累计 3 次后不再重启 hooks worker，改为整体报错。"}
+{"id":"chunk-vr8smdd9.js#Qni","doc":"环境卸载导致中止"}
+{"id":"chunk-e6aww6q8.js#pUn","doc":"16"}
+{"id":"chunk-e6aww6q8.js#POe","doc":"标记缓存"}
+{"id":"chunk-e6aww6q8.js#Ylt","doc":"plugin#env event s"}
+{"id":"chunk-e6aww6q8.js#EUn","doc":"5"}
+{"id":"chunk-e6aww6q8.js#RUn","doc":"已有标签或已满"}
+{"id":"chunk-e6aww6q8.js#Xlt","doc":"mod 失败上报表"}
+{"id":"chunk-e6aww6q8.js#Qlt","doc":"已上报的问题集合"}
+{"id":"chunk-ga3g4pve.js#eBi","doc":"答案不是纯数据"}
+{"id":"chunk-ga3g4pve.js#Aos","doc":"取错误的字符串 cause"}
+{"id":"chunk-ga3g4pve.js#A3t","doc":"next() 参数不是纯数据"}
+{"id":"chunk-ga3g4pve.js#Xeo","doc":"参数不是纯数据"}
+{"id":"chunk-ga3g4pve.js#fEe","doc":"纯数据校验错误类"}
+{"id":"chunk-ga3g4pve.js#BSi","doc":"是否该类错误"}
+{"id":"chunk-ga3g4pve.js#Cos","doc":"按标志选错误类"}
+{"id":"chunk-ga3g4pve.js#spr","doc":"已结算标记"}
+{"id":"chunk-ga3g4pve.js#tBi","doc":"转回 HooksError"}
+{"id":"chunk-ga3g4pve.js#ipr","doc":"用 WeakMap 打标"}
+{"id":"chunk-ga3g4pve.js#Ros","doc":"读弱标记"}
+{"id":"chunk-ga3g4pve.js#Jeo","doc":"询问被拒错误类"}
+{"id":"chunk-ga3g4pve.js#Qeo","doc":"是否在弱集合中"}
+{"id":"chunk-ga3g4pve.js#apr","doc":"加入弱集合"}
+{"id":"chunk-ga3g4pve.js#s","doc":"弱标记器"}
+{"id":"chunk-ga3g4pve.js#_xt","doc":"打标"}
+{"id":"chunk-ga3g4pve.js#SIe","doc":"环境已卸载错误"}
+{"id":"chunk-ga3g4pve.js#lpr","doc":"标记载荷"}
+{"id":"chunk-ga3g4pve.js#nBi","doc":"带标记的卸载错误"}
+{"id":"chunk-ga3g4pve.js#dpr","doc":"读标记"}
+{"id":"chunk-e6aww6q8.js#kFt","doc":"内联问题去重集"}
+{"id":"chunk-e6aww6q8.js#Jpe","doc":"延迟输出的问题行"}
+{"id":"chunk-e6aww6q8.js#Zpe","doc":"文本输出且非 bg 会话"}
+{"id":"chunk-e6aww6q8.js#bNi","doc":"输出延迟的问题"}
+{"id":"chunk-e6aww6q8.js#Uje","doc":"已报告的内联问题"}
+{"id":"chunk-e6aww6q8.js#wFt","doc":"绑定 async 资源"}
+{"id":"chunk-e6aww6q8.js#TFt","doc":"合并出带 options 的对象"}
+{"id":"chunk-e6aww6q8.js#jje","doc":"以 ! 或内部前缀开头"}
+{"id":"chunk-e6aww6q8.js#T7","doc":"宿主状态"}
+{"id":"chunk-e6aww6q8.js#EBr","doc":"已加载插件的选项"}
+{"id":"chunk-e6aww6q8.js#O$t","doc":"取某插件的选项"}
+{"id":"chunk-e6aww6q8.js#Ewo","doc":"找不可读的受信设置源"}
+{"id":"chunk-e6aww6q8.js#N$t","doc":"未在 N 毫秒内加载"}
+{"id":"chunk-e6aww6q8.js#Fme","doc":"错误文本加 cause"}
+{"id":"chunk-e6aww6q8.js#P3n","doc":"清空并刷新代理定义"}
+{"id":"chunk-e6aww6q8.js#cWe","doc":"插件代理的唯一键"}
+{"id":"chunk-e6aww6q8.js#fWe","doc":"插件登记的代理表"}
+{"id":"chunk-e6aww6q8.js#ID","doc":"忘掉登记的代理并刷新"}
+{"id":"chunk-e6aww6q8.js#AOn","doc":"原样返回"}
+{"id":"chunk-e6aww6q8.js#yoe","doc":"未加载则拒绝"}
+{"id":"chunk-e6aww6q8.js#iEt","doc":"hooks 宿主等待 worker 就绪的默认超时 10 秒；插件自己的 init 可覆盖。"}
+{"id":"chunk-e6aww6q8.js#r2r","doc":"worker 加载上报器"}
+{"id":"chunk-e6aww6q8.js#zoe","doc":"记录加载失败"}
+{"id":"chunk-e6aww6q8.js#nF","doc":"去掉 “插件名: ” 前缀"}
+{"id":"chunk-e6aww6q8.js#MOn","doc":"构造 worker 线程选项"}
+{"id":"chunk-e6aww6q8.js#OOn","doc":"Bun 打包前缀"}
+{"id":"chunk-e6aww6q8.js#DOn","doc":"hooks-<uuid前段>"}
+{"id":"chunk-e6aww6q8.js#zOn","doc":"1e6"}
+{"id":"chunk-e6aww6q8.js#_oe","doc":"读 /proc/self/task 文件"}
+{"id":"chunk-e6aww6q8.js#KOn","doc":"\"RTt\""}
+{"id":"chunk-e6aww6q8.js#VOn","doc":"10"}
+{"id":"chunk-e6aww6q8.js#YOn","doc":"/proc/<pid>/stat 格式"}
+{"id":"chunk-vr8smdd9.js#De","doc":"匹配警告去重表"}
+{"id":"chunk-vr8smdd9.js#Le","doc":"已警告集合"}
+{"id":"chunk-vr8smdd9.js#he","doc":"从首个匹配处取模块"}
+{"id":"chunk-vr8smdd9.js#ye","doc":"参与分发的模块"}
+{"id":"chunk-vr8smdd9.js#ipe","doc":"插件目录槽"}
+{"id":"chunk-vr8smdd9.js#QKt","doc":"目录监视槽"}
+{"id":"chunk-vr8smdd9.js#K4o","doc":"是否监视插件目录"}
+{"id":"chunk-vr8smdd9.js#SYr","doc":"内联插件列表"}
+{"id":"chunk-vr8smdd9.js#Gtr","doc":"$.ui.log 写日志时的文本截断上限 10000 字符，超出部分用省略号代替。"}
+{"id":"chunk-vr8smdd9.js#We","doc":"100"}
+{"id":"chunk-vr8smdd9.js#Re","doc":"找因某原因死的模块"}
+{"id":"chunk-vr8smdd9.js#we","doc":"来源标签"}
+{"id":"chunk-vr8smdd9.js#Ktr","doc":"来源展示名"}
+{"id":"chunk-vr8smdd9.js#Qo","doc":"分出调用者与上层"}
+{"id":"chunk-vr8smdd9.js#MFi","doc":"来源链文本"}
+{"id":"chunk-vr8smdd9.js#EYr","doc":"带标签的来源链"}
+{"id":"chunk-vr8smdd9.js#DFi","doc":"标记“被下层改写”"}
+{"id":"chunk-vr8smdd9.js#q4o","doc":"集合拼成字符串"}
+{"id":"chunk-vr8smdd9.js#LFi","doc":"worker 被替换"}
+{"id":"chunk-vr8smdd9.js#dkt","doc":"拼接标签"}
+{"id":"chunk-vr8smdd9.js#Vni","doc":"next() 结果不可克隆"}
+{"id":"chunk-e6aww6q8.js#KBn","doc":"空回调"}
+{"id":"chunk-e6aww6q8.js#eos","doc":"worker 时序槽"}
+{"id":"chunk-e6aww6q8.js#ros","doc":"1000"}
+{"id":"chunk-e6aww6q8.js#VBn","doc":"5000"}
+{"id":"chunk-e6aww6q8.js#YBn","doc":"worker 宿主槽"}
+{"id":"chunk-e6aww6q8.js#_os","doc":"2"}
+{"id":"chunk-e6aww6q8.js#XBn","doc":"12"}
+{"id":"chunk-e6aww6q8.js#QBn","doc":"恒 false"}
+{"id":"chunk-e6aww6q8.js#K4","doc":"worker 的 ready/timeout 参数"}
+{"id":"chunk-e6aww6q8.js#ZBn","doc":"当前心跳标记名"}
+{"id":"chunk-e6aww6q8.js#oUn","doc":"未知卡住原因"}
+{"id":"chunk-e6aww6q8.js#Cx","doc":"记录空闲"}
+{"id":"chunk-e6aww6q8.js#ore","doc":"在调用者上下文执行"}
+{"id":"chunk-e6aww6q8.js#X4","doc":"清定时器后 resolve/reject"}
+{"id":"chunk-e6aww6q8.js#f2r","doc":"把插件钩子的提示作为 meta 任务通知投递（isMeta: true），主代理下一轮才会看到。"}
+{"id":"chunk-e6aww6q8.js#p2r","doc":"生成钩子提示任务"}
+{"id":"chunk-e6aww6q8.js#m2r","doc":"延迟通知队列"}
+{"id":"chunk-e6aww6q8.js#oF","doc":"审批标签或 unnamed"}
+{"id":"chunk-e6aww6q8.js#nis","doc":"原样返回"}
+{"id":"chunk-e6aww6q8.js#Xns","doc":"清掉死掉的宿主"}
+{"id":"chunk-e6aww6q8.js#NUn","doc":"原样返回"}
+{"id":"chunk-e6aww6q8.js#nlt","doc":"取事件来源插件"}
+{"id":"chunk-e6aww6q8.js#olt","doc":"根事件分发"}
+{"id":"chunk-e6aww6q8.js#rre","doc":"未等待的 Promise 被拒"}
+{"id":"chunk-e6aww6q8.js#VUn","doc":"未等待拒绝的说明"}
+{"id":"chunk-e6aww6q8.js#res","doc":"未处理拒绝处理器"}
+{"id":"chunk-e6aww6q8.js#ilt","doc":"回合内分发"}
+{"id":"chunk-e6aww6q8.js#TWo","doc":"不是纯数据"}
+{"id":"chunk-e6aww6q8.js#m9s","doc":"克隆失败转 HooksError"}
+{"id":"chunk-e6aww6q8.js#IOe","doc":"音频/派生/渲染宿主操作"}
+{"id":"chunk-e6aww6q8.js#sre","doc":"宿主操作根"}
+{"id":"chunk-pwe88xvs.js#X","doc":"各 UI 元素构造器"}
+{"id":"chunk-pwe88xvs.js#Z","doc":"无法交给检查钩子的说明"}
+{"id":"chunk-pwe88xvs.js#L","doc":"工具未运行的说明"}
+{"id":"chunk-pwe88xvs.js#wAn","doc":"检查钩子未能交回答案"}
+{"id":"chunk-pwe88xvs.js#oe","doc":"ui.input/select/press"}
+{"id":"chunk-pwe88xvs.js#Ne","doc":"实时事件信封"}
+{"id":"chunk-pwe88xvs.js#G","doc":"按对象缓存参数"}
+{"id":"chunk-pwe88xvs.js#P","doc":"e\\0t 组合键"}
+{"id":"chunk-pwe88xvs.js#ie","doc":"取环境的分发注册"}
+{"id":"chunk-pwe88xvs.js#U","doc":"转发 generator"}
+{"id":"chunk-pwe88xvs.js#fe","doc":"附上经典钩子的扣留标记"}
+{"id":"chunk-pwe88xvs.js#gt","doc":"删除键"}
+{"id":"chunk-pwe88xvs.js#kt","doc":"session.start 事件"}
+{"id":"chunk-pwe88xvs.js#EAn","doc":"拒绝全部挂起"}
+{"id":"chunk-pwe88xvs.js#XJ","doc":"取出并删除挂起项"}
+{"id":"chunk-pwe88xvs.js#uZr","doc":"与 worker 共享的 marks 数组里「最新分发序号」的槽位；宿主用它判断已应答的是不是当前这次分发。"}
+{"id":"chunk-pwe88xvs.js#wUi","doc":"marks 共享数组的槽位数（3 个槽：最新分发序号、已应答分发序号、已应答次数）。"}
+{"id":"chunk-pwe88xvs.js#drs","doc":"marks 共享数组里「已应答次数」的槽位。"}
+{"id":"chunk-pwe88xvs.js#crs","doc":"marks 共享数组里「已应答的分发序号」的槽位。"}
+{"id":"chunk-e6aww6q8.js#fDn","doc":"accept/content-type/user-agent"}
+{"id":"chunk-e6aww6q8.js#Vxe","doc":"30000"}
+{"id":"chunk-e6aww6q8.js#pw","doc":"\"$.http.fetch\""}
+{"id":"chunk-e6aww6q8.js#boe","doc":"数组包含"}
+{"id":"chunk-e6aww6q8.js#hDn","doc":"301/302/303/307/308"}
+{"id":"chunk-e6aww6q8.js#e0r","doc":"是否重定向"}
+{"id":"chunk-e6aww6q8.js#t0r","doc":"204/205/304"}
+{"id":"chunk-e6aww6q8.js#n0r","doc":"301/302"}
+{"id":"chunk-e6aww6q8.js#o0r","doc":"303"}
+{"id":"chunk-e6aww6q8.js#Yxe","doc":"非必要流量已禁用"}
+{"id":"chunk-e6aww6q8.js#TDn","doc":"是否官方插件引用"}
+{"id":"chunk-e6aww6q8.js#p0r","doc":"凭证被扣下的说明"}
+{"id":"chunk-e6aww6q8.js#ADn","doc":"5"}
+{"id":"chunk-e6aww6q8.js#xDn","doc":"事件批量请求体 schema"}
+{"id":"chunk-e6aww6q8.js#Zxe","doc":"/api/event_logging/v2/batch"}
+{"id":"chunk-e6aww6q8.js#IDn","doc":"模型元数据请求体 schema"}
+{"id":"chunk-e6aww6q8.js#LDn","doc":"是否该形状"}
+{"id":"chunk-e6aww6q8.js#NDn","doc":"工具结果请求体 schema"}
+{"id":"chunk-e6aww6q8.js#FDn","doc":"是否该形状"}
+{"id":"chunk-e6aww6q8.js#ePe","doc":"纯数据校验"}
+{"id":"chunk-e6aww6q8.js#_fe","doc":"MCP 连接失败结果"}
+{"id":"chunk-e6aww6q8.js#s0n","doc":"3"}
+{"id":"chunk-e6aww6q8.js#WY","doc":"连接等待时长"}
+{"id":"chunk-e6aww6q8.js#zY","doc":"等待 MCP 行"}
+{"id":"chunk-e6aww6q8.js#Noe","doc":"MCP 连接登记表"}
+{"id":"chunk-e6aww6q8.js#qY","doc":"忘掉插件建立的 MCP 服务器"}
+{"id":"chunk-e6aww6q8.js#d0n","doc":"连接失败结果"}
+{"id":"chunk-e6aww6q8.js#c0n","doc":"API 错误转结果"}
+{"id":"chunk-e6aww6q8.js#RXr","doc":"1024"}
+{"id":"chunk-e6aww6q8.js#Y3","doc":"忘掉并移除某 MCP 服务器"}
+{"id":"chunk-e6aww6q8.js#Oyt","doc":"简单可变槽"}
+{"id":"chunk-e6aww6q8.js#mle","doc":"工具调用槽"}
+{"id":"chunk-e6aww6q8.js#Hto","doc":"设置当前工具调用"}
+{"id":"chunk-e6aww6q8.js#Iyt","doc":"当前工具调用"}
+{"id":"chunk-e6aww6q8.js#XLe","doc":"工具是否属于某服务器"}
+{"id":"chunk-w2teref8.js#p","doc":"可走快捷路径的事件"}
+{"id":"chunk-e6aww6q8.js#moe","doc":"是否已记录 mod 加载汇总"}
+{"id":"chunk-e6aww6q8.js#goe","doc":"分发计数"}
+{"id":"chunk-e6aww6q8.js#fx","doc":"按来源计数"}
+{"id":"chunk-e6aww6q8.js#fLr","doc":"计入一次事件"}
+{"id":"chunk-e6aww6q8.js#vOn","doc":"记录加载失败"}
+{"id":"chunk-e6aww6q8.js#_Lr","doc":"记录已加载"}
+{"id":"chunk-e6aww6q8.js#m0n","doc":"模型调用超时说明"}
+{"id":"chunk-e6aww6q8.js#S0n","doc":"2"}
+{"id":"chunk-e6aww6q8.js#DXr","doc":"会话回合缓存"}
+{"id":"chunk-e6aww6q8.js#vWo","doc":"记住回合请求参数"}
+{"id":"chunk-e6aww6q8.js#kWo","doc":"注册一次 Stop 钩子"}
+{"id":"chunk-e6aww6q8.js#ZPe","doc":"带前缀包装的错误构造"}
+{"id":"chunk-bfnfj4kx.js#Le","doc":"读取中被改动"}
+{"id":"chunk-bfnfj4kx.js#we","doc":"模块读取错误类"}
+{"id":"chunk-bfnfj4kx.js#B","doc":"取错误码，缺省 EIO"}
+{"id":"chunk-bfnfj4kx.js#ct","doc":"文件不存在错误"}
+{"id":"chunk-bfnfj4kx.js#ut","doc":"EMFILE/ENFILE"}
+{"id":"chunk-bfnfj4kx.js#Y","doc":"失败时转换错误"}
+{"id":"chunk-bfnfj4kx.js#nu","doc":"不可读错误"}
+{"id":"chunk-bfnfj4kx.js#yt","doc":"JSX 编译指令头"}
+{"id":"chunk-bfnfj4kx.js#Oo","doc":"扩展名对应 loader"}
+{"id":"chunk-bfnfj4kx.js#kt","doc":"转译错误文本"}
+{"id":"chunk-bfnfj4kx.js#Heo","doc":"是否代码文件"}
+{"id":"chunk-bfnfj4kx.js#Ro","doc":"32"}
+{"id":"chunk-bfnfj4kx.js#_3t","doc":"单个模块源码的字节上限 1 MiB：读取钩子模块与内联模块时超过即报错，不再解析。"}
+{"id":"chunk-bfnfj4kx.js#jt","doc":"8388608"}
+{"id":"chunk-bfnfj4kx.js#dos","doc":"解析相对导入"}
+{"id":"chunk-bfnfj4kx.js#bt","doc":"三种读取失败"}
+{"id":"chunk-bfnfj4kx.js#Io","doc":"插件模块读取错误"}
+{"id":"chunk-bfnfj4kx.js#Se","doc":"模块过大错误"}
+{"id":"chunk-bfnfj4kx.js#Ve","doc":"断言是代码文件"}
+{"id":"chunk-bfnfj4kx.js#uos","doc":"去掉前缀"}
+{"id":"chunk-bfnfj4kx.js#Ot","doc":"构造模块错误"}
+{"id":"chunk-bfnfj4kx.js#Gu","doc":"总量超限错误"}
+{"id":"chunk-bfnfj4kx.js#Vu","doc":"校验后读取模块"}
+{"id":"chunk-bfnfj4kx.js#fos","doc":"acorn 解析器"}
+{"id":"chunk-bfnfj4kx.js#nCn","doc":"简单缓存 Map"}
+{"id":"chunk-bfnfj4kx.js#Neo","doc":"内置源码登记表"}
+{"id":"chunk-bfnfj4kx.js#Pt","doc":"80"}
+{"id":"chunk-bfnfj4kx.js#It","doc":"导入解析缓存"}
+{"id":"chunk-bfnfj4kx.js#Ft","doc":"hooks 导入解析器"}
+{"id":"chunk-bfnfj4kx.js#We","doc":"模块解析失败"}
+{"id":"chunk-bfnfj4kx.js#SSi","doc":"转译 hooks 模块"}
+{"id":"chunk-bfnfj4kx.js#Ht","doc":"是否 JS"}
+{"id":"chunk-bfnfj4kx.js#ox","doc":"节点是否声明标识符"}
+{"id":"chunk-bfnfj4kx.js#Fo","doc":"像 AST 节点"}
+{"id":"chunk-bfnfj4kx.js#ax","doc":"建立父节点表"}
+{"id":"chunk-bfnfj4kx.js#Ho","doc":"2000"}
+{"id":"chunk-bfnfj4kx.js#Ut","doc":"函数或实例属性值"}
+{"id":"chunk-bfnfj4kx.js#Do","doc":"写入未被遮蔽"}
+{"id":"chunk-bfnfj4kx.js#fe","doc":"原因与位置"}
+{"id":"chunk-bfnfj4kx.js#me","doc":"是否在该处声明"}
+{"id":"chunk-bfnfj4kx.js#or","doc":"作用域标签"}
+{"id":"chunk-bfnfj4kx.js#rr","doc":"指定名字的标识符"}
+{"id":"chunk-bfnfj4kx.js#nr","doc":"4"}
+{"id":"chunk-bfnfj4kx.js#sr","doc":"可直接展示的摘录"}
+{"id":"chunk-bfnfj4kx.js#pr","doc":"16"}
+{"id":"chunk-bfnfj4kx.js#Qe","doc":"120"}
+{"id":"chunk-bfnfj4kx.js#F","doc":"摘录或加引号"}
+{"id":"chunk-bfnfj4kx.js#v","doc":"\"?\""}
+{"id":"chunk-bfnfj4kx.js#ce","doc":"解析常量字面量"}
+{"id":"chunk-bfnfj4kx.js#cr","doc":"/…/o 形式"}
+{"id":"chunk-bfnfj4kx.js#ir","doc":"字面量或对象路径"}
+{"id":"chunk-bfnfj4kx.js#jUi","doc":"拼接字面量"}
+{"id":"chunk-bfnfj4kx.js#Feo","doc":"是否导出该名"}
+{"id":"chunk-bfnfj4kx.js#ue","doc":"长度+内容（图摘要用）"}
+{"id":"chunk-z3wfa7xm.js#Uq","doc":"空对象"}
+{"id":"chunk-z3wfa7xm.js#vk","doc":"面板客户端登记表"}
+{"id":"chunk-z3wfa7xm.js#$tr","doc":"全屏客户端"}
+{"id":"chunk-z3wfa7xm.js#g2","doc":"面板宿主槽"}
+{"id":"chunk-z3wfa7xm.js#Ftr","doc":"面板颜色"}
+{"id":"chunk-z3wfa7xm.js#JNe","doc":"颜色或原值"}
+{"id":"chunk-z3wfa7xm.js#ae","doc":"是否合法主题色"}
+{"id":"chunk-z3wfa7xm.js#ekt","doc":"合法主题名"}
+{"id":"chunk-z3wfa7xm.js#R","doc":"面板槽"}
+{"id":"chunk-z3wfa7xm.js#K","doc":"64"}
+{"id":"chunk-z3wfa7xm.js#L_n","doc":"组装面板键 {plugin,id}；列表与设置都按这个形状传面板标识。"}
+{"id":"chunk-z3wfa7xm.js#V","doc":"面板键 schema"}
+{"id":"chunk-z3wfa7xm.js#W","doc":"颜色索引不超范围"}
+{"id":"chunk-z3wfa7xm.js#H_n","doc":"聚焦槽"}
+{"id":"chunk-z3wfa7xm.js#N_n","doc":"放置槽"}
+{"id":"chunk-z3wfa7xm.js#$_n","doc":"询问计数槽"}
+{"id":"chunk-z3wfa7xm.js#KKt","doc":"询问计数表的键 plugin\\0id，与面板键分开存放询问次数。"}
+{"id":"chunk-z3wfa7xm.js#VKt","doc":"取询问计数"}
+{"id":"chunk-z3wfa7xm.js#tkt","doc":"删除若干键"}
+{"id":"chunk-z3wfa7xm.js#ul","doc":"插件面板登记表"}
+{"id":"chunk-z3wfa7xm.js#F_n","doc":"移除面板并触发重绘"}
+{"id":"chunk-z3wfa7xm.js#hxe","doc":"打开与传统一放的面板"}
+{"id":"chunk-z3wfa7xm.js#w","doc":"是否已询问过"}
+{"id":"chunk-z3wfa7xm.js#q","doc":"更新 asked 列表"}
+{"id":"chunk-z3wfa7xm.js#F","doc":"人回答后关闭询问"}
+{"id":"chunk-z3wfa7xm.js#rkt","doc":"当前显示的面板"}
+{"id":"chunk-z3wfa7xm.js#B4o","doc":"面板是否接管 toast"}
+{"id":"chunk-z3wfa7xm.js#j4o","doc":"聚焦面板的下一个"}
+{"id":"chunk-z3wfa7xm.js#I","doc":"面板最小宽度"}
+{"id":"chunk-z3wfa7xm.js#Rni","doc":"非字符串参数"}
+{"id":"chunk-z3wfa7xm.js#N4o","doc":"1..n 的整数"}
+{"id":"chunk-z3wfa7xm.js#dYr","doc":"校验 key 参数"}
+{"id":"chunk-z3wfa7xm.js#zKt","doc":"校验 path 参数"}
+{"id":"chunk-z3wfa7xm.js#Ntr","doc":"进程 init.timeoutMs 的上限 600000 毫秒（10 分钟），超出即报参数错误。"}
+{"id":"chunk-z3wfa7xm.js#PFi","doc":"值须可 JSON 序列化"}
+{"id":"chunk-z3wfa7xm.js#hrt","doc":"text 必须字符串"}
+{"id":"chunk-z3wfa7xm.js#EFi","doc":"项目根目录"}
+{"id":"chunk-z3wfa7xm.js#le","doc":"吞掉 rejection"}
+{"id":"chunk-z3wfa7xm.js#bqe","doc":"串行任务队列"}
+{"id":"chunk-z3wfa7xm.js#lt","doc":"con/prn/aux/nul/com1…"}
+{"id":"chunk-z3wfa7xm.js#ce","doc":"64"}
+{"id":"chunk-z3wfa7xm.js#ct","doc":"12"}
+{"id":"chunk-z3wfa7xm.js#ye","doc":"按键串行队列"}
+{"id":"chunk-z3wfa7xm.js#xt","doc":"存储键格式"}
+{"id":"chunk-z3wfa7xm.js#yt","doc":"插件串行队列"}
+{"id":"chunk-z3wfa7xm.js#S","doc":"插件存储文件路径"}
+{"id":"chunk-z3wfa7xm.js#ke","doc":"创建存储目录"}
+{"id":"chunk-z3wfa7xm.js#Ce","doc":"存储后端句柄"}
+{"id":"chunk-z3wfa7xm.js#Vt","doc":"存储后端引用"}
+{"id":"chunk-z3wfa7xm.js#Ie","doc":"存储错误文本表"}
+{"id":"chunk-z3wfa7xm.js#Y","doc":"256"}
+{"id":"chunk-z3wfa7xm.js#qKt","doc":"排队应用存储事件"}
+{"id":"chunk-e6aww6q8.js#Az","doc":"回合绑定表"}
+{"id":"chunk-e6aww6q8.js#ZNi","doc":"绑定回合"}
+{"id":"chunk-e6aww6q8.js#n$i","doc":"回合因用户中止而释放时随释放信号发出的标志 true；正常结束发 false。"}
+{"id":"chunk-e6aww6q8.js#EWe","doc":"回合释放信号"}
+{"id":"chunk-e6aww6q8.js#W1o","doc":"若是当前回合则释放并通知"}
+{"id":"chunk-e6aww6q8.js#G1o","doc":"当前回合绑定"}
+{"id":"chunk-e6aww6q8.js#vbe","doc":"当前回合"}
+{"id":"chunk-e6aww6q8.js#Lso","doc":"gapMs 8000 / capMs 60000"}
+{"id":"chunk-e6aww6q8.js#R8n","doc":"重载控制器槽"}
+{"id":"chunk-e6aww6q8.js#Nso","doc":"250"}
+{"id":"chunk-e6aww6q8.js#Yue","doc":"待处理重载槽"}
+{"id":"chunk-e6aww6q8.js#Fso","doc":"limit 5 / gap 2000 / quiet 10000"}
+{"id":"chunk-e6aww6q8.js#Bde","doc":"重载定时槽"}
+{"id":"chunk-e6aww6q8.js#Ude","doc":"重载原因槽"}
+{"id":"chunk-e6aww6q8.js#_Ys","doc":"记录原因并清掉定时器"}
+{"id":"chunk-e6aww6q8.js#ylt","doc":"plugin.register 事件定义"}
+{"id":"chunk-e6aww6q8.js#mBn","doc":"拒绝的插件"}
+{"id":"chunk-e6aww6q8.js#SBn","doc":"上报注册拒绝"}
+{"id":"chunk-e6aww6q8.js#Rx","doc":"之前版本已卸载"}
+{"id":"chunk-e6aww6q8.js#kBn","doc":"记录拒绝文本"}
+{"id":"chunk-e6aww6q8.js#bBn","doc":"准入期间执行"}
+{"id":"chunk-e6aww6q8.js#fat","doc":"1048576"}
+{"id":"chunk-e6aww6q8.js#pat","doc":"\"$.process.spawn\""}
+{"id":"chunk-e6aww6q8.js#x9r","doc":"装饰段未变或文本相同"}
+{"id":"chunk-s61vbvea.js#cqo","doc":"平移装饰段"}
+{"id":"chunk-e6aww6q8.js#tFr","doc":"校验 prompt.section 参数"}
+{"id":"chunk-e6aww6q8.js#A0n","doc":"各事件是否记录 session.start"}
+{"id":"chunk-e6aww6q8.js#Aj","doc":"会话开始调用记录槽"}
+{"id":"chunk-e6aww6q8.js#gMe","doc":"忘掉某次调用"}
+{"id":"chunk-e6aww6q8.js#x0n","doc":"各事件空调用表"}
+{"id":"chunk-e6aww6q8.js#hat","doc":"移除一次调用"}
+{"id":"chunk-e6aww6q8.js#P0n","doc":"会话加载记录"}
+{"id":"chunk-e6aww6q8.js#iA","doc":"提示附件缓存"}
+{"id":"chunk-e6aww6q8.js#ile","doc":"取段落 id"}
+{"id":"chunk-e6aww6q8.js#ov","doc":"提示段落槽"}
+{"id":"chunk-e6aww6q8.js#TZn","doc":"由答案生成段落"}
+{"id":"chunk-e6aww6q8.js#WI","doc":"提示组装槽"}
+{"id":"chunk-e6aww6q8.js#iyt","doc":"刷新提示上下文"}
+{"id":"chunk-e6aww6q8.js#HC","doc":"提示上下文槽"}
+{"id":"chunk-e6aww6q8.js#leo","doc":"上下文绑定后才执行"}
+{"id":"chunk-e6aww6q8.js#e_t","doc":"prompt.fill 核心"}
+{"id":"chunk-e6aww6q8.js#zle","doc":"prompt.fill 事件"}
+{"id":"chunk-dbh1yfwe.js#t","doc":"提示提及运行器槽"}
+{"id":"chunk-e6aww6q8.js#RBr","doc":"钩子未放行提示"}
+{"id":"chunk-e6aww6q8.js#vNi","doc":"保证有 drop"}
+{"id":"chunk-e6aww6q8.js#G$t","doc":"批次中前一条失败"}
+{"id":"chunk-e6aww6q8.js#eTo","doc":"构造核心步骤"}
+{"id":"chunk-e6aww6q8.js#nTo","doc":"提交监视状态"}
+{"id":"chunk-e6aww6q8.js#Bme","doc":"提交等待者"}
+{"id":"chunk-e6aww6q8.js#kNi","doc":"释放时丢弃等待项"}
+{"id":"chunk-e6aww6q8.js#uTo","doc":"prompt.submit 站点规则"}
+{"id":"chunk-e6aww6q8.js#cTo","doc":"等待提交结果"}
+{"id":"chunk-e6aww6q8.js#ANi","doc":"取出等待者"}
+{"id":"chunk-e6aww6q8.js#Wme","doc":"非 undefined 或 session.start"}
+{"id":"chunk-e6aww6q8.js#oX","doc":"提交标记槽"}
+{"id":"chunk-e6aww6q8.js#Gme","doc":"记录提交标记"}
+{"id":"chunk-e6aww6q8.js#V_e","doc":"提交标记集合"}
+{"id":"chunk-e6aww6q8.js#zme","doc":"按回合修剪并标记"}
+{"id":"chunk-e6aww6q8.js#nUo","doc":"请求一条建议"}
+{"id":"chunk-e6aww6q8.js#Vle","doc":"prompt.suggest 事件"}
+{"id":"chunk-e6aww6q8.js#n_t","doc":"建议的核心步骤"}
+{"id":"chunk-e6aww6q8.js#tKe","doc":"插件提供者层级"}
+{"id":"chunk-e6aww6q8.js#vBr","doc":"字符串转文本块，数组浅拷贝"}
+{"id":"chunk-e6aww6q8.js#$$t","doc":"插件可见的消息形状"}
+{"id":"chunk-e6aww6q8.js#zwo","doc":"bearer 或 api-key"}
+{"id":"chunk-e6aww6q8.js#U$t","doc":"无 API key 且用 WIF"}
+{"id":"chunk-e6aww6q8.js#mWe","doc":"以 / 开头"}
+{"id":"chunk-e6aww6q8.js#Hme","doc":"200"}
+{"id":"chunk-e6aww6q8.js#_We","doc":"官方仓库才返回"}
+{"id":"chunk-e6aww6q8.js#TTo","doc":"含 tool_result 块"}
+{"id":"chunk-e6aww6q8.js#vTo","doc":"是否内部模型仓库"}
+{"id":"chunk-e6aww6q8.js#SWe","doc":"允许的 git 远程"}
+{"id":"chunk-e6aww6q8.js#V$t","doc":"空的异步实现"}
+{"id":"chunk-e6aww6q8.js#xTo","doc":"开关开启才查"}
+{"id":"chunk-e6aww6q8.js#Vme","doc":"tengu_snappy_plum 开关"}
+{"id":"chunk-e6aww6q8.js#kWe","doc":"构造插件可见用户行"}
+{"id":"chunk-e6aww6q8.js#J$t","doc":"URL 里的用户信息"}
+{"id":"chunk-e6aww6q8.js#LTo","doc":"去掉 URL 凭证"}
+{"id":"chunk-e6aww6q8.js#f0t","doc":"4"}
+{"id":"chunk-e6aww6q8.js#m0t","doc":"授权句柄登记表"}
+{"id":"chunk-e6aww6q8.js#b0t","doc":"请求凭证与来源"}
+{"id":"chunk-e6aww6q8.js#nge","doc":"已持有会话表"}
+{"id":"chunk-e6aww6q8.js#P0t","doc":"SendMessage 未投递"}
+{"id":"chunk-e6aww6q8.js#ZMn","doc":"用量窗口对象"}
+{"id":"chunk-e6aww6q8.js#vK","doc":"构造插件行"}
+{"id":"chunk-e6aww6q8.js#V7t","doc":"附上工具结果与句柄"}
+{"id":"chunk-e6aww6q8.js#W4e","doc":"session.compact 核心步骤"}
+{"id":"chunk-e6aww6q8.js#W1r","doc":"助手行换新 uuid"}
+{"id":"chunk-e6aww6q8.js#z4e","doc":"跳过压缩"}
+{"id":"chunk-e6aww6q8.js#q4e","doc":"保留下层的行 uuid"}
+{"id":"chunk-e6aww6q8.js#u6o","doc":"session.compact 站点规则"}
+{"id":"chunk-0sfjpx19.js#Y0n","doc":"无核心时的自动补全"}
+{"id":"chunk-0sfjpx19.js#X0n","doc":"把光标夹到文本内"}
+{"id":"chunk-0sfjpx19.js#dn","doc":"光标移到末尾"}
+{"id":"chunk-0sfjpx19.js#qo","doc":"prompt.edit 核心步骤"}
+{"id":"chunk-0sfjpx19.js#Xo","doc":"编辑键参数"}
+{"id":"chunk-0sfjpx19.js#cn","doc":"连续满足的次数"}
+{"id":"chunk-0sfjpx19.js#ypt","doc":"会话作用域的默认键 <x>:default，用于没有指定 session 的场景。"}
+{"id":"chunk-0sfjpx19.js#Vpo","doc":"结束所有客户端会话"}
+{"id":"chunk-0sfjpx19.js#wa","doc":"运行提及链"}
+{"id":"chunk-0sfjpx19.js#lr","doc":"用量窗口是否变化"}
+{"id":"chunk-0sfjpx19.js#ur","doc":"成本是否变化"}
+{"id":"chunk-0sfjpx19.js#dr","doc":"1e-9"}
+{"id":"chunk-0sfjpx19.js#cr","doc":"1"}
+{"id":"chunk-0sfjpx19.js#pn","doc":"会话度量槽"}
+{"id":"chunk-0sfjpx19.js#pr","doc":"默认度量结果"}
+{"id":"chunk-0sfjpx19.js#gr","doc":"并入限流信息"}
+{"id":"chunk-0sfjpx19.js#hr","doc":"按需保留限流"}
+{"id":"chunk-0sfjpx19.js#He","doc":"会话结束槽"}
+{"id":"chunk-0sfjpx19.js#gn","doc":"宿主状态槽"}
+{"id":"chunk-0sfjpx19.js#wr","doc":"session.measure 是否有钩子"}
+{"id":"chunk-0sfjpx19.js#hn","doc":"中止时静默"}
+{"id":"chunk-0sfjpx19.js#Cr","doc":"session.end 核心步骤"}
+{"id":"chunk-0sfjpx19.js#Rr","doc":"session.end 是否有钩子"}
+{"id":"chunk-0sfjpx19.js#Ir","doc":"15000"}
+{"id":"chunk-0sfjpx19.js#Pr","doc":"总等待时长"}
+{"id":"chunk-0sfjpx19.js#Or","doc":"300000"}
+{"id":"chunk-e6aww6q8.js#r_t","doc":"session.attach 事件"}
+{"id":"chunk-e6aww6q8.js#s_t","doc":"session.detach 事件"}
+{"id":"chunk-e6aww6q8.js#Yle","doc":"session.end 事件"}
+{"id":"chunk-e6aww6q8.js#Xle","doc":"session.measure 事件"}
+{"id":"chunk-e6aww6q8.js#oUo","doc":"session.receive 是否有钩子"}
+{"id":"chunk-e6aww6q8.js#sde","doc":"session.receive 事件"}
+{"id":"chunk-e6aww6q8.js#ade","doc":"session.start 事件"}
+{"id":"chunk-e6aww6q8.js#FNe","doc":"附上 frontmatter"}
+{"id":"chunk-e6aww6q8.js#T_t","doc":"turn.complete 事件"}
+{"id":"chunk-e6aww6q8.js#v_t","doc":"turn.start 事件"}
+{"id":"chunk-e6aww6q8.js#ANe","doc":"拼接文本块"}
+{"id":"chunk-e6aww6q8.js#a_t","doc":"钩子未放行投递"}
+{"id":"chunk-e6aww6q8.js#d_t","doc":"排队投递结果"}
+{"id":"chunk-e6aww6q8.js#Zle","doc":"投递接收槽"}
+{"id":"chunk-e6aww6q8.js#D1r","doc":"执行核心步骤"}
+{"id":"chunk-4121qate.js#ep","doc":"agent.offer 固定键"}
+{"id":"chunk-4121qate.js#op","doc":"agent.spawn 固定键"}
+{"id":"chunk-4121qate.js#rp","doc":"background/cwd"}
+{"id":"chunk-4121qate.js#np","doc":"恢复可改键"}
+{"id":"chunk-4121qate.js#pp","doc":"覆盖 ceiling"}
+{"id":"chunk-4121qate.js#ap","doc":"合法权限决定"}
+{"id":"chunk-5prdqx1m.js#sjn","doc":"经典 PreToolUse id"}
+{"id":"chunk-5prdqx1m.js#ijn","doc":"经典钩子 id"}
+{"id":"chunk-5prdqx1m.js#MLs","doc":"PreToolUse 或 tool.check"}
+{"id":"chunk-4121qate.js#h3t","doc":"站点规则命名空间"}
+{"id":"chunk-4121qate.js#go","doc":"plugin key"}
+{"id":"chunk-4121qate.js#qRt","doc":"界面预算键"}
+{"id":"chunk-4121qate.js#Wp","doc":"64"}
+{"id":"chunk-4121qate.js#Dr","doc":"纯数据检查状态"}
+{"id":"chunk-4121qate.js#Z6t","doc":"纯数据最大深度"}
+{"id":"chunk-4121qate.js#afr","doc":"文本字符上限"}
+{"id":"chunk-4121qate.js#AZr","doc":"节点上限"}
+{"id":"chunk-4121qate.js#lEe","doc":"纯数据校验入口"}
+{"id":"chunk-4121qate.js#mm","doc":"普通对象"}
+{"id":"chunk-4121qate.js#As","doc":"段落模式校验"}
+{"id":"chunk-4121qate.js#MAn","doc":"光标必须整数"}
+{"id":"chunk-4121qate.js#gn","doc":"ui.scroll 固定键"}
+{"id":"chunk-4121qate.js#hn","doc":"非负数"}
+{"id":"chunk-4121qate.js#Gi","doc":"有 toJSON 方法"}
+{"id":"chunk-4121qate.js#Lu","doc":"64"}
+{"id":"chunk-4121qate.js#ju","doc":"8388608"}
+{"id":"chunk-4121qate.js#XAn","doc":"消息相同或不改"}
+{"id":"chunk-4121qate.js#rxt","doc":"插件备注拒答"}
+{"id":"chunk-4121qate.js#Go","doc":"type/name/role/isMeta"}
+{"id":"chunk-4121qate.js#Wu","doc":"session.end 站点规则"}
+{"id":"chunk-4121qate.js#Gu","doc":"session.measure 站点规则"}
+{"id":"chunk-4121qate.js#qu","doc":"state.get 站点规则"}
+{"id":"chunk-4121qate.js#Qu","doc":"state.set 站点规则"}
+{"id":"chunk-4121qate.js#tc","doc":"telemetry.mark 站点规则"}
+{"id":"chunk-4121qate.js#ofr","doc":"工具站点名表"}
+{"id":"chunk-4121qate.js#RAn","doc":"结果 token 预算"}
+{"id":"chunk-4121qate.js#M","doc":"结果须为对象"}
+{"id":"chunk-4121qate.js#Tr","doc":"恢复单个字段"}
+{"id":"chunk-4121qate.js#Ie","doc":"恢复缺失键"}
+{"id":"chunk-4121qate.js#$a","doc":"与答案不同"}
+{"id":"chunk-4121qate.js#_rs","doc":"去掉 isError"}
+{"id":"chunk-4121qate.js#KRt","doc":"是否字符串列表"}
+{"id":"chunk-4121qate.js#cR","doc":"跳过时保留的文本上限 4096 字符，超出截断并加省略号后放进提示。"}
+{"id":"chunk-4121qate.js#To","doc":"截断并加省略号"}
+{"id":"chunk-4121qate.js#Sr","doc":"简单站点规则"}
+{"id":"chunk-4121qate.js#Er","doc":"带固定键的站点规则"}
+{"id":"chunk-4121qate.js#Or","doc":"255"}
+{"id":"chunk-4121qate.js#bo","doc":"来源须为 engine"}
+{"id":"chunk-4121qate.js#ms","doc":"校验来源未改"}
+{"id":"chunk-4121qate.js#vr","doc":"32"}
+{"id":"chunk-4121qate.js#cs","doc":"取指令文件路径"}
+{"id":"chunk-4121qate.js#wf","doc":"需有 changed 数组"}
+{"id":"chunk-4121qate.js#_s","doc":"需有 clientId"}
+{"id":"chunk-4121qate.js#Cs","doc":"需有 cwd"}
+{"id":"chunk-4121qate.js#Tf","doc":"需有 sessionId"}
+{"id":"chunk-4121qate.js#bf","doc":"需有 text"}
+{"id":"chunk-4121qate.js#Hs","doc":"需有 turnId"}
+{"id":"chunk-4121qate.js#Ns","doc":"经典钩子输入固定键校验"}
+{"id":"chunk-4121qate.js#$s","doc":"经典字段类型/决定校验"}
+{"id":"chunk-4121qate.js#SZr","doc":"经典钩子站点规则"}
+{"id":"chunk-4121qate.js#Ao","doc":"command.describe 键"}
+{"id":"chunk-4121qate.js#Bs","doc":"复制段落"}
+{"id":"chunk-4121qate.js#Po","doc":"config.describe 键"}
+{"id":"chunk-4121qate.js#Hf","doc":"env.get 站点规则"}
+{"id":"chunk-4121qate.js#If","doc":"env.set 站点规则"}
+{"id":"chunk-4121qate.js#Fr","doc":"ui.fault 固定键"}
+{"id":"chunk-4121qate.js#Mf","doc":"ui.fault 站点规则"}
+{"id":"chunk-4121qate.js#Lr","doc":"ui.focus 固定键"}
+{"id":"chunk-4121qate.js#LAn","doc":"文件引用三类"}
+{"id":"chunk-4121qate.js#jr","doc":"正整数"}
+{"id":"chunk-4121qate.js#wZr","doc":"面板 id 的长度上限 64，且只能由字母、数字、下划线或连字符组成。"}
+{"id":"chunk-4121qate.js#hK","doc":"非负整数"}
+{"id":"chunk-4121qate.js#kv","doc":"tool/tool_use_id/agentId"}
+{"id":"chunk-4121qate.js#lt","doc":"\"$shadowed\""}
+{"id":"chunk-4121qate.js#fp","doc":"tool.check 固定键"}
+{"id":"chunk-4121qate.js#nSi","doc":"附上 agentId"}
+{"id":"chunk-4121qate.js#Rv","doc":"agentId/$shadowed"}
+{"id":"chunk-4121qate.js#LUi","doc":"无 agentId 的工具事件"}
+{"id":"chunk-4121qate.js#m3t","doc":"工具调用事件"}
+{"id":"chunk-4121qate.js#Brs","doc":"工具输入转文本"}
+{"id":"chunk-4121qate.js#HUi","doc":"附请求元信息"}
+{"id":"chunk-4121qate.js#Jo","doc":"校验 tool.check 固定键"}
+{"id":"chunk-4121qate.js#mp","doc":"归一权限决定表"}
+{"id":"chunk-4121qate.js#g3t","doc":"工具站点用到的来源种类常量组：anthropic/sources、claude/plugins、sources-relay 等，以及请求元信息的字节上限。"}
+{"id":"chunk-4121qate.js#jrs","doc":"UTF-8 字节数"}
+{"id":"chunk-4121qate.js#dp","doc":"固定键 + 元信息校验"}
+{"id":"chunk-4121qate.js#lp","doc":"context 归一为字符串列表"}
+{"id":"chunk-4121qate.js#bn","doc":"空串"}
+{"id":"chunk-4121qate.js#ac","doc":"决定名归属插件"}
+{"id":"chunk-4121qate.js#fc","doc":"决定相关字段"}
+{"id":"chunk-4121qate.js#gp","doc":"tool.call 字段"}
+{"id":"chunk-4121qate.js#xp","doc":"tool.check 字段"}
+{"id":"chunk-4121qate.js#dc","doc":"tool.register 站点规则"}
+{"id":"chunk-4121qate.js#Tp","doc":"工具步骤 id"}
+{"id":"chunk-4121qate.js#Fo","doc":"来源更靠后"}
+{"id":"chunk-4121qate.js#et","doc":"\"an object\"/null/missing"}
+{"id":"chunk-4121qate.js#si","doc":"ui.render 固定键"}
+{"id":"chunk-4121qate.js#ii","doc":"校验 ui.render 固定键"}
+{"id":"chunk-4121qate.js#gm","doc":"纯数据字符数"}
+{"id":"chunk-4121qate.js#ki","doc":"UserMessage 固定 props"}
+{"id":"chunk-4121qate.js#Pi","doc":"渲染参数与 props 校验"}
+{"id":"chunk-4121qate.js#xm","doc":"ui.input 站点规则"}
+{"id":"chunk-4121qate.js#km","doc":"ui.message 站点规则"}
+{"id":"chunk-4121qate.js#Cu","doc":"ui.resolve 站点规则"}
+{"id":"chunk-4121qate.js#Hu","doc":"ui.select 站点规则"}
+{"id":"chunk-e6aww6q8.js#h_t","doc":"技能 frontmatter 问题结果"}
+{"id":"chunk-e6aww6q8.js#gde","doc":"skill.prompt 事件"}
+{"id":"chunk-e6aww6q8.js#k_t","doc":"合法日期或当前时间"}
+{"id":"chunk-e6aww6q8.js#b_t","doc":"Array.from 包装"}
+{"id":"chunk-bfnfj4kx.js#pe","doc":"派生状态标记"}
+{"id":"chunk-bfnfj4kx.js#Ce","doc":"带有某 Symbol 属性"}
+{"id":"chunk-bfnfj4kx.js#R","doc":"是否状态原子"}
+{"id":"chunk-bfnfj4kx.js#_e","doc":"是否派生状态"}
+{"id":"chunk-bfnfj4kx.js#Ml","doc":"生成状态引用"}
+{"id":"chunk-bfnfj4kx.js#Bl","doc":"读状态值"}
+{"id":"chunk-bfnfj4kx.js#ft","doc":"附形状"}
+{"id":"chunk-bfnfj4kx.js#mt","doc":"64"}
+{"id":"chunk-bfnfj4kx.js#hO","doc":"状态原子构造器"}
+{"id":"chunk-bfnfj4kx.js#EO","doc":"派生状态构造器"}
+{"id":"chunk-bfnfj4kx.js#SO","doc":"状态引用"}
+{"id":"chunk-bfnfj4kx.js#NO","doc":"读状态"}
+{"id":"chunk-bfnfj4kx.js#RO","doc":"更新状态"}
+{"id":"chunk-bfnfj4kx.js#Qr","doc":"区间内的状态使用"}
+{"id":"chunk-bfnfj4kx.js#K","doc":"找展开参数"}
+{"id":"chunk-bfnfj4kx.js#cn","doc":"必须导出 register"}
+{"id":"chunk-bfnfj4kx.js#En","doc":"打包模块信息"}
+{"id":"chunk-e6aww6q8.js#NN","doc":"是否有可用界面"}
+{"id":"chunk-e6aww6q8.js#VU","doc":"无界面原因"}
+{"id":"chunk-e6aww6q8.js#Kot","doc":"无界面时补原因"}
+{"id":"chunk-e6aww6q8.js#DDr","doc":"无界面则未放置"}
+{"id":"chunk-e6aww6q8.js#NC","doc":"界面绑定槽"}
+{"id":"chunk-e6aww6q8.js#K$o","doc":"绑定界面"}
+{"id":"chunk-e6aww6q8.js#G3","doc":"界面 composer"}
+{"id":"chunk-e6aww6q8.js#lp","doc":"当前界面绑定"}
+{"id":"chunk-jv2zdrd7.js#HNt","doc":"空对象"}
+{"id":"chunk-jv2zdrd7.js#We","doc":"UI 消息端口"}
+{"id":"chunk-jv2zdrd7.js#wwo","doc":"客户端界面键"}
+{"id":"chunk-jv2zdrd7.js#ye","doc":"客户端描述"}
+{"id":"chunk-jv2zdrd7.js#ne","doc":"客户端失败说明"}
+{"id":"chunk-jv2zdrd7.js#HTe","doc":"焦点 store"}
+{"id":"chunk-jv2zdrd7.js#Qrn","doc":"设置焦点"}
+{"id":"chunk-jv2zdrd7.js#io","doc":"取焦点 id"}
+{"id":"chunk-jv2zdrd7.js#Ewo","doc":"清除焦点"}
+{"id":"chunk-jv2zdrd7.js#U","doc":"引擎节点权重"}
+{"id":"chunk-jv2zdrd7.js#Se","doc":"持有句柄"}
+{"id":"chunk-jv2zdrd7.js#se","doc":"客户端日志键"}
+{"id":"chunk-jv2zdrd7.js#ie","doc":"20"}
+{"id":"chunk-jv2zdrd7.js#ae","doc":"8"}
+{"id":"chunk-jv2zdrd7.js#ve","doc":"3"}
+{"id":"chunk-jv2zdrd7.js#vo","doc":"上报未结算"}
+{"id":"chunk-jv2zdrd7.js#B","doc":"视口键"}
+{"id":"chunk-jv2zdrd7.js#Ae","doc":"客户端错误文本"}
+{"id":"chunk-jv2zdrd7.js#Fe","doc":"是否脚本超时"}
+{"id":"chunk-jv2zdrd7.js#Ie","doc":"1000"}
+{"id":"chunk-jv2zdrd7.js#_e","doc":"60000"}
+{"id":"chunk-jv2zdrd7.js#je","doc":"\"__surface__.run()\""}
+{"id":"chunk-jv2zdrd7.js#Ne","doc":"客户端运行时"}
+{"id":"chunk-jv2zdrd7.js#qe","doc":"加载中的环境"}
+{"id":"chunk-jv2zdrd7.js#Ge","doc":"界面宿主槽"}
+{"id":"chunk-jv2zdrd7.js#Xe","doc":"界面环境池"}
+{"id":"chunk-jv2zdrd7.js#TDs","doc":"界面客户端宿主"}
+{"id":"chunk-s61vbvea.js#Ep","doc":"运行失败节流表"}
+{"id":"chunk-s61vbvea.js#lc","doc":"被压制计数"}
+{"id":"chunk-s61vbvea.js#BE","doc":"60000"}
+{"id":"chunk-s61vbvea.js#Rp","doc":"取未过期的节流项"}
+{"id":"chunk-s61vbvea.js#dc","doc":"engine.create 错误表"}
+{"id":"chunk-e6aww6q8.js#WX","doc":"发送器模块命名空间"}
+{"id":"chunk-e6aww6q8.js#Sde","doc":"telemetry.mark 事件"}
+{"id":"chunk-e6aww6q8.js#T3r","doc":"标记记录可信"}
+{"id":"chunk-e6aww6q8.js#DY","doc":"记录决定"}
+{"id":"chunk-e6aww6q8.js#v3r","doc":"给结果消息附权限决定"}
+{"id":"chunk-e6aww6q8.js#F3r","doc":"100"}
+{"id":"chunk-e6aww6q8.js#lat","doc":"8000"}
+{"id":"chunk-e6aww6q8.js#B2e","doc":"空对象"}
+{"id":"chunk-e6aww6q8.js#rv","doc":"空对象"}
+{"id":"chunk-e6aww6q8.js#OCe","doc":"空对象"}
+{"id":"chunk-e6aww6q8.js#$Br","doc":"经典钩子事件（非 PreToolUse）"}
+{"id":"chunk-e6aww6q8.js#Cht","doc":"经典钩子有钩子"}
+{"id":"chunk-e6aww6q8.js#GLe","doc":"classic.<event>"}
+{"id":"chunk-e6aww6q8.js#F3","doc":"是否有 classic.<event> 站"}
+{"id":"chunk-e6aww6q8.js#FNi","doc":"有模块监听该经典事件"}
+{"id":"chunk-e6aww6q8.js#FBr","doc":"插件提示表"}
+{"id":"chunk-e6aww6q8.js#zLe","doc":"忘掉打开的调用"}
+{"id":"chunk-e6aww6q8.js#Pht","doc":"记录打开的调用"}
+{"id":"chunk-e6aww6q8.js#Mht","doc":"忘掉扣留的调用"}
+{"id":"chunk-e6aww6q8.js#Hqs","doc":"结果被扣留说明"}
+{"id":"chunk-e6aww6q8.js#OLn","doc":"工具描述缓存"}
+{"id":"chunk-e6aww6q8.js#JHr","doc":"300"}
+{"id":"chunk-e6aww6q8.js#tUr","doc":"20"}
+{"id":"chunk-e6aww6q8.js#QGt","doc":"并发子代理上限"}
+{"id":"chunk-e6aww6q8.js#nUr","doc":"并发子代理上限"}
+{"id":"chunk-e6aww6q8.js#NLn","doc":"子代理调用者信息"}
+{"id":"chunk-e6aww6q8.js#FLn","doc":"{type:\"direct\"}"}
+{"id":"chunk-e6aww6q8.js#sUr","doc":"构造插件 tool_use 块"}
+{"id":"chunk-e6aww6q8.js#jLn","doc":"包装成 HooksError"}
+{"id":"chunk-e6aww6q8.js#iPe","doc":"扣留结果标记"}
+{"id":"chunk-e6aww6q8.js#pUr","doc":"是否被扣留"}
+{"id":"chunk-e6aww6q8.js#mUr","doc":"标记扣留"}
+{"id":"chunk-e6aww6q8.js#cyt","doc":"自动模式有无 deny 列表"}
+{"id":"chunk-e6aww6q8.js#Syt","doc":"读取块覆盖"}
+{"id":"chunk-e6aww6q8.js#kyt","doc":"permissions.blockReadsOutsideWorkingDirectories"}
+{"id":"chunk-e6aww6q8.js#byt","doc":"附设置来源"}
+{"id":"chunk-e6aww6q8.js#wyt","doc":"工具检查核心步骤"}
+{"id":"chunk-e6aww6q8.js#Tyt","doc":"插件钩子决定来源"}
+{"id":"chunk-e6aww6q8.js#VFo","doc":"tool.check 站点规则"}
+{"id":"chunk-e6aww6q8.js#cle","doc":"工具检查槽"}
+{"id":"chunk-e6aww6q8.js#Fyt","doc":"判断插件是否订阅了 tool.describe 钩子（是则返回次数），配套的 Nyt 记录「已发送」标记、Jto 负责调用钩子并应用返回的 description 与 isDeferred。"}
+{"id":"chunk-e6aww6q8.js#TWn","doc":"附 alwaysLoad 元信息"}
+{"id":"chunk-e6aww6q8.js#Bps","doc":"惰性 MCP SDK"}
+{"id":"chunk-e6aww6q8.js#zps","doc":"安装插件工具服务器"}
+{"id":"chunk-e6aww6q8.js#hre","doc":"tsconfig/.gitignore"}
+{"id":"chunk-e6aww6q8.js#iF","doc":"插件 types 目录"}
+{"id":"chunk-e6aww6q8.js#ZGt","doc":"类型根的入口相对路径 ./types/index.d.ts，缺少类型目录时用它拼路径。"}
+{"id":"chunk-e6aww6q8.js#Bcs","doc":"生成 tsconfig 扩展"}
+{"id":"chunk-e6aww6q8.js#jcs","doc":"生成类型根 tsconfig"}
+{"id":"chunk-e6aww6q8.js#uWn","doc":"438"}
+{"id":"chunk-e6aww6q8.js#Idt","doc":"按 umask 计算目录权限"}
+{"id":"chunk-e6aww6q8.js#Ddt","doc":"写类型根目录"}
+{"id":"chunk-4121qate.js#Lt","doc":"全部 UI 元素类型"}
+{"id":"chunk-4121qate.js#ea","doc":"构建占位元素"}
+{"id":"chunk-4121qate.js#Gbi","doc":"某类型元素的构造器表"}
+{"id":"chunk-4121qate.js#Dy","doc":"是否已知元素类型"}
+{"id":"chunk-4121qate.js#pn","doc":"engine 或 Svg"}
+{"id":"chunk-4121qate.js#St","doc":"Button/Input/Select/Markdown"}
+{"id":"chunk-4121qate.js#iu","doc":"可承载子元素"}
+{"id":"chunk-4121qate.js#$e","doc":"取子元素"}
+{"id":"chunk-4121qate.js#Lrs","doc":"client 元素键"}
+{"id":"chunk-4121qate.js#me","doc":"元素的 plugin"}
+{"id":"chunk-4121qate.js#an","doc":"字符串或 engine 类型"}
+{"id":"chunk-4121qate.js#PUi","doc":"渲染树内容哈希"}
+{"id":"chunk-4121qate.js#IUi","doc":"收集器状态"}
+{"id":"chunk-4121qate.js#Ifr","doc":"悬停作用域表的键 plugin\\0scope，按插件与作用域名区分悬停计数。"}
+{"id":"chunk-4121qate.js#d3t","doc":"Box 或 Text"}
+{"id":"chunk-4121qate.js#c3t","doc":"元素的 scope"}
+{"id":"chunk-4121qate.js#Hrs","doc":"image 元素键"}
+{"id":"chunk-4121qate.js#mu","doc":"标记图片所属插件"}
+{"id":"chunk-4121qate.js#cu","doc":"onPress/onEvent"}
+{"id":"chunk-4121qate.js#Qbi","doc":"纯数据且带 type"}
+{"id":"chunk-4121qate.js#Di","doc":"带 key 的 Markdown"}
+{"id":"chunk-4121qate.js#Ko","doc":"悬停作用域元素"}
+{"id":"chunk-4121qate.js#mn","doc":"自有属性的值"}
+{"id":"chunk-4121qate.js#Bi","doc":"设置并返回"}
+{"id":"chunk-4121qate.js#un","doc":"markdown 片段键"}
+{"id":"chunk-4121qate.js#$rs","doc":"raster 元素键"}
+{"id":"chunk-4121qate.js#du","doc":"标记 raster 所属插件"}
+{"id":"chunk-4121qate.js#MUi","doc":"映射按键句柄"}
+{"id":"chunk-4121qate.js#yu","doc":"标记 client 所属插件"}
+{"id":"chunk-4121qate.js#xu","doc":"标记分组所属插件"}
+{"id":"chunk-4121qate.js#ku","doc":"标记图片媒体"}
+{"id":"chunk-4121qate.js#wu","doc":"a Button/an Input…"}
+{"id":"chunk-4121qate.js#Ht","doc":"标记部件所属插件"}
+{"id":"chunk-4121qate.js#ln","doc":"去掉 part"}
+{"id":"chunk-4121qate.js#Su","doc":"标记 raster 媒体"}
+{"id":"chunk-4121qate.js#DUi","doc":"校验并标记元素"}
+{"id":"chunk-4121qate.js#Ii","doc":"3072"}
+{"id":"chunk-4121qate.js#Jr","doc":"4096"}
+{"id":"chunk-4121qate.js#bm","doc":"255"}
+{"id":"chunk-4121qate.js#Sm","doc":"255"}
+{"id":"chunk-4121qate.js#rS","doc":"校验图像单元格"}
+{"id":"chunk-4121qate.js#ZRt","doc":"file/shm 来源"}
+{"id":"chunk-4121qate.js#Em","doc":"图像负载字节数"}
+{"id":"chunk-4121qate.js#eo","doc":"2097152"}
+{"id":"chunk-4121qate.js#qr","doc":"4096"}
+{"id":"chunk-4121qate.js#bt","doc":"PNG IHDR 偏移"}
+{"id":"chunk-4121qate.js#Om","doc":"PNG 魔数"}
+{"id":"chunk-4121qate.js#vm","doc":"2048"}
+{"id":"chunk-4121qate.js#Pm","doc":"4"}
+{"id":"chunk-4121qate.js#Cm","doc":"/名字 格式"}
+{"id":"chunk-4121qate.js#Prs","doc":"是否 shm 来源"}
+{"id":"chunk-s61vbvea.js#x6","doc":"validateTree 命名空间"}
+{"id":"chunk-s61vbvea.js#QE","doc":"负数"}
+{"id":"chunk-s61vbvea.js#Hvt","doc":"扣留的处理器"}
+{"id":"chunk-s61vbvea.js#Cp","doc":"各插件输入队列"}
+{"id":"chunk-s61vbvea.js#Ap","doc":"ui.input 站点规则"}
+{"id":"chunk-s61vbvea.js#h4r","doc":"链接在允许列表"}
+{"id":"chunk-s61vbvea.js#Op","doc":"ui.press 站点规则"}
+{"id":"chunk-s61vbvea.js#Ip","doc":"ui.select 站点规则"}
+{"id":"chunk-s61vbvea.js#cR","doc":"在 async store 里执行"}
+{"id":"chunk-s61vbvea.js#Cer","doc":"排队分发输入"}
+{"id":"chunk-s61vbvea.js#Mp","doc":"各插件选择队列"}
+{"id":"chunk-s61vbvea.js#xer","doc":"排队分发选择"}
+{"id":"chunk-s61vbvea.js#Pei","doc":"取某环境的按键"}
+{"id":"chunk-s61vbvea.js#Iei","doc":"清掉某环境的按键记录"}
+{"id":"chunk-s61vbvea.js#kKt","doc":"按键上下文 ALS"}
+{"id":"chunk-s61vbvea.js#wE","doc":"取分发对应的按键 id"}
+{"id":"chunk-s61vbvea.js#Qj","doc":"包装按键上下文"}
+{"id":"chunk-4121qate.js#Mm","doc":"1000"}
+{"id":"chunk-4121qate.js#Fm","doc":"64"}
+{"id":"chunk-4121qate.js#dt","doc":"16 位半段常量"}
+{"id":"chunk-4121qate.js#Qr","doc":"取高 16 位"}
+{"id":"chunk-4121qate.js#$o","doc":"12"}
+{"id":"chunk-4121qate.js#Lm","doc":"估算单元格字节"}
+{"id":"chunk-4121qate.js#oo","doc":"unmeasured/narrow/refused"}
+{"id":"chunk-4121qate.js#jm","doc":"空对象"}
+{"id":"chunk-4121qate.js#_t","doc":"16777216"}
+{"id":"chunk-4121qate.js#ro","doc":"真彩色位偏移"}
+{"id":"chunk-4121qate.js#Ni","doc":"合法颜色整数"}
+{"id":"chunk-4121qate.js#Ct","doc":"3"}
+{"id":"chunk-4121qate.js#K5e","doc":"稍后拒绝"}
+{"id":"chunk-4121qate.js#no","doc":"已挂载 raster"}
+{"id":"chunk-4121qate.js#wfr","doc":"raster 每秒最多贴 120 次；超出后本次直接拒绝，防止界面被单插件刷屏。"}
+{"id":"chunk-4121qate.js#ext","doc":"raster 键"}
+{"id":"chunk-4121qate.js#Km","doc":"1000"}
+{"id":"chunk-4121qate.js#We","doc":"16 色位偏移"}
+{"id":"chunk-4121qate.js#Zr","doc":"展开 4 位通道"}
+{"id":"chunk-4121qate.js#so","doc":"32768"}
+{"id":"chunk-4121qate.js#en","doc":"打包前景/背景色"}
+{"id":"chunk-4121qate.js#tn","doc":"取低 16 位"}
+{"id":"chunk-4121qate.js#po","doc":"38/48/39/49"}
+{"id":"chunk-4121qate.js#on","doc":"生成前景+背景 SGR"}
+{"id":"chunk-4121qate.js#rn","doc":"透明色 SGR"}
+{"id":"chunk-4121qate.js#nn","doc":"1024"}
+{"id":"chunk-4121qate.js#Vm","doc":"16384"}
+{"id":"chunk-4121qate.js#sn","doc":"4096"}
+{"id":"chunk-4121qate.js#zm","doc":"准入令牌状态"}
+{"id":"chunk-4121qate.js#Ym","doc":"raster 准入槽"}
+{"id":"chunk-4121qate.js#Jm","doc":"1024"}
+{"id":"chunk-4121qate.js#qm","doc":"131072"}
+{"id":"chunk-4121qate.js#Qm","doc":"160"}
+{"id":"chunk-4121qate.js#tu","doc":"512"}
+{"id":"chunk-4121qate.js#ou","doc":"256"}
+{"id":"chunk-4121qate.js#WE","doc":"校验挂载单元格"}
+{"id":"chunk-s61vbvea.js#nx","doc":"渲染桥接状态"}
+{"id":"chunk-s61vbvea.js#Uc","doc":"引擎元素"}
+{"id":"chunk-s61vbvea.js#ta","doc":"渲染桥接"}
+{"id":"chunk-s61vbvea.js#dx","doc":"安装渲染桥接"}
+{"id":"chunk-s61vbvea.js#JB","doc":"渲染版本表"}
+{"id":"chunk-s61vbvea.js#tl","doc":"递增渲染版本"}
+{"id":"chunk-s61vbvea.js#nl","doc":"\" live\""}
+{"id":"chunk-s61vbvea.js#SM","doc":"是否 live 键"}
+{"id":"chunk-s61vbvea.js#_M","doc":"加 live 后缀"}
+{"id":"chunk-s61vbvea.js#ol","doc":"按节奏生成键"}
+{"id":"chunk-s61vbvea.js#$yn","doc":"按节奏递增渲染版本"}
+{"id":"chunk-s61vbvea.js#Fyn","doc":"渲染突发槽"}
+{"id":"chunk-s61vbvea.js#sl","doc":"是否允许渲染"}
+{"id":"chunk-s61vbvea.js#il","doc":"节流截止表"}
+{"id":"chunk-s61vbvea.js#DS","doc":"1000"}
+{"id":"chunk-s61vbvea.js#al","doc":"节流若干键"}
+{"id":"chunk-s61vbvea.js#NS","doc":"是否仍在节流"}
+{"id":"chunk-s61vbvea.js#ll","doc":"34"}
+{"id":"chunk-s61vbvea.js#NM","doc":"live 节奏节流"}
+{"id":"chunk-s61vbvea.js#LS","doc":"16"}
+{"id":"chunk-s61vbvea.js#FM","doc":"steady 节奏节流"}
+{"id":"chunk-s61vbvea.js#cKt","doc":"steady 节奏下重绘的最小间隔 100 毫秒，低于间隔的失效请求合并到下一次。"}
+{"id":"chunk-s61vbvea.js#pl","doc":"\"\\0state\""}
+{"id":"chunk-s61vbvea.js#Zd","doc":"加 state 后缀"}
+{"id":"chunk-s61vbvea.js#FS","doc":"是否 state 键"}
+{"id":"chunk-s61vbvea.js#ser","doc":"全量失效"}
+{"id":"chunk-s61vbvea.js#ier","doc":"renderEvent 的视口键（\"<renderEvent> viewport\"），视口相关失效都打到它上面。"}
+{"id":"chunk-s61vbvea.js#rFi","doc":"视口失效"}
+{"id":"chunk-s61vbvea.js#rD","doc":"附上各插件版本"}
+{"id":"chunk-4121qate.js#W5e","doc":"是否已知元素类型名"}
+{"id":"chunk-4121qate.js#Ir","doc":"start/end"}
+{"id":"chunk-4121qate.js#vs","doc":"文本样式键集合"}
+{"id":"chunk-4121qate.js#yf","doc":"基本类型或空串"}
+{"id":"chunk-4121qate.js#Yn","doc":"\"...\""}
+{"id":"chunk-4121qate.js#Jn","doc":"120"}
+{"id":"chunk-4121qate.js#oi","doc":"是否为固定属性"}
+{"id":"chunk-4121qate.js#At","doc":"字符串总字符数"}
+{"id":"chunk-4121qate.js#zte","doc":"界面行账本"}
+{"id":"chunk-4121qate.js#pt","doc":"3 字节 / 4 字符"}
+{"id":"chunk-4121qate.js#su","doc":"节点标识状态"}
+{"id":"chunk-4121qate.js#ji","doc":"节点标识"}
+{"id":"chunk-4121qate.js#It","doc":"标记遍历结束"}
+{"id":"chunk-e6aww6q8.js#i2r","doc":"选区对象"}
+{"id":"chunk-e6aww6q8.js#I0n","doc":"空则 undefined"}
+{"id":"chunk-e6aww6q8.js#u$i","doc":"选区结果"}
+{"id":"chunk-e6aww6q8.js#QN","doc":"当前请求者"}
+{"id":"chunk-e6aww6q8.js#D0n","doc":"非终端界面"}
+{"id":"chunk-e6aww6q8.js#L0n","doc":"请求者客户端"}
+{"id":"chunk-e6aww6q8.js#yMe","doc":"能回答的客户端"}
+{"id":"chunk-e6aww6q8.js#Oj","doc":"1e6"}
+{"id":"chunk-e6aww6q8.js#tgn","doc":"发给界面宿主的请求（复制、读选区、读写提示等）默认超时 5 秒。"}
+{"id":"chunk-e6aww6q8.js#f$i","doc":"设置当前请求者"}
+{"id":"chunk-e6aww6q8.js#a2r","doc":"只有原因的失败结果"}
+{"id":"chunk-e6aww6q8.js#U0n","doc":"1048576"}
+{"id":"chunk-e6aww6q8.js#f7r","doc":"补默认界面"}
+{"id":"chunk-e6aww6q8.js#g$i","doc":"订阅放置事件"}
+{"id":"chunk-e6aww6q8.js#kat","doc":"500"}
+{"id":"chunk-e6aww6q8.js#G0n","doc":"取 placed 系统事件"}
+{"id":"chunk-e6aww6q8.js#q0n","doc":"3000"}
+{"id":"chunk-e6aww6q8.js#rgn","doc":"焦点站点绘制表"}
+{"id":"chunk-e6aww6q8.js#f9s","doc":"包装处理器，跳过指定键"}
+{"id":"chunk-e6aww6q8.js#X0n","doc":"64"}
+{"id":"chunk-e6aww6q8.js#bRe","doc":"取值或 null"}
+{"id":"chunk-e6aww6q8.js#SRe","doc":"记录拒绝但不抛"}
+{"id":"chunk-e6aww6q8.js#z7r","doc":"$.ui.log 写调试日志"}
+{"id":"chunk-e6aww6q8.js#J7r","doc":"补默认标题"}
+{"id":"chunk-e6aww6q8.js#eHn","doc":"3000"}
+{"id":"chunk-4121qate.js#LZr","doc":"宿主侧复制"}
+{"id":"chunk-4121qate.js#by","doc":"注入 VM 的源码片段：用 _WeakSet 标记捕获到的错误（capErr/isCap），以及用 message 匹配栈溢出结尾的 isStackEnd；这些片段在插件代码里展开执行，错误因此能跨 VM 边界被识别。"}
+{"id":"chunk-4121qate.js#Qp","doc":"缓存的 VM 上下文"}
+{"id":"chunk-4121qate.js#rr","doc":"取（懒创建）VM 上下文"}
+{"id":"chunk-4121qate.js#Bbi","doc":"VM 中的 Fragment"}
+{"id":"chunk-4121qate.js#jbi","doc":"VM 中的元素构造"}
+{"id":"chunk-4121qate.js#Ny","doc":"带名字的 VM 元素构造器"}
+{"id":"chunk-4121qate.js#wl","doc":"转发的流式操作"}
+{"id":"chunk-4121qate.js#Oeo","doc":"缓存的 ui.resolve 答案"}
+{"id":"chunk-4121qate.js#El","doc":"取参数里的 surface"}
+{"id":"chunk-4121qate.js#Al","doc":"原样返回"}
+{"id":"chunk-4121qate.js#_l","doc":"克隆失败时的文本"}
+{"id":"chunk-4121qate.js#Il","doc":"文件模块引用"}
+{"id":"chunk-4121qate.js#fSi","doc":"执行 import 拒绝源码"}
+{"id":"chunk-4121qate.js#Nn","doc":"长度+内容拼接"}
+{"id":"chunk-4121qate.js#Ll","doc":"导入路径 → 文件"}
+{"id":"chunk-4121qate.js#jl","doc":"文件 → 源码"}
+{"id":"chunk-4121qate.js#Up","doc":"是否栈溢出"}
+{"id":"chunk-4121qate.js#pSi","doc":"链接并加载模块"}
+{"id":"chunk-4121qate.js#Meo","doc":"插件环境槽"}
+{"id":"chunk-4121qate.js#Mn","doc":"取插件的环境"}
+{"id":"chunk-4121qate.js#eos","doc":"是否已登记环境"}
+{"id":"chunk-4121qate.js#jfr","doc":"拒绝值转文本"}
+{"id":"chunk-4121qate.js#mSi","doc":"新建 VM 宿主上下文"}
+{"id":"chunk-4121qate.js#gSi","doc":"带调用栈戳执行"}
+{"id":"chunk-4121qate.js#Wl","doc":"命中 user 子句"}
+{"id":"chunk-4121qate.js#dfr","doc":"函数名标记表"}
+{"id":"chunk-4121qate.js#BT","doc":"前置 'use strict'"}
+{"id":"chunk-4121qate.js#lSi","doc":"VM 入站复制器"}
+{"id":"chunk-4121qate.js#WP","doc":"断言 ArrayBuffer"}
+{"id":"chunk-4121qate.js#GP","doc":"断言函数"}
+{"id":"chunk-4121qate.js#En","doc":"断言 Uint8Array"}
+{"id":"chunk-4121qate.js#at","doc":"断言字符串"}
+{"id":"chunk-4121qate.js#zP","doc":"VM 宿主辅助函数集"}
+{"id":"chunk-4121qate.js#Cc","doc":"清除定时器"}
+{"id":"chunk-4121qate.js#JP","doc":"执行一次性定时回调"}
+{"id":"chunk-4121qate.js#dSi","doc":"执行 VM 前导源码"}
+{"id":"chunk-4121qate.js#On","doc":"出错返回 false"}
+{"id":"chunk-4121qate.js#QAn","doc":"是否 VM 内 Error"}
+{"id":"chunk-4121qate.js#Mc","doc":"Object.create(null)"}
+{"id":"chunk-4121qate.js#fo","doc":"64"}
+{"id":"chunk-4121qate.js#jc","doc":"2"}
+{"id":"chunk-4121qate.js#Dc","doc":"任一谓词为真"}
+{"id":"chunk-4121qate.js#Uc","doc":"执行值种类判定"}
+{"id":"chunk-4121qate.js#ZAn","doc":"与 VM 共享的心跳戳数组里，调用栈从第 2 个槽开始；前两个槽留给当前环境与当前调用。"}
+{"id":"chunk-4121qate.js#ixt","doc":"心跳戳数组里「当前调用编号」的槽位，插件每次进入调用都会写它。"}
+{"id":"chunk-4121qate.js#axt","doc":"心跳戳数组里「当前环境编号」的槽位，进出环境时保存与恢复。"}
+{"id":"chunk-4121qate.js#$Ui","doc":"心跳戳共享数组的槽位数：2 个固定槽加最多 7 层调用栈。"}
+{"id":"chunk-4121qate.js#Yp","doc":"无 import 钩子标记"}
+{"id":"chunk-4121qate.js#B5e","doc":"构造 timeout 选项"}
+{"id":"chunk-4121qate.js#cfr","doc":"删除 Error.captureStackTrace"}
+{"id":"chunk-4121qate.js#$An","doc":"空原型包装 await"}
+{"id":"chunk-4121qate.js#FAn","doc":"直接调用函数"}
+{"id":"chunk-4121qate.js#Ln","doc":"懒创建的错误读取器"}
+{"id":"chunk-72n15jmc.js#T","doc":"空对象"}
+{"id":"chunk-72n15jmc.js#h","doc":"内嵌资源"}
+{"id":"chunk-72n15jmc.js#r","doc":"读取声明文本"}
+{"id":"chunk-72n15jmc.js#e","doc":"声明文本"}
+{"id":"chunk-72n15jmc.js#A","doc":"加生成头"}
+{"id":"chunk-72n15jmc.js#m","doc":"声明加工具输入类型"}
+{"id":"chunk-hde26vvz.js#vie","doc":"是否 sec-default 模块"}
+{"id":"chunk-jahwkg2g.js#QNe","doc":"按名字找已加载模块"}
+{"id":"chunk-jahwkg2g.js#IT","doc":"取模块参数"}
+{"id":"chunk-4163ksv9.js#d","doc":"[\"take_in\"]"}
+{"id":"chunk-4163ksv9.js#r","doc":"访问者登记表"}
+{"id":"chunk-4163ksv9.js#l","doc":"访问者登记槽"}
+{"id":"chunk-4163ksv9.js#a","doc":"是否仍在等待"}
+{"id":"chunk-ha3km179.js#Xd","doc":"非空字符串或 null"}
+{"id":"chunk-ha3km179.js#ou","doc":"git 环境缓存"}
+{"id":"chunk-ha3km179.js#gg","doc":"带超时列标签页"}
+{"id":"chunk-ha3km179.js#Uu","doc":"去掉可观察字段"}
+{"id":"chunk-ha3km179.js#nSo","doc":"记录快速路径失败"}
+{"id":"chunk-ha3km179.js#yp","doc":"主动任务通知"}
+{"id":"chunk-ha3km179.js#Is","doc":"目标空闲检查开关"}
+{"id":"chunk-ha3km179.js#_a","doc":"指数退避的检查间隔"}
+{"id":"chunk-ha3km179.js#_p","doc":"附“检查已暂停”说明"}
+{"id":"chunk-ha3km179.js#Mr","doc":"达到最大空闲检查次数"}
+{"id":"chunk-ha3km179.js#Pn","doc":"清目标重提示状态"}
+{"id":"chunk-ha3km179.js#Ca","doc":"清并重排目标重提示"}
+{"id":"chunk-ha3km179.js#Ma","doc":"设定重提示定时器"}
+{"id":"chunk-ha3km179.js#Ea","doc":"去掉可忽略字符"}
+{"id":"chunk-ha3km179.js#Ra","doc":"用 «» 包裹"}
+{"id":"chunk-ha3km179.js#Aa","doc":"目标是否相同"}
+{"id":"chunk-ha3km179.js#sc","doc":"中止并重置流式执行器"}
+{"id":"chunk-ha3km179.js#sSo","doc":"命中伪造标记"}
+{"id":"chunk-ha3km179.js#Gg","doc":"2"}
+{"id":"chunk-ha3km179.js#Mi","doc":"还能再重试"}
+{"id":"chunk-ha3km179.js#lc","doc":"最近的格式错误重试"}
+{"id":"chunk-ha3km179.js#uc","doc":"是否尝试恢复"}
+{"id":"chunk-ha3km179.js#gc","doc":"尖括号分类"}
+{"id":"chunk-ha3km179.js#yc","doc":"找伪造片段标记"}
+{"id":"chunk-ha3km179.js#hc","doc":"伪造回合发言者分类"}
+{"id":"chunk-e6aww6q8.js#Vwt","doc":"主循环模型覆盖"}
+{"id":"chunk-e6aww6q8.js#b7e","doc":"小写后同名比较"}
+{"id":"chunk-e6aww6q8.js#pzr","doc":"是否回退到该模型"}
+{"id":"chunk-ha3km179.js#$r","doc":"恒 false"}
+{"id":"chunk-ha3km179.js#Kr","doc":"3"}
+{"id":"chunk-ha3km179.js#zu","doc":"两个模型的上下文窗口"}
+{"id":"chunk-ha3km179.js#_n","doc":"紧凑 token 文本"}
+{"id":"chunk-3s7ydtfd.js#Dl","doc":"柱状图默认 4 个系列"}
+{"id":"chunk-3s7ydtfd.js#Ul","doc":"迷你图默认 24 条"}
+{"id":"chunk-3s7ydtfd.js#Ct","doc":"折线/占比默认 8 个"}
+{"id":"chunk-3s7ydtfd.js#Fl","doc":"条形图最多 40 条"}
+{"id":"chunk-3s7ydtfd.js#Bl","doc":"柱状图最多 4 个系列"}
+{"id":"chunk-3s7ydtfd.js#jl","doc":"迷你图最多 40 条"}
+{"id":"chunk-3s7ydtfd.js#Tx","doc":"截断时给省略号预留的宽度"}
+{"id":"chunk-3s7ydtfd.js#gx","doc":"emoji 占 2 列"}
+{"id":"chunk-3s7ydtfd.js#Ox","doc":"宽字符占 2 列"}
+{"id":"chunk-3s7ydtfd.js#We","doc":"时间字段里的「日」"}
+{"id":"chunk-3s7ydtfd.js#Eu","doc":"刻度范围外多留 2 步"}
+{"id":"chunk-3s7ydtfd.js#ks","doc":"取中位数/居中所用的 2"}
+{"id":"chunk-3s7ydtfd.js#bu","doc":"至少跨 2 周才换周刻度"}
+{"id":"chunk-3s7ydtfd.js#Iu","doc":"getUTCDay 的周六"}
+{"id":"chunk-3s7ydtfd.js#Mu","doc":"区间为空时的位置比例"}
+{"id":"chunk-3s7ydtfd.js#ku","doc":"标签总宽不能超过刻度的 5 倍"}
+{"id":"chunk-3s7ydtfd.js#Pu","doc":"至少 2 个刻度才出标签"}
+{"id":"chunk-3s7ydtfd.js#Ps","doc":"时间字段里的「秒」"}
+{"id":"chunk-3s7ydtfd.js#Uu","doc":"时/分/秒补零宽度"}
+{"id":"chunk-3s7ydtfd.js#Qo","doc":"时间字段里的「月」"}
+{"id":"chunk-3s7ydtfd.js#Ds","doc":"时间字段里的「年」"}
+{"id":"chunk-3s7ydtfd.js#Bu","doc":"合并文本片段时至少隔 3 格"}
+{"id":"chunk-3s7ydtfd.js#vu","doc":"ISO 周按周四划分的偏移"}
+{"id":"chunk-3s7ydtfd.js#Wu","doc":"7 天一星期"}
+{"id":"chunk-4121qate.js#_n","doc":"装饰段合法（光标整数）"}
+{"id":"chunk-4121qate.js#uEe","doc":"接口调用返回值的字符上限 4194304，超出的值按错误拒绝。"}
+{"id":"chunk-4121qate.js#jp","doc":"只取存在的字段"}
+{"id":"chunk-4121qate.js#Id","doc":"取参数里的 agentId"}
+{"id":"chunk-s61vbvea.js#_4o","doc":"空对象默认导出"}
+{"id":"chunk-s61vbvea.js#Nyn","doc":"JSON 深拷贝"}
+{"id":"chunk-s61vbvea.js#uSe","doc":"空对象默认导出"}
+{"id":"chunk-s61vbvea.js#zS","doc":"插件状态登记表"}
+{"id":"chunk-s61vbvea.js#HS","doc":"丢弃未挂载实例的渲染版本"}
+{"id":"chunk-s61vbvea.js#tf","doc":"到点刷新待处理项"}
+{"id":"chunk-s61vbvea.js#nf","doc":"steady/live 两种重绘间隔"}
+{"id":"chunk-s61vbvea.js#$S","doc":"状态写入后调度过期读者"}
+{"id":"chunk-s61vbvea.js#US","doc":"订阅状态过期通知"}
+{"id":"chunk-s61vbvea.js#rf","doc":"同站点批量重绘"}
+{"id":"chunk-s61vbvea.js#nxe","doc":"状态条目表的键 plugin\\0key（带实例 id 时再补 \\0id），同一插件同一键的不同实例分开存。"}
+{"id":"chunk-s61vbvea.js#af","doc":"忘掉某渲染实例的读者记录"}
+{"id":"chunk-s61vbvea.js#lf","doc":"4000"}
+{"id":"chunk-s61vbvea.js#NZs","doc":"附上一次的值"}
+{"id":"chunk-s61vbvea.js#hl","doc":"状态引用形状说明"}
+{"id":"chunk-s61vbvea.js#cf","doc":"state.set 允许的键"}
+{"id":"chunk-s61vbvea.js#uf","doc":"取（或挂上）状态值表"}
+{"id":"chunk-e6aww6q8.js#HHn","doc":"65536"}
+{"id":"chunk-e6aww6q8.js#BMe","doc":"截断并加省略号"}
+{"id":"chunk-e6aww6q8.js#BHn","doc":"截断 title/description"}
+{"id":"chunk-e6aww6q8.js#UMe","doc":"先登记再返回"}
+{"id":"chunk-e6aww6q8.js#iZr","doc":"工具 API 目录里的长说明文本：remote-control 会话收件箱的事件格式（source/session-inbox、file_id 读取方式），以及 GitHub PR 订阅的用法；由 apiCatalog 拼进插件可见的工具描述。"}
+{"id":"chunk-e6aww6q8.js#aZr","doc":"可在云会话运行的工具"}
+{"id":"chunk-e6aww6q8.js#qat","doc":"绑定工具名的 check/run"}
+{"id":"chunk-e6aww6q8.js#RZr","doc":"command.run/prompt.submit"}
+{"id":"chunk-e6aww6q8.js#JC","doc":"插件名转存储 id"}
+{"id":"chunk-e6aww6q8.js#Nde","doc":"命令结果对象"}
+{"id":"chunk-e6aww6q8.js#gdt","doc":"把变更路径映射到根下"}
+{"id":"chunk-e6aww6q8.js#yjn","doc":"60000"}
+{"id":"chunk-e6aww6q8.js#_jn","doc":"10000"}
+{"id":"chunk-e6aww6q8.js#Sjn","doc":"30000"}
+{"id":"chunk-e6aww6q8.js#xXn","doc":"目录监视忽略的目录名：node_modules 与 .git。"}
+{"id":"chunk-e6aww6q8.js#Ax","doc":"路径是否在目录内"}
+{"id":"chunk-e6aww6q8.js#ZWt","doc":"是否在 types 目录内"}
+{"id":"chunk-e6aww6q8.js#Ads","doc":"任一目录内"}
+{"id":"chunk-e6aww6q8.js#yre","doc":"100"}
+{"id":"chunk-e6aww6q8.js#_dt","doc":"真实路径或原值"}
+{"id":"chunk-e6aww6q8.js#rmn","doc":"监视器活跃时的轮询间隔 400 毫秒；空闲后按 idleMs 放慢。"}
+{"id":"chunk-e6aww6q8.js#gGr","doc":"比较文件戳时预留的时钟误差 10 毫秒，避免同秒内的改动被漏掉。"}
+{"id":"chunk-e6aww6q8.js#Ejn","doc":"是否为关心的变更"}
+{"id":"chunk-e6aww6q8.js#Rjn","doc":"插件读取快照"}
+{"id":"chunk-e6aww6q8.js#v6","doc":"优先把 manifest 变化当原因"}
+{"id":"chunk-e6aww6q8.js#VOe","doc":"大小 + 哈希"}
+{"id":"chunk-e6aww6q8.js#sgn","doc":"重载绑定的插件"}
+{"id":"chunk-e6aww6q8.js#jjn","doc":"false"}
+{"id":"chunk-e6aww6q8.js#kre","doc":"监视中的插件记录"}
+{"id":"chunk-e6aww6q8.js#Wjn","doc":"插件目录串行队列"}
+{"id":"chunk-e6aww6q8.js#_9s","doc":"惰性创建设备树宿主"}
+{"id":"chunk-e6aww6q8.js#kWn","doc":"URI 解码失败返回 undefined"}
+{"id":"chunk-e6aww6q8.js#bWn","doc":"405"}
+{"id":"chunk-e6aww6q8.js#wWn","doc":"404"}
+{"id":"chunk-e6aww6q8.js#I4","doc":"上报模块加载失败"}
+{"id":"chunk-e6aww6q8.js#qoe","doc":"上报重载失败"}
+{"id":"chunk-e6aww6q8.js#TBn","doc":"按名字找钩子成员"}
+{"id":"chunk-e6aww6q8.js#xlt","doc":"该次扫描要重折叠"}
+{"id":"chunk-e6aww6q8.js#OBn","doc":"插件提供者层级"}
+{"id":"chunk-e6aww6q8.js#Dlt","doc":"import( 检测"}
+{"id":"chunk-e6aww6q8.js#pOe","doc":"same-thread 或 worker"}
+{"id":"chunk-e6aww6q8.js#kns","doc":"取参数的层级"}
+{"id":"chunk-e6aww6q8.js#BBn","doc":"逐个退役模块并收集错误"}
+{"id":"chunk-e6aww6q8.js#xns","doc":"按层级插入模块"}
+{"id":"chunk-e6aww6q8.js#Wj","doc":"重载失败错误类"}
+{"id":"chunk-e6aww6q8.js#Flt","doc":"排队重载模块"}
+{"id":"chunk-e6aww6q8.js#WBn","doc":"等待所有模块读取"}
+{"id":"chunk-e6aww6q8.js#kqs","doc":"遥测引用摘要"}
+{"id":"chunk-e6aww6q8.js#BDn","doc":"模型名脱敏"}
+{"id":"chunk-e6aww6q8.js#est","doc":"tmux 透传提示作为替代文字"}
+{"id":"chunk-e6aww6q8.js#gY","doc":"已挂载图片表"}
+{"id":"chunk-e6aww6q8.js#HHr","doc":"是否带 source"}
+{"id":"chunk-e6aww6q8.js#l$i","doc":"附 swap"}
+{"id":"chunk-e6aww6q8.js#ELn","doc":"读当前选区"}
+{"id":"chunk-e6aww6q8.js#L0e","doc":"tengu_violin_rosin 等条件"}
+{"id":"chunk-e6aww6q8.js#tH","doc":"开关 tengu_zinc_harbor（默认关）：控制插件输入暂扣是否启用。"}
+{"id":"chunk-e6aww6q8.js#j9n","doc":"代理派生来源"}
+{"id":"chunk-e6aww6q8.js#Nce","doc":"是否无名引导"}
+{"id":"chunk-e6aww6q8.js#q$o","doc":"暂扣原因槽"}
+{"id":"chunk-e6aww6q8.js#kBr","doc":"插件输入拒绝开关"}
+{"id":"chunk-e6aww6q8.js#RZ","doc":"插件输入暂扣槽"}
+{"id":"chunk-e6aww6q8.js#xZ","doc":"插件是否暂扣输入"}
+{"id":"chunk-e6aww6q8.js#PCe","doc":"是否应暂扣"}
+{"id":"chunk-e6aww6q8.js#Fce","doc":"空对象"}
+{"id":"chunk-e6aww6q8.js#I3n","doc":"暂扣期间推迟执行"}
+{"id":"chunk-e6aww6q8.js#CBr","doc":"清暂扣并释放"}
+{"id":"chunk-e6aww6q8.js#WMe","doc":"接口调用 ALS"}
+{"id":"chunk-e6aww6q8.js#NZr","doc":"接口调用未结束"}
+{"id":"chunk-e6aww6q8.js#VHn","doc":"在调用帧里执行接口调用"}
+{"id":"chunk-bfnfj4kx.js#Dt","doc":"模块 id 匹配"}
+{"id":"chunk-e6aww6q8.js#$0","doc":"当前回合槽"}
+{"id":"chunk-e6aww6q8.js#vWe","doc":"回合释放信号"}
+{"id":"chunk-e6aww6q8.js#ST","doc":"按键排序的条目"}
+{"id":"chunk-e6aww6q8.js#k6","doc":"托管钩子策略快照"}
+{"id":"chunk-e6aww6q8.js#ojn","doc":"策略快照是否仍然一致"}
+{"id":"chunk-e6aww6q8.js#rjn","doc":"2"}
+{"id":"chunk-e6aww6q8.js#tdt","doc":"读到策略稳定为止"}
+{"id":"chunk-e6aww6q8.js#T6","doc":"空串"}
+{"id":"chunk-e6aww6q8.js#JKe","doc":"演示或 claubbet 环境"}
+{"id":"chunk-e6aww6q8.js#ems","doc":"取合并后设置"}
+{"id":"chunk-e6aww6q8.js#oMe","doc":"销毁所有流"}
+{"id":"chunk-e6aww6q8.js#T0n","doc":"500"}
+{"id":"chunk-e6aww6q8.js#v0n","doc":"2000"}
+{"id":"chunk-e6aww6q8.js#uat","doc":"4194304"}
+{"id":"chunk-e6aww6q8.js#cat","doc":"\"$.process.run\""}
+{"id":"chunk-e6aww6q8.js#R0n","doc":"30000"}
+{"id":"chunk-e6aww6q8.js#cMe","doc":"启动失败说明"}
+{"id":"chunk-kpkakvzd.js#e","doc":"内嵌资源"}
+{"id":"chunk-kpkakvzd.js#f","doc":"读取资源文本"}
+{"id":"chunk-xcj8pcqy.js#m","doc":"内嵌资源"}
+{"id":"chunk-xcj8pcqy.js#s","doc":"读取资源文本"}
+{"id":"chunk-5265f3tr.js#r","doc":"内嵌资源"}
+{"id":"chunk-5265f3tr.js#S","doc":"读取资源文本"}
+{"id":"chunk-e6aww6q8.js#p4","doc":"停掉心跳并清状态"}
+{"id":"chunk-e6aww6q8.js#Hoe","doc":"累计等待时长"}
+{"id":"chunk-e6aww6q8.js#Pes","doc":"某插件扣留的 $ 名词"}
+{"id":"chunk-e6aww6q8.js#sBn","doc":"同上别名"}
+{"id":"chunk-e6aww6q8.js#aBn","doc":"崩溃或仍有扣留"}
+{"id":"chunk-e6aww6q8.js#lBn","doc":"追加插件名"}
+{"id":"chunk-e6aww6q8.js#mlt","doc":"递增代次"}
+{"id":"chunk-e6aww6q8.js#dBn","doc":"已知参数列表"}
+{"id":"chunk-e6aww6q8.js#glt","doc":"记录插件参数"}
+{"id":"chunk-e6aww6q8.js#jes","doc":"去掉该插件的折叠基线"}
+{"id":"chunk-e6aww6q8.js#Ges","doc":"上次折叠摘要"}
+{"id":"chunk-e6aww6q8.js#nOe","doc":"失效工具描述等缓存"}
+{"id":"chunk-e6aww6q8.js#Woe","doc":"失效全部钩子相关缓存"}
+{"id":"chunk-e6aww6q8.js#y$t","doc":"密封插件 hooks.json schema"}
+{"id":"chunk-e6aww6q8.js#_$t","doc":"计算摘要时跳过的名字"}
+{"id":"chunk-e6aww6q8.js#aWe","doc":"4096"}
+{"id":"chunk-e6aww6q8.js#Jw","doc":"密封插件校验错误"}
+{"id":"chunk-e6aww6q8.js#_7","doc":"33554432"}
+{"id":"chunk-e6aww6q8.js#b$t","doc":"需要一致的清单字段"}
+{"id":"chunk-e6aww6q8.js#k7","doc":".claude-plugin/plugin.json"}
+{"id":"chunk-e6aww6q8.js#R$t","doc":"密封摘要对象"}
+{"id":"chunk-e6aww6q8.js#x$t","doc":"追加密封插件 id"}
+{"id":"chunk-4121qate.js#ct","doc":"每个存在的索引都满足"}
+{"id":"chunk-4121qate.js#Xv","doc":"复制成稠密数组"}
+{"id":"chunk-4121qate.js#it","doc":"kind\\0path"}
+{"id":"chunk-4121qate.js#Xa","doc":"false"}
+{"id":"chunk-4121qate.js#za","doc":"不在托管目录内"}
+{"id":"chunk-4121qate.js#W1","doc":"held:/asks:/空"}
+{"id":"chunk-4121qate.js#pf","doc":"转义后的路径文本"}
+{"id":"chunk-4121qate.js#L5e","doc":"拼出记忆指令段"}
+{"id":"chunk-4121qate.js#Pr","doc":"合法指令文件列表"}
+{"id":"chunk-4121qate.js#xs","doc":"格式化或 undefined"}
+{"id":"chunk-4121qate.js#uf","doc":"新增项里缺该键"}
+{"id":"chunk-4121qate.js#_r","doc":"恢复并保留长文本"}
+{"id":"chunk-4121qate.js#Ae","doc":"不在列表内时取长度"}
+{"id":"chunk-s61vbvea.js#Wi","doc":"桌面界面引用"}
+{"id":"chunk-s61vbvea.js#hc","doc":"plugin\\0module\\0key"}
+{"id":"chunk-s61vbvea.js#yc","doc":"component\\0requestId"}
+{"id":"chunk-s61vbvea.js#_R","doc":"1024"}
+{"id":"chunk-s61vbvea.js#bR","doc":"站点版本取值函数"}
+{"id":"chunk-s61vbvea.js#_r","doc":"已绘制客户端账本"}
+{"id":"chunk-s61vbvea.js#RR","doc":"ui.fault 站点规则"}
+{"id":"chunk-s61vbvea.js#vR","doc":"4096"}
+{"id":"chunk-s61vbvea.js#A4r","doc":"按插件排队分发故障"}
+{"id":"chunk-s61vbvea.js#Dp","doc":"500"}
+{"id":"chunk-s61vbvea.js#IR","doc":"去换行并截断"}
+{"id":"chunk-s61vbvea.js#C4r","doc":"模块失败无消息"}
+{"id":"chunk-s61vbvea.js#Np","doc":"\"…\""}
+{"id":"chunk-s61vbvea.js#Lp","doc":"200"}
+{"id":"chunk-s61vbvea.js#xs","doc":"界面模块在包里的路径键"}
+{"id":"chunk-s61vbvea.js#HR","doc":"未链接模块的键"}
+{"id":"chunk-s61vbvea.js#BR","doc":"类型声明源码"}
+{"id":"chunk-s61vbvea.js#P4r","doc":"界面树/数据的限额"}
+{"id":"chunk-s61vbvea.js#Fp","doc":"界面运行包缓存"}
+{"id":"chunk-s61vbvea.js#zR","doc":"各插件消息队列"}
+{"id":"chunk-s61vbvea.js#KR","doc":"ui.message 站点规则"}
+{"id":"chunk-s61vbvea.js#MS","doc":"定时递增渲染版本"}
+{"id":"chunk-e6aww6q8.js#G1","doc":"键盘被别的插件占着"}
+{"id":"chunk-e6aww6q8.js#kSt","doc":"焦点站点表"}
+{"id":"chunk-e6aww6q8.js#A_t","doc":"不是本插件的站点"}
+{"id":"chunk-e6aww6q8.js#x_t","doc":"找带该按键行的站点"}
+{"id":"chunk-e6aww6q8.js#KCe","doc":"滚动站点表"}
+{"id":"chunk-e6aww6q8.js#s6","doc":"界面站点的键 component:requestId，焦点与滚动表都按它索引。"}
+{"id":"chunk-e6aww6q8.js#vde","doc":"取滚动站点"}
+{"id":"chunk-e6aww6q8.js#iv","doc":"ui.press/input/select"}
+{"id":"chunk-e6aww6q8.js#Ede","doc":"ui.scroll 事件"}
+{"id":"chunk-e6aww6q8.js#X$","doc":"取焦点站点"}
+{"id":"chunk-e6aww6q8.js#xde","doc":"ui.focus 事件"}
+{"id":"chunk-e6aww6q8.js#LD","doc":"从 key 取提示正文"}
+{"id":"chunk-e6aww6q8.js#C7","doc":"50"}
+{"id":"chunk-e6aww6q8.js#Jme","doc":"状态区提示的存盘键"}
+{"id":"chunk-e6aww6q8.js#ege","doc":"托管提示排前"}
+{"id":"chunk-e6aww6q8.js#n0t","doc":"记录提示账本"}
+{"id":"chunk-e6aww6q8.js#a0t","doc":"key → 文本"}
+{"id":"chunk-e6aww6q8.js#l0t","doc":"账本条目"}
+{"id":"chunk-e6aww6q8.js#bWe","doc":"覆盖提示文本"}
+{"id":"chunk-e6aww6q8.js#O3n","doc":"提示队列最多排 50 条，再多就让最早的一条让位。"}
+{"id":"chunk-e6aww6q8.js#u0t","doc":"让位给哪个提示"}
+{"id":"chunk-e6aww6q8.js#H2e","doc":"plugin#环境"}
+{"id":"chunk-e6aww6q8.js#Aqs","doc":"每次只提示一次让位"}
+{"id":"chunk-e6aww6q8.js#gfn","doc":"提示默认显示 4000 毫秒，调用方可用 timeoutMs 覆盖。"}
+{"id":"chunk-e6aww6q8.js#NNi","doc":"提示的键 plugin-toast-<plugin>:<text>，按插件与正文区分同文提示。"}
+{"id":"chunk-4163ksv9.js#hMs","doc":"是否有未完成的回合访问者"}
+{"id":"chunk-32qjrk8h.js#vHs","doc":"恒返回空数组"}
+{"id":"chunk-ha3km179.js#au","doc":"取模式的分类器角色"}
+{"id":"chunk-ha3km179.js#lu","doc":"分类器角色非 off"}
+{"id":"chunk-ha3km179.js#du","doc":"刷新 auto mode 的 git 状态"}
+{"id":"chunk-ha3km179.js#nu","doc":"可见性查询缓存状态"}
+{"id":"chunk-ha3km179.js#kg","doc":"setTimeout 包装"}
+{"id":"chunk-ha3km179.js#uu","doc":"取提交与 PR"}
+{"id":"chunk-ha3km179.js#mu","doc":"记录消息与回合起点"}
+{"id":"chunk-ha3km179.js#Vd","doc":"定时任务触发规则"}
+{"id":"chunk-ha3km179.js#ng","doc":"取仓库 slug"}
+{"id":"chunk-ha3km179.js#fi","doc":"unverified 记 unknown"}
+{"id":"chunk-ha3km179.js#dg","doc":"标签页列举开关名"}
+{"id":"chunk-ha3km179.js#Cd","doc":"记录摘要失败"}
+{"id":"chunk-ha3km179.js#va","doc":"“去睡觉/上床”类短语"}
+{"id":"chunk-ha3km179.js#Ar","doc":"内联通知模式下可查询"}
+{"id":"chunk-ha3km179.js#wr","doc":"队列里的可投递项"}
+{"id":"chunk-ha3km179.js#xr","doc":"投递去向"}
+{"id":"chunk-ha3km179.js#Da","doc":"有活动消息队列"}
+{"id":"chunk-ha3km179.js#Ir","doc":"claude-opus-5-5"}
+{"id":"chunk-ha3km179.js#zp","doc":"补丁回合（artifact patch）可以忽略的附件种类集合：这些系统注入的附件不会单独触发一次补丁请求；同组还有一个默认关闭的开关。"}
+{"id":"chunk-ha3km179.js#tm","doc":"跳过补丁回合的原因"}
+{"id":"chunk-ha3km179.js#Ga","doc":"toolu_patch_<uuid>"}
+{"id":"chunk-ha3km179.js#Os","doc":"构造未计量的助手消息"}
+{"id":"chunk-ha3km179.js#mm","doc":"msg_ 开头"}
+{"id":"chunk-ha3km179.js#Ds","doc":"惰性加载补丁模块"}
+{"id":"chunk-ha3km179.js#_m","doc":"可进时间线的类型"}
+{"id":"chunk-ha3km179.js#bm","doc":"是否在运行中的回合"}
+{"id":"chunk-ha3km179.js#Ns","doc":"来源是否已上报"}
+{"id":"chunk-ha3km179.js#qs","doc":"未标明则 unattributed"}
+{"id":"chunk-ha3km179.js#Em","doc":"JSON 文本或占位"}
+{"id":"chunk-ha3km179.js#xxr","doc":"是否被放回"}
+{"id":"chunk-ha3km179.js#yu","doc":"打开重新入队窗口"}
+{"id":"chunk-ha3km179.js#oSo","doc":"标记已被取走"}
+{"id":"chunk-ha3km179.js#_u","doc":"无待发工具描述"}
+{"id":"chunk-ha3km179.js#qn","doc":"工具描述待发状态"}
+{"id":"chunk-ha3km179.js#Su","doc":"需要重新描述时的代次"}
+{"id":"chunk-ha3km179.js#Ag","doc":"16"}
+{"id":"chunk-ha3km179.js#hi","doc":"系统提示哈希历史"}
+{"id":"chunk-ha3km179.js#Wr","doc":"空串转 null"}
+{"id":"chunk-ha3km179.js#hn","doc":"非 bareFork 且辅助查询以外的"}
+{"id":"chunk-ha3km179.js#Ru","doc":"线形相关字段"}
+{"id":"chunk-ha3km179.js#ROs","doc":"延迟加载工具附件"}
+{"id":"chunk-ha3km179.js#Bd","doc":"合成模型的消息"}
+{"id":"chunk-ha3km179.js#ii","doc":"钩子阻断错误附件"}
+{"id":"chunk-ha3km179.js#hf","doc":"4000"}
+{"id":"chunk-ha3km179.js#Xl","doc":"是否应排空工具"}
+{"id":"chunk-ha3km179.js#Jl","doc":"空实现"}
+{"id":"chunk-ha3km179.js#_f","doc":"1500"}
+{"id":"chunk-ha3km179.js#nd","doc":"静默/报错两种原因"}
+{"id":"chunk-ha3km179.js#Ur","doc":"记录策略失败"}
+{"id":"chunk-ha3km179.js#Nr","doc":"foamy spring + tengu_joyful_globe"}
+{"id":"chunk-ha3km179.js#si","doc":"cowork + tengu_resilient_galaxy"}
+{"id":"chunk-ha3km179.js#wd","doc":"取回复闸门策略"}
+{"id":"chunk-ha3km179.js#Bf","doc":"因错误清空目标时的原因分类：认证失败、磁盘满、需要组织验证、余额不足、上下文超限、模型不可用，各自带 label 与 cleared_* 错误码；同组 Hf 是提示文本上限 80。"}
+{"id":"chunk-ha3km179.js#ci","doc":"目标检查失败后的重试退避 1/5/15 分钟与抖动比例 0.2；同一声明还包括失败原因到提示文案的映射和最多重试次数。"}
+{"id":"chunk-ha3km179.js#zf","doc":"\"try /compact\""}
+{"id":"chunk-ha3km179.js#pi","doc":"压缩失败的系统提示"}
+{"id":"chunk-ha3km179.js#Xf","doc":"开关名"}
+{"id":"chunk-0h4e7gnq.js#Ixo","doc":"回合步骤槽"}
+{"id":"chunk-0h4e7gnq.js#an","doc":"会话度量器"}
+{"id":"chunk-0h4e7gnq.js#Ho","doc":"回合步骤计数"}
+{"id":"chunk-0h4e7gnq.js#or","doc":"回合结束通知"}
+{"id":"chunk-0h4e7gnq.js#Nn","doc":"回合结束原因"}
+{"id":"chunk-0h4e7gnq.js#$n","doc":"合法 stop_reason"}
+{"id":"chunk-0h4e7gnq.js#jn","doc":"取助手消息用量"}
+{"id":"chunk-0h4e7gnq.js#_r","doc":"空块状态"}
+{"id":"chunk-0h4e7gnq.js#Tr","doc":"空串给 {} 否则解析"}
+{"id":"chunk-0h4e7gnq.js#kr","doc":"默认停止块"}
+{"id":"chunk-0h4e7gnq.js#cl","doc":"块结束事件"}
+{"id":"chunk-0h4e7gnq.js#ml","doc":"消息结束事件"}
+{"id":"chunk-0h4e7gnq.js#Or","doc":"工具块引用"}
+{"id":"chunk-0h4e7gnq.js#Lr","doc":"3000"}
+{"id":"chunk-0h4e7gnq.js#Hr","doc":"是否有 turn.* 钩子"}
+{"id":"chunk-4121qate.js#Ya","doc":"技能目录条目与深度上限"}
+{"id":"chunk-4121qate.js#Jt","doc":"各版本里新出现的更长文本长度"}
+{"id":"chunk-4121qate.js#ws","doc":"需有 value，否则按 deny"}
+{"id":"chunk-4121qate.js#he","doc":"只要求 { value } 的站点"}
+{"id":"chunk-4121qate.js#Lae","doc":"空引擎元素 {type:\"engine\", ref:0}：只要求参数里有 engine 段、不校验内容时用它占位。"}
+{"id":"chunk-4121qate.js#Cr","doc":"按键列表取值建对象"}
+{"id":"chunk-4121qate.js#Es","doc":"复制建议列表"}
+{"id":"chunk-4121qate.js#bUe","doc":"事件名 → 工具站点名的映射表（未定义表示该事件没有工具站点）。"}
+{"id":"chunk-4121qate.js#Yf","doc":"engine.create 站点规则"}
+{"id":"chunk-4121qate.js#qf","doc":"prompt.change 站点规则"}
+{"id":"chunk-4121qate.js#$r","doc":"从上下文块里取 CLAUDE.md 文本"}
+{"id":"chunk-4121qate.js#Ys","doc":"指令文件列表是否相同"}
+{"id":"chunk-4121qate.js#em","doc":"还原上下文并判定未验证文件"}
+{"id":"chunk-4121qate.js#nm","doc":"50"}
+{"id":"chunk-4121qate.js#Rt","doc":"\"any kind\""}
+{"id":"chunk-4121qate.js#ti","doc":"取 tool_use_id"}
+{"id":"chunk-4121qate.js#Ur","doc":"tool_use_id 列表"}
+{"id":"chunk-4121qate.js#Nae","doc":"取（可带 raiseArgument 的）站点规则"}
+{"id":"chunk-4121qate.js#Wrs","doc":"经典 PreToolUse 链失败上报"}
+{"id":"chunk-4121qate.js#$u","doc":"有上限的深比较"}
+{"id":"chunk-e6aww6q8.js#$Ln","doc":"工具结果带 isError"}
+{"id":"chunk-e6aww6q8.js#HLn","doc":"插件构造的工具调用 id 前缀 toolu_plugin_；带这个前缀的 tool_use 视为插件发起。"}
+{"id":"chunk-e6aww6q8.js#Sfs","doc":"是否 fchmod 系统调用错误"}
+{"id":"chunk-e6aww6q8.js#ezt","doc":"读取 tsconfig 的字节上限 262144（256 KiB），超过就当没有类型配置。"}
+{"id":"chunk-e6aww6q8.js#Cre","doc":"只留被监视目录下的类型根"}
+{"id":"chunk-s61vbvea.js#E4o","doc":"模块导出对象"}
+{"id":"chunk-s61vbvea.js#jb","doc":"zod → JSON Schema 的缓存"}
+{"id":"chunk-s61vbvea.js#KE","doc":"TypeScript 标识符"}
+{"id":"chunk-s61vbvea.js#VE","doc":"非标识符则加引号"}
+{"id":"chunk-s61vbvea.js#mW","doc":"32"}
+{"id":"chunk-wz6vk74d.js#XQ","doc":"C0 控制字符码表（NUL…US 与 DEL）以及 ESC/BEL/分隔符、字符集复位与各转义引导符（CSI/OSC/DCS/APC/PM/SOS/ST）的字符码。"}
+{"id":"chunk-wz6vk74d.js#gC","doc":"CSI 终结字节表：光标移动、擦除（ED/EL/ECH）、滚动（SU/SD）、模式设置（SM/RM）、SGR、DSR、DECSCUSR、DECSTBM 等。"}
+{"id":"chunk-dxdtyerk.js#x","doc":"OSC 引导符：ESC ] 与字符串结束符 ST（kitty 用 ST，其它终端用 BEL 结束）。"}

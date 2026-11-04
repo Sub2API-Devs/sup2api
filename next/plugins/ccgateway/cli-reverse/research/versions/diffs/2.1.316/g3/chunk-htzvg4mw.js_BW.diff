@@ -1,0 +1,12 @@
+# chunk-htzvg4mw.js:BW -> chunk-hvpfdswb.js:k$
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-htzvg4mw.js_BW.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-htzvg4mw.js_BW.new.js"
+index c510984..7f25b97 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-htzvg4mw.js_BW.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-htzvg4mw.js_BW.new.js"
+@@ -1,4 +1,6 @@
+ function SELF() {
++  let $l0 = $m_Wto();
++  if ($l0 !== void 0) return $l0;
+   return $m_gZr({ envVar: "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR", wellKnownPath: $m_axt, label: "API key", getCached: $m_Wto, setCached: $m_Gto });
+ }
+ ;

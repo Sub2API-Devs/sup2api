@@ -1,0 +1,12 @@
+# chunk-a1htenb7.js:C_t -> chunk-fym4r1th.js:Mkt
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-a1htenb7.js_C_t.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-a1htenb7.js_C_t.new.js"
+index d38c24a..3b16d72 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-a1htenb7.js_C_t.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-a1htenb7.js_C_t.new.js"
+@@ -1,5 +1,5 @@
+ function SELF($l0) {
+   if ($l0 === void 0) return {};
+-  return { duration_ms: Math.round($l0.wallMs * 1e3) / 1e3, ...$l0.cpu !== void 0 && { command_cpu_user_ms: $l0.cpu.userMs, command_cpu_system_ms: $l0.cpu.systemMs, left_process_running: $l0.cpu.leftProcessRunning }, ...$l0.procCpuMs !== void 0 && { command_proc_cpu_ms: $l0.procCpuMs }, ...$l0.cpuAccount !== void 0 && { command_cgroup_cpu_ms: Math.round($l0.cpuAccount.cpuMs * 1e3) / 1e3, command_cgroup_shared: $l0.cpuAccount.shared } };
++  return { duration_ms: Math.round($l0.wallMs * 1e3) / 1e3, ...$l0.cpu !== void 0 && { command_cpu_user_ms: $l0.cpu.userMs, command_cpu_system_ms: $l0.cpu.systemMs, left_process_running: $l0.cpu.leftProcessRunning }, ...$l0.procCpuMs !== void 0 && { command_proc_cpu_ms: $l0.procCpuMs }, ...$l0.cpuAccount !== void 0 && { command_cgroup_cpu_ms: Math.round($l0.cpuAccount.cpuMs * 1e3) / 1e3, command_cgroup_shared: $l0.cpuAccount.shared, command_cgroup_shared_left_running_only: $l0.cpuAccount.sharedWithLeftRunningOnly } };
+ }
+ ;

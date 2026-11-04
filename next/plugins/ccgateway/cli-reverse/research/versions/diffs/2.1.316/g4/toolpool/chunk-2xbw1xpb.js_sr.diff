@@ -1,0 +1,14 @@
+# chunk-2xbw1xpb.js:sr -> chunk-kxyd0g16.js:ir
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-2xbw1xpb.js_sr.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-2xbw1xpb.js_sr.new.js"
+index 93e79d5..5b50111 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-2xbw1xpb.js_sr.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-2xbw1xpb.js_sr.new.js"
+@@ -1,7 +1,7 @@
+ SELF = $m_tn({ name: $m_SS, searchHint: "check on a background shell command by task ID", backgrounding: "never", maxResultSizeChars: 1e5, async description() {
+   return $m_er;
+ }, async prompt() {
+-  return $m_tr;
++  return $m_tr();
+ }, get inputSchema() {
+   return $m_ci();
+ }, get outputSchema() {

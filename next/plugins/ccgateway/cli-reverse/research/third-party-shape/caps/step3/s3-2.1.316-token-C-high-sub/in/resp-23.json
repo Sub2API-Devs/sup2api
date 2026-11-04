@@ -1,0 +1,20 @@
+{
+ "url": "/v1/messages?beta=true",
+ "status": 200,
+ "tracked": false,
+ "headers": {
+  "cache-control": "no-store",
+  "content-type": "text/event-stream",
+  "request-id": "req_ccgaudit1",
+  "date": "Mon, 02 Nov 2026 15:40:41 GMT"
+ },
+ "trailers": {},
+ "body": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_ccg_audit_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-8\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_ccgaudit_1\",\"name\":\"Agent\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"description\\\":\\\"probe\\\",\\\"prompt\\\":\\\"LEVEL1: use a subagent to say OK.\\\",\\\"subagent_type\\\":\\\"general-purpose\\\",\\\"run_in_background\\\":false}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":1}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+ "timing": {
+  "headersMs": 159,
+  "firstByteMs": 160,
+  "endMs": 168,
+  "dataChunks": 1,
+  "bytes": 941
+ }
+}

@@ -1,0 +1,1266 @@
+{
+  "version": "2.1.302",
+  "platform": "linux-x64-glibc",
+  "scope": "Explicitly recognized types at xct, not every producer, not 131 transmitted attachments.",
+  "method": "AST inventory of the hash-verified restored official module; no target code execution.",
+  "offsetUnit": "UTF-16 JavaScript string offsets, not binary offsets",
+  "source": {
+    "file": "chunk-8242685m.js",
+    "sha256": "91c62b6b31e5c5cb52418ee9007dbcbdc26bacc5346fdf65f241b70a5fb4f6c8"
+  },
+  "counts": {
+    "registry": 89,
+    "switch": 22,
+    "special": 3,
+    "compatibility-ignore": 17
+  },
+  "totalTypes": 131,
+  "unconditionalEmptyRegistryEntries": 26,
+  "addedSince296": [
+    "output_limit_note"
+  ],
+  "removedSince296": [],
+  "symbols": {
+    "aNe": {
+      "file": "chunk-8242685m.js",
+      "line": 38,
+      "startCharacter": 91833,
+      "endCharacter": 92106
+    },
+    "lNe": {
+      "file": "chunk-8242685m.js",
+      "line": 38,
+      "startCharacter": 92107,
+      "endCharacter": 92399
+    },
+    "Ryt": {
+      "file": "chunk-8242685m.js",
+      "line": 38,
+      "startCharacter": 92948,
+      "endCharacter": 93339
+    },
+    "pZn": {
+      "file": "chunk-8242685m.js",
+      "line": 38,
+      "startCharacter": 95168,
+      "endCharacter": 95844
+    },
+    "xyt": {
+      "file": "chunk-8242685m.js",
+      "line": 39,
+      "startCharacter": 95844,
+      "endCharacter": 95893
+    },
+    "Oyt": {
+      "file": "chunk-8242685m.js",
+      "line": 40,
+      "startCharacter": 97011,
+      "endCharacter": 98112
+    },
+    "QMn": {
+      "file": "chunk-8242685m.js",
+      "line": 44,
+      "startCharacter": 104359,
+      "endCharacter": 104421
+    },
+    "n6": {
+      "file": "chunk-8242685m.js",
+      "line": 44,
+      "startCharacter": 104422,
+      "endCharacter": 104447
+    },
+    "Zyt": {
+      "file": "chunk-8242685m.js",
+      "line": 44,
+      "startCharacter": 104513,
+      "endCharacter": 105178
+    },
+    "o_t": {
+      "file": "chunk-8242685m.js",
+      "line": 49,
+      "startCharacter": 106118,
+      "endCharacter": 106617
+    },
+    "gRn": {
+      "file": "chunk-8242685m.js",
+      "line": 2982,
+      "startCharacter": 3380769,
+      "endCharacter": 3384032
+    },
+    "TYr": {
+      "file": "chunk-8242685m.js",
+      "line": 2984,
+      "startCharacter": 3509263,
+      "endCharacter": 3511282
+    },
+    "n6n": {
+      "file": "chunk-8242685m.js",
+      "line": 3640,
+      "startCharacter": 4827178,
+      "endCharacter": 4827663
+    },
+    "_A": {
+      "file": "chunk-8242685m.js",
+      "line": 3644,
+      "startCharacter": 4838768,
+      "endCharacter": 4853886
+    },
+    "Vte": {
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4908451,
+      "endCharacter": 4908958
+    },
+    "$Fe": {
+      "file": "chunk-8242685m.js",
+      "line": 3844,
+      "startCharacter": 4910563,
+      "endCharacter": 4911250
+    },
+    "xct": {
+      "file": "chunk-8242685m.js",
+      "line": 3844,
+      "startCharacter": 4911780,
+      "endCharacter": 4938412
+    }
+  },
+  "entries": [
+    {
+      "type": "poll_events",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3805,
+      "startCharacter": 4891719,
+      "endCharacter": 4891870
+    },
+    {
+      "type": "directory",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3805,
+      "startCharacter": 4891871,
+      "endCharacter": 4892021
+    },
+    {
+      "type": "edited_text_file",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3805,
+      "startCharacter": 4892022,
+      "endCharacter": 4892520
+    },
+    {
+      "type": "at_mention_reference",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3806,
+      "startCharacter": 4892521,
+      "endCharacter": 4893643
+    },
+    {
+      "type": "compact_file_reference",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3806,
+      "startCharacter": 4893644,
+      "endCharacter": 4893865
+    },
+    {
+      "type": "pdf_reference",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3806,
+      "startCharacter": 4893866,
+      "endCharacter": 4896551
+    },
+    {
+      "type": "selected_lines_in_ide",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3806,
+      "startCharacter": 4896552,
+      "endCharacter": 4896764
+    },
+    {
+      "type": "selected_lines_in_diff",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3809,
+      "startCharacter": 4896765,
+      "endCharacter": 4897038
+    },
+    {
+      "type": "opened_file_in_ide",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3812,
+      "startCharacter": 4897039,
+      "endCharacter": 4897201
+    },
+    {
+      "type": "plan_file_reference",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3812,
+      "startCharacter": 4897202,
+      "endCharacter": 4897496
+    },
+    {
+      "type": "nested_memory",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3818,
+      "startCharacter": 4897497,
+      "endCharacter": 4897600
+    },
+    {
+      "type": "withheld_memory",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3820,
+      "startCharacter": 4897601,
+      "endCharacter": 4897623
+    },
+    {
+      "type": "read_truncation_notice",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3820,
+      "startCharacter": 4897624,
+      "endCharacter": 4897694
+    },
+    {
+      "type": "dir_sync_notice",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3820,
+      "startCharacter": 4897695,
+      "endCharacter": 4897759
+    },
+    {
+      "type": "bash_output_audience_note",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3820,
+      "startCharacter": 4897760,
+      "endCharacter": 4897975
+    },
+    {
+      "type": "unknown_command_fallback",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3820,
+      "startCharacter": 4897976,
+      "endCharacter": 4898042
+    },
+    {
+      "type": "agent_mention",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3820,
+      "startCharacter": 4898043,
+      "endCharacter": 4898242
+    },
+    {
+      "type": "peer_mention",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3820,
+      "startCharacter": 4898243,
+      "endCharacter": 4898297
+    },
+    {
+      "type": "skill_mention",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3820,
+      "startCharacter": 4898298,
+      "endCharacter": 4898588
+    },
+    {
+      "type": "skill_listing",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3820,
+      "startCharacter": 4898589,
+      "endCharacter": 4898749
+    },
+    {
+      "type": "dynamic_skill",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3822,
+      "startCharacter": 4898750,
+      "endCharacter": 4899142
+    },
+    {
+      "type": "output_style",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3824,
+      "startCharacter": 4899143,
+      "endCharacter": 4899522
+    },
+    {
+      "type": "critical_system_reminder",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3824,
+      "startCharacter": 4899523,
+      "endCharacter": 4899592
+    },
+    {
+      "type": "plan_mode_exit",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3824,
+      "startCharacter": 4899593,
+      "endCharacter": 4899858
+    },
+    {
+      "type": "auto_mode_exit",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3826,
+      "startCharacter": 4899859,
+      "endCharacter": 4900283
+    },
+    {
+      "type": "token_usage",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4900284,
+      "endCharacter": 4900392
+    },
+    {
+      "type": "total_tokens_reminder",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4900393,
+      "endCharacter": 4900456
+    },
+    {
+      "type": "output_limit_note",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4900457,
+      "endCharacter": 4900516
+    },
+    {
+      "type": "silent_turn_reminder",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4900517,
+      "endCharacter": 4900579
+    },
+    {
+      "type": "elapsed_time_reminder",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4900580,
+      "endCharacter": 4900643
+    },
+    {
+      "type": "batching_reminder",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4900644,
+      "endCharacter": 4900703
+    },
+    {
+      "type": "secondary_reminder",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4900704,
+      "endCharacter": 4900764
+    },
+    {
+      "type": "budget_usd",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4900765,
+      "endCharacter": 4900874
+    },
+    {
+      "type": "output_token_usage",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4900875,
+      "endCharacter": 4901068
+    },
+    {
+      "type": "hook_blocking_error",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4901069,
+      "endCharacter": 4901237
+    },
+    {
+      "type": "hook_additional_context",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3830,
+      "startCharacter": 4901238,
+      "endCharacter": 4901402
+    },
+    {
+      "type": "inlined_image_paths",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4901403,
+      "endCharacter": 4901570
+    },
+    {
+      "type": "hook_stopped_continuation",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4901571,
+      "endCharacter": 4901688
+    },
+    {
+      "type": "prefix_delta",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4901689,
+      "endCharacter": 4901771
+    },
+    {
+      "type": "thread_state",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4901772,
+      "endCharacter": 4901886
+    },
+    {
+      "type": "date_change",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4901887,
+      "endCharacter": 4902062
+    },
+    {
+      "type": "sandbox_instructions",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4902063,
+      "endCharacter": 4902196
+    },
+    {
+      "type": "artifact_opening_prefetch",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4902197,
+      "endCharacter": 4902337
+    },
+    {
+      "type": "environment",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4902338,
+      "endCharacter": 4902606
+    },
+    {
+      "type": "model",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4902607,
+      "endCharacter": 4902778
+    },
+    {
+      "type": "output_style_instructions",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4902779,
+      "endCharacter": 4902913
+    },
+    {
+      "type": "session_context",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4902914,
+      "endCharacter": 4903113
+    },
+    {
+      "type": "coordinator_context",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3831,
+      "startCharacter": 4903114,
+      "endCharacter": 4903497
+    },
+    {
+      "type": "context_sections",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3835,
+      "startCharacter": 4903498,
+      "endCharacter": 4903720
+    },
+    {
+      "type": "prompt_snapshot",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4903721,
+      "endCharacter": 4903743
+    },
+    {
+      "type": "prompt_render_point",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4903744,
+      "endCharacter": 4903770
+    },
+    {
+      "type": "thinking_stripped",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4903771,
+      "endCharacter": 4903795
+    },
+    {
+      "type": "advisor_stripped",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4903796,
+      "endCharacter": 4903819
+    },
+    {
+      "type": "thinking_drop",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4903820,
+      "endCharacter": 4903840
+    },
+    {
+      "type": "credential_org",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4903841,
+      "endCharacter": 4903862
+    },
+    {
+      "type": "deferred_tools_record",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4903863,
+      "endCharacter": 4903891
+    },
+    {
+      "type": "instructions",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4903892,
+      "endCharacter": 4904034
+    },
+    {
+      "type": "date",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4904035,
+      "endCharacter": 4904142
+    },
+    {
+      "type": "fork_briefing",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4904143,
+      "endCharacter": 4904244
+    },
+    {
+      "type": "language",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4904245,
+      "endCharacter": 4904365
+    },
+    {
+      "type": "ultrathink_effort",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4904366,
+      "endCharacter": 4904548
+    },
+    {
+      "type": "workflow_keyword_request",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4904549,
+      "endCharacter": 4904753
+    },
+    {
+      "type": "ultra_effort_enter",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4904754,
+      "endCharacter": 4905266
+    },
+    {
+      "type": "ultra_effort_exit",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4905267,
+      "endCharacter": 4905400
+    },
+    {
+      "type": "tool_host_result_lines",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4905401,
+      "endCharacter": 4905430
+    },
+    {
+      "type": "tool_hosts_correction",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3839,
+      "startCharacter": 4905431,
+      "endCharacter": 4905542
+    },
+    {
+      "type": "tool_hosts_notice",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3840,
+      "startCharacter": 4905543,
+      "endCharacter": 4905671
+    },
+    {
+      "type": "remote_session_change",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4905672,
+      "endCharacter": 4905797
+    },
+    {
+      "type": "advisor_tool",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4905798,
+      "endCharacter": 4905961
+    },
+    {
+      "type": "workflow_size_guideline_change",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4905962,
+      "endCharacter": 4906041
+    },
+    {
+      "type": "cowork_memory_context",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906042,
+      "endCharacter": 4906428
+    },
+    {
+      "type": "account_memory_recall",
+      "kind": "registry",
+      "unconditionalEmpty": false,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906429,
+      "endCharacter": 4906502
+    },
+    {
+      "type": "already_read_file",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906503,
+      "endCharacter": 4906527
+    },
+    {
+      "type": "async_hook_response_batch",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906528,
+      "endCharacter": 4906560
+    },
+    {
+      "type": "batching_reminder_sent",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906561,
+      "endCharacter": 4906590
+    },
+    {
+      "type": "secondary_reminder_sent",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906591,
+      "endCharacter": 4906621
+    },
+    {
+      "type": "command_permissions",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906622,
+      "endCharacter": 4906648
+    },
+    {
+      "type": "edited_image_file",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906649,
+      "endCharacter": 4906673
+    },
+    {
+      "type": "hook_cancelled",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906674,
+      "endCharacter": 4906695
+    },
+    {
+      "type": "hook_error_during_execution",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906696,
+      "endCharacter": 4906730
+    },
+    {
+      "type": "hook_non_blocking_error",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906731,
+      "endCharacter": 4906761
+    },
+    {
+      "type": "hook_system_message",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906762,
+      "endCharacter": 4906788
+    },
+    {
+      "type": "hook_permission_decision",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906789,
+      "endCharacter": 4906820
+    },
+    {
+      "type": "hook_deferred_tool",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906821,
+      "endCharacter": 4906846
+    },
+    {
+      "type": "goal_status",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906847,
+      "endCharacter": 4906865
+    },
+    {
+      "type": "session_cron_carry",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906866,
+      "endCharacter": 4906891
+    },
+    {
+      "type": "structured_output",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906892,
+      "endCharacter": 4906916
+    },
+    {
+      "type": "max_turns_reached",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906917,
+      "endCharacter": 4906941
+    },
+    {
+      "type": "teammate_shutdown_batch",
+      "kind": "registry",
+      "unconditionalEmpty": true,
+      "file": "chunk-8242685m.js",
+      "line": 3843,
+      "startCharacter": 4906942,
+      "endCharacter": 4906972
+    },
+    {
+      "type": "file",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3869,
+      "startCharacter": 4913341,
+      "endCharacter": 4913915
+    },
+    {
+      "type": "invoked_skills",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3869,
+      "startCharacter": 4913915,
+      "endCharacter": 4914811
+    },
+    {
+      "type": "todo_reminder",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3880,
+      "startCharacter": 4914811,
+      "endCharacter": 4915439
+    },
+    {
+      "type": "task_reminder",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3886,
+      "startCharacter": 4915439,
+      "endCharacter": 4916065
+    },
+    {
+      "type": "tool_search_usage_reminder",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3892,
+      "startCharacter": 4916065,
+      "endCharacter": 4916672
+    },
+    {
+      "type": "relevant_memories",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3892,
+      "startCharacter": 4916672,
+      "endCharacter": 4917187
+    },
+    {
+      "type": "queued_command",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3896,
+      "startCharacter": 4917187,
+      "endCharacter": 4919526
+    },
+    {
+      "type": "diagnostics",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3902,
+      "startCharacter": 4919526,
+      "endCharacter": 4919633
+    },
+    {
+      "type": "plan_mode",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3902,
+      "startCharacter": 4919633,
+      "endCharacter": 4919694
+    },
+    {
+      "type": "plan_mode_reentry",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3902,
+      "startCharacter": 4919694,
+      "endCharacter": 4920740
+    },
+    {
+      "type": "attention_budget",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3914,
+      "startCharacter": 4920740,
+      "endCharacter": 4920772
+    },
+    {
+      "type": "auto_mode",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3914,
+      "startCharacter": 4920772,
+      "endCharacter": 4924252
+    },
+    {
+      "type": "mcp_resource",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3934,
+      "startCharacter": 4924252,
+      "endCharacter": 4925093
+    },
+    {
+      "type": "task_status",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3934,
+      "startCharacter": 4925093,
+      "endCharacter": 4926789
+    },
+    {
+      "type": "async_hook_response",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3934,
+      "startCharacter": 4926789,
+      "endCharacter": 4927259
+    },
+    {
+      "type": "hook_success",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3934,
+      "startCharacter": 4927259,
+      "endCharacter": 4927497
+    },
+    {
+      "type": "context_efficiency",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3934,
+      "startCharacter": 4927497,
+      "endCharacter": 4927531
+    },
+    {
+      "type": "deferred_tools_delta",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3934,
+      "startCharacter": 4927531,
+      "endCharacter": 4935788
+    },
+    {
+      "type": "agent_listing_delta",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3980,
+      "startCharacter": 4935788,
+      "endCharacter": 4936459
+    },
+    {
+      "type": "mcp_instructions_delta",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3986,
+      "startCharacter": 4936459,
+      "endCharacter": 4936945
+    },
+    {
+      "type": "mcp_dropped_tools_delta",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 3996,
+      "startCharacter": 4936945,
+      "endCharacter": 4937514
+    },
+    {
+      "type": "memory_update",
+      "kind": "switch",
+      "file": "chunk-8242685m.js",
+      "line": 4002,
+      "startCharacter": 4937514,
+      "endCharacter": 4937991
+    },
+    {
+      "type": "autocheckpointing",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4937996,
+      "endCharacter": 4938015
+    },
+    {
+      "type": "background_task_status",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938016,
+      "endCharacter": 4938040
+    },
+    {
+      "type": "todo",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938041,
+      "endCharacter": 4938047
+    },
+    {
+      "type": "task_progress",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938048,
+      "endCharacter": 4938063
+    },
+    {
+      "type": "ultramemory",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938064,
+      "endCharacter": 4938077
+    },
+    {
+      "type": "compaction_reminder",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938078,
+      "endCharacter": 4938099
+    },
+    {
+      "type": "current_session_memory",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938100,
+      "endCharacter": 4938124
+    },
+    {
+      "type": "thinking_reminder",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938125,
+      "endCharacter": 4938144
+    },
+    {
+      "type": "companion_intro",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938145,
+      "endCharacter": 4938162
+    },
+    {
+      "type": "pen_mode_enter",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938163,
+      "endCharacter": 4938179
+    },
+    {
+      "type": "pen_mode_exit",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938180,
+      "endCharacter": 4938195
+    },
+    {
+      "type": "ultrawork_request",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938196,
+      "endCharacter": 4938215
+    },
+    {
+      "type": "echo_activities",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938216,
+      "endCharacter": 4938233
+    },
+    {
+      "type": "verify_plan_reminder",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938234,
+      "endCharacter": 4938256
+    },
+    {
+      "type": "fold_nudge",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938257,
+      "endCharacter": 4938269
+    },
+    {
+      "type": "context_tip",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938270,
+      "endCharacter": 4938283
+    },
+    {
+      "type": "audio_transcript",
+      "kind": "compatibility-ignore",
+      "file": "chunk-8242685m.js",
+      "line": 4003,
+      "startCharacter": 4938284,
+      "endCharacter": 4938302
+    },
+    {
+      "type": "teammate_mailbox",
+      "kind": "special",
+      "file": "chunk-8242685m.js",
+      "line": 3844,
+      "startCharacter": 4911845,
+      "endCharacter": 4911872
+    },
+    {
+      "type": "team_context",
+      "kind": "special",
+      "file": "chunk-8242685m.js",
+      "line": 3844,
+      "startCharacter": 4911989,
+      "endCharacter": 4912012
+    },
+    {
+      "type": "proactivity",
+      "kind": "special",
+      "file": "chunk-8242685m.js",
+      "line": 3869,
+      "startCharacter": 4913084,
+      "endCharacter": 4913106
+    }
+  ]
+}

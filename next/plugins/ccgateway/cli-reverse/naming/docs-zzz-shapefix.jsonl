@@ -1,0 +1,41 @@
+{"id":"chunk-0wdgqhcf.js#vt","doc":"导出常量或表：vt = 256 是 schema 里 title 字段的字符上限（o().max(vt)）；Ye / at 是外部构建为 null、内部构建才赋值的可选 schema 槽，与字符上限无关。"}
+{"id":"chunk-2a8yx6fc.js#mn","doc":"按仓库扫一遍配置类文件（toml/yaml/json/cfg）找 s3/gs/az 存储桶名：mn 是判定生产环境路径的正则；Qr 扫描超时 8 s；eo 最多收录的桶地址数 20000；to 传给 ripgrep 的 --max-filesize \"4M\"；no 聚类至少要出现的次数 3；ro 每类前缀最多列出 10 条。"}
+{"id":"chunk-5aas12zq.js#Pe","doc":"插件目录校验的常量组（38 个绑定）：Pe 是问题码表（码 → title/severity/hold/fix，g() 以 Pe[code] 取值）；R 是清单相对路径 .claude-plugin/plugin.json；ae/nn 是 README 候选名与根级子集；tn LICENSE 候选；rn 图标候选；ee 是 README 最少词数 40；sn/ge 是插件名 kebab-case 与图标格式错误的说明文案；ne README 字节上限 262144；me 图标体积上限 2097152；ye/Se/Ee/we/Ae/on/ie 分别是列表嵌套、缩进列数、分隔符段数、分隔符字符数、方括号数、截图条数、系统文件展示条数的上限；an/ln/dn/X/ke/$e/j/K/Y/un/cn 是系统文件集合、目录名、说明文案、扫描条数/深度/父目录层数、路径截断长度、MCP+hooks 文件数 16、逐条列出的路径数 20、hooks 事件名集合、列名前几条 3；xe/fn/hn/pn/gn/mn/yn/Sn/En/wn/An 是列表空白字符与各类识别正则。"}
+{"id":"chunk-9qwbw2qr.js#F","doc":"插件目录绑定文件的常量组：F 是文件名 plugin-directory-bindings.json；A 是 schema 版本 1；M 是读写体积上限 1 MiB；Y_n 是 repositoryKey 的字符上限 4096；ae 是绑定文件 schema。"}
+{"id":"chunk-aepeg2w5.js#Rpr","doc":"目录表面的名单与体量常量：Rpr = [\"cc\",\"ccr\",\"ccd\"]；M3t 响应体上限 2 MiB（作 maxContentLength）；aN 是 ETag 格式正则；uN 是 ETag 字符上限 256。"}
+{"id":"chunk-aepeg2w5.js#gb","doc":"目录（catalog）的 schema 组：gb 是目录通知 notice schema；_b 单个选项 schema；lN 选项组 schema；dN 价格 schema；cN 运行时（token 上限、effort 等级）schema；fN 模型行 schema；hb 是解析目录行时的行数上限 64。"}
+{"id":"chunk-aepeg2w5.js#of","doc":"网关内部网络的校验常量：of 是允许的最短 CIDR 前缀 8（/8 到 /32）；ES 是最多接受的块数 4。"}
+{"id":"chunk-aepeg2w5.js#FN","doc":"按模型缓存的目录查找结果：FN 是缓存条数的上限 256，超过即整体清空。"}
+{"id":"chunk-aepeg2w5.js#qi","doc":"GrowthBook 的默认 host（https://api.anthropic.com/）；FRn 返回它，使用非默认 host 时会把会话标记为 usedNonDefaultHost。"}
+{"id":"chunk-ch0vxh4c.js#lR","doc":"进程包装器的常量组：lR 是环境变量名 CLAUDE_CODE_PROCESS_WRAPPER；Xit 是超时 12000 ms；c 是 memoState 的空状态对象（argv/error/platformIgnored/record）。"}
+{"id":"chunk-czx62zen.js#ye","doc":"展示名安全化：ye 是允许的展示名字符正则；Pe 是默认长度上限 64；bJr 是完整展示名的长度上限 256；E 是一次最多列出的段数 5。"}
+{"id":"chunk-e6aww6q8.js#Dir","doc":"URL 权限等待的超时常量组：Dir 是特性开关名 tengu_orderly_lantern；ain 等待答复 300000 ms；Wir 提示升级占预算的比例 0.1；zir/qir/Kir 是超时、撤回、过期三种文案；O8e 是要求模型不要重试的提示。"}
+{"id":"chunk-e6aww6q8.js#_ut","doc":"插件目录缓存的常量组：_ut 是缓存版本 1；k1n 是缓存文件名 plugin-catalog-cache.json；Ire 是插件统计目录下载地址；Ngs 是缓存时长 1 天；Fgs 是缓存体积上限（2 × 平台上限）；b1n/hut/$gs/w1n/Hgs 依次是 token 费用、目录条目、目录、目录文件与缓存文件的 schema。"}
+{"id":"chunk-e6aww6q8.js#Y_s","doc":"npm 下载相关的常量组（32 个绑定）：Y_s npm view 超时 60 s；Q_s registry 查询超时 30 s；Z_s npm pack 超时 300 s；eSs npm 子进程输出上限 8 MiB；uDe tar 块 1 MiB；tSs/nSs/aSs 每块数（256/512/256）与 Qct/Ozn/Izn 三个体积上限；Dzn 条目数上限 1e5；lSs/dSs/cSs 错误与名称展示长度；e5/fSs 是 tar 头长度 512 与权限位掩码 493；SSs 类型位掩码 73；rft/bSs/wSs/TSs/vSs/RSs 是 tar 的大小、可打印判定与进制常量；Ox 是 tar 头各字段的偏移；CSs/ASs/PSs/MSs/OSs 是 npm view 字段、校验算法、包名与归档后缀正则、git 托管站；ISs/DSs 是校验和字段的起止下标；LSs 是 promisify 后的 gunzip。"}
+{"id":"chunk-e6aww6q8.js#rqn","doc":"安装插件依赖的常量组：rqn 安装命令超时 60 s；Rks 安装输出上限 32 MiB；sqn npm ci 参数；Eft 各 lockfile 对应的安装计划；uqn bun.lockb 不受支持的说明；cqn 各计划的 lockfile 名；fqn lockfile → 完成标记文件的映射。"}
+{"id":"chunk-e7z1g8a9.js#J","doc":"对端密钥文件的常量组：J 是认证消息类型名 auth；Ihr 是密钥文件名正则；he 是临时密钥文件名（.tmp.<hex>）正则；v 是令牌字节数 16；be 是令牌十六进制正则；x 是密钥文件读取上限 4096；Q 是密钥文件 schema。"}
+{"id":"chunk-e6aww6q8.js#Hrn","doc":"终端/摘要输出里多处使用的分隔串 \" · \"（split/join 与 trim 后拼接）。"}
+{"id":"chunk-jbv0t0w5.js#ye","doc":"提示文案里各字段的长度上限：ye 是内联 JSON 参数最多 16000 字符；yt 是脚本路径 4096；pe 是描述/原因 1000；$e/xe 是安全字符集，_t/oe/bt/vt 是据此拼出的正则，Tt 是组合符类。"}
+{"id":"chunk-kxyd0g16.js#xs","doc":"列目录（MemoryList）时一次返回的条目上限 50；Ps 是输入 schema，zs 是输出 schema。"}
+{"id":"chunk-wm1cd8qt.js#K","doc":"发布草稿文件的权限位 0o644（420）：文件由发布流程写出，只允许属主写。"}
+{"id":"chunk-s67w32sp.js#at","doc":"插件目录请求的超时：at 是单次响应的时限（cbr）；ot 是首个答复的默认时限 15000 ms；Ne 是超时时的说明文案 \"it did not answer in time\"。"}
+{"id":"chunk-s67w32sp.js#Xe","doc":"插件目录缓存 schema：Xe 是带 schema 版本的缓存 schema；Je 是不带版本的最小 schema；Ve 是 listing 的最长保留时间 90 天。"}
+{"id":"chunk-s67w32sp.js#dt","doc":"判定时间戳是否可信：dt 是允许时钟超前的容差 3600000 ms；F 是失败后的退避时长。"}
+{"id":"chunk-s67w32sp.js#he","doc":"插件从 listing 里消失后的宽限期 7200000 ms（2 小时）：只有在宽限期之后的又一次遍历仍缺失，才真正丢弃。"}
+{"id":"chunk-x58vpmpd.js#b","doc":"设备密钥存储的常量组：b 是钥匙串服务名 \"Claude Code-device-keys\"；T 是 security 命令超时 2000 ms；U 是改用 -i 传参数的命令行长度上限 4032；ee 是“项不存在”的退出码 44；re 是无钥匙串的退出码集合 {37,50}。"}
+{"id":"chunk-yb0ajcmt.js#Ct","doc":"mermaid 时序图解析：Ct 是消息箭头写法表（写法 → 线型 + 箭头形状）；Dt 是 participant/actor 行正则；He 是 \" as \" 关键字；Rt/Ot/We/_t/Lt 是注记、激活/停用、分组、else/and/option、方向标记的正则；Nt/It 是参与方与步骤数上限（50/400）。"}
+{"id":"chunk-yf82ynbr.js#ne","doc":"敏感目录与文件名的表：ne 常见敏感目录名；te 敏感目录路径段；re 敏感文件名；w 敏感密钥文件后缀正则；d DOT_ENV 前缀；oe Claude 自用文件名；G 非机密后缀；M/se/ie 三种匹配正则；f 名称变体条数上限 64；U$e 255 与 le 是路径读长上限与切分正则；ce 远程前缀正则；w3o/E3o/ae 编辑器备份与同步冲突后缀；ue/x 是 .git 与 config。"}
+{"id":"chunk-85kmkm1x.js#Xn","doc":"MCP 服务器文件的校验常量组：Xn 是已知服务器类型集合（stdio/http/streamable-http/sse/ws/sdk/sse-ide/ws-ide/claudeai-proxy）；Qn 是 ${user_config.X} 占位符正则（全局）；xt 是任意 ${…} 模板占位正则，URL 里出现即判模板；Me 是最多检查的 MCP server 文件数 16；es 是 URL 长度上限 8192；ts/ns/ss 是机密值、键名与占位值的识别正则。"}
+{"id":"chunk-aepeg2w5.js#ac","doc":"行为遥测键缓存（同一声明 4 个绑定）：ac 键前缀 \"bi1-\"；eoo 不可用标记 `${ac}key-unavailable`；na 按 entrypoint/model/版本/组织 的 sha256 缓存键的 Map；wI 缓存条数上限 32，超过即整体清空。"}
+{"id":"chunk-dcmhvw5a.js#_E","doc":"插件专属定制限制：_E 是 strictPluginOnlyCustomization 的 schema（逐项过滤，非数组原样放行）；oJt 是允许的定制组件名单 [\"skills\",\"agents\",\"hooks\",\"mcp\"]，名单外会在校验时给出 unknown-surface 的说明。"}
+{"id":"chunk-f3qhjfah.js#MFe","doc":"插件链接标记：MFe 是标记文件名 \".claude-plugin-link\"；CJr 是链接文件 schema（绝对路径的 target）；vkn 是写进文件首行的头 `\\n[mode: link]`。"}
+{"id":"chunk-f3qhjfah.js#un","doc":"插件归属 sidecar：un 是侧车文件的 schema（四个可选字段，键来自常量，解析失败按缺省忽略）；dZo 是读取该文件时 4096 字节的上限。"}
+{"id":"chunk-mvhmq2z8.js#et","doc":"云会话模型选择器的提示文案组：et 本地选项不可用、Po 列表加载失败、Lo 等待超时的说明（\"Stopped waiting for the cloud session’s model list …\"）；No 是超时毫秒 15000；Kt/xo 是别名判断与最长值挑选。"}
+{"id":"chunk-16jhn3ak.js#bMr","doc":"设置层级名单 [\"project\",\"local\",\"user\"]：v$s = (kind) => !bMr.includes(kind)，用来判断某个 kind 是否属于这三层设置；导出为 bMr。"}
+{"id":"chunk-3g8vhh6f.js#aDn","doc":"团队记忆的目录名 \"team\"：记忆文件路径 …/memory/team/<file> 里以 n[2]===aDn 判定属于团队记忆（另一支是个人记忆）；导出为 aDn。"}
+{"id":"chunk-4m46mxx9.js#B","doc":"telemetry 插件的目录名 \"telemetry\"，导出为 MOD_FOLDER；registerPlugin 里 Zfr(B) 在该目录下解析 hooks 模块文件。"}
+{"id":"chunk-85kmkm1x.js#ht","doc":"市场/插件名校验常量组：ht 是名称格式正则 /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/；Un 是保留市场名集合（org / org-provisioned / unknown）；$e 是 \"UNRECORDABLE_NAME\" finding code；UOr 是 plugin@marketplace 各分段允许字符的规则文案，拼进 message。"}
+{"id":"chunk-aepeg2w5.js#cj","doc":"按 host 缓存的 Linux 沙箱探测槽：new W(() => new yx({platform:\"linux\", isDockerenvPresent, isBubblewrapEnvSet, probeInternalNetworkAccess, …}))；gs() 返回 cj.of(B().host)，所以同一进程里每个 host 只有一个探测实例，不是可直接调用的函数。"}
+{"id":"chunk-bfnfj4kx.js#yos","doc":"agents 目录名 \"agents\"，导出为 yos；加载 agents 文件时用它拼目录。"}
+{"id":"chunk-bss4k1z9.js#Ao","doc":"首段解释的写作指引文案 \"At most 100 words; fewer when the thing needs no introduction.\"，导出为 FIRST_EXPLANATION_LENGTH；EXPLANATION_LENGTHS.first 直接引用它（是提示语，不是数字上限）。"}
+{"id":"chunk-e6aww6q8.js#Hdo","doc":"agent 元数据清洗：Hdo 是截断长度上限 1024（YR(e, n = Hdo) 的默认值）；P2e 是元数据名正则 /^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$/；Bdo 匹配控制字符与换行的成串正则（替换为空格）。"}

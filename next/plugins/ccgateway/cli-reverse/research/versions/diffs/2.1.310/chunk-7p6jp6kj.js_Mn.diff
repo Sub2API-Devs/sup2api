@@ -1,0 +1,16 @@
+# chunk-7p6jp6kj.js:Mn -> chunk-ajtyjx88.js:Ln
+diff --git "a/diffs\\chunk-7p6jp6kj.js_Mn.old.js" "b/diffs\\chunk-7p6jp6kj.js_Mn.new.js"
+index a4316f2..4c52aaa 100644
+--- "a/diffs\\chunk-7p6jp6kj.js_Mn.old.js"
++++ "b/diffs\\chunk-7p6jp6kj.js_Mn.new.js"
+@@ -1,8 +1,7 @@
+ function SELF() {
+   if ($m_v4()) return null;
+   let $l0 = $m_rTe.of($m_j().host);
+-  if ($l0.value !== void 0) return $l0.value;
+-  let $l1 = $m_TB();
+-  return $l0.value = $l1, $l1;
++  if ($l0.value === void 0) $l0.value = $m_TB();
++  return $l0.value ?? $NEW_chunk_ajtyjx88_js_eA();
+ }
+ ;

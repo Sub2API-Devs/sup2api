@@ -1,0 +1,14 @@
+# chunk-f7avdr1b.js:yA -> chunk-aepeg2w5.js:pR
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_yA.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_yA.new.js"
+index 0fe87e7..327fb99 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_yA.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_yA.new.js"
+@@ -5,7 +5,7 @@ function SELF($l0 = {}) {
+     return { key: null, source: "none" };
+   }
+   let $l1 = $m_qv() ? void 0 : $m_i.ANTHROPIC_API_KEY;
+-  if ($m_Jxn() && $l1) return { key: $l1, source: "ANTHROPIC_API_KEY" };
++  if ($l1 && $m_Jxn()) return { key: $l1, source: "ANTHROPIC_API_KEY" };
+   if ($m_Le(false)) {
+     let $l2 = $m_BW();
+     if ($l2) return { key: $l2, source: "ANTHROPIC_API_KEY" };

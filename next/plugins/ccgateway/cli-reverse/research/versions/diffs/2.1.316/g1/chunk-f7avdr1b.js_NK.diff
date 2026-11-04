@@ -1,0 +1,32 @@
+# chunk-f7avdr1b.js:NK -> chunk-aepeg2w5.js:MG
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-f7avdr1b.js_NK.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-f7avdr1b.js_NK.new.js"
+index ded04be..21c54c1 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-f7avdr1b.js_NK.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-f7avdr1b.js_NK.new.js"
+@@ -1,19 +1,12 @@
+ function SELF($l0) {
+-  if ($m_yc($l0) !== void 0) return;
+   let $l1 = $m__$e($l0);
+   if ($l1 === void 0 || $m_gSe($l1.id) !== void 0) return;
+-  let $l2 = $m_Aot($l1);
+-  if ($l2 === void 0 || $l2 === $l1.id) return;
+-  if ($m_vo().state === "refused") return;
+-  let $l3;
+-  try {
+-    $l3 = $m_pe("policySettings");
+-  } catch {
+-    return;
+-  }
+-  let $l4 = $l3?.availableModels;
+-  if ($l4 !== void 0 && !$m_no($l1.id, { allowlist: $l4, overridesMap: $l3?.modelOverrides ?? $m_Die() ?? {}, envFreeAliasResolution: true })) return;
+-  if ($m_rw($l2)) return;
+-  return $m_Wn($l2);
++  let $l2 = $NEW_chunk_aepeg2w5_js_fn($l1.id) ? $l1.id : void 0;
++  if ($m_yc($l0) !== void 0 && $l0.toLowerCase() !== $l2) return;
++  let $l3 = $NEW_chunk_aepeg2w5_js_xxt($l1);
++  if ($l3 === void 0 || $l3 === $l1.id && $l2 === void 0) return;
++  let $l4 = $NEW_chunk_aepeg2w5_js_jw({ id: $l1.id, raw: $m_Aot($l1) ?? $l0, overrideKey: $l2 });
++  if ($l4 === void 0 || $l4.mapped === $l1.id || $m_rw($l4.mapped)) return;
++  return $m_Wn($l4.mapped);
+ }
+ ;

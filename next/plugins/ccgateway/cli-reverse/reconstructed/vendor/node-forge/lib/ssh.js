@@ -1,0 +1,162 @@
+/**
+ * node-forge/lib/ssh.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: node-forge@1.4.0
+ * pieces: chunk-fq0cr76a.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_forge } from "./forge.js";
+import { require_aes } from "./aes.js";
+import { require_hmac } from "./hmac.js";
+import { require_md5 } from "./md5.js";
+import { require_sha1 } from "./sha1.js";
+import { require_util } from "./util.js";
+
+//@ chunk-fq0cr76a.js:293009-295373 cjs-fingerprint
+var require_ssh = __commonJS(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_aes();
+  require_hmac();
+  require_md5();
+  require_sha1();
+  require_util();
+  var ssh = (cjsModule.exports = forge.ssh = forge.ssh || {});
+  ssh.privateKeyToPutty = function (privateKey, passphrase, comment) {
+    comment = comment || "";
+    passphrase = passphrase || "";
+    var algorithm = "ssh-rsa";
+    var encryptionAlgorithm = passphrase === "" ? "none" : "aes256-cbc";
+    var ppk =
+      "PuTTY-User-Key-File-2: " +
+      algorithm +
+      `\r
+`;
+    ppk +=
+      "Encryption: " +
+      encryptionAlgorithm +
+      `\r
+`;
+    ppk +=
+      "Comment: " +
+      comment +
+      `\r
+`;
+    var pubbuffer = forge.util.createBuffer();
+    _addStringToBuffer(pubbuffer, algorithm);
+    _addBigIntegerToBuffer(pubbuffer, privateKey.e);
+    _addBigIntegerToBuffer(pubbuffer, privateKey.n);
+    var pub = forge.util.encode64(pubbuffer.bytes(), 64);
+    var length = Math.floor(pub.length / 66) + 1;
+    ppk +=
+      "Public-Lines: " +
+      length +
+      `\r
+`;
+    ppk += pub;
+    var privbuffer = forge.util.createBuffer();
+    _addBigIntegerToBuffer(privbuffer, privateKey.d);
+    _addBigIntegerToBuffer(privbuffer, privateKey.p);
+    _addBigIntegerToBuffer(privbuffer, privateKey.q);
+    _addBigIntegerToBuffer(privbuffer, privateKey.qInv);
+    var priv;
+    if (!passphrase) priv = forge.util.encode64(privbuffer.bytes(), 64);
+    else {
+      var encLen = privbuffer.length() + 16 - 1;
+      encLen -= encLen % 16;
+      var padding = _sha1(privbuffer.bytes());
+      padding.truncate(padding.length() - encLen + privbuffer.length());
+      privbuffer.putBuffer(padding);
+      var aeskey = forge.util.createBuffer();
+      aeskey.putBuffer(_sha1("\x00\x00\x00\x00", passphrase));
+      aeskey.putBuffer(_sha1("\x00\x00\x00\x01", passphrase));
+      var cipher = forge.aes.createEncryptionCipher(aeskey.truncate(8), "CBC");
+      cipher.start(forge.util.createBuffer().fillWithByte(0, 16));
+      cipher.update(privbuffer.copy());
+      cipher.finish();
+      var encrypted = cipher.output;
+      encrypted.truncate(16);
+      priv = forge.util.encode64(encrypted.bytes(), 64);
+    }
+    length = Math.floor(priv.length / 66) + 1;
+    ppk +=
+      `\r
+Private-Lines: ` +
+      length +
+      `\r
+`;
+    ppk += priv;
+    var mackey = _sha1("putty-private-key-file-mac-key", passphrase);
+    var macbuffer = forge.util.createBuffer();
+    _addStringToBuffer(macbuffer, algorithm);
+    _addStringToBuffer(macbuffer, encryptionAlgorithm);
+    _addStringToBuffer(macbuffer, comment);
+    macbuffer.putInt32(pubbuffer.length());
+    macbuffer.putBuffer(pubbuffer);
+    macbuffer.putInt32(privbuffer.length());
+    macbuffer.putBuffer(privbuffer);
+    var hmac = forge.hmac.create();
+    hmac.start("sha1", mackey);
+    hmac.update(macbuffer.bytes());
+    ppk +=
+      `\r
+Private-MAC: ` +
+      hmac.digest().toHex() +
+      `\r
+`;
+    return ppk;
+  };
+  ssh.publicKeyToOpenSSH = function (key, comment) {
+    var type = "ssh-rsa";
+    comment = comment || "";
+    var buffer = forge.util.createBuffer();
+    _addStringToBuffer(buffer, type);
+    _addBigIntegerToBuffer(buffer, key.e);
+    _addBigIntegerToBuffer(buffer, key.n);
+    return type + " " + forge.util.encode64(buffer.bytes()) + " " + comment;
+  };
+  ssh.privateKeyToOpenSSH = function (privateKey, passphrase) {
+    if (!passphrase) return forge.pki.privateKeyToPem(privateKey);
+    return forge.pki.encryptRsaPrivateKey(privateKey, passphrase, {
+      legacy: true,
+      algorithm: "aes128",
+    });
+  };
+  ssh.getPublicKeyFingerprint = function (key, options) {
+    options = options || {};
+    var md = options.md || forge.md.md5.create();
+    var type = "ssh-rsa";
+    var buffer = forge.util.createBuffer();
+    _addStringToBuffer(buffer, type);
+    _addBigIntegerToBuffer(buffer, key.e);
+    _addBigIntegerToBuffer(buffer, key.n);
+    md.start();
+    md.update(buffer.getBytes());
+    var digest = md.digest();
+    if (options.encoding === "hex") {
+      var hex = digest.toHex();
+      if (options.delimiter) return hex.match(/.{2}/g).join(options.delimiter);
+      return hex;
+    } else if (options.encoding === "binary") return digest.getBytes();
+    else if (options.encoding) throw Error('Unknown encoding "' + options.encoding + '".');
+    return digest;
+  };
+  function _addBigIntegerToBuffer(buffer, val) {
+    var hexVal = val.toString(16);
+    if (hexVal[0] >= "8") hexVal = "00" + hexVal;
+    var bytes = forge.util.hexToBytes(hexVal);
+    buffer.putInt32(bytes.length);
+    buffer.putBytes(bytes);
+  }
+  function _addStringToBuffer(buffer, val) {
+    buffer.putInt32(val.length);
+    buffer.putString(val);
+  }
+  function _sha1() {
+    var sha = forge.md.sha1.create();
+    var num = arguments.length;
+    for (var i = 0; i < num; ++i) sha.update(arguments[i]);
+    return sha.digest();
+  }
+});
+export { require_ssh };

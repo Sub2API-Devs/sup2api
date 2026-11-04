@@ -1,0 +1,1066 @@
+{
+  "sha256": "14da5daf8e6ea2dc8aa7e39a0f2da38427543fa3bfb4ce66274c5e806ee4007e",
+  "reports": [
+    {
+      "name": "websearch-None",
+      "mode": "direct",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        }
+      },
+      "betas": "fixture-beta",
+      "direct_bytes_identical": true
+    },
+    {
+      "name": "websearch-None",
+      "mode": "build",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "auto"
+        },
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 2048,
+        "output_config": {
+          "effort": "medium"
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,effort-2025-11-24",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "websearch-{'type': 'disabled'}",
+      "mode": "direct",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        },
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        },
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "betas": "fixture-beta",
+      "direct_bytes_identical": true
+    },
+    {
+      "name": "websearch-{'type': 'disabled'}",
+      "mode": "build",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        },
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "auto"
+        },
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 2048,
+        "output_config": {
+          "effort": "medium"
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,effort-2025-11-24",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "websearch-{'type': 'adaptive'}",
+      "mode": "direct",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        },
+        "thinking": {
+          "type": "adaptive"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        },
+        "thinking": {
+          "type": "adaptive"
+        }
+      },
+      "betas": "fixture-beta",
+      "direct_bytes_identical": true
+    },
+    {
+      "name": "websearch-{'type': 'adaptive'}",
+      "mode": "build",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        },
+        "thinking": {
+          "type": "adaptive"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "auto"
+        },
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 2048,
+        "thinking": {
+          "type": "adaptive",
+          "display": "updates"
+        },
+        "output_config": {
+          "effort": "medium"
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,effort-2025-11-24,thinking-display-updates-2026-08-18",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "websearch-{'type': 'enabled', 'budget_tokens': 1024}",
+      "mode": "direct",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        },
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        },
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024
+        }
+      },
+      "betas": "fixture-beta",
+      "direct_bytes_identical": true
+    },
+    {
+      "name": "websearch-{'type': 'enabled', 'budget_tokens': 1024}",
+      "mode": "build",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "tool",
+          "name": "web_search"
+        },
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [
+          {
+            "name": "web_search",
+            "type": "web_search_20250305",
+            "max_uses": 8
+          }
+        ],
+        "tool_choice": {
+          "type": "auto"
+        },
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 2048,
+        "thinking": {
+          "type": "adaptive",
+          "display": "updates"
+        },
+        "output_config": {
+          "effort": "medium"
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,effort-2025-11-24,thinking-display-updates-2026-08-18",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "summary-None",
+      "mode": "direct",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        }
+      },
+      "betas": "fixture-beta",
+      "direct_bytes_identical": true
+    },
+    {
+      "name": "summary-None",
+      "mode": "build",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [],
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 2048,
+        "output_config": {
+          "effort": "medium"
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,effort-2025-11-24",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "summary-{'type': 'disabled'}",
+      "mode": "direct",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "betas": "fixture-beta",
+      "direct_bytes_identical": true
+    },
+    {
+      "name": "summary-{'type': 'disabled'}",
+      "mode": "build",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [],
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 2048,
+        "output_config": {
+          "effort": "medium"
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,effort-2025-11-24",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "summary-{'type': 'adaptive'}",
+      "mode": "direct",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "thinking": {
+          "type": "adaptive"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "thinking": {
+          "type": "adaptive"
+        }
+      },
+      "betas": "fixture-beta",
+      "direct_bytes_identical": true
+    },
+    {
+      "name": "summary-{'type': 'adaptive'}",
+      "mode": "build",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "thinking": {
+          "type": "adaptive"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [],
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 2048,
+        "thinking": {
+          "type": "adaptive",
+          "display": "updates"
+        },
+        "output_config": {
+          "effort": "medium"
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,effort-2025-11-24,thinking-display-updates-2026-08-18",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "summary-{'type': 'enabled', 'budget_tokens': 1024}",
+      "mode": "direct",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024
+        }
+      },
+      "betas": "fixture-beta",
+      "direct_bytes_identical": true
+    },
+    {
+      "name": "summary-{'type': 'enabled', 'budget_tokens': 1024}",
+      "mode": "build",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [],
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 2048,
+        "thinking": {
+          "type": "adaptive",
+          "display": "updates"
+        },
+        "output_config": {
+          "effort": "medium"
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,effort-2025-11-24,thinking-display-updates-2026-08-18",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "native-parameter-mapping",
+      "mode": "build",
+      "input": {
+        "model": "claude-sonnet-4-5",
+        "max_tokens": 1000000,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "format": {
+            "type": "json_schema",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "answer": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "answer"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "thinking": {
+          "type": "disabled"
+        },
+        "temperature": 0.25
+      },
+      "wire": {
+        "model": "claude-sonnet-4-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [],
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 32000,
+        "thinking": {
+          "type": "disabled"
+        },
+        "temperature": 0.25,
+        "output_config": {
+          "format": {
+            "type": "json_schema",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "answer": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "answer"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,structured-outputs-2025-12-15",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "unmapped-parameters-build",
+      "mode": "build",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "top_p": 0.4,
+        "stop_sequences": [
+          "END"
+        ],
+        "metadata": {
+          "user_id": "incoming"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "fixture"
+              }
+            ]
+          }
+        ],
+        "system": [],
+        "tools": [],
+        "metadata": {
+          "user_id": "<native-generated; diagnostic redacted>"
+        },
+        "max_tokens": 2048,
+        "output_config": {
+          "effort": "medium"
+        },
+        "stream": false
+      },
+      "betas": "fixture-beta,effort-2025-11-24",
+      "direct_bytes_identical": null
+    },
+    {
+      "name": "unmapped-parameters-direct",
+      "mode": "direct",
+      "input": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "top_p": 0.4,
+        "stop_sequences": [
+          "END"
+        ],
+        "metadata": {
+          "user_id": "incoming"
+        }
+      },
+      "wire": {
+        "model": "claude-opus-5-5",
+        "max_tokens": 2048,
+        "messages": [
+          {
+            "role": "user",
+            "content": "fixture"
+          }
+        ],
+        "stream": false,
+        "output_config": {
+          "effort": "medium"
+        },
+        "top_p": 0.4,
+        "stop_sequences": [
+          "END"
+        ],
+        "metadata": {
+          "user_id": "incoming"
+        }
+      },
+      "betas": "fixture-beta",
+      "direct_bytes_identical": true
+    }
+  ],
+  "version": "2.1.302",
+  "patch": "ccgateway-v11-native-build-parameters",
+  "deployed": false,
+  "unit_tests": {
+    "passed": 37,
+    "failed": 0
+  },
+  "native_cases_passed": 19,
+  "limitations": [
+    "Loopback fixture upstream: verifies request construction, not live model acceptance or successful web searches.",
+    "No production containers updated.",
+    "ToolSearch/reference/caller history issues remain outside this change.",
+    "Unmapped build parameters are not forwarded; direct preserves the complete body."
+  ]
+}

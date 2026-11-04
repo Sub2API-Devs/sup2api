@@ -1,0 +1,51 @@
+/**
+ * safe-buffer/index.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: safe-buffer@5.2.1
+ * pieces: chunk-82d8c88w.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
+
+//@ chunk-82d8c88w.js:229-1109 cjs-fingerprint
+var require_safe_buffer = __commonJS(function (cjsExports, cjsModule) {
+  /*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
+  var buffer = importMetaRequire("buffer");
+  var RealBuffer = buffer.Buffer;
+  function copyProps(src, dst) {
+    for (var key in src) dst[key] = src[key];
+  }
+  if (RealBuffer.from && RealBuffer.alloc && RealBuffer.allocUnsafe && RealBuffer.allocUnsafeSlow)
+    cjsModule.exports = buffer;
+  else {
+    copyProps(buffer, cjsExports);
+    cjsExports.Buffer = SafeBuffer;
+  }
+  function SafeBuffer(arg, encodingOrOffset, length) {
+    return RealBuffer(arg, encodingOrOffset, length);
+  }
+  SafeBuffer.prototype = Object.create(RealBuffer.prototype);
+  copyProps(RealBuffer, SafeBuffer);
+  SafeBuffer.from = function (arg, encodingOrOffset, length) {
+    if (typeof arg === "number") throw TypeError("Argument must not be a number");
+    return RealBuffer(arg, encodingOrOffset, length);
+  };
+  SafeBuffer.alloc = function (size, fill, encoding) {
+    if (typeof size !== "number") throw TypeError("Argument must be a number");
+    var buf = RealBuffer(size);
+    if (fill !== undefined) {
+      if (typeof encoding === "string") buf.fill(fill, encoding);
+      else buf.fill(fill);
+    } else buf.fill(0);
+    return buf;
+  };
+  SafeBuffer.allocUnsafe = function (size) {
+    if (typeof size !== "number") throw TypeError("Argument must be a number");
+    return RealBuffer(size);
+  };
+  SafeBuffer.allocUnsafeSlow = function (size) {
+    if (typeof size !== "number") throw TypeError("Argument must be a number");
+    return buffer.SlowBuffer(size);
+  };
+});
+export { require_safe_buffer };

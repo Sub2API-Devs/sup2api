@@ -1,0 +1,48 @@
+{
+ "modules": 6946,
+ "decls": 81667,
+ "bytes": 38921647,
+ "byKind": {
+  "vendor": {
+   "modules": 2004,
+   "decls": 6504,
+   "bytes": 7235528
+  },
+  "first-party": {
+   "modules": 4941,
+   "decls": 75152,
+   "bytes": 31685087
+  },
+  "runtime": {
+   "modules": 1,
+   "decls": 11,
+   "bytes": 1032
+  }
+ },
+ "byMethod": {
+  "placement": 58421,
+  "affinity": 554,
+  "fingerprint": 5097,
+  "callgraph-witnessed": 233,
+  "layout": 6479,
+  "callgraph-fingerprint": 345,
+  "sole-consumer": 1197,
+  "file-local": 437,
+  "esm-fingerprint": 3373,
+  "esm-layout": 1183,
+  "facade-exports": 1120,
+  "file-last-pair": 30,
+  "shared-adjacent": 14,
+  "facade-majority": 1696,
+  "cjs-fingerprint": 1236,
+  "cjs-require-graph": 132,
+  "cjs-unmatched+string-clue": 66,
+  "cjs-fingerprint+context": 13,
+  "cjs-unmatched": 12,
+  "cjs-layout": 6,
+  "native-addon": 2,
+  "resource-wrapper": 9,
+  "embedded-runtime": 1,
+  "helper:bun-runtime": 11
+ }
+}

@@ -1,0 +1,11 @@
+# chunk-7dmym6x9.js:esr -> chunk-e6aww6q8.js:vur
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_esr.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_esr.new.js"
+index 06ebf75..0e69dd9 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_esr.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_esr.new.js"
+@@ -1,4 +1,4 @@
+ function SELF($l0) {
+-  return $m_Ze($l0, ":").replace(/-/g, "_").replace(/^env_info.*$/, "environment").replace(/^act_dont_rederive$/, "when_to_be_proactive").replace(/^token_budget$/, "optional_token_budgets").replace(/^delivering_work_max$/, "delivering_work").replace(/^overcorrection$/, "corrections").replace(/^heron_brook$/, "additional_guidance").replace(/^opus5_reduced_delegation$/, "additional_guidance");
++  return $m_Ze($l0, ":").replace(/-/g, "_").replace(/^env_info.*$/, "environment").replace(/^act_dont_rederive$/, "when_to_be_proactive").replace(/^token_budget$/, "optional_token_budgets").replace(/^delivering_work_max$/, "delivering_work").replace(/^overcorrection$/, "corrections").replace(/^heron_brook$/, "additional_guidance").replace(/^opus5_reduced_delegation$/, "additional_guidance").replace(/^original_games$/, "additional_guidance");
+ }
+ ;

@@ -1,0 +1,227 @@
+{
+  "version": "2.1.296",
+  "platform": "linux-x64-glibc",
+  "method": "Static AST extraction from official restored modules; not an end-to-end resume test.",
+  "offsetUnit": "UTF-16 string characters, not ELF file offsets",
+  "sources": {
+    "chunk-kasbfbhj.js": {
+      "sha256": "4db1e890fb4b277063ca17984811e7cf08b8bf1d2bb45c0da9c22a5e39b3deca"
+    },
+    "chunk-ypkrahyx.js": {
+      "sha256": "18e197cb53d8866f502eaedffb895e9145fe688f7ae94e2a8278ae8acec89f36"
+    },
+    "chunk-63xa24b4.js": {
+      "sha256": "63745617fd9ae5f89863b0155078ce0183cc17ad6384034e9f692e328ee501db"
+    }
+  },
+  "functions": [
+    {
+      "symbol": "Umo",
+      "file": "chunk-kasbfbhj.js",
+      "line": 1724,
+      "startCharacter": 1257517,
+      "endCharacter": 1258586,
+      "code": "function Umo(e){if(typeof e!==\"object\"||e===null||!(\"type\"in e)||typeof e.type!==\"string\")return!1;switch(e.type){case\"invoked_skills\":return\"skills\"in e&&Array.isArray(e.skills)&&e.skills.every((n)=>typeof n===\"object\"&&n!==null);case\"hook_success\":return\"content\"in e&&typeof e.content===\"string\";case\"skill_listing\":return!(\"names\"in e)||e.names===void 0||Array.isArray(e.names)&&e.names.length<=jmo&&e.names.every((n)=>typeof n===\"string\"&&n.length<=Wmo);case\"hook_additional_context\":return\"content\"in e&&Array.isArray(e.content)&&e.content.every((n)=>typeof n===\"string\");case\"task_reminder\":case\"todo_reminder\":return\"content\"in e&&Array.isArray(e.content)&&e.content.every(L);case\"file\":case\"already_read_file\":return\"content\"in e&&L(e.content);case\"withheld_memory\":return\"by\"in e&&typeof e.by===\"string\"&&e.by!==\"\"&&\"entries\"in e&&Array.isArray(e.entries)&&e.entries.every((n)=>L(n)&&(\"path\"in n)&&typeof n.path===\"string\"&&(\"why\"in n)&&typeof n.why===\"string\"&&Object.hasOwn(PU,n.why)&&(\"displayPath\"in n)&&typeof n.displayPath===\"string\");default:return!0}}"
+    },
+    {
+      "symbol": "uJ",
+      "file": "chunk-kasbfbhj.js",
+      "line": 1724,
+      "startCharacter": 1258607,
+      "endCharacter": 1258925,
+      "code": "function uJ(e){let n=0,r=e.filter((s)=>{if(s.type===\"attachment\"&&!Umo(s.attachment))return n+=1,!1;return!0});if(n===0)return e;return t(`transcript load: dropped ${n} attachment ${I(n,\"entry\",\"entries\")} with a missing or malformed payload \\u2014 the session transcript appears partially corrupt`,{level:\"error\"}),r}"
+    },
+    {
+      "symbol": "Ike",
+      "file": "chunk-kasbfbhj.js",
+      "line": 1724,
+      "startCharacter": 1298761,
+      "endCharacter": 1303388,
+      "code": "async function Ike(e,n,r){let s,h=(S,w)=>{let H=r.onSessionResolved;if(H===void 0)return;s??=Promise.resolve().then(()=>H({sessionId:jb(S),transcriptPath:w})).catch((G)=>t(`resume: onSessionResolved hook failed: ${l(G)}`))},y=()=>{s?.then((S)=>S?.()).catch(()=>{})};try{let S=null,w=null,H=!1,G=!1,V,Y,he=!1;if(e===void 0)S=await W5r({storageV5:r.storageV5,forkSession:r.forkSession,onNewestRunningInBackground:(vt)=>{he=!0,r.onNewestRunningInBackground?.(vt)}});else if(n&&typeof e===\"string\")S=await cTe(e,n,r.storageV5),V=S?.messages.at(-1)?.sessionId??S?.sessionId??e;else if(typeof e===\"string\"){let vt=r.precedingRows?.rows.length?wes(r.precedingRows.rows,e):void 0;S=await cTe(e,void 0,r.storageV5,vt)??await Rho(e,r.storageV5)??await Cho(e,r.storageV5),V=e}else S=e;if(!S&&!w)return f(\"session_resume\",he?\"running_in_background\":\"not_found\"),null;if(S){if(Sne(S))S=await aTe(S,{onTranscriptUnreadable:(Vt)=>{Y=Vt},storageV5:r.storageV5});if(!V)V=wf(S);let vt=CDn(V,r)?V:void 0,Ft=r.forkSession?void 0:vt;if(V)if(h(V,S.fullPath),s===void 0)await yRt(S,vt,r.storageV5);else await Promise.all([yRt(S,vt,r.storageV5),s]);let Pt=Vkn(a.CLAUDE_CODE_RESUME_SOURCE_ALIVE),Wt=V??K();if(H=Pt!==null&&(Pt.sessionId===void 0||Pt.sessionId===Wt||Pt.parentSessionId===Wt),G=r.forkSession&&Pt?.parentSessionId===Wt,!H)skn(S,Ft,r.storageV5);w=S.messages,ges(w),JFt(w,S.fileSize)}let _e=w?.length??0;w=eTn(w),w=uJ(w),Eho(w);let ke=S?.fullPath??n,be=ke?await ves(ke,r.storageV5)??void 0:void 0,Te=w.length,Re=w,Pe=w.at(-1)?.uuid,Fe=r.precedingRows?.first===!0&&r.precedingRows.rows.some((vt)=>vt.uuid===Pe),He=C$t(w,be?new Set([be.toolUseID]):void 0,r.replyOnResume,S?.rewindAnchorUuid??r.precedingRows?.rows.findLast((vt)=>vt.type===\"user\"||vt.type===\"assistant\")?.uuid,r.resumeInterruptedTurn,G,r.hostAnswerableToolUseIds,r.restoredCardToolUseId);if(w=He.messages,S){let vt=He.turnInterruptionState;NFt({log:S,stored:Re,verdict:vt.kind===\"none\"?\"none\":vt.message.isMeta?\"continue\":\"resubmit\",rescueSuppressed:He.rescueSuppressed,rewound:S.rewindAnchorUuid!==void 0,autoResume:Boolean(r.resumeInterruptedTurn??a.CLAUDE_CODE_RESUME_INTERRUPTED_TURN),openerVouched:vt.kind!==\"none\"&&(!vt.message.isMeta||vt.interruptedTurnUserMessageUuid!==void 0),supersededCalls:He.supersededToolUseIds.size,isTypedPrompt:(Ft)=>BHe([Ft])===Ft.uuid})}let Ve=performance.now(),Je=r.forkSession||Fe||V!==void 0&&!CDn(V,r)?\"fork\":\"resume\",nt=w,dt=!r.forkSession&&CDn(V,r)?V:K(),Ze={rows:[],additionalContexts:[],isOvertaken:!1,lateInitialUserMessage:void 0},ut=Wvt(\"tail\",(vt)=>TJ(Gj(),Je,{sessionId:dt,sessionTitle:Em(K())??(G?void 0:S?.customTitle),resumedMessages:nt,orphaned:vt,progress:Ze,storageV5:r.storageV5,credentials:r.credentials}).then((Ft)=>{if(vt.aborted)return Ft;wr(\"hooks_init_ms\",performance.now()-Ve,Ve);let Pt=zvt();if(Pt)yes(Pt,dt,r.storageV5);return Ft}));if(HFt({msgsLoaded:Te,msgsInJsonl:_e}),Y!==void 0)f(\"session_resume\",\"transcript_unreadable\",{errno:Y});else g(\"session_resume\");return{messages:w,sessionStartHooks:{...ut,progress:Ze},turnInterruptionState:He.turnInterruptionState,supersededToolUseIds:He.supersededToolUseIds,supersededToolNames:He.supersededToolNames,answeredToolUseIds:He.answeredToolUseIds,rescueSuppressed:He.rescueSuppressed,deferredToolUse:be,fileHistorySnapshots:H?void 0:S?.fileHistorySnapshots,attributionSnapshots:S?.attributionSnapshots,contentReplacements:S?.contentReplacements,sessionId:V,agentName:G?void 0:S?.agentName,agentColor:S?.agentColor,agentSetting:S?.agentSetting,customTitle:G?void 0:S?.customTitle,...vAt({},Xye(S)),aiTitle:G?void 0:S?.aiTitle,tag:S?.tag,relocatedCwd:S?.relocatedCwd,projectPath:S?.projectPath,mode:S?.mode,permissionMode:S?.permissionMode,isolationLatch:S?.isolationLatch,devModsFolder:S?.devModsFolder,memoryModeStamps:S?.memoryModeStamps,atisLatch:S?.atisLatch,worktreeSession:S?.worktreeSession,artifactCommentMonitor:S?.artifactCommentMonitor,artifactAutoReactLedger:S?.artifactAutoReactLedger,costState:S?.costState,prNumber:S?.prNumber,prUrl:S?.prUrl,prRepository:S?.prRepository,bridgeSessionId:S?.bridgeSessionId,bridgeLastSeq:S?.bridgeLastSeq,bridgeDialogKinds:S?.bridgeDialogKinds,bridgeSessionGroupingId:S?.bridgeSessionGroupingId,bridgeNoHistoryBackfill:S?.bridgeNoHistoryBackfill,bridgeOwnerAccountUuid:S?.bridgeOwnerAccountUuid,bridgeOwnerOrganizationUuid:S?.bridgeOwnerOrganizationUuid,sessionHistorySuppressed:S?.sessionHistorySuppressed,fullPath:S?.fullPath}}catch(S){if(m(\"session_resume\",\"load_failed\"),y(),tJ(S))t(`loadConversationForResume failed (${v(S)}): ${l(S)}`,{level:\"error\"});else c(ot(W(S),\"loadConversationForResume failed\"));throw S}}"
+    },
+    {
+      "symbol": "Zt",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3342,
+      "startCharacter": 3692916,
+      "endCharacter": 3693137,
+      "code": "function Zt(e,n={now:()=>new Date().toISOString(),uuid:()=>$ve()}){let r=u7(e);return{attachment:e,type:\"attachment\",uuid:n.uuid(),timestamp:(e.type===\"queued_command\"||e.type===\"poll_events\")&&e.timestamp||n.now(),...r}}"
+    },
+    {
+      "symbol": "u7",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3718,
+      "startCharacter": 4466366,
+      "endCharacter": 4466872,
+      "code": "function u7(e){try{if(dlr(e.type))return{};let n=IDn(aVe(e,e.type===\"deferred_tools_delta\"?{surfacedToolNames:fLn(e)}:void 0));if(n===void 0)return{};let r=VDn(e)?\"user\":\"system\";if(e.type===\"remote_session_change\")return{rendered:n,renderedRole:r,renderedBesideToolResult:!0};if(e.type!==\"queued_command\")return{rendered:n,renderedRole:r};let s=IDn(aVe(e,{inHumanTurn:!0}));return s===void 0||tqr(s,n)?{rendered:n,renderedRole:r}:{rendered:n,renderedInHumanTurn:s,renderedRole:r}}catch(n){return c(n),{}}}"
+    },
+    {
+      "symbol": "MDe",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3719,
+      "startCharacter": 4468429,
+      "endCharacter": 4469116,
+      "code": "function MDe(e,n){if(e.attachment.type===\"coordinator_context\"&&!pKe())return{messages:[],isKnownType:!0,recordedRole:void 0};if(!dlr(e.attachment.type)&&kKr(e.attachment,n?.surfacedToolNames)){let s=yKr(e.attachment.type===\"queued_command\"&&n?.inHumanTurn===!0?e.renderedInHumanTurn:e.rendered);if(s!==null){let{renderedRole:h}=e,y;try{y=_Ze(e.attachment,n)}catch(S){c(S)}return{messages:y?.length===s.length?y.map((S,w)=>({...S,message:{...S.message,content:s[w].content}})):s.map((S)=>xe({content:S.content,isMeta:!0})),isKnownType:y!==void 0,recordedRole:h===\"system\"||h===\"user\"?h:void 0}}}let r=_Ze(e.attachment,n);return{messages:r??[],isKnownType:r!==void 0,recordedRole:void 0}}"
+    },
+    {
+      "symbol": "yKr",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3719,
+      "startCharacter": 4469136,
+      "endCharacter": 4469288,
+      "code": "function yKr(e){if(!Array.isArray(e))return null;let n=ODn.get(e);if(n===void 0){let r=_Kr().safeParse(e);n=r.success?r.data:null,ODn.set(e,n)}return n}"
+    },
+    {
+      "symbol": "_Kr",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3719,
+      "startCharacter": 4469292,
+      "endCharacter": 4469390,
+      "code": "_Kr=p(()=>T(De({content:Ue([o().min(1),T(De({type:A(\"text\"),text:o().min(1)})).min(1)])})).min(1))"
+    },
+    {
+      "symbol": "kKr",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3719,
+      "startCharacter": 4469391,
+      "endCharacter": 4469538,
+      "code": "function kKr(e,n){if(e.type!==\"deferred_tools_delta\"||n===void 0)return!0;let r=fLn(e),s=n;return r.length===s.length&&r.every((h)=>s.includes(h))}"
+    },
+    {
+      "symbol": "bD",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3894,
+      "startCharacter": 4533109,
+      "endCharacter": 4533138,
+      "code": "function bD(e){return fgr(e)}"
+    },
+    {
+      "symbol": "qNn",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3894,
+      "startCharacter": 4533374,
+      "endCharacter": 4533402,
+      "code": "function qNn(e){return L(e)}"
+    },
+    {
+      "symbol": "$ar",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3930,
+      "startCharacter": 4618282,
+      "endCharacter": 4618383,
+      "code": "function $ar(e){return e.map((n)=>{let{isSidechain:r,parentUuid:s,promptId:h,...y}=n;return YJr(y)})}"
+    },
+    {
+      "symbol": "YJr",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3930,
+      "startCharacter": 4618383,
+      "endCharacter": 4618539,
+      "code": "function YJr(e){if(e.type!==\"user\")return e;let n=fNn(e.origin),r=fNn(e.queueOrigin);return n===e.origin&&r===e.queueOrigin?e:{...e,origin:n,queueOrigin:r}}"
+    },
+    {
+      "symbol": "EEt",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3930,
+      "startCharacter": 4620644,
+      "endCharacter": 4621075,
+      "code": "function EEt(e,n,r){let s=[],h=new Set,y=n;while(y){if(h.has(y.uuid)){c(Error(`Cycle detected in parentUuid chain at message ${y.uuid}. Returning partial transcript.`)),i(\"tengu_chain_parent_cycle\",{});break}h.add(y.uuid),s.push(y);let w=y.parentUuid;if(!w)break;let H=e.get(w);if(!H||h.has(H.uuid)){if(H=z2r(e,y,h),H)i(\"tengu_chain_timestamp_fallback\",{})}y=H}s.reverse();let S=q2r(e,s,h);return W2r(n,S,h,r??kFn(e)),XFt(e,S,h),S}"
+    },
+    {
+      "symbol": "LZe",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3933,
+      "startCharacter": 4634150,
+      "endCharacter": 4634683,
+      "code": "function LZe(e,n=0,r,s,h,y,S,w,H,G){let V=e.at(-1),Y=e[0],he=ynt(e),_e=new Date(Y.timestamp),ke=new Date(V.timestamp);return{date:V.timestamp,messages:$ar(e),fullPath:S,value:n,created:_e,modified:ke,firstPrompt:he,messageCount:Ent(e),isSidechain:Y.isSidechain,teamName:Y.teamName,sessionKind:Y.sessionKind,agentName:Y.agentName,agentSetting:H,leafUuid:(e.findLast((be)=>!pL(be.uuid))??V).uuid,summary:r,customTitle:s,tag:y,fileHistorySnapshots:h,attributionSnapshots:w,contentReplacements:G,gitBranch:V.gitBranch,projectPath:Y.cwd}}"
+    },
+    {
+      "symbol": "bNn",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3939,
+      "startCharacter": 4663463,
+      "endCharacter": 4663640,
+      "code": "function bNn(e){let n=vut(e),r=0;for(let s=0;s<e.length;){let h=e.indexOf(10,s),y=h===-1?e.length:h;if(e.subarray(s,y).some((S)=>!oVr.has(S)))r++;s=y+1}return WFn(r-n.length),n}"
+    },
+    {
+      "symbol": "JFn",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3939,
+      "startCharacter": 4678959,
+      "endCharacter": 4687825,
+      "code": "function JFn(e){let n=new Map,r=new Map,s=new Map,h=new Set,y=new Map,S=new Map,w=new Map,H=new Map,G=new Map,V=new Map,Y=new Map,he=new Map,_e=new Map,ke=new Map,be=new Map,Te=new Map,Re=new Map,Pe=new Map,Fe=new Map,He=new Map,Ve=new Set,Je=new Map,nt=new Map,dt=new Map,Ze=new Map,ut=new Map,Rt=new Map,vt=new Map,Ft=new Map,Pt=new Map,Wt=new Map,Vt=new Map,qt=new Map,on=new Map,Cn=new Map,$n=new Map,Sn=new Map,an=!1,nn,Wn,Kn=\"\",ro,ko=!1,io=!1,mo=!1,Xn=!1,no=!1,tn=0,Hn=\"leaf_scan\",ao=!1,Eo,No=new Map,Do=r$t(),fo=(ts,qr=!0)=>{if(!qNn(ts))return;let xo=ts;if(UZe(xo)){eNn(\"seen\");let $r=xo.parentUuid;No.set(xo.uuid,$r&&No.has($r)?No.get($r)??null:$r);return}if(bD(xo)){if(xo.parentUuid&&No.has(xo.parentUuid))eNn(\"rewrote\"),xo.parentUuid=No.get(xo.parentUuid)??null;if(Eo!==void 0&&!xo.isSidechain){if(xo.parentUuid===null&&!zo(xo))xo.parentUuid=Eo;Eo=void 0}if(!Do.admit(xo,n))return;if(qr)yBe(xo);if(xo.type===\"assistant\"&&xo.wireToolInputs!==void 0){let $r=tVt(xo.wireToolInputs,xo.message?.content,xo.batchToolUses);if($r===void 0)delete xo.wireToolInputs;else xo.wireToolInputs=$r}if(xo.type===\"assistant\"&&(xo.wireToolInputs!==void 0||xo.wireIngestContext!==void 0)){let $r=rVt(xo.wireIngestContext,xo.wireToolInputs,xo.message?.content);if($r===void 0)delete xo.wireIngestContext;else xo.wireIngestContext=$r}if(n.set(xo.uuid,xo),!xo.isSidechain&&!hVr(xo)){if(nn=xo.uuid,tn++,typeof xo.timestamp===\"string\"&&xo.timestamp>Kn)Wn=xo.uuid,Kn=xo.timestamp;ko=!1,mo=!1,Xn=!1}if(zo(xo))ro=void 0,ko=!1,io=!1}else if(xo.type===\"summary\"&&xo.leafUuid)r.set(xo.leafUuid,xo.summary);else if(xo.type===\"last-prompt\"){if(xo.leafUuid!==void 0)no=!0;if(xo.leafUuid)ko=xo.explicit===!0||ko&&xo.leafUuid===ro,io=xo.explicit===!0||io&&xo.leafUuid===ro,Xn=xo.rewound===!0||Xn&&xo.leafUuid===ro,ro=xo.leafUuid,tn=0,mo=!1;else if(xo.leafUuid===null&&xo.explicit===!0)mo=!0,ro=void 0,ko=!1,io=!1,Xn=!1,Eo=void 0}else if(xo.type===\"custom-title\"&&xo.sessionId)s.set(xo.sessionId,xo.customTitle);else if(xo.type===\"ended-by-model\"&&xo.sessionId&&!KOn())h.add(xo.sessionId);else if(xo.type===\"ai-title\"&&xo.sessionId)y.set(xo.sessionId,xo.aiTitle);else if(xo.type===\"tag\"&&xo.sessionId)S.set(xo.sessionId,xo.tag);else if(xo.type===\"relocated\"&&xo.sessionId)w.set(xo.sessionId,xo.relocatedCwd);else if(xo.type===\"agent-name\"&&xo.sessionId)H.set(xo.sessionId,xo.agentName);else if(xo.type===\"agent-color\"&&xo.sessionId)G.set(xo.sessionId,xo.agentColor);else if(xo.type===\"agent-setting\"&&xo.sessionId)V.set(xo.sessionId,xo.agentSetting);else if(xo.type===\"mode\"&&xo.sessionId)Je.set(xo.sessionId,xo.mode);else if(xo.type===\"permission-mode\"&&xo.sessionId)nt.set(xo.sessionId,xo.permissionMode);else if(xo.type===\"isolation-latch\"&&xo.sessionId)dt.set(xo.sessionId,xo.side);else if(xo.type===\"dev-mods\"&&xo.sessionId)if(typeof xo.folder===\"string\"&&SEn(xo.folder,xo.sessionId))Ze.set(xo.sessionId,xo.folder);else t(\"dev mods: dropped a dev-mods entry naming a folder not its own\");else if(xo.type===\"memory-mode\"&&xo.sessionId&&(xo.mode===\"on\"||xo.mode===\"off\")&&(typeof xo.afterUuid===\"string\"||xo.afterUuid===null)&&typeof xo.timestamp===\"string\"){let $r=ut.get(xo.sessionId)??[];ut.set(xo.sessionId,$r),$r.push({mode:xo.mode,afterUuid:xo.afterUuid,timestamp:xo.timestamp,...(xo.reason===\"paused\"||xo.reason===\"account_off\"||xo.reason===\"account_read_only\"||xo.reason===\"session_shape\"||xo.reason===\"server_off\")&&{reason:xo.reason},...typeof xo.account===\"string\"&&{account:xo.account},...(xo.accountChoice===\"on\"||xo.accountChoice===\"read_only\"||xo.accountChoice===\"off\")&&{accountChoice:xo.accountChoice}})}else if(xo.type===\"atis-latch\"&&xo.sessionId){if(typeof xo.atis===\"string\"&&/^[\\x21-\\x7e]*$/.test(xo.atis))Rt.set(xo.sessionId,xo.atis)}else if(xo.type===\"worktree-state\"&&xo.sessionId)vt.set(xo.sessionId,xo.worktreeSession);else if(xo.type===\"artifact-comment-monitor\"&&xo.sessionId){let $r=Ft.get(xo.sessionId);Ft.set(xo.sessionId,$r===void 0?xo:Yar($r,xo))}else if(xo.type===\"artifact-autoreact-ledger\"&&xo.sessionId)Pt.set(xo.sessionId,xo);else if(xo.type===\"cost-state\"&&xo.sessionId){let $r=Fcr().safeParse(xo);if($r.success)Wt.set(xo.sessionId,{...$r.data,sessionId:xo.sessionId})}else if(xo.type===\"pr-link\"&&xo.sessionId)Y.set(xo.sessionId,xo.prNumber),he.set(xo.sessionId,xo.prUrl),_e.set(xo.sessionId,xo.prRepository);else if(xo.type===\"bridge-session\"&&xo.sessionId){if(ke.set(xo.sessionId,xo.bridgeSessionId),be.set(xo.sessionId,xo.lastSequenceNum),xo.sessionGroupingId)Re.set(xo.sessionId,xo.sessionGroupingId);else Re.delete(xo.sessionId);if(xo.noHistoryBackfill)Pe.set(xo.sessionId,!0);else Pe.delete(xo.sessionId);{let{ownerAccountUuid:Rr,ownerOrganizationUuid:Oo}=xo,Ir=Rr!==void 0&&!dPe(Rr)||Oo!==void 0&&!dPe(Oo);if(!Ir&&Rr)Fe.set(xo.sessionId,Rr);else Fe.delete(xo.sessionId);if(!Ir&&Oo)He.set(xo.sessionId,Oo);else He.delete(xo.sessionId)}let $r=poe(xo.declaredDialogKinds);if($r.length>0)Te.set(xo.sessionId,$r);else Te.delete(xo.sessionId)}else if(xo.type===\"history-suppression\"&&xo.sessionId)Ve.add(xo.sessionId);else if(xo.type===\"file-history-snapshot\")Vt.set(xo.messageId,xo);else if(xo.type===\"file-history-delta\"){let $r=qt.get(xo.messageId);if($r)$r.push(xo);else qt.set(xo.messageId,[xo])}else if(xo.type===\"attribution-snapshot\")on.clear(),on.set(xo.messageId,xo);else if(xo.type===\"content-replacement\")if(xo.agentId){let $r=$n.get(xo.agentId)??[];$n.set(xo.agentId,$r),$r.push(...xo.replacements)}else{let $r=Cn.get(xo.sessionId)??[];Cn.set(xo.sessionId,$r),$r.push(...xo.replacements)}else if(xo.type===\"fork-context-ref\")Sn.set(xo.agentId,xo)};return{processEntry:fo,precede:(ts)=>{for(let qr of ts)fo(qr);Eo=ts.findLast((qr)=>wle(qr)&&n.has(qr.uuid))?.uuid},dropPreBoundaryEntries:()=>{n.clear(),Vt.clear(),qt.clear(),No.clear()},attributionSnapshots:on,artifactCommentMonitors:Ft,artifactAutoReactLedgers:Pt,markPrunedBeforeFold:()=>{ao=!0},setTailTorn:(ts)=>{an=ts},finish:()=>(Do.finish(n),dr(U2r(n)))};function dr(ts){if(an)for(let[Vo,or]of Ft)Ft.set(Vo,{...or,tailTorn:!0});if(!e&&mo)return Hr(new Set);let qr=new Set,xo=ko&&ro&&n.has(ro)&&!n.get(ro)?.isSidechain,$r=(Vo)=>{let or=new Map([[Vo,!0]]),Fr=(es)=>{let Wo=[],us=!1,fi=es;while(fi){let gr=or.get(fi);if(gr!==void 0){us=gr;break}or.set(fi,!1),Wo.push(fi),fi=n.get(fi)?.parentUuid??void 0}for(let gr of Wo)or.set(gr,us);return us},uo=Vo,hr=\"\";for(let es of n.values())if(!es.isSidechain&&es.uuid!==Vo&&typeof es.timestamp===\"string\"&&es.timestamp>=hr&&Fr(es.uuid))uo=es.uuid,hr=es.timestamp;return uo},Rr=nn;if(!e&&!no&&Rr&&Wn&&Wn!==Rr)Rr=$r(Rr);if(!e&&(!ts||xo)){let Vo=ro&&n.has(ro)?ro:void 0;if(Vo&&!ko&&nn&&n.has(nn)&&nn!==Vo&&PNn(n,nn,Vo,{direct:!0,throughBatch:!io}))Vo=nn;if(!ts)Vo??=Rr;if(Vo&&n.has(Vo)){let or=new Set,Fr=n.get(Vo);while(Fr){if(or.has(Fr.uuid)){i(\"tengu_transcript_parent_cycle\",{});break}if(or.add(Fr.uuid),Fr.type===\"user\"||Fr.type===\"assistant\"){qr.add(Fr.uuid);break}Fr=Fr.parentUuid?n.get(Fr.parentUuid):void 0}if(qr.size===1)return Hn=Vo===ro?\"checkpoint\":Vo===nn?\"last_row\":\"inferred\",Hr(qr)}}let Oo=new Set,Ir=new Set;for(let Vo of n.values())if(Vo.parentUuid!==null){if(Oo.add(Vo.parentUuid),Vo.type===\"user\"||Vo.type===\"assistant\")Ir.add(Vo.parentUuid)}let ns=[];for(let Vo of n.values())if(!Oo.has(Vo.uuid))ns.push(Vo);let Ur=!1;for(let Vo of ns){let or=new Set,Fr=Vo;while(Fr){if(or.has(Fr.uuid)){Ur=!0;break}if(or.add(Fr.uuid),Fr.type===\"user\"||Fr.type===\"assistant\"){if(!Ir.has(Fr.uuid))qr.add(Fr.uuid);break}Fr=Fr.parentUuid?n.get(Fr.parentUuid):void 0}}if(Ur)i(\"tengu_transcript_parent_cycle\",{});if(!e&&qr.size>1){let Vo=ro&&qr.has(ro)&&(ko||!nn||!PNn(n,nn,ro,{direct:!1,throughBatch:!io}))?ro:nn;if(!Vo||!n.has(Vo))return Hr(qr);let or=new Set,Fr=n.get(Vo);while(Fr){if(or.has(Fr.uuid))break;if(or.add(Fr.uuid),Fr.type===\"user\"||Fr.type===\"assistant\"){qr.clear(),qr.add(Fr.uuid),Hn=Vo===ro?\"checkpoint_pruned\":\"last_row_pruned\";break}Fr=Fr.parentUuid?n.get(Fr.parentUuid):void 0}}return Hr(qr)}function Hr(ts){return OFt(n,{chose:Hn,checkpoint:ro,checkpointEverExplicit:io,lastRow:nn,newestRow:Wn,rowsAfterLastCheckpoint:tn,prunedBeforeFold:ao}),{messages:n,summaries:r,customTitles:s,endedSessions:h,aiTitles:y,tags:S,relocatedCwds:w,agentNames:H,agentColors:G,agentSettings:V,prNumbers:Y,prUrls:he,prRepositories:_e,bridgeSessionIds:ke,bridgeLastSeqs:be,bridgeDialogKindsBySession:Te,bridgeSessionGroupingIds:Re,bridgeNoBackfill:Pe,bridgeOwnerAccountUuids:Fe,bridgeOwnerOrganizationUuids:He,historySuppressed:Ve,modes:Je,permissionModes:nt,isolationLatches:dt,...Ze.size>0&&{devModsFolders:Ze},memoryModeStamps:ut,atisLatches:Rt,worktreeStates:vt,artifactCommentMonitors:Ft,artifactAutoReactLedgers:Pt,costStates:Wt,fileHistorySnapshots:Vt,fileHistoryDeltas:qt,attributionSnapshots:on,contentReplacements:Cn,agentContentReplacements:$n,forkContextRefs:Sn,leafUuids:ts,clearedToEmpty:!e&&mo,rewindAnchorUuid:Xn?ro:void 0}}}"
+    },
+    {
+      "symbol": "Cle",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3939,
+      "startCharacter": 4687926,
+      "endCharacter": 4691256,
+      "code": "async function Cle(e,n){let r=JFn(n?.keepAllLeaves??!1),{processEntry:s,artifactCommentMonitors:h,artifactAutoReactLedgers:y}=r;r.precede(n?.precedingEntries??[]);let S=Ne(process.env.CLAUDE_CODE_DISABLE_PRECOMPACT_SKIP);if(j()&&n?.storageV5){let{backend:w,key:H}=n.storageV5,G=await w.read([H]),V=G.ok?void 0:ODt(G.error)?await dNn(w,H):C2r(G.error)?await dNn(w,H,QJ):void 0,Y=G.ok?void 0:V===void 0?G.error:V!==null&&(\"failure\"in V)?V.failure:void 0;if(Y!==void 0){if(Y.code===\"Failed\"&&Y.failureClass===\"permission\")return t(\"loadTranscriptFile: v5 read inaccessible (permission) \\u2014 empty result\"),Object.assign(r.finish(),{servedBy:\"inaccessible\"});t(`loadTranscriptFile: v5 read failed (${Y.code})`,{level:\"error\"});let Re=lj(\"telemetryCode\"in Y?Y.telemetryCode:void 0),Pe=Object.assign(Error(\"loadTranscriptFile: transcript unreadable via storage backend\",{cause:Y}),Re===void 0?{}:{code:Re});if(FNe(Pe))c(ot(Pe,cae));throw Pe}let he=G.ok?G.value.items[0]:void 0,_e=V!==void 0&&V!==null&&\"bytes\"in V?V:void 0,ke=he?.found?{servedBy:\"v5\",v5Read:{mtimeMs:he.mtimeMs}}:_e?{servedBy:\"v5-records\",v5Read:{mtimeMs:_e.mtimeMs}}:{servedBy:\"absent\"},be=he?.found?he.value:_e?.bytes,Te=he?.found?he.storedBytes:_e?.storedBytes;if(be!==void 0){let Re=Buffer.from(be.buffer,be.byteOffset,be.byteLength),Pe=async()=>{if(_e!==void 0)return _e.tornTailBytes>0;let He=await w.stat(H);return He.ok&&(He.value.tornTailBytes??0)>0};if(!S&&(Te??Re.length)>kZ){let He=GFn(nVr(Re),s,r.dropPreBoundaryEntries,n?.keepAllLeaves??!1),Ve=dVr(Re,He.lastAttributionOffset,He.lastAttributionLength);if(Ve)r.attributionSnapshots.set(Ve.messageId,Ve);r.markPrunedBeforeFold();let Je=He.finalLine.offset>=0&&He.ledgerLines.at(-1)?.offset!==He.finalLine.offset&&(He.ledgerLines.length>0||y.size>0),nt=(Je?[...He.ledgerLines,He.finalLine]:He.ledgerLines).map(({offset:Ze,length:ut})=>Re.subarray(Ze,Ze+ut)),dt=Je&&hRe(nt.pop()??null);if(gRe(nt,y,dt),h.size>0||y.size>0){let Ze=await Pe();if(r.setTailTorn(Ze),Ze)for(let[ut,Rt]of y)y.set(ut,FZr(Rt,!1))}return Object.assign(r.finish(),ke)}let Fe=hRe(wNn(Re));if(!n?.keepAllLeaves&&Re.length>kZ)Re=hNn(Re),r.markPrunedBeforeFold();for(let He of bNn(Re))s(He);if(gRe(vNn(Re),y,Fe),h.size>0||y.size>0){let He=await Pe();if(r.setTailTorn(He),He)for(let[Ve,Je]of y)y.set(Ve,FZr(Je,!1))}}return Object.assign(r.finish(),ke)}if(Ce())return r.finish();try{if(!S){let{size:G}=await nb(e);if(G>kZ){let V=rVr(e,G,s,r.dropPreBoundaryEntries,n?.keepAllLeaves??!1);if(!n?.keepAllLeaves){let{keptFrom:be,...Te}=V.scan;Abs({...Te,bytes:G,keptBytes:G-be})}let Y=aVr(e,V.lastAttributionOffset,V.lastAttributionLength);if(Y)r.attributionSnapshots.set(Y.messageId,Y);r.markPrunedBeforeFold();let he=V.finalLine.offset>=0&&V.ledgerLines.at(-1)?.offset!==V.finalLine.offset&&(V.ledgerLines.length>0||y.size>0),_e=VFn(e,he?[...V.ledgerLines,V.finalLine]:V.ledgerLines),ke=he&&hRe(_e.pop()??null);if(gRe(_e,y,ke),h.size>0)r.setTailTorn(!await iVr(e,G));return r.finish()}}let w=await cD(e),H=hRe(wNn(w));if(r.setTailTorn(w.length>0&&w.at(-1)!==10),!n?.keepAllLeaves&&w.length>kZ)w=hNn(w),r.markPrunedBeforeFold();for(let G of bNn(w))s(G);gRe(vNn(w),y,H)}catch(w){if(!jt(w)){if(C0t(w))c(ot(w,cae));else if(tJ(w))t(`loadTranscriptFile: transcript unreadable (${v(w)}): ${l(w)}`,{level:\"error\"});else c(w);throw w}}return r.finish()}"
+    },
+    {
+      "symbol": "Ant",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3939,
+      "startCharacter": 4691256,
+      "endCharacter": 4691702,
+      "code": "async function Ant(e,n,r,s){if(j()&&r!==void 0)if(n===void 0){let S=await cVr(e,r);if(S!==void 0){let w=await Cle(S.path,{storageV5:{backend:r,key:S.key},precedingEntries:s});return Object.assign(w,{sessionFile:S.path})}}else{let S=Xp(n,r);if(S!==void 0){let w=await Cle(n,{storageV5:S,precedingEntries:s});return Object.assign(w,{sessionFile:n})}}let h=n??await fVr(e),y=await Cle(h,{precedingEntries:s});return Object.assign(y,{sessionFile:h})}"
+    },
+    {
+      "symbol": "cTe",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3939,
+      "startCharacter": 4694012,
+      "endCharacter": 4694268,
+      "code": "async function cTe(e,n,r,s){let h=await Ant(e,n,r,s),{sessionFile:y,v5Read:S}=h,w=await wLs(e,h,{path:y,modifiedAt:async()=>S!==void 0?new Date(S.mtimeMs):(await nb(y)).mtime});if(w!==null&&s?.length)ad().primeFilelessResume(e,s.map((H)=>H.uuid));return w}"
+    },
+    {
+      "symbol": "wLs",
+      "file": "chunk-kasbfbhj.js",
+      "line": 3939,
+      "startCharacter": 4694268,
+      "endCharacter": 4696522,
+      "code": "async function wLs(e,n,r){let{messages:s,summaries:h,customTitles:y,endedSessions:S,aiTitles:w,tags:H,relocatedCwds:G,agentNames:V,agentColors:Y,agentSettings:he,prNumbers:_e,prUrls:ke,prRepositories:be,bridgeSessionIds:Te,bridgeLastSeqs:Re,bridgeDialogKindsBySession:Pe,bridgeSessionGroupingIds:Fe,bridgeNoBackfill:He,bridgeOwnerAccountUuids:Ve,bridgeOwnerOrganizationUuids:Je,historySuppressed:nt,modes:dt,permissionModes:Ze,isolationLatches:ut,devModsFolders:Rt,memoryModeStamps:vt,atisLatches:Ft,worktreeStates:Pt,artifactCommentMonitors:Wt,artifactAutoReactLedgers:Vt,costStates:qt,fileHistorySnapshots:on,fileHistoryDeltas:Cn,attributionSnapshots:$n,contentReplacements:Sn,leafUuids:an,clearedToEmpty:nn}=n;if(s.size===0)return null;if(r===void 0)ad().primeFilelessResume(e,s.keys());else KCn(e,s.keys());let Wn=mB(s.values(),(ao)=>an.has(ao.uuid)&&!ao.isSidechain&&(ao.type===\"user\"||ao.type===\"assistant\"))??(an.size===0&&!nn?mB(s.values(),(ao)=>!ao.isSidechain):void 0);if(!Wn){if(nn&&r!==void 0){let ao=await r.modifiedAt();return knt(n,{date:ao.toISOString(),fullPath:r.path,created:ao,modified:ao},e)}return null}let Kn=EEt(s,Wn);XJr(s,Kn,Wn.sessionId);let ro=Wn.sessionId,ko=h.get(Wn.uuid),io=y.get(ro),mo=H.get(ro),Xn=he.get(ro),no=LZe(Kn,0,ko,io,ARe(on,Cn,Kn),mo,r?.path,MRe($n,Kn),Xn,Sn.get(ro)??[]),tn=G.get(ro),Hn={...no,...r===void 0&&{sessionId:e},fileSnapshots:_Fn(s),projectPath:tn??no.projectPath,rewindAnchorUuid:n.rewindAnchorUuid,aiTitle:w.get(ro),relocatedCwd:tn,...vAt({},S.has(ro)),agentName:V.get(ro)??no.agentName,agentColor:Y.get(ro),mode:dt.get(ro),permissionMode:Ze.get(ro),isolationLatch:ut.get(ro),devModsFolder:Rt?.get(ro),memoryModeStamps:vt.get(ro)??[],atisLatch:LRe(Ft,ro),prNumber:_e.get(ro),prUrl:ke.get(ro),prRepository:be.get(ro),bridgeSessionId:Te.get(ro),bridgeLastSeq:Re.get(ro),bridgeDialogKinds:Pe.get(ro),bridgeSessionGroupingId:Fe.get(ro),bridgeNoHistoryBackfill:He.get(ro),bridgeOwnerAccountUuid:Ve.get(ro),bridgeOwnerOrganizationUuid:Je.get(ro),sessionHistorySuppressed:nt.has(ro)?!0:void 0,worktreeSession:Pt.get(ro),artifactCommentMonitor:Wt.get(ro),artifactAutoReactLedger:Vt.get(ro),costState:qt.get(ro)};if(r!==void 0){let ao=ad().project;LFt(Hn,s,Kn,ao?{writer:ao,sessionId:e}:void 0)}return Hn}"
+    },
+    {
+      "symbol": "nt",
+      "file": "chunk-ypkrahyx.js",
+      "line": 12,
+      "startCharacter": 19242,
+      "endCharacter": 19296,
+      "code": "nt=new Set([\"user\",\"assistant\",\"attachment\",\"system\"])"
+    },
+    {
+      "symbol": "fgr",
+      "file": "chunk-ypkrahyx.js",
+      "line": 12,
+      "startCharacter": 19297,
+      "endCharacter": 19367,
+      "code": "function fgr(e){return L(e)&&typeof e.type===\"string\"&&nt.has(e.type)}"
+    },
+    {
+      "symbol": "Oe",
+      "file": "chunk-63xa24b4.js",
+      "line": 27,
+      "startCharacter": 19673,
+      "endCharacter": 19905,
+      "code": "function Oe(e){let i=e.length,r=0;if(e[0]===239&&e[1]===187&&e[2]===191)r=3;let n=[];while(r<i){let l=e.indexOf(10,r);if(l===-1)l=i;let s=e.toString(\"utf8\",r,l).trim();if(r=l+1,!s)continue;try{n.push(JSON.parse(s))}catch{}}return n}"
+    },
+    {
+      "symbol": "Te",
+      "file": "chunk-63xa24b4.js",
+      "line": 27,
+      "startCharacter": 19905,
+      "endCharacter": 20094,
+      "code": "function Te(e){let i=Io(e),r=i.length,n=0,l=[];while(n<r){let s=i.indexOf(`\n`,n);if(s===-1)s=r;let u=i.substring(n,s).trim();if(n=s+1,!u)continue;try{l.push(JSON.parse(u))}catch{}}return l}"
+    },
+    {
+      "symbol": "vut",
+      "file": "chunk-63xa24b4.js",
+      "line": 28,
+      "startCharacter": 20094,
+      "endCharacter": 20191,
+      "code": "function vut(e){let i=jko();if(i)return ye(e,i);if(typeof e===\"string\")return Te(e);return Oe(e)}"
+    }
+  ]
+}

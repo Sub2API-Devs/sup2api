@@ -1,0 +1,22 @@
+async function SELF($l0, $l1 = $m_Jl) {
+  let $l2 = $m_Dc($l0?.compress);
+  if ($l0 === void 0 || $l2 === void 0 || typeof $l0.body !== "string" || !$m_Za($l0)) return { init: $l0 };
+  let $l3 = $l0.body, $l4 = $m_Ti(), $l5 = $l4.gzipRequestBody, $l6 = $l5.blockStore, $l7 = new Headers($l0.headers), $l8 = $l7.get($m_kAe), $l9 = $m_Cc();
+  if ($l9 === 0 || $l5.blocksSwitchedOff) return $m_Qfn($l8, { mode: $l9, outcome: $l9 === 0 ? "off" : "switched_off" }), { init: $l0 };
+  if ($l9 === 1 && $l6.blocks.size === 0) return $m_Qfn($l8, { mode: $l9, outcome: "by_runtime" }), { init: $l0, afterResponse: $m_Mc($l5, $l1, $l3, $l2) };
+  let $l10 = () => ($m_Qfn($l8, { mode: $l9, outcome: "switched_off" }), { init: $l0 }), $l11 = performance.now();
+  try {
+    let $l12 = $m_xGo({ body: Buffer.from($l3), level: $l2, store: $l6, clock: $l1 }), $l13 = $l12.reusedBytes * 2 < $l12.body.length, $l14 = $l9 === 1 && $l13 ? void 0 : await $m_EJs($l12, $l6, $l1, { signal: $l0.signal ?? void 0, stopIf: () => $l5.blocksSwitchedOff !== false });
+    if ($l5.blocksSwitchedOff) return $l10();
+    if ($m_Qfn($l8, { mode: $l9, outcome: $l14 === void 0 ? "by_runtime" : "as_blocks", planned: { blockCount: $l12.blocks.length, reusedBlockCount: $l12.reusedBlockCount, reusedBytes: $l12.reusedBytes, spentMs: Math.round(performance.now() - $l11), gzippedBytes: $l14?.length, storedBytes: $l6.storedBytes, evictedForSpaceCount: $l6.evictedForSpaceCount } }), $l14 === void 0) return { init: $l0, ...$m_vJs($l12) && { afterResponse: $m_Mc($l5, $l1, $l3, $l2) } };
+    if ($l4.once("gzip_request_body_blocks_ok")) $m_g("api_gzip_request_body_blocks");
+    $l7.set("Content-Encoding", "gzip");
+    let { compress: $l15, ...$l16 } = $l0;
+    return { init: { ...$l16, headers: $l7, body: $l14 }, afterResponse: $m_gb($l5, $l1, $l14) };
+  } catch ($l17) {
+    if ($l0.signal?.aborted) return { init: $l0 };
+    if ($l5.blocksSwitchedOff && !($l17 instanceof $m_awt)) return $l10();
+    return $m_Fc($l17, $l5, "failed"), $m_Qfn($l8, { mode: $l9, outcome: "failed" }), { init: $l0 };
+  }
+}
+;

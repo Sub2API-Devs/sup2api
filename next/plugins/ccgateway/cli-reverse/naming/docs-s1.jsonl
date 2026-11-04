@@ -1,0 +1,247 @@
+{"id":"chunk-t1sz4atx.js#wmt","doc":"函数 stripSandboxViolations（去掉 <sandbox_violations> 段）；位于「工具错误的兜底渲染：\"Tool execution failed\"/InputValidationError 等，截断长错误」模块。"}
+{"id":"chunk-18hwfzwa.js#rXe","doc":"函数 collapseToSingleLine（换行与制表符替换为空格）。"}
+{"id":"chunk-18hwfzwa.js#nAs","doc":"函数 hasPendingSurveyFeedbackSource（待处理来源存在且未过期）。"}
+{"id":"chunk-5gatfnjn.js#lRr","doc":"函数 requestNudgeOnce（未获批时返回 nudge）；位于「fleet 提示状态存储（2.1.316 新增）」模块。"}
+{"id":"chunk-e6aww6q8.js#c6","doc":"函数 truncateAttentionText（压缩空白后按上限截断）。"}
+{"id":"chunk-e6aww6q8.js#N6s","doc":"函数 looksLikeApproveLine（文本是否以 \"approve …\" 开头）。"}
+{"id":"chunk-e6aww6q8.js#$6s","doc":"函数 returnFalseAttention（恒 false）。"}
+{"id":"chunk-e6aww6q8.js#F6s","doc":"函数 emptyMergedJobs（恒返回空数组）。"}
+{"id":"chunk-e6aww6q8.js#P1o","doc":"类 CloudListPartialError（云会话列表中途失败，携带已取到的行）。"}
+{"id":"chunk-dnj0hze9.js#a5","doc":"函数 useFrozenValue（离屏时冻结上次的值）；位于「离屏时冻结渲染的组件（2.1.316 新增）」模块。"}
+{"id":"chunk-ag5x7vhf.js#rAr","doc":"函数 useFeedIsWide（全屏 feed 是否够宽）；位于「全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、\"新消息\"跳底药丸、置顶提示头、对话框/建议浮层」模块。"}
+{"id":"chunk-ag5x7vhf.js#dtn","doc":"导出值：TranscriptOverlaySlot（transcript 叠加层槽）；位于「全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、\"新消息\"跳底药丸、置顶提示头、对话框/建议浮层」模块。"}
+{"id":"chunk-ag5x7vhf.js#ctn","doc":"导出值：FooterSlot（页脚槽）；位于「全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、\"新消息\"跳底药丸、置顶提示头、对话框/建议浮层」模块。"}
+{"id":"chunk-47mye09a.js#y$n","doc":"函数 noopTrialEffect（空 effect）。"}
+{"id":"chunk-47mye09a.js#vRs","doc":"导出值：TRIAL_ENV（CLAUDE_CODE_TUI_TRIAL=fullscreen）。"}
+{"id":"chunk-47mye09a.js#LTr","doc":"函数 setTrialFlag（写入试用标记）。"}
+{"id":"chunk-cwwxybjc.js#XFn","doc":"导出值：MAX_CODE_CHARS（2000：代码字符上限）。"}
+{"id":"chunk-cwwxybjc.js#bJe","doc":"函数 truncatedCharsSuffix（\" … [+N chars]\"）。"}
+{"id":"chunk-8jypjjdf.js#Rmt","doc":"导出值：clawdPoseStore（Clawd 姿态 store）；位于「Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本」模块。"}
+{"id":"chunk-8jypjjdf.js#ECr","doc":"函数 normalizePose（字符串姿态名转定义）；位于「Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本」模块。"}
+{"id":"chunk-8jypjjdf.js#LFn","doc":"函数 isPoseSpec（非字符串且带 facing）；位于「Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本」模块。"}
+{"id":"chunk-ag5x7vhf.js#P7","doc":"函数 useHasComplianceTaint（是否有合规标记）；位于「启动 Logo 主组件：根据宽度/会话状态选择完整欢迎框或精简 Logo，并挂 Feed、通知、提示」模块。"}
+{"id":"chunk-ag5x7vhf.js#EHt","doc":"函数 isModelSuccessorNoticeActive（已有印象且公告槽未释放）。"}
+{"id":"chunk-s4skx7fa.js#eZ","doc":"函数 managedSettingsUrl（托管设置提示链接）。"}
+{"id":"chunk-dcmhvw5a.js#Tct","doc":"函数 trimmedOrUndefined（trim 后为空返回 undefined）；位于「托管设置危险项提取与比较：hooks、apiKeyHelper、危险环境变量（含增强遥测）等，判断自上次批准后是否变化」模块。"}
+{"id":"chunk-dcmhvw5a.js#TPi","doc":"函数 hasPayloadSlot（payloadSlots 有条目）；位于「托管设置危险项提取与比较：hooks、apiKeyHelper、危险环境变量（含增强遥测）等，判断自上次批准后是否变化」模块。"}
+{"id":"chunk-dcmhvw5a.js#hbr","doc":"函数 realCanonicalPath（真实路径）；位于「托管设置危险项提取与比较：hooks、apiKeyHelper、危险环境变量（含增强遥测）等，判断自上次批准后是否变化」模块。"}
+{"id":"chunk-wj577vf9.js#UPs","doc":"导出值：endsWith（字符串以某后缀结尾）；位于「Markdown 渲染：marked lexer（带缓存）→ 令牌格式化为 ANSI 文本；表格交给 MarkdownTable；流式 Markdown 只重渲染末尾块」模块。"}
+{"id":"chunk-wj577vf9.js#jCr","doc":"函数 firstLine（取第一行文本）；位于「Markdown 渲染：marked lexer（带缓存）→ 令牌格式化为 ANSI 文本；表格交给 MarkdownTable；流式 Markdown 只重渲染末尾块」模块。"}
+{"id":"chunk-e6aww6q8.js#ife","doc":"函数 collectToolUseIds（收集消息组的工具调用 id）；位于「消息操作：可导航消息判定、复制文本、工具调用/结果提取、消息操作栏与 MessageActionsKeybindings」模块。"}
+{"id":"chunk-e6aww6q8.js#Z9n","doc":"函数 hasAnyToolUseId（是否有任一 id 在集合内）；位于「消息操作：可导航消息判定、复制文本、工具调用/结果提取、消息操作栏与 MessageActionsKeybindings」模块。"}
+{"id":"chunk-wq9366y3.js#Hmt","doc":"函数 useMessageResponseValue（取消息响应上下文）；位于「工具结果/子输出的缩进容器（\"⎿\" 前缀），带 aria-hidden 与嵌套去重」模块。"}
+{"id":"chunk-g6fxv0zg.js#d5","doc":"导出值：expandContextSignal（展开上下文标记）。"}
+{"id":"chunk-ah34pb7m.js#Dho","doc":"函数 leadingCompactHint（取以压缩边界开头的历史提示后缀）；位于「同类工具调用分组显示（工具的 renderGroupedToolUse）」模块。"}
+{"id":"chunk-ah34pb7m.js#MAr","doc":"导出值：同一声明里的多个绑定：monitorEventCache（monitor 事件解析缓存）；monitorEventCacheStore（monitor 事件缓存的 hook 槽）。"}
+{"id":"chunk-6t1v7est.js#UHt","doc":"函数 renderToolUseByName（按工具名找渲染器）。"}
+{"id":"chunk-mmq58n27.js#i0t","doc":"函数 useTranscriptMode（取 transcript 模式）。"}
+{"id":"chunk-mmq58n27.js#Wj","doc":"函数 resolveTranscriptMode（任一来源为真则为真）。"}
+{"id":"chunk-ah34pb7m.js#Pho","doc":"函数 splitBashOutputCached（按消息缓存 bash 输出拆分结果）；位于「用户斜杠命令/技能调用回显（\"/命令 参数\" 或 Skill(name)）」模块。"}
+{"id":"chunk-ah34pb7m.js#DAr","doc":"导出值：forkAttachControllerSlot（fork 会话附着控制器槽）；位于「本地命令输出（<local-command-stdout/stderr>）的缩进显示，含 fork/cloud launch 特殊内容」模块。"}
+{"id":"chunk-j64mp9kq.js#QAr","doc":"函数 isShortSiteText（文本够短且无敏感路径）。"}
+{"id":"chunk-ah34pb7m.js#iFn","doc":"导出值：PLACEHOLDER_ID_SUFFIX（图片占位 id 固定后缀）；位于「普通用户提示回显（userMessageBackground 背景，brief 模式特殊处理）」模块。"}
+{"id":"chunk-ah34pb7m.js#Iho","doc":"函数 placeholderImageId（由序号生成图片占位 id）；位于「普通用户提示回显（userMessageBackground 背景，brief 模式特殊处理）」模块。"}
+{"id":"chunk-ah34pb7m.js#Ptn","doc":"导出值：promptAwaitingModelSlot（等待模型的提示槽）；位于「普通用户提示回显（userMessageBackground 背景，brief 模式特殊处理）」模块。"}
+{"id":"chunk-095ptjmr.js#mB","doc":"导出值：MODEL_PIN_FAMILIES（可固定的模型家族）。"}
+{"id":"chunk-f25sswmp.js#s9o","doc":"导出值：NUDGE_ID_A（空 nudge id 占位）。"}
+{"id":"chunk-f25sswmp.js#Xqt","doc":"导出值：同一声明里的多个绑定：NUDGE_ID_B（空 nudge id 占位）；NUDGE_ID_C（空 nudge id 占位）。"}
+{"id":"chunk-tzghj6zv.js#Ipt","doc":"导出值：packageManagerAutoUpdaterSlot（包管理器自动更新器槽）；位于「包管理器安装（brew/winget/mise 等）的更新提示命令」模块。"}
+{"id":"chunk-0e8j1zzj.js#dWe","doc":"导出值：同一声明里的多个绑定：MAX_CONSENT_RULE_WIDTH（64：同意行规则宽度）；MAX_CONSENT_SUGGESTION_WIDTH（160：建议规则宽度上限）；INLINE_DESTINATIONS（可内联展示的规则去向）。"}
+{"id":"chunk-0e8j1zzj.js#dTr","doc":"导出值：DISPLAYED_UPDATE_TYPES（只展示 addRules 更新）。"}
+{"id":"chunk-0e8j1zzj.js#gT","doc":"导出值：ConsentRowSchema（同意行的 schema）。"}
+{"id":"chunk-0e8j1zzj.js#qmo","doc":"导出值：EMPTY_DISPLAYED_UPDATES（空的已展示更新列表（非空断言））。"}
+{"id":"chunk-qgcqa405.js#wJe","doc":"函数 useFallbackPermission（订阅兜底权限请求）；位于「通用工具权限请求（无专用组件的工具/MCP 工具）：工具名 + 参数表格 + 允许/不再询问/拒绝选项」模块。"}
+{"id":"chunk-re9y5nwg.js#JYt","doc":"函数 returnFalsePermissionHook（恒 false）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。"}
+{"id":"chunk-re9y5nwg.js#Pmi","doc":"函数 hasHostAttestedDialog（host 佐证过且开关开启）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。"}
+{"id":"chunk-re9y5nwg.js#kCt","doc":"函数 recordToolUseDecision（追加一条决定）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。"}
+{"id":"chunk-re9y5nwg.js#Xlr","doc":"函数 dialogSourceFor（有记录则来源为 host_dialog）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。"}
+{"id":"chunk-re9y5nwg.js#Mmi","doc":"函数 filterEditableRules（开关关闭时保持原列表）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。"}
+{"id":"chunk-re9y5nwg.js#Dmi","doc":"函数 recordEditedRuleContents（登记编辑后的规则内容）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。"}
+{"id":"chunk-s4bxxzsw.js#v$t","doc":"函数 normalizeUrlHref（URL 规范化，失败原样返回）。"}
+{"id":"chunk-s4bxxzsw.js#QHi","doc":"导出值：MAX_CARD_ACTIONS（6：权限卡动作上限）。"}
+{"id":"chunk-s4bxxzsw.js#C0s","doc":"函数 isAutoDenyKind（这几类默认拒绝）。"}
+{"id":"chunk-s4bxxzsw.js#iWn","doc":"导出值：DIALOG_LAYOUT_EMPTY_1（空布局选项（占位））。"}
+{"id":"chunk-s4bxxzsw.js#aWn","doc":"导出值：DIALOG_LAYOUT_EMPTY_2（空布局选项（占位））。"}
+{"id":"chunk-s4bxxzsw.js#lWn","doc":"导出值：DIALOG_LAYOUT_EMPTY_3（空布局选项（占位））。"}
+{"id":"chunk-s4bxxzsw.js#dWn","doc":"导出值：DIALOG_LAYOUT_EMPTY_4（空布局选项（占位））。"}
+{"id":"chunk-3v13eg2e.js#ODe","doc":"导出值：permissionTitleRef（权限标题 ref）；位于「权限对话框标题行（工具名、子标题、队友 WorkerBadge）」模块。"}
+{"id":"chunk-3v13eg2e.js#mCr","doc":"函数 fitsWithMeta（标题加元信息能否放进宽度）；位于「权限对话框标题行（工具名、子标题、队友 WorkerBadge）」模块。"}
+{"id":"chunk-y6209p35.js#yce","doc":"导出值：MAX_VISIBLE_ITEMS（8：列表/应用数超过该值即折叠）。"}
+{"id":"chunk-qgpgvvwv.js#jho","doc":"函数 usePrActionEffect（PR 动作 effect）；位于「PR 徽章：PR 号 + 审查状态颜色（approved/changes_requested/pending/merged…）」模块。"}
+{"id":"chunk-a6f4nz0a.js#xpt","doc":"函数 wrapCardText（按宽度换行）。"}
+{"id":"chunk-a6f4nz0a.js#mTr","doc":"导出值：DRAFTED_BY_CLAUDE_TEXT（\"Drafted by Claude from this session\"）。"}
+{"id":"chunk-7s4yj2r0.js#uWs","doc":"函数 swarmBannerName（远端会话名或独立代理名）；位于「new in 2.1.316 (2.1.88 has no file at this path)」模块。"}
+{"id":"chunk-a33zgk4j.js#Oy","doc":"函数 showSwarmFooterGate（swarm 页脚开关）；位于「输入框页脚显示条件（2.1.316 新增）」模块。"}
+{"id":"chunk-a33zgk4j.js#AHt","doc":"函数 showFooterHintGate（页脚提示开关）；位于「输入框页脚显示条件（2.1.316 新增）」模块。"}
+{"id":"chunk-e6aww6q8.js#gYs","doc":"函数 mergeDecorationMaps（把多组装饰合并进已有列表）。"}
+{"id":"chunk-e6aww6q8.js#k8n","doc":"函数 nonEmptySpans（去掉空区间，为空时返回冻结空数组）。"}
+{"id":"chunk-e6aww6q8.js#ZFo","doc":"导出值：domSpansToDecorations（DOM 行区间转为装饰）。"}
+{"id":"chunk-e6aww6q8.js#T8n","doc":"函数 emptySpans（只保留空区间（用于光标位置））。"}
+{"id":"chunk-8jypjjdf.js#xyo","doc":"导出值：同一声明里的多个绑定：MAX_NOTICE_LINES（2：通知行数）；NOTICE_WIDTH_LIMIT（15：通知宽度）；noticeDialogSlot（通知对话框槽）；位于「输入框右下的通知区：显示通知队列当前项（语音录制/处理、IDE、apiKeyHelper 慢、用量额度等），超时自动消失」模块。"}
+{"id":"chunk-e6aww6q8.js#Gfn","doc":"函数 isQueuedSendNowEnabled（tengu_jiggly_mochi：排队消息立即发送开关）。"}
+{"id":"chunk-e6aww6q8.js#h8n","doc":"函数 isSendNowKeyEnabled（tengu_velvet_panda：立即发送键开关）。"}
+{"id":"chunk-e6aww6q8.js#FFo","doc":"函数 isDetachedToolCallsEnabled（两个开关都开时才行）。"}
+{"id":"chunk-8jypjjdf.js#Ryo","doc":"导出值：FooterSuggestionsMemo（memo 包装的建议列表）；位于「输入建议列表（命令/文件/MCP 资源/agent/emoji 等）：按类型取图标、高亮匹配字符、滚动窗口与对齐」模块。"}
+{"id":"chunk-fm6h4dv7.js#Dtn","doc":"函数 isAutoResumeOfferEnabled（开关开且含 overage）。"}
+{"id":"chunk-fm6h4dv7.js#zho","doc":"函数 usageLimitStatusText（带重置时间的限流文案）。"}
+{"id":"chunk-fm6h4dv7.js#EWe","doc":"导出值：LIMIT_CATEGORIES（session/weekly/fable/full）。"}
+{"id":"chunk-fm6h4dv7.js#Qho","doc":"函数 maybeOpenUsageCreditsDialog（满足条件时打开对话框）。"}
+{"id":"chunk-fm6h4dv7.js#YAr","doc":"函数 offerDedupeKey（按状态/名/id/标签拼键）。"}
+{"id":"chunk-975mts6d.js#W","doc":"导出值：DECAY_TICK_MS（1000）。"}
+{"id":"chunk-rtnapjwv.js#NPn","doc":"函数 sandboxBinaryPath（取沙箱二进制路径）；位于「/sandbox 依赖检查：ripgrep、bubblewrap、socat、seatbelt、Windows WFP 等是否就绪与安装提示」模块。"}
+{"id":"chunk-2e3jzhrc.js#$E","doc":"导出值：scrollViewportContext（滚动视口上下文）；位于「滚动视口上下文（2.1.316 新增）」模块。"}
+{"id":"chunk-2e3jzhrc.js#Tl","doc":"函数 useHasScrollViewport（是否在滚动视口内）；位于「滚动视口上下文（2.1.316 新增）」模块。"}
+{"id":"chunk-2e3jzhrc.js#fTe","doc":"函数 useScrollViewportHandle（取滚动视口句柄）；位于「滚动视口上下文（2.1.316 新增）」模块。"}
+{"id":"chunk-2e3jzhrc.js#Xmt","doc":"函数 useClaimScrollBox（取认领滚动框函数）；位于「滚动视口上下文（2.1.316 新增）」模块。"}
+{"id":"chunk-tzghj6zv.js#tgo","doc":"函数 neverEmbedded（恒返回 false 的嵌入模式判定）；位于「通用搜索框组件（\"Search…\" 占位、聚焦边框色），用于各种选择器」模块。"}
+{"id":"chunk-6f92z7de.js#pKn","doc":"函数 markCustomSetting（未知键标 custom）；位于「/config 设置页（Config 标签）：可切换的全部设置项（主题、编辑器模式、通知、自动压缩、verbose、模型、输出样式、语言等），远程会话下说明作用范围」模块。"}
+{"id":"chunk-44c3bx89.js#Myt","doc":"函数 shouldShowConfigGate（多项条件同时满足）。"}
+{"id":"chunk-6p6y0k3t.js#Syo","doc":"导出值：DEBUG_DETAILS_SUFFIX（\" (details in the --debug log)\"）；位于「/status 标签页：版本、会话名、cwd、账号/组织、认证方式、模型、MCP/插件/IDE 状态、设置来源」模块。"}
+{"id":"chunk-a7sxm3q7.js#z","doc":"导出值：WELLBEING_ROW_HEIGHT（200）。"}
+{"id":"chunk-ae5g0zb5.js#Xt","doc":"函数 hasPluginSkill（有来自该插件的技能命令）；位于「/skills 菜单：按来源（用户/项目/插件/命令）列出技能及描述」模块。"}
+{"id":"chunk-07xmkrj2.js#BDe","doc":"导出值：slashCommandLinkSignal（命令链接标记）。"}
+{"id":"chunk-kvpw3x0k.js#lTe","doc":"导出值：SPINNER_COLUMN_MIN_WIDTH（0）。"}
+{"id":"chunk-9rmf152v.js#VDe","doc":"导出值：SPINNER_FLAG_PRIORITY（-100）。"}
+{"id":"chunk-mjyddqh1.js#l0t","doc":"导出值：同一声明里的多个绑定：GLYPH_ANIM_MS（2000）；GLYPH_ACCENT_RGB（强调色）；GLYPH_BASE_RGB（基础色）；位于「Spinner 旋转字形（按帧/停滞状态变色）」模块。"}
+{"id":"chunk-hbc3mvx0.js#UWe","doc":"函数 statusSnapshot（spinner 状态快照）。"}
+{"id":"chunk-hbc3mvx0.js#$nn","doc":"函数 statusRowTexts（spinner 行文本）。"}
+{"id":"chunk-hbc3mvx0.js#wz","doc":"导出值：sampleAlias（sample 导出别名）。"}
+{"id":"chunk-hbc3mvx0.js#yUn","doc":"导出值：API_ERROR_TEXT（\"API error\"）。"}
+{"id":"chunk-hbc3mvx0.js#Kmt","doc":"导出值：statusOverrideSlot（状态覆盖槽）。"}
+{"id":"chunk-hbc3mvx0.js#A0t","doc":"函数 useSpinnerStatus（取某会话的 spinner 状态）。"}
+{"id":"chunk-hbc3mvx0.js#x_o","doc":"函数 useThinkingStartedAt（思考开始时间）。"}
+{"id":"chunk-hbc3mvx0.js#P_o","doc":"函数 useRetryStatus（重试状态）。"}
+{"id":"chunk-hbc3mvx0.js#_Un","doc":"函数 useStatusField（取状态的某个字段）。"}
+{"id":"chunk-mww2ey7m.js#VWe","doc":"函数 spinnerFramesForTerminal（按终端选帧集）；位于「Spinner 工具：默认字形帧（Ghostty 特判）、RGB 解析/插值、HSL 转 RGB」模块。"}
+{"id":"chunk-mww2ey7m.js#Jnn","doc":"函数 snapTo360（对齐到 360 度）；位于「Spinner 工具：默认字形帧（Ghostty 特判）、RGB 解析/插值、HSL 转 RGB」模块。"}
+{"id":"chunk-mww2ey7m.js#qWe","doc":"函数 cosineEase（余弦缓动）；位于「Spinner 工具：默认字形帧（Ghostty 特判）、RGB 解析/插值、HSL 转 RGB」模块。"}
+{"id":"chunk-18hwfzwa.js#zZt","doc":"函数 useNowTicker（按间隔刷新的当前时间）；位于「沿用旧版路径：启动状态通知」模块。"}
+{"id":"chunk-tcnhgpc6.js#Vfo","doc":"函数 teleportProgressRow（进度行（标签/标注/详情））；位于「teleport 进度（\"Teleporting session…\"，校验、检出分支）」模块。"}
+{"id":"chunk-ncs6vc5k.js#_mt","doc":"函数 WaitingLabel（\"Waiting…\"）。"}
+{"id":"chunk-ncs6vc5k.js#bmt","doc":"函数 RunningLabel（\"Running…\"）。"}
+{"id":"chunk-9awzs2m4.js#Yxr","doc":"函数 truncateTrustLine（去控制字符并截断）；位于「信任对话框的风险来源收集：各类 hooks、bash 权限、OTEL headers helper、apiKeyHelper、AWS/GCP 命令、危险环境变量的来源文件列表；本模块混入了大量同名副本（shared 指纹）」模块。"}
+{"id":"chunk-9awzs2m4.js#ePr","doc":"函数 hasProxyAuthHelper（有 proxyAuthHelper）；位于「信任对话框的风险来源收集：各类 hooks、bash 权限、OTEL headers helper、apiKeyHelper、AWS/GCP 命令、危险环境变量的来源文件列表；本模块混入了大量同名副本（shared 指纹）」模块。"}
+{"id":"chunk-ag5x7vhf.js#Ypt","doc":"函数 bumpClawdPoseRun（姿态运行计数 +1）；位于「虚拟滚动消息列表：按测量高度只渲染视口内的项，支持搜索高亮跳转、置顶用户提示跟踪」模块。"}
+{"id":"chunk-ag5x7vhf.js#Xpt","doc":"导出值：releaseKeptPoseIfStale（运行号过期时清除保留姿态）；位于「虚拟滚动消息列表：按测量高度只渲染视口内的项，支持搜索高亮跳转、置顶用户提示跟踪」模块。"}
+{"id":"chunk-ag5x7vhf.js#tHi","doc":"函数 selectionPayloadForAltScreen（alt-screen 下的选区载荷）；位于「虚拟滚动消息列表：按测量高度只渲染视口内的项，支持搜索高亮跳转、置顶用户提示跟踪」模块。"}
+{"id":"chunk-xvcy52fk.js#cAr","doc":"导出值：WORKFLOW_MAX_ROWS（12：最多行）。"}
+{"id":"chunk-e6aww6q8.js#h$o","doc":"函数 agentProxyReadmePath（代理代理目录的 README 路径）。"}
+{"id":"chunk-e6aww6q8.js#q1t","doc":"函数 setAgentProxyNote（写入代理说明）。"}
+{"id":"chunk-e6aww6q8.js#sVs","doc":"函数 getAgentProxyNoteObject（对象形式的代理说明）。"}
+{"id":"chunk-e6aww6q8.js#KUr","doc":"函数 setAgentProxyGhStandin（写入 gh stand-in）。"}
+{"id":"chunk-yxnffbzs.js#aCi","doc":"函数 getClaudeAiOrigin（claude.ai 源（可被覆盖））。"}
+{"id":"chunk-yxnffbzs.js#lCi","doc":"函数 isClaudeAiCpOverride（恒 false 的 cp 覆盖开关）。"}
+{"id":"chunk-yxnffbzs.js#dCi","doc":"函数 getBaseApiUrl（BASE_API_URL（可被覆盖））。"}
+{"id":"chunk-yxnffbzs.js#cCi","doc":"函数 isBaseApiCpOverride（恒 false 的 cp 覆盖开关）。"}
+{"id":"chunk-yxnffbzs.js#HBe","doc":"函数 getArtifactHostOverride（artifact 主机覆盖（当前恒为 undefined））。"}
+{"id":"chunk-e6aww6q8.js#W6s","doc":"函数 buildMemoryDirectorySection（生成记忆目录提示段）；位于「系统提示词的组装：按\"事实→会话分段决策→渲染\"三步生成各分段（intro/system/doing_tasks/actions/tools/tone 共享段 + communication/pronouns/环境/记忆/上下文管理等会话段），带 __SYSTEM_PROMPT_DYNAMIC_BOUNDARY__ 静态/动态分界；另含环境信息块、模型身份行、输出风格/语言段落文本」模块。"}
+{"id":"chunk-bbtre4r8.js#aDt","doc":"导出值：同一声明里的多个绑定：ARTIFACT_CONTENT_AUTHORED_TAG（\"<artifact-content-authored-by-others/>\"）；ARTIFACT_CONTENT_AUTHORED_TAG_LEAD（带尾随空格的同标签）；位于「消息中使用的 XML 标签名常量（命令、bash、任务通知、worktree、队友/频道/跨会话消息、fork 样板等）与相关判断；混入少量函数应归别处」模块。"}
+{"id":"chunk-bbtre4r8.js#SDi","doc":"函数 artifactHeaderBlock（artifact 头部标签块）；位于「消息中使用的 XML 标签名常量（命令、bash、任务通知、worktree、队友/频道/跨会话消息、fork 样板等）与相关判断；混入少量函数应归别处」模块。"}
+{"id":"chunk-ah34pb7m.js#fmt","doc":"函数 isBashOutputText（文本以 bash-stdout/stderr 标签开头）；位于「消息中使用的 XML 标签名常量（命令、bash、任务通知、worktree、队友/频道/跨会话消息、fork 样板等）与相关判断；混入少量函数应归别处」模块。"}
+{"id":"chunk-e6aww6q8.js#_Wo","doc":"函数 shouldPrefetchGitStatus（非远程模式且需要 git 指令）；位于「会话上下文：git 状态快照（getGitStatus）、系统上下文（Perforce 说明等，按短语缓存）、用户上下文（CLAUDE.md、用户邮箱、附加项目、当前日期）的构建、缓存与定期重读」模块。"}
+{"id":"chunk-e6aww6q8.js#s9s","doc":"函数 takeGitStatusPrefetch（取出并清空预取结果）；位于「会话上下文：git 状态快照（getGitStatus）、系统上下文（Perforce 说明等，按短语缓存）、用户上下文（CLAUDE.md、用户邮箱、附加项目、当前日期）的构建、缓存与定期重读」模块。"}
+{"id":"chunk-e6aww6q8.js#l9s","doc":"函数 resetPluginInstructionLogged（清掉\"已记录插件指令文件\"标记）；位于「会话上下文：git 状态快照（getGitStatus）、系统上下文（Perforce 说明等，按短语缓存）、用户上下文（CLAUDE.md、用户邮箱、附加项目、当前日期）的构建、缓存与定期重读」模块。"}
+{"id":"chunk-e6aww6q8.js#c9s","doc":"函数 getUserContextRefreshReason（用户上下文上次刷新原因）；位于「会话上下文：git 状态快照（getGitStatus）、系统上下文（Perforce 说明等，按短语缓存）、用户上下文（CLAUDE.md、用户邮箱、附加项目、当前日期）的构建、缓存与定期重读」模块。"}
+{"id":"chunk-jvez4qde.js#Ynn","doc":"函数 useStatelessShared（无状态订阅辅助）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。"}
+{"id":"chunk-jvez4qde.js#Kj","doc":"函数 holdsToasts（diff 面板或 pane 占住 toast）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。"}
+{"id":"chunk-jvez4qde.js#bye","doc":"函数 isHeldNotice（非空且可豁免 diff 面板）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。"}
+{"id":"chunk-jvez4qde.js#KDe","doc":"函数 isGaugeSurface（表面为 gauge）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。"}
+{"id":"chunk-jvez4qde.js#pTe","doc":"函数 useHeaderGauge（取头部 gauge）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。"}
+{"id":"chunk-jvez4qde.js#RUn","doc":"导出值：GAUGE_DECAY_MS（8000）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。"}
+{"id":"chunk-jvez4qde.js#MRr","doc":"函数 gaugeOf（取 gauge（未启用））；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。"}
+{"id":"chunk-0h4e7gnq.js#SLr","doc":"函数 isValidNotice（key/text 为字符串且优先级已知）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。"}
+{"id":"chunk-372tanf4.js#D_o","doc":"函数 useOverlayKeys（取当前叠加层 key）；位于「覆盖层登记（useRegisterOverlay）与各类覆盖层是否激活的选择器（模态、非模态 autocomplete、history-search、elicitation）」模块。"}
+{"id":"chunk-372tanf4.js#SUn","doc":"函数 useSecondOverlayKeys（第二组叠加层 key）；位于「覆盖层登记（useRegisterOverlay）与各类覆盖层是否激活的选择器（模态、非模态 autocomplete、history-search、elicitation）」模块。"}
+{"id":"chunk-372tanf4.js#GWe","doc":"函数 hasUnknownOtherKey（第二组存在未登记 key）；位于「覆盖层登记（useRegisterOverlay）与各类覆盖层是否激活的选择器（模态、非模态 autocomplete、history-search、elicitation）」模块。"}
+{"id":"chunk-372tanf4.js#UV","doc":"函数 useThirdOverlayKeys（第三组叠加层 key）；位于「覆盖层登记（useRegisterOverlay）与各类覆盖层是否激活的选择器（模态、非模态 autocomplete、history-search、elicitation）」模块。"}
+{"id":"chunk-372tanf4.js#P0t","doc":"函数 useOverlayFlagA（叠加层布尔 A）；位于「覆盖层登记（useRegisterOverlay）与各类覆盖层是否激活的选择器（模态、非模态 autocomplete、history-search、elicitation）」模块。"}
+{"id":"chunk-372tanf4.js#bRr","doc":"函数 useOverlayFlagB（叠加层布尔 B）；位于「覆盖层登记（useRegisterOverlay）与各类覆盖层是否激活的选择器（模态、非模态 autocomplete、history-search、elicitation）」模块。"}
+{"id":"chunk-04ybzhw5.js#dg","doc":"函数 useQueuedMessageText（取排队消息文本）；位于「排队消息渲染上下文（isQueued、isFirst、高亮）的 Provider」模块。"}
+{"id":"chunk-04ybzhw5.js#Imt","doc":"函数 useQueuedMessageContext（取排队消息上下文）；位于「排队消息渲染上下文（isQueued、isFirst、高亮）的 Provider」模块。"}
+{"id":"chunk-s3t86t3k.js#Nu","doc":"函数 useCommandQueueOrDefault（无上下文时用默认实现）；位于「排队消息渲染上下文（isQueued、isFirst、高亮）的 Provider」模块。"}
+{"id":"chunk-m6sy5dxm.js#hkt","doc":"函数 getRootSessionOverride（取覆盖值）；位于「REPL 根上下文（2.1.316 新增）」模块。"}
+{"id":"chunk-m6sy5dxm.js#lVt","doc":"导出值：rootSessionSlot（根会话槽）；位于「REPL 根上下文（2.1.316 新增）」模块。"}
+{"id":"chunk-xzrznswy.js#iP","doc":"函数 useSessionOrUndefined（取会话，缺省 undefined）；位于「SessionProvider 及 useHost/useProject/useSession（2.1.316 新增）」模块。"}
+{"id":"chunk-09njdshr.js#Dqe","doc":"函数 isCoordinatorEnvSet（环境变量为 \"true\"）；位于「并入旧版已有路径：协调者模式」模块。"}
+{"id":"chunk-e6aww6q8.js#ACe","doc":"函数 getSessionCostUSD（本次运行成本（扣除恢复部分））；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。"}
+{"id":"chunk-e6aww6q8.js#OVs","doc":"函数 getSpentTokens（账本已用 token）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。"}
+{"id":"chunk-e6aww6q8.js#uN","doc":"函数 hasReachedBudget（是否达到 --max-budget-usd）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。"}
+{"id":"chunk-e6aww6q8.js#Ozt","doc":"函数 flushAndSaveCosts（记录成本状态并写项目配置）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。"}
+{"id":"chunk-e6aww6q8.js#Q9s","doc":"函数 saveCostsAsync（异步保存会话成本）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。"}
+{"id":"chunk-e6aww6q8.js#Z9s","doc":"函数 saveCostsOnExit（退出时同步保存）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。"}
+{"id":"chunk-nbg7qs8b.js#m","doc":"导出值：同一声明里的多个绑定：MAX_DAEMON_STATUS_BYTES（4096）；DAEMON_STATUS_TTL_MS（200）；DAEMON_STATUS_ENTRIES（32）。"}
+{"id":"chunk-gg3tj8q5.js#A_o","doc":"函数 fireDeadProbe（触发探测）。"}
+{"id":"chunk-3z29138t.js#TVn","doc":"函数 sweepDraft（执行一次草稿清理）。"}
+{"id":"chunk-3z29138t.js#ZOo","doc":"函数 writeDraftBestEffort（写草稿并吞错误）。"}
+{"id":"chunk-vrr64ez0.js#Rn","doc":"导出值：同一声明里的多个绑定：MAX_KILL_OUTPUT_LINES（32：停止输出保留行数）；HEAD_TAIL_LINES_STOP（{head:50,tail:30}）；HEAD_TAIL_LINES_LOG（{head:60,tail:100}：日志首尾行数）。"}
+{"id":"chunk-22p96rmv.js#hho","doc":"函数 isAttachUpgradeEnabled（tengu_bg_attach_upgrade 开关）。"}
+{"id":"chunk-f1dqjgj0.js#jJe","doc":"导出值：MAX_DAEMON_CONFIG_BYTES（1048576）。"}
+{"id":"chunk-vb0enkt7.js#Kwo","doc":"导出值：EMPTY_WORKER_ENDING（空对象）。"}
+{"id":"chunk-kgh2tnx9.js#J","doc":"函数 keepResult（恒返回 \"keep\"）；位于「并入一个对话框懒加载启动器」模块。"}
+{"id":"chunk-9s5t3vdq.js#o0n","doc":"函数 adoptEngineForLauncher（为启动器接管引擎）；位于「并入一个对话框懒加载启动器」模块。"}
+{"id":"chunk-6mt8vha1.js#A","doc":"导出值：attachmentAnswerCache（空对象缓存）。"}
+{"id":"chunk-a53esm6j.js#m","doc":"导出值：mentionChainCache（空对象缓存）。"}
+{"id":"chunk-1nk4j4sn.js#U","doc":"导出值：renderedRowsCache（空对象缓存）。"}
+{"id":"chunk-xdkvf45x.js#Koi","doc":"函数 installTelemetryMeter（安装遥测 meter）；位于「new in 2.1.316 (2.1.88 has no file at this path)」模块。"}
+{"id":"chunk-hjesqqfw.js#ye","doc":"导出值：同一声明里的多个绑定：MAX_HEARTBEAT_BYTES（4096）；HEARTBEAT_SETTINGS_SOURCES（userSettings 加已知来源）。"}
+{"id":"chunk-387jwn0v.js#c","doc":"导出值：同一声明里的多个绑定：SERVE_MODE_KEYS（标识 serve 模式的键集合）；SERVE_MODE_VALUE（serve 模式取值）。"}
+{"id":"chunk-bwbq4xvm.js#yOe","doc":"导出值：同一声明里的多个绑定：USER_REJECTED_KIND（仅 user-rejected 的旧取值）；NON_EXECUTION_KINDS（tool_result_meta.non_execution_kind 取值）；位于「并入已有模块：SDK 核心消息与数据结构的 zod schema（system/assistant/result/限额事件、权限显示、模型用量、钩子输入等），316 增加了 away summary 等新消息类型」模块。"}
+{"id":"chunk-3nztfxrw.js#rDe","doc":"导出值：METRIC_NAME_RE（指标名字符集）。"}
+{"id":"chunk-3nztfxrw.js#xks","doc":"函数 createHistogram（新建直方图）。"}
+{"id":"chunk-3nztfxrw.js#Pks","doc":"函数 observeHistogram（记录一次观测）。"}
+{"id":"chunk-3nztfxrw.js#Yde","doc":"函数 escapeLabelValue（转义标签值）。"}
+{"id":"chunk-mmkhgzzy.js#q_i","doc":"函数 setClaimContext（设置认领上下文）。"}
+{"id":"chunk-mmkhgzzy.js#iAn","doc":"函数 claimedCredential（认领到的凭据）。"}
+{"id":"chunk-mmkhgzzy.js#Y_i","doc":"函数 claimRoadHint（认领路径提示）。"}
+{"id":"chunk-mmkhgzzy.js#ORt","doc":"函数 envDriftDetected（当前环境与认领时不一致）。"}
+{"id":"chunk-mmkhgzzy.js#Q_i","doc":"函数 claimedSubscriptionType（认领时的订阅类型）。"}
+{"id":"chunk-s61vbvea.js#n_n","doc":"函数 isValidPasteId（正整数且 < 2^32）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#rpe","doc":"函数 addPastedEntry（写入一条粘贴记录）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#Ter","doc":"函数 stripPlaceholdersWithOptions（带选项的剥离）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#ert","doc":"导出值：MAX_HISTORY_ENTRIES（1e5：历史条数上限）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#g4r","doc":"函数 readProjectHistory（读项目历史）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#ySe","doc":"函数 addHistoryEntry（追加历史）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#Dvt","doc":"函数 addHistoryEntryNoUndo（追加历史且不挂撤销）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#Aei","doc":"函数 registerHistoryExitFlush（注册退出前刷盘）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#Cei","doc":"函数 setHistoryStore（替换历史存储）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#Rei","doc":"函数 keepClearedDraft（保留已清空的草稿）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#Aer","doc":"函数 getHistoryGeneration（取历史代数）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-s61vbvea.js#xei","doc":"函数 removeLastHistoryEntry（移除最后一条历史）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-e6aww6q8.js#zZ","doc":"函数 registerPasteCarrier（登记粘贴占位载体）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-e6aww6q8.js#HXn","doc":"函数 advancePasteId（推进已用的粘贴编号）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-e6aww6q8.js#ZR","doc":"函数 mintPasteId（分配新的粘贴编号）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-ha3km179.js#rSo","doc":"函数 readPromptText（按特性返回纯文本或解析后的粘贴内容）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。"}
+{"id":"chunk-yj65zw1g.js#CUn","doc":"函数 voiceSetState（取语音 store 的 setState）；位于「new in 2.1.316 (2.1.88 has no file at this path)」模块。"}
+{"id":"chunk-1b5x3jje.js#Byt","doc":"导出值：MAX_FILE_SUGGESTIONS（15）；位于「@ 文件建议：git ls-files / ripgrep 建项目文件索引、.ignore/.rgignore、后台刷新、模糊匹配生成建议并应用」模块。"}
+{"id":"chunk-2sw13wfh.js#t$r","doc":"函数 isMcpConnectivityIssue（failed（非认证类）或 needs-auth）；位于「MCP 服务器连接失败/需要认证的通知（排除 IDE 与 claude.ai 代理）」模块。"}
+{"id":"chunk-0e8j1zzj.js#n$n","doc":"导出值：WORKFLOW_HINT_TEXT（\"workflows run best with it on\"）；位于「设置校验错误与权限模式冲突（如 workflow auto 不可用）的通知」模块。"}
+{"id":"chunk-kxxfj8vr.js#vCr","doc":"函数 resolveMainLoopModel（多来源取主循环模型）；位于「解析当前主循环模型（mainLoopModel 与 mainLoopModelForSession），含 plan 模式模型与若干模型选择器副本」模块。"}
+{"id":"chunk-18hwfzwa.js#sDe","doc":"函数 useFastModeOnForModel（订阅并计算某模型的 fast mode 状态）；位于「输入框预测建议（tengu_prompt_suggestion）：显示/接受/忽略的状态与统计」模块。"}
+{"id":"chunk-pq6d88wp.js#mM","doc":"导出值：RECENT_INPUT_GUARD_MS（250）。"}
+{"id":"chunk-tzghj6zv.js#ego","doc":"函数 startsWithPunctuation（首字符是标点）；位于「搜索输入 hook：Emacs 风格编辑键（kill/yank）、退出/取消，供 transcript 搜索、选择器等使用」模块。"}
+{"id":"chunk-vc5p26w2.js#qd","doc":"函数 useSettingsState（取 settings）；位于「读取当前设置（订阅 settings 变化）的 hook」模块。"}
+{"id":"chunk-yn45f1gp.js#NRr","doc":"导出值：同一声明里的多个绑定：ZERO_SELECTOR（选择器返回常量 a）；returnConstantA（返回 a）；returnUndefined（返回 undefined）；位于「状态仓库选择器 hook（2.1.316 新增）」模块。"}
+{"id":"chunk-rha5p3kj.js#Yjs","doc":"函数 hasPendingSwarmPermission（该 id 有未决 swarm 权限）；位于「队友侧权限回复轮询：注册回调，处理领导经 mailbox 回复的权限/沙箱批准，校验输入摘要」模块。"}
+{"id":"chunk-rha5p3kj.js#Xjs","doc":"函数 clearSwarmPermissions（清空 swarm 权限）；位于「队友侧权限回复轮询：注册回调，处理领导经 mailbox 回复的权限/沙箱批准，校验输入摘要」模块。"}
+{"id":"chunk-rha5p3kj.js#Qjs","doc":"函数 hasPendingSandboxPermission（该 id 有未决沙箱权限）；位于「队友侧权限回复轮询：注册回调，处理领导经 mailbox 回复的权限/沙箱批准，校验输入摘要」模块。"}
+{"id":"chunk-0n43rj0b.js#fRr","doc":"导出值：同一声明里的多个绑定：taskListSignal（任务列表信号）；noopTaskListener（空实现）；位于「TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动」模块。"}
+{"id":"chunk-0n43rj0b.js#gye","doc":"函数 useTaskListSnapshot（订阅任务列表）；位于「TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动」模块。"}
+{"id":"chunk-0n43rj0b.js#C_o","doc":"函数 useTaskListSubscription（仅订阅不取值）；位于「TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动」模块。"}
+{"id":"chunk-0n43rj0b.js#QPs","doc":"函数 useHasTaskSelection（有选中任务）；位于「TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动」模块。"}
+{"id":"chunk-7p2hc4jn.js#Vnn","doc":"函数 needsShiftWorkaround（Apple Terminal 需要 shift 兼容）；位于「文本输入核心 hook：按键映射到 Cursor 编辑操作（移动/删除/kill/yank/换行）、历史上下、双击 Esc 清空、Ctrl-C 处理、提交」模块。"}
+{"id":"chunk-tzghj6zv.js#vXe","doc":"函数 useVoiceLoginCompleted（语音登录完成计数）；位于「语音与输入框的集成：按住说话键位、录音状态切换、把转写文本插入光标处（输入分歧时放弃）」模块。"}
+{"id":"chunk-qwh6zcf0.js#K","doc":"导出值：同一声明里的多个绑定：DIFF_DEBOUNCE_MS（400：diff 刷新防抖）；DIFF_MIN_REFRESH_MS（150：diff 最小刷新间隔）；DIFF_STALE_MS（2000：diff 过期时间）；EMPTY_DIFF_RESULT（空 hunks 结果）。"}
+{"id":"chunk-qwh6zcf0.js#me","doc":"导出值：DIFF_UNAVAILABLE_TEXT（diff 面板不可用的提示）。"}
+{"id":"chunk-qwh6zcf0.js#wFn","doc":"函数 isDiffPanelAvailable（diff 面板是否可用）。"}
+{"id":"chunk-qwh6zcf0.js#De","doc":"导出值：同一声明里的多个绑定：DIFF_SHOWN_TEXT（\"Diff panel shown\"）；DIFF_HIDDEN_TEXT（\"Diff panel hidden\"）；DIFF_RETRY_MS（2000：diff 重试间隔）。"}
+{"id":"chunk-qwh6zcf0.js#ztn","doc":"函数 filePathToUrl（路径转 file 链接）。"}
+{"id":"chunk-qwh6zcf0.js#vFn","doc":"导出值：diffDialogSlot（diff 对话框槽）。"}
+{"id":"chunk-4ymxyb4g.js#cAi","doc":"函数 clampLevelForAttacher（附着方等级夹到 2）；位于「颜色输出：chalk 级别（--color/--no-color、NO_COLOR/FORCE_COLOR）与着色辅助」模块。"}
+{"id":"chunk-4ymxyb4g.js#kBe","doc":"函数 levelGeneration（等级代数）；位于「颜色输出：chalk 级别（--color/--no-color、NO_COLOR/FORCE_COLOR）与着色辅助」模块。"}
+{"id":"chunk-4ymxyb4g.js#uAi","doc":"函数 clampForAttacher（按附着方夹等级）；位于「颜色输出：chalk 级别（--color/--no-color、NO_COLOR/FORCE_COLOR）与着色辅助」模块。"}
+{"id":"chunk-cg10fy59.js#$L","doc":"导出值：同一声明里的多个绑定：defaultSetTimeout（setTimeout 包装）；noopClock（空时钟）；nullClock（恒 null）；位于「并入时钟上下文 useClock 与 StyledText」模块。"}
+{"id":"chunk-cg10fy59.js#_T","doc":"导出值：同一声明里的多个绑定：clockContext（时钟上下文）；CLOCK_INTERVAL_MS（tick 的两倍）；位于「并入时钟上下文 useClock 与 StyledText」模块。"}
+{"id":"chunk-bzr73sfg.js#GRr","doc":"导出值：ErrorBoundaryStateRef（错误边界的同一信号）。"}
+{"id":"chunk-x6v6jz2y.js#Bo","doc":"导出值：useInputClockValue（取输入时钟）。"}
+{"id":"chunk-01xdq6fy.js#LI","doc":"导出值：ScrollBoxDefault（默认 ScrollBox 组件别名）；位于「<ScrollBox>：带滚动偏移的可滚动容器（滚轮、粘底、命令式 scrollTo/scrollBy）」模块。"}
+{"id":"chunk-x6v6jz2y.js#Zmt","doc":"导出值：textSignal（文本标记）；位于「并入 Text、Link、Box 等基础组件声明」模块。"}

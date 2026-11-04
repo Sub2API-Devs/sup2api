@@ -1,0 +1,47 @@
+/**
+ * commands/autocompact/index.ts
+ *
+ * 2.1.316 新增：/autocompact 命令对象：查看与调整自动压缩窗口
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-e6aww6q8.js (1)
+ * attribution: placement 1
+ */
+import { getIsNonInteractiveSession, getIsRemoteMode } from "../../bootstrap/state.js";
+
+//@ chunk-e6aww6q8.js:1693236-1693786 placement
+/**
+ * /autocompact 命令对象（local-jsx）；描述：Set how full the context gets before auto-summarizing；isEnabled: ()=>!_e()；isHidden: false；实现 chunk-qqj12s77.js 的 vo。
+ */
+var autocompactCommand = {
+  type: "local-jsx",
+  name: "autocompact",
+  description: "Set how full the context gets before auto-summarizing",
+  immediate: true,
+  isEnabled: () => !getIsNonInteractiveSession(),
+  isHidden: false,
+  argumentHint: "[auto|<tokens>]",
+  userFacingName() {
+    return "autocompact";
+  },
+};
+var autocompactNonInteractiveCommand = {
+  type: "local",
+  name: "autocompact",
+  supportsNonInteractive: true,
+  thinClientDispatch: "post-text",
+  description: "Configure the auto-compact window size",
+  get isHidden() {
+    return !getIsNonInteractiveSession() && !getIsRemoteMode();
+  },
+  isEnabled() {
+    return getIsNonInteractiveSession() || getIsRemoteMode();
+  },
+  argumentHint: "[auto|<tokens>]",
+  load: () => import("./autocompact.js"),
+  userFacingName() {
+    return "autocompact";
+  },
+};
+export { autocompactCommand, autocompactNonInteractiveCommand };

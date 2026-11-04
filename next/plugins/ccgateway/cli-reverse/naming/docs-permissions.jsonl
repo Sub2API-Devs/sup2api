@@ -1,0 +1,874 @@
+{"id":"chunk-dcmhvw5a.js#uc","doc":"六种对外权限模式的显示配置表：title/shortTitle/indicator/symbol/color/external。default 显示为 \"Manual\"；bubble 不在表内（getModeConfig 回落 default）。"}
+{"id":"chunk-dcmhvw5a.js#lhe","doc":"是否对外可见模式：只有内部模式 \"bubble\"（子代理把权限请求冒泡给父级）返回 false。"}
+{"id":"chunk-dcmhvw5a.js#yd","doc":"把内部模式映射为对外模式名（config.external）；未知模式按 default。"}
+{"id":"chunk-dcmhvw5a.js#Jxi","doc":"模式切换遥测字段 {permission_mode, is_ultraplan_mode}；rule=\"while-latched\" 时只要新模式是 ultraplan 就上报，否则只在刚进入 ultraplan 时上报。"}
+{"id":"chunk-dcmhvw5a.js#yI","doc":"把字符串解析为已知权限模式（经 Pg，\"manual\" 视作 default），无法识别时返回 \"default\"。"}
+{"id":"chunk-dcmhvw5a.js#Qxi","doc":"模式为 \"default\" 或未设置时为 true。"}
+{"id":"chunk-dcmhvw5a.js#LU","doc":"模式的显示标题（PERMISSION_MODE_CONFIG.title）。"}
+{"id":"chunk-dcmhvw5a.js#VXt","doc":"某模式下“没有规则命中时”的基础行为：auto→\"classify\"，bypassPermissions（或 YD 判为等价 bypass）→\"allow\"，dontAsk→\"deny\"，其余→\"ask\"。"}
+{"id":"chunk-dcmhvw5a.js#KG","doc":"模式在状态栏上的指示文字（config.indicator，如 \"accept edits\"）。"}
+{"id":"chunk-dcmhvw5a.js#lct","doc":"模式图标（config.symbol）。"}
+{"id":"chunk-tbfde207.js#zPs","doc":"返回 AppState 更新函数：先应用 internal 元数据，再应用 external 元数据（externalMetadataToAppState）。与权限模式无关，属切分误归。"}
+{"id":"chunk-n4pvm0gt.js#qV","doc":"Shift+Tab 能否循环到 auto：context.isAutoModeAvailable 与实时闸门 isAutoModeGateEnabled（d_）都为真；否则打调试日志说明原因。"}
+{"id":"chunk-n4pvm0gt.js#Jsn","doc":"Shift+Tab 能否循环到 bypassPermissions：isBypassPermissionsModeAvailable 且未被 settings.permissions.disableBypassPermissionsMode=\"disable\" 关闭（zA）。"}
+{"id":"chunk-n4pvm0gt.js#Qsn","doc":"Shift+Tab 循环顺序：default→acceptEdits→plan→bypassPermissions（可用时）→auto（可用时）→default；bypassPermissions→auto 或 default；dontAsk、auto 及其他→default。316 已去掉旧版 ant 用户从 default 直接跳 bypass/auto 的分支。"}
+{"id":"chunk-n4pvm0gt.js#JAo","doc":"计算下一个模式并调用 transitionPermissionMode 准备上下文（进入 auto 时剥离危险 allow 规则等），返回 {nextMode, context}。"}
+{"id":"chunk-kswt4qha.js#Fwe","doc":"主动性档位 → 启动权限模式：ask→auto（可用时）否则 default；default→auto（可用时）否则沿用基线模式（基线为 auto 或不可用的 bypass 时回 default）；proactive→bypassPermissions（可用时）→auto→acceptEdits。"}
+{"id":"chunk-ktpw8eqa.js#w$","doc":"权限模式枚举：EXTERNAL_PERMISSION_MODES = acceptEdits/auto/bypassPermissions/default/dontAsk/plan（316 把 auto 并入对外集合，旧版要 TRANSCRIPT_CLASSIFIER 才有），INTERNAL/PERMISSION_MODES 是其拷贝；\"manual\" 作为 default 的别名被接受。"}
+{"id":"chunk-e6aww6q8.js#e$i","doc":"标记某个 tool_use 正在被分类器检查（写入 $0 集合并通知 vWe 订阅者刷新 UI）。"}
+{"id":"chunk-e6aww6q8.js#cst","doc":"由 auto-mode 分类器的 decisionReason 生成遥测字段 {classifier_verdict, classifier_category?}；用户接受时只在分类器本已放行时报 allow；类别仅在允许记录工具细节时附带。"}
+{"id":"chunk-1ny7cxrt.js#Ff","doc":"在模型条目列表里按 id 查找（忽略大小写，或经 VD 规范化后相等）。"}
+{"id":"chunk-1ny7cxrt.js#ai","doc":"去掉非可打印 ASCII 字符并截断到 128 字符，用于错误提示里回显模型名。"}
+{"id":"chunk-1ny7cxrt.js#mE","doc":"生成“模型不在运营方白名单”提示。"}
+{"id":"chunk-1ny7cxrt.js#cE","doc":"按角色的 availableModels/deniedModels 判定，返回被拒或不在白名单的提示文字；无限制时 undefined。"}
+{"id":"chunk-e6aww6q8.js#dSt","doc":"规则行为的描述词：allow→\"allowed\"，deny→\"denied\"，其他→\"asked for confirmation for\"。"}
+{"id":"chunk-e6aww6q8.js#bq","doc":"只保留“收紧”方向的权限更新：非 allow 的 addRules、移除 allow 的 removeRules、removeDirectories；replaceRules/setMode/addDirectories 一律丢弃。"}
+{"id":"chunk-e6aww6q8.js#Ybr","doc":"汇总 alwaysDenyRules 中所有规则串（去重），跳过 toolsNarrowing/command 来源和 \"prompt:\" 内容的规则，供分类器提示词使用。"}
+{"id":"chunk-dtv8x2hx.js#un","doc":"规则的唯一键：JSON.stringify([来源, 行为, toolName, ruleContent|null])。"}
+{"id":"chunk-gda5w2fs.js#Fn","doc":"解析规则串：WQ 识别 \"Tool(content)\" 形态（括号须配对且在末尾，否则视为裸工具名/畸形）；内容为空或 \"*\" 等价整工具规则；内容反转义 \\( \\) \\\\；工具名经 td 做旧名→新名映射。"}
+{"id":"chunk-e6aww6q8.js#lq","doc":"自动模式拒绝上限：连续 3 次或累计 20 次后回退到人工确认。"}
+{"id":"chunk-e6aww6q8.js#ttt","doc":"初始拒绝跟踪状态 {consecutiveDenials:0, totalDenials:0}。"}
+{"id":"chunk-e6aww6q8.js#f2e","doc":"连续与累计拒绝数各加一。"}
+{"id":"chunk-e6aww6q8.js#N6t","doc":"记录一次被分类器拦下的调用：同一条 assistant 消息内只累计一次连续拒绝（按 lastRewriteMessageId 去重，只更新指纹）；新消息则连续数与 rewriteDenials 加一。"}
+{"id":"chunk-e6aww6q8.js#a_e","doc":"若当前放行的调用与最近一次被拒调用指纹一致（模型改写后重试成功），把该消息贡献的连续拒绝数退回并清空重写记录。"}
+{"id":"chunk-e6aww6q8.js#p2e","doc":"工具名 + 输入的指纹（hDt），出错返回 undefined。"}
+{"id":"chunk-e6aww6q8.js#xL","doc":"清零连续拒绝数及限时回退/重写相关字段（累计数保留）；已是干净状态时返回原对象。"}
+{"id":"chunk-e6aww6q8.js#m2e","doc":"连续拒绝 ≥3 或累计 ≥20 时需回退到人工确认。"}
+{"id":"chunk-e6aww6q8.js#SBo","doc":"工具调用放行后，若有连续拒绝则在上下文/AppState 中清零。"}
+{"id":"chunk-2a8yx6fc.js#gt","doc":"去掉规则串末尾的空白、冒号和星号。"}
+{"id":"chunk-2a8yx6fc.js#tr","doc":"分词并跳过开头的 sudo/doas（及其带值选项）或 env（及 VAR=、-u 选项），返回剩余词。"}
+{"id":"chunk-2a8yx6fc.js#ht","doc":"危险规则判定用的词表：凭证文件路径（.ssh、.aws/credentials、.netrc、.npmrc、gh/glab 配置…）、可写权限 chmod、解释器、iex、下载命令。"}
+{"id":"chunk-2a8yx6fc.js#zt","doc":"识别“下载后交给解释器执行”：`sh <(curl …)`、`iex (iwr …)`、或管道前段是 curl/wget 且后段是 bash/sh/python 等（后段无参数）或规则带通配。"}
+{"id":"chunk-2a8yx6fc.js#ir","doc":"云/集群 CLI 的破坏性子命令：kubectl/gcloud/az delete、aws s3 rm|rb 或 delete-*/terminate-*、gsutil rm、terraform destroy、helm uninstall/delete。"}
+{"id":"chunk-2a8yx6fc.js#ar","doc":"判断一条 Bash 规则/命令模式是否危险：下载管道执行、触及凭证路径、带通配的 rm/chmod/chown/强推 git push/dd/mkfs/关机等，以及带通配的云端破坏命令。"}
+{"id":"chunk-sfy7bm1n.js#oe","doc":"进入 auto 模式时会被剥离的“等价于任意代码执行”的 allow 规则前缀：解释器/包运行器（python、node、deno、npx、bun run…）、shell、ssh、eval/exec/env/xargs/sudo；网络/云 CLI（curl、wget、kubectl、aws、gcloud、gsutil）只在子命令落入 DANGEROUS_SUBCOMMANDS 或参数含 $/` 时算危险。"}
+{"id":"chunk-82kqcve8.js#Sp","doc":"合法的更新目的地（settings 五层 + cliArg/command/toolsNarrowing/mcpServerPolicy/hostCredential/session/mcpMount）与 allow/deny/ask → alwaysAllowRules/alwaysDenyRules/alwaysAskRules 的映射。"}
+{"id":"chunk-82kqcve8.js#$st","doc":"从更新列表中取出所有 addRules 的规则值。"}
+{"id":"chunk-82kqcve8.js#_i","doc":"运行时校验一条权限更新，返回 {action:\"apply\", update} 或 {action:\"drop\", reason}：目的地/行为必须在枚举内；放宽型（allow 的 add/replace、非 allow 的 remove）规则必须形状合法且能经存储往返（否则尝试 bp 修正）；收紧型规则只丢弃畸形项并按解析结果规范化；目录列表不得含空串/NUL。"}
+{"id":"chunk-82kqcve8.js#iYe","doc":"批量校验更新，丢弃不合法项并记错误日志。"}
+{"id":"chunk-82kqcve8.js#up","doc":"校验后应用单条更新；Desktop Code 标签会话会丢弃未限定到单个 skill 的 .claude 会话 Edit allow 规则（Omi）；最后经 QYt 后处理。"}
+{"id":"chunk-82kqcve8.js#vp","doc":"把一条（已校验的）更新应用到 ToolPermissionContext：setMode（bypass 不可用时拒绝）、addRules/replaceRules/removeRules（按目的地写入对应规则表）、addDirectories/removeDirectories。"}
+{"id":"chunk-82kqcve8.js#Mui","doc":"从 allow 的 add/replace 更新中去掉针对指定工具的“整工具”（无内容）规则，豁免条件由回调决定。"}
+{"id":"chunk-82kqcve8.js#pO","doc":"依次应用多条更新；模式变化时清掉 startupModeDecidedByProactivityLevel。"}
+{"id":"chunk-82kqcve8.js#gFe","doc":"只有 localSettings/userSettings/projectSettings 可持久化。"}
+{"id":"chunk-82kqcve8.js#kp","doc":"把更新写入 settings 文件（仅三个可写层）：addRules/removeRules/replaceRules 改 permissions.allow|deny|ask，add/removeDirectories 改 additionalDirectories，setMode 写 defaultMode；setMode bypassPermissions 只在会话内生效，不落盘。"}
+{"id":"chunk-82kqcve8.js#Fst","doc":"为目录生成 Read(<dir>/**) 的 allow 规则建议（转义 glob，绝对路径前加 /）；根目录返回 undefined。"}
+{"id":"chunk-0e8j1zzj.js#ls","doc":"过滤外部传入的更新列表：addRules 只保留形状合法且可存储的规则，其他类型原样保留。"}
+{"id":"chunk-fq0cr76a.js#Sqt","doc":"沙箱设置写到哪一层：仅允许托管域名时不可写；托管策略锁定时只写 userSettings（若启用），否则 localSettings。"}
+{"id":"chunk-dcmhvw5a.js#tMe","doc":"旧式前缀规则 \"cmd:*\" 取出前缀 cmd；不是则 null。"}
+{"id":"chunk-dcmhvw5a.js#Ips","doc":"内容是否含未转义的 *（以 \":*\" 结尾的旧式前缀规则不算通配）。"}
+{"id":"chunk-dcmhvw5a.js#x8","doc":"Shell 规则通配匹配：\\* 与 \\\\ 为字面量，/**/ 匹配零或多级目录，* 匹配任意字符（含换行，s 标志）；\"cmd *\" 只有一个 * 时尾部参数可省略；含 NUL 的模式拒绝；可选忽略大小写、折叠空白。"}
+{"id":"chunk-pc1rmcr2.js#M","doc":"每个宿主一份的 auto 闸门检查状态：claimAutoModeCheck 保证只跑一次，rearm 后下次视为非启动运行。"}
+{"id":"chunk-pc1rmcr2.js#y0t","doc":"每宿主只跑一次：调用 verifyAutoModeGateAccess，按返回的 updateContext 更新 toolPermissionContext（踢出 auto 或刷新可用性），并排队/推送不可用通知。"}
+{"id":"chunk-18hwfzwa.js#Bie","doc":"React hook：主模型、会话模型或 fast 模式变化时重新运行 auto 闸门检查；settings 变化时推送 \"auto mode disabled by settings\" 通知。"}
+{"id":"chunk-18hwfzwa.js#mCt","doc":"把模式（规范化为对外模式）写入 AppState，并同步 isBypassPermissionsModeAvailable（目标为 bypass 时置 true）；返回 {ok, mode} 或失败结果。"}
+{"id":"chunk-p2qwpk2k.js#Xr","doc":"检测不可达的 allow 规则：带内容的 allow 规则若同工具存在整工具 deny（被拦）或整工具 ask（被遮蔽；Bash 在沙箱自动放行开启时只有共享来源的 ask 才算）则列出，附原因和修复建议。"}
+{"id":"chunk-p2qwpk2k.js#bd","doc":"带内容 allow 规则是否被同工具整工具 ask 规则遮蔽；沙箱自动放行时只认 projectSettings/policySettings/command 来源的 ask。"}
+{"id":"chunk-anrta56w.js#yg","doc":"policySettings.allowManagedPermissionRulesOnly=true 时只使用托管策略里的权限规则。"}
+{"id":"chunk-anrta56w.js#v1","doc":"把一个 settings JSON 的 permissions.allow/deny/ask 转成规则对象列表（带来源）。"}
+{"id":"chunk-anrta56w.js#yte","doc":"CLAUDE_CODE_EVAL_CONFINED（插件评测）下为真：忽略 settings 的 allow 规则与额外目录。"}
+{"id":"chunk-anrta56w.js#cD","doc":"加载 settings 各层的权限规则；评测受限模式下去掉 allow 规则。"}
+{"id":"chunk-anrta56w.js#x","doc":"托管独占时只读 policySettings；否则读全部启用层。工作区未受信任时丢弃 projectSettings/localSettings 的 allow 规则并给出一次性警告。"}
+{"id":"chunk-anrta56w.js#Pvn","doc":"汇总各层 settings 声明的 additionalDirectories，区分只由仓库控制层（project/local）声明的目录 repoOnly。"}
+{"id":"chunk-anrta56w.js#wYe","doc":"读取 settings 各层 permissions.additionalDirectories；未受信任工作区跳过 project/local 层并告警；评测受限模式返回空。"}
+{"id":"chunk-anrta56w.js#Ivn","doc":"返回 {gateProject, gateLocal}：projectSettings 与 userSettings 不是同一文件（且工作区未信任）时 gateProject；localSettings 被 git 跟踪时 gateLocal。"}
+{"id":"chunk-anrta56w.js#E","doc":"未受信任工作区丢弃 project/local 的放宽项时，每类只警告一次（stderr 说明如何信任工作区）。"}
+{"id":"chunk-anrta56w.js#Mvn","doc":"从可编辑 settings 文件删除一条规则（按规范化串比较）；localSettings 另查实际文件确认。"}
+{"id":"chunk-anrta56w.js#fQo","doc":"把规则追加写入某层 settings（去重）；托管独占时拒绝。"}
+{"id":"chunk-zfbhezv9.js#G","doc":"规则来源的显示名：settings 层显示文件路径（相对 cwd 更短时用相对路径），其他来源原样。"}
+{"id":"chunk-zfbhezv9.js#hjs","doc":"找出会绕过 auto 分类器的危险 allow 规则（sme：Bash/PowerShell 整工具或解释器/网络前缀、MCP 等），含 --allowed-tools 的规则。"}
+{"id":"chunk-zfbhezv9.js#Ge","doc":"宽泛 shell 规则分类（遥测用）：powershell / bare / cluster / network / ace（任意代码执行）。"}
+{"id":"chunk-zfbhezv9.js#I0i","doc":"按来源分组，用 removeRules 从上下文删掉给定的危险 allow 规则（默认只删可编辑层、session、cliArg）。"}
+{"id":"chunk-zfbhezv9.js#P5","doc":"进入 auto（或 plan+auto）时剥离危险 allow 规则，并把它们按来源存入 strippedDangerousRules 以便退出时恢复。"}
+{"id":"chunk-zfbhezv9.js#yAe","doc":"退出 auto 时把 strippedDangerousRules 里的规则加回（command 来源过滤掉 cBo 命中的项），并清空暂存。"}
+{"id":"chunk-zfbhezv9.js#EIo","doc":"重建上下文时保留旧上下文的模式状态（mode、prePlanMode、startupModeDecidedByProactivityLevel），allow 规则与暂存的危险规则只保留新上下文中仍存在的项。"}
+{"id":"chunk-zfbhezv9.js#Y0","doc":"模式切换的统一入口：记录切换事件；进入 plan 走 prepareContextForPlanMode；进入使用分类器的模式（auto）要求闸门开启并剥离危险规则，离开时恢复；离开 plan 时清掉 prePlanMode。"}
+{"id":"chunk-zfbhezv9.js#TIo","doc":"启动时决定权限模式：CLAUDE_CODE_SUBPROCESS_ENV_SCRUB 时强制 default；否则汇总 CLI/env/settings/agent frontmatter/主动性档位交给 initialPermissionModeFromCLI，并在 GrowthBook 或策略未就绪时登记“临时启动模式”以便稍后重算。"}
+{"id":"chunk-zfbhezv9.js#YHr","doc":"限制写入在工作目录内，并禁用 EnterWorktree/ExitWorktree 工具（toolsNarrowing deny）。"}
+{"id":"chunk-zfbhezv9.js#AIo","doc":"构建初始 ToolPermissionContext：解析 --allowedTools/--disallowedTools/--tools，加载 settings 规则（工作区信任门控），计算 bypass 可用性（disableBypassPermissionsMode、restricted），Windows 上禁 Bash 时联动 PowerShell，检测危险/宽泛规则，设置 auto 可用性与 Chrome 分类器开关，校验并加入 additionalDirectories（settings、会话、--add-dir）。"}
+{"id":"chunk-zfbhezv9.js#L0i","doc":"规则自检告警：deny/ask 规则指向已移除或未知的工具、用 \"field:\" 原样匹配 command/path 字段（不会生效）；validatePermissionRule 报告的警告。"}
+{"id":"chunk-zfbhezv9.js#DKn","doc":"GrowthBook 缓存或策略结论到位后重算启动模式；若用户未手动切换过且结果不同，则通过 transitionPermissionMode 切换（trigger=startup_reresolve）。"}
+{"id":"chunk-zfbhezv9.js#lze","doc":"校验 auto 模式能否进入：读 tengu_auto_mode_config（enabled: enabled/disabled/opt-in、disableFastMode）、settings disableAutoMode、模型是否支持；可进入时返回刷新可用性的 updateContext，否则返回踢出 auto 的 updateContext 与原因通知（settings/circuit-breaker/fast-mode/model）。"}
+{"id":"chunk-zfbhezv9.js#Lyt","doc":"当前处于 auto，或 plan 且进入前是 auto/已剥离危险规则。"}
+{"id":"chunk-zfbhezv9.js#QHr","doc":"闸门关闭时退出 auto：恢复危险规则，模式改回 default（或按主动性档位算出的模式），并标记 auto 不可用。"}
+{"id":"chunk-zfbhezv9.js#dUt","doc":"进入 plan：记录 prePlanMode；从 auto 进入时视 plan 是否沿用分类器决定是否恢复危险规则；从其他模式进入时若 plan 使用 auto 分类器则剥离危险规则。"}
+{"id":"chunk-kswt4qha.js#sQr","doc":"纯函数决定启动模式：按 --dangerously-skip-permissions、--permission-mode、agent frontmatter、settings defaultMode（project/local 不能授予 bypass/auto，CCR 只允许 acceptEdits/plan/default/auto）、继承模式的顺序取第一个可用模式；都没有时满足条件可默认 auto；再按主动性档位覆盖。返回模式、通知、各种“等待策略结论”标志。"}
+{"id":"chunk-e6aww6q8.js#d_","doc":"auto 闸门实时值：未被熔断（Pge）、当前主模型支持 auto、且 settings 未 disableAutoMode。"}
+{"id":"chunk-e6aww6q8.js#LM","doc":"auto 不可用的原因：settings / circuit-breaker / model，或 Els() 给出的其他原因。"}
+{"id":"chunk-sfy7bm1n.js#$ar","doc":"Bash 规则内容是否等价于“任意执行某危险前缀”：*、前缀本身、\"前缀:*\"/\"前缀 *\"/\"前缀*\"，或以前缀开头并以 * 结尾；网络/云命令只在子命令危险或含 $/` 时算；python -m 包名例外。"}
+{"id":"chunk-sfy7bm1n.js#uXr","doc":"PowerShell 规则是否危险：空/通配，或匹配 pwsh/cmd/iex/Invoke-Command/Start-Process/Add-Type/New-Object 等（含 .exe 形式）的前缀/通配形式。"}
+{"id":"chunk-tr0s0d0k.js#St","doc":"若 Shell 命令会读取宿主凭证（Windows 按 token 检查，其他平台按 wt 扫描），返回 hostCredential 来源的 deny 规则。"}
+{"id":"chunk-9rkt9tdt.js#G7o","doc":"settings.permissions.disableBypassPermissionsMode=\"disable\" 时返回原因文字。"}
+{"id":"chunk-6j594vm1.js#So","doc":"--permission-prompt-tool（SDK 宿主）协议：输入 {tool_name, input, tool_use_id?}；输出 allow {updatedInput?, updatedPermissions?, toolUseID?, decisionClassification?} 或 deny {message, interrupt?}；decisionClassification 为 user_temporary/user_permanent/user_reject。"}
+{"id":"chunk-6j594vm1.js#zgt","doc":"把权限提示工具的回复转成权限决定：allow 时应用 updatedPermissions（launcher 宿主直接应用；strict 宿主校验改写后的输入不命中 deny 规则、不丢失收紧项，否则拒绝）；deny+interrupt 中止当前回合。decisionReason 为 permissionPromptTool。"}
+{"id":"chunk-e6aww6q8.js#Wmn","doc":"把磁盘上（严格信任）各来源新出现的 deny 规则并入上下文（y$ 匹配的排前面），并按需开启 blockReadsOutsideWorkingDirectories。"}
+{"id":"chunk-e6aww6q8.js#sO","doc":"用更新函数修改拒绝跟踪状态：子代理写本地 localDenialTracking，主线程写 AppState.denialTracking；返回新状态。"}
+{"id":"chunk-e6aww6q8.js#Zjr","doc":"Bash/Monitor/PowerShell 的 allow 若来自沙箱自动放行或只读判定，返回 \"sandbox\"/\"readOnly\"（用于交给服务端分类器复核）。"}
+{"id":"chunk-e6aww6q8.js#rd","doc":"按 decisionReason 生成请求确认的说明文字（classifier/hook/rule/subcommandResults/permissionPromptTool/sandboxOverride/workingDir/safetyCheck/mode/asyncAgent），默认 \"Claude requested permissions to use X…\"。"}
+{"id":"chunk-e6aww6q8.js#iTr","doc":"运行 PermissionRequest 钩子：allow（仅在允许由钩子放行时）经 Lkn 生效；deny 直接拒绝（interrupt 时中止）；远程执行跳过；异常记日志返回 null。"}
+{"id":"chunk-e6aww6q8.js#nWr","doc":"ask 结果且 hooksMayRefuse 时先跑 PermissionRequest 钩子：deny 立即拒绝；allow 只在 hooksMayAllow 且改写后输入合法时经 Lkn 采用。"}
+{"id":"chunk-e6aww6q8.js#nCe","doc":"无法弹窗（shouldAvoidPermissionPrompts）或带 refusal 时，用 PermissionRequest 钩子代替人工；钩子无结论则拒绝（asyncAgent：\"Permission prompts are not available in this context\"）。"}
+{"id":"chunk-e6aww6q8.js#GE","doc":"对外的权限检查入口（canUseTool 的核心）：已给定结果时直接返回，否则走 resolveToolPermission。"}
+{"id":"chunk-e6aww6q8.js#gKe","doc":"完整判定：hasPermissionsToUseTool → refusal 时无提示解决 → PermissionRequest 钩子预处理 → 安全检查结果抑制“总是允许” → 放行后撤销重写拒绝计数 → 记录决定。"}
+{"id":"chunk-e6aww6q8.js#Kkn","doc":"找到能放行该工具的整工具 allow 规则（排除忽略整工具规则的工具、Chrome 地板、MCP 限制、computer-use 例外等）。"}
+{"id":"chunk-e6aww6q8.js#dTr","doc":"主判定：先跑规则/工具检查（abn，经插件 tool.check 裁决 aWr）；allow 直接返回（清零连续拒绝）；ask 时按模式处理——dontAsk 转拒绝；auto 依次走安全检查/ask 规则回退、acceptEdits 模拟快路径、安全白名单、插件/合成调用跳过、分类器（本地或服务端），拦截时计拒绝并在超限时回退人工；bypassPermissions 对安全检查弹窗限时处理；最后无法弹窗时用钩子或拒绝。"}
+{"id":"chunk-e6aww6q8.js#lne","doc":"写入拒绝跟踪状态（子代理写 localDenialTracking，否则写 AppState）。"}
+{"id":"chunk-e6aww6q8.js#ukn","doc":"拒绝超限（连续 3/累计 20）：headless 直接抛 AbortError；否则记日志，累计超限时清零计数，返回带 denialLimitFallback（可限时自动拒绝）的 ask 结果让人工审阅。"}
+{"id":"chunk-e6aww6q8.js#lWr","doc":"删除一条规则：policySettings/flagSettings/command 只读；可编辑层同时改文件；cliArg/session 只改内存。"}
+{"id":"chunk-e6aww6q8.js#Sq","doc":"把规则列表作为 addRules 更新应用到上下文。"}
+{"id":"chunk-e6aww6q8.js#kpn","doc":"从磁盘重载规则：先清空各 settings 层（托管独占时还清空 cliArg/session 与 mcpMount allow），再按 replaceRules 写入。"}
+{"id":"chunk-sfy7bm1n.js#_te","doc":"规则来源按顺序：userSettings、projectSettings、localSettings、flagSettings、policySettings、cliArg、command、session、mcpMount、toolsNarrowing、mcpServerPolicy、hostCredential。"}
+{"id":"chunk-sfy7bm1n.js#TH","doc":"收集 allow 规则；auto 模式下跳过危险规则（sme）与特定工具；CLAUDE_CODE_EVAL_CONFINED 时只用 cliArg；M() 判为被托管限制的来源之后的规则被截断。"}
+{"id":"chunk-sfy7bm1n.js#_","doc":"规则工具名是否匹配工具：同名、家族父工具、别名展开、glob 名、MCP 服务器级规则（mcp__server / mcp__server__*）。"}
+{"id":"chunk-sfy7bm1n.js#Qf","doc":"匹配 \"key: expected\" 形式的字段规则：对工具（及其别名、家族、MCP 服务器）的同行为规则，取输入字段值做通配比较；MCP 资源工具的 server 字段与 skill 名特判。"}
+{"id":"chunk-a76knw89.js#vbn","doc":"运行代码的工具（如 Monitor）沿用 Bash 的 deny/ask 规则：命中 Bash deny 则拒绝，命中 ask 则确认。"}
+{"id":"chunk-0h4e7gnq.js#r7e","doc":"由 disallowedTools 规则串构建过滤器：工具名集合、裸名集合、MCP 服务器级禁用，isToolDisallowed(tool) 综合判断（Bash 被禁时一并禁用 Monitor 等等价工具）。"}
+{"id":"chunk-e6aww6q8.js#abn","doc":"规则与工具自检阶段：已中止则抛错；deny 规则命中即拒绝；整工具 ask 规则返回 ask（Bash 在沙箱自动放行且启用 autoAllowBashIfSandboxed 时例外，mcpServerPolicy 在远程 bypass 下可豁免）；随后调用 tool.checkPermissions、安全修正、字段级 ask 规则、requiresUserInteraction、bypassPermissions 放行、allow 规则，最后把 passthrough 转为 ask。"}
+{"id":"chunk-e6aww6q8.js#N$i","doc":"对带内部标记（B6e）的 user 消息或 queued_command 附件，复制一份并把 task-notification 类 origin 的 producer 改成 \"session-task\"；其他消息原样返回。"}
+{"id":"chunk-e6aww6q8.js#IVs","doc":"返回本进程累计的 input/output/cache 读/cache 写 token，扣除恢复会话时 costLedger 记入的 restoredTokens（只统计本次运行实际消耗）。"}
+{"id":"chunk-e6aww6q8.js#Ogr","doc":"user 消息或 queued_command 附件是否是经核实的转发人类发言（verifiedSlackHumanTurn 且非 meta）。"}
+{"id":"chunk-e6aww6q8.js#lQe","doc":"poll_events 附件中含 principal 来源时保留；经核实的人类转发消息且有正文时保留；否则返回 undefined。"}
+{"id":"chunk-e6aww6q8.js#Sbr","doc":"分类器 API 出错时把错误、上下文对比数（mainLoopTokens/classifierChars/…）、被判动作、系统提示词和转录写到会话级 dump 文件（mode 0600），供 /share 收集；返回 {outcome: skipped|written|failed, path}。远程存储可用时写到存储层。"}
+{"id":"chunk-e6aww6q8.js#wbr","doc":"计算转录里 outcome 行的取值：有拒绝原因时按 TOOL_DENIAL_KIND_TO_OUTCOME 映射（rejected-by-user、blocked-by-permissions、automode-blocked…）；Shell 工具被中断为 interrupted；否则 error/ok。"}
+{"id":"chunk-e6aww6q8.js#VRe","doc":"取 tool_use id 末 6 位并把非 [A-Za-z0-9_-] 字符替换为下划线，用于转录行的 id 字段。"}
+{"id":"chunk-e6aww6q8.js#mU","doc":"把 U+2028/U+2029/U+0085 转义成 \\uXXXX，防止转录 JSONL 行被这些字符断开。"}
+{"id":"chunk-e6aww6q8.js#MJe","doc":"把对象序列化为一行 JSONL（去掉保留标签、转义行分隔符）并加换行，用于 repoVisibility/gitStatus 等附加上下文行。"}
+{"id":"chunk-e6aww6q8.js#RJe","doc":"把一个人类回合的文本格式化进转录：非转发时（可选）缩进引用；带回复信息时按 root/answers 生成线程回复头，并在 10 分钟窗口内上报 auto_mode_projects_thread_reply；Slack 入口加转发标记前缀。"}
+{"id":"chunk-e6aww6q8.js#KSt","doc":"子代理分类时，若 tengu_auto_mode_config.subagentInheritVerifiedTurns 打开，把父会话已核实的人类回合拼到消息前面，返回 {messages, inheritedPrefix}（前缀条数）。permissions.ts 的自动模式路径调用。"}
+{"id":"chunk-e6aww6q8.js#UJe","doc":"把主循环消息投影成分类器转录条目（user 文本、assistant 的 tool_use、tool_result 的 outcome/host_context/result_from、meta、omitted_turns）。assistant 文本默认不进转录（priorAssistantContext 时才带最近一段）；queued_command/poll_events/teammate_mailbox 附件按 frame（invisible/summary/relay-human…）处理；对 Claude Code Projects 的 owner 线程行做送达门、重复戳、副本不一致等否决计数并上报 auto_mode_projects_owner_rows；standingAskOut 非空时回传未答复的协调者提问。"}
+{"id":"chunk-e6aww6q8.js#eCe","doc":"工具名与别名 → Tool 对象的查找表。"}
+{"id":"chunk-e6aww6q8.js#$Sn","doc":"调 tool.toAutoClassifierInput(input) 得到分类器可见的输入投影，未定义时退回 JSON 串；抛错时（历史里的坏参数）记 tengu_auto_mode_malformed_tool_input 并退回原始 JSON。Chrome 中转工具改写开关打开时对字符串结果重新拼写工具名。"}
+{"id":"chunk-e6aww6q8.js#YRe","doc":"找到块对应的工具，且其分类器输入投影非空时返回该工具，否则 null（决定 outcome/host_context 等附属行是否输出）。"}
+{"id":"chunk-e6aww6q8.js#Bbr","doc":"转录 JSONL 行的键（工具名）去掉不可见字符；与保留键（user、assistant、outcome、id、meta、host_context、result_from、omitted）同名时加方括号，防止工具名伪造保留行。"}
+{"id":"chunk-e6aww6q8.js#HSn","doc":"把一个转录块序列化成 JSONL 行：tool_use → {\"<工具名>\": 投影, id?}；outcome → {\"outcome\": ok|error|interrupted|…, id} 或 {\"tool_result\": 文本}；host_context/result_from/meta；omitted_turns → 占位行；text → {\"<role>\": 文本}。工具无投影时返回 \"\"。"}
+{"id":"chunk-e6aww6q8.js#i5s","doc":"把消息与工具列表直接生成紧凑转录字符串（每行一个 JSONL 对象），供交接/子代理审查等调用；mainSessionLoop 时按需启用 Projects 线程行。"}
+{"id":"chunk-e6aww6q8.js#a5s","doc":"子代理结束交回控制时构造给分类器的最后一条 user 消息：审查指令 + 用 <subagent_hand_back> 包起来的子代理最终回复（声明为不可信输出，需检查转述的提示注入）。"}
+{"id":"chunk-e6aww6q8.js#qbr","doc":"生成系统提示词的“## Forwarded user turns”一节：说明 <forwarded_user_turns> 区段由 harness 用随机 key 标记，按 author（session_user/channel_participant/project_owner/unattributed）规定各自能否表达同意、清除 SOFT BLOCK。"}
+{"id":"chunk-e6aww6q8.js#Kbr","doc":"把父会话最近的人类回合拼成 <forwarded_user_turns key=…> 文本块（owner 回合带 written 时间），并附一句只认该 key 的说明；无回合返回 null。"}
+{"id":"chunk-e6aww6q8.js#Vbr","doc":"从 bootstrap 状态缓存读 CLAUDE.md 内容，包成 <user_claude_md> 的 user 消息（说明只有明确授权同一操作同一目标才算用户意图），带 cache_control；未缓存或为空时返回 null。"}
+{"id":"chunk-e6aww6q8.js#Xbr","doc":"生成系统提示词“Session Context”行：当前用户身份（$USER/… 分支规则据此解释）。"}
+{"id":"chunk-e6aww6q8.js#Qbr","doc":"动作在另一台机器执行时，把对方随请求带来的 hard_deny/soft_deny/allow/environment 规则拼成“Rules declared by the machine that will run this command”一节。"}
+{"id":"chunk-e6aww6q8.js#Jbr","doc":"组装自动模式分类器的系统提示词：基础模板（有严重度阈值时把 Output Format 换成 <severity> 格式）替换 <cross_session_messages_rule>、<permissions_template>，再填入 settings.autoMode 的 allow/soft_deny/hard_deny/environment 与用户 deny 规则块；附加 Session Context、Forwarded user turns 规则、工具说明与远端机器规则。返回 [{text, cache_control}, {text}?]。"}
+{"id":"chunk-e6aww6q8.js#dwr","doc":"把系统提示词末尾的“## Output Format”整节换成严重度输出格式（<severity>0–100</severity> + 可选 <category>）。"}
+{"id":"chunk-e6aww6q8.js#zUo","doc":"解析严重度模式的两阶段阈值 {t1, t2}（默认 15/20）：按调用点 severityBySite（\"off\" 关闭）或按模型 severityByModel（tengu_auto_mode_config）取值；未配置返回 null（走 <block> yes/no 模式）。返回 {value, src}。"}
+{"id":"chunk-e6aww6q8.js#gwr","doc":"第一阶段附在转录后的提示：GrowthBook s1SuffixByModel 覆盖；严重度模式用 SEVERITY_S1_SUFFIX；both 模式用“stage 1 不考虑用户意图”的版本，否则 XML_S1_SUFFIX（要求直接以 <block> 开头）。"}
+{"id":"chunk-e6aww6q8.js#IJe","doc":"解析 <block>yes|no：去掉 thinking 后恰好一种取值才返回 true/false，出现矛盾或没有则 null。"}
+{"id":"chunk-e6aww6q8.js#ESn","doc":"解析唯一的 <category>BLOCK 规则名</category>，归一成 slug 并校验在已知规则集合里，返回 {slug, name}；否则 undefined。"}
+{"id":"chunk-e6aww6q8.js#kwr","doc":"XML 两阶段分类器。stage 1（fast）：max_tokens 64/256、stop_sequences </block> 或 </severity>，判 allow 立即返回；fast 模式下 block/解析失败直接返回。stage 2（thinking）：max_tokens 8192，要求先 <thinking> 再 <block>/<severity>，结果覆盖 stage 1。请求走 MSn（带每次尝试超时、不可解析重试），querySource=auto_mode、skipSystemPromptPrefix、forceAttributionHeader。任何异常都 shouldBlock=true：中止→Classifier request aborted；上下文过长→transcriptTooLong；stage 2 出错但 stage 1 已判→按 stage 1 拦截；否则 unavailable。记录 tengu_auto_mode_outcome 并写错误 dump。"}
+{"id":"chunk-e6aww6q8.js#USn","doc":"动作的分类器投影为空（工具声明与安全无关）时的放行结果，classifierRan=false。"}
+{"id":"chunk-e6aww6q8.js#JCe","doc":"自动模式分类器入口（permissions.ts 的 auto 模式、AgentTool 交接审查、子代理等调用）。动作投影为空直接放行；本地分类器被 tengu_bright_dragonfly 关闭时拦截（CLASSIFIER_SWITCHED_OFF）。组装系统提示词、CLAUDE.md 前缀、转录（JSONL 行，最后一块与动作块打 cache_control）和附加上下文（repoVisibility、gitStatus），估算 classifierTokensEst=字符数/4 与主循环 token 对比；按 dpn 选模型，调用 classifyYoloActionXml；对暂时性错误（超时、连接、429、5xx）按 unavailableOuterRetries 指数退避重试；主模型不可用/被安全拒绝时在剩余时间预算内换备用模型；Sonnet 5 探测失败则降级。"}
+{"id":"chunk-e6aww6q8.js#OSn","doc":"分类器温度：环境变量 CLAUDE_CODE_AUTO_MODE_TEMPERATURE（有限数），默认 1。"}
+{"id":"chunk-e6aww6q8.js#dpn","doc":"选分类器模型：tengu_auto_mode_config.modelByMainModel / model（经组织模型策略校验）优先，且会忽略 CLAUDE_CODE_AUTO_MODE_MODEL 并告警；其次环境变量；再次外部默认 Sonnet 5（探测未降级时，externalDefault=true）；最后按主模型推导默认。返回 {value, src, externalDefault?}。"}
+{"id":"chunk-e6aww6q8.js#XRe","doc":"校验候选分类器模型：组织策略不允许、或来自 env 但安全防护会拒绝升级检查时，记一次日志并返回 undefined。"}
+{"id":"chunk-e6aww6q8.js#Lwr","doc":"读 tengu_auto_mode_config.twoStageClassifier：fast/thinking 原样，其他一律 both。返回 {value, src}。"}
+{"id":"chunk-e6aww6q8.js#jwr","doc":"转录是否按块分段（每条一个 text 块）：CLAUDE_CODE_AUTO_MODE_SEGMENTED_TRANSCRIPT > GrowthBook segmentedTranscript > false。"}
+{"id":"chunk-e6aww6q8.js#pU","doc":"上报 tengu_auto_mode_outcome（outcome、classifierModel、classifierType、failureKind、stopReason、errorKind、fallbackFrom…），并按成功/失败更新 permission_auto_mode_classifier 健康计数。"}
+{"id":"chunk-e6aww6q8.js#qwr","doc":"把分类器异常归类：wall_clock_timeout、connection_timeout、connection_error、安全监控拦截、http_<状态>（x-should-retry=false 时加 _no_retry）、连接错误码或 other。"}
+{"id":"chunk-e6aww6q8.js#k0e","doc":"把待判定的工具调用包成 assistant 的 tool_use 消息条目（可带 id），作为分类器的 action。"}
+{"id":"chunk-aepeg2w5.js#pW","doc":"从后往前找最近一条“决定性”人类回合（user 消息或人类 queued_command），返回 {decider:{index,origin,text,userDriven,strictHuman,scheduledTrigger}, referentTail: 其前一条 assistant 文本, scheduledTrigger}。"}
+{"id":"chunk-2a8yx6fc.js#dW","doc":"解析外部权限模板，返回 settings.autoMode 形状的默认规则 {allow, soft_deny, hard_deny, environment}（取自 <user_*_to_replace> 标签内的“- ”列表）；用于 `claude auto-mode defaults`。"}
+{"id":"chunk-2a8yx6fc.js#nt","doc":"取模板中某标签内的“- ”列表项，续行并入上一项。"}
+{"id":"chunk-2a8yx6fc.js#jWs","doc":"生成只含默认规则的外部分类器系统提示词（替换 permissions_template，用户规则槽为空，去掉跨会话规则），用于 `claude auto-mode critique`。"}
+{"id":"chunk-82kqcve8.js#yn","doc":"去掉文件名末尾的 .md（plans 用）。"}
+{"id":"chunk-82kqcve8.js#Vg","doc":"lstat 计划目录下 <name>.md，返回 {publishDiscipline:\"inPlace\", mode}（低 9 位权限）；文件不存在或远程模式返回默认状态。"}
+{"id":"chunk-82kqcve8.js#Eo","doc":"路径比较前的大小写归一：toLowerCase，并把土耳其无点 ı 与长 s ſ 折成 i/s，防止 Unicode 大小写绕过。"}
+{"id":"chunk-82kqcve8.js#Pp","doc":"判断路径是否落在项目或用户的 .claude/skills/<名>/ 下，是则返回 {skillName, pattern:\"/.claude/skills/<名>/**\" 或 \"~/.claude/skills/<名>/**\"}，用于“仅允许编辑这个 skill”建议；名字含通配、..、反斜杠、内置/保留 skill 名或子路径再含 .claude 时返回 null。"}
+{"id":"chunk-82kqcve8.js#aYe","doc":"posix 风格的相对路径；Windows 上先把两端转成 posix 形式再算。"}
+{"id":"chunk-82kqcve8.js#KP","doc":"Windows 上把路径转成 posix 形式，其他平台原样返回。"}
+{"id":"chunk-82kqcve8.js#no","doc":"所有设置文件路径：各 SETTING_SOURCES 的文件、每个配置目录下的用户设置文件名，WSL 下再加 Windows 侧 managed-settings.json。"}
+{"id":"chunk-82kqcve8.js#Mc","doc":"遍历每个设置文件的路径链，若末端是符号链接，把链上每种拼写（规范化后）映射回该设置文件；结果按路径集合缓存 2 秒。出错时 2 秒内视为没有链接。"}
+{"id":"chunk-82kqcve8.js#Bi","doc":"返回 [当前项目根] 或 [项目根, 另一根目录]（第二个来自 lo()，未确认含义），用于 .claude 配置路径判定。"}
+{"id":"chunk-82kqcve8.js#hwe","doc":"路径是否是 Claude 设置文件本身，或是指向设置文件的符号链接的某种拼写。"}
+{"id":"chunk-82kqcve8.js#Cc","doc":"判断路径是否是 Claude Code 设置文件：任何 .claude/settings(.local).json、SETTING_SOURCES 的各文件、managed-settings drop-in 目录下文件，以及配置目录/项目 .claude 目录 realpath 后的同名文件。"}
+{"id":"chunk-82kqcve8.js#Tp","doc":"是否是 Claude 配置文件：设置文件（含链接）或项目根下 .claude/commands、.claude/agents、.claude/skills 里的文件。"}
+{"id":"chunk-82kqcve8.js#eYt","doc":"内置 skill 参考文件的解压根目录 <临时目录>/bundled-skills/<版本>/<随机 nonce>，进程内缓存；读权限对其放行。"}
+{"id":"chunk-82kqcve8.js#nR","doc":"会话 scratchpad 目录 <项目临时目录>/<sessionId>/scratchpad，按 sessionId 缓存；无项目临时目录时为 null。"}
+{"id":"chunk-82kqcve8.js#ywe","doc":"scratchpad 功能开启且非远程时创建会话 scratchpad 目录（0700）并返回路径，否则 null。"}
+{"id":"chunk-82kqcve8.js#l4","doc":"路径是否是当前会话 scratchpad 目录本身或其下（大小写归一比较，并排除 s3 列出的特殊子路径）。"}
+{"id":"chunk-82kqcve8.js#yc","doc":"在每个配置目录候选路径下查找名为 entryName 的条目（jobs、daemon、shell-snapshots…），与给定路径的各拼写逐段比较（含 Windows 短名），返回每个命中的 {written, folded} 余下路径段。"}
+{"id":"chunk-82kqcve8.js#Bc","doc":"Windows 上把路径扩展成它可能打开的所有拼写（短名、尾点/空格、链接目标…，最多查 40 个）；非 Windows 原样。返回 {spellings, notFollowed}（未能解析的第一个拼写）。"}
+{"id":"chunk-82kqcve8.js#Sn","doc":"写入目标若落在配置目录的 jobs/（只放行后台会话的 tmp）、daemon/、daemon.json、shell-snapshots/、session-env/ 或 adopt.json（含 Windows 短名与临时文件替身），返回对应 deny 结果；Windows 上拼写无法确定时也拒绝。tengu_merry_boot 控制新规则是否生效。"}
+{"id":"chunk-82kqcve8.js#Pi","doc":"路径是否是 CLAUDE_CODE_HOST_CREDS_FILE 指向的宿主凭证文件（任一拼写）。"}
+{"id":"chunk-82kqcve8.js#Hc","doc":"后台会话（CLAUDE_CODE_SESSION_KIND=bg）中，路径是否落在 $CLAUDE_JOB_DIR/tmp/ 下（且 CLAUDE_JOB_DIR 在配置目录 jobs/ 内）。"}
+{"id":"chunk-82kqcve8.js#d4","doc":"自动编辑（acceptEdits/自动放行）前的路径安全检查：远程模式一律不安全；可疑 Windows 路径（设备命名空间、短名、尾点、UNC…）；Claude 设置文件（含经链接，classifierApprovable 取决于是否经链接）；Claude 配置文件（commands/agents/skills）；危险文件/目录（Xp）。返回 {safe:true} 或 {safe:false, message, classifierApprovable, circuitBreaker?}。"}
+{"id":"chunk-82kqcve8.js#ru","doc":"path 是否在 workingPath 内：两端展开为绝对路径，macOS /private/var、/private/tmp 归一为 /var、/tmp，可选大小写折叠与 UNC 形状一致性检查，再看 posix 相对路径是否不以 .. 开头且非绝对。"}
+{"id":"chunk-82kqcve8.js#sYt","doc":"规则来源对应的根目录：cliArg/command/session 等会话来源用当前工作目录；settings 各层用该设置文件所在目录的根。"}
+{"id":"chunk-82kqcve8.js#_c","doc":"把带根的规则模式换算成相对 rootPath 的 gitignore 模式列表：同根直接加 /；模式在根下取后缀；根在模式下用 stripPatternPrefixSegments 吃掉前缀段；无关返回 []。"}
+{"id":"chunk-82kqcve8.js#Qp","doc":"用 gitignore 语义让模式逐段匹配并消耗前缀目录段（支持 **），返回剩余模式集合（全部消耗则为 **）。"}
+{"id":"chunk-82kqcve8.js#iYt","doc":"把按根分组的忽略模式统一换算成相对 root 的模式列表（含模式根的 realpath 版本），供 ripgrep 等搜索工具的忽略规则使用。"}
+{"id":"chunk-82kqcve8.js#aYt","doc":"Read 的 deny 规则按根分组的模式表（去掉 ! 取反项）；WSL 第二根挂载开启时为每个挂载根复制一份。"}
+{"id":"chunk-82kqcve8.js#Qc","doc":"解析路径规则模式的根：//x 为文件系统根（Windows //c/ 为盘符根）、C:\\ 盘符、~/ 为家目录、/x 为规则来源根，其余相对模式 root=null（匹配时用 cwd）。返回 {relativePattern, root}。"}
+{"id":"chunk-82kqcve8.js#KJo","doc":"对相对或含 .. 的路径，把它的尾部依次拼到每条 Read/Edit deny 规则的根（及根下各前缀）后再匹配，返回第一条命中的 deny 规则（用于 shell 命令里写法不定的路径）。"}
+{"id":"chunk-82kqcve8.js#VJo","doc":"搜索根目录下是否有路径被 Read deny 规则覆盖（规则根在搜索根内，或规则段与相对路径前缀匹配），返回第一条这样的规则；用于 Grep/Glob 搜索根的预检。"}
+{"id":"chunk-82kqcve8.js#xa","doc":"matchingRuleForInput 的外层：先按原路径匹配；deny/ask 未命中时再查（WSL 第二根挂载开启时）路径在另一挂载根下的拼写，命中则上报 tengu_path_rule_matched_through_second_root_mount。"}
+{"id":"chunk-82kqcve8.js#kc","doc":"在按根分组的 gitignore 匹配器里找命中路径的规则：路径换成相对规则根的形式（Windows 与 caseInsensitiveTarget 时大小写折叠，目录加 /），倒序取最后一条命中；处理 x/** 与 /x 的等价写法。返回规则对象或 null。"}
+{"id":"chunk-82kqcve8.js#WA","doc":"读权限判定：1 Read deny 规则（每种拼写）→ deny；2 记忆暂停时读记忆 → deny；3 restricted / blockReadsOutsideWorkingDirectories 下工作目录外的读 → deny 或 ask；路径无法解析 → deny；4 dYe 额外检查；5 Read ask 规则 → ask；6 若同一路径可编辑（checkWritePermissionForTool 以非 plan 上下文判定为 allow）则读也允许；7 在工作目录内 → allow；8 内部可读路径（checkReadableInternalPath）；9 Read allow 规则；否则 ask 并给出 addRules/addDirectories 建议。"}
+{"id":"chunk-82kqcve8.js#Y_","doc":"写权限判定：1 j9r 早期判定（deny 规则、受保护路径等）；2 会话里允许的 skill 目录规则；3 Edit ask 规则 → ask；4 内部可编辑路径（计划文件、scratchpad、记忆…）→ allow 或 deny；5 checkPathSafetyForAutoEdit 不安全 → ask（建议限定 skill 规则或 acceptEdits）；6 plan 模式 → ask；7 acceptEdits 且在工作目录内 → allow；8 Edit allow 规则 → allow；9 其他 → ask（工作目录外附 addDirectories 建议，经符号链接落到目录外时说明）。"}
+{"id":"chunk-82kqcve8.js#Ewe","doc":"写入目标本身是符号链接时拒绝，提示改写链接目标路径。"}
+{"id":"chunk-82kqcve8.js#TPe","doc":"请求路径经符号链接后落点与原拼写不同时，返回 {landing, landingOutside, spellingInside, carriedOut}（carriedOut=原拼写在工作目录内而落点在外）。"}
+{"id":"chunk-82kqcve8.js#dYt","doc":"路径是否是只能由人改的内部文件（checkEditableInternalPath 精确匹配为 deny），供 Bash/PowerShell 路径校验使用。"}
+{"id":"chunk-82kqcve8.js#UAt","doc":"生成权限对话框的建议更新：工作目录外的读 → 对父目录的 Read 会话规则；写/创建 → 可切到 acceptEdits 时建议 setMode，目录外再加 addDirectories；其他只给 setMode 建议。"}
+{"id":"chunk-82kqcve8.js#fYe","doc":"内部路径写判定：拒绝写宿主凭证文件、配置目录 jobs/daemon/shell-snapshots/session-env/adopt.json、seed-admin、profile store、settings-review store、记忆暂停时的记忆文件；放行（返回 allow，denySpeculation 包装）当前会话计划文件、workflow 脚本、scratchpad、后台会话 tmp、agent/auto memory 的 .md、.claude/launch.json；否则 passthrough。"}
+{"id":"chunk-82kqcve8.js#vwe","doc":"内部路径读判定：放行项目目录、计划文件、工具结果文件、scratchpad、后台会话 tmp、项目临时目录、agent/auto memory、tasks/teams、（readBlockFence 时）用户 CLAUDE.md 与 skills/plugins/rules/agents/commands、内置 skill 参考文件；记忆暂停时拒绝读记忆；否则 passthrough。"}
+{"id":"chunk-9mf2agcn.js#Dp","doc":"Claude 临时根目录：CLAUDE_CODE_TMPDIR，否则系统 tmpdir()。"}
+{"id":"chunk-fq0cr76a.js#Eqt","doc":"沙箱开启且 deny 列表完整时，路径的每种拼写都在沙箱写允许列表内（且不在 denyWithinAllow 内）才返回 true；用于沙箱下自动放行 Bash 写操作。"}
+{"id":"chunk-fq0cr76a.js#Ide","doc":"处理含 “目录/..” 的路径：逐段解析符号链接后再判定（Windows 直接 undefined）；读操作若 .. 前有 glob 且开启了外部读拦截或有 Read deny 规则，返回不可判定的 safetyCheck。"}
+{"id":"chunk-fq0cr76a.js#qF","doc":"Bash/PowerShell 路径参数校验入口：UNC、~user/~+/~-、$ % ` = 等 shell 展开、目录后的 .. 遍历、写目标含花括号、写目标含 glob 一律要人工确认；读的 glob 按基目录判定；其余解析为绝对路径后交给 isPathAllowed。返回 {allowed, resolvedPath, decisionReason}。"}
+{"id":"chunk-r01896cg.js#W9r","doc":"解析命令得到 {rootNode, envVars, commandNode, originalCommand}：空串或超过 MAX_COMMAND_LENGTH(10000) 返回 null；用 S_().parse（内置 TS 解析器，带缓存）解析，找第一个 command 节点并提取前导 VAR=val。异常吞掉返回 null。"}
+{"id":"chunk-r01896cg.js#XW","doc":"安全分析用的原始解析：空串返回 null；超长、解析返回 null 或抛异常时上报 tengu_tree_sitter_parse_abort（cmdLength、panic）并返回 PARSE_ABORTED 哨兵。"}
+{"id":"chunk-r01896cg.js#rR","doc":"PARSE_ABORTED 哨兵 Symbol：解析器超时/超预算/超长时由 parseCommandRaw 返回，parseForSecurityFromAst 见到它即返回 too-complex（nodeType PARSE_ABORT）。"}
+{"id":"chunk-r01896cg.js#Twe","doc":"在 AST 中找第一个 command/declaration_command 节点：穿过 pipeline、redirected_statement；variable_assignment 时取父节点中其后的命令节点。"}
+{"id":"chunk-r01896cg.js#sn","doc":"取 command 节点开头的 VAR=val 文本（遇到 command_name/word 停止）。"}
+{"id":"chunk-r01896cg.js#Vst","doc":"从命令节点提取去引号的参数列表：declaration_command 只返回关键字；遇到命令/进程替换即截断（concatenation 中含替换的命令名保留原文）。供前缀提取与 shell-quote 回退使用。"}
+{"id":"chunk-r01896cg.js#LN","doc":"安全解析入口（2.1.88 parseForSecurity 的 316 版）：空串/解析失败返回空 simple；否则调用 parseForSecurityFromAstWithLoopCheck，simple 结果附带 tree。选项 readsDivergentShapes 用于按“分歧形态”重读。被 Shell.exec 的 worktree 守卫、命令文本日志与 shell -c 递归检查使用。"}
+{"id":"chunk-r01896cg.js#w1","doc":"parseForSecurityFromAst 的包装：先以 first 轮运行；若结果 simple 且含循环、且 GrowthBook tengu_snappy_tower 打开，再以 later 轮（循环体按迭代后状态重走）运行，两次结果不深度相等时加 laterLoopPassesDiffer。BashTool 权限检查的主要调用点。"}
+{"id":"chunk-r01896cg.js#at","doc":"Bash 安全分析核心：先做字节级预检（孤立代理项、控制字符、Unicode 空白、反斜杠空白、zsh ~[ / =cmd / <N-M>、花括号内引号），再查解析中止、反引号扫描异常、顶层语句之间/末尾是否有解析器跳过的字节、fd 变量重定向、重定向形状、结构性解析错误；然后保存/重置模块级分析状态，调用 walkProgram 收集 SimpleCommand。返回 {kind:'simple', commands, bareAssignmentNames, hasLoop, …} 或 {kind:'too-complex', reason, nodeType?, differential?, divergentShape?, keepsRemovalVerdict?}；可附 usesAssignedValue、uncertainWrite、declarationPrefixes。"}
+{"id":"chunk-r01896cg.js#On","doc":"遍历 program：先跑 Tar 预检，再 collectCommands 收集命令与裸赋值名；对每条命令检查 zsh stat -A/-H 与声明上下文（local 在函数外等）。返回 {kind:'simple', commands, bareAssignmentNames, hasLoop}。"}
+{"id":"chunk-r01896cg.js#I","doc":"递归收集简单命令（2.1.88 collectCommands 的大幅扩展版）：处理 command、redirected_statement、program/list/pipeline（|| 与 & 分支复制作用域，pipeline 末段外的赋值不外泄）、negated_command、declaration_command（declare/typeset/local/export/readonly 的大量 zsh/bash 分歧检查与变量跟踪）、variable_assignment（执行影响变量、整数属性变量拒绝）、for/while/if（作用域合并与循环变量限制）、subshell、test_command、unset_command；不认识的节点交给 tooComplex。返回 null 表示继续，返回结果对象表示终止。"}
+{"id":"chunk-r01896cg.js#qn","doc":"把一个 command 节点变成 SimpleCommand：逐子节点处理前缀赋值（同命令内前缀互相引用即拒绝）、command_name（环境清洗开启时命令名不能是变量）、参数（以 - 开头且含运行期内容拒绝）、$var、file/herestring 重定向；之后检查重定向读前缀变量、按命令更新变量作用域（applyCommandVariableWrites）。text 字段在含 $ 或换行时用重新加引号的 argv 重建。"}
+{"id":"chunk-r01896cg.js#M","doc":"把参数节点解析成字符串：word（拒绝花括号展开、转义花括号、漏解析的 $ 或反引号、被吞的引号）、number、raw_string、string、concatenation（拒绝子节点间遗漏字节、zsh $name[expr]）、算术展开（返回 VAR_PLACEHOLDER）、$var；其余 too-complex。"}
+{"id":"chunk-r01896cg.js#qt","doc":"解析双引号字符串：拼接 string_content，处理 $（拒绝 $[...]、zsh $+ 等前缀标志）、$(cat <<EOF) 安全内联、其他命令替换（递归收集并以 CMDSUB_PLACEHOLDER 代替）、$var（按作用域取值）、算术展开；子节点间间隙含反引号时拒绝。"}
+{"id":"chunk-r01896cg.js#Ge","doc":"解析 NAME=value / NAME+=value：命令替换值记为 CMDSUB_PLACEHOLDER，$var 按作用域解析，其余经 walkArgument；返回 {name, value, isAppend} 或 too-complex。"}
+{"id":"chunk-r01896cg.js#fe","doc":"解析 $var：作用域里有值时返回值（不确定值→too-complex+divergentShape；动态变量只在引号内且是安全环境变量时返回占位符；裸用时空值或含空白/通配的值拒绝）；HOME 取本机 homedir；引号内的安全环境变量与特殊变量返回 VAR_PLACEHOLDER；其余 too-complex。"}
+{"id":"chunk-r01896cg.js#Ce","doc":"把赋值写入变量作用域：分支内或值冲突时标为未知（VAR_PLACEHOLDER），+= 累加，否则覆盖。"}
+{"id":"chunk-r01896cg.js#Fn","doc":"处理 redirected_statement：分离 file/heredoc 重定向与内层命令；内层是 a && b 的 list 时分两段收集；随后解析每个文件重定向、检查重定向读前缀变量、校验 heredoc，并把重定向挂到最后一条命令上（无命令时推入空 argv 命令）。"}
+{"id":"chunk-r01896cg.js#Ee","doc":"解析单个 file_redirect 为 {op, target, fd, targetSourceLiteral}：拒绝 fd 变量、关闭 fd 后跟词、多目标、>& 后以 - 开头、含花括号/替换的目标、含命令替换输出/换行/以 ! 或 = 开头的目标，以及 >& 后非简单路径。"}
+{"id":"chunk-r01896cg.js#Ue","doc":"校验 heredoc：必须有被扫描的正文；分界符未加引号时只在 plainUnquotedHeredocs 模式且正文只含可静态解析的 $name 时放行，否则 too-complex（differential）；引号分界符含反斜杠、<<- 配制表符分界符、正文行以分界符开头后跟 ) ` } 等也拒绝。可选允许分界行后紧跟一个简单管道。"}
+{"id":"chunk-r01896cg.js#Ht","doc":"校验 here-string（<<<）：参数需可静态解析，禁止 fd 变量与换行后注释。"}
+{"id":"chunk-r01896cg.js#Ct","doc":"遍历 [[ ]]/[ ] 内表达式，把运算符和操作数压入 argv：拒绝 zsh $name[expr]、!( 粘连、regex/extglob 中的展开/进程替换/=(CMD)/未加引号 &/粘连 ||/括号不平衡、独立 ]] 闭合符等 shell 词法分歧。"}
+{"id":"chunk-r01896cg.js#Je","doc":"校验算术展开：叶子只能是数字字面量或运算符，引用变量即 too-complex。"}
+{"id":"chunk-r01896cg.js#Kn","doc":"识别 $(cat <<'EOF' … EOF) 这种安全的字面量替换：只含一个 cat 命令和一个合法 heredoc 时返回正文；正文含 /proc/*/environ 或危险 awk 程序时返回 'DANGEROUS'；否则 null。"}
+{"id":"chunk-r01896cg.js#w","doc":"把无法分析的节点转成 too-complex：ERROR 节点按是否为 $+非 ASCII 给不同理由，其他类型用 DANGEROUS_TYPES 中的中文化描述（如“A nested command”）。"}
+{"id":"chunk-r01896cg.js#Yst","doc":"对 simple 结果做语义检查（2.1.88 checkSemantics 的扩展）：先剥去 time/nohup/timeout/nice/env/stdbuf/command/builtin/noglob/xargs 包装（参数不规范即拒绝），再检查命令名为空/占位符/片段、test -v 等下标求值、eval 类内建、zsh 危险内建、awk 危险程序、find -exec 类、shell 关键字作命令名、/proc/*/environ、换行后 #（kind:'newline-hash'）等。返回 {ok:true} 或 {ok:false, reason, kind?}。"}
+{"id":"chunk-r01896cg.js#Qe","doc":"递归分析 $(…)：要求子节点之间只有空白/分号/续行（否则“bytes no parsed node accounts for”），内部命令以复制的作用域收集进同一命令列表，空替换补一条 true 命令。"}
+{"id":"chunk-r01896cg.js#Gn","doc":"按命令语义更新变量作用域：识别 builtin/command/noglob 包装（zsh/bash 行为不同时拒绝）、前缀赋值、declare 类、read（含 zsh read 分歧检查）、printf -v、unset、print、set -A、mapfile、cd/pushd/popd（标 PWD/OLDPWD 未知），以及声明前缀（declarationPrefix）模式下的赋值核对；写入受保护变量即 too-complex。"}
+{"id":"chunk-r01896cg.js#se","doc":"遍历子树，把可能被写入的变量在作用域中标为未知（赋值、for 变量、read/mapfile/unset、包装命令中的赋值等；跳过函数定义/子 shell/替换与后台命令）。用于循环与 while 条件。"}
+{"id":"chunk-r01896cg.js#mt","doc":"later 轮次下重新遍历循环体（嵌套超过 MAX_LOOP_NESTING=5 即 too-complex），返回循环中值被改变的变量名；保存/恢复相关模块级状态。"}
+{"id":"chunk-r01896cg.js#kar","doc":"判断命令 argv 或非 heredoc 重定向目标中是否有会被 shell 通配展开的模式（结合 argvUnquotedGlob 与占位符）。"}
+{"id":"chunk-r01896cg.js#z","doc":"简易扫描：命令文本在未加引号处（跳过单/双引号、反引号、注释）出现 * ? [ 即为真。写入 SimpleCommand.hasUnquotedGlob。"}
+{"id":"chunk-r01896cg.js#bt","doc":"把单/双引号与反引号内的 { 替换为空格，用于 BRACE_WITH_QUOTE_RE 预检，避免把引号里的花括号当成展开混淆。"}
+{"id":"chunk-r01896cg.js#Si","doc":"值中是否含任一占位符（CMDSUB / TRACKED_VAR / UNCERTAIN_VAR）。"}
+{"id":"chunk-r01896cg.js#c4","doc":"把占位符换成 $(…) / ${…}，用于给用户看的理由文本。"}
+{"id":"chunk-r01896cg.js#q9r","doc":"为 n 个声明前缀生成“bash 是否保留赋值”的若干种布尔组合：n≤3 全枚举（exhaustive），否则取全假/全真/单个为真，并补上当前组合。供 shell -c 递归检查逐种读法判定。"}
+{"id":"chunk-r01896cg.js#GAt","doc":"检查 awk 程序文本：system()、命令管道/getline、@load/@include/间接调用、extension()、/inet/ 网络套接字，命中返回理由，否则 false。"}
+{"id":"chunk-r01896cg.js#qst","doc":"是否为影响命令查找/执行的变量（PATH、HOME、IFS 之外的 fpath/cdpath/LANG/LC_* 等，及 LD_*/DYLD_*/BASH_FUNC_* 前缀），大小写不敏感。"}
+{"id":"chunk-r01896cg.js#u4","doc":"受保护 shell 变量：执行影响变量、IFS、PS4、PROMPT4 或整数属性变量。ShellSnapshot 解析导出变量时也用它过滤。"}
+{"id":"chunk-r01896cg.js#nQo","doc":"提取文本中所有 ${…} 的内部内容（尊重引号与嵌套）。"}
+{"id":"chunk-r01896cg.js#mYe","doc":"去掉引号内的内容和转义字符，只保留未加引号的部分。"}
+{"id":"chunk-r01896cg.js#rQo","doc":"命令名是否为 eval 类内建、zsh 危险内建、exec 包装或 rm/rmdir。"}
+{"id":"chunk-r01896cg.js#tQo","doc":"把节点类型映射为数字 id（未定义 -2、ERROR -1、DANGEROUS_TYPE_IDS 下标+1、其他 0），用于 tengu_bash_ast_too_complex 遥测。"}
+{"id":"chunk-r01896cg.js#Qn","doc":"节点类型 → 用户可读描述（A variable、A nested command、A here-document…），tooComplex 生成理由时使用。"}
+{"id":"chunk-r01896cg.js#S","doc":"把变量在作用域中标为未知值 VAR_PLACEHOLDER（已是不确定值时保持）。"}
+{"id":"chunk-r01896cg.js#Wt","doc":"递归检查所有重定向节点的形状：文件重定向交给 checkFileRedirectShape；here-string/heredoc 禁止 fd 变量，heredoc 起始行后只能跟文件重定向或管道。"}
+{"id":"chunk-r01896cg.js#Mt","doc":"检查 file_redirect：子节点之间不能有被解析器丢掉的字节，不能用 fd 变量，>&/<& 后不能以 - 开头，关闭 fd 后不能跟词，目标不能多于一个。"}
+{"id":"chunk-r01896cg.js#kt","doc":"找结构性解析错误：空的非 heredoc 节点返回 Parse error；[ 紧贴后续单词时返回理由。"}
+{"id":"chunk-e6aww6q8.js#q2t","doc":"快速判断命令是否含 zsh 危险命令：能安全解析时用 AST argv，否则用 splitCommand + tryParseShellCommand 回退，逐条交给 validateZshDangerousCommands。"}
+{"id":"chunk-e6aww6q8.js#bOo","doc":"反复剥掉命令文本开头的重定向词（<<< word、>file、2>&1 等），返回剩余部分；用于识别以重定向开头的命令。"}
+{"id":"chunk-e6aww6q8.js#jDo","doc":"shell -c 递归检查辅助：脚本前只有一个 cd 且其余以 && 连接时，解析 cd 目标并调用 Vze 计算新 cwd；远程执行或带 -C/-D/--chdir/su 等时放弃。"}
+{"id":"chunk-38axkkfw.js#uot","doc":"AST 中是否有 ERROR 节点。"}
+{"id":"chunk-38axkkfw.js#A","doc":"子树中是否有重定向节点在运算符后跟了多于一个词（多余的词会变成命令的隐藏参数）。"}
+{"id":"chunk-k5vy5m8c.js#Qe","doc":"S_().parse 的实现：按命令文本缓存 AST（最多 64 条或总长 32000 字符，按最旧淘汰），缓存键还核对 tengu_tingly_pearl / tengu_calm_nautilus / tengu_foamy_heron 三个闸门的当前值；显式超时或超长时不走缓存。"}
+{"id":"chunk-k5vy5m8c.js#he","doc":"纯 TS bash 解析主函数：建立 lexer 与解析状态（节点上限 50000、默认 50ms 超时、UTF-8 字节偏移），parseProgram 产出 tree-sitter-bash 形状的节点树；超时/超预算返回 null；检测到 zsh 花括号/条件括号/$ 操作数/关键字错位等分歧时把根包成 ERROR。"}
+{"id":"chunk-k5vy5m8c.js#w","doc":"词法分析下一个 token（EOF/NEWLINE/COMMENT/OP/WORD/NUMBER…），cmd 上下文把 [ 视为运算符，arg 上下文视为单词字符。"}
+{"id":"chunk-k5vy5m8c.js#Ve","doc":"解析整个程序：跳过前导空行，循环解析语句列表与注释，生成 program 节点。"}
+{"id":"chunk-k5vy5m8c.js#A","doc":"解析语句序列直到 terminator：处理换行（触发 heredoc 正文扫描）、注释、; & 等分隔符。"}
+{"id":"chunk-k5vy5m8c.js#Oe","doc":"解析 && / || 链为 list 节点；右侧是 redirected_statement 时调整节点结构以对齐 tree-sitter。"}
+{"id":"chunk-k5vy5m8c.js#xe","doc":"解析 | / |& 管道。"}
+{"id":"chunk-k5vy5m8c.js#U","doc":"解析一条命令：复合语句（if/while/for/case/function/子 shell/{}/[[ ]]/(( ))）、声明、unset 或简单命令，并附加重定向。"}
+{"id":"chunk-k5vy5m8c.js#Ye","doc":"解析简单命令：前缀赋值、命令名、参数、重定向混排。"}
+{"id":"chunk-k5vy5m8c.js#j","doc":"尝试解析一个重定向（含 fd 前缀、{var}、>&、&>、<<、<<<、heredoc 登记）。"}
+{"id":"chunk-k5vy5m8c.js#ue","doc":"在换行处扫描挂起的 heredoc 正文，回填 heredoc_body/heredoc_end 节点。"}
+{"id":"chunk-k5vy5m8c.js#C","doc":"解析一个词（裸词、引号串、$ 展开、反引号、花括号、拼接）。"}
+{"id":"chunk-k5vy5m8c.js#K","doc":"解析 $ 开头的结构：$var、${…}、$(…)、$((…))、$'…'、$\"…\"。"}
+{"id":"chunk-k5vy5m8c.js#l","doc":"创建节点 {type, text, startIndex, endIndex, children}（偏移为 UTF-8 字节），同时计数检查预算。"}
+{"id":"chunk-k5vy5m8c.js#Xe","doc":"节点数超过 50000 或每 128 个节点检查一次超时，超出则标 aborted 并抛错中止解析。"}
+{"id":"chunk-r01896cg.js#St","doc":"递归检查 declare/unset 语句的写法：标志会改变赋值语义且有会被求值的操作数、相邻引号片段拼成一个操作数、$'…' 标志、拼写成别的命令但实为声明等，返回 too-complex。（实为 ast.ts 安全检查，被切到 bashParser.ts）"}
+{"id":"chunk-r01896cg.js#$t","doc":"检查声明命令的选项组合：列举型选项与赋值同用、readonly 重复命名、选项出现在名字之后、bash/zsh 不共同支持的选项，返回理由或 null。"}
+{"id":"chunk-r01896cg.js#Tt","doc":"检查声明上下文分歧：local 在函数外赋值、export/readonly 给名字加数组属性，返回理由或 null。"}
+{"id":"chunk-r01896cg.js#Bt","doc":"在子树中找 {name}> / {name}< 形式的 fd 变量重定向，返回其文本（会给 shell 变量赋值，属副作用）。"}
+{"id":"chunk-e6aww6q8.js#sze","doc":"深度优先访问 AST 每个节点。"}
+{"id":"chunk-e6aww6q8.js#mOo","doc":"收集所有 pipeline 中 | / |& 的字节区间并排序。"}
+{"id":"chunk-e6aww6q8.js#gOo","doc":"收集 > / >> 文件重定向的 {startIndex, endIndex, target, operator}。"}
+{"id":"chunk-e6aww6q8.js#AKt","doc":"基于 AST 的命令对象：getPipeSegments 按管道字节位置切段，withoutOutputRedirections 按字节删除输出重定向并规整空白，getOutputRedirections 返回 {target, operator}；还携带 treeSitterAnalysis（引号上下文、复合结构、危险模式）。"}
+{"id":"chunk-e6aww6q8.js#ize","doc":"由已解析的 AST 根构建 TreeSitterParsedCommand（管道位置、重定向、analyzeCommand 结果）。"}
+{"id":"chunk-e6aww6q8.js#CKt","doc":"动态导入 parser 模块解析命令并构建 TreeSitterParsedCommand；失败返回 null（316 已无正则回退）。"}
+{"id":"chunk-e6aww6q8.js#xKt","doc":"ParsedCommand 的实现类：只缓存上一条命令的解析 Promise；在“关闭”上下文（$dt）中直接解析不缓存，命中缓存时若期间触发过关键字规则则调用 KPn 记录。"}
+{"id":"chunk-e6aww6q8.js#aze","doc":"全局 ParsedCommand 单例，parse(command) 返回 TreeSitterParsedCommand 或 null。"}
+{"id":"chunk-e6aww6q8.js#rze","doc":"收集 AST 中单引号串、$'…'、双引号串、引号分界的 heredoc 的字节区间。"}
+{"id":"chunk-e6aww6q8.js#uOo","doc":"生成三种去引号视图：withDoubleQuotes（只去单引号内容与双引号定界符）、fullyUnquoted（去掉所有引号区间）、unquotedKeepQuoteChars（清空引号内容但保留引号字符）。供基于文本的危险模式检查。"}
+{"id":"chunk-e6aww6q8.js#cOo","doc":"提取顶层复合结构：运算符序列（&& || ;）、各段文本，以及是否有管道、子 shell、命令组。"}
+{"id":"chunk-e6aww6q8.js#fOo","doc":"AST 中是否有 ; && || 或 list 节点。"}
+{"id":"chunk-e6aww6q8.js#pOo","doc":"统计 AST 中是否出现命令替换、进程替换、参数展开、heredoc、注释。"}
+{"id":"chunk-e6aww6q8.js#RKt","doc":"汇总 AST 分析：quoteContext、compoundStructure、hasActualOperatorNodes、dangerousPatterns。"}
+{"id":"chunk-e6aww6q8.js#oze","doc":"参数是否为 spec 中的子命令名（大小写不敏感，支持别名数组）。"}
+{"id":"chunk-e6aww6q8.js#fne","doc":"用 Fig spec 静态计算命令前缀（用于“始终允许 xxx 开头的命令”建议）：递归最多 10 层/包装 2 层；包装命令（nice 或 spec 中 isCommand 参数）递归取被包装命令前缀；前缀词数少于 MH 要求时返回 null 前缀；保留前导 VAR=val。"}
+{"id":"chunk-e6aww6q8.js#xTr","doc":"处理包装命令（timeout/nohup/srun…）：按 spec 的 isCommand 参数位置或第一个非选项参数找到被包装命令，递归取其前缀并拼上包装名。"}
+{"id":"chunk-e6aww6q8.js#s6s","doc":"复合命令的前缀：用 splitCommand 拆子命令，逐个求前缀（可用回调排除），按首词分组后取最长公共前缀。"}
+{"id":"chunk-e6aww6q8.js#Nbn","doc":"复合命令逐子命令求前缀，去掉命令自带的 VAR=val，再按 spec 逐层扩展子命令，返回去重后的前缀列表。"}
+{"id":"chunk-e6aww6q8.js#PTr","doc":"按空格分词求多个字符串的最长公共前缀（至少保留首词）。"}
+{"id":"chunk-e6aww6q8.js#HTr","doc":"按命令名动态导入 @withfig/autocomplete/build/<cmd>.js 作为 spec；拒绝含路径分隔符、..、以 - 开头的名字；GrowthBook tengu_keen_anchor 决定使用哪个可用性判断。"}
+{"id":"chunk-38axkkfw.js#Lxe","doc":"从命令中提取输出重定向（> >> &> >| >&）：返回 {commandWithoutRedirections, redirections:[{target, operator}], hasDangerousRedirection, dangerousRedirectionReason}；目标含 ~ 通配 ! = 或变量、多目标、<& 异常、/dev/tcp|udp 等标为危险（shell_expansion / network_device）。"}
+{"id":"chunk-e6aww6q8.js#xze","doc":"扫描字符串（用于 test 等命令参数）：未在单引号内的 $var 返回 'variable'，未加引号的 * ? [..] 返回 'glob'，否则 false；处理转义、反引号、注释与双引号。"}
+{"id":"chunk-e6aww6q8.js#Nze","doc":"把子命令判定结果组装成 Map（子命令文本→判定）；同一子命令文本出现多次时把它的重定向拼进键名以区分。"}
+{"id":"chunk-38axkkfw.js#Ck","doc":"shell-quote 风格回退：解析命令并返回第一条命令的去引号参数列表；超长或失败返回空数组。"}
+{"id":"chunk-e6aww6q8.js#Lwn","doc":"把命令包装成可交给 eval 的单引号字符串；含 heredoc 或多行字符串时整体单引号，非 heredoc 时追加 < /dev/null。"}
+{"id":"chunk-e6aww6q8.js#$wn","doc":"是否应追加 < /dev/null：命令含 heredoc 或已有输入重定向时不追加。"}
+{"id":"chunk-e6aww6q8.js#Hwn","doc":"把 Windows 风格的 >NUL / 2>nul 改写为 /dev/null（命令含 < $ 反引号时不改）。"}
+{"id":"chunk-e6aww6q8.js#fZe","doc":"粗判命令是否含 heredoc（排除位移运算与算术中的 <<）。"}
+{"id":"chunk-e6aww6q8.js#Ewn","doc":"单引号包装命令并追加 < /dev/null。"}
+{"id":"chunk-e6aww6q8.js#sMo","doc":"重定向是否为字面量 >/dev/null 或 2>/dev/null。"}
+{"id":"chunk-0stm8h1s.js#_o","doc":"把参数数组按需单引号转义并空格拼接（安全字符集原样保留，空串为 ''）。"}
+{"id":"chunk-18hwfzwa.js#qVe","doc":"Prompt 输入框的 shell 补全：仅 bash/zsh；从光标前文本判断前缀与类型（变量/文件/命令），执行 compgen 或 zsh 参数展开命令（超时 1000ms，最多 15 条），返回补全项。"}
+{"id":"chunk-18hwfzwa.js#lQt","doc":"从光标前文本取补全前缀与类型：$name→variable；含 / ~ . 的词→file；首词→command，其余→file。"}
+{"id":"chunk-18hwfzwa.js#uQt","doc":"按 shell 类型生成补全命令并通过 Shell.exec 运行，截取前 15 行转换成补全项。"}
+{"id":"chunk-e6aww6q8.js#Own","doc":"创建 shell 快照：按 shell 选择 .zshrc/.bashrc/.profile，在 Claude 配置目录 shell-snapshots/ 下生成 snapshot-<shell>-<时间>-<随机>.sh，用 shell -c -l 执行快照脚本（10s 超时，env 带 SHELL、GIT_EDITOR=true、CLAUDECODE=1，CLAUDE_CODE_DONT_INHERIT_ENV 时不继承环境）；成功后注册退出清理，并可解析导出的环境变量；失败上报 tengu_shell_snapshot_failed 等事件。返回快照路径或 undefined。"}
+{"id":"chunk-e6aww6q8.js#Wvr","doc":"拼装快照脚本：source 用户配置（< /dev/null）、可选导出环境、清空快照文件、unalias -a、用户函数/选项/别名、Claude Code 自带内容，最后校验文件存在。"}
+{"id":"chunk-e6aww6q8.js#jvr","doc":"Claude Code 自带的快照内容：rg 别名或函数（内置 ripgrep）、可选 find/grep 用内置 bfs/ugrep 替换、pkill 防误杀函数、PATH（Windows 下从登录 shell 探测，失败则在运行时追加插件目录）。"}
+{"id":"chunk-e6aww6q8.js#Fvr","doc":"导出用户 shell 状态的脚本片段：zsh 用 typeset -f / setopt，bash 用 shopt -p、逐函数 eval %q、set -o；别名最多 1000 条（Windows 去掉 winpty 别名）。"}
+{"id":"chunk-e6aww6q8.js#dZe","doc":"生成同名 shell 函数，以 ARGV0（zsh/Windows）或 exec -a（bash）把内置二进制伪装成 rg/bfs/ugrep 执行；CLAUDE_CODE_EXECPATH 不可执行时回落到系统命令；可指定遇到某些参数时直接走系统命令。"}
+{"id":"chunk-e6aww6q8.js#Ivr","doc":"内置 find/grep 替换开启时，生成 find→bfs、grep→ugrep 的包装函数（ugrep 默认 -G --ignore-files --hidden -I 并排除 VCS 目录，危险选项回落系统 grep）。"}
+{"id":"chunk-e6aww6q8.js#Dvr","doc":"生成 pkill 包装函数：用 pgrep 预演同样的模式，若会匹配 CLAUDE_PID 则拒绝并提示用 pkill -P $$。"}
+{"id":"chunk-e6aww6q8.js#Uvr","doc":"解析快照 stdout 中两个标记之间的 NAME=value 行，得到环境变量 Map（跳过已在进程环境中的、PWD/SHLVL 等、受保护变量、含 U+FFFD 的；还原 %25/%0A/%0D）。"}
+{"id":"chunk-e6aww6q8.js#$vr","doc":"Windows 下运行 shell -lc 'echo \"$PATH\"' 取登录 PATH；输出不可用时记日志并上报 tengu_shell_snapshot_path_probe_failed，返回 undefined。"}
+{"id":"chunk-e6aww6q8.js#uZe","doc":"按 shell 路径选择配置文件：含 zsh→~/.zshrc，含 bash→~/.bashrc，否则 ~/.profile。"}
+{"id":"chunk-e6aww6q8.js#iKi","doc":"取当前宿主状态上的 PowerShell 提供者（getPsProvider(pre())）。"}
+{"id":"chunk-e6aww6q8.js#CTn","doc":"惰性创建并缓存（存于宿主状态 powerShellProvider）PowerShell 提供者：先 getCachedPowerShellPath 找 pwsh/powershell，找不到抛 \"PowerShell is not available\"。"}
+{"id":"chunk-e6aww6q8.js#KEr","doc":"shellType → 提供者获取函数表：bash 走 getBashProviderForHost(RTn) 取 .provider，powershell 走 getPsProvider。"}
+{"id":"chunk-e6aww6q8.js#hbe","doc":"Shell 工具的统一执行入口 exec(command, abortSignal, shellType, options)。顺序：diskless 会话直接拒绝 → 取 bash/powershell 提供者 → 生成执行 id 与 TMPDIR → provider.buildExecCommand 拼出命令串（快照 source、cwd 落盘文件等）→ 校验 cwd（被删/被换链接/与权限检查时不一致都拒绝，必要时回退到项目根/家目录/临时目录）、worktree 隔离防逃逸 → 若 shouldUseSandbox：合并逐命令 denyRead/denyWrite、scrub 沙箱配置，调用 SandboxManager.wrapWithSandbox（POSIX，得到包装后的命令串）或 wrapWithSandboxArgv（Windows，得到 argv/env），strict 模式下无隔离则拒绝 → spawn（cgroup、env 覆盖、Windows PowerShell 启动器）→ 包成 ShellCommandImpl；结束后读 cwd 文件更新会话 cwd、清理沙箱、改写 Windows 沙箱错误码说明。失败一律返回 createFailedCommand（E2BIG、磁盘满单独提示）。"}
+{"id":"chunk-e6aww6q8.js#HBo","doc":"把 cwd 参数解析成绝对真实路径（只取 path 字段）。"}
+{"id":"chunk-e6aww6q8.js#ATn","doc":"相对路径基于给定目录或当前 cwd 解析，再 realpath；目录不存在抛 MissingWorkingDirectoryError，其他错误返回 {path, verified:false}。"}
+{"id":"chunk-e6aww6q8.js#Mpn","doc":"工作目录不存在时抛出的错误类，带 path 字段。"}
+{"id":"chunk-e6aww6q8.js#V9n","doc":"按会话根保存 {pinned} 状态（工作目录缺失时的钉住标记）；被钉住的会话 cwd 消失时 exec 不回退到别的目录。"}
+{"id":"chunk-e6aww6q8.js#EWr","doc":"取该会话在权限检查时记录的 cwd（按会话根的 WeakMap）；exec 在 spawn 前后比对，目录被替换/删除则拒绝执行。"}
+{"id":"chunk-e6aww6q8.js#gIn","doc":"把配置项转成 config.describe 用的描述对象（与 Shell 无关，切分误归）。"}
+{"id":"chunk-e6aww6q8.js#tRs","doc":"按 shellType 选退出码/输出解释函数（bash/powershell 各一）；切分误归，应在 Bash/PowerShell 工具的 commandSemantics。"}
+{"id":"chunk-s61vbvea.js#ST","doc":"判断 shell 路径可执行：先 access X_OK，失败时（非 Windows 绝对路径的特定错误直接 false）再跑 `--version` 看退出码。"}
+{"id":"chunk-s61vbvea.js#Dm","doc":"生成候选 shell 列表：CLAUDE_CODE_SHELL、SHELL（含 bash/zsh 的）、which 结果，以及 /bin、/usr/bin、/usr/local/bin、/opt/homebrew/bin 下的 bash/zsh；SHELL 含 bash 时 bash 优先。"}
+{"id":"chunk-s61vbvea.js#_T","doc":"依次探测候选 shell 取第一个可执行的；CLAUDE_CODE_SHELL 无效时记日志回退；都没有则抛 \"No suitable shell found\"。"}
+{"id":"chunk-e6aww6q8.js#uHe","doc":"把子进程 stdout/stderr 流按 utf-8 转发到 TaskOutput（writeStdout/writeStderr），ended 在 end/close 时完成。"}
+{"id":"chunk-e6aww6q8.js#fHe","doc":"运行中 shell 命令对象：状态 running/backgrounded/completed/killed；超时（可自动转后台）、abort、输出文件大小看门狗（超限或文件被替换则杀）；完成时组装 {code,stdout,stderr,interrupted,backgroundTaskId,outputFilePath,shellUsage(wall/cpu),leftRunningPgid,timedOut…}；kill 先 SIGTERM 进程树、1.5s 后 SIGKILL；background() 转后台并把输出落盘。"}
+{"id":"chunk-e6aww6q8.js#tce","doc":"用子进程、abort 信号、超时、TaskOutput 等构造 ShellCommandImpl。"}
+{"id":"chunk-e6aww6q8.js#vAt","doc":"未执行即中止的命令占位：结果 code 145、\"Command aborted before execution\"、interrupted。"}
+{"id":"chunk-e6aww6q8.js#J$","doc":"返回 AbortedShellCommand 实例（exec 在 spawn 前发现已中止时用）。"}
+{"id":"chunk-e6aww6q8.js#dHe","doc":"进程退出时收集仍存活/正在被杀的 shell 进程树，统一 SIGKILL 并上报 cli_shell_exit_sweep 诊断。"}
+{"id":"chunk-e6aww6q8.js#Oco","doc":"非 Windows 且开关允许时把 sweepShellTreesOnExit 挂到 process 'exit'（prepend），否则摘除。"}
+{"id":"chunk-e6aww6q8.js#mAt","doc":"用 kill(pid,0) 探测进程组与已知子孙是否都已不存在（ESRCH）。"}
+{"id":"chunk-e6aww6q8.js#o_","doc":"构造未启动即失败的命令对象：code 1、stderr=原因、preSpawnError（可带 preSpawnErrorCode 如 e2big）。"}
+{"id":"chunk-e6aww6q8.js#g4n","doc":"结果没有 backgroundTaskId 时原样返回，否则去掉 shellUsage 字段（具体用途未完全确认）。"}
+{"id":"chunk-e6aww6q8.js#Qwn","doc":"生成取消导出 __CLAUDE_CC_COMMAND_TEXT 的片段（命令文本经环境变量携带时使用）。"}
+{"id":"chunk-e6aww6q8.js#Zwn","doc":"生成从 __CLAUDE_CC_COMMAND_TEXT 取出命令文本、unset 后 eval 的片段；变量丢失则 exit 126。"}
+{"id":"chunk-e6aww6q8.js#aEr","doc":"返回关闭扩展 glob 的命令：bash `shopt -u extglob`，zsh `setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL`；设了 CLAUDE_CODE_SHELL_PREFIX 时两者都试。"}
+{"id":"chunk-e6aww6q8.js#sTn","doc":"生成 `unalias`+`unset -f` 指定命令名的片段，防止用户 rc 里的别名/函数劫持。"}
+{"id":"chunk-e6aww6q8.js#aTn","doc":"tengu_swirling_koala 打开时，返回环境里存在的 BASH_FUNC_which%%/unsetenv 之类导出函数变量名，供 spawn 时 unset。"}
+{"id":"chunk-e6aww6q8.js#lTn","doc":"Windows 沙箱里只接受绝对路径的 bash.exe/sh.exe 作内层 shell（返回 {exe,args:['-c']}），否则告警并返回 null（改用 Git Bash）。"}
+{"id":"chunk-e6aww6q8.js#dTn","doc":"创建 bash 提供者：异步生成 shell 快照（失败则回落到 login shell，-l）；buildExecCommand 依次拼接：source 快照、Windows TEMP/TMP、沙箱 TMPDIR、会话环境脚本、PATH 追加、BUN_OPTIONS 搬运、额外 git config、关闭 extglob、去掉 which/unsetenv 劫持、scrub 凭据环境、cgroup 记账、`eval '<命令>'` 和 `pwd -P >| <cwd 文件>`，再套 CLAUDE_CODE_SHELL_PREFIX；getEnvironmentOverrides 设 CLAUDE_CODE_EXECPATH、沙箱 TMPDIR/TMPPREFIX。"}
+{"id":"chunk-bhxaz9j0.js#jq","doc":"Bash 输出最大字符数：settings.bashOutputMaxChars（夹在上下限之间）优先，否则 BASH_MAX_OUTPUT_LENGTH（默认 30000，上限 150000）。"}
+{"id":"chunk-bhxaz9j0.js#R","doc":"把设置值夹到 [下限, 上限]；undefined 原样返回。"}
+{"id":"chunk-e2fknt7w.js#He","doc":"readlink 后再检查目标是否为文件（Windows 应用执行别名 pwsh.exe）。"}
+{"id":"chunk-e2fknt7w.js#te","doc":"查找 PowerShell：diskless 返回 null；先 pwsh（Linux snap 版换成 /opt/microsoft 或 /usr/bin 下的直装版），Windows 再查 Program Files、WindowsApps、.dotnet/tools，最后回退 powershell 5（含 System32 固定路径）。"}
+{"id":"chunk-e2fknt7w.js#fli","doc":"按给定环境变量集合查找 PowerShell 并缓存到宿主状态 organizationsPowerShellPath。"}
+{"id":"chunk-e2fknt7w.js#fO","doc":"缓存的 PowerShell 路径 Promise（宿主状态 powerShellPath），完成后写 resolvedPowerShellPath。"}
+{"id":"chunk-e6aww6q8.js#RHt","doc":"创建 PowerShell 提供者：命令后追加记录 $LASTEXITCODE 与 (Get-Location) 到 claude-pwd-ps-<id> 文件的片段；POSIX 沙箱下改用 -EncodedCommand（UTF-16LE base64）；环境补 PYTHONIOENCODING、NO_COLOR，沙箱时设 TMPDIR。"}
+{"id":"chunk-7r5y3c3p.js#Hhe","doc":"按 BOM 判断缓冲区编码（FF FE → utf16le，否则 utf8）；切分误归。"}
+{"id":"chunk-4m46mxx9.js#me","doc":"取路径末段（去 .exe 小写）判断是否已知 shell 名，返回该名、\"other\" 或 \"none\"（遥测分类用）。"}
+{"id":"chunk-qchp9vrd.js#us","doc":"插件评测的模拟应答：用 Haiku/默认模型按 responder 提示生成文本并计费（切分误归）。"}
+{"id":"chunk-e6aww6q8.js#$jr","doc":"按 Fig spec 生成命令前缀（如 `git push`、`gcloud compute …`）：跳过 flag（带 isCommand/isModule 参数的保留），遇路径/URL 停止，深度由 calculateDepth 决定；用于权限规则建议。"}
+{"id":"chunk-e6aww6q8.js#sOo","doc":"计算前缀深度：DEPTH_RULES 表（rg 2、gcloud 4、kubectl 3…）优先，否则按 spec 的子命令/参数形状推断（默认 2）。"}
+{"id":"chunk-e6aww6q8.js#iOo","doc":"参数是否为前缀终点：flag、含 '/' 或像文件名（有扩展名）或 URL 时停止；`-m 模块` 例外。"}
+{"id":"chunk-82kqcve8.js#dr","doc":"git 只读子命令共用的 flag 白名单片段（flag → 参数类型 none/string/number）。另含 %G / %(signature) 格式占位正则：会触发 gpg 验签（执行外部程序），所以格式串里出现即视为危险。"}
+{"id":"chunk-82kqcve8.js#ep","doc":"--format/--pretty 的值不是内置格式名（oneline/short/…）即视为自定义格式（含 %、format:、tformat:）。"}
+{"id":"chunk-82kqcve8.js#Ot","doc":"git 参数里 --format/--pretty/--sort/--group 的值含 ~ 展开、占位符、签名格式或自定义 pretty 格式时返回 true。"}
+{"id":"chunk-82kqcve8.js#rvn","doc":"git 只读子命令白名单（git diff/log/show/status/blame/ls-files/rev-parse/branch/tag/worktree list 等 24 项）：每项 safeFlags + 可选 additionalCommandIsDangerousCallback（拦格式串、写操作参数）。"}
+{"id":"chunk-82kqcve8.js#ovn","doc":"参数里有会被 shell 展开的 ~（开头或 = / : 之后，或 ~ 与 { 同现）时返回 true。"}
+{"id":"chunk-82kqcve8.js#Ne","doc":"gh 只读命令的附加危险检查：参数含 ~、占位符、URL（://）、@ 或两个以上 '/'（可能指向其他主机/仓库）时视为危险。"}
+{"id":"chunk-82kqcve8.js#svn","doc":"gh 只读子命令白名单（pr/issue/repo/run/release/workflow/label/search 的 view/list/status 等）。"}
+{"id":"chunk-82kqcve8.js#D9r","doc":"docker 参数含改连接目标/配置的 flag（-H/--host/--context/--config/--tls*/--url/…，含组合短 flag）时返回 true。"}
+{"id":"chunk-82kqcve8.js#zP","doc":"仅 Windows：检测会触发 SMB/WebDAV 外连的 UNC 形式（\\\\server、//server、混合斜杠、@SSL@端口、DavWWWRoot、IPv4/IPv6 主机、\\??\\ 前缀）；isArgument 时还剥掉 flag 前缀与 `--x=` 再查。"}
+{"id":"chunk-82kqcve8.js#fc","doc":"校验 flag 参数值是否符合类型：none 无值、number 纯数字、string 任意、char 单字符、{} / EOF 字面量。"}
+{"id":"chunk-82kqcve8.js#Q4t","doc":"按白名单逐个校验 token：未知 flag、需值却缺值、值以 - 开头、值类型不符一律 false；支持 `--`、组合短 flag（全为 none 型）、grep/rg 的 -A3 粘连数字、git 的 -<数字>、xargs 目标命令；Windows 上 git 参数含 :// 或占位符且 tengu_jaunty_honey 开时直接拒绝；tengu_amber_thimble 放宽 flag 识别。"}
+{"id":"chunk-rnaw3pc3.js#kCr","doc":"默认 shell：settings.defaultShell；选 bash 但没有 Git Bash 时改 powershell，选 powershell 但未启用 PowerShell 工具时改 bash；未设时有 bash 用 bash 否则 powershell。"}
+{"id":"chunk-fws4w04f.js#_Oo","doc":"危险 cmdlet 集合：按文件路径执行脚本（invoke-command/start-job…）、脚本块执行代码（含 invoke-expression、register-*event、new/enter-pssession）、加载模块（import-module/install-module…）、shell 与进程生成器（pwsh/cmd/bash/wsl/start-process/add-type/new-object）。"}
+{"id":"chunk-fws4w04f.js#s","doc":"返回 COMMON_ALIASES 中指向给定 cmdlet 集合的别名列表。"}
+{"id":"chunk-fws4w04f.js#r","doc":"永不作为通配前缀建议的命令名集合：上述各类危险 cmdlet + foreach-object + 跨平台代码执行器（python/node/ruby/npx…单词项）及它们的别名。"}
+{"id":"chunk-tr0s0d0k.js#Qn","doc":"在命令文本里查找 shell 可执行名或 git `alias.*=!` 的正则（切分归属待查）。"}
+{"id":"chunk-e6aww6q8.js#RRo","doc":"PowerShell 解析超时：CLAUDE_CODE_PWSH_PARSE_TIMEOUT_MS（>0）否则 5000ms。"}
+{"id":"chunk-e6aww6q8.js#PRo","doc":"pwsh 内执行的解析脚本：用 System.Management.Automation.Language.Parser 解析 stdin 里 base64 的命令，输出语句/命令元素/重定向/变量/安全模式（子表达式、脚本块、展开串、成员调用、splat、类型字面量、using、#requires、后台作业）的 JSON，再 base64 回传。"}
+{"id":"chunk-e6aww6q8.js#_R","doc":"构造无效解析结果（valid:false，带 errorId 与原命令）。"}
+{"id":"chunk-e6aww6q8.js#Ige","doc":"字符串转 UTF-16LE 再 base64（-EncodedCommand 格式）。"}
+{"id":"chunk-e6aww6q8.js#ORo","doc":"pwsh 参数（-NoProfile -NonInteractive -NoLogo -EncodedCommand <解析脚本>）与 stdin（命令的 base64）。"}
+{"id":"chunk-e6aww6q8.js#NRo","doc":"把 pwsh 输出的原始 JSON 规范成 ParsedPowerShellCommand（statements、variables、errors、typeLiterals、hasUsingStatements/hasScriptRequirements/hasBackgroundJob）。"}
+{"id":"chunk-e6aww6q8.js#FRo","doc":"调 pwsh 解析一条 PowerShell 命令：超过 32767 字节、含 `u{…} 码点转义直接判无效；最多尝试 2 次（spawn 失败/超时/非零退出）；校验回传的 originalCommand 与输入一致，否则 InputMismatch。"}
+{"id":"chunk-e6aww6q8.js#$Ro","doc":"暂时性错误 id（spawn 失败、超时、空输出、JSON 无效…）：这类结果不进缓存，下次重解析。"}
+{"id":"chunk-e6aww6q8.js#bHt","doc":"每宿主一个 LRU(256) 解析缓存；暂时性失败结果会从缓存删除。"}
+{"id":"chunk-e6aww6q8.js#a0e","doc":"解析 PowerShell 命令（当前宿主的缓存解析器），供 PowerShell 工具的权限/只读/前缀分析使用。"}
+{"id":"chunk-e6aww6q8.js#ose","doc":"汇总解析结果的安全标志：子表达式、脚本块、splat、可展开字符串、成员调用、赋值、--% 停止解析。"}
+{"id":"chunk-v9tcvh08.js#pio","doc":"返回某个模型提供者对应的 base URL 环境变量列表（切分误归，应属 API 提供者配置）。"}
+{"id":"chunk-18hwfzwa.js#r0o","doc":"取所有语句里 elementType 为 CommandAst 的命令。"}
+{"id":"chunk-18hwfzwa.js#_yt","doc":"从单个 PowerShell 命令元素提取规则前缀：application 类、危险名（NEVER_SUGGEST）不建议；cmdlet 直接用名；外部命令要求参数全为常量/参数并经 buildPrefix 对齐；tengu_misty_crown 下拒绝带 isCommand 参数的命令。"}
+{"id":"chunk-18hwfzwa.js#Tyt","doc":"复合 PowerShell 命令的静态前缀：逐命令取前缀，按首词分组求词对齐公共前缀；只剩一个词且该命令有子命令/深度规则时丢弃。"}
+{"id":"chunk-b29hdd5e.js#Wn","doc":"返回安全存储实现；本构建（linux）中平台存储变量为空，恒为 plainTextStorage。"}
+{"id":"chunk-9np9x1zv.js#s","doc":"用 `security find-generic-password -a <用户> -w -s <服务名>` 预取钥匙串项；超时返回 null。"}
+{"id":"chunk-gwwacf44.js#ive","doc":"macOS 钥匙串服务名：\"Claude Code\" + OAuth 后缀 + 后缀 + （设置了 CLAUDE_CONFIG_DIR / CLAUDE_SECURESTORAGE_CONFIG_DIR 时）配置目录 sha256 前 8 位。"}
+{"id":"chunk-gwwacf44.js#lY","doc":"钥匙串账户名：USER 或 os.userInfo，非 [A-Za-z0-9._-] 时用 claude-code-user。"}
+{"id":"chunk-b29hdd5e.js#g","doc":"明文凭据位置：<配置目录>/.credentials.json。"}
+{"id":"chunk-b29hdd5e.js#z","doc":"明文凭据文件后端（read/readStrict/write(权限 0600)/remove）与 diskless 会话的空后端。"}
+{"id":"chunk-b29hdd5e.js#Z","doc":"宿主托管凭据存储后端：读写走宿主提供的 readCredentials/writeCredentials/deleteCredentials，并维护本地副本与代数。"}
+{"id":"chunk-b29hdd5e.js#w","doc":"明文安全存储（name=plaintext）：同步 read 读 .credentials.json（宿主托管时可读本地副本）；readAsync/readAsyncStrict/update/delete 按情况选宿主后端、文件后端或 diskless 空后端；写入返回 \"Warning: Storing credentials in plaintext.\"。"}
+{"id":"chunk-s61vbvea.js#Di","doc":"在指定目录运行 git（带固定前置参数），成功返回去空白的 stdout，失败/非零返回 undefined。"}
+{"id":"chunk-s61vbvea.js#J$","doc":"已有目录状态缓存时直接取 branch，否则 git rev-parse --abbrev-ref HEAD。"}
+{"id":"chunk-6vnxsn99.js#we","doc":"运行 git diff 系列命令（不抛异常），给定 cwd 时附带额外环境。切分上属 utils/gitDiff。"}
+{"id":"chunk-sycgf9xs.js#NSr","doc":"同步执行 shell 命令（默认 10 分钟超时、1MB 输出），失败或无输出返回 null。"}
+{"id":"chunk-e6aww6q8.js#HRe","doc":"执行 Skill/命令文件里的 !`cmd` 与 ```! 块：按 frontmatter shell 选 Bash/PowerShell 工具，逐条做权限检查（GE），auto 模式下需要询问的可移交模型（promptShellHandOff），不允许则抛错；允许则执行并把输出替换进文本。readOnlySkillLoad 时不执行。"}
+{"id":"chunk-e6aww6q8.js#PRr","doc":"提取文本中的内联/块命令并用工具 inputSchema 校验；不合法（或含不可打印字符）时抛出带说明的错误，一条都不执行。"}
+{"id":"chunk-6zvphrsz.js#o$o","doc":"在 zsh/bash/fish 配置文件里查找 `alias claude=` 的目标；读不了的文件记日志跳过。"}
+{"id":"chunk-fq0cr76a.js#uTt","doc":"判断沙箱路径模式是否覆盖某路径：无 glob 时按路径段前缀比较，有 glob 时大小写两种折叠都试并处理不可编译模式。"}
+{"id":"chunk-fq0cr76a.js#Ki","doc":"glob 模式第一个通配符之前的目录部分（Windows 用 win32.dirname）。"}
+{"id":"chunk-fq0cr76a.js#Aie","doc":"把规则串（如 `Read(//secret/**)`、`WebFetch(domain:x)`）解析成 {toolName, ruleContent}，Windows 上对反斜杠路径单独处理转义。"}
+{"id":"chunk-fq0cr76a.js#r3r","doc":"解析 sandbox.filesystem 路径：`//x` 为绝对，`/x` 相对该设置来源根目录，`~/` 家目录，其他相对 cwd（./）。"}
+{"id":"chunk-fq0cr76a.js#o3r","doc":"解析权限规则里的路径模式（Read/Edit 规则），`//x` 为绝对，其余经 expandPath 相对来源根；Windows 先展开 %USERPROFILE% 等。"}
+{"id":"chunk-fq0cr76a.js#ew","doc":"解析一条沙箱路径条目；失败时若沙箱为必需、或是可信层的 deny 条目则抛 SandboxPathEntryError（整个配置构建失败），否则告警丢弃。"}
+{"id":"chunk-fq0cr76a.js#j0","doc":"把权限规则列表按工具名分组，只保留有 ruleContent 的（如取出所有 Read(...) 的路径）。"}
+{"id":"chunk-fq0cr76a.js#xce","doc":"外部构建里沙箱 GrowthBook 配置恒为 {}（forbidUnsandboxedCommands、disableNoSandbox、requireSandboxedAttempt、filesystemPolicy 都未设置）。"}
+{"id":"chunk-fq0cr76a.js#w$","doc":"计算 sandbox.network 的本地放行项（unix socket、本地绑定、mach lookup、代理端口）：无管理员强制且无可信网络限制时直接用合并设置；否则忽略 project/local 设置里的这些键（并记一次日志），代理端口在 allowManagedDomainsOnly 时只认托管设置。"}
+{"id":"chunk-fq0cr76a.js#Tue","doc":"检查沙箱依赖（ripgrep 路径交给 sandbox-runtime 的 checkDependencies），Linux/WSL 在运行时未初始化时额外试跑一次 bubblewrap。"}
+{"id":"chunk-fq0cr76a.js#Dpe","doc":"是否被强制开启沙箱：管理员强制下用户设置 enabled=true，或 GrowthBook disableNoSandbox 且当前不在 scrub/IS_SANDBOX/bubblewrap 环境里。"}
+{"id":"chunk-fq0cr76a.js#ql","doc":"沙箱是否在设置里开启（含强制开启）；读设置失败记日志返回 false。"}
+{"id":"chunk-fq0cr76a.js#Lpe","doc":"CLAUDE_CODE_SUBPROCESS_ENV_SCRUB 打开、scrub 沙箱可用、且用户没开沙箱时，强制用 scrub 沙箱。"}
+{"id":"chunk-fq0cr76a.js#Aue","doc":"sandbox.autoAllowBashIfSandboxed（默认 true）；scrub 模式或 Windows 下不支持。"}
+{"id":"chunk-fq0cr76a.js#fV","doc":"是否禁止沙箱外执行：GrowthBook forbidUnsandboxedCommands、可信层 allowUnsandboxedCommands=false 或合并设置 allowUnsandboxedCommands===false。"}
+{"id":"chunk-fq0cr76a.js#Oa","doc":"管理员沙箱强制：GB 禁止沙箱外命令、托管设置 allowManagedDomainsOnly、托管层 allowUnsandboxedCommands=false 或 --settings/flagSettings 的 allowUnsandboxedCommands=false。强制下 project/local 的放宽项一律忽略。"}
+{"id":"chunk-fq0cr76a.js#Iue","doc":"可信层（托管/--settings）有网络限制：管理员强制、strictAllowlist、deniedDomains 或 WebFetch(domain:) 的 deny 规则。"}
+{"id":"chunk-fq0cr76a.js#cw","doc":"收集非 project/local 层的读禁止根：sandbox.credentials.files、Read(...) deny 规则、sandbox.filesystem.denyRead，解析为规范路径。"}
+{"id":"chunk-fq0cr76a.js#Lue","doc":"每次沙箱包装前（节流 250ms）重新检查当初未解析或经符号链接拼写的可信读禁止/凭据遮罩路径。"}
+{"id":"chunk-fq0cr76a.js#Bue","doc":"执行一次读禁止根复查：有路径改变落点时，首次则重建配置；会话中途则收窄运行中配置（丢弃落入禁止区的仓库授权、把受影响的凭据遮罩降为占位符），失败时记 pendingReadDenyFallback。"}
+{"id":"chunk-fq0cr76a.js#ob","doc":"内置的可信读禁止根（如 ~/.claude/seed-admin、IDE 锁文件目录等）的规范路径。"}
+{"id":"chunk-fq0cr76a.js#$ue","doc":"门面 areUnsandboxedCommandsAllowed：沙箱未处于“开着但没在跑”、会话未禁用沙箱外命令、且未配置严格模式时为 true（允许 dangerouslyDisableSandbox 重试）。"}
+{"id":"chunk-fq0cr76a.js#Kd","doc":"沙箱是否“必需”：设置开启、平台在 enabledPlatforms 内、且 sandbox.failIfUnavailable（或管理员强制下用户设置的 failIfUnavailable）。"}
+{"id":"chunk-fq0cr76a.js#th","doc":"托管设置 sandbox.enabledPlatforms 未设为 true；空数组为 false；否则当前平台须在列表里。"}
+{"id":"chunk-fq0cr76a.js#Bc","doc":"门面 isSandboxingEnabled：diskless 否；scrub 模式且未开沙箱看 scrub 沙箱可用性；本会话已禁用否；“必需但不可用”时也视为开启（以便拒绝命令）；否则需通过廉价门槛且依赖检查无错误。"}
+{"id":"chunk-fq0cr76a.js#kw","doc":"沙箱开启但无法使用的原因：平台不支持（WSL1、Windows 门控、其他系统）、diskless、Windows allowLocalBinding 变更需重启、需重新安装、依赖缺失（给出 apt install bubblewrap socat 或 /sandbox 提示）。"}
+{"id":"chunk-fq0cr76a.js#jue","doc":"Linux/WSL 上 Edit/Read 规则里含 bubblewrap 无法表达的 glob（尾部 /** 之外）时返回这些规则用于告警。"}
+{"id":"chunk-fq0cr76a.js#zue","doc":"把 sandbox.enabled/autoAllowBashIfSandboxed/allowUnsandboxedCommands 写入 localSettings（只写变化项）。"}
+{"id":"chunk-fq0cr76a.js#Xue","doc":"门面 getExcludedCommands：合并设置的 sandbox.excludedCommands；管理员强制时只认可信层（托管、--settings、用户设置），并记一次被忽略条数。"}
+{"id":"chunk-fq0cr76a.js#Que","doc":"汇总各设置来源的 sandbox.filesystem.allowWrite/allowRead：管理员强制时丢弃不可信来源的写授权；落在可信读禁止区内或含 glob 的不可信授权被过滤；allowManagedReadPathsOnly 时 allowRead 只取托管层。"}
+{"id":"chunk-fq0cr76a.js#Dw","doc":"包装命令前确保沙箱已初始化：必需但不可用直接抛 SandboxInitFailedError（并禁止 dangerouslyDisableSandbox）；懒初始化；初始化失败时按“工作目录被拒/必需/普通”给出不同错误（普通情况本会话禁用沙箱）；之后刷新 Windows 授权、复查读禁止根等。"}
+{"id":"chunk-fq0cr76a.js#N3o","doc":"把 Windows 沙箱特定退出码（1 拒绝访问、19 loopback 模式变更、16 映射网络盘 cwd）换成给模型看的说明文字。"}
+{"id":"chunk-fq0cr76a.js#tde","doc":"门面 wrapWithSandbox：ensureInitializedForWrap 后调用 sandbox-runtime 把命令串包成沙箱命令（macOS sandbox-exec 配置 / Linux bwrap+seccomp+socat 代理）。"}
+{"id":"chunk-fq0cr76a.js#nde","doc":"门面 wrapWithSandboxArgv（Windows 唯一方式）：合并原生 deny 列表后调用 sandbox-runtime 得到 {argv, env}，再算出与当前环境的差异 env 与需 unset 的变量（含 credentials.envVars 的 deny 项）。"}
+{"id":"chunk-fq0cr76a.js#hw","doc":"门面 initialize：构建配置 Q0(settings)（Windows 拒绝在家目录/配置目录下作工作目录）→ Windows 先确保自执行授权、原生 deny → SandboxManager.initialize；成功后订阅设置/插件目录/GrowthBook 变化以热更新配置（refreshConfig）；配置构建失败则等待设置变化再试。网络请求询问回调在 allowManagedDomainsOnly 时一律拒绝。"}
+{"id":"chunk-fq0cr76a.js#db","doc":"门面 refreshConfig：沙箱启用时重建配置并装入运行时（失败保留旧配置）。"}
+{"id":"chunk-fq0cr76a.js#rwn","doc":"把命令（优先取建议规则 Bash(prefix:*) 的前缀）加入 sandbox.excludedCommands；管理员强制或 Windows 严格模式写 userSettings，否则 localSettings；强制下用户设置被禁用则拒绝。"}
+{"id":"chunk-fq0cr76a.js#Xv","doc":"沙箱命令结束后的清理：执行 scrub、复查标记，并在命令只写了自己的临时目录时决定是否推迟读禁止根复查。"}
+{"id":"chunk-6vnxsn99.js#rn","doc":"若 cwd 是 <repo>.git/worktrees/<name> 形式则返回主仓库 .git 路径，否则原样返回（切分上属 utils/gitDiff 一带）。"}
+{"id":"chunk-fq0cr76a.js#Q0","doc":"把合并设置转成 sandbox-runtime 配置 {network:{allowedDomains,deniedDomains,unix socket/本地绑定/代理端口,tlsTerminate}, filesystem:{denyRead,allowRead,allowWrite,denyWrite,disabled?}, ignoreViolations, credentials, enableWeakerNestedSandbox, allowNestedUserNamespaces, enableWeakerNetworkIsolation, allowAppleEvents, git.safeDirectories, ripgrep, seccomp, bwrapPath, socatPath, windows?}。允许域名来自 sandbox.network.allowedDomains 与 WebFetch(domain:…) allow 规则（管理员强制/strictAllowlist 时只认可信层，allowManagedDomainsOnly 时只认托管层）；读禁止来自 Read(...) deny 规则、sandbox.filesystem.denyRead、credentials.files；写允许含 cwd、额外工作目录、Edit(...) allow 规则、临时目录，写禁止含 settings 文件、.claude 下 skills/agents/commands/hooks、.git/hooks 与 config、.mcp.json 等；relaxed 文件系统策略下置 disabled。构建失败抛 SandboxPathEntryError。"}
+{"id":"chunk-fq0cr76a.js#He","doc":"取沙箱适配层的单例状态（初始化 Promise、失败原因、已安装配置的各类附加信息、读禁止复查状态、Windows 原生 deny 等）。"}
+{"id":"chunk-fq0cr76a.js#_i","doc":"把构建好的配置装入 sandbox-runtime（SandboxManager.updateConfig），同步记录该配置对应的 GrowthBook 规则/deny 开关/读禁止根解析等附加状态。"}
+{"id":"chunk-fq0cr76a.js#XC","doc":"有效文件系统策略 strict/relaxed：scrub 模式与 Windows 恒 strict；设置 sandbox.filesystem.disabled 显式指定时按其值；否则看 GrowthBook filesystemPolicy（relaxedIfForced：有设置根路径时 strict）。"}
+{"id":"chunk-fq0cr76a.js#Pc","doc":"门面 checkDependencies：Windows 未启用、diskless 直接报错；否则取缓存的依赖探测结果（bubblewrap/socat/ripgrep、macOS sandbox-exec、Windows srt-win 等）。"}
+{"id":"chunk-fq0cr76a.js#wqt","doc":"当前会话 Shell 工具是否实际处于沙箱：初始化未失败且（scrub 模式，或依赖探测已缓存时 isSandboxingEnabled，或初始化已开始且未被禁用）。"}
+{"id":"chunk-fq0cr76a.js#L3o","doc":"沙箱出口是否受限：沙箱实际生效且不是仅 scrub 模式。"}
+{"id":"chunk-fq0cr76a.js#I3o","doc":"把单条命令批准的 allowed_domains 转成 sandbox-runtime 的逐命令网络列表；托管仅限域名/strictAllowlist/评测模式下逐命令放行被扣留（空列表）。"}
+{"id":"chunk-e6aww6q8.js#ane","doc":"服务端分类器角色的按调用修正：本次 tool_use 是客户端指定的 clientRequestedToolUseId 时返回 \"off\"（不交服务端分类器），否则原样返回角色。"}
+{"id":"chunk-e6aww6q8.js#Qwr","doc":"auto 模式退回按量计费的分类器请求时的提示：已中止返回 interrupt；有缓存的选择直接用；无 Opus 权限或没有对话框表面时记日志并 continue；否则弹一次计费提示对话框（上报 tengu_auto_mode_server_fallback_notice），返回用户的选择。"}
+{"id":"chunk-e6aww6q8.js#YJe","doc":"分类器的两种固定拦截结果：YJe 为用户在计费提示处取消（\"Cancelled at the classifier billing notice\"），XJe 为本会话不运行分类器；rkn 是子代理报告未经审查时附加的警告文字。"}
+{"id":"chunk-e6aww6q8.js#Jwr","doc":"超限回退时“限时自动拒绝”窗口长度：env CLAUDE_CODE_TICKLISH_WHISPER_TIMEOUT_MS，缺省用 TIMED_FALLBACK_AUTO_DENY_MS。"}
+{"id":"chunk-e6aww6q8.js#CWt","doc":"判断脚本是否“请求在沙箱外运行”：dangerouslyDisableSandbox 为 true，且该命令带此标志时不走沙箱、不带时会走沙箱（即标志确实改变了沙箱决定）。PowerShell 工具按 powershell shellType 判断。"}
+{"id":"chunk-e6aww6q8.js#hU","doc":"为 Bash/PowerShell 调用生成破坏性命令分析字段（destructive_category、destructive_target_scope、git_destructive_target），用于权限决定的遥测；其他工具返回 undefined。"}
+{"id":"chunk-e6aww6q8.js#skn","doc":"模式切换后，之前的放行是否仍成立：auto 恒真；plan 下仅在 auto 激活且工具输入只读（或属于 plan 允许的只读类）时成立；其余模式返回调用方给定的原结果。"}
+{"id":"chunk-e6aww6q8.js#Skn","doc":"Cowork 云会话的 Web 工具放行覆盖：存在授权且工具是 Cowork Web 工具时，按 RL（Cowork Web 判定）返回是否覆盖。"}
+{"id":"chunk-e6aww6q8.js#yBo","doc":"MCP 工具在 auto 模式下被“破坏性 MCP allow 规则”直接放行（跳过分类器复核）时上报 tengu_auto_mode_destructive_mcp_rule_allow，带规则来源与服务端分类器角色。"}
+{"id":"chunk-e6aww6q8.js#_Bo","doc":"MCP 的 ask 是否否决已有的整工具授权：远程会话 MCP、Cowork Web、或开启服务端策略且该 MCP 工具受策略 ask 约束并命中会话级 allow 时为真；为真时 hasPermissionsToUseTool 给结果加 suppressAlwaysAllowRule。"}
+{"id":"chunk-e6aww6q8.js#tTr","doc":"破坏性 MCP 调用在 auto/分类器模式下是否应改为 ask：有授权、模式走分类器、工具 isDestructive(input) 为真，且远程破坏性 MCP 开关或 tengu_modular_mochi 打开。"}
+{"id":"chunk-e6aww6q8.js#Mkn","doc":"Computer Use 检查开关：GrowthBook tengu_quirky_shore 为 on 或设置 computerUseChecks 打开时返回 \"on\"。"}
+{"id":"chunk-e6aww6q8.js#ikn","doc":"settings.autoMode 是否配置了自定义 soft_deny 或 hard_deny 规则。"}
+{"id":"chunk-e6aww6q8.js#akn","doc":"向会话追加 auto 模式警告系统消息（非 SDK、有 appendSystemMessage，且子代理只在显式要求时追加）。"}
+{"id":"chunk-e6aww6q8.js#bBo","doc":"从 addRules/replaceRules 的 allow 更新中剔除“加载 MCP skill 形式”的新规则（除非来源允许），用于 MCP skill 加载 ask 的回答。"}
+{"id":"chunk-e6aww6q8.js#IV","doc":"选择要展示的决定原因：结果里有带熔断器的 safetyCheck，或结果标记 localDisplayOnly 时用结果自己的原因，否则用调用方给的原因。"}
+{"id":"chunk-e6aww6q8.js#pX","doc":"为 ask 去掉整工具授权：在工具名及其别名集合上移除整工具 allow 规则（按来源过滤），返回新的权限上下文。"}
+{"id":"chunk-e6aww6q8.js#lwt","doc":"由一组 PermissionUpdate 推出授权范围：去掉远程作用域不允许的授权后，若有持久化目的地返回 \"always\"，有其他更新返回 \"session\"，否则 \"once\"。"}
+{"id":"chunk-e6aww6q8.js#Epn","doc":"回答 MCP skill 加载 ask 时可应用的更新：普通更新经远程作用域过滤；allow addRules 只保留与本次 skill 规则完全一致、目的地为 session 或允许目的地的那条。"}
+{"id":"chunk-e6aww6q8.js#stt","doc":"代理类型因其所有可用工具都被权限设置拒绝而不可用时的提示文字。"}
+{"id":"chunk-e6aww6q8.js#eWr","doc":"过滤可派发的代理：去掉 isEnabled 为假的、被 Agent(type) deny 规则拒绝的、工具池全被拒绝的代理。"}
+{"id":"chunk-e6aww6q8.js#mbe","doc":"取可派发代理列表：先按允许的 agentType 名单筛选，再走 filterDispatchableAgents。"}
+{"id":"chunk-e6aww6q8.js#dwt","doc":"PermissionRequest 钩子带 updatedInput 放行时的守卫：如果对改写后输入的规则检查结果是 deny/ask，记日志并返回该结果（规则优先于钩子）；否则返回 null。"}
+{"id":"chunk-e6aww6q8.js#tWr","doc":"无法弹窗的 ask 交给 PermissionRequest 钩子裁决：远程执行、宿主显示的 ask、仅限人工且属 MCP skill 或工具宿主的 ask 不咨询钩子（返回 null）；否则运行钩子，带建议与“总是允许”抑制标志。"}
+{"id":"chunk-e6aww6q8.js#gN","doc":"无法弹窗时的拒绝结果：decisionReason.type 为 asyncAgent，原因“需要交互批准但当前上下文没有权限提示”，附原 ask 的摘要（refusedAskOf）。"}
+{"id":"chunk-e6aww6q8.js#aTr","doc":"插件评测（plugin eval）授权检查：把上下文改成 dontAsk 并把 cliArg allow 规则（含被剥离的危险规则）加回，用 checkDeclarativePermission 经插件裁决层判定是否 allow。"}
+{"id":"chunk-e6aww6q8.js#Bkn","doc":"请求时模式是否为 auto：上下文带 permissionModeAtRequest 且去掉它后的有效模式为 auto。"}
+{"id":"chunk-e6aww6q8.js#bW","doc":"以 asksNoHost 标志调用 hasPermissionsToUseTool，用于没有宿主可询问的评估。"}
+{"id":"chunk-e6aww6q8.js#rWr","doc":"分类器拦截是否计入拒绝次数：shouldBlock 且不是不可用、转录过长或被安全拦截。"}
+{"id":"chunk-e6aww6q8.js#Vkn","doc":"分类器结论是否可用：分类器确实运行、非不可用/转录过长/被安全拦截，且没有 failureMode 与 errorKind。"}
+{"id":"chunk-e6aww6q8.js#uTr","doc":"Chrome 地板拦截后是否改为弹窗：站点授权路由、模式为 default/acceptEdits 且未变、SDK stdio 宿主、无链式 allow、可弹窗、分类器结论可用且类别命中 Chrome 地板集合，并且不是远程会话、chromeFloorBlockPrompts 未关闭。"}
+{"id":"chunk-e6aww6q8.js#sWr","doc":"auto 拒绝超限处理：未超限返回 false；超限上报 tengu_auto_mode_denial_limit_exceeded；headless 直接抛 AbortError；累计超限时清零计数；返回 true 表示回退人工。"}
+{"id":"chunk-e6aww6q8.js#iWr","doc":"从 subcommandResults 中取出原因与给定原因相同的那个子命令 ask 的消息，否则用结果自身消息。"}
+{"id":"chunk-e6aww6q8.js#cwt","doc":"决定原因是否由 ask 规则驱动（rule 且 ruleBehavior 为 ask，或 subcommandResults 里任一 ask 子项如此）。"}
+{"id":"chunk-e6aww6q8.js#SP","doc":"结果是否带 ask 规则意图：原因由 ask 规则驱动，或 matchedAskRule 为 ask。auto 下这类 ask 回退人工而不交分类器。"}
+{"id":"chunk-e6aww6q8.js#uwt","doc":"原因是否为 mcpServerPolicy 来源的 ask 规则。"}
+{"id":"chunk-e6aww6q8.js#RWt","doc":"沙箱/只读放行是否改标为 sandboxOverride 交复核：无 ask 规则意图、无安全检查原因、尚非 sandboxOverride，且 tengu_curried_squirrel 打开。"}
+{"id":"chunk-e6aww6q8.js#xWt","doc":"沙箱覆盖 ask 守卫开关（GrowthBook tengu_curried_squirrel，安全默认）。"}
+{"id":"chunk-e6aww6q8.js#PWt","doc":"mcpServerPolicy 的 ask 是否落在 plan 写地板之下：解析输入后判断该调用在 plan 下是否属于需要阻挡的写；解析失败时以当前是否 plan 模式为准。"}
+{"id":"chunk-e6aww6q8.js#vpn","doc":"是否仍欠一次人工交互：工具属于强制人工类，或 requiresUserInteraction 为真且未被豁免。"}
+{"id":"chunk-e6aww6q8.js#dne","doc":"解析工具输入：先严格 parse；失败且仅因未知键、tengu_tidy_eclipse 打开、且未知键无需询问时，去掉这些键重试，并返回 keysSetAside:true。"}
+{"id":"chunk-e6aww6q8.js#rCe","doc":"结果是否“已确定”：有结果且不是 checkIncomplete 的 ask。"}
+{"id":"chunk-e6aww6q8.js#jC","doc":"只查规则与工具自检的权限检查（给 PreToolUse 钩子 allow/ask 后复核用）：提前裁决、deny 规则、整工具 ask 规则（沙箱自动放行例外）、tool.checkPermissions；hook allow 时施加 plan 写地板；检查崩溃且 crashIsObjection 时返回 ask；只返回 deny/ask，放行时返回 null。"}
+{"id":"chunk-e6aww6q8.js#V5s","doc":"工具宿主（ToolHost）上的规则检查：会话为该工具注册了宿主裁决时调用它；返回 deny，或带 ask 规则意图/安全检查/仅限人工的 ask，否则 null。"}
+{"id":"chunk-e6aww6q8.js#sbn","doc":"调用工具宿主的裁决函数，传入服务端分类器是否裁决（serverClassifierDecides）与本地评估回调 evaluateHere。"}
+{"id":"chunk-e6aww6q8.js#wBo","doc":"checkDeclarativePermission 的变体：去掉 mcpServerPolicy 来源的 ask 规则后再检查，检查崩溃视为异议。"}
+{"id":"chunk-e6aww6q8.js#aWr","doc":"插件 tool.check 裁决层：先运行插件检查（resolveToolCheck）包住 evaluate；deny 或与本地评估一致且无 refusal/hooksMayAllow 时直接返回；否则按一系列闸门（远程 MCP、Cowork Web、auto 下钩子 allow 不能放行的工具、云浏览器、需人工交互、等待人写入、MCP skill ask、plan 写地板）限制插件只能收紧不能放宽。"}
+{"id":"chunk-e6aww6q8.js#L9n","doc":"设置 CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS 且存在 PermissionRequest 钩子（SDK、托管层或设置中）时，把 removalWaiverRulesClear 置为 false，即危险删除豁免交给钩子裁决。"}
+{"id":"chunk-e6aww6q8.js#Za","doc":"在决定原因（含 subcommandResults 递归）中找第一个满足谓词的 safetyCheck 原因。"}
+{"id":"chunk-ktpw8eqa.js#xve","doc":"权限类型常量：设置模式失败的错误文字、MCP ask 工具上限与名字正则、熔断器特性表 CIRCUIT_BREAKER_TRAITS（每种 circuitBreaker 的 bypassImmune/waivableInBypass/classifierRouted/autoModeDeny/hostPersonOnly/localProjectionOnly/servedUnplaceable）。"}
+{"id":"chunk-ktpw8eqa.js#qK","doc":"原因（含 also）中是否有 bypass 下也不能放行的熔断器。"}
+{"id":"chunk-ktpw8eqa.js#Mbr","doc":"是否有 bypass 下也不能放行、且不可豁免的熔断器。"}
+{"id":"chunk-ktpw8eqa.js#DOn","doc":"是否有“服务端无法放置”的熔断器。"}
+{"id":"chunk-ktpw8eqa.js#XD","doc":"该 safetyCheck 的熔断器是否允许交分类器裁决（classifierRouted）。"}
+{"id":"chunk-ktpw8eqa.js#ugs","doc":"also 列表中是否带必须由人回答的熔断器（bypassImmune 且不交分类器）。"}
+{"id":"chunk-ktpw8eqa.js#ghe","doc":"该 safetyCheck 的熔断器在 auto 模式下是否直接拒绝。"}
+{"id":"chunk-ktpw8eqa.js#JG","doc":"是否有只能由宿主侧人工回答的熔断器。"}
+{"id":"chunk-ktpw8eqa.js#fgs","doc":"是否有只在本地投影显示的熔断器。"}
+{"id":"chunk-ktpw8eqa.js#m8e","doc":"是否算作可记录的拒绝：非 allow、不是同一结果对象、不是输入无效的拒绝。"}
+{"id":"chunk-ktpw8eqa.js#g8e","doc":"是否为“输入无效”导致的拒绝（behavior deny 且 invalidInput）。"}
+{"id":"chunk-ktpw8eqa.js#eMt","doc":"decisionReason.type 的全部取值表：rule、mode、subcommandResults、permissionPromptTool、hook、asyncAgent、sandboxOverride、workingDir、safetyCheck、classifier、other。"}
+{"id":"chunk-ktpw8eqa.js#mgs","doc":"权限原因文字常量：沙箱/只读自动放行原因、服务端分类器持有、工作目录外读写被阻挡（blockReadsOutsideWorkingDirectories / blockWritesOutsideWorkingDirectories）、--restricted 等；以及 INLINE_CODE_FLAGS（python -c、node -e 等内联代码 flag 表）。"}
+{"id":"chunk-ktpw8eqa.js#u0","doc":"原因是否为 outsideReadsBlocked 熔断的 safetyCheck。"}
+{"id":"chunk-ktpw8eqa.js#Wct","doc":"在开启读阻挡时，sandboxOverride 原因需要特殊处理的判定。"}
+{"id":"chunk-ktpw8eqa.js#ES","doc":"读阻挡下“路径在运行时才计算、无法检查”的 ask 结果（safetyCheck、不可交分类器、outsideReadsBlocked）。"}
+{"id":"chunk-ktpw8eqa.js#hY","doc":"读阻挡下“命令太复杂、解析器无法分析”的 ask 结果，不带建议。"}
+{"id":"chunk-ktpw8eqa.js#FOn","doc":"读阻挡下 sed 脚本不在白名单、可能读写任意文件时的 ask 结果。"}
+{"id":"chunk-ktpw8eqa.js#IJt","doc":"分类器相关原因文字常量：bashCommandClamp 拒绝/崩溃、Classifier unavailable、转录过长回退人工、钩子改写输入后无法复核、服务端分类器无解释等；B 为“分类器不可用类”原因集合。"}
+{"id":"chunk-ktpw8eqa.js#nMt","doc":"分类器拒绝的种类：unavailable（不可用或反复无结论停止）、no_verdict、block。"}
+{"id":"chunk-ktpw8eqa.js#rMt","doc":"记忆暂停相关原因文字与对外原因代码表 DECISION_REASON_CODES（classifier_transcript_too_long、outside_reads_blocked、memory_paused）。"}
+{"id":"chunk-ktpw8eqa.js#Bbr","doc":"决定原因在线上传输时的类型：subcommandResults 可带 typeOnWire 覆盖。"}
+{"id":"chunk-ktpw8eqa.js#ede","doc":"把决定原因映射为对外原因代码（transcript 过长、读阻挡、记忆暂停）；subcommandResults 中读阻挡优先。"}
+{"id":"chunk-ktpw8eqa.js#Bao","doc":"headless/无提示场景的原因常量：钩子改写输入触发 ask、需要交互但无提示、无审批表面、无法确认是人发起本步等，均为 asyncAgent 类型。"}
+{"id":"chunk-ktpw8eqa.js#Gct","doc":"把 ask 结果压缩成拒绝里附带的 ask 摘要：decisionReason、matchedAskRule、hooksMayRefuse。"}
+{"id":"chunk-ktpw8eqa.js#jOn","doc":"工具能否自行了结未询问的问题：结果 personOnly、工具实现 settleUnaskedQuestion，且不是钩子要求的 ask 地板。"}
+{"id":"chunk-ktpw8eqa.js#iMe","doc":"是否必须留给人：ask 要求用户交互，或工具 owesPersonOnlyAsk 返回真。"}
+{"id":"chunk-ktpw8eqa.js#vgs","doc":"--permission-prompt-tool / SDK canUseTool 通道的拒绝原因常量：MCP 工具需交互、MCP 服务器名冒充 claude.ai 连接器、流关闭、结果不合 schema、请求失败/中止、提示工具断开等。"}
+{"id":"chunk-a76knw89.js#ynr","doc":"能执行代码的工具名集合：声明 enablesCodeExecution 的工具，加上 PowerShell 工具。"}
+{"id":"chunk-a76knw89.js#KYr","doc":"默认预设工具名：当前启用的工具名列表。"}
+{"id":"chunk-a76knw89.js#Aee","doc":"按 deny 规则过滤工具池：整工具 deny、MCP effectiveMaxPermission 为 blocked、标准键 MCP 在不支持时、不在 --tools 启动清单内的工具都去掉；后者每个工具告警一次并上报 tengu_tool_withheld_outside_launch_list。"}
+{"id":"chunk-a76knw89.js#mVt","doc":"工具是否在 --tools 启动清单之外：有清单，且不是必需工具、MCP、特殊工具，也不在清单（或其父工具名不在清单）内。"}
+{"id":"chunk-a76knw89.js#gVt","doc":"工具是否因启动清单被省略（而不是被 deny 规则拒绝）：属于可省略集合、非 HIPAA，且去掉 toolsNarrowing 来源后不被 deny 规则拒绝。"}
+{"id":"chunk-a76knw89.js#hVt","doc":"以 Bash 方式运行代码的工具名：PowerShell 工具与 Artifact REPL 工具。"}
+{"id":"chunk-zfbhezv9.js#MKn","doc":"bypass 相关提示常量：后台会话未同意 bypass 能力的通知、--allow-dangerously-skip-permissions 被忽略的警告；ALL_DANGEROUS_COMMAND_PREFIXES 合并 Bash 危险前缀与其他两张表。"}
+{"id":"chunk-zfbhezv9.js#SIo","doc":"给权限上下文设置 toolAliases：tengu_sorted_zebra 打开时，对映射到 MCP 工具的危险工具别名登记为“会运行代码的 MCP 工具”，无法登记时告警（该工具的 allow 规则将绕过分类器）；最后按需重新剥离危险规则。"}
+{"id":"chunk-zfbhezv9.js#wIo","doc":"登记 SDK 宿主声明的会运行代码的 MCP 工具（codeRunningMcpTools：服务器名 → 工具名列表），畸形项计数并告警；返回规范化后的映射。"}
+{"id":"chunk-zfbhezv9.js#zHr","doc":"上下文已处于“剥离过危险规则”状态时，重新执行剥离（新规则加入后保持剥离）。"}
+{"id":"chunk-zfbhezv9.js#voe","doc":"设置权限模式前的守卫：模式名非法、bypass 在 --restricted 下、被设置禁用或会话未以 --dangerously-skip-permissions 启动、auto 不可用时返回 {ok:false, error, code}。"}
+{"id":"chunk-zfbhezv9.js#KHr","doc":"auto 不可用时的拒绝结果，错误文字与代码按不可用原因生成。"}
+{"id":"chunk-zfbhezv9.js#IC","doc":"带守卫地设置权限模式：守卫通过后在 setter 内对最新上下文再守卫一次并调用 transitionPermissionMode，成功后异步发出模式变化事件。"}
+{"id":"chunk-zfbhezv9.js#kIo","doc":"撤销到先前模式时的副作用：守卫通过则执行模式切换，按需同步 auto 激活状态，离开 auto 时恢复危险规则。"}
+{"id":"chunk-zfbhezv9.js#qHr","doc":"Chrome 分类器地板开关：env CLAUDE_CHROME_CLASSIFIER_FLOOR，否则远程会话读 tengu_cowork_chrome_automode_default 的安全值、本地读普通值。"}
+{"id":"chunk-zfbhezv9.js#CIo","doc":"把 CLI 参数的 allow 规则追加到 cliArg 来源（受限情况下 yg() 为真时不加）。"}
+{"id":"chunk-zfbhezv9.js#XHr","doc":"主动性档位选择因等待策略结论被暂缓时，返回给用户的提示。"}
+{"id":"chunk-zfbhezv9.js#JHr","doc":"放弃等待策略结论：清除 awaitsPolicyVerdict（若仍在等 GrowthBook 则保留其余待定状态）。"}
+{"id":"chunk-zfbhezv9.js#LKn","doc":"为遥测收集 auto 模式可用性：是否可用、不可用原因、禁用来源（含策略来源）、enabled 状态及其来源、熔断状态、settings 的 defaultMode、是否来自回退。"}
+{"id":"chunk-zfbhezv9.js#Dyt","doc":"auto 模式是否被托管策略设置禁用（policySettings 与可信策略层均禁用）。"}
+{"id":"chunk-zfbhezv9.js#PIo","doc":"禁用 bypass：当前为 bypass 时切回 default，并把 isBypassPermissionsModeAvailable 置为 false。"}
+{"id":"chunk-zfbhezv9.js#IIo","doc":"settings 的 permissions.defaultMode 是否为 auto。"}
+{"id":"chunk-zfbhezv9.js#MIo","doc":"把上下文规整为“已认领的启动模式”：清除主动性档位标记；未经 flag 允许时关闭 bypass 可用；plan 带 prePlanMode 时按 auto 是否激活处理 plan 的 auto 状态。"}
+{"id":"chunk-kswt4qha.js#KFe","doc":"主动性档位对应模式与当前不同时，返回 HIPAA 策略结论（taint/pending），否则 undefined。"}
+{"id":"chunk-kswt4qha.js#iQr","doc":"HIPAA 策略结论：已知 HIPAA 或曾见到不可得的 HIPAA 状态时为 taint，策略待定时为 pending。"}
+{"id":"chunk-kswt4qha.js#uhi","doc":"启动参数解析：取 CLI 或 settings 的 fallbackModel 列表并规范化（与权限无关，属模型/启动选项解析）。"}
+{"id":"chunk-kswt4qha.js#jZo","doc":"把逗号分隔字符串拆成去空白的非空项列表。"}
+{"id":"chunk-kswt4qha.js#WZo","doc":"启动时解析主模型：CLI --model（default 取默认模型）> agent frontmatter 的 model > env ANTHROPIC_MODEL > settings.model，并记录来源；随后校验模型可用性（与权限无关，属模型解析）。"}
+{"id":"chunk-kswt4qha.js#fhi","doc":"启动参数解析：取 CLI 的 systemPrompt 与 appendSystemPrompt，并把额外的附加系统提示拼到 append 之后。"}
+{"id":"chunk-kswt4qha.js#tcr","doc":"GrowthBook tengu_harbor_willow（默认开）或远端配置 meadow_lantern 为真时返回 true；用途是启动选项的一个特性闸门。"}
+{"id":"chunk-kswt4qha.js#GZo","doc":"找出最后一个设置了 defaultMode 的设置层（auto 来自不可信层除外）；层不可读时返回 settings_unreadable，非 auto 默认返回 stored_default，否则 undefined。"}
+{"id":"chunk-kswt4qha.js#ncr","doc":"auto 能否作为启动模式“种入”的因素：可种入（设置允许且非 scrub）、存储的 defaultMode 阻挡、用户另选了档位或继承模式、继承 plan 保持、可信 plan 被替换。"}
+{"id":"chunk-kswt4qha.js#rcr","doc":"启动模式遥测：未显式指定模式/跳过权限/scrub 时记录 settings 的 defaultMode 与 effort。"}
+{"id":"chunk-kswt4qha.js#phi","doc":"远程会话的模式：发来的模式为 auto 时返回 undefined（另行处理），有则用之；否则取仓库设置的 defaultMode（须为远程支持的非 auto 模式），缺省 default。"}
+{"id":"chunk-sfy7bm1n.js#cXr","doc":"Bash 规则是否危险：整工具、空内容或全是空白/星号，或命中危险命令前缀表。"}
+{"id":"chunk-sfy7bm1n.js#wYt","doc":"规则是否危险（带缓存）：Bash、PowerShell、Task 危险规则，或代码执行类工具、Artifact REPL 工具。"}
+{"id":"chunk-sfy7bm1n.js#qAt","doc":"工具是否属于“auto 下钩子 allow 也必须经分类器”的类别：MCP 工具，或在相关开关下的特定前缀工具、MCP 资源读取工具、危险工具。"}
+{"id":"chunk-sfy7bm1n.js#sme","doc":"对分类器而言规则是否危险：在特定开关下 Bash/PowerShell 一律危险，MCP 工具一律危险，否则走 wYt。进入 auto 时据此剥离 allow 规则。"}
+{"id":"chunk-e6aww6q8.js#mX","doc":"auto 不可用原因到提示文字：settings、circuit-breaker、fast-mode、model 四种。"}
+{"id":"chunk-e6aww6q8.js#XWt","doc":"当前 auto 不可用时的提示文字，无具体原因时用通用文字。"}
+{"id":"chunk-4p0ppc72.js#p","doc":"PermissionUpdate 可用的目的地列表：userSettings、projectSettings、localSettings、flagSettings、cliArg、session。"}
+{"id":"chunk-7kt7c7a3.js#TSe","doc":"auto 模式 enabled 状态的来源是否为 disabled（读取失败记错误并返回 false）。"}
+{"id":"chunk-gz7b768t.js#Wu","doc":"读取 GrowthBook tengu_auto_mode_config，缺省返回冻结的空配置。"}
+{"id":"chunk-sfy7bm1n.js#EYe","doc":"把某行为（allow/deny/ask）的各来源规则字符串展开成规则对象列表 {source, ruleBehavior, ruleValue}。"}
+{"id":"chunk-sfy7bm1n.js#wFe","doc":"工具是否命中整工具规则（规则无内容时按工具名匹配）。"}
+{"id":"chunk-sfy7bm1n.js#S","doc":"构造工具匹配信息（惰性计算）：工具名、MCP 信息、别名来源、MCP 服务器规则名、其他 deny/ask 读取名。"}
+{"id":"chunk-sfy7bm1n.js#EYt","doc":"该规则是否允许别名展开：cliArg 与 toolsNarrowing 来源不展开。"}
+{"id":"chunk-sfy7bm1n.js#Rb","doc":"规则是否命中工具：按名字（含别名、glob）匹配，再检查 aliasSkillToolNames 与打包别名 skill 名。"}
+{"id":"chunk-sfy7bm1n.js#Zr","doc":"找命中该工具的 deny 规则（会话结束类工具除外），返回规则或 null。"}
+{"id":"chunk-sfy7bm1n.js#C","doc":"带别名的规则匹配：无内容规则走 toolMatchesRule；有内容规则检查别名来源上的宽泛内容是否覆盖该工具。"}
+{"id":"chunk-sfy7bm1n.js#hQo","doc":"规则名是否为模式名（glob 名或只到 MCP 服务器一级的名字）。"}
+{"id":"chunk-sfy7bm1n.js#Lvn","doc":"为一组 deny 规则建索引：整名集合、模式规则、MCP 服务器名、带内容但经别名覆盖的规则等，供批量过滤工具池。"}
+{"id":"chunk-sfy7bm1n.js#IPe","doc":"用 deny 规则索引判断工具是否被拒绝：名字、其他读名、父工具名、别名 skill 名、MCP 服务器名、模式规则、带内容的覆盖规则依次检查。"}
+{"id":"chunk-sfy7bm1n.js#Jui","doc":"会话结束类工具是否被整工具 deny 拒绝（存在同名 allow 规则时不算）。"}
+{"id":"chunk-sfy7bm1n.js#kJ","doc":"找 toolName 与 ruleContent 精确相等的 deny 规则（例如 Agent(type)）。"}
+{"id":"chunk-sfy7bm1n.js#Uar","doc":"找 toolName 与 ruleContent 精确相等的 ask 规则。"}
+{"id":"chunk-sfy7bm1n.js#Qui","doc":"按 Agent(type) deny 规则过滤代理列表。"}
+{"id":"chunk-e6aww6q8.js#fbn","doc":"把规则列表按 来源:行为 分组，转换成 PermissionUpdate 列表（type 由调用方给定，destination 即来源）。"}
+{"id":"chunk-e6aww6q8.js#mkn","doc":"取结果中的 updatedInput，没有则用回退输入。"}
+{"id":"chunk-8wvtd8sr.js#Al","doc":"URL 类规则的精确域名：解析带类型前缀的规则内容，取出不含通配的域名；属于 WebFetch/浏览器类工具的规则族，误归入本模块。"}
+{"id":"chunk-8wvtd8sr.js#ko","doc":"取该工具的 URL 规则中与给定 URL 匹配的那些；属于 WebFetch/浏览器类工具的规则族。"}
+{"id":"chunk-8wvtd8sr.js#Wp","doc":"文件编辑权限结论（供编辑类 UI/预检用）：Edit 级 ask 规则或规则原因 → ask；mode 原因在 plan 下为带 plan 地板的 ask；allow 或 bypass/有 allow 规则且非安全检查 → allow；特定情况为 unseen。"}
+{"id":"chunk-0wdgqhcf.js#Cn","doc":"按键集合从 alwaysAskRules 中删除 ask 规则。"}
+{"id":"chunk-38x90rmj.js#q","doc":"构造 Chrome 工具的域名 allow 规则对象。"}
+{"id":"chunk-pc1rmcr2.js#k","doc":"规则来源是否为会话级（cliArg、command、session）。"}
+{"id":"chunk-xr4xc2mq.js#et","doc":"原因（含子命令递归）是否为非 allow 的规则原因，或读阻挡相关原因；第二参数选择检查哪一类。"}
+{"id":"chunk-anrta56w.js#xvn","doc":"前置声明（frontmatter）里 allowed-tools 授权被扣留的原因：仅托管规则模式且来源非托管 → managed_rules_only；限制个人配置时来自个人配置 → personal_config。"}
+{"id":"chunk-anrta56w.js#Oar","doc":"报告被忽略的 skill/command frontmatter allowed-tools：记告警（区分 allowManagedPermissionRulesOnly 与 CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG），上报 tengu_frontmatter_grant_withheld，文本模式下也打印到 stderr。"}
+{"id":"chunk-anrta56w.js#SYe","doc":"命令/skill 实际生效的 allowed-tools：读取工具列表；带有被扣留的钩子或授权被扣留时返回空。"}
+{"id":"chunk-anrta56w.js#oXr","doc":"插件授权的来源信息：插件 id、是否官方认证、市场来源。"}
+{"id":"chunk-anrta56w.js#RPe","doc":"代理是否属于被限制的个人配置（运行时注册的不算）。"}
+{"id":"chunk-anrta56w.js#uQo","doc":"命令的钩子是否被扣留：开启个人配置限制、非宿主目录来源且来源受限。"}
+{"id":"chunk-anrta56w.js#_Yt","doc":"仓库内的设置来源：projectSettings，以及在 settings.local.json 被 git 跟踪（或曾见过被跟踪）时加上 localSettings；首次发现被跟踪时持久化标记。"}
+{"id":"chunk-anrta56w.js#sXr","doc":"工作区信任闸门的豁免：CLAUDE_CODE_SANDBOXED、远程/SDK/非交互等环境不施加项目授权闸门。"}
+{"id":"chunk-anrta56w.js#bYt","doc":"工作区是否有被信任闸门挡住的授权：被闸门的 projectSettings/localSettings 中确有授权项。"}
+{"id":"chunk-bwpc82tt.js#LOo","doc":"从设置对象中只提取限制性权限（deny 与 ask 的字符串数组），没有则返回 null。"}
+{"id":"chunk-pp50kewz.js#Rn","doc":"插件启用的锁定来源：仅策略启用的插件返回 policySettings；否则看覆盖来源是否为 flagSettings 等（属插件启用管理，误归入 permissionsLoader）。"}
+{"id":"chunk-82kqcve8.js#avn","doc":"向权限上下文添加额外工作目录（记录来源），返回新上下文。"}
+{"id":"chunk-82kqcve8.js#har","doc":"工具名及其全部别名组成的集合。"}
+{"id":"chunk-82kqcve8.js#mte","doc":"先校验 PermissionUpdate（validatePermissionUpdate），被丢弃时记录原因，通过后持久化。"}
+{"id":"chunk-4kzs0ch0.js#f","doc":"与磁盘已存规则合并：目的地为 user/project/local 设置时，把已存规则放前、再加上新规则中非特殊形式的项。"}
+{"id":"chunk-18hwfzwa.js#WOt","doc":"启动时是否提供 auto 模式选项：来自回退时看 atn(\"auto\") 或 nAr，否则看 qgo（UI 层逻辑，误归入 types/permissions）。"}
+{"id":"chunk-hgrqcyvx.js#nqn","doc":"该 tool_use 是否由用户决定：查 toolDecisions 中的来源为 user_temporary/user_permanent；没有记录时用全局判定。"}
+{"id":"chunk-pc1rmcr2.js#h0t","doc":"构造 auto 模式闸门通知对象（key auto-mode-gate-notification，警告色、高优先级）。"}
+{"id":"chunk-dcmhvw5a.js#Jio","doc":"Shell 规则是否以未转义的 * 结尾（统计结尾 * 之前反斜杠个数的奇偶）。"}
+{"id":"chunk-82kqcve8.js#$9r","doc":"自动编辑的危险目录名表：.git .vscode .idea .claude .husky .cargo .devcontainer .yarn .mvn（比 2.1.88 多后五个）；同一语句还定义多段危险子路径 DANGEROUS_SUBPATHS = ['.config/git']。checkPathSafetyForAutoEdit 用它判定是否需要人工确认。"}
+{"id":"chunk-82kqcve8.js#lvn","doc":"判断一组路径拼写是否指向 Claude 设置文件：命中已知设置路径或托管目录即 certain；没有 .json 拼写为 none；有 .json 但托管 drop-in 目录尚未全部解析时为 possible。写阻断（blockWritesOutsideWorkingDirectories）据此决定是否拒绝。"}
+{"id":"chunk-82kqcve8.js#$Jo","doc":"对每个托管设置 drop-in 目录异步调用定位函数（通常是 realpath），收集 {dir, located} 或 {dir, error}，用于得到 managed-settings.d 的全部真实拼写。"}
+{"id":"chunk-82kqcve8.js#Ust","doc":"返回托管设置 drop-in 目录列表：平台默认的 managed-settings.d；WSL 且启用 Windows 侧托管设置时再加 Windows 侧目录。"}
+{"id":"chunk-82kqcve8.js#jst","doc":"汇总所有设置文件路径（各层 settings、附加目录里的 settings）和设置目录（含 drop-in 目录的父目录），去重后返回 {files, dirs}，供设置路径保护使用。"}
+{"id":"chunk-82kqcve8.js#FJo","doc":"生成用于在命令/路径文本里粗查“是否提到设置文件”的小写关键串：cowork 设置名、managed-settings.json、managed-settings.d/、策略设置所在目录、drop-in 目录，以及 .claude 和配置目录名下各设置文件名的 / 与 \\ 两种拼写。"}
+{"id":"chunk-82kqcve8.js#UJo","doc":"返回 .claude 与配置目录基名中以点开头、长度大于 1 的小写目录词，用于文本级判断路径是否落在 Claude 设置目录。旧版名 isInGlobalClaudeFolder 与实际行为不符。"}
+{"id":"chunk-82kqcve8.js#dvn","doc":"拼装 safetyCheck 决策原因里的分类器字段：普通情况透传 classifierApprovable/circuitBreaker/also；restricted 模式下强制 classifierApprovable=false、circuitBreaker='restrictedMode'，原熔断标签并入 also。"}
+{"id":"chunk-82kqcve8.js#jA","doc":"scratchpad 是否启用：GrowthBook tengu_scratch 打开，或 Artifact 工具可用（isArtifactToolEligible）。"}
+{"id":"chunk-82kqcve8.js#tYt","doc":"判断路径是否在当前会话的 scratchpad 目录下（按比较前缀，并排除跨越会话边界的拼写），用于把内部路径显示为 scratchpad。"}
+{"id":"chunk-82kqcve8.js#r3","doc":"判断 UNC/网络路径是否位于 trustedNetworkDirectories 列出的可信网络根之下（要求同为网络路径形状，且 pathInWorkingPath 成立）；设备命名空间路径一律不可信。"}
+{"id":"chunk-82kqcve8.js#eme","doc":"是否为不可信的 UNC 路径：NT 设备命名空间直接视为不可信；否则是 UNC 形状、不是本地映射且不在可信网络根下。"}
+{"id":"chunk-82kqcve8.js#nYt","doc":"给可疑 Windows 路径形状分类并返回原因码：nt_device_namespace、colon_past_drive_position（Windows/WSL 上盘符后再出现冒号，即 ADS）、tilde_digit（8.3 短名）、device_path_prefix（\\\\?\\ 等）、trailing_dot_or_whitespace、dos_device_suffix、dot_run_segment（...）、unc_or_webdav_form（不可信网络根）。无可疑返回 undefined。"}
+{"id":"chunk-82kqcve8.js#Wst","doc":"远程模式下编辑 Claude 配置的豁免是否适用：要求 isRemoteMode、非 restricted、当前与改写前都不是 auto、且不是沿用 auto 分类器的 plan。"}
+{"id":"chunk-82kqcve8.js#$At","doc":"写权限询问时是否附带“切到 acceptEdits”建议：改写前模式不是 auto 类；default 模式总是附带；plan 模式仅当进入 plan 前的模式不是 auto 类时附带。"}
+{"id":"chunk-82kqcve8.js#sv","doc":"工作目录集合 = 当前原始 cwd + toolPermissionContext.additionalWorkingDirectories 的键（--add-dir、settings additionalDirectories、会话内添加）。"}
+{"id":"chunk-82kqcve8.js#bwe","doc":"取某工作目录的全部真实拼写（符号链接解析等），结果缓存在权限状态里；CLAUDE_CODE_EVAL_CONFINED 下对 cwd 只用原拼写。"}
+{"id":"chunk-82kqcve8.js#cvn","doc":"把某工作目录钉为只按原名比较（解析结果设为自身，并加入“按名持有”集合），用于不允许跟随符号链接的目录。"}
+{"id":"chunk-82kqcve8.js#BJo","doc":"若该工作目录尚未解析过，则把它登记为“按名持有”，后续只按字面路径比较。"}
+{"id":"chunk-82kqcve8.js#jJo","doc":"查询工作目录是否被登记为“按名持有”（只按字面路径比较，不展开真实拼写）。"}
+{"id":"chunk-82kqcve8.js#EPe","doc":"blockReadsOutsideWorkingDirectories 打开时判断这次读是否被拦：路径不在读允许的工作目录内、且不是内部可读路径（readBlockFence 模式下的 checkReadableInternalPath）即返回 true。"}
+{"id":"chunk-82kqcve8.js#b_","doc":"判断路径的全部拼写是否都落在某个工作目录（含其真实拼写，按名持有的目录只用原名）或额外根之内；比较时不折叠大小写、要求 UNC 形状一致，非 macOS 的额外根跳过 /private 别名。"}
+{"id":"chunk-82kqcve8.js#oYt","doc":"Shell 写目标的阻断说明：先查内部硬拒绝；blockWritesOutsideWorkingDirectories 打开时，目录外写返回“工作目录外”消息，写到可能是设置文件的路径返回设置文件消息；否则返回 undefined。"}
+{"id":"chunk-82kqcve8.js#F9r","doc":"GrowthBook tengu_auto_mode_worktree_fast_path：auto 模式下是否对已核实的 linked worktree 目录走快路径。"}
+{"id":"chunk-82kqcve8.js#WJo","doc":"在 worktree 快路径开启时，从每个工作目录找到 git 仓库根，核实其在工作目录内且 realpath 未被重定向后，列出该仓库的 linked worktree 目录（跳过不安全目录），供 auto 模式视作可写工作区。"}
+{"id":"chunk-82kqcve8.js#GJo","doc":"把一条路径规则编译成 {root, pattern}：patternWithRoot 拆根，规范化后转成 gitignore 风格 glob（allow 规则与 deny 规则的规范化方式不同）；无效模式返回 null。"}
+{"id":"chunk-82kqcve8.js#yar","doc":"找出可能借大小写折叠或排除 glob 逃逸的路径中、其任一拼写命中 Read deny 规则的那些，返回集合；用于搜索类工具补做 deny 过滤。旧版名 isFileReadDenied 不准确。"}
+{"id":"chunk-82kqcve8.js#FAt","doc":"若某目录本身就是一条 deny（或指定行为）路径规则的根、且该规则是 /** 或 **（整目录内容），返回该规则；Windows 上按大小写折叠比较，并补 WSL 第二挂载根拼写。用于判断整个目录的内容是否被拒。"}
+{"id":"chunk-82kqcve8.js#Gst","doc":"判断一个路径是否匹配给定规则串：按 session 来源解析根，用 ignore 库做 gitignore 匹配；不匹配时，若规则以 * 开头或不像路径且不是 :* 前缀规则，再退回通配匹配。"}
+{"id":"chunk-82kqcve8.js#zst","doc":"把位于可信符号链接前缀下的路径改写为其目标前缀，用于 allow 规则匹配时补一次拼写。"}
+{"id":"chunk-82kqcve8.js#mvn","doc":"要求所有路径拼写都命中某条 allow 规则（必要时用可信符号链接改写后的拼写再试），全部命中返回第一条规则，否则 null。"}
+{"id":"chunk-82kqcve8.js#dYe","doc":"读权限的网络路径防御：对 /net、/Network 自动挂载、macOS 内核重定向前缀（/.vol 等）和 UNC 路径（含所有解析拼写），若不在可信网络根下则返回 ask，并说明可能触发 DNS 查询或远程挂载。"}
+{"id":"chunk-82kqcve8.js#gvn","doc":"返回命中某路径的 Read deny 规则：先查整工具 deny；没有路径级 deny 规则时直接返回；否则逐个拼写用 matchingRuleForInput 查。"}
+{"id":"chunk-82kqcve8.js#cm","doc":"只支持 Read 工具最小属性集（name、getPath 等）的探针对象，用 Proxy 包装，访问其他属性即抛错；供“按路径算读权限”的函数在没有真实工具对象时调用规则检查。"}
+{"id":"chunk-82kqcve8.js#cYe","doc":"判断读某路径是否会被自动放行：有整工具 Read deny/ask 规则则否；按分层读判定，allow 层为是，path-mode-ask 仅在 bypassPermissions 下为是，其余（各类 deny/ask）为否。"}
+{"id":"chunk-82kqcve8.js#Swe","doc":"对一组路径做分层读判定，返回最先命中的层：bare-deny（整工具 deny）、path-deny（可选拒绝自动挂载查找路径，或某路径被拒）、path-rule-ask（路径级 ask 规则）、bare-ask（整工具 ask）、path-mode-ask（其他需询问）、allow。toolsNarrowing/command 来源的规则不参与。"}
+{"id":"chunk-82kqcve8.js#uYe","doc":"工具池里是否有能读文件的工具（Read，或另一读类工具）。"}
+{"id":"chunk-82kqcve8.js#lYt","doc":"若路径经符号链接解析后的落点与请求路径不同（按规范键比较），返回落点；未解析或相同返回 null。"}
+{"id":"chunk-82kqcve8.js#B9r","doc":"写目标经符号链接重定向时生成说明：返回 {landing, sentence, personOnly}；请求路径本身安全或已实际落到目录外时 personOnly=true，要求必须由人确认。"}
+{"id":"chunk-82kqcve8.js#yFe","doc":"拼出“X 解析到 Y”的符号链接说明句；落点在工作目录外时追加“which is outside the allowed working directories”。"}
+{"id":"chunk-82kqcve8.js#_ar","doc":"把内部路径的真实拼写还原成规范根：若路径以 cwd、原始 cwd、配置目录、家目录等根的某个解析拼写开头，就换回原根；否则按可信符号链接改写。"}
+{"id":"chunk-82kqcve8.js#qJo","doc":"把 safetyCheck 类型的拒绝原因改成 other（保留 reason，标 wasSafetyCheck），让它作为 ask 传播时不再带安全检查的熔断语义。"}
+{"id":"chunk-82kqcve8.js#hvn","doc":"内部路径给出的结论是否成立：服务端代执行（servedCall）的调用不接受内部路径的 allow，其余都成立。"}
+{"id":"chunk-82kqcve8.js#cYt","doc":"是否为读闸门产生的安全询问：behavior 为 ask，且原因是 other，或是不可由分类器批准、也没有熔断标签的 safetyCheck。"}
+{"id":"chunk-82kqcve8.js#j9r","doc":"写判定的前置拒绝：先查内部硬拒绝；restricted 或 blockWritesOutsideWorkingDirectories 下检查工作目录约束；阻写模式下可能是设置文件则直接 deny；最后交给 yh 做剩余前置检查。"}
+{"id":"chunk-18hwfzwa.js#LMt","doc":"从工具上下文取 toolPermissionContext.additionalWorkingDirectories（Map）。与 filesystem 的 allWorkingDirectories 同名但不含 cwd，应归 UI/工具侧代码。"}
+{"id":"chunk-18hwfzwa.js#Mgo","doc":"判断路径是否是记忆目录下的 .md 文件（排除指定子目录和若干特殊文件）。旧版名 isSessionPlanFile 误配，应归 memdir。"}
+{"id":"chunk-0h4e7gnq.js#Yd","doc":"把 .claude/worktrees/<名>/<相对路径> 映射回主仓库中的对应路径（防 .. 逃逸）；不在 worktree 下且位于允许根内返回 null，否则原样返回。旧版名 isDangerousFilePathToAutoEdit 误配，应归 worktree 相关模块。"}
+{"id":"chunk-8t8n4kdh.js#ba","doc":"把 MCP discover 判定结果写入状态：有托管存储时写存储（0600），否则在本地路径原子写入（目录 0700、文件 0600），失败返回错误。旧版名 ensureScratchpadDir 误配，应归 MCP 模块。"}
+{"id":"chunk-8wvtd8sr.js#qc","doc":"在路径中找出 scratchpad 根（形如 .../claude[-N]/<x>/<UUID>/scratchpad），返回到 scratchpad 为止的前缀；找不到返回 undefined。"}
+{"id":"chunk-axmbhcjg.js#Ve","doc":"列出每个附加目录下的 .claude/settings.json 与 settings.local.json 路径。旧版名 isClaudeSettingsPath 误配。"}
+{"id":"chunk-tb11za84.js#te","doc":"是否 UNC 路径：\\\\?\\UNC\\ 前缀，或以 \\\\ 开头但不是 \\\\?\\、\\\\.\\ 设备前缀。旧版名 hasSuspiciousWindowsPathPattern 误配。"}
+{"id":"chunk-fq0cr76a.js#For","doc":"把目录列表格式化成带引号的逗号串，超过上限只列前几个并附“and N more”，用于路径询问消息。"}
+{"id":"chunk-fq0cr76a.js#Uor","doc":"从内部路径拒绝原因中取可展示的文字（safetyCheck/other 的 reason）。"}
+{"id":"chunk-fq0cr76a.js#Bor","doc":"若拒绝原因是只能由宿主上的人确认的 safetyCheck，返回其熔断标签。"}
+{"id":"chunk-fq0cr76a.js#f3r","doc":"把内部路径硬拒绝转换为 Shell 命令的 safetyCheck 询问原因：附加符号链接说明；restricted 模式下标 restrictedMode 并在 also 中记 internalHardDeny；宿主专属时沿用其熔断；否则标 internalHardDeny，是否允许分类器批准取决于是否必须由人确认。"}
+{"id":"chunk-fq0cr76a.js#$3o","doc":"判断路径检查结果是否“仅因在工作目录外而被默认拒绝”（没有具体原因），这类可以给出 addDirectories 建议。"}
+{"id":"chunk-fq0cr76a.js#bH","doc":"Shell 路径参数的统一许可判定：任一拼写命中 deny 规则即拒绝；路径无法解析时读/写分别按 outsideReadsBlocked、restrictedMode 给出原因；读受 blockReadsOutsideWorkingDirectories 约束；写先看内部可写路径，再做 checkPathSafetyForAutoEdit；随后按工作目录、规则、模式决定，返回 {allowed, decisionReason, isInWorkingDir, …}。"}
+{"id":"chunk-fq0cr76a.js#h4e","doc":"判断路径（含各种拼写）是否为受保护系统路径：Windows 设备或管理路径、macOS /.vol 等内核重定向路径、其他系统根。旧版名 getReservedShortcuts 误配。"}
+{"id":"chunk-fq0cr76a.js#own","doc":"按 / 切分路径段；Windows 上同时按 \\ 和 / 切分并合并两种结果。"}
+{"id":"chunk-fq0cr76a.js#Gxe","doc":"路径中是否有出现在普通段之后的 ..（向上逃逸），开头的 .. 不算。"}
+{"id":"chunk-fq0cr76a.js#swn","doc":"是否在 glob 字符（或未闭合的 [）之后出现 ..，这种路径无法静态确定落点，需人工确认。"}
+{"id":"chunk-fq0cr76a.js#p3r","doc":"对一个已展开的 Shell 路径参数做许可判定：写操作按符号链接落点检查并在被拒时给出实际落点；读操作先解析真实路径，必要时连同原拼写一起交给 isPathAllowed。"}
+{"id":"chunk-e6aww6q8.js#QEo","doc":"按规范化真实路径去重，判断文件是否已加载（未加载则登记）。旧版名 validateGlobPattern 误配，属插件 markdown 遍历。"}
+{"id":"chunk-e6aww6q8.js#BJe","doc":"分类器转录中被截掉的早期回合的占位键 omitted 及其 JSONL 占位行。"}
+{"id":"chunk-e6aww6q8.js#zJe","doc":"若动作消息里的 tool_use 都是已知工具，且压缩成分类器输入后为空，返回“无需分类”的放行结果；否则返回 undefined。旧版名 countToolCallsSince 误配。"}
+{"id":"chunk-e6aww6q8.js#UZt","doc":"取分类器的备用模型：外部默认模型走探测降级的备用，其他走配置的备用；与主模型相同则不返回。"}
+{"id":"chunk-e6aww6q8.js#Tjr","doc":"分类器错误是否为暂时性（可外层重试）：wall_clock_timeout、connection_timeout、connection_error，以及 HTTP 429 和 5xx。"}
+{"id":"chunk-aepeg2w5.js#Hy","doc":"从模型注册表收集 confidential 模型的 id 及其 default/fast 变体。旧版名 isTwoStageClassifierEnabled 误配，属模型注册模块。"}
+{"id":"chunk-aepeg2w5.js#kxt","doc":"需要隐藏的模型 id 集合：confidential 模型、config.dropped_model_ids，以及无法解析的默认模型。属模型目录模块。"}
+{"id":"chunk-aepeg2w5.js#_W","doc":"从 prompt（字符串或内容块数组）中取出文本，多块用换行连接，没有文本返回 null。"}
+{"id":"chunk-aepeg2w5.js#Ais","doc":"是否为人类亲自发出的回合：用户发出的 queued_command 附件，或既不是工具结果也不是压缩摘要的 user 消息。"}
+{"id":"chunk-0sfjpx19.js#Ht","doc":"把 usage 乘系数后累加到总计（输入、输出、缓存读、缓存写四项）。旧版名 combineUsage 不确切，属成本统计。"}
+{"id":"chunk-0sfjpx19.js#uo","doc":"把 usage 转成 [输入, 输出, 缓存读, 缓存写] 元组。属成本统计。"}
+{"id":"chunk-0sfjpx19.js#Gi","doc":"判断消息（或 queued_command 附件的 prompt）是否包含指定文本。旧版名 buildTranscriptEntries 误配。"}
+{"id":"chunk-s61vbvea.js#fqr","doc":"判断错误消息是否为“提示词过长”（prompt is too long / input is too long for requested model）。"}
+{"id":"chunk-r01896cg.js#ZJo","doc":"文本中是否含运行时才确定的占位符：变量或不确定变量占位，或不在行首的命令替换输出占位。"}
+{"id":"chunk-r01896cg.js#eQo","doc":"文本是否以任一占位符（命令替换输出、变量、不确定变量）开头。"}
+{"id":"chunk-r01896cg.js#Tar","doc":"递归扫描同一行上紧贴前一语句的语句或 (…) 组：bash 会把它们读成一条命令或报错，zsh 会当成 glob 组，存在解析分歧，返回 too-complex（differential）。"}
+{"id":"chunk-r01896cg.js#Svn","doc":"文本中是否有独立的 ]]（排除 [[:class:]] 等字符类写法，以及两侧都是单词字符的情况），用于发现 [[ ]] 条件的提前闭合。"}
+{"id":"chunk-r01896cg.js#wvn","doc":"bash/zsh 会隐式改写的特殊变量集合（_、RANDOM、SECONDS、REPLY、PIPESTATUS、BASH_REMATCH、MATCH、OPTARG、PS1 等），这些变量的值不能当作已跟踪的常量。"}
+{"id":"chunk-r01896cg.js#WAt","doc":"去掉反斜杠转义（保留会影响引号或展开的转义），单引号区原样保留，用于比较命令文本的字面形态。"}
+{"id":"chunk-r01896cg.js#Car","doc":"会写变量的 zsh 模块函数名（strftime、zstat、zselect、zftp 等），以及会写变量的 zsh 内建集合（zformat、zparseopts、zstyle、vared……）。"}
+{"id":"chunk-r01896cg.js#gYe","doc":"zsh 危险内建集合（zmodload、emulate、sysopen、zpty、ztcp、zf_rm……、setopt、autoload，以及会写变量的内建），checkSemantics 遇到即拒绝；同一语句定义 find 的执行/写类动作集合 FIND_EXEC_ACTIONS（-exec、-delete、-fprint 等）。"}
+{"id":"chunk-r01896cg.js#hte","doc":"eval 类内建集合（eval、source、.、exec、trap、alias、let、mapfile、bind、complete……），这类命令的参数会被当成代码执行；同时定义 awk 程序名集合，以及 awk 读取程序文件的选项正则。"}
+{"id":"chunk-r01896cg.js#tme","doc":"shell 程序名集合（POSIX shell、busybox/toybox/wsl/su 等 applet、fish/csh、cmd/powershell）、可透明剥离的启动包装（time、command、env、nice、nohup、sudo、doas、timeout……）和不处理的执行包装（watch、setsid、strace、flock、unshare……）。"}
+{"id":"chunk-r01896cg.js#X9r","doc":"Bash 语义检查用的常量表：会对下标求值的选项（test -v、printf -v、read -a…）、算术比较运算符、声明类关键字与内建、set -o 安全选项与字母，以及影响命令查找/执行的变量名（PATH、BASH_ENV、LANG、LC_* 等）。"}
+{"id":"chunk-r01896cg.js#yYe","doc":"read 内建的选项表：带数据参数的选项、需再检查参数的选项、数值参数选项与数值正则；另有带下标变量名正则、组合短选项里吃参数的字母、/proc/*/environ 正则和“换行后 #”正则。"}
+{"id":"chunk-e6aww6q8.js#XIo","doc":"结构性节点类型集合：program、list、pipeline、redirected_statement，遍历时只下钻不当作命令。"}
+{"id":"chunk-38axkkfw.js#I","doc":"重定向相关的操作符与节点类型集合（< > >> << <<- <<< <& >& &> &>> >| 以及 file_descriptor、heredoc_*），判断重定向子节点是否只含这些记号。"}
+{"id":"chunk-k5vy5m8c.js#Z9r","doc":"检测 $name 或 ${...} 中变量名紧跟非 ASCII 字符：zsh 会把多字节字符算进变量名而 bash 不会，存在解析分歧。"}
+{"id":"chunk-r01896cg.js#En","doc":"声明类命令的正则与选项规则：前缀包装（builtin/command/exec/time/coproc/noglob/nocorrect/-）、声明命令名、declare/export 会改变语义的标志字母，以及 declare/typeset/local/export/readonly 的赋值型与列出型选项。"}
+{"id":"chunk-a477qqne.js#je","doc":"构造读文件成功结果 {outcome:'ok', path, version, bytes, content, op}。旧版名 isOperator 误配，与 Bash 无关。"}
+{"id":"chunk-m41h77x8.js#Qi","doc":"把字符串重复 n 次（n 非有限或不大于 0 时视为 0）。旧版名 joinContinuationLines 误配，属第三方或通用工具。"}
+{"id":"chunk-a477qqne.js#fe","doc":"把名字编码为固定前缀加 UTF-8 十六进制串。旧版名 generatePlaceholders 误配，与 Bash 无关。"}
+{"id":"chunk-a477qqne.js#vn","doc":"解码固定前缀加十六进制的名字，校验能往返编码且名字合法，否则返回 null。与 Bash 无关。"}
+{"id":"chunk-aqdf5t3e.js#co","doc":"返回逐行处理器：对以 { 开头的行解析 JSON，comment 类型回调 comment()，ver 字段回调 ver(v,'live')，其他忽略。旧版名 splitCommandWithOperators 误配，属 frameLive 相关模块。"}
+{"id":"chunk-hm0ce8vc.js#ja","doc":"按角色（如 prep）计算 git 挂载的信任判定：把 operator、routing、target、trustBundle 交给 Oln，取其 decision。旧版名 handleFileDescriptorRedirection 误配，属 runner/挂载模块。"}
+{"id":"chunk-r01896cg.js#vt","doc":"递归判断语法树中是否含 comment 节点。"}
+{"id":"chunk-38axkkfw.js#M","doc":"替换类节点类型集合：command_substitution、process_substitution、arithmetic_expansion、subshell。"}
+{"id":"chunk-38axkkfw.js#K","doc":"参数类节点类型集合（word、string、raw_string、number），以及“含未转义 shell 操作符”和“以未转义反斜杠结尾”两个正则。"}
+{"id":"chunk-whwptcwy.js#te","doc":"声明命令集合、可执行代码的命令集合（eval 类、zsh 危险内建、shell 程序、包装命令、xargs、parallel），Claude 配置目录下的敏感文件名（.config.json、.credentials.json、.device-keys.json），以及开关名 tengu_toasty_hammock。属只读命令判定的辅助模块。"}
+{"id":"chunk-e6aww6q8.js#wKt","doc":"按命令规格判断某选项是否带参数：规格里有该选项时看其 args；规格有子命令且下一个词不是已知子命令时也视为带参数。"}
+{"id":"chunk-e6aww6q8.js#rOo","doc":"按命令规格跳过选项（及其参数），返回第一个子命令词；规格没有子命令时返回第一个非选项词。用于提取命令前缀。"}
+{"id":"chunk-e6aww6q8.js#Lbn","doc":"前缀提取用的常量：纯数字参数正则、环境变量赋值正则、总视为包装命令的集合（nice），以及转数组的辅助函数。"}
+{"id":"chunk-wj577vf9.js#bt","doc":"在 token 序列中从末尾向前，在换行数预算内找可用的起始位置（不早于最后一个空白 token 之后），返回满足条件的下标。旧版名 findLastStringToken 存疑，与 shell 补全无直接关系。"}
+{"id":"chunk-mthxbav8.js#It","doc":"取 ~ 之后的操作数：同一词里有后缀则用后缀，否则用下一个词的文本，并标记是否按字面处理（下一个词带引号）。旧版名 quote 误配。"}
+{"id":"chunk-e6aww6q8.js#Bbn","doc":"pyright 的命令规格（选项及哪些带参数），供命令前缀提取使用。"}
+{"id":"chunk-8wvtd8sr.js#hGe","doc":"判断工具输入是否为带过滤条件的 action='list' 调用，某工具的 checkPermissions 据此补默认 scope。旧版名 hasActualOperatorNodes 误配，与 Bash 无关。"}
+{"id":"chunk-e6aww6q8.js#lCe","doc":"Shell 快照超时 10 秒，以及传给子 shell 的环境变量名 CLAUDE_CODE_EXECPATH、CLAUDE_CODE_INVOKED_SKILLS。"}
+{"id":"chunk-38axkkfw.js#Grr","doc":"用一组正则粗查命令文本是否有语句级的词法分歧形态（bash 与 zsh 断句不同），命中即不信任按语句拆分的结果。"}
+{"id":"chunk-38axkkfw.js#xh","doc":"把复合命令拆成子命令文本：超长则整体返回，解析失败返回原文；递归 program、list、pipeline，跳过分隔符、注释和重定向，叶子命令按原文收集。"}
+{"id":"chunk-38axkkfw.js#H6o","doc":"判断最后一个子命令是否以 && 接在前一条之后（会因前一条失败而不执行）；超长或解析失败时保守返回 true。"}
+{"id":"chunk-38axkkfw.js#Kkt","doc":"解析命令并返回其中所有嵌套 command 节点的文本，超长或解析失败返回空数组。"}
+{"id":"chunk-38axkkfw.js#c6r","doc":"收集语法树里所有 command 节点文本，并展开 ${ …; } 函数替换体再解析；累计长度或嵌套层数超出预算（或严格模式下函数体无法解析）时返回 null。"}
+{"id":"chunk-38axkkfw.js#u6r","doc":"从 expansion/ERROR 节点中取出 ${ …} 或 ${| …} 函数替换（funsub）的命令体，去掉前导 | 与尾部分号；不是函数替换返回 null。"}
+{"id":"chunk-38axkkfw.js#ASn","doc":"严格拆分：超长或解析失败返回 null，否则返回结构化的子命令列表。"}
+{"id":"chunk-38axkkfw.js#f6r","doc":"为排除命令匹配做拆分：解析有错误节点、同行语句粘连、含命令替换或其他危险结构、zsh 括号展开、反引号时返回 null；任一子命令不满足条件也返回 null。"}
+{"id":"chunk-38axkkfw.js#p6r","doc":"是否有带 ( 的 expansion 节点（zsh 会在花括号展开里执行括号内容）；超长或解析失败保守返回 true。"}
+{"id":"chunk-38axkkfw.js#N6o","doc":"判断命令的重定向目标是否要到运行时才能确定（含变量、展开、额外单词、= 开头的词等）；只检查调用方判定为相关的命令；超长、存在词法分歧或解析出错时返回 true。"}
+{"id":"chunk-38axkkfw.js#$6o","doc":"判断单条命令的 argv 是否要到运行时才能确定：必须恰好一条简单命令、无替换、展开和异常重定向，且所有参数都是静态字面量，否则返回 true。"}
+{"id":"chunk-sycgf9xs.js#it","doc":"execFileNoThrow：执行外部程序且从不抛错，返回 {stdout, stderr, code, error}。默认超时 10 分钟、保留出错输出、cwd 取当前会话目录（Tv() 为真时不设）；其余选项（abortSignal、env、stdin、cgroup、inheritFd、git 钩子/终端提示开关等）原样转给 execFileNoThrowWithCwd。"}
+{"id":"chunk-sycgf9xs.js#dt","doc":"execFileNoThrowWithCwd：execFileNoThrow 的底层，按是否给出选项调用实际的 spawn 实现，并包一层同步异常转结果。"}
+{"id":"chunk-sycgf9xs.js#ee","doc":"向进程组（-pid）发 SIGTERM；pid ≤ 1 时不做，错误忽略。旧版名 stopRecording 是错配。"}
+{"id":"chunk-sycgf9xs.js#Xt","doc":"监听 abort：触发时杀掉子进程所在进程组，并在一段时间后销毁 stdout/stderr 管道，防止孙进程持有管道导致挂起。返回解除监听的函数。"}
+{"id":"chunk-sycgf9xs.js#Zt","doc":"监听 abort：触发时先调用回调尝试优雅停止；回调返回 false 则立即 abort 内部控制器，返回 true 则给 5 秒宽限再 abort 并销毁 stdio。返回清理函数。"}
+{"id":"chunk-sycgf9xs.js#qt","doc":"子进程仍在运行（有 pid、无 exitCode/signalCode）时等待 exit 事件，带超时；kill 后等待退出用。"}
+{"id":"chunk-sycgf9xs.js#ke","doc":"判断错误是否为子进程输出超出 maxBuffer（ERR_CHILD_PROCESS_STDIO_MAXBUFFER、isMaxBuffer 或 MaxBufferError）。"}
+{"id":"chunk-sycgf9xs.js#Qt","doc":"spawn 被运行时拒绝时找原因：依次检查 cwd、可执行文件路径、某个 argv、环境变量名、环境变量值中是否含空字节，返回 {telemetry 类别, local 给人看的说明}；都没有时返回 undefined。"}
+{"id":"chunk-sycgf9xs.js#nn","doc":"接管子进程 stdin 的 error 事件：错误码不在可忽略集合时记录 truncatedBy 并 kill 子进程；返回记录对象供结果报告输入被截断。"}
+{"id":"chunk-sycgf9xs.js#rn","doc":"取执行失败的错误文本：shortMessage 优先，其次信号名，最后错误码字符串。"}
+{"id":"chunk-e6aww6q8.js#i0e","doc":"把 Unicode 破折号（U+2013/2014/2015）换成 ASCII “-”；PowerShell 会把它们当参数前缀，校验前先归一。"}
+{"id":"chunk-e6aww6q8.js#nFo","doc":"按名字形状粗分命令：动词-名词为 cmdlet，含 . \\ / 为外部程序，否则 unknown。"}
+{"id":"chunk-e6aww6q8.js#DBr","doc":"去掉 cmdlet 的模块限定前缀（Module\\Get-Item → Get-Item）；盘符路径、UNC、.\\、..\\ 开头的路径保持原样。"}
+{"id":"chunk-e6aww6q8.js#rse","doc":"PowerShell 常用别名到规范 cmdlet 的映射（无原型对象）：ls/dir/gci→Get-ChildItem、cat/gc→Get-Content、rm/del→Remove-Item、iex→Invoke-Expression、iwr→Invoke-WebRequest 等。权限与只读判定按规范名比较，防止用别名绕过规则。"}
+{"id":"chunk-e6aww6q8.js#rFo","doc":"收集解析结果中所有语句的顶层命令与嵌套命令名（小写）。"}
+{"id":"chunk-e6aww6q8.js#qz","doc":"收集解析结果中所有语句的顶层命令与嵌套命令对象（返回命令对象，不是名字）。"}
+{"id":"chunk-e6aww6q8.js#Iqs","doc":"按作用域前缀（如 env:、global:）过滤解析出的变量引用。"}
+{"id":"chunk-e6aww6q8.js#oFo","doc":"判断命令中是否出现指定命令：名字或别名任一方向经 COMMON_ALIASES 规范化后相等即算命中。"}
+{"id":"chunk-e6aww6q8.js#l0e","doc":"判断参数是否是 PowerShell 形参：有 AST 元素类型时看是否为 Parameter，否则看首字符是否属于 PowerShell 认的破折号集合（含 Unicode 破折号）。"}
+{"id":"chunk-e6aww6q8.js#sFo","doc":"判断命令是否带某参数的缩写（PowerShell 允许唯一前缀缩写）：去掉反引号续行与冒号值后，参数须以最短前缀开头且是完整参数名的前缀。"}
+{"id":"chunk-e6aww6q8.js#mjt","doc":"重定向目标是否为 $null / ${null}（丢弃输出，不算写文件）。"}
+{"id":"chunk-e6aww6q8.js#L3n","doc":"取真正写文件的重定向：排除流合并（2>&1）和指向 $null 的重定向。"}
+{"id":"chunk-e6aww6q8.js#$ze","doc":"argv[0] 去掉路径后若是 cd/chdir/pushd/popd 则返回该名字，否则 undefined。是函数，不是旧版名所说的别名集合。"}
+{"id":"chunk-e6aww6q8.js#kRr","doc":"PowerShell 命令遥测分类用的三张表：已知外部/网络命令小写→原名、cmdlet 动词→cmdlet_<动词> 标签、只作后备标签的 location/write 类 cmdlet。属于命令分析遥测，不是 parser 本身（旧版名 DIRECTORY_CHANGE_CMDLETS 错配）。"}
+{"id":"chunk-fq0cr76a.js#T$","doc":"只看 policySettings：托管层设置了 sandbox.enabled / autoAllowBashIfSandboxed / allowUnsandboxedCommands 任一项即视为沙箱设置被托管锁定（SandboxManager.areSandboxSettingsLockedByManagedSettings）。"}
+{"id":"chunk-fq0cr76a.js#Cue","doc":"userSettings 打开了沙箱且该项未被更高层覆盖、同时管理员强制沙箱时为真；此时 getSandboxEnabledSetting 直接视为开启。"}
+{"id":"chunk-fq0cr76a.js#hV","doc":"可信层（policy、--settings）是否配置了读禁止：sandbox.filesystem.denyRead、credentials.files 或带内容的 Read(...) deny 规则。决定是否需要解析读禁止根。"}
+{"id":"chunk-fq0cr76a.js#mV","doc":"解析读禁止根：以 (cwd, 条目) 为键缓存一个 tick 内的解析结果，返回内置可信禁止根加上每个条目的各种拼写（原样与经 realpath 的规范路径）。"}
+{"id":"chunk-fq0cr76a.js#uw","doc":"把凭据遮罩的 glob 展开成具体路径（{lexical, canonical}）；位于禁区、或通配符不在最后一段、或叶子是裸 ** 时不展开只按字面参与，避免 readdir 被引导穿过未审查目录。"}
+{"id":"chunk-fq0cr76a.js#tb","doc":"把路径做大小写折叠并规整成以 / 开头、无空段的绝对形式，用于大小写不敏感比较。"}
+{"id":"chunk-fq0cr76a.js#Jp","doc":"解析一个读禁止条目的根：glob 取基目录，经 canonicalizePathForMaskSweep 求规范路径，返回 {root, spellings:[原样, 规范], lookAgain}；路径未稳定或经过符号链接时 lookAgain 记录停在何处，供运行中复查。"}
+{"id":"chunk-fq0cr76a.js#dw","doc":"与 resolveReadDenyRoot 相同但用于非 glob 的凭据遮罩路径：返回原样与规范两种拼写及是否需要复查。"}
+{"id":"chunk-fq0cr76a.js#Cw","doc":"凭据遮罩条目是否只是占位：mode 为 mask、injectHosts 为空且没有其他字段。"}
+{"id":"chunk-fq0cr76a.js#Dc","doc":"判断一组路径（可含 glob）是否覆盖目标路径：目标先规范化，glob 目标取基目录；同时比较原样与 realpath 拼写。"}
+{"id":"chunk-fq0cr76a.js#SV","doc":"pathsCoverPath 的 glob 分支：列表中任一条目（glob 取基目录）与目标任一拼写互相包含即为覆盖（大小写折叠比较）。"}
+{"id":"chunk-fq0cr76a.js#Jo","doc":"按进程 cwd 把沙箱路径解析成绝对路径；Windows 去掉尾部 /**，其他平台规整；失败返回 undefined。"}
+{"id":"chunk-fq0cr76a.js#Vue","doc":"可信来源是否关闭了“沙箱外重跑”的退路：settings 禁止、GrowthBook 禁止或可信层设置禁止任一成立。"}
+{"id":"chunk-fq0cr76a.js#lb","doc":"平台是否支持沙箱：Windows 看 srt-win 是否可用，其他平台用 sandbox-runtime 自带的判断。"}
+{"id":"chunk-fq0cr76a.js#cb","doc":"沙箱被要求（failIfUnavailable）但当前不可用：平台不支持或依赖检查有错。旧版名 isSandboxingEnabled 错配。"}
+{"id":"chunk-fq0cr76a.js#_V","doc":"沙箱“设置开着但没在运行”：必需却不可用，或（必需/工作目录被拒）且初始化失败但 isSandboxingEnabled 仍为真。UI 用来提示命令会被拒绝。"}
+{"id":"chunk-fq0cr76a.js#que","doc":"计算凭据遮罩相关的安全警告文本；不满足触发条件或出错时返回 undefined（错误只记日志）。"}
+{"id":"chunk-fq0cr76a.js#IV","doc":"把包装失败转成 commandNotWrapped 错误；若是本次 abort 的原因则原样返回。"}
+{"id":"chunk-fq0cr76a.js#r$","doc":"记录沙箱初始化失败：清空初始化 Promise 与运行时标志，保存错误码与给人看的原因（含自执行授权是否已加），标记是否因工作目录被拒，并上报 sandbox_init_failed。旧版名 initialize 错配。"}
+{"id":"chunk-e6aww6q8.js#wer","doc":"任一托管/可信层设置了 sandbox.filesystem.allowManagedReadPathsOnly 时为真：allowRead 只认可信层。"}
+{"id":"chunk-4r745zza.js#A","doc":"在总时限内依次探测某提供者的回退默认值与文档默认值（第二次用剩余时间），返回两者结果；属于第三方提供者默认模型探测，误归 secureStorage（旧版名 createFallbackStorage 错配）。"}
+{"id":"chunk-b29hdd5e.js#tus","doc":"Windows 凭据管理器后端是否启用：CLAUDE_CODE_FORCE_WINDOWS_CREDMAN=1 强制开启，否则读缓存的 GrowthBook 开关。"}
+{"id":"chunk-9np9x1zv.js#ous","doc":"macOS 钥匙串预读的启动入口；在 linux 构建中函数体被裁剪，实际什么也不做。"}
+{"id":"chunk-9np9x1zv.js#oIn","doc":"等待钥匙串预读完成（可带超时）；没有预读任务时直接返回。"}
+{"id":"chunk-gwwacf44.js#g$","doc":"安全存储使用的配置目录：CLAUDE_SECURESTORAGE_CONFIG_DIR 优先（空串退回 ~/.claude），否则用 Claude 配置目录；NFC 归一。用于钥匙串服务名后缀。旧版名 getProjectDirsUpToHome 错配。"}
+{"id":"chunk-gwwacf44.js#ERi","doc":"把钥匙串读缓存标为过期（保留数据、cachedAt 归零），代数加一并清除进行中的读取与失败记录。"}
+{"id":"chunk-gwwacf44.js#_8","doc":"清空钥匙串读缓存（数据置空），代数加一并清除进行中的读取与失败记录。"}
+{"id":"chunk-b29hdd5e.js#SRi","doc":"用 security find-generic-password 探测钥匙串项是否不存在（退出码等于“未找到”）；出错返回 false。不是旧版的 doReadAsync。"}
+{"id":"chunk-fq0cr76a.js#oce","doc":"试跑一次 bubblewrap（干净 PATH、cwd=/、带超时），返回 {ran, exitCode, stderr}，用于沙箱依赖检查判断 bwrap 能否启动。旧版名 isMacOsKeychainLocked 错配，应归沙箱依赖探测。"}
+{"id":"chunk-x58vpmpd.js#se","doc":"设备密钥的 macOS 钥匙串后端：read 用 security 读出并解析设备密钥文档（无登录钥匙串、读失败、格式不对分别处理），write 以十六进制写入（短命令走 security -i），带写锁。属于 deviceKeyStore，不是 macOsKeychainStorage。"}
+{"id":"chunk-e2fknt7w.js#G3r","doc":"读取探测 PowerShell 所需的 Windows 环境变量：PATH、ProgramFiles、LOCALAPPDATA、USERPROFILE、SYSTEMROOT。"}
+{"id":"chunk-e2fknt7w.js#pli","doc":"返回已解析 PowerShell 的版本类别（按路径区分 pwsh 与 Windows PowerShell）；未解析成路径时原样返回状态值。"}
+{"id":"chunk-4m46mxx9.js#fe","doc":"危险的 shell 前缀：zsh/bash/sh/fish/pwsh/cmd/nu 等 shell 本身，命令前缀提取时不能把它们当作可放行的前缀。"}
+{"id":"chunk-qchp9vrd.js#Lc","doc":"插件评测模拟应答器的常量（数量/字节上限、ABORT:/ERROR: 应答前缀），误归 utils/shell/prefix。"}
+{"id":"chunk-82kqcve8.js#par","doc":"docker logs/inspect 与 rg 的只读 flag 白名单：每个 flag 标注值类型；docker 另有回调拦截改连接目标的 flag、~ 展开与危险参数。"}
+{"id":"chunk-82kqcve8.js#Nst","doc":"token 是否形如 flag：以 - 开头、长度大于 1 且符合 flag 正则。"}
+{"id":"chunk-2a8yx6fc.js#En","doc":"从 git remote URL（scheme:// 或 scp 风格 host:path）取主机名，单字母主机（Windows 盘符）排除，主机名不合法返回 undefined。属于 auto mode 环境采集的 repo 信息，误归只读校验（旧版名 ghIsDangerousCallback 错配）。"}
+{"id":"chunk-g54kbxqw.js#Vv","doc":"PowerShell 工具是否启用：非 Windows 只在 CLAUDE_CODE_USE_POWERSHELL_TOOL 为真时开；Windows 上 env 显式设置优先，否则没有 Git Bash 时默认开，再否则看 GrowthBook tengu_cobalt_ridge。"}
+{"id":"chunk-6zvphrsz.js#oet","doc":"各 shell 的 rc 文件路径：zsh 用 $ZDOTDIR/.zshrc，bash 在 macOS 取已存在的 .bash_profile/.bash_login/.profile（另给 .bashrc），其他平台 .bashrc，fish 用 ~/.config/fish/config.fish。"}
+{"id":"chunk-6zvphrsz.js#vUr","doc":"从 rc 文件行中去掉指向本地安装 claude 的 alias claude=… 行，返回 {filtered, hadAlias}；安装器/迁移用。"}
+{"id":"chunk-6zvphrsz.js#U6n","doc":"读文件并按行切分；文件不存在返回 null，是目录时告警并返回 null，其他错误抛出。"}
+{"id":"chunk-6zvphrsz.js#kUr","doc":"把行数组写回文件并 datasync。"}
+{"id":"chunk-6zvphrsz.js#GKs","doc":"在 rc 文件中找 claude 别名，展开 ~ 后目标存在（文件或符号链接）才返回别名目标。"}
+{"id":"chunk-vkh471k3.js#H8e","doc":"按 {file, args, cwd, env} 执行一次调用（不继承环境、默认编码），属于外部命令调用工具，误归 shellConfig（旧版名 readFileLines 错配）。"}
+{"id":"chunk-fq0cr76a.js#t3r","doc":"Shell 需要沙箱但沙箱不可用时抛出的错误类型。"}
+{"id":"chunk-fq0cr76a.js#Zq","doc":"沙箱因策略拒绝执行时的错误，带 reason 字段。"}
+{"id":"chunk-fq0cr76a.js#z6","doc":"POSIX 路径前缀覆盖：相等、或根目录覆盖一切绝对路径、或以 e/ 开头。"}
+{"id":"chunk-fq0cr76a.js#dTt","doc":"用 picomatch 按 dot:true（可选大小写不敏感）匹配 glob，编译结果按模式缓存，编译失败视为不匹配。"}
+{"id":"chunk-fq0cr76a.js#Oot","doc":"把含通配段的路径拆成若干“名字读法”：整串作字面名，以及每个通配段前的前缀目录 + 余下 glob，用于判断 glob 可能命中的文件夹名。"}
+{"id":"chunk-fq0cr76a.js#n3r","doc":"路径是否匹配某个名字读法：字面名相等，或位于前缀目录下且余下部分匹配 glob。"}
+{"id":"chunk-fq0cr76a.js#cTt","doc":"deny 条目是否覆盖目标路径：非 glob 用前缀覆盖；glob 则对目标及其各级父目录依次尝试 glob 与名字读法匹配。"}
+{"id":"chunk-fq0cr76a.js#K0","doc":"去掉沙箱路径规则中的 glob 转义（\\x→x，单字符类 [x]→x），保留真正的通配与字符类；Windows 上只在特定字符前视反斜杠为转义。"}
+{"id":"chunk-fq0cr76a.js#Ior","doc":"沙箱文件系统路径是否为相对路径（不是绝对路径也不是 ~/ 开头）；Windows 先展开 %USERPROFILE% 类变量。"}
+{"id":"chunk-fq0cr76a.js#s3r","doc":"Windows 上含 profile 变量的路径在旧版本被当相对路径读，返回 ./ 前缀的旧读法用于提示；其他情况 null。"}
+{"id":"chunk-fq0cr76a.js#yw","doc":"批量解析路径条目（相对于来源根、展开 ~），丢弃解析失败的条目。"}
+{"id":"chunk-fq0cr76a.js#x3o","doc":"清掉沙箱 GrowthBook 配置缓存与主机规则缓存；尚未初始化时同时重置“已安装过滤器强制白名单”标志。"}
+{"id":"chunk-fq0cr76a.js#Oor","doc":"Windows 沙箱是否允许本地连接：取 sandbox.network.allowLocalBinding（托管锁定时只看可信层）。"}
+{"id":"chunk-fq0cr76a.js#C$","doc":"本地连接设置与启动时不同（需要重启才生效）时为真。"}
+{"id":"chunk-fq0cr76a.js#jxe","doc":"Windows 上 tlsTerminate 的 CA 来源：设置给了 caCertPath/caKeyPath 为 trustedPair，srt-win 可用为 managed，否则 unavailable。"}
+{"id":"chunk-fq0cr76a.js#m4e","doc":"沙箱是否会做 TLS 终止：设置了 tlsTerminate 且（非 Windows，或 Windows 有可用 CA 来源）。"}
+{"id":"chunk-fq0cr76a.js#a3r","doc":"比较已安装的 Windows TLS CA 证书指纹与期望值；无证书路径、文件异常或读取失败一律视为最新。"}
+{"id":"chunk-fq0cr76a.js#Mot","doc":"沙箱读禁止是否生效：沙箱启用、文件系统策略不是 relaxed 且没有覆盖原因。"}
+{"id":"chunk-fq0cr76a.js#VSe","doc":"任一托管/可信层设置了 sandbox.network.allowManagedDomainsOnly 时为真：网络白名单只认托管层。"}
+{"id":"chunk-fq0cr76a.js#sb","doc":"任一可信层设置了 sandbox.network.strictAllowlist 时为真。"}
+{"id":"chunk-fq0cr76a.js#Dor","doc":"是否扣下按命令的额外网络放行：托管域名独占、严格白名单或插件评测（CLAUDE_CODE_EVAL_CONFINED）任一成立。"}
+{"id":"chunk-fq0cr76a.js#Yp","doc":"主机名规范化（IDNA 等）后与其小写形式不同；IPv6 不算。用于识别易误导的同意弹窗主机名。"}
+{"id":"chunk-fq0cr76a.js#d3r","doc":"是否是严格端口后缀“:数字”且不超过 65535。"}
+{"id":"chunk-fq0cr76a.js#c3r","doc":"规范化会不会改变主机：无法规范化、规范结果与原串不一致、或是特殊形式时为真；IP 直接为假。"}
+{"id":"chunk-fq0cr76a.js#Ew","doc":"是否为不带方括号的 IPv6 字面量（至少两个冒号且不以 [ 开头）。"}
+{"id":"chunk-fq0cr76a.js#g4e","doc":"把主机名转成会话放行条目：去掉末尾点（原样或可规范化时），再做条目编码。"}
+{"id":"chunk-fq0cr76a.js#nw","doc":"从多层设置收集网络域名条目：sandbox.network.allowedDomains/deniedDomains，加上 WebFetch(domain:…) 的 allow/deny 规则。"}
+{"id":"chunk-fq0cr76a.js#O3o","doc":"按沙箱网络策略判断主机是否允许：命中 deniedDomains（含 IP 反查名）则拒绝并给原因；allowManagedDomainsOnly 时只放行托管层白名单；否则放行。"}
+{"id":"chunk-fq0cr76a.js#Y0","doc":"取 realpath；目标不存在时用父目录 realpath 拼上文件名；再失败原样返回。"}
+{"id":"chunk-fq0cr76a.js#Wxe","doc":"为遮罩/禁止扫描求路径的规范形式：逐级向上找到可 realpath 的祖先再拼回缺失尾段；遇到禁区或不安全链接停止解析并返回原样；可选回填 settled/stoppedAt/throughLink 状态。"}
+{"id":"chunk-fq0cr76a.js#$$","doc":"确保桥接子进程的私有根目录存在，失败只告警。"}
+{"id":"chunk-fq0cr76a.js#V$","doc":"确保原子写暂存目录存在且是真实目录（文件或坏目录会被删掉重建），并记录其 dev/ino 身份防止被替换；首次还会把 .claude/<暂存目录>/ 加进全局 gitignore。"}
+{"id":"chunk-fq0cr76a.js#M3o","doc":"运行时把某目录加入沙箱可写列表（按 key 登记），变化时 refreshConfig。"}
+{"id":"chunk-fq0cr76a.js#D3o","doc":"从运行时可写列表移除某 key 的目录，有变化时 refreshConfig。"}
+{"id":"chunk-fq0cr76a.js#ib","doc":"这次包装是否没有真实隔离：平台不是 linux/wsl/macos、filesystem.disabled、本会话已降为无隔离包装或其他强制条件。strict 策略据此拒绝执行。"}
+{"id":"chunk-fq0cr76a.js#Na","doc":"路径大小写折叠：去掉特定字符后 NFD→小写→大写→NFC，用于在大小写不敏感文件系统上比较。"}
+{"id":"chunk-fq0cr76a.js#hue","doc":"复查 denyWrite 中按字面登记、后来变成符号链接的候选：解析其最终目标（最多跟 8 层），把目标加进 denyWrite 并重新安装配置。"}
+{"id":"chunk-fq0cr76a.js#aV","doc":"复查配置构建后被重新链接的 allowRead/allowWrite 授权：若现在指向家目录、配置目录或读禁止区，就从运行中配置撤下并上报 tengu_sandbox_late_symlink_grant_dropped，下次构建再审。"}
+{"id":"chunk-fq0cr76a.js#Hor","doc":"检测 cwd 是否是 git worktree：读 .git 文件中的 gitdir，校验其位于 <主仓库>.git/worktrees/ 下且反向链接一致，返回主仓库 .git 目录供沙箱放行写入；任何异常返回 null。"}
+{"id":"chunk-fq0cr76a.js#vV","doc":"Windows 沙箱需要重新安装时给出 {why, how}：版本过新指向文档，否则提示运行 /sandbox install 或 claude sandbox install。"}
+{"id":"chunk-fq0cr76a.js#Nor","doc":"沙箱失败后的两句提示常量：“命令将在无沙箱下运行直到重启”和“沙箱命令将被拒绝直到重启”。"}
+{"id":"chunk-fq0cr76a.js#pTt","doc":"flagSettings 或 policySettings 是否设置了指定的 sandbox 键。"}
+{"id":"chunk-fq0cr76a.js#AV","doc":"flag/policy 层任一设置了 enabled、autoAllowBashIfSandboxed、allowUnsandboxedCommands 时为真（SandboxManager.areSandboxSettingsLockedByPolicy 实际指向它）。"}
+{"id":"chunk-fq0cr76a.js#ede","doc":"把 Windows 沙箱“命令行过长 / CreateProcessW 限制”错误转成友好的 SandboxCommandTooLongError，其他错误原样返回。"}
+{"id":"chunk-fq0cr76a.js#u3r","doc":"构造 Windows 沙箱命令过长（或环境变量过大）的错误，附处理建议并上报遥测。"}
+{"id":"chunk-fq0cr76a.js#ub","doc":"包装命令前检查暂存的 mcp_call 目录在 temp 根下仍是普通目录（必要时清掉文件）；不是则沙箱命令被拒。"}
+{"id":"chunk-fq0cr76a.js#Pw","doc":"重建沙箱运行时配置；失败时记录并保留当前运行中的配置（返回 undefined）。"}
+{"id":"chunk-fq0cr76a.js#Ke","doc":"Claude Code 侧的 SandboxManager 门面对象：汇总初始化、启用/必需判断、托管锁定、排除命令、网络与文件系统授权、wrapWithSandbox/wrapWithSandboxArgv、依赖检查、refreshConfig/reset 等；getConfig/getFsReadConfig 转发 vendor 的运行中配置并做额外处理。"}
+{"id":"chunk-e6aww6q8.js#RTn","doc":"惰性创建并缓存 shell 配置（选择 shell 提供者与快照的 Promise）。"}
+{"id":"chunk-e6aww6q8.js#DBo","doc":"取当前执行用 shell 的分析标签（按 shellPath 归类），失败返回 none。"}
+{"id":"chunk-e6aww6q8.js#LBo","doc":"插件刷新后决定是否丢弃 shell 快照：配置仍在构建、快照不可用或插件 bin/ PATH 变了就清掉缓存的 shellConfig（下次 Bash 重建），否则保留；返回是否丢弃。"}
+{"id":"chunk-e6aww6q8.js#Dpn","doc":"chdir 后调用 setCwd；setCwd 拒绝时尝试切回原目录再抛出错误。"}
+{"id":"chunk-e6aww6q8.js#vWr","doc":"构造 shell 子进程环境：默认值、SHELL（bash 时）、GIT_EDITOR=true、覆盖项、沙箱 env、会话/effort 标识；删除沙箱要求移除的变量，把插件 bin 目录拼进 PATH，带上 BUN_OPTIONS 与命令文本承载变量。"}

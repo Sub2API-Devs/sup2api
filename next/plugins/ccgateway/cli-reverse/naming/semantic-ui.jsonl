@@ -1,0 +1,1046 @@
+{"file":"chunk-00qhwn8e.js","key":"@17615","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(19)"}
+{"file":"chunk-08945j39.js","key":"@9923","name":"isTaggedSystemUserText","source":"semantic","confidence":0.75,"note":"判断用户文本是否以 bash/local-command/队友/任务通知等标签开头（旧版名 UserTextMessage 为错配，真正组件是 chunk-ah34pb7m.js#I7）"}
+{"file":"chunk-095ptjmr.js","key":"@959","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(40)"}
+{"file":"chunk-095ptjmr.js","key":"@3023","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-0bntfk7p.js","key":"@1275","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-0bntfk7p.js","key":"@6848","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(31)"}
+{"file":"chunk-0e8j1zzj.js","key":"@14584","name":"standaloneAgentContext","source":"semantic","confidence":0.85,"note":"L2 G(s => s.standaloneAgentContext)"}
+{"file":"chunk-0e8j1zzj.js","key":"@14619","name":"remoteSessionName","source":"semantic","confidence":0.85,"note":"L2 G(s => s.remoteSessionName)"}
+{"file":"chunk-0e8j1zzj.js","key":"@14649","name":"agent","source":"semantic","confidence":0.85,"note":"L2 G(s => s.agent)"}
+{"file":"chunk-0e8j1zzj.js","key":"@19297","name":"selectToolPermissionContextMode","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.toolPermissionContext.mode"}
+{"file":"chunk-0e8j1zzj.js","key":"@19408","name":"MAX_EXPLANATION_LINES","source":"semantic","confidence":0.5,"note":"7"}
+{"file":"chunk-0e8j1zzj.js","key":"@21500","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(29)"}
+{"file":"chunk-0e8j1zzj.js","key":"@24857","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-0e8j1zzj.js","key":"@24865","name":"toolPermissionContext","source":"semantic","confidence":0.85,"note":"L2 G(s => s.toolPermissionContext)"}
+{"file":"chunk-0e8j1zzj.js","key":"@25773","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(35)"}
+{"file":"chunk-0e8j1zzj.js","key":"@40086","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(38)"}
+{"file":"chunk-0e8j1zzj.js","key":"@44548","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(164)"}
+{"file":"chunk-0eepcc6r.js","key":"@19230","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-0sfjpx19.js","key":"@134560","name":"DEFAULT_FEEDBACK_SURVEY_CONFIG","source":"semantic","confidence":0.8,"note":"{minTimeBeforeFeedbackMs: 600000, minTimeBetweenFeedbackMs: 3600000, …}"}
+{"file":"chunk-0sfjpx19.js","key":"@134857","name":"DEFAULT_SURVEY_FOLLOWUP_CONFIG","source":"semantic","confidence":0.5,"note":"{enabled:false, maxChars:500, autoDismissAfterMs:30000}"}
+{"file":"chunk-10q8r8ck.js","key":"@17007","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-10q8r8ck.js","key":"@19890","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-10q8r8ck.js","key":"@20247","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(129)"}
+{"file":"chunk-18hwfzwa.js","key":"@107851","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-18hwfzwa.js","key":"@121818","name":"getQueuedCommandText","source":"semantic","confidence":0.7,"note":"value 为字符串时取显示文本"}
+{"file":"chunk-18hwfzwa.js","key":"@122001","name":"summarizeQueuedCommand","source":"semantic","confidence":0.55,"note":"KBo(h, getQueuedCommandText, …)"}
+{"file":"chunk-18hwfzwa.js","key":"@133851","name":"selectExpandedView","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.expandedView"}
+{"file":"chunk-18hwfzwa.js","key":"@133976","name":"selectIsBriefOnly","source":"semantic","confidence":0.8,"note":"旧版名"}
+{"file":"chunk-18hwfzwa.js","key":"@134167","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-18hwfzwa.js","key":"@134248","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(22)"}
+{"file":"chunk-18hwfzwa.js","key":"@134348","name":"expandedView","source":"semantic","confidence":0.85,"note":"L2 G(s => s.expandedView)"}
+{"file":"chunk-18hwfzwa.js","key":"@134563","name":"isBriefOnly","source":"semantic","confidence":0.85,"note":"L2 G(s => s.isBriefOnly)"}
+{"file":"chunk-18hwfzwa.js","key":"@136432","name":"VERBOSE_LABEL","source":"semantic","confidence":0.7,"note":"\"verbose \""}
+{"file":"chunk-18hwfzwa.js","key":"@136446","name":"FOOTER_PADDING","source":"semantic","confidence":0.7,"note":"paddingLeft 2"}
+{"file":"chunk-18hwfzwa.js","key":"@136470","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-18hwfzwa.js","key":"@138089","name":"TranscriptFooterStatus","source":"semantic","confidence":0.75,"note":"返回 status / 搜索 current/count / \"verbose \" 三选一"}
+{"file":"chunk-18hwfzwa.js","key":"@138100","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(6)"}
+{"file":"chunk-18hwfzwa.js","key":"@138485","name":"SearchIndexStatus","source":"semantic","confidence":0.75,"note":"indexStatus \"building\"/{ms}/no matches/current/count"}
+{"file":"chunk-18hwfzwa.js","key":"@138811","name":"TranscriptHelpFooter","source":"semantic","confidence":0.75,"note":"j/k、ctrl+u/d、g/G、/ 搜索、n/N、[ 打印、v 打开编辑器"}
+{"file":"chunk-18hwfzwa.js","key":"@138821","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(23)"}
+{"file":"chunk-18hwfzwa.js","key":"@177588","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-18hwfzwa.js","key":"@186751","name":"selectMainLoopModels","source":"semantic","confidence":0.75,"note":"h => [h.mainLoopModel, h.mainLoopModelForSession]（不是 hook）"}
+{"file":"chunk-18hwfzwa.js","key":"@209445","name":"pluginsSync","source":"semantic","confidence":0.85,"note":"L2 no(s => s.pluginsSync)"}
+{"file":"chunk-18hwfzwa.js","key":"@217335","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-18hwfzwa.js","key":"@267123","name":"host","source":"semantic","confidence":0.85,"note":"L2 no(s => s.host)"}
+{"file":"chunk-18hwfzwa.js","key":"@329634","name":"getActiveBottomSurface","source":"semantic","confidence":0.6,"note":"\"progress\"/\"panel\"/\"draft\"/\"typing\"/null"}
+{"file":"chunk-18hwfzwa.js","key":"@415211","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(6)"}
+{"file":"chunk-18hwfzwa.js","key":"@422852","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-18hwfzwa.js","key":"@423723","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-18hwfzwa.js","key":"@424857","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(16)"}
+{"file":"chunk-18hwfzwa.js","key":"@426136","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(62)"}
+{"file":"chunk-18hwfzwa.js","key":"@429342","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(2)"}
+{"file":"chunk-18hwfzwa.js","key":"@433147","name":"selectPendingWorkerRequest","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.pendingWorkerRequest"}
+{"file":"chunk-18hwfzwa.js","key":"@440064","name":"selectViewingAgentTaskId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.viewingAgentTaskId"}
+{"file":"chunk-18hwfzwa.js","key":"@440779","name":"selectViewingAgentTaskId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.viewingAgentTaskId"}
+{"file":"chunk-18hwfzwa.js","key":"@443043","name":"collectAncestorTaskIds","source":"semantic","confidence":0.55,"note":"沿 parentAgentId 收集祖先任务 id"}
+{"file":"chunk-18hwfzwa.js","key":"@443644","name":"getVisibleBackgroundTasks","source":"semantic","confidence":0.55,"note":"过滤可显示的后台任务 id"}
+{"file":"chunk-18hwfzwa.js","key":"@446106","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(60)"}
+{"file":"chunk-18hwfzwa.js","key":"@446214","name":"tasks","source":"semantic","confidence":0.85,"note":"L2 G(s => s.tasks)"}
+{"file":"chunk-18hwfzwa.js","key":"@446232","name":"ultracode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.ultracode)"}
+{"file":"chunk-18hwfzwa.js","key":"@446364","name":"taskDecorations","source":"semantic","confidence":0.85,"note":"L2 G(s => s.taskDecorations)"}
+{"file":"chunk-18hwfzwa.js","key":"@446374","name":"viewingAgentTaskId","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewingAgentTaskId)"}
+{"file":"chunk-18hwfzwa.js","key":"@446384","name":"agentNameRegistry","source":"semantic","confidence":0.85,"note":"L2 G(s => s.agentNameRegistry)"}
+{"file":"chunk-18hwfzwa.js","key":"@446394","name":"slackTagConnected","source":"semantic","confidence":0.85,"note":"L2 G(s => s.slackTagConnected)"}
+{"file":"chunk-18hwfzwa.js","key":"@446404","name":"coordinatorTaskIndex","source":"semantic","confidence":0.85,"note":"L2 G(s => s.coordinatorTaskIndex)"}
+{"file":"chunk-18hwfzwa.js","key":"@446434","name":"workflowFooterIndex","source":"semantic","confidence":0.85,"note":"L2 G(s => s.workflowFooterIndex)"}
+{"file":"chunk-18hwfzwa.js","key":"@453002","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(39)"}
+{"file":"chunk-18hwfzwa.js","key":"@453011","name":"tasks","source":"semantic","confidence":0.85,"note":"L2 G(s => s.tasks)"}
+{"file":"chunk-18hwfzwa.js","key":"@453020","name":"taskDecorations","source":"semantic","confidence":0.85,"note":"L2 G(s => s.taskDecorations)"}
+{"file":"chunk-18hwfzwa.js","key":"@453029","name":"viewingAgentTaskId","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewingAgentTaskId)"}
+{"file":"chunk-18hwfzwa.js","key":"@453038","name":"viewSelectionMode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewSelectionMode)"}
+{"file":"chunk-18hwfzwa.js","key":"@453047","name":"footerSelection","source":"semantic","confidence":0.85,"note":"L2 G(s => s.footerSelection)"}
+{"file":"chunk-18hwfzwa.js","key":"@453057","name":"coordinatorTaskIndex","source":"semantic","confidence":0.85,"note":"L2 G(s => s.coordinatorTaskIndex)"}
+{"file":"chunk-18hwfzwa.js","key":"@453067","name":"workflowFooterIndex","source":"semantic","confidence":0.85,"note":"L2 G(s => s.workflowFooterIndex)"}
+{"file":"chunk-18hwfzwa.js","key":"@455439","name":"useVisibleAgentTaskCount","source":"semantic","confidence":0.55,"note":"面板隐藏时为 0"}
+{"file":"chunk-18hwfzwa.js","key":"@456137","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(16)"}
+{"file":"chunk-18hwfzwa.js","key":"@467318","name":"viewSelectionMode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewSelectionMode)"}
+{"file":"chunk-18hwfzwa.js","key":"@514554","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(2)"}
+{"file":"chunk-18hwfzwa.js","key":"@535727","name":"findMatchCursorOffset","source":"semantic","confidence":0.65,"note":"匹配位置，回退到粘贴引用位置"}
+{"file":"chunk-18hwfzwa.js","key":"@615271","name":"AT_TOKEN_RE","source":"semantic","confidence":0.6,"note":"@ 后路径/引号路径"}
+{"file":"chunk-18hwfzwa.js","key":"@616647","name":"logSuggestionNavUsed","source":"semantic","confidence":0.6,"note":"tengu_ax_sr_suggestion_nav_used"}
+{"file":"chunk-18hwfzwa.js","key":"@617798","name":"AT_MENTION_TOKEN_RE","source":"semantic","confidence":0.6,"note":"@ 后名称（agent/队友）"}
+{"file":"chunk-18hwfzwa.js","key":"@617893","name":"isCursorInTriggerToken","source":"semantic","confidence":0.55,"note":"正则匹配光标前的触发片段"}
+{"file":"chunk-18hwfzwa.js","key":"@619472","name":"value","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.value)"}
+{"file":"chunk-18hwfzwa.js","key":"@619484","name":"cursorOffset","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.cursorOffset)"}
+{"file":"chunk-18hwfzwa.js","key":"@619496","name":"mode","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.mode)"}
+{"file":"chunk-18hwfzwa.js","key":"@620059","name":"resources","source":"semantic","confidence":0.85,"note":"L2 G(s => s.mcp.resources)"}
+{"file":"chunk-18hwfzwa.js","key":"@620088","name":"resourceTemplates","source":"semantic","confidence":0.85,"note":"L2 G(s => s.mcp.resourceTemplates)"}
+{"file":"chunk-18hwfzwa.js","key":"@620193","name":"id","source":"semantic","confidence":0.85,"note":"L2 no(s => s.id)"}
+{"file":"chunk-18hwfzwa.js","key":"@620856","name":"promptSuggestion","source":"semantic","confidence":0.85,"note":"L2 G(s => s.promptSuggestion)"}
+{"file":"chunk-18hwfzwa.js","key":"@643848","name":"selectReplBridgeReconnecting","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.replBridgeReconnecting"}
+{"file":"chunk-18hwfzwa.js","key":"@643994","name":"selectReplBridgeError","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.replBridgeError"}
+{"file":"chunk-18hwfzwa.js","key":"@644037","name":"selectReplBridgeErrorKind","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.replBridgeErrorKind"}
+{"file":"chunk-18hwfzwa.js","key":"@644084","name":"selectReplBridgeExplicit","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.replBridgeExplicit"}
+{"file":"chunk-18hwfzwa.js","key":"@644175","name":"selectReplBridgeEnvironmentId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.replBridgeEnvironmentId"}
+{"file":"chunk-18hwfzwa.js","key":"@644226","name":"selectReplBridgeSessionId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.replBridgeSessionId"}
+{"file":"chunk-18hwfzwa.js","key":"@644273","name":"selectVerbose","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.verbose"}
+{"file":"chunk-18hwfzwa.js","key":"@644308","name":"selectOriginalCwd","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.originalCwd"}
+{"file":"chunk-18hwfzwa.js","key":"@644347","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-18hwfzwa.js","key":"@644363","name":"negate","source":"semantic","confidence":0.85,"note":"T2 x => !x（多用作 setState 切换）"}
+{"file":"chunk-18hwfzwa.js","key":"@644390","name":"disableReplBridgeState","source":"semantic","confidence":0.7,"note":"关闭 replBridgeEnabled 并清除错误/分组 ID"}
+{"file":"chunk-18hwfzwa.js","key":"@644592","name":"enableReplBridgeState","source":"semantic","confidence":0.7,"note":"重新启用 replBridge（explicit=true）"}
+{"file":"chunk-18hwfzwa.js","key":"@644875","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(112)"}
+{"file":"chunk-18hwfzwa.js","key":"@644999","name":"replBridgeErrorKind","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeErrorKind)"}
+{"file":"chunk-18hwfzwa.js","key":"@645009","name":"replBridgeExplicit","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeExplicit)"}
+{"file":"chunk-18hwfzwa.js","key":"@645019","name":"replBridgeEnabled","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeEnabled)"}
+{"file":"chunk-18hwfzwa.js","key":"@645029","name":"replBridgeEnvironmentId","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeEnvironmentId)"}
+{"file":"chunk-18hwfzwa.js","key":"@645039","name":"replBridgeSessionId","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeSessionId)"}
+{"file":"chunk-18hwfzwa.js","key":"@645049","name":"verbose","source":"semantic","confidence":0.85,"note":"L2 G(s => s.verbose)"}
+{"file":"chunk-18hwfzwa.js","key":"@645138","name":"originalCwd","source":"semantic","confidence":0.85,"note":"L2 _A(s => s.originalCwd)"}
+{"file":"chunk-18hwfzwa.js","key":"@651074","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-18hwfzwa.js","key":"@653495","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(22)"}
+{"file":"chunk-18hwfzwa.js","key":"@653564","name":"frameUrls","source":"semantic","confidence":0.85,"note":"L2 G(s => s.frameUrls)"}
+{"file":"chunk-18hwfzwa.js","key":"@654652","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-18hwfzwa.js","key":"@654702","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(115)"}
+{"file":"chunk-18hwfzwa.js","key":"@661243","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(38)"}
+{"file":"chunk-18hwfzwa.js","key":"@662976","name":"HISTORY_DIALOG_VISIBLE_ROWS","source":"semantic","confidence":0.5,"note":"6（与其他尺寸常量同语句）"}
+{"file":"chunk-18hwfzwa.js","key":"@663031","name":"getHistoryScanStatusText","source":"semantic","confidence":0.75,"note":"Loading…/Searching older prompts…/No history yet"}
+{"file":"chunk-18hwfzwa.js","key":"@666732","name":"fuzzyMatchScore","source":"semantic","confidence":0.55,"note":"子序列匹配"}
+{"file":"chunk-18hwfzwa.js","key":"@669015","name":"sessionEffort","source":"semantic","confidence":0.85,"note":"L2 G(s => s.sessionEffort)"}
+{"file":"chunk-18hwfzwa.js","key":"@669044","name":"settingsEffortTable","source":"semantic","confidence":0.85,"note":"L2 G(s => s.settingsEffortTable)"}
+{"file":"chunk-18hwfzwa.js","key":"@669079","name":"ultracode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.ultracode)"}
+{"file":"chunk-18hwfzwa.js","key":"@675027","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-18hwfzwa.js","key":"@676185","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(24)"}
+{"file":"chunk-18hwfzwa.js","key":"@687528","name":"selectAgentDefinitionsActiveAgents","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.agentDefinitions.activeAgents"}
+{"file":"chunk-18hwfzwa.js","key":"@687595","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(70)"}
+{"file":"chunk-18hwfzwa.js","key":"@687700","name":"activeAgents","source":"semantic","confidence":0.85,"note":"L2 G(s => s.agentDefinitions.activeAgents)"}
+{"file":"chunk-18hwfzwa.js","key":"@693261","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(20)"}
+{"file":"chunk-18hwfzwa.js","key":"@694864","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-18hwfzwa.js","key":"@701257","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(59)"}
+{"file":"chunk-18hwfzwa.js","key":"@704235","name":"selectAgentDefinitionsActiveAgents","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.agentDefinitions.activeAgents"}
+{"file":"chunk-18hwfzwa.js","key":"@704302","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(71)"}
+{"file":"chunk-18hwfzwa.js","key":"@704380","name":"activeAgents","source":"semantic","confidence":0.85,"note":"L2 G(s => s.agentDefinitions.activeAgents)"}
+{"file":"chunk-18hwfzwa.js","key":"@709305","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(74)"}
+{"file":"chunk-18hwfzwa.js","key":"@713130","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-18hwfzwa.js","key":"@714218","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-18hwfzwa.js","key":"@715424","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-18hwfzwa.js","key":"@716405","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(50)"}
+{"file":"chunk-18hwfzwa.js","key":"@722109","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(51)"}
+{"file":"chunk-18hwfzwa.js","key":"@725148","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(19)"}
+{"file":"chunk-18hwfzwa.js","key":"@727861","name":"selectTasks","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.tasks"}
+{"file":"chunk-18hwfzwa.js","key":"@731620","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(458)"}
+{"file":"chunk-18hwfzwa.js","key":"@731789","name":"tasks","source":"semantic","confidence":0.85,"note":"L2 G(s => s.tasks)"}
+{"file":"chunk-18hwfzwa.js","key":"@773600","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(4)"}
+{"file":"chunk-18hwfzwa.js","key":"@774437","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(1)"}
+{"file":"chunk-18hwfzwa.js","key":"@775071","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(1)"}
+{"file":"chunk-18hwfzwa.js","key":"@783630","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-18hwfzwa.js","key":"@784354","name":"selectAutoCompactWindow","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.autoCompactWindow"}
+{"file":"chunk-18hwfzwa.js","key":"@784399","name":"selectRemoteAutocompactState","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.remoteAutocompactState"}
+{"file":"chunk-18hwfzwa.js","key":"@784459","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-18hwfzwa.js","key":"@784493","name":"autoCompactWindow","source":"semantic","confidence":0.85,"note":"L2 G(s => s.autoCompactWindow)"}
+{"file":"chunk-18hwfzwa.js","key":"@784502","name":"remoteAutocompactState","source":"semantic","confidence":0.85,"note":"L2 G(s => s.remoteAutocompactState)"}
+{"file":"chunk-18hwfzwa.js","key":"@786770","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-18hwfzwa.js","key":"@787839","name":"hasActiveGoal","source":"semantic","confidence":0.7,"note":"s.activeGoal?.setAt !== undefined"}
+{"file":"chunk-18hwfzwa.js","key":"@787893","name":"clearEnvHookNotifier","source":"semantic","confidence":0.75,"note":"setEnvHookNotifier(null)"}
+{"file":"chunk-18hwfzwa.js","key":"@787955","name":"selectVoiceState","source":"semantic","confidence":0.8,"note":"s => s.voiceState"}
+{"file":"chunk-18hwfzwa.js","key":"@787993","name":"selectVoiceError","source":"semantic","confidence":0.8,"note":"s => s.voiceError"}
+{"file":"chunk-18hwfzwa.js","key":"@788026","name":"NOTIFICATION_TIMEOUT_MS","source":"semantic","confidence":0.75,"note":"5000"}
+{"file":"chunk-18hwfzwa.js","key":"@788034","name":"Notifications","source":"semantic","confidence":0.8,"note":"React.memo 组件；旧版 Notifications"}
+{"file":"chunk-18hwfzwa.js","key":"@788056","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(59)"}
+{"file":"chunk-18hwfzwa.js","key":"@788377","name":"autoCompactWindow","source":"semantic","confidence":0.85,"note":"L2 G(s => s.autoCompactWindow)"}
+{"file":"chunk-18hwfzwa.js","key":"@788387","name":"remoteAutocompactState","source":"semantic","confidence":0.85,"note":"L2 G(s => s.remoteAutocompactState)"}
+{"file":"chunk-18hwfzwa.js","key":"@788573","name":"isBriefOnly","source":"semantic","confidence":0.85,"note":"L2 G(s => s.isBriefOnly)"}
+{"file":"chunk-18hwfzwa.js","key":"@791990","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(41)"}
+{"file":"chunk-18hwfzwa.js","key":"@795218","name":"selectRemoteConnectionStatus","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.remoteConnectionStatus"}
+{"file":"chunk-18hwfzwa.js","key":"@805885","name":"selectTasks","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.tasks"}
+{"file":"chunk-18hwfzwa.js","key":"@805982","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-18hwfzwa.js","key":"@806522","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-18hwfzwa.js","key":"@813863","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-18hwfzwa.js","key":"@813890","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-18hwfzwa.js","key":"@823951","name":"selectPrUrlTemplate","source":"semantic","confidence":0.8,"note":"s => s.settings?.prUrlTemplate"}
+{"file":"chunk-18hwfzwa.js","key":"@824002","name":"incrementVoiceFooterHintSeenCount","source":"semantic","confidence":0.8,"note":"voiceFooterHintSeenCount + 1"}
+{"file":"chunk-18hwfzwa.js","key":"@824148","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(65)"}
+{"file":"chunk-18hwfzwa.js","key":"@829133","name":"getFooterIndicatorConfig","source":"semantic","confidence":0.6,"note":"Id()?.footer_indicator"}
+{"file":"chunk-18hwfzwa.js","key":"@829813","name":"tasks","source":"semantic","confidence":0.85,"note":"L2 G(s => s.tasks)"}
+{"file":"chunk-18hwfzwa.js","key":"@829871","name":"taskDecorations","source":"semantic","confidence":0.85,"note":"L2 G(s => s.taskDecorations)"}
+{"file":"chunk-18hwfzwa.js","key":"@830052","name":"viewSelectionMode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewSelectionMode)"}
+{"file":"chunk-18hwfzwa.js","key":"@830085","name":"viewingAgentTaskId","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewingAgentTaskId)"}
+{"file":"chunk-18hwfzwa.js","key":"@830119","name":"expandedView","source":"semantic","confidence":0.85,"note":"L2 G(s => s.expandedView)"}
+{"file":"chunk-18hwfzwa.js","key":"@830248","name":"attentionBudget","source":"semantic","confidence":0.85,"note":"L2 G(s => s.attentionBudget)"}
+{"file":"chunk-18hwfzwa.js","key":"@830279","name":"proactivityLevel","source":"semantic","confidence":0.85,"note":"L2 G(s => s.proactivityLevel)"}
+{"file":"chunk-18hwfzwa.js","key":"@839117","name":"VoiceHoldToSpeakHint","source":"semantic","confidence":0.75,"note":"\"hold <键> to speak\""}
+{"file":"chunk-18hwfzwa.js","key":"@839128","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-18hwfzwa.js","key":"@839462","name":"BackgroundTaskCountPill","source":"semantic","confidence":0.7,"note":"{count, selected, onClick}，显示 \"N background\""}
+{"file":"chunk-18hwfzwa.js","key":"@839485","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-18hwfzwa.js","key":"@846488","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(93)"}
+{"file":"chunk-18hwfzwa.js","key":"@852343","name":"selectDebug","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.debug"}
+{"file":"chunk-18hwfzwa.js","key":"@852376","name":"selectHideLoginNotice","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.hideLoginNotice"}
+{"file":"chunk-18hwfzwa.js","key":"@852419","name":"selectIsLoading","source":"semantic","confidence":0.7,"note":"s => s.isLoading"}
+{"file":"chunk-18hwfzwa.js","key":"@852460","name":"selectIsExternalLoading","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.isExternalLoading"}
+{"file":"chunk-18hwfzwa.js","key":"@852505","name":"selectCoordinatorTaskIndex","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.coordinatorTaskIndex"}
+{"file":"chunk-18hwfzwa.js","key":"@852564","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(92)"}
+{"file":"chunk-18hwfzwa.js","key":"@853369","name":"debug","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.debug)"}
+{"file":"chunk-18hwfzwa.js","key":"@853383","name":"hideLoginNotice","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.hideLoginNotice)"}
+{"file":"chunk-18hwfzwa.js","key":"@853410","name":"isExternalLoading","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.isExternalLoading)"}
+{"file":"chunk-18hwfzwa.js","key":"@853729","name":"coordinatorTaskIndex","source":"semantic","confidence":0.85,"note":"L2 G(s => s.coordinatorTaskIndex)"}
+{"file":"chunk-18hwfzwa.js","key":"@857895","name":"PromptInputFooterMemo","source":"semantic","confidence":0.8,"note":"React.memo(PromptInputFooter)"}
+{"file":"chunk-18hwfzwa.js","key":"@857916","name":"shouldShowFooterStatus","source":"semantic","confidence":0.7,"note":"!(有建议且非全屏) && !helpOpen"}
+{"file":"chunk-18hwfzwa.js","key":"@858881","name":"HISTORY_BATCH_SIZE","source":"semantic","confidence":0.75,"note":"10"}
+{"file":"chunk-18hwfzwa.js","key":"@858894","name":"HistoryLoader","source":"semantic","confidence":0.6,"note":"分批加载历史条目的类（旧版名 loadHistoryEntries 是函数名）"}
+{"file":"chunk-18hwfzwa.js","key":"@859370","name":"historyLoaderByHost","source":"semantic","confidence":0.6,"note":"new W(() => new HistoryLoader())"}
+{"file":"chunk-18hwfzwa.js","key":"@859402","name":"findHistoryOverlapIndex","source":"semantic","confidence":0.55,"note":"新旧历史列表按 display 对齐"}
+{"file":"chunk-18hwfzwa.js","key":"@859661","name":"value","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.value)"}
+{"file":"chunk-18hwfzwa.js","key":"@875925","name":"TRUNCATE_THRESHOLD_CHARS","source":"semantic","confidence":0.85,"note":"1e4"}
+{"file":"chunk-18hwfzwa.js","key":"@875933","name":"TRUNCATE_KEEP_CHARS","source":"semantic","confidence":0.8,"note":"1000，首尾各留一半"}
+{"file":"chunk-18hwfzwa.js","key":"@877131","name":"TRUNCATE_EDIT_ATTRIBUTION","source":"semantic","confidence":0.6,"note":"Object.freeze({kind:\"landing\"})，draft.attribute 的来源标记"}
+{"file":"chunk-18hwfzwa.js","key":"@877189","name":"value","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.value)"}
+{"file":"chunk-18hwfzwa.js","key":"@877200","name":"pastedContents","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.pastedContents)"}
+{"file":"chunk-18hwfzwa.js","key":"@879209","name":"selectTeamContext","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.teamContext"}
+{"file":"chunk-18hwfzwa.js","key":"@879250","name":"selectViewingAgentTaskId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.viewingAgentTaskId"}
+{"file":"chunk-18hwfzwa.js","key":"@880381","name":"MIN_INPUT_ROWS","source":"semantic","confidence":0.5,"note":"数值常量组，供 PromptInput 布局使用"}
+{"file":"chunk-18hwfzwa.js","key":"@880423","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(543)"}
+{"file":"chunk-18hwfzwa.js","key":"@881165","name":"value","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.value)"}
+{"file":"chunk-18hwfzwa.js","key":"@881177","name":"cursorOffset","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.cursorOffset)"}
+{"file":"chunk-18hwfzwa.js","key":"@881189","name":"mode","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.mode)"}
+{"file":"chunk-18hwfzwa.js","key":"@881201","name":"pastedContents","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.pastedContents)"}
+{"file":"chunk-18hwfzwa.js","key":"@881213","name":"interimRange","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.interimRange)"}
+{"file":"chunk-18hwfzwa.js","key":"@881226","name":"decorations","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.decorations)"}
+{"file":"chunk-18hwfzwa.js","key":"@881239","name":"cameBack","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.cameBack)"}
+{"file":"chunk-18hwfzwa.js","key":"@881319","name":"commands","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.commands)"}
+{"file":"chunk-18hwfzwa.js","key":"@881368","name":"activeAgents","source":"semantic","confidence":0.85,"note":"L2 G(s => s.agentDefinitions.activeAgents)"}
+{"file":"chunk-18hwfzwa.js","key":"@881378","name":"teamContext","source":"semantic","confidence":0.85,"note":"L2 G(s => s.teamContext)"}
+{"file":"chunk-18hwfzwa.js","key":"@881388","name":"viewingAgentTaskId","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewingAgentTaskId)"}
+{"file":"chunk-18hwfzwa.js","key":"@881398","name":"store","source":"semantic","confidence":0.75,"note":"Cr() AppState store"}
+{"file":"chunk-18hwfzwa.js","key":"@881406","name":"setAppState","source":"semantic","confidence":0.85,"note":"useSetAppState()"}
+{"file":"chunk-18hwfzwa.js","key":"@881414","name":"session","source":"semantic","confidence":0.8,"note":"no() useSession"}
+{"file":"chunk-18hwfzwa.js","key":"@881422","name":"sessionUiStore","source":"semantic","confidence":0.65,"note":"op() = bM(session)，getState().vimMode"}
+{"file":"chunk-18hwfzwa.js","key":"@881464","name":"messageQueue","source":"semantic","confidence":0.7,"note":"Nu()"}
+{"file":"chunk-18hwfzwa.js","key":"@881480","name":"mainLoopModel","source":"semantic","confidence":0.8,"note":"useMainLoopModel()"}
+{"file":"chunk-18hwfzwa.js","key":"@881488","name":"clock","source":"semantic","confidence":0.75,"note":"useClock()"}
+{"file":"chunk-18hwfzwa.js","key":"@881578","name":"vimMode","source":"semantic","confidence":0.8,"note":"yv() 订阅 vimMode"}
+{"file":"chunk-18hwfzwa.js","key":"@881586","name":"isVimEditorMode","source":"semantic","confidence":0.75,"note":"Cg() settings.editorMode；与 vimMode !== \"INSERT\" 组合决定光标 after/before（旧版名 queuedCommands 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@882471","name":"setQueueEditIndex","source":"semantic","confidence":0.75,"note":"setAppState(s => ({...s, queueEditIndex}))"}
+{"file":"chunk-18hwfzwa.js","key":"@882918","name":"queueEditIndex","source":"semantic","confidence":0.85,"note":"L2 G(s => s.queueEditIndex)"}
+{"file":"chunk-18hwfzwa.js","key":"@884036","name":"displayedValue","source":"semantic","confidence":0.6,"note":"历史搜索时显示匹配项，否则显示 value"}
+{"file":"chunk-18hwfzwa.js","key":"@884420","name":"ultraplanSessionUrl","source":"semantic","confidence":0.85,"note":"L2 G(s => s.ultraplanSessionUrl)"}
+{"file":"chunk-18hwfzwa.js","key":"@884430","name":"ultraplanLaunching","source":"semantic","confidence":0.85,"note":"L2 G(s => s.ultraplanLaunching)"}
+{"file":"chunk-18hwfzwa.js","key":"@885121","name":"workflowKeywordToggleShortcut","source":"semantic","confidence":0.8,"note":"useShortcutDisplay(\"chat:workflowKeywordToggle\",\"Chat\",\"alt+w\")"}
+{"file":"chunk-18hwfzwa.js","key":"@929224","name":"selectTeamContext","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.teamContext"}
+{"file":"chunk-18hwfzwa.js","key":"@929311","name":"selectViewingAgentTaskId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.viewingAgentTaskId"}
+{"file":"chunk-18hwfzwa.js","key":"@978639","name":"selectRemoteConnectionStatus","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.remoteConnectionStatus"}
+{"file":"chunk-18hwfzwa.js","key":"@978689","name":"selectRemoteWorkerReportedGone","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.remoteWorkerReportedGone"}
+{"file":"chunk-18hwfzwa.js","key":"@978741","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-18hwfzwa.js","key":"@978842","name":"selectRemoteForegroundTask","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.remoteForegroundTask"}
+{"file":"chunk-18hwfzwa.js","key":"@978914","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(23)"}
+{"file":"chunk-18hwfzwa.js","key":"@979059","name":"remoteConnectionStatus","source":"semantic","confidence":0.85,"note":"L2 G(s => s.remoteConnectionStatus)"}
+{"file":"chunk-18hwfzwa.js","key":"@979069","name":"remoteWorkerReportedGone","source":"semantic","confidence":0.85,"note":"L2 G(s => s.remoteWorkerReportedGone)"}
+{"file":"chunk-18hwfzwa.js","key":"@980051","name":"remoteForegroundTask","source":"semantic","confidence":0.85,"note":"L2 G(s => s.remoteForegroundTask)"}
+{"file":"chunk-18hwfzwa.js","key":"@989181","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(25)"}
+{"file":"chunk-18hwfzwa.js","key":"@993914","name":"selectVerbose","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.verbose"}
+{"file":"chunk-18hwfzwa.js","key":"@994037","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-18hwfzwa.js","key":"@994118","name":"verbose","source":"semantic","confidence":0.85,"note":"L2 G(s => s.verbose)"}
+{"file":"chunk-18hwfzwa.js","key":"@995138","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-18hwfzwa.js","key":"@1001776","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-18hwfzwa.js","key":"@1002646","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(24)"}
+{"file":"chunk-18hwfzwa.js","key":"@1024868","name":"isLoading","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.isLoading)"}
+{"file":"chunk-18hwfzwa.js","key":"@1024896","name":"submitCount","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.submitCount)"}
+{"file":"chunk-18hwfzwa.js","key":"@1046483","name":"MEMORY_SURVEY_DELAY_MS","source":"semantic","confidence":0.5,"note":"5000"}
+{"file":"chunk-18hwfzwa.js","key":"@1046492","name":"MEMORY_SURVEY_TIMEOUT_MS","source":"semantic","confidence":0.5,"note":"60000"}
+{"file":"chunk-18hwfzwa.js","key":"@1046608","name":"MEMORY_SURVEY_SCORES","source":"semantic","confidence":0.7,"note":"{bad:1, fine:2, good:3}"}
+{"file":"chunk-18hwfzwa.js","key":"@1046996","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(43)"}
+{"file":"chunk-18hwfzwa.js","key":"@1082886","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(26)"}
+{"file":"chunk-18hwfzwa.js","key":"@1084908","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(6)"}
+{"file":"chunk-18hwfzwa.js","key":"@1085185","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(34)"}
+{"file":"chunk-18hwfzwa.js","key":"@1086789","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-18hwfzwa.js","key":"@1098402","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(32)"}
+{"file":"chunk-18hwfzwa.js","key":"@1100735","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-18hwfzwa.js","key":"@1106831","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(33)"}
+{"file":"chunk-18hwfzwa.js","key":"@1108748","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-18hwfzwa.js","key":"@1127683","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-18hwfzwa.js","key":"@1192370","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(22)"}
+{"file":"chunk-18hwfzwa.js","key":"@1194546","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-18hwfzwa.js","key":"@1195566","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-18hwfzwa.js","key":"@1196916","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(22)"}
+{"file":"chunk-18hwfzwa.js","key":"@1206430","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-18hwfzwa.js","key":"@1207230","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(28)"}
+{"file":"chunk-18hwfzwa.js","key":"@1220758","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(163)"}
+{"file":"chunk-18hwfzwa.js","key":"@1239169","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-18hwfzwa.js","key":"@1239922","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(4)"}
+{"file":"chunk-18hwfzwa.js","key":"@1240210","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(39)"}
+{"file":"chunk-18hwfzwa.js","key":"@1243531","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(79)"}
+{"file":"chunk-18hwfzwa.js","key":"@1248739","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(44)"}
+{"file":"chunk-18hwfzwa.js","key":"@1259623","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(92)"}
+{"file":"chunk-18hwfzwa.js","key":"@1271495","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-18hwfzwa.js","key":"@1271775","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(37)"}
+{"file":"chunk-18hwfzwa.js","key":"@1275839","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(55)"}
+{"file":"chunk-18hwfzwa.js","key":"@1278865","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(122)"}
+{"file":"chunk-18hwfzwa.js","key":"@1287021","name":"selectToolPermissionContextMode","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.toolPermissionContext.mode"}
+{"file":"chunk-18hwfzwa.js","key":"@1287282","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(76)"}
+{"file":"chunk-18hwfzwa.js","key":"@1293871","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(24)"}
+{"file":"chunk-18hwfzwa.js","key":"@1296581","name":"selectToolPermissionContextMode","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.toolPermissionContext.mode"}
+{"file":"chunk-18hwfzwa.js","key":"@1297693","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-18hwfzwa.js","key":"@1300696","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(144)"}
+{"file":"chunk-18hwfzwa.js","key":"@1344096","name":"selectToolPermissionContextMode","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.toolPermissionContext.mode"}
+{"file":"chunk-18hwfzwa.js","key":"@1344347","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(27)"}
+{"file":"chunk-18hwfzwa.js","key":"@1364333","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-18hwfzwa.js","key":"@1364908","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(6)"}
+{"file":"chunk-18hwfzwa.js","key":"@1370892","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(19)"}
+{"file":"chunk-18hwfzwa.js","key":"@1372110","name":"selectCwd","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.cwd"}
+{"file":"chunk-18hwfzwa.js","key":"@1372588","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-18hwfzwa.js","key":"@1373376","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(54)"}
+{"file":"chunk-18hwfzwa.js","key":"@1380479","name":"toolPermissionContext","source":"semantic","confidence":0.85,"note":"L2 G(s => s.toolPermissionContext)"}
+{"file":"chunk-18hwfzwa.js","key":"@1391910","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(50)"}
+{"file":"chunk-18hwfzwa.js","key":"@1414031","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(57)"}
+{"file":"chunk-18hwfzwa.js","key":"@1425904","name":"selectTerminalTitle","source":"semantic","confidence":0.8,"note":"s => s.terminalTitle"}
+{"file":"chunk-18hwfzwa.js","key":"@1425945","name":"selectTitleDisabled","source":"semantic","confidence":0.8,"note":"s => s.disabled"}
+{"file":"chunk-18hwfzwa.js","key":"@1425981","name":"nextTitleFrame","source":"semantic","confidence":0.8,"note":"(f + 1) % 帧数"}
+{"file":"chunk-18hwfzwa.js","key":"@1426016","name":"TITLE_SPINNER_FRAMES","source":"semantic","confidence":0.8,"note":"[\"◐\",\"◑\"]"}
+{"file":"chunk-18hwfzwa.js","key":"@1426039","name":"TITLE_IDLE_PREFIX","source":"semantic","confidence":0.8,"note":"\"✳\""}
+{"file":"chunk-18hwfzwa.js","key":"@1426051","name":"TITLE_FRAME_INTERVAL_MS","source":"semantic","confidence":0.8,"note":"960"}
+{"file":"chunk-18hwfzwa.js","key":"@1426078","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(1)"}
+{"file":"chunk-18hwfzwa.js","key":"@1426124","name":"terminalTitle","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.terminalTitle)"}
+{"file":"chunk-18hwfzwa.js","key":"@1426137","name":"disabled","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.disabled)"}
+{"file":"chunk-18hwfzwa.js","key":"@1434533","name":"hasPendingWorkerRequest","source":"semantic","confidence":0.8,"note":"s.pendingWorkerRequest !== null"}
+{"file":"chunk-18hwfzwa.js","key":"@1438148","name":"viewSelectionMode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewSelectionMode)"}
+{"file":"chunk-18hwfzwa.js","key":"@1438181","name":"viewingAgentTaskId","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewingAgentTaskId)"}
+{"file":"chunk-18hwfzwa.js","key":"@1438711","name":"selectViewingAgentTaskId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.viewingAgentTaskId"}
+{"file":"chunk-18hwfzwa.js","key":"@1444322","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(14)"}
+{"file":"chunk-18hwfzwa.js","key":"@1452753","name":"BuriedPermissionCue","source":"semantic","confidence":0.6,"note":"对话框被遮挡时 firstReveal(requestId, \"buried-idle-cue\") 并发送通知"}
+{"file":"chunk-18hwfzwa.js","key":"@1452764","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-18hwfzwa.js","key":"@1452934","name":"usePermissionPromptNotification","source":"semantic","confidence":0.75,"note":"旧版名 PermissionRequest 错配：只是调用 useNotifyAfterTimeout(text, \"permission_prompt\")"}
+{"file":"chunk-18hwfzwa.js","key":"@1578851","name":"replBridgeEnabled","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeEnabled)"}
+{"file":"chunk-18hwfzwa.js","key":"@1578884","name":"replBridgeConnected","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeConnected)"}
+{"file":"chunk-18hwfzwa.js","key":"@1578919","name":"commands","source":"semantic","confidence":0.85,"note":"L2 G(s => s.mcp.commands)"}
+{"file":"chunk-18hwfzwa.js","key":"@1578947","name":"replBridgeSessionActive","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeSessionActive)"}
+{"file":"chunk-18hwfzwa.js","key":"@1578986","name":"replBridgeError","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeError)"}
+{"file":"chunk-18hwfzwa.js","key":"@1579017","name":"replBridgeErrorKind","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeErrorKind)"}
+{"file":"chunk-18hwfzwa.js","key":"@1579065","name":"credentialsPersisted","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.credentialsPersisted)"}
+{"file":"chunk-18hwfzwa.js","key":"@1579105","name":"replBridgeOutboundOnly","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeOutboundOnly)"}
+{"file":"chunk-18hwfzwa.js","key":"@1579143","name":"replBridgeInitialName","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeInitialName)"}
+{"file":"chunk-18hwfzwa.js","key":"@1579180","name":"replBridgeSessionGroupingId","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replBridgeSessionGroupingId)"}
+{"file":"chunk-18hwfzwa.js","key":"@1579223","name":"mode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.toolPermissionContext.mode)"}
+{"file":"chunk-18hwfzwa.js","key":"@1579265","name":"fastMode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.fastMode)"}
+{"file":"chunk-18hwfzwa.js","key":"@1579289","name":"autoCompactWindow","source":"semantic","confidence":0.85,"note":"L2 G(s => s.autoCompactWindow)"}
+{"file":"chunk-18hwfzwa.js","key":"@1579322","name":"settings","source":"semantic","confidence":0.85,"note":"L2 G(s => s.settings)"}
+{"file":"chunk-18hwfzwa.js","key":"@1647931","name":"permissionUpdater","source":"semantic","confidence":0.55,"note":"b0e(setAppState)，传给权限检查"}
+{"file":"chunk-18hwfzwa.js","key":"@1647954","name":"canUseTool","source":"semantic","confidence":0.85,"note":"返回的回调 (tool, input, toolUseContext, assistantMessage, toolUseID, forceDecision)"}
+{"file":"chunk-18hwfzwa.js","key":"@1665871","name":"isLoading","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.isLoading)"}
+{"file":"chunk-18hwfzwa.js","key":"@1667018","name":"negate","source":"semantic","confidence":0.85,"note":"T2 x => !x（多用作 setState 切换）"}
+{"file":"chunk-18hwfzwa.js","key":"@1667056","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(29)"}
+{"file":"chunk-18hwfzwa.js","key":"@1688802","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-18hwfzwa.js","key":"@1695129","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(57)"}
+{"file":"chunk-18hwfzwa.js","key":"@1695475","name":"id","source":"semantic","confidence":0.85,"note":"L2 no(s => s.id)"}
+{"file":"chunk-18hwfzwa.js","key":"@1802626","name":"selectFileHistoryTrackedFiles","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.fileHistory.trackedFiles"}
+{"file":"chunk-18hwfzwa.js","key":"@1802691","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-18hwfzwa.js","key":"@1802699","name":"trackedFiles","source":"semantic","confidence":0.85,"note":"L2 G(s => s.fileHistory.trackedFiles)"}
+{"file":"chunk-18hwfzwa.js","key":"@1806286","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-18hwfzwa.js","key":"@1817627","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(75)"}
+{"file":"chunk-18hwfzwa.js","key":"@1822965","name":"selectFileHistoryTrackedFilesSize","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.fileHistory.trackedFiles.size"}
+{"file":"chunk-18hwfzwa.js","key":"@1839140","name":"selectPendingWorkerRequest","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.pendingWorkerRequest"}
+{"file":"chunk-18hwfzwa.js","key":"@1839647","name":"selectHasBashesDialog","source":"semantic","confidence":0.8,"note":"s => !!s.bashesDialog"}
+{"file":"chunk-18hwfzwa.js","key":"@1839773","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-18hwfzwa.js","key":"@1839789","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-18hwfzwa.js","key":"@1839805","name":"toggleScreen","source":"semantic","confidence":0.85,"note":"\"transcript\" 与 \"prompt\" 互换"}
+{"file":"chunk-18hwfzwa.js","key":"@1839869","name":"logDiffSidebarRenderError","source":"semantic","confidence":0.75,"note":"SentryErrorBoundary onError：repl_diff_read/render_threw"}
+{"file":"chunk-18hwfzwa.js","key":"@1840052","name":"NullComponent","source":"semantic","confidence":0.6,"note":"() => null 占位组件"}
+{"file":"chunk-18hwfzwa.js","key":"@1840074","name":"REPLWithProviders","source":"semantic","confidence":0.7,"note":"包 REPL：消息队列 Provider(zmt) + 写入节流 Provider(vz)"}
+{"file":"chunk-18hwfzwa.js","key":"@1840085","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-18hwfzwa.js","key":"@1840451","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(686)"}
+{"file":"chunk-18hwfzwa.js","key":"@1841201","name":"isStrictMcpConfig","source":"semantic","confidence":0.85,"note":"strictMcpConfig 默认 false"}
+{"file":"chunk-18hwfzwa.js","key":"@1841222","name":"isDisabled","source":"semantic","confidence":0.85,"note":"disabled 默认 false"}
+{"file":"chunk-18hwfzwa.js","key":"@1841243","name":"slashCommandsDisabled","source":"semantic","confidence":0.85,"note":"disableSlashCommands 默认 false"}
+{"file":"chunk-18hwfzwa.js","key":"@1841264","name":"isEmbedded","source":"semantic","confidence":0.85,"note":"embedded 默认 false"}
+{"file":"chunk-18hwfzwa.js","key":"@1841285","name":"shouldHideLoginNotice","source":"semantic","confidence":0.85,"note":"hideLoginNotice 默认 false"}
+{"file":"chunk-18hwfzwa.js","key":"@1841306","name":"isQueryDisabled","source":"semantic","confidence":0.85,"note":"disableQuery 默认 false"}
+{"file":"chunk-18hwfzwa.js","key":"@1841327","name":"presentation","source":"semantic","confidence":0.8,"note":"NI()；=== \"fullscreen\" 判断全屏，作为 presentation 传给控制器（旧版名 queuedCommands 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1841335","name":"isInsidePanelHost","source":"semantic","confidence":0.6,"note":"Se(lVt) !== null"}
+{"file":"chunk-18hwfzwa.js","key":"@1841374","name":"isFullscreen","source":"semantic","confidence":0.85,"note":"presentation === \"fullscreen\""}
+{"file":"chunk-18hwfzwa.js","key":"@1841430","name":"fleetNudgeStore","source":"semantic","confidence":0.85,"note":"v0t() 错误串 useFleetNudgeStore"}
+{"file":"chunk-18hwfzwa.js","key":"@1841439","name":"messageQueue","source":"semantic","confidence":0.85,"note":"Nu()；作为 messageQueue 传入各控制器"}
+{"file":"chunk-18hwfzwa.js","key":"@1841515","name":"isRemoteSession","source":"semantic","confidence":0.85,"note":"!!remoteSessionConfig || htt()；作为 isRemoteSession 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1841521","name":"hasRemoteTransport","source":"semantic","confidence":0.85,"note":"远程/直连/SSH 任一存在；作为 hasRemoteTransport 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1841604","name":"isThinClient","source":"semantic","confidence":0.85,"note":"On() || hasRemoteTransport；作为 isThinClient 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1841610","name":"clock","source":"semantic","confidence":0.85,"note":"yn() useClock；作为 clock 传入，用 .setTimeout"}
+{"file":"chunk-18hwfzwa.js","key":"@1841658","name":"session","source":"semantic","confidence":0.85,"note":"no() useSession；作为 session 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1841666","name":"replTab","source":"semantic","confidence":0.85,"note":"L2 G(s => s.replTab)"}
+{"file":"chunk-18hwfzwa.js","key":"@1841676","name":"hasGitRepo","source":"semantic","confidence":0.7,"note":"POe()；传 sCr({hasGitRepo})"}
+{"file":"chunk-18hwfzwa.js","key":"@1841685","name":"replTab","source":"semantic","confidence":0.85,"note":"G(s => s.replTab)；=== \"diff\" 时开 diff 侧栏（旧版名错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1841695","name":"chromeClients","source":"semantic","confidence":0.6,"note":"G(yJo)（commands/chrome），与 mcpClients 合并"}
+{"file":"chunk-18hwfzwa.js","key":"@1841705","name":"setAppState","source":"semantic","confidence":0.9,"note":"useSetAppState()"}
+{"file":"chunk-18hwfzwa.js","key":"@1841713","name":"setSessionState","source":"semantic","confidence":0.8,"note":"B_o()；作为 setSessionState 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1841722","name":"store","source":"semantic","confidence":0.85,"note":"Cr() AppState store；作为 store 传入，用 getState/setState/subscribe"}
+{"file":"chunk-18hwfzwa.js","key":"@1841730","name":"activePlugins","source":"semantic","confidence":0.85,"note":"c5() 错误串 useActivePlugins"}
+{"file":"chunk-18hwfzwa.js","key":"@1841738","name":"sessionHooks","source":"semantic","confidence":0.85,"note":"vce() 错误串 useSessionHooksRegistry"}
+{"file":"chunk-18hwfzwa.js","key":"@1841759","name":"dialogStore","source":"semantic","confidence":0.85,"note":"Cm() 错误串 useDialogStore"}
+{"file":"chunk-18hwfzwa.js","key":"@1841767","name":"spinnerStore","source":"semantic","confidence":0.85,"note":"hye() 错误串 useSpinnerStore；作为 spinnerStore 传入（旧版名 setAppState 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1841983","name":"taskRegistry","source":"semantic","confidence":0.8,"note":"ih(getState, setAppState, {refillWebSearchBudgetByDefault})；作为 taskRegistry 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1842232","name":"teammateColors","source":"semantic","confidence":0.8,"note":"wIe(getState, setAppState, \"teammateColors\")"}
+{"file":"chunk-18hwfzwa.js","key":"@1842381","name":"terminal","source":"semantic","confidence":0.8,"note":"useTerminalNotification()；作为 terminal 传入（旧版名 store 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1842389","name":"mainLoopModel","source":"semantic","confidence":0.85,"note":"useMainLoopModel()；处处作为 mainLoopModel 传入（旧版名 terminal 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1842407","name":"briefTranscript","source":"semantic","confidence":0.85,"note":"L2 G(s => s.briefTranscript)"}
+{"file":"chunk-18hwfzwa.js","key":"@1842418","name":"screen","source":"semantic","confidence":0.85,"note":"useState(\"prompt\")：\"prompt\" | \"transcript\""}
+{"file":"chunk-18hwfzwa.js","key":"@1842421","name":"setScreen","source":"semantic","confidence":0.85,"note":"screen 的 setter"}
+{"file":"chunk-18hwfzwa.js","key":"@1842438","name":"dumpMode","source":"semantic","confidence":0.8,"note":"useState(false)；转录打印到 scrollback"}
+{"file":"chunk-18hwfzwa.js","key":"@1842441","name":"setDumpMode","source":"semantic","confidence":0.8,"note":"dumpMode 的 setter"}
+{"file":"chunk-18hwfzwa.js","key":"@1842526","name":"exitTranscript","source":"semantic","confidence":0.8,"note":"setScreen(\"prompt\") + setDumpMode(false)；作为 onExit"}
+{"file":"chunk-18hwfzwa.js","key":"@1842580","name":"mergedMcpClients","source":"semantic","confidence":0.7,"note":"jw(mcpClients, chromeClients)"}
+{"file":"chunk-18hwfzwa.js","key":"@1843502","name":"scope","source":"semantic","confidence":0.85,"note":"new NQ(ReplSessionScope)；作为 scope 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1843571","name":"writePacer","source":"semantic","confidence":0.7,"note":"Se(vz)：{deferred,paced,flush,isDeferring}，作为 frameNotifier/isWritePaced（旧版名 showRemoteCallout 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1844661","name":"controllers","source":"semantic","confidence":0.7,"note":"{sessionEngine, turn, transcript}"}
+{"file":"chunk-18hwfzwa.js","key":"@1845562","name":"chrome","source":"semantic","confidence":0.85,"note":"new ute(ComposerChrome)；作为 chrome 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1845572","name":"ideSelection","source":"semantic","confidence":0.8,"note":"Ie(chrome, s => s.ideSelection)；作为 ideSelection 传入（旧版名 awaitPendingHooks 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1845745","name":"turnEventTail","source":"semantic","confidence":0.75,"note":"ien.createTurnEventTail(...)"}
+{"file":"chunk-18hwfzwa.js","key":"@1845756","name":"permissionRelays","source":"semantic","confidence":0.8,"note":"useState(vJo)；作为 permissionRelays 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1846084","name":"networkPrompts","source":"semantic","confidence":0.8,"note":"new MQ([SandboxNetworkPrompts])；作为 networkPrompts 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1846478","name":"sandbox","source":"semantic","confidence":0.8,"note":"new cz 沙箱控制器；作为 sandbox 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1846488","name":"isLoading","source":"semantic","confidence":0.85,"note":"Ie(turn, s => s.isLoading)；作为 isLoading 传入（旧版名 setResponseLength 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1846517","name":"toolProgress","source":"semantic","confidence":0.8,"note":"Ie(turn.stream, s => s.toolProgress)；作为 progress 传入（旧版名 onStreamingText 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1846538","name":"userInputOnProcessing","source":"semantic","confidence":0.8,"note":"Ie(turn.stream, s => s.userInputOnProcessing)（旧版名 pickNewSpinnerTip 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1846559","name":"hasToolProgress","source":"semantic","confidence":0.8,"note":"toolProgress.size > 0"}
+{"file":"chunk-18hwfzwa.js","key":"@1846640","name":"pauseAnimation","source":"semantic","confidence":0.7,"note":"由 toolProgress 派生；作为 pauseAnimation 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1846683","name":"awaySummary","source":"semantic","confidence":0.75,"note":"$Ee(transcript, isLoading, !isRemoteSession)；作为 awaySummary 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1846828","name":"scrollPin","source":"semantic","confidence":0.85,"note":"new Yee(ScrollPin)；作为 scrollPin 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1846958","name":"isTypedAhead","source":"semantic","confidence":0.75,"note":"r5e() && Oit()；作为 isTypedAhead 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1847399","name":"draft","source":"semantic","confidence":0.85,"note":"new zY(PromptDraft)；作为 draft 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1848875","name":"sessionController","source":"semantic","confidence":0.85,"note":"new lz(SessionController)；作为 sessionController 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1848932","name":"isDialogActive","source":"semantic","confidence":0.6,"note":"Aw()"}
+{"file":"chunk-18hwfzwa.js","key":"@1849112","name":"blockingDialogKind","source":"semantic","confidence":0.7,"note":"KH() 当前屏幕阻塞的对话框类型；作为 onScreenBlockingKind 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1849471","name":"dialogSurface","source":"semantic","confidence":0.8,"note":"{requestDialog, turnActivity, tasks}；作为 dialogSurface 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1850071","name":"contextualTips","source":"semantic","confidence":0.6,"note":"new xQ（tmux 鼠标/焦点提示等 contextual 提示），start() 于 effect"}
+{"file":"chunk-18hwfzwa.js","key":"@1850202","name":"recommendationGate","source":"semantic","confidence":0.6,"note":"GEe()，传给 LSP/ClaudeCodeHint 推荐 hook（旧版名 wt 无意义）"}
+{"file":"chunk-18hwfzwa.js","key":"@1850252","name":"hasLocalJsxOverlay","source":"semantic","confidence":0.7,"note":"KR(nh.kind)（旧版名 skillImprovementSurvey 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1850267","name":"hasActiveLocalJsxUI","source":"semantic","confidence":0.8,"note":"HI(SUt)；作为 hasActiveLocalJsxUI 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1850278","name":"panelHidesPrompt","source":"semantic","confidence":0.8,"note":"AZ()；作为 panelHidesPrompt 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1850535","name":"titles","source":"semantic","confidence":0.85,"note":"new AQ（终端标题）；作为 titles 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1850545","name":"hasOpenDialog","source":"semantic","confidence":0.8,"note":"BWe()；作为 hasOpenDialog 传入（旧版名 sessionEndTimeoutMs 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1850554","name":"modalVisibility","source":"semantic","confidence":0.75,"note":"VH()：\"visible\" | \"suppressed\" | \"none\""}
+{"file":"chunk-18hwfzwa.js","key":"@1850719","name":"isResponseRunning","source":"semantic","confidence":0.8,"note":"useSyncExternalStore(guard.subscribe, () => guard.isRunning)"}
+{"file":"chunk-18hwfzwa.js","key":"@1850756","name":"panelHoldsQueue","source":"semantic","confidence":0.8,"note":"hasActiveLocalJsxUI && !isResponseRunning；作为 panelHoldsQueue 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1850767","name":"dialogOverPanel","source":"semantic","confidence":0.6,"note":"VI()"}
+{"file":"chunk-18hwfzwa.js","key":"@1850784","name":"isUltraplanChoiceShowing","source":"semantic","confidence":0.75,"note":"blockingDialogKind === IKe.kind（ultraplan）"}
+{"file":"chunk-18hwfzwa.js","key":"@1850873","name":"elicitationShowing","source":"semantic","confidence":0.75,"note":"oLo(blockingDialogKind)；作为 elicitationShowing 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1850879","name":"pinnedConsentShowing","source":"semantic","confidence":0.75,"note":"Bce(blockingDialogKind)；作为 pinnedConsentShowing 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1850956","name":"messages","source":"semantic","confidence":0.8,"note":"ug(et()).messages 当前会话消息"}
+{"file":"chunk-18hwfzwa.js","key":"@1851135","name":"openMessageSelector","source":"semantic","confidence":0.8,"note":"ile({localJsx, turn, sessionController})；作为 openMessageSelector 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1852059","name":"idleNudge","source":"semantic","confidence":0.8,"note":"new BG（tengu_idle_return_action）；作为 idleNudge 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1852450","name":"pollEventDelivery","source":"semantic","confidence":0.6,"note":"new $G({queue, guard})"}
+{"file":"chunk-18hwfzwa.js","key":"@1852571","name":"turnEvents","source":"semantic","confidence":0.75,"note":"{begin: randomUUID, enqueue}；作为 turnEvents 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1853831","name":"gesture","source":"semantic","confidence":0.8,"note":"new XG(BackgroundGesture)；作为 gesture/attachRequests 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1854233","name":"lowLatency","source":"semantic","confidence":0.75,"note":"new jG（input_low_latency_submit）；作为 lowLatency 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1854378","name":"applyLocalConversationReset","source":"semantic","confidence":0.8,"note":"作为 applyLocalConversationReset 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1854390","name":"adoptRateLimits","source":"semantic","confidence":0.8,"note":"!isEmbedded；作为 adoptRateLimits 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1855898","name":"idleCacheQuota","source":"semantic","confidence":0.6,"note":"new UG：空闲后询问缓存/额度"}
+{"file":"chunk-18hwfzwa.js","key":"@1856130","name":"axBell","source":"semantic","confidence":0.75,"note":"umt()；作为 axBell 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1856139","name":"isBashesDialogOpen","source":"semantic","confidence":0.75,"note":"Ie(chrome, s => !!s.bashesDialog)（旧版名 onQueryImpl 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1856153","name":"hasIdeOverlay","source":"semantic","confidence":0.6,"note":"KR(IKe.kind)（旧版名 ideClient 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1856370","name":"theme","source":"semantic","confidence":0.85,"note":"useTheme()[0]；作为 theme 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1856379","name":"mainIsBusy","source":"semantic","confidence":0.8,"note":"作为 mainIsBusy 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1856564","name":"focused","source":"semantic","confidence":0.8,"note":"Xie({mainConversationId, mainIsBusy}) 当前聚焦视图（主线程或被查看的队友）；作为 focused 传入（旧版名 systemPrompt 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1856920","name":"showSpinner","source":"semantic","confidence":0.8,"note":"作为 showSpinner 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1857535","name":"surveySlot","source":"semantic","confidence":0.75,"note":"useState(() => new m8())；作为 slot/surveySlot 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1858069","name":"exitState","source":"semantic","confidence":0.6,"note":"Ie(chrome, BV)"}
+{"file":"chunk-18hwfzwa.js","key":"@1858082","name":"hasTeamModal","source":"semantic","confidence":0.6,"note":"MZ()"}
+{"file":"chunk-18hwfzwa.js","key":"@1858090","name":"isModalOpen","source":"semantic","confidence":0.6,"note":"IZ()"}
+{"file":"chunk-18hwfzwa.js","key":"@1858109","name":"hasSuppressedDialogs","source":"semantic","confidence":0.8,"note":"作为 hasSuppressedDialogs 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1859412","name":"submitController","source":"semantic","confidence":0.85,"note":"new yte(PromptSubmitController)；作为 submitController 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1859711","name":"isColdResumeQuotaShowing","source":"semantic","confidence":0.75,"note":"blockingDialogKind === COLD_RESUME_QUOTA"}
+{"file":"chunk-18hwfzwa.js","key":"@1860423","name":"promptEffects","source":"semantic","confidence":0.6,"note":"冷恢复额度对话框 + oY 输入流组件"}
+{"file":"chunk-18hwfzwa.js","key":"@1860429","name":"canUseTool","source":"semantic","confidence":0.85,"note":"HIe()；处处作为 canUseTool 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1860439","name":"mcpReconnectContext","source":"semantic","confidence":0.6,"note":"ZXe.Provider 的 value"}
+{"file":"chunk-18hwfzwa.js","key":"@1866663","name":"blocksBtwReopen","source":"semantic","confidence":0.6,"note":"hasOpenDialog || hasLocalJsxOverlay"}
+{"file":"chunk-18hwfzwa.js","key":"@1868057","name":"swarmEnabled","source":"semantic","confidence":0.75,"note":"isAgentSwarmsEnabled() 且非远程；作为 enabled 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1868840","name":"tokenWarningState","source":"semantic","confidence":0.6,"note":"VIe({isLoading, transcript})；$A.Provider 的 value"}
+{"file":"chunk-18hwfzwa.js","key":"@1868981","name":"suspendKey","source":"semantic","confidence":0.6,"note":"AEe()：ctrl+z 挂起恢复后用作 key 强制重挂载"}
+{"file":"chunk-18hwfzwa.js","key":"@1868990","name":"virtualScrollActive","source":"semantic","confidence":0.8,"note":"isFullscreen && !CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL；作为 virtualScrollActive 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1869421","name":"screenFrameProps","source":"semantic","confidence":0.6,"note":"传给 _F 的 props"}
+{"file":"chunk-18hwfzwa.js","key":"@1870288","name":"wrapWithProviders","source":"semantic","confidence":0.7,"note":"外层 provider 包装函数（MCPConnectionManager 等）"}
+{"file":"chunk-18hwfzwa.js","key":"@1870310","name":"diffSidebarEnabled","source":"semantic","confidence":0.6,"note":"yyo()"}
+{"file":"chunk-18hwfzwa.js","key":"@1870773","name":"sidebarWidth","source":"semantic","confidence":0.8,"note":"作为 sidebarWidth 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1870798","name":"dockWidth","source":"semantic","confidence":0.8,"note":"作为 dockWidth 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1871000","name":"autoOpenBaseline","source":"semantic","confidence":0.8,"note":"Goe(...)；作为 autoOpenBaseline 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1871177","name":"scrollViewport","source":"semantic","confidence":0.75,"note":"作为 scrollViewport 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1871230","name":"isTranscriptScreen","source":"semantic","confidence":0.85,"note":"screen === \"transcript\""}
+{"file":"chunk-18hwfzwa.js","key":"@1872047","name":"transcriptView","source":"semantic","confidence":0.75,"note":"gQ 转录视图元素"}
+{"file":"chunk-18hwfzwa.js","key":"@1872730","name":"modalSlotActive","source":"semantic","confidence":0.8,"note":"作为 modalSlotActive 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1872752","name":"layoutSlots","source":"semantic","confidence":0.6,"note":"DIe(...) → {inPane, abovePrompt, drawn}（旧版名 jumpRef 错配）"}
+{"file":"chunk-18hwfzwa.js","key":"@1873194","name":"promptVisible","source":"semantic","confidence":0.75,"note":"作为 visible/promptMounted 传入"}
+{"file":"chunk-18hwfzwa.js","key":"@1874467","name":"scrollable","source":"semantic","confidence":0.8,"note":"Gee 消息列表元素；FullscreenLayout.scrollable"}
+{"file":"chunk-18hwfzwa.js","key":"@1875360","name":"abovePrompt","source":"semantic","confidence":0.8,"note":"FullscreenLayout.abovePrompt"}
+{"file":"chunk-18hwfzwa.js","key":"@1876214","name":"bottom","source":"semantic","confidence":0.8,"note":"FullscreenLayout.bottom"}
+{"file":"chunk-18hwfzwa.js","key":"@1876752","name":"layout","source":"semantic","confidence":0.7,"note":"FullscreenLayout 元素"}
+{"file":"chunk-19dk83fw.js","key":"@4472","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-19dk83fw.js","key":"@5221","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(2)"}
+{"file":"chunk-1dkfja46.js","key":"@1128","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(52)"}
+{"file":"chunk-1dkfja46.js","key":"@5890","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(18)"}
+{"file":"chunk-1dkfja46.js","key":"@6764","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(4)"}
+{"file":"chunk-1dkfja46.js","key":"@7071","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(6)"}
+{"file":"chunk-1dkfja46.js","key":"@7351","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-1dth5azr.js","key":"@7782","name":"isSameConnectedClient","source":"semantic","confidence":0.7,"note":"同一个 connected MCP 客户端"}
+{"file":"chunk-20skp6hd.js","key":"@1161","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(1)"}
+{"file":"chunk-2jdf5m4m.js","key":"@2541","name":"isHooksManagedOnly","source":"semantic","confidence":0.4,"note":"k() || E_()"}
+{"file":"chunk-2jdf5m4m.js","key":"@2922","name":"isAllHooksDisabledByPolicy","source":"semantic","confidence":0.85,"note":"policySettings.disableAllHooks === true"}
+{"file":"chunk-3g0djq3w.js","key":"@9869","name":"NON_HISTORY_COMMANDS","source":"semantic","confidence":0.55,"note":"Set(clear, resume, help, exit, feedback…)"}
+{"file":"chunk-3g0djq3w.js","key":"@9934","name":"shouldIncludeCommandInHistory","source":"semantic","confidence":0.4,"note":"非 prompt 类型的 clear/resume/help/exit/feedback 命令不计入"}
+{"file":"chunk-3mec1atf.js","key":"@1928","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(97)"}
+{"file":"chunk-3mec1atf.js","key":"@14843","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(57)"}
+{"file":"chunk-3mec1atf.js","key":"@18890","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(2)"}
+{"file":"chunk-3mec1atf.js","key":"@19306","name":"selectViewingAgentTaskId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.viewingAgentTaskId"}
+{"file":"chunk-3mec1atf.js","key":"@19432","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(24)"}
+{"file":"chunk-3mec1atf.js","key":"@19684","name":"isBriefOnly","source":"semantic","confidence":0.85,"note":"L2 G(s => s.isBriefOnly)"}
+{"file":"chunk-3mec1atf.js","key":"@21232","name":"spinnerTip","source":"semantic","confidence":0.85,"note":"L2 G(s => s.spinnerTip)"}
+{"file":"chunk-3mec1atf.js","key":"@21256","name":"spinnerTipLabel","source":"semantic","confidence":0.85,"note":"L2 G(s => s.spinnerTipLabel)"}
+{"file":"chunk-3mec1atf.js","key":"@21284","name":"briefTranscript","source":"semantic","confidence":0.85,"note":"L2 G(s => s.briefTranscript)"}
+{"file":"chunk-3mec1atf.js","key":"@24083","name":"remoteConnectionStatus","source":"semantic","confidence":0.85,"note":"L2 G(s => s.remoteConnectionStatus)"}
+{"file":"chunk-3mec1atf.js","key":"@25071","name":"remoteConnectionStatus","source":"semantic","confidence":0.85,"note":"L2 G(s => s.remoteConnectionStatus)"}
+{"file":"chunk-3mec1atf.js","key":"@25703","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-3s4dbk22.js","key":"@15290","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(165)"}
+{"file":"chunk-3v13eg2e.js","key":"@1949","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(25)"}
+{"file":"chunk-3v13eg2e.js","key":"@3202","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(36)"}
+{"file":"chunk-3xb70ww4.js","key":"@3764","name":"THINKING_AND_RESULT_TYPES","source":"semantic","confidence":0.7,"note":"Set(thinking, redacted_thinking, tool_result)（旧版名错配）"}
+{"file":"chunk-41w44bgm.js","key":"@101552","name":"isBuiltInWithFlag","source":"semantic","confidence":0.4,"note":"e === \"built-in\" && n"}
+{"file":"chunk-4dnha4dk.js","key":"@351","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-4kzs0ch0.js","key":"@543","name":"buildNativeDoctorDiagnostics","source":"semantic","confidence":0.5,"note":"Doctor：合并工作目录诊断（native 安装）"}
+{"file":"chunk-4v9zy7gn.js","key":"@16199","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-4xzsbgqr.js","key":"@1695","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(56)"}
+{"file":"chunk-4xzsbgqr.js","key":"@4265","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-55w3ydvj.js","key":"@14093","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-55w3ydvj.js","key":"@17349","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(26)"}
+{"file":"chunk-55w3ydvj.js","key":"@22253","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-55w3ydvj.js","key":"@23196","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(24)"}
+{"file":"chunk-55w3ydvj.js","key":"@25404","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(36)"}
+{"file":"chunk-55w3ydvj.js","key":"@28888","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(24)"}
+{"file":"chunk-5bdzenzx.js","key":"@14176","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(20)"}
+{"file":"chunk-5bdzenzx.js","key":"@15540","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-5cp2fssw.js","key":"@13435","name":"describeRemoteStatus","source":"semantic","confidence":0.65,"note":"requires_action → \"waiting on a human\""}
+{"file":"chunk-5cp2fssw.js","key":"@13503","name":"describeSessionStatus","source":"semantic","confidence":0.6,"note":"远程会话状态或 offline"}
+{"file":"chunk-5cp2fssw.js","key":"@13576","name":"getSessionDisplayTitle","source":"semantic","confidence":0.6,"note":"排除 \"untitled session\""}
+{"file":"chunk-5cp2fssw.js","key":"@13665","name":"buildOtherSessionsSection","source":"semantic","confidence":0.6,"note":"\"Other Claude sessions\" 列表"}
+{"file":"chunk-5je9hz27.js","key":"@1159","name":"selectSettingsSyntaxHighlightingDisabled","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.settings.syntaxHighlightingDisabled"}
+{"file":"chunk-5je9hz27.js","key":"@1382","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(109)"}
+{"file":"chunk-63641kq7.js","key":"@1361","name":"resolveTaskNotificationOrigin","source":"semantic","confidence":0.6,"note":"补全 task-notification 来源的 runId（旧版名错配）"}
+{"file":"chunk-648vry02.js","key":"@4015","name":"isRootedAbsolutePath","source":"semantic","confidence":0.6,"note":"isAbsolute 且 posix 或有盘符根（旧版名 _temp4 错配）"}
+{"file":"chunk-6p6y0k3t.js","key":"@5066","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-6p6y0k3t.js","key":"@5512","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(26)"}
+{"file":"chunk-6p6y0k3t.js","key":"@6856","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(18)"}
+{"file":"chunk-6p6y0k3t.js","key":"@7001","name":"mainLoopModel","source":"semantic","confidence":0.85,"note":"L2 G(s => s.mainLoopModel)"}
+{"file":"chunk-6p6y0k3t.js","key":"@7020","name":"mcp","source":"semantic","confidence":0.85,"note":"L2 G(s => s.mcp)"}
+{"file":"chunk-6p6y0k3t.js","key":"@7028","name":"mode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.toolPermissionContext.mode)"}
+{"file":"chunk-6p6y0k3t.js","key":"@7036","name":"remoteSessionName","source":"semantic","confidence":0.85,"note":"L2 G(s => s.remoteSessionName)"}
+{"file":"chunk-6p6y0k3t.js","key":"@7053","name":"id","source":"semantic","confidence":0.85,"note":"L2 no(s => s.id)"}
+{"file":"chunk-6p6y0k3t.js","key":"@7993","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-6rcbehen.js","key":"@794","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(107)"}
+{"file":"chunk-6vnxsn99.js","key":"@25510","name":"isIdleTeammateTask","source":"semantic","confidence":0.75,"note":"in_process_teammate 且 isIdle 且未…"}
+{"file":"chunk-74a0twcp.js","key":"@200","name":"prependModeCharacterToInput","source":"semantic","confidence":0.85,"note":"bash 模式加 \"!\" 前缀"}
+{"file":"chunk-74a0twcp.js","key":"@271","name":"getModeFromInput","source":"semantic","confidence":0.9,"note":"\"!\" 开头为 bash，否则 prompt"}
+{"file":"chunk-74a0twcp.js","key":"@335","name":"stripModePrefix","source":"semantic","confidence":0.8,"note":"prompt 模式原样，bash 模式去掉首字符 !"}
+{"file":"chunk-7hdssadt.js","key":"@513","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(20)"}
+{"file":"chunk-7p2hc4jn.js","key":"@43000","name":"mapInput","source":"semantic","confidence":0.9,"note":"旧版同名"}
+{"file":"chunk-7p2hc4jn.js","key":"@50981","name":"VOICE_LEVEL_BARS","source":"semantic","confidence":0.8,"note":"\" ▁▂▃▄▅▆▇█\""}
+{"file":"chunk-7p2hc4jn.js","key":"@51591","name":"CLIPBOARD_CHECK_DEBOUNCE_MS","source":"semantic","confidence":0.6,"note":"50"}
+{"file":"chunk-7p2hc4jn.js","key":"@51597","name":"PATH_SPLIT_RE","source":"semantic","confidence":0.7,"note":"在空格+路径起点处拆分"}
+{"file":"chunk-7p2hc4jn.js","key":"@51631","name":"UNQUOTED_PATH_RE","source":"semantic","confidence":0.7,"note":"绝对路径/盘符/UNC"}
+{"file":"chunk-7p2hc4jn.js","key":"@51704","name":"QUOTED_PATH_RE","source":"semantic","confidence":0.7,"note":"引号包裹的路径"}
+{"file":"chunk-7p2hc4jn.js","key":"@51770","name":"MACOS_SCREENSHOT_TEMP_RE","source":"semantic","confidence":0.8,"note":"TemporaryItems/…screencaptureui…/Screenshot"}
+{"file":"chunk-7p2hc4jn.js","key":"@51835","name":"getClipboardPlatform","source":"semantic","confidence":0.55,"note":"Td(ot())"}
+{"file":"chunk-7p2hc4jn.js","key":"@51955","name":"isPasting","source":"semantic","confidence":0.8,"note":"useState(false)，返回值 isPasting"}
+{"file":"chunk-7p2hc4jn.js","key":"@51957","name":"setIsPasting","source":"semantic","confidence":0.8,"note":"isPasting 的 setter"}
+{"file":"chunk-7p2hc4jn.js","key":"@51966","name":"isMountedRef","source":"semantic","confidence":0.75,"note":"卸载时置 false"}
+{"file":"chunk-7p2hc4jn.js","key":"@51974","name":"isPasteInProgressRef","source":"semantic","confidence":0.7,"note":"粘贴处理中标记"}
+{"file":"chunk-7p2hc4jn.js","key":"@51982","name":"pendingReturnRef","source":"semantic","confidence":0.7,"note":"粘贴中被吞掉的回车，结束后补发"}
+{"file":"chunk-7p2hc4jn.js","key":"@52001","name":"isMacOS","source":"semantic","confidence":0.85,"note":"I() === \"macos\""}
+{"file":"chunk-7p2hc4jn.js","key":"@52028","name":"isWSL","source":"semantic","confidence":0.85,"note":"I() === \"wsl\""}
+{"file":"chunk-7p2hc4jn.js","key":"@52085","name":"replayReturn","source":"semantic","confidence":0.7,"note":"补发一次 return 按键"}
+{"file":"chunk-7p2hc4jn.js","key":"@52352","name":"readClipboardImage","source":"semantic","confidence":0.75,"note":"getImageFromClipboard 后 onImagePaste"}
+{"file":"chunk-7p2hc4jn.js","key":"@52612","name":"submitPastedText","source":"semantic","confidence":0.7,"note":"onPaste(text) 或模拟按键"}
+{"file":"chunk-7p2hc4jn.js","key":"@52782","name":"finishPaste","source":"semantic","confidence":0.7,"note":"清除粘贴状态"}
+{"file":"chunk-7p2hc4jn.js","key":"@52879","name":"processPastedText","source":"semantic","confidence":0.75,"note":"拆行、识别图片路径、读取图片"}
+{"file":"chunk-7p2hc4jn.js","key":"@54320","name":"handlePaste","source":"semantic","confidence":0.8,"note":"返回值 handlePaste"}
+{"file":"chunk-7p2hc4jn.js","key":"@54405","name":"handleKeyDown","source":"semantic","confidence":0.8,"note":"返回值 handleKeyDown"}
+{"file":"chunk-7sw8gya5.js","key":"@4017","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(98)"}
+{"file":"chunk-7tjtztz1.js","key":"@860","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-7vp249v4.js","key":"@42551","name":"freezeZodValue","source":"semantic","confidence":0.8,"note":"zod $ZodReadonly 的 Object.freeze（旧版名 Message 错配，第三方 zod）"}
+{"file":"chunk-7wdbg1ct.js","key":"@11450","name":"PROJECT_SETTING_SOURCES","source":"semantic","confidence":0.7,"note":"[\"projectSettings\",\"localSettings\"]"}
+{"file":"chunk-7wdbg1ct.js","key":"@11488","name":"TMPDIR_ENV_VARS","source":"semantic","confidence":0.85,"note":"CLAUDE_CODE_TMPDIR/TMPDIR/TEMP/TMP"}
+{"file":"chunk-7wdbg1ct.js","key":"@11536","name":"HOME_ENV_VARS","source":"semantic","confidence":0.75,"note":"CLAUDE_CONFIG_DIR/HOME/USERPROFILE/HOMEDRIVE/HOMEPATH…"}
+{"file":"chunk-7wdbg1ct.js","key":"@11639","name":"GIT_CONFIG_ENV_VARS","source":"semantic","confidence":0.85,"note":"GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM"}
+{"file":"chunk-7wdbg1ct.js","key":"@11685","name":"PROTECTED_ENV_VARS","source":"semantic","confidence":0.55,"note":"上述集合 + XDG_CONFIG_HOME + PATH"}
+{"file":"chunk-81qqq1aq.js","key":"@2358","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-81qqq1aq.js","key":"@2628","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(21)"}
+{"file":"chunk-81qqq1aq.js","key":"@4318","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-81qqq1aq.js","key":"@7036","name":"selectVoiceState","source":"semantic","confidence":0.8,"note":"s => s.voiceState"}
+{"file":"chunk-81qqq1aq.js","key":"@7073","name":"identity","source":"semantic","confidence":0.85,"note":"T2 x => x"}
+{"file":"chunk-81qqq1aq.js","key":"@7099","name":"identity","source":"semantic","confidence":0.85,"note":"T2 x => x"}
+{"file":"chunk-81qqq1aq.js","key":"@7135","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(59)"}
+{"file":"chunk-82kqcve8.js","key":"@234521","name":"getClaudeConfigDirCandidates","source":"semantic","confidence":0.5,"note":"去重目录列表（旧版名错配）"}
+{"file":"chunk-887tgx6t.js","key":"@814","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-887tgx6t.js","key":"@5318","name":"DIFF_THEME_KEYS","source":"semantic","confidence":0.75,"note":"diffAdded/diffRemoved/…Dimmed/…Word"}
+{"file":"chunk-887tgx6t.js","key":"@5430","name":"pickDiffThemeColors","source":"semantic","confidence":0.65,"note":"从主题中取出 diff 相关颜色"}
+{"file":"chunk-887tgx6t.js","key":"@6029","name":"expandTabsInPatch","source":"semantic","confidence":0.7,"note":"行内 tab 展开"}
+{"file":"chunk-887tgx6t.js","key":"@6184","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(19)"}
+{"file":"chunk-8ayegty4.js","key":"@315","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-8jawqfvg.js","key":"@351","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-8jypjjdf.js","key":"@1332","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-8jypjjdf.js","key":"@2116","name":"MAX_VISIBLE_SUGGESTIONS","source":"semantic","confidence":0.55,"note":"5"}
+{"file":"chunk-8jypjjdf.js","key":"@2311","name":"findContiguousMatch","source":"semantic","confidence":0.6,"note":"小写查找连续匹配区间"}
+{"file":"chunk-8jypjjdf.js","key":"@2617","name":"HighlightedSuggestionText","source":"semantic","confidence":0.7,"note":"{text, query, color, isSelected, bold, contiguousOnly}"}
+{"file":"chunk-8jypjjdf.js","key":"@2627","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-8jypjjdf.js","key":"@3443","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(101)"}
+{"file":"chunk-8jypjjdf.js","key":"@14949","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(47)"}
+{"file":"chunk-8jypjjdf.js","key":"@17399","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-8jypjjdf.js","key":"@17848","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(19)"}
+{"file":"chunk-8jypjjdf.js","key":"@20391","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(2)"}
+{"file":"chunk-8jypjjdf.js","key":"@20706","name":"selectNotificationsCurrent","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.notifications.current"}
+{"file":"chunk-8rmevhsy.js","key":"@14589","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(67)"}
+{"file":"chunk-8wvtd8sr.js","key":"@14102","name":"isOnlyHtmlComments","source":"semantic","confidence":0.7,"note":"去掉开头所有 <!-- --> 后是否为空"}
+{"file":"chunk-90s2c6g2.js","key":"@482","name":"isBuiltInAgentOfType","source":"semantic","confidence":0.6,"note":"built-in 且 agentType === tS（旧版名 updateAgentFile_3 错配）"}
+{"file":"chunk-9h8dr0qb.js","key":"@6561","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-9h8dr0qb.js","key":"@7888","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-9h8dr0qb.js","key":"@10296","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-9h8dr0qb.js","key":"@11382","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(26)"}
+{"file":"chunk-9h8dr0qb.js","key":"@17284","name":"mainLoopModelForSession","source":"semantic","confidence":0.85,"note":"L2 G(s => s.mainLoopModelForSession)"}
+{"file":"chunk-9h8dr0qb.js","key":"@17334","name":"verbose","source":"semantic","confidence":0.85,"note":"L2 G(s => s.verbose)"}
+{"file":"chunk-9h8dr0qb.js","key":"@17355","name":"thinkingEnabled","source":"semantic","confidence":0.85,"note":"L2 G(s => s.thinkingEnabled)"}
+{"file":"chunk-9h8dr0qb.js","key":"@17428","name":"promptSuggestionEnabled","source":"semantic","confidence":0.85,"note":"L2 G(s => s.promptSuggestionEnabled)"}
+{"file":"chunk-9h8dr0qb.js","key":"@17465","name":"awaySummaryEnabled","source":"semantic","confidence":0.85,"note":"L2 G(s => s.awaySummaryEnabled)"}
+{"file":"chunk-9h8dr0qb.js","key":"@17984","name":"enabled","source":"semantic","confidence":0.85,"note":"L2 G(s => s.plugins.enabled)"}
+{"file":"chunk-9h8dr0qb.js","key":"@42648","name":"selectMcpCommands","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.mcp.commands"}
+{"file":"chunk-9h8dr0qb.js","key":"@46111","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(2)"}
+{"file":"chunk-9h8dr0qb.js","key":"@54196","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(41)"}
+{"file":"chunk-9h8dr0qb.js","key":"@57140","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-9h8dr0qb.js","key":"@66011","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(27)"}
+{"file":"chunk-9h8dr0qb.js","key":"@91755","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(21)"}
+{"file":"chunk-9h8dr0qb.js","key":"@92983","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(50)"}
+{"file":"chunk-9h8dr0qb.js","key":"@96324","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-9h8dr0qb.js","key":"@97407","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(102)"}
+{"file":"chunk-9h8dr0qb.js","key":"@105733","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(61)"}
+{"file":"chunk-9h8dr0qb.js","key":"@108754","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(27)"}
+{"file":"chunk-9h8dr0qb.js","key":"@113414","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(51)"}
+{"file":"chunk-9ncz9ams.js","key":"@1255","name":"getClaudeConfigDirs","source":"semantic","confidence":0.55,"note":"去重的 .claude 目录列表（旧版名 isInGlobalClaudeFolder_6 错配）"}
+{"file":"chunk-9qfjhaj4.js","key":"@244","name":"applyMcpServerConfig","source":"semantic","confidence":0.55,"note":"用新配置重建 client（并更新 tools/commands）"}
+{"file":"chunk-9t1jcaah.js","key":"@298","name":"u8","source":"semantic","confidence":0.85,"note":"fflate：Uint8Array 别名（第三方 fflate 被误归）"}
+{"file":"chunk-9t1jcaah.js","key":"@311","name":"u16","source":"semantic","confidence":0.85,"note":"fflate：Uint16Array"}
+{"file":"chunk-9t1jcaah.js","key":"@325","name":"i32","source":"semantic","confidence":0.85,"note":"fflate：Int32Array"}
+{"file":"chunk-9t1jcaah.js","key":"@339","name":"fleb","source":"semantic","confidence":0.85,"note":"fflate 长度额外位表"}
+{"file":"chunk-9t1jcaah.js","key":"@415","name":"fdeb","source":"semantic","confidence":0.85,"note":"fflate 距离额外位表"}
+{"file":"chunk-9t1jcaah.js","key":"@499","name":"clim","source":"semantic","confidence":0.85,"note":"fflate 码长顺序表"}
+{"file":"chunk-9t1jcaah.js","key":"@558","name":"freb","source":"semantic","confidence":0.85,"note":"fflate 构建基值表"}
+{"file":"chunk-9t1jcaah.js","key":"@975","name":"hMap","source":"semantic","confidence":0.85,"note":"fflate 霍夫曼码表构建"}
+{"file":"chunk-9t1jcaah.js","key":"@1339","name":"flt","source":"semantic","confidence":0.8,"note":"fflate 固定字面量码长表"}
+{"file":"chunk-aa3cndeh.js","key":"@9713","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-ag5x7vhf.js","key":"@25265","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(2)"}
+{"file":"chunk-ag5x7vhf.js","key":"@27760","name":"selectVerbose","source":"semantic","confidence":0.8,"note":"s => s.verbose"}
+{"file":"chunk-ag5x7vhf.js","key":"@27794","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-ag5x7vhf.js","key":"@27809","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-ag5x7vhf.js","key":"@27848","name":"repaintFullscreenInk","source":"semantic","confidence":0.6,"note":"全屏时取 stdout 对应 ink 实例"}
+{"file":"chunk-ag5x7vhf.js","key":"@28025","name":"selectUnseenDividerCount","source":"semantic","confidence":0.8,"note":"m => m.unseenDivider?.count ?? 0"}
+{"file":"chunk-ag5x7vhf.js","key":"@28068","name":"ScrollChromeContextValue","source":"semantic","confidence":0.6,"note":"createContext(null)，被 useScrollChrome 读取"}
+{"file":"chunk-ag5x7vhf.js","key":"@28089","name":"useScrollChrome","source":"semantic","confidence":0.9,"note":"错误串 useScrollChrome cannot be called outside of a <FullscreenLayout />"}
+{"file":"chunk-ag5x7vhf.js","key":"@29252","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(164)"}
+{"file":"chunk-ag5x7vhf.js","key":"@39098","name":"useHasVisibleNotification","source":"semantic","confidence":0.6,"note":"读通知队列当前项是否可见"}
+{"file":"chunk-ag5x7vhf.js","key":"@39107","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-ag5x7vhf.js","key":"@39471","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(46)"}
+{"file":"chunk-ag5x7vhf.js","key":"@43164","name":"JUMP_TO_BOTTOM_CHORD","source":"semantic","confidence":0.7,"note":"parseChord(\"ctrl+end\")"}
+{"file":"chunk-ag5x7vhf.js","key":"@43183","name":"PAGE_DOWN_CHORD","source":"semantic","confidence":0.7,"note":"parseChord(\"pagedown\")"}
+{"file":"chunk-ag5x7vhf.js","key":"@43221","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(20)"}
+{"file":"chunk-ag5x7vhf.js","key":"@44659","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-ag5x7vhf.js","key":"@45407","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(4)"}
+{"file":"chunk-ag5x7vhf.js","key":"@45677","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-ag5x7vhf.js","key":"@47395","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(4)"}
+{"file":"chunk-ag5x7vhf.js","key":"@52305","name":"isNewerClawdEntranceVersion","source":"semantic","confidence":0.5,"note":"比较 lastClawdEntranceVersion 与当前版本信息"}
+{"file":"chunk-ag5x7vhf.js","key":"@53587","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(28)"}
+{"file":"chunk-ag5x7vhf.js","key":"@55277","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(40)"}
+{"file":"chunk-ag5x7vhf.js","key":"@57074","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(6)"}
+{"file":"chunk-ag5x7vhf.js","key":"@61935","name":"selectAgent","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.agent"}
+{"file":"chunk-ag5x7vhf.js","key":"@61967","name":"selectUltracode","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.ultracode"}
+{"file":"chunk-ag5x7vhf.js","key":"@62013","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(34)"}
+{"file":"chunk-ag5x7vhf.js","key":"@62327","name":"ultracode","source":"semantic","confidence":0.85,"note":"L2 G(s => s.ultracode)"}
+{"file":"chunk-ag5x7vhf.js","key":"@71341","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(38)"}
+{"file":"chunk-ag5x7vhf.js","key":"@73730","name":"formatChannelEntry","source":"semantic","confidence":0.75,"note":"plugin:name@marketplace 或 server:name"}
+{"file":"chunk-ag5x7vhf.js","key":"@80179","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(1)"}
+{"file":"chunk-ag5x7vhf.js","key":"@83892","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(22)"}
+{"file":"chunk-ag5x7vhf.js","key":"@86930","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-ag5x7vhf.js","key":"@113607","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(28)"}
+{"file":"chunk-ag5x7vhf.js","key":"@117195","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(14)"}
+{"file":"chunk-ag5x7vhf.js","key":"@139111","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-ag5x7vhf.js","key":"@140432","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-ag5x7vhf.js","key":"@141747","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(80)"}
+{"file":"chunk-ag5x7vhf.js","key":"@150091","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-ag5x7vhf.js","key":"@160350","name":"createSearchTextCache","source":"semantic","confidence":0.75,"note":"{promptText: WeakMap, extractSearchText}"}
+{"file":"chunk-ag5x7vhf.js","key":"@173735","name":"LayoutSubscriber","source":"semantic","confidence":0.6,"note":"订阅布局变化并回调 onLayout"}
+{"file":"chunk-ag5x7vhf.js","key":"@173745","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(4)"}
+{"file":"chunk-ag5x7vhf.js","key":"@181072","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(284)"}
+{"file":"chunk-ag5x7vhf.js","key":"@181847","name":"briefTranscript","source":"semantic","confidence":0.85,"note":"L2 G(s => s.briefTranscript)"}
+{"file":"chunk-ag5x7vhf.js","key":"@181856","name":"hasRemoteReplyChannel","source":"semantic","confidence":0.85,"note":"L2 G(s => s.hasRemoteReplyChannel)"}
+{"file":"chunk-ag5x7vhf.js","key":"@181886","name":"activeAgents","source":"semantic","confidence":0.85,"note":"L2 G(s => s.agentDefinitions.activeAgents)"}
+{"file":"chunk-ag5x7vhf.js","key":"@181895","name":"showMessageTimestamps","source":"semantic","confidence":0.85,"note":"L2 G(s => s.showMessageTimestamps)"}
+{"file":"chunk-ah34pb7m.js","key":"@14807","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-ah34pb7m.js","key":"@25745","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(1)"}
+{"file":"chunk-ah34pb7m.js","key":"@28763","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-ah34pb7m.js","key":"@36076","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(32)"}
+{"file":"chunk-ah34pb7m.js","key":"@38063","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(24)"}
+{"file":"chunk-ah34pb7m.js","key":"@40553","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(42)"}
+{"file":"chunk-ah34pb7m.js","key":"@43266","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-ah34pb7m.js","key":"@56301","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(55)"}
+{"file":"chunk-ah34pb7m.js","key":"@63093","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(27)"}
+{"file":"chunk-ah34pb7m.js","key":"@64299","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(22)"}
+{"file":"chunk-ah34pb7m.js","key":"@65553","name":"selectMaxProseWidth","source":"semantic","confidence":0.8,"note":"s => s.settings.maxProseWidth"}
+{"file":"chunk-ah34pb7m.js","key":"@65610","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-ah34pb7m.js","key":"@66301","name":"selectPendingWorkerRequest","source":"semantic","confidence":0.8,"note":"s => s.pendingWorkerRequest"}
+{"file":"chunk-ah34pb7m.js","key":"@66348","name":"selectPermissionMode","source":"semantic","confidence":0.8,"note":"s => s.toolPermissionContext.mode"}
+{"file":"chunk-ah34pb7m.js","key":"@66401","name":"selectActiveAgents","source":"semantic","confidence":0.8,"note":"s => s.agentDefinitions.activeAgents"}
+{"file":"chunk-ah34pb7m.js","key":"@66457","name":"ToolUseStatusDot","source":"semantic","confidence":0.6,"note":"按 inProgressToolUseIDs/lookups 决定圆点状态"}
+{"file":"chunk-ah34pb7m.js","key":"@66467","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(29)"}
+{"file":"chunk-ah34pb7m.js","key":"@67799","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(209)"}
+{"file":"chunk-ah34pb7m.js","key":"@76493","name":"ToolResultInline","source":"semantic","confidence":0.55,"note":"渲染已完成工具的结果摘要（renderToolResultMessage）"}
+{"file":"chunk-ah34pb7m.js","key":"@76503","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(46)"}
+{"file":"chunk-ah34pb7m.js","key":"@81265","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-ah34pb7m.js","key":"@83490","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(16)"}
+{"file":"chunk-ah34pb7m.js","key":"@84375","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-ah34pb7m.js","key":"@85056","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(20)"}
+{"file":"chunk-ah34pb7m.js","key":"@87735","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-ah34pb7m.js","key":"@94624","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(23)"}
+{"file":"chunk-ah34pb7m.js","key":"@104543","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-ah34pb7m.js","key":"@106018","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(14)"}
+{"file":"chunk-ah34pb7m.js","key":"@107450","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-ah34pb7m.js","key":"@107883","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-ah34pb7m.js","key":"@108614","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-ah34pb7m.js","key":"@109098","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(25)"}
+{"file":"chunk-ah34pb7m.js","key":"@110359","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(19)"}
+{"file":"chunk-ah34pb7m.js","key":"@112150","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-ah34pb7m.js","key":"@112894","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-ah34pb7m.js","key":"@114420","name":"selectViewingAgentTaskId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.viewingAgentTaskId"}
+{"file":"chunk-ah34pb7m.js","key":"@115881","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(33)"}
+{"file":"chunk-ah34pb7m.js","key":"@116497","name":"isBriefOnly","source":"semantic","confidence":0.85,"note":"L2 G(s => s.isBriefOnly)"}
+{"file":"chunk-ah34pb7m.js","key":"@116506","name":"viewingAgentTaskId","source":"semantic","confidence":0.85,"note":"L2 G(s => s.viewingAgentTaskId)"}
+{"file":"chunk-ah34pb7m.js","key":"@118661","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-ah34pb7m.js","key":"@127643","name":"isNonBlank","source":"semantic","confidence":0.75,"note":"s.trim() !== \"\""}
+{"file":"chunk-ah34pb7m.js","key":"@127681","name":"isNonBlank_2","source":"semantic","confidence":0.6,"note":"s.trim() !== \"\""}
+{"file":"chunk-ah34pb7m.js","key":"@127719","name":"isNonBlank_3","source":"semantic","confidence":0.6,"note":"s.trim() !== \"\""}
+{"file":"chunk-ah34pb7m.js","key":"@127767","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(281)"}
+{"file":"chunk-ah34pb7m.js","key":"@145778","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(4)"}
+{"file":"chunk-ah34pb7m.js","key":"@146067","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(6)"}
+{"file":"chunk-ah34pb7m.js","key":"@146633","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-ah34pb7m.js","key":"@147488","name":"getFileAttachmentSummaryKind","source":"semantic","confidence":0.55,"note":"file_unchanged → \"unchanged\"，notebook 按 cells，否则 lines"}
+{"file":"chunk-ah34pb7m.js","key":"@147848","name":"firstLineOfHookOutput","source":"semantic","confidence":0.55,"note":"取 stdout/stderr 首行（\"Expected schema:\" 处理）"}
+{"file":"chunk-ah34pb7m.js","key":"@148170","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(4)"}
+{"file":"chunk-ah34pb7m.js","key":"@151430","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-ah34pb7m.js","key":"@154249","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(23)"}
+{"file":"chunk-ah34pb7m.js","key":"@157624","name":"selectViewingAgentTaskId","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.viewingAgentTaskId"}
+{"file":"chunk-ah34pb7m.js","key":"@157723","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(28)"}
+{"file":"chunk-ah34pb7m.js","key":"@159066","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(54)"}
+{"file":"chunk-ah34pb7m.js","key":"@166102","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(201)"}
+{"file":"chunk-ah34pb7m.js","key":"@187876","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(22)"}
+{"file":"chunk-ah34pb7m.js","key":"@189267","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-ah34pb7m.js","key":"@193434","name":"pickTurnCompletionVerb","source":"semantic","confidence":0.8,"note":"按消息 uuid 哈希选 TURN_COMPLETION_VERBS，缺省 \"Worked\""}
+{"file":"chunk-ah34pb7m.js","key":"@193495","name":"countPendingBackgroundWork","source":"semantic","confidence":0.7,"note":"{pendingAgents, pendingWorkflows}"}
+{"file":"chunk-ah34pb7m.js","key":"@193598","name":"listPendingBackgroundAgents","source":"semantic","confidence":0.65,"note":"后台 agent 的 {id, agentType, startTime, toolUseId}"}
+{"file":"chunk-ah34pb7m.js","key":"@193761","name":"collectPendingBackgroundWork","source":"semantic","confidence":0.65,"note":"后台 agent 与 local_workflow 集合（含排队命令）"}
+{"file":"chunk-ah34pb7m.js","key":"@194597","name":"sumDurationMs","source":"semantic","confidence":0.7,"note":"reduce 累加 durationMs"}
+{"file":"chunk-ah34pb7m.js","key":"@195429","name":"isLivelyAvalancheEnabled","source":"semantic","confidence":0.7,"note":"tengu_lively_avalanche 开关"}
+{"file":"chunk-ah34pb7m.js","key":"@195497","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(65)"}
+{"file":"chunk-ah34pb7m.js","key":"@200199","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(2)"}
+{"file":"chunk-ah34pb7m.js","key":"@201396","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(19)"}
+{"file":"chunk-ah34pb7m.js","key":"@202339","name":"TurnDurationRow","source":"semantic","confidence":0.55,"note":"showTurnDuration 设置控制的回合耗时行"}
+{"file":"chunk-ah34pb7m.js","key":"@202349","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(21)"}
+{"file":"chunk-ah34pb7m.js","key":"@204065","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(33)"}
+{"file":"chunk-ah34pb7m.js","key":"@206458","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(18)"}
+{"file":"chunk-ah34pb7m.js","key":"@207634","name":"MemoryFilePath","source":"semantic","confidence":0.55,"note":"记忆文件路径行"}
+{"file":"chunk-ah34pb7m.js","key":"@207644","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-ah34pb7m.js","key":"@208015","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(16)"}
+{"file":"chunk-ah34pb7m.js","key":"@208636","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-ah34pb7m.js","key":"@217489","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-ah34pb7m.js","key":"@218304","name":"selectIsBriefOnly","source":"semantic","confidence":0.8,"note":"s => s.isBriefOnly"}
+{"file":"chunk-ah34pb7m.js","key":"@218342","name":"selectActiveAgents","source":"semantic","confidence":0.8,"note":"s => s.agentDefinitions.activeAgents"}
+{"file":"chunk-ah34pb7m.js","key":"@218408","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(40)"}
+{"file":"chunk-ah34pb7m.js","key":"@218564","name":"isBriefOnly","source":"semantic","confidence":0.85,"note":"L2 G(s => s.isBriefOnly)"}
+{"file":"chunk-ah34pb7m.js","key":"@218572","name":"activeAgents","source":"semantic","confidence":0.85,"note":"L2 G(s => s.agentDefinitions.activeAgents)"}
+{"file":"chunk-ah34pb7m.js","key":"@220449","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-ah34pb7m.js","key":"@221835","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(58)"}
+{"file":"chunk-ah34pb7m.js","key":"@225022","name":"workSegmentModule","source":"semantic","confidence":0.6,"note":"可选加载的 WorkSegmentMessage 模块（null 时不渲染）"}
+{"file":"chunk-ah34pb7m.js","key":"@225049","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(174)"}
+{"file":"chunk-ah34pb7m.js","key":"@234171","name":"WorkSegmentMessageView","source":"semantic","confidence":0.7,"note":"渲染 WorkSegmentMessage，尊重减少动画设置"}
+{"file":"chunk-ah34pb7m.js","key":"@234181","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-ah34pb7m.js","key":"@234419","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(39)"}
+{"file":"chunk-ah34pb7m.js","key":"@236426","name":"TOOL_SEARCH_BLOCK_TYPES","source":"semantic","confidence":0.75,"note":"tool_search_tool_regex/bm25"}
+{"file":"chunk-ah34pb7m.js","key":"@236498","name":"allowlistedBlockName","source":"semantic","confidence":0.6,"note":"遥测用：名字在白名单内才返回"}
+{"file":"chunk-ah34pb7m.js","key":"@236568","name":"allowlistedBlockType","source":"semantic","confidence":0.6,"note":"遥测用：块类型白名单化"}
+{"file":"chunk-ah34pb7m.js","key":"@236688","name":"unrenderableBlockKey","source":"semantic","confidence":0.75,"note":"type:id / type:tool_use_id / type:hash"}
+{"file":"chunk-ah34pb7m.js","key":"@236947","name":"logUnrenderableBlockOnce","source":"semantic","confidence":0.8,"note":"claim(\"unrenderable_block:…\") 后 logError"}
+{"file":"chunk-ah34pb7m.js","key":"@237038","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(65)"}
+{"file":"chunk-am3vy82s.js","key":"@18841","name":"selectOriginalCwd","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.originalCwd"}
+{"file":"chunk-am3vy82s.js","key":"@18879","name":"selectCwd","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.cwd"}
+{"file":"chunk-am3vy82s.js","key":"@18918","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(32)"}
+{"file":"chunk-am3vy82s.js","key":"@19039","name":"originalCwd","source":"semantic","confidence":0.85,"note":"L2 _A(s => s.originalCwd)"}
+{"file":"chunk-b79vwm1h.js","key":"@1886","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(36)"}
+{"file":"chunk-b79vwm1h.js","key":"@4318","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(49)"}
+{"file":"chunk-b79vwm1h.js","key":"@18686","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-b7gstm5r.js","key":"@20632","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(20)"}
+{"file":"chunk-bajxb7bf.js","key":"@40795","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(22)"}
+{"file":"chunk-bajxb7bf.js","key":"@42042","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(23)"}
+{"file":"chunk-bajxb7bf.js","key":"@43481","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(26)"}
+{"file":"chunk-bajxb7bf.js","key":"@44739","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(45)"}
+{"file":"chunk-bajxb7bf.js","key":"@48389","name":"selectMcp","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.mcp"}
+{"file":"chunk-bajxb7bf.js","key":"@48747","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(133)"}
+{"file":"chunk-bbtre4r8.js","key":"@16675","name":"getRecentErrors","source":"semantic","confidence":0.8,"note":"[...recentErrors]"}
+{"file":"chunk-bc20zedk.js","key":"@12056","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-c55mbvfz.js","key":"@34062","name":"agentDefinitions","source":"semantic","confidence":0.85,"note":"L2 G(s => s.agentDefinitions)"}
+{"file":"chunk-cpqpnzp4.js","key":"@22285","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-cpqpnzp4.js","key":"@23735","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-cpqpnzp4.js","key":"@24122","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(23)"}
+{"file":"chunk-cpqpnzp4.js","key":"@24853","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(78)"}
+{"file":"chunk-cpqpnzp4.js","key":"@32594","name":"selectMcp","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.mcp"}
+{"file":"chunk-cpqpnzp4.js","key":"@32624","name":"selectAgentDefinitions","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.agentDefinitions"}
+{"file":"chunk-cpqpnzp4.js","key":"@33282","name":"negate","source":"semantic","confidence":0.85,"note":"T2 x => !x（多用作 setState 切换）"}
+{"file":"chunk-cpqpnzp4.js","key":"@33318","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(78)"}
+{"file":"chunk-cpqpnzp4.js","key":"@38016","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(30)"}
+{"file":"chunk-cqn8yadz.js","key":"@626","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(27)"}
+{"file":"chunk-cwwxybjc.js","key":"@13289","name":"getMaxLineNumber","source":"semantic","confidence":0.7,"note":"旧/新范围的最大行号（用于 gutter 宽度）"}
+{"file":"chunk-cxdk9p3j.js","key":"@983","name":"fullscreenProbeState","source":"semantic","confidence":0.6,"note":"全屏探测缓存对象"}
+{"file":"chunk-cxdk9p3j.js","key":"@1520","name":"isTmuxControlMode","source":"semantic","confidence":0.75,"note":"缓存的 tmux -CC 探测结果"}
+{"file":"chunk-cxdk9p3j.js","key":"@4153","name":"getFullscreenDecision","source":"semantic","confidence":0.8,"note":"返回 bg_forced_on/sr_auto_off/env_off/env_on/settings_on/tmux_cc_auto_off/win_ssh_auto_off 等原因码"}
+{"file":"chunk-cxdk9p3j.js","key":"@5933","name":"isFullscreenActive","source":"semantic","confidence":0.7,"note":"Vd() && isFullscreenEnvEnabled()"}
+{"file":"chunk-czx62zen.js","key":"@1546","name":"hasPolicySettings","source":"semantic","confidence":0.75,"note":"policySettings 非空"}
+{"file":"chunk-czx62zen.js","key":"@13361","name":"getPolicyAllowedSet","source":"semantic","confidence":0.5,"note":"合并 policySettings 与当前设置的集合"}
+{"file":"chunk-dcmhvw5a.js","key":"@71749","name":"isClaudeAiProxyServer","source":"semantic","confidence":0.65,"note":"claudeai-proxy 且 scope claudeai/dynamic"}
+{"file":"chunk-dnj0hze9.js","key":"@829","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-e6aww6q8.js","key":"@304462","name":"getNullRenderingAttachmentType","source":"semantic","confidence":0.6,"note":"附件类型在集合中则返回类型"}
+{"file":"chunk-e6aww6q8.js","key":"@341891","name":"isNotProgressMessage","source":"semantic","confidence":0.85,"note":"e.type !== \"progress\"（旧版名 countUnseenAssistantTurns 为 shared 指纹错配）"}
+{"file":"chunk-e6aww6q8.js","key":"@545041","name":"latestLogPerSession","source":"semantic","confidence":0.7,"note":"每个 sessionId 只保留最新的日志（旧版名 groupLogsBySessionId_2）"}
+{"file":"chunk-e6aww6q8.js","key":"@553293","name":"shouldPrependModeChar","source":"semantic","confidence":0.5,"note":"旧版名错配"}
+{"file":"chunk-e6aww6q8.js","key":"@554776","name":"isPromptModeQueuedCommand","source":"semantic","confidence":0.6,"note":"$f(e) && e.mode === \"prompt\""}
+{"file":"chunk-e6aww6q8.js","key":"@1820790","name":"isThinkingBlockObject","source":"semantic","confidence":0.8,"note":"对象且 thinking/redacted_thinking（旧版名 hasThinkingContent_N 为 shared 指纹错配，以下同）"}
+{"file":"chunk-e6aww6q8.js","key":"@1849186","name":"isQueueTranscriptOnlyUserMessage","source":"semantic","confidence":0.6,"note":"user 且 queueTranscriptOnly"}
+{"file":"chunk-e6aww6q8.js","key":"@2085737","name":"countNonProgressMessages","source":"semantic","confidence":0.7,"note":"过滤 progress 后计数（旧版名错配）"}
+{"file":"chunk-e6aww6q8.js","key":"@2359857","name":"isBuiltInAgent","source":"semantic","confidence":0.85,"note":"e.source === \"built-in\""}
+{"file":"chunk-e6aww6q8.js","key":"@2359901","name":"isPluginAgent","source":"semantic","confidence":0.85,"note":"e.source === \"plugin\""}
+{"file":"chunk-e6aww6q8.js","key":"@2533801","name":"isRenderableContentBlock","source":"semantic","confidence":0.7,"note":"非空 text 或非 thinking 块"}
+{"file":"chunk-e6aww6q8.js","key":"@2533983","name":"lastBlockIsRenderable","source":"semantic","confidence":0.7,"note":"助手消息最后一个块可渲染"}
+{"file":"chunk-e6aww6q8.js","key":"@2565578","name":"isThinkingBlockOptional","source":"semantic","confidence":0.7,"note":"m?.type thinking/redacted_thinking"}
+{"file":"chunk-e6aww6q8.js","key":"@2647809","name":"getThinkingBlockKey","source":"semantic","confidence":0.8,"note":"type:signature 或 type:data"}
+{"file":"chunk-e6aww6q8.js","key":"@2648013","name":"countThinkingBlocks","source":"semantic","confidence":0.8,"note":"统计助手消息中的思考块"}
+{"file":"chunk-e6aww6q8.js","key":"@3853988","name":"MCP_SCOPES","source":"semantic","confidence":0.75,"note":"[\"enterprise\",\"managed\",\"local\",\"user\",\"project\"]"}
+{"file":"chunk-e6aww6q8.js","key":"@3854041","name":"MCP_SCOPE_SET","source":"semantic","confidence":0.75,"note":"new Set(MCP_SCOPES)"}
+{"file":"chunk-e6aww6q8.js","key":"@4673824","name":"stickyTextCache","source":"semantic","confidence":0.7,"note":"用户提示文本的 WeakMap 缓存"}
+{"file":"chunk-e6aww6q8.js","key":"@4673849","name":"getUserPromptText","source":"semantic","confidence":0.6,"note":"用户消息首个 text 块的显示文本（带缓存；旧版名为 shared 指纹）"}
+{"file":"chunk-e6aww6q8.js","key":"@4699186","name":"isTaskNotificationAttachment","source":"semantic","confidence":0.85,"note":"queued_command 且 commandMode === \"task-notification\""}
+{"file":"chunk-e6aww6q8.js","key":"@4715635","name":"hasCompletedWithFindings","source":"semantic","confidence":0.55,"note":"status completed 且 CP(e) 非空"}
+{"file":"chunk-e6aww6q8.js","key":"@4880683","name":"isUserQueuedCommandAttachment","source":"semantic","confidence":0.75,"note":"queued_command，非 task-notification、非 meta 且来源为用户"}
+{"file":"chunk-e6aww6q8.js","key":"@5020656","name":"isThinkingOnlyMessage","source":"semantic","confidence":0.85,"note":"助手消息全部为思考块"}
+{"file":"chunk-e6aww6q8.js","key":"@5021525","name":"isThinkingBlock","source":"semantic","confidence":0.85,"note":"type thinking/redacted_thinking"}
+{"file":"chunk-e6aww6q8.js","key":"@5022349","name":"EMPTY_TEXT_REMOVED","source":"semantic","confidence":0.8,"note":"\"[Empty text removed]\""}
+{"file":"chunk-e6aww6q8.js","key":"@5022385","name":"isThinkingWithEmptyText","source":"semantic","confidence":0.6,"note":"思考块后只跟空/占位文本"}
+{"file":"chunk-e6aww6q8.js","key":"@5022605","name":"collectNonThinkingMessageIds","source":"semantic","confidence":0.7,"note":"含非思考块的助手 message.id 集合"}
+{"file":"chunk-e6aww6q8.js","key":"@5022794","name":"isMeaningfulBlock","source":"semantic","confidence":0.65,"note":"非思考且非空/非占位文本"}
+{"file":"chunk-e6aww6q8.js","key":"@5026000","name":"hasUnsignedThinkingOnly","source":"semantic","confidence":0.7,"note":"全是思考块且存在无 signature 的 thinking"}
+{"file":"chunk-e6aww6q8.js","key":"@5029018","name":"countThinkingBlocksInMessage","source":"semantic","confidence":0.75,"note":"计数思考块"}
+{"file":"chunk-e6aww6q8.js","key":"@5029174","name":"findThinkingBlockMessageIndex","source":"semantic","confidence":0.6,"note":"按 messageId + thinkingIndex 定位消息下标"}
+{"file":"chunk-e6aww6q8.js","key":"@5029330","name":"EMPTY_ID_SET","source":"semantic","confidence":0.6,"note":"new Set()"}
+{"file":"chunk-e6aww6q8.js","key":"@5029351","name":"getAdvisorStrippedMessageIds","source":"semantic","confidence":0.7,"note":"最后一个 advisor_stripped 附件之前的助手 message.id"}
+{"file":"chunk-e6aww6q8.js","key":"@5029608","name":"unionSets","source":"semantic","confidence":0.75,"note":"合并两个 Set（空则复用）"}
+{"file":"chunk-e6aww6q8.js","key":"@5029712","name":"mergeMinMaps","source":"semantic","confidence":0.7,"note":"合并 Map，冲突取较小值"}
+{"file":"chunk-e6aww6q8.js","key":"@5029877","name":"stripThinkingFromMessages","source":"semantic","confidence":0.6,"note":"按每条消息的起始思考索引剥离思考块"}
+{"file":"chunk-e6aww6q8.js","key":"@5030224","name":"computeThinkingStrippedScope","source":"semantic","confidence":0.6,"note":"根据 thinking_stripped 附件得出 all/partial 剥离范围"}
+{"file":"chunk-e6aww6q8.js","key":"@5030691","name":"thinkingRemovedPlaceholder","source":"semantic","confidence":0.8,"note":"{type:\"text\", text:\"[Thinking removed]\"}"}
+{"file":"chunk-e6aww6q8.js","key":"@5030765","name":"isThinkingOrEmptyText","source":"semantic","confidence":0.75,"note":"思考块或空文本"}
+{"file":"chunk-e6aww6q8.js","key":"@5030904","name":"stripThinkingFromIndex","source":"semantic","confidence":0.6,"note":"从第 n 个思考块起剥离"}
+{"file":"chunk-ey2qag4x.js","key":"@19602","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-ey2qag4x.js","key":"@19827","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(47)"}
+{"file":"chunk-ey2qag4x.js","key":"@23030","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-ey2qag4x.js","key":"@25864","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-ey2qag4x.js","key":"@26513","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(107)"}
+{"file":"chunk-ey2qag4x.js","key":"@43826","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(12)"}
+{"file":"chunk-ey2qag4x.js","key":"@44633","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(89)"}
+{"file":"chunk-fggt3ccb.js","key":"@1094","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-fggt3ccb.js","key":"@2624","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-fggt3ccb.js","key":"@3981","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(52)"}
+{"file":"chunk-fggt3ccb.js","key":"@8203","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(27)"}
+{"file":"chunk-fq0cr76a.js","key":"@709270","name":"FILE_URL_PREFIX","source":"semantic","confidence":0.7,"note":"\"file:\"（旧版名 _temp2 错配）"}
+{"file":"chunk-fq0cr76a.js","key":"@853381","name":"getPolicySettingsIfEnabled","source":"semantic","confidence":0.55,"note":"Lne() 时返回 policySettings"}
+{"file":"chunk-g3xfp0ds.js","key":"@6433","name":"LIGHT_THEME","source":"semantic","confidence":0.8,"note":"getTheme(\"light\") 返回此表（旧版名 lightDaltonizedTheme 错配）"}
+{"file":"chunk-g3xfp0ds.js","key":"@8913","name":"LIGHT_ANSI_THEME","source":"semantic","confidence":0.8,"note":"getTheme(\"light-ansi\")"}
+{"file":"chunk-g3xfp0ds.js","key":"@11164","name":"DARK_ANSI_THEME","source":"semantic","confidence":0.8,"note":"getTheme(\"dark-ansi\")"}
+{"file":"chunk-g3xfp0ds.js","key":"@13555","name":"LIGHT_DALTONIZED_THEME","source":"semantic","confidence":0.8,"note":"getTheme(\"light-daltonized\")"}
+{"file":"chunk-g3xfp0ds.js","key":"@16028","name":"DARK_THEME","source":"semantic","confidence":0.8,"note":"getTheme 默认分支"}
+{"file":"chunk-g3xfp0ds.js","key":"@18502","name":"DARK_DALTONIZED_THEME","source":"semantic","confidence":0.8,"note":"getTheme(\"dark-daltonized\")"}
+{"file":"chunk-gtxctzsd.js","key":"@408","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-h2rjy0z4.js","key":"@16347","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(39)"}
+{"file":"chunk-h93cnm7e.js","key":"@906","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(6)"}
+{"file":"chunk-h93cnm7e.js","key":"@1221","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-h93cnm7e.js","key":"@6363","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-hny2rpzz.js","key":"@2441","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-hthm3h8y.js","key":"@5579","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(22)"}
+{"file":"chunk-hwmsct5x.js","key":"@197459","name":"checkProductFeedbackAllowed","source":"semantic","confidence":0.65,"note":"allow_product_feedback 策略检查"}
+{"file":"chunk-j1c0t4gs.js","key":"@1104","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(1)"}
+{"file":"chunk-j1c0t4gs.js","key":"@1305","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-j1c0t4gs.js","key":"@1573","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(16)"}
+{"file":"chunk-j1c0t4gs.js","key":"@2573","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(38)"}
+{"file":"chunk-j64mp9kq.js","key":"@2693","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(34)"}
+{"file":"chunk-ja34p3ys.js","key":"@349","name":"StatusRow","source":"semantic","confidence":0.7,"note":"{status, children}，左侧 StatusIcon（mTe[status].color）"}
+{"file":"chunk-ja34p3ys.js","key":"@359","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-jde8wnzx.js","key":"@28326","name":"id","source":"semantic","confidence":0.85,"note":"L2 no(s => s.id)"}
+{"file":"chunk-jde8wnzx.js","key":"@28435","name":"standaloneAgentContext","source":"semantic","confidence":0.85,"note":"L2 G(s => s.standaloneAgentContext)"}
+{"file":"chunk-jde8wnzx.js","key":"@28471","name":"mainLoopModel","source":"semantic","confidence":0.85,"note":"L2 G(s => s.mainLoopModel)"}
+{"file":"chunk-jmdd9gvn.js","key":"@13762","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-jz0q3n7b.js","key":"@1173","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(37)"}
+{"file":"chunk-k1hxk1ex.js","key":"@538","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-kf9b436m.js","key":"@322","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-kswt4qha.js","key":"@28677","name":"getEffortLevelOrHigh","source":"semantic","confidence":0.6,"note":"ZYe(...) ?? \"high\""}
+{"file":"chunk-kswt4qha.js","key":"@28959","name":"normalizeEffortLevel","source":"semantic","confidence":0.65,"note":"合法 effort 字符串原样返回，否则 \"high\""}
+{"file":"chunk-kxxfj8vr.js","key":"@546","name":"getMainLoopModelFromState","source":"semantic","confidence":0.75,"note":"从 state 的 mainLoopModelForSession/mainLoopModel 解析模型（旧版名 useMainLoopModel_6 不是 hook）"}
+{"file":"chunk-kxxfj8vr.js","key":"@619","name":"useMainLoopModelSetting","source":"semantic","confidence":0.55,"note":"订阅并解析会话模型设置"}
+{"file":"chunk-kxxfj8vr.js","key":"@891","name":"useMainLoopModel","source":"semantic","confidence":0.85,"note":"订阅 mainLoopModel/ForSession 并 memo 解析结果（21 处使用）"}
+{"file":"chunk-mjyddqh1.js","key":"@506","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(35)"}
+{"file":"chunk-mkatyybr.js","key":"@655","name":"STATUS_CONFIG","source":"semantic","confidence":0.85,"note":"{success,error,warning,…: {icon,color,ariaLabel}}"}
+{"file":"chunk-mkatyybr.js","key":"@1374","name":"AGENT_STATUS_GLYPHS","source":"semantic","confidence":0.6,"note":"{working, needsYou:\"!\", idle:\"◦\", failed:\"×\"}"}
+{"file":"chunk-mt2ya4ef.js","key":"@691","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-mtx4csef.js","key":"@17607","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-mtx4csef.js","key":"@18131","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(16)"}
+{"file":"chunk-mtx4csef.js","key":"@19638","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(83)"}
+{"file":"chunk-mww2ey7m.js","key":"@613","name":"roundToStep","source":"semantic","confidence":0.5,"note":"Math.round(r*T)/T"}
+{"file":"chunk-n1nr1qar.js","key":"@478","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(39)"}
+{"file":"chunk-n1nr1qar.js","key":"@8168","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(44)"}
+{"file":"chunk-n30mmv2p.js","key":"@13859","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(34)"}
+{"file":"chunk-nq7jz8ya.js","key":"@4063","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(75)"}
+{"file":"chunk-p2qwpk2k.js","key":"@19798","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-p2qwpk2k.js","key":"@21770","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-p2qwpk2k.js","key":"@22746","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(27)"}
+{"file":"chunk-p2qwpk2k.js","key":"@24451","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(18)"}
+{"file":"chunk-p2qwpk2k.js","key":"@27134","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-p2qwpk2k.js","key":"@32525","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-p2qwpk2k.js","key":"@33379","name":"selectOriginalCwd","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.originalCwd"}
+{"file":"chunk-p2qwpk2k.js","key":"@33548","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(29)"}
+{"file":"chunk-p2qwpk2k.js","key":"@33705","name":"originalCwd","source":"semantic","confidence":0.85,"note":"L2 _A(s => s.originalCwd)"}
+{"file":"chunk-p2qwpk2k.js","key":"@42846","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(1)"}
+{"file":"chunk-p2qwpk2k.js","key":"@42971","name":"getAutoModeRuleCategoryLabel","source":"semantic","confidence":0.7,"note":"allow/soft_deny/hard_deny/environment → 显示文案"}
+{"file":"chunk-p2qwpk2k.js","key":"@44436","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(64)"}
+{"file":"chunk-p2qwpk2k.js","key":"@67215","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(4)"}
+{"file":"chunk-p2qwpk2k.js","key":"@68442","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(37)"}
+{"file":"chunk-p2qwpk2k.js","key":"@70930","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(37)"}
+{"file":"chunk-p2qwpk2k.js","key":"@72554","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(23)"}
+{"file":"chunk-p2qwpk2k.js","key":"@73582","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(241)"}
+{"file":"chunk-p8fze0jh.js","key":"@19229","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-p8fze0jh.js","key":"@19567","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-p8fze0jh.js","key":"@20160","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-paas88x7.js","key":"@431","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(27)"}
+{"file":"chunk-pfn09c5f.js","key":"@14521","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(16)"}
+{"file":"chunk-q466qetm.js","key":"@7530","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(23)"}
+{"file":"chunk-qcqdqsn4.js","key":"@5037","name":"stripFilePrefix","source":"semantic","confidence":0.75,"note":"去掉 \"file:\" 前缀"}
+{"file":"chunk-qcqdqsn4.js","key":"@5079","name":"stripTrailingSlashes","source":"semantic","confidence":0.8,"note":"去掉末尾斜杠"}
+{"file":"chunk-qcqdqsn4.js","key":"@5123","name":"isNormalizedAbsolutePath","source":"semantic","confidence":0.6,"note":"绝对且已规范化"}
+{"file":"chunk-qgpgvvwv.js","key":"@1155","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(41)"}
+{"file":"chunk-qh0448cn.js","key":"@3203","name":"noop","source":"semantic","confidence":0.9,"note":"T2 空函数"}
+{"file":"chunk-qh0448cn.js","key":"@3271","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(38)"}
+{"file":"chunk-qmsrnapp.js","key":"@49654","name":"isRenderablePatchList","source":"semantic","confidence":0.6,"note":"hunk 数、总行数、总字符数均在上限内"}
+{"file":"chunk-qmsrnapp.js","key":"@49823","name":"isValidPatchHunk","source":"semantic","confidence":0.7,"note":"oldStart/oldLines/newStart/newLines 为非负安全整数且 lines 为字符串数组（旧版名错配）"}
+{"file":"chunk-qwh6zcf0.js","key":"@8527","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-qz53w8v8.js","key":"@576","name":"isNonEmptyImageAttachment","source":"semantic","confidence":0.75,"note":"type image 且有内容"}
+{"file":"chunk-r1wk8q25.js","key":"@13585","name":"isPlainObject","source":"semantic","confidence":0.8,"note":"非 null、非数组对象"}
+{"file":"chunk-r1wk8q25.js","key":"@13655","name":"isThinkingBlockLoose","source":"semantic","confidence":0.7,"note":"isPlainObject 且思考块"}
+{"file":"chunk-r1wk8q25.js","key":"@13735","name":"stripThinkingFromApiMessage","source":"semantic","confidence":0.75,"note":"删掉 assistant content 中思考/空文本，全删则放占位"}
+{"file":"chunk-r2w21sc3.js","key":"@318","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(6)"}
+{"file":"chunk-r5n7tcxe.js","key":"@1052","name":"saveUserSetting","source":"semantic","confidence":0.8,"note":"zn(\"userSettings\", {[key]: value})"}
+{"file":"chunk-r68xwcze.js","key":"@23016","name":"OrderedListWithItem","source":"semantic","confidence":0.6,"note":"Object.assign(OrderedList, {Item})"}
+{"file":"chunk-r7bynxfq.js","key":"@3079","name":"getTaskNotificationRunId","source":"semantic","confidence":0.6,"note":"task-notification 来源的 runId"}
+{"file":"chunk-rshven70.js","key":"@1026","name":"MEMO_CACHE_SENTINEL","source":"semantic","confidence":0.95,"note":"Symbol.for(\"react.memo_cache_sentinel\")：React Compiler 缓存未初始化标记（800+ 处 $[i] === S）"}
+{"file":"chunk-rshven70.js","key":"@1068","name":"EARLY_RETURN_SENTINEL","source":"semantic","confidence":0.9,"note":"Symbol.for(\"react.early_return_sentinel\")"}
+{"file":"chunk-rshven70.js","key":"@1113","name":"defineExports","source":"semantic","confidence":0.75,"note":"Bun 运行时 __export 帮助函数（getter 定义导出）"}
+{"file":"chunk-rshven70.js","key":"@1200","name":"importMetaRequire","source":"semantic","confidence":0.8,"note":"import.meta.require"}
+{"file":"chunk-s1ks86z4.js","key":"@14518","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-s3fw2t2g.js","key":"@1315","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(14)"}
+{"file":"chunk-s4bxxzsw.js","key":"@49275","name":"showPermissionDialog","source":"semantic","confidence":0.6,"note":"旧版名 usePermissionRequestLogging 不准确：实际通过 requestDialog 打开权限对话框并管理其生命周期"}
+{"file":"chunk-s5p7fp0c.js","key":"@10652","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(13)"}
+{"file":"chunk-s5p7fp0c.js","key":"@12126","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-s61vbvea.js","key":"@233529","name":"resolveFileUrl","source":"semantic","confidence":0.6,"note":"\"file:\" 前缀时解析路径"}
+{"file":"chunk-sfy7bm1n.js","key":"@11373","name":"collectRulesFromSettings","source":"semantic","confidence":0.6,"note":"遍历设置来源收集 {source, ruleBehavior, ruleValue}"}
+{"file":"chunk-styvqsd2.js","key":"@13707","name":"logBypassDialogShown","source":"semantic","confidence":0.75,"note":"tengu_bypass_permissions_mode_dialog_shown"}
+{"file":"chunk-styvqsd2.js","key":"@13780","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-sx9xc5ee.js","key":"@3839","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-sx9xc5ee.js","key":"@16261","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(52)"}
+{"file":"chunk-sx9xc5ee.js","key":"@19314","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-sx9xc5ee.js","key":"@23495","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-t1sz4atx.js","key":"@768","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(28)"}
+{"file":"chunk-t6e3jxy0.js","key":"@370","name":"ANSI_FG_RGB","source":"semantic","confidence":0.7,"note":"SGR 30-37/90-97 → RGB"}
+{"file":"chunk-t6e3jxy0.js","key":"@723","name":"DEFAULT_FG_RGB","source":"semantic","confidence":0.6,"note":"{229,229,229}"}
+{"file":"chunk-t6e3jxy0.js","key":"@745","name":"DEFAULT_BG_RGB","source":"semantic","confidence":0.6,"note":"{30,30,30}"}
+{"file":"chunk-tbfde207.js","key":"@2190","name":"shallowEqualTaskMaps","source":"semantic","confidence":0.6,"note":"比较两个对象键顺序与值（旧版名错配）"}
+{"file":"chunk-tc95s49z.js","key":"@216","name":"withHideWhile","source":"semantic","confidence":0.6,"note":"给面板描述补默认 hideWhile"}
+{"file":"chunk-td6byj4s.js","key":"@14273","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-td6byj4s.js","key":"@15506","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(21)"}
+{"file":"chunk-thjvqmbc.js","key":"@8510","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(48)"}
+{"file":"chunk-tw8fk0yz.js","key":"@14937","name":"formatDurationRoundedToMinute","source":"semantic","confidence":0.75,"note":"≥1 分钟时取整到分钟再 formatDuration"}
+{"file":"chunk-tw8fk0yz.js","key":"@15031","name":"formatElapsedCompact","source":"semantic","confidence":0.7,"note":"如 \"45s\"、\"3m05s\"、\"1h02m\""}
+{"file":"chunk-tzghj6zv.js","key":"@7089","name":"cursorOffset","source":"semantic","confidence":0.85,"note":"L2 Ie(s => s.cursorOffset)"}
+{"file":"chunk-tzghj6zv.js","key":"@16030","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(32)"}
+{"file":"chunk-tzghj6zv.js","key":"@21195","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-tzghj6zv.js","key":"@22575","name":"autoUpdaterResult","source":"semantic","confidence":0.85,"note":"L2 G(s => s.autoUpdaterResult)"}
+{"file":"chunk-tzghj6zv.js","key":"@32964","name":"autoUpdaterResult","source":"semantic","confidence":0.85,"note":"L2 G(s => s.autoUpdaterResult)"}
+{"file":"chunk-tzghj6zv.js","key":"@46646","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(18)"}
+{"file":"chunk-v517dzda.js","key":"@14497","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-v6kts6xw.js","key":"@3419","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(15)"}
+{"file":"chunk-v9w831vx.js","key":"@957","name":"ThemeContext","source":"semantic","confidence":0.8,"note":"createContext({themeSetting, currentTheme, resolvedTheme, customThemes…})"}
+{"file":"chunk-v9w831vx.js","key":"@1228","name":"getConfiguredTheme","source":"semantic","confidence":0.75,"note":"全局配置的 theme，默认 \"dark\""}
+{"file":"chunk-v9w831vx.js","key":"@1286","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(46)"}
+{"file":"chunk-v9w831vx.js","key":"@3572","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-v9w831vx.js","key":"@3754","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(3)"}
+{"file":"chunk-vnfdjr3f.js","key":"@656","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(39)"}
+{"file":"chunk-vnfdjr3f.js","key":"@2527","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(25)"}
+{"file":"chunk-vrb44rx7.js","key":"@6400","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(9)"}
+{"file":"chunk-vrb44rx7.js","key":"@8370","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(28)"}
+{"file":"chunk-vrb44rx7.js","key":"@26468","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(5)"}
+{"file":"chunk-vrb44rx7.js","key":"@30215","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(50)"}
+{"file":"chunk-vrb44rx7.js","key":"@33780","name":"selectMcpTools","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.mcp.tools"}
+{"file":"chunk-vrb44rx7.js","key":"@34220","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(23)"}
+{"file":"chunk-w5ndchqs.js","key":"@12982","name":"fillUsageTemplate","source":"semantic","confidence":0.6,"note":"替换 {days}/{pct} 占位"}
+{"file":"chunk-wj577vf9.js","key":"@6682","name":"lexResult","source":"semantic","confidence":0.55,"note":"{taken, rest, lines}"}
+{"file":"chunk-wj577vf9.js","key":"@6731","name":"lexAsSingleParagraph","source":"semantic","confidence":0.55,"note":"整段作为一个 paragraph 令牌"}
+{"file":"chunk-wj577vf9.js","key":"@6832","name":"makeParagraphToken","source":"semantic","confidence":0.7,"note":"{type:\"paragraph\", raw, text, tokens:[text]}（旧版名 cachedLexer 错配）"}
+{"file":"chunk-wj577vf9.js","key":"@6900","name":"makeTextToken","source":"semantic","confidence":0.75,"note":"{type:\"text\", raw, text, escaped:false}"}
+{"file":"chunk-wj577vf9.js","key":"@13783","name":"endsWithHardBreak","source":"semantic","confidence":0.5,"note":"以空格结尾的 Markdown 硬换行判断"}
+{"file":"chunk-wj577vf9.js","key":"@13923","name":"formatTokenWindowed","source":"semantic","confidence":0.55,"note":"formatToken 后在 windowed 模式剥离部分转义"}
+{"file":"chunk-wq9366y3.js","key":"@407","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(11)"}
+{"file":"chunk-wq9366y3.js","key":"@1069","name":"InMessageResponseContext","source":"semantic","confidence":0.7,"note":"createContext(false)：嵌套 MessageResponse 时不重复画 ⎿"}
+{"file":"chunk-wyqg6m3h.js","key":"@37559","name":"toFileUrl","source":"semantic","confidence":0.6,"note":"url => \"file:\" + 路径"}
+{"file":"chunk-x3qn5k1g.js","key":"@8302","name":"commonPrefixLength","source":"semantic","confidence":0.8,"note":"两字符串公共前缀长度"}
+{"file":"chunk-x3qn5k1g.js","key":"@8408","name":"commonPrefixOfSuggestions","source":"semantic","confidence":0.7,"note":"建议 displayText 的公共前缀"}
+{"file":"chunk-x6v6jz2y.js","key":"@6244","name":"Box","source":"semantic","confidence":0.8,"note":"var s = ThemedBox；对应旧版 ink.ts 导出的主题 Box（全项目 865 处使用）"}
+{"file":"chunk-x6v6jz2y.js","key":"@6446","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(32)"}
+{"file":"chunk-xe7zq1p4.js","key":"@16736","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(32)"}
+{"file":"chunk-y6fv30yg.js","key":"@1543","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-y6fv30yg.js","key":"@3541","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(30)"}
+{"file":"chunk-y6fv30yg.js","key":"@11378","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(48)"}
+{"file":"chunk-y6fv30yg.js","key":"@14271","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-y6fv30yg.js","key":"@15707","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(17)"}
+{"file":"chunk-y6fv30yg.js","key":"@17137","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(35)"}
+{"file":"chunk-yckdkb4w.js","key":"@317","name":"buildSessionAllowRuleUpdates","source":"semantic","confidence":0.6,"note":"把规则转成 session allow 的 addRules 更新"}
+{"file":"chunk-ynfbqx38.js","key":"@3091","name":"isTaskNotificationFor","source":"semantic","confidence":0.7,"note":"mode === \"task-notification\" 且 value 相等"}
+{"file":"chunk-yqj79cx2.js","key":"@902","name":"HIGHLIGHT_CACHE_SIZE","source":"semantic","confidence":0.5,"note":"500"}
+{"file":"chunk-yqj79cx2.js","key":"@918","name":"getCachedHighlight","source":"semantic","confidence":0.65,"note":"LRU：键含语言、插件语法代数与主题，命中则移到末尾并扣减工作量预算"}
+{"file":"chunk-yqj79cx2.js","key":"@1341","name":"protectLongLines","source":"semantic","confidence":0.5,"note":"超长行替换为标记（markers）避免高亮过慢"}
+{"file":"chunk-yqj79cx2.js","key":"@1548","name":"restoreLongLines","source":"semantic","confidence":0.5,"note":"把标记换回原文"}
+{"file":"chunk-yqj79cx2.js","key":"@1678","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(16)"}
+{"file":"chunk-yqj79cx2.js","key":"@2360","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(7)"}
+{"file":"chunk-yqj79cx2.js","key":"@3219","name":"HIGHLIGHT_MAX_WIDTH","source":"semantic","confidence":0.5,"note":"80（与 HighlightedCode 组件同语句）"}
+{"file":"chunk-yqj79cx2.js","key":"@3225","name":"HighlightedCode","source":"semantic","confidence":0.8,"note":"React.memo 组件，旧版 HighlightedCode"}
+{"file":"chunk-yqj79cx2.js","key":"@3247","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(40)"}
+{"file":"chunk-yxcx2jtr.js","key":"@15557","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(8)"}
+{"file":"chunk-yxcx2jtr.js","key":"@16463","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(44)"}
+{"file":"chunk-zef67v87.js","key":"@791","name":"selectExpandedView","source":"semantic","confidence":0.85,"note":"T1 状态选择器 s => s.expandedView"}
+{"file":"chunk-zef67v87.js","key":"@4099","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(37)"}
+{"file":"chunk-zenpc8qn.js","key":"@15127","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(19)"}
+{"file":"chunk-zfbhezv9.js","key":"@7169","name":"stripDangerousRulesIfNeeded","source":"semantic","confidence":0.6,"note":"strippedDangerousRules 未定义时原样返回"}
+{"file":"chunk-zj31az9x.js","key":"@14707","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(35)"}
+{"file":"chunk-zj31az9x.js","key":"@17768","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(38)"}
+{"file":"chunk-zkzpd9ky.js","key":"@20098","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(24)"}
+{"file":"chunk-znr63w8n.js","key":"@787","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}
+{"file":"chunk-znr63w8n.js","key":"@1498","name":"$","source":"semantic","confidence":0.9,"note":"L1 React Compiler 缓存数组 c(10)"}

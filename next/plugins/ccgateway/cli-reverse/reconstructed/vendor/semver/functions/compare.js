@@ -1,0 +1,17 @@
+/**
+ * semver/functions/compare.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: semver@7.7.3..7.7.4
+ * pieces: chunk-bwbq4xvm.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import { require_semver } from "../classes/semver.js";
+
+//@ chunk-bwbq4xvm.js:11583-11679 cjs-fingerprint
+var require_compare = __commonJS(function (cjsExports, cjsModule) {
+  var SemVer = require_semver();
+  var compare = (a, b, loose) => new SemVer(a, loose).compare(new SemVer(b, loose));
+  cjsModule.exports = compare;
+});
+export { require_compare };

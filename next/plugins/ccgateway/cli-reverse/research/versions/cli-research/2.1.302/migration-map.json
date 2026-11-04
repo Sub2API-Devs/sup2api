@@ -1,0 +1,367 @@
+{
+  "version": "2.1.302",
+  "method": "Bun payload table recovery, AST comparison, manual anchors, native replay",
+  "reaNativeAnalysis": "unavailable: ERR_REA_WINDOWS_NATIVE",
+  "moduleCount": 2686,
+  "jsCount": 2433,
+  "unresolvedModules": 0,
+  "bindings": [
+    {
+      "oldFile": "cli.js",
+      "oldBinding": "Bt",
+      "newFile": "cli.js",
+      "newBinding": "Ge",
+      "structuralExact": false,
+      "similarityScore": 0.8913043478260869,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "BWo",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "hRr",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "sN",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "U$",
+      "structuralExact": false,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "eYt",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "KQt",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "Gle",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "Khe",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "vwt",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "mxt",
+      "structuralExact": false,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "Xj",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "jz",
+      "structuralExact": false,
+      "similarityScore": 0.6666666666666666,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "uln",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "xRn",
+      "structuralExact": false,
+      "similarityScore": 0.9709677419354839,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "Jan",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "gRn",
+      "structuralExact": false,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "hT",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "_A",
+      "structuralExact": false,
+      "similarityScore": 0.9473684210526315,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "Xyr",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "TYr",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "Kvt",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "XPt",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "MDe",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "$Fe",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "ip",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "qp",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "i5t",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "Acn",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "Zt",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "en",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "xHe",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "aur",
+      "structuralExact": false,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "fkn",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "gDn",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "t5r",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "Fao",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "P7t",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "vhn",
+      "structuralExact": false,
+      "similarityScore": 1,
+      "semanticProof": false,
+      "selection": "manual call-site tracing plus native mods regression"
+    },
+    {
+      "oldFile": "chunk-kasbfbhj.js",
+      "oldBinding": "xe",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "Ce",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-30jbnw20.js",
+      "oldBinding": "CT",
+      "newFile": "chunk-ctwws12s.js",
+      "newBinding": "bE",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-gtj0ecsn.js",
+      "oldBinding": "ta",
+      "newFile": "chunk-sdr1wqge.js",
+      "newBinding": "ka",
+      "structuralExact": false,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-716kq0mx.js",
+      "oldBinding": "n5t",
+      "newFile": "chunk-82nm2axm.js",
+      "newBinding": "QZt",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-gr4a0fky.js",
+      "oldBinding": "eF",
+      "newFile": "chunk-pmgddf3s.js",
+      "newBinding": "GU",
+      "structuralExact": false,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-gr4a0fky.js",
+      "oldBinding": "rbe",
+      "newFile": "chunk-pmgddf3s.js",
+      "newBinding": "CEe",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-gr4a0fky.js",
+      "oldBinding": "Zre",
+      "newFile": "chunk-pmgddf3s.js",
+      "newBinding": "Tae",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-0ycjphb5.js",
+      "oldBinding": "El",
+      "newFile": "chunk-mam1wjsh.js",
+      "newBinding": "kl",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-6dwnw6av.js",
+      "oldBinding": "Y_o",
+      "newFile": "chunk-yn324528.js",
+      "newBinding": "uLo",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldFile": "chunk-6dwnw6av.js",
+      "oldBinding": "YEr",
+      "newFile": "chunk-yn324528.js",
+      "newBinding": "Y0r",
+      "structuralExact": true,
+      "similarityScore": 1,
+      "semanticProof": false
+    },
+    {
+      "oldBinding": "bY",
+      "newFile": "chunk-8242685m.js",
+      "newBinding": "j7",
+      "selection": "manual PreToolUse aggregation call-site tracing; new soleAsk behavior retained in upstream helper"
+    },
+    {
+      "oldBinding": "getRootSession",
+      "newFile": "chunk-9pbqjfax.js",
+      "newBinding": "getRootSession",
+      "selection": "named export forwarding"
+    }
+  ],
+  "patchManifest": {
+    "baseline": "linux-x64-glibc/2.1.302",
+    "extension": "ccgateway-v7-request-modes",
+    "capabilities": [
+      "request_direct",
+      "request_build",
+      "native_tools",
+      "mods_dispatch"
+    ],
+    "files": {
+      "cli.js": {
+        "before": "1b145961aed572ec8f45fd311f00c2d79b39766ca2de5685f3decf2888a65311",
+        "after": "9b1d82060600c6f4a61e4d1a0bd99a4b69340bb1025dae87e78585f2f60641ed"
+      },
+      "chunk-ctwws12s.js": {
+        "before": "961fb25c35c1505651fb3b587621ee80dff136e63c1581f64a73cd2a7614dbc1",
+        "after": "b0037ed02612a7b852b5197ce38b2a3b9ea08cdacf3bf04763c657f8b34d7eca"
+      },
+      "chunk-8242685m.js": {
+        "before": "91c62b6b31e5c5cb52418ee9007dbcbdc26bacc5346fdf65f241b70a5fb4f6c8",
+        "after": "c5c947eeddce24eae1d4b8248fc66e4431461b2913d7fc7906b290c0133a00bf"
+      },
+      "chunk-sdr1wqge.js": {
+        "before": "5bc578a31182db8e6a684cb9c3bc3fa3bac62023e8e0c1bec5cf4c43229c3537",
+        "after": "db74ff4daf939ec84294a8bb1c9c0e5c0093b947e0ad88144813e96ba6813cf7"
+      },
+      "chunk-82nm2axm.js": {
+        "before": "541302df19354462f076f13e79d202464e39389f9a87c86c9505a35f853abc0c",
+        "after": "5b0341abb9661cda594860a911cdf9bb21d1c20387c7774e35a9c0f4561deb58"
+      },
+      "chunk-9c5hpqbb.js": {
+        "before": "3eaf8451679ae55f7181b26f5aede483d72c723758091b08c59f3971adae7216",
+        "after": "e577ce73ad115d8ed02c8293da4561e81bb3cef8ebe697fc0e264a7c56f7c32a"
+      },
+      "chunk-pmgddf3s.js": {
+        "before": "2add7059a2c5369feed39d9a88005f3d11fc048b4f19b2d9726565da5fd49f33",
+        "after": "2946c2bc267bc402ba44f66f1aa50cd78155535f9d9aa78587cc491318452640"
+      },
+      "chunk-2rs9vjmc.js": {
+        "before": "7107333c9b6d9f81be74f2ab2bf2995bec9f0d418df629dc2811dcbe84d3caff",
+        "after": "8e66246b6d75185aafc730fc05865e8dfa91bc629daafe25d24fa407437e62e3"
+      }
+    },
+    "supportFiles": {
+      "ccgateway-native-tools.js": {
+        "source": "native-tools.js",
+        "sha256": "570b9225361416fb95b855a4ec80d79a2caeac5947b9cb95a7c5f5c0a993febf"
+      },
+      "ccgateway-model-request.js": {
+        "source": "model-request.js",
+        "sha256": "c4f5efc69c26c38c6225779dd97dd4567eb0196f5abb22ec0b9a7fd347010c17"
+      },
+      "ccgateway-request-command.js": {
+        "source": "request-command.js",
+        "sha256": "79187ef1f1dbd827dceb3d5863bb143b01f56506783cdd4da49b54b4099c24c0"
+      },
+      "ccgateway-request-input.js": {
+        "source": "request-input.js",
+        "sha256": "054ccbc0f464edc58302bd8555875a92b517aec01c926b9500e115cba00cedc9"
+      },
+      "ccgateway-request-build.js": {
+        "source": "request-build.js",
+        "sha256": "c0256bfe6460f766b9bc42e67b3115484a3f01060cfcd755a46fecfc220d85c2"
+      },
+      "ccgateway-request-output.js": {
+        "source": "request-output.js",
+        "sha256": "cd4669523cf5475f90d66690ffe8fe0138b24713f5a0dc6202a1fcd6f3d9624c"
+      },
+      "ccgateway-request-options.js": {
+        "source": "request-options.js",
+        "sha256": "bf6a4a24d0603a10ecf40f7c6bd647132cb2ee3cf1bd0e11142d08d552b8c4e7"
+      }
+    }
+  }
+}

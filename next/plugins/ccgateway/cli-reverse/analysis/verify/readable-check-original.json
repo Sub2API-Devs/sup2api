@@ -1,0 +1,270 @@
+{
+ "files": 2653,
+ "declarations": {
+  "expected": 0,
+  "found": 0,
+  "duplicated": 0,
+  "missing": []
+ },
+ "parseErrors": 3,
+ "duplicateDeclarations": 0,
+ "missingImportFiles": 0,
+ "missingImportNames": 0,
+ "freeIdentifiers": 32,
+ "freeNames": [
+  "Af",
+  "AsyncIterator",
+  "C",
+  "Dn",
+  "EdgeRuntime",
+  "ErrorEvent",
+  "F",
+  "FileReader",
+  "INTERVAL_PRESETS",
+  "Jh",
+  "L",
+  "M",
+  "QUIET_PRESETS",
+  "QuotaExceededError",
+  "Rh",
+  "THRESHOLD_PRESETS",
+  "Worker",
+  "__REACT_DEVTOOLS_GLOBAL_HOOK__",
+  "__values",
+  "h",
+  "i",
+  "jQuery",
+  "keyOf",
+  "lt",
+  "m",
+  "n",
+  "r",
+  "reportError",
+  "rowDescription",
+  "spanOf",
+  "t",
+  "w"
+ ],
+ "samples": {
+  "parseErrors": [
+   {
+    "file": "chart.umd.min.js",
+    "error": "Unexpected character '�'. (1:1)"
+   },
+   {
+    "file": "hljsBundle.generated.min.js",
+    "error": "Unexpected character '�'. (1:1)"
+   },
+   {
+    "file": "mermaid.min.js",
+    "error": "Unexpected character '�'. (1:1)"
+   }
+  ],
+  "dupes": [],
+  "missingFiles": [],
+  "missingNames": [],
+  "free": [
+   [
+    "Worker",
+    [
+     "chunk-3nztfxrw.js",
+     "chunk-e6aww6q8.js",
+     "chunk-fq0cr76a.js"
+    ]
+   ],
+   [
+    "h",
+    [
+     "chunk-3s7ydtfd.js",
+     "chunk-bss4k1z9.js",
+     "chunk-sc72x544.js",
+     "chunk-wyqg6m3h.js"
+    ]
+   ],
+   [
+    "EdgeRuntime",
+    [
+     "chunk-3wydcdvj.js"
+    ]
+   ],
+   [
+    "INTERVAL_PRESETS",
+    [
+     "chunk-a7sxm3q7.js"
+    ]
+   ],
+   [
+    "spanOf",
+    [
+     "chunk-a7sxm3q7.js"
+    ]
+   ],
+   [
+    "C",
+    [
+     "chunk-a7sxm3q7.js",
+     "chunk-z0q4jgnc.js"
+    ]
+   ],
+   [
+    "THRESHOLD_PRESETS",
+    [
+     "chunk-a7sxm3q7.js"
+    ]
+   ],
+   [
+    "M",
+    [
+     "chunk-a7sxm3q7.js"
+    ]
+   ],
+   [
+    "i",
+    [
+     "chunk-a7sxm3q7.js"
+    ]
+   ],
+   [
+    "QUIET_PRESETS",
+    [
+     "chunk-a7sxm3q7.js"
+    ]
+   ],
+   [
+    "keyOf",
+    [
+     "chunk-a7sxm3q7.js"
+    ]
+   ],
+   [
+    "t",
+    [
+     "chunk-a7sxm3q7.js"
+    ]
+   ],
+   [
+    "n",
+    [
+     "chunk-aepeg2w5.js"
+    ]
+   ],
+   [
+    "r",
+    [
+     "chunk-aepeg2w5.js",
+     "chunk-ynfp53zr.js"
+    ]
+   ],
+   [
+    "reportError",
+    [
+     "chunk-bzr73sfg.js",
+     "chunk-p86mcgbc.js"
+    ]
+   ],
+   [
+    "__REACT_DEVTOOLS_GLOBAL_HOOK__",
+    [
+     "chunk-bzr73sfg.js"
+    ]
+   ],
+   [
+    "rowDescription",
+    [
+     "chunk-cpqpnzp4.js"
+    ]
+   ],
+   [
+    "Dn",
+    [
+     "chunk-dcmhvw5a.js"
+    ]
+   ],
+   [
+    "Rh",
+    [
+     "chunk-e6aww6q8.js"
+    ]
+   ],
+   [
+    "Af",
+    [
+     "chunk-e6aww6q8.js"
+    ]
+   ],
+   [
+    "Jh",
+    [
+     "chunk-e6aww6q8.js"
+    ]
+   ],
+   [
+    "lt",
+    [
+     "chunk-e6aww6q8.js"
+    ]
+   ],
+   [
+    "ErrorEvent",
+    [
+     "chunk-e6aww6q8.js"
+    ]
+   ],
+   [
+    "w",
+    [
+     "chunk-fe6rs39h.js"
+    ]
+   ],
+   [
+    "QuotaExceededError",
+    [
+     "chunk-fq0cr76a.js"
+    ]
+   ],
+   [
+    "jQuery",
+    [
+     "chunk-fq0cr76a.js"
+    ]
+   ],
+   [
+    "__values",
+    [
+     "chunk-fq0cr76a.js"
+    ]
+   ],
+   [
+    "AsyncIterator",
+    [
+     "chunk-fq0cr76a.js",
+     "chunk-spyfntaa.js"
+    ]
+   ],
+   [
+    "F",
+    [
+     "chunk-hny2rpzz.js"
+    ]
+   ],
+   [
+    "m",
+    [
+     "chunk-jvez4qde.js"
+    ]
+   ],
+   [
+    "FileReader",
+    [
+     "chunk-wr8v03d0.js"
+    ]
+   ],
+   [
+    "L",
+    [
+     "chunk-z0q4jgnc.js"
+    ]
+   ]
+  ]
+ }
+}

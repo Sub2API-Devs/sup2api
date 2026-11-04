@@ -1,0 +1,36 @@
+/**
+ * tools/AgentTool/builtInAgentGate.ts
+ *
+ * 2.1.316 新增：内置代理的开关判定
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-e6aww6q8.js (3)
+ * attribution: placement 3
+ */
+import { env } from "../../utils/env.js";
+import { HostScoped } from "../../utils/hostScoped.js";
+import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
+
+//@ chunk-e6aww6q8.js:127851-127967 placement
+class ExplorePlanAgentsGate {
+  latched = undefined;
+  isEnabled() {
+    this.latched ??= !env.CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS;
+    return this.latched;
+  }
+}
+//@ chunk-e6aww6q8.js:127967-127994 placement
+var explorePlanAgentsGateSlots; // deferred: uses ExplorePlanAgentsGate of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:127967", () => {
+  explorePlanAgentsGateSlots = new HostScoped(() => new ExplorePlanAgentsGate());
+});
+//@ chunk-e6aww6q8.js:127994-128044 placement
+/**
+ * 判断 Explore/Plan 内置代理是否启用。
+ */
+function isExplorePlanAgentsEnabled() {
+  return explorePlanAgentsGateSlots.of(getRootSession().host).isEnabled();
+}
+export { isExplorePlanAgentsEnabled };

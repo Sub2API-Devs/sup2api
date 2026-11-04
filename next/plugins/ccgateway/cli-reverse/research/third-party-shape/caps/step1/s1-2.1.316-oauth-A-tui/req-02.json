@@ -1,0 +1,39 @@
+{
+ "index": 2,
+ "listener": "tls:443",
+ "method": "GET",
+ "url": "/api/claude_code/policy_limits",
+ "rawHeaders": [
+  "Accept",
+  "application/json, text/plain, */*",
+  "User-Agent",
+  "claude-code/2.1.316",
+  "Cache-Control",
+  "no-cache",
+  "Pragma",
+  "no-cache",
+  "Authorization",
+  "Bearer sk-ant-oat01-client-fake",
+  "anthropic-beta",
+  "oauth-2025-04-20",
+  "Accept-Encoding",
+  "gzip, compress, deflate, br",
+  "Host",
+  "api.anthropic.com",
+  "Connection",
+  "keep-alive"
+ ],
+ "headers": {
+  "accept": "application/json, text/plain, */*",
+  "user-agent": "claude-code/2.1.316",
+  "cache-control": "no-cache",
+  "pragma": "no-cache",
+  "authorization": "Bearer sk-ant-oat01-client-fake",
+  "anthropic-beta": "oauth-2025-04-20",
+  "accept-encoding": "gzip, compress, deflate, br",
+  "host": "api.anthropic.com",
+  "connection": "keep-alive"
+ },
+ "body": "",
+ "rawBody": ""
+}

@@ -1,0 +1,14 @@
+# chunk-7dmym6x9.js:_rr -> chunk-e6aww6q8.js:udr
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js__rr.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js__rr.new.js"
+index 2f728b7..16a8234 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js__rr.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js__rr.new.js"
+@@ -1,7 +1,7 @@
+ function SELF($l0) {
+   let $l1 = $m_Je($l0);
+   if ($m_Ht($l1) === "claude-fable-5-1") return "5.1";
+-  if ($m_Eqe($l1) || $m_Dxe($l0)) return "5";
++  if ($m_Eqe($l1) || $m_Dxe($l0)) return $NEW_chunk_aepeg2w5_js_WH($l0, $l1) ? null : "5";
+   return null;
+ }
+ ;

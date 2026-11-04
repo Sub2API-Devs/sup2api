@@ -1,0 +1,13 @@
+{
+  "name": "verify-market",
+  "owner": { "name": "verify" },
+  "metadata": { "description": "Local marketplace fixture for runtime verification scenarios" },
+  "plugins": [
+    {
+      "name": "verify-plugin",
+      "source": "./plugins/verify-plugin",
+      "description": "Verify plugin: a slash command, a skill, an agent and hooks",
+      "version": "1.0.0"
+    }
+  ]
+}
