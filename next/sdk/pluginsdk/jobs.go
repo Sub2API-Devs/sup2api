@@ -43,10 +43,24 @@ type JobResult struct {
 	// after it without counting as a failure, a node job is recorded as
 	// skipped (core 0.1.237+; older cores record a success).
 	RetryAfter time.Duration
+	// ContinueAfter > 0 says the run did part of the work and has more: it
+	// runs again after this delay with the same args, recorded as
+	// "continued" (core 0.1.238+; older cores record a success and the next
+	// scheduled run continues). Use it for work that may outlast the run's
+	// timeout, see JobFunc.
+	ContinueAfter time.Duration
 }
 
 // JobFunc runs one job. It must honor ctx: the job's timeout, shutdown and
 // withdrawn admission all cancel it.
+//
+// A run lasts at most an hour (a cluster job; 10 minutes for a node job, see
+// manifest.MaxClusterJobTimeoutSec), and a core release or plugin upgrade
+// stops it after about 20 seconds, so do bounded batches instead of one long
+// pass: read ctx.Deadline() rather than trusting the manifest timeout, stop
+// a little before it, keep the progress in your own tables, and return
+// ContinueAfter to go on (or let the next scheduled run go on). The
+// moderation plugin's retention purge is the reference.
 type JobFunc func(ctx context.Context, run JobRun) (JobResult, error)
 
 // ErrUnknownJob is returned by JobMux for a job id without a handler.
@@ -114,6 +128,9 @@ func (m *JobMux) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	out := &pluginv1.RunJobResponse{Message: res.Message, Count: int32(min(res.Count, int(^uint32(0)>>1)))}
 	if res.RetryAfter > 0 {
 		out.RetryAfterMs = max(res.RetryAfter.Milliseconds(), 1)
+	}
+	if res.ContinueAfter > 0 {
+		out.ContinueAfterMs = max(res.ContinueAfter.Milliseconds(), 1)
 	}
 	return out, nil
 }

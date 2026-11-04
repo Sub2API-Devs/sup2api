@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/Masterminds/semver/v3"
@@ -662,8 +661,15 @@ func (v *validator) jobs() {
 		if err != nil {
 			v.add(f+".schedule", "invalid", "invalid schedule %q: %v", j.Schedule, err)
 		}
-		if j.TimeoutSec < 0 || j.TimeoutSec > 24*3600 {
-			v.add(f+".timeoutSec", "out_of_range", "timeoutSec must be between 0 and 86400")
+		// The task framework runs a cluster job for at most an hour and any
+		// job at most every 5 seconds (CONTRACTS §77.8): work that takes
+		// longer is split into runs that continue each other.
+		if every, ok := sched.(cron.ConstantDelaySchedule); ok && every.Delay < manifest.MinJobEvery {
+			v.add(f+".schedule", "out_of_range", "a job runs at most every %s", manifest.MinJobEvery)
+		}
+		if j.TimeoutSec < 0 || (!j.NodeScope() && j.TimeoutSec > manifest.MaxClusterJobTimeoutSec) {
+			v.add(f+".timeoutSec", "out_of_range", "timeoutSec must be between 0 and %d; split longer work into runs that continue each other",
+				manifest.MaxClusterJobTimeoutSec)
 		}
 		for lang, text := range j.Title {
 			if strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > maxJobTitle {
@@ -674,18 +680,15 @@ func (v *validator) jobs() {
 		case "", manifest.JobScopeCluster:
 		case manifest.JobScopeNode:
 			nodeJobs++
-			if j.TimeoutSec > maxNodeJobTimeout {
-				v.add(f+".timeoutSec", "out_of_range", "a node job times out after at most %d seconds", maxNodeJobTimeout)
-			}
-			if every, ok := sched.(cron.ConstantDelaySchedule); ok && every.Delay < minNodeJobEvery {
-				v.add(f+".schedule", "out_of_range", "a node job runs at most every %s", minNodeJobEvery)
+			if j.TimeoutSec > manifest.MaxNodeJobTimeoutSec {
+				v.add(f+".timeoutSec", "out_of_range", "a node job times out after at most %d seconds", manifest.MaxNodeJobTimeoutSec)
 			}
 		default:
 			v.add(f+".scope", "invalid", "job scope must be %q or %q", manifest.JobScopeCluster, manifest.JobScopeNode)
 		}
 	}
-	if nodeJobs > maxNodeJobs {
-		v.add("jobs", "out_of_range", "at most %d node jobs", maxNodeJobs)
+	if nodeJobs > manifest.MaxNodeJobs {
+		v.add("jobs", "out_of_range", "at most %d node jobs", manifest.MaxNodeJobs)
 	}
 	// Older cores ignore scope and would run a node job once per cluster.
 	if nodeJobs > 0 {
@@ -696,13 +699,11 @@ func (v *validator) jobs() {
 	}
 }
 
-// Limits of node jobs (TASK-FRAMEWORK-DESIGN §11.1) and the cores that run
-// them: 0.1.236 is the last core that runs every job once per cluster.
+// The cores that run node jobs: 0.1.236 is the last core that runs every job
+// once per cluster. The job limits are manifest.MaxClusterJobTimeoutSec and
+// its neighbours.
 const (
 	maxJobTitle             = 100
-	maxNodeJobs             = 10
-	maxNodeJobTimeout       = 600
-	minNodeJobEvery         = 5 * time.Second
 	lastClusterOnlyJobsCore = "0.1.236"
 	firstNodeJobsCore       = "0.1.237"
 )

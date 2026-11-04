@@ -48,9 +48,19 @@ func TestJobScopeAndTitle(t *testing.T) {
 		}
 	}
 
-	// A cluster job keeps the old limits: a cron schedule and a long timeout.
-	if c := jobCodes(jobsManifest(manifest.Job{ID: "a", Schedule: "0 3 * * *", TimeoutSec: 7200})); len(c) > 0 {
-		t.Fatalf("cluster job limits changed: %v", c)
+	// A cluster job runs for at most an hour and at most every 5 seconds,
+	// what the task framework runs (core 0.1.237 cut longer ones silently).
+	if c := jobCodes(jobsManifest(manifest.Job{ID: "a", Schedule: "0 3 * * *", TimeoutSec: 3600})); len(c) > 0 {
+		t.Fatalf("an hour is allowed: %v", c)
+	}
+	if c := jobCodes(jobsManifest(manifest.Job{ID: "a", Schedule: "0 3 * * *", TimeoutSec: 3601})); c["jobs[0].timeoutSec"] != "out_of_range" {
+		t.Fatalf("a cluster job over an hour must be rejected: %v", c)
+	}
+	if c := jobCodes(jobsManifest(manifest.Job{ID: "a", Schedule: "@every 2s"})); c["jobs[0].schedule"] != "out_of_range" {
+		t.Fatalf("a cluster job every 2s must be rejected: %v", c)
+	}
+	if c := jobCodes(jobsManifest(manifest.Job{ID: "a", Schedule: "@every 5s"})); len(c) > 0 {
+		t.Fatalf("every 5s is allowed: %v", c)
 	}
 }
 

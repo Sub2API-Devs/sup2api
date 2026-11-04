@@ -6,6 +6,7 @@ package manifest
 import (
 	"encoding/json"
 	"net/mail"
+	"time"
 )
 
 // APIVersion is the only manifest apiVersion this SDK understands.
@@ -734,9 +735,16 @@ type Events struct {
 }
 
 type Job struct {
-	ID         string `json:"id"`
-	Schedule   string `json:"schedule"` // cron (5 fields) or "@every <duration>"
-	TimeoutSec int    `json:"timeoutSec,omitempty"`
+	ID string `json:"id"`
+	// Schedule is a 5-field cron (UTC) or "@every <duration>", at most every
+	// MinJobEvery.
+	Schedule string `json:"schedule"`
+	// TimeoutSec bounds one run: 0 is 60 s; at most MaxClusterJobTimeoutSec
+	// for a cluster job, MaxNodeJobTimeoutSec for a node job. Work that may
+	// take longer is done in batches that stop before the run's ctx deadline
+	// and continue in the next run (pluginsdk.JobResult.ContinueAfter).
+	// Older manifests may declare more; the core cuts it to the limit.
+	TimeoutSec int `json:"timeoutSec,omitempty"`
 	// Scope is JobScopeCluster (the default: one run per slot in the
 	// cluster) or JobScopeNode (every node runs it on its own instance;
 	// core 0.1.237 and later).
@@ -750,6 +758,17 @@ type Job struct {
 const (
 	JobScopeCluster = "cluster"
 	JobScopeNode    = "node"
+)
+
+// Limits of manifest jobs; the task framework runs nothing beyond them
+// (CONTRACTS §77.8).
+const (
+	MaxClusterJobTimeoutSec = 3600
+	MaxNodeJobTimeoutSec    = 600
+	MaxNodeJobs             = 10
+	MinJobEvery             = 5 * time.Second
+	// DefaultJobTimeoutSec is the timeout of a job declaring none.
+	DefaultJobTimeoutSec = 60
 )
 
 // NodeScope reports whether every node runs the job.

@@ -48,6 +48,12 @@ message RunJobResponse {
   // > 0: the run did nothing yet; a cluster job is run again after this
   // delay without counting as a failure, a node job is recorded as skipped.
   int64 retry_after_ms = 3;
+  // > 0: the run did part of the work and stopped before its deadline; it
+  // runs again after this delay with the same args (recorded as
+  // "continued", not a failure). Read by core 0.1.238 and later; older
+  // cores record a success and the next slot continues.
+  // retry_after_ms wins when both are set.
+  int64 continue_after_ms = 4;
 }
 
 message Event {
