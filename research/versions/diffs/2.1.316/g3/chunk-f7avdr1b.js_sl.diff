@@ -1,0 +1,26 @@
+# chunk-f7avdr1b.js:sl -> chunk-aepeg2w5.js:fl
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_sl.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_sl.new.js"
+index e2cdf7f..beb2ca3 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_sl.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_sl.new.js"
+@@ -1,14 +1,15 @@
+ function SELF() {
+-  if ($m_sW()) return false;
++  let $l0 = $m_Sr();
++  if ($l0 && $m_sW()) return false;
+   if ($m_i.ANTHROPIC_UNIX_SOCKET) return !!$m_i.CLAUDE_CODE_OAUTH_TOKEN;
+   if ($m_rc()) return false;
+-  let $l0 = !$m_Bn(), $l1 = $m_sr() || {}, $l2 = $m_Sr() ? $m_ig() : $m_j4e("apiKeyHelper", $l1.apiKeyHelper), $l3 = $m_ab(), $l4;
++  let $l1 = !$m_Bn(), $l2 = $m_sr() || {}, $l3 = $l0 ? $m_ig() : $m_j4e("apiKeyHelper", $l2.apiKeyHelper), $l4 = $m_ab(), $l5;
+   try {
+-    $l4 = $m_yA({ skipRetrievingKeyFromApiKeyHelper: true }).source;
++    $l5 = $m_yA({ skipRetrievingKeyFromApiKeyHelper: true }).source;
+   } catch {
+     return false;
+   }
+-  let $l5 = $l4 === "ANTHROPIC_API_KEY" || $l4 === "apiKeyHelper", $l6 = $m_pte("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR"), $l7 = ($l3 || $l5) && !$m_TSe() || ($l2 || $l6) && !$m_Dr();
+-  return !($l0 || $l7);
++  let $l6 = $l5 === "ANTHROPIC_API_KEY" || $l5 === "apiKeyHelper", $l7 = $m_Dr(), $l8 = !$l7 && $m_pte("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR"), $l9 = ($l4 || $l6) && !$m_TSe() || ($l3 || $l8) && !$l7;
++  return !($l1 || $l9);
+ }
+ ;

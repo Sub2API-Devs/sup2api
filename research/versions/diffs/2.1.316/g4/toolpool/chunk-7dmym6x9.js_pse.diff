@@ -1,0 +1,23 @@
+# chunk-7dmym6x9.js:pse -> chunk-e6aww6q8.js:Kie
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_pse.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_pse.new.js"
+index 64fb2a8..3f306e6 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_pse.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_pse.new.js"
+@@ -2,14 +2,9 @@ async function SELF($l0) {
+   try {
+     let $l1 = $m_Vb($l0);
+     if (!$l1 || $m_dse($l1)) return null;
+-    return await $m_Nct($l1, async () => {
+-      let $l2 = await $m_Fct($l1);
+-      if (!$l2) return "unavailable";
+-      let $l3 = await $m_e2n($l1, $l2);
+-      return $l3 ? { repoRoot: $l1, gitDirectory: $l2, tree: $l3 } : "unavailable";
+-    });
+-  } catch ($l4) {
+-    return $m_t(`bashEditDiff: snapshot failed: ${String($l4)}`), "unavailable";
++    return await ($NEW_chunk_e6aww6q8_js_cW() ? $NEW_chunk_e6aww6q8_js_zVn($l1, true) : $m_Nct($l1, () => $NEW_chunk_e6aww6q8_js_zVn($l1, false)));
++  } catch ($l2) {
++    return $m_t(`bashEditDiff: snapshot failed: ${String($l2)}`), "unavailable";
+   }
+ }
+ ;

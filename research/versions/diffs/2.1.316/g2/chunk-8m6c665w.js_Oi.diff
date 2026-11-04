@@ -1,0 +1,13 @@
+# chunk-8m6c665w.js:Oi -> chunk-tw8fk0yz.js:Bi
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-8m6c665w.js_Oi.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-8m6c665w.js_Oi.new.js"
+index 0d68ffb..439e3c0 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-8m6c665w.js_Oi.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-8m6c665w.js_Oi.new.js"
+@@ -1,5 +1,5 @@
+ function SELF($l0) {
+-  let $l1 = $l0 >= 1e3;
+-  return $m_Qbi("en-US", $l1 ? $m_qe : $m_Xe).format($l0).toLowerCase();
++  let $l1 = typeof $l0 === "number" ? $l0 : Number.NaN, $l2 = $l1 >= 1e3;
++  return $m_Qbi("en-US", $l2 ? $m_qe : $m_Xe).format($l1).toLowerCase();
+ }
+ ;

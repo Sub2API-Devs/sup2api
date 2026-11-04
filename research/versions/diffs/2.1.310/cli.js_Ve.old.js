@@ -1,0 +1,420 @@
+async function SELF() {
+  if (process.env.CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR !== void 0 || process.argv.includes("--session-tunnel")) {
+    let { guardRelayTokenDescriptor: $l0 } = require("./chunk-6a5t31j8.js");
+    $l0();
+  }
+  let $l1 = $m_j2s();
+  if ($l1 === "refused") return;
+  let $l2 = $m_x5n(process.argv);
+  if ($l2) console.error($l2), process.exit(1);
+  let $l3 = process.argv.slice(2);
+  if (($l3.length === 1 || $l3.length === 2 && $l3[1] === "--verbose") && ($l3[0] === "--version" || $l3[0] === "-v" || $l3[0] === "-V")) {
+    if (console.log(`${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.304", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-19T18:11:48Z", GIT_SHA: "17ab70404e5b632fe060207effb0b440788363ba", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION} (Claude Code)${$m_SW()}`), $l3.length === 2 && { ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.304", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-19T18:11:48Z", GIT_SHA: "17ab70404e5b632fe060207effb0b440788363ba", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.GIT_SHA) console.log(`Commit: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.304", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-19T18:11:48Z", GIT_SHA: "17ab70404e5b632fe060207effb0b440788363ba", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.GIT_SHA}`);
+    return;
+  }
+  let $l4 = $m_le();
+  if ($l4) {
+    console.error($l4);
+    let { writeStartupFailureResult: $l5 } = await import("./chunk-40nsa1hy.js"), { randomUUID: $l6 } = await import("crypto");
+    await $l5({ sessionId: $l6(), message: $l4, reason: "cwd_unavailable" }), process.exit(1);
+  }
+  let { profileCheckpoint: $l7 } = await import("./chunk-1w8hw079.js");
+  $l7("cli_entry");
+  let $l8 = $l3[0] === "--preload" || $l3[0] === "--bg-spare", $l9 = !$l8 && process.env.CLAUDE_CODE_HOVER_REST ? (await import("./chunk-tzqbxh6f.js")).pinStorageV5FromEnv() : void 0;
+  if (!$l8) setTimeout(() => {
+    if (process.env.CLAUDE_CODE_JIT_POLICY_AFTER_STARTUP) import("./chunk-bjkrd11q.js").then(($l10) => $l10.setJitPolicyAfterStartup());
+    else if (typeof Bun < "u") Bun.unsafe.setJITPolicy?.(1);
+  }, 1e4).unref();
+  if ($l1 !== void 0) {
+    let { loadFastPathPolicy: $l11 } = await import("./chunk-3nrrbnwj.js"), $l12 = await $l11($l9);
+    if ($l12) {
+      let { exitWithError: $l13 } = await import("./chunk-0nyqbskw.js");
+      $l13($l12);
+    }
+    let { ghStandinMain: $l14 } = await import("./chunk-yqdvjqxw.js");
+    await $l14($l1);
+    return;
+  }
+  if ($l3[0] === "plugin" && $l3[1] === "test") {
+    let [{ loadFastPathPolicy: $l15 }, { pluginTestFormOf: $l16, pluginTestGatesOf: $l17, pluginTestRefusal: $l18 }, { endPluginTest: $l19 }] = await Promise.all([import("./chunk-3nrrbnwj.js"), import("./chunk-3hz22p2x.js"), import("./chunk-075z7d49.js")]), $l20 = $l18(await $l17({ helperError: await $l15($l9), form: $l16($l3.slice(2)), envPin: $l9 }));
+    if ($l3[2] === "--file" && $l20 !== void 0) {
+      let { REPORT_MARK: $l21 } = await import("./chunk-3rxngx6x.js");
+      process.stdout.write(`${$l21}${JSON.stringify({ file: $l3[3], results: [], error: $l20 })}
+`);
+      return;
+    }
+    if ($l20 !== void 0) return process.stderr.write(`claude plugin test: ${$l20}
+`), process.exitCode = 1, $l19(process.exitCode);
+    let { pluginTestMain: $l22 } = await import("./chunk-9t8wpbb3.js");
+    return process.exitCode = await $l22($l3.slice(2)), $l19(process.exitCode);
+  }
+  if (process.argv[2] === "--eval-mock-server") {
+    $l7("cli_eval_mock_server_path");
+    let { runEvalMockServer: $l23 } = await import("./chunk-g828v35r.js");
+    try {
+      await $l23(process.argv[3], process.argv[4]);
+    } catch ($l24) {
+      console.error(`--eval-mock-server: ${$l24 instanceof Error ? $l24.message : String($l24)}`), process.exitCode = 1;
+    }
+    return;
+  }
+  if (process.argv[2] === "--claude-in-chrome-mcp") {
+    $l7("cli_claude_in_chrome_mcp_path");
+    let { runClaudeInChromeMcpServer: $l25 } = await import("./chunk-egh518rt.js");
+    await $l25($l9);
+    return;
+  } else if (process.argv[2] === "--chrome-native-host") {
+    $l7("cli_chrome_native_host_path");
+    let { runChromeNativeHost: $l26 } = await import("./chunk-4cp03twd.js");
+    await $l26();
+    return;
+  }
+  if ($l3[0] === "--daemon-worker") {
+    let { loadFastPathPolicy: $l27 } = await import("./chunk-3nrrbnwj.js"), $l28 = await $l27($l9);
+    if ($l28) process.stderr.write(`${$l28}
+`);
+    let { sessionFactsRestored: $l29 } = await import("./chunk-e1t68bkb.js"), $l30 = await $l29($l9);
+    if ($l30 !== null) {
+      let { endsInARowOf: $l31, workerEndingOf: $l32 } = await import("./chunk-bstsmjs8.js"), $l33 = $l32($l30, $l31($l3[2]));
+      process.stderr.write($l33.said), process.exit($l33.code);
+    }
+    let { runDaemonWorker: $l34 } = await import("./chunk-ztybcjfh.js");
+    await $l34($l3[1], $l9);
+    return;
+  }
+  if ($l3[0] === "--bg-pty-host") {
+    let { ensureFastPathSettingsLoaded: $l35 } = await import("./chunk-3nrrbnwj.js");
+    try {
+      await $l35($l9);
+    } catch ($l36) {
+      process.stderr.write(`ptyHost: settings bootstrap threw (continuing; supervisor already gated): ${$l36?.stack ?? String($l36)}
+`);
+    }
+    let { runPtyHost: $l37 } = await import("./chunk-28zmh53x.js");
+    await $l37($l3.slice(1));
+    return;
+  }
+  if ($l3[0] === "--bg-spare") {
+    let { ensureFastPathSettingsLoaded: $l38 } = await import("./chunk-3nrrbnwj.js");
+    await $l38(void 0);
+    let { runBgSpare: $l39 } = await import("./chunk-k2v91y77.js");
+    await $l39($l3.slice(1));
+    return;
+  }
+  if ($l3[0] === "--preload") {
+    let { ensureFastPathSettingsLoaded: $l40 } = await import("./chunk-3nrrbnwj.js");
+    await $l40(void 0);
+    let { runPreload: $l41 } = await import("./chunk-7p916zzf.js");
+    await $l41($l3.slice(1));
+    return;
+  }
+  if ($l3[0] === "remote-control" || $l3[0] === "rc" || $l3[0] === "remote" || $l3[0] === "sync" || $l3[0] === "bridge") {
+    $l7("cli_bridge_path");
+    let { loadFastPathPolicy: $l42 } = await import("./chunk-3nrrbnwj.js");
+    {
+      let $l43 = await $l42($l9);
+      if ($l43) {
+        let { exitWithError: $l44 } = await import("./chunk-0nyqbskw.js");
+        $l44($l43);
+      }
+    }
+    if ($l3.slice(1).some(($l45) => $l45 === "--help" || $l45 === "-h")) {
+      let { printRemoteControlHelp: $l46 } = await import("./chunk-18f80kz1.js");
+      await $l46();
+      return;
+    }
+    let { sessionFactsRestored: $l47 } = await import("./chunk-e1t68bkb.js"), $l48 = await $l47($l9);
+    if ($l48 !== null) {
+      let { exitWithError: $l49 } = await import("./chunk-0nyqbskw.js");
+      $l49($l48.reason);
+    }
+    let { refuseRemoteControlLocally: $l50, refuseRemoteControlIneligible: $l51, startRemoteControl: $l52 } = await import("./chunk-nvrscafg.js"), $l53 = await $l50(), [{ pinStorageV5: $l54 }, { seedInstallIDs: $l55 }] = await Promise.all([import("./chunk-d9a70tfc.js"), import("./chunk-8h7dcktb.js")]), $l56 = $l54($l9);
+    if ($m_z() && $l56 !== void 0) {
+      let [{ credentialsStoreFor: $l57 }, { setGrowthBookCredentials: $l58, setGrowthBookStorageBackend: $l59 }, { composePolicyLimitsClient: $l60, primePolicyLimitsCache: $l61 }, { primeFastPathCredentials: $l62 }] = await Promise.all([import("./chunk-4h5rct70.js"), import("./chunk-qnw606xc.js"), import("./chunk-md9pmek4.js"), import("./chunk-q0dc9ygk.js")]), $l63 = $l57($l56);
+      $l58($l63), $l59($l56), $l60({ storageV5: $l56, credentials: $l63 }), await $l62($l63), await $l61($l56), await $l55($l56);
+    }
+    let [{ initSinks: $l64 }, { initialize1PEventLogging: $l65 }, { credentialsStoreFor: $l66 }, { initDefaultDebugLog: $l67 }, { watchGlobalConfigThroughStorage: $l68 }] = await Promise.all([import("./chunk-147mtvpm.js"), import("./chunk-yybky31w.js"), import("./chunk-4h5rct70.js"), import("./chunk-gnm4wmxr.js"), import("./chunk-8h7dcktb.js")]);
+    $l64();
+    let $l69 = $l66($l56);
+    $l65($l56);
+    let $l70 = await $l51($l53);
+    if ($m_z() && $l56 !== void 0) $l67({ storageV5: $l56 }), $l68($l56);
+    await $l52($l70, $l3.slice(1), $l56, $l69);
+    return;
+  }
+  {
+    let $l71 = $m_F2s($l3);
+    if ($l71 !== null) {
+      $l7("cli_daemon_path");
+      let { ensureFastPathSettingsLoaded: $l72 } = await import("./chunk-3nrrbnwj.js");
+      await $l72($l9);
+      let { initializeErrorLogSink: $l73 } = await import("./chunk-1ev8qxk0.js");
+      $l73();
+      let { daemonMain: $l74 } = await import("./chunk-vvezwyk4.js");
+      await $l74($l71, $l9);
+      return;
+    }
+  }
+  let $l75 = process.env.CLAUDE_CODE_SESSION_KIND === "bg", $l76 = $l3.some(($l77) => $l77 === "logs" || $l77 === "attach" || $l77 === "stop" || $l77 === "kill" || $l77 === "respawn" || $l77 === "rm") ? require("./chunk-38fng3kx.js").backgroundSessionVerbIndex($l3, { behindRootOptions: !$l75 }) : -1, $l78 = $l76 === -1 ? [] : $l3.slice($l76), $l79 = $l3.includes("--bg") || $l3.includes("--background") ? require("./chunk-38fng3kx.js").hasBackgroundFlag($l3) : false;
+  if ($l78.length > 0 || $l79) {
+    if ($l7("cli_bg_path"), $m_de($l3)) console.error($l78.length > 0 ? `--desktop can't be combined with \`claude ${$l78[0]}\`.` : "--desktop opens the Claude Desktop app and can't run in the background (`--bg`, `--background`, `--routine`)."), process.exit(1);
+    if ($l76 > 0) {
+      let [{ eagerParseCliFlag: $l80 }, { loadSettingsFromFlag: $l81, loadManagedSettingsFromFlag: $l82 }] = await Promise.all([import("./chunk-38fng3kx.js"), import("./chunk-23a2b5p2.js")]), $l83 = $l3.slice(0, $l76), $l84 = $l80("--settings", $l83);
+      if ($l84) $l81($l84);
+      let $l85 = $l80("--managed-settings", $l83);
+      if ($l85) $l82($l85);
+    }
+    let { loadFastPathPolicy: $l86 } = await import("./chunk-3nrrbnwj.js"), { sessionFactsRestored: $l87 } = await import("./chunk-e1t68bkb.js"), $l88 = null, $l89 = ["logs", "stop", "kill", "rm"].includes($l78[0] ?? "");
+    {
+      let $l90 = await $l86($l9);
+      if ($l90) if ($l89) process.stderr.write(`${$l90}
+`);
+      else {
+        let { exitWithError: $l91 } = await import("./chunk-0nyqbskw.js");
+        $l91($l90);
+      }
+      if ($l88 = await $l87($l9), $l88 !== null && !$l89) {
+        let { exitWithError: $l92 } = await import("./chunk-0nyqbskw.js");
+        $l92($l88.reason);
+      }
+    }
+    let $l93 = $l88 === null;
+    if ($l88 !== null) process.stderr.write(`${$l88.reason}
+`);
+    let $l94 = await import("./chunk-phqgyrcs.js");
+    if (await $l94.ensureFleetGateHydrated({ kickGrowthBook: $l93 && !$l89 }), !$l94.isAgentsFleetEnabled()) {
+      let $l95 = $l78[0] ?? $l3.find(($l96) => $l96 === "--bg" || $l96 === "--background" || $l96 === "--routine" || $l96.startsWith("--routine=")) ?? "--bg";
+      return $l94.fleetGateRejected($l95);
+    }
+    let [$l97, { pinStorageV5: $l98 }, { initDefaultDebugLog: $l99 }, { seedInstallIDs: $l100, watchGlobalConfigThroughStorage: $l101 }] = await Promise.all([import("./chunk-9g7s2b9q.js"), import("./chunk-d9a70tfc.js"), import("./chunk-gnm4wmxr.js"), import("./chunk-8h7dcktb.js")]), $l102 = $l98($l9);
+    if ($m_z() && $l102 !== void 0) {
+      $l99({ storageV5: $l102 }), $l101($l102);
+      let [{ credentialsStoreFor: $l103 }, { setGrowthBookCredentials: $l104, setGrowthBookStorageBackend: $l105 }, { composePolicyLimitsClient: $l106, primePolicyLimitsCache: $l107 }, { primeFastPathCredentials: $l108 }] = await Promise.all([import("./chunk-4h5rct70.js"), import("./chunk-qnw606xc.js"), import("./chunk-md9pmek4.js"), import("./chunk-q0dc9ygk.js")]), $l109 = $l103($l102);
+      $l104($l109), $l105($l102), $l106({ storageV5: $l102, credentials: $l109 }), await $l108($l109), await $l107($l102), await $l100($l102);
+    }
+    switch ($l78[0]) {
+      case "logs":
+      case "attach":
+      case "stop":
+      case "kill":
+      case "respawn":
+      case "rm": {
+        let [{ initializeAnalyticsSink: $l110 }, { initialize1PEventLogging: $l111, shutdown1PEventLogging: $l112 }, { shutdownDatadog: $l113 }, { sleep: $l114 }] = await Promise.all([import("./chunk-6qs57ffd.js"), import("./chunk-yybky31w.js"), import("./chunk-wma8vthz.js"), import("./chunk-d78qykqg.js")]);
+        if ($l93) $l110(), $l111($l102);
+        if ($l78[0] === "logs") await $l97.logsHandler($l78[1], $l102);
+        else if ($l78[0] === "attach") await $l97.attachHandler($l78[1], $l102);
+        else if ($l78[0] === "respawn") await $l97.respawnHandler($l78[1], $l102);
+        else if ($l78[0] === "rm") await $l97.rmHandler($l78[1], $l102, void 0, $l93);
+        else await $l97.stopHandler($l78[1], $l102, $l93);
+        return await Promise.race([Promise.all([$l112(), $l113()]), $l114(500, void 0, { unref: true })]).catch(() => {
+        }), process.exit(process.exitCode ?? 0);
+      }
+      default: {
+        let [{ initializeAnalyticsSink: $l115 }, { initialize1PEventLogging: $l116, shutdown1PEventLogging: $l117 }, { shutdownDatadog: $l118 }, { logEvent: $l119 }, { sleep: $l120 }] = await Promise.all([import("./chunk-6qs57ffd.js"), import("./chunk-yybky31w.js"), import("./chunk-wma8vthz.js"), import("./chunk-2heazea0.js"), import("./chunk-d78qykqg.js")]);
+        $l115(), $l116($l102), $l119("tengu_background", { via_flag: true, via: $m_b("flag") }), await $l97.handleBgFlag($l3, $l102), await Promise.race([Promise.all([$l117(), $l118()]), $l120(500, void 0, { unref: true })]).catch(() => {
+        }), process.exit(process.exitCode ?? 0);
+      }
+    }
+    return;
+  }
+  let $l121 = $m_Qht($l3);
+  $l121.config.restricted ||= ["1", "true", "yes", "on"].includes((process.env.CLAUDE_CODE_RESTRICTED ?? "").toLowerCase().trim());
+  let { dispatchDefaults: $l122, rest: $l123 } = $m_Ge($l121.rest), $l124 = $l121.hasAgentsPositional && $m_pe($l123), $l125;
+  if (($l124 || ($m_pe($l3) || $l125 !== void 0) && process.stdin.isTTY) && process.stdout.isTTY) {
+    let { startCapturingEarlyInput: $l126, consumeEarlyInput: $l127 } = await import("./chunk-jxz9t39q.js");
+    $l126();
+    let [{ startMdmRawRead: $l128 }, { startKeychainPrefetch: $l129 }] = await Promise.all([import("./chunk-s11r57vr.js"), import("./chunk-9bys4f6d.js")]);
+    $l128(), $l129();
+    let { enableConfigs: $l130, getGlobalConfig: $l131, seedInstallIDs: $l132 } = await import("./chunk-8h7dcktb.js"), $l133 = false, $l134 = false, $l135 = false;
+    try {
+      await $l130($m_z() ? $l9?.backend : void 0), $l134 = $l131().defaultToAgentsView === true, $l133 = $l124 || $l134 && $l125 === void 0;
+    } catch {
+    }
+    if ($l133) {
+      if ($l121.config.settings || $l121.config.managedSettings) {
+        let { loadSettingsFromFlag: $l136, loadManagedSettingsFromFlag: $l137 } = await import("./chunk-23a2b5p2.js");
+        if ($l121.config.settings) $l136($l121.config.settings);
+        if ($l121.config.managedSettings) $l137($l121.config.managedSettings);
+      }
+      if ($l121.config.pluginDir.length > 0 || $l121.config.pluginDirNoMcp.length > 0) {
+        let [{ setInlinePlugins: $l138, setInlinePluginsNoMcp: $l139 }, { clearPluginCache: $l140 }] = await Promise.all([import("./chunk-72vwyp9d.js"), import("./chunk-1nh9kps4.js")]);
+        $l138($l121.config.pluginDir), $l139($l121.config.pluginDirNoMcp), $l140("claude agents --plugin-dir");
+      }
+      let { loadFastPathPolicy: $l141 } = await import("./chunk-3nrrbnwj.js"), $l142 = await $l141($l9);
+      if ($l142) {
+        let { exitWithError: $l143 } = await import("./chunk-0nyqbskw.js");
+        $l143($l142);
+      }
+      let $l144;
+      if (process.env.CLAUDE_CODE_PLUGIN_DIRS?.trim()) {
+        let [{ mergePluginDirs: $l145, PLUGIN_DIRS_ENV_RECOVERY_HINT: $l146, PLUGIN_DIRS_ENV_VAR: $l147, settlePluginDirsEnv: $l148, withoutPluginDirs: $l149 }, { setInlinePlugins: $l150 }, { clearPluginCache: $l151 }] = await Promise.all([import("./chunk-11hjxkdd.js"), import("./chunk-72vwyp9d.js"), import("./chunk-1nh9kps4.js")]), $l152 = $l149($l148(), $l121.config.pluginDirNoMcp);
+        if ($l152.length > 0) $l144 = { name: $l147, hint: $l146 }, $l150($l145($l121.config.pluginDir, $l152)), $l151("claude agents CLAUDE_CODE_PLUGIN_DIRS");
+      }
+      {
+        let { areSideloadFlagsDisabledByPolicy: $l153, sideloadFlagsBlockedMessage: $l154 } = await import("./chunk-rkhrs5tk.js");
+        if ($l153()) {
+          let $l155 = [];
+          if ($l121.config.pluginDir.length > 0) $l155.push("--plugin-dir");
+          if ($l121.config.pluginDirNoMcp.length > 0) $l155.push("--plugin-dir-no-mcp");
+          if ($l144) $l155.push($l144.name);
+          if ($l155.length > 0) {
+            let { exitWithError: $l156 } = await import("./chunk-0nyqbskw.js");
+            $l156($l144 ? `${$l154($l155)} ${$l144.hint}` : $l154($l155));
+          }
+        }
+      }
+      let { isAgentsFleetEnabled: $l157, ensureFleetGateHydrated: $l158, fleetGateRejected: $l159, consumeAgentViewRelaunchMarker: $l160 } = await import("./chunk-phqgyrcs.js");
+      if (await $l158({ kickGrowthBook: false }), $l133 && $l157()) {
+        let { sessionFactsRestored: $l161 } = await import("./chunk-e1t68bkb.js"), $l162 = await $l161($l9);
+        if ($l162 !== null) {
+          let { exitWithError: $l163 } = await import("./chunk-0nyqbskw.js");
+          $l163($l162.reason);
+        }
+        let [{ applyFleetViewHostWindowsEnv: $l164 }, { createRoot: $l165 }, { getBaseRenderOptions: $l166 }, { resolve: $l167 }, { getRootSession: $l168, setCliSessionConfigCarried: $l169, setIsInteractive: $l170, setRestrictedSession: $l171, setSessionStartType: $l172 }, { cliCarriesSessionConfig: $l173 }, { pinStorageV5: $l174 }, { appliedSettingSourcesFlagValue: $l175 }] = await Promise.all([import("./chunk-jav4q525.js"), import("./chunk-cp4eb01y.js"), import("./chunk-m0j6ht1s.js"), import("path"), import("./chunk-72vwyp9d.js"), import("./chunk-zv9ma9fz.js"), import("./chunk-d9a70tfc.js"), import("./chunk-8xbsjfqq.js")]), $l176 = { ...$l121.config, settingSources: $l175() }, $l177 = $l174($l9), $l178;
+        if ($m_z() && $l177 !== void 0) {
+          let [{ credentialsStoreFor: $l179 }, { setGrowthBookCredentials: $l180, setGrowthBookStorageBackend: $l181 }, { primeFastPathCredentials: $l182 }] = await Promise.all([import("./chunk-4h5rct70.js"), import("./chunk-qnw606xc.js"), import("./chunk-q0dc9ygk.js")]);
+          $l178 = $l179($l177), $l180($l178), $l181($l177), await $l182($l178), await $l132($l177);
+        }
+        import("./chunk-bke9nrvh.js").then(({ resolveSetting: $l183 }) => {
+          let { value: $l184 } = $l183("theme", "dark");
+          if ($l184.startsWith("custom:")) import("./chunk-2z2tjv2p.js").then(($l185) => $l185.loadCustomThemes($l177));
+        });
+        let $l186 = $l160();
+        $l170(true), $l169($l173({ ...$l176, ...$l122 })), $l171($l121.config.restricted), $l172("agents_view");
+        let $l187 = () => {
+        };
+        process.on("unhandledRejection", $l187);
+        let $l188 = Promise.resolve(), $l189 = () => {
+        }, $l190 = new Promise(($l191) => {
+          $l189 = $l191;
+        });
+        setImmediate(async () => {
+          if ($m_z() && $l177 !== void 0) try {
+            let [{ credentialsStoreFor: $l192 }, { composePolicyLimitsClient: $l193, primePolicyLimitsCache: $l194 }] = await Promise.all([import("./chunk-4h5rct70.js"), import("./chunk-md9pmek4.js")]);
+            $l193({ storageV5: $l177, credentials: $l192($l177) }), await $l194($l177);
+          } catch ($l195) {
+            import("./chunk-gnm4wmxr.js").then(({ logForDebugging: $l196 }) => $l196(`Policy limits: start-up composition on the agents path failed: ${$l195 instanceof Error ? $l195.message : String($l195)}`, { level: "warn" }));
+          }
+          $l188 = Promise.all([import("./chunk-eab83f1v.js"), import("./chunk-1ev8qxk0.js"), import("./chunk-6qs57ffd.js"), import("./chunk-yybky31w.js"), import("./chunk-2heazea0.js"), import("./chunk-hb9dv9yb.js"), import("./chunk-qnw606xc.js"), import("./chunk-9yaynd97.js"), import("./chunk-8h7dcktb.js"), import("./chunk-hkyhhbfj.js"), import("./chunk-wwh2e99a.js"), import("./chunk-gnm4wmxr.js")]).then(([{ setupGracefulShutdown: $l197 }, { initializeErrorLogSink: $l198 }, { initializeAnalyticsSink: $l199 }, { initialize1PEventLogging: $l200 }, { logEvent: $l201 }, { captureTeammateModeSnapshotIfEnabled: $l202 }, { initializeGrowthBook: $l203 }, { initializeTelemetryAfterTrust: $l204 }, { checkHasTrustDialogAccepted: $l205, watchGlobalConfigThroughStorage: $l206 }, { applyConfigEnvironmentVariables: $l207 }, { setRepoDetectionGuards: $l208 }, { initDefaultDebugLog: $l209 }]) => {
+            if ($l197({ storageV5: $l177, credentials: $l178 }), $l208({ trustProbe: $l205 }), $l203().catch(() => {
+            }), $l198(), $l199(), $l200($l177), $m_z() && $l177 !== void 0) $l209({ storageV5: $l177 }), $l206($l177);
+            return $l190.then(() => {
+              if ($l205()) $l207(), $l204($l177);
+            }), $l201("tengu_fleetview", { defaultToAgentsView: $l134, relaunch: $l186 }), $l202();
+          }).finally(() => process.off("unhandledRejection", $l187));
+          let $l210 = () => void import("./chunk-4gpmq523.js").then(($l211) => $l211.startBackgroundHousekeeping($l168().host, $l177));
+          Promise.all([import("./chunk-qnw606xc.js"), import("./chunk-8h7dcktb.js")]).then(([{ getFeatureValue_CACHED_MAY_BE_STALE: $l212 }, { checkHasTrustDialogAccepted: $l213 }]) => {
+            if ($l212("tengu_noble_wozniak", true)) $l190.then(() => {
+              if ($l213()) $l210();
+            });
+            else $l210();
+          });
+        }), $l127(), $l164();
+        let $l214 = $l122?.permissionMode === "bypassPermissions" || $l122?.allowBypass ? await import("./chunk-h95rbt03.js") : void 0;
+        $l214?.refuseBypassUnderRoot($l122);
+        let $l215 = $l214?.applyBypassPolicyGate($l122) ?? $l122, $l216 = await $l165($l166(false)), { ensureAgentsWorkspaceTrust: $l217, agentsTrustDecision: $l218 } = await import("./chunk-0qphg7qa.js");
+        if (await $l217($l216, $l218(), $l177), $l189(), $l214) await $l214.ensureAgentsBypassConsent($l216, $l215, $l177);
+        let $l219 = true;
+        try {
+          $l219 = require("./chunk-pngkkv4q.js").orgConfigGateFlagOnHand($l131(), process.env.CLAUDE_INTERNAL_FC_OVERRIDES);
+        } catch {
+        }
+        if ($l219 && (await import("./chunk-sd1qd7v3.js")).orgConfigGateFlagCouldArm()) {
+          let { enforceOrgConfigGateOnLaunchLane: $l220 } = await import("./chunk-06s2jqxw.js");
+          await $l220({ showBlockedScreen: () => import("./chunk-8yvh0g4t.js").then(($l221) => $l221.showOrgConfigBlockedScreen, () => {
+            return;
+          }), printMessage: async ($l222) => {
+            let { endInkWithError: $l223 } = await import("./chunk-f7c26z1s.js");
+            await $l223($l216, $l222);
+          } });
+        }
+        let $l224 = await import("./chunk-phqgyrcs.js"), $l225 = { cwdFilter: $l121.cwdFilter, dispatchExtraArgs: $m_Hle($m_Zht($l176, $l167)), dispatchDefaults: $l215, entryChannel: $l224.isListReturnRelaunch() ? "list_return" : $l124 ? "cli_agents" : "default_home", storageV5: $l177, credentials: $l178 };
+        {
+          let { mountFleetViewWithComposerBack: $l226 } = await import("./chunk-scmk9zvk.js");
+          await $l226($l216, $l225);
+        }
+        await $l188.catch(() => {
+        });
+        let { gracefulShutdown: $l227 } = await import("./chunk-eab83f1v.js");
+        await $l227(0, "other", { suppressResumeHint: true });
+        return;
+      }
+      if ($l124) return $l159("claude agents");
+    }
+  }
+  if ($l3[0] === "self-hosted-runner") {
+    $l7("cli_self_hosted_runner_path");
+    let $l228 = $l3[1];
+    if ($l228 === "orchestrator") {
+      let { selfHostedRunnerOrchestratorMain: $l229 } = await import("./chunk-wy7qph9c.js");
+      await $l229($l3.slice(2));
+      return;
+    }
+    if ($l228 === "setup") {
+      let { selfHostedRunnerSetupMain: $l230 } = await import("./chunk-2hqhnt2k.js");
+      await $l230($l3.slice(2), $l9);
+      return;
+    }
+    if ($l228 === "doctor") {
+      let { selfHostedRunnerDoctorMain: $l231 } = await import("./chunk-qx99q3fs.js");
+      await $l231($l3.slice(2), $l9);
+      return;
+    }
+    if ($l228 === "code-sign") {
+      let { selfHostedRunnerCodeSignMain: $l232 } = await import("./chunk-d3z6znh3.js");
+      await $l232($l3.slice(2));
+      return;
+    }
+    if ($l228 === "decode-token") {
+      let { selfHostedRunnerDecodeTokenMain: $l233 } = await import("./chunk-54amrmvs.js");
+      await $l233($l3.slice(2));
+      return;
+    }
+    let { selfHostedRunnerMain: $l234 } = await import("./chunk-r9e0m06y.js");
+    await $l234($l3.slice(1));
+    return;
+  }
+  if (($l3.includes("--tmux") || $l3.includes("--tmux=classic")) && ($l3.includes("-w") || $l3.includes("--worktree") || $l3.some(($l235) => $l235.startsWith("--worktree=")))) {
+    if ($l7("cli_tmux_worktree_fast_path"), $m_de($l3)) console.error("--desktop only opens the Claude Desktop app; it can't be combined with `--worktree` or `--tmux`."), process.exit(1);
+    let { eagerLoadSettings: $l236 } = await import("./chunk-23a2b5p2.js");
+    $l236();
+    let { loadFastPathPolicy: $l237 } = await import("./chunk-3nrrbnwj.js");
+    {
+      let $l238 = await $l237($l9);
+      if ($l238) {
+        let { exitWithError: $l239 } = await import("./chunk-0nyqbskw.js");
+        $l239($l238);
+      }
+    }
+    let { configureFastPathGlobalAgents: $l240 } = await import("./chunk-cq0hks85.js");
+    $l240();
+    let { isWorktreeModeEnabled: $l241 } = await import("./chunk-42hw59sx.js");
+    if ($l241()) {
+      let [{ execIntoTmuxWorktree: $l242 }, { pinStorageV5: $l243 }, { initDefaultDebugLog: $l244 }] = await Promise.all([import("./chunk-7kgakwyt.js"), import("./chunk-d9a70tfc.js"), import("./chunk-gnm4wmxr.js")]), $l245 = $l243($l9), $l246;
+      if ($m_z() && $l245 !== void 0) {
+        $l244({ storageV5: $l245 });
+        let [{ credentialsStoreFor: $l247 }, { setGrowthBookCredentials: $l248, setGrowthBookStorageBackend: $l249 }, { primeFastPathCredentials: $l250 }] = await Promise.all([import("./chunk-4h5rct70.js"), import("./chunk-qnw606xc.js"), import("./chunk-q0dc9ygk.js")]);
+        $l246 = $l247($l245), $l248($l246), $l249($l245), await $l250($l246);
+        let { seedInstallIDs: $l251 } = await import("./chunk-8h7dcktb.js");
+        await $l251($l245);
+      }
+      let $l252 = await $l242($l3, $l245, $l246);
+      if ($l252.handled) return;
+      let { exitWithError: $l253 } = await import("./chunk-0nyqbskw.js");
+      $l253($l252.error);
+    }
+  }
+  if ($l3.length === 1 && ($l3[0] === "--update" || $l3[0] === "--upgrade")) process.argv = [process.argv[0], process.argv[1], "update"];
+  let $l254 = $l3.indexOf("--");
+  if (($l254 === -1 ? $l3 : $l3.slice(0, $l254)).includes("--bare")) process.env.CLAUDE_CODE_SIMPLE = "1";
+  let { NON_REPL_SUBCOMMANDS: $l255, isMcpServeInvocation: $l256, isPluginEvalInvocation: $l257, isRemoteControlInvocation: $l258, isAgentsJsonInvocation: $l259, isProjectVerbInvocation: $l260 } = await import("./chunk-fh9552me.js");
+  if (!$l255.has(process.argv[2] ?? "") && !$l256(process.argv.slice(2)) && !$l257(process.argv.slice(2)) && !$l258(process.argv.slice(2)) && !$l259(process.argv.slice(2)) && !$l260(process.argv.slice(2))) {
+    let { startCapturingEarlyInput: $l261 } = await import("./chunk-jxz9t39q.js");
+    $l261();
+  }
+  let [{ startMdmRawRead: $l262 }, { startKeychainPrefetch: $l263 }] = await Promise.all([import("./chunk-s11r57vr.js"), import("./chunk-9bys4f6d.js")]);
+  $l262(), $l263(), $l7("cli_before_main_import"), (await import("./chunk-wrdjedjm.js")).configureZodForStartup();
+  let { main: $l264 } = await import("./chunk-bb4zvbgw.js");
+  $l7("cli_after_main_import"), await $l264($l9), $l7("cli_after_main_complete");
+}
+;

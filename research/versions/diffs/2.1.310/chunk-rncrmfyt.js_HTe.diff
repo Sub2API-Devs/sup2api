@@ -1,0 +1,549 @@
+# chunk-rncrmfyt.js:HTe -> chunk-j0tbz6ra.js:hRe
+diff --git "a/diffs\\chunk-rncrmfyt.js_HTe.old.js" "b/diffs\\chunk-rncrmfyt.js_HTe.new.js"
+index d12b6c4..e37936c 100644
+--- "a/diffs\\chunk-rncrmfyt.js_HTe.old.js"
++++ "b/diffs\\chunk-rncrmfyt.js_HTe.new.js"
+@@ -1,289 +1,323 @@
+ async function* SELF($l0, $l1, $l2) {
+-  let $l3 = $m_efr($l2), $l4 = $l2.clock ?? $m_Xd, $l5 = { model: $l2.model, ...$m_jo() && { fastMode: $l2.fastMode } }, $l6 = null, $l7 = $l2.initialConsecutive529Errors ?? 0, $l8, $l9 = 0, $l10 = $l2.modelCallRetries?.capacityWait ?? { spentMs: 0, usageLimitSpentMs: 0 }, $l11 = 0, $l12 = { open: void 0 }, $l13 = 0, $l14 = 0, $l15 = 0, $l16 = $l2.noResponseRetryLedger ?? { count: 0 }, $l17 = 0, $l18 = 0, $l19 = 0, $l20 = 0, $l21 = 0, $l22, $l23 = false, $l24, $l25, $l26 = /* @__PURE__ */ new Set(), $l27 = false, $l28 = false, $l29 = { count: 0 }, $l30 = $l2.lowPriorityWait ?? $m_ILr(), $l31 = $l2.lowPriorityWait === void 0, $l32 = $m_PFr(), $l33 = $m_IFr();
++  let $l3 = $m_efr($l2), $l4 = $l3, $l5 = $l2.clock ?? $m_Xd, $l6 = { model: $l2.model, ...$m_jo() && { fastMode: $l2.fastMode } }, $l7 = null, $l8 = $l2.initialConsecutive529Errors ?? 0, $l9, $l10 = 0, $l11 = $l2.modelCallRetries?.capacityWait ?? { spentMs: 0, usageLimitSpentMs: 0 }, $l12 = 0, $l13 = false, $l14 = 0, $l15 = false, $l16 = { open: void 0 }, $l17 = 0, $l18 = 0, $l19 = 0, $l20 = $l2.noResponseRetryLedger ?? { count: 0 }, $l21 = 0, $l22 = 0, $l23 = 0, $l24 = 0, $l25 = 0, $l26, $l27 = false, $l28, $l29, $l30 = /* @__PURE__ */ new Set(), $l31 = false, $l32 = false, $l33 = { count: 0 }, $l34 = $l2.lowPriorityWait ?? $m_ILr(), $l35 = $l2.lowPriorityWait === void 0, $l36 = $m_PFr(), $l37 = $m_IFr();
+   try {
+-    let $l34 = $m_pJe($l2);
+-    if ($l34 !== void 0 && $m_Uyt($l2.model)) throw new $m_pD($l2.model, $l34, "permission_denied", $m_lqs($l2.model));
+-    for (let $l35 = 1; $l35 <= $l3 + 1; $l35++) {
++    let $l38 = $m_pJe($l2);
++    if ($l38 !== void 0 && $m_Uyt($l2.model)) throw new $m_pD($l2.model, $l38, "permission_denied", $m_lqs($l2.model));
++    for (let $l39 = 1; $l39 <= $l4 + 1; $l39++) {
+       if ($l2.signal?.aborted) throw new $m_cu();
+-      if ($l2.modelCallRetries?.takeApiAttempt() === false) throw new $m_Wc(new $m_yke(), $l5);
+-      let $l36 = $l4.now();
+-      if ($l28 = false, $l5.fastMode && $m_lun($l5.model)) $l5.fastMode = false;
+-      let $l37 = $m_jo() ? $l5.fastMode && !$m_AGe() : false, $l38 = Math.min($l35 + $l9, $l3 + 1);
++      if ($l2.modelCallRetries?.takeApiAttempt() === false) throw new $m_Wc(new $m_yke(), $l6);
++      let $l40 = $l5.now();
++      if ($l32 = false, $l6.fastMode && $m_lun($l6.model)) $l6.fastMode = false;
++      let $l41 = $m_jo() ? $l6.fastMode && !$m_AGe() : false, $l42 = Math.min($l39 + $l10, $l4 + 1);
+       try {
+-        let $l39 = $m_Wcr($l8);
+-        if ($l39) $m_t("Stale connection \u2014 disabling keep-alive for retry"), $m_sKo();
+-        let $l40 = false;
+-        if ($m_Gcr($l8)) {
+-          let $l41 = await $m_zcr(!$l23);
+-          if ($l40 = $l41.attempted, $l41.reportedFailure) $l23 = true;
++        let $l43 = $m_Wcr($l9);
++        if ($l43) $m_t("Stale connection \u2014 disabling keep-alive for retry"), $m_sKo();
++        let $l44 = false;
++        if ($m_Gcr($l9)) {
++          let $l45 = await $m_zcr(!$l27);
++          if ($l44 = $l45.attempted, $l45.reportedFailure) $l27 = true;
+         }
+-        let $l42 = $l24 !== void 0 && Boolean($m_a.CLAUDE_CODE_REMOTE_SESSION_ID) && $m_Ucr($l24);
+-        if ($l42) $m_t("Credential rotated since the client was built \u2014 rebuilding before retry");
+-        if ($l6 === null || $l42 || $m_imn($l8, $l5.model) || $l39 || $l40) {
+-          if ($l8 instanceof $m_Ot && $l8.status === 401 || $m_Hne($l8) || $m__ve() && ($m_bJe($l8, $l5.model) || $m_cK($l8))) {
+-            if (!$m_Xle() && $m_nc()) await $m_f0o($l6?.authToken);
+-            if ($l24) {
+-              let $l43;
+-              await $m_mS($l24, $l2.credentials, $l2.storageV5, { onForcedRefreshOutcome: ($l44) => {
+-                $l43 = $l44;
++        let $l46 = $l28 !== void 0 && Boolean($m_a.CLAUDE_CODE_REMOTE_SESSION_ID) && $m_Ucr($l28);
++        if ($l46) $m_t("Credential rotated since the client was built \u2014 rebuilding before retry");
++        if ($l7 === null || $l46 || $m_imn($l9, $l6.model) || $l43 || $l44) {
++          if ($l9 instanceof $m_Ot && $l9.status === 401 || $m_Hne($l9) || $m__ve() && ($m_bJe($l9, $l6.model) || $m_cK($l9))) {
++            if (!$m_Xle() && $m_nc()) await $m_f0o($l7?.authToken);
++            if ($l28) {
++              let $l47;
++              await $m_mS($l28, $l2.credentials, $l2.storageV5, { onForcedRefreshOutcome: ($l48) => {
++                $l47 = $l48;
+               } });
+-              let $l45 = $m_tTe();
+-              if ($l45) throw $m_m("api_request", "api_request_account_on_hold"), new $m_Wc(new $m_nye($l45.url), $l5);
+-              if ($m_Mn()?.accessToken === $l24) {
+-                if ($m_NAe() !== null || !$m_fB($l8) && ++$l17 >= $m_Icr) {
+-                  if ($l43 === "lock_disk_full" && $m_jcr($l8)) throw $m_m("api_request", "api_request_oauth_refresh_disk_full"), new $m_Wc(new $m_pK(), $l5);
+-                  throw $m_m("api_request", "api_request_oauth_refresh_exhausted"), new $m_Wc($l8, $l5);
++              let $l49 = $m_tTe();
++              if ($l49) throw $m_m("api_request", "api_request_account_on_hold"), new $m_Wc(new $m_nye($l49.url), $l6);
++              if ($m_Mn()?.accessToken === $l28) {
++                if ($m_NAe() !== null || !$m_fB($l9) && ++$l21 >= $m_Icr) {
++                  if ($l47 === "lock_disk_full" && $m_jcr($l9)) throw $m_m("api_request", "api_request_oauth_refresh_disk_full"), new $m_Wc(new $m_pK(), $l6);
++                  throw $m_m("api_request", "api_request_oauth_refresh_exhausted"), new $m_Wc($l9, $l6);
+                 }
+-              } else $l17 = 0;
+-            } else if ($m__ve() && process.env[$m_yut()] !== $l25) $m_t("Host credential replaced since the client was built \u2014 retrying with it");
++              } else $l21 = 0;
++            } else if ($m__ve() && process.env[$m_yut()] !== $l29) $m_t("Host credential replaced since the client was built \u2014 retrying with it");
+             else if ($m__ve()) {
+-              let $l46 = null, $l47, $l48 = false, $l49 = false;
++              let $l50 = null, $l51, $l52 = false, $l53 = false;
+               try {
+-                ({ authToken: $l46, materialUnchanged: $l47 } = await $m_vKe()());
+-              } catch ($l50) {
+-                if ($m_t(`host getHostAuthToken callback failed: ${$m_d($l50)}`, { level: "error" }), $l50 instanceof $m_Cd) throw new $m_Wc($l8, $l5);
+-                if ($m_Ke($l50)) $l49 = true;
+-                else $l48 = true, $m_m("host_auth_recovery", "callback_failed");
++                ({ authToken: $l50, materialUnchanged: $l51 } = await $m_vKe()());
++              } catch ($l54) {
++                if ($m_t(`host getHostAuthToken callback failed: ${$m_awo($l54)}`, { level: "error" }), $l54 instanceof $m_Cd) throw new $m_Wc($l9, $l6);
++                if ($m_Ke($l54)) $l53 = true;
++                else $l52 = true, $m_m("host_auth_recovery", "callback_failed");
+               }
+-              let $l51 = ($l52) => {
+-                if (++$l18 >= $m_Dcr) throw $m_m("host_auth_recovery", $l52), $m_m("api_request", "api_request_host_auth_exhausted"), new $m_Wc($l8, $l5);
++              let $l55 = ($l56) => {
++                if (++$l22 >= $m_Dcr) throw $m_m("host_auth_recovery", $l56), $m_m("api_request", "api_request_host_auth_exhausted"), new $m_Wc($l9, $l6);
+               };
+-              if ($l48) ;
+-              else if ($l49) $l51("callback_aborted");
+-              else if (typeof $l46 === "string" && $l46 && $l46 !== $l25) process.env[$m_yut()] = $l46, $m_DB(), $l18 = 0, $m_g("host_auth_recovery");
+-              else if ($l46 === null) if ($l47 === true) $l51("material_unchanged");
+-              else $l18 = 0, $m_g("host_auth_recovery");
+-              else $l51("bearer_unchanged");
+-            } else if (($m_a.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST && $m_Xn() || $m_Pun()) && !$m_nc() && $m_na().source !== "apiKeyHelper" && !$m_fB($l8)) throw $m_m("api_request", "api_request_host_managed_auth_fail"), new $m_Wc($l8, $l5);
++              if ($l52) ;
++              else if ($l53) $l55("callback_aborted");
++              else if (typeof $l50 === "string" && $l50 && $l50 !== $l29) process.env[$m_yut()] = $l50, $m_DB(), $l22 = 0, $m_NRs("host_auth_recovery");
++              else if ($l50 === null) if ($l51 === true) $l55("material_unchanged");
++              else $l22 = 0, $m_NRs("host_auth_recovery");
++              else $l55("bearer_unchanged");
++            } else if (($m__d() && $m_Xn() || $m_Pun()) && !$m_nc() && $m_na().source !== "apiKeyHelper" && !$m_fB($l9)) throw $m_m("api_request", "api_request_host_managed_auth_fail"), new $m_Wc($l9, $l6);
+           }
+-          $l25 = process.env[$m_yut()], $l6 = await $l0(), $l24 = $m_ll() ? $m_Mn()?.accessToken : void 0;
++          $l29 = process.env[$m_yut()], $l7 = await $l0(), $l28 = $m_ll() ? $m_Mn()?.accessToken : void 0;
+         }
+-        $l28 = $m_sa() && $m_EJe();
+-        let $l53 = await $l1($l6, $l38, $l5);
+-        if ($m_g("api_request"), $m_iqs($l2.model), !$m_PGe() && !$m_oqs($l2.model) && !$m_SQe() && $m_J3n($l2.model, $m_VWn, $m_Lve)) $m_t(`[model-access] now using ${$l2.model} as its tier's default: every newer model of the tier was refused, is not allowed, or was skipped because of its context window`), $m_YWn($l2.model, "ok");
+-        if ($l31) $m_f6n($l30);
+-        return $l53;
+-      } catch ($l54) {
+-        if ($l54 instanceof $m_Wc) throw $l54;
+-        if ($l54 instanceof $m_cu) throw $l54;
+-        if ($m_Q7e($l54)) throw $m_m("api_request", "api_request_dlp_denied"), new $m_Wc($l54, $l5);
+-        if ($m_Mze($l54)) throw $m_m("api_request", "api_request_safety_monitor_blocked"), new $m_Wc($l54, $l5);
+-        if ($m_ZP($l54)) throw $m_m("api_request", "api_request_output_content_filtered"), new $m_Wc($l54, $l5);
+-        if ($m_eun($l54)) throw $m_m("api_request", "api_request_verification_required"), new $m_Wc($l54, $l5);
+-        if ($m_bX($l54)) throw $m_m("api_request", "api_request_regime_features_refused"), new $m_Wc($l54, $l5);
+-        if ($l2.modelCallRetries?.outOfApiAttempts()) throw $m_m("api_request", "api_request_attempts_exhausted"), new $m_Wc($l54, $l5);
+-        if ($l8 = $l54, $m_t(`API error (attempt ${$l38}/${$l3 + 1}): ${$l54 instanceof $m_Ot ? `${$l54.status} ${$l54.message}` : $m_d($l54)}`, { level: "error" }), $m_dmn($l54) !== void 0) {
+-          if (!$m_G6() && $l16.count >= $m_gmn) throw $m_m("api_request", "api_request_no_response_exhausted"), new $m_Wc($l54, $l5);
+-          $l16.count++;
++        $l32 = $m_sa() && $m_EJe();
++        let $l57 = await $l1($l7, $l42, $l6);
++        if ($m_NRs("api_request"), $l15) $m_NRs("api_reconnect"), $l15 = false;
++        if ($m_iqs($l2.model), !$m_PGe() && !$m_oqs($l2.model) && !$m_SQe() && $m_J3n($l2.model, $m_VWn, $m_Lve)) $m_t(`[model-access] now using ${$l2.model} as its tier's default: every newer model of the tier was refused, is not allowed, or was skipped because of its context window`), $m_YWn($l2.model, "ok");
++        if ($l35) $m_f6n($l34);
++        return $l57;
++      } catch ($l58) {
++        if ($l58 instanceof $m_Wc) throw $l58;
++        if ($l58 instanceof $m_cu) throw $l58;
++        if ($m_Q7e($l58)) throw $m_m("api_request", "api_request_dlp_denied"), new $m_Wc($l58, $l6);
++        if ($m_Mze($l58)) throw $m_m("api_request", "api_request_safety_monitor_blocked"), new $m_Wc($l58, $l6);
++        if ($m_ZP($l58)) throw $m_m("api_request", "api_request_output_content_filtered"), new $m_Wc($l58, $l6);
++        if ($m_eun($l58)) throw $m_m("api_request", "api_request_verification_required"), new $m_Wc($l58, $l6);
++        if ($m_bX($l58)) throw $m_m("api_request", "api_request_regime_features_refused"), new $m_Wc($l58, $l6);
++        if ($NEW_chunk_bbw420pv_js_a1r($l58)) {
++          let $l59 = $m_Mbt($l58) && !$l2.modelCallRetries?.outOfApiAttempts() ? $l2.fallbackModel ?? ($m_Sd($l2.model) === "firstParty" ? $m_pJe($l2) : void 0) : void 0;
++          if ($l59 && $l59 !== $l2.model) throw $m_i("tengu_api_model_not_found_fallback_triggered", { original_model: $m_Et($l2.model), fallback_model: $m_Et($l59), provider: $m_gA(), reason: $m_h("permission_denied") }), new $m_pD($l2.model, $l59, "permission_denied", $l58);
++          throw $m_m("api_request", "api_request_route_answer_final"), new $m_Wc($l58, $l6);
+         }
+-        let $l55, $l56 = $m_a.CLAUDE_CODE_NONSTREAMING_TIMEOUT_RETRIES ?? ($m_G6() && $l2.failedStreamOutlastedTimeout ? $m_Ncr : void 0);
+-        if ($l56 !== void 0 && $l2.nonStreamingTimeoutMs !== void 0 && $l54 instanceof $m_OA && $l4.now() - $l36 >= $l2.nonStreamingTimeoutMs * $m_Lcr) {
+-          if ($l13 >= $l56) throw $m_m("api_request", "api_request_nonstreaming_timeout_exhausted"), new $m_Wc($l54, $l5);
+-          $l13++, $l55 = $l56 - $l13;
++        if ($l2.modelCallRetries?.outOfApiAttempts()) throw $m_m("api_request", "api_request_attempts_exhausted"), new $m_Wc($l58, $l6);
++        if ($l9 = $l58, $m_t(`API error (attempt ${$l42}/${$l4 + 1}): ${$l58 instanceof $m_Ot ? `${$l58.status} ${$l58.message}` : $m_awo($l58)}`, { level: "error" }), $m_dmn($l58) !== void 0) {
++          if (!$NEW_chunk_j0tbz6ra_js_zb() && $l20.count >= $m_gmn) throw $m_m("api_request", "api_request_no_response_exhausted"), new $m_Wc($l58, $l6);
++          $l20.count++;
+         }
+-        let $l57 = await $l2.onError?.($l54);
+-        if ($l57 && !$l26.has($l57)) {
+-          $l26.add($l57);
+-          let $l58 = $m_uJe($l54, $l5.model);
+-          if ($l58?.noResponse) {
+-            $l27 = true;
+-            let $l59 = $m_lmn($l58, $l35, $l3, $l16.count);
+-            $l2.onRetryStatus?.({ kind: "retrying", error: $l58, attempt: $l35, maxRetries: $l59, retryInMs: 0, deadline: $l4.now() }), yield $m_N2($l58, 0, $l35, $l59, "request_retry");
++        let $l60, $l61 = $m_a.CLAUDE_CODE_NONSTREAMING_TIMEOUT_RETRIES ?? ($NEW_chunk_j0tbz6ra_js_zb() && $l2.failedStreamOutlastedTimeout ? $m_Ncr : void 0);
++        if ($l61 !== void 0 && $l2.nonStreamingTimeoutMs !== void 0 && $l58 instanceof $m_OA && $l5.now() - $l40 >= $l2.nonStreamingTimeoutMs * $m_Lcr) {
++          if ($l17 >= $l61) throw $m_m("api_request", "api_request_nonstreaming_timeout_exhausted"), new $m_Wc($l58, $l6);
++          $l17++, $l60 = $l61 - $l17;
++        }
++        let $l62 = await $l2.onError?.($l58);
++        if ($l62 && !$l30.has($l62)) {
++          $l30.add($l62);
++          let $l63 = $m_uJe($l58, $l6.model);
++          if ($l63?.noResponse) {
++            $l31 = true;
++            let $l64 = $m_lmn($l63, $l39, $l4, $l20.count);
++            $l2.onRetryStatus?.({ kind: "retrying", error: $l63, attempt: $l39, maxRetries: $l64, retryInMs: 0, deadline: $l5.now() }), yield $m_N2($l63, 0, $l39, $l64, "request_retry");
+           }
+-          $l35--;
++          $l39--;
+           continue;
+         }
+-        let $l60 = $m_DLr($l54, { markedAtDispatch: $l28, querySource: $l2.querySource, wait: $l30 });
+-        if ($l60 !== null) {
+-          $l27 = true, $l2.onRetryStatus?.({ kind: "low_priority_waiting", attempt: $l60.attempt, retryInMs: $l60.delayMs, deadline: $l4.now() + $l60.delayMs }), await $m_Y($l60.delayMs, $l2.signal, { abortError: $m_lZ, clock: $l4 }), $l35--;
++        let $l65 = $m_DLr($l58, { markedAtDispatch: $l32, querySource: $l2.querySource, wait: $l34 });
++        if ($l65 !== null) {
++          $l31 = true, $l2.onRetryStatus?.({ kind: "low_priority_waiting", attempt: $l65.attempt, retryInMs: $l65.delayMs, deadline: $l5.now() + $l65.delayMs }), await $m_Y($l65.delayMs, $l2.signal, { abortError: $m_lZ, clock: $l5 }), $l39--;
+           continue;
+         }
+-        if ($m_ODt($l2.model, $l54) === "refused") {
+-          $m_AW($l2.model, $l54), $m_YWn($l2.model, "refused");
+-          let $l61 = $m_lJe($l2);
+-          if ($l61 !== void 0) throw $m_i("tengu_api_model_not_found_fallback_triggered", { original_model: $m_Et($l2.model), fallback_model: $m_Et($l61), provider: $m_gA(), reason: $m_c("model_access_refused") }), new $m_pD($l2.model, $l61, "permission_denied", $l54);
+-          throw $m_qWn($l2.model, $l54, "refused"), new $m_Wc($l54, $l5);
++        if ($m_ODt($l2.model, $l58) === "refused") {
++          $m_AW($l2.model, $l58), $m_YWn($l2.model, "refused");
++          let $l66 = $m_lJe($l2);
++          if ($l66 !== void 0) throw $m_i("tengu_api_model_not_found_fallback_triggered", { original_model: $m_Et($l2.model), fallback_model: $m_Et($l66), provider: $m_gA(), reason: $m_h("model_access_refused") }), new $m_pD($l2.model, $l66, "permission_denied", $l58);
++          throw $m_qWn($l2.model, $l58, "refused"), new $m_Wc($l58, $l6);
+         }
+-        if ($m_ODt($l2.model, $l54) === "denied") {
+-          let $l62 = await $m_Kcr($l2.signal);
+-          if ($l62 !== void 0 && $l62 === $l22) {
++        if ($m_ODt($l2.model, $l58) === "denied") {
++          let $l67 = await $m_Kcr($l2.signal);
++          if ($l67 !== void 0 && $l67 === $l26) {
+             if ($l2.signal?.aborted) throw $m_lZ();
+-            let $l63 = $m_lJe($l2), $l64 = $l63 === void 0 ? void 0 : await $m_zEo($l63, $l62);
+-            if ($l63 !== void 0 && $l64 === "accessible" && $m_lJe($l2) === $l63) throw $m_AW($l2.model, $l54), $m_YWn($l2.model, "refused"), $m_i("tengu_api_model_not_found_fallback_triggered", { original_model: $m_Et($l2.model), fallback_model: $m_Et($l63), provider: $m_gA(), reason: $m_c("model_access_denied") }), new $m_pD($l2.model, $l63, "permission_denied", $l54);
+-            let $l65 = $l63 !== void 0 && $l64 === "refused" && $l2.fallbackModel === void 0;
+-            if ($l65) $m_AW($l63, $m_MJ($l63));
+-            if ($l63 === void 0 || $l65) $m_qWn($l2.model, $l54, "denied");
+-            throw new $m_Wc($l54, $l5);
++            let $l68 = $m_lJe($l2), $l69 = $l68 === void 0 ? void 0 : await $m_zEo($l68, $l67);
++            if ($l68 !== void 0 && $l69 === "accessible" && $m_lJe($l2) === $l68) throw $m_AW($l2.model, $l58), $m_YWn($l2.model, "refused"), $m_i("tengu_api_model_not_found_fallback_triggered", { original_model: $m_Et($l2.model), fallback_model: $m_Et($l68), provider: $m_gA(), reason: $m_h("model_access_denied") }), new $m_pD($l2.model, $l68, "permission_denied", $l58);
++            let $l70 = $l68 !== void 0 && $l69 === "refused" && $l2.fallbackModel === void 0;
++            if ($l70) $m_AW($l68, $m_MJ($l68));
++            if ($l68 === void 0 || $l70) $m_qWn($l2.model, $l58, "denied");
++            throw new $m_Wc($l58, $l6);
+           }
+-          $l22 = $l62;
+-        } else $l22 = void 0;
+-        let $l66 = $m_tDe($l54) || $m_Mbt($l54), $l67 = $l2.fallbackModel ?? ($l66 && $m_Sd($l2.model) === "firstParty" ? $m_pJe($l2) : void 0);
+-        if (($l66 || !$m_G6() && $m_yJe($l54)) && $l67 && $l67 !== $l2.model) {
+-          let $l68 = $m_tDe($l54) ? "model_not_found" : $m_Mbt($l54) ? "permission_denied" : "server_error";
+-          throw $m_i("tengu_api_model_not_found_fallback_triggered", { original_model: $m_Et($l2.model), fallback_model: $m_Et($l67), provider: $m_gA(), reason: $m_c($l68) }), new $m_pD($l2.model, $l67, $l68, $l54);
++          $l26 = $l67;
++        } else $l26 = void 0;
++        let $l71 = $m_tDe($l58) || $m_Mbt($l58), $l72 = $l2.fallbackModel ?? ($l71 && $m_Sd($l2.model) === "firstParty" ? $m_pJe($l2) : void 0);
++        if (($l71 || !$NEW_chunk_j0tbz6ra_js_zb() && $m_yJe($l58)) && $l72 && $l72 !== $l2.model) {
++          let $l73 = $m_tDe($l58) ? "model_not_found" : $m_Mbt($l58) ? "permission_denied" : "server_error";
++          throw $m_i("tengu_api_model_not_found_fallback_triggered", { original_model: $m_Et($l2.model), fallback_model: $m_Et($l72), provider: $m_gA(), reason: $m_h($l73) }), new $m_pD($l2.model, $l72, $l73, $l58);
+         }
+-        let $l69 = $m_FTe($l54), $l70 = $l69 && $l20 < $m_omn;
+-        if (!$l69 && !$m_fB($l54) && $l54 instanceof $m_Ot && ($l54.status !== void 0 || $m_GW($l54)) && $m_mJe($l54) === void 0) $l20 = 0, $l11 = 0;
+-        let $l71 = $m_G6();
+-        if ($l37 && $l54 instanceof $m_Ot && ($l54.status === 429 || $m_GW($l54))) {
+-          let $l72 = $l54.headers?.get("anthropic-ratelimit-unified-overage-disabled-reason");
+-          if ($l72 !== null && $l72 !== void 0) {
+-            if ($m_vVs($l72, $l2.storageV5), $l5.fastMode = false, $l71) $l35--;
++        let $l74 = $m_FTe($l58), $l75 = $l74 && $l24 < $m_omn;
++        if (!$l74 && !$m_fB($l58) && $l58 instanceof $m_Ot && ($l58.status !== void 0 || $m_GW($l58)) && $m_mJe($l58) === void 0) $l24 = 0, $l14 = 0;
++        let $l76 = $m_G6();
++        if ($l41 && $l58 instanceof $m_Ot && ($l58.status === 429 || $m_GW($l58))) {
++          let $l77 = $l58.headers?.get("anthropic-ratelimit-unified-overage-disabled-reason");
++          if ($l77 !== null && $l77 !== void 0) {
++            if ($m_vVs($l77, $l2.storageV5), $l6.fastMode = false, $l76) $l39--;
+             continue;
+           }
+-          let $l73 = $m_ofr($l54), $l74 = $l73 !== null && $l73 < $m_cJe;
+-          if ($l74 && !$l71) {
+-            if ($l35 <= $l3) {
+-              let $l75 = Math.min($m_PF($l35, $m_fJe($l54), $m_cJe, $l2.random), $m_cJe), $l76 = $m_uJe($l54, $l5.model);
+-              if ($l76) $l27 = true, $l2.onRetryStatus?.({ kind: "retrying", error: $l76, attempt: $l35, maxRetries: $l3, retryInMs: $l75, deadline: $l4.now() + $l75 }), yield $m_N2($l76, $l75, $l35, $l3, "request_retry");
+-              await $m_amn($l75, $l2);
++          let $l78 = $m_ofr($l58), $l79 = $l78 !== null && $l78 < $m_cJe;
++          if ($l79 && !$l76) {
++            if ($l39 <= $l4) {
++              let $l80 = Math.min($m_PF($l39, $m_fJe($l58), $m_cJe, $l2.random), $m_cJe), $l81 = $m_uJe($l58, $l6.model);
++              if ($l81) $l31 = true, $l2.onRetryStatus?.({ kind: "retrying", error: $l81, attempt: $l39, maxRetries: $l4, retryInMs: $l80, deadline: $l5.now() + $l80 }), yield $m_N2($l81, $l80, $l39, $l4, "request_retry");
++              await $m_amn($l80, $l2);
+             }
+             continue;
+           }
+-          if (!$l74) {
+-            let $l77 = Math.max($l73 ?? $m_tfr, $m_nfr), $l78 = $m_GW($l54) ? "overloaded" : "rate_limit";
+-            if ($m_yVs(Date.now() + $l77, $l78), $m_jo()) $l5.fastMode = false;
+-            if ($l71) $l35--;
++          if (!$l79) {
++            let $l82 = Math.max($l78 ?? $m_tfr, $m_nfr), $l83 = $m_GW($l58) ? "overloaded" : "rate_limit";
++            if ($m_yVs(Date.now() + $l82, $l83), $m_jo()) $l6.fastMode = false;
++            if ($l76) $l39--;
+             continue;
+           }
+         }
+-        if ($l37 && $m_hJe($l54, $l5.model) && ($l2.modelIsRefusalFallbackTarget || $m_U$r($l5.model))) {
+-          if ($m_bVs($l5.model), $l5.fastMode = false, $l71) $l35--;
++        if ($l41 && $m_hJe($l58, $l6.model) && ($l2.modelIsRefusalFallbackTarget || $m_U$r($l6.model))) {
++          if ($m_bVs($l6.model), $l6.fastMode = false, $NEW_chunk_j0tbz6ra_js_zb()) $l39--;
+           continue;
+         }
+-        if ($l37 && $m_jTe($l54)) {
+-          if ($m__Vs($l2.storageV5), $l5.fastMode = false, $l71) $l35--;
++        if ($l41 && $m_jTe($l58)) {
++          if ($m__Vs($l2.storageV5), $l6.fastMode = false, $NEW_chunk_j0tbz6ra_js_zb()) $l39--;
+           continue;
+         }
+-        if ($m_K4t($l54, { model: $l5.model, carriesConfigSkips: true }, $l29)) {
+-          $l35--;
++        if ($m_K4t($l58, { model: $l6.model, carriesConfigSkips: true }, $l33)) {
++          $l39--;
+           continue;
+         }
+-        if ($m_GW($l54) && !$m_Dke($l2.querySource) && !$m_G6()) throw $m_i("tengu_api_529_background_dropped", { query_source: $m_os($l2.querySource) }), $m_m("api_request", "api_request_overload_background_dropped"), new $m_Wc($l54, $l5);
+-        let $l79 = $m_qe($l2.model);
+-        if ($m_GW($l54) && ($m_a.FALLBACK_FOR_ALL_PRIMARY_MODELS || $l2.fallbackModel !== void 0 || !$m_kt() && ($m_Kle($l79) || $m_IGe($l79) || $m_dBt($l79)))) {
+-          if ($l7++, $l7 >= $m_dZ) {
+-            if ($l2.fallbackModel) throw $m_i("tengu_api_opus_fallback_triggered", { original_model: $m_Et($l2.model), fallback_model: $m_Et($l2.fallbackModel), provider: $m_gA() }), $m_f("api_request", "api_request_fallback_triggered"), new $m_pD($l2.model, $l2.fallbackModel, "overloaded", $l54);
+-            if (!$m_a.IS_SANDBOX && !$m_G6()) throw $m_i("tengu_api_custom_529_overloaded_error", {}), $m_m("api_request", "api_request_overload_repeated"), new $m_Wc(Error($m_nke, { cause: $l54 }), $l5);
++        if ($m_GW($l58) && !$m_Dke($l2.querySource) && !$NEW_chunk_j0tbz6ra_js_zb()) throw $m_i("tengu_api_529_background_dropped", { query_source: $m_os($l2.querySource) }), $m_m("api_request", "api_request_overload_background_dropped"), new $m_Wc($l58, $l6);
++        let $l84 = $m_qe($l2.model);
++        if ($m_GW($l58) && ($m_a.FALLBACK_FOR_ALL_PRIMARY_MODELS || $l2.fallbackModel !== void 0 || !$m_kt() && ($m_Kle($l84) || $m_IGe($l84) || $m_dBt($l84)))) {
++          if ($l8++, $l8 >= $m_dZ) {
++            if ($l2.fallbackModel) throw $m_i("tengu_api_opus_fallback_triggered", { original_model: $m_Et($l2.model), fallback_model: $m_Et($l2.fallbackModel), provider: $m_gA() }), $m_dn("api_request", "api_request_fallback_triggered"), new $m_pD($l2.model, $l2.fallbackModel, "overloaded", $l58);
++            if (!$m_a.IS_SANDBOX && !$m_G6()) throw $m_i("tengu_api_custom_529_overloaded_error", {}), $m_m("api_request", "api_request_overload_repeated"), new $m_Wc(Error($m_nke, { cause: $l58 }), $l6);
+           }
+         }
+-        let $l80 = $m_G6() && $m_ymn($l54), $l81 = $l54 instanceof $m_Zu && $m_umn($l54) && ($l2.modelCallRetries?.sleptThroughLeft() ?? 0) > 0;
+-        if ($l35 > $l3 && !$l80 && !$l81) {
+-          let $l82 = !($l54 instanceof $m_Ot && $l54.status === 401) || $l24 !== void 0 || $m__ve() || $m_FTe($l54) || !$m_Xle() && $m_nc();
+-          if (!$m_imn($l54, $l5.model) || !$l82 || $l2.modelCallRetries?.takeCredentialRenewal() !== true) throw $m_m("api_request", "api_request_retry_exhausted"), new $m_Wc($l54, $l5);
+-          $l35--;
++        let $l85 = $m_G6() && $m_ymn($l58), $l86 = $l58 instanceof $m_Zu && $m_umn($l58) && ($l2.modelCallRetries?.sleptThroughLeft() ?? 0) > 0, $l87 = $NEW_chunk_x8k0r295_js_isr($l58);
++        if ($l87 && ($l2.modelCallRetries?.reconnectsLeft() ?? 0) > 0) $l4++;
++        if ($l39 > $l4 && !$l85 && !$l86) {
++          let $l88 = !($l58 instanceof $m_Ot && $l58.status === 401) || $l28 !== void 0 || $m__ve() || $m_FTe($l58) || !$m_Xle() && $m_nc();
++          if (!$m_imn($l58, $l6.model) || !$l88 || $l2.modelCallRetries?.takeCredentialRenewal() !== true) throw $m_m("api_request", "api_request_retry_exhausted"), new $m_Wc($l58, $l6);
++          $l39--;
+         }
+-        if ($m_fB($l54)) {
+-          if ($l11 >= $m_Mcr) throw $m_m("api_request", "api_request_ccr_auth_exhausted"), new $m_Wc($l54, $l5);
+-          $l11++;
++        if ($m_fB($l58)) {
++          if ($l14 >= $m_Mcr) throw $m_m("api_request", "api_request_ccr_auth_exhausted"), new $m_Wc($l58, $l6);
++          $l14++;
+         }
+-        let $l83, $l84 = $m_fK($l54);
+-        if ($m_IFr() > $l33 && ($l84 === "AWS" || !$m__ve() && $m__Je($l54, $l5.model))) throw $m_m("api_request", "api_request_aws_sign_in_failed"), new $m_Wc($l54, $l5);
+-        if ($l84 === "AWS" || !$m__ve() && $m_SJe($l54, $l5.model)) {
+-          if ($l14 >= $m_tmn) throw $m_m("api_request", "api_request_aws_auth_exhausted"), new $m_Wc($l54, $l5);
+-          $l14++, $l83 = $m_tmn - $l14;
++        let $l89, $l90 = $m_fK($l58);
++        if ($m_IFr() > $l37 && ($l90 === "AWS" || !$m__ve() && $m__Je($l58, $l6.model))) throw $m_m("api_request", "api_request_aws_sign_in_failed"), new $m_Wc($l58, $l6);
++        if ($l90 === "AWS" || !$m__ve() && $m_SJe($l58, $l6.model)) {
++          if ($l18 >= $m_tmn) throw $m_m("api_request", "api_request_aws_auth_exhausted"), new $m_Wc($l58, $l6);
++          $l18++, $l89 = $m_tmn - $l18;
+         }
+-        if ($l84 === "Google Cloud" || !$m__ve() && $m_cK($l54)) {
+-          if ($m_PFr() > $l32) throw $m_m("api_request", "api_request_gcp_sign_in_failed"), new $m_Wc($l54, $l5);
+-          if ($l15 >= $m_nmn) throw $m_m("api_request", "api_request_gcp_auth_exhausted"), new $m_Wc($l54, $l5);
+-          $l15++, $l83 = $m_nmn - $l15;
++        if ($l90 === "Google Cloud" || !$m__ve() && $m_cK($l58)) {
++          if ($m_PFr() > $l36) throw $m_m("api_request", "api_request_gcp_sign_in_failed"), new $m_Wc($l58, $l6);
++          if ($l19 >= $m_nmn) throw $m_m("api_request", "api_request_gcp_auth_exhausted"), new $m_Wc($l58, $l6);
++          $l19++, $l89 = $m_nmn - $l19;
+         }
+-        if ($l54 instanceof $m_Ot && ($l54.status === 401 || $l54.status === 403) && $m_Xn() && $m_Vge() && $m_Xyt() !== null) {
+-          if ($l19 >= $m_Fcr) throw $m_m("api_request", "api_request_api_key_helper_failed"), new $m_Wc($l54, $l5);
+-          $l19++;
++        if ($l58 instanceof $m_Ot && ($l58.status === 401 || $l58.status === 403) && $m_Xn() && $m_Vge() && $m_Xyt() !== null) {
++          if ($l23 >= $m_Fcr) throw $m_m("api_request", "api_request_api_key_helper_failed"), new $m_Wc($l58, $l6);
++          $l23++;
+         }
+-        if ($l69) {
+-          if ($l20 === $m_omn) $m_f("api_request", "api_request_api_key_helper_auth_exhausted");
+-          $l20++;
++        if ($l74) {
++          if ($l24 === $m_omn) $m_dn("api_request", "api_request_api_key_helper_auth_exhausted");
++          $l24++;
+         }
+-        if ($l54 instanceof $m_Yu && $l54.statusCode === 401) {
+-          if ($l21 >= $m_Hcr) throw $m_m("api_request", "api_request_wif_exchange_401"), new $m_Wc($l54, $l5);
+-          $l21++;
++        if ($l58 instanceof $m_Yu && $l58.statusCode === 401) {
++          if ($l25 >= $m_Hcr) throw $m_m("api_request", "api_request_wif_exchange_401"), new $m_Wc($l58, $l6);
++          $l25++;
+         }
+-        if (!($m_Vcr($l54, $l5.model) || $m_Ycr($l54) || await $m_Xcr($l54)) && (!($l54 instanceof $m_Ot) || !$m_Qcr($l54))) {
+-          let $l85 = $l54 instanceof $m_Ot && ($l54.status !== void 0 && $m_qcr.has($l54.status) && !($l54.status === 404 && $l2.isNonStreamingRequest) || $l54.type === "billing_error" || $l2.isResumePrefillRequest === true && $l54.status !== void 0 && $m_D1r($l54.status) || $m__mn.some(($l86) => $l86($l54)));
+-          if ($l54 instanceof $m_Ot && $l54.status !== void 0 && !$l85 && $l2.fallbackModel && $l2.fallbackModel !== $l2.model) throw $m_i("tengu_api_fallback_last_resort", { status: $l54.status, errorType: $m_c($m_q7($l54.type)), provider: $m_gA(), fastMode: $l5.fastMode ?? false }), $m_f("api_request", "api_request_last_resort_fallback"), new $m_pD($l2.model, $l2.fallbackModel, $l54.status === 404 && $m_Tjo($l54) ? "model_not_found" : "last_resort", $l54);
+-          throw $m_m("api_request", $l54 instanceof $m_nye || $m__2e($l54) !== null ? "api_request_account_on_hold" : $l54 instanceof $m_kht ? "api_request_oauth_refresh_lock_timeout" : "api_request_non_retryable"), new $m_Wc($l54, $l5);
++        if (!($m_Vcr($l58, $l6.model) || $m_Ycr($l58) || await $m_Xcr($l58)) && (!($l58 instanceof $m_Ot) || !$m_Qcr($l58))) {
++          let $l91 = $l58 instanceof $m_Ot && ($l58.status !== void 0 && $m_qcr.has($l58.status) && !($l58.status === 404 && $l2.isNonStreamingRequest) || $l58.type === "billing_error" || $l2.isResumePrefillRequest === true && $l58.status !== void 0 && $m_D1r($l58.status) || $m__mn.some(($l92) => $l92($l58)));
++          if ($l58 instanceof $m_Ot && $l58.status !== void 0 && !$l91 && $l2.fallbackModel && $l2.fallbackModel !== $l2.model) throw $m_i("tengu_api_fallback_last_resort", { status: $l58.status, errorType: $m_h($m_q7($l58.type)), provider: $m_gA(), fastMode: $l6.fastMode ?? false }), $m_dn("api_request", "api_request_last_resort_fallback"), new $m_pD($l2.model, $l2.fallbackModel, $l58.status === 404 && $m_Tjo($l58) ? "model_not_found" : "last_resort", $l58);
++          throw $m_m("api_request", $l58 instanceof $m_nye || $m__2e($l58) !== null ? "api_request_account_on_hold" : $l58 instanceof $m_kht ? "api_request_oauth_refresh_lock_timeout" : "api_request_non_retryable"), new $m_Wc($l58, $l6);
+         }
+-        if ($l54 instanceof $m_Ot) {
+-          let $l87 = $m_UTe($l54);
+-          if ($l87) {
+-            let { inputTokens: $l88, contextLimit: $l89 } = $l87, $l90 = 1e3, $l91 = Math.max(0, $l89 - $l88 - 1e3);
+-            if ($l91 < $m_Zpn) throw $m_l(Error(`availableContext ${$l91} is less than FLOOR_OUTPUT_TOKENS ${$m_Zpn}`)), $l54;
+-            let $l92 = $l91;
+-            if ($l5.maxTokensOverride !== void 0 && $l92 >= $l5.maxTokensOverride) throw $m_l(Error("max_tokens overflow adjustment made no progress")), $l54;
+-            $l5.maxTokensOverride = $l92, $m_i("tengu_max_tokens_context_overflow_adjustment", { inputTokens: $l88, contextLimit: $l89, adjustedMaxTokens: $l92, attempt: $l35 });
++        if ($l58 instanceof $m_Ot) {
++          let $l93 = $m_UTe($l58);
++          if ($l93) {
++            let { inputTokens: $l94, contextLimit: $l95 } = $l93, $l96 = 1e3, $l97 = Math.max(0, $l95 - $l94 - 1e3);
++            if ($l97 < $m_Zpn) throw $m_l(Error(`availableContext ${$l97} is less than FLOOR_OUTPUT_TOKENS ${$m_Zpn}`)), $l58;
++            let $l98 = $l97;
++            if ($l6.maxTokensOverride !== void 0 && $l98 >= $l6.maxTokensOverride) throw $m_l(Error("max_tokens overflow adjustment made no progress")), $l58;
++            $l6.maxTokensOverride = $l98, $m_i("tengu_max_tokens_context_overflow_adjustment", { inputTokens: $l94, contextLimit: $l95, adjustedMaxTokens: $l98, attempt: $l39 });
+             continue;
+           }
+         }
+-        let $l93 = $m_fJe($l54), $l94, $l95 = $l80, $l96 = null;
+-        if ($l80) {
+-          let $l97 = ($m_a.CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS ?? 1 / 0) - $l10.spentMs;
+-          if ($l97 <= 0) throw $m_m("api_request", "api_request_capacity_wait_exhausted"), new $m_Wc($l54, $l5);
+-          $l9++;
+-          let $l98 = null;
+-          if ($l54 instanceof $m_Ot && $l54.status === 429) {
+-            if ($l98 = $m_rfr($l54, $l4), $l98 !== null && $l54.headers?.get?.("anthropic-ratelimit-unified-status") === "rejected") {
+-              let $l99 = ($m_a.CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS ?? 1 / 0) - $l10.usageLimitSpentMs;
+-              if ($l98 > $l99) {
+-                let $l100 = $l54.headers?.get($m_EFt), $l101 = $l100 === "allowed" || $l100 === "allowed_warning";
+-                if ($l99 <= 0 || !$l101 && $l54.headers?.get($m_MWe) !== "fetch_error") throw $m_m("api_request", "api_request_usage_limit_wait_too_long"), new $m_Wc($l54, $l5);
+-                $l98 = $l101 ? Math.min($l99, $m_PF($l9, null, $m_rmn, $l2.random)) : $l99;
++        let $l99 = $m_fJe($l58), $l100, $l101 = $l85, $l102 = null;
++        if ($l85) {
++          let $l103 = ($m_a.CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS ?? 1 / 0) - $l11.spentMs;
++          if ($l103 <= 0) throw $m_m("api_request", "api_request_capacity_wait_exhausted"), new $m_Wc($l58, $l6);
++          $l10++;
++          let $l104 = null;
++          if ($l58 instanceof $m_Ot && $l58.status === 429) {
++            if ($l104 = $m_rfr($l58, $l5), $l104 !== null && $l58.headers?.get?.("anthropic-ratelimit-unified-status") === "rejected") {
++              let $l105 = ($m_a.CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS ?? 1 / 0) - $l11.usageLimitSpentMs;
++              if ($l104 > $l105) {
++                let $l106 = $l58.headers?.get($m_EFt), $l107 = $l106 === "allowed" || $l106 === "allowed_warning";
++                if ($l105 <= 0 || !$l107 && $l58.headers?.get($m_MWe) !== "fetch_error") throw $m_m("api_request", "api_request_usage_limit_wait_too_long"), new $m_Wc($l58, $l6);
++                $l104 = $l107 ? Math.min($l105, $m_PF($l10, null, $m_rmn, $l2.random)) : $l105;
+               }
+-              $l96 = $l54;
++              $l102 = $l58;
+             }
+           }
+-          $l94 = Math.min($l98 ?? $m_PF($l9, $l93, $m_rmn, $l2.random), $m_smn), $l94 = Math.min($l94, $l97);
+-        } else if ($m_fB($l54)) $l94 = $m_Ocr;
+-        else if ($l70) $l94 = $m_$cr;
++          $l100 = Math.min($l104 ?? $m_PF($l10, $l99, $m_rmn, $l2.random), $m_smn), $l100 = Math.min($l100, $l103);
++        } else if ($m_fB($l58)) $l100 = $m_Ocr;
++        else if ($l75) $l100 = $m_$cr;
+         else {
+-          let $l102 = $m_GW($l54), $l103 = $l102 ? $m_a.CLAUDE_CODE_OVERLOADED_RETRY_MAX_DELAY_MS : void 0;
+-          if ($l94 = $m_PF($l35 + $l9, $l93, $l103, $l2.random, $l102 ? $m_a.CLAUDE_CODE_OVERLOADED_RETRY_BASE_DELAY_MS : void 0), $m_G6()) $l94 = Math.min($l94, $m_smn), $l95 = true;
+-          else if ($l94 > Math.max($m_Bcr, Math.ceil(($l103 ?? 0) * (1 + $m_kjo)))) throw $m_i("tengu_api_retry_after_too_long", { delayMs: $l94, status: $l54.status, provider: $m_gA() }), $m_m("api_request", "api_request_retry_after_too_long"), new $m_Wc($l54, $l5);
++          let $l108 = $m_GW($l58), $l109 = $l108 ? $m_a.CLAUDE_CODE_OVERLOADED_RETRY_MAX_DELAY_MS : void 0;
++          if ($l100 = $m_PF($l39 + $l10, $l99, $l109, $l2.random, $l108 ? $m_a.CLAUDE_CODE_OVERLOADED_RETRY_BASE_DELAY_MS : void 0), $NEW_chunk_j0tbz6ra_js_zb()) $l100 = Math.min($l100, $m_smn), $l101 = true;
++          else if ($l100 > Math.max($m_Bcr, Math.ceil(($l109 ?? 0) * (1 + $m_kjo)))) throw $m_i("tengu_api_retry_after_too_long", { delayMs: $l100, status: $l58.status, provider: $m_gA() }), $m_m("api_request", "api_request_retry_after_too_long"), new $m_Wc($l58, $l6);
+         }
+-        let $l104 = $l80 ? $l9 : $l81 ? Math.max(1, Math.min($l35, $l3)) : $l35, $l105 = $m_jpe($l54);
+-        if ($l2.modelCallRetries?.reportHttpFailure($l54, "retry"), $m_i("tengu_api_retry", { attempt: $l104, delayMs: $l94, error: $m_Z7e($l105, $l54 instanceof $m_Ot ? $l54.status : void 0), errorType: $m_c($l105), ...$m_Ip($l54), status: $l54.status, provider: $m_gA(), attempt_duration_ms: $l4.now() - $l36 }), $m_X("warn", "cli_api_retry", () => ({ ...$m_mL($l54, $l105), attempt: $l104, delay_ms: $l94, attempt_duration_ms: $l4.now() - $l36, model: $m_Et($l2.model) ?? null, query_source_category: $m_rs($l2.querySource) ?? null })), $l95 && $l94 > 6e4) $m_i("tengu_api_persistent_retry_wait", { status: $l54.status, delayMs: $l94, attempt: $l104, provider: $m_gA() });
+-        let $l106 = void 0;
+-        if ($l96 && !$l2.signal?.aborted) try {
+-          $l106 = $l2.onQuotaWindowWait?.($l96, { retryAtMs: $l4.now() + $l94, attempt: $l104, maxRetries: $l3 });
+-        } catch ($l107) {
+-          $m_l($l107);
++        if ($l39 > $l3 && !$l85 && !$l86) $l15 = true;
++        let $l110 = $l85 ? $l10 : $l86 ? Math.max(1, Math.min($l39, $l4)) : $l39, $l111 = $m_jpe($l58);
++        if ($l2.modelCallRetries?.reportHttpFailure($l58, "retry"), $m_i("tengu_api_retry", { attempt: $l110, delayMs: $l100, error: $m_Z7e($l111, $l58 instanceof $m_Ot ? $l58.status : void 0), errorType: $m_h($l111), ...$m_Ip($l58), status: $l58.status, provider: $m_gA(), attempt_duration_ms: $l5.now() - $l40 }), $m_X("warn", "cli_api_retry", () => ({ ...$m_mL($l58, $l111), attempt: $l110, delay_ms: $l100, attempt_duration_ms: $l5.now() - $l40, model: $m_Et($l2.model) ?? null, query_source_category: $m_rs($l2.querySource) ?? null })), $l101 && $l100 > 6e4) $m_i("tengu_api_persistent_retry_wait", { status: $l58.status, delayMs: $l100, attempt: $l110, provider: $m_gA() });
++        let $l112 = void 0;
++        if ($l102 && !$l2.signal?.aborted) try {
++          $l112 = $l2.onQuotaWindowWait?.($l102, { retryAtMs: $l5.now() + $l100, attempt: $l110, maxRetries: $l4 });
++        } catch ($l113) {
++          $m_l($l113);
+         }
+-        let $l108 = () => {
+-          $l2.signal?.removeEventListener("abort", $l108);
++        let $l114 = () => {
++          $l2.signal?.removeEventListener("abort", $l114);
+           try {
+-            $l106?.();
+-          } catch ($l109) {
+-            $m_l($l109);
++            $l112?.();
++          } catch ($l115) {
++            $m_l($l115);
+           }
+-          $l106 = void 0;
++          $l112 = void 0;
+         };
+-        if ($l106) $l2.signal?.addEventListener("abort", $l108, { once: true });
+-        using $l110 = { [Symbol.dispose]: $l108 };
+-        let $l111 = $l95 ? $m_Aho : $l94, $l112 = $l70 && !$l95, $l113 = $l94;
+-        while ($l113 > 0) {
+-          if ($l95 && $l2.signal?.aborted) throw new $m_cu();
+-          let $l114 = $m_uJe($l54, $l5.model);
+-          if ($l112 && $l27) $l2.onRetryStatus?.(null), $l27 = false;
+-          if ($l114 && !$l112) {
+-            $l27 = true;
+-            let $l115 = $m_lmn($l114, $l35, $l81 ? Math.max(1, $l3) : $l3, $l16.count, $l83 ?? $l55);
+-            $l2.onRetryStatus?.({ kind: "retrying", error: $l114, attempt: $l104, maxRetries: $l115, retryInMs: $l113, deadline: $l4.now() + $l113 }), yield $m_N2($l114, $l113, $l104, $l115, "request_retry");
++        if ($l112) $l2.signal?.addEventListener("abort", $l114, { once: true });
++        using $l116 = { [Symbol.dispose]: $l114 };
++        let $l117 = $l101 ? $m_Aho : $l100, $l118 = $l75 && !$l101, $l119 = $l102 && $l2.isUsageLimitLifted ? $m_a.CLAUDE_CODE_RETRY_WATCHDOG_USAGE_LIMIT_RECHECK_MS : void 0;
++        if ($l102 && $l13) $l12++, $l13 = false;
++        let $l120 = $l119 === void 0 ? 1 / 0 : 0, $l121 = 0, $l122 = $l100;
++        while ($l122 > 0) {
++          if ($l119 !== void 0 && $l120 <= 0) $l120 = $m_PF(1 + $l12, null, $m_smn / 2, $l2.random, $l119);
++          if ($l101 && $l2.signal?.aborted) throw new $m_cu();
++          let $l123 = $m_uJe($l58, $l6.model);
++          if ($l118 && $l31) $l2.onRetryStatus?.(null), $l31 = false;
++          if ($l123 && !$l118) {
++            $l31 = true;
++            let $l124 = $m_lmn($l123, $l39, ($l86 ? Math.max(1, $l4) : $l4) + ($l87 ? $l2.modelCallRetries?.reconnectsLeft() ?? 0 : 0), $l20.count, $l89 ?? $l60);
++            $l2.onRetryStatus?.({ kind: "retrying", error: $l123, attempt: $l110, maxRetries: $l124, retryInMs: $l122, deadline: $l5.now() + $l122 }), yield $m_N2($l123, $l122, $l110, $l124, "request_retry");
++          }
++          let $l125 = Math.min($l122, $l117), $l126 = Math.min($l125, $l121);
++          $l121 = 0;
++          let $l127 = $l5.monotonicNow(), $l128 = await $m_amn($l125 - $l126, $l2);
++          if ($l85) {
++            let $l129 = $l128 ? Math.min($l125, $l126 + Math.round($l5.monotonicNow() - $l127)) : $l125;
++            if ($l11.spentMs += $l129, $l102) $l11.usageLimitSpentMs += $l129;
+           }
+-          let $l116 = Math.min($l113, $l111), $l117 = $l4.monotonicNow(), $l118 = await $m_amn($l116, $l2);
+-          if ($l80) {
+-            let $l119 = $l118 ? Math.min($l116, Math.round($l4.monotonicNow() - $l117)) : $l116;
+-            if ($l10.spentMs += $l119, $l96) $l10.usageLimitSpentMs += $l119;
++          if ($l128) break;
++          if ($l122 -= $l125, $l120 -= $l125, $l120 <= 0 && $l122 > $l117 && $l102 && $l2.isUsageLimitLifted) {
++            let $l130 = false, $l131 = $l2.subscribeRetryWake?.(() => {
++              $l130 = true;
++            }), $l132 = $l5.monotonicNow(), $l133 = false;
++            try {
++              $l133 = await $l2.isUsageLimitLifted($l102);
++            } catch ($l134) {
++              $m_l($l134);
++            } finally {
++              $l131?.();
++            }
++            if ($l13 = $l133, $l133 || $l130) break;
++            $l121 = Math.max(0, Math.round($l5.monotonicNow() - $l132));
+           }
+-          if ($l118) break;
+-          $l113 -= $l116;
+         }
+-        if ($l80 || $l81) $l35--;
++        if ($l85 || $l86) $l39--;
+       }
+     }
+-    throw $m_m("api_request", "api_request_retry_exhausted"), new $m_Wc($l8, $l5);
++    throw $m_m("api_request", "api_request_retry_exhausted"), new $m_Wc($l9, $l6);
++  } catch ($l135) {
++    if ($l15 && !$l2.signal?.aborted) {
++      if ($l135 instanceof $m_pD) $m_dn("api_reconnect", "fallback_triggered");
++      else $m_m("api_reconnect", $l135 instanceof $m_Wc && $NEW_chunk_x8k0r295_js_isr($l135.originalError) ? "still_down" : "other_failure");
++      $l15 = false;
++    }
++    throw $l135;
+   } finally {
+-    if ($l27) $l2.onRetryStatus?.(null);
++    if ($l15) $m_dn("api_reconnect", "aborted");
++    if ($l31) $l2.onRetryStatus?.(null);
+   }
+ }
+ ;

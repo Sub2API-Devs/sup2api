@@ -1,0 +1,30 @@
+# chunk-ajtyjx88.js:eK -> chunk-f7avdr1b.js:c$
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-ajtyjx88.js_eK.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-ajtyjx88.js_eK.new.js"
+index 20988c159..3555445d1 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-ajtyjx88.js_eK.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-ajtyjx88.js_eK.new.js"
+@@ -1,15 +1,15 @@
+ function SELF($l0) {
+-  let $l1 = $m_Hj(), $l2 = { model: $l0, canonical: $m_Xe($l0), provider: $m_Ae(), experimentalBetasOff: $l1, firstPartyOnlyBetas: $m_l_(), firstPartyCapabilityBetas: $m_eq($m_Od($l0)) && !$l1, interleavedThinking: $m_fnr($l0) }, $l3 = [];
+-  for (let $l4 of $m_QH) if ($l4.when($l2)) $l3.push($l4.beta);
+-  let $l5 = $m_i.ANTHROPIC_BETAS;
+-  if ($l5) if ($m_Lj()) $m_t("ANTHROPIC_BETAS ignored: experimental betas are disabled by your organization's policy", { level: "debug" });
+-  else for (let $l6 of $l5.split(",").map(($l7) => $l7.trim()).filter(($l8) => $l8 && !$m_WKt($l8))) {
+-    if ($l6 === $m_oqe) {
+-      $m_t(`ANTHROPIC_BETAS: '${$l6}' is generally available; the header is not sent`, { level: "debug" });
++  let $l1 = { model: $l0, canonical: $m_Xe($l0), provider: $m_Ae(), firstPartyOnlyBetas: $m_l_(), firstPartyCapabilityBetas: $m_eq($m_Od($l0)) && !$m_Hj(), interleavedThinking: $m_fnr($l0) }, $l2 = [];
++  for (let $l3 of $m_QH) if ($l3.when($l1)) $l2.push($l3.beta);
++  let $l4 = $m_i.ANTHROPIC_BETAS;
++  if ($l4) if ($m_Lj()) $m_t("ANTHROPIC_BETAS ignored: experimental betas are disabled by your organization's policy", { level: "debug" });
++  else for (let $l5 of $l4.split(",").map(($l6) => $l6.trim()).filter(($l7) => $l7 && !$m_WKt($l7))) {
++    if ($l5 === $m_oqe) {
++      $m_t(`ANTHROPIC_BETAS: '${$l5}' is generally available; the header is not sent`, { level: "debug" });
+       continue;
+     }
+-    $l3.push($m_H5o($l6));
++    $l2.push($m_H5o($l5));
+   }
+-  return $l3;
++  return $l2;
+ }
+ ;

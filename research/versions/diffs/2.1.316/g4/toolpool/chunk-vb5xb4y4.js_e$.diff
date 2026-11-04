@@ -1,0 +1,107 @@
+# chunk-vb5xb4y4.js:e$ -> chunk-9ycd12hk.js:fF
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-vb5xb4y4.js_e$.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-vb5xb4y4.js_e$.new.js"
+index 5b5244e..d5c5a13 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-vb5xb4y4.js_e$.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-vb5xb4y4.js_e$.new.js"
+@@ -4,6 +4,8 @@ SELF = $m_tn({ isConcurrencySafe() {
+   return true;
+ }, toAutoClassifierInput($l0) {
+   return `${$l0.server} ${$l0.uri}`;
++}, suppressesAlwaysAllowRule() {
++  return $NEW_chunk_sfy7bm1n_js_SFe();
+ }, shouldDefer: true, name: $m_vM, aliases: ["ReadMcpResource"], searchHint: "read a specific MCP resource by URI", backgrounding: "never", maxResultSizeChars: 1e5, async description() {
+   return $m_jZs;
+ }, async prompt() {
+@@ -13,50 +15,55 @@ SELF = $m_tn({ isConcurrencySafe() {
+ }, get outputSchema() {
+   return $m_ie();
+ }, create($l1) {
+-  return { async call($l2, { signal: $l3 }) {
+-    let { turnMcpClients: $l4, storageV5: $l5 } = $l1, { server: $l6, uri: $l7 } = $l2, $l8 = $m_HDr($l4, $l6);
+-    if ($m_Zin($l8, $l1.agentId), $l8.config.pluginSource) $m_bR($l8.config.pluginSource), $m_d$($l8.config.pluginSource, "mcp", { kind: "mcp-server", name: $l8.name });
+-    let $l9 = await $m_j().ensureConnectedClient($l8, { signal: $l3, context: "MCP resource read" });
+-    $m_Zin($l9, $l1.agentId);
+-    let $l10 = $m_IDr($l7, $m_qin($l9.name, $l1.messages(), $l1.inheritedMcpSkillMessages())), $l11 = async ($l12, $l13) => ({ contents: [], error: await $m_zFs({ connected: $l9, skills: $l12, uri: $l7, reason: $l13, signal: $l3 }) });
+-    if ($l10.case === "unlisted") return { data: await $l11($l10.skills, $l10.reason) };
+-    let $l14;
++  return { async checkPermissions($l2) {
++    if (!$NEW_chunk_sfy7bm1n_js_SFe()) return { behavior: "allow", updatedInput: $l2 };
++    return { behavior: "passthrough", message: `${$m_vM} requires permission.` };
++  }, async call($l3, { signal: $l4 }) {
++    let { turnMcpClients: $l5, storageV5: $l6 } = $l1, { server: $l7, uri: $l8 } = $l3, $l9 = $m_HDr($l5, $l7);
++    if ($m_Zin($l9, $l1.agentId), $l9.config.pluginSource) $m_bR($l9.config.pluginSource), $m_d$($l9.config.pluginSource, "mcp", { kind: "mcp-server", name: $l9.name });
++    let $l10 = $NEW_chunk_e6aww6q8_js_Ifn($l9.name, $l8, $l1.messages(), $l1.inheritedMcpSkillMessages());
++    if ($l10 !== void 0) return { data: { contents: [], error: $l10 } };
++    let $l11 = await $m_j().ensureConnectedClient($l9, { signal: $l4, context: "MCP resource read" });
++    $m_Zin($l11, $l1.agentId);
++    let $l12 = $m_IDr($l8, $m_qin($l11.name, $l1.messages(), $l1.inheritedMcpSkillMessages())), $l13 = async ($l14, $l15) => ({ contents: [], error: await $m_zFs({ connected: $l11, skills: $l14, uri: $l8, reason: $l15, signal: $l4 }) });
++    if ($l12.case === "unlisted") return { data: await $l13($l12.skills, $l12.reason) };
++    let $l16;
+     try {
+-      $l14 = await $m_R_t($l9, $l7, { signal: $l3 });
+-    } catch ($l15) {
+-      if ($l3.aborted) throw new $m_qe();
+-      let $l16 = $m_re();
+-      if ($l16.isMcpMethodNotFoundError($l15)) return $m_hs($l8.name, "resources/read returned -32601 MethodNotFound \u2014 server advertises resources but does not implement reads"), { data: { contents: [], error: `Server "${$l8.name}" advertises resource support but does not implement resource reads.` } };
+-      if ($l16.isMcpResourceNotFoundError($l15)) {
+-        if ($m_hs($l8.name, `resources/read returned ${$l16.getMcpErrorCode($l15)} \u2014 resource not found`), $m_j().invalidateMcpResourceListCaches($l9), $l10.case === "listed") return { data: await $l11($l10.skills, "not_found") };
+-        let $l17 = $m_te().serverDeclaresDirectoryRead($l9.capabilities) ? ` If the URI is a directory resource, use ${$m_Dj} instead.` : "";
+-        return { data: { contents: [], error: `Resource not found: ${$l7} \u2014 it may have been deleted or the URI is stale. Re-run ${$m_Rz} to refresh.${$l17}` } };
++      $l16 = await $m_R_t($l11, $l8, { signal: $l4 });
++    } catch ($l17) {
++      if ($l4.aborted) throw new $m_qe();
++      let $l18 = $m_re();
++      if ($l18.isMcpMethodNotFoundError($l17)) return $m_hs($l9.name, "resources/read returned -32601 MethodNotFound \u2014 server advertises resources but does not implement reads"), { data: { contents: [], error: `Server "${$l9.name}" advertises resource support but does not implement resource reads.` } };
++      if ($l18.isMcpResourceNotFoundError($l17)) {
++        if ($m_hs($l9.name, `resources/read returned ${$l18.getMcpErrorCode($l17)} \u2014 resource not found`), $m_j().invalidateMcpResourceListCaches($l11), $l12.case === "listed") return { data: await $l13($l12.skills, "not_found") };
++        let $l19 = $m_te().serverDeclaresDirectoryRead($l11.capabilities) ? ` If the URI is a directory resource, use ${$m_Dj} instead.` : "";
++        return { data: { contents: [], error: `Resource not found: ${$l8} \u2014 it may have been deleted or the URI is stale. Re-run ${$m_Rz} to refresh.${$l19}` } };
+       }
+-      throw $l15;
++      throw $l17;
+     }
+-    let $l18 = $l14.contents;
+-    if ($l10.case === "listed") {
+-      let $l19 = $m_ODr($l14.contents, $l7, $l10.rows);
+-      if (!$l19.ok) return { data: await $l11($l10.skills, $l19.reason) };
+-      $m_g("skill_mcp_read"), $l18 = [$l19.item];
++    let $l20 = $l16.contents;
++    if ($l12.case === "listed") {
++      let $l21 = $m_ODr($l16.contents, $l8, $l12.rows);
++      if (!$l21.ok) return { data: await $l13($l12.skills, $l21.reason) };
++      $m_g("skill_mcp_read"), $l20 = [$l21.item];
+     }
+-    return { data: { contents: await Promise.all($l18.map(async ($l20, $l21) => {
+-      if ("text" in $l20) return { uri: $l20.uri, mimeType: $l20.mimeType, text: $l20.text };
+-      if (!("blob" in $l20) || typeof $l20.blob !== "string") return { uri: $l20.uri, mimeType: $l20.mimeType };
+-      let $l22 = `mcp-resource-${Date.now()}-${$l21}-${Math.random().toString(36).slice(2, 8)}`, $l23 = await $m_iC(Buffer.from($l20.blob, "base64"), $l20.mimeType, $l22, void 0, $l5);
+-      if ("error" in $l23) {
+-        if ($m_Gg() !== void 0) return { uri: $l20.uri, mimeType: $l20.mimeType, text: $m_due($l20.mimeType, Buffer.byteLength($l20.blob, "base64")) };
+-        return { uri: $l20.uri, mimeType: $l20.mimeType, text: `Binary content could not be saved to disk: ${$l23.error}` };
++    return { data: { contents: await Promise.all($l20.map(async ($l22, $l23) => {
++      if ("text" in $l22) return { uri: $l22.uri, mimeType: $l22.mimeType, text: $l22.text };
++      if (!("blob" in $l22) || typeof $l22.blob !== "string") return { uri: $l22.uri, mimeType: $l22.mimeType };
++      let $l24 = `mcp-resource-${Date.now()}-${$l23}-${Math.random().toString(36).slice(2, 8)}`, $l25 = await $m_iC(Buffer.from($l22.blob, "base64"), $l22.mimeType, $l24, void 0, $l6);
++      if ("error" in $l25) {
++        if ($m_Gg() !== void 0) return { uri: $l22.uri, mimeType: $l22.mimeType, text: $m_due($l22.mimeType, Buffer.byteLength($l22.blob, "base64")) };
++        return { uri: $l22.uri, mimeType: $l22.mimeType, text: `Binary content could not be saved to disk: ${$l25.error}` };
+       }
+-      return { uri: $l20.uri, mimeType: $l20.mimeType, blobSavedTo: $l23.filepath, text: $m_lue($l23.filepath, $l20.mimeType, $l23.size, `[Resource from ${$l8.name} at ${$l20.uri}] `) };
++      return { uri: $l22.uri, mimeType: $l22.mimeType, blobSavedTo: $l25.filepath, text: $m_lue($l25.filepath, $l22.mimeType, $l25.size, `[Resource from ${$l9.name} at ${$l22.uri}] `) };
+     })) } };
+   } };
+-}, renderToolUseMessage($l24) {
+-  if (!$l24.uri || !$l24.server) return null;
+-  return `Read resource "${$l24.uri}" from server "${$l24.server}"`;
++}, renderToolUseMessage($l26) {
++  if (!$l26.uri || !$l26.server) return null;
++  return `Read resource "${$l26.uri}" from server "${$l26.server}"`;
+ }, userFacingName() {
+   return "readMcpResource";
+-}, mapToolResultToToolResultBlockParam($l25, $l26) {
+-  if ($l25.error) return { tool_use_id: $l26, type: "tool_result", content: $l25.error };
+-  return { tool_use_id: $l26, type: "tool_result", content: $m__($l25) };
++}, mapToolResultToToolResultBlockParam($l27, $l28) {
++  if ($l27.error) return { tool_use_id: $l28, type: "tool_result", content: $l27.error };
++  return { tool_use_id: $l28, type: "tool_result", content: $m__($l27) };
+ } });

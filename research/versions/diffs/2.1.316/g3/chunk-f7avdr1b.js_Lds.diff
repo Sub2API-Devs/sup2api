@@ -1,0 +1,10 @@
+# chunk-f7avdr1b.js:Lds -> undefined
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_Lds.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_Lds.new.js"
+index e1f208a..ac9c11a 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_Lds.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_Lds.new.js"
+@@ -1 +1 @@
+-/* chunk-f7avdr1b.js:Lds not found */
+\ No newline at end of file
++/* unmapped */
+\ No newline at end of file

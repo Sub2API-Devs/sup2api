@@ -1,0 +1,8 @@
+# chunk-7dmym6x9.js:hL -> undefined
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_hL.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_hL.new.js"
+index e69de29..ac9c11a 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_hL.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_hL.new.js"
+@@ -0,0 +1 @@
++/* unmapped */
+\ No newline at end of file

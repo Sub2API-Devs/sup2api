@@ -1,0 +1,27 @@
+{
+ "index": 3,
+ "listener": "tls:443",
+ "method": "GET",
+ "url": "/mcp-registry/v0/servers?version=latest&limit=100&visibility=commercial%2Cgsuite%2Centerprise%2Chealth",
+ "rawHeaders": [
+  "Accept",
+  "application/json, text/plain, */*",
+  "User-Agent",
+  "claude-cli/2.1.316 (external, sdk-cli)",
+  "Accept-Encoding",
+  "gzip, compress, deflate, br",
+  "Host",
+  "api.anthropic.com",
+  "Connection",
+  "keep-alive"
+ ],
+ "headers": {
+  "accept": "application/json, text/plain, */*",
+  "user-agent": "claude-cli/2.1.316 (external, sdk-cli)",
+  "accept-encoding": "gzip, compress, deflate, br",
+  "host": "api.anthropic.com",
+  "connection": "keep-alive"
+ },
+ "body": "",
+ "rawBody": ""
+}

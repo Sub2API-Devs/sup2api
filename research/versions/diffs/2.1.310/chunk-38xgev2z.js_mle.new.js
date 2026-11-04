@@ -1,0 +1,16 @@
+async function SELF($l0, $l1) {
+  let $l2 = $NEW_chunk_bbw420pv_js_Nc.of($m_j().host).route?.($l0, $l1, $m_Ac);
+  if ($l2 !== void 0) return $l2;
+  if (!$m_Ka($l1) || !$m_wo($l0)) return $m_Ac($l0, $l1);
+  let { init: $l3, afterResponse: $l4 } = await $m_Sc($l1).catch(($l5) => ($m_l($l5), { init: $l1 })), $l6;
+  try {
+    return $l6 = await $m_Ac($l0, $l3), $l6;
+  } finally {
+    if ($l6 !== void 0 || !$m_eb($l1?.signal)) try {
+      $l4?.($l6);
+    } catch ($l7) {
+      $m_l($l7);
+    }
+  }
+}
+;

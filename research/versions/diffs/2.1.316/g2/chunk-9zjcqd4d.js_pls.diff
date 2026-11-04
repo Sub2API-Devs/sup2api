@@ -1,0 +1,11 @@
+# chunk-9zjcqd4d.js:pls -> chunk-cgr0tezp.js:obs
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-9zjcqd4d.js_pls.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-9zjcqd4d.js_pls.new.js"
+index f81b9bf..a2f3d2e 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-9zjcqd4d.js_pls.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-9zjcqd4d.js_pls.new.js"
+@@ -1,4 +1,4 @@
+ function SELF($l0) {
+-  return $l0.length <= 256 && /^(?:\/(?!\.\.?(?:\/|$))[A-Za-z0-9._+@-]+)+$/.test($l0);
++  return $l0.length <= $m_AN && /^(?:\/(?!\.\.?(?:\/|$))[A-Za-z0-9._+@-]+)+$/.test($l0);
+ }
+ ;

@@ -1,0 +1,112 @@
+# chunk-7dmym6x9.js:E_s -> chunk-e6aww6q8.js:PTs
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_E_s.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_E_s.new.js"
+index 7398e33..50e2e81 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_E_s.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_E_s.new.js"
+@@ -1,60 +1,65 @@
+ async function SELF($l0, $l1, $l2) {
+   let { readFileState: $l3, userModified: $l4, getFileHistoryState: $l5, applyFileHistoryOp: $l6, dynamicSkillDirTriggers: $l7 } = $l1, { file_path: $l8, replace_all: $l9 = false } = $l0, { old_string: $l10, new_string: $l11 } = $l0, $l12 = $m_qb($l8), $l13 = $m_Rme($l1, $l12);
+   if ($m_lB($l12, $l1.permissions())) throw new $m_BX($m_ekn);
++  let $l14 = $NEW_chunk_82kqcve8_js_oYt($l12, $l1.permissions(), $l13);
++  if ($l14 !== void 0) throw new $m_BX($l14);
+   if ({ old_string: $l10, new_string: $l11 } = $m_yGn($l0, $l1), !$m_i.CLAUDE_CODE_SIMPLE && $l1.remoteCall === void 0) await $m_Sq($l1.session.host, $l12, $l7, $l1.storageV5);
+   if ($l1.remoteCall === void 0) await $m_kGe.of($l1.session).beforeFileEdited($l12);
+-  let $l14 = await $m_FUr($l1, $l13, { toolName: $m_it, absolutePath: $l12, input: $l0 }), $l15 = $m_m_e($l1, $l13, await $m_H_e($l1.session.host, $l13));
+-  if ($l14 === void 0) await $m_LQe($l5, $l6, $l12, $l2.uuid);
+-  let { originalFileContents: $l16, actualOldString: $l17, actualNewString: $l18, updatedFile: $l19, patch: $l20, staleRecovered: $l21, contentNotInModelContext: $l22, staged: $l23 } = await $m_J2($l12, async () => {
+-    let $l24 = await $m_pw($l12, $l13, { createParents: $l10 === "" && $l14 === void 0 }).catch(($l25) => {
+-      if ($l14 !== void 0 && $l10 === "" && $m_z($l25)) return null;
+-      throw $l25;
++  let $l15 = await $m_FUr($l1, $l13, { toolName: $m_it, absolutePath: $l12, input: $l0 }), $l16 = $m_m_e($l1, $l13, await $m_H_e($l1.session.host, $l13));
++  if ($l15 === void 0) await $m_LQe($l5, $l6, $l12, $l2.uuid);
++  let { originalFileContents: $l17, actualOldString: $l18, actualNewString: $l19, updatedFile: $l20, patch: $l21, staleRecovered: $l22, contentNotInModelContext: $l23, staged: $l24 } = await $m_J2($l12, async () => {
++    let $l25 = await $m_pw($l12, $l13, { createParents: $l10 === "" && $l15 === void 0 }).catch(($l26) => {
++      if ($l15 !== void 0 && $l10 === "" && $m_z($l26)) return null;
++      throw $l26;
+     });
+     try {
+-      let { content: $l26, fileExists: $l27, encoding: $l28, lineEndings: $l29, notText: $l30 } = await $m_R_s($l24), $l31 = $l3.get($l12), $l32 = $l27 && $l24 !== null && await $m_C_s({ ioPath: $l24.ioPath, fileContents: $l26, lastRead: $l31, oldString: $l10, replaceAll: $l9, preReadGuard: $m_abn($m_Je($l1.model()), $l1.remoteCall), readBaseline: $l1.remoteCall?.readBaseline, servedOn: $l1.remoteCall?.origin.hostName, readNotAutoAllowed: () => !$m_bbe($m_it, $l12, $l1, $l1.permissions()) });
+-      if ($l30) throw new $m_BX($m_WAt($l30));
+-      let $l33 = $m_uLe($l26, $l10) || $l10, $l34 = $m_D6n($l10, $l33, $m_F_t($l10, $l33, $l11)), $l35 = $m_tL($l1), $l36 = $m_Sht($l12, $l34, $l35) ?? $m_q7e($l12, $l34);
+-      if ($l36 !== null) throw new $m_C($l36, "memory-directory write refused an edit after escape decoding");
+-      let $l37 = $m_SQ($l12, $l34, $l35), $l38 = $l37 !== $l34, $l39 = $l10 === "" ? $m_veo($l26, $l37) : $l37, $l40 = $m_d_e($l1.session.host, $l1.toolUseId), $l41 = $l38 || $l40;
+-      if ($l38 && $l39 === $l33) throw new $m_C("Nothing to change once the invisible characters are removed and harness-tag text is defused in new_string: it then equals old_string. Nothing was written.", "memory-directory write lint left an edit with nothing to change");
+-      let $l42 = $m_eun({ filePath: $l12, fileContents: $l26, oldString: $l33, newString: $l39, replaceAll: $l9, isForToolResult: $l14 === void 0 }), $l43 = await $m_s1t($l12), $l44 = $l14 !== void 0 || $l24 === null ? void 0 : await $m_Jcn($l1, $l43, $l27 ? $l26 : null, $l42.updatedFile, { remote: $l1.remoteCall !== void 0 }), $l45 = $m_D_t($l43, $l42.updatedFile, $l44?.context);
+-      $m_Zcn($l45.sharedItemBlock, "team");
+-      let $l46 = $l45.content, $l47 = $l46 !== $l42.updatedFile, $l48 = !$l47 ? $l42.patch : $m_qye({ filePath: $l12, oldContent: $l26, newContent: $l46, convertTabs: true, isForToolResult: $l14 === void 0 }), $l49 = $l4 || $l47 || $l41 || $l27 && (!$m_Yoe($l31) || $l32 || !$m_bvt($l31, $m_Av($l26)));
+-      if ($l14 !== void 0 || $l24 === null) return await $m_UUr({ writeCtx: $l1, tool: "Edit", absolutePath: $l14?.path ?? $l12, currentContent: $l27 ? $l26 : null, proposedContent: $l46 }), { originalFileContents: $l26, actualOldString: $l33, actualNewString: $l39, updatedFile: $l46, patch: $l48, staleRecovered: $l32, contentNotInModelContext: $l49, staged: true };
+-      let $l50;
+-      await $l24.recheckBeforeWrite();
++      let { content: $l27, fileExists: $l28, encoding: $l29, lineEndings: $l30, notText: $l31 } = await $m_R_s($l25), $l32 = $l3.get($l12), $l33 = $l28 && $l25 !== null && await $m_C_s({ ioPath: $l25.ioPath, fileContents: $l27, lastRead: $l32, oldString: $l10, replaceAll: $l9, preReadGuard: $m_abn($m_Je($l1.model()), $l1.remoteCall), readBaseline: $l1.remoteCall?.readBaseline, servedOn: $l1.remoteCall?.origin.hostName, readNotAutoAllowed: () => !$m_bbe($m_it, $l12, $l1, $l1.permissions()) });
++      if ($l31) throw new $m_BX($m_WAt($l31));
++      let $l34 = $m_uLe($l27, $l10) || $l10, $l35 = $m_D6n($l10, $l34, $m_F_t($l10, $l34, $l11)), $l36 = $m_tL($l1), $l37 = $m_Sht($l12, $l35, $l36) ?? $m_q7e($l12, $l35);
++      if ($l37 !== null) throw new $m_C($l37, "memory-directory write refused an edit after escape decoding");
++      let $l38 = $m_SQ($l12, $l35, $l36), $l39 = $l38 !== $l35, $l40 = $l10 === "" ? $m_veo($l27, $l38) : $l38, $l41 = $m_d_e($l1.session.host, $l1.toolUseId), $l42 = $l39 || $l41;
++      if ($l39 && $l40 === $l34) throw new $m_C("Nothing to change once the invisible characters are removed and harness-tag text is defused in new_string: it then equals old_string. Nothing was written.", "memory-directory write lint left an edit with nothing to change");
++      let $l43 = $m_eun({ filePath: $l12, fileContents: $l27, oldString: $l34, newString: $l40, replaceAll: $l9, isForToolResult: $l15 === void 0 }), $l44 = await $m_s1t($l12), $l45 = $l15 !== void 0 || $l25 === null ? void 0 : await $m_Jcn($l1, $l44, $l28 ? $l27 : null, $l43.updatedFile, { remote: $l1.remoteCall !== void 0 }), $l46 = $m_D_t($l44, $l43.updatedFile, $l45?.context);
++      $m_Zcn($l46.sharedItemBlock, "team");
++      let $l47 = $l46.content, $l48 = $l47 !== $l43.updatedFile, $l49 = !$l48 ? $l43.patch : $m_qye({ filePath: $l12, oldContent: $l27, newContent: $l47, convertTabs: true, isForToolResult: $l15 === void 0 }), $l50 = $l4 || $l48 || $l42 || $l28 && (!$m_Yoe($l32) || $l33 || !$m_bvt($l32, $m_Av($l27)));
++      if ($l15 !== void 0 || $l25 === null) return await $m_UUr({ writeCtx: $l1, tool: "Edit", absolutePath: $l15?.path ?? $l12, currentContent: $l28 ? $l27 : null, proposedContent: $l47 }), { originalFileContents: $l27, actualOldString: $l34, actualNewString: $l40, updatedFile: $l47, patch: $l49, staleRecovered: $l33, contentNotInModelContext: $l50, staged: true };
++      let $l51;
++      await $l25.recheckBeforeWrite();
+       try {
+-        $l50 = await $m_plt($l24.ioPath, $l46, $l28, $l29);
+-      } catch ($l51) {
+-        throw $m_nk($l12), $l51;
++        $l51 = await $m_plt($l25.ioPath, $l47, $l29, $l30);
++      } catch ($l52) {
++        throw $m_nk($l12), $l52;
+       }
+-      if (await $m_Qcn($l43, $l46, $l45.item, $l44?.rev), $l3.set($l12, { content: $m_Av($l46), timestamp: $l50, offset: void 0, limit: void 0, ...$l49 && { contentNotInModelContext: true }, ...$l27 && $l31?.isPartialView === true && { isPartialView: true } }), $l28 === "utf8" && $l29 !== "CRLF") $m_Lvt($l12, $l46);
++      if (await $m_Qcn($l44, $l47, $l46.item, $l45?.rev), $l3.set($l12, { content: $m_Av($l47), timestamp: $l51, offset: void 0, limit: void 0, ...$l50 && { contentNotInModelContext: true }, ...$l28 && $l32?.isPartialView === true && { isPartialView: true } }), $l29 === "utf8" && $l30 !== "CRLF") $m_Lvt($l12, $l47);
+       else $m_nk($l12);
+-      return { originalFileContents: $l26, actualOldString: $l33, actualNewString: $l39, updatedFile: $l46, patch: $l48, staleRecovered: $l32, contentNotInModelContext: $l49, staged: false };
+-    } catch ($l52) {
+-      if ($l24 === null) throw $l52;
+-      $m_Sme($l52, $l24, $l12);
++      return { originalFileContents: $l27, actualOldString: $l34, actualNewString: $l40, updatedFile: $l47, patch: $l49, staleRecovered: $l33, contentNotInModelContext: $l50, staged: false };
++    } catch ($l53) {
++      if ($l25 === null) throw $l53;
++      $m_Sme($l53, $l25, $l12);
+     } finally {
+-      await $l24?.close();
++      await $l25?.close();
+     }
+   });
+-  if ($l23) return { data: { filePath: $l8, oldString: $l17, newString: $l11, originalFile: $l16, structuredPatch: $l20, userModified: $l4 ?? false, replaceAll: $l9, staged: true, stagedWording: $m_NUr({ session: $l1.session, served: $l1.remoteCall !== void 0, cause: $l14?.cause ?? "unapproved" }) }, remedy: { kind: "staged_for_review", path: $l14?.path ?? $l12 } };
++  if ($l24) {
++    let $l54 = $l1.remoteCall !== void 0 || $l1.inputFromAnotherMachine === true;
++    return { data: { filePath: $l8, oldString: $l54 ? $l0.old_string : $l18, newString: $l54 ? $l0.new_string : $l11, originalFile: $l54 ? null : $l17, structuredPatch: $l54 ? [] : $l21, userModified: $l4 ?? false, replaceAll: $l9, staged: true, stagedWording: $m_NUr({ session: $l1.session, served: $l1.remoteCall !== void 0, cause: $l15?.cause ?? "unapproved" }) }, remedy: { kind: "staged_for_review", path: $l15?.path ?? $l12 } };
++  }
+   if ($l1.remoteCall === void 0) $m_Jz($l1.nestedMemoryAttachmentTriggers, $l12);
+-  let $l53 = $l1.remoteCall === void 0 ? $m_UTe() : void 0;
+-  if ($l53) $m_lan($l1.session, $l12), $m_dan($l1.session, $l12), $l53.changeFile($l12, $l19).catch(($l54) => {
+-    $m_t(`LSP: Failed to notify server of file change for ${$l12}: ${$l54.message}`, { level: "error" });
+-  }), $l53.saveFile($l12).catch(($l55) => {
+-    $m_t(`LSP: Failed to notify server of file save for ${$l12}: ${$l55.message}`, { level: "error" });
++  let $l55 = $l1.remoteCall === void 0 ? $m_UTe() : void 0;
++  if ($l55) $m_lan($l1.session, $l12), $m_dan($l1.session, $l12), $l55.changeFile($l12, $l20).catch(($l56) => {
++    $m_t(`LSP: Failed to notify server of file change for ${$l12}: ${$l56.message}`, { level: "error" });
++  }), $l55.saveFile($l12).catch(($l57) => {
++    $m_t(`LSP: Failed to notify server of file save for ${$l12}: ${$l57.message}`, { level: "error" });
+   });
+-  if ($m_bht($l12, $l16, $l19), $l12.endsWith(`${$m_T_s}CLAUDE.md`)) $m_a("tengu_write_claudemd", {});
+-  ($l1.callerLogsSharedEvents ? $m_$6n : $m_a1t)($l20, $l2.message.model), $m_oR({ operation: "edit", tool: "FileEditTool", filePath: $l12 }), $m_a("tengu_edit_string_lengths", { oldStringBytes: Buffer.byteLength($l10, "utf8"), newStringBytes: Buffer.byteLength($l11, "utf8"), replaceAll: $l9 });
+-  let $l56;
++  if ($m_bht($l12, $l17, $l20), $l12.endsWith(`${$NEW_chunk_e6aww6q8_js_ATs}CLAUDE.md`)) $m_a("tengu_write_claudemd", {});
++  ($l1.callerLogsSharedEvents ? $m_$6n : $m_a1t)($l21, $l2.message.model), $m_oR({ operation: "edit", tool: "FileEditTool", filePath: $l12 }), $m_a("tengu_edit_string_lengths", { oldStringBytes: Buffer.byteLength($l10, "utf8"), newStringBytes: Buffer.byteLength($l11, "utf8"), replaceAll: $l9 });
++  let $l58;
+   if ($m_oBr($l1)) {
+-    let $l57 = Date.now(), $l58 = await $m_iBr($l12);
+-    if ($l58 && $m_sBr($l58)) $l56 = $l58;
+-    $m_a("tengu_tool_use_diff_computed", { isEditTool: true, durationMs: Date.now() - $l57, hasDiff: !!$l58 });
++    let $l59 = Date.now(), $l60 = await $m_iBr($l12);
++    if ($l60 && $m_sBr($l60)) $l58 = $l60;
++    $m_a("tengu_tool_use_diff_computed", { isEditTool: true, durationMs: Date.now() - $l59, hasDiff: !!$l60 });
+   }
+-  let $l59 = { filePath: $l8, oldString: $l17, newString: $l11, originalFile: $l16, structuredPatch: $l20, userModified: $l4 ?? false, replaceAll: $l9, ...$l21 && { staleRecovered: true }, ...$l22 && { contentNotInModelContext: true }, ...$l15 && { syncedSkillNext: $l15 }, ...$l56 && { gitDiff: $l56 } }, $l60 = { absoluteFilePath: $l12, output: $l59, originalFile: $l16, updatedFile: $l19, appliedNewString: $l18 }, $l61 = $l1.remoteCall !== void 0 ? void 0 : $l1.smallResultAsked === true ? $m_Jut($l60) : $l1.agentId !== void 0 ? $m_fGn($l60) : void 0;
+-  return { data: $l59, ...$l61 };
++  let $l61 = { filePath: $l8, oldString: $l18, newString: $l11, originalFile: $l17, structuredPatch: $l21, userModified: $l4 ?? false, replaceAll: $l9, ...$l22 && { staleRecovered: true }, ...$l23 && { contentNotInModelContext: true }, ...$l16 && { syncedSkillNext: $l16 }, ...$l58 && { gitDiff: $l58 } }, $l62 = { absoluteFilePath: $l12, output: $l61, originalFile: $l17, updatedFile: $l20, appliedNewString: $l19 }, $l63 = $l1.remoteCall !== void 0 ? void 0 : $l1.smallResultAsked === true ? $m_Jut($l62) : $l1.agentId !== void 0 ? $m_fGn($l62) : void 0;
++  return { data: $l61, ...$l63 };
+ }
+ ;

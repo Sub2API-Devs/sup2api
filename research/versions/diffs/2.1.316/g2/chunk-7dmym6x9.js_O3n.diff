@@ -1,0 +1,14 @@
+# chunk-7dmym6x9.js:O3n -> chunk-e6aww6q8.js:k6n
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_O3n.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_O3n.new.js"
+index 7f738e6..c611d70 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_O3n.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_O3n.new.js"
+@@ -10,7 +10,7 @@ function SELF($l0, $l1, $l2) {
+     if (!Array.isArray($l7)) return $l6;
+     if (!$l7.some(($l8) => $l8.type === "tool_result")) return $l6;
+     let $l9 = [], $l10 = [];
+-    for (let $l11 of $l7) if ($l11.type === "text" && ($l11.text.startsWith($m_BP) || !$l1 && $m_Yeo($l11.text)) && !$m_Tft($l11.text) && !$m_x3n($l11.text, $l2)) $l9.push($l11);
++    for (let $l11 of $l7) if ($l11.type === "text" && ($l11.text.startsWith($m_BP) || !$l1 && $m_Yeo($l11.text)) && !$m_Tft($l11.text) && !$m_x3n($l11.text, $l2) && !$NEW_chunk_e6aww6q8_js_h6n($l11.text)) $l9.push($l11);
+     else $l10.push($l11);
+     if ($l9.length === 0) return $l6;
+     let $l12 = $l10.findLastIndex(($l13) => $l13.type === "tool_result" && !$m_M3n($l13) && !$m_A3n($l13) && !$m_P3n($l13) && !(typeof $l13.tool_use_id === "string" && $l3.has($l13.tool_use_id) && !$m_dbn($l13.content)));

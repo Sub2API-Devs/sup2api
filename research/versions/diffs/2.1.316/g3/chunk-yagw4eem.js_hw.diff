@@ -1,0 +1,14 @@
+# chunk-yagw4eem.js:hw -> chunk-hwmsct5x.js:bw
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_hw.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_hw.new.js"
+index 4f4e470..f3f23b2 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_hw.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-yagw4eem.js_hw.new.js"
+@@ -4,7 +4,7 @@ function SELF($l0, $l1, $l2, $l3, $l4, $l5, $l6, $l7, $l8) {
+     let $l14 = new Headers($l13?.headers), $l15 = $l12 instanceof Request ? $l12.url : String($l12), { method: $l16 } = $m_mYt($l12, $l13);
+     $m_jQo($l9, $l16, $l15);
+     let $l17 = $l14.get($m_gRe) ?? void 0;
+-    if ($l11 && !$l14.has($m_gRe)) $l14.set($m_gRe, $m_ew());
++    if ($l11 && !$l14.has($m_gRe)) $l14.set($m_gRe, $NEW_chunk_hwmsct5x_js_aw());
+     if ($l11 && ($m_O4() && $m_$c() || $m_U6e())) {
+       $l14.set($m_Nc, "true");
+       let $l18 = $m_pZn($m_Lds());

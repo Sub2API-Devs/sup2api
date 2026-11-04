@@ -1,0 +1,36 @@
+{
+ "index": 1,
+ "listener": "tls:443",
+ "method": "GET",
+ "url": "/api/claude_code/settings",
+ "rawHeaders": [
+  "Accept",
+  "application/json, text/plain, */*",
+  "x-api-key",
+  "sk-ant-api03-client-fake",
+  "User-Agent",
+  "claude-code/2.1.312",
+  "Cache-Control",
+  "no-cache",
+  "Pragma",
+  "no-cache",
+  "Accept-Encoding",
+  "gzip, compress, deflate, br",
+  "Host",
+  "api.anthropic.com",
+  "Connection",
+  "keep-alive"
+ ],
+ "headers": {
+  "accept": "application/json, text/plain, */*",
+  "x-api-key": "sk-ant-api03-client-fake",
+  "user-agent": "claude-code/2.1.312",
+  "cache-control": "no-cache",
+  "pragma": "no-cache",
+  "accept-encoding": "gzip, compress, deflate, br",
+  "host": "api.anthropic.com",
+  "connection": "keep-alive"
+ },
+ "body": "",
+ "rawBody": ""
+}

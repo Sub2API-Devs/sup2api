@@ -1,0 +1,12 @@
+# chunk-f7avdr1b.js:Qy -> chunk-aepeg2w5.js:C_
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_Qy.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_Qy.new.js"
+index 1a81f5d..38a90ce 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_Qy.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_Qy.new.js"
+@@ -1,5 +1,5 @@
+ function SELF($l0) {
+-  $l0 = $l0.toLowerCase();
++  $l0 = $NEW_chunk_jabbzrn8_js_f_r($l0.toLowerCase());
+   let $l1 = $m_aN().canonicalNameMemo, $l2 = $l1.get($l0);
+   if ($l2 !== void 0) return $l2;
+   let $l3 = $m_kK($l0);

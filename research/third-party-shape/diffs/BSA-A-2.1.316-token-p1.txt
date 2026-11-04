@@ -1,0 +1,16 @@
+Messages 请求 A=1 B=1
+
+-- 主线程 第1轮 (A req-1 / B req-1): 8 处差异
+  头 x-claude-code-session-id（每次随机）A=4883ac16-20de-4905-af11-c54157212eac B=2ca6241b-616b-4b07-a453-63c9c8a45a96
+  头 anthropic-beta A=["claude-code-20250219","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","mid-conversation-system-clear-at-2026-08-21","effort-2025-11-24","thinking-binding-controls-2026-08-01","cache-diagnosis-2026-04-07"]
+                  B=["claude-code-20250219","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","effort-2025-11-24","thinking-binding-controls-2026-08-01","cache-diagnosis-2026-04-07"]
+  头 x-claude-code-prompt-id（每次随机）A=a9dfd4a9-626d-4c9d-b555-a6ebd17aea86 B=566f3107-3af4-488e-b203-c5effbda1fcd
+  头 x-client-request-id（每次随机）A=3404839b-13b7-4abc-88e5-5043f560cc87 B=7b116e69-e9b5-4e67-bb5e-093ffda34852
+  头 host A=api.anthropic.com B=127.0.0.1:8790
+  system[0] 文字不同（A 192B / B 192B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=e9668; cc_prompt_id=a9dfd4a9-626d-4c9d-b555-a6ebd17aea86; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=b8fc8; cc_prompt_id=566f3107-3af4-488e-b203-c5effbda1fcd; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=e9668; cc_prompt_id=a9dfd4a9-626d-4c9d-b555-a6ebd17aea86; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=b8fc8; cc_prompt_id=566f3107-3af4-488e-b203-c5effbda1fcd; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+  metadata A={"user_id":"{\"device_id\":\"59c99a596ef4637fd58a130c884be9966adb7dfa2bf606fab63c93596aed8c3b\",\"account_uuid\":\"\",\"session_id\":\"4883ac16-20de-4905-af11-c54157212eac\"}"}
+           B={"user_id":"{\"device_id\":\"82a74f84816bd2450f9818f87b64acd86e289db385052ec3e8a22ce1bf116ce9\",\"account_uuid\":\"\",\"session_id\":\"2ca6241b-616b-4b07-a453-63c9c8a45a96\"}"}

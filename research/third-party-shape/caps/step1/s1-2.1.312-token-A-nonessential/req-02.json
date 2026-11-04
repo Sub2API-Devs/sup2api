@@ -1,0 +1,49 @@
+{
+ "index": 2,
+ "listener": "tls:443",
+ "method": "POST",
+ "url": "/api/eval/sdk-zAZezfDKGoZuXXKe",
+ "rawHeaders": [
+  "Authorization",
+  "Bearer ccg-client-token-fake",
+  "Content-Type",
+  "application/json",
+  "User-Agent",
+  "claude-code/2.1.312",
+  "Connection",
+  "keep-alive",
+  "Accept",
+  "*/*",
+  "Host",
+  "api.anthropic.com",
+  "Accept-Encoding",
+  "gzip, deflate, br, zstd",
+  "Content-Length",
+  "355"
+ ],
+ "headers": {
+  "authorization": "Bearer ccg-client-token-fake",
+  "content-type": "application/json",
+  "user-agent": "claude-code/2.1.312",
+  "connection": "keep-alive",
+  "accept": "*/*",
+  "host": "api.anthropic.com",
+  "accept-encoding": "gzip, deflate, br, zstd",
+  "content-length": "355"
+ },
+ "body": {
+  "attributes": {
+   "id": "dea0b3bf139fbd8f0d3fb723b9e738d6b51889747ca2149abf9d3176d05239b1",
+   "sessionId": "6a58ead9-168b-46df-b006-4470ca6d0d20",
+   "deviceID": "dea0b3bf139fbd8f0d3fb723b9e738d6b51889747ca2149abf9d3176d05239b1",
+   "platform": "linux",
+   "userType": "external",
+   "appVersion": "2.1.312",
+   "entrypoint": "sdk-cli"
+  },
+  "forcedVariations": {},
+  "forcedFeatures": [],
+  "url": ""
+ },
+ "rawBody": "{\"attributes\":{\"id\":\"dea0b3bf139fbd8f0d3fb723b9e738d6b51889747ca2149abf9d3176d05239b1\",\"sessionId\":\"6a58ead9-168b-46df-b006-4470ca6d0d20\",\"deviceID\":\"dea0b3bf139fbd8f0d3fb723b9e738d6b51889747ca2149abf9d3176d05239b1\",\"platform\":\"linux\",\"userType\":\"external\",\"appVersion\":\"2.1.312\",\"entrypoint\":\"sdk-cli\"},\"forcedVariations\":{},\"forcedFeatures\":[],\"url\":\"\"}"
+}

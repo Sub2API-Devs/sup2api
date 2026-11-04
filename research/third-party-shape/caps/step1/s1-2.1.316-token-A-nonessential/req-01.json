@@ -1,0 +1,27 @@
+{
+ "index": 1,
+ "listener": "tls:443",
+ "method": "HEAD",
+ "url": "/api/hello",
+ "rawHeaders": [
+  "Connection",
+  "keep-alive",
+  "User-Agent",
+  "Bun/1.4.4",
+  "Accept",
+  "*/*",
+  "Host",
+  "api.anthropic.com",
+  "Accept-Encoding",
+  "gzip, deflate, br, zstd"
+ ],
+ "headers": {
+  "connection": "keep-alive",
+  "user-agent": "Bun/1.4.4",
+  "accept": "*/*",
+  "host": "api.anthropic.com",
+  "accept-encoding": "gzip, deflate, br, zstd"
+ },
+ "body": "",
+ "rawBody": ""
+}

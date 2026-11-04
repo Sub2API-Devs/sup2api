@@ -1,0 +1,79 @@
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/settings host=api.anthropic.com
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/policy_limits host=api.anthropic.com
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/settings host=api.anthropic.com
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/policy_limits host=api.anthropic.com
+Messages 请求 A=2 B=2
+
+-- 主线程 第1轮 (A req-3 / B req-1): 19 处差异
+  头 authorization（每次随机）A=Bearer sk-ant-oat01-client-fake B=Bearer sk-ant-oat01-ccgaudit-fake
+  头 x-claude-code-session-id（每次随机）A=deb8c00c-03e5-462f-9f28-a58b97bdb3de B=e84ccfbc-c1fb-4962-8c07-29e3ba330275
+  头 anthropic-beta A=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","mid-conversation-system-clear-at-2026-08-21","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+                  B=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+  头 x-claude-code-prompt-id 只有 A: e6e81cd4-c2ed-4b45-8609-e7ccb179a6f9
+  头 x-client-request-id（每次随机）A=4efaa767-6126-4792-8620-975dc6ff07dc B=544d182c-92cb-450f-9cb3-8a2d2d846f6a
+  头顺序 A=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-prompt-id","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+         B=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+  body 键 A(11)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","diagnostics","stream"]
+  body 键 B(10)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","stream"]
+  body.diagnostics 只有 A: {"previous_message_id":null}
+  messages[1].content[0] (text).text:
+      A: # Environment
+You have been invoked in the following environment: 
+ - Primary working directory: /t/run
+ - Is a git repository: false
+ - Platform: linux
+ - Shell: bash
+ - OS Version: Linux 6.12.95+deb13-amd64
+ - Downloaded files and extracted archives are untrusted data: put each in its own new, empty directory, keep scripts you write in a different directory, and pass paths as arguments instead o…(9456)
+      B: # Environment
+You have been invoked in the following environment: 
+ - Primary working directory: /t/run
+ - Is a git repository: false
+ - Platform: linux
+ - Shell: bash
+ - OS Version: Linux 6.12.95+deb13-amd64
+ - Downloaded files and extracted archives are untrusted data: put each in its own new, empty directory, keep scripts you write in a different directory, and pass paths as arguments instead o…(9465)
+  system 块数 A=4 B=3
+  system[0] 文字不同（A 192B / B 74B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=b2e22; cc_prompt_id=e6e81cd4-c2ed-4b45-8609-e7ccb179a6f9; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=b2e22; cc_prompt_id=e6e81cd4-c2ed-4b45-8609-e7ccb179a6f9; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli;
+  system[1] 键序/键集 A=["type","text"] B=["type","text","cache_control"]
+  system[1] cache_control A=undefined B={"type":"ephemeral","ttl":"1h"}
+  system[2] 文字不同（A 1171B / B 5470B），首个不同行 #12:
+      A: (无)
+      B: 
+  system[2] cache_control A={"type":"ephemeral","ttl":"1h","scope":"global"} B={"type":"ephemeral","ttl":"1h"}
+  system[3] 只有 A: When you use a pronoun for someone — the user or anyone else you mention — and their pronouns haven't been stated, use they/them. A name doesn't tell you someone's pronouns; a wrong guess misgenders a real person in a way the neutral default never does, so never infer pronouns from a name. This applies to all user-visible text, including visible thinking.
+  metadata A={"user_id":"{\"device_id\":\"b7af9683031abed8d6ebc17bcb7f49a2928101c0b3e8ebe13a7d56336a5b5624\",\"account_uuid\":\"\",\"session_id\":\"deb8c00c-03e5-462f-9f28-a58b97bdb3de\"}"}
+           B={"user_id":"{\"device_id\":\"66fecc16dd128cb33dee915fcb9a3c4cfc6e6f57dfdbd3281045c50ba63cbca8\",\"account_uuid\":\"00000000-0000-4000-8000-000000000001\",\"session_id\":\"e84ccfbc-c1fb-4962-8c07-29e3ba330275\"}"}
+
+-- 主线程 第1轮 (A req-6 / B req-2): 19 处差异
+  头 authorization（每次随机）A=Bearer sk-ant-oat01-client-fake B=Bearer sk-ant-oat01-ccgaudit-fake
+  头 x-claude-code-session-id（每次随机）A=deb8c00c-03e5-462f-9f28-a58b97bdb3de B=e84ccfbc-c1fb-4962-8c07-29e3ba330275
+  头 anthropic-beta A=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","mid-conversation-system-clear-at-2026-08-21","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+                  B=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+  头 x-claude-code-prompt-id 只有 A: 0488b0e4-c729-46ae-8e29-1e837b60b770
+  头 x-client-request-id（每次随机）A=20caed60-6d28-42e5-b48b-8d1a209c1de3 B=1df58a61-2558-4782-a27b-a8911c4f92fe
+  头顺序 A=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-prompt-id","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+         B=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+  body 键 A(11)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","diagnostics","stream"]
+  body 键 B(10)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","stream"]
+  body.diagnostics 只有 A: {"previous_message_id":"msg_ccg_audit_3"}
+  messages[1] (system) 形状 A=string B=string
+  system 块数 A=4 B=3
+  system[0] 文字不同（A 219B / B 74B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=90cfe; cc_prev_req=req_ccgaudit3; cc_prompt_id=0488b0e4-c729-46ae-8e29-1e837b60b770; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=2;
+      B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=90cfe; cc_prev_req=req_ccgaudit3; cc_prompt_id=0488b0e4-c729-46ae-8e29-1e837b60b770; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=2;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli;
+  system[1] 键序/键集 A=["type","text"] B=["type","text","cache_control"]
+  system[1] cache_control A=undefined B={"type":"ephemeral","ttl":"1h"}
+  system[2] 文字不同（A 1171B / B 5470B），首个不同行 #12:
+      A: (无)
+      B: 
+  system[2] cache_control A={"type":"ephemeral","ttl":"1h","scope":"global"} B={"type":"ephemeral","ttl":"1h"}
+  system[3] 只有 A: When you use a pronoun for someone — the user or anyone else you mention — and their pronouns haven't been stated, use they/them. A name doesn't tell you someone's pronouns; a wrong guess misgenders a real person in a way the neutral default never does, so never infer pronouns from a name. This applies to all user-visible text, including visible thinking.
+  metadata A={"user_id":"{\"device_id\":\"b7af9683031abed8d6ebc17bcb7f49a2928101c0b3e8ebe13a7d56336a5b5624\",\"account_uuid\":\"\",\"session_id\":\"deb8c00c-03e5-462f-9f28-a58b97bdb3de\"}"}
+           B={"user_id":"{\"device_id\":\"66fecc16dd128cb33dee915fcb9a3c4cfc6e6f57dfdbd3281045c50ba63cbca8\",\"account_uuid\":\"00000000-0000-4000-8000-000000000001\",\"session_id\":\"e84ccfbc-c1fb-4962-8c07-29e3ba330275\"}"}

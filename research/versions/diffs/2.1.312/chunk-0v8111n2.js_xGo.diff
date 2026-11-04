@@ -1,0 +1,21 @@
+# chunk-0v8111n2.js:xGo -> chunk-6vj7p32b.js:$Yo
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-0v8111n2.js_xGo.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-0v8111n2.js_xGo.new.js"
+index 3608e86d8..1c322bc69 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-0v8111n2.js_xGo.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-0v8111n2.js_xGo.new.js"
+@@ -1,10 +1,10 @@
+ function SELF({ body: $l0, level: $l1, store: $l2, clock: $l3 }) {
+-  let $l4 = $m_ne($l0), $l5 = $m_re($l0, $l4, $l1), $l6 = $l3.monotonicNow(), $l7 = 0, $l8 = 0, $l9 = $l4.map(($l10, $l11) => {
+-    let $l12 = $m_N($l2, $l5[$l11], $l6);
+-    if ($l12 !== void 0) $l7++, $l8 += $l10.end - $l10.start;
+-    return $l12;
++  let $l4 = $m_ne($l0), { keys: $l5, carriedDigestCount: $l6 } = $m_re($l0, $l4, $l1, $l0.buffer === $l2.keptBody?.memory.buffer && $l0.byteOffset === 0 ? $l2.keptBody : void 0), $l7 = $l3.monotonicNow(), $l8 = 0, $l9 = 0, $l10 = $l4.map(($l11, $l12) => {
++    let $l13 = $m_N($l2, $l5[$l12], $l7);
++    if ($l13 !== void 0) $l8++, $l9 += $l11.end - $l11.start;
++    return $l13;
+   });
+   if ($l2.blocks.size > 0) $m_z($l2, $l3);
+-  return { body: $l0, level: $l1, blocks: $l4, keys: $l5, reused: $l9, reusedBlockCount: $l7, reusedBytes: $l8, generation: $l2.generation };
++  return { body: $l0, level: $l1, blocks: $l4, keys: $l5, reused: $l10, reusedBlockCount: $l8, reusedBytes: $l9, carriedDigestCount: $l6, generation: $l2.generation };
+ }
+ ;

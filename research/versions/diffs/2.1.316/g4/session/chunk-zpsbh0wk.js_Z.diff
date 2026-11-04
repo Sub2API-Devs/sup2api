@@ -1,0 +1,214 @@
+# chunk-zpsbh0wk.js:Z -> chunk-ndmse9kj.js:Z
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Z.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Z.new.js"
+index dfded10..e8080ca 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Z.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Z.new.js"
+@@ -8,28 +8,29 @@ class $l0 {
+   #i = false;
+   #d = false;
+   #u = false;
+-  #l = false;
+   #c = false;
++  #l = false;
+   #p = void 0;
+-  #a = false;
+-  #h = void 0;
++  #h = false;
++  #a = void 0;
+   #g = false;
+-  #m = false;
++  #S = false;
+   #y = null;
+-  #S = null;
++  #v = null;
+   #f = null;
+-  #v = false;
++  #m = false;
+   #b = null;
+   #k = false;
+   #R = false;
++  #x = false;
+   #C = false;
+   #P = false;
+-  #x = false;
+-  #M = void 0;
++  #T = void 0;
+   #w = void 0;
+   #A = void 0;
+-  #T = null;
+-  #L = null;
++  #L = void 0;
++  #M = null;
++  #O = null;
+   onboardingShownThisSession() {
+     return this.#e;
+   }
+@@ -85,25 +86,25 @@ class $l0 {
+     this.#u = $l9;
+   }
+   memoryPausedByCommand() {
+-    return this.#c;
++    return this.#l;
+   }
+   replaceMemoryPausedByCommand($l10) {
+-    this.#c = $l10;
++    this.#l = $l10;
+   }
+   accountMemorySessionMode() {
+     return this.#p;
+   }
+   replaceAccountMemorySessionMode($l11, $l12 = false) {
+-    this.#p = $l11, this.#a = $l12 && $l11 !== void 0;
++    this.#p = $l11, this.#h = $l12 && $l11 !== void 0;
+   }
+   accountMemorySessionModeRestored() {
+-    return this.#a;
++    return this.#h;
+   }
+   accountMemoryLaunchMode() {
+-    return this.#h;
++    return this.#a;
+   }
+   replaceAccountMemoryLaunchMode($l13) {
+-    this.#h = $l13;
++    this.#a = $l13;
+   }
+   restoredMemoryPause() {
+     return this.#g;
+@@ -112,22 +113,22 @@ class $l0 {
+     this.#g = $l14;
+   }
+   restoredAutoMemoryOff() {
+-    return this.#l;
++    return this.#c;
+   }
+   replaceRestoredAutoMemoryOff($l15) {
+-    this.#l = $l15;
++    this.#c = $l15;
+   }
+   teardownUnwindRequested() {
+-    return this.#v;
++    return this.#m;
+   }
+   replaceTeardownUnwindRequested($l16) {
+-    this.#v = $l16;
++    this.#m = $l16;
+   }
+   backgroundAutoModeSetupInFlight() {
+-    return this.#m;
++    return this.#S;
+   }
+   replaceBackgroundAutoModeSetupInFlight($l17) {
+-    this.#m = $l17;
++    this.#S = $l17;
+   }
+   deferredToolStubGateLatch() {
+     return this.#y;
+@@ -136,10 +137,10 @@ class $l0 {
+     this.#y = $l18;
+   }
+   verifySkillRolloutGateLatch() {
+-    return this.#S;
++    return this.#v;
+   }
+   replaceVerifySkillRolloutGateLatch($l19) {
+-    this.#S = $l19;
++    this.#v = $l19;
+   }
+   commitSkillRolloutGateLatch() {
+     return this.#f;
+@@ -160,31 +161,31 @@ class $l0 {
+     this.#k = true;
+   }
+   activeRoutine() {
+-    return this.#w;
++    return this.#A;
+   }
+   replaceActiveRoutine($l22) {
+-    this.#w = $l22;
++    this.#A = $l22;
+   }
+   inheritedTeamName() {
+-    return this.#A;
++    return this.#L;
+   }
+   replaceInheritedTeamName($l23) {
+-    this.#A = $l23;
++    this.#L = $l23;
+   }
+   teleportedSessionInfo() {
+-    return this.#T;
++    return this.#M;
+   }
+   replaceTeleportedSessionInfo($l24) {
+-    this.#T = $l24;
++    this.#M = $l24;
+   }
+   markFirstTeleportMessageLogged() {
+-    if (this.#T) this.#T.hasLoggedFirstMessage = true;
++    if (this.#M) this.#M.hasLoggedFirstMessage = true;
+   }
+   cachedClaudeMdContent() {
+-    return this.#L;
++    return this.#O;
+   }
+   replaceCachedClaudeMdContent($l25) {
+-    this.#L = $l25;
++    this.#O = $l25;
+   }
+   accountSkillsSyncEnabled() {
+     return this.#R;
+@@ -193,35 +194,41 @@ class $l0 {
+     this.#R = $l26;
+   }
+   skillsSyncVetoed() {
+-    return this.#C;
++    return this.#x;
+   }
+   replaceSkillsSyncVetoed($l27) {
+-    this.#C = $l27;
++    this.#x = $l27;
+   }
+   accountPluginsSyncEnabled() {
+-    return this.#P;
++    return this.#C;
+   }
+   replaceAccountPluginsSyncEnabled($l28) {
+-    this.#P = $l28;
++    this.#C = $l28;
+   }
+   pluginsSyncVetoed() {
+-    return this.#x;
++    return this.#P;
+   }
+   replacePluginsSyncVetoed($l29) {
+-    this.#x = $l29;
++    this.#P = $l29;
+   }
+-  armPendingContextCompacted($l30) {
+-    this.#M = $l30;
++  armPendingContextCompacted($l30, $l31) {
++    this.#T = $l30, this.#w = $l31;
+   }
+   consumePendingContextCompacted() {
+-    let $l31 = this.#M;
+-    return this.#M = void 0, $l31;
++    let $l32 = this.#T;
++    return this.#T = void 0, $l32;
+   }
+   forgetPendingContextCompacted() {
+-    this.#M = void 0;
++    this.#T = void 0, this.#w = void 0;
++  }
++  responseBeforeCompaction() {
++    return this.#w;
++  }
++  forgetResponseBeforeCompaction() {
++    this.#w = void 0;
+   }
+   reset() {
+-    this.#R = false, this.#C = false, this.#P = false, this.#x = false, this.#e = false, this.#t = false, this.#n = false, this.#o = false, this.#r = false, this.#s = false, this.#i = false, this.#d = false, this.#u = false, this.#c = false, this.#p = void 0, this.#a = false, this.#h = void 0, this.#g = false, this.#l = false, this.#v = false, this.#m = false, this.#y = null, this.#S = null, this.#f = null, this.#b = null, this.#k = false, this.#w = void 0, this.#A = void 0, this.#T = null, this.#L = null, this.#M = void 0;
++    this.#R = false, this.#x = false, this.#C = false, this.#P = false, this.#e = false, this.#t = false, this.#n = false, this.#o = false, this.#r = false, this.#s = false, this.#i = false, this.#d = false, this.#u = false, this.#l = false, this.#p = void 0, this.#h = false, this.#a = void 0, this.#g = false, this.#c = false, this.#m = false, this.#S = false, this.#y = null, this.#v = null, this.#f = null, this.#b = null, this.#k = false, this.#A = void 0, this.#L = void 0, this.#M = null, this.#O = null, this.#T = void 0, this.#w = void 0;
+   }
+ }
+ ;

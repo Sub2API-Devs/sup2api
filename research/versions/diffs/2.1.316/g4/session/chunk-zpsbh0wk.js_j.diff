@@ -1,0 +1,63 @@
+# chunk-zpsbh0wk.js:J -> chunk-ndmse9kj.js:V
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_J.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_J.new.js"
+index 9caadbb..52271b0 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_J.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_J.new.js"
+@@ -8,10 +8,10 @@ class $l0 {
+   #i = false;
+   #d = false;
+   #u = void 0;
+-  #l = false;
+-  #c = void 0;
++  #c = false;
++  #l = void 0;
+   #p = void 0;
+-  #a = void 0;
++  #h = void 0;
+   mainLoopModelOverride() {
+     return this.#e;
+   }
+@@ -64,20 +64,20 @@ class $l0 {
+     return this.#u;
+   }
+   silentLaneServerArmed() {
+-    return this.#l;
++    return this.#c;
+   }
+   armSilentLaneFromServer() {
+-    this.#l = true;
++    this.#c = true;
+   }
+   forgetRefusalFallbackOccurred() {
+-    this.#i = false, this.#d = false, this.#l = false, this.#u = void 0;
++    this.#i = false, this.#d = false, this.#c = false, this.#u = void 0;
+   }
+   refusalFallbackModelLatch() {
+-    return this.#c;
++    return this.#l;
+   }
+   replaceRefusalFallbackModelLatch($l9, $l10 = "superseded") {
+-    if (this.#c?.carriedEffort !== void 0 && $l9?.carriedEffort === void 0) this.#p = $l10;
+-    this.#c = $l9;
++    if (this.#l?.carriedEffort !== void 0 && $l9?.carriedEffort === void 0) this.#p = $l10;
++    this.#l = $l9;
+   }
+   unlatchRefusalFallbackModel($l11) {
+     this.replaceRefusalFallbackModelLatch(void 0, $l11);
+@@ -87,13 +87,13 @@ class $l0 {
+     return this.#p = void 0, $l12;
+   }
+   availabilityFallbackChain() {
+-    return this.#a;
++    return this.#h;
+   }
+   replaceAvailabilityFallbackChain($l13) {
+-    this.#a = $l13;
++    this.#h = $l13;
+   }
+   reset() {
+-    this.#e = void 0, this.#t = void 0, this.#n = void 0, this.#o = void 0, this.#r = void 0, this.#s = void 0, this.#i = false, this.#d = false, this.#l = false, this.#u = void 0, this.#c = void 0, this.#p = void 0, this.#a = void 0;
++    this.#e = void 0, this.#t = void 0, this.#n = void 0, this.#o = void 0, this.#r = void 0, this.#s = void 0, this.#i = false, this.#d = false, this.#c = false, this.#u = void 0, this.#l = void 0, this.#p = void 0, this.#h = void 0;
+   }
+ }
+ ;

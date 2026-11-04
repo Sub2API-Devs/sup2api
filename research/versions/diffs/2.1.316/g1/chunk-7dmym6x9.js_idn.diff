@@ -1,0 +1,16 @@
+# chunk-7dmym6x9.js:idn -> chunk-e6aww6q8.js:Fmn
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_idn.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_idn.new.js"
+index 6b9a81b..f402f55 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_idn.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_idn.new.js"
+@@ -1,6 +1,6 @@
+-function SELF($l0, $l1, $l2, $l3) {
+-  let $l4 = $l0 === $m_Us(), $l5 = ($l6) => !$l0.declaredToolsDecided && ($m_rdr($l6) || $l4 && $m_odr?.isLinkedComputerToolShownOnRelay($l6, $l0, $l3) === true), $l7 = $m_bWr($l1, $l0), $l8 = $l7 !== $l1;
+-  if (($l8 ? $l0.declaredTools !== void 0 : $l0.declaredToolsDecided) || !$m_N_e() || !$l8 && !$l1.some($l5) || !$l1.some(($l9) => $m_xt($l9, $m_Ys))) return;
+-  return new $m_K7($l7.filter(($l10) => !$l2($l10) && !$l5($l10)));
++function SELF($l0, $l1, $l2, $l3, $l4 = false) {
++  let $l5 = $l0 === $m_Us(), $l6 = ($l7) => !$l0.declaredToolsDecided && ($m_rdr($l7) || $l5 && $m_odr?.isLinkedComputerToolShownOnRelay($l7, $l0, $l3) === true), $l8 = $m_bWr($l1, $l0), $l9 = $l8 !== $l1, $l10 = ($l11) => $l11.mcpInfo?.scope !== "claudeai" && $m_ok($l11, $m_i.CLAUDE_CODE_UPFRONT_TOOLS ?? []), $l12 = $l4 && !$l0.declaredToolsDecided && $l8.some(($l13) => $l10($l13) && $l2($l13));
++  if (($l9 ? $l0.declaredTools !== void 0 : $l0.declaredToolsDecided) || !$m_N_e() || !$l9 && !$l12 && !$l1.some($l6) || !$l1.some(($l14) => $m_xt($l14, $m_Ys))) return;
++  return new $m_K7($l8.filter(($l15) => (!$l2($l15) || $l12 && $l10($l15)) && !$l6($l15)));
+ }
+ ;

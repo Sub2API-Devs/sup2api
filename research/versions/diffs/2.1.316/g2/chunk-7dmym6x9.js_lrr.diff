@@ -1,0 +1,13 @@
+# chunk-7dmym6x9.js:lrr -> chunk-e6aww6q8.js:Xlr
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_lrr.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_lrr.new.js"
+index bf38d58..7d35ad6 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_lrr.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_lrr.new.js"
+@@ -3,6 +3,6 @@ function SELF($l0, $l1) {
+   if ($m_cfe($l0)) return $m_SB($l2, $l0) && !$l1 ? "rewrite-final-message" : "rewrite";
+   if ($m_II("turn_updates", $l2, $l0, $m_i.CLAUDE_CODE_TURN_UPDATES)) return "turn-updates";
+   if ($m_irr($l2, $l0) || $m_jri($l2)) return $m_SB($l2, $l0) && !$l1 ? "readable-final-message" : "readable";
+-  return $m_Q5($l0) ? "short" : "standard";
++  return $m_Q5($l0) ? "none" : "standard";
+ }
+ ;

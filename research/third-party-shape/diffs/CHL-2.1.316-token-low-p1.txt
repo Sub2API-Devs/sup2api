@@ -1,0 +1,69 @@
+Messages 请求 A=1 B=1
+
+-- 主线程 第1轮 (A req-1 / B req-1): 24 处差异
+  头 authorization（每次随机）A=Bearer sk-ant-oat01-client-login B=Bearer sk-ant-oat01-ccgaudit-fake
+  头 x-claude-code-session-id（每次随机）A=e0e5c38c-4499-42d3-b480-d923cfdd4bc5 B=9a73ff57-7480-4375-8414-82537eff4a23
+  头 anthropic-beta A=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","mid-conversation-system-clear-at-2026-08-21","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+                  B=["claude-code-20250219","oauth-2025-04-20","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","effort-2025-11-24","thinking-binding-controls-2026-08-01","extended-cache-ttl-2025-04-11","cache-diagnosis-2026-04-07"]
+  头 x-claude-code-prompt-id（每次随机）A=722181ac-4951-4cad-9933-4cb36a1501a3 B=a2239643-41ad-4e58-ab09-762b4c299364
+  头 x-client-request-id（每次随机）A=59255f18-9e10-45f4-beb5-d008854aed40 B=3402a2d4-3878-49cb-a2da-c48311415045
+  body 键 A(11)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","diagnostics","stream"]
+  body 键 B(10)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","stream"]
+  body.diagnostics 只有 A: {"previous_message_id":null}
+  messages[0] (user) 块数 A=3 B=2: A=["text","text","text"] B=["text","text"]
+  messages[0].content[0] (text).text:
+      A: <system-reminder>
+As you answer the user's questions, you can use the following context:
+# userEmail
+The user's email address is client@example.invalid. Use it only to identify the user, such as for authorship, attribution, or filtering their own work. Never send it to an unrelated service, such as in a request header, URL, or payload, unless the user explicitly asks.
+
+Claude Code attached this co…(564)
+      B: <system-reminder>
+Attribution for git commits and pull requests you create from here on (this replaces Claude Code's own earlier attribution guidance, such as a previous copy of this reminder; the user's own instructions about these lines, such as a CLAUDE.md or memory rule, take precedence over this reminder, but do not add attribution lines this reminder leaves out):
+- End git commit messages wi…(581)
+  messages[0].content[1] (text).text:
+      A: <system-reminder>
+Attribution for git commits and pull requests you create from here on (this replaces Claude Code's own earlier attribution guidance, such as a previous copy of this reminder; the user's own instructions about these lines, such as a CLAUDE.md or memory rule, take precedence over this reminder, but do not add attribution lines this reminder leaves out):
+- End git commit messages wi…(581)
+      B: Reply with the single word OK.
+  messages[0].content[2] 只有 A: {"type":"text","text":"Reply with the single word OK."}
+  messages[1].content[0] (text).text:
+      A: # Environment
+You have been invoked in the following environment: 
+ - Primary working directory: /t/run
+ - Is a git repository: false
+ - Platform: linux
+ - Shell: bash
+ - OS Version: Linux 6.12.95+deb13-amd64
+ - Downloaded files and extracted archives are untrusted data: put each in its own new, empty directory, keep scripts you write in a different directory, and pass paths as arguments instead o…(9465)
+      B: # Environment
+You have been invoked in the following environment: 
+ - Primary working directory: /t/run
+ - Is a git repository: false
+ - Platform: linux
+ - Shell: bash
+ - OS Version: Linux 6.12.95+deb13-amd64
+ - Downloaded files and extracted archives are untrusted data: put each in its own new, empty directory, keep scripts you write in a different directory, and pass paths as arguments instead o…(9069)
+  messages[1].content[0] (text).cache_control:
+      A: {"type":"ephemeral","ttl":"1h"}
+      B: {"type":"ephemeral"}
+  system 块数 A=4 B=3
+  system[0] 文字不同（A 192B / B 74B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=664dc; cc_prompt_id=722181ac-4951-4cad-9933-4cb36a1501a3; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=664dc; cc_prompt_id=722181ac-4951-4cad-9933-4cb36a1501a3; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli;
+  system[1] 键序/键集 A=["type","text"] B=["type","text","cache_control"]
+  system[1] cache_control A=undefined B={"type":"ephemeral"}
+  system[2] 文字不同（A 1171B / B 5470B），首个不同行 #12:
+      A: (无)
+      B: 
+  system[2] cache_control A={"type":"ephemeral","ttl":"1h","scope":"global"} B={"type":"ephemeral"}
+  system[3] 只有 A: When you use a pronoun for someone — the user or anyone else you mention — and their pronouns haven't been stated, use they/them. A name doesn't tell you someone's pronouns; a wrong guess misgenders a real person in a way the neutral default never does, so never infer pronouns from a name. This applies to all user-visible text, including visible thinking.
+  tools[ScheduleWakeup].description A=Schedule when to resume work in /loop dynamic mode — the user invoked /loop without an interval, asking you to self-pace iterations of a specific task.
+
+Do NOT schedule a short-interval wakeup to poll for background work you started — when harness-tracked work finishes, you are re-invoked automatically, so polling is wasted. Instead schedule a long fallback (1200s+) so the loop survives if the wor…(3148) B=Schedule when to resume work in /loop dynamic mode — the user invoked /loop without an interval, asking you to self-pace iterations of a specific task.
+
+Do NOT schedule a short-interval wakeup to poll for background work you started — when harness-tracked work finishes, you are re-invoked automatically, so polling is wasted. Instead schedule a long fallback (1200s+) so the loop survives if the wor…(3396)
+  metadata A={"user_id":"{\"device_id\":\"b2bb0a3c6a258ad067a1af6b2d522090f08df24e6b3079e49f9d75d004df8781\",\"account_uuid\":\"22222222-2222-4222-8222-222222222222\",\"session_id\":\"e0e5c38c-4499-42d3-b480-d923cfdd4bc5\"}"}
+           B={"user_id":"{\"device_id\":\"ebf73a29ae043f94d7943b24c3a46d40841a9757291af7f2f9c8a0008142b192\",\"account_uuid\":\"00000000-0000-4000-8000-000000000001\",\"session_id\":\"9a73ff57-7480-4375-8414-82537eff4a23\"}"}

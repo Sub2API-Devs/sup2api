@@ -1,0 +1,17 @@
+function SELF($l0, $l1, $l2, $l3, $l4) {
+  let $l5 = $l0.blockStore, { generation: $l6 } = $l5;
+  return ($l7) => {
+    if (!$l7?.ok || $l0.blocksBuildGeneration === $l6) return;
+    let $l8 = typeof $l2 !== "string" && $l2.buffer === $l5.keptBody?.memory.buffer ? Buffer.from($l2) : $l2;
+    $l0.blocksBuildGeneration = $l6, $l1.setTimeout(async () => {
+      try {
+        if (!$l0.blocksSwitchedOff && $m_Cc() !== 0 && $l5.generation === $l6) await $m_IGo($m_xGo({ body: typeof $l8 === "string" ? Buffer.from($l8) : $l8, level: $l3, store: $l5, clock: $l1 }), $l5, $l1, { inBackground: true, stopIf: () => $l0.blocksSwitchedOff !== false });
+      } catch ($l9) {
+        if (!$l0.blocksSwitchedOff || $l9 instanceof $m_awt) $m_Fc($l9, $l0, "build_failed", $l4);
+      } finally {
+        if ($l0.blocksBuildGeneration === $l6) $l0.blocksBuildGeneration = void 0;
+      }
+    }, $m_Oc, { unref: true });
+  };
+}
+;

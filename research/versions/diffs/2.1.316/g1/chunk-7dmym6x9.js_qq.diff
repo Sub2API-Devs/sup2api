@@ -1,0 +1,11 @@
+# chunk-7dmym6x9.js:Qq -> chunk-e6aww6q8.js:HK
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_Qq.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_Qq.new.js"
+index e401c24..611bcdc 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_Qq.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_Qq.new.js"
+@@ -1,4 +1,4 @@
+ function SELF($l0) {
+-  return $l0 instanceof $m_Mt && $l0.status === 400 && ($m__Fo($l0.message) || $m_lH($l0.message, "structured_outputs_unsupported"));
++  return $l0 instanceof $m_Mt && $l0.status === 400 && ($m__Fo($l0.message) || $m_lH($l0.message, "structured_outputs_unsupported") || $m_qq($l0, $m_kpe) || $NEW_chunk_e6aww6q8_js_Hke($l0, $m_kpe));
+ }
+ ;

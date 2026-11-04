@@ -1,0 +1,8 @@
+# chunk-ewb408bg.js:H -> chunk-p1bhnnws.js:H
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-ewb408bg.js_H.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-ewb408bg.js_H.new.js"
+index fc367f1..6ffc0b0 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-ewb408bg.js_H.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-ewb408bg.js_H.new.js"
+@@ -1 +1 @@
+-SELF = /* @__PURE__ */ new Set(["silent_turn_reminder", "quizzical_shore"]);
++SELF = /* @__PURE__ */ new Set(["silent_turn_reminder", "quizzical_shore", "original_games_guidance"]);

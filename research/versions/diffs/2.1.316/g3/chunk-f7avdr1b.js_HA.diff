@@ -1,0 +1,23 @@
+# chunk-f7avdr1b.js:HA -> chunk-aepeg2w5.js:TT
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_HA.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_HA.new.js"
+index e714661..14f4b65 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_HA.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-f7avdr1b.js_HA.new.js"
+@@ -6,6 +6,8 @@ class $l0 {
+   lastKeychainAccessToken = null;
+   lastUnusableTokenRecheckAt = 0;
+   lastOwnSavedAccessToken = null;
++  loginSwitch = null;
++  loginSwitchStopOn = false;
+   credentialsChangedOnDisk = $m_Me();
+   pending401Handlers = /* @__PURE__ */ new Map();
+   pendingRefreshChecks = { bare: null, store: null, backend: null };
+@@ -14,7 +16,7 @@ class $l0 {
+     this.value = void 0, this.promise = null;
+   }
+   resetChangeCheck() {
+-    this.lastCredentialsMtimeMs = 0, this.lastCredentialsVersion = void 0, this.lastKeychainAccessToken = null, this.lastUnusableTokenRecheckAt = 0, this.lastOwnSavedAccessToken = null;
++    this.lastCredentialsMtimeMs = 0, this.lastCredentialsVersion = void 0, this.lastKeychainAccessToken = null, this.lastUnusableTokenRecheckAt = 0, this.lastOwnSavedAccessToken = null, this.loginSwitch = null, this.loginSwitchStopOn = false;
+   }
+ }
+ ;

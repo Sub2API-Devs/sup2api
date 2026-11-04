@@ -1,0 +1,30 @@
+Messages 请求 A=1 B=1
+
+-- 主线程 第1轮 (A req-1 / B req-1): 19 处差异
+  头 x-claude-code-session-id（每次随机）A=525bbd25-ec87-48db-97af-3f75f1acfd6d B=d88368dd-c34d-45ae-8617-6bcf6a23ff2b
+  头 anthropic-beta A=["claude-code-20250219","interleaved-thinking-2025-05-14","context-management-2025-06-27","prompt-caching-scope-2026-01-05","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","mid-conversation-system-clear-at-2026-08-21","effort-2025-11-24","thinking-binding-controls-2026-08-01","cache-diagnosis-2026-04-07"]
+                  B=["claude-code-20250219","interleaved-thinking-2025-05-14","context-management-2025-06-27","mid-conversation-tool-changes-2026-07-01","thinking-token-count-2026-05-13","advanced-tool-use-2025-11-20","effort-2025-11-24"]
+  头 x-claude-code-prompt-id 只有 A: ab37acfe-3301-49fd-b120-06b1dd6acae0
+  头 x-claude-code-request-class 只有 A: main
+  头 x-client-request-id 只有 A: d1add4cb-a397-4e08-8899-15c65c3215b1
+  头 host A=api.anthropic.com B=127.0.0.1:8790
+  头顺序 A=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","x-claude-code-prompt-id","x-claude-code-request-class","x-client-request-id","connection","host","accept-encoding"]
+         B=["accept","authorization","content-type","user-agent","x-claude-code-session-id","x-stainless-arch","x-stainless-lang","x-stainless-os","x-stainless-package-version","x-stainless-retry-count","x-stainless-runtime","x-stainless-runtime-version","x-stainless-timeout","anthropic-beta","anthropic-dangerous-direct-browser-access","anthropic-version","x-app","connection","host","accept-encoding"]
+  body 键 A(11)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","diagnostics","stream"]
+  body 键 B(10)=["model","messages","system","tools","metadata","max_tokens","thinking","context_management","output_config","stream"]
+  body.diagnostics 只有 A: {"previous_message_id":null}
+  system 块数 A=4 B=3
+  system[0] 文字不同（A 192B / B 74B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=3539b; cc_prompt_id=ab37acfe-3301-49fd-b120-06b1dd6acae0; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      B: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=3539b; cc_prompt_id=ab37acfe-3301-49fd-b120-06b1dd6acae0; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli;
+  system[1] 键序/键集 A=["type","text"] B=["type","text","cache_control"]
+  system[1] cache_control A=undefined B={"type":"ephemeral"}
+  system[2] 文字不同（A 1171B / B 5566B），首个不同行 #12:
+      A: (无)
+      B: 
+  system[2] cache_control A={"type":"ephemeral","scope":"global"} B={"type":"ephemeral"}
+  system[3] 只有 A: Write code that reads like the surrounding code: match its comment density, naming, and idiom.
+  metadata A={"user_id":"{\"device_id\":\"9c97578576154991c76bcb06b4401026c938fcb0d4eac8d71145beb0f16a5e57\",\"account_uuid\":\"\",\"session_id\":\"525bbd25-ec87-48db-97af-3f75f1acfd6d\"}"}
+           B={"user_id":"{\"device_id\":\"4c5167d4d80950cd414d28a1e53096b99c4b830ea3947264487805309ddb7beb\",\"account_uuid\":\"\",\"session_id\":\"d88368dd-c34d-45ae-8617-6bcf6a23ff2b\"}"}

@@ -1,0 +1,121 @@
+# chunk-zpsbh0wk.js:Re -> chunk-ndmse9kj.js:Re
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Re.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Re.new.js"
+index 2b79a4b..d1d4fbb 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Re.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Re.new.js"
+@@ -8,17 +8,17 @@ class $l0 {
+   #i = null;
+   #d = null;
+   #u = null;
+-  #l = null;
+   #c = null;
++  #l = null;
+   #p = null;
+-  #a = null;
+-  #h = [];
++  #h = null;
++  #a = [];
+   #g = null;
+-  #m = $m_Xe();
++  #S = $m_Xe();
+   #y = null;
+-  #S = null;
++  #v = null;
+   #f = null;
+-  #v = $m_Ye();
++  #m = $m_Ye();
+   #b = null;
+   #k = null;
+   installMeter($l1, $l2, { omitUnits: $l3 = false } = {}) {
+@@ -54,43 +54,43 @@ class $l0 {
+     return this.#u;
+   }
+   statsStore() {
+-    return this.#l;
++    return this.#c;
+   }
+   replaceStatsStore($l6) {
+-    this.#l = $l6;
++    this.#c = $l6;
+   }
+   loggerProvider() {
+-    return this.#c;
++    return this.#l;
+   }
+   replaceLoggerProvider($l7) {
+-    this.#c = $l7;
++    this.#l = $l7;
+   }
+   eventLogger() {
+     return this.#p;
+   }
+   eventLoggerOwner() {
+-    return this.#a;
++    return this.#h;
+   }
+   attachEventLogger($l8, $l9) {
+-    if (this.#p = $l8, this.#a = $l8 ? $l9 : null, !$l8) return;
+-    let $l10 = this.#h;
+-    if (this.#h = null, $l10) for (let $l11 of $l10) $l8.emit($l11);
++    if (this.#p = $l8, this.#h = $l8 ? $l9 : null, !$l8) return;
++    let $l10 = this.#a;
++    if (this.#a = null, $l10) for (let $l11 of $l10) $l8.emit($l11);
+   }
+   bufferPendingEvent($l12) {
+-    if (this.#h === null || this.#h.length >= 100) return false;
+-    return this.#h.push($l12), true;
++    if (this.#a === null || this.#a.length >= 100) return false;
++    return this.#a.push($l12), true;
+   }
+   closeWindow($l13) {
+-    this.#h = null, this.#g = $l13;
++    this.#a = null, this.#g = $l13;
+   }
+   windowCloseCause() {
+     return this.#g;
+   }
+   isWindowOpen() {
+-    return this.#h !== null;
++    return this.#a !== null;
+   }
+   hostOtel() {
+-    return this.#m;
++    return this.#S;
+   }
+   meterProvider() {
+     return this.#y;
+@@ -99,10 +99,10 @@ class $l0 {
+     this.#y = $l14;
+   }
+   tracerProvider() {
+-    return this.#S;
++    return this.#v;
+   }
+   replaceTracerProvider($l15) {
+-    this.#S = $l15;
++    this.#v = $l15;
+   }
+   cachedTelemetryResource() {
+     return this.#f;
+@@ -111,10 +111,10 @@ class $l0 {
+     this.#f = $l16;
+   }
+   cachedOtlpHttpAgentFactory($l17, $l18) {
+-    return this.#v[$l17 ? "proxied" : "direct"][$l18];
++    return this.#m[$l17 ? "proxied" : "direct"][$l18];
+   }
+   replaceCachedOtlpHttpAgentFactory($l19, $l20, $l21) {
+-    this.#v[$l19 ? "proxied" : "direct"][$l20] = $l21;
++    this.#m[$l19 ? "proxied" : "direct"][$l20] = $l21;
+   }
+   inClusterOtlpTrustRoots() {
+     return this.#b;
+@@ -129,7 +129,7 @@ class $l0 {
+     this.#k = $l23;
+   }
+   reset() {
+-    this.#e = null, this.#t = null, this.#n = null, this.#o = null, this.#r = null, this.#s = null, this.#i = null, this.#d = null, this.#u = null, this.#l = null, this.#c = null, this.#p = null, this.#a = null, this.#h = [], this.#g = null, this.#m = $m_Xe(), this.#y = null, this.#S = null, this.#f = null, this.#v = $m_Ye(), this.#b = null, this.#k = null;
++    this.#e = null, this.#t = null, this.#n = null, this.#o = null, this.#r = null, this.#s = null, this.#i = null, this.#d = null, this.#u = null, this.#c = null, this.#l = null, this.#p = null, this.#h = null, this.#a = [], this.#g = null, this.#S = $m_Xe(), this.#y = null, this.#v = null, this.#f = null, this.#m = $m_Ye(), this.#b = null, this.#k = null;
+   }
+ }
+ ;

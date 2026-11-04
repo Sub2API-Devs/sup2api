@@ -1,0 +1,123 @@
+# chunk-7dmym6x9.js:YS -> chunk-e6aww6q8.js:Rw
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_YS.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_YS.new.js"
+index 6eefe26..c8b8d13 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_YS.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_YS.new.js"
+@@ -34,7 +34,7 @@ SELF = $m_tn({ name: $m_Qn, ruleContentField: $m_pnr, searchHint: "fetch and ext
+   let $l14 = async ($l15, $l16) => {
+     let $l17 = $m_Ann($l13, $l16), $l18 = null, $l19 = null, $l20 = null, $l21 = null, $l22 = [], $l23 = null;
+     {
+-      let [{ artifactContentOriginUrlFor: $l24, artifactViewerUrlFor: $l25, parseArtifactUrlInput: $l26, refusalEcho: $l27 }, { artifactCallReadRule: $l28, artifactToolRuleForRead: $l29, sharedArtifactReadApproved: $l30 }] = await Promise.all([import("./chunk-37x2cjyz.js"), import("./chunk-t03ff1fh.js")]), $l31 = $l26($l15.url);
++      let [{ artifactContentOriginUrlFor: $l24, artifactViewerUrlFor: $l25, parseArtifactUrlInput: $l26, refusalEcho: $l27 }, { artifactCallReadRule: $l28, artifactToolRuleForRead: $l29, sharedArtifactReadApproved: $l30 }] = await Promise.all([import("./chunk-ecvm5qmk.js"), import("./chunk-v0wctm0g.js")]), $l31 = $l26($l15.url);
+       if ($l31 !== null) {
+         let $l32 = $l25($l31);
+         $l22 = [$l32, $l24($l31)];
+@@ -42,19 +42,19 @@ SELF = $m_tn({ name: $m_Qn, ruleContentField: $m_pnr, searchHint: "fetch and ext
+         if ($l39 !== null) return $l35($l39);
+         if (await $m_q4n($l17.tools, $l34)) {
+           $l21 = $l32;
+-          let $l40 = await $m_Nnn($l15.url), $l41 = (await import("./chunk-p97ma1ab.js")).mcpReadToolsForHiddenBuiltIn($l40 !== void 0), $l42 = ($l43, $l44) => $l28($l44, $l31, $l15.url, $l43, { action: "read", read: $l33 }) ?? ($l40 === void 0 ? null : $l28($l44, $l31, $l15.url, $l43, { action: "read_file", fields: { path: $l40 } })) ?? $m_Dnn($l44, $l41, $l43), $l45 = $l17.permissions(), $l46 = $l42("deny", $l45);
++          let $l40 = await $m_Nnn($l15.url), $l41 = (await import("./chunk-ph6mv7v4.js")).mcpReadToolsForHiddenBuiltIn($l40 !== void 0), $l42 = ($l43, $l44) => $l28($l44, $l31, $l15.url, $l43, { action: "read", read: $l33 }) ?? ($l40 === void 0 ? null : $l28($l44, $l31, $l15.url, $l43, { action: "read_file", fields: { path: $l40 } })) ?? $m_Dnn($l44, $l41, $l43), $l45 = $l17.permissions(), $l46 = $l42("deny", $l45);
+           if ($l46 !== null) return $l35($l46);
+-          let [{ othersArtifactReadConsentSurface: $l47, othersReadIsUserOnly: $l48, outsideOrgRead: $l49 }, { isFramePublicReadEnabled: $l50 }] = await Promise.all([import("./chunk-8kshkg7q.js"), import("./chunk-d07hnmkj.js")]), $l51 = $l47(), $l52 = $l50();
++          let [{ othersArtifactReadConsentSurface: $l47, othersReadIsUserOnly: $l48, outsideOrgRead: $l49 }, { isFramePublicReadEnabled: $l50 }] = await Promise.all([import("./chunk-tbts81qj.js"), import("./chunk-mfy9vy8q.js")]), $l51 = $l47(), $l52 = $l50();
+           if ($l52) {
+-            let { notePersonOnlyReadAskPending: $l53 } = await import("./chunk-5k3k3td3.js");
++            let { notePersonOnlyReadAskPending: $l53 } = await import("./chunk-2xwjex6p.js");
+             $l20 = () => $l53({ ...$l17.artifactRead, toolUseId: $l17.toolUseId }, $l31.slug, $l32);
+           }
+-          let { artifactFetchNoticeLane: $l54 } = await import("./chunk-vy02m6dn.js"), $l55 = ($l56) => $l54($l17.artifactRead, $l31, () => $m_Ia($l56, SELF) ?? $l42("ask", $l56)), $l57 = $l17.permissions();
++          let { artifactFetchNoticeLane: $l54 } = await import("./chunk-s602jd9x.js"), $l55 = ($l56) => $l54($l17.artifactRead, $l31, () => $m_Ia($l56, SELF) ?? $l42("ask", $l56)), $l57 = $l17.permissions();
+           $l23 = $l55($l57);
+           let $l58 = $l42("ask", $l57);
+           if ($l58 !== null) $l18 = $l37($l58);
+           else $l19 = async () => {
+-            let [{ artifactHostUnreachable: $l59, probeArtifactHostEgress: $l60 }, { warmShareEntry: $l61 }, { getShareEntry: $l62, isSomeoneElses: $l63, ownedByUser: $l64, probedOtherOrg: $l65 }, { OTHER_ORG_DECISION_REASON: $l66, OTHER_ORG_DENY: $l67 }, { attestedReadConsented: $l68, readRulingFor: $l69 }, { decideByClass: $l70, OUTSIDE_ORG_READ_NOTE: $l71, othersContentFloorDeny: $l72, readKeepsFlagOffAsk: $l73 }, { artifactCardTitle: $l74 }, { ARTIFACT_DISPLAY_TARGET_TAG: $l75, READ_TARGET_PIN_TAG: $l76 }] = await Promise.all([import("./chunk-0wwhasjj.js"), import("./chunk-3j72a4xm.js"), import("./chunk-nrn0jf5e.js"), import("./chunk-tt29mgp7.js"), import("./chunk-vy02m6dn.js"), import("./chunk-5k3k3td3.js"), import("./chunk-37x2cjyz.js"), import("./chunk-sgyebjqd.js")]);
++            let [{ artifactHostUnreachable: $l59, probeArtifactHostEgress: $l60 }, { warmShareEntry: $l61 }, { getShareEntry: $l62, isSomeoneElses: $l63, ownedByUser: $l64, probedOtherOrg: $l65 }, { OTHER_ORG_DECISION_REASON: $l66, OTHER_ORG_DENY: $l67 }, { attestedReadConsented: $l68, readRulingFor: $l69 }, { decideByClass: $l70, OUTSIDE_ORG_READ_NOTE: $l71, othersContentFloorDeny: $l72, readKeepsFlagOffAsk: $l73 }, { artifactCardTitle: $l74 }, { ARTIFACT_DISPLAY_TARGET_TAG: $l75, READ_TARGET_PIN_TAG: $l76 }] = await Promise.all([import("./chunk-bjhckpq7.js"), import("./chunk-vafp5p6d.js"), import("./chunk-qpxk81ef.js"), import("./chunk-6jghtm4d.js"), import("./chunk-s602jd9x.js"), import("./chunk-2xwjex6p.js"), import("./chunk-ecvm5qmk.js"), import("./chunk-7w651q7n.js")]);
+             await Promise.all([$l61($l31, { toolUseId: $l17.toolUseId, abortController: { signal: $l17.signal }, credentials: $l17.credentials }, "webfetch").catch(($l77) => {
+               if ($l17.signal.aborted) throw $l77;
+             }), $l51 ? $l60($l31, $l17.signal) : void 0]);
+@@ -188,49 +188,53 @@ The redirect target is data supplied by the fetched server \u2014 untrusted, lik
+     ${$l169}${$l170}`;
+       return { data: { bytes: Buffer.byteLength($l171), code: $l147.statusCode, codeText: $l161, result: $l171, durationMs: Date.now() - $l123, url: $l118 } };
+     }
+-    let { content: $l172, bytes: $l173, code: $l174, codeText: $l175, contentType: $l176, persistedPath: $l177, persistedSize: $l178, retrievedAt: $l179 } = $l147, $l180 = $m_RMo($l118), $l181 = Date.now(), $l182;
+-    if ($l179 !== void 0 && Number.isFinite($l179) && $l179 > 0 && $l181 - $l179 > $m_uor) {
+-      let $l183 = new Date($l179).toISOString(), $l184 = $m_M_(new Date($l179), { style: "long", maxUnit: "day", now: new Date($l181) });
+-      $l182 = `a stored copy of the page, retrieved from the site on ${$l183.slice(0, 10)} at ${$l183.slice(11, 16)} UTC (${$l184}); the live page may have changed since then`;
++    let { content: $l172, bytes: $l173, code: $l174, codeText: $l175, contentType: $l176, isExtractedText: $l177, persistedPath: $l178, persistedSize: $l179, retrievedAt: $l180 } = $l147, $l181 = $m_RMo($l118), $l182 = Date.now(), $l183;
++    if ($l180 !== void 0 && Number.isFinite($l180) && $l180 > 0 && $l182 - $l180 > $m_uor) {
++      let $l184 = new Date($l180).toISOString(), $l185 = $m_M_(new Date($l180), { style: "long", maxUnit: "day", now: new Date($l182) });
++      $l183 = `a stored copy of the page, retrieved from the site on ${$l184.slice(0, 10)} at ${$l184.slice(11, 16)} UTC (${$l185}); the live page may have changed since then`;
+     }
+-    let $l185 = $l182 ? `[${$m_Qn} note: this result comes from ${$l182}.]` : "", $l186 = "", $l187 = "", $l188 = $l177 ? $l160 ? `
++    let $l186 = $l183 ? `[${$m_Qn} note: this result comes from ${$l183}.]` : "", $l187 = "", $l188 = "", $l189 = $l178 ? $l160 ? `
+ 
+-[Binary content (${$m_eXe($l176)}, ${$m_Qt($l178 ?? $l173)}) was saved to a local file for the caller. You cannot open files here, and the harness gives the caller the path itself \u2014 say that the file was saved, but do not put any file path in your report.]` : `
++[Binary content (${$m_eXe($l176)}, ${$m_Qt($l179 ?? $l173)}) was saved to a local file for the caller. You cannot open files here, and the harness gives the caller the path itself \u2014 say that the file was saved, but do not put any file path in your report.]` : `
+ 
+-[Binary content (${$m_eXe($l176)}, ${$m_Qt($l178 ?? $l173)}) also saved to ${$l177}]` : "", $l189 = $m_Bwe($l176), $l190 = $m_hl($l172, $l172.length - $l120), $l191, $l192;
+-    if ($l160) $l192 = $m_b("agent_raw"), $l191 = await $m_cor({ url: $l118, code: $l174, contentType: $l176, content: $l172, offset: $l120, isBinary: $l189, isPreapproved: $l180, storedCopy: $l182, summarizeRemainder: ($l193) => {
+-      let $l194 = $l115.timing?.mark("model");
+-      return $m_QFt($l119, $l193, { signal: $l122.signal, isNonInteractiveSession: $l121, isPreapprovedDomain: $l180, agentContext: $l116.agentContext, helperEffortFor: $l116.helperEffortFor, callerAnsweredQuerySource: $l116.queryTracking?.answeredQuerySource, credentials: $l116.credentials }).finally($l194);
++[Binary content (${$m_eXe($l176)}, ${$m_Qt($l179 ?? $l173)}) also saved to ${$l178}]` : "", $l190 = !$l177 && $m_Bwe($l176), $l191 = $m_hl($l172, $l172.length - $l120), $l192, $l193, $l194 = false;
++    if ($l160) $l193 = $m_b("agent_raw"), $l192 = await $m_cor({ url: $l118, code: $l174, contentType: $l176, content: $l172, offset: $l120, isBinary: $l190, isPreapproved: $l181, storedCopy: $l183, summarizeRemainder: ($l195) => {
++      let $l196 = $l115.timing?.mark("model");
++      return $m_QFt($l119, $l195, { signal: $l122.signal, isNonInteractiveSession: $l121, isPreapprovedDomain: $l181, agentContext: $l116.agentContext, helperEffortFor: $l116.helperEffortFor, callerAnsweredQuerySource: $l116.queryTracking?.answeredQuerySource, credentials: $l116.credentials }).finally($l196);
+     } });
+-    else if ($l120 > 0 && $l190 === "") $l192 = $m_b("past_end"), $l191 = `Nothing left to read from offset ${$l120}: this page's text is ${$l172.length} characters long.`;
+-    else if ($l180 && $l176.includes("text/markdown") && $l190.length < $m_PXn) $l192 = $m_b("raw_markdown"), $l191 = $l190, $l186 = $l185 && `${$l185}
++    else if ($l120 > 0 && $l191 === "") $l193 = $m_b("past_end"), $l192 = `Nothing left to read from offset ${$l120}: this page's text is ${$l172.length} characters long.`;
++    else if ($l181 && $l176.includes("text/markdown") && $l191.length < $m_PXn) $l193 = $m_b("raw_markdown"), $l192 = $l191, $l187 = $l186 && `${$l186}
+ 
+ `;
+     else {
+-      $l192 = $m_b("secondary_model");
+-      let $l195 = $l115.timing?.mark("model");
+-      $l191 = await $m_QFt($l119, $l190, { signal: $l122.signal, isNonInteractiveSession: $l121, isPreapprovedDomain: $l180, agentContext: $l116.agentContext, helperEffortFor: $l116.helperEffortFor, callerAnsweredQuerySource: $l116.queryTracking?.answeredQuerySource, credentials: $l116.credentials, contentLead: $l120 > 0 ? `The content below is one part of a longer page: it starts ${$l120} characters into the page's ${$l172.length}.
+-` : "", maxWords: $m_k("tengu_humming_waffle", 0) }).finally($l195);
+-      let $l196 = $l172.length - $l190.length, $l197 = $l196 + $m_I0r($l190).length;
+-      if ($l197 < $l172.length && !$l189 && $l136 !== void 0) $l191 += `
++      $l193 = $m_b("secondary_model");
++      let $l197 = $l115.timing?.mark("model");
++      $l192 = await $m_QFt($l119, $l191, { signal: $l122.signal, isNonInteractiveSession: $l121, isPreapprovedDomain: $l181, agentContext: $l116.agentContext, helperEffortFor: $l116.helperEffortFor, callerAnsweredQuerySource: $l116.queryTracking?.answeredQuerySource, credentials: $l116.credentials, contentLead: $l120 > 0 ? `The content below is one part of a longer page: it starts ${$l120} characters into the page's ${$l172.length}.
++` : "" }).finally($l197);
++      let $l198 = $l172.length - $l191.length, $l199 = $l198 + $m_I0r($l191).length;
++      if ($l199 < $l172.length && !$l190 && $l136 !== void 0) $l194 = true, $l192 += `
+ 
+-[${$m_Qn} note: this page's text is ${$l172.length} characters long and the answer above covers only characters ${$l196} to ${$l197}; the final ${$l172.length - $l197} were not read${$m_Onn($l197)}.]`;
+-      $l187 = $l185 && `
++[${$m_Qn} note: this page's text is ${$l172.length} characters long and the answer above covers only characters ${$l198} to ${$l199}; the final ${$l172.length - $l199} were not read${$m_Onn($l199)}.]`;
++      $l188 = $l186 && `
+ 
+-${$l185}`;
++${$l186}`;
+     }
+-    let $l198 = { bytes: $l173, code: $l174, codeText: $l175, result: $l186 + $l191 + $l187 + $l188, durationMs: Date.now() - $l123, url: $l118 };
++    if ($l136 !== void 0 && !$l160 && $m_Jb()) {
++      if ($l120 > 0 && $l191 !== "") $m_a("tengu_web_fetch_read_on", {});
++      else if ($l194) $m_a("tengu_web_fetch_long_page", {});
++    }
++    let $l200 = { bytes: $l173, code: $l174, codeText: $l175, result: $l187 + $l192 + $l188 + $l189, durationMs: Date.now() - $l123, url: $l118 };
+     if ($l128 && $l131 !== void 0) {
+-      if ($l126) $m_a("tengu_web_fetch_dedup_shadow", { cacheHit: $l129, repeat: $l130 !== void 0, ...$l130 && { priorAgeSeconds: Math.round(($l123 - $l130.fetchedAt) / 1e3), samePrompt: $l132, sameAgent: $l130.agentId === $l133, noted: false, ...$l141 && { noteSkip: $l141 } }, resultPath: $l192, contentChars: $l172.length, resultChars: $l191.length });
++      if ($l126) $m_a("tengu_web_fetch_dedup_shadow", { cacheHit: $l129, repeat: $l130 !== void 0, ...$l130 && { priorAgeSeconds: Math.round(($l123 - $l130.fetchedAt) / 1e3), samePrompt: $l132, sameAgent: $l130.agentId === $l133, noted: false, ...$l141 && { noteSkip: $l141 } }, resultPath: $l193, contentChars: $l172.length, resultChars: $l192.length });
+       if ($l172.trim() !== "") {
+-        let $l199 = $l128.get($l118);
+-        if (!$l199) $l199 = { fetchedAt: $l123, agentId: $l133, promptHashes: /* @__PURE__ */ new Set(), calls: /* @__PURE__ */ new Map() }, $l128.set($l118, $l199);
+-        if ($l199.promptHashes.size < $m_rjr) $l199.promptHashes.add($l131);
+-        if ($l136 !== void 0 && $l191.trim() !== "" && ($l199.calls.has($l134) || $l199.calls.size < $m_rjr)) $l199.calls.set($l134, { toolUseId: $l136, fetchedAt: $l123, cacheEntry: $l157 && new WeakRef($l157), code: $l174, codeText: $l175, resultChars: $l198.result.length, noted: false });
++        let $l201 = $l128.get($l118);
++        if (!$l201) $l201 = { fetchedAt: $l123, agentId: $l133, promptHashes: /* @__PURE__ */ new Set(), calls: /* @__PURE__ */ new Map() }, $l128.set($l118, $l201);
++        if ($l201.promptHashes.size < $m_rjr) $l201.promptHashes.add($l131);
++        if ($l136 !== void 0 && $l192.trim() !== "" && ($l201.calls.has($l134) || $l201.calls.size < $m_rjr)) $l201.calls.set($l134, { toolUseId: $l136, fetchedAt: $l123, cacheEntry: $l157 && new WeakRef($l157), code: $l174, codeText: $l175, resultChars: $l200.result.length, noted: false });
+       }
+     }
+-    return { data: $l198 };
++    return { data: $l200 };
+   } };
+-}, mapToolResultToToolResultBlockParam({ result: $l200 }, $l201) {
+-  return { tool_use_id: $l201, type: "tool_result", content: $l200 };
++}, mapToolResultToToolResultBlockParam({ result: $l202 }, $l203) {
++  return { tool_use_id: $l203, type: "tool_result", content: $l202 };
+ } });

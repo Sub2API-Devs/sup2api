@@ -1,0 +1,16 @@
+# chunk-7dmym6x9.js:jBt -> chunk-e6aww6q8.js:Wzt
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_jBt.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_jBt.new.js"
+index e7073a5..ec102ca 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_jBt.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_jBt.new.js"
+@@ -1,9 +1,6 @@
+ function SELF($l0, $l1, $l2) {
+   let $l3 = $m_i5($l1);
+-  if (!$l2.midTurn) return `The ${$l3} plugin sent a message:
+-${$l0}
+-
+-This is how Claude Code surfaces a prompt a plugin submits between turns \u2014 it starts this turn in the user's place. Address the message above.`;
++  if (!$l2.midTurn) return $NEW_chunk_5k94rwtv_js_Xys($l3) + $l0 + $NEW_chunk_5k94rwtv_js_kDn;
+   return `The ${$l3} plugin sent a message while you were working:
+ ${$l0}
+ 

@@ -1,0 +1,17 @@
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/settings host=api.anthropic.com
+-- 非 Messages 请求（只记录）A: [tls:443] GET /api/claude_code/policy_limits host=api.anthropic.com
+-- 非 Messages 请求（只记录）B: [tls:443] GET /api/claude_code/settings host=api.anthropic.com
+-- 非 Messages 请求（只记录）B: [tls:443] GET /api/claude_code/policy_limits host=api.anthropic.com
+Messages 请求 A=1 B=1
+
+-- 主线程 第1轮 (A req-3 / B req-3): 6 处差异
+  头 x-claude-code-session-id（每次随机）A=f9a2d6c4-cf93-4ffe-b5bf-10e64548f3f6 B=9a43647a-cb86-4ee0-8509-a96e699d3bca
+  头 x-claude-code-prompt-id（每次随机）A=df77755a-cb6e-4bd0-b1a2-7f6bb75c8a45 B=ec77171a-d59c-47d8-b643-6d075baa6aa8
+  头 x-client-request-id（每次随机）A=144b46ba-a0d9-4f97-8525-3a7c6aa2c070 B=4be483ff-3fda-4eab-a938-478932c547f6
+  system[0] 文字不同（A 192B / B 192B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=1bdcb; cc_prompt_id=df77755a-cb6e-4bd0-b1a2-7f6bb75c8a45; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      B: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=422c3; cc_prompt_id=ec77171a-d59c-47d8-b643-6d075baa6aa8; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=1bdcb; cc_prompt_id=df77755a-cb6e-4bd0-b1a2-7f6bb75c8a45; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.312.6b4; cc_entrypoint=sdk-cli; cch=422c3; cc_prompt_id=ec77171a-d59c-47d8-b643-6d075baa6aa8; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+  metadata A={"user_id":"{\"device_id\":\"98285cc8648344b74a33860c2acba0aadfd7b30093aa12b0d66bc7ad7864b7dd\",\"account_uuid\":\"\",\"session_id\":\"f9a2d6c4-cf93-4ffe-b5bf-10e64548f3f6\"}"}
+           B={"user_id":"{\"device_id\":\"ad9198bfea6abfa39c7449fa2284377298b95b895065d7a3b2b9fbcd04fff79d\",\"account_uuid\":\"\",\"session_id\":\"9a43647a-cb86-4ee0-8509-a96e699d3bca\"}"}

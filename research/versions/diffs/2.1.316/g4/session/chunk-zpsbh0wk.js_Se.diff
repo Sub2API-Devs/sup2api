@@ -1,0 +1,579 @@
+# chunk-zpsbh0wk.js:Se -> chunk-ndmse9kj.js:Se
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Se.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Se.new.js"
+index 8b18ac0..1dffaab 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Se.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Se.new.js"
+@@ -1,379 +1,404 @@
+ class $l0 {
+   #e = false;
+-  #t = null;
++  #t = false;
+   #n = false;
+-  #o = void 0;
++  #o = null;
+   #r = false;
+-  #s = false;
++  #s = void 0;
+   #i = false;
+   #d = false;
+-  #u = void 0;
+-  #l = false;
++  #u = false;
+   #c = false;
+-  #p = null;
++  #l = void 0;
++  #p = false;
++  #h = false;
+   #a = null;
+-  #h = /* @__PURE__ */ new Map();
+-  #g = "cli";
+-  #m = "fresh";
+-  #y = void 0;
+-  #S = false;
+-  #f = false;
+-  #v = [];
++  #g = null;
++  #S = /* @__PURE__ */ new Map();
++  #y = "cli";
++  #v = "fresh";
++  #f = void 0;
++  #m = false;
+   #b = false;
+-  #k = false;
++  #k = [];
+   #R = false;
+-  #C = /* @__PURE__ */ new Set();
+-  #P = false;
+   #x = false;
+-  #M = false;
+-  #w = "none";
+-  #A = false;
++  #C = false;
++  #P = /* @__PURE__ */ new Set();
+   #T = false;
++  #w = false;
++  #A = false;
+   #L = false;
++  #M = "none";
+   #O = false;
+   #F = false;
+-  #I = void 0;
+-  #D = void 0;
+-  #H = void 0;
++  #I = false;
++  #E = false;
++  #H = false;
+   #B = void 0;
+   #U = void 0;
+-  #j = false;
+-  #q = false;
+-  #N = false;
+-  #_ = null;
+-  #W = null;
+-  #G = true;
+-  #V = null;
+-  #E = false;
+-  #Z = $m_Me();
++  #j = void 0;
++  #q = void 0;
++  #N = void 0;
++  #_ = void 0;
++  #W = false;
++  #G = false;
++  #V = false;
+   #K = null;
+-  #J = false;
+-  #z = false;
+-  #Q = {};
++  #J = null;
++  #z = true;
++  #Q = null;
++  #D = false;
++  #oe = $m_Me();
+   #$ = null;
+-  #Y = "none";
+-  #X = void 0;
++  #Y = false;
++  #X = false;
++  #Z = {};
++  #ee = null;
++  #te = "none";
++  #ne = void 0;
+   isInteractive() {
+     return this.#e;
+   }
++  isInteractivityDecided() {
++    return this.#t;
++  }
++  isNoDialogLaunch() {
++    return this.#n;
++  }
++  markNoDialogLaunch() {
++    this.#n = true;
++  }
+   replaceIsInteractive($l1) {
+-    this.#e = $l1;
++    this.#e = $l1, this.#t = true;
+   }
+   printOutputFormat() {
+-    return this.#t;
++    return this.#o;
+   }
+   replacePrintOutputFormat($l2) {
+-    this.#t = $l2;
++    this.#o = $l2;
+   }
+   thinkingDisplayExplicit() {
+-    return this.#n;
++    return this.#r;
+   }
+   replaceThinkingDisplayExplicit($l3) {
+-    this.#n = $l3;
++    this.#r = $l3;
+   }
+   permissionPromptToolName() {
+-    return this.#o;
++    return this.#s;
+   }
+   replacePermissionPromptToolName($l4) {
+-    this.#o = $l4;
++    this.#s = $l4;
+   }
+   hasStreamingInput() {
+-    return this.#r;
++    return this.#i;
+   }
+   replaceHasStreamingInput($l5) {
+-    this.#r = $l5;
++    this.#i = $l5;
+   }
+   singleShotPrintSession() {
+-    return this.#s;
++    return this.#d;
+   }
+   replaceSingleShotPrintSession($l6) {
+-    this.#s = $l6;
++    this.#d = $l6;
+   }
+   printInputClosed() {
+-    return this.#i;
++    return this.#u;
+   }
+   markPrintInputClosed() {
+-    this.#i = true;
++    this.#u = true;
+   }
+   modelOverrideOptOutForSession() {
+-    return this.#d;
++    return this.#c;
+   }
+   replaceModelOverrideOptOutForSession($l7) {
+-    this.#d = $l7;
++    this.#c = $l7;
+   }
+   rendererMode() {
+-    return this.#u;
++    return this.#l;
+   }
+   replaceRendererMode($l8) {
+-    this.#u = $l8;
++    this.#l = $l8;
+   }
+   strictToolResultPairing() {
+-    return this.#l;
++    return this.#p;
+   }
+   replaceStrictToolResultPairing($l9) {
+-    this.#l = $l9;
++    this.#p = $l9;
+   }
+   restrictedSession() {
+-    return this.#c;
++    return this.#h;
+   }
+   replaceRestrictedSession($l10) {
+-    this.#c = $l10;
++    this.#h = $l10;
+   }
+   workspaceRestrictionState() {
+-    return this.#p;
++    return this.#a;
+   }
+   replaceWorkspaceRestrictionState($l11) {
+-    this.#p = $l11;
++    this.#a = $l11;
+   }
+   replaceWorkspaceRestrictionUnsubscribe($l12) {
+-    this.#a?.(), this.#a = $l12;
++    this.#g?.(), this.#g = $l12;
+   }
+   restrictedWorkspaceRoots() {
+-    return this.#h;
++    return this.#S;
+   }
+   addRestrictedWorkspaceRoot($l13, $l14) {
+-    this.#h.set($l13, $l14);
++    this.#S.set($l13, $l14);
+   }
+   clearRestrictedWorkspaceRoots() {
+-    this.#h = /* @__PURE__ */ new Map();
++    this.#S = /* @__PURE__ */ new Map();
+   }
+   clientType() {
+-    return this.#g;
++    return this.#y;
+   }
+   replaceClientType($l15) {
+-    this.#g = $l15;
++    this.#y = $l15;
+   }
+   sessionStartType() {
+-    return this.#m;
++    return this.#v;
+   }
+   replaceSessionStartType($l16) {
+-    this.#m = $l16;
++    this.#v = $l16;
+   }
+   questionPreviewFormat() {
+-    return this.#y;
++    return this.#f;
+   }
+   replaceQuestionPreviewFormat($l17) {
+-    this.#y = $l17;
++    this.#f = $l17;
+   }
+   extendedQuestionsEnabled() {
+-    return this.#S;
++    return this.#m;
+   }
+   replaceExtendedQuestionsEnabled($l18) {
+-    this.#S = $l18;
++    this.#m = $l18;
+   }
+   questionOptionDescriptionsOptional() {
+-    return this.#f;
++    return this.#b;
+   }
+   replaceQuestionOptionDescriptionsOptional($l19) {
+-    this.#f = $l19;
++    this.#b = $l19;
+   }
+   replConfigArgv() {
+-    return this.#v;
++    return this.#k;
+   }
+   replaceReplConfigArgv($l20) {
+-    this.#v = $l20;
++    this.#k = $l20;
+   }
+   userMsgOptIn() {
+-    return this.#b;
++    return this.#R;
+   }
+   replaceUserMsgOptIn($l21) {
+-    this.#b = $l21;
++    this.#R = $l21;
+   }
+   searchToolsOptIn() {
+-    return this.#k;
++    return this.#x;
+   }
+   replaceSearchToolsOptIn($l22) {
+-    this.#k = $l22;
++    this.#x = $l22;
+   }
+   todoToolsOptIn() {
+-    return this.#R;
++    return this.#C;
+   }
+   replaceTodoToolsOptIn($l23) {
+-    this.#R = $l23;
++    this.#C = $l23;
+   }
+   toolsOmittedByLaunchList() {
+-    return this.#C;
++    return this.#P;
+   }
+   replaceToolsOmittedByLaunchList($l24) {
+-    this.#C = $l24;
++    this.#P = $l24;
+   }
+   wizardOperatorToolsEnabled() {
+-    return this.#P;
++    return this.#T;
+   }
+   replaceWizardOperatorToolsEnabled($l25) {
+-    this.#P = $l25;
++    this.#T = $l25;
+   }
+   runnerDeclaredNestedRepositoryDiff() {
+-    return this.#x;
++    return this.#w;
+   }
+   replaceRunnerDeclaredNestedRepositoryDiff($l26) {
+-    this.#x = $l26;
++    this.#w = $l26;
+   }
+   runnerDeclaredNoRepositoryCheckedOut() {
+-    return this.#M;
++    return this.#A;
+   }
+   replaceRunnerDeclaredNoRepositoryCheckedOut($l27) {
+-    this.#M = $l27;
++    this.#A = $l27;
++  }
++  runnerDeclaredFreshMachinePerSession() {
++    return this.#L;
++  }
++  replaceRunnerDeclaredFreshMachinePerSession($l28) {
++    this.#L = $l28;
+   }
+   pollEventIngress() {
+-    return this.#w;
++    return this.#M;
+   }
+-  markPollEventIngress($l28) {
+-    this.#w = $l28;
++  markPollEventIngress($l29) {
++    this.#M = $l29;
+   }
+   ownEventDeliveryRequested() {
+-    return this.#A && !this.#T;
++    return this.#O && !this.#F;
+   }
+-  replaceOwnEventDeliveryHeld($l29) {
+-    this.#T = $l29;
++  replaceOwnEventDeliveryHeld($l30) {
++    this.#F = $l30;
+   }
+   markOwnEventDeliveryRequested() {
+-    this.#A = true;
++    this.#O = true;
+   }
+   sdkAgentProgressSummariesEnabled() {
+-    return this.#L;
++    return this.#I;
+   }
+-  replaceSdkAgentProgressSummariesEnabled($l30) {
+-    this.#L = $l30;
++  replaceSdkAgentProgressSummariesEnabled($l31) {
++    this.#I = $l31;
+   }
+   sessionPersistenceDisabled() {
+-    return this.#O;
++    return this.#E;
+   }
+-  replaceSessionPersistenceDisabled($l31) {
+-    this.#O = $l31;
++  replaceSessionPersistenceDisabled($l32) {
++    this.#E = $l32;
+   }
+   diskless() {
+-    return this.#F;
++    return this.#H;
+   }
+-  replaceDiskless($l32) {
+-    this.#F = $l32;
++  replaceDiskless($l33) {
++    this.#H = $l33;
+   }
+   ccrSessionUrl() {
+-    return this.#I;
++    return this.#B;
+   }
+-  replaceCcrSessionUrl($l33) {
+-    this.#I = $l33;
++  replaceCcrSessionUrl($l34) {
++    this.#B = $l34;
+   }
+   ccrDerivedSurface() {
+-    return this.#D;
++    return this.#U;
+   }
+-  replaceCcrDerivedSurface($l34) {
+-    this.#D = $l34;
++  replaceCcrDerivedSurface($l35) {
++    this.#U = $l35;
++  }
++  autoCompactWindowSurface() {
++    return this.#q;
++  }
++  replaceAutoCompactWindowSurface($l36) {
++    this.#q = $l36;
+   }
+   entrypointOnRequests() {
+-    return this.#H;
++    return this.#j;
+   }
+-  replaceEntrypointOnRequests($l35) {
+-    this.#H = $l35;
++  replaceEntrypointOnRequests($l37) {
++    this.#j = $l37;
+   }
+   coworkEnrollment() {
+-    return this.#B;
++    return this.#N;
+   }
+-  replaceCoworkEnrollment($l36) {
+-    this.#B = $l36;
++  replaceCoworkEnrollment($l38) {
++    this.#N = $l38;
+   }
+   toolsMachine() {
+-    return this.#U;
++    return this.#_;
+   }
+-  replaceToolsMachine($l37) {
+-    this.#U = $l37;
++  replaceToolsMachine($l39) {
++    this.#_ = $l39;
+   }
+   sessionBypassPermissionsMode() {
+-    return this.#j;
++    return this.#W;
+   }
+-  replaceSessionBypassPermissionsMode($l38) {
+-    this.#j = $l38;
++  replaceSessionBypassPermissionsMode($l40) {
++    this.#W = $l40;
+   }
+   disableSlashCommands() {
+-    return this.#q;
++    return this.#G;
+   }
+-  replaceDisableSlashCommands($l39) {
+-    this.#q = $l39;
++  replaceDisableSlashCommands($l41) {
++    this.#G = $l41;
+   }
+   disableFileMentions() {
+-    return this.#N;
++    return this.#V;
+   }
+-  replaceDisableFileMentions($l40) {
+-    this.#N = $l40;
++  replaceDisableFileMentions($l42) {
++    this.#V = $l42;
+   }
+   sessionUploadsDir() {
+-    return this.#_;
++    return this.#K;
+   }
+-  replaceSessionUploadsDir($l41) {
+-    this.#_ = $l41;
++  replaceSessionUploadsDir($l43) {
++    this.#K = $l43;
+   }
+   localUploadsRoot() {
+-    return this.#W;
++    return this.#J;
+   }
+-  replaceLocalUploadsRoot($l42) {
+-    this.#W = $l42;
++  replaceLocalUploadsRoot($l44) {
++    this.#J = $l44;
+   }
+   mayForwardHomeSettings() {
+-    return this.#G;
++    return this.#z;
+   }
+-  replaceMayForwardHomeSettings($l43) {
+-    this.#G = $l43;
++  replaceMayForwardHomeSettings($l45) {
++    this.#z = $l45;
+   }
+   homeSettingsHostConsent() {
+-    return this.#V;
++    return this.#Q;
+   }
+-  replaceHomeSettingsHostConsent($l44) {
+-    this.#V = $l44;
++  replaceHomeSettingsHostConsent($l46) {
++    this.#Q = $l46;
+   }
+   scheduledTasksEnabled() {
+-    return this.#E;
++    return this.#D;
+   }
+-  replaceScheduledTasksEnabled($l45) {
+-    let $l46 = $l45 && !this.#E;
+-    if (this.#E = $l45, $l46) this.#Z.emit();
++  replaceScheduledTasksEnabled($l47) {
++    let $l48 = $l47 && !this.#D;
++    if (this.#D = $l47, $l48) this.#oe.emit();
+   }
+-  onScheduledTasksEnabled($l47) {
+-    return this.#Z.subscribe($l47);
++  onScheduledTasksEnabled($l49) {
++    return this.#oe.subscribe($l49);
+   }
+   initJsonSchema() {
+-    return this.#K;
++    return this.#$;
+   }
+-  replaceInitJsonSchema($l48) {
+-    this.#K = $l48;
++  replaceInitJsonSchema($l50) {
++    this.#$ = $l50;
+   }
+   cliSessionConfigCarried() {
+-    return this.#J;
++    return this.#Y;
+   }
+-  replaceCliSessionConfigCarried($l49) {
+-    this.#J = $l49;
++  replaceCliSessionConfigCarried($l51) {
++    this.#Y = $l51;
+   }
+   forkRestrictedLaunchConfig() {
+-    return this.#z;
++    return this.#X;
+   }
+-  replaceForkRestrictedLaunchConfig($l50) {
+-    this.#z = $l50;
++  replaceForkRestrictedLaunchConfig($l52) {
++    this.#X = $l52;
+   }
+   forkReplayLaunchConfig() {
+-    return this.#Q;
++    return this.#Z;
+   }
+   spareClaimState() {
+-    return this.#Y;
++    return this.#te;
+   }
+-  replaceSpareClaimState($l51) {
+-    this.#Y = $l51;
++  replaceSpareClaimState($l53) {
++    this.#te = $l53;
+   }
+   spareParkedAtMs() {
+-    return this.#X;
++    return this.#ne;
+   }
+-  replaceSpareParkedAtMs($l52) {
+-    this.#X = $l52;
++  replaceSpareParkedAtMs($l54) {
++    this.#ne = $l54;
+   }
+-  replaceForkReplayLaunchConfig($l53) {
+-    this.#Q = $l53;
++  replaceForkReplayLaunchConfig($l55) {
++    this.#Z = $l55;
+   }
+   projectConfigRoot() {
+-    return this.#$;
++    return this.#ee;
+   }
+-  replaceProjectConfigRoot($l54) {
+-    this.#$ = $l54;
++  replaceProjectConfigRoot($l56) {
++    this.#ee = $l56;
+   }
+   reset() {
+-    this.#e = false, this.#t = null, this.#Y = "none", this.#X = void 0, this.#n = false, this.#o = void 0, this.#r = false, this.#s = false, this.#i = false, this.#d = false, this.#u = void 0, this.#l = false, this.#c = false, this.#p = null, this.replaceWorkspaceRestrictionUnsubscribe(null), this.#h = /* @__PURE__ */ new Map(), this.#g = "cli", this.#m = "fresh", this.#y = void 0, this.#S = false, this.#f = false, this.#v = [], this.#b = false, this.#k = false, this.#R = false, this.#C = /* @__PURE__ */ new Set(), this.#P = false, this.#x = false, this.#M = false, this.#w = "none", this.#A = false, this.#T = false, this.#L = false, this.#O = false, this.#F = false, this.#I = void 0, this.#D = void 0, this.#H = void 0, this.#B = void 0, this.#U = void 0, this.#j = false, this.#q = false, this.#N = false, this.#_ = null, this.#W = null, this.#G = true, this.#V = null, this.#E = false, this.#K = null, this.#J = false, this.#z = false, this.#Q = {}, this.#$ = null;
++    this.#e = false, this.#t = false, this.#n = false, this.#o = null, this.#te = "none", this.#ne = void 0, this.#r = false, this.#s = void 0, this.#i = false, this.#d = false, this.#u = false, this.#c = false, this.#l = void 0, this.#p = false, this.#h = false, this.#a = null, this.replaceWorkspaceRestrictionUnsubscribe(null), this.#S = /* @__PURE__ */ new Map(), this.#y = "cli", this.#v = "fresh", this.#f = void 0, this.#m = false, this.#b = false, this.#k = [], this.#R = false, this.#x = false, this.#C = false, this.#P = /* @__PURE__ */ new Set(), this.#T = false, this.#w = false, this.#A = false, this.#L = false, this.#M = "none", this.#O = false, this.#F = false, this.#I = false, this.#E = false, this.#H = false, this.#B = void 0, this.#U = void 0, this.#q = void 0, this.#j = void 0, this.#N = void 0, this.#_ = void 0, this.#W = false, this.#G = false, this.#V = false, this.#K = null, this.#J = null, this.#z = true, this.#Q = null, this.#D = false, this.#$ = null, this.#Y = false, this.#X = false, this.#Z = {}, this.#ee = null;
+   }
+ }
+ ;

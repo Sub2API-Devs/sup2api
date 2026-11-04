@@ -1,0 +1,14 @@
+# chunk-6vj7p32b.js:q -> chunk-rbe666af.js:q
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-6vj7p32b.js_q.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-6vj7p32b.js_q.new.js"
+index e833a3f..219fed2 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-6vj7p32b.js_q.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g3\\chunk-6vj7p32b.js_q.new.js"
+@@ -8,7 +8,7 @@ class $l0 {
+   requestReplay = { chains: /* @__PURE__ */ new Map(), chainClears: 0, hashMemos: /* @__PURE__ */ new WeakMap(), unrecordableShapes: /* @__PURE__ */ new Set() };
+   lastIngressUuidBySession = /* @__PURE__ */ new Map();
+   cacheCoverage = $m_G();
+-  ccsSenderAddr = { asking: /* @__PURE__ */ new Map(), held: /* @__PURE__ */ new Map() };
++  ccsSenderAddr = { asking: /* @__PURE__ */ new Map(), held: /* @__PURE__ */ new Map(), waits: { firstMs: void 0, unsignedCalls: 0, asks: 0 } };
+   gzipRequestBody = { latchedOff: false, rejectedThisProcess: false, persistedLatchChecked: false, persistedLatchInEffect: false, telemetryByClientRequestId: new $m_zc({ max: $m_L }), dispatchAtByClientRequestId: new $m_zc({ max: $m_L }), ccrWorkerSkipReasonsLogged: /* @__PURE__ */ new Set(), blockStore: $m_N(), blocksSwitchedOff: false, bodyBytesSwitchedOff: false, reusingBodiesChecked: 0, firstReusingBodiesDraw: void 0, serialisedBodies: /* @__PURE__ */ new WeakMap(), blocksBuildGeneration: void 0, blockGzippedResponses: /* @__PURE__ */ new WeakMap() };
+   sentPrefix = { ledger: void 0, mode: void 0, persist: Promise.resolve(), persisted: void 0, pendingSeed: void 0, lastReport: /* @__PURE__ */ new WeakMap(), lastVerdict: /* @__PURE__ */ new WeakMap(), renderEpochs: /* @__PURE__ */ new WeakMap(), memoryEpochs: /* @__PURE__ */ new WeakMap(), announced: /* @__PURE__ */ new WeakMap(), excuse: /* @__PURE__ */ new WeakMap(), staged: /* @__PURE__ */ new WeakMap(), boundVerdict: /* @__PURE__ */ new WeakMap() };
+   bindingDrops = { seenBlocks: void 0, threadsRead: new $m_zc({ max: 512 }) };

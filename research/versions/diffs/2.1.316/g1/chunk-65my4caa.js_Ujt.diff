@@ -1,0 +1,12 @@
+# chunk-65my4caa.js:Ujt -> chunk-s61vbvea.js:DKt
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-65my4caa.js_Ujt.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-65my4caa.js_Ujt.new.js"
+index 557ab90..19993e8 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-65my4caa.js_Ujt.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-65my4caa.js_Ujt.new.js"
+@@ -1,5 +1,4 @@
+ function SELF($l0, $l1) {
+-  let $l2 = $m_Ud($l0);
+-  return $l2 === "bedrock" || $l2 === "vertex" || $l2 === "mantle" ? $m_ojt($l2, $l1) : "unknown";
++  return $m_ojt($m_Ud($l0), $l1);
+ }
+ ;

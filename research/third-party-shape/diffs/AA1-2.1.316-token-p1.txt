@@ -1,0 +1,13 @@
+Messages 请求 A=1 B=1
+
+-- 主线程 第1轮 (A req-1 / B req-1): 6 处差异
+  头 x-claude-code-session-id（每次随机）A=4883ac16-20de-4905-af11-c54157212eac B=77c2115e-ad55-4b9f-8e8e-1a0a4e4dd85f
+  头 x-claude-code-prompt-id（每次随机）A=a9dfd4a9-626d-4c9d-b555-a6ebd17aea86 B=3b6cb1a5-9aa1-460d-9613-93731ce39a1b
+  头 x-client-request-id（每次随机）A=3404839b-13b7-4abc-88e5-5043f560cc87 B=463461a4-d73d-4ca0-85cf-ef9c7c739457
+  system[0] 文字不同（A 192B / B 192B），首个不同行 #1:
+      A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=e9668; cc_prompt_id=a9dfd4a9-626d-4c9d-b555-a6ebd17aea86; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=9e272; cc_prompt_id=3b6cb1a5-9aa1-460d-9613-93731ce39a1b; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 A: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=e9668; cc_prompt_id=a9dfd4a9-626d-4c9d-b555-a6ebd17aea86; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+      首行 B: x-anthropic-billing-header: cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=9e272; cc_prompt_id=3b6cb1a5-9aa1-460d-9613-93731ce39a1b; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;
+  metadata A={"user_id":"{\"device_id\":\"59c99a596ef4637fd58a130c884be9966adb7dfa2bf606fab63c93596aed8c3b\",\"account_uuid\":\"\",\"session_id\":\"4883ac16-20de-4905-af11-c54157212eac\"}"}
+           B={"user_id":"{\"device_id\":\"a78e24d8fa954ccfacfc2af8fcbb3d311ef5e2b65d51f71ed13a8b7ecde7bbd2\",\"account_uuid\":\"\",\"session_id\":\"77c2115e-ad55-4b9f-8e8e-1a0a4e4dd85f\"}"}

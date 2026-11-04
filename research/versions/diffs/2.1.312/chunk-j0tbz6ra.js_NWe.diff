@@ -1,0 +1,12 @@
+# chunk-j0tbz6ra.js:NWe -> chunk-7dmym6x9.js:nLe
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-j0tbz6ra.js_NWe.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-j0tbz6ra.js_NWe.new.js"
+index 46d61ac56..84cac66a2 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-j0tbz6ra.js_NWe.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-j0tbz6ra.js_NWe.new.js"
+@@ -1,5 +1,6 @@
+ function SELF($l0, $l1) {
+   if ($l0.attachment.type === "coordinator_context" && !$m_x7e()) return { messages: [], isKnownType: true, recordedRole: void 0 };
++  if ($l0.attachment.type === "file" && $l0.attachment.overTokenLimit === true && $m_Sit()) return SELF({ attachment: { type: "at_mention_reference", mentions: [$l0.attachment.filename] } });
+   if (!$m_pHr($l0.attachment.type) && $m_zxs($l0.attachment, $l1?.surfacedToolNames)) {
+     let $l2 = $m_Wxs($l0.attachment.type === "queued_command" && $l1?.inHumanTurn === true ? $l0.renderedInHumanTurn : $l0.rendered);
+     if ($l2 !== null) {

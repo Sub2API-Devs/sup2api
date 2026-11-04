@@ -1,0 +1,15 @@
+# chunk-7dmym6x9.js:HG -> chunk-e6aww6q8.js:bH
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_HG.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_HG.new.js"
+index 48d5d21..bddd515 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_HG.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_HG.new.js"
+@@ -2,8 +2,7 @@ function SELF() {
+   let $l0 = $m_Te();
+   switch ($l0) {
+     case "firstParty":
+-      if ($m_i.ANTHROPIC_UNIX_SOCKET !== void 0) return $m_i.CLAUDE_CODE_ENTRYPOINT === "ssh-remote" ? "firstParty" : "thirdParty";
+-      return $m_Pi() ? "firstParty" : "thirdParty";
++      return $NEW_chunk_e6aww6q8_js_GGe() ? "firstParty" : "thirdParty";
+     case "bedrock":
+     case "mantle":
+     case "vertex":

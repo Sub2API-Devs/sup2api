@@ -1,0 +1,57 @@
+# chunk-prffebe9.js:e -> chunk-vqdc30xc.js:e
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-prffebe9.js_e.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-prffebe9.js_e.new.js"
+index bcbb72e..3bf683d 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-prffebe9.js_e.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-prffebe9.js_e.new.js"
+@@ -13,7 +13,6 @@ class $l0 {
+   forkSubagentEnabledSource;
+   bashFirstDescriptionTrimmed;
+   bashFirstDescriptionTrimmedCompiledOnly;
+-  bashPromptSkillCommands;
+   coordinatorReadOnlyBashEnabled;
+   coordinatorWorkerOutputTrees;
+   bashActFirstEnabled;
+@@ -22,11 +21,7 @@ class $l0 {
+   suggestRolloutEnabled;
+   sendUserFileDeferred;
+   sessionStartWorkflowSizeGuideline;
+-  totalTokensReminderMode;
+-  totalTokensReminderBudget;
+-  totalTokensReminderAfterUserTurn;
+-  subagentBudgetOnTopOfStart;
+-  subagentBudgetNote;
++  totalTokensReminderClientDataReported;
+   silentTurnReminderTurns;
+   clientDataCapabilityLogged;
+   sharedMemoryServedViaTools;
+@@ -43,6 +38,7 @@ class $l0 {
+   thinkingDisplayProbeFailures;
+   keptReminderOkLogged;
+   retiredClassifierSideCallsLogged;
++  localClassifierSwitchedOffLogged;
+   artifactReplPathEnabled;
+   artifactPreviewBrowserSearch;
+   artifactPreviewBrowser;
+@@ -56,12 +52,12 @@ class $l0 {
+   replDrawShare;
+   replConversationResumed;
+   machinesSectionShown;
+-  workflowAuthoringSkillAvailable;
+   attributionAnnouncementEnabled;
+   autoModeContextEnabled;
+   serverClassifierShadowEnabled;
+   thirdPartyServerClassifierEnabled;
+   userServerClassifierSwitch;
++  betasSwitchSetAside;
+   shellDescription;
+   agentProxyNote;
+   keptDeferredToolsEnabled;
+@@ -73,8 +69,5 @@ class $l0 {
+   clear() {
+     for (let $l1 of Object.keys(this)) this[$l1] = void 0;
+   }
+-  forgetSkillAndReminderPins() {
+-    this.bashPromptSkillCommands = void 0, this.workflowAuthoringSkillAvailable = void 0, this.subagentBudgetNote = void 0, this.totalTokensReminderMode = void 0, this.totalTokensReminderBudget = void 0, this.totalTokensReminderAfterUserTurn = void 0;
+-  }
+ }
+ ;

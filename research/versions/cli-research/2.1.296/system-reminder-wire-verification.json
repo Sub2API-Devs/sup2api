@@ -1,0 +1,172 @@
+{
+  "version": "2.1.296",
+  "scope": "Official original Linux x64/glibc CC client, not custom request CLI or gateway rewriting",
+  "reviewDate": "2026-10-18",
+  "conclusion": "Confirmed: literal <system-reminder> and </system-reminder> occur inside captured final /v1/messages HTTP JSON bodies. They are not globally stripped before sending.",
+  "evidence": {
+    "capture": {
+      "path": "artifacts/claude-mods-research-20261017/linux-x64/native-websearch-observation.json",
+      "sha256": "656a2e27d9215eec43f0bef37a933764d2bb4ac5b21f9dc97e5f3335120233db",
+      "passed": true,
+      "requestCount": 3,
+      "provenance": "Existing original CLI loopback run, independently reviewed this turn; not a newly executed run.",
+      "captureBoundary": "http.createServer reads request stream, JSON.parse(raw), record.requests.push(body), before replying. stdout is recorded separately and is not used as wire-body evidence.",
+      "probePath": "next/plugins/ccgateway/companions/cli-mods/test/websearch-probe.cjs",
+      "probeSha256": "570896890a500703c65968586a49b9f2309a2fa864216f094c207b2a035b8dff",
+      "matches": [
+        {
+          "jsonPointer": "/requests/0/messages/0/content/0/text",
+          "excerpt": "<system-reminder>\n# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /tmp/cc-websearch-probe-U0Djql\n - Is a git repository: false\n - P",
+          "kind": "actual-reminder-wrapper-in-message-content"
+        },
+        {
+          "jsonPointer": "/requests/0/messages/0/content/1/text",
+          "excerpt": "<system-reminder>\nYou are powered by the model named Haiku 4.5. The exact model ID is claude-haiku-4-5-20251001. Assistant knowledge cutoff is February 2025.\n</system-reminder>",
+          "kind": "actual-reminder-wrapper-in-message-content"
+        },
+        {
+          "jsonPointer": "/requests/0/messages/0/content/2/text",
+          "excerpt": "<system-reminder>\n<total_tokens>15000000 tokens left</total_tokens>\n</system-reminder>",
+          "kind": "actual-reminder-wrapper-in-message-content"
+        },
+        {
+          "jsonPointer": "/requests/0/messages/0/content/3/text",
+          "excerpt": "<system-reminder>\nToday's date is 2026-10-17.\n</system-reminder>\n",
+          "kind": "actual-reminder-wrapper-in-message-content"
+        },
+        {
+          "jsonPointer": "/requests/0/system/2/text",
+          "excerpt": "ch.\n - Tool results and user messages may include <system-reminder> or other tags. Tags contain information from the system. They bear no direct relation to the specific tool results or user messages in which they appear.\n - Tool ",
+          "kind": "literal-tag-explanation-in-system-prompt"
+        },
+        {
+          "jsonPointer": "/requests/2/messages/0/content/0/text",
+          "excerpt": "<system-reminder>\n# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /tmp/cc-websearch-probe-U0Djql\n - Is a git repository: false\n - P",
+          "kind": "actual-reminder-wrapper-in-message-content"
+        },
+        {
+          "jsonPointer": "/requests/2/messages/0/content/1/text",
+          "excerpt": "<system-reminder>\nYou are powered by the model named Haiku 4.5. The exact model ID is claude-haiku-4-5-20251001. Assistant knowledge cutoff is February 2025.\n</system-reminder>",
+          "kind": "actual-reminder-wrapper-in-message-content"
+        },
+        {
+          "jsonPointer": "/requests/2/messages/0/content/2/text",
+          "excerpt": "<system-reminder>\n<total_tokens>15000000 tokens left</total_tokens>\n</system-reminder>",
+          "kind": "actual-reminder-wrapper-in-message-content"
+        },
+        {
+          "jsonPointer": "/requests/2/messages/0/content/3/text",
+          "excerpt": "<system-reminder>\nToday's date is 2026-10-17.\n</system-reminder>\n",
+          "kind": "actual-reminder-wrapper-in-message-content"
+        },
+        {
+          "jsonPointer": "/requests/2/messages/2/content/0/content",
+          "excerpt": " response to the user using markdown hyperlinks.\n\n<system-reminder>\n<total_tokens>14999890 tokens left</total_tokens>\n</system-reminder>",
+          "kind": "actual-reminder-wrapper-in-message-content"
+        },
+        {
+          "jsonPointer": "/requests/2/system/2/text",
+          "excerpt": "ch.\n - Tool results and user messages may include <system-reminder> or other tags. Tags contain information from the system. They bear no direct relation to the specific tool results or user messages in which they appear.\n - Tool ",
+          "kind": "literal-tag-explanation-in-system-prompt"
+        }
+      ]
+    },
+    "static": {
+      "root": "artifacts/claude-mods-research-20261017/linux-x64/restored",
+      "functions": [
+        {
+          "file": "chunk-kasbfbhj.js",
+          "line": 3559,
+          "name": "Yl",
+          "role": "Wraps text in HO/newline/text/newline/pBe (system-reminder tags)."
+        },
+        {
+          "file": "chunk-kasbfbhj.js",
+          "line": 3563,
+          "name": "Ene",
+          "role": "Strips matching complete outer reminder wrapper when called; not a global serialization pass."
+        },
+        {
+          "file": "chunk-kasbfbhj.js",
+          "line": 3564,
+          "name": "uZe",
+          "role": "Calls Ene for strings and every text block, returns null for non-text blocks, joins texts."
+        },
+        {
+          "file": "chunk-kasbfbhj.js",
+          "line": 3539,
+          "name": "hT",
+          "role": "w=S7(model); H=w&&fvr(model). Promotable attachments under w use uZe(pi); H rewraps result with Yl, otherwise bare text can aggregate into api_system. Fallback user/tool-result branches can preserve wrappers."
+        },
+        {
+          "file": "chunk-kasbfbhj.js",
+          "line": 3556,
+          "name": "lLn",
+          "role": "Can fold reminder text into tool_result.content under branch conditions."
+        },
+        {
+          "file": "chunk-kasbfbhj.js",
+          "line": 2856,
+          "name": "Xyr",
+          "role": "Serializes user through eyr, api_system to role:system. No unconditional removal of system-reminder tags."
+        },
+        {
+          "file": "chunk-kasbfbhj.js",
+          "line": 2854,
+          "name": "eyr",
+          "role": "Preserves user message text while applying content/caching normalization."
+        },
+        {
+          "file": "chunk-0ycjphb5.js",
+          "line": 52,
+          "name": "S7",
+          "role": "Uses model capability midConversationSystem with zF fallback."
+        },
+        {
+          "file": "chunk-0ycjphb5.js",
+          "line": 52,
+          "name": "fvr",
+          "role": "Returns We(model)===\"claude-sonnet-5\"; hT rewrap condition H depends on this and w."
+        }
+      ],
+      "excerptProvenance": "artifacts/claude-mods-research-20261017/linux-x64/reminder-wire-rea-audit/provenance.json"
+    },
+    "rea": {
+      "actualCalls": [
+        {
+          "operation": "analyze_javascript_application",
+          "sources": [
+            "chunk-kasbfbhj.js",
+            "chunk-0ycjphb5.js"
+          ],
+          "status": "provider_timeout",
+          "timeoutMs": 45000,
+          "retainedEvidenceId": "ev_2f26f2bdea70650cd536714e56b35a43d6fd69550c241b32c2d160d795a82af1"
+        },
+        {
+          "operation": "analyze_javascript_application",
+          "sources": [
+            "chunk-0ycjphb5.js"
+          ],
+          "status": "completed",
+          "parentEvidenceId": "ev_7da99e433944f603929c002d02f55291e67481894f2eadb0c9658979b9972253",
+          "summaryEvidenceId": "ev_c58dd0648b66b6ec73741c6e652ffc2407ab2e94f0a656ee5ec9d233487fe2c8",
+          "parseFailures": 0,
+          "semanticNodeLimit": 5000,
+          "coverage": "partial, truncated"
+        }
+      ],
+      "limitations": [
+        "REA graph is static and incomplete, with 2353 unselected source files. It does not prove runtime execution.",
+        "Core behavior above independently read from exact restored source, not claimed to have been completely resolved by REA.",
+        "Exact-function excerpts preserve provenance but were not executed or analyzed by REA."
+      ]
+    }
+  },
+  "limits": [
+    "Capture proves the observed original-CLI Haiku request path, not every model/provider/feature combination.",
+    "Mid-conversation system promotion and rewrap conditions are statically confirmed, not freshly triggered in a comparative live capture.",
+    "Not all internal attachments survive as separate wrappers. Labels can be stripped, aggregated, rewritten by mods or folded into tool results.",
+    "No new real API requests or production actions in this verification."
+  ]
+}

@@ -1,0 +1,352 @@
+[
+ {
+  "key": "official-2.1.310 GET /api/claude_code/settings",
+  "tlsVariants": 2,
+  "headVariants": 1,
+  "ja4": "t13d181000_5d04281c6031_25d8bb11352d",
+  "ja3": "5355e3851d76d069ab8a98fdb51cf1b4",
+  "alpnOffer": [],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": false,
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-code/2.1.310",
+  "headerNames": [
+   "Accept",
+   "x-api-key",
+   "User-Agent",
+   "Cache-Control",
+   "Pragma",
+   "Accept-Encoding",
+   "Host",
+   "Connection"
+  ]
+ },
+ {
+  "key": "official-2.1.310 GET /api/claude_code/policy_limits",
+  "tlsVariants": 2,
+  "headVariants": 1,
+  "ja4": "t13d181000_5d04281c6031_25d8bb11352d",
+  "ja3": "5355e3851d76d069ab8a98fdb51cf1b4",
+  "alpnOffer": [],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": false,
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-code/2.1.310",
+  "headerNames": [
+   "Accept",
+   "User-Agent",
+   "Cache-Control",
+   "Pragma",
+   "x-api-key",
+   "Accept-Encoding",
+   "Host",
+   "Connection"
+  ]
+ },
+ {
+  "key": "official-2.1.310 POST /v1/messages",
+  "tlsVariants": 1,
+  "headVariants": 1,
+  "ja4": "t13d1713h1_5b57614c22b0_7f527383e249",
+  "ja3": "1523504b38f0fae0d881d4b6554aac1b",
+  "alpnOffer": [
+   "http/1.1"
+  ],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": "http/1.1",
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-cli/2.1.310 (external, sdk-cli)",
+  "headerNames": [
+   "Accept",
+   "Content-Type",
+   "User-Agent",
+   "X-Claude-Code-Session-Id",
+   "X-Stainless-Arch",
+   "X-Stainless-Lang",
+   "X-Stainless-OS",
+   "X-Stainless-Package-Version",
+   "X-Stainless-Retry-Count",
+   "X-Stainless-Runtime",
+   "X-Stainless-Runtime-Version",
+   "X-Stainless-Timeout",
+   "anthropic-beta",
+   "anthropic-dangerous-direct-browser-access",
+   "anthropic-version",
+   "x-api-key",
+   "x-app",
+   "x-claude-code-prompt-id",
+   "x-claude-code-request-class",
+   "x-client-request-id",
+   "Connection",
+   "Host",
+   "Accept-Encoding",
+   "Content-Length"
+  ]
+ },
+ {
+  "key": "official-2.1.312 GET /api/claude_code/settings",
+  "tlsVariants": 2,
+  "headVariants": 1,
+  "ja4": "t13d181000_5d04281c6031_25d8bb11352d",
+  "ja3": "5355e3851d76d069ab8a98fdb51cf1b4",
+  "alpnOffer": [],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": false,
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-code/2.1.312",
+  "headerNames": [
+   "Accept",
+   "x-api-key",
+   "User-Agent",
+   "Cache-Control",
+   "Pragma",
+   "Accept-Encoding",
+   "Host",
+   "Connection"
+  ]
+ },
+ {
+  "key": "official-2.1.312 GET /api/claude_code/policy_limits",
+  "tlsVariants": 2,
+  "headVariants": 1,
+  "ja4": "t13d181000_5d04281c6031_25d8bb11352d",
+  "ja3": "5355e3851d76d069ab8a98fdb51cf1b4",
+  "alpnOffer": [],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": false,
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-code/2.1.312",
+  "headerNames": [
+   "Accept",
+   "User-Agent",
+   "Cache-Control",
+   "Pragma",
+   "x-api-key",
+   "Accept-Encoding",
+   "Host",
+   "Connection"
+  ]
+ },
+ {
+  "key": "official-2.1.312 POST /v1/messages",
+  "tlsVariants": 1,
+  "headVariants": 1,
+  "ja4": "t13d1713h1_5b57614c22b0_7f527383e249",
+  "ja3": "1523504b38f0fae0d881d4b6554aac1b",
+  "alpnOffer": [
+   "http/1.1"
+  ],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": "http/1.1",
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-cli/2.1.312 (external, sdk-cli)",
+  "headerNames": [
+   "Accept",
+   "Content-Type",
+   "User-Agent",
+   "X-Claude-Code-Session-Id",
+   "X-Stainless-Arch",
+   "X-Stainless-Lang",
+   "X-Stainless-OS",
+   "X-Stainless-Package-Version",
+   "X-Stainless-Retry-Count",
+   "X-Stainless-Runtime",
+   "X-Stainless-Runtime-Version",
+   "X-Stainless-Timeout",
+   "anthropic-beta",
+   "anthropic-dangerous-direct-browser-access",
+   "anthropic-version",
+   "x-api-key",
+   "x-app",
+   "x-claude-code-prompt-id",
+   "x-claude-code-request-class",
+   "x-client-request-id",
+   "Connection",
+   "Host",
+   "Accept-Encoding",
+   "Content-Length"
+  ]
+ },
+ {
+  "key": "custom-v36-direct POST /v1/messages",
+  "tlsVariants": 1,
+  "headVariants": 1,
+  "ja4": "t13d1713h1_5b57614c22b0_7f527383e249",
+  "ja3": "1523504b38f0fae0d881d4b6554aac1b",
+  "alpnOffer": [
+   "http/1.1"
+  ],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": "http/1.1",
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-cli/2.1.310 (external, cli)",
+  "headerNames": [
+   "Accept",
+   "Content-Type",
+   "User-Agent",
+   "X-Claude-Code-Session-Id",
+   "X-Stainless-Arch",
+   "X-Stainless-Lang",
+   "X-Stainless-OS",
+   "X-Stainless-Package-Version",
+   "X-Stainless-Retry-Count",
+   "X-Stainless-Runtime",
+   "X-Stainless-Runtime-Version",
+   "X-Stainless-Timeout",
+   "anthropic-dangerous-direct-browser-access",
+   "anthropic-version",
+   "x-api-key",
+   "x-app",
+   "x-claude-code-request-class",
+   "x-client-request-id",
+   "Connection",
+   "Host",
+   "Accept-Encoding",
+   "Content-Length"
+  ]
+ },
+ {
+  "key": "custom-v36-build POST /v1/messages",
+  "tlsVariants": 1,
+  "headVariants": 1,
+  "ja4": "t13d1713h1_5b57614c22b0_7f527383e249",
+  "ja3": "1523504b38f0fae0d881d4b6554aac1b",
+  "alpnOffer": [
+   "http/1.1"
+  ],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": "http/1.1",
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-cli/2.1.310 (external, sdk-cli)",
+  "headerNames": [
+   "Accept",
+   "Content-Type",
+   "User-Agent",
+   "X-Claude-Code-Session-Id",
+   "X-Stainless-Arch",
+   "X-Stainless-Lang",
+   "X-Stainless-OS",
+   "X-Stainless-Package-Version",
+   "X-Stainless-Retry-Count",
+   "X-Stainless-Runtime",
+   "X-Stainless-Runtime-Version",
+   "X-Stainless-Timeout",
+   "anthropic-beta",
+   "anthropic-dangerous-direct-browser-access",
+   "anthropic-version",
+   "x-api-key",
+   "x-app",
+   "x-claude-code-request-class",
+   "x-client-request-id",
+   "Connection",
+   "Host",
+   "Accept-Encoding",
+   "Content-Length"
+  ]
+ },
+ {
+  "key": "custom-v38-direct POST /v1/messages",
+  "tlsVariants": 1,
+  "headVariants": 1,
+  "ja4": "t13d1713h1_5b57614c22b0_7f527383e249",
+  "ja3": "1523504b38f0fae0d881d4b6554aac1b",
+  "alpnOffer": [
+   "http/1.1"
+  ],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": "http/1.1",
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-cli/2.1.312 (external, cli)",
+  "headerNames": [
+   "Accept",
+   "Content-Type",
+   "User-Agent",
+   "X-Claude-Code-Session-Id",
+   "X-Stainless-Arch",
+   "X-Stainless-Lang",
+   "X-Stainless-OS",
+   "X-Stainless-Package-Version",
+   "X-Stainless-Retry-Count",
+   "X-Stainless-Runtime",
+   "X-Stainless-Runtime-Version",
+   "X-Stainless-Timeout",
+   "anthropic-dangerous-direct-browser-access",
+   "anthropic-version",
+   "x-api-key",
+   "x-app",
+   "x-claude-code-request-class",
+   "x-client-request-id",
+   "Connection",
+   "Host",
+   "Accept-Encoding",
+   "Content-Length"
+  ]
+ },
+ {
+  "key": "custom-v38-build POST /v1/messages",
+  "tlsVariants": 1,
+  "headVariants": 1,
+  "ja4": "t13d1713h1_5b57614c22b0_7f527383e249",
+  "ja3": "1523504b38f0fae0d881d4b6554aac1b",
+  "alpnOffer": [
+   "http/1.1"
+  ],
+  "negotiated": {
+   "protocol": "TLSv1.3",
+   "alpn": "http/1.1",
+   "cipher": "TLS_AES_128_GCM_SHA256"
+  },
+  "ua": "claude-cli/2.1.312 (external, sdk-cli)",
+  "headerNames": [
+   "Accept",
+   "Content-Type",
+   "User-Agent",
+   "X-Claude-Code-Session-Id",
+   "X-Stainless-Arch",
+   "X-Stainless-Lang",
+   "X-Stainless-OS",
+   "X-Stainless-Package-Version",
+   "X-Stainless-Retry-Count",
+   "X-Stainless-Runtime",
+   "X-Stainless-Runtime-Version",
+   "X-Stainless-Timeout",
+   "anthropic-beta",
+   "anthropic-dangerous-direct-browser-access",
+   "anthropic-version",
+   "x-api-key",
+   "x-app",
+   "x-claude-code-request-class",
+   "x-client-request-id",
+   "Connection",
+   "Host",
+   "Accept-Encoding",
+   "Content-Length"
+  ]
+ }
+]
+custom-v36-direct POST /v1/messages vs official-2.1.310 POST /v1/messages: TLS identical; header names differ (only custom: [], only official: ["anthropic-beta","x-claude-code-prompt-id"])
+custom-v36-direct POST /v1/messages vs official-2.1.312 POST /v1/messages: TLS identical; header names differ (only custom: [], only official: ["anthropic-beta","x-claude-code-prompt-id"])
+custom-v36-build POST /v1/messages vs official-2.1.310 POST /v1/messages: TLS identical; header names differ (only custom: [], only official: ["x-claude-code-prompt-id"])
+custom-v36-build POST /v1/messages vs official-2.1.312 POST /v1/messages: TLS identical; header names differ (only custom: [], only official: ["x-claude-code-prompt-id"])
+custom-v38-direct POST /v1/messages vs official-2.1.310 POST /v1/messages: TLS identical; header names differ (only custom: [], only official: ["anthropic-beta","x-claude-code-prompt-id"])
+custom-v38-direct POST /v1/messages vs official-2.1.312 POST /v1/messages: TLS identical; header names differ (only custom: [], only official: ["anthropic-beta","x-claude-code-prompt-id"])
+custom-v38-build POST /v1/messages vs official-2.1.310 POST /v1/messages: TLS identical; header names differ (only custom: [], only official: ["x-claude-code-prompt-id"])
+custom-v38-build POST /v1/messages vs official-2.1.312 POST /v1/messages: TLS identical; header names differ (only custom: [], only official: ["x-claude-code-prompt-id"])

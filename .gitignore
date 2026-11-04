@@ -11,3 +11,9 @@ runnable/
 /build/
 nul
 reconstructed/dist/
+# official binaries of other versions (manifests are tracked); tools/extract/acquire.mjs fetches them
+artifacts/official/*/claude-linux-x64
+# restored trees and equiv pairings of other versions (regenerable, tools/versions/README.md)
+artifacts/versions/
+# capture logs migrated from sup2api are evidence, not build logs
+!research/**/*.log

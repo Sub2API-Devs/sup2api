@@ -1,0 +1,14 @@
+# chunk-pp7zwndm.js:F9t -> chunk-2xbw1xpb.js:gDt
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-pp7zwndm.js_F9t.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-pp7zwndm.js_F9t.new.js"
+index 5abacbc28..9e2d9392f 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-pp7zwndm.js_F9t.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-pp7zwndm.js_F9t.new.js"
+@@ -1,6 +1,6 @@
+ function SELF($l0, $l1, $l2) {
+   $m_dys();
+-  let $l3 = $m_TF($l0, $l2), $l4 = $m_ri($m_Ght([...$l2?.machineMcpTools ?? [], ...$l1]), "name"), $l5 = $m_cDn($m_dDn($m_TQ($l4, $l0), $l4), $l4), $l6 = $m_lys($l3, $l5);
+-  return $m_ri($l6.toSorted($m_Xye).concat($l5.sort($m_Xye)), "name");
++  let $l3 = $m_TF($l0, $l2), $l4 = $NEW_chunk_1stqtz31_js_Ove($m_Ght([...$l2?.machineMcpTools ?? [], ...$l1]), ($l5) => $l5.name), $l6 = $m_cDn($m_dDn($m_TQ($l4, $l0), $l4), $l4), $l7 = $m_lys($l3, $l6);
++  return $NEW_chunk_1stqtz31_js_Ove($l7.toSorted($m_Xye).concat($l6.sort($m_Xye)), ($l8) => $l8.name);
+ }
+ ;

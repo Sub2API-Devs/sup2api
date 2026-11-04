@@ -1,0 +1,66 @@
+# chunk-zpsbh0wk.js:ve -> chunk-ndmse9kj.js:be
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_ve.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_ve.new.js"
+index ca4ce45..e7c2a36 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_ve.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_ve.new.js"
+@@ -8,11 +8,11 @@ class $l0 {
+   #i = /* @__PURE__ */ new Map();
+   #d = [];
+   #u = void 0;
+-  #l = [];
+-  #c = false;
++  #c = [];
++  #l = false;
+   #p = void 0;
+-  #a = void 0;
+   #h = void 0;
++  #a = void 0;
+   inlinePlugins() {
+     return this.#e;
+   }
+@@ -72,16 +72,16 @@ class $l0 {
+     this.#u = $l17;
+   }
+   allowedChannels() {
+-    return this.#l;
++    return this.#c;
+   }
+   replaceAllowedChannels($l18) {
+-    this.#l = $l18;
++    this.#c = $l18;
+   }
+   hasDevChannels() {
+-    return this.#c;
++    return this.#l;
+   }
+   replaceHasDevChannels($l19) {
+-    this.#c = $l19;
++    this.#l = $l19;
+   }
+   sessionSkillAllowlist() {
+     return this.#p;
+@@ -90,19 +90,19 @@ class $l0 {
+     this.#p = $l20;
+   }
+   chromeFlagOverride() {
+-    return this.#a;
++    return this.#h;
+   }
+   replaceChromeFlagOverride($l21) {
+-    this.#a = $l21;
++    this.#h = $l21;
+   }
+   teammateAgentId() {
+-    return this.#h;
++    return this.#a;
+   }
+   replaceTeammateAgentId($l22) {
+-    this.#h = $l22;
++    this.#a = $l22;
+   }
+   reset() {
+-    this.#e = [], this.#t = [], this.#n = [], this.clearSyncedPluginDirs(), this.#d = [], this.#u = void 0, this.#l = [], this.#c = false, this.#p = void 0, this.#a = void 0, this.#h = void 0;
++    this.#e = [], this.#t = [], this.#n = [], this.clearSyncedPluginDirs(), this.#d = [], this.#u = void 0, this.#c = [], this.#l = false, this.#p = void 0, this.#h = void 0, this.#a = void 0;
+   }
+ }
+ ;

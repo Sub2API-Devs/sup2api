@@ -17,6 +17,8 @@
     "@babel/traverse": "^8.1.0",
     "@babel/types": "^8.1.0",
     "bun": "1.4.4",
+    "eslint-scope": "8.4.0",
+    "espree": "10.4.0",
     "prettier": "^3.9.10"
   }
 }

@@ -1,0 +1,14 @@
+# chunk-bbw420pv.js:ljt -> chunk-yagw4eem.js:wzt
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-bbw420pv.js_ljt.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-bbw420pv.js_ljt.new.js"
+index 7b07d1605..c622aa7ea 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-bbw420pv.js_ljt.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-bbw420pv.js_ljt.new.js"
+@@ -9,6 +9,8 @@ function SELF() {
+   }
+   let $l3 = $m_Rlr();
+   if ($l3 && !Object.keys($l0).some(($l4) => /^anthropic-client-(platform|version)$/i.test($l4))) $l0["anthropic-client-platform"] = "desktop_app", $l0["anthropic-client-version"] = $l3;
++  let $l5 = $NEW_chunk_zpsbh0wk_js_zus();
++  if ($l5 !== void 0) $l0[$NEW_chunk_f7avdr1b_js_V3r] = $l5;
+   return $l0;
+ }
+ ;

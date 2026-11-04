@@ -1,0 +1,14 @@
+# chunk-bbw420pv.js:ky -> chunk-yagw4eem.js:cw
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-bbw420pv.js_ky.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-bbw420pv.js_ky.new.js"
+index 94c705261..8bd6d13ce 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-bbw420pv.js_ky.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.312\\diffs\\chunk-bbw420pv.js_ky.new.js"
+@@ -1,7 +1,7 @@
+ function SELF({ clientRequestId: $l0, provider: $l1, routedProvider: $l2, method: $l3, url: $l4, body: $l5, noResponseRetryLedger: $l6 }) {
+   let $l7 = $l2 === "gateway" && $l6 !== void 0 && $m_i.CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS !== void 0 && $m_hi() && $l3 === "POST" && $m_an($l4), $l8 = $l7 ? { escalated: $l6.count > 0 } : $m_Ay($l0), $l9 = $l8 === void 0 && $l1 === "bedrock" && $l3 === "POST" && $l4.includes($m_qp);
+   if ($l8 === void 0 && !$l9 || !$l7 && !$m_p1r($l2)) return;
+-  let $l10 = typeof $l5 === "string" ? Buffer.byteLength($l5) : 0, $l11 = Math.ceil($l10 / $m_vy) * 1e3, $l12 = $m_u1r() ?? 6e5, $l13 = $l12 <= 0 ? 1 / 0 : $l12 - 1e3;
++  let $l10 = typeof $l5 === "string" ? Buffer.byteLength($l5) : $NEW_chunk_t6h9vpfq_js_cnt($l5) ? $l5.length : 0, $l11 = Math.ceil($l10 / $m_vy) * 1e3, $l12 = $m_u1r() ?? 6e5, $l13 = $l12 <= 0 ? 1 / 0 : $l12 - 1e3;
+   if ($l13 < $m_mi) return;
+   let $l14 = $m_Ey($l1) + $l11, $l15 = Math.min($l14, $l13);
+   if ($l8 === void 0) return { escalated: false, firstWindowMs: $l15, retryWindowMs: $l15 };

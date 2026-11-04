@@ -1,0 +1,544 @@
+# chunk-rncrmfyt.js:jA -> chunk-j0tbz6ra.js:UC
+diff --git "a/diffs\\chunk-rncrmfyt.js_jA.old.js" "b/diffs\\chunk-rncrmfyt.js_jA.new.js"
+index d57d12f..1f7fa9c 100644
+--- "a/diffs\\chunk-rncrmfyt.js_jA.old.js"
++++ "b/diffs\\chunk-rncrmfyt.js_jA.new.js"
+@@ -73,305 +73,317 @@ function SELF($l0, $l1 = [], $l2, $l3) {
+       break;
+     }
+   }
+-  let $l73 = [], $l74 = $m_Smt(), $l75 = [], $l76 = [], $l77 = [], $l78 = /* @__PURE__ */ new Map(), $l79 = $l3?.inlineToolDefinitions !== void 0 ? $m_n9e($l0, $l3.nameOnlyAnnouncements) : void 0, $l80 = /* @__PURE__ */ new Set(), $l81, $l82 = [], $l83 = [], $l84 = $l3?.keptReminders === true && $l7, $l85 = /* @__PURE__ */ new Map(), $l86 = /* @__PURE__ */ new Set(), $l87 = [], $l88 = false, $l89 = /* @__PURE__ */ new Map(), $l90 = 0, $l91 = $m_KCs($l4), $l92 = $l91 && /* @__PURE__ */ new Set(), $l93 = [], $l94 = /* @__PURE__ */ new Set(), $l95 = /* @__PURE__ */ new Set(), $l96 = /* @__PURE__ */ new Map(), $l97;
+-  function $l98($l99, $l100, $l101) {
+-    let $l102 = $l99.userRoleGuard === true, $l103 = ($l104) => {
+-      if ($l102 || $m_Dle($l99.kinds)) $l3?.onSessionNoticeRender?.({ uuid: $l100, timestamp: $l101, guarded: $l102, ...$l104 });
+-    }, $l105 = $l99;
+-    if (!$l102 && $l94.has($l100)) return true;
+-    if ($l102) {
+-      let $l106 = $l94.has($l100) ? void 0 : $m_qbt($l99, $l95);
+-      if ($l94.add($l100), $l106 === void 0) return $l103({ reason: "repeated", outcome: "omitted" }), true;
+-      $l105 = $l106;
++  let $l73 = [], $l74 = $m_Smt(), $l75 = [], $l76 = [], $l77 = [], $l78 = /* @__PURE__ */ new Map(), $l79 = $l3?.inlineToolDefinitions !== void 0 ? $m_n9e($l0, $l3.nameOnlyAnnouncements) : void 0, $l80 = /* @__PURE__ */ new Set(), $l81, $l82 = [], $l83 = [], $l84 = $l3?.keptReminders === true && $l7, $l85 = /* @__PURE__ */ new Map(), $l86 = /* @__PURE__ */ new Set(), $l87 = [], $l88 = false, $l89 = /* @__PURE__ */ new Map(), $l90 = 0, $l91 = $m_KCs($l4), $l92 = $l91 && /* @__PURE__ */ new Set(), $l93 = [], $l94 = /* @__PURE__ */ new Set(), $l95 = /* @__PURE__ */ new Set(), $l96 = /* @__PURE__ */ new Map(), $l97, $l98 = /* @__PURE__ */ new Set();
++  function $l99($l100, $l101, $l102) {
++    let $l103 = $l100.userRoleGuard === true, $l104 = ($l105) => {
++      if ($l103 || $m_Dle($l100.kinds)) $l3?.onSessionNoticeRender?.({ uuid: $l101, timestamp: $l102, guarded: $l103, ...$l105 });
++    }, $l106 = $l100;
++    if (!$l103 && $l94.has($l101)) return true;
++    if ($l103) {
++      let $l107 = $l94.has($l101) ? void 0 : $m_qbt($l100, $l95);
++      if ($l94.add($l101), $l107 === void 0) return $l104({ reason: "repeated", outcome: "omitted" }), true;
++      $l106 = $l107;
+     }
+-    let $l107 = $l102 && $m_jbt(), $l108 = !$l102 && $m_ade($l99), $l109 = $m_$j(), $l110 = $l109 || $l107 ? $m_zCs($l73, $l105, $l100, !$l102 ? "tail_text" : $l107 ? "second_pair" : "refuse", $l108 ? ($l111) => $l96.has($l111) : $l107 ? ($l112) => $l96.get($l112) === "declared" : void 0) : void 0;
+-    if ($l110 === "no_assistant") $l3?.onDeclaredRoundRender?.($l100, $l99);
+-    if ($l110 === "no_assistant" && ($l107 || $l108)) {
+-      let $l113 = $l91?.get($l100) ?? null;
+-      if ($l93.push({ attachment: $l105, uuid: $l100, timestamp: $l101, anchor: $l113, guarded: $l102 }), $l94.add($l100), $l102) $m_C9n($l105, $l95);
+-      if ($l113 === null) $l114($l92);
++    let $l108 = $l103 && $m_jbt(), $l109 = !$l103 && $m_ade($l100), $l110 = $m_$j(), $l111 = $l110 || $l108 ? $m_zCs($l73, $l106, $l101, !$l103 ? "tail_text" : $l108 ? "second_pair" : "refuse", $l109 ? ($l112) => $l96.has($l112) || $l98.has($l112) : $l108 ? ($l113) => $l96.get($l113) === "declared" || $l98.has($l113) : ($l114) => $l98.has($l114)) : void 0;
++    if ($l111 === "no_assistant") $l3?.onDeclaredRoundRender?.($l101, $l100);
++    if ($l111 === "no_assistant" && ($l108 || $l109)) {
++      let $l115 = $l91?.get($l101) ?? null;
++      if ($l93.push({ attachment: $l106, uuid: $l101, timestamp: $l102, anchor: $l115, guarded: $l103 }), $l94.add($l101), $l103) $m_C9n($l106, $l95);
++      if ($l115 === null) $l116($l92);
+       return true;
+     }
+-    if ($l102 && ($l110 === "hosted" || $l110 === "second_pair")) $m_C9n($l105, $l95);
+-    let $l115 = $m_VCs($l110, $l109, $l102);
+-    if ($l115 !== void 0) $l103($l115);
+-    return $l110 === "hosted" || $l110 === "second_pair" || $l110 === "tail_text";
++    if ($l103 && ($l111 === "hosted" || $l111 === "second_pair")) $m_C9n($l106, $l95);
++    let $l117 = $m_VCs($l111, $l110, $l103);
++    if ($l117 !== void 0) $l104($l117);
++    return $l111 === "hosted" || $l111 === "second_pair" || $l111 === "tail_text";
+   }
+-  function $l114($l116) {
+-    let $l117 = $l93.filter(($l118) => $l116 === void 0 || $l118.anchor === null || $l116.has($l118.anchor));
+-    if ($l117.length === 0) return;
+-    $l93.splice(0, $l93.length, ...$l93.filter(($l119) => !$l117.includes($l119)));
+-    for (let [$l120, { attachment: $l121, uuid: $l122, timestamp: $l123, guarded: $l124 }] of $l117.entries()) {
+-      if ($l124) $l3?.onSessionNoticeRender?.({ uuid: $l122, timestamp: $l123, guarded: true, reason: "no_assistant", outcome: "synthetic_round" });
+-      let $l125 = $l124 ? "session_notice" : "declared", $l126 = $l97 !== void 0 && $l97 !== $l125, $l127 = $l124 && !$l126;
+-      if ($l120 === 0) if ($l127) $l128();
+-      else $l129();
+-      let $l130 = !$l73.some(($l131) => $l131.type === "user");
+-      if ($l126 || $l124 && $l130) {
+-        let $l132 = $m_Ol($l124 ? $m_Wbt : $m_bwt), $l133 = $l73.findLastIndex(($l134) => $l134.type !== "api_system"), $l135 = $l73[$l133];
+-        if (!$l130 && $l135?.type === "user") {
+-          let $l136 = $l135.message.content;
+-          $l73[$l133] = { ...$l135, message: { ...$l135.message, content: [...typeof $l136 === "string" ? [{ type: "text", text: $l136 }] : $l136, { type: "text", text: $l132 }] } };
+-        } else $l73.push($m_Re({ content: $l132, isMeta: true, uuid: $m_UK("wake", $l122) }));
++  function $l116($l118) {
++    let $l119 = $l93.filter(($l120) => $l118 === void 0 || $l120.anchor === null || $l118.has($l120.anchor));
++    if ($l119.length === 0) return;
++    $l93.splice(0, $l93.length, ...$l93.filter(($l121) => !$l119.includes($l121)));
++    for (let [$l122, { attachment: $l123, uuid: $l124, timestamp: $l125, guarded: $l126 }] of $l119.entries()) {
++      if ($l126) $l3?.onSessionNoticeRender?.({ uuid: $l124, timestamp: $l125, guarded: true, reason: "no_assistant", outcome: "synthetic_round" });
++      let $l127 = $l126 ? "session_notice" : "declared", $l128 = $l97 !== void 0 && $l97 !== $l127, $l129 = $l126 && !$l128;
++      if ($l122 === 0) if ($l129) $l130();
++      else $l131();
++      let $l132 = !$l73.some(($l133) => $l133.type === "user");
++      if ($l128 || $l126 && $l132) {
++        let $l134 = $m_Ol($l126 ? $m_Wbt : $m_bwt), $l135 = $l73.findLastIndex(($l136) => $l136.type !== "api_system"), $l137 = $l73[$l135];
++        if (!$l132 && $l137?.type === "user") {
++          let $l138 = $l137.message.content;
++          $l73[$l135] = { ...$l137, message: { ...$l137.message, content: [...typeof $l138 === "string" ? [{ type: "text", text: $l138 }] : $l138, { type: "text", text: $l134 }] } };
++        } else $l73.push($m_Re({ content: $l134, isMeta: true, uuid: $m_UK("wake", $l124) }));
+       }
+-      if ($l120 === 0 && !$l127 && !$l130) $l128();
+-      $l97 = $l125;
+-      let $l137 = `${$m_eOe}${$l122}`, $l138 = $m_amt({ type: "tool_use", id: $l137, name: $m_Lm, input: {} }, $l122);
+-      $l96.set($l138.uuid, $l125), $l73.push($l138, $m_Re({ content: [{ type: "tool_result", tool_use_id: $l137, content: $m_fft($m_OX($l121.envelopes, $l121.remainingWakeCount), $l121.media) }], isMeta: true, uuid: $l122 })), $l89.clear(), $l90 = $l73.length;
++      if ($l122 === 0 && !$l129 && !$l132) $l130();
++      $l97 = $l127;
++      let $l139 = `${$m_eOe}${$l124}`, $l140 = $m_amt({ type: "tool_use", id: $l139, name: $m_Lm, input: {} }, $l124);
++      $l96.set($l140.uuid, $l127), $l73.push($l140, $m_Re({ content: [{ type: "tool_result", tool_use_id: $l139, content: $m_fft($m_OX($l123.envelopes, $l123.remainingWakeCount), $l123.media) }], isMeta: true, uuid: $l124 })), $l89.clear(), $l90 = $l73.length;
+     }
+   }
+-  let $l139 = [];
+-  function $l129() {
+-    if ($l139.length === 0) return;
+-    let $l140 = $l139.splice(0), $l141 = $m_s1($l73);
+-    if ($l141?.type === "user") {
+-      $l73[$l73.length - 1] = $l140.reduce(($l142, $l143) => $m_ZN($l142, $l143, $l74), $l141);
++  let $l141 = [];
++  function $l131() {
++    if ($l141.length === 0) return;
++    let $l142 = $l141.splice(0), $l143 = $m_s1($l73);
++    if ($l143?.type === "user") {
++      $l73[$l73.length - 1] = $l142.reduce(($l144, $l145) => $m_ZN($l144, $l145, $l74), $l143);
+       return;
+     }
+-    $l73.push($l140.reduce(($l144, $l145) => $m_ZN($l144, $l145, $l74)));
++    $l73.push($l142.reduce(($l146, $l147) => $m_ZN($l146, $l147, $l74)));
+   }
+-  function $l128() {
+-    $l129();
+-    let $l146 = ["batching_reminder_sent", "secondary_reminder_sent"].filter(($l147) => !$l86.has($l147)).map(($l148) => $l85.get($l148) ?? "").filter(($l149) => $l149.trim() !== "");
+-    if ($l85.clear(), $l86.clear(), $l75.length === 0 && $l83.length === 0 && $l146.length === 0) return;
+-    let $l150 = $l75.join(`
++  function $l130() {
++    $l131();
++    let $l148 = ["batching_reminder_sent", "secondary_reminder_sent"].filter(($l149) => !$l86.has($l149)).map(($l150) => $l85.get($l150) ?? "").filter(($l151) => $l151.trim() !== "");
++    if ($l85.clear(), $l86.clear(), $l75.length === 0 && $l83.length === 0 && $l148.length === 0) return;
++    let $l152 = $l75.join(`
+ 
+-`), $l151 = $l82.join(`
++`), $l153 = $l82.join(`
+ 
+-`), $l152 = $l83.join(`
++`), $l154 = $l83.join(`
+ 
+-`), $l153 = [...$l83, ...$l146].join(`
++`), $l155 = [...$l83, ...$l148].join(`
+ 
+-`), $l154 = $l76.splice(0), $l155 = $l77.splice(0), $l156 = new Map($l78);
++`), $l156 = $l76.splice(0), $l157 = $l77.splice(0), $l158 = new Map($l78);
+     $l78.clear();
+-    let $l157 = [], $l158 = 0;
+-    for (let $l159 of $l75) $l157.push($l158), $l158 += $l159.length + 2;
+-    let $l160 = $l87.splice(0).map(({ type: $l161, entry: $l162 }) => ({ type: $l161, start: $l157[$l162] ?? 0, length: $l75[$l162]?.length ?? 0 })), $l163 = $l160.map(($l164) => $l164.type);
++    let $l159 = [], $l160 = 0;
++    for (let $l161 of $l75) $l159.push($l160), $l160 += $l161.length + 2;
++    let $l162 = $l87.splice(0).map(({ type: $l163, entry: $l164 }) => ({ type: $l163, start: $l159[$l164] ?? 0, length: $l75[$l164]?.length ?? 0 })), $l165 = $l162.map(($l166) => $l166.type);
+     $l75.length = 0, $l82.length = 0, $l83.length = 0;
+-    let $l165 = $l154.length > 0 || $l156.size > 0 ? $l151 : void 0, $l166 = $m_s1($l73);
+-    if ($l166?.type === "api_system") {
+-      if ($m_ale($l166, $l150, $l153, $l165, $l160), $l146.length > 0) $l166.reminderFromRecords = true;
+-      if ($m_fmt($l166, $l154, $l155, $l156, $l80), $l163.length > 0) $l166.foldedAttachmentTypes = [...$l166.foldedAttachmentTypes ?? [], ...$l163];
+-    } else if ($l166?.type === "user") {
++    let $l167 = $l156.length > 0 || $l158.size > 0 ? $l153 : void 0, $l168 = $m_s1($l73);
++    if ($l168?.type === "api_system") {
++      if ($m_ale($l168, $l152, $l155, $l167, $l162), $l148.length > 0) $l168.reminderFromRecords = true;
++      if ($m_fmt($l168, $l156, $l157, $l158, $l80), $l165.length > 0) $l168.foldedAttachmentTypes = [...$l168.foldedAttachmentTypes ?? [], ...$l165];
++    } else if ($l168?.type === "user") {
+       $l88 = true;
+-      let $l167 = $m_ile("");
+-      if ($m_ale($l167, $l150, $l153, $l165, $l160), $l146.length > 0) $l167.reminderFromRecords = true;
+-      if ($l81?.toolDefinitions !== void 0) for (let $l168 of Object.keys($l81.toolDefinitions)) $l80.add($l168);
+-      if ($l81 = $l167, $m_fmt($l167, $l154, $l155, $l156, $l80), $l163.length > 0) $l167.foldedAttachmentTypes = $l163;
+-      $l73.push($l167);
++      let $l169 = $m_ile("");
++      if ($m_ale($l169, $l152, $l155, $l167, $l162), $l148.length > 0) $l169.reminderFromRecords = true;
++      if ($l81?.toolDefinitions !== void 0) for (let $l170 of Object.keys($l81.toolDefinitions)) $l80.add($l170);
++      if ($l81 = $l169, $m_fmt($l169, $l156, $l157, $l158, $l80), $l165.length > 0) $l169.foldedAttachmentTypes = $l165;
++      $l73.push($l169);
+     } else {
+-      let $l169 = $m_mI($l165 ?? $l150, $l152);
+-      if ($l146.length > 0 && $l169 === "") return;
+-      $l73.push($m_Re({ content: $l8 ? $l169 : $m_Ol($l169), isMeta: true, ephemeral: $l152 !== "" || void 0 }));
++      let $l171 = $m_mI($l167 ?? $l152, $l154);
++      if ($l148.length > 0 && $l171 === "") return;
++      $l73.push($m_Re({ content: $l8 ? $l171 : $m_Ol($l171), isMeta: true, ephemeral: $l154 !== "" || void 0 }));
+     }
+   }
+-  let $l170 = /* @__PURE__ */ new Set();
+-  function $l171($l172, $l173, $l174) {
+-    if ($l170.has($l173)) return true;
+-    let $l175 = $m_exs($l73, $l172, $l173, { ...$l174, behindEarlierMessages: $l28.has($l173), report: $l2 !== void 0, flushTail: $l128 });
+-    if ($l175 === false) return false;
+-    if ($l170.add($l173), $l175 === "new_turn") $l89.clear(), $l90 = $l73.length;
++  let $l172 = /* @__PURE__ */ new Set();
++  function $l173($l174, $l175, $l176) {
++    if ($l172.has($l175)) return true;
++    let $l177 = $m_exs($l73, $l174, $l175, { ...$l176, behindEarlierMessages: $l28.has($l175), report: $l2 !== void 0, flushTail: $l130, isRoundHost: ($l178) => $l98.has($l178) });
++    if ($l177 === false) return false;
++    if ($l172.add($l175), $l177 === "new_turn") $l89.clear(), $l90 = $l73.length;
+     return true;
+   }
+-  let $l176;
+-  for (let $l177 of $l23) {
++  function $l179($l180, $l181) {
++    let $l182 = $NEW_chunk_j0tbz6ra_js_dxs($l180, $l181);
++    if ($l182 === void 0 || $l98.has($l182.call.uuid)) return;
++    let $l183 = $m_s1($l73);
++    if ($l183?.type === "user") $l73[$l73.length - 1] = $m_P9n($l183, $l182.notice, $l19(), $l7, $l20);
++    else $l73.push($l182.notice);
++    $l130(), $l98.add($l182.call.uuid), $l73.push($l182.call, $l182.results), $l89.clear(), $l90 = $l73.length;
++  }
++  let $l184;
++  for (let $l185 of $l23) {
+     if ($l92 !== void 0) {
+-      if ($l176 !== void 0) $l92.add($l176);
+-      $l176 = $l177.uuid, $l114($l92);
++      if ($l184 !== void 0) $l92.add($l184);
++      $l184 = $l185.uuid, $l116($l92);
+     }
+-    if ($m_TS($l177)) continue;
+-    switch ($l177.type) {
++    if ($m_TS($l185)) continue;
++    switch ($l185.type) {
+       case "progress":
+         continue;
+       case "system": {
+-        if (!$m_MK($l177)) continue;
+-        $l129(), $l85.clear();
+-        let $l178 = $m_Re({ content: $l177.content, uuid: $l177.uuid, timestamp: $l177.timestamp }), $l179 = $m_s1($l73);
+-        if ($l179?.type === "user") {
+-          $l73[$l73.length - 1] = $m_ZN($l179, $l178, $l74);
++        if (!$m_MK($l185)) continue;
++        $l131(), $l85.clear();
++        let $l186 = $m_Re({ content: $l185.content, uuid: $l185.uuid, timestamp: $l185.timestamp }), $l187 = $m_s1($l73);
++        if ($l187?.type === "user") {
++          $l73[$l73.length - 1] = $m_ZN($l187, $l186, $l74);
+           continue;
+         }
+-        $l73.push($l178);
++        $l73.push($l186);
+         continue;
+       }
+       case "user": {
+-        if ($m_ken($l177)) continue;
+-        $l129(), $l85.clear();
+-        let $l180 = $l177;
+-        if ($l177.taskDelivery && $l171($l177.taskDelivery, $l177.uuid, { startsTurn: true, inDrainPosition: false, inHumanTurn: false })) continue;
+-        if ($l177.taskDelivery) $l180 = { ...$l180, taskDelivery: void 0 };
+-        if ($l177.origin?.kind === "task-notification") {
+-          let $l181 = $l180.message.content, $l182, $l183 = $l177.origin.subkind === "scheduled-trigger" ? $m_JOo : $l177.origin.subkind === "projects-relay" && $l177.hearthRelayMessageIds !== void 0 ? ($l184, $l185 = false) => $m_NSo($l184, { serverEnvelope: !$l185 }) : void 0;
+-          if ($l183) $l182 = typeof $l181 === "string" ? $l183($l181) : [{ type: "text", text: $l183($l181.filter(($l186) => $l186.type === "text").map(($l187) => $l187.type === "text" ? $l187.text : "").join(`
++        if ($m_ken($l185)) continue;
++        $l131(), $l85.clear();
++        let $l188 = $l185;
++        if ($l185.taskDelivery && $l173($l185.taskDelivery, $l185.uuid, { startsTurn: true, inDrainPosition: false, inHumanTurn: false })) continue;
++        if ($l185.taskDelivery) $l188 = { ...$l188, taskDelivery: void 0 };
++        if ($l185.origin?.kind === "task-notification") {
++          let $l189 = $l188.message.content, $l190, $l191 = $l185.origin.subkind === "scheduled-trigger" ? $m_JOo : $l185.origin.subkind === "projects-relay" && $l185.hearthRelayMessageIds !== void 0 ? ($l192, $l193 = false) => $m_NSo($l192, { serverEnvelope: !$l193 }) : void 0;
++          if ($l191) $l190 = typeof $l189 === "string" ? $l191($l189) : [{ type: "text", text: $l191($l189.filter(($l194) => $l194.type === "text").map(($l195) => $l195.type === "text" ? $l195.text : "").join(`
+ 
+-`), $m_F($l181, ($l188) => $l188.type === "text") > 1) }, ...$l181.filter(($l189) => $l189.type !== "text")];
+-          else if (typeof $l181 === "string") $l182 = $m_XOo($l181);
++`), $m_F($l189, ($l196) => $l196.type === "text") > 1) }, ...$l189.filter(($l197) => $l197.type !== "text")];
++          else if (typeof $l189 === "string") $l190 = $m_XOo($l189);
+           else {
+-            let $l190 = $l181.filter(($l191) => $l191.type === "text").map(($l192) => $l192.text).join(`
++            let $l198 = $l189.filter(($l199) => $l199.type === "text").map(($l200) => $l200.text).join(`
+ `);
+-            $l182 = [{ type: "text", text: $m_XOo($l190) }, ...$l181.filter(($l193) => $l193.type !== "text")];
++            $l190 = [{ type: "text", text: $m_XOo($l198) }, ...$l189.filter(($l201) => $l201.type !== "text")];
+           }
+-          $l180 = { ...$l180, origin: void 0, message: { ...$l180.message, content: $l182 } };
++          $l188 = { ...$l188, origin: void 0, message: { ...$l188.message, content: $l190 } };
+         }
+-        if (!$l17()) $l180 = $m_WJe($l180);
+-        else $l180 = $m_TCs($l180, $l1, $l10, $l3?.strippedToolReferenceKeys);
+-        let $l194 = $l36.get($l180.uuid);
+-        if ($l194) {
+-          let $l195 = $m_R9n($l180, $l194);
+-          if ($l195 === null) continue;
+-          $l180 = $l195;
++        if (!$l17()) $l188 = $m_WJe($l188);
++        else $l188 = $m_TCs($l188, $l1, $l10, $l3?.strippedToolReferenceKeys);
++        let $l202 = $l36.get($l188.uuid);
++        if ($l202) {
++          let $l203 = $m_R9n($l188, $l202);
++          if ($l203 === null) continue;
++          $l188 = $l203;
+         }
+-        $l180 = $m_S3([$l180], $l43.get($l180.uuid)?.reason ?? "")[0];
+-        let $l196 = $l180.message.content;
+-        if (Array.isArray($l196) && !$l196.some(($l197) => $l197.type === "text" && $l197.text.startsWith($m_S9n)) && $m_CCs($l196)) $l180 = { ...$l180, message: { ...$l180.message, content: [...$l196, { type: "text", text: $m_S9n }] } };
++        $l188 = $m_S3([$l188], $l43.get($l188.uuid)?.reason ?? "")[0];
++        let $l204 = $l188.message.content;
++        if (Array.isArray($l204) && !$l204.some(($l205) => $l205.type === "text" && $l205.text.startsWith($m_S9n)) && $m_CCs($l204)) $l188 = { ...$l188, message: { ...$l188.message, content: [...$l204, { type: "text", text: $m_S9n }] } };
+         if ($l9) {
+-          let $l198 = $m_gxs($l180, $l9);
+-          if ($l198) {
+-            $l180 = $l198.cleaned;
+-            let $l199 = $l8 ? $l198.reminders.map($m_Ol) : $l198.reminders;
+-            $l75.push(...$l199), $l82.push(...$l199);
++          let $l206 = $m_gxs($l188, $l9);
++          if ($l206) {
++            $l188 = $l206.cleaned;
++            let $l207 = $l8 ? $l206.reminders.map($m_Ol) : $l206.reminders;
++            $l75.push(...$l207), $l82.push(...$l207);
+           }
+         }
+-        let $l200 = $m_yxs($l177, $l29, $l32);
+-        $l180 = $m_T9n($l180);
+-        let $l201 = $m_s1($l73);
+-        if ($l201?.type === "user") $l73[$l73.length - 1] = $m_ZN($l201, $l180, $l74);
+-        else $l73.push($l180);
+-        if ($l200 !== void 0) {
+-          let $l202 = $m_AO($l200);
+-          if ($l7) $l75.push($l202), $l82.push($l202);
++        let $l208 = $m_yxs($l185, $l29, $l32);
++        $l188 = $m_T9n($l188);
++        let $l209 = $m_s1($l73);
++        if ($l209?.type === "user") $l73[$l73.length - 1] = $m_ZN($l209, $l188, $l74);
++        else $l73.push($l188);
++        if ($l208 !== void 0) {
++          let $l210 = $m_AO($l208);
++          if ($l7) $l75.push($l210), $l82.push($l210);
+           else {
+-            let $l203 = $m_s1($l73), $l204 = $m_Re({ content: $m_Ol($l202), isMeta: true });
+-            if ($l203?.type === "user") $l73[$l73.length - 1] = $m_P9n($l203, $l204, $l19(), false, $l20);
+-            else $l73.push($l204);
++            let $l211 = $m_s1($l73), $l212 = $m_Re({ content: $m_Ol($l210), isMeta: true });
++            if ($l211?.type === "user") $l73[$l73.length - 1] = $m_P9n($l211, $l212, $l19(), false, $l20);
++            else $l73.push($l212);
+           }
+         }
+         continue;
+       }
+       case "assistant": {
+-        $l114(), $l129();
+-        let $l205 = $l17(), $l206 = $m_YHs($l177.message.content, $l177.batchToolUses, $l1), $l207;
+-        for (let $l208 = 0; $l208 < $l206.length; $l208++) {
+-          let $l209 = $l206[$l208];
+-          if ($l209.type === "text" && Array.isArray($l209.citations) && $l209.citations.some(($l210) => $l210?.type !== "web_search_result_location")) $l207 ??= $l206.slice(), $l207[$l208] = { ...$l209, citations: $l209.citations.filter(($l211) => $l211?.type === "web_search_result_location") };
+-          if ($l209.type !== "tool_use") continue;
+-          $l9?.set($l209.id, $l209.name);
+-          let $l212 = $m_xn($l1, $l209.name), $l213 = $l212?.name ?? $l209.name, $l214 = $l14 && $m_$n($l177.wireToolInputs) ? $l177.wireToolInputs : void 0, $l215 = $l214 !== void 0 && Object.hasOwn($l214, $l209.id) ? $l214[$l209.id] : void 0, $l216 = $l214 !== void 0 && $m_$n($l215) && $m_o4t($l214, $l209.id, $l215, $l209.input, $l213, $l212, $l177.wireIngestContext?.[$l209.id], $l15) ? $l213 === $m_Cn ? $m_ujt($l215) ?? $l215 : $l215 : $m_DYt($l213, $l209.input, $l212 !== void 0 || $l12?.has($m_ac($l209.name)) === true);
+-          if ($l205 && $l216 === $l209.input && $l213 === $l209.name) continue;
+-          $l207 ??= $l206.slice(), $l207[$l208] = $l205 ? { ...$l209, name: $l213, input: $l216 } : { type: "tool_use", id: $l209.id, name: $l213, input: $l216 };
++        $l116(), $l131();
++        let $l213 = $l17(), $l214 = $m_YHs($l185.message.content, $l185.batchToolUses, $l1), $l215;
++        for (let $l216 = 0; $l216 < $l214.length; $l216++) {
++          let $l217 = $l214[$l216];
++          if ($l217.type === "text" && Array.isArray($l217.citations) && $l217.citations.some(($l218) => $l218?.type !== "web_search_result_location")) $l215 ??= $l214.slice(), $l215[$l216] = { ...$l217, citations: $l217.citations.filter(($l219) => $l219?.type === "web_search_result_location") };
++          if ($l217.type !== "tool_use") continue;
++          $l9?.set($l217.id, $l217.name);
++          let $l220 = $m_xn($l1, $l217.name), $l221 = $l220?.name ?? $l217.name, $l222 = $l14 && $m_$n($l185.wireToolInputs) ? $l185.wireToolInputs : void 0, $l223 = $l222 !== void 0 && Object.hasOwn($l222, $l217.id) ? $l222[$l217.id] : void 0, $l224 = $l222 !== void 0 && $m_$n($l223) && $m_o4t($l222, $l217.id, $l223, $l217.input, $l221, $l220, $l185.wireIngestContext?.[$l217.id], $l15) ? $l221 === $m_Cn ? $m_ujt($l223) ?? $l223 : $l223 : $m_DYt($l221, $l217.input, $l220 !== void 0 || $l12?.has($m_w2o($l217.name)) === true);
++          if ($l213 && $l224 === $l217.input && $l221 === $l217.name) continue;
++          $l215 ??= $l214.slice(), $l215[$l216] = $l213 ? { ...$l217, name: $l221, input: $l224 } : { type: "tool_use", id: $l217.id, name: $l221, input: $l224 };
+         }
+-        let $l217 = $l207 ?? ($l206 !== $l177.message.content ? $l206 : void 0), $l218 = $l177;
+-        if ($l177.wireToolInputs !== void 0 || $l177.wireIngestContext !== void 0 || $l217 !== void 0) {
+-          let { wireToolInputs: $l219, wireIngestContext: $l220, ...$l221 } = $l177;
+-          $l218 = $l217 !== void 0 ? { ...$l221, message: { ...$l177.message, content: $l217 } } : $l221;
++        let $l225 = $l215 ?? ($l214 !== $l185.message.content ? $l214 : void 0), $l226 = $l185;
++        if ($l185.wireToolInputs !== void 0 || $l185.wireIngestContext !== void 0 || $l225 !== void 0) {
++          let { wireToolInputs: $l227, wireIngestContext: $l228, ...$l229 } = $l185;
++          $l226 = $l225 !== void 0 ? { ...$l229, message: { ...$l185.message, content: $l225 } } : $l229;
+         }
+         for (; $l90 < $l73.length; $l90++) {
+-          let $l222 = $l73[$l90];
+-          if ($l222.type === "assistant") $l89.set($l222.message.id, $l90);
+-          else if ($l222.type !== "api_system" && !$m_Jy($l222)) $l89.clear();
++          let $l230 = $l73[$l90];
++          if ($l230.type === "assistant") $l89.set($l230.message.id, $l90);
++          else if ($l230.type !== "api_system" && !$m_Jy($l230)) $l89.clear();
+         }
+-        let $l223 = $l89.get($l218.message.id), $l224 = $l223 === void 0 ? void 0 : $l73[$l223];
+-        if ($l223 !== void 0 && $l224?.type === "assistant") $l73[$l223] = $m_txs($l224, $l218, { echoApiBlockOrder: $l3?.echoApiBlockOrder === true });
++        let $l231 = $l89.get($l226.message.id), $l232 = $l231 === void 0 ? void 0 : $l73[$l231];
++        if ($l231 !== void 0 && $l232?.type === "assistant") $l73[$l231] = $m_txs($l232, $l226, { echoApiBlockOrder: $l3?.echoApiBlockOrder === true });
+         else {
+-          $l128();
+-          let $l225 = $l218.message.content, $l226 = $l3?.echoApiBlockOrder === true && typeof $l218.apiBlockIndex === "number" ? $l225 : $m_c8n($l225);
+-          if ($l226 === $l225) $l73.push($l218);
++          $l130();
++          let $l233 = $l226.message.content, $l234 = $l3?.echoApiBlockOrder === true && typeof $l226.apiBlockIndex === "number" ? $l233 : $m_c8n($l233);
++          if ($l234 === $l233) $l73.push($l226);
+           else {
+-            let { apiBlockIndex: $l227, apiBlockIndices: $l228, ...$l229 } = $l218;
+-            $l73.push({ ...$l229, message: { ...$l218.message, content: $l226 } });
++            let { apiBlockIndex: $l235, apiBlockIndices: $l236, ...$l237 } = $l226;
++            $l73.push({ ...$l237, message: { ...$l226.message, content: $l234 } });
+           }
+         }
+         continue;
+       }
+       case "attachment": {
+-        if ($m_g0n($l177)) continue;
+-        if ($l177.attachment.type === "poll_events" && $l177.attachment.deliveredVia === void 0 && $l3?.pollEventsAsText !== true && $l98($l177.attachment, $l177.uuid, $l177.timestamp)) continue;
+-        if ($l177.attachment.type === "queued_command" && $l177.attachment.taskDelivery && $l171($l177.attachment.taskDelivery, $l177.uuid, { startsTurn: false, inDrainPosition: $l27.has($l177.uuid), inHumanTurn: $l25.has($l177.uuid) })) continue;
+-        let $l230 = $l177.attachment.type === "batching_reminder" || $l177.attachment.type === "secondary_reminder";
+-        if ($l230 && !$l7) continue;
+-        if ($l177.attachment.type === "output_limit_note" && !($l7 && typeof $l177.attachment.model === "string" && $m_age($l177.attachment.model, $l2))) continue;
+-        if ($l84 && ($l177.attachment.type === "batching_reminder_sent" || $l177.attachment.type === "secondary_reminder_sent") && $l177.attachment.clearAt === "next_user_message") {
+-          let $l231 = $m_emt([$m_Re({ content: $m_Ol($l177.attachment.text), isMeta: true })]) ?? "";
+-          $l85.set($l177.attachment.type, $l231 && $l8 ? $m_Ol($l231) : $l231);
++        if ($m_g0n($l185)) continue;
++        if ($l185.attachment.type === "poll_events" && $l185.attachment.deliveredVia === void 0 && $l3?.pollEventsAsText !== true && $l99($l185.attachment, $l185.uuid, $l185.timestamp)) continue;
++        if ($l185.attachment.type === "queued_command" && $l185.attachment.taskDelivery && $l173($l185.attachment.taskDelivery, $l185.uuid, { startsTurn: false, inDrainPosition: $l27.has($l185.uuid), inHumanTurn: $l25.has($l185.uuid) })) continue;
++        if ($l185.attachment.type === "project_doc_reads") {
++          $l179($l185.attachment, $l185.uuid);
++          continue;
++        }
++        let $l238 = $l185.attachment.type === "batching_reminder" || $l185.attachment.type === "secondary_reminder";
++        if ($l238 && !$l7) continue;
++        if ($l185.attachment.type === "output_limit_note" && !($l7 && typeof $l185.attachment.model === "string" && $m_age($l185.attachment.model, $l2))) continue;
++        if ($l84 && ($l185.attachment.type === "batching_reminder_sent" || $l185.attachment.type === "secondary_reminder_sent") && $l185.attachment.clearAt === "next_user_message") {
++          let $l239 = $m_emt([$m_Re({ content: $m_Ol($l185.attachment.text), isMeta: true })]) ?? "";
++          $l85.set($l185.attachment.type, $l239 && $l8 ? $m_Ol($l239) : $l239);
+           continue;
+         }
+-        let $l232 = $l7 && $l3?.surfaceLateToolAdditions === true && $l3.inlineToolDefinitions !== void 0 && $l177.attachment.type === "deferred_tools_delta" ? $m_HAs($l79?.get($l177.uuid), $l3.inlineToolDefinitions) : void 0, $l233 = $l7 && $l3?.surfaceLateToolAdditions === true && $l177.attachment.type === "deferred_tools_delta" && $l3.nameOnlyAnnouncements?.has($l177.uuid) !== true ? [...$m_Zi($l177.attachment.surfacedNames), ...$l232 !== void 0 ? $m_Zi($l177.attachment.replacedNames) : []].filter(($l234) => $l232?.definitions.get($l234) !== void 0 || $l3.deferredWireToolNames?.has($l234) === true) : [], $l235 = $l232 !== void 0 && $l177.attachment.type === "deferred_tools_delta" && $l3?.nameOnlyAnnouncements?.has($l177.uuid) !== true ? $m_Zi($l177.attachment.removedByBlock) : [], $l236 = $l7 && $l3?.advisorToolChanges === true && $l177.attachment.type === "advisor_tool" ? $l177.attachment.toolChange : void 0, $l237 = $m_gmt($l177.attachment), $l238 = $m_ymt($l177.attachment), $l239 = $l7 && $l177.attachment.type === "queued_command" && $l177.attachment.humanTurn === true && $l177.attachment.commandMode === "prompt" && $l177.attachment.isMeta !== true && $m_aA($l177) && !$m_bne($l177.attachment) && $l22(), $l240 = $l26.has($l177.uuid) || $l233.length > 0 || $l235.length > 0 || $l236 !== void 0, $l241 = { inHumanTurn: $l25.has($l177.uuid), surfacedToolNames: $l233 }, $l242 = $l3?.withoutAttachmentHooks ? $m_aBe($l177, $l241) : $m_I8n($l177, $l241, $l240), $l243 = $l242.messages, { isKnownType: $l244, recordedRole: $l245 } = $l242, $l246 = $m_t8n($l177.attachment) ? "user" : "system", $l247 = $l246 === "system" && ($l244 ? $l245 !== "user" : $l245 === "system");
+-        if ($l2 !== void 0 && $l243.length > 0 && (!$l244 || $l245 !== void 0 && $l245 !== $l246) && typeof $l177.attachment === "object" && !$m_x9n.has($l177.attachment)) $m_x9n.add($l177.attachment), $m_i("tengu_attachment_role_unknown_or_differs", { is_known_type: $l244, recorded_role: $m_c($l245 ?? "none"), should_promote: $l247, system_turns_on: $l7 });
+-        let $l248 = $l36.get($l177.uuid);
+-        if ($l248) $l243 = $l243.flatMap(($l249) => {
+-          let $l250 = $m_R9n($l249, $l248);
+-          return $l250 === null ? [] : [$l250];
++        let $l240 = $l7 && $l3?.surfaceLateToolAdditions === true && $l3.inlineToolDefinitions !== void 0 && $l185.attachment.type === "deferred_tools_delta" ? $m_HAs($l79?.get($l185.uuid), $l3.inlineToolDefinitions) : void 0, $l241 = $l7 && $l3?.surfaceLateToolAdditions === true && $l185.attachment.type === "deferred_tools_delta" && $l3.nameOnlyAnnouncements?.has($l185.uuid) !== true ? [...$m_Zi($l185.attachment.surfacedNames), ...$l240 !== void 0 ? $m_Zi($l185.attachment.replacedNames) : []].filter(($l242) => $l240?.definitions.get($l242) !== void 0 || $l3.deferredWireToolNames?.has($l242) === true) : [], $l243 = $l240 !== void 0 && $l185.attachment.type === "deferred_tools_delta" && $l3?.nameOnlyAnnouncements?.has($l185.uuid) !== true ? $m_Zi($l185.attachment.removedByBlock) : [], $l244 = $l7 && $l3?.advisorToolChanges === true && $l185.attachment.type === "advisor_tool" ? $l185.attachment.toolChange : void 0, $l245 = $m_gmt($l185.attachment), $l246 = $m_ymt($l185.attachment), $l247 = $l7 && $l185.attachment.type === "queued_command" && $l185.attachment.humanTurn === true && $l185.attachment.commandMode === "prompt" && $l185.attachment.isMeta !== true && $m_aA($l185) && !$m_bne($l185.attachment) && $l22(), $l248 = $l26.has($l185.uuid) || $l241.length > 0 || $l243.length > 0 || $l244 !== void 0, $l249 = { inHumanTurn: $l25.has($l185.uuid), surfacedToolNames: $l241 }, $l250 = $l3?.withoutAttachmentHooks ? $m_aBe($l185, $l249) : $m_I8n($l185, $l249, $l248), $l251 = $l250.messages, { isKnownType: $l252, recordedRole: $l253 } = $l250, $l254 = $m_t8n($l185.attachment) ? "user" : "system", $l255 = $l253 === void 0 ? $l252 && !$NEW_chunk_j0tbz6ra_js_$Zn($l185.attachment) : $l253 === "system";
++        if ($l2 !== void 0 && $l251.length > 0 && (!$l252 || $l253 !== void 0 && $l253 !== $l254) && typeof $l185.attachment === "object" && !$m_x9n.has($l185.attachment)) $m_x9n.add($l185.attachment), $m_i("tengu_attachment_role_unknown_or_differs", { is_known_type: $l252, recorded_role: $m_h($l253 ?? "none"), should_promote: $l255, system_turns_on: $l7 });
++        let $l256 = $l36.get($l185.uuid);
++        if ($l256) $l251 = $l251.flatMap(($l257) => {
++          let $l258 = $m_R9n($l257, $l256);
++          return $l258 === null ? [] : [$l258];
+         });
+-        let $l251 = $l177.attachment.type === "queued_command" && $m_Mwt($l177.attachment.reminderId) ? $l177.attachment.reminderId : void 0, $l252 = $l43.get($l177.uuid)?.reason ?? "";
+-        if ($l243 = $l243.map(($l253) => {
+-          let $l254 = $m_S3([$l253], $l252)[0];
+-          if ($l251 === void 0 || !$m_b9n($l253, $l251)) return $m_T9n($l254);
+-          let $l255 = $l254.message.content;
+-          if ($l254 === $l253 || typeof $l255 === "string") return $l253;
+-          let $l256 = $l255.filter(($l257) => $l257.type !== "text" || $m_ELe($l257.text) === $l251);
+-          return { ...$l254, message: { ...$l254.message, content: $l256 } };
+-        }), $l239) {
+-          let $l258 = [];
+-          for (let $l259 of $l243) {
+-            if ($l259.isMeta) {
+-              $l258.push($l259);
++        let $l259 = $l185.attachment.type === "queued_command" && $m_Mwt($l185.attachment.reminderId) ? $l185.attachment.reminderId : void 0, $l260 = $l43.get($l185.uuid)?.reason ?? "";
++        if ($l251 = $l251.map(($l261) => {
++          let $l262 = $m_S3([$l261], $l260)[0];
++          if ($l259 === void 0 || !$m_b9n($l261, $l259)) return $m_T9n($l262);
++          let $l263 = $l262.message.content;
++          if ($l262 === $l261 || typeof $l263 === "string") return $l261;
++          let $l264 = $l263.filter(($l265) => $l265.type !== "text" || $m_ELe($l265.text) === $l259);
++          return { ...$l262, message: { ...$l262.message, content: $l264 } };
++        }), $l247) {
++          let $l266 = [];
++          for (let $l267 of $l251) {
++            if ($l267.isMeta) {
++              $l266.push($l267);
+               continue;
+             }
+-            let $l260 = $l259.message.content;
+-            $l139.push({ ...$l259, message: { ...$l259.message, content: typeof $l260 === "string" ? $m_Iie($l260) : $l260.map(($l261) => $l261.type === "text" ? { ...$l261, text: $m_Iie($l261.text) } : $l261) } });
++            let $l268 = $l267.message.content;
++            $l141.push({ ...$l267, message: { ...$l267.message, content: typeof $l268 === "string" ? $m_Iie($l268) : $l268.map(($l269) => $l269.type === "text" ? { ...$l269, text: $m_Iie($l269.text) } : $l269) } });
+           }
+-          if ($l258.length === 0) continue;
+-          $l243 = $l258;
++          if ($l266.length === 0) continue;
++          $l251 = $l266;
+         }
+-        if ($l7 && $l251 !== void 0) {
+-          let $l262 = [], $l263 = [];
+-          for (let $l264 of $l243) if ($m_b9n($l264, $l251)) $l262.push($l264);
+-          else $l263.push($l264);
+-          if ($l262.length > 0) {
+-            let $l265 = $m_s1($l73);
+-            if ($l265?.type === "user") $l73[$l73.length - 1] = $l262.reduce(($l266, $l267) => $m_ZN($l266, $l267, $l74), $l265);
+-            else $l73.push(...$l262);
+-            if ($l263.length === 0) continue;
+-            $l243 = $l263;
++        if ($l7 && $l259 !== void 0) {
++          let $l270 = [], $l271 = [];
++          for (let $l272 of $l251) if ($m_b9n($l272, $l259)) $l270.push($l272);
++          else $l271.push($l272);
++          if ($l270.length > 0) {
++            let $l273 = $m_s1($l73);
++            if ($l273?.type === "user") $l73[$l73.length - 1] = $l270.reduce(($l274, $l275) => $m_ZN($l274, $l275, $l74), $l273);
++            else $l73.push(...$l270);
++            if ($l271.length === 0) continue;
++            $l251 = $l271;
+           }
+         }
+-        if ($l7 && $l247) {
+-          let $l268 = $m_emt($l243);
+-          if ($l268 !== null) {
+-            let $l269 = $l8 ? $m_Ol($l268) : $l268;
+-            if ($l230) {
+-              $l83.push($l269), $l86.add(`${$l177.attachment.type}_sent`);
++        if ($l7 && $l255) {
++          let $l276 = $m_emt($l251);
++          if ($l276 !== null) {
++            let $l277 = $l8 ? $m_Ol($l276) : $l276;
++            if ($l238) {
++              $l83.push($l277), $l86.add(`${$l185.attachment.type}_sent`);
+               continue;
+             }
+-            $l75.push($l269), $l87.push({ type: $l177.attachment.type, entry: $l75.length - 1 });
+-            let $l270 = { ...$l241, surfacedToolNames: [] }, $l271 = $l233.length > 0 ? $m_emt($l3?.withoutAttachmentHooks ? $m_aBe($l177, $l270).messages : $m_fGe($l177, $l270)) ?? $l268 : $l268;
+-            $l82.push($l8 ? $m_Ol($l271) : $l271);
+-            for (let $l272 of $l235) $l77.push({ op: "remove", name: $l272, byValue: true });
+-            for (let $l273 of $l233) {
+-              let $l274 = $l232?.definitions.get($l273);
+-              if ($l274 === void 0) $l76.push($l273);
+-              else $l78.set($l273, $l274), $l77.push({ op: "add", name: $l273 });
++            $l75.push($l277), $l87.push({ type: $l185.attachment.type, entry: $l75.length - 1 });
++            let $l278 = { ...$l249, surfacedToolNames: [] }, $l279 = $l241.length > 0 ? $m_emt($l3?.withoutAttachmentHooks ? $m_aBe($l185, $l278).messages : $m_fGe($l185, $l278)) ?? $l276 : $l276;
++            $l82.push($l8 ? $m_Ol($l279) : $l279);
++            for (let $l280 of $l243) $l77.push({ op: "remove", name: $l280, byValue: true });
++            for (let $l281 of $l241) {
++              let $l282 = $l240?.definitions.get($l281);
++              if ($l282 === void 0) $l76.push($l281);
++              else $l78.set($l281, $l282), $l77.push({ op: "add", name: $l281 });
+             }
+-            if ($l236 !== void 0) $l77.push({ op: $l236, name: $m_iIe });
++            if ($l244 !== void 0) $l77.push({ op: $l244, name: $m_iIe });
+             continue;
+           }
+         }
+-        let $l275 = $l19() && !$l237 && !$l238 ? $l243.map($m_Q9n) : $l243, $l276 = $l237 || $l238 || $l7 && ($l177.attachment.type === "account_memory_recall" || $m_Z9n($l177.attachment)), $l277 = $m_s1($l73);
+-        if ($l277?.type === "user") {
+-          $l73[$l73.length - 1] = $l275.reduce(($l278, $l279) => $l276 ? $m_ZN($l278, $l279, $l74) : $m_P9n($l278, $l279, $l19(), $l7, $l20), $l277);
++        let $l283 = $l19() && !$l245 && !$l246 ? $l251.map($m_Q9n) : $l251, $l284 = $l245 || $l246 || $l7 && ($l185.attachment.type === "account_memory_recall" || $l185.attachment.type === "nested_memory" || $m_Z9n($l185.attachment)), $l285 = $m_s1($l73);
++        if ($l285?.type === "user") {
++          $l73[$l73.length - 1] = $l283.reduce(($l286, $l287) => $l284 ? $m_ZN($l286, $l287, $l74) : $m_P9n($l286, $l287, $l19(), $l7, $l20), $l285);
+           continue;
+         }
+-        $l73.push(...$l275);
++        $l73.push(...$l283);
+         continue;
+       }
+     }
+   }
+-  $l114(), $l128();
+-  let $l280 = $m_xAs($l73, $l3?.preserveTrailingThinking), $l281 = $m_B8n($l280, $l3?.preserveTrailingThinking), $l282 = $l281.length === $l280.length ? $l281 : $m_MDe($l281), $l283 = $m_L8n($l282, $l3?.preserveTrailingThinking), $l284 = $m_F8n($l283), $l285 = $m_AAs($l284), $l286;
+-  if ($l7) $l286 = $l88 ? $m_nxs($l285, $l8) : $l285;
+-  else if ($l19()) $l286 = $m_s8n($m_MDe($l285), $l7, $l20);
+-  else $l286 = $l285;
+-  let $l287 = $l3?.echoApiBlockOrder === true ? $m_zJe($l286, $l3?.preserveTrailingThinking) : $l286, $l288 = $l5.size > 0 ? $m_DAs($l287, $l5) : $l287, $l289 = $m_xCs($l6.size > 0 ? $m_zb($l288, $l6) : $l288);
+-  return $m_XHs($m_ywt($l289), $l1);
++  $l116(), $l130();
++  let $l288 = $m_xAs($l73, $l3?.preserveTrailingThinking), $l289 = $m_B8n($l288, $l3?.preserveTrailingThinking), $l290 = $l289.length === $l288.length ? $l289 : $m_MDe($l289), $l291 = $m_L8n($l290, $l3?.preserveTrailingThinking), $l292 = $m_F8n($l291), $l293 = $m_AAs($l292), $l294;
++  if ($l7) $l294 = $l88 ? $m_nxs($l293, $l8) : $l293;
++  else if ($l19()) $l294 = $m_s8n($m_MDe($l293), $l7, $l20);
++  else $l294 = $l293;
++  let $l295 = $l3?.echoApiBlockOrder === true ? $m_zJe($l294, $l3?.preserveTrailingThinking) : $l294, $l296 = $l5.size > 0 ? $m_DAs($l295, $l5) : $l295, $l297 = $m_xCs($l6.size > 0 ? $m_zb($l296, $l6) : $l296);
++  return $m_XHs($m_ywt($l297), $l1);
+ }
+ ;

@@ -1,0 +1,9 @@
+function SELF($l0) {
+  if ($m_Oa() || $m_BH($l0)) return;
+  if ($m_cln("tengu_streamed_bumblebee", $m_i.CLAUDE_CODE_STREAMED_BUMBLEBEE) !== true) return;
+  let $l1 = $m_qFt($m_KAr($m_Ylt()), void 0);
+  if ($l1 === void 0) return;
+  let $l2 = $m_cln("tengu_streamed_bumblebee_text", $m_i.CLAUDE_CODE_STREAMED_BUMBLEBEE_TEXT), $l3 = typeof $l2 === "string" && $l2.trim() !== "", $l4 = $l3 ? $l2.trim() : $m_$o[$m_o7e()];
+  return $m_a("tengu_streamed_bumblebee_applied", { budget: $l1, isConfiguredWording: $l3 }), $l4.replaceAll("{N}", $l1.toLocaleString("en-US"));
+}
+;

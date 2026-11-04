@@ -1,0 +1,11 @@
+# chunk-cz6a8p8d.js:In -> chunk-a76knw89.js:Fn
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-cz6a8p8d.js_In.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-cz6a8p8d.js_In.new.js"
+index e39d674..4016664 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-cz6a8p8d.js_In.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-cz6a8p8d.js_In.new.js"
+@@ -1,4 +1,4 @@
+ function SELF($l0) {
+-  return $m__a($l0, "name").flatMap(($l1) => $l1.mcpInfo !== void 0 && $l1.name === $m_Io($l1.mcpInfo.serverName, $l1.mcpInfo.toolName) ? [{ name: $l1.name, server: $l1.mcpInfo, standardKey: $l1.mcpInfo.standardKey }] : []);
++  return $m__a($l0, "name").flatMap(($l1) => $l1.mcpInfo !== void 0 && $l1.name === $m_Io($l1.mcpInfo.serverName, $l1.mcpInfo.toolName) ? [{ name: $l1.name, server: $l1.mcpInfo, standardKey: $l1.mcpInfo.standardKey, denyKey: $l1.mcpInfo.denyKey, mayRecordOwner: $l1.mcpInfo.scope === void 0 ? void 0 : $NEW_chunk_a76knw89_js_a$e($l1.mcpInfo.serverName, $l1.mcpInfo) }] : []);
+ }
+ ;

@@ -1,0 +1,145 @@
+# chunk-zpsbh0wk.js:Q -> chunk-ndmse9kj.js:z
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Q.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Q.new.js"
+index ea8f4ec..676336a 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Q.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\session\\chunk-zpsbh0wk.js_Q.new.js"
+@@ -8,15 +8,16 @@ class $l0 {
+   #i = null;
+   #d = void 0;
+   #u = 0;
++  #c = void 0;
+   #l = null;
+-  #c = null;
+   #p = null;
+-  #a = null;
+   #h = null;
+-  #g = false;
+-  #m = null;
+-  #y = null;
++  #a = null;
++  #g = null;
+   #S = false;
++  #y = null;
++  #v = null;
++  #f = false;
+   lastAPIRequest() {
+     return this.#e;
+   }
+@@ -65,8 +66,11 @@ class $l0 {
+   lastMainRequestId() {
+     return this.#d;
+   }
+-  replaceLastMainRequestId($l8) {
+-    if (this.#d = $l8, $l8 === void 0) this.#u += 1;
++  replaceLastMainRequestId($l8, $l9) {
++    if (this.#d = $l8, this.#c = $l9, $l8 === void 0) this.#u += 1;
++  }
++  lastMainResponse() {
++    return this.#c;
+   }
+   mainChainReleaseCount() {
+     return this.#u;
+@@ -74,69 +78,69 @@ class $l0 {
+   lastMainThreadCacheTtlMs() {
+     return this.#l;
+   }
+-  replaceLastMainThreadCacheTtlMs($l9, $l10, $l11 = false) {
+-    this.#l = $l9, this.#a = Date.now(), this.#p = { ttlMs: $l9, model: $l10, requestAt: this.#a, askedAt: $l11 ? this.#p?.askedAt ?? this.#a : this.#a }, this.#h = this.#a, this.#g = true;
++  replaceLastMainThreadCacheTtlMs($l10, $l11, $l12 = false) {
++    this.#l = $l10, this.#a = Date.now(), this.#h = { ttlMs: $l10, model: $l11, requestAt: this.#a, askedAt: $l12 ? this.#h?.askedAt ?? this.#a : this.#a }, this.#g = this.#a, this.#S = true;
+   }
+-  isLastMainThreadAskLive($l12, $l13) {
+-    let $l14 = this.#p;
+-    return $l14 !== null && $l14.requestAt === this.#a && $l14.ttlMs === $l12 && $l14.model === $l13 && Date.now() - $l14.askedAt < $l12;
++  isLastMainThreadAskLive($l13, $l14) {
++    let $l15 = this.#h;
++    return $l15 !== null && $l15.requestAt === this.#a && $l15.ttlMs === $l13 && $l15.model === $l14 && Date.now() - $l15.askedAt < $l13;
+   }
+-  adjustLastMainThreadCacheTtlMs($l15) {
+-    this.#l = $l15;
++  adjustLastMainThreadCacheTtlMs($l16) {
++    this.#l = $l16;
+   }
+-  recordLastMainThreadCacheRenewal($l16) {
+-    if (this.#a !== null) this.#c = { requestAt: this.#a, at: Math.max($l16, this.lastMainThreadCacheRenewedAt() ?? -1 / 0) };
++  recordLastMainThreadCacheRenewal($l17) {
++    if (this.#a !== null) this.#p = { requestAt: this.#a, at: Math.max($l17, this.lastMainThreadCacheRenewedAt() ?? -1 / 0) };
+   }
+   lastMainThreadCacheRenewedAt() {
+-    let $l17 = this.#c;
+-    return $l17 !== null && $l17.requestAt === this.#a ? $l17.at : null;
++    let $l18 = this.#p;
++    return $l18 !== null && $l18.requestAt === this.#a ? $l18.at : null;
+   }
+   lastLiveMainThreadRequestAt() {
+-    return this.#h;
++    return this.#g;
+   }
+   lastMainThreadRequestAt() {
+     return this.#a;
+   }
+   mainThreadRequestedInProcess() {
+-    return this.#g;
++    return this.#S;
+   }
+   recordMainThreadTurnStart() {
+-    this.#g = true;
++    this.#S = true;
+   }
+-  replaceLastMainThreadRequest($l18, $l19) {
+-    this.#a = $l18, this.#l = $l19;
++  replaceLastMainThreadRequest($l19, $l20) {
++    this.#a = $l19, this.#l = $l20;
+   }
+   lastMainThreadContextTokens() {
+-    return this.#m;
++    return this.#y;
+   }
+-  replaceLastMainThreadContextTokens($l20) {
+-    this.#m = $l20;
++  replaceLastMainThreadContextTokens($l21) {
++    this.#y = $l21;
+   }
+-  stageResumeSeed($l21) {
+-    this.#f = $l21;
++  stageResumeSeed($l22) {
++    this.#m = $l22;
+   }
+-  applyResumeSeed($l22) {
+-    this.#f = null, this.#l = $l22.ttlMs, this.#a = $l22.requestAt, this.#m = $l22.contextTokens;
++  applyResumeSeed($l23) {
++    this.#m = null, this.#l = $l23.ttlMs, this.#a = $l23.requestAt, this.#y = $l23.contextTokens;
+   }
+-  #f = null;
+-  clearLastMainThreadRequest($l23) {
+-    let $l24 = $l23 !== void 0 && this.#f?.sessionId === $l23 ? this.#f : null;
+-    this.#f = null, this.#l = $l24?.ttlMs ?? null, this.#a = $l24?.requestAt ?? null, this.#m = $l24?.contextTokens ?? null, this.#h = null, this.#g = false;
++  #m = null;
++  clearLastMainThreadRequest($l24) {
++    let $l25 = $l24 !== void 0 && this.#m?.sessionId === $l24 ? this.#m : null;
++    this.#m = null, this.#l = $l25?.ttlMs ?? null, this.#a = $l25?.requestAt ?? null, this.#y = $l25?.contextTokens ?? null, this.#g = null, this.#S = false;
+   }
+   lastApiCompletionTimestamp() {
+-    return this.#y;
++    return this.#v;
+   }
+-  replaceLastApiCompletionTimestamp($l25) {
+-    this.#y = $l25;
++  replaceLastApiCompletionTimestamp($l26) {
++    this.#v = $l26;
+   }
+   pendingPostCompaction() {
+-    return this.#S;
++    return this.#f;
+   }
+-  replacePendingPostCompaction($l26) {
+-    this.#S = $l26;
++  replacePendingPostCompaction($l27) {
++    this.#f = $l27;
+   }
+   reset() {
+-    this.#e = null, this.#t = null, this.#n = null, this.#o = null, this.#r = null, this.#s = 0, this.#i = null, this.#d = void 0, this.#u += 1, this.#l = null, this.#a = null, this.#h = null, this.#g = false, this.#m = null, this.#f = null, this.#y = null, this.#S = false;
++    this.#e = null, this.#t = null, this.#n = null, this.#o = null, this.#r = null, this.#s = 0, this.#i = null, this.#d = void 0, this.#c = void 0, this.#u += 1, this.#l = null, this.#a = null, this.#g = null, this.#S = false, this.#y = null, this.#m = null, this.#v = null, this.#f = false;
+   }
+ }
+ ;

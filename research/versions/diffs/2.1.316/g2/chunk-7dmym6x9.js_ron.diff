@@ -1,0 +1,21 @@
+# chunk-7dmym6x9.js:ron -> chunk-e6aww6q8.js:Xin
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_ron.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_ron.new.js"
+index 1169852..d28fc32 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_ron.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g2\\chunk-7dmym6x9.js_ron.new.js"
+@@ -1,11 +1,7 @@
+ function SELF() {
+-  let $l0 = $m_Vr();
+-  if ($l0.totalTokensReminderMode === void 0) {
+-    let $l1 = $m_son(), $l2 = $l1 === void 0 ? $m_Sd()?.[$m_lXe] : void 0, $l3 = $m_Vwe($l2) ? $l2 : $l2 === false ? "off" : void 0;
+-    if ($l3 !== void 0) $m_a($m_dXe, { mode: $m_c($l3) });
+-    else $m_uXe($m_lXe, $l2);
+-    $l0.totalTokensReminderMode = { explicit: $l1 ?? $l3 };
+-  }
+-  return $l0.totalTokensReminderMode;
++  let $l0 = $m_son();
++  if ($l0 !== void 0) return $l0;
++  let $l1 = $m_Sd()?.[$m_lXe], $l2 = $m_Vwe($l1) ? $l1 : $l1 === false ? "off" : void 0;
++  return $m_Wor($m_lXe, $l1, $l2 ? { mode: $m_c($l2) } : void 0), $l2;
+ }
+ ;

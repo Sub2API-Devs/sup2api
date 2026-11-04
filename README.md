@@ -38,6 +38,7 @@
 | 了解 316 相对旧版的变化 | 各手册的"与 2.1.88 的差异"一节，以及 [`docs/CHANGES-SINCE-2.1.88.md`](docs/CHANGES-SINCE-2.1.88.md) |
 | 了解这个项目是怎么做出来的 | [`docs/PLAN.md`](docs/PLAN.md)、[`docs/WORKLOG.md`](docs/WORKLOG.md)、[`docs/process/`](docs/process/)（各成员的过程记录；问题报告与裁决的对照见 [`docs/process/fixes-index.md`](docs/process/fixes-index.md)） |
 | 了解阅读树怎么做到能编译运行 | [`docs/process/buildable.md`](docs/process/buildable.md) |
+| 了解官方 CLI 实际发出什么请求、各版本改了什么 | [`research/README.md`](research/README.md)；版本对比工具见 [`tools/versions/README.md`](tools/versions/README.md) |
 | 作为 AI 在本仓库工作 | [`AGENTS.md`](AGENTS.md) |
 
 ## 目录
@@ -52,13 +53,15 @@ reconstructed/        ★ 阅读树（生成物，入库）
   assets/               资源文件（提示词、wasm、图片等）
   manifest.json         文件 → 声明列表、出处
   symbols.jsonl         名字 → 文件:行、声明 id、来源、说明
-artifacts/official/   官方 ELF（不入库，按 sha256 校验）与 manifest
+artifacts/official/   官方 ELF（不入库，按 sha256 校验）与 manifest；2.1.304/310/312 在同名子目录
+artifacts/versions/   其他版本的还原树与版本配对结果（生成物，不入库）
 original/             从 ELF 提取的 2,880 个模块（2,648 个 JS + 232 个资源），只读真值
 runnable/             改名后、与 original 同布局的可运行树（生成物，不入库）
 analysis/             AST 事实与中间结果：scan / reference / match / vendor / facades / segments / names / readability / verify
 naming/               命名与文档输入：semantic-*（语义名）、docs-*（声明说明）、modules-*（模块说明）、placement-*（放置）、_name-shape-verdicts.jsonl（形态裁决）
   final/              合并后的最终命名表（生成物）
-tools/                流水线工具：extract / ast / vendor / segment / naming / rename / emit / build / verify / q.mjs
+tools/                流水线工具：extract / ast / vendor / segment / naming / rename / emit / build / verify / q.mjs；versions/ 是版本对比工具
+research/             官方 CLI 行为研究（从 sup2api 迁入）：请求组装、计费头、附件、第一方/第三方形状、各版本变化、实抓请求
 docs/                 架构、手册、过程记录
 references/           旧版源码子模块（只读）
 ```
@@ -103,7 +106,7 @@ SCAN=1 VERIFY=1 bash tools/pipeline.sh
 
 说明：
 
-- 官方 ELF 放在 `artifacts/official/claude-linux-x64`，sha256 见 `artifacts/official/official-manifest.json`。`tools/extract/restore-bun.cjs` 的目标目录 `original/` 必须不存在。
+- 官方 ELF 放在 `artifacts/official/claude-linux-x64`，sha256 见 `artifacts/official/official-manifest.json`。没有这个文件时，运行 `node tools/extract/acquire.mjs 2.1.316 linux-x64 artifacts/official` 下载并校验。需要代理时加 `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=…`。`tools/extract/restore-bun.cjs` 的目标目录 `original/` 必须不存在。
 - 流水线依次做：AST 扫描 → 与 2.1.88 匹配 → 门面导出名 → 切分与放置 → 命名合并 → 生成 `runnable/` 并做 α 校验 → 生成 `reconstructed/` → 构建阅读树。
 - 加 `VERIFY=1` 时，最后还会跑运行对拍和全部静态校验，大约需要 1 小时。
 - 第三方识别要联网下载 npm 包，约 15 分钟，结果已经入库，一般不用重跑：
@@ -173,6 +176,7 @@ bash tools/vendor/run.sh
 - **`_2` 后缀**：同一作用域内语义相同的两个名字（例如两个 `entry`）里，后出现的那个带 `_2` 后缀，共 2,028 处。
 - **延迟初始化包装**：阅读树按源模块拆成了几千个 ES 模块，模块之间有一个 3,675 个模块组成的导入环（官方构建启动时只求值 8 个 chunk）。为了保持官方的求值顺序，有 5,801 条顶层语句被包在 `deferInit("<chunk>:<偏移>", () => {…})` 里，等导入环加载完成后再按官方顺序执行，每处都有注释说明原因。其中 2,852 条只是为了保持副作用的先后顺序，用更细的副作用分析可以减少。做法和等价性论证见 [`docs/process/buildable.md`](docs/process/buildable.md)。
 - **启动速度**：阅读树构建的 CLI 比官方慢约 0.6 秒。官方用的是 bytecode 编译，而 `--compile --bytecode` 在这棵树上生成 bytecode 失败，没有深究。
+- **和官方原生二进制的运行时差异**：官方 ELF 内嵌的是私有修订的 Bun 1.4.4。它在发送前把计费头里的 `cch=00000` 改写成按请求计算的值，报告的 Node 版本是 v26.12.1；公开的 Bun 1.4.4 不改写 `cch`，报 v26.3.0。阅读树构建的 CLI 跑在公开 Bun 上，所以这两处与官方原生运行时不同（对拍时两边都在公开 Bun 上跑，因此一致）。见 [`research/README.md`](research/README.md)。
 - **场景覆盖**：运行对拍覆盖 98 个场景，场景没走到的路径只有静态证据（声明一一对应、α 等价、规范形等价）。"加载时依赖"的判断是近似的，场景外的启动路径理论上仍可能有顺序问题。函数钩子 worker 只验证了能启动。
 - **文件归属**：一个源文件在官方构建里会被拆散到多个 chunk。归属先按门面导出、2.1.88 匹配和调用关系推断，再经过四轮人工复核（[`docs/process/fixes-index.md`](docs/process/fixes-index.md)），但仍是推断，不是源码真值。
 - **旧版对照**：`reference` 来源的名字依赖与 2.1.88 的匹配。316 改过的函数可能沿用旧名，名字形态检查和人工复核能兜住一部分。

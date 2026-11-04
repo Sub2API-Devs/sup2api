@@ -1,0 +1,21 @@
+# chunk-7dmym6x9.js:Jde -> chunk-e6aww6q8.js:Zue
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_Jde.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_Jde.new.js"
+index c9e0c1e..e89bbc0 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_Jde.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g1\\chunk-7dmym6x9.js_Jde.new.js"
+@@ -26,6 +26,7 @@ function SELF($l0) {
+     if ($m_lH($l0.message, "thinking_signature")) return "invalid_thinking_signature";
+   }
+   if ($m_xXt($l0)) return $m_HBr($l0.message) || $m_lH($l0.message, "prompt_too_long") ? "prompt_too_long" : "request_too_large";
++  if ($NEW_chunk_e6aww6q8_js_Oke($l0)) return "request_too_large";
+   if ($m_AXt($l0)) return "tool_use_mismatch";
+   if ($m_PXt($l0)) return "unexpected_tool_result";
+   if ($m_MXt($l0)) return "duplicate_tool_use_id";
+@@ -49,6 +50,7 @@ function SELF($l0) {
+   if ($l0 instanceof $m_dnt || $l0 instanceof $m_Owe) return "auth_error";
+   if ($l0 instanceof $m_pvt) return "oauth_refresh_lock_timeout";
+   if ($l0 instanceof $m_Bq) return "oauth_refresh_disk_full";
++  if ($l0 instanceof $NEW_chunk_7c9mpntp_js_nU) return "stored_login_refused";
+   if ($l0 instanceof Error && $l0.message.toLowerCase().includes("domains are not accessible to our user agent")) return "webfetch_domain_blocked";
+   if ($l0 instanceof Error) {
+     let $l1 = $l0.message.toLowerCase();

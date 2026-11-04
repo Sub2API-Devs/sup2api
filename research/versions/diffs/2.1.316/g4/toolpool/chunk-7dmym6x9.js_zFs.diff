@@ -1,0 +1,13 @@
+# chunk-7dmym6x9.js:zFs -> chunk-e6aww6q8.js:C4s
+diff --git "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_zFs.old.js" "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_zFs.new.js"
+index fb11ab3..53bdaac 100644
+--- "a/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_zFs.old.js"
++++ "b/D:\\projects\\golang\\sup2api\\artifacts\\claude-2.1.316\\diffs\\g4\\toolpool\\chunk-7dmym6x9.js_zFs.new.js"
+@@ -1,4 +1,6 @@
+ async function SELF($l0) {
+-  return await $m_At().skillsFetcher?.settleFailedRead($l0) ?? $m_R4o($l0.uri, $l0.reason) + $l0.skills.map(($l1) => $m_oVn($l1.skillName)).join("");
++  let $l1 = !$m_Hpn();
++  if ($l1 && $l0.reason === "unlisted") return "This file was not read, because MCP skills are turned off for now. While they are off, this app reads no file of a loaded skill.";
++  return await ($l1 ? void 0 : $m_At().skillsFetcher)?.settleFailedRead($l0) ?? $m_R4o($l0.uri, $l0.reason) + $l0.skills.map(($l2) => $m_oVn($l2.skillName)).join("");
+ }
+ ;

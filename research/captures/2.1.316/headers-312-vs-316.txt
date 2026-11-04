@@ -1,0 +1,56 @@
+keys index,method,url,rawHeaders,headers,body,rawBody
+url /v1/messages?beta=true /v1/messages?beta=true POST POST
+--- 2.1.312 headers (order) ---
+Accept: application/json
+Content-Type: application/json
+User-Agent: claude-cli/2.1.312 (external, sdk-cli)
+X-Claude-Code-Session-Id: e8b02d9b-b467-48fd-921c-ebbb5a4d1c3e
+X-Stainless-Arch: x64
+X-Stainless-Lang: js
+X-Stainless-OS: Linux
+X-Stainless-Package-Version: 0.128.0
+X-Stainless-Retry-Count: 0
+X-Stainless-Runtime: node
+X-Stainless-Runtime-Version: v26.12.1
+X-Stainless-Timeout: 600
+anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,cache-diagnosis-2026-04-07
+anthropic-dangerous-direct-browser-access: true
+anthropic-version: 2023-06-01
+x-api-key: sk-ant-api03-ccgaudit-fake
+x-app: cli
+x-claude-code-prompt-id: d4fa50b0-056f-406e-a39e-0e8b2bf73993
+x-claude-code-request-class: main
+x-client-request-id: 6c87e8d0-de16-4767-b54b-fe6a3e60b9fe
+Connection: keep-alive
+Host: api.anthropic.com
+Accept-Encoding: gzip, deflate, br, zstd
+Content-Length: 84844
+--- 2.1.316 headers (order) ---
+Accept: application/json
+Content-Type: application/json
+User-Agent: claude-cli/2.1.316 (external, sdk-cli)
+X-Claude-Code-Session-Id: a4603a43-6781-4c26-a01b-5d279ce9b198
+X-Stainless-Arch: x64
+X-Stainless-Lang: js
+X-Stainless-OS: Linux
+X-Stainless-Package-Version: 0.128.0
+X-Stainless-Retry-Count: 0
+X-Stainless-Runtime: node
+X-Stainless-Runtime-Version: v26.12.1
+X-Stainless-Timeout: 600
+anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,cache-diagnosis-2026-04-07
+anthropic-dangerous-direct-browser-access: true
+anthropic-version: 2023-06-01
+x-api-key: sk-ant-api03-ccgaudit-fake
+x-app: cli
+x-claude-code-prompt-id: e91b9184-999b-473c-ae51-c5c75dab774b
+x-claude-code-request-class: main
+x-client-request-id: e96b89a3-1fa9-4ff2-b6e5-bd581e220f6f
+Connection: keep-alive
+Host: api.anthropic.com
+Accept-Encoding: gzip, deflate, br, zstd
+Content-Length: 84844
+--- name order equal: true
+DIFF[3] ["X-Claude-Code-Session-Id","e8b02d9b-b467-48fd-921c-ebbb5a4d1c3e"] => ["X-Claude-Code-Session-Id","a4603a43-6781-4c26-a01b-5d279ce9b198"]
+DIFF[17] ["x-claude-code-prompt-id","d4fa50b0-056f-406e-a39e-0e8b2bf73993"] => ["x-claude-code-prompt-id","e91b9184-999b-473c-ae51-c5c75dab774b"]
+DIFF[19] ["x-client-request-id","6c87e8d0-de16-4767-b54b-fe6a3e60b9fe"] => ["x-client-request-id","e96b89a3-1fa9-4ff2-b6e5-bd581e220f6f"]
