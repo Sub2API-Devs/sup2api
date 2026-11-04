@@ -131,7 +131,7 @@
 
 未决，要线上数据确认：`7d_oi` 对应 `seven_day_overage_included`，名字不是 Fable，这里沿用 claude-oauth 的映射把它当 `7d_fable`。线上还没有 Fable 请求，无法验证；如果语义不同，Fable 的负载会算错（只影响权重，不拒绝请求）。
 
-测试：miniredis + PG，见 `sticky_session_test.go`、`failure_policy_test.go`（`TestStickyClaimAndRelease`）、`rank_test.go`、`ccgateway/rank_test.go`。本机没有 gcc，`-race` 没跑；前端只改了详情页一行，没跑前端测试。
+测试：miniredis + PG，见 `sticky_session_test.go`、`failure_policy_test.go`（`TestStickyClaimAndRelease`）、`rank_test.go`、`ccgateway/rank_test.go`。核心 53 个包、SDK、各插件全部通过，前端账号页 211 个用例和类型检查通过。本机没有 gcc，`-race` 没跑；并发只用测试验证了结果，没有检查数据竞争。
 
 ## 10. 发布注意
 
