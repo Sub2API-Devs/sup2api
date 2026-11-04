@@ -248,7 +248,9 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // changed the shared support modules and the profile's native bindings.
   // 2026-11-03 (live test): ccgateway-v46-shape-prompt-text (was ccgateway-v45-first-party-shape); a turn's derived prompt ID
   // no longer depends on where the client put its cache marker (request-session.js).
-  assert.equal(patchManifest.extension, 'ccgateway-v46-shape-prompt-text');
+  // 2026-11-04: ccgateway-v47-count-tokens (was ccgateway-v46-shape-prompt-text); claude request --count
+  // (request_count_tokens_v1) added the token counting mode.
+  assert.equal(patchManifest.extension, 'ccgateway-v47-count-tokens');
   assert(patchManifest.capabilities.includes('build_first_party_shape_v1'));
   assert(patchManifest.capabilities.includes('build_injection_tools_v2'));
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
@@ -271,7 +273,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(cli.includes('if(t[0]==="request"){let{runRequest}=await import("./ccgateway-request-entry.js");process.exit(await runRequest(t.slice(1),o))}'));
   assert.equal(cli.split('./ccgateway-request-entry.js').length, 2);
   assert.doesNotMatch(cli, /ccgPrefix|ccgBilling|ccgDirect|ccgHead/);
-  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1","client_user_agent_v1","request_capture_v1","management_http_v1","build_session_state_v1","build_injection_tools_v2","build_first_party_shape_v1"]/);
+  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1","client_user_agent_v1","request_capture_v1","management_http_v1","build_session_state_v1","build_injection_tools_v2","build_first_party_shape_v1","request_count_tokens_v1"]/);
   // The command's wiring is its support module: CC's fast-path policy, the
   // native bindings it composes, and the command itself.
   const entry = fs.readFileSync(path.join(output, 'ccgateway-request-entry.js'), 'utf8');
