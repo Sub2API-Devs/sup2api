@@ -78,9 +78,10 @@ describe('simplified failure settings', () => {
     expect(i18n.global.t('failurePolicy.title')).toBe('调度策略')
     expect(wrapper.find('[data-testid="settings-reset"]').exists()).toBe(false)
     for (const label of ['历史版本', '累计等待上限', 'Retry-After', '换号出口限制']) expect(wrapper.text()).not.toContain(label)
-    // The only per-rule switch is Go regex; rules have no enable switch.
+    // The per-rule switches are Go regex and same-account retry; rules have no enable switch.
     expect(wrapper.get('[data-testid="retry-rules"]').findAll('[data-testid="rule-regex"]').map(s => s.attributes('aria-label'))).toEqual(['Go 正则'])
-    expect(wrapper.get('[data-testid="retry-rules"]').findAllComponents(SSwitch)).toHaveLength(1)
+    expect(wrapper.get('[data-testid="retry-rules"]').findAll('[data-testid="rule-same-account"]').map(s => s.attributes('aria-label'))).toEqual(['原账号重试'])
+    expect(wrapper.get('[data-testid="retry-rules"]').findAllComponents(SSwitch)).toHaveLength(2)
   })
   it('saves a fixed v4 plan and ignores inactive empty retry counts', async () => {
     const wrapper = mount(FailurePolicySettings, { global })
@@ -223,7 +224,7 @@ describe('rule interaction', () => {
     await wrapper.get('[data-reorder-handle="0"]').trigger('keydown', { key: 'ArrowDown' })
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([[rules[1], rules[0]]])
     expect(wrapper.find('[aria-haspopup="menu"]').exists()).toBe(false)
-    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '规则名称 / 错误来源', '错误码', '关键词', 'Go 正则', '操作'])
+    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '规则名称 / 错误来源', '错误码', '关键词', 'Go 正则', '原账号重试', '操作'])
   })
   it('validates inline conditions before Save and keeps errors attached after reorder', async () => {
     const wrapper = mount(FailurePolicySettings, { global })
@@ -332,5 +333,25 @@ describe('explanations', () => {
     rule.match.source = 'upstream'
     await wrapper.setProps({ modelValue: [rule] })
     expect(wrapper.get('[data-testid="rule-summary"]').text()).toBe('还没有填写错误码或关键词，这条规则不会命中。')
+  })
+
+  it('turns retrying on the same account off per retry rule, on by default', async () => {
+    const rule = newFailureRule('r', false)
+    expect(rule.no_same_account_retry).toBeUndefined()
+    const w = mount(FailureRulesTable, { props: { modelValue: [rule], account: false, disabled: false }, global })
+    const toggle = w.findAllComponents(SSwitch)[1]!
+    expect(w.get('[data-testid="rule-same-account"]').attributes('aria-label')).toBe('原账号重试')
+    expect(toggle.props('modelValue')).toBe(true)
+    toggle.vm.$emit('update:modelValue', false)
+    expect(rule.no_same_account_retry).toBe(true)
+    toggle.vm.$emit('update:modelValue', true)
+    expect(rule.no_same_account_retry).toBe(false)
+    const form = editablePolicy({ ...emptyFailurePolicy(), retry_rules: [{ ...rule, no_same_account_retry: true, match: { ...rule.match, status_codes: '429' } }] })
+    expect(normalizedPolicy(form).retry_rules[0]!.no_same_account_retry).toBe(true)
+  })
+
+  it('has no same-account setting on disable rules', () => {
+    const w = mount(FailureRulesTable, { props: { modelValue: [newFailureRule('r', true)], account: true, disabled: false }, global })
+    expect(w.find('[data-testid="rule-same-account"]').exists()).toBe(false)
   })
 })

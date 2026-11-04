@@ -13,6 +13,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'codes', label: t('failurePolicy.codesShort'), width: '180px' },
   { key: 'keywords', label: t('failurePolicy.keywordsShort'), class: 'min-w-64' },
   { key: 'regex', label: t('failurePolicy.regexLabel'), width: '96px' },
+  ...(props.account ? [] : [{ key: 'same', label: t('failurePolicy.sameAccountRetry'), width: '112px' }]),
   ...(props.disabled ? [] : [{ key: 'actions', label: t('common.actions'), width: '130px' }])
 ])
 const errors = computed(() => new Map(rules.value.map(rule => [rule.id, props.showErrors ? ruleFormErrors(rule, t('failurePolicy.invalidRule')) : {}])))
@@ -144,6 +145,15 @@ function summary(rule: FailureRule) {
           :aria-label="t('failurePolicy.regexLabel')"
           data-testid="rule-regex"
           @update:model-value="row.match.keyword_regex = $event"
+        />
+      </template>
+      <template #cell-same="{ row }">
+        <SSwitch
+          :model-value="!row.no_same_account_retry"
+          :disabled="disabled"
+          :aria-label="t('failurePolicy.sameAccountRetry')"
+          data-testid="rule-same-account"
+          @update:model-value="row.no_same_account_retry = !$event"
         />
       </template>
       <template #cell-actions="{ row }">

@@ -69,6 +69,10 @@ type FailureRule struct {
 	ExhaustedAction    string       `json:"exhausted_action"`
 	Egress             string       `json:"egress"`
 	CooldownSeconds    int          `json:"cooldown_seconds"`
+	// NoSameAccountRetry turns "retry on the same account" off for a retry rule
+	// of a unified plan: its errors skip retries_per_account and go straight to
+	// the plan's next step. Off the default, so a stored rule keeps its behaviour.
+	NoSameAccountRetry bool `json:"no_same_account_retry,omitempty"`
 }
 
 type FailureMatch struct {
@@ -280,6 +284,9 @@ func (p *FailurePolicy) retryDecision(r FailureRule) FailureDecision {
 		d.ExhaustedAction = failureReset
 	} else {
 		d.ExhaustedAction = failureSwitch
+	}
+	if r.NoSameAccountRetry {
+		d.SameAccountRetries = 0
 	}
 	return d
 }

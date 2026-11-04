@@ -4801,6 +4801,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - CCGateway 已经这样分类 429（`classifyRateLimit`：托管账号禁用到 `anthropic-ratelimit-unified-reset` / `retry-after` 给出的时刻，没有时 60 秒），插件不用改；只要升级核心。
 - CCGateway 0.1.127 起（2026-11-04，用户要求）：托管账号的上游 429 只有额度真满才自动禁用，其他 429 原路返回客户端，不冷却、不禁用、不把窗口记为 rejected。判断依据是这次响应自带的头（`quotaExhausted`）：`5h` 或 `7d` 的 utilization ≥ 1 或状态 `rejected`，或 `representative-claim` 指向模型专属窗口或未知的限额，或指向共享窗口却读不到该窗口的用量，算满；reset 和 `Retry-After` 单独出现不算。依据是 2026-11-04 对线上 7 天请求日志的扫描：447 条额度 429 都带 claim、窗口用量和 `Retry-After`，且 `rejected` 与 utilization ≥ 1 完全一致，`anthropic-ratelimit-unified-reset` 与 `Retry-After` 相差不超过 3 秒；11 条 `Usage credits are required for long context requests.` 没有窗口头、claim 和 `Retry-After`，`x-should-retry` 为 false，`anthropic-ratelimit-unified-reset` 是账期结束（2026-12-01），之前的 7 天禁用就是它被截断到 `maxCooldown` 的结果。Worker 自身的并发 429（来源不是 `http`）仍短冷却并换号。发布了故障策略时，是否重试、换号仍由策略决定。
 - 默认重试规则同日改为两条（`defaultRetryRules`，用户要求），线上已发布的策略也手工改成同样两条：`http-transient` = 上游 408、500–599；`rate-limit` = 上游 429 且包含关键词 `exceed your account's rate limit` 或 `gateway concurrency limit reached`。其他 429（如 long context）不匹配任何规则，直接返回客户端，换号也不会有不同结果。代价：上游若改了额度满的提示文字，这种 429 不换号，但账号仍按响应头禁用，下一个请求会选别的账号。
+- 重试规则可单独关闭“原账号重试”（2026-11-04，用户要求；`no_same_account_retry`，默认缺省即开启，只对统一计划 schema ≥ 2 的重试规则有效，禁用规则和旧版 v1 规则上会被清除）。开启时按 `retries_per_account` 重试；关闭时该规则命中的错误不在原账号重试，直接进入计划的下一步（换号），没开切换账号时不再重试。`max_retries` 仍是总上限。
 
 ## 70. CCGateway 用量改为读响应头：请求时懒刷新、手动才主动查询（2026-10-30，用户要求）
 
