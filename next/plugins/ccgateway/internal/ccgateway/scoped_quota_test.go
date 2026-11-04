@@ -109,16 +109,11 @@ func TestScoped429SpoofsAndUnknownClaimsRemainConservative(t *testing.T) {
 		{"CLI-side source", func(in *pluginv1.ClassifyErrorRequest) { in.Headers[sourceHeader] = "transport" }, false, false},
 		{"source exact case", func(in *pluginv1.ClassifyErrorRequest) { in.Headers[sourceHeader] = "HTTP" }, false, false},
 		{"unknown claim", func(in *pluginv1.ClassifyErrorRequest) { in.Headers[claimHeader] = "seven_day_opus" }, false, false},
-		{"missing claim", func(in *pluginv1.ClassifyErrorRequest) { delete(in.Headers, claimHeader) }, false, false},
 		{"claim whitespace", func(in *pluginv1.ClassifyErrorRequest) { in.Headers[claimHeader] += " " }, false, false},
 		{"invalid reset", func(in *pluginv1.ClassifyErrorRequest) { in.Headers[claimResetHeader] = "-1" }, false, false},
 		{"reset overflow", func(in *pluginv1.ClassifyErrorRequest) { in.Headers[claimResetHeader] = "9223372036854775808" }, false, false},
 		{"gateway concurrency", func(in *pluginv1.ClassifyErrorRequest) { in.Headers[sourceHeader] = "gateway" }, true, false},
 		{"API key", func(in *pluginv1.ClassifyErrorRequest) { in.Account.Type = AccountTypeAPIKey }, false, true},
-		{"the body cannot claim a scope", func(in *pluginv1.ClassifyErrorRequest) {
-			delete(in.Headers, claimHeader)
-			in.BodyPrefix = []byte(`{"error":{"type":"rate_limit_error","message":"Fable weekly limit","scope":"Fable"}}`)
-		}, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := upstream429("seven_day_overage_included", 0)
@@ -133,6 +128,27 @@ func TestScoped429SpoofsAndUnknownClaimsRemainConservative(t *testing.T) {
 			}
 			require.Equal(t, want, out.AccountEffect)
 			require.Equal(t, tc.local, out.LocalFailure)
+		})
+	}
+}
+
+// With no claim the answer names no limit, and the body cannot name one either:
+// the client gets it back and no scope is recorded.
+func TestScoped429NoClaimNamesNoLimit(t *testing.T) {
+	p, _ := quotaTestPlugin()
+	for name, body := range map[string]string{
+		"plain":               `{"error":{"type":"rate_limit_error","message":"This request would exceed your account's rate limit."}}`,
+		"body claims a scope": `{"error":{"type":"rate_limit_error","message":"Fable weekly limit","scope":"Fable"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			in := upstream429("seven_day_overage_included", 0)
+			delete(in.Headers, claimHeader)
+			in.BodyPrefix = []byte(body)
+			out, err := p.ClassifyError(context.Background(), in)
+			require.NoError(t, err)
+			require.Nil(t, out.Quota)
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT, out.Action)
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED, out.AccountEffect)
 		})
 	}
 }

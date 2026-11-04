@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -136,7 +137,7 @@ func TestRateLimitRetryAfterClassification(t *testing.T) {
 				Account:    &pluginv1.Account{Type: AccountTypeManaged},
 				Status:     http.StatusTooManyRequests,
 				BodyPrefix: []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"rate limited"}}`),
-				Headers:    map[string]string{sourceHeader: "http", "retry-after": retryAfter},
+				Headers:    map[string]string{sourceHeader: "http", "retry-after": retryAfter, "anthropic-ratelimit-unified-5h-status": "rejected"},
 			})
 			require.NoError(t, err)
 			require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, out.GetAction())
@@ -169,4 +170,116 @@ func TestCLILoginRefusalDisables(t *testing.T) {
 		require.False(t, out.GetLocalFailure(), tc.body)
 		require.Empty(t, out.GetClientErrorType(), "CC's message reaches the client as written")
 	}
+}
+
+// Only a limit that is really used up disables the account. Every other
+// upstream 429 goes back to the client and leaves the account alone, whatever
+// reset time or Retry-After comes with it.
+func TestRateLimitDisablesOnlyWhenLimitIsUsedUp(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	p := &Plugin{now: func() time.Time { return now }}
+	reset := strconv.FormatInt(now.Add(3*time.Hour).Unix(), 10)
+	far := strconv.FormatInt(now.Add(29*24*time.Hour).Unix(), 10)
+	usage := func(fiveHour, week string, extra map[string]string) map[string]string {
+		h := map[string]string{sourceHeader: "http",
+			"anthropic-ratelimit-unified-5h-utilization": fiveHour, "anthropic-ratelimit-unified-5h-status": "allowed", "anthropic-ratelimit-unified-5h-reset": reset,
+			"anthropic-ratelimit-unified-7d-utilization": week, "anthropic-ratelimit-unified-7d-status": "allowed", "anthropic-ratelimit-unified-7d-reset": reset,
+			claimResetHeader: reset}
+		for k, v := range extra {
+			h[k] = v
+		}
+		return h
+	}
+	classify := func(h map[string]string) *pluginv1.ClassifyErrorResponse {
+		out, err := p.ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Account: &pluginv1.Account{Type: AccountTypeManaged}, Status: 429, Headers: h,
+			BodyPrefix: []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"some refusal"}}`)})
+		require.NoError(t, err)
+		return out
+	}
+
+	for name, h := range map[string]map[string]string{
+		"room":                   usage("0.07", "0.27", nil),
+		"room, retry after":      usage("0.07", "0.27", map[string]string{"retry-after": "604800"}),
+		"room, claim names 7d":   usage("0.07", "0.27", map[string]string{claimHeader: "seven_day"}),
+		"room, unified rejected": usage("0.07", "0.27", map[string]string{"anthropic-ratelimit-unified-status": "rejected", claimResetHeader: far}),
+		"room, overage rejected": usage("0.07", "0.27", map[string]string{"anthropic-ratelimit-unified-overage-status": "rejected", "anthropic-ratelimit-unified-overage-reset": far}),
+		"nothing":                {sourceHeader: "http"},
+		"far reset":              {sourceHeader: "http", claimResetHeader: far},
+		"retry after only":       {sourceHeader: "http", "retry-after": "10800"},
+		"only 5h usage":          {sourceHeader: "http", "anthropic-ratelimit-unified-5h-utilization": "0.07", "retry-after": "10800"},
+	} {
+		t.Run("returned/"+name, func(t *testing.T) {
+			out := classify(h)
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT, out.GetAction())
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED, out.GetAccountEffect())
+			require.Zero(t, out.GetCooldownUntilUnix())
+			require.Nil(t, out.GetAutomaticState())
+			require.Nil(t, out.GetQuota())
+			require.Empty(t, out.GetClientMessage(), "the upstream body reaches the client unchanged")
+		})
+	}
+
+	for name, h := range map[string]map[string]string{
+		"7d full":                 usage("0.07", "1.0", map[string]string{claimHeader: "seven_day", "anthropic-ratelimit-unified-7d-status": "rejected"}),
+		"5h full":                 usage("1.46", "0.27", map[string]string{claimHeader: "five_hour", "anthropic-ratelimit-unified-5h-status": "rejected"}),
+		"7d over, no status":      usage("0.07", "1.03", nil),
+		"7d rejected below 1":     usage("0.07", "0.97", map[string]string{"anthropic-ratelimit-unified-7d-status": "rejected"}),
+		"claim without its usage": {sourceHeader: "http", claimHeader: "seven_day", claimResetHeader: reset, "anthropic-ratelimit-unified-5h-utilization": "0.07"},
+		"unknown claim":           usage("0.07", "0.27", map[string]string{claimHeader: "seven_day_opus"}),
+	} {
+		t.Run("disabled/"+name, func(t *testing.T) {
+			out := classify(h)
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, out.GetAction())
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, out.GetAccountEffect())
+			require.Equal(t, now.Add(3*time.Hour).Unix(), out.GetAutomaticState().GetUntilUnix())
+		})
+	}
+
+	// A model-scoped limit is judged by its claim: the shared windows having
+	// room says nothing about it.
+	out := classify(usage("0.07", "0.27", map[string]string{claimHeader: "seven_day_overage_included"}))
+	require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, out.GetAction())
+	require.Nil(t, out.GetAutomaticState())
+	require.Equal(t, "scoped quota rejected: 7d_fable", out.GetReason())
+
+	// Only an upstream answer counts: without the marker the usual path runs.
+	h := usage("0.07", "0.27", map[string]string{"retry-after": "10800"})
+	delete(h, sourceHeader)
+	require.Equal(t, now.Add(3*time.Hour).Unix(), classify(h).GetAutomaticState().GetUntilUnix())
+}
+
+// The answers as production saw them (2026-11-04 request logs).
+func TestRateLimitProductionHeaders(t *testing.T) {
+	now := time.Unix(1793758483, 0)
+	p := &Plugin{now: func() time.Time { return now }}
+	classify := func(msg string, h map[string]string) *pluginv1.ClassifyErrorResponse {
+		h[sourceHeader] = "http"
+		out, err := p.ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Account: &pluginv1.Account{Type: AccountTypeManaged}, Status: 429, Headers: h,
+			BodyPrefix: []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"` + msg + `"}}`)})
+		require.NoError(t, err)
+		return out
+	}
+	exceeded := "This request would exceed your account's rate limit. Please try again later."
+
+	out := classify(exceeded, map[string]string{
+		"anthropic-ratelimit-unified-5h-reset": "1793774400", "anthropic-ratelimit-unified-5h-status": "rejected", "anthropic-ratelimit-unified-5h-utilization": "1.46",
+		"anthropic-ratelimit-unified-7d-reset": "1794243600", "anthropic-ratelimit-unified-7d-status": "allowed", "anthropic-ratelimit-unified-7d-utilization": "0.4",
+		"anthropic-ratelimit-unified-overage-status": "rejected", claimHeader: "five_hour", claimResetHeader: "1793774400", "anthropic-ratelimit-unified-status": "rejected",
+		"retry-after": "15917", "x-should-retry": "true"})
+	require.Equal(t, int64(1793774400), out.GetAutomaticState().GetUntilUnix(), "5h full")
+
+	out = classify(exceeded, map[string]string{
+		"anthropic-ratelimit-unified-5h-reset": "1793770000", "anthropic-ratelimit-unified-5h-status": "allowed", "anthropic-ratelimit-unified-5h-utilization": "0.07",
+		"anthropic-ratelimit-unified-7d-reset": "1793898000", "anthropic-ratelimit-unified-7d-status": "rejected", "anthropic-ratelimit-unified-7d-utilization": "1.0",
+		claimHeader: "seven_day", claimResetHeader: "1793898000", "anthropic-ratelimit-unified-status": "rejected", "retry-after": "139517"})
+	require.Equal(t, int64(1793898000), out.GetAutomaticState().GetUntilUnix(), "7d full")
+
+	out = classify("Usage credits are required for long context requests.", map[string]string{
+		"anthropic-ratelimit-unified-credits-can-purchase": "true", "anthropic-ratelimit-unified-credits-exhausted-included": "false",
+		"anthropic-ratelimit-unified-credits-has-payment-method": "false", "anthropic-ratelimit-unified-overage-disabled-reason": "org_level_disabled",
+		claimResetHeader: "1796083200", "x-should-retry": "false"})
+	require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT, out.GetAction(), "long context")
+	require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED, out.GetAccountEffect())
+	require.Nil(t, out.GetAutomaticState())
+	require.Nil(t, out.GetQuota())
 }

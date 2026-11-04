@@ -163,12 +163,18 @@ func classifyLocal(resp *pluginv1.ClassifyErrorResponse, headers map[string]stri
 // another account, the account stays usable for other models (model
 // availability holds that family back until the reset, availability.go); any
 // other limit, a scoped one without a reset time included, disables the
-// account until it resets.
+// account until it resets. An upstream answer that shows no used-up limit
+// (quotaExhausted) goes back to the client and leaves the account alone.
 //
 // Only an upstream HTTP answer names a limit: the Worker marks it
 // (requestfailure.SourceHTTP) and never relays a provider's x-ccgateway-*
 // headers (httpfacts.Apply), so a provider cannot claim the source.
 func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.ClassifyErrorRequest, source string, now time.Time, cooldown func(time.Duration, string)) {
+	if source == requestfailure.SourceHTTP && in.GetAccount().GetType() == AccountTypeManaged && !quotaExhausted(in.GetHeaders()) {
+		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
+		resp.Reason = "upstream 429 without a used-up limit"
+		return
+	}
 	if source == requestfailure.SourceHTTP {
 		resp.Quota = rejectedQuota(in, now)
 	}
@@ -184,6 +190,31 @@ func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.Classi
 		resp.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE,
 			Reason: resp.Reason, Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: until.Unix()}}
 	}
+}
+
+// quotaExhausted reports whether a managed account's 429 means a limit is used
+// up: a shared window is rejected or at 1, the claim names a model-scoped window
+// or a limit this plugin does not know, or it names a shared window without
+// giving that window's usage. Reset times and Retry-After alone say nothing: the
+// long context refusal has no window headers and only the billing period's end
+// in anthropic-ratelimit-unified-reset.
+func quotaExhausted(h map[string]string) bool {
+	claim := h[claimHeader]
+	key := quotaClaimKey(claim)
+	if scopedQuota(key) || claim != "" && key == "" {
+		return true
+	}
+	for _, prefix := range unifiedWindowHeader {
+		ratio, err := strconv.ParseFloat(h[prefix+"-utilization"], 64)
+		if err == nil && validUsage(ratio) && ratio >= 1 || strings.EqualFold(h[prefix+"-status"], "rejected") {
+			return true
+		}
+	}
+	if prefix := unifiedWindowHeader[key]; prefix != "" {
+		ratio, err := strconv.ParseFloat(h[prefix+"-utilization"], 64)
+		return err != nil || !validUsage(ratio)
+	}
+	return false
 }
 
 // The failure markers as the host passes headers (lowercase).

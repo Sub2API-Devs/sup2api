@@ -4,6 +4,16 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-04 ccgateway **0.1.127**（`c8f63b05e`，北京时间 15:49，rollout 229；插件包 `d38ba34a…f52f`，只发插件，核心不变）：
+- 起因：账号 #87 等被 `Usage credits are required for long context requests.` 的 429 禁用 7 天。扫描线上 64 个运行中账号容器 7 天的请求日志（`/work/data/request-logs/*/{metadata,response-headers}.json`）：869 条 429 里 447 条额度满（都带 claim、窗口用量和 Retry-After，rejected 与 utilization ≥ 1 完全一致），411 条 Worker 并发限制，11 条 long context（没有窗口头、claim 和 Retry-After，`anthropic-ratelimit-unified-reset` 是账期结束 2026-12-01，被截断成 7 天）。
+- 内容（CONTRACTS §69）：托管账号的上游 429 只有额度真满才自动禁用，其他原路返回客户端。只改插件 `classify.go`，CLI、Worker 与账号容器不动。
+- 只发插件：没有推任何运行时角色，67 个 `ccg-*` 容器前后 ID、镜像完全相同（`containers-before.txt` = `containers-after.txt`），所以运行时页 `up_to_date` 为 false，属预期。
+- 故障策略（用户同意，北京时间 16:05，revision 4 → 5，经 `PUT /settings/failure-policy`）：有策略时插件的返回动作不采用，所以把 `http-transient` 拆成两条：`http-transient` = 上游 408、500–599；`rate-limit` = 上游 429 且包含 `exceed your account's rate limit` 或 `gateway concurrency limit reached`。其他 429 不再重试换号，直接返回客户端。代码里的默认规则同步修改，下一次核心发版生效，不影响线上。改前的策略在 `stage/ccgateway-0.1.127/failure-policy-before.json`，回滚时按它改回。
+- 发布前：869 条线上 429 回放结果符合预期；本机 Linux 插件模块测试全过。
+- 核验：`active_version` 0.1.127，两节点 plugin instance started；`/readyz` 与 api.prophey.ai 200；发布后两节点各 4 分钟 ERROR 为 0。发布时没有 long context 流量，真实请求还没验证。
+- 回滚：`rollout.py rollback`（回 0.1.126，包已上传）。
+- 脚本 `stage/ccgateway-0.1.127/`；备份 `backups/ccgateway-0.1.127`（数据库 `c0dbb4aa…`）。
+
 2026-11-04 核心 **0.1.239**（`f71ee5f77`，北京时间 13:06–13:10；核心 manifest `588338a9…7d03`，计划 `0ca53a5ae0b5fc84f388702bd2f4c1e5` completed/13；**无迁移**，Host API 仍 9，内置插件与 0.1.238 相同）：
 - 内容：修复插件建 schema 的并发竞态。所有插件角色都被授权执行同一对核心函数（`plugin_migrations_applied`、`plugin_migration_record`），权限各在一行 `pg_proc` 里；`Ensure` 只按插件加锁，滚动升级时两个节点同时启动不同插件就会一起改这行，其中一个报 `GRANT … tuple concurrently updated`、拿不到 DSN 直到重试（0.1.237、0.1.238 发布时各出现一次）。现在先查角色是否已有权限（线上已有，不再写），需要授权时在一把全局 advisory 锁里再查再授；删除插件的 `DROP OWNED` 也拿这把锁。新测试 `TestEnsureConcurrentPlugins` 修前在本机复现了线上同样的错误。
 - 发布前：Linux 核心 53 个包全过。

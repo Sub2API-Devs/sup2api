@@ -449,3 +449,34 @@ func TestFailurePolicyOldRequestCannotOverwriteNewBinding(t *testing.T) {
 	raw, _ := e.rdb.Get(t.Context(), old.key).Result()
 	require.Equal(t, int64(2), bindingAccount(raw))
 }
+
+// A 429 is retried only when another account can help; the bodies are the ones
+// production answered with (2026-11-04 request logs).
+func TestDefaultRetryRulesOnlyRetryUsefulRateLimits(t *testing.T) {
+	p := migrationDraft(GatewaySettings{MaxAttempts: 4}, AutoDisableSettings{})
+	require.Empty(t, p.validate(t.Context()))
+	for _, tc := range []struct {
+		name   string
+		status int
+		text   string
+		rule   string
+	}{
+		{"quota", 429, `{"type":"error","error":{"type":"rate_limit_error","message":"This request would exceed your account's rate limit. Please try again later."},"request_id":"req_1"}`, "rate-limit"},
+		{"concurrency", 429, `{"error":{"message":"Gateway concurrency limit reached","type":"rate_limit_error"},"type":"error"}`, "rate-limit"},
+		{"long context", 429, `{"type":"error","error":{"type":"rate_limit_error","message":"Usage credits are required for long context requests."}}`, ""},
+		{"any other 429", 429, `{"type":"error","error":{"type":"rate_limit_error","message":"some refusal"}}`, ""},
+		{"timeout", 408, ``, "http-transient"},
+		{"server error", 502, `Connection error.`, "http-transient"},
+		{"client error", 400, `{"error":{"message":"exceed your account's rate limit"}}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := p.decide(FailureFacts{Source: "upstream", Status: tc.status, Text: tc.text})
+			require.Equal(t, tc.rule, d.RetryRule)
+			if tc.rule == "" {
+				require.Equal(t, failureReturn, d.Action)
+			} else {
+				require.Equal(t, failureRetry, d.Action)
+			}
+		})
+	}
+}
