@@ -4393,6 +4393,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 59.2 核心
 
 - 迁移 0054：`accounts.subscription_type text`（NULL = 未知）。账号视图新增 `subscription_type: string | null`。
+- 迁移 0086（2026-11-04）：`accounts.rate_limit_tier text`（NULL = 未知），来自凭证 `claudeAiOauth.rateLimitTier`，Worker 随 `subscription_type` 上报（ccgateway 0.1.129 起），账号视图 `rate_limit_tier` 原样返回，控制台详情页和订阅类型一起原样显示（如 `max · default_claude_max_20x`），不加倍率，不起新名字。
 - `core.AccountLifecycleResource.CheckAccountPreparation` 改为返回 `core.AccountPreparationFacts{SubscriptionType}`；ccgateway 实现从准备容器的 `admin/status` 读取。旧的 `ccgateway_runtime` 创建路径同样取得。
 - `POST /accounts` 保存前：把事实写入 `subscription_type`，并作为 `resource_facts_json`（JSON 对象，未知时为空串）随 `before_create` 交给插件。
 - 已有账号：控制台查看凭证状态（`GET …/health`）与重新授权提交时，Worker 报告了订阅类型就更新账号；报告为空不清除已有值（旧 Worker 不报告）。

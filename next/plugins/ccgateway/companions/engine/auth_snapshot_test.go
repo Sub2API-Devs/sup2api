@@ -103,6 +103,20 @@ func TestAuthSnapshotDefaultGlobalConfig(t *testing.T) {
 	}
 }
 
+func TestAuthSnapshotReportsStoredRateLimitTier(t *testing.T) {
+	config := t.TempDir()
+	env := []string{"CLAUDE_CONFIG_DIR=" + config}
+	for stored, want := range map[string]any{`"default_claude_max_20x"`: "default_claude_max_20x", `"default_claude_ai"`: "default_claude_ai", `null`: nil, `"Max 20x"`: nil} {
+		if err := os.WriteFile(filepath.Join(config, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"token","rateLimitTier":`+stored+`}}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := localAuthSnapshot(env)
+		if err != nil || got["rate_limit_tier"] != want {
+			t.Errorf("%s: %v %v", stored, got["rate_limit_tier"], err)
+		}
+	}
+}
+
 func TestAuthSnapshotReportsStoredSubscription(t *testing.T) {
 	config := t.TempDir()
 	env := []string{"CLAUDE_CONFIG_DIR=" + config}

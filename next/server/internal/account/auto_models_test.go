@@ -50,6 +50,24 @@ func anyStrings(v any) []string {
 // before_update receives the recorded subscription type and its
 // account_patch replaces the models about to be saved; auto_models is saved
 // and read back (CONTRACTS §41.4, §59).
+// The account view carries the tier as the upstream names it.
+func TestAccountViewRateLimitTier(t *testing.T) {
+	e, _, _, _ := preparationPluginFixture(t)
+	enc, err := e.svc.d.Cipher.Encrypt([]byte(`{}`), aad("fixture"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := e.exec1(`INSERT INTO accounts(name,plugin_key,type,credentials_enc,settings,subscription_type,rate_limit_tier)
+		VALUES('tier','fixture','managed',$1,'{}','max','default_claude_max_20x') RETURNING id`, enc)
+	code, out := e.do("GET", "/accounts/"+strconv.FormatInt(id, 10), nil)
+	if code != 200 {
+		t.Fatalf("get: %d %v", code, out)
+	}
+	if got := data(out); got["rate_limit_tier"] != "default_claude_max_20x" || got["subscription_type"] != "max" {
+		t.Fatalf("view %v", got)
+	}
+}
+
 func TestBeforeUpdateAccountPatchAndAutoModels(t *testing.T) {
 	e, _, _, plugin := preparationPluginFixture(t)
 	plugin.patch = autoModelsPatch

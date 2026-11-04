@@ -50,6 +50,9 @@ func safeAuthStatus(raw []byte) (any, error) {
 		// SubscriptionType is what Claude Code reported for the signed-in
 		// account (CONTRACTS §59); absent when unknown.
 		SubscriptionType string `json:"subscription_type,omitempty"`
+		// RateLimitTier is the login's tier as the upstream names it; absent
+		// when unknown or from a Worker that does not report it.
+		RateLimitTier string `json:"rate_limit_tier,omitempty"`
 		// AccountEmail is the email of the signed-in Claude login; absent
 		// when unknown.
 		AccountEmail string `json:"account_email,omitempty"`
@@ -89,6 +92,7 @@ func safeAuthStatus(raw []byte) (any, error) {
 	}
 	v.LoggedIn = *v.CredentialPresent
 	v.SubscriptionType = normalizeSubscription(v.SubscriptionType)
+	v.RateLimitTier = normalizeSubscription(v.RateLimitTier)
 	v.AccountEmail = normalizeEmail(v.AccountEmail)
 	return v, nil
 }
@@ -106,6 +110,16 @@ func recordSubscription(ctx context.Context, q store.Querier, accountID int64, v
 		return false, err
 	}
 	return tag.RowsAffected() > 0, nil
+}
+
+// recordRateLimitTier keeps on the account the tier the runtime reported. An
+// unknown value leaves the recorded one alone.
+func recordRateLimitTier(ctx context.Context, q store.Querier, accountID int64, value string) error {
+	if value = normalizeSubscription(value); value == "" || accountID <= 0 {
+		return nil
+	}
+	_, err := q.Exec(ctx, `UPDATE accounts SET rate_limit_tier=$2 WHERE id=$1 AND rate_limit_tier IS DISTINCT FROM $2`, accountID, value)
+	return err
 }
 
 // factsObserved runs the FactsObserved hook, when any, once what the

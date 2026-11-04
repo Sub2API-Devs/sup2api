@@ -117,6 +117,9 @@ func localAuthSnapshot(env []string) (Object, error) {
 		if subscription := storedSubscription(oauth); subscription != "" {
 			result["subscription_type"] = subscription
 		}
+		if tier := storedRateLimitTier(oauth); tier != "" {
+			result["rate_limit_tier"] = tier
+		}
 		// The login's email, as Claude Code stores it at login (the core
 		// keeps it on the account, CONTRACTS §59).
 		if email := storedAccountEmail(env); email != "" {

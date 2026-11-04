@@ -979,10 +979,14 @@ func (s *Service) runtimeAction(ctx context.Context, d accountDesired, draft boo
 func (s *Service) noteFacts(ctx context.Context, accountID int64, raw []byte) {
 	var status struct {
 		SubscriptionType string `json:"subscription_type"`
+		RateLimitTier    string `json:"rate_limit_tier"`
 		AccountEmail     string `json:"account_email"`
 	}
 	if json.Unmarshal(raw, &status) != nil {
 		return
+	}
+	if err := recordRateLimitTier(ctx, s.DB.Pool, accountID, status.RateLimitTier); err != nil {
+		slog.WarnContext(ctx, "ccgateway: record rate limit tier", "account", accountID, "err", err)
 	}
 	changed, err := recordSubscription(ctx, s.DB.Pool, accountID, status.SubscriptionType)
 	if err != nil {

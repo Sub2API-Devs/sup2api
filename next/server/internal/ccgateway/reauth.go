@@ -98,6 +98,7 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 		var health struct {
 			LoggedIn         bool   `json:"logged_in"`
 			SubscriptionType string `json:"subscription_type"`
+			RateLimitTier    string `json:"rate_limit_tier"`
 			AccountEmail     string `json:"account_email"`
 		}
 		if res.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&health) != nil || !health.LoggedIn {
@@ -106,6 +107,9 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 		observed = observedFacts(health.SubscriptionType, health.AccountEmail)
 		changed, err := recordSubscription(ctx, tx, accountID, health.SubscriptionType)
 		if err != nil {
+			return err
+		}
+		if err := recordRateLimitTier(ctx, tx, accountID, health.RateLimitTier); err != nil {
 			return err
 		}
 		subscriptionChanged = changed

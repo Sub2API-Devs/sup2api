@@ -555,6 +555,8 @@ export interface Account {
   last_test?: AccountLastTest | null
   /** Plan the account's runtime reported ("max", "pro" ...), CONTRACTS §59; null while unknown. */
   subscription_type?: string | null
+  /** Rate limit tier the runtime reported, as the upstream names it. */
+  rate_limit_tier?: string | null
   /** Balance of the account (CONTRACTS §52); null when the type does not support balance. */
   balance?: AccountBalance | null
   /** Plugin-registered custom actions available for this account (CONTRACTS §52). */

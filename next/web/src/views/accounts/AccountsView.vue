@@ -720,7 +720,8 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
                 <SHint inline size="xs">· {{ accountTypes.pluginName(detail.plugin_key) }} <span class="font-mono">({{ detail.plugin_key }}/{{ detail.type }})</span></SHint>
               </SDescItem>
               <SDescItem v-if="detail.subscription_type" :label="t('accounts.subscription')">
-                <SBadge tone="purple" :title="t('accounts.subscriptionHint')">{{ subscriptionLabel(detail.subscription_type) }}</SBadge>
+                <SBadge tone="purple" :title="t('accounts.subscriptionHint')">{{ detail.subscription_type }}</SBadge>
+                <SHint v-if="detail.rate_limit_tier" inline size="xs" class="ml-1.5 font-mono" data-testid="account-rate-limit-tier">· {{ detail.rate_limit_tier }}</SHint>
               </SDescItem>
               <SDescItem v-for="fact in accountTypes.pluginFacts(detail.plugin_key, detail.type, detail.settings)" :key="fact.key" :label="fact.label" :data-testid="'account-detail-fact-' + fact.key">{{ fact.value }}</SDescItem>
               <SDescItem v-if="detailType" :label="t('platforms.supported')"><PlatformBadges :items="detailType.platforms" empty="—" /></SDescItem>

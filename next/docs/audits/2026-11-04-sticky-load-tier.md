@@ -118,32 +118,27 @@
 | 套餐倍率 | 不使用 |
 | 负载公式 | 请求 Fable 模型用 7d Fable，其他模型用 7d（与套餐无关） |
 
-## 9. 实施分工与状态
+## 9. 实施状态（2026-11-04 已实现，未发布）
 
-三个 agent 各自在独立 worktree 中实现，基点 `30fdac052`。worktree 默认从过时的 main（27c416483）切出，已让三个 agent 都重置到基点。
+原计划的三个分支没有留下代码，改在 `feat/next-platform` 上直接实现。**线上核心是 0.1.240（发布分支 `release/count-tokens-core`，基于 0.1.239 只摘计数），本文“现状”说的都是开发分支，排队（6571924c1）、RPM/TPM（6d8ea676c）和重试开关（8a34be86f）线上都还没有。**
 
-| 分支 | 范围 | 迁移 | 状态 |
-|---|---|---|---|
-| impl-sticky | 核心 gateway：选中时就写绑定、溢出不改写、按账号重置、命中只续期、排队中的账号不接受新会话、排队上限 8、sticky_hit 误报修正、长上下文 429 默认规则 | 0086（如需要） | 进行中 |
-| impl-load | next/sdk 的 RankCandidate 增加额度快照、核心 rank.go 改为按比例降权、ccgateway 实现 RankAccounts（按请求模型选 7d Fable 或 7d） | 无 | 进行中 |
-| impl-tier | Worker 上报 rate_limit_tier、核心记录并通过 API 返回、前端显示 | 0087 | 进行中 |
+| 项 | 实现 | 与原方案的差异 |
+|---|---|---|
+| 粘性 | 选中账号时原子写绑定（`stickyClaim`），并发请求跟随先到的；命中只续期；溢出不改写；失败只解除指向该账号的绑定（`stickyRelease`），已被绑到新账号时跟随；绑定账号不在候选里时解除，不再每个请求各自随机；排队中的账号不接新会话（全部都在排队时才排）；排队上限默认 8；限流拒绝不再记 sticky_hit | 绑定不再带代数。`keep_on_account_disabled` 开启时保留绑定、溢出不改写 |
+| 长上下文 429 | 不改代码：默认规则和线上 revision 5 的 429 只对两个关键词重试，插件只在额度真满时禁用，`TestDefaultRetryRulesOnlyRetryUsefulRateLimits`、`classify_test` 已覆盖 | 没有加默认规则和迁移。如果管理员以后配了不带关键词的 429 重试规则，这句会被重试 |
+| 负载 | `RankCandidate.quota` 带核心内存里的额度快照；ccgateway 实现 `RankAccounts`（order 200）；核心改为 `max(1, weight × (100 − load))`，全部候选同乘 100 | 没加 `subscription_type`（公式与套餐无关）。load=100 也不排除账号（§5.2），§67 已改 |
+| 套餐 | 迁移 0086 `rate_limit_tier`；Worker 上报；账号视图返回；详情页原样显示 | 迁移号是 0086（长上下文没用上），不是 0087 |
 
-测试清单（miniredis 加 PG，不能静默跳过）：
-- 新会话的并发请求落到同一账号；
-- 429 重置后的并发请求跟随新账号；
-- 溢出请求成功后绑定不变；
-- 同时 429 的请求都能换号；
-- 排队中的账号不被新会话选中；
-- 长上下文 429 原样返回；
-- 负载公式各分支，以及 weight=1 时不会降成 0；
-- 排序顺序排在 dynweight 之后；
-- rate_limit_tier 全链路。
+未决，要线上数据确认：`7d_oi` 对应 `seven_day_overage_included`，名字不是 Fable，这里沿用 claude-oauth 的映射把它当 `7d_fable`。线上还没有 Fable 请求，无法验证；如果语义不同，Fable 的负载会算错（只影响权重，不拒绝请求）。
 
-每个 Go 模块都要跑 go vet、go test 和 `GOOS=linux go vet`。
+测试：miniredis + PG，见 `sticky_session_test.go`、`failure_policy_test.go`（`TestStickyClaimAndRelease`）、`rank_test.go`、`ccgateway/rank_test.go`。本机没有 gcc，`-race` 没跑；前端只改了详情页一行，没跑前端测试。
 
 ## 10. 发布注意
 
-- proto 有变化：先发核心（旧插件会忽略新字段），再发 ccgateway 插件。核心发布前要确认外壳的 Host API 满足要求。
-- 迁移 0086 和 0087 随核心重启自动执行，必须幂等。
-- rate_limit_tier 要等 ccgateway 新镜像发布、Worker 上报后才有值。
+- 从开发分支发核心时，排队、RPM/TPM、重试开关会一起上线，要先定好范围。
+- proto 有变化：先发核心（旧插件忽略新字段），再发 ccgateway 插件 **0.1.129**（0.1.128 已发布，只有计数）。外壳的 Host API 这次不变。
+- 插件新增 `scheduler.rank` 权限，升级时要同意。
+- 迁移 0086 随核心重启执行，幂等；加了列的核心不能自动回滚到旧 schema。
+- `rate_limit_tier` 要 Worker 升级后才有值，目前只有 #109 跑过新 Worker，且不含这次改动。
+- 粘性绑定值从 `v1:<代数>:<id>` 变成 `<id>`，新旧都能读。滚动发布时旧节点的 CAS 可能写失败，只影响那一次请求的绑定。
 - 本轮不改的配置：账号的 priority 和 weight、max_concurrency，以及 key_includes 里的 model（是否去掉由用户另行决定）。

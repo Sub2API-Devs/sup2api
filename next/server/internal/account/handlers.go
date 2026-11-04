@@ -69,6 +69,8 @@ type row struct {
 	LastTestErrorSource *string
 	// SubscriptionType is the plan the runtime reported (CONTRACTS §59); nil while unknown.
 	SubscriptionType *string
+	// RateLimitTier is the tier the runtime reported, as the upstream names it.
+	RateLimitTier *string
 	AutoModels       *bool
 	// AutoDisabledSource says who wrote an automatic disable (0070):
 	// usageLimitSource or '' (plugins and failure policies).
@@ -82,7 +84,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
-	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.auto_models,a.auto_disabled_source
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -92,7 +94,7 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.ModelLimits, &a.Environment, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
-		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.AutoModels, &a.AutoDisabledSource)
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource)
 	return &a, err
 }
 
@@ -233,6 +235,8 @@ type View struct {
 	// SubscriptionType is the plan the account's runtime reported ("max",
 	// "pro" ...), CONTRACTS §59; null while unknown.
 	SubscriptionType *string `json:"subscription_type"`
+	// RateLimitTier is the tier the runtime reported, as the upstream names it.
+	RateLimitTier *string `json:"rate_limit_tier"`
 	// Orphaned is true when the plugin declaring the account type is not
 	// enabled (disabled or uninstalled).
 	Orphaned      bool                         `json:"orphaned"`
@@ -280,6 +284,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 			LastTest:         a.lastTest(),
 			SubscriptionType: a.SubscriptionType,
+			RateLimitTier:    a.RateLimitTier,
 			limitDisabled:    limitDisabled(a.Status, a.AutoDisabledSource),
 		}
 		out[i], ids[i], byID[a.ID] = v, a.ID, v

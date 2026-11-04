@@ -24,6 +24,18 @@ func storedSubscription(oauth map[string]any) string {
 	return ""
 }
 
+// storedRateLimitTier is the rate limit tier of the signed-in Claude account,
+// read from claudeAiOauth.rateLimitTier beside the subscription type
+// ("default_claude_ai", "default_claude_max_20x"). "" when absent or not an
+// identifier.
+func storedRateLimitTier(oauth map[string]any) string {
+	value, _ := oauth["rateLimitTier"].(string)
+	if subscriptionPattern.MatchString(value) {
+		return value
+	}
+	return ""
+}
+
 // accountEmailPattern bounds the reported login email: one address, no
 // spaces or control characters.
 var accountEmailPattern = regexp.MustCompile(`^[^\s@]{1,64}@[^\s@]{1,255}$`)
