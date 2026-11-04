@@ -1,7 +1,7 @@
 {
   "binarySHA256": "fd13c70000fec3f2116dfbcbb6121210b4a29328bf0e46210a59dd594a67d824",
   "version": "2.1.316",
-  "extension": "ccgateway-v46-shape-prompt-text",
+  "extension": "ccgateway-v47-count-tokens",
   "bunVersion": "1.4.4",
   "runtimeVersion": "v26.12.1",
   "capabilities": [
@@ -26,7 +26,8 @@
     "management_http_v1",
     "build_session_state_v1",
     "build_injection_tools_v2",
-    "build_first_party_shape_v1"
+    "build_first_party_shape_v1",
+    "request_count_tokens_v1"
   ],
   "supportModules": [
     "shared",

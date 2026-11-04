@@ -209,6 +209,48 @@ func TestWirePolicyCarriesOnlyTheLayersOfItsLevel(t *testing.T) {
 // The capability read runs for the policy the request resolves to, also when
 // only a group or account changes the level, and no request reaches a Worker
 // that does not follow levels.
+// A counting request needs the CLI's counting capability, and no CC feature
+// policy shapes it: only its log level goes along.
+func TestCountRequestNeedsTheCountCapability(t *testing.T) {
+	for _, capable := range []bool{false, true} {
+		var policies []string
+		worker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/healthz" {
+				caps := []string{features.RequestPolicyModeCapability, features.RequestLevelsCapability}
+				if capable {
+					caps = append(caps, features.RequestCountTokensCapability)
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "claude_version": "2.1.302", "capabilities": caps})
+				return
+			}
+			require.Equal(t, "/v1/messages/count_tokens", r.URL.Path)
+			policies = append(policies, r.Header.Get("X-CCGateway-Request-Policy"))
+			_, _ = w.Write([]byte(`{"input_tokens":8}`))
+		}))
+		t.Setenv("CCGATEWAY_URL", worker.URL)
+		global := defaultRequestPolicy()
+		global.Level, global.CLIVersion = features.LevelMicro, "2.1.302"
+		svc := &Service{}
+		svc.cache.cfg = keptConfig(Config{Mode: "local", APIKey: "worker-key", RequestPolicy: &global}, time.Now())
+		req, err := http.NewRequestWithContext(context.Background(), "POST", VirtualCountURL, strings.NewReader(`{"model":"m"}`))
+		require.NoError(t, err)
+		res, err := svc.ModelClientForRequest(ModelRequestContext{GroupID: 7}).Do(req)
+		require.NoError(t, err)
+		_ = res.Body.Close()
+		if !capable {
+			require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+			require.Equal(t, "core", res.Header.Get("X-CCGateway-Error-Source"))
+			require.Empty(t, policies)
+		} else {
+			require.Equal(t, http.StatusOK, res.StatusCode)
+			require.Len(t, policies, 1)
+			require.NotContains(t, policies[0], "relay_mode")
+			require.NotContains(t, policies[0], "level")
+		}
+		worker.Close()
+	}
+}
+
 func TestModelRequestNeedsTheLevelsCapability(t *testing.T) {
 	for _, capable := range []bool{false, true} {
 		var policies []string

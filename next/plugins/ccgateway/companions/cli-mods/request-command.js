@@ -11,7 +11,7 @@ import { readRequestAgent, resolveAgentContext, setClientUserAgent } from './ccg
 import { continueDirectSession, requestThread } from './ccgateway-request-session.js';
 import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
 
-const help = `Usage: claude request [--direct | --build] [--betas "a,b"] [file|-] [options]
+const help = `Usage: claude request [--direct | --build | --count] [--betas "a,b"] [file|-] [options]
 
 Use CC's authenticated client to send either a Messages body or build components.
 Successful responses (including SSE) use stdout. Errors use a structured stderr line.
@@ -21,6 +21,8 @@ the stderr frame as bodyBase64 when no metadata path is supplied.
   --direct                 Send the JSON body as written; only a missing or
                            Worker-owned billing header is filled (default)
   --build                  Assemble components through CC, then send once
+  --count                  Send the JSON body as written to the token counting
+                           endpoint; nothing is added to it
   --input <file|->          Read JSON from a file; default: stdin
   --betas <a,b,...>         API beta features (repeatable; comma separated)
   --header <name:value>     anthropic-version or anthropic-beta only
@@ -160,7 +162,13 @@ async function prepareOutgoing(ctx, incoming) {
   const resolveAgent = agentResolver(agentNative);
   let outgoing = { body: incoming.body, rawBody: incoming.rawBody, headers: options.headers, timeoutMs: incoming.timeout };
   let agent, clientBetas, addedBetas = [];
-  if (options.mode === 'direct') {
+  if (options.mode === 'count') {
+    // Counting generates nothing: no billing header, no client's kind of
+    // request, no session. CC's client authenticates it, and the body is the
+    // client's bytes.
+    outgoing.countTokens = true;
+    clientBetas = normalizeBetas(options.headers['anthropic-beta']);
+  } else if (options.mode === 'direct') {
     agent = resolveAgent?.({ billing: agentNative.requestBilling(incoming.body.system), prompt: agentNative.prompt(messagesOf(incoming.body)) });
     outgoing = await prepareDirect(ctx, outgoing, agent);
     clientBetas = normalizeBetas(options.headers['anthropic-beta']);

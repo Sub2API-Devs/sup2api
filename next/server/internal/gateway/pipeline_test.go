@@ -287,8 +287,7 @@ func TestNoAccountIsOverloaded(t *testing.T) {
 }
 
 // A group with no account of a type serving the endpoint, in any status,
-// cannot serve it: 404, which clients do not retry (2026-10-11: CCGateway
-// offers no count_tokens).
+// cannot serve it: 404, which clients do not retry.
 func TestEndpointNoAccountServesIsNotFound(t *testing.T) {
 	e := newEnv(t)
 	e.accounts.groups[testGroup] = nil

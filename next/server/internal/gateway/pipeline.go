@@ -236,7 +236,7 @@ func (c *call) run(ctx context.Context) {
 	// 3. The caps of the API key. They depend on the key alone, so a capped
 	// request is refused before any hook runs (as new-api rate-limits before
 	// moderation); a task snapshot is read locally and is not capped.
-	if !c.ep.TaskQuery() {
+	if !c.ep.TaskQuery() && !c.tokenCounting() {
 		tokens := int64(0)
 		if p.KeyLimits.TPM > 0 {
 			tokens = c.rateTokens(ctx)

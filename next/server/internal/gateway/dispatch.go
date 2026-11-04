@@ -374,10 +374,22 @@ func weightedOrder(grp []core.AccountRef, rnd func() float64) {
 	}
 }
 
+// tokenCounting reports a token counting request. It generates nothing, so it
+// consumes nothing: no key or account concurrency, no RPM or TPM, no quota, and
+// a failed count says nothing about the account, which keeps its state
+// (2026-11-04). An account that is cooling or disabled still does not serve it.
+func (c *call) tokenCounting() bool {
+	return strings.HasSuffix(c.ep.Protocol, ".count_tokens")
+}
+
 // acquireAccount takes a concurrency slot of the account and, when the
 // request's model is in one of the account's model lists, one of that list
 // (CONTRACTS §68); either being full makes the account busy.
 func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func(), bool) {
+	if c.tokenCounting() {
+		c.slotCtx = ctx
+		return func() {}, true
+	}
 	leaseCtx, release, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, "account", ref.ID, ref.MaxConcurrency, c.rid)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: acquire account slot", "account", ref.ID, "err", err)
@@ -406,6 +418,9 @@ func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func()
 // session on ref, reserving its estimated tokens where a TPM cap applies, and
 // keeps the hold its tokens settle against.
 func (c *call) admitRate(ref *core.AccountRef) (bool, error) {
+	if c.tokenCounting() {
+		return true, nil
+	}
 	c.releaseAccountHold(c.slotCtx)
 	tokens := int64(0)
 	if l := ref.ModelLimitFor(c.model); ref.TPMLimit > 0 || (l != nil && l.TPMLimit > 0) {
@@ -833,7 +848,7 @@ func (c *call) classifyWithPlugin(ctx context.Context, rt *typeRoute, acct *plug
 // means for the account (CONTRACTS §69); otherwise the plugin decides.
 func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, header http.Header,
 	body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
-	if c.failurePolicy != nil {
+	if c.failurePolicy != nil && !c.tokenCounting() {
 		res := c.classifyFailure(ctx, acct.GetId(), status, header, body, transportErr, rt.conv != nil)
 		if res.err != nil {
 			res.err.LocalFailure = cls.GetLocalFailure()
@@ -843,8 +858,11 @@ func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *plu
 		}
 		return res
 	}
-	c.applyQuotaObservation(ctx, acct.GetId(), cls.GetQuota())
-	reason, failover := c.applyAccountEffect(ctx, acct, status, body, transportErr, cls)
+	reason, failover := cls.GetReason(), false
+	if !c.tokenCounting() {
+		c.applyQuotaObservation(ctx, acct.GetId(), cls.GetQuota())
+		reason, failover = c.applyAccountEffect(ctx, acct, status, body, transportErr, cls)
+	}
 
 	clientStatus := int(cls.GetClientStatus())
 	if clientStatus == 0 {

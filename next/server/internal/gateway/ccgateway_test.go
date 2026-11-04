@@ -33,7 +33,12 @@ func managedCCGatewayEnv(t *testing.T, configured bool) *env {
 		typ.ID = "managed"
 		e.gen.plugins = []core.PluginInfo{info}
 		e.gen.accountTypes = []core.AccountTypeBinding{{Plugin: info, Type: typ, Client: e.plat}}
-		e.plat.route = func(*pluginv1.BuildUpstreamRequestRequest) string { return ccgateway.VirtualURL }
+		e.plat.route = func(in *pluginv1.BuildUpstreamRequestRequest) string {
+			if in.GetMeta().GetProtocol() == "anthropic.count_tokens" {
+				return ccgateway.VirtualCountURL
+			}
+			return ccgateway.VirtualURL
+		}
 		e.accounts = newFakeAccounts()
 		e.accounts.addTyped(testGroup, 1, 1, "", "ccgateway", "managed")
 		e.accounts.accounts[1].Credentials = json.RawMessage(`{}`)
@@ -51,6 +56,7 @@ func managedCCGatewayEnv(t *testing.T, configured bool) *env {
 		if r.URL.Path == "/healthz" {
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "claude_version": "2.1.302", "capabilities": []string{
 				features.RequestPolicyModeCapability, features.RequestLevelsCapability, features.BuildContentPreservationCapability,
+				features.RequestCountTokensCapability,
 			}})
 			return
 		}
@@ -118,6 +124,17 @@ func TestCCGatewayManagedGatewayJSONAndSSEUsage(t *testing.T) {
 			default:
 			}
 		})
+	}
+}
+
+func TestCCGatewayManagedGatewayCountsTokens(t *testing.T) {
+	e := managedCCGatewayEnv(t, true)
+	r := e.do("/v1/messages/count_tokens", body(testModel, false), nil)
+	if r.status != 200 || r.json().Get("input_tokens").Int() != 42 {
+		t.Fatalf("HTTP %d: %s", r.status, r.body)
+	}
+	if rec := e.record(); !rec.Success || rec.Billable || rec.Protocol != "anthropic.count_tokens" {
+		t.Fatalf("record %+v", rec)
 	}
 }
 

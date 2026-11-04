@@ -97,6 +97,15 @@ test('the command records what the transport sent, for direct and build', async 
       return { record, bytes };
     };
 
+    // Count: the body goes as the client wrote it, with nothing added.
+    const count = '{ "model":"fixture-count", "n":9007199254740993, "system":"s", "messages":[{"role":"user","content":"中文 🙂"}] }';
+    const counted = await run(['--count', '--capture-request', 'sent', '--capture-body'], count);
+    assert.equal(counted.code, 0, counted.stderr);
+    assert.equal(counted.stdout, '{"ok":true}');
+    const countRecord = await checkRecord('count', { model: 'fixture-count', stream: false });
+    assert.equal(countRecord.bytes.toString('utf8'), count);
+    await clean();
+
     // Direct, OAuth: the body goes as the client wrote it, byte for byte.
     const direct = '{ "model":"fixture-direct", "stream":true, "n":9007199254740993, "messages":[{"role":"user","content":"中文 🙂"}] }';
     let result = await run(['--direct', '--capture-request', 'sent', '--capture-body'], direct);

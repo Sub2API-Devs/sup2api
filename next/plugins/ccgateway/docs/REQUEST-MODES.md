@@ -41,7 +41,7 @@
 
 ### 1.5 Worker 的其他准入
 
-- 只接受 `POST /v1/messages` 与 `/v1/ccgateway/probe`；其他路径 404 `not_found_error`（`count_tokens` 插件不声明，核心不调度到 CCGateway）。
+- 只接受 `POST /v1/messages`、`/v1/messages/count_tokens` 与 `/v1/ccgateway/probe`；其他路径 404 `not_found_error`。计数运行 CLI 的 `request --count`，要求能力 `request_count_tokens_v1`（否则 409 `configuration_error`），不带身份、代理上下文、会话、形状转换和 fallback credit（CONTRACTS §11.6）。
 - `anthropic-version` 只接受 `2023-06-01`；body 上限 32 MiB（413）；Worker 密钥不对 401。
 - 并发上限每 Worker 4 个请求（`Slots`），超出 429 并带 `Retry-After: 1`；槽位在只凭请求头就能做的检查（路径、模式、能力、方法、版本）之后、读 body 之前占用（审核 C3）。被跟踪 fallback credit 的请求在占槽之前另用一个槽核验发放方（见下条）。
 - direct 也解析 body：必须是 JSON 对象且 `model` 非空。`metadata.user_id` 读不出时不拒绝，只记 `request_identity_unreadable` 事件，原样交给上游判断（审核 C9，`resolveAgent`）；agent 请求头同样只作为输入，不因格式拒绝。

@@ -361,7 +361,9 @@ Anthropic 的 `cache_creation_input_tokens` 是总量（含 1 小时缓存）。
 - 所有尝试都失败时：最后一次是上游错误则返回该错误（按 ClassifyError 的状态码与类型）；是插件或账号问题返回 503 `no_available_account`；有账号但并发槽位全满返回 429
 - **`anthropic` 格式下没有可用账号按官方"过载"返回**（2026-10-10）：HTTP 529，`{"type":"error","error":{"type":"overloaded_error","message":"Overloaded","code":"no_available_account"}}`，与官方 API 的过载一致，Claude Code 与 SDK 会退避重试（`gateway/errors.go` `clientError`）。使用记录的 `status_code` 为 529，`error_type` 仍为 `no_account`，`error_message` 保留核心原因（如 `no available account`）。其他格式（`openai`、`gemini`、`plain`）仍是 503；上游原样透传的错误体不受影响。
 - **模型名不合法时返回 400**（2026-11-02）：从请求取到的模型名含空白或控制字符、超过 256 字节或不是合法 UTF-8 时，在选号前返回 400 `invalid_request_error`，使用记录 `error_type` 为 `invalid_request`。此前只靠 CCGateway 的可用性检查（`invalid_candidate`）拦截，返回 503；可用性检查改为放行 `UNKNOWN` 后移到核心（§44.7）。
-- **分组里根本没有能服务该端点的账号时返回 404**（2026-10-11，用户决定）：没有任何已启用的账号类型声明该端点，或调用方分组里没有这些类型的账号（不论账号状态，已删除的除外；`AccountDirectory.GroupHasType`），返回 404 `not_found_error`「no account in this group serves this endpoint」，`code` 为 `not_found`。客户端不会重试 404。使用记录的 `error_type` 为 `no_account`，`status_code` 为 404。分组里有这种账号、只是全部被禁用、冷却或占满时，仍按上一条返回 529/503。例：CCGateway 不声明 `count_tokens`，只有 CCGateway 账号的分组调计数接口会得到 404。其余映射：参数错误 400 `invalid_request_error`（上游 4xx 原样透传，不冷却账号）、鉴权 401/403、真正的上游故障 5xx
+- **分组里根本没有能服务该端点的账号时返回 404**（2026-10-11，用户决定）：没有任何已启用的账号类型声明该端点，或调用方分组里没有这些类型的账号（不论账号状态，已删除的除外；`AccountDirectory.GroupHasType`），返回 404 `not_found_error`「no account in this group serves this endpoint」，`code` 为 `not_found`。客户端不会重试 404。使用记录的 `error_type` 为 `no_account`，`status_code` 为 404。分组里有这种账号、只是全部被禁用、冷却或占满时，仍按上一条返回 529/503。例：一个只有不声明 `count_tokens` 的账号类型的分组，调计数接口会得到 404（CCGateway 2026-11-04 起声明）。
+
+**token 计数不占资源**（2026-11-04，用户决定，取代 2026-10-11 的“CCGateway 不提供计数”）：`*.count_tokens` 不占 API Key 和账号的并发，不计 Key 和账号的 RPM、TPM，不扣额度也不查余额。计数失败可以换账号，但不改变账号状态：不冷却、不自动禁用、不观测额度，失败策略规则也不参与。仍要通过鉴权，已冷却或禁用的账号不会被选中，使用记录照常写一条不计费的记录。CCGateway 账号的计数由 Worker 运行 CLI 的 `request --count`：客户端的字节原样发到上游计数端点，认证由 CC 原生客户端完成，不加计费头、身份、会话和注入，也不带 CC 特性策略，只带请求日志级别。核心发送前检查能力 `request_count_tokens_v1`，Worker/CLI 不具备时核心自己回 503（来源 `core`），换下一个账号，不影响该账号。其余映射：参数错误 400 `invalid_request_error`（上游 4xx 原样透传，不冷却账号）、鉴权 401/403、真正的上游故障 5xx
 - **只属于本请求的网关错误不冷却账号**（2026-10-10）：CCGateway worker 拒绝本次请求（`cannot prepare the upstream request: …`，历史或特性无法原样承载）时响应头带 `X-Ccgateway-Error-Scope: request`；ccgateway 插件的 `ClassifyError` 见此头返回 `RETURN_TO_CLIENT`、不设账号效果（不冷却、不切换），同组其他会话不受影响。上游 API 的响应头里出现该头会被 worker 删掉，上游无法冒用
 - `usage_logs.error_type` 取值另含 `model_not_allowed`、`price_not_configured`、`rate_limited`、`invalid_request`、`plugin_unavailable`、`blocked_by_hook`
 - 钩子熔断按节点计数：同一钩子在本节点连续失败 10 次后熔断 30 秒
@@ -417,7 +419,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 ## 13. 平台声明端点、账号类型声明平台、内置平台（2026-09-25，ARCHITECTURE 6.6）
 
-**平台内端点子集（2026-10-08）**：`accountTypes[].platforms[]` 可声明 `endpoints: ["messages", "count_tokens"]`，每项引用所属 `platform` 的端点 ID，不是路径或协议名；不能引用其他平台的端点。省略字段兼容旧插件，表示支持该平台全部端点；显式空数组、重复 ID 和不存在的端点均拒绝。CCGateway 两种账号类型只声明 Anthropic 的 `messages`（0.1.36 起不再声明 `count_tokens`，CCGateway 不提供计数，见 §53.13）；核心不会把计数请求调度到 CCGateway 账号，分组里没有其他能计数的账号时返回 404（§11.6）。安装时根据内置、本插件及其他已安装插件的平台校验；离线打包无法解析外部平台时延后到安装校验。网关原生路由与协议转换目标都受子集约束，账号类型 API 的可服务端点保持一致。安装预览保留 `platforms` ID 数组并新增 `platform_declarations`，控制台按账号类型 → 平台 → 端点展示；平台 API 的端点新增 `id` 用于解析引用。端点子集依赖支持本字段的宿主执行，旧宿主会忽略该约束。
+**平台内端点子集（2026-10-08）**：`accountTypes[].platforms[]` 可声明 `endpoints: ["messages", "count_tokens"]`，每项引用所属 `platform` 的端点 ID，不是路径或协议名；不能引用其他平台的端点。省略字段兼容旧插件，表示支持该平台全部端点；显式空数组、重复 ID 和不存在的端点均拒绝。CCGateway 两种账号类型声明 Anthropic 的 `messages` 和 `count_tokens`（0.1.36 到 0.1.127 不声明计数，0.1.128 起恢复，2026-11-04 用户决定，见 §11.6）。安装时根据内置、本插件及其他已安装插件的平台校验；离线打包无法解析外部平台时延后到安装校验。网关原生路由与协议转换目标都受子集约束，账号类型 API 的可服务端点保持一致。安装预览保留 `platforms` ID 数组并新增 `platform_declarations`，控制台按账号类型 → 平台 → 端点展示；平台 API 的端点新增 `id` 用于解析引用。端点子集依赖支持本字段的宿主执行，旧宿主会忽略该约束。
 
 本节优先于 §12 及前文中冲突的描述。§12 中"全局定价""凭证授权""转换失败""插件未启用 404"等仍然有效。
 
@@ -4096,7 +4098,7 @@ images/gateway.tar.gz      # Caddy 网关
 
 ### 53.13 固定 native 请求策略与原生表达（历史，已由 §53.21 取代）
 
-> 2026-10-25：本节描述的 native 执行路径已于 2026-10-24 删除（§53.21），Worker 只运行 CLI 的 `request --build|--direct`，下文的准入拒绝清单、EXTRA_BODY、私有原生历史都不再执行；fallback credit 现在由请求命令回执（REQUEST-MODES §1.5）。仍然有效的只有 count_tokens 一条：插件不声明，核心不调度到 CCGateway。现行契约见 `plugins/ccgateway/docs/REQUEST-MODES.md` 与 BUILD-REQUEST-COMPONENTS-DESIGN。
+> 2026-10-25：本节描述的 native 执行路径已于 2026-10-24 删除（§53.21），Worker 只运行 CLI 的 `request --build|--direct`，下文的准入拒绝清单、EXTRA_BODY、私有原生历史都不再执行；fallback credit 现在由请求命令回执（REQUEST-MODES §1.5）。count_tokens 一条也已由 §11.6 取代（2026-11-04）。现行契约见 `plugins/ccgateway/docs/REQUEST-MODES.md` 与 BUILD-REQUEST-COMPONENTS-DESIGN。
 
 旧 relay 仅保留在 `archive/ccgateway-relay-0.1.41@4b0e0967c`；当前工作树已物理删除旧主体与 `mod/search`。本文描述 native-only 代码合同，**测试及资源授权仍在验收中，不代表已发布、已部署或全部验证通过**。逐项设计见 `ccgateway-feature-support/PASSTHROUGH-DESIGN.md`，策略细节见 `CCGATEWAY-REQUEST-POLICY.md`。
 
@@ -4110,7 +4112,7 @@ images/gateway.tar.gz      # Caddy 网关
 - `model` → `--model`；max_tokens、thinking、采样/停止参数、service_tier、inference_geo、output_config（format/effort/task_budget）、output_format、safeguards、diagnostics 通过受控 EXTRA_BODY 表达；tool_choice 只在第 0 轮，工具名映射为内层名。thinking 缺省用 `--thinking disabled`，effort 缺省 high，speed 用请求级 fastMode 与生成字段。两份 EXTRA_BODY 以 JSON 字符串穿过 Mod，避免网关额外数值转换；最终接受 CLI 的 JSON 数值语义，不保证任意大整数保真。CLI 2.1.296 隔离实测 `9007199254740993` 出站为 `9007199254740992`，同内容字符串保持不变。请求倍数上限与 usage/cache 严格计量校验不因此放宽。
 - beta 按客户端顺序去重交给 `ANTHROPIC_BETAS`，CLI 可附加自身 beta；固定 BetaRules 用于 CLI 设置，不是 native 转发白名单。缓存保留 TTL，但断点/context_management/compaction 由 CLI 决定；system 与内嵌 effort 按 CLI 构造，客户端 metadata 只选会话。
 - 私有原生历史以 U 运行，子代理 A′ 由 CLI 自身头配置表达；不在 HTTP relay 改写。图片拆分、CLI 原生预处理与工具命名差异必须保留说明，不能标成逐字节等价。
-- count_tokens 不提供：插件不声明端点，核心不调度到 CCGateway；分组没有计数账号时返回 404 not_found_error。Worker 的 400 `count_tokens is not supported by this gateway` 仅作兜底。
+- count_tokens 不提供：插件不声明端点，核心不调度到 CCGateway（历史；2026-11-04 起见 §11.6）。
 - 准入拒绝：assistant prefill、非流式 max_tokens:0 预热、fallback_credit_token、container/container skills、mcp_servers、code_execution/web_fetch/API tool_search/advisor 等服务端工具、typed 工具集、inline 工具定义、图片 transformations、non-direct caller/toolset_name 与未支持的对应历史块。direct caller 不能误写为一概拒绝；WebSearch 仅接受可还原的网关结果历史，user_location 等未支持参数仍拒绝。
 
 旧 legacy 默认、两名单灰度、首次 HTTP 错误原样直返、非流 warmup 桥接、出站还原与 helper history 的旧测试/上线记录均属于归档历史，不是当前功能或回滚选项。原生错误、搜索、fallback 及独立资源边界以 §53.14 为准。

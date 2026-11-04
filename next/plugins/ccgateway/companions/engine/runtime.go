@@ -260,7 +260,7 @@ func (r *Runtime) maintain(ctx context.Context, logs *requestLogStore) {
 }
 
 func (r *Runtime) ServeHTTP(w http.ResponseWriter, request *http.Request) {
-	business := request.URL.Path == "/v1/messages" || request.URL.Path == "/v1/ccgateway/probe"
+	business := request.URL.Path == "/v1/messages" || request.URL.Path == countTokensPath || request.URL.Path == "/v1/ccgateway/probe"
 	if !r.admit(w, business) {
 		return
 	}

@@ -13,6 +13,12 @@ const RequestIdentityCapability = "request_identity_v1"
 // older CLI refuses the unknown arguments, so the Worker asks only this one.
 const RequestCaptureCapability = "request_capture_v1"
 
+// RequestCountTokensCapability: the CLI's request command takes --count and
+// sends the body as written to the token counting endpoint, through CC's own
+// authenticated client. The core checks it before sending a counting request
+// to an account (2026-11-04).
+const RequestCountTokensCapability = "request_count_tokens_v1"
+
 // SessionStateCapability: the request identity the Worker gives the CLI
 // (CCG_REQUEST_IDENTITY) may carry previous, what the Worker remembers of the
 // request's upstream session: the request-id of its last successful upstream
@@ -63,7 +69,7 @@ func RequestCatalog(mode string) Document {
 		ID: "F-REQUEST-MODES", Title: "单次请求 direct/build", Category: "CC 执行上下文", Scope: "cc", Status: "partial",
 		BodyPaths: []string{"system", "messages", "tools"}, BetaHeaders: []string{},
 		Mechanisms: []string{mode, "CLI 原生单次发送", "API Key 认证", "调用方执行工具"},
-		Reason:     "direct 保留 Messages 原文，只补缺失的计费头；build 由 CLI 用原生函数按客户端原块组装，Worker 不改写内容。均不执行工具循环，工具由调用方执行。count_tokens 未实现。版本、补丁和哈希在启动前校验；具体上游模型能力需实际验证。",
+		Reason:     "direct 保留 Messages 原文，只补缺失的计费头；build 由 CLI 用原生函数按客户端原块组装，Worker 不改写内容。均不执行工具循环，工具由调用方执行。count_tokens 由 CLI 原样发送到计数端点（request_count_tokens_v1）。版本、补丁和哈希在启动前校验；具体上游模型能力需实际验证。",
 	}}}
 	if mode == "request_build" {
 		doc.Features = append(doc.Features, buildAttachmentsFeature())

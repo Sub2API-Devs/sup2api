@@ -261,3 +261,9 @@ test('the body file is written only when asked for, and a failed write never fai
     await assert.rejects(fs.access(path.join(dir, 'missing')));
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
+
+test('the counting endpoint sits beside the Messages endpoint, with its query', async () => {
+  const { countTokensPathOf } = await import('../model-request.js');
+  assert.equal(countTokensPathOf('/v1/messages?beta=true'), '/v1/messages/count_tokens?beta=true');
+  assert.equal(countTokensPathOf('/v1/messages'), '/v1/messages/count_tokens');
+});
