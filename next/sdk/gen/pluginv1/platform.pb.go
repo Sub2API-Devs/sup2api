@@ -1141,7 +1141,6 @@ type AccountAutomaticState struct {
 	Action AccountAutomaticState_Action `protobuf:"varint,1,opt,name=action,proto3,enum=sub2api.plugin.v1.AccountAutomaticState_Action" json:"action,omitempty"`
 	Reason string                       `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	// Types that are assignable to Release:
-	//
 	//	*AccountAutomaticState_UntilUnix
 	//	*AccountAutomaticState_DurationSeconds
 	Release isAccountAutomaticState_Release `protobuf_oneof:"release"`

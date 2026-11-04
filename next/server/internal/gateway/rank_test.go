@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"strings"
 	"sync"
 	"testing"
@@ -380,34 +381,35 @@ func TestRankMatchFiltersRequests(t *testing.T) {
 	}
 }
 
-// load reduces the effective weight: load=100 zeroes it (excludes account).
+// A load lowers an account's chance in proportion and never takes it out, also
+// at the default weight of 1, which plain division would turn into 0.
 func TestRankLoadReducesWeight(t *testing.T) {
 	e := newEnv(t)
 	samePriority(e)
-	// acc-1: load=0   weight 1000 (eligible)
-	// acc-2: load=50  weight 500 (eligible)
-	// acc-3: load=100 weight 0 (excluded — must never reach upstream)
+	random := rand.New(rand.NewSource(1))
+	e.gw.randFloat = random.Float64
 	e.addRanker("load", manifest.SchedulerRank{}, &fakeRanker{
 		fn: func(_ context.Context, in *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
 			return []*pluginv1.RankedAccount{
-				{AccountId: 1, Priority: 10, Weight: 1000, Load: 0},
-				{AccountId: 2, Priority: 10, Weight: 1000, Load: 50},
-				{AccountId: 3, Priority: 10, Weight: 1000, Load: 100},
+				{AccountId: 1, Priority: 10, Weight: 1, Load: 0},
+				{AccountId: 2, Priority: 10, Weight: 1, Load: 50},
+				{AccountId: 3, Priority: 10, Weight: 1, Load: 100},
 			}, nil
 		}})
-	// Make acc-3 always return 500 so that if it is picked we know immediately.
-	e.up.set("acc-3", &upstreamRule{status: 500})
-	for i := 0; i < 20; i++ {
-		r := e.messages(body(testModel, false))
+	served := map[string]int{}
+	for range 300 {
+		if r := e.messages(body(testModel, false)); r.status != 200 {
+			t.Fatalf("%d %s", r.status, r.body)
+		}
 		e.record()
-		for _, k := range e.up.keys() {
-			if k == "acc-3" {
-				t.Fatalf("iter %d: acc-3 with load=100 was scheduled (status=%d)", i, r.status)
-			}
-		}
-		if r.status != 200 {
-			t.Fatalf("iter %d: status %d %s", i, r.status, r.body)
-		}
+		served[e.up.last().key]++
+	}
+	// 100 : 50 : 1 of 300 is about 199, 99 and 2.
+	if served["acc-1"] < 170 || served["acc-2"] < 70 || served["acc-2"] > 130 || served["acc-3"] > 10 {
+		t.Fatalf("served %v", served)
+	}
+	if served["acc-1"]+served["acc-2"] == 300 {
+		t.Logf("acc-3 was not drawn in this run: %v", served)
 	}
 }
 

@@ -78,7 +78,7 @@ func TestManifestAndUsageContract(t *testing.T) {
 	if !slices.Equal(managed.DefaultModelsBySubscription["pro"], ccgateway.DefaultModelsForSubscription("pro")) {
 		t.Fatal("the Pro UI preset must match the plugin's save policy")
 	}
-	if !managed.ModelAvailability || managed.Quota == nil || !managed.Quota.Query || managed.Quota.AutoRefresh || len(managed.Quota.Headers) != 2 || len(managed.Quota.Windows) != 4 {
+	if !managed.ModelAvailability || managed.Quota == nil || !managed.Quota.Query || managed.Quota.AutoRefresh || len(managed.Quota.Headers) != 3 || len(managed.Quota.Windows) != 4 {
 		t.Fatal("managed accounts read quota from response headers, query it only on demand, and check model availability")
 	}
 	for _, window := range managed.Quota.Windows {
@@ -92,11 +92,11 @@ func TestManifestAndUsageContract(t *testing.T) {
 	if m.AccountTypes[0].AuthMethodLabel["en"] == m.AccountTypes[1].AuthMethodLabel["en"] {
 		t.Fatal("authentication choices must remain distinguishable")
 	}
-	if len(m.AccountTypes[0].SensitiveFields) != 0 || len(m.AccountTypes[0].SettingsFields) != 0 || len(m.HostPermissions) != 2 {
+	if len(m.AccountTypes[0].SensitiveFields) != 0 || len(m.AccountTypes[0].SettingsFields) != 0 || len(m.HostPermissions) != 3 {
 		t.Fatal("managed adapter must not request connection credentials")
 	}
-	if len(m.Capabilities) != 2 || m.Capabilities[0].ID != manifest.CapPlatformAdapter || m.Capabilities[1].ID != manifest.CapAccountLifecycle {
-		t.Fatal("must use core forwarding and account lifecycle callbacks")
+	if len(m.Capabilities) != 3 || m.Capabilities[0].ID != manifest.CapPlatformAdapter || m.Capabilities[1].ID != manifest.CapAccountLifecycle || m.Capabilities[2].ID != manifest.CapSchedulerRank {
+		t.Fatal("must use core forwarding, account lifecycle callbacks and scheduling")
 	}
 	if m.AccountTypes[0].Lifecycle == nil || !m.AccountTypes[0].Lifecycle.Preparation || !m.AccountTypes[0].Lifecycle.Required || len(m.AccountTypes[0].ExtensionsSchema) == 0 {
 		t.Fatal("managed accounts require preparation and declared extensions")

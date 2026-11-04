@@ -9,7 +9,7 @@
     "en": "Managed Claude Code Messages accounts. SSH connections and credentials are managed by the core. Token counting is free; model discovery is not supported.",
     "zh": "托管 Claude Code Messages 账号，SSH 连接与凭证由核心管理；支持流式响应及用量计费；token 计数不计费；不支持模型发现。"
   },
-  "version": "0.1.128",
+  "version": "0.1.129",
   "publisher": "sub2api",
   "icon": "assets/claudecode-color.svg",
   "runtime": "grpc",
@@ -25,8 +25,12 @@
     },
     {
       "id": "account.lifecycle.v1"
+    },
+    {
+      "id": "scheduler.rank.v1"
     }
   ],
+  "scheduler": { "rank": { "order": 200, "timeoutMs": 50 } },
   "accountTypes": [
     {
       "id": "managed",
@@ -35,7 +39,8 @@
         "query": true,
         "headers": [
           {"key": "5h", "utilization": "anthropic-ratelimit-unified-5h-utilization", "reset": "anthropic-ratelimit-unified-5h-reset", "status": "anthropic-ratelimit-unified-5h-status"},
-          {"key": "7d", "utilization": "anthropic-ratelimit-unified-7d-utilization", "reset": "anthropic-ratelimit-unified-7d-reset", "status": "anthropic-ratelimit-unified-7d-status"}
+          {"key": "7d", "utilization": "anthropic-ratelimit-unified-7d-utilization", "reset": "anthropic-ratelimit-unified-7d-reset", "status": "anthropic-ratelimit-unified-7d-status"},
+          {"key": "7d_fable", "utilization": "anthropic-ratelimit-unified-7d_oi-utilization", "reset": "anthropic-ratelimit-unified-7d_oi-reset", "status": "anthropic-ratelimit-unified-7d_oi-status"}
         ],
         "windows": [
           {"key": "5h", "label": {"en": "5-hour usage", "zh": "5 小时用量"}, "shortLabel": {"en": "5h", "zh": "5 小时"}},
@@ -180,6 +185,13 @@
       "reason": {
         "en": "Register managed Claude Code accounts for Anthropic Messages",
         "zh": "为 Anthropic Messages 注册托管 Claude Code 账号"
+      }
+    },
+    {
+      "id": "scheduler.rank",
+      "reason": {
+        "en": "Lower the chance of accounts that used much of their weekly quota when scheduling",
+        "zh": "调度时降低周额度用量高的账号的权重"
       }
     },
     {

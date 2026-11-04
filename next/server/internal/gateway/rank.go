@@ -93,6 +93,7 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 	// them in place so the next one sees its result.
 	list := make([]*pluginv1.RankCandidate, 0, len(cands))
 	byID := make(map[int64]*pluginv1.RankCandidate, len(cands))
+	loads := map[int64]int{}
 	for i := range cands {
 		a := &cands[i]
 		if !c.usable(a) {
@@ -105,6 +106,14 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 	}
 	if len(list) == 0 {
 		return nil
+	}
+	ids := make([]int64, len(list))
+	for i, rc := range list {
+		ids[i] = rc.AccountId
+	}
+	quota := c.readQuota(ctx, ids, c.g.availabilitySnapshotBudget())
+	for _, rc := range list {
+		rc.Quota = quota.snapshots[rc.AccountId]
 	}
 
 	changedAny := false
@@ -138,20 +147,18 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 			}
 			p := clampRank(ctx, rb.Plugin.Key, "priority", rc.AccountId, ra.GetPriority(), maxRankPriority)
 			w := clampRank(ctx, rb.Plugin.Key, "weight", rc.AccountId, ra.GetWeight(), maxRankWeight)
-			// Apply load: reduce the effective weight proportionally.
-			// load=0 → no change, load=100 → weight becomes 0 (account excluded).
-			// The plugin's returned weight is the baseline; the host applies
-			// the reduction afterwards (CONTRACTS §67).
+			// The plugin's returned weight is the baseline and the next plugin
+			// sees it; the load is applied once all have answered (CONTRACTS §67).
 			load := clampRank(ctx, rb.Plugin.Key, "load", rc.AccountId, ra.GetLoad(), maxRankLoad)
-			if load > 0 {
-				w = w * (maxRankLoad - load) / maxRankLoad
+			if load > loads[rc.AccountId] {
+				loads[rc.AccountId] = load
 			}
-			if int32(p) == rc.Priority && int32(w) == rc.Weight {
+			if int32(p) == rc.Priority && int32(w) == rc.Weight && load == 0 {
 				continue // nothing moved: not worth a row in sched_decisions
 			}
 			rc.Priority, rc.Weight = int32(p), int32(w)
 			if len(changed) < maxRankChanges {
-				changed = append(changed, core.RankChange{AccountID: rc.AccountId, Priority: p, Weight: w})
+				changed = append(changed, core.RankChange{AccountID: rc.AccountId, Priority: p, Weight: w, Load: load})
 			}
 		}
 		if len(changed) > 0 {
@@ -181,7 +188,14 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 
 	out := make(map[int64]rankValues, len(list))
 	for _, rc := range list {
-		out[rc.AccountId] = rankValues{priority: int(rc.Priority), weight: int(rc.Weight)}
+		weight := int(rc.Weight)
+		// Scaled by 100 for every candidate, so a default weight of 1 still
+		// divides in proportion to the load. A load lowers an account's chance
+		// and never takes it out; a plugin's weight 0 does that.
+		if len(loads) > 0 && weight > 0 {
+			weight = max(1, weight*(maxRankLoad-loads[rc.AccountId]))
+		}
+		out[rc.AccountId] = rankValues{priority: int(rc.Priority), weight: weight}
 	}
 	c.ranked = out
 	return out

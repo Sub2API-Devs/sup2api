@@ -3,6 +3,7 @@ syntax = "proto3";
 package sub2api.plugin.v1;
 
 import "sub2api/plugin/v1/common.proto";
+import "sub2api/plugin/v1/platform.proto";
 
 option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
 
@@ -39,6 +40,10 @@ message RankCandidate {
   // The account's current weight; the host guarantees it is normalized to
   // 1-1000.
   int32 weight = 6;
+  // The account's quota as the core last observed it, read from memory. Empty
+  // when none is known. Never fresh enough to refuse an account by: only the
+  // availability check does that.
+  AccountQuotaSnapshot quota = 7;
 }
 
 message RankAccountsResponse {
@@ -57,10 +62,11 @@ message RankedAccount {
   int32 priority = 2;
   int32 weight = 3;
   // load is the account's current utilization as a percentage (0–100,
-  // default 0). The host reduces the effective scheduling weight by the load
-  // factor: effective_weight = weight * (100 - load) / 100. A load of 100
-  // therefore removes the account from this request (effective weight 0),
-  // while a load of 0 leaves the weight unchanged. Load is independent of the
+  // default 0). The host lowers the account's chance in proportion to it:
+  // effective_weight = max(1, weight * (100 - load)), with every candidate of
+  // the request scaled by the same 100, so a load never takes an account out
+  // of the request (weight 0 does). A load of 0 leaves the chance unchanged, and
+  // the highest load of the plugins counts. Load is independent of the
   // weight field: the plugin sets both, and the host applies the reduction
   // afterwards so the weight value the plugin returns is always the baseline,
   // not already discounted.

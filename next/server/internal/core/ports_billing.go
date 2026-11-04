@@ -458,6 +458,7 @@ type RankChange struct {
 	AccountID int64 `json:"account_id"`
 	Priority  int   `json:"priority"`
 	Weight    int   `json:"weight"` // 0 = not used for this request
+	Load      int   `json:"load,omitempty"`
 }
 
 // Settler accepts usage records without blocking the request path.

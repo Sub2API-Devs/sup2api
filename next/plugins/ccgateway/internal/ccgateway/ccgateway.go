@@ -22,6 +22,7 @@ const (
 	PlatformID          = "anthropic"
 	AccountTypeManaged  = "managed"
 	AccountTypeAPIKey   = "apikey"
+	pluginKey           = "ccgateway"
 	ProtocolMessages    = "anthropic.messages"
 	ProtocolCountTokens = "anthropic.count_tokens"
 	VirtualURL          = "https://ccgateway.internal/v1/messages"
