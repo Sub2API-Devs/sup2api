@@ -32,6 +32,10 @@ for (const f of fs.readdirSync('docs/process').filter((f) => /^naming-.*\.md$/.t
 }
 
 const frozenCache = new Map();
+// short names checked against the npm source to be the author's own (zod's `_lt`, axios's `G`)
+const authoredList = new Map();
+if (fs.existsSync('naming/_authored-short-names.jsonl'))
+  for (const l of fs.readFileSync('naming/_authored-short-names.jsonl', 'utf8').split('\n')) if (l) { const x = JSON.parse(l); authoredList.set(x.file + x.key, `${x.package}: ${x.source}`); }
 const frozenOf = (file) => {
   if (!frozenCache.has(file)) {
     const bs = bindingsOf(file, fs.readFileSync(path.join('original', file), 'utf8'));
@@ -51,6 +55,7 @@ for (const t of todo) {
   else if (listed.has(t.file + t.key)) { reason = 'dead'; note = listed.get(t.file + t.key); }
   else if (t.refs === 0) { reason = 'dead'; note = 'no references'; }
   else if (!info.minified && t.final === t.min) { reason = 'authored'; note = "module is not minified: the author's own short name"; }
+  else if (authoredList.has(t.file + t.key)) { reason = 'authored'; note = authoredList.get(t.file + t.key); }
   else if (t.path.startsWith('runtime/')) { reason = 'bundler'; note = 'Bun module wrapper / runtime helper'; }
   else reason = 'unnamed';
   out.push({ file: t.file, key: t.key, min: t.min, final: t.final, path: t.path, scope: t.scope, refs: t.refs, reason, note });

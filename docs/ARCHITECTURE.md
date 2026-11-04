@@ -478,7 +478,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 | `placement` | 放置成员/领域成员显式指定（第三阶段的主力，约 5.6 万个声明） |
 | `fingerprint`、`callgraph-witnessed`、`callgraph-fingerprint`、`layout`、`file-local` | 与 2.1.88 源码匹配：字符串/属性名指纹、调用图传播、chunk 内布局插值、文件内二次匹配 |
 | `facade-exports`、`facade-majority` | 门面 chunk 推出（同一门面的导出属于同一文件）；早期还有 facade-new（旧版没有对应文件的门面模块，放进顶层 _new/），place-rest 后已全部改为 placement |
-| `sole-consumer`、`sole-consumer-new` | 一段未归属声明只被一个模块使用：紧挨该模块时并入它；不紧挨时作为它旁边的独立新模块（见 8.5） |
+| `sole-consumer` | 一段未归属声明只被一个模块使用：紧挨该模块时并入它；早期不紧挨时作为它旁边的独立新模块（sole-consumer-new，见 8.5，现已全部改为正式放置） |
 | `affinity`、`shared-adjacent` | 与已归属声明相邻且引用边指向同一文件 |
 | `cjs-*`、`esm-*`、`embedded-runtime`、`native-addon`、`resource-wrapper`、`helper:bun-runtime` | 第三方识别（vendor 成员） |
 | leftover | 仍未归属，按 chunk 连续段放进 _unattributed/（place-rest 后已不出现在统计中） |
@@ -507,7 +507,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 | 位置 | 含义 |
 |---|---|
 | 顶层 `_new/<导出名>`（已清空） | 门面 chunk 推出、2.1.88 没有对应文件的模块，起初按最大导出名放在顶层 `_new/`（例如早期的 _new/applyCoordinatorToolFilter.ts，其中的 `mergeAndFilterTools` 现在在 `reconstructed/src/utils/toolPool.js`）；第三阶段放置后 197 个全部给出正式路径，顶层 `_new/` 已不存在。手册里若还写着这类路径，用声明 id 查当前位置 |
-| `<目录>/_new/<名>.js`、`<目录>/_new/<文件>.helpers-<chunk 前 4 位>.js` | `sole-consumer-new`（写作时 `_new/` 子目录下 146 个文件，其中 23 个 helpers 文件；第四阶段命名后几乎都已按主声明改名并入正式路径，现在只剩 `reconstructed/src/cli/print/_new/elicitationRegistrar.helpers-tyg7.js` 一个 helpers 文件；另有若干 `_new/*.lazy.js` 是动态加载单元，不是这类模块）：只被同目录某个模块使用、但在 chunk 里不与它相邻的一段代码，独立成新模块放在使用者旁边；没有好名字时命名为 `<使用者>.helpers-<chunk 标记>`（例如早期只给 `entrypoints/init.js` 用的 init helpers 文件，其中的 `installTelemetryMeter` 现在就在 `reconstructed/src/entrypoints/init.js`） |
+| `<目录>/_new/<名>.js`、`<目录>/_new/<文件>.helpers-<chunk 前 4 位>.js`（已清空） | 早期的 sole-consumer-new 放置：只被同目录某个模块使用、但在 chunk 里不与它相邻的一段代码，独立成新模块放在使用者旁边，没有好名字时命名为 `<使用者>.helpers-<chunk 标记>`。写作时 `_new/` 子目录下有 146 个文件；第四阶段命名后都已按主声明改名，最后一个（`elicitationRegistrar` 的 helpers）在收尾时并入 `reconstructed/src/cli/print/elicitationRegistrar.js`；动态加载的再导出单元（`*.lazy.js`）也不再放进 `_new/`，而是放在它们指向的模块旁边。现在阅读树里没有任何 `_new/`、`_unattributed/` 目录（流水线 `no-scratch-dirs` 一步检查）。例如早期只给 `entrypoints/init.js` 用的 init helpers 文件，其中的 `installTelemetryMeter` 现在就在 `reconstructed/src/entrypoints/init.js` |
 | `_unattributed/<chunk>/part-NNN.js`（已清空） | 未归属代码按 chunk 内连续段切开的临时位置；place-rest 放置后已全部落位，当前阅读树没有这个目录 |
 | `_misplaced/<原路径>`（已清空） | fixer 确认归错、但当时去处不明的声明（`docs/process/fixer.md` 第 7 节），place-rest 已给出去处 |
 | `reconstructed/vendor/<包>/<文件>` | 第三方，按 npm 包内路径还原；`private-unresolved/` 是私有/未识别包 |
