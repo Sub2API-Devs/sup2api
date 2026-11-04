@@ -18,7 +18,8 @@ import (
 type fakeLimiter struct {
 	mu         sync.Mutex
 	exhausted  map[int64]bool
-	hits       []string // "<id>:<model>"
+	refused    map[int64]bool // Reserve refuses them though Exhausted passed them
+	hits       []string       // "<id>:<model>"
 	tokens     map[int64]int64
 	listTokens map[string]int64 // "<id>:<list key>"
 	models     []string         // model of each Exhausted call
@@ -51,7 +52,7 @@ func (l *fakeLimiter) TryHit(_ context.Context, ref core.AccountRef, model, sess
 	defer l.mu.Unlock()
 	l.hits = append(l.hits, itoa(ref.ID)+":"+model)
 	l.sessions = append(l.sessions, session)
-	return true, nil
+	return !l.refused[ref.ID], nil
 }
 
 func (l *fakeLimiter) ReleaseSession(_ context.Context, ref core.AccountRef, _ string, session string) {

@@ -51,7 +51,7 @@ func TestClearStickyBindings(t *testing.T) {
 	for i := range 200 {
 		require.NoError(t, rdb.Set(ctx, "sticky:r:7:m:"+itoa(int64(i)), "42", 0).Err())
 	}
-	require.NoError(t, rdb.Set(ctx, "sticky:r:7:m:policy", bindingValue(42), 0).Err())
+	require.NoError(t, rdb.Set(ctx, "sticky:r:7:m:policy", "v1:gen:42", 0).Err())
 	require.NoError(t, rdb.Set(ctx, "sticky:r:7:m:other", "43", 0).Err())
 	require.NoError(t, rdb.Set(ctx, "sticky:r:8:m:group", "42", 0).Err())
 	require.NoError(t, rdb.HSet(ctx, "sticky:stats:r", "hits", 1).Err())

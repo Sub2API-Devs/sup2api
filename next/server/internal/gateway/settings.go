@@ -56,7 +56,7 @@ type StickySettings struct {
 
 func defaultGatewaySettings() GatewaySettings {
 	return GatewaySettings{MaxAttempts: 3, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 300,
-		PlatformHotpathTimeoutMs: 300, QueueStickyMaxWaiting: 3, QueueStickyWaitSeconds: 120,
+		PlatformHotpathTimeoutMs: 300, QueueStickyMaxWaiting: 8, QueueStickyWaitSeconds: 120,
 		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30}
 }
 

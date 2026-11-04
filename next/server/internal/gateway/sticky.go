@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -318,7 +319,8 @@ type stickySession struct {
 	refused      bool  // a stick rule found the bound account without room
 	hit          bool  // the bound account served (or is serving) the request
 	keep         bool  // keep bindings of disabled accounts
-	policyValue  string
+	claimed      int64 // the account this request bound the session to
+	released     bool  // this request took the session off a failing account
 	initialBound int64
 }
 
@@ -344,17 +346,15 @@ func (c *call) resolveSticky(ctx context.Context) *stickySession {
 		ttl = c.stickyCfg.DefaultTTLSeconds
 	}
 	s := &stickySession{rule: r, key: key, ttl: time.Duration(ttl) * time.Second, keep: c.stickyCfg.KeepOnAccountDisabled}
-	if c.failurePolicy != nil {
-		c.failureState.stickyErr = c.readPolicyBinding(ctx, s)
-		return s
-	}
 	rctx, cancel := context.WithTimeout(ctx, stickyRedisTimeout)
 	raw, err := g.d.Redis.Get(rctx, s.key).Result()
 	cancel()
-	if err == nil {
-		s.bound, _ = strconv.ParseInt(raw, 10, 64)
-		s.policyValue = raw
+	switch {
+	case err == nil:
+		s.bound = bindingAccount(raw)
 		s.initialBound = s.bound
+	case !errors.Is(err, redis.Nil) && c.failurePolicy != nil:
+		c.failureState.stickyErr = err
 	}
 	return s
 }
@@ -455,18 +455,16 @@ func (c *call) dropBinding(ctx context.Context, s *stickySession) {
 	}
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stickyRedisTimeout)
 	defer cancel()
-	deleted, err := c.g.d.Redis.Eval(rctx, stickyDeleteIfValue, []string{s.key}, s.policyValue).Int()
-	if err != nil {
+	if _, err := c.g.d.Redis.Eval(rctx, stickyRelease, []string{s.key}, strconv.FormatInt(s.bound, 10)).Result(); err != nil {
 		slog.WarnContext(ctx, "gateway: drop sticky binding", "err", err)
-	}
-	if deleted == 1 {
-		s.policyValue = ""
 	}
 	s.bound = 0
 }
 
-// finishSticky updates hit/miss/rebind counters and writes or refreshes
-// the binding after a successful request.
+// finishSticky updates hit/miss/rebind counters, renews the binding of a
+// request its account served, and gives back a binding this request made for
+// an account that did not serve it. A request served elsewhere (it overflowed)
+// leaves the binding alone.
 func (c *call) finishSticky(ctx context.Context, accountID int64, success bool) {
 	s := c.sticky
 	if s == nil || c.g.d.Redis == nil {
@@ -476,6 +474,11 @@ func (c *call) finishSticky(ctx context.Context, accountID int64, success bool) 
 	c.rec.StickyHit = s.hit
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 500*time.Millisecond)
 	defer cancel()
+	if !success && s.claimed != 0 && ctx.Err() == nil {
+		if err := c.releaseBinding(rctx, s.claimed); err != nil {
+			slog.WarnContext(ctx, "gateway: release sticky binding", "err", err)
+		}
+	}
 	pipe := c.g.d.Redis.Pipeline()
 	stats := stickyStatsKey(s.rule.Name)
 	if s.hit {
@@ -483,19 +486,10 @@ func (c *call) finishSticky(ctx context.Context, accountID int64, success bool) 
 	} else {
 		pipe.HIncrBy(rctx, stats, "misses", 1)
 	}
-	if success && accountID > 0 {
-		previous := s.bound
-		if c.failurePolicy != nil {
-			previous = s.initialBound
-		}
-		if c.failurePolicy == nil {
-			pipe.Eval(rctx, `if (redis.call('GET',KEYS[1]) or '') ~= ARGV[1] then return 0 end redis.call('SET',KEYS[1],ARGV[2],'PX',ARGV[3]) return 1`, []string{s.key}, s.policyValue, strconv.FormatInt(accountID, 10), s.ttl.Milliseconds())
-		} else if !c.failureState.preserveSticky {
-			if err := c.writePolicyBinding(rctx, s, accountID); err != nil {
-				slog.InfoContext(ctx, "gateway: sticky success not written", "request_id", c.rid, "err", err)
-			}
-		}
-		if previous != 0 && previous != accountID && !c.failureState.preserveSticky {
+	if success && accountID > 0 && accountID == s.bound {
+		pipe.PExpire(rctx, s.key, s.ttl)
+		// A dropped binding (its account is gone) makes a new binding, not a rebind.
+		if s.initialBound != 0 && s.initialBound != accountID && (s.released || c.failurePolicy != nil) {
 			pipe.HIncrBy(rctx, stats, "rebinds", 1)
 		}
 	}

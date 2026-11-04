@@ -173,9 +173,14 @@ func TestStickyKeepOnAccountDisabled(t *testing.T) {
 	e.accounts.AutoDisable(context.Background(), 1, "admin")
 	e.messages(sess)
 	e.record()
-	// Served by another account, which now owns the binding (rebind).
-	if st := e.stickyStats("claude-code-session"); st["rebinds"] != "1" {
-		t.Fatalf("rebinds %v", st)
+	// Served by another account; the session keeps its binding and goes back
+	// when the account does.
+	if k := e.up.last().key; k == "acc-1" {
+		t.Fatalf("served by the disabled account")
+	}
+	key := stickyKey(e.gw.rules.override[0], testGroup, testModel, "keep-session")
+	if v, _ := e.mr.Get(key); v != "1" {
+		t.Fatalf("binding %q", v)
 	}
 }
 

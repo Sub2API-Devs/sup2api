@@ -120,6 +120,9 @@ func (c *call) dispatch(ctx context.Context) {
 			if !admitted {
 				release()
 				excluded[ref.ID] = true
+				if c.sticky != nil {
+					c.sticky.hit = false
+				}
 				last = fromCore(core.ErrRateLimited.WithMessage("all accounts are busy or rate limited, please retry later"), errTypeNoAccount)
 				continue
 			}
@@ -179,6 +182,9 @@ func (c *call) dispatch(ctx context.Context) {
 				c.fail(last)
 				c.finishSticky(ctx, ref.ID, false)
 				return
+			}
+			if err := c.releaseBinding(ctx, ref.ID); err != nil {
+				slog.WarnContext(ctx, "gateway: release sticky binding", "err", err)
 			}
 			c.releaseSession(ctx, ref)
 		}
@@ -286,18 +292,62 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 		weightedOrder(pool[i:j], c.g.randFloat)
 		i = j
 	}
+	queued := c.queuedAccounts(ctx, pool)
 	for i := range pool {
 		ref := pool[i]
+		if queued[ref.ID] {
+			continue
+		}
 		if release, ok := c.acquireAccount(ctx, &ref); ok {
-			return &ref, release, false
+			return c.finishPick(ctx, &ref, release, cands, excluded)
 		}
 	}
 	if ref := c.queueTarget(ctx, pool, reserve); ref != nil {
 		if release, ok := c.waitForAccount(ctx, ref, c.gw.QueueFallbackMaxWaiting, c.gw.queueFallbackWait()); ok {
-			return ref, release, false
+			return c.finishPick(ctx, ref, release, cands, excluded)
 		}
 	}
 	return nil, nil, true
+}
+
+// finishPick settles an account picked outside the binding: a session without
+// one is bound to it now, and when a concurrent request of the session got
+// there first this one follows that request instead.
+func (c *call) finishPick(ctx context.Context, ref *core.AccountRef, release func(), cands []core.AccountRef, excluded map[int64]bool) (*core.AccountRef, func(), bool) {
+	if s := c.sticky; s != nil {
+		if winner := c.claimBinding(ctx, ref.ID); winner != 0 && winner != ref.ID {
+			release()
+			s.bound, s.tried = winner, false
+			return c.pick(ctx, cands, excluded)
+		}
+	}
+	return ref, release, false
+}
+
+// queuedAccounts are the accounts a new session must not be bound to because
+// requests are queueing for them: it would only add to their queue while other
+// accounts are free. Every account being queued for still takes it in
+// queueTarget.
+func (c *call) queuedAccounts(ctx context.Context, pool []core.AccountRef) map[int64]bool {
+	if s := c.sticky; s == nil || s.bound != 0 || !c.queueable() {
+		return nil
+	}
+	ids := make([]int64, len(pool))
+	for i := range pool {
+		ids[i] = pool[i].ID
+	}
+	waiting, err := c.g.d.Slots.InUseMany(ctx, core.AccountWaitSlots, ids)
+	if err != nil {
+		slog.WarnContext(ctx, "gateway: read account queues", "err", err)
+		return nil
+	}
+	queued := map[int64]bool{}
+	for id, n := range waiting {
+		if n > 0 {
+			queued[id] = true
+		}
+	}
+	return queued
 }
 
 // tryStickyBinding honours this request's sticky binding once. ok reports
@@ -335,10 +385,13 @@ func (c *call) tryStickyBinding(ctx context.Context, cands []core.AccountRef, ex
 		}
 		return nil, nil, true
 	}
-	if cooling, err := c.g.d.Accounts.IsCoolingDown(ctx, s.bound); c.failurePolicy == nil && err == nil && !cooling {
+	if cooling, err := c.g.d.Accounts.IsCoolingDown(ctx, s.bound); err == nil && !cooling {
 		// Not in the group's schedulable set for this request and
 		// not merely cooling down: disabled, deleted, unschedulable,
-		// moved, or of a type that cannot serve this endpoint.
+		// moved, out of quota, or of a type that cannot serve this
+		// endpoint. The next account takes the session; only the binding
+		// keeps its requests from scattering, and a request that overflows
+		// does not move it.
 		c.dropBinding(ctx, s)
 	}
 	return nil, nil, true
@@ -998,7 +1051,7 @@ func (c *call) pluginAutoDisable(ctx context.Context, id int64, st *pluginv1.Acc
 	if s := c.sticky; disabled && s != nil && s.bound == id {
 		if c.failurePolicy != nil {
 			if !s.keep {
-				c.failureState.stickyErr = c.writePolicyBinding(ctx, s, 0)
+				c.failureState.stickyErr = c.releaseBinding(ctx, id)
 			}
 		} else {
 			c.dropBinding(ctx, s)

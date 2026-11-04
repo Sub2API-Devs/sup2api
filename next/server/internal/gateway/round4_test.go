@@ -368,7 +368,7 @@ func TestGatewaySettingsAPI(t *testing.T) {
 		t.Fatalf("put: %d %s", code, res.Raw)
 	}
 	if store.v == nil || *store.v != (GatewaySettings{MaxAttempts: 5, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 800,
-		PlatformHotpathTimeoutMs: 300, QueueStickyMaxWaiting: 3, QueueStickyWaitSeconds: 120,
+		PlatformHotpathTimeoutMs: 300, QueueStickyMaxWaiting: 8, QueueStickyWaitSeconds: 120,
 		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30}) || store.by != 7 {
 		t.Fatalf("stored %+v by %d", store.v, store.by)
 	}

@@ -229,21 +229,37 @@ func TestFailurePolicyStickyResetAndPreserve(t *testing.T) {
 	}
 }
 
-func TestFailurePolicyStickyCAS(t *testing.T) {
+// A session has one account: the first claim wins and later ones learn it, and
+// a release only takes the session off the account it names.
+func TestStickyClaimAndRelease(t *testing.T) {
 	e := newEnv(t)
-	p := testFailurePolicy()
-	c := &call{g: e.gw, failurePolicy: &p}
-	first := &stickySession{key: "policy-cas", ttl: time.Hour}
-	require.NoError(t, c.readPolicyBinding(t.Context(), first))
-	late := *first
-	c.sticky = first
-	require.NoError(t, c.resetPolicyBinding(t.Context()))
-	require.NoError(t, c.writePolicyBinding(t.Context(), first, 2))
-	require.Error(t, c.writePolicyBinding(t.Context(), &late, 1))
-	raw, _ := e.rdb.Get(t.Context(), first.key).Result()
+	session := func() *call {
+		return &call{g: e.gw, sticky: &stickySession{key: "claim", ttl: time.Hour}}
+	}
+	first, second := session(), session()
+	require.Equal(t, int64(1), first.claimBinding(t.Context(), 1))
+	require.Equal(t, int64(1), first.sticky.bound)
+	require.Equal(t, int64(1), second.claimBinding(t.Context(), 2), "a concurrent request follows the first")
+	require.Equal(t, int64(0), second.sticky.bound)
+
+	// Two requests of the session fail on account 1 at once: both move on.
+	require.NoError(t, first.releaseBinding(t.Context(), 1))
+	require.Equal(t, int64(0), first.sticky.bound)
+	require.Equal(t, int64(2), first.claimBinding(t.Context(), 2))
+	second.sticky.bound = 1
+	require.NoError(t, second.releaseBinding(t.Context(), 1), "losing the race is no failure")
+	require.Equal(t, int64(2), second.sticky.bound, "the later request follows the new binding")
+	require.False(t, second.sticky.tried)
+
+	raw, _ := e.rdb.Get(t.Context(), "claim").Result()
 	require.Equal(t, int64(2), bindingAccount(raw))
-	e.mr.FastForward(2 * time.Hour)
-	require.Error(t, c.writePolicyBinding(t.Context(), first, 1), "expired generation must not resurrect")
+
+	// A binding written by an older node is understood.
+	require.NoError(t, e.rdb.Set(t.Context(), "claim", "v1:gen:7", time.Hour).Err())
+	require.Equal(t, int64(7), session().claimBinding(t.Context(), 3))
+	old := session()
+	require.NoError(t, old.releaseBinding(t.Context(), 7))
+	require.Equal(t, int64(3), old.claimBinding(t.Context(), 3))
 }
 
 func TestFailurePolicyEgressConstraint(t *testing.T) {
@@ -436,13 +452,8 @@ func TestFailurePolicyCannotRelaxEgressInLaterRules(t *testing.T) {
 
 func TestFailurePolicyOldRequestCannotOverwriteNewBinding(t *testing.T) {
 	e := newEnv(t)
-	old := &stickySession{rule: &stickyRule{Name: "test"}, key: "policy-old", ttl: time.Hour, policyValue: "1", bound: 1}
-	require.NoError(t, e.rdb.Set(t.Context(), old.key, "1", time.Hour).Err())
-	p := testFailurePolicy()
-	newCall := &call{g: e.gw, failurePolicy: &p}
-	newBinding := &stickySession{key: old.key, ttl: time.Hour}
-	require.NoError(t, newCall.readPolicyBinding(t.Context(), newBinding))
-	require.NoError(t, newCall.writePolicyBinding(t.Context(), newBinding, 2))
+	old := &stickySession{rule: &stickyRule{Name: "test"}, key: "policy-old", ttl: time.Hour, bound: 1}
+	require.NoError(t, e.rdb.Set(t.Context(), old.key, "2", time.Hour).Err())
 	oldCall := &call{g: e.gw, sticky: old, rec: &core.UsageRecord{}}
 	oldCall.finishSticky(t.Context(), 1, true)
 	oldCall.dropBinding(t.Context(), old)

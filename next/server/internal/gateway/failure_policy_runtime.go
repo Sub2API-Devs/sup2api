@@ -112,7 +112,7 @@ func (c *call) decideFailure(ctx context.Context, accountID int64, f FailureFact
 		if disabled {
 			s.accountResult = "disabled"
 			if c.sticky != nil && !c.sticky.keep && c.sticky.bound == accountID && c.nextFailureAction(accountID) != failureSwitch {
-				s.stickyErr = c.writePolicyBinding(ctx, c.sticky, 0)
+				s.stickyErr = c.releaseBinding(ctx, accountID)
 			}
 		} else {
 			s.accountResult = "not_allowed"
@@ -337,7 +337,10 @@ func (c *call) prepareRetry(ctx context.Context, ref *core.AccountRef, action st
 		return ""
 	}
 	if action == failureReset {
-		if err := c.resetPolicyBinding(ctx); err != nil {
+		if s.stickyErr != nil {
+			return "sticky_reset_failed"
+		}
+		if err := c.releaseBinding(ctx, ref.ID); err != nil {
 			return "sticky_reset_failed"
 		}
 		c.releaseSession(ctx, ref)
