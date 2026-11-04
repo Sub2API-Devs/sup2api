@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -23,6 +24,8 @@ type fakeLimiter struct {
 	models     []string         // model of each Exhausted call
 	sessions   []string         // session of each Exhausted and TryHit call
 	released   []string         // "<id>:<session>" of each ReleaseSession call
+	reserved   []int64          // tokens of each Reserve call
+	settled    []string         // "<id>:<actual>" of each Settle call
 }
 
 func newFakeLimiter() *fakeLimiter {
@@ -55,6 +58,32 @@ func (l *fakeLimiter) ReleaseSession(_ context.Context, ref core.AccountRef, _ s
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.released = append(l.released, itoa(ref.ID)+":"+session)
+}
+
+func (l *fakeLimiter) Reserve(ctx context.Context, ref core.AccountRef, model, session string, tokens int64) (core.RateHold, bool, error) {
+	ok, err := l.TryHit(ctx, ref, model, session)
+	l.mu.Lock()
+	l.reserved = append(l.reserved, tokens)
+	l.mu.Unlock()
+	hold := core.RateHold{Subject: ref.ID, Items: []core.RateHoldItem{{}}}
+	if ml := ref.ModelLimitFor(model); ml != nil {
+		hold.Items = append(hold.Items, core.RateHoldItem{Sub: ml.Key()})
+	}
+	return hold, ok, err
+}
+
+func (l *fakeLimiter) Settle(ctx context.Context, hold core.RateHold, actual int64) {
+	l.mu.Lock()
+	l.settled = append(l.settled, fmt.Sprintf("%d:%d", hold.Subject, actual))
+	l.mu.Unlock()
+	if actual <= 0 {
+		return
+	}
+	list := ""
+	if len(hold.Items) > 1 {
+		list = hold.Items[1].Sub
+	}
+	l.AddTokens(ctx, hold.Subject, list, actual)
 }
 
 func (l *fakeLimiter) AddTokens(_ context.Context, id int64, list string, n int64) {
@@ -143,8 +172,8 @@ func TestRateLimitedAccountsAreSkipped(t *testing.T) {
 	if len(lim.hits) != 1 || lim.hits[0] != "2:"+testModel {
 		t.Fatalf("hits %v", lim.hits)
 	}
-	if lim.tokens[2] != rec.Tokens.Total() || rec.Tokens.Total() == 0 {
-		t.Fatalf("tokens counted %d, record %d", lim.tokens[2], rec.Tokens.Total())
+	if n := rec.Tokens.Throughput(rec.UsageSemantics); lim.tokens[2] != n || n == 0 {
+		t.Fatalf("tokens counted %d, record %d", lim.tokens[2], n)
 	}
 	// Account 3 has no limits, so it was not asked about.
 	if len(lim.models) != 1 || lim.models[0] != testModel {
@@ -197,8 +226,8 @@ func TestModelLimitsSlotsAndTokens(t *testing.T) {
 	if n, _ := e.slots.InUse(context.Background(), kind, 1); n != 0 {
 		t.Fatal("model list slot not released", n)
 	}
-	if lim.listTokens["1:"+list.Key()] != rec.Tokens.Total() || lim.tokens[1] != rec.Tokens.Total() {
-		t.Fatalf("tokens account %d list %v, record %d", lim.tokens[1], lim.listTokens, rec.Tokens.Total())
+	if n := rec.Tokens.Throughput(rec.UsageSemantics); lim.listTokens["1:"+list.Key()] != n || lim.tokens[1] != n {
+		t.Fatalf("tokens account %d list %v, record %d", lim.tokens[1], lim.listTokens, n)
 	}
 	if lim.hits[len(lim.hits)-1] != "1:"+testModel {
 		t.Fatalf("hits %v", lim.hits)

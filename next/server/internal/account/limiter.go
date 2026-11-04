@@ -47,6 +47,15 @@ func (l *Limiter) TryHit(ctx context.Context, ref core.AccountRef, model, sessio
 	return ok, err
 }
 
+func (l *Limiter) Reserve(ctx context.Context, ref core.AccountRef, model, session string, tokens int64) (core.RateHold, bool, error) {
+	hold, ok, _, err := l.w.ReserveAll(ctx, limitsOf(ref, model), session, tokens)
+	return hold, ok, err
+}
+
+func (l *Limiter) Settle(ctx context.Context, hold core.RateHold, actual int64) {
+	l.w.Settle(ctx, hold, actual)
+}
+
 func (l *Limiter) ReleaseSession(ctx context.Context, ref core.AccountRef, model, session string) {
 	l.w.ReleaseSession(ctx, limitsOf(ref, model), session)
 }

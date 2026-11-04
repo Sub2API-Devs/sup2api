@@ -71,7 +71,7 @@ func (g *Gateway) serveResourceHTTP(c *gin.Context) bool {
 		return true
 	}
 	x.owner = core.ResourceOwner{UserID: p.UserID, GroupID: p.Group.ID}
-	ctx, releaseKey, e := g.admitKey(c.Request.Context(), p, x.rid)
+	ctx, releaseKey, _, e := g.admitKey(c.Request.Context(), p, x.rid, 0)
 	if e != nil {
 		writeError(c, "anthropic", e)
 		return true

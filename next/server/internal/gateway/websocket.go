@@ -348,14 +348,20 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 	p := cl.principal
 	// Each turn is one request of the API key (CONTRACTS §60), capped
 	// before the hooks run, as on HTTP.
-	_, releaseKey, ke := s.g.admitKey(ctx, p, cl.rid)
+	tokens := int64(0)
+	if p.KeyLimits.TPM > 0 {
+		tokens = cl.rateTokens(ctx)
+	}
+	_, releaseKey, keyHold, ke := s.g.admitKey(ctx, p, cl.rid, tokens)
 	if ke != nil {
 		return reject(cl, ke)
 	}
+	cl.keyHold = keyHold
 	var releaseAccount func()
 	handedOff := false
 	defer func() {
 		if !handedOff {
+			cl.releaseHolds(ctx)
 			if releaseAccount != nil {
 				releaseAccount()
 			}
@@ -816,6 +822,12 @@ func (s *wsSession) finish(ctx context.Context, t *wsTurn, out wsOutcome) {
 	}
 	t.release()
 	cl.publishObservation(observation.AttemptFinished, rec, !out.ok && isLocalFailure(out.local, out.errType))
+	// Only a turn the client abandoned counts the prompt when no usage came
+	// back; an upstream failure consumed nothing we know of.
+	if out.errType != errTypeClientCanceled {
+		cl.rateEstimate.prompt = 0
+	}
+	defer cl.releaseHolds(ctx)
 	if id := s.ref; id != nil {
 		cl.countTokens(ctx, id.ID)
 		if rec.Success {

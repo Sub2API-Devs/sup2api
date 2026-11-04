@@ -498,7 +498,18 @@ type EventPublisher interface {
 // RawJSON is a helper alias for pre-encoded payloads.
 type RawJSON = json.RawMessage
 
-// Total is the number of tokens processed (all kinds), used by rate limits.
+// Total is the number of tokens processed (all kinds).
 func (t UsageTokens) Total() int64 {
 	return t.Input + t.Output + t.CacheRead + t.CacheCreation + t.CacheCreation1h
+}
+
+// Throughput is what rate limits count: the input outside any cache plus the
+// output (CONTRACTS §18.1). Under "inclusive" semantics Input also holds the
+// cache tokens.
+func (t UsageTokens) Throughput(semantics string) int64 {
+	input := t.Input
+	if semantics == "inclusive" {
+		input = max(input-t.CacheRead-t.CacheCreation-t.CacheCreation1h, 0)
+	}
+	return input + t.Output
 }

@@ -130,6 +130,9 @@ func (c *call) dispatch(ctx context.Context) {
 		res = c.planFailure(ctx, ref, res, attempts, excluded)
 		c.observeAttemptResult(ref, res)
 		lastAccount = ref.ID
+		if res.kind != attemptDone {
+			c.releaseAccountHold(ctx)
+		}
 		switch res.kind {
 		case attemptDone:
 			// An endpoint whose usage a plugin reports does not know its
@@ -400,14 +403,17 @@ func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func()
 }
 
 // admitRate asks the limiter to admit one request of the call's model and
-// session on ref and remembers the model list its tokens are counted in.
+// session on ref, reserving its estimated tokens where a TPM cap applies, and
+// keeps the hold its tokens settle against.
 func (c *call) admitRate(ref *core.AccountRef) (bool, error) {
-	ok, err := c.g.d.Limiter.TryHit(c.slotCtx, *ref, c.model, c.session)
+	c.releaseAccountHold(c.slotCtx)
+	tokens := int64(0)
+	if l := ref.ModelLimitFor(c.model); ref.TPMLimit > 0 || (l != nil && l.TPMLimit > 0) {
+		tokens = c.rateTokens(c.slotCtx)
+	}
+	hold, ok, err := c.g.d.Limiter.Reserve(c.slotCtx, *ref, c.model, c.session, tokens)
 	if ok && err == nil {
-		c.rateList.id, c.rateList.key = ref.ID, ""
-		if l := ref.ModelLimitFor(c.model); l != nil {
-			c.rateList.key = l.Key()
-		}
+		c.accountHold = &hold
 	}
 	return ok, err
 }

@@ -268,8 +268,8 @@
 | `hook:stats:{plugin}:{hook}` | HASH 调用/拒绝/超时/错误计数与延迟桶，TTL 7d | G |
 | `hook:statidx:{plugin}` | SET 该插件出现过的钩子 id，TTL 7d | G |
 | `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}` | STRING 插件当日入账/扣款累计，TTL 48h | C2 |
-| `rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}` | STRING 账号分钟窗口请求数 / token 数，TTL 2m（§18） | A |
-| `rl:account:{id}:m:{key}:rpm:{minute}`、`rl:account:{id}:m:{key}:tpm:{minute}` | STRING 账号某个模型列表的分钟窗口计数，TTL 2m（§68） | A |
+| `rl:account:{id}:rpm`、`rl:account:{id}:tpm` | ZSET 账号近 60 秒的请求和 token 事件，TTL 2m（§18、§68.3） | A |
+| `rl:account:{id}:m:{key}:rpm`、`rl:account:{id}:m:{key}:tpm` | ZSET 账号某个模型列表近 60 秒的请求和 token 事件，TTL 2m（§68.3） | A |
 | `rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm` | ZSET 账号 / 模型列表近 60 秒活跃的会话（member = 粘性会话键，没有粘性键时为 `req:{请求 ID}`，score = Redis 毫秒时间），每次准入时修剪窗口外成员，TTL 2m（§71） | A |
 | `slot:account-model:{key}:{id}` | ZSET 账号某个模型列表的并发槽位，格式同 `slot:{kind}:{id}`（§68.2） | D |
 
@@ -843,9 +843,9 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 | `tpm_limit` | 0–10^12，默认 0 | 每分钟 token 数上限，0 = 不限 |
 | `rate_usage` | 只读：`{rpm, tpm, sessions, models}`（§68.4、§71.1） | 近 60 秒的用量，`rpm`、`tpm` 是估算值（§68.3）（列表与详情都有；Redis 不可用时都为 0） |
 
-- token 数口径：`input + output + cache_read + cache_creation + cache_creation_1h`（`core.UsageTokens.Total`），在上游响应结束、解析出用量后累加。`inclusive` 平台（OpenAI、Gemini）的 input 已含 cache_read，当前实现会重复计入，属于已知偏差（§78.4）。限流是"窗口内已用量达到上限就不再调度"，不预扣：用量计入前在途请求互相看不到，并发的大请求可以让窗口超出上限很多倍（§78.3）。
-- 计数仍存在按 Redis 时间 `floor(unix/60)` 划分的分钟窗口里；2026-10-30 起判断和展示都按"近 60 秒"估算（§68.3）。
-- 候选筛选只是预检查；拿到账号并发槽后必须调用 Redis Lua `TryHit`，在一次原子操作中检查并占用 RPM。共享时间取 Redis `TIME`，Redis 出错则拒绝这次准入。TPM/TPD 检查已记录用量，仍不做 token 预留。
+- token 数口径（2026-11-04 起，参照 new-api）：**非缓存输入 + 输出**（`core.UsageTokens.Throughput`），缓存读写都不计。`inclusive` 平台（OpenAI、Gemini）的 input 含缓存，先减去。设了 TPM 上限时，准入时按估算预占，响应结束后换成实际用量（§78.3）。
+- 判断和展示都按精确的近 60 秒（§68.3），时间取 Redis `TIME`。
+- 候选筛选只是预检查；拿到账号并发槽后必须调用 Redis Lua `TryHit`，在一次原子操作中检查并占用 RPM，同时预占 TPM（§78.3）。共享时间取 Redis `TIME`，Redis 出错则拒绝这次准入。
 - 达到任一上限的账号在本窗口内不再参与调度（和冷却一样从候选中剔除，不改状态、不发事件）。候选账号都因限流或并发满而不可用时，网关返回 429 `rate_limited`（message：`all accounts are busy or rate limited, please retry later`）；候选为空仍是 503 `no_available_account`。
 - 粘性会话绑定的账号达到限流上限时，视同"没有空闲并发槽位"：`on_failure=failover` 的规则改选别的账号并重新绑定，`stick` 的规则返回 429（当前实现没有做到 `stick` 的 429，§78.4）。
 
@@ -861,8 +861,8 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 - POST/PATCH `/accounts`：以上字段都可选；PATCH 时 `models`、`model_mapping` 整体替换。字段错误：`models[i]`（`invalid` / `duplicate` / `too_many`）、`model_mapping.<from>`（`invalid`）、`model_mapping`（`too_many`）、`weight`、`rpm_limit`、`tpm_limit`（`invalid`）。
 - GET `/accounts` 新增筛选 `?model=<完整模型 ID>`：只列出能服务该模型的账号（`models` 为空或包含它）。列表排序改为 `priority, weight DESC, id`。
 - POST `/accounts/:id/test {model?}`：模型先经该账号的 `model_mapping` 映射再交给插件。
-- Redis key（§7 补充）：`rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}`（TTL 2 分钟），STRING 计数，由 `account` 模块实现 `core.AccountLimiter`。
-- `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`；端口 `core.AccountLimiter` 包含 `Exhausted(ctx, refs, model, session)` 预检查、`TryHit(ctx, ref, model, session) (bool, error)` 原子准入、`ReleaseSession(ctx, ref, model, session)`、`AddTokens(ctx, id, list, n)` 与 `Usage(ctx, refs)`（§68.2、§71）。网关和托管任务轮询使用 `TryHit`。网关 `Deps.Limiter` 为 nil 时不限流。
+- Redis key（§7 补充）：`rl:account:{id}:rpm`、`rl:account:{id}:tpm`（ZSET，TTL 2 分钟，格式见 §68.3），由 `account` 模块实现 `core.AccountLimiter`。
+- `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`；端口 `core.AccountLimiter` 包含 `Exhausted(ctx, refs, model, session)` 预检查、`TryHit(ctx, ref, model, session) (bool, error)` 原子准入、`Reserve(ctx, ref, model, session, tokens) (RateHold, bool, error)` 准入并预占、`Settle(ctx, hold, actual)` 结算、`ReleaseSession(ctx, ref, model, session)`、`AddTokens(ctx, id, list, n)` 与 `Usage(ctx, refs)`（§68.2、§71、§78.3）。网关用 `Reserve`，托管任务轮询和资源下载用 `TryHit`。网关 `Deps.Limiter` 为 nil 时不限流。
 
 ### 18.4 控制台
 
@@ -4439,18 +4439,18 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - 迁移 0058：`api_keys.rpm_limit int`、`tpm_limit bigint`、`max_concurrency int`，都是 `NOT NULL DEFAULT 0`，0 = 不限。旧核心忽略这三列、不限速，所有节点升级后才生效。
 - `POST /me/api-keys` 与 `PATCH /me/api-keys/:id` 接受这三个字段（PATCH 未给的字段不变，给 0 清除），范围 0–1,000,000 / 0–10¹² / 0–100,000，越界为 `invalid_fields`。PATCH 的审计 `apikey.update` 的 `detail` 就是请求里给出的字段。
-- Key 视图返回这三个字段，以及 `live: {rpm, tpm, concurrency}`：近 60 秒请求数与 token 数的估算值（§68.3）、正在进行的请求数（跨节点）。计数读不到时省略 `live`，列表照常返回。
+- Key 视图返回这三个字段，以及 `live: {rpm, tpm, concurrency}`：近 60 秒的请求数与 token 数（§68.3，token 含在途请求的预占）、正在进行的请求数（跨节点）。计数读不到时省略 `live`，列表照常返回。
 
 ### 60.2 网关
 
-- 认证结果 `core.APIKeyPrincipal.KeyLimits` 携带这三个上限。HTTP、WebSocket 每一轮、资源请求都在请求钩子（§20，如内容审核）之前调用 `admitKey`（与 new-api 先限速后审核一致；只读本地的任务查询不调用），所以被钩子、计费或路由拒绝的请求也计入一次 RPM：先占 `apikey` 类并发槽（`core.KeySlots`，与账号的并发槽同一套 Valkey 有序集合，节点宕机由心跳回收），再在 `apikey` 作用域的分钟窗口里原子地检查并计入一次请求（`ratelimit.Minute.Admit`，Redis `TIME` 取窗口）。
-- 不设上限的 Key 也计数（槽与分钟窗口），供列表显示当前用量；Valkey 不可用时请求失败（503），与账号限速一致。
-- 超限返回 429（`rate_limited`，消息含 "API key"），并发超限 `Retry-After: 5`，RPM/TPM 超限 `Retry-After` 为估算值回落到上限以下所需的秒数（§68.3）；不会选账号、不会请求上游，用量记录的 `error_type` 为 `rate_limited`。
-- TPM 与账号 TPM（§18）相同：响应结束、知道 token 数后由 `countTokens` 同时计入账号与 Key 的窗口，同时进行的大请求可能超出，超出后请求被拒，直到近 60 秒估算值回落（§78.3）。
+- 认证结果 `core.APIKeyPrincipal.KeyLimits` 携带这三个上限。HTTP、WebSocket 每一轮、资源请求都在请求钩子（§20，如内容审核）之前调用 `admitKey`（与 new-api 先限速后审核一致；只读本地的任务查询不调用），所以被钩子、计费或路由拒绝的请求也计入一次 RPM：先占 `apikey` 类并发槽（`core.KeySlots`，与账号的并发槽同一套 Valkey 有序集合，节点宕机由心跳回收），再在 `apikey` 作用域的窗口里原子地检查并计入一次请求，设了 TPM 上限时同时预占 token（`ratelimit.Minute.Reserve`，§78.3，Redis `TIME` 取时间）。
+- 不设上限的 Key 也计数（槽与窗口），供列表显示当前用量；Valkey 不可用时请求失败（503），与账号限速一致。
+- 超限返回 429（`rate_limited`，消息含 "API key"），并发超限 `Retry-After: 5`，RPM/TPM 超限 `Retry-After` 为最早能放行的秒数（§68.3）；不会选账号、不会请求上游，用量记录的 `error_type` 为 `rate_limited`。
+- TPM 与账号 TPM（§18）相同：准入时预占，响应结束、知道 token 数后由 `countTokens` 同时结算账号与 Key 的预占（§78.3）。
 
 ### 60.3 共享实现
 
-`internal/ratelimit.Minute` 是按作用域（`account`、`apikey`）的分钟窗口；`account.Limiter` 改为它的 `account` 作用域，Redis 键仍为 `rl:account:{id}:{rpm|tpm}:{分钟}`，滚动升级期间新旧节点共用同一计数。
+`internal/ratelimit.Minute` 是按作用域（`account`、`apikey`）的近 60 秒窗口；`account.Limiter` 是它的 `account` 作用域。Redis 键为 `rl:{作用域}:{id}:{rpm|tpm}`（§68.3）。2026-11-04 改键后，滚动升级期间新旧节点各计各的，这段时间和刚升级的 60 秒内限额偏松；回滚同理。
 
 ### 60.4 控制台
 
@@ -4728,7 +4728,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ## 68. 指定模型限速与近 60 秒窗口（2026-10-30，用户要求参照 new-api 渠道限速）
 
-用户要求：并发、RPM、TPM、优先级、权重，以及"指定模型列表单独限制并发 / RPM / TPM"都是**核心通用功能**，由核心调度；插件可以直接设置这些字段。参照 new-api 的渠道速率限制（`relaykit/dto/channel_settings.go` 的 `ModelRateLimit`、`model/channel_rate_limit.go`），但不照搬它的预占估算：TPM 仍在响应结束后按实际用量累加（§18.1）。new-api 没有按模型列表的并发，这里新增。
+用户要求：并发、RPM、TPM、优先级、权重，以及"指定模型列表单独限制并发 / RPM / TPM"都是**核心通用功能**，由核心调度；插件可以直接设置这些字段。参照 new-api 的渠道速率限制（`relaykit/dto/channel_settings.go` 的 `ModelRateLimit`、`model/channel_rate_limit.go`）。2026-11-04 起窗口和预占也参照它（§68.3、§78.3）。new-api 没有按模型列表的并发，这里新增。
 
 ### 68.1 账号字段 `model_limits`
 
@@ -4744,21 +4744,19 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 68.2 调度
 
 - **并发**：先占账号自身的槽位（`slot:account:{id}`），请求模型在某个列表里时再占列表的槽位（Slots kind `account-model:{key}`，id 为账号 id）。任何一个满了，这个账号本次就算忙，换下一个账号；两个槽位一起释放。列表上限为 0 时也占槽位，用来统计使用中的数量。
-- **RPM / TPM**：`AccountLimiter` 的参数从 session 改为请求模型。`Exhausted(ctx, refs, model)` 预检查，`TryHit(ctx, ref, model)` 在一个 Lua 脚本里同时检查账号和列表的上限，都没到才同时 +1，任何一个到了就都不计。`AddTokens(ctx, id, list, n)` 把 token 加到账号上，`list` 不为空时也加到该列表（网关记下最后一次准入的账号和列表）。托管任务轮询和资源下载不带模型，只计账号自身。
+- **RPM / TPM**：`AccountLimiter` 的参数从 session 改为请求模型。`Exhausted(ctx, refs, model)` 预检查，`TryHit(ctx, ref, model)` 在一个 Lua 脚本里同时检查账号和列表的上限，都没到才同时记一条事件，任何一个到了就都不记。结算时同时写账号和列表（网关持有最后一次准入的 `RateHold`，§78.3）。托管任务轮询和资源下载不带模型，只计账号自身。
 - 被列表上限挡住和被账号上限挡住的效果一样（§18.1）：从候选中跳过，不改状态、不发事件；都不可用时返回 429 `rate_limited`。
-- Redis key：`rl:account:{id}:m:{key}:rpm:{minute}`、`rl:account:{id}:m:{key}:tpm:{minute}`（TTL 2 分钟），与账号自身的 `rl:account:{id}:rpm:{minute}` 并列。
+- Redis key：`rl:account:{id}:m:{key}:rpm`、`rl:account:{id}:m:{key}:tpm`（ZSET，TTL 2 分钟），与账号自身的 `rl:account:{id}:rpm` 并列。
 
 ### 68.3 近 60 秒窗口（账号和 API Key 都适用）
 
-原来按固定分钟窗口判断：每到整分钟清零，表格里的 RPM 跟着跳回 0，分钟交界处最多能放过两倍的请求。现在仍按分钟存计数，但判断和展示都用"近 60 秒"的估算值：
+2026-11-04 起参照 new-api 改为逐条记录（`common/ratelua`）。此前按分钟桶估算，3 个请求可能显示成 1 个，真实 60 秒内可放行约 2 倍上限。
 
-`用量 = 本分钟计数 + 上一分钟计数 × (60 秒 − 本分钟已过时间) / 60 秒`
-
-- 假设上一分钟的请求在这一分钟内均匀分布（Cloudflare 的滑动窗口估算）。不需要为每个请求单独记一条，Redis 开销和原来一样：每个窗口多读一个 key。
-- 准入条件是 `用量 < 上限`。被拒时，`retry`（API Key 的 `Retry-After`）按估算值回落到上限以下所需的时间计算，最少 1 秒。
-- `rate_usage` 的 `rpm` / `tpm` 是这个估算值四舍五入后的结果。判断不四舍五入：显示 5/5 时实际可能是 4.6，请求仍会放行。
-- 这是估算，不是精确计数，流量不均匀时会偏。上一分钟末尾进来 3 个请求，到本分钟第 40 秒显示 `3 × 20/60 = 1`，实际近 60 秒仍是 3 个。
-- 估算缓解但没有消除分钟交界的突发。上一分钟末尾打满上限后，下一分钟里估算值随时间回落，还能陆续放行，真实 60 秒内最多约 2 倍上限。上限很小时更明显：`rpm_limit=1` 时，相隔不到 1 秒的两个请求可以分别落在两个窗口并都通过。长期平均不超过上限。
+- 每个请求是一条事件，写进 ZSET，score 为 Redis 时间（毫秒）：`rpm` 的成员是事件 ID，`tpm` 的成员是 `事件 ID|token 数`。读取和判断只看 score 在近 60 秒内的事件，写入时删掉更早的，key 的 TTL 是 2 分钟。
+- RPM 准入条件是 `已用 < 上限`，TPM 是 `已用 + 本次预占 <= 上限`，本次不预占时按 1 算。所以任意 60 秒内放行的请求数不超过 RPM 上限，分钟交界也没有突发。
+- 被拒时，`retry`（API Key 的 `Retry-After`）是腾出足够额度的那条事件离开窗口的时间，最少 1 秒。TPM 的这个时间不算在途请求结算后可能退回的部分。
+- `rate_usage` 的 `rpm`、`tpm` 是精确值，`tpm` 含在途请求的预占（§78.3）。
+- 开销随 60 秒内的请求数增长。一次脚本最多加总 10 万条 token 事件，超过时判为达到上限；读用量时每 50 组一个脚本，不让一个长脚本卡住 Redis。
 
 ### 68.4 用量 `rate_usage.models`
 
@@ -4845,7 +4843,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 71.3 调度
 
-- `Exhausted(ctx, refs, model, session)` 只读预判（一次 pipeline：各层 RPM/TPM 窗口 + `ZCOUNT` + 该会话的 `ZSCORE`），会拒绝该会话的账号不进候选池。粘性绑定的账号在 60 秒内持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。会话最后一次准入超过 60 秒后不再算持有（从准入算起，不是从请求结束算起：超过 60 秒的长流还没结束，会话就已不算持有）：该账号 SPM 已满时，`failover` 规则改绑到别的账号（提示缓存随之失效），`stick` 规则回 429；与 new-api 相同。WebSocket 连接首轮得到 `req:{首轮请求 ID}`（或粘性键），后续轮次沿用，一条连接算一个会话。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
+- `Exhausted(ctx, refs, model, session)` 只读预判（一次读脚本：各层 RPM/TPM 窗口 + `ZCOUNT` + 该会话的 `ZSCORE`），会拒绝该会话的账号不进候选池。粘性绑定的账号在 60 秒内持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。会话最后一次准入超过 60 秒后不再算持有（从准入算起，不是从请求结束算起：超过 60 秒的长流还没结束，会话就已不算持有）：该账号 SPM 已满时，`failover` 规则改绑到别的账号（提示缓存随之失效），`stick` 规则回 429；与 new-api 相同。WebSocket 连接首轮得到 `req:{首轮请求 ID}`（或粘性键），后续轮次沿用，一条连接算一个会话。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
 - Redis 出错：预判放行（与 RPM / TPM 预判一致）；原子准入出错时整次请求失败（`account limits unavailable`，与 §18.1 现行 RPM / TPM 一致，不是放行；WebSocket 和资源接口的响应不同，§78.4）。
 - **重试换号时会话跟着走**（2026-11-01）：失败策略换号并清除粘性绑定（`switch_reset`，Schema 3 起总是如此），或未发布失败策略时按插件分类切换账号，核心在换号前把本次会话从离开的账号各层 ZSET 里移除（`core.AccountLimiter.ReleaseSession`，尽力而为，`ZREM`；`gateway` `releaseSession`）。否则同一会话在 60 秒内同时占着两个账号的会话槽。已计的 RPM 不退。旧版失败策略的 `switch`（换号但保留绑定）不移除：会话仍绑定在原账号上。
 
@@ -6155,7 +6153,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - “定时任务”页全集群任务表：插件任务行有启用开关（`task:manage`）。插件详情“任务”页签显示范围、名称和“在定时任务中查看”链接。
 - River 新增队列 `plugin`（4 个 worker），插件任务的运行和核心任务分开，慢插件不挤占核心任务。
 
-## 78. 账号限额与并发的口径、取舍和已知偏差（2026-11-04，用户要求审核）
+## 78. 账号限额与并发的口径、预占和已知偏差（2026-11-04，用户要求审核，统计逻辑参照 new-api）
 
 本节汇总 §18、§60、§68、§71 在实现里的实际效果。用户看到账号并发 3、RPM 1，怀疑统计有误，审核后写下。78.4 的条目修复后从这里删除。
 
@@ -6164,15 +6162,15 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | 数字 | 什么时候变 | 含义 |
 |---|---|---|
 | 并发 `in_use` | 占槽时 +1，这次尝试结束时 -1（流式在最后一个字节写出之后） | 此刻占用的槽位数，集群实时。任务轮询和资源下载也占账号槽 |
-| RPM | 准入时计 1 次（`TryHit`），之后不再变 | 近 60 秒**准入尝试数**的估算值（§68.3）。不是客户端请求数，也不是成功数：换号和同账号重试每次都计，准入后的失败也不退 |
-| TPM | 响应结束后才计入 | 近 60 秒 token 的估算值。流进行中不计入，结束时全部落在结束所在的分钟，含缓存 |
+| RPM | 准入时记一条事件，之后不再变 | 近 60 秒**准入尝试数**，精确值。不是客户端请求数，也不是成功数：换号和同账号重试每次都计，准入后的失败也不退 |
+| TPM | 有上限时准入即预占，结束时换成实际值；没上限时结束才计入 | 近 60 秒的非缓存输入加输出，含在途请求的预占 |
 | 会话 | 准入时写入或刷新时间 | 近 60 秒**被准入过**的不同会话数，精确值。不是进行中的会话：超过 60 秒的单个流，并发是 1，会话是 0 |
 
 **并发和 RPM 没有固定比例。** 并发约等于“进入速率 × 请求时长”。每分钟进 1 个请求、每个流跑 3 分钟，稳定时就是并发 3、RPM 1，这不是统计错误。
 
 要判断并发是否真实，可以只读查 `slot:account:{id}`：成员 score 减 Redis 当前时间约等于 TTL（5 分钟）的是还在续期的租约，明显更小且持续下降的是没人续期的孤儿成员（78.4）。
 
-模型列表的数字按列表聚合，后台没有单个模型的统计。账号总量还包含不在列表里的模型和后台流量，各行分别四舍五入，同一会话键跨列表时各算 1 个，所以各列表之和不等于账号总量。列表按映射前的客户端模型精确匹配，把映射后的上游模型名放进列表，这一行永远是 0。
+模型列表的数字按列表聚合，后台没有单个模型的统计。账号总量还包含不在列表里的模型和后台流量，同一会话键跨列表时各算 1 个，所以各列表之和不等于账号总量。列表按映射前的客户端模型精确匹配，把映射后的上游模型名放进列表，这一行永远是 0。
 
 `GET /accounts/stats` 的 RPM / TPM 是另一套口径（§56 统计设置的窗口，只算成功请求），和限额列的数字不用比较。
 
@@ -6180,32 +6178,37 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 这些是有意的设计，不是 bug。是否调整由用户决定。
 
-- **TPM 不预占**（§18.1、§68）：用量计入前，在途请求互相看不到。用 miniredis 测试，上限 100k 时，50 个并发各 50k 全部放行，共 2.5M，是上限的 25 倍，之后账号被跳过约 2 分钟。new-api 是请求开始时原子预占、结束时结算，这里没有照搬。
-- **RPM 用估算不用逐条记录**（§68.3）：Redis 开销小，代价是显示值在流量不均匀时有偏差，真实 60 秒内可放行约 2 倍上限。
-- **TPM 含缓存读**（§18.1）：缓存命中多的账号数值会很高。new-api 的渠道 TPM 是非缓存输入加输出，缓存读写都不计（`model.ThroughputTokens`），这里不同。
 - **API Key 的 RPM 在钩子和余额检查之前计入，不回滚**（§60.2）：账号全忙返回 429 时，客户端重试仍消耗 Key 的 RPM。
-- **Redis 是请求路径的强依赖**（§60.2、§71.3）：准入失败时请求失败，没配上限的账号和 Key 也一样，因为计数和占槽都不跳过。
+- **Redis 是请求路径的强依赖**（§60.2、§71.3）：准入失败时请求失败，没配上限的账号和 Key 也一样，因为计数和占槽都不跳过。new-api 对没配上限的渠道不访问 Redis。
 - **账号路径的超限错误不区分原因，也没有 `Retry-After`**（§71.2）：并发、RPM、TPM、会话是同一条消息。
 - **账号用量读失败显示 0**（§18.1）：和真实的 0 无法区分。`outcomes` 这时是 `null`（§73），Key 的 `live` 这时被省略（§60.1），账号用量的做法和它们不一致。
 - **上游超时默认不限**（`core.EnvironmentVariables`）：响应头有默认值（流式 180 秒，非流式 600 秒）。之后整体超时和流式空闲超时未设置就不限，上游静默时槽一直被占用。
 
-### 78.3 用量计入前的超限幅度
+### 78.3 TPM 预占和结算
 
-§18.1 的“不预扣”在并发下没有上界：可超出的量约等于 `并发数 × 单次请求 token 数`，并不只是“略超”。超出后，估算值要等上一分钟的计数滚出窗口才回落，最长约 2 分钟，账号在这段时间内被跳过。API Key 的 TPM 同理。
+参照 new-api `ReserveChannelRate` / `SettleChannelRate`。
+
+- **何时预占**：账号、请求模型所在的列表或 API Key 设了 TPM 上限才估算和预占，没设的层不预占，结束时直接计入实际值。
+- **预占多少**：本地 tokenizer 算出的 prompt 加声明的最大输出（`max_tokens`、`max_completion_tokens`、`max_output_tokens`、`generationConfig.maxOutputTokens`），没声明时加 4000。数不出 prompt 时用请求体字节数除以 4。免费端点（如 `count_tokens`）不预占。每层最多预占到自己的上限，所以单个超大请求能在窗口全空时通过，不会永远被拒（new-api 会拒绝）。
+- **怎么结算**：`core.RateHold` 记着事件 ID 和各层预占量，结束时 `Settle` 把预占换成实际值，保持原来的时间。流式响应没有中途更新。
+- **长流**：预占已离开 60 秒窗口时，它已经算满了 60 秒，只把实际值超出预占的部分记到当前时间。new-api 这时不再计入，这里有意不同。
+- **失败和没有用量**：
+  - 这次尝试没成功（换号、上游错误、取消、拒绝）：预占退回，RPM 不退。
+  - 请求没成功且没有用量（流在用量事件前中断）：按估算的 prompt 计入，避免客户端提前断开来绕过 TPM。成功但没有用量（如 `count_tokens`）不计。
+  - 进程崩溃等没结算的情况：预占随时间离开窗口，最多占 60 秒。
+- **保守的一面**：prompt 估算不区分缓存，而实际 TPM 不计缓存。大量命中缓存的请求预占远高于实际值，在途时会占住额度，结束才退回。TPM 上限较小的账号，并发可能被这一点压低。
 
 ### 78.4 已知偏差（实现与本文不符或有缺陷，待修）
 
 | 问题 | 位置 | 效果 |
 |---|---|---|
 | `on_failure=stick` 的绑定账号限流或并发满时没有返回 429 | `gateway` `pick` 丢弃 `tryStickyBinding` 的 handled | 换号并改绑，与 §18.1、§71.3 不符，会话漂移。内置规则都是 `failover`，只影响管理员配置的 `stick` 规则 |
-| `inclusive` 平台的缓存读被重复计入 TPM | `core.UsageTokens.Total`，`gateway` `countTokens` | OpenAI、Gemini 的账号、模型列表和 Key 的 TPM 提前触顶，缓存占比高时接近 2 倍。计费用 `Normalize` 区分了语义，限流没有 |
 | 续期命令出错也当作失去成员 | `cluster` `Slots.refresh` | Redis 抖动一次，本节点在途请求被取消，而成员还有近 5 分钟有效期 |
 | 租约丢失被当成客户端取消 | `gateway` `attempt`、`forward` 只看 `ctx.Err()` | 不换号，记成 499 `client_canceled`。响应头之前丢失时，客户端收不到网关的错误响应；流中丢失时，客户端收到正常结束，看不出被截断。WebSocket 已正确处理（关闭码 1013） |
 | 释放槽位的 `ZREM` 失败后不重试 | `cluster` `Slots.Acquire` 返回的 release | 槽位要等 TTL 才空出，最多 5 分钟，这段时间账号可能显示满并发并被判忙 |
 | 写客户端没有超时 | `gateway` `forward` | 客户端不读数据时，槽位一直被占用，直到连接关闭 |
 | PG 卡住会拖累 Redis 心跳 | `cluster` registry，两者共用一个 5 秒 ctx | 单节点 PG 卡住 15 秒以上时被其他节点判死，它的槽位被回收，请求被取消 |
-| 流中断或没有用量时 TPM 少计，甚至计 0 | `gateway` `countTokens` 在 `n<=0` 时返回 | OpenAI Responses 的用量只在终止事件里，客户端提前断开可不计 TPM |
-| 会话时间只在准入时刷新 | `ratelimit` `admit` | 长流还没结束，会话就已不算持有。账号会话满时，同一会话的下一个请求可能被改绑（`failover`） |
+| 会话时间只在准入时刷新 | `ratelimit` `admit` | 长流还没结束，会话就已不算持有。账号会话满时，同一会话的下一个请求可能被改绑（`failover`）。new-api 也是这样 |
 | WebSocket 沿用连接建立时的账号和 Key 上限 | `gateway/websocket.go` | 管理员降低上限后，活跃连接仍按旧值放行 |
 | WebSocket 首轮换号不移除旧账号的会话 | `gateway/websocket.go` | 与 §71.3 不符，旧账号的会话数最多虚高 60 秒 |
 | 准入时 Redis 出错的响应不一致 | `gateway/websocket.go`、`gateway/resource_http.go` | HTTP 返回 503，WebSocket 和资源接口返回 429，与 §71.3 不符 |

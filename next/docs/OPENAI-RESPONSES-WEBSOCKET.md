@@ -49,7 +49,7 @@
    - **后续轮次**：沿用首轮的账号与上游连接；账号并发位或限额暂时不可用时等待最多 10 s，仍不可用则回 429 错误事件；账号已不能服务本轮模型时回错误事件；
    - 套用账号的模型映射，把消息原样（钩子改写后）发往上游；
    - 逐条转发上游事件，按 `usage.sse` 规则累计；遇到 `response.completed`、`response.incomplete`、`response.failed` 或 `error` 事件即结束本轮；
-   - 结束时释放 API Key 与账号并发位，计入账号 token 限额，写一条使用记录（`protocol=openai.responses_ws`、`stream=true`），由结算服务扣费。
+   - 结束时释放 API Key 与账号并发位，结算账号和 Key 的 token 预占（CONTRACTS §78.3），写一条使用记录（`protocol=openai.responses_ws`、`stream=true`），由结算服务扣费。
 4. **上游错误事件**：带 HTTP 状态的 `error` 事件（例如限流）交给插件 `ClassifyError`，冷却或禁用账号；本轮记为失败，连接保持，下一轮仍用该连接，由上游决定。
 5. **结束**：轮间空闲 300 s 以 1000 关闭；客户端断开时取消进行中的一轮并记为客户端取消；上游连接断开时以 1011 关闭客户端连接，客户端需重连（新连接重新选账号）。
 

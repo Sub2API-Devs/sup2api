@@ -123,12 +123,32 @@ type KeyUsageReporter interface {
 // KeySlots is the Slots kind of the API keys' requests in flight.
 const KeySlots = "apikey"
 
+// RateHold is one admitted request in the rate windows: what it reserved in
+// each set of counters of its subject, until Settle replaces that by what the
+// request really used. A hold never settled returns by itself when its
+// reservation leaves the 60 seconds.
+type RateHold struct {
+	ID      string
+	Subject int64
+	Items   []RateHoldItem
+}
+
+// RateHoldItem is what a hold reserved in the counters Sub ("" = the
+// subject's own).
+type RateHoldItem struct {
+	Sub    string
+	Tokens int64
+}
+
 // RateWindows counts requests and tokens of one kind of subject (API keys)
-// in shared minute windows. Admit counts one request when the subject is
-// under rpm and tpm (0 = unlimited), else returns the time until the next
-// window; AddTokens counts a finished response.
+// over the last 60 seconds, shared by every node. Admit counts one request
+// when the subject is under rpm and tpm (0 = unlimited), else returns the time
+// until it would pass; Reserve also reserves tokens until Settle; AddTokens
+// counts a finished response admitted without a reservation.
 type RateWindows interface {
 	Admit(ctx context.Context, id int64, rpm int, tpm int64) (ok bool, retry time.Duration, err error)
+	Reserve(ctx context.Context, id int64, rpm int, tpm, tokens int64) (hold RateHold, ok bool, retry time.Duration, err error)
+	Settle(ctx context.Context, hold RateHold, actual int64)
 	AddTokens(ctx context.Context, id, n int64)
 	Usage(ctx context.Context, ids []int64) (map[int64]RateUsage, error)
 }
@@ -275,10 +295,14 @@ type AccountLimiter interface {
 	// Accounts without limits are never listed.
 	Exhausted(ctx context.Context, refs []AccountRef, model, session string) (map[int64]bool, error)
 	// TryHit atomically checks the limits for model and session and counts an
-	// admitted request (and the session). Admission is atomic; SPM counts
-	// exactly, RPM uses the estimate of CONTRACTS §68.3;
-	// tokens are counted after responses finish.
+	// admitted request (and the session), without reserving tokens.
 	TryHit(ctx context.Context, ref AccountRef, model, session string) (bool, error)
+	// Reserve is TryHit that also reserves tokens against the TPM caps until
+	// Settle (CONTRACTS §78).
+	Reserve(ctx context.Context, ref AccountRef, model, session string, tokens int64) (RateHold, bool, error)
+	// Settle replaces what hold reserved by the tokens really used; 0 returns
+	// the reservation and the request stays counted.
+	Settle(ctx context.Context, hold RateHold, actual int64)
 	// ReleaseSession takes session off the account's (and its model list's)
 	// active sessions: a retry moved the session to another account, which
 	// now holds it alone. Best effort.

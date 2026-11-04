@@ -695,7 +695,7 @@ sequenceDiagram
   C->>GW: POST /v1/messages（x-api-key 或 Authorization）
   GW->>GW: API Key 鉴权 → 用户状态、gateway:use 权限 → 分组（可用性、模型白名单）
   GW->>GW: gjson 读取 model、stream
-  GW->>R: 获取 API Key 并发槽位，原子检查并计入 RPM（检查 TPM），超限返回 429
+  GW->>R: 获取 API Key 并发槽位，原子检查并计入 RPM，预占 TPM，超限返回 429
   GW->>H: OnGatewayRequest（meta + model + prompt_text）
   alt 拒绝
     H-->>GW: DENY 403
@@ -707,7 +707,7 @@ sequenceDiagram
   loop 失败切换（最多 3 次）
     GW->>R: 查粘性会话绑定（规则命中时）
     GW->>GW: 绑定的账号可用就直接用；否则选账号：分组内 · 平台插件已启用 · 启用 · 可调度 · 未冷却 · 未排除<br/>按 priority 排序，同优先级按 weight 加权随机<br/>未命中粘性时 priority/weight 可能先被插件改写，见 6.2
-    GW->>R: 获取账号并发槽位，原子检查并计入 RPM 和会话（TryHit），超限换下一个账号
+    GW->>R: 获取账号并发槽位，原子检查并计入 RPM 和会话，预占 TPM，超限换下一个账号
     GW->>P: BuildUpstreamRequest
     P-->>GW: url、headers、patches
     GW->>U: 发送请求（经账号代理）
@@ -739,7 +739,7 @@ sequenceDiagram
 - 候选账号 = API Key 所属分组的账号 ∩ 账号类型能服务该端点（原生或经转换）的账号 ∩ 状态正常 ∩ 参与调度 ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/spm 上限
 - 顺序：粘性绑定的账号优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机（不放回抽样）；逐个获取并发槽位，失败切换时跳过已试过的账号（CONTRACTS §18）。排序用的 `priority` / `weight` 可能已被插件为本次请求改写（见下）
 - **插件改写调度参数（可选扩展点，CONTRACTS §24）**：声明了 `scheduler.rank` 的插件可以为**一次请求**改写候选账号的 `priority` 和 `weight`，核心拿改写后的值跑上面这套算法。只对**未命中粘性绑定**的请求调用，每个请求一次（失败切换复用结果），多个插件按 `order` 串行、后者看到前者的结果；超时、出错或结果非法一律 fail open，退回账号自身的值。候选集的筛选、并发槽位、限流、冷却、端点与模型支持性仍全部由核心把关 —— **核心保留最终调度权**，插件只是临时改写账号本来就有的两个参数，不能凭空加账号，也不写库。本次实际发生的改写记入 `usage_logs.sched_decisions`（jsonb，迁移 0011，接口暂不暴露，CONTRACTS §24.5）
-- 限流：rpm/tpm 按分钟存计数，判断和展示都用近 60 秒估算值（CONTRACTS §68.3）；tpd 已移除；spm 是 60 秒滚动窗口内去重的会话数，精确值（会话 = 粘性会话键，无粘性规则时每请求一会话；窗口内已有的会话总是放行）。达到上限的账号在本窗口内不参与调度；全部不可用时返回 429 `rate_limited`
+- 限流：rpm/tpm 逐条记录，判断和展示都是精确的近 60 秒（CONTRACTS §68.3），tpm 设了上限时准入即预占（§78.3）；tpd 已移除；spm 是 60 秒滚动窗口内去重的会话数（会话 = 粘性会话键，无粘性规则时每请求一会话；窗口内已有的会话总是放行）。达到上限的账号在本窗口内不参与调度；全部不可用时返回 429 `rate_limited`
 - 模型映射：选定账号后，核心把请求里的模型（body `modelPath` / 路径参数 / `RequestMeta.model`）换成映射后的模型再交给插件，`usage_logs.upstream_model` 记录映射后的模型；计费、白名单、粘性、钩子都看客户端模型
 - 每个节点缓存分组内的账号快照，`account:changed` 广播时失效
 - 并发：账号槽位按 `accounts.max_concurrency`，API Key 槽位按 `api_keys.max_concurrency`（§60），都在 Redis 用 Lua 原子获取；不按用户限制并发（`users.max_concurrency` 列已废弃，保留只为滚动升级时旧核心可读）

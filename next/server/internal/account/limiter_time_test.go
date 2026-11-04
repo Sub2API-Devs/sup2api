@@ -2,7 +2,6 @@ package account
 
 import (
 	"context"
-	"strconv"
 	"testing"
 	"time"
 
@@ -27,16 +26,15 @@ func TestLimiterUsesRedisWindowForEveryOperation(t *testing.T) {
 	if ok, err := b.TryHit(ctx, ref, "second", ""); err != nil || ok {
 		t.Fatal("second node bypassed shared limit", ok, err)
 	}
-	// The keys are those of the releases before the shared ratelimit package.
-	if n, err := rdb.Get(ctx, "rl:account:7:rpm:"+strconv.FormatInt(stamp.Unix()/60, 10)).Int(); err != nil || n != 1 {
-		t.Fatal("RPM key used local time", n, err)
+	if at, err := rdb.ZRangeWithScores(ctx, ratelimit.Key("account", 7, "rpm"), 0, -1).Result(); err != nil || len(at) != 1 || int64(at[0].Score) != stamp.UnixMilli() {
+		t.Fatal("RPM event used local time", at, err)
 	}
 	if ok, err := a.TryHit(ctx, core.AccountRef{ID: 8}, "", ""); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
 	a.AddTokens(ctx, 8, "", 17)
-	if n, err := rdb.Get(ctx, ratelimit.Key("account", 8, "tpm", stamp)).Int(); err != nil || n != 17 {
-		t.Fatal("TPM key used local time", n, err)
+	if at, err := rdb.ZRangeWithScores(ctx, ratelimit.Key("account", 8, "tpm"), 0, -1).Result(); err != nil || len(at) != 1 || int64(at[0].Score) != stamp.UnixMilli() {
+		t.Fatal("TPM event used local time", at, err)
 	}
 	u, err := b.Usage(ctx, []core.AccountRef{{ID: 8}})
 	if err != nil || u[8].RPM != 1 || u[8].TPM != 17 {
