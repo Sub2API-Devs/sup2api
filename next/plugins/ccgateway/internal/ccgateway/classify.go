@@ -175,16 +175,16 @@ func classifyLocal(resp *pluginv1.ClassifyErrorResponse, headers map[string]stri
 // another account, the account stays usable for other models (model
 // availability holds that family back until the reset, availability.go); any
 // other limit, a scoped one without a reset time included, disables the
-// account until it resets. An answer whose usage headers show the 5h and 7d
-// windows have room is not a used-up account: a short cooldown at most.
+// account until it resets. An upstream answer that shows no used-up limit
+// (quotaExhausted) only gets a short cooldown.
 //
 // Only an upstream HTTP answer names a limit: the Worker marks it
 // (requestfailure.SourceHTTP) and never relays a provider's x-ccgateway-*
 // headers (httpfacts.Apply), so a provider cannot claim the source.
 func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.ClassifyErrorRequest, source string, now time.Time, cooldown func(time.Duration, string)) {
-	if source == requestfailure.SourceHTTP && in.GetAccount().GetType() == AccountTypeManaged && sharedWindowsHaveRoom(in.GetHeaders()) {
+	if source == requestfailure.SourceHTTP && in.GetAccount().GetType() == AccountTypeManaged && !quotaExhausted(in.GetHeaders()) {
 		until, _ := rateLimitReset(map[string]string{"retry-after": in.GetHeaders()["retry-after"]}, now)
-		cooldown(min(until.Sub(now), defaultRateLimitCooldown), "upstream 429 with room left in the 5h and 7d windows")
+		cooldown(min(until.Sub(now), defaultRateLimitCooldown), "upstream 429 without a used-up window")
 		return
 	}
 	if source == requestfailure.SourceHTTP {
@@ -204,22 +204,34 @@ func classifyRateLimit(resp *pluginv1.ClassifyErrorResponse, in *pluginv1.Classi
 	}
 }
 
-// sharedWindowsHaveRoom reports that a 429's own usage headers show the account
-// is not out of quota: both shared windows carry a utilization below 1, neither
-// is rejected, and the claim names no model-scoped window (those have no usage
-// header here). Anything less certain goes the usual way. A reset time on such
-// an answer is not how long the account is limited.
-func sharedWindowsHaveRoom(h map[string]string) bool {
-	if scopedQuota(quotaClaimKey(h[claimHeader])) {
-		return false
+// quotaExhausted reports whether a managed account's 429 means a limit is used
+// up. A shared window that is rejected or at 1 does, and so does a claim naming
+// a model-scoped window or a limit this plugin does not know. Both shared
+// windows showing room means it is not. Without that usage, a claim or a
+// Retry-After is taken at its word; a reset time alone is not: the long context
+// refusal has no window headers, no Retry-After, and only the billing period's
+// end in anthropic-ratelimit-unified-reset.
+func quotaExhausted(h map[string]string) bool {
+	claim := h[claimHeader]
+	key := quotaClaimKey(claim)
+	if scopedQuota(key) || claim != "" && key == "" {
+		return true
 	}
+	readable := 0
 	for _, prefix := range unifiedWindowHeader {
 		ratio, err := strconv.ParseFloat(h[prefix+"-utilization"], 64)
-		if err != nil || !validUsage(ratio) || ratio >= 1 || strings.EqualFold(h[prefix+"-status"], "rejected") {
-			return false
+		known := err == nil && validUsage(ratio)
+		if known && ratio >= 1 || strings.EqualFold(h[prefix+"-status"], "rejected") {
+			return true
+		}
+		if known {
+			readable++
 		}
 	}
-	return true
+	if readable == len(unifiedWindowHeader) {
+		return false
+	}
+	return claim != "" || h["retry-after"] != ""
 }
 
 // The failure markers as the host passes headers (lowercase).

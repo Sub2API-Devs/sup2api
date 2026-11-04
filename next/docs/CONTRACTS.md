@@ -4800,7 +4800,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 实现：`gateway/dispatch.go` 的 `pluginAutoDisable`、`applyPluginAccountState`；`core.AccountDirectory.AutoDisableUntil`（`account/directory.go`，走 `ApplyAccountAutomaticState`）。
 - CCGateway 已经这样分类 429（`classifyRateLimit`：托管账号禁用到 `anthropic-ratelimit-unified-reset` / `retry-after` 给出的时刻，没有时 60 秒），插件不用改；只要升级核心。
 - CCGateway 0.1.127 起（2026-11-04）：上游 429 的消息含 `Usage credits are required for long context` 时不算账号限流，不冷却、不禁用，也不看响应头里的重置时刻；没有故障策略时直接返回客户端。发布了故障策略时，是否换号仍由策略决定。
-- 同样从 CCGateway 0.1.127 起：托管账号的上游 429 只有额度真满才自动禁用。判断依据是这次响应自带的用量头：`5h`、`7d` 的 utilization 都小于 1、都不是 `rejected`，且 `representative-claim` 没有指向模型专属窗口时，只冷却（`retry-after`，最长 60 秒），不禁用，也不把窗口记为 rejected，响应头里的 reset 不当作限流时长。缺任一窗口的 utilization 时按原逻辑处理。
+- 同样从 CCGateway 0.1.127 起：托管账号的上游 429 只有额度真满才自动禁用，判断依据是这次响应自带的头（`quotaExhausted`）：`5h` 或 `7d` 的 utilization ≥ 1 或状态 `rejected`，或 `representative-claim` 指向模型专属窗口或未知的限额，算满；两个窗口都能读到且都没满，不算满；读不到完整用量时，有 claim 或 `Retry-After` 算满，否则不算。不算满时只冷却（`retry-after`，最长 60 秒），不禁用，也不把窗口记为 rejected。依据是 2026-11-04 对线上 7 天请求日志的扫描：447 条额度 429 都带 claim、窗口用量和 `Retry-After`，且 `rejected` 与 utilization ≥ 1 完全一致，claim 窗口的 reset 与 `Retry-After` 相差不超过 3 秒；11 条 long context 429 没有窗口头、claim 和 `Retry-After`，`x-should-retry` 为 false，`anthropic-ratelimit-unified-reset` 是账期结束（2026-12-01），之前的 7 天禁用就是它被截断到 `maxCooldown` 的结果。
 
 ## 70. CCGateway 用量改为读响应头：请求时懒刷新、手动才主动查询（2026-10-30，用户要求）
 

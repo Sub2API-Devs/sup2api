@@ -251,12 +251,14 @@ func TestRateLimitDisablesOnlyWhenWindowIsFull(t *testing.T) {
 	}
 
 	for name, h := range map[string]map[string]string{
-		"7d full":     usage("0.07", "1.0", map[string]string{claimHeader: "seven_day", "anthropic-ratelimit-unified-7d-status": "rejected"}),
-		"5h full":     usage("1.0", "0.27", map[string]string{claimHeader: "five_hour", "anthropic-ratelimit-unified-5h-status": "rejected"}),
-		"7d over":     usage("0.07", "1.03", nil),
-		"7d rejected": usage("0.07", "0.97", map[string]string{"anthropic-ratelimit-unified-7d-status": "rejected"}),
-		"no 7d usage": {sourceHeader: "http", "anthropic-ratelimit-unified-5h-utilization": "0.07", "retry-after": "10800"},
-		"no usage":    {sourceHeader: "http", "retry-after": "10800"},
+		"7d full":                 usage("0.07", "1.0", map[string]string{claimHeader: "seven_day", "anthropic-ratelimit-unified-7d-status": "rejected"}),
+		"5h full":                 usage("1.0", "0.27", map[string]string{claimHeader: "five_hour", "anthropic-ratelimit-unified-5h-status": "rejected"}),
+		"7d over":                 usage("0.07", "1.03", nil),
+		"7d rejected":             usage("0.07", "0.97", map[string]string{"anthropic-ratelimit-unified-7d-status": "rejected"}),
+		"claim without its usage": {sourceHeader: "http", claimHeader: "seven_day", "anthropic-ratelimit-unified-5h-utilization": "0.07", "retry-after": "10800"},
+		"retry after, no usage":   {sourceHeader: "http", "retry-after": "10800"},
+		"retry after, only 5h":    {sourceHeader: "http", "anthropic-ratelimit-unified-5h-utilization": "0.07", "retry-after": "10800"},
+		"unknown claim":           {sourceHeader: "http", claimHeader: "seven_day_opus", claimResetHeader: strconv.FormatInt(reset.Unix(), 10), "anthropic-ratelimit-unified-5h-utilization": "0.07", "anthropic-ratelimit-unified-7d-utilization": "0.27"},
 	} {
 		t.Run("disable/"+name, func(t *testing.T) {
 			out := classify(h)
@@ -275,4 +277,59 @@ func TestRateLimitDisablesOnlyWhenWindowIsFull(t *testing.T) {
 	h := usage("0.07", "0.27", map[string]string{"retry-after": "10800"})
 	delete(h, sourceHeader)
 	require.Equal(t, reset.Unix(), classify(h).GetAutomaticState().GetUntilUnix())
+
+	// No usage, no claim, no Retry-After: a reset time alone limits nothing.
+	for name, h := range map[string]map[string]string{
+		"nothing":        {sourceHeader: "http"},
+		"far reset":      {sourceHeader: "http", claimResetHeader: far},
+		"5h room, reset": {sourceHeader: "http", "anthropic-ratelimit-unified-5h-utilization": "0.07", claimResetHeader: far},
+	} {
+		t.Run("unknown/"+name, func(t *testing.T) {
+			out := classify(h)
+			require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, out.GetAccountEffect())
+			require.Equal(t, now.Add(defaultRateLimitCooldown).Unix(), out.GetCooldownUntilUnix())
+			require.Nil(t, out.GetAutomaticState())
+		})
+	}
+}
+
+// The answers as production saw them (2026-11-04 request logs).
+func TestRateLimitProductionHeaders(t *testing.T) {
+	now := time.Unix(1793758483, 0)
+	p := &Plugin{now: func() time.Time { return now }}
+	classify := func(msg string, h map[string]string) *pluginv1.ClassifyErrorResponse {
+		h[sourceHeader] = "http"
+		out, err := p.ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Account: &pluginv1.Account{Type: AccountTypeManaged}, Status: 429, Headers: h,
+			BodyPrefix: []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"` + msg + `"}}`)})
+		require.NoError(t, err)
+		return out
+	}
+	exceeded := "This request would exceed your account's rate limit. Please try again later."
+
+	out := classify(exceeded, map[string]string{
+		"anthropic-ratelimit-unified-5h-reset": "1793774400", "anthropic-ratelimit-unified-5h-status": "rejected", "anthropic-ratelimit-unified-5h-utilization": "1.46",
+		"anthropic-ratelimit-unified-7d-reset": "1794243600", "anthropic-ratelimit-unified-7d-status": "allowed", "anthropic-ratelimit-unified-7d-utilization": "0.4",
+		"anthropic-ratelimit-unified-overage-status": "rejected", claimHeader: "five_hour", claimResetHeader: "1793774400", "anthropic-ratelimit-unified-status": "rejected",
+		"retry-after": "15917", "x-should-retry": "true"})
+	require.Equal(t, int64(1793774400), out.GetAutomaticState().GetUntilUnix(), "5h full")
+
+	out = classify(exceeded, map[string]string{
+		"anthropic-ratelimit-unified-5h-reset": "1793770000", "anthropic-ratelimit-unified-5h-status": "allowed", "anthropic-ratelimit-unified-5h-utilization": "0.07",
+		"anthropic-ratelimit-unified-7d-reset": "1793898000", "anthropic-ratelimit-unified-7d-status": "rejected", "anthropic-ratelimit-unified-7d-utilization": "1.0",
+		claimHeader: "seven_day", claimResetHeader: "1793898000", "anthropic-ratelimit-unified-status": "rejected", "retry-after": "139517"})
+	require.Equal(t, int64(1793898000), out.GetAutomaticState().GetUntilUnix(), "7d full")
+
+	longContext := map[string]string{
+		"anthropic-ratelimit-unified-credits-can-purchase": "true", "anthropic-ratelimit-unified-credits-exhausted-included": "false",
+		"anthropic-ratelimit-unified-credits-has-payment-method": "false", "anthropic-ratelimit-unified-overage-disabled-reason": "org_level_disabled",
+		claimResetHeader: "1796083200", "x-should-retry": "false"}
+	out = classify("Usage credits are required for long context requests.", longContext)
+	require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT, out.GetAction())
+	require.Nil(t, out.GetAutomaticState())
+
+	// The same headers under another wording still disable nothing.
+	out = classify("Some other credits refusal.", longContext)
+	require.Nil(t, out.GetAutomaticState())
+	require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, out.GetAccountEffect())
+	require.Equal(t, now.Add(defaultRateLimitCooldown).Unix(), out.GetCooldownUntilUnix())
 }
