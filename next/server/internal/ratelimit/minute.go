@@ -156,7 +156,8 @@ end
 return {1}`)
 
 // Admit atomically checks the last 60 seconds of id against rpm and tpm
-// (0 = unlimited) and counts one request when it is under both. RPM is exact;
+// (0 = unlimited) and counts one request when it is under both. The check is
+// atomic against the estimate of CONTRACTS §68.3, which is not an exact count;
 // tokens are counted when responses finish (AddTokens), so a burst can pass
 // TPM. A refused request gets the time until it would be admitted.
 func (m *Minute) Admit(ctx context.Context, id int64, rpm int, tpm int64) (ok bool, retry time.Duration, err error) {

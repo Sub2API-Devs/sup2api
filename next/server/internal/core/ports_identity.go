@@ -275,7 +275,8 @@ type AccountLimiter interface {
 	// Accounts without limits are never listed.
 	Exhausted(ctx context.Context, refs []AccountRef, model, session string) (map[int64]bool, error)
 	// TryHit atomically checks the limits for model and session and counts an
-	// admitted request (and the session). RPM and SPM admission is exact;
+	// admitted request (and the session). Admission is atomic; SPM counts
+	// exactly, RPM uses the estimate of CONTRACTS §68.3;
 	// tokens are counted after responses finish.
 	TryHit(ctx context.Context, ref AccountRef, model, session string) (bool, error)
 	// ReleaseSession takes session off the account's (and its model list's)
