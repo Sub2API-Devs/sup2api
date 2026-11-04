@@ -287,7 +287,7 @@ func TestResetBuiltinRole(t *testing.T) {
 	if r, err := s.ResetRole(ctx, root, suID); err != nil || r.Name.Get("zh") != "超级管理员" || !r.Superuser {
 		t.Fatalf("reset super_admin: %+v %v", r, err)
 	}
-	custom, err := s.CreateRole(ctx, CreateRoleInput{Key: "viewer", Name: lt("Viewer", "只读")})
+	custom, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "viewer", Name: lt("Viewer", "只读")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,6 +367,7 @@ func TestRoleManagement(t *testing.T) {
 	db := testutil.DB(t)
 	s := newService(t, db, newMemBus(), nil)
 	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
 	admin := addUser(t, s, "admin@x.com", RoleAdmin)
 
 	if err := s.DeleteRole(ctx, roleID(t, s, RoleAdmin)); !isCode(err, "conflict") {
@@ -375,17 +376,17 @@ func TestRoleManagement(t *testing.T) {
 	if _, err := s.SetRolePermissions(ctx, admin, roleID(t, s, RoleSuperAdmin), []string{"user:read"}); !isCode(err, "conflict") {
 		t.Fatalf("super_admin perms: %v", err)
 	}
-	if _, err := s.CreateRole(ctx, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营"), PermissionKeys: []string{"nope:x"}}); !isCode(err, "invalid_argument") {
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营"), PermissionKeys: []string{"nope:x"}}); !isCode(err, "invalid_argument") {
 		t.Fatalf("unknown perm: %v", err)
 	}
-	if _, err := s.CreateRole(ctx, CreateRoleInput{Key: "Bad Key", Name: lt("x", "x")}); !isCode(err, "invalid_argument") {
+	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "Bad Key", Name: lt("x", "x")}); !isCode(err, "invalid_argument") {
 		t.Fatalf("bad key: %v", err)
 	}
-	r, err := s.CreateRole(ctx, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营"), PermissionKeys: []string{"account:read", "account:test"}})
+	r, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营"), PermissionKeys: []string{"account:read", "account:test"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateRole(ctx, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营")}); !isCode(err, "conflict") {
+	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营")}); !isCode(err, "conflict") {
 		t.Fatalf("dup key: %v", err)
 	}
 	uid := addUser(t, s, "o@x.com", "ops")
@@ -402,6 +403,105 @@ func TestRoleManagement(t *testing.T) {
 	mustCan(t, s, uid, "account:test", false)
 	if _, err := s.GetRole(ctx, r.ID); !isCode(err, "not_found") {
 		t.Fatalf("get deleted: %v", err)
+	}
+}
+
+// An actor with role:manage can only hand out permissions it holds itself,
+// whether by creating a role or by assigning one (to anyone, itself included).
+func TestRoleGrantEscalation(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	admin := addUser(t, s, "admin@x.com", RoleAdmin)
+	operator := addUser(t, s, "op@x.com", RoleOperator)
+	alice := addUser(t, s, "alice@x.com", RoleUser)
+	mustCan(t, s, operator, "plugin:install", false)
+
+	// Creating a role: the operator cannot put permissions it lacks on it.
+	_, err := s.CreateRole(ctx, operator, CreateRoleInput{Key: "installer", Name: lt("Installer", "安装"),
+		PermissionKeys: []string{"user:read", "plugin:install", "settings:manage"}})
+	if !isCode(err, "permission_denied") {
+		t.Fatalf("operator creates escalating role: %v", err)
+	}
+	var ce *core.Error
+	if !errors.As(err, &ce) || ce.Details == nil {
+		t.Fatalf("details missing: %+v", err)
+	}
+	missing, _ := ce.Details["missing"].([]string)
+	if strings.Join(missing, ",") != "plugin:install,settings:manage" {
+		t.Fatalf("missing = %v", ce.Details["missing"])
+	}
+	if _, err := s.GetRole(ctx, 0); !isCode(err, "not_found") {
+		t.Fatalf("role must not be created: %v", err)
+	}
+	var n int
+	if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM roles WHERE key = 'installer'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("installer roles = %d %v", n, err)
+	}
+	// ...but a role within its own permissions is fine.
+	if _, err := s.CreateRole(ctx, operator, CreateRoleInput{Key: "readers", Name: lt("Readers", "只读"),
+		PermissionKeys: []string{"user:read", "account:read"}}); err != nil {
+		t.Fatalf("operator creates role: %v", err)
+	}
+	// The super admin is not limited; the admin holds every core permission.
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "installer", Name: lt("Installer", "安装"),
+		PermissionKeys: []string{"plugin:install", "settings:manage", "system:update:execute"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "updater", Name: lt("Updater", "升级"),
+		PermissionKeys: []string{"system:update:execute"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Assigning roles: the operator cannot give itself admin or installer.
+	if err := setRoles(s, operator, operator, RoleOperator, RoleAdmin); !isCode(err, "permission_denied") {
+		t.Fatalf("operator self-assigns admin: %v", err)
+	}
+	if err := setRoles(s, operator, operator, RoleOperator, "installer"); !isCode(err, "permission_denied") {
+		t.Fatalf("operator self-assigns installer: %v", err)
+	}
+	mustCan(t, s, operator, "plugin:install", false)
+	// Nor give them to someone else.
+	if err := setRoles(s, operator, alice, "installer"); !isCode(err, "permission_denied") {
+		t.Fatalf("operator assigns installer: %v", err)
+	}
+	mustCan(t, s, alice, "plugin:install", false)
+	// Roles within its permissions are fine, for itself and for others.
+	if err := setRoles(s, operator, alice, RoleUser, "readers"); err != nil {
+		t.Fatalf("operator assigns readers: %v", err)
+	}
+	mustCan(t, s, alice, "account:read", true)
+	if err := setRoles(s, operator, operator, RoleOperator, "readers"); err != nil {
+		t.Fatalf("operator self-assigns readers: %v", err)
+	}
+	// Re-saving a role the user already holds is not a grant: the admin
+	// gives alice "installer", and the operator (who cannot grant it) can
+	// still keep it while changing the rest.
+	if err := setRoles(s, admin, alice, "installer"); err != nil {
+		t.Fatalf("admin assigns installer: %v", err)
+	}
+	mustCan(t, s, alice, "plugin:install", true)
+	if err := setRoles(s, operator, alice, "installer"); !isCode(err, "permission_denied") {
+		t.Fatalf("operator acts on a higher user: %v", err)
+	}
+	// Admin can assign operator; the super admin can assign anything.
+	bob := addUser(t, s, "bob@x.com", RoleUser)
+	if err := setRoles(s, admin, bob, RoleOperator); err != nil {
+		t.Fatalf("admin assigns operator: %v", err)
+	}
+	mustCan(t, s, bob, "account:update", true)
+	if err := setRoles(s, root, bob, RoleAdmin, "installer"); err != nil {
+		t.Fatalf("root assigns: %v", err)
+	}
+	mustCan(t, s, bob, "plugin:install", true)
+	// Only a super admin may grant super_admin, even to an admin.
+	if err := setRoles(s, admin, bob, RoleSuperAdmin); !isCode(err, "permission_denied") {
+		t.Fatalf("admin grants super_admin: %v", err)
+	}
+	if err := setRoles(s, 0, bob, RoleOperator); err != nil {
+		t.Fatalf("system: %v", err)
 	}
 }
 

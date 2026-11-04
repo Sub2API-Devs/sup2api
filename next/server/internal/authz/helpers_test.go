@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -151,6 +152,26 @@ func TestCanActOn(t *testing.T) {
 			err := s.CanActOnUser(context.Background(), tt.actorID, tt.targetID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CanActOnUser() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestAddedKeys(t *testing.T) {
+	tests := []struct {
+		name       string
+		want, have []string
+		added      []string
+	}{
+		{"all new", []string{"a", "b"}, nil, []string{"a", "b"}},
+		{"none new", []string{"a", "b"}, []string{"b", "a"}, nil},
+		{"some new, order kept", []string{"c", "a", "d"}, []string{"a", "b"}, []string{"c", "d"}},
+		{"removal only", nil, []string{"a"}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := addedKeys(tt.want, tt.have); !slices.Equal(got, tt.added) {
+				t.Errorf("addedKeys(%v, %v) = %v, want %v", tt.want, tt.have, got, tt.added)
 			}
 		})
 	}

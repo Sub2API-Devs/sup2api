@@ -101,8 +101,9 @@ type CreateRoleInput struct {
 	PermissionKeys []string           `json:"permission_keys"`
 }
 
-// CreateRole creates a custom (non-superuser) role.
-func (s *Service) CreateRole(ctx context.Context, in CreateRoleInput) (*Role, error) {
+// CreateRole creates a custom (non-superuser) role. The actor must hold all
+// permissions being granted, as for SetRolePermissions (CONTRACTS §43.6).
+func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleInput) (*Role, error) {
 	var fields []core.FieldError
 	if !roleKeyRe.MatchString(in.Key) {
 		fields = append(fields, core.FieldError{Field: "key", Code: "invalid", Message: "must match ^[a-z][a-z0-9_]{1,49}$"})
@@ -115,6 +116,9 @@ func (s *Service) CreateRole(ctx context.Context, in CreateRoleInput) (*Role, er
 	}
 	if in.Description == nil {
 		in.Description = core.LocalizedText{}
+	}
+	if err := s.CanGrant(ctx, actorID, in.PermissionKeys); err != nil {
+		return nil, err
 	}
 	var id int64
 	err := s.mutate(ctx, func(tx pgx.Tx) error {
@@ -316,7 +320,9 @@ func (s *Service) UserRoleKeys(ctx context.Context, q store.Querier, userID int6
 // (call Committed with the returned version after commit). actorID is the
 // acting user (0 = system, which bypasses the actor checks). Rules: only a
 // superuser may add or remove a superuser role; nobody may revoke their own
-// superuser role; the last active superuser cannot lose it.
+// superuser role; the last active superuser cannot lose it; the actor must
+// hold every permission carried by the roles being added (CanGrant,
+// CONTRACTS §43.6), the target user included when it is the actor itself.
 func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID int64, roleKeys []string) (int64, error) {
 	v, err := s.Bump(ctx, tx)
 	if err != nil {
@@ -407,6 +413,29 @@ func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID i
 		}
 		if err := s.ensureOtherSuperuser(ctx, tx, userID); err != nil {
 			return 0, err
+		}
+	}
+	// Adding a role grants its permissions: the actor must hold all of them.
+	// Roles the user already has are not a grant, so only the added ones are
+	// checked; that keeps removing or re-saving roles possible for an actor
+	// who could not grant the user's existing set.
+	if actorID != 0 {
+		cur, err := s.UserRoleKeys(ctx, tx, userID)
+		if err != nil {
+			return 0, err
+		}
+		if added := addedKeys(roleKeys, cur); len(added) > 0 {
+			perms, err := s.RolesPermissions(ctx, tx, added)
+			if err != nil {
+				return 0, err
+			}
+			keys := make([]string, 0, len(perms.Keys))
+			for k := range perms.Keys {
+				keys = append(keys, k)
+			}
+			if err := s.CanGrant(ctx, actorID, keys); err != nil {
+				return 0, err
+			}
 		}
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1 AND role_id <> ALL($2)`, userID, ids); err != nil {
@@ -546,6 +575,17 @@ ORDER BY p.source, p.module, p.sort, p.key`)
 		return a.Module < b.Module
 	})
 	return order, nil
+}
+
+// addedKeys returns the keys in want that are not in have, in want order.
+func addedKeys(want, have []string) []string {
+	var out []string
+	for _, k := range want {
+		if !slices.Contains(have, k) {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 func dedupe(keys []string) []string {

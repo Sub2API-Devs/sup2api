@@ -119,9 +119,9 @@
 | POST `/users` `{email, display_name, password, role_keys[]}` | `user:create`；授予的 role_keys 必须是操作者持有权限的子集；指定非默认角色另需 `role:manage` |
 | GET/PATCH `/users/:id` | `user:read` / `user:update`；更新他人时目标用户权限集不得超出操作者；修改他人密码需 `user:password:reset`🔐；修改影响认证的字段（密码、status、禁用）会递增 `token_version` 使旧 token 失效 |
 | DELETE `/users/:id` | `user:delete`；目标用户权限集不得超出操作者 |
-| PUT `/users/:id/roles` `{role_keys[]}` | `role:manage`；授予的 role_keys 必须是操作者持有权限的子集；只有超级管理员能授予/撤销 `super_admin` |
+| PUT `/users/:id/roles` `{role_keys[]}` | `role:manage`；新增的 role_keys 所含权限必须是操作者持有权限的子集（给自己分配也一样，否则 403 `details.missing`）；只有超级管理员能授予/撤销 `super_admin` |
 | GET `/users/:id/groups`，PUT `/users/:id/groups` `{group_ids[]}` | `group:read` / `group:manage` |
-| GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:manage` |
+| GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:manage`；POST 授予的 permission_keys 必须是操作者持有权限的子集 |
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:manage`；授予的 permission_keys 必须是操作者持有权限的子集 |
 | POST `/roles/:id/reset` | `role:manage`；内置角色恢复默认（§15.7） |
 | GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,status}]}]` |
@@ -665,7 +665,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 |---|---|---|---|
 | GET `/roles` | `role:read` | | 不分页，内置在前 |
 | GET `/roles/:id` | `role:read` | | 不存在 404 |
-| POST `/roles` | `role:manage` | `{key, name, description?, permission_keys?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]` |
+| POST `/roles` | `role:manage` | `{key, name, description?, permission_keys?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]`；操作者须持有全部 `permission_keys`（同 PUT `/roles/:id/permissions`，否则 403 `details.missing`） |
 | PATCH `/roles/:id` | `role:manage` | `{name?, description?}` | 内置角色也可改名称和描述；给了 `name` 时 `name.en` 不能为空 |
 | DELETE `/roles/:id` | `role:manage` | | 内置角色 409；用户的该角色随之删除 |
 | PUT `/roles/:id/permissions` | `role:manage` | `{permission_keys}` | 整体替换；超级管理员角色 409；已移除（`status=removed`）的权限视为未知 |
@@ -2602,7 +2602,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 
 ### 43.6 授予与操作他人的权限检查
 
-- 授予角色或权限（`CanGrant`）：只能授予自己拥有的权限，否则 403，`details.missing` 列出缺的权限。
+- 授予角色或权限（`CanGrant`）：只能授予自己拥有的权限，否则 403，`details.missing` 列出缺的权限。覆盖 POST `/roles`、PUT `/roles/:id/permissions`、POST `/roles/:id/reset`、POST `/users`（带 role_keys）和 PUT `/users/:id/roles`；后者只检查**新增**的角色所含权限，用户已有的角色不算授予，给自己分配角色同样检查（2026-11-05 修正：之前 POST `/roles` 和 PUT `/users/:id/roles` 没有做这项检查，持 `role:manage` 的运维可以建一个带 `plugin:install` 的角色再分配给自己）。
 - 修改、禁用、删除其他用户（`CanActOnUser`、`CanActOn`）：目标的权限必须是操作者权限的子集，否则 403（`details.missing_permissions`），因此不能改动权限比自己大的用户；持 `*` 的目标只有持 `*` 的人能改。
 - 持 `*` 的超级用户和系统自身（actor 0：内置插件安装、引导管理员等）不受这些检查限制。2026-10-05 修正：之前系统也被当成没有权限的用户拦下。
 - 插件安装、升级的授权确认（consent）：只有插件声明的权限里**有核心还没有的新权限**时，才需要 `role:manage` 并对这些新权限做 `CanGrant`。升级不新增权限时只需要插件管理权限。2026-10-05 修正：之前每次安装、升级都要求 `role:manage`。

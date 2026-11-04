@@ -59,7 +59,8 @@ func (s *Service) handleCreateRole(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	role, err := s.CreateRole(c.Request.Context(), in)
+	actorID, _ := core.UserID(c.Request.Context())
+	role, err := s.CreateRole(c.Request.Context(), actorID, in)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
