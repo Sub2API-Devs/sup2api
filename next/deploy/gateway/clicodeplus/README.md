@@ -127,6 +127,20 @@
 
 **上线顺序**：同 0.1.128。19:51 更新 ovh 的 sup2api-1（9 秒就绪）；从 Caddy 摘下 3140（`Caddyfile.bak-gw131`），19:52:51 重建 sup2api-ccp（24 秒就绪），恢复 Caddy。全程 api.prophey.ai `/readyz` 200。随后发布核心 0.1.237。clicodeplus `/` 剩 18 GB。
 
+## 网关 0.1.132：节点密钥只存哈希、转发头与插件包上传收紧（2026-11-04，peer 协议 2）
+
+源码 `d51ac8f0d`（develop），镜像 `sup2api-gateway:0.1.132`（ID `fa071277…`），在 ovh 干净 worktree `~/sup2api/release-gateway-0.1.132` 构建，经本机复制到 clicodeplus。先在 ovh 用同一提交的干净 worktree 跑 `go vet` 与全部网关单元测试（golang:1.27-alpine 容器，PG 依赖的用例按原样跳过）。两边 `.env` 的 `GATEWAY_IMAGE` 都已改成这个版本，备份为 `.env.bak-gw132`。
+
+**内容**（[规约 §14](../../../docs/MULTINODE-SYNC-PROTOCOL.md)，来自 2026-11-04 的节点鉴权审查）：
+- Redis 登记只保存节点密钥的 SHA-256（`auth_key_sha256`），peer 协议 1 → 2。读 Redis 只能校验节点，不能再冒充节点。旧网关与新网关互不接受，所以两节点一起换；换的期间不创建核心升级计划。
+- `REDIS_URL` 走 TCP 没有密码时网关拒绝启动（`allow_unauthenticated_redis` 只供隔离测试）。线上两边都是带密码的 `rediss://`，不受影响。
+- 网关默认给核心加 `SUB2API_PLUGIN_LANDLOCK=true`（compose 本来就设了，两边等价）；管理 socket 令牌文件对同 UID 的插件本身没有隔离作用，隔离来自 Landlock。
+- 私有转发入口把转发头收窄为单个 IP、单个协议，删除 `Forwarded`/`X-Real-IP`/`X-Forwarded-Host`。
+- 主节点的插件包上传：必须声明 `Content-Length`，每个来源节点最多 2 个并发，整个 `plugin-blobs/` 有 16 GiB 总量上限（`plugin_store_max_bytes`）。插件包读取允许从任意启用节点读取被引用的包（主节点更换后的回退路径此前两端都会 403）。
+- 节点身份的 PG 复核在接收网关缓存 2 秒（只缓存肯定答案），授权操作仍逐次读库。
+
+**上线顺序**：同 0.1.128。18:10:29 UTC 更新 ovh 的 sup2api-1（9 秒就绪）；18:10:59 从 Caddy 摘下 3140（`Caddyfile.bak-gw132`），重建 sup2api-ccp，18:11:24 `/readyz` 200（22 秒），同时恢复 Caddy（与备份逐字节一致）。全程 api.prophey.ai `/readyz` 200。两节点启动后无 WARN/ERROR。核心版本不变。
+
 ## 已知问题
 
 - **资源余量小**：clicodeplus 6 核、7.7 GB 内存，节点约用 1.8 GB，可用约 3.6 GB；磁盘 158 GB 剩约 20 GB（2026-11-02 曾被占满，大头是同机其他服务；外壳 0.1.130 起旧核心发布包会自动清理）。
