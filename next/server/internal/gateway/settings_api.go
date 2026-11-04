@@ -59,6 +59,10 @@ type gatewaySettingsInput struct {
 	PlatformCallTimeoutMs    *int `json:"platform_call_timeout_ms"`
 	DefaultHookTimeoutMs     *int `json:"default_hook_timeout_ms"`
 	PlatformHotpathTimeoutMs *int `json:"platform_hotpath_timeout_ms"`
+	QueueStickyMaxWaiting    *int `json:"queue_sticky_max_waiting"`
+	QueueStickyWaitSeconds   *int `json:"queue_sticky_wait_seconds"`
+	QueueFallbackMaxWaiting  *int `json:"queue_fallback_max_waiting"`
+	QueueFallbackWaitSecond  *int `json:"queue_fallback_wait_seconds"`
 }
 
 // validate checks the provided fields against the accepted ranges
@@ -80,6 +84,10 @@ func (in *gatewaySettingsInput) validate(ctx context.Context) []core.FieldError 
 	check("platform_call_timeout_ms", in.PlatformCallTimeoutMs, minPlatformCallTimeoutMs, maxPlatformCallTimeoutMs)
 	check("default_hook_timeout_ms", in.DefaultHookTimeoutMs, minDefaultHookTimeoutMs, maxDefaultHookTimeoutMs)
 	check("platform_hotpath_timeout_ms", in.PlatformHotpathTimeoutMs, minPlatformHotpathTimeoutMs, maxPlatformHotpathTimeoutMs)
+	check("queue_sticky_max_waiting", in.QueueStickyMaxWaiting, 0, maxQueueWaiting)
+	check("queue_sticky_wait_seconds", in.QueueStickyWaitSeconds, 0, maxQueueWaitSeconds)
+	check("queue_fallback_max_waiting", in.QueueFallbackMaxWaiting, 0, maxQueueWaiting)
+	check("queue_fallback_wait_seconds", in.QueueFallbackWaitSecond, 0, maxQueueWaitSeconds)
 	return fe
 }
 
@@ -95,6 +103,18 @@ func (in *gatewaySettingsInput) applyTo(v *GatewaySettings) {
 	}
 	if in.PlatformHotpathTimeoutMs != nil {
 		v.PlatformHotpathTimeoutMs = *in.PlatformHotpathTimeoutMs
+	}
+	if in.QueueStickyMaxWaiting != nil {
+		v.QueueStickyMaxWaiting = *in.QueueStickyMaxWaiting
+	}
+	if in.QueueStickyWaitSeconds != nil {
+		v.QueueStickyWaitSeconds = *in.QueueStickyWaitSeconds
+	}
+	if in.QueueFallbackMaxWaiting != nil {
+		v.QueueFallbackMaxWaiting = *in.QueueFallbackMaxWaiting
+	}
+	if in.QueueFallbackWaitSecond != nil {
+		v.QueueFallbackWaitSecond = *in.QueueFallbackWaitSecond
 	}
 }
 

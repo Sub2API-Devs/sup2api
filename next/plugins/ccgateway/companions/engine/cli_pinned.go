@@ -88,6 +88,10 @@ func (g *Gateway) requestCapabilities() []string {
 	if g.CLIInfo.supports(features.FirstPartyShapeCapability) {
 		out = append(out, features.FirstPartyShapeCapability)
 	}
+	// The CLI sends token counting requests; the core asks before routing one.
+	if g.CLIInfo.supports(features.RequestCountTokensCapability) {
+		out = append(out, features.RequestCountTokensCapability)
+	}
 	// The Worker logs each request at the level its policy names
 	// (request_log_diagnostic.go capture); the CLI takes no part.
 	out = append(out, features.RequestLogPolicyCapability)

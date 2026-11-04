@@ -166,7 +166,7 @@ func TestStickyBindingDroppedWhenAccountDisabled(t *testing.T) {
 func TestStickyKeepOnAccountDisabled(t *testing.T) {
 	e := newEnv(t)
 	e.enableSticky(onFailureFailover)
-	e.setSettings(defaultGatewaySettings(), StickySettings{Enabled: true, DefaultTTLSeconds: 60, KeepOnAccountDisabled: true})
+	e.setSettings(noQueueSettings(), StickySettings{Enabled: true, DefaultTTLSeconds: 60, KeepOnAccountDisabled: true})
 	sess := withSession(body(testModel, false), "keep-session")
 	e.messages(sess)
 	e.record()
@@ -182,7 +182,7 @@ func TestStickyKeepOnAccountDisabled(t *testing.T) {
 func TestStickyDisabledGlobally(t *testing.T) {
 	e := newEnv(t)
 	e.enableSticky(onFailureFailover)
-	e.setSettings(defaultGatewaySettings(), StickySettings{Enabled: false, DefaultTTLSeconds: 60})
+	e.setSettings(noQueueSettings(), StickySettings{Enabled: false, DefaultTTLSeconds: 60})
 	e.messages(withSession(body(testModel, false), "x"))
 	if rec := e.record(); rec.StickyRule != "" {
 		t.Fatalf("sticky while disabled: %+v", rec)

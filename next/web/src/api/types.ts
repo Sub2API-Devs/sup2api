@@ -523,6 +523,8 @@ export interface Account {
   credentials?: Record<string, unknown>
   settings?: { locale?: string; timezone?: string; [key: string]: unknown }
   in_use?: number
+  /** Requests queueing for a free slot of the account. */
+  waiting?: number
   cooldown_until?: string | null
   cooldown_reason?: string // assumed
   orphaned?: boolean
@@ -1103,6 +1105,14 @@ export interface GatewaySettings {
   default_hook_timeout_ms: number
   /** Timeout of the per-request platform RPCs that are not hooks (ResolveModel, ExtractUsage), 50–2000 ms (default 300). */
   platform_hotpath_timeout_ms: number
+  /** Requests that may queue for a session's bound account when it is full, 0–10000 (default 3); 0 turns this queue off. */
+  queue_sticky_max_waiting: number
+  /** Longest wait in that queue, 0–600 s (default 120). */
+  queue_sticky_wait_seconds: number
+  /** Requests that may queue for an account when all candidates are full, 0–10000 (default 100); 0 turns this queue off. */
+  queue_fallback_max_waiting: number
+  /** Longest wait in that queue, 0–600 s (default 30). */
+  queue_fallback_wait_seconds: number
 }
 
 /** Validation ranges of GatewaySettings, mirrored from the server. */
@@ -1110,7 +1120,11 @@ export const GATEWAY_SETTINGS_RANGES: Record<keyof GatewaySettings, [number, num
   max_attempts: [1, 10],
   platform_call_timeout_ms: [100, 30000],
   default_hook_timeout_ms: [50, 2000],
-  platform_hotpath_timeout_ms: [50, 2000]
+  platform_hotpath_timeout_ms: [50, 2000],
+  queue_sticky_max_waiting: [0, 10000],
+  queue_sticky_wait_seconds: [0, 600],
+  queue_fallback_max_waiting: [0, 10000],
+  queue_fallback_wait_seconds: [0, 600]
 }
 
 // ------------------------------------------------------------------ sticky

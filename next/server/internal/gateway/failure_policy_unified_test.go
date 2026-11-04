@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -128,4 +129,53 @@ func TestUnifiedFailurePolicyValidation(t *testing.T) {
 	p.RetriesPerAccount = 2
 	p.RetryRules[0].Action = failureReset
 	require.NotEmpty(t, p.validate(t.Context()), "v2 only allows return or the shared retry plan")
+}
+
+// A rule with "retry on the same account" off skips retries_per_account and goes
+// straight to the plan's next step; other rules keep the plan.
+func TestRuleWithoutSameAccountRetry(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		switchAccount bool
+		off           bool
+		want          []string
+	}{
+		{"on keeps the plan", true, false, []string{"acc-1", "acc-1", "acc-1", "acc-2", "acc-2", "acc-3"}},
+		{"off switches at once", true, true, []string{"acc-1", "acc-2", "acc-3"}},
+		{"no switching keeps retrying when on", false, false, []string{"acc-1", "acc-1", "acc-1", "acc-1", "acc-1", "acc-1"}},
+		{"no switching with it off has no retry left", false, true, []string{"acc-1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			p := unifiedTestPolicy()
+			p.SwitchAccount = tc.switchAccount
+			p.RetryRules[0].NoSameAccountRetry = tc.off
+			e.setFailurePolicy(p)
+			for _, key := range []string{"acc-1", "acc-2", "acc-3"} {
+				e.up.set(key, &upstreamRule{status: 503})
+			}
+			require.Equal(t, 503, e.messages(body(testModel, false)).status)
+			require.Equal(t, tc.want, e.up.keys())
+		})
+	}
+}
+
+func TestSameAccountRetrySettingOnlyAppliesToRetryRulesOfAUnifiedPlan(t *testing.T) {
+	p := unifiedTestPolicy()
+	p.RetryRules[0].NoSameAccountRetry = true
+	p.AccountRules = []FailureRule{{ID: "disable", Name: "Disable", Enabled: true, Action: "disable", NoSameAccountRetry: true,
+		Match: FailureMatch{Source: "upstream", StatusCodes: "401", Mode: "all"}}}
+	require.Empty(t, p.validate(t.Context()))
+	require.True(t, p.RetryRules[0].NoSameAccountRetry)
+	require.False(t, p.AccountRules[0].NoSameAccountRetry)
+
+	legacy := testFailurePolicy()
+	legacy.RetryRules[0].NoSameAccountRetry = true
+	require.Empty(t, legacy.validate(t.Context()))
+	require.False(t, legacy.RetryRules[0].NoSameAccountRetry)
+
+	// A rule that never set it stores nothing, so it reads back as on.
+	raw, err := json.Marshal(FailureRule{ID: "r"})
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "no_same_account_retry")
 }

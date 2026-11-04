@@ -904,7 +904,7 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 	})
 	t.Cleanup(e.gw.Close)
 	e.gw.randFloat = func() float64 { return 0 } // deterministic order within a priority
-	e.setSettings(defaultGatewaySettings(), StickySettings{Enabled: false, DefaultTTLSeconds: 3600})
+	e.setSettings(noQueueSettings(), StickySettings{Enabled: false, DefaultTTLSeconds: 3600})
 
 	engine := gin.New()
 	engine.Use(httpapi.RequestContext(), httpapi.Recover(), e.gw.Middleware())
@@ -912,6 +912,14 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 	e.srv = httptest.NewServer(engine)
 	t.Cleanup(e.srv.Close)
 	return e
+}
+
+// noQueueSettings are the defaults with the account queues off: a test that is
+// not about queueing should not sit out a queue timeout.
+func noQueueSettings() GatewaySettings {
+	gw := defaultGatewaySettings()
+	gw.QueueStickyMaxWaiting, gw.QueueFallbackMaxWaiting = 0, 0
+	return gw
 }
 
 func (e *env) setSettings(gw GatewaySettings, st StickySettings) {
@@ -943,7 +951,7 @@ func (e *env) enableSticky(onFailure string) {
 	e.gw.rules.mu.Lock()
 	e.gw.rules.override = activeRules([]*stickyRule{rule})
 	e.gw.rules.mu.Unlock()
-	e.setSettings(defaultGatewaySettings(), StickySettings{Enabled: true, DefaultTTLSeconds: 3600})
+	e.setSettings(noQueueSettings(), StickySettings{Enabled: true, DefaultTTLSeconds: 3600})
 }
 
 func (e *env) addHook(h manifest.Hook, granted []string, client core.HookPlugin) {

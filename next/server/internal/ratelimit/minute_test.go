@@ -22,11 +22,10 @@ func TestMinuteWindows(t *testing.T) {
 	if ok, _, err := keys.Admit(ctx, 1, 2, 0); !ok || err != nil {
 		t.Fatal(ok, err)
 	}
-	// The estimate spreads a window evenly: right after 12:01 the previous
-	// window counts a little under two requests.
+	// The third request waits for the first to leave the last 60 seconds.
 	ok, retry, err := keys.Admit(ctx, 1, 2, 0)
-	if ok || err != nil || retry != 20*time.Second {
-		t.Fatal("third request in the minute", ok, retry, err)
+	if ok || err != nil || retry != time.Minute {
+		t.Fatal("third request in the 60 seconds", ok, retry, err)
 	}
 	// Scopes do not share windows.
 	if ok, _, _ := accounts.Admit(ctx, 1, 1, 0); !ok {
@@ -44,18 +43,21 @@ func TestMinuteWindows(t *testing.T) {
 	if err != nil || u[1].RPM != 2 || u[2].TPM != 50 {
 		t.Fatal(u, err)
 	}
-	// Right after the minute the previous window still counts in full.
-	mr.SetTime(time.Date(2026, 10, 26, 12, 1, 0, 0, time.UTC))
+	// Crossing a minute changes nothing: both requests are 39 seconds old.
+	mr.SetTime(time.Date(2026, 10, 26, 12, 1, 19, 0, time.UTC))
 	if ok, _, _ := keys.Admit(ctx, 1, 2, 0); ok {
 		t.Fatal("the last 60 seconds still hold two requests")
 	}
-	// Half way through, half of the previous window is left: 2 x 0.5 = 1.
-	mr.SetTime(time.Date(2026, 10, 26, 12, 1, 30, 0, time.UTC))
-	if u, _ := keys.Usage(ctx, []int64{1}); u[1].RPM != 1 {
-		t.Fatal("sliding estimate", u)
+	if u, _ := keys.Usage(ctx, []int64{1}); u[1].RPM != 2 {
+		t.Fatal("count is exact", u)
+	}
+	// Past 60 seconds they are gone.
+	mr.SetTime(time.Date(2026, 10, 26, 12, 1, 41, 0, time.UTC))
+	if u, _ := keys.Usage(ctx, []int64{1}); u[1].RPM != 0 {
+		t.Fatal("requests older than 60 seconds still counted", u)
 	}
 	if ok, _, _ := keys.Admit(ctx, 1, 2, 0); !ok {
-		t.Fatal("one request in the last 60 seconds still refused")
+		t.Fatal("an empty window refused")
 	}
 	if ok, _, err := NewMinute(nil, "apikey").Admit(ctx, 1, 1, 1); !ok || err != nil {
 		t.Fatal("without Redis everything is admitted", ok, err)
@@ -221,5 +223,172 @@ func TestReleaseSession(t *testing.T) {
 	}
 	if ok, _, _ := m.AdmitAll(ctx, sets, "next"); !ok {
 		t.Fatal("released slot not free")
+	}
+}
+
+// No boundary burst: a cap of one passes one request in any 60 seconds, wherever
+// the requests fall around a minute.
+func TestNoBurstAcrossAMinute(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	ctx := t.Context()
+	m := NewMinute(rdb, "account")
+	start := time.Date(2026, 10, 26, 12, 0, 59, 900_000_000, time.UTC)
+	mr.SetTime(start)
+	if ok, _, _ := m.Admit(ctx, 1, 1, 0); !ok {
+		t.Fatal("first request refused")
+	}
+	mr.SetTime(start.Add(200 * time.Millisecond))
+	if ok, retry, _ := m.Admit(ctx, 1, 1, 0); ok || retry != time.Minute {
+		t.Fatal("second request passed across the minute", ok, retry)
+	}
+	mr.SetTime(start.Add(time.Minute + time.Millisecond))
+	if ok, _, _ := m.Admit(ctx, 1, 1, 0); !ok {
+		t.Fatal("refused after 60 seconds")
+	}
+}
+
+// Three requests at the end of a minute still show as three 40 seconds later.
+func TestUsageIsExactForBurstyTraffic(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	ctx := t.Context()
+	m := NewMinute(rdb, "account")
+	mr.SetTime(time.Date(2026, 10, 26, 12, 0, 59, 0, time.UTC))
+	for range 3 {
+		if ok, _, _ := m.Admit(ctx, 1, 0, 0); !ok {
+			t.Fatal("refused")
+		}
+	}
+	mr.SetTime(time.Date(2026, 10, 26, 12, 1, 40, 0, time.UTC))
+	if u, _ := m.Usage(ctx, []int64{1}); u[1].RPM != 3 {
+		t.Fatal(u)
+	}
+}
+
+func TestReserveAndSettle(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	ctx := t.Context()
+	m := NewMinute(rdb, "account")
+	start := time.Date(2026, 10, 26, 12, 0, 10, 0, time.UTC)
+	mr.SetTime(start)
+	tpm := func() int64 {
+		t.Helper()
+		u, err := m.Usage(ctx, []int64{1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u[1].TPM
+	}
+
+	// Concurrent requests see each other's reservation.
+	first, ok, _, err := m.Reserve(ctx, 1, 0, 100, 60)
+	if !ok || err != nil || tpm() != 60 {
+		t.Fatal(ok, err, tpm())
+	}
+	if _, ok, retry, _ := m.Reserve(ctx, 1, 0, 100, 60); ok || retry != time.Minute {
+		t.Fatal("reservation over the cap passed", ok, retry)
+	}
+	// Settling swaps the amount and keeps the request's time.
+	mr.SetTime(start.Add(10 * time.Second))
+	m.Settle(ctx, first, 10)
+	if tpm() != 10 {
+		t.Fatal("settled", tpm())
+	}
+	second, ok, _, _ := m.Reserve(ctx, 1, 0, 100, 60)
+	if !ok {
+		t.Fatal("room left by the settlement not usable")
+	}
+	// A failure returns the reservation; the request stays counted.
+	m.Settle(ctx, second, 0)
+	u, _ := m.Usage(ctx, []int64{1})
+	if u[1].TPM != 10 || u[1].RPM != 2 {
+		t.Fatal(u)
+	}
+	mr.SetTime(start.Add(61 * time.Second))
+	if tpm() != 0 {
+		t.Fatal("settled tokens are dated from the request's start", tpm())
+	}
+
+	// A reservation larger than the cap passes an empty window, alone.
+	big, ok, _, _ := m.Reserve(ctx, 2, 0, 100, 500)
+	if !ok || big.Items[0].Tokens != 100 {
+		t.Fatal(ok, big)
+	}
+	if _, ok, _, _ := m.Reserve(ctx, 2, 0, 100, 1); ok {
+		t.Fatal("cap full of a reservation still admits")
+	}
+	if ok, _, _ := m.Admit(ctx, 2, 0, 100); ok {
+		t.Fatal("full cap admits a request reserving nothing")
+	}
+}
+
+func TestSettleAfterTheReservationLeftTheWindow(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	ctx := t.Context()
+	m := NewMinute(rdb, "account")
+	start := time.Date(2026, 10, 26, 12, 0, 10, 0, time.UTC)
+	mr.SetTime(start)
+	over, _, _, _ := m.Reserve(ctx, 1, 0, 1000, 100)
+	under, _, _, _ := m.Reserve(ctx, 1, 0, 1000, 100)
+	// A stream of three minutes: only what exceeds the reservation still counts.
+	mr.SetTime(start.Add(3 * time.Minute))
+	m.Settle(ctx, over, 150)
+	m.Settle(ctx, under, 20)
+	if u, _ := m.Usage(ctx, []int64{1}); u[1].TPM != 50 {
+		t.Fatal(u)
+	}
+	if n, _ := rdb.ZCard(ctx, Key("account", 1, "tpm")).Result(); n != 1 {
+		t.Fatal("old reservations left behind", n)
+	}
+}
+
+func TestReserveOnlyWhereATPMCapApplies(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	ctx := t.Context()
+	mr.SetTime(time.Date(2026, 10, 26, 12, 0, 10, 0, time.UTC))
+	m := NewMinute(rdb, "account")
+	sets := []Limits{{ID: 1}, {ID: 1, Sub: "m:a", TPM: 100}}
+	hold, ok, _, _ := m.ReserveAll(ctx, sets, "", 40)
+	if !ok || hold.Items[0].Tokens != 0 || hold.Items[1].Tokens != 40 {
+		t.Fatal(ok, hold)
+	}
+	u, _ := m.UsageOf(ctx, sets)
+	if u[0].TPM != 0 || u[1].TPM != 40 {
+		t.Fatal(u)
+	}
+	m.Settle(ctx, hold, 30)
+	u, _ = m.UsageOf(ctx, sets)
+	if u[0].TPM != 30 || u[1].TPM != 30 {
+		t.Fatal(u)
+	}
+}
+
+// The tokens that free room decide when a refused request can retry.
+func TestRetryAfterTokens(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	ctx := t.Context()
+	m := NewMinute(rdb, "account")
+	start := time.Date(2026, 10, 26, 12, 0, 10, 0, time.UTC)
+	mr.SetTime(start)
+	m.AddTokens(ctx, 1, 50)
+	mr.SetTime(start.Add(20 * time.Second))
+	m.AddTokens(ctx, 1, 50)
+	mr.SetTime(start.Add(30 * time.Second))
+	if _, ok, retry, _ := m.Reserve(ctx, 1, 0, 100, 40); ok || retry != 30*time.Second {
+		t.Fatal(ok, retry)
+	}
+	if _, ok, retry, _ := m.Reserve(ctx, 1, 0, 100, 60); ok || retry != 50*time.Second {
+		t.Fatal(ok, retry)
 	}
 }

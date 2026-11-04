@@ -39,8 +39,11 @@ func validateRequestMode(mode string) error {
 
 // requestPlan is what one request runs with, decided before the CLI starts.
 type requestPlan struct {
-	mode  string // build or direct
+	mode  string // build, direct or count
 	probe bool   // the console's own test request
+	// count: a token counting request. It runs the CLI's own mode and has no
+	// identity, agent, session, shape or credit.
+	count bool
 	// fromCore: the request carries the core's policy (features.PolicyHeader);
 	// without one (the CLI run by hand) the container's own mode applies.
 	fromCore bool
@@ -100,10 +103,13 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	// answers (the issuer the core bound it to cannot change before the CLI
 	// sent it) and answers with that issuer. Its identity step takes a resource
 	// slot for the check only.
-	credit, refusal := g.admitCredit(w, r)
-	if refusal != nil {
-		refusal.write(w, d)
-		return
+	var credit *requestCredit
+	if !plan.count {
+		credit, refusal = g.admitCredit(w, r)
+		if refusal != nil {
+			refusal.write(w, d)
+			return
+		}
 	}
 	if credit != nil {
 		defer credit.release()
@@ -164,8 +170,10 @@ func (g *Gateway) prepareRequest(w http.ResponseWriter, r *http.Request, d *requ
 		return refusal
 	}
 	plan.env = g.Runner.baseEnv()
-	if refusal = g.resolveRequestContext(plan, body, r.Header, d); refusal != nil {
-		return refusal
+	if !plan.count {
+		if refusal = g.resolveRequestContext(plan, body, r.Header, d); refusal != nil {
+			return refusal
+		}
 	}
 	d.request(body, r.Header)
 	return g.prepareInput(plan, body)
@@ -192,11 +200,15 @@ func (g *Gateway) parseRequestPolicy(r *http.Request) (*requestPlan, *requestRef
 		}
 	}
 	plan.probe = r.URL.Path == "/v1/ccgateway/probe"
-	if r.URL.Path != "/v1/messages" && !plan.probe {
+	plan.count = r.URL.Path == countTokensPath
+	if r.URL.Path != "/v1/messages" && !plan.probe && !plan.count {
 		return nil, refuse(404, "not_found_error", "Request mode supports /v1/messages only")
 	}
 	if plan.probe {
 		plan.mode = "build"
+	}
+	if plan.count {
+		plan.mode = "count"
 	}
 	// The CLI's part of the policy: the content and billing choices, the
 	// injection reduced to what is added.
@@ -217,6 +229,9 @@ const (
 	unsupportedDirect  = "Loaded CLI does not support the requested direct policy"
 )
 
+// countTokensPath is the token counting endpoint a Worker answers.
+const countTokensPath = "/v1/messages/count_tokens"
+
 func building(p *requestPlan) bool  { return p.mode == "build" }
 func directing(p *requestPlan) bool { return p.mode == "direct" }
 
@@ -232,6 +247,7 @@ func otherMode(g *Gateway, p *requestPlan) bool {
 // level, so a CLI that does not follow the levels is refused in either mode
 // (2026-10-23 audit C11).
 var requestCapabilityGates = []capabilityGate{
+	{func(_ *Gateway, p *requestPlan) bool { return p.count }, features.RequestCountTokensCapability, "Loaded CLI does not support token counting"},
 	{func(g *Gateway, p *requestPlan) bool { return building(p) && otherMode(g, p) }, "request_build", unsupportedMode},
 	{func(g *Gateway, p *requestPlan) bool { return directing(p) && otherMode(g, p) }, "request_direct", unsupportedMode},
 	// The CLI assembles the request from the client's own blocks; the Worker
@@ -366,6 +382,13 @@ func (g *Gateway) prepareInput(p *requestPlan, body *requestBody) *requestRefusa
 			return refuse(400, "invalid_request_error", err.Error())
 		}
 		p.input = input
+		return nil
+	}
+	if p.count {
+		if _, err := body.model(); err != nil {
+			return refuse(400, "invalid_request_error", err.Error())
+		}
+		p.input = body.raw
 		return nil
 	}
 	// Direct is the billing header alone (request levels, 2026-10-23): the CLI

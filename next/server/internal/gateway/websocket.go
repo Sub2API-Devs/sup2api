@@ -162,6 +162,11 @@ func (s *wsSession) run(ctx context.Context) {
 	poll := time.NewTicker(s.g.ws.drainPoll)
 	defer poll.Stop()
 	var drainDeadline time.Time
+	// upstreamIdle bounds the silence of a turn in progress, as a stream's idle
+	// timeout does on HTTP, so a stuck turn cannot hold its slots forever.
+	upstreamIdle := time.NewTimer(time.Hour)
+	upstreamIdle.Stop()
+	defer upstreamIdle.Stop()
 	end := func(code websocket.StatusCode, reason string) {
 		_ = s.client.Close(code, reason)
 	}
@@ -198,6 +203,9 @@ func (s *wsSession) run(ctx context.Context) {
 				return
 			}
 			idle.Reset(s.g.ws.idle)
+			if turn != nil {
+				upstreamIdle.Reset(turn.cl.streamIdle())
+			}
 		case m := <-upIn:
 			if m.err != nil {
 				if turn != nil {
@@ -216,9 +224,11 @@ func (s *wsSession) run(ctx context.Context) {
 			if turn == nil {
 				continue
 			}
+			upstreamIdle.Reset(turn.cl.streamIdle())
 			if done, out := s.observe(sctx, turn, m.data); done {
 				s.finish(sctx, turn, out)
 				turn = nil
+				upstreamIdle.Stop()
 				idle.Reset(s.g.ws.idle)
 				if !drainDeadline.IsZero() {
 					end(wsCloseRestart, "node is draining; reconnect")
@@ -228,6 +238,13 @@ func (s *wsSession) run(ctx context.Context) {
 		case <-lease:
 			s.finish(sctx, turn, wsOutcome{status: http.StatusServiceUnavailable, errType: errTypeInternal, msg: "account lease lost"})
 			end(websocket.StatusTryAgainLater, "account lease lost; reconnect")
+			return
+		case <-upstreamIdle.C:
+			if turn == nil {
+				continue
+			}
+			s.finish(sctx, turn, wsOutcome{status: http.StatusGatewayTimeout, errType: errTypeUpstream, msg: errStreamIdleTimeout.Error()})
+			end(websocket.StatusTryAgainLater, "upstream went silent; reconnect")
 			return
 		case <-idle.C:
 			if turn != nil {
@@ -348,14 +365,20 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 	p := cl.principal
 	// Each turn is one request of the API key (CONTRACTS §60), capped
 	// before the hooks run, as on HTTP.
-	_, releaseKey, ke := s.g.admitKey(ctx, p, cl.rid)
+	tokens := int64(0)
+	if p.KeyLimits.TPM > 0 {
+		tokens = cl.rateTokens(ctx)
+	}
+	_, releaseKey, keyHold, ke := s.g.admitKey(ctx, p, cl.rid, tokens)
 	if ke != nil {
 		return reject(cl, ke)
 	}
+	cl.keyHold = keyHold
 	var releaseAccount func()
 	handedOff := false
 	defer func() {
 		if !handedOff {
+			cl.releaseHolds(ctx)
 			if releaseAccount != nil {
 				releaseAccount()
 			}
@@ -816,6 +839,12 @@ func (s *wsSession) finish(ctx context.Context, t *wsTurn, out wsOutcome) {
 	}
 	t.release()
 	cl.publishObservation(observation.AttemptFinished, rec, !out.ok && isLocalFailure(out.local, out.errType))
+	// Only a turn the client abandoned counts the prompt when no usage came
+	// back; an upstream failure consumed nothing we know of.
+	if out.errType != errTypeClientCanceled {
+		cl.rateEstimate.prompt = 0
+	}
+	defer cl.releaseHolds(ctx)
 	if id := s.ref; id != nil {
 		cl.countTokens(ctx, id.ID)
 		if rec.Success {

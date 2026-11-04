@@ -174,9 +174,11 @@ type Slots interface {
 	InUseMany(ctx context.Context, kind string, ids []int64) (map[int64]int, error)
 }
 
-// LeasedSlots additionally cancels the returned context when a held slot is
-// lost. Callers must use it for all work admitted by the slot, and release it
-// before another attempt. A Redis failure must not silently admit uncounted work.
+// LeasedSlots additionally returns a context that ends when the slot is
+// released. Callers must use it for all work admitted by the slot, and release
+// it before another attempt. A Redis failure must not silently admit uncounted
+// work, but a slot lost later never stops the work it admitted: the slot is
+// counted again (docs/GATEWAY-CONCURRENCY-DESIGN.md §4).
 type LeasedSlots interface {
 	Slots
 	AcquireLease(ctx context.Context, kind string, id int64, limit int, requestID string) (context.Context, func(), bool, error)

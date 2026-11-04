@@ -207,8 +207,10 @@ type View struct {
 	Outcomes *Outcomes `json:"outcomes"`
 	// Usage is the core's usage record of the account and its usage limit
 	// (CONTRACTS §73); null when it cannot be read.
-	Usage          *UsageView `json:"usage"`
-	InUse          int        `json:"in_use"`
+	Usage *UsageView `json:"usage"`
+	InUse int        `json:"in_use"`
+	// Waiting counts the requests queueing for a free slot of the account.
+	Waiting        int        `json:"waiting"`
 	CooldownUntil  *time.Time `json:"cooldown_until"`
 	CooldownReason string     `json:"cooldown_reason,omitempty"`
 	// Quota is the subscription quota snapshot (CONTRACTS §44), read from
@@ -302,8 +304,13 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 				slog.WarnContext(ctx, "account: read slots", "err", err)
 				return
 			}
+			waiting, err := s.d.Slots.InUseMany(ctx, core.AccountWaitSlots, ids)
+			if err != nil {
+				slog.WarnContext(ctx, "account: read queue", "err", err)
+			}
 			for _, v := range out {
 				v.InUse = inUse[v.ID]
+				v.Waiting = waiting[v.ID]
 			}
 		},
 		// fillModelInUse writes into RateUsage.Models: same task, after it.

@@ -167,7 +167,7 @@ flowchart LR
   subgraph redis["Redis"]
     live["node:live（ZSET）<br/>存活节点 + 心跳时间"]
     info["node:info:{boot_id}<br/>node:plugins:{boot_id}<br/>TTL 15s"]
-    slots["slot:account:{id} · slot:user:{id}<br/>并发槽位"]
+    slots["slot:account:{id} · slot:apikey:{id}<br/>并发槽位"]
     cool["cooldown:account:{id}"]
     bal["balance:{user_id}<br/>余额缓存"]
     locks["lock:*<br/>任务、事件投递、对账、内置插件安装<br/>插件锁 lock:plugin:{key}:*"]
@@ -192,7 +192,7 @@ flowchart LR
 | 存活判断 | 每 5 秒心跳，15 秒没有心跳视为下线；共享存活分数及筛选统一使用 Redis 时间，避免节点钟差误删活跃节点 |
 | 状态同步 | 状态变更通过 Redis 广播，节点收到后立即对账；另有每 5 秒一次对账兜底 |
 | 自我隔离 | 连续 15 秒无法和 Redis/PG 通信的节点，停止接收依赖插件的请求（返回 503） |
-| 并发槽位 | 成员为 `boot_id:request_id:lease_id`；共享到期判断使用 Redis 时间，只续期现存未过期成员。租约丢失即取消请求，本地有效期扣除通信耗时；持有表按完整槽键和成员区分用户槽、账号槽和重试 |
+| 并发槽位 | 成员为 `boot_id:request_id:lease_id`；共享到期判断使用 Redis 时间，只续期现存未过期成员。续期出错或成员丢失都不影响在跑的请求，丢失时重新写入（CONTRACTS §78.5）；持有表按完整槽键和成员区分 API Key 槽、账号槽和重试 |
 | 异步任务 | 核心登记用户归属、原账号和初始快照，按 PG 执行令牌与租约领取轮询；快照和财务结果同事务提交。客户端查询任一节点均读取共享快照，详见 CONTRACTS §28 |
 | 单节点执行 | 插件任务、事件投递、对账、保留清理、内置插件安装用 Redis 锁（redsync，`core.Locker`）保证同一时刻只在一个节点执行；**没有 PG 兜底**，连不上 Redis 的节点不拿锁。锁不带 fencing token，不可幂等的工作另有数据库层保护（CONTRACTS §27）。插件自己需要按需互斥时，凭宿主权限 `lock` 经 `HostService.LockAcquire/LockRenew/LockRelease` 使用同一套锁，key 由宿主强制加上 `plugin:{plugin_key}:` 前缀，owner token 由插件生成（CONTRACTS §27.3）。核心迁移、插件 schema 迁移、IAM 引导用的是各自独立的 PG advisory lock，与 Redis 锁无关 |
 
@@ -695,6 +695,7 @@ sequenceDiagram
   C->>GW: POST /v1/messages（x-api-key 或 Authorization）
   GW->>GW: API Key 鉴权 → 用户状态、gateway:use 权限 → 分组（可用性、模型白名单）
   GW->>GW: gjson 读取 model、stream
+  GW->>R: 获取 API Key 并发槽位，原子检查并计入 RPM，预占 TPM，超限返回 429
   GW->>H: OnGatewayRequest（meta + model + prompt_text）
   alt 拒绝
     H-->>GW: DENY 403
@@ -703,11 +704,10 @@ sequenceDiagram
     H-->>GW: ALLOW（可能附带修改指令）
   end
   GW->>R: 余额检查（缓存，未命中回源 PG）→ 不足返回 402
-  GW->>R: 获取 API Key 并发槽位（含 RPM/TPM 检查）
   loop 失败切换（最多 3 次）
     GW->>R: 查粘性会话绑定（规则命中时）
     GW->>GW: 绑定的账号可用就直接用；否则选账号：分组内 · 平台插件已启用 · 启用 · 可调度 · 未冷却 · 未排除<br/>按 priority 排序，同优先级按 weight 加权随机<br/>未命中粘性时 priority/weight 可能先被插件改写，见 6.2
-    GW->>R: 获取账号并发槽位
+    GW->>R: 获取账号并发槽位，原子检查并计入 RPM 和会话，预占 TPM，超限换下一个账号
     GW->>P: BuildUpstreamRequest
     P-->>GW: url、headers、patches
     GW->>U: 发送请求（经账号代理）
@@ -736,10 +736,10 @@ sequenceDiagram
 
 ### 6.2 调度
 
-- 候选账号 = API Key 所属分组的账号 ∩ 账号类型能服务该端点（原生或经转换）的账号 ∩ 状态正常 ∩ 参与调度 ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/tpd/spm 上限
+- 候选账号 = API Key 所属分组的账号 ∩ 账号类型能服务该端点（原生或经转换）的账号 ∩ 状态正常 ∩ 参与调度 ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/spm 上限
 - 顺序：粘性绑定的账号优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机（不放回抽样）；逐个获取并发槽位，失败切换时跳过已试过的账号（CONTRACTS §18）。排序用的 `priority` / `weight` 可能已被插件为本次请求改写（见下）
 - **插件改写调度参数（可选扩展点，CONTRACTS §24）**：声明了 `scheduler.rank` 的插件可以为**一次请求**改写候选账号的 `priority` 和 `weight`，核心拿改写后的值跑上面这套算法。只对**未命中粘性绑定**的请求调用，每个请求一次（失败切换复用结果），多个插件按 `order` 串行、后者看到前者的结果；超时、出错或结果非法一律 fail open，退回账号自身的值。候选集的筛选、并发槽位、限流、冷却、端点与模型支持性仍全部由核心把关 —— **核心保留最终调度权**，插件只是临时改写账号本来就有的两个参数，不能凭空加账号，也不写库。本次实际发生的改写记入 `usage_logs.sched_decisions`（jsonb，迁移 0011，接口暂不暴露，CONTRACTS §24.5）
-- 限流：rpm/tpm/tpd 是固定窗口计数（分钟 / UTC 日），spm 是 60 秒滚动窗口内去重的会话数（会话 = 粘性会话键，无粘性规则时每请求一会话；窗口内已有的会话总是放行）。达到上限的账号在本窗口内不参与调度；全部不可用时返回 429 `rate_limited`
+- 限流：rpm/tpm 逐条记录，判断和展示都是精确的近 60 秒（CONTRACTS §68.3），tpm 设了上限时准入即预占（§78.3）；tpd 已移除；spm 是 60 秒滚动窗口内去重的会话数（会话 = 粘性会话键，无粘性规则时每请求一会话；窗口内已有的会话总是放行）。达到上限的账号在本窗口内不参与调度；全部不可用时返回 429 `rate_limited`
 - 模型映射：选定账号后，核心把请求里的模型（body `modelPath` / 路径参数 / `RequestMeta.model`）换成映射后的模型再交给插件，`usage_logs.upstream_model` 记录映射后的模型；计费、白名单、粘性、钩子都看客户端模型
 - 每个节点缓存分组内的账号快照，`account:changed` 广播时失效
 - 并发：账号槽位按 `accounts.max_concurrency`，API Key 槽位按 `api_keys.max_concurrency`（§60），都在 Redis 用 Lua 原子获取；不按用户限制并发（`users.max_concurrency` 列已废弃，保留只为滚动升级时旧核心可读）
@@ -824,8 +824,8 @@ sequenceDiagram
 **调度过程**：
 
 1. 按顺序找第一条命中的规则，计算会话 key：`sticky:{规则名}:{分组}:{模型}:{sha256(取到的值)}`
-2. 从 Redis 读取绑定的账号；该账号仍在分组内、可调度、未冷却、能拿到并发槽位，就直接使用
-3. 否则走普通调度
+2. 从 Redis 读取绑定的账号；该账号仍在分组内、可调度、未冷却、未达限流上限、能拿到并发槽位，就直接使用
+3. 绑定账号并发满时先排队等它（CONTRACTS §78.5）；仍不可用，或已达限流上限时，`failover` 规则走普通调度，`stick` 规则返回 429
 4. 请求成功后写入或刷新绑定（TTL 重新计时）；如果这次用的是新账号，就改绑到新账号（相当于 new-api 的 switch_on_success）
 5. 绑定的账号被禁用时，默认删除绑定（可配置为保留）
 
@@ -1069,7 +1069,7 @@ CREATE TABLE model_price_history (
 flowchart TD
   a["请求进入"] --> b{"余额缓存 > 最低余额？<br/>（默认 0）"}
   b -- 否 --> x["返回 402 余额不足"]
-  b -- 是 --> c["转发请求（获取 API Key 并发槽位）"]
+  b -- 是 --> c["转发请求（API Key 并发槽位已在钩子之前取得）"]
   c --> d["请求结束：得到 token 用量"]
   d --> e["结算任务进入异步队列"]
   e --> f["计算费用<br/>执行价格表达式 × 分组倍率<br/>记录命中的档位和加价规则"]
@@ -1607,7 +1607,7 @@ flowchart LR
 16. guard 的原生大盘页面和首页卡片正常显示；禁用 guard 后页面和卡片消失
 
 **多节点**
-17. 停掉一个节点：15 秒内从节点列表消失，它留下的并发槽位被清理，另一个节点正常服务
+17. 停掉一个节点：15 秒内从节点列表消失，它留下的并发槽位在下一轮回收时清理（回收周期 30 秒，最长约 45 秒），另一个节点正常服务
 
 ---
 
@@ -1711,7 +1711,7 @@ flowchart LR
 │ 调度                                                      [核心]     │
 │   优先级 [1]  权重 [1]  最大并发 [10]  ☑ 参与调度                     │
 │ 限流（0 = 不限）                                          [核心]     │
-│   RPM [0]  TPM [0]  TPD [0]  SPM [0]                                  │
+│   RPM [0]  TPM [0]  SPM [0]                                           │
 │ 模型                                                      [核心]     │
 │   模型列表 [claude-sonnet-4-5 ✕][claude-opus-4-1 ✕][+]  空 = 全部    │
 │   模型映射 [claude-3-5-sonnet-latest → claude-sonnet-4-5] [+] [JSON] │

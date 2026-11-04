@@ -164,8 +164,7 @@ safeguards 经 EXTRA_BODY 表达，`safeguard_results` 从 CLI stream_event 读�
   typed 工具集、PTC/non-direct caller、toolset_name、inline 工具定义、图片 transformations。
 - 对应未支持的 server/MCP/code-exec/compaction/fallback 历史块；WebSearch 仅接收可还原的网关格式。
 - helper history 托管：Worker 不再声明或挂载相关路由，不能因核心仍有协议代码而继续使用。
-- count_tokens：插件不声明端点，核心不调度到 CCGateway；分组没有计数账号时返回
-  404 not_found_error。Worker 的 400 `count_tokens is not supported by this gateway` 仅作兜底。
+- count_tokens：2026-11-04 起支持，Worker 运行 CLI 的 `request --count`，见 CONTRACTS §11.6。
 
 ## 10. 会话与身份
 

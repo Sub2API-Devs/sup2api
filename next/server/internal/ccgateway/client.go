@@ -21,11 +21,14 @@ import (
 )
 
 const VirtualURL = "https://ccgateway.internal/v1/messages"
+const VirtualCountURL = "https://ccgateway.internal/v1/messages/count_tokens"
 const VirtualTestURL = "https://ccgateway.internal/v1/ccgateway/probe"
 
-// managedURL accepts the model endpoint and the internal account probe.
-// CCGateway offers no token counting endpoint.
-func managedURL(raw string) bool { return raw == VirtualURL || raw == VirtualTestURL }
+// managedURL accepts the model endpoint, the token counting endpoint and the
+// internal account probe.
+func managedURL(raw string) bool {
+	return raw == VirtualURL || raw == VirtualCountURL || raw == VirtualTestURL
+}
 
 func IsManaged(plugin, kind, raw string) bool {
 	return plugin == "ccgateway" && (kind == "managed" || kind == "apikey") && managedURL(raw)
@@ -319,6 +322,9 @@ func (a *attempt) clone(body io.ReadCloser, path string) *http.Request {
 // attachPolicy resolves the account's CC feature policy, confirms the Worker
 // can apply it and puts it on clone (X-CCGateway-Request-Policy).
 func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
+	if path == "/v1/messages/count_tokens" {
+		return a.attachCountPolicy(clone)
+	}
 	policy, err := a.t.s.resolvedWorkerPolicy(a.ctx, a.cfg, a.t.accountID, a.t.groupID)
 	if err != nil {
 		return a.fail(err)
@@ -354,6 +360,20 @@ func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 	policyJSON, _ := json.Marshal(policy)
 	clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
 	return nil
+}
+
+// attachCountPolicy confirms the Worker's CLI can count and names only the
+// request's log level: the CC feature policy shapes what a request generates,
+// and counting generates nothing.
+func (a *attempt) attachCountPolicy(clone *http.Request) *outcome {
+	if err := a.t.s.requireCountTokensCapability(a.ctx, a.client, a.base, a.modelKey, a.route); err != nil {
+		if a.cfg.AccountRuntimes && errors.Is(err, errAccountNotSynchronized) {
+			_ = a.close()
+			return a.notSynchronized()
+		}
+		return a.refuse("configuration_error", core.AsError(err).Message)
+	}
+	return a.attachLogPolicy(clone)
 }
 
 // attachLogPolicy puts on a provider resource request (which has no CC

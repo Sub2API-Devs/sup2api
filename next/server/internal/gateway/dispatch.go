@@ -98,7 +98,10 @@ func (c *call) dispatch(ctx context.Context) {
 		if ref == nil {
 			c.endFailurePolicy("no_eligible_account")
 			if last == nil {
-				if busy {
+				if ctx.Err() != nil {
+					// The client left while queueing for an account.
+					last = canceledErr()
+				} else if busy {
 					last = fromCore(core.ErrRateLimited.WithMessage("all accounts are busy or rate limited, please retry later"), errTypeNoAccount)
 				} else {
 					last = fromCore(core.ErrNoAvailableAccount, errTypeNoAccount)
@@ -130,6 +133,9 @@ func (c *call) dispatch(ctx context.Context) {
 		res = c.planFailure(ctx, ref, res, attempts, excluded)
 		c.observeAttemptResult(ref, res)
 		lastAccount = ref.ID
+		if res.kind != attemptDone {
+			c.releaseAccountHold(ctx)
+		}
 		switch res.kind {
 		case attemptDone:
 			// An endpoint whose usage a plugin reports does not know its
@@ -213,6 +219,11 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 	if ref, release, _ := c.tryStickyBinding(ctx, cands, excluded, exhausted); ref != nil {
 		return ref, release, false
 	}
+	// CONTRACTS §18.1: a stick rule does not leave a bound account that has no
+	// room, it answers 429.
+	if c.sticky != nil && c.sticky.refused {
+		return nil, nil, true
+	}
 	// Plugins may rewrite the priority/weight of the candidates for this
 	// request (CONTRACTS §24); everything below still gates them.
 	over := c.rankOverrides(ctx, cands)
@@ -281,6 +292,11 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 			return &ref, release, false
 		}
 	}
+	if ref := c.queueTarget(ctx, pool, reserve); ref != nil {
+		if release, ok := c.waitForAccount(ctx, ref, c.gw.QueueFallbackMaxWaiting, c.gw.queueFallbackWait()); ok {
+			return ref, release, false
+		}
+	}
 	return nil, nil, true
 }
 
@@ -304,11 +320,18 @@ func (c *call) tryStickyBinding(ctx context.Context, cands []core.AccountRef, ex
 		bound := &cands[i]
 		// An unusable type (request not convertible) keeps the binding; an
 		// exhausted rate window counts as "no free slot".
-		if c.usable(bound) && !exhausted[bound.ID] {
-			if release, ok := c.acquireAccount(ctx, bound); ok {
-				s.hit = true
-				return bound, release, true
+		if c.usable(bound) {
+			if !exhausted[bound.ID] {
+				release, ok := c.acquireAccount(ctx, bound)
+				if !ok {
+					release, ok = c.waitForAccount(ctx, bound, c.gw.QueueStickyMaxWaiting, c.gw.queueStickyWait())
+				}
+				if ok {
+					s.hit = true
+					return bound, release, true
+				}
 			}
+			s.refused = s.rule.OnFailure == onFailureStick
 		}
 		return nil, nil, true
 	}
@@ -325,7 +348,7 @@ func (c *call) tryStickyBinding(ctx context.Context, cands []core.AccountRef, ex
 // failures do not block scheduling.
 func (c *call) exhausted(ctx context.Context, cands []core.AccountRef, excluded map[int64]bool) map[int64]bool {
 	lim := c.g.d.Limiter
-	if lim == nil {
+	if lim == nil || c.tokenCounting() {
 		return nil
 	}
 	var limited []core.AccountRef
@@ -371,10 +394,24 @@ func weightedOrder(grp []core.AccountRef, rnd func() float64) {
 	}
 }
 
+// tokenCounting reports a token counting request. It generates nothing, so it
+// consumes nothing: no key or account concurrency, no RPM or TPM, no quota, and
+// a failed count says nothing about the account, which keeps its state
+// (2026-11-04). An account that is cooling or disabled still does not serve it.
+// It has nothing to do with sticky sessions: the account is picked by weight,
+// and no binding is read or written (resolveSticky).
+func (c *call) tokenCounting() bool {
+	return strings.HasSuffix(c.ep.Protocol, ".count_tokens")
+}
+
 // acquireAccount takes a concurrency slot of the account and, when the
 // request's model is in one of the account's model lists, one of that list
 // (CONTRACTS §68); either being full makes the account busy.
 func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func(), bool) {
+	if c.tokenCounting() {
+		c.slotCtx = ctx
+		return func() {}, true
+	}
 	leaseCtx, release, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, "account", ref.ID, ref.MaxConcurrency, c.rid)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: acquire account slot", "account", ref.ID, "err", err)
@@ -400,14 +437,20 @@ func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func()
 }
 
 // admitRate asks the limiter to admit one request of the call's model and
-// session on ref and remembers the model list its tokens are counted in.
+// session on ref, reserving its estimated tokens where a TPM cap applies, and
+// keeps the hold its tokens settle against.
 func (c *call) admitRate(ref *core.AccountRef) (bool, error) {
-	ok, err := c.g.d.Limiter.TryHit(c.slotCtx, *ref, c.model, c.session)
+	if c.tokenCounting() {
+		return true, nil
+	}
+	c.releaseAccountHold(c.slotCtx)
+	tokens := int64(0)
+	if l := ref.ModelLimitFor(c.model); ref.TPMLimit > 0 || (l != nil && l.TPMLimit > 0) {
+		tokens = c.rateTokens(c.slotCtx)
+	}
+	hold, ok, err := c.g.d.Limiter.Reserve(c.slotCtx, *ref, c.model, c.session, tokens)
 	if ok && err == nil {
-		c.rateList.id, c.rateList.key = ref.ID, ""
-		if l := ref.ModelLimitFor(c.model); l != nil {
-			c.rateList.key = l.Key()
-		}
+		c.accountHold = &hold
 	}
 	return ok, err
 }
@@ -702,8 +745,8 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
 	}
-	if idle := c.env.Duration(core.EnvVarStreamingIdleTimeoutSeconds); idle > 0 && c.stream {
-		resp.Body = newIdleBody(resp.Body, idle, ucancel)
+	if c.stream {
+		resp.Body = newIdleBody(resp.Body, c.streamIdle(), ucancel)
 	}
 	defer resp.Body.Close()
 	if c.g.d.Observations != nil {
@@ -827,7 +870,7 @@ func (c *call) classifyWithPlugin(ctx context.Context, rt *typeRoute, acct *plug
 // means for the account (CONTRACTS §69); otherwise the plugin decides.
 func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, header http.Header,
 	body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
-	if c.failurePolicy != nil {
+	if c.failurePolicy != nil && !c.tokenCounting() {
 		res := c.classifyFailure(ctx, acct.GetId(), status, header, body, transportErr, rt.conv != nil)
 		if res.err != nil {
 			res.err.LocalFailure = cls.GetLocalFailure()
@@ -837,8 +880,11 @@ func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *plu
 		}
 		return res
 	}
-	c.applyQuotaObservation(ctx, acct.GetId(), cls.GetQuota())
-	reason, failover := c.applyAccountEffect(ctx, acct, status, body, transportErr, cls)
+	reason, failover := cls.GetReason(), false
+	if !c.tokenCounting() {
+		c.applyQuotaObservation(ctx, acct.GetId(), cls.GetQuota())
+		reason, failover = c.applyAccountEffect(ctx, acct, status, body, transportErr, cls)
+	}
 
 	clientStatus := int(cls.GetClientStatus())
 	if clientStatus == 0 {

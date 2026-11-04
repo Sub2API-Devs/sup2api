@@ -43,6 +43,18 @@ type idleBody struct {
 	idle  time.Duration
 }
 
+// defaultStreamIdle bounds a silent upstream when nothing configures it, so a
+// stuck stream cannot hold its concurrency slot forever.
+const defaultStreamIdle = 180 * time.Second
+
+// streamIdle is the longest gap between two reads of a streamed response.
+func (c *call) streamIdle() time.Duration {
+	if idle := c.env.Duration(core.EnvVarStreamingIdleTimeoutSeconds); idle > 0 {
+		return idle
+	}
+	return defaultStreamIdle
+}
+
 func newIdleBody(body io.ReadCloser, idle time.Duration, cancel context.CancelCauseFunc) *idleBody {
 	timer := time.AfterFunc(idle, func() { cancel(errStreamIdleTimeout) })
 	timer.Stop()

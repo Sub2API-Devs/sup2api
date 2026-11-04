@@ -315,6 +315,7 @@ type stickySession struct {
 	ttl          time.Duration
 	bound        int64 // account id bound before this request, 0 = none
 	tried        bool  // the bound account was considered
+	refused      bool  // a stick rule found the bound account without room
 	hit          bool  // the bound account served (or is serving) the request
 	keep         bool  // keep bindings of disabled accounts
 	policyValue  string
@@ -325,7 +326,7 @@ type stickySession struct {
 // yields a session value, and reads its binding.
 func (c *call) resolveSticky(ctx context.Context) *stickySession {
 	g := c.g
-	if !c.stickyCfg.Enabled {
+	if !c.stickyCfg.Enabled || c.tokenCounting() {
 		return nil
 	}
 	if g.d.Redis == nil {

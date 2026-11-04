@@ -48,6 +48,7 @@ func (e *convertError) Unwrap() error { return e.err }
 // the request as it went upstream; only its declared usageRequestFields are
 // read from it, at the end, and the body itself is not kept.
 func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, resp *http.Response, upBody []byte) attemptResult {
+	defer c.limitClientWrites()()
 	httpfacts.Apply(c.c.Writer.Header(), resp.Header)
 	u := newUsageAcc(rt.usage).WithLog("request_id", c.rid, "plugin", rt.binding.Plugin.Key,
 		"platform", rt.platform, "protocol", rt.upstream)

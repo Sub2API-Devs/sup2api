@@ -2,9 +2,6 @@ package cluster
 
 import (
 	"context"
-	"errors"
-	"github.com/redis/go-redis/v9"
-	"net"
 	"testing"
 	"time"
 )
@@ -36,7 +33,9 @@ func TestRequestSlotsRenewIndependently(t *testing.T) {
 		t.Fatalf("live request lost concurrency slot: user=%d account=%d held_entries=%d", un, an, len(s.held))
 	}
 }
-func TestRefreshDetectsLostSlots(t *testing.T) {
+
+// Accounting never stops a running request: a member that vanished is put back.
+func TestRefreshRestoresLostSlots(t *testing.T) {
 	ctx := context.Background()
 	_, rdb := newRedis(t)
 	c := newClock()
@@ -45,17 +44,75 @@ func TestRefreshDetectsLostSlots(t *testing.T) {
 	if !ok || err != nil {
 		t.Fatal(ok, err)
 	}
-	defer release()
 	if err := rdb.Del(ctx, SlotKey("account", 2)).Err(); err != nil {
 		t.Fatal(err)
 	}
-	err = s.refresh(ctx)
-	n, _ := s.InUse(ctx, "account", 2)
-	if err == nil && n == 0 {
-		t.Fatal("refresh reports success after losing a live request slot; existing request receives no failure signal")
+	if err := s.refresh(ctx); err != nil {
+		t.Fatal(err)
 	}
-	if !errors.Is(context.Cause(leaseCtx), ErrSlotLost) {
-		t.Fatalf("request not canceled after slot loss: %v", context.Cause(leaseCtx))
+	if n, _ := s.InUse(ctx, "account", 2); n != 1 {
+		t.Fatal("lost slot not counted again", n)
+	}
+	if leaseCtx.Err() != nil {
+		t.Fatal("request canceled after slot loss", context.Cause(leaseCtx))
+	}
+	release()
+	if n, _ := s.InUse(ctx, "account", 2); n != 0 {
+		t.Fatal("restored slot not released", n)
+	}
+	if leaseCtx.Err() == nil {
+		t.Fatal("lease context outlived its release")
+	}
+}
+
+// A Redis failure while refreshing does not cancel the request either.
+func TestRefreshErrorKeepsTheRequestRunning(t *testing.T) {
+	ctx := context.Background()
+	mr, rdb := newRedis(t)
+	c := newClock()
+	s := NewSlots(rdb, newReg(rdb, c, "node-a", "boot-a"), SlotOptions{Now: c.Now})
+	leaseCtx, release, ok, err := s.AcquireLease(ctx, "account", 3, 1, "inflight")
+	if !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	defer release()
+	mr.SetError("ERR down")
+	if err := s.refresh(ctx); err == nil {
+		t.Fatal("refresh hid the error")
+	}
+	mr.SetError("")
+	if leaseCtx.Err() != nil {
+		t.Fatal("request canceled by a refresh error", context.Cause(leaseCtx))
+	}
+	if err := s.refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.InUse(ctx, "account", 3); n != 1 {
+		t.Fatal("slot lost", n)
+	}
+}
+
+// A failed release is retried, so the account is not busy for a whole TTL.
+func TestFailedReleaseIsRetried(t *testing.T) {
+	ctx := context.Background()
+	mr, rdb := newRedis(t)
+	c := newClock()
+	s := NewSlots(rdb, newReg(rdb, c, "node-a", "boot-a"), SlotOptions{Now: c.Now})
+	_, release, ok, err := s.AcquireLease(ctx, "account", 4, 1, "inflight")
+	if !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	mr.SetError("ERR down")
+	release()
+	mr.SetError("")
+	if n, _ := s.InUse(ctx, "account", 4); n != 1 {
+		t.Fatal("the failed release should have left the member", n)
+	}
+	if err := s.refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.InUse(ctx, "account", 4); n != 0 {
+		t.Fatal("release not retried", n)
 	}
 }
 
@@ -79,38 +136,5 @@ func TestRepeatedSlotReleaseDoesNotRemoveNewLease(t *testing.T) {
 	}
 	if err := s.refresh(ctx); err != nil || secondCtx.Err() != nil {
 		t.Fatal(err, secondCtx.Err())
-	}
-}
-
-type delayedSlotReply struct{ delay time.Duration }
-
-func (h delayedSlotReply) DialHook(next redis.DialHook) redis.DialHook {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) { return next(ctx, network, addr) }
-}
-func (h delayedSlotReply) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
-	return func(ctx context.Context, cmd redis.Cmder) error {
-		err := next(ctx, cmd)
-		if err == nil && (cmd.Name() == "eval" || cmd.Name() == "evalsha") {
-			time.Sleep(h.delay)
-		}
-		return err
-	}
-}
-func (h delayedSlotReply) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
-	return next
-}
-func TestSlowAcquireReplyDoesNotExtendLocalLease(t *testing.T) {
-	ctx := context.Background()
-	_, rdb := newRedis(t)
-	c := newClock()
-	rdb.AddHook(delayedSlotReply{100 * time.Millisecond})
-	s := NewSlots(rdb, newReg(rdb, c, "node-a", "boot-a"), SlotOptions{TTL: 50 * time.Millisecond})
-	leaseCtx, release, ok, err := s.AcquireLease(ctx, "account", 2, 1, "slow")
-	if err != nil || !ok {
-		t.Fatal(ok, err)
-	}
-	defer release()
-	if !errors.Is(context.Cause(leaseCtx), ErrSlotLost) {
-		t.Fatal("expired lease accepted after delayed Redis reply")
 	}
 }

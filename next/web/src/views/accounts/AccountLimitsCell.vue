@@ -40,6 +40,7 @@ const pillText = (f: LimitFigure) => {
         <span v-if="f.limit > 0" class="absolute inset-y-0 left-0" :class="FILL[figureTone(f)]" :style="{ width: `${usedShare(f) * 100}%` }" aria-hidden="true" />
         <span class="relative">{{ text(f) }}</span>
       </span>
+      <span v-if="account.waiting" class="text-xxs text-warning-600" data-testid="account-limit-waiting">{{ t('accounts.limitsUi.waiting', { n: account.waiting }) }}</span>
       <span v-if="lists" class="text-xxs text-fg-subtle" data-testid="account-limit-lists">{{ t('accounts.limitsUi.lists', { n: lists }) }}</span>
     </span>
     <template #content>

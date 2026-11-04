@@ -20,6 +20,8 @@ export interface FailureRule {
   exhausted_action: string
   egress: string
   cooldown_seconds: number
+  /** Retry rules: true when "retry on the same account" is off. Missing means on. */
+  no_same_account_retry?: boolean
 }
 export interface FailurePolicy {
   schema_version: number

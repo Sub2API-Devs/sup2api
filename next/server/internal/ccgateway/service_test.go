@@ -70,7 +70,7 @@ func TestManagedBoundary(t *testing.T) {
 	for _, tc := range []struct {
 		p, k, u string
 		ok      bool
-	}{{"ccgateway", "managed", VirtualURL, true}, {"ccgateway", "apikey", VirtualURL, true}, {"ccgateway", "managed", VirtualURL + "/count_tokens", false}, {"ccgateway", "apikey", VirtualURL + "/count_tokens", false}, {"ccgateway", "managed", VirtualURL + "/extra", false}, {"other", "managed", VirtualURL, false}, {"ccgateway", "other", VirtualURL, false}, {"ccgateway", "managed", VirtualURL + "?x=1", false}, {"ccgateway", "managed", "http://127.0.0.1/v1/messages", false}} {
+	}{{"ccgateway", "managed", VirtualURL, true}, {"ccgateway", "apikey", VirtualURL, true}, {"ccgateway", "managed", VirtualCountURL, true}, {"ccgateway", "managed", VirtualURL + "/other", false}, {"ccgateway", "apikey", VirtualCountURL, true}, {"ccgateway", "managed", VirtualURL + "/extra", false}, {"other", "managed", VirtualURL, false}, {"ccgateway", "other", VirtualURL, false}, {"ccgateway", "managed", VirtualURL + "?x=1", false}, {"ccgateway", "managed", "http://127.0.0.1/v1/messages", false}} {
 		if IsManaged(tc.p, tc.k, tc.u) != tc.ok {
 			t.Fatal(tc)
 		}
@@ -175,10 +175,10 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("body close did not cancel upstream")
 	}
-	// No token counting: the transport refuses the count target.
-	countReq, _ := http.NewRequest("POST", VirtualURL+"/count_tokens", strings.NewReader(`{"model":"fixture","messages":[]}`))
-	if countRes, err := s.ModelClient().Do(countReq); err == nil {
-		countRes.Body.Close()
-		t.Fatal("count target forwarded", countRes.StatusCode)
+	// Only the managed targets go through the transport.
+	otherReq, _ := http.NewRequest("POST", VirtualURL+"/other", strings.NewReader(`{"model":"fixture","messages":[]}`))
+	if otherRes, err := s.ModelClient().Do(otherReq); err == nil {
+		otherRes.Body.Close()
+		t.Fatal("other target forwarded", otherRes.StatusCode)
 	}
 }

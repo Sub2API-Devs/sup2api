@@ -72,6 +72,10 @@ func (v *policyValidation) rules(name string, rules *[]FailureRule, account bool
 			v.add(base+"name", "name must be 1-100 characters", "名称为 1–100 个字符")
 		}
 		v.match(base+"match", &r.Match)
+		if account || !v.unified {
+			// Only a retry rule of a unified plan has this setting.
+			r.NoSameAccountRetry = false
+		}
 		if v.simple {
 			r.Enabled, r.Action = true, failureRetry
 			if account {

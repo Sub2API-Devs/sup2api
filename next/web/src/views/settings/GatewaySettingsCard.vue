@@ -18,12 +18,20 @@ const DEFAULTS: GatewaySettings = {
   max_attempts: 3,
   platform_call_timeout_ms: 2000,
   default_hook_timeout_ms: 300,
-  platform_hotpath_timeout_ms: 300
+  platform_hotpath_timeout_ms: 300,
+  queue_sticky_max_waiting: 3,
+  queue_sticky_wait_seconds: 120,
+  queue_fallback_max_waiting: 100,
+  queue_fallback_wait_seconds: 30
 }
 const fields: Array<{ key: Key; unit?: string }> = [
   { key: 'platform_call_timeout_ms', unit: 'ms' },
   { key: 'default_hook_timeout_ms', unit: 'ms' },
-  { key: 'platform_hotpath_timeout_ms', unit: 'ms' }
+  { key: 'platform_hotpath_timeout_ms', unit: 'ms' },
+  { key: 'queue_sticky_max_waiting' },
+  { key: 'queue_sticky_wait_seconds', unit: 's' },
+  { key: 'queue_fallback_max_waiting' },
+  { key: 'queue_fallback_wait_seconds', unit: 's' }
 ]
 
 const { form, loading, saving, dirty, errors, isLoaded, load, save, reset } = useSettingsForm<Form, GatewaySettings>({

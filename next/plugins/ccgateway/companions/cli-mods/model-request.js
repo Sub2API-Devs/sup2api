@@ -171,6 +171,10 @@ function captureErrorResponse(options, transportFetch) {
 // it posts to the endpoint that call uses; patch-cli-2.1.304.cjs reads the path
 // from that native create (AST) and fills it here, so no copy is written down.
 export const messagesPath = /*CCGATEWAY_MESSAGES_PATH*/ '';
+// The token counting endpoint of that same beta Messages API: the SDK's
+// countTokens call posts beside it, with the same query.
+export const countTokensPathOf = path => path.replace('/v1/messages', '/v1/messages/count_tokens');
+const countTokensPath = countTokensPathOf(messagesPath);
 
 // sendOnce is the client's one send: build as the SDK's beta Messages call (the
 // caller built an object body), direct as its raw bytes to the same endpoint.
@@ -188,6 +192,7 @@ function sendOnce(client, options, entry) {
   // endpoint the beta Messages call posts to.
   if (options.nativeCreate === true) return client.beta.messages.create(options.body, request).asResponse();
   if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  if (options.countTokens === true) return client.post(countTokensPath, { body: options.rawBody, ...request }).asResponse();
   return client.post(messagesPath, {
     body: options.rawBody, stream: options.body.stream === true, ...request,
   }).asResponse();

@@ -129,7 +129,9 @@ func TestReferencedUsageJSONAndSSE(t *testing.T) {
 			if item.Model != advisorModel || item.Kind != "advisor" || item.Price.ID != 19 || item.Price.Expression != "p*7+c*11" || item.Tokens != (core.UsageTokens{Input: 823, Output: 1612}) || item.RateMultiplier.String() != "1.5" {
 				t.Fatalf("bad nested price snapshot %+v", item)
 			}
-			if lim.tokens[1] != 1760+531+412+823+1612 {
+			// Rate limits count the input outside any cache plus the output: the
+			// executor's 412 cache-read tokens stay out.
+			if lim.tokens[1] != 1760+531+823+1612 {
 				t.Fatal("rate limit omitted or double counted advisor", lim.tokens)
 			}
 		})

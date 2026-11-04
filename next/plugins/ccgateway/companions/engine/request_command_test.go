@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -389,6 +390,76 @@ func TestRuntimeNeedsAModeAndRefusesRetiredHostMode(t *testing.T) {
 	}
 	if _, err := NewRuntime(Options{RequestMode: "native"}); err == nil {
 		t.Fatal("explicit native mode accepted")
+	}
+}
+
+// A counting request runs the CLI's own mode on the client's bytes, with none
+// of what a generating request carries.
+func TestCountTokensRunsTheCLIsCountMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture; executed on Linux release host")
+	}
+	root := t.TempDir()
+	cli := filepath.Join(root, "claude")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$FIXTURE/args"
+env > "$FIXTURE/env"
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--response-meta" ]; then shift; meta="$1"; fi
+  shift
+done
+cat > "$FIXTURE/input"
+printf '%s' '{"status":200,"statusText":"OK","headers":{"content-type":"application/json"},"request":{"mode":"count"}}' > "$meta"
+printf '%s' '{"input_tokens":8}'
+`
+	if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	raw := "{ \"model\":\"m\", \"n\":9007199254740993, \"messages\":[{\"role\":\"user\",\"content\":\"hi\"}], \"metadata\":{\"user_id\":\"not json\"} }\n"
+	capable := cliRequestInfo{Capabilities: []string{features.RequestCountTokensCapability, features.RequestLevelsCapability, features.RequestAgentContextCapability}}
+	count := func(g *Gateway, policy string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", countTokensPath, strings.NewReader(raw))
+		r.Header.Set("x-api-key", "gateway")
+		r.Header.Set("anthropic-beta", "test-beta")
+		if policy != "" {
+			r.Header.Set(features.PolicyHeader, policy)
+		}
+		out := httptest.NewRecorder()
+		g.ServeHTTP(out, r)
+		return out
+	}
+
+	g := &Gateway{RequestMode: "build", Key: "gateway", CLIInfo: capable, requestIdentityEnabled: true, Runner: &Runner{CLI: cli, Work: root, Env: append(os.Environ(), "FIXTURE="+root)}}
+	out := count(g, `{"request_log":"off"}`)
+	if out.Code != 200 || out.Body.String() != `{"input_tokens":8}` {
+		t.Fatalf("%d %s", out.Code, out.Body.String())
+	}
+	// The core reads the capability from /healthz before routing a count.
+	build := g.CLIInfo
+	build.Capabilities = append(slices.Clone(build.Capabilities), "request_build")
+	declared := (&Gateway{CLIInfo: build, Runner: &Runner{}}).requestCapabilities()
+	if !slices.Contains(declared, features.RequestCountTokensCapability) {
+		t.Fatalf("not reported: %v", declared)
+	}
+	input, _ := os.ReadFile(filepath.Join(root, "input"))
+	if string(input) != raw {
+		t.Fatalf("the body changed: %s", input)
+	}
+	args, _ := os.ReadFile(filepath.Join(root, "args"))
+	if !strings.HasPrefix(string(args), "request\n--count\n") || !strings.Contains(string(args), "--betas\ntest-beta\n") {
+		t.Fatalf("wrong command: %s", args)
+	}
+	env, _ := os.ReadFile(filepath.Join(root, "env"))
+	for _, name := range []string{requestIdentityEnv, requestAgentEnv, directPolicyEnv, firstPartyShapeEnv} {
+		if strings.Contains(string(env), name+"=") {
+			t.Fatalf("a count carries %s", name)
+		}
+	}
+
+	// A CLI that cannot count is refused before it starts.
+	old := &Gateway{RequestMode: "build", Key: "gateway", CLIInfo: cliRequestInfo{Capabilities: []string{features.RequestLevelsCapability}}, Runner: &Runner{CLI: "must-not-start", Work: root}}
+	if out := count(old, ""); out.Code != 409 || !strings.Contains(out.Body.String(), "token counting") {
+		t.Fatalf("%d %s", out.Code, out.Body.String())
 	}
 }
 

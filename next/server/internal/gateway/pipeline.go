@@ -143,13 +143,13 @@ type call struct {
 	usage *pendingExtract
 	// Context of the currently selected account's concurrency lease.
 	slotCtx context.Context
-	// rateList is the account last admitted by the limiter and the key of
-	// its model list holding the request's model ("" = none): its tokens are
-	// counted there too (CONTRACTS §68).
-	rateList struct {
-		id  int64
-		key string
-	}
+	// queueWaited says the request already sat out a whole queue timeout, so it
+	// does not queue again (docs/GATEWAY-CONCURRENCY-DESIGN.md §3).
+	queueWaited bool
+	// accountHold and keyHold are the holds of the account last admitted by
+	// the limiter and of the API key, until their tokens settle (CONTRACTS §78).
+	accountHold, keyHold     *core.RateHold
+	rateEstimate             rateEstimate
 	task                     *core.TaskSnapshot
 	taskPublicID             string
 	taskPersisted            bool
@@ -192,7 +192,9 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 		return
 	}
 	cl.gw, cl.stickyCfg, cl.autoDisable = set.gateway, set.sticky, set.autoDisable
-	cl.failurePolicy = set.failurePolicy
+	if !cl.tokenCounting() {
+		cl.failurePolicy = set.failurePolicy
+	}
 	if b.Endpoint.WebSocket() {
 		g.serveWebSocket(ctx, cl)
 		return
@@ -239,15 +241,27 @@ func (c *call) run(ctx context.Context) {
 	// 3. The caps of the API key. They depend on the key alone, so a capped
 	// request is refused before any hook runs (as new-api rate-limits before
 	// moderation); a task snapshot is read locally and is not capped.
-	if !c.ep.TaskQuery() {
-		admitted, releaseKey, e := c.g.admitKey(ctx, p, c.rid)
+	if !c.ep.TaskQuery() && !c.tokenCounting() {
+		tokens := int64(0)
+		if p.KeyLimits.TPM > 0 {
+			tokens = c.rateTokens(ctx)
+		}
+		admitted, releaseKey, hold, e := c.g.admitKey(ctx, p, c.rid, tokens)
 		if e != nil {
 			c.fail(e)
 			return
 		}
+		c.keyHold = hold
 		defer releaseKey()
 		ctx = admitted
 	}
+	// A request that never reaches countTokens gives its reservations back.
+	// With usage still to come, submit counts it after the handler returns.
+	defer func() {
+		if c.usage == nil {
+			c.releaseHolds(ctx)
+		}
+	}()
 
 	// 4. Hooks (may deny or patch the body).
 	c.sessionFP = c.sessionFingerprint(ctx)
@@ -907,28 +921,59 @@ func (c *call) dropReservation(ctx context.Context, rec *core.UsageRecord, billi
 // countTokens adds this request's tokens to the rate-limit windows of the
 // account and of the API key.
 func (c *call) countTokens(ctx context.Context, accountID int64) {
-	n := c.rec.Tokens.Total()
+	n := c.rec.Tokens.Throughput(c.rec.UsageSemantics)
 	if len(c.rec.Replacement) > 0 {
 		n = 0
 		for _, item := range c.rec.Replacement {
-			n += item.Tokens.Total()
+			n += item.Tokens.Throughput(item.UsageSemantics)
 		}
 	}
 	for _, item := range c.rec.Additional {
-		n += item.Tokens.Total()
+		n += item.Tokens.Throughput(item.UsageSemantics)
 	}
-	if n <= 0 {
-		return
+	// A stream cut before its usage event: count the prompt, so that hanging
+	// up does not escape the caps that made this estimate necessary. A request
+	// that succeeded without usage (count_tokens) used nothing to count.
+	if n <= 0 && !c.rec.Success {
+		n = c.rateEstimate.prompt
 	}
 	ctx = context.WithoutCancel(ctx)
 	if lim := c.g.d.Limiter; lim != nil && accountID != 0 {
-		list := ""
-		if c.rateList.id == accountID {
-			list = c.rateList.key
+		if h := c.accountHold; h != nil && h.Subject == accountID {
+			c.accountHold = nil
+			lim.Settle(ctx, *h, n)
+		} else if n > 0 {
+			lim.AddTokens(ctx, accountID, "", n)
 		}
-		lim.AddTokens(ctx, accountID, list, n)
 	}
 	if w := c.g.d.KeyWindows; w != nil && c.principal != nil {
-		w.AddTokens(ctx, c.principal.KeyID, n)
+		if h := c.keyHold; h != nil {
+			c.keyHold = nil
+			w.Settle(ctx, *h, n)
+		} else if n > 0 {
+			w.AddTokens(ctx, c.principal.KeyID, n)
+		}
+	}
+}
+
+// releaseAccountHold gives back what the account's hold still reserves: its
+// attempt ended with no tokens to count. The request stays counted in RPM.
+func (c *call) releaseAccountHold(ctx context.Context) {
+	if h := c.accountHold; h != nil {
+		c.accountHold = nil
+		if lim := c.g.d.Limiter; lim != nil {
+			lim.Settle(context.WithoutCancel(ctx), *h, 0)
+		}
+	}
+}
+
+// releaseHolds gives back what the request still reserves.
+func (c *call) releaseHolds(ctx context.Context) {
+	c.releaseAccountHold(ctx)
+	if h := c.keyHold; h != nil {
+		c.keyHold = nil
+		if w := c.g.d.KeyWindows; w != nil {
+			w.Settle(context.WithoutCancel(ctx), *h, 0)
+		}
 	}
 }

@@ -9,8 +9,8 @@ export function parseRequestOptions(args) {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--help' || arg === '-h') { options.help = true; continue; }
-    if (arg === '--direct' || arg === '--build') {
-      if (options.mode && options.mode !== arg.slice(2)) throw Error('--direct and --build are mutually exclusive');
+    if (arg === '--direct' || arg === '--build' || arg === '--count') {
+      if (options.mode && options.mode !== arg.slice(2)) throw Error('--direct, --build and --count are mutually exclusive');
       options.mode = arg.slice(2); continue;
     }
     if (arg === '--') { if (i + 2 !== args.length) throw Error('Expected one input file after --'); setInput(args[++i]); continue; }

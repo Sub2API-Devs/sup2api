@@ -88,20 +88,37 @@ func withConfirmedCapabilities(p features.WorkerPolicy, capabilities []string) f
 // CLI cannot render and without first_party_shape unless it declares the
 // conversion (withConfirmedCapabilities).
 func (s *Service) requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, r *accountRoute, p features.WorkerPolicy) (features.WorkerPolicy, error) {
-	var h workerHealth
-	if cached := s.routeHealthIfFresh(r); cached != nil {
-		h = *cached
-	} else {
-		var err error
-		if h, err = readWorkerHealth(ctx, client, base, key); err != nil {
-			return p, err
-		}
-		if r != nil && h.Status == "ok" {
-			s.keepRouteHealth(r, h)
-		}
+	h, err := s.currentWorkerHealth(ctx, client, base, key, r)
+	if err != nil {
+		return p, err
 	}
 	p = withConfirmedCapabilities(p, h.Capabilities)
 	return p, h.require(p.CLIVersion, requestPolicyCapabilities(p))
+}
+
+// requireCountTokensCapability confirms the Worker's CLI answers token counting
+// requests, through the same cached health as a model request.
+func (s *Service) requireCountTokensCapability(ctx context.Context, client *http.Client, base, key string, r *accountRoute) error {
+	h, err := s.currentWorkerHealth(ctx, client, base, key, r)
+	if err != nil {
+		return err
+	}
+	return h.require("", []string{features.RequestCountTokensCapability})
+}
+
+// currentWorkerHealth is the route's fresh cached health, or the Worker's answer now.
+func (s *Service) currentWorkerHealth(ctx context.Context, client *http.Client, base, key string, r *accountRoute) (workerHealth, error) {
+	if cached := s.routeHealthIfFresh(r); cached != nil {
+		return *cached, nil
+	}
+	h, err := readWorkerHealth(ctx, client, base, key)
+	if err != nil {
+		return h, err
+	}
+	if r != nil && h.Status == "ok" {
+		s.keepRouteHealth(r, h)
+	}
+	return h, nil
 }
 
 // routeHealthIfFresh is routeHealth for a route of the request cache; nil
