@@ -98,7 +98,10 @@ func (c *call) dispatch(ctx context.Context) {
 		if ref == nil {
 			c.endFailurePolicy("no_eligible_account")
 			if last == nil {
-				if busy {
+				if ctx.Err() != nil {
+					// The client left while queueing for an account.
+					last = canceledErr()
+				} else if busy {
 					last = fromCore(core.ErrRateLimited.WithMessage("all accounts are busy or rate limited, please retry later"), errTypeNoAccount)
 				} else {
 					last = fromCore(core.ErrNoAvailableAccount, errTypeNoAccount)
@@ -216,6 +219,11 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 	if ref, release, _ := c.tryStickyBinding(ctx, cands, excluded, exhausted); ref != nil {
 		return ref, release, false
 	}
+	// CONTRACTS §18.1: a stick rule does not leave a bound account that has no
+	// room, it answers 429.
+	if c.sticky != nil && c.sticky.refused {
+		return nil, nil, true
+	}
 	// Plugins may rewrite the priority/weight of the candidates for this
 	// request (CONTRACTS §24); everything below still gates them.
 	over := c.rankOverrides(ctx, cands)
@@ -284,6 +292,11 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 			return &ref, release, false
 		}
 	}
+	if ref := c.queueTarget(ctx, pool, reserve); ref != nil {
+		if release, ok := c.waitForAccount(ctx, ref, c.gw.QueueFallbackMaxWaiting, c.gw.queueFallbackWait()); ok {
+			return ref, release, false
+		}
+	}
 	return nil, nil, true
 }
 
@@ -307,11 +320,18 @@ func (c *call) tryStickyBinding(ctx context.Context, cands []core.AccountRef, ex
 		bound := &cands[i]
 		// An unusable type (request not convertible) keeps the binding; an
 		// exhausted rate window counts as "no free slot".
-		if c.usable(bound) && !exhausted[bound.ID] {
-			if release, ok := c.acquireAccount(ctx, bound); ok {
-				s.hit = true
-				return bound, release, true
+		if c.usable(bound) {
+			if !exhausted[bound.ID] {
+				release, ok := c.acquireAccount(ctx, bound)
+				if !ok {
+					release, ok = c.waitForAccount(ctx, bound, c.gw.QueueStickyMaxWaiting, c.gw.queueStickyWait())
+				}
+				if ok {
+					s.hit = true
+					return bound, release, true
+				}
 			}
+			s.refused = s.rule.OnFailure == onFailureStick
 		}
 		return nil, nil, true
 	}
@@ -723,8 +743,8 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
 	}
-	if idle := c.env.Duration(core.EnvVarStreamingIdleTimeoutSeconds); idle > 0 && c.stream {
-		resp.Body = newIdleBody(resp.Body, idle, ucancel)
+	if c.stream {
+		resp.Body = newIdleBody(resp.Body, c.streamIdle(), ucancel)
 	}
 	defer resp.Body.Close()
 	if c.g.d.Observations != nil {

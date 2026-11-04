@@ -87,10 +87,18 @@ export default {
       max_attempts: 'Max attempts',
       platform_call_timeout_ms: 'Platform call timeout',
       default_hook_timeout_ms: 'Default hook timeout',
-      platform_hotpath_timeout_ms: 'Platform hot-path timeout'
+      platform_hotpath_timeout_ms: 'Platform hot-path timeout',
+      queue_sticky_max_waiting: 'Max queued for a bound account',
+      queue_sticky_wait_seconds: 'Longest wait for a bound account',
+      queue_fallback_max_waiting: 'Max queued per account when all are full',
+      queue_fallback_wait_seconds: 'Longest wait when all accounts are full'
     },
     hints: {
       max_attempts: 'Accounts tried per request, including the first attempt (failover).',
+      queue_sticky_max_waiting: 'How many requests per account may wait for a session\'s bound account when it is full, staying on it to keep the prompt cache. 0 turns this queue off.',
+      queue_sticky_wait_seconds: 'Longest wait for the bound account; after it the sticky rule switches account or answers 429. 0 turns this queue off.',
+      queue_fallback_max_waiting: 'How many requests per account may queue when every candidate is full. 0 answers 429 at once.',
+      queue_fallback_wait_seconds: 'Longest wait when every candidate is full; after it the request gets 429. 0 turns this queue off.',
       platform_call_timeout_ms: 'Timeout of plugin platform calls on the request path (building the upstream request, parsing usage).',
       default_hook_timeout_ms: 'Used by hooks whose manifest sets no timeout.',
       platform_hotpath_timeout_ms:

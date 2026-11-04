@@ -14,7 +14,7 @@ export default {
     numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存'
   },
   limitsUi: {
-    title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话',
+    title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话', waiting: '等待 {n}',
     windowHint: 'RPM、TPM、会话都是精确的近 60 秒用量。RPM 在请求开始时计入，长流不会重复计，所以并发可以高于 RPM。TPM 是非缓存输入加输出，设了上限时包含进行中请求的预占，结束后换成实际值。会话是近 60 秒内开始过请求的会话数（按粘性会话键，没有命中粘性规则的请求各算一个）。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。'
   },
   usage: {

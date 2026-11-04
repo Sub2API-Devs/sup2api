@@ -123,6 +123,10 @@ type KeyUsageReporter interface {
 // KeySlots is the Slots kind of the API keys' requests in flight.
 const KeySlots = "apikey"
 
+// AccountWaitSlots is the Slots kind of the requests queueing for an account
+// (docs/GATEWAY-CONCURRENCY-DESIGN.md §3).
+const AccountWaitSlots = "account-wait"
+
 // RateHold is one admitted request in the rate windows: what it reserved in
 // each set of counters of its subject, until Settle replaces that by what the
 // request really used. A hold never settled returns by itself when its

@@ -254,7 +254,7 @@
 |---|---|---|
 | `node:live` | ZSET boot_id → 心跳毫秒 | D |
 | `node:info:{boot_id}`、`node:plugins:{boot_id}` | HASH，TTL 15s | D |
-| `slot:{kind}:{id}` | ZSET member=`{boot_id}:{request_id}:{lease_id}`，score 为 Redis 时间下的到期毫秒；失去成员即取消执行（当前实现中续期命令出错也按失去处理，§78.4） | D |
+| `slot:{kind}:{id}` | ZSET member=`{boot_id}:{request_id}:{lease_id}`，score 为 Redis 时间下的到期毫秒；失去成员时重新写入，不影响在跑的请求（§78.5） | D |
 | `lock:{name}` | STRING owner token，TTL = 锁有效期（redsync `SET NX PX`，比对删除 / 比对 `PEXPIRE`）；**没有 PG 兜底**，连不上 Redis 的节点不拿锁（§27） | D |
 | `lock:plugin:{plugin_key}:{name}` | 同上，但 owner token **由插件生成**（每次 `LockAcquire` 一个新的）；插件经 `HostService.LockAcquire/Renew/Release` 使用，前缀由宿主按调用者强制加上（§27.3）。核心自己的锁名**不得**以 `plugin:` 开头 | C2 |
 | `cooldown:account:{id}` | STRING reason，TTL | A |
@@ -849,7 +849,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 - 判断和展示都按精确的近 60 秒（§68.3），时间取 Redis `TIME`。
 - 候选筛选只是预检查；拿到账号并发槽后必须调用 Redis Lua `TryHit`，在一次原子操作中检查并占用 RPM，同时预占 TPM（§78.3）。共享时间取 Redis `TIME`，Redis 出错则拒绝这次准入。
 - 达到任一上限的账号在本窗口内不再参与调度（和冷却一样从候选中剔除，不改状态、不发事件）。候选账号都因限流或并发满而不可用时，网关返回 429 `rate_limited`（message：`all accounts are busy or rate limited, please retry later`）；候选为空仍是 503 `no_available_account`。
-- 粘性会话绑定的账号达到限流上限时，视同"没有空闲并发槽位"：`on_failure=failover` 的规则改选别的账号并重新绑定，`stick` 的规则返回 429（当前实现没有做到 `stick` 的 429，§78.4）。
+- 粘性会话绑定的账号达到限流上限时，视同"没有空闲并发槽位"：`on_failure=failover` 的规则改选别的账号并重新绑定，`stick` 的规则返回 429。绑定账号只是并发满时先排队（§78.5）。
 
 ### 18.2 调度顺序（ARCHITECTURE 6.2 更新）
 
@@ -6184,7 +6184,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **Redis 是请求路径的强依赖**（§60.2、§71.3）：准入失败时请求失败，没配上限的账号和 Key 也一样，因为计数和占槽都不跳过。new-api 对没配上限的渠道不访问 Redis。
 - **账号路径的超限错误不区分原因，也没有 `Retry-After`**（§71.2）：并发、RPM、TPM、会话是同一条消息。
 - **账号用量读失败显示 0**（§18.1）：和真实的 0 无法区分。`outcomes` 这时是 `null`（§73），Key 的 `live` 这时被省略（§60.1），账号用量的做法和它们不一致。
-- **上游超时默认不限**（`core.EnvironmentVariables`）：响应头有默认值（流式 180 秒，非流式 600 秒）。之后整体超时和流式空闲超时未设置就不限，上游静默时槽一直被占用。
+- **上游整体超时默认不限**（`core.EnvironmentVariables`）：响应头默认流式 180 秒、非流式 600 秒，流式空闲默认 180 秒。非流式响应头之后的读取没有默认上限。
 
 ### 78.3 TPM 预占和结算
 
@@ -6204,14 +6204,18 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 | 问题 | 位置 | 效果 |
 |---|---|---|
-| `on_failure=stick` 的绑定账号限流或并发满时没有返回 429 | `gateway` `pick` 丢弃 `tryStickyBinding` 的 handled | 换号并改绑，与 §18.1、§71.3 不符，会话漂移。内置规则都是 `failover`，只影响管理员配置的 `stick` 规则 |
-| 续期命令出错也当作失去成员 | `cluster` `Slots.refresh` | Redis 抖动一次，本节点在途请求被取消，而成员还有近 5 分钟有效期 |
-| 租约丢失被当成客户端取消 | `gateway` `attempt`、`forward` 只看 `ctx.Err()` | 不换号，记成 499 `client_canceled`。响应头之前丢失时，客户端收不到网关的错误响应；流中丢失时，客户端收到正常结束，看不出被截断。WebSocket 已正确处理（关闭码 1013） |
-| 释放槽位的 `ZREM` 失败后不重试 | `cluster` `Slots.Acquire` 返回的 release | 槽位要等 TTL 才空出，最多 5 分钟，这段时间账号可能显示满并发并被判忙 |
-| 写客户端没有超时 | `gateway` `forward` | 客户端不读数据时，槽位一直被占用，直到连接关闭 |
-| PG 卡住会拖累 Redis 心跳 | `cluster` registry，两者共用一个 5 秒 ctx | 单节点 PG 卡住 15 秒以上时被其他节点判死，它的槽位被回收，请求被取消 |
+| PG 卡住会拖累 Redis 心跳 | `cluster` registry，两者共用一个 5 秒 ctx | 单节点 PG 卡住 15 秒以上时被其他节点判死，它的槽位被回收。在跑的请求不受影响，槽位会写回，但节点在这段时间显示为下线 |
 | 会话时间只在准入时刷新 | `ratelimit` `admit` | 长流还没结束，会话就已不算持有。账号会话满时，同一会话的下一个请求可能被改绑（`failover`）。new-api 也是这样 |
 | WebSocket 沿用连接建立时的账号和 Key 上限 | `gateway/websocket.go` | 管理员降低上限后，活跃连接仍按旧值放行 |
 | WebSocket 首轮换号不移除旧账号的会话 | `gateway/websocket.go` | 与 §71.3 不符，旧账号的会话数最多虚高 60 秒 |
 | 准入时 Redis 出错的响应不一致 | `gateway/websocket.go`、`gateway/resource_http.go` | HTTP 返回 503，WebSocket 和资源接口返回 429，与 §71.3 不符 |
 | 账号详情抽屉的用量不刷新 | `web/src/views/accounts/AccountsView.vue` | 数字停在打开时的值，列表正常刷新 |
+
+### 78.5 并发控制（参照旧版 sub2api，设计见 `docs/GATEWAY-CONCURRENCY-DESIGN.md`）
+
+- **统计不影响在跑的请求**：续期出错只记日志，下一轮再试；成员丢失（Redis 重启、节点被误判死亡）时重新写入，这段时间并发可能超过上限。释放时 `ZREM` 失败会重试，直到成员过期。`LeasedSlots` 返回的 context 只在释放或上层取消时结束。
+- **账号满时排队**：绑定账号并发满时，请求等它（默认最多 3 个排队，最长 120 秒）；超时或排队满时，`failover` 规则走普通调度，`stick` 规则返回 429。所有候选都满时，请求排在最高优先级层负载最低的账号上（默认每账号 100 个，最长 30 秒），负载 = (在用 + 排队) ÷ 上限，超时或排队满返回 429。限流满的账号不排队。排队不计入重试次数，等过一次超时后本请求不再排队。占到槽后回到正常流程（`TryHit`），并检查账号是否进入冷却。
+- **不排队的请求**：WebSocket、免费端点（如 `count_tokens`）、正在排空的节点。
+- **排队计数**：`slot:account-wait:{账号 id}`，复用槽位，节点死亡后一样回收。账号视图新增 `waiting`。重试节奏 100ms 起，×1.5，上限 2 秒，±20% 抖动。
+- **设置**：`GET/PUT /settings/gateway` 新增 `queue_sticky_max_waiting`（0–10000，默认 3）、`queue_sticky_wait_seconds`（0–600，默认 120）、`queue_fallback_max_waiting`（0–10000，默认 100）、`queue_fallback_wait_seconds`（0–600，默认 30）。任一项为 0 关闭对应的排队。
+- **卡死兜底**：流式空闲超时未设置时默认 180 秒，WebSocket 进行中的一轮也受它约束（超时以 1013 关闭）。每次写客户端最长 60 秒，超时按客户端断开处理。

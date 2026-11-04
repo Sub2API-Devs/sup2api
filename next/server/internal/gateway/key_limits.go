@@ -13,7 +13,7 @@ import (
 // (CONTRACTS §60; 0 = unlimited). Every request is counted, capped or not,
 // so the key list shows the current rates. tokens are reserved against the
 // TPM cap until hold (nil when there are no windows) settles. release frees
-// the slot; ctx is cancelled if the slot is lost.
+// the slot.
 func (g *Gateway) admitKey(ctx context.Context, p *core.APIKeyPrincipal, rid string, tokens int64) (context.Context, func(), *core.RateHold, *gwError) {
 	l := p.KeyLimits
 	ctx, release, ok, err := core.AcquireSlot(ctx, g.d.Slots, core.KeySlots, p.KeyID, l.Concurrency, rid)

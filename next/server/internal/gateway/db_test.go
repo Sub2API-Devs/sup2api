@@ -312,7 +312,7 @@ func TestStickyRulesFromDBDriveScheduling(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	e.setSettings(defaultGatewaySettings(), StickySettings{Enabled: true, DefaultTTLSeconds: 60})
+	e.setSettings(noQueueSettings(), StickySettings{Enabled: true, DefaultTTLSeconds: 60})
 	sess := withSession(body(testModel, false), "db-session")
 	e.messages(sess)
 	e.record()

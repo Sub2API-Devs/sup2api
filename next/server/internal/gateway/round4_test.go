@@ -290,8 +290,14 @@ func TestGatewaySettingsValidation(t *testing.T) {
 		PlatformHotpathTimeoutMs: 2000}) {
 		t.Fatalf("normalized %+v", n)
 	}
-	if (GatewaySettings{}).normalized() != defaultGatewaySettings() {
-		t.Fatal("zero value must yield the defaults")
+	// The queue numbers are the exception: 0 turns a queue off, and a stored
+	// row lacking them reads as the defaults because it decodes over them.
+	if (GatewaySettings{}).normalized() != (func() GatewaySettings {
+		d := defaultGatewaySettings()
+		d.QueueStickyMaxWaiting, d.QueueStickyWaitSeconds, d.QueueFallbackMaxWaiting, d.QueueFallbackWaitSecond = 0, 0, 0, 0
+		return d
+	})() {
+		t.Fatal("zero value must yield the defaults, with the queues off")
 	}
 }
 
@@ -362,7 +368,8 @@ func TestGatewaySettingsAPI(t *testing.T) {
 		t.Fatalf("put: %d %s", code, res.Raw)
 	}
 	if store.v == nil || *store.v != (GatewaySettings{MaxAttempts: 5, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 800,
-		PlatformHotpathTimeoutMs: 300}) || store.by != 7 {
+		PlatformHotpathTimeoutMs: 300, QueueStickyMaxWaiting: 3, QueueStickyWaitSeconds: 120,
+		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30}) || store.by != 7 {
 		t.Fatalf("stored %+v by %d", store.v, store.by)
 	}
 	g.settings.mu.Lock()

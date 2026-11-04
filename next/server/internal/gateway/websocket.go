@@ -162,6 +162,11 @@ func (s *wsSession) run(ctx context.Context) {
 	poll := time.NewTicker(s.g.ws.drainPoll)
 	defer poll.Stop()
 	var drainDeadline time.Time
+	// upstreamIdle bounds the silence of a turn in progress, as a stream's idle
+	// timeout does on HTTP, so a stuck turn cannot hold its slots forever.
+	upstreamIdle := time.NewTimer(time.Hour)
+	upstreamIdle.Stop()
+	defer upstreamIdle.Stop()
 	end := func(code websocket.StatusCode, reason string) {
 		_ = s.client.Close(code, reason)
 	}
@@ -198,6 +203,9 @@ func (s *wsSession) run(ctx context.Context) {
 				return
 			}
 			idle.Reset(s.g.ws.idle)
+			if turn != nil {
+				upstreamIdle.Reset(turn.cl.streamIdle())
+			}
 		case m := <-upIn:
 			if m.err != nil {
 				if turn != nil {
@@ -216,9 +224,11 @@ func (s *wsSession) run(ctx context.Context) {
 			if turn == nil {
 				continue
 			}
+			upstreamIdle.Reset(turn.cl.streamIdle())
 			if done, out := s.observe(sctx, turn, m.data); done {
 				s.finish(sctx, turn, out)
 				turn = nil
+				upstreamIdle.Stop()
 				idle.Reset(s.g.ws.idle)
 				if !drainDeadline.IsZero() {
 					end(wsCloseRestart, "node is draining; reconnect")
@@ -228,6 +238,13 @@ func (s *wsSession) run(ctx context.Context) {
 		case <-lease:
 			s.finish(sctx, turn, wsOutcome{status: http.StatusServiceUnavailable, errType: errTypeInternal, msg: "account lease lost"})
 			end(websocket.StatusTryAgainLater, "account lease lost; reconnect")
+			return
+		case <-upstreamIdle.C:
+			if turn == nil {
+				continue
+			}
+			s.finish(sctx, turn, wsOutcome{status: http.StatusGatewayTimeout, errType: errTypeUpstream, msg: errStreamIdleTimeout.Error()})
+			end(websocket.StatusTryAgainLater, "upstream went silent; reconnect")
 			return
 		case <-idle.C:
 			if turn != nil {

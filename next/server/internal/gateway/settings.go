@@ -37,6 +37,14 @@ type GatewaySettings struct {
 	// tightening the hook default tightened that RPC too. The two have no
 	// reason to move together.
 	PlatformHotpathTimeoutMs int `json:"platform_hotpath_timeout_ms"`
+	// A request finding its account full queues for it
+	// (docs/GATEWAY-CONCURRENCY-DESIGN.md §3). Sticky: its session's bound
+	// account. Fallback: the least loaded candidate when all are full. 0 for
+	// either number turns that queue off.
+	QueueStickyMaxWaiting   int `json:"queue_sticky_max_waiting"`
+	QueueStickyWaitSeconds  int `json:"queue_sticky_wait_seconds"`
+	QueueFallbackMaxWaiting int `json:"queue_fallback_max_waiting"`
+	QueueFallbackWaitSecond int `json:"queue_fallback_wait_seconds"`
 }
 
 // StickySettings is the "sticky" row of the settings table.
@@ -48,7 +56,8 @@ type StickySettings struct {
 
 func defaultGatewaySettings() GatewaySettings {
 	return GatewaySettings{MaxAttempts: 3, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 300,
-		PlatformHotpathTimeoutMs: 300}
+		PlatformHotpathTimeoutMs: 300, QueueStickyMaxWaiting: 3, QueueStickyWaitSeconds: 120,
+		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30}
 }
 
 // Accepted ranges of the gateway settings (CONTRACTS §14.4).
@@ -64,6 +73,8 @@ const (
 	// neither is a place to wait seconds.
 	minPlatformHotpathTimeoutMs = 50
 	maxPlatformHotpathTimeoutMs = 2000
+	maxQueueWaiting             = 10000
+	maxQueueWaitSeconds         = 600
 )
 
 func defaultStickySettings() StickySettings {
@@ -91,6 +102,14 @@ func (s GatewaySettings) normalized() GatewaySettings {
 	s.DefaultHookTimeoutMs = clamp(s.DefaultHookTimeoutMs, d.DefaultHookTimeoutMs, minDefaultHookTimeoutMs, maxDefaultHookTimeoutMs)
 	s.PlatformHotpathTimeoutMs = clamp(s.PlatformHotpathTimeoutMs, d.PlatformHotpathTimeoutMs,
 		minPlatformHotpathTimeoutMs, maxPlatformHotpathTimeoutMs)
+	// Unlike the fields above, 0 means something here (off): a row written
+	// before these fields existed reads them as their defaults because the
+	// row is decoded over defaultGatewaySettings.
+	bound := func(v, hi int) int { return min(max(v, 0), hi) }
+	s.QueueStickyMaxWaiting = bound(s.QueueStickyMaxWaiting, maxQueueWaiting)
+	s.QueueStickyWaitSeconds = bound(s.QueueStickyWaitSeconds, maxQueueWaitSeconds)
+	s.QueueFallbackMaxWaiting = bound(s.QueueFallbackMaxWaiting, maxQueueWaiting)
+	s.QueueFallbackWaitSecond = bound(s.QueueFallbackWaitSecond, maxQueueWaitSeconds)
 	return s
 }
 
@@ -108,6 +127,14 @@ func (s GatewaySettings) hotpathTimeout() time.Duration {
 		ms = defaultGatewaySettings().PlatformHotpathTimeoutMs
 	}
 	return time.Duration(ms) * time.Millisecond
+}
+
+func (s GatewaySettings) queueStickyWait() time.Duration {
+	return time.Duration(s.QueueStickyWaitSeconds) * time.Second
+}
+
+func (s GatewaySettings) queueFallbackWait() time.Duration {
+	return time.Duration(s.QueueFallbackWaitSecond) * time.Second
 }
 
 type settingsSnapshot struct {

@@ -143,6 +143,9 @@ type call struct {
 	usage *pendingExtract
 	// Context of the currently selected account's concurrency lease.
 	slotCtx context.Context
+	// queueWaited says the request already sat out a whole queue timeout, so it
+	// does not queue again (docs/GATEWAY-CONCURRENCY-DESIGN.md §3).
+	queueWaited bool
 	// accountHold and keyHold are the holds of the account last admitted by
 	// the limiter and of the API key, until their tokens settle (CONTRACTS §78).
 	accountHold, keyHold     *core.RateHold

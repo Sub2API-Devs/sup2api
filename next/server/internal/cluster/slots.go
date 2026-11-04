@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"strconv"
 	"sync"
@@ -26,7 +25,8 @@ redis.call('ZADD', KEYS[1], now+tonumber(ARGV[2]), ARGV[4])
 redis.call('PEXPIRE', KEYS[1], ARGV[2])
 return 1`)
 
-// A vanished or expired member is a lost lease, never a successful refresh.
+// A vanished or expired member is a lost lease, never a successful refresh:
+// refresh puts it back with restoreSlotScript.
 var refreshSlotScript = redis.NewScript(redisTimeLua + `
 local old = redis.call('ZSCORE', KEYS[1], ARGV[2])
 if not old or tonumber(old) <= now then return 0 end
@@ -34,13 +34,14 @@ redis.call('ZADD', KEYS[1], 'XX', now+tonumber(ARGV[3]), ARGV[2])
 redis.call('PEXPIRE', KEYS[1], ARGV[3])
 return 1`)
 
-var ErrSlotLost = errors.New("concurrency slot lease lost")
+// restoreSlotScript counts a running request again whose member was lost, with
+// no regard for the limit: the request is already running.
+var restoreSlotScript = redis.NewScript(redisTimeLua + `
+redis.call('ZADD', KEYS[1], now+tonumber(ARGV[3]), ARGV[2])
+redis.call('PEXPIRE', KEYS[1], ARGV[3])
+return 1`)
 
 type slotID struct{ key, member string }
-type slotLease struct {
-	cancel context.CancelCauseFunc
-	timer  *time.Timer
-}
 
 // reclaimScript removes members whose boot id is not alive in node:live.
 // It refuses to run (returns -1) unless the calling node itself is alive,
@@ -96,7 +97,11 @@ type Slots struct {
 	log  *slog.Logger
 
 	mu   sync.Mutex
-	held map[slotID]*slotLease
+	held map[slotID]struct{}
+	// unreleased holds members whose ZREM failed until when they expire by
+	// themselves; refresh keeps trying, so a Redis hiccup does not leave the
+	// account looking busy for a whole TTL.
+	unreleased map[slotID]time.Time
 }
 
 // NewSlots builds the limiter for node (normally the *Registry).
@@ -110,7 +115,7 @@ func NewSlots(rdb redis.UniversalClient, node core.Node, opts SlotOptions) *Slot
 	if opts.ReclaimInterval <= 0 {
 		opts.ReclaimInterval = DefaultReclaimInterval
 	}
-	return &Slots{rdb: rdb, node: node, opts: opts, log: orDefault(opts.Logger), held: map[slotID]*slotLease{}}
+	return &Slots{rdb: rdb, node: node, opts: opts, log: orDefault(opts.Logger), held: map[slotID]struct{}{}, unreleased: map[slotID]time.Time{}}
 }
 
 // SlotKey returns the Redis key for (kind, id).
@@ -132,7 +137,6 @@ func (s *Slots) AcquireLease(ctx context.Context, kind string, id int64, limit i
 	// Each acquisition has its own identity: releasing an earlier attempt
 	// can never remove a later lease of the same request and account.
 	member := s.node.BootID() + ":" + requestID + ":" + uuid.NewString()
-	started := time.Now()
 	n, err := acquireScript.Run(ctx, s.rdb, []string{key},
 		sharedClockOverride(s.opts.Now), s.opts.TTL.Milliseconds(), limit, member,
 	).Int()
@@ -144,32 +148,23 @@ func (s *Slots) AcquireLease(ctx context.Context, kind string, id int64, limit i
 	}
 	leaseCtx, cancel := context.WithCancelCause(ctx)
 	ident := slotID{key, member}
-	lease := &slotLease{cancel: cancel}
-	remaining := s.opts.TTL - time.Since(started)
-	if remaining <= 0 {
-		cancel(ErrSlotLost)
-	}
-	lease.timer = time.AfterFunc(max(remaining, 0), func() { cancel(ErrSlotLost) })
 	s.mu.Lock()
-	if old := s.held[ident]; old != nil {
-		old.timer.Stop()
-		old.cancel(ErrSlotLost)
-	}
-	s.held[ident] = lease
+	s.held[ident] = struct{}{}
 	s.mu.Unlock()
 	var once sync.Once
 	return leaseCtx, func() {
 		once.Do(func() {
 			s.mu.Lock()
 			delete(s.held, ident)
-			lease.timer.Stop()
 			s.mu.Unlock()
 			cancel(context.Canceled)
 			rctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			if err := s.rdb.ZRem(rctx, key, member).Err(); err != nil {
-				// The member expires on its own (TTL) or is reclaimed.
-				s.log.Warn("slot release failed", "key", key, "err", err)
+				s.log.Warn("slot release failed, will retry", "key", key, "err", err)
+				s.mu.Lock()
+				s.unreleased[ident] = time.Now().Add(s.opts.TTL)
+				s.mu.Unlock()
 			}
 		})
 	}, true, nil
@@ -244,49 +239,85 @@ func (s *Slots) Reclaim(ctx context.Context) (int, error) {
 	return removed, nil
 }
 
-// refresh extends the expiry of every slot this process still holds.
+// refresh extends the expiry of every slot this process still holds and
+// retries the releases that failed. Accounting never touches a running
+// request (docs/GATEWAY-CONCURRENCY-DESIGN.md §4): on a Redis error the next
+// round tries again, and a member that is gone (Redis restarted, this node
+// was judged dead) is put back, even if that goes over the limit for a while.
 func (s *Slots) refresh(ctx context.Context) error {
+	s.retryReleases(ctx)
 	s.mu.Lock()
-	held := make(map[slotID]*slotLease, len(s.held))
-	for id, lease := range s.held {
-		held[id] = lease
+	held := make([]slotID, 0, len(s.held))
+	for id := range s.held {
+		held = append(held, id)
 	}
 	s.mu.Unlock()
 	if len(held) == 0 {
 		return nil
 	}
-	started := time.Now()
 	rctx, cancel := context.WithTimeout(ctx, min(s.opts.TTL/5, 3*time.Second))
 	defer cancel()
 	cmds := make(map[slotID]*redis.Cmd, len(held))
 	_, first := s.rdb.Pipelined(rctx, func(p redis.Pipeliner) error {
-		for id := range held {
+		for _, id := range held {
 			cmds[id] = refreshSlotScript.Eval(rctx, p, []string{id.key}, sharedClockOverride(s.opts.Now), id.member, s.opts.TTL.Milliseconds())
 		}
 		return nil
 	})
-	remaining := s.opts.TTL - time.Since(started)
-	for id, lease := range held {
+	for _, id := range held {
 		n, err := cmds[id].Int()
-		s.mu.Lock()
-		if s.held[id] == lease {
-			if err != nil || n != 1 || remaining <= 0 {
-				lease.timer.Stop()
-				lease.cancel(ErrSlotLost)
-				delete(s.held, id)
-			} else {
-				lease.timer.Reset(remaining)
+		if err != nil {
+			if first == nil {
+				first = err
 			}
+			continue
 		}
-		s.mu.Unlock()
-		if err != nil && first == nil {
-			first = err
-		}
-		if n != 1 && first == nil {
-			first = ErrSlotLost
+		if n != 1 {
+			s.restore(rctx, id)
 		}
 	}
 	return first
+}
+
+// restore puts back the member of a slot found lost while it is still held.
+// A release between the check and the write would leave the member behind with
+// nobody refreshing it, so the check runs again afterwards.
+func (s *Slots) restore(ctx context.Context, id slotID) {
+	stillHeld := func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		_, ok := s.held[id]
+		return ok
+	}
+	if !stillHeld() {
+		return
+	}
+	s.log.Warn("slot of a running request was lost, counting it again", "key", id.key)
+	if err := restoreSlotScript.Run(ctx, s.rdb, []string{id.key}, sharedClockOverride(s.opts.Now), id.member, s.opts.TTL.Milliseconds()).Err(); err != nil {
+		s.log.Warn("slot restore failed", "key", id.key, "err", err)
+		return
+	}
+	if !stillHeld() {
+		_ = s.rdb.ZRem(ctx, id.key, id.member).Err()
+	}
+}
+
+// retryReleases removes the members whose release failed, until they expire.
+func (s *Slots) retryReleases(ctx context.Context) {
+	s.mu.Lock()
+	ids := make(map[slotID]time.Time, len(s.unreleased))
+	for id, until := range s.unreleased {
+		ids[id] = until
+	}
+	s.mu.Unlock()
+	for id, until := range ids {
+		if err := s.rdb.ZRem(ctx, id.key, id.member).Err(); err != nil && time.Now().Before(until) {
+			continue
+		}
+		s.mu.Lock()
+		delete(s.unreleased, id)
+		s.mu.Unlock()
+	}
 }
 
 // Run reclaims dead-node slots every ReclaimInterval and refreshes held

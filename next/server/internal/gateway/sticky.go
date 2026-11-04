@@ -315,6 +315,7 @@ type stickySession struct {
 	ttl          time.Duration
 	bound        int64 // account id bound before this request, 0 = none
 	tried        bool  // the bound account was considered
+	refused      bool  // a stick rule found the bound account without room
 	hit          bool  // the bound account served (or is serving) the request
 	keep         bool  // keep bindings of disabled accounts
 	policyValue  string
