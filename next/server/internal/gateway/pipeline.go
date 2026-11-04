@@ -192,7 +192,9 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 		return
 	}
 	cl.gw, cl.stickyCfg, cl.autoDisable = set.gateway, set.sticky, set.autoDisable
-	cl.failurePolicy = set.failurePolicy
+	if !cl.tokenCounting() {
+		cl.failurePolicy = set.failurePolicy
+	}
 	if b.Endpoint.WebSocket() {
 		g.serveWebSocket(ctx, cl)
 		return

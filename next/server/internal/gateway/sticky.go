@@ -379,7 +379,8 @@ func (c *call) stickyMatch(ctx context.Context) (*stickyRule, string) {
 	c.matched = &stickyMatched{model: c.model, bodyVersion: c.bodyVersion}
 	ua := c.c.Request.UserAgent()
 	for _, r := range c.g.rules.get(ctx) {
-		if !r.matches(c.ep.Protocol, c.model, ua) {
+		// Counting shares its session's binding with the Messages requests.
+		if !r.matches(c.ep.Protocol, c.model, ua) && !(c.ep.Protocol == "anthropic.count_tokens" && r.matches("anthropic.messages", c.model, ua)) {
 			continue
 		}
 		if v := c.stickyValue(ctx, r); v != "" {
@@ -474,6 +475,9 @@ func (c *call) finishSticky(ctx context.Context, accountID int64, success bool) 
 	}
 	c.rec.StickyRule = s.rule.Name
 	c.rec.StickyHit = s.hit
+	if c.tokenCounting() {
+		return // Follows the binding; never writes it or the rule's statistics.
+	}
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 500*time.Millisecond)
 	defer cancel()
 	pipe := c.g.d.Redis.Pipeline()

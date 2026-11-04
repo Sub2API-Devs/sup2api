@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,6 +43,30 @@ func TestTokenCountingConsumesNothing(t *testing.T) {
 			t.Fatalf("the model request after them: %d %s", r.status, r.body)
 		}
 		e.record()
+	})
+
+	t.Run("it follows a session's binding and never makes one", func(t *testing.T) {
+		e := newEnv(t)
+		e.enableSticky(onFailureFailover)
+		countSession := func(session string) {
+			t.Helper()
+			r := e.do("/v1/messages/count_tokens", withSession(body(testModel, false), session), nil)
+			if r.status != 200 {
+				t.Fatalf("%d %s", r.status, r.body)
+			}
+			e.record()
+		}
+		countSession("unbound")
+		if keys := e.mr.Keys(); slices.ContainsFunc(keys, func(k string) bool { return strings.HasPrefix(k, "sticky:") && !strings.HasPrefix(k, "sticky:stats") }) {
+			t.Fatalf("a count made a binding: %v", keys)
+		}
+		_, key := bindSession(t, e, "bound")
+		for range 5 {
+			countSession("bound")
+			if k := e.up.keys(); k[len(k)-1] != key {
+				t.Fatalf("served by %v, want %s", k, key)
+			}
+		}
 	})
 
 	t.Run("a failed count leaves the account as it was", func(t *testing.T) {

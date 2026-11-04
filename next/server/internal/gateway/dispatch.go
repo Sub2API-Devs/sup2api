@@ -348,7 +348,7 @@ func (c *call) tryStickyBinding(ctx context.Context, cands []core.AccountRef, ex
 // failures do not block scheduling.
 func (c *call) exhausted(ctx context.Context, cands []core.AccountRef, excluded map[int64]bool) map[int64]bool {
 	lim := c.g.d.Limiter
-	if lim == nil {
+	if lim == nil || c.tokenCounting() {
 		return nil
 	}
 	var limited []core.AccountRef
@@ -398,6 +398,7 @@ func weightedOrder(grp []core.AccountRef, rnd func() float64) {
 // consumes nothing: no key or account concurrency, no RPM or TPM, no quota, and
 // a failed count says nothing about the account, which keeps its state
 // (2026-11-04). An account that is cooling or disabled still does not serve it.
+// It follows the session's sticky binding but never makes one (sticky.go).
 func (c *call) tokenCounting() bool {
 	return strings.HasSuffix(c.ep.Protocol, ".count_tokens")
 }
