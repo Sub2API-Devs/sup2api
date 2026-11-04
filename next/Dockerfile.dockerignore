@@ -20,3 +20,6 @@ plugins/ccgateway/companions/*
 # the context: build-go.sh packs it into the ccgateway package (§53.10). Only
 # the image script's leftover temporary directories are dropped.
 plugins/ccgateway/images/.build.*
+# Claude Code reverse-engineering workspace (reading tree, research, official ELFs, node_modules):
+# not part of any build, and several GB with its local data.
+plugins/ccgateway/cli-reverse

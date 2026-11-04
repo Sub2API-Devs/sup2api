@@ -22,6 +22,7 @@ ccgateway/
 ├─ forms/                 # 账号表单（managed、apikey 的 schema 与 UI）
 ├─ assets/                # 图标与许可
 ├─ docs/                  # 设计、机制分析、操作手册（见下）
+├─ cli-reverse/           # 官方 Claude Code CLI 2.1.316 的 AST 逆向：可读可构建的阅读树、官方 CLI 行为研究、版本对比工具（不进插件包和镜像，见其 README）
 └─ companions/            # 账号容器里运行的组件，不随插件包安装到核心
    ├─ go.mod              # Worker 引擎模块 ccgateway
    ├─ engine/             # /v1/messages → CLI request 命令、身份、日志、资源身份、管理接口

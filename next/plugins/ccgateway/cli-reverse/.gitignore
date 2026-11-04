@@ -1,3 +1,20 @@
+# sup2api's root .gitignore ignores names that are source in this tree (reconstructed/vendor/,
+# vendor packages' own dist/ and build/ dirs, AGENTS.md, tests …): re-include them here first;
+# this tree's own ignores follow and win.
+!vendor/
+!dist/
+!build/
+!release/
+!tests
+!tmp/
+!temp/
+!AGENTS.md
+!*.out
+!*.tmp
+!*.bak
+!*.test
+!.cache/
+
 node_modules/
 artifacts/official/claude-linux-x64
 artifacts/tmp/

@@ -4,10 +4,10 @@
 
 ## 来源与约定
 
-- 复制自 sup2api 仓库 `D:\projects\golang\sup2api`，复制时的提交是 `9b4e71ec4`（2026-11-04）。sup2api 里的原件保留不动，由 sup2api 继续维护它自己的那份。
-- 文档按原样复制，没有改写。因此文中的相对链接和路径（如 `../companions/cli-mods/…`、`artifacts/claude-2.1.312/…`、`CONTRACTS §53`）**指的都是 sup2api 仓库**，在本仓库里打不开。要查原文上下文，到 sup2api 的对应位置看。
-- 文中的函数名都是**当时那个版本**的压缩名，比如 2.1.304 的 `kLo`、2.1.316 的 `Oi()`。它们和本仓库阅读树里的名字不是一回事。要在阅读树里找 2.1.316 的同一个函数，用 `node tools/q.mjs find <压缩名>`，或者查 `naming/final/top.json` 里 `min` 字段等于这个压缩名的条目，并按文中写的 chunk 文件区分同名。其他版本先用 [`tools/versions/`](../tools/versions/) 配对到 2.1.316，再查名字。
-- 很多文档带有"改造 / 补丁 / Worker / 网关"相关的内容，那是 sup2api 的产品设计，只作背景。本仓库关心的是其中关于官方 CLI 本身行为的结论。
+- 复制自 sup2api，复制时的提交是 `9b4e71ec4`（2026-11-04）。原件保留在原处，由 ccgateway 继续维护：文档在 `next/plugins/ccgateway/docs/` 和 `next/docs/`，数据在 sup2api 本机的 `artifacts/`（不入库）。本目录现在也在 sup2api 里，位置是 `next/plugins/ccgateway/cli-reverse/`。
+- 文档按原样复制，没有改写。所以文中的相对链接和路径（如 `../companions/cli-mods/…`、`artifacts/claude-2.1.312/…`、`CONTRACTS §53`）**都是相对原件所在位置写的**，从本目录点不开。要看原文的上下文，请打开 `next/plugins/ccgateway/docs/` 里的原件。
+- 文中的函数名都是**当时那个版本**的压缩名，比如 2.1.304 的 `kLo`、2.1.316 的 `Oi()`。它们和本目录阅读树里的名字不是一回事。要在阅读树里找 2.1.316 的同一个函数，用 `node tools/q.mjs find <压缩名>`，或者查 `naming/final/top.json` 里 `min` 字段等于这个压缩名的条目，并按文中写的 chunk 文件区分同名。其他版本先用 [`tools/versions/`](../tools/versions/) 配对到 2.1.316，再查名字。
+- 很多文档带有"改造 / 补丁 / Worker / 网关"相关的内容，那是 sup2api 的产品设计，只作背景。本目录关心的是其中关于官方 CLI 本身行为的结论。
 
 ## 目录
 

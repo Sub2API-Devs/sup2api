@@ -1,15 +1,17 @@
 # Claude Code 2.1.316 逆向重建
 
-本项目把官方 Claude Code CLI **2.1.316** 还原成一个人能读、能编译运行的源码项目。输入是官方的 linux-x64 单文件可执行程序（sha256 `fd13c700…d824`），还原方法基于 **AST 语法分析**。
+本目录（sup2api 的 `next/plugins/ccgateway/cli-reverse/`）把官方 Claude Code CLI **2.1.316** 还原成一个人能读、能编译运行的源码项目。输入是官方的 linux-x64 单文件可执行程序（sha256 `fd13c700…d824`），还原方法基于 **AST 语法分析**。
 
 交付物是阅读树 [`reconstructed/`](reconstructed/)：
 
 - 源码按旧版目录布局组织，名字已经还原，带出处注释和说明。
 - 用和官方相同的 **Bun 1.4.4** 从这些源码构建出 CLI，在 98 个运行场景里，行为和官方原生构建逐字段一致。
 
-所有代码都从官方二进制推导而来。旧版源码（2.1.88，即 `references/claude-code-analysis` 子模块）只用来提供名字、目录结构和意图线索。
+所有代码都从官方二进制推导而来。旧版源码（2.1.88，放在 `references/claude-code-analysis`，用 `bash tools/fetch-references.sh` 拉取）只用来提供名字、目录结构和意图线索。
 
-> 这是一个研究项目。代码版权属于 Anthropic PBC，每个生成文件都保留了原始版权声明。本仓库不分发官方二进制本身。
+本目录原来是独立仓库 `cc`，2026-11-04 用 `git subtree` 合并进 sup2api 的 ccgateway 模块，原来的提交历史保留。下文所有命令都在本目录执行，路径也都相对本目录。ccgateway 的定制 CLI（`../companions/cli-mods/`）就是建立在 `research/` 的结论之上的。
+
+> 这是一个研究项目。代码版权属于 Anthropic PBC，每个生成文件都保留了原始版权声明。仓库不分发官方二进制本身。
 
 ## 最终结果
 
@@ -39,7 +41,7 @@
 | 了解这个项目是怎么做出来的 | [`docs/PLAN.md`](docs/PLAN.md)、[`docs/WORKLOG.md`](docs/WORKLOG.md)、[`docs/process/`](docs/process/)（各成员的过程记录；问题报告与裁决的对照见 [`docs/process/fixes-index.md`](docs/process/fixes-index.md)） |
 | 了解阅读树怎么做到能编译运行 | [`docs/process/buildable.md`](docs/process/buildable.md) |
 | 了解官方 CLI 实际发出什么请求、各版本改了什么 | [`research/README.md`](research/README.md)；版本对比工具见 [`tools/versions/README.md`](tools/versions/README.md) |
-| 作为 AI 在本仓库工作 | [`AGENTS.md`](AGENTS.md) |
+| 作为 AI 在本目录工作 | [`AGENTS.md`](AGENTS.md) |
 
 ## 目录
 
@@ -61,7 +63,7 @@ analysis/             AST 事实与中间结果：scan / reference / match / ven
 naming/               命名与文档输入：semantic-*（语义名）、docs-*（声明说明）、modules-*（模块说明）、placement-*（放置）、_name-shape-verdicts.jsonl（形态裁决）
   final/              合并后的最终命名表（生成物）
 tools/                流水线工具：extract / ast / vendor / segment / naming / rename / emit / build / verify / q.mjs；versions/ 是版本对比工具
-research/             官方 CLI 行为研究（从 sup2api 迁入）：请求组装、计费头、附件、第一方/第三方形状、各版本变化、实抓请求
+research/             官方 CLI 行为研究（从 ccgateway 文档与 sup2api artifacts 复制的快照）：请求组装、计费头、附件、第一方/第三方形状、各版本变化、实抓请求
 docs/                 架构、手册、过程记录
 references/           旧版源码子模块（只读）
 ```
@@ -94,6 +96,10 @@ bun reconstructed/dist/cli.js -p "hello"
 
 ```bash
 npm ci --ignore-scripts
+```
+
+```bash
+bash tools/fetch-references.sh
 ```
 
 ```bash

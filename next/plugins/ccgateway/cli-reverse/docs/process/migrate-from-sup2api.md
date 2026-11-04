@@ -42,3 +42,21 @@ sup2api 的产品内容一律不迁，包括：定制 CLI 补丁、发布产物�
 - `AGENTS.md` 改写为独立项目的指令文件，写明：用中文；硬规则；Bun 版本规则；子代理做法；本机环境（heredoc 坑、代理）；与 sup2api 的关系（本仓库不修改 sup2api）；没有远端，推送前要问。
 - `README.md` 增加了 `research/`、`tools/versions/`、`artifacts/versions/` 的入口。"已知限制"里补了一条：和官方原生二进制相比，`cch` 改写和运行时版本头这两处运行时行为不同。
 - `.gitignore` 增加了三条：其他版本的 ELF、`artifacts/versions/`，以及 `research/**/*.log` 例外（抓取日志是证据，要入库）。
+
+## 第二步：并入 sup2api 的 ccgateway 模块（同日）
+
+迁入完成后，用户改变决定：cc 不再作为独立项目，而是放进 sup2api 的 ccgateway 模块，原来的 cc 文件夹删除。做法如下：
+
+- **位置**：`next/plugins/ccgateway/cli-reverse/`，和 `docs/`、`companions/` 同级。没有放进 `companions/` 是因为 ccgateway 的镜像构建把 `companions/` 当作 Docker 构建上下文，放进去会把几 GB 的本地数据带进镜像构建。
+- **历史**：用 `git subtree add --prefix=next/plugins/ccgateway/cli-reverse <cc> main` 合并，cc 原来的提交和提交号都保留，文档里引用的 `a968429f` 之类在 sup2api 里仍能 `git show`。
+- **子模块**：2.1.88 参考源码原来是 git 子模块，嵌套路径下子模块不能用，所以合并前改成了 `tools/fetch-references.sh`，钉在提交 `7b7b915d`。抓下来的目录不入库。
+- **忽略规则**：sup2api 根 `.gitignore` 会忽略 `vendor/`、`dist/`、`build/`、`AGENTS.md`、`tests` 等名字。合并后有 2,044 个已跟踪文件被这些规则命中，主要是 `reconstructed/vendor/**`。已跟踪的文件不受影响，但新生成的文件会被悄悄忽略，和之前 `lazy.js` 漏提交是同一类问题。为此在本目录 `.gitignore` 开头加了 `!vendor/`、`!dist/` 等反忽略规则，加完后 `git ls-files -ci --exclude-standard` 结果为 0。
+- **构建隔离**：
+  - 插件包只收 `forms/`、`migrations/`、`i18n/`、`assets/`、`ui/`，不受影响。
+  - 核心镜像的构建上下文是 `next/`，在 `next/Dockerfile.dockerignore` 里排除了本目录。
+  - 本目录没有 `.go` 文件，`node_modules` 里也没有，所以 ccgateway 模块的 `go build ./...` 不受影响。
+- **本地数据**：被忽略的本地数据整份复制到新位置，包括官方 ELF、`analysis/scan`、`analysis/reference`、`vendor-ref/node_modules`、`node_modules`、`runnable/`、`artifacts/versions/` 和参考源码，不用重新下载或重新生成。`artifacts/tmp/` 是过程中的临时文件，没有复制。
+- **说明文件**：
+  - `AGENTS.md`、`README.md`、`research/README.md` 改成在 sup2api 子目录里的说法。
+  - ccgateway 的 `README.md` 目录树里加了 `cli-reverse/`。
+- **GitHub 仓库**：之前为独立项目建的私有仓库 `touwaeriol/cc` 还是空的，一次也没有推送过，不再使用。
