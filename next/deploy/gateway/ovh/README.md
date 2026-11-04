@@ -4,6 +4,15 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-04 核心 **0.1.238**（`88ad5db99`，北京时间 12:46–12:48；核心 manifest `1c2b9328…81d8`，计划 `fbcd30d13abf124c7361a94feedde6e0` completed/13，61 秒，没有暂停；**无迁移**，schema 仍 `6100539c…`；Host API 仍 9，外壳不用换；内置插件与 0.1.237 相同）：
+- 起因：agent team 分析插件任务超时冲突（manifest 允许 24 小时、框架只跑 1 小时、核心悄悄截断）。结论：保留 1 小时上限（River 其实按任务超时延后救回，但发布、插件升级 20–30 秒就中断运行），长工作分段续跑。
+- 内容（CONTRACTS §77.8）：上传时检查任务上限（全集群 3600 秒、每节点 600 秒、间隔 ≥5 秒；已存版本不再检查，登记时截断）；内容相同的包重新上传跳过检查；`RunJobResponse.continue_after_ms` / SDK `JobResult.ContinueAfter` 与“已续跑”状态（算成功，`scheduled_tasks.last_status` 仍记 succeeded，无迁移）；插件 API 返回 `effective_schedule`/`effective_timeout_sec`/`adjusted`，“任务”页签显示实际超时并标“已按上限调整”；`plugin_job_runs` 卡住判定 25 小时 → 2 小时；文档改正。
+- 修了两个 bug：运行时任务不论登记多长超时都被 60 秒切断（核心调插件时只按 manifest 找超时，0.1.237 引入，线上没有插件用到）；插件“任务”页签刷新后表格变空（读错了接口返回结构，早就存在）。
+- 发布前：Linux（`golang:1.27-bookworm` + 一次性 postgres:16）核心 53、SDK 13、外壳 9 个包全过；本机插件 5 个通过；前端 117/118 个文件通过（`stores/plugins.spec.ts` 4 个用例仍是 Windows 路径问题）。
+- 核验：两节点 current 都是 `1c2b9328…`，`/readyz` 与 api.prophey.ai 200；dynweight、moderation 的 5 个任务继续成功，插件 API 的实际值与 manifest 一致（无截断）；24 小时内唯一一次失败是 02:23 UTC `core.ccgateway.draft_sweep` 解析 Supabase 域名超时，与本次无关。滚动时 ccp 又出现一次 dynweight 启动时 `GRANT … tuple concurrently updated`（两节点同时建 schema 的已有竞态），随后两节点 ready。
+- 回滚：同 schema、同 Host API，可自动回滚到 0.1.237。
+- 脚本 `stage/0.1.238/`；备份 `backups/core-0.1.238`（`3b0f2427…`）。
+
 2026-11-04 网关（外壳）**0.1.131** + 核心 **0.1.237**（`2701738f6`，北京时间 03:51–04:01；外壳镜像 `ac2826b3…`；核心 manifest `c3213c51…4a32`，计划 `20c82ddcf69fe39fc0d6956ed8a4f9f0` completed/13，55 秒，没有暂停；**无迁移**，schema 仍 `6100539c…`；**Host API 8 → 9**；内置插件与 0.1.236 相同）：
 - 内容（CONTRACTS §77.8，定时任务第二批）：插件任务全部走框架，`internal/job` 原来的调度（每节点算时段 + Redis 锁）删除；manifest `jobs[]` 加 `scope`（`cluster` 默认 / `node`）和 `title`；`RunJob` 请求/应答加字段；Host API 9 运行时任务 `SyncTasks`/`UpsertTask`/`DeleteTask`/`ListTasks`/`EnqueueTask`；SDK `JobMux.HandleJob`、`host.Tasks()`；River 新队列 `plugin`；新权限 `task:manage` 与 `PATCH /system/tasks/:name`（启用/停用插件全集群任务），控制台定时任务页有开关、插件“任务”页签显示范围和名称。现有插件没重发。
 - 顺序：先升外壳（Host API 9，否则签出的核心与外壳不符，见 2026-10-31 事故）。外壳 0.1.131 与 0.1.130 只差 `runtime-contract` 的 Host API；ovh 19:51 换（9 秒就绪），clicodeplus 从 Caddy 摘 3140 后 19:52 重建（24 秒就绪）、恢复 Caddy，全程 api.prophey.ai 200。两边 `.env` 备份 `.env.bak-gw131`，Caddy 备份 `Caddyfile.bak-gw131`。
