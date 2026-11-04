@@ -8,7 +8,7 @@
 - 起因：账号 #87 等被 `Usage credits are required for long context requests.` 的 429 禁用 7 天。扫描线上 64 个运行中账号容器 7 天的请求日志（`/work/data/request-logs/*/{metadata,response-headers}.json`）：869 条 429 里 447 条额度满（都带 claim、窗口用量和 Retry-After，rejected 与 utilization ≥ 1 完全一致），411 条 Worker 并发限制，11 条 long context（没有窗口头、claim 和 Retry-After，`anthropic-ratelimit-unified-reset` 是账期结束 2026-12-01，被截断成 7 天）。
 - 内容（CONTRACTS §69）：托管账号的上游 429 只有额度真满才自动禁用，其他原路返回客户端。只改插件 `classify.go`，CLI、Worker 与账号容器不动。
 - 只发插件：没有推任何运行时角色，67 个 `ccg-*` 容器前后 ID、镜像完全相同（`containers-before.txt` = `containers-after.txt`），所以运行时页 `up_to_date` 为 false，属预期。
-- 故障策略未改（revision 4）：`http-transient` 对上游 408、429、5xx 重试，最多 3 次并换号，插件的返回动作在有策略时不采用。所以这些 429 不再禁用账号，但仍会被重试到别的账号。
+- 故障策略（用户同意，北京时间 16:05，revision 4 → 5，经 `PUT /settings/failure-policy`）：有策略时插件的返回动作不采用，所以把 `http-transient` 拆成两条：`http-transient` = 上游 408、500–599；`rate-limit` = 上游 429 且包含 `exceed your account's rate limit` 或 `gateway concurrency limit reached`。其他 429 不再重试换号，直接返回客户端。代码里的默认规则同步修改，下一次核心发版生效，不影响线上。改前的策略在 `stage/ccgateway-0.1.127/failure-policy-before.json`，回滚时按它改回。
 - 发布前：869 条线上 429 回放结果符合预期；本机 Linux 插件模块测试全过。
 - 核验：`active_version` 0.1.127，两节点 plugin instance started；`/readyz` 与 api.prophey.ai 200；发布后两节点各 4 分钟 ERROR 为 0。发布时没有 long context 流量，真实请求还没验证。
 - 回滚：`rollout.py rollback`（回 0.1.126，包已上传）。

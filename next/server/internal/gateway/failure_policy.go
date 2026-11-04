@@ -151,6 +151,24 @@ var storedLoginKeywords = map[string]string{
 	"account-on-hold": "stored_login_refused_admin",
 }
 
+// rateLimitRetryKeywords are the 429s another account can help with: an account
+// out of quota and a Worker at its concurrency limit. Any other 429, such as a
+// request that needs usage credits, would get the same answer from every
+// account, so it goes back to the client.
+var rateLimitRetryKeywords = []string{"exceed your account's rate limit", "gateway concurrency limit reached"}
+
+// defaultRetryRules are the retry rules of a new policy.
+func defaultRetryRules() []FailureRule {
+	return []FailureRule{
+		{ID: "http-transient", Name: "HTTP transient errors", Enabled: true,
+			Match:  FailureMatch{Source: "upstream", StatusCodes: "408,500-599", Mode: "all"},
+			Action: failureRetry},
+		{ID: "rate-limit", Name: "Account quota and gateway concurrency (429)", Enabled: true,
+			Match:  FailureMatch{Source: "upstream", StatusCodes: "429", Keywords: slices.Clone(rateLimitRetryKeywords), Mode: "all"},
+			Action: failureRetry},
+	}
+}
+
 // migrationDraft is a visible starting point, not an executable replacement
 // until published. Legacy plugin-specific decisions are intentionally not copied.
 // The old settings disabled on a status code or a keyword; a rule needs both
@@ -161,9 +179,7 @@ func migrationDraft(gw GatewaySettings, ad AutoDisableSettings) FailurePolicy {
 	p.MaxRetries = gw.normalized().MaxAttempts - 1
 	p.RetryEnabled = p.MaxRetries > 0
 	p.AccountEnabled = ad.Enabled
-	p.RetryRules = []FailureRule{{ID: "http-transient", Name: "HTTP transient errors", Enabled: true,
-		Match:  FailureMatch{Source: "upstream", StatusCodes: "408,429,500-599", Mode: "all"},
-		Action: failureRetry}}
+	p.RetryRules = defaultRetryRules()
 	p.AccountRules = loginAccountRules()
 	if ad.StatusCodes != "" && ad.StatusCodes != "401" {
 		p.AccountRules = append(p.AccountRules, FailureRule{ID: "migrated-status", Name: "Existing automatic disable (status)", Enabled: true,
