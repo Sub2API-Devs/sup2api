@@ -118,6 +118,7 @@ type LockRunner interface {
 }
 
 const PrimaryFirst = "primary-first-v1"
+
 // PeerProtocol 2: Redis registrations carry the SHA-256 of the node key
 // (peer.Protocol); every gateway of a cluster must agree.
 const PeerProtocol = 2

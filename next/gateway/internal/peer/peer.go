@@ -70,6 +70,7 @@ func ValidID(s string) bool {
 	}
 	return true
 }
+
 // KeyHash is the Redis representation of a key.
 func KeyHash(key string) string { h := sha256.Sum256([]byte(key)); return hex.EncodeToString(h[:]) }
 func validHash(s string) bool {

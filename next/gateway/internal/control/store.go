@@ -814,6 +814,7 @@ func (s *Store) WithRegistration(ctx context.Context, node string, fn func(conte
 	}
 	return nil
 }
+
 // validateNodeCacheTTL bounds how long a positive ValidateNode answer is
 // reused. The private listener asks twice per request (source and self);
 // without the cache an unauthenticated flood turns into PG load. Every

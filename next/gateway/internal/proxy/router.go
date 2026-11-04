@@ -316,6 +316,7 @@ func (r *Router) serve(w http.ResponseWriter, q *http.Request, target string, re
 	}}
 	p.ServeHTTP(w, q)
 }
+
 // sanitizeForwarded bounds what an authenticated node may tell the core about
 // the original client. The core trusts this gateway as its proxy, so the
 // forwarded headers must be exactly what the public ingress would have
