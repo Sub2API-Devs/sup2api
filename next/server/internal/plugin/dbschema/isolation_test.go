@@ -215,3 +215,49 @@ func TestEnsureAdoptsOwnRole(t *testing.T) {
 		t.Fatalf("legacy own role: %+v %v", st, err)
 	}
 }
+
+// Ensuring different plugins at once (every node starts its plugins together)
+// must not fail on the shared migration functions: their ACL is one row, and
+// concurrent GRANTs on it fail with "tuple concurrently updated".
+func TestEnsureConcurrentPlugins(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	mk := make([]byte, 32)
+	_, _ = rand.Read(mk)
+	keys := make([]string, 12)
+	for i := range keys {
+		keys[i] = randKey()
+	}
+	nodes := []*dbschema.Manager{
+		dbschema.New(db, db.Pool.Config().ConnString(), mk, true),
+		dbschema.New(db, db.Pool.Config().ConnString(), mk, true),
+	}
+	t.Cleanup(func() {
+		for _, k := range keys {
+			_ = nodes[0].Drop(context.Background(), k)
+		}
+	})
+	for round := 0; round < 2; round++ {
+		errs := make(chan error, len(keys)*len(nodes))
+		for _, k := range keys {
+			for _, m := range nodes {
+				go func() {
+					_, err := m.Ensure(ctx, k)
+					errs <- err
+				}()
+			}
+		}
+		for range len(keys) * len(nodes) {
+			if err := <-errs; err != nil {
+				t.Fatalf("round %d: %v", round, err)
+			}
+		}
+	}
+	for _, k := range keys {
+		var ok bool
+		if err := db.Pool.QueryRow(ctx, `SELECT has_function_privilege($1, 'public.plugin_migrations_applied(varchar)', 'EXECUTE')`,
+			dbschema.SchemaName(k)).Scan(&ok); err != nil || !ok {
+			t.Fatalf("role of %s cannot run the migration functions: %v %v", k, ok, err)
+		}
+	}
+}

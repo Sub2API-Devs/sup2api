@@ -130,6 +130,42 @@ FROM pg_roles r WHERE r.rolname = $1`, role, marker, schema).Scan(&owned)
 	return owned, err
 }
 
+// migrationFuncs are the core functions a plugin role runs for its own
+// migration bookkeeping (0003 migration).
+const migrationFuncs = "public.plugin_migrations_applied(varchar), public.plugin_migration_record(varchar, varchar, varchar)"
+
+// sharedACLLockKey serializes changes to the ACL of migrationFuncs. Every
+// plugin role is granted on the same two pg_proc rows, so two plugins'
+// Ensure (or Drop) at once - every node starts its plugins together - would
+// otherwise fail with "tuple concurrently updated". It is always taken after
+// a plugin's own lock, never before.
+var sharedACLLockKey = store.PluginMigrationLockKey("*shared-migration-function-acl*")
+
+// grantMigrationFuncs lets role run migrationFuncs. Most Ensure calls find
+// the grant in place and write nothing.
+func grantMigrationFuncs(ctx context.Context, tx pgx.Tx, role string) error {
+	granted := func() (bool, error) {
+		var ok bool
+		err := tx.QueryRow(ctx, `SELECT has_function_privilege($1, 'public.plugin_migrations_applied(varchar)', 'EXECUTE')
+			AND has_function_privilege($1, 'public.plugin_migration_record(varchar, varchar, varchar)', 'EXECUTE')`, role).Scan(&ok)
+		return ok, err
+	}
+	if ok, err := granted(); err != nil || ok {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, sharedACLLockKey); err != nil {
+		return err
+	}
+	if ok, err := granted(); err != nil || ok {
+		return err
+	}
+	s := "GRANT EXECUTE ON FUNCTION " + migrationFuncs + " TO " + pgx.Identifier{role}.Sanitize()
+	if _, err := tx.Exec(ctx, s); err != nil {
+		return fmt.Errorf("%s: %w", s, err)
+	}
+	return nil
+}
+
 // Ensure creates the schema and, unless role isolation is off by
 // configuration, the isolated login role. It is idempotent and safe to call
 // on every node. Without the right to create roles it fails with
@@ -234,13 +270,14 @@ func (m *Manager) Ensure(ctx context.Context, pluginKey string) (Status, error) 
 			"REVOKE ALL ON SCHEMA " + sid + " FROM PUBLIC",
 			"GRANT USAGE, CREATE ON SCHEMA " + sid + " TO " + rid,
 			"ALTER ROLE " + rid + " SET search_path TO " + sid,
-			// Migration bookkeeping for its own key only (0003 migration).
-			"GRANT EXECUTE ON FUNCTION public.plugin_migrations_applied(varchar), public.plugin_migration_record(varchar, varchar, varchar) TO " + rid,
 		}
 		for _, s := range stmts {
 			if _, err := tx.Exec(ctx, s); err != nil {
 				return fmt.Errorf("%s: %w", s, err)
 			}
+		}
+		if err := grantMigrationFuncs(ctx, tx, role); err != nil {
+			return err
 		}
 		st.Role = role
 		st.RoleIsolated = true
@@ -371,6 +408,10 @@ func (m *Manager) DropTx(ctx context.Context, tx pgx.Tx, pluginKey string) error
 		// the cluster, an operator's role) is left alone.
 		if owned {
 			rid := pgx.Identifier{schema}.Sanitize()
+			// DROP OWNED revokes the role's grant on migrationFuncs.
+			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, sharedACLLockKey); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, "DROP OWNED BY "+rid); err != nil {
 				return err
 			}
