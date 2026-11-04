@@ -903,7 +903,8 @@ fs.writeFileSync(path.join(OUT, 'package.json'), JSON.stringify({
   engines: { bun: '1.4.4' },
 }, null, 2) + '\n');
 fs.copyFileSync('tools/build/build.mjs', path.join(OUT, 'build.mjs'));
-fs.writeFileSync(path.join(OUT, '.gitignore'), 'dist/\n');
+// only the build output at the root: vendor packages have dist/ directories of their own
+fs.writeFileSync(path.join(OUT, '.gitignore'), '/dist/\n');
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 1));
 fs.writeFileSync(path.join(OUT, 'symbols.jsonl'), symbols.map((x) => JSON.stringify(x)).join('\n') + '\n');
 console.log({ written, formatFailures, deminifyFailures, resources: resources.size, renameConflicts: conflicts });
