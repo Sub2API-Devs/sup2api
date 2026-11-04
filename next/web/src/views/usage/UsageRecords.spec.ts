@@ -5,8 +5,8 @@ import { i18n } from '@/i18n'
 import UsageRecords from './UsageRecords.vue'
 
 // Data sources are stubbed: what this spec checks is the page around them -
-// the charts panel remembered per page, the tabs in the URL, and the failed
-// requests list following the search with success=false.
+// the tabs in the URL, and the failed requests list following the search with
+// success=false.
 const lists: Array<{ path: string; filters: Record<string, unknown>; reload: ReturnType<typeof vi.fn>; immediate: boolean }> = []
 vi.mock('@/composables/useList', () => ({
   useList: (path: string, init: Record<string, unknown>, opts: { immediate?: boolean } = {}) => {
@@ -29,7 +29,7 @@ const perms = vi.hoisted(() => ({ accountRead: true }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => key === 'account:read' && perms.accountRead }) }))
 vi.mock('./UsageTable.vue', () => ({ default: { name: 'UsageTable', props: ['rows', 'showAccount'], emits: ['filter-account-id'], template: '<div data-testid="usage-table" />' } }))
 vi.mock('./UsageIPPanel.vue', () => ({ default: { name: 'UsageIPPanel', template: '<div data-testid="ip-panel" />' } }))
-vi.mock('@/components/stats/UsageCharts.vue', () => ({ default: { name: 'UsageCharts', template: '<div data-testid="charts" />' } }))
+vi.mock('./UsageLiveStats.vue', () => ({ default: { name: 'UsageLiveStats', props: ['realtimePath', 'summaryPath', 'revision'], template: '<div data-testid="live-stats" />' } }))
 vi.mock('./UserRanking.vue', () => ({ default: { name: 'UserRanking', emits: ['select'], template: '<div data-testid="ranking" />' } }))
 const { exportUsage, notifyError } = vi.hoisted(() => ({ exportUsage: vi.fn(), notifyError: vi.fn() }))
 vi.mock('./exportUsage', () => ({ exportUsage }))
@@ -43,8 +43,6 @@ function render(admin = false, extraTabs: Array<{ key: string; label: string }> 
     global: { plugins: [i18n], stubs: { SChart: true } }
   })
 }
-type Wrapper = ReturnType<typeof render>
-const charts = (w: Wrapper) => w.find('[data-testid="charts"]').exists()
 
 describe('usage records page', () => {
   beforeEach(() => {
@@ -56,16 +54,13 @@ describe('usage records page', () => {
     i18n.global.locale.value = 'zh'
   })
 
-  it('shows the totals and the charts by default, and remembers collapsing them per page', async () => {
-    const w = render()
+  it('shows the live statistics of its own list, and neither the totals nor the charts', async () => {
+    const w = render(true)
     await flushPromises()
-    expect(summaries).toContain('none')
-    expect(charts(w)).toBe(true)
-    await w.get('[data-testid="toggle-usage-charts"]').trigger('click')
-    expect(charts(w)).toBe(false)
-    w.unmount()
-    expect(charts(render())).toBe(false)
-    expect(charts(render(true))).toBe(true)
+    expect(w.findComponent({ name: 'UsageLiveStats' }).props()).toMatchObject({ realtimePath: '/usage/realtime', summaryPath: '/usage/summary' })
+    expect(w.find('[data-testid="usage-summary-cards"]').exists()).toBe(false)
+    expect(w.find('[data-testid="usage-granularity"]').exists()).toBe(false)
+    expect(summaries).not.toContain('none')
   })
 
   it('opens the tab named in the URL and writes the chosen one back', async () => {

@@ -1,30 +1,27 @@
 <script setup lang="ts">
-// Usage records with their statistics, for an operator (`admin`: all users)
-// or for the caller: the search bar (time range, granularity, filters), the
-// four totals, the charts (collapsible, remembered per page) and the tabs -
-// the request list, the failed requests, the client IPs, the user ranking
-// (operator only), plus any tab the page adds (`extraTabs`, rendered from the
-// #tab-<key> slot). Every part follows the same filters, which a link may
-// preset (?user_id=, ?from=, …); Export downloads them as CSV. The open tab
-// is ?tab= in the URL. The page header (title, refresh) stays with the view
-// and bumps `revision`.
-import { computed, reactive, ref, watch } from 'vue'
+// Usage records, for an operator (`admin`: all users) or for the caller: the
+// search bar with the live statistics, and the tabs - the request list, the
+// failed requests, the client IPs, the user ranking (operator only), plus any
+// tab the page adds (`extraTabs`, rendered from the #tab-<key> slot). Every
+// part follows the same filters, which a link may preset (?user_id=, ?from=,
+// …); Export downloads them as CSV. The open tab is ?tab= in the URL. The
+// page header (title, refresh) stays with the view and bumps `revision`. The
+// totals and charts are on the overview page (UsageOverview).
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { api } from '@sub2api/host'
-import { SButton, SDateRange, SPagination, SSegmented, STabs, rangeBounds, type RangeKey, type TabItem } from '@sub2api/ui'
+import { SButton, SDateRange, SPagination, STabs, type RangeKey, type TabItem } from '@sub2api/ui'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
-import UsageSummaryCards from '@/components/UsageSummaryCards.vue'
-import UsageCharts from '@/components/stats/UsageCharts.vue'
-import { autoGranularity, hourAllowed, type Granularity } from '@/components/stats/stats'
 import { notifyError } from '@/utils/errors'
 import { exportUsage } from './exportUsage'
 import UsageFilters from './UsageFilters.vue'
 import UsageIPPanel from './UsageIPPanel.vue'
+import UsageLiveStats from './UsageLiveStats.vue'
 import UsageTable from './UsageTable.vue'
 import UserRanking from './UserRanking.vue'
 import { useUsageSummary } from './useUsageSummary'
+import { baseUsageFilters, queryUsageFilters } from './usageFilters'
 import type { UsageRow } from './usage'
 
 const props = withDefaults(
@@ -51,58 +48,11 @@ const auth = useAuthStore()
 const showAccount = computed(() => props.admin && auth.has('account:read'))
 
 const range = ref<RangeKey>(props.defaultRange)
-const baseFilters = {
-  ...rangeBounds(props.defaultRange),
-  model_contains: '',
-  success: '',
-  client_ip: '',
-  // exact match on the client's X-Request-Id (CONTRACTS §14.4)
-  client_request_id: ''
-}
-// A link from the dashboard opens the page already filtered (?user_id=…&from=…&to=…).
-const QUERY_FILTERS = ['user_id', 'group_name', 'model_contains', 'api_key_id', 'from', 'to'] as const
-const fromQuery: Record<string, string> = {}
-for (const k of QUERY_FILTERS) {
-  const v = route.query[k]
-  if (typeof v === 'string' && v !== '' && (props.admin || (k !== 'user_id' && k !== 'group_name'))) fromQuery[k] = v
-}
+const baseFilters = baseUsageFilters(props.defaultRange)
+// A link from the dashboard opens the page already filtered.
+const fromQuery = queryUsageFilters(route.query, props.admin)
 if (fromQuery.from || fromQuery.to) range.value = 'custom'
 const { items, loading, page, pageSize, total, filters, reload: reloadList } = useList<UsageRow>(props.listPath, { ...baseFilters, ...fromQuery })
-
-// Granularity: automatic (hours up to a day) until the user picks one; a new
-// range goes back to automatic. Hours over 31 days are refused by the server.
-const picked = ref<Granularity | null>(null)
-watch(() => [filters.from, filters.to], () => (picked.value = null))
-const canHour = computed(() => hourAllowed(String(filters.from || ''), String(filters.to || '')))
-const granularity = computed<Granularity>(() => {
-  const g = picked.value ?? autoGranularity(String(filters.from || ''), String(filters.to || ''))
-  return g === 'hour' && !canHour.value ? 'day' : g
-})
-const granularityOptions = computed(() => [
-  { value: 'day', label: t('stats.day') },
-  { value: 'hour', label: t('stats.hour'), disabled: !canHour.value }
-])
-
-const totals = useUsageSummary(props.summaryPath, filters, 'none')
-
-// The charts panel: open or closed survives a reload, per browser and per page.
-const chartsKey = `s2a.${props.admin ? 'usage-log' : 'my-usage-log'}.charts`
-const chartsOpen = ref(localStorage.getItem(chartsKey) !== '0')
-watch(chartsOpen, (v) => localStorage.setItem(chartsKey, v ? '1' : '0'))
-
-// The caller's API key names for the "by API key" breakdown (keyed by id).
-const keyNames = reactive(new Map<string, string>())
-if (!props.admin && auth.has('apikey:self:manage')) {
-  api
-    .list<{ id: number; name: string }>('/me/api-keys', { page_size: 200 })
-    .then((res) => res.items.forEach((k) => keyNames.set(String(k.id), k.name)))
-    .catch(() => {})
-}
-const secondary = computed(() =>
-  props.admin
-    ? { groupBy: 'group', title: t('stats.groupDist'), keyLabel: t('stats.group') }
-    : { groupBy: 'api_key', title: t('stats.keyDist'), keyLabel: t('stats.apiKey'), labelOf: (k: string) => keyNames.get(k) || `#${k}` }
-)
 
 // Tabs.
 const tabs = computed<TabItem[]>(() => [
@@ -144,21 +94,15 @@ watch(tab, (v) => {
 }, { immediate: true })
 const ips = useUsageSummary(props.summaryPath, filters, 'ip', () => tab.value === 'ips')
 
-const revisionCharts = ref(0)
 function reload() {
   reloadList()
-  totals.reload()
-  revisionCharts.value++
   if (tab.value === 'errors') errors.reload()
   if (tab.value === 'ips') ips.reload()
 }
 watch(() => props.revision, reload)
-const busy = computed(() => loading.value || totals.loading.value || (tab.value === 'errors' && errors.loading.value))
+const busy = computed(() => loading.value || (tab.value === 'errors' && errors.loading.value))
 watch(busy, (v) => emit('update:loading', v), { immediate: true })
 
-function filterBy(patch: Record<string, string>) {
-  Object.assign(filters, patch)
-}
 function selectUser(id: string) {
   filters.user_id = id
   tab.value = 'records'
@@ -182,54 +126,15 @@ async function exportCsv() {
   <div class="flex flex-col gap-4">
     <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :accounts="showAccount" :group-options="groupOptions" @update:model-value="Object.assign(filters, $event)">
       <template #range>
-        <div class="flex flex-wrap items-center gap-2">
-          <SDateRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />
-          <SSegmented
-            :model-value="granularity"
-            :options="granularityOptions"
-            size="sm"
-            :aria-label="t('stats.granularity')"
-            :title="canHour ? undefined : t('stats.hourTooLong')"
-            data-testid="usage-granularity"
-            @update:model-value="picked = $event as Granularity"
-          />
-        </div>
+        <SDateRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />
+      </template>
+      <template #stats>
+        <UsageLiveStats :realtime-path="`${listPath}/realtime`" :summary-path="summaryPath" :filters="filters" :revision="revision" />
       </template>
       <template #actions>
         <SButton type="button" size="sm" icon="download" :loading="exporting" data-testid="export-usage" @click="exportCsv">{{ t('stats.exportCsv') }}</SButton>
       </template>
     </UsageFilters>
-
-    <UsageSummaryCards :totals="totals.rows.value[0] || null" :loading="totals.loading.value" />
-
-    <section>
-      <div class="mb-3 flex items-center gap-2">
-        <h3 class="text-sm font-semibold text-fg">{{ t('stats.charts') }}</h3>
-        <span class="text-xs text-fg-subtle">{{ t('stats.chartsHint') }}</span>
-        <SButton
-          class="ms-auto"
-          size="sm"
-          variant="ghost"
-          :aria-expanded="chartsOpen"
-          data-testid="toggle-usage-charts"
-          @click="chartsOpen = !chartsOpen"
-        >
-          {{ chartsOpen ? t('stats.collapse') : t('stats.expand') }}
-        </SButton>
-      </div>
-      <UsageCharts
-        v-if="chartsOpen"
-        :summary-path="summaryPath"
-        :filters="filters"
-        :granularity="granularity"
-        :secondary="secondary"
-        :revision="revisionCharts"
-        :group="admin ? 'usage-admin' : 'usage-mine'"
-        :model-sources="admin"
-        @select-model="filterBy({ model_contains: $event })"
-        @select-secondary="(k: string) => filterBy(admin ? { group_name: k } : { api_key_id: k })"
-      />
-    </section>
 
     <STabs v-model="tab" :tabs="tabs">
       <UsageTable
@@ -270,7 +175,7 @@ async function exportCsv() {
         :active="filters.client_ip"
         @filter="(ip: string) => (filters.client_ip = ip)"
       />
-      <UserRanking v-if="admin && tab === 'ranking'" :summary-path="summaryPath" :filters="filters" :revision="revisionCharts" @select="selectUser" />
+      <UserRanking v-if="admin && tab === 'ranking'" :summary-path="summaryPath" :filters="filters" :revision="revision" @select="selectUser" />
       <template v-for="x in extraTabs" :key="x.key">
         <slot v-if="tab === x.key" :name="`tab-${x.key}`" />
       </template>

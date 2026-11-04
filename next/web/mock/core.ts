@@ -227,6 +227,7 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/proxies': ['proxy:read', 'proxy:own:read', 'proxy:own:manage'],
   '/prices': 'price:read',
   '/usage': 'usage:all:read',
+  '/usage/overview': 'usage:all:read',
   '/sticky': 'sticky:read',
   '/ledger': 'balance:all:read',
   '/users': 'user:read',
@@ -242,6 +243,7 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/system/tasks': 'task:read',
   '/me/api-keys': 'apikey:self:manage',
   '/me/usage': 'usage:self:read',
+  '/me/usage/overview': 'usage:self:read',
   '/me/balance': 'balance:self:read',
   '/p/anthropic/models': 'plugin.anthropic:model_catalog:read',
   '/p/guard/dashboard': 'plugin.guard:stats:read'
@@ -264,6 +266,7 @@ const MENUS = [
       { id: 'platforms', label: { en: 'Platforms', zh: '平台' }, icon: 'globe', path: '/platforms' },
       { id: 'proxies', label: { en: 'Proxies', zh: '代理' }, icon: 'proxy', path: '/proxies' },
       { id: 'prices', label: { en: 'Model prices', zh: '模型价格' }, icon: 'price', path: '/prices' },
+      { id: 'usage-overview', label: { en: 'Usage overview', zh: '概览' }, icon: 'chart', path: '/usage/overview' },
       { id: 'usage', label: { en: 'Usage records', zh: '使用记录' }, icon: 'usage', path: '/usage' },
       { id: 'anthropic:anthropic-models', label: { en: 'Model catalog', zh: '模型目录' }, icon: 'list', path: '/p/anthropic/models', plugin_key: 'anthropic' }
     ]
@@ -302,6 +305,7 @@ const MENUS = [
     section: 'me',
     items: [
       { id: 'my-api-keys', label: { en: 'API keys', zh: 'API 密钥' }, icon: 'key', path: '/me/api-keys' },
+      { id: 'my-usage-overview', label: { en: 'Usage overview', zh: '概览' }, icon: 'chart', path: '/me/usage/overview' },
       { id: 'my-usage', label: { en: 'Usage records', zh: '使用记录' }, icon: 'usage', path: '/me/usage' }
     ]
   }

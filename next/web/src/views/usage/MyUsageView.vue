@@ -6,9 +6,9 @@ import { useAuthStore } from '@/stores/auth'
 import MyLedgerTab from '@/views/ledger/MyLedgerTab.vue'
 import UsageRecords from './UsageRecords.vue'
 
-// Mine > Usage records: the caller's statistics, request log, failed
-// requests and client IPs (UsageRecords), plus their balance changes on the
-// "ledger" tab (?tab=ledger). The old Usage statistics page redirects here.
+// Mine > Usage records: the caller's request log, failed requests and client
+// IPs (UsageRecords), plus their balance changes on the "ledger" tab
+// (?tab=ledger).
 const { t } = useI18n()
 const auth = useAuthStore()
 

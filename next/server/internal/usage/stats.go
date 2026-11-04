@@ -243,6 +243,74 @@ func (s *Service) overview(c *gin.Context, self *int64) {
 	httpapi.OK(c, out)
 }
 
+// Realtime is GET /usage/realtime and GET /me/usage/realtime: the last minute
+// of the usage records page (CONTRACTS §66.7), as new-api's log stat counts it.
+// RPM and TPM are the requests that succeeded; with RecentFailures they give
+// the last-minute success rate.
+type Realtime struct {
+	RPM            int64 `json:"rpm"`
+	TPM            int64 `json:"tpm"`
+	RecentFailures int64 `json:"recent_failures"`
+}
+
+const (
+	// realtimeWindow is the window of Realtime, over when a request finished.
+	realtimeWindow = 60 * time.Second
+	// realtimeScan bounds the rows looked at. created_at is when a request
+	// started, so the window cannot use it directly; a request running longer
+	// than this leaves the numbers.
+	realtimeScan = time.Hour
+)
+
+// realtimeTokens is core.UsageTokens.Throughput in SQL: the input outside any
+// cache plus the output.
+const realtimeTokens = `CASE WHEN u.billing_detail->'inputs'->>'semantics' = 'inclusive'
+		THEN GREATEST(u.input_tokens - u.cache_read_tokens - u.cache_creation_tokens - u.cache_creation_1h_tokens, 0)
+		ELSE u.input_tokens END + u.output_tokens`
+
+// realtimeFailure leaves out what says nothing about the service, as new-api
+// does: a 400, the client going away, and a request the gateway itself turned
+// down before trying an account (gateway/errors.go).
+const realtimeFailure = `NOT u.success AND u.status_code <> 400 AND u.error_type NOT IN
+		('client_canceled', 'rate_limited', 'invalid_request', 'insufficient_balance',
+		 'key_quota_exhausted', 'model_not_allowed', 'blocked_by_hook')`
+
+func (s *Service) myRealtime(c *gin.Context) {
+	uid, _ := core.UserID(c.Request.Context())
+	s.realtime(c, &uid)
+}
+
+func (s *Service) allRealtime(c *gin.Context) { s.realtime(c, nil) }
+
+// realtime takes the filters of the usage list. The console leaves out the
+// time range and the status: the numbers are always the last minute's, and
+// they need both outcomes.
+func (s *Service) realtime(c *gin.Context, self *int64) {
+	ctx := c.Request.Context()
+	f, err := parseFilter(c, self, s.seesAccounts(ctx, self))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	now := time.Now()
+	f.And("u.created_at >= ?", now.Add(-realtimeScan))
+	f.And("u.created_at + u.latency_ms * interval '1 millisecond' >= ?", now.Add(-realtimeWindow))
+	// Token counting is free and takes no part in rate limits (§18).
+	f.And("u.protocol NOT LIKE '%.count_tokens'")
+	var out Realtime
+	err = s.statsTx(ctx, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE u.success),
+			COALESCE(sum(`+realtimeTokens+`) FILTER (WHERE u.success), 0),
+			count(*) FILTER (WHERE `+realtimeFailure+`)
+			FROM usage_logs u`+f.Cond(), f.Args()...).Scan(&out.RPM, &out.TPM, &out.RecentFailures)
+	})
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
 // can asks the Authorizer; no Authorizer or an error count as "no".
 func (s *Service) can(ctx context.Context, uid int64, perm string) bool {
 	if s.Authz == nil {

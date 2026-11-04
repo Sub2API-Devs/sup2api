@@ -41,10 +41,10 @@ type coreMenuSection struct {
 	items []coreMenuItem
 }
 
-// coreMenus follows ARCHITECTURE appendix A.1. Each section stays short
-// (at most six core items): gateway resources, security, finance, users and
-// permissions, the plugin ecosystem and cluster operations are separate
-// groups so plugins can join the one their pages belong to.
+// coreMenus follows ARCHITECTURE appendix A.1. Each section stays short:
+// gateway resources, security, finance, users and permissions, the plugin
+// ecosystem and cluster operations are separate groups so plugins can join the
+// one their pages belong to.
 var coreMenus = []coreMenuSection{
 	{"overview", lt("Overview", "概览"), []coreMenuItem{
 		{"dashboard", lt("Dashboard", "仪表盘"), "dashboard", "/dashboard", nil},
@@ -56,6 +56,7 @@ var coreMenus = []coreMenuSection{
 		{"platforms", lt("Platforms", "平台"), "globe", "/platforms", []string{"account:read", "account:own:read", "account:own:create"}},
 		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}},
 		{"prices", lt("Model prices", "模型价格"), "price", "/prices", []string{"price:read"}},
+		{"usage-overview", lt("Usage overview", "概览"), "chart", "/usage/overview", []string{"usage:all:read"}},
 		{"usage", lt("Usage records", "使用记录"), "usage", "/usage", []string{"usage:all:read"}},
 	}},
 	// No core items: request guards and moderation are plugins and join it.
@@ -80,10 +81,10 @@ var coreMenus = []coreMenuSection{
 		{"audit", lt("Audit logs", "审计日志"), "clock", "/system/audit", []string{"audit:read"}},
 		{"settings", lt("Settings", "设置"), "settings", "/settings", []string{"settings:read", "sticky:read"}},
 	}},
-	// Usage statistics are part of the usage records page (the old
-	// /me/stats redirects there).
+	// The old usage statistics page (/me/stats) redirects to the overview.
 	{"me", lt("My account", "我的账户"), []coreMenuItem{
 		{"my-api-keys", lt("API keys", "API 密钥"), "key", "/me/api-keys", []string{"apikey:self:manage"}},
+		{"my-usage-overview", lt("Usage overview", "概览"), "chart", "/me/usage/overview", []string{"usage:self:read"}},
 		{"my-usage", lt("Usage records", "使用记录"), "usage", "/me/usage", []string{"usage:self:read"}},
 	}},
 }

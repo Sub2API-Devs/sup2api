@@ -15,6 +15,7 @@ export default {
     accounts: 'Accounts',
     proxies: 'Proxies',
     prices: 'Model prices',
+    usageOverview: 'Usage overview',
     usage: 'Usage records',
     ledger: 'Balance ledger',
     users: 'Users',
@@ -27,6 +28,7 @@ export default {
     tasks: 'Scheduled tasks',
     settings: 'Settings',
     myApiKeys: 'API keys',
+    myUsageOverview: 'Usage overview',
     myUsage: 'Usage records'
   },
   crumbs: {

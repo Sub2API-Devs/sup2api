@@ -136,3 +136,52 @@ func TestOverviewWindowsDST(t *testing.T) {
 	require.Equal(t, time.Date(2026, 11, 2, 0, 0, 0, 0, ny), w.today)
 	require.Equal(t, 25*time.Hour, w.today.Sub(w.yesterday))
 }
+
+// The last minute of the usage records page: finished within 60 seconds,
+// whenever the request started; tokens without the cache; failures without
+// what says nothing about the service; free token counting not at all.
+func TestRealtime(t *testing.T) {
+	f := newFixture(t)
+	now := time.Now()
+	at := func(id string, ts time.Time) *core.UsageRecord {
+		r := f.record(id, false)
+		r.CreatedAt = ts
+		r.Tokens = core.UsageTokens{Input: 100, Output: 20, CacheRead: 1000}
+		return r
+	}
+	failed := func(id string, status int, errType string) *core.UsageRecord {
+		r := at(id, now.Add(-10*time.Second))
+		r.Success, r.StatusCode, r.ErrorType = false, status, errType
+		return r
+	}
+	long := at("rt-long", now.Add(-5*time.Minute))
+	long.LatencyMs = int(5 * time.Minute / time.Millisecond)
+	inclusive := at("rt-inclusive", now.Add(-20*time.Second))
+	inclusive.UsageSemantics = "inclusive"
+	inclusive.Tokens.Input = 1100
+	count := at("rt-count", now.Add(-10*time.Second))
+	count.Protocol = "anthropic.count_tokens"
+	other := at("rt-other", now.Add(-10*time.Second))
+	other.UserID, other.Model = f.other, "claude-haiku-4"
+	f.svc.process(t.Context(), []*core.UsageRecord{
+		at("rt-recent", now.Add(-30*time.Second)),
+		long,
+		inclusive,
+		at("rt-old", now.Add(-2*time.Minute)),
+		count,
+		other,
+		failed("rt-upstream", 529, "upstream_error"),
+		failed("rt-no-account", 503, "no_account"),
+		failed("rt-400", 400, "upstream_error"),
+		failed("rt-canceled", 499, "client_canceled"),
+		failed("rt-limited", 429, "rate_limited"),
+		failed("rt-balance", 402, "insufficient_balance"),
+	})
+
+	got := func(path string) map[string]any { return f.get(f.user, path, 200)["data"].(map[string]any) }
+	want := map[string]any{"rpm": float64(3), "tpm": float64(360), "recent_failures": float64(2)}
+	require.Equal(t, want, got("/me/usage/realtime"))
+	require.Equal(t, map[string]any{"rpm": float64(4), "tpm": float64(480), "recent_failures": float64(2)}, got("/usage/realtime"))
+	require.Equal(t, map[string]any{"rpm": float64(1), "tpm": float64(120), "recent_failures": float64(0)}, got("/usage/realtime?model_contains=haiku"))
+	f.get(f.user, "/usage/realtime?user_id=x", 400)
+}

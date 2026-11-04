@@ -1302,6 +1302,15 @@ on('GET', '/usage/overview', (req) => {
   const active = new Set(usageRows.filter((u) => zoned(u.created_at, tz).day === today).map((u) => u.user_id)).size
   return { ...o, users: { total: 4, new_today: 1, active_today: active }, accounts: { total: 6, available: 4, auto_disabled: 1, disabled: 1 } }
 })
+// GET /usage/realtime, /me/usage/realtime (CONTRACTS §66.7): the last minute under the filters.
+function realtimeOf(rows: typeof usageRows, q: Record<string, string>) {
+  const since = Date.now() - 60_000
+  const recent = usageFilter(rows, q).filter((u) => new Date(u.created_at).getTime() >= since)
+  const ok = recent.filter((u) => u.success)
+  return { rpm: ok.length, tpm: ok.reduce((n, u) => n + u.input_tokens + u.output_tokens, 0), recent_failures: recent.length - ok.length }
+}
+on('GET', '/usage/realtime', (req) => realtimeOf(usageRows, req.query))
+on('GET', '/me/usage/realtime', (req) => realtimeOf(usageRows.filter((u) => u.user_id === 1), req.query))
 on('GET', '/usage/export', (req) => usageCSV(usageRows, req.query, false))
 on('GET', '/me/usage/export', (req) => usageCSV(usageRows.filter((u) => u.user_id === 1), req.query, true))
 on('GET', '/usage', (req) => paginate(usageFilter(usageRows, req.query).map((u) => publicUsage(u)), req.query))

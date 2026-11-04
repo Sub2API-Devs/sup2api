@@ -2,7 +2,22 @@ export default {
   title: 'Usage logs',
   description: 'Every gateway request with its billing trace.',
   myTitle: 'Usage records',
-  myDescription: 'Your usage statistics, each of your requests and your balance changes.',
+  myDescription: 'Each of your requests and your balance changes.',
+  overviewTitle: 'Usage overview',
+  overviewDescription: 'Requests, tokens and cost across the gateway.',
+  myOverviewTitle: 'Usage overview',
+  myOverviewDescription: 'Your requests, tokens and cost.',
+  live: {
+    cost: 'Usage',
+    standard: 'Base quota',
+    cacheHit: 'Cache hit',
+    successRate: 'Success rate',
+    rangeHint: 'Follows the time range and filters above',
+    rpmHint: 'Requests that succeeded in the last minute. Follows the filters, not the time range.',
+    tpmHint: 'Tokens of those requests (non-cached input + output). Follows the filters, not the time range.',
+    successHint: 'Last minute: {ok} succeeded / {fail} failed (400 errors, client disconnects and gateway-side rejections excluded)',
+    noRequests: 'No requests in the last minute'
+  },
   statsTitle: 'Usage statistics',
   statsDescription: 'Your requests, tokens and cost over a period.',
   stats: {

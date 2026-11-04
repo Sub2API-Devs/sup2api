@@ -39,10 +39,12 @@ const children: RouteRecordRaw[] = [
   { path: 'prices/sources', component: () => import('@/views/prices/PriceSourcesView.vue'), meta: { perm: 'price:read', title: 'prices.sources.title', parent: '/prices' } },
   { path: 'prices/sources/:id/sync', component: () => import('@/views/prices/PriceSyncView.vue'), meta: { perm: 'price:manage', title: 'prices.syncPrices', parent: '/prices/sources' } },
   { path: 'prices/:id', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:read', title: 'prices.editTitleShort', parent: '/prices' } },
+  { path: 'usage/overview', component: () => import('@/views/usage/UsageOverviewView.vue'), props: { admin: true }, meta: { perm: 'usage:all:read', title: 'nav.items.usageOverview' } },
   { path: 'usage', component: () => import('@/views/usage/UsageView.vue'), meta: { perm: 'usage:all:read', title: 'nav.items.usage' } },
+  { path: 'me/usage/overview', component: () => import('@/views/usage/UsageOverviewView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsageOverview' } },
   { path: 'me/usage', component: () => import('@/views/usage/MyUsageView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsage' } },
-  // Usage statistics are part of the usage records page now.
-  { path: 'me/stats', redirect: '/me/usage' },
+  // The old usage statistics page.
+  { path: 'me/stats', redirect: '/me/usage/overview' },
   { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
   { path: 'me/ledger', redirect: { path: '/me/usage', query: { tab: 'ledger' } } },
   { path: 'me/balance', redirect: { path: '/me/usage', query: { tab: 'ledger' } } },

@@ -4690,6 +4690,19 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 超出 `limit` 的行合并成一行 `key="__other__"`，排在最后：各计数与费用求和，`latency_ms_avg`、`first_token_ms_avg` 按成功请求数加权平均。不带这两个参数时结果与此前完全相同（按 `key` 排序、不合并）。
 - 控制台用法：管理员仪表盘的用户消费榜（`group_by=user&order=…&limit=10`）、使用记录页的「用户排行」页签（前 20 / 50 / 100 / 200）。
 
+### 66.7 概览与使用记录分开，使用记录页的实时统计（2026-11-05，用户要求，照搬 new-api 使用日志页）
+
+控制台把原来一页的统计和列表拆成两个菜单，管理员和自助都一样：「概览」（`/usage/overview`、`/me/usage/overview`，筛选、四张合计卡片、图表）和「使用记录」（`/usage`、`/me/usage`，筛选、六项统计、请求列表、失败请求、调用 IP、用户排行、余额变动）。`/me/stats` 重定向到 `/me/usage/overview`。
+
+**`GET /usage/realtime`（`usage:all:read`）、`GET /me/usage/realtime`（`usage:self:read`）**：`{"rpm":3,"tpm":360,"recent_failures":2}`，筛选参数与对应列表相同。控制台不传时间范围和状态，所以这三个数只跟随其余筛选。
+
+- 窗口：请求结束时间（`created_at + latency_ms`）在最近 60 秒内。`created_at` 是请求开始时间，只回看 1 小时，运行更久的请求不计。在途请求还没有记录，也不计。
+- `rpm`：成功的请求数。`tpm`：这些请求的非缓存输入 + 输出（与 `core.UsageTokens.Throughput` 同口径）。不含 `*.count_tokens`。这里不是限流计数（§68.3），只看已写入的使用记录。
+- `recent_failures`：失败的请求数，不含状态码 400 和 `error_type` 为 `client_canceled`、`rate_limited`、`invalid_request`、`insufficient_balance`、`key_quota_exhausted`、`model_not_allowed`、`blocked_by_hook` 的记录。`no_account` 算失败。一个请求只有一行，所以与 new-api 不同，一次请求内部的重试不单独计数。
+- 超时同 66.3。
+
+使用记录页筛选栏里的六项：消耗（`total_cost`）、基础额度（`standard_cost`）、缓存命中，来自 `summary?group_by=none`，跟随时间范围；RPM、TPM、成功率（`rpm / (rpm + recent_failures)`，≥99% 绿、≥95% 黄、否则红，没有请求时显示 —）来自上面的接口。与 new-api 相同，在搜索和刷新时取数，不自动轮询。
+
 ## §67 账号负载信号（2026-10-29）
 
 ### 67.1 目的

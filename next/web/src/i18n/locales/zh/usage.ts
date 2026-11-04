@@ -2,7 +2,22 @@ export default {
   title: '使用记录',
   description: '网关的每一次请求及其计费过程。',
   myTitle: '使用记录',
-  myDescription: '你的请求统计、每一次请求与余额变动。',
+  myDescription: '你的每一次请求与余额变动。',
+  overviewTitle: '概览',
+  overviewDescription: '网关的请求量、Token 与费用统计。',
+  myOverviewTitle: '概览',
+  myOverviewDescription: '你的请求量、Token 与费用统计。',
+  live: {
+    cost: '消耗',
+    standard: '基础额度',
+    cacheHit: '缓存命中',
+    successRate: '成功率',
+    rangeHint: '跟随上方时间范围与筛选',
+    rpmHint: '近 1 分钟成功的请求数，只跟随筛选，不受时间范围影响',
+    tpmHint: '近 1 分钟成功请求的 Token 数（非缓存输入 + 输出），只跟随筛选，不受时间范围影响',
+    successHint: '近 1 分钟：成功 {ok} / 失败 {fail}（400 错误、客户端断开与网关本地拒绝不计入）',
+    noRequests: '近 1 分钟无请求'
+  },
   statsTitle: '使用统计',
   statsDescription: '按时间段统计你的请求量、Token 与费用。',
   stats: {

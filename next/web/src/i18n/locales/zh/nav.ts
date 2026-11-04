@@ -15,6 +15,7 @@ export default {
     accounts: '账号',
     proxies: '代理',
     prices: '模型价格',
+    usageOverview: '概览',
     usage: '使用记录',
     ledger: '余额流水',
     users: '用户',
@@ -27,6 +28,7 @@ export default {
     tasks: '定时任务',
     settings: '设置',
     myApiKeys: 'API 密钥',
+    myUsageOverview: '概览',
     myUsage: '使用记录'
   },
   crumbs: {

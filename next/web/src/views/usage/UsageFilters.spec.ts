@@ -4,6 +4,7 @@ import { reactive, ref } from 'vue'
 import { createPinia } from 'pinia'
 import { i18n } from '@/i18n'
 import UsageFilters from './UsageFilters.vue'
+import UsageOverviewView from './UsageOverviewView.vue'
 import UsageView from './UsageView.vue'
 import UsageIPPanel from './UsageIPPanel.vue'
 
@@ -19,7 +20,7 @@ const global = { plugins: [i18n] }
 
 describe('shared usage search', () => {
   it('uses the same search criteria for the totals and every chart', async () => {
-    const w = mount(UsageView, { global: { plugins: [i18n, createPinia()], stubs: { UsageTable: true, SChart: true } } })
+    const w = mount(UsageOverviewView, { props: { admin: true }, global: { plugins: [i18n, createPinia()], stubs: { SChart: true } } })
     await flushPromises()
     w.getComponent(UsageFilters).vm.$emit('update:modelValue', { client_ip: '192.0.2.7', api_key_name: 'laptop', status_code: '429', stream: 'true' })
     await flushPromises()
