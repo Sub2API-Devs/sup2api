@@ -92,6 +92,9 @@ func newFixture(t *testing.T) *fixture {
 	f := &fixture{t: t, db: db, bill: bill, ledger: &flakyLedger{Service: bill}}
 	f.svc = New(db, f.ledger, bill, pub, Options{FlushInterval: 10 * time.Millisecond, Workers: 2, RetryInterval: time.Hour, RetryAfter: time.Millisecond})
 	f.svc.Authz = allowAll{} // the caller holds every permission unless a test says otherwise
+	// Most tests read their own writes; TestOperatorStatsCached turns these on.
+	f.svc.overviews = newSnapshotCache[Overview](0, 0)
+	f.svc.summaries = newSnapshotCache[[]SummaryRow](0, 0)
 
 	for _, email := range []string{"u@example.com", "o@example.com"} {
 		var id int64

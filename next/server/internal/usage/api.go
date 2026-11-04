@@ -755,43 +755,57 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	if useTZ {
 		args = append(args, tz)
 	}
-	out := []SummaryRow{}
-	err = s.statsTx(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `
-			SELECT `+key+` AS k`+extra+`, count(*), count(*) FILTER (WHERE u.success),
-			       COALESCE(sum(u.input_tokens), 0), COALESCE(sum(u.output_tokens), 0),
-			       COALESCE(sum(u.cache_read_tokens), 0),
-			       COALESCE(sum(u.cache_creation_tokens + u.cache_creation_1h_tokens), 0),
-			       COALESCE(sum(u.total_cost), 0),
-			       count(*) FILTER (WHERE `+anomalous+`),
-			       count(*) FILTER (WHERE `+est+`),
-			       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0), `+lastAt+`,
-			       CASE WHEN count(*) = count(`+promptTokens+`) THEN sum(`+promptTokens+`) END,
-			       COALESCE(sum(`+standardCost+`), 0),
-			       COALESCE(round(avg(u.latency_ms) FILTER (WHERE u.success AND u.latency_ms > 0)), 0)::bigint,
-			       COALESCE(round(avg(u.first_token_ms) FILTER (WHERE u.success AND u.first_token_ms > 0)), 0)::bigint
-			FROM usage_logs u`+join+f.Cond()+groupBy+order, args...)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var r SummaryRow
-			if err := rows.Scan(&r.Key, &r.UserEmail, &r.Requests, &r.Success, &r.InputTokens, &r.OutputTokens,
-				&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt, &r.PromptTokens,
-				&r.StandardCost, &r.LatencyMsAvg, &r.FirstTokenMsAvg); err != nil {
+	rankOrder, rankLimit := c.Query("order"), c.Query("limit")
+	load := func(ctx context.Context) ([]SummaryRow, error) {
+		out := []SummaryRow{}
+		err := s.statsTx(ctx, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `
+				SELECT `+key+` AS k`+extra+`, count(*), count(*) FILTER (WHERE u.success),
+				       COALESCE(sum(u.input_tokens), 0), COALESCE(sum(u.output_tokens), 0),
+				       COALESCE(sum(u.cache_read_tokens), 0),
+				       COALESCE(sum(u.cache_creation_tokens + u.cache_creation_1h_tokens), 0),
+				       COALESCE(sum(u.total_cost), 0),
+				       count(*) FILTER (WHERE `+anomalous+`),
+				       count(*) FILTER (WHERE `+est+`),
+				       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0), `+lastAt+`,
+				       CASE WHEN count(*) = count(`+promptTokens+`) THEN sum(`+promptTokens+`) END,
+				       COALESCE(sum(`+standardCost+`), 0),
+				       COALESCE(round(avg(u.latency_ms) FILTER (WHERE u.success AND u.latency_ms > 0)), 0)::bigint,
+				       COALESCE(round(avg(u.first_token_ms) FILTER (WHERE u.success AND u.first_token_ms > 0)), 0)::bigint
+				FROM usage_logs u`+join+f.Cond()+groupBy+order, args...)
+			if err != nil {
 				return err
 			}
-			r.TotalTokens = r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheCreationTokens
-			out = append(out, r)
+			defer rows.Close()
+			for rows.Next() {
+				var r SummaryRow
+				if err := rows.Scan(&r.Key, &r.UserEmail, &r.Requests, &r.Success, &r.InputTokens, &r.OutputTokens,
+					&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt, &r.PromptTokens,
+					&r.StandardCost, &r.LatencyMsAvg, &r.FirstTokenMsAvg); err != nil {
+					return err
+				}
+				r.TotalTokens = r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheCreationTokens
+				out = append(out, r)
+			}
+			return rows.Err()
+		})
+		if err != nil {
+			return nil, err
 		}
-		return rows.Err()
-	})
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
+		return rankRows(rankOrder, rankLimit, out)
 	}
-	if out, err = rankRows(c, out); err != nil {
+	// The caller's own rows are few; an operator's query scans everyone's, so
+	// it is cached (CONTRACTS §66.3). Parsing above has already refused what
+	// this caller may not ask, and the answer depends only on the query.
+	var out []SummaryRow
+	if self != nil {
+		out, err = load(ctx)
+	} else {
+		var hit bool
+		out, hit, err = s.summaries.get(ctx, c.Request.URL.Query().Encode(), load)
+		c.Header("X-Snapshot-Cache", snapshotHeader(hit))
+	}
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

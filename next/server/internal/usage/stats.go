@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	_ "time/tzdata" // tz= accepts IANA names on minimal images
 
@@ -152,12 +151,9 @@ func (s *Service) myOverview(c *gin.Context) {
 }
 
 // GET /usage/overview?tz= (usage:all:read): the same windows over every user,
-// plus users (user:read) and accounts (account:read). Cached for
-// overviewTTL per time zone and permission set: it scans everyone's last 30
-// days.
+// plus users (user:read) and accounts (account:read). Cached per time zone and
+// permission set (CONTRACTS §66.3): it scans everyone's last 30 days.
 func (s *Service) allOverview(c *gin.Context) { s.overview(c, nil) }
-
-const overviewTTL = 30 * time.Second
 
 func (s *Service) overview(c *gin.Context, self *int64) {
 	ctx := c.Request.Context()
@@ -166,19 +162,29 @@ func (s *Service) overview(c *gin.Context, self *int64) {
 		httpapi.Fail(c, err)
 		return
 	}
-	uid, _ := core.UserID(ctx)
-	users, accounts := false, false
-	if self == nil {
-		users, accounts = s.can(ctx, uid, "user:read"), s.can(ctx, uid, "account:read")
-		if v, ok := s.overviews.get(tz, users, accounts); ok {
-			httpapi.OK(c, v)
-			return
-		}
+	var out Overview
+	if self != nil {
+		out, err = s.loadOverview(ctx, tz, loc, self, false, false)
+	} else {
+		uid, _ := core.UserID(ctx)
+		users, accounts := s.can(ctx, uid, "user:read"), s.can(ctx, uid, "account:read")
+		var hit bool
+		out, hit, err = s.overviews.get(ctx, fmt.Sprintf("%s|%t|%t", tz, users, accounts), func(ctx context.Context) (Overview, error) {
+			return s.loadOverview(ctx, tz, loc, nil, users, accounts)
+		})
+		c.Header("X-Snapshot-Cache", snapshotHeader(hit))
 	}
-	now := time.Now()
-	w := overviewWindows(now, loc)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) loadOverview(ctx context.Context, tz string, loc *time.Location, self *int64, users, accounts bool) (Overview, error) {
+	w := overviewWindows(time.Now(), loc)
 	out := Overview{TZ: tz}
-	err = s.statsTx(ctx, func(tx pgx.Tx) error {
+	err := s.statsTx(ctx, func(tx pgx.Tx) error {
 		targets := append(append(append(out.Today.scanTargets(), out.Yesterday.scanTargets()...), out.Last30d.scanTargets()...),
 			&out.Last5m.Requests, &out.Last5m.Tokens)
 		where, args := `u.created_at >= least($1, $2)`, []any{w.yesterday, w.last30d, w.today, w.last5m}
@@ -233,14 +239,7 @@ func (s *Service) overview(c *gin.Context, self *int64) {
 		}
 		return nil
 	})
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	if self == nil {
-		s.overviews.put(tz, users, accounts, out)
-	}
-	httpapi.OK(c, out)
+	return out, err
 }
 
 // Realtime is GET /usage/realtime and GET /me/usage/realtime: the last minute
@@ -320,41 +319,6 @@ func (s *Service) can(ctx context.Context, uid int64, perm string) bool {
 	return err == nil && ok
 }
 
-// overviewCache keeps each operator overview for overviewTTL, keyed by time
-// zone and by which optional sections the caller may see.
-type overviewCache struct {
-	mu      sync.Mutex
-	entries map[string]cachedOverview
-}
-
-type cachedOverview struct {
-	at time.Time
-	v  Overview
-}
-
-func overviewKey(tz string, users, accounts bool) string {
-	return fmt.Sprintf("%s|%t|%t", tz, users, accounts)
-}
-
-func (c *overviewCache) get(tz string, users, accounts bool) (Overview, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	e, ok := c.entries[overviewKey(tz, users, accounts)]
-	if !ok || time.Since(e.at) >= overviewTTL {
-		return Overview{}, false
-	}
-	return e.v, true
-}
-
-func (c *overviewCache) put(tz string, users, accounts bool, v Overview) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.entries == nil || len(c.entries) > 256 {
-		c.entries = map[string]cachedOverview{}
-	}
-	c.entries[overviewKey(tz, users, accounts)] = cachedOverview{at: time.Now(), v: v}
-}
-
 type windows struct{ today, yesterday, last30d, last5m time.Time }
 
 // overviewWindows gives the lower bounds of the overview's windows. Days are
@@ -369,8 +333,7 @@ func overviewWindows(now time.Time, loc *time.Location) windows {
 // rankRows applies ?order=cost|requests|tokens&limit=N to grouped summary
 // rows: the largest first, the rest folded into one row keyed "__other__".
 // Without either parameter the rows are returned unchanged.
-func rankRows(c *gin.Context, rows []SummaryRow) ([]SummaryRow, error) {
-	order, limitArg := c.Query("order"), c.Query("limit")
+func rankRows(order, limitArg string, rows []SummaryRow) ([]SummaryRow, error) {
 	if order == "" && limitArg == "" {
 		return rows, nil
 	}

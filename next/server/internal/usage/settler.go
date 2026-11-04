@@ -124,9 +124,10 @@ type Service struct {
 	// Authz answers the console statistics' optional sections (users and
 	// accounts in GET /usage/overview); nil hides them.
 	Authz core.Authorizer
-	// overviews caches GET /usage/overview briefly: it scans every user's
-	// last 30 days.
-	overviews overviewCache
+	// overviews and summaries keep the operator's statistics briefly: they
+	// scan every user's rows (snapshot_cache.go).
+	overviews *snapshotCache[Overview]
+	summaries *snapshotCache[[]SummaryRow]
 }
 
 var _ core.Settler = (*Service)(nil)
@@ -134,7 +135,11 @@ var _ core.Settler = (*Service)(nil)
 // New builds the usage service. Call Start to run the workers.
 func New(db *store.DB, ledger TxLedger, quoter core.Quoter, events core.EventPublisher, opts Options) *Service {
 	opts.defaults()
-	return &Service{db: db, ledger: ledger, quoter: quoter, events: events, opts: opts, queue: make(chan *core.UsageRecord, opts.QueueSize)}
+	return &Service{
+		db: db, ledger: ledger, quoter: quoter, events: events, opts: opts, queue: make(chan *core.UsageRecord, opts.QueueSize),
+		overviews: newSnapshotCache[Overview](overviewFresh, statsCacheTTL),
+		summaries: newSnapshotCache[[]SummaryRow](statsCacheTTL, statsCacheTTL),
+	}
 }
 
 // Start runs the settlement workers until Stop; retries are

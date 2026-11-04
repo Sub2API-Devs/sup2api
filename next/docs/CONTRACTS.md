@@ -4654,6 +4654,14 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 统计查询（summary、overview）在只读事务里执行，`SET LOCAL statement_timeout = '5s'`。超时回 503 `unavailable`（「statistics query timed out; narrow the time range or filters」），界面显示错误与重试，不显示成 0。
 
+**缓存（2026-11-05，用户要求，参考旧版 sub2api 的仪表盘）**：管理员接口扫描全部用户的行，所以在进程内缓存，响应头 `X-Snapshot-Cache: hit|miss`。实现：`usage/snapshot_cache.go`。
+
+- `GET /usage/overview`：按「时区 + 两个权限」缓存。15 秒内直接返回；15 到 30 秒返回旧值并在后台刷新；超过 30 秒等待重新查询。
+- `GET /usage/summary`：按完整查询串缓存 30 秒。默认范围的 `from` 是本地零点、`to` 为空，所以相同页面能命中；`1h`、`24h` 的 `from` 每次都变，等于不缓存。
+- 同一个键同时只查一次，错误不缓存，单个缓存最多 256 项。刷新按钮也读缓存，所以最多可能晚 30 秒。
+- 每个节点各有一份缓存，不同节点的数字可能差几十秒。旧版的卡片缓存放在 Redis，这里没有用，因为用量模块没有 Redis 依赖。
+- 不缓存：`/me/usage/*`（只查自己的行，旧版也不缓存）和 `/usage/realtime`（§66.7）。
+
 ### 66.4 菜单（`authz/menus.go`）
 
 概览项改名「仪表盘 / Dashboard」；「我的」分组改名「我的账户 / My account」，其中「API Key」改为「API 密钥」；删除「使用统计」（`/me/stats`），控制台把它重定向到 `/me/usage`。没有网关、财务、系统任何一个分组的用户，控制台把侧边栏画成不带分组标题的平铺列表（纯前端规则，接口不变）。
@@ -4680,7 +4688,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - `users`（`user:read`）：未删除的用户数；`new_today` 是 `tz` 今天注册的；`active_today` 是今天有使用记录的不同用户数。
 - `accounts`（`account:read`）：未删除的账号数；`available` 是 `status='active'` 且可调度；`auto_disabled` 是控制台的"自动禁用"（`auto_disabled`、遗留的 `error`、启用但不可调度），`disabled` 是手动禁用（2026-10-30 起，原 `error` 字段改名）。全部是 COUNT，不受列表分页影响。
-- 进程内按「时区 + 两个权限」缓存 30 秒（它扫描全部用户近 30 天的行）。
+- 进程内缓存，见 66.3（它扫描全部用户近 30 天的行）。
 
 **`group_by=upstream_model`**：管理员的 `/usage/summary` 可按上游实际模型分组；自助接口返回 400，与 `user` 相同。
 
