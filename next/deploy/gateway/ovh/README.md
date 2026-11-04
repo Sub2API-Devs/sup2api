@@ -4,6 +4,13 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-04 核心 **0.1.240** + ccgateway **0.1.128**（token 计数，北京时间 19:29–19:40；核心 `b41fad7fb`，发布分支 `release/count-tokens-core`，基于 0.1.239 只摘计数，**不含**开发分支上的 RPM/TPM、排队、重试开关，下次发核心要留意；插件 `841ce6b16`，包 `124e30ad…f78a`，rollout 230）：
+- 内容（CONTRACTS §11.6）：CCGateway 支持 `/v1/messages/count_tokens`，CLI `request --count` 原样透传（`ccgateway-v47-count-tokens`，ELF `02688698…0e56`，能力 `request_count_tokens_v1`）；计数不占并发、RPM、TPM、额度，失败不影响账号，和粘性无关。
+- 只发核心和插件，容器不变。Worker 和 CLI 只有 #109（`d7d504c01f447da7d`）原地升级（`runtimes/<key>/worker {"image":"ccgateway-app:0.1.128","components":["worker","cli"]}`），其余账号用户要求暂不升级；未升级账号核心回 503（`lacks request_count_tokens_v1`）并换号，不冷却。
+- 核验：直连 #109 的 Worker 计数 200（`hi` 8，与渠道 381 一致），`/healthz` 上报能力；经网关用现有 Key 确认路由和未升级账号的 503，被试到的账号没有冷却。经网关成功返回计数还没验证（#109 当时额度满到 15:30 UTC）。
+- 待办（用户说后面再说）：调度时跳过不支持的账号，都不支持时回 404。
+- 脚本 `stage/0.1.240/`、`stage/ccgateway-0.1.128/`；CLI 产物 `~/sup2api/checks/cli-v47/release`；备份 `backups/core-0.1.240`。
+
 2026-11-04 ccgateway **0.1.127**（`c8f63b05e`，北京时间 15:49，rollout 229；插件包 `d38ba34a…f52f`，只发插件，核心不变）：
 - 起因：账号 #87 等被 `Usage credits are required for long context requests.` 的 429 禁用 7 天。扫描线上 64 个运行中账号容器 7 天的请求日志（`/work/data/request-logs/*/{metadata,response-headers}.json`）：869 条 429 里 447 条额度满（都带 claim、窗口用量和 Retry-After，rejected 与 utilization ≥ 1 完全一致），411 条 Worker 并发限制，11 条 long context（没有窗口头、claim 和 Retry-After，`anthropic-ratelimit-unified-reset` 是账期结束 2026-12-01，被截断成 7 天）。
 - 内容（CONTRACTS §69）：托管账号的上游 429 只有额度真满才自动禁用，其他原路返回客户端。只改插件 `classify.go`，CLI、Worker 与账号容器不动。
